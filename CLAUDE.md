@@ -18,19 +18,28 @@ Hiện trạng vận hành:
 
 Mục tiêu: AI đọc tin nhắn đặt hàng trên Zalo (viết tắt, không dấu) → trích xuất đơn có cấu trúc → Sale duyệt 1-click → đồng bộ KiotViet/Base. Triển khai theo giai đoạn 1 → 2 → 3, go-live sớm nhất có thể.
 
-Tài liệu gốc: `APP AI_Công ty Cổ Phần U Ultty Việt Nam_ Phuong Jul 2026.docx` (hồ sơ khảo sát đầy đủ — đọc file này khi cần chi tiết). Tài liệu đính kèm (mẫu PO, biên bản bàn giao, danh mục SKU, bảng giá, tin nhắn mẫu): link Drive trong mục 7 của docx.
+Hệ thống tài liệu (đọc theo thứ tự khi cần ngữ cảnh):
+1. `APP AI_Công ty Cổ Phần U Ultty Việt Nam_ Phuong Jul 2026.docx` — hồ sơ khảo sát gốc (mẫu PO, SKU, bảng giá, tin nhắn mẫu: link Drive mục 7)
+2. `Thiet_ke_AI_Agent_U_Ultty.md` — thiết kế giải pháp NetViet (nghiệp vụ, lộ trình 3 GĐ, KPI — GIỮ NGUYÊN, không sửa file này)
+3. [docs/thiet-ke-ky-thuat-hop-nhat.md](docs/thiet-ke-ky-thuat-hop-nhat.md) — **thiết kế triển khai hợp nhất, là quyết định cuối cho phần kỹ thuật**
+4. [docs/bao-cao-tich-hop-zalo.md](docs/bao-cao-tich-hop-zalo.md) — căn cứ kênh Zalo (chi phí, chính sách, điều khoản)
+5. [.claude/plans/ultty-ai-agent.plan.md](.claude/plans/ultty-ai-agent.plan.md) — kế hoạch code GĐ1 (task + validate)
+6. `design/` — 8 ảnh design app của khách (tham khảo UX, PWA 5 tab bám theo)
+7. [docs/so-do-he-thong.md](docs/so-do-he-thong.md) — 8 sơ đồ Mermaid (bối cảnh, 6 tầng, sequence đơn hàng, state machine, intent, ERD, lộ trình, 2 chế độ ingestion)
+8. [docs/checklist-du-lieu-khach.md](docs/checklist-du-lieu-khach.md) — checklist dữ liệu cần thu thập từ khách (A: nguồn sự thật, B: tin nhắn test, C: truy cập hệ thống, D: quyết định)
+9. [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md) — template kết quả PoC Bot Platform (chạy theo [tools/poc-zalo-bot/README.md](tools/poc-zalo-bot/README.md))
 
 ## Công nghệ (đã chốt)
 
 | Thành phần | Lựa chọn | Lý do |
 |---|---|---|
-| Ngôn ngữ | TypeScript (Node.js 22 LTS) | Một ngôn ngữ cho cả backend + dashboard; thư viện Zalo `zca-js` là Node-native |
-| Backend | NestJS | Cấu trúc module rõ ràng cho hệ tích hợp nhiều bên (zalo, parser, kiotviet, orders) |
-| Dashboard duyệt đơn | Next.js (React) | Sale duyệt/sửa đơn AI đã parse |
-| Database | PostgreSQL + Prisma | Lưu đơn hàng, audit log, glossary viết tắt, feedback loop |
+| Ngôn ngữ | TypeScript (Node.js 22 LTS) | Một ngôn ngữ cho cả backend + app; monorepo pnpm |
+| Backend | NestJS | Module theo 6 tầng NetViet: channels, ingest, pipeline, rules, knowledge, orders, kiotviet, metrics, auth |
+| App Sale | Next.js **PWA mobile-first**, 5 tab theo `design/` | Sale làm việc trên điện thoại; installable, không cần app store |
+| Database | PostgreSQL + Prisma | Nguồn sự thật (SKU/giá/chính sách/glossary), đơn hàng, feedback, KPI, audit |
 | Queue | BullMQ (Redis) | Pipeline xử lý tin nhắn bất đồng bộ |
-| AI | Claude API (structured output / tool use) | Trích xuất JSON theo schema cố định |
-| Zalo | Zalo OA API (chính thức) hoặc `zca-js` (userbot, rủi ro khóa tài khoản) | **Chưa chốt — chờ khách xác nhận** có chuyển nhóm sang OA được không |
+| AI | Claude API (tool use) — 1 orchestrator, KHÔNG multi-agent | Intent (7 loại) + trích xuất ràng buộc; **LLM không tính tiền/không quyết chính sách** — rules engine TS tất định lo phần đó |
+| Kênh Zalo GĐ1 | **Co-pilot (dán tay) là baseline + PoC Zalo Bot Platform tuần 1 để nâng cấp tự động** — mọi kênh qua interface `ChannelAdapter` (Copilot/BotPlatform/Mock) | zca-js đã LOẠI khỏi lộ trình chính (chỉ khi khách ký chấp nhận rủi ro); OA+GMF để GĐ2-3 |
 
 ## Quyết định kiến trúc đã chốt
 
@@ -42,6 +51,8 @@ Tài liệu gốc: `APP AI_Công ty Cổ Phần U Ultty Việt Nam_ Phuong Jul 2
    - Định tuyến theo độ tin cậy: đơn rõ ràng → điền sẵn cho Sale duyệt 1-click; trường mơ hồ → đánh dấu Sale nhập tay, AI không tự quyết
    - Feedback loop: log cặp (tin nhắn gốc, kết quả Sale sửa) → mở rộng glossary + few-shot, không cần train lại model
 3. Chọn model qua bake-off trên 20-30 tin nhắn thật: đo tỷ lệ JSON hợp lệ, độ chính xác field-level, khả năng dùng đúng glossary.
+4. **GĐ1 khóa phạm vi = Co-pilot + Sale duyệt** (theo NetViet): AI KHÔNG tự gửi/tự trả lời trong nhóm; auto-reply chỉ xem xét sau khi có văn bản đồng ý của khách. "Chuẩn hóa nguồn sự thật trước khi bật AI" là điều kiện chặn.
+5. **Tách bạch LLM vs rules**: LLM chỉ phân loại intent + trích xuất + soạn văn bản; giá/ship/chính sách/VAT do rules engine TypeScript tính từ nguồn sự thật trong DB. Không đảo ngược nguyên tắc này.
 
 ## Nghiệp vụ cốt lõi
 
@@ -55,12 +66,19 @@ Hai mẫu đơn:
 
 Quy trình duyệt: 1 Sale xác nhận bước cuối → kế toán kiểm tra khi lên hệ thống. Cần cả đơn giao và báo giá riêng. VAT xuất tùy trường hợp (nháp → khách kiểm tra → xuất).
 
-## Câu hỏi mở (chưa chốt với khách — hỏi trước khi implement phần liên quan)
+## Câu hỏi mở (chưa chốt — hỏi/thử trước khi implement phần liên quan)
 
-1. Nhóm Zalo chuyển dần sang OA được không, hay giữ nguyên nhóm cá nhân? (quyết định Zalo OA vs zca-js)
+1. PoC Zalo Bot Platform (3 câu hỏi Beta): bot vào được nhóm cá nhân có sẵn? nhận mọi tin nhắn hay chỉ @mention? 1 bot vào được bao nhiêu nhóm? — xem mục 9 của [docs/bao-cao-tich-hop-zalo.md](docs/bao-cao-tich-hop-zalo.md)
 2. Gói KiotViet hiện tại có bật API không? Rate limit bao nhiêu?
 3. Base có tài liệu API không? (khảo sát ghi "không rõ")
 4. Phạm vi cụ thể của giai đoạn 1/2/3 là gì?
+5. Báo giá GMF chính thức cho 200-350 nhóm nhỏ + gói OA mới (sau 1/6/2026) nào có GMF/OpenAPI
+
+## Tuân thủ chính sách Zalo (nếu dùng kênh chính thức)
+
+- Thông báo cho thành viên nhóm rằng họ tương tác với hệ thống tự động; gắn nhãn nội dung do AI tạo (điều khoản Zalo Bot Platform)
+- Không thu thập dữ liệu cá nhân trong nhóm khi chưa có đồng ý hợp pháp (Nghị định 13/2023, Luật BVDLCN 2025); tối thiểu hóa dữ liệu gửi sang LLM API
+- Lưu mọi tin nhắn/đơn về DB ngay khi nhận — Zalo có quyền khóa bot/nhóm không cần báo trước, không được để mất dữ liệu theo kênh
 
 ## Lưu ý bảo mật
 
