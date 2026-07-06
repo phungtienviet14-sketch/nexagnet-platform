@@ -1,0 +1,32 @@
+{
+  "name": "ultty-ai-orders",
+  "version": "0.1.0",
+  "private": true,
+  "description": "He thong AI Agent xu ly don hang Zalo - U Ultty Viet Nam",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.34.4",
+  "pnpm": {
+    "onlyBuiltDependencies": ["@swc/core", "esbuild", "sharp"]
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,mjs}\"",
+    "dev:api": "pnpm --filter @ultty/api dev",
+    "dev:web": "pnpm --filter @ultty/web dev",
+    "poc:updates": "pnpm --filter @ultty/poc-zalo-bot updates",
+    "poc:send": "pnpm --filter @ultty/poc-zalo-bot send"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  }
+}

@@ -29,3 +29,8 @@ Thumbs.db
 # Temp
 *.tmp
 .cache/
+
+# Test & build artifacts
+coverage/
+*.tsbuildinfo
+.swc/

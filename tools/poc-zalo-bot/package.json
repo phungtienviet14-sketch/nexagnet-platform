@@ -1,0 +1,20 @@
+{
+  "name": "@ultty/poc-zalo-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "updates": "tsx src/get-updates.ts",
+    "send": "tsx src/send-message.ts",
+    "webhook": "tsx src/webhook.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2"
+  }
+}
