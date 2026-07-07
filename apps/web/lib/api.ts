@@ -1,14 +1,8 @@
-import type { KiotVietOrder, KiotVietProduct, OrderView } from '@ultty/shared';
+import type { DemoGroup, KiotVietOrder, KiotVietProduct, OrderView } from '@ultty/shared';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-/** 1 nhom Zalo da map (GET /demo/groups) — dung cho bo chon nhom khi giả lập. */
-export interface DemoGroup {
-  chatId: string;
-  name: string;
-  dealerName: string | null;
-  branch: string;
-}
+export type { DemoGroup };
 
 /** Tham so giả lập 1 tin — chon nhom de test dinh tuyen dai ly theo nhom. */
 export interface SimulateInput {

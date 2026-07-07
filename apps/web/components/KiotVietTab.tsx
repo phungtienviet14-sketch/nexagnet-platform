@@ -3,8 +3,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, formatVnd } from '../lib/api';
 
-const INITIAL_STOCK = 100; // khop voi mock (KiotVietMockAdapter) — de danh dau SP da xuat kho
-
 function timeOf(iso: string): string {
   return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
@@ -50,9 +48,10 @@ export function KiotVietTab() {
               <div className="name">{p.name}</div>
               <div className="kv-sub">
                 {p.sku} · {formatVnd(p.price)}/{p.unit}
+                {p.sold > 0 ? ` · đã xuất ${p.sold}` : ''}
               </div>
             </div>
-            <div className={`kv-stock ${p.stock < INITIAL_STOCK ? 'kv-stock-moved' : ''}`}>
+            <div className={`kv-stock ${p.sold > 0 ? 'kv-stock-moved' : ''}`}>
               <b>{p.stock}</b>
               <span>tồn</span>
             </div>

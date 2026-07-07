@@ -42,6 +42,10 @@ export class OrdersService {
    */
   async approve(id: string): Promise<OrderView> {
     const view = this.getOrThrow(id);
+    // Idempotent (M4): don da 'synced' -> khong gui Zalo / day KiotViet lai lan nua.
+    if (view.status === 'synced') {
+      return view;
+    }
     if (!view.priced) {
       throw new UnprocessableEntityException('Tin nay khong phai don hang, khong the duyet');
     }

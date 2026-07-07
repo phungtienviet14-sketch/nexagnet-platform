@@ -37,6 +37,7 @@ export class KiotVietMockAdapter extends KiotVietAdapter {
         unit: p.unit,
         price: priceOf.get(p.sku) ?? 0,
         stock: INITIAL_STOCK,
+        sold: 0,
       });
     }
   }
@@ -47,10 +48,17 @@ export class KiotVietMockAdapter extends KiotVietAdapter {
     const code = `KV-${this.counter}`;
 
     // Gia lap xuat kho: tru ton cho cac dong da map SKU (immutable — thay object moi).
+    // Chan san 0 de ton kho khong am (M2).
     for (const line of order.lines) {
       if (!line.sku) continue;
       const cur = this.products.get(line.sku);
-      if (cur) this.products.set(line.sku, { ...cur, stock: cur.stock - line.quantity });
+      if (cur) {
+        this.products.set(line.sku, {
+          ...cur,
+          stock: Math.max(0, cur.stock - line.quantity),
+          sold: cur.sold + line.quantity,
+        });
+      }
     }
 
     this.orders.unshift({

@@ -1,18 +1,10 @@
 import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
-import { channelMessageSchema, loadEnv, type OrderView } from '@ultty/shared';
+import { channelMessageSchema, loadEnv, type DemoGroup, type OrderView } from '@ultty/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 
 /** Nhom test that (map -> Meta HN) — dung lam mac dinh khi demo qua simulate. */
 const DEMO_CHAT_ID = 'zgr-f8a7101d77709e2ec761';
-
-/** 1 dong trong bo chon nhom khi demo (web goi GET /demo/groups). */
-export interface DemoGroup {
-  chatId: string;
-  name: string;
-  dealerName: string | null;
-  branch: string;
-}
 
 const SAMPLE_MESSAGES = [
   '@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT',

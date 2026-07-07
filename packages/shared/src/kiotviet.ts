@@ -11,6 +11,8 @@ export interface KiotVietProduct {
   price: number;
   /** Ton kho gia lap (mock) — giam khi co don day len */
   stock: number;
+  /** Tong so luong da xuat (cong don qua cac don) — de UI danh dau SP da ban */
+  sold: number;
 }
 
 export interface KiotVietOrder {

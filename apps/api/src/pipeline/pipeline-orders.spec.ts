@@ -112,6 +112,18 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     expect(adapter.sent.at(-1)?.chatId).toBe(tn!.chatId);
   });
 
+  it('duyet 2 lan cung 1 don -> khong gui lai, khong tao ma KiotViet moi (idempotent, M4)', async () => {
+    const { pipeline, orders, adapter } = build();
+    const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
+
+    const first = await orders.approve(view.id);
+    const second = await orders.approve(view.id);
+
+    expect(adapter.sent).toHaveLength(1); // chi gui Zalo 1 lan
+    expect(second.status).toBe('synced');
+    expect(second.kiotVietCode).toBe(first.kiotVietCode); // khong tao ma moi
+  });
+
   it('tin hoi gia khong phai don -> khong nam trong danh sach don, khong duyet duoc', async () => {
     const { pipeline, orders } = build();
     const view = await pipeline.process(msg('ghe felix bao nhieu tien c oi'), BOT_NAME);
