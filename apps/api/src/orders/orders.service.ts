@@ -5,12 +5,10 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { OrderView } from '@ultty/shared';
+import { AUTO_LABEL } from '../channels/auto-label.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { KiotVietAdapter } from '../kiotviet/kiotviet.adapter.js';
 import { OrdersRepository } from './orders.repository.js';
-
-/** Nhan tin tu dong theo dieu khoan Zalo Bot Platform (bao cao muc 6.3). */
-const AUTO_LABEL = '\n— Tin tự động từ Bot Ultty';
 
 @Injectable()
 export class OrdersService {

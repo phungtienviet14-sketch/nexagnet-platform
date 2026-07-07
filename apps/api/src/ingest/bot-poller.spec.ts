@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { updateToChannelMessage } from './bot-poller.js';
+import { shouldAutoAck, updateToChannelMessage } from './bot-poller.js';
 
 describe('updateToChannelMessage', () => {
   it('map tin text nhom', () => {
@@ -43,5 +43,20 @@ describe('updateToChannelMessage', () => {
 
   it('bo qua update khong co noi dung', () => {
     expect(updateToChannelMessage({ message: { chat: { id: 'zgr-x' } } })).toBeNull();
+  });
+});
+
+describe('shouldAutoAck', () => {
+  it('bat cong tac + intent=khac (LLM khong hieu) -> co ack', () => {
+    expect(shouldAutoAck('khac', 'on')).toBe(true);
+  });
+
+  it('tat cong tac -> khong ack du intent=khac', () => {
+    expect(shouldAutoAck('khac', 'off')).toBe(false);
+  });
+
+  it('bat cong tac nhung intent da hieu (dat_don/hoi_gia) -> khong ack', () => {
+    expect(shouldAutoAck('dat_don', 'on')).toBe(false);
+    expect(shouldAutoAck('hoi_gia', 'on')).toBe(false);
   });
 });

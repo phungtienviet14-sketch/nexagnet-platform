@@ -22,6 +22,9 @@ export const envSchema = z.object({
   PARSER_MODE: z.enum(['mock', 'claude', 'deepseek']).default('mock'),
   // Bat/tat worker doc tin Zalo Bot. Mac dinh off de app boot khong can token.
   BOT_MODE: z.enum(['on', 'off']).default('off'),
+  // Auto-ack: bot tu nhan "da ghi nhan" khi intent=Khac (LLM khong hieu). Mac dinh off
+  // (GD1: AI khong tu tra loi nhom) — chi bat khi khach dong y cho bot nhan tin.
+  AUTO_ACK: z.enum(['on', 'off']).default('off'),
   // Ten bot de boc @mention khoi noi dung tin.
   BOT_NAME: z.string().default('Bot ultty AI orders'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),

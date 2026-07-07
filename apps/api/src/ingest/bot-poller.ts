@@ -1,7 +1,21 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import { channelMessageSchema, loadEnv, type ChannelMessage } from '@ultty/shared';
+import { channelMessageSchema, loadEnv, type ChannelMessage, type Intent } from '@ultty/shared';
+import { AUTO_LABEL } from '../channels/auto-label.js';
+import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
+
+/** Tin auto-ack khi LLM khong hieu (intent=Khac). Gan them AUTO_LABEL khi gui. */
+export const AUTO_ACK_TEXT = 'Đã ghi nhận, Sale sẽ phản hồi anh/chị sớm ạ';
+
+/**
+ * Chi auto-ack khi: bat cong tac (AUTO_ACK=on) VA intent la 'khac' (LLM khong hieu).
+ * Cac intent khac (hoi gia, van chuyen...) da hieu -> Sale xu ly, khong ack.
+ * Ham thuan de test de dang.
+ */
+export function shouldAutoAck(intent: Intent, mode: 'on' | 'off'): boolean {
+  return mode === 'on' && intent === 'khac';
+}
 
 /** Chuyen 1 update Zalo -> ChannelMessage chuan; null neu bo qua (tin bot, thieu noi dung). */
 export function updateToChannelMessage(update: BotUpdate): ChannelMessage | null {
@@ -37,7 +51,10 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
   private running = false;
   private readonly seen = new Set<string>();
 
-  constructor(private readonly pipeline: PipelineService) {}
+  constructor(
+    private readonly pipeline: PipelineService,
+    private readonly channel: ChannelAdapter,
+  ) {}
 
   onModuleInit(): void {
     const env = loadEnv();
@@ -46,15 +63,15 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.running = true;
-    void this.loop(env.ZALO_BOT_TOKEN, env.BOT_NAME);
-    this.logger.log('BOT_MODE=on -> bat dau long polling getUpdates.');
+    void this.loop(env.ZALO_BOT_TOKEN, env.BOT_NAME, env.AUTO_ACK);
+    this.logger.log(`BOT_MODE=on -> bat dau long polling getUpdates. Auto-ack=${env.AUTO_ACK}.`);
   }
 
   onModuleDestroy(): void {
     this.running = false;
   }
 
-  private async loop(token: string, botName: string): Promise<void> {
+  private async loop(token: string, botName: string, autoAck: 'on' | 'off'): Promise<void> {
     while (this.running) {
       try {
         const res = await callBotApi(token, 'getUpdates', { timeout: 20 });
@@ -71,6 +88,9 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
           try {
             const view = await this.pipeline.process(message, botName);
             this.logger.log(`Da xu ly tin ${message.externalMessageId} -> intent=${view.intent}`);
+            if (shouldAutoAck(view.intent, autoAck)) {
+              await this.sendAutoAck(message.externalChatId);
+            }
           } catch (error) {
             this.logger.error(`Loi xu ly tin: ${error instanceof Error ? error.message : String(error)}`);
           }
@@ -79,6 +99,16 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`Loi mang getUpdates: ${error instanceof Error ? error.message : String(error)}`);
         await sleep(3000);
       }
+    }
+  }
+
+  /** Gui tin auto-ack (best-effort): loi khong lam gian doan doc tin, tin da luu tren app. */
+  private async sendAutoAck(chatId: string): Promise<void> {
+    try {
+      await this.channel.sendMessage(chatId, AUTO_ACK_TEXT + AUTO_LABEL);
+      this.logger.log(`Da gui auto-ack (intent=khac) toi ${chatId}`);
+    } catch (error) {
+      this.logger.warn(`Gui auto-ack that bai: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
