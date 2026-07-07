@@ -1,26 +1,49 @@
 'use client';
 
 import { useState } from 'react';
+import type { DemoGroup } from '../lib/api';
 
 type Props = {
-  onSend: (text: string) => void;
+  onSend: (input: { text: string; chatId?: string }) => void;
   samples: string[];
+  groups: DemoGroup[];
   isSending: boolean;
 };
 
-export function Composer({ onSend, samples, isSending }: Props) {
+export function Composer({ onSend, samples, groups, isSending }: Props) {
   const [text, setText] = useState('');
+  const [chatId, setChatId] = useState('');
+
+  // Mac dinh chon nhom dau tien khi danh sach da tai xong.
+  const activeChatId = chatId || groups[0]?.chatId || '';
 
   function handleSend() {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onSend(trimmed);
+    onSend({ text: trimmed, chatId: activeChatId || undefined });
     setText('');
   }
 
   return (
     <div className="composer">
       <label htmlFor="msg">Giả lập tin nhắn đại lý (như dán tin từ nhóm Zalo)</label>
+
+      {groups.length > 0 && (
+        <select
+          className="group-select"
+          aria-label="Chọn nhóm Zalo"
+          value={activeChatId}
+          onChange={(e) => setChatId(e.target.value)}
+        >
+          {groups.map((g) => (
+            <option key={g.chatId} value={g.chatId}>
+              {g.name}
+              {g.dealerName ? ` — ${g.dealerName}` : ''}
+            </option>
+          ))}
+        </select>
+      )}
+
       <textarea
         id="msg"
         value={text}

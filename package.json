@@ -20,6 +20,7 @@
     "dev:web": "pnpm --filter @ultty/web dev",
     "poc:doctor": "pnpm --filter @ultty/poc-zalo-bot run doctor",
     "poc:updates": "pnpm --filter @ultty/poc-zalo-bot updates",
+    "poc:groups": "pnpm --filter @ultty/poc-zalo-bot groups",
     "poc:send": "pnpm --filter @ultty/poc-zalo-bot send",
     "poc:webhook": "pnpm --filter @ultty/poc-zalo-bot webhook"
   },

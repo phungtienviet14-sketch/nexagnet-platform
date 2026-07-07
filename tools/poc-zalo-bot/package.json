@@ -6,6 +6,7 @@
   "scripts": {
     "doctor": "tsx src/doctor.ts",
     "updates": "tsx src/get-updates.ts",
+    "groups": "tsx src/list-groups.ts",
     "send": "tsx src/send-message.ts",
     "webhook": "tsx src/webhook.ts",
     "typecheck": "tsc --noEmit"

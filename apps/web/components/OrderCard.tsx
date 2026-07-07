@@ -53,7 +53,9 @@ export function OrderCard({ order, onApprove, onReject, isBusy }: Props) {
         <div className="card-head">
           <div>
             <div className="who">{INTENT_LABEL[order.intent]}</div>
-            <div className="meta">{timeOf(order.createdAt)} · nhóm {order.chatId.slice(0, 12)}…</div>
+            <div className="meta">
+              {timeOf(order.createdAt)} · {order.groupName ?? `nhóm ${order.chatId.slice(0, 12)}…`}
+            </div>
           </div>
           <span className={`badge ${status.cls}`}>{status.label}</span>
         </div>
@@ -67,10 +69,11 @@ export function OrderCard({ order, onApprove, onReject, isBusy }: Props) {
     <article className="card">
       <div className="card-head">
         <div>
-          <div className="who">{p.dealerName ?? 'Chưa rõ đại lý'}</div>
+          <div className="who">{p.dealerName ?? order.dealerName ?? 'Chưa rõ đại lý'}</div>
           <div className="meta">
             {p.orderType} · {timeOf(order.createdAt)} · {INTENT_LABEL[order.intent]}
           </div>
+          {order.groupName && <div className="group-tag">📍 {order.groupName}</div>}
         </div>
         <span className={`badge ${status.cls}`}>{status.label}</span>
       </div>

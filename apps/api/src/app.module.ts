@@ -4,6 +4,7 @@ import { DemoController } from './demo/demo.controller.js';
 import { HealthController } from './health/health.controller.js';
 import { BotPoller } from './ingest/bot-poller.js';
 import { KiotVietAdapter, KiotVietMockAdapter } from './kiotviet/kiotviet.adapter.js';
+import { KiotVietController } from './kiotviet/kiotviet.controller.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
 import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
@@ -12,7 +13,13 @@ import { parserProvider } from './pipeline/parser.provider.js';
 import { PipelineService } from './pipeline/pipeline.service.js';
 
 @Module({
-  controllers: [HealthController, OrdersController, MessagesController, DemoController],
+  controllers: [
+    HealthController,
+    OrdersController,
+    MessagesController,
+    DemoController,
+    KiotVietController,
+  ],
   providers: [
     KnowledgeService,
     { provide: OrdersRepository, useClass: InMemoryOrdersRepository },

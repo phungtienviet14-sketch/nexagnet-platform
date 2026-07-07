@@ -47,6 +47,10 @@ export interface OrderView {
   status: OrderStatus;
   createdAt: string;
   chatId: string;
+  /** Ten nhom Zalo (map tu chatId) — hien tren feed de phan biet nhieu nhom */
+  groupName?: string;
+  /** Ten dai ly (map tu nhom) — hien ca khi tin khong phai don hang */
+  dealerName?: string;
   rawText: string;
   /** photo_url neu tin la anh (hien anh don tren app) */
   imageUrl?: string;

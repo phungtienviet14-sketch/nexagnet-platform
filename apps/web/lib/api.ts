@@ -1,6 +1,20 @@
-import type { OrderView } from '@ultty/shared';
+import type { KiotVietOrder, KiotVietProduct, OrderView } from '@ultty/shared';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
+/** 1 nhom Zalo da map (GET /demo/groups) — dung cho bo chon nhom khi giả lập. */
+export interface DemoGroup {
+  chatId: string;
+  name: string;
+  dealerName: string | null;
+  branch: string;
+}
+
+/** Tham so giả lập 1 tin — chon nhom de test dinh tuyen dai ly theo nhom. */
+export interface SimulateInput {
+  text: string;
+  chatId?: string;
+}
 
 async function toJson<T>(res: Response): Promise<T> {
   const text = await res.text();
@@ -25,13 +39,19 @@ export const api = {
     fetch(`${BASE}/orders/${id}/approve`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
   reject: (id: string): Promise<OrderView> =>
     fetch(`${BASE}/orders/${id}/reject`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
-  simulate: (text: string): Promise<OrderView> =>
+  simulate: ({ text, chatId }: SimulateInput): Promise<OrderView> =>
     fetch(`${BASE}/demo/simulate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, chatId }),
     }).then((r) => toJson<OrderView>(r)),
   samples: (): Promise<string[]> => fetch(`${BASE}/demo/samples`).then((r) => toJson<string[]>(r)),
+  groups: (): Promise<DemoGroup[]> =>
+    fetch(`${BASE}/demo/groups`).then((r) => toJson<DemoGroup[]>(r)),
+  kiotVietProducts: (): Promise<KiotVietProduct[]> =>
+    fetch(`${BASE}/kiotviet/products`).then((r) => toJson<KiotVietProduct[]>(r)),
+  kiotVietOrders: (): Promise<KiotVietOrder[]> =>
+    fetch(`${BASE}/kiotviet/orders`).then((r) => toJson<KiotVietOrder[]>(r)),
 };
 
 export function formatVnd(amount: number): string {

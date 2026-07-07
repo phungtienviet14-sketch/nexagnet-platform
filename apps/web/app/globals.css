@@ -42,7 +42,7 @@ body {
   margin: 0 auto;
   min-height: 100dvh;
   background: var(--bg);
-  padding-bottom: 3rem;
+  padding-bottom: 4.8rem; /* chua thanh tab co dinh o duoi */
 }
 
 /* ---- Topbar ---- */
@@ -79,7 +79,7 @@ body {
 .counters {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.7rem;
+  padding: 0.9rem 1.1rem 0;
 }
 .counter {
   flex: 1;
@@ -148,6 +148,36 @@ body {
 .chip:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+.chip-active,
+.chip-active:hover {
+  border-color: var(--accent);
+  color: white;
+  background: var(--accent);
+}
+
+/* ---- Group select + filter ---- */
+.group-select {
+  width: 100%;
+  margin-top: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.group-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.group-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.8rem 1.1rem 0;
 }
 
 /* ---- Buttons ---- */
@@ -247,6 +277,16 @@ body {
   font-size: 0.68rem;
   color: var(--text-dim);
   margin-top: 0.15rem;
+}
+.card-head .group-tag {
+  display: inline-block;
+  margin-top: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
 }
 .badge {
   font-size: 0.62rem;
@@ -382,4 +422,139 @@ body {
   color: var(--ok);
   background: var(--ok-soft);
   border-top: 1px solid var(--line);
+}
+
+/* ---- Bottom tab bar ---- */
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+  z-index: 20;
+}
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.5rem 0.4rem calc(0.5rem + env(safe-area-inset-bottom, 0));
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  transition: color 0.15s;
+}
+.tab-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+.tab-active {
+  color: var(--accent);
+}
+.tab-active .tab-icon {
+  transform: translateY(-1px);
+}
+
+/* ---- KiotViet tab ---- */
+.kv-note {
+  margin: 0.7rem 1.1rem 0;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 1.1rem;
+}
+.kv-product,
+.kv-order {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  padding: 0.6rem 0.8rem;
+}
+.kv-product {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.kv-product-main .name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.kv-sub {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 0.1rem;
+  font-variant-numeric: tabular-nums;
+}
+.kv-stock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.kv-stock b {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.kv-stock span {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.kv-stock-moved {
+  background: var(--accent-soft);
+}
+.kv-stock-moved b {
+  color: var(--accent);
+}
+.kv-order-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.kv-code {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--accent);
+}
+.kv-time {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+.kv-order-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+}
+.kv-order-body b {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }

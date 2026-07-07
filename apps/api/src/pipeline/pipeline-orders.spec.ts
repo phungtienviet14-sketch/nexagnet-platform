@@ -17,7 +17,7 @@ function build() {
   const repo = new InMemoryOrdersRepository();
   const pipeline = new PipelineService(new MockParser(), knowledge, repo);
   const adapter = new MockAdapter();
-  const orders = new OrdersService(repo, adapter, new KiotVietMockAdapter());
+  const orders = new OrdersService(repo, adapter, new KiotVietMockAdapter(knowledge));
   return { pipeline, orders, adapter };
 }
 
@@ -72,7 +72,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     const knowledge = new KnowledgeService();
     const repo = new InMemoryOrdersRepository();
     const pipeline = new PipelineService(new MockParser(), knowledge, repo);
-    const orders = new OrdersService(repo, new FailingAdapter(), new KiotVietMockAdapter());
+    const orders = new OrdersService(repo, new FailingAdapter(), new KiotVietMockAdapter(knowledge));
 
     const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
     await expect(orders.approve(view.id)).rejects.toThrow();
@@ -80,6 +80,36 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     const after = orders.getOrThrow(view.id);
     expect(after.status).toBe('pending_review'); // van con nut Duyet -> retry duoc
     expect(after.kiotVietCode).toBeUndefined(); // chua len KiotViet
+  });
+
+  it('tin tu NHOM KHAC -> map dung dai ly/chinh sach/ten nhom cua nhom do (dinh tuyen da nhom)', async () => {
+    const { pipeline, orders, adapter } = build();
+    const knowledge = new KnowledgeService();
+    const tn = knowledge.groups().find((g) => g.dealerId === 'dl-thai-nguyen');
+    expect(tn, 'seed can co nhom map -> dl-thai-nguyen').toBeDefined();
+
+    const view = await pipeline.process(
+      {
+        externalMessageId: `m-${Math.random()}`,
+        platform: 'zalo',
+        source: 'bot_webhook',
+        chatType: 'group',
+        externalChatId: tn!.chatId,
+        text: '@Bot ultty AI orders gui 10 ghe felix',
+        sentAt: new Date(),
+      },
+      BOT_NAME,
+    );
+
+    expect(view.intent).toBe('dat_don');
+    expect(view.groupName).toBe(tn!.name);
+    expect(view.dealerName).toBe('Đại lý Thái Nguyên');
+    expect(view.priced?.policy).toBe('cong_no_45'); // khac Meta HN (cong_no_30) -> dinh tuyen theo nhom
+    expect(view.status).toBe('pending_review'); // co dai ly -> khong canh bao "chua xac dinh"
+
+    // Duyet -> xac nhan gui ve DUNG nhom nguon (khong phai Meta HN).
+    await orders.approve(view.id);
+    expect(adapter.sent.at(-1)?.chatId).toBe(tn!.chatId);
   });
 
   it('tin hoi gia khong phai don -> khong nam trong danh sach don, khong duyet duoc', async () => {

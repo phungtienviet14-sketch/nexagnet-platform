@@ -38,6 +38,8 @@ ZALO_BOT_TOKEN=<token bot>
 Chạy lại `pnpm dev:api`. Bot sẽ long-polling nhóm. Trong nhóm Zalo, **@mention bot** kèm đơn (text hoặc **ảnh có tag** — bot đọc `photo_url`) → đơn tự hiện trên app → duyệt → **bot gửi xác nhận vào chính nhóm đó**.
 > Lưu ý: tin gửi lúc bot offline không được Zalo phát lại → production cần webhook always-on; Co-pilot (nhập tay) là lưới an toàn.
 
+**Nhiều nhóm cùng lúc:** bot đọc mọi nhóm nó ở trong; mỗi nhóm map với 1 đại lý trong [seed.ts](../apps/api/src/knowledge/seed.ts) (`groups`) → đơn tự nhận đúng đại lý/chính sách theo nhóm, tất cả đổ về 1 màn hình Sale (lọc theo nhóm). Lấy `chat_id` nhóm mới bằng `pnpm poc:groups`. Kịch bản demo đa nhóm: [kich-ban-demo-nhieu-nhom.md](kich-ban-demo-nhieu-nhom.md).
+
 ## 4. Chế độ AI THẬT (Claude thay Mock)
 
 Trong `.env`:

@@ -51,6 +51,8 @@ export class PipelineService {
       status,
       createdAt: new Date().toISOString(),
       chatId: message.externalChatId,
+      groupName: resolved.groupName ?? undefined,
+      dealerName: resolved.dealer?.name ?? undefined,
       rawText: message.text,
       imageUrl: message.imageUrl,
       intent: parseResult.intent,

@@ -31,6 +31,8 @@ export interface GroupMap {
   chatId: string;
   dealerId: string;
   branch: string;
+  /** Ten hien thi nhom (UI feed + bo chon nhom khi demo) */
+  name: string;
 }
 
 export interface GlossaryEntry {

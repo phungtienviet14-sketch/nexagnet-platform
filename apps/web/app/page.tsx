@@ -1,83 +1,45 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Composer } from '../components/Composer';
-import { OrderCard } from '../components/OrderCard';
-import { api } from '../lib/api';
+import { useState } from 'react';
+import { KiotVietTab } from '../components/KiotVietTab';
+import { OrdersTab } from '../components/OrdersTab';
+
+type Tab = 'orders' | 'kiotviet';
 
 export default function HomePage() {
-  const qc = useQueryClient();
-  const feedQ = useQuery({ queryKey: ['messages'], queryFn: api.messages, refetchInterval: 2500 });
-  const samplesQ = useQuery({ queryKey: ['samples'], queryFn: api.samples });
-
-  const invalidate = () => {
-    void qc.invalidateQueries({ queryKey: ['messages'] });
-  };
-  const simulateM = useMutation({ mutationFn: api.simulate, onSuccess: invalidate });
-  const approveM = useMutation({ mutationFn: api.approve, onSuccess: invalidate });
-  const rejectM = useMutation({ mutationFn: api.reject, onSuccess: invalidate });
-
-  const items = feedQ.data ?? [];
-  const orders = items.filter((o) => o.intent === 'dat_don');
-  const pending = orders.filter(
-    (o) => o.status === 'pending_review' || o.status === 'needs_edit',
-  ).length;
-  const sent = orders.filter((o) => o.status === 'synced').length;
-  const isBusy = approveM.isPending || rejectM.isPending;
-  const actionError = approveM.error ?? rejectM.error ?? simulateM.error;
+  const [tab, setTab] = useState<Tab>('orders');
 
   return (
     <main className="app">
       <header className="topbar">
         <div className="brand">
           <h1>Ultty AI</h1>
-          <span className="tag">Trợ lý đơn hàng</span>
-        </div>
-        <div className="counters">
-          <div className="counter">
-            <b>{orders.length}</b>
-            <span>Đơn</span>
-          </div>
-          <div className="counter">
-            <b>{pending}</b>
-            <span>Chờ duyệt</span>
-          </div>
-          <div className="counter">
-            <b>{sent}</b>
-            <span>Đã gửi</span>
-          </div>
+          <span className="tag">{tab === 'orders' ? 'Trợ lý đơn hàng' : 'KiotViet (mock)'}</span>
         </div>
       </header>
 
-      <Composer
-        onSend={(t) => simulateM.mutate(t)}
-        samples={samplesQ.data ?? []}
-        isSending={simulateM.isPending}
-      />
+      <div className="tab-body">{tab === 'orders' ? <OrdersTab /> : <KiotVietTab />}</div>
 
-      {actionError && (
-        <div className="error-banner" role="alert">
-          ⚠ {actionError.message}
-        </div>
-      )}
-
-      <div className="section-title">Đơn &amp; tin nhắn</div>
-      <div className="feed">
-        {items.length === 0 && (
-          <div className="empty">
-            Chưa có tin. Gửi thử một tin ở trên, hoặc bật bot đọc từ nhóm Zalo (BOT_MODE=on).
-          </div>
-        )}
-        {items.map((o) => (
-          <OrderCard
-            key={o.id}
-            order={o}
-            isBusy={isBusy}
-            onApprove={(id) => approveM.mutate(id)}
-            onReject={(id) => rejectM.mutate(id)}
-          />
-        ))}
-      </div>
+      <nav className="tabbar" aria-label="Điều hướng">
+        <button
+          type="button"
+          className={`tab ${tab === 'orders' ? 'tab-active' : ''}`}
+          aria-current={tab === 'orders'}
+          onClick={() => setTab('orders')}
+        >
+          <span className="tab-icon">🧾</span>
+          <span>Đơn hàng</span>
+        </button>
+        <button
+          type="button"
+          className={`tab ${tab === 'kiotviet' ? 'tab-active' : ''}`}
+          aria-current={tab === 'kiotviet'}
+          onClick={() => setTab('kiotviet')}
+        >
+          <span className="tab-icon">📦</span>
+          <span>KiotViet</span>
+        </button>
+      </nav>
     </main>
   );
 }

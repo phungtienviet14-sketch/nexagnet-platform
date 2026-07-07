@@ -34,3 +34,4 @@ export type {
   PricedOrder,
   OrderView,
 } from './order-view.js';
+export type { KiotVietProduct, KiotVietOrder } from './kiotviet.js';

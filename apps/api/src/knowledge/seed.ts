@@ -46,9 +46,22 @@ const dealers: Dealer[] = [
   { id: 'ctv-ocean-park', name: 'CTV Ocean Park', aliases: ['ocean park', 'ocp'], tier: 'ctv', defaultPolicy: 'thanh_toan_ngay' },
 ];
 
-// Nhom test that tu PoC 07/07 (chat_id zgr-...) — map ve dai ly Meta HN.
+// Nhom Zalo THAT (chat_id zgr-...) — map moi nhom ve 1 dai ly de demo nhieu nhom.
+// Lay chat_id bang `pnpm poc:groups` (tag bot trong nhom -> in ra chat_id).
 const groups: GroupMap[] = [
-  { chatId: 'zgr-f8a7101d77709e2ec761', dealerId: 'meta-hn', branch: 'HN' },
+  {
+    chatId: 'zgr-f8a7101d77709e2ec761',
+    dealerId: 'meta-hn',
+    branch: 'HN',
+    name: 'Nhóm đại lý Meta HN',
+  },
+  {
+    // Nhom Zalo that thu 2 (lay bang `pnpm poc:groups` / feed app 07/07).
+    chatId: 'zgr-f51afbe59a8873d62a99',
+    dealerId: 'dl-thai-nguyen',
+    branch: 'TN',
+    name: 'Nhóm đại lý Thái Nguyên',
+  },
 ];
 
 const glossary: GlossaryEntry[] = [
