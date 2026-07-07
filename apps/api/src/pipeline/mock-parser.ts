@@ -44,8 +44,9 @@ function extractItems(normText: string, products: Product[]): ExtractedItem[] {
       if (idx < 0 || usedSkus.has(product.sku)) continue;
 
       const prefixNumbers = normText.slice(0, idx).match(/\d+/g);
-      const explicit = Boolean(prefixNumbers && prefixNumbers.length > 0);
-      const quantity = explicit ? Number.parseInt(prefixNumbers![prefixNumbers!.length - 1], 10) : 1;
+      const lastNumber = prefixNumbers?.[prefixNumbers.length - 1];
+      const explicit = lastNumber !== undefined;
+      const quantity = lastNumber !== undefined ? Number.parseInt(lastNumber, 10) : 1;
 
       items.push({ skuRaw: candidate, quantity, explicit });
       usedSkus.add(product.sku);

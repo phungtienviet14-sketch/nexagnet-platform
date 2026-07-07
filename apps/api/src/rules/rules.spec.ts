@@ -59,9 +59,9 @@ describe('priceOrder — TH1', () => {
 
   it('ap gia theo cap dai ly, mien ship, khong VAT', () => {
     const priced = priceOrder(parsed, ctx());
-    expect(priced.lines[0].sku).toBe('GHE-FELIX');
-    expect(priced.lines[0].unitPrice).toBe(1_150_000);
-    expect(priced.lines[0].lineTotal).toBe(11_500_000);
+    expect(priced.lines[0]!.sku).toBe('GHE-FELIX');
+    expect(priced.lines[0]!.unitPrice).toBe(1_150_000);
+    expect(priced.lines[0]!.lineTotal).toBe(11_500_000);
     expect(priced.itemsSubtotal).toBe(11_500_000);
     expect(priced.shippingFee).toBe(0);
     expect(priced.vatAmount).toBe(0);
@@ -90,7 +90,7 @@ describe('priceOrder — validation', () => {
       { orderType: 'TH1', items: [{ skuRaw: 'ban an go', quantity: 2 }], noVat: true },
       ctx(),
     );
-    expect(priced.lines[0].matched).toBe(false);
+    expect(priced.lines[0]!.matched).toBe(false);
     expect(priced.warnings.join(' ')).toMatch(/ban an go/i);
   });
 

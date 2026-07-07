@@ -20,6 +20,8 @@ export const channelMessageSchema = z.object({
   senderExternalId: z.string().min(1).optional(),
   senderDisplayName: z.string().min(1).optional(),
   text: z.string().min(1).max(10_000),
+  /** photo_url neu tin la anh (Zalo message.image.received) — Claude doc bang vision */
+  imageUrl: z.string().url().optional(),
   sentAt: z.coerce.date(),
 });
 

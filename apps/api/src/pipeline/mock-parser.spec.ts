@@ -21,8 +21,8 @@ describe('MockParser', () => {
     const r = await run('@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT');
     expect(r.intent).toBe('dat_don');
     expect(r.order?.items).toHaveLength(1);
-    expect(r.order?.items[0].quantity).toBe(10);
-    expect(r.order?.items[0].skuRaw.toLowerCase()).toContain('felix');
+    expect(r.order?.items?.[0]?.quantity).toBe(10);
+    expect(r.order?.items?.[0]?.skuRaw.toLowerCase()).toContain('felix');
     expect(r.order?.noVat).toBe(true);
   });
 
@@ -49,7 +49,7 @@ describe('MockParser', () => {
   it('boc @mention khoi noi dung, khong coi ten bot la SP', async () => {
     const r = await run('@Bot ultty AI orders 5 noi chien');
     expect(r.order?.items).toHaveLength(1);
-    expect(r.order?.items[0].quantity).toBe(5);
+    expect(r.order?.items?.[0]?.quantity).toBe(5);
   });
 
   it('mac dinh noVat=false khi khong ghi ko VAT', async () => {

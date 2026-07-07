@@ -17,6 +17,13 @@ export const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   ZALO_BOT_TOKEN: z.string().optional(),
   ZALO_BOT_WEBHOOK_SECRET: z.string().optional(),
+  // Che do parser: mock (tat dinh, demo offline) hoac claude (that).
+  PARSER_MODE: z.enum(['mock', 'claude']).default('mock'),
+  // Bat/tat worker doc tin Zalo Bot. Mac dinh off de app boot khong can token.
+  BOT_MODE: z.enum(['on', 'off']).default('off'),
+  // Ten bot de boc @mention khoi noi dung tin.
+  BOT_NAME: z.string().default('Bot ultty AI orders'),
+  CORS_ORIGIN: z.string().default('http://localhost:3000'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
