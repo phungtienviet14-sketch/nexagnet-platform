@@ -40,9 +40,12 @@ Xây hệ thống AI Co-pilot: tin nhắn đặt hàng Zalo (dán tay hoặc bot
 - Action: pnpm workspaces (`apps/api`, `apps/web`, `packages/shared`, `tools/*`); TS strict; ESLint+Prettier; Vitest; env schema (zod) validate khi boot; docker-compose Postgres+Redis
 - Validate: `pnpm install && pnpm build && pnpm test && pnpm lint`
 
-**Task 0.2: PoC Zalo Bot Platform** *(quyết định ingestion, KHÔNG chặn go-live)*
+**Task 0.2: PoC Zalo Bot Platform** ✅ **XONG 07/07/2026** *(quyết định ingestion, KHÔNG chặn go-live)*
 - Action: script getUpdates + setWebhook (bot tạo tay qua Zalo Bot Manager); thử với 1 nhóm test; trả lời 3 câu hỏi Beta (vào nhóm sẵn có? mọi tin hay @mention? bao nhiêu nhóm?)
-- Validate: `docs/poc-zalo-bot.md` ghi kết quả + quyết định bật/tắt `BotPlatformAdapter`
+- **Kết quả ([docs/poc-zalo-bot.md](../../docs/poc-zalo-bot.md)):** vào nhóm sẵn có ✅; **chỉ nhận @mention** (mention-gating gốc, không tắt được) ✅; bot gửi ngược vào nhóm ✅; giới hạn nhóm/rate limit ⬜ chưa test. → `BotPlatformAdapter` = **kênh lai** (bắt đơn text-có-tag), chạy song song `CopilotAdapter`. Điều kiện bật: khách đồng ý đại lý tag bot (D2).
+- **Còn treo (optional, không chặn code):** test đồng nghiệp (người khác) @mention · ảnh/thoại chat 1-1 (PRIVATE) · đa nhóm + rate limit · chế độ webhook (production).
+- **Sửa tool trong lúc PoC:** `get-updates.ts` coi HTTP 408 là idle (trước đó tự chết sau 5 lần); thêm script gốc `poc:doctor`/`poc:webhook`.
+- Validate: `docs/poc-zalo-bot.md` ghi kết quả + quyết định bật/tắt `BotPlatformAdapter` ✅
 
 **Task 0.3: Thu thập nguồn sự thật từ khách** *(điều kiện chặn bật AI — khuyến nghị NetViet)*
 - Action: lấy từ Drive: danh mục 18-20 SKU, bảng giá theo cấp, 4 chính sách + biểu phí COD, 20-30 tin nhắn thật; chuẩn hóa thành seed data (CSV/JSON)

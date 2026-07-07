@@ -18,8 +18,10 @@
     "format": "prettier --write \"**/*.{ts,tsx,md,json,mjs}\"",
     "dev:api": "pnpm --filter @ultty/api dev",
     "dev:web": "pnpm --filter @ultty/web dev",
+    "poc:doctor": "pnpm --filter @ultty/poc-zalo-bot run doctor",
     "poc:updates": "pnpm --filter @ultty/poc-zalo-bot updates",
-    "poc:send": "pnpm --filter @ultty/poc-zalo-bot send"
+    "poc:send": "pnpm --filter @ultty/poc-zalo-bot send",
+    "poc:webhook": "pnpm --filter @ultty/poc-zalo-bot webhook"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

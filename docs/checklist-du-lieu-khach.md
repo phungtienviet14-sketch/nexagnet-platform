@@ -38,8 +38,8 @@ Trạng thái: ⬜ chưa có · 🟡 đã hỏi, đang chờ · ✅ đã nhận 
 
 | # | Quyết định | Ghi chú | TT |
 |---|---|---|---|
-| D1 | Lập **nhóm Zalo test** + đồng ý add bot PoC | Nhóm test riêng (2-3 người phía khách + đội dự án), KHÔNG dùng nhóm đại lý thật cho PoC | ⬜ |
-| D2 | Nếu bot chỉ nhận @mention: đại lý có chấp nhận tag bot khi đặt hàng? | Chờ kết quả PoC câu 2 rồi hỏi | ⬜ |
+| D1 | ~~Lập **nhóm Zalo test** + đồng ý add bot PoC~~ | ✅ **XONG 07/07** — đã tạo nhóm dev, add bot thành công, chạy PoC ([poc-zalo-bot.md](poc-zalo-bot.md)) | ✅ |
+| D2 | ⭐ **Đại lý có chấp nhận tag (@mention) bot khi đặt hàng không?** | **KÍCH HOẠT** — PoC 07/07 xác nhận bot trong nhóm CHỈ nhận tin @mention (mention-gating gốc của Zalo, không tắt được). Đây là điều kiện chặn bật Bot mode; nếu không đồng ý → chạy thuần Co-pilot | 🟡 |
 | D3 | Design app (AutoRep) là spec bắt buộc hay tham khảo UX? Facebook/Telegram thuộc giai đoạn nào? | Ảnh trong `design/` | ⬜ |
 | D4 | AI có được TỰ trả lời tư vấn trong nhóm không, hay chỉ soạn nháp cho Sale? | Cần **văn bản xác nhận** nếu bật tự trả lời (quyết định kiến trúc #4) | ⬜ |
 | D5 | Danh sách người dùng app: Sale/kế toán/quản lý (tên + SĐT + vai trò) | Cho Task 2.1 auth & phân quyền | ⬜ |

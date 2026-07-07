@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "doctor": "tsx src/doctor.ts",
     "updates": "tsx src/get-updates.ts",
     "send": "tsx src/send-message.ts",
     "webhook": "tsx src/webhook.ts",

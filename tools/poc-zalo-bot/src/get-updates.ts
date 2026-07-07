@@ -72,10 +72,20 @@ console.log('Bat dau long polling getUpdates... (Ctrl+C de dung va xem tong ket)
 console.log('Kich ban test: xem tools/poc-zalo-bot/README.md');
 
 let consecutiveErrors = 0;
+let idlePolls = 0;
 for (;;) {
   try {
-    const response = await callBotApi(token, 'getUpdates', { timeout: 25 });
+    // timeout:20 -> long-poll giu ket noi toi 20s cho tin moi; client cho toi 45s.
+    const response = await callBotApi(token, 'getUpdates', { timeout: 20 }, 45_000);
     if (!response.ok) {
+      // 408 "Request timeout" = het cua so long-poll ma KHONG co tin moi.
+      // Day la trang thai RANH BINH THUONG cua Zalo Bot API, khong phai loi -> poll tiep.
+      if (response.error_code === 408) {
+        consecutiveErrors = 0;
+        idlePolls += 1;
+        console.log(`[${new Date().toLocaleTimeString('vi-VN')}] ... dang cho tin (poll idle #${idlePolls})`);
+        continue;
+      }
       stats.errors += 1;
       consecutiveErrors += 1;
       console.error(`Loi API (${response.error_code}): ${response.description}`);

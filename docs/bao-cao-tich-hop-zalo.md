@@ -83,6 +83,13 @@ Tài liệu webhook chính thức xác nhận: `chat.chat_type` nhận giá tr�
 2. Bot nhận **tất cả tin nhắn trong nhóm** hay chỉ tin có @mention bot? (tài liệu OpenClaw ghi nhận nhóm cần @mention để kích hoạt — nếu đúng, đại lý phải đổi thói quen: tag bot khi đặt hàng. Có thể chấp nhận được nhưng cần khách đồng ý.)
 3. Giới hạn: 1 bot vào được bao nhiêu nhóm? Rate limit? (chưa công bố)
 
+> **✅ KẾT QUẢ PoC THỰC TẾ (07/07/2026 — bot "Bot ultty AI orders", chi tiết [poc-zalo-bot.md](poc-zalo-bot.md)):**
+> 1. **Vào nhóm sẵn có: ĐƯỢC** — thêm bot qua "Thêm thành viên" (tìm tên bot) hoặc chia sẻ **link mời của bot** vào nhóm. Bác bỏ lo ngại "bot Marketplace không vào được nhóm" (ít nhất với nhóm này).
+> 2. **Chỉ nhận @mention: ĐÚNG** — tin có tag về trọn nội dung; tin thường/ảnh/thoại không tag KHÔNG về. Xác minh đây là **mention-gating GỐC của nền tảng, không tắt được** (OpenClaw docs: *"not configurable per channel", "mention-gated"*; `getMe` không có cờ `can_read_all_group_messages` như Telegram; không có setting nào phía mình). Bot **gửi ngược vào nhóm: ĐƯỢC** (`sendMessage` ok). Khác Telegram (tắt privacy được qua BotFather) — Zalo Beta chưa cho, có thể ở tab "Sắp ra mắt".
+> 3. **Giới hạn nhóm/rate limit: chưa test** (mới 1 nhóm).
+>
+> **Hàm ý:** dùng Bot làm **kênh lai** — đơn text-có-tag bot tự đọc; đơn không tag/ảnh/thoại → Co-pilot. Cần khách đồng ý để đại lý tag bot (mục 10, câu #4).
+
 **Lưu ý:** tin nhắn từ "nhóm đối tượng đặc biệt" (trẻ em, người khuyết tật...) sẽ chỉ nhận sự kiện `message.unsupported.received` thay vì nội dung — tuân thủ luật bảo vệ dữ liệu.
 
 ### 4.3 Ưu / nhược
@@ -219,10 +226,10 @@ Các điểm trọng yếu với dự án:
 
 | # | Câu hỏi | Hỏi ai |
 |---|---|---|
-| 1 | Bot Platform: 3 câu hỏi Beta ở mục 9.1 | Tự thử nghiệm PoC |
+| 1 | ~~Bot Platform: 3 câu hỏi Beta~~ → **ĐÃ TEST 07/07** (mục 4.2): vào nhóm ✅, chỉ @mention ✅; còn treo: đa nhóm/rate limit | ✅ Xong phần lớn |
 | 2 | Giá gói Premium của Bot Platform, giới hạn free tier | Zalo Platforms (cskh@zaloplatforms.com) |
 | 3 | Gói OA mới nào có GMF + OpenAPI; báo giá GMF 200-350 nhóm | Zalo sales |
-| 4 | Khách chấp nhận thói quen @mention bot khi đặt hàng không? | U Ultty (chị Phương) |
+| 4 | ⭐ Khách chấp nhận thói quen @mention bot khi đặt hàng không? **(PoC xác nhận BẮT BUỘC @mention → giờ là điều kiện chặn bật Bot mode)** | U Ultty (chị Phương) |
 | 5 | Khách chấp nhận rủi ro zca-js (nếu phải dùng) bằng văn bản? | U Ultty |
 
 ## 11. Nguồn tham khảo

@@ -297,3 +297,5 @@ flowchart TB
 ```
 
 **Vì sao an toàn:** hai chế độ dùng chung toàn bộ pipeline phía sau; chuyển qua lại chỉ là bật/tắt adapter, dữ liệu đơn hàng không phụ thuộc kênh.
+
+> **Cập nhật sau PoC 07/07/2026 ([poc-zalo-bot.md](poc-zalo-bot.md)):** Chế độ B (Bot Platform) đã xác nhận khả thi NHƯNG trong nhóm bot **chỉ nhận tin @mention nó** (mention-gating gốc của Zalo, không tắt được). ⇒ hai chế độ **chạy SONG SONG (kênh lai)**, không phải thay thế: đơn text-có-tag → Bot tự đọc; đơn không tag / ảnh / thoại → Co-pilot dán tay. Điều kiện bật Bot mode: khách đồng ý để đại lý tag bot (checklist D2).

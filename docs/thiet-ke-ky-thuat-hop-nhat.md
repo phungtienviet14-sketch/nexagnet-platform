@@ -30,13 +30,16 @@ TypeScript (Node.js 22) · NestJS (API) · Next.js **PWA mobile-first** (app Sal
 | Phương án | Tính chính thức | Đọc tin nhóm | Chi phí | Vị trí trong lộ trình |
 |---|---|---|---|---|
 | **A. Co-pilot** (Sale dán tin nhắn/ảnh vào app, AI xử lý, Sale gửi tay) | ✅ Không đụng ToS | Thủ công | 0đ | **Baseline GĐ1 — luôn hoạt động, là fallback vĩnh viễn** |
-| **B. Zalo Bot Platform** (bot.zapps.me, chính thức, nhóm Beta) | ✅ | Tự động (cần PoC 3 câu hỏi Beta) | Free tier / Premium chưa công bố | **PoC tuần 1; nếu đạt → nâng ingestion tự động ngay GĐ1** |
+| **B. Zalo Bot Platform** (bot.zapps.me, chính thức, nhóm Beta) | ✅ | **Tự động NHƯNG chỉ tin @mention** (PoC 07/07 đã xác nhận) | Free tier / Premium chưa công bố | **PoC xong → dùng làm KÊNH LAI: đơn text-có-tag bot tự đọc; phần còn lại Co-pilot** |
 | **C. Zalo OA + GMF** | ✅ | Tự động (API + webhook đầy đủ) | ~25-300k/tháng/nhóm × 200-350 nhóm + gói OA | GĐ2-3: OA cho CSKH 1:1 + ZNS (theo NetViet); GMF nhóm chỉ khi khách chấp nhận chi phí |
 | **D. zca-js (userbot)** | ❌ Vi phạm ToS | Tự động | 0đ | **Không dùng** trừ khi có văn bản chấp nhận rủi ro |
 
-**3 câu hỏi PoC Bot Platform (chặn quyết định):** (1) bot thêm được vào nhóm cá nhân có sẵn? (2) nhận mọi tin nhắn hay chỉ @mention? (3) 1 bot vào được bao nhiêu nhóm / rate limit?
+**3 câu hỏi PoC Bot Platform (KẾT QUẢ 07/07/2026 — [poc-zalo-bot.md](poc-zalo-bot.md)):**
+1. Bot thêm được vào nhóm cá nhân có sẵn? → ✅ **CÓ** (thêm thành viên tìm tên bot, hoặc chia sẻ link mời của bot vào nhóm).
+2. Nhận mọi tin hay chỉ @mention? → ⚠️ **CHỈ @mention** — nhận trọn nội dung khi được tag; tin thường/ảnh/thoại không tag KHÔNG về. Đây là **mention-gating gốc của Zalo (Beta), không tắt được** (đã xác minh qua OpenClaw docs + `getMe` không có cờ `can_read_all_group_messages` + không có setting nào bên mình) — KHÔNG phải cấu hình sai.
+3. Giới hạn số nhóm / rate limit? → ⬜ **chưa test** (mới 1 nhóm).
 
-Kết quả PoC không thay đổi kiến trúc: mọi kênh đi qua interface `ChannelAdapter`, Co-pilot cũng là một adapter (`CopilotAdapter` — nguồn tin là UI thay vì webhook).
+Kết quả PoC không thay đổi kiến trúc: mọi kênh đi qua interface `ChannelAdapter`, Co-pilot cũng là một adapter (`CopilotAdapter` — nguồn tin là UI thay vì webhook). **Hệ quả: `BotPlatformAdapter` chỉ bắt được đơn text-có-@mention → chạy song song Co-pilot (kênh lai), không thay thế.** Điều kiện bật Bot mode = khách đồng ý để đại lý tag bot khi đặt đơn (D2).
 
 ## 4. Map 6 tầng NetViet → module triển khai
 
@@ -106,7 +109,8 @@ Không làm (dấu hiệu template trong design): Gói dịch vụ Free/Premium,
 
 | Rủi ro | Giảm thiểu |
 |---|---|
-| PoC Bot Platform không đạt (chỉ @mention / không vào được nhóm sẵn) | Co-pilot vẫn go-live GĐ1 đúng hạn — PoC chỉ là nâng cấp, không phải điều kiện |
+| PoC Bot Platform (07/07): vào nhóm được nhưng **chỉ nhận @mention** → đại lý phải đổi thói quen tag bot | Kênh lai: bot bắt đơn text-có-tag, Co-pilot bắt phần còn lại; Co-pilot vẫn go-live GĐ1 đúng hạn dù khách không đồng ý tag. Ảnh/thoại nhóm → luôn qua Co-pilot |
+| Ảnh/thoại trong nhóm không bao giờ về bot (mention-gating, không @mention được media) | Đơn dạng ảnh (~<20%) xử lý bằng Co-pilot (Sale dán ảnh, Claude vision đọc); không phụ thuộc Zalo mở privacy nhóm |
 | Co-pilot dán tay chậm hơn quy trình 5 phút hiện tại → Sale bỏ dùng | Đo time_to_close ngay pilot 1-2 nhóm (bước 5 NetViet); tối ưu UX dán-duyệt-copy dưới 3 chạm; ưu tiên PoC Bot để bỏ bước dán |
 | Nguồn sự thật (SKU/giá/chính sách) khách cung cấp chậm | Là điều kiện chặn bật AI (đúng khuyến nghị NetViet); chèn task thu thập ngay tuần 1 |
 | AI trả lời sai giá/chính sách | Rules engine tất định + RAG bắt buộc có nguồn + không có dữ liệu thì không đoán |

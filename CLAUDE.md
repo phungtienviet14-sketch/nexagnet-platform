@@ -39,7 +39,9 @@ Hệ thống tài liệu (đọc theo thứ tự khi cần ngữ cảnh):
 | Database | PostgreSQL + Prisma | Nguồn sự thật (SKU/giá/chính sách/glossary), đơn hàng, feedback, KPI, audit |
 | Queue | BullMQ (Redis) | Pipeline xử lý tin nhắn bất đồng bộ |
 | AI | Claude API (tool use) — 1 orchestrator, KHÔNG multi-agent | Intent (7 loại) + trích xuất ràng buộc; **LLM không tính tiền/không quyết chính sách** — rules engine TS tất định lo phần đó |
-| Kênh Zalo GĐ1 | **Co-pilot (dán tay) là baseline + PoC Zalo Bot Platform tuần 1 để nâng cấp tự động** — mọi kênh qua interface `ChannelAdapter` (Copilot/BotPlatform/Mock) | zca-js đã LOẠI khỏi lộ trình chính (chỉ khi khách ký chấp nhận rủi ro); OA+GMF để GĐ2-3 |
+| Kênh Zalo GĐ1 | **Co-pilot (dán tay) là baseline; Bot Platform = KÊNH LAI (PoC 07/07 đã xác nhận khả thi)** — mọi kênh qua interface `ChannelAdapter` (Copilot/BotPlatform/Mock) | zca-js đã LOẠI khỏi lộ trình chính (chỉ khi khách ký chấp nhận rủi ro); OA+GMF để GĐ2-3 |
+
+**Kết quả PoC Bot Platform (07/07/2026 — chi tiết [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md)):** khả thi về kỹ thuật — bot vào được nhóm sẵn có ✅, đọc trọn nội dung tin ✅, gửi ngược vào nhóm ✅, chi phí 0đ, chính thức. **Ràng buộc cứng:** trong nhóm bot **CHỈ nhận tin @mention nó** (mention-gating là hành vi gốc của Zalo, KHÔNG tắt được — đã xác minh, không phải cấu hình sai); ảnh/thoại/tin-không-tag không về. → **Kênh lai:** đơn text-có-tag → bot tự đọc; phần còn lại (không tag/ảnh/thoại) → Co-pilot dán tay. Điều kiện bật Bot mode = **khách đồng ý để đại lý tag bot khi đặt đơn** (câu hỏi mở D2).
 
 ## Quyết định kiến trúc đã chốt
 
@@ -68,7 +70,7 @@ Quy trình duyệt: 1 Sale xác nhận bước cuối → kế toán kiểm tra 
 
 ## Câu hỏi mở (chưa chốt — hỏi/thử trước khi implement phần liên quan)
 
-1. PoC Zalo Bot Platform (3 câu hỏi Beta): bot vào được nhóm cá nhân có sẵn? nhận mọi tin nhắn hay chỉ @mention? 1 bot vào được bao nhiêu nhóm? — xem mục 9 của [docs/bao-cao-tich-hop-zalo.md](docs/bao-cao-tich-hop-zalo.md)
+1. ~~PoC Zalo Bot Platform (3 câu hỏi Beta)~~ — **ĐÃ CHỐT phần lớn (PoC 07/07, [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md)):** (a) vào nhóm sẵn có ✅ CÓ; (b) chỉ nhận @mention (native, không tắt được) ✅; (c) giới hạn nhóm/rate limit — CÒN treo. **Còn phải hỏi khách:** đại lý có chấp nhận @mention bot khi đặt hàng không (D2)? + gói Premium giá/rate limit (hỏi Zalo).
 2. Gói KiotViet hiện tại có bật API không? Rate limit bao nhiêu?
 3. Base có tài liệu API không? (khảo sát ghi "không rõ")
 4. Phạm vi cụ thể của giai đoạn 1/2/3 là gì?
