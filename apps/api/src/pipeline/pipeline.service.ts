@@ -52,6 +52,7 @@ export class PipelineService {
       createdAt: new Date().toISOString(),
       chatId: message.externalChatId,
       rawText: message.text,
+      imageUrl: message.imageUrl,
       intent: parseResult.intent,
       parsed: parseResult.order ?? null,
       priced,

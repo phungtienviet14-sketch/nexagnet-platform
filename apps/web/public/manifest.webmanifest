@@ -1,0 +1,11 @@
+{
+  "name": "U Ultty — Trợ lý đơn hàng AI",
+  "short_name": "Ultty AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f4ee",
+  "theme_color": "#b45f43",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

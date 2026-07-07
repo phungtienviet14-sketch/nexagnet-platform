@@ -33,4 +33,12 @@ export default tseslint.config(
       globals: { ...globals.browser },
     },
   },
+  {
+    // NestJS DI dung class lam token runtime qua emitDecoratorMetadata:
+    // ep `import type` se xoa import runtime -> hong DI. Tat rule cho api.
+    files: ['apps/api/**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'off',
+    },
+  },
 );

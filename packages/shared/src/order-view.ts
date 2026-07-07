@@ -48,6 +48,8 @@ export interface OrderView {
   createdAt: string;
   chatId: string;
   rawText: string;
+  /** photo_url neu tin la anh (hien anh don tren app) */
+  imageUrl?: string;
   intent: Intent;
   parsed: ParsedOrder | null;
   priced: PricedOrder | null;
