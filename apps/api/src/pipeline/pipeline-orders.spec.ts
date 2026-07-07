@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChannelMessage } from '@ultty/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { KiotVietMockAdapter } from '../kiotviet/kiotviet.adapter.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
@@ -59,6 +60,26 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     expect(adapter.sent[0]!.chatId).toBe(GROUP);
     expect(adapter.sent[0]!.text).toContain('Nồi chiên không dầu');
     expect(adapter.sent[0]!.text).toContain('Tin tự động');
+  });
+
+  it('gui Zalo LOI -> don giu pending_review de duyet lai (khong ket, H1)', async () => {
+    class FailingAdapter extends ChannelAdapter {
+      readonly name = 'fail';
+      async sendMessage(): Promise<void> {
+        throw new Error('rate limit');
+      }
+    }
+    const knowledge = new KnowledgeService();
+    const repo = new InMemoryOrdersRepository();
+    const pipeline = new PipelineService(new MockParser(), knowledge, repo);
+    const orders = new OrdersService(repo, new FailingAdapter(), new KiotVietMockAdapter());
+
+    const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
+    await expect(orders.approve(view.id)).rejects.toThrow();
+
+    const after = orders.getOrThrow(view.id);
+    expect(after.status).toBe('pending_review'); // van con nut Duyet -> retry duoc
+    expect(after.kiotVietCode).toBeUndefined(); // chua len KiotViet
   });
 
   it('tin hoi gia khong phai don -> khong nam trong danh sach don, khong duyet duoc', async () => {

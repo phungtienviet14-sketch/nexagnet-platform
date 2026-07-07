@@ -22,8 +22,9 @@ export default function HomePage() {
   const pending = orders.filter(
     (o) => o.status === 'pending_review' || o.status === 'needs_edit',
   ).length;
-  const sent = orders.filter((o) => o.status === 'sent').length;
+  const sent = orders.filter((o) => o.status === 'synced').length;
   const isBusy = approveM.isPending || rejectM.isPending;
+  const actionError = approveM.error ?? rejectM.error ?? simulateM.error;
 
   return (
     <main className="app">
@@ -53,6 +54,12 @@ export default function HomePage() {
         samples={samplesQ.data ?? []}
         isSending={simulateM.isPending}
       />
+
+      {actionError && (
+        <div className="error-banner" role="alert">
+          ⚠ {actionError.message}
+        </div>
+      )}
 
       <div className="section-title">Đơn &amp; tin nhắn</div>
       <div className="feed">

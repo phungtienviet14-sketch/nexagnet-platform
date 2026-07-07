@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import type { OrderView } from '@ultty/shared';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { KiotVietAdapter } from '../kiotviet/kiotviet.adapter.js';
@@ -33,15 +38,25 @@ export class OrdersService {
 
   /**
    * Sale duyet 1 cham -> (1) gui format xac nhan vao nhom Zalo, (2) day don len KiotViet.
-   * Trang thai cuoi: synced (hoan tat).
+   * KHONG doi trang thai truoc khi gui thanh cong: neu gui Zalo loi (rate limit/mang),
+   * don GIU NGUYEN pending_review/needs_edit de Sale DUYET LAI (khong bi ket). Trang thai
+   * chi chuyen 'synced' khi ca 2 buoc xong.
    */
   async approve(id: string): Promise<OrderView> {
     const view = this.getOrThrow(id);
     if (!view.priced) {
       throw new UnprocessableEntityException('Tin nay khong phai don hang, khong the duyet');
     }
-    this.repo.update(id, { status: 'approved' });
-    await this.channel.sendMessage(view.chatId, view.priced.confirmationText + AUTO_LABEL);
+
+    try {
+      await this.channel.sendMessage(view.chatId, view.priced.confirmationText + AUTO_LABEL);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new ServiceUnavailableException(
+        `Gửi xác nhận vào nhóm Zalo thất bại — đơn giữ nguyên, bấm Duyệt lại. (${detail})`,
+      );
+    }
+
     const { code } = await this.kiotViet.pushOrder(view.priced);
     return this.repo.update(id, { status: 'synced', kiotVietCode: code })!;
   }

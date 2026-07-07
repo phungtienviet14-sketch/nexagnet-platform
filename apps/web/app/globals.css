@@ -186,6 +186,17 @@ body {
 }
 
 /* ---- Feed / cards ---- */
+.error-banner {
+  margin: 0.6rem 1.1rem 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--r-md);
+  background: oklch(94% 0.05 25);
+  color: var(--danger);
+  border: 1px solid oklch(85% 0.08 25);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .section-title {
   padding: 1.1rem 1.1rem 0.4rem;
   font-size: 0.72rem;

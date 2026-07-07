@@ -3,11 +3,18 @@ import type { OrderView } from '@ultty/shared';
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 async function toJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API ${res.status}: ${body.slice(0, 120)}`);
+    let message = text.slice(0, 160);
+    try {
+      const body = JSON.parse(text) as { message?: string | string[] };
+      if (body.message) message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
+    } catch {
+      // giu message tho
+    }
+    throw new Error(message);
   }
-  return (await res.json()) as T;
+  return JSON.parse(text) as T;
 }
 
 export const api = {
