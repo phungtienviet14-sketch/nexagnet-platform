@@ -109,7 +109,8 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
     if (!l.matched) warnings.push(`Chưa map được sản phẩm: "${l.skuRaw}"`);
   }
   if (!ctx.dealer) warnings.push('Chưa xác định đại lý từ nhóm Zalo');
-  if (parsed.totalRaw != null && itemsSubtotal > 0) {
+  // totalRaw <= 0 = parser dien mac dinh (khong phai khach ghi) -> bo qua doi chieu.
+  if (parsed.totalRaw != null && parsed.totalRaw > 0 && itemsSubtotal > 0) {
     const diffRatio = Math.abs(itemsSubtotal - parsed.totalRaw) / Math.max(parsed.totalRaw, 1);
     if (diffRatio > ctx.cfg.totalMismatchTolerance) {
       warnings.push(

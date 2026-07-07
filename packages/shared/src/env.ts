@@ -15,10 +15,11 @@ export const envSchema = z.object({
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
+  DEEPSEEK_API_KEY: z.string().optional(),
   ZALO_BOT_TOKEN: z.string().optional(),
   ZALO_BOT_WEBHOOK_SECRET: z.string().optional(),
-  // Che do parser: mock (tat dinh, demo offline) hoac claude (that).
-  PARSER_MODE: z.enum(['mock', 'claude']).default('mock'),
+  // Che do parser: mock (tat dinh) | claude (Anthropic) | deepseek (DeepSeek, tuong thich OpenAI).
+  PARSER_MODE: z.enum(['mock', 'claude', 'deepseek']).default('mock'),
   // Bat/tat worker doc tin Zalo Bot. Mac dinh off de app boot khong can token.
   BOT_MODE: z.enum(['on', 'off']).default('off'),
   // Ten bot de boc @mention khoi noi dung tin.

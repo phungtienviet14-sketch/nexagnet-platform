@@ -107,6 +107,19 @@ describe('priceOrder — validation', () => {
     expect(priced.warnings.join(' ')).toMatch(/lệch|lech/i);
   });
 
+  it('bo qua doi chieu khi totalRaw=0 (parser dien mac dinh, khong phai khach ghi)', () => {
+    const priced = priceOrder(
+      {
+        orderType: 'TH1',
+        items: [{ skuRaw: 'ghe felix', quantity: 10 }],
+        totalRaw: 0,
+        noVat: true,
+      },
+      ctx(),
+    );
+    expect(priced.warnings).toHaveLength(0);
+  });
+
   it('khong canh bao khi tong khop trong sai so', () => {
     const priced = priceOrder(
       {
