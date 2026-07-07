@@ -110,7 +110,8 @@ Không làm (dấu hiệu template trong design): Gói dịch vụ Free/Premium,
 | Rủi ro | Giảm thiểu |
 |---|---|
 | PoC Bot Platform (07/07): vào nhóm được nhưng **chỉ nhận @mention** → đại lý phải đổi thói quen tag bot | Kênh lai: bot bắt đơn text-có-tag, Co-pilot bắt phần còn lại; Co-pilot vẫn go-live GĐ1 đúng hạn dù khách không đồng ý tag. Ảnh/thoại nhóm → luôn qua Co-pilot |
-| Ảnh/thoại trong nhóm không bao giờ về bot (mention-gating, không @mention được media) | Đơn dạng ảnh (~<20%) xử lý bằng Co-pilot (Sale dán ảnh, Claude vision đọc); không phụ thuộc Zalo mở privacy nhóm |
+| Ảnh/thoại KHÔNG tag trong nhóm không về bot (mention-gating) | Ảnh CÓ tag thì VỀ (kèm `photo_url`+`caption`, test 13:07) → xử lý qua bot; chỉ ảnh/thoại KHÔNG tag mới cần Co-pilot (Claude vision đọc) |
+| Tin gửi lúc bot offline không được Zalo phát lại (getUpdates không replay) | Production dùng webhook always-on; Co-pilot là lưới an toàn (Sale vẫn thấy tin trong nhóm); lưu mọi tin về DB ngay khi nhận |
 | Co-pilot dán tay chậm hơn quy trình 5 phút hiện tại → Sale bỏ dùng | Đo time_to_close ngay pilot 1-2 nhóm (bước 5 NetViet); tối ưu UX dán-duyệt-copy dưới 3 chạm; ưu tiên PoC Bot để bỏ bước dán |
 | Nguồn sự thật (SKU/giá/chính sách) khách cung cấp chậm | Là điều kiện chặn bật AI (đúng khuyến nghị NetViet); chèn task thu thập ngay tuần 1 |
 | AI trả lời sai giá/chính sách | Rules engine tất định + RAG bắt buộc có nguồn + không có dữ liệu thì không đoán |

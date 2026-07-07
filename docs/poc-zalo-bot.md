@@ -40,8 +40,10 @@ Thêm bot vào nhóm Zalo dev (có sẵn, nhiều thành viên) qua "Thêm thàn
 | Text có @mention bot | ✅ Có | 12:25, 12:29 (x2) — về **trọn nội dung** kèm chuỗi "@Bot ultty AI orders ..." |
 | Ảnh (không mention) | ❌ Không | gửi 12:26 — không về |
 | Tin thoại (không mention) | ❌ Không | gửi 12:26 — không về |
+| **Ảnh CÓ @mention** (tag trong caption) | ✅ **Có** | 13:07 — event `message.image.received`, kèm **`photo_url`** (tải được để Claude vision đọc) + **`caption`** (text đơn). ⇒ đơn ảnh CÓ tag bắt được qua bot |
+| **Reply-to-ảnh CÓ @mention** | ✅ Có | 13:08 — về dạng text |
+| Tin thoại CÓ @mention | ⬜ Chưa test | (thoại thường không tag được → khả năng vẫn không về) |
 | Từ thành viên KHÁC | ⬜ Chưa test | mọi tin test đều từ chủ bot (Phùng Việt) — **cần xác nhận mention của đại lý (người khác) cũng về** |
-| Ảnh/thoại CÓ mention | ⬜ Chưa test | quyết định liệu đơn dạng ảnh có bắt được qua bot không |
 
 #### Xác định nguyên nhân: NATIVE (mention-gating), KHÔNG phải cấu hình mình chặn
 
@@ -52,7 +54,9 @@ Thêm bot vào nhóm Zalo dev (có sẵn, nhiều thành viên) qua "Thêm thàn
 3. **`getMe` của bot mình** không có cờ `can_read_all_group_messages` (cờ mà Telegram dùng để lộ privacy mode tắt) → nền tảng Zalo (Beta) **chưa mở** khả năng đọc mọi tin nhóm. `account_type: BASIC`.
 4. **Phía mình sạch:** `getWebhookInfo` = 404 (không gắn webhook nhầm), token hợp lệ (`getMe` ok), poller nhận đúng khi có tag → không có gì bên mình chặn.
 
-**Kết luận nguyên nhân:** bot không thấy ảnh/thoại/tin-không-tag là do **"privacy mode" mặc định BẬT của Zalo Bot Platform ở chế độ nhóm (Beta), hiện KHÔNG tắt được** — KHÔNG phải lỗi cấu hình. (Khác Telegram: Telegram cho tắt privacy qua BotFather; Zalo Beta thì chưa — có thể nằm ở tab "Sắp ra mắt" trong quản lý bot.)
+**Kết luận nguyên nhân:** bot không thấy tin **KHÔNG @mention** (kể cả ảnh/thoại không tag) là do **"privacy mode" mặc định BẬT của Zalo Bot Platform ở chế độ nhóm (Beta), hiện KHÔNG tắt được** — KHÔNG phải lỗi cấu hình. (Khác Telegram: Telegram cho tắt privacy qua BotFather; Zalo Beta thì chưa — có thể nằm ở tab "Sắp ra mắt" trong quản lý bot.)
+
+**Cập nhật quan trọng (test 13:07):** mention-gating là cổng **DUY NHẤT** — tin nào @mention bot đều về đầy đủ, **kể cả ẢNH** (event `message.image.received` kèm `photo_url` + `caption`). Nghĩa là đơn dạng ảnh (~<20%) **bắt được qua bot NẾU đại lý tag bot trong caption ảnh**. Trước đó tưởng ảnh phải Co-pilot — nay đính chính: chỉ **ảnh KHÔNG tag** mới phải Co-pilot.
 
 ### Câu 3 — giới hạn
 Chưa test (mới 1 nhóm). Cần thêm bot vào 2-3 nhóm + gửi liên tiếp để đo số nhóm tối đa / rate limit.
@@ -65,11 +69,14 @@ Chưa test (mới 1 nhóm). Cần thêm bot vào 2-3 nhóm + gửi liên tiếp 
 - **`chat_id` nhóm test:** `zgr-f8a7101d77709e2ec761` (định dạng `zgr-...`).
 - **2 cách thêm bot vào nhóm:** (a) trong nhóm → Thêm thành viên → tìm tên bot; (b) tab **"Thông tin"** của bot có **link mời** ("Chia sẻ đường dẫn này vào nhóm mà bạn muốn mời Bot tham gia") → hữu ích cho onboarding hàng loạt 200 nhóm.
 - **Biểu đồ "Thống kê" trong app quản lý bot = chiều GỬI ĐI, không phải nhận:** chú thích `sendMessage/sendPhoto/sendSticker/sendChatAction` là method bot gửi (`sendMessage=1` = tin xác nhận mình gửi thử). Không phản ánh việc bot nhận ảnh/thoại. Xác nhận bot **gửi được ảnh/sticker** (dùng cho tin xác nhận đơn).
-- **Tương lai ảnh/thoại:** khả năng NHẬN ảnh/thoại đã có sẵn ở nền tảng (event `message.image.received`, `message.voice.received`). Trong **chat 1-1 (PRIVATE)** hầu như chắc nhận được (không bị mention-gate) — *chưa test, nên test để khẳng định*. Trong **nhóm**: chỉ về nếu Zalo bỏ mention-gating (tắt privacy nhóm) — **chưa cam kết, ngoài tầm kiểm soát của mình**; đơn ảnh nhóm (~<20%) vẫn phải Co-pilot.
+- **Payload ảnh (test 13:07):** event `message.image.received`, `message_type: CHAT_PHOTO`, có **`photo_url`** (link tải trực tiếp `https://photo-stal-*.zdn.vn/...jpg`) + **`caption`** (text kèm ảnh, gồm cả @mention). ⇒ pipeline tải ảnh từ `photo_url` → Claude vision đọc + dùng `caption` làm text đơn. Đơn ảnh-có-tag xử lý tự động được.
+- **⚠️ Tin gửi khi bot OFFLINE KHÔNG được phát lại:** tin ảnh gửi lúc 13:02 (poller đang tắt) không về khi bật lại — `getUpdates` không replay tin cũ. **Hàm ý thiết kế production:** phải chạy **webhook always-on** (hoặc poller không được gián đoạn); nếu bot chết trong lúc có tin → mất tin qua kênh bot, nhưng **Co-pilot là lưới an toàn** (Sale vẫn thấy tin trong nhóm, dán tay). Củng cố quyết định "lưu mọi tin về DB ngay khi nhận".
+- **Ảnh/thoại KHÔNG tag** trong nhóm: vẫn không về (mention-gating). Tương lai chỉ về nếu Zalo bỏ mention-gating (tab "Sắp ra mắt") — chưa cam kết.
 - **Tab "Sắp ra mắt"** trong quản lý bot: hiện KHÔNG bấm được (có thể là nơi thêm tùy chọn privacy/nhóm trong tương lai).
 
 ## Việc còn lại để kết luận 100%
 1. **Đồng nghiệp (người khác) @mention** → xác nhận bot thấy tin của đại lý, không chỉ của chủ bot. *(quan trọng nhất còn treo)*
-2. **Ảnh/thoại có kèm @mention** → có bắt được đơn dạng ảnh không.
+2. ~~Ảnh có @mention~~ → ✅ **XONG (13:07): ảnh-có-tag về kèm `photo_url` + `caption`.** Còn: thoại-có-tag (ít quan trọng).
 3. **Câu 3:** thêm 2-3 nhóm, đo giới hạn nhóm & rate limit.
-4. **Hỏi khách (D2):** đại lý chấp nhận tag bot khi đặt hàng không.
+4. **Chế độ webhook (production):** bắt buộc cho vận hành thật vì poller gián đoạn = mất tin (đã xác nhận offline không replay).
+5. **Hỏi khách (D2):** đại lý chấp nhận tag bot khi đặt hàng không.
