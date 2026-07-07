@@ -74,5 +74,7 @@ export const ORDER_STATUSES = [
   'approved',
   'rejected',
   'sent',
+  // Da duyet -> gui xac nhan nhom + day len KiotViet (hoan tat)
+  'synced',
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];

@@ -54,4 +54,6 @@ export interface OrderView {
   parsed: ParsedOrder | null;
   priced: PricedOrder | null;
   confidence: FieldConfidence;
+  /** Ma don KiotViet sau khi day len (GD1: mock; GD2: API that) */
+  kiotVietCode?: string;
 }

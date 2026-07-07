@@ -3,6 +3,7 @@ import { channelProvider } from './channels/channel.provider.js';
 import { DemoController } from './demo/demo.controller.js';
 import { HealthController } from './health/health.controller.js';
 import { BotPoller } from './ingest/bot-poller.js';
+import { KiotVietAdapter, KiotVietMockAdapter } from './kiotviet/kiotviet.adapter.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
 import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
@@ -15,6 +16,7 @@ import { PipelineService } from './pipeline/pipeline.service.js';
   providers: [
     KnowledgeService,
     { provide: OrdersRepository, useClass: InMemoryOrdersRepository },
+    { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
     parserProvider,
     channelProvider,
     PipelineService,

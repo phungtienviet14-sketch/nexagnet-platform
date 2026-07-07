@@ -16,6 +16,7 @@ const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = {
   needs_edit: { label: 'Cần kiểm tra', cls: 'badge-edit' },
   approved: { label: 'Đã duyệt', cls: 'badge-sent' },
   sent: { label: 'Đã gửi nhóm', cls: 'badge-sent' },
+  synced: { label: 'Hoàn tất', cls: 'badge-sent' },
   rejected: { label: 'Đã từ chối', cls: 'badge-rejected' },
 };
 
@@ -145,6 +146,11 @@ export function OrderCard({ order, onApprove, onReject, isBusy }: Props) {
           <button type="button" className="btn btn-primary" disabled={isBusy} onClick={() => onApprove(order.id)}>
             Duyệt & gửi nhóm
           </button>
+        </div>
+      ) : order.status === 'synced' ? (
+        <div className="done">
+          <span>✓ Đã gửi xác nhận vào nhóm Zalo</span>
+          <span>✓ Lên KiotViet · {order.kiotVietCode}</span>
         </div>
       ) : (
         <div className="non-order">

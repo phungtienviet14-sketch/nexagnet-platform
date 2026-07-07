@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChannelMessage } from '@ultty/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
+import { KiotVietMockAdapter } from '../kiotviet/kiotviet.adapter.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { MockParser } from './mock-parser.js';
@@ -15,7 +16,7 @@ function build() {
   const repo = new InMemoryOrdersRepository();
   const pipeline = new PipelineService(new MockParser(), knowledge, repo);
   const adapter = new MockAdapter();
-  const orders = new OrdersService(repo, adapter);
+  const orders = new OrdersService(repo, adapter, new KiotVietMockAdapter());
   return { pipeline, orders, adapter };
 }
 
@@ -52,7 +53,8 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
 
     const approved = await orders.approve(view.id);
 
-    expect(approved.status).toBe('sent');
+    expect(approved.status).toBe('synced');
+    expect(approved.kiotVietCode).toMatch(/^KV-/);
     expect(adapter.sent).toHaveLength(1);
     expect(adapter.sent[0]!.chatId).toBe(GROUP);
     expect(adapter.sent[0]!.text).toContain('Nồi chiên không dầu');
