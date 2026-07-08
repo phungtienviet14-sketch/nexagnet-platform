@@ -100,7 +100,9 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
   const shippingFee = computeShipping(totalQuantity, region, ctx.cfg);
   const codCollect = parsed.orderType === 'TH2' && parsed.codCollect === true;
   const codFee = codCollect ? ctx.cfg.codFee : 0;
-  const vat = !parsed.noVat;
+  // Nghiep vu: MAC DINH KHONG VAT (VAT tuy truong hop). Chi ap VAT khi khach ghi ro
+  // "xuat VAT" (wantVat) va khong ghi "ko VAT" (noVat).
+  const vat = parsed.wantVat === true && parsed.noVat !== true;
   const vatAmount = vat ? Math.round(itemsSubtotal * ctx.cfg.vatRate) : 0;
   const grandTotal = itemsSubtotal + shippingFee + vatAmount + codFee;
 

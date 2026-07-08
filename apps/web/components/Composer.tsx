@@ -41,6 +41,8 @@ export function Composer({ onSend, samples, groups, isSending }: Props) {
               {g.dealerName ? ` — ${g.dealerName}` : ''}
             </option>
           ))}
+          {/* Nhom chua map dai ly -> demo tuyen Giam sat leo thang (senderType=unknown). */}
+          <option value="zgr-nhom-la-demo">🔓 Nhóm lạ (chưa map đại lý)</option>
         </select>
       )}
 

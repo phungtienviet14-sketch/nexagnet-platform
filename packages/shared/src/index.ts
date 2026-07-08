@@ -27,6 +27,8 @@ export type {
   ParseResult,
   OrderStatus,
 } from './order.js';
+export { INTENT_DEFINITIONS } from './intents.js';
+export type { IntentDef } from './intents.js';
 export type {
   DealerTier,
   PolicyType,
@@ -36,3 +38,22 @@ export type {
 } from './order-view.js';
 export type { KiotVietProduct, KiotVietOrder } from './kiotviet.js';
 export type { DemoGroup } from './demo.js';
+export { broadcastRequestSchema, MAX_BROADCAST_TEXT } from './broadcast.js';
+export type { BroadcastRequest, BroadcastResult, BroadcastTargetResult } from './broadcast.js';
+export {
+  AGENT_ROLES,
+  ROLE_LABELS,
+  INTENT_LABELS,
+  INTENT_TO_ROLE,
+  SENDER_LABELS,
+} from './agents.js';
+export type {
+  AgentRole,
+  AgentSource,
+  AgentStep,
+  AgentStepStatus,
+  AgentTrace,
+  RiskLevel,
+  SenderType,
+  SupervisorSummary,
+} from './agents.js';

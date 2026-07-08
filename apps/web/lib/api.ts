@@ -1,4 +1,11 @@
-import type { DemoGroup, KiotVietOrder, KiotVietProduct, OrderView } from '@ultty/shared';
+import type {
+  BroadcastRequest,
+  BroadcastResult,
+  DemoGroup,
+  KiotVietOrder,
+  KiotVietProduct,
+  OrderView,
+} from '@ultty/shared';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -46,6 +53,12 @@ export const api = {
     fetch(`${BASE}/kiotviet/products`).then((r) => toJson<KiotVietProduct[]>(r)),
   kiotVietOrders: (): Promise<KiotVietOrder[]> =>
     fetch(`${BASE}/kiotviet/orders`).then((r) => toJson<KiotVietOrder[]>(r)),
+  broadcast: (req: BroadcastRequest): Promise<BroadcastResult> =>
+    fetch(`${BASE}/broadcast`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }).then((r) => toJson<BroadcastResult>(r)),
 };
 
 export function formatVnd(amount: number): string {

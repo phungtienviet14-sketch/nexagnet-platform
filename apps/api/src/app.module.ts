@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { AgentOrchestrator } from './agents/agent-orchestrator.service.js';
+import { BroadcastController } from './broadcast/broadcast.controller.js';
+import { BroadcastService } from './broadcast/broadcast.service.js';
 import { channelProvider } from './channels/channel.provider.js';
 import { DemoController } from './demo/demo.controller.js';
 import { HealthController } from './health/health.controller.js';
@@ -19,6 +22,7 @@ import { PipelineService } from './pipeline/pipeline.service.js';
     MessagesController,
     DemoController,
     KiotVietController,
+    BroadcastController,
   ],
   providers: [
     KnowledgeService,
@@ -26,8 +30,10 @@ import { PipelineService } from './pipeline/pipeline.service.js';
     { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
     parserProvider,
     channelProvider,
+    AgentOrchestrator,
     PipelineService,
     OrdersService,
+    BroadcastService,
     BotPoller,
   ],
 })

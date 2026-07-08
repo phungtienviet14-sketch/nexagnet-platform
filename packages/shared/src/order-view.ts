@@ -1,3 +1,4 @@
+import type { AgentTrace, SenderType } from './agents.js';
 import type { FieldConfidence, Intent, OrderStatus, OrderType, ParsedOrder } from './order.js';
 
 /**
@@ -60,4 +61,8 @@ export interface OrderView {
   confidence: FieldConfidence;
   /** Ma don KiotViet sau khi day len (GD1: mock; GD2: API that) */
   kiotVietCode?: string;
+  /** Loai nguoi gui suy tu nhom (multi-agent 6 con). */
+  senderType?: SenderType;
+  /** Vet 6 vai agent da phoi hop xu ly tin (multi-agent 6 con). */
+  trace?: AgentTrace;
 }

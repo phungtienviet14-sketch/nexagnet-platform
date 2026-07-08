@@ -69,9 +69,9 @@ Xây hệ thống AI Co-pilot: tin nhắn đặt hàng Zalo (dán tay hoặc bot
 - Action: interface `ChannelAdapter` (`onMessage`, `sendMessage`, `health`); `CopilotAdapter` (endpoint nhận text/ảnh Sale dán); `BotPlatformAdapter` (webhook, verify `X-Bot-Api-Secret-Token`, feature-flag theo kết quả 0.2); `MockAdapter`; lưu `messages` ngay khi nhận (idempotent theo `message_id`) rồi mới enqueue
 - Validate: unit + integration (MockAdapter → message trong DB → job trong queue); test idempotency gửi trùng
 
-**Task 1.4: Orchestrator (pipeline AI)**
-- Action: BullMQ processor: build context từ `knowledge` (nhóm→đại lý, SKU, glossary, prompt_rules bật) → 1 call Claude tool use trả `{intent, extraction?, draftReply?}`; retry/backoff; log token cost vào `kpi_events`
-- Validate: unit với LLM mock; integration (tùy chọn, env `RUN_LLM_TESTS=1`) chạy 5 tin mẫu từ bake-off, so khớp golden output
+**Task 1.4: AgentOrchestrator — Multi-agent 6 con (§5.1)**
+- Action: `agents/` — Router (1 call Claude tool use: intent + danh tính) → dispatch 1 trong 6 vai chuyên trách (Tư vấn SP · Bán hàng · Chính sách-TC · Hậu mãi) → Supervisor (rules tất định: rủi ro/leo thang). Gắn `AgentTrace` (6 bước, badge nguồn rules/AI/knowledge) lên OrderView. Dual-mode: mock offline (0 LLM) + LLM; 1 lần gọi LLM/tin. **DUY NHẤT Bán hàng gọi rules engine tính tiền.** Retry/backoff; log token cost `kpi_events`
+- Validate: unit orchestrator (trace đủ 6 vai, dat_don ra ≥4 vai active, tiền source=rules, đơn lớn→Supervisor escalate, offline 0 LLM); integration (env `RUN_LLM_TESTS=1`) 5 tin bake-off
 
 **Task 1.5: Rules engine (tất định, tách khỏi LLM)**
 - Action: giá theo `price_tiers` + cấp đại lý; ship (≥2 SP miễn; 1 SP: Grab HN/HCM nội thành, Viettel tỉnh); chính sách mặc định theo hồ sơ đại lý (công nợ 30/45, ký gửi, thanh toán ngay, COD + phí thu hộ theo biểu); VAT flag; dựng format xác nhận TH1/TH2 đúng mẫu NetViet 5.3

@@ -558,3 +558,270 @@ body {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ---- Broadcast (Khuyen mai) tab ---- */
+.bc-target-label {
+  margin-top: 0.8rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.bc-panel {
+  margin: 0.4rem 1.1rem 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  animation: rise 0.35s ease both;
+}
+.bc-panel .section-title {
+  padding: 0.8rem 0.95rem 0.3rem;
+}
+.bc-panel .actions {
+  padding: 0.4rem 0.95rem 0.9rem;
+}
+.bc-text {
+  margin: 0 0.95rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.bc-groups {
+  margin: 0.6rem 0 0.2rem;
+  padding: 0 0.95rem;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+}
+.bc-groups li {
+  padding: 0.35rem 0.55rem;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+}
+.bc-groups li.bc-ok {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+.bc-groups li.bc-fail {
+  color: var(--danger);
+  background: oklch(94% 0.05 25);
+}
+
+/* ---- Agent trace (multi-agent 6 con) ---- */
+.at {
+  margin: 0.2rem 0.95rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.at-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.at-title {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+.at-meta {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.at-sender {
+  margin-left: auto;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+}
+.at-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.at-step {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: var(--r-sm);
+  border-left: 2px solid var(--line);
+  animation: at-in 0.3s ease both;
+}
+.at-step:nth-child(2) {
+  animation-delay: 0.04s;
+}
+.at-step:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.at-step:nth-child(4) {
+  animation-delay: 0.12s;
+}
+.at-step:nth-child(5) {
+  animation-delay: 0.16s;
+}
+.at-step:nth-child(6) {
+  animation-delay: 0.2s;
+}
+@keyframes at-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+.at-icon {
+  font-size: 1rem;
+  line-height: 1.3;
+}
+.at-body {
+  flex: 1;
+  min-width: 0;
+}
+.at-role {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.at-name {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+.at-action {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  margin-top: 0.1rem;
+}
+.at-notes {
+  margin: 0.2rem 0 0;
+  padding-left: 0.9rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+/* Trang thai */
+.at-active {
+  background: var(--surface);
+  border-left-color: var(--accent);
+}
+.at-skipped {
+  opacity: 0.42;
+}
+.at-flagged {
+  background: var(--warn-soft);
+  border-left-color: var(--warn);
+}
+.at-handoff {
+  background: oklch(95% 0.04 25);
+  border-left-color: var(--danger);
+}
+/* Badge nguon */
+.at-src {
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+}
+.at-src-rules {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+.at-src-knowledge {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.at-src-llm {
+  color: oklch(45% 0.14 300);
+  background: oklch(94% 0.05 300);
+}
+.at-src-router {
+  color: var(--text-dim);
+  background: var(--surface-2);
+}
+.at-llm {
+  font-size: 0.56rem;
+  font-weight: 800;
+  color: oklch(45% 0.14 300);
+  border: 1px solid oklch(80% 0.08 300);
+  border-radius: 999px;
+  padding: 0.05rem 0.35rem;
+}
+.at-pill {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--danger);
+  background: oklch(94% 0.05 25);
+  border-radius: 999px;
+  padding: 0.08rem 0.4rem;
+}
+/* Banner leo thang + tra loi de xuat */
+.at > .at-handoff {
+  margin: 0 0.7rem 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--r-sm);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--danger);
+  background: oklch(94% 0.05 25);
+  border-left: none;
+  animation: none;
+}
+.at-reply {
+  margin: 0 0.7rem 0.6rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.at-reply-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.at-copy {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 700;
+  border-radius: var(--r-sm);
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+.at-reply-text {
+  margin: 0;
+  padding: 0.4rem 0.6rem 0.55rem;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid var(--line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .at-step {
+    animation: none;
+  }
+}

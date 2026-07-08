@@ -11,6 +11,8 @@ export interface Product {
   /** Ten thuong goi/viet tat dai ly hay dung (vd "felix", "ghe felix") */
   aliases: string[];
   unit: string;
+  /** Mo ta ngan cho agent Tu van san pham (RAG). */
+  description?: string;
 }
 
 export interface PriceRow {

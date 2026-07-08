@@ -28,6 +28,10 @@ export const envSchema = z.object({
   // Ten bot de boc @mention khoi noi dung tin.
   BOT_NAME: z.string().default('Bot ultty AI orders'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  // Broadcast (KH2): gian cach giua 2 lan gui de tranh vuot rate-limit Zalo (chua cong bo).
+  BROADCAST_THROTTLE_MS: z.coerce.number().int().nonnegative().default(1500),
+  // Tran so nhom moi lan gui — chan blast nham vao qua nhieu nhom.
+  BROADCAST_MAX_TARGETS: z.coerce.number().int().positive().default(50),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

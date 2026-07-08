@@ -1,0 +1,177 @@
+[
+  {
+    "text": "TN_8.7 dai ly TN, 10 x felix 1.150k tong 11tr5",
+    "expectedIntent": "dat_don",
+    "notes": "TH1 chuan format co Chi nhanh_Ngay_Dai ly. Kho: '11tr5'=11.500.000, 'felix'=viet tat SKU, phai validate SL x don gia ~ tong."
+  },
+  {
+    "text": "Meta HN dat 5 noi chien + 3 robot gui ve kho hn",
+    "expectedIntent": "dat_don",
+    "notes": "TH1 nhieu SP, KHONG co gia -> phai tra ve DB tinh gia. 'noi chien'=Noi chien khong dau 5L, 'robot'=Robot hut bui lau nha. Sale can dien gia."
+  },
+  {
+    "text": "gui thang cho khach c Lan 0912345678, 25 Tran Duy Hung HN, 1 ghe felix, thu ho 11tr5",
+    "expectedIntent": "dat_don",
+    "notes": "TH2 giao thang khach le: co ten+SDT+dia chi+thu ho. 'c Lan'=chi Lan. SDT 10 so. 'thu ho'=COD. Du lieu ca nhan -> luu DB, than trong LLM."
+  },
+  {
+    "text": "OCP lay 20 am sieu toc, 2 bep tu doi, ko VAT nhe",
+    "expectedIntent": "dat_don",
+    "notes": "TH1 nhieu SP, co 'ko VAT'. 'OCP'=Ocean Park (CTV Ocean Park). 'am sieu toc','bep tu doi' viet tat. Chenh lech SL lon (20 vs 2)."
+  },
+  {
+    "text": "dai ly TN dat 8 may loc nuoc RO xuat VAT cho c",
+    "expectedIntent": "dat_don",
+    "notes": "TH1 1 SP, co 'xuat VAT'. 'may loc nuoc RO'=May loc nuoc RO. 'cho c'=cho chi (nguoi dat). Co dinh la xuat VAT."
+  },
+  {
+    "text": "Meta HN chot sll 120 quat dieu hoa 890k/c gui gap",
+    "expectedIntent": "dat_don",
+    "notes": "So luong lon bat thuong (>50): 120 cai. 'sll'=so luong lon (glossary), '890k/c'=890 nghin/cai. Can canh bao SL lon + kiem ton KiotViet."
+  },
+  {
+    "text": "2 robot 1 ncked ve TN",
+    "expectedIntent": "dat_don",
+    "notes": "Viet CUC tat, khong dong tu dat ro rang, khong gia. 'ncked'=Noi chien khong dau (viet tat cung). 've TN'=giao Dai ly Thai Nguyen. Kho nhat lo."
+  },
+  {
+    "text": "khach a Hung 0987654321 so 12 ngo 5 Lang Ha, 1 may loc khong khi, cuoc ben nhan tra, thu ho 4tr5",
+    "expectedIntent": "dat_don",
+    "notes": "TH2 day du: ten+SDT+dia chi+cuoc VC+thu ho. 'a Hung'=anh Hung. 'cuoc ben nhan tra'=freight payer=khach. '4tr5'=4.500.000."
+  },
+  {
+    "text": "HN_8.7_Meta HN 10 x noi com 650k, 5 x may ep cham 1.290k, tong 12.950k ck roi",
+    "expectedIntent": "dat_don",
+    "notes": "TH1 chuan format nhieu SP co gia+tong+da CK. Validate: 10x650k + 5x1.290k = 6.500k+6.450k = 12.950k (khop). 'ck roi'=da chuyen khoan."
+  },
+  {
+    "text": "lay 60 am sieu toc + 30 noi com ve OCP ko vat",
+    "expectedIntent": "dat_don",
+    "notes": "SL lon (>50) + nhieu SP + 'ko vat' + viet tat. 'OCP'=CTV Ocean Park. Tong SL 90 cai -> canh bao ton kho. Khong gia."
+  },
+  {
+    "text": "ghe felix ngoi lau co dau lung ko c, no massage duoc ca vai gay ko",
+    "expectedIntent": "hoi_san_pham",
+    "notes": "Hoi cong nang/chat luong ghe massage Felix, khong hoi gia khong dat. De."
+  },
+  {
+    "text": "robot hut bui co lau duoc san go ko a, nha e trai san go so xuoc",
+    "expectedIntent": "hoi_san_pham",
+    "notes": "Hoi tinh nang lau san cua robot, ro rang tu van SP. De."
+  },
+  {
+    "text": "nha co tre nho thi nen lap may loc nuoc RO hay may loc khong khi truoc c oi",
+    "expectedIntent": "hoi_san_pham",
+    "notes": "Tu van/so sanh 2 SP theo nhu cau, KHONG hoi gia. Kho vua vi nhac 2 SP de lam nhieu vao dat_don."
+  },
+  {
+    "text": "bep tu doi nau co nong tay cam ko, so voi bep hong ngoai thi loai nao ngon hon",
+    "expectedIntent": "hoi_san_pham",
+    "notes": "Cau so sanh dac tinh SP. Kho: co the bi nham sang hoi_gia nhung khong he hoi tien."
+  },
+  {
+    "text": "ghe felix bao nhieu tien c oi",
+    "expectedIntent": "hoi_gia",
+    "notes": "Hoi gia 1 SP, tu khoa 'bao nhieu tien'. De."
+  },
+  {
+    "text": "noi chien 5l may tien 1 cai z a",
+    "expectedIntent": "hoi_gia",
+    "notes": "Hoi gia 1 SP, tu khoa 'may tien'. De, viet tat kieu go voi."
+  },
+  {
+    "text": "bao gia si cho e robot voi quat dieu hoa voi am sieu toc nhe",
+    "expectedIntent": "hoi_gia",
+    "notes": "Hoi gia si NHIEU SP mot luc, khong co so luong dat. Kho: nhieu SP de bi nham dat_don nhung chi la 'bao gia si'."
+  },
+  {
+    "text": "loc nuoc RO lay sll thi gia bao nhieu c",
+    "expectedIntent": "hoi_gia",
+    "notes": "Bien gioi voi dat_don: co 'lay' + 'sll' (so luong lon) nhung KHONG co con so cu the, that ra chi hoi gia si. Case kho nhat de test phan biet hoi_gia vs dat_don."
+  },
+  {
+    "text": "cho c hoi don nay minh cho cong no 45 ngay dc ko a, dot nay lay sll",
+    "expectedIntent": "chinh_sach_cong_no",
+    "notes": "Hoi han cong no 45 ngay -> chinh_sach_cong_no. Co glossary c=chi, sll=so luong lon. Bay: 'lay sll' de nham thanh dat_don, nhung KHONG co SP + so luong cu the nen van la hoi chinh sach."
+  },
+  {
+    "text": "hang ky gui thang nay ban dc 8 con felix, cuoi thang e bao so xuat vat nhe",
+    "expectedIntent": "chinh_sach_cong_no",
+    "notes": "Chinh sach ky gui (cuoi thang bao so -> len don + VAT), khong phai dat don moi. Bay: co 'ban dc 8 con felix' de nham dat_don, nhung day la bao so ban hang ky gui theo chinh sach, khong phai dat them hang."
+  },
+  {
+    "text": "khach lay hang thu ho COD thi phi thu ho tinh the nao a, bao truoc cho e voi",
+    "expectedIntent": "chinh_sach_cong_no",
+    "notes": "Hoi cach tinh phi thu ho COD -> nhom chinh sach thanh toan. Glossary COD, a=anh, e=em. Kho o cho de lan sang van_chuyen (vi co chu 'giao/thu ho') nhung trong tam la phi/chinh sach COD."
+  },
+  {
+    "text": "don ghe felix chot hom qua bao gio ship ve TN v a",
+    "expectedIntent": "van_chuyen",
+    "notes": "Hoi khi nao giao -> van_chuyen. Glossary TN=Thai Nguyen, v=vay, a=anh. De: co nhac SP felix nhung khong dat moi, chi hoi tien do giao."
+  },
+  {
+    "text": "cho hoi don meta hn di den dau roi, khach ho i suot ma chua thay",
+    "expectedIntent": "van_chuyen",
+    "notes": "Hoi don di den dau (trang thai van chuyen) -> van_chuyen. Co ten dai ly Meta HN. Cum tu 'ho i' mo phong go voi dinh sai khoang trang, tang do kho parse."
+  },
+  {
+    "text": "cho xin ma van don cai don ncked hom qua vs a",
+    "expectedIntent": "van_chuyen",
+    "notes": "Xin ma van don (tracking) -> van_chuyen. Viet tat ncked=noi chien khong dau, vs=voi, a=anh. Kho: ncked la viet tat SKU it pho bien."
+  },
+  {
+    "text": "robot moi nhan dc 3 hom ma da ko sac dc pin, doi hang dc ko a",
+    "expectedIntent": "bao_hanh_khieu_nai",
+    "notes": "SP loi trong 7 ngay, xin doi hang -> bao_hanh_khieu_nai. SP robot hut bui. Diem doi/tra + moc thoi gian '3 hom' de rules xet chinh sach doi moi."
+  },
+  {
+    "text": "may loc nuoc RO dung 2 thang bi chay nuoc ri o day voi, gio bao hanh kieu j",
+    "expectedIntent": "bao_hanh_khieu_nai",
+    "notes": "Loi ngoai 7 ngay (2 thang) -> bao_hanh (bao hanh chu khong doi moi). SP may loc nuoc RO. Viet tat j=gi. Kho: phai phan biet bao hanh vs doi tra theo moc thoi gian."
+  },
+  {
+    "text": "dat 10 con felix ma giao co 8, thieu 2 con lam an kieu j the, khach mang minh suot",
+    "expectedIntent": "bao_hanh_khieu_nai",
+    "notes": "Giao thieu hang + khieu nai gat -> bao_hanh_khieu_nai. Bay lon: co 'dat 10 con felix' + so luong nen rat de nham dat_don, nhung day la KHIEU NAI giao thieu (giao 8/10), khong phai don moi. Giong ung xu cam xuc gat."
+  },
+  {
+    "text": "ok em cam on chi nhieu a chuc chi buoi chieu vui ve",
+    "expectedIntent": "khac",
+    "notes": "Chao hoi + cam on thuan tuy, khong co nhu cau SP/gia/don. Bay: co the bi gan nham thanh xac nhan don. Nhan dung: khac."
+  },
+  {
+    "text": "troi HN chieu nay mua to qua di lai kho ghe a e",
+    "expectedIntent": "khac",
+    "notes": "Off-topic tan gau thoi tiet. Bay: co chu 'ghe' (goi tat Ghe Felix) va 'a e' de bi keo ve hoi_san_pham/dat_don, nhung 'ghe' o day la tu dem (ghe gom), khong lien quan SP. Nhan dung: khac."
+  },
+  {
+    "text": "the a",
+    "expectedIntent": "khac",
+    "notes": "Tin cuc ngan, mo ho, khong ro y. Khong du du lieu de suy ra intent. Theo nguyen tac AI khong tu doan -> khac."
+  },
+  {
+    "text": "👍👍😅🙏",
+    "expectedIntent": "khac",
+    "notes": "Chi co emoji, khong co noi dung van ban. Khong the trich xuat intent -> khac. Bay: parser co the crash/tra ve rong neu khong xu ly input thuan emoji."
+  },
+  {
+    "text": "may loc nuoc RO bao nhieu tien 1 cai vay shop",
+    "expectedIntent": "hoi_gia",
+    "notes": "Bay dat_don vs hoi_gia: co so '1 cai' de tuong la so luong dat. Nhung '1 cai' o day la don vi hoi don gia ('bao nhieu tien 1 cai'), khong phai y dat hang. Khong co dong tu dat/gui -> hoi_gia, KHONG phai dat_don."
+  },
+  {
+    "text": "noi chien 5l chien dc ga nguyen con ko c",
+    "expectedIntent": "hoi_san_pham",
+    "notes": "Bay dat_don vs hoi_san_pham: co ten SKU + dung tich (noi chien 5l) trong nhu chuan bi dat. Nhung y that su la hoi cong nang ('chien duoc ga nguyen con khong'), khong co so luong/y dat -> hoi_san_pham, KHONG phai dat_don."
+  },
+  {
+    "text": "bep tu dooi gia bnhieu vaay ad co ban ko z",
+    "expectedIntent": "hoi_gia",
+    "notes": "Sai chinh ta nang: 'dooi' (doi), 'bnhieu' (bao nhieu), 'vaay', 'z'. Bay: typo lam glossary/match SKU kho, nhung ban chat van la hoi gia Bep tu doi -> hoi_gia."
+  },
+  {
+    "text": "gui cho c nhu moi lan nhe c gap",
+    "expectedIntent": "khac",
+    "notes": "Bay dat_don vs khac: co dong tu 'gui' + 'nhu moi lan' trong het suc giong don hang. Nhung THIEU SKU va so luong cu the -> qua mo ho, AI khong duoc tu tao don, phai de Sale nhap tay. Nhan an toan: khac (khong dat_don)."
+  }
+]

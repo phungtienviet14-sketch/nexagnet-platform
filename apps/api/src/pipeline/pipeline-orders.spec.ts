@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChannelMessage } from '@ultty/shared';
+import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
@@ -15,7 +16,8 @@ const GROUP = 'zgr-f8a7101d77709e2ec761'; // nhom test map -> Meta HN (dai_ly)
 function build() {
   const knowledge = new KnowledgeService();
   const repo = new InMemoryOrdersRepository();
-  const pipeline = new PipelineService(new MockParser(), knowledge, repo);
+  const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
+  const pipeline = new PipelineService(orchestrator);
   const adapter = new MockAdapter();
   const orders = new OrdersService(repo, adapter, new KiotVietMockAdapter(knowledge));
   return { pipeline, orders, adapter };
@@ -71,7 +73,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     }
     const knowledge = new KnowledgeService();
     const repo = new InMemoryOrdersRepository();
-    const pipeline = new PipelineService(new MockParser(), knowledge, repo);
+    const pipeline = new PipelineService(new AgentOrchestrator(new MockParser(), knowledge, repo));
     const orders = new OrdersService(repo, new FailingAdapter(), new KiotVietMockAdapter(knowledge));
 
     const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);

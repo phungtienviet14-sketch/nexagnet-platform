@@ -77,8 +77,15 @@ describe('priceOrder — TH1', () => {
     expect(priced.confirmationText).toContain('11.500.000đ');
   });
 
-  it('tinh VAT khi khong co co "khong VAT"', () => {
+  it('MAC DINH khong VAT khi khach khong ghi "xuat VAT"', () => {
     const priced = priceOrder({ ...parsed, noVat: false }, ctx());
+    expect(priced.vat).toBe(false);
+    expect(priced.vatAmount).toBe(0);
+    expect(priced.grandTotal).toBe(11_500_000);
+  });
+
+  it('CO VAT khi khach ghi "xuat VAT" (wantVat=true)', () => {
+    const priced = priceOrder({ ...parsed, noVat: false, wantVat: true }, ctx());
     expect(priced.vatAmount).toBe(1_150_000);
     expect(priced.grandTotal).toBe(12_650_000);
   });

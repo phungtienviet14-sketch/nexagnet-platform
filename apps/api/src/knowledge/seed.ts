@@ -7,10 +7,34 @@ import type { Dealer, GlossaryEntry, GroupMap, KnowledgeSnapshot, PriceRow, Prod
  */
 
 const products: Product[] = [
-  { sku: 'GHE-FELIX', name: 'Ghế massage Felix', aliases: ['felix', 'ghe felix', 'ghe massage'], unit: 'cái' },
-  { sku: 'NCKD-5L', name: 'Nồi chiên không dầu 5L', aliases: ['noi chien', 'ncked', 'noi chien khong dau'], unit: 'cái' },
-  { sku: 'ROBOT-HB', name: 'Robot hút bụi lau nhà', aliases: ['robot', 'robot hut bui', 'may hut bui robot'], unit: 'cái' },
-  { sku: 'MAY-LOC-NUOC', name: 'Máy lọc nước RO', aliases: ['may loc nuoc', 'loc nuoc', 'may ro'], unit: 'cái' },
+  {
+    sku: 'GHE-FELIX',
+    name: 'Ghế massage Felix',
+    aliases: ['felix', 'ghe felix', 'ghe massage'],
+    unit: 'cái',
+    description: 'Ghế massage toàn thân con lăn 4D, 12 chương trình, nhiệt hồng ngoại, bảo hành 2 năm.',
+  },
+  {
+    sku: 'NCKD-5L',
+    name: 'Nồi chiên không dầu 5L',
+    aliases: ['noi chien', 'ncked', 'noi chien khong dau'],
+    unit: 'cái',
+    description: 'Dung tích 5L cho gia đình 3-5 người, 8 chế độ nấu, lồng chống dính, ít dầu 90%.',
+  },
+  {
+    sku: 'ROBOT-HB',
+    name: 'Robot hút bụi lau nhà',
+    aliases: ['robot', 'robot hut bui', 'may hut bui robot'],
+    unit: 'cái',
+    description: 'Hút + lau 2 trong 1, lực hút 4000Pa, dẫn đường laser LDS, tự về sạc, điều khiển qua app.',
+  },
+  {
+    sku: 'MAY-LOC-NUOC',
+    name: 'Máy lọc nước RO',
+    aliases: ['may loc nuoc', 'loc nuoc', 'may ro'],
+    unit: 'cái',
+    description: 'Công nghệ RO 9 cấp, bình áp 10L, vòi thông minh, đạt QCVN nước uống trực tiếp.',
+  },
   { sku: 'MAY-LOC-KK', name: 'Máy lọc không khí', aliases: ['may loc khong khi', 'loc khong khi'], unit: 'cái' },
   { sku: 'BEP-TU-DOI', name: 'Bếp từ đôi', aliases: ['bep tu', 'bep tu doi'], unit: 'cái' },
   { sku: 'NCĐ-TU', name: 'Nồi cơm điện tử', aliases: ['noi com', 'noi com dien tu'], unit: 'cái' },

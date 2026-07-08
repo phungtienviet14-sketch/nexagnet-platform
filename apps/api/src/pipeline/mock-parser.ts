@@ -16,8 +16,14 @@ interface ExtractedItem {
 }
 
 const PRICE_KEYWORDS = /(bao nhieu|gia bao|\bgia\b|may tien|bao gia)/;
-const WARRANTY_KEYWORDS = /(bao hanh|bi loi|doi tra|khieu nai|hong hoc|loi san pham)/;
+const WARRANTY_KEYWORDS = /(bao hanh|bi loi|doi tra|khieu nai|hong hoc|loi san pham|giao sai|giao thieu|thieu hang)/;
+const POLICY_KEYWORDS = /(cong no|ky gui|tra cham|tra sau|han thanh toan|no bao nhieu|thanh toan sau|chinh sach)/;
+const SHIP_KEYWORDS =
+  /(khi nao.*(hang|giao|toi|nhan|den)|bao gio.*(hang|giao|toi|nhan|den)|van chuyen|giao hang|may ngay.*(hang|giao|toi)|hang toi chua|hang den chua|van don|tracking)/;
+const PRODUCT_QUESTION_KEYWORDS =
+  /(co tot|the nao|nhu the nao|ra sao|chat luong|review|danh gia|so sanh|khac gi|dung co tot|co ben|co dep|bao lau|tu van|gioi thieu|thong so|cong suat|kich thuoc|dung duoc khong)/;
 const NO_VAT_KEYWORDS = /(ko lay vat|khong lay vat|ko vat|khong vat|ko xuat vat|khong xuat vat|mien vat)/;
+const WANT_VAT_KEYWORDS = /(xuat vat|co vat|lay vat|xuat hoa don|co hoa don|lay hoa don|xuat hd)/;
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -58,9 +64,15 @@ function extractItems(normText: string, products: Product[]): ExtractedItem[] {
 
 function classifyIntent(normText: string, items: ExtractedItem[]): Intent {
   const hasExplicitItem = items.some((i) => i.explicit);
+  // Don ro rang (co so luong + SP) thang truoc.
   if (hasExplicitItem) return 'dat_don';
-  if (PRICE_KEYWORDS.test(normText)) return 'hoi_gia';
+  // Cac tuyen cau hoi/nghiep vu xet TRUOC nhanh "co ten SP -> dat_don"
+  // de tin hoi (khong so luong) khong bi nuot thanh don.
   if (WARRANTY_KEYWORDS.test(normText)) return 'bao_hanh_khieu_nai';
+  if (POLICY_KEYWORDS.test(normText)) return 'chinh_sach_cong_no';
+  if (SHIP_KEYWORDS.test(normText)) return 'van_chuyen';
+  if (PRICE_KEYWORDS.test(normText)) return 'hoi_gia';
+  if (items.length > 0 && PRODUCT_QUESTION_KEYWORDS.test(normText)) return 'hoi_san_pham';
   if (items.length > 0) return 'dat_don';
   return 'khac';
 }
@@ -96,6 +108,7 @@ export class MockParser implements OrderParser {
       dealerNameRaw: input.dealerNameRaw,
       items: orderItems,
       noVat: NO_VAT_KEYWORDS.test(normText),
+      wantVat: WANT_VAT_KEYWORDS.test(normText),
       ...(phoneMatch ? { customerPhone: phoneMatch[0] } : {}),
     };
 

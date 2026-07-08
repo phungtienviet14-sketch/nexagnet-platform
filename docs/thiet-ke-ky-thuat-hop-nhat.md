@@ -17,7 +17,7 @@ Khi hai nguồn khác nhau, tài liệu này là quyết định cuối cho ph�
 | Lộ trình 3 giai đoạn, KPI, managed service | NetViet (mục 6, 7) | Giữ nguyên |
 | Ma trận phương án Zalo | Tài liệu này (mục 3) | Sửa 2 điểm lỗi thời của NetViet 4.1: bổ sung Zalo Bot Platform; OA thực tế CÓ hỗ trợ nhóm (GMF) nhưng đắt |
 | Cơ chế ingestion GĐ1 | Ghép: **Co-pilot là baseline + PoC Bot Platform tuần đầu để nâng cấp** | Bịt khoảng trống "tin nhắn vào hệ thống bằng cách nào" |
-| Multi-agent 6 con | Đơn giản hóa: **1 orchestrator + intent router + tools** | KISS với 10-20 đơn/ngày; tách agent khi có nhu cầu thật |
+| Multi-agent 6 con | **Làm đúng 6 vai (§5.1)** dưới 1 orchestrator điều phối | 6 vai chuyên trách phối hợp, **dùng chung 1 lần gọi LLM/tin** (Router parse) — KHÔNG phải 6 LLM độc lập; giữ chi phí như 1 orchestrator, rules engine vẫn tính tiền |
 | Stack, schema, pipeline, tuân thủ | Tài liệu này (mục 4-9) | NetViet không có tầng này |
 | zca-js | **Loại khỏi lộ trình chính** | Khớp khẩu vị rủi ro NetViet; chỉ xem xét lại khi lãnh đạo U Ultty ký chấp nhận rủi ro bằng văn bản |
 
@@ -47,7 +47,7 @@ Kết quả PoC không thay đổi kiến trúc: mọi kênh đi qua interface `
 |---|---|
 | 1. Kênh | `apps/api/src/modules/channels/` — `ChannelAdapter` interface + `CopilotAdapter`, `BotPlatformAdapter`, `MockAdapter` (test). GĐ2+: `OaAdapter`, `MessengerAdapter` |
 | 2. Tiếp nhận | `ingest/` — endpoint webhook + endpoint copilot-paste; lưu `messages` NGAY khi nhận; gán danh tính qua map nhóm→đại lý; đẩy BullMQ |
-| 3. Lõi AI | `pipeline/` — normalize → intent → extract/RAG → soạn phản hồi. Một orchestrator duy nhất (Claude tool use), KHÔNG chia 6 agent |
+| 3. Lõi AI | `pipeline/` + `agents/` — **AgentOrchestrator**: Router (1 lần parse) → dispatch 1 trong 6 vai chuyên trách → Supervisor (rules, đánh giá rủi ro/leo thang). Gắn `AgentTrace` (6 bước) lên OrderView. 1 lần gọi LLM/tin; rules engine vẫn tính tiền |
 | 4. Luật nghiệp vụ | `rules/` — thuần TypeScript tất định (KHÔNG để LLM tính): giá theo cấp đại lý, ship (≥2 SP miễn phí; 1 SP: Grab nội thành/Viettel tỉnh), chính sách công nợ/ký gửi/COD theo hồ sơ đại lý, VAT |
 | 5. Tích hợp | `kiotviet/` (GĐ1: export Excel; GĐ2: API), `base/` (GĐ1: sinh format dán tay; GĐ2: API nếu có), vận đơn GĐ2-3 |
 | 6. Dữ liệu & quản trị | `knowledge/` (nguồn sự thật: SKU, bảng giá theo cấp, chính sách, glossary), `orders/`, `metrics/` (KPI), `auth/` (phân quyền Sale/Kế toán/Quản lý), audit log |
@@ -57,11 +57,12 @@ Kết quả PoC không thay đổi kiến trúc: mọi kênh đi qua interface `
 ```
 Tin nhắn (webhook hoặc dán tay)
  → [lưu raw + platform + nguồn]
- → [BullMQ] Orchestrator (1 lần gọi Claude, tool use):
+ → [BullMQ] AgentOrchestrator — **Router điều phối** (1 lần gọi Claude tool use) → dispatch 1 trong 6 vai → **Supervisor**:
      ngữ cảnh: metadata nhóm→đại lý, danh mục SKU, glossary, bảng giá cấp đại lý (đọc từ knowledge, KHÔNG hardcode)
-     ① intent: hoi_san_pham | hoi_gia | dat_don | chinh_sach_cong_no | bao_hanh_khieu_nai | van_chuyen | khac
-     ② nếu dat_don → extract JSON schema TH1/TH2 (ràng buộc từ điển đóng)
-     ③ nếu hỏi thông tin → RAG: trích knowledge + soạn câu trả lời KÈM nguồn; không có dữ liệu → trả lời "cần Sale" (không đoán)
+     ① Router: intent (hoi_san_pham | hoi_gia | dat_don | chinh_sach_cong_no | bao_hanh_khieu_nai | van_chuyen | khac) + danh tính (đại lý/CTV/khách lẻ)
+     ② dispatch theo intent: Bán hàng (dat_don → extract TH1/TH2) · Tư vấn SP · Chính sách-TC (giá/công nợ/ship) · Hậu mãi (bảo hành)
+     ③ vai trả lời KÈM nguồn (RAG từ knowledge); không có dữ liệu → "cần Sale" (không đoán)
+     ④ Supervisor (rules, 0 LLM): rủi ro (đơn lớn, khiếu nại gắt, đại lý chưa xác định) → leo thang người thật
  → Rules engine (TS tất định): áp giá, ship, chính sách, VAT → dựng format xác nhận TH1/TH2
  → Validation: SKU ∈ danh mục; SL×đơn giá ≈ tổng khách ghi; đại lý tồn tại; confidence per-field
  → Routing: đủ tin cậy → hàng đợi duyệt 1 chạm; mơ hồ → đánh dấu field cần Sale nhập; rủi ro (đơn lớn, deal riêng, khiếu nại gắt — mục 5.6 NetViet) → handoff

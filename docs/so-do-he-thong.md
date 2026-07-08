@@ -60,7 +60,7 @@ flowchart TB
     end
 
     subgraph L3["Tầng 3 — Lõi AI (pipeline/)"]
-        ORCH["Orchestrator — 1 call Claude tool use<br/>① intent (7 loại) ② trích xuất TH1/TH2 ③ draft trả lời RAG"]
+        ORCH["AgentOrchestrator — Router (1 call Claude)<br/>→ dispatch 6 vai chuyên trách → Giám sát<br/>① intent (7 loại) ② trích xuất TH1/TH2 ③ RAG kèm nguồn"]
     end
 
     subgraph L4["Tầng 4 — Luật nghiệp vụ (rules/) — TypeScript tất định, KHÔNG dùng LLM"]
@@ -101,7 +101,7 @@ sequenceDiagram
     actor DL as Đại lý (nhóm Zalo)
     actor S as Sale (PWA)
     participant IN as Ingest
-    participant AI as Orchestrator (Claude)
+    participant AI as AgentOrchestrator (Router + 6 vai)
     participant RU as Rules engine
     participant DB as PostgreSQL
     participant KV as KiotViet
@@ -161,7 +161,7 @@ stateDiagram-v2
 
 ```mermaid
 flowchart TD
-    MSG["Tin nhắn mới"] --> INT{"Orchestrator<br/>phân loại intent"}
+    MSG["Tin nhắn mới"] --> INT{"Router (Điều phối)<br/>phân loại intent + danh tính"}
 
     INT -->|dat_don| EX["Trích xuất TH1/TH2<br/>→ rules → hàng đợi duyệt"]
     INT -->|hoi_gia| RAG1["RAG: bảng giá theo cấp đại lý<br/>→ draft trả lời KÈM nguồn"]

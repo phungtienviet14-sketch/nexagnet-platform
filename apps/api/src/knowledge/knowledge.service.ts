@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { SenderType } from '@ultty/shared';
 import type { Dealer, GlossaryEntry, GroupMap, PriceRow, Product } from './domain.js';
 import { SEED } from './seed.js';
 
@@ -7,6 +8,8 @@ export interface ResolvedGroup {
   dealer: Dealer | null;
   branch: string | null;
   groupName: string | null;
+  /** Loai nguoi gui suy tu cap dai ly (RouterAgent). */
+  senderType: SenderType;
 }
 
 /**
@@ -42,14 +45,16 @@ export class KnowledgeService {
     return this.snapshot.dealers.find((d) => d.id === id) ?? null;
   }
 
-  /** Map nhom Zalo -> dai ly + chi nhanh + ten nhom. */
+  /** Map nhom Zalo -> dai ly + chi nhanh + ten nhom + loai nguoi gui. */
   resolveByChatId(chatId: string): ResolvedGroup {
     const group = this.snapshot.groups.find((g) => g.chatId === chatId);
-    if (!group) return { dealer: null, branch: null, groupName: null };
+    if (!group) return { dealer: null, branch: null, groupName: null, senderType: 'unknown' };
+    const dealer = this.findDealerById(group.dealerId);
     return {
-      dealer: this.findDealerById(group.dealerId),
+      dealer,
       branch: group.branch,
       groupName: group.name,
+      senderType: dealer ? (dealer.tier === 'ctv' ? 'ctv' : 'dai_ly') : 'unknown',
     };
   }
 }

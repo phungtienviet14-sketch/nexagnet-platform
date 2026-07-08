@@ -2,6 +2,7 @@
 
 import type { Intent, OrderStatus, OrderView, PolicyType } from '@ultty/shared';
 import { formatVnd } from '../lib/api';
+import { AgentTraceStrip } from './AgentTraceStrip';
 
 type Props = {
   order: OrderView;
@@ -60,6 +61,7 @@ export function OrderCard({ order, onApprove, onReject, isBusy }: Props) {
           <span className={`badge ${status.cls}`}>{status.label}</span>
         </div>
         <div className="raw">“{order.rawText}”</div>
+        {order.trace && <AgentTraceStrip trace={order.trace} senderType={order.senderType} />}
         <div className="non-order">AI: không phải đơn hàng — chuyển Sale xử lý thủ công.</div>
       </article>
     );
@@ -140,6 +142,8 @@ export function OrderCard({ order, onApprove, onReject, isBusy }: Props) {
         “{order.rawText}”
         {order.imageUrl && <img src={order.imageUrl} alt="Ảnh đơn hàng" />}
       </div>
+
+      {order.trace && <AgentTraceStrip trace={order.trace} senderType={order.senderType} />}
 
       {canAct ? (
         <div className="actions">
