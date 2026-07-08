@@ -1,5 +1,11 @@
-import { Injectable } from '@nestjs/common';
-import type { SenderType } from '@ultty/shared';
+import { Injectable, Logger } from '@nestjs/common';
+import type {
+  GlossaryView,
+  GroupMapView,
+  KnowledgeProductView,
+  KnowledgeSummary,
+  SenderType,
+} from '@ultty/shared';
 import type { Dealer, GlossaryEntry, GroupMap, PriceRow, Product } from './domain.js';
 import { SEED } from './seed.js';
 
@@ -18,10 +24,65 @@ export interface ResolvedGroup {
  */
 @Injectable()
 export class KnowledgeService {
+  private readonly logger = new Logger('KnowledgeService');
   private readonly snapshot = SEED;
 
   products(): Product[] {
     return this.snapshot.products;
+  }
+
+  /** DTO danh muc + gia 2 cap cho cot "Nguon su that". Canh bao neu SKU thieu dong gia. */
+  productViews(): KnowledgeProductView[] {
+    const priceBySku = new Map(this.snapshot.prices.map((p) => [p.sku, p.prices]));
+    return this.snapshot.products.map((p) => {
+      const price = priceBySku.get(p.sku);
+      if (!price) {
+        this.logger.warn(`SKU ${p.sku} thiếu dòng giá — hiển thị 0đ (kiểm tra seed/bảng giá).`);
+      }
+      return {
+        sku: p.sku,
+        name: p.name,
+        unit: p.unit,
+        priceDaiLy: price?.dai_ly ?? 0,
+        priceCtv: price?.ctv ?? 0,
+        description: p.description,
+      };
+    });
+  }
+
+  /** DTO glossary viet tat. */
+  glossaryViews(): GlossaryView[] {
+    return this.snapshot.glossary.map((g) => ({ term: g.term, meaning: g.meaning }));
+  }
+
+  /** DTO map nhom -> dai ly (kem cap + chinh sach). Dung chung cho console + /demo/groups. */
+  groupViews(): GroupMapView[] {
+    return this.snapshot.groups.map((g) => {
+      const dealer = this.findDealerById(g.dealerId);
+      return {
+        chatId: g.chatId,
+        groupName: g.name,
+        dealerName: dealer?.name ?? null,
+        dealerTier: dealer?.tier ?? null,
+        policy: dealer?.defaultPolicy ?? null,
+        branch: g.branch,
+      };
+    });
+  }
+
+  /** Tong hop kho tri thuc cho cot "Nguon su that" (1 lan goi). */
+  knowledgeSummary(): KnowledgeSummary {
+    const products = this.productViews();
+    const glossary = this.glossaryViews();
+    const groups = this.groupViews();
+    return {
+      products,
+      glossary,
+      groups,
+      productCount: products.length,
+      glossaryCount: glossary.length,
+      groupCount: groups.length,
+    };
   }
 
   prices(): PriceRow[] {

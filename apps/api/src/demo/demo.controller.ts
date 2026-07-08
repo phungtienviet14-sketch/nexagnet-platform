@@ -1,5 +1,11 @@
 import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
-import { channelMessageSchema, loadEnv, type DemoGroup, type OrderView } from '@ultty/shared';
+import {
+  channelMessageSchema,
+  loadEnv,
+  type DemoConfig,
+  type DemoGroup,
+  type OrderView,
+} from '@ultty/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 
@@ -35,13 +41,21 @@ export class DemoController {
     return SAMPLE_MESSAGES;
   }
 
+  /** Che do van hanh (bot bat/tat, parser dang dung) — topbar console hien badge that. */
+  @Get('config')
+  config(): DemoConfig {
+    const env = loadEnv();
+    return { botMode: env.BOT_MODE, parserMode: env.PARSER_MODE, botName: env.BOT_NAME };
+  }
+
   /** Danh sach nhom da map — web dung lam bo chon nhom khi giả lập tin. */
   @Get('groups')
   groups(): DemoGroup[] {
-    return this.knowledge.groups().map((g) => ({
+    // Dung chung logic map nhom->dai ly voi KnowledgeController (DRY).
+    return this.knowledge.groupViews().map((g) => ({
       chatId: g.chatId,
-      name: g.name,
-      dealerName: this.knowledge.findDealerById(g.dealerId)?.name ?? null,
+      name: g.groupName,
+      dealerName: g.dealerName,
       branch: g.branch,
     }));
   }

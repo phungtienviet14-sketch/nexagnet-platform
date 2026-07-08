@@ -24,12 +24,28 @@ Cho khán giả thấy **4 điều**:
   PARSER_MODE=deepseek BOT_MODE=off pnpm dev:api      # terminal 1
   pnpm --filter @ultty/poc-parser eval                # terminal 2 → phải thấy ≥ 90% (đã đo 100%)
   ```
-- [ ] `pnpm dev:web` → mở `http://localhost:3000`, **phóng to (Ctrl +) 2–3 nấc**.
-- [ ] Vào tab **Đơn hàng** 🧾. Chuẩn bị sẵn **bảng tin nhắn** (Phụ lục) để copy nhanh.
+- [ ] `pnpm dev:web` → mở `http://localhost:3000` trên **màn hình rộng/máy chiếu** (console 3 cột; **không cần phóng to** — chỉ Ctrl+ 1 nấc nếu máy chiếu hẹp).
+- [ ] Console mở thẳng vào màn **Đơn hàng** (nút 🖥 trên thanh trên). Chuẩn bị sẵn **bảng tin nhắn** (Phụ lục) để dán nhanh vào ô **Bơm tin thử** (cột trái).
 - [ ] **Lưới an toàn:** nếu mạng/DeepSeek trục trặc → đổi `.env` `PARSER_MODE=mock` (chạy offline, tất định) rồi restart API. Logic 6 agent y hệt, chỉ khác bước "đọc hiểu".
 - [ ] Tắt thông báo, tắt sleep màn hình.
 
 > **Vì sao yên tâm chạy AI thật:** đã đo eval **35 tin thật** → **100% phân loại đúng** ([docs/poc-parser.md](poc-parser.md)). Parser có few-shot 7 intent + retry + tự đọc tiền tắt ("11tr5", "1.150k").
+
+---
+
+## 1.5 BỐ CỤC CONSOLE 3 CỘT (mới — nắm trước khi chỉ tay)
+
+Giao diện mới là **console rộng cho máy chiếu**, 3 cột trái→phải theo đúng luồng "tin vào → AI suy luận → nguồn sự thật":
+
+- **Cột trái — Tin & đơn vào:** ô **"Bơm tin thử"** (dán tin demo) + danh sách tin/đơn realtime. Tin mới **tự nhảy lên đầu và tự được chọn**, kèm chấm **đang xử lý**. *(Bật `BOT_MODE=on` thì tin đại lý @mention bot cũng tự vào đây — §11.)*
+- **Cột giữa — Đội 6 agent:** tin gốc ở trên → **6 agent sáng lên TUẦN TỰ** (⏳ *đang xử lý* → ✓ *xong*), mỗi vai kèm **badge nguồn** (AI · Rules engine · Kho tri thức) → phiếu đơn + **nháp trả lời** + nút duyệt. Nút **▶ Chạy lại** để diễn lại hiệu ứng cho người vào xem sau.
+- **Cột phải — Nguồn sự thật:** 3 tab — **Kho tri thức** (18–20 SKU + bảng giá + từ điển viết tắt + map nhóm→đại lý), **KiotViet** (tồn kho = nguồn sự thật kho + đơn đã đồng bộ), **Luật đã áp** (đổi theo tin đang chọn: giá/ship/VAT/chính sách + kết luận Giám sát).
+
+**Các câu giải thích trước đây in trên màn — nay ĐÃ BỎ khỏi giao diện cho gọn, người trình bày nói bằng lời:**
+- **Nháp trả lời:** "AI chỉ **soạn nháp**, **Sale copy gửi** — GĐ1 AI **không tự gửi** vào nhóm."
+- **Tin không phải đơn:** "AI xếp loại rồi **chuyển Sale xử lý** — không ép thành đơn."
+- **KiotViet:** "Đây là **mô phỏng** KiotViet (chưa có API); duyệt đơn ở cột giữa → đơn hiện ở tab này và **trừ tồn kho**."
+- **Khuyến mãi** (nút 📣 trên thanh trên): "Công cụ Sale **soạn → xem trước → xác nhận** gửi hàng loạt; mỗi tin **tự gắn nhãn 'Tin tự động'**, có giãn cách chống spam — **AI không tự gửi**."
 
 ---
 
@@ -52,19 +68,19 @@ Cho khán giả thấy **4 điều**:
 
 ## 4. MÀN 1 — Đơn hàng thường + duyệt 1 chạm (≈2 phút) ⭐ trục chính
 
-[Ô "Giả lập tin nhắn", chọn **Nhóm đại lý Meta HN**, dán:]
+[Cột trái · ô **Bơm tin thử** → chọn **Nhóm đại lý Meta HN** → dán:]
 
 ```
 @Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT
 ```
 
-[Bấm **Gửi cho AI xử lý**. ~1–2 giây (AI thật) → thẻ đơn hiện ra kèm dải AgentTrace.]
+[Bấm **Gửi cho AI xử lý ▸**. Cột giữa: **6 agent sáng lên tuần tự** (⏳ đang xử lý → ✓ xong), rồi phiếu đơn hiện ra.]
 
 **Nói (vừa chỉ vừa nói):**
-> "Tin đặt hàng kiểu đại lý hay nhắn — viết tắt, không dấu. AI xử lý xong, trả thẻ đơn điền sẵn."
+> "Tin đặt hàng kiểu đại lý hay nhắn — viết tắt, không dấu. Anh/chị thấy **sáu vai chạy tuần tự**, mỗi vai xong tới vai kế — rồi ra phiếu đơn điền sẵn."
 
-👉 **Chỉ vào header dải trace:**
-> "Chỗ này ghi **‘1 lần gọi AI · deepseek’** — đây là AI thật, và **đúng một lần gọi** dù có sáu vai."
+👉 **Chỉ chip trên đầu đội agent + badge trên thanh tiêu đề:**
+> "Chỗ này ghi **‘1 lần gọi AI’**, thanh trên có badge **‘AI: DeepSeek’** — đây là AI thật, và **đúng một lần gọi** dù có sáu vai."
 
 👉 **Chỉ từng hàng agent:**
 > - "**Điều phối** 🧭 — nhận ra *Đặt đơn*, người gửi *Đại lý*, giao cho Bán hàng."
@@ -74,6 +90,9 @@ Cho khán giả thấy **4 điều**:
 
 👉 **Chỉ dòng ‘Tổng (rules engine)’ + nhãn xanh:**
 > "Điểm an toàn nhất: dòng tiền **11.500.000đ** nhãn **‘Rules engine’ xanh** — do bộ quy tắc tính, không phải AI bịa. Em ghi rõ *‘số lượng do AI trích, đơn giá & tổng do quy tắc’*. Kế toán yên tâm."
+
+👉 **Chỉ sang cột phải:**
+> "Bên phải là **nguồn sự thật**. Tab **‘Luật đã áp’** liệt kê từng luật cho đơn này — giá cấp đại lý, miễn ship, **VAT off**, công nợ 30 — mỗi dòng nhãn **Rules engine**. Tab **‘Kho tri thức’** cho thấy AI **chỉ được chọn trong danh mục đóng 18–20 SKU** + từ điển viết tắt (TN→Thái Nguyên…). AI không tự nghĩ ra sản phẩm hay giá."
 
 [Bấm **Duyệt & gửi nhóm**.]
 > "Sale **một chạm** để duyệt — gửi xác nhận vào nhóm Zalo (có nhãn tin tự động) + đẩy lên KiotViet. Trạng thái *Hoàn tất*, có mã đơn."

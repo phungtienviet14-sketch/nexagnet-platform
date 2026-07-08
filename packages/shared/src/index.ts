@@ -37,7 +37,13 @@ export type {
   OrderView,
 } from './order-view.js';
 export type { KiotVietProduct, KiotVietOrder } from './kiotviet.js';
-export type { DemoGroup } from './demo.js';
+export type {
+  KnowledgeProductView,
+  GlossaryView,
+  GroupMapView,
+  KnowledgeSummary,
+} from './knowledge-view.js';
+export type { DemoGroup, DemoConfig } from './demo.js';
 export { broadcastRequestSchema, MAX_BROADCAST_TEXT } from './broadcast.js';
 export type { BroadcastRequest, BroadcastResult, BroadcastTargetResult } from './broadcast.js';
 export {

@@ -8,6 +8,7 @@ import { HealthController } from './health/health.controller.js';
 import { BotPoller } from './ingest/bot-poller.js';
 import { KiotVietAdapter, KiotVietMockAdapter } from './kiotviet/kiotviet.adapter.js';
 import { KiotVietController } from './kiotviet/kiotviet.controller.js';
+import { KnowledgeController } from './knowledge/knowledge.controller.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
 import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
@@ -22,6 +23,7 @@ import { PipelineService } from './pipeline/pipeline.service.js';
     MessagesController,
     DemoController,
     KiotVietController,
+    KnowledgeController,
     BroadcastController,
   ],
   providers: [

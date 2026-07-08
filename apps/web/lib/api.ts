@@ -1,9 +1,11 @@
 import type {
   BroadcastRequest,
   BroadcastResult,
+  DemoConfig,
   DemoGroup,
   KiotVietOrder,
   KiotVietProduct,
+  KnowledgeSummary,
   OrderView,
 } from '@ultty/shared';
 
@@ -59,6 +61,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
     }).then((r) => toJson<BroadcastResult>(r)),
+  knowledge: (): Promise<KnowledgeSummary> =>
+    fetch(`${BASE}/knowledge/summary`).then((r) => toJson<KnowledgeSummary>(r)),
+  config: (): Promise<DemoConfig> => fetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),
 };
 
 export function formatVnd(amount: number): string {

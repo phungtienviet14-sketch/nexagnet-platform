@@ -9,3 +9,13 @@ export interface DemoGroup {
   dealerName: string | null;
   branch: string;
 }
+
+/**
+ * Che do van hanh demo (GET /demo/config) — de topbar console hien badge TRUNG THUC
+ * (bot bat/tat, parser dang dung). Read-only, khong lo secret.
+ */
+export interface DemoConfig {
+  botMode: 'on' | 'off';
+  parserMode: 'mock' | 'claude' | 'deepseek';
+  botName: string;
+}
