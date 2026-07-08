@@ -35,7 +35,7 @@ Hệ thống tài liệu (đọc theo thứ tự khi cần ngữ cảnh):
 |---|---|---|
 | Ngôn ngữ | TypeScript (Node.js 22 LTS) | Một ngôn ngữ cho cả backend + app; monorepo pnpm |
 | Backend | NestJS | Module theo 6 tầng NetViet: channels, ingest, pipeline, rules, knowledge, orders, kiotviet, metrics, auth |
-| App Sale | Next.js **PWA mobile-first**, 5 tab theo `design/` | Sale làm việc trên điện thoại; installable, không cần app store |
+| App Sale | **Demo: console PC rộng "Trung tâm điều hành"** (Next.js) — 3 cột: Feed · 6-agent theater **streaming SSE real-time** · Nguồn sự thật (Kho tri thức/KiotViet/Luật đã áp "bám theo tin"). *(Bản PWA mobile-first 5 tab theo `design/` là hướng sản phẩm khi Sale làm trên điện thoại — làm sau.)* | Demo cần màn rộng để khách thấy rõ 6 agent xử lý + nguồn sự thật lúc chạy |
 | Database | PostgreSQL + Prisma | Nguồn sự thật (SKU/giá/chính sách/glossary), đơn hàng, feedback, KPI, audit |
 | Queue | BullMQ (Redis) | Pipeline xử lý tin nhắn bất đồng bộ |
 | AI | Claude API (tool use) — **1 orchestrator điều phối 6 vai chuyên trách** (Điều phối · Tư vấn SP · Bán hàng · Chính sách-TC · Hậu mãi · Giám sát, theo `Thiet_ke_AI_Agent_U_Ultty.md` §5.1); **1 lần gọi LLM/tin** (Router parse), KHÔNG phải 6 LLM độc lập | Intent (7 loại) + trích xuất ràng buộc; **LLM không tính tiền/không quyết chính sách** — rules engine TS tất định lo phần đó; 6 vai hiển thị qua AgentTrace |
@@ -53,7 +53,7 @@ Hệ thống tài liệu (đọc theo thứ tự khi cần ngữ cảnh):
    - Định tuyến theo độ tin cậy: đơn rõ ràng → điền sẵn cho Sale duyệt 1-click; trường mơ hồ → đánh dấu Sale nhập tay, AI không tự quyết
    - Feedback loop: log cặp (tin nhắn gốc, kết quả Sale sửa) → mở rộng glossary + few-shot, không cần train lại model
 3. Chọn model qua bake-off trên 20-30 tin nhắn thật: đo tỷ lệ JSON hợp lệ, độ chính xác field-level, khả năng dùng đúng glossary.
-4. **GĐ1 khóa phạm vi = Co-pilot + Sale duyệt** (theo NetViet): AI KHÔNG tự gửi/tự trả lời trong nhóm; auto-reply chỉ xem xét sau khi có văn bản đồng ý của khách. "Chuẩn hóa nguồn sự thật trước khi bật AI" là điều kiện chặn.
+4. **GĐ1 khóa phạm vi = Co-pilot + Sale duyệt** (theo NetViet): AI KHÔNG tự gửi/tự trả lời trong nhóm; auto-reply chỉ xem xét sau khi có văn bản đồng ý của khách. "Chuẩn hóa nguồn sự thật trước khi bật AI" là điều kiện chặn. *(Đã có cờ `AUTO_SEND` — **mặc định off** giữ nguyên tắc này; bật on thì AI tự chốt đơn KHÔNG rủi ro, gated bởi vai Giám sát, chỉ dùng khi có đồng ý của khách = GĐ2.)*
 5. **Tách bạch LLM vs rules**: LLM chỉ phân loại intent + trích xuất + soạn văn bản; giá/ship/chính sách/VAT do rules engine TypeScript tính từ nguồn sự thật trong DB. Không đảo ngược nguyên tắc này.
 
 ## Nghiệp vụ cốt lõi

@@ -38,11 +38,14 @@ Cho khán giả thấy **4 điều**:
 Giao diện mới là **console rộng cho máy chiếu**, 3 cột trái→phải theo đúng luồng "tin vào → AI suy luận → nguồn sự thật":
 
 - **Cột trái — Tin & đơn vào:** ô **"Bơm tin thử"** (dán tin demo) + danh sách tin/đơn realtime. Tin mới **tự nhảy lên đầu và tự được chọn**, kèm chấm **đang xử lý**. *(Bật `BOT_MODE=on` thì tin đại lý @mention bot cũng tự vào đây — §11.)*
-- **Cột giữa — Đội 6 agent:** tin gốc ở trên → **6 agent sáng lên TUẦN TỰ** (⏳ *đang xử lý* → ✓ *xong*), mỗi vai kèm **badge nguồn** (AI · Rules engine · Kho tri thức) → phiếu đơn + **nháp trả lời** + nút duyệt. Nút **▶ Chạy lại** để diễn lại hiệu ứng cho người vào xem sau.
-- **Cột phải — Nguồn sự thật:** 3 tab — **Kho tri thức** (18–20 SKU + bảng giá + từ điển viết tắt + map nhóm→đại lý), **KiotViet** (tồn kho = nguồn sự thật kho + đơn đã đồng bộ), **Luật đã áp** (đổi theo tin đang chọn: giá/ship/VAT/chính sách + kết luận Giám sát).
+- **Cột giữa — Đội 6 agent (STREAM THẬT qua SSE):** tin gốc → **6 agent sáng lên theo NHỊP THẬT của backend** (⏳ *đang xử lý* → ✓ *xong*), badge nguồn (AI · Rules engine · Kho tri thức) → phiếu đơn + nút duyệt. **Với DeepSeek, vai Điều phối "quay" ~1–2s thật** (đang gọi AI), 5 vai rules chạy tức thì. Badge **LIVE** (topbar) = đang kết nối SSE. **Bấm đơn cũ = xem TĨNH** (không chạy lại); chỉ nút **"▶ Chạy lại (gọi lại AI)"** mới **gọi lại LLM thật** + stream lại.
+- **Cột phải — Nguồn sự thật (bám theo tin đang chọn — nhìn biết AI làm gì):**
+  - **Kho tri thức:** đầu panel có khối **"🔍 AI đã dùng cho tin này"** — Điều phối *giải mã viết tắt* (TN→Thái Nguyên, c→chị), Bán hàng *khớp SKU + giá* (`ghe felix` → Ghế Felix 1.150.000đ × 10), *nhóm→đại lý* quyết cấp giá/chính sách; danh mục bên dưới **tô sáng** mục đã dùng.
+  - **Luật đã áp:** mỗi dòng = **[agent] · AI THẤY gì → RA gì + nhãn nguồn** (vd Bán hàng: "10 × Ghế Felix (AI trích) → giá Đại lý 1.150.000đ → 11.500.000đ" ⟨Rules engine⟩).
+  - **KiotViet:** tồn kho (nguồn sự thật kho) + đơn đã đồng bộ.
 
 **Các câu giải thích trước đây in trên màn — nay ĐÃ BỎ khỏi giao diện cho gọn, người trình bày nói bằng lời:**
-- **Nháp trả lời:** "AI chỉ **soạn nháp**, **Sale copy gửi** — GĐ1 AI **không tự gửi** vào nhóm."
+- **Duyệt / nháp trả lời:** "GĐ1 AI **soạn**, **Sale duyệt 1-chạm** mới gửi. *(Tùy chọn nâng cao: bật `AUTO_SEND=on` → AI **tự chốt** đơn KHÔNG rủi ro, chỉ khi Giám sát báo vấn đề mới gọi Sale — xem §11.5.)*"
 - **Tin không phải đơn:** "AI xếp loại rồi **chuyển Sale xử lý** — không ép thành đơn."
 - **KiotViet:** "Đây là **mô phỏng** KiotViet (chưa có API); duyệt đơn ở cột giữa → đơn hiện ở tab này và **trừ tồn kho**."
 - **Khuyến mãi** (nút 📣 trên thanh trên): "Công cụ Sale **soạn → xem trước → xác nhận** gửi hàng loạt; mỗi tin **tự gắn nhãn 'Tin tự động'**, có giãn cách chống spam — **AI không tự gửi**."
@@ -206,6 +209,20 @@ Gõ lần lượt 4 tin, mỗi tin chỉ nhanh vai nổi bật:
 ## 11. (TÙY CHỌN) Bật bot Zalo THẬT
 
 Muốn khoe đại lý nhắn thẳng trong nhóm Zalo: `.env` `BOT_MODE=on` + `ZALO_BOT_TOKEN`, restart API. Tag bot trong nhóm → tin về app (xem [poc-zalo-bot.md](poc-zalo-bot.md)). Ràng buộc: nhóm chỉ nhận tin **@mention** bot.
+
+---
+
+## 11.5 (TÙY CHỌN) AI TỰ CHỐT ĐƠN — `AUTO_SEND`
+
+Muốn khoe "AI tự chạy, không cần Sale bấm": `.env` **`AUTO_SEND=on`**, restart API.
+- Đơn **KHÔNG rủi ro** → AI **tự chốt**: gửi xác nhận vào nhóm + đồng bộ KiotViet → **"Hoàn tất"** (không cần Sale bấm Duyệt).
+- **Chỉ khi vai Giám sát báo vấn đề** (đơn lớn ≥20tr, đại lý lạ, khiếu nại gắt, SL lớn ≥30, cảnh báo, độ tin cậy thấp) → **giữ "Cần kiểm tra" cho Sale**. Đây chính là "rule engine kiểm tra" = vai Giám sát tất định.
+- Topbar hiện badge **"Tự gửi: ON"** (vàng).
+- **Cảnh báo:** `AUTO_SEND=on` + `BOT_MODE=on` = AI **gửi thật** vào nhóm Zalo → theo GĐ1 cần **văn bản đồng ý của khách** trước khi bật. Demo an toàn không gửi thật: để `BOT_MODE=off` (kênh mock chỉ ghi log).
+- Mặc định `AUTO_SEND=off` (đúng GĐ1: Sale duyệt 1-chạm).
+
+**Nói khi demo (nếu bật):**
+> "Khi khách đã đồng ý, mình có thể bật chế độ **AI tự chốt**: đơn sạch thì hệ thống tự gửi xác nhận + lên KiotViet ngay; **chỉ đơn nào Giám sát thấy bất thường mới gọi người thật**. Sale chỉ còn xử lý ngoại lệ."
 
 ---
 
