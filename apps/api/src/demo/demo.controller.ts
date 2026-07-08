@@ -1,4 +1,12 @@
-import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+} from '@nestjs/common';
 import {
   channelMessageSchema,
   loadEnv,
@@ -7,6 +15,7 @@ import {
   type OrderView,
 } from '@ultty/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { OrdersRepository } from '../orders/orders.repository.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 
 /** Nhom test that (map -> Meta HN) — dung lam mac dinh khi demo qua simulate. */
@@ -34,6 +43,7 @@ export class DemoController {
   constructor(
     private readonly pipeline: PipelineService,
     private readonly knowledge: KnowledgeService,
+    private readonly orders: OrdersRepository,
   ) {}
 
   @Get('samples')
@@ -41,11 +51,16 @@ export class DemoController {
     return SAMPLE_MESSAGES;
   }
 
-  /** Che do van hanh (bot bat/tat, parser dang dung) — topbar console hien badge that. */
+  /** Che do van hanh (bot bat/tat, parser dang dung, stream) — topbar + frontend chon SSE/polling. */
   @Get('config')
   config(): DemoConfig {
     const env = loadEnv();
-    return { botMode: env.BOT_MODE, parserMode: env.PARSER_MODE, botName: env.BOT_NAME };
+    return {
+      botMode: env.BOT_MODE,
+      parserMode: env.PARSER_MODE,
+      botName: env.BOT_NAME,
+      streamMode: env.STREAM_MODE,
+    };
   }
 
   /** Danh sach nhom da map — web dung lam bo chon nhom khi giả lập tin. */
@@ -76,5 +91,33 @@ export class DemoController {
       sentAt: new Date(),
     });
     return this.pipeline.process(message, loadEnv().BOT_NAME);
+  }
+
+  /**
+   * "Chay lai" 1 tin da co: gọi LẠI LLM thật với cùng text/nhom, GIU nguyen id
+   * (cap nhat DUNG don, khong tao don moi) + phat lai su kien stream.
+   */
+  @Post('rerun/:id')
+  rerun(@Param('id') id: string): Promise<OrderView> {
+    const existing = this.orders.findById(id);
+    if (!existing) {
+      throw new NotFoundException(`Khong tim thay tin ${id} de chay lai`);
+    }
+    // Don da dong bo KiotViet -> KHONG chay lai (giu idempotent M4: tranh ghi de mat
+    // kiotVietCode roi duyet lai gay day don trung).
+    if (existing.status === 'synced') {
+      throw new BadRequestException('Đơn đã đồng bộ KiotViet — không thể chạy lại');
+    }
+    const message = channelMessageSchema.parse({
+      externalMessageId: `rerun-${id}-${Date.now()}`,
+      platform: 'zalo',
+      source: 'copilot_paste',
+      chatType: 'group',
+      externalChatId: existing.chatId,
+      text: existing.rawText,
+      imageUrl: existing.imageUrl,
+      sentAt: new Date(),
+    });
+    return this.pipeline.process(message, loadEnv().BOT_NAME, { orderId: id, rerun: true });
   }
 }

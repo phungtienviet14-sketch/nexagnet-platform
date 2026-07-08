@@ -18,4 +18,6 @@ export interface DemoConfig {
   botMode: 'on' | 'off';
   parserMode: 'mock' | 'claude' | 'deepseek';
   botName: string;
+  /** on -> frontend dung SSE /events (real-time); off -> polling. */
+  streamMode: 'on' | 'off';
 }

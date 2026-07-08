@@ -3,7 +3,7 @@
 import { AGENT_ROLES, ROLE_LABELS } from '@ultty/shared';
 import { Fragment } from 'react';
 import { ROLE_ICON } from '../../lib/labels';
-import type { StepUiState } from '../../hooks/useAgentReveal';
+import type { StepUiState } from '../../lib/live';
 
 type Props = {
   stateByRole: Record<string, StepUiState>;

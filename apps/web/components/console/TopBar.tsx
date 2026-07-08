@@ -11,6 +11,8 @@ type Props = {
   config?: DemoConfig;
   view: ConsoleView;
   onViewChange: (view: ConsoleView) => void;
+  streaming: boolean;
+  connected: boolean;
 };
 
 const PARSER_LABEL: Record<DemoConfig['parserMode'], string> = {
@@ -27,8 +29,18 @@ function toggleTheme() {
   root.setAttribute('data-theme', next);
 }
 
-export function TopBar({ orderCount, pendingCount, groupCount, config, view, onViewChange }: Props) {
+export function TopBar({
+  orderCount,
+  pendingCount,
+  groupCount,
+  config,
+  view,
+  onViewChange,
+  streaming,
+  connected,
+}: Props) {
   const botOn = config?.botMode === 'on';
+  const liveOn = streaming && connected;
   return (
     <header className="topbar">
       <div className="brand">
@@ -37,6 +49,10 @@ export function TopBar({ orderCount, pendingCount, groupCount, config, view, onV
       </div>
 
       <div className="status-badges">
+        <span className={`sbadge ${liveOn ? '' : 'off'}`} title={streaming ? 'Streaming SSE' : 'Chế độ polling'}>
+          <span className="dot" />
+          {streaming ? (connected ? 'LIVE' : 'kết nối…') : 'Polling'}
+        </span>
         <span className={`sbadge ${botOn ? '' : 'off'}`}>
           <span className="dot" />
           Bot Zalo: {botOn ? 'ON' : 'OFF'}

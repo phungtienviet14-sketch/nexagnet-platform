@@ -1,32 +1,22 @@
 'use client';
 
-import { AGENT_ROLES, SENDER_LABELS, type AgentStep, type OrderView } from '@ultty/shared';
-import type { RevealState } from '../../hooks/useAgentReveal';
+import { AGENT_ROLES, SENDER_LABELS, type AgentRole } from '@ultty/shared';
+import type { FeedItem, RevealState, StepUiState } from '../../lib/live';
 import { AgentPipeline } from './AgentPipeline';
 import { AgentStepCard } from './AgentStepCard';
 import { OrderDetailPanel } from './OrderDetailPanel';
 
 type Props = {
-  order?: OrderView;
+  item?: FeedItem;
   reveal: RevealState;
   isBusy: boolean;
-  onReplay: () => void;
+  onRerun: (id: string) => void;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
 };
 
-const EMPTY_STEP = (role: AgentStep['role']): AgentStep => ({
-  role,
-  label: role,
-  status: 'skipped',
-  action: '—',
-  notes: [],
-  source: 'none',
-  usedLlm: false,
-});
-
-export function AgentTheater({ order, reveal, isBusy, onReplay, onApprove, onReject }: Props) {
-  if (!order) {
+export function AgentTheater({ item, reveal, isBusy, onRerun, onApprove, onReject }: Props) {
+  if (!item) {
     return (
       <div className="empty">
         Chọn một tin ở cột trái, hoặc bơm thử một tin để xem đội 6 agent xử lý.
@@ -34,30 +24,46 @@ export function AgentTheater({ order, reveal, isBusy, onReplay, onApprove, onRej
     );
   }
 
-  const trace = order.trace;
-  const sender = order.senderType ?? trace?.senderType ?? 'unknown';
-  const stepByRole = new Map<string, AgentStep>((trace?.steps ?? []).map((s) => [s.role, s]));
+  const sender = item.senderType ?? 'unknown';
+  const stateByRole = Object.fromEntries(
+    AGENT_ROLES.map((r) => [r, reveal.byRole[r].state]),
+  ) as Record<AgentRole, StepUiState>;
+  const llmText = item.order?.trace
+    ? `${item.order.trace.llmCalls} lần gọi AI`
+    : item.processing
+      ? 'đang gọi AI…'
+      : '—';
+  // Don da dong bo/gui KiotViet -> khong chay lai (backend cung chan, giu idempotent).
+  const isFinalized = item.order?.status === 'synced' || item.order?.status === 'sent';
+  const canRerun = !item.processing && !isFinalized;
 
   return (
     <>
       <div className="input-card">
         <div className="ic-head">
-          <span className="ic-who">{order.groupName ?? `Nhóm ${order.chatId.slice(0, 14)}…`}</span>
+          <span className="ic-who">{item.groupName ?? `Nhóm ${item.chatId.slice(0, 14)}…`}</span>
           <span className="chip chip-sender">{SENDER_LABELS[sender]}</span>
           <span className="ic-src">nguồn: nhóm Zalo (dán tay / bot @mention)</span>
         </div>
-        <div className="input-msg mono">{order.rawText}</div>
-        {order.imageUrl && <img className="input-img" src={order.imageUrl} alt="Ảnh đơn hàng" />}
+        <div className="input-msg mono">{item.rawText}</div>
+        {item.imageUrl && <img className="input-img" src={item.imageUrl} alt="Ảnh đơn hàng" />}
       </div>
 
-      <AgentPipeline stateByRole={reveal.stateByRole} />
+      <AgentPipeline stateByRole={stateByRole} />
 
       <p className="theater-sec-label">
         Đội 6 agent phối hợp
-        <span className="llm-count">{trace ? `${trace.llmCalls} lần gọi AI` : '—'}</span>
+        <span className="llm-count">{llmText}</span>
         <span className="sec-note">Rules engine là nơi DUY NHẤT tính tiền</span>
-        <button type="button" className="btn btn-ghost" style={{ padding: '0.2rem 0.55rem' }} onClick={onReplay}>
-          ▶ Chạy lại
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={{ padding: '0.2rem 0.55rem' }}
+          disabled={!canRerun}
+          title={isFinalized ? 'Đơn đã đồng bộ KiotViet' : undefined}
+          onClick={() => onRerun(item.id)}
+        >
+          {item.processing ? '⏳ đang chạy…' : '▶ Chạy lại (gọi lại AI)'}
         </button>
       </p>
 
@@ -65,15 +71,18 @@ export function AgentTheater({ order, reveal, isBusy, onReplay, onApprove, onRej
         {AGENT_ROLES.map((role) => (
           <AgentStepCard
             key={role}
-            step={stepByRole.get(role) ?? EMPTY_STEP(role)}
-            state={reveal.stateByRole[role] ?? 'idle'}
+            role={role}
+            state={reveal.byRole[role].state}
+            step={reveal.byRole[role].step}
           />
         ))}
       </ul>
 
-      <div className={`reveal-block ${reveal.revealed ? '' : 'hidden'}`}>
-        <OrderDetailPanel order={order} isBusy={isBusy} onApprove={onApprove} onReject={onReject} />
-      </div>
+      {item.order && (
+        <div className={`reveal-block ${reveal.revealed ? '' : 'hidden'}`}>
+          <OrderDetailPanel order={item.order} isBusy={isBusy} onApprove={onApprove} onReject={onReject} />
+        </div>
+      )}
     </>
   );
 }

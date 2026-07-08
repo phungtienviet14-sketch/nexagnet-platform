@@ -2,61 +2,60 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OrderView } from '@ultty/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentTheater } from '../components/console/AgentTheater';
 import { BroadcastPanel } from '../components/console/BroadcastPanel';
 import { FeedColumn } from '../components/console/FeedColumn';
 import { SourceColumn } from '../components/console/SourceColumn';
 import { TopBar, type ConsoleView } from '../components/console/TopBar';
-import { useAgentReveal } from '../hooks/useAgentReveal';
+import { useAgentStream } from '../hooks/useAgentStream';
 import { api } from '../lib/api';
+import { buildFeedItems, deriveReveal } from '../lib/live';
 
 const EMPTY_ORDERS: OrderView[] = [];
 
 export default function HomePage() {
   const qc = useQueryClient();
   const configQ = useQuery({ queryKey: ['config'], queryFn: api.config, staleTime: 300_000 });
-  const messagesQ = useQuery({ queryKey: ['messages'], queryFn: api.messages, refetchInterval: 2500 });
-
-  const orders = messagesQ.data ?? EMPTY_ORDERS;
+  const streaming = configQ.data?.streamMode === 'on';
 
   const [view, setView] = useState<ConsoleView>('console');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [replayNonce, setReplayNonce] = useState(0);
-  const [animate, setAnimate] = useState(false);
 
+  // Streaming: SSE -> tien do live (runs) + tu chon don moi tao (order.created).
+  const { runs, connected } = useAgentStream(streaming, setSelectedId);
+
+  // Luoi an toan: SSE roi (connected=false) -> quay ve polling; noi lai thi ngung.
+  const messagesQ = useQuery({
+    queryKey: ['messages'],
+    queryFn: api.messages,
+    refetchInterval: streaming && connected ? false : 2500,
+  });
+  const orders = messagesQ.data ?? EMPTY_ORDERS;
+
+  // Tu chon: lan dau chon don moi nhat (tinh); che do POLLING tu chon tin moi.
+  // Streaming da lo qua onCreated nen KHONG re-select o day (tranh double).
   const seenRef = useRef<Set<string>>(new Set());
   const initedRef = useRef(false);
-
-  // Phat hien tin MOI -> tu chon + phat hieu ung; lan dau chi seed (khong animate).
   useEffect(() => {
-    // Cho query resolve xong lan dau moi khoa "inited" — ke ca kho rong (fresh start)
-    // thi tin dau tien den sau van duoc coi la MOI va co hieu ung (bug lanh: don dau
-    // cua Man 1 bi mat animation neu API vua restart).
     if (!messagesQ.isSuccess) return;
     const newest = orders[0];
-    if (!initedRef.current) {
-      initedRef.current = true;
-      orders.forEach((o) => seenRef.current.add(o.id));
-      if (newest) {
-        setSelectedId((cur) => cur ?? newest.id);
-        setAnimate(false);
-      }
+    const firstLoad = !initedRef.current;
+    initedRef.current = true;
+    const isNew = Boolean(newest && !seenRef.current.has(newest.id));
+    orders.forEach((o) => seenRef.current.add(o.id));
+    if (!newest) return;
+    if (firstLoad) {
+      setSelectedId((cur) => cur ?? newest.id);
       return;
     }
-    if (newest && !seenRef.current.has(newest.id)) {
-      orders.forEach((o) => seenRef.current.add(o.id));
-      setSelectedId(newest.id);
-      setAnimate(true);
-      setReplayNonce((n) => n + 1);
-    } else {
-      orders.forEach((o) => seenRef.current.add(o.id));
-    }
-    // Phu thuoc messagesQ.data (ref on dinh nho structural-sharing) + isSuccess — khong lap moi render.
-  }, [messagesQ.data, messagesQ.isSuccess]);
+    if (!streaming && isNew) setSelectedId(newest.id);
+    // Deps: messagesQ.data (ref on dinh) + isSuccess + streaming — khong dua `orders` (derive).
+  }, [messagesQ.data, messagesQ.isSuccess, streaming]);
 
-  const selectedOrder = orders.find((o) => o.id === selectedId);
-  const reveal = useAgentReveal(selectedOrder, replayNonce, animate);
+  const items = useMemo(() => buildFeedItems(orders, runs), [orders, runs]);
+  const selectedItem = items.find((it) => it.id === selectedId);
+  const reveal = deriveReveal(selectedItem, selectedId ? runs.get(selectedId) : undefined);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ['messages'] });
@@ -64,25 +63,28 @@ export default function HomePage() {
   };
   const approveM = useMutation({ mutationFn: api.approve, onSuccess: invalidate });
   const rejectM = useMutation({ mutationFn: api.reject, onSuccess: invalidate });
+  const rerunM = useMutation({ mutationFn: api.rerun, onSuccess: invalidate });
   const isBusy = approveM.isPending || rejectM.isPending;
-  const actionError = approveM.error ?? rejectM.error;
+  const actionError = approveM.error ?? rejectM.error ?? rerunM.error;
 
-  const handleSelect = (id: string) => {
+  // Doi don dang chon -> xoa loi hanh dong cu (tranh banner loi treo qua don khac).
+  useEffect(() => {
+    approveM.reset();
+    rejectM.reset();
+    rerunM.reset();
+    // Chi chay khi doi selectedId.
+  }, [selectedId]);
+
+  const handleRerun = (id: string) => {
     setSelectedId(id);
-    setAnimate(true);
-    setReplayNonce((n) => n + 1);
-  };
-  const handleReplay = () => {
-    setAnimate(true);
-    setReplayNonce((n) => n + 1);
+    rerunM.mutate(id);
   };
 
-  const orderCount = orders.filter((o) => o.intent === 'dat_don').length;
-  const pendingCount = orders.filter(
-    (o) => o.intent === 'dat_don' && (o.status === 'pending_review' || o.status === 'needs_edit'),
+  const orderCount = items.filter((i) => i.intent === 'dat_don').length;
+  const pendingCount = items.filter(
+    (i) => i.intent === 'dat_don' && (i.status === 'pending_review' || i.status === 'needs_edit'),
   ).length;
-  const groupCount = new Set(orders.map((o) => o.chatId)).size;
-  const liveId = !reveal.revealed && selectedId ? selectedId : null;
+  const groupCount = new Set(items.map((i) => i.chatId)).size;
 
   return (
     <div className="shell">
@@ -93,6 +95,8 @@ export default function HomePage() {
         config={configQ.data}
         view={view}
         onViewChange={setView}
+        streaming={streaming}
+        connected={connected}
       />
 
       {view === 'broadcast' ? (
@@ -101,7 +105,7 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="grid">
-          <FeedColumn orders={orders} selectedId={selectedId} liveId={liveId} onSelect={handleSelect} />
+          <FeedColumn items={items} selectedId={selectedId} onSelect={setSelectedId} />
           <main className="col theater" aria-label="Luồng xử lý 6 agent">
             {actionError && (
               <div className="error-banner" role="alert">
@@ -109,15 +113,15 @@ export default function HomePage() {
               </div>
             )}
             <AgentTheater
-              order={selectedOrder}
+              item={selectedItem}
               reveal={reveal}
               isBusy={isBusy}
-              onReplay={handleReplay}
+              onRerun={handleRerun}
               onApprove={(id) => approveM.mutate(id)}
               onReject={(id) => rejectM.mutate(id)}
             />
           </main>
-          <SourceColumn order={selectedOrder} />
+          <SourceColumn order={selectedItem?.order} />
         </div>
       )}
     </div>

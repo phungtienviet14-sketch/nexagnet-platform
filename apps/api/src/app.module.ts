@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AgentEventsService } from './agents/agent-events.service.js';
 import { AgentOrchestrator } from './agents/agent-orchestrator.service.js';
 import { BroadcastController } from './broadcast/broadcast.controller.js';
 import { BroadcastService } from './broadcast/broadcast.service.js';
@@ -15,6 +16,7 @@ import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repo
 import { OrdersService } from './orders/orders.service.js';
 import { parserProvider } from './pipeline/parser.provider.js';
 import { PipelineService } from './pipeline/pipeline.service.js';
+import { StreamController } from './stream/stream.controller.js';
 
 @Module({
   controllers: [
@@ -25,9 +27,11 @@ import { PipelineService } from './pipeline/pipeline.service.js';
     KiotVietController,
     KnowledgeController,
     BroadcastController,
+    StreamController,
   ],
   providers: [
     KnowledgeService,
+    AgentEventsService,
     { provide: OrdersRepository, useClass: InMemoryOrdersRepository },
     { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
     parserProvider,

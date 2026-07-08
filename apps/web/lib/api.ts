@@ -11,6 +11,9 @@ import type {
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+/** Kenh SSE 6 agent real-time. */
+export const EVENTS_URL = `${BASE}/events`;
+
 export type { DemoGroup };
 
 /** Tham so giả lập 1 tin — chon nhom de test dinh tuyen dai ly theo nhom. */
@@ -42,6 +45,9 @@ export const api = {
     fetch(`${BASE}/orders/${id}/approve`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
   reject: (id: string): Promise<OrderView> =>
     fetch(`${BASE}/orders/${id}/reject`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
+  /** "Chay lai" — goi LAI LLM that voi cung id (real-time, phat lai stream). */
+  rerun: (id: string): Promise<OrderView> =>
+    fetch(`${BASE}/demo/rerun/${id}`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
   simulate: ({ text, chatId }: SimulateInput): Promise<OrderView> =>
     fetch(`${BASE}/demo/simulate`, {
       method: 'POST',

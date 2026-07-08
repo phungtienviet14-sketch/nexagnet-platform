@@ -44,6 +44,11 @@ export type {
   KnowledgeSummary,
 } from './knowledge-view.js';
 export type { DemoGroup, DemoConfig } from './demo.js';
+export type {
+  OrderCreatedPayload,
+  AgentStreamEvent,
+  AgentStreamEventType,
+} from './agent-stream.js';
 export { broadcastRequestSchema, MAX_BROADCAST_TEXT } from './broadcast.js';
 export type { BroadcastRequest, BroadcastResult, BroadcastTargetResult } from './broadcast.js';
 export {

@@ -10,7 +10,11 @@ import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 export class PipelineService {
   constructor(private readonly orchestrator: AgentOrchestrator) {}
 
-  process(message: ChannelMessage, botName?: string): Promise<OrderView> {
-    return this.orchestrator.run(message, botName);
+  process(
+    message: ChannelMessage,
+    botName?: string,
+    opts?: { orderId?: string; rerun?: boolean },
+  ): Promise<OrderView> {
+    return this.orchestrator.run(message, botName, opts);
   }
 }

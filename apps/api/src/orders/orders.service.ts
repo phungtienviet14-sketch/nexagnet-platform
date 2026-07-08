@@ -1,10 +1,12 @@
 import {
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { OrderView } from '@ultty/shared';
+import { AgentEventsService } from '../agents/agent-events.service.js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { KiotVietAdapter } from '../kiotviet/kiotviet.adapter.js';
@@ -16,6 +18,7 @@ export class OrdersService {
     private readonly repo: OrdersRepository,
     private readonly channel: ChannelAdapter,
     private readonly kiotViet: KiotVietAdapter,
+    @Optional() private readonly events?: AgentEventsService,
   ) {}
 
   /** Danh sach DON (intent dat_don). */
@@ -60,11 +63,15 @@ export class OrdersService {
     }
 
     const { code } = await this.kiotViet.pushOrder(view.priced);
-    return this.repo.update(id, { status: 'synced', kiotVietCode: code })!;
+    const synced = this.repo.update(id, { status: 'synced', kiotVietCode: code })!;
+    this.events?.emit({ type: 'order.updated', order: synced });
+    return synced;
   }
 
   reject(id: string): OrderView {
     this.getOrThrow(id);
-    return this.repo.update(id, { status: 'rejected' })!;
+    const rejected = this.repo.update(id, { status: 'rejected' })!;
+    this.events?.emit({ type: 'order.updated', order: rejected });
+    return rejected;
   }
 }

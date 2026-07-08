@@ -32,6 +32,10 @@ export const envSchema = z.object({
   BROADCAST_THROTTLE_MS: z.coerce.number().int().nonnegative().default(1500),
   // Tran so nhom moi lan gui — chan blast nham vao qua nhieu nhom.
   BROADCAST_MAX_TARGETS: z.coerce.number().int().positive().default(50),
+  // Streaming 6 agent qua SSE. on -> frontend dung /events real-time; off -> quay ve polling (luoi an toan demo).
+  STREAM_MODE: z.enum(['on', 'off']).default('on'),
+  // Gian nhe giua cac buoc rules (tuc thi) cho de nhin. Router van co do tre THAT (LLM). 0 = thuan real.
+  STREAM_STEP_DELAY_MS: z.coerce.number().int().nonnegative().default(280),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

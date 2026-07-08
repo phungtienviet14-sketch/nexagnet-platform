@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
   AGENT_ROLES,
@@ -6,10 +6,12 @@ import {
   INTENT_TO_ROLE,
   ROLE_LABELS,
   SENDER_LABELS,
+  loadEnv,
   type AgentRole,
   type AgentSource,
   type AgentStep,
   type AgentStepStatus,
+  type AgentStreamEvent,
   type AgentTrace,
   type ChannelMessage,
   type Intent,
@@ -23,6 +25,7 @@ import { KnowledgeService, type ResolvedGroup } from '../knowledge/knowledge.ser
 import { OrdersRepository } from '../orders/orders.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
+import { AgentEventsService } from './agent-events.service.js';
 import { DEFAULT_RULES_CONFIG } from '../rules/config.js';
 import { priceOrder, routeStatus } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
@@ -61,17 +64,53 @@ interface DispatchResult {
 export class AgentOrchestrator {
   private readonly logger = new Logger('AgentOrchestrator');
 
+  private readonly stepDelayMs = loadEnv().STREAM_STEP_DELAY_MS;
+
   constructor(
     @Inject(ORDER_PARSER) private readonly parser: OrderParser,
     private readonly knowledge: KnowledgeService,
     private readonly orders: OrdersRepository,
+    @Optional() private readonly events?: AgentEventsService,
   ) {}
 
-  async run(message: ChannelMessage, botName?: string): Promise<OrderView> {
+  /**
+   * Xu ly 1 tin. Phat su kien STREAMING (order.created -> agent.progress tung vai ->
+   * order.finalized) neu co client SSE. Van TRA VE OrderView day du (backward-compatible).
+   * opts.orderId: dung lai id (nut "Chay lai" -> cap nhat DUNG don, khong tao don moi).
+   */
+  async run(
+    message: ChannelMessage,
+    botName?: string,
+    opts?: { orderId?: string; rerun?: boolean },
+  ): Promise<OrderView> {
+    const orderId = opts?.orderId ?? randomUUID();
+    const createdAt = new Date().toISOString();
     const resolved = this.knowledge.resolveByChatId(message.externalChatId);
     const senderKnown = resolved.dealer !== null;
 
-    // ROUTER — 1 lan parse (LLM hoac mock)
+    const emit = (e: AgentStreamEvent): void => this.events?.emit(e);
+    // Chi gian nhip khi CO client dang xem (tranh them do tre khi khong ai coi/test).
+    const streaming = Boolean(this.events?.hasSubscribers());
+    const pace = (): Promise<void> => (streaming ? sleep(this.stepDelayMs) : Promise.resolve());
+    const NO_SUP: SupervisorSummary = { riskLevel: 'none', escalate: false, reasons: [] };
+
+    emit({
+      type: 'order.created',
+      order: {
+        orderId,
+        chatId: message.externalChatId,
+        groupName: resolved.groupName ?? undefined,
+        dealerName: resolved.dealer?.name ?? undefined,
+        senderType: resolved.senderType,
+        rawText: message.text,
+        imageUrl: message.imageUrl,
+        createdAt,
+        rerun: opts?.rerun,
+      },
+    });
+
+    // ROUTER — 1 lan parse (LLM hoac mock). do tre THAT nam o day.
+    emit({ type: 'agent.progress', orderId, role: 'router', phase: 'active' });
     const parseResult = await this.parser.parse({
       text: message.text,
       imageUrl: message.imageUrl,
@@ -85,7 +124,7 @@ export class AgentOrchestrator {
     const primaryRole = INTENT_TO_ROLE[intent];
     const normText = normalize(message.text);
 
-    // DISPATCH worker theo intent
+    // DISPATCH worker theo intent (dong bo), roi phat tung vai theo thu tu.
     const dispatch = this.dispatch(parseResult, resolved, normText);
     dispatch.roles.set('router', {
       action: `Phân loại: ${INTENT_LABELS[intent]} · người gửi: ${SENDER_LABELS[resolved.senderType]} → ${ROLE_LABELS[primaryRole]}`,
@@ -93,9 +132,29 @@ export class AgentOrchestrator {
       source: usedLlm ? 'llm' : 'router',
       usedLlm,
     });
+    emit({
+      type: 'agent.progress',
+      orderId,
+      role: 'router',
+      phase: 'done',
+      step: this.buildStep('router', dispatch.roles.get('router'), NO_SUP),
+    });
 
-    // SUPERVISOR — rules tat dinh, 0 LLM
+    // WORKER — cac vai tham gia (rules/knowledge, tuc thi; gian nhe cho de nhin).
+    for (const role of AGENT_ROLES) {
+      if (role === 'router' || role === 'supervisor') continue;
+      const data = dispatch.roles.get(role);
+      if (!data) continue;
+      await pace();
+      emit({ type: 'agent.progress', orderId, role, phase: 'active' });
+      await pace();
+      emit({ type: 'agent.progress', orderId, role, phase: 'done', step: this.buildStep(role, data, NO_SUP) });
+    }
+
+    // SUPERVISOR — rules tat dinh, 0 LLM.
     const intentConfidence = parseResult.confidence.intent ?? 0.8;
+    await pace();
+    emit({ type: 'agent.progress', orderId, role: 'supervisor', phase: 'active' });
     const supervisor = assessRisk(dispatch.priced, intentConfidence, senderKnown, normText, DEFAULT_AGENTS_CONFIG);
     dispatch.roles.set('supervisor', {
       action: supervisor.riskLevel === 'none' ? 'Không phát hiện rủi ro' : `Rủi ro: ${supervisor.reasons.join('; ')}`,
@@ -103,15 +162,22 @@ export class AgentOrchestrator {
       source: 'rules',
       handoff: supervisor.escalate,
     });
+    emit({
+      type: 'agent.progress',
+      orderId,
+      role: 'supervisor',
+      phase: 'done',
+      step: this.buildStep('supervisor', dispatch.roles.get('supervisor'), supervisor),
+    });
     const status = supervisor.escalate && dispatch.status === 'pending_review' ? 'needs_edit' : dispatch.status;
 
     const trace = this.buildTrace(dispatch.roles, primaryRole, resolved, usedLlm, supervisor, dispatch.reply);
     this.logStep(intent, resolved, supervisor);
 
     const view: OrderView = {
-      id: randomUUID(),
+      id: orderId,
       status,
-      createdAt: new Date().toISOString(),
+      createdAt,
       chatId: message.externalChatId,
       groupName: resolved.groupName ?? undefined,
       dealerName: resolved.dealer?.name ?? undefined,
@@ -124,7 +190,9 @@ export class AgentOrchestrator {
       senderType: resolved.senderType,
       trace,
     };
-    return this.orders.create(view);
+    const saved = this.orders.create(view);
+    emit({ type: 'order.finalized', order: saved });
+    return saved;
   }
 
   /** Dispatch tin toi vai chuyen trach; DUY NHAT nhanh dat_don goi priceOrder. */
@@ -243,19 +311,7 @@ export class AgentOrchestrator {
     supervisor: SupervisorSummary,
     reply?: string,
   ): AgentTrace {
-    const steps: AgentStep[] = AGENT_ROLES.map((role) => {
-      const data = roles.get(role);
-      return {
-        role,
-        label: ROLE_LABELS[role],
-        status: this.stepStatus(role, data, supervisor),
-        action: data?.action ?? '—',
-        notes: data?.notes ?? [],
-        source: data?.source ?? 'none',
-        usedLlm: data?.usedLlm ?? false,
-        handoff: data?.handoff,
-      };
-    });
+    const steps: AgentStep[] = AGENT_ROLES.map((role) => this.buildStep(role, roles.get(role), supervisor));
     return {
       steps,
       primaryRole,
@@ -264,6 +320,20 @@ export class AgentOrchestrator {
       brainMode: this.parser.name,
       supervisor,
       reply,
+    };
+  }
+
+  /** Dung 1 AgentStep tu RoleData (dung chung cho streaming tung buoc + buildTrace). */
+  private buildStep(role: AgentRole, data: RoleData | undefined, supervisor: SupervisorSummary): AgentStep {
+    return {
+      role,
+      label: ROLE_LABELS[role],
+      status: this.stepStatus(role, data, supervisor),
+      action: data?.action ?? '—',
+      notes: data?.notes ?? [],
+      source: data?.source ?? 'none',
+      usedLlm: data?.usedLlm ?? false,
+      handoff: data?.handoff,
     };
   }
 
@@ -282,4 +352,8 @@ export class AgentOrchestrator {
       this.logger.warn(`[Agent:supervisor] risk=${supervisor.riskLevel} escalate=${supervisor.escalate}`);
     }
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

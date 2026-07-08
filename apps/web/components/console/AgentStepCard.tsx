@@ -1,12 +1,14 @@
 'use client';
 
-import type { AgentStep } from '@ultty/shared';
+import { ROLE_LABELS, type AgentRole, type AgentStep } from '@ultty/shared';
 import { ROLE_ICON, ROLE_TAG, SOURCE_META } from '../../lib/labels';
-import type { StepUiState } from '../../hooks/useAgentReveal';
+import type { StepUiState } from '../../lib/live';
 
 type Props = {
-  step: AgentStep;
+  role: AgentRole;
   state: StepUiState;
+  /** Du lieu buoc — chi co khi da "done"/trace tinh; luc "active" (dang goi LLM) chua co. */
+  step?: AgentStep;
 };
 
 const STATUS_TEXT: Record<StepUiState, { text: string; cls: string }> = {
@@ -18,29 +20,29 @@ const STATUS_TEXT: Record<StepUiState, { text: string; cls: string }> = {
   handoff: { text: '⚑ chuyển người thật', cls: 'st-handoff' },
 };
 
-export function AgentStepCard({ step, state }: Props) {
+export function AgentStepCard({ role, state, step }: Props) {
   const status = STATUS_TEXT[state];
-  const src = SOURCE_META[step.source];
-  const showDetail =
-    state === 'active' || state === 'done' || state === 'flagged' || state === 'handoff';
+  const detailStates = state === 'done' || state === 'flagged' || state === 'handoff';
+  const showDetail = detailStates && !!step;
+  const src = step ? SOURCE_META[step.source] : null;
 
   return (
     <li className="agent" data-state={state}>
       <span className="agent-ic" aria-hidden>
-        {ROLE_ICON[step.role]}
+        {ROLE_ICON[role]}
       </span>
       <div>
         <div className="agent-head">
-          <span className="agent-name">{step.label}</span>
-          <span className="agent-role-tag">{ROLE_TAG[step.role]}</span>
+          <span className="agent-name">{ROLE_LABELS[role]}</span>
+          <span className="agent-role-tag">{ROLE_TAG[role]}</span>
           <span className={`agent-status ${status.cls}`}>{status.text}</span>
         </div>
 
         {state === 'skipped' && (
-          <div className="agent-hidden-note">Tin này không cần vai {step.label}.</div>
+          <div className="agent-hidden-note">Tin này không cần vai {ROLE_LABELS[role]}.</div>
         )}
 
-        {showDetail && (
+        {showDetail && step && (
           <>
             <div className="agent-action">{step.action}</div>
             {step.notes.length > 0 && (
@@ -51,7 +53,7 @@ export function AgentStepCard({ step, state }: Props) {
               </ul>
             )}
             <div className="agent-badges">
-              {src.label && <span className={`src ${src.cls}`}>{src.label}</span>}
+              {src?.label && <span className={`src ${src.cls}`}>{src.label}</span>}
               {step.usedLlm && <span className="src src-llm">LLM · 1 lần</span>}
             </div>
           </>
