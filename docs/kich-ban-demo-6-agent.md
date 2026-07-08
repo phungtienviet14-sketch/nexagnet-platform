@@ -77,10 +77,10 @@ Giao diện mới là **console rộng cho máy chiếu**, 3 cột trái→phả
 @Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT
 ```
 
-[Bấm **Gửi cho AI xử lý ▸**. Cột giữa: **6 agent sáng lên tuần tự** (⏳ đang xử lý → ✓ xong), rồi phiếu đơn hiện ra.]
+[Bấm **Gửi cho AI xử lý ▸**. Cột giữa: **6 agent sáng lên theo nhịp THẬT** (⏳ đang xử lý → ✓ xong) — vai **Điều phối "quay" ~1–2s** (đang gọi DeepSeek), rồi các vai quy tắc chạy tức thì → phiếu đơn hiện ra.]
 
 **Nói (vừa chỉ vừa nói):**
-> "Tin đặt hàng kiểu đại lý hay nhắn — viết tắt, không dấu. Anh/chị thấy **sáu vai chạy tuần tự**, mỗi vai xong tới vai kế — rồi ra phiếu đơn điền sẵn."
+> "Tin đặt hàng kiểu đại lý hay nhắn — viết tắt, không dấu. Anh/chị để ý vai **Điều phối đang 'quay'** — đó là nó **đang gọi AI thật**, mất một hai giây; xong là các vai quy tắc chạy ngay. Đây là chạy **trực tiếp**, không phải quay video sẵn — rồi ra phiếu đơn điền sẵn."
 
 👉 **Chỉ chip trên đầu đội agent + badge trên thanh tiêu đề:**
 > "Chỗ này ghi **‘1 lần gọi AI’**, thanh trên có badge **‘AI: DeepSeek’** — đây là AI thật, và **đúng một lần gọi** dù có sáu vai."
@@ -146,7 +146,7 @@ Gõ lần lượt 4 tin, mỗi tin chỉ nhanh vai nổi bật:
 [Đưa chuột/bàn phím cho khách. Gợi ý nếu khách ngại:]
 > "Ví dụ: *‘robot hut bui gia bao nhieu’*, hay *‘dat 3 noi chien 2 may loc nuoc ve OCP’*, hay hỏi *‘khi nao hang toi’*…"
 
-**Khi khách gõ:** để AI xử lý, rồi chỉ vào AgentTrace giải thích vai nào vào cuộc + header ‘1 lần gọi AI’.
+**Khi khách gõ:** để AI xử lý, rồi chỉ vào **cột giữa (đội 6 agent)** giải thích vai nào vào cuộc + chip **‘1 lần gọi AI’**; cột phải tab **Kho tri thức** cho thấy AI đã dùng gì cho tin khách vừa gõ.
 
 👉 **Trình diễn "Giám sát chặn đơn lạ":** trong ô chọn nhóm có sẵn mục **"🔓 Nhóm lạ (chưa map đại lý)"**.
 > "Chọn nhóm này rồi gõ một đơn — vì **chưa xác định được đại lý**, bạn Giám sát **leo thang người thật** ngay. Kể cả nhóm mới lọt vào, hệ thống không tự chốt."
