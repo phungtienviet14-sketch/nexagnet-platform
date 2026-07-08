@@ -46,6 +46,33 @@ Trạng thái: ⬜ chưa có · 🟡 đã hỏi, đang chờ · ✅ đã nhận 
 | D6 | Mẫu thông báo "nhóm có hệ thống hỗ trợ tự động" gửi các nhóm | Tuân thủ điều khoản Zalo Bot + NĐ13/Luật BVDLCN (mình soạn nháp, khách duyệt) | ⬜ |
 | D7 | Chốt phạm vi GĐ1 + KPI + mốc pilot 1-2 nhóm | Theo mục 8 tài liệu NetViet | ⬜ |
 
+## Nhóm E — Hạ tầng & vận hành production (bổ sung — chặn chạy 24/7)
+
+| # | Cần gì | Chi tiết cần hỏi/quyết | Vì sao chặn | TT |
+|---|---|---|---|---|
+| E1 | Máy chủ 24/7 + domain + HTTPS | Ai cung cấp/trả tiền (VPS/cloud)? Cho **webhook always-on** của Bot Platform | getUpdates KHÔNG replay tin lúc bot offline → không có webhook always-on là mất đơn | ⬜ |
+| E2 | PostgreSQL + Redis production + sao lưu | Managed hay tự host? Lịch backup? | Demo đang in-memory (restart mất sạch); production cần DB thật (schema mục 6) cho tin/đơn/KPI/audit | ⬜ |
+| E3 | Ai vận hành hằng ngày sau bàn giao | Khách chưa có IT → NetViet managed service? Ai restart/xử lý khi bot/kênh chết? Giờ hỗ trợ/SLA | Không ai trực = tin rơi, không ai biết | ⬜ |
+| E4 | Kênh nhận cảnh báo sự cố | Bot chết/webhook lỗi/queue nghẽn → báo vào Zalo/email của ai | Zalo có quyền khóa bot không báo trước | ⬜ |
+
+## Nhóm F — Tài khoản & chi phí (ai sở hữu / ai trả)
+
+| # | Cần gì | Chi tiết cần hỏi/quyết | TT |
+|---|---|---|---|
+| F1 | Chủ sở hữu bot Zalo production | Hiện là tài khoản dự án → nên chuyển sang tài khoản U Ultty? Ai giữ token/admin bot | ⬜ |
+| F2 | Ai add bot vào ~200 nhóm, theo đợt nào | Phải là thành viên/admin nhóm; danh sách nhóm pilot trước (khớp A4) | ⬜ |
+| F3 | Gói Zalo Bot Premium (nếu cần) | Giới hạn nhóm/rate limit + giá (câu hỏi mở #1c, #5 còn treo); ai duyệt chi | ⬜ |
+| F4 | Tài khoản + ngân sách LLM API | Ai trả, hạn mức/tháng | ⬜ |
+
+## Nhóm G — AI/LLM production
+
+| # | Cần gì | Chi tiết cần hỏi/quyết | Chặn | TT |
+|---|---|---|---|---|
+| G1 | Chốt model qua bake-off | Claude/DeepSeek/khác — đo trên B1-B2 (câu hỏi mở #3); hiện demo tạm DeepSeek | 0.4 | ⬜ |
+| G2 | Quyền gửi dữ liệu cá nhân sang LLM | SĐT/địa chỉ (đơn TH2) — mức tối thiểu hóa; tuân thủ NĐ13/2023 + Luật BVDLCN 2025 | GĐ2 | ⬜ |
+
+> **Ghi chú trạng thái code (08/07/2026):** demo đã có: bot đa nhóm (seed 2 nhóm thật), tab KiotViet mock (danh mục + tồn kho + đơn), auto-ack khi intent=Khác (env `AUTO_ACK`, mặc định off). Chi tiết: [demo-script.md](demo-script.md), [kich-ban-demo-nhieu-nhom.md](kich-ban-demo-nhieu-nhom.md).
+
 ---
 
 ## Gợi ý cách hỏi hiệu quả
