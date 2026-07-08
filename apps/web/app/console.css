@@ -861,6 +861,108 @@
   white-space: nowrap;
 }
 
+/* ---------- "AI da dung gi" (kho tri thuc bam theo tin) ---------- */
+.kb-usage {
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, transparent);
+  border-radius: var(--r-md);
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 1rem;
+}
+.kb-usage-title {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+  color: var(--accent);
+  margin: 0 0 0.55rem;
+}
+.usage-group + .usage-group {
+  margin-top: 0.55rem;
+}
+.usage-label {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  font-weight: 700;
+  margin-bottom: 0.28rem;
+}
+.usage-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  font-size: 0.76rem;
+  padding: 0.12rem 0;
+}
+.usage-raw {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 0.06rem 0.4rem;
+  white-space: nowrap;
+}
+.usage-arrow {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+/* Danh dau muc kho tri thuc DA DUNG cho tin nay */
+.gl-used {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.kb-row-used td {
+  background: color-mix(in oklch, var(--accent-soft) 55%, transparent);
+}
+.kb-used-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+.map-row-used {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---------- Luat da ap: agent · thay gi -> ra gi ---------- */
+.rule-agent {
+  font-size: 1.1rem;
+  line-height: 1.25;
+  text-align: center;
+}
+.rule-name {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  font-weight: 800;
+}
+.rule-io {
+  font-size: 0.79rem;
+  margin-top: 0.12rem;
+  line-height: 1.4;
+}
+.rule-in {
+  color: var(--text-dim);
+}
+.rule-arrow {
+  color: var(--accent);
+  font-weight: 800;
+  margin: 0 0.3rem;
+}
+.rule-out {
+  color: var(--text);
+}
+
 /* ---------- Broadcast (view phu) ---------- */
 .bc-wrap {
   max-width: 720px;

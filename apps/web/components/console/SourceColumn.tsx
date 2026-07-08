@@ -38,7 +38,7 @@ export function SourceColumn({ order }: { order?: OrderView }) {
       </div>
 
       <div role="tabpanel" id={`src-panel-${tab}`} aria-labelledby={`src-tab-${tab}`}>
-        {tab === 'kb' && <KnowledgePanel />}
+        {tab === 'kb' && <KnowledgePanel order={order} />}
         {tab === 'kv' && <KiotVietPanel />}
         {tab === 'rules' && <AppliedRulesPanel order={order} />}
       </div>
