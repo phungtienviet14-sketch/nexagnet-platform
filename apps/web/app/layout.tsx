@@ -18,8 +18,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="vi">
-      <body>
+    // suppressHydrationWarning: bo qua lech thuoc tinh do extension trinh duyet chen
+    // vao <html>/<body> truoc khi React hydrate (vd mdl-js, bis_register). Khong giau
+    // bug that ben trong — chi tac dung o dung 2 the goc nay.
+    <html lang="vi" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>
