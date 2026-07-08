@@ -208,6 +208,14 @@ body {
   background: var(--llm);
   box-shadow: 0 0 0 3px var(--llm-soft);
 }
+.sbadge.autosend {
+  color: var(--warn-ink);
+  border-color: color-mix(in oklch, var(--warn) 45%, var(--line));
+}
+.sbadge.autosend .dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-soft);
+}
 .topbar-right {
   margin-left: auto;
   display: flex;

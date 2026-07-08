@@ -20,4 +20,6 @@ export interface DemoConfig {
   botName: string;
   /** on -> frontend dung SSE /events (real-time); off -> polling. */
   streamMode: 'on' | 'off';
+  /** on -> AI tu chot + gui don khi khong co rui ro (khong can Sale duyet). */
+  autoSend: 'on' | 'off';
 }

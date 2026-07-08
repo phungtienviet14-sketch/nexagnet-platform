@@ -40,6 +40,7 @@ export function TopBar({
   connected,
 }: Props) {
   const botOn = config?.botMode === 'on';
+  const autoSendOn = config?.autoSend === 'on';
   const liveOn = streaming && connected;
   return (
     <header className="topbar">
@@ -56,6 +57,17 @@ export function TopBar({
         <span className={`sbadge ${botOn ? '' : 'off'}`}>
           <span className="dot" />
           Bot Zalo: {botOn ? 'ON' : 'OFF'}
+        </span>
+        <span
+          className={`sbadge ${autoSendOn ? 'autosend' : 'off'}`}
+          title={
+            autoSendOn
+              ? 'AI tự chốt + gửi đơn khi không có rủi ro (Giám sát phát hiện vấn đề mới gọi Sale)'
+              : 'AI soạn, Sale duyệt 1-chạm'
+          }
+        >
+          <span className="dot" />
+          Tự gửi: {autoSendOn ? 'ON' : 'OFF'}
         </span>
         <span className="sbadge ai">
           <span className="dot" />

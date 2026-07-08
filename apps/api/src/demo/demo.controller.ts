@@ -60,6 +60,7 @@ export class DemoController {
       parserMode: env.PARSER_MODE,
       botName: env.BOT_NAME,
       streamMode: env.STREAM_MODE,
+      autoSend: env.AUTO_SEND,
     };
   }
 

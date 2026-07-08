@@ -25,6 +25,10 @@ export const envSchema = z.object({
   // Auto-ack: bot tu nhan "da ghi nhan" khi intent=Khac (LLM khong hieu). Mac dinh off
   // (GD1: AI khong tu tra loi nhom) — chi bat khi khach dong y cho bot nhan tin.
   AUTO_ACK: z.enum(['on', 'off']).default('off'),
+  // Auto-send (GD2): AI TU CHOT + gui xac nhan don vao nhom, KHONG can Sale duyet — CHI khi
+  // Giam sat khong phat hien rui ro (riskLevel='none'); co van de -> giu Sale duyet. Mac dinh
+  // off theo GD1 (CLAUDE.md: AI khong tu gui khi CHUA co van ban dong y cua khach).
+  AUTO_SEND: z.enum(['on', 'off']).default('off'),
   // Ten bot de boc @mention khoi noi dung tin.
   BOT_NAME: z.string().default('Bot ultty AI orders'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
