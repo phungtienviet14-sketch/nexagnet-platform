@@ -11,7 +11,8 @@ import { MockParser } from './mock-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
 const BOT_NAME = 'Bot ultty AI orders';
-const GROUP = 'zgr-f8a7101d77709e2ec761'; // nhom test map -> Meta HN (dai_ly)
+// Lay chatId nhom Meta HN DONG tu seed (khong hardcode ID) -> khong vo khi doi sang ID zca that.
+const GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-hn')!.chatId;
 
 function build() {
   const knowledge = new KnowledgeService();

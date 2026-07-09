@@ -13,7 +13,8 @@ import { OrdersService } from '../orders/orders.service.js';
 import { MockParser } from './mock-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
-const GROUP = 'zgr-f8a7101d77709e2ec761'; // Meta HN (dai_ly)
+// Lay chatId nhom Meta HN DONG tu seed (khong hardcode ID).
+const GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-hn')!.chatId;
 
 function build() {
   const knowledge = new KnowledgeService();
