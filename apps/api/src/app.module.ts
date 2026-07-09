@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { type DynamicModule, Logger, Module } from '@nestjs/common';
 import { loadEnv } from '@ultty/shared';
+import { PrismaModule } from './config/prisma.module.js';
 import { PrismaService } from './config/prisma.service.js';
 import { AgentEventsService } from './agents/agent-events.service.js';
 import { AgentOrchestrator } from './agents/agent-orchestrator.service.js';
@@ -26,6 +27,7 @@ import { PipelineService } from './pipeline/pipeline.service.js';
 import { StreamController } from './stream/stream.controller.js';
 
 @Module({
+  imports: [PrismaModule],
   controllers: [
     HealthController,
     OrdersController,
@@ -39,7 +41,6 @@ import { StreamController } from './stream/stream.controller.js';
   providers: [
     KnowledgeService,
     AgentEventsService,
-    PrismaService,
     {
       // PERSISTENCE=prisma -> Postgres; mac dinh memory (demo/CI khong can DB).
       provide: OrdersRepository,
@@ -70,4 +71,25 @@ import { StreamController } from './stream/stream.controller.js';
     ZcaListener,
   ],
 })
-export class AppModule {}
+export class AppModule {
+  /**
+   * Boot dong: chi mount panel /admin (AdminJS) khi ADMIN_UI=on VA PERSISTENCE=prisma.
+   * O che do memory/CI (mac dinh) tra ve module KHONG co admin -> khong nap thu vien AdminJS ESM,
+   * boot va toan bo test giu nguyen. Metadata @Module (controllers/providers/PrismaModule) van gop vao.
+   */
+  static async forRoot(): Promise<DynamicModule> {
+    const env = loadEnv();
+    const imports: NonNullable<DynamicModule['imports']> = [];
+    if (env.ADMIN_UI === 'on') {
+      if (env.PERSISTENCE !== 'prisma') {
+        new Logger('AppModule').warn(
+          'ADMIN_UI=on nhưng PERSISTENCE!=prisma → bỏ qua /admin (AdminJS cần Postgres).',
+        );
+      } else {
+        const { buildAdminModule } = await import('./admin/admin.module.js');
+        imports.push(await buildAdminModule(env));
+      }
+    }
+    return { module: AppModule, imports };
+  }
+}

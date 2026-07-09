@@ -39,3 +39,5 @@ Thumbs.db
 coverage/
 *.tsbuildinfo
 .swc/
+# AdminJS bundler output (tao khi chay panel /admin — artifact, khong commit)
+.adminjs/

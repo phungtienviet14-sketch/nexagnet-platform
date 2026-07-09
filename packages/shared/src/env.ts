@@ -58,6 +58,17 @@ export const envSchema = z.object({
   STREAM_MODE: z.enum(['on', 'off']).default('on'),
   // Gian nhe giua cac buoc rules (tuc thi) cho de nhin. Router van co do tre THAT (LLM). 0 = thuan real.
   STREAM_STEP_DELAY_MS: z.coerce.number().int().nonnegative().default(280),
+  // --- Admin panel "Nguon su that" (AdminJS, mount tai /admin) ---
+  // Bat/tat panel quan tri nguon su that (Dealer/Group/Product/Price/Glossary/Override).
+  // CHI mount khi ADMIN_UI=on VA PERSISTENCE=prisma (AdminJS can Postgres). Mac dinh off ->
+  // demo/CI/che do memory KHONG dung toi AdminJS (khong nap thu vien ESM nang o boot).
+  ADMIN_UI: z.enum(['on', 'off']).default('off'),
+  // Thong tin dang nhap panel. Mac dinh la GIA TRI DEV (khop nguyen tac env.ts: co default de chay
+  // local); BAT BUOC dat lai o production (dat ADMIN_PASSWORD/ADMIN_COOKIE_SECRET manh qua env).
+  ADMIN_EMAIL: z.string().default('admin@ultty.local'),
+  ADMIN_PASSWORD: z.string().default('ultty-admin'),
+  // Secret ky cookie phien AdminJS. Default dev — production PHAI thay bang chuoi ngau nhien dai.
+  ADMIN_COOKIE_SECRET: z.string().default('ultty-admin-dev-cookie-secret-doi-o-production'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
