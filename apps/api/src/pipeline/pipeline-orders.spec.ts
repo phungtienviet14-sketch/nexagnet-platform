@@ -80,7 +80,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
     await expect(orders.approve(view.id)).rejects.toThrow();
 
-    const after = orders.getOrThrow(view.id);
+    const after = await orders.getOrThrow(view.id);
     expect(after.status).toBe('pending_review'); // van con nut Duyet -> retry duoc
     expect(after.kiotVietCode).toBeUndefined(); // chua len KiotViet
   });
@@ -132,7 +132,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     const view = await pipeline.process(msg('ghe felix bao nhieu tien c oi'), BOT_NAME);
 
     expect(view.intent).toBe('hoi_gia');
-    expect(orders.listOrders()).toHaveLength(0);
+    expect(await orders.listOrders()).toHaveLength(0);
     await expect(orders.approve(view.id)).rejects.toThrow();
   });
 });

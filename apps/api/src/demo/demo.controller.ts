@@ -100,8 +100,8 @@ export class DemoController {
    * (cap nhat DUNG don, khong tao don moi) + phat lai su kien stream.
    */
   @Post('rerun/:id')
-  rerun(@Param('id') id: string): Promise<OrderView> {
-    const existing = this.orders.findById(id);
+  async rerun(@Param('id') id: string): Promise<OrderView> {
+    const existing = await this.orders.findById(id);
     if (!existing) {
       throw new NotFoundException(`Khong tim thay tin ${id} de chay lai`);
     }

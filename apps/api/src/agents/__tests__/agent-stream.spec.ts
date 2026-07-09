@@ -103,6 +103,6 @@ describe('AgentOrchestrator — streaming su kien', () => {
     });
 
     expect(rerun.id).toBe(first.id);
-    expect(repo.list()).toHaveLength(1); // cung id -> ghi de, khong nhan doi
+    expect(await repo.list()).toHaveLength(1); // cung id -> ghi de, khong nhan doi
   });
 });

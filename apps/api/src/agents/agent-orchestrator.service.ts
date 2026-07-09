@@ -190,7 +190,7 @@ export class AgentOrchestrator {
       senderType: resolved.senderType,
       trace,
     };
-    const saved = this.orders.create(view);
+    const saved = await this.orders.create(view);
     emit({ type: 'order.finalized', order: saved });
     return saved;
   }

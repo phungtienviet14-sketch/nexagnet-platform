@@ -22,17 +22,17 @@ export class OrdersService {
   ) {}
 
   /** Danh sach DON (intent dat_don). */
-  listOrders(): OrderView[] {
-    return this.repo.list().filter((v) => v.intent === 'dat_don');
+  async listOrders(): Promise<OrderView[]> {
+    return (await this.repo.list()).filter((v) => v.intent === 'dat_don');
   }
 
   /** Feed moi tin da xu ly (raw) cho tab Tin nhan. */
-  listMessages(): OrderView[] {
+  async listMessages(): Promise<OrderView[]> {
     return this.repo.list();
   }
 
-  getOrThrow(id: string): OrderView {
-    const view = this.repo.findById(id);
+  async getOrThrow(id: string): Promise<OrderView> {
+    const view = await this.repo.findById(id);
     if (!view) throw new NotFoundException(`Khong tim thay don ${id}`);
     return view;
   }
@@ -44,7 +44,7 @@ export class OrdersService {
    * chi chuyen 'synced' khi ca 2 buoc xong.
    */
   async approve(id: string): Promise<OrderView> {
-    const view = this.getOrThrow(id);
+    const view = await this.getOrThrow(id);
     // Idempotent (M4): don da 'synced' -> khong gui Zalo / day KiotViet lai lan nua.
     if (view.status === 'synced') {
       return view;
@@ -63,14 +63,14 @@ export class OrdersService {
     }
 
     const { code } = await this.kiotViet.pushOrder(view.priced);
-    const synced = this.repo.update(id, { status: 'synced', kiotVietCode: code })!;
+    const synced = (await this.repo.update(id, { status: 'synced', kiotVietCode: code }))!;
     this.events?.emit({ type: 'order.updated', order: synced });
     return synced;
   }
 
-  reject(id: string): OrderView {
-    this.getOrThrow(id);
-    const rejected = this.repo.update(id, { status: 'rejected' })!;
+  async reject(id: string): Promise<OrderView> {
+    await this.getOrThrow(id);
+    const rejected = (await this.repo.update(id, { status: 'rejected' }))!;
     this.events?.emit({ type: 'order.updated', order: rejected });
     return rejected;
   }
