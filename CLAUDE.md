@@ -20,15 +20,16 @@ Mục tiêu: AI đọc tin nhắn đặt hàng trên Zalo (viết tắt, không 
 
 Hệ thống tài liệu (đọc theo thứ tự khi cần ngữ cảnh):
 1. `APP AI_Công ty Cổ Phần U Ultty Việt Nam_ Phuong Jul 2026.docx` — hồ sơ khảo sát gốc (mẫu PO, SKU, bảng giá, tin nhắn mẫu: link Drive mục 7)
-2. `Thiet_ke_AI_Agent_U_Ultty.md` — thiết kế giải pháp NetViet (nghiệp vụ, lộ trình 3 GĐ, KPI — GIỮ NGUYÊN, không sửa file này)
-3. [docs/thiet-ke-ky-thuat-hop-nhat.md](docs/thiet-ke-ky-thuat-hop-nhat.md) — **thiết kế triển khai hợp nhất, là quyết định cuối cho phần kỹ thuật**
-4. [docs/bao-cao-tich-hop-zalo.md](docs/bao-cao-tich-hop-zalo.md) — căn cứ kênh Zalo (chi phí, chính sách, điều khoản)
-5. [docs/tien-do-va-ke-hoach.md](docs/tien-do-va-ke-hoach.md) — **TIẾN ĐỘ + KẾ HOẠCH CÒN LẠI** (đang ở đâu, còn gì, dữ liệu thiếu, quyết định treo — đọc trước khi làm tiếp). Plan code gốc: [.claude/plans/ultty-ai-agent.plan.md](.claude/plans/ultty-ai-agent.plan.md)
-6. `design/` — 8 ảnh design app của khách (tham khảo UX, PWA 5 tab bám theo)
-7. [docs/so-do-he-thong.md](docs/so-do-he-thong.md) — 8 sơ đồ Mermaid (bối cảnh, 6 tầng, sequence đơn hàng, state machine, intent, ERD, lộ trình, 2 chế độ ingestion)
-8. [docs/checklist-du-lieu-khach.md](docs/checklist-du-lieu-khach.md) — checklist dữ liệu cần thu thập từ khách (A: nguồn sự thật, B: tin nhắn test, C: truy cập hệ thống, D: quyết định)
-9. [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md) — template kết quả PoC Bot Platform (chạy theo [tools/poc-zalo-bot/README.md](tools/poc-zalo-bot/README.md))
-10. [docs/kich-ban-demo-toan-he-thong.md](docs/kich-ban-demo-toan-he-thong.md) — **KỊCH BẢN DEMO MASTER** (chạy trên hệ thật: kênh zca + dữ liệu thật + luật thật). Thay 2 kịch bản cũ (thuyet-trinh, nhieu-nhom đã lỗi thời). Deep-dive 6 agent: [docs/kich-ban-demo-6-agent.md](docs/kich-ban-demo-6-agent.md)
+2. `Thiet_ke_AI_Agent_U_Ultty.md` — thiết kế giải pháp NetViet (đề xuất gốc: nghiệp vụ, lộ trình 3 GĐ, KPI — GIỮ NGUYÊN, không sửa file này)
+3. [docs/nghiep-vu.md](docs/nghiep-vu.md) — **MÔ TẢ NGHIỆP VỤ as-built** (actors, 2 mẫu đơn, 4 chính sách, 7 intent, đội 6 agent, luật tính tiền + ngưỡng rủi ro — khớp code; đọc để nắm nghiệp vụ)
+4. [docs/thiet-ke-ky-thuat-hop-nhat.md](docs/thiet-ke-ky-thuat-hop-nhat.md) — **thiết kế triển khai hợp nhất, là quyết định cuối cho phần kỹ thuật**
+5. [docs/bao-cao-tich-hop-zalo.md](docs/bao-cao-tich-hop-zalo.md) — căn cứ kênh Zalo (chi phí, chính sách, điều khoản)
+6. [docs/tien-do-va-ke-hoach.md](docs/tien-do-va-ke-hoach.md) — **TIẾN ĐỘ + KẾ HOẠCH CÒN LẠI** (đang ở đâu, còn gì, dữ liệu thiếu, quyết định treo — đọc trước khi làm tiếp). Plan code gốc: [.claude/plans/ultty-ai-agent.plan.md](.claude/plans/ultty-ai-agent.plan.md)
+7. `design/` — 8 ảnh design app của khách (tham khảo UX, PWA 5 tab bám theo)
+8. [docs/so-do-he-thong.md](docs/so-do-he-thong.md) — 8 sơ đồ Mermaid (bối cảnh, 6 tầng, sequence đơn hàng, state machine, intent, ERD, lộ trình, chọn kênh `CHANNEL_MODE` — đã cập nhật zca là kênh chính)
+9. [docs/checklist-du-lieu-khach.md](docs/checklist-du-lieu-khach.md) — checklist dữ liệu cần thu thập từ khách (A: nguồn sự thật, B: tin nhắn test, C: truy cập hệ thống, D: quyết định)
+10. [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md) — template kết quả PoC Bot Platform (chạy theo [tools/poc-zalo-bot/README.md](tools/poc-zalo-bot/README.md)). Eval parser: [docs/poc-parser.md](docs/poc-parser.md)
+11. [docs/kich-ban-demo-toan-he-thong.md](docs/kich-ban-demo-toan-he-thong.md) — **KỊCH BẢN DEMO (tài liệu demo DUY NHẤT)** — chạy trên hệ thật: kênh zca + dữ liệu thật + luật thật. (Các bản cũ thuyet-trinh/nhieu-nhom/6-agent/demo-script đã xoá.)
 
 ## Công nghệ (đã chốt)
 

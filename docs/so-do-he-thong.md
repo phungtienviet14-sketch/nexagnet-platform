@@ -1,6 +1,7 @@
 # SƠ ĐỒ HỆ THỐNG — AI AGENT U ULTTY
 
-Bộ sơ đồ minh họa cho [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md). Xem trực tiếp trên GitHub hoặc VS Code (extension Markdown Preview Mermaid).
+> Bộ sơ đồ minh hoạ cho [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md) (kỹ thuật) và [nghiep-vu.md](nghiep-vu.md) (nghiệp vụ). Xem trên GitHub hoặc VS Code (extension Markdown Preview Mermaid).
+> **Cập nhật 09/07/2026:** kênh đọc chính GĐ1 là **zca-js** (đọc mọi tin nhóm, không cần @mention); chuyển kênh bằng biến `CHANNEL_MODE=mock|bot|zca`. Lưu trữ demo là **in-memory** (production dùng Postgres).
 
 ---
 
@@ -14,28 +15,28 @@ flowchart LR
     KT["🧾 Kế toán"]
 
     subgraph SYS["🤖 Hệ thống AI Agent (NetViet vận hành - cloud)"]
-        PWA["📱 App PWA 5 tab"]
+        CONSOLE["🖥️ Console điều hành (demo)<br/>· 📱 PWA 5 tab (sản phẩm)"]
         API["⚙️ Backend NestJS"]
     end
 
-    CLAUDE["🧠 Claude API<br/>(intent + trích xuất)"]
+    LLM["🧠 LLM (Claude / DeepSeek)<br/>(intent + trích xuất)"]
     KV["📦 KiotViet<br/>(đơn + tồn kho)"]
     BASE["🗂️ Base<br/>(duyệt + giao vận)"]
     SHIP["🚚 Aha / Viettel"]
 
     DL -->|"nhắn đặt hàng<br/>(viết tắt, không dấu)"| GRP
-    GRP -->|"GĐ1: Sale dán tin nhắn<br/>hoặc Bot tự đọc (nếu PoC đạt)"| API
-    API <-->|"gọi AI"| CLAUDE
-    API --> PWA
-    SALE -->|duyệt / sửa| PWA
-    PWA -->|"format xác nhận TH1/TH2"| GRP
+    GRP -->|"GĐ1: zca đọc MỌI tin nhóm<br/>(không cần tag); Bot/Co-pilot = dự phòng"| API
+    API <-->|"gọi AI (1 lần/tin)"| LLM
+    API --> CONSOLE
+    SALE -->|duyệt / sửa| CONSOLE
+    CONSOLE -->|"format xác nhận TH1/TH2"| GRP
     API -->|"GĐ1: Excel<br/>GĐ2: API"| KV
     API -->|"GĐ1: format dán tay<br/>GĐ2: API"| BASE
     BASE --> SHIP
     KT -->|kiểm tra khi lên hệ thống| KV
 ```
 
-**Đọc sơ đồ:** đại lý nhắn vào nhóm Zalo như hiện tại — không phải đổi thói quen. Hệ thống đứng giữa, AI soạn sẵn, Sale luôn là người bấm duyệt trước khi bất kỳ thứ gì đi ra ngoài.
+**Đọc sơ đồ:** đại lý nhắn vào nhóm Zalo như hiện tại — không đổi thói quen, không cần tag. Hệ thống đứng giữa, AI soạn sẵn, Sale luôn là người bấm duyệt trước khi bất kỳ thứ gì đi ra ngoài.
 
 ---
 
@@ -43,31 +44,33 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph L1["Tầng 1 — Kênh (channels/)"]
-        CA["ChannelAdapter (interface)"]
-        COP["CopilotAdapter<br/>(Sale dán tin)"]
-        BOT["BotPlatformAdapter<br/>(webhook - feature flag)"]
-        MOCK["MockAdapter (test)"]
-        CA --- COP
+    subgraph L1["Tầng 1 — Kênh (channels/) — chọn qua CHANNEL_MODE"]
+        CA["ChannelAdapter (interface: gửi)"]
+        ZCA["ZcaAdapter<br/>(zca-js — kênh chính)"]
+        BOT["BotPlatformAdapter<br/>(@mention — kênh phụ)"]
+        MOCK["MockAdapter (offline/CI)"]
+        COP["Co-pilot dán tay<br/>(fallback)"]
+        CA --- ZCA
         CA --- BOT
         CA --- MOCK
+        CA --- COP
     end
 
     subgraph L2["Tầng 2 — Tiếp nhận (ingest/)"]
-        SAVE["Lưu messages NGAY khi nhận<br/>(idempotent theo message_id)"]
-        IDENT["Gán danh tính:<br/>nhóm → đại lý/CTV"]
-        Q["BullMQ queue"]
+        LIS["ZcaListener (nghe mọi tin nhóm)<br/>/ BotPoller (@mention)"]
+        IDENT["Gán danh tính:<br/>nhóm → đại lý/CTV (theo chatId)"]
+        SAVE["Lưu messages NGAY khi nhận<br/>(production; demo = in-memory)"]
     end
 
-    subgraph L3["Tầng 3 — Lõi AI (pipeline/)"]
-        ORCH["AgentOrchestrator — Router (1 call Claude)<br/>→ dispatch 6 vai chuyên trách → Giám sát<br/>① intent (7 loại) ② trích xuất TH1/TH2 ③ RAG kèm nguồn"]
+    subgraph L3["Tầng 3 — Lõi AI (pipeline/ + agents/)"]
+        ORCH["AgentOrchestrator — Router (1 call LLM)<br/>→ dispatch 6 vai chuyên trách → Giám sát<br/>① intent (7 loại) ② trích xuất TH1/TH2 ③ RAG kèm nguồn"]
     end
 
     subgraph L4["Tầng 4 — Luật nghiệp vụ (rules/) — TypeScript tất định, KHÔNG dùng LLM"]
-        PRICE["Giá theo cấp đại lý"]
-        SHIPR["Phí ship<br/>(≥2 SP miễn / Grab / Viettel)"]
+        PRICE["Giá sỉ (wholesale) + deal riêng"]
+        SHIPR["Phí ship<br/>(≥2 SP miễn / TH1 miễn / Grab / Viettel)"]
         POL["Chính sách: công nợ 30-45<br/>ký gửi / trả ngay / COD"]
-        VAT["VAT + format TH1/TH2"]
+        VAT["VAT (mặc định off) + format TH1/TH2"]
     end
 
     subgraph L5["Tầng 5 — Tích hợp (kiotviet/, base/)"]
@@ -76,10 +79,10 @@ flowchart TB
     end
 
     subgraph L6["Tầng 6 — Dữ liệu & quản trị"]
-        KNOW["knowledge/ — NGUỒN SỰ THẬT:<br/>SKU, bảng giá, chính sách, glossary"]
-        ORD["orders/ + warranty/"]
-        MET["metrics/ — KPI"]
-        AUTH["auth/ — phân quyền + audit log"]
+        KNOW["knowledge/ — NGUỒN SỰ THẬT:<br/>19 SKU, bảng giá, chính sách, glossary"]
+        ORD["orders/ (state machine)"]
+        MET["metrics/ — KPI (GĐ sau)"]
+        AUTH["auth/ — phân quyền + audit (GĐ sau)"]
     end
 
     L1 --> L2 --> L3 --> L4 --> L5
@@ -99,35 +102,35 @@ flowchart TB
 sequenceDiagram
     autonumber
     actor DL as Đại lý (nhóm Zalo)
-    actor S as Sale (PWA)
+    actor S as Sale (console/PWA)
     participant IN as Ingest
     participant AI as AgentOrchestrator (Router + 6 vai)
     participant RU as Rules engine
-    participant DB as PostgreSQL
+    participant ST as Lưu trữ (in-memory / Postgres)
     participant KV as KiotViet
 
     DL->>DL: "gui 10 ghe felix ve TN cho c, ko lay VAT"
 
-    alt Chế độ Co-pilot (baseline GĐ1)
-        S->>IN: Dán tin nhắn vào tab Tin nhắn
-    else Bot Platform (nếu PoC đạt)
-        DL-->>IN: Webhook message.text.received
+    alt CHANNEL_MODE=zca (kênh chính GĐ1)
+        DL-->>IN: zca đọc mọi tin nhóm (KHÔNG cần tag)
+    else CHANNEL_MODE=bot / Co-pilot
+        DL-->>IN: Bot nhận tin @mention / Sale dán tay
     end
 
-    IN->>DB: Lưu message thô + platform + nguồn
-    IN->>AI: Enqueue (BullMQ)
-    AI->>DB: Lấy ngữ cảnh: nhóm→đại lý Meta HN,<br/>18-20 SKU, glossary (TN=Thái Nguyên), rules bật
+    IN->>ST: Lưu message thô + platform + nguồn
+    IN->>AI: Đưa vào pipeline
+    AI->>ST: Lấy ngữ cảnh: nhóm→đại lý Meta HN,<br/>19 SKU, glossary (TN=Thái Nguyên)
     AI->>AI: intent = dat_don<br/>trích xuất: 10 x Ghế Felix, giao TN, không VAT
     AI->>RU: JSON đơn thô
-    RU->>DB: Tra giá cấp đại lý + phí ship + chính sách công nợ
+    RU->>ST: Tra giá sỉ + phí ship + chính sách công nợ
     RU->>RU: Validation: SKU hợp lệ? SL×giá ≈ tổng?<br/>Confidence từng field
-    RU->>DB: Tạo order (pending_review) + format TH1
-    DB-->>S: 🔔 Đơn chờ duyệt trên PWA
+    RU->>ST: Tạo order (pending_review) + format TH1
+    ST-->>S: 🔔 Đơn chờ duyệt trên console
     S->>S: Kiểm tra (field mờ được tô vàng)
-    S->>DB: Duyệt 1 chạm (hoặc sửa → lưu parse_feedback)
-    S->>DL: Copy format xác nhận → gửi vào nhóm
-    S->>KV: GĐ1: xuất Excel import / GĐ2: API tự đẩy
-    DB->>DB: Ghi kpi_events (thời gian chốt, có sửa hay không)
+    S->>ST: Duyệt 1 chạm (hoặc sửa → lưu parse_feedback)
+    S->>DL: Gửi format xác nhận vào đúng nhóm Zalo
+    S->>KV: GĐ1: xuất Excel / mock; GĐ2: API tự đẩy
+    ST->>ST: Ghi kpi_events (thời gian chốt, có sửa hay không)
 ```
 
 ---
@@ -139,18 +142,19 @@ stateDiagram-v2
     [*] --> draft: AI trích xuất xong
     draft --> pending_review: qua validation, đủ tin cậy
     draft --> needs_edit: có field mơ hồ (SKU lạ, tổng lệch, thiếu địa chỉ)
-    pending_review --> approved: Sale duyệt 1 chạm
-    pending_review --> needs_edit: Sale phát hiện sai
+    pending_review --> needs_edit: Giám sát leo thang / Sale phát hiện sai
+    pending_review --> approved: Sale duyệt 1 chạm (hoặc AUTO_SEND nếu không rủi ro)
     needs_edit --> approved: Sale sửa xong (bản sửa lưu parse_feedback)
     pending_review --> rejected: không phải đơn thật / trùng
     needs_edit --> rejected
-    approved --> exported: xuất Excel KiotViet (GĐ1) hoặc sync API (GĐ2)
-    exported --> [*]
+    approved --> sent: gửi xác nhận vào nhóm Zalo
+    sent --> synced: đẩy KiotViet (GĐ1 mock / GĐ2 API)
+    synced --> [*]
     rejected --> [*]
 
     note right of needs_edit
         Handoff người thật (NetViet 5.6):
-        đơn lớn bất thường, deal riêng,
+        đơn lớn ≥20tr, đại lý chưa xác định,
         khiếu nại gắt → không auto
     end note
 ```
@@ -163,12 +167,12 @@ stateDiagram-v2
 flowchart TD
     MSG["Tin nhắn mới"] --> INT{"Router (Điều phối)<br/>phân loại intent + danh tính"}
 
-    INT -->|dat_don| EX["Trích xuất TH1/TH2<br/>→ rules → hàng đợi duyệt"]
-    INT -->|hoi_gia| RAG1["RAG: bảng giá theo cấp đại lý<br/>→ draft trả lời KÈM nguồn"]
-    INT -->|hoi_san_pham| RAG2["RAG: kho tri thức SP<br/>→ draft mô tả + ảnh/video"]
-    INT -->|chinh_sach_cong_no| RAG3["RAG: chính sách + hồ sơ đại lý<br/>→ draft điều kiện áp dụng"]
-    INT -->|bao_hanh_khieu_nai| WAR["Tạo warranty_ticket<br/>phân nhánh 7 ngày / ngoài 7 ngày / giao thiếu<br/>→ định tuyến nhóm kỹ thuật"]
-    INT -->|van_chuyen| SHIP2["Tra trạng thái vận đơn (GĐ2)<br/>GĐ1: draft cho Sale trả lời"]
+    INT -->|dat_don| EX["Bán hàng: trích xuất TH1/TH2<br/>→ rules → hàng đợi duyệt"]
+    INT -->|hoi_gia| RAG1["Chính sách & TC: tra bảng giá sỉ<br/>→ draft trả lời KÈM nguồn"]
+    INT -->|hoi_san_pham| RAG2["Tư vấn SP: kho tri thức<br/>→ draft mô tả"]
+    INT -->|chinh_sach_cong_no| RAG3["Chính sách & TC: hồ sơ đại lý<br/>→ draft điều kiện áp dụng"]
+    INT -->|bao_hanh_khieu_nai| WAR["Hậu mãi: phân nhánh<br/>7 ngày / ngoài 7 ngày / giao thiếu<br/>→ định tuyến kỹ thuật"]
+    INT -->|van_chuyen| SHIP2["Chính sách & TC: tra vận đơn (GĐ2)<br/>GĐ1: draft cho Sale trả lời"]
     INT -->|khac| HUMAN["Chuyển Sale, AI không đoán"]
 
     EX --> SALE2["Sale duyệt"]
@@ -185,7 +189,7 @@ flowchart TD
 
 ---
 
-## 6. Dữ liệu chính (ERD rút gọn)
+## 6. Dữ liệu chính (ERD rút gọn — schema Postgres đích)
 
 ```mermaid
 erDiagram
@@ -203,30 +207,30 @@ erDiagram
 
     DEALERS {
         string name
-        string tier "cấp đại lý / CTV"
+        string tier "đại lý / CTV"
         string default_policy "công nợ 30-45 / ký gửi / trả ngay / COD"
     }
     GROUPS {
         string platform "zalo (GĐ2: messenger...)"
-        string external_id
+        string external_id "chatId — map nhóm theo ID"
     }
     MESSAGES {
-        string source "copilot_paste | webhook"
+        string source "zca_listener | bot | copilot"
         string raw_text
     }
     ORDERS {
-        string status "draft→pending_review→approved→exported"
+        string status "draft→pending_review→approved→sent→synced"
         string order_type "TH1 | TH2"
         json field_confidence
         int total_amount
     }
     PRODUCTS {
-        string sku "18-20 SKU"
+        string sku "19 SKU"
         string name
     }
     PRICE_TIERS {
         string tier
-        int price
+        int wholesale "Đơn giá CTV"
         date valid_month "bảng giá theo tháng"
     }
     PARSE_FEEDBACK {
@@ -235,33 +239,34 @@ erDiagram
     }
 ```
 
-Ngoài ra còn: `glossary_entries` (TN→Thái Nguyên...), `prompt_rules` (tab Prompt AI bật/tắt), `policies`, `kpi_events`, `audit_logs`, `users`.
+Ngoài ra còn: `glossary_entries` (TN→Thái Nguyên...), `dealer_price_overrides` (deal riêng), `policies`, `kpi_events`, `audit_logs`, `users`.
+> **Lưu ý:** demo hiện chạy **in-memory** ([knowledge/seed.ts](../apps/api/src/knowledge/seed.ts) + `InMemoryOrdersRepository`); schema Postgres trên là đích của Phase 3.
 
 ---
 
-## 7. Lộ trình 3 giai đoạn (theo NetViet, đã ghép PoC)
+## 7. Lộ trình 3 giai đoạn (theo NetViet)
 
 ```mermaid
 flowchart LR
-    subgraph P0["Tuần 1 — Chuẩn bị"]
-        A1["Scaffold monorepo"]
-        A2["PoC Zalo Bot Platform<br/>(3 câu hỏi Beta)"]
-        A3["Nguồn sự thật:<br/>SKU + giá + chính sách + glossary"]
-        A4["Bake-off parser<br/>trên 20-30 tin thật"]
+    subgraph P0["Chuẩn bị"]
+        A1["Scaffold monorepo ✅"]
+        A2["PoC Bot + zca ✅"]
+        A3["Nguồn sự thật:<br/>19 SKU + giá + glossary ✅"]
+        A4["Bake-off parser (eval 100%) ✅"]
     end
 
-    subgraph G1["GĐ1 — Co-pilot (tuần 2-4)"]
-        B1["Pipeline: intent + trích xuất<br/>+ rules + validation"]
-        B2["PWA 5 tab, duyệt 1 chạm"]
-        B3["Excel KiotViet + format Base"]
-        B4["Pilot 1-2 nhóm, đo 4 KPI<br/>→ go/no-go mở rộng 200 nhóm"]
+    subgraph G1["GĐ1 — Đọc tự động + Sale duyệt"]
+        B1["Pipeline: intent + trích xuất<br/>+ rules + validation ✅"]
+        B2["Console/PWA duyệt 1 chạm ✅ (console)"]
+        B3["Excel KiotViet + format Base ⬜"]
+        B4["Pilot 1-2 nhóm, đo 4 KPI ⬜<br/>→ go/no-go mở rộng 200 nhóm"]
     end
 
-    subgraph G2["GĐ2 — Tự động hóa & đa kênh"]
+    subgraph G2["GĐ2 — Tự động hoá & đa kênh"]
         C1["KiotViet API + Base API"]
         C2["Zalo OA 1:1 + ZNS"]
         C3["Messenger / web widget"]
-        C4["Tự động đối soát ký gửi, công nợ"]
+        C4["Tự động đối soát ký gửi, công nợ + AUTO_SEND"]
     end
 
     subgraph G3["GĐ3 — Tối ưu & chủ động"]
@@ -271,31 +276,35 @@ flowchart LR
     end
 
     P0 --> G1 --> G2 --> G3
-    A2 -.->|"nếu PoC đạt: bot tự đọc tin<br/>thay dán tay ngay trong GĐ1"| B1
 ```
+
+> Vị trí hiện tại: **cuối GĐ1** — lõi AI + rules + console demo đã xong trên dữ liệu/kênh thật; còn Excel KiotViet, lưu trữ Postgres, auth, pilot. Chi tiết: [tien-do-va-ke-hoach.md](tien-do-va-ke-hoach.md).
 
 ---
 
-## 8. Hai chế độ tiếp nhận tin nhắn (quyết định bởi PoC)
+## 8. Chọn kênh tiếp nhận bằng `CHANNEL_MODE`
 
 ```mermaid
 flowchart TB
-    subgraph COP["Chế độ A — Co-pilot (baseline, luôn hoạt động)"]
-        S1["Sale thấy tin nhắn trong nhóm Zalo"] --> S2["Mở PWA → dán tin nhắn<br/>(hoặc ảnh chụp bảng)"]
-        S2 --> S3["AI xử lý → đơn chờ duyệt"]
-        S3 --> S4["Sale duyệt → copy format<br/>→ tự gửi lại nhóm"]
+    subgraph ZCA["CHANNEL_MODE=zca — KÊNH ĐỌC CHÍNH GĐ1"]
+        Z1["Đăng nhập tài khoản Zalo PHỤ (quét QR)"] --> Z2["ZcaListener đọc MỌI tin nhóm<br/>(KHÔNG cần @mention)"]
+        Z2 --> Z3["AI xử lý → đơn chờ duyệt"]
+        Z3 --> Z4["Sale duyệt → gửi xác nhận về nhóm"]
     end
 
-    subgraph BOTM["Chế độ B — Bot Platform (nếu PoC đạt 3 câu hỏi)"]
-        T1["Bot trong nhóm nhận tin realtime<br/>(webhook chính thức)"] --> T2["AI xử lý → đơn chờ duyệt<br/>+ thông báo đẩy cho Sale"]
-        T2 --> T3["Sale duyệt trên PWA"]
-        T3 --> T4["Bot gửi format xác nhận<br/>kèm nhãn tin tự động"]
+    subgraph BOTM["CHANNEL_MODE=bot — kênh phụ (chính thức)"]
+        T1["Bot trong nhóm CHỈ nhận tin @mention<br/>(mention-gating gốc Zalo, không tắt được)"] --> T2["AI xử lý → đơn chờ duyệt"]
+        T2 --> T3["Sale duyệt → Bot gửi (kèm nhãn tin tự động)"]
     end
 
-    COP -.->|"PoC đạt → nâng cấp<br/>không đổi kiến trúc (cùng ChannelAdapter)"| BOTM
-    BOTM -.->|"bot bị khóa / Beta đổi chính sách<br/>→ quay về ngay lập tức"| COP
+    subgraph MOCKM["CHANNEL_MODE=mock — offline/CI + Co-pilot"]
+        M1["Ô 'Bơm tin thử' / Sale dán tay"] --> M2["AI + rules y hệt, chỉ khác nguồn tin"]
+    end
+
+    ZCA -.->|"kênh chính lỗi/khoá → phủ nốt"| BOTM
+    ZCA -.->|"mạng yếu / demo an toàn"| MOCKM
 ```
 
-**Vì sao an toàn:** hai chế độ dùng chung toàn bộ pipeline phía sau; chuyển qua lại chỉ là bật/tắt adapter, dữ liệu đơn hàng không phụ thuộc kênh.
+**Vì sao an toàn:** cả 3 chế độ dùng chung toàn bộ pipeline phía sau (`ChannelAdapter`); chuyển kênh chỉ là đổi 1 biến `CHANNEL_MODE`, dữ liệu đơn hàng không phụ thuộc kênh.
 
-> **Cập nhật sau PoC 07/07/2026 ([poc-zalo-bot.md](poc-zalo-bot.md)):** Chế độ B (Bot Platform) đã xác nhận khả thi NHƯNG trong nhóm bot **chỉ nhận tin @mention nó** (mention-gating gốc của Zalo, không tắt được). ⇒ hai chế độ **chạy SONG SONG (kênh lai)**, không phải thay thế: đơn text-có-tag → Bot tự đọc; đơn không tag / ảnh / thoại → Co-pilot dán tay. Điều kiện bật Bot mode: khách đồng ý để đại lý tag bot (checklist D2).
+> **Điều kiện chặn kênh zca:** dùng **tài khoản Zalo phụ** (không dùng tài khoản Sale chính) + **văn bản chấp nhận rủi ro của khách** (vi phạm ToS Zalo, có thể bị khoá tài khoản; NĐ13/2023 + Luật BVDLCN 2025). Chi tiết PoC Bot: [poc-zalo-bot.md](poc-zalo-bot.md).

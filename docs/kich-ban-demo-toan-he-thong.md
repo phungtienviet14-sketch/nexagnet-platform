@@ -1,7 +1,7 @@
 # KỊCH BẢN DEMO TOÀN HỆ THỐNG — Ultty AI (bản MASTER)
 
-> **Đây là kịch bản chạy demo chính thức, thay cho** [kich-ban-demo-thuyet-trinh.md](kich-ban-demo-thuyet-trinh.md) và [kich-ban-demo-nhieu-nhom.md](kich-ban-demo-nhieu-nhom.md) (đã lỗi thời — còn khung "phải tag bot" + dữ liệu bịa).
-> Deep-dive 6 agent: [kich-ban-demo-6-agent.md](kich-ban-demo-6-agent.md). Nguồn sự thật đã nạp: [seed.ts](../apps/api/src/knowledge/seed.ts).
+> **Đây là tài liệu kịch bản demo DUY NHẤT.** Các bản cũ (thuyet-trinh, nhieu-nhom, 6-agent, demo-script) đã lỗi thời và được gộp/xoá — mọi nội dung demo nằm ở đây.
+> Nghiệp vụ: [nghiep-vu.md](nghiep-vu.md) · Sơ đồ: [so-do-he-thong.md](so-do-he-thong.md) · Nguồn sự thật đã nạp: [seed.ts](../apps/api/src/knowledge/seed.ts).
 >
 > Người trình bày: **Phùng Việt (NetViet)**. Khán giả: sếp (anh Hiệu) và/hoặc khách (chị Phương – U Ultty).
 > Ký hiệu: **▶ Thao tác** · **🗣 Nói** (đọc gần nguyên văn) · **⏸ Ngưng** · 👉 chỉ tay · 💡 ghi chú riêng.
