@@ -18,10 +18,10 @@ Cho khán giả thấy **4 điều**:
 
 ## 1. CHUẨN BỊ KỸ THUẬT (giờ G trừ 20 phút)
 
-- [ ] `.env`: **`PARSER_MODE=deepseek`** (AI thật) + `BOT_MODE=off` + có `DEEPSEEK_API_KEY`. *(Bot Zalo thật thì bật `BOT_MODE=on` — xem §11.)*
+- [ ] `.env`: **`PARSER_MODE=deepseek`** (AI thật) + có `DEEPSEEK_API_KEY`. Kênh Zalo: **`CHANNEL_MODE=mock`** cho demo an toàn offline; **`CHANNEL_MODE=zca`** để khoe đọc tin nhóm THẬT không cần tag (xem §11 — quét QR tài khoản phụ trước giờ G).
 - [ ] **Đo eval trước** (bước quan trọng nhất để yên tâm chạy AI thật):
   ```bash
-  PARSER_MODE=deepseek BOT_MODE=off pnpm dev:api      # terminal 1
+  PARSER_MODE=deepseek CHANNEL_MODE=mock pnpm dev:api # terminal 1 (an toan offline)
   pnpm --filter @ultty/poc-parser eval                # terminal 2 → phải thấy ≥ 90% (đã đo 100%)
   ```
 - [ ] `pnpm dev:web` → mở `http://localhost:3000` trên **màn hình rộng/máy chiếu** (console 3 cột; **không cần phóng to** — chỉ Ctrl+ 1 nấc nếu máy chiếu hẹp).
@@ -37,7 +37,7 @@ Cho khán giả thấy **4 điều**:
 
 Giao diện mới là **console rộng cho máy chiếu**, 3 cột trái→phải theo đúng luồng "tin vào → AI suy luận → nguồn sự thật":
 
-- **Cột trái — Tin & đơn vào:** ô **"Bơm tin thử"** (dán tin demo) + danh sách tin/đơn realtime. Tin mới **tự nhảy lên đầu và tự được chọn**, kèm chấm **đang xử lý**. *(Bật `BOT_MODE=on` thì tin đại lý @mention bot cũng tự vào đây — §11.)*
+- **Cột trái — Tin & đơn vào:** ô **"Bơm tin thử"** (dán tin demo) + danh sách tin/đơn realtime. Tin mới **tự nhảy lên đầu và tự được chọn**, kèm chấm **đang xử lý**. *(Bật `CHANNEL_MODE=zca` thì đại lý nhắn thẳng trong nhóm Zalo — **không cần tag** — tin cũng tự vào đây; badge topbar hiện **"Kênh: Zalo Web cá nhân"** — §11.)*
 - **Cột giữa — Đội 6 agent (STREAM THẬT qua SSE):** tin gốc → **6 agent sáng lên theo NHỊP THẬT của backend** (⏳ *đang xử lý* → ✓ *xong*), badge nguồn (AI · Rules engine · Kho tri thức) → phiếu đơn + nút duyệt. **Với DeepSeek, vai Điều phối "quay" ~1–2s thật** (đang gọi AI), 5 vai rules chạy tức thì. Badge **LIVE** (topbar) = đang kết nối SSE. **Bấm đơn cũ = xem TĨNH** (không chạy lại); chỉ nút **"▶ Chạy lại (gọi lại AI)"** mới **gọi lại LLM thật** + stream lại.
 - **Cột phải — Nguồn sự thật (bám theo tin đang chọn — nhìn biết AI làm gì):**
   - **Kho tri thức:** đầu panel có khối **"🔍 AI đã dùng cho tin này"** — Điều phối *giải mã viết tắt* (TN→Thái Nguyên, c→chị), Bán hàng *khớp SKU + giá* (`ghe felix` → Ghế Felix 1.150.000đ × 10), *nhóm→đại lý* quyết cấp giá/chính sách; danh mục bên dưới **tô sáng** mục đã dùng.
@@ -206,9 +206,16 @@ Gõ lần lượt 4 tin, mỗi tin chỉ nhanh vai nổi bật:
 
 ---
 
-## 11. (TÙY CHỌN) Bật bot Zalo THẬT
+## 11. (TÙY CHỌN) Đọc tin Zalo THẬT — chọn kênh bằng `CHANNEL_MODE`
 
-Muốn khoe đại lý nhắn thẳng trong nhóm Zalo: `.env` `BOT_MODE=on` + `ZALO_BOT_TOKEN`, restart API. Tag bot trong nhóm → tin về app (xem [poc-zalo-bot.md](poc-zalo-bot.md)). Ràng buộc: nhóm chỉ nhận tin **@mention** bot.
+**Cách khoe mạnh nhất — `CHANNEL_MODE=zca` (thư viện ngoài zca-js, đọc MỌI tin nhóm, KHÔNG cần tag):**
+- Chuẩn bị trước giờ G: `.env` `CHANNEL_MODE=zca`, restart API → **lần đầu** API in ra file QR (`secrets/zalo-qr.png`); mở file, **quét bằng Zalo trên điện thoại — TÀI KHOẢN PHỤ** (không dùng tài khoản Sale chính). Quét xong phiên được lưu (`secrets/zalo-cred.json`), lần sau không cần quét.
+- Khi demo: nhờ một máy khác **nhắn thẳng vào nhóm test** (VD `gui 10 ghe felix ve TN cho c`) — **không tag ai cả** → tin **tự chảy vào cột trái**, 6 agent chạy. Đây là điểm ăn tiền so với bot: **đại lý không phải đổi thói quen, không cần @bot**.
+- **Nói:** *"Khác với bot chính thức phải tag, cái này đăng nhập như một máy Zalo của mình nên **đọc được mọi tin trong nhóm**. Đại lý cứ nhắn như thường."*
+- **Cảnh báo cần nói thẳng nếu khách hỏi:** đây là kênh **không chính thức của Zalo** (vi phạm điều khoản) — chạy trên **tài khoản phụ**, cần khách **đồng ý bằng văn bản** vì có rủi ro Zalo khóa tài khoản. Lưới an toàn: đổi `CHANNEL_MODE=mock` chạy offline.
+- Ràng buộc kỹ thuật: mỗi tài khoản chỉ 1 phiên nghe — **đừng mở Zalo Web** bằng tài khoản đó lúc đang chạy (sẽ ngắt listener).
+
+**Kênh cũ — `CHANNEL_MODE=bot` (Bot Platform chính thức):** `.env` `CHANNEL_MODE=bot` + `ZALO_BOT_TOKEN`, restart API. Chỉ nhận tin **@mention** bot (xem [poc-zalo-bot.md](poc-zalo-bot.md)).
 
 ---
 
@@ -218,7 +225,7 @@ Muốn khoe "AI tự chạy, không cần Sale bấm": `.env` **`AUTO_SEND=on`**
 - Đơn **KHÔNG rủi ro** → AI **tự chốt**: gửi xác nhận vào nhóm + đồng bộ KiotViet → **"Hoàn tất"** (không cần Sale bấm Duyệt).
 - **Chỉ khi vai Giám sát báo vấn đề** (đơn lớn ≥20tr, đại lý lạ, khiếu nại gắt, SL lớn ≥30, cảnh báo, độ tin cậy thấp) → **giữ "Cần kiểm tra" cho Sale**. Đây chính là "rule engine kiểm tra" = vai Giám sát tất định.
 - Topbar hiện badge **"Tự gửi: ON"** (vàng).
-- **Cảnh báo:** `AUTO_SEND=on` + `BOT_MODE=on` = AI **gửi thật** vào nhóm Zalo → theo GĐ1 cần **văn bản đồng ý của khách** trước khi bật. Demo an toàn không gửi thật: để `BOT_MODE=off` (kênh mock chỉ ghi log).
+- **Cảnh báo:** `AUTO_SEND=on` + `CHANNEL_MODE=zca` (hoặc `bot`) = AI **gửi thật** vào nhóm Zalo → theo GĐ1 cần **văn bản đồng ý của khách** trước khi bật. Demo an toàn không gửi thật: để `CHANNEL_MODE=mock` (kênh mock chỉ ghi log).
 - Mặc định `AUTO_SEND=off` (đúng GĐ1: Sale duyệt 1-chạm).
 
 **Nói khi demo (nếu bật):**

@@ -19,7 +19,7 @@ Khi hai nguồn khác nhau, tài liệu này là quyết định cuối cho ph�
 | Cơ chế ingestion GĐ1 | Ghép: **Co-pilot là baseline + PoC Bot Platform tuần đầu để nâng cấp** | Bịt khoảng trống "tin nhắn vào hệ thống bằng cách nào" |
 | Multi-agent 6 con | **Làm đúng 6 vai (§5.1)** dưới 1 orchestrator điều phối | 6 vai chuyên trách phối hợp, **dùng chung 1 lần gọi LLM/tin** (Router parse) — KHÔNG phải 6 LLM độc lập; giữ chi phí như 1 orchestrator, rules engine vẫn tính tiền |
 | Stack, schema, pipeline, tuân thủ | Tài liệu này (mục 4-9) | NetViet không có tầng này |
-| zca-js | **Loại khỏi lộ trình chính** | Khớp khẩu vị rủi ro NetViet; chỉ xem xét lại khi lãnh đạo U Ultty ký chấp nhận rủi ro bằng văn bản |
+| zca-js | **ĐẢO QUYẾT ĐỊNH (09/07/2026): kênh đọc chính GĐ1** | Khách U Ultty chọn zca-js làm kênh đọc chính (đọc mọi tin nhóm, không cần tag). Chuyển kênh bằng `CHANNEL_MODE`. Điều kiện chặn: **tài khoản phụ** + **văn bản chấp nhận rủi ro** (vi phạm ToS Zalo, rủi ro khóa tài khoản + NĐ13/2023) |
 
 ## 2. Công nghệ (không đổi so với CLAUDE.md)
 
@@ -32,7 +32,7 @@ TypeScript (Node.js 22) · NestJS (API) · Next.js **PWA mobile-first** (app Sal
 | **A. Co-pilot** (Sale dán tin nhắn/ảnh vào app, AI xử lý, Sale gửi tay) | ✅ Không đụng ToS | Thủ công | 0đ | **Baseline GĐ1 — luôn hoạt động, là fallback vĩnh viễn** |
 | **B. Zalo Bot Platform** (bot.zapps.me, chính thức, nhóm Beta) | ✅ | **Tự động NHƯNG chỉ tin @mention** (PoC 07/07 đã xác nhận) | Free tier / Premium chưa công bố | **PoC xong → dùng làm KÊNH LAI: đơn text-có-tag bot tự đọc; phần còn lại Co-pilot** |
 | **C. Zalo OA + GMF** | ✅ | Tự động (API + webhook đầy đủ) | ~25-300k/tháng/nhóm × 200-350 nhóm + gói OA | GĐ2-3: OA cho CSKH 1:1 + ZNS (theo NetViet); GMF nhóm chỉ khi khách chấp nhận chi phí |
-| **D. zca-js (userbot)** | ❌ Vi phạm ToS | Tự động | 0đ | **Không dùng** trừ khi có văn bản chấp nhận rủi ro |
+| **D. zca-js (userbot)** — đăng nhập tài khoản cá nhân qua Zalo Web | ❌ Vi phạm ToS | **Tự động — ĐỌC MỌI TIN nhóm (không cần @mention)** | 0đ | **KÊNH ĐỌC CHÍNH GĐ1 (khách chọn 09/07)** — bật bằng `CHANNEL_MODE=zca`. Điều kiện: tài khoản phụ + văn bản chấp nhận rủi ro |
 
 **3 câu hỏi PoC Bot Platform (KẾT QUẢ 07/07/2026 — [poc-zalo-bot.md](poc-zalo-bot.md)):**
 1. Bot thêm được vào nhóm cá nhân có sẵn? → ✅ **CÓ** (thêm thành viên tìm tên bot, hoặc chia sẻ link mời của bot vào nhóm).
@@ -45,8 +45,8 @@ Kết quả PoC không thay đổi kiến trúc: mọi kênh đi qua interface `
 
 | Tầng NetViet | Module thực tế |
 |---|---|
-| 1. Kênh | `apps/api/src/modules/channels/` — `ChannelAdapter` interface + `CopilotAdapter`, `BotPlatformAdapter`, `MockAdapter` (test). GĐ2+: `OaAdapter`, `MessengerAdapter` |
-| 2. Tiếp nhận | `ingest/` — endpoint webhook + endpoint copilot-paste; lưu `messages` NGAY khi nhận; gán danh tính qua map nhóm→đại lý; đẩy BullMQ |
+| 1. Kênh | `apps/api/src/channels/` — `ChannelAdapter` interface (gửi) + `ZcaAdapter` (zca-js, kênh chính), `BotPlatformAdapter`, `MockAdapter`. `ZaloUserClient` giữ phiên zca-js. Chọn kênh qua `CHANNEL_MODE`. GĐ2+: `OaAdapter`, `MessengerAdapter` |
+| 2. Tiếp nhận | `ingest/` — `ZcaListener` (nghe mọi tin nhóm qua zca-js) · `BotPoller` (long-poll Bot Platform) · endpoint copilot-paste; chuẩn hóa về `ChannelMessage`; gán danh tính qua map nhóm→đại lý; đẩy pipeline |
 | 3. Lõi AI | `pipeline/` + `agents/` — **AgentOrchestrator**: Router (1 lần parse) → dispatch 1 trong 6 vai chuyên trách → Supervisor (rules, đánh giá rủi ro/leo thang). Gắn `AgentTrace` (6 bước) lên OrderView. 1 lần gọi LLM/tin; rules engine vẫn tính tiền |
 | 4. Luật nghiệp vụ | `rules/` — thuần TypeScript tất định (KHÔNG để LLM tính): giá theo cấp đại lý, ship (≥2 SP miễn phí; 1 SP: Grab nội thành/Viettel tỉnh), chính sách công nợ/ký gửi/COD theo hồ sơ đại lý, VAT |
 | 5. Tích hợp | `kiotviet/` (GĐ1: export Excel; GĐ2: API), `base/` (GĐ1: sinh format dán tay; GĐ2: API nếu có), vận đơn GĐ2-3 |
