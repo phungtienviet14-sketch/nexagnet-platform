@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import type {
   GlossaryView,
   GroupMapView,
@@ -6,7 +6,16 @@ import type {
   KnowledgeSummary,
   SenderType,
 } from '@ultty/shared';
-import type { Dealer, DealerPriceOverride, GlossaryEntry, GroupMap, PriceRow, Product } from './domain.js';
+import type {
+  Dealer,
+  DealerPriceOverride,
+  GlossaryEntry,
+  GroupMap,
+  KnowledgeSnapshot,
+  PriceRow,
+  Product,
+} from './domain.js';
+import { KnowledgeRepository } from './knowledge.repository.js';
 import { SEED } from './seed.js';
 
 /** Ket qua map 1 nhom Zalo -> ngu canh dai ly/chi nhanh (dung trong pipeline + UI). */
@@ -23,9 +32,26 @@ export interface ResolvedGroup {
  * Boc sau service de sau thay bang Prisma/Postgres o GD1 ma khong dung pipeline.
  */
 @Injectable()
-export class KnowledgeService {
+export class KnowledgeService implements OnModuleInit {
   private readonly logger = new Logger('KnowledgeService');
-  private readonly snapshot = SEED;
+  private snapshot: KnowledgeSnapshot = SEED;
+
+  // @Optional: test dung `new KnowledgeService()` (khong DI) van chay voi SEED nhu cu.
+  constructor(@Optional() private readonly repo?: KnowledgeRepository) {}
+
+  /** Nap nguon su that vao bo nho luc boot: Prisma (PERSISTENCE=prisma) hoac giu SEED (mac dinh). */
+  async onModuleInit(): Promise<void> {
+    await this.reload();
+  }
+
+  /** Nap lai snapshot tu repo (goi sau khi CRUD nguon su that qua UI/MCP). */
+  async reload(): Promise<void> {
+    if (!this.repo) return;
+    this.snapshot = await this.repo.loadSnapshot();
+    this.logger.log(
+      `Nap nguon su that: ${this.snapshot.products.length} SP, ${this.snapshot.dealers.length} dai ly, ${this.snapshot.groups.length} nhom da map.`,
+    );
+  }
 
   products(): Product[] {
     return this.snapshot.products;

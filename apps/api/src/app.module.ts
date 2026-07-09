@@ -14,7 +14,9 @@ import { ZcaListener } from './ingest/zca-listener.js';
 import { KiotVietAdapter, KiotVietMockAdapter } from './kiotviet/kiotviet.adapter.js';
 import { KiotVietController } from './kiotviet/kiotviet.controller.js';
 import { KnowledgeController } from './knowledge/knowledge.controller.js';
+import { KnowledgeRepository, SeedKnowledgeRepository } from './knowledge/knowledge.repository.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
+import { PrismaKnowledgeRepository } from './knowledge/prisma-knowledge.repository.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
 import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
 import { PrismaOrdersRepository } from './orders/prisma-orders.repository.js';
@@ -45,6 +47,15 @@ import { StreamController } from './stream/stream.controller.js';
         loadEnv().PERSISTENCE === 'prisma'
           ? new PrismaOrdersRepository(prisma)
           : new InMemoryOrdersRepository(),
+      inject: [PrismaService],
+    },
+    {
+      // Nguon su that: Prisma (PERSISTENCE=prisma) hoac SEED in-memory (mac dinh).
+      provide: KnowledgeRepository,
+      useFactory: (prisma: PrismaService): KnowledgeRepository =>
+        loadEnv().PERSISTENCE === 'prisma'
+          ? new PrismaKnowledgeRepository(prisma)
+          : new SeedKnowledgeRepository(),
       inject: [PrismaService],
     },
     { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
