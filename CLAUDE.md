@@ -28,6 +28,7 @@ Hệ thống tài liệu (đọc theo thứ tự khi cần ngữ cảnh):
 7. [docs/so-do-he-thong.md](docs/so-do-he-thong.md) — 8 sơ đồ Mermaid (bối cảnh, 6 tầng, sequence đơn hàng, state machine, intent, ERD, lộ trình, 2 chế độ ingestion)
 8. [docs/checklist-du-lieu-khach.md](docs/checklist-du-lieu-khach.md) — checklist dữ liệu cần thu thập từ khách (A: nguồn sự thật, B: tin nhắn test, C: truy cập hệ thống, D: quyết định)
 9. [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md) — template kết quả PoC Bot Platform (chạy theo [tools/poc-zalo-bot/README.md](tools/poc-zalo-bot/README.md))
+10. [docs/kich-ban-demo-toan-he-thong.md](docs/kich-ban-demo-toan-he-thong.md) — **KỊCH BẢN DEMO MASTER** (chạy trên hệ thật: kênh zca + dữ liệu thật + luật thật). Thay 2 kịch bản cũ (thuyet-trinh, nhieu-nhom đã lỗi thời). Deep-dive 6 agent: [docs/kich-ban-demo-6-agent.md](docs/kich-ban-demo-6-agent.md)
 
 ## Công nghệ (đã chốt)
 
