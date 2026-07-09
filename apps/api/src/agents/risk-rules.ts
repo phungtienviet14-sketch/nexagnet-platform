@@ -8,12 +8,13 @@ import type { AgentsConfig } from './agents.config.js';
  * moi con so tien deu doc lai tu PricedOrder (rules engine) — chi format/danh gia.
  */
 
+// Thuat ngu that tu PO/quy trinh khach (cong no tinh tu ngay nhan hang; ky gui chot cuoi thang).
 export const POLICY_LABELS: Record<PolicyType, string> = {
-  cong_no_30: 'Công nợ 30 ngày',
-  cong_no_45: 'Công nợ 45 ngày',
-  ky_gui: 'Ký gửi',
-  thanh_toan_ngay: 'Thanh toán ngay',
-  cod: 'COD (thu hộ)',
+  cong_no_30: 'Công nợ 30 ngày (từ ngày nhận hàng)',
+  cong_no_45: 'Công nợ 45 ngày (từ ngày nhận hàng)',
+  ky_gui: 'Ký gửi (chốt số cuối tháng)',
+  thanh_toan_ngay: 'Thanh toán ngay (100% khi giao)',
+  cod: 'COD (thu hộ khi giao)',
 };
 
 /** Cac SP duoc nhac trong tin (so khop ten/alias khong dau). */

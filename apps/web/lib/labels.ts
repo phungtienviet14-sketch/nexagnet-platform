@@ -53,11 +53,11 @@ export const INTENT_LABEL: Record<Intent, string> = {
 };
 
 export const POLICY_LABEL: Record<PolicyType, string> = {
-  cong_no_30: 'Công nợ 30 ngày',
-  cong_no_45: 'Công nợ 45 ngày',
-  ky_gui: 'Ký gửi',
-  thanh_toan_ngay: 'Thanh toán ngay',
-  cod: 'COD (thu hộ)',
+  cong_no_30: 'Công nợ 30 ngày (từ ngày nhận hàng)',
+  cong_no_45: 'Công nợ 45 ngày (từ ngày nhận hàng)',
+  ky_gui: 'Ký gửi (chốt số cuối tháng)',
+  thanh_toan_ngay: 'Thanh toán ngay (100% khi giao)',
+  cod: 'COD (thu hộ khi giao)',
 };
 
 export function timeOf(iso: string): string {

@@ -60,12 +60,14 @@ export function computeShipping(totalQuantity: number, region: string, cfg: Rule
   return isNoiThanh(region, cfg) ? cfg.shipFeeNoiThanh : cfg.shipFeeTinh;
 }
 
+// Nhan chinh sach — thuat ngu that tu PO/quy trinh khach (cong no tinh tu NGAY NHAN HANG;
+// ky gui = doi soat cuoi thang roi thanh toan; CTV = thanh toan 100% khi giao).
 const POLICY_LABELS: Record<NonNullable<PricedOrder['policy']>, string> = {
-  cong_no_30: 'Công nợ 30 ngày',
-  cong_no_45: 'Công nợ 45 ngày',
-  ky_gui: 'Ký gửi',
-  thanh_toan_ngay: 'Thanh toán ngay',
-  cod: 'COD (thu hộ)',
+  cong_no_30: 'Công nợ 30 ngày (từ ngày nhận hàng)',
+  cong_no_45: 'Công nợ 45 ngày (từ ngày nhận hàng)',
+  ky_gui: 'Ký gửi (chốt số cuối tháng)',
+  thanh_toan_ngay: 'Thanh toán ngay (100% khi giao)',
+  cod: 'COD (thu hộ khi giao)',
 };
 
 function buildConfirmation(p: Omit<PricedOrder, 'confirmationText'>, now: Date): string {
@@ -115,7 +117,9 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
   const itemsSubtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
   const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
   const region = parsed.customerAddress ?? ctx.branch ?? '';
-  const shippingFee = computeShipping(totalQuantity, region, ctx.cfg);
+  // Don giao DAI LY (TH1) MIEN PHI ship (PO: "Mien phi giao hang dung thoi han khong mop meo be vo").
+  // TH2 = giao thang khach le cua dai ly -> cuoc theo vung (tam tinh, cho bieu cuoc khach — A3).
+  const shippingFee = parsed.orderType === 'TH2' ? computeShipping(totalQuantity, region, ctx.cfg) : 0;
   const codCollect = parsed.orderType === 'TH2' && parsed.codCollect === true;
   const codFee = codCollect ? ctx.cfg.codFee : 0;
   // Nghiep vu: MAC DINH KHONG VAT (VAT tuy truong hop). Chi ap VAT khi khach ghi ro

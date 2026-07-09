@@ -100,7 +100,7 @@ describe('buildQuoteLines (báo giá tất định)', () => {
 describe('annotatePolicy — chỉ format từ PricedOrder', () => {
   it('nhac chinh sach + trang thai VAT tu priced', () => {
     const notes = annotatePolicy(priced(5_000_000, 5));
-    expect(notes).toContain('Công nợ 30 ngày');
+    expect(notes.join(' ')).toContain('Công nợ 30 ngày');
     expect(notes).toContain('Không xuất VAT');
   });
 });
