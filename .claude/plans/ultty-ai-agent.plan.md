@@ -1,3 +1,5 @@
+> ⚠️ **Plan code GỐC (08/07) — khung ban đầu (Co-pilot/PWA/Bot Platform).** Theo dõi TIẾN ĐỘ + phần CHƯA XONG ở [docs/tien-do-va-ke-hoach.md](../../docs/tien-do-va-ke-hoach.md) (cập nhật liên tục). Kể từ 09/07 kênh đọc chính là **zca**, dữ liệu đã **THẬT** (Phase 1/2), demo dùng **console PC** thay PWA.
+
 # Plan: Hệ thống AI Agent U Ultty (bản hợp nhất NetViet + Claude Code)
 
 **Nguồn thiết kế**: [docs/thiet-ke-ky-thuat-hop-nhat.md](../../docs/thiet-ke-ky-thuat-hop-nhat.md) (quyết định kỹ thuật) · [Thiet_ke_AI_Agent_U_Ultty.md](../../Thiet_ke_AI_Agent_U_Ultty.md) (nghiệp vụ, giữ nguyên) · [docs/bao-cao-tich-hop-zalo.md](../../docs/bao-cao-tich-hop-zalo.md) (căn cứ kênh Zalo)

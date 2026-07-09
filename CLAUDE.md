@@ -23,7 +23,7 @@ Hệ thống tài liệu (đọc theo thứ tự khi cần ngữ cảnh):
 2. `Thiet_ke_AI_Agent_U_Ultty.md` — thiết kế giải pháp NetViet (nghiệp vụ, lộ trình 3 GĐ, KPI — GIỮ NGUYÊN, không sửa file này)
 3. [docs/thiet-ke-ky-thuat-hop-nhat.md](docs/thiet-ke-ky-thuat-hop-nhat.md) — **thiết kế triển khai hợp nhất, là quyết định cuối cho phần kỹ thuật**
 4. [docs/bao-cao-tich-hop-zalo.md](docs/bao-cao-tich-hop-zalo.md) — căn cứ kênh Zalo (chi phí, chính sách, điều khoản)
-5. [.claude/plans/ultty-ai-agent.plan.md](.claude/plans/ultty-ai-agent.plan.md) — kế hoạch code GĐ1 (task + validate)
+5. [docs/tien-do-va-ke-hoach.md](docs/tien-do-va-ke-hoach.md) — **TIẾN ĐỘ + KẾ HOẠCH CÒN LẠI** (đang ở đâu, còn gì, dữ liệu thiếu, quyết định treo — đọc trước khi làm tiếp). Plan code gốc: [.claude/plans/ultty-ai-agent.plan.md](.claude/plans/ultty-ai-agent.plan.md)
 6. `design/` — 8 ảnh design app của khách (tham khảo UX, PWA 5 tab bám theo)
 7. [docs/so-do-he-thong.md](docs/so-do-he-thong.md) — 8 sơ đồ Mermaid (bối cảnh, 6 tầng, sequence đơn hàng, state machine, intent, ERD, lộ trình, 2 chế độ ingestion)
 8. [docs/checklist-du-lieu-khach.md](docs/checklist-du-lieu-khach.md) — checklist dữ liệu cần thu thập từ khách (A: nguồn sự thật, B: tin nhắn test, C: truy cập hệ thống, D: quyết định)
