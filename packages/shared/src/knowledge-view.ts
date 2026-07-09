@@ -11,10 +11,10 @@ export interface KnowledgeProductView {
   sku: string;
   name: string;
   unit: string;
-  /** Gia cap dai ly (VND). */
-  priceDaiLy: number;
-  /** Gia cap CTV (VND). */
-  priceCtv: number;
+  /** Gia SI dai ly/CTV tra (Don gia CTV — dung tinh don). */
+  wholesale: number;
+  /** Gia ban le de xuat (tham chieu bao gia); co the thieu voi mot so SKU phu. */
+  retailPrice?: number;
   description?: string;
 }
 

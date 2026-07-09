@@ -40,8 +40,8 @@ Giao diện mới là **console rộng cho máy chiếu**, 3 cột trái→phả
 - **Cột trái — Tin & đơn vào:** ô **"Bơm tin thử"** (dán tin demo) + danh sách tin/đơn realtime. Tin mới **tự nhảy lên đầu và tự được chọn**, kèm chấm **đang xử lý**. *(Bật `CHANNEL_MODE=zca` thì đại lý nhắn thẳng trong nhóm Zalo — **không cần tag** — tin cũng tự vào đây; badge topbar hiện **"Kênh: Zalo Web cá nhân"** — §11.)*
 - **Cột giữa — Đội 6 agent (STREAM THẬT qua SSE):** tin gốc → **6 agent sáng lên theo NHỊP THẬT của backend** (⏳ *đang xử lý* → ✓ *xong*), badge nguồn (AI · Rules engine · Kho tri thức) → phiếu đơn + nút duyệt. **Với DeepSeek, vai Điều phối "quay" ~1–2s thật** (đang gọi AI), 5 vai rules chạy tức thì. Badge **LIVE** (topbar) = đang kết nối SSE. **Bấm đơn cũ = xem TĨNH** (không chạy lại); chỉ nút **"▶ Chạy lại (gọi lại AI)"** mới **gọi lại LLM thật** + stream lại.
 - **Cột phải — Nguồn sự thật (bám theo tin đang chọn — nhìn biết AI làm gì):**
-  - **Kho tri thức:** đầu panel có khối **"🔍 AI đã dùng cho tin này"** — Điều phối *giải mã viết tắt* (TN→Thái Nguyên, c→chị), Bán hàng *khớp SKU + giá* (`ghe felix` → Ghế Felix 1.150.000đ × 10), *nhóm→đại lý* quyết cấp giá/chính sách; danh mục bên dưới **tô sáng** mục đã dùng.
-  - **Luật đã áp:** mỗi dòng = **[agent] · AI THẤY gì → RA gì + nhãn nguồn** (vd Bán hàng: "10 × Ghế Felix (AI trích) → giá Đại lý 1.150.000đ → 11.500.000đ" ⟨Rules engine⟩).
+  - **Kho tri thức:** đầu panel có khối **"🔍 AI đã dùng cho tin này"** — Điều phối *giải mã viết tắt* (TN→Thái Nguyên, c→chị), Bán hàng *khớp SKU + giá* (`ghe felix` → Ghế Felix 1.250.000đ × 10), *nhóm→đại lý* quyết cấp giá/chính sách; danh mục bên dưới **tô sáng** mục đã dùng.
+  - **Luật đã áp:** mỗi dòng = **[agent] · AI THẤY gì → RA gì + nhãn nguồn** (vd Bán hàng: "10 × Ghế Felix (AI trích) → giá sỉ 1.250.000đ → 12.500.000đ" ⟨Rules engine⟩).
   - **KiotViet:** tồn kho (nguồn sự thật kho) + đơn đã đồng bộ.
 
 **Các câu giải thích trước đây in trên màn — nay ĐÃ BỎ khỏi giao diện cho gọn, người trình bày nói bằng lời:**
@@ -87,15 +87,15 @@ Giao diện mới là **console rộng cho máy chiếu**, 3 cột trái→phả
 
 👉 **Chỉ từng hàng agent:**
 > - "**Điều phối** 🧭 — nhận ra *Đặt đơn*, người gửi *Đại lý*, giao cho Bán hàng."
-> - "**Bán hàng** 🧾 — bóc 10 ghế Felix, áp giá cấp đại lý, dựng phiếu xác nhận."
+> - "**Bán hàng** 🧾 — bóc 10 ghế Felix, áp giá sỉ (bảng giá tháng 7), dựng phiếu xác nhận."
 > - "**Chính sách & tài chính** 📋 — chú thích: công nợ 30 ngày, không VAT, miễn ship."
 > - "**Giám sát** 🛡️ — *Không phát hiện rủi ro*."
 
 👉 **Chỉ dòng ‘Tổng (rules engine)’ + nhãn xanh:**
-> "Điểm an toàn nhất: dòng tiền **11.500.000đ** nhãn **‘Rules engine’ xanh** — do bộ quy tắc tính, không phải AI bịa. Em ghi rõ *‘số lượng do AI trích, đơn giá & tổng do quy tắc’*. Kế toán yên tâm."
+> "Điểm an toàn nhất: dòng tiền **12.500.000đ** nhãn **‘Rules engine’ xanh** — do bộ quy tắc tính, không phải AI bịa. Em ghi rõ *‘số lượng do AI trích, đơn giá & tổng do quy tắc’*. Kế toán yên tâm."
 
 👉 **Chỉ sang cột phải:**
-> "Bên phải là **nguồn sự thật**. Tab **‘Luật đã áp’** liệt kê từng luật cho đơn này — giá cấp đại lý, miễn ship, **VAT off**, công nợ 30 — mỗi dòng nhãn **Rules engine**. Tab **‘Kho tri thức’** cho thấy AI **chỉ được chọn trong danh mục đóng 18–20 SKU** + từ điển viết tắt (TN→Thái Nguyên…). AI không tự nghĩ ra sản phẩm hay giá."
+> "Bên phải là **nguồn sự thật**. Tab **‘Luật đã áp’** liệt kê từng luật cho đơn này — giá sỉ, miễn ship, **VAT off**, công nợ 30 — mỗi dòng nhãn **Rules engine**. Tab **‘Kho tri thức’** cho thấy AI **chỉ được chọn trong danh mục đóng 18–20 SKU** + từ điển viết tắt (TN→Thái Nguyên…). AI không tự nghĩ ra sản phẩm hay giá."
 
 [Bấm **Duyệt & gửi nhóm**.]
 > "Sale **một chạm** để duyệt — gửi xác nhận vào nhóm Zalo (có nhãn tin tự động) + đẩy lên KiotViet. Trạng thái *Hoàn tất*, có mã đơn."
@@ -109,7 +109,7 @@ Gõ lần lượt 4 tin, mỗi tin chỉ nhanh vai nổi bật:
 | [dán] | **Nói ngắn** |
 |---|---|
 | `ghe felix co tot khong c oi` | "Hỏi sản phẩm → **Tư vấn SP** 💡 lấy từ kho tri thức, soạn sẵn câu trả lời (Sale copy, không tự gửi)." |
-| `ghe felix bao nhieu tien` | "Hỏi giá → **Chính sách & tài chính** 📋 **tra bảng giá theo cấp đại lý**: 1.150.000đ (nhãn Kho tri thức)." |
+| `ghe felix bao nhieu tien` | "Hỏi giá → **Chính sách & tài chính** 📋 **tra bảng giá sỉ chung**: 1.250.000đ (nhãn Kho tri thức)." |
 | `thang nay cong no duoc khong` | "Hỏi công nợ → trả lời **theo hồ sơ nhóm này** (Meta HN = Công nợ 30 ngày)." |
 | `noi chien moi mua hom qua bi loi` | "Bảo hành → **Hậu mãi** 🛠️ phân nhánh *Trong 7 ngày*, **chuyển nhóm kỹ thuật** (không tự phán lỗi)." |
 
@@ -144,7 +144,7 @@ Gõ lần lượt 4 tin, mỗi tin chỉ nhanh vai nổi bật:
 > "Giờ mời anh/chị **gõ thử tin bất kỳ** kiểu đại lý hay nhắn — viết tắt, không dấu cũng được. Cứ tự nhiên ạ."
 
 [Đưa chuột/bàn phím cho khách. Gợi ý nếu khách ngại:]
-> "Ví dụ: *‘robot hut bui gia bao nhieu’*, hay *‘dat 3 noi chien 2 may loc nuoc ve OCP’*, hay hỏi *‘khi nao hang toi’*…"
+> "Ví dụ: *‘quat bb grey gia bao nhieu’*, hay *‘dat 3 noi chien 2 quat elni ve OCP’*, hay hỏi *‘khi nao hang toi’*…"
 
 **Khi khách gõ:** để AI xử lý, rồi chỉ vào **cột giữa (đội 6 agent)** giải thích vai nào vào cuộc + chip **‘1 lần gọi AI’**; cột phải tab **Kho tri thức** cho thấy AI đã dùng gì cho tin khách vừa gõ.
 
@@ -239,16 +239,16 @@ Nhóm: **Meta HN** (Đại lý, Công nợ 30 ngày). `PARSER_MODE=deepseek`.
 
 | # | Tin nhắn | Vai nổi bật | Kết quả kỳ vọng |
 |---|---|---|---|
-| 1 | `@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT` | Điều phối→Bán hàng→Chính sách→Giám sát | Đơn **11.500.000đ** (nhãn Rules engine), *Chờ duyệt* → Duyệt → *Hoàn tất* + mã KiotViet |
+| 1 | `@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT` | Điều phối→Bán hàng→Chính sách→Giám sát | Đơn **12.500.000đ** (nhãn Rules engine), *Chờ duyệt* → Duyệt → *Hoàn tất* + mã KiotViet |
 | 2 | `ghe felix co tot khong c oi` | Tư vấn SP | Mô tả Ghế Felix (Kho tri thức), không tạo đơn |
-| 3 | `ghe felix bao nhieu tien` | Chính sách & TC | Báo giá **1.150.000đ** (cấp đại lý) |
+| 3 | `ghe felix bao nhieu tien` | Chính sách & TC | Báo giá **1.250.000đ** (giá sỉ) |
 | 4 | `thang nay cong no duoc khong` | Chính sách & TC | Công nợ 30 ngày |
 | 5 | `noi chien moi mua hom qua bi loi` | Hậu mãi | *Trong 7 ngày* → chuyển kỹ thuật |
 | 6 | `@Bot ultty AI orders gui 50 ghe felix` | Giám sát | *Đơn lớn bất thường 57.500.000đ* → leo thang, *Cần kiểm tra* |
 | 7 | (chọn "🔓 Nhóm lạ") + đơn bất kỳ | Giám sát | *Chưa xác định đại lý* → leo thang |
 | 8 | `@Bot ultty AI orders gui 10 ghe felix xuat VAT` | Bán hàng | Có dòng **VAT** → tổng **12.650.000đ** |
 
-**Số liệu neo:** Ghế Felix giá đại lý **1.150.000đ** · 10 cái = **11,5tr** (mặc định KHÔNG VAT) · 10 cái + "xuất VAT" = **12,65tr** · 50 cái = **57,5tr** (ngưỡng cảnh báo đơn lớn = **20tr**).
+**Số liệu neo (giá sỉ thật — bảng giá tháng 7):** Ghế Felix **1.250.000đ** · 10 cái = **12,5tr** (mặc định KHÔNG VAT) · 10 cái + "xuất VAT" = **13,75tr** · 50 cái = **62,5tr** (ngưỡng cảnh báo đơn lớn = **20tr**).
 
 ---
 

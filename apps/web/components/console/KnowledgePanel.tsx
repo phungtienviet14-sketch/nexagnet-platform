@@ -79,7 +79,7 @@ export function KnowledgePanel({ order }: { order?: OrderView }) {
       <UsageBox usage={usage} />
 
       <div className="kb-block">
-        <p className="kb-title">Danh mục · giá cấp Đại lý ({kb.productCount} SKU)</p>
+        <p className="kb-title">Danh mục · giá sỉ đại lý/CTV ({kb.productCount} SKU)</p>
         <table className="kb-table">
           <thead>
             <tr>
@@ -97,7 +97,7 @@ export function KnowledgePanel({ order }: { order?: OrderView }) {
                     {p.name}
                     <div className="sku">{p.sku}</div>
                   </td>
-                  <td className="price">{formatVnd(p.priceDaiLy)}</td>
+                  <td className="price">{formatVnd(p.wholesale)}</td>
                 </tr>
               );
             })}

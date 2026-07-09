@@ -61,7 +61,8 @@ describe('PipelineService AUTO_SEND (AI tu chot khi khong rui ro)', () => {
 
   it('đơn có cảnh báo/số lượng lớn (Giám sát theo dõi) -> KHÔNG tự gửi', async () => {
     const { pipeline, adapter } = build();
-    const view = await pipeline.process(msg('@Bot ultty AI orders 30 am sieu toc'));
+    // 30 x quat mini (ELNA 450k) = 13,5tr < 20tr (khong escalate) nhung SL >= 30 -> watch.
+    const view = await pipeline.process(msg('@Bot ultty AI orders 30 quat mini'));
 
     // watch (SL >= 30) hoac bat ky rui ro nao -> khong auto-send.
     expect(view.trace?.supervisor.riskLevel).not.toBe('none');

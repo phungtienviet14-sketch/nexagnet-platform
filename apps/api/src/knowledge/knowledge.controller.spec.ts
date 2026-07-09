@@ -9,14 +9,13 @@ import { KnowledgeService } from './knowledge.service.js';
 describe('KnowledgeController (nguon su that)', () => {
   const controller = new KnowledgeController(new KnowledgeService());
 
-  it('gop gia 2 cap (dai_ly + ctv) tu bang gia vao tung SKU', () => {
+  it('lo gia si (Don gia CTV) that theo bang gia thang 7', () => {
     const products = controller.products();
-    expect(products.length).toBeGreaterThanOrEqual(14);
-    const felix = products.find((p) => p.sku === 'GHE-FELIX');
+    expect(products.length).toBeGreaterThanOrEqual(18);
+    const felix = products.find((p) => p.sku === 'FELIX');
     expect(felix).toBeDefined();
-    expect(felix?.priceDaiLy).toBe(1_150_000);
-    expect(felix?.priceCtv).toBe(1_250_000);
-    expect(felix?.name).toBe('Ghế massage Felix');
+    expect(felix?.wholesale).toBe(1_250_000);
+    expect(felix?.name).toContain('Felix');
   });
 
   it('lo glossary viet tat (term -> nghia)', () => {
@@ -38,7 +37,7 @@ describe('KnowledgeController (nguon su that)', () => {
     expect(s.productCount).toBe(s.products.length);
     expect(s.glossaryCount).toBe(s.glossary.length);
     expect(s.groupCount).toBe(s.groups.length);
-    expect(s.productCount).toBeGreaterThanOrEqual(14);
+    expect(s.productCount).toBeGreaterThanOrEqual(18);
   });
 
   it('KHONG lo du lieu ca nhan khach (PII)', () => {

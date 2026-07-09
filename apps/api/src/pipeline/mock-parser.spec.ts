@@ -56,4 +56,20 @@ describe('MockParser', () => {
     const r = await run('gui 3 ghe felix');
     expect(r.order?.noVat).toBe(false);
   });
+
+  it('combo khong bi dem trung voi SP thanh phan (alias con la substring)', async () => {
+    const comboProducts: Product[] = [
+      { sku: 'WFX', name: 'May rua WFX', aliases: ['wfx', 'may rua thuc pham'], unit: 'cai' },
+      { sku: 'COMBO', name: 'Combo WFX PF360', aliases: ['combo wfx', 'wfx pf360', 'combo rua rau'], unit: 'bo' },
+    ];
+    const r = await parser.parse({
+      text: 'cho e 2 combo wfx pf360',
+      products: comboProducts,
+      glossary,
+      botName: 'Bot ultty AI orders',
+    });
+    // Chi 1 dong (COMBO), khong co dong WFX ma.
+    expect(r.order?.items).toHaveLength(1);
+    expect(r.order?.items?.[0]?.quantity).toBe(2);
+  });
 });

@@ -199,7 +199,6 @@ export class AgentOrchestrator {
   private dispatch(parseResult: ParseResult, resolved: ResolvedGroup, normText: string): DispatchResult {
     const roles = new Map<AgentRole, RoleData>();
     const intent = parseResult.intent;
-    const tier = resolved.dealer?.tier ?? 'dai_ly';
 
     if (intent === 'dat_don' && parseResult.order) {
       const priced = priceOrder(parseResult.order, {
@@ -207,6 +206,7 @@ export class AgentOrchestrator {
         branch: resolved.branch,
         products: this.knowledge.products(),
         prices: this.knowledge.prices(),
+        priceOverrides: this.knowledge.priceOverrides(),
         cfg: DEFAULT_RULES_CONFIG,
       });
       roles.set('sales', {
@@ -237,7 +237,7 @@ export class AgentOrchestrator {
     }
 
     if (intent === 'hoi_gia') {
-      const quote = buildQuoteLines(normText, this.knowledge.products(), this.knowledge.prices(), tier);
+      const quote = buildQuoteLines(normText, this.knowledge.products(), this.knowledge.prices());
       roles.set('policy_finance', {
         action: `Báo giá theo cấp ${SENDER_LABELS[resolved.senderType]} (tra bảng giá)`,
         notes: quote.map((q) => `${q.name}: ${formatVnd(q.unitPrice)}`),

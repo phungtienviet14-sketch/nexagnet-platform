@@ -1,4 +1,4 @@
-import type { DealerTier, PolicyType, PricedOrder, SupervisorSummary } from '@ultty/shared';
+import type { PolicyType, PricedOrder, SupervisorSummary } from '@ultty/shared';
 import type { PriceRow, Product } from '../knowledge/domain.js';
 import { formatVnd, normalize } from '../rules/text.js';
 import type { AgentsConfig } from './agents.config.js';
@@ -39,17 +39,16 @@ export function describeProducts(
   }));
 }
 
-/** Bao gia: TRA CUU don gia theo cap dai ly tu bang gia (khong hoi LLM). */
+/** Bao gia: TRA CUU gia si (Don gia CTV) tu bang gia chung (khong hoi LLM). */
 export function buildQuoteLines(
   normText: string,
   products: Product[],
   prices: PriceRow[],
-  tier: DealerTier,
 ): { name: string; unitPrice: number }[] {
   return productsInText(normText, products)
     .map((p) => {
       const row = prices.find((r) => r.sku === p.sku);
-      return row ? { name: p.name, unitPrice: row.prices[tier] } : null;
+      return row ? { name: p.name, unitPrice: row.wholesale } : null;
     })
     .filter((x): x is { name: string; unitPrice: number } => x !== null);
 }

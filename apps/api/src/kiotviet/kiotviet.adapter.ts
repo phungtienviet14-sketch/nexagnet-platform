@@ -29,7 +29,7 @@ export class KiotVietMockAdapter extends KiotVietAdapter {
   constructor(private readonly knowledge: KnowledgeService) {
     super();
     // Danh muc + ton kho gia lap dung theo nguon su that (KiotViet = source of truth kho).
-    const priceOf = new Map(knowledge.prices().map((p) => [p.sku, p.prices.dai_ly]));
+    const priceOf = new Map(knowledge.prices().map((p) => [p.sku, p.wholesale]));
     for (const p of knowledge.products()) {
       this.products.set(p.sku, {
         sku: p.sku,

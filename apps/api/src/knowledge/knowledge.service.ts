@@ -6,7 +6,7 @@ import type {
   KnowledgeSummary,
   SenderType,
 } from '@ultty/shared';
-import type { Dealer, GlossaryEntry, GroupMap, PriceRow, Product } from './domain.js';
+import type { Dealer, DealerPriceOverride, GlossaryEntry, GroupMap, PriceRow, Product } from './domain.js';
 import { SEED } from './seed.js';
 
 /** Ket qua map 1 nhom Zalo -> ngu canh dai ly/chi nhanh (dung trong pipeline + UI). */
@@ -31,9 +31,9 @@ export class KnowledgeService {
     return this.snapshot.products;
   }
 
-  /** DTO danh muc + gia 2 cap cho cot "Nguon su that". Canh bao neu SKU thieu dong gia. */
+  /** DTO danh muc + gia si cho cot "Nguon su that". Canh bao neu SKU thieu dong gia. */
   productViews(): KnowledgeProductView[] {
-    const priceBySku = new Map(this.snapshot.prices.map((p) => [p.sku, p.prices]));
+    const priceBySku = new Map(this.snapshot.prices.map((p) => [p.sku, p]));
     return this.snapshot.products.map((p) => {
       const price = priceBySku.get(p.sku);
       if (!price) {
@@ -43,8 +43,8 @@ export class KnowledgeService {
         sku: p.sku,
         name: p.name,
         unit: p.unit,
-        priceDaiLy: price?.dai_ly ?? 0,
-        priceCtv: price?.ctv ?? 0,
+        wholesale: price?.wholesale ?? 0,
+        retailPrice: price?.retailPrice,
         description: p.description,
       };
     });
@@ -87,6 +87,11 @@ export class KnowledgeService {
 
   prices(): PriceRow[] {
     return this.snapshot.prices;
+  }
+
+  /** Deal rieng theo dealer+sku (override wholesale). Rong khi chua co so lieu khach. */
+  priceOverrides(): DealerPriceOverride[] {
+    return this.snapshot.priceOverrides;
   }
 
   glossary(): GlossaryEntry[] {

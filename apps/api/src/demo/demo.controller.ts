@@ -23,9 +23,9 @@ const DEMO_CHAT_ID = 'zgr-f8a7101d77709e2ec761';
 
 const SAMPLE_MESSAGES = [
   '@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT',
-  '@Bot ultty AI orders 3 noi chien va 2 robot hut bui',
-  '@Bot ultty AI orders 5 may loc nuoc, xuat VAT',
-  'ghe felix bao nhieu tien c oi',
+  '@Bot ultty AI orders 3 noi chien va 2 quat bb grey',
+  '@Bot ultty AI orders 5 quat elni, xuat VAT',
+  'quat bb grey bao nhieu tien c oi',
 ];
 
 interface SimulateBody {

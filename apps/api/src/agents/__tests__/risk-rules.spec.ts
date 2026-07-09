@@ -85,16 +85,15 @@ describe('buildQuoteLines (báo giá tất định)', () => {
   const products: Product[] = [
     { sku: 'GHE-FELIX', name: 'Ghế Felix', aliases: ['felix', 'ghe felix'], unit: 'cái' },
   ];
-  const prices: PriceRow[] = [{ sku: 'GHE-FELIX', prices: { dai_ly: 1_150_000, ctv: 1_250_000 } }];
+  const prices: PriceRow[] = [{ sku: 'GHE-FELIX', wholesale: 1_150_000 }];
 
-  it('tra dung don gia theo cap dai ly', () => {
-    const q = buildQuoteLines('bao gia ghe felix', products, prices, 'dai_ly');
+  it('tra dung gia si (Don gia CTV) tu bang gia chung', () => {
+    const q = buildQuoteLines('bao gia ghe felix', products, prices);
     expect(q).toEqual([{ name: 'Ghế Felix', unitPrice: 1_150_000 }]);
   });
 
-  it('tra dung don gia theo cap CTV', () => {
-    const q = buildQuoteLines('ghe felix bao nhieu', products, prices, 'ctv');
-    expect(q[0]?.unitPrice).toBe(1_250_000);
+  it('khong khop SP -> mang rong', () => {
+    expect(buildQuoteLines('bao gia ban an go', products, prices)).toEqual([]);
   });
 });
 

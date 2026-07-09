@@ -35,31 +35,42 @@ function stripMention(text: string, botName?: string): string {
   return text.replace(new RegExp(pattern, 'ig'), ' ');
 }
 
+/** So luong = so nguyen NGAY TRUOC vi tri ten SP (khong co -> 1, explicit=false). */
+function quantityBefore(normText: string, idx: number): { quantity: number; explicit: boolean } {
+  const prefixNumbers = normText.slice(0, idx).match(/\d+/g);
+  const lastNumber = prefixNumbers?.[prefixNumbers.length - 1];
+  return {
+    quantity: lastNumber !== undefined ? Number.parseInt(lastNumber, 10) : 1,
+    explicit: lastNumber !== undefined,
+  };
+}
+
 function extractItems(normText: string, products: Product[]): ExtractedItem[] {
-  const items: ExtractedItem[] = [];
+  // Gom MOI (sku, ten/alias) roi khop cum DAI truoc + TIEU THU vung da khop, de tin dang
+  // "combo wfx pf360" khong dem trung ca WFX lan COMBO (alias 'wfx' la substring cua 'combo wfx').
+  const candidates = products
+    .flatMap((p) => [p.name, ...p.aliases].map((raw) => ({ sku: p.sku, text: normalize(raw) })))
+    .filter((c) => c.text.length >= 3)
+    .sort((a, b) => b.text.length - a.text.length);
+
+  const consumed: Array<[number, number]> = [];
   const usedSkus = new Set<string>();
+  const matched: { skuRaw: string; idx: number }[] = [];
 
-  for (const product of products) {
-    const candidates = [product.name, ...product.aliases]
-      .map(normalize)
-      .filter((c) => c.length >= 3)
-      .sort((a, b) => b.length - a.length);
-
-    for (const candidate of candidates) {
-      const idx = normText.indexOf(candidate);
-      if (idx < 0 || usedSkus.has(product.sku)) continue;
-
-      const prefixNumbers = normText.slice(0, idx).match(/\d+/g);
-      const lastNumber = prefixNumbers?.[prefixNumbers.length - 1];
-      const explicit = lastNumber !== undefined;
-      const quantity = lastNumber !== undefined ? Number.parseInt(lastNumber, 10) : 1;
-
-      items.push({ skuRaw: candidate, quantity, explicit });
-      usedSkus.add(product.sku);
-      break;
-    }
+  for (const cand of candidates) {
+    if (usedSkus.has(cand.sku)) continue;
+    const idx = normText.indexOf(cand.text);
+    if (idx < 0) continue;
+    const end = idx + cand.text.length;
+    if (consumed.some(([s, e]) => idx < e && s < end)) continue; // chong lan vung da khop -> bo
+    consumed.push([idx, end]);
+    usedSkus.add(cand.sku);
+    matched.push({ skuRaw: cand.text, idx });
   }
-  return items;
+
+  return matched
+    .sort((a, b) => a.idx - b.idx) // thu tu tu nhien theo vi tri trong tin
+    .map((m) => ({ skuRaw: m.skuRaw, ...quantityBefore(normText, m.idx) }));
 }
 
 function classifyIntent(normText: string, items: ExtractedItem[]): Intent {

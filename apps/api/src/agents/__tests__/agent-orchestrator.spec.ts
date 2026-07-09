@@ -48,8 +48,8 @@ describe('AgentOrchestrator — multi-agent 6 con', () => {
     expect(view.intent).toBe('dat_don');
     const roles = activeRoles(view.trace!.steps);
     expect(roles).toEqual(expect.arrayContaining(['router', 'sales', 'policy_finance', 'supervisor']));
-    // Nguyen tac bat bien: gia/tong tu rules engine (10 x 1.150.000, khong VAT)
-    expect(view.priced?.grandTotal).toBe(11_500_000); // = itemsSubtotal, tu rules engine
+    // Nguyen tac bat bien: gia/tong tu rules engine (10 x 1.250.000 gia si that, khong VAT)
+    expect(view.priced?.grandTotal).toBe(12_500_000); // = itemsSubtotal, tu rules engine
     expect(view.trace?.steps.find((s) => s.role === 'sales')?.source).toBe('rules');
   });
 
@@ -58,7 +58,7 @@ describe('AgentOrchestrator — multi-agent 6 con', () => {
     expect(view.intent).toBe('hoi_gia');
     expect(view.priced).toBeNull();
     expect(view.trace?.steps.find((s) => s.role === 'policy_finance')?.status).toBe('active');
-    expect(view.trace?.reply).toContain('Ghế massage Felix');
+    expect(view.trace?.reply).toContain('Felix');
   });
 
   it('hoi_san_pham (câu hỏi, không số lượng) -> Tư vấn SP, KHONG bi nuot thanh don', async () => {
