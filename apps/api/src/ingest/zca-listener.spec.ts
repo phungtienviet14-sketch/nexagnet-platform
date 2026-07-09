@@ -20,7 +20,7 @@ function makeZcaMessage(msgId: string, content = 'gui 10 ghe felix', threadId = 
 function setup(intent: Intent = 'dat_don') {
   let captured: ZcaMessageHandler | undefined;
   const process = vi.fn(async (): Promise<OrderView> => ({ intent }) as OrderView);
-  const sendMessage = vi.fn(async (): Promise<void> => undefined);
+  const sendMessage = vi.fn(async (_chatId: string, _text: string): Promise<void> => undefined);
   const client = { setMessageHandler: (h: ZcaMessageHandler) => (captured = h) } as unknown as ZaloUserClient;
   const pipeline = { process } as unknown as PipelineService;
   const channel = { sendMessage } as unknown as ChannelAdapter;
