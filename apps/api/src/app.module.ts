@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { loadEnv } from '@ultty/shared';
+import { PrismaService } from './config/prisma.service.js';
 import { AgentEventsService } from './agents/agent-events.service.js';
 import { AgentOrchestrator } from './agents/agent-orchestrator.service.js';
 import { BroadcastController } from './broadcast/broadcast.controller.js';
@@ -15,6 +17,7 @@ import { KnowledgeController } from './knowledge/knowledge.controller.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
 import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
+import { PrismaOrdersRepository } from './orders/prisma-orders.repository.js';
 import { OrdersService } from './orders/orders.service.js';
 import { parserProvider } from './pipeline/parser.provider.js';
 import { PipelineService } from './pipeline/pipeline.service.js';
@@ -34,7 +37,16 @@ import { StreamController } from './stream/stream.controller.js';
   providers: [
     KnowledgeService,
     AgentEventsService,
-    { provide: OrdersRepository, useClass: InMemoryOrdersRepository },
+    PrismaService,
+    {
+      // PERSISTENCE=prisma -> Postgres; mac dinh memory (demo/CI khong can DB).
+      provide: OrdersRepository,
+      useFactory: (prisma: PrismaService): OrdersRepository =>
+        loadEnv().PERSISTENCE === 'prisma'
+          ? new PrismaOrdersRepository(prisma)
+          : new InMemoryOrdersRepository(),
+      inject: [PrismaService],
+    },
     { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
     parserProvider,
     ZaloUserClient,

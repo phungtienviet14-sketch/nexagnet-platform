@@ -13,6 +13,9 @@ export const envSchema = z.object({
     .url()
     .default('postgresql://ultty:ultty_local@localhost:5432/ultty'),
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
+  // Lop luu tru don/tin: memory (in-memory, MAC DINH — demo/CI khong can DB) | prisma (Postgres).
+  // Tach RIENG khoi DATABASE_URL (vi .env da co URL cho docker) -> bat Prisma phai CHU DONG dat = prisma.
+  PERSISTENCE: z.enum(['memory', 'prisma']).default('memory'),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),

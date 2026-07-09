@@ -1,7 +1,7 @@
 // Prisma schema — Phase 3 (luu tru ben Postgres).
 // Nguon su that mo hinh: docs/nghiep-vu.md + docs/so-do-he-thong.md (ERD).
-// GHI CHU QUAN TRONG: app VAN chay in-memory mac dinh; Prisma chi bat khi co DATABASE_URL
-// (increment 3). Schema nay chua duoc wiring vao DI -> khong anh huong demo/test.
+// GHI CHU QUAN TRONG: app VAN chay in-memory mac dinh (PERSISTENCE=memory). Prisma chi bat khi
+// PERSISTENCE=prisma -> demo/test khong can DB. Migration tao khi co Postgres: docker compose up -d postgres.
 
 generator client {
   provider = "prisma-client-js"
@@ -146,32 +146,35 @@ model Message {
 }
 
 model Order {
-  id         String          @id @default(cuid())
-  status     OrderStatus     @default(pending_review)
-  orderType  String? // TH1 | TH2
-  intent     String
-  senderType String
-  chatId     String
-  groupId    String?
-  group      Group?          @relation(fields: [groupId], references: [id])
-  dealerId   String?
-  dealer     Dealer?         @relation(fields: [dealerId], references: [id])
-  dealerName String?
-  branch     String?
-  groupName  String?
-  rawText    String
-  imageUrl   String?
-  messageId  String?
-  message    Message?        @relation(fields: [messageId], references: [id])
-  confidence Json?
-  parsed     Json?
-  priced     Json?
-  trace      Json?
-  grandTotal Int?
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  items      OrderItem[]
-  feedback   ParseFeedback[]
+  id           String          @id @default(cuid())
+  status       OrderStatus     @default(pending_review)
+  orderType    String? // TH1 | TH2
+  intent       String
+  senderType   String
+  chatId       String
+  groupId      String?
+  group        Group?          @relation(fields: [groupId], references: [id])
+  dealerId     String?
+  dealer       Dealer?         @relation(fields: [dealerId], references: [id])
+  dealerName   String?
+  branch       String?
+  groupName    String?
+  rawText      String
+  imageUrl     String?
+  messageId    String?
+  message      Message?        @relation(fields: [messageId], references: [id])
+  confidence   Json?
+  parsed       Json?
+  priced       Json?
+  trace        Json?
+  grandTotal   Int?
+  kiotVietCode String?
+  /// Ban day du OrderView (nguon su that cho repo — round-trip khong mat field long nhau).
+  view         Json?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  items        OrderItem[]
+  feedback     ParseFeedback[]
 
   @@index([status])
   @@index([chatId])
