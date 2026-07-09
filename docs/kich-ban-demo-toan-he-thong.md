@@ -29,6 +29,11 @@ pnpm dev:web      # http://localhost:3000  (mở trên màn rộng/máy chiếu)
 - Quét xong phiên lưu vào `secrets/zalo-cred.json` → **các lần sau không cần quét**.
 - Mở sẵn 1-2 **nhóm Zalo test** trên điện thoại (tài khoản phụ đã ở trong nhóm).
 
+**⚠️ Map nhóm → đại lý theo ID, KHÔNG theo tên nhóm.** Muốn đơn nhận đúng đại lý/chính sách:
+1. Nhắn 1 tin bất kỳ trong nhóm test → xem log API dòng **`📌 Nhom ... chatId="..."`** → copy ID đó.
+2. Dán ID vào [seed.ts](../apps/api/src/knowledge/seed.ts) `groups[]` (`chatId`), map với đại lý mong muốn → restart API.
+   *(Đổi tên nhóm KHÔNG có tác dụng — hệ thống chỉ nhìn ID.)* Nhóm chưa map → hiện "Nhóm lạ" + Giám sát leo thang (đúng thiết kế).
+
 ### 0.3 Hai cách trình diễn (chọn theo độ ổn định mạng)
 - **Cách A — THẬT nhất:** một máy khác **nhắn thẳng vào nhóm Zalo** (KHÔNG cần tag ai) → tin tự chảy vào console. Điểm ăn tiền: *đại lý không phải đổi thói quen gì cả*.
 - **Cách B — an toàn, luôn chạy:** gõ vào ô **"Bơm tin thử"** trên console (chọn nhóm). **AI vẫn thật (DeepSeek), rules + KiotViet vẫn chạy** — chỉ khác nguồn tin. Dùng khi mạng yếu.

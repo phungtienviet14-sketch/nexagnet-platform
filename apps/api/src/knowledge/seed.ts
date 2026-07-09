@@ -73,7 +73,10 @@ const dealers: Dealer[] = [
   { id: 'ctv-ocean-park', name: 'CTV Ocean Park', aliases: ['ocean park', 'ocp'], tier: 'ctv', defaultPolicy: 'thanh_toan_ngay' },
 ];
 
-// Nhom Zalo THAT (chat_id zgr-...) — lay bang `pnpm poc:groups`. Map nhom -> dai ly.
+// Map nhom -> dai ly theo chatId (ID NHOM, KHONG phai TEN nhom).
+// - Kenh zca (CHANNEL_MODE=zca): chatId = threadId cua zca; nhan tin 1 lan trong nhom roi xem log
+//   API "📌 Nhom ... chatId=..." -> copy vao day. (chat_id zgr-... la cua Bot Platform, KHAC zca.)
+// - Kenh bot (CHANNEL_MODE=bot): lay chat_id bang `pnpm poc:groups`.
 const groups: GroupMap[] = [
   { chatId: 'zgr-f8a7101d77709e2ec761', dealerId: 'meta-hn', branch: 'HN', name: 'Nhóm đại lý Meta HN' },
   { chatId: 'zgr-f51afbe59a8873d62a99', dealerId: 'dl-thai-nguyen', branch: 'TN', name: 'Nhóm đại lý Thái Nguyên' },

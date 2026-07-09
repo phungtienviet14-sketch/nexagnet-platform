@@ -20,6 +20,8 @@ const MAX_SEEN = 2000;
 export class ZcaListener implements OnModuleInit {
   private readonly logger = new Logger('ZcaListener');
   private readonly seen = new Set<string>();
+  /** Chat da in ID (in 1 lan/nhom) — giup lay threadId that de map vao seed.ts. */
+  private readonly announced = new Set<string>();
 
   constructor(
     private readonly pipeline: PipelineService,
@@ -47,7 +49,9 @@ export class ZcaListener implements OnModuleInit {
     selfListen: boolean,
   ): Promise<void> {
     const channelMessage = zcaMessageToChannelMessage(message, selfListen);
-    if (!channelMessage || this.seen.has(channelMessage.externalMessageId)) return;
+    if (!channelMessage) return;
+    this.announceGroup(channelMessage.externalChatId, channelMessage.chatType);
+    if (this.seen.has(channelMessage.externalMessageId)) return;
     this.remember(channelMessage.externalMessageId);
     try {
       const view = await this.pipeline.process(channelMessage, botName);
@@ -58,6 +62,18 @@ export class ZcaListener implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Loi xu ly tin: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * In ID nhom (1 lan/nhom) de lay threadId THAT cua zca -> dan vao seed.ts groups[].chatId
+   * (map nhom -> dai ly la theo ID nay, KHONG theo TEN nhom).
+   */
+  private announceGroup(chatId: string, chatType: string): void {
+    if (this.announced.has(chatId)) return;
+    this.announced.add(chatId);
+    this.logger.log(
+      `📌 Nhom (${chatType}) chatId="${chatId}" — copy ID nay vao seed.ts groups[] de map dai ly.`,
+    );
   }
 
   /** Nho id da xu ly (chong trung), chan phinh: qua tran thi bo id cu nhat (Set giu thu tu chen). */
