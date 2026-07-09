@@ -42,4 +42,40 @@ describe('loadEnv', () => {
     expect(env.BOT_MODE).toBe('off');
     expect(env.BOT_NAME).toContain('Bot');
   });
+
+  it('mac dinh CHANNEL_MODE=mock (offline, khong can dang nhap Zalo)', () => {
+    const env = loadEnv({});
+
+    expect(env.CHANNEL_MODE).toBe('mock');
+    expect(env.ZALO_SELF_LISTEN).toBe('off');
+    expect(env.ZALO_CRED_PATH).toContain('zalo-cred.json');
+  });
+
+  it('nhan CHANNEL_MODE=zca cho kenh thu vien ngoai', () => {
+    const env = loadEnv({ CHANNEL_MODE: 'zca' });
+
+    expect(env.CHANNEL_MODE).toBe('zca');
+  });
+
+  it('tuong thich nguoc: BOT_MODE=on (chua dat CHANNEL_MODE) -> suy ra kenh bot', () => {
+    const env = loadEnv({ BOT_MODE: 'on' });
+
+    expect(env.CHANNEL_MODE).toBe('bot');
+  });
+
+  it('CHANNEL_MODE dat tuong minh thang BOT_MODE (khong bi suy ra de)', () => {
+    const env = loadEnv({ BOT_MODE: 'on', CHANNEL_MODE: 'zca' });
+
+    expect(env.CHANNEL_MODE).toBe('zca');
+  });
+
+  it('CHANNEL_MODE=mock tuong minh + BOT_MODE=on -> GIU mock (khong bi suy ra bot)', () => {
+    const env = loadEnv({ BOT_MODE: 'on', CHANNEL_MODE: 'mock' });
+
+    expect(env.CHANNEL_MODE).toBe('mock');
+  });
+
+  it('nem loi khi CHANNEL_MODE khong hop le', () => {
+    expect(() => loadEnv({ CHANNEL_MODE: 'userbot' })).toThrowError(EnvValidationError);
+  });
 });

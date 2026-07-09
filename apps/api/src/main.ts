@@ -25,4 +25,4 @@ app.enableCors({ origin: env.CORS_ORIGIN, credentials: true });
 app.enableShutdownHooks();
 await app.listen(env.PORT);
 logger.log(`API dang chay tai http://localhost:${env.PORT} (${env.NODE_ENV})`);
-logger.log(`Parser=${env.PARSER_MODE} · Bot=${env.BOT_MODE} · CORS=${env.CORS_ORIGIN}`);
+logger.log(`Parser=${env.PARSER_MODE} · Kenh=${env.CHANNEL_MODE} · CORS=${env.CORS_ORIGIN}`);

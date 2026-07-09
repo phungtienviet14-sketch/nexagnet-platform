@@ -57,6 +57,7 @@ export class DemoController {
     const env = loadEnv();
     return {
       botMode: env.BOT_MODE,
+      channelMode: env.CHANNEL_MODE,
       parserMode: env.PARSER_MODE,
       botName: env.BOT_NAME,
       streamMode: env.STREAM_MODE,

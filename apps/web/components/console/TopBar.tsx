@@ -21,6 +21,18 @@ const PARSER_LABEL: Record<DemoConfig['parserMode'], string> = {
   mock: 'Mock (offline)',
 };
 
+const CHANNEL_LABEL: Record<DemoConfig['channelMode'], string> = {
+  mock: 'Mock (offline)',
+  bot: 'Bot Zalo',
+  zca: 'Zalo Web cá nhân',
+};
+
+const CHANNEL_TITLE: Record<DemoConfig['channelMode'], string> = {
+  mock: 'Không gửi/đọc Zalo — demo qua ô Bơm tin thử',
+  bot: 'Zalo Bot Platform (chính thức) — chỉ nhận tin @mention bot',
+  zca: 'zca-js: đăng nhập tài khoản cá nhân, đọc MỌI tin trong nhóm (không cần tag). Dùng tài khoản phụ.',
+};
+
 function toggleTheme() {
   const root = document.documentElement;
   const cur = root.getAttribute('data-theme');
@@ -39,7 +51,7 @@ export function TopBar({
   streaming,
   connected,
 }: Props) {
-  const botOn = config?.botMode === 'on';
+  const channelMode = config?.channelMode ?? 'mock';
   const autoSendOn = config?.autoSend === 'on';
   const liveOn = streaming && connected;
   return (
@@ -54,9 +66,9 @@ export function TopBar({
           <span className="dot" />
           {streaming ? (connected ? 'LIVE' : 'kết nối…') : 'Polling'}
         </span>
-        <span className={`sbadge ${botOn ? '' : 'off'}`}>
+        <span className={`sbadge ${channelMode !== 'mock' ? '' : 'off'}`} title={CHANNEL_TITLE[channelMode]}>
           <span className="dot" />
-          Bot Zalo: {botOn ? 'ON' : 'OFF'}
+          Kênh: {CHANNEL_LABEL[channelMode]}
         </span>
         <span
           className={`sbadge ${autoSendOn ? 'autosend' : 'off'}`}

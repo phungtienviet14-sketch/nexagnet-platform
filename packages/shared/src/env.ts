@@ -20,8 +20,23 @@ export const envSchema = z.object({
   ZALO_BOT_WEBHOOK_SECRET: z.string().optional(),
   // Che do parser: mock (tat dinh) | claude (Anthropic) | deepseek (DeepSeek, tuong thich OpenAI).
   PARSER_MODE: z.enum(['mock', 'claude', 'deepseek']).default('mock'),
-  // Bat/tat worker doc tin Zalo Bot. Mac dinh off de app boot khong can token.
+  // KENH ZALO — nguon su that DUY NHAT chon kenh doc/gui tin:
+  //   mock  = offline (demo qua /demo/simulate) — mac dinh, khong can dang nhap Zalo.
+  //   bot   = Zalo Bot Platform chinh thuc (can ZALO_BOT_TOKEN) — CHI nhan tin @mention.
+  //   zca   = thu vien ngoai zca-js (userbot tai khoan ca nhan) — doc MOI tin nhom, khong can tag.
+  // Luu y: zca vi pham ToS Zalo, co the bi khoa tai khoan -> dung TAI KHOAN PHU + can van ban
+  // chap nhan rui ro cua khach (xem CLAUDE.md muc "Kenh Zalo").
+  CHANNEL_MODE: z.enum(['mock', 'bot', 'zca']).default('mock'),
+  // Bat/tat worker doc tin Zalo Bot (Bot Platform). GIU cho tuong thich nguoc: neu CHANNEL_MODE
+  // khong dat nhung BOT_MODE=on thi loadEnv suy ra CHANNEL_MODE='bot'. Mac dinh off.
   BOT_MODE: z.enum(['on', 'off']).default('off'),
+  // Duong dan file luu PHIEN dang nhap zca-js (cookie + imei + userAgent) sau khi quet QR lan dau,
+  // de cac lan sau tu dang nhap lai khong can quet. Cred = session token -> bao mat nhu secret,
+  // KHONG commit (da gitignore thu muc secrets/).
+  ZALO_CRED_PATH: z.string().default('./secrets/zalo-cred.json'),
+  // Nghe ca tin do CHINH tai khoan zca gui (message.isSelf). Mac dinh off de tranh vong lap
+  // (bot gui xac nhan -> lai doc chinh no) + giam nhieu.
+  ZALO_SELF_LISTEN: z.enum(['on', 'off']).default('off'),
   // Auto-ack: bot tu nhan "da ghi nhan" khi intent=Khac (LLM khong hieu). Mac dinh off
   // (GD1: AI khong tu tra loi nhom) — chi bat khi khach dong y cho bot nhan tin.
   AUTO_ACK: z.enum(['on', 'off']).default('off'),
@@ -59,5 +74,10 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     );
     throw new EnvValidationError(issues);
   }
-  return result.data;
+  const data = result.data;
+  // Tuong thich nguoc: cau hinh cu chi co BOT_MODE=on (chua biet CHANNEL_MODE) -> coi la kenh 'bot'.
+  if (source.CHANNEL_MODE === undefined && data.BOT_MODE === 'on' && data.CHANNEL_MODE === 'mock') {
+    return { ...data, CHANNEL_MODE: 'bot' };
+  }
+  return data;
 }

@@ -8,7 +8,13 @@
     "sourceMap": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      // zca-js root index.d.ts dung `export * from "./dist"` (khong duoi file) — NodeNext khong
+      // resolve directory import. Tro thang toi types day du o dist. Runtime van dung exports map.
+      "zca-js": ["./node_modules/zca-js/dist/index.d.ts"]
+    }
   },
   "include": ["src"]
 }

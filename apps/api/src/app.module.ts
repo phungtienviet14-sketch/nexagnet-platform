@@ -4,9 +4,11 @@ import { AgentOrchestrator } from './agents/agent-orchestrator.service.js';
 import { BroadcastController } from './broadcast/broadcast.controller.js';
 import { BroadcastService } from './broadcast/broadcast.service.js';
 import { channelProvider } from './channels/channel.provider.js';
+import { ZaloUserClient } from './channels/zalo-user.client.js';
 import { DemoController } from './demo/demo.controller.js';
 import { HealthController } from './health/health.controller.js';
 import { BotPoller } from './ingest/bot-poller.js';
+import { ZcaListener } from './ingest/zca-listener.js';
 import { KiotVietAdapter, KiotVietMockAdapter } from './kiotviet/kiotviet.adapter.js';
 import { KiotVietController } from './kiotviet/kiotviet.controller.js';
 import { KnowledgeController } from './knowledge/knowledge.controller.js';
@@ -35,12 +37,14 @@ import { StreamController } from './stream/stream.controller.js';
     { provide: OrdersRepository, useClass: InMemoryOrdersRepository },
     { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
     parserProvider,
+    ZaloUserClient,
     channelProvider,
     AgentOrchestrator,
     PipelineService,
     OrdersService,
     BroadcastService,
     BotPoller,
+    ZcaListener,
   ],
 })
 export class AppModule {}

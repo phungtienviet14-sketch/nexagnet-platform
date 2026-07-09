@@ -11,6 +11,8 @@ out/
 .env
 .env.*
 !.env.example
+# Phien dang nhap zca-js (cookie/imei/userAgent) + ma QR — la session token, KHONG commit
+secrets/
 
 # Logs
 *.log

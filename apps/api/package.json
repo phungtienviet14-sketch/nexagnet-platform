@@ -18,7 +18,8 @@
     "@ultty/shared": "workspace:*",
     "dotenv": "^16.4.5",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zca-js": "^2.1.2"
   },
   "devDependencies": {
     "@swc-node/register": "^1.10.9",

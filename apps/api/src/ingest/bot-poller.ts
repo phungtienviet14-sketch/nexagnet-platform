@@ -58,8 +58,8 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     const env = loadEnv();
-    if (env.BOT_MODE !== 'on' || !env.ZALO_BOT_TOKEN) {
-      this.logger.log('BOT_MODE=off -> khong doc Zalo (dung /demo/simulate de demo).');
+    if (env.CHANNEL_MODE !== 'bot' || !env.ZALO_BOT_TOKEN) {
+      this.logger.log('CHANNEL_MODE != bot (hoac thieu token) -> BotPoller nghi (dung /demo/simulate hoac kenh zca).');
       return;
     }
     this.running = true;
