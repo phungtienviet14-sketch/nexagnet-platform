@@ -1,3 +1,6 @@
+> ⚠️ **LỖI THỜI (09/07/2026) — DÙNG [kich-ban-demo-toan-he-thong.md](kich-ban-demo-toan-he-thong.md) THAY THẾ.**
+> Bản này còn khung "Zalo Bot Platform / phải tag bot" + dữ liệu bịa (Ghế Felix 1.150k, robot, máy lọc nước). Hệ hiện tại: kênh **zca đọc mọi tin KHÔNG cần tag** + **dữ liệu thật** (Felix 1.250.000đ). Giữ lại để tham khảo phần "vì sao không dùng OA/userbot lậu".
+
 # KỊCH BẢN THUYẾT TRÌNH DEMO — Ultty AI
 
 > Bản đọc-được-ngay khi đứng trước mọi người. **Trọng tâm: (1) VÌ SAO chọn Zalo Bot, (2) LUỒNG xử lý đơn hàng từ đầu đến cuối.**

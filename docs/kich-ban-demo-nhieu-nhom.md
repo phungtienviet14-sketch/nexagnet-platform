@@ -1,3 +1,6 @@
+> ⚠️ **LỖI THỜI (09/07/2026) — phần đa nhóm đã gộp vào [kich-ban-demo-toan-he-thong.md](kich-ban-demo-toan-he-thong.md) §4.**
+> Bản này còn khung "phải tag bot" + Felix 1.150k. Hệ hiện tại: zca đọc mọi tin không cần tag, Felix 1.250.000đ.
+
 # KỊCH BẢN DEMO — BOT CHẠY NHIỀU NHÓM ZALO (Ultty AI)
 
 > Phần bổ sung cho [kich-ban-demo-thuyet-trinh.md](kich-ban-demo-thuyet-trinh.md).
