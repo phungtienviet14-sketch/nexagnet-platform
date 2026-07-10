@@ -196,3 +196,37 @@ flowchart LR
 - Tích hợp Base API, Zalo OA/ZNS, Messenger/web widget — vẫn thuộc GĐ2 gốc của NetViet, không lặp lại ở đây.
 - PWA mobile 5 tab — quyết định treo #5, độc lập với 6 tính năng này.
 - AI tự gửi tin không cần duyệt (`AUTO_SEND=on`) — chỉ bật khi có văn bản đồng ý (quyết định treo #7); mọi tính năng trên thiết kế để chạy được cả hai chế độ.
+
+---
+
+## 7. Thư viện & dịch vụ đã chốt (search-first — 10/07/2026, lộ trình Đợt 1→4 đã được duyệt)
+
+> Quy trình: rà dep sẵn có trong repo → npm registry (`npm view`: version/license/nhịp bảo trì) → agent research web (QR/webhook/vision/KiotViet, có nguồn). Nguyên tắc: **dùng đồ sẵn có trước · dep mới phải nhỏ-MIT-còn bảo trì · KHÔNG thêm hạ tầng khi chưa cần.**
+
+### 7.1 Đã có sẵn trong repo — dùng lại, không cài thêm
+| Dep sẵn có | Dùng cho |
+|---|---|
+| `@anthropic-ai/sdk` ^0.68 (api) | F4 vision — mọi model Claude hiện hành có `image_input`; rẻ nhất = **Haiku 4.5** ≈ $0.0013/ảnh 1000×1000 (~34đ) |
+| `zod` (api+shared) | Validate webhook SePay, payload QR, mọi input mới |
+| `@tanstack/react-query` (web) | F3 dashboard data layer |
+| `rxjs` + SSE có sẵn | F3 số liệu sống · F6a chuông cảnh báo console |
+| Prisma 6 | Bảng mới: `payments`, `audit_logs`, ghi `kpi_events` |
+
+### 7.2 Cài mới theo tính năng (quyết định Adopt/Build)
+| Cho | Gói / dịch vụ | Căn cứ |
+|---|---|---|
+| F2 sinh QR | **`vietnam-qr-pay`** 1.5.0 + **`qrcode`** 1.5.4 (đều MIT) | Payload EMVCo/Napas **offline** duy nhất đáng tin: 165★, ~11k dl/tháng, 100% TS, zero-dep, có decode để test round-trip (`QRPay.initVietQR({bankBin, bankNumber, amount, purpose})`). **LOẠI `vietqr`**: chết từ 02/2022 + là wrapper gọi API vietqr.io online |
+| F2 biết tiền về | **SePay** (dịch vụ webhook — phương án (a) của D9) | Payload có `content` (memo) + `referenceCode` + `transferAmount` → khớp đơn tất định; webhook ký HMAC-SHA256, retry Fibonacci; **free 50 giao dịch/tháng đủ pilot**, gói STARTUP 120k/tháng, trả THEO THÁNG (Casso ép billing năm); hỗ trợ tài khoản cá nhân lẫn DN tùy bank. payOS (0đ) = phương án thay thế nếu đổi sang mô hình cổng thanh toán. ⚠️ vẫn chờ **D9** + bổ sung thỏa thuận xử lý dữ liệu (bên thứ 3 đọc lịch sử giao dịch — NĐ13/2023) |
+| F1 diff CŨ↔MỚI | **`microdiff`** 1.5.0 | Zero-dep, nhỏ; state machine mở rộng (`amended`/`cancelled`) là code thuần, không cần lib |
+| F3 biểu đồ | **`recharts`** 3.x | Chuẩn React, active (07/2026); phần ghi `kpi_events` = Prisma thuần |
+| F4 tiền xử lý ảnh | **`sharp`** 0.35 (Apache-2.0) | Resize/nén ảnh Zalo trước khi gửi Claude (trần 10MB/ảnh + tiết kiệm token); tải ảnh về = `fetch` + `fs` thuần, không lib |
+| F5 lịch quét nợ | **`@nestjs/schedule`** 6.x | Cron hằng ngày KHÔNG cần Redis. **Hoãn BullMQ** (dù đã ghi trong stack): thêm cả Redis ops chỉ cho 1 cron job là YAGNI — chỉ dựng khi pipeline thật sự cần queue |
+| F5 tính hạn nợ | **`date-fns`** 4.x | Hạn 30/45/60 ngày, hàm thuần tree-shakeable, TZ qua `@date-fns/tz` |
+| F5 + Đợt 0 Excel | **`exceljs`** 4.4.0 | Import số dư đầu kỳ + A4 + xuất bảng đối soát (đã chốt từ trước — tránh `xlsx`/`node-xlsx` vì CVE) |
+| F6 | *(không dep mới)* | Luật tất định TS thuần + zca/SSE sẵn có; fuzzy-match (`fastest-levenshtein`) chỉ thêm khi thật sự cần |
+| Đợt 0 KiotViet API | **Tự viết client mỏng** sau `KiotVietAdapter` sẵn có | KHÔNG có client chính thức. SDK cộng đồng `kiotviet-client-sdk` 0.4.0 (13★, active 06/2026) chỉ dùng **tham khảo**, không làm dep (0.x, adoption thấp). Auth OAuth2 client-credentials, token 1h tại `id.kiotviet.vn/connect/token`, base `https://public.kiotapi.com`, header `Retailer`; API chỉ bật ở gói KiotViet có tính năng API (câu hỏi mở #2) |
+| Đợt 0 auth (ứng viên) | `@nestjs/passport` 11 + `argon2` 0.44 | Đã kiểm registry (đều active); chốt phương án khi làm increment auth |
+
+### 7.3 Phát hiện quan trọng ngoài lề (từ đợt nghiên cứu)
+- ⚠️ **DeepSeek khai tử `deepseek-chat`/`deepseek-reasoner` ngày 24/07/2026**, thay bằng `deepseek-v4-flash`/`deepseek-v4-pro` (vẫn text-only) — **demo parser phải đổi model name trước ngày đó**, nếu không pipeline demo chết.
+- DeepSeek API xác nhận chính thức **không nhận ảnh** ở mọi biến thể → F4 bắt buộc đi đường Claude, đúng thiết kế hiện tại.
