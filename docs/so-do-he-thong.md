@@ -2,6 +2,7 @@
 
 > Bộ sơ đồ minh hoạ cho [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md) (kỹ thuật) và [nghiep-vu.md](nghiep-vu.md) (nghiệp vụ). Xem trên GitHub hoặc VS Code (extension Markdown Preview Mermaid).
 > **Cập nhật 09/07/2026:** kênh đọc chính GĐ1 là **zca-js** (đọc mọi tin nhóm, không cần @mention); chuyển kênh bằng biến `CHANNEL_MODE=mock|bot|zca`. Lưu trữ demo là **in-memory** (production dùng Postgres).
+> **Cập nhật 10/07/2026:** đối chiếu toàn bộ sơ đồ với code — sửa ERD §6 về **as-built 12 model** (tách riêng phần "đích GĐ sau"); ghi chú `kpi_events` (model có, **chưa ghi** — Phase 5) và "lưu mọi tin vào DB" (**đang hoàn thiện** — Phase 3 còn lại).
 
 ---
 
@@ -59,7 +60,7 @@ flowchart TB
     subgraph L2["Tầng 2 — Tiếp nhận (ingest/)"]
         LIS["ZcaListener (nghe mọi tin nhóm)<br/>/ BotPoller (@mention)"]
         IDENT["Gán danh tính:<br/>nhóm → đại lý/CTV (theo chatId)"]
-        SAVE["Lưu messages NGAY khi nhận<br/>(production; demo = in-memory)"]
+        SAVE["Lưu messages ngay khi nhận<br/>(schema Prisma sẵn sàng — cơ chế lưu<br/>đang hoàn thiện: Phase 3 còn lại)"]
     end
 
     subgraph L3["Tầng 3 — Lõi AI (pipeline/ + agents/)"]
@@ -131,8 +132,8 @@ sequenceDiagram
     S->>S: Kiểm tra (field mờ được tô vàng)
     S->>ST: Duyệt 1 chạm (hoặc sửa → lưu parse_feedback)
     S->>DL: Gửi format xác nhận vào đúng nhóm Zalo
-    S->>KV: GĐ1: xuất Excel / mock; GĐ2: API tự đẩy
-    ST->>ST: Ghi kpi_events (thời gian chốt, có sửa hay không)
+    S->>KV: GĐ1: xuất Excel / mock · GĐ2: API tự đẩy
+    ST->>ST: Ghi kpi_events — Phase 5 (model đã có, CHƯA ghi)
 ```
 
 ---
@@ -191,49 +192,50 @@ flowchart TD
 
 ---
 
-## 6. Dữ liệu chính (ERD rút gọn — schema Postgres đích)
+## 6. Dữ liệu chính (ERD as-built — Prisma 12 model, Phase 3)
 
 ```mermaid
 erDiagram
     DEALERS ||--o{ GROUPS : "có nhóm"
-    GROUPS ||--o{ CONVERSATIONS : ""
-    CONVERSATIONS ||--o{ MESSAGES : ""
-    MESSAGES ||--o| ORDERS : "AI trích xuất ra"
+    GROUPS ||--o{ MESSAGES : ""
+    MESSAGES ||--o{ ORDERS : "AI trích xuất ra"
     ORDERS ||--|{ ORDER_ITEMS : ""
     PRODUCTS ||--o{ ORDER_ITEMS : ""
-    PRODUCTS ||--o{ PRICE_TIERS : "giá theo cấp"
+    PRODUCTS ||--o| PRICES : "1 bảng giá/SKU"
+    PRODUCTS ||--o{ DEALER_PRICE_OVERRIDES : "deal riêng"
+    DEALERS ||--o{ DEALER_PRICE_OVERRIDES : ""
     DEALERS ||--o{ ORDERS : "đặt"
     ORDERS ||--o{ PARSE_FEEDBACK : "Sale sửa → học"
-    USERS ||--o{ ORDERS : "duyệt"
-    MESSAGES ||--o{ WARRANTY_TICKETS : "khiếu nại"
 
     DEALERS {
         string name
-        string tier "đại lý / CTV"
-        string default_policy "công nợ 30-45 / ký gửi / trả ngay / COD"
+        string tier "dai_ly | ctv"
+        string default_policy "cong_no_30 | cong_no_45 | ky_gui | thanh_toan_ngay | cod"
     }
     GROUPS {
-        string platform "zalo (GĐ2: messenger...)"
-        string external_id "chatId — map nhóm theo ID"
+        string platform "zalo"
+        string chat_id "map nhóm theo ID, KHÔNG theo tên"
+        string status "pending | mapped | ignored (hộp thư nhóm chưa map)"
     }
     MESSAGES {
         string source "zca_listener | bot | copilot"
-        string raw_text
+        string text
+        string image_url "ảnh kèm tin (nếu có)"
     }
     ORDERS {
         string status "draft→pending_review→approved→sent→synced"
         string order_type "TH1 | TH2"
-        json field_confidence
-        int total_amount
+        json confidence
+        int grand_total
     }
     PRODUCTS {
         string sku "19 SKU"
         string name
     }
-    PRICE_TIERS {
-        string tier
-        int wholesale "Đơn giá CTV"
-        date valid_month "bảng giá theo tháng"
+    PRICES {
+        int wholesale "Đơn giá CTV = giá tính đơn"
+        int min_retail_price "sàn đại lý bán ra"
+        string valid_month "bảng giá theo tháng"
     }
     PARSE_FEEDBACK {
         json ai_output
@@ -241,8 +243,8 @@ erDiagram
     }
 ```
 
-Ngoài ra còn: `glossary_entries` (TN→Thái Nguyên...), `dealer_price_overrides` (deal riêng), `policies`, `kpi_events`, `audit_logs`, `users`.
-> **Lưu ý:** Phase 3 **đã hiện thực** schema này trên Postgres (Prisma 6, migration `init` + `prisma/seed.ts`). Mặc định app vẫn chạy **in-memory** (`PERSISTENCE=memory` → demo/CI không cần DB); đặt `PERSISTENCE=prisma` để dùng Postgres. Sửa nguồn sự thật **động** qua `/admin` (AdminJS) hoặc **MCP tool**.
+Bảng độc lập (chưa nối quan hệ): `glossary_entries` (TN→Thái Nguyên...) · `users` (Phase 5 auth) · `kpi_events` (model đã có — **chưa ghi**, Phase 5).
+> **As-built vs đích:** schema thật = [apps/api/prisma/schema.prisma](../apps/api/prisma/schema.prisma) — đúng 12 model như trên (1 `Price`/SKU chứa 4 mức giá, không phải bảng giá theo cấp). Các bảng thuộc **đích GĐ sau, CHƯA có**: `conversations` · `warranty_tickets` (phiếu bảo hành) · `policies` (điều khoản dạng bảng — hiện là enum trên dealer + rules-config) · `prompt_rules` · `audit_logs`. Mặc định app chạy **in-memory** (`PERSISTENCE=memory` → demo/CI không cần DB); đặt `PERSISTENCE=prisma` để dùng Postgres. Sửa nguồn sự thật **động** qua `/admin` (AdminJS) hoặc **MCP tool**.
 
 ---
 

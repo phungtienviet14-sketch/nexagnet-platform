@@ -2,7 +2,7 @@
 
 # Plan: Hệ thống AI Agent U Ultty (bản hợp nhất NetViet + Claude Code)
 
-**Nguồn thiết kế**: [docs/thiet-ke-ky-thuat-hop-nhat.md](../../docs/thiet-ke-ky-thuat-hop-nhat.md) (quyết định kỹ thuật) · [Thiet_ke_AI_Agent_U_Ultty.md](../../Thiet_ke_AI_Agent_U_Ultty.md) (nghiệp vụ, giữ nguyên) · [docs/bao-cao-tich-hop-zalo.md](../../docs/bao-cao-tich-hop-zalo.md) (căn cứ kênh Zalo)
+**Nguồn thiết kế**: [docs/thiet-ke-ky-thuat-hop-nhat.md](../../docs/thiet-ke-ky-thuat-hop-nhat.md) (quyết định kỹ thuật) · [Thiet_ke_AI_Agent_U_Ultty.md](../../Thiet_ke_AI_Agent_U_Ultty.md) (nghiệp vụ, giữ nguyên) · ~~bao-cao-tich-hop-zalo.md~~ (căn cứ kênh Zalo — đã xóa 10/07/2026, xem thiet-ke §3 / git history)
 **Phạm vi plan này**: Giai đoạn 1 (Co-pilot MVP) + PoC. GĐ2-3 chỉ phác khung, lập plan riêng khi GĐ1 xong.
 **Complexity**: Large (GĐ1 ≈ 3-4 tuần dev)
 

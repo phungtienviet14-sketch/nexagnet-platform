@@ -1,0 +1,247 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sơ đồ hệ thống — bản dễ hiểu</title>
+<style>
+@page { size: A4; margin: 15mm 14mm 16mm 14mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: 'Segoe UI','Arial',sans-serif; font-size: 10.5pt; line-height: 1.55; color: #1a2332; margin: 0; }
+.cover { border: 2px solid #0e3a5f; border-radius: 10px; padding: 20px 26px; margin-bottom: 20px; background: #eef4fa; }
+.cover .brand { font-size: 9pt; letter-spacing: 2px; color: #0e3a5f; font-weight: 600; }
+.cover h1 { margin: 6px 0 4px; font-size: 19pt; color: #0e3a5f; line-height: 1.25; }
+.cover .sub { font-size: 11pt; color: #33475b; margin-bottom: 10px; }
+.meta { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+.meta td { padding: 2px 8px 2px 0; color: #33475b; }
+.meta td:first-child { font-weight: 600; width: 150px; color: #0e3a5f; }
+h2 { font-size: 13.5pt; color: #0e3a5f; border-bottom: 2px solid #0e3a5f; padding-bottom: 3px; margin: 22px 0 8px; break-after: avoid; }
+p { margin: 5px 0; }
+.box { border-left: 4px solid #1c7ed6; background: #eef6fd; padding: 8px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; break-inside: avoid; }
+.warn { border-left-color: #e8590c; background: #fff4e6; }
+.ok { border-left-color: #2b8a3e; background: #ebfbee; }
+.diagram { break-inside: avoid; margin: 8px 0 2px; text-align: center; }
+.diagram pre.mermaid { margin: 0; }
+.mermaid svg { max-width: 100%; max-height: 243mm; }
+.caption { font-size: 9pt; color: #5a6b7c; text-align: center; margin: 2px 0 12px; font-style: italic; }
+.pagebreak { break-before: page; }
+.footer-note { margin-top: 24px; padding-top: 7px; border-top: 1px solid #c9d6e2; font-size: 8.5pt; color: #6b7c8d; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="brand">NETVIET — GIẢI PHÁP CHUYỂN ĐỔI SỐ &amp; AI</div>
+  <h1>SƠ ĐỒ HỆ THỐNG — BẢN DỄ HIỂU</h1>
+  <div class="sub">7 sơ đồ: bức tranh tổng thể · 3 lớp an toàn · hành trình một đơn hàng · trạng thái đơn · 7 loại tin nhắn · cách nhận tin Zalo · lộ trình 3 giai đoạn</div>
+  <table class="meta">
+    <tr><td>Khách hàng</td><td>Công ty Cổ Phần U Ultty Việt Nam</td></tr>
+    <tr><td>Bộ tài liệu</td><td>Quyển 02/03 — Sơ đồ hệ thống (kèm Quyển 01: Nghiệp vụ hiện tại · Quyển 03: Kế hoạch dài hạn)</td></tr>
+    <tr><td>Phiên bản / Ngày</td><td>v2.0 — 10/07/2026 (nội dung đã đối chiếu với hệ thống thực tế)</td></tr>
+    <tr><td>Tính chất</td><td>Trình bày dễ hiểu, dành cho lãnh đạo. Tài liệu nội bộ</td></tr>
+  </table>
+</div>
+
+<div class="box">Mỗi sơ đồ có phần "đọc thế nào" ngay bên dưới. Bản vẽ kỹ thuật đầy đủ (kiến trúc phần mềm, sơ đồ dữ liệu, luồng xử lý chi tiết) nằm trong hồ sơ kỹ thuật của dự án — quyển này chỉ giữ lại những gì cần cho việc ra quyết định.</div>
+
+<h2>Sơ đồ 1 — Bức tranh tổng thể: ai dùng, hệ thống kết nối những gì</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    DL["👥 Đại lý / Cộng tác viên&lt;br/&gt;(200–300 đối tác)"]
+    GRP["💬 ~200–350 nhóm Zalo"]
+    SALE["🧑‍💼 Sale U Ultty&lt;br/&gt;(người duyệt)"]
+    KT["🧾 Kế toán"]
+
+    subgraph SYS["🤖 Hệ thống AI (NetViet vận hành trọn gói trên nền tảng đám mây)"]
+        CONSOLE["🖥️ Màn hình làm việc của Sale&lt;br/&gt;(xem đơn AI soạn, bấm duyệt)"]
+        API["⚙️ Bộ xử lý trung tâm&lt;br/&gt;(đọc tin, soạn đơn, tính tiền)"]
+    end
+
+    KV["📦 KiotViet&lt;br/&gt;(quản lý bán hàng, tồn kho)"]
+    BASE["🗂️ Base&lt;br/&gt;(giao việc nội bộ, giao vận)"]
+    SHIP["🚚 Ahamove / Viettel Post"]
+
+    DL --&gt;|"nhắn đặt hàng&lt;br/&gt;(viết tắt, không dấu)"| GRP
+    GRP --&gt;|"hệ thống tự đọc tin trong nhóm"| API
+    API --&gt; CONSOLE
+    SALE --&gt;|kiểm tra, duyệt / sửa| CONSOLE
+    CONSOLE --&gt;|"tin xác nhận đơn"| GRP
+    API --&gt;|"chuyển đơn"| KV
+    API --&gt;|"chuyển thông tin giao việc"| BASE
+    BASE --&gt; SHIP
+    KT --&gt;|kiểm tra khi đơn lên hệ thống| KV
+</pre>
+</div>
+<p class="caption"><b>Đọc thế nào:</b> đại lý nhắn tin vào nhóm Zalo y như hiện nay — không phải đổi thói quen. Hệ thống đứng giữa: AI soạn sẵn mọi thứ, nhưng Sale luôn là người bấm duyệt trước khi bất cứ thứ gì được gửi ra ngoài hay chuyển sang KiotViet/Base.</p>
+
+<h2>Sơ đồ 2 — Ba lớp an toàn: AI hiểu, quy tắc tính tiền, con người quyết</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TB
+    L1["<b>LỚP 1 — AI ĐỌC HIỂU</b> (không đụng đến tiền)&lt;br/&gt;Phân loại tin nhắn (7 loại) · dịch viết tắt, thiếu dấu&lt;br/&gt;Bóc tách: sản phẩm, số lượng, nơi giao"]
+    L2["<b>LỚP 2 — BỘ QUY TẮC TÍNH TIỀN</b> (lập trình cố định, không phải AI)&lt;br/&gt;Tra giá đúng bảng giá công ty · tính phí gửi, phí thu hộ, thuế&lt;br/&gt;Áp đúng chính sách của từng đại lý"]
+    L3["<b>LỚP 3 — CON NGƯỜI GIỮ QUYỀN QUYẾT</b>&lt;br/&gt;Sale kiểm tra, sửa nếu cần, duyệt 1 chạm&lt;br/&gt;Đơn rủi ro bắt buộc qua tay người · không có gì tự gửi đi"]
+    KHO["📚 <b>KHO DỮ LIỆU CHUẨN CỦA CÔNG TY</b>&lt;br/&gt;19 sản phẩm · bảng giá theo tháng · chính sách từng đại lý&lt;br/&gt;từ điển viết tắt · danh sách nhóm Zalo → đại lý"]
+    QT["🛠️ Trang quản trị: công ty tự cập nhật giá, đại lý, nhóm...&lt;br/&gt;— có hiệu lực ngay, không cần lập trình lại"]
+    L1 --&gt; L2 --&gt; L3
+    KHO -.-&gt;|"AI chỉ hiểu theo dữ liệu này"| L1
+    KHO -.-&gt;|"mọi con số lấy từ đây"| L2
+    QT -.-&gt; KHO
+    classDef layer fill:#eef4fa,stroke:#0e3a5f,stroke-width:2px;
+    classDef store fill:#fff9db,stroke:#997404,stroke-width:2px;
+    class L1,L2,L3 layer;
+    class KHO,QT store;
+</pre>
+</div>
+<p class="caption"><b>Đọc thế nào:</b> đây là lý do hệ thống không "đoán bừa" — AI chỉ làm việc đọc hiểu; con số nào cũng do quy tắc cố định tính từ kho dữ liệu chuẩn; và con người luôn đứng ở cửa cuối. Kho dữ liệu chuẩn do chính công ty cập nhật được qua trang quản trị.</p>
+
+<div class="pagebreak"></div>
+<h2>Sơ đồ 3 — Hành trình một đơn hàng: từ tin nhắn đến KiotViet</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TB
+    M1["💬 Đại lý nhắn: 'gui 10 ghe felix ve TN cho c, ko lay VAT'"]
+    M2["Hệ thống tự đọc tin trong nhóm, lưu lại ngay"]
+    M3["AI nhận diện: nhóm này của đại lý nào&lt;br/&gt;Hiểu tin: 10 chiếc Ghế Felix, giao Thái Nguyên, không hóa đơn"]
+    M4["Bộ quy tắc tính: giá theo bảng giá công ty&lt;br/&gt;+ phí gửi + chính sách công nợ của đại lý đó"]
+    M5["Kiểm tra chéo: sản phẩm có thật không?&lt;br/&gt;Số lượng × đơn giá có khớp tổng tiền khách nhắn?"]
+    M6{"Tin có rõ ràng không?"}
+    M7["✅ Đơn soạn sẵn hoàn chỉnh&lt;br/&gt;chờ Sale duyệt trên màn hình"]
+    M8["⚠️ Chỗ chưa chắc được tô vàng&lt;br/&gt;Sale sửa lại rồi mới duyệt&lt;br/&gt;(hệ thống ghi nhớ để lần sau hiểu đúng)"]
+    M9["Sale bấm duyệt 1 chạm"]
+    M10["📨 Gửi tin xác nhận vào đúng nhóm Zalo&lt;br/&gt;📦 Chuyển đơn sang KiotViet"]
+    M1 --&gt; M2 --&gt; M3 --&gt; M4 --&gt; M5 --&gt; M6
+    M6 --&gt;|rõ| M7 --&gt; M9
+    M6 --&gt;|mơ hồ| M8 --&gt; M9
+    M9 --&gt; M10
+    classDef human fill:#d1e7dd,stroke:#0f5132,stroke-width:2px;
+    class M7,M8,M9 human;
+</pre>
+</div>
+<p class="caption"><b>Đọc thế nào:</b> toàn bộ phần "đọc – hiểu – tính – soạn" diễn ra tự động trong vài giây. Ô xanh là phần con người: Sale nhìn đơn đã soạn sẵn, sửa nếu cần, bấm duyệt — thay vì tự gõ lại từ đầu như hiện nay.</p>
+
+<h2>Sơ đồ 4 — Một đơn hàng đi qua những trạng thái nào</h2>
+<div class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --&gt; SoanXong: AI soạn xong đơn
+    SoanXong --&gt; ChoDuyet: nội dung rõ ràng, đủ tin cậy
+    SoanXong --&gt; CanSua: có chỗ mơ hồ (sản phẩm lạ, tiền không khớp...)
+    ChoDuyet --&gt; CanSua: hệ thống phát hiện rủi ro / Sale thấy sai
+    ChoDuyet --&gt; DaDuyet: Sale duyệt 1 chạm
+    CanSua --&gt; DaDuyet: Sale sửa xong (hệ thống ghi nhớ chỗ sửa)
+    ChoDuyet --&gt; Loai: không phải đơn thật / trùng
+    CanSua --&gt; Loai
+    DaDuyet --&gt; DaGuiXacNhan: tin xác nhận đã gửi vào nhóm
+    DaGuiXacNhan --&gt; DaLenKiotViet: đơn đã chuyển sang KiotViet
+    DaLenKiotViet --&gt; [*]
+    Loai --&gt; [*]
+
+    SoanXong: AI soạn xong
+    ChoDuyet: Chờ duyệt
+    CanSua: Cần Sale sửa
+    DaDuyet: Đã duyệt
+    DaGuiXacNhan: Đã gửi xác nhận
+    DaLenKiotViet: Đã lên KiotViet
+    Loai: Loại bỏ
+</pre>
+</div>
+<p class="caption"><b>Đọc thế nào:</b> không có đường tắt nào bỏ qua bước duyệt của Sale. Đơn rủi ro (giá trị lớn, nhóm lạ, khiếu nại gay gắt) tự động rẽ vào "Cần Sale sửa" — máy không tự quyết. Mỗi lần Sale sửa đều được ghi nhớ để hệ thống ngày càng chính xác.</p>
+
+<div class="pagebreak"></div>
+<h2>Sơ đồ 5 — Bảy loại tin nhắn và đường đi của từng loại</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    MSG["Tin nhắn mới trong nhóm"] --&gt; INT{"AI phân loại tin&lt;br/&gt;+ nhận diện đại lý"}
+
+    INT --&gt;|Đặt hàng| EX["Bóc tách thành đơn&lt;br/&gt;→ tính tiền → chờ duyệt"]
+    INT --&gt;|Hỏi giá| RAG1["Tra bảng giá công ty&lt;br/&gt;→ soạn sẵn câu trả lời kèm nguồn"]
+    INT --&gt;|Hỏi sản phẩm| RAG2["Tra kho thông tin sản phẩm&lt;br/&gt;→ soạn mô tả"]
+    INT --&gt;|Hỏi công nợ / chính sách| RAG3["Xem chính sách của đại lý đó&lt;br/&gt;→ soạn điều kiện áp dụng"]
+    INT --&gt;|Bảo hành / khiếu nại| WAR["Tạo phiếu, phân nhánh&lt;br/&gt;trong 7 ngày / ngoài 7 ngày / giao thiếu"]
+    INT --&gt;|Hỏi vận chuyển| SHIP2["Soạn câu trả lời cho Sale&lt;br/&gt;(giai đoạn 2: tra được vận đơn)"]
+    INT --&gt;|Khác / không rõ| HUMAN["Chuyển thẳng cho Sale&lt;br/&gt;AI không đoán"]
+
+    EX --&gt; SALE2["Sale duyệt rồi mới gửi"]
+    RAG1 --&gt; SALE2
+    RAG2 --&gt; SALE2
+    RAG3 --&gt; SALE2
+    WAR --&gt; TECH["Bộ phận kỹ thuật quyết định lỗi&lt;br/&gt;(AI không tự phán)"]
+
+    style HUMAN fill:#f8d7da,stroke:#842029
+    style SALE2 fill:#d1e7dd,stroke:#0f5132
+</pre>
+</div>
+<p class="caption"><b>Đọc thế nào:</b> loại tin nào cũng kết thúc ở một trong hai chỗ: Sale duyệt, hoặc bộ phận có thẩm quyền (kỹ thuật với bảo hành). Tin không rõ thì chuyển người — nguyên tắc "không có dữ liệu thì không đoán".</p>
+
+<h2>Sơ đồ 6 — Ba cách nhận tin từ Zalo (kênh chính + hai lớp dự phòng)</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TB
+    subgraph C1["CÁCH 1 — Đọc tự động qua tài khoản Zalo phụ (KÊNH CHÍNH)"]
+        Z1["Lập một tài khoản Zalo riêng, cho vào các nhóm"] --&gt; Z2["Hệ thống đọc được MỌI tin nhắn trong nhóm&lt;br/&gt;— đại lý không phải làm gì khác"]
+        Z2 --&gt; Z3["⚠️ Nằm ngoài quy định Zalo → có thể bị khóa tài khoản&lt;br/&gt;Điều kiện: tài khoản phụ riêng + văn bản chấp nhận rủi ro"]
+    end
+    subgraph C2["CÁCH 2 — Bot chính thức của Zalo (KÊNH PHỤ)"]
+        T1["Hợp lệ, miễn phí — nhưng chỉ nhận được tin&lt;br/&gt;khi đại lý NHẮC TÊN bot trong tin nhắn&lt;br/&gt;(giới hạn của Zalo, đã kiểm chứng, không tắt được)"]
+    end
+    subgraph C3["CÁCH 3 — Sale dán tay (DỰ PHÒNG)"]
+        M1["Sale dán tin nhắn vào hệ thống — AI xử lý y hệt&lt;br/&gt;Luôn hoạt động, không phụ thuộc Zalo"]
+    end
+    C1 -.-&gt;|"kênh chính trục trặc / bị khóa"| C2
+    C1 -.-&gt;|"phương án cuối, luôn sẵn sàng"| C3
+</pre>
+</div>
+<p class="caption"><b>Đọc thế nào:</b> ba cách dùng chung một bộ xử lý — chuyển qua lại chỉ là bật công tắc, dữ liệu không mất. Kênh chính đọc được mọi tin nhưng đi kèm rủi ro về quy định Zalo (cần công ty ký chấp nhận); hai kênh còn lại là lưới an toàn.</p>
+
+<div class="pagebreak"></div>
+<h2>Sơ đồ 7 — Lộ trình 3 giai đoạn và vị trí hiện tại</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    subgraph P0["Chuẩn bị"]
+        A1["Dựng nền hệ thống ✅"]
+        A2["Thử nghiệm 2 kênh Zalo ✅"]
+        A3["Nạp dữ liệu chuẩn:&lt;br/&gt;19 sản phẩm + giá + từ điển ✅"]
+        A4["Chọn AI qua bài đo thật ✅"]
+    end
+
+    subgraph G1["GIAI ĐOẠN 1 — Đọc tự động + Sale duyệt"]
+        B1["AI đọc tin, soạn đơn, tính tiền ✅"]
+        B2["Màn hình duyệt 1 chạm ✅"]
+        B3["Nối KiotViet (bước đầu: file Excel) ⬜"]
+        B4["Chạy thử 1–2 nhóm thật, đo 4 chỉ số ⬜&lt;br/&gt;→ đạt mới mở rộng 200 nhóm"]
+    end
+
+    subgraph G2["GIAI ĐOẠN 2 — Tự động sâu &amp; đa kênh"]
+        C1["Nối thẳng KiotViet + Base"]
+        C2["Kênh Zalo chính thức cho khách lẻ"]
+        C3["Thêm Messenger / website"]
+        C4["Tự đối soát ký gửi, công nợ&lt;br/&gt;+ cân nhắc cho AI tự gửi (có văn bản đồng ý)"]
+    end
+
+    subgraph G3["GIAI ĐOẠN 3 — Tối ưu &amp; chủ động"]
+        D1["Dự báo mùa vụ, cảnh báo tồn kho"]
+        D2["Gợi ý bán thêm, nhắc tái đặt hàng"]
+        D3["Chuyển giao khi công ty có đội công nghệ"]
+    end
+
+    P0 --&gt; G1 --&gt; G2 --&gt; G3
+</pre>
+</div>
+<p class="caption"><b>Đọc thế nào:</b> đang ở <b>cuối Giai đoạn 1</b> — phần lõi (AI đọc, soạn đơn, tính tiền, màn hình duyệt) đã chạy trên dữ liệu và kênh Zalo thật. Còn lại: nối KiotViet và chạy thử có đo đếm trên 1–2 nhóm thật trước khi mở rộng. Kế hoạch mở rộng dài hạn (6 tính năng mới): xem Quyển 03.</p>
+
+<div class="footer-note">
+NetViet — Giải pháp Chuyển đổi số &amp; AI · Quyển 02/03 "Sơ đồ hệ thống — bản dễ hiểu" v2.0 — 10/07/2026 · Khách hàng: Công ty Cổ Phần U Ultty Việt Nam · Tài liệu nội bộ, không chia sẻ cho bên thứ ba. <i>Bản vẽ kỹ thuật đầy đủ (kiến trúc 6 tầng, sơ đồ dữ liệu, luồng chi tiết) nằm trong hồ sơ dự án, thư mục docs/.</i>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose',
+  fontFamily: 'Segoe UI, Arial, sans-serif',
+  flowchart: { htmlLabels: true, useMaxWidth: true } });
+</script>
+</body>
+</html>

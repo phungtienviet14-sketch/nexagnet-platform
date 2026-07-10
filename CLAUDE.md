@@ -23,13 +23,15 @@ Hệ thống tài liệu (đọc theo thứ tự khi cần ngữ cảnh):
 2. `Thiet_ke_AI_Agent_U_Ultty.md` — thiết kế giải pháp NetViet (đề xuất gốc: nghiệp vụ, lộ trình 3 GĐ, KPI — GIỮ NGUYÊN, không sửa file này)
 3. [docs/nghiep-vu.md](docs/nghiep-vu.md) — **NGHIỆP VỤ đối chiếu NGUỒN GỐC** (quy trình đặt hàng thật 9 bước + **2 cổng KSNB**, 4 chính sách + điều khoản PO thật, 7 intent, đội 6 agent) kèm **bảng SAI LỆCH nguồn-gốc ↔ code** (VAT-default, phí COD, cước ship đang *tạm tính*) — **đọc trước khi sửa rules engine**
 4. [docs/thiet-ke-ky-thuat-hop-nhat.md](docs/thiet-ke-ky-thuat-hop-nhat.md) — **thiết kế triển khai hợp nhất, là quyết định cuối cho phần kỹ thuật**
-5. [docs/bao-cao-tich-hop-zalo.md](docs/bao-cao-tich-hop-zalo.md) — căn cứ kênh Zalo (chi phí, chính sách, điều khoản)
-6. [docs/tien-do-va-ke-hoach.md](docs/tien-do-va-ke-hoach.md) — **TIẾN ĐỘ + KẾ HOẠCH CÒN LẠI** (đang ở đâu, còn gì, dữ liệu thiếu, quyết định treo — đọc trước khi làm tiếp). Plan code gốc: [.claude/plans/ultty-ai-agent.plan.md](.claude/plans/ultty-ai-agent.plan.md)
-7. `design/` — 8 ảnh design app của khách (tham khảo UX, PWA 5 tab bám theo)
-8. [docs/so-do-he-thong.md](docs/so-do-he-thong.md) — 8 sơ đồ Mermaid (bối cảnh, 6 tầng, sequence đơn hàng, state machine, intent, ERD, lộ trình, chọn kênh `CHANNEL_MODE` — đã cập nhật zca là kênh chính)
-9. [docs/checklist-du-lieu-khach.md](docs/checklist-du-lieu-khach.md) — checklist dữ liệu cần thu thập từ khách (A: nguồn sự thật, B: tin nhắn test, C: truy cập hệ thống, D: quyết định)
-10. [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md) — template kết quả PoC Bot Platform (chạy theo [tools/poc-zalo-bot/README.md](tools/poc-zalo-bot/README.md)). Eval parser: [docs/poc-parser.md](docs/poc-parser.md)
-11. [docs/kich-ban-demo-toan-he-thong.md](docs/kich-ban-demo-toan-he-thong.md) — **KỊCH BẢN DEMO (tài liệu demo DUY NHẤT)** — chạy trên hệ thật: kênh zca + dữ liệu thật + luật thật. (Các bản cũ thuyet-trinh/nhieu-nhom/6-agent/demo-script đã xoá.)
+5. [docs/tien-do-va-ke-hoach.md](docs/tien-do-va-ke-hoach.md) — **TIẾN ĐỘ + KẾ HOẠCH CÒN LẠI** (đang ở đâu, còn gì, dữ liệu thiếu, quyết định treo — đọc trước khi làm tiếp). Plan code gốc: [.claude/plans/ultty-ai-agent.plan.md](.claude/plans/ultty-ai-agent.plan.md)
+6. `design/` — 8 ảnh design app của khách (tham khảo UX, PWA 5 tab bám theo)
+7. [docs/so-do-he-thong.md](docs/so-do-he-thong.md) — 8 sơ đồ Mermaid **KỸ THUẬT** (bối cảnh, 6 tầng, sequence đơn hàng, state machine, intent, ERD as-built 12 model, lộ trình, chọn kênh `CHANNEL_MODE`) — đã đối chiếu code 10/07/2026
+8. [docs/checklist-du-lieu-khach.md](docs/checklist-du-lieu-khach.md) — checklist dữ liệu cần thu thập từ khách (A: nguồn sự thật, B: tin nhắn test, C: truy cập hệ thống, D: quyết định)
+9. [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md) — kết quả PoC Bot Platform (bằng chứng mention-gating; chạy theo [tools/poc-zalo-bot/README.md](tools/poc-zalo-bot/README.md)). Eval parser: [docs/poc-parser.md](docs/poc-parser.md)
+10. [docs/ke-hoach-dai-han.md](docs/ke-hoach-dai-han.md) — **KẾ HOẠCH DÀI HẠN (định hướng — bản KỸ THUẬT)** — 6 tính năng mới (sửa đơn NL · QR thanh toán · dashboard · ảnh viết tay · công nợ · chống gian lận + gọi nhân viên), lộ trình Đợt 0→4 + cổng quyết định D9-D14; có thể thêm/bớt theo khách
+11. `docs/pdf/` — **3 PDF BÀN GIAO CHO LÃNH ĐẠO** (giọng phi kỹ thuật): 01 nghiệp vụ hiện tại · 02 sơ đồ hệ thống bản dễ hiểu · 03 kế hoạch dài hạn. Nguồn HTML regen: `docs/pdf/src/` (mermaid qua CDN — cần mạng; lệnh regen trong README ở đó). Chi tiết kỹ thuật tương ứng nằm ở các .md mục 3/7/10 — **PDF cho sếp/khách, .md cho dev**
+
+> **Đã xóa 10/07/2026** (yêu cầu user — git history còn): `docs/kich-ban-demo-toan-he-thong.md` (không cần kịch bản demo nữa) · `docs/bao-cao-tich-hop-zalo.md` (nghiên cứu kênh đã hết vai trò — quyết định cuối ở [docs/thiet-ke-ky-thuat-hop-nhat.md](docs/thiet-ke-ky-thuat-hop-nhat.md) §3).
 
 ## Công nghệ (đã chốt)
 

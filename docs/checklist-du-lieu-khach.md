@@ -83,7 +83,7 @@ Trạng thái: ⬜ chưa có · 🟡 đã hỏi, đang chờ · ✅ đã nhận 
 | G1 | Chốt model qua bake-off | Claude/DeepSeek/khác — đo trên B1-B2 (câu hỏi mở #3); hiện demo tạm DeepSeek | 0.4 | ⬜ |
 | G2 | Quyền gửi dữ liệu cá nhân sang LLM | SĐT/địa chỉ (đơn TH2) — mức tối thiểu hóa; tuân thủ NĐ13/2023 + Luật BVDLCN 2025 | GĐ2 | ⬜ |
 
-> **Ghi chú trạng thái code:** demo đã có: đa nhóm (seed nhóm thật), tab KiotViet mock (danh mục + tồn kho + đơn), auto-ack khi intent=Khác (env `AUTO_ACK`, mặc định off). Chi tiết: [kich-ban-demo-toan-he-thong.md](kich-ban-demo-toan-he-thong.md), [tien-do-va-ke-hoach.md](tien-do-va-ke-hoach.md).
+> **Ghi chú trạng thái code:** demo đã có: đa nhóm (seed nhóm thật), tab KiotViet mock (danh mục + tồn kho + đơn), auto-ack khi intent=Khác (env `AUTO_ACK`, mặc định off). Chi tiết: [tien-do-va-ke-hoach.md](tien-do-va-ke-hoach.md).
 
 ---
 

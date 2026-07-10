@@ -3,7 +3,7 @@
 **Phiên bản:** v1.0 — 06/07/2026
 **Vai trò tài liệu:** bản thiết kế TRIỂN KHAI (implementation design), hợp nhất từ 2 nguồn:
 - [Thiet_ke_AI_Agent_U_Ultty.md](../Thiet_ke_AI_Agent_U_Ultty.md) (NetViet, giữ nguyên) — thiết kế giải pháp: kiến trúc nghiệp vụ, lộ trình, KPI, mô hình vận hành
-- [bao-cao-tich-hop-zalo.md](bao-cao-tich-hop-zalo.md) (Claude Code) — căn cứ đã kiểm chứng về kênh Zalo, chi phí, chính sách
+- ~~bao-cao-tich-hop-zalo.md~~ (Claude Code) — căn cứ đã kiểm chứng về kênh Zalo, chi phí, chính sách. **Đã xóa 10/07/2026** (hết vai trò sau khi hợp nhất — nội dung quyết định nằm trọn ở §3 dưới; bản gốc còn trong git history)
 
 Khi hai nguồn khác nhau, tài liệu này là quyết định cuối cho phần kỹ thuật.
 

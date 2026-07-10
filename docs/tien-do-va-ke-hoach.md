@@ -2,6 +2,7 @@
 
 > **Nguồn sự thật DUY NHẤT về "đang ở đâu / còn gì".** Cập nhật 09/07/2026 (sau Phase 3).
 > Nghiệp vụ (đối chiếu nguồn gốc + bảng sai lệch): [nghiep-vu.md](nghiep-vu.md). Thiết kế kỹ thuật: [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md). Kế hoạch Phase 3: [.claude/plans/phase3-nguon-su-that-dong.plan.md](../.claude/plans/phase3-nguon-su-that-dong.plan.md).
+> **Kế hoạch DÀI HẠN (tính năng mới, định hướng — 10/07/2026):** [ke-hoach-dai-han.md](ke-hoach-dai-han.md) — Đợt 1→4 đứng TRÊN nền Phase 3→6 của tài liệu này.
 
 ---
 
@@ -9,7 +10,7 @@
 
 - **Nhánh đang làm:** `feat/phase3-persistence` (tách từ `feat/console-realtime-ui`) — **10 commit Phase 3**.
 - **Nhánh `feat/console-realtime-ui`** (demo + docs) vẫn **CHƯA merge `main`**.
-- **Demo chạy được ngay** trên **dữ liệu thật** (19 SKU/giá/glossary) + **kênh Zalo thật** (zca) + AI thật (DeepSeek). Kịch bản: [kich-ban-demo-toan-he-thong.md](kich-ban-demo-toan-he-thong.md).
+- **Demo chạy được ngay** trên **dữ liệu thật** (19 SKU/giá/glossary) + **kênh Zalo thật** (zca) + AI thật (DeepSeek). *(Kịch bản demo đã xóa 10/07 theo yêu cầu — demo thao tác tự do trên console.)*
 - **Lưu trữ:** mặc định **in-memory** (`PERSISTENCE=memory`) → demo/CI **không cần DB**. Bật Postgres bằng `PERSISTENCE=prisma`.
 - **Nguồn sự thật giờ ĐỘNG:** sửa qua panel `/admin` (AdminJS) **hoặc** qua **MCP tool** (agent) → ghi Postgres + pipeline nạp lại ngay.
 

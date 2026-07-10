@@ -1,0 +1,207 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Kế hoạch dài hạn — 6 tính năng mới</title>
+<style>
+@page { size: A4; margin: 15mm 14mm 16mm 14mm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: 'Segoe UI','Arial',sans-serif; font-size: 10.5pt; line-height: 1.55; color: #1a2332; margin: 0; }
+.cover { border: 2px solid #5f3dc4; border-radius: 10px; padding: 20px 26px; margin-bottom: 20px; background: #f3f0fc; }
+.cover .brand { font-size: 9pt; letter-spacing: 2px; color: #5f3dc4; font-weight: 600; }
+.cover h1 { margin: 6px 0 4px; font-size: 19pt; color: #3b2a8c; line-height: 1.25; }
+.cover .sub { font-size: 11pt; color: #33475b; margin-bottom: 10px; }
+.meta { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+.meta td { padding: 2px 8px 2px 0; color: #33475b; }
+.meta td:first-child { font-weight: 600; width: 150px; color: #3b2a8c; }
+h2 { font-size: 13.5pt; color: #3b2a8c; border-bottom: 2px solid #5f3dc4; padding-bottom: 3px; margin: 22px 0 8px; break-after: avoid; }
+p { margin: 5px 0; }
+table.data { width: 100%; border-collapse: collapse; margin: 7px 0 11px; font-size: 9.5pt; }
+table.data th { background: #3b2a8c; color: #fff; text-align: left; padding: 5px 8px; font-weight: 600; }
+table.data td { border: 1px solid #cfc7ec; padding: 5px 8px; vertical-align: top; }
+table.data tr:nth-child(even) td { background: #f6f4fd; }
+table.data thead { display: table-header-group; }
+table.data tr { break-inside: avoid; }
+.box { border-left: 4px solid #5f3dc4; background: #f3f0fc; padding: 8px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; break-inside: avoid; }
+.warn { border-left-color: #e8590c; background: #fff4e6; }
+.gate { border-left-color: #1971c2; background: #e7f5ff; }
+.diagram { break-inside: avoid; margin: 8px 0 2px; text-align: center; }
+.diagram pre.mermaid { margin: 0; }
+.mermaid svg { max-width: 100%; max-height: 243mm; }
+.caption { font-size: 9pt; color: #5a6b7c; text-align: center; margin: 2px 0 12px; font-style: italic; }
+ul, ol { margin: 5px 0; padding-left: 20px; }
+li { margin: 3px 0; }
+.badge { display: inline-block; font-size: 8.5pt; font-weight: 700; border-radius: 10px; padding: 0 8px; white-space: nowrap; }
+.b-s { background: #d3f9d8; color: #2b8a3e; } .b-m { background: #fff3bf; color: #997404; } .b-l { background: #ffe3e3; color: #c92a2a; }
+.pagebreak { break-before: page; }
+.footer-note { margin-top: 24px; padding-top: 7px; border-top: 1px solid #cfc7ec; font-size: 8.5pt; color: #6b7c8d; }
+.fhead { background: #efeaf9; border: 1px solid #cfc7ec; border-radius: 8px; padding: 8px 12px; margin: 16px 0 8px; break-inside: avoid; break-after: avoid; }
+.fhead .fname { font-size: 12pt; font-weight: 700; color: #3b2a8c; }
+.fhead .ftag { font-size: 9pt; color: #5a6b7c; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="brand">NETVIET — GIẢI PHÁP CHUYỂN ĐỔI SỐ &amp; AI</div>
+  <h1>KẾ HOẠCH DÀI HẠN — 6 TÍNH NĂNG MỚI</h1>
+  <div class="sub">Sửa đơn bằng tin nhắn thường · Mã QR thanh toán &amp; tự biết tiền đã về · Bảng theo dõi tổng quan · Đọc ảnh đơn viết tay · Nhắc &amp; đối soát công nợ · Chống đơn ảo, gian lận + gọi nhân viên</div>
+  <table class="meta">
+    <tr><td>Khách hàng</td><td>Công ty Cổ Phần U Ultty Việt Nam</td></tr>
+    <tr><td>Bộ tài liệu</td><td>Quyển 03/03 — Kế hoạch dài hạn (kèm Quyển 01: Nghiệp vụ hiện tại · Quyển 02: Sơ đồ hệ thống)</td></tr>
+    <tr><td>Phiên bản / Ngày</td><td>v2.0 — 10/07/2026</td></tr>
+    <tr><td>Tính chất</td><td><b>ĐỊNH HƯỚNG TƯƠNG LAI</b> — có thể bổ sung hoặc bỏ bớt tùy quyết định của công ty. Mỗi tính năng chỉ bắt đầu làm phần "chạm thật" khi công ty đã chốt dữ liệu/quyết định cần thiết. Tài liệu nội bộ</td></tr>
+  </table>
+</div>
+
+<h2>1. Tóm tắt cho lãnh đạo</h2>
+<p>Sáu tính năng dưới đây mở rộng hệ thống từ chỗ "đọc tin — soạn đơn — người duyệt" (đã có) sang <b>quản được cả tiền và rủi ro</b>: biết khách đã chuyển tiền chưa, nhắc công nợ đúng hạn, sửa đơn nhanh khi khách đổi ý, đọc được cả đơn viết tay, chặn đơn ảo/gian lận, và luôn có đường "gọi người thật" khi khách cần.</p>
+<ul>
+  <li><b>Cách làm: chia 4 đợt</b>, mỗi đợt 2–3 món, xong và nghiệm thu mới sang đợt sau — không làm dàn trải.</li>
+  <li><b>Ba nguyên tắc cũ giữ nguyên:</b> AI không tự tính tiền, không tự gửi gì khi chưa duyệt, thiếu dữ liệu thì không đoán. Riêng tiền bạc (khớp tiền chuyển khoản, công nợ) do quy tắc cố định xử lý — AI hoàn toàn không tham gia.</li>
+  <li><b>Mỗi tính năng có "cổng vào":</b> danh sách những gì công ty cần cung cấp hoặc quyết trước khi làm (mục 4). Chưa qua cổng — chưa tốn tiền làm.</li>
+  <li><b>Riêng tính năng đọc ảnh viết tay: đo trước, hứa sau</b> — chạy bài kiểm tra trên 20–30 ảnh thật, có con số chính xác rồi công ty mới quyết có triển khai hay không.</li>
+</ul>
+
+<h2>2. Sáu tính năng — nhìn nhanh một bảng</h2>
+<table class="data">
+  <thead><tr><th style="width:24%">Tính năng</th><th style="width:38%">Mang lại gì</th><th style="width:24%">Cần công ty chốt gì trước</th><th>Độ lớn</th></tr></thead>
+  <tbody>
+    <tr><td><b>1. Sửa đơn đã chốt bằng tin nhắn thường</b></td><td>Khách nhắn "đổi 10 thành 15", "hủy đơn sáng nay" — hệ thống tự tìm đúng đơn, đưa bản so sánh cũ/mới cho Sale duyệt</td><td>Đơn ở giai đoạn nào thì còn được sửa/hủy</td><td><span class="badge b-m">VỪA</span></td></tr>
+    <tr><td><b>2. Mã QR thanh toán + tự biết tiền đã về</b></td><td>Duyệt đơn là có mã QR đúng số tiền gửi kèm; tiền vào tài khoản → đơn tự chuyển "đã thanh toán", khỏi soi tài khoản bằng mắt</td><td>Tài khoản nhận tiền + chọn dịch vụ báo giao dịch</td><td><span class="badge b-m">VỪA</span>–<span class="badge b-l">LỚN</span></td></tr>
+    <tr><td><b>3. Bảng theo dõi tổng quan (Dashboard)</b></td><td>Một màn hình: bao nhiêu đơn, AI đúng bao nhiêu %, doanh thu theo đại lý, đơn nào đang tắc</td><td>Chốt danh sách con số muốn xem</td><td><span class="badge b-m">VỪA</span></td></tr>
+    <tr><td><b>4. Đọc ảnh đơn viết tay</b></td><td>Đại lý chụp bảng kê viết tay gửi vào nhóm — hệ thống đọc thành đơn như tin nhắn chữ</td><td>Gửi 20–30 ảnh thật để đo độ chính xác trước + cấp tài khoản AI đọc ảnh</td><td><span class="badge b-l">LỚN</span></td></tr>
+    <tr><td><b>5. Nhắc &amp; đối soát công nợ</b></td><td>Tự lên danh sách đại lý sắp/quá hạn theo đúng điều khoản hợp đồng; soạn sẵn tin nhắc để Sale duyệt gửi; cuối tháng ra bảng đối soát ký gửi</td><td>Ngưỡng công nợ chính thức + cách tính "ngày nhận hàng" + số dư ban đầu</td><td><span class="badge b-l">LỚN</span></td></tr>
+    <tr><td><b>6. Chống đơn ảo, gian lận + gọi nhân viên</b></td><td>Chặn đơn trùng/đơn từ người lạ, cảnh báo bán phá giá sàn, hành vi bất thường; khách nhắn "cho gặp người" là AI im lặng và báo ngay Sale trực</td><td>Kể các vụ việc thật đã gặp + ai trực nhận cảnh báo</td><td><span class="badge b-s">phần gọi người: NHỎ</span> <span class="badge b-m">phần chống gian lận: VỪA</span></td></tr>
+  </tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h2>3. Từng tính năng — chi tiết vừa đủ để ra quyết định</h2>
+
+<div class="fhead"><span class="fname">Tính năng 1 — Sửa/hủy đơn đã chốt bằng tin nhắn thường</span><br>
+<span class="ftag">Chính là bước 4 trong quy trình của công ty: "khách đối chiếu &amp; phản hồi" — nay được tự động hóa</span></div>
+<p><b>Hôm nay:</b> khách đổi ý ("đổi 10 ghế thành 15", "chuyển giao về Ocean Park") → Sale phải tự lục lại đơn, sửa tay trên KiotViet, dễ sót. <b>Sau này:</b> hệ thống tự nhận ra tin nhắn là yêu cầu sửa đơn, tự tìm đúng đơn gần nhất của nhóm đó, tính lại toàn bộ tiền, rồi đưa <b>bản so sánh CŨ ↔ MỚI từng dòng</b> cho Sale duyệt. Duyệt xong: gửi xác nhận vào nhóm + cập nhật KiotViet + lưu vết ai sửa, sửa gì, lúc nào.</p>
+<ul>
+  <li>Nếu có 2 đơn na ná nhau, hệ thống <b>không đoán</b> — bắt Sale chọn đúng đơn.</li>
+  <li>Đơn đã giao đi rồi thì không sửa kiểu này nữa — chuyển sang quy trình hoàn trả hàng như công ty đang có.</li>
+</ul>
+<div class="box gate"><b>Cần chốt trước:</b> đơn ở giai đoạn nào thì còn cho sửa/hủy? Đơn đã đẩy sang KiotViet thì sửa trực tiếp hay tạo bản điều chỉnh?</div>
+
+<div class="fhead"><span class="fname">Tính năng 2 — Mã QR thanh toán &amp; tự biết khách đã chuyển tiền</span><br>
+<span class="ftag">Cho các đơn phải "chuyển khoản trước khi gửi hàng" — hiện Sale kiểm tra tài khoản bằng mắt</span></div>
+<p><b>Cách chạy:</b> Sale duyệt đơn → hệ thống sinh <b>mã QR ngân hàng (chuẩn VietQR)</b> đúng số tiền, kèm mã đơn trong nội dung chuyển khoản, gửi cùng tin xác nhận. Khách quét — chuyển tiền — hệ thống nhận tín hiệu giao dịch từ ngân hàng và <b>tự khớp với đơn</b>: đúng mã + đúng số tiền → đơn chuyển "đã thanh toán", Sale thấy ngay. Trường hợp lệch (quên ghi nội dung, chuyển gộp nhiều đơn) → rơi vào danh sách "chưa khớp" cho kế toán xử lý tay.</p>
+<ul>
+  <li>Việc khớp tiền do quy tắc cố định làm, <b>AI không tham gia vào tiền</b>.</li>
+  <li>Đơn thu hộ (COD) không dùng QR — vẫn thu khi giao như quy trình hiện tại.</li>
+  <li>Để "biết tiền về", cần chọn 1 trong 3: <b>(a)</b> dịch vụ báo giao dịch (Casso/SePay — nhanh, ~100–200 nghìn/tháng, thêm một bên xử lý dữ liệu cần đưa vào hợp đồng); <b>(b)</b> nối thẳng ngân hàng (chính chủ, cần tài khoản doanh nghiệp, thủ tục lâu hơn); <b>(c)</b> kế toán tải sao kê lên định kỳ (không tốn thêm, nhưng không tức thời).</li>
+</ul>
+<div class="box gate"><b>Cần chốt trước:</b> nhận tiền vào tài khoản nào (công ty hay cá nhân — liên quan việc xuất hóa đơn)? Chọn phương án (a)/(b)/(c)? Nếu chọn (a): bổ sung thỏa thuận xử lý dữ liệu.</div>
+
+<div class="fhead"><span class="fname">Tính năng 3 — Bảng theo dõi tổng quan (Dashboard)</span><br>
+<span class="ftag">Đã được cam kết trong thiết kế ban đầu — nay làm thành màn hình hoàn chỉnh</span></div>
+<p>Một màn hình cho người quản lý, số liệu tự động: <b>4 chỉ số cốt lõi</b> (tỷ lệ AI soạn đúng · thời gian chốt đơn · tỷ lệ phải sửa · tỷ lệ chuyển người) + lượng tin/đơn theo ngày, doanh thu theo đại lý và chi nhánh, sản phẩm bán chạy, đơn đang tắc ở khâu nào, nhóm Zalo nào chưa gắn với đại lý. Sau khi có tính năng 2 và 5 sẽ thêm: tiền đã thu/chưa thu, công nợ đến hạn.</p>
+<div class="box gate"><b>Cần chốt trước:</b> danh sách con số lãnh đạo muốn xem (đề xuất bắt đầu gọn với nhóm trên — tránh vẽ 20 biểu đồ không ai dùng).</div>
+
+<div class="fhead"><span class="fname">Tính năng 4 — Đọc ảnh đơn viết tay</span><br>
+<span class="ftag">Dưới 20% đơn hiện đến dưới dạng ảnh chụp bảng kê — hệ thống đã nhận được ảnh, chỉ chưa đọc nội dung</span></div>
+<p><b>Cách chạy:</b> đại lý gửi ảnh vào nhóm → hệ thống lưu ảnh về ngay (ảnh trên Zalo có thời hạn, không lưu là mất) → AI đọc ảnh, bóc ra danh sách hàng — số lượng — nơi giao y như tin nhắn chữ → vì chữ viết tay khó hơn, đơn từ ảnh <b>luôn được soát kỹ hơn</b> trước khi duyệt.</p>
+<div class="box warn"><b>Nguyên tắc "đo trước, hứa sau":</b> độ chính xác với chữ viết tay tiếng Việt là ẩn số. Bước đầu tiên là bài kiểm tra trên 20–30 ảnh thật của công ty, ra con số cụ thể (đọc đúng bao nhiêu %) — rồi công ty quyết có triển khai không. Không cam kết trước khi có số.</div>
+<div class="box gate"><b>Cần chốt trước:</b> gửi 20–30 ảnh đơn viết tay thật kèm đáp án; cấp tài khoản dịch vụ AI đọc được ảnh (AI đang dùng cho bản chạy thử không đọc được ảnh, và ảnh chứa số điện thoại/địa chỉ nên chỉ được gửi tới dịch vụ đã có thỏa thuận bảo mật dữ liệu).</div>
+
+<div class="fhead"><span class="fname">Tính năng 5 — Nhắc &amp; đối soát công nợ đại lý</span><br>
+<span class="ftag">Điều khoản đã có sẵn trong hợp đồng — hiện theo dõi bằng file Excel thủ công</span></div>
+<p><b>Điều khoản thật đang áp dụng:</b> công nợ 30/45 ngày kể từ ngày nhận hàng; chậm trả phạt 1%/ngày; quá 60 ngày ngừng cung cấp; đợt sau phải trả hết đợt trước; ký gửi đối soát cuối tháng, trả trong 7 ngày sau hóa đơn. <b>Hệ thống sẽ làm thay phần theo dõi:</b></p>
+<ul>
+  <li><b>Bước 1 — Nhắc:</b> mỗi ngày tự rà toàn bộ đơn, lên danh sách "sắp đến hạn / quá hạn / chạm mốc 60 ngày (đề nghị ngừng cấp)"; soạn sẵn tin nhắc lịch sự theo mẫu — <b>Sale duyệt rồi mới gửi</b> vào đúng nhóm.</li>
+  <li><b>Bước 2 — Đối soát:</b> kết hợp với dữ liệu chuyển khoản (tính năng 2) để biết đại lý đã trả bao nhiêu còn bao nhiêu; cuối tháng tự ra bảng đối soát ký gửi cho kế toán.</li>
+</ul>
+<p>Nghiệp vụ tiền bạc nên nguyên tắc là <b>đúng trước, nhanh sau</b>: khi chưa có dữ liệu "ngày nhận hàng" chính xác (phải chờ nối với khâu giao vận), tin nhắc sẽ ghi rõ "tạm tính theo ngày lên đơn" — không để con số mập mờ.</p>
+<div class="box gate"><b>Cần chốt trước:</b> ngưỡng công nợ chính thức của từng nhóm đại lý; cách xác định "ngày nhận hàng" trong thời gian đầu; số dư công nợ hiện tại (lấy từ file Excel đang theo dõi); xác nhận có loại "công nợ 7 ngày" riêng không.</div>
+
+<div class="fhead"><span class="fname">Tính năng 6 — Chống đơn ảo, gian lận + gọi nhân viên</span><br>
+<span class="ftag">Nâng cấp "người gác cổng" sẵn có của hệ thống (hiện đã tự chặn đơn từ 20 triệu, nhóm lạ, khiếu nại gay gắt)</span></div>
+<p><b>Gọi nhân viên (làm sớm nhất — nhỏ mà giá trị ngay):</b> khách nhắn "cho gặp người", "gọi sale giúp em" → AI lập tức <b>im lặng trong nhóm đó</b> và báo chuông cho Sale trực (trên màn hình làm việc, có thể kèm tin Zalo riêng). Khách không bao giờ bị kẹt trong vòng "nói chuyện với máy".</p>
+<p><b>Chống đơn ảo/gian lận (theo quy tắc rõ ràng, không phải AI đoán):</b></p>
+<table class="data">
+  <thead><tr><th style="width:26%">Nhóm rủi ro</th><th>Hệ thống chặn/cảnh báo thế nào</th></tr></thead>
+  <tbody>
+    <tr><td>Đơn ảo, đơn trùng</td><td>Tin nhắn gửi lại/chuyển tiếp tạo đơn giống hệt trong ít phút → gộp lại, hỏi xác nhận; người lạ (không thuộc đại lý nào) đặt đơn trong nhóm → chặn lại chờ người xem</td></tr>
+    <tr><td>Gian lận giá</td><td>Đơn ghi giá <b>thấp hơn giá sàn cho phép bán</b> (đã có trong bảng giá) hoặc lệch thỏa thuận riêng → cờ đỏ; sửa đơn sau khi chốt mà làm giảm tiền bất thường → bắt buộc duyệt 2 lớp (đúng vai kiểm soát nội bộ)</td></tr>
+    <tr><td>Hành vi bất thường</td><td>Một nhóm đột nhiên đặt dồn dập; cùng một số điện thoại nhận hàng xuất hiện ở nhiều đại lý; địa chỉ lạ hoàn toàn với đại lý lâu năm → cộng điểm rủi ro, đưa vào <b>danh sách nghi vấn</b> cho bộ phận kiểm soát nội bộ xem</td></tr>
+  </tbody>
+</table>
+<div class="box gate"><b>Cần chốt trước:</b> kể lại các vụ đơn ảo/gian lận thật đã gặp (để quy tắc bám thực tế, không tưởng tượng); ai trực nhận cảnh báo và xử lý danh sách nghi vấn.</div>
+
+<div class="pagebreak"></div>
+<h2>4. Lộ trình đề xuất — 4 đợt, xong đợt nào nghiệm thu đợt đó</h2>
+<div class="box"><b>Nguyên tắc xếp thứ tự:</b> món ít phụ thuộc bên ngoài làm trước · món đụng đến tiền cần nền chắc rồi mới làm · món chưa rõ độ chính xác thì đo thử trước. <b>Thứ tự có thể đảo, món nào công ty không cần có thể bỏ.</b></div>
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    D0["ĐỢT 0 — HOÀN THIỆN NỀN&lt;br/&gt;(đang làm dở)&lt;br/&gt;nối KiotViet · phân quyền&lt;br/&gt;chạy thử 1–2 nhóm thật"]
+    D1["ĐỢT 1 — GIÁ TRỊ NHANH&lt;br/&gt;Gọi nhân viên&lt;br/&gt;Sửa đơn bằng tin nhắn&lt;br/&gt;Bảng theo dõi tổng quan"]
+    D2["ĐỢT 2 — DÒNG TIỀN&lt;br/&gt;Mã QR + tự biết tiền về&lt;br/&gt;Nhắc công nợ"]
+    D3["ĐỢT 3 — NĂNG LỰC MỚI&lt;br/&gt;Đọc ảnh viết tay (đo trước)&lt;br/&gt;Chống đơn ảo/gian lận"]
+    D4["ĐỢT 4 — TỐI ƯU&lt;br/&gt;Đối soát tự động hoàn chỉnh&lt;br/&gt;Cảnh báo theo lịch sử&lt;br/&gt;Dự báo, gợi ý bán thêm"]
+    D0 --&gt; D1 --&gt; D2 --&gt; D3 --&gt; D4
+</pre>
+</div>
+<table class="data">
+  <thead><tr><th style="width:16%">Đợt</th><th style="width:30%">Gồm</th><th style="width:30%">Điều kiện bắt đầu</th><th>Kết quả nghiệm thu</th></tr></thead>
+  <tbody>
+    <tr><td><b>0 — Nền</b></td><td>Hoàn thiện phần đang làm dở (nối KiotViet, phân quyền, chạy thử thật)</td><td>(đang chạy)</td><td>Chạy thử 1–2 nhóm thật, 4 chỉ số có số liệu</td></tr>
+    <tr><td><b>1 — Giá trị nhanh</b></td><td>Gọi nhân viên → Sửa đơn → Bảng theo dõi</td><td>Chốt quy tắc sửa đơn + danh sách chỉ số + người trực</td><td>Sửa đơn qua tin nhắn chạy thật; bảng theo dõi có số sống</td></tr>
+    <tr><td><b>2 — Dòng tiền</b></td><td>Mã QR thanh toán → Nhắc công nợ</td><td>Chốt tài khoản + dịch vụ báo giao dịch + ngưỡng công nợ + số dư ban đầu</td><td>Đơn tự chuyển "đã thanh toán"; danh sách nhắc nợ chạy hằng ngày</td></tr>
+    <tr><td><b>3 — Năng lực mới</b></td><td>Đọc ảnh viết tay (đo → quyết → làm) · Chống gian lận</td><td>20–30 ảnh thật + tài khoản AI đọc ảnh · các vụ việc thật</td><td>Công bố độ chính xác đọc ảnh; danh sách nghi vấn hoạt động</td></tr>
+    <tr><td><b>4 — Tối ưu</b></td><td>Đối soát tự động · cảnh báo theo lịch sử · dự báo</td><td>Vài tháng dữ liệu thật sau khi chạy chính thức</td><td>Đối soát ký gửi cuối tháng tự động</td></tr>
+  </tbody>
+</table>
+<p class="caption">Độ lớn tham khảo: NHỎ ≈ vài ngày làm · VỪA ≈ 1–2 tuần · LỚN ≈ 2–4 tuần (chưa tính thời gian chờ công ty chốt dữ liệu/quyết định — đây thường mới là phần lâu nhất).</p>
+
+<h2>5. Các quyết định cần công ty chốt (tổng hợp)</h2>
+<table class="data">
+  <thead><tr><th style="width:8%">Mã</th><th>Quyết định</th><th style="width:22%">Cho tính năng</th></tr></thead>
+  <tbody>
+    <tr><td>D9</td><td>Tài khoản nhận tiền (công ty hay cá nhân) + chọn cách nhận tín hiệu giao dịch (dịch vụ báo giao dịch / nối ngân hàng / kế toán tải sao kê) + bổ sung thỏa thuận dữ liệu nếu dùng dịch vụ ngoài</td><td>2 — QR thanh toán</td></tr>
+    <tr><td>D10</td><td>Đơn ở giai đoạn nào còn được sửa/hủy qua tin nhắn; đơn đã giao xử lý theo quy trình hoàn trả nào</td><td>1 — Sửa đơn</td></tr>
+    <tr><td>D11</td><td>Danh sách con số muốn xem trên bảng theo dõi</td><td>3 — Dashboard</td></tr>
+    <tr><td>D12</td><td>Gửi 20–30 ảnh đơn viết tay thật kèm đáp án + cấp tài khoản dịch vụ AI đọc ảnh</td><td>4 — Đọc ảnh</td></tr>
+    <tr><td>D13</td><td>Ngưỡng công nợ chính thức + cách xác định "ngày nhận hàng" giai đoạn đầu + số dư công nợ hiện tại + xác nhận có "công nợ 7 ngày" riêng không</td><td>5 — Công nợ</td></tr>
+    <tr><td>D14</td><td>Ai trực nhận cảnh báo (và nhận qua đâu) + kể các vụ đơn ảo/gian lận thật đã gặp</td><td>6 — Gian lận, gọi người</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Rủi ro chính và cách phòng</h2>
+<table class="data">
+  <thead><tr><th style="width:46%">Rủi ro</th><th style="width:12%">Mức</th><th>Cách phòng</th></tr></thead>
+  <tbody>
+    <tr><td>Làm tính năng mới khi phần nền chưa xong → xây trên cát</td><td><span class="badge b-l">CAO</span></td><td>Kỷ luật "cổng vào đợt": nền (Đợt 0) là điều kiện cứng, không nhảy cóc</td></tr>
+    <tr><td>Hiểu nhầm "tự biết tiền về" là tuyệt đối 100% — thực tế có độ trễ và giao dịch không khớp</td><td><span class="badge b-l">CAO</span></td><td>Nói rõ từ đầu: phần lớn khớp tự động, phần lệch vào danh sách cho kế toán; công bố tỷ lệ khớp hằng tuần</td></tr>
+    <tr><td>Đọc chữ viết tay tiếng Việt kém → tính năng gây thất vọng</td><td><span class="badge b-m">VỪA</span></td><td>Đo trên ảnh thật trước, có con số rồi công ty mới quyết làm hay không</td></tr>
+    <tr><td>Nhắc công nợ sai số → mất uy tín với đại lý</td><td><span class="badge b-m">VỪA</span></td><td>Giai đoạn đầu chỉ NHẮC kèm ghi chú "tạm tính"; đối soát chính thức chờ đủ dữ liệu giao hàng</td></tr>
+    <tr><td>Dùng dịch vụ báo giao dịch = thêm một bên chạm dữ liệu</td><td><span class="badge b-m">VỪA</span></td><td>Đưa vào thỏa thuận xử lý dữ liệu trước khi bật — như đã làm với các dịch vụ AI</td></tr>
+    <tr><td>Ôm nhiều việc một lúc, việc nào cũng dở dang</td><td><span class="badge b-m">VỪA</span></td><td>Mỗi đợt tối đa 2–3 món; nghiệm thu xong mới sang đợt sau</td></tr>
+  </tbody>
+</table>
+
+<h2>7. Những gì KHÔNG nằm trong kế hoạch này (tránh hiểu nhầm phạm vi)</h2>
+<ul>
+  <li>Nối tự động với Base, kênh Zalo chính thức cho khách lẻ, Messenger/website — vẫn thuộc Giai đoạn 2 của lộ trình gốc, không tính trùng vào đây.</li>
+  <li>Ứng dụng điện thoại cho Sale — là quyết định riêng, độc lập với 6 tính năng này.</li>
+  <li>Cho AI tự gửi tin không cần người duyệt — chỉ xem xét khi công ty đồng ý bằng văn bản; mọi tính năng trên đều chạy tốt ở chế độ "người duyệt" hiện tại.</li>
+</ul>
+
+<div class="footer-note">
+NetViet — Giải pháp Chuyển đổi số &amp; AI · Quyển 03/03 "Kế hoạch dài hạn (định hướng)" v2.0 — 10/07/2026 · Khách hàng: Công ty Cổ Phần U Ultty Việt Nam · Tài liệu nội bộ, không chia sẻ cho bên thứ ba · Nội dung mang tính định hướng, điều chỉnh theo quyết định của công ty tại các cổng D9–D14. <i>Bản kỹ thuật chi tiết (dành cho đội phát triển) nằm trong hồ sơ dự án, thư mục docs/.</i>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose',
+  fontFamily: 'Segoe UI, Arial, sans-serif',
+  flowchart: { htmlLabels: true, useMaxWidth: true } });
+</script>
+</body>
+</html>
