@@ -5,6 +5,18 @@
 
 Trạng thái: ⬜ chưa có · 🟡 đã hỏi, đang chờ · ✅ đã nhận & kiểm tra
 
+> **CẬP NHẬT 09/07/2026 — đọc trước khi dùng checklist này:**
+> - Nguồn sự thật giờ **sửa ĐỘNG** (panel `/admin` + MCP tool) ⇒ thiếu **A2/A3/A4 KHÔNG còn chặn việc BUILD** — nhập dần được, không cần deploy.
+> - Vẫn chặn **"chạy đúng số"**: **A3** (biểu phí COD + biểu cước ship). Rules đang **tạm tính** — COD 20.000đ và ship 30k/40k là **giả định**, không có trong hồ sơ.
+> - **B1–B2 vẫn là cổng GO-LIVE** (đo độ chính xác + bake-off model). "Nguồn sự thật động" **không thay thế được**.
+>
+> **🆕 Hai câu hỏi MỚI — chặn việc sửa rules engine** (căn cứ: [nghiep-vu.md §13](nghiep-vu.md)):
+>
+> | # | Câu hỏi cho khách | Vì sao quan trọng |
+> |---|---|---|
+> | **D6** | **VAT mặc định** áp theo chính sách/đại lý (PO công nợ B2B ghi *"giá đã bao gồm GTGT, xuất hóa đơn theo từng lần giao hàng thành công"*), hay giữ "chỉ xuất VAT khi khách ghi rõ"? | Code đang mặc định **KHÔNG VAT** → có thể sai với đại lý công nợ |
+> | **D7** | **"Công nợ 7 ngày"** là chính sách riêng, hay chính là điều khoản *"thanh toán trong 7 ngày kể từ ngày xuất hóa đơn"* của **ký gửi**? | Khảo sát có nhắc; hồ sơ chỉ có PO **30 / 45 / ký gửi** |
+
 ---
 
 ## Nhóm A — Nguồn sự thật (CHẶN việc bật AI — Task 0.3)

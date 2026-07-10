@@ -65,14 +65,16 @@
 | # | Việc | Trạng thái |
 |---|---|---|
 | **1** | Scaffold Prisma (schema + client, chưa wiring) | ✅ **XONG** (commit d60ff05) |
-| **2** | `OrdersRepository` → **async** + `PrismaOrdersRepository` + provider chọn theo `DATABASE_URL`; `docker compose up postgres` + `prisma migrate` | ⬜ |
-| **3** | `KnowledgeRepository` seam (Seed mặc định) + `PrismaKnowledgeRepository` (dealers/groups/products/prices/glossary/overrides/rules-config); **seed script** nạp SEED + bảng giá tháng 7 vào DB | ⬜ |
-| **4** | `MessagesRepository` + **lưu MỌI tin ngay khi nhận** ở ingest (Zca/Bot/Copilot) — tuân thủ | ⬜ |
-| **5** | **API CRUD nguồn sự thật** (NestJS): dealers/groups/products/prices/glossary/overrides/rules-config + map nhóm (upsert / list-unmapped / map) + zod validation | ⬜ |
-| **6** | **MCP tool** `tools/ultty-mcp` (@modelcontextprotocol/sdk, stdio): tools `list/upsert_dealer`, `map_group`, `list_unmapped_groups`, `set_price`, `add_glossary`, `set_rules_config`… gọi API (#5) | ⬜ |
-| **7** | **Giao diện "Nguồn sự thật"** (apps/web): bảng CRUD + **hộp thư nhóm chưa map** (1 chạm gán đại lý) + editor rules-config | ⬜ |
-| **8** | Rules-config từ DB (ship/COD/VAT/ngưỡng thành data sửa được) + **sửa nghiệp vụ**: thêm `cong_no_7`, VAT-default theo chính sách (mục B) | ⬜ |
-| **9** | Import Excel A4 (đại lý + map nhóm) hàng loạt (script/endpoint; lib `xlsx`/`exceljs`) | ⬜ (khi có file khách) |
+| **2** | `OrdersRepository` → **async** + `PrismaOrdersRepository` + provider chọn theo **`PERSISTENCE`** *(đổi so với plan: KHÔNG gate theo `DATABASE_URL` vì `.env` đã có sẵn URL docker)*; docker postgres + `prisma migrate init` | ✅ `1c59248`,`114dbc5`,`b86a226` — IT round-trip Postgres |
+| **3** | `KnowledgeRepository` seam (Seed mặc định) + `PrismaKnowledgeRepository` + `prisma/seed.ts` nạp SEED thật; nạp snapshot lúc boot + `reload()` (getter vẫn đồng bộ) | ✅ `7abb1d9` — IT loadSnapshot Postgres |
+| **4** | `MessagesRepository` + **lưu MỌI tin ngay khi nhận** ở ingest (Zca/Bot/Copilot) — tuân thủ NĐ13, chống mất đơn | ⬜ **← việc tiếp theo** |
+| **5** | ~~API CRUD nguồn sự thật (NestJS)~~ | ❌ **BỎ** — AdminJS (#7) auto-CRUD thay thế (kết quả search-first) |
+| **6** | **MCP tool** `apps/api/src/mcp/` (`@modelcontextprotocol/sdk` 1.29, stdio): **8 tool**, logic tách transport, zod + kiểm FK; ghi **thẳng Prisma** + best-effort `POST /knowledge/reload` | ✅ `c066a06` — IT 11/11 + smoke stdio |
+| **7** | **Giao diện "Nguồn sự thật"** = **AdminJS mount `/admin`** *(không phải `apps/web`)*: auto-CRUD 6 bảng + action **map nhóm→đại lý** + hộp thư `status=pending`; gated `ADMIN_UI=on`+`PERSISTENCE=prisma` | ✅ `d44149e` — verified boot + authed CRUD Postgres |
+| **8** | Rules-config từ DB (ship/COD/VAT/ngưỡng thành data sửa được) + **sửa nghiệp vụ** (mục B) | ⬜ **BỊ CHẶN**: cần khách trả lời VAT-default + `cong_no_7` |
+| **9** | Import Excel A4 (đại lý + map nhóm) bằng **`exceljs`** — ĐÃ chốt lib; **TRÁNH `xlsx`/`node-xlsx`** (CVE chưa vá) | ⬜ (khi có file khách) |
+
+> **Trạng thái tổng:** increments **1,2,3,6,7 XONG + verified trên Postgres thật**; còn **4, 8, 9**. Nguồn sự thật về tiến độ: [docs/tien-do-va-ke-hoach.md](../../docs/tien-do-va-ke-hoach.md).
 
 ### Files to Change (chính)
 | File | Action | Vì sao |
@@ -84,8 +86,8 @@
 | `apps/api/src/messages/*` | CREATE | lưu tin |
 | `apps/api/src/config/prisma.service.ts` | CREATE | PrismaClient lifecycle (onModuleInit/destroy) |
 | `apps/api/src/app.module.ts` | UPDATE | provider chọn theo env |
-| `tools/ultty-mcp/*` | CREATE | MCP server |
-| `apps/web/app/(console)/nguon-su-that/*` | CREATE | UI admin |
+| `apps/api/src/mcp/*` | ✅ ĐÃ TẠO | MCP server (**không** phải `tools/ultty-mcp`) |
+| `apps/api/src/admin/*` | ✅ ĐÃ TẠO | UI admin = **AdminJS mount `/admin`** (**không** phải `apps/web`) |
 | `packages/shared/src/*` | UPDATE | DTO/zod cho CRUD |
 | `docs/nghiep-vu.md` | UPDATE | sửa theo nguồn gốc (mục B) |
 
