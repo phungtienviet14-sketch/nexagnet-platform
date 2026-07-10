@@ -7,6 +7,12 @@
 
 Khi hai nguồn khác nhau, tài liệu này là quyết định cuối cho phần kỹ thuật.
 
+> ⚠️ **CẬP NHẬT sau Phase 3 (09/07/2026) — vài chỗ dưới đây đã bị as-built vượt qua:**
+> - **Sửa "nguồn sự thật" KHÔNG qua tab "Prompt AI" của PWA** (§7). As-built: panel **`/admin` (AdminJS auto-CRUD)** + **MCP tool** (8 tool). PWA hoãn lại; demo dùng console PC.
+> - **Lưu trữ:** Postgres/Prisma 6 đã hiện thực, bật bằng cờ **`PERSISTENCE=prisma`** (mặc định `memory` → demo/CI không cần DB).
+> - **§6 schema là schema ĐÍCH, không phải as-built.** Schema thật: [apps/api/prisma/schema.prisma](../apps/api/prisma/schema.prisma) (12 model; 1 `Price` / SKU với 4 mức giá, chưa có `conversations`/`policies`/`prompt_rules`/`audit_logs`).
+> - Trạng thái "đang ở đâu / còn gì": [tien-do-va-ke-hoach.md](tien-do-va-ke-hoach.md). Nghiệp vụ + sai lệch: [nghiep-vu.md](nghiep-vu.md).
+
 ---
 
 ## 1. Quyết định hợp nhất (đã chốt)

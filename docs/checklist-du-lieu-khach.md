@@ -19,7 +19,7 @@ Trạng thái: ⬜ chưa có · 🟡 đã hỏi, đang chờ · ✅ đã nhận 
 
 ---
 
-## Nhóm A — Nguồn sự thật (CHẶN việc bật AI — Task 0.3)
+## Nhóm A — Nguồn sự thật (⚠️ nay chặn **"chạy thật đúng số" / go-live**, KHÔNG còn chặn việc BUILD — xem ghi chú đầu file)
 
 | # | Cần gì | Chi tiết cần hỏi | Dạng nhận | Chặn task | TT |
 |---|---|---|---|---|---|

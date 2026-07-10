@@ -47,7 +47,7 @@
 
 **Phạm vi mới** = Lưu trữ bền (Postgres/Prisma) **+ nguồn sự thật ĐỘNG**: sửa được qua **(1) Giao diện admin "Nguồn sự thật"** (người dùng) và **(2) MCP tool** (Claude/agent sửa bằng hội thoại). Một API + một DB, hai mặt truy cập.
 
-**Nguyên tắc giữ nguyên:** mặc định **in-memory** (không `DATABASE_URL` → demo offline/CI không đổi); Prisma bật khi có `DATABASE_URL`. Docker Postgres đã có sẵn (`docker-compose.yml`).
+**Nguyên tắc giữ nguyên:** mặc định **in-memory** → demo offline/CI không đổi. Bật Prisma bằng cờ **`PERSISTENCE=prisma`** — **cố ý TÁCH khỏi `DATABASE_URL`** (vì `.env` đã có sẵn URL docker, gate theo URL sẽ vô tình bật Prisma cho demo). Docker Postgres có sẵn (`docker-compose.yml`).
 
 ### Patterns to Mirror
 | Loại | Nguồn | Pattern |
