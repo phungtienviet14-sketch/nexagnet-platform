@@ -1,198 +1,217 @@
-# MÔ TẢ NGHIỆP VỤ — Hệ thống AI xử lý đơn hàng Zalo (U Ultty)
+# MÔ TẢ NGHIỆP VỤ — U Ultty (đối chiếu NGUỒN GỐC)
 
-> **Vai trò tài liệu:** mô tả **nghiệp vụ as-built** — hệ thống hiện *đang làm gì* và áp *luật gì*, bám theo code thật (`rules/`, `agents/`, `knowledge/seed.ts`). Đây là tài liệu tra cứu nghiệp vụ cho Sale/kế toán/khách và cho người code.
-> **Phân biệt với các tài liệu khác:**
-> - `Thiet_ke_AI_Agent_U_Ultty.md` = **đề xuất giải pháp gốc của NetViet** (what was proposed — giữ nguyên).
-> - [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md) = **quyết định kỹ thuật** (stack, module, pipeline).
-> - [so-do-he-thong.md](so-do-he-thong.md) = **sơ đồ** minh hoạ (Mermaid).
-> - Tài liệu này = **nghiệp vụ đã hiện thực** (con số, luật, quy trình đúng như code chạy).
-> Cập nhật: 09/07/2026. Nguồn số liệu: [rules/config.ts](../apps/api/src/rules/config.ts), [agents/agents.config.ts](../apps/api/src/agents/agents.config.ts), [knowledge/seed.ts](../apps/api/src/knowledge/seed.ts).
-
----
-
-## 1. Bối cảnh & mục tiêu nghiệp vụ
-
-U Ultty (gia dụng cao cấp) bán sỉ cho **200–300 đại lý/CTV** qua **~200 nhóm Zalo** (+100–150 nhóm thi thoảng), **10–20 đơn/ngày**, chủ yếu đơn số lượng lớn chốt bằng **tin nhắn text viết tắt, không dấu** (<20% là ảnh chụp bảng). Quy trình hiện tại thủ công: chốt Zalo → gõ tay lên KiotViet → chuyển Base giao vận → ship Aha/Viettel. Chưa có API kết nối, chưa có IT nội bộ.
-
-**Mục tiêu:** AI đọc tin đặt hàng → trích xuất đơn có cấu trúc → **Sale duyệt 1 chạm** → đồng bộ KiotViet/Base. Nguyên tắc lõi:
-
-> **AI đọc hiểu — quy tắc chốt số — người giữ nút duyệt.** LLM chỉ phân loại ý định + trích xuất + soạn văn bản; **không tính tiền, không quyết chính sách**. Mọi số tiền do rules engine (TypeScript tất định) tính từ nguồn sự thật.
+> **Cảnh báo lịch sử:** bản đầu của tài liệu này (09/07/2026, suy từ code + CLAUDE.md) **có sai lệch**. Bản này viết lại bằng cách đọc **hồ sơ gốc của khách**, và ghi rõ chỗ nào **code đang khác nguồn gốc**.
+>
+> **Vai trò tài liệu:** mô tả nghiệp vụ THẬT + đối chiếu với **as-built** (hệ thống đang làm gì). Đây là tài liệu tra cứu cho Sale/kế toán/khách và cho người code.
+> **Phân biệt:** `Thiet_ke_AI_Agent_U_Ultty.md` = đề xuất giải pháp NetViet (giữ nguyên) · [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md) = quyết định kỹ thuật · [so-do-he-thong.md](so-do-he-thong.md) = sơ đồ · tài liệu này = **nghiệp vụ + sai lệch**.
+>
+> **Không chứa PII.** Hồ sơ gốc có SĐT/địa chỉ/số tài khoản/tên người — đã gitignore, **không trích vào đây**.
+> Cập nhật: 09/07/2026.
 
 ---
 
-## 2. Vai trò người dùng (actors)
+## 0. Nguồn kiểm chứng (minh bạch phạm vi)
 
-| Vai | Mô tả | Trong hệ thống |
+**Đã đọc & đối chiếu trực tiếp:**
+| Nguồn gốc | Dùng để xác định |
+|---|---|
+| `APP AI_...docx` (bản `.md` trong hồ sơ khảo sát) | Bối cảnh, chính sách, checklist chốt đơn, bảo hành, ngôn ngữ viết tắt |
+| `Các quy trình_/QT đặt hàng.pdf` | **Quy trình đặt hàng thật 9 bước + vai KSNB/BPKD/BPVH** |
+| `PO - Biên bản bàn giao_/PO _ Công nợ 30 ngày.pdf` | Điều khoản công nợ 30, miễn phí giao hàng, vai trò PGH |
+| `PO - Biên bản bàn giao_/PO_công nợ 45 ngày .pdf` | Điều khoản công nợ 45, phạt chậm, ngưỡng ngừng cấp, **VAT theo từng lần giao** |
+| `PO - Biên bản bàn giao_/PO _ Kí gửi...pdf` | Điều khoản ký gửi (đối soát cuối tháng, TT 7 ngày sau HĐ) |
+| ` AI Zalo_/Thông báo giá tháng 7.2026.pdf` | **Bảng giá 19 SKU (4 mức giá)** |
+
+**CHƯA đọc — chưa phản ánh vào hệ thống** (còn trong hồ sơ, cần bổ sung sau):
+`QT Preoder.pdf` · `QT_Báo giá B2B xlsx.pdf` · `QT_Tiếp xúc khách hàng.pdf` · `QT đưa sp vào TT.pdf` · `QT_Hoàn trả hàng B2B.pdf` · `Biên bản bàn giao.pdf` · `Tên và mã sản phẩm.xlsx` · `Viết tắt_.docx` · ảnh `Bảng đặt hàng của khách.jpg`.
+
+---
+
+## 1. Bối cảnh & nguyên tắc
+
+U Ultty (gia dụng cao cấp) bán sỉ cho **200–300 đại lý/CTV** qua **~200 nhóm Zalo** (+100–150 nhóm thi thoảng), **10–20 đơn/ngày**, chủ yếu **đơn số lượng lớn** chốt bằng **tin nhắn text viết tắt, không dấu** (**<20%** là ảnh chụp bảng). Luồng: Zalo → lên đơn **KiotViet** → xử lý nội bộ trên **Base** → giao vận **Aha/Viettel/GHTK**. **Chưa có API**, chưa có IT nội bộ.
+
+> **Nguyên tắc bất di bất dịch:** AI **đọc hiểu**, **quy tắc chốt số**, **người giữ nút duyệt**. LLM chỉ phân loại ý định + trích xuất + soạn văn bản; **không tính tiền, không quyết chính sách**.
+
+---
+
+## 2. Vai trò / phòng ban (theo quy trình gốc)
+
+| Vai | Viết tắt | Việc |
 |---|---|---|
-| **Đại lý** | Đối tác lấy sỉ số lượng lớn, có chính sách công nợ/ký gửi | `tier = dai_ly`, gửi tin trong nhóm Zalo của mình |
-| **CTV** | Cộng tác viên số lượng nhỏ, thường thanh toán ngay | `tier = ctv` |
-| **Khách lẻ** | Khách cuối của đại lý (đơn TH2 giao thẳng) | `senderType = khach_le` |
-| **Sale U Ultty** | Người **duyệt 1 chạm**, sửa field mờ, gửi xác nhận | dùng console/PWA |
-| **Kế toán** | Kiểm tra khi lên hệ thống, quyết VAT | (GĐ sau: auth vai kế toán) |
-| **Quản lý** | Duyệt đơn rủi ro/đơn lớn (KSNB) | nhận đơn leo thang từ Giám sát |
-| **NetViet** | Vận hành managed service (khách chưa có IT) | hạ tầng, giám sát |
+| Đại lý / CTV | — | Báo đơn lên nhóm Zalo |
+| **Bộ phận Kinh doanh** | **BPKD** | Lên đơn KiotViet, lập PGH/PO, gửi khách xác nhận, giao Task Base, theo dõi công nợ |
+| **Kiểm soát nội bộ** | **KSNB** | **2 cổng duyệt**: (1) đối chiếu chứng từ trước khi gửi khách; (2) duyệt Task trên Base trước khi vận hành nhận |
+| **Bộ phận Vận hành** | **BPVH** | Đóng hàng, giao hàng, thu tiền (đơn TT ngay), lấy chữ ký PGH/PO, up ảnh Base |
+| Kế toán | — | Xuất VAT (nháp → khách kiểm → xuất), kiểm tra khi lên hệ thống |
+| Kỹ thuật | — | **Quyết định lỗi** bảo hành (AI & Sale không tự phán) |
+| Sale (NetViet gọi chung) | — | Người **duyệt 1 chạm** trong app AI (thực chất nằm trong BPKD) |
 
-`SenderType` (suy từ cấp đại lý của nhóm): `dai_ly` · `ctv` · `khach_le` · `unknown` (nhóm chưa map → Giám sát leo thang).
-
----
-
-## 3. Danh mục sản phẩm & mô hình giá
-
-- **19 SKU chính** (bảng giá tháng 7.2026), mỗi SKU có tên đầy đủ + **aliases** (tên viết tắt đại lý hay nhắn, vd `felix`, `ghe felix`).
-- Mỗi SKU có **4 mức giá**: `listPrice` (niêm yết) · `retailPrice` (bán lẻ đề xuất) · `minRetailPrice` (bán lẻ tối thiểu — sàn đại lý được bán ra) · **`wholesale` ("Đơn giá CTV") = giá đại lý/CTV TRẢ**.
-- **Giá tính đơn = `wholesale`** (giá sỉ chung, như nhau mọi đại lý/CTV). Biết được **kể cả khi chưa map đại lý**.
-- **Deal riêng:** một số đại lý lấy SL lớn có `DealerPriceOverride` (override `wholesale` theo `dealerId + sku`). Hiện **rỗng** — chờ dữ liệu khách (A2).
-
-Ví dụ (số thật): Ghế Felix `wholesale = 1.250.000đ`; 10 cái = 12.500.000đ.
+> Chữ ký trên Phiếu giao nhận hàng hóa gồm **Nhân viên + Giám sát** của cả hai bên → "Giám sát" trong hệ thống AI ánh xạ đúng vai **KSNB**.
 
 ---
 
-## 4. Phân loại đại lý & 4 chính sách
+## 3. Quy trình đặt hàng THẬT (9 bước, 2 cổng KSNB)
 
-`tier`: `dai_ly` | `ctv`. Mỗi đại lý có **1 chính sách mặc định** (`defaultPolicy`), suy ra từ loại hợp đồng:
+Nguồn: `QT đặt hàng.pdf`.
 
-| Chính sách | Mã | Điều kiện áp dụng (nghiệp vụ) | Nhãn hệ thống |
-|---|---|---|---|
-| Công nợ 30 ngày | `cong_no_30` | Đại lý lấy SL lớn | "Công nợ 30 ngày (**từ ngày nhận hàng**)" |
-| Công nợ 45 ngày | `cong_no_45` | Đại lý lấy SL lớn (hạn dài hơn) | "Công nợ 45 ngày (từ ngày nhận hàng)" |
-| Ký gửi | `ky_gui` | Chỉ 2–3 bên; cuối tháng đối soát số bán → đơn bán + VAT | "Ký gửi (**chốt số cuối tháng**)" |
-| Thanh toán ngay | `thanh_toan_ngay` | CTV số lượng nhỏ — CK trước khi giao | "Thanh toán ngay (100% khi giao)" |
-| COD / thu hộ | `cod` | Giao cho khách của đại lý (TH2) | "COD (thu hộ khi giao)" |
+1. **BPKD lên hóa đơn KiotViet** sau khi khách báo đơn trên nhóm; lập thêm phiếu giao hàng cho ĐVVC (nếu gửi tỉnh); một số trường hợp lập thêm **PO giao hàng**.
+2. **KSNB kiểm tra, đối chiếu** (PGH, hóa đơn bán lẻ, PO, phiếu ĐVVC). *Không duyệt → BPKD sửa, gửi lại.* ← **cổng 1**
+3. **BPKD gửi khách xác nhận** lại thông tin đơn.
+4. **Khách đối chiếu & phản hồi** (sai/đổi → báo lại lên nhóm).
+5. **BPKD giao Task trên Base** cho BPVH (đính kèm PGH, hóa đơn, PO, phiếu ĐVVC).
+6. **KSNB kiểm tra, xét duyệt Task** trên Base. *Thiếu/sai → đẩy lại BPKD.* ← **cổng 2**
+7. **BPVH xử lý Task**: đóng hàng, giao hàng. Đơn **thanh toán ngay** → BPVH thu tiền (CK/tiền mặt) + ảnh xác nhận. Đơn **công nợ/ký gửi** → khách ký PO + PGH. Ảnh giao hàng up lên Base.
+8. **BPKD gửi ảnh xác nhận đã giao** vào nhóm Zalo + **theo dõi công nợ** (file Excel) & hỗ trợ kế toán thu hồi.
+9. **Chăm sóc khách hàng sau bán.**
 
-> Ngưỡng SL áp công nợ 30 vs 45, danh sách bên ký gửi, biểu phí COD chi tiết: **chưa có từ khách (A3)** — hiện đặt mặc định hợp lý trong config.
+**AI nằm ở đâu:** hệ thống AI hỗ trợ **bước 1 → 3** (đọc tin nhóm, bóc tách đơn, dựng format xác nhận, Sale duyệt 1 chạm, đẩy KiotViet). Từ bước 5 trở đi vẫn là Base/BPVH (GĐ2 mới tích hợp).
 
----
-
-## 5. Hai mẫu đơn & format PO chuẩn
-
-**TH1 — giao cho đại lý.** Format: `Chi nhánh_Ngày_Tên đại lý` + các dòng SP.
-Ví dụ: `HN_30.6_Meta HN — 10 x Ghế Felix — 1.250k/SP — Tổng: 12.500.000đ`.
-
-**TH2 — giao thẳng khách lẻ của đại lý.** Thêm: tên khách — SĐT/địa chỉ — cước vận chuyển — thu hộ/không.
-Nhận diện TH2: tin có **tên khách lẻ kèm SĐT (0 + 9 chữ số)** hoặc **địa chỉ giao**.
-
-Đầu ra là **format xác nhận** dựng bởi rules engine ([rules.ts](../apps/api/src/rules/rules.ts) `buildConfirmation`): header `[chi nhánh]_[ngày]_[đại lý]`, danh sách dòng, tiền hàng, phí ship, VAT (nếu có), thu hộ (nếu có), TỔNG, chính sách.
+> ⚠️ **Đính chính:** "1 Sale duyệt 1 chạm" (khảo sát §4) đúng ở nghĩa *một người của BPKD chốt với khách*. Nhưng **quy trình nội bộ có 2 cổng KSNB** — hệ thống AI hiện **chưa mô hình hoá** KSNB/BPVH.
 
 ---
 
-## 6. Quy tắc tính tiền (rules engine — số chính xác)
+## 4. Danh mục & mô hình giá — ✅ đã kiểm chứng khớp
 
-Nguồn: [rules/config.ts](../apps/api/src/rules/config.ts). **LLM không đụng vào các con số này.**
+`Thông báo giá tháng 7.2026.pdf` có **19 SKU**, mỗi SKU 4 mức: **Giá Niêm Yết · Giá bán lẻ · Giá bán lẻ tối thiểu · Đơn giá CTV**.
 
-| Luật | Giá trị hiện tại | Ghi chú |
+- **Giá tính đơn = "Đơn giá CTV"** (giá đại lý/CTV TRẢ) → trong code là `wholesale`. **Đã đối chiếu khớp từng dòng** với `seed.ts`.
+- "Giá bán lẻ tối thiểu" = **sàn** đại lý được bán ra. "Niêm yết"/"Bán lẻ" là tham chiếu báo giá.
+- **Bảng giá chung** cho mọi đại lý; **một số đại lý lấy SL lớn có deal riêng** → mô hình `DealerPriceOverride` (dealer + sku → giá). Hiện **rỗng**, chờ dữ liệu (A2).
+- **Mã hàng nội bộ dạng số** (PGH ghi mã kiểu `8716` cho ELNI 16) ≠ SKU chữ trong code → **cần bảng map SKU ↔ mã KiotViet** khi tích hợp (Phase 4).
+
+---
+
+## 5. Bốn nhóm chính sách + điều khoản THẬT
+
+| Chính sách | Mã trong code | Điều khoản theo nguồn gốc |
 |---|---|---|
-| Giá 1 SKU | `wholesale` (hoặc deal riêng nếu có) | giá sỉ chung |
-| **Miễn ship** | đơn có **tổng SL ≥ 2** → 0đ | `freeShipMinQuantity = 2` |
-| **TH1 (giao đại lý)** | **luôn miễn ship** | PO: "miễn phí giao hàng đúng thời hạn" |
-| Ship 1 SP nội thành | **30.000đ** (Grab, HN/HCM) | `shipFeeNoiThanh` — chỉ TH2 |
-| Ship 1 SP đi tỉnh | **40.000đ** (Viettel) | `shipFeeTinh` — chỉ TH2 · *tạm tính, chờ A3* |
-| **VAT** | **mặc định KHÔNG**; chỉ áp khi khách ghi "xuất VAT" và không ghi "ko VAT" | `vatRate = 10%` |
-| **COD** | chỉ **TH2** + có "thu hộ/COD" → **20.000đ** | `codFee` — *demo cố định, chờ A3* |
-| Đối chiếu tổng | lệch > **5%** giữa tổng khách ghi vs hệ thống → cảnh báo | `totalMismatchTolerance = 0.05` |
-| Nội thành | từ khoá: `ha noi, hn, ho chi minh, hcm, sai gon, tphcm` | `noiThanhKeywords` |
+| Công nợ 30 ngày | `cong_no_30` | Thanh toán trong vòng **30 ngày kể từ ngày nhận hàng**. |
+| Công nợ 45 ngày | `cong_no_45` | **45 ngày kể từ ngày nhận hàng**; **đợt hàng sau phải thanh toán hết đợt trước**; **quá 60 ngày** chưa TT → **tạm ngừng cung cấp**; **chậm TT → phạt 1%/ngày** trên giá trị chậm; báo kế hoạch đặt hàng **trước tối thiểu 5 ngày**; **giá đã gồm GTGT, xuất hóa đơn theo từng lần giao thành công**. |
+| Ký gửi | `ky_gui` | Gửi hàng trước; **cuối tháng đối soát số lượng tiêu thụ thực tế**; xuất hóa đơn; **thanh toán trong 7 ngày kể từ ngày xuất hóa đơn**. Chỉ 2–3 bên. |
+| Thanh toán ngay | `thanh_toan_ngay` | CTV số lượng nhỏ; **BPVH thu tiền khi giao** (CK/tiền mặt) + ảnh xác nhận. |
+| COD / thu hộ | `cod` | Giao thẳng khách của đại lý; **phí thu hộ tính theo "biểu mẫu riêng"**, **báo trước** để đại lý xác nhận phí. |
 
-Cảnh báo (đưa đơn về `needs_edit`): SP chưa map được, chưa xác định đại lý, tổng lệch quá ngưỡng.
+**Điều kiện áp công nợ:** đại lý lấy **SL lớn (20–100 SP)**.
+**Chưa mô hình hoá trong code:** phạt 1%/ngày · ngưỡng 60 ngày ngừng cấp · ràng buộc đợt-sau-trả-đợt-trước · báo trước 5 ngày → thuộc **module theo dõi công nợ** (làm sau, không cản Phase 3).
 
----
-
-## 7. Bảy loại ý định (intent) & vai xử lý
-
-Nguồn: [intents.ts](../packages/shared/src/intents.ts), [agents.ts](../packages/shared/src/agents.ts) `INTENT_TO_ROLE`. Router chọn **đúng 1** intent/tin.
-
-| Intent | Khi nào | Vai xử lý chính | Ví dụ |
-|---|---|---|---|
-| `dat_don` | Có **số lượng cụ thể** + tên SP | Bán hàng & chốt đơn | `gui 10 ghe felix ve TN cho c, ko VAT` |
-| `hoi_gia` | Hỏi giá, **chưa chốt số lượng** | Chính sách & tài chính | `ghe felix bao nhieu tien c oi` |
-| `hoi_san_pham` | Hỏi công năng/tư vấn, không hỏi giá | Tư vấn sản phẩm | `ghe felix ngoi lau co dau lung ko` |
-| `chinh_sach_cong_no` | Hỏi công nợ/ký gửi/COD/hạn TT | Chính sách & tài chính | `thang nay cho cong no 45 ngay dc ko` |
-| `bao_hanh_khieu_nai` | Lỗi/đổi trả/khiếu nại/giao sai-thiếu | Hậu mãi & bảo hành | `robot moi nhan 3 hom da ko sac dc` |
-| `van_chuyen` | Hỏi tình trạng giao/mã vận đơn | Chính sách & tài chính (GĐ2: API vận đơn) | `don meta hn di den dau roi` |
-| `khac` | Chào hỏi/off-topic/quá mơ hồ | Điều phối giữ, soạn câu lịch sự | `chao shop`, `a oi` |
+> ❓ **"Công nợ 7 ngày":** khảo sát liệt kê `PO (Ký gửi, Công nợ 7 ngày, 30 ngày, 45 ngày)`, nhưng **hồ sơ chỉ có PO cho 30 / 45 / ký gửi**. Có thể "7 ngày" chính là điều khoản **TT trong 7 ngày sau khi xuất hóa đơn** của **ký gửi**. **CẦN KHÁCH XÁC MINH** trước khi thêm mã chính sách mới.
 
 ---
 
-## 8. Đội 6 agent (§5.1 NetViet)
+## 6. Hai mẫu đơn & bộ chứng từ
 
-**6 vai dưới 1 orchestrator, dùng chung 1 lần gọi LLM/tin** (Router parse) — KHÔNG phải 6 LLM độc lập. Chi tiết luồng: [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md) §5.
+**TH1 — giao cho đại lý:** `Chi nhánh_Ngày_Tên CTV/Đại lý — Số lượng x Mã SP — Đơn giá 1SP — Tổng đơn`.
+**TH2 — giao thẳng khách của đại lý:** thêm `Tên khách — SĐT/Địa chỉ — Cước vận chuyển — Thu hộ/Không thu`.
 
-| Vai | Việc | Nguồn |
+**Phân biệt quan trọng** (AI hay bị nhầm):
+| Chứng từ | Là gì | Ai ký |
 |---|---|---|
-| **Điều phối** (Router) | Phân intent + xác định người gửi + dispatch | LLM (1 lần parse) |
-| **Tư vấn sản phẩm** | Mô tả SP từ kho tri thức (RAG tất định) | knowledge |
-| **Bán hàng & chốt đơn** | Bóc dòng, **gọi `priceOrder`** (DUY NHẤT vai này tính tiền), dựng phiếu TH1/TH2 | rules |
-| **Chính sách & tài chính** | Chú thích công nợ/VAT/ship/COD; báo giá; trả lời công nợ | rules/knowledge |
-| **Hậu mãi & bảo hành** | Phân nhánh bảo hành, định tuyến kỹ thuật | knowledge |
-| **Giám sát** (Supervisor) | Đánh giá rủi ro → leo thang (0 LLM) | rules |
+| **"Format xác nhận đơn"** (AI dựng) | Tin nhắn chốt lại đơn với đại lý trong nhóm Zalo | không ký |
+| **PGH — Phiếu giao nhận hàng hóa** | **Căn cứ pháp lý** xác nhận hàng đã giao & **ghi nhận công nợ**; là phần không tách rời của đơn đặt hàng | KSNB + BPKD + BPVH + khách |
+| **PO** | Đơn đặt hàng theo mẫu; **đóng dấu treo** công ty | BPVH + khách |
+| **Biên bản bàn giao** | 1 mẫu *(chưa đọc)* | — |
 
-Mỗi tin sinh `AgentTrace` 6 bước (vai không tham gia = `skipped`), badge nguồn (`llm`/`rules`/`knowledge`) và `llmCalls` (minh bạch chi phí).
+> Hệ thống AI hiện **chỉ sinh "format xác nhận đơn"**, **không** sinh PGH/PO.
 
 ---
 
-## 9. Giám sát & leo thang (assessRisk — số chính xác)
+## 7. Quy tắc tính tiền — as-built (đánh dấu rõ cái nào TẠM TÍNH)
 
-Nguồn: [agents.config.ts](../apps/api/src/agents/agents.config.ts), [risk-rules.ts](../apps/api/src/agents/risk-rules.ts). Tất định, 0 LLM.
+Nguồn số: [rules/config.ts](../apps/api/src/rules/config.ts). **LLM không đụng các số này.**
 
-**Leo thang người thật (`escalate` → `needs_edit`, KHÔNG auto-chốt):**
-- Chưa xác định đại lý từ nhóm (nhóm chưa map).
-- Dấu hiệu **khiếu nại gắt** (regex: `qua te`, `doi tra ngay`, `kien`, `lua dao`, `huy don`…).
-- **Đơn lớn:** `grandTotal ≥ 20.000.000đ` (`largeOrderTotal`).
+| Luật | Code hiện tại | Đối chiếu nguồn gốc |
+|---|---|---|
+| Giá 1 SKU | `wholesale` (hoặc deal riêng) | ✅ đúng ("Đơn giá CTV") |
+| Miễn ship | tổng SL **≥ 2** → 0đ | ✅ khớp ("đơn 2 SP miễn ship") |
+| **TH1 (giao đại lý)** | **luôn miễn ship** | ✅ khớp PGH: *"Miễn phí giao hàng đúng thời hạn không móp méo bể vỡ"* |
+| Ship 1 SP nội thành | 30.000đ (Grab, HN/HCM) | ⚠️ **TẠM TÍNH** — nguồn gốc chỉ nói *"Grab nội thành"*, **không có mức tiền** |
+| Ship 1 SP đi tỉnh | 40.000đ (Viettel) | ⚠️ **TẠM TÍNH** — không có mức tiền trong hồ sơ |
+| VAT | mặc định **KHÔNG**; chỉ áp khi khách ghi "xuất VAT" · 10% | ⚠️ **SAI LỆCH** — xem §13 |
+| COD | TH2 + "thu hộ" → **20.000đ phẳng** | ⚠️ **SAI LỆCH** — thực tế theo **"biểu mẫu riêng"** (bảng phí), chưa có trong hồ sơ |
+| Đối chiếu tổng | lệch > 5% → cảnh báo | (quy ước kỹ thuật, không có trong nguồn gốc) |
 
-**Theo dõi (`watch`, gắn cờ vàng nhưng không chặn):**
-- Tổng số lượng **≥ 30** (`largeOrderQuantity`).
-- Đơn có cảnh báo (SP chưa map / tổng lệch).
-- Độ tin cậy phân loại **< 0.5** (`lowConfidence`).
-
-Triết lý (NetViet 5.6): **đơn sạch thì nhanh, đơn rủi ro thì chuyển người**.
+Cảnh báo đưa đơn về `needs_edit`: SP chưa map được · chưa xác định đại lý · tổng lệch quá ngưỡng.
 
 ---
 
-## 10. Vòng đời đơn hàng & duyệt
+## 8. Bảy ý định (intent) & đội 6 agent — as-built
 
-State machine ([order.ts](../packages/shared/src/order.ts) `ORDER_STATUSES`):
-`draft → pending_review → (needs_edit) → approved → sent/synced` · nhánh `rejected`.
+7 intent: `dat_don` · `hoi_gia` · `hoi_san_pham` · `chinh_sach_cong_no` · `bao_hanh_khieu_nai` · `van_chuyen` · `khac`.
+6 vai dưới **1 orchestrator, dùng chung 1 lần gọi LLM/tin**: Điều phối (Router) · Tư vấn SP · Bán hàng & chốt đơn (**vai DUY NHẤT gọi `priceOrder`**) · Chính sách & tài chính · Hậu mãi & bảo hành · **Giám sát** (0 LLM, ánh xạ vai KSNB).
 
+**Checklist chốt đơn thật (khảo sát §4)** — AI đang số hoá: (1) hình thức ship → (2) hình thức thanh toán (thu hộ hay CK trước) → (3) có/không VAT (gửi STK) → (4) gửi format xác nhận → (5) **sau khi gửi hàng, gửi lại ảnh đã gửi vào nhóm**.
+> Bước (5) **hệ thống chưa làm** (thuộc bước 8 quy trình thật).
+
+---
+
+## 9. Giám sát & leo thang — as-built
+
+Nguồn số: [agents.config.ts](../apps/api/src/agents/agents.config.ts). Tất định, 0 LLM.
+- **Leo thang** (`needs_edit`, KHÔNG auto-chốt): chưa xác định đại lý từ nhóm · dấu hiệu **khiếu nại gắt** · **đơn ≥ 20.000.000đ**.
+- **Theo dõi** (cờ vàng): tổng SL **≥ 30** · đơn có cảnh báo · độ tin cậy intent **< 0.5**.
+
+Triết lý: *đơn sạch thì nhanh, đơn rủi ro thì chuyển người* (NetViet 5.6).
+
+---
+
+## 10. Vòng đời đơn & duyệt — as-built
+
+`draft → pending_review → (needs_edit) → approved → sent → synced` · nhánh `rejected`.
 - **GĐ1:** AI soạn → **Sale duyệt 1 chạm** → gửi xác nhận vào nhóm + đẩy KiotViet. AI **không tự gửi**.
-- **`AUTO_SEND` (GĐ2, mặc định off):** đơn **không rủi ro** (Giám sát `riskLevel = none`, intent `dat_don`, đã định giá) → AI **tự chốt**; đơn rủi ro vẫn giữ cho Sale. Bật khi có **văn bản đồng ý của khách**.
+- **`AUTO_SEND` (GĐ2, mặc định off):** đơn **không rủi ro** → AI tự chốt; đơn rủi ro vẫn giữ cho người. Bật khi có **văn bản đồng ý của khách**.
+
+> Vòng đời này **dừng ở "đã đẩy KiotViet"**. Quy trình thật còn KSNB cổng 2 → BPVH → ảnh giao hàng → công nợ (§3).
 
 ---
 
 ## 11. Hậu mãi & bảo hành
 
-AI **tiếp nhận + phân nhánh + tạo phiếu**, **không tự phán định lỗi** (kỹ thuật quyết). 3 nhánh ([risk-rules.ts](../apps/api/src/agents/risk-rules.ts) `classifyWarranty`):
+Bảo hành **18–36 tháng**. AI **tiếp nhận + phân nhánh + tạo phiếu**, **không tự phán lỗi** (kỹ thuật quyết).
 
-| Nhánh | Nhận diện | Xử lý |
+| Nhánh | Điều kiện thật | Code |
 |---|---|---|
-| **Giao sai/thiếu** | `giao sai`, `giao thieu`, `thieu hang`, `sai mau`… | Xác minh vận đơn & ảnh, bù/đổi |
-| **Trong 7 ngày** | `moi mua`, `hom qua`, `vua nhan`, `7 ngay`… | 1 đổi 1 nếu lỗi NSX; xin ảnh/clip |
-| **Ngoài 7 ngày** | (còn lại) | Bảo hành hãng (18–36 tháng); chuyển kỹ thuật |
+| **Trong 7 ngày** | Lỗi NSX → báo nhóm → kiểm tra lịch sử/thời gian mua → **kỹ thuật xác nhận lỗi** → **còn nguyên đai kiện, vỏ hộp** → **đổi mới 1-1** | nhận diện theo từ khoá; **chưa kiểm điều kiện "nguyên đai kiện/vỏ hộp"** |
+| **Ngoài 7 ngày** | Báo nhóm → kiểm tra lịch sử → kỹ thuật tiếp nhận case bảo hành, làm việc với khách | ✅ |
+| **Giao sai/thiếu** | Báo nhóm → kiểm tra **khâu đóng hàng bên giao vận** → đúng lỗi thì **gửi bù** | ✅ |
+
+> Quy trình **Hoàn trả hàng B2B** có file riêng — **chưa đọc, chưa phản ánh**.
 
 ---
 
 ## 12. Nguồn sự thật: glossary & map nhóm → đại lý
 
-- **Glossary viết tắt** ([seed.ts](../apps/api/src/knowledge/seed.ts)): địa danh (`TN`=Thái Nguyên, `OCP`=Ocean Park), xưng hô (`c`=chị, `a`=anh), từ hay dùng (`ck`=chuyển khoản, `sll`=số lượng lớn, `cod`=thu hộ), cụm câu thật (`gui ve TN cho c`).
-- **Map nhóm → đại lý theo `chatId` (ID nhóm), KHÔNG theo tên** ([knowledge.service.ts](../apps/api/src/knowledge/knowledge.service.ts) `resolveByChatId`): 1 nhóm Zalo → 1 đại lý → cấp + chính sách. Nhóm chưa map → `unknown` → Giám sát leo thang (fail-safe). *Hiện chỉ 3 nhóm mẫu — chờ danh sách đầy đủ (A4).*
+- **Ngôn ngữ đầu vào:** viết tắt, không dấu — *"Gui ve TN cho c"*, *"Gửi OCP"*, *"Bao nhieu tien"*, *"gui nhe"*, *"dung nhu the nao"*.
+- **Glossary** (`seed.ts`, gốc từ `Viết tắt_.docx`): địa danh (`TN`=Thái Nguyên, `OCP`=Ocean Park), xưng hô, từ hay dùng (`ck`, `sll`, `cod`).
+- **Map nhóm → đại lý theo `chatId` (ID nhóm), KHÔNG theo tên.** Nhóm chưa map → `unknown` → Giám sát leo thang (fail-safe). Sửa được **động** qua panel `/admin` hoặc **MCP tool** (Phase 3).
+- Khách hiện đánh dấu đại lý bằng **tag thẻ Zalo** (Đại lý / CTV / Hội nhóm) hoặc **nhớ theo đặc điểm** → chưa có mã đại lý chuẩn (A4).
 
 ---
 
-## 13. Ranh giới AI vs Rules (bất di bất dịch)
+## 13. ⚠️ BẢNG SAI LỆCH: nguồn gốc ↔ code hiện tại
 
-| Việc | Ai làm |
-|---|---|
-| Phân loại intent, trích xuất SL + tên SP, soạn văn bản | **LLM** |
-| Map SKU chuẩn, giá, ship, VAT, COD, chính sách, tổng tiền, format PO | **Rules engine (TS tất định)** |
-| Đánh giá rủi ro, leo thang | **Rules (Giám sát)** |
-| Duyệt cuối / quyết chính sách ngoại lệ / phán định lỗi | **Con người** |
-
-Trạng thái THẬT vs MÔ PHỎNG của từng thành phần: xem [tien-do-va-ke-hoach.md](tien-do-va-ke-hoach.md) và [kich-ban-demo-toan-he-thong.md](kich-ban-demo-toan-he-thong.md) §13.2.
+| # | Nguồn gốc nói | Code / tài liệu cũ nói | Mức | Hành động |
+|---|---|---|---|---|
+| 1 | **VAT:** hợp đồng công nợ B2B ghi *"giá bao gồm GTGT, xuất hóa đơn theo từng lần giao hàng thành công"*; ký gửi → xuất HĐ cuối tháng. Khảo sát: *"tùy trường hợp"*, kế toán xuất nháp → khách kiểm → xuất. | Mặc định **KHÔNG VAT**, chỉ áp khi khách ghi "xuất VAT". | **Cần sửa** | VAT-default nên theo **chính sách/đại lý** (cấu hình), không phải luôn off. |
+| 2 | **Phí COD** tính theo **"biểu mẫu riêng"** (bảng phí), báo trước để đại lý xác nhận. | Phí **phẳng 20.000đ**. | **Cần sửa** | Xin **bảng phí COD** (A3); làm dạng bảng-cấu-hình, không phải 1 số. |
+| 3 | **Cước ship** 1 SP: Grab nội thành / Viettel tỉnh — **không có mức tiền** ở bất kỳ file nào đã đọc. | 30.000đ / 40.000đ. | **Tạm tính** | Xin biểu cước (A3). TH1 miễn ship thì ✅ đúng. |
+| 4 | Khảo sát liệt kê **PO "Công nợ 7 ngày"**; hồ sơ chỉ có PO 30/45/ký gửi. | Chỉ `cong_no_30`, `cong_no_45`. | **Cần xác minh** | Hỏi khách: có chính sách 7 ngày riêng, hay là điều khoản TT-7-ngày của ký gửi? |
+| 5 | Quy trình có **2 cổng duyệt KSNB** + **BPVH**; PGH cần 4 chữ ký; PO đóng dấu treo. | "1 Sale duyệt 1 chạm"; không có KSNB/BPVH; không sinh PGH/PO. | **Ghi chú** | Phase sau: mô hình vai + trạng thái sau `synced`. Ảnh hưởng auth (Phase 5). |
+| 6 | Điều khoản công nợ: **phạt 1%/ngày**, **>60 ngày ngừng cấp**, **đợt sau trả đợt trước**, **báo trước 5 ngày**. | Không mô hình hoá. | **Ghi chú** | Module theo dõi công nợ (sau). |
+| 7 | Mã hàng nội bộ **dạng số** (vd `8716`). | SKU chữ (`ELNI`). | **Ghi chú** | Cần map SKU ↔ mã KiotViet (Phase 4). |
+| 8 | Checklist chốt đơn có bước **"gửi lại ảnh đã gửi hàng vào nhóm"**. | Không có. | **Ghi chú** | Thuộc bước 8 quy trình thật (BPVH/Base). |
+| 9 | Đổi mới 1-1 yêu cầu **còn nguyên đai kiện, vỏ hộp** + kỹ thuật xác nhận. | Chỉ phân nhánh theo từ khoá. | **Ghi chú** | Thêm nhắc điều kiện vào phiếu bảo hành. |
+| 10 | **Bảng giá 19 SKU** (Đơn giá CTV). | `seed.ts` `wholesale`. | ✅ **ĐÚNG** | Không đổi. |
+| 11 | **TH1 miễn phí giao hàng.** | `orderType==='TH1' → shippingFee=0`. | ✅ **ĐÚNG** | Không đổi. |
 
 ---
 
-## 14. Dữ liệu nghiệp vụ còn thiếu (chặn chạy thật)
+## 14. Còn thiếu (chặn chạy thật toàn tập)
 
 Chi tiết + cách hỏi: [checklist-du-lieu-khach.md](checklist-du-lieu-khach.md).
 
-- 🔴 **A4** — danh sách đại lý/CTV + **map nhóm Zalo → đại lý** đầy đủ (hiện 3 nhóm mẫu).
-- 🔴 **A3** — biểu phí COD + cước ship chi tiết + ngưỡng công nợ 30 vs 45 (hiện *tạm tính*).
-- 🔴 **A2** — deal riêng của đại lý SL lớn (override giá sỉ).
-- 🟠 **B1–B2** — 20–30 tin thật + đơn đúng (golden) để đo độ chính xác field-level.
+- 🔴 **A4** — danh sách đại lý/CTV + **map nhóm Zalo → đại lý** đầy đủ. *(Cơ chế đã có: panel `/admin` + MCP tool + hộp thư "nhóm chưa map" → nhập dần được, không còn chặn việc build.)*
+- 🔴 **A3** — **bảng phí COD** + **biểu cước ship** + xác nhận ngưỡng công nợ.
+- 🔴 **A2** — deal riêng theo đại lý.
+- 🟠 **B1–B2** — 20–30 tin thật + đơn đúng (golden) → **cổng đo độ chính xác trước go-live** (không thay thế được bằng "nguồn sự thật động").
+- 🟡 Đọc nốt: `QT Preoder` · `QT_Báo giá B2B` · `QT_Hoàn trả hàng B2B` · `QT_Tiếp xúc khách hàng` · `QT đưa sp vào TT` · `Biên bản bàn giao` → bổ sung vào tài liệu này.

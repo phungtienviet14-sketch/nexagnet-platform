@@ -79,10 +79,12 @@ flowchart TB
     end
 
     subgraph L6["Tầng 6 — Dữ liệu & quản trị"]
-        KNOW["knowledge/ — NGUỒN SỰ THẬT:<br/>19 SKU, bảng giá, chính sách, glossary"]
+        KNOW["knowledge/ — NGUỒN SỰ THẬT<br/>(Postgres/Prisma khi PERSISTENCE=prisma)<br/>19 SKU, bảng giá, chính sách, glossary"]
+        ADMIN["/admin (AdminJS) + MCP tool<br/>sửa nguồn sự thật ĐỘNG"]
         ORD["orders/ (state machine)"]
         MET["metrics/ — KPI (GĐ sau)"]
         AUTH["auth/ — phân quyền + audit (GĐ sau)"]
+        ADMIN -.->|"ghi + reload()"| KNOW
     end
 
     L1 --> L2 --> L3 --> L4 --> L5
@@ -240,7 +242,7 @@ erDiagram
 ```
 
 Ngoài ra còn: `glossary_entries` (TN→Thái Nguyên...), `dealer_price_overrides` (deal riêng), `policies`, `kpi_events`, `audit_logs`, `users`.
-> **Lưu ý:** demo hiện chạy **in-memory** ([knowledge/seed.ts](../apps/api/src/knowledge/seed.ts) + `InMemoryOrdersRepository`); schema Postgres trên là đích của Phase 3.
+> **Lưu ý:** Phase 3 **đã hiện thực** schema này trên Postgres (Prisma 6, migration `init` + `prisma/seed.ts`). Mặc định app vẫn chạy **in-memory** (`PERSISTENCE=memory` → demo/CI không cần DB); đặt `PERSISTENCE=prisma` để dùng Postgres. Sửa nguồn sự thật **động** qua `/admin` (AdminJS) hoặc **MCP tool**.
 
 ---
 

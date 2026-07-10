@@ -245,12 +245,14 @@ bb grey co tot khong c oi
 | AI đọc hiểu | 🟢 THẬT | `PARSER_MODE=deepseek`/`claude` |
 | Kênh Zalo (đọc/gửi) | 🟢 THẬT | `CHANNEL_MODE=zca` |
 | Danh mục 19 SKU + giá sỉ + glossary | 🟢 THẬT | bảng giá tháng 7 của khách |
-| Rules (giá/ship/công nợ/VAT) | 🟢 THẬT | khớp PO + quy trình khách |
+| Rules — giá sỉ, chính sách công nợ, TH1 miễn ship | 🟢 THẬT | khớp bảng giá tháng 7 + PO của khách |
+| Rules — cước ship 1 SP, phí COD, VAT mặc định | 🟡 **TẠM TÍNH** | hồ sơ chưa có biểu phí (A3). Nói thật khi khách hỏi. Chi tiết: [nghiep-vu.md §13](nghiep-vu.md) |
 | 6-agent + streaming | 🟢 THẬT | |
 | KiotViet (kho + đẩy đơn) | 🟡 MÔ PHỎNG | chưa có API — mock KV-1001 |
-| Lưu trữ (đơn/tin) | 🟡 in-memory | demo restart sạch; production dùng Postgres |
+| Lưu trữ (đơn/tin) | 🟡 in-memory khi demo — 🟢 **Postgres đã sẵn sàng** | demo restart sạch; bật thật: `PERSISTENCE=prisma` + `docker compose up -d postgres` |
+| **Sửa nguồn sự thật** (SKU/giá/đại lý/map nhóm) | 🟢 **THẬT, động** | panel `/admin` (AdminJS) hoặc **MCP tool** — sửa xong pipeline thấy ngay |
 | Base (giao vận) | ⚪ CHƯA CÓ | GĐ2 |
-| Danh sách 200 đại lý + map nhóm đầy đủ | 🟡 3 nhóm mẫu | chờ khách gửi (A4) |
+| Danh sách 200 đại lý + map nhóm đầy đủ | 🟡 vài nhóm mẫu | chờ khách (A4) — **nhập dần được** qua hộp thư "nhóm chưa map" ở `/admin`, không cần deploy |
 
 ### 13.3 Còn thiếu để chạy THẬT toàn tập (xin khách)
 Danh sách đại lý/CTV + map nhóm Zalo đầy đủ (A4) · biểu phí COD + cước ship (A3) · deal riêng (A2) · 20–30 tin test (B1-B2) · file export/import KiotViet (C1). Chi tiết: [checklist-du-lieu-khach.md](checklist-du-lieu-khach.md).
