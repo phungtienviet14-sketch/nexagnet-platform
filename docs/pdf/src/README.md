@@ -34,4 +34,5 @@ $c = <dump-dom output>
 ## Quy ước nội dung
 
 - **PDF (thư mục cha) = bản cho SẾP/KHÁCH**: không tên biến env, không tên bảng DB/module, không thuật ngữ (intent, rules engine, state machine...). Không dùng chữ "Co-pilot" (dễ nhầm Microsoft Copilot) — viết "chế độ Sale dán tay".
-- **Chi tiết kỹ thuật = các .md trong `docs/`**: [nghiep-vu.md](../../nghiep-vu.md) · [so-do-he-thong.md](../../so-do-he-thong.md) · [ke-hoach-dai-han.md](../../ke-hoach-dai-han.md) · [thiet-ke-ky-thuat-hop-nhat.md](../../thiet-ke-ky-thuat-hop-nhat.md). Sửa nghiệp vụ/kỹ thuật thì sửa .md trước, rồi phản ánh bản rút gọn vào HTML.
+- **Chi tiết kỹ thuật = các .md trong `docs/`**: [nghiep-vu.md](../../nghiep-vu.md) · [so-do-he-thong.md](../../so-do-he-thong.md) (gồm cả thiết kế kỹ thuật hợp nhất + phụ lục PoC) · [ke-hoach/tong-quan.md](../../ke-hoach/tong-quan.md) + [ke-hoach/tinh-nang-dai-han.md](../../ke-hoach/tinh-nang-dai-han.md). Sửa nghiệp vụ/kỹ thuật thì sửa .md trước, rồi phản ánh bản rút gọn vào HTML.
+- ⚠️ **3 PDF hiện là bản 10/07/2026** — bộ .md đã chuẩn hóa lại 11/07/2026 (hợp nhất thiết kế/PoC vào sơ đồ, kế hoạch chuyển vào `docs/ke-hoach/`); khi cần bàn giao bản mới thì cập nhật HTML theo .md rồi regen.

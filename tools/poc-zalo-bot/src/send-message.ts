@@ -22,6 +22,6 @@ const response = await callBotApi(token, 'sendMessage', { chat_id: chatId, text 
 console.log(JSON.stringify(response, null, 2));
 
 if (!response.ok) {
-  console.error('Gui that bai - ghi lai error_code/description vao docs/poc-zalo-bot.md');
+  console.error('Gui that bai - ghi lai error_code/description vao docs/so-do-he-thong.md (Phu luc A)');
   process.exit(1);
 }
