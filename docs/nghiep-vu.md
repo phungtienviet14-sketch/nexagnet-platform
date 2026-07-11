@@ -3,10 +3,10 @@
 > **Cảnh báo lịch sử:** bản đầu của tài liệu này (09/07/2026, suy từ code + CLAUDE.md) **có sai lệch**. Bản này viết lại bằng cách đọc **hồ sơ gốc của khách**, và ghi rõ chỗ nào **code đang khác nguồn gốc**.
 >
 > **Vai trò tài liệu:** mô tả nghiệp vụ THẬT + đối chiếu với **as-built** (hệ thống đang làm gì). Đây là tài liệu tra cứu cho Sale/kế toán/khách và cho người code.
-> **Phân biệt:** `Thiet_ke_AI_Agent_U_Ultty.md` = đề xuất giải pháp NetViet (giữ nguyên) · [so-do-he-thong.md](so-do-he-thong.md) = sơ đồ + thiết kế kỹ thuật as-built · [ke-hoach/tong-quan.md](ke-hoach/tong-quan.md) = kế hoạch + trạng thái · tài liệu này = **nghiệp vụ + sai lệch**.
+> **Phân biệt:** `Thiet_ke_AI_Agent_U_Ultty.md` = đề xuất giải pháp NetViet (giữ nguyên) · [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md) = quyết định kỹ thuật · [so-do-he-thong.md](so-do-he-thong.md) = sơ đồ · tài liệu này = **nghiệp vụ + sai lệch**.
 >
 > **Không chứa PII.** Hồ sơ gốc có SĐT/địa chỉ/số tài khoản/tên người — đã gitignore, **không trích vào đây**.
-> Cập nhật: **11/07/2026** — đối chiếu lại toàn bộ mô tả as-built với code (code là chuẩn): sửa §10 vòng đời đơn theo code thật; chính xác hóa §7/§8/§9/§12.
+> Cập nhật: 09/07/2026.
 
 ---
 
@@ -123,7 +123,7 @@ Nguồn số: [rules/config.ts](../apps/api/src/rules/config.ts). **LLM không �
 | Luật | Code hiện tại | Đối chiếu nguồn gốc |
 |---|---|---|
 | Giá 1 SKU | `wholesale` (hoặc deal riêng) | ✅ đúng ("Đơn giá CTV") |
-| Miễn ship (TH2) | tổng SL **≥ 2** → 0đ *(TH1 luôn miễn — dòng dưới)* | ✅ khớp ("đơn 2 SP miễn ship") |
+| Miễn ship | tổng SL **≥ 2** → 0đ | ✅ khớp ("đơn 2 SP miễn ship") |
 | **TH1 (giao đại lý)** | **luôn miễn ship** | ✅ khớp PGH: *"Miễn phí giao hàng đúng thời hạn không móp méo bể vỡ"* |
 | Ship 1 SP nội thành | 30.000đ (Grab, HN/HCM) | ⚠️ **TẠM TÍNH** — nguồn gốc chỉ nói *"Grab nội thành"*, **không có mức tiền** |
 | Ship 1 SP đi tỉnh | 40.000đ (Viettel) | ⚠️ **TẠM TÍNH** — không có mức tiền trong hồ sơ |
@@ -131,11 +131,7 @@ Nguồn số: [rules/config.ts](../apps/api/src/rules/config.ts). **LLM không �
 | COD | TH2 + "thu hộ" → **20.000đ phẳng** | ⚠️ **SAI LỆCH** — thực tế theo **"biểu mẫu riêng"** (bảng phí), chưa có trong hồ sơ |
 | Đối chiếu tổng | lệch > 5% → cảnh báo | (quy ước kỹ thuật, không có trong nguồn gốc) |
 
-Chi tiết as-built ([rules.ts](../apps/api/src/rules/rules.ts)):
-- **Giá sỉ là bảng giá chung** — tra được kể cả khi nhóm CHƯA map đại lý (đơn vẫn có giá; Giám sát vẫn leo thang vì "chưa xác định đại lý").
-- **Đối chiếu tổng:** so `totalRaw` khách ghi với **tiền hàng** (chưa gồm ship/VAT/COD); lệch >5% → cảnh báo.
-- **Nhận diện nội thành** theo từ khóa (`ha noi`, `hn`, `hcm`, `sai gon`…) trên địa chỉ TH2; không có địa chỉ → dùng chi nhánh của nhóm.
-- Cảnh báo đưa đơn về `needs_edit`: SP chưa map được · chưa xác định đại lý · tổng lệch quá ngưỡng.
+Cảnh báo đưa đơn về `needs_edit`: SP chưa map được · chưa xác định đại lý · tổng lệch quá ngưỡng.
 
 ---
 
@@ -143,8 +139,6 @@ Chi tiết as-built ([rules.ts](../apps/api/src/rules/rules.ts)):
 
 7 intent: `dat_don` · `hoi_gia` · `hoi_san_pham` · `chinh_sach_cong_no` · `bao_hanh_khieu_nai` · `van_chuyen` · `khac`.
 6 vai dưới **1 orchestrator, dùng chung 1 lần gọi LLM/tin**: Điều phối (Router) · Tư vấn SP · Bán hàng & chốt đơn (**vai DUY NHẤT gọi `priceOrder`**) · Chính sách & tài chính · Hậu mãi & bảo hành · **Giám sát** (0 LLM, ánh xạ vai KSNB).
-
-**Map intent → vai xử lý chính (as-built, [agents.ts](../packages/shared/src/agents.ts)):** `dat_don` → Bán hàng (+ Chính sách-TC chú thích đơn) · `hoi_gia` / `chinh_sach_cong_no` / `van_chuyen` → Chính sách & tài chính · `hoi_san_pham` → Tư vấn SP · `bao_hanh_khieu_nai` → Hậu mãi (handoff kỹ thuật) · `khac` → Điều phối giữ, soạn câu trả lời lịch sự. Mọi tin ≠ đặt đơn vẫn tạo bản ghi `pending_review` kèm **draft trả lời** để Sale dùng (AI không tự gửi).
 
 **Checklist chốt đơn thật (khảo sát §4)** — AI đang số hoá: (1) hình thức ship → (2) hình thức thanh toán (thu hộ hay CK trước) → (3) có/không VAT (gửi STK) → (4) gửi format xác nhận → (5) **sau khi gửi hàng, gửi lại ảnh đã gửi vào nhóm**.
 > Bước (5) **hệ thống chưa làm** (thuộc bước 8 quy trình thật).
@@ -156,7 +150,6 @@ Chi tiết as-built ([rules.ts](../apps/api/src/rules/rules.ts)):
 Nguồn số: [agents.config.ts](../apps/api/src/agents/agents.config.ts). Tất định, 0 LLM.
 - **Leo thang** (`needs_edit`, KHÔNG auto-chốt): chưa xác định đại lý từ nhóm · dấu hiệu **khiếu nại gắt** · **đơn ≥ 20.000.000đ**.
 - **Theo dõi** (cờ vàng): tổng SL **≥ 30** · đơn có cảnh báo · độ tin cậy intent **< 0.5**.
-- Cơ chế: leo thang trên đơn đang `pending_review` → chuyển `needs_edit`; `AUTO_SEND` (nếu bật) cũng CHỈ chạy khi Giám sát = không rủi ro.
 
 Triết lý: *đơn sạch thì nhanh, đơn rủi ro thì chuyển người* (NetViet 5.6).
 
@@ -164,18 +157,11 @@ Triết lý: *đơn sạch thì nhanh, đơn rủi ro thì chuyển người* (N
 
 ## 10. Vòng đời đơn & duyệt — as-built
 
-**As-built theo code ([orders.service.ts](../apps/api/src/orders/orders.service.ts) + [rules.ts](../apps/api/src/rules/rules.ts)):** AI xử lý xong, đơn sinh ra ở `pending_review` (đơn sạch) hoặc `needs_edit` (có cảnh báo / Giám sát leo thang). Hai đường đi tiếp:
+`draft → pending_review → (needs_edit) → approved → sent → synced` · nhánh `rejected`.
+- **GĐ1:** AI soạn → **Sale duyệt 1 chạm** → gửi xác nhận vào nhóm + đẩy KiotViet. AI **không tự gửi**.
+- **`AUTO_SEND` (GĐ2, mặc định off):** đơn **không rủi ro** → AI tự chốt; đơn rủi ro vẫn giữ cho người. Bật khi có **văn bản đồng ý của khách**.
 
-- **Duyệt** → gửi format xác nhận vào nhóm Zalo (kèm nhãn tin tự động) → đẩy KiotViet → chuyển **thẳng** `synced`.
-- **Từ chối** → `rejected`.
-
-Tính chất của nút Duyệt: **gửi Zalo lỗi → đơn GIỮ NGUYÊN trạng thái** để bấm duyệt lại (không kẹt, không mất đơn); **idempotent** — đơn đã `synced` bấm lại không gửi/đẩy trùng.
-
-- Enum còn 3 trạng thái **dự phòng CHƯA dùng** (`draft`, `approved`, `sent`) — dành cho khi tách "đã duyệt / đã gửi / đã đồng bộ" thành các bước riêng. *(Tài liệu cũ từng vẽ chuỗi `draft→…→approved→sent→synced` như thể đang chạy — **đã đính chính 11/07/2026**, code là chuẩn.)*
-- **GĐ1:** AI **không tự gửi** — mọi thứ đi ra ngoài đều qua nút Duyệt của Sale.
-- **`AUTO_SEND` (GĐ2, mặc định off):** bật lên thì đơn `dat_don` **không rủi ro** (Giám sát = none) được AI tự duyệt bằng ĐÚNG luồng trên; đơn rủi ro vẫn giữ cho người. Bật khi có **văn bản đồng ý của khách**.
-
-> Vòng đời này **dừng ở "đã đẩy KiotViet"** (GĐ1 KiotViet là **mock**). Quy trình thật còn KSNB cổng 2 → BPVH → ảnh giao hàng → công nợ (§3).
+> Vòng đời này **dừng ở "đã đẩy KiotViet"**. Quy trình thật còn KSNB cổng 2 → BPVH → ảnh giao hàng → công nợ (§3).
 
 ---
 
@@ -196,8 +182,8 @@ Bảo hành **18–36 tháng**. AI **tiếp nhận + phân nhánh + tạo phiế
 ## 12. Nguồn sự thật: glossary & map nhóm → đại lý
 
 - **Ngôn ngữ đầu vào:** viết tắt, không dấu — *"Gui ve TN cho c"*, *"Gửi OCP"*, *"Bao nhieu tien"*, *"gui nhe"*, *"dung nhu the nao"*.
-- **Glossary 24 mục** (`seed.ts`, gốc từ `Viết tắt_.docx`): địa danh (`TN`=Thái Nguyên, `OCP`=Ocean Park), xưng hô, từ hay dùng (`ck`, `sll`, `cod`) + cụm-câu mẫu.
-- **Map nhóm → đại lý theo `chatId` (ID nhóm), KHÔNG theo tên.** Nhóm chưa map → `unknown` → Giám sát leo thang (fail-safe). Sửa được **động** qua panel `/admin` hoặc **MCP tool** (Phase 3). Seed hiện có **3 đại lý mẫu** (Meta HN — công nợ 30 · ĐL Thái Nguyên — công nợ 45 · CTV Ocean Park — thanh toán ngay) + **2 nhóm Zalo thật đã map** (ID zca).
+- **Glossary** (`seed.ts`, gốc từ `Viết tắt_.docx`): địa danh (`TN`=Thái Nguyên, `OCP`=Ocean Park), xưng hô, từ hay dùng (`ck`, `sll`, `cod`).
+- **Map nhóm → đại lý theo `chatId` (ID nhóm), KHÔNG theo tên.** Nhóm chưa map → `unknown` → Giám sát leo thang (fail-safe). Sửa được **động** qua panel `/admin` hoặc **MCP tool** (Phase 3).
 - Khách hiện đánh dấu đại lý bằng **tag thẻ Zalo** (Đại lý / CTV / Hội nhóm) hoặc **nhớ theo đặc điểm** → chưa có mã đại lý chuẩn (A4).
 
 ---
@@ -222,7 +208,7 @@ Bảo hành **18–36 tháng**. AI **tiếp nhận + phân nhánh + tạo phiế
 
 ## 14. Còn thiếu (chặn chạy thật toàn tập)
 
-Chi tiết + cách hỏi: [ke-hoach/tong-quan.md](ke-hoach/tong-quan.md) — mục "Dữ liệu còn thiếu".
+Chi tiết + cách hỏi: [checklist-du-lieu-khach.md](checklist-du-lieu-khach.md).
 
 - 🔴 **A4** — danh sách đại lý/CTV + **map nhóm Zalo → đại lý** đầy đủ. *(Cơ chế đã có: panel `/admin` + MCP tool + hộp thư "nhóm chưa map" → nhập dần được, không còn chặn việc build.)*
 - 🔴 **A3** — **bảng phí COD** + **biểu cước ship** + xác nhận ngưỡng công nợ.
