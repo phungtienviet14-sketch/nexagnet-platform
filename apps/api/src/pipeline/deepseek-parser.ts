@@ -12,10 +12,11 @@ import {
  * Parser THAT dung DeepSeek (API tuong thich OpenAI, JSON mode).
  * Dung prompt chung (7 intent + few-shot) de phan loai on dinh; retry 1 lan khi loi
  * mang/5xx/429; loi cuoi -> fallback intent=khac (confidence.intent=0 de Giam sat gan co).
- * LUU Y: deepseek-chat KHONG doc anh — don anh can Claude/Co-pilot. KHONG tinh tien.
+ * LUU Y: DeepSeek KHONG doc anh (moi bien the) — don anh can Claude/Co-pilot. KHONG tinh tien.
+ * Model: deepseek-v4-flash (deepseek-chat/deepseek-reasoner bi khai tu 24/07/2026 15:59 UTC).
  */
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
-const DEFAULT_MODEL = 'deepseek-chat';
+const DEFAULT_MODEL = 'deepseek-v4-flash';
 const MAX_RETRIES = 1;
 const RETRY_DELAY_MS = 400;
 const TIMEOUT_MS = 30_000;
@@ -50,6 +51,9 @@ export class DeepSeekParser implements OrderParser {
               { role: 'user', content: input.text },
             ],
             response_format: { type: 'json_object' },
+            // v4 mac dinh BAT thinking -> tat de giu hanh vi/latency nhu deepseek-chat cu
+            // (thinking mode khong ho tro temperature).
+            thinking: { type: 'disabled' },
             temperature: 0,
             max_tokens: 800,
           }),
