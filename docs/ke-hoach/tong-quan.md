@@ -13,7 +13,7 @@
 - **Demo chạy được ngay** trên **dữ liệu thật** (19 SKU + bảng giá tháng 7 + 24 glossary) + **kênh Zalo thật** (zca, 2 nhóm đã map) + AI thật (DeepSeek — eval 35/35).
 - **Lưu trữ:** mặc định in-memory (`PERSISTENCE=memory` → demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma`.
 - **Nguồn sự thật ĐỘNG:** sửa qua panel `/admin` (AdminJS) hoặc MCP tool (8 tool) → ghi Postgres + pipeline nạp lại ngay.
-- **Chất lượng:** 137 test xanh (memory) · IT Postgres gated `RUN_PRISMA_IT=1` · lint · typecheck.
+- **Chất lượng:** 148 test xanh (memory) · IT Postgres gated `RUN_PRISMA_IT=1` · lint · typecheck.
 
 ### Cách chạy nhanh
 
@@ -47,7 +47,7 @@ flowchart LR
     subgraph G1["GĐ1 — Đọc tự động + Sale duyệt (⬅ ĐANG Ở CUỐI GĐ NÀY)"]
         B1["Pipeline: intent + trích xuất<br/>+ rules + validation ✅"]
         B2["Console duyệt 1 chạm ✅"]
-        B3["Lưu mọi tin + rules-config động ⬜"]
+        B3["Lưu mọi tin ✅ · rules-config động ⬜"]
         B4["KiotViet Excel/API + auth ⬜"]
         B5["Pilot 1-2 nhóm, đo 4 KPI ⬜"]
     end
@@ -78,9 +78,9 @@ flowchart LR
 |---|---|
 | Phase 0-2 — scaffold · PoC · pipeline · rules · console SSE · kênh zca · dữ liệu thật | ✅ XONG |
 | Phase 3 — Postgres/Prisma + repo seam + panel `/admin` + MCP tool + seed thật | ✅ XONG |
-| Phase 3 còn lại — **lưu MỌI tin vào DB** (`messages`) | ⬜ |
+| Phase 3 còn lại — **lưu MỌI tin vào DB** (`messages`) | ✅ 11/07/2026 — `MessagesRepository` seam memory\|prisma, pipeline lưu TRƯỚC khi xử lý (lỗi lưu không chặn đơn; rerun không lưu lại), chống trùng unique `(platform, externalMessageId)`, nối `orders.messageId`; IT Postgres gated `RUN_PRISMA_IT=1` |
 | Phase 3 còn lại — **rules-config động** + sửa nghiệp vụ theo nguồn gốc (VAT-default **D8** · phí COD dạng bảng · xác minh `cong_no_7` **D15** · ship/ngưỡng thành config) | ⬜ chờ D8/D15 + A3 |
-| Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `exceljs`) | ⬜ chờ A4 |
+| Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `read-excel-file` — 🔄 11/07 thay `exceljs`) | ⬜ chờ A4 |
 | Phase 4 — KiotViet Excel/API + map SKU↔mã số · Base · đổi LLM sang Claude cho dữ liệu thật | ⬜ chờ C1 |
 | Phase 5 — auth theo vai (2 cổng KSNB) + ghi `kpi_events` + feedback loop | ⬜ chờ D5 |
 | Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | ⬜ chờ E1-E4 + B1-B2 |
@@ -113,7 +113,7 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | A1 | Danh mục SKU | ~~Mã, tên, tên gọi tắt, đơn vị~~ — **đã có 19 SKU từ hồ sơ giá tháng 7**; chỉ còn xác nhận đủ/thiếu | — | ✅ |
 | A2 | Deal riêng theo đại lý | Ai có deal riêng, SKU nào, giá nào (cơ chế `DealerPriceOverride` sẵn, đang rỗng) | Giá đúng cho đại lý SL lớn | ⬜ |
 | A3 | **Biểu phí COD + biểu cước ship + ngưỡng công nợ** | Bảng phí thu hộ COD ("biểu mẫu riêng"); mức cước Grab nội thành/Viettel tỉnh; định nghĩa "nội thành"; ngưỡng SL áp công nợ 30 vs 45 | Rules hết **tạm tính** (COD 20k, ship 30k/40k đang là giả định) | ⬜ |
-| A4 | Danh sách đại lý/CTV + map nhóm Zalo | Tên, cấp, chính sách mặc định, SĐT + nhóm Zalo nào thuộc đại lý nào (từ tag Zalo đang dùng); ưu tiên 10-20 nhóm pilot; gửi file mẫu cho Sale điền dần | Áp đúng đại lý/chính sách (cơ chế nhập sẵn: `/admin` + hộp thư nhóm chưa map + import exceljs) | ⬜ |
+| A4 | Danh sách đại lý/CTV + map nhóm Zalo | Tên, cấp, chính sách mặc định, SĐT + nhóm Zalo nào thuộc đại lý nào (từ tag Zalo đang dùng); ưu tiên 10-20 nhóm pilot; gửi file mẫu cho Sale điền dần | Áp đúng đại lý/chính sách (cơ chế nhập sẵn: `/admin` + hộp thư nhóm chưa map + import `read-excel-file`) | ⬜ |
 
 ### B — Dữ liệu kiểm thử AI (CỔNG GO-LIVE)
 

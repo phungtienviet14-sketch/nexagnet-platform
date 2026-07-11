@@ -31,7 +31,7 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 
 ### 1.3 Import Excel A4 (đại lý + map nhóm)
 
-- **Phạm vi:** lệnh/endpoint import file Excel theo mẫu (đại lý: tên/cấp/chính sách/SĐT/alias; map: chatId nhóm ↔ đại lý + chi nhánh) bằng **`exceljs`** (đã chốt — tránh `xlsx`/`node-xlsx` vì CVE); dry-run báo lỗi từng dòng trước khi ghi; ghi xong gọi `reload()`.
+- **Phạm vi:** lệnh/endpoint import file Excel theo mẫu (đại lý: tên/cấp/chính sách/SĐT/alias; map: chatId nhóm ↔ đại lý + chi nhánh) bằng **`read-excel-file`** *(🔄 11/07: thay `exceljs` — bỏ bảo trì ~3 năm, xem [tinh-nang-dai-han.md §7.2](tinh-nang-dai-han.md); vẫn tránh `xlsx`/`node-xlsx` vì CVE)*; dry-run báo lỗi từng dòng trước khi ghi; ghi xong gọi `reload()`.
 - **Cổng:** **A4** (file khách điền). Mẫu file gửi khách soạn ngay không cần chờ.
 - **Validate:** import file mẫu → nhóm map đúng; dòng lỗi bị từ chối có lý do tiếng Việt.
 
@@ -41,7 +41,7 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 
 | Việc | Nội dung | Cổng |
 |---|---|---|
-| KiotViet | `KiotVietExcelAdapter` (xuất file đúng format import) **hoặc** API client mỏng sau `KiotVietAdapter` sẵn có (OAuth2 client-credentials, token 1h tại `id.kiotviet.vn/connect/token`, base `https://public.kiotapi.com`, header `Retailer`, 5.000 GET/giờ — tự viết, KHÔNG dep ngoài; SDK cộng đồng chỉ tham khảo) + **bảng map SKU ↔ mã hàng số** (vd ELNI=`8716`) | **C1** (file mẫu / xác nhận gói có API) |
+| KiotViet | `KiotVietExcelAdapter` (xuất file đúng format import) **hoặc** API client mỏng sau `KiotVietAdapter` sẵn có (OAuth2 client-credentials, token hạn **24h** — `expires_in` 86400, verify docs 11/07 — tại `id.kiotviet.vn/connect/token`, base `https://public.kiotapi.com`, header `Retailer`, 5.000 GET/giờ — tự viết, KHÔNG dep ngoài; SDK cộng đồng chỉ tham khảo) + **bảng map SKU ↔ mã hàng số** (vd ELNI=`8716`) | **C1** (file mẫu / xác nhận gói có API) |
 | Base | Sinh format chuẩn để dán tay (GĐ1); API/webhook nếu có tài liệu (GĐ2) — hiện CHƯA có code | **C2** |
 | LLM | Đổi `PARSER_MODE=claude` cho dữ liệu khách thật (DeepSeek chỉ demo/test) hoặc bổ sung DeepSeek vào thỏa thuận xử lý dữ liệu | **D17** + **F4** |
 
@@ -49,7 +49,7 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 
 ## 3. Phase 5 — Auth + KPI + Feedback loop
 
-- **Auth theo vai** `BPKD / KSNB / BPVH / Kế toán / Quản lý` — quy trình thật có **2 cổng KSNB** ([../nghiep-vu.md §3](../nghiep-vu.md)); vai "Giám sát" trong hệ thống ánh xạ KSNB. Hiện **mọi endpoint chưa có auth** (kể cả `POST /knowledge/reload`) → chặn production. Ứng viên đã kiểm registry: `@nestjs/passport` 11 + `argon2` 0.44 (chốt khi làm).
+- **Auth theo vai** `BPKD / KSNB / BPVH / Kế toán / Quản lý` — quy trình thật có **2 cổng KSNB** ([../nghiep-vu.md §3](../nghiep-vu.md)); vai "Giám sát" trong hệ thống ánh xạ KSNB. Hiện **mọi endpoint chưa có auth** (kể cả `POST /knowledge/reload`) → chặn production. Phương án đã chốt sau tra lại 11/07: **`express-session` (sẵn có) + guard/`@Roles()` tự viết + `argon2` 0.44** — bỏ tầng passport (chi tiết [tinh-nang-dai-han.md §7.2](tinh-nang-dai-han.md)).
 - **Ghi `kpi_events`** (model có sẵn, chưa ghi): message_received · order_created · approved/rejected · sửa field — đủ tính 4 KPI ([../so-do-he-thong.md §15.2](../so-do-he-thong.md)). Dashboard (F3) chỉ là tầng đọc phía trên.
 - **Feedback loop:** lưu cặp (tin gốc, AI output, bản Sale sửa) vào `parse_feedback` → đề xuất glossary/few-shot mới. Cổng: **D5** (danh sách người dùng + vai).
 
