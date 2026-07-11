@@ -18,6 +18,8 @@ import { KnowledgeController } from './knowledge/knowledge.controller.js';
 import { KnowledgeRepository, SeedKnowledgeRepository } from './knowledge/knowledge.repository.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { PrismaKnowledgeRepository } from './knowledge/prisma-knowledge.repository.js';
+import { InMemoryMessagesRepository, MessagesRepository } from './messages/messages.repository.js';
+import { PrismaMessagesRepository } from './messages/prisma-messages.repository.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
 import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
 import { PrismaOrdersRepository } from './orders/prisma-orders.repository.js';
@@ -48,6 +50,15 @@ import { StreamController } from './stream/stream.controller.js';
         loadEnv().PERSISTENCE === 'prisma'
           ? new PrismaOrdersRepository(prisma)
           : new InMemoryOrdersRepository(),
+      inject: [PrismaService],
+    },
+    {
+      // Luu MOI tin ngay khi nhan (Phase 3): Postgres khi PERSISTENCE=prisma; memory mac dinh.
+      provide: MessagesRepository,
+      useFactory: (prisma: PrismaService): MessagesRepository =>
+        loadEnv().PERSISTENCE === 'prisma'
+          ? new PrismaMessagesRepository(prisma)
+          : new InMemoryMessagesRepository(),
       inject: [PrismaService],
     },
     {
