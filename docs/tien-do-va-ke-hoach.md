@@ -57,9 +57,10 @@ pnpm --filter @ultty/api mcp
 ## 3. CHƯA XONG — kế hoạch còn lại
 
 ### Phase 3 — còn lại ⬜
+- ⚠️ **KHẨN — deadline 24/07/2026:** đổi model DeepSeek `deepseek-chat` → `deepseek-v4-flash` **+ tắt thinking** (model mới mặc định bật) tại `apps/api/src/pipeline/deepseek-parser.ts` — sau 24/07 15:59 UTC model cũ bị cắt hẳn, demo parser chết ([ke-hoach-dai-han.md §7.3](ke-hoach-dai-han.md)).
 - **Lưu MỌI tin ngay khi nhận** vào DB (`MessagesRepository`) — tuân thủ NĐ13 + chống mất đơn khi Zalo khoá kênh.
 - **Rules-config động + sửa nghiệp vụ theo nguồn gốc** ([nghiep-vu.md §13](nghiep-vu.md)): VAT-default theo chính sách · phí COD dạng **bảng** (không phẳng 20k) · xác minh `cong_no_7` · đưa ship/ngưỡng thành cấu hình sửa được.
-- **Import Excel A4** (đại lý + map nhóm) bằng **exceljs** *(đã chốt lib; tránh `xlsx`/`node-xlsx` — CVE)*.
+- **Import Excel A4** (đại lý + map nhóm) bằng **`read-excel-file`** *(🔄 đổi 11/07/2026 sau tra lại search-first: `exceljs` bỏ bảo trì ~3 năm — 655 issues/140 PR; export sau này dùng `write-excel-file`; vẫn tránh `xlsx`/`node-xlsx` — CVE. Chi tiết: [ke-hoach-dai-han.md §7.2](ke-hoach-dai-han.md))*.
 
 ### Phase 4 — Tích hợp vận hành ⬜
 - **KiotViet:** `KiotVietExcelAdapter` (file import đúng format) **hoặc** API. Cần file mẫu (C1) / credential. Kèm **map SKU ↔ mã hàng số** (vd `8716`).

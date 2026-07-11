@@ -98,7 +98,7 @@ Xây hệ thống AI Co-pilot: tin nhắn đặt hàng Zalo (dán tay hoặc bot
 - Validate: e2e Playwright luồng chính: dán tin nhắn → thấy đơn chờ duyệt → sửa 1 field → duyệt → copy format; screenshot 375px làm visual baseline
 
 **Task 2.3: Export KiotViet Excel + format Base**
-- Action: xuất `.xlsx` đúng cột import KiotViet (dùng thư viện `exceljs` — search-first, không tự viết writer); nút copy đơn cho Base
+- Action: xuất `.xlsx` đúng cột import KiotViet (dùng `write-excel-file` — 🔄 11/07/2026 thay `exceljs` sau tra lại search-first, xem [ke-hoach-dai-han.md §7.2](../../docs/ke-hoach-dai-han.md); không tự viết writer); nút copy đơn cho Base
 - Validate: unit so sánh file xuất với golden file; khách xác nhận import thử thành công 1 đơn
 
 **Task 2.4: Feedback loop**

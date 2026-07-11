@@ -72,7 +72,7 @@
 | **6** | **MCP tool** `apps/api/src/mcp/` (`@modelcontextprotocol/sdk` 1.29, stdio): **8 tool**, logic tách transport, zod + kiểm FK; ghi **thẳng Prisma** + best-effort `POST /knowledge/reload` | ✅ `c066a06` — IT 11/11 + smoke stdio |
 | **7** | **Giao diện "Nguồn sự thật"** = **AdminJS mount `/admin`** *(không phải `apps/web`)*: auto-CRUD 6 bảng + action **map nhóm→đại lý** + hộp thư `status=pending`; gated `ADMIN_UI=on`+`PERSISTENCE=prisma` | ✅ `d44149e` — verified boot + authed CRUD Postgres |
 | **8** | Rules-config từ DB (ship/COD/VAT/ngưỡng thành data sửa được) + **sửa nghiệp vụ** (mục B) | ⬜ **BỊ CHẶN**: cần khách trả lời VAT-default + `cong_no_7` |
-| **9** | Import Excel A4 (đại lý + map nhóm) bằng **`exceljs`** — ĐÃ chốt lib; **TRÁNH `xlsx`/`node-xlsx`** (CVE chưa vá) | ⬜ (khi có file khách) |
+| **9** | Import Excel A4 (đại lý + map nhóm) bằng **`read-excel-file`** *(🔄 11/07/2026: thay `exceljs` — bỏ bảo trì ~3 năm, xem [ke-hoach-dai-han.md §7.2](../../docs/ke-hoach-dai-han.md))*; **TRÁNH `xlsx`/`node-xlsx`** (CVE chưa vá) | ⬜ (khi có file khách) |
 
 > **Trạng thái tổng:** increments **1,2,3,6,7 XONG + verified trên Postgres thật**; còn **4, 8, 9**. Nguồn sự thật về tiến độ: [docs/tien-do-va-ke-hoach.md](../../docs/tien-do-va-ke-hoach.md).
 

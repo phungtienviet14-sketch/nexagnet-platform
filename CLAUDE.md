@@ -78,7 +78,7 @@ Quy trình duyệt: 1 Sale xác nhận bước cuối → kế toán kiểm tra 
 ## Câu hỏi mở (chưa chốt — hỏi/thử trước khi implement phần liên quan)
 
 1. ~~PoC Zalo Bot Platform (3 câu hỏi Beta)~~ — **ĐÃ CHỐT phần lớn (PoC 07/07, [docs/poc-zalo-bot.md](docs/poc-zalo-bot.md)):** (a) vào nhóm sẵn có ✅ CÓ; (b) chỉ nhận @mention (native, không tắt được) ✅; (c) giới hạn nhóm/rate limit — CÒN treo. **Còn phải hỏi khách:** đại lý có chấp nhận @mention bot khi đặt hàng không (D2)? + gói Premium giá/rate limit (hỏi Zalo).
-2. Gói KiotViet hiện tại có bật API không? Rate limit bao nhiêu?
+2. Gói KiotViet hiện tại có bật API không? ~~Rate limit bao nhiêu?~~ — *docs công khai (tra 11/07/2026): rate limit **5.000 GET/giờ**, token hạn **24h**; còn phải hỏi khách: gói đang dùng có bật tính năng API không.*
 3. Base có tài liệu API không? (khảo sát ghi "không rõ")
 4. Phạm vi cụ thể của giai đoạn 1/2/3 là gì?
 5. Báo giá GMF chính thức cho 200-350 nhóm nhỏ + gói OA mới (sau 1/6/2026) nào có GMF/OpenAPI
