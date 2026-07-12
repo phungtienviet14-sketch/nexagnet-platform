@@ -11,7 +11,7 @@
 
 - **Nhánh đang làm:** `feat/phase3-persistence` (tách từ `feat/console-realtime-ui`). Cả 2 nhánh **CHƯA merge `main`**.
 - **Demo chạy được ngay** trên **dữ liệu thật** (19 SKU + bảng giá tháng 7 + 24 glossary) + **kênh Zalo thật** (zca, 2 nhóm đã map) + AI thật (DeepSeek — eval 35/35).
-- **Lưu trữ:** mặc định in-memory (`PERSISTENCE=memory` → demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma`.
+- **Lưu trữ:** mặc định in-memory (`PERSISTENCE=memory` → demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma`. **MỌI tin nhắn được lưu vào bảng `messages` ngay khi nhận** (11/07, commit `6d1a539` — trước khi qua pipeline, chống trùng unique, nối `orders.messageId`).
 - **Nguồn sự thật ĐỘNG:** sửa qua panel `/admin` (AdminJS) hoặc MCP tool (8 tool) → ghi Postgres + pipeline nạp lại ngay.
 - **Chất lượng:** 148 test xanh (memory) · IT Postgres gated `RUN_PRISMA_IT=1` · lint · typecheck.
 
@@ -198,3 +198,5 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | Merge `feat/console-realtime-ui` + `feat/phase3-persistence` vào `main` | Nhiều commit đang chờ |
 | KiotViet: làm `KiotVietExcelAdapter` ngay hay chờ xác nhận API (C1) | Khảo sát ghi "chưa có API" |
 | Regen 3 PDF lãnh đạo (`docs/pdf/`) theo bộ tài liệu mới 11/07 | Cần mạng (mermaid CDN); lệnh trong `docs/pdf/src/README.md` |
+| **Việc kế tiếp đề xuất #1 (11/07):** soạn **mẫu file Excel A4** gửi khách điền (đại lý + map nhóm) | [nen-tang.md §1.3](nen-tang.md): "mẫu file gửi khách soạn ngay không cần chờ" — việc Phase 3 duy nhất không bị khách chặn |
+| **Việc kế tiếp đề xuất #2 (11/07):** ghi **`kpi_events`** (message_received · order_created · approved/rejected · sửa field) | Phase 5 phần KHÔNG cần dữ liệu khách; model có sẵn chưa ghi — nền cho dashboard F3 ([nen-tang.md §3](nen-tang.md)) |
