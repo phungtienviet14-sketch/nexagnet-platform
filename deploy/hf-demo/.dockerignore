@@ -1,0 +1,53 @@
+# =============================================================================
+# .dockerignore cho ban demo HF Spaces.
+# LUU Y: Docker doc .dockerignore o GOC build context (goc repo), KHONG phai canh
+# Dockerfile. Khi tao Space -> copy file nay thanh ".dockerignore" o goc repo/Space.
+# Muc dich: build context gon + KHONG bao gio dua secret/PII/node_modules vao image.
+# =============================================================================
+
+# Dependencies & build output (Docker tu cai + build lai ben trong)
+node_modules
+**/node_modules
+dist
+**/dist
+.next
+**/.next
+out
+**/out
+.swc
+**/*.tsbuildinfo
+
+# Secrets & PII — TUYET DOI khong dua vao image
+.env
+.env.*
+!.env.example
+secrets/
+**/secrets/
+HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG/
+*.docx
+
+# Prisma Client da generate o host (se generate LAI trong container theo engine Debian)
+**/.prisma
+**/generated
+
+# Git / CI / editor / OS
+.git
+.gitignore
+.github
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Claude / worktrees / docs nang (khong can cho runtime demo)
+.claude
+docs/pdf
+design
+coverage
+**/coverage
+*.log
+logs/
+
+# Chinh cac file trien khai (khong can vao image; da COPY co chon loc trong Dockerfile)
+deploy/hf-demo/README.md
+deploy/hf-demo/README.space.md
