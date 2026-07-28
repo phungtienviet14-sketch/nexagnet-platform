@@ -216,3 +216,24 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | Regen 3 PDF lãnh đạo (`docs/pdf/`) theo bộ tài liệu mới 11/07 | Cần mạng (mermaid CDN); lệnh trong `docs/pdf/src/README.md` |
 | ~~**Việc kế tiếp đề xuất #1 (11/07):** soạn **mẫu file Excel A4** gửi khách điền~~ | ✅ **13/07/2026** — `docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx` (generator `tools/excel-template/generate_a4_template.py` + README bảng map cột→field). **Gửi chị Phương điền** rồi build importer đọc lại (cổng A4) |
 | **Việc kế tiếp đề xuất #2 (11/07):** ghi **`kpi_events`** (message_received · order_created · approved/rejected · sửa field) | Phase 5 phần KHÔNG cần dữ liệu khách; model có sẵn chưa ghi — nền cho dashboard F3 ([nen-tang.md §3](nen-tang.md)) |
+| Dọn worktree cũ `.claude/worktrees/cool-maxwell-2f02b3/` | Sinh 28 lỗi `pnpm lint` toàn repo, không phải code thật — `pnpm lint` sẽ còn đỏ đến khi xoá |
+
+---
+
+## 6. Bàn giao phiên 28/07/2026 — đổi nền AI + chặn kỹ thuật
+
+**Đã xong (3 commit trên `feat/phase3-persistence`):**
+
+| Commit | Nội dung |
+|---|---|
+| `6a69b27` | **H1 mất tin nhắn** — `MessageGuard` + `processWithRetry` dùng chung cho `ZcaListener`/`BotPoller`: chỉ đánh dấu khi pipeline **thành công**, thử lại 2 lần, hết lượt thì log ERROR kèm id. **H2 xác thực** — `ApiKeyGuard` toàn cục + `@Public` cho `/health`; `API_KEY` trống = guard mở (demo/CI/HF nguyên vẹn), `NODE_ENV=production` **bắt buộc** có key nếu không fail fast. Test 148 → 166 (api), 33 → 37 (shared) |
+| `3cfd364` | Căn cứ pháp lý: NĐ 13/2023 hết hiệu lực → **Luật 91/2025/QH15 + NĐ 356/2025** (7 chỗ / 5 file) |
+| `a2a8c3c` | Sửa cùng căn cứ trong nguồn PDF bàn giao lãnh đạo |
+
+**Hạ tầng — đã tạo, CHƯA tốn tiền:** project GCP `ultty-flowise-spike-2607` (trong org `phungtienviet14-org`, billing `0157A9-389619-7EE46C`, Compute API đã bật). **0 VM, 0 đĩa → $0/tháng.** Startup script dựng Flowise trên Ubuntu 24.04 đã soạn nhưng **chưa chạy**. Xoá sạch bằng: `gcloud projects delete ultty-flowise-spike-2607`.
+
+**Việc kế tiếp, theo thứ tự:**
+1. **H3** — thêm cột tách khách vào `schema.prisma` (đang **0** cột `tenantId`/`customerId`); phụ thuộc D19 về mức cách ly khách yêu cầu.
+2. **Phase 1 spike Flowise** — chạy startup script trên máy Linux nhỏ, đo `docker stats` sau 24-48h. Ba câu phải trả lời: RAM thật · ép được JSON schema khớp `parseResultSchema` không · gọi HTTP ngược về rules engine được không. **Chưa chạy vì Docker daemon trên máy Windows không phản hồi, và số RAM đo trên Windows không phải số cần biết.**
+3. **D21 — đo số TIN/ngày thật.** Chặn mọi thứ phía sau: sizing, báo giá, hoá đơn LLM đều đang dựa trên "10-20 đơn/ngày" trong khi `zca` đọc **mọi tin** của 200-350 nhóm.
+4. Chốt **GCP hay DigitalOcean** (phiên này chọn DO nhưng `doctl` chưa cài và chưa có token; GCP đã đăng nhập sẵn).
