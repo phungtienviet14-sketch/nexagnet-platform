@@ -11,7 +11,7 @@
 
 ### 1.1 Lưu MỌI tin vào DB ngay khi nhận
 
-- **Vì sao:** tuân thủ NĐ13 + chống mất đơn khi Zalo khóa kênh (Zalo không replay tin); nền cho sửa đơn (F1), chống gian lận (F6b), công nợ (F5).
+- **Vì sao:** tuân thủ Luật BVDLCN 91/2025 + chống mất đơn khi Zalo khóa kênh (Zalo không replay tin); nền cho sửa đơn (F1), chống gian lận (F6b), công nợ (F5).
 - **Phạm vi:** `MessagesRepository` (seam memory|prisma như Orders/Knowledge) — ghi bảng `messages` NGAY khi tin vào ingest (zca/bot/dán tay), TRƯỚC khi qua pipeline; chống trùng bằng unique `(platform, externalMessageId)` (thay bộ nhớ Set hiện tại khi ở chế độ prisma); nối `orders.messageId` khi đơn được tạo từ tin.
 - **Ràng buộc:** ảnh — lưu `imageUrl` như đang có; việc TẢI ảnh về (URL Zalo có hạn) thuộc F4, chưa làm ở đây.
 - **Validate:** IT round-trip Postgres (gated `RUN_PRISMA_IT=1`); tin trùng không tạo 2 dòng; luồng memory giữ nguyên hành vi.
