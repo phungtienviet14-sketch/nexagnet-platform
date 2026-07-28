@@ -232,8 +232,25 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 
 **Hạ tầng — đã tạo, CHƯA tốn tiền:** project GCP `ultty-flowise-spike-2607` (trong org `phungtienviet14-org`, billing `0157A9-389619-7EE46C`, Compute API đã bật). **0 VM, 0 đĩa → $0/tháng.** Startup script dựng Flowise trên Ubuntu 24.04 đã soạn nhưng **chưa chạy**. Xoá sạch bằng: `gcloud projects delete ultty-flowise-spike-2607`.
 
+### ✅ Phase 1 — spike Flowise ĐÃ CHẠY THẬT (28/07/2026)
+
+Đo trên `e2-standard-2` (2 vCPU / 8 GB), Ubuntu 24.04 LTS, `asia-southeast1-b`, **Flowise 3.1.2** qua Docker. Đây là **số đo**, không phải ước lượng quy hoạch như mọi con số RAM trước đó.
+
+| Câu hỏi chặn | Kết quả đo |
+|---|---|
+| **RAM thật** | **558 MB** / **1 container** (lúc rảnh, mới chạy). Toàn máy dùng 1.374 GB kể cả OS + Docker |
+| **Ép JSON schema** khớp `parseResultSchema`? | **CÓ** — node `StructuredOutputParser` + `StructuredOutputParserAdvanced` |
+| **Gọi HTTP ngược** về rules engine TS? | **CÓ** — `RequestsGet/Post/Put/Delete`, `CustomTool`, `OpenAPIToolkit`, và cả node **`MCP`** (repo đã có sẵn MCP server → đường nối tự nhiên) |
+| Thời gian dựng từ máy trắng | **2 phút 40 giây** (boot → Flowise trả `pong`) |
+| Dung lượng image | **5,48 GB** (đĩa, không phải RAM) — đĩa dùng 9,8 GB / 48 GB |
+| Bảo mật mặc định | API trả **401 Unauthorized** ngay từ đầu — **trái ngược Dify** (`/install` kiểu land-grab, mật khẩu công khai `difyai123456`) |
+
+**Hệ quả cho sizing:** con số "engine 3,1 GB" trong bảng ngân sách RAM là ước lượng **cho Dify 16 container**. Flowise thật = **558 MB / 1 container**, nhẹ hơn ~5,5 lần. Máy AI dùng chung **không cần 8 GB** — nhưng đừng chốt vội: 558 MB là lúc rảnh, phải đo lại dưới tải thật sau khi có D21.
+
+**Trạng thái hạ tầng:** VM spike đã **xoá sau khi đo xong**. Project `ultty-flowise-spike-2607` giữ lại (0 tài nguyên = **$0/tháng**), đã khoá sẵn: xoá `default-allow-ssh`/`default-allow-rdp` (mặc định GCP mở `0.0.0.0/0`), SSH chỉ qua IAP `35.235.240.0/20`, service account riêng **không gán role nào**, Shielded VM. Dựng lại đúng máy đó bằng `deploy/spike/startup-flowise.sh` — mất 3 phút.
+
 **Việc kế tiếp, theo thứ tự:**
-1. **H3** — thêm cột tách khách vào `schema.prisma` (đang **0** cột `tenantId`/`customerId`); phụ thuộc D19 về mức cách ly khách yêu cầu.
-2. **Phase 1 spike Flowise** — chạy startup script trên máy Linux nhỏ, đo `docker stats` sau 24-48h. Ba câu phải trả lời: RAM thật · ép được JSON schema khớp `parseResultSchema` không · gọi HTTP ngược về rules engine được không. **Chưa chạy vì Docker daemon trên máy Windows không phản hồi, và số RAM đo trên Windows không phải số cần biết.**
-3. **D21 — đo số TIN/ngày thật.** Chặn mọi thứ phía sau: sizing, báo giá, hoá đơn LLM đều đang dựa trên "10-20 đơn/ngày" trong khi `zca` đọc **mọi tin** của 200-350 nhóm.
-4. Chốt **GCP hay DigitalOcean** (phiên này chọn DO nhưng `doctl` chưa cài và chưa có token; GCP đã đăng nhập sẵn).
+1. **D21 — đo số TIN/ngày thật.** Chặn mọi thứ phía sau: sizing, báo giá, hoá đơn LLM đều đang dựa trên "10-20 đơn/ngày" trong khi `zca` đọc **mọi tin** của 200-350 nhóm.
+2. **H3** — thêm cột tách khách vào `schema.prisma` (đang **0** cột `tenantId`/`customerId`); phụ thuộc D19 về mức cách ly khách yêu cầu.
+3. **Phase 2** — `/internal/*` (rules engine TS vẫn là nơi DUY NHẤT tính tiền) + `FlowiseOrchestrator` gọi qua `RequestsPost`.
+4. Chốt **GCP hay DigitalOcean** (phiên này chọn DO nhưng `doctl` chưa cài và chưa có token; GCP đã đăng nhập sẵn và vừa chạy spike trơn tru).
