@@ -6,20 +6,20 @@ import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { ZaloUserClient } from '../channels/zalo-user.client.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { AUTO_ACK_TEXT, shouldAutoAck } from './bot-poller.js';
+import { MessageGuard, processWithRetry } from './message-guard.js';
 import { zcaMessageToChannelMessage } from './zca-message.js';
-
-/** Tran so tin da xu ly giu lai de chong trung. zca doc MOI tin nhom -> can chan phinh bo nho. */
-const MAX_SEEN = 2000;
 
 /**
  * Tang 2 — worker doc tin qua zca-js (userbot ca nhan). Chi chay khi CHANNEL_MODE=zca.
  * Khac Bot Platform: nghe MOI tin trong nhom (khong bi mention-gating) -> tin nao cung vao pipeline.
  * Dang ky handler voi ZaloUserClient (client lo dang nhap + giu phien); map -> pipeline.process.
+ *
+ * Chong mat tin: tin CHI duoc danh dau da xu ly khi pipeline chay xong THANH CONG (xem MessageGuard).
  */
 @Injectable()
 export class ZcaListener implements OnModuleInit {
   private readonly logger = new Logger('ZcaListener');
-  private readonly seen = new Set<string>();
+  private readonly guard = new MessageGuard();
   /** Chat da in ID (in 1 lan/nhom) — giup lay threadId that de map vao seed.ts. */
   private readonly announced = new Set<string>();
 
@@ -51,16 +51,23 @@ export class ZcaListener implements OnModuleInit {
     const channelMessage = zcaMessageToChannelMessage(message, selfListen);
     if (!channelMessage) return;
     this.announceGroup(channelMessage.externalChatId, channelMessage.chatType);
-    if (this.seen.has(channelMessage.externalMessageId)) return;
-    this.remember(channelMessage.externalMessageId);
-    try {
-      const view = await this.pipeline.process(channelMessage, botName);
-      this.logger.log(`Da xu ly tin ${channelMessage.externalMessageId} -> intent=${view.intent}`);
-      if (shouldAutoAck(view.intent, autoAck)) {
-        await this.sendAutoAck(channelMessage.externalChatId);
-      }
-    } catch (error) {
-      this.logger.error(`Loi xu ly tin: ${error instanceof Error ? error.message : String(error)}`);
+    const id = channelMessage.externalMessageId;
+    if (!this.guard.claim(id)) return;
+
+    const view = await processWithRetry(
+      () => this.pipeline.process(channelMessage, botName),
+      id,
+      this.logger,
+    );
+    if (!view) {
+      // That bai het luot -> KHONG danh dau. Tin con duong chay lai (khong nuot don im lang).
+      this.guard.release(id);
+      return;
+    }
+    this.guard.complete(id);
+    this.logger.log(`Da xu ly tin ${id} -> intent=${view.intent}`);
+    if (shouldAutoAck(view.intent, autoAck)) {
+      await this.sendAutoAck(channelMessage.externalChatId);
     }
   }
 
@@ -74,15 +81,6 @@ export class ZcaListener implements OnModuleInit {
     this.logger.log(
       `📌 Nhom (${chatType}) chatId="${chatId}" — copy ID nay vao seed.ts groups[] de map dai ly.`,
     );
-  }
-
-  /** Nho id da xu ly (chong trung), chan phinh: qua tran thi bo id cu nhat (Set giu thu tu chen). */
-  private remember(id: string): void {
-    this.seen.add(id);
-    if (this.seen.size > MAX_SEEN) {
-      const oldest = this.seen.values().next().value;
-      if (oldest !== undefined) this.seen.delete(oldest);
-    }
   }
 
   /** Gui tin auto-ack (best-effort): loi khong lam gian doan doc tin. */

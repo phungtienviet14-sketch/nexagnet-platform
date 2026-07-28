@@ -1,5 +1,7 @@
 import { type DynamicModule, Logger, Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { loadEnv } from '@ultty/shared';
+import { ApiKeyGuard } from './auth/api-key.guard.js';
 import { PrismaModule } from './config/prisma.module.js';
 import { PrismaService } from './config/prisma.service.js';
 import { AgentEventsService } from './agents/agent-events.service.js';
@@ -41,6 +43,12 @@ import { StreamController } from './stream/stream.controller.js';
     StreamController,
   ],
   providers: [
+    {
+      // Xac thuc TOAN CUC: chan moi route tru @Public khi da dat API_KEY.
+      // API_KEY bo trong (mac dinh) -> guard mo, demo/CI/HF chay nhu cu.
+      provide: APP_GUARD,
+      useClass: ApiKeyGuard,
+    },
     KnowledgeService,
     AgentEventsService,
     {

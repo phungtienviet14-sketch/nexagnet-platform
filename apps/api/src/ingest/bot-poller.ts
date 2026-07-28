@@ -4,6 +4,7 @@ import { AUTO_LABEL } from '../channels/auto-label.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
+import { MessageGuard, processWithRetry } from './message-guard.js';
 
 /** Tin auto-ack khi LLM khong hieu (intent=Khac). Gan them AUTO_LABEL khi gui. */
 export const AUTO_ACK_TEXT = 'Đã ghi nhận, Sale sẽ phản hồi anh/chị sớm ạ';
@@ -44,12 +45,14 @@ export function updateToChannelMessage(update: BotUpdate): ChannelMessage | null
 /**
  * Tang 2 — worker doc tin Zalo Bot (long polling). Chi chay khi BOT_MODE=on.
  * Luu y: Zalo khong phat lai tin luc bot offline -> production nen dung webhook always-on.
+ *
+ * Chong mat tin: tin CHI duoc danh dau da xu ly khi pipeline chay xong THANH CONG (xem MessageGuard).
  */
 @Injectable()
 export class BotPoller implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('BotPoller');
   private running = false;
-  private readonly seen = new Set<string>();
+  private readonly guard = new MessageGuard();
 
   constructor(
     private readonly pipeline: PipelineService,
@@ -83,16 +86,24 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
         }
         for (const update of normalizeUpdates(res.result)) {
           const message = updateToChannelMessage(update);
-          if (!message || this.seen.has(message.externalMessageId)) continue;
-          this.seen.add(message.externalMessageId);
-          try {
-            const view = await this.pipeline.process(message, botName);
-            this.logger.log(`Da xu ly tin ${message.externalMessageId} -> intent=${view.intent}`);
-            if (shouldAutoAck(view.intent, autoAck)) {
-              await this.sendAutoAck(message.externalChatId);
-            }
-          } catch (error) {
-            this.logger.error(`Loi xu ly tin: ${error instanceof Error ? error.message : String(error)}`);
+          if (!message) continue;
+          const id = message.externalMessageId;
+          if (!this.guard.claim(id)) continue;
+
+          const view = await processWithRetry(
+            () => this.pipeline.process(message, botName),
+            id,
+            this.logger,
+          );
+          if (!view) {
+            // That bai het luot -> KHONG danh dau. Tin con duong chay lai (khong nuot don im lang).
+            this.guard.release(id);
+            continue;
+          }
+          this.guard.complete(id);
+          this.logger.log(`Da xu ly tin ${id} -> intent=${view.intent}`);
+          if (shouldAutoAck(view.intent, autoAck)) {
+            await this.sendAutoAck(message.externalChatId);
           }
         }
       } catch (error) {

@@ -78,4 +78,26 @@ describe('loadEnv', () => {
   it('nem loi khi CHANNEL_MODE khong hop le', () => {
     expect(() => loadEnv({ CHANNEL_MODE: 'userbot' })).toThrowError(EnvValidationError);
   });
+
+  // --- API_KEY: chan viec deploy production ma quen khoa API ---
+
+  it('mac dinh (khong production) KHONG can API_KEY -> demo/CI chay nhu cu', () => {
+    const env = loadEnv({});
+
+    expect(env.API_KEY).toBeUndefined();
+  });
+
+  it('NODE_ENV=production ma THIEU API_KEY -> nem loi ngay luc khoi dong', () => {
+    expect(() => loadEnv({ NODE_ENV: 'production' })).toThrowError(EnvValidationError);
+  });
+
+  it('NODE_ENV=production + co API_KEY -> hop le', () => {
+    const env = loadEnv({ NODE_ENV: 'production', API_KEY: 'khoa-that-du-dai-1234567890' });
+
+    expect(env.API_KEY).toBe('khoa-that-du-dai-1234567890');
+  });
+
+  it('API_KEY qua ngan -> nem loi (chan khoa doan duoc)', () => {
+    expect(() => loadEnv({ API_KEY: 'ngan-qua' })).toThrowError(EnvValidationError);
+  });
 });

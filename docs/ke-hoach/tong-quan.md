@@ -144,7 +144,7 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | D3 | Design PWA là spec hay tham khảo UX? Console PC hay PWA mobile 5 tab? | Hướng app Sale sau demo | ⬜ |
 | D4 | AI có được **tự gửi/trả lời** trong nhóm (`AUTO_SEND`/auto-reply)? | Cần **văn bản đồng ý** — GĐ2 | ⬜ |
 | D5 | Danh sách người dùng app (tên + SĐT + vai: BPKD/KSNB/kế toán/quản lý) | Phase 5 auth | ⬜ |
-| D6 | Mẫu thông báo "nhóm có hệ thống hỗ trợ tự động" | Tuân thủ Zalo + NĐ13 khi chạy thật | ⬜ |
+| D6 | Mẫu thông báo "nhóm có hệ thống hỗ trợ tự động" | Tuân thủ Zalo + Luật 91/2025 khi chạy thật | ⬜ |
 | D7 | Chốt phạm vi GĐ1 + KPI + mốc pilot 1-2 nhóm | Phase 6 | ⬜ |
 | **D8** | **VAT-default** theo chính sách/đại lý (PO công nợ B2B ghi "giá đã gồm GTGT") hay giữ "chỉ VAT khi khách ghi rõ"? | Increment rules-config (Đợt 0) | ⬜ |
 | D9 | STK nhận tiền + chọn SePay/Open API bank/bán tự động + bổ sung hợp đồng xử lý dữ liệu giao dịch | F2 (Đợt 2) | ⬜ |
@@ -155,7 +155,14 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | D14 | Danh sách Sale trực + kênh nhận cảnh báo + case đơn ảo/gian lận thật + ngưỡng | F6 (Đợt 1+3) | ⬜ |
 | **D15** | **"Công nợ 7 ngày"** là chính sách riêng hay điều khoản TT-7-ngày của ký gửi? | Increment rules-config (Đợt 0) | ⬜ |
 | **D16** | **Văn bản chấp nhận rủi ro ToS** cho kênh zca (tài khoản phụ) | Chạy thật kênh zca | ⬜ |
-| **D17** | DeepSeek: bổ sung vào thỏa thuận xử lý dữ liệu HAY đổi hẳn `PARSER_MODE=claude`? | Chạy thật với dữ liệu khách | ⬜ |
+| **D17** | ~~DeepSeek: bổ sung vào thỏa thuận HAY đổi `PARSER_MODE=claude`?~~ → **CHỈ CÒN 1 ĐƯỜNG: đổi sang Claude.** Khảo sát 28/07: DeepSeek lưu dữ liệu tại Trung Quốc và **không có DPA để ký**; Privacy Policy loại trừ chính luồng open-platform API đang dùng. Phương án "bổ sung vào thỏa thuận" **bất khả thi** | Chạy thật với dữ liệu khách | 🟡 đã rõ hướng |
+| **D18** | **Nền AI: Flowise (Apache 2.0)** thay Dify — chốt 28/07/2026. Lý do: LICENSE Dify cấm "operate a multi-tenant environment" khi chưa có văn bản cho phép (khoản 1a), mà mô hình đã đổi thành **bán dịch vụ cho 5 khách ngoài**; PR #8143 (09/09/2024) cố ý bỏ chữ "SaaS" để **mở rộng** phạm vi cấm. Thêm nữa khách không được cấp console ⇒ giá trị no-code của Dify = 0 | Toàn bộ hướng kỹ thuật phần AI | ✅ 28/07 |
+| **D19** | **Mô hình đổi: 5 dự án NỘI BỘ → 5 KHÁCH NGOÀI TRẢ TIỀN.** Kéo theo: DPA từng khách, hồ sơ chuyển dữ liệu xuyên biên giới, cách ly dữ liệu bằng kiến trúc, SLA, on-call, offboarding | Mọi giả định hạ tầng + pháp lý | ✅ 28/07 |
+| **D20** | **Ai đứng tên 5 tài khoản Zalo phụ** — bạn hay khách? Nếu bạn đứng tên thì **bạn** là bên vi phạm ToS Zalo và D16 mất phần lớn ý nghĩa | Chạy thật kênh zca | ⬜ |
+| **D21** | **ĐO số TIN/ngày thật** trên nhóm khách. Sizing + báo giá hiện dựa trên "10-20 đơn/ngày" nhưng zca đọc **mọi tin** của 200-350 nhóm ⇒ sai 2-3 bậc độ lớn về RAM/disk/hóa đơn LLM | Chốt cỡ máy + báo giá khách | ⬜ |
+| **D22** | **Hồ sơ ĐGTĐXLDL + ĐGTĐCDL (Mẫu số 09)** theo Luật 91/2025 + NĐ 356/2025 — 2 điểm chuyển (Singapore + LLM), nộp trong 60 ngày, chế tài tới **5% doanh thu năm liền trước** | Ký hợp đồng khách đầu tiên | ⬜ |
+| **D23** | **Đơn vị kinh tế**: giá bán/khách, biên lợi nhuận, điểm hòa vốn. Hiện chỉ biết hạ tầng ~$44/khách/tháng; chưa có chi phí LLM, nhân sự, onboarding (hàng chục giờ công/khách) | Chốt mô hình kinh doanh | ⬜ |
+| **D24** | **Ai trực + SLA** khi có 5 khách trả tiền (bus factor hiện = 1). Lưu ý: SLA 99.9% ≈ 43 phút/tháng — kiến trúc 1 droplet/1 vùng **không cam kết nổi** | Ký hợp đồng khách đầu tiên | ⬜ |
 
 ### E — Hạ tầng production (chặn chạy 24/7)
 
@@ -180,7 +187,16 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | # | Cần gì | TT |
 |---|---|---|
 | G1 | Chốt model qua bake-off trên B1-B2 (demo tạm DeepSeek 35/35) | ⬜ |
-| G2 | Quyền gửi dữ liệu cá nhân (SĐT/địa chỉ đơn TH2) sang LLM — tối thiểu hóa, NĐ13/2023 | ⬜ |
+| G2 | Quyền gửi dữ liệu cá nhân (SĐT/địa chỉ đơn TH2) sang LLM — tối thiểu hóa. ⚠️ **Cơ sở pháp lý đã đổi**: NĐ 13/2023 **hết hiệu lực**, nay là **Luật 91/2025/QH15 + NĐ 356/2025** (từ 01/01/2026) | ⬜ |
+
+### H — Chặn kỹ thuật trước khi bán dịch vụ (phát hiện 28/07/2026, đã xác minh trong code)
+
+| # | Vấn đề | Bằng chứng | TT |
+|---|---|---|---|
+| **H1** | **MẤT TIN NHẮN ÂM THẦM.** `remember()` đánh dấu đã-xử-lý **trước** `pipeline.process()`, catch chỉ log ⇒ LLM timeout = tin mất vĩnh viễn (Zalo không replay). `seen` là Set trong RAM (max 2000), mất khi restart. Vi phạm chính quy tắc CLAUDE.md "lưu mọi tin về DB ngay khi nhận" | [zca-listener.ts:55](../../apps/api/src/ingest/zca-listener.ts) chạy trước dòng 57 | ⬜ |
+| **H2** | **API KHÔNG CÓ XÁC THỰC.** 0 `UseGuards`/`AuthGuard`/`CanActivate` trên 8 controller. `POST /broadcast` gửi tin Zalo thật tới 50 nhóm; `/knowledge` trả bảng giá + map đại lý. `main.ts` chỉ có `enableCors` — CORS không chặn `curl` | grep toàn `apps/api/src` = 0 kết quả | ⬜ |
+| **H3** | **SCHEMA KHÔNG CÓ CỘT TÁCH KHÁCH.** `tenantId`/`customerId`/`orgId`/`workspaceId` = 0 kết quả. `ParseFeedback` dùng dữ liệu khách mở rộng glossary/few-shot ⇒ nếu chảy chung giữa 5 khách thì vừa rò rỉ chéo, vừa đẩy ta từ Bên Xử lý sang **Bên Kiểm soát** | grep `apps/api/prisma/schema.prisma` | ⬜ |
+| **H4** | Không CI/CD (`.github/workflows` không tồn tại), không bộ đóng gói production, không staging, không giám sát/cảnh báo, không heartbeat cho zca listener (phiên hết hạn = hỏng **âm thầm**) | — | ⬜ |
 
 ### Gợi ý cách hỏi hiệu quả
 

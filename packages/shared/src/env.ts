@@ -16,6 +16,14 @@ export const envSchema = z.object({
   // Lop luu tru don/tin: memory (in-memory, MAC DINH — demo/CI khong can DB) | prisma (Postgres).
   // Tach RIENG khoi DATABASE_URL (vi .env da co URL cho docker) -> bat Prisma phai CHU DONG dat = prisma.
   PERSISTENCE: z.enum(['memory', 'prisma']).default('memory'),
+  // Khoa xac thuc API (header `x-api-key`). BO TRONG -> guard MO (demo/CI/HF chay nhu cu).
+  // DAT GIA TRI -> MOI route deu can key, tru route gan @Public (vd /health).
+  // NODE_ENV=production BAT BUOC co (xem superRefine ben duoi): API nay co /broadcast gui tin
+  // Zalo THAT toi nhieu nhom + /knowledge lo bang gia — khong duoc phoi ra Internet khi khong khoa.
+  // Luu y: app web goi API tu TRINH DUYET (NEXT_PUBLIC_API_URL) nen KHONG dat key vao bien
+  // NEXT_PUBLIC_* (se lo cho moi nguoi). Production: cho web goi qua proxy phia server, hoac cho
+  // toi khi co dang nhap nguoi dung that (quyet dinh D5).
+  API_KEY: z.string().min(16, 'API_KEY qua ngan — dung chuoi ngau nhien >= 16 ky tu').optional(),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
@@ -89,6 +97,14 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new EnvValidationError(issues);
   }
   const data = result.data;
+  // Production BAT BUOC co API_KEY. API nay co POST /broadcast (gui tin Zalo THAT toi nhieu nhom
+  // khach) va GET /knowledge (bang gia + map nhom -> dai ly) — phoi ra Internet ma khong khoa la
+  // su co bao mat, khong phai thieu sot nho. Fail fast luc khoi dong (CLAUDE.md - Luu y bao mat).
+  if (data.NODE_ENV === 'production' && !data.API_KEY) {
+    throw new EnvValidationError([
+      'API_KEY: BAT BUOC khi NODE_ENV=production (API co /broadcast gui tin Zalo that + /knowledge lo bang gia)',
+    ]);
+  }
   // Tuong thich nguoc: cau hinh cu chi co BOT_MODE=on (chua biet CHANNEL_MODE) -> coi la kenh 'bot'.
   if (source.CHANNEL_MODE === undefined && data.BOT_MODE === 'on' && data.CHANNEL_MODE === 'mock') {
     return { ...data, CHANNEL_MODE: 'bot' };

@@ -59,13 +59,30 @@ describe('ZcaListener', () => {
     expect(process).toHaveBeenCalledTimes(1);
   });
 
-  it('pipeline.process nem loi -> khong throw ra listener, va tin da danh dau (khong chay lai)', async () => {
+  it('cung 1 tin ban 2 lan SONG SONG -> chi xu ly 1 lan', async () => {
     const { getHandler, process } = setup();
-    (process as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
+    const handler = getHandler()!;
+    await Promise.all([handler(makeZcaMessage('a')), handler(makeZcaMessage('a'))]);
+    expect(process).toHaveBeenCalledTimes(1);
+  });
+
+  it('pipeline loi TAM THOI -> tu thu lai va xu ly thanh cong (khong mat tin)', async () => {
+    const { getHandler, process } = setup();
+    (process as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('LLM timeout'));
     const handler = getHandler()!;
     await expect(handler(makeZcaMessage('a'))).resolves.toBeUndefined();
-    await handler(makeZcaMessage('a')); // da seen -> khong goi lai
-    expect(process).toHaveBeenCalledTimes(1);
+    expect(process).toHaveBeenCalledTimes(2); // 1 goc + 1 lan thu lai
+  });
+
+  it('pipeline loi HET LUOT -> KHONG danh dau da xu ly, tin den lai thi VAN chay lai', async () => {
+    const { getHandler, process } = setup();
+    (process as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LLM chet han'));
+    const handler = getHandler()!;
+    await expect(handler(makeZcaMessage('a'))).resolves.toBeUndefined();
+    expect(process).toHaveBeenCalledTimes(3); // 1 goc + 2 lan thu lai
+    // Truoc day tin bi danh dau NGAY TRUOC khi xu ly -> mat don im lang. Gio phai chay lai duoc.
+    await handler(makeZcaMessage('a'));
+    expect(process).toHaveBeenCalledTimes(6);
   });
 
   it('AUTO_ACK=on + intent=khac -> gui auto-ack 1 lan (kem nhan tu dong)', async () => {
