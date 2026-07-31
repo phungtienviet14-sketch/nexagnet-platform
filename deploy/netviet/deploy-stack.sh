@@ -24,7 +24,7 @@ for attempt in {1..60}; do
   fi
   sleep 5
 done
-"${COMPOSE[@]}" exec -T postgres /usr/local/bin/netviet-sync-passwords
+"${COMPOSE[@]}" exec -T postgres sh -s < postgres/sync-passwords.sh
 "${COMPOSE[@]}" up -d flowise
 
 for attempt in {1..60}; do

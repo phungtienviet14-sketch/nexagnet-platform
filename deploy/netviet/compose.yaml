@@ -13,7 +13,6 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
-      - ./postgres/sync-passwords.sh:/usr/local/bin/netviet-sync-passwords:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U netviet_admin -d postgres"]
       interval: 5s
