@@ -14,6 +14,7 @@
 - **Lưu trữ:** mặc định in-memory (`PERSISTENCE=memory` → demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma`. **MỌI tin nhắn được lưu vào bảng `messages` ngay khi nhận** (11/07, commit `6d1a539` — trước khi qua pipeline, chống trùng unique, nối `orders.messageId`).
 - **Nguồn sự thật ĐỘNG:** sửa qua panel `/admin` (AdminJS) hoặc MCP tool (8 tool) → ghi Postgres + pipeline nạp lại ngay.
 - **Chất lượng:** 176 test API + 39 shared + 3 web xanh; Flowise contract thật xanh; eval Flowise **35/35 intent**; lint · typecheck · build xanh. Field-accuracy vẫn chờ golden B1-B2.
+- **Pilot GCP `netviet`:** stack mock/TEST đang healthy; contract, E2E SSE + 6 vai + duyệt đơn, restart-persistence, backup/restore và rollback `deepseek → flowise` đều đạt. Soak 24 giờ khởi động lại sau diễn tập lúc **12:43 31/07/2026 (UTC+7)**, dự kiến kết thúc **12:43 01/08/2026**.
 
 ### Cách chạy nhanh
 
@@ -83,7 +84,7 @@ flowchart LR
 | Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `read-excel-file` — 🔄 11/07 thay `exceljs`) | 🟡 **mẫu gửi khách ĐÃ soạn 13/07** — `docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx` (3 sheet, dropdown khớp enum `Dealer`/`Group`, kèm 3 đại lý + 2 nhóm thật) sinh từ `tools/excel-template/`; **importer** đọc file khách trả về ⬜ chờ A4 |
 | Phase 4 — KiotViet Excel/API + map SKU↔mã số · Base · đổi LLM sang Claude cho dữ liệu thật | ⬜ chờ C1 |
 | Phase 5 — auth theo vai (2 cổng KSNB) + ghi `kpi_events` + feedback loop | ⬜ chờ D5 |
-| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 pilot hạ tầng riêng tư `netviet` dùng mock/TEST đang triển khai; pilot nhóm thật vẫn chờ E3-E4 + B1-B2 + D6/D7/D16 |
+| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 pilot hạ tầng riêng tư `netviet` dùng mock/TEST đã deploy; smoke · persistence · backup/restore · monitoring · rollback đạt, soak 24 giờ đang chạy. Pilot nhóm thật vẫn chờ E3-E4 + B1-B2 + D6/D7/D16 |
 | Việc "thật hơn" treo — đọc 6 quy trình gốc chưa phản ánh · mô hình hóa sau `synced` · PWA 5 tab | ⬜ |
 
 ### 3.2 [tinh-nang-dai-han.md](tinh-nang-dai-han.md) — Đợt 1-4 (6 tính năng mới, định hướng)
@@ -158,7 +159,7 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | **D17** | ~~DeepSeek: bổ sung vào thỏa thuận HAY đổi `PARSER_MODE=claude`?~~ → **CHỈ CÒN 1 ĐƯỜNG: đổi sang Claude.** Khảo sát 28/07: DeepSeek lưu dữ liệu tại Trung Quốc và **không có DPA để ký**; Privacy Policy loại trừ chính luồng open-platform API đang dùng. Phương án "bổ sung vào thỏa thuận" **bất khả thi** | Chạy thật với dữ liệu khách | 🟡 đã rõ hướng |
 | **D18a** | **Quyết định + spike Flowise thay Dify.** NestJS giữ vai trò điều phối; Flowise chỉ gọi LLM để phân loại/trích xuất. Lý do giấy phép ghi chính xác: core Flowise ngoài thư mục enterprise là Apache 2.0; một số phần enterprise dùng điều khoản thương mại, không phải toàn bộ Flowise là Apache | Hướng kỹ thuật phần AI | ✅ 28/07, rà lại 31/07 |
 | **D18b** | **Tích hợp Flowise runtime:** `FlowiseParser`, Agentflow V2 versioned, fail-fast env, contract auth/schema, rollback `PARSER_MODE=deepseek`; eval intent 35/35 | Nghiệm thu lớp parser | 🟡 code + contract + intent eval đã đạt 31/07; chưa được đánh ✅ vì chưa có golden B1-B2 để so field-accuracy |
-| **D18c** | **Pilot riêng tư trên GCP:** project `netviet-host-968934832433`, VM `netviet`, stack riêng `/srv/netviet/apps/zalo-ultty`, IAP-only, backup/monitoring/rollback/soak | Nghiệm thu hạ tầng pilot | 🟡 triển khai 31/07; chỉ đánh ✅ sau smoke, restore, rollback và soak 24 giờ đạt |
+| **D18c** | **Pilot riêng tư trên GCP:** project `netviet-host-968934832433`, VM `netviet`, stack riêng `/srv/netviet/apps/zalo-ultty`, IAP-only, backup/monitoring/rollback/soak | Nghiệm thu hạ tầng pilot | 🟡 31/07: deploy + contract + smoke + persistence + backup/restore + monitoring + rollback đạt; soak chạy từ 12:43 31/07, chỉ đánh ✅ sau khi đủ 24 giờ không lỗi |
 | **D19** | **Mô hình đổi: 5 dự án NỘI BỘ → 5 KHÁCH NGOÀI TRẢ TIỀN.** Kéo theo: DPA từng khách, hồ sơ chuyển dữ liệu xuyên biên giới, cách ly dữ liệu bằng kiến trúc, SLA, on-call, offboarding | Mọi giả định hạ tầng + pháp lý | ✅ 28/07 |
 | **D20** | **Ai đứng tên 5 tài khoản Zalo phụ** — bạn hay khách? Nếu bạn đứng tên thì **bạn** là bên vi phạm ToS Zalo và D16 mất phần lớn ý nghĩa | Chạy thật kênh zca | ⬜ |
 | **D21** | **ĐO số TIN/ngày thật** trên nhóm khách. Sizing + báo giá hiện dựa trên "10-20 đơn/ngày" nhưng zca đọc **mọi tin** của 200-350 nhóm ⇒ sai 2-3 bậc độ lớn về RAM/disk/hóa đơn LLM | Chốt cỡ máy + báo giá khách | ⬜ |
@@ -171,7 +172,7 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | # | Cần gì | TT |
 |---|---|---|
 | E1 | Máy chủ 24/7 + domain + HTTPS (webhook always-on) — ai cung cấp/trả tiền | 🟡 VM pilot riêng tư do NetViet tạo; chưa phải endpoint public/webhook thật |
-| E2 | Postgres production + lịch sao lưu (managed hay tự host) | 🟡 pilot self-host Postgres, backup GCS 7 ngày + 4 tuần; chờ nghiệm thu restore |
+| E2 | Postgres production + lịch sao lưu (managed hay tự host) | 🟡 pilot self-host Postgres, backup GCS 7 ngày + 4 tuần và restore check hai DB đã đạt 31/07; mô hình production vẫn chưa chốt |
 | E3 | Ai vận hành hằng ngày sau bàn giao (NetViet managed?) + SLA | ⬜ |
 | E4 | Kênh nhận cảnh báo sự cố (bot/kênh chết → báo ai, qua đâu) | ⬜ |
 
@@ -224,13 +225,21 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 
 ## 6. Chuyển đổi Dify → Flowise và pilot GCP (28-31/07/2026)
 
-**Đã xong (3 commit trên `feat/phase3-persistence`):**
+**Mốc nền trước chuyển đổi:**
 
 | Commit | Nội dung |
 |---|---|
 | `6a69b27` | **H1 mất tin nhắn** — `MessageGuard` + `processWithRetry` dùng chung cho `ZcaListener`/`BotPoller`: chỉ đánh dấu khi pipeline **thành công**, thử lại 2 lần, hết lượt thì log ERROR kèm id. **H2 xác thực** — `ApiKeyGuard` toàn cục + `@Public` cho `/health`; `API_KEY` trống = guard mở (demo/CI/HF nguyên vẹn), `NODE_ENV=production` **bắt buộc** có key nếu không fail fast. Test 148 → 166 (api), 33 → 37 (shared) |
 | `3cfd364` | Căn cứ pháp lý: NĐ 13/2023 hết hiệu lực → **Luật 91/2025/QH15 + NĐ 356/2025** (7 chỗ / 5 file) |
 | `a2a8c3c` | Sửa cùng căn cứ trong nguồn PDF bàn giao lãnh đạo |
+
+**Mốc triển khai Flowise/GCP:**
+
+| Commit | Nội dung |
+|---|---|
+| `6f62307` | Tích hợp `FlowiseParser`, workflow versioned, test/contract/eval, stack private GCP, backup/restore/health/soak và tài liệu vận hành |
+| `8725b52` | Image runtime đã triển khai sau khi hoàn thiện reconcile database, bootstrap Flowise và readiness gate |
+| `1f384f1` | Monitoring idempotent qua API, gồm log metric, email channel và ba alert policy |
 
 **Spike cũ:** VM trong project `ultty-flowise-spike-2607` đã xóa; project giữ 0 VM/đĩa. Số đo Flowise 3.1.2 lúc rảnh là 558 MB; đây chỉ là dữ liệu lịch sử sizing, không phải bản pilot.
 
@@ -255,8 +264,11 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 - Project `netviet-host-968934832433` (`NetViet Host`), VM đúng tên `netviet`, `asia-southeast1-b`, `e2-standard-2`, Ubuntu 24.04, đĩa balanced 80 GB.
 - Chỉ SSH qua IAP; gateway `127.0.0.1:8080`, Flowise admin `127.0.0.1:3002`; không có firewall inbound web/API/Postgres/Flowise.
 - Stack Zalo tách riêng ở `/srv/netviet/apps/zalo-ultty`, Compose project `zalo-ultty`; DB user/password/volume/network riêng cho Zalo và Flowise.
-- Image app + Flowise dẫn xuất build từ commit, gắn git SHA, đẩy Artifact Registry và deploy bằng digest; secret ở Secret Manager.
-- Backup hai DB hằng đêm lên GCS (7 ngày + 4 tuần), restore check; Cloud Ops Agent + cảnh báo health/restart/RAM/disk; rollback parser/image; soak 24 giờ.
+- Runtime app từ commit `8725b52`, digest `sha256:82d28f35…`; Flowise dẫn xuất digest `sha256:3066d581…`. Image được đẩy Artifact Registry và deploy bằng digest; secret ở Secret Manager.
+- Contract Flowise và E2E mock đạt; SSE có đủ 6 vai, Sale duyệt được; order còn nguyên sau restart API.
+- Backup hai DB đã tải lên GCS và restore check độc lập đạt. Cloud Ops Agent, health/backup timer, log metric, email channel và alert health/restart/RAM/disk đều active.
+- Diễn tập rollback sang image trước + `PARSER_MODE=deepseek` đạt E2E; sau đó khôi phục digest hiện tại + `flowise` và E2E lại đạt.
+- Soak 24 giờ khởi động lại sau diễn tập lúc **12:43 31/07/2026 (UTC+7)**; D18c vẫn 🟡 cho tới khi báo cáo kết thúc không có health lỗi, OOM/restart bất thường hay vượt ngưỡng.
 - Pilot chỉ dùng dữ liệu TEST với `CHANNEL_MODE=mock`, `PARSER_MODE=flowise`, DeepSeek. Không bật zca/PII thật.
 
-**Cổng còn lại:** hoàn tất deploy/smoke/restore/rollback/soak 24 giờ cho D18c; nhận B1-B2 để đo field-accuracy cho D18b; D21 vẫn cần trước sizing 200-350 nhóm thật.
+**Cổng còn lại:** chờ soak đủ 24 giờ cho D18c; nhận B1-B2 để đo field-accuracy cho D18b; D21 vẫn cần trước sizing 200-350 nhóm thật.

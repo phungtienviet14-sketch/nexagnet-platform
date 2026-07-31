@@ -26,6 +26,12 @@ Script tạo project/VPC/VM/Artifact Registry/Secret Manager/bucket backup, buil
 từ worktree, chép manifest vào `/srv/netviet/apps/zalo-ultty`, bootstrap Flowise và
 chạy smoke test. Không mở firewall web ra Internet.
 
+Nếu chỉ cần reconcile log metric, kênh email và alert policy mà không build/deploy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/netviet/deploy.ps1 -MonitoringOnly
+```
+
 Script chỉ build khi toàn bộ thay đổi tracked đã được commit; image được gắn đúng git SHA.
 Health endpoint và trạng thái/restart container được kiểm tra mỗi phút. Cloud Ops Agent
 đẩy log/host metrics; Cloud Monitoring gửi cảnh báo email khi health lỗi, RAM > 85% hoặc
