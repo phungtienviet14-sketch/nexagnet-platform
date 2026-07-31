@@ -7,7 +7,8 @@ param(
   [string]$Region = 'asia-southeast1',
   [string]$Zone = 'asia-southeast1-b',
   [string]$VmName = 'netviet',
-  [string]$OperatorEmail = 'phungtienviet14@gmail.com'
+  [string]$OperatorEmail = 'phungtienviet14@gmail.com',
+  [switch]$MonitoringOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -518,7 +519,14 @@ function Ensure-NotificationChannel {
   $headers = @{ Authorization = "Bearer $token" }
   $uri = "https://monitoring.googleapis.com/v3/projects/$ProjectId/notificationChannels"
   $channels = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-  $existing = $channels.notificationChannels |
+  $channelList = @()
+  $channelProperty = if ($null -ne $channels) {
+    $channels.PSObject.Properties['notificationChannels']
+  }
+  if ($null -ne $channelProperty) {
+    $channelList = @($channelProperty.Value)
+  }
+  $existing = $channelList |
     Where-Object { $_.displayName -eq 'NetViet pilot operator' } |
     Select-Object -First 1
   if ($existing) {
@@ -537,34 +545,51 @@ function Ensure-AlertPolicy {
   param(
     [Parameter(Mandatory)][string]$DisplayName,
     [Parameter(Mandatory)][string]$Filter,
-    [Parameter(Mandatory)][string]$Aggregation,
+    [Parameter(Mandatory)][hashtable]$Aggregation,
     [Parameter(Mandatory)][string]$Duration,
-    [Parameter(Mandatory)][string]$Threshold,
+    [Parameter(Mandatory)][double]$Threshold,
     [Parameter(Mandatory)][string]$NotificationChannel
   )
-  $existing = Invoke-Gcloud -Arguments @(
-    'monitoring', 'policies', 'list',
-    '--project', $ProjectId,
-    "--filter=displayName='$DisplayName'",
-    '--format=value(name)'
-  ) -Capture
-  if ($existing | Select-Object -First 1) {
+  $token = Invoke-Gcloud -Arguments @('auth', 'print-access-token') -Capture
+  $headers = @{ Authorization = "Bearer $token" }
+  $uri = "https://monitoring.googleapis.com/v3/projects/$ProjectId/alertPolicies"
+  $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+  $policyProperty = if ($null -ne $response) {
+    $response.PSObject.Properties['alertPolicies']
+  }
+  $policies = if ($null -ne $policyProperty) {
+    @($policyProperty.Value)
+  } else {
+    @()
+  }
+  if ($policies | Where-Object { $_.displayName -eq $DisplayName } | Select-Object -First 1) {
     return
   }
-  Invoke-Gcloud @(
-    'monitoring', 'policies', 'create',
-    "--project=$ProjectId",
-    "--display-name=$DisplayName",
-    "--condition-display-name=$DisplayName",
-    "--condition-filter=$Filter",
-    "--aggregation=$Aggregation",
-    "--duration=$Duration",
-    "--if=> $Threshold",
-    '--trigger-count=1',
-    "--notification-channels=$NotificationChannel",
-    '--combiner=OR',
-    '--quiet'
-  )
+  $body = @{
+    displayName = $DisplayName
+    combiner = 'OR'
+    enabled = $true
+    notificationChannels = @($NotificationChannel)
+    conditions = @(
+      @{
+        displayName = $DisplayName
+        conditionThreshold = @{
+          filter = $Filter
+          comparison = 'COMPARISON_GT'
+          thresholdValue = $Threshold
+          duration = $Duration
+          trigger = @{ count = 1 }
+          aggregations = @($Aggregation)
+        }
+      }
+    )
+  } | ConvertTo-Json -Depth 10
+  $null = Invoke-RestMethod `
+    -Method Post `
+    -Uri $uri `
+    -Headers $headers `
+    -ContentType 'application/json' `
+    -Body $body
 }
 
 function Ensure-Monitoring {
@@ -589,34 +614,40 @@ function Ensure-Monitoring {
   Ensure-AlertPolicy `
     -DisplayName 'NetViet health or container restart failure' `
     -Filter 'resource.type="gce_instance" AND metric.type="logging.googleapis.com/user/netviet_health_failures"' `
-    -Aggregation '{"alignmentPeriod":"60s","perSeriesAligner":"ALIGN_DELTA"}' `
+    -Aggregation @{ alignmentPeriod = '60s'; perSeriesAligner = 'ALIGN_DELTA' } `
     -Duration '0s' `
     -Threshold '0' `
     -NotificationChannel $channel
   Ensure-AlertPolicy `
     -DisplayName 'NetViet RAM above 85 percent' `
     -Filter "resource.type=`"gce_instance`" AND resource.label.instance_id=`"$instanceId`" AND metric.type=`"agent.googleapis.com/memory/percent_used`" AND metric.label.state=`"used`"" `
-    -Aggregation '{"alignmentPeriod":"60s","perSeriesAligner":"ALIGN_MEAN"}' `
+    -Aggregation @{ alignmentPeriod = '60s'; perSeriesAligner = 'ALIGN_MEAN' } `
     -Duration '300s' `
     -Threshold '85' `
     -NotificationChannel $channel
   Ensure-AlertPolicy `
     -DisplayName 'NetViet disk above 80 percent' `
     -Filter "resource.type=`"gce_instance`" AND resource.label.instance_id=`"$instanceId`" AND metric.type=`"agent.googleapis.com/disk/percent_used`" AND metric.label.state=`"used`"" `
-    -Aggregation '{"alignmentPeriod":"60s","perSeriesAligner":"ALIGN_MEAN"}' `
+    -Aggregation @{ alignmentPeriod = '60s'; perSeriesAligner = 'ALIGN_MEAN' } `
     -Duration '300s' `
     -Threshold '80' `
     -NotificationChannel $channel
 }
 
 Set-Location $RepositoryRoot
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-  throw 'Docker is not installed or not in PATH.'
-}
-
 $activeAccount = Invoke-Gcloud -Arguments @('auth', 'list', '--filter=status:ACTIVE', '--format=value(account)') -Capture
 if (-not $activeAccount) {
   throw 'No active gcloud account.'
+}
+
+if ($MonitoringOnly) {
+  Ensure-Monitoring
+  Write-Host "Monitoring healthy for VM $VmName."
+  exit 0
+}
+
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+  throw 'Docker is not installed or not in PATH.'
 }
 
 Ensure-Project
