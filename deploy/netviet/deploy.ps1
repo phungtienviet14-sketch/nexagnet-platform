@@ -58,6 +58,29 @@ function Invoke-Gcloud {
   }
 }
 
+function Invoke-GcloudRetry {
+  param(
+    [Parameter(Mandatory)]
+    [string[]]$Arguments,
+    [int]$Attempts = 6,
+    [int]$DelaySeconds = 10
+  )
+
+  for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+    try {
+      Invoke-Gcloud -Arguments $Arguments
+      return
+    }
+    catch {
+      if ($attempt -eq $Attempts) {
+        throw
+      }
+      Write-Warning "gcloud attempt $attempt/$Attempts failed; retrying in $DelaySeconds seconds."
+      Start-Sleep -Seconds $DelaySeconds
+    }
+  }
+}
+
 function Test-GcloudResource {
   param([Parameter(Mandatory)][string[]]$Arguments)
   $previousErrorAction = $ErrorActionPreference
@@ -351,7 +374,7 @@ function Ensure-Vm {
   }
 
   $remoteInstall = "/tmp/netviet-install-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()).sh"
-  Invoke-Gcloud @(
+  Invoke-GcloudRetry -Arguments @(
     'compute', 'scp', (Join-Path $PSScriptRoot 'install-vm.sh'),
     "${VmName}:$remoteInstall",
     "--zone=$Zone",
@@ -359,7 +382,7 @@ function Ensure-Vm {
     '--project', $ProjectId,
     '--quiet'
   )
-  Invoke-Gcloud @(
+  Invoke-GcloudRetry -Arguments @(
     'compute', 'ssh', $VmName,
     "--zone=$Zone",
     '--tunnel-through-iap',
@@ -428,7 +451,7 @@ function Deploy-Stack {
     [Parameter(Mandatory)][string]$FlowiseImage
   )
   $remoteBundle = "/tmp/netviet-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
-  Invoke-Gcloud @(
+  Invoke-GcloudRetry -Arguments @(
     'compute', 'scp', '--recurse', $PSScriptRoot,
     "${VmName}:$remoteBundle",
     "--zone=$Zone",
