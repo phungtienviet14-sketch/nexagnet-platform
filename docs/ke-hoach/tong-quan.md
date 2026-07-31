@@ -3,17 +3,17 @@
 > **Vai trò:** tài liệu DUY NHẤT giữ **trạng thái** mọi kế hoạch (đang ở đâu, xong gì, chờ gì, quyết định treo, dữ liệu thiếu). Các kế hoạch con CHỈ mô tả phạm vi/thiết kế — **không chứa trạng thái**; muốn biết tiến độ, quay về đây.
 > **Kế hoạch con:** [nen-tang.md](nen-tang.md) (Đợt 0 — nền phải xong) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4 — 6 tính năng mới).
 > **Thay thế (11/07/2026):** `tien-do-va-ke-hoach.md` + `checklist-du-lieu-khach.md` + phần trạng thái của `ke-hoach-dai-han.md` + 2 plan code trong `.claude/plans/` — tất cả đã xóa, git history còn.
-> Cập nhật: **11/07/2026**.
+> Cập nhật: **31/07/2026**.
 
 ---
 
-## 1. Ảnh chụp nhanh (11/07/2026)
+## 1. Ảnh chụp nhanh (31/07/2026)
 
-- **Nhánh đang làm:** `feat/phase3-persistence` (tách từ `feat/console-realtime-ui`). Cả 2 nhánh **CHƯA merge `main`**.
-- **Demo chạy được ngay** trên **dữ liệu thật** (19 SKU + bảng giá tháng 7 + 24 glossary) + **kênh Zalo thật** (zca, 2 nhóm đã map) + AI thật (DeepSeek — eval 35/35).
+- **Nhánh đang làm:** `feat/phase3-persistence`; nhánh này đã chứa cả persistence và console realtime, không còn việc merge nhánh console riêng.
+- **Demo local chạy được** với 19 SKU + bảng giá tháng 7 + 24 glossary, zca/2 nhóm đã map và DeepSeek trực tiếp. **Pilot GCP mới chỉ dùng dữ liệu TEST**, `CHANNEL_MODE=mock`, `PARSER_MODE=flowise`; không bật zca và không dùng PII thật.
 - **Lưu trữ:** mặc định in-memory (`PERSISTENCE=memory` → demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma`. **MỌI tin nhắn được lưu vào bảng `messages` ngay khi nhận** (11/07, commit `6d1a539` — trước khi qua pipeline, chống trùng unique, nối `orders.messageId`).
 - **Nguồn sự thật ĐỘNG:** sửa qua panel `/admin` (AdminJS) hoặc MCP tool (8 tool) → ghi Postgres + pipeline nạp lại ngay.
-- **Chất lượng:** 148 test xanh (memory) · IT Postgres gated `RUN_PRISMA_IT=1` · lint · typecheck.
+- **Chất lượng:** 176 test API + 39 shared + 3 web xanh; Flowise contract thật xanh; eval Flowise **35/35 intent**; lint · typecheck · build xanh. Field-accuracy vẫn chờ golden B1-B2.
 
 ### Cách chạy nhanh
 
@@ -83,7 +83,7 @@ flowchart LR
 | Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `read-excel-file` — 🔄 11/07 thay `exceljs`) | 🟡 **mẫu gửi khách ĐÃ soạn 13/07** — `docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx` (3 sheet, dropdown khớp enum `Dealer`/`Group`, kèm 3 đại lý + 2 nhóm thật) sinh từ `tools/excel-template/`; **importer** đọc file khách trả về ⬜ chờ A4 |
 | Phase 4 — KiotViet Excel/API + map SKU↔mã số · Base · đổi LLM sang Claude cho dữ liệu thật | ⬜ chờ C1 |
 | Phase 5 — auth theo vai (2 cổng KSNB) + ghi `kpi_events` + feedback loop | ⬜ chờ D5 |
-| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | ⬜ chờ E1-E4 + B1-B2 |
+| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 pilot hạ tầng riêng tư `netviet` dùng mock/TEST đang triển khai; pilot nhóm thật vẫn chờ E3-E4 + B1-B2 + D6/D7/D16 |
 | Việc "thật hơn" treo — đọc 6 quy trình gốc chưa phản ánh · mô hình hóa sau `synced` · PWA 5 tab | ⬜ |
 
 ### 3.2 [tinh-nang-dai-han.md](tinh-nang-dai-han.md) — Đợt 1-4 (6 tính năng mới, định hướng)
@@ -156,7 +156,9 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | **D15** | **"Công nợ 7 ngày"** là chính sách riêng hay điều khoản TT-7-ngày của ký gửi? | Increment rules-config (Đợt 0) | ⬜ |
 | **D16** | **Văn bản chấp nhận rủi ro ToS** cho kênh zca (tài khoản phụ) | Chạy thật kênh zca | ⬜ |
 | **D17** | ~~DeepSeek: bổ sung vào thỏa thuận HAY đổi `PARSER_MODE=claude`?~~ → **CHỈ CÒN 1 ĐƯỜNG: đổi sang Claude.** Khảo sát 28/07: DeepSeek lưu dữ liệu tại Trung Quốc và **không có DPA để ký**; Privacy Policy loại trừ chính luồng open-platform API đang dùng. Phương án "bổ sung vào thỏa thuận" **bất khả thi** | Chạy thật với dữ liệu khách | 🟡 đã rõ hướng |
-| **D18** | **Nền AI: Flowise (Apache 2.0)** thay Dify — chốt 28/07/2026. Lý do: LICENSE Dify cấm "operate a multi-tenant environment" khi chưa có văn bản cho phép (khoản 1a), mà mô hình đã đổi thành **bán dịch vụ cho 5 khách ngoài**; PR #8143 (09/09/2024) cố ý bỏ chữ "SaaS" để **mở rộng** phạm vi cấm. Thêm nữa khách không được cấp console ⇒ giá trị no-code của Dify = 0 | Toàn bộ hướng kỹ thuật phần AI | ✅ 28/07 |
+| **D18a** | **Quyết định + spike Flowise thay Dify.** NestJS giữ vai trò điều phối; Flowise chỉ gọi LLM để phân loại/trích xuất. Lý do giấy phép ghi chính xác: core Flowise ngoài thư mục enterprise là Apache 2.0; một số phần enterprise dùng điều khoản thương mại, không phải toàn bộ Flowise là Apache | Hướng kỹ thuật phần AI | ✅ 28/07, rà lại 31/07 |
+| **D18b** | **Tích hợp Flowise runtime:** `FlowiseParser`, Agentflow V2 versioned, fail-fast env, contract auth/schema, rollback `PARSER_MODE=deepseek`; eval intent 35/35 | Nghiệm thu lớp parser | 🟡 code + contract + intent eval đã đạt 31/07; chưa được đánh ✅ vì chưa có golden B1-B2 để so field-accuracy |
+| **D18c** | **Pilot riêng tư trên GCP:** project `netviet-host-968934832433`, VM `netviet`, stack riêng `/srv/netviet/apps/zalo-ultty`, IAP-only, backup/monitoring/rollback/soak | Nghiệm thu hạ tầng pilot | 🟡 triển khai 31/07; chỉ đánh ✅ sau smoke, restore, rollback và soak 24 giờ đạt |
 | **D19** | **Mô hình đổi: 5 dự án NỘI BỘ → 5 KHÁCH NGOÀI TRẢ TIỀN.** Kéo theo: DPA từng khách, hồ sơ chuyển dữ liệu xuyên biên giới, cách ly dữ liệu bằng kiến trúc, SLA, on-call, offboarding | Mọi giả định hạ tầng + pháp lý | ✅ 28/07 |
 | **D20** | **Ai đứng tên 5 tài khoản Zalo phụ** — bạn hay khách? Nếu bạn đứng tên thì **bạn** là bên vi phạm ToS Zalo và D16 mất phần lớn ý nghĩa | Chạy thật kênh zca | ⬜ |
 | **D21** | **ĐO số TIN/ngày thật** trên nhóm khách. Sizing + báo giá hiện dựa trên "10-20 đơn/ngày" nhưng zca đọc **mọi tin** của 200-350 nhóm ⇒ sai 2-3 bậc độ lớn về RAM/disk/hóa đơn LLM | Chốt cỡ máy + báo giá khách | ⬜ |
@@ -168,8 +170,8 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 
 | # | Cần gì | TT |
 |---|---|---|
-| E1 | Máy chủ 24/7 + domain + HTTPS (webhook always-on) — ai cung cấp/trả tiền | ⬜ |
-| E2 | Postgres production + lịch sao lưu (managed hay tự host) | ⬜ |
+| E1 | Máy chủ 24/7 + domain + HTTPS (webhook always-on) — ai cung cấp/trả tiền | 🟡 VM pilot riêng tư do NetViet tạo; chưa phải endpoint public/webhook thật |
+| E2 | Postgres production + lịch sao lưu (managed hay tự host) | 🟡 pilot self-host Postgres, backup GCS 7 ngày + 4 tuần; chờ nghiệm thu restore |
 | E3 | Ai vận hành hằng ngày sau bàn giao (NetViet managed?) + SLA | ⬜ |
 | E4 | Kênh nhận cảnh báo sự cố (bot/kênh chết → báo ai, qua đâu) | ⬜ |
 
@@ -193,10 +195,10 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 
 | # | Vấn đề | Bằng chứng | TT |
 |---|---|---|---|
-| **H1** | **MẤT TIN NHẮN ÂM THẦM.** `remember()` đánh dấu đã-xử-lý **trước** `pipeline.process()`, catch chỉ log ⇒ LLM timeout = tin mất vĩnh viễn (Zalo không replay). `seen` là Set trong RAM (max 2000), mất khi restart. Vi phạm chính quy tắc CLAUDE.md "lưu mọi tin về DB ngay khi nhận" | [zca-listener.ts:55](../../apps/api/src/ingest/zca-listener.ts) chạy trước dòng 57 | ⬜ |
-| **H2** | **API KHÔNG CÓ XÁC THỰC.** 0 `UseGuards`/`AuthGuard`/`CanActivate` trên 8 controller. `POST /broadcast` gửi tin Zalo thật tới 50 nhóm; `/knowledge` trả bảng giá + map đại lý. `main.ts` chỉ có `enableCors` — CORS không chặn `curl` | grep toàn `apps/api/src` = 0 kết quả | ⬜ |
-| **H3** | **SCHEMA KHÔNG CÓ CỘT TÁCH KHÁCH.** `tenantId`/`customerId`/`orgId`/`workspaceId` = 0 kết quả. `ParseFeedback` dùng dữ liệu khách mở rộng glossary/few-shot ⇒ nếu chảy chung giữa 5 khách thì vừa rò rỉ chéo, vừa đẩy ta từ Bên Xử lý sang **Bên Kiểm soát** | grep `apps/api/prisma/schema.prisma` | ⬜ |
-| **H4** | Không CI/CD (`.github/workflows` không tồn tại), không bộ đóng gói production, không staging, không giám sát/cảnh báo, không heartbeat cho zca listener (phiên hết hạn = hỏng **âm thầm**) | — | ⬜ |
+| **H1** | Mất tin khi LLM lỗi | `MessageGuard` + `processWithRetry`: lưu tin thô trước xử lý, tối đa 3 lượt, chỉ đánh dấu xong khi thành công | ✅ 28/07 |
+| **H2** | API trước đây không xác thực | `ApiKeyGuard` toàn cục; production bắt buộc `API_KEY`; gateway nội bộ tự gắn header, chỉ bind loopback | ✅ 28/07 |
+| **H3** | Cách ly nhiều khách | v1 dùng **mỗi dự án một Compose project, DB/user/secret/volume/network riêng**; vì không chia DB nên chưa cần `tenantId`. Nếu chuyển sang DB dùng chung phải mở lại quyết định này | ✅ cho kiến trúc pilot 31/07 |
+| **H4** | Đóng gói/vận hành production | CI lint/typecheck/test/build, image theo git SHA+digest, Compose, Secret Manager, backup/restore, Ops Agent, health/restart/RAM/disk alert đã có. Heartbeat zca vẫn cần trước pilot nhóm thật | 🟡 pilot mock đạt phạm vi; zca thật còn treo |
 
 ### Gợi ý cách hỏi hiệu quả
 
@@ -211,16 +213,16 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 
 | Việc | Ghi chú |
 |---|---|
-| Merge `feat/console-realtime-ui` + `feat/phase3-persistence` vào `main` | Nhiều commit đang chờ |
+| Đưa nhánh đã duyệt vào `main` | Chỉ làm sau khi pilot hạ tầng/soak đạt; không còn nhánh console riêng cần merge |
 | KiotViet: làm `KiotVietExcelAdapter` ngay hay chờ xác nhận API (C1) | Khảo sát ghi "chưa có API" |
 | Regen 3 PDF lãnh đạo (`docs/pdf/`) theo bộ tài liệu mới 11/07 | Cần mạng (mermaid CDN); lệnh trong `docs/pdf/src/README.md` |
 | ~~**Việc kế tiếp đề xuất #1 (11/07):** soạn **mẫu file Excel A4** gửi khách điền~~ | ✅ **13/07/2026** — `docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx` (generator `tools/excel-template/generate_a4_template.py` + README bảng map cột→field). **Gửi chị Phương điền** rồi build importer đọc lại (cổng A4) |
 | **Việc kế tiếp đề xuất #2 (11/07):** ghi **`kpi_events`** (message_received · order_created · approved/rejected · sửa field) | Phase 5 phần KHÔNG cần dữ liệu khách; model có sẵn chưa ghi — nền cho dashboard F3 ([nen-tang.md §3](nen-tang.md)) |
-| Dọn worktree cũ `.claude/worktrees/cool-maxwell-2f02b3/` | Sinh 28 lỗi `pnpm lint` toàn repo, không phải code thật — `pnpm lint` sẽ còn đỏ đến khi xoá |
+| Worktree cũ `.claude/worktrees/cool-maxwell-2f02b3/` | Được loại khỏi phạm vi lint; không xóa dữ liệu người dùng |
 
 ---
 
-## 6. Bàn giao phiên 28/07/2026 — đổi nền AI + chặn kỹ thuật
+## 6. Chuyển đổi Dify → Flowise và pilot GCP (28-31/07/2026)
 
 **Đã xong (3 commit trên `feat/phase3-persistence`):**
 
@@ -230,27 +232,31 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | `3cfd364` | Căn cứ pháp lý: NĐ 13/2023 hết hiệu lực → **Luật 91/2025/QH15 + NĐ 356/2025** (7 chỗ / 5 file) |
 | `a2a8c3c` | Sửa cùng căn cứ trong nguồn PDF bàn giao lãnh đạo |
 
-**Hạ tầng — đã tạo, CHƯA tốn tiền:** project GCP `ultty-flowise-spike-2607` (trong org `phungtienviet14-org`, billing `0157A9-389619-7EE46C`, Compute API đã bật). **0 VM, 0 đĩa → $0/tháng.** Startup script dựng Flowise trên Ubuntu 24.04 đã soạn nhưng **chưa chạy**. Xoá sạch bằng: `gcloud projects delete ultty-flowise-spike-2607`.
+**Spike cũ:** VM trong project `ultty-flowise-spike-2607` đã xóa; project giữ 0 VM/đĩa. Số đo Flowise 3.1.2 lúc rảnh là 558 MB; đây chỉ là dữ liệu lịch sử sizing, không phải bản pilot.
 
-### ✅ Phase 1 — spike Flowise ĐÃ CHẠY THẬT (28/07/2026)
+### D18a — quyết định + spike
 
-Đo trên `e2-standard-2` (2 vCPU / 8 GB), Ubuntu 24.04 LTS, `asia-southeast1-b`, **Flowise 3.1.2** qua Docker. Đây là **số đo**, không phải ước lượng quy hoạch như mọi con số RAM trước đó.
+- Bỏ hướng Flowise gọi ngược `/internal/*`. NestJS vẫn là orchestrator và nguồn sự thật.
+- Luồng chính thức: `Zalo/Mock → lưu tin thô → FlowiseParser → Agentflow V2 → parseResultSchema → rules TypeScript → SSE/Sale duyệt`.
+- Flowise không được tính giá/VAT/ship/COD/chính sách, ghi DB, gọi MCP/tool hay tự gửi Zalo.
+- Giấy phép: core ngoài `enterprise/` là Apache 2.0; một số phần enterprise chịu giấy phép thương mại theo [LICENSE chính thức](https://github.com/FlowiseAI/Flowise/blob/main/LICENSE.md). Không mô tả toàn bộ Flowise là Apache 2.0.
 
-| Câu hỏi chặn | Kết quả đo |
-|---|---|
-| **RAM thật** | **558 MB** / **1 container** (lúc rảnh, mới chạy). Toàn máy dùng 1.374 GB kể cả OS + Docker |
-| **Ép JSON schema** khớp `parseResultSchema`? | **CÓ** — node `StructuredOutputParser` + `StructuredOutputParserAdvanced` |
-| **Gọi HTTP ngược** về rules engine TS? | **CÓ** — `RequestsGet/Post/Put/Delete`, `CustomTool`, `OpenAPIToolkit`, và cả node **`MCP`** (repo đã có sẵn MCP server → đường nối tự nhiên) |
-| Thời gian dựng từ máy trắng | **2 phút 40 giây** (boot → Flowise trả `pong`) |
-| Dung lượng image | **5,48 GB** (đĩa, không phải RAM) — đĩa dùng 9,8 GB / 48 GB |
-| Bảo mật mặc định | API trả **401 Unauthorized** ngay từ đầu — **trái ngược Dify** (`/install` kiểu land-grab, mật khẩu công khai `difyai123456`) |
+### D18b — runtime đã cài đặt, còn cổng nghiệm thu dữ liệu
 
-**Hệ quả cho sizing:** con số "engine 3,1 GB" trong bảng ngân sách RAM là ước lượng **cho Dify 16 container**. Flowise thật = **558 MB / 1 container**, nhẹ hơn ~5,5 lần. Máy AI dùng chung **không cần 8 GB** — nhưng đừng chốt vội: 558 MB là lúc rảnh, phải đo lại dưới tải thật sau khi có D21.
+- `PARSER_MODE=flowise` fail-fast với `FLOWISE_BASE_URL`, `FLOWISE_FLOW_ID`, `FLOWISE_API_KEY`, `FLOWISE_TIMEOUT_MS`.
+- `FlowiseParser` chỉ nhận `response.json`, validate lại bằng schema dùng chung; timeout/401/404/429/5xx/schema sai đều ném lỗi để ingest retry tối đa 3 lượt.
+- Workflow `zalo-order-parser-v1` là artifact đã bỏ credential: Start form → một LLM structured output → kết thúc; không memory/tool/code/MCP/HTTP callback.
+- Flowise khóa bản [3.1.4](https://github.com/FlowiseAI/Flowise/releases/tag/flowise%403.1.4) bằng image digest. Image dẫn xuất có patch source-guarded để gửi `thinking:{type:"disabled"}` cho DeepSeek V4 và expose structured output Agentflow tại `response.json`.
+- Contract thật đạt: import idempotent, prediction key chặn request thiếu/sai key, output qua `parseResultSchema`, đúng một LLM call.
+- Eval Flowise trên bộ hiện có: **35/35 intent = 100%**, ngang baseline DeepSeek trực tiếp. Bộ hiện có chưa có golden field; vì vậy D18b chưa được đánh ✅ trước B1-B2.
 
-**Trạng thái hạ tầng:** VM spike đã **xoá sau khi đo xong**. Project `ultty-flowise-spike-2607` giữ lại (0 tài nguyên = **$0/tháng**), đã khoá sẵn: xoá `default-allow-ssh`/`default-allow-rdp` (mặc định GCP mở `0.0.0.0/0`), SSH chỉ qua IAP `35.235.240.0/20`, service account riêng **không gán role nào**, Shielded VM. Dựng lại đúng máy đó bằng `deploy/spike/startup-flowise.sh` — mất 3 phút.
+### D18c — pilot `netviet`
 
-**Việc kế tiếp, theo thứ tự:**
-1. **D21 — đo số TIN/ngày thật.** Chặn mọi thứ phía sau: sizing, báo giá, hoá đơn LLM đều đang dựa trên "10-20 đơn/ngày" trong khi `zca` đọc **mọi tin** của 200-350 nhóm.
-2. **H3** — thêm cột tách khách vào `schema.prisma` (đang **0** cột `tenantId`/`customerId`); phụ thuộc D19 về mức cách ly khách yêu cầu.
-3. **Phase 2** — `/internal/*` (rules engine TS vẫn là nơi DUY NHẤT tính tiền) + `FlowiseOrchestrator` gọi qua `RequestsPost`.
-4. Chốt **GCP hay DigitalOcean** (phiên này chọn DO nhưng `doctl` chưa cài và chưa có token; GCP đã đăng nhập sẵn và vừa chạy spike trơn tru).
+- Project `netviet-host-968934832433` (`NetViet Host`), VM đúng tên `netviet`, `asia-southeast1-b`, `e2-standard-2`, Ubuntu 24.04, đĩa balanced 80 GB.
+- Chỉ SSH qua IAP; gateway `127.0.0.1:8080`, Flowise admin `127.0.0.1:3002`; không có firewall inbound web/API/Postgres/Flowise.
+- Stack Zalo tách riêng ở `/srv/netviet/apps/zalo-ultty`, Compose project `zalo-ultty`; DB user/password/volume/network riêng cho Zalo và Flowise.
+- Image app + Flowise dẫn xuất build từ commit, gắn git SHA, đẩy Artifact Registry và deploy bằng digest; secret ở Secret Manager.
+- Backup hai DB hằng đêm lên GCS (7 ngày + 4 tuần), restore check; Cloud Ops Agent + cảnh báo health/restart/RAM/disk; rollback parser/image; soak 24 giờ.
+- Pilot chỉ dùng dữ liệu TEST với `CHANNEL_MODE=mock`, `PARSER_MODE=flowise`, DeepSeek. Không bật zca/PII thật.
+
+**Cổng còn lại:** hoàn tất deploy/smoke/restore/rollback/soak 24 giờ cho D18c; nhận B1-B2 để đo field-accuracy cho D18b; D21 vẫn cần trước sizing 200-350 nhóm thật.

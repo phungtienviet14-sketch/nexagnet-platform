@@ -1,0 +1,210 @@
+name: zalo-ultty
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: netviet_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: postgres
+      ZALO_DB_PASSWORD: ${ZALO_DB_PASSWORD}
+      FLOWISE_DB_PASSWORD: ${FLOWISE_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netviet_admin -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - data
+
+  flowise-volume-init:
+    image: ${FLOWISE_IMAGE:-flowiseai/flowise:3.1.4@sha256:3922767afb52a5777759fd8b28a3c9eee864daea96018a791f2429eae2a76571}
+    user: "0:0"
+    entrypoint: ["sh", "-c"]
+    command: ["chown -R node:node /home/node/.flowise"]
+    volumes:
+      - flowise-data:/home/node/.flowise
+    network_mode: none
+
+  flowise:
+    image: ${FLOWISE_IMAGE:-flowiseai/flowise:3.1.4@sha256:3922767afb52a5777759fd8b28a3c9eee864daea96018a791f2429eae2a76571}
+    restart: unless-stopped
+    user: "1000:1000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      flowise-volume-init:
+        condition: service_completed_successfully
+    environment:
+      PORT: 3000
+      DATABASE_TYPE: postgres
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: flowise
+      DATABASE_USER: flowise
+      DATABASE_PASSWORD: ${FLOWISE_DB_PASSWORD}
+      DATABASE_SSL: "false"
+      FLOWISE_SECRETKEY_OVERWRITE: ${FLOWISE_SECRETKEY}
+      APP_URL: http://127.0.0.1:3002
+      JWT_AUTH_TOKEN_SECRET: ${FLOWISE_JWT_SECRET}
+      JWT_REFRESH_TOKEN_SECRET: ${FLOWISE_REFRESH_SECRET}
+      EXPRESS_SESSION_SECRET: ${FLOWISE_SESSION_SECRET}
+      TOKEN_HASH_SECRET: ${FLOWISE_TOKEN_HASH_SECRET}
+      SECURE_COOKIES: "false"
+      DISABLE_FLOWISE_TELEMETRY: "true"
+      SHOW_COMMUNITY_NODES: "false"
+      ALLOW_BUILTIN_DEP: "false"
+      TOOL_FUNCTION_BUILTIN_DEP: ""
+      TOOL_FUNCTION_EXTERNAL_DEP: ""
+      HTTP_SECURITY_CHECK: "true"
+      PATH_TRAVERSAL_SAFETY: "true"
+      CUSTOM_MCP_SECURITY_CHECK: "true"
+      LOG_LEVEL: info
+      LOG_SANITIZE_BODY_FIELDS: password,credential,apiKey,token,secret
+      LOG_SANITIZE_HEADER_FIELDS: authorization,cookie,x-api-key
+      FLOWISE_FILE_SIZE_LIMIT: 1mb
+    ports:
+      - "127.0.0.1:3002:3000"
+    volumes:
+      - flowise-data:/home/node/.flowise
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/v1/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - backend
+      - data
+
+  bootstrap:
+    image: ${APP_IMAGE}
+    profiles: ["tools"]
+    user: "0:0"
+    depends_on:
+      flowise:
+        condition: service_healthy
+    env_file:
+      - ./.runtime/flowise.env
+    environment:
+      FLOWISE_BASE_URL: http://flowise:3000
+      FLOWISE_ADMIN_EMAIL: ${FLOWISE_ADMIN_EMAIL}
+      FLOWISE_ADMIN_PASSWORD: ${FLOWISE_ADMIN_PASSWORD}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      FLOWISE_RUNTIME_ENV_PATH: /runtime/flowise.env
+    command: ["node", "deploy/flowise/bootstrap-flowise.mjs"]
+    volumes:
+      - ./.runtime:/runtime
+    networks:
+      - backend
+
+  api:
+    image: ${APP_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      flowise:
+        condition: service_healthy
+    env_file:
+      - ./.runtime/flowise.env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://zalo:${ZALO_DB_PASSWORD}@postgres:5432/zalo
+      PERSISTENCE: prisma
+      PARSER_MODE: ${PARSER_MODE:-flowise}
+      FLOWISE_BASE_URL: http://flowise:3000
+      FLOWISE_TIMEOUT_MS: 30000
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      CHANNEL_MODE: mock
+      AUTO_ACK: "off"
+      AUTO_SEND: "off"
+      API_KEY: ${API_KEY}
+      CORS_ORIGIN: http://127.0.0.1:8080
+      ADMIN_UI: "off"
+      STREAM_MODE: "on"
+    command:
+      - sh
+      - -ec
+      - |
+        apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
+        exec node apps/api/dist/main.js
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - backend
+      - data
+
+  web:
+    image: ${APP_IMAGE}
+    restart: unless-stopped
+    command:
+      [
+        "apps/web/node_modules/.bin/next",
+        "start",
+        "apps/web",
+        "-p",
+        "3000",
+        "-H",
+        "0.0.0.0"
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - backend
+
+  gateway:
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      API_KEY: ${API_KEY}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+
+volumes:
+  postgres-data:
+  flowise-data:
+
+networks:
+  backend:
+  data:
+    internal: true

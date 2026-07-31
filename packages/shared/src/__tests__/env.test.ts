@@ -43,6 +43,35 @@ describe('loadEnv', () => {
     expect(env.BOT_NAME).toContain('Bot');
   });
 
+  it('nhan cau hinh Flowise day du va ep timeout sang so', () => {
+    const env = loadEnv({
+      PARSER_MODE: 'flowise',
+      FLOWISE_BASE_URL: 'http://flowise:3000',
+      FLOWISE_FLOW_ID: 'zalo-order-parser-v1',
+      FLOWISE_API_KEY: 'flowise-secret-key',
+      FLOWISE_TIMEOUT_MS: '45000',
+    });
+
+    expect(env.PARSER_MODE).toBe('flowise');
+    expect(env.FLOWISE_BASE_URL).toBe('http://flowise:3000');
+    expect(env.FLOWISE_FLOW_ID).toBe('zalo-order-parser-v1');
+    expect(env.FLOWISE_TIMEOUT_MS).toBe(45_000);
+  });
+
+  it('PARSER_MODE=flowise thieu cau hinh -> fail fast, khong roi ve mock', () => {
+    expect(() => loadEnv({ PARSER_MODE: 'flowise' })).toThrowError(EnvValidationError);
+
+    try {
+      loadEnv({ PARSER_MODE: 'flowise' });
+    } catch (error) {
+      const validationError = error as EnvValidationError;
+      const issues = validationError.issues.join('\n');
+      expect(issues).toContain('FLOWISE_BASE_URL');
+      expect(issues).toContain('FLOWISE_FLOW_ID');
+      expect(issues).toContain('FLOWISE_API_KEY');
+    }
+  });
+
   it('mac dinh CHANNEL_MODE=mock (offline, khong can dang nhap Zalo)', () => {
     const env = loadEnv({});
 

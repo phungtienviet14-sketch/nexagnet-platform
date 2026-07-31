@@ -1,0 +1,204 @@
+{
+  "name": "zalo-order-parser-v1",
+  "description": "Flowise Agentflow V2 chỉ phân loại intent và trích xuất đơn thô; không tính tiền hoặc quyết chính sách.",
+  "flowiseVersion": "3.1.4",
+  "credentialPlaceholder": "__FLOWISE_DEEPSEEK_CREDENTIAL_ID__",
+  "flow": {
+    "nodes": [
+      {
+        "id": "startAgentflow_0",
+        "type": "agentFlow",
+        "position": {
+          "x": 0,
+          "y": 80
+        },
+        "data": {
+          "id": "startAgentflow_0",
+          "label": "Parser Input",
+          "version": 1.1,
+          "name": "startAgentflow",
+          "type": "Start",
+          "color": "#7EE787",
+          "hideInput": true,
+          "baseClasses": ["Start"],
+          "category": "Agent Flows",
+          "description": "Input có cấu trúc từ NestJS FlowiseParser",
+          "inputParams": [],
+          "inputAnchors": [],
+          "inputs": {
+            "startInputType": "formInput",
+            "formTitle": "Zalo order parser",
+            "formDescription": "Internal API only",
+            "formInputTypes": [
+              {
+                "type": "string",
+                "label": "Message text",
+                "name": "text"
+              },
+              {
+                "type": "string",
+                "label": "Image URL",
+                "name": "imageUrl"
+              },
+              {
+                "type": "string",
+                "label": "Products JSON",
+                "name": "productsJson"
+              },
+              {
+                "type": "string",
+                "label": "Glossary JSON",
+                "name": "glossaryJson"
+              },
+              {
+                "type": "string",
+                "label": "Dealer name",
+                "name": "dealerNameRaw"
+              },
+              {
+                "type": "string",
+                "label": "Bot name",
+                "name": "botName"
+              }
+            ],
+            "startEphemeralMemory": true,
+            "startState": "",
+            "startPersistState": false
+          },
+          "outputAnchors": [
+            {
+              "id": "startAgentflow_0-output-startAgentflow",
+              "label": "Start",
+              "name": "startAgentflow"
+            }
+          ],
+          "outputs": {},
+          "selected": false
+        },
+        "width": 160,
+        "height": 66,
+        "selected": false,
+        "positionAbsolute": {
+          "x": 0,
+          "y": 80
+        },
+        "dragging": false
+      },
+      {
+        "id": "llmAgentflow_0",
+        "type": "agentFlow",
+        "position": {
+          "x": 260,
+          "y": 80
+        },
+        "data": {
+          "id": "llmAgentflow_0",
+          "label": "DeepSeek Extractor",
+          "version": 1.1,
+          "name": "llmAgentflow",
+          "type": "LLM",
+          "color": "#64B5F6",
+          "baseClasses": ["LLM"],
+          "category": "Agent Flows",
+          "description": "Một lần gọi DeepSeek, trả structured output",
+          "inputParams": [
+            {
+              "label": "Messages",
+              "name": "llmMessages",
+              "type": "array",
+              "optional": true,
+              "acceptVariable": true
+            }
+          ],
+          "inputAnchors": [
+            {
+              "label": "LLM",
+              "name": "llmAgentflow",
+              "type": "LLM",
+              "id": "llmAgentflow_0-input-llmAgentflow-LLM"
+            }
+          ],
+          "inputs": {
+            "llmModel": "chatDeepseek",
+            "llmMessages": [
+              {
+                "role": "system",
+                "content": "Bạn là bộ PHÂN LOẠI Ý ĐỊNH + TRÍCH XUẤT đơn hàng cho U Ultty Việt Nam. Đại lý nhắn tiếng Việt viết tắt, không dấu và ngắn.\n\nChọn đúng một intent:\n- hoi_san_pham: hỏi thông tin hoặc tư vấn sản phẩm\n- hoi_gia: hỏi giá, báo giá hoặc bao nhiêu tiền\n- dat_don: đặt hàng hoặc xác nhận gửi hàng\n- chinh_sach_cong_no: hỏi công nợ, thanh toán, ký gửi, VAT hoặc COD\n- bao_hanh_khieu_nai: bảo hành, lỗi, đổi trả hoặc khiếu nại\n- van_chuyen: hỏi vận chuyển, giao hàng hoặc cước\n- khac: không thuộc sáu loại trên hoặc quá mơ hồ\n\nRanh giới bắt buộc:\n- \"mấy tiền 1 cái\", \"bao nhiêu tiền 1 cái\", \"giá bao nhiêu\" là hoi_gia, KHÔNG phải hoi_san_pham hay dat_don.\n- Chỉ chọn dat_don khi có số lượng cụ thể cùng ý đặt/chốt/lấy/gửi hàng; câu hỏi đơn giá dù có \"1 cái\" vẫn là hoi_gia.\n- Tin báo giao thiếu, hàng lỗi, đòi đổi là bao_hanh_khieu_nai, không phải đơn mới.\n- Tin hỏi tiến độ hoặc mã vận đơn là van_chuyen, không phải đơn mới.\n\nNếu intent=dat_don, trích xuất đơn THÔ. TUYỆT ĐỐI KHÔNG tự tính giá, tổng, VAT, phí ship, COD hoặc quyết chính sách. Chỉ ghi lại số khách thực sự viết trong unitPriceRaw, totalRaw, shippingFeeRaw. Không biết thì bỏ qua.\n- items: skuRaw là tên/mã khách ghi; quantity là số nguyên dương.\n- orderType=TH2 khi có khách lẻ kèm số điện thoại hoặc địa chỉ giao; còn lại TH1.\n- noVat=true chỉ khi khách nói không VAT. wantVat=true chỉ khi khách yêu cầu VAT/hóa đơn.\n- codCollect=true chỉ khi khách nói thu hộ/COD.\n- order chỉ được có khi intent=dat_don.\n- confidence.intent phải từ 0 đến 1.\n- Trường tùy chọn không biết phải BỎ HẲN; tuyệt đối không xuất null.\n\nDeepSeek không đọc ảnh trong flow này. imageUrl chỉ là metadata; tin chỉ có ảnh phải để độ tin cậy thấp.\n\nDanh mục SKU JSON: {{ $form.productsJson }}\nTừ điển viết tắt JSON: {{ $form.glossaryJson }}\nĐại lý suy ra từ nhóm: {{ $form.dealerNameRaw }}\nTên bot cần bỏ mention: {{ $form.botName }}"
+              },
+              {
+                "role": "user",
+                "content": "{{ $form.text }}"
+              }
+            ],
+            "llmEnableMemory": false,
+            "llmMemoryType": "allMessages",
+            "llmUserMessage": "",
+            "llmReturnResponseAs": "assistantMessage",
+            "llmStructuredOutput": [
+              {
+                "key": "result",
+                "type": "jsonArray",
+                "enumValues": "",
+                "jsonSchema": "{\"intent\":{\"type\":\"string\",\"description\":\"Một trong 7 intent cố định\"},\"order\":{\"type\":\"object\",\"optional\":true,\"description\":\"Chỉ có khi intent=dat_don\",\"properties\":{\"orderType\":{\"type\":\"string\"},\"dealerNameRaw\":{\"type\":\"string\",\"optional\":true},\"branch\":{\"type\":\"string\",\"optional\":true},\"items\":{\"type\":\"array\",\"items\":{\"skuRaw\":{\"type\":\"string\"},\"quantity\":{\"type\":\"number\"},\"unitPriceRaw\":{\"type\":\"number\",\"optional\":true}}},\"totalRaw\":{\"type\":\"number\",\"optional\":true},\"noVat\":{\"type\":\"boolean\"},\"wantVat\":{\"type\":\"boolean\",\"optional\":true},\"customerName\":{\"type\":\"string\",\"optional\":true},\"customerPhone\":{\"type\":\"string\",\"optional\":true},\"customerAddress\":{\"type\":\"string\",\"optional\":true},\"shippingFeeRaw\":{\"type\":\"number\",\"optional\":true},\"codCollect\":{\"type\":\"boolean\",\"optional\":true}}},\"confidence\":{\"type\":\"object\",\"properties\":{\"intent\":{\"type\":\"number\"}}}}",
+                "description": "Mảng bắt buộc đúng một ParseResult để NestJS unwrap và validate"
+              }
+            ],
+            "llmUpdateState": "",
+            "llmModelConfig": {
+              "FLOWISE_CREDENTIAL_ID": "__FLOWISE_DEEPSEEK_CREDENTIAL_ID__",
+              "modelName": "deepseek-v4-flash",
+              "temperature": 0,
+              "streaming": false,
+              "maxTokens": 800,
+              "topP": "",
+              "frequencyPenalty": "",
+              "presencePenalty": "",
+              "timeout": 30000,
+              "stopSequence": "",
+              "thinking": false,
+              "baseOptions": "",
+              "llmModel": "chatDeepseek"
+            }
+          },
+          "outputAnchors": [
+            {
+              "id": "llmAgentflow_0-output-llmAgentflow",
+              "label": "LLM",
+              "name": "llmAgentflow"
+            }
+          ],
+          "outputs": {},
+          "selected": false
+        },
+        "width": 176,
+        "height": 66,
+        "selected": false,
+        "positionAbsolute": {
+          "x": 260,
+          "y": 80
+        },
+        "dragging": false
+      }
+    ],
+    "edges": [
+      {
+        "source": "startAgentflow_0",
+        "sourceHandle": "startAgentflow_0-output-startAgentflow",
+        "target": "llmAgentflow_0",
+        "targetHandle": "llmAgentflow_0",
+        "data": {
+          "sourceColor": "#7EE787",
+          "targetColor": "#64B5F6",
+          "isHumanInput": false
+        },
+        "type": "agentFlow",
+        "id": "startAgentflow_0-startAgentflow_0-output-startAgentflow-llmAgentflow_0-llmAgentflow_0"
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  }
+}

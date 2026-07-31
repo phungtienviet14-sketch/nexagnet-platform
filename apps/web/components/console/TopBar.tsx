@@ -17,6 +17,7 @@ type Props = {
 
 const PARSER_LABEL: Record<DemoConfig['parserMode'], string> = {
   deepseek: 'DeepSeek',
+  flowise: 'Flowise · DeepSeek',
   claude: 'Claude',
   mock: 'Mock (offline)',
 };

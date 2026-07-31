@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/coverage/**',
       '**/next-env.d.ts',
       '**/logs/**',
+      '**/.claude/worktrees/**',
     ],
   },
   js.configs.recommended,

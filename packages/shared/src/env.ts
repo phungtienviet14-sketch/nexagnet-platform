@@ -27,10 +27,16 @@ export const envSchema = z.object({
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
+  // Flowise chi la adapter parser noi bo. Khi PARSER_MODE=flowise, ca ba bien duoi BAT BUOC
+  // co; loadEnv fail-fast de production khong am tham roi ve MockParser.
+  FLOWISE_BASE_URL: z.string().url().optional(),
+  FLOWISE_FLOW_ID: z.string().min(1).optional(),
+  FLOWISE_API_KEY: z.string().min(1).optional(),
+  FLOWISE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   ZALO_BOT_TOKEN: z.string().optional(),
   ZALO_BOT_WEBHOOK_SECRET: z.string().optional(),
-  // Che do parser: mock (tat dinh) | claude (Anthropic) | deepseek (DeepSeek, tuong thich OpenAI).
-  PARSER_MODE: z.enum(['mock', 'claude', 'deepseek']).default('mock'),
+  // Che do parser: mock | claude | deepseek truc tiep | flowise (Agentflow V2 noi bo).
+  PARSER_MODE: z.enum(['mock', 'claude', 'deepseek', 'flowise']).default('mock'),
   // KENH ZALO — nguon su that DUY NHAT chon kenh doc/gui tin:
   //   mock  = offline (demo qua /demo/simulate) — mac dinh, khong can dang nhap Zalo.
   //   bot   = Zalo Bot Platform chinh thuc (can ZALO_BOT_TOKEN) — CHI nhan tin @mention.
@@ -104,6 +110,16 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new EnvValidationError([
       'API_KEY: BAT BUOC khi NODE_ENV=production (API co /broadcast gui tin Zalo that + /knowledge lo bang gia)',
     ]);
+  }
+  if (data.PARSER_MODE === 'flowise') {
+    const missingFlowiseVariables = [
+      !data.FLOWISE_BASE_URL ? 'FLOWISE_BASE_URL: BAT BUOC khi PARSER_MODE=flowise' : null,
+      !data.FLOWISE_FLOW_ID ? 'FLOWISE_FLOW_ID: BAT BUOC khi PARSER_MODE=flowise' : null,
+      !data.FLOWISE_API_KEY ? 'FLOWISE_API_KEY: BAT BUOC khi PARSER_MODE=flowise' : null,
+    ].filter((issue): issue is string => issue !== null);
+    if (missingFlowiseVariables.length > 0) {
+      throw new EnvValidationError(missingFlowiseVariables);
+    }
   }
   // Tuong thich nguoc: cau hinh cu chi co BOT_MODE=on (chua biet CHANNEL_MODE) -> coi la kenh 'bot'.
   if (source.CHANNEL_MODE === undefined && data.BOT_MODE === 'on' && data.CHANNEL_MODE === 'mock') {

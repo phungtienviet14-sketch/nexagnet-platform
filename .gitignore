@@ -34,6 +34,7 @@ Thumbs.db
 # Temp
 *.tmp
 .cache/
+.runtime/
 
 # Test & build artifacts
 coverage/

@@ -2,7 +2,7 @@
 
 > **Vai trò tài liệu:** bản KỸ THUẬT hợp nhất — toàn bộ **sơ đồ hệ thống (12 sơ đồ Mermaid)** + **quyết định thiết kế đã chốt** + **phụ lục bằng chứng PoC**. Xem trên GitHub hoặc VS Code (extension Markdown Preview Mermaid).
 > **Hợp nhất 11/07/2026:** nuốt trọn `thiet-ke-ky-thuat-hop-nhat.md` (quyết định kỹ thuật — §2/§3/§15) và 2 tài liệu PoC `poc-zalo-bot.md`, `poc-parser.md` (→ Phụ lục A/B) — 3 file gốc đã xóa, git history còn.
-> **Đối chiếu code 11/07/2026:** mọi sơ đồ đã rà lại theo code (code là chuẩn) — sửa state machine §8 (bỏ chuỗi `draft→approved→sent` chưa dùng), sequence §6 (chưa lưu message riêng), ERD §12 (đánh dấu bảng chưa ghi).
+> **Đối chiếu code 31/07/2026:** bổ sung FlowiseParser/Agentflow V2, lưu tin + retry ingest, API key guard và topology pilot GCP `netviet`; code vẫn là chuẩn khi tài liệu lệch.
 > Nghiệp vụ + sai lệch nguồn gốc: [nghiep-vu.md](nghiep-vu.md) · Kế hoạch + trạng thái: [ke-hoach/tong-quan.md](ke-hoach/tong-quan.md).
 
 **Mục lục:** §1 Bối cảnh · §2 Quyết định kỹ thuật · §3 Ma trận kênh Zalo · §4 Kiến trúc 6 tầng · §5 Bản đồ module · §6 Luồng 1 đơn hàng · §7 Pipeline chi tiết · §8 Vòng đời đơn · §9 Bảy intent · §10 Nguồn sự thật động · §11 Realtime SSE · §12 ERD · §13 Runtime & cờ env · §14 Chọn kênh · §15 Tích hợp, KPI, bảo mật, rủi ro · Phụ lục A/B (PoC).
@@ -23,14 +23,16 @@ flowchart LR
         API["⚙️ Backend NestJS"]
     end
 
-    LLM["🧠 LLM (DeepSeek / Claude)<br/>(intent + trích xuất — 1 lần/tin)"]
+    FLOW["🔀 Flowise Agentflow V2<br/>(chỉ adapter gọi LLM)"]
+    LLM["🧠 LLM (pilot: DeepSeek TEST<br/>production PII: Claude)"]
     KV["📦 KiotViet<br/>(đơn + tồn kho)"]
     BASE["🗂️ Base<br/>(duyệt + giao vận)"]
     SHIP["🚚 Aha / Viettel"]
 
     DL -->|"nhắn đặt hàng<br/>(viết tắt, không dấu)"| GRP
     GRP -->|"GĐ1: zca đọc MỌI tin nhóm<br/>(không cần tag) · Bot/dán tay = dự phòng"| API
-    API <-->|"gọi AI (1 lần/tin)"| LLM
+    API -->|"FlowiseParser (1 request/tin)"| FLOW
+    FLOW -->|"1 lần LLM · structured output"| LLM
     API --> CONSOLE
     SALE -->|duyệt / sửa| CONSOLE
     CONSOLE -->|"format xác nhận TH1/TH2"| GRP
@@ -52,10 +54,12 @@ flowchart LR
 |---|---|---|
 | Kiến trúc 6 tầng, intent taxonomy, luồng chính sách/bảo hành, checklist chốt đơn | Theo NetViet (`Thiet_ke_AI_Agent_U_Ultty.md` §3, §5 — giữ nguyên) | Nghiệp vụ không đổi |
 | Lộ trình 3 giai đoạn, KPI, managed service | Theo NetViet (§6, §7) | Sơ đồ lộ trình: [ke-hoach/tong-quan.md](ke-hoach/tong-quan.md) |
-| Stack | TypeScript (Node 22) · NestJS · Next.js · PostgreSQL + **Prisma 6 (pin, KHÔNG nâng v7** — `@adminjs/prisma` chưa hỗ trợ) · Claude/DeepSeek API · monorepo pnpm | BullMQ/Redis có trong stack nhưng **chưa dùng** (YAGNI — thêm khi pipeline thật sự cần queue) |
+| Stack | TypeScript (Node 22) · NestJS · Next.js · PostgreSQL + **Prisma 6 (pin, KHÔNG nâng v7** — `@adminjs/prisma` chưa hỗ trợ) · Flowise 3.1.4 · Claude/DeepSeek API · monorepo pnpm | BullMQ/Redis có trong stack nhưng **chưa dùng** (YAGNI — thêm khi pipeline thật sự cần queue) |
 | Kênh Zalo GĐ1 | **zca-js = kênh đọc chính** (đảo quyết định 09/07/2026, khách chọn); chuyển kênh bằng 1 biến `CHANNEL_MODE=mock\|bot\|zca` | Điều kiện chặn: **tài khoản phụ** + **văn bản chấp nhận rủi ro** (vi phạm ToS Zalo; Luật BVDLCN 91/2025/QH15 + NĐ 356/2025) |
 | Multi-agent 6 vai | 6 vai chuyên trách **dưới 1 orchestrator, dùng chung 1 lần gọi LLM/tin** (Router parse) — KHÔNG phải 6 LLM độc lập | Chi phí như 1 orchestrator; rules engine tính tiền |
 | LLM vs rules | **LLM không tính tiền, không quyết chính sách** — chỉ phân loại intent + trích xuất + soạn văn bản; giá/ship/VAT/chính sách do rules engine TS tất định tính từ nguồn sự thật | Nguyên tắc bất di bất dịch |
+| Dify → Flowise | NestJS giữ orchestrator; `FlowiseParser` gọi Agentflow `zalo-order-parser-v1` chỉ gồm form input + một LLM structured output. Không tool/code/memory/MCP/callback vào NestJS | `PARSER_MODE=deepseek` được giữ để rollback; D18a-c ở kế hoạch tổng quan |
+| Cách ly khách v1 | Một Compose stack + DB/user/secret/volume/network riêng cho mỗi dự án; chưa cần `tenantId` khi không dùng chung DB | Stack đầu: `/srv/netviet/apps/zalo-ultty` |
 | Kho | KHÔNG xây module kho riêng — KiotViet là source of truth duy nhất | 10-20 đơn/ngày không cần cache |
 | Lưu trữ | Mặc định **in-memory** (`PERSISTENCE=memory` — demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma` (cờ riêng, tách khỏi `DATABASE_URL`) | as-built Phase 3 |
 | Nguồn sự thật ĐỘNG | Panel **`/admin`** (AdminJS auto-CRUD 6 bảng) + **MCP tool** (8 tool) — cả hai ghi Postgres + nạp lại snapshot ngay | Thay cho tab "Prompt AI" của PWA trong thiết kế cũ |
@@ -95,11 +99,11 @@ flowchart TB
     subgraph L2["Tầng 2 — Tiếp nhận (ingest/)"]
         LIS["ZcaListener (nghe mọi tin nhóm)<br/>/ BotPoller (@mention)"]
         IDENT["Gán danh tính:<br/>nhóm → đại lý/CTV (theo chatId)"]
-        SAVE["Lưu messages ngay khi nhận<br/>(model Prisma sẵn — cơ chế ghi CHƯA có,<br/>thuộc Đợt 0 còn lại)"]
+        SAVE["Lưu messages ngay khi nhận<br/>trước parser · chống trùng · retry tối đa 3 lượt"]
     end
 
     subgraph L3["Tầng 3 — Lõi AI (pipeline/ + agents/)"]
-        ORCH["AgentOrchestrator — Router (1 call LLM)<br/>→ dispatch 6 vai chuyên trách → Giám sát<br/>① intent (7 loại) ② trích xuất TH1/TH2 ③ RAG kèm nguồn"]
+        ORCH["AgentOrchestrator — Router qua OrderParser<br/>FlowiseParser = 1 structured LLM call<br/>→ dispatch 6 vai chuyên trách → Giám sát"]
     end
 
     subgraph L4["Tầng 4 — Luật nghiệp vụ (rules/) — TypeScript tất định, KHÔNG dùng LLM"]
@@ -141,7 +145,7 @@ flowchart LR
     subgraph APIAPP["apps/api — NestJS"]
         MAIN["main.ts<br/>validate env → AppModule.forRoot()"]
         ING2["ingest/<br/>ZcaListener · BotPoller"]
-        PIP2["pipeline/<br/>PipelineService + parser<br/>(mock · deepseek · claude)"]
+        PIP2["pipeline/<br/>PipelineService + OrderParser<br/>(mock · deepseek · claude · flowise)"]
         AGE2["agents/<br/>AgentOrchestrator · risk-rules<br/>AgentEventsService"]
         RUL2["rules/ — thuần TS, pure"]
         KNO2["knowledge/<br/>KnowledgeService · seed · repo"]
@@ -157,9 +161,13 @@ flowchart LR
     WEB2["apps/web — console Next.js"]
     SHA2["packages/shared — zod schemas + types<br/>(hợp đồng chung api ⇄ web ⇄ tools)"]
     PG2[("Postgres<br/>chỉ khi PERSISTENCE=prisma")]
+    FLO2["Flowise 3.1.4<br/>zalo-order-parser-v1"]
+    LLM2["DeepSeek / Claude API"]
 
     MAIN --> ING2
     ING2 --> PIP2 --> AGE2
+    PIP2 -->|"PARSER_MODE=flowise"| FLO2
+    FLO2 -->|"1 structured LLM call"| LLM2
     AGE2 --> RUL2
     AGE2 --> KNO2
     AGE2 --> ORD2
@@ -194,6 +202,7 @@ sequenceDiagram
     actor S as Sale (console)
     participant IN as Ingest
     participant AI as AgentOrchestrator (Router + 6 vai)
+    participant FL as Flowise Agentflow V2
     participant RU as Rules engine
     participant ST as Lưu trữ (in-memory / Postgres)
     participant KV as KiotViet (mock)
@@ -206,10 +215,12 @@ sequenceDiagram
         DL-->>IN: Bot nhận tin @mention / Sale dán qua console
     end
 
-    Note over IN,ST: Lưu message thô vào DB — model sẵn, cơ chế ghi CHƯA có (Đợt 0 còn lại) · hiện chống trùng bằng externalMessageId in-memory
+    IN->>ST: Lưu message thô TRƯỚC xử lý<br/>chống trùng externalMessageId
     IN->>AI: Đưa vào pipeline
     AI->>ST: Lấy ngữ cảnh: nhóm→đại lý Meta HN,<br/>19 SKU, glossary (TN=Thái Nguyên)
-    AI->>AI: Router (1 lần LLM) → intent=dat_don<br/>trích xuất: 10 x Ghế Felix, giao TN, không VAT
+    AI->>FL: FlowiseParser gửi form + ngữ cảnh đóng
+    FL->>FL: 1 lần LLM, structured output<br/>không tool/memory/callback
+    FL-->>AI: parseResultSchema: intent=dat_don<br/>10 x Ghế Felix, giao TN, không VAT
     AI->>RU: JSON đơn thô
     RU->>ST: Tra giá sỉ + deal riêng + phí ship + chính sách
     RU->>RU: Validation: SKU hợp lệ? tổng lệch >5%?<br/>Giám sát: rủi ro? → pending_review / needs_edit
@@ -232,7 +243,7 @@ flowchart TD
     IN3["Tin vào (zca / bot / dán tay / demo)"] --> DEDUP{"Trùng externalMessageId?"}
     DEDUP -->|có| DROP["Bỏ qua (idempotent)"]
     DEDUP -->|không| RESOLVE["Map chatId → đại lý · chi nhánh · loại người gửi<br/>(nhóm lạ → unknown)"]
-    RESOLVE --> ROUTER["Điều phối (Router) — parse 1 lần:<br/>mock = regex tất định, 0 LLM<br/>deepseek/claude = 1 lần gọi LLM"]
+    RESOLVE --> ROUTER["Điều phối (Router) — parse 1 lần:<br/>mock = regex tất định, 0 LLM<br/>deepseek/claude = gọi trực tiếp<br/>flowise = Agentflow structured output"]
     ROUTER --> ISORDER{"intent = dat_don<br/>kèm order thô?"}
     ISORDER -->|có| PRICE3["Bán hàng → rules engine tất định:<br/>map SKU (alias, không dấu) · giá sỉ/deal riêng<br/>ship · VAT · COD · format xác nhận TH1/TH2"]
     ISORDER -->|không| DRAFT3["Vai chuyên trách tra kho tri thức<br/>→ soạn draft trả lời KÈM nguồn<br/>(không có dữ liệu → nói cần Sale, không bịa)"]
@@ -249,7 +260,7 @@ flowchart TD
     style AUTO3 fill:#cfe2ff,stroke:#084298
 ```
 
-Kèm 2 lưới an toàn ở tầng parser: LLM lỗi/timeout → retry 1 lần → fallback `intent=khac` với confidence 0 (Giám sát gắn cờ); tiền dạng chuỗi ("11tr5", "1.150k") được ép về số trước khi validate (Phụ lục B).
+Lưới an toàn: tin thô được giữ trong PostgreSQL; timeout/401/404/429/5xx/schema sai làm lượt xử lý thất bại, ingest thử tối đa **3 lượt** rồi để vận hành chạy lại — không âm thầm đổi sang MockParser. Tiền dạng chuỗi ("11tr5", "1.150k") được ép về số trước khi validate (Phụ lục B).
 
 ---
 
@@ -422,9 +433,9 @@ erDiagram
 
 Bảng độc lập (chưa nối quan hệ): `glossary_entries` (24 mục) · `users` (Phase 5 auth) · `kpi_events` (Phase 5).
 
-> **Bảng nào ĐANG được ghi thật (11/07/2026):**
-> - **Ghi rồi:** `dealers` · `groups` · `products` · `prices` · `dealer_price_overrides` · `glossary_entries` (qua seed + `/admin` + MCP) và `orders` (khi `PERSISTENCE=prisma`; dòng đơn nằm trong cột JSON `view`, scalar denormalize để lọc).
-> - **Model có, CHƯA ghi:** `messages` (lưu-mọi-tin — Đợt 0 còn lại) · `order_items` (dữ liệu dòng đang nằm trong `orders.view`) · `parse_feedback` · `users` · `kpi_events` (Phase 5).
+> **Bảng nào ĐANG được ghi thật (31/07/2026):**
+> - **Ghi rồi:** `dealers` · `groups` · `products` · `prices` · `dealer_price_overrides` · `glossary_entries` (qua seed + `/admin` + MCP), `messages` (ghi trước pipeline, chống trùng) và `orders` (khi `PERSISTENCE=prisma`; dòng đơn nằm trong cột JSON `view`, scalar denormalize để lọc).
+> - **Model có, CHƯA ghi:** `order_items` (dữ liệu dòng đang nằm trong `orders.view`) · `parse_feedback` · `users` · `kpi_events` (Phase 5).
 > - Các bảng thuộc **đích GĐ sau, CHƯA có model**: `conversations` · `warranty_tickets` · `policies` (điều khoản dạng bảng — hiện là enum trên dealer + rules-config) · `audit_logs`.
 > Schema thật: [apps/api/prisma/schema.prisma](../apps/api/prisma/schema.prisma). Mặc định app chạy in-memory (`PERSISTENCE=memory`).
 
@@ -434,21 +445,31 @@ Bảng độc lập (chưa nối quan hệ): `glossary_entries` (24 mục) · `u
 
 ```mermaid
 flowchart LR
-    subgraph HOST["1 máy dev / 1 VM (Phase 6: Docker)"]
-        APIP["API NestJS :3001<br/>pnpm dev:api"]
-        WEBP["Console Next.js :3000<br/>pnpm dev:web"]
-        MCPP["MCP server (stdio)<br/>pnpm --filter @ultty/api mcp"]
-        PGD[("Postgres :5432<br/>docker compose up -d postgres<br/>chỉ cần khi PERSISTENCE=prisma")]
-    end
-    ZALO2["Zalo<br/>(zca userbot / Bot Platform)"]
-    LLM3["LLM API<br/>(DeepSeek / Claude)"]
+    OP["Máy vận hành<br/>gcloud CLI"]
+    SM["GCP Secret Manager"]
+    AR["Artifact Registry<br/>image theo git SHA + digest"]
+    GCS["GCS backup<br/>7 ngày + 4 tuần"]
+    LLM3["DeepSeek TEST / Claude production"]
 
-    WEBP -->|"REST + SSE :3001"| APIP
-    APIP <-->|"đọc tin / gửi xác nhận"| ZALO2
-    APIP -->|"1 lần gọi/tin"| LLM3
+    subgraph VM["GCP VM netviet · IAP SSH only"]
+        GW["Caddy gateway<br/>127.0.0.1:8080"]
+        WEBP["Console Next.js"]
+        APIP["API NestJS"]
+        FLOWP["Flowise 3.1.4<br/>127.0.0.1:3002"]
+        PGD[("Postgres nội bộ<br/>DB/user Zalo + Flowise riêng")]
+    end
+
+    OP -->|"IAP tunnel"| GW
+    OP -->|"IAP tunnel admin"| FLOWP
+    AR -->|"pull digest"| VM
+    SM -->|"render env 0600"| VM
+    GW --> WEBP
+    GW -->|"REST + SSE, gắn x-api-key"| APIP
+    APIP -->|"FlowiseParser"| FLOWP
+    FLOWP -->|"1 lần LLM/tin"| LLM3
     APIP --> PGD
-    MCPP --> PGD
-    MCPP -.->|"POST /knowledge/reload"| APIP
+    FLOWP --> PGD
+    PGD -->|"pg_dump nightly"| GCS
 ```
 
 **Cờ env quyết định hành vi** (đủ bộ: [packages/shared/src/env.ts](../packages/shared/src/env.ts) — validate lúc boot, fail fast):
@@ -456,13 +477,15 @@ flowchart LR
 | Cờ | Giá trị (mặc định **đậm**) | Quyết định gì |
 |---|---|---|
 | `CHANNEL_MODE` | **mock** · bot · zca | Kênh đọc + gửi Zalo (nguồn sự thật duy nhất chọn kênh) |
-| `PARSER_MODE` | **mock** · claude · deepseek | Bộ não parse (mock = 0 LLM, tất định) |
+| `PARSER_MODE` | **mock** · claude · deepseek · flowise | Bộ não parse; `flowise` gọi Agentflow nội bộ, `deepseek` giữ làm rollback pilot |
 | `PERSISTENCE` | **memory** · prisma | Lưu đơn + nguồn sự thật (memory = demo/CI không cần DB) |
 | `ADMIN_UI` | **off** · on | Mount panel `/admin` (đòi thêm `PERSISTENCE=prisma`) |
 | `AUTO_SEND` | **off** · on | GĐ2 — AI tự duyệt đơn 0-rủi-ro (cần văn bản đồng ý khách) |
 | `AUTO_ACK` | **off** · on | Tự nhắn "đã ghi nhận" khi intent=khac |
 | `STREAM_MODE` | **on** · off | SSE real-time / polling |
 | `ZALO_SELF_LISTEN` | **off** · on | zca có nghe tin do chính tài khoản gửi không (chống vòng lặp) |
+| Flowise | `FLOWISE_BASE_URL`, `FLOWISE_FLOW_ID`, `FLOWISE_API_KEY`, `FLOWISE_TIMEOUT_MS`=30000 | Bắt buộc và fail-fast khi `PARSER_MODE=flowise`; không dùng `overrideConfig` |
+| Bảo vệ API | `API_KEY` | Bắt buộc khi `NODE_ENV=production`; gateway nội bộ gắn header, không đưa key vào browser/query string |
 | Khác | `BOT_NAME`, `ZALO_CRED_PATH` (phiên zca — bảo mật như secret), `BROADCAST_THROTTLE_MS`=1500, `BROADCAST_MAX_TARGETS`=50, `STREAM_STEP_DELAY_MS`=280, `ADMIN_EMAIL/PASSWORD/COOKIE_SECRET` (đổi ở production), `DATABASE_URL`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `ZALO_BOT_TOKEN` | |
 
 ---
@@ -520,11 +543,11 @@ Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ k
 
 ### 15.3 Bảo mật & tuân thủ
 
-- Secrets qua env (validate lúc boot, fail fast); không hardcode key; phiên zca (`secrets/zalo-cred.json`) bảo mật như secret, đã gitignore.
-- Dữ liệu khách (SĐT, địa chỉ, đơn) là nội bộ — **không gửi bên thứ 3** ngoài API đã thống nhất (KiotViet, Claude). **DeepSeek chưa nằm trong danh sách duyệt** → demo chỉ dùng nhóm/dữ liệu TEST; bản chạy thật phải đổi `PARSER_MODE=claude` hoặc bổ sung DeepSeek vào thỏa thuận xử lý dữ liệu.
+- Secrets production nằm trong Secret Manager, render file 0600; env validate lúc boot, không hardcode; phiên zca (`secrets/zalo-cred.json`) bảo mật như secret, đã gitignore.
+- Dữ liệu khách (SĐT, địa chỉ, đơn) là nội bộ — **không gửi bên thứ 3** ngoài API đã thống nhất (KiotViet, Claude). DeepSeek không có DPA phù hợp cho luồng này → pilot Flowise chỉ dùng dữ liệu TEST; bản chạy thật phải dùng Claude.
 - Mọi tin bot/hệ thống gửi ra đều nối nhãn "— Tin tự động từ Bot Ultty" (điều khoản Zalo về nội dung AI).
-- Lưu mọi tin về DB ngay khi nhận (Zalo có quyền khóa kênh không báo trước) — **cơ chế ghi thuộc Đợt 0 còn lại**.
-- Còn thiếu trước production: **auth theo vai** (mọi endpoint kể cả `/knowledge/reload` hiện chưa có auth) + audit log (Phase 5).
+- Lưu mọi tin về DB ngay khi nhận; lỗi parser không đánh dấu đã xử lý và được retry tối đa 3 lượt.
+- `ApiKeyGuard` bảo vệ toàn API ở production; pilot chỉ bind loopback/IAP. **Auth người dùng theo vai + audit log** vẫn còn thiếu trước production nhiều người dùng (Phase 5).
 
 ### 15.4 Rủi ro kỹ thuật chính
 
@@ -534,8 +557,10 @@ Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ k
 | Bot Platform mention-gating (chỉ tin @mention) | Kênh lai: bot bắt đơn có tag; phần còn lại zca/dán tay (Phụ lục A) |
 | Tin gửi lúc bot/zca offline không replay | Production: webhook always-on / listener không gián đoạn + lưu mọi tin DB; Sale vẫn thấy tin trong nhóm (dán tay) |
 | AI trả lời sai giá/chính sách | Rules engine tất định + RAG bắt buộc kèm nguồn + không dữ liệu thì không đoán |
-| LLM lỗi/timeout | Retry 1 lần → fallback intent=khac confidence 0 → Giám sát gắn cờ; `PARSER_MODE=mock` chạy offline |
+| LLM/Flowise lỗi, timeout hoặc output sai schema | Ném lỗi, retry tối đa 3 lượt, giữ tin thô chưa xử lý để vận hành chạy lại; không fallback âm thầm. Rollback pilot bằng `PARSER_MODE=deepseek` |
 | DeepSeek khai tử model cũ 24/07/2026 | Đã dùng `deepseek-v4-flash` (cập nhật trước hạn) |
+| Flowise 3.1.4 thiếu `thinking:disabled` và không expose Agentflow structured output tại `response.json` | Image dẫn xuất từ digest khóa phiên bản, patch có source guard cho cả hai điểm; contract container kiểm tra lại |
+| Một VM tự host là single point of failure | Pilot có backup/restore, health alert và rollback; không cam kết SLA production cho tới khi chốt E3/D24 |
 | Beta Bot Platform đổi chính sách | `ChannelAdapter` đổi kênh không đập hệ thống; tin đã lưu DB |
 
 ---
@@ -569,6 +594,8 @@ Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ k
 Đo **phân loại 7 intent** qua đúng pipeline thật (`/demo/simulate`, `PARSER_MODE=deepseek`) trên 35 tin tiếng Việt không dấu (phủ 7 intent + bẫy TH2/nhiều SP/glossary/adversarial):
 
 **Kết quả: 35/35 = 100%** (từng intent đều 100%; ngưỡng demo đề ra ≥90% → ĐẠT).
+
+**Chạy lại qua `FlowiseParser` + Flowise 3.1.4 ngày 31/07/2026:** **35/35 = 100%**, ngang baseline gọi DeepSeek trực tiếp; mọi response thành công qua `parseResultSchema` và trace ghi `llmCalls=1`. Bộ đề hiện chỉ có nhãn intent, chưa có golden field — chưa được dùng để tuyên bố field-accuracy; cổng đó vẫn là B1-B2.
 
 **Lịch sử tune (bài học nằm trong code dùng chung [parser-prompt.ts](../apps/api/src/pipeline/parser-prompt.ts)):**
 

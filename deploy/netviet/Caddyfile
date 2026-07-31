@@ -1,0 +1,27 @@
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'"
+	}
+
+	@api path /events /orders* /messages* /demo* /kiotviet* /knowledge* /broadcast* /health
+	handle @api {
+		reverse_proxy api:3001 {
+			header_up x-api-key "{$API_KEY}"
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

@@ -21,7 +21,7 @@ export interface DemoConfig {
    *   mock = offline · bot = Bot Platform (@mention) · zca = zca-js userbot (doc moi tin nhom).
    */
   channelMode: 'mock' | 'bot' | 'zca';
-  parserMode: 'mock' | 'claude' | 'deepseek';
+  parserMode: 'mock' | 'claude' | 'deepseek' | 'flowise';
   botName: string;
   /** on -> frontend dung SSE /events (real-time); off -> polling. */
   streamMode: 'on' | 'off';

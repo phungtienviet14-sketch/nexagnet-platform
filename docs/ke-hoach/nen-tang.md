@@ -43,7 +43,7 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 |---|---|---|
 | KiotViet | `KiotVietExcelAdapter` (xuất file đúng format import) **hoặc** API client mỏng sau `KiotVietAdapter` sẵn có (OAuth2 client-credentials, token hạn **24h** — `expires_in` 86400, verify docs 11/07 — tại `id.kiotviet.vn/connect/token`, base `https://public.kiotapi.com`, header `Retailer`, 5.000 GET/giờ — tự viết, KHÔNG dep ngoài; SDK cộng đồng chỉ tham khảo) + **bảng map SKU ↔ mã hàng số** (vd ELNI=`8716`) | **C1** (file mẫu / xác nhận gói có API) |
 | Base | Sinh format chuẩn để dán tay (GĐ1); API/webhook nếu có tài liệu (GĐ2) — hiện CHƯA có code | **C2** |
-| LLM | Đổi `PARSER_MODE=claude` cho dữ liệu khách thật (DeepSeek chỉ demo/test) hoặc bổ sung DeepSeek vào thỏa thuận xử lý dữ liệu | **D17** + **F4** |
+| LLM | Flowise là adapter runtime (`PARSER_MODE=flowise`) nhưng model cho dữ liệu khách thật phải đổi sang Claude; DeepSeek chỉ dùng demo/test vì không có DPA phù hợp để bổ sung vào thỏa thuận | **D17** + **F4** |
 
 ---
 
@@ -57,9 +57,13 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 
 ## 4. Phase 6 — Deploy + Pilot
 
-- Deploy Docker 1 VM (api + web + postgres + backup); kênh đọc always-on (zca listener không gián đoạn; nếu dùng bot → webhook thay long-poll); cảnh báo sự cố về kênh đã chốt ở **E4**.
-- **Pilot 1-2 nhóm thật** → đo 4 KPI trên dữ liệu thật → **go/no-go** mở rộng 200 nhóm.
-- Cổng: **E1-E4** (hạ tầng/vận hành) + **B1-B2** (bộ đo trước go-live) + **D16** (văn bản rủi ro zca) + **D6** (mẫu thông báo nhóm) + **D7** (phạm vi + KPI chốt).
+- Mô hình host: một VM NetViet có thể chứa nhiều dự án, nhưng **mỗi dự án là một Compose stack độc lập** với DB/user/secret/volume/network riêng. Stack đầu là `/srv/netviet/apps/zalo-ultty`, Compose project `zalo-ultty`; v1 không dùng `tenantId` vì không chia database.
+- Luồng deploy: CI chạy lint/typecheck/test/build; image app và Flowise dẫn xuất được gắn git SHA, đẩy Artifact Registry, resolve digest; VM chỉ pull image. Chạy `prisma migrate deploy` trước API.
+- Truy cập pilot chỉ qua IAP tunnel. Gateway bind `127.0.0.1:8080`, Flowise admin bind `127.0.0.1:3002`; PostgreSQL không publish port.
+- Secret lấy từ Secret Manager; backup cả Zalo DB và Flowise DB lên GCS, giữ 7 bản ngày + 4 bản tuần và kiểm tra restore. Ops Agent + health timer cảnh báo endpoint, restart, RAM và disk.
+- Pilot hạ tầng đầu tiên dùng `CHANNEL_MODE=mock`, `PARSER_MODE=flowise`, DeepSeek và dữ liệu TEST. Sau smoke/persistence/rollback/soak 24 giờ mới xem xét pilot 1-2 nhóm thật.
+- **Pilot 1-2 nhóm thật** phải đổi model theo D17, bật kênh đọc always-on, đo 4 KPI rồi **go/no-go** mở rộng 200 nhóm.
+- Cổng cho dữ liệu thật: **E3-E4** (vận hành/cảnh báo) + **B1-B2** (bộ đo trước go-live) + **D16** (văn bản rủi ro zca) + **D6** (mẫu thông báo nhóm) + **D7** (phạm vi + KPI chốt).
 
 ---
 
@@ -74,4 +78,5 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 ```bash
 pnpm test && pnpm lint && pnpm typecheck      # memory mode, không cần DB
 RUN_PRISMA_IT=1 pnpm --filter @ultty/api test # integration Postgres (cần docker)
+node deploy/flowise/contract-test.mjs          # Flowise 3.1.4 + workflow + prediction key
 ```

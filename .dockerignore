@@ -1,0 +1,22 @@
+.git
+.github
+.claude
+.Codex
+.idea
+.vscode
+AGENTS.md
+.env
+.env.*
+!.env.example
+.runtime
+node_modules
+**/node_modules
+**/.next
+**/dist
+coverage
+logs
+secrets
+HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG
+*.docx
+docs/pdf
+design
