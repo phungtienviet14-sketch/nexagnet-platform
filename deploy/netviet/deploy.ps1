@@ -22,6 +22,11 @@ $ServiceAccountName = 'netviet-vm'
 $ServiceAccount = "$ServiceAccountName@$ProjectId.iam.gserviceaccount.com"
 $BackupBucket = "gs://$ProjectId-backups"
 $RegistryHost = "$Region-docker.pkg.dev"
+$GcloudCommand = Get-Command gcloud.cmd -ErrorAction SilentlyContinue
+if (-not $GcloudCommand) {
+  throw 'gcloud CLI is not installed or not in PATH.'
+}
+$GcloudExecutable = $GcloudCommand.Source
 
 function Invoke-Gcloud {
   param(
@@ -31,14 +36,14 @@ function Invoke-Gcloud {
   )
 
   if ($Capture) {
-    $output = & gcloud @Arguments 2>$null
+    $output = & $script:GcloudExecutable @Arguments 2>$null
     if ($LASTEXITCODE -ne 0) {
       throw "gcloud failed: gcloud $($Arguments -join ' ')"
     }
     return ($output -join "`n").Trim()
   }
 
-  & gcloud @Arguments
+  & $script:GcloudExecutable @Arguments
   if ($LASTEXITCODE -ne 0) {
     throw "gcloud failed: gcloud $($Arguments -join ' ')"
   }
@@ -46,7 +51,7 @@ function Invoke-Gcloud {
 
 function Test-GcloudResource {
   param([Parameter(Mandatory)][string[]]$Arguments)
-  & gcloud @Arguments --quiet *> $null
+  & $script:GcloudExecutable @Arguments --quiet *> $null
   return $LASTEXITCODE -eq 0
 }
 
@@ -98,14 +103,14 @@ function Ensure-Secret {
   if (-not (Test-GcloudResource @('secrets', 'describe', $Name, '--project', $ProjectId))) {
     Invoke-Gcloud @('secrets', 'create', $Name, '--replication-policy=automatic', '--project', $ProjectId, '--quiet')
   }
-  $versions = & gcloud secrets versions list $Name --project $ProjectId --filter 'state=ENABLED' --format 'value(name)' 2>$null
+  $versions = & $script:GcloudExecutable secrets versions list $Name --project $ProjectId --filter 'state=ENABLED' --format 'value(name)' 2>$null
   if ($LASTEXITCODE -ne 0) {
     throw "Cannot inspect versions for secret $Name."
   }
   if (-not ($versions | Select-Object -First 1)) {
     $value = & $ValueFactory
     try {
-      $value | & gcloud secrets versions add $Name --data-file=- --project $ProjectId --quiet *> $null
+      $value | & $script:GcloudExecutable secrets versions add $Name --data-file=- --project $ProjectId --quiet *> $null
       if ($LASTEXITCODE -ne 0) {
         throw "Cannot add initial version to secret $Name."
       }
@@ -441,7 +446,7 @@ function Ensure-AlertPolicy {
     [Parameter(Mandatory)][string]$Threshold,
     [Parameter(Mandatory)][string]$NotificationChannel
   )
-  $existing = & gcloud monitoring policies list --project $ProjectId --filter "displayName='$DisplayName'" --format 'value(name)' 2>$null
+  $existing = & $script:GcloudExecutable monitoring policies list --project $ProjectId --filter "displayName='$DisplayName'" --format 'value(name)' 2>$null
   if ($LASTEXITCODE -ne 0) {
     throw "Cannot inspect alert policy $DisplayName."
   }
@@ -507,9 +512,6 @@ function Ensure-Monitoring {
 }
 
 Set-Location $RepositoryRoot
-if (-not (Get-Command gcloud -ErrorAction SilentlyContinue)) {
-  throw 'gcloud CLI is not installed or not in PATH.'
-}
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   throw 'Docker is not installed or not in PATH.'
 }
