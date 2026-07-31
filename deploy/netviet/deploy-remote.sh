@@ -19,7 +19,7 @@ app_dir='/srv/netviet/apps/zalo-ultty'
 
 install -d -m 0750 "$app_dir/.runtime"
 rsync -a --exclude '.runtime' "$source_dir/" "$app_dir/"
-chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/init-databases.sh"
+chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/"*.sh
 cp "$app_dir/systemd/"*.service "$app_dir/systemd/"*.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now netviet-backup.timer netviet-health.timer

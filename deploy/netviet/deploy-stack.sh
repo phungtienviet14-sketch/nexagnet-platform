@@ -12,7 +12,20 @@ fi
 COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml)
 
 "${COMPOSE[@]}" pull postgres flowise gateway
-"${COMPOSE[@]}" up -d postgres flowise
+"${COMPOSE[@]}" up -d postgres
+for attempt in {1..60}; do
+  if "${COMPOSE[@]}" exec -T postgres pg_isready -U netviet_admin -d postgres >/dev/null; then
+    break
+  fi
+  if [[ "${attempt}" -eq 60 ]]; then
+    echo "PostgreSQL khong healthy sau 5 phut." >&2
+    "${COMPOSE[@]}" logs --tail=100 postgres >&2
+    exit 1
+  fi
+  sleep 5
+done
+"${COMPOSE[@]}" exec -T postgres /usr/local/bin/netviet-sync-passwords
+"${COMPOSE[@]}" up -d flowise
 
 for attempt in {1..60}; do
   if "${COMPOSE[@]}" exec -T flowise curl -fsS http://127.0.0.1:3000/api/v1/ping >/dev/null; then
