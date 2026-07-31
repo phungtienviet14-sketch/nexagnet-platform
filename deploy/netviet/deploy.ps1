@@ -35,24 +35,60 @@ function Invoke-Gcloud {
     [switch]$Capture
   )
 
-  if ($Capture) {
-    $output = & $script:GcloudExecutable @Arguments 2>$null
-    if ($LASTEXITCODE -ne 0) {
+  $previousErrorAction = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    if ($Capture) {
+      $output = & $script:GcloudExecutable @Arguments 2>$null
+      $exitCode = $LASTEXITCODE
+      if ($exitCode -ne 0) {
+        throw "gcloud failed: gcloud $($Arguments -join ' ')"
+      }
+      return ($output -join "`n").Trim()
+    }
+
+    & $script:GcloudExecutable @Arguments
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
       throw "gcloud failed: gcloud $($Arguments -join ' ')"
     }
-    return ($output -join "`n").Trim()
   }
-
-  & $script:GcloudExecutable @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "gcloud failed: gcloud $($Arguments -join ' ')"
+  finally {
+    $ErrorActionPreference = $previousErrorAction
   }
 }
 
 function Test-GcloudResource {
   param([Parameter(Mandatory)][string[]]$Arguments)
-  & $script:GcloudExecutable @Arguments --quiet *> $null
-  return $LASTEXITCODE -eq 0
+  $previousErrorAction = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    & $script:GcloudExecutable @Arguments --quiet *> $null
+    $exitCode = $LASTEXITCODE
+    return $exitCode -eq 0
+  }
+  finally {
+    $ErrorActionPreference = $previousErrorAction
+  }
+}
+
+function Invoke-GcloudWithInput {
+  param(
+    [Parameter(Mandatory)][string[]]$Arguments,
+    [Parameter(Mandatory)][string]$InputValue
+  )
+  $previousErrorAction = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $InputValue | & $script:GcloudExecutable @Arguments *> $null
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+      throw "gcloud failed while reading stdin: gcloud $($Arguments -join ' ')"
+    }
+  }
+  finally {
+    $ErrorActionPreference = $previousErrorAction
+  }
 }
 
 function Invoke-Native {
@@ -103,17 +139,21 @@ function Ensure-Secret {
   if (-not (Test-GcloudResource @('secrets', 'describe', $Name, '--project', $ProjectId))) {
     Invoke-Gcloud @('secrets', 'create', $Name, '--replication-policy=automatic', '--project', $ProjectId, '--quiet')
   }
-  $versions = & $script:GcloudExecutable secrets versions list $Name --project $ProjectId --filter 'state=ENABLED' --format 'value(name)' 2>$null
-  if ($LASTEXITCODE -ne 0) {
-    throw "Cannot inspect versions for secret $Name."
-  }
+  $versions = Invoke-Gcloud -Arguments @(
+    'secrets', 'versions', 'list', $Name,
+    '--project', $ProjectId,
+    '--filter=state=ENABLED',
+    '--format=value(name)'
+  ) -Capture
   if (-not ($versions | Select-Object -First 1)) {
     $value = & $ValueFactory
     try {
-      $value | & $script:GcloudExecutable secrets versions add $Name --data-file=- --project $ProjectId --quiet *> $null
-      if ($LASTEXITCODE -ne 0) {
-        throw "Cannot add initial version to secret $Name."
-      }
+      Invoke-GcloudWithInput -Arguments @(
+        'secrets', 'versions', 'add', $Name,
+        '--data-file=-',
+        '--project', $ProjectId,
+        '--quiet'
+      ) -InputValue $value
     }
     finally {
       $value = $null
@@ -446,10 +486,12 @@ function Ensure-AlertPolicy {
     [Parameter(Mandatory)][string]$Threshold,
     [Parameter(Mandatory)][string]$NotificationChannel
   )
-  $existing = & $script:GcloudExecutable monitoring policies list --project $ProjectId --filter "displayName='$DisplayName'" --format 'value(name)' 2>$null
-  if ($LASTEXITCODE -ne 0) {
-    throw "Cannot inspect alert policy $DisplayName."
-  }
+  $existing = Invoke-Gcloud -Arguments @(
+    'monitoring', 'policies', 'list',
+    '--project', $ProjectId,
+    "--filter=displayName='$DisplayName'",
+    '--format=value(name)'
+  ) -Capture
   if ($existing | Select-Object -First 1) {
     return
   }
