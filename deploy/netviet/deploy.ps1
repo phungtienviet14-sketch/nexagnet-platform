@@ -105,8 +105,14 @@ function Invoke-Native {
 function New-RandomSecret {
   param([int]$Bytes = 32)
   $buffer = [byte[]]::new($Bytes)
-  [System.Security.Cryptography.RandomNumberGenerator]::Fill($buffer)
-  return [Convert]::ToHexString($buffer).ToLowerInvariant()
+  $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $generator.GetBytes($buffer)
+  }
+  finally {
+    $generator.Dispose()
+  }
+  return [BitConverter]::ToString($buffer).Replace('-', '').ToLowerInvariant()
 }
 
 function Get-LocalDeepSeekKey {
