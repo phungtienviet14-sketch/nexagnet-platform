@@ -47,7 +47,7 @@ function Invoke-Gcloud {
       return ($output -join "`n").Trim()
     }
 
-    & $script:GcloudExecutable @Arguments
+    & $script:GcloudExecutable @Arguments | Out-Host
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) {
       throw "gcloud failed: gcloud $($Arguments -join ' ')"
@@ -119,7 +119,7 @@ function Invoke-Native {
     [Parameter(Mandatory)][string]$Command,
     [Parameter(Mandatory)][string[]]$Arguments
   )
-  & $Command @Arguments
+  & $Command @Arguments | Out-Host
   if ($LASTEXITCODE -ne 0) {
     throw "$Command failed."
   }
