@@ -138,6 +138,10 @@ function New-RandomSecret {
   return [BitConverter]::ToString($buffer).Replace('-', '').ToLowerInvariant()
 }
 
+function New-FlowiseAdminPassword {
+  return "Nv1!$(New-RandomSecret)"
+}
+
 function Get-LocalDeepSeekKey {
   $envPath = Join-Path $RepositoryRoot '.env'
   if (-not (Test-Path -LiteralPath $envPath)) {
@@ -187,6 +191,36 @@ function Ensure-Secret {
     finally {
       $value = $null
     }
+  }
+}
+
+function Ensure-FlowiseAdminPasswordSecret {
+  $name = 'zalo-ultty-flowise-admin-password'
+  Ensure-Secret $name { New-FlowiseAdminPassword }
+
+  $current = Invoke-Gcloud -Arguments @(
+    'secrets', 'versions', 'access', 'latest',
+    "--secret=$name",
+    '--project', $ProjectId
+  ) -Capture
+  try {
+    if ($current -notmatch '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,128}$') {
+      $replacement = New-FlowiseAdminPassword
+      try {
+        Invoke-GcloudWithInput -Arguments @(
+          'secrets', 'versions', 'add', $name,
+          '--data-file=-',
+          '--project', $ProjectId,
+          '--quiet'
+        ) -InputValue $replacement
+      }
+      finally {
+        $replacement = $null
+      }
+    }
+  }
+  finally {
+    $current = $null
   }
 }
 
@@ -318,7 +352,7 @@ function Ensure-Secrets {
   Ensure-Secret 'zalo-ultty-api-key' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-flowise-secretkey' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-flowise-admin-email' { $OperatorEmail }
-  Ensure-Secret 'zalo-ultty-flowise-admin-password' { New-RandomSecret }
+  Ensure-FlowiseAdminPasswordSecret
   Ensure-Secret 'zalo-ultty-flowise-jwt-secret' { New-RandomSecret 48 }
   Ensure-Secret 'zalo-ultty-flowise-refresh-secret' { New-RandomSecret 48 }
   Ensure-Secret 'zalo-ultty-flowise-session-secret' { New-RandomSecret 48 }

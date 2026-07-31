@@ -47,7 +47,7 @@ async function ensureLogin() {
       role: {},
     }),
   });
-  if (!registerResponse.ok && registerResponse.status !== 400) {
+  if (!registerResponse.ok) {
     throw await httpError('Dang ky Flowise admin', registerResponse);
   }
 
