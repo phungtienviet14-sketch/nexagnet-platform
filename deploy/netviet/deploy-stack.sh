@@ -45,7 +45,17 @@ done
 "${COMPOSE[@]}" up -d api web gateway
 "${COMPOSE[@]}" ps
 
-curl -fsS http://127.0.0.1:8080/health >/dev/null
+for attempt in {1..60}; do
+  if curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
+    break
+  fi
+  if [[ "${attempt}" -eq 60 ]]; then
+    echo "Gateway khong healthy sau 2 phut." >&2
+    "${COMPOSE[@]}" logs --tail=100 gateway >&2
+    exit 1
+  fi
+  sleep 2
+done
 smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -e PILOT_BASE_URL=http://gateway:8080 \
   bootstrap node deploy/netviet/smoke-test.mjs)"
