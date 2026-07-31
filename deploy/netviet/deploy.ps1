@@ -450,39 +450,32 @@ function Deploy-Stack {
     [Parameter(Mandatory)][string]$AppImage,
     [Parameter(Mandatory)][string]$FlowiseImage
   )
-  $remoteBundle = "/tmp/netviet-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+  $remoteParent = "/tmp/netviet-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+  $remoteBundle = "$remoteParent/netviet"
+  Invoke-GcloudRetry -Arguments @(
+    'compute', 'ssh', $VmName,
+    "--zone=$Zone",
+    '--tunnel-through-iap',
+    '--project', $ProjectId,
+    '--quiet',
+    '--command', "install -d -m 0700 '$remoteParent'"
+  )
   Invoke-GcloudRetry -Arguments @(
     'compute', 'scp', '--recurse', $PSScriptRoot,
-    "${VmName}:$remoteBundle",
+    "${VmName}:$remoteParent/",
     "--zone=$Zone",
     '--tunnel-through-iap',
     '--project', $ProjectId,
     '--quiet'
   )
 
-  $remoteCommand = @"
-set -euo pipefail
-test '$AppDirectory' = '/srv/netviet/apps/zalo-ultty'
-case '$remoteBundle' in /tmp/netviet-deploy-[0-9]*) ;; *) exit 1 ;; esac
-sudo install -d -m 0750 '$AppDirectory/.runtime'
-sudo rsync -a --exclude '.runtime' '$remoteBundle/' '$AppDirectory/'
-sudo chmod 0750 '$AppDirectory/'*.sh '$AppDirectory/postgres/init-databases.sh'
-sudo cp '$AppDirectory/systemd/'*.service '$AppDirectory/systemd/'*.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now netviet-backup.timer netviet-health.timer
-sudo env GCP_PROJECT_ID='$ProjectId' APP_IMAGE='$AppImage' FLOWISE_IMAGE='$FlowiseImage' '$AppDirectory/render-secrets.sh'
-sudo '$AppDirectory/deploy-stack.sh'
-sudo env VERIFY_RESTORE=1 BACKUP_BUCKET='$BackupBucket' '$AppDirectory/backup.sh'
-sudo systemctl start --no-block netviet-soak.service
-sudo rm -rf -- '$remoteBundle'
-"@
   Invoke-Gcloud @(
     'compute', 'ssh', $VmName,
     "--zone=$Zone",
     '--tunnel-through-iap',
     '--project', $ProjectId,
     '--quiet',
-    '--command', $remoteCommand
+    '--command', "sudo bash '$remoteBundle/deploy-remote.sh' '$ProjectId' '$AppImage' '$FlowiseImage' '$BackupBucket'"
   )
 }
 
