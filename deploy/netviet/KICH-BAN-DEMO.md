@@ -43,8 +43,9 @@ gcloud secrets versions access latest --project netviet-host-968934832433 --secr
 Nếu muốn copy thẳng vào clipboard:
 
 ```powershell
-$flowisePw = (gcloud secrets versions access latest --project netviet-host-968934832433 --secret zalo-ultty-flowise-admin-password).Trim()
-$flowisePw | Set-Clipboard
+$flowisePw = ((gcloud secrets versions access latest --project netviet-host-968934832433 --secret zalo-ultty-flowise-admin-password) -join '').Trim()
+Set-Clipboard -Value $flowisePw
+$flowisePw = $null
 ```
 
 Sau khi đăng nhập xong, xóa clipboard:

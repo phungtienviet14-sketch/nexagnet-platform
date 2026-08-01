@@ -26,9 +26,10 @@ Nếu đang chuẩn bị demo và không muốn mật khẩu hiện trên màn h
 clipboard ở cửa sổ riêng:
 
 ```powershell
-$flowisePw = (gcloud secrets versions access latest --project netviet-host-968934832433 `
-  --secret zalo-ultty-flowise-admin-password).Trim()
-$flowisePw | Set-Clipboard
+$flowisePw = ((gcloud secrets versions access latest --project netviet-host-968934832433 `
+  --secret zalo-ultty-flowise-admin-password) -join '').Trim()
+Set-Clipboard -Value $flowisePw
+$flowisePw = $null
 ```
 
 Sau khi đăng nhập xong, xóa clipboard:

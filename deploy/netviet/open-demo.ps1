@@ -38,7 +38,9 @@ if ($CopyFlowisePassword) {
   if ($LASTEXITCODE -ne 0) {
     throw 'Khong lay duoc mat khau Flowise tu Secret Manager.'
   }
-  $flowisePassword.Trim() | Set-Clipboard
+  $flowisePassword = (($flowisePassword -join '').Trim())
+  Set-Clipboard -Value $flowisePassword
+  $flowisePassword = $null
   Write-Host ''
   Write-Host 'Da copy mat khau Flowise vao clipboard. Khong paste len man hinh dang chia se neu co khach xem.'
   Write-Host "Sau khi dang nhap xong, chay: Set-Clipboard -Value ''"
