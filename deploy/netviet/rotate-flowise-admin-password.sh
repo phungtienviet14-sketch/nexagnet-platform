@@ -65,7 +65,11 @@ const current = await login(oldPassword);
 if (!current) throw new Error('Khong dang nhap duoc Flowise bang secret cu de rotate.');
 const response = await fetch(`${baseUrl}/api/v1/user`, {
   method: 'PUT',
-  headers: { 'Content-Type': 'application/json', Cookie: current.cookies },
+  headers: {
+    'Content-Type': 'application/json',
+    Cookie: current.cookies,
+    'x-request-from': 'internal',
+  },
   body: JSON.stringify({
     id: current.user.id,
     oldPassword,
