@@ -7,7 +7,8 @@ Với IP hiện tại `35.187.235.82`:
 
 - Demo khách hàng: `https://demo.35-187-235-82.sslip.io` — Basic Auth user `demo`.
 - Vận hành/đăng nhập Zalo: `https://operator.35-187-235-82.sslip.io/zalo` — Basic Auth user `netviet`.
-- Flowise admin: `https://flowise.35-187-235-82.sslip.io` — đăng nhập bằng tài khoản Flowise.
+- Flowise admin: `https://flowise.35-187-235-82.sslip.io` — email
+  `phungtienviet14@gmail.com`, mật khẩu lấy từ Secret Manager như bên dưới.
 
 IP được promote thành regional static address `netviet-public-ip`; Caddy tự cấp và gia hạn TLS.
 Mật khẩu không nằm trong repo. Operator lấy từ Secret Manager:
@@ -21,10 +22,61 @@ gcloud secrets versions access latest --project netviet-host-968934832433 `
   --secret zalo-ultty-flowise-admin-password
 ```
 
+Nếu đang chuẩn bị demo và không muốn mật khẩu hiện trên màn hình chia sẻ, lấy trước rồi copy vào
+clipboard ở cửa sổ riêng:
+
+```powershell
+$flowisePw = (gcloud secrets versions access latest --project netviet-host-968934832433 `
+  --secret zalo-ultty-flowise-admin-password).Trim()
+$flowisePw | Set-Clipboard
+```
+
+Sau khi đăng nhập xong, xóa clipboard:
+
+```powershell
+Set-Clipboard -Value ''
+```
+
 Runtime pilot dùng PostgreSQL thật, Flowise + DeepSeek thật, `CHANNEL_MODE=zca`,
 `PARSER_MODE=flowise`, `AUTO_SEND=off`; chỉ KiotViet là mock. ZCA không tự tạo QR khi chưa
 xác nhận rủi ro trên UI. Sau đăng nhập, allowlist mặc định rỗng: chỉ các nhóm được operator
 chọn mới được lưu và chuyển sang Flowise/DeepSeek.
+
+## Chạy buổi demo từ PC
+
+Không cần chạy source code hoặc Docker trên PC. Hệ thống đang chạy 24/7 trên VM `netviet`;
+PC chỉ cần trình duyệt và `gcloud` để lấy mật khẩu. Mở ba tab bằng helper không chứa secret:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/netviet/open-demo.ps1
+```
+
+Kiểm tra nhanh trạng thái public:
+
+```powershell
+curl.exe -s -o NUL -w "%{http_code}`n" https://demo.35-187-235-82.sslip.io/health
+curl.exe -s -o NUL -w "%{http_code}`n" https://operator.35-187-235-82.sslip.io/health
+curl.exe -s -o NUL -w "%{http_code}`n" https://flowise.35-187-235-82.sslip.io/api/v1/ping
+```
+
+Kết quả bình thường là `401`, `401`, `200`: demo/operator bị chặn Basic Auth khi chưa đăng nhập;
+Flowise ping mở public nhưng phần admin vẫn yêu cầu tài khoản Flowise.
+
+`http://127.0.0.1:8080` là cổng loopback của VM, không phải địa chỉ public và không mở được
+trên PC nếu chưa tạo IAP tunnel. Kịch bản trình bày đầy đủ, tin thử và nhánh dự phòng nằm tại
+[KICH-BAN-DEMO.md](KICH-BAN-DEMO.md).
+
+Nếu chỉ phát triển offline trên PC, chạy API và web ở hai cửa sổ PowerShell riêng:
+
+```powershell
+pnpm install
+pnpm dev:api
+# Cửa sổ khác
+pnpm dev:web
+```
+
+Sau đó mở `http://localhost:3000`. Đây là chế độ phát triển local, mặc định không phải stack
+Flowise production trên GCP.
 
 Triển khai idempotent từ PC:
 
