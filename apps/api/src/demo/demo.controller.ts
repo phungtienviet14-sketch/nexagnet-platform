@@ -18,9 +18,6 @@ import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 
-/** Nhom test that (map -> Meta HN) — dung lam mac dinh khi demo qua simulate. */
-const DEMO_CHAT_ID = 'zgr-f8a7101d77709e2ec761';
-
 const SAMPLE_MESSAGES = [
   '@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT',
   '@Bot ultty AI orders 3 noi chien va 2 quat bb grey',
@@ -90,7 +87,8 @@ export class DemoController {
       platform: 'zalo',
       source: 'copilot_paste',
       chatType: 'group',
-      externalChatId: body.chatId ?? DEMO_CHAT_ID,
+      // Luon lay nhom dang map trong nguon su that de khong gui vao group ID demo cu.
+      externalChatId: body.chatId ?? this.knowledge.groups()[0]?.chatId ?? 'demo-unmapped',
       text: body.text,
       imageUrl: body.imageUrl,
       sentAt: new Date(),

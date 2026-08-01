@@ -4,12 +4,13 @@ process.env.STREAM_STEP_DELAY_MS = '0';
 import { describe, expect, it } from 'vitest';
 import type { AgentStreamEvent, ChannelMessage } from '@ultty/shared';
 import { KnowledgeService } from '../../knowledge/knowledge.service.js';
+import { SEED } from '../../knowledge/seed.js';
 import { InMemoryOrdersRepository } from '../../orders/orders.repository.js';
 import { MockParser } from '../../pipeline/mock-parser.js';
 import { AgentEventsService } from '../agent-events.service.js';
 import { AgentOrchestrator } from '../agent-orchestrator.service.js';
 
-const META_HN = 'zgr-f8a7101d77709e2ec761';
+const META_HN = SEED.groups.find((group) => group.dealerId === 'meta-hn')!.chatId;
 
 function msg(text: string, chatId: string = META_HN): ChannelMessage {
   return {

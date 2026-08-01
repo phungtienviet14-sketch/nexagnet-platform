@@ -161,8 +161,8 @@ GROUP_COLS = [
     ("Chat ID nhóm\n(kỹ thuật — để trống, hệ thống điền)", 34),
 ]
 GROUP_ROWS = [
-    ["Nhóm đại lý Meta HN", "Meta HN", "HN", "2046408360852539532"],
-    ["Nhóm đại lý Thái Nguyên", "Đại lý Thái Nguyên", "TN", "736861033200222675"],
+    ["Nhóm đại lý Meta HN", "Meta HN", "HN", "2508572440887686813"],
+    ["Nhóm đại lý Thái Nguyên", "Đại lý Thái Nguyên", "TN", "3787434804745256898"],
 ]
 GROUP_SHEET = "2. Map nhóm Zalo"
 DEALER_NAME_RANGE = "DanhSachDaiLy"

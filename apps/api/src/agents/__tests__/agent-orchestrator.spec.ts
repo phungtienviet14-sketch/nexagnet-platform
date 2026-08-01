@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentStep, ChannelMessage } from '@ultty/shared';
 import { KnowledgeService } from '../../knowledge/knowledge.service.js';
+import { SEED } from '../../knowledge/seed.js';
 import { InMemoryOrdersRepository } from '../../orders/orders.repository.js';
 import { MockParser } from '../../pipeline/mock-parser.js';
 import { AgentOrchestrator } from '../agent-orchestrator.service.js';
 
 const BOT = 'Bot ultty AI orders';
-const META_HN = 'zgr-f8a7101d77709e2ec761'; // seed -> Meta HN (dai_ly)
+const META_HN = SEED.groups.find((group) => group.dealerId === 'meta-hn')!.chatId;
 
 function build(): AgentOrchestrator {
   return new AgentOrchestrator(new MockParser(), new KnowledgeService(), new InMemoryOrdersRepository());
