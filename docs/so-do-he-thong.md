@@ -451,20 +451,25 @@ flowchart LR
     GCS["GCS backup<br/>7 ngày + 4 tuần"]
     LLM3["DeepSeek TEST / Claude production"]
 
-    subgraph VM["GCP VM netviet · IAP SSH only"]
-        GW["Caddy gateway<br/>127.0.0.1:8080"]
+    CUSTOMER["Khách demo<br/>HTTPS + Basic Auth"]
+    OPERATOR["Operator<br/>HTTPS + Basic Auth riêng"]
+
+    subgraph VM["GCP VM netviet · SSH chỉ qua IAP"]
+        GW["Caddy gateway<br/>public 80/443<br/>loopback 8080"]
         WEBP["Console Next.js"]
         APIP["API NestJS"]
         FLOWP["Flowise 3.1.4<br/>127.0.0.1:3002"]
         PGD[("Postgres nội bộ<br/>DB/user Zalo + Flowise riêng")]
     end
 
-    OP -->|"IAP tunnel"| GW
-    OP -->|"IAP tunnel admin"| FLOWP
+    CUSTOMER -->|"demo host"| GW
+    OPERATOR -->|"operator /zalo"| GW
+    OP -->|"IAP tunnel dự phòng"| GW
     AR -->|"pull digest"| VM
     SM -->|"render env 0600"| VM
     GW --> WEBP
     GW -->|"REST + SSE, gắn x-api-key"| APIP
+    GW -->|"Flowise host + login riêng"| FLOWP
     APIP -->|"FlowiseParser"| FLOWP
     FLOWP -->|"1 lần LLM/tin"| LLM3
     APIP --> PGD
