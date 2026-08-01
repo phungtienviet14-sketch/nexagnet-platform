@@ -21,6 +21,11 @@ secret() {
 email="$(secret zalo-ultty-flowise-admin-email)"
 old_password="$(secret zalo-ultty-flowise-admin-password "$old_version")"
 new_password="$(secret zalo-ultty-flowise-admin-password)"
+# Cac version cu tao boi Windows PowerShell co CRLF. Compose da bo CR khi doc
+# secrets.env, nen credential Flowise thuc te la gia tri sau khi bo mot CR cuoi.
+email="${email%$'\r'}"
+old_password="${old_password%$'\r'}"
+new_password="${new_password%$'\r'}"
 source "$app_dir/.runtime/secrets.env"
 
 FLOWISE_BASE_URL="$base_url" \
