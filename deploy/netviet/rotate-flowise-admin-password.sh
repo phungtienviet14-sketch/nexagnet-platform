@@ -10,8 +10,7 @@ fi
 project_id="$1"
 old_version="$2"
 base_url='http://127.0.0.1:3002'
-runtime_dir="$(mktemp -d)"
-trap 'rm -rf -- "$runtime_dir"' EXIT
+app_dir='/srv/netviet/apps/zalo-ultty'
 
 secret() {
   local name="$1"
@@ -22,48 +21,58 @@ secret() {
 email="$(secret zalo-ultty-flowise-admin-email)"
 old_password="$(secret zalo-ultty-flowise-admin-password "$old_version")"
 new_password="$(secret zalo-ultty-flowise-admin-password)"
+source "$app_dir/.runtime/secrets.env"
 
-login() {
-  local password="$1"
-  printf '%s\0%s' "$email" "$password" | python3 -c '
-import json, sys
-email, password = sys.stdin.buffer.read().decode().split("\0", 1)
-print(json.dumps({"email": email, "password": password}))
-' >"$runtime_dir/login.json"
-  curl -fsS -c "$runtime_dir/cookies.txt" \
-    -H 'Content-Type: application/json' \
-    --data-binary @"$runtime_dir/login.json" \
-    "$base_url/api/v1/auth/login" >"$runtime_dir/login-response.json"
+FLOWISE_BASE_URL="$base_url" \
+FLOWISE_ADMIN_EMAIL="$email" \
+FLOWISE_OLD_PASSWORD="$old_password" \
+FLOWISE_NEW_PASSWORD="$new_password" \
+docker run --rm --network host -i \
+  -e FLOWISE_BASE_URL -e FLOWISE_ADMIN_EMAIL -e FLOWISE_OLD_PASSWORD -e FLOWISE_NEW_PASSWORD \
+  "$APP_IMAGE" node --input-type=module - <<'NODE'
+const baseUrl = process.env.FLOWISE_BASE_URL;
+const email = process.env.FLOWISE_ADMIN_EMAIL;
+const oldPassword = process.env.FLOWISE_OLD_PASSWORD;
+const newPassword = process.env.FLOWISE_NEW_PASSWORD;
+
+async function login(password) {
+  const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) return null;
+  const user = await response.json();
+  const cookies = response.headers
+    .getSetCookie()
+    .map((value) => value.split(';', 1)[0])
+    .join('; ');
+  if (!user?.id || !cookies) throw new Error('Flowise login khong tra user/cookie.');
+  return { user, cookies };
 }
 
-if login "$new_password" 2>/dev/null; then
-  echo 'Flowise admin password da la secret moi.'
-  exit 0
-fi
+if (await login(newPassword)) {
+  process.stdout.write('Flowise admin password da la secret moi.\n');
+  process.exit(0);
+}
 
-rm -f -- "$runtime_dir/cookies.txt" "$runtime_dir/login-response.json"
-if ! login "$old_password"; then
-  echo 'Khong dang nhap duoc Flowise bang secret cu de rotate.' >&2
-  exit 1
-fi
-
-user_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$runtime_dir/login-response.json")"
-printf '%s\0%s\0%s' "$user_id" "$old_password" "$new_password" | python3 -c '
-import json, sys
-user_id, old_password, new_password = sys.stdin.buffer.read().decode().split("\0", 2)
-print(json.dumps({
-    "id": user_id,
-    "oldPassword": old_password,
-    "newPassword": new_password,
-    "confirmPassword": new_password,
-}))
-' >"$runtime_dir/update.json"
-
-curl -fsS -b "$runtime_dir/cookies.txt" \
-  -X PUT -H 'Content-Type: application/json' \
-  --data-binary @"$runtime_dir/update.json" \
-  "$base_url/api/v1/user" >/dev/null
+const current = await login(oldPassword);
+if (!current) throw new Error('Khong dang nhap duoc Flowise bang secret cu de rotate.');
+const response = await fetch(`${baseUrl}/api/v1/user`, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json', Cookie: current.cookies },
+  body: JSON.stringify({
+    id: current.user.id,
+    oldPassword,
+    newPassword,
+    confirmPassword: newPassword,
+  }),
+});
+if (!response.ok) {
+  throw new Error(`Flowise password update HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`);
+}
+process.stdout.write('Flowise admin password rotate thanh cong.\n');
+NODE
 
 old_password=''
 new_password=''
-echo 'Flowise admin password rotate thanh cong.'

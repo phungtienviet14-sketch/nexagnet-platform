@@ -57,7 +57,7 @@ $remotePath = "/tmp/netviet-rotate-flowise-$([DateTimeOffset]::UtcNow.ToUnixTime
 & gcloud.cmd compute scp (Join-Path $PSScriptRoot 'rotate-flowise-admin-password.sh') "${VmName}:$remotePath" "--zone=$Zone" --tunnel-through-iap --project $ProjectId --quiet
 if ($LASTEXITCODE -ne 0) { throw 'Khong copy duoc script rotate Flowise.' }
 
-& gcloud.cmd compute ssh $VmName "--zone=$Zone" --tunnel-through-iap --project $ProjectId --quiet --command "sudo bash '$remotePath' '$ProjectId' '$OldFlowisePasswordVersion'; sudo rm -f -- '$remotePath'"
+& gcloud.cmd compute ssh $VmName "--zone=$Zone" --tunnel-through-iap --project $ProjectId --quiet --command "sudo bash -c 'bash \"$remotePath\" \"$ProjectId\" \"$OldFlowisePasswordVersion\"; status=`$?; rm -f -- \"$remotePath\"; exit `$status'"
 if ($LASTEXITCODE -ne 0) { throw 'Khong rotate duoc tai khoan Flowise.' }
 
 Write-Host 'Human-facing secrets da rotate khong kem CRLF; can render lai stack.'
