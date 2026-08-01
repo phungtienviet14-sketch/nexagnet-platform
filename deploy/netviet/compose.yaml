@@ -54,7 +54,9 @@ services:
       JWT_REFRESH_TOKEN_SECRET: ${FLOWISE_REFRESH_SECRET}
       EXPRESS_SESSION_SECRET: ${FLOWISE_SESSION_SECRET}
       TOKEN_HASH_SECRET: ${FLOWISE_TOKEN_HASH_SECRET}
-      SECURE_COOKIES: "true"
+      # TLS ket thuc tai Caddy. Flowise can phat session cookie qua mang Docker HTTP
+      # cho bootstrap; Caddy bat buoc gan Secure truoc khi cookie ra Internet.
+      SECURE_COOKIES: "false"
       DISABLE_FLOWISE_TELEMETRY: "true"
       SHOW_COMMUNITY_NODES: "false"
       ALLOW_BUILTIN_DEP: "false"

@@ -72,5 +72,7 @@ http://:8080 {
 
 {$FLOWISE_DOMAIN} {
 	import secure_headers
-	reverse_proxy flowise:3000
+	reverse_proxy flowise:3000 {
+		header_down Set-Cookie (.*) "$1; Secure"
+	}
 }
