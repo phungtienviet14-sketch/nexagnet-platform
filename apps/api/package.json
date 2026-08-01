@@ -9,6 +9,7 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage:zca": "vitest run src/channels/zalo-user.client.spec.ts src/channels/zalo.controller.spec.ts src/ingest/zca-listener.spec.ts --coverage --coverage.include=src/channels/zalo-user.client.ts --coverage.include=src/channels/zalo.controller.ts --coverage.include=src/ingest/zca-listener.ts",
     "mcp": "tsx src/mcp/server.ts"
   },
   "dependencies": {
@@ -17,9 +18,9 @@
     "@adminjs/prisma": "^5.0.4",
     "@anthropic-ai/sdk": "^0.68.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/common": "11.1.28",
+    "@nestjs/core": "11.1.28",
+    "@nestjs/platform-express": "11.1.28",
     "@prisma/client": "^6.19.3",
     "@ultty/shared": "workspace:*",
     "adminjs": "^7.8.17",

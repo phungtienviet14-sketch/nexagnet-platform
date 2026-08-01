@@ -49,12 +49,12 @@ services:
       DATABASE_PASSWORD: ${FLOWISE_DB_PASSWORD}
       DATABASE_SSL: "false"
       FLOWISE_SECRETKEY_OVERWRITE: ${FLOWISE_SECRETKEY}
-      APP_URL: http://127.0.0.1:3002
+      APP_URL: https://${FLOWISE_DOMAIN}
       JWT_AUTH_TOKEN_SECRET: ${FLOWISE_JWT_SECRET}
       JWT_REFRESH_TOKEN_SECRET: ${FLOWISE_REFRESH_SECRET}
       EXPRESS_SESSION_SECRET: ${FLOWISE_SESSION_SECRET}
       TOKEN_HASH_SECRET: ${FLOWISE_TOKEN_HASH_SECRET}
-      SECURE_COOKIES: "false"
+      SECURE_COOKIES: "true"
       DISABLE_FLOWISE_TELEMETRY: "true"
       SHOW_COMMUNITY_NODES: "false"
       ALLOW_BUILTIN_DEP: "false"
@@ -121,11 +121,15 @@ services:
       FLOWISE_BASE_URL: http://flowise:3000
       FLOWISE_TIMEOUT_MS: 30000
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      CHANNEL_MODE: mock
+      CHANNEL_MODE: ${CHANNEL_MODE:-mock}
+      ZALO_CRED_PATH: /runtime/zalo/zalo-cred.json
+      ZALO_ALLOWED_GROUPS_PATH: /runtime/zalo/zalo-allowed-groups.json
+      ZALO_OPERATOR_ORIGIN: https://${OPERATOR_DOMAIN}
+      ZALO_SELF_LISTEN: "off"
       AUTO_ACK: "off"
       AUTO_SEND: "off"
       API_KEY: ${API_KEY}
-      CORS_ORIGIN: http://127.0.0.1:8080
+      CORS_ORIGIN: https://${DEMO_DOMAIN}
       ADMIN_UI: "off"
       STREAM_MODE: "on"
     command:
@@ -134,6 +138,8 @@ services:
       - |
         apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
         exec node apps/api/dist/main.js
+    volumes:
+      - ./.runtime/zalo:/runtime/zalo
     healthcheck:
       test:
         [
@@ -188,10 +194,17 @@ services:
         condition: service_healthy
     environment:
       API_KEY: ${API_KEY}
+    env_file:
+      - ./.runtime/caddy.env
     ports:
       - "127.0.0.1:8080:8080"
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
       interval: 10s
@@ -203,6 +216,8 @@ services:
 volumes:
   postgres-data:
   flowise-data:
+  caddy-data:
+  caddy-config:
 
 networks:
   backend:

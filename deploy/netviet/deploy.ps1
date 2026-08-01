@@ -20,6 +20,7 @@ $Network = 'netviet'
 $Subnet = 'netviet-sea1'
 $Repository = 'netviet'
 $ServiceAccountName = 'netviet-vm'
+$PublicAddressName = 'netviet-public-ip'
 $ServiceAccount = "$ServiceAccountName@$ProjectId.iam.gserviceaccount.com"
 $BackupBucket = "gs://$ProjectId-backups"
 $RegistryHost = "$Region-docker.pkg.dev"
@@ -278,6 +279,20 @@ function Ensure-Network {
       '--quiet'
     )
   }
+  if (-not (Test-GcloudResource @('compute', 'firewall-rules', 'describe', 'netviet-allow-public-web', '--project', $ProjectId))) {
+    Invoke-Gcloud @(
+      'compute', 'firewall-rules', 'create', 'netviet-allow-public-web',
+      "--network=$Network",
+      '--direction=INGRESS',
+      '--priority=1000',
+      '--action=ALLOW',
+      '--rules=tcp:80,tcp:443,udp:443',
+      '--source-ranges=0.0.0.0/0',
+      '--target-tags=netviet-public-web',
+      '--project', $ProjectId,
+      '--quiet'
+    )
+  }
 }
 
 function Ensure-ServiceAccount {
@@ -358,6 +373,8 @@ function Ensure-Secrets {
   Ensure-Secret 'zalo-ultty-flowise-refresh-secret' { New-RandomSecret 48 }
   Ensure-Secret 'zalo-ultty-flowise-session-secret' { New-RandomSecret 48 }
   Ensure-Secret 'zalo-ultty-flowise-token-hash-secret' { New-RandomSecret 48 }
+  Ensure-Secret 'zalo-ultty-demo-password' { New-FlowiseAdminPassword }
+  Ensure-Secret 'zalo-ultty-operator-password' { New-FlowiseAdminPassword }
 
   $secretNames = @(
     'zalo-ultty-postgres-admin-password',
@@ -371,7 +388,9 @@ function Ensure-Secrets {
     'zalo-ultty-flowise-jwt-secret',
     'zalo-ultty-flowise-refresh-secret',
     'zalo-ultty-flowise-session-secret',
-    'zalo-ultty-flowise-token-hash-secret'
+    'zalo-ultty-flowise-token-hash-secret',
+    'zalo-ultty-demo-password',
+    'zalo-ultty-operator-password'
   )
   foreach ($name in $secretNames) {
     Invoke-Gcloud @(
@@ -396,7 +415,7 @@ function Ensure-Vm {
       '--boot-disk-type=pd-balanced',
       "--network=$Network",
       "--subnet=$Subnet",
-      '--tags=netviet-iap',
+      '--tags=netviet-iap,netviet-public-web',
       "--service-account=$ServiceAccount",
       '--scopes=https://www.googleapis.com/auth/cloud-platform',
       '--shielded-secure-boot',
@@ -407,6 +426,14 @@ function Ensure-Vm {
       '--quiet'
     )
   }
+
+  Invoke-Gcloud @(
+    'compute', 'instances', 'add-tags', $VmName,
+    "--zone=$Zone",
+    '--tags=netviet-iap,netviet-public-web',
+    '--project', $ProjectId,
+    '--quiet'
+  )
 
   $remoteInstall = "/tmp/netviet-install-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()).sh"
   Invoke-GcloudRetry -Arguments @(
@@ -425,6 +452,36 @@ function Ensure-Vm {
     '--quiet',
     '--command', "sudo bash '$remoteInstall' && sudo rm -f '$remoteInstall' && sudo gcloud auth configure-docker '$RegistryHost' --quiet"
   )
+}
+
+function Ensure-StaticExternalIp {
+  if (Test-GcloudResource @('compute', 'addresses', 'describe', $PublicAddressName, '--region', $Region, '--project', $ProjectId)) {
+    return Invoke-Gcloud -Arguments @(
+      'compute', 'addresses', 'describe', $PublicAddressName,
+      "--region=$Region",
+      '--project', $ProjectId,
+      '--format=value(address)'
+    ) -Capture
+  }
+
+  $currentIp = Invoke-Gcloud -Arguments @(
+    'compute', 'instances', 'describe', $VmName,
+    "--zone=$Zone",
+    '--project', $ProjectId,
+    '--format=value(networkInterfaces[0].accessConfigs[0].natIP)'
+  ) -Capture
+  if (-not $currentIp) {
+    throw 'VM netviet has no external IP to promote.'
+  }
+  Invoke-Gcloud @(
+    'compute', 'addresses', 'create', $PublicAddressName,
+    "--addresses=$currentIp",
+    "--region=$Region",
+    '--network-tier=PREMIUM',
+    '--project', $ProjectId,
+    '--quiet'
+  )
+  return $currentIp
 }
 
 function Build-And-PushImages {
@@ -483,7 +540,8 @@ function Build-And-PushImages {
 function Deploy-Stack {
   param(
     [Parameter(Mandatory)][string]$AppImage,
-    [Parameter(Mandatory)][string]$FlowiseImage
+    [Parameter(Mandatory)][string]$FlowiseImage,
+    [Parameter(Mandatory)][string]$PublicIp
   )
   $remoteParent = "/tmp/netviet-deploy-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
   $remoteBundle = "$remoteParent/netviet"
@@ -510,7 +568,7 @@ function Deploy-Stack {
     '--tunnel-through-iap',
     '--project', $ProjectId,
     '--quiet',
-    '--command', "sudo bash '$remoteBundle/deploy-remote.sh' '$ProjectId' '$AppImage' '$FlowiseImage' '$BackupBucket'"
+    '--command', "sudo bash '$remoteBundle/deploy-remote.sh' '$ProjectId' '$AppImage' '$FlowiseImage' '$BackupBucket' '$PublicIp'"
   )
 }
 
@@ -656,9 +714,14 @@ Ensure-ServiceAccount
 Ensure-RegistryAndBackupBucket
 Ensure-Secrets
 Ensure-Vm
+$publicIp = Ensure-StaticExternalIp
 $images = Build-And-PushImages
-Deploy-Stack -AppImage $images.App -FlowiseImage $images.Flowise
+Deploy-Stack -AppImage $images.App -FlowiseImage $images.Flowise -PublicIp $publicIp
 Ensure-Monitoring
 
 Write-Host "Deployment healthy: app=$($images.App), flowise=$($images.Flowise)"
 Write-Host "IAP tunnel: gcloud compute ssh $VmName --project $ProjectId --zone $Zone --tunnel-through-iap -- -L 8080:127.0.0.1:8080 -L 3002:127.0.0.1:3002"
+$publicIpLabel = $publicIp.Replace('.', '-')
+Write-Host "Demo: https://demo.$publicIpLabel.sslip.io"
+Write-Host "Zalo operator: https://operator.$publicIpLabel.sslip.io/zalo"
+Write-Host "Flowise: https://flowise.$publicIpLabel.sslip.io"

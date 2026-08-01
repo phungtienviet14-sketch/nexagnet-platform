@@ -1,20 +1,30 @@
-# Private pilot trên VM `netviet`
+# Pilot trên VM `netviet`
 
-Topology: `gateway → web/api → Flowise/PostgreSQL`. Chỉ hai cổng loopback được bind:
+Topology: `Caddy HTTPS → web/api → Flowise/PostgreSQL`. Public chỉ mở `80/443`; API,
+PostgreSQL, Flowise port gốc và SSH không được mở trực tiếp.
 
-- `127.0.0.1:8080`: console Sale và API proxy.
-- `127.0.0.1:3002`: Flowise admin.
+Với IP hiện tại `35.187.235.82`:
 
-Truy cập qua IAP:
+- Demo khách hàng: `https://demo.35-187-235-82.sslip.io` — Basic Auth user `demo`.
+- Vận hành/đăng nhập Zalo: `https://operator.35-187-235-82.sslip.io/zalo` — Basic Auth user `netviet`.
+- Flowise admin: `https://flowise.35-187-235-82.sslip.io` — đăng nhập bằng tài khoản Flowise.
+
+IP được promote thành regional static address `netviet-public-ip`; Caddy tự cấp và gia hạn TLS.
+Mật khẩu không nằm trong repo. Operator lấy từ Secret Manager:
 
 ```powershell
-gcloud compute ssh netviet --project netviet-host-968934832433 `
-  --zone asia-southeast1-b --tunnel-through-iap `
-  -- -L 8080:127.0.0.1:8080 -L 3002:127.0.0.1:3002
+gcloud secrets versions access latest --project netviet-host-968934832433 `
+  --secret zalo-ultty-demo-password
+gcloud secrets versions access latest --project netviet-host-968934832433 `
+  --secret zalo-ultty-operator-password
+gcloud secrets versions access latest --project netviet-host-968934832433 `
+  --secret zalo-ultty-flowise-admin-password
 ```
 
-Sau đó mở `http://127.0.0.1:8080`. Pilot mặc định dùng dữ liệu test,
-`CHANNEL_MODE=mock`, `PARSER_MODE=flowise`, `AUTO_SEND=off`.
+Runtime pilot dùng PostgreSQL thật, Flowise + DeepSeek thật, `CHANNEL_MODE=zca`,
+`PARSER_MODE=flowise`, `AUTO_SEND=off`; chỉ KiotViet là mock. ZCA không tự tạo QR khi chưa
+xác nhận rủi ro trên UI. Sau đăng nhập, allowlist mặc định rỗng: chỉ các nhóm được operator
+chọn mới được lưu và chuyển sang Flowise/DeepSeek.
 
 Triển khai idempotent từ PC:
 
@@ -22,26 +32,22 @@ Triển khai idempotent từ PC:
 powershell -ExecutionPolicy Bypass -File deploy/netviet/deploy.ps1
 ```
 
-Script tạo project/VPC/VM/Artifact Registry/Secret Manager/bucket backup, build image
-từ worktree, chép manifest vào `/srv/netviet/apps/zalo-ultty`, bootstrap Flowise và
-chạy smoke test. Không mở firewall web ra Internet.
+Script tạo/reconcile project, VPC, firewall, static IP, VM, Artifact Registry, Secret Manager,
+backup, monitoring; build image từ commit, bootstrap/contract-test Flowise và smoke test cả
+loopback lẫn ba hostname HTTPS. Image gắn git SHA và script từ chối build khi tracked worktree bẩn.
 
-Nếu chỉ cần reconcile log metric, kênh email và alert policy mà không build/deploy:
+Truy cập khẩn cấp bằng IAP vẫn được giữ:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy/netviet/deploy.ps1 -MonitoringOnly
+gcloud compute ssh netviet --project netviet-host-968934832433 `
+  --zone asia-southeast1-b --tunnel-through-iap `
+  -- -L 8080:127.0.0.1:8080 -L 3002:127.0.0.1:3002
 ```
 
-Script chỉ build khi toàn bộ thay đổi tracked đã được commit; image được gắn đúng git SHA.
-Health endpoint và trạng thái/restart container được kiểm tra mỗi phút. Cloud Ops Agent
-đẩy log/host metrics; Cloud Monitoring gửi cảnh báo email khi health lỗi, RAM > 85% hoặc
-disk > 80%. Backup chạy hằng đêm; bản Chủ nhật được giữ trong nhánh `weekly/`.
-Lần deploy đầu chạy cả backup và phục hồi thử hai database trước khi báo thành công.
-Sau smoke test, `netviet-soak.service` tự chạy 24 giờ và tải báo cáo TSV lên
-`gs://netviet-host-968934832433-backups/soak/`; chỉ báo đạt khi không có health lỗi,
-OOM/restart bất thường hoặc vượt ngưỡng RAM/disk.
+Monitoring kiểm tra health/restart container, RAM > 85% và disk > 80%. Backup chạy hằng đêm;
+bản Chủ nhật vào nhánh `weekly/`. Deploy chạy backup + restore-check và khởi động soak 24 giờ.
 
-Rollback parser và image không cần migration database:
+Rollback parser/image không cần migration database:
 
 ```bash
 sudo /srv/netviet/apps/zalo-ultty/rollback.sh \

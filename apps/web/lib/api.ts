@@ -8,6 +8,7 @@ import type {
   KnowledgeSummary,
   OrderView,
 } from '@ultty/shared';
+import type { ZaloGroup, ZaloStatus } from './zalo';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -70,6 +71,24 @@ export const api = {
   knowledge: (): Promise<KnowledgeSummary> =>
     fetch(`${BASE}/knowledge/summary`).then((r) => toJson<KnowledgeSummary>(r)),
   config: (): Promise<DemoConfig> => fetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),
+  zaloStatus: (): Promise<ZaloStatus> =>
+    fetch(`${BASE}/zalo/status`, { cache: 'no-store' }).then((r) => toJson<ZaloStatus>(r)),
+  zaloQr: (): Promise<{ image: string }> =>
+    fetch(`${BASE}/zalo/qr`, { cache: 'no-store' }).then((r) => toJson<{ image: string }>(r)),
+  zaloLogin: (): Promise<ZaloStatus> =>
+    fetch(`${BASE}/zalo/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acceptedRisk: true }),
+    }).then((r) => toJson<ZaloStatus>(r)),
+  zaloGroups: (): Promise<ZaloGroup[]> =>
+    fetch(`${BASE}/zalo/groups`, { cache: 'no-store' }).then((r) => toJson<ZaloGroup[]>(r)),
+  saveZaloGroups: (groupIds: string[]): Promise<ZaloStatus> =>
+    fetch(`${BASE}/zalo/allowed-groups`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupIds }),
+    }).then((r) => toJson<ZaloStatus>(r)),
 };
 
 export function formatVnd(amount: number): string {

@@ -10,6 +10,7 @@ import { BroadcastController } from './broadcast/broadcast.controller.js';
 import { BroadcastService } from './broadcast/broadcast.service.js';
 import { channelProvider } from './channels/channel.provider.js';
 import { ZaloUserClient } from './channels/zalo-user.client.js';
+import { ZaloController } from './channels/zalo.controller.js';
 import { DemoController } from './demo/demo.controller.js';
 import { HealthController } from './health/health.controller.js';
 import { BotPoller } from './ingest/bot-poller.js';
@@ -41,6 +42,7 @@ import { StreamController } from './stream/stream.controller.js';
     KnowledgeController,
     BroadcastController,
     StreamController,
+    ZaloController,
   ],
   providers: [
     {

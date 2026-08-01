@@ -117,6 +117,11 @@ export function TopBar({
         >
           📣 Khuyến mãi
         </button>
+        {config?.zaloOperatorUrl && (
+          <a className="nav-btn nav-link" href={config.zaloOperatorUrl} target="_blank" rel="noreferrer">
+            Kết nối Zalo
+          </a>
+        )}
         <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Đổi tông sáng/tối">
           ◐ Tông
         </button>

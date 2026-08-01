@@ -27,4 +27,6 @@ export interface DemoConfig {
   streamMode: 'on' | 'off';
   /** on -> AI tu chot + gui don khi khong co rui ro (khong can Sale duyet). */
   autoSend: 'on' | 'off';
+  /** Trang van hanh Zalo duoc bao ve rieng; khong chua secret. */
+  zaloOperatorUrl?: string;
 }

@@ -50,6 +50,9 @@ export class ZcaListener implements OnModuleInit {
   ): Promise<void> {
     const channelMessage = zcaMessageToChannelMessage(message, selfListen);
     if (!channelMessage) return;
+    // ZCA thay moi tin cua tai khoan. Mac dinh deny: chi nhom operator da chon moi duoc
+    // luu/dua sang Flowise + DeepSeek, tranh ro tin ca nhan va dot chi phi ngoai y muon.
+    if (!this.client.isGroupAllowed(channelMessage.externalChatId)) return;
     this.announceGroup(channelMessage.externalChatId, channelMessage.chatType);
     const id = channelMessage.externalMessageId;
     if (!this.guard.claim(id)) return;

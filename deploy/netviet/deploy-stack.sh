@@ -82,3 +82,25 @@ done
   -e "VERIFY_ORDER_ID=${smoke_order_id}" \
   bootstrap node deploy/netviet/smoke-test.mjs
 echo "Stack zalo-ultty da healthy tai 127.0.0.1:8080."
+
+source .runtime/secrets.env
+demo_password="$(gcloud secrets versions access latest --project "${GCP_PROJECT_ID}" --secret zalo-ultty-demo-password)"
+operator_password="$(gcloud secrets versions access latest --project "${GCP_PROJECT_ID}" --secret zalo-ultty-operator-password)"
+for attempt in {1..60}; do
+  if curl -fsS --max-time 10 --resolve "${DEMO_DOMAIN}:443:127.0.0.1" \
+    --user "demo:${demo_password}" "https://${DEMO_DOMAIN}/health" >/dev/null && \
+    curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
+    --user "netviet:${operator_password}" "https://${OPERATOR_DOMAIN}/zalo/status" >/dev/null && \
+    curl -fsS --max-time 10 --resolve "${FLOWISE_DOMAIN}:443:127.0.0.1" \
+    "https://${FLOWISE_DOMAIN}/api/v1/ping" >/dev/null; then
+    break
+  fi
+  if [[ "${attempt}" -eq 60 ]]; then
+    echo "Public HTTPS smoke test that bai." >&2
+    exit 1
+  fi
+  sleep 2
+done
+demo_password=''
+operator_password=''
+echo "Public HTTPS healthy: https://${DEMO_DOMAIN} | https://${OPERATOR_DOMAIN}/zalo | https://${FLOWISE_DOMAIN}"

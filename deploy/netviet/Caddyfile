@@ -1,27 +1,76 @@
 {
-	auto_https off
 	admin off
+	email {$ACME_EMAIL}
 }
 
-:8080 {
+(app_headers) {
 	header {
 		-Server
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
 	}
+}
 
-	@api path /events /orders* /messages* /demo* /kiotviet* /knowledge* /broadcast* /health
+(secure_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}
+
+(app_routes) {
+	@api path /events /orders* /messages* /demo* /kiotviet* /knowledge* /broadcast* /health /zalo*
 	handle @api {
 		reverse_proxy api:3001 {
 			header_up x-api-key "{$API_KEY}"
+			header_up -Authorization
 			flush_interval -1
 		}
 	}
 
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy web:3000 {
+			header_up -Authorization
+		}
 	}
+}
+
+http://:8080 {
+	import app_headers
+	import app_routes
+}
+
+{$DEMO_DOMAIN} {
+	basic_auth {
+		demo {$DEMO_PASSWORD_HASH}
+	}
+	import secure_headers
+	import app_headers
+
+	@blocked path /zalo* /broadcast*
+	handle @blocked {
+		respond "Khong co quyen truy cap" 404
+	}
+	import app_routes
+}
+
+{$OPERATOR_DOMAIN} {
+	basic_auth {
+		netviet {$OPERATOR_PASSWORD_HASH}
+	}
+	import secure_headers
+	import app_headers
+	import app_routes
+}
+
+{$FLOWISE_DOMAIN} {
+	import secure_headers
+	reverse_proxy flowise:3000
 }

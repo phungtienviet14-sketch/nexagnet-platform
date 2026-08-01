@@ -51,6 +51,11 @@ export const envSchema = z.object({
   // de cac lan sau tu dang nhap lai khong can quet. Cred = session token -> bao mat nhu secret,
   // KHONG commit (da gitignore thu muc secrets/).
   ZALO_CRED_PATH: z.string().default('./secrets/zalo-cred.json'),
+  // Allowlist nhom duoc phep dua vao LLM. File nay duoc cap nhat tu trang van hanh Zalo;
+  // mac dinh rong = nghe socket nhung KHONG xu ly bat ky nhom nao.
+  ZALO_ALLOWED_GROUPS_PATH: z.string().default('./secrets/zalo-allowed-groups.json'),
+  // Origin HTTPS cua trang operator. Dung de chong CSRF cho cac mutation QR/allowlist.
+  ZALO_OPERATOR_ORIGIN: z.string().url().optional(),
   // Nghe ca tin do CHINH tai khoan zca gui (message.isSelf). Mac dinh off de tranh vong lap
   // (bot gui xac nhan -> lai doc chinh no) + giam nhieu.
   ZALO_SELF_LISTEN: z.enum(['on', 'off']).default('off'),
@@ -119,6 +124,14 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     ].filter((issue): issue is string => issue !== null);
     if (missingFlowiseVariables.length > 0) {
       throw new EnvValidationError(missingFlowiseVariables);
+    }
+  }
+  if (data.NODE_ENV === 'production' && data.CHANNEL_MODE === 'zca') {
+    const operatorUrl = data.ZALO_OPERATOR_ORIGIN ? new URL(data.ZALO_OPERATOR_ORIGIN) : null;
+    if (!operatorUrl || operatorUrl.protocol !== 'https:') {
+      throw new EnvValidationError([
+        'ZALO_OPERATOR_ORIGIN: BAT BUOC va phai dung HTTPS khi production + CHANNEL_MODE=zca',
+      ]);
     }
   }
   // Tuong thich nguoc: cau hinh cu chi co BOT_MODE=on (chua biet CHANNEL_MODE) -> coi la kenh 'bot'.

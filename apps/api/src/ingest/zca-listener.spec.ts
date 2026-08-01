@@ -21,12 +21,15 @@ function setup(intent: Intent = 'dat_don') {
   let captured: ZcaMessageHandler | undefined;
   const process = vi.fn(async (): Promise<OrderView> => ({ intent }) as OrderView);
   const sendMessage = vi.fn(async (_chatId: string, _text: string): Promise<void> => undefined);
-  const client = { setMessageHandler: (h: ZcaMessageHandler) => (captured = h) } as unknown as ZaloUserClient;
+  const client = {
+    setMessageHandler: (h: ZcaMessageHandler) => (captured = h),
+    isGroupAllowed: vi.fn(() => true),
+  } as unknown as ZaloUserClient;
   const pipeline = { process } as unknown as PipelineService;
   const channel = { sendMessage } as unknown as ChannelAdapter;
   const listener = new ZcaListener(pipeline, client, channel);
   listener.onModuleInit();
-  return { getHandler: () => captured, process, sendMessage };
+  return { getHandler: () => captured, process, sendMessage, client };
 }
 
 describe('ZcaListener', () => {
@@ -57,6 +60,15 @@ describe('ZcaListener', () => {
     await handler(makeZcaMessage('a'));
     await handler(makeZcaMessage('a'));
     expect(process).toHaveBeenCalledTimes(1);
+  });
+
+  it('nhom chua duoc operator cho phep -> khong dua tin vao LLM', async () => {
+    const { getHandler, process, client } = setup();
+    vi.mocked(client.isGroupAllowed).mockReturnValue(false);
+
+    await getHandler()!(makeZcaMessage('blocked', 'don hang co PII', 'personal-group'));
+
+    expect(process).not.toHaveBeenCalled();
   });
 
   it('cung 1 tin ban 2 lan SONG SONG -> chi xu ly 1 lan', async () => {

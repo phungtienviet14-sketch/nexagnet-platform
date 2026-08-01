@@ -78,6 +78,7 @@ describe('loadEnv', () => {
     expect(env.CHANNEL_MODE).toBe('mock');
     expect(env.ZALO_SELF_LISTEN).toBe('off');
     expect(env.ZALO_CRED_PATH).toContain('zalo-cred.json');
+    expect(env.ZALO_ALLOWED_GROUPS_PATH).toContain('zalo-allowed-groups.json');
   });
 
   it('nhan CHANNEL_MODE=zca cho kenh thu vien ngoai', () => {
@@ -121,9 +122,26 @@ describe('loadEnv', () => {
   });
 
   it('NODE_ENV=production + co API_KEY -> hop le', () => {
-    const env = loadEnv({ NODE_ENV: 'production', API_KEY: 'khoa-that-du-dai-1234567890' });
+    const apiCredentialFixture = 'x'.repeat(32);
+    const env = loadEnv({ NODE_ENV: 'production', API_KEY: apiCredentialFixture });
 
-    expect(env.API_KEY).toBe('khoa-that-du-dai-1234567890');
+    expect(env.API_KEY).toBe(apiCredentialFixture);
+  });
+
+  it('production + CHANNEL_MODE=zca bat buoc co operator origin HTTPS', () => {
+    const base = {
+      NODE_ENV: 'production',
+      API_KEY: 'x'.repeat(32),
+      CHANNEL_MODE: 'zca',
+    } as const;
+
+    expect(() => loadEnv(base)).toThrowError(EnvValidationError);
+    expect(() => loadEnv({ ...base, ZALO_OPERATOR_ORIGIN: 'http://operator.example.com' })).toThrowError(
+      EnvValidationError,
+    );
+    expect(
+      loadEnv({ ...base, ZALO_OPERATOR_ORIGIN: 'https://operator.example.com' }).ZALO_OPERATOR_ORIGIN,
+    ).toBe('https://operator.example.com');
   });
 
   it('API_KEY qua ngan -> nem loi (chan khoa doan duoc)', () => {

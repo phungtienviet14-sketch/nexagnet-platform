@@ -62,6 +62,9 @@ export class DemoController {
       botName: env.BOT_NAME,
       streamMode: env.STREAM_MODE,
       autoSend: env.AUTO_SEND,
+      zaloOperatorUrl: env.ZALO_OPERATOR_ORIGIN
+        ? `${env.ZALO_OPERATOR_ORIGIN.replace(/\/$/, '')}/zalo`
+        : undefined,
     };
   }
 
