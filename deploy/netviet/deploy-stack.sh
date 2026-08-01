@@ -58,6 +58,7 @@ for attempt in {1..60}; do
 done
 smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -e PILOT_BASE_URL=http://gateway:8080 \
+  -e CHANNEL_MODE=zca \
   bootstrap node deploy/netviet/smoke-test.mjs)"
 echo "${smoke_output}"
 smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n 1)"
@@ -79,6 +80,7 @@ for attempt in {1..60}; do
 done
 "${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -e PILOT_BASE_URL=http://gateway:8080 \
+  -e CHANNEL_MODE=zca \
   -e "VERIFY_ORDER_ID=${smoke_order_id}" \
   bootstrap node deploy/netviet/smoke-test.mjs
 echo "Stack zalo-ultty da healthy tai 127.0.0.1:8080."

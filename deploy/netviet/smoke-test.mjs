@@ -2,14 +2,17 @@ import process from 'node:process';
 
 const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
 const verifyOrderId = process.env.VERIFY_ORDER_ID?.trim();
+const channelMode = process.env.CHANNEL_MODE?.trim() ?? 'mock';
+const requiresZaloLogin = channelMode === 'zca';
 
 await expectOk('/health');
 
 if (verifyOrderId) {
   const persisted = await getJson(`/orders/${encodeURIComponent(verifyOrderId)}`);
   assertPilotOrder(persisted, verifyOrderId);
-  if (persisted.status !== 'synced') {
-    throw new Error(`Don sau restart khong con trang thai synced: ${persisted.status}`);
+  const expectedStatus = requiresZaloLogin ? 'pending' : 'synced';
+  if (persisted.status !== expectedStatus) {
+    throw new Error(`Don sau restart sai trang thai ${expectedStatus}: ${persisted.status}`);
   }
   process.stdout.write(`Persistence smoke OK: ${verifyOrderId}\n`);
 } else {
@@ -56,17 +59,21 @@ if (verifyOrderId) {
       }
     }
 
-    const approved = await postJson(`/orders/${encodeURIComponent(order.id)}/approve`);
-    if (approved.status !== 'synced' || !approved.kiotVietCode) {
-      throw new Error(`Sale approve khong dong bo duoc don ${order.id}`);
+    if (!requiresZaloLogin) {
+      const approved = await postJson(`/orders/${encodeURIComponent(order.id)}/approve`);
+      if (approved.status !== 'synced' || !approved.kiotVietCode) {
+        throw new Error(`Sale approve khong dong bo duoc don ${order.id}`);
+      }
     }
 
     const saved = await getJson(`/orders/${encodeURIComponent(order.id)}`);
-    if (saved.status !== 'synced') {
-      throw new Error(`Don ${order.id} khong doc lai duoc sau khi approve`);
+    const expectedStatus = requiresZaloLogin ? 'pending' : 'synced';
+    if (saved.status !== expectedStatus) {
+      throw new Error(`Don ${order.id} khong doc lai duoc voi trang thai ${expectedStatus}`);
     }
 
-    process.stdout.write(`Pilot smoke OK: SSE + 6-agent trace + approve; SMOKE_ORDER_ID=${order.id}\n`);
+    const scope = requiresZaloLogin ? 'draft (Zalo dang cho operator login)' : 'approve';
+    process.stdout.write(`Pilot smoke OK: SSE + 6-agent trace + ${scope}; SMOKE_ORDER_ID=${order.id}\n`);
   } finally {
     abort.abort();
     await readerTask.catch((error) => {
