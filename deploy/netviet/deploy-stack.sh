@@ -57,12 +57,16 @@ for attempt in {1..60}; do
   sleep 2
 done
 smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
+  -T \
   -e PILOT_BASE_URL=http://gateway:8080 \
   -e CHANNEL_MODE=zca \
-  bootstrap node deploy/netviet/smoke-test.mjs)"
+  bootstrap node --input-type=module - < smoke-test.mjs)"
 echo "${smoke_output}"
 smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n 1)"
-if [[ ! "${smoke_order_id}" =~ ^[0-9a-f-]{36}$ ]]; then
+smoke_order_id="${smoke_order_id%%;*}"
+smoke_order_status="$(sed -n 's/.*SMOKE_ORDER_STATUS=//p' <<<"${smoke_output}" | tail -n 1)"
+if [[ ! "${smoke_order_id}" =~ ^[0-9a-f-]{36}$ ]] || \
+  [[ ! "${smoke_order_status}" =~ ^(pending_review|needs_edit|synced)$ ]]; then
   echo "Khong lay duoc order id tu pilot smoke test." >&2
   exit 1
 fi
@@ -79,10 +83,12 @@ for attempt in {1..60}; do
   sleep 2
 done
 "${COMPOSE[@]}" --profile tools run --rm --no-deps \
+  -T \
   -e PILOT_BASE_URL=http://gateway:8080 \
   -e CHANNEL_MODE=zca \
   -e "VERIFY_ORDER_ID=${smoke_order_id}" \
-  bootstrap node deploy/netviet/smoke-test.mjs
+  -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
+  bootstrap node --input-type=module - < smoke-test.mjs
 echo "Stack zalo-ultty da healthy tai 127.0.0.1:8080."
 
 source .runtime/secrets.env

@@ -2,6 +2,7 @@ import process from 'node:process';
 
 const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
 const verifyOrderId = process.env.VERIFY_ORDER_ID?.trim();
+const verifyOrderStatus = process.env.VERIFY_ORDER_STATUS?.trim();
 const channelMode = process.env.CHANNEL_MODE?.trim() ?? 'mock';
 const requiresZaloLogin = channelMode === 'zca';
 
@@ -10,7 +11,7 @@ await expectOk('/health');
 if (verifyOrderId) {
   const persisted = await getJson(`/orders/${encodeURIComponent(verifyOrderId)}`);
   assertPilotOrder(persisted, verifyOrderId);
-  const expectedStatus = requiresZaloLogin ? 'pending' : 'synced';
+  const expectedStatus = verifyOrderStatus ?? (requiresZaloLogin ? 'needs_edit' : 'synced');
   if (persisted.status !== expectedStatus) {
     throw new Error(`Don sau restart sai trang thai ${expectedStatus}: ${persisted.status}`);
   }
@@ -67,13 +68,15 @@ if (verifyOrderId) {
     }
 
     const saved = await getJson(`/orders/${encodeURIComponent(order.id)}`);
-    const expectedStatus = requiresZaloLogin ? 'pending' : 'synced';
-    if (saved.status !== expectedStatus) {
-      throw new Error(`Don ${order.id} khong doc lai duoc voi trang thai ${expectedStatus}`);
+    const expectedStatuses = requiresZaloLogin ? ['pending_review', 'needs_edit'] : ['synced'];
+    if (!expectedStatuses.includes(saved.status)) {
+      throw new Error(`Don ${order.id} co trang thai ngoai du kien: ${saved.status}`);
     }
 
     const scope = requiresZaloLogin ? 'draft (Zalo dang cho operator login)' : 'approve';
-    process.stdout.write(`Pilot smoke OK: SSE + 6-agent trace + ${scope}; SMOKE_ORDER_ID=${order.id}\n`);
+    process.stdout.write(
+      `Pilot smoke OK: SSE + 6-agent trace + ${scope}; SMOKE_ORDER_ID=${order.id}; SMOKE_ORDER_STATUS=${saved.status}\n`,
+    );
   } finally {
     abort.abort();
     await readerTask.catch((error) => {
