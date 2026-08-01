@@ -31,7 +31,8 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm --filter @ultty/shared build && pnpm -r test",
+    "test": "pnpm --filter @ultty/shared build && pnpm -r test && pnpm test:deploy-routes",
+    "test:deploy-routes": "node --test deploy/netviet/caddy-route-contract.test.mjs",
     "typecheck": "pnpm --filter @ultty/shared build && pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,mjs}\"",

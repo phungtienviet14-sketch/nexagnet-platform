@@ -42,7 +42,9 @@ done
 "${COMPOSE[@]}" --profile tools run --rm bootstrap
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/flowise/contract-test.mjs
-"${COMPOSE[@]}" up -d api web gateway
+"${COMPOSE[@]}" up -d api web
+# Caddy khong tu reload khi noi dung bind-mounted Caddyfile thay doi.
+"${COMPOSE[@]}" up -d --force-recreate gateway
 "${COMPOSE[@]}" ps
 
 for attempt in {1..60}; do
@@ -97,6 +99,8 @@ operator_password="$(gcloud secrets versions access latest --project "${GCP_PROJ
 for attempt in {1..60}; do
   if curl -fsS --max-time 10 --resolve "${DEMO_DOMAIN}:443:127.0.0.1" \
     --user "demo:${demo_password}" "https://${DEMO_DOMAIN}/health" >/dev/null && \
+    curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
+    --user "netviet:${operator_password}" "https://${OPERATOR_DOMAIN}/zalo" >/dev/null && \
     curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
     --user "netviet:${operator_password}" "https://${OPERATOR_DOMAIN}/zalo/status" >/dev/null && \
     curl -fsS --max-time 10 --resolve "${FLOWISE_DOMAIN}:443:127.0.0.1" \
