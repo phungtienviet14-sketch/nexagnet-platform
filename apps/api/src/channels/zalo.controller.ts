@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { ZaloUserClient, normalizeAllowedGroupIds } from './zalo-user.client.js';
 
 const loginSchema = z.object({ acceptedRisk: z.literal(true) }).strict();
+const logoutSchema = z.object({ confirmed: z.literal(true) }).strict();
 const allowGroupsSchema = z.object({
   groupIds: z.array(z.string().trim().min(1).max(128)).max(10),
 }).strict();
@@ -61,6 +62,17 @@ export class ZaloController {
       throw new BadRequestException('Danh sach chi duoc gom toi da 10 ID nhom hop le');
     }
     await this.client.setAllowedGroupIds(normalizeAllowedGroupIds(parsed.data.groupIds));
+    return this.client.status();
+  }
+
+  @Post('logout')
+  async logout(@Body() body: unknown, @Headers('origin') origin?: string) {
+    this.assertMutationOrigin(origin);
+    const parsed = logoutSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException('Phai xac nhan truoc khi dang xuat va xoa phien Zalo cuc bo');
+    }
+    await this.client.logout();
     return this.client.status();
   }
 

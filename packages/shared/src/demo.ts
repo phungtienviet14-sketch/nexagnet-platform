@@ -30,3 +30,7 @@ export interface DemoConfig {
   /** Trang van hanh Zalo duoc bao ve rieng; khong chua secret. */
   zaloOperatorUrl?: string;
 }
+
+export interface AutoSendState {
+  autoSend: 'on' | 'off';
+}

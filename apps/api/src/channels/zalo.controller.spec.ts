@@ -7,11 +7,13 @@ describe('ZaloController', () => {
   const apiCredentialFixture = 'x'.repeat(32);
   const startQrLogin = vi.fn();
   const setAllowedGroupIds = vi.fn();
+  const logout = vi.fn(async () => undefined);
   const client = {
     status: vi.fn(() => ({ channelMode: 'zca', state: 'logged_out', allowedGroupIds: [] })),
     startQrLogin,
     listGroups: vi.fn(async () => []),
     setAllowedGroupIds,
+    logout,
     qrDataUrl: vi.fn(() => 'data:image/png;base64,abc'),
   } as unknown as ZaloUserClient;
   let controller: ZaloController;
@@ -52,5 +54,19 @@ describe('ZaloController', () => {
       ),
     ).rejects.toThrow(BadRequestException);
     expect(setAllowedGroupIds).not.toHaveBeenCalled();
+  });
+
+  it('dang xuat chi khi origin operator hop le va co xac nhan', async () => {
+    await expect(
+      controller.logout({ confirmed: true }, 'https://operator.example.com'),
+    ).resolves.toMatchObject({ state: 'logged_out' });
+    expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('khong dang xuat neu thieu xac nhan', async () => {
+    await expect(
+      controller.logout({ confirmed: false }, 'https://operator.example.com'),
+    ).rejects.toThrow(BadRequestException);
+    expect(logout).not.toHaveBeenCalled();
   });
 });

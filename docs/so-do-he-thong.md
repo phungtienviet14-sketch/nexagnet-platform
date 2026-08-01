@@ -485,7 +485,7 @@ flowchart LR
 | `PARSER_MODE` | **mock** · claude · deepseek · flowise | Bộ não parse; `flowise` gọi Agentflow nội bộ, `deepseek` giữ làm rollback pilot |
 | `PERSISTENCE` | **memory** · prisma | Lưu đơn + nguồn sự thật (memory = demo/CI không cần DB) |
 | `ADMIN_UI` | **off** · on | Mount panel `/admin` (đòi thêm `PERSISTENCE=prisma`) |
-| `AUTO_SEND` | **off** · on | GĐ2 — AI tự duyệt đơn 0-rủi-ro (cần văn bản đồng ý khách) |
+| `AUTO_SEND` | **off** · on | Giá trị khởi động. Console có công tắc runtime (bật cần xác nhận), chỉ tự duyệt tin mới 0-rủi-ro; restart API trở về env. GĐ2 vẫn cần văn bản đồng ý khách khi dùng thật |
 | `AUTO_ACK` | **off** · on | Tự nhắn "đã ghi nhận" khi intent=khac |
 | `STREAM_MODE` | **on** · off | SSE real-time / polling |
 | `ZALO_SELF_LISTEN` | **off** · on | zca có nghe tin do chính tài khoản gửi không (chống vòng lặp) |
@@ -520,7 +520,7 @@ flowchart TB
 
 **Vì sao an toàn:** cả 3 chế độ dùng chung toàn bộ pipeline phía sau (`ChannelAdapter`); chuyển kênh chỉ là đổi 1 biến, dữ liệu đơn không phụ thuộc kênh.
 
-Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ khi `ZALO_SELF_LISTEN=on`) · **bỏ ảnh KHÔNG có caption** (tin không văn bản chưa vào pipeline) · chống trùng 2.000 id gần nhất · in `chatId` mỗi nhóm 1 lần để lấy ID map đại lý · mỗi tài khoản chỉ 1 listener (mở Zalo Web cùng tài khoản → listener dừng).
+Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ khi `ZALO_SELF_LISTEN=on`) · **bỏ ảnh KHÔNG có caption** (tin không văn bản chưa vào pipeline) · chống trùng 2.000 id gần nhất · in `chatId` mỗi nhóm 1 lần để lấy ID map đại lý · mỗi tài khoản chỉ 1 listener (mở Zalo Web cùng tài khoản → listener dừng). Trang Operator có nút đăng xuất cục bộ: dừng listener, xóa `zalo-cred.json`, QR và allowlist; lần sau phải quét QR/chọn nhóm lại. Đây không phải thao tác thu hồi phiên phía Zalo vì zca-js không cung cấp API logout.
 
 > **Điều kiện chặn kênh zca:** dùng **tài khoản Zalo phụ** (không dùng tài khoản Sale chính) + **văn bản chấp nhận rủi ro của khách** (vi phạm ToS Zalo, có thể bị khóa tài khoản; Luật BVDLCN 91/2025/QH15 + NĐ 356/2025).
 

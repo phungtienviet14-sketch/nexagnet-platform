@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { loadEnv } from '@ultty/shared';
 import {
@@ -75,6 +75,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   private qrExpiresAt: Date | null = null;
   private allowedGroupIds = new Set<string>();
   private readonly threadTypes = new Map<string, ThreadType>();
+  private connectionGeneration = 0;
 
   async onModuleInit(): Promise<void> {
     await this.loadAllowedGroups();
@@ -135,6 +136,22 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     this.allowedGroupIds = new Set(normalized);
   }
 
+  /** Ngat listener, xoa credential cuc bo va xoa allowlist de tai khoan sau khong ke thua pham vi cu. */
+  async logout(): Promise<void> {
+    this.connectionGeneration += 1;
+    this.stopListener();
+    this.api = null;
+    this.connectionState = 'logged_out';
+    this.displayName = undefined;
+    this.lastError = undefined;
+    this.qrImage = null;
+    this.qrExpiresAt = null;
+    this.threadTypes.clear();
+    await Promise.all([this.removePrivateFile(this.credPath), this.removePrivateFile(this.qrPath)]);
+    await this.setAllowedGroupIds([]);
+    this.logger.log('Da dang xuat zca-js: dung listener, xoa phien cuc bo va allowlist.');
+  }
+
   async listGroups(): Promise<ZaloGroupView[]> {
     if (!this.api) throw new Error('Zalo chua ket noi');
     const all = await this.api.getAllGroups();
@@ -170,6 +187,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   }
 
   private async performConnect(allowQr: boolean): Promise<void> {
+    const generation = this.connectionGeneration;
     this.connectionState = 'connecting';
     this.lastError = undefined;
     const zalo = new Zalo({ selfListen: this.selfListen, checkUpdate: false, logging: false });
@@ -186,7 +204,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
         this.connectionState = 'logged_out';
         return;
       }
-      if (this.destroyed) {
+      if (this.destroyed || generation !== this.connectionGeneration) {
         this.stopListener();
         this.api = null;
         return;
@@ -197,6 +215,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.logger.log('zca-js dang nhap thanh cong - listener chi xu ly nhom trong allowlist.');
       this.attachListener();
     } catch (error) {
+      if (this.destroyed || generation !== this.connectionGeneration) return;
       const message = errMsg(error);
       this.api = null;
       this.connectionState = 'error';
@@ -301,6 +320,14 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       mode: SECRET_FILE_MODE,
     });
     await rename(temporaryPath, path);
+  }
+
+  private async removePrivateFile(path: string): Promise<void> {
+    try {
+      await unlink(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
 }
 

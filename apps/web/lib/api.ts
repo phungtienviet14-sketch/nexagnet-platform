@@ -1,6 +1,7 @@
 import type {
   BroadcastRequest,
   BroadcastResult,
+  AutoSendState,
   DemoConfig,
   DemoGroup,
   KiotVietOrder,
@@ -71,6 +72,12 @@ export const api = {
   knowledge: (): Promise<KnowledgeSummary> =>
     fetch(`${BASE}/knowledge/summary`).then((r) => toJson<KnowledgeSummary>(r)),
   config: (): Promise<DemoConfig> => fetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),
+  setAutoSend: (enabled: boolean): Promise<AutoSendState> =>
+    fetch(`${BASE}/demo/auto-send`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(enabled ? { enabled: true, acknowledged: true } : { enabled: false }),
+    }).then((r) => toJson<AutoSendState>(r)),
   zaloStatus: (): Promise<ZaloStatus> =>
     fetch(`${BASE}/zalo/status`, { cache: 'no-store' }).then((r) => toJson<ZaloStatus>(r)),
   zaloQr: (): Promise<{ image: string }> =>
@@ -80,6 +87,12 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ acceptedRisk: true }),
+    }).then((r) => toJson<ZaloStatus>(r)),
+  zaloLogout: (): Promise<ZaloStatus> =>
+    fetch(`${BASE}/zalo/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmed: true }),
     }).then((r) => toJson<ZaloStatus>(r)),
   zaloGroups: (): Promise<ZaloGroup[]> =>
     fetch(`${BASE}/zalo/groups`, { cache: 'no-store' }).then((r) => toJson<ZaloGroup[]>(r)),

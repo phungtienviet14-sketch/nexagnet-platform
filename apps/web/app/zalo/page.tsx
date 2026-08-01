@@ -42,13 +42,34 @@ export default function ZaloLoginPage() {
       void queryClient.invalidateQueries({ queryKey: ['zalo-groups'] });
     },
   });
+  const logoutMutation = useMutation({
+    mutationFn: api.zaloLogout,
+    onSuccess: (next) => {
+      setSelectedGroups([]);
+      setAcceptedRisk(false);
+      queryClient.setQueryData(['zalo-status'], next);
+      queryClient.removeQueries({ queryKey: ['zalo-groups'] });
+      queryClient.removeQueries({ queryKey: ['zalo-qr'] });
+    },
+  });
 
   const toggleGroup = (id: string) => {
     setSelectedGroups((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
   };
-  const error = statusQuery.error ?? loginMutation.error ?? groupsQuery.error ?? saveMutation.error;
+  const error =
+    statusQuery.error ?? loginMutation.error ?? groupsQuery.error ?? saveMutation.error ?? logoutMutation.error;
+
+  const handleLogout = () => {
+    if (
+      window.confirm(
+        'Đăng xuất sẽ dừng nhận tin, xóa phiên Zalo đã lưu và xóa toàn bộ nhóm trong allowlist. Bạn sẽ phải quét QR lại. Tiếp tục?',
+      )
+    ) {
+      logoutMutation.mutate();
+    }
+  };
 
   return (
     <main className="zalo-operator">
@@ -66,6 +87,20 @@ export default function ZaloLoginPage() {
           <strong>{status ? zaloStateLabel(status.state) : 'Đang kiểm tra…'}</strong>
           {status?.displayName && <span>{status.displayName}</span>}
         </div>
+
+        {status && status.state !== 'logged_out' && (
+          <div className="operator-session-actions">
+            <span>Đăng xuất sẽ dừng listener và xóa phiên đăng nhập lưu trên máy chủ.</span>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={logoutMutation.isPending}
+              onClick={handleLogout}
+            >
+              {logoutMutation.isPending ? 'Đang đăng xuất…' : 'Đăng xuất tài khoản Zalo'}
+            </button>
+          </div>
+        )}
 
         {error && <div className="error-banner">⚠ {error.message}</div>}
         {status?.error && <div className="error-banner">⚠ {status.error}</div>}

@@ -12,17 +12,18 @@ import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { MockParser } from './mock-parser.js';
 import { PipelineService } from './pipeline.service.js';
+import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 
 // Lay chatId nhom Meta HN DONG tu seed (khong hardcode ID).
 const GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-hn')!.chatId;
 
-function build() {
+function build(settings?: RuntimeSettingsService) {
   const knowledge = new KnowledgeService();
   const repo = new InMemoryOrdersRepository();
   const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
   const adapter = new MockAdapter();
   const orders = new OrdersService(repo, adapter, new KiotVietMockAdapter(knowledge));
-  const pipeline = new PipelineService(orchestrator, orders);
+  const pipeline = new PipelineService(orchestrator, orders, undefined, settings);
   return { pipeline, adapter };
 }
 
@@ -69,5 +70,20 @@ describe('PipelineService AUTO_SEND (AI tu chot khi khong rui ro)', () => {
     expect(view.trace?.supervisor.riskLevel).not.toBe('none');
     expect(view.status).not.toBe('synced');
     expect(adapter.sent).toHaveLength(0);
+  });
+
+  it('cong tac runtime co hieu luc ngay ma khong can khoi dong lai API', async () => {
+    process.env.AUTO_SEND = 'off';
+    const settings = new RuntimeSettingsService();
+    const { pipeline, adapter } = build(settings);
+
+    const waiting = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'));
+    expect(waiting.status).toBe('pending_review');
+    expect(adapter.sent).toHaveLength(0);
+
+    settings.setAutoSend(true);
+    const synced = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'));
+    expect(synced.status).toBe('synced');
+    expect(adapter.sent).toHaveLength(1);
   });
 });

@@ -3,6 +3,7 @@ import { loadEnv, type ChannelMessage, type OrderView } from '@ultty/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { MessagesRepository, type SaveMessageResult } from '../messages/messages.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 
 /**
  * Tang 3+4 — adapter mong uy quyen cho AgentOrchestrator (multi-agent 6 con).
@@ -14,12 +15,12 @@ import { OrdersService } from '../orders/orders.service.js';
 @Injectable()
 export class PipelineService {
   private readonly logger = new Logger('PipelineService');
-  private readonly autoSend = loadEnv().AUTO_SEND;
 
   constructor(
     private readonly orchestrator: AgentOrchestrator,
     @Optional() private readonly orders?: OrdersService,
     @Optional() private readonly messages?: MessagesRepository,
+    @Optional() private readonly settings?: RuntimeSettingsService,
   ) {}
 
   async process(
@@ -82,7 +83,7 @@ export class PipelineService {
    */
   private shouldAutoSend(view: OrderView): boolean {
     return (
-      this.autoSend === 'on' &&
+      (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on' &&
       view.intent === 'dat_don' &&
       view.priced !== null &&
       view.trace?.supervisor.riskLevel === 'none'

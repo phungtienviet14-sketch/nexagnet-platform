@@ -64,8 +64,16 @@ export default function HomePage() {
   const approveM = useMutation({ mutationFn: api.approve, onSuccess: invalidate });
   const rejectM = useMutation({ mutationFn: api.reject, onSuccess: invalidate });
   const rerunM = useMutation({ mutationFn: api.rerun, onSuccess: invalidate });
+  const autoSendM = useMutation({
+    mutationFn: api.setAutoSend,
+    onSuccess: (state) => {
+      qc.setQueryData(['config'], (current: typeof configQ.data) =>
+        current ? { ...current, autoSend: state.autoSend } : current,
+      );
+    },
+  });
   const isBusy = approveM.isPending || rejectM.isPending;
-  const actionError = approveM.error ?? rejectM.error ?? rerunM.error;
+  const actionError = approveM.error ?? rejectM.error ?? rerunM.error ?? autoSendM.error;
 
   // Doi don dang chon -> xoa loi hanh dong cu (tranh banner loi treo qua don khac).
   useEffect(() => {
@@ -78,6 +86,18 @@ export default function HomePage() {
   const handleRerun = (id: string) => {
     setSelectedId(id);
     rerunM.mutate(id);
+  };
+
+  const handleAutoSendChange = (enabled: boolean) => {
+    if (
+      enabled &&
+      !window.confirm(
+        'Bật Tự gửi sẽ cho phép hệ thống tự gửi xác nhận vào nhóm Zalo và tạo đơn KiotViet mock khi Giám sát xác định không có rủi ro. Bạn có chắc muốn bật?',
+      )
+    ) {
+      return;
+    }
+    autoSendM.mutate(enabled);
   };
 
   const orderCount = items.filter((i) => i.intent === 'dat_don').length;
@@ -97,6 +117,8 @@ export default function HomePage() {
         onViewChange={setView}
         streaming={streaming}
         connected={connected}
+        autoSendPending={autoSendM.isPending}
+        onAutoSendChange={handleAutoSendChange}
       />
 
       {view === 'broadcast' ? (

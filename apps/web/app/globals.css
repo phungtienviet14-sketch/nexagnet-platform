@@ -216,6 +216,21 @@ body {
   background: var(--warn);
   box-shadow: 0 0 0 3px var(--warn-soft);
 }
+.autosend-toggle {
+  font: inherit;
+  cursor: pointer;
+}
+.autosend-toggle:hover:not(:disabled) {
+  border-color: var(--warn);
+}
+.autosend-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.autosend-toggle:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
 .topbar-right {
   margin-left: auto;
   display: flex;
@@ -394,11 +409,25 @@ body {
   justify-content: space-between;
   gap: 1rem;
 }
+.operator-session-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+}
 
 @media (max-width: 640px) {
   .qr-panel,
   .group-picker {
     grid-template-columns: 1fr;
+  }
+  .operator-session-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
@@ -457,6 +486,14 @@ body {
 }
 .btn-primary:hover:not(:disabled) {
   filter: brightness(1.07);
+}
+.btn-danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in oklch, var(--danger) 45%, var(--line));
+}
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--danger);
 }
 .btn-ghost {
   background: var(--surface-2);

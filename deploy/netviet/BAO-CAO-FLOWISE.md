@@ -2,6 +2,10 @@
 
 Ngày cập nhật: 01/08/2026.
 
+> **Phạm vi thay đổi mới nhất:** source trên PC đã có công tắc runtime **Tự gửi** và nút
+> **Đăng xuất tài khoản Zalo**. Theo yêu cầu của người vận hành, thay đổi này chưa deploy;
+> bản public GCP vẫn là image trước đó và vẫn hiển thị `Tự gửi: OFF` dạng trạng thái.
+
 ## 1. Kết luận hiện tại
 
 Hệ thống đã chuyển lớp parser từ hướng Dify sang **Flowise Agentflow** và đã deploy pilot trên
@@ -16,9 +20,9 @@ Trạng thái nghiệm thu:
 - Hạ tầng public demo đã chạy: HTTPS, Basic Auth, backup, restore-check, rollback và healthcheck.
 - Flowise chạy thật, DeepSeek chạy thật, PostgreSQL chạy thật.
 - Chỉ KiotViet đang mock vì chưa có credential/API scope thật của khách.
-- ZCA đã có trang Operator để đăng nhập QR bằng tài khoản Zalo phụ và chọn allowlist nhóm.
-- Pilot chưa được đánh dấu hoàn tất 100% vì còn cần operator quét QR, chọn nhóm test và chạy E2E
-  bằng Zalo thật trong nhóm test.
+- ZCA đã đăng nhập bằng tài khoản phụ. Allowlist hiện có **Meta HN**
+  (`2508572440887686813`) và **Thái Nguyên** (`3787434804745256898`).
+- Pilot chưa được đánh dấu hoàn tất 100% vì còn cần xác nhận lại E2E duyệt/gửi sau bản sửa group ID.
 
 ## 2. URL và tài khoản
 
@@ -50,6 +54,11 @@ khẩu demo.
 | `AUTO_SEND` | `off` | AI không tự gửi; Sale duyệt mới gửi |
 | KiotViet | mock adapter | Mô phỏng đồng bộ KiotViet |
 | Flowise | `zalo-order-parser-v1` | Agentflow parser đang deploy |
+
+Sau khi bản local được duyệt để deploy, `AUTO_SEND=off` vẫn là mặc định an toàn. Giao diện cho
+phép đổi runtime mà không restart API: bật cần xác nhận, chỉ tự xử lý đơn mới có `riskLevel=none`,
+và tự trở về giá trị env sau restart. Nút đăng xuất Zalo dừng listener, xóa credential cục bộ và
+xóa allowlist; zca-js không cung cấp thao tác thu hồi phiên tài khoản phía máy chủ Zalo.
 
 Kết quả kiểm tra public gần nhất:
 
@@ -129,7 +138,9 @@ Sau đó mở `http://localhost:3000`.
   và nhóm test.
 - DeepSeek chưa phù hợp để dùng với PII thật của khách trong production. Demo/pilot hiện chỉ dùng
   dữ liệu test.
-- Allowlist nhóm mặc định rỗng; hệ thống không xử lý nhóm nào cho tới khi operator chọn nhóm.
+- Allowlist bootstrap mặc định rỗng; runtime test hiện đã chọn đúng hai nhóm Meta HN và Thái Nguyên.
+- Nút **Đăng xuất tài khoản Zalo** là thao tác phá hủy phiên cục bộ và allowlist; chỉ dùng khi
+  kết thúc demo hoặc thực sự muốn đổi tài khoản.
 - Field-accuracy chưa được nghiệm thu bằng bộ tin thật có đáp án chuẩn B1-B2. Eval hiện có mới đủ
   để nói Flowise phân loại intent đạt 35/35 trên bộ demo.
 - KiotViet đang mock. Không nói là đã đồng bộ KiotViet thật.

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -154,5 +154,29 @@ describe('ZaloUserClient runtime', () => {
     expect(fakeApi.sendMessage).toHaveBeenCalledWith('xin chao', 'g1', ThreadType.Group);
     client.onModuleDestroy();
     expect(listener.stop).toHaveBeenCalled();
+  });
+
+  it('dang xuat dung listener, xoa credential va xoa allowlist', async () => {
+    const listener = { on: vi.fn(), start: vi.fn(), stop: vi.fn() };
+    const fakeApi = { listener } as unknown as API;
+    await writeFile(
+      join(runtimeDir, 'zalo-cred.json'),
+      JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
+      'utf8',
+    );
+    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['g1']), 'utf8');
+    zcaMocks.login.mockResolvedValue(fakeApi);
+
+    const { ZaloUserClient } = await import('./zalo-user.client.js');
+    const client = new ZaloUserClient();
+    await client.onModuleInit();
+    await vi.waitFor(() => expect(client.status().state).toBe('ready'));
+
+    await client.logout();
+
+    expect(client.status()).toMatchObject({ state: 'logged_out', allowedGroupIds: [] });
+    expect(listener.stop).toHaveBeenCalled();
+    await expect(readFile(join(runtimeDir, 'zalo-cred.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(JSON.parse(await readFile(join(runtimeDir, 'zalo-allowed-groups.json'), 'utf8'))).toEqual([]);
   });
 });

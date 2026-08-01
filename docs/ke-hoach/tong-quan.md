@@ -10,11 +10,11 @@
 ## 1. Ảnh chụp nhanh (01/08/2026)
 
 - **Nhánh đang làm:** `feat/phase3-persistence`; nhánh này đã chứa cả persistence và console realtime, không còn việc merge nhánh console riêng.
-- **Demo local chạy được** với 19 SKU + bảng giá tháng 7 + 24 glossary. **Pilot GCP chỉ dùng dữ liệu TEST**, `CHANNEL_MODE=zca`, `PARSER_MODE=flowise`; ZCA đang chờ operator quét QR/chọn allowlist, chưa dùng PII thật.
+- **Demo local chạy được** với 19 SKU + bảng giá tháng 7 + 24 glossary. **Pilot GCP chỉ dùng dữ liệu TEST**, `CHANNEL_MODE=zca`, `PARSER_MODE=flowise`; ZCA đã đăng nhập và allowlist đúng hai nhóm Meta HN/Thái Nguyên, chưa dùng PII thật.
 - **Lưu trữ:** mặc định in-memory (`PERSISTENCE=memory` → demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma`. **MỌI tin nhắn được lưu vào bảng `messages` ngay khi nhận** (11/07, commit `6d1a539` — trước khi qua pipeline, chống trùng unique, nối `orders.messageId`).
 - **Nguồn sự thật ĐỘNG:** sửa qua panel `/admin` (AdminJS) hoặc MCP tool (8 tool) → ghi Postgres + pipeline nạp lại ngay.
-- **Chất lượng:** 185 test API + 40 shared + 5 web xanh; coverage phần ZCA mới 82,29%; Flowise contract thật xanh; eval Flowise **35/35 intent**; lint · typecheck · build xanh; không còn audit high/critical. Field-accuracy vẫn chờ golden B1-B2.
-- **Pilot GCP `netviet`:** HTTPS public có Basic Auth riêng cho demo/operator; Flowise có đăng nhập riêng. Contract, SSE + 6 vai/1 LLM, restart-persistence, backup/restore và rollback `deepseek → flowise` đều đạt. Soak 24 giờ kết thúc **PASS 01/08** (RAM tối đa 56%, disk 21%, không OOM/restart bất thường). ZCA mặc định không xử lý nhóm nào cho tới khi operator đăng nhập và chọn allowlist.
+- **Chất lượng:** 198 test API + 40 shared + 7 web + 2 contract route xanh; coverage ZCA 84,76%, controller/runtime mới 99,19%; Flowise contract thật xanh; eval Flowise **35/35 intent**; lint · typecheck · build xanh; không còn audit high/critical (còn 6 moderate). Field-accuracy vẫn chờ golden B1-B2.
+- **Pilot GCP `netviet`:** HTTPS public có Basic Auth riêng cho demo/operator; Flowise có đăng nhập riêng. Contract, SSE + 6 vai/1 LLM, restart-persistence, backup/restore và rollback `deepseek → flowise` đều đạt. Soak 24 giờ kết thúc **PASS 01/08** (RAM tối đa 56%, disk 21%, không OOM/restart bất thường). ZCA đã chọn Meta HN (`2508572440887686813`) và Thái Nguyên (`3787434804745256898`); còn xác nhận lại E2E duyệt/gửi sau sửa group ID.
 
 ### Cách chạy nhanh
 
@@ -84,7 +84,7 @@ flowchart LR
 | Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `read-excel-file` — 🔄 11/07 thay `exceljs`) | 🟡 **mẫu gửi khách ĐÃ soạn 13/07** — `docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx` (3 sheet, dropdown khớp enum `Dealer`/`Group`, kèm 3 đại lý + 2 nhóm thật) sinh từ `tools/excel-template/`; **importer** đọc file khách trả về ⬜ chờ A4 |
 | Phase 4 — KiotViet Excel/API + map SKU↔mã số · Base · đổi LLM sang Claude cho dữ liệu thật | ⬜ chờ C1 |
 | Phase 5 — auth theo vai (2 cổng KSNB) + ghi `kpi_events` + feedback loop | ⬜ chờ D5 |
-| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS có auth; Flowise/DeepSeek/Postgres thật, chỉ KiotViet mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. Còn quét QR tài khoản phụ + chọn allowlist + E2E ZCA trước khi chốt pilot |
+| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS có auth; Flowise/DeepSeek/Postgres thật, chỉ KiotViet mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. QR + allowlist hai nhóm đã xong; còn xác nhận lại E2E duyệt/gửi sau sửa group ID trước khi chốt pilot |
 | Việc "thật hơn" treo — đọc 6 quy trình gốc chưa phản ánh · mô hình hóa sau `synced` · PWA 5 tab | ⬜ |
 
 ### 3.2 [tinh-nang-dai-han.md](tinh-nang-dai-han.md) — Đợt 1-4 (6 tính năng mới, định hướng)
@@ -159,7 +159,7 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | **D17** | ~~DeepSeek: bổ sung vào thỏa thuận HAY đổi `PARSER_MODE=claude`?~~ → **CHỈ CÒN 1 ĐƯỜNG: đổi sang Claude.** Khảo sát 28/07: DeepSeek lưu dữ liệu tại Trung Quốc và **không có DPA để ký**; Privacy Policy loại trừ chính luồng open-platform API đang dùng. Phương án "bổ sung vào thỏa thuận" **bất khả thi** | Chạy thật với dữ liệu khách | 🟡 đã rõ hướng |
 | **D18a** | **Quyết định + spike Flowise thay Dify.** NestJS giữ vai trò điều phối; Flowise chỉ gọi LLM để phân loại/trích xuất. Lý do giấy phép ghi chính xác: core Flowise ngoài thư mục enterprise là Apache 2.0; một số phần enterprise dùng điều khoản thương mại, không phải toàn bộ Flowise là Apache | Hướng kỹ thuật phần AI | ✅ 28/07, rà lại 31/07 |
 | **D18b** | **Tích hợp Flowise runtime:** `FlowiseParser`, Agentflow V2 versioned, fail-fast env, contract auth/schema, rollback `PARSER_MODE=deepseek`; eval intent 35/35 | Nghiệm thu lớp parser | 🟡 code + contract + intent eval đã đạt 31/07; chưa được đánh ✅ vì chưa có golden B1-B2 để so field-accuracy |
-| **D18c** | **Pilot trên GCP:** project `netviet-host-968934832433`, VM `netviet`, stack riêng `/srv/netviet/apps/zalo-ultty`; SSH IAP-only, web/Flowise public HTTPS có auth, backup/monitoring/rollback/soak | Nghiệm thu hạ tầng pilot | 🟡 hạ tầng + soak 24 giờ đã đạt 01/08; còn operator quét QR, chọn allowlist và chạy E2E ZCA thật trước khi đánh ✅ |
+| **D18c** | **Pilot trên GCP:** project `netviet-host-968934832433`, VM `netviet`, stack riêng `/srv/netviet/apps/zalo-ultty`; SSH IAP-only, web/Flowise public HTTPS có auth, backup/monitoring/rollback/soak | Nghiệm thu hạ tầng pilot | 🟡 hạ tầng + soak 24 giờ đã đạt 01/08; QR + allowlist hai nhóm đã xong, còn xác nhận lại E2E duyệt/gửi sau sửa group ID trước khi đánh ✅ |
 | **D19** | **Mô hình đổi: 5 dự án NỘI BỘ → 5 KHÁCH NGOÀI TRẢ TIỀN.** Kéo theo: DPA từng khách, hồ sơ chuyển dữ liệu xuyên biên giới, cách ly dữ liệu bằng kiến trúc, SLA, on-call, offboarding | Mọi giả định hạ tầng + pháp lý | ✅ 28/07 |
 | **D20** | **Ai đứng tên 5 tài khoản Zalo phụ** — bạn hay khách? Nếu bạn đứng tên thì **bạn** là bên vi phạm ToS Zalo và D16 mất phần lớn ý nghĩa | Chạy thật kênh zca | ⬜ |
 | **D21** | **ĐO số TIN/ngày thật** trên nhóm khách. Sizing + báo giá hiện dựa trên "10-20 đơn/ngày" nhưng zca đọc **mọi tin** của 200-350 nhóm ⇒ sai 2-3 bậc độ lớn về RAM/disk/hóa đơn LLM | Chốt cỡ máy + báo giá khách | ⬜ |
@@ -266,10 +266,10 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 - SSH vẫn chỉ qua IAP. Caddy public duy nhất cổng 80/443: demo và operator dùng Basic Auth riêng; Flowise dùng đăng nhập riêng. API, PostgreSQL, `127.0.0.1:8080` và Flowise thô `127.0.0.1:3002` không public.
 - Stack Zalo tách riêng ở `/srv/netviet/apps/zalo-ultty`, Compose project `zalo-ultty`; DB user/password/volume/network riêng cho Zalo và Flowise.
 - Runtime app từ commit `8d2d5fd`, digest `sha256:2d0ea92b…`; Flowise dẫn xuất digest `sha256:8e03db16…`. Image được đẩy Artifact Registry và deploy bằng digest; secret ở Secret Manager.
-- Contract Flowise và smoke pre-login đạt; SSE có đủ 6 vai/đúng 1 LLM call, draft còn nguyên sau restart API. Duyệt/gửi Zalo chỉ kiểm tra sau khi operator đăng nhập.
+- Contract Flowise và smoke pre-login đạt; SSE có đủ 6 vai/đúng 1 LLM call, draft còn nguyên sau restart API. Operator đã đăng nhập và chọn đúng hai nhóm test; bản sửa dùng group ID cấu hình đã deploy, còn cần xác nhận lại thao tác duyệt/gửi thành công.
 - Backup hai DB đã tải lên GCS và restore check độc lập đạt. Cloud Ops Agent, health/backup timer, log metric, email channel và alert health/restart/RAM/disk đều active.
 - Diễn tập rollback sang image trước + `PARSER_MODE=deepseek` đạt E2E; sau đó khôi phục digest hiện tại + `flowise` và E2E lại đạt.
 - Soak 24 giờ kết thúc **PASS 01/08/2026**: RAM tối đa 56%, disk 21%, không có health lỗi, OOM hay restart bất thường.
-- Pilot chỉ dùng dữ liệu TEST với `CHANNEL_MODE=zca`, `PARSER_MODE=flowise`, DeepSeek; `AUTO_SEND=off`, allowlist mặc định rỗng. Chưa bật PII thật.
+- Pilot chỉ dùng dữ liệu TEST với `CHANNEL_MODE=zca`, `PARSER_MODE=flowise`, DeepSeek; `AUTO_SEND=off` ở env. Source PC đã có công tắc runtime Tự gửi và nút đăng xuất Zalo nhưng chưa deploy; allowlist runtime hiện có Meta HN + Thái Nguyên. Chưa bật PII thật.
 
-**Cổng còn lại:** operator quét QR tài khoản phụ + chọn tối đa 10 nhóm test + chạy E2E ZCA cho D18c; nhận B1-B2 để đo field-accuracy cho D18b; D21 vẫn cần trước sizing 200-350 nhóm thật.
+**Cổng còn lại:** xác nhận lại E2E ZCA duyệt/gửi sau sửa group ID cho D18c; nhận B1-B2 để đo field-accuracy cho D18b; D21 vẫn cần trước sizing 200-350 nhóm thật.

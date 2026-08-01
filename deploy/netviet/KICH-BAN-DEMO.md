@@ -3,6 +3,10 @@
 > Thời lượng mục tiêu: 18 phút. Chỉ dùng tài khoản Zalo phụ, nhóm test và dữ liệu giả.
 > Không hiển thị API key, DeepSeek credential hoặc mật khẩu khi đang chia sẻ màn hình.
 
+> **Trạng thái bản giao diện mới (01/08/2026):** source trên PC đã có công tắc **Tự gửi** và
+> nút **Đăng xuất tài khoản Zalo**, nhưng theo yêu cầu đang demo nên **chưa deploy lên GCP**.
+> Hai nút này chỉ xuất hiện trên bản local cho tới lần deploy được duyệt sau.
+
 ## 1. Trạng thái cần nói đúng với khách
 
 Luồng đang chạy trên GCP:
@@ -21,8 +25,10 @@ Luồng đang chạy trên GCP:
   Một tin xử lý thành công chỉ gọi LLM đúng một lần.
 - Eval intent Flowise đạt 35/35. Chưa được tuyên bố chính xác field-level vì còn chờ bộ tin
   B1-B2 có đáp án chuẩn của khách.
-- Hạ tầng, backup/restore, rollback và soak 24 giờ đã đạt. Nghiệm thu ZCA còn chờ quét QR,
-  chọn allowlist và chạy E2E bằng nhóm test.
+- Hạ tầng, backup/restore, rollback và soak 24 giờ đã đạt. ZCA đã đăng nhập và allowlist hiện
+  có hai nhóm test: **Meta HN** (`2508572440887686813`) và **Thái Nguyên**
+  (`3787434804745256898`). Còn cần xác nhận lại E2E duyệt/gửi sau bản sửa group ID trước khi
+  đánh dấu nghiệm thu pilot hoàn tất.
 
 ## 2. Chuẩn bị trước buổi demo
 
@@ -72,8 +78,9 @@ Set-Clipboard -Value ''
 
 3. Đăng nhập Flowise bằng email `phungtienviet14@gmail.com`. Mở `Agentflows` rồi mở
    `zalo-order-parser-v1`.
-4. Đăng nhập trang Operator bằng user `netviet`. Dùng tài khoản Zalo phụ, tạo QR, xác nhận
-   trên điện thoại, chọn đúng một nhóm test và bấm **Lưu và bắt đầu nhận tin**.
+4. Đăng nhập trang Operator bằng user `netviet`. Nếu trạng thái đã là **Đã kết nối**, giữ nguyên
+   phiên và kiểm tra hai nhóm Meta HN/Thái Nguyên đang được chọn. Chỉ tạo QR lại nếu phiên đã
+   đăng xuất. Không bấm **Đăng xuất tài khoản Zalo** trước hoặc trong buổi demo.
 5. Mở Trung tâm điều hành bằng user `demo`; chờ trạng thái SSE hiển thị kết nối.
 6. Kiểm tra nhanh trạng thái:
 
@@ -88,7 +95,7 @@ Set-Clipboard -Value ''
 7. Copy sẵn hai tin không chứa PII:
 
    ```text
-   gui 10 ghe felix ve TN cho c, ko lay VAT
+   HN_1.8_Meta HN, 10 x ghe Felix, ko VAT
    ```
 
    ```text
@@ -98,7 +105,7 @@ Set-Clipboard -Value ''
 Chỉ gửi cho khách URL/user/mật khẩu của trang Demo. Tài khoản Operator và Flowise là tài
 khoản vận hành nội bộ; đăng nhập hai trang này trước khi bắt đầu chia sẻ màn hình.
 
-Tin thứ nhất phù hợp luồng TH1. Tin thứ hai chỉ dùng để cho thấy TH2/COD; toàn bộ tên, số
+Tin thứ nhất là TH1 sạch cho nhóm Meta HN. Tin thứ hai chỉ dùng để cho thấy TH2/COD; toàn bộ tên, số
 điện thoại và địa chỉ đều là dữ liệu giả.
 
 Nếu nhóm Zalo test chưa map với đại lý, kết quả sẽ có cảnh báo **Chưa xác định đại lý từ
@@ -155,10 +162,11 @@ Không nói canvas có sáu agent hoặc ba node; điều đó không đúng art
 
 ### 6:00–9:00 — Đăng nhập Zalo và giới hạn phạm vi dữ liệu
 
-1. Chuyển sang trang Operator.
-2. Tick xác nhận đang dùng tài khoản phụ.
-3. Bấm **Tạo mã QR đăng nhập**, quét và xác nhận trên điện thoại.
-4. Chọn đúng một nhóm test, bấm **Lưu và bắt đầu nhận tin**.
+1. Chuyển sang trang Operator và chỉ trạng thái **Đã kết nối**.
+2. Chỉ hai nhóm test trong allowlist: Meta HN và Thái Nguyên.
+3. Giải thích nút **Đăng xuất tài khoản Zalo** trên bản local: thao tác này dừng listener,
+   xóa credential lưu cục bộ và xóa allowlist; lần sau phải quét QR rồi chọn nhóm lại.
+4. Không bấm đăng xuất trong lúc demo luồng nhận tin.
 
 Lời thoại:
 
@@ -172,7 +180,7 @@ Lời thoại:
 2. Gửi trong nhóm test, không tag bot:
 
    ```text
-   gui 10 ghe felix ve TN cho c, ko lay VAT
+   HN_1.8_Meta HN, 10 x ghe Felix, ko VAT
    ```
 
 3. Theo dõi tin xuất hiện trong Feed và các vai chạy tuần tự.
@@ -194,6 +202,11 @@ Nếu hiện cảnh báo nhóm chưa map:
 3. Trước khi bấm duyệt, nói:
 
    > Tự gửi đang tắt. Flowise không có quyền gửi Zalo; Sale kiểm tra rồi mới duyệt.
+
+   Trên bản local mới, badge **Tự gửi: OFF** là một công tắc. Bật công tắc phải xác nhận cảnh
+   báo; chỉ **tin mới** được xử lý sau đó và được Giám sát kết luận `riskLevel=none` mới tự duyệt,
+   gửi Zalo và tạo đơn KiotViet mock. Đơn có rủi ro vẫn chờ Sale. Công tắc nằm trong bộ nhớ,
+   trở về giá trị `AUTO_SEND` trong env sau khi API restart.
 
 4. Với đơn test đủ dữ liệu, bấm **Duyệt & gửi nhóm**.
 5. Chuyển sang Zalo để cho thấy tin xác nhận. Giải thích mã KiotViet là kết quả adapter mock;
@@ -225,5 +238,6 @@ Kết luận:
 | Gửi Zalo lỗi                          | Chỉ ra đơn vẫn còn để Sale thao tác lại, không bị chuyển trạng thái thành công sai.                                 |
 | Khách hỏi sao Flowise chỉ có hai node | Trả lời: Flowise chỉ sở hữu lớp AI xác suất; rules, database và quyền gửi được cố ý giữ ngoài Flowise để kiểm soát. |
 
-Tuyệt đối không bật `AUTO_SEND=on`, không dùng tài khoản Sale chính và không nhập dữ liệu cá
-nhân thật trong buổi demo.
+Chỉ bật **Tự gửi** khi đang ở bản local, dùng nhóm/dữ liệu test và đã chủ động trình bày nhánh
+auto-send; tắt lại ngay sau phần đó. Không bật với dữ liệu thật, không dùng tài khoản Sale chính
+và không bấm **Đăng xuất tài khoản Zalo** cho tới khi kết thúc toàn bộ demo.

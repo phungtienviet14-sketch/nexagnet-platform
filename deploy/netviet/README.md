@@ -1,5 +1,9 @@
 # Pilot trên VM `netviet`
 
+> Source PC ngày 01/08/2026 đã bổ sung công tắc runtime **Tự gửi** và nút **Đăng xuất tài khoản
+> Zalo**, nhưng **chưa deploy** theo yêu cầu người vận hành đang demo. Bản public GCP chưa có hai
+> thao tác mới này.
+
 Topology: `Caddy HTTPS → web/api → Flowise/PostgreSQL`. Public chỉ mở `80/443`; API,
 PostgreSQL, Flowise port gốc và SSH không được mở trực tiếp.
 
@@ -40,8 +44,14 @@ Set-Clipboard -Value ''
 
 Runtime pilot dùng PostgreSQL thật, Flowise + DeepSeek thật, `CHANNEL_MODE=zca`,
 `PARSER_MODE=flowise`, `AUTO_SEND=off`; chỉ KiotViet là mock. ZCA không tự tạo QR khi chưa
-xác nhận rủi ro trên UI. Sau đăng nhập, allowlist mặc định rỗng: chỉ các nhóm được operator
-chọn mới được lưu và chuyển sang Flowise/DeepSeek.
+xác nhận rủi ro trên UI. Allowlist bootstrap mặc định rỗng; trạng thái test hiện đã chọn
+**Meta HN** (`2508572440887686813`) và **Thái Nguyên** (`3787434804745256898`). Chỉ các nhóm
+được operator chọn mới được lưu và chuyển sang Flowise/DeepSeek.
+
+Khi bản source mới được deploy, badge **Tự gửi: OFF** trên console là công tắc runtime. Bật cần
+xác nhận và chỉ áp dụng cho tin mới được Giám sát kết luận không rủi ro; restart API sẽ đưa nó
+về `AUTO_SEND` trong env. Trang Operator có nút đăng xuất: dừng listener, xóa credential cục bộ
+và xóa allowlist, vì vậy lần đăng nhập sau phải quét QR và chọn nhóm lại.
 
 ## Chạy buổi demo từ PC
 

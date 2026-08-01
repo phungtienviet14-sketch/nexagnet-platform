@@ -30,6 +30,7 @@ import { OrdersService } from './orders/orders.service.js';
 import { parserProvider } from './pipeline/parser.provider.js';
 import { PipelineService } from './pipeline/pipeline.service.js';
 import { StreamController } from './stream/stream.controller.js';
+import { RuntimeSettingsService } from './runtime/runtime-settings.service.js';
 
 @Module({
   imports: [PrismaModule],
@@ -52,6 +53,7 @@ import { StreamController } from './stream/stream.controller.js';
       useClass: ApiKeyGuard,
     },
     KnowledgeService,
+    RuntimeSettingsService,
     AgentEventsService,
     {
       // PERSISTENCE=prisma -> Postgres; mac dinh memory (demo/CI khong can DB).

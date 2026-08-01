@@ -13,6 +13,8 @@ type Props = {
   onViewChange: (view: ConsoleView) => void;
   streaming: boolean;
   connected: boolean;
+  autoSendPending: boolean;
+  onAutoSendChange: (enabled: boolean) => void;
 };
 
 const PARSER_LABEL: Record<DemoConfig['parserMode'], string> = {
@@ -51,6 +53,8 @@ export function TopBar({
   onViewChange,
   streaming,
   connected,
+  autoSendPending,
+  onAutoSendChange,
 }: Props) {
   const channelMode = config?.channelMode ?? 'mock';
   const autoSendOn = config?.autoSend === 'on';
@@ -71,8 +75,13 @@ export function TopBar({
           <span className="dot" />
           Kênh: {CHANNEL_LABEL[channelMode]}
         </span>
-        <span
-          className={`sbadge ${autoSendOn ? 'autosend' : 'off'}`}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoSendOn}
+          disabled={!config || autoSendPending}
+          className={`sbadge autosend-toggle ${autoSendOn ? 'autosend' : 'off'}`}
+          onClick={() => onAutoSendChange(!autoSendOn)}
           title={
             autoSendOn
               ? 'AI tự chốt + gửi đơn khi không có rủi ro (Giám sát phát hiện vấn đề mới gọi Sale)'
@@ -80,8 +89,8 @@ export function TopBar({
           }
         >
           <span className="dot" />
-          Tự gửi: {autoSendOn ? 'ON' : 'OFF'}
-        </span>
+          {autoSendPending ? 'Đang đổi…' : `Tự gửi: ${autoSendOn ? 'ON' : 'OFF'}`}
+        </button>
         <span className="sbadge ai">
           <span className="dot" />
           AI: {config ? PARSER_LABEL[config.parserMode] : '…'}

@@ -43,7 +43,7 @@ export type {
   GroupMapView,
   KnowledgeSummary,
 } from './knowledge-view.js';
-export type { DemoGroup, DemoConfig } from './demo.js';
+export type { AutoSendState, DemoGroup, DemoConfig } from './demo.js';
 export type {
   OrderCreatedPayload,
   AgentStreamEvent,
