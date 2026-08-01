@@ -103,15 +103,28 @@ function Invoke-GcloudWithInput {
     [Parameter(Mandatory)][string]$InputValue
   )
   $previousErrorAction = $ErrorActionPreference
+  $temporaryPath = Join-Path ([IO.Path]::GetTempPath()) "netviet-secret-$([Guid]::NewGuid().ToString('N')).txt"
   try {
     $ErrorActionPreference = 'Continue'
-    $InputValue | & $script:GcloudExecutable @Arguments *> $null
+    # Windows PowerShell them CRLF khi pipe string vao native stdin. Secret Manager
+    # se luu ca CR do, lam password nguoi dung khong the nhap dung trong browser.
+    [IO.File]::WriteAllText($temporaryPath, $InputValue, [Text.UTF8Encoding]::new($false))
+    $resolvedArguments = @($Arguments | ForEach-Object {
+      if ($_ -eq '--data-file=-') { "--data-file=$temporaryPath" } else { $_ }
+    })
+    if ('--data-file=-' -notin $Arguments) {
+      throw 'Invoke-GcloudWithInput requires --data-file=-.'
+    }
+    & $script:GcloudExecutable @resolvedArguments *> $null
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) {
       throw "gcloud failed while reading stdin: gcloud $($Arguments -join ' ')"
     }
   }
   finally {
+    if (Test-Path -LiteralPath $temporaryPath) {
+      Remove-Item -LiteralPath $temporaryPath -Force
+    }
     $ErrorActionPreference = $previousErrorAction
   }
 }
