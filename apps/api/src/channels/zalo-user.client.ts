@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { loadEnv } from '@ultty/shared';
+import type { GroupParticipantProfile, GroupParticipantSyncSnapshot } from '@ultty/shared';
 import {
   LoginQRCallbackEventType,
   ThreadType,
@@ -24,7 +25,7 @@ export type ZaloConnectionState =
   | 'error';
 
 export interface ZaloStatus {
-  channelMode: 'mock' | 'bot' | 'zca';
+  channelMode: 'mock' | 'bot' | 'zca' | 'hybrid';
   state: ZaloConnectionState;
   displayName?: string;
   qrVersion: number;
@@ -47,6 +48,10 @@ const SECRET_DIR_MODE = 0o700;
 const MAX_ALLOWED_GROUPS = 10;
 const QR_TTL_MS = 100_000;
 const GROUP_INFO_BATCH_SIZE = 50;
+const MEMBER_PROFILE_BATCH_SIZE = 50;
+
+export class ZaloNotConnectedError extends Error {}
+export class ZaloGroupNotAllowedError extends Error {}
 
 /**
  * Quan ly phien zca-js va allowlist nhom. Neu da co credential thi tu reconnect khi boot;
@@ -79,7 +84,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     await this.loadAllowedGroups();
-    if (this.channelMode !== 'zca') {
+    if (this.channelMode !== 'zca' && this.channelMode !== 'hybrid') {
       this.connectionState = 'disabled';
       this.logger.log(`CHANNEL_MODE=${this.channelMode} -> khong khoi tao zca-js.`);
       return;
@@ -125,7 +130,9 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   }
 
   startQrLogin(): void {
-    if (this.channelMode !== 'zca') throw new Error('CHANNEL_MODE khong phai zca');
+    if (this.channelMode !== 'zca' && this.channelMode !== 'hybrid') {
+      throw new Error('CHANNEL_MODE khong bat zca');
+    }
     if (this.api || this.connectionTask) return;
     void this.connect(true);
   }
@@ -170,6 +177,55 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       }
     }
     return groups.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+  }
+
+  /**
+   * Lay snapshot member tu zca-js. Batch loi duoc tra ve nhu partial de lop persistence
+   * tuyet doi khong danh inactive nhung member khong fetch duoc.
+   */
+  async fetchGroupMembers(groupId: string): Promise<GroupParticipantSyncSnapshot> {
+    const api = this.api;
+    if (!api) throw new ZaloNotConnectedError('Zalo chua dang nhap');
+    if (!this.allowedGroupIds.has(groupId)) {
+      throw new ZaloGroupNotAllowedError('Nhom khong nam trong allowlist');
+    }
+
+    const groupResponse = await api.getGroupInfo(groupId);
+    const group =
+      groupResponse.gridInfoMap[groupId] ??
+      Object.values(groupResponse.gridInfoMap).find((candidate) => candidate.groupId === groupId);
+    if (!group) throw new Error('Khong tim thay nhom Zalo da cho phep');
+
+    const memberIds = normalizeMemberIds(group.memberIds);
+    const members: GroupParticipantProfile[] = [];
+    const failedMemberIds: string[] = [];
+    for (let offset = 0; offset < memberIds.length; offset += MEMBER_PROFILE_BATCH_SIZE) {
+      const batch = memberIds.slice(offset, offset + MEMBER_PROFILE_BATCH_SIZE);
+      try {
+        const response = await api.getGroupMembersInfo(batch);
+        for (const memberId of batch) {
+          const profile = response.profiles[memberId];
+          if (!profile) {
+            failedMemberIds.push(memberId);
+            continue;
+          }
+          members.push(normalizeMemberProfile(memberId, profile));
+        }
+      } catch {
+        failedMemberIds.push(...batch);
+        this.logger.warn(
+          `Dong bo profile Zalo bi partial: group=${groupId}, batchSize=${batch.length}, failed=${batch.length}`,
+        );
+      }
+    }
+
+    return {
+      groupId,
+      complete: failedMemberIds.length === 0,
+      expectedCount: memberIds.length,
+      members,
+      failedMemberIds,
+    };
   }
 
   async sendMessage(threadId: string, text: string, type?: ThreadType): Promise<void> {
@@ -348,6 +404,38 @@ export function normalizeAllowedGroupIds(groupIds: readonly string[]): string[] 
     throw new Error('ID nhom khong hop le');
   }
   return normalized;
+}
+
+function normalizeMemberIds(memberIds: readonly string[]): string[] {
+  const normalized = memberIds.map((memberId) => memberId.trim());
+  if (normalized.some((memberId) => memberId.length === 0 || memberId.length > 128)) {
+    throw new Error('Danh sach UID thanh vien Zalo khong hop le');
+  }
+  return [...new Set(normalized)];
+}
+
+function normalizeMemberProfile(
+  externalUserId: string,
+  profile: { displayName: string; zaloName: string; avatar: string },
+): GroupParticipantProfile {
+  const displayName = profile.displayName.trim() || profile.zaloName.trim() || externalUserId;
+  const zaloName = profile.zaloName.trim();
+  const avatarUrl = normalizeHttpUrl(profile.avatar);
+  return {
+    externalUserId,
+    displayName,
+    ...(zaloName ? { zaloName } : {}),
+    ...(avatarUrl ? { avatarUrl } : {}),
+  };
+}
+
+function normalizeHttpUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function errMsg(error: unknown): string {

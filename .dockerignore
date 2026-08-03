@@ -5,6 +5,7 @@
 .idea
 .vscode
 AGENTS.md
+tmp
 .env
 .env.*
 !.env.example

@@ -20,7 +20,7 @@ export interface DemoConfig {
    * Kenh Zalo dang dung (nguon su that chon kenh):
    *   mock = offline · bot = Bot Platform (@mention) · zca = zca-js userbot (doc moi tin nhom).
    */
-  channelMode: 'mock' | 'bot' | 'zca';
+  channelMode: 'mock' | 'bot' | 'zca' | 'hybrid';
   parserMode: 'mock' | 'claude' | 'deepseek' | 'flowise';
   botName: string;
   /** on -> frontend dung SSE /events (real-time); off -> polling. */

@@ -26,7 +26,7 @@
 }
 
 (app_routes) {
-	@api path /events /orders* /messages* /demo* /kiotviet* /knowledge* /broadcast* /health /zalo/*
+	@api path /events /orders* /messages* /demo* /kiotviet* /knowledge* /broadcast* /health /zalo/* /groups/* /settings/* /admin*
 	handle @api {
 		reverse_proxy api:3001 {
 			header_up x-api-key "{$API_KEY}"
@@ -54,7 +54,7 @@ http://:8080 {
 	import secure_headers
 	import app_headers
 
-	@blocked path /zalo* /broadcast*
+	@blocked path /zalo* /broadcast* /settings* /groups* /admin*
 	handle @blocked {
 		respond "Khong co quyen truy cap" 404
 	}

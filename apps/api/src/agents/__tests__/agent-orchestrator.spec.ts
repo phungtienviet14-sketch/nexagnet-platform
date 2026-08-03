@@ -13,11 +13,15 @@ function build(): AgentOrchestrator {
   return new AgentOrchestrator(new MockParser(), new KnowledgeService(), new InMemoryOrdersRepository());
 }
 
-function msg(text: string, chatId: string = META_HN): ChannelMessage {
+function msg(
+  text: string,
+  chatId: string = META_HN,
+  source: ChannelMessage['source'] = 'bot_webhook',
+): ChannelMessage {
   return {
     externalMessageId: `m-${Math.random()}`,
     platform: 'zalo',
-    source: 'bot_webhook',
+    source,
     chatType: 'group',
     externalChatId: chatId,
     text,
@@ -29,6 +33,16 @@ const activeRoles = (steps: AgentStep[]): string[] =>
   steps.filter((s) => s.status !== 'skipped').map((s) => s.role);
 
 describe('AgentOrchestrator — multi-agent 6 con', () => {
+  it.each([
+    ['bot_webhook', 'bot'],
+    ['zca_listener', 'zca'],
+    ['copilot_paste', 'mock'],
+  ] as const)('luu replyChannel theo nguon %s -> %s', async (source, replyChannel) => {
+    const view = await build().run(msg('@Bot ultty AI orders 3 noi chien', META_HN, source), BOT);
+
+    expect(view.replyChannel).toBe(replyChannel);
+  });
+
   it('trace LUON du 6 vai dung thu tu; mock => 0 lan goi LLM', async () => {
     const view = await build().run(msg('@Bot ultty AI orders 3 noi chien'), BOT);
     expect(view.trace?.steps).toHaveLength(6);

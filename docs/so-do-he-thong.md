@@ -2,7 +2,7 @@
 
 > **Vai trò tài liệu:** bản KỸ THUẬT hợp nhất — toàn bộ **sơ đồ hệ thống (12 sơ đồ Mermaid)** + **quyết định thiết kế đã chốt** + **phụ lục bằng chứng PoC**. Xem trên GitHub hoặc VS Code (extension Markdown Preview Mermaid).
 > **Hợp nhất 11/07/2026:** nuốt trọn `thiet-ke-ky-thuat-hop-nhat.md` (quyết định kỹ thuật — §2/§3/§15) và 2 tài liệu PoC `poc-zalo-bot.md`, `poc-parser.md` (→ Phụ lục A/B) — 3 file gốc đã xóa, git history còn.
-> **Đối chiếu code 31/07/2026:** bổ sung FlowiseParser/Agentflow V2, lưu tin + retry ingest, API key guard và topology pilot GCP `netviet`; code vẫn là chuẩn khi tài liệu lệch.
+> **Đối chiếu code 03/08/2026:** bổ sung FlowiseParser/Agentflow V2, lưu tin + retry ingest, API key guard, topology pilot GCP `netviet` và chế độ hai Bot `CHANNEL_MODE=hybrid`; code vẫn là chuẩn khi tài liệu lệch.
 > Nghiệp vụ + sai lệch nguồn gốc: [nghiep-vu.md](nghiep-vu.md) · Kế hoạch + trạng thái: [ke-hoach/tong-quan.md](ke-hoach/tong-quan.md).
 
 **Mục lục:** §1 Bối cảnh · §2 Quyết định kỹ thuật · §3 Ma trận kênh Zalo · §4 Kiến trúc 6 tầng · §5 Bản đồ module · §6 Luồng 1 đơn hàng · §7 Pipeline chi tiết · §8 Vòng đời đơn · §9 Bảy intent · §10 Nguồn sự thật động · §11 Realtime SSE · §12 ERD · §13 Runtime & cờ env · §14 Chọn kênh · §15 Tích hợp, KPI, bảo mật, rủi ro · Phụ lục A/B (PoC).
@@ -30,7 +30,7 @@ flowchart LR
     SHIP["🚚 Aha / Viettel"]
 
     DL -->|"nhắn đặt hàng<br/>(viết tắt, không dấu)"| GRP
-    GRP -->|"GĐ1: zca đọc MỌI tin nhóm<br/>(không cần tag) · Bot/dán tay = dự phòng"| API
+    GRP -->|"GĐ1 hybrid: có native @mention → Bot Platform<br/>không tag Bot → zca · dán tay = dự phòng"| API
     API -->|"FlowiseParser (1 request/tin)"| FLOW
     FLOW -->|"1 lần LLM · structured output"| LLM
     API --> CONSOLE
@@ -42,7 +42,7 @@ flowchart LR
     KT -->|kiểm tra khi lên hệ thống| KV
 ```
 
-**Đọc sơ đồ:** đại lý nhắn vào nhóm Zalo như hiện tại — không đổi thói quen, không cần tag. Hệ thống đứng giữa, AI soạn sẵn, Sale luôn là người bấm duyệt trước khi bất kỳ thứ gì đi ra ngoài.
+**Đọc sơ đồ:** đại lý có thể nhắn như hiện tại; nếu native @mention Bot chính thức thì Bot đó nhận, còn tin không tag Bot do tài khoản zca nhận. Bộ phân xử bảo đảm chỉ một nhánh vào pipeline. AI soạn sẵn; `AUTO_SEND`/`AUTO_ACK` mặc định off nên Sale vẫn duyệt trước khi phản hồi đi ra ngoài.
 
 ---
 
@@ -55,14 +55,14 @@ flowchart LR
 | Kiến trúc 6 tầng, intent taxonomy, luồng chính sách/bảo hành, checklist chốt đơn | Theo NetViet (`Thiet_ke_AI_Agent_U_Ultty.md` §3, §5 — giữ nguyên) | Nghiệp vụ không đổi |
 | Lộ trình 3 giai đoạn, KPI, managed service | Theo NetViet (§6, §7) | Sơ đồ lộ trình: [ke-hoach/tong-quan.md](ke-hoach/tong-quan.md) |
 | Stack | TypeScript (Node 22) · NestJS · Next.js · PostgreSQL + **Prisma 6 (pin, KHÔNG nâng v7** — `@adminjs/prisma` chưa hỗ trợ) · Flowise 3.1.4 · Claude/DeepSeek API · monorepo pnpm | BullMQ/Redis có trong stack nhưng **chưa dùng** (YAGNI — thêm khi pipeline thật sự cần queue) |
-| Kênh Zalo GĐ1 | **zca-js = kênh đọc chính** (đảo quyết định 09/07/2026, khách chọn); chuyển kênh bằng 1 biến `CHANNEL_MODE=mock\|bot\|zca` | Điều kiện chặn: **tài khoản phụ** + **văn bản chấp nhận rủi ro** (vi phạm ToS Zalo; Luật BVDLCN 91/2025/QH15 + NĐ 356/2025) |
+| Kênh Zalo GĐ1 | **Hai Bot cùng nhóm qua `CHANNEL_MODE=hybrid`** (03/08/2026): native @mention Bot chính thức → Bot Platform; không tag Bot → zca. Các mode đơn `mock\|bot\|zca` vẫn giữ để rollback/test | `getMe` lấy Bot UID; zca so metadata `mentions[].uid`, bỏ tin do Bot chính thức gửi; không lấy được UID thì zca fail-closed. Điều kiện zca: **tài khoản phụ** + **văn bản chấp nhận rủi ro** |
 | Multi-agent 6 vai | 6 vai chuyên trách **dưới 1 orchestrator, dùng chung 1 lần gọi LLM/tin** (Router parse) — KHÔNG phải 6 LLM độc lập | Chi phí như 1 orchestrator; rules engine tính tiền |
 | LLM vs rules | **LLM không tính tiền, không quyết chính sách** — chỉ phân loại intent + trích xuất + soạn văn bản; giá/ship/VAT/chính sách do rules engine TS tất định tính từ nguồn sự thật | Nguyên tắc bất di bất dịch |
 | Dify → Flowise | NestJS giữ orchestrator; `FlowiseParser` gọi Agentflow `zalo-order-parser-v1` chỉ gồm form input + một LLM structured output. Không tool/code/memory/MCP/callback vào NestJS | `PARSER_MODE=deepseek` được giữ để rollback; D18a-c ở kế hoạch tổng quan |
 | Cách ly khách v1 | Một Compose stack + DB/user/secret/volume/network riêng cho mỗi dự án; chưa cần `tenantId` khi không dùng chung DB | Stack đầu: `/srv/netviet/apps/zalo-ultty` |
 | Kho | KHÔNG xây module kho riêng — KiotViet là source of truth duy nhất | 10-20 đơn/ngày không cần cache |
 | Lưu trữ | Mặc định **in-memory** (`PERSISTENCE=memory` — demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma` (cờ riêng, tách khỏi `DATABASE_URL`) | as-built Phase 3 |
-| Nguồn sự thật ĐỘNG | Panel **`/admin`** (AdminJS auto-CRUD 6 bảng) + **MCP tool** (8 tool) — cả hai ghi Postgres + nạp lại snapshot ngay | Thay cho tab "Prompt AI" của PWA trong thiết kế cũ |
+| Nguồn sự thật ĐỘNG | Trang **`/settings`** cho người vận hành (6 tab: Kênh Zalo · Nhóm & thành viên · Đại lý/SP/giá · Rules · Tự động hóa · Lịch sử) + panel **`/admin`** (AdminJS auto-CRUD, power-user) + **MCP tool** (8 tool) — tất cả đi qua một `SourceTruthWriteService` (transaction → audit → reload snapshot) | Thay cho tab "Prompt AI" của PWA trong thiết kế cũ; `/settings` là mặt chính, `/admin` giữ làm fallback |
 | App Sale | Demo = **console PC 3 cột** (Feed · 6-agent theater SSE · Nguồn sự thật); PWA mobile 5 tab theo `design/` = hướng sản phẩm, làm sau | Quyết định treo D3 |
 
 ---
@@ -74,7 +74,7 @@ flowchart LR
 | **A. Co-pilot / dán tay** (Sale dán tin vào app) | ✅ Không đụng ToS | Thủ công | 0đ | **Fallback vĩnh viễn** (khi zca lỗi/khóa) |
 | **B. Zalo Bot Platform** (bot.zapps.me, Beta) | ✅ | **CHỈ tin @mention** (mention-gating gốc Zalo, không tắt được — Phụ lục A) | 0đ (Premium chưa công bố) | Kênh phụ — bật khi đại lý chịu tag bot (quyết định D2) |
 | **C. Zalo OA + GMF** | ✅ | Tự động (API đầy đủ) | ~25-300k/tháng/nhóm × 200-350 nhóm + gói OA | GĐ2-3: OA cho CSKH 1:1 + ZNS; GMF chỉ khi khách chịu chi phí |
-| **D. zca-js (userbot)** | ❌ vi phạm ToS | **Tự động — MỌI tin nhóm, không cần tag** | 0đ | **KÊNH ĐỌC CHÍNH GĐ1** (khách chọn 09/07/2026) — `CHANNEL_MODE=zca` |
+| **D. zca-js (userbot)** | ❌ vi phạm ToS | **Tự động — thấy MỌI tin nhóm**; ở hybrid tự nhường tin tag Bot chính thức | 0đ | Nhánh nhận tin không tag trong `CHANNEL_MODE=hybrid`; mode `zca` đơn giữ làm rollback |
 
 Mọi kênh đi qua interface `ChannelAdapter` → đổi kênh không đập hệ thống. Bằng chứng PoC Bot Platform: **Phụ lục A**.
 
@@ -380,11 +380,17 @@ sequenceDiagram
 
 ---
 
-## 12. Dữ liệu chính (ERD as-built — Prisma 12 model, Phase 3)
+## 12. Dữ liệu chính (ERD as-built — Prisma 15 model, Phase 3)
+
+> **Bổ sung 03/08/2026** (migration `20260803102000_operator_settings`): `GROUP_PARTICIPANTS` (thành viên
+> nhóm đồng bộ bằng zca + phân loại), `RULE_CONFIG_VERSIONS` (rules typed có vòng đời
+> draft → preview → active → archived) và `AUDIT_LOGS` (append-only, đã lọc secret/PII).
+> `ORDERS.rule_config_version` giữ vết version rules đã dùng cho từng đơn.
 
 ```mermaid
 erDiagram
     DEALERS ||--o{ GROUPS : "có nhóm"
+    GROUPS ||--o{ GROUP_PARTICIPANTS : "thành viên (sync zca)"
     GROUPS ||--o{ MESSAGES : ""
     MESSAGES ||--o{ ORDERS : "AI trích xuất ra"
     ORDERS ||--|{ ORDER_ITEMS : ""
@@ -424,6 +430,24 @@ erDiagram
         int wholesale "Đơn giá CTV = giá tính đơn"
         int min_retail_price "sàn đại lý bán ra"
         string valid_month "bảng giá theo tháng"
+    }
+    GROUP_PARTICIPANTS {
+        string external_user_id "UID Zalo — unique cùng group_id"
+        string customer_rank "dai_ly | ctv | khach_le | unknown — KHÔNG quyết định giá"
+        string operational_role "khach_hang | sale | ke_toan | quan_ly | ksnb | bpvh | ky_thuat | unknown"
+        string handling_mode "inherit_group | process | ignore | manual_review"
+        bool active "false khi vắng mặt trong lần sync ĐẦY ĐỦ gần nhất"
+        string source "zca_sync | manual"
+    }
+    RULE_CONFIG_VERSIONS {
+        int version "tăng dần"
+        string status "draft | preview | active | archived — chỉ 1 active"
+        json payload "schema typed, KHÔNG chứa code"
+    }
+    AUDIT_LOGS {
+        string actor
+        string action "price.update | rules.activate | participant.* | automation.auto_send…"
+        json before_after "đã lọc token/cookie/SĐT/địa chỉ/UID"
     }
     PARSE_FEEDBACK {
         json ai_output
@@ -481,7 +505,7 @@ flowchart LR
 
 | Cờ | Giá trị (mặc định **đậm**) | Quyết định gì |
 |---|---|---|
-| `CHANNEL_MODE` | **mock** · bot · zca | Kênh đọc + gửi Zalo (nguồn sự thật duy nhất chọn kênh) |
+| `CHANNEL_MODE` | **mock** · bot · zca · hybrid | `hybrid`: chạy đồng thời Bot Platform + zca và định tuyến phản hồi về đúng kênh nguồn |
 | `PARSER_MODE` | **mock** · claude · deepseek · flowise | Bộ não parse; `flowise` gọi Agentflow nội bộ, `deepseek` giữ làm rollback pilot |
 | `PERSISTENCE` | **memory** · prisma | Lưu đơn + nguồn sự thật (memory = demo/CI không cần DB) |
 | `ADMIN_UI` | **off** · on | Mount panel `/admin` (đòi thêm `PERSISTENCE=prisma`) |
@@ -499,10 +523,15 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph ZCAM["CHANNEL_MODE=zca — KÊNH ĐỌC CHÍNH GĐ1"]
-        Z1["Đăng nhập tài khoản Zalo PHỤ (quét QR lần đầu,<br/>phiên lưu secrets/zalo-cred.json)"] --> Z2["ZcaListener đọc MỌI tin nhóm<br/>(KHÔNG cần @mention)"]
-        Z2 --> Z3["AI xử lý → đơn chờ duyệt"]
-        Z3 --> Z4["Sale duyệt → gửi xác nhận về nhóm<br/>(kèm nhãn tin tự động)"]
+    subgraph HYBRID["CHANNEL_MODE=hybrid — HAI BOT CÙNG NHÓM"]
+        H0["getMe → cache UID Bot chính thức"]
+        H1["Tin có native @mention Bot"] --> H2["BotPoller nhận → pipeline<br/>replyChannel=bot"]
+        H3["Tin không tag Bot"] --> H4["ZcaListener nhận → pipeline<br/>replyChannel=zca"]
+        H0 --> H4
+        H5["zca thấy mention Bot hoặc tin do Bot gửi"] --> H6["BỎ QUA — chống trùng/vòng lặp"]
+        H7["Không lấy được Bot UID"] --> H8["zca FAIL-CLOSED"]
+        H2 --> H9["Sale duyệt → OutboundChannelRouter<br/>gửi đúng Bot Platform"]
+        H4 --> H10["Sale duyệt → OutboundChannelRouter<br/>gửi đúng tài khoản zca"]
     end
 
     subgraph BOTM["CHANNEL_MODE=bot — kênh phụ (chính thức)"]
@@ -514,11 +543,13 @@ flowchart TB
         M1["Ô 'Bơm tin thử' trên console / Sale dán tay"] --> M2["AI + rules y hệt, chỉ khác nguồn tin"]
     end
 
-    ZCAM -.->|"kênh chính lỗi/khóa → phủ nốt"| BOTM
-    ZCAM -.->|"mạng yếu / demo an toàn"| MOCKM
+    HYBRID -.->|"zca lỗi/khóa → chỉ giữ luồng có tag"| BOTM
+    HYBRID -.->|"mạng yếu / demo an toàn"| MOCKM
 ```
 
-**Vì sao an toàn:** cả 3 chế độ dùng chung toàn bộ pipeline phía sau (`ChannelAdapter`); chuyển kênh chỉ là đổi 1 biến, dữ liệu đơn không phụ thuộc kênh.
+**Vì sao an toàn:** `OrderView.replyChannel` được lưu cùng đơn (`bot|zca|mock`); `OrdersService`, auto-ack và auto-send đều đi qua `OutboundChannelRouter`, không dùng một adapter toàn cục để đoán kênh. Đơn cũ thiếu `replyChannel` bị từ chối trong hybrid. Broadcast gửi thật cũng bị khóa trong hybrid tới khi UI buộc chọn kênh/chat ID rõ ràng.
+
+**Map nhóm:** Bot Platform `chat.id` và zca `threadId` là hai ID khác nhau. Cần tạo hai bản ghi Group cùng trỏ về một Dealer. Bot Platform chỉ đưa tin nhóm đã map vào pipeline; zca còn qua allowlist operator riêng trước LLM.
 
 Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ khi `ZALO_SELF_LISTEN=on`) · **bỏ ảnh KHÔNG có caption** (tin không văn bản chưa vào pipeline) · chống trùng 2.000 id gần nhất · in `chatId` mỗi nhóm 1 lần để lấy ID map đại lý · mỗi tài khoản chỉ 1 listener (mở Zalo Web cùng tài khoản → listener dừng). Trang Operator có nút đăng xuất cục bộ: dừng listener, xóa `zalo-cred.json`, QR và allowlist; lần sau phải quét QR/chọn nhóm lại. Đây không phải thao tác thu hồi phiên phía Zalo vì zca-js không cung cấp API logout.
 
@@ -582,11 +613,11 @@ Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ k
 | 2. Nhận mọi tin hay chỉ @mention? | ⚠️ **CHỈ @mention** — 6/6 test nhất quán: text/ảnh/thoại KHÔNG tag đều không về; tin CÓ tag về **trọn nội dung**, **kể cả ẢNH** (event `message.image.received` kèm `photo_url` tải được + `caption`) |
 | 3. Giới hạn nhóm / rate limit? | ⬜ chưa test (mới 1 nhóm) |
 
-**Mention-gating là hành vi GỐC của Zalo (Beta), không tắt được** — đã loại trừ khả năng cấu hình sai: docs OpenClaw ghi rõ "Groups require an @mention... not configurable"; docs webhook Zalo không có setting privacy/mention nào; `getMe` không có cờ `can_read_all_group_messages`; phía mình sạch (webhook 404, token ok, poller nhận đúng khi có tag).
+**Kết luận câu hỏi “tin không tag có về server Bot không?”: KHÔNG.** PoC không thấy 6/6 tin text/ảnh/thoại không tag ở cả `getUpdates`/server nhận Bot; chỉ tin có native @mention mới phát event. Mention-gating là hành vi GỐC của Zalo (Beta), không tắt được — đã loại trừ khả năng cấu hình sai: docs OpenClaw ghi rõ "Groups require an @mention... not configurable"; docs webhook Zalo không có setting privacy/mention nào; `getMe` không có cờ `can_read_all_group_messages`; phía mình sạch (webhook 404, token ok, poller nhận đúng khi có tag).
 
 **Quan sát vận hành:** bot gửi tin nhóm được (kèm nhãn tự động ✅ điều khoản); long-poll `getUpdates` trả HTTP 408 khi rảnh = BÌNH THƯỜNG; độ trễ vài giây ~20s; ⚠️ **tin gửi lúc bot offline KHÔNG được phát lại** → production phải webhook always-on + lưu mọi tin DB ngay.
 
-**Hệ quả kiến trúc — kênh lai:** đơn text/ảnh **có tag** → bot tự đọc; **không tag** → zca (kênh chính) hoặc dán tay. Điều kiện bật Bot mode = khách đồng ý đại lý tag bot (quyết định **D2**).
+**Hệ quả kiến trúc — kênh lai đã có code 03/08/2026:** text/ảnh **có native tag** → Bot Platform; **không tag** → zca. Gõ tên Bot bằng chữ nhưng không có `mentions[].uid` vẫn thuộc zca. Phản hồi đi theo `replyChannel` của tin nguồn. Runtime hiện vẫn long-poll; trước production 24/7 phải chuyển/kiểm chứng webhook official Bot và lưu event ngay.
 
 **Còn treo (không chặn):** xác nhận mention từ NGƯỜI KHÁC (mọi test là chủ bot) · thoại-có-tag · đa nhóm + rate limit · chế độ webhook.
 

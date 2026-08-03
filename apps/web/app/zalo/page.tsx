@@ -104,6 +104,14 @@ export default function ZaloLoginPage() {
 
         {error && <div className="error-banner">⚠ {error.message}</div>}
         {status?.error && <div className="error-banner">⚠ {status.error}</div>}
+        {status?.channelMode === 'hybrid' && (
+          <div className={status.botIdentity?.state === 'ready' ? 'operator-callout' : 'error-banner'}>
+            Bot Zalo chính thức:{' '}
+            {status.botIdentity?.state === 'ready'
+              ? `${status.botIdentity.name ?? 'Bot'} · ID ${status.botIdentity.id}`
+              : 'chưa xác định được danh tính; zca đang fail-closed để tránh hai Bot cùng xử lý.'}
+          </div>
+        )}
 
         {(status?.state === 'logged_out' || status?.state === 'error') && (
           <div className="risk-box">

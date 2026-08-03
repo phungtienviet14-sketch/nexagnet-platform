@@ -4,6 +4,7 @@ import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
+import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { KiotVietMockAdapter } from '../kiotviet/kiotviet.adapter.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
@@ -20,8 +21,10 @@ function build() {
   const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
   const pipeline = new PipelineService(orchestrator);
   const adapter = new MockAdapter();
-  const orders = new OrdersService(repo, adapter, new KiotVietMockAdapter(knowledge));
-  return { pipeline, orders, adapter };
+  const zcaAdapter = new MockAdapter();
+  const outbound = new OutboundChannelRouter(adapter, zcaAdapter, new MockAdapter());
+  const orders = new OrdersService(repo, outbound, new KiotVietMockAdapter(knowledge));
+  return { pipeline, orders, adapter, zcaAdapter };
 }
 
 function msg(text: string): ChannelMessage {
@@ -65,6 +68,21 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     expect(adapter.sent[0]!.text).toContain('Tin tự động');
   });
 
+  it('don tu zca_listener -> duyet va chi gui bang tai khoan zca', async () => {
+    const { pipeline, orders, adapter, zcaAdapter } = build();
+    const view = await pipeline.process(
+      { ...msg('3 noi chien'), source: 'zca_listener' },
+      BOT_NAME,
+    );
+
+    await orders.approve(view.id);
+
+    expect(view.replyChannel).toBe('zca');
+    expect(zcaAdapter.sent).toHaveLength(1);
+    expect(zcaAdapter.sent[0]?.chatId).toBe(GROUP);
+    expect(adapter.sent).toHaveLength(0);
+  });
+
   it('gui Zalo LOI -> don giu pending_review de duyet lai (khong ket, H1)', async () => {
     class FailingAdapter extends ChannelAdapter {
       readonly name = 'fail';
@@ -75,7 +93,12 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     const knowledge = new KnowledgeService();
     const repo = new InMemoryOrdersRepository();
     const pipeline = new PipelineService(new AgentOrchestrator(new MockParser(), knowledge, repo));
-    const orders = new OrdersService(repo, new FailingAdapter(), new KiotVietMockAdapter(knowledge));
+    const outbound = new OutboundChannelRouter(
+      new FailingAdapter(),
+      new MockAdapter(),
+      new MockAdapter(),
+    );
+    const orders = new OrdersService(repo, outbound, new KiotVietMockAdapter(knowledge));
 
     const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
     await expect(orders.approve(view.id)).rejects.toThrow();

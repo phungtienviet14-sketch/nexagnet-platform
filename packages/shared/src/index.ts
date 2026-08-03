@@ -32,6 +32,7 @@ export type { IntentDef } from './intents.js';
 export type {
   DealerTier,
   PolicyType,
+  ReplyChannel,
   PricedLine,
   PricedOrder,
   OrderView,
@@ -51,6 +52,53 @@ export type {
 } from './agent-stream.js';
 export { broadcastRequestSchema, MAX_BROADCAST_TEXT } from './broadcast.js';
 export type { BroadcastRequest, BroadcastResult, BroadcastTargetResult } from './broadcast.js';
+export {
+  CUSTOMER_RANKS,
+  OPERATIONAL_ROLES,
+  HANDLING_MODES,
+  PARTICIPANT_SOURCES,
+  customerRankSchema,
+  operationalRoleSchema,
+  handlingModeSchema,
+  participantSourceSchema,
+  groupParticipantProfileSchema,
+  groupParticipantSchema,
+  groupParticipantUpdateSchema,
+  groupParticipantsQuerySchema,
+  groupParticipantSyncSnapshotSchema,
+} from './group-participant.js';
+export type {
+  CustomerRank,
+  OperationalRole,
+  HandlingMode,
+  ParticipantSource,
+  GroupParticipantProfile,
+  GroupParticipant,
+  GroupParticipantUpdate,
+  GroupParticipantsQuery,
+  GroupParticipantSyncSnapshot,
+  GroupParticipantSyncResult,
+} from './group-participant.js';
+export {
+  RULE_CONFIG_STATUSES,
+  ruleSettingsSchema,
+  agentSettingsSchema,
+  ruleConfigPayloadSchema,
+  ruleConfigVersionSchema,
+  auditJsonValueSchema,
+  auditLogSchema,
+  auditLogFilterSchema,
+} from './settings.js';
+export type {
+  RuleConfigStatus,
+  RuleSettings,
+  AgentSettings,
+  RuleConfigPayload,
+  RuleConfigVersion,
+  AuditJsonValue,
+  AuditLog,
+  AuditLogFilter,
+} from './settings.js';
 export {
   AGENT_ROLES,
   ROLE_LABELS,

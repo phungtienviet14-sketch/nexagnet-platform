@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChannelMessage } from '@ultty/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
+import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { KiotVietMockAdapter } from '../kiotviet/kiotviet.adapter.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
@@ -22,7 +23,8 @@ function build(settings?: RuntimeSettingsService) {
   const repo = new InMemoryOrdersRepository();
   const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
   const adapter = new MockAdapter();
-  const orders = new OrdersService(repo, adapter, new KiotVietMockAdapter(knowledge));
+  const outbound = new OutboundChannelRouter(adapter, new MockAdapter(), new MockAdapter());
+  const orders = new OrdersService(repo, outbound, new KiotVietMockAdapter(knowledge));
   const pipeline = new PipelineService(orchestrator, orders, undefined, settings);
   return { pipeline, adapter };
 }

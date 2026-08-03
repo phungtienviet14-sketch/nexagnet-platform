@@ -47,6 +47,12 @@ describe('channelProvider (chon kenh gui theo CHANNEL_MODE)', () => {
     expect(factory(fakeClient)).toBeInstanceOf(MockAdapter);
   });
 
+  it('hybrid -> adapter mac dinh la Mock (phan hoi bat buoc qua OutboundChannelRouter)', () => {
+    process.env.CHANNEL_MODE = 'hybrid';
+    process.env.ZALO_BOT_TOKEN = 'token-x';
+    expect(factory(fakeClient)).toBeInstanceOf(MockAdapter);
+  });
+
   it('khong dat gi (mac dinh) -> MockAdapter', () => {
     expect(factory(fakeClient)).toBeInstanceOf(MockAdapter);
   });

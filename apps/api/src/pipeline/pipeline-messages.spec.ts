@@ -30,6 +30,14 @@ class RecordingMessagesRepository extends MessagesRepository {
   }
 }
 
+class DuplicateMessagesRepository extends MessagesRepository {
+  async save(): Promise<SaveMessageResult> {
+    return { id: 'existing-message', duplicate: true };
+  }
+
+  async attachOrder(): Promise<void> {}
+}
+
 class ThrowingMessagesRepository extends MessagesRepository {
   async save(): Promise<SaveMessageResult> {
     throw new Error('DB chet gia lap');
@@ -87,6 +95,21 @@ describe('Pipeline luu MOI tin vao MessagesRepository (Phase 3)', () => {
     await pipeline.process(msg('@Bot ultty AI orders 3 noi chien', 'm-trung'), BOT_NAME);
 
     expect(repo.list()).toHaveLength(1);
+  });
+
+  it('tin da ton tai trong kho ben vung -> KHONG chay orchestrator tao don lan nua', async () => {
+    const knowledge = new KnowledgeService();
+    const orders = new InMemoryOrdersRepository();
+    const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, orders);
+    const pipeline = new PipelineService(orchestrator, undefined, new DuplicateMessagesRepository());
+
+    const result = await pipeline.process(
+      msg('@Bot ultty AI orders 3 noi chien', 'm-persisted-duplicate'),
+      BOT_NAME,
+    );
+
+    expect(result).toBeNull();
+    expect(await orders.list()).toHaveLength(0);
   });
 
   it('rerun (sua don) KHONG luu lai tin', async () => {

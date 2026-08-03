@@ -6,11 +6,17 @@ import { BotPlatformAdapter } from './bot-platform.adapter.js';
 import { MockAdapter } from './mock.adapter.js';
 import { ZcaAdapter } from './zca.adapter.js';
 import { ZaloUserClient } from './zalo-user.client.js';
+import {
+  BOT_CHANNEL_ADAPTER,
+  MOCK_CHANNEL_ADAPTER,
+  ZCA_CHANNEL_ADAPTER,
+} from './channel.tokens.js';
 
 /**
  * Chon kenh GUI theo CHANNEL_MODE:
  *   zca  -> ZcaAdapter (userbot ca nhan qua ZaloUserClient)
  *   bot  -> BotPlatformAdapter (can ZALO_BOT_TOKEN; thieu token -> Mock + canh bao)
+ *   hybrid -> MockAdapter mac dinh; moi luot gui phai chon bot/zca qua OutboundChannelRouter
  *   mock -> MockAdapter (khong gui Zalo)
  * Doc tin (ingest) do BotPoller / ZcaListener tu chon theo cung CHANNEL_MODE.
  */
@@ -37,3 +43,23 @@ export const channelProvider: Provider = {
     }
   },
 };
+
+/** Adapter theo ten kenh cho OutboundChannelRouter. Hybrid khong dung adapter mac dinh. */
+export const namedChannelProviders: Provider[] = [
+  {
+    provide: BOT_CHANNEL_ADAPTER,
+    useFactory: (): ChannelAdapter => {
+      const token = loadEnv().ZALO_BOT_TOKEN;
+      return token ? new BotPlatformAdapter(token) : new MockAdapter();
+    },
+  },
+  {
+    provide: ZCA_CHANNEL_ADAPTER,
+    inject: [ZaloUserClient],
+    useFactory: (zaloUser: ZaloUserClient): ChannelAdapter => new ZcaAdapter(zaloUser),
+  },
+  {
+    provide: MOCK_CHANNEL_ADAPTER,
+    useFactory: (): ChannelAdapter => new MockAdapter(),
+  },
+];

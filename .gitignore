@@ -42,3 +42,6 @@ coverage/
 .swc/
 # AdminJS bundler output (tao khi chay panel /admin — artifact, khong commit)
 .adminjs/
+# Playwright E2E output (trace/screenshot cua lan chay gan nhat)
+test-results/
+playwright-report/

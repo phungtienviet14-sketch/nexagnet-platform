@@ -17,6 +17,7 @@ import {
   upsertDealer,
   upsertDealerInput,
 } from './source-of-truth.tools.js';
+import { recordSourceTruthAudit } from '../audit/source-truth-audit.js';
 
 /**
  * MCP stdio server: phoi "Nguon su that" (Postgres) ra thanh tool cho Claude/agent sua bang
@@ -43,6 +44,21 @@ async function bestEffortReload(): Promise<void> {
   } catch {
     // API khong chay/khong voi toi -> bo qua (ghi DB da hoan tat, day chi la dong bo song).
   }
+}
+
+async function auditMcpWrite(
+  action: string,
+  entityType: string,
+  entityId: string,
+  after: unknown,
+): Promise<void> {
+  await recordSourceTruthAudit(prisma, {
+    actor: 'mcp-agent',
+    action,
+    entityType,
+    entityId,
+    after,
+  });
 }
 
 /** Boc ket qua logic thanh noi dung tool MCP; isError=true khi that bai. */
@@ -109,7 +125,10 @@ server.registerTool(
   },
   async (args) => {
     const result = await upsertDealer(prisma, args);
-    if (result.ok) await bestEffortReload();
+    if (result.ok) {
+      await auditMcpWrite('source_truth.dealer.upsert', 'Dealer', args.id, result);
+      await bestEffortReload();
+    }
     return toToolContent(result);
   },
 );
@@ -124,7 +143,10 @@ server.registerTool(
   },
   async (args) => {
     const result = await mapGroup(prisma, args);
-    if (result.ok) await bestEffortReload();
+    if (result.ok) {
+      await auditMcpWrite('source_truth.group.map', 'Group', args.chatId, result);
+      await bestEffortReload();
+    }
     return toToolContent(result);
   },
 );
@@ -139,7 +161,10 @@ server.registerTool(
   },
   async (args) => {
     const result = await setPrice(prisma, args);
-    if (result.ok) await bestEffortReload();
+    if (result.ok) {
+      await auditMcpWrite('source_truth.price.update', 'Price', args.sku, result);
+      await bestEffortReload();
+    }
     return toToolContent(result);
   },
 );
@@ -153,7 +178,10 @@ server.registerTool(
   },
   async (args) => {
     const result = await addGlossary(prisma, args);
-    if (result.ok) await bestEffortReload();
+    if (result.ok) {
+      await auditMcpWrite('source_truth.glossary.upsert', 'GlossaryEntry', args.term, result);
+      await bestEffortReload();
+    }
     return toToolContent(result);
   },
 );

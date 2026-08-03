@@ -3,17 +3,18 @@
 > **Vai trò:** tài liệu DUY NHẤT giữ **trạng thái** mọi kế hoạch (đang ở đâu, xong gì, chờ gì, quyết định treo, dữ liệu thiếu). Các kế hoạch con CHỈ mô tả phạm vi/thiết kế — **không chứa trạng thái**; muốn biết tiến độ, quay về đây.
 > **Kế hoạch con:** [nen-tang.md](nen-tang.md) (Đợt 0 — nền phải xong) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4 — 6 tính năng mới).
 > **Thay thế (11/07/2026):** `tien-do-va-ke-hoach.md` + `checklist-du-lieu-khach.md` + phần trạng thái của `ke-hoach-dai-han.md` + 2 plan code trong `.claude/plans/` — tất cả đã xóa, git history còn.
-> Cập nhật: **01/08/2026**.
+> Cập nhật: **03/08/2026**.
 
 ---
 
-## 1. Ảnh chụp nhanh (01/08/2026)
+## 1. Ảnh chụp nhanh (03/08/2026)
 
 - **Nhánh đang làm:** `feat/phase3-persistence`; nhánh này đã chứa cả persistence và console realtime, không còn việc merge nhánh console riêng.
-- **Demo local chạy được** với 19 SKU + bảng giá tháng 7 + 24 glossary. **Pilot GCP chỉ dùng dữ liệu TEST**, `CHANNEL_MODE=zca`, `PARSER_MODE=flowise`; ZCA đã đăng nhập và allowlist đúng hai nhóm Meta HN/Thái Nguyên, chưa dùng PII thật.
+- **Demo local chạy được** với 19 SKU + bảng giá tháng 7 + 24 glossary. Source đã có `CHANNEL_MODE=hybrid`: native @mention Bot chính thức → Bot Platform, không tag → zca, phản hồi quay lại đúng kênh nguồn. **Pilot GCP đang chạy bản cũ `CHANNEL_MODE=zca`, chưa redeploy hybrid**, chỉ dùng dữ liệu TEST và chưa dùng PII thật.
+- **Trang vận hành `/settings` (03/08/2026)** — 6 tab cho người non-technical: trạng thái/đăng xuất kênh Zalo + đồng bộ thành viên nhóm allowlist bằng zca; phân loại từng thành viên (`customerRank` · `operationalRole` · `handlingMode`, mặc định `unknown + inherit_group` nên sync KHÔNG tự đổi hành vi pipeline); CRUD đại lý/SKU/giá/override; rules typed có draft → preview → activate (không cho nhập công thức tự do); công tắc `AUTO_SEND` dùng chung một state với TopBar; lịch sử thay đổi (audit append-only, đã lọc token/PII). **Rank thành viên không đổi đơn giá** — giá vẫn là `DealerPriceOverride > Price.wholesale`.
 - **Lưu trữ:** mặc định in-memory (`PERSISTENCE=memory` → demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma`. **MỌI tin nhắn được lưu vào bảng `messages` ngay khi nhận** (11/07, commit `6d1a539` — trước khi qua pipeline, chống trùng unique, nối `orders.messageId`).
 - **Nguồn sự thật ĐỘNG:** sửa qua panel `/admin` (AdminJS) hoặc MCP tool (8 tool) → ghi Postgres + pipeline nạp lại ngay.
-- **Chất lượng:** 198 test API + 40 shared + 7 web + 2 contract route xanh; coverage ZCA 84,76%, controller/runtime mới 99,19%; Flowise contract thật xanh; eval Flowise **35/35 intent**; lint · typecheck · build xanh; không còn audit high/critical (còn 6 moderate). Field-accuracy vẫn chờ golden B1-B2.
+- **Chất lượng (03/08/2026):** 308 test API (+21 integration/eval skip khi không có DB; bật `RUN_PRISMA_IT=1` trên Postgres thật → **328 xanh**) + 60 shared + 26 web + 2 contract route + **2 Playwright E2E `/settings`** xanh; coverage mục tiêu phần hybrid đạt 93,29% statement/line, 87,32% branch, 86,66% function; Flowise contract thật xanh; eval Flowise **35/35 intent**; lint · typecheck · build xanh; không còn audit high/critical (còn 6 moderate). Field-accuracy vẫn chờ golden B1-B2.
 - **Pilot GCP `netviet`:** HTTPS public có Basic Auth riêng cho demo/operator; Flowise có đăng nhập riêng. Contract, SSE + 6 vai/1 LLM, restart-persistence, backup/restore và rollback `deepseek → flowise` đều đạt. Soak 24 giờ kết thúc **PASS 01/08** (RAM tối đa 56%, disk 21%, không OOM/restart bất thường). ZCA đã chọn Meta HN (`2508572440887686813`) và Thái Nguyên (`3787434804745256898`); còn xác nhận lại E2E duyệt/gửi sau sửa group ID.
 
 ### Cách chạy nhanh
@@ -84,7 +85,7 @@ flowchart LR
 | Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `read-excel-file` — 🔄 11/07 thay `exceljs`) | 🟡 **mẫu gửi khách ĐÃ soạn 13/07** — `docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx` (3 sheet, dropdown khớp enum `Dealer`/`Group`, kèm 3 đại lý + 2 nhóm thật) sinh từ `tools/excel-template/`; **importer** đọc file khách trả về ⬜ chờ A4 |
 | Phase 4 — KiotViet Excel/API + map SKU↔mã số · Base · đổi LLM sang Claude cho dữ liệu thật | ⬜ chờ C1 |
 | Phase 5 — auth theo vai (2 cổng KSNB) + ghi `kpi_events` + feedback loop | ⬜ chờ D5 |
-| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS có auth; Flowise/DeepSeek/Postgres thật, chỉ KiotViet mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. QR + allowlist hai nhóm đã xong; còn xác nhận lại E2E duyệt/gửi sau sửa group ID trước khi chốt pilot |
+| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS có auth; Flowise/DeepSeek/Postgres thật, chỉ KiotViet mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. Source hybrid hai Bot đã xong 03/08 nhưng **chưa deploy**; còn tạo Secret Manager cho Bot token, map Bot `chat.id` + zca `threadId` về cùng đại lý, chuyển/kiểm chứng webhook official Bot và chạy E2E ma trận tag/không-tag trước pilot |
 | Việc "thật hơn" treo — đọc 6 quy trình gốc chưa phản ánh · mô hình hóa sau `synced` · PWA 5 tab | ⬜ |
 
 ### 3.2 [tinh-nang-dai-han.md](tinh-nang-dai-han.md) — Đợt 1-4 (6 tính năng mới, định hướng)
@@ -166,12 +167,13 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | **D22** | **Hồ sơ ĐGTĐXLDL + ĐGTĐCDL (Mẫu số 09)** theo Luật 91/2025 + NĐ 356/2025 — 2 điểm chuyển (Singapore + LLM), nộp trong 60 ngày, chế tài tới **5% doanh thu năm liền trước** | Ký hợp đồng khách đầu tiên | ⬜ |
 | **D23** | **Đơn vị kinh tế**: giá bán/khách, biên lợi nhuận, điểm hòa vốn. Hiện chỉ biết hạ tầng ~$44/khách/tháng; chưa có chi phí LLM, nhân sự, onboarding (hàng chục giờ công/khách) | Chốt mô hình kinh doanh | ⬜ |
 | **D24** | **Ai trực + SLA** khi có 5 khách trả tiền (bus factor hiện = 1). Lưu ý: SLA 99.9% ≈ 43 phút/tháng — kiến trúc 1 droplet/1 vùng **không cam kết nổi** | Ký hợp đồng khách đầu tiên | ⬜ |
+| **D25** | **Hai Bot cùng một nhóm:** native @mention Bot Zalo → Bot Platform xử lý/trả lời; không tag → tài khoản zca xử lý/trả lời. Chỉ metadata mention native được tính; nếu không lấy được Bot UID thì zca fail-closed | Kiến trúc kênh hybrid | ✅ user duyệt + code local 03/08; chưa deploy/E2E live |
 
 ### E — Hạ tầng production (chặn chạy 24/7)
 
 | # | Cần gì | TT |
 |---|---|---|
-| E1 | Máy chủ 24/7 + domain + HTTPS (webhook always-on) — ai cung cấp/trả tiền | 🟡 VM NetViet đã có IP tĩnh + HTTPS public qua `sslip.io`, Basic Auth tách demo/operator và đăng nhập Flowise; domain thương hiệu/chi phí vận hành dài hạn chưa chốt |
+| E1 | Máy chủ 24/7 + domain + HTTPS (webhook always-on) — ai cung cấp/trả tiền | 🟡 VM NetViet đã có IP tĩnh + HTTPS public qua `sslip.io`, Basic Auth tách demo/operator và đăng nhập Flowise; official Bot hiện còn dùng long-poll, cần webhook endpoint/secret + kiểm chứng always-on trước production; domain thương hiệu/chi phí dài hạn chưa chốt |
 | E2 | Postgres production + lịch sao lưu (managed hay tự host) | 🟡 pilot self-host Postgres, backup GCS 7 ngày + 4 tuần và restore check hai DB đã đạt 31/07; mô hình production vẫn chưa chốt |
 | E3 | Ai vận hành hằng ngày sau bàn giao (NetViet managed?) + SLA | ⬜ |
 | E4 | Kênh nhận cảnh báo sự cố (bot/kênh chết → báo ai, qua đâu) | ⬜ |
@@ -180,7 +182,7 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 
 | # | Cần gì | TT |
 |---|---|---|
-| F1 | Chủ sở hữu bot Zalo + tài khoản Zalo phụ (zca) production — ai giữ token/SIM | ⬜ |
+| F1 | Chủ sở hữu bot Zalo + tài khoản Zalo phụ (zca) production — ai giữ token/SIM; tạo secret `zalo-ultty-zalo-bot-token` trước deploy hybrid | ⬜ |
 | F2 | Ai add bot/tài khoản phụ vào ~200 nhóm, theo đợt nào (khớp A4) | ⬜ |
 | F3 | Gói Zalo Bot Premium nếu cần (giới hạn nhóm/rate limit — hỏi Zalo) | ⬜ |
 | F4 | Tài khoản + ngân sách LLM API (ai trả, hạn mức/tháng) | ⬜ |
@@ -270,6 +272,6 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 - Backup hai DB đã tải lên GCS và restore check độc lập đạt. Cloud Ops Agent, health/backup timer, log metric, email channel và alert health/restart/RAM/disk đều active.
 - Diễn tập rollback sang image trước + `PARSER_MODE=deepseek` đạt E2E; sau đó khôi phục digest hiện tại + `flowise` và E2E lại đạt.
 - Soak 24 giờ kết thúc **PASS 01/08/2026**: RAM tối đa 56%, disk 21%, không có health lỗi, OOM hay restart bất thường.
-- Pilot chỉ dùng dữ liệu TEST với `CHANNEL_MODE=zca`, `PARSER_MODE=flowise`, DeepSeek; `AUTO_SEND=off` ở env. Source PC đã có công tắc runtime Tự gửi và nút đăng xuất Zalo nhưng chưa deploy; allowlist runtime hiện có Meta HN + Thái Nguyên. Chưa bật PII thật.
+- Pilot hiện chỉ dùng dữ liệu TEST với `CHANNEL_MODE=zca`, `PARSER_MODE=flowise`, DeepSeek; `AUTO_SEND=off` ở env. Source PC đã có hybrid hai Bot, router phản hồi theo nguồn, công tắc runtime Tự gửi và nút đăng xuất Zalo nhưng phần hybrid chưa deploy; allowlist runtime hiện có Meta HN + Thái Nguyên. Chưa bật PII thật.
 
-**Cổng còn lại:** xác nhận lại E2E ZCA duyệt/gửi sau sửa group ID cho D18c; nhận B1-B2 để đo field-accuracy cho D18b; D21 vẫn cần trước sizing 200-350 nhóm thật.
+**Cổng còn lại:** tạo Bot-token secret + map hai ID kênh/đại lý + deploy rồi chạy E2E native-tag/không-tag/mention-người-khác/tin-Bot-gửi; chuyển/kiểm chứng webhook official Bot; nhận B1-B2 để đo field-accuracy cho D18b; D21 vẫn cần trước sizing 200-350 nhóm thật.

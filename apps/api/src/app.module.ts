@@ -1,5 +1,6 @@
 import { type DynamicModule, Logger, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { loadEnv } from '@ultty/shared';
 import { ApiKeyGuard } from './auth/api-key.guard.js';
 import { PrismaModule } from './config/prisma.module.js';
@@ -8,7 +9,9 @@ import { AgentEventsService } from './agents/agent-events.service.js';
 import { AgentOrchestrator } from './agents/agent-orchestrator.service.js';
 import { BroadcastController } from './broadcast/broadcast.controller.js';
 import { BroadcastService } from './broadcast/broadcast.service.js';
-import { channelProvider } from './channels/channel.provider.js';
+import { channelProvider, namedChannelProviders } from './channels/channel.provider.js';
+import { BotIdentityService } from './channels/bot-identity.service.js';
+import { OutboundChannelRouter } from './channels/outbound-channel.router.js';
 import { ZaloUserClient } from './channels/zalo-user.client.js';
 import { ZaloController } from './channels/zalo.controller.js';
 import { DemoController } from './demo/demo.controller.js';
@@ -31,9 +34,19 @@ import { parserProvider } from './pipeline/parser.provider.js';
 import { PipelineService } from './pipeline/pipeline.service.js';
 import { StreamController } from './stream/stream.controller.js';
 import { RuntimeSettingsService } from './runtime/runtime-settings.service.js';
+import { GroupParticipantsModule } from './groups/group-participants.module.js';
+import { SettingsController } from './settings/settings.controller.js';
+import { SettingsQueryService } from './settings/settings-query.service.js';
+import { SourceTruthWriteService } from './settings/source-truth-write.service.js';
+import { OperationalSettingsModule } from './settings/operational-settings.module.js';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [
+    PrismaModule,
+    OperationalSettingsModule,
+    GroupParticipantsModule,
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+  ],
   controllers: [
     HealthController,
     OrdersController,
@@ -44,6 +57,7 @@ import { RuntimeSettingsService } from './runtime/runtime-settings.service.js';
     BroadcastController,
     StreamController,
     ZaloController,
+    SettingsController,
   ],
   providers: [
     {
@@ -51,6 +65,10 @@ import { RuntimeSettingsService } from './runtime/runtime-settings.service.js';
       // API_KEY bo trong (mac dinh) -> guard mo, demo/CI/HF chay nhu cu.
       provide: APP_GUARD,
       useClass: ApiKeyGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
     KnowledgeService,
     RuntimeSettingsService,
@@ -64,6 +82,8 @@ import { RuntimeSettingsService } from './runtime/runtime-settings.service.js';
           : new InMemoryOrdersRepository(),
       inject: [PrismaService],
     },
+    SettingsQueryService,
+    SourceTruthWriteService,
     {
       // Luu MOI tin ngay khi nhan (Phase 3): Postgres khi PERSISTENCE=prisma; memory mac dinh.
       provide: MessagesRepository,
@@ -85,7 +105,10 @@ import { RuntimeSettingsService } from './runtime/runtime-settings.service.js';
     { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
     parserProvider,
     ZaloUserClient,
+    BotIdentityService,
+    ...namedChannelProviders,
     channelProvider,
+    OutboundChannelRouter,
     AgentOrchestrator,
     PipelineService,
     OrdersService,

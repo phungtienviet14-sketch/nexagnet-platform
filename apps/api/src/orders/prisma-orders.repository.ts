@@ -52,6 +52,7 @@ export class PrismaOrdersRepository extends OrdersRepository {
       groupName: view.groupName ?? null,
       grandTotal: view.priced?.grandTotal ?? null,
       kiotVietCode: view.kiotVietCode ?? null,
+      ruleConfigVersion: view.ruleConfigVersion ?? null,
       createdAt: new Date(view.createdAt),
       view: view as unknown as Prisma.InputJsonValue,
     };

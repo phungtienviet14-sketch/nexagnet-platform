@@ -6,6 +6,10 @@
 > **Trạng thái bản giao diện mới (01/08/2026):** source trên PC đã có công tắc **Tự gửi** và
 > nút **Đăng xuất tài khoản Zalo**, nhưng theo yêu cầu đang demo nên **chưa deploy lên GCP**.
 > Hai nút này chỉ xuất hiện trên bản local cho tới lần deploy được duyệt sau.
+> **Source 03/08/2026** đã thêm `CHANNEL_MODE=hybrid` (tag Bot chính thức → Bot Platform,
+> không tag → zca) nhưng GCP vẫn đang chạy bản `zca`. Trước lần deploy hybrid phải có secret
+> `zalo-ultty-zalo-bot-token`, map cả Bot `chat.id` và zca `threadId` về cùng đại lý, rồi chạy
+> E2E ma trận tag/không-tag. Không được trình bày hybrid như đã chạy live.
 
 ## 1. Trạng thái cần nói đúng với khách
 

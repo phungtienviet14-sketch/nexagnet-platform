@@ -74,9 +74,10 @@ const dealers: Dealer[] = [
 ];
 
 // Map nhom -> dai ly theo chatId (ID NHOM, KHONG phai TEN nhom).
-// - Kenh zca (CHANNEL_MODE=zca): chatId = threadId cua zca; nhan tin 1 lan trong nhom roi xem log
+// - Kenh zca (CHANNEL_MODE=zca|hybrid): chatId = threadId cua zca; nhan tin 1 lan trong nhom roi xem log
 //   API "📌 Nhom ... chatId=..." -> copy vao day. (chat_id zgr-... la cua Bot Platform, KHAC zca.)
-// - Kenh bot (CHANNEL_MODE=bot): lay chat_id bang `pnpm poc:groups`.
+// - Kenh bot (CHANNEL_MODE=bot|hybrid): lay chat_id bang `pnpm poc:groups`.
+// - Hybrid: tao HAI GroupMap (Bot chat.id + zca threadId) cung tro ve mot dealerId.
 const groups: GroupMap[] = [
   { chatId: '2508572440887686813', dealerId: 'meta-hn', branch: 'HN', name: 'Nhóm đại lý Meta HN' },
   { chatId: '3787434804745256898', dealerId: 'dl-thai-nguyen', branch: 'TN', name: 'Nhóm đại lý Thái Nguyên' },

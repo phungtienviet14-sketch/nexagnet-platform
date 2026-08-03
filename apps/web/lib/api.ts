@@ -73,7 +73,7 @@ export const api = {
     fetch(`${BASE}/knowledge/summary`).then((r) => toJson<KnowledgeSummary>(r)),
   config: (): Promise<DemoConfig> => fetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),
   setAutoSend: (enabled: boolean): Promise<AutoSendState> =>
-    fetch(`${BASE}/demo/auto-send`, {
+    fetch(`${BASE}/settings/automation/auto-send`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(enabled ? { enabled: true, acknowledged: true } : { enabled: false }),

@@ -87,6 +87,16 @@ describe('loadEnv', () => {
     expect(env.CHANNEL_MODE).toBe('zca');
   });
 
+  it('nhan CHANNEL_MODE=hybrid khi co token Bot Platform', () => {
+    const env = loadEnv({ CHANNEL_MODE: 'hybrid', ZALO_BOT_TOKEN: 'bot-token-test' });
+
+    expect(env.CHANNEL_MODE).toBe('hybrid');
+  });
+
+  it('CHANNEL_MODE=hybrid thieu token Bot Platform -> fail fast', () => {
+    expect(() => loadEnv({ CHANNEL_MODE: 'hybrid' })).toThrowError(EnvValidationError);
+  });
+
   it('tuong thich nguoc: BOT_MODE=on (chua dat CHANNEL_MODE) -> suy ra kenh bot', () => {
     const env = loadEnv({ BOT_MODE: 'on' });
 
@@ -142,6 +152,38 @@ describe('loadEnv', () => {
     expect(
       loadEnv({ ...base, ZALO_OPERATOR_ORIGIN: 'https://operator.example.com' }).ZALO_OPERATOR_ORIGIN,
     ).toBe('https://operator.example.com');
+  });
+
+  it('production + CHANNEL_MODE=hybrid cung bat buoc co operator origin HTTPS', () => {
+    const base = {
+      NODE_ENV: 'production',
+      API_KEY: 'x'.repeat(32),
+      CHANNEL_MODE: 'hybrid',
+      ZALO_BOT_TOKEN: 'bot-token-test',
+    } as const;
+
+    expect(() => loadEnv(base)).toThrowError(EnvValidationError);
+    expect(
+      loadEnv({ ...base, ZALO_OPERATOR_ORIGIN: 'https://operator.example.com' })
+        .ZALO_OPERATOR_ORIGIN,
+    ).toBe('https://operator.example.com');
+  });
+
+  it('production khong cho bat AdminJS bang credential mac dinh hoac yeu', () => {
+    const base = {
+      NODE_ENV: 'production',
+      API_KEY: 'x'.repeat(32),
+      ADMIN_UI: 'on',
+    } as const;
+
+    expect(() => loadEnv(base)).toThrowError(EnvValidationError);
+    expect(() =>
+      loadEnv({
+        ...base,
+        ADMIN_PASSWORD: 'mot-mat-khau-du-dai-va-khac-default',
+        ADMIN_COOKIE_SECRET: 'c'.repeat(48),
+      }),
+    ).not.toThrow();
   });
 
   it('API_KEY qua ngan -> nem loi (chan khoa doan duoc)', () => {

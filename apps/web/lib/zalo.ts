@@ -8,13 +8,18 @@ export type ZaloConnectionState =
   | 'error';
 
 export interface ZaloStatus {
-  channelMode: 'mock' | 'bot' | 'zca';
+  channelMode: 'mock' | 'bot' | 'zca' | 'hybrid';
   state: ZaloConnectionState;
   displayName?: string;
   qrVersion: number;
   qrExpiresAt?: string;
   allowedGroupIds: string[];
   error?: string;
+  botIdentity?: {
+    state: 'disabled' | 'unknown' | 'ready' | 'error';
+    id?: string;
+    name?: string;
+  };
 }
 
 export interface ZaloGroup {

@@ -19,6 +19,8 @@ import {
   type OrderView,
   type ParseResult,
   type PricedOrder,
+  type ReplyChannel,
+  type SenderType,
   type SupervisorSummary,
 } from '@ultty/shared';
 import { KnowledgeService, type ResolvedGroup } from '../knowledge/knowledge.service.js';
@@ -26,10 +28,12 @@ import { OrdersRepository } from '../orders/orders.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
 import { AgentEventsService } from './agent-events.service.js';
-import { DEFAULT_RULES_CONFIG } from '../rules/config.js';
+import { DEFAULT_RULES_CONFIG, type RulesConfig } from '../rules/config.js';
 import { priceOrder, routeStatus } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
-import { DEFAULT_AGENTS_CONFIG } from './agents.config.js';
+import { DEFAULT_AGENTS_CONFIG, type AgentsConfig } from './agents.config.js';
+import { RuleConfigService } from '../rule-config/rule-config.service.js';
+import { toAgentsConfig, toRulesConfig } from '../rule-config/rule-config.defaults.js';
 import {
   POLICY_LABELS,
   annotatePolicy,
@@ -55,6 +59,17 @@ interface DispatchResult {
   roles: Map<AgentRole, RoleData>;
 }
 
+export function replyChannelForSource(source: ChannelMessage['source']): ReplyChannel {
+  switch (source) {
+    case 'bot_webhook':
+      return 'bot';
+    case 'zca_listener':
+      return 'zca';
+    case 'copilot_paste':
+      return 'mock';
+  }
+}
+
 /**
  * Tang 3 — Multi-agent 6 con (§5.1) duoi 1 orchestrator, 1 lan goi LLM (Router parse).
  * Router -> dispatch worker theo intent -> Supervisor (rules, 0 LLM) -> AgentTrace.
@@ -71,6 +86,7 @@ export class AgentOrchestrator {
     private readonly knowledge: KnowledgeService,
     private readonly orders: OrdersRepository,
     @Optional() private readonly events?: AgentEventsService,
+    @Optional() private readonly ruleConfigs?: RuleConfigService,
   ) {}
 
   /**
@@ -81,12 +97,22 @@ export class AgentOrchestrator {
   async run(
     message: ChannelMessage,
     botName?: string,
-    opts?: { orderId?: string; rerun?: boolean },
+    opts?: { orderId?: string; rerun?: boolean; senderTypeOverride?: SenderType },
   ): Promise<OrderView> {
     const orderId = opts?.orderId ?? randomUUID();
     const createdAt = new Date().toISOString();
-    const resolved = this.knowledge.resolveByChatId(message.externalChatId);
+    const baseResolved = this.knowledge.resolveByChatId(message.externalChatId);
+    const resolved = opts?.senderTypeOverride
+      ? { ...baseResolved, senderType: opts.senderTypeOverride }
+      : baseResolved;
     const senderKnown = resolved.dealer !== null;
+    const activeRuleConfig = await this.ruleConfigs?.getActive();
+    const rulesConfig = activeRuleConfig
+      ? toRulesConfig(activeRuleConfig.payload)
+      : DEFAULT_RULES_CONFIG;
+    const agentsConfig = activeRuleConfig
+      ? toAgentsConfig(activeRuleConfig.payload)
+      : DEFAULT_AGENTS_CONFIG;
 
     const emit = (e: AgentStreamEvent): void => this.events?.emit(e);
     // Chi gian nhip khi CO client dang xem (tranh them do tre khi khong ai coi/test).
@@ -125,7 +151,7 @@ export class AgentOrchestrator {
     const normText = normalize(message.text);
 
     // DISPATCH worker theo intent (dong bo), roi phat tung vai theo thu tu.
-    const dispatch = this.dispatch(parseResult, resolved, normText);
+    const dispatch = this.dispatch(parseResult, resolved, normText, rulesConfig, agentsConfig);
     dispatch.roles.set('router', {
       action: `Phân loại: ${INTENT_LABELS[intent]} · người gửi: ${SENDER_LABELS[resolved.senderType]} → ${ROLE_LABELS[primaryRole]}`,
       notes: [resolved.groupName ? `Nhóm: ${resolved.groupName}` : 'Nhóm chưa map đại lý'],
@@ -155,7 +181,7 @@ export class AgentOrchestrator {
     const intentConfidence = parseResult.confidence.intent ?? 0.8;
     await pace();
     emit({ type: 'agent.progress', orderId, role: 'supervisor', phase: 'active' });
-    const supervisor = assessRisk(dispatch.priced, intentConfidence, senderKnown, normText, DEFAULT_AGENTS_CONFIG);
+    const supervisor = assessRisk(dispatch.priced, intentConfidence, senderKnown, normText, agentsConfig);
     dispatch.roles.set('supervisor', {
       action: supervisor.riskLevel === 'none' ? 'Không phát hiện rủi ro' : `Rủi ro: ${supervisor.reasons.join('; ')}`,
       notes: supervisor.reasons,
@@ -179,6 +205,7 @@ export class AgentOrchestrator {
       status,
       createdAt,
       chatId: message.externalChatId,
+      replyChannel: replyChannelForSource(message.source),
       groupName: resolved.groupName ?? undefined,
       dealerName: resolved.dealer?.name ?? undefined,
       rawText: message.text,
@@ -189,6 +216,7 @@ export class AgentOrchestrator {
       confidence: parseResult.confidence,
       senderType: resolved.senderType,
       trace,
+      ...(activeRuleConfig ? { ruleConfigVersion: activeRuleConfig.version } : {}),
     };
     const saved = await this.orders.create(view);
     emit({ type: 'order.finalized', order: saved });
@@ -196,7 +224,13 @@ export class AgentOrchestrator {
   }
 
   /** Dispatch tin toi vai chuyen trach; DUY NHAT nhanh dat_don goi priceOrder. */
-  private dispatch(parseResult: ParseResult, resolved: ResolvedGroup, normText: string): DispatchResult {
+  private dispatch(
+    parseResult: ParseResult,
+    resolved: ResolvedGroup,
+    normText: string,
+    rulesConfig: RulesConfig,
+    agentsConfig: AgentsConfig,
+  ): DispatchResult {
     const roles = new Map<AgentRole, RoleData>();
     const intent = parseResult.intent;
 
@@ -207,7 +241,7 @@ export class AgentOrchestrator {
         products: this.knowledge.products(),
         prices: this.knowledge.prices(),
         priceOverrides: this.knowledge.priceOverrides(),
-        cfg: DEFAULT_RULES_CONFIG,
+        cfg: rulesConfig,
       });
       roles.set('sales', {
         action: `Bóc ${priced.lines.length} dòng, áp giá ${SENDER_LABELS[resolved.senderType]}, dựng xác nhận ${priced.orderType}`,
@@ -278,7 +312,7 @@ export class AgentOrchestrator {
     }
 
     if (intent === 'bao_hanh_khieu_nai') {
-      const w = classifyWarranty(normText, DEFAULT_AGENTS_CONFIG);
+      const w = classifyWarranty(normText, agentsConfig);
       roles.set('after_sales', {
         action: `Tiếp nhận bảo hành: ${w.branchLabel}`,
         notes: [w.note, 'Định tuyến nhóm kỹ thuật'],

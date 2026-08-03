@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { KnowledgeService } from '../knowledge/knowledge.service.js';
 import type { OrdersRepository } from '../orders/orders.repository.js';
@@ -6,7 +6,7 @@ import type { PipelineService } from '../pipeline/pipeline.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { DemoController } from './demo.controller.js';
 
-describe('DemoController auto-send', () => {
+describe('DemoController', () => {
   const processMessage = vi.fn(async () => ({ id: 'order-1' }));
   const groupViews = vi.fn(() => [
     {
@@ -36,28 +36,8 @@ describe('DemoController auto-send', () => {
     );
   });
 
-  it('chi bat tu gui khi dung origin va da xac nhan', () => {
-    expect(
-      controller.setAutoSend(
-        { enabled: true, acknowledged: true },
-        'https://demo.example.com',
-      ),
-    ).toEqual({ autoSend: 'on' });
-  });
-
-  it('chan bat tu gui khi thieu xac nhan', () => {
-    expect(() =>
-      controller.setAutoSend({ enabled: true }, 'https://demo.example.com'),
-    ).toThrow(BadRequestException);
-  });
-
-  it('chan mutation tu origin khac trong production', () => {
-    expect(() =>
-      controller.setAutoSend(
-        { enabled: true, acknowledged: true },
-        'https://evil.example.com',
-      ),
-    ).toThrow(ForbiddenException);
+  it('khong phoi mutation AUTO_SEND tren namespace demo', () => {
+    expect('setAutoSend' in controller).toBe(false);
   });
 
   it('tra config runtime, samples va danh sach nhom da map', () => {
@@ -102,6 +82,7 @@ describe('DemoController auto-send', () => {
     findById.mockResolvedValueOnce({
       status: 'pending_review',
       chatId: '3787434804745256898',
+      replyChannel: 'bot',
       rawText: 'gui 10 ghe Felix',
     });
 
@@ -109,6 +90,7 @@ describe('DemoController auto-send', () => {
     expect(processMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         externalChatId: '3787434804745256898',
+        source: 'bot_webhook',
         text: 'gui 10 ghe Felix',
       }),
       expect.any(String),

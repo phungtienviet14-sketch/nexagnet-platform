@@ -1,8 +1,15 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import { channelMessageSchema, loadEnv, type ChannelMessage, type Intent } from '@ultty/shared';
+import {
+  channelMessageSchema,
+  loadEnv,
+  type AppEnv,
+  type ChannelMessage,
+  type Intent,
+} from '@ultty/shared';
 import { AUTO_LABEL } from '../channels/auto-label.js';
-import { ChannelAdapter } from '../channels/channel-adapter.js';
+import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';
+import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { MessageGuard, processWithRetry } from './message-guard.js';
 
@@ -16,6 +23,18 @@ export const AUTO_ACK_TEXT = 'Đã ghi nhận, Sale sẽ phản hồi anh/chị 
  */
 export function shouldAutoAck(intent: Intent, mode: 'on' | 'off'): boolean {
   return mode === 'on' && intent === 'khac';
+}
+
+export function isBotChannelActive(mode: AppEnv['CHANNEL_MODE']): boolean {
+  return mode === 'bot' || mode === 'hybrid';
+}
+
+/** Bot chinh thuc chi duoc dua tin NHOM da map vao LLM. */
+export function isAllowedBotMessage(
+  message: ChannelMessage,
+  allowedChatIds: ReadonlySet<string>,
+): boolean {
+  return message.chatType === 'group' && allowedChatIds.has(message.externalChatId);
 }
 
 /** Chuyen 1 update Zalo -> ChannelMessage chuan; null neu bo qua (tin bot, thieu noi dung). */
@@ -56,13 +75,14 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly pipeline: PipelineService,
-    private readonly channel: ChannelAdapter,
+    private readonly outbound: OutboundChannelRouter,
+    private readonly knowledge: KnowledgeService,
   ) {}
 
   onModuleInit(): void {
     const env = loadEnv();
-    if (env.CHANNEL_MODE !== 'bot' || !env.ZALO_BOT_TOKEN) {
-      this.logger.log('CHANNEL_MODE != bot (hoac thieu token) -> BotPoller nghi (dung /demo/simulate hoac kenh zca).');
+    if (!isBotChannelActive(env.CHANNEL_MODE) || !env.ZALO_BOT_TOKEN) {
+      this.logger.log('BotPoller nghi: kenh hien tai khong bat Bot Platform hoac thieu token.');
       return;
     }
     this.running = true;
@@ -87,11 +107,16 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
         for (const update of normalizeUpdates(res.result)) {
           const message = updateToChannelMessage(update);
           if (!message) continue;
+          const allowedChatIds = new Set(this.knowledge.groups().map((group) => group.chatId));
+          if (!isAllowedBotMessage(message, allowedChatIds)) {
+            this.logger.warn(`Bo qua tin Bot Platform tu chatId chua map/khong phai nhom: ${message.externalChatId}`);
+            continue;
+          }
           const id = message.externalMessageId;
           if (!this.guard.claim(id)) continue;
 
           const view = await processWithRetry(
-            () => this.pipeline.process(message, botName),
+            () => this.pipeline.process(message, botName, { allowDuplicateSkip: true }),
             id,
             this.logger,
           );
@@ -116,7 +141,7 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
   /** Gui tin auto-ack (best-effort): loi khong lam gian doan doc tin, tin da luu tren app. */
   private async sendAutoAck(chatId: string): Promise<void> {
     try {
-      await this.channel.sendMessage(chatId, AUTO_ACK_TEXT + AUTO_LABEL);
+      await this.outbound.sendMessage('bot', chatId, AUTO_ACK_TEXT + AUTO_LABEL);
       this.logger.log(`Da gui auto-ack (intent=khac) toi ${chatId}`);
     } catch (error) {
       this.logger.warn(`Gui auto-ack that bai: ${error instanceof Error ? error.message : String(error)}`);

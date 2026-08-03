@@ -4,7 +4,7 @@ const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://127.0.0.1:8080').replace(
 const verifyOrderId = process.env.VERIFY_ORDER_ID?.trim();
 const verifyOrderStatus = process.env.VERIFY_ORDER_STATUS?.trim();
 const channelMode = process.env.CHANNEL_MODE?.trim() ?? 'mock';
-const requiresZaloLogin = channelMode === 'zca';
+const requiresZaloLogin = channelMode === 'zca' || channelMode === 'hybrid';
 
 await expectOk('/health');
 

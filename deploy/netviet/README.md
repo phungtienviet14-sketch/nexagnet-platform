@@ -42,10 +42,13 @@ Sau khi đăng nhập xong, xóa clipboard:
 Set-Clipboard -Value ''
 ```
 
-Runtime pilot dùng PostgreSQL thật, Flowise + DeepSeek thật, `CHANNEL_MODE=zca`,
-`PARSER_MODE=flowise`, `AUTO_SEND=off`; chỉ KiotViet là mock. ZCA không tự tạo QR khi chưa
-xác nhận rủi ro trên UI. Allowlist bootstrap mặc định rỗng; trạng thái test hiện đã chọn
-**Meta HN** (`2508572440887686813`) và **Thái Nguyên** (`3787434804745256898`). Chỉ các nhóm
+Lần deploy kế tiếp dùng PostgreSQL thật, Flowise + DeepSeek thật, `CHANNEL_MODE=hybrid`,
+`PARSER_MODE=flowise`, `AUTO_SEND=off`; chỉ KiotViet là mock. Trước khi deploy phải tạo Secret
+Manager `zalo-ultty-zalo-bot-token` bằng quy trình quản lý secret (không ghi token vào repo/log).
+ZCA không tự tạo QR khi chưa xác nhận rủi ro trên UI. Allowlist bootstrap mặc định rỗng; trạng
+thái test hiện đã chọn **Meta HN** (`2508572440887686813`) và **Thái Nguyên**
+(`3787434804745256898`). Cần nhập thêm Bot Platform `chat.id` tương ứng vào Knowledge và cùng
+trỏ về đúng đại lý trước E2E hybrid. Chỉ các nhóm
 được operator chọn mới được lưu và chuyển sang Flowise/DeepSeek.
 
 Khi bản source mới được deploy, badge **Tự gửi: OFF** trên console là công tắc runtime. Bật cần

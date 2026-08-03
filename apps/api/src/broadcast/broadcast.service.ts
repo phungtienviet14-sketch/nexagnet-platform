@@ -65,6 +65,12 @@ export class BroadcastService {
       };
     }
 
+    if (env.CHANNEL_MODE === 'hybrid') {
+      throw new BadRequestException(
+        'Broadcast that dang bi khoa trong CHANNEL_MODE=hybrid vi moi kenh co chatId rieng; hay chon kenh ro rang truoc khi gui.',
+      );
+    }
+
     const results: BroadcastTargetResult[] = [];
     for (const [i, target] of targets.entries()) {
       try {

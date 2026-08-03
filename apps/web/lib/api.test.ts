@@ -17,7 +17,7 @@ describe('operator mutations', () => {
 
     await expect(api.setAutoSend(true)).resolves.toEqual({ autoSend: 'on' });
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:3001/demo/auto-send',
+      'http://localhost:3001/settings/automation/auto-send',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({ enabled: true, acknowledged: true }),

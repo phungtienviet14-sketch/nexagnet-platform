@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+// Credential MAC DINH cho AdminJS o local. Khai bao thanh hang so de loadEnv co the CHAN
+// dung lai chinh chung o production (khong doan chuoi, khong lap lai literal o hai noi).
+const DEV_ADMIN_PASSWORD = 'ultty-admin';
+const DEV_ADMIN_COOKIE_SECRET = 'ultty-admin-dev-cookie-secret-doi-o-production';
+// Do dai toi thieu cho credential AdminJS o production (panel /admin sua duoc gia + map nhom).
+const MIN_ADMIN_PASSWORD_LENGTH = 16;
+const MIN_ADMIN_COOKIE_SECRET_LENGTH = 32;
+
 /**
  * Schema bien moi truong dung chung cho toan he thong.
  * Nguyen tac (CLAUDE.md - Luu y bao mat): khong hardcode secret,
@@ -43,7 +51,7 @@ export const envSchema = z.object({
   //   zca   = thu vien ngoai zca-js (userbot tai khoan ca nhan) — doc MOI tin nhom, khong can tag.
   // Luu y: zca vi pham ToS Zalo, co the bi khoa tai khoan -> dung TAI KHOAN PHU + can van ban
   // chap nhan rui ro cua khach (xem CLAUDE.md muc "Kenh Zalo").
-  CHANNEL_MODE: z.enum(['mock', 'bot', 'zca']).default('mock'),
+  CHANNEL_MODE: z.enum(['mock', 'bot', 'zca', 'hybrid']).default('mock'),
   // Bat/tat worker doc tin Zalo Bot (Bot Platform). GIU cho tuong thich nguoc: neu CHANNEL_MODE
   // khong dat nhung BOT_MODE=on thi loadEnv suy ra CHANNEL_MODE='bot'. Mac dinh off.
   BOT_MODE: z.enum(['on', 'off']).default('off'),
@@ -85,9 +93,9 @@ export const envSchema = z.object({
   // Thong tin dang nhap panel. Mac dinh la GIA TRI DEV (khop nguyen tac env.ts: co default de chay
   // local); BAT BUOC dat lai o production (dat ADMIN_PASSWORD/ADMIN_COOKIE_SECRET manh qua env).
   ADMIN_EMAIL: z.string().default('admin@ultty.local'),
-  ADMIN_PASSWORD: z.string().default('ultty-admin'),
+  ADMIN_PASSWORD: z.string().default(DEV_ADMIN_PASSWORD),
   // Secret ky cookie phien AdminJS. Default dev — production PHAI thay bang chuoi ngau nhien dai.
-  ADMIN_COOKIE_SECRET: z.string().default('ultty-admin-dev-cookie-secret-doi-o-production'),
+  ADMIN_COOKIE_SECRET: z.string().default(DEV_ADMIN_COOKIE_SECRET),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -126,12 +134,41 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
       throw new EnvValidationError(missingFlowiseVariables);
     }
   }
-  if (data.NODE_ENV === 'production' && data.CHANNEL_MODE === 'zca') {
+  if (data.CHANNEL_MODE === 'hybrid' && !data.ZALO_BOT_TOKEN) {
+    throw new EnvValidationError([
+      'ZALO_BOT_TOKEN: BAT BUOC khi CHANNEL_MODE=hybrid de xac dinh Bot va tranh xu ly trung',
+    ]);
+  }
+  if (
+    data.NODE_ENV === 'production' &&
+    (data.CHANNEL_MODE === 'zca' || data.CHANNEL_MODE === 'hybrid')
+  ) {
     const operatorUrl = data.ZALO_OPERATOR_ORIGIN ? new URL(data.ZALO_OPERATOR_ORIGIN) : null;
     if (!operatorUrl || operatorUrl.protocol !== 'https:') {
       throw new EnvValidationError([
-        'ZALO_OPERATOR_ORIGIN: BAT BUOC va phai dung HTTPS khi production + CHANNEL_MODE=zca',
+        'ZALO_OPERATOR_ORIGIN: BAT BUOC va phai dung HTTPS khi production + CHANNEL_MODE=zca|hybrid',
       ]);
+    }
+  }
+  // Panel /admin sua duoc bang gia, map nhom -> dai ly va chinh sach. Bat o production bang
+  // credential dev (hoac chuoi ngan) = giao quyen ghi nguon su that cho bat ky ai doc repo.
+  if (data.NODE_ENV === 'production' && data.ADMIN_UI === 'on') {
+    const weakAdminCredentials = [
+      data.ADMIN_PASSWORD === DEV_ADMIN_PASSWORD
+        ? 'ADMIN_PASSWORD: dang dung gia tri MAC DINH dev — bat buoc doi khi ADMIN_UI=on o production'
+        : null,
+      data.ADMIN_PASSWORD.length < MIN_ADMIN_PASSWORD_LENGTH
+        ? `ADMIN_PASSWORD: qua ngan — can >= ${MIN_ADMIN_PASSWORD_LENGTH} ky tu khi ADMIN_UI=on o production`
+        : null,
+      data.ADMIN_COOKIE_SECRET === DEV_ADMIN_COOKIE_SECRET
+        ? 'ADMIN_COOKIE_SECRET: dang dung gia tri MAC DINH dev — bat buoc doi khi ADMIN_UI=on o production'
+        : null,
+      data.ADMIN_COOKIE_SECRET.length < MIN_ADMIN_COOKIE_SECRET_LENGTH
+        ? `ADMIN_COOKIE_SECRET: qua ngan — can >= ${MIN_ADMIN_COOKIE_SECRET_LENGTH} ky tu khi ADMIN_UI=on o production`
+        : null,
+    ].filter((issue): issue is string => issue !== null);
+    if (weakAdminCredentials.length > 0) {
+      throw new EnvValidationError(weakAdminCredentials);
     }
   }
   // Tuong thich nguoc: cau hinh cu chi co BOT_MODE=on (chua biet CHANNEL_MODE) -> coi la kenh 'bot'.

@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadType, type Message } from 'zca-js';
 import type { OrderView, Intent } from '@ultty/shared';
-import type { ChannelAdapter } from '../channels/channel-adapter.js';
+import type { BotIdentityService } from '../channels/bot-identity.service.js';
+import type { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import type { ZaloUserClient, ZcaMessageHandler } from '../channels/zalo-user.client.js';
 import type { PipelineService } from '../pipeline/pipeline.service.js';
+import type { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { AUTO_ACK_TEXT } from './bot-poller.js';
 import { ZcaListener } from './zca-listener.js';
 
@@ -17,23 +19,36 @@ function makeZcaMessage(msgId: string, content = 'gui 10 ghe felix', threadId = 
 }
 
 /** Dung listener + fake deps; tra ve handler ma ingest da dang ky (de tu goi). */
-function setup(intent: Intent = 'dat_don') {
+function setup(
+  intent: Intent = 'dat_don',
+  officialBotId: string | null = 'official-bot-1',
+  mappedGroup = true,
+) {
   let captured: ZcaMessageHandler | undefined;
   const process = vi.fn(async (): Promise<OrderView> => ({ intent }) as OrderView);
-  const sendMessage = vi.fn(async (_chatId: string, _text: string): Promise<void> => undefined);
+  const sendMessage = vi.fn(
+    async (_replyChannel: 'bot' | 'zca' | 'mock', _chatId: string, _text: string): Promise<void> =>
+      undefined,
+  );
   const client = {
     setMessageHandler: (h: ZcaMessageHandler) => (captured = h),
     isGroupAllowed: vi.fn(() => true),
   } as unknown as ZaloUserClient;
   const pipeline = { process } as unknown as PipelineService;
-  const channel = { sendMessage } as unknown as ChannelAdapter;
-  const listener = new ZcaListener(pipeline, client, channel);
+  const router = { sendMessage } as unknown as OutboundChannelRouter;
+  const identity = {
+    resolveId: vi.fn(async () => officialBotId),
+  } as unknown as BotIdentityService;
+  const knowledge = {
+    groups: vi.fn(() => (mappedGroup ? [{ chatId: 'zgr-x' }] : [])),
+  } as unknown as KnowledgeService;
+  const listener = new ZcaListener(pipeline, client, router, identity, knowledge);
   listener.onModuleInit();
-  return { getHandler: () => captured, process, sendMessage, client };
+  return { getHandler: () => captured, process, sendMessage, client, identity };
 }
 
 describe('ZcaListener', () => {
-  const KEYS = ['CHANNEL_MODE', 'AUTO_ACK'] as const;
+  const KEYS = ['CHANNEL_MODE', 'AUTO_ACK', 'ZALO_BOT_TOKEN'] as const;
   const saved: Record<string, string | undefined> = {};
   beforeEach(() => {
     for (const k of KEYS) saved[k] = process.env[k];
@@ -54,6 +69,68 @@ describe('ZcaListener', () => {
     expect(getHandler()).toBeUndefined();
   });
 
+  it('CHANNEL_MODE=hybrid + tin khong tag Bot -> zca xu ly', async () => {
+    process.env.CHANNEL_MODE = 'hybrid';
+    process.env.ZALO_BOT_TOKEN = 'test-token';
+    const { getHandler, process: pipelineProcess } = setup();
+
+    await getHandler()!(makeZcaMessage('hybrid-no-tag'));
+
+    expect(pipelineProcess).toHaveBeenCalledTimes(1);
+  });
+
+  it('CHANNEL_MODE=hybrid + native mention Bot -> zca nhuong, khong vao pipeline', async () => {
+    process.env.CHANNEL_MODE = 'hybrid';
+    process.env.ZALO_BOT_TOKEN = 'test-token';
+    const { getHandler, process: pipelineProcess } = setup();
+    const message = makeZcaMessage('hybrid-tag') as unknown as {
+      data: { mentions?: Array<{ uid: string; pos: number; len: number }> };
+    };
+    message.data.mentions = [{ uid: 'official-bot-1', pos: 0, len: 20 }];
+
+    await getHandler()!(message as unknown as Message);
+
+    expect(pipelineProcess).not.toHaveBeenCalled();
+  });
+
+  it('CHANNEL_MODE=hybrid + tin do Bot chinh thuc gui -> zca bo qua', async () => {
+    process.env.CHANNEL_MODE = 'hybrid';
+    process.env.ZALO_BOT_TOKEN = 'test-token';
+    const { getHandler, process: pipelineProcess } = setup();
+    const message = makeZcaMessage('hybrid-bot-sender') as unknown as {
+      data: { uidFrom: string };
+    };
+    message.data.uidFrom = 'official-bot-1';
+
+    await getHandler()!(message as unknown as Message);
+
+    expect(pipelineProcess).not.toHaveBeenCalled();
+  });
+
+  it('CHANNEL_MODE=hybrid + khong lay duoc Bot ID + khong mention -> van fail closed', async () => {
+    process.env.CHANNEL_MODE = 'hybrid';
+    process.env.ZALO_BOT_TOKEN = 'test-token';
+    const { getHandler, process: pipelineProcess } = setup('dat_don', null);
+
+    await getHandler()!(makeZcaMessage('hybrid-no-identity'));
+
+    expect(pipelineProcess).not.toHaveBeenCalled();
+  });
+
+  it('CHANNEL_MODE=hybrid + khong lay duoc Bot ID + co mention -> fail closed', async () => {
+    process.env.CHANNEL_MODE = 'hybrid';
+    process.env.ZALO_BOT_TOKEN = 'test-token';
+    const { getHandler, process: pipelineProcess } = setup('dat_don', null);
+    const message = makeZcaMessage('hybrid-no-identity-tag') as unknown as {
+      data: { mentions?: Array<{ uid: string; pos: number; len: number }> };
+    };
+    message.data.mentions = [{ uid: 'unknown-target', pos: 0, len: 5 }];
+
+    await getHandler()!(message as unknown as Message);
+
+    expect(pipelineProcess).not.toHaveBeenCalled();
+  });
+
   it('chong trung: cung msgId 2 lan -> pipeline.process chi chay 1 lan', async () => {
     const { getHandler, process } = setup();
     const handler = getHandler()!;
@@ -67,6 +144,14 @@ describe('ZcaListener', () => {
     vi.mocked(client.isGroupAllowed).mockReturnValue(false);
 
     await getHandler()!(makeZcaMessage('blocked', 'don hang co PII', 'personal-group'));
+
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it('nhom duoc zca allowlist nhung chua map nguon su that -> khong dua PII vao LLM', async () => {
+    const { getHandler, process } = setup('dat_don', 'official-bot-1', false);
+
+    await getHandler()!(makeZcaMessage('unmapped', 'don hang co PII', 'zgr-x'));
 
     expect(process).not.toHaveBeenCalled();
   });
@@ -102,7 +187,8 @@ describe('ZcaListener', () => {
     const { getHandler, sendMessage } = setup('khac');
     await getHandler()!(makeZcaMessage('a'));
     expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(sendMessage.mock.calls[0]![1]).toContain(AUTO_ACK_TEXT);
+    expect(sendMessage.mock.calls[0]![0]).toBe('zca');
+    expect(sendMessage.mock.calls[0]![2]).toContain(AUTO_ACK_TEXT);
   });
 
   it('AUTO_ACK=on nhung intent=dat_don (da hieu) -> KHONG auto-ack', async () => {

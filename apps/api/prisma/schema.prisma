@@ -44,6 +44,43 @@ enum GroupMappingStatus {
   ignored
 }
 
+enum CustomerRank {
+  dai_ly
+  ctv
+  khach_le
+  unknown
+}
+
+enum OperationalRole {
+  khach_hang
+  sale
+  ke_toan
+  quan_ly
+  ksnb
+  bpvh
+  ky_thuat
+  unknown
+}
+
+enum ParticipantHandlingMode {
+  inherit_group
+  process
+  ignore
+  manual_review
+}
+
+enum ParticipantSource {
+  zca_sync
+  manual
+}
+
+enum RuleConfigStatus {
+  draft
+  preview
+  active
+  archived
+}
+
 // ----- Nguon su that (tang 6) -----
 
 model Dealer {
@@ -63,23 +100,47 @@ model Dealer {
 
 /// 1 nhom Zalo -> 1 dai ly. Map theo (platform, chatId) — KHONG theo ten nhom.
 model Group {
-  id         String             @id @default(cuid())
-  platform   String             @default("zalo")
-  chatId     String
-  name       String?
-  branch     String?
-  dealerId   String?
-  dealer     Dealer?            @relation(fields: [dealerId], references: [id])
-  status     GroupMappingStatus @default(pending)
-  source     String? // manual | auto_suggest | import
-  lastSeenAt DateTime?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-  messages   Message[]
-  orders     Order[]
+  id           String             @id @default(cuid())
+  platform     String             @default("zalo")
+  chatId       String
+  name         String?
+  branch       String?
+  dealerId     String?
+  dealer       Dealer?            @relation(fields: [dealerId], references: [id])
+  status       GroupMappingStatus @default(pending)
+  source       String? // manual | auto_suggest | import
+  lastSeenAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  messages     Message[]
+  orders       Order[]
+  participants GroupParticipant[]
 
   @@unique([platform, chatId])
   @@index([status])
+}
+
+model GroupParticipant {
+  id              String                  @id @default(cuid())
+  groupId         String
+  group           Group                   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  externalUserId  String
+  displayName     String
+  zaloName        String?
+  avatarUrl       String?
+  customerRank    CustomerRank            @default(unknown)
+  operationalRole OperationalRole         @default(unknown)
+  handlingMode    ParticipantHandlingMode @default(inherit_group)
+  active          Boolean                 @default(true)
+  source          ParticipantSource       @default(zca_sync)
+  lastSeenAt      DateTime?
+  syncedAt        DateTime
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([groupId, externalUserId])
+  @@index([groupId, active])
+  @@index([externalUserId])
 }
 
 model Product {
@@ -146,38 +207,68 @@ model Message {
 }
 
 model Order {
-  id           String          @id @default(cuid())
-  status       OrderStatus     @default(pending_review)
-  orderType    String? // TH1 | TH2
-  intent       String
-  senderType   String
-  chatId       String
-  groupId      String?
-  group        Group?          @relation(fields: [groupId], references: [id])
-  dealerId     String?
-  dealer       Dealer?         @relation(fields: [dealerId], references: [id])
-  dealerName   String?
-  branch       String?
-  groupName    String?
-  rawText      String
-  imageUrl     String?
-  messageId    String?
-  message      Message?        @relation(fields: [messageId], references: [id])
-  confidence   Json?
-  parsed       Json?
-  priced       Json?
-  trace        Json?
-  grandTotal   Int?
-  kiotVietCode String?
+  id                String          @id @default(cuid())
+  status            OrderStatus     @default(pending_review)
+  orderType         String? // TH1 | TH2
+  intent            String
+  senderType        String
+  chatId            String
+  groupId           String?
+  group             Group?          @relation(fields: [groupId], references: [id])
+  dealerId          String?
+  dealer            Dealer?         @relation(fields: [dealerId], references: [id])
+  dealerName        String?
+  branch            String?
+  groupName         String?
+  rawText           String
+  imageUrl          String?
+  messageId         String?
+  message           Message?        @relation(fields: [messageId], references: [id])
+  confidence        Json?
+  parsed            Json?
+  priced            Json?
+  trace             Json?
+  grandTotal        Int?
+  kiotVietCode      String?
+  ruleConfigVersion Int?
   /// Ban day du OrderView (nguon su that cho repo — round-trip khong mat field long nhau).
-  view         Json?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  items        OrderItem[]
-  feedback     ParseFeedback[]
+  view              Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  items             OrderItem[]
+  feedback          ParseFeedback[]
 
   @@index([status])
   @@index([chatId])
+}
+
+model RuleConfigVersion {
+  id          String           @id @default(cuid())
+  version     Int              @unique @default(autoincrement())
+  status      RuleConfigStatus @default(draft)
+  payload     Json
+  createdBy   String?
+  activatedBy String?
+  createdAt   DateTime         @default(now())
+  activatedAt DateTime?
+
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  requestId  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([actor])
 }
 
 model OrderItem {

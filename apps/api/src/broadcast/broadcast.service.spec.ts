@@ -25,6 +25,30 @@ if (!firstChatId) throw new Error('Seed phải có ít nhất 1 nhóm cho test b
 const NO_THROTTLE = { throttleMs: 0 };
 
 describe('BroadcastService', () => {
+  it('hybrid: cho dry-run nhung khoa gui that de khong doan sai kenh', async () => {
+    const savedMode = process.env.CHANNEL_MODE;
+    const savedToken = process.env.ZALO_BOT_TOKEN;
+    process.env.CHANNEL_MODE = 'hybrid';
+    process.env.ZALO_BOT_TOKEN = 'test-token';
+    try {
+      const mock = new MockAdapter();
+      const svc = new BroadcastService(mock, knowledge);
+
+      await expect(
+        svc.broadcast({ text: 'Sale 10%', dryRun: false }, NO_THROTTLE),
+      ).rejects.toThrow(/hybrid/i);
+      await expect(
+        svc.broadcast({ text: 'Sale 10%', dryRun: true }, NO_THROTTLE),
+      ).resolves.toMatchObject({ dryRun: true, sent: 0 });
+      expect(mock.sent).toHaveLength(0);
+    } finally {
+      if (savedMode === undefined) delete process.env.CHANNEL_MODE;
+      else process.env.CHANNEL_MODE = savedMode;
+      if (savedToken === undefined) delete process.env.ZALO_BOT_TOKEN;
+      else process.env.ZALO_BOT_TOKEN = savedToken;
+    }
+  });
+
   it('dryRun: gan AUTO_LABEL, liet ke tat ca nhom, KHONG goi adapter', async () => {
     const mock = new MockAdapter();
     const svc = new BroadcastService(mock, knowledge);

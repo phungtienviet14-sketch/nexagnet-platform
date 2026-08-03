@@ -124,6 +124,7 @@ services:
       FLOWISE_TIMEOUT_MS: 30000
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       CHANNEL_MODE: ${CHANNEL_MODE:-mock}
+      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
       ZALO_CRED_PATH: /runtime/zalo/zalo-cred.json
       ZALO_ALLOWED_GROUPS_PATH: /runtime/zalo/zalo-allowed-groups.json
       ZALO_OPERATOR_ORIGIN: https://${OPERATOR_DOMAIN}

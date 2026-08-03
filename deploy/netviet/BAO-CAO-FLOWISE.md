@@ -48,7 +48,7 @@ khẩu demo.
 
 | Cấu hình | Giá trị hiện tại | Ý nghĩa |
 |---|---|---|
-| `CHANNEL_MODE` | `zca` | Đọc tin qua tài khoản Zalo cá nhân phụ bằng zca-js |
+| `CHANNEL_MODE` | `hybrid` (lần deploy kế tiếp) | Native @mention → Bot Platform; không tag Bot → tài khoản Zalo cá nhân phụ bằng zca-js |
 | `PARSER_MODE` | `flowise` | NestJS gọi Flowise Prediction API để parse |
 | `PERSISTENCE` | `prisma` | Lưu tin/đơn/nguồn sự thật vào PostgreSQL |
 | `AUTO_SEND` | `off` | AI không tự gửi; Sale duyệt mới gửi |

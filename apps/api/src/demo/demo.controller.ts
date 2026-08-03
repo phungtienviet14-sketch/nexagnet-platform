@@ -3,31 +3,21 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   NotFoundException,
   Param,
   Post,
-  Put,
-  ForbiddenException,
 } from '@nestjs/common';
 import {
   channelMessageSchema,
   loadEnv,
   type DemoConfig,
-  type AutoSendState,
   type DemoGroup,
   type OrderView,
 } from '@ultty/shared';
-import { z } from 'zod';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
-
-const autoSendSchema = z.discriminatedUnion('enabled', [
-  z.object({ enabled: z.literal(true), acknowledged: z.literal(true) }).strict(),
-  z.object({ enabled: z.literal(false) }).strict(),
-]);
 
 const SAMPLE_MESSAGES = [
   '@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT',
@@ -48,8 +38,6 @@ interface SimulateBody {
  */
 @Controller('demo')
 export class DemoController {
-  private readonly env = loadEnv();
-
   constructor(
     private readonly pipeline: PipelineService,
     private readonly knowledge: KnowledgeService,
@@ -77,16 +65,6 @@ export class DemoController {
         ? `${env.ZALO_OPERATOR_ORIGIN.replace(/\/$/, '')}/zalo`
         : undefined,
     };
-  }
-
-  @Put('auto-send')
-  setAutoSend(@Body() body: unknown, @Headers('origin') origin?: string): AutoSendState {
-    this.assertMutationOrigin(origin);
-    const parsed = autoSendSchema.safeParse(body);
-    if (!parsed.success) {
-      throw new BadRequestException('Bat tu gui can xac nhan ro rang; tat tu gui chi can enabled=false');
-    }
-    return this.settings.setAutoSend(parsed.data.enabled);
   }
 
   /** Danh sach nhom da map — web dung lam bo chon nhom khi giả lập tin. */
@@ -138,7 +116,12 @@ export class DemoController {
     const message = channelMessageSchema.parse({
       externalMessageId: `rerun-${id}-${Date.now()}`,
       platform: 'zalo',
-      source: 'copilot_paste',
+      source:
+        existing.replyChannel === 'bot'
+          ? 'bot_webhook'
+          : existing.replyChannel === 'zca'
+            ? 'zca_listener'
+            : 'copilot_paste',
       chatType: 'group',
       externalChatId: existing.chatId,
       text: existing.rawText,
@@ -146,12 +129,5 @@ export class DemoController {
       sentAt: new Date(),
     });
     return this.pipeline.process(message, loadEnv().BOT_NAME, { orderId: id, rerun: true });
-  }
-
-  private assertMutationOrigin(origin?: string): void {
-    if (this.env.NODE_ENV !== 'production') return;
-    if (!origin || origin !== this.env.CORS_ORIGIN) {
-      throw new ForbiddenException('Origin dieu khien demo khong hop le');
-    }
   }
 }

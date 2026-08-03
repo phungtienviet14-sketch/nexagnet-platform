@@ -6,6 +6,7 @@ import type {
   ResourceWithOptions,
 } from 'adminjs';
 import { refreshKnowledge } from './knowledge-refresh.js';
+import { recordSourceTruthAudit } from '../audit/source-truth-audit.js';
 
 /**
  * Cau hinh 6 resource "Nguon su that" cho AdminJS (auto CRUD list/filter/create/edit/delete qua
@@ -19,18 +20,32 @@ type GetModelByName = (name: string, clientModule?: unknown) => object;
 
 const NAV = { name: 'Nguồn sự thật', icon: 'Database' } as const;
 
-/** Sau khi tao/sua/xoa 1 nguon su that -> nap lai snapshot in-memory (pipeline doc tuc thi). */
-const afterWrite = async (response: ActionResponse): Promise<ActionResponse> => {
-  await refreshKnowledge();
-  return response;
-};
-
-/** Hook nap-lai gan cho 3 action ghi mac dinh cua moi resource. */
-const writeHooks = {
-  new: { after: afterWrite },
-  edit: { after: afterWrite },
-  delete: { after: afterWrite },
-};
+function writeHooks(prisma: PrismaClient, entityType: string) {
+  const afterWrite =
+    (action: string) =>
+    async (
+      response: ActionResponse,
+      request: ActionRequest,
+      context: ActionContext,
+    ): Promise<ActionResponse> => {
+      const record = response.record as { id?: string; params?: Record<string, unknown> } | undefined;
+      const admin = context.currentAdmin as { email?: string } | undefined;
+      await recordSourceTruthAudit(prisma, {
+        actor: admin?.email ?? 'adminjs',
+        action: `source_truth.${action}`,
+        entityType,
+        entityId: record?.id ?? null,
+        after: action === 'delete' ? null : (record?.params ?? request.payload ?? null),
+      });
+      await refreshKnowledge();
+      return response;
+    };
+  return {
+    new: { after: afterWrite('create') },
+    edit: { after: afterWrite('update') },
+    delete: { after: afterWrite('delete') },
+  };
+}
 
 export function buildKnowledgeResources(
   prisma: PrismaClient,
@@ -48,7 +63,7 @@ export function buildKnowledgeResources(
         navigation: NAV,
         listProperties: ['code', 'name', 'tier', 'defaultPolicy', 'phone'],
         editProperties: ['code', 'name', 'aliases', 'tier', 'defaultPolicy', 'phone'],
-        actions: { ...writeHooks },
+        actions: { ...writeHooks(prisma, 'Dealer') },
       },
     },
     {
@@ -56,7 +71,7 @@ export function buildKnowledgeResources(
       options: {
         navigation: NAV,
         listProperties: ['sku', 'name', 'unit'],
-        actions: { ...writeHooks },
+        actions: { ...writeHooks(prisma, 'Product') },
       },
     },
     {
@@ -64,7 +79,7 @@ export function buildKnowledgeResources(
       options: {
         navigation: NAV,
         listProperties: ['sku', 'wholesale', 'retailPrice', 'validMonth', 'updatedAt'],
-        actions: { ...writeHooks },
+        actions: { ...writeHooks(prisma, 'Price') },
       },
     },
     {
@@ -72,7 +87,7 @@ export function buildKnowledgeResources(
       options: {
         navigation: NAV,
         listProperties: ['dealerId', 'sku', 'price'],
-        actions: { ...writeHooks },
+        actions: { ...writeHooks(prisma, 'DealerPriceOverride') },
       },
     },
     {
@@ -80,7 +95,7 @@ export function buildKnowledgeResources(
       options: {
         navigation: NAV,
         listProperties: ['term', 'meaning'],
-        actions: { ...writeHooks },
+        actions: { ...writeHooks(prisma, 'GlossaryEntry') },
       },
     },
     {
@@ -91,7 +106,7 @@ export function buildKnowledgeResources(
         filterProperties: ['status', 'platform', 'dealerId', 'branch'],
         sort: { sortBy: 'lastSeenAt', direction: 'desc' },
         actions: {
-          ...writeHooks,
+          ...writeHooks(prisma, 'Group'),
           // Mac dinh mo "hop thu nhom chua map": chua co filter nao -> loc status=pending.
           list: {
             before: async (request: ActionRequest): Promise<ActionRequest> => {
@@ -132,6 +147,13 @@ export function buildKnowledgeResources(
                 };
               }
               await record.update({ dealerId, status: 'mapped' });
+              await recordSourceTruthAudit(prisma, {
+                actor: (currentAdmin as { email?: string } | undefined)?.email ?? 'adminjs',
+                action: 'source_truth.group.map',
+                entityType: 'Group',
+                entityId: String(record.id()),
+                after: { dealerId, status: 'mapped' },
+              });
               await refreshKnowledge();
               return {
                 record: record.toJSON(currentAdmin),
