@@ -114,7 +114,10 @@ export class GroupParticipantsController {
 
   private assertMutationOrigin(origin?: string): void {
     if (this.env.NODE_ENV !== 'production') return;
-    if (!origin || origin !== this.env.CORS_ORIGIN) {
+    // Trang /settings nam tren domain OPERATOR (Caddy chan /settings* o domain demo) nen phai
+    // chap nhan ca hai origin — giong SettingsController, tranh 403 dung luc sua phan loai.
+    const allowed = new Set([this.env.CORS_ORIGIN, this.env.ZALO_OPERATOR_ORIGIN].filter(Boolean));
+    if (!origin || !allowed.has(origin)) {
       throw new ForbiddenException('Origin cau hinh thanh vien khong hop le');
     }
   }

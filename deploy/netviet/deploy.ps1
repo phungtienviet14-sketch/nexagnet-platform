@@ -157,24 +157,28 @@ function New-FlowiseAdminPassword {
   return "Nv1!$(New-RandomSecret)"
 }
 
-function Get-LocalDeepSeekKey {
+function Get-LocalEnvValue {
+  param([Parameter(Mandatory)][string]$Name)
+
+  # Doc gia tri tu .env cuc bo de bootstrap Secret Manager lan dau. Gia tri KHONG bao gio duoc
+  # in ra stdout/log — no di thang vao Invoke-GcloudWithInput (file tam, xoa ngay sau khi ghi).
   $envPath = Join-Path $RepositoryRoot '.env'
   if (-not (Test-Path -LiteralPath $envPath)) {
-    throw 'Secret zalo-ultty-deepseek-api-key has no version and local .env is missing.'
+    throw "Secret for $Name has no version and local .env is missing."
   }
   $line = Get-Content -LiteralPath $envPath |
-    Where-Object { $_ -match '^\s*DEEPSEEK_API_KEY\s*=' } |
+    Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=" } |
     Select-Object -First 1
   if (-not $line) {
-    throw 'Secret zalo-ultty-deepseek-api-key has no version and DEEPSEEK_API_KEY is missing in local .env.'
+    throw "Secret for $Name has no version and $Name is missing in local .env."
   }
-  $value = ($line -replace '^\s*DEEPSEEK_API_KEY\s*=\s*', '').Trim()
+  $value = ($line -replace "^\s*$([regex]::Escape($Name))\s*=\s*", '').Trim()
   if (($value.StartsWith('"') -and $value.EndsWith('"')) -or
       ($value.StartsWith("'") -and $value.EndsWith("'"))) {
     $value = $value.Substring(1, $value.Length - 2)
   }
   if (-not $value) {
-    throw 'DEEPSEEK_API_KEY in local .env is empty.'
+    throw "$Name in local .env is empty."
   }
   return $value
 }
@@ -377,7 +381,9 @@ function Ensure-Secrets {
   Ensure-Secret 'zalo-ultty-postgres-admin-password' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-zalo-db-password' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-flowise-db-password' { New-RandomSecret }
-  Ensure-Secret 'zalo-ultty-deepseek-api-key' { Get-LocalDeepSeekKey }
+  Ensure-Secret 'zalo-ultty-deepseek-api-key' { Get-LocalEnvValue 'DEEPSEEK_API_KEY' }
+  # Co secret nay -> render-secrets.sh render CHANNEL_MODE=hybrid (hai bot cung nhom).
+  Ensure-Secret 'zalo-ultty-zalo-bot-token' { Get-LocalEnvValue 'ZALO_BOT_TOKEN' }
   Ensure-Secret 'zalo-ultty-api-key' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-flowise-secretkey' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-flowise-admin-email' { $OperatorEmail }
@@ -394,6 +400,7 @@ function Ensure-Secrets {
     'zalo-ultty-zalo-db-password',
     'zalo-ultty-flowise-db-password',
     'zalo-ultty-deepseek-api-key',
+    'zalo-ultty-zalo-bot-token',
     'zalo-ultty-api-key',
     'zalo-ultty-flowise-secretkey',
     'zalo-ultty-flowise-admin-email',

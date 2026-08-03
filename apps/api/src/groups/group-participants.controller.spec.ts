@@ -15,6 +15,7 @@ describe('GroupParticipantsController', () => {
     process.env.NODE_ENV = 'production';
     process.env.API_KEY = 'x'.repeat(32);
     process.env.CORS_ORIGIN = 'https://app.example.com';
+    process.env.ZALO_OPERATOR_ORIGIN = 'https://operator.example.com';
     vi.clearAllMocks();
     controller = new GroupParticipantsController(service);
   });
@@ -44,6 +45,26 @@ describe('GroupParticipantsController', () => {
       operationalRole: 'sale',
       handlingMode: 'ignore',
     });
+  });
+
+  // Trang /settings duoc phuc vu tren domain OPERATOR (Caddy chan /settings* o domain demo), nen
+  // origin cua mutation la ZALO_OPERATOR_ORIGIN chu khong phai CORS_ORIGIN.
+  it('accepts a mutation coming from the Zalo operator origin', async () => {
+    await expect(
+      controller.update(
+        'group-1',
+        'participant-1',
+        { customerRank: 'dai_ly' },
+        'https://operator.example.com',
+      ),
+    ).resolves.toEqual({ id: 'participant-1' });
+    await expect(
+      controller.bulkUpdate(
+        'group-1',
+        { participantIds: ['participant-1'], changes: { handlingMode: 'ignore' }, preview: true },
+        'https://operator.example.com',
+      ),
+    ).resolves.toEqual({ participants: [], total: 0 });
   });
 
   it('rejects an empty/unknown update and cross-origin mutation', async () => {
