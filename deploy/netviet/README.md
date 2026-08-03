@@ -42,9 +42,13 @@ Sau khi đăng nhập xong, xóa clipboard:
 Set-Clipboard -Value ''
 ```
 
-Lần deploy kế tiếp dùng PostgreSQL thật, Flowise + DeepSeek thật, `CHANNEL_MODE=hybrid`,
-`PARSER_MODE=flowise`, `AUTO_SEND=off`; chỉ KiotViet là mock. Trước khi deploy phải tạo Secret
-Manager `zalo-ultty-zalo-bot-token` bằng quy trình quản lý secret (không ghi token vào repo/log).
+Deploy dùng PostgreSQL thật, Flowise + DeepSeek thật, `PARSER_MODE=flowise`, `AUTO_SEND=off`;
+chỉ KiotViet là mock. **Kênh Zalo do secret quyết định:** `render-secrets.sh` đọc
+`zalo-ultty-zalo-bot-token` — có token thì render `CHANNEL_MODE=hybrid` (hai bot cùng nhóm),
+chưa có thì render `CHANNEL_MODE=zca` và in cảnh báo, vì `loadEnv` fail-fast nếu hybrid thiếu
+token. Muốn bật hybrid: tạo secret `zalo-ultty-zalo-bot-token` bằng quy trình quản lý secret
+(không ghi token vào repo/log), cấp `roles/secretmanager.secretAccessor` cho service account
+`netviet-vm@…`, rồi deploy lại.
 ZCA không tự tạo QR khi chưa xác nhận rủi ro trên UI. Allowlist bootstrap mặc định rỗng; trạng
 thái test hiện đã chọn **Meta HN** (`2508572440887686813`) và **Thái Nguyên**
 (`3787434804745256898`). Cần nhập thêm Bot Platform `chat.id` tương ứng vào Knowledge và cùng

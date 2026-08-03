@@ -19,11 +19,26 @@ secret() {
   gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1"
 }
 
+# Secret CHUA duoc tao -> tra chuoi rong thay vi lam hong ca lan deploy. Chi dung cho secret
+# that su tuy chon; secret bat buoc van goi secret() de fail fast.
+optional_secret() {
+  gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" 2>/dev/null || true
+}
+
 POSTGRES_ADMIN_PASSWORD="$(secret zalo-ultty-postgres-admin-password)"
 ZALO_DB_PASSWORD="$(secret zalo-ultty-zalo-db-password)"
 FLOWISE_DB_PASSWORD="$(secret zalo-ultty-flowise-db-password)"
 DEEPSEEK_API_KEY="$(secret zalo-ultty-deepseek-api-key)"
-ZALO_BOT_TOKEN="$(secret zalo-ultty-zalo-bot-token)"
+# Bot Platform token la DIEU KIEN de chay hai bot cung nhom. Chua co secret (quyet dinh F1 con
+# treo: ai giu token) -> KHONG doan, KHONG de trong o hybrid vi loadEnv se fail fast; roi ve
+# CHANNEL_MODE=zca dung duong rollback da thiet ke. Tao secret xong, lan deploy sau tu len hybrid.
+ZALO_BOT_TOKEN="$(optional_secret zalo-ultty-zalo-bot-token)"
+if [[ -n "${ZALO_BOT_TOKEN}" ]]; then
+  CHANNEL_MODE='hybrid'
+else
+  CHANNEL_MODE='zca'
+  echo 'render-secrets: thieu secret zalo-ultty-zalo-bot-token -> deploy voi CHANNEL_MODE=zca.' >&2
+fi
 API_KEY=$(secret zalo-ultty-api-key)
 FLOWISE_SECRETKEY="$(secret zalo-ultty-flowise-secretkey)"
 FLOWISE_ADMIN_EMAIL="$(secret zalo-ultty-flowise-admin-email)"
@@ -52,7 +67,7 @@ cat >"${RUNTIME_DIR}/secrets.env" <<EOF
 APP_IMAGE=${APP_IMAGE_VALUE}
 FLOWISE_IMAGE=${FLOWISE_IMAGE_VALUE}
 PARSER_MODE=flowise
-CHANNEL_MODE=hybrid
+CHANNEL_MODE=${CHANNEL_MODE}
 GCP_PROJECT_ID=${PROJECT_ID}
 DEMO_DOMAIN=${DEMO_DOMAIN}
 OPERATOR_DOMAIN=${OPERATOR_DOMAIN}
