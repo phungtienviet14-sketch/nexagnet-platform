@@ -10,7 +10,7 @@
 ## 1. Ảnh chụp nhanh (03/08/2026)
 
 - **Nhánh đang làm:** `feat/phase3-persistence`; nhánh này đã chứa cả persistence và console realtime, không còn việc merge nhánh console riêng.
-- **Demo local chạy được** với 19 SKU + bảng giá tháng 7 + 24 glossary. Source đã có `CHANNEL_MODE=hybrid`: native @mention Bot chính thức → Bot Platform, không tag → zca, phản hồi quay lại đúng kênh nguồn. **Pilot GCP đang chạy bản cũ `CHANNEL_MODE=zca`, chưa redeploy hybrid**, chỉ dùng dữ liệu TEST và chưa dùng PII thật.
+- **Demo local chạy được** với 19 SKU + bảng giá tháng 7 + 24 glossary. Source đã có `CHANNEL_MODE=hybrid`: native @mention Bot chính thức → Bot Platform, không tag → zca, phản hồi quay lại đúng kênh nguồn. **Pilot GCP đã deploy `CHANNEL_MODE=hybrid` ngày 03/08/2026** (secret `zalo-ultty-zalo-bot-token` đã tạo; migration `20260803102000_operator_settings` đã áp trên Postgres production; smoke + persistence + public HTTPS đạt), chỉ dùng dữ liệu TEST và chưa dùng PII thật.
 - **Trang vận hành `/settings` (03/08/2026)** — 6 tab cho người non-technical: trạng thái/đăng xuất kênh Zalo + đồng bộ thành viên nhóm allowlist bằng zca; phân loại từng thành viên (`customerRank` · `operationalRole` · `handlingMode`, mặc định `unknown + inherit_group` nên sync KHÔNG tự đổi hành vi pipeline); CRUD đại lý/SKU/giá/override; rules typed có draft → preview → activate (không cho nhập công thức tự do); công tắc `AUTO_SEND` dùng chung một state với TopBar; lịch sử thay đổi (audit append-only, đã lọc token/PII). **Rank thành viên không đổi đơn giá** — giá vẫn là `DealerPriceOverride > Price.wholesale`.
 - **Lưu trữ:** mặc định in-memory (`PERSISTENCE=memory` → demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma`. **MỌI tin nhắn được lưu vào bảng `messages` ngay khi nhận** (11/07, commit `6d1a539` — trước khi qua pipeline, chống trùng unique, nối `orders.messageId`).
 - **Nguồn sự thật ĐỘNG:** sửa qua panel `/admin` (AdminJS) hoặc MCP tool (8 tool) → ghi Postgres + pipeline nạp lại ngay.
@@ -85,7 +85,7 @@ flowchart LR
 | Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `read-excel-file` — 🔄 11/07 thay `exceljs`) | 🟡 **mẫu gửi khách ĐÃ soạn 13/07** — `docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx` (3 sheet, dropdown khớp enum `Dealer`/`Group`, kèm 3 đại lý + 2 nhóm thật) sinh từ `tools/excel-template/`; **importer** đọc file khách trả về ⬜ chờ A4 |
 | Phase 4 — KiotViet Excel/API + map SKU↔mã số · Base · đổi LLM sang Claude cho dữ liệu thật | ⬜ chờ C1 |
 | Phase 5 — auth theo vai (2 cổng KSNB) + ghi `kpi_events` + feedback loop | ⬜ chờ D5 |
-| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS có auth; Flowise/DeepSeek/Postgres thật, chỉ KiotViet mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. Source hybrid hai Bot đã xong 03/08 nhưng **chưa deploy**; còn tạo Secret Manager cho Bot token, map Bot `chat.id` + zca `threadId` về cùng đại lý, chuyển/kiểm chứng webhook official Bot và chạy E2E ma trận tag/không-tag trước pilot |
+| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS có auth; Flowise/DeepSeek/Postgres thật, chỉ KiotViet mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. Hybrid hai Bot + console `/settings` **đã deploy 03/08** (secret Bot token đã tạo, migration đã áp, smoke đạt); **CI/CD đã có** (`.github/workflows/ci.yml` 5 job gồm Prisma IT + Playwright + audit; `deploy.yml` CD keyless qua Workload Identity Federation — còn đặt 2 repository variable trên GitHub). Còn lại trước pilot: map Bot `chat.id` + zca `threadId` về cùng đại lý, chuyển/kiểm chứng webhook official Bot, chạy E2E ma trận tag/không-tag trên nhóm test |
 | Việc "thật hơn" treo — đọc 6 quy trình gốc chưa phản ánh · mô hình hóa sau `synced` · PWA 5 tab | ⬜ |
 
 ### 3.2 [tinh-nang-dai-han.md](tinh-nang-dai-han.md) — Đợt 1-4 (6 tính năng mới, định hướng)
@@ -167,7 +167,7 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 | **D22** | **Hồ sơ ĐGTĐXLDL + ĐGTĐCDL (Mẫu số 09)** theo Luật 91/2025 + NĐ 356/2025 — 2 điểm chuyển (Singapore + LLM), nộp trong 60 ngày, chế tài tới **5% doanh thu năm liền trước** | Ký hợp đồng khách đầu tiên | ⬜ |
 | **D23** | **Đơn vị kinh tế**: giá bán/khách, biên lợi nhuận, điểm hòa vốn. Hiện chỉ biết hạ tầng ~$44/khách/tháng; chưa có chi phí LLM, nhân sự, onboarding (hàng chục giờ công/khách) | Chốt mô hình kinh doanh | ⬜ |
 | **D24** | **Ai trực + SLA** khi có 5 khách trả tiền (bus factor hiện = 1). Lưu ý: SLA 99.9% ≈ 43 phút/tháng — kiến trúc 1 droplet/1 vùng **không cam kết nổi** | Ký hợp đồng khách đầu tiên | ⬜ |
-| **D25** | **Hai Bot cùng một nhóm:** native @mention Bot Zalo → Bot Platform xử lý/trả lời; không tag → tài khoản zca xử lý/trả lời. Chỉ metadata mention native được tính; nếu không lấy được Bot UID thì zca fail-closed | Kiến trúc kênh hybrid | ✅ user duyệt + code local 03/08; chưa deploy/E2E live |
+| **D25** | **Hai Bot cùng một nhóm:** native @mention Bot Zalo → Bot Platform xử lý/trả lời; không tag → tài khoản zca xử lý/trả lời. Chỉ metadata mention native được tính; nếu không lấy được Bot UID thì zca fail-closed | Kiến trúc kênh hybrid | ✅ user duyệt + code 03/08, **đã deploy pilot 03/08**; còn E2E live trên nhóm test |
 
 ### E — Hạ tầng production (chặn chạy 24/7)
 
@@ -182,7 +182,7 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 
 | # | Cần gì | TT |
 |---|---|---|
-| F1 | Chủ sở hữu bot Zalo + tài khoản Zalo phụ (zca) production — ai giữ token/SIM; tạo secret `zalo-ultty-zalo-bot-token` trước deploy hybrid | ⬜ |
+| F1 | Chủ sở hữu bot Zalo + tài khoản Zalo phụ (zca) production — ai giữ token/SIM | 🟡 secret `zalo-ultty-zalo-bot-token` đã tạo 03/08 (nạp từ `.env` qua `deploy.ps1`) nên hybrid deploy được; **câu hỏi quản trị "ai giữ token/SIM" vẫn chưa chốt** |
 | F2 | Ai add bot/tài khoản phụ vào ~200 nhóm, theo đợt nào (khớp A4) | ⬜ |
 | F3 | Gói Zalo Bot Premium nếu cần (giới hạn nhóm/rate limit — hỏi Zalo) | ⬜ |
 | F4 | Tài khoản + ngân sách LLM API (ai trả, hạn mức/tháng) | ⬜ |
