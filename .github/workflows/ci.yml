@@ -8,23 +8,82 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.34.4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-workspace
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  # Test Prisma bi skip khi thieu DB (RUN_PRISMA_IT chua dat) — job nay dung Postgres that de
+  # chung minh migration + upsert/lifecycle thanh vien nhom, rule config va audit log chay dung.
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ultty
+          POSTGRES_PASSWORD: ultty_local
+          POSTGRES_DB: ultty
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ultty"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ultty:ultty_local@localhost:5432/ultty
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter @ultty/shared build
+      - name: Apply migrations to the throwaway Postgres
+        run: pnpm --filter @ultty/api exec prisma migrate deploy --schema prisma/schema.prisma
+      - name: Run the Prisma-gated suite
+        run: pnpm --filter @ultty/api test
+        env:
+          RUN_PRISMA_IT: '1'
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter @ultty/shared build
+      - run: pnpm --filter @ultty/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @ultty/web test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: apps/web/test-results/
+          retention-days: 7
+
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm audit --audit-level high
+
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
       - run: docker build -f deploy/netviet/Dockerfile -t netviet-zalo:${{ github.sha }} .
       - run: docker build -f deploy/flowise/Dockerfile -t netviet-flowise:${{ github.sha }} .

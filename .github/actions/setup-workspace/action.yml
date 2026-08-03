@@ -1,0 +1,20 @@
+name: Setup workspace
+description: Cai pnpm + Node 22, cai dependency cua workspace va sinh Prisma client.
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.34.4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+    # pnpm 10 chan postinstall cua Prisma (root `onlyBuiltDependencies` chi co @swc/core, esbuild,
+    # sharp) -> phai generate TAY. Thieu buoc nay thi typecheck do hang loat loi
+    # "@prisma/client has no exported member 'PrismaClient'".
+    - run: pnpm --filter @ultty/api exec prisma generate
+      shell: bash

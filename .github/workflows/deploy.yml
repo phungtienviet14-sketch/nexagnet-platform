@@ -1,0 +1,62 @@
+name: deploy
+
+# CD cho pilot `netviet`. Xac thuc GCP bang Workload Identity Federation (keyless) — KHONG luu
+# service account key JSON trong GitHub secrets.
+#
+# Truoc lan chay dau tien, chay `deploy/netviet/setup-github-oidc.sh` roi dat 2 repository
+# variable: GCP_WORKLOAD_IDENTITY_PROVIDER va GCP_DEPLOY_SERVICE_ACCOUNT.
+#
+# Job dung environment `production`: dat required reviewers cho environment do thi moi lan deploy
+# se cho nguoi duyet — dung voi rang buoc D4/D16 (chua duoc tu gui/PII that khi chua co van ban).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-netviet
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 60
+    env:
+      GCP_PROJECT_ID: netviet-host-968934832433
+      GCP_REGION: asia-southeast1
+      GCP_ZONE: asia-southeast1-b
+      VM_NAME: netviet
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build, push and roll out to the pilot VM
+        run: bash deploy/netviet/deploy-ci.sh
+        env:
+          GIT_SHA: ${{ github.sha }}
+
+      - name: Report the public endpoints
+        run: |
+          public_ip="$(gcloud compute addresses describe netviet-public-ip \
+            --region "${GCP_REGION}" --project "${GCP_PROJECT_ID}" --format='value(address)')"
+          label="${public_ip//./-}"
+          {
+            echo "### Deploy xong"
+            echo ""
+            echo "- Demo: https://demo.${label}.sslip.io"
+            echo "- Van hanh Zalo: https://operator.${label}.sslip.io/zalo"
+            echo "- Cau hinh: https://operator.${label}.sslip.io/settings"
+          } >>"${GITHUB_STEP_SUMMARY}"

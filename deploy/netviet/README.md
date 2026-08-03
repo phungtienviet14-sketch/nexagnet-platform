@@ -60,6 +60,30 @@ xác nhận và chỉ áp dụng cho tin mới được Giám sát kết luận 
 về `AUTO_SEND` trong env. Trang Operator có nút đăng xuất: dừng listener, xóa credential cục bộ
 và xóa allowlist, vì vậy lần đăng nhập sau phải quét QR và chọn nhóm lại.
 
+## CI/CD
+
+- **CI** (`.github/workflows/ci.yml`, chạy khi push `main` hoặc mở PR): 5 job song song — `verify`
+  (lint · typecheck · test · build), `integration` (Postgres 16 thật + `prisma migrate deploy` +
+  `RUN_PRISMA_IT=1`), `e2e` (Playwright `/settings`, upload trace khi fail), `audit`
+  (`pnpm audit --audit-level high`), `images` (build 2 Dockerfile). Composite action
+  `.github/actions/setup-workspace` lo pnpm 10.34.4 + Node 22 + `prisma generate` (bắt buộc vì
+  pnpm 10 chặn postinstall của Prisma).
+- **CD** (`.github/workflows/deploy.yml`): build/push image theo digest rồi rollout lên VM qua
+  IAP, dùng `deploy-ci.sh`. Xác thực **keyless** bằng Workload Identity Federation — không lưu
+  service account key JSON trong GitHub.
+
+Thiết lập CD lần đầu:
+
+```bash
+GCP_PROJECT_ID=netviet-host-968934832433 GITHUB_REPOSITORY=phungtienviet14-sketch/ultty-ai-orders bash deploy/netviet/setup-github-oidc.sh
+```
+
+Script in ra hai giá trị; đặt chúng ở **Settings → Secrets and variables → Actions → Variables**:
+`GCP_WORKLOAD_IDENTITY_PROVIDER` và `GCP_DEPLOY_SERVICE_ACCOUNT`. Job deploy gắn environment
+`production` — thêm *required reviewers* cho environment này thì mỗi lần deploy sẽ phải có người
+duyệt, đúng ràng buộc D4/D16. Bootstrap hạ tầng (project, network, VM, secret) vẫn chạy tay bằng
+`deploy.ps1`; CD chỉ lo build → push → rollout.
+
 ## Chạy buổi demo từ PC
 
 Không cần chạy source code hoặc Docker trên PC. Hệ thống đang chạy 24/7 trên VM `netviet`;
