@@ -271,8 +271,10 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     return {
       groupId,
       complete: failedMemberIds.length === 0 && !memberListMissing,
-      // Bao dung con so Zalo noi la co, de UI hien "0/4" thay vi "da dong bo 0 thanh vien".
-      expectedCount: memberListMissing ? totalMember : memberIds.length,
+      // `expectedCount` la so UID DA THU lay, khong phai so Zalo khai bao — schema giu bat bien
+      // members + failedMemberIds === expectedCount. Viec "Zalo noi co 4 ma khong tra ai" the
+      // hien bang complete=false (0 nguoi + chua xong = khong tra danh sach).
+      expectedCount: memberIds.length,
       members,
       failedMemberIds,
     };
