@@ -128,7 +128,8 @@
 .settings-field select,
 .settings-rule-field input,
 .settings-inline-editor select,
-.settings-bulkbar select {
+.settings-bulkbar select,
+.settings-select {
   width: 100%;
   min-height: 38px;
   padding: 0.45rem 0.6rem;
@@ -136,6 +137,16 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   background: var(--surface);
+}
+/* Trong bang thi o chon dai ly khong duoc gian het cot — nhung van du rong de doc ten dai ly. */
+.settings-table .settings-select {
+  width: auto;
+  min-width: min(190px, 34vw);
+  max-width: 100%;
+}
+.settings-table .settings-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .settings-mapping-strip,
 .settings-priority-rule {

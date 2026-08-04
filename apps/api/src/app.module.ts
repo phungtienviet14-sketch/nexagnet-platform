@@ -37,6 +37,7 @@ import { RuntimeSettingsService } from './runtime/runtime-settings.service.js';
 import { GroupParticipantsModule } from './groups/group-participants.module.js';
 import { SettingsController } from './settings/settings.controller.js';
 import { SettingsQueryService } from './settings/settings-query.service.js';
+import { GroupMappingService } from './settings/group-mapping.service.js';
 import { SourceTruthWriteService } from './settings/source-truth-write.service.js';
 import { OperationalSettingsModule } from './settings/operational-settings.module.js';
 
@@ -83,6 +84,7 @@ import { OperationalSettingsModule } from './settings/operational-settings.modul
       inject: [PrismaService],
     },
     SettingsQueryService,
+    GroupMappingService,
     SourceTruthWriteService,
     {
       // Luu MOI tin ngay khi nhan (Phase 3): Postgres khi PERSISTENCE=prisma; memory mac dinh.

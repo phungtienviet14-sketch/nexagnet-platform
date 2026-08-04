@@ -72,6 +72,27 @@ describe('settings response schemas', () => {
       expect.objectContaining({ zcaChatId: 'zca-1', name: 'Đại lý Hà Nội', allowed: true }),
     ]);
   });
+
+  it('nhom thieu status -> mac dinh pending, khong bao gio doan la da map', () => {
+    // Doan "mapped" khi khong biet = UI bao nhom dang len don trong khi that ra chua.
+    const summary = parseSettingsSummary({
+      groups: [{ id: 'zca-1', name: 'Nhom moi', allowed: true }],
+    });
+
+    expect(summary.groups[0]?.status).toBe('pending');
+  });
+
+  it('status hop le thi giu nguyen; gia tri la thi ve pending', () => {
+    const summary = parseSettingsSummary({
+      groups: [
+        { id: 'g-mapped', status: 'mapped' },
+        { id: 'g-ignored', status: 'ignored' },
+        { id: 'g-rac', status: 'khong-hop-le' },
+      ],
+    });
+
+    expect(summary.groups.map((group) => group.status)).toEqual(['mapped', 'ignored', 'pending']);
+  });
 });
 
 describe('participant view model', () => {

@@ -24,10 +24,14 @@ export interface BotIdentitySummary {
   name?: string;
 }
 
+/** `pending` = he thong da thay nhom nhung chua ai chon dai ly -> tin duoc luu, chua qua parser. */
+export type GroupMappingStatus = 'pending' | 'mapped' | 'ignored';
+
 export interface SettingsGroupSummary {
   id: string;
   zcaChatId: string;
   name: string;
+  status: GroupMappingStatus;
   allowed: boolean;
   memberCount: number;
   activeParticipants: number;
@@ -265,6 +269,8 @@ function parseGroupSummary(value: unknown): SettingsGroupSummary | undefined {
     id: stringValue(value.groupId) ?? id,
     zcaChatId: id,
     name: stringValue(value.name) ?? stringValue(value.groupName) ?? `Nhóm ${id}`,
+    // Mac dinh 'pending': khong biet chac thi coi nhu CHUA map, de UI khong hua hen sai.
+    status: enumValue(value.status, ['pending', 'mapped', 'ignored'] as const, 'pending'),
     allowed: booleanValue(value.allowed, false),
     memberCount: numberValue(value.memberCount),
     activeParticipants: numberValue(value.activeParticipants ?? value.activeCount),
@@ -830,6 +836,27 @@ export const settingsApi = {
       resource,
       await requestJson(`/settings/source-truth/${resource}${suffix}`, jsonInit('PUT', body)),
     );
+  },
+  /**
+   * Map nhom -> dai ly bang chatId ma UI dang hien. `name` gui kem de hang DB co ten that
+   * (tin nhan khong mang ten nhom, nen neu khong gui thi DB chi co ID tro trui).
+   */
+  setGroupMapping: async (
+    zcaChatId: string,
+    input: { dealerId: string | null; name?: string },
+  ): Promise<{ chatId: string; dealerId: string | null; status: GroupMappingStatus }> => {
+    const raw = unwrapEnvelope(
+      await requestJson(
+        `/settings/groups/${encodeURIComponent(zcaChatId)}/mapping`,
+        jsonInit('PUT', input),
+      ),
+    );
+    const record = isRecord(raw) ? raw : {};
+    return {
+      chatId: stringValue(record.chatId) ?? zcaChatId,
+      dealerId: stringValue(record.dealerId) ?? null,
+      status: enumValue(record.status, ['pending', 'mapped', 'ignored'] as const, 'pending'),
+    };
   },
   rules: async (): Promise<RuleConfigVersion[]> => parseRules(await requestJson('/settings/rules')),
   createRuleDraft: async (payload: JsonObject): Promise<RuleConfigVersion> => {

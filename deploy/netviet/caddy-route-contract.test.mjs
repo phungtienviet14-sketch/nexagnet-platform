@@ -39,6 +39,7 @@ test('every /settings page path reaches Next.js while only the listed APIs reach
   for (const apiPath of [
     '/settings/summary',
     '/settings/source-truth*',
+    '/settings/groups/*',
     '/settings/rules*',
     '/settings/automation*',
     '/settings/audit*',
@@ -48,6 +49,8 @@ test('every /settings page path reaches Next.js while only the listed APIs reach
       `@api thieu ${apiPath} -> trang /settings goi API se 404`,
     );
   }
+  // `/settings/groups*` (khong co dau / truoc *) se nuot ca duong dan trang bat dau bang chuoi do.
+  assert.doesNotMatch(apiMatcher, /(?:^|\s)\/settings\/groups\*(?:\s|$)/);
   assert.match(apiMatcher, /(?:^|\s)\/groups\/\*(?:\s|$)/);
   assert.match(apiMatcher, /(?:^|\s)\/admin\*(?:\s|$)/);
 });

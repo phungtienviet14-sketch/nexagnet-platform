@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import type { AuditLogService } from '../audit/audit-log.service.js';
 import type { RuleConfigService } from '../rule-config/rule-config.service.js';
+import type { GroupMappingService } from './group-mapping.service.js';
 import type { SettingsQueryService } from './settings-query.service.js';
 import type { SourceTruthWriteService } from './source-truth-write.service.js';
 import { createDefaultRuleConfigPayload } from '../rule-config/rule-config.defaults.js';
@@ -37,13 +38,21 @@ function build() {
     append: vi.fn(async () => undefined),
     list: vi.fn(async () => []),
   } as unknown as AuditLogService;
+  const groupMapping = {
+    setMapping: vi.fn(async () => ({
+      chatId: 'chat-1',
+      dealerId: 'meta-hn',
+      status: 'mapped' as const,
+    })),
+  } as unknown as GroupMappingService;
   return {
-    controller: new SettingsController(query, writes, runtime, rules, audit),
+    controller: new SettingsController(query, writes, runtime, rules, audit, groupMapping),
     query,
     writes,
     runtime,
     rules,
     audit,
+    groupMapping,
   };
 }
 
@@ -175,5 +184,60 @@ describe('SettingsController', () => {
       'operator',
       null,
     );
+  });
+
+  it('map nhom chi can chatId + dealerId, khong doi id cuid', async () => {
+    const { controller, groupMapping } = build();
+
+    await controller.setGroupMapping(
+      '5418371951945064288',
+      { dealerId: 'meta-hn', name: 'Meta HN' },
+      undefined,
+      'chi-phuong',
+      'req-1',
+    );
+
+    expect(groupMapping.setMapping).toHaveBeenCalledWith(
+      '5418371951945064288',
+      { dealerId: 'meta-hn', name: 'Meta HN' },
+      'chi-phuong',
+      'req-1',
+    );
+  });
+
+  it('bo map nhom bang dealerId=null', async () => {
+    const { controller, groupMapping } = build();
+
+    await controller.setGroupMapping('chat-1', { dealerId: null }, undefined, 'operator');
+
+    expect(groupMapping.setMapping).toHaveBeenCalledWith(
+      'chat-1',
+      { dealerId: null },
+      'operator',
+      null,
+    );
+  });
+
+  it('thieu dealerId -> 400, khong cham service', async () => {
+    const { controller, groupMapping } = build();
+
+    expect(() => controller.setGroupMapping('chat-1', {}, undefined, 'operator')).toThrow(
+      BadRequestException,
+    );
+    expect(groupMapping.setMapping).not.toHaveBeenCalled();
+  });
+
+  it('truong la trong body -> 400 (strict schema, khong ghi bua vao Group)', async () => {
+    const { controller, groupMapping } = build();
+
+    expect(() =>
+      controller.setGroupMapping(
+        'chat-1',
+        { dealerId: 'meta-hn', status: 'mapped' },
+        undefined,
+        'operator',
+      ),
+    ).toThrow(BadRequestException);
+    expect(groupMapping.setMapping).not.toHaveBeenCalled();
   });
 });
