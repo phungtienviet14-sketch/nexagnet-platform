@@ -240,9 +240,17 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    IN3["Tin vào (zca / bot / dán tay / demo)"] --> DEDUP{"Trùng externalMessageId?"}
-    DEDUP -->|có| DROP["Bỏ qua (idempotent)"]
-    DEDUP -->|không| RESOLVE["Map chatId → đại lý · chi nhánh · loại người gửi<br/>(nhóm lạ → unknown)"]
+    IN3["Tin vào (zca / bot / dán tay / demo)"] --> ALLOW{"Nhóm trong allowlist?<br/>(hybrid: áp cho CẢ hai kênh)"}
+    ALLOW -->|không| DROP0["Không đọc, không lưu"]
+    ALLOW -->|có| IGN{"Người gửi để handlingMode=ignore?"}
+    IGN -->|có| DROP1["ignored — người vận hành chủ động loại"]
+    IGN -->|không| SAVE["LƯU TIN VÀO DB — luôn luôn<br/>(Zalo không phát lại; mất là mất hẳn)"]
+    SAVE --> DEDUP{"Trùng externalMessageId?"}
+    DEDUP -->|có| DROP["duplicate — bỏ qua (idempotent)"]
+    DEDUP -->|không| DISC["Ghi nhận nhóm (pending/auto_suggest)<br/>+ ghi nhận NGƯỜI GỬI vào danh sách thành viên<br/>(nguồn message_stream — chạy cả khi chưa map)"]
+    DISC --> MAPPED{"Nhóm đã map đại lý?<br/>(fail-closed nếu không xác minh được)"}
+    MAPPED -->|chưa| STORED["stored_only — tin ĐÃ nằm trong DB,<br/>KHÔNG đưa nội dung sang parser/LLM"]
+    MAPPED -->|rồi| RESOLVE["Map chatId → đại lý · chi nhánh · loại người gửi"]
     RESOLVE --> ROUTER["Điều phối (Router) — parse 1 lần:<br/>mock = regex tất định, 0 LLM<br/>deepseek/claude = gọi trực tiếp<br/>flowise = Agentflow structured output"]
     ROUTER --> ISORDER{"intent = dat_don<br/>kèm order thô?"}
     ISORDER -->|có| PRICE3["Bán hàng → rules engine tất định:<br/>map SKU (alias, không dấu) · giá sỉ/deal riêng<br/>ship · VAT · COD · format xác nhận TH1/TH2"]
@@ -258,7 +266,13 @@ flowchart TD
 
     style NE3 fill:#fff3cd,stroke:#997404
     style AUTO3 fill:#cfe2ff,stroke:#084298
+    style SAVE fill:#d1e7dd,stroke:#0f5132
+    style STORED fill:#fff3cd,stroke:#997404
 ```
+
+**Thứ tự hai cổng lọc là có chủ ý (sửa 04/08/2026).** Trước đó cả hai listener chặn ngay từ đầu bằng điều kiện "nhóm đã map", nên tin của nhóm chưa map **không bao giờ được lưu** — mà Zalo không phát lại, tức mất hẳn. Nay tách rõ: **allowlist** là sự đồng ý *đọc* nhóm (điều kiện để lưu), còn **đã map đại lý** chỉ là điều kiện để đưa *nội dung* sang parser/LLM. Nhóm chưa map vẫn giữ trọn tin trong DB và vẫn góp người gửi vào danh sách thành viên; chọn đại lý ở `/settings` là chạy tiếp ngay.
+
+`intake()` trả kết quả **có nhãn** (`processed` · `stored_only` · `duplicate` · `ignored`) dạng union phân biệt — trước đây mọi trường hợp bỏ qua đều trả `null` giống hệt lỗi thật, nên listener gọi `guard.release()` cho cả hai và tin bỏ-qua-có-chủ-ý bị xếp lịch chạy lại.
 
 Lưới an toàn: tin thô được giữ trong PostgreSQL; timeout/401/404/429/5xx/schema sai làm lượt xử lý thất bại, ingest thử tối đa **3 lượt** rồi để vận hành chạy lại — không âm thầm đổi sang MockParser. Tiền dạng chuỗi ("11tr5", "1.150k") được ép về số trước khi validate (Phụ lục B).
 
@@ -409,7 +423,9 @@ erDiagram
     GROUPS {
         string platform "zalo"
         string chat_id "map nhóm theo ID, KHÔNG theo tên"
-        string status "pending | mapped | ignored (hộp thư nhóm chưa map)"
+        string status "pending | mapped | ignored (pending = tin vẫn lưu, chưa lên đơn)"
+        string source "auto_suggest (tự thấy) | manual (người chọn) | import"
+        datetime last_seen_at "lần cuối có tin — do GroupDiscoveryService ghi"
     }
     MESSAGES {
         string source "copilot_paste | bot_webhook | zca_listener"
@@ -437,7 +453,7 @@ erDiagram
         string operational_role "khach_hang | sale | ke_toan | quan_ly | ksnb | bpvh | ky_thuat | unknown"
         string handling_mode "inherit_group | process | ignore | manual_review"
         bool active "false khi vắng mặt trong lần sync ĐẦY ĐỦ gần nhất"
-        string source "zca_sync | manual"
+        string source "zca_sync | manual | message_stream"
     }
     RULE_CONFIG_VERSIONS {
         int version "tăng dần"
@@ -613,6 +629,19 @@ Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ k
 | 1. Bot vào được nhóm cá nhân có sẵn? | ✅ **CÓ** — "Thêm thành viên" tìm tên bot, hoặc link mời của bot (hữu ích onboard 200 nhóm) |
 | 2. Nhận mọi tin hay chỉ @mention? | ⚠️ **CHỈ @mention** — 6/6 test nhất quán: text/ảnh/thoại KHÔNG tag đều không về; tin CÓ tag về **trọn nội dung**, **kể cả ẢNH** (event `message.image.received` kèm `photo_url` tải được + `caption`) |
 | 3. Giới hạn nhóm / rate limit? | ⬜ chưa test (mới 1 nhóm) |
+| 4. Có API danh sách thành viên nhóm không? *(dò 04/08/2026)* | ❌ **KHÔNG CÓ** — xem dưới |
+
+**Dò API thành viên bằng token thật (04/08/2026), trên 2 nhóm thật:**
+
+```
+getMe                  => ok:true  {"account_type":"BASIC","can_join_groups":true}
+getChat                => 404 Not Found
+getChatMemberCount     => 404 Not Found
+getChatMembersCount    => 404 Not Found
+getChatAdministrators  => 404 Not Found
+```
+
+`getMe` trả 200 trên **cùng dạng đường dẫn** ⇒ 404 nghĩa là **method không tồn tại**, không phải thiếu quyền hay sai chat_id. Kết luận: Bot Platform **không cấp danh sách thành viên** ở gói BASIC. Cộng với việc `getGroupInfo` của zca trả mảng rỗng, **luồng tin là nguồn duy nhất còn lại** để dựng danh sách thành viên — xem `ParticipantSource.message_stream` (§12) và [docs/ke-hoach/tong-quan.md](ke-hoach/tong-quan.md).
 
 **Kết luận câu hỏi “tin không tag có về server Bot không?”: KHÔNG.** PoC không thấy 6/6 tin text/ảnh/thoại không tag ở cả `getUpdates`/server nhận Bot; chỉ tin có native @mention mới phát event. Mention-gating là hành vi GỐC của Zalo (Beta), không tắt được — đã loại trừ khả năng cấu hình sai: docs OpenClaw ghi rõ "Groups require an @mention... not configurable"; docs webhook Zalo không có setting privacy/mention nào; `getMe` không có cờ `can_read_all_group_messages`; phía mình sạch (webhook 404, token ok, poller nhận đúng khi có tag).
 
