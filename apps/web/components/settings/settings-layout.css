@@ -425,6 +425,16 @@
 .settings-state--error .settings-state__mark {
   border-color: var(--danger);
 }
+/* Vien LIEN (khong dashed) de xac nhan thanh cong doc ra khac han cac o trong/dang tai. */
+.settings-state--success {
+  color: var(--ok);
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--ok) 42%, var(--line));
+  background: var(--ok-soft);
+}
+.settings-state--success .settings-state__mark {
+  border-color: var(--ok);
+}
 .settings-state p {
   color: inherit;
   opacity: 0.78;

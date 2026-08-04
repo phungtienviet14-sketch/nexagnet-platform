@@ -13,6 +13,8 @@
 - [ ] Mở sẵn 2 tab: `https://demo.35-187-235-82.sslip.io` và `https://operator.35-187-235-82.sslip.io/zalo`.
       Cả hai vào thẳng, không hỏi mật khẩu.
 - [ ] **Không mở** tab Flowise và trang `/admin` trước mặt khách — đó là bếp, không phải món ăn.
+- [ ] Từ 04/08/2026 vào trang cấu hình bằng nút **⚙ Cấu hình** ở góc phải thanh trên, không cần gõ
+      URL. Cả hai hostname (demo và operator) đều mở được — trước đó demo trả 404.
 - [ ] Tắt thông báo Zalo/Outlook/Teams trên máy.
 - [ ] Copy sẵn 2 tin nhắn mẫu ở mục 3 và 4 vào Notepad.
 - [ ] Kiểm tra nhanh: cả hai trang mở được và hiện dữ liệu.

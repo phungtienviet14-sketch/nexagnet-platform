@@ -161,11 +161,19 @@ export function ParticipantsSettings({ groups }: Props) {
   const [bulkMode, setBulkMode] = useState<HandlingMode>('manual_review');
   const effectiveGroupId = selectedGroupId || groups[0]?.id || '';
   const selectedGroup = groups.find((group) => group.id === effectiveGroupId);
-  const allFilters: ParticipantFilters = { ...INITIAL_FILTERS };
+  // Loc CO CAU TRUC gui thang len API (endpoint da ho tro san, truoc day bi bo khong).
+  // Rieng o tim kiem giu o client de khong ban mot request moi ky tu go.
+  const serverFilters: ParticipantFilters = { ...filters, search: '' };
 
   const participantsQuery = useQuery({
-    queryKey: ['settings-participants', effectiveGroupId],
-    queryFn: () => settingsApi.listParticipants(effectiveGroupId, allFilters),
+    queryKey: [
+      'settings-participants',
+      effectiveGroupId,
+      filters.customerRank,
+      filters.operationalRole,
+      filters.handlingMode,
+    ],
+    queryFn: () => settingsApi.listParticipants(effectiveGroupId, serverFilters),
     enabled: Boolean(effectiveGroupId),
   });
   const visibleParticipants = filterParticipants(
@@ -173,10 +181,18 @@ export function ParticipantsSettings({ groups }: Props) {
     filters,
   );
 
+  const [savedNotice, setSavedNotice] = useState<string>();
   const updateMutation = useMutation({
     mutationFn: ({ participantId, patch }: { participantId: string; patch: ParticipantPatch }) =>
       settingsApi.updateParticipant(effectiveGroupId, participantId, patch),
-    onSuccess: () => {
+    onSuccess: (participant) => {
+      const handling = HANDLING_OPTIONS.find(
+        (option) => option.value === participant.handlingMode,
+      )?.label;
+      const rank = RANK_OPTIONS.find(
+        (option) => option.value === participant.customerRank,
+      )?.label;
+      setSavedNotice(`${participant.displayName} · ${rank} · ${handling}`);
       setEditingId(undefined);
       void queryClient.invalidateQueries({ queryKey: ['settings-participants', effectiveGroupId] });
     },
@@ -188,7 +204,11 @@ export function ParticipantsSettings({ groups }: Props) {
   const bulkMutation = useMutation({
     mutationFn: (request: ParticipantBulkRequest) =>
       settingsApi.bulkUpdateParticipants(effectiveGroupId, request),
-    onSuccess: () => {
+    onSuccess: (_list, request) => {
+      const handling = HANDLING_OPTIONS.find(
+        (option) => option.value === request.patch.handlingMode,
+      )?.label;
+      setSavedNotice(`${request.participantIds.length} thành viên → ${handling}`);
       setSelectedIds(new Set());
       previewMutation.reset();
       void queryClient.invalidateQueries({ queryKey: ['settings-participants', effectiveGroupId] });
@@ -237,6 +257,7 @@ export function ParticipantsSettings({ groups }: Props) {
               setSelectedIds(new Set());
               previewMutation.reset();
               setEditingId(undefined);
+              setSavedNotice(undefined);
             }}
           >
             {groups.map((group) => (
@@ -368,6 +389,13 @@ export function ParticipantsSettings({ groups }: Props) {
           tone="error"
           title="Chưa lưu được phân loại"
           detail={actionError.message}
+        />
+      )}
+      {savedNotice && !updateMutation.isPending && !bulkMutation.isPending && (
+        <SettingsPanelState
+          tone="success"
+          title="Đã lưu phân loại vào hệ thống"
+          detail={`${savedNotice}. Áp dụng cho tin nhắn nhận từ bây giờ; đơn giá vẫn theo đại lý đang map với nhóm.`}
         />
       )}
       {participantsQuery.isLoading && (

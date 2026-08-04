@@ -35,7 +35,13 @@ export function SettingsShell() {
       code: 'ZA',
       label: 'Kênh Zalo',
       description: 'Kết nối, allowlist, đồng bộ',
-      panel: <ZaloSettings summary={summary} onRefresh={() => summaryQuery.refetch()} />,
+      panel: (
+        <ZaloSettings
+          summary={summary}
+          onRefresh={() => summaryQuery.refetch()}
+          onOpenMembers={() => setActiveTab('members')}
+        />
+      ),
     },
     {
       id: 'members',
@@ -49,7 +55,7 @@ export function SettingsShell() {
       code: 'GI',
       label: 'Đại lý & giá',
       description: 'SKU, bốn cột giá, deal riêng',
-      panel: <SourceTruthSettings />,
+      panel: <SourceTruthSettings adminUiEnabled={summary.adminUi === 'on'} />,
     },
     {
       id: 'rules',

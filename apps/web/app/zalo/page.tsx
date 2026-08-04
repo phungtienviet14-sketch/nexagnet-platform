@@ -57,6 +57,9 @@ export default function ZaloLoginPage() {
     setSelectedGroups((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
+    // Doi lua chon thi bao "da luu" cu khong con dung nua -> xoa ngay, tranh nguoi van hanh
+    // tuong thay doi vua roi da duoc ghi.
+    saveMutation.reset();
   };
   const error =
     statusQuery.error ?? loginMutation.error ?? groupsQuery.error ?? saveMutation.error ?? logoutMutation.error;
@@ -73,7 +76,10 @@ export default function ZaloLoginPage() {
 
   return (
     <main className="zalo-operator">
-      <a className="operator-back" href="/">← Trung tâm điều hành</a>
+      <nav className="operator-nav" aria-label="Điều hướng trang vận hành">
+        <a className="operator-back" href="/">← Trung tâm điều hành</a>
+        <a className="operator-back" href="/settings">Cấu hình vận hành →</a>
+      </nav>
       <section className="operator-card">
         <p className="operator-kicker">Kênh nhận tin thật</p>
         <h1>Kết nối tài khoản Zalo</h1>
@@ -196,6 +202,25 @@ export default function ZaloLoginPage() {
               {saveMutation.isPending ? 'Đang lưu…' : 'Lưu và bắt đầu nhận tin'}
             </button>
           </div>
+
+          {saveMutation.isSuccess && !saveMutation.isPending && (
+            <div className="success-banner" role="status" aria-live="polite">
+              <span aria-hidden="true">✓</span>
+              <span>
+                <b>
+                  Đã ghi nhận cấu hình · {saveMutation.data.allowedGroupIds.length} nhóm đang được
+                  nghe
+                </b>
+                <small>
+                  Hệ thống chỉ đọc tin của {saveMutation.data.allowedGroupIds.length} nhóm này; các
+                  nhóm khác bị bỏ trước khi lưu và trước khi gọi AI.
+                </small>
+                <a className="success-banner__next" href="/settings">
+                  Bước tiếp theo: đồng bộ và phân loại thành viên →
+                </a>
+              </span>
+            </div>
+          )}
         </section>
       )}
     </main>

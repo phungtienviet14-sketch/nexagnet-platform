@@ -30,6 +30,9 @@ export class SettingsQueryService {
     return {
       availability: 'available',
       channelMode: env.CHANNEL_MODE,
+      // UI phai biet AdminJS co bat khong: khi ADMIN_UI=off thi /admin tra 404, ma trang
+      // Nguon su that lai dang chia nut "Mo Admin nang cao" -> bam ra trang loi giua buoi demo.
+      adminUi: env.ADMIN_UI,
       zca: zcaStatus,
       zcaState: zcaStatus.state,
       botIdentity: this.botIdentity.status(),

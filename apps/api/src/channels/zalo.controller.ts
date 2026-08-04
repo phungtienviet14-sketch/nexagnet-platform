@@ -130,7 +130,13 @@ export class ZaloController {
       throw new ServiceUnavailableException('Kho luu thanh vien nhom chua duoc cau hinh');
     }
     try {
-      const snapshot = await this.client.fetchGroupMembers(parsedParams.data.groupId);
+      // Bot Platform la cong cu cua he thong, khong phai nguoi can phan loai -> khong dua vao
+      // danh sach thanh vien. Tai khoan zca cua chinh minh do ZaloUserClient tu loai.
+      const botExternalId = this.botIdentity.status().id;
+      const snapshot = await this.client.fetchGroupMembers(
+        parsedParams.data.groupId,
+        botExternalId ? [botExternalId] : [],
+      );
       return await this.participants.synchronize(snapshot);
     } catch (error) {
       if (error instanceof ZaloGroupNotAllowedError) {
