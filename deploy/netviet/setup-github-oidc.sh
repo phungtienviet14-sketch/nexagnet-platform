@@ -67,6 +67,23 @@ for role in \
     --quiet >/dev/null
 done
 
+# `gcloud compute ssh` KHONG chi can osAdminLogin: no con doi quyen actAs tren service account
+# ma VM dang chay, neu khong thi PERMISSION_DENIED ngay truoc khi mo tunnel IAP. Binding nay o
+# pham vi DUNG MOT service account cua VM, khong phai quyen toan project.
+vm_service_account="$(gcloud compute instances describe netviet \
+  --zone "${ZONE:-asia-southeast1-b}" \
+  --project "${PROJECT_ID}" \
+  --format='value(serviceAccounts[0].email)' 2>/dev/null || true)"
+if [[ -n "${vm_service_account}" ]]; then
+  gcloud iam service-accounts add-iam-policy-binding "${vm_service_account}" \
+    --member "serviceAccount:${SERVICE_ACCOUNT}" \
+    --role roles/iam.serviceAccountUser \
+    --project "${PROJECT_ID}" \
+    --quiet >/dev/null
+else
+  echo 'setup-github-oidc: chua thay VM netviet -> bo qua binding actAs; chay lai sau khi deploy.ps1 tao VM.' >&2
+fi
+
 pool_resource="projects/${project_number}/locations/global/workloadIdentityPools/${POOL}"
 gcloud iam service-accounts add-iam-policy-binding "${SERVICE_ACCOUNT}" \
   --role roles/iam.workloadIdentityUser \
