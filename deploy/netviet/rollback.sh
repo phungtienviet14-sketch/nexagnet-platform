@@ -41,6 +41,14 @@ chmod 0600 "${next_env}"
 mv -f -- "${next_env}" "${ENV_FILE}"
 trap - EXIT
 
+# Cung khoa voi deploy-stack.sh/health-check.sh — rollback cung recreate container nen dinh dung
+# race "removal of container ... is already in progress" neu timer tu-chua chen vao.
+exec 9>".runtime/compose.lock"
+if ! flock -w 300 9; then
+  echo "Khong lay duoc khoa compose sau 300s — co tien trinh compose khac dang chay." >&2
+  exit 1
+fi
+
 COMPOSE=(docker compose --env-file "${ENV_FILE}" -f compose.yaml)
 "${COMPOSE[@]}" pull api web
 "${COMPOSE[@]}" up -d api web gateway

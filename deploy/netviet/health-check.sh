@@ -4,6 +4,15 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-ultty}"
 cd "${APP_DIR}"
 
+# Cung khoa voi deploy-stack.sh. Dang deploy thi BO QUA nhip nay: container len xuong la co chu y,
+# bao loi luc do chi la nhieu — va quan trong hon, chay `compose up` chen vao giua deploy lam
+# deploy chet ("removal of container ... is already in progress", su co 04/08/2026).
+exec 9>"${APP_DIR}/.runtime/compose.lock"
+if ! flock -n 9; then
+  echo "NETVIET_HEALTH_SKIP dang co tien trinh compose khac (deploy/rollback) chay" >&2
+  exit 0
+fi
+
 COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml)
 failure=""
 STATE_FILE="${APP_DIR}/.runtime/health-restarts"
@@ -21,7 +30,7 @@ next_state="$(mktemp "${APP_DIR}/.runtime/health-restarts.XXXXXX")"
 trap 'rm -f -- "${next_state}"' EXIT
 
 # TU KHOI PHUC truoc khi bao loi: service nao khong con container hoac dang stop thi dua len lai.
-# `--no-recreate` khong dung toi container dang chay -> chay trung luc deploy cung khong pha.
+# An toan vi da giu khoa compose o tren (khong con chay chong len deploy).
 # Van GHI LOG moi lan phai chua de khong che giau su co lap di lap lai.
 healed=""
 for service in postgres flowise api web gateway; do

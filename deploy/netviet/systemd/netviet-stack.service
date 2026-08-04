@@ -10,8 +10,10 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/srv/netviet/apps/zalo-ultty
-# --no-recreate: khong dung toi container dang chay -> an toan khi trung voi luc deploy.
-ExecStart=/usr/bin/docker compose --env-file .runtime/secrets.env -f compose.yaml up -d --no-recreate
+# Cung khoa voi deploy-stack.sh va health-check.sh: hai tien trinh `docker compose up` chay
+# chong nhau lam deploy chet ("removal of container ... is already in progress", 04/08/2026).
+# `--no-recreate` mot minh KHONG du de tranh dung nhau. Boot thi doi duoc, nen dung -w 300.
+ExecStart=/usr/bin/flock -w 300 /srv/netviet/apps/zalo-ultty/.runtime/compose.lock /usr/bin/docker compose --env-file .runtime/secrets.env -f compose.yaml up -d --no-recreate
 User=root
 
 [Install]
