@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { settingsApi, type SettingsSummary } from '../../lib/settings';
+import { settingsApi, type MemberSyncResult, type SettingsSummary } from '../../lib/settings';
 import { formatSettingsDate } from './settings-format';
 import { SettingsPanelState } from './SettingsPanelState';
 
@@ -21,6 +21,28 @@ const STATE_LABELS: Readonly<Record<string, string>> = {
   error: 'Có lỗi',
   unknown: 'Chưa rõ',
 };
+
+/**
+ * Ba ket qua dong bo khac han nhau, khong duoc gop lam mot:
+ *  - day du            -> da ghi nhan, moi sang phan loai;
+ *  - Zalo khong tra ai  -> KHONG phai "nhom rong", la loi doc du lieu (04/08/2026 gap that);
+ *  - thieu mot phan     -> lay duoc mot so, so con lai chua co ho so.
+ */
+function syncMemberTitle(result: MemberSyncResult): string {
+  if (result.complete) return `Đã đồng bộ ${result.upsertedCount} thành viên`;
+  if (result.fetchedCount === 0) return 'Zalo không trả về danh sách thành viên';
+  return `Đồng bộ một phần: ${result.fetchedCount}/${result.expectedCount} thành viên`;
+}
+
+function syncMemberDetail(result: MemberSyncResult): string {
+  if (result.complete) {
+    return `Ghi nhận lúc ${formatSettingsDate(result.syncedAt)}. ${result.deactivatedCount} người rời nhóm được đánh dấu không hoạt động, không ai bị xóa. Thành viên mới mặc định “Theo mặc định nhóm” — phân loại rồi mới đổi cách xử lý.`;
+  }
+  if (result.fetchedCount === 0) {
+    return 'Tài khoản Zalo phụ nhìn thấy nhóm nhưng không đọc được danh sách thành viên. Chưa có ai bị thay đổi — phân loại đã lưu vẫn nguyên. Thử: mở nhóm đó trên Zalo bằng tài khoản phụ một lần rồi bấm Đồng bộ lại; nếu vẫn vậy thì tài khoản này chưa đủ quyền xem thành viên.';
+  }
+  return `Còn ${result.failedCount} thành viên chưa lấy được hồ sơ. Hệ thống KHÔNG đánh dấu ai không hoạt động trong lần đồng bộ thiếu này; bấm “Đồng bộ” lại sau ít phút.`;
+}
 
 export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
   const queryClient = useQueryClient();
@@ -89,25 +111,19 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
           bam xong khong biet co chay khong. Gio hien so + loi mo thang sang tab thanh vien. */}
       {syncMutation.isSuccess && !syncMutation.isPending && (
         <SettingsPanelState
-          tone="success"
-          title={
-            syncMutation.data.complete
-              ? `Đã đồng bộ ${syncMutation.data.upsertedCount} thành viên`
-              : `Đồng bộ một phần: ${syncMutation.data.fetchedCount}/${syncMutation.data.expectedCount} thành viên`
-          }
-          detail={
-            syncMutation.data.complete
-              ? `Ghi nhận lúc ${formatSettingsDate(syncMutation.data.syncedAt)}. ${syncMutation.data.deactivatedCount} người rời nhóm được đánh dấu không hoạt động, không ai bị xóa. Thành viên mới mặc định “Theo mặc định nhóm” — phân loại rồi mới đổi cách xử lý.`
-              : `Còn ${syncMutation.data.failedCount} thành viên chưa lấy được hồ sơ. Hệ thống KHÔNG đánh dấu ai không hoạt động trong lần đồng bộ thiếu này; bấm “Đồng bộ” lại sau ít phút.`
-          }
+          tone={syncMutation.data.complete ? 'success' : 'error'}
+          title={syncMemberTitle(syncMutation.data)}
+          detail={syncMemberDetail(syncMutation.data)}
           action={
-            <button
-              type="button"
-              className="settings-button settings-button--primary"
-              onClick={onOpenMembers}
-            >
-              Xem &amp; phân loại thành viên
-            </button>
+            syncMutation.data.upsertedCount > 0 ? (
+              <button
+                type="button"
+                className="settings-button settings-button--primary"
+                onClick={onOpenMembers}
+              >
+                Xem &amp; phân loại thành viên
+              </button>
+            ) : undefined
           }
         />
       )}

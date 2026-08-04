@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { groupParticipantSyncSnapshotSchema } from '@ultty/shared';
 import { LoginQRCallbackEventType, ThreadType, type API, type LoginQRCallback } from 'zca-js';
 import { isCredentials, normalizeAllowedGroupIds } from './zalo-user.client.js';
 
@@ -340,8 +341,12 @@ describe('ZaloUserClient runtime', () => {
     const result = await client.fetchGroupMembers('group-1');
 
     expect(result.complete).toBe(false);
-    expect(result.expectedCount).toBe(4);
+    // Bat bien cua schema: members + failedMemberIds === expectedCount. Khong duoc nhet so
+    // totalMember cua Zalo vao day, nhu vay snapshot se truot Zod va endpoint tra 500.
+    expect(result.expectedCount).toBe(0);
     expect(result.members).toEqual([]);
+    expect(result.failedMemberIds).toEqual([]);
+    expect(() => groupParticipantSyncSnapshotSchema.parse(result)).not.toThrow();
   });
 
   it('nhom that su rong (totalMember = so tai khoan he thong) van la dong bo day du', async () => {
