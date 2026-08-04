@@ -8,11 +8,9 @@ const compose = await readFile(new URL('./compose.yaml', import.meta.url), 'utf8
 
 test('operator page /zalo goes to Next.js while /zalo/* stays on the API', () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
-  const demoBlockMatcher = caddyfile.match(/\{\$DEMO_DOMAIN\}[\s\S]*?@blocked path ([^\r\n]+)/)?.[1] ?? '';
 
   assert.match(apiMatcher, /(?:^|\s)\/zalo\/\*(?:\s|$)/);
   assert.doesNotMatch(apiMatcher, /(?:^|\s)\/zalo\*(?:\s|$)/);
-  assert.match(demoBlockMatcher, /(?:^|\s)\/zalo\*(?:\s|$)/);
 });
 
 // Quyet dinh van hanh 04/08/2026: VM la moi truong dev/demo, TAT HET xac thuc de he thong luon
@@ -31,25 +29,43 @@ test('dev/demo VM serves both hostnames without any authentication', () => {
   assert.match(compose, /AUTH_MODE:\s*\$\{AUTH_MODE:-none\}/);
 });
 
-test('settings UI stays on Next.js while settings, participants and AdminJS APIs reach NestJS', () => {
+// `/settings/*` cu nuot ca `/settings/` (dau / cuoi) va day sang NestJS -> 404 giua buoi demo.
+// Nay tach tung endpoint API, con MOI duong dan trang deu roi xuong Next.js.
+test('every /settings page path reaches Next.js while only the listed APIs reach NestJS', () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
-  const demoBlockMatcher = caddyfile.match(/\{\$DEMO_DOMAIN\}[\s\S]*?@blocked path ([^\r\n]+)/)?.[1] ?? '';
 
-  assert.match(apiMatcher, /(?:^|\s)\/settings\/\*(?:\s|$)/);
   assert.doesNotMatch(apiMatcher, /(?:^|\s)\/settings\*(?:\s|$)/);
+  assert.doesNotMatch(apiMatcher, /(?:^|\s)\/settings\/\*(?:\s|$)/);
+  for (const apiPath of [
+    '/settings/summary',
+    '/settings/source-truth*',
+    '/settings/rules*',
+    '/settings/automation*',
+    '/settings/audit*',
+  ]) {
+    assert.ok(
+      apiMatcher.split(/\s+/).includes(apiPath),
+      `@api thieu ${apiPath} -> trang /settings goi API se 404`,
+    );
+  }
   assert.match(apiMatcher, /(?:^|\s)\/groups\/\*(?:\s|$)/);
   assert.match(apiMatcher, /(?:^|\s)\/admin\*(?:\s|$)/);
-  assert.match(demoBlockMatcher, /(?:^|\s)\/settings\*(?:\s|$)/);
-  assert.match(demoBlockMatcher, /(?:^|\s)\/groups\*(?:\s|$)/);
-  assert.match(demoBlockMatcher, /(?:^|\s)\/admin\*(?:\s|$)/);
 });
 
-test('AUTO_SEND has a single mutation surface behind the blocked settings prefix', () => {
-  const demoBlockMatcher = caddyfile.match(/\{\$DEMO_DOMAIN\}[\s\S]*?@blocked path ([^\r\n]+)/)?.[1] ?? '';
+// Quyet dinh 04/08/2026 (dot 2): hostname demo va operator hanh xu GIONG NHAU. Truoc do demo tra
+// 404 cho /settings* nen nguoi van hanh tuong trang cau hinh chua ton tai.
+test('the demo hostname no longer 404s the operator surface', () => {
+  const demoBlock = caddyfile.match(/\{\$DEMO_DOMAIN\}[\s\S]*?\n\}/)?.[0] ?? '';
 
-  // Cong tac AUTO_SEND nay chi con o PUT /settings/automation/auto-send (co audit) — nam trong
-  // tien to /settings* da bi chan tren domain demo. Namespace /demo khong duoc mo lai loi ghi nao.
-  assert.match(demoBlockMatcher, /(?:^|\s)\/settings\*(?:\s|$)/);
+  assert.notEqual(demoBlock, '');
+  assert.doesNotMatch(demoBlock, /@blocked/);
+  assert.doesNotMatch(demoBlock, /Khong co quyen truy cap/);
+  assert.match(demoBlock, /import app_routes/);
+});
+
+test('AUTO_SEND keeps a single audited mutation surface', () => {
+  // Cong tac AUTO_SEND chi con o PUT /settings/automation/auto-send (co audit).
+  // Namespace /demo khong duoc mo lai loi ghi nao.
   assert.doesNotMatch(caddyfile, /\/demo\/auto-send/);
 });
 

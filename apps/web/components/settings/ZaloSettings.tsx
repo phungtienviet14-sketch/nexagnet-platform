@@ -8,6 +8,7 @@ import { SettingsPanelState } from './SettingsPanelState';
 type Props = {
   summary: SettingsSummary;
   onRefresh: () => void;
+  onOpenMembers: () => void;
 };
 
 const STATE_LABELS: Readonly<Record<string, string>> = {
@@ -21,7 +22,7 @@ const STATE_LABELS: Readonly<Record<string, string>> = {
   unknown: 'Chưa rõ',
 };
 
-export function ZaloSettings({ summary, onRefresh }: Props) {
+export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
   const queryClient = useQueryClient();
   const syncMutation = useMutation({
     mutationFn: settingsApi.syncMembers,
@@ -81,6 +82,41 @@ export function ZaloSettings({ summary, onRefresh }: Props) {
           tone="error"
           title="Thao tác Zalo chưa hoàn tất"
           detail={actionError.message}
+        />
+      )}
+
+      {/* Ket qua dong bo tra ve day du so lieu nhung truoc 04/08/2026 bi bo di, nguoi van hanh
+          bam xong khong biet co chay khong. Gio hien so + loi mo thang sang tab thanh vien. */}
+      {syncMutation.isSuccess && !syncMutation.isPending && (
+        <SettingsPanelState
+          tone="success"
+          title={
+            syncMutation.data.complete
+              ? `Đã đồng bộ ${syncMutation.data.upsertedCount} thành viên`
+              : `Đồng bộ một phần: ${syncMutation.data.fetchedCount}/${syncMutation.data.expectedCount} thành viên`
+          }
+          detail={
+            syncMutation.data.complete
+              ? `Ghi nhận lúc ${formatSettingsDate(syncMutation.data.syncedAt)}. ${syncMutation.data.deactivatedCount} người rời nhóm được đánh dấu không hoạt động, không ai bị xóa. Thành viên mới mặc định “Theo mặc định nhóm” — phân loại rồi mới đổi cách xử lý.`
+              : `Còn ${syncMutation.data.failedCount} thành viên chưa lấy được hồ sơ. Hệ thống KHÔNG đánh dấu ai không hoạt động trong lần đồng bộ thiếu này; bấm “Đồng bộ” lại sau ít phút.`
+          }
+          action={
+            <button
+              type="button"
+              className="settings-button settings-button--primary"
+              onClick={onOpenMembers}
+            >
+              Xem &amp; phân loại thành viên
+            </button>
+          }
+        />
+      )}
+
+      {logoutMutation.isSuccess && !logoutMutation.isPending && (
+        <SettingsPanelState
+          tone="success"
+          title="Đã đăng xuất tài khoản Zalo phụ"
+          detail="Listener đã dừng, phiên đăng nhập và allowlist cục bộ đã xóa. Phân loại thành viên đã lưu vẫn còn nguyên trong hệ thống."
         />
       )}
 

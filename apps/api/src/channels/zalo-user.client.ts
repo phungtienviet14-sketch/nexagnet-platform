@@ -183,7 +183,10 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
    * Lay snapshot member tu zca-js. Batch loi duoc tra ve nhu partial de lop persistence
    * tuyet doi khong danh inactive nhung member khong fetch duoc.
    */
-  async fetchGroupMembers(groupId: string): Promise<GroupParticipantSyncSnapshot> {
+  async fetchGroupMembers(
+    groupId: string,
+    excludeExternalIds: readonly string[] = [],
+  ): Promise<GroupParticipantSyncSnapshot> {
     const api = this.api;
     if (!api) throw new ZaloNotConnectedError('Zalo chua dang nhap');
     if (!this.allowedGroupIds.has(groupId)) {
@@ -196,7 +199,17 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       Object.values(groupResponse.gridInfoMap).find((candidate) => candidate.groupId === groupId);
     if (!group) throw new Error('Khong tim thay nhom Zalo da cho phep');
 
-    const memberIds = normalizeMemberIds(group.memberIds);
+    // Tai khoan phu dang chay listener va Bot Platform KHONG phai "thanh vien can phan loai":
+    // ho la cong cu cua chinh he thong. De lot vao danh sach thi nguoi van hanh phai tu doan xem
+    // dong nao moi la nguoi that. Loai o day, truoc khi ton request lay ho so.
+    const excluded = new Set(
+      [...excludeExternalIds, safeOwnId(api)]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    );
+    const memberIds = normalizeMemberIds(group.memberIds).filter(
+      (memberId) => !excluded.has(memberId),
+    );
     const members: GroupParticipantProfile[] = [];
     const failedMemberIds: string[] = [];
     for (let offset = 0; offset < memberIds.length; offset += MEMBER_PROFILE_BATCH_SIZE) {
@@ -404,6 +417,18 @@ export function normalizeAllowedGroupIds(groupIds: readonly string[]): string[] 
     throw new Error('ID nhom khong hop le');
   }
   return normalized;
+}
+
+/**
+ * UID cua chinh tai khoan dang dang nhap. `getOwnId()` chi tra duoc sau khi login xong, va cac
+ * mock trong test khong khai bao no — nen khong duoc de loi o day lam hong ca lan dong bo.
+ */
+function safeOwnId(api: API): string | undefined {
+  try {
+    return typeof api.getOwnId === 'function' ? api.getOwnId() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function normalizeMemberIds(memberIds: readonly string[]): string[] {

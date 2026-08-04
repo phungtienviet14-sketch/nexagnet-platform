@@ -282,6 +282,18 @@ body {
 .nav-link {
   text-decoration: none;
 }
+/* Loi ra khoi console sang trang cau hinh: vien accent de doc ra la DIEM DEN khac,
+   khong phai mot tab xem cua chinh console. */
+.nav-link--settings {
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--line));
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.nav-link--settings:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
 
 /* ---------- Trang operator Zalo ---------- */
 .zalo-operator {
@@ -574,6 +586,43 @@ textarea:focus-visible {
   border: 1px solid color-mix(in oklch, var(--danger) 40%, transparent);
   font-size: 0.8rem;
   font-weight: 600;
+}
+/* Doi xung voi .error-banner: truoc 04/08/2026 chi co bao LOI, thao tac thanh cong thi im lang
+   nen nguoi van hanh khong biet he thong da ghi nhan cau hinh chua. */
+.success-banner {
+  margin: 0.9rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--r-md);
+  background: var(--ok-soft);
+  color: var(--ok);
+  border: 1px solid color-mix(in oklch, var(--ok) 40%, transparent);
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+.success-banner b {
+  display: block;
+  font-size: 0.92rem;
+}
+.success-banner small {
+  display: block;
+  font-weight: 500;
+  opacity: 0.85;
+}
+.success-banner__next {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: inherit;
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+.operator-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 1040px) {

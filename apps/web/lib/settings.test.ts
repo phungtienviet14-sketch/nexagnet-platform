@@ -166,6 +166,15 @@ describe('settings API contracts', () => {
     );
   });
 
+  // Chan tai phat lo 04/08/2026: UI chia nut "Mo Admin nang cao" trong khi ADMIN_UI=off nen
+  // /admin tra 404. Khong biet chac thi phai coi la off.
+  it('coi AdminJS la tat khi summary khong noi ro, va chi bat khi API tra adminUi=on', () => {
+    expect(parseSettingsSummary({}).adminUi).toBe('off');
+    expect(parseSettingsSummary({ adminUi: 'off' }).adminUi).toBe('off');
+    expect(parseSettingsSummary({ adminUi: 'khong-hop-le' }).adminUi).toBe('off');
+    expect(parseSettingsSummary({ adminUi: 'on' }).adminUi).toBe('on');
+  });
+
   it('falls back to the three existing status endpoints when the summary facade is unavailable', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);

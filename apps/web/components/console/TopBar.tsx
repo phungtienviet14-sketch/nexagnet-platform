@@ -133,6 +133,11 @@ export function TopBar({
             Kết nối Zalo
           </a>
         )}
+        {/* Cua vao DUY NHAT cho /settings. Thieu no thi ca trang cau hinh nguon su that va
+            thanh vien nhom deu khong the tim ra tu giao dien — dung loi da gap 04/08/2026. */}
+        <a className="nav-btn nav-link nav-link--settings" href="/settings">
+          <span aria-hidden="true">⚙</span> Cấu hình
+        </a>
         <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Đổi tông sáng/tối">
           ◐ Tông
         </button>

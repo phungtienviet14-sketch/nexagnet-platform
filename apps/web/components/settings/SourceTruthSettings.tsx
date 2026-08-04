@@ -278,13 +278,19 @@ function SourceTruthEditor({ definition, row, isPending, onCancel, onSave }: Edi
   );
 }
 
-export function SourceTruthSettings() {
+type SourceTruthProps = {
+  /** ADMIN_UI=off thi /admin tra 404 — khong duoc chia loi dan sang do. */
+  adminUiEnabled: boolean;
+};
+
+export function SourceTruthSettings({ adminUiEnabled }: SourceTruthProps) {
   const queryClient = useQueryClient();
   const [activeResource, setActiveResource] = useState<SourceTruthResource>('dealers');
   const [editorRow, setEditorRow] = useState<SourceTruthRow | null>();
   const query = useQuery({ queryKey: ['settings-source-truth'], queryFn: settingsApi.sourceTruth });
   const definition = RESOURCES.find((item) => item.resource === activeResource) ?? RESOURCES[0]!;
   const section = query.data?.find((item) => item.resource === activeResource);
+  const [savedLabel, setSavedLabel] = useState<string>();
   const saveMutation = useMutation({
     mutationFn: ({
       id,
@@ -293,7 +299,10 @@ export function SourceTruthSettings() {
       id?: string;
       changes: Readonly<Record<string, string | number | boolean | null>>;
     }) => settingsApi.saveSourceTruth(activeResource, id, changes),
-    onSuccess: () => {
+    onSuccess: (_rows, variables) => {
+      setSavedLabel(
+        `${definition.label}: ${variables.id ? `đã cập nhật ${variables.id}` : 'đã thêm bản ghi mới'}`,
+      );
       setEditorRow(undefined);
       void queryClient.invalidateQueries({ queryKey: ['settings-source-truth'] });
       void queryClient.invalidateQueries({ queryKey: ['settings-summary'] });
@@ -308,10 +317,20 @@ export function SourceTruthSettings() {
           <h2>Đại lý, sản phẩm & giá</h2>
           <p>Dữ liệu ở đây áp dụng ngay cho đơn mới; đơn cũ giữ nguyên giá đã chốt.</p>
         </div>
-        <a className="settings-button settings-button--quiet" href="/admin">
-          Mở Admin nâng cao
-        </a>
+        {adminUiEnabled && (
+          <a className="settings-button settings-button--quiet" href="/admin">
+            Mở Admin nâng cao
+          </a>
+        )}
       </header>
+
+      {savedLabel && !saveMutation.isPending && (
+        <SettingsPanelState
+          tone="success"
+          title="Đã ghi vào cơ sở dữ liệu"
+          detail={`${savedLabel}. Đơn tạo từ bây giờ dùng dữ liệu mới; đơn đã chốt giữ nguyên giá cũ.`}
+        />
+      )}
 
       <div className="settings-priority-rule" aria-label="Thứ tự ưu tiên giá">
         <span>Deal riêng đại lý + SKU</span>
@@ -335,6 +354,7 @@ export function SourceTruthSettings() {
                 onClick={() => {
                   setActiveResource(item.resource);
                   setEditorRow(undefined);
+                  setSavedLabel(undefined);
                 }}
               >
                 <span>{item.shortLabel}</span>

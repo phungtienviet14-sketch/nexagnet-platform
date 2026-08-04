@@ -41,6 +41,8 @@ export interface SettingsGroupSummary {
 export interface SettingsSummary {
   availability: Availability;
   channelMode: ChannelMode;
+  /** `off` => /admin tra 404; UI phai an moi loi dan sang AdminJS. */
+  adminUi: 'on' | 'off';
   zcaState: string;
   zcaDisplayName?: string;
   botIdentity: BotIdentitySummary;
@@ -298,6 +300,8 @@ export function parseSettingsSummary(value: unknown): SettingsSummary {
   return {
     availability: hasData ? 'available' : 'unavailable',
     channelMode: enumValue(record.channelMode ?? zca.channelMode, CHANNEL_MODES, 'mock'),
+    // Mac dinh 'off': tha an nut con hon hien nut dan toi /admin dang tra 404.
+    adminUi: enumValue(record.adminUi, ['on', 'off'] as const, 'off'),
     zcaState: stringValue(zca.state ?? record.zcaState ?? record.state) ?? 'unknown',
     ...(stringValue(zca.displayName ?? record.zcaDisplayName ?? record.displayName)
       ? {

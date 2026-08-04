@@ -110,7 +110,8 @@ describe('ZaloController', () => {
     await expect(
       controller.syncGroupMembers('group-1', {}, 'https://operator.example.com'),
     ).resolves.toMatchObject({ complete: true, fetchedCount: 1 });
-    expect(fetchGroupMembers).toHaveBeenCalledWith('group-1');
+    // UID Bot phai di kem de bi loai: Bot la cong cu cua he thong, khong phai nguoi can phan loai.
+    expect(fetchGroupMembers).toHaveBeenCalledWith('group-1', ['official-bot-1']);
     expect(synchronize).toHaveBeenCalledWith(expect.objectContaining({ groupId: 'group-1' }));
   });
 

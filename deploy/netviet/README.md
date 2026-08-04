@@ -43,8 +43,21 @@ chỉ đều đọc được bảng giá/đơn/thành viên nhóm, sửa đượ
 - Trước khi chạy dữ liệu khách thật: đặt `AUTH_MODE=api-key`, bật lại Basic Auth, và làm xác thực
   người dùng thật (quyết định **D5**, chưa làm).
 
-`@blocked` trên hostname demo (`/zalo* /broadcast* /settings* /groups* /admin*` → 404) **không phải
-xác thực** — chỉ để khách xem demo không nhìn thấy trang vận hành; giữ nguyên.
+**Cập nhật 04/08/2026 (đợt 2) — đã bỏ `@blocked` trên hostname demo.** Trước đó demo trả 404
+"Khong co quyen truy cap" cho `/zalo* /broadcast* /settings* /groups* /admin*`. Hệ quả thực tế:
+người vận hành mở `demo.../settings` chỉ thấy báo lỗi và tưởng hệ thống **chưa có** trang cấu hình.
+Nay **hai hostname hành xử giống hệt nhau** — không còn "trang này chạy ở kia thì không".
+
+| | Trước | Nay |
+|---|---|---|
+| `demo.../settings` | 404 | **200** |
+| `demo.../zalo` | 404 | 200 |
+| `demo.../broadcast` | 404 | 200 — **gửi tin Zalo THẬT** |
+| `operator.../*` | 200 | 200 |
+
+Đánh đổi đã biết: `/broadcast` gọi được từ cả hostname demo. Muốn chặn lại thì thêm khối
+`@blocked path /broadcast*` vào block `{$DEMO_DOMAIN}` trong `Caddyfile` — 4 dòng, có mẫu trong
+comment ngay trên block đó.
 
 Riêng **Flowise vẫn đòi đăng nhập**: Flowise 3.x bắt buộc có tài khoản, không có cờ tắt. Lấy mật
 khẩu (không chia sẻ màn hình khi chạy):
