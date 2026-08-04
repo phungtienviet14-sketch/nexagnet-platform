@@ -6,7 +6,8 @@ export type CustomerRank = 'dai_ly' | 'ctv' | 'khach_le' | 'unknown';
 export type OperationalRole =
   'khach_hang' | 'sale' | 'ke_toan' | 'quan_ly' | 'ksnb' | 'bpvh' | 'ky_thuat' | 'unknown';
 export type HandlingMode = 'inherit_group' | 'process' | 'ignore' | 'manual_review';
-export type ParticipantSource = 'zca_sync' | 'manual';
+/** `message_stream` = hoc tu chinh luong tin, vi Zalo khong tra danh sach thanh vien (04/08/2026). */
+export type ParticipantSource = 'zca_sync' | 'manual' | 'message_stream';
 export type RuleStatus = 'draft' | 'preview' | 'active' | 'archived';
 export type SourceTruthResource =
   'dealers' | 'groups' | 'products' | 'prices' | 'overrides' | 'glossary';
@@ -359,7 +360,7 @@ function parseParticipant(value: unknown): GroupParticipant | undefined {
     operationalRole: enumValue(value.operationalRole, OPERATIONAL_ROLES, 'unknown'),
     handlingMode: enumValue(value.handlingMode, HANDLING_MODES, 'inherit_group'),
     active: booleanValue(value.active, false),
-    source: enumValue(value.source, ['zca_sync', 'manual'], 'manual'),
+    source: enumValue(value.source, ['zca_sync', 'manual', 'message_stream'], 'manual'),
     ...(stringValue(value.lastSeenAt) ? { lastSeenAt: stringValue(value.lastSeenAt) } : {}),
     ...(stringValue(value.syncedAt) ? { syncedAt: stringValue(value.syncedAt) } : {}),
     ...(stringValue(value.createdAt) ? { createdAt: stringValue(value.createdAt) } : {}),

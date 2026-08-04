@@ -12,7 +12,12 @@ export const OPERATIONAL_ROLES = [
   'unknown',
 ] as const;
 export const HANDLING_MODES = ['inherit_group', 'process', 'ignore', 'manual_review'] as const;
-export const PARTICIPANT_SOURCES = ['zca_sync', 'manual'] as const;
+/**
+ * `message_stream` = hoc duoc tu chinh luong tin (ca zca lan Bot Platform deu kem uid + ten
+ * nguoi gui o MOI tin). Can thiet vi `getGroupInfo` cua Zalo tra danh sach thanh vien RONG voi
+ * tai khoan that (04/08/2026), ma Bot Platform thi khong co API thanh vien nao ca.
+ */
+export const PARTICIPANT_SOURCES = ['zca_sync', 'manual', 'message_stream'] as const;
 
 export const customerRankSchema = z.enum(CUSTOMER_RANKS);
 export const operationalRoleSchema = z.enum(OPERATIONAL_ROLES);

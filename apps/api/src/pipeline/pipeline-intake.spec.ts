@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChannelMessage } from '@ultty/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import type { GroupDiscoveryService } from '../groups/group-discovery.service.js';
+import { InMemoryGroupParticipantsRepository } from '../groups/group-participants.repository.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import {
   InMemoryMessagesRepository,
@@ -31,6 +32,7 @@ function fakeDiscovery() {
 function build(options: {
   messages?: MessagesRepository;
   discovery?: GroupDiscoveryService;
+  participants?: InMemoryGroupParticipantsRepository;
   withKnowledge?: boolean;
 }) {
   const knowledge = new KnowledgeService();
@@ -41,7 +43,7 @@ function build(options: {
     undefined,
     options.messages ?? new InMemoryMessagesRepository(),
     undefined,
-    undefined,
+    options.participants,
     options.withKnowledge === false ? undefined : knowledge,
     options.discovery,
   );
@@ -134,6 +136,33 @@ describe('PipelineService.intake — luu truoc, loc parser sau', () => {
     const result = await pipeline.intake(msg(MAPPED_GROUP, 'm-obs-loi'), BOT_NAME);
 
     expect(result.outcome).toBe('processed');
+  });
+
+  it('ghi nhan nguoi gui vao danh sach thanh vien, ke ca khi nhom CHUA map', async () => {
+    // Zalo tra danh sach thanh vien rong (04/08/2026) -> luong tin la nguon duy nhat con lai.
+    const participants = new InMemoryGroupParticipantsRepository();
+    const { pipeline } = build({ participants });
+
+    await pipeline.intake(msg(UNMAPPED_GROUP, 'm-sender'), BOT_NAME);
+
+    const { participants: rows } = await participants.list(UNMAPPED_GROUP, {});
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      externalUserId: 'user-1',
+      displayName: 'Chi Phuong',
+      source: 'message_stream',
+    });
+  });
+
+  it('tin khong co ten nguoi gui -> khong tao ho so rong', async () => {
+    const participants = new InMemoryGroupParticipantsRepository();
+    const { pipeline } = build({ participants });
+    const anonymous = { ...msg(MAPPED_GROUP, 'm-an-danh') };
+    delete (anonymous as { senderDisplayName?: string }).senderDisplayName;
+
+    await pipeline.intake(anonymous, BOT_NAME);
+
+    expect((await participants.list(MAPPED_GROUP, {})).participants).toHaveLength(0);
   });
 
   it('khong co KnowledgeService -> FAIL CLOSED: luu tin nhung khong dua sang parser', async () => {

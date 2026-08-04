@@ -72,6 +72,9 @@ export class PipelineService {
     if (saved?.duplicate) return { outcome: 'duplicate' };
 
     await this.observeGroup(message.externalChatId);
+    // Chay cho CA nhom chua map: chi noi dung bi chan khoi LLM, con danh tinh nguoi nhan tin thi
+    // khong — do la thu duy nhat dung duoc de dung danh sach thanh vien.
+    await this.recordSender(message);
 
     if (!this.isGroupMapped(message.externalChatId)) {
       this.logger.warn(
@@ -162,6 +165,30 @@ export class PipelineService {
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Ghi nhan nhom ${chatId} that bai (xu ly tin van tiep tuc): ${detail}`);
+    }
+  }
+
+  /**
+   * Ghi nhan nguoi vua nhan tin vao danh sach thanh vien. Ca zca lan Bot Platform deu kem uid +
+   * ten nguoi gui o MOI tin, ma truoc 04/08/2026 hai truong nay chi duoc luu vao bang Message roi
+   * bo do — trong khi tab thanh vien khong dung duoc vi Zalo tra danh sach rong.
+   *
+   * Loi KHONG chan xu ly don (I6).
+   */
+  private async recordSender(message: ChannelMessage): Promise<void> {
+    const externalUserId = message.senderExternalId;
+    const displayName = message.senderDisplayName?.trim();
+    // Thieu ten thi khong tao ho so rong — de lan sau co ten day du roi ghi.
+    if (!externalUserId || !displayName || !this.participants) return;
+    try {
+      await this.participants.recordSeen(
+        message.externalChatId,
+        { externalUserId, displayName },
+        new Date().toISOString(),
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Ghi nhan nguoi gui ${externalUserId} that bai: ${detail}`);
     }
   }
 
