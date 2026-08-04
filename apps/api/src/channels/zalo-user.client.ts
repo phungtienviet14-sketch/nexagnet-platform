@@ -261,10 +261,16 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     const totalMember = typeof group.totalMember === 'number' ? group.totalMember : 0;
     const memberListMissing = memberIds.length === 0 && totalMember > excluded.size;
     if (memberListMissing) {
+      // `lockViewMember` = nhom bat "khoa xem thanh vien" -> Zalo khong tra danh sach cho thanh
+      // vien thuong. Day la nghi can so mot; log ro de nguoi van hanh biet phai chinh o dau
+      // thay vi doan mo. `e2ee` va `adminIds` de loai tru hai kha nang con lai.
+      const setting = (group.setting ?? {}) as Record<string, unknown>;
       this.logger.warn(
         `Zalo khong tra danh sach thanh vien: group=${groupId} totalMember=${totalMember} ` +
           `memberIds=${(group.memberIds ?? []).length} currentMems=${(group.currentMems ?? []).length} ` +
-          `hasMoreMember=${String(group.hasMoreMember)} fields=${Object.keys(group).join(',')}`,
+          `hasMoreMember=${String(group.hasMoreMember)} e2ee=${String(group.e2ee)} ` +
+          `adminIds=${(group.adminIds ?? []).length} lockViewMember=${String(setting.lockViewMember)} ` +
+          `setting=${JSON.stringify(setting)}`,
       );
     }
 
