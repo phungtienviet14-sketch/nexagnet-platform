@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { GroupParticipant, GroupParticipantsQuery, GroupParticipantUpdate } from '@ultty/shared';
+import type {
+  GroupParticipant,
+  GroupParticipantProfile,
+  GroupParticipantsQuery,
+  GroupParticipantUpdate,
+} from '@ultty/shared';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service.js';
 import {
@@ -164,6 +169,40 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
       },
     });
     return row ? toView(row) : null;
+  }
+
+  async recordSeen(
+    externalChatId: string,
+    profile: GroupParticipantProfile,
+    seenAt: string,
+  ): Promise<GroupParticipant | null> {
+    const group = await this.prisma.group.findUnique({
+      where: { platform_chatId: { platform: 'zalo', chatId: externalChatId } },
+      select: { id: true },
+    });
+    // Nhom chua co trong nguon su that -> khong co cho gan. KHONG nem: don hang quan trong hon.
+    if (!group) return null;
+
+    const at = new Date(seenAt);
+    const row = await this.prisma.groupParticipant.upsert({
+      where: {
+        groupId_externalUserId: { groupId: group.id, externalUserId: profile.externalUserId },
+      },
+      // CHI ba truong nay: khong dung toi phan loai cua nguoi van hanh (I3) va khong ha cap
+      // `source` (I4). Cung khong co nhanh updateMany danh inactive nhu `synchronize` (I2).
+      update: { displayName: profile.displayName, active: true, lastSeenAt: at },
+      create: {
+        groupId: group.id,
+        externalUserId: profile.externalUserId,
+        displayName: profile.displayName,
+        zaloName: profile.zaloName ?? null,
+        avatarUrl: profile.avatarUrl ?? null,
+        source: 'message_stream',
+        lastSeenAt: at,
+        syncedAt: at,
+      },
+    });
+    return toView(row);
   }
 }
 

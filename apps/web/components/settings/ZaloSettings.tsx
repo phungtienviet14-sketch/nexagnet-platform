@@ -1,7 +1,12 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { settingsApi, type MemberSyncResult, type SettingsSummary } from '../../lib/settings';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  settingsApi,
+  type MemberSyncResult,
+  type SettingsGroupSummary,
+  type SettingsSummary,
+} from '../../lib/settings';
 import { formatSettingsDate } from './settings-format';
 import { SettingsPanelState } from './SettingsPanelState';
 
@@ -46,6 +51,20 @@ function syncMemberDetail(result: MemberSyncResult): string {
 
 export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
   const queryClient = useQueryClient();
+  // Danh sach dai ly de chon ngay tren dong nhom — truoc 04/08/2026 nguoi van hanh phai sang
+  // trang Nguon su that va GO TAY chatId vao form thi nhom moi duoc map.
+  // Cung queryKey voi SourceTruthSettings: sua ten dai ly ben do la dropdown nay cung moi theo.
+  const dealersQuery = useQuery({
+    queryKey: ['settings-source-truth'],
+    queryFn: settingsApi.sourceTruth,
+  });
+  const mappingMutation = useMutation({
+    mutationFn: ({ group, dealerId }: { group: SettingsGroupSummary; dealerId: string | null }) =>
+      settingsApi.setGroupMapping(group.zcaChatId, { dealerId, name: group.name }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settings-summary'] });
+    },
+  });
   const syncMutation = useMutation({
     mutationFn: settingsApi.syncMembers,
     onSuccess: () => {
@@ -75,7 +94,11 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
     if (confirmed) logoutMutation.mutate();
   };
 
-  const actionError = syncMutation.error ?? logoutMutation.error;
+  const actionError = syncMutation.error ?? logoutMutation.error ?? mappingMutation.error;
+  const dealers = (dealersQuery.data ?? []).find((section) => section.resource === 'dealers')?.rows ?? [];
+  const pendingCount = summary.groups.filter(
+    (group) => group.allowed && group.status !== 'mapped',
+  ).length;
 
   return (
     <div className="settings-section-stack">
@@ -125,6 +148,30 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
               </button>
             ) : undefined
           }
+        />
+      )}
+
+      {mappingMutation.isSuccess && !mappingMutation.isPending && (
+        <SettingsPanelState
+          tone={mappingMutation.data.status === 'mapped' ? 'success' : 'neutral'}
+          title={
+            mappingMutation.data.status === 'mapped'
+              ? 'Đã map nhóm vào đại lý'
+              : 'Đã bỏ map nhóm'
+          }
+          detail={
+            mappingMutation.data.status === 'mapped'
+              ? 'Từ tin tiếp theo, nhóm này được tra giá theo đại lý vừa chọn và lên đơn cho Sale duyệt. Tin đã nhận trước đó vẫn nằm trong hệ thống.'
+              : 'Nhóm quay về trạng thái chờ. Tin vẫn được lưu đầy đủ nhưng không đưa sang AI cho tới khi chọn lại đại lý.'
+          }
+        />
+      )}
+
+      {pendingCount > 0 && (
+        <SettingsPanelState
+          tone="error"
+          title={`${pendingCount} nhóm đang nghe nhưng chưa chọn đại lý`}
+          detail="Tin của các nhóm này vẫn được lưu đầy đủ, nhưng chưa được tra giá và chưa lên đơn. Chọn đại lý ở cột “Đại lý đang map” bên dưới là chạy ngay, không cần nhập ID."
         />
       )}
 
@@ -219,7 +266,32 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
                       <strong>{group.name}</strong>
                       <small className="settings-cell-meta mono">{group.zcaChatId}</small>
                     </td>
-                    <td>{group.dealerName ?? <span className="settings-muted">Chưa map</span>}</td>
+                    <td>
+                      <select
+                        className="settings-select"
+                        value={group.dealerId ?? ''}
+                        disabled={mappingMutation.isPending || dealersQuery.isPending}
+                        aria-label={`Đại lý cho nhóm ${group.name}`}
+                        onChange={(event) =>
+                          mappingMutation.mutate({
+                            group,
+                            dealerId: event.target.value === '' ? null : event.target.value,
+                          })
+                        }
+                      >
+                        <option value="">— Chưa map —</option>
+                        {dealers.map((dealer) => (
+                          <option key={dealer.id} value={dealer.id}>
+                            {dealer.label}
+                          </option>
+                        ))}
+                      </select>
+                      {group.status !== 'mapped' && (
+                        <small className="settings-cell-meta settings-danger">
+                          Tin vẫn được lưu, nhưng chưa lên đơn
+                        </small>
+                      )}
+                    </td>
                     <td>
                       <span>{group.activeParticipants || group.memberCount} hoạt động</span>
                       {group.inactiveParticipants > 0 && (
@@ -240,7 +312,11 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
                       <button
                         type="button"
                         className="settings-button settings-button--quiet"
-                        disabled={!group.allowed || syncMutation.isPending}
+                        // Chua map thi khong co hang Group de gan thanh vien -> dong bo se 400.
+                        disabled={!group.allowed || group.status !== 'mapped' || syncMutation.isPending}
+                        title={
+                          group.status === 'mapped' ? undefined : 'Chọn đại lý cho nhóm này trước'
+                        }
                         aria-label={`Đồng bộ thành viên nhóm ${group.name}`}
                         onClick={() => handleSync(group.zcaChatId, group.name)}
                       >

@@ -12,8 +12,10 @@ import {
   type ParticipantBulkRequest,
   type ParticipantFilters,
   type ParticipantPatch,
+  type ParticipantSource,
   type SettingsSummary,
 } from '../../lib/settings';
+import { formatSettingsDate } from './settings-format';
 import { SettingsPanelState } from './SettingsPanelState';
 
 type Props = {
@@ -44,6 +46,16 @@ const HANDLING_OPTIONS: readonly { value: HandlingMode; label: string }[] = [
   { value: 'manual_review', label: 'Luôn duyệt tay' },
   { value: 'ignore', label: 'Bỏ qua trước AI' },
 ];
+
+/**
+ * Nguon goc cua tung ho so. Quan trong voi nguoi van hanh vi tu 04/08/2026 Zalo khong tra danh
+ * sach thanh vien nua — phan lon hang trong bang la nguoi ĐÃ NHẮN, khong phai toan bo nhom.
+ */
+const SOURCE_LABELS: Readonly<Record<ParticipantSource, string>> = {
+  zca_sync: 'Đồng bộ từ Zalo',
+  message_stream: 'Học từ tin nhắn',
+  manual: 'Người vận hành đặt',
+};
 
 const INITIAL_FILTERS: ParticipantFilters = {
   search: '',
@@ -247,6 +259,12 @@ export function ParticipantsSettings({ groups }: Props) {
           <p className="settings-eyebrow">Phân loại người gửi, không phân giá</p>
           <h2>Nhóm & thành viên</h2>
           <p>Rank định tuyến và tone; đơn giá vẫn lấy theo đại lý đang map với nhóm.</p>
+          {/* Zalo khong tra danh sach thanh vien nua -> phai noi ro day la NGUOI DA NHAN, khong
+              phai toan bo nhom, keo nguoi van hanh tuong ai vang mat la da roi nhom. */}
+          <p>
+            Danh sách gồm những người <b>đã nhắn</b> trong nhóm, không phải toàn bộ thành viên —
+            Zalo hiện không trả danh sách đầy đủ. Ai chưa nhắn lần nào thì chưa xuất hiện ở đây.
+          </p>
         </div>
         <label className="settings-field settings-field--group">
           <span>Nhóm đang xem</span>
@@ -445,6 +463,10 @@ export function ParticipantsSettings({ groups }: Props) {
               <div className="settings-member-identity">
                 <strong>{participant.displayName}</strong>
                 <small>{participant.zaloName ?? participant.externalUserId}</small>
+                <small>
+                  {SOURCE_LABELS[participant.source]} · nhắn gần nhất{' '}
+                  {formatSettingsDate(participant.lastSeenAt)}
+                </small>
               </div>
               <div className="settings-member-tags">
                 <span>

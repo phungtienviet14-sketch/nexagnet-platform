@@ -45,6 +45,26 @@ export abstract class GroupParticipantsRepository {
     externalChatId: string,
     externalUserId: string,
   ): Promise<GroupParticipant | null>;
+
+  /**
+   * Ghi nhan mot nguoi VUA NHAN TIN trong nhom — nguon danh sach thanh vien duy nhat con dung
+   * duoc sau khi Zalo tra `getGroupInfo` rong va Bot Platform khong co API thanh vien (04/08/2026).
+   *
+   * Khac `synchronize` o ba diem, va ca ba deu la bat bien:
+   *  - KHONG BAO GIO danh `active: false` cho ai: day la mot lat cat, khong phai anh chup day du,
+   *    nen "khong thay" khong co nghia la "da roi nhom".
+   *  - KHONG dung toi customerRank / operationalRole / handlingMode: do la phan loai cua nguoi
+   *    van hanh, luong tin khong duoc de len.
+   *  - KHONG ha cap `source`: da la `manual` hay `zca_sync` thi giu nguyen.
+   *
+   * Tra `null` khi khong tim thay nhom (chua map) — KHONG nem, vi loi metadata khong duoc chan
+   * viec xu ly don.
+   */
+  abstract recordSeen(
+    externalChatId: string,
+    profile: GroupParticipantProfile,
+    seenAt: string,
+  ): Promise<GroupParticipant | null>;
 }
 
 @Injectable()
@@ -144,6 +164,38 @@ export class InMemoryGroupParticipantsRepository extends GroupParticipantsReposi
         candidate.active,
     );
     return participant ? { ...participant } : null;
+  }
+
+  async recordSeen(
+    externalChatId: string,
+    profile: GroupParticipantProfile,
+    seenAt: string,
+  ): Promise<GroupParticipant | null> {
+    const existing = this.store.find(
+      (candidate) =>
+        candidate.groupId === externalChatId &&
+        candidate.externalUserId === profile.externalUserId,
+    );
+    if (!existing) {
+      const created: GroupParticipant = {
+        ...createParticipant(externalChatId, profile, seenAt),
+        source: 'message_stream',
+      };
+      this.store = [...this.store, created];
+      return { ...created };
+    }
+    // CHI ba truong nay. Phan loai va source cua nguoi van hanh khong duoc dung toi (I3, I4).
+    const updated: GroupParticipant = {
+      ...existing,
+      displayName: profile.displayName,
+      active: true,
+      lastSeenAt: seenAt,
+      updatedAt: seenAt,
+    };
+    this.store = this.store.map((candidate) =>
+      candidate.id === existing.id ? updated : candidate,
+    );
+    return { ...updated };
   }
 }
 

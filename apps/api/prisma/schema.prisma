@@ -72,6 +72,9 @@ enum ParticipantHandlingMode {
 enum ParticipantSource {
   zca_sync
   manual
+  // Hoc tu luong tin: moi tin (zca lan Bot) deu kem uid + ten nguoi gui. Duong duy nhat con lai
+  // sau khi getGroupInfo tra danh sach rong va Bot Platform khong co API thanh vien (04/08/2026).
+  message_stream
 }
 
 enum RuleConfigStatus {

@@ -13,12 +13,25 @@ const summary = {
       zcaChatId: 'zca-group-1',
       id: 'zca-group-1',
       name: 'Nhom pilot',
+      // Da map dai ly -> moi duoc dong bo thanh vien. Nhom `pending` co nut Dong bo bi tat.
+      status: 'mapped',
       allowed: true,
       memberCount: 2,
       activeParticipants: 2,
       inactiveParticipants: 0,
       dealerId: 'dealer-1',
       dealerName: 'Dai ly pilot',
+    },
+    {
+      groupId: 'group-db-2',
+      zcaChatId: 'zca-group-2',
+      id: 'zca-group-2',
+      name: 'Nhom chua map',
+      status: 'pending',
+      allowed: true,
+      memberCount: 0,
+      activeParticipants: 0,
+      inactiveParticipants: 0,
     },
   ],
   warnings: ['Rank thanh vien khong thay doi don gia.'],
@@ -47,6 +60,12 @@ async function mockSettings(page: Page): Promise<void> {
   await page.route('**/settings/automation/auto-send', (route) =>
     json(route, { autoSend: route.request().postDataJSON().enabled ? 'on' : 'off' }),
   );
+  await page.route('**/settings/source-truth/dealers', (route) =>
+    json(route, [{ id: 'dealer-1', name: 'Dai ly pilot', tier: 'dai_ly' }]),
+  );
+  await page.route('**/settings/groups/*/mapping', (route) =>
+    json(route, { chatId: 'zca-group-2', dealerId: 'dealer-1', status: 'mapped' }),
+  );
 }
 
 test('operator can sync the allowlisted group and log out the personal Zalo account', async ({ page }) => {
@@ -64,6 +83,34 @@ test('operator can sync the allowlisted group and log out the personal Zalo acco
 
   await page.getByRole('button', { name: 'Đăng xuất an toàn' }).click();
   await expect.poll(() => requests).toContain('POST /zalo/logout');
+});
+
+test('nhom chua map dai ly: nut Dong bo bi tat, chon dai ly ngay tren bang la xong', async ({
+  page,
+}) => {
+  await mockSettings(page);
+  const requests: string[] = [];
+  page.on('request', (request) =>
+    requests.push(`${request.method()} ${new URL(request.url()).pathname}`),
+  );
+
+  await page.goto('/settings');
+
+  // Dong bo nhom chua map chac chan 400 (chua co hang Group de gan thanh vien) -> phai tat truoc.
+  await expect(
+    page.getByRole('button', { name: /Đồng bộ thành viên nhóm Nhom chua map/i }),
+  ).toBeDisabled();
+  await expect(page.getByText(/1 nhóm đang nghe nhưng chưa chọn đại lý/)).toBeVisible();
+
+  // Khong con o text bat go chatId 19 chu so — chon thang tren dong.
+  await page
+    .getByRole('combobox', { name: /Đại lý cho nhóm Nhom chua map/i })
+    .selectOption('dealer-1');
+
+  await expect
+    .poll(() => requests)
+    .toContain('PUT /settings/groups/zca-group-2/mapping');
+  await expect(page.getByText('Đã map nhóm vào đại lý')).toBeVisible();
 });
 
 test('AUTO_SEND requires the explicit second confirmation and uses the shared settings endpoint', async ({

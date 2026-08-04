@@ -8,6 +8,7 @@ import {
   InMemoryGroupParticipantsRepository,
 } from './group-participants.repository.js';
 import { GroupParticipantsService } from './group-participants.service.js';
+import { GroupDiscoveryService } from './group-discovery.service.js';
 import { PrismaGroupParticipantsRepository } from './prisma-group-participants.repository.js';
 
 @Module({
@@ -15,6 +16,7 @@ import { PrismaGroupParticipantsRepository } from './prisma-group-participants.r
   controllers: [GroupParticipantsController],
   providers: [
     GroupParticipantsService,
+    GroupDiscoveryService,
     {
       provide: GroupParticipantsRepository,
       useFactory: (prisma: PrismaService): GroupParticipantsRepository =>
@@ -24,6 +26,6 @@ import { PrismaGroupParticipantsRepository } from './prisma-group-participants.r
       inject: [PrismaService],
     },
   ],
-  exports: [GroupParticipantsService, GroupParticipantsRepository],
+  exports: [GroupParticipantsService, GroupParticipantsRepository, GroupDiscoveryService],
 })
 export class GroupParticipantsModule {}

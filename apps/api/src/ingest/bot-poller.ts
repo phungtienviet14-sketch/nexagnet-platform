@@ -1,4 +1,10 @@
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Optional,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import {
   channelMessageSchema,
   loadEnv,
@@ -9,7 +15,7 @@ import {
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';
-import { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { ZaloUserClient } from '../channels/zalo-user.client.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { MessageGuard, processWithRetry } from './message-guard.js';
 
@@ -29,12 +35,34 @@ export function isBotChannelActive(mode: AppEnv['CHANNEL_MODE']): boolean {
   return mode === 'bot' || mode === 'hybrid';
 }
 
-/** Bot chinh thuc chi duoc dua tin NHOM da map vao LLM. */
-export function isAllowedBotMessage(
+/**
+ * Bot chinh thuc chi doc tin NHOM. Cong "nhom da map dai ly" da chuyen xuong
+ * PipelineService.intake (04/08/2026): truoc day no chan ca viec LUU tin, ma Zalo khong phat lai
+ * -> tin @mention cua nhom chua map mat vinh vien.
+ */
+export function isAllowedBotMessage(message: ChannelMessage): boolean {
+  return message.chatType === 'group';
+}
+
+/**
+ * Trong hybrid, allowlist ma nguoi van hanh chon luc dang nhap phai chi phoi CA HAI kenh.
+ * Truoc 04/08/2026 chi ZcaListener kiem allowlist, nen mot nhom operator CO Y khong chon van
+ * duoc xu ly qua kenh Bot neu tinh co da map trong DB.
+ *
+ * Bot thuan (khong co phien zca -> allowlist rong) thi KHONG ap: ap vao la chan sach ca kenh.
+ * Vi vay dieu kien la "allowlist dang co hieu luc", khong phai "co trong allowlist".
+ */
+export function shouldAcceptBotMessage(
   message: ChannelMessage,
-  allowedChatIds: ReadonlySet<string>,
+  ctx: {
+    mode: AppEnv['CHANNEL_MODE'];
+    allowlistActive: boolean;
+    isAllowed: (chatId: string) => boolean;
+  },
 ): boolean {
-  return message.chatType === 'group' && allowedChatIds.has(message.externalChatId);
+  if (!isAllowedBotMessage(message)) return false;
+  if (ctx.mode !== 'hybrid' || !ctx.allowlistActive) return true;
+  return ctx.isAllowed(message.externalChatId);
 }
 
 /** Chuyen 1 update Zalo -> ChannelMessage chuan; null neu bo qua (tin bot, thieu noi dung). */
@@ -76,7 +104,8 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly pipeline: PipelineService,
     private readonly outbound: OutboundChannelRouter,
-    private readonly knowledge: KnowledgeService,
+    // Chi de doc allowlist trong hybrid. @Optional() vi bot thuan khong co phien zca nao.
+    @Optional() private readonly zca?: ZaloUserClient,
   ) {}
 
   onModuleInit(): void {
@@ -86,7 +115,7 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.running = true;
-    void this.loop(env.ZALO_BOT_TOKEN, env.BOT_NAME, env.AUTO_ACK);
+    void this.loop(env.ZALO_BOT_TOKEN, env.BOT_NAME, env.AUTO_ACK, env.CHANNEL_MODE);
     this.logger.log(`BOT_MODE=on -> bat dau long polling getUpdates. Auto-ack=${env.AUTO_ACK}.`);
   }
 
@@ -94,7 +123,12 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
     this.running = false;
   }
 
-  private async loop(token: string, botName: string, autoAck: 'on' | 'off'): Promise<void> {
+  private async loop(
+    token: string,
+    botName: string,
+    autoAck: 'on' | 'off',
+    mode: AppEnv['CHANNEL_MODE'],
+  ): Promise<void> {
     while (this.running) {
       try {
         const res = await callBotApi(token, 'getUpdates', { timeout: 20 });
@@ -107,27 +141,39 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
         for (const update of normalizeUpdates(res.result)) {
           const message = updateToChannelMessage(update);
           if (!message) continue;
-          const allowedChatIds = new Set(this.knowledge.groups().map((group) => group.chatId));
-          if (!isAllowedBotMessage(message, allowedChatIds)) {
-            this.logger.warn(`Bo qua tin Bot Platform tu chatId chua map/khong phai nhom: ${message.externalChatId}`);
+          const allowedGroupIds = this.zca?.status().allowedGroupIds ?? [];
+          const accepted = shouldAcceptBotMessage(message, {
+            mode,
+            allowlistActive: allowedGroupIds.length > 0,
+            isAllowed: (chatId) => allowedGroupIds.includes(chatId),
+          });
+          if (!accepted) {
+            this.logger.warn(
+              `Bo qua tin Bot Platform (khong phai nhom hoac ngoai allowlist): ${message.externalChatId}`,
+            );
             continue;
           }
           const id = message.externalMessageId;
           if (!this.guard.claim(id)) continue;
 
-          const view = await processWithRetry(
-            () => this.pipeline.process(message, botName, { allowDuplicateSkip: true }),
+          const result = await processWithRetry(
+            () => this.pipeline.intake(message, botName),
             id,
             this.logger,
           );
-          if (!view) {
+          if (!result) {
             // That bai het luot -> KHONG danh dau. Tin con duong chay lai (khong nuot don im lang).
             this.guard.release(id);
             continue;
           }
+          // Bo qua CO CHU Y (da luu chua map / trung / thanh vien ignore) van la "xong".
           this.guard.complete(id);
-          this.logger.log(`Da xu ly tin ${id} -> intent=${view.intent}`);
-          if (shouldAutoAck(view.intent, autoAck)) {
+          if (result.outcome !== 'processed') {
+            this.logger.log(`Tin ${id} -> ${result.outcome} (khong tao don)`);
+            continue;
+          }
+          this.logger.log(`Da xu ly tin ${id} -> intent=${result.view.intent}`);
+          if (shouldAutoAck(result.view.intent, autoAck)) {
             await this.sendAutoAck(message.externalChatId);
           }
         }

@@ -23,6 +23,7 @@ import {
 import { toRulesConfig } from '../rule-config/rule-config.defaults.js';
 import { computeShipping } from '../rules/rules.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
+import { GroupMappingService, groupMappingSchema } from './group-mapping.service.js';
 import { SettingsQueryService } from './settings-query.service.js';
 import {
   SOURCE_TRUTH_RESOURCES,
@@ -73,6 +74,7 @@ export class SettingsController {
     private readonly runtime: RuntimeSettingsService,
     private readonly rules: RuleConfigService,
     private readonly audit: AuditLogService,
+    private readonly groupMapping: GroupMappingService,
   ) {}
 
   @Get('summary')
@@ -137,6 +139,34 @@ export class SettingsController {
       parsedId.data,
       changes,
       actor,
+      requestId ?? null,
+    );
+  }
+
+  /**
+   * Map nhom -> dai ly bang chatId (UI da hien san), khong bat nguoi van hanh go ID vao form
+   * nguon su that. Khoa tu nhien platform+chatId nen dung duoc voi ca nhom vua phat hien.
+   */
+  @Put('groups/:chatId/mapping')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  setGroupMapping(
+    @Param('chatId') chatId: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    const parsedChatId = idSchema.safeParse(chatId);
+    if (!parsedChatId.success) throw new BadRequestException('chatId nhom khong hop le');
+    const parsed = groupMappingSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException('Can dealerId (chuoi hoac null) de map nhom');
+    }
+    return this.groupMapping.setMapping(
+      parsedChatId.data,
+      parsed.data,
+      actorName(actor),
       requestId ?? null,
     );
   }
