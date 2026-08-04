@@ -1,3 +1,4 @@
+import type { AgentTrace, SenderType } from './agents.js';
 import type { FieldConfidence, Intent, OrderStatus, OrderType, ParsedOrder } from './order.js';
 
 /**
@@ -7,6 +8,7 @@ import type { FieldConfidence, Intent, OrderStatus, OrderType, ParsedOrder } fro
 
 export type DealerTier = 'dai_ly' | 'ctv';
 export type PolicyType = 'cong_no_30' | 'cong_no_45' | 'ky_gui' | 'thanh_toan_ngay' | 'cod';
+export type ReplyChannel = 'mock' | 'bot' | 'zca';
 
 export interface PricedLine {
   skuRaw: string;
@@ -47,6 +49,8 @@ export interface OrderView {
   status: OrderStatus;
   createdAt: string;
   chatId: string;
+  /** Kenh da nhan tin; moi phan hoi phai quay lai dung kenh nay. */
+  replyChannel?: ReplyChannel;
   /** Ten nhom Zalo (map tu chatId) — hien tren feed de phan biet nhieu nhom */
   groupName?: string;
   /** Ten dai ly (map tu nhom) — hien ca khi tin khong phai don hang */
@@ -60,4 +64,10 @@ export interface OrderView {
   confidence: FieldConfidence;
   /** Ma don KiotViet sau khi day len (GD1: mock; GD2: API that) */
   kiotVietCode?: string;
+  /** Loai nguoi gui suy tu nhom (multi-agent 6 con). */
+  senderType?: SenderType;
+  /** Vet 6 vai agent da phoi hop xu ly tin (multi-agent 6 con). */
+  trace?: AgentTrace;
+  /** Version rules typed da ap dung; bo trong nghia la defaults trong code. */
+  ruleConfigVersion?: number;
 }

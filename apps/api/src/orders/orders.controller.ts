@@ -7,12 +7,12 @@ export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
 
   @Get()
-  list(): OrderView[] {
+  list(): Promise<OrderView[]> {
     return this.orders.listOrders();
   }
 
   @Get(':id')
-  get(@Param('id') id: string): OrderView {
+  get(@Param('id') id: string): Promise<OrderView> {
     return this.orders.getOrThrow(id);
   }
 
@@ -22,7 +22,7 @@ export class OrdersController {
   }
 
   @Post(':id/reject')
-  reject(@Param('id') id: string): OrderView {
+  reject(@Param('id') id: string): Promise<OrderView> {
     return this.orders.reject(id);
   }
 }
@@ -32,7 +32,7 @@ export class MessagesController {
   constructor(private readonly orders: OrdersService) {}
 
   @Get()
-  list(): OrderView[] {
+  list(): Promise<OrderView[]> {
     return this.orders.listMessages();
   }
 }

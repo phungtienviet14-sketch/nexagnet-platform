@@ -1,0 +1,9 @@
+[Unit]
+Description=NetViet 24-hour private pilot soak test
+After=netviet-health.service
+
+[Service]
+Type=simple
+ExecStart=/srv/netviet/apps/zalo-ultty/soak-test.sh
+User=root
+Restart=no

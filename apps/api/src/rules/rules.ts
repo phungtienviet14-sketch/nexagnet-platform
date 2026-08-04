@@ -1,5 +1,5 @@
-import type { DealerTier, OrderStatus, ParsedOrder, PricedLine, PricedOrder } from '@ultty/shared';
-import type { Dealer, PriceRow, Product } from '../knowledge/domain.js';
+import type { OrderStatus, ParsedOrder, PricedLine, PricedOrder } from '@ultty/shared';
+import type { Dealer, DealerPriceOverride, PriceRow, Product } from '../knowledge/domain.js';
 import type { RulesConfig } from './config.js';
 import { formatVnd, normalize } from './text.js';
 
@@ -13,6 +13,8 @@ export interface PriceContext {
   branch: string | null;
   products: Product[];
   prices: PriceRow[];
+  /** Deal rieng theo dealer+sku (override gia si). */
+  priceOverrides: DealerPriceOverride[];
   cfg: RulesConfig;
   now?: Date;
 }
@@ -28,9 +30,23 @@ export function matchProduct(skuRaw: string, products: Product[]): Product | nul
   return null;
 }
 
-function priceFor(sku: string, tier: DealerTier, prices: PriceRow[]): number | null {
+/**
+ * Gia si dai ly/CTV tra cho 1 SKU = deal rieng cua dai ly (neu co) > gia si chung (wholesale).
+ * Gia si chung nhu nhau moi dai ly/CTV (khao sat: "bang gia chung" + deal rieng); biet duoc
+ * ke ca chua map dai ly.
+ */
+function priceFor(
+  sku: string,
+  dealerId: string | null,
+  prices: PriceRow[],
+  overrides: DealerPriceOverride[],
+): number | null {
+  if (dealerId) {
+    const override = overrides.find((o) => o.dealerId === dealerId && o.sku === sku);
+    if (override) return override.price;
+  }
   const row = prices.find((p) => p.sku === sku);
-  return row ? row.prices[tier] : null;
+  return row ? row.wholesale : null;
 }
 
 function isNoiThanh(region: string, cfg: RulesConfig): boolean {
@@ -44,12 +60,14 @@ export function computeShipping(totalQuantity: number, region: string, cfg: Rule
   return isNoiThanh(region, cfg) ? cfg.shipFeeNoiThanh : cfg.shipFeeTinh;
 }
 
+// Nhan chinh sach — thuat ngu that tu PO/quy trinh khach (cong no tinh tu NGAY NHAN HANG;
+// ky gui = doi soat cuoi thang roi thanh toan; CTV = thanh toan 100% khi giao).
 const POLICY_LABELS: Record<NonNullable<PricedOrder['policy']>, string> = {
-  cong_no_30: 'Công nợ 30 ngày',
-  cong_no_45: 'Công nợ 45 ngày',
-  ky_gui: 'Ký gửi',
-  thanh_toan_ngay: 'Thanh toán ngay',
-  cod: 'COD (thu hộ)',
+  cong_no_30: 'Công nợ 30 ngày (từ ngày nhận hàng)',
+  cong_no_45: 'Công nợ 45 ngày (từ ngày nhận hàng)',
+  ky_gui: 'Ký gửi (chốt số cuối tháng)',
+  thanh_toan_ngay: 'Thanh toán ngay (100% khi giao)',
+  cod: 'COD (thu hộ khi giao)',
 };
 
 function buildConfirmation(p: Omit<PricedOrder, 'confirmationText'>, now: Date): string {
@@ -81,8 +99,10 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
 
   const lines: PricedLine[] = parsed.items.map((item) => {
     const product = matchProduct(item.skuRaw, ctx.products);
-    const unitPrice =
-      product && ctx.dealer ? (priceFor(product.sku, ctx.dealer.tier, ctx.prices) ?? 0) : 0;
+    // Gia si biet duoc ke ca chua map dai ly (bang gia chung); Giam sat van leo thang neu dai ly la.
+    const unitPrice = product
+      ? (priceFor(product.sku, ctx.dealer?.id ?? null, ctx.prices, ctx.priceOverrides) ?? 0)
+      : 0;
     return {
       skuRaw: item.skuRaw,
       sku: product?.sku ?? null,
@@ -97,10 +117,14 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
   const itemsSubtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
   const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
   const region = parsed.customerAddress ?? ctx.branch ?? '';
-  const shippingFee = computeShipping(totalQuantity, region, ctx.cfg);
+  // Don giao DAI LY (TH1) MIEN PHI ship (PO: "Mien phi giao hang dung thoi han khong mop meo be vo").
+  // TH2 = giao thang khach le cua dai ly -> cuoc theo vung (tam tinh, cho bieu cuoc khach — A3).
+  const shippingFee = parsed.orderType === 'TH2' ? computeShipping(totalQuantity, region, ctx.cfg) : 0;
   const codCollect = parsed.orderType === 'TH2' && parsed.codCollect === true;
   const codFee = codCollect ? ctx.cfg.codFee : 0;
-  const vat = !parsed.noVat;
+  // Nghiep vu: MAC DINH KHONG VAT (VAT tuy truong hop). Chi ap VAT khi khach ghi ro
+  // "xuat VAT" (wantVat) va khong ghi "ko VAT" (noVat).
+  const vat = parsed.wantVat === true && parsed.noVat !== true;
   const vatAmount = vat ? Math.round(itemsSubtotal * ctx.cfg.vatRate) : 0;
   const grandTotal = itemsSubtotal + shippingFee + vatAmount + codFee;
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { shouldAutoAck, updateToChannelMessage } from './bot-poller.js';
+import {
+  isAllowedBotMessage,
+  isBotChannelActive,
+  shouldAutoAck,
+  updateToChannelMessage,
+} from './bot-poller.js';
 
 describe('updateToChannelMessage', () => {
   it('map tin text nhom', () => {
@@ -58,5 +63,31 @@ describe('shouldAutoAck', () => {
   it('bat cong tac nhung intent da hieu (dat_don/hoi_gia) -> khong ack', () => {
     expect(shouldAutoAck('dat_don', 'on')).toBe(false);
     expect(shouldAutoAck('hoi_gia', 'on')).toBe(false);
+  });
+});
+
+describe('hybrid ownership guard', () => {
+  it('BotPoller hoat dong o ca bot va hybrid', () => {
+    expect(isBotChannelActive('bot')).toBe(true);
+    expect(isBotChannelActive('hybrid')).toBe(true);
+    expect(isBotChannelActive('zca')).toBe(false);
+    expect(isBotChannelActive('mock')).toBe(false);
+  });
+
+  it('chi nhan tin nhom da map vao knowledge, chan private/nhom la truoc LLM', () => {
+    const mapped = new Set(['bot-chat-mapped']);
+    const base = {
+      externalMessageId: 'm-1',
+      platform: 'zalo' as const,
+      source: 'bot_webhook' as const,
+      chatType: 'group' as const,
+      externalChatId: 'bot-chat-mapped',
+      text: 'gui 10 ghe',
+      sentAt: new Date(),
+    };
+
+    expect(isAllowedBotMessage(base, mapped)).toBe(true);
+    expect(isAllowedBotMessage({ ...base, externalChatId: 'unknown' }, mapped)).toBe(false);
+    expect(isAllowedBotMessage({ ...base, chatType: 'private' }, mapped)).toBe(false);
   });
 });

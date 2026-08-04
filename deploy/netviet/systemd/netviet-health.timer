@@ -1,0 +1,10 @@
+[Unit]
+Description=Check NetViet containers and private health endpoint
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=1m
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

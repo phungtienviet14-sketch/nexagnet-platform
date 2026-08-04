@@ -1,12 +1,29 @@
-# PoC Parser bake-off (Task 0.4 — CHỜ DỮ LIỆU KHÁCH)
+# PoC Parser — Eval độ ổn định phân loại intent
 
-Đo độ chính xác trích xuất đơn TH1/TH2 trên **20-30 tin nhắn thật** của U Ultty, so sánh ≥2 model Claude.
+Đo **độ chính xác phân loại 7 intent** của parser (DeepSeek/Claude/mock) qua **đúng pipeline thật**
+(gọi API `/demo/simulate`), để verify **trước buổi demo** khi chạy `PARSER_MODE=deepseek`.
 
-**Điều kiện chặn:** cần dữ liệu từ khách (xem [docs/checklist-du-lieu-khach.md](../../docs/checklist-du-lieu-khach.md)):
-tin nhắn mẫu + danh mục SKU + bảng giá + glossary viết tắt.
+## Cách chạy
 
-Khi có dữ liệu, tool này sẽ được dựng gồm:
-- `data/messages.jsonl` — tin nhắn thật + golden output (đơn đúng do Sale xác nhận)
-- runner gọi Claude API (tool use, schema từ `@ultty/shared`) cho từng model
-- báo cáo: % JSON hợp lệ, độ chính xác từng field (SKU, số lượng, đơn giá, tổng, địa chỉ), % dùng đúng glossary
-- kết quả ghi vào `docs/poc-parser.md` → chốt model + prompt baseline cho Task 1.4
+1. Chạy API với parser cần đo (ví dụ AI thật):
+   ```bash
+   PARSER_MODE=deepseek BOT_MODE=off pnpm dev:api      # cần DEEPSEEK_API_KEY trong .env
+   ```
+2. Chạy eval (terminal khác):
+   ```bash
+   pnpm --filter @ultty/poc-parser eval
+   ```
+
+Kết quả: bảng % đúng theo từng intent + tổng + danh sách tin phân loại sai (`expected → got`).
+Ngưỡng đề xuất demo: **intent-accuracy ≥ 90%**. Nếu chưa đạt → tune prompt/few-shot ở
+[apps/api/src/pipeline/parser-prompt.ts](../../apps/api/src/pipeline/parser-prompt.ts) +
+[packages/shared/src/intents.ts](../../packages/shared/src/intents.ts).
+
+## Dữ liệu
+
+`eval-set.json` — 35 tin nhắn Zalo tiếng Việt (không dấu, viết tắt) phủ 7 intent + bẫy TH2/nhiều SP/
+glossary/adversarial, mỗi tin gắn `expectedIntent`. Khi có **tin thật của khách** (checklist B1-B2),
+bổ sung/thay vào đây + thêm golden output để đo cả field-accuracy.
+
+## Biến môi trường
+`API_URL` (mặc định `http://localhost:3001`) · `EVAL_CHAT_ID` (mặc định nhóm Meta HN) · `EVAL_THROTTLE_MS` (300).

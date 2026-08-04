@@ -6,7 +6,8 @@ import { z } from 'zod';
  * chuan hoa ve schema nay truoc khi day vao pipeline.
  */
 export const PLATFORMS = ['zalo'] as const;
-export const MESSAGE_SOURCES = ['copilot_paste', 'bot_webhook'] as const;
+// Nguon tin: dan tay (copilot) | webhook/poll Bot Platform | listener zca-js (userbot ca nhan).
+export const MESSAGE_SOURCES = ['copilot_paste', 'bot_webhook', 'zca_listener'] as const;
 export const CHAT_TYPES = ['private', 'group'] as const;
 
 export const channelMessageSchema = z.object({

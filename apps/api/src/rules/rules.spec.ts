@@ -9,8 +9,8 @@ const products: Product[] = [
   { sku: 'NOI-CHIEN', name: 'Nồi chiên không dầu', aliases: ['noi chien', 'ncked'], unit: 'cai' },
 ];
 const prices: PriceRow[] = [
-  { sku: 'GHE-FELIX', prices: { dai_ly: 1_150_000, ctv: 1_250_000 } },
-  { sku: 'NOI-CHIEN', prices: { dai_ly: 2_000_000, ctv: 2_200_000 } },
+  { sku: 'GHE-FELIX', wholesale: 1_150_000 },
+  { sku: 'NOI-CHIEN', wholesale: 2_000_000 },
 ];
 const dealer: Dealer = {
   id: 'd1',
@@ -23,7 +23,7 @@ const cfg = DEFAULT_RULES_CONFIG;
 const now = new Date('2026-07-07T00:00:00Z');
 
 function ctx(over: Partial<Parameters<typeof priceOrder>[1]> = {}) {
-  return { dealer, branch: 'HN', products, prices, cfg, now, ...over };
+  return { dealer, branch: 'HN', products, prices, priceOverrides: [], cfg, now, ...over };
 }
 
 describe('matchProduct', () => {
@@ -77,10 +77,33 @@ describe('priceOrder — TH1', () => {
     expect(priced.confirmationText).toContain('11.500.000đ');
   });
 
-  it('tinh VAT khi khong co co "khong VAT"', () => {
+  it('MAC DINH khong VAT khi khach khong ghi "xuat VAT"', () => {
     const priced = priceOrder({ ...parsed, noVat: false }, ctx());
+    expect(priced.vat).toBe(false);
+    expect(priced.vatAmount).toBe(0);
+    expect(priced.grandTotal).toBe(11_500_000);
+  });
+
+  it('CO VAT khi khach ghi "xuat VAT" (wantVat=true)', () => {
+    const priced = priceOrder({ ...parsed, noVat: false, wantVat: true }, ctx());
     expect(priced.vatAmount).toBe(1_150_000);
     expect(priced.grandTotal).toBe(12_650_000);
+  });
+
+  it('ap gia SI ke ca CHUA map dai ly (bang gia chung), van canh bao dai ly la', () => {
+    const priced = priceOrder(parsed, ctx({ dealer: null }));
+    expect(priced.lines[0]!.unitPrice).toBe(1_150_000);
+    expect(priced.lines[0]!.lineTotal).toBe(11_500_000);
+    expect(priced.warnings.join(' ')).toMatch(/đại lý|dai ly/i);
+  });
+
+  it('deal RIENG cua dai ly override gia si chung', () => {
+    const priced = priceOrder(
+      parsed,
+      ctx({ priceOverrides: [{ dealerId: 'd1', sku: 'GHE-FELIX', price: 1_000_000 }] }),
+    );
+    expect(priced.lines[0]!.unitPrice).toBe(1_000_000);
+    expect(priced.lines[0]!.lineTotal).toBe(10_000_000);
   });
 });
 

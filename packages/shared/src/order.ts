@@ -44,7 +44,10 @@ export const parsedOrderSchema = z.object({
   items: z.array(parsedOrderItemSchema).min(1),
   /** Tong khach ghi (neu co) — de validation doi chieu voi tong rules tinh */
   totalRaw: z.number().nonnegative().optional(),
+  /** Khach ghi ro "khong VAT"/"ko lay VAT". */
   noVat: z.boolean().default(false),
+  /** Khach ghi ro "xuat VAT"/"co hoa don". VAT chi ap khi wantVat=true (mac dinh KHONG VAT). */
+  wantVat: z.boolean().optional(),
   // Truong rieng TH2
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),

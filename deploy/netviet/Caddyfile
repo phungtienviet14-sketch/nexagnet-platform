@@ -1,0 +1,76 @@
+{
+	admin off
+	email {$ACME_EMAIL}
+}
+
+(app_headers) {
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+	}
+}
+
+(secure_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}
+
+(app_routes) {
+	@api path /events /orders* /messages* /demo* /kiotviet* /knowledge* /broadcast* /health /zalo/* /groups/* /settings/* /admin*
+	handle @api {
+		reverse_proxy api:3001 {
+			header_up x-api-key "{$API_KEY}"
+			header_up -Authorization
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000 {
+			header_up -Authorization
+		}
+	}
+}
+
+http://:8080 {
+	import app_headers
+	import app_routes
+}
+
+# MOI TRUONG DEV/DEMO — KHONG CO XAC THUC (quyet dinh nguoi van hanh 04/08/2026).
+# Ca hai hostname duoi day mo cong khai, khong Basic Auth; API phia sau chay AUTH_MODE=none.
+# @blocked KHONG phai xac thuc — chi tach be mat: khach xem demo khong thay trang van hanh.
+# Bat lai bao ve: them lai `basic_auth` o day + dat AUTH_MODE=api-key trong .runtime/secrets.env.
+{$DEMO_DOMAIN} {
+	import secure_headers
+	import app_headers
+
+	@blocked path /zalo* /broadcast* /settings* /groups* /admin*
+	handle @blocked {
+		respond "Khong co quyen truy cap" 404
+	}
+	import app_routes
+}
+
+{$OPERATOR_DOMAIN} {
+	import secure_headers
+	import app_headers
+	import app_routes
+}
+
+{$FLOWISE_DOMAIN} {
+	import secure_headers
+	reverse_proxy flowise:3000 {
+		header_down Set-Cookie (.*) "$1; Secure"
+	}
+}

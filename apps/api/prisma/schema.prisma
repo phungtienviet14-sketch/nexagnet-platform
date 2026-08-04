@@ -1,0 +1,316 @@
+// Prisma schema — Phase 3 (luu tru ben Postgres).
+// Nguon su that mo hinh: docs/nghiep-vu.md + docs/so-do-he-thong.md (ERD).
+// GHI CHU QUAN TRONG: app VAN chay in-memory mac dinh (PERSISTENCE=memory). Prisma chi bat khi
+// PERSISTENCE=prisma -> demo/test khong can DB. Migration tao khi co Postgres: docker compose up -d postgres.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----- Enums (khop literal union trong packages/shared) -----
+
+enum DealerTier {
+  dai_ly
+  ctv
+}
+
+enum PolicyType {
+  cong_no_30
+  cong_no_45
+  ky_gui
+  thanh_toan_ngay
+  cod
+}
+
+enum OrderStatus {
+  draft
+  pending_review
+  needs_edit
+  approved
+  rejected
+  sent
+  synced
+}
+
+/// Trang thai map nhom -> dai ly. `pending` = nhom la (hop thu "nhom chua map").
+enum GroupMappingStatus {
+  pending
+  mapped
+  ignored
+}
+
+enum CustomerRank {
+  dai_ly
+  ctv
+  khach_le
+  unknown
+}
+
+enum OperationalRole {
+  khach_hang
+  sale
+  ke_toan
+  quan_ly
+  ksnb
+  bpvh
+  ky_thuat
+  unknown
+}
+
+enum ParticipantHandlingMode {
+  inherit_group
+  process
+  ignore
+  manual_review
+}
+
+enum ParticipantSource {
+  zca_sync
+  manual
+}
+
+enum RuleConfigStatus {
+  draft
+  preview
+  active
+  archived
+}
+
+// ----- Nguon su that (tang 6) -----
+
+model Dealer {
+  id            String                @id @default(cuid())
+  code          String?               @unique
+  name          String
+  aliases       String[]              @default([])
+  tier          DealerTier
+  defaultPolicy PolicyType
+  phone         String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  groups        Group[]
+  overrides     DealerPriceOverride[]
+  orders        Order[]
+}
+
+/// 1 nhom Zalo -> 1 dai ly. Map theo (platform, chatId) — KHONG theo ten nhom.
+model Group {
+  id           String             @id @default(cuid())
+  platform     String             @default("zalo")
+  chatId       String
+  name         String?
+  branch       String?
+  dealerId     String?
+  dealer       Dealer?            @relation(fields: [dealerId], references: [id])
+  status       GroupMappingStatus @default(pending)
+  source       String? // manual | auto_suggest | import
+  lastSeenAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  messages     Message[]
+  orders       Order[]
+  participants GroupParticipant[]
+
+  @@unique([platform, chatId])
+  @@index([status])
+}
+
+model GroupParticipant {
+  id              String                  @id @default(cuid())
+  groupId         String
+  group           Group                   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  externalUserId  String
+  displayName     String
+  zaloName        String?
+  avatarUrl       String?
+  customerRank    CustomerRank            @default(unknown)
+  operationalRole OperationalRole         @default(unknown)
+  handlingMode    ParticipantHandlingMode @default(inherit_group)
+  active          Boolean                 @default(true)
+  source          ParticipantSource       @default(zca_sync)
+  lastSeenAt      DateTime?
+  syncedAt        DateTime
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([groupId, externalUserId])
+  @@index([groupId, active])
+  @@index([externalUserId])
+}
+
+model Product {
+  sku         String                @id
+  name        String
+  aliases     String[]              @default([])
+  unit        String
+  description String?
+  price       Price?
+  overrides   DealerPriceOverride[]
+  orderItems  OrderItem[]
+}
+
+/// Bang gia thang (gia dai ly/CTV TRA = wholesale = "Don gia CTV").
+model Price {
+  sku            String   @id
+  product        Product  @relation(fields: [sku], references: [sku])
+  wholesale      Int
+  minRetailPrice Int?
+  retailPrice    Int?
+  listPrice      Int?
+  validMonth     String? // vd "2026-07"
+  updatedAt      DateTime @updatedAt
+}
+
+/// Deal rieng: override gia si theo dealer + sku.
+model DealerPriceOverride {
+  id       String  @id @default(cuid())
+  dealerId String
+  dealer   Dealer  @relation(fields: [dealerId], references: [id])
+  sku      String
+  product  Product @relation(fields: [sku], references: [sku])
+  price    Int
+
+  @@unique([dealerId, sku])
+}
+
+model GlossaryEntry {
+  term    String @id
+  meaning String
+}
+
+// ----- Tin nhan & don (tuan thu: luu MOI tin ngay khi nhan) -----
+
+model Message {
+  id                String   @id @default(cuid())
+  externalMessageId String
+  platform          String   @default("zalo")
+  source            String // zca_listener | bot | copilot
+  chatId            String
+  groupId           String?
+  group             Group?   @relation(fields: [groupId], references: [id])
+  senderExternalId  String?
+  senderDisplayName String?
+  text              String
+  imageUrl          String?
+  sentAt            DateTime
+  receivedAt        DateTime @default(now())
+  raw               Json?
+  orders            Order[]
+
+  @@unique([platform, externalMessageId])
+  @@index([chatId])
+}
+
+model Order {
+  id                String          @id @default(cuid())
+  status            OrderStatus     @default(pending_review)
+  orderType         String? // TH1 | TH2
+  intent            String
+  senderType        String
+  chatId            String
+  groupId           String?
+  group             Group?          @relation(fields: [groupId], references: [id])
+  dealerId          String?
+  dealer            Dealer?         @relation(fields: [dealerId], references: [id])
+  dealerName        String?
+  branch            String?
+  groupName         String?
+  rawText           String
+  imageUrl          String?
+  messageId         String?
+  message           Message?        @relation(fields: [messageId], references: [id])
+  confidence        Json?
+  parsed            Json?
+  priced            Json?
+  trace             Json?
+  grandTotal        Int?
+  kiotVietCode      String?
+  ruleConfigVersion Int?
+  /// Ban day du OrderView (nguon su that cho repo — round-trip khong mat field long nhau).
+  view              Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  items             OrderItem[]
+  feedback          ParseFeedback[]
+
+  @@index([status])
+  @@index([chatId])
+}
+
+model RuleConfigVersion {
+  id          String           @id @default(cuid())
+  version     Int              @unique @default(autoincrement())
+  status      RuleConfigStatus @default(draft)
+  payload     Json
+  createdBy   String?
+  activatedBy String?
+  createdAt   DateTime         @default(now())
+  activatedAt DateTime?
+
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  requestId  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([actor])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sku         String?
+  product     Product? @relation(fields: [sku], references: [sku])
+  skuRaw      String
+  productName String?
+  quantity    Int
+  unitPrice   Int
+  lineTotal   Int
+  matched     Boolean  @default(false)
+}
+
+/// Feedback loop: cap (AI output, ban Sale sua) -> mo rong glossary/few-shot.
+model ParseFeedback {
+  id        String   @id @default(cuid())
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  aiOutput  Json
+  corrected Json
+  createdAt DateTime @default(now())
+}
+
+// ----- Quan tri (Phase 5) -----
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?  @unique
+  role      String // sale | ke_toan | quan_ly
+  createdAt DateTime @default(now())
+}
+
+model KpiEvent {
+  id      String   @id @default(cuid())
+  type    String
+  orderId String?
+  payload Json?
+  at      DateTime @default(now())
+
+  @@index([type])
+}

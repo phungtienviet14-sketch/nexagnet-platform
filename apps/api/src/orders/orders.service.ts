@@ -1,12 +1,14 @@
 import {
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { OrderView } from '@ultty/shared';
+import { loadEnv, type OrderView, type ReplyChannel } from '@ultty/shared';
+import { AgentEventsService } from '../agents/agent-events.service.js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
-import { ChannelAdapter } from '../channels/channel-adapter.js';
+import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { KiotVietAdapter } from '../kiotviet/kiotviet.adapter.js';
 import { OrdersRepository } from './orders.repository.js';
 
@@ -14,22 +16,23 @@ import { OrdersRepository } from './orders.repository.js';
 export class OrdersService {
   constructor(
     private readonly repo: OrdersRepository,
-    private readonly channel: ChannelAdapter,
+    private readonly outbound: OutboundChannelRouter,
     private readonly kiotViet: KiotVietAdapter,
+    @Optional() private readonly events?: AgentEventsService,
   ) {}
 
   /** Danh sach DON (intent dat_don). */
-  listOrders(): OrderView[] {
-    return this.repo.list().filter((v) => v.intent === 'dat_don');
+  async listOrders(): Promise<OrderView[]> {
+    return (await this.repo.list()).filter((v) => v.intent === 'dat_don');
   }
 
   /** Feed moi tin da xu ly (raw) cho tab Tin nhan. */
-  listMessages(): OrderView[] {
+  async listMessages(): Promise<OrderView[]> {
     return this.repo.list();
   }
 
-  getOrThrow(id: string): OrderView {
-    const view = this.repo.findById(id);
+  async getOrThrow(id: string): Promise<OrderView> {
+    const view = await this.repo.findById(id);
     if (!view) throw new NotFoundException(`Khong tim thay don ${id}`);
     return view;
   }
@@ -41,7 +44,7 @@ export class OrdersService {
    * chi chuyen 'synced' khi ca 2 buoc xong.
    */
   async approve(id: string): Promise<OrderView> {
-    const view = this.getOrThrow(id);
+    const view = await this.getOrThrow(id);
     // Idempotent (M4): don da 'synced' -> khong gui Zalo / day KiotViet lai lan nua.
     if (view.status === 'synced') {
       return view;
@@ -51,7 +54,11 @@ export class OrdersService {
     }
 
     try {
-      await this.channel.sendMessage(view.chatId, view.priced.confirmationText + AUTO_LABEL);
+      await this.outbound.sendMessage(
+        view.replyChannel ?? legacyReplyChannel(),
+        view.chatId,
+        view.priced.confirmationText + AUTO_LABEL,
+      );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new ServiceUnavailableException(
@@ -60,11 +67,21 @@ export class OrdersService {
     }
 
     const { code } = await this.kiotViet.pushOrder(view.priced);
-    return this.repo.update(id, { status: 'synced', kiotVietCode: code })!;
+    const synced = (await this.repo.update(id, { status: 'synced', kiotVietCode: code }))!;
+    this.events?.emit({ type: 'order.updated', order: synced });
+    return synced;
   }
 
-  reject(id: string): OrderView {
-    this.getOrThrow(id);
-    return this.repo.update(id, { status: 'rejected' })!;
+  async reject(id: string): Promise<OrderView> {
+    await this.getOrThrow(id);
+    const rejected = (await this.repo.update(id, { status: 'rejected' }))!;
+    this.events?.emit({ type: 'order.updated', order: rejected });
+    return rejected;
   }
+}
+
+/** Don cu chua co replyChannel chi duoc suy ra khi runtime KHONG phai hybrid. */
+function legacyReplyChannel(): ReplyChannel | undefined {
+  const mode = loadEnv().CHANNEL_MODE;
+  return mode === 'hybrid' ? undefined : mode;
 }

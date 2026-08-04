@@ -1,0 +1,331 @@
+import {
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  ForbiddenException,
+  Get,
+  Headers,
+  NotFoundException,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { loadEnv } from '@ultty/shared';
+import { z } from 'zod';
+import { AuditLogService } from '../audit/audit-log.service.js';
+import {
+  RuleConfigLifecycleError,
+  RuleConfigService,
+} from '../rule-config/rule-config.service.js';
+import { toRulesConfig } from '../rule-config/rule-config.defaults.js';
+import { computeShipping } from '../rules/rules.js';
+import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
+import { SettingsQueryService } from './settings-query.service.js';
+import {
+  SOURCE_TRUTH_RESOURCES,
+  SourceTruthWriteService,
+  type SourceTruthResource,
+} from './source-truth-write.service.js';
+
+const resourceSchema = z.enum(SOURCE_TRUTH_RESOURCES);
+const idSchema = z.string().trim().min(1).max(128);
+const autoSendSchema = z.discriminatedUnion('enabled', [
+  z.object({ enabled: z.literal(true), acknowledged: z.literal(true) }).strict(),
+  z.object({ enabled: z.literal(false) }).strict(),
+]);
+const ruleDraftSchema = z.object({ payload: z.unknown() }).strict();
+const previewSchema = z
+  .object({
+    sampleOrder: z
+      .object({
+        orderType: z.enum(['TH1', 'TH2']),
+        totalQuantity: z.number().int().positive().max(1_000_000),
+        region: z.string().trim().max(500),
+        itemsSubtotal: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        codCollect: z.boolean(),
+        wantVat: z.boolean(),
+      })
+      .strict(),
+  })
+  .strict();
+const activateSchema = z.object({ confirmed: z.literal(true) }).strict();
+const auditQuerySchema = z
+  .object({
+    actor: z.string().trim().min(1).max(200).optional(),
+    action: z.string().trim().min(1).max(200).optional(),
+    entityType: z.string().trim().min(1).max(200).optional(),
+    entityId: z.string().trim().min(1).max(200).optional(),
+    page: z.coerce.number().int().positive().default(1),
+    limit: z.coerce.number().int().positive().max(200).default(25),
+  })
+  .strict();
+
+@Controller('settings')
+export class SettingsController {
+  private readonly env = loadEnv();
+
+  constructor(
+    private readonly queryService: SettingsQueryService,
+    private readonly sourceTruthWrites: SourceTruthWriteService,
+    private readonly runtime: RuntimeSettingsService,
+    private readonly rules: RuleConfigService,
+    private readonly audit: AuditLogService,
+  ) {}
+
+  @Get('summary')
+  summary() {
+    return this.queryService.summary();
+  }
+
+  @Get('source-truth/:resource')
+  sourceTruth(@Param('resource') resource: string) {
+    return this.queryService.sourceTruth(parseResource(resource));
+  }
+
+  @Put('source-truth/:resource/:id')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  putSourceTruth(
+    @Param('resource') resource: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    const parsedId = idSchema.safeParse(id);
+    if (!parsedId.success) throw new BadRequestException('ID nguon su that khong hop le');
+    return this.sourceTruthWrites.write(
+      parseResource(resource),
+      parsedId.data,
+      body,
+      actor,
+      requestId ?? null,
+    );
+  }
+
+  @Put('source-truth/:resource')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  putNewSourceTruth(
+    @Param('resource') resource: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    const parsedResource = parseResource(resource);
+    const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+    if (
+      parsedResource === 'overrides' &&
+      (!idSchema.safeParse(record.dealerId).success || !idSchema.safeParse(record.sku).success)
+    ) {
+      throw new BadRequestException('Override can co dealerId va sku hop le');
+    }
+    const inferredId =
+      parsedResource === 'overrides'
+        ? `${String(record.dealerId ?? '')}:${String(record.sku ?? '')}`
+        : (record.id ?? record.sku ?? record.term ?? record.chatId);
+    const parsedId = idSchema.safeParse(inferredId);
+    if (!parsedId.success) throw new BadRequestException('Can co id, sku, term hoac chatId de tao moi');
+    const changes = createChangesWithoutRouteIdentifier(parsedResource, record);
+    return this.sourceTruthWrites.write(
+      parsedResource,
+      parsedId.data,
+      changes,
+      actor,
+      requestId ?? null,
+    );
+  }
+
+  @Get('rules')
+  rulesList() {
+    return this.rules.list();
+  }
+
+  @Post('rules')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async createRule(
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    const parsed = ruleDraftSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Payload rules khong hop le');
+    try {
+      const version = await this.rules.createDraft(parsed.data.payload, actorName(actor));
+      await this.audit.append({
+        actor: actorName(actor),
+        action: 'rules.draft.create',
+        entityType: 'RuleConfigVersion',
+        entityId: version.id,
+        after: version,
+        requestId,
+      });
+      return version;
+    } catch (error) {
+      this.rethrowRuleError(error);
+    }
+  }
+
+  @Post('rules/:id/preview')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async previewRule(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    const parsed = previewSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Don mau preview khong hop le');
+    try {
+      const version = await this.rules.preview(id);
+      const cfg = toRulesConfig(version.payload);
+      const sample = parsed.data.sampleOrder;
+      const shippingFee =
+        sample.orderType === 'TH1'
+          ? 0
+          : computeShipping(sample.totalQuantity, sample.region, cfg);
+      const vatAmount = sample.wantVat ? Math.round(sample.itemsSubtotal * cfg.vatRate) : 0;
+      const codFee = sample.orderType === 'TH2' && sample.codCollect ? cfg.codFee : 0;
+      const totals = {
+        itemsSubtotal: sample.itemsSubtotal,
+        shippingFee,
+        vatAmount,
+        codFee,
+        grandTotal: sample.itemsSubtotal + shippingFee + vatAmount + codFee,
+      };
+      await this.audit.append({
+        actor: actorName(actor),
+        action: 'rules.preview',
+        entityType: 'RuleConfigVersion',
+        entityId: version.id,
+        after: version,
+        requestId,
+      });
+      return {
+        version,
+        totals,
+        warnings: ['A3/D8/D15 van la gia tri tam tinh; can xac minh truoc production.'],
+        trace: [`Rules v${version.version} da qua schema typed va san sang kich hoat.`],
+      };
+    } catch (error) {
+      this.rethrowRuleError(error);
+    }
+  }
+
+  @Post('rules/:id/activate')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async activateRule(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    if (!activateSchema.safeParse(body).success) {
+      throw new BadRequestException('Phai xac nhan truoc khi kich hoat rules');
+    }
+    try {
+      const version = await this.rules.activate(id, actorName(actor));
+      await this.audit.append({
+        actor: actorName(actor),
+        action: 'rules.activate',
+        entityType: 'RuleConfigVersion',
+        entityId: version.id,
+        after: version,
+        requestId,
+      });
+      return version;
+    } catch (error) {
+      this.rethrowRuleError(error);
+    }
+  }
+
+  @Put('automation/auto-send')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async setAutoSend(
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    const parsed = autoSendSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException('Bat AUTO_SEND can xac nhan ro rang; tat chi can enabled=false');
+    }
+    const before = { autoSend: this.runtime.autoSend() };
+    const after = this.runtime.setAutoSend(parsed.data.enabled);
+    await this.audit.append({
+      actor: actorName(actor),
+      action: 'automation.auto_send',
+      entityType: 'RuntimeSettings',
+      entityId: 'AUTO_SEND',
+      before,
+      after,
+      requestId,
+    });
+    return after;
+  }
+
+  @Get('audit')
+  async auditList(@Query() raw: unknown) {
+    const parsed = auditQuerySchema.safeParse(raw);
+    if (!parsed.success) throw new BadRequestException('Bo loc audit khong hop le');
+    const { page, limit, ...filter } = parsed.data;
+    const entries = await this.audit.list({ ...filter, limit: page * limit });
+    const paged = entries.slice((page - 1) * limit, page * limit);
+    return { entries: paged, total: entries.length, page, limit };
+  }
+
+  private assertMutationOrigin(origin?: string): void {
+    // AUTH_MODE=none (VM dev/demo): xac thuc da tat -> khong kiem Origin nua. Xem env.ts.
+    if (this.env.AUTH_MODE === 'none') return;
+    if (this.env.NODE_ENV !== 'production') return;
+    const allowed = new Set([this.env.CORS_ORIGIN, this.env.ZALO_OPERATOR_ORIGIN].filter(Boolean));
+    if (!origin || !allowed.has(origin)) {
+      throw new ForbiddenException('Origin trang cau hinh khong hop le');
+    }
+  }
+
+  private rethrowRuleError(error: unknown): never {
+    if (!(error instanceof RuleConfigLifecycleError)) throw error;
+    if (error.code === 'NOT_FOUND') throw new NotFoundException(error.message);
+    if (error.code === 'INVALID_TRANSITION') throw new ConflictException(error.message);
+    throw new BadRequestException(error.message);
+  }
+}
+
+function createChangesWithoutRouteIdentifier(
+  resource: SourceTruthResource,
+  record: Record<string, unknown>,
+): Record<string, unknown> {
+  if (resource === 'overrides' || resource === 'groups') return { ...record };
+  const identifier =
+    resource === 'dealers'
+      ? 'id'
+      : resource === 'glossary'
+        ? 'term'
+        : 'sku';
+  return Object.fromEntries(Object.entries(record).filter(([key]) => key !== identifier));
+}
+
+function parseResource(resource: string): SourceTruthResource {
+  const parsed = resourceSchema.safeParse(resource);
+  if (!parsed.success) throw new NotFoundException('Nguon su that khong ton tai');
+  return parsed.data;
+}
+
+function actorName(actor: string): string {
+  const parsed = z.string().trim().min(1).max(200).safeParse(actor);
+  return parsed.success ? parsed.data : 'operator';
+}

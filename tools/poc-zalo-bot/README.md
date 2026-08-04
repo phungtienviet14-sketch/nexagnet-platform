@@ -1,7 +1,7 @@
 # PoC Zalo Bot Platform — trả lời 3 câu hỏi Beta
 
 Mục tiêu: xác định Bot Platform có dùng được làm kênh **tự động đọc tin nhắn nhóm** cho GĐ1 không.
-Kết quả điền vào [docs/poc-zalo-bot.md](../../docs/poc-zalo-bot.md). Tài liệu API: https://bot.zapps.me/docs
+Kết quả điền vào [docs/so-do-he-thong.md](../../docs/so-do-he-thong.md) — **Phụ lục A** (bản gốc `docs/poc-zalo-bot.md` đã hợp nhất vào đó 11/07/2026). Tài liệu API: https://bot.zapps.me/docs
 
 ## Chuẩn bị (1 lần, ~10 phút)
 

@@ -16,8 +16,14 @@ interface ExtractedItem {
 }
 
 const PRICE_KEYWORDS = /(bao nhieu|gia bao|\bgia\b|may tien|bao gia)/;
-const WARRANTY_KEYWORDS = /(bao hanh|bi loi|doi tra|khieu nai|hong hoc|loi san pham)/;
+const WARRANTY_KEYWORDS = /(bao hanh|bi loi|doi tra|khieu nai|hong hoc|loi san pham|giao sai|giao thieu|thieu hang)/;
+const POLICY_KEYWORDS = /(cong no|ky gui|tra cham|tra sau|han thanh toan|no bao nhieu|thanh toan sau|chinh sach)/;
+const SHIP_KEYWORDS =
+  /(khi nao.*(hang|giao|toi|nhan|den)|bao gio.*(hang|giao|toi|nhan|den)|van chuyen|giao hang|may ngay.*(hang|giao|toi)|hang toi chua|hang den chua|van don|tracking)/;
+const PRODUCT_QUESTION_KEYWORDS =
+  /(co tot|the nao|nhu the nao|ra sao|chat luong|review|danh gia|so sanh|khac gi|dung co tot|co ben|co dep|bao lau|tu van|gioi thieu|thong so|cong suat|kich thuoc|dung duoc khong)/;
 const NO_VAT_KEYWORDS = /(ko lay vat|khong lay vat|ko vat|khong vat|ko xuat vat|khong xuat vat|mien vat)/;
+const WANT_VAT_KEYWORDS = /(xuat vat|co vat|lay vat|xuat hoa don|co hoa don|lay hoa don|xuat hd)/;
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -29,38 +35,55 @@ function stripMention(text: string, botName?: string): string {
   return text.replace(new RegExp(pattern, 'ig'), ' ');
 }
 
+/** So luong = so nguyen NGAY TRUOC vi tri ten SP (khong co -> 1, explicit=false). */
+function quantityBefore(normText: string, idx: number): { quantity: number; explicit: boolean } {
+  const prefixNumbers = normText.slice(0, idx).match(/\d+/g);
+  const lastNumber = prefixNumbers?.[prefixNumbers.length - 1];
+  return {
+    quantity: lastNumber !== undefined ? Number.parseInt(lastNumber, 10) : 1,
+    explicit: lastNumber !== undefined,
+  };
+}
+
 function extractItems(normText: string, products: Product[]): ExtractedItem[] {
-  const items: ExtractedItem[] = [];
+  // Gom MOI (sku, ten/alias) roi khop cum DAI truoc + TIEU THU vung da khop, de tin dang
+  // "combo wfx pf360" khong dem trung ca WFX lan COMBO (alias 'wfx' la substring cua 'combo wfx').
+  const candidates = products
+    .flatMap((p) => [p.name, ...p.aliases].map((raw) => ({ sku: p.sku, text: normalize(raw) })))
+    .filter((c) => c.text.length >= 3)
+    .sort((a, b) => b.text.length - a.text.length);
+
+  const consumed: Array<[number, number]> = [];
   const usedSkus = new Set<string>();
+  const matched: { skuRaw: string; idx: number }[] = [];
 
-  for (const product of products) {
-    const candidates = [product.name, ...product.aliases]
-      .map(normalize)
-      .filter((c) => c.length >= 3)
-      .sort((a, b) => b.length - a.length);
-
-    for (const candidate of candidates) {
-      const idx = normText.indexOf(candidate);
-      if (idx < 0 || usedSkus.has(product.sku)) continue;
-
-      const prefixNumbers = normText.slice(0, idx).match(/\d+/g);
-      const lastNumber = prefixNumbers?.[prefixNumbers.length - 1];
-      const explicit = lastNumber !== undefined;
-      const quantity = lastNumber !== undefined ? Number.parseInt(lastNumber, 10) : 1;
-
-      items.push({ skuRaw: candidate, quantity, explicit });
-      usedSkus.add(product.sku);
-      break;
-    }
+  for (const cand of candidates) {
+    if (usedSkus.has(cand.sku)) continue;
+    const idx = normText.indexOf(cand.text);
+    if (idx < 0) continue;
+    const end = idx + cand.text.length;
+    if (consumed.some(([s, e]) => idx < e && s < end)) continue; // chong lan vung da khop -> bo
+    consumed.push([idx, end]);
+    usedSkus.add(cand.sku);
+    matched.push({ skuRaw: cand.text, idx });
   }
-  return items;
+
+  return matched
+    .sort((a, b) => a.idx - b.idx) // thu tu tu nhien theo vi tri trong tin
+    .map((m) => ({ skuRaw: m.skuRaw, ...quantityBefore(normText, m.idx) }));
 }
 
 function classifyIntent(normText: string, items: ExtractedItem[]): Intent {
   const hasExplicitItem = items.some((i) => i.explicit);
+  // Don ro rang (co so luong + SP) thang truoc.
   if (hasExplicitItem) return 'dat_don';
-  if (PRICE_KEYWORDS.test(normText)) return 'hoi_gia';
+  // Cac tuyen cau hoi/nghiep vu xet TRUOC nhanh "co ten SP -> dat_don"
+  // de tin hoi (khong so luong) khong bi nuot thanh don.
   if (WARRANTY_KEYWORDS.test(normText)) return 'bao_hanh_khieu_nai';
+  if (POLICY_KEYWORDS.test(normText)) return 'chinh_sach_cong_no';
+  if (SHIP_KEYWORDS.test(normText)) return 'van_chuyen';
+  if (PRICE_KEYWORDS.test(normText)) return 'hoi_gia';
+  if (items.length > 0 && PRODUCT_QUESTION_KEYWORDS.test(normText)) return 'hoi_san_pham';
   if (items.length > 0) return 'dat_don';
   return 'khac';
 }
@@ -96,6 +119,7 @@ export class MockParser implements OrderParser {
       dealerNameRaw: input.dealerNameRaw,
       items: orderItems,
       noVat: NO_VAT_KEYWORDS.test(normText),
+      wantVat: WANT_VAT_KEYWORDS.test(normText),
       ...(phoneMatch ? { customerPhone: phoneMatch[0] } : {}),
     };
 

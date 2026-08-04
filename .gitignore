@@ -11,6 +11,11 @@ out/
 .env
 .env.*
 !.env.example
+# Phien dang nhap zca-js (cookie/imei/userAgent) + ma QR — la session token, KHONG commit
+secrets/
+# Ho so khao sat khach hang — PII THAT (dia chi, SDT, PO, STK, bang gia) — KHONG commit len GitHub.
+# Dung cuc bo de nap nguon su that; da trich vao apps/api/src/knowledge/seed.ts.
+HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG/
 
 # Logs
 *.log
@@ -29,8 +34,14 @@ Thumbs.db
 # Temp
 *.tmp
 .cache/
+.runtime/
 
 # Test & build artifacts
 coverage/
 *.tsbuildinfo
 .swc/
+# AdminJS bundler output (tao khi chay panel /admin — artifact, khong commit)
+.adminjs/
+# Playwright E2E output (trace/screenshot cua lan chay gan nhat)
+test-results/
+playwright-report/

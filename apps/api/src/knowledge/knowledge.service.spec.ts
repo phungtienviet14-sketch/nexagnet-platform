@@ -8,6 +8,15 @@ import { KnowledgeService } from './knowledge.service.js';
 describe('KnowledgeService.resolveByChatId (dinh tuyen da nhom)', () => {
   const knowledge = new KnowledgeService();
 
+  it('dung dung group ID zca da duoc operator chon cho Meta HN va Thai Nguyen', () => {
+    expect(knowledge.groups()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ chatId: '2508572440887686813', dealerId: 'meta-hn' }),
+        expect.objectContaining({ chatId: '3787434804745256898', dealerId: 'dl-thai-nguyen' }),
+      ]),
+    );
+  });
+
   it('nhom Meta HN -> dai ly + chi nhanh + ten nhom', () => {
     const meta = knowledge.groups().find((g) => g.dealerId === 'meta-hn');
     expect(meta).toBeDefined();
