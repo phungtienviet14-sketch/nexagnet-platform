@@ -22,7 +22,12 @@ export async function buildAdminModule(env: AppEnv): Promise<DynamicModule> {
   AdminJS.registerAdapter({ Database, Resource });
 
   const logger = new Logger('AdminModule');
-  logger.log('Mount AdminJS tai /admin (PERSISTENCE=prisma, ADMIN_UI=on).');
+  // AUTH_MODE=none (VM dev/demo): panel mount KHONG co man hinh dang nhap. @adminjs/nestjs coi
+  // `auth`/`sessionOptions` la tuy chon — bo han hai khoi thay vi de credential rong.
+  const authDisabled = env.AUTH_MODE === 'none';
+  logger.log(
+    `Mount AdminJS tai /admin (PERSISTENCE=prisma, ADMIN_UI=on)${authDisabled ? ' — KHONG dang nhap (AUTH_MODE=none)' : ''}.`,
+  );
 
   return AdminModule.createAdminAsync({
     inject: [PrismaService],
@@ -35,17 +40,21 @@ export async function buildAdminModule(env: AppEnv): Promise<DynamicModule> {
         },
         resources: buildKnowledgeResources(prisma, getModelByName),
       },
-      auth: {
-        authenticate: async (email: string, password: string) =>
-          email === env.ADMIN_EMAIL && password === env.ADMIN_PASSWORD ? { email } : null,
-        cookieName: 'ultty-adminjs',
-        cookiePassword: env.ADMIN_COOKIE_SECRET,
-      },
-      sessionOptions: {
-        resave: false,
-        saveUninitialized: false,
-        secret: env.ADMIN_COOKIE_SECRET,
-      },
+      ...(authDisabled
+        ? {}
+        : {
+            auth: {
+              authenticate: async (email: string, password: string) =>
+                email === env.ADMIN_EMAIL && password === env.ADMIN_PASSWORD ? { email } : null,
+              cookieName: 'ultty-adminjs',
+              cookiePassword: env.ADMIN_COOKIE_SECRET,
+            },
+            sessionOptions: {
+              resave: false,
+              saveUninitialized: false,
+              secret: env.ADMIN_COOKIE_SECRET,
+            },
+          }),
     }),
   });
 }

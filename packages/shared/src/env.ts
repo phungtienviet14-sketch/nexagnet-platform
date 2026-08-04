@@ -32,6 +32,16 @@ export const envSchema = z.object({
   // NEXT_PUBLIC_* (se lo cho moi nguoi). Production: cho web goi qua proxy phia server, hoac cho
   // toi khi co dang nhap nguoi dung that (quyet dinh D5).
   API_KEY: z.string().min(16, 'API_KEY qua ngan — dung chuoi ngau nhien >= 16 ky tu').optional(),
+  // CONG TAC XAC THUC TOAN HE THONG (mot bien duy nhat, de bat lai):
+  //   api-key = MAC DINH. Guard toan cuc theo header `x-api-key` khi API_KEY co gia tri,
+  //             kiem Origin cho mutation, CORS bo theo CORS_ORIGIN, AdminJS doi dang nhap.
+  //   none    = TAT TOAN BO xac thuc cua ung dung: khong x-api-key, khong kiem Origin,
+  //             CORS mo, AdminJS khong doi dang nhap. Caddy cung bo Basic Auth (xem Caddyfile).
+  // `none` la QUYET DINH VAN HANH cho VM dev/demo (yeu cau nguoi dung 04/08/2026) — doi lai
+  // he thong luon truy cap duoc khong can mat khau. CHI dung khi nhom/du lieu la TEST, khong PII
+  // that: bat ky ai biet URL deu doc duoc bang gia/don va goi duoc /broadcast (gui tin Zalo THAT).
+  // Truoc khi chay du lieu khach: dat lai AUTH_MODE=api-key + API_KEY va bat lai Basic Auth.
+  AUTH_MODE: z.enum(['api-key', 'none']).default('api-key'),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
@@ -119,9 +129,12 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   // Production BAT BUOC co API_KEY. API nay co POST /broadcast (gui tin Zalo THAT toi nhieu nhom
   // khach) va GET /knowledge (bang gia + map nhom -> dai ly) — phoi ra Internet ma khong khoa la
   // su co bao mat, khong phai thieu sot nho. Fail fast luc khoi dong (CLAUDE.md - Luu y bao mat).
-  if (data.NODE_ENV === 'production' && !data.API_KEY) {
+  // AUTH_MODE=none = da CHU DONG chon chay khong xac thuc (VM dev/demo). Van la mot lua chon
+  // TUONG MINH, greppable — khac han "quen dat API_KEY", nen fail-fast duoi day duoc mien.
+  const authDisabled = data.AUTH_MODE === 'none';
+  if (data.NODE_ENV === 'production' && !data.API_KEY && !authDisabled) {
     throw new EnvValidationError([
-      'API_KEY: BAT BUOC khi NODE_ENV=production (API co /broadcast gui tin Zalo that + /knowledge lo bang gia)',
+      'API_KEY: BAT BUOC khi NODE_ENV=production (API co /broadcast gui tin Zalo that + /knowledge lo bang gia). Moi truong dev/demo khong can khoa thi dat AUTH_MODE=none',
     ]);
   }
   if (data.PARSER_MODE === 'flowise') {
@@ -152,7 +165,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   // Panel /admin sua duoc bang gia, map nhom -> dai ly va chinh sach. Bat o production bang
   // credential dev (hoac chuoi ngan) = giao quyen ghi nguon su that cho bat ky ai doc repo.
-  if (data.NODE_ENV === 'production' && data.ADMIN_UI === 'on') {
+  if (data.NODE_ENV === 'production' && data.ADMIN_UI === 'on' && !authDisabled) {
     const weakAdminCredentials = [
       data.ADMIN_PASSWORD === DEV_ADMIN_PASSWORD
         ? 'ADMIN_PASSWORD: dang dung gia tri MAC DINH dev — bat buoc doi khi ADMIN_UI=on o production'

@@ -113,6 +113,8 @@ export class GroupParticipantsController {
   }
 
   private assertMutationOrigin(origin?: string): void {
+    // AUTH_MODE=none (VM dev/demo): xac thuc da tat -> khong kiem Origin nua. Xem env.ts.
+    if (this.env.AUTH_MODE === 'none') return;
     if (this.env.NODE_ENV !== 'production') return;
     // Trang /settings nam tren domain OPERATOR (Caddy chan /settings* o domain demo) nen phai
     // chap nhan ca hai origin — giong SettingsController, tranh 403 dung luc sua phan loai.

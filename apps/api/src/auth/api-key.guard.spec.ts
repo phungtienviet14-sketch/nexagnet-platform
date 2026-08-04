@@ -20,7 +20,7 @@ function reflector(isPublic = false): Reflector {
 
 describe('ApiKeyGuard', () => {
   const saved: Record<string, string | undefined> = {};
-  const KEYS = ['API_KEY', 'NODE_ENV'] as const;
+  const KEYS = ['API_KEY', 'NODE_ENV', 'AUTH_MODE'] as const;
 
   beforeEach(() => {
     for (const k of KEYS) saved[k] = process.env[k];
@@ -69,6 +69,14 @@ describe('ApiKeyGuard', () => {
     process.env.API_KEY = KEY;
     const guard = new ApiKeyGuard(reflector(true));
     expect(guard.canActivate(ctx())).toBe(true);
+  });
+
+  it('AUTH_MODE=none -> mo hoan toan du DA dat API_KEY (VM dev/demo)', () => {
+    process.env.API_KEY = KEY;
+    process.env.AUTH_MODE = 'none';
+    const guard = new ApiKeyGuard(reflector());
+    expect(guard.canActivate(ctx())).toBe(true);
+    expect(guard.canActivate(ctx({ 'x-api-key': 'khoa-hoan-toan-sai' }))).toBe(true);
   });
 
   it('header khong phai chuoi (mang) -> 401, khong crash', () => {

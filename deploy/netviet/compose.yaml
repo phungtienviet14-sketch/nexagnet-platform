@@ -3,7 +3,9 @@ name: zalo-ultty
 services:
   postgres:
     image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
-    restart: unless-stopped
+    # `always` (khong phai `unless-stopped`): stack phai tu quay lai ke ca sau khi ai do
+    # `docker stop` thu cong roi VM reboot — yeu cau "he thong tren VM luon chay".
+    restart: always
     environment:
       POSTGRES_USER: netviet_admin
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
@@ -32,7 +34,9 @@ services:
 
   flowise:
     image: ${FLOWISE_IMAGE:-flowiseai/flowise:3.1.4@sha256:3922767afb52a5777759fd8b28a3c9eee864daea96018a791f2429eae2a76571}
-    restart: unless-stopped
+    # `always` (khong phai `unless-stopped`): stack phai tu quay lai ke ca sau khi ai do
+    # `docker stop` thu cong roi VM reboot — yeu cau "he thong tren VM luon chay".
+    restart: always
     user: "1000:1000"
     depends_on:
       postgres:
@@ -106,7 +110,9 @@ services:
 
   api:
     image: ${APP_IMAGE}
-    restart: unless-stopped
+    # `always` (khong phai `unless-stopped`): stack phai tu quay lai ke ca sau khi ai do
+    # `docker stop` thu cong roi VM reboot — yeu cau "he thong tren VM luon chay".
+    restart: always
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,6 +138,9 @@ services:
       AUTO_ACK: "off"
       AUTO_SEND: "off"
       API_KEY: ${API_KEY}
+      # VM nay la moi truong DEV/DEMO -> mac dinh KHONG xac thuc: khong x-api-key, khong kiem
+      # Origin, CORS mo. API_KEY o tren van duoc render san de bat lai chi bang AUTH_MODE=api-key.
+      AUTH_MODE: ${AUTH_MODE:-none}
       CORS_ORIGIN: https://${DEMO_DOMAIN}
       ADMIN_UI: "off"
       STREAM_MODE: "on"
@@ -161,7 +170,9 @@ services:
 
   web:
     image: ${APP_IMAGE}
-    restart: unless-stopped
+    # `always` (khong phai `unless-stopped`): stack phai tu quay lai ke ca sau khi ai do
+    # `docker stop` thu cong roi VM reboot — yeu cau "he thong tren VM luon chay".
+    restart: always
     command:
       [
         "apps/web/node_modules/.bin/next",
@@ -189,7 +200,9 @@ services:
 
   gateway:
     image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
-    restart: unless-stopped
+    # `always` (khong phai `unless-stopped`): stack phai tu quay lai ke ca sau khi ai do
+    # `docker stop` thu cong roi VM reboot — yeu cau "he thong tren VM luon chay".
+    restart: always
     depends_on:
       api:
         condition: service_healthy

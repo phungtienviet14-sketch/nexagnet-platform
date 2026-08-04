@@ -475,8 +475,8 @@ flowchart LR
     GCS["GCS backup<br/>7 ngày + 4 tuần"]
     LLM3["DeepSeek TEST / Claude production"]
 
-    CUSTOMER["Khách demo<br/>HTTPS + Basic Auth"]
-    OPERATOR["Operator<br/>HTTPS + Basic Auth riêng"]
+    CUSTOMER["Khách demo<br/>HTTPS · KHÔNG xác thực (dev/demo)"]
+    OPERATOR["Operator<br/>HTTPS · KHÔNG xác thực (dev/demo)"]
 
     subgraph VM["GCP VM netviet · SSH chỉ qua IAP"]
         GW["Caddy gateway<br/>public 80/443<br/>loopback 8080"]
@@ -514,7 +514,8 @@ flowchart LR
 | `STREAM_MODE` | **on** · off | SSE real-time / polling |
 | `ZALO_SELF_LISTEN` | **off** · on | zca có nghe tin do chính tài khoản gửi không (chống vòng lặp) |
 | Flowise | `FLOWISE_BASE_URL`, `FLOWISE_FLOW_ID`, `FLOWISE_API_KEY`, `FLOWISE_TIMEOUT_MS`=30000 | Bắt buộc và fail-fast khi `PARSER_MODE=flowise`; không dùng `overrideConfig` |
-| Bảo vệ API | `API_KEY` | Bắt buộc khi `NODE_ENV=production`; gateway nội bộ gắn header, không đưa key vào browser/query string |
+| `AUTH_MODE` | **api-key** · none | **Công tắc xác thực toàn hệ thống.** `api-key`: guard `x-api-key` + kiểm `Origin` cho mutation + CORS theo `CORS_ORIGIN` + AdminJS đòi đăng nhập. `none`: **tắt cả bốn** — dùng cho VM dev/demo (VM `netviet` chạy `none` từ 04/08/2026, kèm bỏ Basic Auth ở Caddy). `none` cũng miễn luôn fail-fast "production phải có `API_KEY`" |
+| Bảo vệ API | `API_KEY` | Bắt buộc khi `NODE_ENV=production` **trừ khi** `AUTH_MODE=none`; gateway nội bộ gắn header, không đưa key vào browser/query string |
 | Khác | `BOT_NAME`, `ZALO_CRED_PATH` (phiên zca — bảo mật như secret), `BROADCAST_THROTTLE_MS`=1500, `BROADCAST_MAX_TARGETS`=50, `STREAM_STEP_DELAY_MS`=280, `ADMIN_EMAIL/PASSWORD/COOKIE_SECRET` (đổi ở production), `DATABASE_URL`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `ZALO_BOT_TOKEN` | |
 
 ---

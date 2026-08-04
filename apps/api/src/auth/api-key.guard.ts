@@ -31,9 +31,15 @@ import { IS_PUBLIC_KEY } from './public.decorator.js';
 export class ApiKeyGuard implements CanActivate {
   private readonly logger = new Logger('ApiKeyGuard');
   private readonly apiKey = loadEnv().API_KEY;
+  /** AUTH_MODE=none -> guard mo hoan toan (VM dev/demo, xem env.ts). */
+  private readonly authDisabled = loadEnv().AUTH_MODE === 'none';
 
   constructor(private readonly reflector: Reflector) {
-    if (!this.apiKey) {
+    if (this.authDisabled) {
+      this.logger.warn(
+        'AUTH_MODE=none -> TAT TOAN BO xac thuc API (khong x-api-key, khong kiem Origin). Che do dev/demo; dat lai AUTH_MODE=api-key truoc khi chay du lieu khach that.',
+      );
+    } else if (!this.apiKey) {
       this.logger.warn(
         'API_KEY chua dat -> API MO cho bat ky ai goi duoc. Chi chap nhan o may local/demo, KHONG dua ra Internet.',
       );
@@ -41,6 +47,7 @@ export class ApiKeyGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
+    if (this.authDisabled) return true; // tat xac thuc TUONG MINH (VM dev/demo)
     if (!this.apiKey) return true; // che do mo (demo/CI)
 
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [

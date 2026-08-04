@@ -189,4 +189,27 @@ describe('loadEnv', () => {
   it('API_KEY qua ngan -> nem loi (chan khoa doan duoc)', () => {
     expect(() => loadEnv({ API_KEY: 'ngan-qua' })).toThrowError(EnvValidationError);
   });
+
+  // --- AUTH_MODE: cong tac tat/bat xac thuc cho VM dev/demo ---
+
+  it('mac dinh AUTH_MODE=api-key (khong tu dong tat xac thuc)', () => {
+    expect(loadEnv({}).AUTH_MODE).toBe('api-key');
+  });
+
+  it('AUTH_MODE=none cho phep production chay KHONG can API_KEY (moi truong dev/demo)', () => {
+    const env = loadEnv({ NODE_ENV: 'production', AUTH_MODE: 'none' });
+
+    expect(env.AUTH_MODE).toBe('none');
+    expect(env.API_KEY).toBeUndefined();
+  });
+
+  it('AUTH_MODE=none cho phep bat AdminJS ma khong can credential manh (panel khong doi dang nhap)', () => {
+    expect(() =>
+      loadEnv({ NODE_ENV: 'production', AUTH_MODE: 'none', ADMIN_UI: 'on' }),
+    ).not.toThrow();
+  });
+
+  it('AUTH_MODE khong hop le -> nem loi thay vi am tham tat xac thuc', () => {
+    expect(() => loadEnv({ AUTH_MODE: 'off' })).toThrowError(EnvValidationError);
+  });
 });

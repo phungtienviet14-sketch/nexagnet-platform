@@ -9,38 +9,59 @@ PostgreSQL, Flowise port gốc và SSH không được mở trực tiếp.
 
 Với IP hiện tại `35.187.235.82`:
 
-- Demo khách hàng: `https://demo.35-187-235-82.sslip.io` — Basic Auth user `demo`.
-- Vận hành/đăng nhập Zalo: `https://operator.35-187-235-82.sslip.io/zalo` — Basic Auth user `netviet`.
+- Demo khách hàng: `https://demo.35-187-235-82.sslip.io` — **mở thẳng, không đăng nhập**.
+- Vận hành/đăng nhập Zalo: `https://operator.35-187-235-82.sslip.io/zalo` — **mở thẳng, không đăng nhập**.
 - Flowise admin: `https://flowise.35-187-235-82.sslip.io` — email
-  `phungtienviet14@gmail.com`, mật khẩu lấy từ Secret Manager như bên dưới.
+  `phungtienviet14@gmail.com`, mật khẩu lấy từ Secret Manager (xem mục dưới).
 
 IP được promote thành regional static address `netviet-public-ip`; Caddy tự cấp và gia hạn TLS.
-Mật khẩu không nằm trong repo. Operator lấy từ Secret Manager:
+
+## Môi trường dev/demo — đã tắt toàn bộ xác thực (04/08/2026)
+
+Quyết định của người vận hành: VM này là **môi trường dev/demo**, không cần xác thực phức tạp.
+Bốn lớp dưới đây **đã tắt**, mỗi lớp đều bật lại được:
+
+| Lớp | Trước | Nay | Bật lại bằng |
+|---|---|---|---|
+| Basic Auth `demo` / `netviet` ở Caddy | 2 khối `basic_auth` | bỏ hẳn | thêm lại `basic_auth` vào `Caddyfile` + khôi phục phần hash trong `render-secrets.sh` |
+| Header `x-api-key` (guard toàn cục NestJS) | bắt buộc ở production | bỏ qua | `AUTH_MODE=api-key` |
+| Kiểm `Origin` chống CSRF cho mutation | 403 khi sai origin | bỏ qua | `AUTH_MODE=api-key` |
+| Đăng nhập AdminJS `/admin` | email + mật khẩu | không hỏi | `AUTH_MODE=api-key` |
+
+Công tắc duy nhất là biến `AUTH_MODE` (`api-key` | `none`), mặc định của schema vẫn là `api-key`;
+`render-secrets.sh` ghi `AUTH_MODE=none` vào `.runtime/secrets.env` cho riêng VM này. Secret
+`zalo-ultty-api-key`, `zalo-ultty-demo-password`, `zalo-ultty-operator-password` **vẫn còn** trong
+Secret Manager — bật lại không phải tạo mới.
+
+**Rủi ro đã chấp nhận:** VM mở public trên 80/443. Không còn xác thực nghĩa là bất kỳ ai biết địa
+chỉ đều đọc được bảng giá/đơn/thành viên nhóm, sửa được nguồn sự thật và gọi được `POST /broadcast`
+(gửi tin Zalo **thật** tới nhóm khách). Vì vậy:
+
+- Chỉ dùng **nhóm Zalo và dữ liệu TEST**, không PII khách thật (đúng ràng buộc DeepSeek + zca đã
+  ghi ở `CLAUDE.md`).
+- `AUTO_SEND` giữ `off`; broadcast vẫn cần chọn kênh + ID đích rõ ràng.
+- Trước khi chạy dữ liệu khách thật: đặt `AUTH_MODE=api-key`, bật lại Basic Auth, và làm xác thực
+  người dùng thật (quyết định **D5**, chưa làm).
+
+`@blocked` trên hostname demo (`/zalo* /broadcast* /settings* /groups* /admin*` → 404) **không phải
+xác thực** — chỉ để khách xem demo không nhìn thấy trang vận hành; giữ nguyên.
+
+Riêng **Flowise vẫn đòi đăng nhập**: Flowise 3.x bắt buộc có tài khoản, không có cờ tắt. Lấy mật
+khẩu (không chia sẻ màn hình khi chạy):
 
 ```powershell
-gcloud secrets versions access latest --project netviet-host-968934832433 `
-  --secret zalo-ultty-demo-password
-gcloud secrets versions access latest --project netviet-host-968934832433 `
-  --secret zalo-ultty-operator-password
-gcloud secrets versions access latest --project netviet-host-968934832433 `
-  --secret zalo-ultty-flowise-admin-password
+gcloud secrets versions access latest --project netviet-host-968934832433 --secret zalo-ultty-flowise-admin-password
 ```
 
-Nếu đang chuẩn bị demo và không muốn mật khẩu hiện trên màn hình chia sẻ, lấy trước rồi copy vào
-clipboard ở cửa sổ riêng:
+## Luôn chạy
 
-```powershell
-$flowisePw = ((gcloud secrets versions access latest --project netviet-host-968934832433 `
-  --secret zalo-ultty-flowise-admin-password) -join '').Trim()
-Set-Clipboard -Value $flowisePw
-$flowisePw = $null
-```
-
-Sau khi đăng nhập xong, xóa clipboard:
-
-```powershell
-Set-Clipboard -Value ''
-```
+- `compose.yaml` dùng `restart: always` (không phải `unless-stopped`) cho cả 5 service → container
+  quay lại cả khi trước đó bị `docker stop` tay rồi VM reboot.
+- `systemd/netviet-stack.service` (enable lúc deploy) chạy `docker compose up -d --no-recreate` mỗi
+  lần boot → lo trường hợp container bị **xóa** hẳn, lúc đó Docker không còn gì để restart.
+- `health-check.sh` (timer) nay **tự khôi phục**: service nào mất/không `running` thì
+  `up -d --no-recreate` rồi mới kiểm lại; mỗi lần chữa đều ghi log `NETVIET_HEALTH_HEAL <service>`
+  để sự cố lặp lại vẫn nhìn thấy được.
 
 Deploy dùng PostgreSQL thật, Flowise + DeepSeek thật, `PARSER_MODE=flowise`, `AUTO_SEND=off`;
 chỉ KiotViet là mock. **Kênh Zalo do secret quyết định:** `render-secrets.sh` đọc
@@ -101,7 +122,8 @@ curl.exe -s -o NUL -w "%{http_code}`n" https://operator.35-187-235-82.sslip.io/h
 curl.exe -s -o NUL -w "%{http_code}`n" https://flowise.35-187-235-82.sslip.io/api/v1/ping
 ```
 
-Kết quả bình thường là `401`, `401`, `200`: demo/operator bị chặn Basic Auth khi chưa đăng nhập;
+Kết quả bình thường nay là `200`, `200`, `200` — không còn Basic Auth nên cả ba trả về thẳng.
+(Nhận `401` ở hai dòng đầu nghĩa là bản đang chạy vẫn là Caddyfile cũ, chưa deploy lại.)
 Flowise ping mở public nhưng phần admin vẫn yêu cầu tài khoản Flowise.
 
 `http://127.0.0.1:8080` là cổng loopback của VM, không phải địa chỉ public và không mở được

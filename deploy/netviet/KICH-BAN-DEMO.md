@@ -38,10 +38,13 @@ Luồng đang chạy trên GCP:
 
 ### Tài khoản và màn hình
 
+Từ 04/08/2026 VM chạy ở chế độ **dev/demo không xác thực** — hai màn hình đầu mở thẳng, không còn
+hộp thoại đăng nhập (chi tiết và cách bật lại: [README.md](README.md)).
+
 | Màn hình            | URL                                            | Tài khoản                         | Lấy mật khẩu                               |
 | ------------------- | ---------------------------------------------- | --------------------------------- | ------------------------------------------ |
-| Trung tâm điều hành | `https://demo.35-187-235-82.sslip.io`          | user `demo`                       | secret `zalo-ultty-demo-password`          |
-| Operator Zalo       | `https://operator.35-187-235-82.sslip.io/zalo` | user `netviet`                    | secret `zalo-ultty-operator-password`      |
+| Trung tâm điều hành | `https://demo.35-187-235-82.sslip.io`          | không cần đăng nhập               | —                                          |
+| Operator Zalo       | `https://operator.35-187-235-82.sslip.io/zalo` | không cần đăng nhập               | —                                          |
 | Flowise Admin       | `https://flowise.35-187-235-82.sslip.io`       | email `phungtienviet14@gmail.com` | secret `zalo-ultty-flowise-admin-password` |
 
 Lệnh lấy mật khẩu Flowise, chạy trước khi chia sẻ màn hình:
@@ -66,11 +69,9 @@ Set-Clipboard -Value ''
 
 ### Trước 30 phút
 
-1. Không chia sẻ màn hình. Lấy ba mật khẩu từ Secret Manager:
+1. Không chia sẻ màn hình. Chỉ còn một mật khẩu cần lấy (Flowise):
 
    ```powershell
-   gcloud secrets versions access latest --project netviet-host-968934832433 --secret zalo-ultty-demo-password
-   gcloud secrets versions access latest --project netviet-host-968934832433 --secret zalo-ultty-operator-password
    gcloud secrets versions access latest --project netviet-host-968934832433 --secret zalo-ultty-flowise-admin-password
    ```
 
@@ -106,8 +107,8 @@ Set-Clipboard -Value ''
    Meta HN lay 2 ghe Felix, giao thang Nguyen Van Test 0900000000, 1 Duong Test, COD
    ```
 
-Chỉ gửi cho khách URL/user/mật khẩu của trang Demo. Tài khoản Operator và Flowise là tài
-khoản vận hành nội bộ; đăng nhập hai trang này trước khi bắt đầu chia sẻ màn hình.
+Chỉ gửi cho khách URL trang Demo. Trang Operator giờ **không có mật khẩu chặn** nên đừng gửi URL
+của nó ra ngoài; mở sẵn trên máy trình bày trước khi chia sẻ màn hình. Flowise vẫn cần đăng nhập.
 
 Tin thứ nhất là TH1 sạch cho nhóm Meta HN. Tin thứ hai chỉ dùng để cho thấy TH2/COD; toàn bộ tên, số
 điện thoại và địa chỉ đều là dữ liệu giả.

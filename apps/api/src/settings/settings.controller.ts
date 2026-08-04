@@ -288,6 +288,8 @@ export class SettingsController {
   }
 
   private assertMutationOrigin(origin?: string): void {
+    // AUTH_MODE=none (VM dev/demo): xac thuc da tat -> khong kiem Origin nua. Xem env.ts.
+    if (this.env.AUTH_MODE === 'none') return;
     if (this.env.NODE_ENV !== 'production') return;
     const allowed = new Set([this.env.CORS_ORIGIN, this.env.ZALO_OPERATOR_ORIGIN].filter(Boolean));
     if (!origin || !allowed.has(origin)) {

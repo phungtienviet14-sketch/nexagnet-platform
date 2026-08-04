@@ -47,10 +47,11 @@ http://:8080 {
 	import app_routes
 }
 
+# MOI TRUONG DEV/DEMO — KHONG CO XAC THUC (quyet dinh nguoi van hanh 04/08/2026).
+# Ca hai hostname duoi day mo cong khai, khong Basic Auth; API phia sau chay AUTH_MODE=none.
+# @blocked KHONG phai xac thuc — chi tach be mat: khach xem demo khong thay trang van hanh.
+# Bat lai bao ve: them lai `basic_auth` o day + dat AUTH_MODE=api-key trong .runtime/secrets.env.
 {$DEMO_DOMAIN} {
-	basic_auth {
-		demo {$DEMO_PASSWORD_HASH}
-	}
 	import secure_headers
 	import app_headers
 
@@ -62,9 +63,6 @@ http://:8080 {
 }
 
 {$OPERATOR_DOMAIN} {
-	basic_auth {
-		netviet {$OPERATOR_PASSWORD_HASH}
-	}
 	import secure_headers
 	import app_headers
 	import app_routes

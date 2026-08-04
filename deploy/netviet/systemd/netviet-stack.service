@@ -1,0 +1,18 @@
+[Unit]
+# Dua stack len moi lan VM khoi dong. `restart: always` trong compose.yaml da lo phan container
+# con ton tai; unit nay lo truong hop container bi xoa (docker compose down, don dep, doi image
+# tay) — luc do khong con gi de Docker restart. Hai lop cong lai = "he thong luon chay".
+Description=NetViet zalo-ultty stack (dev/demo, always on)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/srv/netviet/apps/zalo-ultty
+# --no-recreate: khong dung toi container dang chay -> an toan khi trung voi luc deploy.
+ExecStart=/usr/bin/docker compose --env-file .runtime/secrets.env -f compose.yaml up -d --no-recreate
+User=root
+
+[Install]
+WantedBy=multi-user.target

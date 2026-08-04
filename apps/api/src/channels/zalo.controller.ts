@@ -147,6 +147,9 @@ export class ZaloController {
   }
 
   private assertMutationOrigin(origin?: string): void {
+    // AUTH_MODE=none: da tat xac thuc -> chong CSRF khong con y nghia (khong co phien de muon)
+    // va chi lam ket khi mo qua IP/loopback/tunnel. Xem env.ts.
+    if (this.env.AUTH_MODE === 'none') return;
     if (this.env.NODE_ENV !== 'production') return;
     if (!origin || origin !== this.env.ZALO_OPERATOR_ORIGIN) {
       throw new ForbiddenException('Origin van hanh Zalo khong hop le');

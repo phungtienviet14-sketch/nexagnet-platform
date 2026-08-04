@@ -20,6 +20,24 @@ fi
 next_state="$(mktemp "${APP_DIR}/.runtime/health-restarts.XXXXXX")"
 trap 'rm -f -- "${next_state}"' EXIT
 
+# TU KHOI PHUC truoc khi bao loi: service nao khong con container hoac dang stop thi dua len lai.
+# `--no-recreate` khong dung toi container dang chay -> chay trung luc deploy cung khong pha.
+# Van GHI LOG moi lan phai chua de khong che giau su co lap di lap lai.
+healed=""
+for service in postgres flowise api web gateway; do
+  container_id="$("${COMPOSE[@]}" ps -q "${service}")"
+  if [[ -z "${container_id}" ]] || \
+    [[ "$(docker inspect --format '{{.State.Status}}' "${container_id}")" != "running" ]]; then
+    healed="${healed} ${service}"
+  fi
+done
+if [[ -n "${healed}" ]]; then
+  logger --priority user.warning --tag netviet-health "NETVIET_HEALTH_HEAL${healed}"
+  echo "NETVIET_HEALTH_HEAL${healed}" >&2
+  "${COMPOSE[@]}" up -d --no-recreate >/dev/null 2>&1 || true
+  sleep 15
+fi
+
 if ! curl -fsS --max-time 10 http://127.0.0.1:8080/health >/dev/null; then
   failure="gateway health endpoint failed"
 fi

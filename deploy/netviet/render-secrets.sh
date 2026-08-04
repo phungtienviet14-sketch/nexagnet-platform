@@ -11,7 +11,6 @@ PUBLIC_IP_LABEL="${PUBLIC_IP_VALUE//./-}"
 DEMO_DOMAIN="demo.${PUBLIC_IP_LABEL}.sslip.io"
 OPERATOR_DOMAIN="operator.${PUBLIC_IP_LABEL}.sslip.io"
 FLOWISE_DOMAIN="flowise.${PUBLIC_IP_LABEL}.sslip.io"
-CADDY_IMAGE='caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648'
 
 mkdir -p "${RUNTIME_DIR}"
 
@@ -47,21 +46,11 @@ FLOWISE_JWT_SECRET="$(secret zalo-ultty-flowise-jwt-secret)"
 FLOWISE_REFRESH_SECRET="$(secret zalo-ultty-flowise-refresh-secret)"
 FLOWISE_SESSION_SECRET="$(secret zalo-ultty-flowise-session-secret)"
 FLOWISE_TOKEN_HASH_SECRET="$(secret zalo-ultty-flowise-token-hash-secret)"
-DEMO_PASSWORD="$(secret zalo-ultty-demo-password)"
-OPERATOR_PASSWORD="$(secret zalo-ultty-operator-password)"
-
-hash_password() {
-  printf '%s\n' "$1" | docker run --rm -i "${CADDY_IMAGE}" caddy hash-password
-}
-
-DEMO_PASSWORD_HASH="$(hash_password "${DEMO_PASSWORD}")"
-OPERATOR_PASSWORD_HASH="$(hash_password "${OPERATOR_PASSWORD}")"
-DEMO_PASSWORD=''
-OPERATOR_PASSWORD=''
-# Docker Compose coi `$NAME` trong env_file la noi suy bien. Escape thanh `$$`
-# de container Caddy nhan dung bcrypt hash nguyen ban.
-DEMO_PASSWORD_HASH_COMPOSE="$(printf '%s' "${DEMO_PASSWORD_HASH}" | sed 's/\$/$$/g')"
-OPERATOR_PASSWORD_HASH_COMPOSE="$(printf '%s' "${OPERATOR_PASSWORD_HASH}" | sed 's/\$/$$/g')"
+# MOI TRUONG DEV/DEMO — KHONG XAC THUC (quyet dinh nguoi van hanh 04/08/2026):
+# Caddy khong con Basic Auth nen KHONG lay/hash zalo-ultty-demo-password va
+# zalo-ultty-operator-password nua (hai secret van con trong Secret Manager de bat lai sau).
+# API chay AUTH_MODE=none; API_KEY o tren van render san de bat lai chi bang mot bien.
+AUTH_MODE='none'
 
 cat >"${RUNTIME_DIR}/secrets.env" <<EOF
 APP_IMAGE=${APP_IMAGE_VALUE}
@@ -78,6 +67,7 @@ FLOWISE_DB_PASSWORD=${FLOWISE_DB_PASSWORD}
 DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
 ZALO_BOT_TOKEN=${ZALO_BOT_TOKEN}
 API_KEY=${API_KEY}
+AUTH_MODE=${AUTH_MODE}
 FLOWISE_SECRETKEY=${FLOWISE_SECRETKEY}
 FLOWISE_ADMIN_EMAIL=${FLOWISE_ADMIN_EMAIL}
 FLOWISE_ADMIN_PASSWORD=${FLOWISE_ADMIN_PASSWORD}
@@ -93,8 +83,6 @@ ACME_EMAIL=${FLOWISE_ADMIN_EMAIL}
 DEMO_DOMAIN=${DEMO_DOMAIN}
 OPERATOR_DOMAIN=${OPERATOR_DOMAIN}
 FLOWISE_DOMAIN=${FLOWISE_DOMAIN}
-DEMO_PASSWORD_HASH=${DEMO_PASSWORD_HASH_COMPOSE}
-OPERATOR_PASSWORD_HASH=${OPERATOR_PASSWORD_HASH_COMPOSE}
 EOF
 
 touch "${RUNTIME_DIR}/flowise.env"

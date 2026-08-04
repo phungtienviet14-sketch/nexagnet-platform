@@ -20,14 +20,11 @@ $urls = [ordered]@{
 
 Write-Host 'NetViet demo dang chay tren GCP; PC khong can chay source hoac Docker.'
 Write-Host ''
-Write-Host 'Tai khoan:'
-Write-Host '  Demo user:    demo'
-Write-Host '  Operator user: netviet'
+Write-Host 'MOI TRUONG DEV/DEMO — Demo console va Zalo operator KHONG con hoi mat khau.'
+Write-Host 'Chi Flowise Admin van doi dang nhap (Flowise 3.x bat buoc co tai khoan).'
 Write-Host '  Flowise email: phungtienviet14@gmail.com'
 Write-Host ''
-Write-Host 'Lay mat khau (khong chia se man hinh khi chay cac lenh nay):'
-Write-Host "  gcloud secrets versions access latest --project $projectId --secret zalo-ultty-demo-password"
-Write-Host "  gcloud secrets versions access latest --project $projectId --secret zalo-ultty-operator-password"
+Write-Host 'Lay mat khau Flowise (khong chia se man hinh khi chay lenh nay):'
 Write-Host "  gcloud secrets versions access latest --project $projectId --secret zalo-ultty-flowise-admin-password"
 
 if ($CopyFlowisePassword) {

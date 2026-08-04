@@ -25,6 +25,9 @@ chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/"*.sh
 cp "$app_dir/systemd/"*.service "$app_dir/systemd/"*.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now netviet-backup.timer netviet-health.timer
+# netviet-stack.service: `enable` (khong `--now`) — deploy-stack.sh ngay duoi day tu dua stack len;
+# unit chi can co mat de lan reboot sau tu chay lai `docker compose up -d`.
+systemctl enable netviet-stack.service
 env \
   GCP_PROJECT_ID="$gcp_project_id" \
   APP_IMAGE="$app_image" \
