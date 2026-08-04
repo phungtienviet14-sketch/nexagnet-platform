@@ -207,13 +207,35 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
         .map((value) => value?.trim())
         .filter((value): value is string => Boolean(value)),
     );
-    const memberIds = normalizeMemberIds(group.memberIds).filter(
-      (memberId) => !excluded.has(memberId),
-    );
-    const members: GroupParticipantProfile[] = [];
+    // Zalo tra thanh vien qua HAI truong: `memberIds` (chi UID) va `currentMems` (UID kem san
+    // ho so). Nhom that trong pilot tra `memberIds` RONG va do toan bo thanh vien vao
+    // `currentMems` -> chi doc `memberIds` thi dong bo ve 0 nguoi ma van bao "complete".
+    // Gop ca hai, va dung luon ho so nhung san de khoi goi getGroupMembersInfo.
+    const embeddedProfiles = new Map<string, GroupParticipantProfile>();
+    for (const member of group.currentMems ?? []) {
+      const externalUserId = member.id?.trim();
+      if (!externalUserId) continue;
+      embeddedProfiles.set(
+        externalUserId,
+        normalizeMemberProfile(externalUserId, {
+          displayName: member.dName ?? '',
+          zaloName: member.zaloName ?? '',
+          avatar: member.avatar ?? '',
+        }),
+      );
+    }
+
+    const memberIds = normalizeMemberIds([
+      ...(group.memberIds ?? []),
+      ...embeddedProfiles.keys(),
+    ]).filter((memberId) => !excluded.has(memberId));
+    const members: GroupParticipantProfile[] = memberIds
+      .map((memberId) => embeddedProfiles.get(memberId))
+      .filter((profile): profile is GroupParticipantProfile => profile !== undefined);
     const failedMemberIds: string[] = [];
-    for (let offset = 0; offset < memberIds.length; offset += MEMBER_PROFILE_BATCH_SIZE) {
-      const batch = memberIds.slice(offset, offset + MEMBER_PROFILE_BATCH_SIZE);
+    const missingProfileIds = memberIds.filter((memberId) => !embeddedProfiles.has(memberId));
+    for (let offset = 0; offset < missingProfileIds.length; offset += MEMBER_PROFILE_BATCH_SIZE) {
+      const batch = missingProfileIds.slice(offset, offset + MEMBER_PROFILE_BATCH_SIZE);
       try {
         const response = await api.getGroupMembersInfo(batch);
         for (const memberId of batch) {

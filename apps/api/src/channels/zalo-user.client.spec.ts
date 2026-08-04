@@ -258,6 +258,58 @@ describe('ZaloUserClient runtime', () => {
     expect(result.members.map((member) => member.externalUserId)).toEqual(['user-1']);
   });
 
+  // Nhom that trong pilot (04/08/2026) tra memberIds RONG va do thanh vien vao currentMems.
+  // Truoc khi sua, dong bo tra 0 nguoi nhung van bao complete -> hong am tham.
+  it('lay thanh vien tu currentMems khi Zalo tra memberIds rong', async () => {
+    const getGroupMembersInfo = vi.fn();
+    const fakeApi = {
+      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      getOwnId: vi.fn(() => 'own-uid'),
+      getGroupInfo: vi.fn(async () => ({
+        removedsGroup: [],
+        unchangedsGroup: [],
+        gridInfoMap: {
+          'group-1': {
+            groupId: 'group-1',
+            memberIds: [],
+            totalMember: 3,
+            currentMems: [
+              { id: 'own-uid', dName: 'Nhan Vien AI', zaloName: 'nhanvienai', avatar: '' },
+              { id: 'official-bot-1', dName: 'Bot', zaloName: 'bot', avatar: '' },
+              { id: 'user-1', dName: ' Chi Phuong ', zaloName: ' phuong ', avatar: ' https://img.test/1.jpg ' },
+            ],
+          },
+        },
+      })),
+      getGroupMembersInfo,
+    } as unknown as API;
+    await writeFile(
+      join(runtimeDir, 'zalo-cred.json'),
+      JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
+      'utf8',
+    );
+    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    zcaMocks.login.mockResolvedValue(fakeApi);
+    const { ZaloUserClient } = await import('./zalo-user.client.js');
+    const client = new ZaloUserClient();
+    await client.onModuleInit();
+    await vi.waitFor(() => expect(client.status().state).toBe('ready'));
+
+    const result = await client.fetchGroupMembers('group-1', ['official-bot-1']);
+
+    // Ho so da nam san trong currentMems -> khong duoc goi them API lay ho so.
+    expect(getGroupMembersInfo).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ complete: true, expectedCount: 1, failedMemberIds: [] });
+    expect(result.members).toEqual([
+      {
+        externalUserId: 'user-1',
+        displayName: 'Chi Phuong',
+        zaloName: 'phuong',
+        avatarUrl: 'https://img.test/1.jpg',
+      },
+    ]);
+  });
+
   it('van dong bo duoc khi api khong co getOwnId (chua dang nhap xong hoac mock cu)', async () => {
     const getGroupMembersInfo = vi.fn(async (ids: string[]) => ({
       profiles: Object.fromEntries(
