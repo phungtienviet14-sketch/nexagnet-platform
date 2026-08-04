@@ -254,10 +254,25 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Zalo co luc tra group co `totalMember` > 0 nhung KHONG kem danh sach thanh vien (ca
+    // `memberIds` lan `currentMems` deu rong). Neu coi do la "dong bo day du" thi tang persistence
+    // se danh INACTIVE toan bo thanh vien da luu -> mat sach phan loai chi vi mot cu API hut.
+    // Phai coi la KHONG day du, va noi ro trong log de con lan ra nguyen nhan.
+    const totalMember = typeof group.totalMember === 'number' ? group.totalMember : 0;
+    const memberListMissing = memberIds.length === 0 && totalMember > excluded.size;
+    if (memberListMissing) {
+      this.logger.warn(
+        `Zalo khong tra danh sach thanh vien: group=${groupId} totalMember=${totalMember} ` +
+          `memberIds=${(group.memberIds ?? []).length} currentMems=${(group.currentMems ?? []).length} ` +
+          `hasMoreMember=${String(group.hasMoreMember)} fields=${Object.keys(group).join(',')}`,
+      );
+    }
+
     return {
       groupId,
-      complete: failedMemberIds.length === 0,
-      expectedCount: memberIds.length,
+      complete: failedMemberIds.length === 0 && !memberListMissing,
+      // Bao dung con so Zalo noi la co, de UI hien "0/4" thay vi "da dong bo 0 thanh vien".
+      expectedCount: memberListMissing ? totalMember : memberIds.length,
       members,
       failedMemberIds,
     };
