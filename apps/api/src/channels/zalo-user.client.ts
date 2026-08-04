@@ -225,9 +225,16 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       );
     }
 
+    // Nguon UID thu BA. Nhom that trong pilot tra ca `memberIds` lan `currentMems` RONG trong khi
+    // `totalMember` van bao 4-5 nguoi (log VM 04/08/2026, `lockViewMember=0` -> nhom KHONG khoa).
+    // Nhung cung response do con `memVerList` — danh sach "uid_version" Zalo dung de bat cache.
+    // Doc them truong nay la lay lai duoc UID ma khong ton request nao; ho so con thieu se lay qua
+    // `getGroupMembersInfo` o vong duoi nhu cu.
+    const versionListIds = memberIdsFromVersionList(group.memVerList);
     const memberIds = normalizeMemberIds([
       ...(group.memberIds ?? []),
       ...embeddedProfiles.keys(),
+      ...versionListIds,
     ]).filter((memberId) => !excluded.has(memberId));
     const members: GroupParticipantProfile[] = memberIds
       .map((memberId) => embeddedProfiles.get(memberId))
@@ -268,6 +275,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(
         `Zalo khong tra danh sach thanh vien: group=${groupId} totalMember=${totalMember} ` +
           `memberIds=${(group.memberIds ?? []).length} currentMems=${(group.currentMems ?? []).length} ` +
+          `memVerList=${(group.memVerList ?? []).length} ` +
           `hasMoreMember=${String(group.hasMoreMember)} e2ee=${String(group.e2ee)} ` +
           `adminIds=${(group.adminIds ?? []).length} lockViewMember=${String(setting.lockViewMember)} ` +
           `setting=${JSON.stringify(setting)}`,
@@ -474,6 +482,27 @@ function safeOwnId(api: API): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * `memVerList` la danh sach "uid_version" (VD `"1000000000000000001_7"`) Zalo gui kem group info de
+ * client biet ho so nao da cu. Ta chi can phan UID dang truoc dau `_`.
+ *
+ * KHONG duoc nem loi o day: day la nguon vet vat, mot phan tu la dang khong doan truoc ma lam hong
+ * ca lan dong bo thi te hon la bo qua phan tu do. `normalizeMemberIds` moi la cho kiem tinh chat
+ * chat, nen phan tu khong dat chuan bi loai truoc khi den do.
+ */
+function memberIdsFromVersionList(memVerList: readonly string[] | undefined): string[] {
+  if (!Array.isArray(memVerList)) return [];
+  const ids: string[] = [];
+  for (const entry of memVerList) {
+    if (typeof entry !== 'string') continue;
+    const [rawId] = entry.split('_');
+    const memberId = rawId?.trim() ?? '';
+    if (memberId.length === 0 || memberId.length > 128) continue;
+    ids.push(memberId);
+  }
+  return ids;
 }
 
 function normalizeMemberIds(memberIds: readonly string[]): string[] {

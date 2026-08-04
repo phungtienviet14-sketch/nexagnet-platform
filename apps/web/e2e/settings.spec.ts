@@ -33,6 +33,20 @@ const summary = {
       activeParticipants: 0,
       inactiveParticipants: 0,
     },
+    {
+      // Nhom cu da go: phai nam o khu "Nhom da go", KHONG dem vao bang chinh hay canh bao pending.
+      groupId: 'group-db-3',
+      zcaChatId: 'zca-group-3',
+      id: 'zca-group-3',
+      name: 'Nhom cu tu dot test truoc',
+      status: 'ignored',
+      allowed: false,
+      memberCount: 0,
+      activeParticipants: 0,
+      inactiveParticipants: 0,
+      dealerId: 'dealer-1',
+      dealerName: 'Dai ly pilot',
+    },
   ],
   warnings: ['Rank thanh vien khong thay doi don gia.'],
 };
@@ -65,6 +79,12 @@ async function mockSettings(page: Page): Promise<void> {
   );
   await page.route('**/settings/groups/*/mapping', (route) =>
     json(route, { chatId: 'zca-group-2', dealerId: 'dealer-1', status: 'mapped' }),
+  );
+  await page.route('**/settings/groups/*/hidden', (route) =>
+    json(route, {
+      chatId: 'zca-group-1',
+      status: route.request().postDataJSON().hidden ? 'ignored' : 'mapped',
+    }),
   );
 }
 
@@ -111,6 +131,34 @@ test('nhom chua map dai ly: nut Dong bo bi tat, chon dai ly ngay tren bang la xo
     .poll(() => requests)
     .toContain('PUT /settings/groups/zca-group-2/mapping');
   await expect(page.getByText('Đã map nhóm vào đại lý')).toBeVisible();
+});
+
+test('nhom cu go duoc khoi bang, va dua lai duoc — khong con ket trong danh sach', async ({
+  page,
+}) => {
+  await mockSettings(page);
+  const requests: string[] = [];
+  page.on('request', (request) =>
+    requests.push(`${request.method()} ${new URL(request.url()).pathname}`),
+  );
+  page.on('dialog', (dialog) => dialog.accept());
+
+  await page.goto('/settings');
+
+  // Nhom da go khong duoc lam ban bang chinh, cung khong duoc tinh vao canh bao "chua chon dai ly".
+  await expect(page.getByText(/1 nhóm đang nghe nhưng chưa chọn đại lý/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Nhóm đã gỡ' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Đưa nhóm Nhom cu tu dot test truoc trở lại/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: /Đại lý cho nhóm Nhom cu tu dot test truoc/i }),
+  ).toHaveCount(0);
+
+  await page.getByRole('button', { name: /Gỡ nhóm Nhom pilot khỏi danh sách/i }).click();
+
+  await expect.poll(() => requests).toContain('PUT /settings/groups/zca-group-1/hidden');
+  await expect(page.getByText('Đã gỡ nhóm khỏi danh sách')).toBeVisible();
 });
 
 test('AUTO_SEND requires the explicit second confirmation and uses the shared settings endpoint', async ({

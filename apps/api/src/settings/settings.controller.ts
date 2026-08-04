@@ -23,7 +23,11 @@ import {
 import { toRulesConfig } from '../rule-config/rule-config.defaults.js';
 import { computeShipping } from '../rules/rules.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
-import { GroupMappingService, groupMappingSchema } from './group-mapping.service.js';
+import {
+  GroupMappingService,
+  groupHiddenSchema,
+  groupMappingSchema,
+} from './group-mapping.service.js';
 import { SettingsQueryService } from './settings-query.service.js';
 import {
   SOURCE_TRUTH_RESOURCES,
@@ -166,6 +170,32 @@ export class SettingsController {
     return this.groupMapping.setMapping(
       parsedChatId.data,
       parsed.data,
+      actorName(actor),
+      requestId ?? null,
+    );
+  }
+
+  /**
+   * Go nhom khoi danh sach lam viec (`hidden=true`) hoac dua tro lai (`hidden=false`).
+   * Khong phai xoa: xem giai thich o `GroupMappingService.setHidden`.
+   */
+  @Put('groups/:chatId/hidden')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  setGroupHidden(
+    @Param('chatId') chatId: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    const parsedChatId = idSchema.safeParse(chatId);
+    if (!parsedChatId.success) throw new BadRequestException('chatId nhom khong hop le');
+    const parsed = groupHiddenSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Can hidden (true hoac false)');
+    return this.groupMapping.setHidden(
+      parsedChatId.data,
+      parsed.data.hidden,
       actorName(actor),
       requestId ?? null,
     );

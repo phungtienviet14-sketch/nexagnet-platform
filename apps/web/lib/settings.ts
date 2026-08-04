@@ -859,6 +859,26 @@ export const settingsApi = {
       status: enumValue(record.status, ['pending', 'mapped', 'ignored'] as const, 'pending'),
     };
   },
+  /**
+   * Gỡ nhóm khỏi danh sách làm việc, hoặc đưa trở lại. KHÔNG xóa hàng: tin nhắn và đơn đã nhận
+   * vẫn trỏ tới nhóm này, nên hàng phải còn — xem `GroupMappingService.setHidden` phía API.
+   */
+  setGroupHidden: async (
+    zcaChatId: string,
+    hidden: boolean,
+  ): Promise<{ chatId: string; status: GroupMappingStatus }> => {
+    const raw = unwrapEnvelope(
+      await requestJson(
+        `/settings/groups/${encodeURIComponent(zcaChatId)}/hidden`,
+        jsonInit('PUT', { hidden }),
+      ),
+    );
+    const record = isRecord(raw) ? raw : {};
+    return {
+      chatId: stringValue(record.chatId) ?? zcaChatId,
+      status: enumValue(record.status, ['pending', 'mapped', 'ignored'] as const, 'pending'),
+    };
+  },
   rules: async (): Promise<RuleConfigVersion[]> => parseRules(await requestJson('/settings/rules')),
   createRuleDraft: async (payload: JsonObject): Promise<RuleConfigVersion> => {
     const rule = parseRuleVersion(

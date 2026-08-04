@@ -37,11 +37,22 @@ async function main(): Promise<void> {
     });
   }
   for (const g of SEED.groups) {
-    const data = { name: g.name, branch: g.branch, dealerId: g.dealerId, status: 'mapped' as const, source: 'seed' };
+    // Update CO Y KHONG dung toi status/dealerId/source. Truoc 05/08/2026 no ghi de
+    // `status: 'mapped'` cho moi nhom trong SEED, nen chay lai seed la nhung nhom nguoi van hanh
+    // da go (status=ignored) song day va quay lai bang — dung hai nhom `source=seed` con sot tu
+    // dot test truoc. Quyet dinh cua nguoi van hanh phai thang du lieu bootstrap.
     await prisma.group.upsert({
       where: { platform_chatId: { platform: 'zalo', chatId: g.chatId } },
-      create: { platform: 'zalo', chatId: g.chatId, ...data },
-      update: data,
+      create: {
+        platform: 'zalo',
+        chatId: g.chatId,
+        name: g.name,
+        branch: g.branch,
+        dealerId: g.dealerId,
+        status: 'mapped' as const,
+        source: 'seed',
+      },
+      update: { name: g.name, branch: g.branch },
     });
   }
   for (const gl of SEED.glossary) {

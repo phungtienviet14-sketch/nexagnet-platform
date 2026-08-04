@@ -44,6 +44,7 @@ function build() {
       dealerId: 'meta-hn',
       status: 'mapped' as const,
     })),
+    setHidden: vi.fn(async () => ({ chatId: 'chat-1', status: 'ignored' as const })),
   } as unknown as GroupMappingService;
   return {
     controller: new SettingsController(query, writes, runtime, rules, audit, groupMapping),
@@ -239,5 +240,40 @@ describe('SettingsController', () => {
       ),
     ).toThrow(BadRequestException);
     expect(groupMapping.setMapping).not.toHaveBeenCalled();
+  });
+
+  it('go nhom khoi danh sach bang hidden=true', async () => {
+    const { controller, groupMapping } = build();
+
+    await expect(
+      controller.setGroupHidden('chat-1', { hidden: true }, undefined, 'chi-phuong', 'req-2'),
+    ).resolves.toEqual({ chatId: 'chat-1', status: 'ignored' });
+    expect(groupMapping.setHidden).toHaveBeenCalledWith('chat-1', true, 'chi-phuong', 'req-2');
+  });
+
+  it('dua nhom tro lai bang hidden=false', async () => {
+    const { controller, groupMapping } = build();
+
+    await controller.setGroupHidden('chat-1', { hidden: false }, undefined, 'operator');
+
+    expect(groupMapping.setHidden).toHaveBeenCalledWith('chat-1', false, 'operator', null);
+  });
+
+  it('hidden khong phai boolean -> 400, khong cham service', async () => {
+    const { controller, groupMapping } = build();
+
+    expect(() =>
+      controller.setGroupHidden('chat-1', { hidden: 'true' }, undefined, 'operator'),
+    ).toThrow(BadRequestException);
+    expect(groupMapping.setHidden).not.toHaveBeenCalled();
+  });
+
+  it('truong la trong body go nhom -> 400 (strict schema)', async () => {
+    const { controller, groupMapping } = build();
+
+    expect(() =>
+      controller.setGroupHidden('chat-1', { hidden: true, status: 'mapped' }, undefined, 'operator'),
+    ).toThrow(BadRequestException);
+    expect(groupMapping.setHidden).not.toHaveBeenCalled();
   });
 });
