@@ -9,7 +9,6 @@ import {
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';
-import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { MessageGuard, processWithRetry } from './message-guard.js';
 
@@ -29,12 +28,13 @@ export function isBotChannelActive(mode: AppEnv['CHANNEL_MODE']): boolean {
   return mode === 'bot' || mode === 'hybrid';
 }
 
-/** Bot chinh thuc chi duoc dua tin NHOM da map vao LLM. */
-export function isAllowedBotMessage(
-  message: ChannelMessage,
-  allowedChatIds: ReadonlySet<string>,
-): boolean {
-  return message.chatType === 'group' && allowedChatIds.has(message.externalChatId);
+/**
+ * Bot chinh thuc chi doc tin NHOM. Cong "nhom da map dai ly" da chuyen xuong
+ * PipelineService.intake (04/08/2026): truoc day no chan ca viec LUU tin, ma Zalo khong phat lai
+ * -> tin @mention cua nhom chua map mat vinh vien.
+ */
+export function isAllowedBotMessage(message: ChannelMessage): boolean {
+  return message.chatType === 'group';
 }
 
 /** Chuyen 1 update Zalo -> ChannelMessage chuan; null neu bo qua (tin bot, thieu noi dung). */
@@ -76,7 +76,6 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly pipeline: PipelineService,
     private readonly outbound: OutboundChannelRouter,
-    private readonly knowledge: KnowledgeService,
   ) {}
 
   onModuleInit(): void {
@@ -107,27 +106,31 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
         for (const update of normalizeUpdates(res.result)) {
           const message = updateToChannelMessage(update);
           if (!message) continue;
-          const allowedChatIds = new Set(this.knowledge.groups().map((group) => group.chatId));
-          if (!isAllowedBotMessage(message, allowedChatIds)) {
-            this.logger.warn(`Bo qua tin Bot Platform tu chatId chua map/khong phai nhom: ${message.externalChatId}`);
+          if (!isAllowedBotMessage(message)) {
+            this.logger.warn(`Bo qua tin Bot Platform khong phai nhom: ${message.externalChatId}`);
             continue;
           }
           const id = message.externalMessageId;
           if (!this.guard.claim(id)) continue;
 
-          const view = await processWithRetry(
-            () => this.pipeline.process(message, botName, { allowDuplicateSkip: true }),
+          const result = await processWithRetry(
+            () => this.pipeline.intake(message, botName),
             id,
             this.logger,
           );
-          if (!view) {
+          if (!result) {
             // That bai het luot -> KHONG danh dau. Tin con duong chay lai (khong nuot don im lang).
             this.guard.release(id);
             continue;
           }
+          // Bo qua CO CHU Y (da luu chua map / trung / thanh vien ignore) van la "xong".
           this.guard.complete(id);
-          this.logger.log(`Da xu ly tin ${id} -> intent=${view.intent}`);
-          if (shouldAutoAck(view.intent, autoAck)) {
+          if (result.outcome !== 'processed') {
+            this.logger.log(`Tin ${id} -> ${result.outcome} (khong tao don)`);
+            continue;
+          }
+          this.logger.log(`Da xu ly tin ${id} -> intent=${result.view.intent}`);
+          if (shouldAutoAck(result.view.intent, autoAck)) {
             await this.sendAutoAck(message.externalChatId);
           }
         }

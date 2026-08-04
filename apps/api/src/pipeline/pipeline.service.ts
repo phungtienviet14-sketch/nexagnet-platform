@@ -1,10 +1,33 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { loadEnv, type ChannelMessage, type OrderView, type SenderType } from '@ultty/shared';
+import {
+  loadEnv,
+  type ChannelMessage,
+  type GroupParticipant,
+  type OrderView,
+  type SenderType,
+} from '@ultty/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
+import { GroupDiscoveryService } from '../groups/group-discovery.service.js';
 import { GroupParticipantsRepository } from '../groups/group-participants.repository.js';
+import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { MessagesRepository, type SaveMessageResult } from '../messages/messages.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
+
+/**
+ * Ket qua nhan tin CO NHAN. Truoc 04/08/2026 `process()` tra `null` cho ca "bo qua co chu y"
+ * lan "that bai", nen listener goi `guard.release()` cho ca hai — tuc coi viec bo qua la loi
+ * va de tin chay lai. Nhan ro rang lam hai truong hop khong the lan nhau nua.
+ */
+export type IntakeOutcome = 'processed' | 'stored_only' | 'duplicate' | 'ignored';
+
+/**
+ * Union phan biet: chi `processed` moi co `view`. Ben goi khong the doc `view` cua mot tin
+ * chua qua parser ma khong bi TypeScript chan — bat bien nam trong kieu, khong nam o quy uoc.
+ */
+export type IntakeResult =
+  | { outcome: 'processed'; view: OrderView }
+  | { outcome: Exclude<IntakeOutcome, 'processed'>; view?: undefined };
 
 /**
  * Tang 3+4 — adapter mong uy quyen cho AgentOrchestrator (multi-agent 6 con).
@@ -23,7 +46,44 @@ export class PipelineService {
     @Optional() private readonly messages?: MessagesRepository,
     @Optional() private readonly settings?: RuntimeSettingsService,
     @Optional() private readonly participants?: GroupParticipantsRepository,
+    @Optional() private readonly knowledge?: KnowledgeService,
+    @Optional() private readonly groupDiscovery?: GroupDiscoveryService,
   ) {}
+
+  /**
+   * Cong vao cho hai worker doc tin (ZcaListener, BotPoller).
+   *
+   * Thu tu BAT BUOC — luu truoc, loc parser sau: nhom nam trong allowlist thi tin LUON duoc
+   * ghi DB (CLAUDE.md: "Luu moi tin nhan/don ve DB ngay khi nhan"), rieng viec dua NOI DUNG
+   * sang parser/LLM moi doi nhom da map dai ly. Truoc 04/08/2026 hai listener chan ca hai buoc
+   * cung luc nen tin cua nhom chua map bi VUT — ma Zalo khong phat lai.
+   */
+  async intake(message: ChannelMessage, botName?: string): Promise<IntakeResult> {
+    const participant = await this.findParticipant(message);
+    if (participant?.handlingMode === 'ignore') {
+      // Nguoi van hanh CHU DONG loai nguoi nay -> khong luu, khong xu ly (khac han "chua cau hinh").
+      this.logger.log(
+        `Bo qua tin cua thanh vien ignore: group=${message.externalChatId}, sender=${message.senderExternalId}`,
+      );
+      return { outcome: 'ignored' };
+    }
+
+    const saved = await this.saveMessage(message);
+    if (saved?.duplicate) return { outcome: 'duplicate' };
+
+    await this.observeGroup(message.externalChatId);
+
+    if (!this.isGroupMapped(message.externalChatId)) {
+      this.logger.warn(
+        `Nhom chua map nguon su that: ${message.externalChatId} — tin DA LUU, chua dua sang parser. ` +
+          'Chon dai ly cho nhom nay o /settings de bat xu ly don.',
+      );
+      return { outcome: 'stored_only' };
+    }
+
+    const view = await this.runPipeline(message, botName, participant, saved);
+    return { outcome: 'processed', view };
+  }
 
   async process(
     message: ChannelMessage,
@@ -40,10 +100,7 @@ export class PipelineService {
     botName?: string,
     opts?: { orderId?: string; rerun?: boolean; allowDuplicateSkip?: boolean },
   ): Promise<OrderView | null> {
-    const participant =
-      message.senderExternalId && this.participants
-        ? await this.participants.findBySender(message.externalChatId, message.senderExternalId)
-        : null;
+    const participant = await this.findParticipant(message);
     if (participant?.handlingMode === 'ignore') {
       this.logger.log(
         `Bo qua tin cua thanh vien ignore: group=${message.externalChatId}, sender=${message.senderExternalId}`,
@@ -56,6 +113,17 @@ export class PipelineService {
     // Kho ben vung la cong idempotency giua hai worker/qua restart. Tin da co nghia la
     // mot worker khac da nhan quyen xu ly; khong goi LLM va khong tao don thu hai.
     if (saved?.duplicate) return null;
+    return this.runPipeline(message, botName, participant, saved, opts);
+  }
+
+  /** Phan chung cua `intake` va `process`: chay 6 agent, noi don voi tin, xet auto-send. */
+  private async runPipeline(
+    message: ChannelMessage,
+    botName: string | undefined,
+    participant: GroupParticipant | null,
+    saved: SaveMessageResult | null,
+    opts?: { orderId?: string; rerun?: boolean; allowDuplicateSkip?: boolean },
+  ): Promise<OrderView> {
     const senderTypeOverride = participantRankToSenderType(participant?.customerRank);
     const view = await this.orchestrator.run(message, botName, {
       ...opts,
@@ -76,6 +144,36 @@ export class PipelineService {
       }
     }
     return view;
+  }
+
+  private async findParticipant(message: ChannelMessage): Promise<GroupParticipant | null> {
+    if (!message.senderExternalId || !this.participants) return null;
+    return this.participants.findBySender(message.externalChatId, message.senderExternalId);
+  }
+
+  /**
+   * Ghi nhan nhom vao nguon su that. Loi KHONG duoc lam gian doan xu ly tin (bat bien I6):
+   * metadata nhom quan trong hon khong don hang.
+   */
+  private async observeGroup(chatId: string): Promise<void> {
+    if (!this.groupDiscovery) return;
+    try {
+      await this.groupDiscovery.observe(chatId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Ghi nhan nhom ${chatId} that bai (xu ly tin van tiep tuc): ${detail}`);
+    }
+  }
+
+  /**
+   * FAIL CLOSED: khong co KnowledgeService thi KHONG the xac minh nhom da map, ma doan "da map"
+   * dong nghia voi day PII cua nhom la sang LLM. Chua xac minh duoc -> coi nhu chua map: tin van
+   * duoc LUU day du, chi khong qua parser. Cung nguyen tac voi decideZcaMessageOwnership khi
+   * mat Bot ID (message-ownership.ts).
+   */
+  private isGroupMapped(chatId: string): boolean {
+    if (!this.knowledge) return false;
+    return this.knowledge.groups().some((group) => group.chatId === chatId);
   }
 
   /** Luu tin qua MessagesRepository (neu co cau hinh); that bai chi log — pipeline van chay. */

@@ -74,8 +74,7 @@ describe('hybrid ownership guard', () => {
     expect(isBotChannelActive('mock')).toBe(false);
   });
 
-  it('chi nhan tin nhom da map vao knowledge, chan private/nhom la truoc LLM', () => {
-    const mapped = new Set(['bot-chat-mapped']);
+  it('chi nhan tin NHOM, chan tin ca nhan', () => {
     const base = {
       externalMessageId: 'm-1',
       platform: 'zalo' as const,
@@ -86,8 +85,23 @@ describe('hybrid ownership guard', () => {
       sentAt: new Date(),
     };
 
-    expect(isAllowedBotMessage(base, mapped)).toBe(true);
-    expect(isAllowedBotMessage({ ...base, externalChatId: 'unknown' }, mapped)).toBe(false);
-    expect(isAllowedBotMessage({ ...base, chatType: 'private' }, mapped)).toBe(false);
+    expect(isAllowedBotMessage(base)).toBe(true);
+    expect(isAllowedBotMessage({ ...base, chatType: 'private' })).toBe(false);
+  });
+
+  it('nhom chua map KHONG con bi chan o day — tin phai vao duoc pipeline de duoc luu (I1)', () => {
+    // Truoc 04/08/2026 ham nay doi chatId nam trong knowledge.groups(); tin @mention cua nhom
+    // chua map bi vut ma Zalo khong phat lai. Cong "da map" gio nam trong PipelineService.intake.
+    const unmapped = {
+      externalMessageId: 'm-2',
+      platform: 'zalo' as const,
+      source: 'bot_webhook' as const,
+      chatType: 'group' as const,
+      externalChatId: 'nhom-hoan-toan-la',
+      text: 'don hang co PII',
+      sentAt: new Date(),
+    };
+
+    expect(isAllowedBotMessage(unmapped)).toBe(true);
   });
 });

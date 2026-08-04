@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { loadEnv, type AppEnv } from '@ultty/shared';
 import type { Message } from 'zca-js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
@@ -6,7 +6,6 @@ import { BotIdentityService } from '../channels/bot-identity.service.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { ZaloUserClient } from '../channels/zalo-user.client.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
-import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { AUTO_ACK_TEXT, shouldAutoAck } from './bot-poller.js';
 import { MessageGuard, processWithRetry } from './message-guard.js';
 import { decideZcaMessageOwnership } from './message-ownership.js';
@@ -27,8 +26,6 @@ export function isZcaChannelActive(mode: AppEnv['CHANNEL_MODE']): boolean {
 export class ZcaListener implements OnModuleInit {
   private readonly logger = new Logger('ZcaListener');
   private readonly guard = new MessageGuard();
-  /** Chat da in ID (in 1 lan/nhom) — giup lay threadId that de map vao seed.ts. */
-  private readonly announced = new Set<string>();
   private identityWarningEmitted = false;
 
   constructor(
@@ -36,7 +33,6 @@ export class ZcaListener implements OnModuleInit {
     private readonly client: ZaloUserClient,
     private readonly outbound: OutboundChannelRouter,
     private readonly botIdentity: BotIdentityService,
-    @Optional() private readonly knowledge?: KnowledgeService,
   ) {}
 
   onModuleInit(): void {
@@ -78,48 +74,33 @@ export class ZcaListener implements OnModuleInit {
     // ZCA thay moi tin cua tai khoan. Mac dinh deny: chi nhom operator da chon moi duoc
     // luu/dua sang Flowise + DeepSeek, tranh ro tin ca nhan va dot chi phi ngoai y muon.
     if (!this.client.isGroupAllowed(channelMessage.externalChatId)) return;
-    // Allowlist zca chi la lop dong y doc. Nhom con phai map vao nguon su that thi moi
-    // duoc gui noi dung/PII sang parser; dong bo thanh vien khong tu dong cap quyen xu ly.
-    if (
-      this.knowledge &&
-      !this.knowledge.groups().some((group) => group.chatId === channelMessage.externalChatId)
-    ) {
-      this.logger.warn(
-        `Bo qua nhom zca chua map nguon su that: ${channelMessage.externalChatId}`,
-      );
-      return;
-    }
-    this.announceGroup(channelMessage.externalChatId, channelMessage.chatType);
+    // Cong "nhom da map dai ly" KHONG con o day: no chan ca viec LUU tin, ma Zalo khong phat
+    // lai -> tin cua nhom chua map mat vinh vien (phat hien 04/08/2026). Gio PipelineService.intake
+    // luu truoc roi moi quyet dinh co dua noi dung sang parser hay khong.
     const id = channelMessage.externalMessageId;
     if (!this.guard.claim(id)) return;
 
-    const view = await processWithRetry(
-      () => this.pipeline.process(channelMessage, botName, { allowDuplicateSkip: true }),
+    const result = await processWithRetry(
+      () => this.pipeline.intake(channelMessage, botName),
       id,
       this.logger,
     );
-    if (!view) {
+    if (!result) {
       // That bai het luot -> KHONG danh dau. Tin con duong chay lai (khong nuot don im lang).
       this.guard.release(id);
       return;
     }
+    // Bo qua CO CHU Y (da luu chua map / trung / thanh vien ignore) van la "xong" — danh dau de
+    // khong chay lai vo han. Ngoai le duy nhat khong danh dau la nhanh `!result` o tren.
     this.guard.complete(id);
-    this.logger.log(`Da xu ly tin ${id} -> intent=${view.intent}`);
-    if (shouldAutoAck(view.intent, autoAck)) {
+    if (result.outcome !== 'processed') {
+      this.logger.log(`Tin ${id} -> ${result.outcome} (khong tao don)`);
+      return;
+    }
+    this.logger.log(`Da xu ly tin ${id} -> intent=${result.view.intent}`);
+    if (shouldAutoAck(result.view.intent, autoAck)) {
       await this.sendAutoAck(channelMessage.externalChatId);
     }
-  }
-
-  /**
-   * In ID nhom (1 lan/nhom) de lay threadId THAT cua zca -> dan vao seed.ts groups[].chatId
-   * (map nhom -> dai ly la theo ID nay, KHONG theo TEN nhom).
-   */
-  private announceGroup(chatId: string, chatType: string): void {
-    if (this.announced.has(chatId)) return;
-    this.announced.add(chatId);
-    this.logger.log(
-      `📌 Nhom (${chatType}) chatId="${chatId}" — copy ID nay vao seed.ts groups[] de map dai ly.`,
-    );
   }
 
   /** Gui tin auto-ack (best-effort): loi khong lam gian doan doc tin. */
