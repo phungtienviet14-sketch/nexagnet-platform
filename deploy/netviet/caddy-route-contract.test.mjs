@@ -69,6 +69,32 @@ test('AUTO_SEND keeps a single audited mutation surface', () => {
   assert.doesNotMatch(caddyfile, /\/demo\/auto-send/);
 });
 
+// Su co 04/08/2026: timer tu-chua goi `docker compose up` dung luc deploy dang recreate container
+// api -> Docker bao "removal of container ... is already in progress" va deploy chet giua chung,
+// de lai VM chay image CU. Moi tien trinh dong toi compose phai di qua cung mot khoa.
+test('every process that mutates compose takes the shared lock', async () => {
+  const lockPath = '.runtime/compose.lock';
+  const scripts = {
+    'deploy-stack.sh': deployStack,
+    'health-check.sh': await readFile(new URL('./health-check.sh', import.meta.url), 'utf8'),
+    'rollback.sh': await readFile(new URL('./rollback.sh', import.meta.url), 'utf8'),
+  };
+
+  for (const [name, source] of Object.entries(scripts)) {
+    assert.ok(source.includes(lockPath), `${name} khong mo ${lockPath}`);
+    assert.match(source, /flock\s+-[wn]/, `${name} khong goi flock`);
+  }
+
+  // Timer phai la NON-blocking (-n): dang deploy thi bo qua nhip, khong xep hang cho.
+  assert.match(scripts['health-check.sh'], /flock -n 9/);
+  // Deploy va rollback thi doi, vi bo cuoc giua chung nguy hiem hon la cho.
+  assert.match(scripts['deploy-stack.sh'], /flock -w 300 9/);
+  assert.match(scripts['rollback.sh'], /flock -w 300 9/);
+
+  const unit = await readFile(new URL('./systemd/netviet-stack.service', import.meta.url), 'utf8');
+  assert.match(unit, /ExecStart=\/usr\/bin\/flock -w 300 \S*compose\.lock \/usr\/bin\/docker compose/);
+});
+
 test('deployment smoke checks both the operator page and Zalo status API', () => {
   assert.match(deployStack, /"https:\/\/\$\{OPERATOR_DOMAIN\}\/zalo"/);
   assert.match(deployStack, /"https:\/\/\$\{OPERATOR_DOMAIN\}\/zalo\/status"/);

@@ -9,6 +9,17 @@ if [[ ! -s .runtime/secrets.env ]]; then
   exit 1
 fi
 
+# KHOA CHUNG cho moi lenh `docker compose up`. Ngay 04/08/2026 deploy chet giua chung voi
+# "removal of container ... is already in progress": timer tu-chua (health-check.sh) goi
+# `up -d --no-recreate` dung luc deploy dang recreate container api. `--no-recreate` KHONG du
+# de tranh dung nhau — hai tien trinh compose van gianh cung mot container.
+# Deploy uu tien: doi toi 300s. Timer thi bo qua nhip do (xem health-check.sh).
+exec 9>".runtime/compose.lock"
+if ! flock -w 300 9; then
+  echo "Khong lay duoc khoa compose sau 300s — co tien trinh compose khac dang chay." >&2
+  exit 1
+fi
+
 COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml)
 
 "${COMPOSE[@]}" pull postgres flowise gateway
