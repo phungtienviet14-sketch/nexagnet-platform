@@ -44,7 +44,7 @@ function syncMemberDetail(result: MemberSyncResult): string {
     return `Ghi nhận lúc ${formatSettingsDate(result.syncedAt)}. ${result.deactivatedCount} người rời nhóm được đánh dấu không hoạt động, không ai bị xóa. Thành viên mới mặc định “Theo mặc định nhóm” — phân loại rồi mới đổi cách xử lý.`;
   }
   if (result.fetchedCount === 0) {
-    return 'Tài khoản Zalo phụ nhìn thấy nhóm nhưng không đọc được danh sách thành viên. Chưa có ai bị thay đổi — phân loại đã lưu vẫn nguyên. Thử: mở nhóm đó trên Zalo bằng tài khoản phụ một lần rồi bấm Đồng bộ lại; nếu vẫn vậy thì tài khoản này chưa đủ quyền xem thành viên.';
+    return 'Zalo trả về nhóm nhưng không kèm UID thành viên nào. Đây là giới hạn phía Zalo, KHÔNG phải do quyền của tài khoản phụ: nhật ký cho thấy nhóm không bật khóa xem thành viên và không mã hóa đầu cuối, Zalo vẫn báo đúng số người mà chỉ bỏ trống danh sách. Chưa có ai bị thay đổi — phân loại đã lưu vẫn nguyên. Không cần làm gì thêm: danh sách thành viên tự đầy lên khi có người nhắn trong nhóm.';
   }
   return `Còn ${result.failedCount} thành viên chưa lấy được hồ sơ. Hệ thống KHÔNG đánh dấu ai không hoạt động trong lần đồng bộ thiếu này; bấm “Đồng bộ” lại sau ít phút.`;
 }
@@ -72,6 +72,14 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
       void queryClient.invalidateQueries({ queryKey: ['settings-participants'] });
     },
   });
+  // Go nhom khoi danh sach. Dung chung mutation cho ca go lan dua lai de chi co MOT duong ghi.
+  const hideMutation = useMutation({
+    mutationFn: ({ group, hidden }: { group: SettingsGroupSummary; hidden: boolean }) =>
+      settingsApi.setGroupHidden(group.zcaChatId, hidden),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settings-summary'] });
+    },
+  });
   const logoutMutation = useMutation({
     mutationFn: settingsApi.logoutZalo,
     onSuccess: () => {
@@ -87,6 +95,13 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
     if (confirmed) syncMutation.mutate(groupId);
   };
 
+  const handleHide = (group: SettingsGroupSummary) => {
+    const confirmed = window.confirm(
+      `Gỡ “${group.name}” khỏi danh sách? Nhóm ngừng lên đơn ngay. Tin nhắn và đơn đã nhận vẫn được giữ nguyên, và có thể đưa nhóm trở lại bất cứ lúc nào.`,
+    );
+    if (confirmed) hideMutation.mutate({ group, hidden: true });
+  };
+
   const handleLogout = () => {
     const confirmed = window.confirm(
       'Đăng xuất sẽ dừng listener, xóa phiên Zalo và allowlist cục bộ. Cấu hình thành viên đã lưu trong hệ thống vẫn được giữ. Tiếp tục?',
@@ -94,9 +109,14 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
     if (confirmed) logoutMutation.mutate();
   };
 
-  const actionError = syncMutation.error ?? logoutMutation.error ?? mappingMutation.error;
+  const actionError =
+    syncMutation.error ?? logoutMutation.error ?? mappingMutation.error ?? hideMutation.error;
   const dealers = (dealersQuery.data ?? []).find((section) => section.resource === 'dealers')?.rows ?? [];
-  const pendingCount = summary.groups.filter(
+  // Nhom da go van nam trong payload (de con dua lai duoc) nhung KHONG duoc tinh vao bang chinh
+  // hay vao canh bao "chua chon dai ly" — nguoi van hanh da chu dong bo chung ra khoi luong.
+  const visibleGroups = summary.groups.filter((group) => group.status !== 'ignored');
+  const hiddenGroups = summary.groups.filter((group) => group.status === 'ignored');
+  const pendingCount = visibleGroups.filter(
     (group) => group.allowed && group.status !== 'mapped',
   ).length;
 
@@ -167,6 +187,24 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
         />
       )}
 
+      {hideMutation.isSuccess && !hideMutation.isPending && (
+        <SettingsPanelState
+          tone={hideMutation.data.status === 'ignored' ? 'neutral' : 'success'}
+          title={
+            hideMutation.data.status === 'ignored'
+              ? 'Đã gỡ nhóm khỏi danh sách'
+              : 'Đã đưa nhóm trở lại'
+          }
+          detail={
+            hideMutation.data.status === 'ignored'
+              ? 'Nhóm ngừng lên đơn từ tin tiếp theo. Tin nhắn và đơn đã nhận vẫn được giữ nguyên — mục “Nhóm đã gỡ” bên dưới đưa lại được bất cứ lúc nào.'
+              : hideMutation.data.status === 'mapped'
+                ? 'Nhóm chạy tiếp với đại lý đã lưu trước đó, không phải chọn lại.'
+                : 'Nhóm trở lại hàng chờ. Chọn đại lý để nhóm lên đơn được.'
+          }
+        />
+      )}
+
       {pendingCount > 0 && (
         <SettingsPanelState
           tone="error"
@@ -233,11 +271,11 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
             <h3 id="settings-zalo-groups-title">Đồng bộ thành viên</h3>
           </div>
           <span className="settings-count">
-            {summary.groups.filter((group) => group.allowed).length} nhóm được phép
+            {visibleGroups.filter((group) => group.allowed).length} nhóm được phép
           </span>
         </div>
 
-        {summary.groups.length === 0 ? (
+        {visibleGroups.length === 0 ? (
           <SettingsPanelState
             title="Chưa có nhóm được phép"
             detail="Kết nối tài khoản Zalo phụ và chọn allowlist trước khi đồng bộ thành viên."
@@ -260,7 +298,7 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {summary.groups.map((group) => (
+                {visibleGroups.map((group) => (
                   <tr key={group.id}>
                     <td>
                       <strong>{group.name}</strong>
@@ -324,6 +362,15 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
                           ? 'Đang đồng bộ…'
                           : 'Đồng bộ'}
                       </button>
+                      <button
+                        type="button"
+                        className="settings-text-action settings-text-action--danger"
+                        disabled={hideMutation.isPending}
+                        aria-label={`Gỡ nhóm ${group.name} khỏi danh sách`}
+                        onClick={() => handleHide(group)}
+                      >
+                        Gỡ khỏi danh sách
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -332,6 +379,58 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers }: Props) {
           </div>
         )}
       </section>
+
+      {/* Nhom da go van hien o day chu khong bien mat han: hang DB con (tin nhan/don da nhan tro
+          toi no), va nguoi van hanh phai dua lai duoc neu bam nham. */}
+      {hiddenGroups.length > 0 && (
+        <section className="settings-table-section" aria-labelledby="settings-zalo-hidden-title">
+          <div className="settings-subheading">
+            <div>
+              <p className="settings-eyebrow">Không lên đơn, không tính vào cảnh báo</p>
+              <h3 id="settings-zalo-hidden-title">Nhóm đã gỡ</h3>
+            </div>
+            <span className="settings-count">{hiddenGroups.length} nhóm</span>
+          </div>
+          <div className="settings-table-wrap">
+            <table className="settings-table">
+              <thead>
+                <tr>
+                  <th>Nhóm</th>
+                  <th>Đại lý đã lưu</th>
+                  <th aria-label="Thao tác" />
+                </tr>
+              </thead>
+              <tbody>
+                {hiddenGroups.map((group) => (
+                  <tr key={group.id}>
+                    <td>
+                      <strong>{group.name}</strong>
+                      <small className="settings-cell-meta mono">{group.zcaChatId}</small>
+                    </td>
+                    <td>
+                      {group.dealerName ?? '—'}
+                      <small className="settings-cell-meta">
+                        Đưa lại là chạy tiếp với đại lý này
+                      </small>
+                    </td>
+                    <td className="settings-table__action">
+                      <button
+                        type="button"
+                        className="settings-button settings-button--quiet"
+                        disabled={hideMutation.isPending}
+                        aria-label={`Đưa nhóm ${group.name} trở lại danh sách`}
+                        onClick={() => hideMutation.mutate({ group, hidden: false })}
+                      >
+                        Đưa lại
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

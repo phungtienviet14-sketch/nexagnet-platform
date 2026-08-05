@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { loadEnv } from '@ultty/shared';
 import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
@@ -14,6 +19,8 @@ export const groupMappingSchema = z
   .strict();
 
 export type GroupMappingInput = z.infer<typeof groupMappingSchema>;
+
+export const groupHiddenSchema = z.object({ hidden: z.boolean() }).strict();
 
 /**
  * Map nhom Zalo -> dai ly bang KHOA TU NHIEN (platform + chatId).
@@ -86,5 +93,55 @@ export class GroupMappingService {
     await this.knowledge.reload();
 
     return { chatId, dealerId: input.dealerId, status };
+  }
+
+  /**
+   * Go mot nhom khoi danh sach lam viec — VD hai nhom `source=seed` con sot lai tu dot test truoc.
+   *
+   * CO Y KHONG xoa han hang Group: `Message.groupId` va `Order.groupId` deu tro toi day va KHONG
+   * co onDelete cascade, nen `delete` se vi pham khoa ngoai ngay khi nhom da tung nhan tin — ma
+   * CLAUDE.md thi cam xoa tin. Dat `status=ignored` vua dat muc dich (nhom bien khoi bang, va
+   * `PrismaKnowledgeRepository` chi nap `status=mapped` nen pipeline thoi dinh tuyen), vua dao
+   * nguoc duoc.
+   *
+   * KHONG dung toi `dealerId`: co giu lai thi bo an moi tra dung ve dai ly cu, khong bat nguoi
+   * van hanh chon lai.
+   */
+  async setHidden(
+    chatId: string,
+    hidden: boolean,
+    actor: string,
+    requestId: string | null,
+  ): Promise<{ chatId: string; status: 'mapped' | 'pending' | 'ignored' }> {
+    if (loadEnv().PERSISTENCE !== 'prisma') {
+      throw new ServiceUnavailableException('Chi go duoc nhom khi PERSISTENCE=prisma');
+    }
+
+    const before = await this.prisma.group.findUnique({
+      where: { platform_chatId: { platform: 'zalo', chatId } },
+    });
+    if (!before) throw new NotFoundException(`Nhom ${chatId} khong co trong he thong`);
+
+    // Bo an thi tra ve trang thai suy ra tu du lieu con lai, khong doan: con dai ly -> chay lai
+    // duoc ngay; khong con -> ve hang cho de nguoi van hanh chon dai ly.
+    const status = hidden ? 'ignored' : before.dealerId ? 'mapped' : 'pending';
+    await this.prisma.group.update({
+      where: { platform_chatId: { platform: 'zalo', chatId } },
+      data: { status },
+    });
+
+    await this.audit.append({
+      actor,
+      action: hidden ? 'group.hidden.set' : 'group.hidden.clear',
+      entityType: 'Group',
+      entityId: chatId,
+      before,
+      after: { ...before, status },
+      requestId,
+    });
+
+    await this.knowledge.reload();
+
+    return { chatId, status };
   }
 }

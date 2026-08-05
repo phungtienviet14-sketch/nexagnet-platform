@@ -567,4 +567,269 @@ describe('ZaloUserClient runtime', () => {
 
     await expect(client.fetchGroupMembers('group-1')).rejects.toThrow('Khong tim thay nhom');
   });
+
+  // Hinh dang THAT tu VM 04/08/2026: totalMember=4 nhung memberIds=[] va currentMems=[], nhom
+  // KHONG khoa (lockViewMember=0). Truoc do dong bo tra ve 0 nguoi; `memVerList` van co UID.
+  it('lay lai UID tu memVerList khi Zalo bo trong memberIds lan currentMems', async () => {
+    const fakeApi = {
+      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      getOwnId: vi.fn(() => 'own-uid'),
+      getGroupInfo: vi.fn(async () => ({
+        removedsGroup: [],
+        unchangedsGroup: [],
+        gridInfoMap: {
+          'group-1': {
+            groupId: 'group-1',
+            memberIds: [],
+            currentMems: [],
+            totalMember: 3,
+            memVerList: ['user-1_7', 'user-2_3', 'own-uid_1'],
+            setting: { lockViewMember: 0 },
+          },
+        },
+      })),
+      getGroupMembersInfo: vi.fn(async (ids: string[]) => ({
+        profiles: Object.fromEntries(
+          ids.map((id) => [id, { id, displayName: `Display ${id}`, zaloName: '', avatar: '' }]),
+        ),
+        unchangeds_profile: [],
+      })),
+    } as unknown as API;
+    await writeFile(
+      join(runtimeDir, 'zalo-cred.json'),
+      JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
+      'utf8',
+    );
+    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    zcaMocks.login.mockResolvedValue(fakeApi);
+    const { ZaloUserClient } = await import('./zalo-user.client.js');
+    const client = new ZaloUserClient();
+    await client.onModuleInit();
+    await vi.waitFor(() => expect(client.status().state).toBe('ready'));
+
+    const result = await client.fetchGroupMembers('group-1');
+
+    // `own-uid` bi loai vi la chinh tai khoan chay listener, khong phai nguoi can phan loai.
+    expect(result.members.map((member) => member.externalUserId)).toEqual(['user-1', 'user-2']);
+    expect(result).toMatchObject({ complete: true, expectedCount: 2, failedMemberIds: [] });
+  });
+
+  // memVerList la nguon vet vat: mot phan tu la khong duoc lam hong ca lan dong bo.
+  it('bo qua phan tu memVerList di dang thay vi lam hong ca lan dong bo', async () => {
+    const fakeApi = {
+      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      getGroupInfo: vi.fn(async () => ({
+        removedsGroup: [],
+        unchangedsGroup: [],
+        gridInfoMap: {
+          'group-1': {
+            groupId: 'group-1',
+            memberIds: [],
+            currentMems: [],
+            totalMember: 2,
+            memVerList: ['', '_9', `${'x'.repeat(200)}_1`, 'user-1_2'],
+          },
+        },
+      })),
+      getGroupMembersInfo: vi.fn(async (ids: string[]) => ({
+        profiles: Object.fromEntries(
+          ids.map((id) => [id, { id, displayName: `Display ${id}`, zaloName: '', avatar: '' }]),
+        ),
+        unchangeds_profile: [],
+      })),
+    } as unknown as API;
+    await writeFile(
+      join(runtimeDir, 'zalo-cred.json'),
+      JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
+      'utf8',
+    );
+    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    zcaMocks.login.mockResolvedValue(fakeApi);
+    const { ZaloUserClient } = await import('./zalo-user.client.js');
+    const client = new ZaloUserClient();
+    await client.onModuleInit();
+    await vi.waitFor(() => expect(client.status().state).toBe('ready'));
+
+    const result = await client.fetchGroupMembers('group-1');
+
+    expect(result.members.map((member) => member.externalUserId)).toEqual(['user-1']);
+  });
+});
+
+/**
+ * Duong VET VAT cuoi cung khi `getGroupInfo` bo trong ca ba truong UID.
+ * `getGroupLinkInfo` (endpoint `group/link/ginfo`) van tra `currentMems` kem ho so — nhung doi
+ * nhom co LINK MOI dang bat. Zalo dang siet duong nay (issue zca-js #349/#359), nen moi test o
+ * day deu phai chung minh: that bai KHONG duoc lam hong lan dong bo.
+ */
+describe('ZaloUserClient.fetchGroupMembers — duong link moi', () => {
+  const savedEnv: Record<string, string | undefined> = {};
+  const keys = ['NODE_ENV', 'CHANNEL_MODE', 'ZALO_CRED_PATH', 'ZALO_ALLOWED_GROUPS_PATH'] as const;
+  let runtimeDir = '';
+
+  beforeEach(async () => {
+    for (const key of keys) savedEnv[key] = process.env[key];
+    runtimeDir = await mkdtemp(join(tmpdir(), 'netviet-zca-link-'));
+    process.env.NODE_ENV = 'test';
+    process.env.CHANNEL_MODE = 'zca';
+    process.env.ZALO_CRED_PATH = join(runtimeDir, 'zalo-cred.json');
+    process.env.ZALO_ALLOWED_GROUPS_PATH = join(runtimeDir, 'zalo-allowed-groups.json');
+    zcaMocks.login.mockReset();
+    zcaMocks.loginQR.mockReset();
+    await writeFile(
+      join(runtimeDir, 'zalo-cred.json'),
+      JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
+      'utf8',
+    );
+    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+  });
+
+  afterEach(async () => {
+    for (const key of keys) {
+      if (savedEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = savedEnv[key];
+    }
+    await rm(runtimeDir, { recursive: true, force: true });
+  });
+
+  function emptyGroupInfo(totalMember = 3) {
+    return vi.fn(async () => ({
+      removedsGroup: [],
+      unchangedsGroup: [],
+      gridInfoMap: {
+        'group-1': {
+          groupId: 'group-1',
+          memberIds: [],
+          currentMems: [],
+          memVerList: [],
+          totalMember,
+          setting: { lockViewMember: 0 },
+        },
+      },
+    }));
+  }
+
+  async function connect(fakeApi: API) {
+    zcaMocks.login.mockResolvedValue(fakeApi);
+    const { ZaloUserClient } = await import('./zalo-user.client.js');
+    const client = new ZaloUserClient();
+    await client.onModuleInit();
+    await vi.waitFor(() => expect(client.status().state).toBe('ready'));
+    return client;
+  }
+
+  it('getGroupInfo rong -> lay thanh vien qua link moi dang bat', async () => {
+    const getGroupLinkInfo = vi.fn(async (_payload: { link: string }) => ({
+      groupId: 'group-1',
+      currentMems: [
+        { id: 'user-1', dName: ' Chi Phuong ', zaloName: ' phuong ', avatar: 'https://img.test/1.jpg' },
+        { id: 'user-2', dName: 'Anh Nam', zaloName: 'nam', avatar: '' },
+      ],
+      hasMoreMember: 0,
+      totalMember: 3,
+    }));
+    const client = await connect({
+      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      getOwnId: vi.fn(() => 'own-uid'),
+      getGroupInfo: emptyGroupInfo(),
+      getGroupLinkDetail: vi.fn(async () => ({ link: 'https://zalo.me/g/abc123', enabled: 1 })),
+      getGroupLinkInfo,
+      getGroupMembersInfo: vi.fn(),
+    } as unknown as API);
+
+    const result = await client.fetchGroupMembers('group-1');
+
+    expect(getGroupLinkInfo).toHaveBeenCalledWith({ link: 'https://zalo.me/g/abc123' });
+    expect(result).toMatchObject({ complete: true, expectedCount: 2, failedMemberIds: [] });
+    expect(result.members).toEqual([
+      {
+        externalUserId: 'user-1',
+        displayName: 'Chi Phuong',
+        zaloName: 'phuong',
+        avatarUrl: 'https://img.test/1.jpg',
+      },
+      { externalUserId: 'user-2', displayName: 'Anh Nam', zaloName: 'nam' },
+    ]);
+  });
+
+  // Bat link moi = ai co link deu vao duoc nhom cua khach. Do la quyet dinh cua nguoi van hanh.
+  it('link moi dang TAT -> KHONG tu bat, khong doi cai dat nhom cua khach', async () => {
+    const getGroupLinkInfo = vi.fn();
+    const enableGroupLink = vi.fn();
+    const client = await connect({
+      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      getGroupInfo: emptyGroupInfo(),
+      getGroupLinkDetail: vi.fn(async () => ({ enabled: 0 })),
+      getGroupLinkInfo,
+      enableGroupLink,
+    } as unknown as API);
+
+    const result = await client.fetchGroupMembers('group-1');
+
+    expect(enableGroupLink).not.toHaveBeenCalled();
+    expect(getGroupLinkInfo).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ complete: false, expectedCount: 0, members: [] });
+  });
+
+  it('link moi loi -> lan dong bo van tra snapshot an toan, khong nem', async () => {
+    const client = await connect({
+      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      getGroupInfo: emptyGroupInfo(),
+      getGroupLinkDetail: vi.fn(async () => {
+        throw new Error('Zalo tu choi');
+      }),
+      getGroupLinkInfo: vi.fn(),
+    } as unknown as API);
+
+    await expect(client.fetchGroupMembers('group-1')).resolves.toMatchObject({
+      complete: false,
+      expectedCount: 0,
+      members: [],
+    });
+  });
+
+  // Con trang sau ma bao complete=true thi tang persistence se danh INACTIVE nhung nguoi chua doc toi.
+  it('con trang thanh vien chua doc -> complete=false', async () => {
+    const client = await connect({
+      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      getGroupInfo: emptyGroupInfo(200),
+      getGroupLinkDetail: vi.fn(async () => ({ link: 'https://zalo.me/g/abc123', enabled: 1 })),
+      getGroupLinkInfo: vi.fn(async () => ({
+        currentMems: [{ id: 'user-1', dName: 'User 1', zaloName: '', avatar: '' }],
+        hasMoreMember: 1,
+        totalMember: 200,
+      })),
+      getGroupMembersInfo: vi.fn(),
+    } as unknown as API);
+
+    const result = await client.fetchGroupMembers('group-1');
+
+    expect(result.members).toHaveLength(1);
+    expect(result.complete).toBe(false);
+  });
+
+  it('duong chinh co du lieu -> KHONG dong toi link moi', async () => {
+    const getGroupLinkDetail = vi.fn();
+    const client = await connect({
+      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      getGroupInfo: vi.fn(async () => ({
+        removedsGroup: [],
+        unchangedsGroup: [],
+        gridInfoMap: {
+          'group-1': {
+            groupId: 'group-1',
+            memberIds: [],
+            currentMems: [{ id: 'user-1', dName: 'User 1', zaloName: '', avatar: '' }],
+            totalMember: 1,
+          },
+        },
+      })),
+      getGroupLinkDetail,
+      getGroupMembersInfo: vi.fn(),
+    } as unknown as API);
+
+    await client.fetchGroupMembers('group-1');
+
+    expect(getGroupLinkDetail).not.toHaveBeenCalled();
+  });
 });

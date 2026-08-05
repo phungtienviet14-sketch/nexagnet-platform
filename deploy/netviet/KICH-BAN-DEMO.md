@@ -30,9 +30,13 @@ Luồng đang chạy trên GCP:
 - Eval intent Flowise đạt 35/35. Chưa được tuyên bố chính xác field-level vì còn chờ bộ tin
   B1-B2 có đáp án chuẩn của khách.
 - Hạ tầng, backup/restore, rollback và soak 24 giờ đã đạt. ZCA đã đăng nhập và allowlist hiện
-  có hai nhóm test: **Meta HN** (`2508572440887686813`) và **Thái Nguyên**
-  (`3787434804745256898`). Còn cần xác nhận lại E2E duyệt/gửi sau bản sửa group ID trước khi
+  có hai nhóm test: **Meta HN** (`5418371951945064288`) và **Thái Nguyên**
+  (`6732452832330077759`). Còn cần xác nhận lại E2E duyệt/gửi trên hai nhóm này trước khi
   đánh dấu nghiệm thu pilot hoàn tất.
+- **Danh sách thành viên nhóm: nói đúng, đừng hứa.** Zalo đã chặn việc đọc danh sách thành viên
+  nhóm ở diện rộng từ giữa 2026 — không phải giới hạn của phần mềm. Hệ thống dựng danh sách bằng
+  cách **ghi nhận người gửi ở mọi tin nhắn**, nên nhóm chạy vài ngày là đủ mặt người hay đặt hàng.
+  Ai chưa từng nhắn thì chưa xuất hiện. Nếu khách hỏi, trả lời đúng như vậy.
 
 ## 2. Chuẩn bị trước buổi demo
 

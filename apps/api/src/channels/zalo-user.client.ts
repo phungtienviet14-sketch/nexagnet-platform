@@ -225,10 +225,36 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const memberIds = normalizeMemberIds([
+    // Nguon UID thu BA. Nhom that trong pilot tra ca `memberIds` lan `currentMems` RONG trong khi
+    // `totalMember` van bao 4-5 nguoi (log VM 04/08/2026, `lockViewMember=0` -> nhom KHONG khoa).
+    // Nhung cung response do con `memVerList` — danh sach "uid_version" Zalo dung de bat cache.
+    // Doc them truong nay la lay lai duoc UID ma khong ton request nao; ho so con thieu se lay qua
+    // `getGroupMembersInfo` o vong duoi nhu cu.
+    const versionListIds = memberIdsFromVersionList(group.memVerList);
+    const primaryIds = normalizeMemberIds([
       ...(group.memberIds ?? []),
       ...embeddedProfiles.keys(),
+      ...versionListIds,
     ]).filter((memberId) => !excluded.has(memberId));
+
+    // Duong VET VAT: ca ba truong tren deu rong ma Zalo van bao co nguoi. `getGroupLinkInfo` doc
+    // qua endpoint KHAC (`group/link/ginfo`) va van tra `currentMems` kem ho so. Chi goi khi duong
+    // chinh khong ra gi — dung nen tra them phai la tra them, khong phai tra moi lan.
+    const totalMember = typeof group.totalMember === 'number' ? group.totalMember : 0;
+    const viaLink =
+      primaryIds.length === 0 && totalMember > excluded.size
+        ? await this.membersViaInviteLink(api, groupId)
+        : null;
+    for (const profile of viaLink?.profiles ?? []) {
+      embeddedProfiles.set(profile.externalUserId, profile);
+    }
+
+    const memberIds = viaLink
+      ? normalizeMemberIds([
+          ...primaryIds,
+          ...viaLink.profiles.map((profile) => profile.externalUserId),
+        ]).filter((memberId) => !excluded.has(memberId))
+      : primaryIds;
     const members: GroupParticipantProfile[] = memberIds
       .map((memberId) => embeddedProfiles.get(memberId))
       .filter((profile): profile is GroupParticipantProfile => profile !== undefined);
@@ -258,7 +284,6 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     // `memberIds` lan `currentMems` deu rong). Neu coi do la "dong bo day du" thi tang persistence
     // se danh INACTIVE toan bo thanh vien da luu -> mat sach phan loai chi vi mot cu API hut.
     // Phai coi la KHONG day du, va noi ro trong log de con lan ra nguyen nhan.
-    const totalMember = typeof group.totalMember === 'number' ? group.totalMember : 0;
     const memberListMissing = memberIds.length === 0 && totalMember > excluded.size;
     if (memberListMissing) {
       // `lockViewMember` = nhom bat "khoa xem thanh vien" -> Zalo khong tra danh sach cho thanh
@@ -268,6 +293,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(
         `Zalo khong tra danh sach thanh vien: group=${groupId} totalMember=${totalMember} ` +
           `memberIds=${(group.memberIds ?? []).length} currentMems=${(group.currentMems ?? []).length} ` +
+          `memVerList=${(group.memVerList ?? []).length} ` +
           `hasMoreMember=${String(group.hasMoreMember)} e2ee=${String(group.e2ee)} ` +
           `adminIds=${(group.adminIds ?? []).length} lockViewMember=${String(setting.lockViewMember)} ` +
           `setting=${JSON.stringify(setting)}`,
@@ -276,7 +302,9 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
 
     return {
       groupId,
-      complete: failedMemberIds.length === 0 && !memberListMissing,
+      // `viaLink.hasMore` = con trang thanh vien chua doc. Bao `complete` luc do thi tang
+      // persistence se danh INACTIVE nhung nguoi nam o trang sau.
+      complete: failedMemberIds.length === 0 && !memberListMissing && !viaLink?.hasMore,
       // `expectedCount` la so UID DA THU lay, khong phai so Zalo khai bao — schema giu bat bien
       // members + failedMemberIds === expectedCount. Viec "Zalo noi co 4 ma khong tra ai" the
       // hien bang complete=false (0 nguoi + chua xong = khong tra danh sach).
@@ -284,6 +312,62 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       members,
       failedMemberIds,
     };
+  }
+
+  /**
+   * Doc thanh vien qua LINK MOI cua nhom — duong duy nhat con lai khi `getGroupInfo` bo trong ca
+   * `memberIds`, `currentMems` lan `memVerList`.
+   *
+   * CO Y KHONG goi `enableGroupLink`: bat link moi la doi CAI DAT NHOM cua khach, ai co link deu
+   * vao duoc nhom. Do la quyet dinh cua nguoi van hanh, khong phai viec he thong tu lam de cho
+   * tien. Nhom chua bat link thi bo qua.
+   *
+   * Zalo dang siet duong nay (zca-js #349 "link moi la khong thay members", #359 "gio bi lock
+   * roi") nen phai coi that bai la BINH THUONG: tra `null`, lan dong bo di tiep voi nhung gi co.
+   */
+  private async membersViaInviteLink(
+    api: API,
+    groupId: string,
+  ): Promise<{ profiles: GroupParticipantProfile[]; hasMore: boolean } | null> {
+    if (
+      typeof api.getGroupLinkDetail !== 'function' ||
+      typeof api.getGroupLinkInfo !== 'function'
+    ) {
+      return null;
+    }
+    try {
+      const detail = await api.getGroupLinkDetail(groupId);
+      const link = detail?.link?.trim();
+      if (!link || detail.enabled !== 1) {
+        this.logger.warn(
+          `Nhom ${groupId} chua bat link moi -> bo qua duong link. He thong KHONG tu bat link ` +
+            `(bat la ai co link cung vao duoc nhom) — nguoi van hanh tu quyet.`,
+        );
+        return null;
+      }
+      const info = await api.getGroupLinkInfo({ link });
+      const profiles: GroupParticipantProfile[] = [];
+      for (const member of info?.currentMems ?? []) {
+        const externalUserId = member.id?.trim();
+        if (!externalUserId || externalUserId.length > 128) continue;
+        profiles.push(
+          normalizeMemberProfile(externalUserId, {
+            displayName: member.dName ?? '',
+            zaloName: member.zaloName ?? '',
+            avatar: member.avatar ?? '',
+          }),
+        );
+      }
+      this.logger.log(
+        `Lay thanh vien qua link moi: group=${groupId} duoc=${profiles.length} ` +
+          `hasMoreMember=${String(info?.hasMoreMember)}`,
+      );
+      return { profiles, hasMore: Boolean(info?.hasMoreMember) };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Doc thanh vien qua link moi that bai: group=${groupId} — ${reason}`);
+      return null;
+    }
   }
 
   async sendMessage(threadId: string, text: string, type?: ThreadType): Promise<void> {
@@ -474,6 +558,27 @@ function safeOwnId(api: API): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * `memVerList` la danh sach "uid_version" (VD `"1000000000000000001_7"`) Zalo gui kem group info de
+ * client biet ho so nao da cu. Ta chi can phan UID dang truoc dau `_`.
+ *
+ * KHONG duoc nem loi o day: day la nguon vet vat, mot phan tu la dang khong doan truoc ma lam hong
+ * ca lan dong bo thi te hon la bo qua phan tu do. `normalizeMemberIds` moi la cho kiem tinh chat
+ * chat, nen phan tu khong dat chuan bi loai truoc khi den do.
+ */
+function memberIdsFromVersionList(memVerList: readonly string[] | undefined): string[] {
+  if (!Array.isArray(memVerList)) return [];
+  const ids: string[] = [];
+  for (const entry of memVerList) {
+    if (typeof entry !== 'string') continue;
+    const [rawId] = entry.split('_');
+    const memberId = rawId?.trim() ?? '';
+    if (memberId.length === 0 || memberId.length > 128) continue;
+    ids.push(memberId);
+  }
+  return ids;
 }
 
 function normalizeMemberIds(memberIds: readonly string[]): string[] {
