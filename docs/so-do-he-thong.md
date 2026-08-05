@@ -645,6 +645,17 @@ getChatAdministrators  => 404 Not Found
 
 **Bổ sung 05/08/2026 — còn một trường UID nữa trong chính response đó.** Kiểu `GroupInfoResponse` của zca-js 2.1.2 khai `gridInfoMap[groupId]: GroupInfo & { memVerList: string[] }`. `memVerList` là danh sách `"uid_version"` Zalo dùng để bắt cache hồ sơ — **không** nằm trong model `GroupInfo` nên dễ bị bỏ sót, và code trước đó chỉ đọc `memberIds` + `currentMems`. `fetchGroupMembers` nay đọc cả ba. Đây **chưa** phải kết luận: log VM cũ không đếm `memVerList` nên chưa biết Zalo có điền hay cũng bỏ trống; dòng cảnh báo đã thêm số đếm để lần bấm "Đồng bộ" kế tiếp trả lời dứt điểm. Rà API còn lại của zca-js 2.1.2 (`getGroupMembersInfo`, `getGroupBlockedMember`, `getPendingGroupMembers`) — **không có** endpoint liệt kê thành viên phân trang nào; `hasMoreMember=0` nên cũng không có trang tiếp. npm chốt ở 2.1.2, không có bản mới hơn để nâng.
 
+**Nguyên nhân gốc đã rõ (05/08/2026): Zalo CHỦ ĐỘNG đóng, không phải mình làm sai.** Hai issue trên repo zca-js chốt lại điều này, và nó **loại bỏ cả hai giả thuyết** còn treo trong [ke-hoach/tong-quan.md](ke-hoach/tong-quan.md) (lệch phiên bản thư viện / tài khoản bị hạn chế):
+
+| Issue | Nội dung |
+|---|---|
+| [#359](https://github.com/RFS-ADRENO/zca-js/issues/359) (mở) | *"trước quét được giờ bị zalo lock rồi"* — người bảo trì: *"Zalo họ biết và có thể là đã sửa lỗi này rồi"* |
+| [#349](https://github.com/RFS-ADRENO/zca-js/issues/349) (đóng) | *"link cũ vẫn gọi đc, còn link mới là k thấy members luôn"* |
+
+⇒ Giữa 2026 Zalo chặn đọc danh sách thành viên ở **diện rộng**. Nâng thư viện không cứu được. Cơ chế `message_stream` **không phải giải pháp tạm — nó là giải pháp chính.**
+
+**Đường vét vát cuối, đã cài đặt:** `getGroupLinkInfo` (endpoint **khác**: `group/link/ginfo`) vẫn trả `currentMems` kèm hồ sơ, có phân trang `mpage`. `ZaloUserClient.membersViaInviteLink` gọi nó **chỉ khi** cả ba trường UID của `getGroupInfo` đều rỗng, và **chỉ khi nhóm đã sẵn có link mời đang bật** — hệ thống **KHÔNG bao giờ gọi `enableGroupLink`**, vì bật link mời là đổi cài đặt nhóm của khách (ai có link đều vào được). Thất bại được coi là bình thường: trả `null`, lần đồng bộ đi tiếp với những gì có. `hasMoreMember` ⇒ `complete: false` để tầng persistence không đánh INACTIVE người ở trang sau.
+
 **Kết luận câu hỏi “tin không tag có về server Bot không?”: KHÔNG.** PoC không thấy 6/6 tin text/ảnh/thoại không tag ở cả `getUpdates`/server nhận Bot; chỉ tin có native @mention mới phát event. Mention-gating là hành vi GỐC của Zalo (Beta), không tắt được — đã loại trừ khả năng cấu hình sai: docs OpenClaw ghi rõ "Groups require an @mention... not configurable"; docs webhook Zalo không có setting privacy/mention nào; `getMe` không có cờ `can_read_all_group_messages`; phía mình sạch (webhook 404, token ok, poller nhận đúng khi có tag).
 
 **Quan sát vận hành:** bot gửi tin nhóm được (kèm nhãn tự động ✅ điều khoản); long-poll `getUpdates` trả HTTP 408 khi rảnh = BÌNH THƯỜNG; độ trễ vài giây ~20s; ⚠️ **tin gửi lúc bot offline KHÔNG được phát lại** → production phải webhook always-on + lưu mọi tin DB ngay.
