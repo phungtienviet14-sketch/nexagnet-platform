@@ -3,13 +3,17 @@
 > Thời lượng mục tiêu: 18 phút. Chỉ dùng tài khoản Zalo phụ, nhóm test và dữ liệu giả.
 > Không hiển thị API key, DeepSeek credential hoặc mật khẩu khi đang chia sẻ màn hình.
 
-> **Trạng thái bản giao diện mới (01/08/2026):** source trên PC đã có công tắc **Tự gửi** và
-> nút **Đăng xuất tài khoản Zalo**, nhưng theo yêu cầu đang demo nên **chưa deploy lên GCP**.
-> Hai nút này chỉ xuất hiện trên bản local cho tới lần deploy được duyệt sau.
-> **Source 03/08/2026** đã thêm `CHANNEL_MODE=hybrid` (tag Bot chính thức → Bot Platform,
-> không tag → zca) nhưng GCP vẫn đang chạy bản `zca`. Trước lần deploy hybrid phải có secret
-> `zalo-ultty-zalo-bot-token`, map cả Bot `chat.id` và zca `threadId` về cùng đại lý, rồi chạy
-> E2E ma trận tag/không-tag. Không được trình bày hybrid như đã chạy live.
+> **Trạng thái 05/08/2026 — đã deploy lên GCP:** công tắc **Tự gửi**, nút **Đăng xuất tài khoản
+> Zalo**, trang cấu hình và `CHANNEL_MODE=hybrid` đều đang chạy thật trên VM, không còn là bản
+> local. Secret `zalo-ultty-zalo-bot-token` đã có (xoay token 05/08, version 2).
+>
+> ⛔ **Nhưng kênh Bot Platform KHÔNG nhận được tin.** `getUpdates` của Zalo trả HTTP 504 liên tục
+> (chết ở nginx sau đúng ~5 giây, mọi dạng tham số đều vậy). Không phải lỗi token: `getMe` vẫn
+> 200 OK, và **token mới cấp lại cũng y hệt**. `getWebhookInfo` trả 404 nên **không có đường
+> webhook thay thế**. Đây là sự cố phía Zalo, không sửa được bằng code.
+> ⇒ Mọi tin đang vào hệ thống **qua zca**. **Đừng demo phần tag bot** — tag vào nhóm sẽ không có
+> phản hồi. Nếu khách hỏi, nói đúng: kênh chính thức của Zalo đang lỗi, hệ thống vẫn đọc được
+> nhờ kênh phụ.
 
 ## 1. Trạng thái cần nói đúng với khách
 
@@ -18,8 +22,9 @@ Luồng đang chạy trên GCP:
 `Zalo → lưu tin thô → FlowiseParser → Flowise Agentflow → kiểm tra schema → rules TypeScript → 6 vai nghiệp vụ/SSE → Sale duyệt → Zalo + KiotViet mock`
 
 - VM `netviet`, PostgreSQL, Flowise, DeepSeek, web/API và HTTPS đang chạy thật.
-- Runtime dùng `CHANNEL_MODE=zca`, `PARSER_MODE=flowise`, `PERSISTENCE=prisma`,
-  `AUTO_SEND=off`; chỉ adapter KiotViet là mock.
+- Runtime dùng `CHANNEL_MODE=hybrid` (thực tế **chỉ zca đọc được** — Bot Platform đang lỗi 504,
+  xem khối trạng thái đầu file), `PARSER_MODE=flowise`, `PERSISTENCE=prisma`, `AUTO_SEND=off`;
+  chỉ adapter KiotViet là mock.
 - Flowise có Agentflow đã deploy tên `zalo-order-parser-v1`. Canvas thực tế có **2 node và 1
   cạnh**: `Parser Input → DeepSeek Extractor`. Kết quả structured output được trả về NestJS
   ngay sau node LLM; không có node End riêng trên canvas hiện tại.
