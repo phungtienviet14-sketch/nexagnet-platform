@@ -28,16 +28,11 @@ POSTGRES_ADMIN_PASSWORD="$(secret zalo-ultty-postgres-admin-password)"
 ZALO_DB_PASSWORD="$(secret zalo-ultty-zalo-db-password)"
 FLOWISE_DB_PASSWORD="$(secret zalo-ultty-flowise-db-password)"
 DEEPSEEK_API_KEY="$(secret zalo-ultty-deepseek-api-key)"
-# Bot Platform token la DIEU KIEN de chay hai bot cung nhom. Chua co secret (quyet dinh F1 con
-# treo: ai giu token) -> KHONG doan, KHONG de trong o hybrid vi loadEnv se fail fast; roi ve
-# CHANNEL_MODE=zca dung duong rollback da thiet ke. Tao secret xong, lan deploy sau tu len hybrid.
+# Token Bot van duoc render san de co the kiem tra danh tinh, nhung pilot soak da nghiem thu voi
+# kenh Zalo TAT. Giu CHANNEL_MODE=mock qua moi lan deploy de khong vo tinh bat Bot/zca hoac dua
+# PII that vao pipeline; chi doi bang mot thay doi source duoc duyet rieng.
 ZALO_BOT_TOKEN="$(optional_secret zalo-ultty-zalo-bot-token)"
-if [[ -n "${ZALO_BOT_TOKEN}" ]]; then
-  CHANNEL_MODE='hybrid'
-else
-  CHANNEL_MODE='zca'
-  echo 'render-secrets: thieu secret zalo-ultty-zalo-bot-token -> deploy voi CHANNEL_MODE=zca.' >&2
-fi
+CHANNEL_MODE='mock'
 API_KEY=$(secret zalo-ultty-api-key)
 FLOWISE_SECRETKEY="$(secret zalo-ultty-flowise-secretkey)"
 FLOWISE_ADMIN_EMAIL="$(secret zalo-ultty-flowise-admin-email)"

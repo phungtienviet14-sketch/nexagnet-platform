@@ -5,6 +5,7 @@ import test from 'node:test';
 const caddyfile = await readFile(new URL('./Caddyfile', import.meta.url), 'utf8');
 const deployStack = await readFile(new URL('./deploy-stack.sh', import.meta.url), 'utf8');
 const compose = await readFile(new URL('./compose.yaml', import.meta.url), 'utf8');
+const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.url), 'utf8');
 
 test('operator page /zalo goes to Next.js while /zalo/* stays on the API', () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
@@ -101,4 +102,13 @@ test('every process that mutates compose takes the shared lock', async () => {
 test('deployment smoke checks both the operator page and Zalo status API', () => {
   assert.match(deployStack, /"https:\/\/\$\{OPERATOR_DOMAIN\}\/zalo"/);
   assert.match(deployStack, /"https:\/\/\$\{OPERATOR_DOMAIN\}\/zalo\/status"/);
+});
+
+// Quyết định nghiệm thu 08/08/2026: pilot chỉ dùng dữ liệu TEST và phải giữ cả Bot/zca tắt.
+// Khóa ở cả renderer lẫn smoke test để một token đang tồn tại không tự bật hybrid sau deploy.
+test('pilot deploy always keeps CHANNEL_MODE=mock', () => {
+  assert.match(renderSecrets, /^CHANNEL_MODE='mock'$/m);
+  assert.doesNotMatch(renderSecrets, /^\s*CHANNEL_MODE='(?:hybrid|zca)'$/m);
+  assert.equal(deployStack.match(/-e CHANNEL_MODE=mock/g)?.length, 2);
+  assert.doesNotMatch(deployStack, /-e CHANNEL_MODE=(?:hybrid|zca)/);
 });

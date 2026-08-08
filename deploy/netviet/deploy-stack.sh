@@ -72,7 +72,7 @@ done
 smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -T \
   -e PILOT_BASE_URL=http://gateway:8080 \
-  -e CHANNEL_MODE=hybrid \
+  -e CHANNEL_MODE=mock \
   bootstrap node --input-type=module - < smoke-test.mjs)"
 echo "${smoke_output}"
 smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n 1)"
@@ -98,7 +98,7 @@ done
 "${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -T \
   -e PILOT_BASE_URL=http://gateway:8080 \
-  -e CHANNEL_MODE=hybrid \
+  -e CHANNEL_MODE=mock \
   -e "VERIFY_ORDER_ID=${smoke_order_id}" \
   -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
   bootstrap node --input-type=module - < smoke-test.mjs

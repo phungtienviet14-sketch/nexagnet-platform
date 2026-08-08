@@ -77,12 +77,10 @@ gcloud secrets versions access latest --project netviet-host-968934832433 --secr
   để sự cố lặp lại vẫn nhìn thấy được.
 
 Deploy dùng PostgreSQL thật, Flowise + DeepSeek thật, `PARSER_MODE=flowise`, `AUTO_SEND=off`;
-chỉ KiotViet là mock. **Kênh Zalo do secret quyết định:** `render-secrets.sh` đọc
-`zalo-ultty-zalo-bot-token` — có token thì render `CHANNEL_MODE=hybrid` (hai bot cùng nhóm),
-chưa có thì render `CHANNEL_MODE=zca` và in cảnh báo, vì `loadEnv` fail-fast nếu hybrid thiếu
-token. Muốn bật hybrid: tạo secret `zalo-ultty-zalo-bot-token` bằng quy trình quản lý secret
-(không ghi token vào repo/log), cấp `roles/secretmanager.secretAccessor` cho service account
-`netviet-vm@…`, rồi deploy lại.
+chỉ KiotViet là mock. `render-secrets.sh` khóa `CHANNEL_MODE=mock` để Bot Platform và zca không
+đọc/gửi dữ liệu trong pilot đã nghiệm thu. Token Bot có thể vẫn tồn tại trong Secret Manager
+nhưng không làm kênh hoạt động. Bật lại kênh Zalo cần một thay đổi source được duyệt riêng;
+không sửa tay runtime vì lần deploy kế tiếp sẽ đưa về `mock`.
 ZCA không tự tạo QR khi chưa xác nhận rủi ro trên UI. Allowlist bootstrap mặc định rỗng; trạng
 thái test hiện đã chọn **Meta HN** (`2508572440887686813`) và **Thái Nguyên**
 (`3787434804745256898`). Cần nhập thêm Bot Platform `chat.id` tương ứng vào Knowledge và cùng
