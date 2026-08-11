@@ -19,7 +19,8 @@ function makeMessage(opts: {
     isSelf: opts.isSelf ?? false,
     data: {
       msgId: opts.msgId ?? 'm1',
-      content: opts.content ?? 'noi dung',
+      // `in` chu khong phai `??`: co test truyen content = null/'' co chu y, `??` se nuot mat.
+      content: 'content' in opts ? opts.content : 'noi dung',
       uidFrom: opts.uidFrom ?? 'u1',
       dName: opts.dName ?? 'Phùng Việt',
       ts: opts.ts ?? '1783404428055',
@@ -82,6 +83,11 @@ describe('zcaMessageToChannelMessage', () => {
 
   it('bo qua tin khong chu thich khi href khong phai URL http(s) — khong con gi de luu', () => {
     expect(zcaMessageToChannelMessage(makeMessage({ content: { href: 'not-a-url' } }), false)).toBeNull();
+  });
+
+  it('bo qua khi content khong phai string lan object (tin he thong la)', () => {
+    expect(zcaMessageToChannelMessage(makeMessage({ content: null }), false)).toBeNull();
+    expect(zcaMessageToChannelMessage(makeMessage({ content: 42 }), false)).toBeNull();
   });
 
   it('ep ts (chuoi epoch-ms) sang Date hop le, khong phai Invalid Date', () => {

@@ -16,6 +16,7 @@ import { PipelineService } from './pipeline.service.js';
 const BOT_NAME = 'Bot ultty AI orders';
 const MAPPED_GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-hn')!.chatId;
 const UNMAPPED_GROUP = 'nhom-chua-map-9999';
+const IMAGE_URL = 'https://photo-stal-16.zdn.vn/gr/jpg/abc/def.jpg';
 
 class DuplicateMessagesRepository extends MessagesRepository {
   async save(): Promise<SaveMessageResult> {
@@ -68,6 +69,11 @@ function msg(
   };
 }
 
+/** Anh gui TRAN: khong chu thich, chi co link anh. */
+function imageOnlyMsg(chatId: string, externalMessageId: string): ChannelMessage {
+  return { ...msg(chatId, externalMessageId, ''), imageUrl: IMAGE_URL };
+}
+
 describe('PipelineService.intake — luu truoc, loc parser sau', () => {
   it('nhom da map -> outcome processed kem view don', async () => {
     const { pipeline } = build({});
@@ -87,6 +93,30 @@ describe('PipelineService.intake — luu truoc, loc parser sau', () => {
     expect(result.outcome).toBe('stored_only');
     expect(repo.list()).toHaveLength(1);
     expect(repo.list()[0]?.externalChatId).toBe(UNMAPPED_GROUP);
+  });
+
+  // Dot A' Task 1 — mat xich cuoi: schema + 2 mapper da cho anh tran di qua, nhung dieu thuc su
+  // quan trong la no VAO DEN DB. Text rong khong duoc lam vo bat ky chang nao phia sau.
+  it('tin CHI CO ANH (text rong) van vao DB va chay het pipeline', async () => {
+    const repo = new InMemoryMessagesRepository();
+    const { pipeline } = build({ messages: repo });
+
+    const result = await pipeline.intake(imageOnlyMsg(MAPPED_GROUP, 'm-anh-tran'), BOT_NAME);
+
+    expect(result.outcome).toBe('processed');
+    expect(repo.list()).toHaveLength(1);
+    expect(repo.list()[0]?.text).toBe('');
+    expect(repo.list()[0]?.imageUrl).toBe(IMAGE_URL);
+  });
+
+  it('tin CHI CO ANH o nhom CHUA map -> van luu DB kem link anh (bat bien I1)', async () => {
+    const repo = new InMemoryMessagesRepository();
+    const { pipeline } = build({ messages: repo });
+
+    const result = await pipeline.intake(imageOnlyMsg(UNMAPPED_GROUP, 'm-anh-chua-map'), BOT_NAME);
+
+    expect(result.outcome).toBe('stored_only');
+    expect(repo.list()[0]?.imageUrl).toBe(IMAGE_URL);
   });
 
   it('nhom CHUA map -> KHONG goi orchestrator (khong day PII sang LLM)', async () => {
