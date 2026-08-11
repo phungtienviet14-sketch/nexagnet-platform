@@ -1,6 +1,6 @@
 'use client';
 
-import type { DemoConfig } from '@ultty/shared';
+import type { DemoConfig } from '@netviet/shared';
 
 export type ConsoleView = 'console' | 'broadcast';
 

@@ -79,7 +79,7 @@ thành viên.
 - **Lỗi ⇒ nuốt + log warn** (I6).
 - **Mirror**: `announced: Set` trong `zca-listener.ts:31`; upsert khoá tự nhiên ở
   `prisma-group-participants.repository.ts:24`.
-- **Validate**: `pnpm --filter @ultty/api test -- group-discovery`
+- **Validate**: `pnpm --filter @netviet/api test -- group-discovery`
 
 ### Task 1.2 — `PipelineService.intake()`
 
@@ -101,7 +101,7 @@ export interface IntakeResult { outcome: IntakeOutcome; view?: OrderView }
 - **Cần inject thêm**: `@Optional() knowledge?: KnowledgeService`,
   `@Optional() groupDiscovery?: GroupDiscoveryService`. Không có ⇒ coi như mọi nhóm
   đều được xử lý (giữ hành vi test/mock hiện tại).
-- **Validate**: `pnpm --filter @ultty/api test -- pipeline-intake`
+- **Validate**: `pnpm --filter @netviet/api test -- pipeline-intake`
 
 ### Task 1.3 — Hai listener dùng `intake`
 
@@ -118,7 +118,7 @@ export interface IntakeResult { outcome: IntakeOutcome; view?: OrderView }
   | ném lỗi hết lượt retry | `release` | không |
 
 - **Mirror**: bảng phân nhánh hiện có ở `zca-listener.ts:96-110`.
-- **Validate**: `pnpm --filter @ultty/api test -- zca-listener bot-poller`
+- **Validate**: `pnpm --filter @netviet/api test -- zca-listener bot-poller`
 
 ---
 
@@ -146,7 +146,7 @@ export interface IntakeResult { outcome: IntakeOutcome; view?: OrderView }
   `before`/`after` như `zalo.controller.ts:87`.
 - **`name`**: UI gửi kèm tên nhóm nó đang hiển thị (lấy từ zca) ⇒ hàng `Group` có tên
   thật mà không tốn thêm request Zalo.
-- **Validate**: `pnpm --filter @ultty/api test -- group-mapping`
+- **Validate**: `pnpm --filter @netviet/api test -- group-mapping`
 
 ### Task 2.2 — Dropdown trong bảng nhóm
 
@@ -157,7 +157,7 @@ export interface IntakeResult { outcome: IntakeOutcome; view?: OrderView }
   hiện `SettingsPanelState tone="success"` (mirror khối `syncMutation.isSuccess` ở
   `ZaloSettings.tsx:112`).
 - Nút "Đồng bộ" chỉ bật khi `allowed && status === 'mapped'`.
-- **Validate**: `pnpm --filter @ultty/web test && pnpm --filter @ultty/web exec playwright test settings`
+- **Validate**: `pnpm --filter @netviet/web test && pnpm --filter @netviet/web exec playwright test settings`
 
 ---
 
@@ -190,7 +190,7 @@ export interface IntakeResult { outcome: IntakeOutcome; view?: OrderView }
 - Không bao giờ `updateMany({ active: false })` — khác hẳn `synchronize` (I2).
 - **Mirror**: `synchronize` ở `prisma-group-participants.repository.ts:20`, bỏ phần
   `if (input.complete)`.
-- **Validate**: `pnpm --filter @ultty/api test -- group-participants`
+- **Validate**: `pnpm --filter @netviet/api test -- group-participants`
 
 ### Task 3.2 — Nối vào pipeline
 
@@ -198,7 +198,7 @@ export interface IntakeResult { outcome: IntakeOutcome; view?: OrderView }
   `senderExternalId` thì `void participants.recordSeen(...)` — chạy song song, lỗi chỉ log.
 - Chạy cho **cả** `stored_only` lẫn `processed`: người nhắn trong nhóm chưa map vẫn
   đáng được ghi nhận (chỉ nội dung mới bị chặn khỏi LLM, danh tính thì không).
-- **Validate**: `pnpm --filter @ultty/api test -- pipeline-intake`
+- **Validate**: `pnpm --filter @netviet/api test -- pipeline-intake`
 
 ### Task 3.3 — UI phân biệt nguồn
 
@@ -207,7 +207,7 @@ export interface IntakeResult { outcome: IntakeOutcome; view?: OrderView }
   "Nhắn gần nhất" (`lastSeenAt`).
 - Vì `getGroupInfo` đang hỏng, đây sẽ là **nguồn duy nhất** người vận hành nhìn thấy —
   phải nói rõ danh sách này là "những người đã nhắn", không phải "toàn bộ nhóm".
-- **Validate**: `pnpm --filter @ultty/web test`
+- **Validate**: `pnpm --filter @netviet/web test`
 
 ---
 
@@ -229,18 +229,18 @@ export interface IntakeResult { outcome: IntakeOutcome; view?: OrderView }
   **không** chặn — nếu không sẽ chết cả kênh bot.
 - Cần inject `ZaloUserClient` vào `BotPoller` (`@Optional()`).
 - **Mirror**: `isAllowedBotMessage` ngay trên nó (`bot-poller.ts:33`).
-- **Validate**: `pnpm --filter @ultty/api test -- bot-poller`
+- **Validate**: `pnpm --filter @netviet/api test -- bot-poller`
 
 ---
 
 ## Validation
 
 ```bash
-pnpm --filter @ultty/shared build && pnpm -r typecheck && pnpm -r test && pnpm lint
+pnpm --filter @netviet/shared build && pnpm -r typecheck && pnpm -r test && pnpm lint
 ```
 
 ```bash
-pnpm --filter @ultty/api exec prisma migrate dev --name participant_message_stream
+pnpm --filter @netviet/api exec prisma migrate dev --name participant_message_stream
 ```
 
 Kiểm thật sau khi deploy (nhóm test, không PII):

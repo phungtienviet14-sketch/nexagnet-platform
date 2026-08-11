@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { SEED } from '../knowledge/seed.js';
 import { DeepSeekParser } from './deepseek-parser.js';
 
 /**
  * Eval THAT goi DeepSeek — chi chay khi RUN_LLM_TESTS=1 + co DEEPSEEK_API_KEY.
  * Mac dinh SKIP (khong tinh phi API trong CI). Verify demo AI-that phan loai on dinh.
- * Do sau/rong hon: `pnpm --filter @ultty/poc-parser eval` (35 tin).
+ * Do sau/rong hon: `pnpm --filter @netviet/poc-parser eval` (35 tin).
  */
 const env = loadEnv();
 const shouldRun = process.env.RUN_LLM_TESTS === '1' && Boolean(env.DEEPSEEK_API_KEY);

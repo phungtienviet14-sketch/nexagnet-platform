@@ -1,6 +1,6 @@
 import type { DynamicModule } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
-import type { AppEnv } from '@ultty/shared';
+import type { AppEnv } from '@netviet/shared';
 import { PrismaService } from '../config/prisma.service.js';
 import { buildKnowledgeResources } from './admin-resources.js';
 

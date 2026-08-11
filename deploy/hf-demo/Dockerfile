@@ -43,12 +43,12 @@ COPY . .
 COPY deploy/hf-demo/next.config.mjs apps/web/next.config.mjs
 # Prisma Client duoc import VO DIEU KIEN luc boot (PrismaService), ke ca PERSISTENCE=memory
 # -> BAT BUOC generate trong container de dung engine Debian.
-RUN corepack pnpm --filter @ultty/api exec prisma generate
-# Build theo thu tu phu thuoc: @ultty/shared (dist) truoc, roi api + web.
+RUN corepack pnpm --filter @netviet/api exec prisma generate
+# Build theo thu tu phu thuoc: @netviet/shared (dist) truoc, roi api + web.
 # NEXT_PUBLIC_API_URL="" -> lib/api.ts BASE="" -> trinh duyet goi /orders, /events... same-origin.
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=""
-RUN corepack pnpm --filter @ultty/shared --filter @ultty/api --filter @ultty/web build
+RUN corepack pnpm --filter @netviet/shared --filter @netviet/api --filter @netviet/web build
 
 # ---------- runtime: stage gon, chi mang theo app da build ----------
 FROM base AS runtime

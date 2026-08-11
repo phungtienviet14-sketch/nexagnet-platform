@@ -5,7 +5,7 @@ import type {
   GroupParticipantProfile,
   GroupParticipantsQuery,
   GroupParticipantUpdate,
-} from '@ultty/shared';
+} from '@netviet/shared';
 
 export interface GroupParticipantRepositorySyncInput {
   groupId: string;

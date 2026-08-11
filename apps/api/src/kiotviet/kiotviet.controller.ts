@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import type { KiotVietOrder, KiotVietProduct } from '@ultty/shared';
+import type { KiotVietOrder, KiotVietProduct } from '@netviet/shared';
 import { KiotVietAdapter } from './kiotviet.adapter.js';
 
 /** Cong xem trang thai KiotViet (mock) cho tab "KiotViet" tren app. */

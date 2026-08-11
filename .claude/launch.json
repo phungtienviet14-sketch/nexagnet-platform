@@ -4,13 +4,13 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@ultty/web", "dev"],
+      "runtimeArgs": ["--filter", "@netviet/web", "dev"],
       "port": 3000
     },
     {
       "name": "api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@ultty/api", "dev"],
+      "runtimeArgs": ["--filter", "@netviet/api", "dev"],
       "port": 3001
     }
   ]

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { groupParticipantSyncSnapshotSchema } from '@ultty/shared';
+import { groupParticipantSyncSnapshotSchema } from '@netviet/shared';
 import { LoginQRCallbackEventType, ThreadType, type API, type LoginQRCallback } from 'zca-js';
 import { isCredentials, normalizeAllowedGroupIds } from './zalo-user.client.js';
 

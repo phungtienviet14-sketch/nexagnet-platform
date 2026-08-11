@@ -4,7 +4,7 @@
  * so intent thu duoc voi expectedIntent, in bang do chinh xac + danh sach sai.
  *
  * Cach dung (can API dang chay, PARSER_MODE=deepseek de do AI that):
- *   pnpm --filter @ultty/poc-parser eval
+ *   pnpm --filter @netviet/poc-parser eval
  * Bien moi truong: API_URL (mac dinh http://localhost:3001), EVAL_CHAT_ID, EVAL_THROTTLE_MS.
  */
 import { readFileSync } from 'node:fs';

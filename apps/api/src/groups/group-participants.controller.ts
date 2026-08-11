@@ -16,7 +16,7 @@ import {
   groupParticipantsQuerySchema,
   loadEnv,
   type GroupParticipant,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import { z } from 'zod';
 import {
   GroupParticipantNotFoundError,

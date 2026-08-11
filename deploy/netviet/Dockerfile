@@ -20,10 +20,10 @@ RUN corepack pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
-RUN corepack pnpm --filter @ultty/api exec prisma generate
+RUN corepack pnpm --filter @netviet/api exec prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=""
-RUN corepack pnpm --filter @ultty/shared --filter @ultty/api --filter @ultty/web build
+RUN corepack pnpm --filter @netviet/shared --filter @netviet/api --filter @netviet/web build
 
 FROM base AS runtime
 ENV NODE_ENV=production

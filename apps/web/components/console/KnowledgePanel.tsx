@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { DealerTier, OrderView } from '@ultty/shared';
+import type { DealerTier, OrderView } from '@netviet/shared';
 import { api, formatVnd } from '../../lib/api';
 import { POLICY_LABEL } from '../../lib/labels';
 import { deriveKnowledgeUsage, type KnowledgeUsage } from '../../lib/knowledge-usage';

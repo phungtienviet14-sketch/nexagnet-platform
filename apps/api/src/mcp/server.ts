@@ -22,7 +22,7 @@ import { recordSourceTruthAudit } from '../audit/source-truth-audit.js';
 /**
  * MCP stdio server: phoi "Nguon su that" (Postgres) ra thanh tool cho Claude/agent sua bang
  * hoi thoai. La TIEN TRINH RIENG (khong nam trong NestJS) — tu tao PrismaClient (doc DATABASE_URL).
- * Chay: `pnpm --filter @ultty/api mcp` (tsx src/mcp/server.ts).
+ * Chay: `pnpm --filter @netviet/api mcp` (tsx src/mcp/server.ts).
  *
  * QUAN TRONG: stdout la KENH GIAO THUC JSON-RPC — MOI log phai ra STDERR, khong ra stdout.
  */

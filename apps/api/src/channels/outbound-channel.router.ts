@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ReplyChannel } from '@ultty/shared';
+import type { ReplyChannel } from '@netviet/shared';
 import { ChannelAdapter } from './channel-adapter.js';
 import {
   BOT_CHANNEL_ADAPTER,

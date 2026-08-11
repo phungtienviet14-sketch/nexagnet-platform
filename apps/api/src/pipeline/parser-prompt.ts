@@ -1,4 +1,4 @@
-import { INTENT_DEFINITIONS } from '@ultty/shared';
+import { INTENT_DEFINITIONS } from '@netviet/shared';
 import type { ParserInput } from './order-parser.js';
 
 /**

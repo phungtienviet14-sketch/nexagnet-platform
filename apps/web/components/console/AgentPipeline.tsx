@@ -1,6 +1,6 @@
 'use client';
 
-import { AGENT_ROLES, ROLE_LABELS } from '@ultty/shared';
+import { AGENT_ROLES, ROLE_LABELS } from '@netviet/shared';
 import { Fragment } from 'react';
 import { ROLE_ICON } from '../../lib/labels';
 import type { StepUiState } from '../../lib/live';

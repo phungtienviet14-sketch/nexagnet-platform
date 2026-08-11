@@ -2,7 +2,7 @@
 process.env.STREAM_STEP_DELAY_MS = '0';
 
 import { describe, expect, it } from 'vitest';
-import type { AgentStreamEvent, ChannelMessage } from '@ultty/shared';
+import type { AgentStreamEvent, ChannelMessage } from '@netviet/shared';
 import { KnowledgeService } from '../../knowledge/knowledge.service.js';
 import { SEED } from '../../knowledge/seed.js';
 import { InMemoryOrdersRepository } from '../../orders/orders.repository.js';

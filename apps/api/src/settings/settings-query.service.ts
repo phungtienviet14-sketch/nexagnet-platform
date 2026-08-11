@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { BotIdentityService } from '../channels/bot-identity.service.js';
 import { ZaloUserClient, type ZaloGroupView } from '../channels/zalo-user.client.js';
 import { PrismaService } from '../config/prisma.service.js';

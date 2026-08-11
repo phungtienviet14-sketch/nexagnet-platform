@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { OrderView } from '@ultty/shared';
+import type { OrderView } from '@netviet/shared';
 import { PrismaService } from '../config/prisma.service.js';
 import { PrismaOrdersRepository } from './prisma-orders.repository.js';
 
@@ -8,7 +8,7 @@ import { PrismaOrdersRepository } from './prisma-orders.repository.js';
  * CI / may khong co DB -> tu SKIP (giong deepseek-eval gated). Chay:
  *   docker compose up -d postgres
  *   RUN_PRISMA_IT=1 DATABASE_URL=postgresql://ultty:ultty_local@localhost:5432/ultty \
- *     pnpm --filter @ultty/api exec vitest run src/orders/prisma-orders.repository.int.spec.ts
+ *     pnpm --filter @netviet/api exec vitest run src/orders/prisma-orders.repository.int.spec.ts
  * Muc tieu: chung minh round-trip OrderView (ke ca priced/trace long nhau) khong mat field.
  */
 const CHAT_ID = 'it-prisma-chat';

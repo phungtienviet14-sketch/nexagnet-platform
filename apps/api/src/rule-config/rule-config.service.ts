@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { ruleConfigPayloadSchema } from '@ultty/shared';
-import type { RuleConfigStatus, RuleConfigVersion } from '@ultty/shared';
+import { ruleConfigPayloadSchema } from '@netviet/shared';
+import type { RuleConfigStatus, RuleConfigVersion } from '@netviet/shared';
 import type { RuleConfigTransitionResult } from './rule-config.repository.js';
 import { RuleConfigRepository } from './rule-config.repository.js';
 

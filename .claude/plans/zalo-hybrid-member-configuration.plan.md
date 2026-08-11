@@ -356,10 +356,10 @@ Các endpoint `PUT /demo/auto-send` và `/zalo/logout` hiện có được giữ
 ## 12. Validation
 
 ```bash
-pnpm --filter @ultty/shared test
-pnpm --filter @ultty/api test
-RUN_PRISMA_IT=1 pnpm --filter @ultty/api test
-pnpm --filter @ultty/web test
+pnpm --filter @netviet/shared test
+pnpm --filter @netviet/api test
+RUN_PRISMA_IT=1 pnpm --filter @netviet/api test
+pnpm --filter @netviet/web test
 pnpm typecheck
 pnpm lint
 pnpm test

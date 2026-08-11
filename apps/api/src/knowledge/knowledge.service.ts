@@ -5,7 +5,7 @@ import type {
   KnowledgeProductView,
   KnowledgeSummary,
   SenderType,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import type {
   Dealer,
   DealerPriceOverride,

@@ -1,9 +1,9 @@
-import type { AgentRole, AgentSource, Intent, OrderStatus, PolicyType } from '@ultty/shared';
+import type { AgentRole, AgentSource, Intent, OrderStatus, PolicyType } from '@netviet/shared';
 
 /**
  * Nhan/icon/class CHI cho UI (khong thuoc hop dong du lieu). Tach rieng de nhieu
  * component console dung chung (DRY). Nhan nghiep vu (role/intent/sender) lay tu
- * @ultty/shared; day chi bo sung phan trinh bay.
+ * @netviet/shared; day chi bo sung phan trinh bay.
  */
 
 export const ROLE_ICON: Record<AgentRole, string> = {

@@ -13,9 +13,9 @@ import {
 
 /**
  * IT THAT tren Postgres cho MCP tool nguon su that — chi chay khi RUN_PRISMA_IT=1 (giong cac IT khac).
- *   docker compose up -d postgres && pnpm --filter @ultty/api exec tsx prisma/seed.ts
+ *   docker compose up -d postgres && pnpm --filter @netviet/api exec tsx prisma/seed.ts
  *   RUN_PRISMA_IT=1 DATABASE_URL=postgresql://ultty:ultty_local@localhost:5432/ultty \
- *     pnpm --filter @ultty/api exec vitest run src/mcp/source-of-truth.tools.int.spec.ts
+ *     pnpm --filter @netviet/api exec vitest run src/mcp/source-of-truth.tools.int.spec.ts
  *
  * Fixture rieng tien to "it-mcp-*" (KHONG dung chung du lieu seed) -> don sach hoan toan o afterAll.
  * Cac test chay tuan tu (thu tu file) — trang thai mang qua giua cac test (giong prisma-orders IT).

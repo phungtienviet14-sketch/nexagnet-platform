@@ -13,7 +13,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import {

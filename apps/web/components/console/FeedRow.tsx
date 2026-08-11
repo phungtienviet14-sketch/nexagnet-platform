@@ -1,6 +1,6 @@
 'use client';
 
-import { SENDER_LABELS, type OrderStatus } from '@ultty/shared';
+import { SENDER_LABELS, type OrderStatus } from '@netviet/shared';
 import { INTENT_LABEL, STATUS_META } from '../../lib/labels';
 import type { FeedItem } from '../../lib/live';
 

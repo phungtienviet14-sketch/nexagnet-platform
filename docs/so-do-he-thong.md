@@ -365,7 +365,7 @@ sequenceDiagram
 ```
 
 - Panel `/admin` chỉ mount khi `ADMIN_UI=on` **và** `PERSISTENCE=prisma` (dynamic import — chế độ memory không nạp AdminJS). Hộp thư "**nhóm chưa map**": danh sách Group mặc định lọc `status=pending`.
-- MCP đọc `DATABASE_URL` trực tiếp; chạy `pnpm --filter @ultty/api mcp`.
+- MCP đọc `DATABASE_URL` trực tiếp; chạy `pnpm --filter @netviet/api mcp`.
 
 ---
 
@@ -668,7 +668,7 @@ getChatAdministrators  => 404 Not Found
 
 ## Phụ lục B — Eval parser DeepSeek trên 35 tin (08/07/2026)
 
-*(gốc: `poc-parser.md` — hợp nhất 11/07/2026; chạy lại: `pnpm --filter @ultty/poc-parser eval`, bộ đề `tools/poc-parser/eval-set.json`)*
+*(gốc: `poc-parser.md` — hợp nhất 11/07/2026; chạy lại: `pnpm --filter @netviet/poc-parser eval`, bộ đề `tools/poc-parser/eval-set.json`)*
 
 Đo **phân loại 7 intent** qua đúng pipeline thật (`/demo/simulate`, `PARSER_MODE=deepseek`) trên 35 tin tiếng Việt không dấu (phủ 7 intent + bẫy TH2/nhiều SP/glossary/adversarial):
 

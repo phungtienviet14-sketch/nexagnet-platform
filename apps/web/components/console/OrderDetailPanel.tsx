@@ -1,6 +1,6 @@
 'use client';
 
-import type { OrderView } from '@ultty/shared';
+import type { OrderView } from '@netviet/shared';
 import { formatVnd } from '../../lib/api';
 import { INTENT_LABEL, POLICY_LABEL, STATUS_META, timeOf } from '../../lib/labels';
 

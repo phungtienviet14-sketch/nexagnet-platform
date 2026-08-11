@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Post } from '@nestjs/common';
-import type { OrderView } from '@ultty/shared';
+import type { OrderView } from '@netviet/shared';
 import { OrdersService } from './orders.service.js';
 
 @Controller('orders')

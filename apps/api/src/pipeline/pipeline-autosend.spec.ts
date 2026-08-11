@@ -3,7 +3,7 @@ process.env.AUTO_SEND = 'on';
 process.env.STREAM_STEP_DELAY_MS = '0';
 
 import { describe, expect, it } from 'vitest';
-import type { ChannelMessage } from '@ultty/shared';
+import type { ChannelMessage } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';

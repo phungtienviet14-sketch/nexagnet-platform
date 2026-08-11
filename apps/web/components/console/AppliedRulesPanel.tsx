@@ -6,7 +6,7 @@ import {
   type AgentRole,
   type AgentSource,
   type OrderView,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import { formatVnd } from '../../lib/api';
 import { POLICY_LABEL, ROLE_ICON, SOURCE_META } from '../../lib/labels';
 

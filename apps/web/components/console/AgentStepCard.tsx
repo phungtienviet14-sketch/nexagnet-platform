@@ -1,6 +1,6 @@
 'use client';
 
-import { ROLE_LABELS, type AgentRole, type AgentStep } from '@ultty/shared';
+import { ROLE_LABELS, type AgentRole, type AgentStep } from '@netviet/shared';
 import { ROLE_ICON, ROLE_TAG, SOURCE_META } from '../../lib/labels';
 import type { StepUiState } from '../../lib/live';
 

@@ -1,8 +1,8 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { loadEnv } from '@ultty/shared';
-import type { GroupParticipantProfile, GroupParticipantSyncSnapshot } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
+import type { GroupParticipantProfile, GroupParticipantSyncSnapshot } from '@netviet/shared';
 import {
   LoginQRCallbackEventType,
   ThreadType,

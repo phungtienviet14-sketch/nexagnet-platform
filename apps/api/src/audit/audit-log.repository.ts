@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { auditLogFilterSchema, auditLogSchema } from '@ultty/shared';
-import type { AuditJsonValue, AuditLog, AuditLogFilter } from '@ultty/shared';
+import { auditLogFilterSchema, auditLogSchema } from '@netviet/shared';
+import type { AuditJsonValue, AuditLog, AuditLogFilter } from '@netviet/shared';
 
 export interface AppendAuditLogInput {
   actor: string;

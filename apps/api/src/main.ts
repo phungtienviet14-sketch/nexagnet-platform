@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import dotenv from 'dotenv';
 import { setKnowledgeReloader } from './admin/knowledge-refresh.js';
 import { AppModule } from './app.module.js';

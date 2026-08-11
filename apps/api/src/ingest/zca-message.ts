@@ -1,4 +1,4 @@
-import { channelMessageSchema, type ChannelMessage } from '@ultty/shared';
+import { channelMessageSchema, type ChannelMessage } from '@netviet/shared';
 import { ThreadType, type Message } from 'zca-js';
 import { toHttpUrl } from './http-url.js';
 

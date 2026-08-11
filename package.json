@@ -1,26 +1,26 @@
 {
-  "name": "ultty-ai-orders",
+  "name": "netviet-zalo-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "He thong AI Agent xu ly don hang Zalo - U Ultty Viet Nam",
+  "description": "Nen tang AI Agent xu ly don hang Zalo (base dung chung nhieu khach)",
   "engines": {
     "node": ">=22"
   },
   "packageManager": "pnpm@10.34.4",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm --filter @ultty/shared build && pnpm -r test && pnpm test:deploy-routes",
+    "test": "pnpm --filter @netviet/shared build && pnpm -r test && pnpm test:deploy-routes",
     "test:deploy-routes": "node --test deploy/netviet/caddy-route-contract.test.mjs",
-    "typecheck": "pnpm --filter @ultty/shared build && pnpm -r typecheck",
+    "typecheck": "pnpm --filter @netviet/shared build && pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,mjs}\"",
-    "dev:api": "pnpm --filter @ultty/api dev",
-    "dev:web": "pnpm --filter @ultty/web dev",
-    "poc:doctor": "pnpm --filter @ultty/poc-zalo-bot run doctor",
-    "poc:updates": "pnpm --filter @ultty/poc-zalo-bot updates",
-    "poc:groups": "pnpm --filter @ultty/poc-zalo-bot groups",
-    "poc:send": "pnpm --filter @ultty/poc-zalo-bot send",
-    "poc:webhook": "pnpm --filter @ultty/poc-zalo-bot webhook"
+    "dev:api": "pnpm --filter @netviet/api dev",
+    "dev:web": "pnpm --filter @netviet/web dev",
+    "poc:doctor": "pnpm --filter @netviet/poc-zalo-bot run doctor",
+    "poc:updates": "pnpm --filter @netviet/poc-zalo-bot updates",
+    "poc:groups": "pnpm --filter @netviet/poc-zalo-bot groups",
+    "poc:send": "pnpm --filter @netviet/poc-zalo-bot send",
+    "poc:webhook": "pnpm --filter @netviet/poc-zalo-bot webhook"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

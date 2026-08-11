@@ -1,6 +1,6 @@
 import type { Provider } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { ClaudeParser } from './claude-parser.js';
 import { DeepSeekParser } from './deepseek-parser.js';
 import { FlowiseParser } from './flowise-parser.js';

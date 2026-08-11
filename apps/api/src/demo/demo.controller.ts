@@ -13,7 +13,7 @@ import {
   type DemoConfig,
   type DemoGroup,
   type OrderView,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';

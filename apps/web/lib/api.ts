@@ -8,7 +8,7 @@ import type {
   KiotVietProduct,
   KnowledgeSummary,
   OrderView,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import type { ZaloGroup, ZaloStatus } from './zalo';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';

@@ -7,7 +7,7 @@ import {
   type OrderStatus,
   type OrderView,
   type SenderType,
-} from '@ultty/shared';
+} from '@netviet/shared';
 
 /**
  * Trang thai HIEN THI 6 agent + hop nhat feed cho console streaming.

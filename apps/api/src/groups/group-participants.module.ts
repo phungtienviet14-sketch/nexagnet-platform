@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { PrismaModule } from '../config/prisma.module.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { GroupParticipantsController } from './group-participants.controller.js';

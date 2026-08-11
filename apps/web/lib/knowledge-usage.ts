@@ -1,4 +1,4 @@
-import type { GlossaryView, KnowledgeSummary, OrderView, PolicyType } from '@ultty/shared';
+import type { GlossaryView, KnowledgeSummary, OrderView, PolicyType } from '@netviet/shared';
 
 /**
  * Suy ra "AI ĐÃ DÙNG GÌ" tu kho tri thuc cho 1 tin — de panel Kho tri thuc/Luat da ap

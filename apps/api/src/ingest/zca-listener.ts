@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { loadEnv, type AppEnv } from '@ultty/shared';
+import { loadEnv, type AppEnv } from '@netviet/shared';
 import type { Message } from 'zca-js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { BotIdentityService } from '../channels/bot-identity.service.js';

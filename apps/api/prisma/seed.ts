@@ -5,7 +5,7 @@ import { SEED } from '../src/knowledge/seed.js';
  * Nap nguon su that THAT (SEED) vao Postgres — de che do PERSISTENCE=prisma co du lieu.
  * Idempotent (upsert theo khoa) -> chay lai an toan. Chay:
  *   docker compose up -d postgres
- *   pnpm --filter @ultty/api exec tsx prisma/seed.ts
+ *   pnpm --filter @netviet/api exec tsx prisma/seed.ts
  * Dealer dung ID co dinh tu SEED (meta-hn...) de group/override tham chieu dung.
  */
 const prisma = new PrismaClient();

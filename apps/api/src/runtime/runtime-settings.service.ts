@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 
 export type AutoSendMode = 'on' | 'off';
 

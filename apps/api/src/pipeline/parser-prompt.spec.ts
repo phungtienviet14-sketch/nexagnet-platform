@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INTENTS } from '@ultty/shared';
+import { INTENTS } from '@netviet/shared';
 import type { ParserInput } from './order-parser.js';
 import {
   buildSystemPrompt,

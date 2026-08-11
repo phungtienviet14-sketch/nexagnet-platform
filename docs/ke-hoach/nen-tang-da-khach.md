@@ -43,10 +43,10 @@
 | Rules số (ship/VAT/COD/dung sai) + ngưỡng agent | ✅ **đã là dữ liệu**, có vòng đời draft→preview→active | `ruleSettingsSchema` + `agentSettingsSchema` ([settings.ts](../../packages/shared/src/settings.ts)) · model `RuleConfigVersion` | Chỉ cần **hạt giống** khác nhau theo khách |
 | Nguồn sự thật SKU/giá/đại lý/glossary/map nhóm | 🟡 ở DB + CRUD `/settings`, nhưng **hạt giống cứng trong code** | [seed.ts](../../apps/api/src/knowledge/seed.ts) — 19 SKU + bảng giá của riêng Ultty | Tách ra `tenants/<slug>/data/` |
 | Prompt LLM | 🟡 **đúng một dòng** gắn tên khách | [parser-prompt.ts:20](../../apps/api/src/pipeline/parser-prompt.ts:20) | Đưa persona vào gói khách |
-| Cổng ERP | 🟡 đã là cổng abstract nhưng **đặt tên theo một khách** | `abstract class KiotVietAdapter` · type `KiotVietProduct` trong `@ultty/shared` | Đổi tên thành `ErpPort`; KiotViet/Nhanh là 2 hiện thực |
+| Cổng ERP | 🟡 đã là cổng abstract nhưng **đặt tên theo một khách** | `abstract class KiotVietAdapter` · type `KiotVietProduct` trong `@netviet/shared` | Đổi tên thành `ErpPort`; KiotViet/Nhanh là 2 hiện thực |
 | Chính sách bán hàng | 🔴 **enum cứng** trong Prisma + shared | `enum PolicyType { cong_no_30 · cong_no_45 · ky_gui · thanh_toan_ngay · cod }` | Khách khác chính sách ⇒ phải sửa schema. Xem **D28** |
 | Ngưỡng/regex phát hiện rủi ro | ✅ code-owned có chủ ý | [agents.config.ts](../../apps/api/src/agents/agents.config.ts) — ghi rõ "regex không nhận qua Settings" | Giữ nguyên (regex do khách nhập = lỗ hổng) |
-| Tên gói + thương hiệu | 🔴 gắn cứng một khách | `@ultty/*`, `zalo-ultty`, secret `zalo-ultty-*`, chuỗi UI ở `layout.tsx`/`TopBar.tsx` | Đổi tên cơ học một lần (§9 Đợt B1) |
+| Tên gói + thương hiệu | 🔴 gắn cứng một khách | tên gói `@ultty/*` (đã đổi `@netviet/*` ở B1); còn `zalo-ultty` + secret `zalo-ultty-*` ở deploy, chuỗi UI ở `layout.tsx`/`TopBar.tsx` | Phần deploy + UI làm ở §9 Đợt B3 |
 
 **Đọc bảng này theo hướng tích cực:** thứ khó nhất của đa-khách — tách "luật kinh doanh" ra khỏi mã nguồn — thì repo **đã làm xong từ trước**, vì lý do khác (để Sale tự sửa giá). Phần còn lại chủ yếu là đổi tên và di chuyển dữ liệu.
 
@@ -214,7 +214,7 @@ Gói khách **là hạt giống, không phải nguồn sự thật lúc chạy**
 
 | Đợt | Nội dung | Điều kiện nghiệm thu |
 |---|---|---|
-| **B1 — Trung tính hóa nhân**<br/>*(không đổi hành vi)* | Đổi tên `@ultty/*` → `@netviet/*`; tách `seed.ts` → `tenants/ultty/data/`; persona ra cấu hình; `KiotVietAdapter` → `ErpPort` (KiotViet là một hiện thực) | **Toàn bộ test cũ xanh, số lượng không đổi** (mốc hiện tại: api 430 pass/21 skip · shared 69 · web 29 · route 8). Đây là refactor cơ học — một test đổi trạng thái là dấu hiệu làm sai |
+| **B1 — Trung tính hóa nhân**<br/>*(không đổi hành vi)* | Đổi tên `@netviet/*` → `@netviet/*`; tách `seed.ts` → `tenants/ultty/data/`; persona ra cấu hình; `KiotVietAdapter` → `ErpPort` (KiotViet là một hiện thực) | **Toàn bộ test cũ xanh, số lượng không đổi** (mốc hiện tại: api 430 pass/21 skip · shared 69 · web 29 · route 8). Đây là refactor cơ học — một test đổi trạng thái là dấu hiệu làm sai |
 | **B2 — Gói khách + CI hai gói** | `packages/tenant` (schema zod + loader); `tenants/ultty` đầy đủ; `tenants/amico` khung; CI chạy test theo ma trận 2 gói | Đổi `TENANT=amico` thì persona/thương hiệu/rules đổi theo, **không sửa một dòng code nào** |
 | **B3 — Hạ tầng tham số hóa** | Bỏ `zalo-ultty` cứng khỏi 21 file deploy; `$TENANT`; `SECRET_BACKEND=gcp\|sops\|envfile`; tách `deploy/stack/`; runbook cho cả hai chế độ hạ tầng | Dựng được stack thứ hai **trên cùng VM** bằng đúng script đó, hai DB không thấy nhau |
 | **B4 — Năng lực mới cho Amico** | `ErpNhanhAdapter` · `InvoiceMisaAdapter` · `DocumentPort` (PDF) · watcher tồn kho/ghép đơn — mỗi thứ sau một cổng + một cờ | Ultty bật `erp=kiotviet` vẫn chạy y nguyên; mọi năng lực mới mặc định **tắt** |

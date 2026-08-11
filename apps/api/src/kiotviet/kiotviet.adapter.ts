@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { KiotVietOrder, KiotVietProduct, PricedOrder } from '@ultty/shared';
+import type { KiotVietOrder, KiotVietProduct, PricedOrder } from '@netviet/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 
 /**

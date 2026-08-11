@@ -1,5 +1,5 @@
 import { Logger, type Provider } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { MessagesRepository } from '../messages/messages.repository.js';
 import { LocalMediaStore } from './local-media.store.js';
 import { MediaFetcherService } from './media-fetcher.service.js';

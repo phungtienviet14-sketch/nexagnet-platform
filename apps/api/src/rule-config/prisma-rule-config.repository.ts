@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ruleConfigVersionSchema, type RuleConfigVersion } from '@ultty/shared';
+import { ruleConfigVersionSchema, type RuleConfigVersion } from '@netviet/shared';
 import { Prisma, type RuleConfigStatus as PrismaRuleConfigStatus } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service.js';
 import {

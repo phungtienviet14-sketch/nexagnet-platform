@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ChannelMessage, OrderView } from '@ultty/shared';
+import type { ChannelMessage, OrderView } from '@netviet/shared';
 import { PrismaService } from '../config/prisma.service.js';
 import { PrismaOrdersRepository } from '../orders/prisma-orders.repository.js';
 import { PrismaMessagesRepository } from './prisma-messages.repository.js';
@@ -8,7 +8,7 @@ import { PrismaMessagesRepository } from './prisma-messages.repository.js';
  * Integration test THAT tren Postgres — chi chay khi RUN_PRISMA_IT=1 (giong prisma-orders IT). Chay:
  *   docker compose up -d postgres
  *   RUN_PRISMA_IT=1 DATABASE_URL=postgresql://ultty:ultty_local@localhost:5432/ultty \
- *     pnpm --filter @ultty/api exec vitest run src/messages/prisma-messages.repository.int.spec.ts
+ *     pnpm --filter @netviet/api exec vitest run src/messages/prisma-messages.repository.int.spec.ts
  * Muc tieu: round-trip tin, chong trung bang unique DB, noi don <-> tin goc (FK orders.messageId).
  */
 const CHAT_ID = 'it-msg-chat';

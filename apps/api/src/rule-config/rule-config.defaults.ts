@@ -1,5 +1,5 @@
-import { ruleConfigPayloadSchema } from '@ultty/shared';
-import type { RuleConfigPayload } from '@ultty/shared';
+import { ruleConfigPayloadSchema } from '@netviet/shared';
+import type { RuleConfigPayload } from '@netviet/shared';
 import { DEFAULT_AGENTS_CONFIG } from '../agents/agents.config.js';
 import type { AgentsConfig } from '../agents/agents.config.js';
 import { DEFAULT_RULES_CONFIG } from '../rules/config.js';

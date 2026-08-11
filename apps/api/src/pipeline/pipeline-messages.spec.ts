@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChannelMessage } from '@ultty/shared';
+import type { ChannelMessage } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import {

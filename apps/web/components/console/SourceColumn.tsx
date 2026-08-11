@@ -1,6 +1,6 @@
 'use client';
 
-import type { OrderView } from '@ultty/shared';
+import type { OrderView } from '@netviet/shared';
 import { useState } from 'react';
 import { AppliedRulesPanel } from './AppliedRulesPanel';
 import { KiotVietPanel } from './KiotVietPanel';

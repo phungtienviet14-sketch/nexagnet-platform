@@ -4,7 +4,7 @@ import {
   type BroadcastRequest,
   type BroadcastResult,
   type BroadcastTargetResult,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';

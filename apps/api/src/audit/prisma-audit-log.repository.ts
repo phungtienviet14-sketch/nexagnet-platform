@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { auditLogSchema, auditLogFilterSchema, type AuditLog, type AuditLogFilter } from '@ultty/shared';
+import { auditLogSchema, auditLogFilterSchema, type AuditLog, type AuditLogFilter } from '@netviet/shared';
 import { Prisma, type AuditLog as PrismaAuditLog } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service.js';
 import { AuditLogRepository, type AppendAuditLogInput } from './audit-log.repository.js';

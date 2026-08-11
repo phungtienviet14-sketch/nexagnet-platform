@@ -4,7 +4,7 @@ import {
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaService } from '../config/prisma.service.js';

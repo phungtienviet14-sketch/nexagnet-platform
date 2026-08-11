@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PricedOrder } from '@ultty/shared';
+import type { PricedOrder } from '@netviet/shared';
 import type { PriceRow, Product } from '../../knowledge/domain.js';
 import { DEFAULT_AGENTS_CONFIG } from '../agents.config.js';
 import { annotatePolicy, assessRisk, buildQuoteLines, classifyWarranty } from '../risk-rules.js';

@@ -4,8 +4,8 @@ import { PrismaKnowledgeRepository } from './prisma-knowledge.repository.js';
 
 /**
  * IT THAT tren Postgres — chi chay khi RUN_PRISMA_IT=1 (can seed truoc: tsx prisma/seed.ts).
- *   docker compose up -d postgres && pnpm --filter @ultty/api exec tsx prisma/seed.ts
- *   RUN_PRISMA_IT=1 DATABASE_URL=... pnpm --filter @ultty/api exec vitest run src/knowledge/prisma-knowledge.repository.int.spec.ts
+ *   docker compose up -d postgres && pnpm --filter @netviet/api exec tsx prisma/seed.ts
+ *   RUN_PRISMA_IT=1 DATABASE_URL=... pnpm --filter @netviet/api exec vitest run src/knowledge/prisma-knowledge.repository.int.spec.ts
  */
 describe.runIf(process.env.RUN_PRISMA_IT === '1')('PrismaKnowledgeRepository (Postgres THAT)', () => {
   const prisma = new PrismaService();

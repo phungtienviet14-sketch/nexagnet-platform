@@ -1,4 +1,4 @@
-import type { FieldConfidence, Intent, ParsedOrder, ParsedOrderItem, ParseResult } from '@ultty/shared';
+import type { FieldConfidence, Intent, ParsedOrder, ParsedOrderItem, ParseResult } from '@netviet/shared';
 import type { Product } from '../knowledge/domain.js';
 import { normalize } from '../rules/text.js';
 import type { OrderParser, ParserInput } from './order-parser.js';

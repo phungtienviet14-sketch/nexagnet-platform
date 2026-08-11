@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { RuleConfigPayload, RuleConfigStatus, RuleConfigVersion } from '@ultty/shared';
+import type { RuleConfigPayload, RuleConfigStatus, RuleConfigVersion } from '@netviet/shared';
 
 export interface CreateRuleConfigDraftInput {
   payload: RuleConfigPayload;

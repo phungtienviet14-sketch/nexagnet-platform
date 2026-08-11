@@ -4,7 +4,7 @@ import type {
   GroupMapView,
   KnowledgeProductView,
   KnowledgeSummary,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import { KnowledgeService } from './knowledge.service.js';
 
 /**

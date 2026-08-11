@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { ChannelMessage } from '@ultty/shared';
+import type { ChannelMessage } from '@netviet/shared';
 
 /** Ket qua luu tin: id dong trong DB + co phai tin trung (da luu truoc do) khong. */
 export interface SaveMessageResult {

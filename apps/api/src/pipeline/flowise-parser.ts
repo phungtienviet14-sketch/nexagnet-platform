@@ -1,4 +1,4 @@
-import { parseResultSchema, type ParseResult } from '@ultty/shared';
+import { parseResultSchema, type ParseResult } from '@netviet/shared';
 import type { OrderParser, ParserInput } from './order-parser.js';
 
 export interface FlowiseParserOptions {

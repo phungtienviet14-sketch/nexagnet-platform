@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { AuditLogRepository, InMemoryAuditLogRepository } from '../audit/audit-log.repository.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaAuditLogRepository } from '../audit/prisma-audit-log.repository.js';

@@ -1,5 +1,5 @@
 import { Controller, Sse } from '@nestjs/common';
-import type { AgentStreamEvent } from '@ultty/shared';
+import type { AgentStreamEvent } from '@netviet/shared';
 import { map, type Observable } from 'rxjs';
 import { AgentEventsService } from '../agents/agent-events.service.js';
 

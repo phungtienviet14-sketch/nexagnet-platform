@@ -1,7 +1,7 @@
 import { type DynamicModule, Logger, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { ApiKeyGuard } from './auth/api-key.guard.js';
 import { PrismaModule } from './config/prisma.module.js';
 import { PrismaService } from './config/prisma.service.js';

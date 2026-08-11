@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChannelMessage } from '@ultty/shared';
+import type { ChannelMessage } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { MediaFetcherService } from '../media/media-fetcher.service.js';

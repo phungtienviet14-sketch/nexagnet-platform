@@ -77,6 +77,6 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 
 ```bash
 pnpm test && pnpm lint && pnpm typecheck      # memory mode, không cần DB
-RUN_PRISMA_IT=1 pnpm --filter @ultty/api test # integration Postgres (cần docker)
+RUN_PRISMA_IT=1 pnpm --filter @netviet/api test # integration Postgres (cần docker)
 node deploy/flowise/contract-test.mjs          # Flowise 3.1.4 + workflow + prediction key
 ```

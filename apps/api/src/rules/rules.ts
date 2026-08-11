@@ -1,4 +1,4 @@
-import type { OrderStatus, ParsedOrder, PricedLine, PricedOrder } from '@ultty/shared';
+import type { OrderStatus, ParsedOrder, PricedLine, PricedOrder } from '@netviet/shared';
 import type { Dealer, DealerPriceOverride, PriceRow, Product } from '../knowledge/domain.js';
 import type { RulesConfig } from './config.js';
 import { formatVnd, normalize } from './text.js';

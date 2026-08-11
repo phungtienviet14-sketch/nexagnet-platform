@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadType, type Message } from 'zca-js';
-import type { OrderView, Intent } from '@ultty/shared';
+import type { OrderView, Intent } from '@netviet/shared';
 import type { BotIdentityService } from '../channels/bot-identity.service.js';
 import type { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import type { ZaloUserClient, ZcaMessageHandler } from '../channels/zalo-user.client.js';

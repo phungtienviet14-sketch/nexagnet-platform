@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { ChannelMessage } from '@ultty/shared';
+import type { ChannelMessage } from '@netviet/shared';
 import { PrismaService } from '../config/prisma.service.js';
 import {
   MessagesRepository,

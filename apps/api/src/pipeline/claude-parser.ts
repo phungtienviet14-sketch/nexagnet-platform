@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Logger } from '@nestjs/common';
-import { INTENTS, parseResultSchema, type ParseResult } from '@ultty/shared';
+import { INTENTS, parseResultSchema, type ParseResult } from '@netviet/shared';
 import type { OrderParser, ParserInput } from './order-parser.js';
 import { buildSystemPrompt, ensureIntentConfidence, normalizeParserOutput } from './parser-prompt.js';
 

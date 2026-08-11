@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
-import type { BroadcastResult } from '@ultty/shared';
+import type { BroadcastResult } from '@netviet/shared';
 import { useState } from 'react';
 import { api } from '../../lib/api';
 

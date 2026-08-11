@@ -11,7 +11,7 @@
    ```
 2. Chạy eval (terminal khác):
    ```bash
-   pnpm --filter @ultty/poc-parser eval
+   pnpm --filter @netviet/poc-parser eval
    ```
 
 Kết quả: bảng % đúng theo từng intent + tổng + danh sách tin phân loại sai (`expected → got`).

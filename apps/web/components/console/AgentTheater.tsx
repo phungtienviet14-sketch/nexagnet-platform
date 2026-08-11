@@ -1,6 +1,6 @@
 'use client';
 
-import { AGENT_ROLES, SENDER_LABELS, type AgentRole } from '@ultty/shared';
+import { AGENT_ROLES, SENDER_LABELS, type AgentRole } from '@netviet/shared';
 import type { FeedItem, RevealState, StepUiState } from '../../lib/live';
 import { AgentPipeline } from './AgentPipeline';
 import { AgentStepCard } from './AgentStepCard';

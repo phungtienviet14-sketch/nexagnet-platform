@@ -1,6 +1,6 @@
 import type { Provider } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { ChannelAdapter } from './channel-adapter.js';
 import { BotPlatformAdapter } from './bot-platform.adapter.js';
 import { MockAdapter } from './mock.adapter.js';

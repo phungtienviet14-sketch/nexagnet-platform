@@ -5,7 +5,7 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { loadEnv, type OrderView, type ReplyChannel } from '@ultty/shared';
+import { loadEnv, type OrderView, type ReplyChannel } from '@netviet/shared';
 import { AgentEventsService } from '../agents/agent-events.service.js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { OrderView } from '@ultty/shared';
+import type { OrderView } from '@netviet/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentTheater } from '../components/console/AgentTheater';
 import { BroadcastPanel } from '../components/console/BroadcastPanel';

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { OrderView } from '@ultty/shared';
+import type { OrderView } from '@netviet/shared';
 
 /**
  * Repository pattern (patterns.md) — boc luu tru don. Async de GD1 thay bang

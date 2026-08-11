@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ChannelMessage } from '@ultty/shared';
+import type { ChannelMessage } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import type { GroupDiscoveryService } from '../groups/group-discovery.service.js';
 import { InMemoryGroupParticipantsRepository } from '../groups/group-participants.repository.js';

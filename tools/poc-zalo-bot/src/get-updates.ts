@@ -5,7 +5,7 @@
  * Dung bang Ctrl+C -> in bang tong ket de dien vao docs/so-do-he-thong.md (Phu luc A)
  *
  * LUU Y: getUpdates khong hoat dong neu bot dang gan webhook.
- * Chay `pnpm --filter @ultty/poc-zalo-bot webhook delete` truoc neu can.
+ * Chay `pnpm --filter @netviet/poc-zalo-bot webhook delete` truoc neu can.
  */
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';

@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
-import { broadcastRequestSchema, type BroadcastResult } from '@ultty/shared';
+import { broadcastRequestSchema, type BroadcastResult } from '@netviet/shared';
 import { BroadcastService } from './broadcast.service.js';
 
 /**

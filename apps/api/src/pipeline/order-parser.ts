@@ -1,4 +1,4 @@
-import type { ParseResult } from '@ultty/shared';
+import type { ParseResult } from '@netviet/shared';
 import type { GlossaryEntry, Product } from '../knowledge/domain.js';
 
 /**

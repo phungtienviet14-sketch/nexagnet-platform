@@ -1,4 +1,4 @@
-import type { AuditJsonValue } from '@ultty/shared';
+import type { AuditJsonValue } from '@netviet/shared';
 
 export const AUDIT_REDACTED = '[REDACTED]';
 

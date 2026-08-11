@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import type { AgentStreamEvent, OrderView } from '@ultty/shared';
+import type { AgentStreamEvent, OrderView } from '@netviet/shared';
 import { useEffect, useRef, useState } from 'react';
 import { EVENTS_URL } from '../lib/api';
 import { idleByRole, stepUiState, type RunState } from '../lib/live';

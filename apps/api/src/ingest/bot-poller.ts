@@ -11,7 +11,7 @@ import {
   type AppEnv,
   type ChannelMessage,
   type Intent,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';

@@ -13,7 +13,7 @@ import type { PrismaClient } from '@prisma/client';
  * chi can boc lai thanh noi dung tool.
  */
 
-// ----- Enums (khop literal union @ultty/shared + enum Prisma) -----
+// ----- Enums (khop literal union @netviet/shared + enum Prisma) -----
 export const dealerTierSchema = z.enum(['dai_ly', 'ctv']);
 export const policyTypeSchema = z.enum([
   'cong_no_30',

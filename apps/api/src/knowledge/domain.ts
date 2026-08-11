@@ -1,4 +1,4 @@
-import type { DealerTier, PolicyType } from '@ultty/shared';
+import type { DealerTier, PolicyType } from '@netviet/shared';
 
 /**
  * Mo hinh nguon su that (tang 6). Trong demo la du lieu GIA LAP seed san (seed.ts),

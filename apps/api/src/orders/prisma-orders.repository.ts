@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { OrderView } from '@ultty/shared';
+import type { OrderView } from '@netviet/shared';
 import { PrismaService } from '../config/prisma.service.js';
 import { OrdersRepository } from './orders.repository.js';
 

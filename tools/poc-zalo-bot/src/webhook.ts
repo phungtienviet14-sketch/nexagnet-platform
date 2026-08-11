@@ -1,10 +1,10 @@
 /**
  * Tien ich webhook cho PoC (che do production cua Bot Platform).
  *
- *   pnpm --filter @ultty/poc-zalo-bot webhook serve [port]   - chay server nhan webhook local
- *   pnpm --filter @ultty/poc-zalo-bot webhook set <url>      - dang ky webhook URL (https)
- *   pnpm --filter @ultty/poc-zalo-bot webhook info           - xem webhook dang gan
- *   pnpm --filter @ultty/poc-zalo-bot webhook delete         - go webhook (de dung lai getUpdates)
+ *   pnpm --filter @netviet/poc-zalo-bot webhook serve [port]   - chay server nhan webhook local
+ *   pnpm --filter @netviet/poc-zalo-bot webhook set <url>      - dang ky webhook URL (https)
+ *   pnpm --filter @netviet/poc-zalo-bot webhook info           - xem webhook dang gan
+ *   pnpm --filter @netviet/poc-zalo-bot webhook delete         - go webhook (de dung lai getUpdates)
  *
  * De expose server local ra https tam thoi: dung cloudflared/ngrok roi lay URL do `set`.
  */

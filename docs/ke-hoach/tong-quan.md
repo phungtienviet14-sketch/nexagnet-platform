@@ -49,12 +49,12 @@ pnpm dev:api && pnpm dev:web
 
 # Bản thật: Postgres + panel chỉnh nguồn sự thật
 docker compose up -d postgres
-pnpm --filter @ultty/api exec prisma migrate deploy
-pnpm --filter @ultty/api exec tsx prisma/seed.ts
-PERSISTENCE=prisma ADMIN_UI=on pnpm --filter @ultty/api dev   # → /admin
+pnpm --filter @netviet/api exec prisma migrate deploy
+pnpm --filter @netviet/api exec tsx prisma/seed.ts
+PERSISTENCE=prisma ADMIN_UI=on pnpm --filter @netviet/api dev   # → /admin
 
 # MCP tool (agent sửa nguồn sự thật bằng hội thoại)
-pnpm --filter @ultty/api mcp
+pnpm --filter @netviet/api mcp
 ```
 
 ---

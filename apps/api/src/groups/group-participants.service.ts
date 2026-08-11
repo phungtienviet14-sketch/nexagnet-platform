@@ -4,7 +4,7 @@ import {
   type GroupParticipantSyncResult,
   type GroupParticipantsQuery,
   type GroupParticipantUpdate,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import {
   GroupParticipantsRepository,
   type GroupParticipantListResult,

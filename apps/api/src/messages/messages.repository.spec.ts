@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChannelMessage } from '@ultty/shared';
+import type { ChannelMessage } from '@netviet/shared';
 import { InMemoryMessagesRepository } from './messages.repository.js';
 
 function msg(externalMessageId: string): ChannelMessage {

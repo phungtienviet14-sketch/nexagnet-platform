@@ -48,15 +48,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm --filter @ultty/shared build
+      - run: pnpm --filter @netviet/shared build
       - name: Apply migrations to the throwaway Postgres
-        run: pnpm --filter @ultty/api exec prisma migrate deploy --schema prisma/schema.prisma
+        run: pnpm --filter @netviet/api exec prisma migrate deploy --schema prisma/schema.prisma
       # Cac IT doc nguon su that (19 SKU, dai ly meta-hn, bang gia thang 7, glossary) nen DB
       # rong se lam chung do — seed la dieu kien tien quyet, khong phai buoc tuy chon.
       - name: Seed the source of truth
-        run: pnpm --filter @ultty/api exec tsx prisma/seed.ts
+        run: pnpm --filter @netviet/api exec tsx prisma/seed.ts
       - name: Run the Prisma-gated suite
-        run: pnpm --filter @ultty/api test
+        run: pnpm --filter @netviet/api test
         env:
           RUN_PRISMA_IT: '1'
 
@@ -66,9 +66,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-workspace
-      - run: pnpm --filter @ultty/shared build
-      - run: pnpm --filter @ultty/web exec playwright install --with-deps chromium
-      - run: pnpm --filter @ultty/web test:e2e
+      - run: pnpm --filter @netviet/shared build
+      - run: pnpm --filter @netviet/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @netviet/web test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

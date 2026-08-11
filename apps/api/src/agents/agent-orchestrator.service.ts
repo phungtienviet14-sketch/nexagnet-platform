@@ -22,7 +22,7 @@ import {
   type ReplyChannel,
   type SenderType,
   type SupervisorSummary,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import { KnowledgeService, type ResolvedGroup } from '../knowledge/knowledge.service.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';

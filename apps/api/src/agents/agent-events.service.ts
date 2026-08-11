@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AgentStreamEvent } from '@ultty/shared';
+import type { AgentStreamEvent } from '@netviet/shared';
 import { ReplaySubject, type Observable } from 'rxjs';
 
 /**

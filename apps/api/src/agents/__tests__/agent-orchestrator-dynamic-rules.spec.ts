@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChannelMessage } from '@ultty/shared';
+import type { ChannelMessage } from '@netviet/shared';
 import { KnowledgeService } from '../../knowledge/knowledge.service.js';
 import { InMemoryOrdersRepository } from '../../orders/orders.repository.js';
 import { MockParser } from '../../pipeline/mock-parser.js';

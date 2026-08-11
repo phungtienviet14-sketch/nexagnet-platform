@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { loadEnv } from '@ultty/shared';
+import { loadEnv } from '@netviet/shared';
 import { PrismaService } from '../config/prisma.service.js';
 
 /**

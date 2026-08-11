@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ParsedOrder } from '@ultty/shared';
+import type { ParsedOrder } from '@netviet/shared';
 import type { Dealer, PriceRow, Product } from '../knowledge/domain.js';
 import { DEFAULT_RULES_CONFIG } from './config.js';
 import { computeShipping, matchProduct, priceOrder, routeStatus } from './rules.js';

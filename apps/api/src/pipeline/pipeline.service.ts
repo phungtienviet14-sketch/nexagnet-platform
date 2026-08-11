@@ -5,7 +5,7 @@ import {
   type GroupParticipant,
   type OrderView,
   type SenderType,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { GroupDiscoveryService } from '../groups/group-discovery.service.js';
 import { GroupParticipantsRepository } from '../groups/group-participants.repository.js';

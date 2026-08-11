@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { auditLogSchema } from '@ultty/shared';
-import type { AuditLog, AuditLogFilter } from '@ultty/shared';
+import { auditLogSchema } from '@netviet/shared';
+import type { AuditLog, AuditLogFilter } from '@netviet/shared';
 import { redactAuditValue } from './audit-redaction.js';
 import { AuditLogRepository } from './audit-log.repository.js';
 

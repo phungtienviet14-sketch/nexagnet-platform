@@ -4,7 +4,7 @@ import type {
   GroupParticipantProfile,
   GroupParticipantsQuery,
   GroupParticipantUpdate,
-} from '@ultty/shared';
+} from '@netviet/shared';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service.js';
 import {
