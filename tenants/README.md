@@ -32,11 +32,15 @@ tenants/<slug>/
 
 ## Chọn gói khách lúc chạy
 
+**Bắt buộc đặt một trong hai** — cố ý không có giá trị mặc định (Đợt B1). Quên đặt `TENANT` trên stack của khách B mà hệ thống lặng lẽ nạp dữ liệu của khách A là **sự cố rò rỉ dữ liệu**, không phải bất tiện nhỏ. Thiếu biến ⇒ ném ngay lúc boot.
+
 | Biến | Tác dụng |
 |---|---|
-| *(không đặt gì)* | `tenants/ultty` |
+| *(không đặt gì)* | ❌ Ném: `Thieu bien TENANT: khong biet nap goi khach nao.` |
 | `TENANT=<slug>` | `tenants/<slug>` |
 | `TENANT_DIR=<path>` | Dùng thẳng đường dẫn này, **thắng** `TENANT`. Dành cho khách chạy trên hạ tầng riêng: mount gói từ ngoài, không nằm trong image. |
+
+Nơi đã đặt sẵn: `.env.example` · `apps/api/vitest.setup.ts` (`TENANT ??= 'ultty'` cho bộ test API) · `.github/workflows/ci.yml` (2 job) · `deploy/netviet/Dockerfile` (`ARG TENANT`, đổi bằng `--build-arg`).
 
 Gốc repo được dò bằng cách đi ngược tìm `pnpm-workspace.yaml`, **không** dựa vào `process.cwd()` —
 test chạy ở `apps/api`, script Prisma chạy ở gốc, container chạy ở `/app`.

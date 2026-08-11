@@ -234,9 +234,92 @@ Thứ tự có lý do: **B1 phải xong trước khi Amico có bất kỳ dòng 
 
 Chọn gói khách bằng `TENANT=<slug>` hoặc `TENANT_DIR=<path>` (đường dẫn tuyệt đối, cho khách chạy hạ tầng riêng) — xem [tenants/README.md](../../tenants/README.md).
 
-**Cố ý CHƯA làm** (thuộc đợt sau, đừng tưởng bỏ sót): `packages/tenant` riêng + CI ma trận 2 gói (B2) · bỏ `zalo-ultty` khỏi deploy + chuỗi UI ở `layout.tsx`/`TopBar.tsx` (B3) · `NhanhAdapter`, MISA, PDF (B4). Trường `kiotVietCode` trên `OrderView`/Prisma **giữ nguyên tên** vì đổi là chạm schema DB + web — dồn vào B3.
+Nghiệm thu đợt đầu: api **430 test cũ xanh nguyên** (+8 test mới cho loader gói khách) · shared 69 · web 29 · route 8 · typecheck 0 · lint 0.
 
-Nghiệm thu: api **430 test cũ xanh nguyên** (+8 test mới cho loader gói khách) · shared 69 · web 29 · route 8 · typecheck 0 · lint 0.
+### B1 phần còn lại (12/08/2026) — nhân hết mang tên khách
+
+| Trước | Sau |
+|---|---|
+| Loader gói khách nằm trong `apps/api/src/tenant/` — app web không dùng chung được | Gói **`@netviet/tenant`** (`packages/tenant`), cả api lẫn web đọc cùng một schema đã validate |
+| `TENANT` mặc định `'ultty'` | **Không có mặc định.** Thiếu biến → ném lúc boot. Quên đặt `TENANT` trên stack khách B mà lặng lẽ nạp dữ liệu khách A là sự cố rò rỉ, không phải bất tiện nhỏ |
+| `BOT_NAME` mặc định `'Bot ultty AI orders'` trong `envSchema` | Nguồn là `persona.mentionName` của gói khách; `BOT_NAME` đổi vai trò thành **đường ghi đè** theo môi trường chạy (`channels/bot-name.ts`) |
+| 4 tin mẫu demo chứa SKU khách (`ghe felix`, `quat elni`) trong `demo.controller.ts` | `tenants/<slug>/data/demo-messages.json` |
+| Chuỗi thương hiệu cứng ở `layout.tsx` · `TopBar.tsx` · `Composer.tsx` · `SettingsShell.tsx` | `tenant.json.branding` → `layout.tsx` (Server Component) đọc rồi truyền xuống qua `<Providers branding=…>`; client dùng `useBranding()` |
+| AdminJS `companyName: 'U Ultty — Nguồn sự thật'` | `${tenant.shortName} — Nguồn sự thật` |
+| `IS_PUBLIC_KEY='ultty:isPublic'` · cookie `ultty-adminjs` · MCP `ultty-source-of-truth` · credential dev · `DATABASE_URL` mặc định · `ADMIN_EMAIL` | đều `netviet-*` (kèm `docker-compose.yml` + CI cho khớp) |
+
+**Bằng chứng "đổi khách không phải sửa core":** `TENANT=ultty pnpm --filter @netviet/web build` → `.next/server/app/index.html` chứa `<title>Ultty AI — Trung tâm điều hành</title>` — chuỗi đến **từ gói khách**, không còn trong mã nguồn.
+
+**Một test cũ đổi trạng thái, có chủ ý:** `packages/shared/src/__tests__/env.test.ts` khẳng định `BOT_NAME` chứa `'Bot'` — đó đúng là thứ vừa bị bỏ khỏi nhân. Nay khẳng định `toBeUndefined()`. Không test nào khác đổi.
+
+Nghiệm thu: shared **69** · tenant **11** · api **433 passed / 21 skipped** · web **29** · route **8** · typecheck · lint — xanh. *(api 438 = 430 cũ + 8 loader → −8 chuyển sang `packages/tenant`, +3 seam mới = 433.)*
+
+### Còn phụ thuộc khách — cố ý để lại, kèm lý do
+
+| Chỗ | Số lượng | Vì sao chưa làm |
+|---|---|---|
+| `deploy/` — chuỗi `zalo-ultty` | **88 lần / 23 file** (nặng nhất: `deploy.ps1` 32, `render-secrets.sh` 16) | **B3.** Đổi tên secret/thư mục là chạm stack đang chạy thật của Ultty; phải làm cùng `$TENANT` + `SECRET_BACKEND` chứ không đổi lẻ |
+| `kiotVietCode` (Prisma `Order`, `OrderView`, `orders.service`, `prisma-orders.repository`) | 6 chỗ | **B3.** Đổi tên trường = migration DB + sửa web + hợp đồng route |
+| Route `@Controller('kiotviet')` + `KiotVietPanel.tsx` + `queryKey: ['kiotviet']` | 6 chỗ | **B3.** Đường dẫn `/kiotviet` đang nằm trong hợp đồng route + Caddy |
+| Chuỗi UI *"Đơn đã đồng bộ KiotViet"*, *"✓ Lên KiotViet"* | 3 chỗ | **B3**, đi kèm việc trên. Tên nhà cung cấp ERP nên đến từ `tenant.json.integrations.erp` |
+| `vitest.setup.ts` đặt `TENANT ??= 'ultty'` | 1 | **Hợp lý** — bộ test API khẳng định trên dữ liệu thật của gói Ultty (giá Felix, đại lý `meta-hn`). Ghi đè được bằng `TENANT=<slug>` |
+| `deploy/netviet/Dockerfile` `ARG TENANT=ultty` | 1 | **Hợp lý tạm** — `--build-arg TENANT=<slug>` đã đổi được ngay; B3 đưa hẳn vào script deploy |
+| Chú thích nhắc lịch sử/nguồn (`seed.ts`, `bot-name.ts`, `erp.port.ts`, `agents.ts`…) | 8 | **Hợp lý** — xoá đi là mất thông tin *vì sao* code có hình dạng này |
+
+⚠️ **Đổi tên DB dev/CI `ultty` → `netviet`:** production đặt `DATABASE_URL` từ secret nên không ảnh hưởng; **máy local cần `docker compose down -v` một lần** (volume cũ mang tên DB cũ).
+
+---
+
+## 9b. D28 — PolicyType: phân tích để chốt (CHƯA thực hiện)
+
+### Định nghĩa nằm ở 2 nơi, phải khớp bằng tay
+
+| Nơi | Dạng |
+|---|---|
+| [order-view.ts:14](../../packages/shared/src/order-view.ts:14) | `POLICY_TYPES` (mảng `as const`) + `type PolicyType` |
+| [schema.prisma:22](../../apps/api/prisma/schema.prisma:22) | `enum PolicyType` của Postgres + `Dealer.defaultPolicy` (NOT NULL, dòng 95) |
+
+### Call-site: 46 lượt / 12 file (không kể spec)
+
+| File | Dùng thế nào | Thêm giá trị mới thì sao? |
+|---|---|---|
+| [rules.ts:65](../../apps/api/src/rules/rules.ts:65) | `Record<PolicyType, string>` — nhãn tiếng Việt in vào văn bản xác nhận | 🔴 **lỗi biên dịch** tới khi thêm nhãn |
+| [labels.ts:55](../../apps/web/lib/labels.ts:55) | `Record<PolicyType, string>` | 🔴 lỗi biên dịch |
+| [tenant.schema.ts](../../packages/tenant/src/tenant.schema.ts) | `z.enum(POLICY_TYPES)` validate gói khách | 🔴 gói khách có policy lạ → **ném lúc boot** |
+| `knowledge/domain.ts` · `mcp/source-of-truth.tools.ts` · `settings/source-truth-write.service.ts` · `SourceTruthSettings.tsx` · `knowledge-usage.ts` · `knowledge-view.ts` | chỉ truyền kiểu | 🟢 không vỡ |
+
+### Phát hiện quyết định: **không có logic nào rẽ nhánh theo policy**
+
+`grep "policy ===" / "switch (policy)"` toàn repo → **0 kết quả**. [rules.ts:153](../../apps/api/src/rules/rules.ts:153) chỉ gán `policy: ctx.dealer?.defaultPolicy ?? null`; [rules.ts:93](../../apps/api/src/rules/rules.ts:93) chỉ in nhãn. **Phí COD chạy theo cờ `codCollect` của đơn, không theo `policy === 'cod'`.**
+
+⇒ Policy hôm nay là **nhãn mô tả**, không phải luật tính tiền. Đây là lý do việc chuyển rẻ hơn vẻ ngoài rất nhiều — và cũng là lý do **chưa cần vội**.
+
+### Migration impact nếu chuyển enum → bảng
+
+| Việc | Chi tiết |
+|---|---|
+| Postgres | `ALTER TABLE "Dealer" ALTER COLUMN "defaultPolicy" TYPE TEXT` + bảng `Policy(code, label)` + backfill 5 hàng. **Không mất dữ liệu** (giá trị enum = code) |
+| Prisma | Bỏ `enum PolicyType`; `defaultPolicy String` + quan hệ |
+| AdminJS | Mất dropdown tự sinh từ enum ⇒ phải cấu hình `availableValues` đọc từ DB |
+| TypeScript | 2 chỗ `Record<PolicyType, …>` → `Record<string, string>` + fallback khi thiếu nhãn ⇒ **mất lưới an toàn biên dịch**. Đây là cái giá thật, không phải chi tiết nhỏ |
+| Gói khách | `z.enum(POLICY_TYPES)` → `z.string()` + kiểm chéo với danh sách policy của chính khách |
+
+### Ba phương án
+
+| | Nội dung | Công | Rủi ro |
+|---|---|---|---|
+| **A** | Giữ enum, mở rộng khi gặp khách có chính sách lạ | 0 bây giờ; 1 migration + 2 nhãn mỗi lần | Thấp. Với 2-3 khách, tổng công vẫn ít hơn phương án C |
+| **B** ⭐ | Thêm `tenant.json.policies[]` = **tập con** của enum (đúng ví dụ §5). Enum vẫn là danh mục toàn hệ thống; gói khách chọn tập con → UI/`/settings` chỉ hiện chính sách của khách đó | ~½ ngày | **Không đụng DB.** Giữ nguyên lưới biên dịch |
+| **C** | Bảng `Policy` đầy đủ, policy thành dữ liệu hoàn toàn | 1-2 ngày | Mất lưới biên dịch + migration + sửa AdminJS |
+
+**Đề xuất: chọn B bây giờ, để C tới khi có khách thứ 3 mang chính sách thật sự khác.**
+Căn cứ: theo báo giá, Amico dùng `cong_no_30 / thanh_toan_ngay / cod` — **cả ba đã có trong enum**. Danh mục chưa hề phân kỳ giữa các khách, nên C hiện chỉ mua thêm sự linh hoạt chưa ai cần, đổi lấy việc mất một lưới an toàn đang bắt lỗi thật.
+
+**Cần chốt:** A, B hay C.
+
+---
+
+**Cố ý CHƯA làm** (thuộc đợt sau, đừng tưởng bỏ sót): `tenants/amico` + CI ma trận 2 gói (B2) · bỏ `zalo-ultty` khỏi 23 file deploy + đổi tên `kiotVietCode`/route `/kiotviet` (B3) · `NhanhAdapter`, MISA, PDF (B4).
 
 ---
 
