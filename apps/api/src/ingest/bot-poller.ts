@@ -65,12 +65,21 @@ export function shouldAcceptBotMessage(
   return ctx.isAllowed(message.externalChatId);
 }
 
-/** Chuyen 1 update Zalo -> ChannelMessage chuan; null neu bo qua (tin bot, thieu noi dung). */
+/**
+ * Chuyen 1 update Zalo -> ChannelMessage chuan; null neu bo qua (tin bot, khong co ca chu lan anh).
+ *
+ * Anh gui TRAN (khong caption) van duoc GIU voi `text` rong (Dot A' 11/08/2026): link anh Zalo
+ * bi xoa phia server sau <=35 ngay, khong luu hom nay la mat vinh vien.
+ */
 export function updateToChannelMessage(update: BotUpdate): ChannelMessage | null {
   const m = update.message;
   if (!m || !m.chat?.id || m.from?.is_bot) return null;
-  const text = m.text ?? m.caption;
-  if (!text) return null;
+  const text = m.text ?? m.caption ?? '';
+  // photo_url la can cu duy nhat de giu tin khong caption, nen phai kiem TRUOC: mot URL hong
+  // di thang vao schema se lam safeParse rot CA tin — ke ca tin co chu (song song toHttpUrl
+  // ben zca-message.ts).
+  const imageUrl = toHttpUrl(m.photo_url);
+  if (!text.trim() && !imageUrl) return null;
 
   const chatType = (m.chat.chat_type ?? '').toUpperCase() === 'PRIVATE' ? 'private' : 'group';
   const candidate = {
@@ -82,11 +91,22 @@ export function updateToChannelMessage(update: BotUpdate): ChannelMessage | null
     senderExternalId: m.from?.id,
     senderDisplayName: m.from?.display_name,
     text,
-    imageUrl: m.photo_url,
+    imageUrl,
     sentAt: m.date ? new Date(m.date) : new Date(),
   };
   const parsed = channelMessageSchema.safeParse(candidate);
   return parsed.success ? parsed.data : null;
+}
+
+/** Tra ve URL neu la http(s) hop le, nguoc lai undefined. */
+function toHttpUrl(href: string | undefined): string | undefined {
+  if (!href) return undefined;
+  try {
+    const url = new URL(href);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? href : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

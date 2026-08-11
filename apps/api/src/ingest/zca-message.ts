@@ -6,7 +6,8 @@ import { ThreadType, type Message } from 'zca-js';
  * Ham THUAN (khong I/O) de test de dang — song song updateToChannelMessage cua Bot Platform.
  *
  * Bo qua khi: tin do CHINH tai khoan gui (isSelf) va khong bat selfListen; thieu threadId;
- * khong co noi dung text (tin he thong / anh khong chu thich — song song bot-poller).
+ * khong co CA text lan anh (tin he thong — song song bot-poller). Anh khong chu thich thi
+ * GIU, `text` la chuoi rong (Dot A' 11/08/2026).
  *
  * Luu y ky thuat:
  * - `data.ts` la chuoi epoch-ms ("1783404428055") -> phai Number() truoc khi new Date()
@@ -23,8 +24,10 @@ export function zcaMessageToChannelMessage(
   if (!threadId) return null;
 
   const { text, imageUrl } = extractContent(message.data.content);
-  const trimmed = text?.trim();
-  if (!trimmed) return null; // tin khong co van ban (anh khong chu thich / tin he thong) -> bo qua
+  const trimmed = text?.trim() ?? '';
+  // Chi bo khi KHONG co ca chu lan anh (tin he thong / noi dung rong). Anh gui tran van phai
+  // vao DB: link Zalo bi xoa phia server sau <=35 ngay, khong luu hom nay la mat vinh vien.
+  if (!trimmed && !imageUrl) return null;
 
   const data = message.data;
   const candidate = {

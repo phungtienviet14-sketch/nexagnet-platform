@@ -10,20 +10,34 @@ export const PLATFORMS = ['zalo'] as const;
 export const MESSAGE_SOURCES = ['copilot_paste', 'bot_webhook', 'zca_listener'] as const;
 export const CHAT_TYPES = ['private', 'group'] as const;
 
-export const channelMessageSchema = z.object({
-  /** ID tin nhan phia kenh — dung de idempotent, khong xu ly trung */
-  externalMessageId: z.string().min(1),
-  platform: z.enum(PLATFORMS),
-  source: z.enum(MESSAGE_SOURCES),
-  chatType: z.enum(CHAT_TYPES),
-  /** ID nhom/hoi thoai phia kenh — map ve dai ly qua bang groups */
-  externalChatId: z.string().min(1),
-  senderExternalId: z.string().min(1).optional(),
-  senderDisplayName: z.string().min(1).optional(),
-  text: z.string().min(1).max(10_000),
-  /** photo_url neu tin la anh (Zalo message.image.received) — Claude doc bang vision */
-  imageUrl: z.string().url().optional(),
-  sentAt: z.coerce.date(),
-});
+export const channelMessageSchema = z
+  .object({
+    /** ID tin nhan phia kenh — dung de idempotent, khong xu ly trung */
+    externalMessageId: z.string().min(1),
+    platform: z.enum(PLATFORMS),
+    source: z.enum(MESSAGE_SOURCES),
+    chatType: z.enum(CHAT_TYPES),
+    /** ID nhom/hoi thoai phia kenh — map ve dai ly qua bang groups */
+    externalChatId: z.string().min(1),
+    senderExternalId: z.string().min(1).optional(),
+    senderDisplayName: z.string().min(1).optional(),
+    /**
+     * Noi dung chu. RONG la HOP LE khi tin co anh (anh gui tran, khong chu thich) —
+     * truoc 11/08/2026 rang buoc `.min(1)` khien anh tran chua bao gio vao DB, ma link
+     * Zalo bi xoa phia server sau <=35 ngay nen mat vinh vien.
+     *
+     * Van la `string` (KHONG optional) co chu y: moi call-site phia sau (parser, repository,
+     * OrderView.rawText) doc thang `.text` — doi sang optional la vo kieu ca chuoi do.
+     */
+    text: z.string().max(10_000),
+    /** photo_url neu tin la anh (Zalo message.image.received) — Claude doc bang vision */
+    imageUrl: z.string().url().optional(),
+    sentAt: z.coerce.date(),
+  })
+  // Tin phai mang it nhat MOT thu: chu hoac anh. Khong ca hai = tin he thong/rong -> khong luu.
+  .refine((message) => message.text.trim() !== '' || Boolean(message.imageUrl), {
+    message: 'Tin phai co van ban hoac anh',
+    path: ['text'],
+  });
 
 export type ChannelMessage = z.infer<typeof channelMessageSchema>;
