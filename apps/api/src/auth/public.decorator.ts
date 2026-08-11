@@ -1,7 +1,7 @@
 import { SetMetadata, type CustomDecorator } from '@nestjs/common';
 
 /** Khoa metadata danh dau route cong khai (khong can x-api-key). */
-export const IS_PUBLIC_KEY = 'ultty:isPublic';
+export const IS_PUBLIC_KEY = 'netviet:isPublic';
 
 /**
  * Danh dau 1 route (hoac ca controller) la CONG KHAI — bo qua ApiKeyGuard.

@@ -31,7 +31,7 @@ const prisma = new PrismaClient();
 
 // Log ra stderr (stdout danh cho JSON-RPC).
 function log(message: string): void {
-  process.stderr.write(`[ultty-mcp] ${message}\n`);
+  process.stderr.write(`[netviet-mcp] ${message}\n`);
 }
 
 // Nice-to-have: goi API dang chay nap lai snapshot in-memory sau khi ghi (DB da ghi xong roi;
@@ -75,7 +75,7 @@ function toToolContent(result: ToolResult): {
 const READ_ONLY = { readOnlyHint: true } as const;
 const WRITE_HINTS = { readOnlyHint: false, destructiveHint: false, idempotentHint: true } as const;
 
-const server = new McpServer({ name: 'ultty-source-of-truth', version: '0.1.0' });
+const server = new McpServer({ name: 'netviet-source-of-truth', version: '0.1.0' });
 
 // ----- READ tools -----
 server.registerTool(
@@ -206,4 +206,4 @@ const transport = new StdioServerTransport();
 transport.onclose = () => void shutdown(0); // client dong stdin -> tat sach.
 
 await server.connect(transport);
-log('MCP stdio server sẵn sàng (ultty-source-of-truth): 8 tool nguồn sự thật.');
+log('MCP stdio server sẵn sàng (netviet-source-of-truth): 8 tool nguồn sự thật.');

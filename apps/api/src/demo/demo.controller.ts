@@ -14,17 +14,19 @@ import {
   type DemoGroup,
   type OrderView,
 } from '@netviet/shared';
+import { loadDemoMessages } from '@netviet/tenant';
+import { resolveBotName } from '../channels/bot-name.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 
-const SAMPLE_MESSAGES = [
-  '@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT',
-  '@Bot ultty AI orders 3 noi chien va 2 quat bb grey',
-  '@Bot ultty AI orders 5 quat elni, xuat VAT',
-  'quat bb grey bao nhieu tien c oi',
-];
+/**
+ * Tin mau cho luong demo. Truoc Dot B1 bon cau nay nam thang o day — chung chua SKU + ten bot cua
+ * MOT khach ("ghe felix", "quat elni"), tuc nhan dung chung mang san du lieu thuong mai cua khach.
+ * Nay doc tu goi khach `tenants/<slug>/data/demo-messages.json`; goi khong co file -> mang rong.
+ */
+const SAMPLE_MESSAGES = loadDemoMessages();
 
 interface SimulateBody {
   text?: string;
@@ -58,7 +60,7 @@ export class DemoController {
       botMode: env.BOT_MODE,
       channelMode: env.CHANNEL_MODE,
       parserMode: env.PARSER_MODE,
-      botName: env.BOT_NAME,
+      botName: resolveBotName(),
       streamMode: env.STREAM_MODE,
       autoSend: this.settings.autoSend(),
       zaloOperatorUrl: env.ZALO_OPERATOR_ORIGIN
@@ -95,7 +97,7 @@ export class DemoController {
       imageUrl: body.imageUrl,
       sentAt: new Date(),
     });
-    return this.pipeline.process(message, loadEnv().BOT_NAME);
+    return this.pipeline.process(message, resolveBotName());
   }
 
   /**
@@ -128,6 +130,6 @@ export class DemoController {
       imageUrl: existing.imageUrl,
       sentAt: new Date(),
     });
-    return this.pipeline.process(message, loadEnv().BOT_NAME, { orderId: id, rerun: true });
+    return this.pipeline.process(message, resolveBotName(), { orderId: id, rerun: true });
   }
 }

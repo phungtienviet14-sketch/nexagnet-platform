@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 // Credential MAC DINH cho AdminJS o local. Khai bao thanh hang so de loadEnv co the CHAN
 // dung lai chinh chung o production (khong doan chuoi, khong lap lai literal o hai noi).
-const DEV_ADMIN_PASSWORD = 'ultty-admin';
-const DEV_ADMIN_COOKIE_SECRET = 'ultty-admin-dev-cookie-secret-doi-o-production';
+const DEV_ADMIN_PASSWORD = 'netviet-admin';
+const DEV_ADMIN_COOKIE_SECRET = 'netviet-admin-dev-cookie-secret-doi-o-production';
 // Do dai toi thieu cho credential AdminJS o production (panel /admin sua duoc gia + map nhom).
 const MIN_ADMIN_PASSWORD_LENGTH = 16;
 const MIN_ADMIN_COOKIE_SECRET_LENGTH = 32;
@@ -19,7 +19,7 @@ export const envSchema = z.object({
   DATABASE_URL: z
     .string()
     .url()
-    .default('postgresql://ultty:ultty_local@localhost:5432/ultty'),
+    .default('postgresql://netviet:netviet_local@localhost:5432/netviet'),
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
   // Lop luu tru don/tin: memory (in-memory, MAC DINH — demo/CI khong can DB) | prisma (Postgres).
   // Tach RIENG khoi DATABASE_URL (vi .env da co URL cho docker) -> bat Prisma phai CHU DONG dat = prisma.
@@ -84,8 +84,11 @@ export const envSchema = z.object({
   // Giam sat khong phat hien rui ro (riskLevel='none'); co van de -> giu Sale duyet. Mac dinh
   // off theo GD1 (CLAUDE.md: AI khong tu gui khi CHUA co van ban dong y cua khach).
   AUTO_SEND: z.enum(['on', 'off']).default('off'),
-  // Ten bot de boc @mention khoi noi dung tin.
-  BOT_NAME: z.string().default('Bot ultty AI orders'),
+  // Ten bot de boc @mention khoi noi dung tin. KHONG co mac dinh (Dot B1): ten bot la cua tung
+  // khach, de mac dinh o day nghia la nhan dung chung mang san ten bot cua MOT khach. Nguon that
+  // su la goi khach (`persona.mentionName`); bien nay chi con la duong GHI DE theo moi truong
+  // chay — xem apps/api/src/channels/bot-name.ts.
+  BOT_NAME: z.string().min(1).optional(),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   // Broadcast (KH2): gian cach giua 2 lan gui de tranh vuot rate-limit Zalo (chua cong bo).
   BROADCAST_THROTTLE_MS: z.coerce.number().int().nonnegative().default(1500),
@@ -125,7 +128,7 @@ export const envSchema = z.object({
   ADMIN_UI: z.enum(['on', 'off']).default('off'),
   // Thong tin dang nhap panel. Mac dinh la GIA TRI DEV (khop nguyen tac env.ts: co default de chay
   // local); BAT BUOC dat lai o production (dat ADMIN_PASSWORD/ADMIN_COOKIE_SECRET manh qua env).
-  ADMIN_EMAIL: z.string().default('admin@ultty.local'),
+  ADMIN_EMAIL: z.string().default('admin@netviet.local'),
   ADMIN_PASSWORD: z.string().default(DEV_ADMIN_PASSWORD),
   // Secret ky cookie phien AdminJS. Default dev — production PHAI thay bang chuoi ngau nhien dai.
   ADMIN_COOKIE_SECRET: z.string().default(DEV_ADMIN_COOKIE_SECRET),

@@ -1,6 +1,7 @@
 import type { DynamicModule } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
 import type { AppEnv } from '@netviet/shared';
+import { loadTenantConfig } from '@netviet/tenant';
 import { PrismaService } from '../config/prisma.service.js';
 import { buildKnowledgeResources } from './admin-resources.js';
 
@@ -35,7 +36,7 @@ export async function buildAdminModule(env: AppEnv): Promise<DynamicModule> {
       adminJsOptions: {
         rootPath: '/admin',
         branding: {
-          companyName: 'U Ultty — Nguồn sự thật',
+          companyName: `${loadTenantConfig().shortName} — Nguồn sự thật`,
           withMadeWithLove: false,
         },
         resources: buildKnowledgeResources(prisma, getModelByName),
@@ -46,7 +47,7 @@ export async function buildAdminModule(env: AppEnv): Promise<DynamicModule> {
             auth: {
               authenticate: async (email: string, password: string) =>
                 email === env.ADMIN_EMAIL && password === env.ADMIN_PASSWORD ? { email } : null,
-              cookieName: 'ultty-adminjs',
+              cookieName: 'netviet-adminjs',
               cookiePassword: env.ADMIN_COOKIE_SECRET,
             },
             sessionOptions: {

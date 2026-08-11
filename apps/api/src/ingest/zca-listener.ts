@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { loadEnv, type AppEnv } from '@netviet/shared';
 import type { Message } from 'zca-js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
+import { resolveBotName } from '../channels/bot-name.js';
 import { BotIdentityService } from '../channels/bot-identity.service.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { ZaloUserClient } from '../channels/zalo-user.client.js';
@@ -43,7 +44,7 @@ export class ZcaListener implements OnModuleInit {
     }
     const selfListen = env.ZALO_SELF_LISTEN === 'on';
     this.client.setMessageHandler((message) =>
-      this.handle(message, env.BOT_NAME, env.AUTO_ACK, selfListen, env.CHANNEL_MODE === 'hybrid'),
+      this.handle(message, resolveBotName(), env.AUTO_ACK, selfListen, env.CHANNEL_MODE === 'hybrid'),
     );
     this.logger.log(
       `CHANNEL_MODE=${env.CHANNEL_MODE} -> nghe tin nhom qua zca-js. Auto-ack=${env.AUTO_ACK}`,

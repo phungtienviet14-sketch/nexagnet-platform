@@ -16,6 +16,7 @@ import { AUTO_LABEL } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';
 import { ZaloUserClient } from '../channels/zalo-user.client.js';
+import { resolveBotName } from '../channels/bot-name.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { toHttpUrl } from './http-url.js';
 import { MessageGuard, processWithRetry } from './message-guard.js';
@@ -125,7 +126,7 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.running = true;
-    void this.loop(env.ZALO_BOT_TOKEN, env.BOT_NAME, env.AUTO_ACK, env.CHANNEL_MODE);
+    void this.loop(env.ZALO_BOT_TOKEN, resolveBotName(), env.AUTO_ACK, env.CHANNEL_MODE);
     this.logger.log(`BOT_MODE=on -> bat dau long polling getUpdates. Auto-ack=${env.AUTO_ACK}.`);
   }
 

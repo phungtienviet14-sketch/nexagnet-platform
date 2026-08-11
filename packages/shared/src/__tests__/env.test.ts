@@ -40,7 +40,10 @@ describe('loadEnv', () => {
 
     expect(env.PARSER_MODE).toBe('mock');
     expect(env.BOT_MODE).toBe('off');
-    expect(env.BOT_NAME).toContain('Bot');
+    // Dot B1: ten bot la cua TUNG KHACH -> nhan dung chung khong mang mac dinh nao. Nguon that su
+    // la goi khach (`persona.mentionName`, xem apps/api/src/channels/bot-name.ts); bien nay chi con
+    // la duong GHI DE theo moi truong chay.
+    expect(env.BOT_NAME).toBeUndefined();
   });
 
   it('nhan cau hinh Flowise day du va ep timeout sang so', () => {
