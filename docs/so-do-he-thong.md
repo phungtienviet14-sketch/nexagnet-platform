@@ -52,7 +52,7 @@ flowchart LR
 
 | Hạng mục | Quyết định | Ghi chú |
 |---|---|---|
-| Kiến trúc 6 tầng, intent taxonomy, luồng chính sách/bảo hành, checklist chốt đơn | Theo NetViet (`Thiet_ke_AI_Agent_U_Ultty.md` §3, §5 — giữ nguyên) | Nghiệp vụ không đổi |
+| Kiến trúc 6 tầng, intent taxonomy, luồng chính sách/bảo hành, checklist chốt đơn | Theo NetViet (`docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md` §3, §5 — giữ nguyên) | Nghiệp vụ không đổi |
 | Lộ trình 3 giai đoạn, KPI, managed service | Theo NetViet (§6, §7) | Sơ đồ lộ trình: [ke-hoach/tong-quan.md](ke-hoach/tong-quan.md) |
 | Stack | TypeScript (Node 22) · NestJS · Next.js · PostgreSQL + **Prisma 6 (pin, KHÔNG nâng v7** — `@adminjs/prisma` chưa hỗ trợ) · Flowise 3.1.4 · Claude/DeepSeek API · monorepo pnpm | BullMQ/Redis có trong stack nhưng **chưa dùng** (YAGNI — thêm khi pipeline thật sự cần queue) |
 | Kênh Zalo GĐ1 | **Hai Bot cùng nhóm qua `CHANNEL_MODE=hybrid`** (03/08/2026): native @mention Bot chính thức → Bot Platform; không tag Bot → zca. Các mode đơn `mock\|bot\|zca` vẫn giữ để rollback/test | `getMe` lấy Bot UID; zca so metadata `mentions[].uid`, bỏ tin do Bot chính thức gửi; không lấy được UID thì zca fail-closed. Điều kiện zca: **tài khoản phụ** + **văn bản chấp nhận rủi ro** |
@@ -63,7 +63,7 @@ flowchart LR
 | Kho | KHÔNG xây module kho riêng — KiotViet là source of truth duy nhất | 10-20 đơn/ngày không cần cache |
 | Lưu trữ | Mặc định **in-memory** (`PERSISTENCE=memory` — demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma` (cờ riêng, tách khỏi `DATABASE_URL`) | as-built Phase 3 |
 | Nguồn sự thật ĐỘNG | Trang **`/settings`** cho người vận hành (6 tab: Kênh Zalo · Nhóm & thành viên · Đại lý/SP/giá · Rules · Tự động hóa · Lịch sử) + panel **`/admin`** (AdminJS auto-CRUD, power-user) + **MCP tool** (8 tool) — tất cả đi qua một `SourceTruthWriteService` (transaction → audit → reload snapshot) | Thay cho tab "Prompt AI" của PWA trong thiết kế cũ; `/settings` là mặt chính, `/admin` giữ làm fallback |
-| App Sale | Demo = **console PC 3 cột** (Feed · 6-agent theater SSE · Nguồn sự thật); PWA mobile 5 tab theo `design/` = hướng sản phẩm, làm sau | Quyết định treo D3 |
+| App Sale | Demo = **console PC 3 cột** (Feed · 6-agent theater SSE · Nguồn sự thật); PWA mobile 5 tab theo `docs/khach-hang/ultty/design-app/` = hướng sản phẩm, làm sau | Quyết định treo D3 |
 
 ---
 

@@ -32,7 +32,7 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 ### 1.3 Import Excel A4 (đại lý + map nhóm)
 
 - **Phạm vi:** lệnh/endpoint import file Excel theo mẫu (đại lý: tên/cấp/chính sách/SĐT/alias; map: chatId nhóm ↔ đại lý + chi nhánh) bằng **`read-excel-file`** *(🔄 11/07: thay `exceljs` — bỏ bảo trì ~3 năm, xem [tinh-nang-dai-han.md §7.2](tinh-nang-dai-han.md); vẫn tránh `xlsx`/`node-xlsx` vì CVE)*; dry-run báo lỗi từng dòng trước khi ghi; ghi xong gọi `reload()`.
-- **Cổng:** **A4** (file khách điền). Mẫu file gửi khách soạn ngay không cần chờ — mẫu tại `docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx`, sinh + bảng map cột→field ở `tools/excel-template/` (dropdown đã khớp enum `Dealer`/`Group`; importer tái dùng đúng bảng map đó).
+- **Cổng:** **A4** (file khách điền). Mẫu file gửi khách soạn ngay không cần chờ — mẫu tại `docs/khach-hang/ultty/trao-doi/A4_dai-ly_map-nhom_U-Ultty.xlsx`, sinh + bảng map cột→field ở `tools/excel-template/` (dropdown đã khớp enum `Dealer`/`Group`; importer tái dùng đúng bảng map đó).
 - **Validate:** import file mẫu → nhóm map đúng; dòng lỗi bị từ chối có lý do tiếng Việt.
 
 ---
@@ -71,7 +71,7 @@ Căn cứ: bảng sai lệch [../nghiep-vu.md §13](../nghiep-vu.md). Gồm 4 vi
 
 - **Đọc nốt 6 tài liệu gốc** chưa phản ánh: `QT Preoder` · `QT_Báo giá B2B` · `QT_Hoàn trả hàng B2B` · `QT_Tiếp xúc khách hàng` · `QT đưa sp vào TT` · `Biên bản bàn giao` → bổ sung [../nghiep-vu.md](../nghiep-vu.md).
 - **Mô hình hóa phần sau `synced`** (KSNB cổng 2 → BPVH → ảnh giao hàng → công nợ) — dùng 3 trạng thái enum dự phòng (`draft/approved/sent`) khi tách bước.
-- **App PWA mobile-first 5 tab** theo `design/` (hiện dùng console PC) — chờ **D3**.
+- **App PWA mobile-first 5 tab** theo `docs/khach-hang/ultty/design-app/` (hiện dùng console PC) — chờ **D3**.
 
 ## 6. Validation chung cho mọi increment
 

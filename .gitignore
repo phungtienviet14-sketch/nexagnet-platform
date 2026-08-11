@@ -15,7 +15,7 @@ out/
 secrets/
 # Ho so khao sat khach hang — PII THAT (dia chi, SDT, PO, STK, bang gia) — KHONG commit len GitHub.
 # Dung cuc bo de nap nguon su that; da trich vao apps/api/src/knowledge/seed.ts.
-HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG/
+docs/khach-hang/*/nguon-goc/ho-so-khao-sat/
 
 # Logs
 *.log

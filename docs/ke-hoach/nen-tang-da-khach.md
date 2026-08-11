@@ -1,7 +1,7 @@
 # KẾ HOẠCH — NỀN TẢNG DÙNG CHUNG CHO NHIỀU KHÁCH (base + gói khách)
 
 > **Vai trò:** kế hoạch con — CHỈ mô tả phạm vi/thiết kế, **không chứa trạng thái** (trạng thái ✅/⬜ nằm ở [tong-quan.md](tong-quan.md)).
-> **Bối cảnh:** khách thứ 2 — Công ty **Amico** (gia dụng cao cấp, ~30 nhóm Zalo B2B), nguồn: `BaoGia_AI_Agent_Amico_NetViet_Phuong Aug 2026.md`. Trước mắt **2 khách**; mô hình bán dịch vụ đã chốt ở **D19**.
+> **Bối cảnh:** khách thứ 2 — Công ty **Amico** (gia dụng cao cấp, ~30 nhóm Zalo B2B), nguồn: `docs/khach-hang/amico/nguon-goc/bao-gia-ai-agent-2026-08.md`. Trước mắt **2 khách**; mô hình bán dịch vụ đã chốt ở **D19**.
 > **Kế hoạch liên quan:** [nen-tang.md](nen-tang.md) (Đợt 0) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4) · [gd1.md](gd1.md).
 > Lập: **11/08/2026** theo quy trình `search-first`.
 

@@ -2,7 +2,7 @@
 
 > Soạn 11/08/2026 sau khi đọc `Luồng AI Agent ULTTY.pdf` + báo giá tháng 8.
 > **Phần A** gửi được ngay. **Phần B** là bảng dữ liệu xin kèm. **Phần C** là ghi chú nội bộ — KHÔNG gửi.
-> Bản kỹ thuật của cùng danh sách câu hỏi: [docs/ke-hoach/gd1.md §5](../ke-hoach/gd1.md).
+> Bản kỹ thuật của cùng danh sách câu hỏi: [docs/ke-hoach/gd1.md §5](../../../ke-hoach/gd1.md).
 
 ---
 

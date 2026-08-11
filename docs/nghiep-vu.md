@@ -3,7 +3,7 @@
 > **Cảnh báo lịch sử:** bản đầu của tài liệu này (09/07/2026, suy từ code + CLAUDE.md) **có sai lệch**. Bản này viết lại bằng cách đọc **hồ sơ gốc của khách**, và ghi rõ chỗ nào **code đang khác nguồn gốc**.
 >
 > **Vai trò tài liệu:** mô tả nghiệp vụ THẬT + đối chiếu với **as-built** (hệ thống đang làm gì). Đây là tài liệu tra cứu cho Sale/kế toán/khách và cho người code.
-> **Phân biệt:** `Thiet_ke_AI_Agent_U_Ultty.md` = đề xuất giải pháp NetViet (giữ nguyên) · [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md) = quyết định kỹ thuật · [so-do-he-thong.md](so-do-he-thong.md) = sơ đồ · tài liệu này = **nghiệp vụ + sai lệch**.
+> **Phân biệt:** `docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md` = đề xuất giải pháp NetViet (giữ nguyên) · [thiet-ke-ky-thuat-hop-nhat.md](thiet-ke-ky-thuat-hop-nhat.md) = quyết định kỹ thuật · [so-do-he-thong.md](so-do-he-thong.md) = sơ đồ · tài liệu này = **nghiệp vụ + sai lệch**.
 >
 > **Không chứa PII.** Hồ sơ gốc có SĐT/địa chỉ/số tài khoản/tên người — đã gitignore, **không trích vào đây**.
 > Cập nhật: 09/07/2026.
@@ -15,7 +15,7 @@
 **Đã đọc & đối chiếu trực tiếp:**
 | Nguồn gốc | Dùng để xác định |
 |---|---|
-| `APP AI_...docx` (bản `.md` trong hồ sơ khảo sát) | Bối cảnh, chính sách, checklist chốt đơn, bảo hành, ngôn ngữ viết tắt |
+| `docs/khach-hang/ultty/nguon-goc/khao-sat-khach-hang-2026-07.docx` (bản `.md` trong hồ sơ khảo sát) | Bối cảnh, chính sách, checklist chốt đơn, bảo hành, ngôn ngữ viết tắt |
 | `Các quy trình_/QT đặt hàng.pdf` | **Quy trình đặt hàng thật 9 bước + vai KSNB/BPKD/BPVH** |
 | `PO - Biên bản bàn giao_/PO _ Công nợ 30 ngày.pdf` | Điều khoản công nợ 30, miễn phí giao hàng, vai trò PGH |
 | `PO - Biên bản bàn giao_/PO_công nợ 45 ngày .pdf` | Điều khoản công nợ 45, phạt chậm, ngưỡng ngừng cấp, **VAT theo từng lần giao** |

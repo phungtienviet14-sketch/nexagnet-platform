@@ -1,7 +1,7 @@
 # KẾ HOẠCH GIAI ĐOẠN 1 — theo spec của khách
 
 > **Vai trò:** mô tả **phạm vi + thiết kế** GĐ1 đối chiếu tài liệu gốc của khách. **KHÔNG chứa trạng thái** — trạng thái ✅/⬜ nằm ở [tong-quan.md](tong-quan.md).
-> **Nguồn spec:** `HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG/gd1/Luồng AI Agent ULTTY(tài liệu của khách yêu cầu).pdf` (mindmap XMind, 3 agent) + `gd1/BG_Ultty_App AI_Netviet_Phuong Aug 2026.docx.md` (báo giá 147tr, 3 tuần, 5 agent).
+> **Nguồn spec:** `docs/khach-hang/ultty/nguon-goc/ho-so-khao-sat/gd1/Luồng AI Agent ULTTY(tài liệu của khách yêu cầu).pdf` (mindmap XMind, 3 agent) + `gd1/BG_Ultty_App AI_Netviet_Phuong Aug 2026.docx.md` (báo giá 147tr, 3 tuần, 5 agent).
 > Lập: **11/08/2026**. Mốc kết thúc demo: tag `demo/v1.0` = commit `b10e26a`.
 
 ---
@@ -271,4 +271,4 @@ Prisma thêm vào `Message`: `mediaKey String?` · `mediaBytes Int?` · `mediaFe
 | **Gate demo endpoint** | Thêm cờ `DEMO_ENDPOINTS`, mặc định **off** ở GĐ1 — `DemoController` bơm tin giả vào pipeline thật (lỗ hổng bảo mật, không chỉ là dọn dẹp) |
 | **Dọn nhánh** | Xóa 11 nhánh remote đã merge |
 
-Hồ sơ khách (`HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG/`) **đang gitignore đúng** vì chứa PII — giữ nguyên.
+Hồ sơ khách (`docs/khach-hang/ultty/nguon-goc/ho-so-khao-sat/`) **đang gitignore đúng** vì chứa PII — giữ nguyên.

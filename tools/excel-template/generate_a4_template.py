@@ -15,7 +15,7 @@ Bảng ánh xạ nhãn tiếng Việt -> giá trị enum: xem tools/excel-templa
 Chạy:
     python tools/excel-template/generate_a4_template.py
 Đầu ra:
-    docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx
+    docs/khach-hang/ultty/trao-doi/A4_dai-ly_map-nhom_U-Ultty.xlsx
 Cần: openpyxl (pip install openpyxl). KHÔNG phải dependency runtime — chỉ là công cụ soạn mẫu.
 """
 

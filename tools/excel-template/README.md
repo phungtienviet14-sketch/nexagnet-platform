@@ -11,7 +11,7 @@ python tools/excel-template/generate_a4_template.py
 # cần: pip install openpyxl   (chỉ là công cụ soạn mẫu — KHÔNG phải dependency runtime)
 ```
 
-Đầu ra: [`docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx`](../../docs/mau/A4_dai-ly_map-nhom_U-Ultty.xlsx)
+Đầu ra: [`docs/khach-hang/ultty/trao-doi/A4_dai-ly_map-nhom_U-Ultty.xlsx`](../../docs/khach-hang/ultty/trao-doi/A4_dai-ly_map-nhom_U-Ultty.xlsx)
 (3 sheet: **Hướng dẫn** · **1. Đại lý & CTV** · **2. Map nhóm Zalo**). Đã kèm sẵn 3 đại lý + 2 nhóm
 thật từ khảo sát (`apps/api/src/knowledge/seed.ts`) làm dữ liệu khởi tạo → file round-trip đúng seed hiện tại.
 

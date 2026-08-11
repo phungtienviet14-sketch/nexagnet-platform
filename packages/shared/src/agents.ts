@@ -1,7 +1,7 @@
 import type { Intent } from './order.js';
 
 /**
- * Multi-agent 6 con theo Thiet_ke_AI_Agent_U_Ultty.md §5.1 — pham vi demo.
+ * Multi-agent 6 con theo docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md §5.1 — pham vi demo.
  * QUAN TRONG: 6 VAI duoi 1 orchestrator, dung CHUNG 1 lan goi LLM (Router parse),
  * KHONG phai 6 agent LLM doc lap. Rules engine van la noi DUY NHAT tinh tien.
  */

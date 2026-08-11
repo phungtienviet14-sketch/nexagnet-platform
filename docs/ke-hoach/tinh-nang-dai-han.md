@@ -2,7 +2,7 @@
 
 > **Vai trò:** kế hoạch con mô tả THIẾT KẾ ĐỊNH HƯỚNG cho 6 nhóm tính năng mới, xếp theo phụ thuộc kỹ thuật + giá trị nghiệp vụ. Có thể bổ sung/bỏ bớt theo quyết định khách — mỗi tính năng có "cổng vào" rõ ràng; chưa qua cổng thì chưa code phần chạm thật.
 > **Không chứa trạng thái** — tiến độ đợt/cổng đã chốt hay chưa: [tong-quan.md](tong-quan.md) §3.2 + §4-D. Nền phải xong trước (Đợt 0): [nen-tang.md](nen-tang.md).
-> Lập: 10/07/2026 · chuyển vào `ke-hoach/` + bóc trạng thái: 11/07/2026. Nguồn ngữ cảnh: [../nghiep-vu.md](../nghiep-vu.md) · [../so-do-he-thong.md](../so-do-he-thong.md) · `Thiet_ke_AI_Agent_U_Ultty.md` (GĐ2-3 NetViet).
+> Lập: 10/07/2026 · chuyển vào `ke-hoach/` + bóc trạng thái: 11/07/2026. Nguồn ngữ cảnh: [../nghiep-vu.md](../nghiep-vu.md) · [../so-do-he-thong.md](../so-do-he-thong.md) · `docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md` (GĐ2-3 NetViet).
 
 ---
 
@@ -69,7 +69,7 @@
 
 ### F3 — Dashboard
 
-**Nghiệp vụ:** NetViet GĐ1 đã cam kết "Dashboard cơ bản"; `design/` của khách có tab Tổng quan (4 counter + biểu đồ theo giờ + hoạt động gần đây). Đây là món **trả nợ thiết kế**, không phải tính năng mới hoàn toàn.
+**Nghiệp vụ:** NetViet GĐ1 đã cam kết "Dashboard cơ bản"; `docs/khach-hang/ultty/design-app/` của khách có tab Tổng quan (4 counter + biểu đồ theo giờ + hoạt động gần đây). Đây là món **trả nợ thiết kế**, không phải tính năng mới hoàn toàn.
 
 **Nội dung v1** (đúng 4 KPI đã chốt + vận hành hằng ngày):
 - 4 KPI lõi: tỷ lệ bóc tách đúng · thời gian chốt đơn TB · tỷ lệ cần sửa · tỷ lệ handoff.
