@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PricedLine, PricedOrder } from '@netviet/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
-import { KiotVietMockAdapter } from './kiotviet.adapter.js';
+import { KiotVietMockAdapter } from './kiotviet.mock.adapter.js';
 
 function line(sku: string | null, quantity: number): PricedLine {
   return {

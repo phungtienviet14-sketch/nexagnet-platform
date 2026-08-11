@@ -29,6 +29,7 @@ export type {
 } from './order.js';
 export { INTENT_DEFINITIONS } from './intents.js';
 export type { IntentDef } from './intents.js';
+export { DEALER_TIERS, POLICY_TYPES } from './order-view.js';
 export type {
   DealerTier,
   PolicyType,
@@ -37,7 +38,7 @@ export type {
   PricedOrder,
   OrderView,
 } from './order-view.js';
-export type { KiotVietProduct, KiotVietOrder } from './kiotviet.js';
+export type { ErpProduct, ErpOrder } from './erp.js';
 export type {
   KnowledgeProductView,
   GlossaryView,

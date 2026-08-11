@@ -9,7 +9,7 @@ import { loadEnv, type OrderView, type ReplyChannel } from '@netviet/shared';
 import { AgentEventsService } from '../agents/agent-events.service.js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
-import { KiotVietAdapter } from '../kiotviet/kiotviet.adapter.js';
+import { ErpPort } from '../erp/erp.port.js';
 import { OrdersRepository } from './orders.repository.js';
 
 @Injectable()
@@ -17,7 +17,7 @@ export class OrdersService {
   constructor(
     private readonly repo: OrdersRepository,
     private readonly outbound: OutboundChannelRouter,
-    private readonly kiotViet: KiotVietAdapter,
+    private readonly erp: ErpPort,
     @Optional() private readonly events?: AgentEventsService,
   ) {}
 
@@ -66,7 +66,7 @@ export class OrdersService {
       );
     }
 
-    const { code } = await this.kiotViet.pushOrder(view.priced);
+    const { code } = await this.erp.pushOrder(view.priced);
     const synced = (await this.repo.update(id, { status: 'synced', kiotVietCode: code }))!;
     this.events?.emit({ type: 'order.updated', order: synced });
     return synced;

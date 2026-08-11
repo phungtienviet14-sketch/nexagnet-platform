@@ -1,9 +1,10 @@
 /**
- * DTO cho tab "KiotViet" tren app — xem danh muc SP + ton kho + don da dong bo.
- * GD1 la MOCK (in-memory); GD2 thay bang du lieu tu API KiotViet that.
+ * DTO ERP dung chung (tab "KiotViet" tren app) — danh muc SP + ton kho + don da dong bo.
+ * Trung tinh theo nha cung cap: KiotViet (U Ultty) hay Nhanh.vn (Amico) deu do vao hinh nay.
+ * GD1 la MOCK (in-memory); GD2 thay bang du lieu tu API that.
  */
 
-export interface KiotVietProduct {
+export interface ErpProduct {
   sku: string;
   name: string;
   unit: string;
@@ -15,7 +16,7 @@ export interface KiotVietProduct {
   sold: number;
 }
 
-export interface KiotVietOrder {
+export interface ErpOrder {
   /** Ma don KiotViet (vd KV-1001) */
   code: string;
   dealerName: string | null;

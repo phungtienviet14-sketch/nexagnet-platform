@@ -17,7 +17,10 @@ node_modules
 coverage
 logs
 secrets
-HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG
+# Ho so khach co PII/gia that — KHONG duoc vao image. Duong dan doi 11/08/2026 khi gom
+# tai lieu theo khach; `COPY . .` doc THU MUC LAM VIEC chu khong doc git, nen thu muc da
+# gitignore van se bi chep vao neu khong liet ke o day.
+docs/khach-hang/*/nguon-goc/ho-so-khao-sat
+docs/khach-hang/*/design-app
 *.docx
 docs/pdf
-design

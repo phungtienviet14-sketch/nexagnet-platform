@@ -1,30 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { KiotVietOrder, KiotVietProduct, PricedOrder } from '@netviet/shared';
+import type { ErpOrder, ErpProduct, PricedOrder } from '@netviet/shared';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { ErpPort } from './erp.port.js';
 
 /**
- * Tang 5 — tich hop KiotViet. KiotViet CHUA co API (khao sat) nen GD1 dung MOCK:
- * gia lap danh muc + ton kho + tao don, tra ve ma don. GD2 thay bang
+ * Hien thuc ErpPort cho U Ultty — tich hop KiotViet. KiotViet CHUA co API (khao sat) nen GD1
+ * dung MOCK: gia lap danh muc + ton kho + tao don, tra ve ma don. GD2 thay bang
  * KiotVietApiAdapter (goi API that hoac xuat Excel import) ma khong dung service.
  */
-export abstract class KiotVietAdapter {
-  abstract pushOrder(order: PricedOrder): Promise<{ code: string }>;
-  /** Danh muc SP + ton kho hien tai (cho tab KiotViet tren app). */
-  abstract listProducts(): KiotVietProduct[];
-  /** Cac don da day len KiotViet (moi nhat truoc). */
-  abstract listOrders(): KiotVietOrder[];
-}
 
 const INITIAL_STOCK = 100; // ton kho gia lap ban dau moi SKU (mock)
 const PUSH_DELAY_MS = 250; // gia lap do tre goi API KiotViet
 
 @Injectable()
-export class KiotVietMockAdapter extends KiotVietAdapter {
+export class KiotVietMockAdapter extends ErpPort {
   readonly name = 'mock';
   private readonly logger = new Logger('KiotVietMock');
   private counter = 1000;
-  private readonly orders: KiotVietOrder[] = [];
-  private readonly products = new Map<string, KiotVietProduct>();
+  private readonly orders: ErpOrder[] = [];
+  private readonly products = new Map<string, ErpProduct>();
 
   constructor(private readonly knowledge: KnowledgeService) {
     super();
@@ -74,11 +68,11 @@ export class KiotVietMockAdapter extends KiotVietAdapter {
     return { code };
   }
 
-  listProducts(): KiotVietProduct[] {
+  listProducts(): ErpProduct[] {
     return [...this.products.values()];
   }
 
-  listOrders(): KiotVietOrder[] {
+  listOrders(): ErpOrder[] {
     return this.orders;
   }
 }

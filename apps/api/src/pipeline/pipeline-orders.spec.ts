@@ -5,7 +5,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
-import { KiotVietMockAdapter } from '../kiotviet/kiotviet.adapter.js';
+import { KiotVietMockAdapter } from '../erp/kiotviet.mock.adapter.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { MockParser } from './mock-parser.js';

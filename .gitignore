@@ -45,3 +45,6 @@ coverage/
 # Playwright E2E output (trace/screenshot cua lan chay gan nhat)
 test-results/
 playwright-report/
+
+# File khoa tam cua Microsoft Word (sinh ra khi mo .docx trong docs/khach-hang/)
+~$*

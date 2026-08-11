@@ -1,13 +1,21 @@
 import { INTENT_DEFINITIONS } from '@netviet/shared';
+import { tenantPersona } from '../tenant/tenant.config.js';
+import type { TenantConfig } from '../tenant/tenant.schema.js';
 import type { ParserInput } from './order-parser.js';
 
 /**
  * Prompt he thong DUNG CHUNG cho parser LLM (Claude + DeepSeek). Gom: vai tro,
  * dinh nghia 7 intent + few-shot, quy tac trich xuat, danh muc SKU + glossary,
  * va yeu cau dien confidence.intent. Muc tieu: phan loai DUNG ca 7 intent, on dinh.
+ *
+ * Cau mo dau (ten khach + nganh hang) den tu GOI KHACH `tenants/<slug>/tenant.json`, khong
+ * hardcode trong nhan nua (Dot B1). Tham so `persona` de test truyen thang, khoi cham dia.
  */
 
-export function buildSystemPrompt(input: ParserInput): string {
+export function buildSystemPrompt(
+  input: ParserInput,
+  persona: TenantConfig['persona'] = tenantPersona(),
+): string {
   const intents = INTENT_DEFINITIONS.map(
     (d) => `- ${d.intent}: ${d.description}\n  Vi du: ${d.examples.map((e) => `"${e}"`).join(' | ')}`,
   ).join('\n');
@@ -17,7 +25,7 @@ export function buildSystemPrompt(input: ParserInput): string {
   const glossary = input.glossary.map((g) => `${g.term}=${g.meaning}`).join(', ');
 
   return [
-    'Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho U Ultty (gia dung cao cap).',
+    persona.parserIntro,
     'Dai ly nhan tin tieng Viet VIET TAT, KHONG DAU, cut lun. Nhiem vu: (1) phan loai intent, (2) neu dat_don thi trich xuat don THO.',
     'TUYET DOI KHONG tu tinh gia/ship/tong/VAT — chi ghi lai so KHACH viet (unitPriceRaw, totalRaw) neu co.',
     '',

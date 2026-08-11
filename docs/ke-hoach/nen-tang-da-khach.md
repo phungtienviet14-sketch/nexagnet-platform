@@ -214,13 +214,29 @@ Gói khách **là hạt giống, không phải nguồn sự thật lúc chạy**
 
 | Đợt | Nội dung | Điều kiện nghiệm thu |
 |---|---|---|
-| **B1 — Trung tính hóa nhân**<br/>*(không đổi hành vi)* | Đổi tên `@netviet/*` → `@netviet/*`; tách `seed.ts` → `tenants/ultty/data/`; persona ra cấu hình; `KiotVietAdapter` → `ErpPort` (KiotViet là một hiện thực) | **Toàn bộ test cũ xanh, số lượng không đổi** (mốc hiện tại: api 430 pass/21 skip · shared 69 · web 29 · route 8). Đây là refactor cơ học — một test đổi trạng thái là dấu hiệu làm sai |
+| **B1 — Trung tính hóa nhân** ✔<br/>*(không đổi hành vi)* | Đổi tên `@ultty/*` → `@netviet/*`; tách `seed.ts` → `tenants/ultty/data/knowledge.json`; persona ra `tenants/ultty/tenant.json`; `KiotVietAdapter` → `ErpPort` (KiotViet là một hiện thực) | **Toàn bộ test cũ xanh, số lượng không đổi** (mốc: api 430 pass/21 skip · shared 69 · web 29 · route 8). Đây là refactor cơ học — một test đổi trạng thái là dấu hiệu làm sai |
 | **B2 — Gói khách + CI hai gói** | `packages/tenant` (schema zod + loader); `tenants/ultty` đầy đủ; `tenants/amico` khung; CI chạy test theo ma trận 2 gói | Đổi `TENANT=amico` thì persona/thương hiệu/rules đổi theo, **không sửa một dòng code nào** |
 | **B3 — Hạ tầng tham số hóa** | Bỏ `zalo-ultty` cứng khỏi 21 file deploy; `$TENANT`; `SECRET_BACKEND=gcp\|sops\|envfile`; tách `deploy/stack/`; runbook cho cả hai chế độ hạ tầng | Dựng được stack thứ hai **trên cùng VM** bằng đúng script đó, hai DB không thấy nhau |
 | **B4 — Năng lực mới cho Amico** | `ErpNhanhAdapter` · `InvoiceMisaAdapter` · `DocumentPort` (PDF) · watcher tồn kho/ghép đơn — mỗi thứ sau một cổng + một cờ | Ultty bật `erp=kiotviet` vẫn chạy y nguyên; mọi năng lực mới mặc định **tắt** |
 | **B5 — Bảng điều khiển nhiều stack** | Nhìn trạng thái/KPI nhiều khách một chỗ | **Chỉ làm khi đã có khách thứ 3.** Với 2 khách thì mở 2 tab — YAGNI |
 
 Thứ tự có lý do: **B1 phải xong trước khi Amico có bất kỳ dòng code nào**, nếu không sẽ có hai bộ mã song song và mọi lợi ích của "base dùng chung" biến mất trong 2 tuần.
+
+### B1 đã làm gì (12/08/2026)
+
+| Trước | Sau |
+|---|---|
+| `@ultty/*` — tên gói mang tên một khách | `@netviet/*` (124 file) |
+| 19 SP + bảng giá + đại lý + glossary nằm thẳng trong `apps/api/src/knowledge/seed.ts` | `tenants/ultty/data/knowledge.json`; `seed.ts` chỉ còn một dòng gọi loader |
+| Tên khách hardcode ở `parser-prompt.ts:20` | `tenants/ultty/tenant.json` → `persona.parserIntro` |
+| `KiotVietAdapter` là cổng — nhà cung cấp đứng tên hợp đồng | `ErpPort` là cổng, `KiotVietMockAdapter` là một hiện thực (`apps/api/src/erp/`) |
+| `KiotVietProduct` / `KiotVietOrder` | `ErpProduct` / `ErpOrder` |
+
+Chọn gói khách bằng `TENANT=<slug>` hoặc `TENANT_DIR=<path>` (đường dẫn tuyệt đối, cho khách chạy hạ tầng riêng) — xem [tenants/README.md](../../tenants/README.md).
+
+**Cố ý CHƯA làm** (thuộc đợt sau, đừng tưởng bỏ sót): `packages/tenant` riêng + CI ma trận 2 gói (B2) · bỏ `zalo-ultty` khỏi deploy + chuỗi UI ở `layout.tsx`/`TopBar.tsx` (B3) · `NhanhAdapter`, MISA, PDF (B4). Trường `kiotVietCode` trên `OrderView`/Prisma **giữ nguyên tên** vì đổi là chạm schema DB + web — dồn vào B3.
+
+Nghiệm thu: api **430 test cũ xanh nguyên** (+8 test mới cho loader gói khách) · shared 69 · web 29 · route 8 · typecheck 0 · lint 0.
 
 ---
 

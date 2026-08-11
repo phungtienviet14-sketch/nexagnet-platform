@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "slug": "ultty",
+  "displayName": "Công ty Cổ Phần U Ultty Việt Nam",
+  "shortName": "U Ultty",
+  "persona": {
+    "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho U Ultty (gia dung cao cap).",
+    "botName": "Ultty",
+    "productFallbackDescription": "Sản phẩm gia dụng cao cấp U Ultty."
+  }
+}

@@ -6,8 +6,20 @@ import type { FieldConfidence, Intent, OrderStatus, OrderType, ParsedOrder } fro
  * Day la output noi bo (khong parse tu nguon la), dung TS interface thay zod.
  */
 
-export type DealerTier = 'dai_ly' | 'ctv';
-export type PolicyType = 'cong_no_30' | 'cong_no_45' | 'ky_gui' | 'thanh_toan_ngay' | 'cod';
+// Khai bao dang MANG hang (nhu INTENTS o order.ts) chu khong chi la union type: goi khach
+// (tenants/<slug>/) la JSON doc luc chay nen phai validate bang zod -> can gia tri LUC CHAY.
+export const DEALER_TIERS = ['dai_ly', 'ctv'] as const;
+export type DealerTier = (typeof DEALER_TIERS)[number];
+
+export const POLICY_TYPES = [
+  'cong_no_30',
+  'cong_no_45',
+  'ky_gui',
+  'thanh_toan_ngay',
+  'cod',
+] as const;
+export type PolicyType = (typeof POLICY_TYPES)[number];
+
 export type ReplyChannel = 'mock' | 'bot' | 'zca';
 
 export interface PricedLine {

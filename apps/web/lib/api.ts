@@ -4,8 +4,8 @@ import type {
   AutoSendState,
   DemoConfig,
   DemoGroup,
-  KiotVietOrder,
-  KiotVietProduct,
+  ErpOrder,
+  ErpProduct,
   KnowledgeSummary,
   OrderView,
 } from '@netviet/shared';
@@ -59,10 +59,10 @@ export const api = {
   samples: (): Promise<string[]> => fetch(`${BASE}/demo/samples`).then((r) => toJson<string[]>(r)),
   groups: (): Promise<DemoGroup[]> =>
     fetch(`${BASE}/demo/groups`).then((r) => toJson<DemoGroup[]>(r)),
-  kiotVietProducts: (): Promise<KiotVietProduct[]> =>
-    fetch(`${BASE}/kiotviet/products`).then((r) => toJson<KiotVietProduct[]>(r)),
-  kiotVietOrders: (): Promise<KiotVietOrder[]> =>
-    fetch(`${BASE}/kiotviet/orders`).then((r) => toJson<KiotVietOrder[]>(r)),
+  kiotVietProducts: (): Promise<ErpProduct[]> =>
+    fetch(`${BASE}/kiotviet/products`).then((r) => toJson<ErpProduct[]>(r)),
+  kiotVietOrders: (): Promise<ErpOrder[]> =>
+    fetch(`${BASE}/kiotviet/orders`).then((r) => toJson<ErpOrder[]>(r)),
   broadcast: (req: BroadcastRequest): Promise<BroadcastResult> =>
     fetch(`${BASE}/broadcast`, {
       method: 'POST',

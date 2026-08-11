@@ -4,9 +4,10 @@ Nơi giữ **tài liệu của/gửi cho từng khách**. Tách khỏi tài li�
 ([../nghiep-vu.md](../nghiep-vu.md) · [../so-do-he-thong.md](../so-do-he-thong.md) · [../ke-hoach/](../ke-hoach/)) vì
 những thứ đó mô tả **nền tảng**, không thuộc về khách nào.
 
-> **Đừng nhầm với `tenants/`** (sẽ có ở Đợt B2): thư mục này là **tài liệu cho người đọc**
-> (hồ sơ, báo giá, trao đổi, ảnh design). `tenants/<slug>/` là **cấu hình máy đọc** (JSON có
-> zod schema, dữ liệu seed) mà hệ thống nạp lúc chạy. Xem [../ke-hoach/nen-tang-da-khach.md](../ke-hoach/nen-tang-da-khach.md).
+> **Đừng nhầm với [`tenants/`](../../tenants/README.md)** (đã có từ Đợt B1): thư mục này là
+> **tài liệu cho người đọc** (hồ sơ, báo giá, trao đổi, ảnh design). `tenants/<slug>/` là
+> **cấu hình máy đọc** (JSON có zod schema, dữ liệu seed) mà hệ thống nạp lúc chạy.
+> Slug hai bên đặt trùng nhau. Xem [../ke-hoach/nen-tang-da-khach.md](../ke-hoach/nen-tang-da-khach.md).
 
 ## Quy ước
 

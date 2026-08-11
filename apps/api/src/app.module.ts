@@ -18,8 +18,9 @@ import { DemoController } from './demo/demo.controller.js';
 import { HealthController } from './health/health.controller.js';
 import { BotPoller } from './ingest/bot-poller.js';
 import { ZcaListener } from './ingest/zca-listener.js';
-import { KiotVietAdapter, KiotVietMockAdapter } from './kiotviet/kiotviet.adapter.js';
-import { KiotVietController } from './kiotviet/kiotviet.controller.js';
+import { ErpPort } from './erp/erp.port.js';
+import { KiotVietMockAdapter } from './erp/kiotviet.mock.adapter.js';
+import { ErpController } from './erp/erp.controller.js';
 import { KnowledgeController } from './knowledge/knowledge.controller.js';
 import { KnowledgeRepository, SeedKnowledgeRepository } from './knowledge/knowledge.repository.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
@@ -54,7 +55,7 @@ import { OperationalSettingsModule } from './settings/operational-settings.modul
     OrdersController,
     MessagesController,
     DemoController,
-    KiotVietController,
+    ErpController,
     KnowledgeController,
     BroadcastController,
     StreamController,
@@ -105,7 +106,7 @@ import { OperationalSettingsModule } from './settings/operational-settings.modul
           : new SeedKnowledgeRepository(),
       inject: [PrismaService],
     },
-    { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
+    { provide: ErpPort, useClass: KiotVietMockAdapter },
     // Kho luu anh + worker tai anh (Dot A' Task 2). Mac dinh MEDIA_STORE=none -> khong I/O gi,
     // demo/CI chay y nhu truoc; bat bang MEDIA_STORE=s3 khi co bucket.
     mediaStoreProvider,
