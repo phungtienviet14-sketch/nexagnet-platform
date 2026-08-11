@@ -1,5 +1,6 @@
 import { channelMessageSchema, type ChannelMessage } from '@ultty/shared';
 import { ThreadType, type Message } from 'zca-js';
+import { toHttpUrl } from './http-url.js';
 
 /**
  * Chuyen 1 tin tu zca-js (userbot) -> ChannelMessage chuan; null neu bo qua.
@@ -59,17 +60,6 @@ function extractContent(content: unknown): { text?: string; imageUrl?: string } 
     return { text: caption || undefined, imageUrl };
   }
   return {};
-}
-
-/** Tra ve href neu la URL http(s) hop le, nguoc lai undefined. */
-function toHttpUrl(href: unknown): string | undefined {
-  if (typeof href !== 'string' || href.length === 0) return undefined;
-  try {
-    const u = new URL(href);
-    return u.protocol === 'http:' || u.protocol === 'https:' ? href : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /** `ts` la epoch-ms dang chuoi; ep sang so truoc khi tao Date. Fallback: bay gio. */

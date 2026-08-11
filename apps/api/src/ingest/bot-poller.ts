@@ -17,6 +17,7 @@ import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';
 import { ZaloUserClient } from '../channels/zalo-user.client.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
+import { toHttpUrl } from './http-url.js';
 import { MessageGuard, processWithRetry } from './message-guard.js';
 
 /** Tin auto-ack khi LLM khong hieu (intent=Khac). Gan them AUTO_LABEL khi gui. */
@@ -96,17 +97,6 @@ export function updateToChannelMessage(update: BotUpdate): ChannelMessage | null
   };
   const parsed = channelMessageSchema.safeParse(candidate);
   return parsed.success ? parsed.data : null;
-}
-
-/** Tra ve URL neu la http(s) hop le, nguoc lai undefined. */
-function toHttpUrl(href: string | undefined): string | undefined {
-  if (!href) return undefined;
-  try {
-    const url = new URL(href);
-    return url.protocol === 'http:' || url.protocol === 'https:' ? href : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
