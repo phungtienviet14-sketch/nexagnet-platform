@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  InMemoryMessagesRepository,
+  MessagesRepository,
+} from '../messages/messages.repository.js';
 import { LocalMediaStore } from './local-media.store.js';
-import type { MediaStore } from './media-store.js';
-import { mediaStoreProvider } from './media.provider.js';
+import { MediaFetcherService } from './media-fetcher.service.js';
+import { MediaStore } from './media-store.js';
+import { mediaFetcherProvider, mediaStoreProvider } from './media.provider.js';
 import { NoopMediaStore } from './noop-media.store.js';
 import { S3MediaStore } from './s3-media.store.js';
 
@@ -54,5 +59,20 @@ describe('mediaStoreProvider (chon kho anh theo MEDIA_STORE)', () => {
   it('s3 nhung thieu bucket/khoa -> nem loi luc khoi dong, KHONG am tham ve Noop', () => {
     process.env.MEDIA_STORE = 's3';
     expect(() => factory()).toThrow();
+  });
+});
+
+describe('mediaFetcherProvider (dung MediaFetcher tu env)', () => {
+  it('dung duoc fetcher voi kho da chon; kho none -> khong tai gi', async () => {
+    const store = (mediaFetcherProvider as { inject: unknown[] }).inject;
+    expect(store).toEqual([MediaStore, MessagesRepository]);
+
+    const build = (mediaFetcherProvider as {
+      useFactory: (s: MediaStore, m: MessagesRepository) => MediaFetcherService;
+    }).useFactory;
+    const fetcher = build(new NoopMediaStore(), new InMemoryMessagesRepository());
+
+    expect(fetcher).toBeInstanceOf(MediaFetcherService);
+    expect(await fetcher.archive('m-1', 'https://photo-stal-16.zdn.vn/x.jpg', new Date())).toBeNull();
   });
 });

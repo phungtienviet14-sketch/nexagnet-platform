@@ -172,6 +172,32 @@ describe('MediaFetcherService.archive', () => {
 
   // MEDIA_STORE=none la MAC DINH (demo/CI): tai roi vut di la lang phi bang thong va lam CI
   // phu thuoc mang. Khong lam gi ca, va cung khong ghi mediaError gia.
+  it('phan hoi khong co than tin (204) -> ghi mediaError, khong nem', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
+    const { fetcher } = build();
+
+    expect((await fetcher.archive('msg-1', URL_ANH, SENT_AT))?.error).toBeTruthy();
+  });
+
+  // Ghi DB loi la nhanh nguy hiem nhat: no chay trong tien trinh nen, nem o day se thanh
+  // unhandled rejection lam sap ca API.
+  it('ghi ket qua vao DB loi -> nuot lai, van tra ket qua, khong nem', async () => {
+    const jpeg = await anhThat();
+    vi.stubGlobal('fetch', vi.fn(async () => traLoi(jpeg)));
+    const store = new FakeStore();
+    const messages = {
+      recordMedia: async () => {
+        throw new Error('DB sap');
+      },
+    } as unknown as ConstructorParameters<typeof MediaFetcherService>[1];
+    const fetcher = new MediaFetcherService(store, messages, OPTIONS);
+
+    const result = await fetcher.archive('msg-1', URL_ANH, SENT_AT);
+
+    expect(result?.key).toBe(KHOA);
+    expect(store.puts).toHaveLength(1); // anh VAN len duoc kho du DB hong
+  });
+
   it('kho tat (enabled=false) -> khong fetch, khong ghi DB, tra null', async () => {
     const fetchMock = vi.fn(async () => traLoi(Buffer.alloc(0)));
     vi.stubGlobal('fetch', fetchMock);

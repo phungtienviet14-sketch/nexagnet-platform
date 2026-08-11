@@ -127,11 +127,9 @@ export class MediaFetcherService implements OnApplicationShutdown {
  */
 async function readCapped(response: Response, maxBytes: number): Promise<Buffer> {
   const reader = response.body?.getReader();
-  if (!reader) {
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length > maxBytes) throw new Error(`Anh vuot tran ${maxBytes} byte`);
-    return buffer;
-  }
+  // `body` null = khong co than tin (vd 204) -> khong co gi de dem. Tra rong va de sharp bao
+  // "khong phai anh" o buoc sau, thay vi viet mot nhanh dem byte khong bao gio chay.
+  if (!reader) return Buffer.from(await response.arrayBuffer());
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {

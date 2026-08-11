@@ -23,15 +23,22 @@ export const mediaStoreProvider: Provider = {
     const env = loadEnv();
     const logger = new Logger('MediaProvider');
     switch (env.MEDIA_STORE) {
-      case 's3':
-        logger.log(`Kho anh: S3MediaStore (bucket ${env.MEDIA_BUCKET})`);
+      case 's3': {
+        const { MEDIA_BUCKET, MEDIA_ENDPOINT, MEDIA_ACCESS_KEY_ID, MEDIA_SECRET_ACCESS_KEY } = env;
+        // `loadEnv()` da fail-fast; kiem lai o day de bo 4 phep ep kieu `as string` — va neu sau
+        // nay ai do sua env.ts thi vo o cho noi ro nguyen nhan, khong phai loi la tu AWS SDK.
+        if (!MEDIA_BUCKET || !MEDIA_ENDPOINT || !MEDIA_ACCESS_KEY_ID || !MEDIA_SECRET_ACCESS_KEY) {
+          throw new Error('MEDIA_STORE=s3 nhung thieu MEDIA_BUCKET/ENDPOINT/ACCESS_KEY/SECRET');
+        }
+        logger.log(`Kho anh: S3MediaStore (bucket ${MEDIA_BUCKET})`);
         return new S3MediaStore({
-          bucket: env.MEDIA_BUCKET as string,
-          endpoint: env.MEDIA_ENDPOINT as string,
+          bucket: MEDIA_BUCKET,
+          endpoint: MEDIA_ENDPOINT,
           region: env.MEDIA_REGION,
-          accessKeyId: env.MEDIA_ACCESS_KEY_ID as string,
-          secretAccessKey: env.MEDIA_SECRET_ACCESS_KEY as string,
+          accessKeyId: MEDIA_ACCESS_KEY_ID,
+          secretAccessKey: MEDIA_SECRET_ACCESS_KEY,
         });
+      }
       case 'local':
         logger.log(`Kho anh: LocalMediaStore (${env.MEDIA_LOCAL_DIR}) — chi dung cho dev`);
         return new LocalMediaStore(env.MEDIA_LOCAL_DIR);
