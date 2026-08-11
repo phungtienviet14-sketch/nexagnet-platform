@@ -47,6 +47,51 @@ describe('updateToChannelMessage', () => {
     expect(m).toBeNull();
   });
 
+  // Dot A' Task 1: truoc day `if (!text) return null` vut thang anh gui TRAN (khong caption)
+  // -> tin chua bao gio vao DB, ma link Zalo chet <=35 ngay => mat vinh vien.
+  it('GIU tin anh khong caption: text rong, con nguyen photo_url', () => {
+    const m = updateToChannelMessage({
+      event_name: 'message.image.received',
+      message: {
+        message_id: 'img-tran',
+        photo_url: 'https://photo-stal-16.zdn.vn/x.jpg',
+        from: { id: 'u1', display_name: 'A', is_bot: false },
+        chat: { id: 'zgr-x', chat_type: 'GROUP' },
+      },
+    });
+    expect(m).not.toBeNull();
+    expect(m?.text).toBe('');
+    expect(m?.imageUrl).toBe('https://photo-stal-16.zdn.vn/x.jpg');
+  });
+
+  // photo_url nay la can cu DUY NHAT de giu tin khong caption, nen no phai duoc kiem truoc
+  // (giong toHttpUrl cua zca-message): URL hong ma van cho qua thi safeParse rot ca tin.
+  it('tin CO CHU nhung photo_url hong -> giu tin, bo imageUrl (khong lam rot ca tin)', () => {
+    const m = updateToChannelMessage({
+      message: {
+        message_id: 'bad-photo',
+        text: 'gui 3 robot',
+        photo_url: 'not-a-url',
+        from: { id: 'u1', is_bot: false },
+        chat: { id: 'zgr-x', chat_type: 'GROUP' },
+      },
+    });
+    expect(m?.text).toContain('robot');
+    expect(m?.imageUrl).toBeUndefined();
+  });
+
+  it('bo qua tin khong caption khi photo_url hong — khong con gi de luu', () => {
+    const m = updateToChannelMessage({
+      message: {
+        message_id: 'bad-photo-2',
+        photo_url: 'not-a-url',
+        from: { id: 'u1', is_bot: false },
+        chat: { id: 'zgr-x', chat_type: 'GROUP' },
+      },
+    });
+    expect(m).toBeNull();
+  });
+
   it('bo qua update khong co noi dung', () => {
     expect(updateToChannelMessage({ message: { chat: { id: 'zgr-x' } } })).toBeNull();
   });

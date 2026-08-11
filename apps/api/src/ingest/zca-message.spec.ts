@@ -65,9 +65,23 @@ describe('zcaMessageToChannelMessage', () => {
     expect(zcaMessageToChannelMessage(makeMessage({ threadId: '' }), false)).toBeNull();
   });
 
-  it('bo qua tin khong co van ban (anh khong chu thich)', () => {
+  // Dot A' Task 1: truoc day `if (!trimmed) return null` vut thang anh gui TRAN -> tin chua bao
+  // gio vao DB, ma link Zalo chet <=35 ngay. Nay giu tin voi text rong de con luu duoc anh.
+  it('GIU tin anh khong chu thich: text rong, con nguyen imageUrl', () => {
     const m = zcaMessageToChannelMessage(makeMessage({ content: { href: 'https://x/y.jpg' } }), false);
-    expect(m).toBeNull();
+    expect(m).not.toBeNull();
+    expect(m?.text).toBe('');
+    expect(m?.imageUrl).toBe('https://x/y.jpg');
+  });
+
+  it('bo qua tin khong co ca chu lan anh (tin he thong)', () => {
+    expect(zcaMessageToChannelMessage(makeMessage({ content: '' }), false)).toBeNull();
+    expect(zcaMessageToChannelMessage(makeMessage({ content: {} }), false)).toBeNull();
+    expect(zcaMessageToChannelMessage(makeMessage({ content: '   ' }), false)).toBeNull();
+  });
+
+  it('bo qua tin khong chu thich khi href khong phai URL http(s) — khong con gi de luu', () => {
+    expect(zcaMessageToChannelMessage(makeMessage({ content: { href: 'not-a-url' } }), false)).toBeNull();
   });
 
   it('ep ts (chuoi epoch-ms) sang Date hop le, khong phai Invalid Date', () => {
