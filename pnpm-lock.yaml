@@ -83,6 +83,9 @@ importers:
       '@netviet/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@netviet/tenant':
+        specifier: workspace:*
+        version: link:../../packages/tenant
       '@prisma/client':
         specifier: ^6.19.3
         version: 6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
@@ -150,6 +153,9 @@ importers:
       '@netviet/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@netviet/tenant':
+        specifier: workspace:*
+        version: link:../../packages/tenant
       '@tanstack/react-query':
         specifier: ^5.62.0
         version: 5.101.2(react@19.2.7)
@@ -184,6 +190,25 @@ importers:
 
   packages/shared:
     dependencies:
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.0)(jiti@2.7.0)(tsx@4.23.0)
+
+  packages/tenant:
+    dependencies:
+      '@netviet/shared':
+        specifier: workspace:*
+        version: link:../shared
       zod:
         specifier: ^4.0.0
         version: 4.4.3

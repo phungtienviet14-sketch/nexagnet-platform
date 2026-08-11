@@ -1,6 +1,5 @@
 import { INTENT_DEFINITIONS } from '@netviet/shared';
-import { tenantPersona } from '../tenant/tenant.config.js';
-import type { TenantConfig } from '../tenant/tenant.schema.js';
+import { tenantPersona, type TenantConfig } from '@netviet/tenant';
 import type { ParserInput } from './order-parser.js';
 
 /**

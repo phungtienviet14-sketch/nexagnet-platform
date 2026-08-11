@@ -22,6 +22,22 @@ export const tenantConfigSchema = z.object({
   displayName: nonEmpty,
   /** Ten goi tat — dung trong cau chu hien thi. */
   shortName: nonEmpty,
+  /**
+   * Chuoi giao dien. Truoc Dot B1 nhung chuoi nay nam thang trong `apps/web` (`layout.tsx`,
+   * `TopBar.tsx`, `SettingsShell.tsx`, `Composer.tsx`) — doi khach la phai sua ma nguon app.
+   */
+  branding: z.object({
+    /** Ten san pham tren thanh tieu de console. */
+    productName: nonEmpty,
+    /** <title> cua trang. */
+    pageTitle: nonEmpty,
+    /** Mo ta trang (the description + PWA). */
+    pageDescription: nonEmpty,
+    /** Mau chu dao cho `theme-color` cua trinh duyet. */
+    themeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'themeColor: dang #rrggbb'),
+    /** Cau goi y trong o soan tin cua console — chua vi du dat hang cua chinh khach. */
+    composerPlaceholder: nonEmpty,
+  }),
   persona: z.object({
     /** Cau mo dau prompt parser. Truoc B1 cau nay hardcode ten khach trong parser-prompt.ts. */
     parserIntro: nonEmpty,
@@ -31,6 +47,12 @@ export const tenantConfigSchema = z.object({
      * doi la doi thu nguoi ta doc duoc. Tach rieng khoi shortName vi hai cho xung ho khac nhau.
      */
     botName: nonEmpty,
+    /**
+     * Ten dung de BOC @mention khoi noi dung tin den. Khac `botName`: day la chuoi dung nhu no
+     * xuat hien trong nhom Zalo (vd "Bot ultty AI orders"), con botName la ten hien thi.
+     * Bien moi truong BOT_NAME van ghi de duoc cho tung moi truong chay.
+     */
+    mentionName: nonEmpty,
     /** Mo ta thay the khi mot SP trong kho tri thuc chua co description (vai Tu van SP). */
     productFallbackDescription: nonEmpty,
   }),
@@ -38,7 +60,10 @@ export const tenantConfigSchema = z.object({
 
 export type TenantConfig = z.infer<typeof tenantConfigSchema>;
 
-/** Khop 1-1 voi interface KnowledgeSnapshot o ../knowledge/domain.ts. */
+/**
+ * Hat giong nguon su that. Khop 1-1 voi interface `KnowledgeSnapshot` cua apps/api — ben do co
+ * mot phep gan kiem kieu de hai hinh khong tro nhau luc nao khong biet.
+ */
 export const knowledgeSnapshotSchema = z.object({
   products: z.array(
     z.object({
@@ -73,3 +98,9 @@ export const knowledgeSnapshotSchema = z.object({
   ),
   glossary: z.array(z.object({ term: nonEmpty, meaning: nonEmpty })),
 });
+
+export type TenantKnowledge = z.infer<typeof knowledgeSnapshotSchema>;
+
+/** Tin nhan mau cho luong demo (`/demo/simulate`) — la vi du dat hang cua chinh khach. */
+export const demoMessagesSchema = z.array(nonEmpty).min(1);
+export type DemoMessages = z.infer<typeof demoMessagesSchema>;

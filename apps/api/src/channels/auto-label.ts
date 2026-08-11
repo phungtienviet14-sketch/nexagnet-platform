@@ -1,4 +1,4 @@
-import { loadTenantConfig } from '../tenant/tenant.config.js';
+import { loadTenantConfig } from '@netviet/tenant';
 
 /**
  * Nhan tin tu dong (dieu khoan Zalo Bot Platform — bao cao muc 6.3).

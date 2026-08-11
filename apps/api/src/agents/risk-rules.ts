@@ -1,7 +1,7 @@
 import type { PolicyType, PricedOrder, SupervisorSummary } from '@netviet/shared';
 import type { PriceRow, Product } from '../knowledge/domain.js';
 import { formatVnd, normalize } from '../rules/text.js';
-import { tenantPersona } from '../tenant/tenant.config.js';
+import { tenantPersona } from '@netviet/tenant';
 import type { AgentsConfig } from './agents.config.js';
 
 /**

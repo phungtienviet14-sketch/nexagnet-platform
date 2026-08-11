@@ -1,4 +1,4 @@
-import { loadTenantKnowledge } from '../tenant/tenant.config.js';
+import { loadTenantKnowledge } from '@netviet/tenant';
 import type { KnowledgeSnapshot } from './domain.js';
 
 /**

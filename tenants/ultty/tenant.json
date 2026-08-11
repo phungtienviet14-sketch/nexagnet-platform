@@ -3,9 +3,17 @@
   "slug": "ultty",
   "displayName": "Công ty Cổ Phần U Ultty Việt Nam",
   "shortName": "U Ultty",
+  "branding": {
+    "productName": "Ultty AI",
+    "pageTitle": "Ultty AI — Trung tâm điều hành",
+    "pageDescription": "Console demo: 6 agent xử lý đơn hàng Zalo cho U Ultty Việt Nam",
+    "themeColor": "#b45f43",
+    "composerPlaceholder": "vd: @Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT"
+  },
   "persona": {
     "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho U Ultty (gia dung cao cap).",
     "botName": "Ultty",
+    "mentionName": "Bot ultty AI orders",
     "productFallbackDescription": "Sản phẩm gia dụng cao cấp U Ultty."
   }
 }
