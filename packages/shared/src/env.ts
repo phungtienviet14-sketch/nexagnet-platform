@@ -99,6 +99,29 @@ export const envSchema = z.object({
   // Bat/tat panel quan tri nguon su that (Dealer/Group/Product/Price/Glossary/Override).
   // CHI mount khi ADMIN_UI=on VA PERSISTENCE=prisma (AdminJS can Postgres). Mac dinh off ->
   // demo/CI/che do memory KHONG dung toi AdminJS (khong nap thu vien ESM nang o boot).
+  // --- Kho luu ANH (Dot A' Task 2) ---
+  // Zalo XOA object anh phia server sau <=35 ngay (do that 11/08/2026: HEAD link cua 07/07 -> 404,
+  // URL khong co chu ky/`expires` nen khong phai pre-signed). DB chi luu link = 35 ngay nua mat.
+  //   none  = MAC DINH: khong tai anh ve (demo/CI offline, khong can bucket).
+  //   local = ghi xuong dia — CHI cho dev.
+  //   s3    = chuan S3. GCS hom nay (XML API + khoa HMAC), OVHcloud sau nay, MinIO khi dev.
+  //           KHONG dung @google-cloud/storage de khong khoa chat vao Google (chot 11/08/2026).
+  MEDIA_STORE: z.enum(['none', 'local', 's3']).default('none'),
+  MEDIA_BUCKET: z.string().min(1).optional(),
+  MEDIA_ENDPOINT: z.string().url().optional(),
+  MEDIA_REGION: z.string().default('auto'),
+  MEDIA_ACCESS_KEY_ID: z.string().min(1).optional(),
+  MEDIA_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  MEDIA_LOCAL_DIR: z.string().default('./tmp/media'),
+  // Tran byte cho mot anh. Vuot -> huy tai giua chung, ghi mediaError, tin VAN o trong DB.
+  MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(15_000_000),
+  MEDIA_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  // So luot tai song song (p-limit) — chan bao tai khi nhieu nhom cung gui anh.
+  MEDIA_CONCURRENCY: z.coerce.number().int().positive().default(3),
+  // Ten mien duoc phep tai anh, CSV. URL anh den TU TIN NHAN = du lieu ben ngoai, nen day la cong
+  // chan SSRF: khong de server bi sai di goi dia chi noi bo / metadata may chu dam may.
+  // De RONG = chan het (fail closed), khong phai "cho phep tat ca".
+  MEDIA_ALLOWED_HOSTS: z.string().default('zdn.vn'),
   ADMIN_UI: z.enum(['on', 'off']).default('off'),
   // Thong tin dang nhap panel. Mac dinh la GIA TRI DEV (khop nguyen tac env.ts: co default de chay
   // local); BAT BUOC dat lai o production (dat ADMIN_PASSWORD/ADMIN_COOKIE_SECRET manh qua env).
@@ -145,6 +168,19 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     ].filter((issue): issue is string => issue !== null);
     if (missingFlowiseVariables.length > 0) {
       throw new EnvValidationError(missingFlowiseVariables);
+    }
+  }
+  // MEDIA_STORE=s3 ma thieu cau hinh -> FAIL FAST. Neu am tham quay ve "khong luu" thi anh moi
+  // ngay bi vut ma khong ai biet, va khong hoi to duoc (Zalo xoa object sau <=35 ngay).
+  if (data.MEDIA_STORE === 's3') {
+    const missingMediaVariables = [
+      !data.MEDIA_BUCKET ? 'MEDIA_BUCKET: BAT BUOC khi MEDIA_STORE=s3' : null,
+      !data.MEDIA_ENDPOINT ? 'MEDIA_ENDPOINT: BAT BUOC khi MEDIA_STORE=s3' : null,
+      !data.MEDIA_ACCESS_KEY_ID ? 'MEDIA_ACCESS_KEY_ID: BAT BUOC khi MEDIA_STORE=s3' : null,
+      !data.MEDIA_SECRET_ACCESS_KEY ? 'MEDIA_SECRET_ACCESS_KEY: BAT BUOC khi MEDIA_STORE=s3' : null,
+    ].filter((issue): issue is string => issue !== null);
+    if (missingMediaVariables.length > 0) {
+      throw new EnvValidationError(missingMediaVariables);
     }
   }
   if (data.CHANNEL_MODE === 'hybrid' && !data.ZALO_BOT_TOKEN) {

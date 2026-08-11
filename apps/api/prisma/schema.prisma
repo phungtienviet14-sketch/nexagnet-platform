@@ -200,6 +200,13 @@ model Message {
   senderDisplayName String?
   text              String
   imageUrl          String?
+  // Dot A' Task 2 — anh da TAI VE kho ben vung. `imageUrl` la link Zalo, chet sau <=35 ngay
+  // (Zalo xoa object phia server); `mediaKey` moi la thu con lai sau do.
+  // mediaError != null = da thu tai va that bai — tin VAN nguyen ven, chi thieu file anh.
+  mediaKey          String?
+  mediaBytes        Int?
+  mediaFetchedAt    DateTime?
+  mediaError        String?
   sentAt            DateTime
   receivedAt        DateTime @default(now())
   raw               Json?

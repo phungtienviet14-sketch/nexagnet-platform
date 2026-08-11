@@ -28,6 +28,8 @@ class RecordingMessagesRepository extends MessagesRepository {
   async attachOrder(orderId: string, messageId: string): Promise<void> {
     this.attached.push({ orderId, messageId });
   }
+
+  async recordMedia(): Promise<void> {}
 }
 
 class DuplicateMessagesRepository extends MessagesRepository {
@@ -36,6 +38,7 @@ class DuplicateMessagesRepository extends MessagesRepository {
   }
 
   async attachOrder(): Promise<void> {}
+  async recordMedia(): Promise<void> {}
 }
 
 class ThrowingMessagesRepository extends MessagesRepository {
@@ -44,6 +47,7 @@ class ThrowingMessagesRepository extends MessagesRepository {
   }
 
   async attachOrder(): Promise<void> {}
+  async recordMedia(): Promise<void> {}
 }
 
 function build(messages: MessagesRepository) {

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const send = vi.fn(async () => ({}));
+const send = vi.fn(async (_command: { input: Record<string, unknown> }) => ({}));
 vi.mock('@aws-sdk/client-s3', () => ({
   S3Client: class {
     send = send;
@@ -70,7 +70,7 @@ describe('S3MediaStore — GCS hom nay, OVHcloud sau nay, cung mot code', () => 
     await store.put(KEY, BODY, 'image/webp');
 
     expect(send).toHaveBeenCalledTimes(1);
-    const command = send.mock.calls[0]?.[0] as { input: Record<string, unknown> };
+    const command = send.mock.calls[0]![0];
     expect(command.input).toMatchObject({
       Bucket: 'ultty-media',
       Key: KEY,

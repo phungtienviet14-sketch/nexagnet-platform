@@ -24,6 +24,7 @@ import { KnowledgeController } from './knowledge/knowledge.controller.js';
 import { KnowledgeRepository, SeedKnowledgeRepository } from './knowledge/knowledge.repository.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { PrismaKnowledgeRepository } from './knowledge/prisma-knowledge.repository.js';
+import { mediaFetcherProvider, mediaStoreProvider } from './media/media.provider.js';
 import { InMemoryMessagesRepository, MessagesRepository } from './messages/messages.repository.js';
 import { PrismaMessagesRepository } from './messages/prisma-messages.repository.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
@@ -105,6 +106,10 @@ import { OperationalSettingsModule } from './settings/operational-settings.modul
       inject: [PrismaService],
     },
     { provide: KiotVietAdapter, useClass: KiotVietMockAdapter },
+    // Kho luu anh + worker tai anh (Dot A' Task 2). Mac dinh MEDIA_STORE=none -> khong I/O gi,
+    // demo/CI chay y nhu truoc; bat bang MEDIA_STORE=s3 khi co bucket.
+    mediaStoreProvider,
+    mediaFetcherProvider,
     parserProvider,
     ZaloUserClient,
     BotIdentityService,

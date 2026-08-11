@@ -23,6 +23,7 @@ class DuplicateMessagesRepository extends MessagesRepository {
     return { id: 'existing-message', duplicate: true };
   }
   async attachOrder(): Promise<void> {}
+  async recordMedia(): Promise<void> {}
 }
 
 function fakeDiscovery() {

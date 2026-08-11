@@ -10,6 +10,7 @@ import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { GroupDiscoveryService } from '../groups/group-discovery.service.js';
 import { GroupParticipantsRepository } from '../groups/group-participants.repository.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { MediaFetcherService } from '../media/media-fetcher.service.js';
 import { MessagesRepository, type SaveMessageResult } from '../messages/messages.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
@@ -48,6 +49,7 @@ export class PipelineService {
     @Optional() private readonly participants?: GroupParticipantsRepository,
     @Optional() private readonly knowledge?: KnowledgeService,
     @Optional() private readonly groupDiscovery?: GroupDiscoveryService,
+    @Optional() private readonly media?: MediaFetcherService,
   ) {}
 
   /**
@@ -212,6 +214,9 @@ export class PipelineService {
         this.logger.warn(
           `Tin trung ${message.platform}:${message.externalMessageId} — da co trong DB, khong tao dong moi.`,
         );
+      } else {
+        // Chi tin MOI moi tai anh: tin trung nghia la worker khac da tai (hoac dang tai) roi.
+        this.scheduleMediaFetch(result.id, message);
       }
       return result;
     } catch (error) {
@@ -219,6 +224,17 @@ export class PipelineService {
       this.logger.error(`Luu tin ${message.externalMessageId} that bai (pipeline van chay): ${detail}`);
       return null;
     }
+  }
+
+  /**
+   * Dat lich tai anh ve kho ben vung (Dot A' Task 2) — KHONG await co chu y.
+   *
+   * Link anh Zalo chet sau <=35 ngay nen phai tai, nhung tai la viec cua mang: cham hay hong deu
+   * khong duoc lam cham hoac lam rot viec chot don. Loi da duoc MediaFetcher nuot vao `mediaError`.
+   */
+  private scheduleMediaFetch(messageId: string, message: ChannelMessage): void {
+    if (!message.imageUrl || !this.media) return;
+    this.media.schedule(messageId, message.imageUrl, message.sentAt);
   }
 
   /** Noi don voi tin goc (FK orders.messageId); khong co dong don (vd hoi dap) -> bo qua. */

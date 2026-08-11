@@ -21,6 +21,36 @@
           "weekly/"
         ]
       }
+    },
+    {
+      "action": {
+        "storageClass": "NEARLINE",
+        "type": "SetStorageClass"
+      },
+      "condition": {
+        "age": 60,
+        "matchesPrefix": [
+          "media/"
+        ],
+        "matchesStorageClass": [
+          "STANDARD"
+        ]
+      }
+    },
+    {
+      "action": {
+        "storageClass": "COLDLINE",
+        "type": "SetStorageClass"
+      },
+      "condition": {
+        "age": 365,
+        "matchesPrefix": [
+          "media/"
+        ],
+        "matchesStorageClass": [
+          "NEARLINE"
+        ]
+      }
     }
   ]
 }

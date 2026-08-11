@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { ChannelMessage } from '@ultty/shared';
 import { PrismaService } from '../config/prisma.service.js';
-import { MessagesRepository, type SaveMessageResult } from './messages.repository.js';
+import {
+  MessagesRepository,
+  type MessageMedia,
+  type SaveMessageResult,
+} from './messages.repository.js';
 
 /**
  * Luu tin tren Postgres (PERSISTENCE=prisma). Chong trung bang unique (platform, externalMessageId)
@@ -50,6 +54,20 @@ export class PrismaMessagesRepository extends MessagesRepository {
   async attachOrder(orderId: string, messageId: string): Promise<void> {
     // updateMany: don khong duoc luu (vd cau hoi khong tao dong don) -> 0 dong, khong throw.
     await this.prisma.order.updateMany({ where: { id: orderId }, data: { messageId } });
+  }
+
+  async recordMedia(messageId: string, media: MessageMedia): Promise<void> {
+    // updateMany vi cung ly do voi attachOrder: tin co the khong con -> 0 dong, khong throw.
+    // Ghi ca nhanh null de mot lan tai lai thanh cong xoa duoc mediaError cu.
+    await this.prisma.message.updateMany({
+      where: { id: messageId },
+      data: {
+        mediaKey: media.key ?? null,
+        mediaBytes: media.bytes ?? null,
+        mediaFetchedAt: media.fetchedAt ?? null,
+        mediaError: media.error ?? null,
+      },
+    });
   }
 }
 
