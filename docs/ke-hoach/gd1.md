@@ -145,6 +145,67 @@ Báo giá tính 300 nhóm × 5 tin/nhóm/ngày × 30 ngày ≈ 45.000 tin ≈ **
 1. **D21 chưa đo** — zca đọc **mọi** tin, không phải 5 tin/nhóm/ngày. *(Nếu chọn Bot thuần thì mention-gating tự giới hạn lưu lượng — chi phí sát thực tế hơn nhiều.)*
 2. **Đơn giá $0,00135/tin là của model hiện tại.** D17 bắt buộc đổi Claude ⇒ tính lại. GĐ1 còn sinh **văn bản** (tốn output token), không chỉ trích xuất JSON.
 
+### CHẶN E — Ảnh mất vĩnh viễn; ảnh không chú thích bị vứt 🔴
+
+**Đo thật 11/08/2026** trên URL ảnh lấy từ log PoC `updates-2026-07-07-06-05.jsonl` (cách 35 ngày):
+
+| Phép đo | Kết quả | Ý nghĩa |
+|---|---|---|
+| `HEAD` URL ảnh 07/07 | **404**, `server: za-ngx-srv` | Object đã bị Zalo xóa |
+| Cùng URL + UA Chrome + `Referer: chat.zalo.me` | **404** | ❌ Không phải chặn hotlink |
+| Ảnh tĩnh khác trên `zdn.vn` | **200** `image/png` 346 KB | ✅ Hạ tầng CDN vẫn sống |
+
+URL có dạng `https://photo-stal-16.zdn.vn/gr/jpg/<hash>/<key>.jpg` — **không query string, không chữ ký, không `expires`** ⇒ không phải pre-signed URL có TTL, mà Zalo **xóa object phía server**. Cửa sổ sống **≤ 35 ngày** (chưa đo được cận dưới).
+
+**Hai lỗ hổng trong code hiện tại:**
+
+1. **Không lưu ảnh.** `Message.imageUrl` chỉ là `String?` — một cái link. Toàn bộ `apps/api/src` không có chỗ nào tải ảnh về (`writeFile` duy nhất là ghi phiên zca). Zalo xóa object ⇒ **DB còn mỗi link chết**.
+2. **Ảnh không chú thích bị vứt hoàn toàn.** `bot-poller.ts:73` và `zca-message.ts:27` đều `if (!text) return null`, cộng `text: z.string().min(1)` trong `channelMessageSchema` ⇒ ảnh gửi trần **không vào DB, không để lại dòng nào**. Đây không phải mất-sau-35-ngày mà là **chưa bao giờ được lưu**.
+
+**Hệ quả:**
+- Vi phạm trực tiếp `CLAUDE.md`: *"Lưu mọi tin nhắn/đơn về DB ngay khi nhận — không được để mất dữ liệu theo kênh"*
+- Spec khách **2.3.1** *"Nhận ảnh + text từ nhóm vận chuyển"* — ảnh biên bản giao hàng thường gửi trần ⇒ **agent 2.3 không chạy được như thiết kế**
+- Mất bằng chứng đối soát khi đơn tranh chấp
+- Mất bộ eval ảnh (B5/F4): không có ảnh cũ thì không đo được parser vision
+
+**Giải pháp — kết quả `search-first` 11/08/2026:**
+
+| Nhu cầu | Quyết định | Lý do |
+|---|---|---|
+| **Vòng đời theo tuổi** | **GCS Object Lifecycle — 0 dòng code** ✅ | Đã có `deploy/netviet/gcs-lifecycle.json`; chỉ thêm rule prefix `media/`. Server-side, miễn phí |
+| Đẩy lên object storage | **Adopt** `@aws-sdk/client-s3` + `@aws-sdk/lib-storage` 3.1107.0 · Apache-2.0 | **Sửa 11/08 sau khi chốt nền tảng:** giữ GCP, sau này chuyển **OVHcloud** ⇒ **không** dùng `@google-cloud/storage` (khoá chặt vào Google). Chuẩn S3 chạy trên GCS (XML API + HMAC key), OVHcloud Object Storage, và MinIO khi dev offline — đổi nhà cung cấp chỉ cần đổi `MEDIA_ENDPOINT`/`MEDIA_BUCKET`/khoá, **không sửa code** |
+| Nén ảnh | **Adopt** `sharp` 0.35.3 · Apache-2.0 | Resize 1600px + WebP q80 ⇒ giảm ~5-10× |
+| Giới hạn tải đồng thời | **Adopt** `p-limit` 7.3.1 · MIT · 1 dep | Chống bão tải khi nhiều nhóm gửi ảnh |
+| Tải HTTP | **Build (0 dep)** — `fetch` sẵn Node 22 | Không cần thêm gì |
+| Trừu tượng driver | **Build ~80 dòng**, *không* dùng `flydrive` 2.1.0 | Repo đã có khuôn `ChannelAdapter` + `channel.provider.ts` chọn theo env — nhân bản khuôn đó nhất quán hơn thêm khái niệm mới |
+
+Module mới `apps/api/src/media/` nhân bản đúng khuôn `channels/`:
+
+| File | Vai trò | Bám theo |
+|---|---|---|
+| `media-store.ts` | interface + DI token | `channel-adapter.ts` + `channel.tokens.ts` |
+| `media.provider.ts` | chọn theo `MEDIA_STORE=none\|local\|s3` | `channel.provider.ts` |
+| `noop-media.store.ts` | **mặc định** — demo/CI offline, không I/O | `mock.adapter.ts` |
+| `local-media.store.ts` | ghi đĩa, cho dev | — |
+| `s3-media.store.ts` | production — GCS hôm nay, OVHcloud sau này, cùng một code | — |
+| `media-fetcher.service.ts` | tải → `sharp` kiểm tra + nén → lưu → ghi khoá | `p-limit` chặn đồng thời |
+
+Prisma thêm vào `Message`: `mediaKey String?` · `mediaBytes Int?` · `mediaFetchedAt DateTime?` · `mediaError String?`.
+
+> **Nguyên tắc bắt buộc:** tải ảnh hỏng **KHÔNG được làm rớt tin** — ghi `mediaError`, tin vẫn vào DB. Bám lỗi-mềm như `zca-message.ts:62` (`try/catch → undefined`).
+>
+> **Ảnh không bao giờ chạm đĩa VM** — tải xong đẩy thẳng object storage. Điều này xoá hẳn kịch bản đầy đĩa 3,4 tháng trong bài toán dung lượng.
+
+**Vòng đời — yêu cầu khách: giữ ảnh ≥ 60 ngày** (chốt 11/08/2026). Rule cho prefix `media/`:
+
+| Tuổi | Lớp lưu trữ | Ghi chú |
+|---|---|---|
+| 0–60 ngày | **Standard** | Truy cập nhanh — đúng yêu cầu 60 ngày |
+| 60–365 ngày | Nearline | Rẻ ~2×, vẫn lấy được (tối thiểu 30 ngày lưu ⇒ không dính phí xóa sớm) |
+| > 365 ngày | Coldline | Lưu trữ dài hạn |
+
+**KHÔNG có rule `Delete`** — chuyển tầng chứ không xóa, tuân `CLAUDE.md` "không được để mất dữ liệu". Dung lượng 60 ngày sau nén WebP (~100 KB/ảnh): **0,9 GB** (1.500 tin/ngày) → **5,4 GB** (9.000) → **21 GB** (35.000).
+
 ---
 
 ## 5. Phạm vi chưa rõ — chờ khách chốt
@@ -173,6 +234,7 @@ Báo giá tính 300 nhóm × 5 tin/nhóm/ngày × 30 ngày ≈ 45.000 tin ≈ **
 | Đợt | Nội dung | Phụ thuộc |
 |---|---|---|
 | **A — Gỡ chặn** | Xác nhận Bot Platform trên nhóm test thật · chốt kiến trúc kênh (Q11) · đổi `PARSER_MODE=claude` · bảng giá T8 · A2/A4 · bật lại `AUTH_MODE` · gate `DemoController` | Q1, Q11, D17 |
+| **A′ — Ngừng mất ảnh** ⚡ | **Làm song song, không chờ khách.** Bỏ `if (!text) return null` + nới `channelMessageSchema` cho tin chỉ-ảnh · module `media/` (`MediaStore` + noop/local/gcs) · `MediaFetcher` (tải → `sharp` → GCS) · 4 trường `media*` vào Prisma · rule lifecycle prefix `media/` | Không phụ thuộc gì — **mỗi ngày trôi là mất vĩnh viễn ảnh của ngày đó** |
 | **B — Nền hội thoại** | Trường quote/reply vào `channelMessageSchema` · ngữ cảnh N tin gần nhất cho parser · ngưỡng 50 · giá "Lẻ" · **mô hình hàng tặng/khuyến mãi** | A · Q2-Q4 · Q8 |
 | **C — Agent Bán hàng** | Kho nội dung (FAQ/ảnh/catalog/profile) · `sendPhoto` cho ChannelAdapter · tầng soạn trả lời + duyệt | B · Q12 |
 | **D — Agent CSKH** | Scheduler · lịch âm · ngày sinh đại lý · template + duyệt hàng loạt | C · Q6 |
@@ -192,6 +254,9 @@ Báo giá tính 300 nhóm × 5 tin/nhóm/ngày × 30 ngày ≈ 45.000 tin ≈ **
 | Chi phí LLM vượt 2tr/tháng | 🟠 TB | Đo D21 trên nhóm thật trước khi cam kết |
 | Phạt tới 5% doanh thu (D22) | 🟠 TB | Nộp hồ sơ Mẫu 09 trước khi chạy PII thật |
 | Tính sai tổng đơn có hàng tặng | 🟠 TB | Mô hình quà tặng ở Đợt B |
+| **Ảnh mất vĩnh viễn mỗi ngày chưa làm Đợt A′** | 🔴 **CAO** | Đo thật: link Zalo chết ≤35 ngày, ảnh trần **chưa từng** vào DB. Không hồi tố được — làm Đợt A′ **ngay**, song song mọi thứ khác |
+| Tải ảnh làm nghẽn pipeline | 🟠 TB | `p-limit` + tải **bất đồng bộ sau khi** tin đã vào DB; lỗi tải ghi `mediaError`, không rớt tin |
+| Ảnh chứa PII (CCCD, địa chỉ khách) đẩy lên GCS | 🟠 TB | Bucket private, không public URL, service account chỉ ghi prefix `media/` — thuộc phạm vi hồ sơ D22 |
 
 ---
 
