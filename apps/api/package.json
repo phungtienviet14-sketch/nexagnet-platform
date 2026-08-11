@@ -17,6 +17,7 @@
     "@adminjs/nestjs": "^7.0.0",
     "@adminjs/prisma": "^5.0.4",
     "@anthropic-ai/sdk": "^0.68.0",
+    "@aws-sdk/client-s3": "^3.1107.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@nestjs/common": "11.1.28",
     "@nestjs/core": "11.1.28",
@@ -28,8 +29,10 @@
     "dotenv": "^16.4.5",
     "express-formidable": "^1.2.0",
     "express-session": "^1.19.0",
+    "p-limit": "^7.3.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.35.3",
     "zca-js": "^2.1.2",
     "zod": "^4.4.3"
   },

@@ -51,4 +51,37 @@ describe('InMemoryMessagesRepository', () => {
     const repo = new InMemoryMessagesRepository();
     await expect(repo.attachOrder()).resolves.toBeUndefined();
   });
+
+  // Dot A' Task 2 — MediaFetcher tai anh XONG moi quay lai ghi ket qua vao dong tin da luu.
+  it('recordMedia ghi khoa object vao dong tin da luu', async () => {
+    const repo = new InMemoryMessagesRepository();
+    const { id } = await repo.save(msg('m-anh'));
+    const fetchedAt = new Date('2026-08-11T03:00:05.000Z');
+
+    await repo.recordMedia(id, { key: 'media/2026/08/ckabc.webp', bytes: 98_304, fetchedAt });
+
+    expect(repo.list()[0]).toMatchObject({
+      mediaKey: 'media/2026/08/ckabc.webp',
+      mediaBytes: 98_304,
+      mediaFetchedAt: fetchedAt,
+    });
+  });
+
+  it('recordMedia nhanh loi chi ghi mediaError, KHONG dung toi noi dung tin', async () => {
+    const repo = new InMemoryMessagesRepository();
+    const { id } = await repo.save(msg('m-anh-hong'));
+
+    await repo.recordMedia(id, { error: 'HTTP 404' });
+
+    expect(repo.list()[0]?.mediaError).toBe('HTTP 404');
+    expect(repo.list()[0]?.mediaKey).toBeUndefined();
+    expect(repo.list()[0]?.text).toBe('gui 10 ghe felix');
+  });
+
+  // Tin co the da bi xoa/khong ton tai khi anh tai xong — khong duoc nem, vi loi o day
+  // se noi len thanh unhandled rejection trong tien trinh nen.
+  it('recordMedia voi id khong ton tai -> khong throw', async () => {
+    const repo = new InMemoryMessagesRepository();
+    await expect(repo.recordMedia('khong-co', { error: 'x' })).resolves.toBeUndefined();
+  });
 });
