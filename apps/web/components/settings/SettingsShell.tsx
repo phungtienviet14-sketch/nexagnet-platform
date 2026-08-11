@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useBranding } from '../../lib/branding';
 import { parseSettingsSummary, settingsApi } from '../../lib/settings';
 import { AuditSettings } from './AuditSettings';
 import { AutomationSettings } from './AutomationSettings';
@@ -22,6 +23,7 @@ const CHANNEL_LABELS = {
 } as const;
 
 export function SettingsShell() {
+  const branding = useBranding();
   const [activeTab, setActiveTab] = useState<SettingsTabId>('zalo');
   const summaryQuery = useQuery({
     queryKey: ['settings-summary'],
@@ -91,7 +93,7 @@ export function SettingsShell() {
         </div>
         <div className="settings-hero__title">
           <div>
-            <p className="settings-eyebrow">U Ultty · Bàn điều khiển nguồn sự thật</p>
+            <p className="settings-eyebrow">{branding.shortName} · Bàn điều khiển nguồn sự thật</p>
             <h1>Cấu hình vận hành</h1>
           </div>
           <p>

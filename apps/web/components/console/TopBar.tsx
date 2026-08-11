@@ -1,5 +1,6 @@
 'use client';
 
+import { useBranding } from '../../lib/branding';
 import type { DemoConfig } from '@netviet/shared';
 
 export type ConsoleView = 'console' | 'broadcast';
@@ -58,13 +59,14 @@ export function TopBar({
   autoSendPending,
   onAutoSendChange,
 }: Props) {
+  const branding = useBranding();
   const channelMode = config?.channelMode ?? 'mock';
   const autoSendOn = config?.autoSend === 'on';
   const liveOn = streaming && connected;
   return (
     <header className="topbar">
       <div className="brand">
-        <h1>Ultty AI</h1>
+        <h1>{branding.productName}</h1>
         <span className="sub">Trung tâm điều hành</span>
       </div>
 

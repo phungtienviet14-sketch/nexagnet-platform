@@ -12,6 +12,7 @@ WORKDIR /app
 FROM base AS deps
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/tenant/package.json packages/tenant/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY tools/poc-zalo-bot/package.json tools/poc-zalo-bot/
@@ -23,12 +24,20 @@ COPY . .
 RUN corepack pnpm --filter @netviet/api exec prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=""
+# GOI KHACH. `next build` nuong chuoi thuong hieu vao trang tinh nen phai biet goi nao NGAY LUC
+# BUILD. Doi khach: --build-arg TENANT=<slug> (Dot B3 se dua han vao script deploy).
+ARG TENANT=ultty
+ENV TENANT=${TENANT}
 RUN corepack pnpm --filter @netviet/shared --filter @netviet/api --filter @netviet/web build
 
 FROM base AS runtime
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=""
+# GOI KHACH. `next build` nuong chuoi thuong hieu vao trang tinh nen phai biet goi nao NGAY LUC
+# BUILD. Doi khach: --build-arg TENANT=<slug> (Dot B3 se dua han vao script deploy).
+ARG TENANT=ultty
+ENV TENANT=${TENANT}
 COPY --from=build /app /app
 LABEL org.opencontainers.image.title="NetViet Zalo AI Orders"
 CMD ["node", "apps/api/dist/main.js"]

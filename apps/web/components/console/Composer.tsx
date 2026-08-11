@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useBranding } from '../../lib/branding';
 import type { DemoGroup } from '../../lib/api';
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
 
 /** Bom 1 tin GIA vao pipeline (luoi an toan khi demo). Nhan gon — huong dan o kich ban. */
 export function Composer({ onSend, samples, groups, isSending }: Props) {
+  const branding = useBranding();
   const [text, setText] = useState('');
   const [chatId, setChatId] = useState('');
 
@@ -51,7 +53,7 @@ export function Composer({ onSend, samples, groups, isSending }: Props) {
         value={text}
         spellCheck={false}
         onChange={(e) => setText(e.target.value)}
-        placeholder="vd: @Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT"
+        placeholder={branding.composerPlaceholder}
       />
 
       {samples.length > 0 && (
