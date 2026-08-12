@@ -8,6 +8,7 @@ Khu vực này chứa tài liệu do đội phát triển hoặc AI coding tạo
 2. [`ke-hoach/gd1-ultty.md`](ke-hoach/gd1-ultty.md) — phạm vi và thứ tự triển khai GĐ1 Ultty.
 3. [`kien-truc/he-thong.md`](../kien-truc/he-thong.md) — kiến trúc base đa khách và sơ đồ as-built/target.
 4. [`../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md`](../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) — nghiệp vụ đã đối chiếu nguồn gốc trước khi sửa rules.
+5. [`van-hanh/checklist-go-live.md`](van-hanh/checklist-go-live.md) — **đọc trước khi bật pilot dữ liệu thật**: 9 cổng máy tự chấm, 2 công tắc đang khóa có chủ ý, chặn pháp lý, trình tự bật và rollback.
 
 ## Cấu trúc
 
@@ -16,6 +17,7 @@ phat-trien/
   kien-truc/       Quyết định kỹ thuật, sơ đồ, PoC và contract hệ thống.
   ke-hoach/        Roadmap, phạm vi từng đợt và nguồn trạng thái duy nhất.
   kiem-thu/tdd/    Bằng chứng RED → GREEN → REFACTOR của các lát cắt đã làm.
+  van-hanh/        Thủ tục vận hành: điều kiện bật pilot, trình tự bật, rollback.
 ```
 
 Khi thêm tài liệu mới, ưu tiên cập nhật tài liệu hiện có. Chỉ tạo file mới khi có vòng đời hoặc đối tượng đọc khác biệt rõ ràng.

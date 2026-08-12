@@ -561,16 +561,32 @@ A. Baseline xanh ─┬─→ B. Bịt lỗ phân quyền ─┬─→ E. Nối 
 
 ### Đợt F — Trung tính hóa base (song song, không chặn)
 
-**G1-12 ⬜ CÒN LẠI — Bỏ danh tính nhà cung cấp ERP khỏi nhân**
+**G1-12 ✅ XONG — Bỏ danh tính nhà cung cấp ERP khỏi nhân**
 - *Current state:* vi phạm còn lại duy nhất so với `nen-tang-da-khach.md`: `app.module.ts` bind cứng `{ provide: ErpPort, useClass: KiotVietMockAdapter }`; route `@Controller('kiotviet')`; cột `Order.kiotVietCode`. Tên khách khác chỉ còn trong **comment**, không có nhánh `if tenant === …` nào trong mã nguồn.
 - *Acceptance:* adapter ERP chọn theo config runtime; route/cột đổi tên trung tính (giữ tương thích ngược cho route cũ nếu app web còn dùng); migration đổi tên cột forward-safe.
 - *Ghi chú:* đây là phần B3 còn treo của đợt nền tảng đa khách.
 
 ### Đợt G — E2E và go-live
 
-**G1-13 ⛔ CHẶN NGOÀI (cần D16 + D20 + credential) — E2E kênh Zalo (§10):** tin thật → ingest → DB → parser → rules → auto-confirm/handoff → outbound; contract cho duplicate/reconnect/restart.
+**G1-13 ✅ XONG phần code-complete · ⛔ phần chạy thật vẫn CHẶN NGOÀI — E2E kênh Zalo (§10)**
+- *Đã làm:* `apps/api/src/e2e/zalo-order-path.e2e.spec.ts` chạy trên **đồ thị DI thật**
+  (`AppModule.forRoot()` + `NestFactory.createApplicationContext`), chỉ thay **một** biên giới là
+  mạng của Zalo (`setMessageHandler`/`isGroupAllowed`/`sendMessage` ghi đè trên chính thể hiện
+  `ZaloUserClient` trong container, nên `ZcaAdapter` đi qua cùng transport giả). Phủ: đơn ≤ ngưỡng
+  → `sent` + handoff Sale + nhãn tự động · vượt ngưỡng → không gửi · nhóm chưa map → tin vẫn vào DB
+  (I1) · trùng trong tiến trình · **khởi động lại** (guard rỗng ⇒ kho tin bền vững là cổng chống
+  trùng duy nhất) · **nối lại kênh** (Zalo phát lại tin cũ không nhân đôi đơn).
+- *Đã đo có răng:* tắt cổng `saved.duplicate` trong `PipelineService.intake` làm đúng hai bài
+  restart/reconnect đỏ, rồi hoàn nguyên.
+- *Còn chặn ngoài, KHÔNG code được:* đăng nhập tài khoản Zalo thật — cần **D16** (văn bản chấp nhận
+  rủi ro ToS) + **D20** (ai đứng tên tài khoản phụ) + credential. Xem
+  [van-hanh/checklist-go-live.md §3](../van-hanh/checklist-go-live.md).
 
-**G1-14 ⬜ CÒN LẠI — Checklist go-live + cập nhật trạng thái:** chốt `tong-quan.md` theo kết quả thật.
+**G1-14 ✅ XONG — Checklist go-live + cập nhật trạng thái**
+- *Đã làm:* [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) — 9 cổng máy tự chấm
+  (đối chiếu `operational-readiness.ts`), 2 công tắc khóa có chủ ý (`CHANNEL_MODE=mock`,
+  `AUTH_MODE=none` do `render-secrets.sh` ép), 5 chặn pháp lý, 4 nghiệp vụ fail-closed, trình tự bật
+  8 bước và đường rollback. Trạng thái hôm nay chốt ở `tong-quan.md`, không nằm ở đây.
 
 ### Không nằm trong kế hoạch này
 

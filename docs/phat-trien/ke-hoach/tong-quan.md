@@ -2,8 +2,9 @@
 
 > **Vai trò:** tài liệu DUY NHẤT giữ **trạng thái** mọi kế hoạch (đang ở đâu, xong gì, chờ gì, quyết định treo, dữ liệu thiếu). Các kế hoạch con CHỈ mô tả phạm vi/thiết kế — **không chứa trạng thái**; muốn biết tiến độ, quay về đây.
 > **Kế hoạch con:** [gd1-ultty.md](gd1-ultty.md) (**GĐ1 theo spec khách, đọc trước khi làm tiếp**) · [nen-tang.md](dot-0-nen-tang.md) (Đợt 0 — nền phải xong) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4 — 6 tính năng mới) · [nen-tang-da-khach.md](../../kien-truc/nen-tang-da-khach.md) (**Đợt B1-B5 — base dùng chung cho nhiều khách**, lập 11/08 khi có khách thứ 2 Amico; đề xuất D26-D31).
+> **Thủ tục bật pilot:** [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) — **đọc trước khi đụng vào biến môi trường của stack khách**.
 > **Thay thế (11/07/2026):** `tien-do-va-ke-hoach.md` + `checklist-du-lieu-khach.md` + phần trạng thái của `ke-hoach-dai-han.md` + 2 plan code trong `.claude/plans/` — tất cả đã xóa, git history còn.
-> Cập nhật: **12/08/2026** — đã nhập 8 quyết định GĐ1 mới + inventory Google Drive.
+> Cập nhật: **12/08/2026** — GĐ1 **code-complete** (G1-01…G1-14, 8 commit trên `gd1/code-complete`); 9 cổng go-live đạt 1/9, phần còn lại là dữ liệu + pháp lý + công tắc vận hành.
 
 ---
 
@@ -11,13 +12,17 @@
 
 - **🟢 PHẠM VI GĐ1 ĐÃ CHỐT (12/08/2026):** AI được tự gửi vào nhóm. Đơn hợp lệ có tổng số lượng `≤` ngưỡng tenant (Ultty hiện chốt **50**) → rules tính → gửi xác nhận → trạng thái `sent`/hàng việc báo Sale nhập KiotViet thủ công; `>` ngưỡng hoặc thiếu dữ liệu → Sale can thiệp trước gửi. GĐ1 không gọi ERP/KiotViet. Business policy nằm trong gói tenant; `AUTO_SEND` chỉ là kill switch runtime có audit.
 - **🟢 DRIVE ĐÃ KIỂM KÊ TOÀN CÂY (12/08/2026):** 122 thư mục, 825 file. Boundary chốt: binary gốc ở Drive/object storage; provenance, product mapping, FAQ, link catalog/video và nội dung tư vấn ở DB/config, quản trị qua `/settings`. Chỉ 5 FAQ dạng DOCX có nội dung; EUS Felix có media nhưng FAQ trống. **Không có bảng giá tháng 8** và **không có nguồn xác nhận công thức 30+1/10+1** ⇒ A6/A7 còn thiếu, không fallback/không suy diễn.
-- **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Điểm lệch thật sự còn lại là baseline đỏ + RBAC hở + readiness mồ côi.)*
+- **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Ba điểm lệch tiếp theo (baseline đỏ · RBAC hở · readiness mồ côi) **cũng đã đóng** ở Đợt A/B/D.)*
 
-### 1.0 ▶️ BÀN GIAO CHO PHIÊN SAU (viết 12/08/2026, đọc mục này TRƯỚC)
+### 1.0 ▶️ BÀN GIAO CHO PHIÊN SAU (cập nhật 12/08/2026 — đọc mục này TRƯỚC)
 
 **Nhánh:** `gd1/code-complete` (tách khỏi `main` tại `d14f7a4`). **Chưa push, chưa merge.**
 
-**5 commit đã tạo:**
+**🟢 GĐ1 ĐÃ CODE-COMPLETE (12/08/2026).** Toàn bộ G1-01…G1-14 xong theo định nghĩa
+[gd1-ultty.md §15](gd1-ultty.md). **Chưa go-live** — phần còn thiếu là **dữ liệu khách + văn bản
+pháp lý + công tắc vận hành**, không phải code. Xem [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md).
+
+**8 commit đã tạo:**
 
 | Commit | Nội dung |
 |---|---|
@@ -26,17 +31,29 @@
 | `b2c7769` | Đợt C — gỡ số tiền phỏng đoán khỏi cấu hình (G1-06) |
 | `d193b98` | Đợt D — **sửa 3 lỗi làm API không boot được** + nối readiness (G1-07, G1-08) |
 | `bb3a56b` | Đợt E — reply/quote kênh Bot + bằng chứng kỳ giá (G1-09…11) |
+| `5b4b6c6` | Đợt F — chọn adapter ERP theo gói khách + route/cột trung tính (G1-12) |
+| `fe13f7b` | Đợt G — E2E đường tin Zalo trên **đồ thị DI thật** (G1-13) |
+| `21265d5`, `809c0f6`, `c024e29` | dọn ảnh design sai + sắp xếp lại tài liệu |
 
-**Baseline hiện tại — XANH TOÀN BỘ:** `api 561 pass/23 skip` · `web 43` · `shared 83` ·
-`tenant 23` · `poc-parser 4` · `deploy-routes 10` · `typecheck 0` · `lint 0` · `build 0`.
+**Baseline hiện tại — XANH TOÀN BỘ:** `api 574 pass/23 skip` · `web 43` · `shared 83` ·
+`tenant 26` · `poc-parser 4` · `deploy-routes 10` · `typecheck 0` · `lint 0` · `build 0`.
 
-**Việc còn lại: G1-12 → G1-14** (chi tiết ở [gd1-ultty.md §13](gd1-ultty.md)):
-- **G1-12** (Đợt F) — trung tính hóa ERP: `app.module.ts` còn bind cứng `KiotVietMockAdapter` vào
-  `ErpPort`; route `@Controller('kiotviet')`; cột `Order.kiotVietCode`. Migration đổi tên cột phải
-  **forward-safe, giữ dữ liệu cũ**; đây là việc kiến trúc song song, **không được làm chậm/vỡ GĐ1**.
-- **G1-13** (Đợt G) — E2E kênh Zalo. **Chặn bởi bên ngoài**, không code được: cần bật kênh thật
-  (D16 văn bản chấp nhận rủi ro ToS + D20 ai đứng tên tài khoản phụ) và credential.
-- **G1-14** — chốt tài liệu/trạng thái cuối.
+**▶️ VIỆC TIẾP THEO KHÔNG PHẢI LẬP TRÌNH.** 9 cổng go-live máy tự chấm hiện đạt **1/9**
+(`tenant.loaded`). Đường ngắn nhất tới pilot, đúng thứ tự:
+
+1. **A6 — bảng giá tháng hiện hành.** Chặn *thực tế* nặng nhất: tra giá fail-closed chỉ nhận kỳ
+   `active` đúng tháng hiện tại, seed là `2026-07` ⇒ **0 giá active ⇒ MỌI đơn rơi handoff, kể cả đơn
+   ≤50**. Bật kênh Zalo trước khi có bảng giá = bật một hệ thống không tự chốt được đơn nào.
+   UI nhập đã có sẵn, chỉ thiếu số.
+2. **D16 + D20** — văn bản chấp nhận rủi ro ToS Zalo + ai đứng tên tài khoản phụ. Không có hai thứ
+   này thì `CHANNEL_MODE` không được rời `mock`.
+3. **A4** (map nhóm ↔ đại lý cho nhóm pilot) · **A2/A3** (deal riêng, biểu phí COD/ship).
+4. **Công tắc deploy đang khóa có chủ ý:** `render-secrets.sh` ép `CHANNEL_MODE='mock'` và
+   `AUTH_MODE='none'` mỗi lần deploy; `MEDIA_STORE`/`DATA_CLASSIFICATION` chưa render nên mặc định
+   `none`/`test`. Mở từng cái theo trình tự §5 của checklist go-live, **không mở đồng loạt**.
+5. **B1-B2** — golden dataset; chưa có thì `golden.evaluated` không bao giờ `ready`.
+6. **Parser**: stack pilot chạy `PARSER_MODE=flowise` → DeepSeek, **chưa nằm trong danh sách bên thứ
+   3 được duyệt** (KiotViet + Claude). Dữ liệu khách thật phải đổi `claude` hoặc bổ sung DPA.
 
 **⚠️ BẪY MÔI TRƯỜNG — phiên sau phải biết, nếu không sẽ mất thời gian đúng như phiên này:**
 1. `pnpm dev:api` cần `TENANT=ultty`. File `.env` ở gốc repo **thiếu dòng này** (đã thêm cục bộ
@@ -96,27 +113,27 @@ giờ dừng. Nay cache `?? null`.
 | Capability | Status | Evidence | Gap |
 |---|---|---|---|
 | Kiến trúc canonical | **DONE** | `nen-tang-da-khach.md` generic, không tên khách, không trạng thái | — |
-| Tenant isolation | **PARTIAL** | không có nhánh `if tenant===`; tên khách chỉ trong comment; `TENANT` không mặc định | `ErpPort` bind cứng `KiotVietMockAdapter`; route `/kiotviet`; cột `Order.kiotVietCode` → G1-12 |
+| Tenant isolation | **DONE** | không có nhánh `if tenant===`; tên khách chỉ trong comment; `TENANT` không mặc định; adapter ERP chọn theo gói khách + route/cột trung tính (`5b4b6c6`) | — |
 | P1 auto-confirm | **DONE** (code) | `order-auto-confirmation.ts` + `pipeline.service.ts:272`; ngưỡng từ `tenant.orderAutomation`; inclusive 50 | Hiện **không chạy được** vì không có kỳ giá active → xem P2.1 |
 | P2.1 price period | **DONE** | `knowledge/price-periods.ts` chỉ nhận đúng tháng + `active`, **không fallback**; wire ở `knowledge.repository.ts:20`, `knowledge.service.ts:46`, `prisma-knowledge.repository.ts:19`; migration `20260812123000_price_periods` | Seed là `2026-07`, tháng hiện tại `2026-08` ⇒ **0 giá active ⇒ mọi đơn handoff**. Cần A6 + G1-10 |
 | P2.2 retail advice | **DONE** | `tenant.retailAdvice{priceField,qualifier}`; dùng ở `risk-rules.ts:58`, `agent-orchestrator.service.ts:328,362` | — |
 | P4 content schema | **DONE** | 8 model: `SourceProvenance/Asset/ProductAsset/FAQ/AdviceContent/ContentLink/ContentReadiness`; migration `20260812141000_product_content` | — |
 | P4 import | **DONE** (code) | `content/content-import.service.ts` + `ContentSourcePort` + `local-manifest`/`google-drive` adapter | Chưa nhập dữ liệu thật (thiếu quyền Drive) |
 | P4 settings UI | **DONE** | `ContentSettings.tsx` gắn trong `SettingsShell` (9 tab) | — |
-| Agent bán hàng | **PARTIAL** | `ContentService.productAdvice()` nối vào `AgentOrchestrator:306`, fail-safe → handoff khi thiếu content approved | Gửi ảnh/catalog theo channel capability chưa kiểm chứng → G1-11 |
+| Agent bán hàng | **DONE** | `ContentService.productAdvice()` nối vào `AgentOrchestrator:306`, fail-safe → handoff khi thiếu content approved; gửi ảnh theo `channel-capabilities`, video/PDF/catalog gửi **link** (Bot Platform `sendVideo`/`sendFile` trả 404 — đã đo 11/08) | — |
 | P3 campaign domain | **DONE** | `Campaign/CampaignTarget/CampaignDelivery` + 3 enum; migration `20260812150000_campaigns` | — |
-| P3 scheduler | **PARTIAL** | `campaign.scheduler.ts` `setInterval` theo `tickIntervalSeconds`; claim bền có `claimExpiresAt` lease + `$transaction` + SQL claim; retry/cancel có | **Không compile** (G1-01) |
+| P3 scheduler | **DONE** | `campaign.scheduler.ts` `setInterval` theo `tickIntervalSeconds`; claim bền có `claimExpiresAt` lease + `$transaction` + SQL claim; retry/cancel có; compile xanh từ `a2091f4` | — |
 | P3 campaign UI | **DONE** | `CampaignSettings.tsx` trong `SettingsShell` | — |
-| Parser context/reply | **PARTIAL** | `ConversationContextBuilder` bounded (6 tin/4.000 ký tự), khóa theo `externalChatId`; `validateContextualParse` fail-safe → `intent=khac`; `zca-message.ts` map quote | `bot-poller.ts` **không** map reply; `replyTo` chỉ nằm trong `Message.raw` → G1-09 |
+| Parser context/reply | **DONE** | `ConversationContextBuilder` bounded (6 tin/4.000 ký tự), khóa theo `externalChatId`; `validateContextualParse` fail-safe → `intent=khac`; **cả** `zca-message.ts` **và** `bot-poller.ts` map quote → `replyTo` (`bb3a56b`) | — |
 | Auth (session) | **DONE** (code) | `AuthModule`, `Session` model, argon2, `csrf-sync`, migration `20260812162000_auth_sessions`; `AUTH_MODE=session` ép `SESSION_SECRET`≥32 + prisma ở production | Web test đỏ (G1-03) |
-| RBAC | **PARTIAL** | `@Roles` có ở campaign · content · master-data · users · broadcast | **Hở:** `settings`·`orders`·`knowledge`·`demo`·`zalo`·`group-participants` → G1-05 |
+| RBAC | **DONE** | `@Roles` phủ cả 6 controller từng hở (`settings`·`orders`·`knowledge`·`demo`·`zalo`·`group-participants`) + campaign · content · master-data · users · broadcast; `roles-coverage.spec.ts` chặn hồi quy (`351e912`) | — |
 | CSRF/session security | **DONE** (code) | `CsrfGuard` + `SessionAuthGuard` + `RolesGuard` đăng ký `APP_GUARD` | Test đỏ (G1-03) |
 | Production parser gate | **DONE** | `env.ts:207` `DATA_CLASSIFICATION=customer` ép `PARSER_MODE=claude` + `ANTHROPIC_API_KEY` + prisma + auth | — |
 | Media readiness | **DONE** | `env.ts:221` kênh thật + `MEDIA_STORE=none` → fail; `MEDIA_STORE=s3` thiếu config → fail-fast; `MediaHealthController` đã đăng ký | Vận hành chưa bật S3 |
-| Golden eval | **PARTIAL** | harness thật ở `tools/poc-parser/src/eval-core.ts` (field/intent/SKU/quantity/dealer) | `apps/api/src/readiness/golden-eval-report.ts` **mồ côi — 0 importer** → G1-08 |
-| Readiness UI | **TODO** | `apps/api/src/readiness/operational-readiness.ts` có code + test nhưng **0 importer**; chưa có tab §12 | → G1-07 |
-| Zalo E2E | **TODO** | `CHANNEL_MODE=mock` từ 08/08 | → G1-13 |
-| Go-live checklist | **TODO** | — | → G1-14 |
+| Golden eval | **DONE** (code) | harness thật ở `tools/poc-parser/src/eval-core.ts` (field/intent/SKU/quantity/dealer); `golden-eval-report.ts` đã nối vào `ReadinessService` (`d193b98`) — chưa có dataset thì `GO_LIVE_READY=false, reason=missing_golden_dataset` | Thiếu **dữ liệu** B1-B2 |
+| Readiness UI | **DONE** | `operational-readiness.ts` + `ReadinessController` (`GET /settings/readiness`) + tab "Sẵn sàng vận hành" trong `SettingsShell` (`d193b98`); 9 cổng bắt buộc, không bịa dữ liệu khách | — |
+| Zalo E2E | **DONE** (code) · **BLOCKED_EXTERNAL** (chạy thật) | `apps/api/src/e2e/zalo-order-path.e2e.spec.ts` chạy trên **đồ thị DI thật**, chỉ giả lập biên giới mạng Zalo; phủ auto-confirm/handoff/I1/trùng/**restart**/**reconnect** (`fe13f7b`). Đã đo có răng bằng mutation | Đăng nhập tài khoản thật: D16 + D20 + credential |
+| Go-live checklist | **DONE** | [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) — 9 cổng máy chấm, 2 công tắc khóa có chủ ý, 5 chặn pháp lý, trình tự bật 8 bước, rollback | — |
 | VAT | **BLOCKED_BUSINESS** | `rules.ts:122` `vat=false` + warning; `tenant.readiness.blockedCapabilities` hiển thị qua `settings-query.service.ts:42` | D8. Drive X5: hợp đồng **đã hứa tính VAT** |
 | COD + ship | **BLOCKED_BUSINESS** | `rules.ts:118,120` ép 0 + warning; `computeShipping()` ném lỗi, không call-site thật | A3. Drive X2: ngưỡng "miễn phí từ 2 SP" **có nguồn**, số tiền cước thì không |
 | Công nợ 7 ngày | **BLOCKED_BUSINESS** | không có enum/rule mới | D15. Drive X1: PO ký gửi ghi "thanh toán trong 7 ngày kể từ ngày xuất hóa đơn" ⇒ nghiêng về **điều khoản của `ky_gui`** |
@@ -124,13 +141,18 @@ giờ dừng. Nay cache `?? null`.
 | Bảng giá T8 | **BLOCKED_EXTERNAL** | — | A6 — UI nhập đã có, chỉ thiếu dữ liệu |
 | Golden dataset | **BLOCKED_EXTERNAL** | — | B1-B2 |
 
-**Kết luận:** GĐ1 **gần code-complete hơn nhiều** so với bảng cũ, nhưng **không thể gọi là xong** khi typecheck/lint/build đỏ, RBAC hở 6 controller và readiness/golden-eval còn mồ côi. Việc kế tiếp là Đợt A của [gd1-ultty.md §13](gd1-ultty.md) — trả baseline về xanh trước, không mở feature mới.
+**Kết luận (cập nhật cuối 12/08/2026):** ba điểm lệch của bảng trên đã đóng hết — baseline xanh
+(`a2091f4`), RBAC phủ 6 controller (`351e912`), readiness + golden-eval đã nối vào runtime
+(`d193b98`). Cùng với G1-12 (`5b4b6c6`) và G1-13 (`fe13f7b`), **GĐ1 đạt code-complete theo
+[§15](gd1-ultty.md)**. Mọi hạng mục còn `BLOCKED_*` dưới đây đều thiếu **dữ liệu hoặc quyết định
+nghiệp vụ của khách**, không thiếu code — và tất cả đều đang **fail-closed** (ép 0 + cảnh báo ⇒
+chuyển Sale), hiện rõ trên tab "Sẵn sàng vận hành".
 
 - **✅ ĐỢT A′ TASK 1 XONG (11/08/2026) — tin chỉ-ảnh không còn bị vứt.** Làm theo TDD, 4 commit: `f29efda` (RED) → `5608b4a` (GREEN) → `170e975` (refactor) → `9af3ee0` (phủ nốt + chứng minh vào đến DB). Bằng chứng đầy đủ: [TDD Task 1](../kiem-thu/tdd/2026-08-11-tin-chi-anh.md). Đã sửa: `channelMessageSchema` bỏ `.min(1)` trên `text` + thêm `.refine(text.trim() !== '' || imageUrl)` (**`text` giữ nguyên kiểu `string`, KHÔNG optional** — nên không call-site nào phía sau phải đổi); hai mapper `zca-message.ts` + `bot-poller.ts` chỉ bỏ tin khi **không có cả chữ lẫn ảnh**. **Phát sinh phải bịt cùng lúc:** sau thay đổi, `photo_url` thành căn cứ DUY NHẤT giữ tin không caption, mà `bot-poller` trước đó gán thẳng vào `imageUrl` không kiểm ⇒ một URL hỏng làm `safeParse` rớt **cả tin, kể cả tin có chữ**; đã thêm `toHttpUrl` (zca vốn đã có guard này) rồi gom hai bản sao vào `ingest/http-url.ts`. Kiểm: **api 389 passed / 21 skipped** (mốc cũ 378+21, +11 test mới, không test cũ nào đổi trạng thái) · shared 69 · web 29 · route 8 · typecheck · lint — xanh. Đánh đổi đã biết: tin **chỉ toàn khoảng trắng và không có ảnh** nay bị từ chối (trước `.min(1)` cho `'   '` đi qua) — không mất nội dung, và zca vốn đã bỏ tin này bằng `trim()`. ⚠️ Task 1 mới chặn đường mất TIN, chưa chặn đường mất ẢNH — **đã làm nốt ở Task 2 (mục dưới)**.
 - **✅ ĐỢT A′ TASK 2 XONG (11/08/2026) — ảnh được TẢI VỀ kho bền vững, không còn chỉ là cái link.** TDD, 3 commit: `03a6a03` (RED) → `4c6f1fa` (GREEN) → `8205ba3` (refactor + phủ nốt). Bằng chứng: [TDD Task 2](../kiem-thu/tdd/2026-08-11-luu-anh-ben-vung.md). Đã có: module `apps/api/src/media/` 7 file nhân bản khuôn `channels/` (`MediaStore` interface + `media.provider.ts` chọn theo `MEDIA_STORE=none|local|s3` + 3 store + `media-policy.ts` thuần + `MediaFetcherService`); Prisma `Message` **+4 cột nullable** (`mediaKey`/`mediaBytes`/`mediaFetchedAt`/`mediaError`) kèm migration `20260811120000_message_media`; `deploy/netviet/gcs-lifecycle.json` **+2 rule prefix `media/`** (60n → Nearline, 365n → Coldline, **KHÔNG có rule Delete**). Thư viện: `sharp` 0.35.3 + `p-limit` 7.3.1 + `@aws-sdk/client-s3` 3.1107.0 (**chuẩn S3**, không `@google-cloud/storage` — để đổi GCP → OVHcloud không phải sửa code). **Phát sinh phải bịt cùng lúc:** trước Task 2 không chỗ nào trong `apps/api/src` tải một URL do người khác đưa vào; Task 2 tạo ra đúng điều đó ⇒ đã thêm cổng chặn **SSRF** `MEDIA_ALLOWED_HOSTS` (mặc định `zdn.vn`, khớp theo **biên dấu chấm** nên `evil-zdn.vn` bị chặn, để rỗng = chặn hết), chặn **trước khi ra mạng**. Hai bất biến là test: tải ảnh hỏng (404 · không phải ảnh · quá lớn · kho lỗi · **DB lỗi**) KHÔNG làm rớt tin — chỉ ghi `mediaError`; tải chạy **ngoài** đường đi của tin (`schedule`, không `await`) nên mạng chậm không làm chậm chốt đơn. Kiểm: **api 430 passed / 21 skipped** (mốc cũ 389+21, **+41 test mới, không test cũ nào đổi trạng thái**) · coverage `src/media` **97,88% stmt / 95,65% branch** · typecheck · lint — xanh.
   **⚠️ CHƯA LƯU ẢNH NÀO CHO TỚI KHI VẬN HÀNH BẬT:** mặc định vẫn `MEDIA_STORE=none` (demo/CI offline). **▶️ VIỆC TIẾP THEO là việc VẬN HÀNH, không phải lập trình:** cấp khóa HMAC cho bucket + đặt `MEDIA_STORE=s3` · `MEDIA_BUCKET` · `MEDIA_ENDPOINT=https://storage.googleapis.com` · `MEDIA_ACCESS_KEY_ID` · `MEDIA_SECRET_ACCESS_KEY`. **Bẫy:** rule lifecycle gắn vào **bucket sao lưu** (`$BackupBucket`, [deploy.ps1:367](../../../deploy/netviet/deploy.ps1:367)) ⇒ `MEDIA_BUCKET` phải trỏ đúng bucket đó, nếu không rule `media/` không có tác dụng mà cũng không báo lỗi. Chưa có: đường **đọc lại** ảnh (endpoint/UI), hiển thị `mediaError` trên `/settings`, backfill ảnh cũ (chưa cần — `CHANNEL_MODE=mock` từ 08/08 nên chưa có tin Zalo thật trong DB).
 - **Nền tảng server — CHỐT 11/08/2026:** **giữ nguyên GCP**, sau này chuyển **OVHcloud**. ⇒ tầng lưu ảnh phải dùng **chuẩn S3** (`@aws-sdk/client-s3`), **KHÔNG** dùng `@google-cloud/storage`. Yêu cầu khách: **giữ ảnh ≥ 60 ngày**. *(Đã cân nhắc chuyển server về VN cho gọn nghĩa vụ Điều 18 NĐ 356/2025 — user quyết định giữ GCP; nghĩa vụ hồ sơ chuyển dữ liệu xuyên biên giới vì vậy vẫn còn, xem D22.)*
-- **Nhánh hiện tại:** `main`.
+- **Nhánh hiện tại:** `gd1/code-complete` (chưa push, chưa merge vào `main`).
 - **Pilot GCP đã khóa `CHANNEL_MODE=mock` ngày 08/08/2026:** không đọc/gửi Bot Platform hoặc zca, không dùng PII thật. Source deploy cũng luôn render `mock` để lần deploy sau không tự bật lại kênh Zalo; Flowise/PostgreSQL/SSE vẫn dùng dữ liệu TEST qua luồng bơm tin demo.
 - **📚 NHẬT KÝ SỰ CỐ ẢNH 11/08 — ĐÃ KHẮC PHỤC BẰNG A′ TASK 1-2:** đo cũ xác nhận URL Zalo chết trong ≤35 ngày và tin chỉ-ảnh từng bị bỏ. Code hiện đã nhận tin chỉ-ảnh và có `MediaFetcher`/S3 store; việc còn lại là vận hành bật `MEDIA_STORE=s3` như mục trên. Nghiệp vụ nhóm vận chuyển 2.3 vẫn ngoài phạm vi GĐ1, độc lập với việc lưu media đầu vào.
 - **🟢 KẾT LUẬN "BOT PLATFORM CHẾT" ĐÃ SAI — kênh sống lại, đo lại 11/08/2026.** Dùng đúng token đang có: `getUpdates` trả **HTTP 200 + `error_code:408 Request timeout`** và **tôn trọng đúng tham số `timeout`** — 1s→1.196ms, 5s→5.092ms, 20s→20.111ms. Theo chú thích sẵn có trong [zalo-bot.client.ts:3](../../../apps/api/src/channels/zalo-bot.client.ts:3), `408` = *rảnh, không có tin mới* ⇒ **long-poll khỏe mạnh bình thường**, không còn 504-ở-5,13s. Đường **gửi cũng sống**: `sendMessage` và `sendPhoto` trả `410 "The chat_id is invaild"` (endpoint đã validate chat_id) khi thử với chat_id không tồn tại — **không tin nào tới người thật**. ⇒ Sự cố 05/08 là **gián đoạn tạm thời phía Zalo, nay đã hết**; có kênh chính thức hợp pháp cho cả đọc lẫn gửi. **Ràng buộc còn nguyên:** mention-gating (bot chỉ nhận tin @mention) ⇒ D2 thành câu hỏi quyết định kiến trúc; và `sendVideo`/`sendFile` trả **404 — API không tồn tại** ⇒ video/catalog phải gửi bằng link. Chi tiết: [gd1-ultty.md §2](gd1-ultty.md). *(Đoạn dưới giữ nguyên làm nhật ký điều tra 05/08 — không còn là trạng thái hiện tại.)*
@@ -189,12 +211,12 @@ flowchart LR
         A4["Bake-off parser (100%) ✅"]
     end
 
-    subgraph G1["GĐ1 — Tự xác nhận có kiểm soát (⬅ ĐANG TRIỂN KHAI)"]
+    subgraph G1["GĐ1 — Tự xác nhận có kiểm soát (⬅ CODE-COMPLETE, chờ dữ liệu + pháp lý)"]
         B1["Pipeline: intent + trích xuất<br/>+ rules + validation ✅"]
-        B2["Đơn hợp lệ ≤ ngưỡng tenant:<br/>gửi → sent → báo Sale nhập ERP ⬜"]
-        B3["> ngưỡng / thiếu dữ liệu:<br/>Sale can thiệp trước gửi ⬜"]
-        B4["Giá lẻ + freshness · campaign<br/>· nguồn Drive/settings ⬜"]
-        B5["Pilot nhóm test, đo KPI ⬜"]
+        B2["Đơn hợp lệ ≤ ngưỡng tenant:<br/>gửi → sent → báo Sale nhập ERP ✅"]
+        B3["> ngưỡng / thiếu dữ liệu:<br/>Sale can thiệp trước gửi ✅"]
+        B4["Giá lẻ + freshness · campaign<br/>· nguồn Drive/settings ✅"]
+        B5["Pilot nhóm test, đo KPI ⬜<br/>chờ A6 + D16/D20 + B1-B2"]
     end
 
     subgraph G2["GĐ2 — Tự động hóa & đa kênh ⬜"]
@@ -227,12 +249,13 @@ flowchart LR
 | Phase 3 còn lại — **rules-config động** + sửa nghiệp vụ theo nguồn gốc (VAT-default **D8** · phí COD dạng bảng · xác minh `cong_no_7` **D15** · ship/ngưỡng thành config) | ⬜ chờ D8/D15 + A3 |
 | **GĐ1 P1 — policy auto-confirm tenant + biên 50/51 + `sent` không ERP + hàng việc Sale** | ✅ xong TDD 12/08/2026; full suite: shared 69 · tenant 20 · web 34 · API 442 pass/21 skip · deploy routes 10; Playwright `/settings` 4/4; typecheck + lint toàn monorepo xanh. Coverage lát cắt P1: 93,38% statements/lines · 80,39% branch · 81,81% function |
 | **GĐ1 P2 — tư vấn lẻ theo field/qualifier tenant + price freshness** | ✅ code xong (audit 12/08, xem §1.1); còn thiếu **dữ liệu** bảng giá T8 (A6) nên hiện 0 giá active |
-| **GĐ1 P3 — campaign base có approval/schedule/distribution/retry/audit** | ✅ domain + scheduler + UI đã có và wire; ⚠️ scheduler đang **không compile** (G1-01) |
+| **GĐ1 P3 — campaign base có approval/schedule/distribution/retry/audit** | ✅ domain + scheduler + UI đã có và wire; lỗi type của scheduler đã sửa ở Đợt A (`a2091f4`), compile xanh |
 | **GĐ1 P4 — Drive content provenance/import/settings** | ✅ schema (8 model) + importer + tab UI đã có; còn thiếu **dữ liệu** vì chưa truy cập được Drive |
 | Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `read-excel-file` — 🔄 11/07 thay `exceljs`) | 🟡 **mẫu gửi khách ĐÃ soạn 13/07** — `docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx` (3 sheet, dropdown khớp enum `Dealer`/`Group`, kèm 3 đại lý + 2 nhóm thật) sinh từ `tools/excel-template/`; **importer** đọc file khách trả về ⬜ chờ A4 |
 | Phase 4 — ERP/KiotViet Excel/API + map SKU↔mã số · Base | ⬜ **sau GĐ1**, không nằm trên đường găng task hiện tại; C1 vẫn cần khi mở phase |
 | Phase 5 — auth theo vai (2 cổng KSNB) + ghi `kpi_events` + feedback loop | ⬜ chờ D5 |
 | Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS ở chế độ dev/demo không auth; Flowise/DeepSeek/Postgres thật, KiotViet và kênh Zalo mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. Console `/settings` đã deploy; **CI/CD đã có** (`.github/workflows/ci.yml` 5 job gồm Prisma IT + Playwright + audit; `deploy.yml` CD keyless qua Workload Identity Federation). **CI đã chạy xanh 5/5 job trên GitHub 03/08** (run `30803243172`); 2 repository variable đã đặt; environment `production` yêu cầu người duyệt và chỉ cho deploy từ `main`. Việc bật kênh Zalo thật được tách khỏi nghiệm thu hạ tầng D18c |
+| **GĐ1 G1-01…G1-14 — đợt A→G lập lại từ as-built** | ✅ XONG 12/08/2026 (8 commit, xem §1.0). GĐ1 **code-complete**; phần chưa chạy được là dữ liệu khách + văn bản pháp lý + công tắc vận hành → [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) |
 | Việc "thật hơn" treo — đọc 6 quy trình gốc chưa phản ánh · nghiệp vụ vận chuyển 2.3 · PWA 5 tab | ⬜ sau GĐ1 |
 
 ### 3.2 [tinh-nang-dai-han.md](tinh-nang-dai-han.md) — Đợt 1-4 (6 tính năng mới, định hướng)
