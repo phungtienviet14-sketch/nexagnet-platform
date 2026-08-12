@@ -23,6 +23,7 @@ import {
   GroupParticipantsService,
 } from './group-participants.service.js';
 import type { GroupParticipantListResult } from './group-participants.repository.js';
+import { Roles } from '../auth/roles.decorator.js';
 
 const routeIdSchema = z.string().trim().min(1).max(128);
 const bulkUpdateSchema = z
@@ -39,6 +40,7 @@ const bulkUpdateSchema = z
     }
   });
 
+@Roles('SALE', 'MANAGER', 'ADMIN')
 @Controller('groups')
 export class GroupParticipantsController {
   private readonly env = loadEnv();

@@ -25,6 +25,7 @@ import { BotIdentityService } from './bot-identity.service.js';
 import { GroupParticipantsService } from '../groups/group-participants.service.js';
 import { GroupParticipantGroupNotFoundError } from '../groups/prisma-group-participants.repository.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { Roles } from '../auth/roles.decorator.js';
 
 const loginSchema = z.object({ acceptedRisk: z.literal(true) }).strict();
 const logoutSchema = z.object({ confirmed: z.literal(true) }).strict();
@@ -35,6 +36,7 @@ const syncMembersParamsSchema = z.object({ groupId: z.string().trim().min(1).max
 const syncMembersBodySchema = z.object({}).strict();
 
 /** Cong van hanh ZCA. Chi duoc gateway operator (Basic Auth + HTTPS) proxy toi. */
+@Roles('MANAGER', 'ADMIN')
 @Controller('zalo')
 export class ZaloController {
   private readonly env = loadEnv();

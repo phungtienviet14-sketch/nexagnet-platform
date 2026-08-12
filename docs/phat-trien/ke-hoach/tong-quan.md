@@ -20,16 +20,20 @@
 > (typecheck/lint/build fail) — điều bảng cũ không phản ánh. Trạng thái dưới đây kiểm bằng
 > code/call-site/schema/migration/test, không đọc lại tài liệu cũ.
 
-**Baseline worktree hiện tại (đo 12/08/2026, chưa sửa gì):**
+**Baseline — ✅ ĐÃ XANH sau Đợt A (commit `a2091f4`, nhánh `gd1/code-complete`):**
 
-| Kiểm tra | Kết quả |
-|---|---|
-| `pnpm typecheck` | ❌ **FAIL** (exit 2) — 3 lỗi: `campaign-occurrence.ts:35,38` TS2339 union chưa narrow; `campaign.service.spec.ts:18` TS2741 thiếu `features` |
-| `pnpm lint` | ❌ **FAIL** — `packages/shared/src/env.ts:175` `authDisabled` khai báo không dùng |
-| `pnpm build` | ❌ **FAIL** (exit 2) — cùng 2 lỗi campaign |
-| API test | ❌ **2 fail** / 542 pass / 23 skip — `group-mapping.service.spec.ts` `setHidden` (test cũ chưa tính `GroupMappingHistory`) |
-| Web test | ❌ **7 fail** / 36 pass — `lib/settings.test.ts`·`api.test.ts`·`master-data.test.ts` (chưa tính vòng `GET /auth/csrf` của `authFetch`) |
-| shared · tenant · deploy-routes | ✅ 83 · 23 · 10 pass |
+| Kiểm tra | Trước Đợt A | Sau Đợt A |
+|---|---|---|
+| `pnpm typecheck` | ❌ 3 lỗi TS (campaign) | ✅ exit 0 |
+| `pnpm lint` | ❌ `env.ts:175` biến thừa | ✅ exit 0 |
+| `pnpm build` | ❌ exit 2 | ✅ exit 0 |
+| API test | ❌ 2 fail / 542 pass | ✅ **544 pass** / 23 skip |
+| Web test | ❌ 7 fail / 36 pass | ✅ **43 pass** |
+| shared · tenant · poc-parser · deploy-routes | ✅ 83 · 23 · 4 · 10 | ✅ không đổi |
+
+Kèm một lỗi **thật** được sửa trong Đợt A: `lib/auth.ts` không cache token khi `/auth/csrf`
+không trả trường nào ⇒ **mọi** mutation bắt thêm một vòng `/auth/csrf`, im lặng và không bao
+giờ dừng. Nay cache `?? null`.
 
 | Capability | Status | Evidence | Gap |
 |---|---|---|---|

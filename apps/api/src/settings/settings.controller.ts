@@ -33,6 +33,7 @@ import {
   SourceTruthWriteService,
   type SourceTruthResource,
 } from './source-truth-write.service.js';
+import { Roles } from '../auth/roles.decorator.js';
 
 const resourceSchema = z.enum(SOURCE_TRUTH_RESOURCES);
 const idSchema = z.string().trim().min(1).max(128);
@@ -64,6 +65,9 @@ const auditQuerySchema = z
   })
   .strict();
 
+// Mac dinh: DOC mo cho ca 4 vai. Moi mutation cham nguon su that / tien / cong tac van hanh
+// deu bi siet lai MANAGER+ADMIN o cap phuong thuc ben duoi (§9 gd1-ultty).
+@Roles('SALE', 'MANAGER', 'ACCOUNTING', 'ADMIN')
 @Controller('settings')
 export class SettingsController {
   private readonly env = loadEnv();
@@ -88,6 +92,7 @@ export class SettingsController {
     return this.pricePeriods.list();
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('price-periods')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   createPricePeriod(
@@ -100,6 +105,7 @@ export class SettingsController {
     return this.pricePeriods.createDraft(body, actorName(actor), requestId ?? null);
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('price-periods/:id/copy')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   copyPricePeriod(
@@ -113,11 +119,13 @@ export class SettingsController {
     return this.pricePeriods.copyDraft(id, body, actorName(actor), requestId ?? null);
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('price-periods/:id/import/preview')
   previewPriceImport(@Param('id') id: string, @Body() body: unknown) {
     return this.pricePeriods.previewImport(id, body);
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('price-periods/:id/import/apply')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   applyPriceImport(
@@ -131,11 +139,13 @@ export class SettingsController {
     return this.pricePeriods.applyImport(id, body, actorName(actor), requestId ?? null);
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('price-periods/:id/validate')
   validatePricePeriod(@Param('id') id: string) {
     return this.pricePeriods.validate(id);
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('price-periods/:id/activate')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   activatePricePeriod(
@@ -157,6 +167,7 @@ export class SettingsController {
     return this.queryService.sourceTruth(parseResource(resource));
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Put('source-truth/:resource/:id')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   putSourceTruth(
@@ -179,6 +190,7 @@ export class SettingsController {
     );
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Put('source-truth/:resource')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   putNewSourceTruth(
@@ -217,6 +229,7 @@ export class SettingsController {
    * Map nhom -> dai ly bang chatId (UI da hien san), khong bat nguoi van hanh go ID vao form
    * nguon su that. Khoa tu nhien platform+chatId nen dung duoc voi ca nhom vua phat hien.
    */
+  @Roles('MANAGER', 'ADMIN')
   @Put('groups/:chatId/mapping')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   setGroupMapping(
@@ -245,6 +258,7 @@ export class SettingsController {
    * Go nhom khoi danh sach lam viec (`hidden=true`) hoac dua tro lai (`hidden=false`).
    * Khong phai xoa: xem giai thich o `GroupMappingService.setHidden`.
    */
+  @Roles('MANAGER', 'ADMIN')
   @Put('groups/:chatId/hidden')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   setGroupHidden(
@@ -272,6 +286,7 @@ export class SettingsController {
     return this.rules.list();
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('rules')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async createRule(
@@ -299,6 +314,7 @@ export class SettingsController {
     }
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('rules/:id/preview')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async previewRule(
@@ -342,6 +358,7 @@ export class SettingsController {
     }
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Post('rules/:id/activate')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async activateRule(
@@ -371,6 +388,7 @@ export class SettingsController {
     }
   }
 
+  @Roles('MANAGER', 'ADMIN')
   @Put('automation/auto-send')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async setAutoSend(

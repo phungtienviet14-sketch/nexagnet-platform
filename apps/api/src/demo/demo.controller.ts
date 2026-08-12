@@ -20,6 +20,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
+import { Roles } from '../auth/roles.decorator.js';
 
 /**
  * Tin mau cho luong demo. Truoc Dot B1 bon cau nay nam thang o day — chung chua SKU + ten bot cua
@@ -38,6 +39,7 @@ interface SimulateBody {
  * Cong demo: bom 1 tin GIA vao dung pipeline (khong can Zalo) — luoi an toan
  * khi trinh demo neu mang/Zalo truc trac.
  */
+@Roles('SALE', 'MANAGER', 'ADMIN')
 @Controller('demo')
 export class DemoController {
   constructor(
