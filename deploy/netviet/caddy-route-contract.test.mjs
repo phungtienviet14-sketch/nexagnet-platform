@@ -112,3 +112,20 @@ test('pilot deploy always keeps CHANNEL_MODE=mock', () => {
   assert.equal(deployStack.match(/-e CHANNEL_MODE=mock/g)?.length, 2);
   assert.doesNotMatch(deployStack, /-e CHANNEL_MODE=(?:hybrid|zca)/);
 });
+
+// MOT IMAGE — MOI KHACH. Truoc 12/08/2026 image co `ARG TENANT=ultty` va `next build` nuong ten
+// khach vao trang tinh, nen moi khach phai co mot image rieng. Danh tinh khach thuoc LOP DEPLOY.
+// Phep chung minh o muc chay: apps/web/tenant-runtime.contract.mjs.
+test('image khong mang danh tinh khach — TENANT den tu lop deploy luc chay', async () => {
+  const dockerfile = await readFile(new URL('./Dockerfile', import.meta.url), 'utf8');
+
+  // Co ARG/ENV TENANT trong Dockerfile la image gan chet vao mot khach.
+  assert.doesNotMatch(dockerfile, /^\s*(?:ARG|ENV)\s+TENANT/m);
+
+  // Renderer la noi DUY NHAT viet danh tinh khach ra; compose phai chuyen no vao ca api lan web.
+  assert.match(renderSecrets, /^TENANT=\$\{TENANT_SLUG\}$/m);
+  assert.equal(compose.match(/^\s*TENANT: \$\{TENANT:\?/gm)?.length, 2);
+
+  // `:?` chu khong phai `:-<mac dinh>`: thieu bien thi dung han, khong lang le nap du lieu khach khac.
+  assert.doesNotMatch(compose, /TENANT:\s*\$\{TENANT:-/);
+});

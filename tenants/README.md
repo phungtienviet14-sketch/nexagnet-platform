@@ -11,11 +11,13 @@ không được nhắc tên khách nào trong đó. Mọi thứ chỉ đúng v�
 
 ```
 tenants/<slug>/
-  tenant.json          Danh tính + persona. Schema: apps/api/src/tenant/tenant.schema.ts
-  data/knowledge.json  Hạt giống nguồn sự thật: SP, giá, đại lý, map nhóm Zalo, glossary
+  tenant.json               Danh tính + thương hiệu + persona.
+                            Schema: packages/tenant/src/tenant.schema.ts
+  data/knowledge.json       Hạt giống nguồn sự thật: SP, giá, đại lý, map nhóm Zalo, glossary
+  data/demo-messages.json   (tùy chọn) Tin mẫu cho luồng demo. Thiếu file ⇒ mảng rỗng, không lỗi.
 ```
 
-`tenant.json`:
+`tenant.json` — **danh tính**:
 
 | Trường | Ý nghĩa |
 |---|---|
@@ -23,9 +25,30 @@ tenants/<slug>/
 | `slug` | Chữ thường/số/gạch nối. Trùng tên thư mục và `docs/khach-hang/<slug>/`. |
 | `displayName` | Tên pháp nhân đầy đủ — dùng trên chứng từ. |
 | `shortName` | Tên gọi tắt trong câu chữ hiển thị. |
-| `persona.parserIntro` | Câu mở đầu prompt parser (tên khách + ngành hàng). Trước Đợt B1 câu này hardcode trong `parser-prompt.ts`. |
-| `persona.botName` | Tên bot trong nhãn `— Tin tự động từ Bot <botName>` gắn vào **mọi tin gửi ra nhóm Zalo**. Điều khoản Zalo bắt buộc gắn nhãn nội dung do AI tạo ⇒ chuỗi này **đến tay đại lý của khách**, đặt sai là khách đọc thấy tên công ty khác. |
-| `persona.productFallbackDescription` | Mô tả thay thế khi một SP chưa có `description` (vai Tư vấn SP). |
+
+**`branding.*` — mọi chuỗi/màu người dùng nhìn thấy trên app web.** Trước Đợt B1 nằm thẳng trong
+`apps/web`; `installName`/`backgroundColor`/`monogram` thêm ngày 12/08/2026 khi bỏ nốt hai file tĩnh
+`public/manifest.webmanifest` + `public/icon.svg`:
+
+| Trường | Ý nghĩa |
+|---|---|
+| `productName` | Tên sản phẩm trên thanh tiêu đề console; cũng là `short_name` của PWA. |
+| `installName` | Tên đầy đủ khi cài PWA (`name` của manifest) — hiện dưới icon trên màn hình chính. |
+| `pageTitle` | `<title>` của trang. |
+| `pageDescription` | Thẻ `description`. |
+| `themeColor` | `#rrggbb`. `theme-color` của trình duyệt **và** màu nền icon. |
+| `backgroundColor` | `#rrggbb`. Màu nền PWA lúc khởi động **và** màu chữ monogram trên icon. |
+| `monogram` | 1-3 ký tự đặt giữa icon. Icon **sinh lúc chạy** (`app/icon.svg/route.ts`), không còn là file tĩnh. |
+| `composerPlaceholder` | Câu gợi ý trong ô soạn tin — chứa ví dụ đặt hàng của chính khách. |
+
+**`persona.*` — giọng của khách trong prompt LLM và trong tin gửi ra Zalo:**
+
+| Trường | Ý nghĩa |
+|---|---|
+| `parserIntro` | Câu mở đầu prompt parser (tên khách + ngành hàng). Trước Đợt B1 hardcode trong `parser-prompt.ts`. |
+| `botName` | Tên bot trong nhãn `— Tin tự động từ Bot <botName>` gắn vào **mọi tin gửi ra nhóm Zalo**. Điều khoản Zalo bắt buộc gắn nhãn nội dung do AI tạo ⇒ chuỗi này **đến tay đại lý của khách**, đặt sai là khách đọc thấy tên công ty khác. |
+| `mentionName` | Chuỗi dùng để **bóc @mention** khỏi tin đến — đúng như nó xuất hiện trong nhóm Zalo. Khác `botName` (tên hiển thị). Biến `BOT_NAME` ghi đè được cho từng môi trường. |
+| `productFallbackDescription` | Mô tả thay thế khi một SP chưa có `description` (vai Tư vấn SP). |
 
 `data/knowledge.json` khớp 1-1 với `KnowledgeSnapshot` (`apps/api/src/knowledge/domain.ts`):
 `products`, `prices`, `priceOverrides`, `dealers`, `groups`, `glossary`.
@@ -40,7 +63,30 @@ tenants/<slug>/
 | `TENANT=<slug>` | `tenants/<slug>` |
 | `TENANT_DIR=<path>` | Dùng thẳng đường dẫn này, **thắng** `TENANT`. Dành cho khách chạy trên hạ tầng riêng: mount gói từ ngoài, không nằm trong image. |
 
-Nơi đã đặt sẵn: `.env.example` · `apps/api/vitest.setup.ts` (`TENANT ??= 'ultty'` cho bộ test API) · `.github/workflows/ci.yml` (2 job) · `deploy/netviet/Dockerfile` (`ARG TENANT`, đổi bằng `--build-arg`).
+Nơi đã đặt sẵn: `.env.example` · `apps/api/vitest.setup.ts` (`TENANT ??= 'ultty'` cho bộ test API) ·
+`.github/workflows/ci.yml` · `deploy/netviet/render-secrets.sh` (ghi `TENANT` vào `.runtime/secrets.env`,
+compose chuyển vào cả `api` lẫn `web`) · `deploy/hf-demo/Dockerfile` (`ENV TENANT` ở stage runtime).
+
+## Một image — mọi khách
+
+**Image KHÔNG được mang danh tính khách.** Trước 12/08/2026 `deploy/netviet/Dockerfile` có
+`ARG TENANT=ultty` và `next build` prerender tĩnh các trang, nên tên/màu/icon của khách bị nướng
+thẳng vào artifact — mỗi khách phải có một image riêng. Nay:
+
+| | Cách làm |
+|---|---|
+| Build | **Không** đặt `TENANT`. Build phải chạy được khi chưa biết khách nào. |
+| Chạy | `TENANT` (hoặc `TENANT_DIR`) cấp từ lớp deploy — compose, `docker run -e`, systemd. |
+| App web | Mọi route là `force-dynamic`; manifest PWA và icon **sinh lúc chạy**, không phải file tĩnh. |
+
+Hai lưới an toàn giữ điều này khỏi trôi:
+
+- **CI build `apps/web` không có `TENANT`.** Ai đó thêm một trang tĩnh đọc gói khách ⇒ loader ném ⇒
+  CI đỏ ngay, thay vì lặng lẽ nướng tên khách vào image.
+- **`pnpm test:tenant-runtime`** (`apps/web/tenant-runtime.contract.mjs`) — build một lần, chạy hai
+  lần với hai gói khách giả, đòi thương hiệu đổi theo và **không sót chuỗi của gói kia**; kiểm cả
+  `BUILD_ID` không đổi để chứng minh đúng là một artifact.
+- `deploy/netviet/caddy-route-contract.test.mjs` chặn `ARG/ENV TENANT` quay lại Dockerfile.
 
 Gốc repo được dò bằng cách đi ngược tìm `pnpm-workspace.yaml`, **không** dựa vào `process.cwd()` —
 test chạy ở `apps/api`, script Prisma chạy ở gốc, container chạy ở `/app`.

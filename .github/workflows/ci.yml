@@ -16,8 +16,8 @@ jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    # Loader goi khach CO Y khong co mac dinh (Dot B1) — `pnpm build` cua apps/web doc goi khach
-    # luc build de lay chuoi thuong hieu, nen phai noi ro build cho goi nao.
+    # Loader goi khach CO Y khong co mac dinh (Dot B1) — bo test cua apps/api khang dinh tren du
+    # lieu that cua mot goi, nen lint/typecheck/test phai noi ro chay tren goi nao.
     env:
       TENANT: ultty
     steps:
@@ -26,7 +26,18 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm build
+      # LUOI AN TOAN "mot image — moi khach": build phai chay duoc ma KHONG biet khach nao. Neu ai do
+      # them mot trang tinh doc goi khach, loader se nem va CI do NGAY TAI DAY — thay vi lang le
+      # nuong ten khach vao artifact roi den luc doi khach moi phat hien.
+      - name: Build khong co TENANT (khong duoc nuong thuong hieu vao artifact)
+        run: pnpm build
+        env:
+          TENANT: ''
+      # Chay tren dung artifact vua build o tren: mot ban build, hai goi khach, thuong hieu doi theo.
+      - name: Chung minh mot artifact phuc vu duoc nhieu khach
+        run: pnpm test:tenant-runtime
+        env:
+          TENANT: ''
 
   # Test Prisma bi skip khi thieu DB (RUN_PRISMA_IT chua dat) — job nay dung Postgres that de
   # chung minh migration + upsert/lifecycle thanh vien nhom, rule config va audit log chay dung.

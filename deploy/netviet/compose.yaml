@@ -123,6 +123,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+      # GOI KHACH cap luc CHAY, khong nuong vao image (xem deploy/netviet/Dockerfile).
+      # `:?` chu khong phai `:-<mac dinh>`: thieu bien tren stack cua khach B ma lang le nap du lieu
+      # cua khach A la su co ro ri du lieu — de no dung han con hon de chay sai.
+      TENANT: ${TENANT:?TENANT chua duoc dat trong .runtime/secrets.env (chay render-secrets.sh)}
       DATABASE_URL: postgresql://zalo:${ZALO_DB_PASSWORD}@postgres:5432/zalo
       PERSISTENCE: prisma
       PARSER_MODE: ${PARSER_MODE:-flowise}
@@ -173,6 +177,10 @@ services:
     # `always` (khong phai `unless-stopped`): stack phai tu quay lai ke ca sau khi ai do
     # `docker stop` thu cong roi VM reboot — yeu cau "he thong tren VM luon chay".
     restart: always
+    environment:
+      # Thuong hieu (tieu de trang, manifest PWA, icon) doc tu goi khach nay luc CHAY.
+      # Xem chu thich o service `api` ve ly do dung `:?` thay vi mot gia tri mac dinh.
+      TENANT: ${TENANT:?TENANT chua duoc dat trong .runtime/secrets.env (chay render-secrets.sh)}
     command:
       [
         "apps/web/node_modules/.bin/next",

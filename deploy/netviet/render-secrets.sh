@@ -6,6 +6,9 @@ PROJECT_ID="${GCP_PROJECT_ID:-netviet-host-968934832433}"
 APP_IMAGE_VALUE="${APP_IMAGE:?APP_IMAGE is required}"
 FLOWISE_IMAGE_VALUE="${FLOWISE_IMAGE:?FLOWISE_IMAGE is required}"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/netviet/apps/zalo-ultty/.runtime}"
+# GOI KHACH cua stack nay. Image KHONG con biet khach nao (xem Dockerfile) — danh tinh khach do LOP
+# DEPLOY quyet dinh, va day la noi duy nhat viet no ra. Khach khac: TENANT=<slug> ./render-secrets.sh
+TENANT_SLUG="${TENANT:-ultty}"
 PUBLIC_IP_VALUE="${PUBLIC_IP:?PUBLIC_IP is required}"
 PUBLIC_IP_LABEL="${PUBLIC_IP_VALUE//./-}"
 DEMO_DOMAIN="demo.${PUBLIC_IP_LABEL}.sslip.io"
@@ -50,6 +53,7 @@ AUTH_MODE='none'
 cat >"${RUNTIME_DIR}/secrets.env" <<EOF
 APP_IMAGE=${APP_IMAGE_VALUE}
 FLOWISE_IMAGE=${FLOWISE_IMAGE_VALUE}
+TENANT=${TENANT_SLUG}
 PARSER_MODE=flowise
 CHANNEL_MODE=${CHANNEL_MODE}
 GCP_PROJECT_ID=${PROJECT_ID}

@@ -29,6 +29,7 @@ FROM base AS deps
 # pnpm --frozen-lockfile can DU package.json cua MOI workspace package (apps/* packages/* tools/*).
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/tenant/package.json packages/tenant/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY tools/poc-zalo-bot/package.json tools/poc-zalo-bot/
@@ -53,6 +54,10 @@ RUN corepack pnpm --filter @netviet/shared --filter @netviet/api --filter @netvi
 # ---------- runtime: stage gon, chi mang theo app da build ----------
 FROM base AS runtime
 ENV NODE_ENV=production
+# GOI KHACH. `next build` o stage tren CO Y khong biet khach nao; danh tinh khach chi duoc gan o
+# day, luc CHAY. Space nay la demo cua Ultty -> TENANT=ultty. Doi khach: `docker run -e TENANT=...`
+# hoac sua bien nay, KHONG phai build lai theo khach.
+ENV TENANT=ultty
 # Che do DEMO offline — khong secret nao.
 ENV PARSER_MODE=mock
 ENV CHANNEL_MODE=mock
