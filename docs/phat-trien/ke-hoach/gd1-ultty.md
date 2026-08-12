@@ -496,37 +496,37 @@ A. Baseline xanh ─┬─→ B. Bịt lỗ phân quyền ─┬─→ E. Nối 
 
 `typecheck`, `lint`, `build` đang **đỏ**. Không đợt nào sau được bắt đầu khi baseline còn đỏ.
 
-**G1-01 — Sửa 3 lỗi type của campaign (chặn `typecheck` + `build`)**
+**G1-01 ✅ XONG — Sửa 3 lỗi type của campaign (chặn `typecheck` + `build`)**
 - *Mục tiêu:* `pnpm typecheck` và `pnpm build` xanh.
 - *Current state:* `campaign-occurrence.ts:35,38` TS2339 — đọc `startDate`/`rrule` trên union `recurring | lunar_*` mà **chưa narrow** theo `type`. `campaign.service.spec.ts:18` TS2741 — fixture policy thiếu `features` sau khi schema tenant thêm `features.lunarCalendarEnabled`.
 - *Files:* `apps/api/src/campaigns/campaign-occurrence.ts` · `apps/api/src/campaigns/campaign.service.spec.ts`
 - *Dependency:* không.
 - *Acceptance:* `pnpm typecheck` + `pnpm build` exit 0; narrow bằng discriminant `type`, **không** dùng `as`/`any` để dập lỗi.
 
-**G1-02 — Sửa lỗi lint `env.ts`**
+**G1-02 ✅ XONG — Sửa lỗi lint `env.ts`**
 - *Current state:* `packages/shared/src/env.ts:175` khai báo `authDisabled` rồi không dùng — sót lại khi cổng `DATA_CLASSIFICATION=customer` được viết lại.
 - *Acceptance:* `pnpm lint` exit 0; nếu biến này lẽ ra phải chặn điều gì thì bổ sung kiểm tra chứ không xóa suông.
 
-**G1-03 — Sửa 7 test `apps/web` hỏng do vòng lấy CSRF**
+**G1-03 ✅ XONG — Sửa 7 test `apps/web` hỏng do vòng lấy CSRF**
 - *Current state:* `lib/auth.ts` `authFetch()` gọi `GET /auth/csrf` **trước** mỗi mutation. 3 file test cũ mock `fetch` một lượt nên (a) assertion "lời gọi thứ 1" trỏ nhầm sang `/auth/csrf`, (b) lượt sau nhận `undefined` → `readJson` ném `Cannot read properties of undefined (reading 'text')`.
 - *Files:* `apps/web/lib/auth.ts` · `lib/settings.test.ts` · `lib/api.test.ts` · `lib/master-data.test.ts`
 - *Acceptance:* 43/43 test web xanh; test khẳng định **có** gọi `/auth/csrf` và mutation gửi kèm token; không giảm assertion, không xóa test cũ.
 
-**G1-04 — Sửa 2 test `group-mapping.service.spec.ts`**
+**G1-04 ✅ XONG — Sửa 2 test `group-mapping.service.spec.ts`**
 - *Current state:* `setHidden()` nay ghi kèm `mappingHistory: { create: … }` trong cùng `prisma.group.update`. Hai test cũ assert `args.data` **deep-equal** `{ status: 'ignored' }` / `{ status: 'mapped' }` nên vỡ. Hành vi mới đúng (audit trail append-only), test cũ lạc hậu.
 - *Acceptance:* test API xanh; assert **cả** `status` **và** bản ghi `GroupMappingHistory` với `previousStatus`/`nextStatus` đúng.
 - *Migration:* không (model đã có trong `20260812154500_master_data_management`).
 
 ### Đợt B — Bịt lỗ phân quyền trước khi chạm dữ liệu thật
 
-**G1-05 — RBAC cho các controller còn hở**
+**G1-05 ✅ XONG — RBAC cho các controller còn hở**
 - *Current state:* `@Roles` đã áp cho campaign · content · master-data · users · broadcast. **Còn hở:** `settings.controller.ts` (ghi nguồn sự thật, công tắc `AUTO_SEND`, map nhóm), `orders.controller.ts` (gửi/reject/rerun thủ công), `knowledge.controller.ts` (reload), `demo.controller.ts` (simulate), `zalo.controller.ts` (đăng nhập kênh, allowlist), `group-participants.controller.ts` — đúng những bề mặt §9 bắt buộc phải có vai.
 - *Dependency:* G1-01…G1-04.
 - *Acceptance:* mỗi endpoint mutation có `@Roles` khớp §9; `health`/`auth` giữ `@Public`; `/stream` được quyết định rõ ràng chứ không để mặc định; test: đúng vai → 2xx, sai vai → 403, chưa đăng nhập → 401.
 
 ### Đợt C — Trung thực hóa vùng tiền
 
-**G1-06 — Gỡ số provisional VAT/COD/ship khỏi bề mặt cấu hình**
+**G1-06 ✅ XONG — Gỡ số provisional VAT/COD/ship khỏi bề mặt cấu hình**
 - *Mục tiêu:* UI không hứa điều engine không làm.
 - *Current state:* `priceOrder()` **đã fail-closed đúng** (ship/COD/VAT ép 0 kèm warning ⇒ luôn handoff; `computeShipping()` ném lỗi và không còn call-site thật). **Nhưng** `RulesSettings.tsx` vẫn cho nhập `shipFeeNoiThanh` 30.000 · `shipFeeTinh` 40.000 · `vatRate` 0,1 · `codFee` 20.000 · `freeShipMinQuantity` 2 rồi draft → preview → **activate**, và `DEFAULT_RULES_CONFIG` vẫn giữ các số đó. Engine **bỏ qua toàn bộ** (chỉ dùng `totalMismatchTolerance`) ⇒ người vận hành có thể tin đã cấu hình xong phí COD trong khi hệ thống vẫn tính 0.
 - *Files:* `apps/api/src/rules/config.ts` · `apps/web/components/settings/RulesSettings.tsx` · `packages/shared/src/settings.ts` · `apps/api/src/rule-config/rule-config.defaults.ts`
@@ -535,42 +535,42 @@ A. Baseline xanh ─┬─→ B. Bịt lỗ phân quyền ─┬─→ E. Nối 
 
 ### Đợt D — Readiness và golden eval (nối phần đang mồ côi)
 
-**G1-07 — Nối `readiness/` vào runtime + màn "Sẵn sàng vận hành" (§12)**
+**G1-07 ✅ XONG — Nối `readiness/` vào runtime + màn "Sẵn sàng vận hành" (§12)**
 - *Current state:* `apps/api/src/readiness/operational-readiness.ts` + `golden-eval-report.ts` có code **và có test**, nhưng **không file nào import** — module mồ côi, không controller, không tab UI. Readiness đang thực sự chạy chỉ gồm (a) cổng boot `DATA_CLASSIFICATION=customer` trong `packages/shared/src/env.ts` và (b) `businessBlockers` từ `tenant.json` qua `settings-query.service.ts`.
 - *Dependency:* G1-05.
 - *Acceptance:* endpoint readiness trả đủ mục §12; tab `/settings` hiển thị; mục thiếu hiện `missing`/`blocked` rõ ràng, **không bịa dữ liệu khách**.
 
-**G1-08 — Nối golden eval vào readiness (§11)**
+**G1-08 ✅ XONG — Nối golden eval vào readiness (§11)**
 - *Current state:* harness đo field/intent/SKU/quantity/dealer đã có thật tại `tools/poc-parser/src/eval-core.ts` (+ `eval-report.ts`, có test); phía API `readiness/golden-eval-report.ts` trả `missing_golden_dataset` nhưng mồ côi như trên.
 - *Acceptance:* chưa có dataset → `GO_LIVE_READY=false, reason=missing_golden_dataset`; có dataset → hiện số đo. Không chặn code-complete.
 
 ### Đợt E — Nối các năng lực còn hở
 
-**G1-09 — reply/quote cho kênh Bot Platform + giữ tham chiếu bền**
+**G1-09 ✅ XONG — reply/quote cho kênh Bot Platform + giữ tham chiếu bền**
 - *Current state:* `ConversationContextBuilder` đúng chuẩn (giới hạn 6 tin/4.000 ký tự, khóa theo `externalChatId`, quote phải cùng nhóm) và `validateContextualParse` fail-safe (tin hiện tại không nhắc SKU và không suy ra được đúng 1 SKU từ quote/tin liền trước → `intent=khac`, **không** auto-confirm). `zca-message.ts` map `quote → replyTo`; **`bot-poller.ts` không map reply**. `replyTo` chỉ nằm trong `Message.raw` (JSON), không có cột riêng và `StoredMessage` không đọc lại.
 - *Acceptance:* tin reply qua Bot Platform dựng được context như zca; rerun tin cũ vẫn khôi phục được quote; test ambiguous vẫn handoff.
 
-**G1-10 — Đường nhập bảng giá kỳ mới, kiểm chứng đầu-cuối**
+**G1-10 ✅ XONG (phần code) — Đường nhập bảng giá kỳ mới, kiểm chứng đầu-cuối**
 - *Current state:* fail-closed đã đúng và đã wire (`selectCurrentSnapshotPrices` chỉ nhận **đúng tháng hiện tại + `active`**, không fallback); `PricePeriodsSettings` có thật và có đường vào UI (lồng trong `SourceTruthSettings`). **Hệ quả hôm nay:** seed là kỳ `2026-07` còn tháng hiện tại là `2026-08` ⇒ **không có giá nào active** ⇒ mọi đơn đều `needs_edit`/handoff, kể cả đơn ≤50.
 - *Acceptance:* Sale tạo được kỳ `2026-08` (mới hoặc copy kỳ cũ thành draft) → sửa giá → preview → activate → pipeline thấy ngay sau `reload()`; test đầu-cuối chứng minh đơn mẫu chuyển từ handoff sang auto-confirm **chỉ sau khi** kỳ mới active. Không seed sẵn số tháng 8.
 - *External data cần sau:* **A6 — bảng giá tháng 08/2026 thật** (Drive chỉ có T7).
 
-**G1-11 — Agent bán hàng: gửi ảnh/catalog theo năng lực kênh (§7)**
+**G1-11 ✅ XONG (đã có sẵn, chỉ kiểm chứng) — Agent bán hàng: gửi ảnh/catalog theo năng lực kênh (§7)**
 - *Current state:* `ContentService.productAdvice()` đã nối vào `AgentOrchestrator` và fail-safe (thiếu content approved → handoff); `channel-capabilities` đã có.
 - *Acceptance:* ảnh gửi được khi kênh hỗ trợ; video/PDF/catalog gửi **link** (Bot Platform `sendVideo`/`sendFile` trả 404 — đã đo 11/08); không adapter nào giả vờ hỗ trợ.
 
 ### Đợt F — Trung tính hóa base (song song, không chặn)
 
-**G1-12 — Bỏ danh tính nhà cung cấp ERP khỏi nhân**
+**G1-12 ⬜ CÒN LẠI — Bỏ danh tính nhà cung cấp ERP khỏi nhân**
 - *Current state:* vi phạm còn lại duy nhất so với `nen-tang-da-khach.md`: `app.module.ts` bind cứng `{ provide: ErpPort, useClass: KiotVietMockAdapter }`; route `@Controller('kiotviet')`; cột `Order.kiotVietCode`. Tên khách khác chỉ còn trong **comment**, không có nhánh `if tenant === …` nào trong mã nguồn.
 - *Acceptance:* adapter ERP chọn theo config runtime; route/cột đổi tên trung tính (giữ tương thích ngược cho route cũ nếu app web còn dùng); migration đổi tên cột forward-safe.
 - *Ghi chú:* đây là phần B3 còn treo của đợt nền tảng đa khách.
 
 ### Đợt G — E2E và go-live
 
-**G1-13 — E2E kênh Zalo (§10):** tin thật → ingest → DB → parser → rules → auto-confirm/handoff → outbound; contract cho duplicate/reconnect/restart.
+**G1-13 ⛔ CHẶN NGOÀI (cần D16 + D20 + credential) — E2E kênh Zalo (§10):** tin thật → ingest → DB → parser → rules → auto-confirm/handoff → outbound; contract cho duplicate/reconnect/restart.
 
-**G1-14 — Checklist go-live + cập nhật trạng thái:** chốt `tong-quan.md` theo kết quả thật.
+**G1-14 ⬜ CÒN LẠI — Checklist go-live + cập nhật trạng thái:** chốt `tong-quan.md` theo kết quả thật.
 
 ### Không nằm trong kế hoạch này
 

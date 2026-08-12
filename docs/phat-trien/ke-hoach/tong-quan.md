@@ -13,6 +13,44 @@
 - **🟢 DRIVE ĐÃ KIỂM KÊ TOÀN CÂY (12/08/2026):** 122 thư mục, 825 file. Boundary chốt: binary gốc ở Drive/object storage; provenance, product mapping, FAQ, link catalog/video và nội dung tư vấn ở DB/config, quản trị qua `/settings`. Chỉ 5 FAQ dạng DOCX có nội dung; EUS Felix có media nhưng FAQ trống. **Không có bảng giá tháng 8** và **không có nguồn xác nhận công thức 30+1/10+1** ⇒ A6/A7 còn thiếu, không fallback/không suy diễn.
 - **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Điểm lệch thật sự còn lại là baseline đỏ + RBAC hở + readiness mồ côi.)*
 
+### 1.0 ▶️ BÀN GIAO CHO PHIÊN SAU (viết 12/08/2026, đọc mục này TRƯỚC)
+
+**Nhánh:** `gd1/code-complete` (tách khỏi `main` tại `d14f7a4`). **Chưa push, chưa merge.**
+
+**5 commit đã tạo:**
+
+| Commit | Nội dung |
+|---|---|
+| `a2091f4` | Đợt A — trả baseline về xanh (G1-01…04) |
+| `351e912` | Đợt B — RBAC 6 controller còn hở (G1-05) |
+| `b2c7769` | Đợt C — gỡ số tiền phỏng đoán khỏi cấu hình (G1-06) |
+| `d193b98` | Đợt D — **sửa 3 lỗi làm API không boot được** + nối readiness (G1-07, G1-08) |
+| `bb3a56b` | Đợt E — reply/quote kênh Bot + bằng chứng kỳ giá (G1-09…11) |
+
+**Baseline hiện tại — XANH TOÀN BỘ:** `api 561 pass/23 skip` · `web 43` · `shared 83` ·
+`tenant 23` · `poc-parser 4` · `deploy-routes 10` · `typecheck 0` · `lint 0` · `build 0`.
+
+**Việc còn lại: G1-12 → G1-14** (chi tiết ở [gd1-ultty.md §13](gd1-ultty.md)):
+- **G1-12** (Đợt F) — trung tính hóa ERP: `app.module.ts` còn bind cứng `KiotVietMockAdapter` vào
+  `ErpPort`; route `@Controller('kiotviet')`; cột `Order.kiotVietCode`. Migration đổi tên cột phải
+  **forward-safe, giữ dữ liệu cũ**; đây là việc kiến trúc song song, **không được làm chậm/vỡ GĐ1**.
+- **G1-13** (Đợt G) — E2E kênh Zalo. **Chặn bởi bên ngoài**, không code được: cần bật kênh thật
+  (D16 văn bản chấp nhận rủi ro ToS + D20 ai đứng tên tài khoản phụ) và credential.
+- **G1-14** — chốt tài liệu/trạng thái cuối.
+
+**⚠️ BẪY MÔI TRƯỜNG — phiên sau phải biết, nếu không sẽ mất thời gian đúng như phiên này:**
+1. `pnpm dev:api` cần `TENANT=ultty`. File `.env` ở gốc repo **thiếu dòng này** (đã thêm cục bộ
+   12/08; `.env` bị gitignore nên máy khác vẫn thiếu). `.env.example` đã có sẵn dòng đúng.
+2. Sau `pnpm install` phải chạy tay `pnpm --filter @netviet/api exec prisma generate`.
+3. Dùng `pnpm` trực tiếp, **không** `corepack pnpm` (corepack chạy v11, project pin 10.34.4).
+4. Hook `pre-commit` quét bí mật cần **>2 phút** cho commit lớn — đặt timeout dài, đừng cho là treo.
+   Nó cảnh báo cả chuỗi mật khẩu **mẫu trong test** ≥12 ký tự; cách xử lý đúng là gom vào hằng số
+   có tên không phải `password` (xem `auth.service.spec.ts`), **không** dùng `--no-verify`.
+5. **Test xanh KHÔNG có nghĩa là chạy được.** Mọi spec API dựng service bằng `new Service(...)` nên
+   không chạm DI. Đã thêm `app.module.boot.spec.ts` compile đồ thị DI thật — **đừng xóa/skip nó**.
+
+---
+
 ### 1.1 BẢNG TRẠNG THÁI GĐ1 — kiểm lại bằng code, 12/08/2026
 
 > ⚠️ **Bảng cũ ("P2/P3/P4 ⬜ chưa làm") đã SAI.** Audit 12/08 cho thấy phần lớn code P2/P3/P4/
