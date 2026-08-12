@@ -210,7 +210,15 @@ export const knowledgeSnapshotSchema = z.object({
       minRetailPrice: z.number().optional(),
     }),
   ),
-  priceOverrides: z.array(z.object({ dealerId: nonEmpty, sku: nonEmpty, price: z.number() })),
+  priceOverrides: z.array(
+    z.object({
+      dealerId: nonEmpty,
+      sku: nonEmpty,
+      price: z.number(),
+      // Nguong so luong de deal co hieu luc; bo trong = ap moi so luong.
+      minQuantity: z.number().int().positive().optional(),
+    }),
+  ),
   dealers: z.array(
     z.object({
       id: nonEmpty,

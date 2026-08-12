@@ -83,6 +83,44 @@ describe('computeShipping', () => {
   });
 });
 
+describe('priceOrder — deal rieng cua dai ly', () => {
+  const order = (quantity: number): ParsedOrder => ({
+    orderType: 'TH1',
+    dealerNameRaw: 'Meta HN',
+    branch: 'HN',
+    items: [{ skuRaw: 'ghe felix', quantity }],
+    noVat: true,
+  });
+  // Deal that quan sat duoc 25/07/2026: "Lay SL 5 cai gia co tot hon k e" -> gia rieng cho SL 5.
+  const dealFrom5 = [{ dealerId: 'd1', sku: 'GHE-FELIX', price: 1_000_000, minQuantity: 5 }];
+
+  it('dat nguong -> an gia deal rieng', () => {
+    const priced = priceOrder(order(5), ctx({ priceOverrides: dealFrom5 }));
+    expect(priced.lines[0]!.unitPrice).toBe(1_000_000);
+    expect(priced.itemsSubtotal).toBe(5_000_000);
+  });
+
+  it('CHUA dat nguong -> quay ve bang gia chung, khong bao thap hon muc duoc huong', () => {
+    const priced = priceOrder(order(4), ctx({ priceOverrides: dealFrom5 }));
+    expect(priced.lines[0]!.unitPrice).toBe(1_150_000);
+    expect(priced.itemsSubtotal).toBe(4_600_000);
+  });
+
+  it('deal khong ghi nguong -> ap cho moi so luong (hanh vi cu, du lieu cu khong doi)', () => {
+    const always = [{ dealerId: 'd1', sku: 'GHE-FELIX', price: 1_000_000 }];
+    expect(priceOrder(order(1), ctx({ priceOverrides: always })).lines[0]!.unitPrice).toBe(
+      1_000_000,
+    );
+  });
+
+  it('deal cua dai ly KHAC khong duoc ap nham', () => {
+    const other = [{ dealerId: 'd2', sku: 'GHE-FELIX', price: 900_000, minQuantity: 1 }];
+    expect(priceOrder(order(10), ctx({ priceOverrides: other })).lines[0]!.unitPrice).toBe(
+      1_150_000,
+    );
+  });
+});
+
 describe('priceOrder — TH1', () => {
   const parsed: ParsedOrder = {
     orderType: 'TH1',

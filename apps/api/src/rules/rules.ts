@@ -38,12 +38,16 @@ export function matchProduct(skuRaw: string, products: Product[]): Product | nul
 function priceFor(
   sku: string,
   dealerId: string | null,
+  quantity: number,
   prices: PriceRow[],
   overrides: DealerPriceOverride[],
 ): number | null {
   if (dealerId) {
+    // Deal rieng co the kem NGUONG SO LUONG ("lay 5 cai moi duoc 1.150k" — anh chup 25/07/2026).
+    // Chua dat nguong thi KHONG duoc huong deal: quay ve bang gia chung, khong bao gia thap hon
+    // muc dai ly that su duoc huong.
     const override = overrides.find((o) => o.dealerId === dealerId && o.sku === sku);
-    if (override) return override.price;
+    if (override && quantity >= (override.minQuantity ?? 1)) return override.price;
   }
   const row = prices.find((p) => p.sku === sku);
   return row ? row.wholesale : null;
@@ -99,7 +103,13 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
     const product = matchProduct(item.skuRaw, ctx.products);
     // Gia si biet duoc ke ca chua map dai ly (bang gia chung); Giam sat van leo thang neu dai ly la.
     const unitPrice = product
-      ? (priceFor(product.sku, ctx.dealer?.id ?? null, ctx.prices, ctx.priceOverrides) ?? 0)
+      ? (priceFor(
+          product.sku,
+          ctx.dealer?.id ?? null,
+          item.quantity,
+          ctx.prices,
+          ctx.priceOverrides,
+        ) ?? 0)
       : 0;
     return {
       skuRaw: item.skuRaw,

@@ -364,6 +364,8 @@ model DealerPriceOverride {
   sku           String
   product       Product  @relation(fields: [sku], references: [sku])
   price         Int
+  /// So luong toi thieu de deal co hieu luc. NULL = ap cho moi so luong (hanh vi truoc 12/08/2026).
+  minQuantity   Int?
   enabled       Boolean  @default(true)
   effectiveFrom DateTime?
   effectiveTo   DateTime?

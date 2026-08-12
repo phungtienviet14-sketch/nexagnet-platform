@@ -53,6 +53,14 @@ export interface DealerPriceOverride {
   dealerId: string;
   sku: string;
   price: number;
+  /**
+   * So luong TOI THIEU de deal co hieu luc. Rong = ap cho moi so luong.
+   *
+   * Co that trong hoi thoai khach (anh chup 25/07/2026): "Lay SL 5 cai gia co tot hon k e" ->
+   * "Da c lay sl 5c. E xin gia 1150k a". Bo qua nguong nay thi don 1 cai cung duoc gia 1.150k,
+   * tuc bao sai tien theo chieu nguoc lai.
+   */
+  minQuantity?: number;
 }
 
 export interface Dealer {

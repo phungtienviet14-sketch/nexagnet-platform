@@ -63,7 +63,13 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
         validMonth: pricePeriod?.validMonth,
         periodStatus: pricePeriod?.status,
       })),
-      priceOverrides: overrides.map((o) => ({ dealerId: o.dealerId, sku: o.sku, price: o.price })),
+      priceOverrides: overrides.map((o) => ({
+        dealerId: o.dealerId,
+        sku: o.sku,
+        price: o.price,
+        // NULL trong DB = ap moi so luong; giu `undefined` de rules dung mac dinh 1.
+        ...(o.minQuantity === null ? {} : { minQuantity: o.minQuantity }),
+      })),
       dealers: dealers.map((d) => ({
         id: d.id,
         name: d.name,
