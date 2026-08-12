@@ -3,28 +3,35 @@
  * demo dat mac dinh hop ly, tach thanh config de de chinh.
  */
 export interface RulesConfig {
-  /** Don co tong so luong >= nguong nay -> mien phi ship */
-  freeShipMinQuantity: number;
-  /** Cuoc ship 1 SP giao noi thanh HN/HCM (Grab) */
-  shipFeeNoiThanh: number;
-  /** Cuoc ship 1 SP giao tinh (Viettel) */
-  shipFeeTinh: number;
-  /** Thue VAT */
-  vatRate: number;
-  /** Phi thu ho COD (demo: co dinh) */
-  codFee: number;
-  /** Sai so cho phep khi doi chieu tong khach ghi vs he thong tinh */
+  /**
+   * `null` = CHUA CAU HINH. Nam truong duoi day thuoc bon nghiep vu con BLOCKED (VAT · COD/ship
+   * · cong no 7 ngay · khuyen mai) — chua co bang cuoc/bieu phi/quyet dinh chinh thuc tu khach.
+   * Rules engine KHONG doc chung: `priceOrder` ep ship/COD/VAT ve 0 kem canh bao nen don luon
+   * chuyen Sale, con `computeShipping` nem loi. Giu truong lai de hien "chua mo" tren /settings
+   * va de ban ghi rule-config cu (dang chua SO) van doc duoc.
+   */
+  freeShipMinQuantity: number | null;
+  shipFeeNoiThanh: number | null;
+  shipFeeTinh: number | null;
+  vatRate: number | null;
+  codFee: number | null;
+  /** Sai so cho phep khi doi chieu tong khach ghi vs he thong tinh — DUY NHAT truong engine dung */
   totalMismatchTolerance: number;
   /** Tu khoa nhan dien khu vuc noi thanh (da chuan hoa khong dau) */
   noiThanhKeywords: string[];
 }
 
+/**
+ * KHONG dat so tien mac dinh. Truoc day file nay giu ship 30k/40k, VAT 0,1 va COD 20k — deu la
+ * so PHONG DOAN, va vi engine bo qua nen man /settings hien nhu "da cau hinh" trong khi he thong
+ * van tinh 0. Thieu nguon thi de `null` va noi ro la thieu.
+ */
 export const DEFAULT_RULES_CONFIG: RulesConfig = {
-  freeShipMinQuantity: 2,
-  shipFeeNoiThanh: 30_000,
-  shipFeeTinh: 40_000,
-  vatRate: 0.1,
-  codFee: 20_000,
+  freeShipMinQuantity: null,
+  shipFeeNoiThanh: null,
+  shipFeeTinh: null,
+  vatRate: null,
+  codFee: null,
   totalMismatchTolerance: 0.05,
   noiThanhKeywords: ['ha noi', 'hn', 'ho chi minh', 'hcm', 'sai gon', 'tphcm'],
 };

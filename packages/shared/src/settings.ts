@@ -10,13 +10,24 @@ const ratioSchema = z.number().min(0).max(1);
 
 export const RULE_CONFIG_STATUSES = ['draft', 'preview', 'active', 'archived'] as const;
 
+/**
+ * Nam truong dau thuoc BON nghiep vu con BLOCKED (VAT · COD/ship · cong no 7 ngay · khuyen mai):
+ * chua co nguon chinh thuc nen KHONG duoc mang mot con so doan. `null` = "chua cau hinh".
+ *
+ * Van giu `.nullable()` chu khong bo han truong: cac ban ghi `RuleConfigVersion.payload` cu trong
+ * Postgres dang chua SO, va `toRulesConfig()` doc lai chung luc chay — bo truong se lam ban cu
+ * khong parse duoc. Nullable nhan ca hai dang nen khong can migration.
+ *
+ * Rules engine KHONG doc nam truong nay (xem `priceOrder`): tien ship/COD/VAT bi ep 0 kem canh
+ * bao de don luon chuyen Sale. Chung ton tai o day chi de giu tuong thich va de hien trang thai.
+ */
 export const ruleSettingsSchema = z
   .object({
-    freeShipMinQuantity: quantitySchema,
-    shipFeeNoiThanh: moneySchema,
-    shipFeeTinh: moneySchema,
-    vatRate: ratioSchema,
-    codFee: moneySchema,
+    freeShipMinQuantity: quantitySchema.nullable(),
+    shipFeeNoiThanh: moneySchema.nullable(),
+    shipFeeTinh: moneySchema.nullable(),
+    vatRate: ratioSchema.nullable(),
+    codFee: moneySchema.nullable(),
     totalMismatchTolerance: ratioSchema,
     noiThanhKeywords: z
       .array(z.string().trim().min(1).max(100))

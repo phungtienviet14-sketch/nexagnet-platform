@@ -7,11 +7,6 @@ import { formatSettingsDate } from './settings-format';
 import { SettingsPanelState } from './SettingsPanelState';
 
 type RuleNumbers = {
-  freeShipMinQuantity: number;
-  shipFeeNoiThanh: number;
-  shipFeeTinh: number;
-  vatRate: number;
-  codFee: number;
   totalMismatchTolerance: number;
   largeOrderTotal: number;
   largeOrderQuantity: number;
@@ -19,16 +14,25 @@ type RuleNumbers = {
 };
 
 const DEFAULT_RULES: RuleNumbers = {
-  freeShipMinQuantity: 2,
-  shipFeeNoiThanh: 30_000,
-  shipFeeTinh: 40_000,
-  vatRate: 0.1,
-  codFee: 20_000,
   totalMismatchTolerance: 0.05,
   largeOrderTotal: 20_000_000,
   largeOrderQuantity: 30,
   lowConfidence: 0.5,
 };
+
+/**
+ * Bon nghiep vu VAT · COD/ship · cong no 7 ngay · khuyen mai CHUA duoc chot, nen o nhap cua
+ * chung da bi go khoi form. Truoc day form van cho nhap va "Kich hoat" ship 30k/40k, VAT 0,1,
+ * COD 20k — trong khi rules engine bo qua toan bo va van tinh 0 roi chuyen Sale. Nguoi van hanh
+ * vi vay tin la da cau hinh xong phi COD. Nay chung chi hien o khu "chua mo" ben duoi.
+ */
+const BLOCKED_RULES: readonly { label: string; blocker: string }[] = [
+  { label: 'Miễn ship từ số lượng', blocker: 'A3' },
+  { label: 'Ship nội thành', blocker: 'A3' },
+  { label: 'Ship đi tỉnh', blocker: 'A3' },
+  { label: 'Thuế suất VAT', blocker: 'D8' },
+  { label: 'Phí thu hộ COD', blocker: 'A3' },
+];
 
 const RULE_FIELDS: readonly {
   key: keyof RuleNumbers;
@@ -37,35 +41,7 @@ const RULE_FIELDS: readonly {
   step: number;
   min: number;
   max?: number;
-  provisional?: string;
 }[] = [
-  {
-    key: 'freeShipMinQuantity',
-    label: 'Miễn ship từ số lượng',
-    unit: 'sản phẩm',
-    step: 1,
-    min: 1,
-    provisional: 'A3',
-  },
-  {
-    key: 'shipFeeNoiThanh',
-    label: 'Ship nội thành',
-    unit: 'đ',
-    step: 1_000,
-    min: 0,
-    provisional: 'A3',
-  },
-  { key: 'shipFeeTinh', label: 'Ship đi tỉnh', unit: 'đ', step: 1_000, min: 0, provisional: 'A3' },
-  {
-    key: 'vatRate',
-    label: 'Thuế suất VAT',
-    unit: 'tỷ lệ',
-    step: 0.01,
-    min: 0,
-    max: 1,
-    provisional: 'D8',
-  },
-  { key: 'codFee', label: 'Phí thu hộ COD', unit: 'đ', step: 1_000, min: 0, provisional: 'D15' },
   {
     key: 'totalMismatchTolerance',
     label: 'Ngưỡng lệch tổng',
@@ -97,11 +73,12 @@ function buildPayload(values: RuleNumbers): JsonObject {
   return {
     schemaVersion: 1,
     rules: {
-      freeShipMinQuantity: values.freeShipMinQuantity,
-      shipFeeNoiThanh: values.shipFeeNoiThanh,
-      shipFeeTinh: values.shipFeeTinh,
-      vatRate: values.vatRate,
-      codFee: values.codFee,
+      // null = chua cau hinh. Khong gui so doan len nguon su that.
+      freeShipMinQuantity: null,
+      shipFeeNoiThanh: null,
+      shipFeeTinh: null,
+      vatRate: null,
+      codFee: null,
       totalMismatchTolerance: values.totalMismatchTolerance,
       noiThanhKeywords: ['ha noi', 'hn', 'ho chi minh', 'hcm', 'sai gon', 'tphcm'],
     },
@@ -203,11 +180,20 @@ export function RulesSettings() {
       </header>
 
       <div className="settings-provisional" role="note">
-        <strong>A3 · D8 · D15 đang tạm tính</strong>
+        <strong>Chưa mở — chờ quyết định nghiệp vụ</strong>
         <p>
-          Cước ship, VAT và phí COD chưa có xác nhận cuối từ khách hàng. Không thể xác nhận
-          production khi bản rules còn cờ này.
+          Cước ship, VAT và phí thu hộ COD chưa có bảng giá/biểu phí chính thức từ khách hàng, nên
+          hệ thống <strong>không tự tính</strong> các khoản này: đơn có phát sinh ship/COD/VAT luôn
+          được chuyển Sale xử lý trước khi gửi. Các ô nhập đã được gỡ khỏi biểu mẫu để không tạo
+          cảm giác &ldquo;đã cấu hình xong&rdquo;.
         </p>
+        <ul className="settings-blocked-list">
+          {BLOCKED_RULES.map((item) => (
+            <li key={item.label}>
+              {item.label} — <em>chưa cấu hình</em> (chờ {item.blocker})
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="settings-rules-layout">
@@ -223,7 +209,6 @@ export function RulesSettings() {
               <label key={field.key} className="settings-rule-field">
                 <span>
                   {field.label}
-                  {field.provisional && <sup>{field.provisional}</sup>}
                 </span>
                 <span className="settings-number-input">
                   <input

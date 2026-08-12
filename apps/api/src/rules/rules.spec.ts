@@ -36,6 +36,46 @@ describe('matchProduct', () => {
   });
 });
 
+describe('bon nghiep vu BLOCKED khong the bi "cau hinh" bang rule-config', () => {
+  const parsed = {
+    orderType: 'TH2',
+    items: [{ skuRaw: 'ghe felix', quantity: 1 }],
+    codCollect: true,
+    wantVat: true,
+  } as unknown as ParsedOrder;
+
+  it('mac dinh KHONG mang so tien phong doan', () => {
+    expect(DEFAULT_RULES_CONFIG.shipFeeNoiThanh).toBeNull();
+    expect(DEFAULT_RULES_CONFIG.shipFeeTinh).toBeNull();
+    expect(DEFAULT_RULES_CONFIG.codFee).toBeNull();
+    expect(DEFAULT_RULES_CONFIG.vatRate).toBeNull();
+    expect(DEFAULT_RULES_CONFIG.freeShipMinQuantity).toBeNull();
+  });
+
+  it('ban rule-config CU con so ship/COD/VAT van khong lam doi mot dong tien nao', () => {
+    // Mo phong ban ghi RuleConfigVersion cu trong Postgres (truoc khi cac truong thanh nullable).
+    const legacy = {
+      ...DEFAULT_RULES_CONFIG,
+      freeShipMinQuantity: 2,
+      shipFeeNoiThanh: 30_000,
+      shipFeeTinh: 40_000,
+      vatRate: 0.1,
+      codFee: 20_000,
+    };
+
+    const withBlank = priceOrder(parsed, ctx());
+    const withLegacyNumbers = priceOrder(parsed, ctx({ cfg: legacy }));
+
+    expect(withLegacyNumbers.shippingFee).toBe(0);
+    expect(withLegacyNumbers.codFee).toBe(0);
+    expect(withLegacyNumbers.vatAmount).toBe(0);
+    expect(withLegacyNumbers.vat).toBe(false);
+    expect(withLegacyNumbers.grandTotal).toBe(withBlank.grandTotal);
+    // Va van chuyen Sale chu khong tu gui.
+    expect(routeStatus(withLegacyNumbers)).toBe('needs_edit');
+  });
+});
+
 describe('computeShipping', () => {
   it('fail closed vì GĐ1 chưa có bảng vùng/cước chính thức', () => {
     expect(() => computeShipping(10, 'Thai Nguyen', cfg)).toThrow(/thiếu cấu hình.*vận chuyển/i);
