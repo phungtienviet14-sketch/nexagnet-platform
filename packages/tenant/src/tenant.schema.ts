@@ -1,4 +1,9 @@
-import { DEALER_TIERS, POLICY_TYPES } from '@netviet/shared';
+import {
+  contentImportManifestSchema,
+  DEALER_TIERS,
+  POLICY_TYPES,
+  type ContentImportManifest,
+} from '@netviet/shared';
 import { z } from 'zod';
 
 /**
@@ -235,6 +240,18 @@ export const knowledgeSnapshotSchema = z.object({
 });
 
 export type TenantKnowledge = z.infer<typeof knowledgeSnapshotSchema>;
+
+/**
+ * Noi dung tu van cua khach (FAQ / bai tu van / link video-catalog / media) dong goi kem goi khach.
+ * Dung LAI schema import cua nhan (`contentImportManifestSchema`) chu khong dinh nghia schema thu
+ * hai: goi khach va man hinh `/settings` phai di qua CUNG mot cong kiem, neu khong thi du lieu hop
+ * le o duong nay lai hong o duong kia.
+ *
+ * File nay TUY CHON — khach chua co noi dung thi khong co file, va agent tu van fail-closed
+ * (`ContentService.productAdvice()` tra handoff) chu khong bia cau tra loi.
+ */
+export const tenantContentManifestSchema = contentImportManifestSchema;
+export type TenantContentManifest = ContentImportManifest;
 
 /** Tin nhan mau cho luong demo (`/demo/simulate`) — la vi du dat hang cua chinh khach. */
 export const demoMessagesSchema = z.array(nonEmpty).min(1);

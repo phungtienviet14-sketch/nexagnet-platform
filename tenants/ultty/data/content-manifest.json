@@ -1,0 +1,631 @@
+{
+  "source": {
+    "kind": "local_manifest",
+    "sourceId": "ultty-faq-bo-san-pham",
+    "locator": "docs/khach-hang/ultty/nguon-goc/ho-so-khao-sat/gd1/AI Zalo_/FAQ bộ sản phẩm_",
+    "version": "2026-08-13"
+  },
+  "assets": [],
+  "faqs": [
+    {
+      "externalId": "faq:bb:bb-grey:001",
+      "productSku": "BB-GREY",
+      "question": "Công nghệ lọc không khí của quạt BB là công nghệ gì?",
+      "answer": "- Lọc không khí bằng hệ màng lọc Hepa H13++ kết hợp công nghệ Plasmacluster ion.\n- Công nghệ HEPA là công nghệ lọc không khí đối với bụi mịn pm2.5 theo hệ tiêu chuẩn của Mỹ được cả thế giới công nhận và khẳng định khái niệm trên Wikipedia, hệ màng lọc HEPA có nhiều cấp trong đó cấp H13 là cấp cao cấp thứ 2, cấp cao cấp thứ 1 là HEPA H14 chỉ dung trong phòng thí nghiệm hoặc bệnh viện.\n- Công nghệ plasmaclusterIon là công nghệ cải tiến của công nghệ Ion âm, tại đây phát ra ion âm làm trung hoà các điện tích dương, tuy nhiên thay vì việc trung hoà rơi xuống mặt đất thì với Plasma sẽ hoá lỏng tạo ra hơi nước và bốc hơi đi, nên ko tái ô nhiễm như công nghệ ion âm thông thường."
+    },
+    {
+      "externalId": "faq:bb:bb-grey:002",
+      "productSku": "BB-GREY",
+      "question": "Công nghệ Plasmacluster ion có tác dụng gì?",
+      "answer": "Công nghệ Plasmacluster ion hoạt động theo cơ chế tạo và phân tán các ion dương và âm tương tự như trong tự nhiên\nCác ion có gốc OH có tính oxi hóa cao và sẽ bám vào các bề mặt nấm mốc và vi khuẩn. Chúng sẽ phá vỡ cấu trúc protein bằng cách lấy đi nguyên tử H trên bề mặt cấu trúc protein.\nSau đó các gốc OH sẽ kết hợp với nguyên tử H tạo thành phân tử H2O trong không khí\n(nói ngắn gọn Plasmacluster ion sẽ phá cấu trúc protein của vi khuẩn virút và chuyển hóa thành nước hòa vào trong không khí)"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:003",
+      "productSku": "BB-GREY",
+      "question": "Hệ màng lọc của BB như thế nào và có ưu điểm gì so với hệ màng lọc khác?",
+      "answer": "Quạt lọc không khí BB sử dụng hệ màng lọc Hepa H13++ có thể lọc bụi mịn PM 2.5 lên đến 99,95% vi khuẩn có tiêu chuẩn và được công bố kiểm định theo hệ tiêu chuẩn của HEPA Mỹ.\nƯu điểm:\n+ Thiết kế hình trụ giúp lọc không khí 360 độ, tăng diện tích lọc không khí (những sản phẩm lọc không khí trên thị trường màng lọc thiết kế dạng phẳng, chỉ lọc bụi được một mặt, còn ba mặt còn lại không lọc được. Để lọc không khí với phòng diện tích rộng thì máy phải thiết kế lớn)\n+ Bên ngoài có lớp lưới tĩnh điện giúp ngăn chặn được những bụi lớn, lông tóc động vật, phấn hoa… và dễ dàng vệ sinh. Đồng thời giữ được màng lọc không bị biến dạng trong thời gian dài sử dụng.\n+ Mạng lọc được phủ thêm lớp phân tử nano bạc giúp tăng cường khả năng khử mùi trong không khí."
+    },
+    {
+      "externalId": "faq:bb:bb-grey:004",
+      "productSku": "BB-GREY",
+      "question": "Quạt lọc không khí BB đo chất lượng không khí như thế nào?",
+      "answer": "Cảm biến kép kết hợp CPU AI thông minh giúp đo chính xác được hàm lượng bụi mịn trong không khí theo thời gian thực. Không chỉ thế mà còn có cảm biến kép thể hiện được cả độ ẩm trong phòng và nhiệt độ trong phòng giúp người dung thấy được toàn bộ chất lượng không khí.\nCó đèn viền hiện thị 3 màu sắc theo mức độ nhiễm\n+ Màu xanh: không khí trong lành\n+ Màu vàng: không khí ô nhiễm\n+ Màu đỏ: không khí bị ô nhiễm nặng"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:005",
+      "productSku": "BB-GREY",
+      "question": "Quạt lọc không khí BB thay màng lọc như thế nào? Bao lâu phải thay? Vệ sinh có khó không?",
+      "answer": "- Thay màng lọc bằng cách:\n+ B1: Tháo nắp chắn màng lọc theo chiều ngược kim đồng hồ\n+ B2: Tháo màng lọc cũ ra khỏi máy\n+ B3: Lắp màng lọc mới\n+ B4: Lắp lại nhựa chắn màng lọc\n- Hai tuần vệ sinh một lần thì sau 14-16 tháng mới phải thay màng lọc mới\n- Vệ sinh màng lọc rất dễ chỉ cần tháo màng lọc ra và dùng chổi nhỏ quét sạch lớp bụi bám bên ngoài. Để sạch hơn có thể dùng máy hút bụi cầm tay để hút"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:006",
+      "productSku": "BB-GREY",
+      "question": "Quạt lọc không khí BB được điều khiển bằng những cách nào?",
+      "answer": "Điều khiển bằng 3 cách:\nSử dụng nút điều khiển trực tiếp trên thân máy\nSử dụng điều khiển từ xa\nSử dụng trên app điện thoại"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:007",
+      "productSku": "BB-GREY",
+      "question": "Chất liệu cấu tạo của quạt lọc không khí BB ?",
+      "answer": "- Sử dụng nhựa nguyên sinh nhập khẩu hạt nhựa nguyên sinh cao cấp của LG, chân máy bằng hợp kim thép không rỉ\n- Công nghệ in Water printing"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:008",
+      "productSku": "BB-GREY",
+      "question": "Đèn của quạt BB sử dụng là đèn gì, khi hỏng có thay được không?",
+      "answer": "- Quạt BB sử dụng đèn khí quyển học cho ánh sáng tự nhiên không gây hại cho mắt và da, hỗ trợ tích cực cho cảm xúc của người dùng\n- Đèn có công dụng làm đèn ngủ trang trí, hoạt động độc lập với các chức năng khác\n- Khi hỏng có thể thay thế một cách dễ dàng"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:009",
+      "productSku": "BB-GREY",
+      "question": "Quạt lọc không khí BB có chiếm diện tích không? Khoảng cách giữa các chân như thế nào?",
+      "answer": "- Quạt không chiếm quá nhiều diện tích, khoảng cách giữa các chân là 63cm"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:010",
+      "productSku": "BB-GREY",
+      "question": "Màu sắc của quạt lọc không khí BB?",
+      "answer": "Có hai màu trắng và xám (white và titanium grey)"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:011",
+      "productSku": "BB-GREY",
+      "question": "Tốc độ gió của BB có mát không?",
+      "answer": "Tốc độ gió mát, với 9 cấp độ gió làm mát, đưa ra lưu lượng gió lên tới 9700 lít/ phút, vận tốc gió 6,2m/s nhiệt độ gió thổi ra giảm trực tiếp từ 2-3 độ C so với nhiệt độ gió đầu vào."
+    },
+    {
+      "externalId": "faq:bb:bb-grey:012",
+      "productSku": "BB-GREY",
+      "question": "Quạt lọc không khí BB có quay được không?",
+      "answer": "Quạt BB quay 4 góc: 30, 60, 90, 120 ° có thể điều chỉnh lên xuống góc 15 độ"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:013",
+      "productSku": "BB-GREY",
+      "question": "Kích thước của quạt BB như nào? Phù hợp không gian nào?",
+      "answer": "Kích thước: 63x55x123cm phù hợp cho không gian phòng khách"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:014",
+      "productSku": "BB-GREY",
+      "question": "Vậy BB là máy lọc không khí hay là quạt?",
+      "answer": "BB là quạt có chức năng lọc không khí, chức năng 2 trong 1."
+    },
+    {
+      "externalId": "faq:bb:bb-grey:015",
+      "productSku": "BB-GREY",
+      "question": "BB lọc được diện tích bao nhiêu m2 ?",
+      "answer": "Lọc được diện tích 80-100 m2."
+    },
+    {
+      "externalId": "faq:bb:bb-grey:016",
+      "productSku": "BB-GREY",
+      "question": "Máy hiển thị biểu tượng màu đỏ trên màn hình là gì? Cách reset như thế nào?",
+      "answer": "- Biểu tượng màu đỏ là biểu tượng cảnh báo cần vệ sinh màng lọc.\n- Cách reset: giữ nút nguồn trên điều khiển từ xa từ 5-7 giây. Khi quạt kêu 3 tiếng tít tít tít thì bỏ tay ra"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:017",
+      "productSku": "BB-GREY",
+      "question": "Quạt được bảo hành bao lâu?",
+      "answer": "Bảo hành 3 năm lỗi, 1 đổi 1 trong 7 ngày đầu tiên nếu có lỗi từ nhà sản xuất"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:018",
+      "productSku": "BB-GREY",
+      "question": "Quạt lắp vào không sáng?",
+      "answer": "B1: Tắt quạt, tháo chao đèn ra khỏi thân máy\nB2: Bật quạt, lấy điều khiển từ xa bấm vào biểu tượng bật đèn cánh gió\nB3: Lắp lại chao đèn vào thân máy, căn chỉnh cho chao đèn sáng sau đó siết chặt ốc cố định chao đèn"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:019",
+      "productSku": "BB-GREY",
+      "question": "Quạt có mùi hăng khét?",
+      "answer": "Quạt Ultty không có mùi hăng khét. Đây là mùi của sản phẩm mới, mùi nhựa nguyên sinh. Hạt nhưa cao cấp loại 1 nhập khẩu của LG, an toàn với sức khỏe nên a/c yên tâm.\nBên em dùng công nghệ đánh bóng oxygen để giúp bề mặt sản phẩm sáng bóng, chống nhiễm bẩn, chống oxi hoá trên bề mặt. Mà chất này có mùi hắc đặc trưng nên mới đầu dùng sẽ ngửi thấy mùi hắc nhẹ như vậy, khách dùng 1 thời gian ngắn thôi sẽ không còn thấy mùi hắc nữa ạ."
+    },
+    {
+      "externalId": "faq:bb:bb-grey:020",
+      "productSku": "BB-GREY",
+      "question": "Quạt ồn thế e?",
+      "answer": "Các sản phẩm Ultty đều được test và kiểm tra độ ồn nghiêm ngặt trong phòng thí nghiệm ở châu Âu, đạt tiêu chuẩn quốc gia về tiếng ồn của quạt. E gửi chị video phòng kiểm tra độ ổn bên e.\nhttps://youtube.com/shorts/__OAqOtz1gk?feature=share\nTiếng này là tiếng gió thổi chứ ko phải tiếng ồn động cơ. Độ ồn của máy này chỉ 55dB, là mức ồn trắng, mang lại cảm giác thoải mái cho người sử dụng, không gây ảnh hưởng tới giấc ngủ.\ncác nghiên cứu khoa học đc công bố bởi các chuyên gia đầu ngành, anh/ chị tham khảo:"
+    },
+    {
+      "externalId": "faq:bb:bb-grey:021",
+      "productSku": "BB-GREY",
+      "question": "Quạt yếu, không mát như quạt có cánh:",
+      "answer": "Quạt không cánh sử dụng công nghệ bội khí, tăng áp tuabin để làm mát. Nguyên lý làm mát của quạt ko cánh là hạ nhiệt độ từ 2-3 độ giữa đầu vào và đầu ra, cho nên chắc chắn là mát.\nVideo test tốc độ gió: https://www.tiktok.com/@ulttyvietnam_/video/7238460602388073733?is_from_webapp=1&sender_device=pc&web_id=735051383621189786\nẢnh test gió với Dyson và Xiaomi:\nSản phẩm này khác với có cánh ở điểm: nó ko tạo ra nhiều luồng chuyển động của không khí - cái này mọi ng hay gọi là gió, tuy nhiên đây là nhầm lẫn của người VN lâu nay, gió có thể mát hoặc ko mát, gió to và gió nhỏ. Ví dụ miền trung gió vào gió ra như nhau, thổi ra càng thổi càng nóng ạ.\nBên cạnh đó, gió sẽ được phân tán đối lưu, và không gây cảm giác va đập khó chịu của gió vào cơ thể như các quạt có cánh truyền thống ạ."
+    },
+    {
+      "externalId": "faq:bb:bb-rose:001",
+      "productSku": "BB-ROSE",
+      "question": "Công nghệ lọc không khí của quạt BB là công nghệ gì?",
+      "answer": "- Lọc không khí bằng hệ màng lọc Hepa H13++ kết hợp công nghệ Plasmacluster ion.\n- Công nghệ HEPA là công nghệ lọc không khí đối với bụi mịn pm2.5 theo hệ tiêu chuẩn của Mỹ được cả thế giới công nhận và khẳng định khái niệm trên Wikipedia, hệ màng lọc HEPA có nhiều cấp trong đó cấp H13 là cấp cao cấp thứ 2, cấp cao cấp thứ 1 là HEPA H14 chỉ dung trong phòng thí nghiệm hoặc bệnh viện.\n- Công nghệ plasmaclusterIon là công nghệ cải tiến của công nghệ Ion âm, tại đây phát ra ion âm làm trung hoà các điện tích dương, tuy nhiên thay vì việc trung hoà rơi xuống mặt đất thì với Plasma sẽ hoá lỏng tạo ra hơi nước và bốc hơi đi, nên ko tái ô nhiễm như công nghệ ion âm thông thường."
+    },
+    {
+      "externalId": "faq:bb:bb-rose:002",
+      "productSku": "BB-ROSE",
+      "question": "Công nghệ Plasmacluster ion có tác dụng gì?",
+      "answer": "Công nghệ Plasmacluster ion hoạt động theo cơ chế tạo và phân tán các ion dương và âm tương tự như trong tự nhiên\nCác ion có gốc OH có tính oxi hóa cao và sẽ bám vào các bề mặt nấm mốc và vi khuẩn. Chúng sẽ phá vỡ cấu trúc protein bằng cách lấy đi nguyên tử H trên bề mặt cấu trúc protein.\nSau đó các gốc OH sẽ kết hợp với nguyên tử H tạo thành phân tử H2O trong không khí\n(nói ngắn gọn Plasmacluster ion sẽ phá cấu trúc protein của vi khuẩn virút và chuyển hóa thành nước hòa vào trong không khí)"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:003",
+      "productSku": "BB-ROSE",
+      "question": "Hệ màng lọc của BB như thế nào và có ưu điểm gì so với hệ màng lọc khác?",
+      "answer": "Quạt lọc không khí BB sử dụng hệ màng lọc Hepa H13++ có thể lọc bụi mịn PM 2.5 lên đến 99,95% vi khuẩn có tiêu chuẩn và được công bố kiểm định theo hệ tiêu chuẩn của HEPA Mỹ.\nƯu điểm:\n+ Thiết kế hình trụ giúp lọc không khí 360 độ, tăng diện tích lọc không khí (những sản phẩm lọc không khí trên thị trường màng lọc thiết kế dạng phẳng, chỉ lọc bụi được một mặt, còn ba mặt còn lại không lọc được. Để lọc không khí với phòng diện tích rộng thì máy phải thiết kế lớn)\n+ Bên ngoài có lớp lưới tĩnh điện giúp ngăn chặn được những bụi lớn, lông tóc động vật, phấn hoa… và dễ dàng vệ sinh. Đồng thời giữ được màng lọc không bị biến dạng trong thời gian dài sử dụng.\n+ Mạng lọc được phủ thêm lớp phân tử nano bạc giúp tăng cường khả năng khử mùi trong không khí."
+    },
+    {
+      "externalId": "faq:bb:bb-rose:004",
+      "productSku": "BB-ROSE",
+      "question": "Quạt lọc không khí BB đo chất lượng không khí như thế nào?",
+      "answer": "Cảm biến kép kết hợp CPU AI thông minh giúp đo chính xác được hàm lượng bụi mịn trong không khí theo thời gian thực. Không chỉ thế mà còn có cảm biến kép thể hiện được cả độ ẩm trong phòng và nhiệt độ trong phòng giúp người dung thấy được toàn bộ chất lượng không khí.\nCó đèn viền hiện thị 3 màu sắc theo mức độ nhiễm\n+ Màu xanh: không khí trong lành\n+ Màu vàng: không khí ô nhiễm\n+ Màu đỏ: không khí bị ô nhiễm nặng"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:005",
+      "productSku": "BB-ROSE",
+      "question": "Quạt lọc không khí BB thay màng lọc như thế nào? Bao lâu phải thay? Vệ sinh có khó không?",
+      "answer": "- Thay màng lọc bằng cách:\n+ B1: Tháo nắp chắn màng lọc theo chiều ngược kim đồng hồ\n+ B2: Tháo màng lọc cũ ra khỏi máy\n+ B3: Lắp màng lọc mới\n+ B4: Lắp lại nhựa chắn màng lọc\n- Hai tuần vệ sinh một lần thì sau 14-16 tháng mới phải thay màng lọc mới\n- Vệ sinh màng lọc rất dễ chỉ cần tháo màng lọc ra và dùng chổi nhỏ quét sạch lớp bụi bám bên ngoài. Để sạch hơn có thể dùng máy hút bụi cầm tay để hút"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:006",
+      "productSku": "BB-ROSE",
+      "question": "Quạt lọc không khí BB được điều khiển bằng những cách nào?",
+      "answer": "Điều khiển bằng 3 cách:\nSử dụng nút điều khiển trực tiếp trên thân máy\nSử dụng điều khiển từ xa\nSử dụng trên app điện thoại"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:007",
+      "productSku": "BB-ROSE",
+      "question": "Chất liệu cấu tạo của quạt lọc không khí BB ?",
+      "answer": "- Sử dụng nhựa nguyên sinh nhập khẩu hạt nhựa nguyên sinh cao cấp của LG, chân máy bằng hợp kim thép không rỉ\n- Công nghệ in Water printing"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:008",
+      "productSku": "BB-ROSE",
+      "question": "Đèn của quạt BB sử dụng là đèn gì, khi hỏng có thay được không?",
+      "answer": "- Quạt BB sử dụng đèn khí quyển học cho ánh sáng tự nhiên không gây hại cho mắt và da, hỗ trợ tích cực cho cảm xúc của người dùng\n- Đèn có công dụng làm đèn ngủ trang trí, hoạt động độc lập với các chức năng khác\n- Khi hỏng có thể thay thế một cách dễ dàng"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:009",
+      "productSku": "BB-ROSE",
+      "question": "Quạt lọc không khí BB có chiếm diện tích không? Khoảng cách giữa các chân như thế nào?",
+      "answer": "- Quạt không chiếm quá nhiều diện tích, khoảng cách giữa các chân là 63cm"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:010",
+      "productSku": "BB-ROSE",
+      "question": "Màu sắc của quạt lọc không khí BB?",
+      "answer": "Có hai màu trắng và xám (white và titanium grey)"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:011",
+      "productSku": "BB-ROSE",
+      "question": "Tốc độ gió của BB có mát không?",
+      "answer": "Tốc độ gió mát, với 9 cấp độ gió làm mát, đưa ra lưu lượng gió lên tới 9700 lít/ phút, vận tốc gió 6,2m/s nhiệt độ gió thổi ra giảm trực tiếp từ 2-3 độ C so với nhiệt độ gió đầu vào."
+    },
+    {
+      "externalId": "faq:bb:bb-rose:012",
+      "productSku": "BB-ROSE",
+      "question": "Quạt lọc không khí BB có quay được không?",
+      "answer": "Quạt BB quay 4 góc: 30, 60, 90, 120 ° có thể điều chỉnh lên xuống góc 15 độ"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:013",
+      "productSku": "BB-ROSE",
+      "question": "Kích thước của quạt BB như nào? Phù hợp không gian nào?",
+      "answer": "Kích thước: 63x55x123cm phù hợp cho không gian phòng khách"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:014",
+      "productSku": "BB-ROSE",
+      "question": "Vậy BB là máy lọc không khí hay là quạt?",
+      "answer": "BB là quạt có chức năng lọc không khí, chức năng 2 trong 1."
+    },
+    {
+      "externalId": "faq:bb:bb-rose:015",
+      "productSku": "BB-ROSE",
+      "question": "BB lọc được diện tích bao nhiêu m2 ?",
+      "answer": "Lọc được diện tích 80-100 m2."
+    },
+    {
+      "externalId": "faq:bb:bb-rose:016",
+      "productSku": "BB-ROSE",
+      "question": "Máy hiển thị biểu tượng màu đỏ trên màn hình là gì? Cách reset như thế nào?",
+      "answer": "- Biểu tượng màu đỏ là biểu tượng cảnh báo cần vệ sinh màng lọc.\n- Cách reset: giữ nút nguồn trên điều khiển từ xa từ 5-7 giây. Khi quạt kêu 3 tiếng tít tít tít thì bỏ tay ra"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:017",
+      "productSku": "BB-ROSE",
+      "question": "Quạt được bảo hành bao lâu?",
+      "answer": "Bảo hành 3 năm lỗi, 1 đổi 1 trong 7 ngày đầu tiên nếu có lỗi từ nhà sản xuất"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:018",
+      "productSku": "BB-ROSE",
+      "question": "Quạt lắp vào không sáng?",
+      "answer": "B1: Tắt quạt, tháo chao đèn ra khỏi thân máy\nB2: Bật quạt, lấy điều khiển từ xa bấm vào biểu tượng bật đèn cánh gió\nB3: Lắp lại chao đèn vào thân máy, căn chỉnh cho chao đèn sáng sau đó siết chặt ốc cố định chao đèn"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:019",
+      "productSku": "BB-ROSE",
+      "question": "Quạt có mùi hăng khét?",
+      "answer": "Quạt Ultty không có mùi hăng khét. Đây là mùi của sản phẩm mới, mùi nhựa nguyên sinh. Hạt nhưa cao cấp loại 1 nhập khẩu của LG, an toàn với sức khỏe nên a/c yên tâm.\nBên em dùng công nghệ đánh bóng oxygen để giúp bề mặt sản phẩm sáng bóng, chống nhiễm bẩn, chống oxi hoá trên bề mặt. Mà chất này có mùi hắc đặc trưng nên mới đầu dùng sẽ ngửi thấy mùi hắc nhẹ như vậy, khách dùng 1 thời gian ngắn thôi sẽ không còn thấy mùi hắc nữa ạ."
+    },
+    {
+      "externalId": "faq:bb:bb-rose:020",
+      "productSku": "BB-ROSE",
+      "question": "Quạt ồn thế e?",
+      "answer": "Các sản phẩm Ultty đều được test và kiểm tra độ ồn nghiêm ngặt trong phòng thí nghiệm ở châu Âu, đạt tiêu chuẩn quốc gia về tiếng ồn của quạt. E gửi chị video phòng kiểm tra độ ổn bên e.\nhttps://youtube.com/shorts/__OAqOtz1gk?feature=share\nTiếng này là tiếng gió thổi chứ ko phải tiếng ồn động cơ. Độ ồn của máy này chỉ 55dB, là mức ồn trắng, mang lại cảm giác thoải mái cho người sử dụng, không gây ảnh hưởng tới giấc ngủ.\ncác nghiên cứu khoa học đc công bố bởi các chuyên gia đầu ngành, anh/ chị tham khảo:"
+    },
+    {
+      "externalId": "faq:bb:bb-rose:021",
+      "productSku": "BB-ROSE",
+      "question": "Quạt yếu, không mát như quạt có cánh:",
+      "answer": "Quạt không cánh sử dụng công nghệ bội khí, tăng áp tuabin để làm mát. Nguyên lý làm mát của quạt ko cánh là hạ nhiệt độ từ 2-3 độ giữa đầu vào và đầu ra, cho nên chắc chắn là mát.\nVideo test tốc độ gió: https://www.tiktok.com/@ulttyvietnam_/video/7238460602388073733?is_from_webapp=1&sender_device=pc&web_id=735051383621189786\nẢnh test gió với Dyson và Xiaomi:\nSản phẩm này khác với có cánh ở điểm: nó ko tạo ra nhiều luồng chuyển động của không khí - cái này mọi ng hay gọi là gió, tuy nhiên đây là nhầm lẫn của người VN lâu nay, gió có thể mát hoặc ko mát, gió to và gió nhỏ. Ví dụ miền trung gió vào gió ra như nhau, thổi ra càng thổi càng nóng ạ.\nBên cạnh đó, gió sẽ được phân tán đối lưu, và không gây cảm giác va đập khó chịu của gió vào cơ thể như các quạt có cánh truyền thống ạ."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:001",
+      "productSku": "SKJ-CR022",
+      "question": "SKJ-CR022 sở hữu công nghệ làm mát gì, nguyên lý hoạt động như thế nào? Ưu điểm của công nghệ làm mát này so với các quạt khác.",
+      "answer": "Sở hữu 3 công nghệ làm mát hiện đại bậc nhất hiện nay:\n- Tăng áp tua bin\n- Bội khí, tản nhiệt 4D\n- Kết hợp cùng động cơ DC không chổi than mạnh mẽ\nƯu điểm của công nghệ làm mát:\n- Không làm khô da, mất oxy\n- Cảm giác sảng khoái như gió tự nhiên, tốt cho da\n- Phù hợp với cả người già, trẻ nhỏ, người có bệnh liên quan đến hô hấp.\nNguyên lý hoạt động: Máy thu khí từ môi trường phòng, lọc sạch không khí qua hệ màng lọc HEPA H14 cao cấp, khử khuẩn tia UVC, sau đó tuabin tăng áp gia tốc cho không khí hạ nhiệt độ 1-2 độ so với nhiệt độ khí thu vào, và thổi ra ngoài qua các khe gió quạt. Gió mát, tự nhiên, sạch, an toàn sức khỏe"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:002",
+      "productSku": "SKJ-CR022",
+      "question": "Tốc độ gió của SKJ-CR022? So sánh với các quạt không cánh?",
+      "answer": "- Tốc độ gió lên tới 4,5 m/s (tương đương 16,2 km/h)\n- Khoảng gió cảm nhận tốt nhất là dưới 2m, khoảng cách từ 2-5m gió thoảng nhẹ, đối lưu toàn phòng\nNguyên lý: Quạt dùng công nghệ gió 3D trên nguyên lý khí động học qua khe hẹp: gió mềm mại, có luồng, mát vì gió đầu ra giảm 1-2 độ so với gió đầu vào. 9 cấp độ gió.\nSo sánh: Về gió thì gió của quạt có cánh là gió cứng ạ. Quạt ko cánh là gió mềm ạ.\nGió mềm giúp mát mẻ mà ko tạo lực đập lên động mạch và mao mạch, ko gây tê bì chân tay, ko khô niêm mạc mắt mũi miệng, giảm điện tích âm.\nChính vì vậy nên dù giá cao hơn, nhưng xu hướng hiện nay đang ưu tiên chuyển sang dùng quạt không cánh vì những lợi ích về sức khỏe và thoải mái lâu dài.\nGió của ULTTY được đo và kiểm định trong phòng LAB tiêu chuẩn hàng đầu thế giới."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:003",
+      "productSku": "SKJ-CR022",
+      "question": "Quạt có bao nhiêu mức điều chỉnh công suất gió, các chế độ hoạt động nào, phù hợp trong hoàn cảnh như thế nào?",
+      "answer": "9 tốc độ gió (từ 1 đến 9) và 4 chế độ hoạt động: Tự động, gió ngủ, gió tự nhiên, gió tăng áp linh hoạt phù hợp trong mọi hoàn cảnh sử dụng"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:004",
+      "productSku": "SKJ-CR022",
+      "question": "Quạt có biên độ quay như thế nào?",
+      "answer": "- Biên độ quay: Trái phải 80 độ, trên dưới 15 độ =>> đối lưu gió nhanh, đều khắp căn phòng\nMàng lọc"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:005",
+      "productSku": "SKJ-CR022",
+      "question": "Quạt Ultty được trang bị màng lọc nào? Ưu điểm của màng lọc?",
+      "answer": "- Sử dụng màng lọc cao cấp Hepa H14 360 độ\nTiêu chuẩn màng lọc không khí thế giới sẽ chia ra là Epa, Hepa, H cao hơn E. Thì HEPA lại chia ra H10, H12. H13. H14. Màng lọc của CR022 là màng lọc HEPA 14 cao cấp nhất trong thang đo tiêu chuẩn.\nƯu điểm của màng lọc:\n- Đây là dòng sản phẩm quạt lọc duy nhất trên thị trường sở hữu màng lọc cao cấp HEPA H14. Đặc biệt, ở phiên bản mới này, màng lọc được nâng cấp kích thước lớn hơn đến 40%, loại bỏ 99,97% bụi bẩn, vi khuẩn, virut, bụi mịn…\n- Hệ màng lọc hình trụ 360 độ: Đa số màng lọc của các máy lọc không khí trên thị trường là hệ phẳng, chỉ lọc được một hướng duy nhất, còn hệ màng lọc của Ultty SKJ-CR022 có cấu tạo hình trụ, giúp khả năng lọc 360 độ, lưu trữ bụi hiệu quả vượt trội.\n- Ngoài ra, hệ màng lọc còn được bao bọc bên ngoài bởi lớp kim loại tĩnh điện, không chỉ giúp dễ vệ sinh mà còn làm tăng tuổi thọ cho màng lọc."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:006",
+      "productSku": "SKJ-CR022",
+      "question": "Bao lâu phải thay màng lọc? Thay màng lọc ở đâu?",
+      "answer": "- Tuổi thọ phụ thuộc chất lượng không khí. Thời gian thay màng lọc khoảng 15-18 tháng. Có thể tăng tuổi thọ bằng cách vệ sinh thường và đúng cách màng lọc (Có video hướng dẫn)\n- Thay màng lọc tại tất cả đại lý, kênh thương mại điện tử của thương hiệu Ultty Việt Nam trên toàn quốc, giá thay màng lọc có trợ giá 650k\nChế độ bù ẩm – diệt khuẩn"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:007",
+      "productSku": "SKJ-CR022",
+      "question": "Quạt có các chế độ bù ẩm nào, phù hợp với thời tiết, hoàn cảnh như thế nào?",
+      "answer": "Có 03 chế độ bù ẩm (1- mức thấp, 2- Trung bình, 3- Cao) và chế độ tự động (Auto) =>> Phù hợp mọi hoàn cảnh thời tiết. Có thể tắt độc lập khi không cần thiết.\nChế độ auto máy tự cảm biến độ ẩm phòng, khi độ ẩm phòng đạt đến độ ẩm lý tưởng tiêu chuẩn (55-60%) máy tự động dừng bù ẩm và ngược lại dưới 55% thì tự động cấp ẩm lại\nMáy bù ẩm công nghệ sóng siêu âm, hơi ẩm tự nhiên chứ không phải hơi nước như các dòng phun sương ngoài thị trường. Hơi ẩm tự nhiên này không gây đọng giọt, nên không gây hư hỏng các thiết bị điện tử và các thiết bị gỗ mà sẽ thẩm thấu nhanh qua da, mao mạch cơ thể không bị mất nước, khô da."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:008",
+      "productSku": "SKJ-CR022",
+      "question": "Dung tích bình nước? Có thể cho tinh dầu vào trong bình bù ẩm không?",
+      "answer": "- Bình chứa nước lên tới 1200ml\n- Có đèn LED hiển thị báo tình trạng thiếu nước\n- Không thể cho tinh dầu vào trong bình chưa nước vì quạt sử dụng nhựa nguyên sinh."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:009",
+      "productSku": "SKJ-CR022",
+      "question": "Công nghệ diệt khuẩn của SKJ-CR022 hoạt động như thế nào?",
+      "answer": "Diệt khuẩn bằng tia UVC dạng modun cao cấp = >>> có thể tiêu diệt được hầu hết các loại vi khuẩn, virus, kể cả virus corona.\nTia UV được chia làm 3 loại: A,B,C. Thì 2 tia A và B là 2 tia có bước sóng dài, gây hại cho da nhưng tia C lại là tia có bước song ngắn, được ứng dụng trong các phòng mổ, phòng gây mê dùng để diệt khuẩn phòng sau khi phẫu thuật, nên diệt khuẩn diệt viruss có hại trong kk rất tốt\nCác tính năng khác"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:010",
+      "productSku": "SKJ-CR022",
+      "question": "Màn hình LED của quạt hiển thị những thông số gì?",
+      "answer": "- Hàm lượng bụi mịn trong không khí : đơn vị đến 2.5 pm\n- Độ ẩm không khí\n- Chế độ bù ẩm\n- Tia UV khử trùng\n- Trạng thái hoạt động\n- Tốc độ gió\n- Chế độ hẹn giờ\n- Kết nối wifi/app"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:011",
+      "productSku": "SKJ-CR022",
+      "question": "SKJ-CR022 có thể điều khiển qua những cách nào?",
+      "answer": "Điều khiển thuận tiện, đơn giản qua:\n- Phím cảm ứng trên thân sản phẩm\n- Điều khiển từ xa (Remove)\n- App điện thoại Google Home / Amazone Alexa"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:012",
+      "productSku": "SKJ-CR022",
+      "question": "Quạt Ultty cài đặt hẹn giờ trong khoảng thời gian như thế nào?",
+      "answer": "- Thời gian hẹn giờ: từ 1 đến 8 tiếng"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:013",
+      "productSku": "SKJ-CR022",
+      "question": "Độ ồn trung bình của quạt Ultty? Đánh giá độ êm của quạt.",
+      "answer": "- Độ ồn êm ái nhờ 4 lớp tiêu âm cao cấp: độ ồn dưới 55dB cho những giấc ngủ thật sảng khoái\n- Độ ồn trắng, không ảnh hướng thân kinh, giúp giấc ngủ sâu."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:014",
+      "productSku": "SKJ-CR022",
+      "question": "Quạt lọc không khí thông minh Ultty được đánh giá là an toàn, thân thiện với người sử dụng đặc biệt là trẻ em bởi tính năng nào?",
+      "answer": "- Thiết kế không cánh: An toàn cho trẻ em, dừng ngay khi có hiện tượng nghiêng đổ\n- Công nghệ hiện đại không gây khô da, mất oxi, độ ẩm\n- Vỏ sản phẩm thiết kế bằng nhựa nguyên sinh an toàn, không độc hại"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:015",
+      "productSku": "SKJ-CR022",
+      "question": "Công suất tiêu thụ của quạt Ultty? Khả năng tiết kiệm điện của Ultty như thế nào?",
+      "answer": "- Công suất tiêu thu: 60W\nKhả năng tiết kiệm điện vì:\n- Công suất thấp\n- Chế độ hẹn giờ"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:016",
+      "productSku": "SKJ-CR022",
+      "question": "Quạt có mùi khét?",
+      "answer": "Về gió thì gió của quạt có cánh là gió cứng ạ. Quạt ko cánh là gió mềm ạ.\nGió mềm giúp mát mẻ mà ko tạo lực đập lên động mạch và mao mạch, ko gây tê bì chân tay, ko khô niêm mạc mắt mũi miệng, giảm điện tích âm.\nE gửi c so sánh về gió để ac hiểu hơn về quạt ko cánh ạ.\nChính vì vậy nên dù giá cao hơn, nhưng xu hướng hiện nay đang ưu tiên chuyển sang dùng quạt không cánh vì những lợi ích về sức khỏe và thoải mái lâu dài."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:017",
+      "productSku": "SKJ-CR022",
+      "question": "Quạt ồn?",
+      "answer": "Tiếng này là tiếng gió thổi chứ ko phải tiếng ồn động cơ. Độ ồn của máy này chỉ 55dB, là mức ồn trắng, mang lại cảm giác thoải mái cho người sử dụng, không gây ảnh hưởng tới giấc ngủ. Các sản phẩm Ultty đều được test và kiểm tra độ ồn nghiêm ngặt trong phòng thí nghiệm ở châu u, đạt tiêu chuẩn quốc gia về tiếng ồn của quạt."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:018",
+      "productSku": "SKJ-CR022",
+      "question": "Bù ẩm có được dùng tinh dầu không?",
+      "answer": "Máy CR022 bù ẩm không sử dụng tinh dầu ạ. Vì Phmg là chất có trong chất khử trùng, 1 số hương liệu, tinh dầu nó không những ăn mòn nhựa mà còn vào phổi, gây hại sức khỏe nữa ạ"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:019",
+      "productSku": "SKJ-CR022",
+      "question": "Thời gian bảo hành chính hãng và chính sách đổi trả của ULTTY CR022 tại Việt Nam như thế nào?",
+      "answer": "Bảo hành: 2 năm chính hãng quốc tế.\nChính sách 1 đổi 1: Trong vòng 7 ngày đầu tiên nếu phát sinh lỗi từ nhà sản xuất.\nBảo trì: Hỗ trợ bảo trì trọn đời sản phẩm.\nCâu hỏi về thương hiệu"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:020",
+      "productSku": "SKJ-CR022",
+      "question": "Thương hiệu ULTTY có xuất xứ từ đâu và sản phẩm CR022 đạt những chứng nhận chất lượng Châu Âu nào?",
+      "answer": "ULTTY là thương hiệu Global có khởi nguồn tại Pháp, được tư vấn thiết kế bởi thương hiệu nổi tiếng eVatmaster Consulting (Đức) và đăng ký bảo hộ thương hiệu tại 27 quốc gia (EU, Mỹ, Đức, Việt Nam...).\nSản phẩm ứng dụng linh kiện, bo mạch chính công nghệ Đức, lắp ráp tại nhà máy của hãng đặt tại Trung Quốc theo chuỗi cung ứng toàn cầu.\nQuạt đạt các tiêu chuẩn kiểm định chất lượng khắt khe của Châu Âu như: CE, GS, CCC..."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:021",
+      "productSku": "SKJ-CR022",
+      "question": "Giá niêm yết và giá bán lẻ chính thức của ULTTY SKJ - CR022 là bao nhiêu?",
+      "answer": "Giá niêm yết: 12.000.000 VNĐ.\nGiá bán lẻ: 8.500.000 VNĐ."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:022",
+      "productSku": "SKJ-CR022",
+      "question": "Trọng lượng tịnh (N.W), trọng lượng đóng hộp (G.W) và kích thước thực tế của quạt là bao nhiêu?",
+      "answer": "Trọng lượng tịnh (N.W): 4,1kg.\nTổng trọng lượng đóng hộp (G.W): 5,4 kg.\nKích thước sản phẩm: 255 x 255 x 815 mm.\nKích thước đóng hộp: 290 x 290 x 885 x mm."
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:023",
+      "productSku": "SKJ-CR022",
+      "question": "Công suất tiêu thụ điện định danh của quạt là bao nhiêu Watt và nguồn điện sử dụng là bao nhiêu?",
+      "answer": "Công suất định danh: 60W (tiết kiệm điện năng tối đa).\nĐiện áp định danh: 24V / 2,5A.\nNguồn điện đầu vào: 100 - 240V / 50 - 60Hz, 1,5A"
+    },
+    {
+      "externalId": "faq:cr022:skj-cr022:024",
+      "productSku": "SKJ-CR022",
+      "question": "Đi kèm trong hộp sản phẩm chính thức gồm những phụ kiện nào?",
+      "answer": "Đi kèm trong hộp sản phẩm gồm: Điều khiển từ xa (Remote), Adapter (Bộ nguồn), và Sách hướng dẫn sử dụng."
+    },
+    {
+      "externalId": "faq:hercules:hercules:001",
+      "productSku": "HERCULES",
+      "question": "Máy hút ẩm Hercules sản xuất ở đâu?",
+      "answer": "Sản xuất tại nhà máy …, một trong những nhà máy sản xuất máy hút ẩm lớn nhất thế giới hiện tại"
+    },
+    {
+      "externalId": "faq:hercules:hercules:002",
+      "productSku": "HERCULES",
+      "question": "Máy bảo hành bao lâu?",
+      "answer": "Bảo hành 2 năm, 1 đổi 1 trong 7 ngày đầu tiên nếu có lỗi từ nhà sản xuất"
+    },
+    {
+      "externalId": "faq:hercules:hercules:003",
+      "productSku": "HERCULES",
+      "question": "Máy hút được bao nhiêu lít một ngày?",
+      "answer": "Ở điều kiện tiêu chuẩn 30°C, 80 % RH có thể hút được 30L/24h\nỞ điều kiện nhiệt độ thấp, độ ẩm cao máy không giới hạn công suất hút ẩm"
+    },
+    {
+      "externalId": "faq:hercules:hercules:004",
+      "productSku": "HERCULES",
+      "question": "Máy có mấy chế độ hút ẩm?",
+      "answer": "Có 3 chế độ:\nHút ẩm tự động\nHút ẩm cài đặt % RH mong muốn\nChế độ ngủ"
+    },
+    {
+      "externalId": "faq:hercules:hercules:005",
+      "productSku": "HERCULES",
+      "question": "Làm thế nào để biết phòng mình đã đủ độ ẩm?",
+      "answer": "Khi máy ở chế độ Auto, máy đang chạy tự dừng lại, màn hình hiển thị 55% thì phòng đã đủ độ ẩm"
+    },
+    {
+      "externalId": "faq:hercules:hercules:006",
+      "productSku": "HERCULES",
+      "question": "Máy này hơn gì máy khác mà sao nó đắt hơn nhiều vậy em?",
+      "answer": "Vỏ máy sử dụng nhựa nguyên sinh, không gây độc hại\nCông suất hút ẩm lớn,nằm trong top máy hút ẩm có công suất hút lớn nhất hiện nay\nHệ dàn đồng 2+2 nguyên chất dày đặc và máy nén được sản xuất trực tiếp tại Đức\nSử dụng công nghệ diệt khuẩn Plasmacluster ion hiện đại\nSử dụng khí R290 cao cấp nhất hiện nay"
+    },
+    {
+      "externalId": "faq:hercules:hercules:007",
+      "productSku": "HERCULES",
+      "question": "Khoang đựng nước có lớn không?",
+      "answer": "Khoang đựng nước lớn, dung tích lên tới 5,5L"
+    },
+    {
+      "externalId": "faq:hercules:hercules:008",
+      "productSku": "HERCULES",
+      "question": "Máy dùng có bền không?",
+      "answer": "Máy có độ bền cao vì:\nSử dụng hệ dàn đồng nguyên chất 2+2\nSử dụng khí ga R290 cao cấp\nDàn đồng và máy nén sản xuất tại Đức"
+    },
+    {
+      "externalId": "faq:hercules:hercules:009",
+      "productSku": "HERCULES",
+      "question": "Máy hút có khỏe không? Hút được nhà tầng không?",
+      "answer": "Máy hút khỏe, không hút được quá nhiều tầng nhưng có thể hút được thông khoảng 2 tầng diện tích tối đa lên tới 150m2"
+    },
+    {
+      "externalId": "faq:hercules:hercules:010",
+      "productSku": "HERCULES",
+      "question": "Máy này sấy quần áo như nào?",
+      "answer": "Đặt máy dưới giá treo quần áo\nBật máy, bấm nút cài đặt chuyển sang chế độ set RH, màn hình nhấp nháy số 30% RH => đã cài đặt thành công"
+    },
+    {
+      "externalId": "faq:hercules:hercules:011",
+      "productSku": "HERCULES",
+      "question": "Máy dùng có tốn điện không?",
+      "answer": "Máy có chế độ tự động ngắt khi độ ẩm đạt tới phần trăm độ ẩm cài đặt\nSử dụng gas R290 cao cấp\nkhông tốn điện"
+    },
+    {
+      "externalId": "faq:hercules:hercules:012",
+      "productSku": "HERCULES",
+      "question": "Máy này lọc không khí như thế nào?",
+      "answer": "Máy lọc không khí bằng hệ màng lọc các bon than hoạt tính giúp giữ lại những bụi thô, lông tóc động vật, phấn hoa…\nSử dụng bộ phát Plasmacluster ion làm tăng khả năng lọc không khí"
+    },
+    {
+      "externalId": "faq:hercules:hercules:013",
+      "productSku": "HERCULES",
+      "question": "Bao lâu thì phải thay màng lọc? Thay hết bao nhiêu tiền? Bên em có bán sẵn chứ?",
+      "answer": "Khoảng 1 năm nên thay màng lọc\nGiá 550.000 VNĐ\nBên em có bán sẵn\nCông nghệ Plasmacluster ion\nHoạt động theo cơ chế chế tạo và phân tán các ion dương và âm tương tự như trong tự nhiên\nCác ion có gốc OH có tính oxi hóa cao và sẽ bám vào các bề mặt nấm mốc và vi khuẩn. Chúng sẽ phá vỡ cấu trúc protein bằng cách lấy đi nguyên tử H trên bề mặt cấu trúc protein.\nSau đó các gốc OH sẽ kết hợp với nguyên tử H tạo thành phân tử H2O trong không khí\n(nói ngắn gọn Plasmacluster ion sẽ phá cấu trúc protein của vi khuẩn virút và chuyển hóa thành nước hòa vào trong không khí)\nTác dụng của công nghệ Plasmacluster ion:\n+ Diệt virút vi khuẩn gây bệnh\n+ Tăng cường khả năng lọc không khí\n+ Khử mùi hiệu quả\n+ Giảm tĩnh điện\n+ Duy trì độ ẩm trong phòng"
+    },
+    {
+      "externalId": "faq:hercules:hercules:014",
+      "productSku": "HERCULES",
+      "question": "Máy dùng khí Gas gì? Có an toàn không?",
+      "answer": "Máy dùng khí Gas R290. Đây là loại khí gas cao cấp nhất hiện nay.Gas R290 có chỉ số GWP và ODP ở mức rất thấp không gây hiện tượng nhà kính, không phá hủy tầng ozon và không gây ảnh hưởng tới sức khỏe con người"
+    },
+    {
+      "externalId": "faq:hercules:hercules:015",
+      "productSku": "HERCULES",
+      "question": "Khi hết gas thì phải làm thế nào?",
+      "answer": "Gas R290 khi sử dụng lâu dài có sự hao hụt ra rất ít nên thường không phải bơm gas. Nhưng nếu máy bị rò rỉ gây hiện tượng mất gas thì có thể mang tới trung tâm bảo hành để được hỗ trợ\nChính sách bảo hành? Cơ chế bảo hành\n24 tháng , 1 đổi 1 trong 7 ngày đầu tiên nếu có lỗi nhà sản xuất\nCó biểu quy định bảo hành chặt chẽ."
+    },
+    {
+      "externalId": "faq:v08:v08:001",
+      "productSku": "V08",
+      "question": "Thương hiệu và Xuất xứ sản phẩm? Bảo hành?",
+      "answer": "Thương hiệu: Pháp\nXuất xử: Sản xuất tại Tập đoàn Weishisheng\nBảo hành : 24 tháng, 1 đổi 1 trong vòng 7 ngày đầu tiên nếu sản phẩm có lỗi từ nhà sản xuất."
+    },
+    {
+      "externalId": "faq:v08:v08:002",
+      "productSku": "V08",
+      "question": "Máy hút bụi và lau nhà Ultty V08 lực hút có mạnh không?",
+      "answer": "Vô cùng mạnh\nCông suất : 350W – 1600 vòng / giây (96,000 vòng/phút) – Lực hút tối đa 24,000 pascal\nĐộng cơ : Phản lực không chổi than.\nCông nghệ hút: Theo nguyên lý hút lốc xoáy phản lực tăng áp Jet Cylone hút sạch mọi loại rác và bụi, ở mọi địa hình…"
+    },
+    {
+      "externalId": "faq:v08:v08:003",
+      "productSku": "V08",
+      "question": "Máy hút bụi và lau nhà Ultty V08 hoạt động được trong bao lâu? Thời gian sạc ? So sánh với các dòng máy khác trên thị trường?",
+      "answer": "Thời gian hoạt động: Công suất tối đa: 45 phút | Công suất trung bình: 60 phút\nThời gian sạc: 3 giờ\nSử dụng Pin : Lithium Ion, dung lượng 2200 mAh- 25.9V\nƯu điểm:\n+ Pin Lithium Ion không chứa chì, axit, không độc hại, bảo vệ môi trường\n+ Nhỏ gọn và dòng xả cao đáp ứng được yêu cầu của động cơ 3 pha\n+ Hiệu suất chuyển đổi năng lượng cao\n=>> Không chỉ có lực hút mạnh, V08 còn có thời gian sạc nhanh và thời gian sử dụng bền bỉ hơn so với các dòng robot thị trường. Do đó có thể thỏa mái lau dòn mà k bị ngắt quãng, chờ đợi sạc thêm pin trong quá trình sử dụng. (Máy hút bụi cầm tay dưới 10tr có thời gian sạc từ 4-5 tiếng nhưng thời giản sử dụng chỉ 35p, có dòng máy chỉ được 15 phút cho mức công suất tối đa)."
+    },
+    {
+      "externalId": "faq:v08:v08:004",
+      "productSku": "V08",
+      "question": "V08 có những tính năng gì?",
+      "answer": "Ultty V08 tích hợp 6 tính năng trong sản phẩm:\nPhụ kiện\n| Hình ảnh\n| Cấu tạo + Công dụng\n|\nĐầu quét + hút sàn\n|\n| Quét rác to, hút bụi mịn làm sạch trên nhiều bề mặt: Đá, sàn gỗ, thảm,…\nHệ chổi lau và rãnh xoắn cuốn rác vào miệng hút rác\nCó 4 đèn LED phát hiện bụi và vệ sinh trong điều kiện thiếu sang.\nĐầu có thể xoay chuyển 180 độ + bánh xe nên di chuyển, lau dọn linh động.\n|\nĐầu lau + hút sàn\n|\n| - Hệ 2 chổi xoay ngược chiều nhau 360 độ hỗ trợ đưa rác vào họng hút có thể hút + lau đồng thời.\n- Có cụm đèn led để hỗ trợ dọn dẹp góc tối.\n|\nĐầu hút sofa, đệm\n|\n| - Hút, vệ sinh sofa, giường, đệm, rèm cửa\n- Cấu tạo có chổi quét , miệng hút, và đệm bảo vệ bên ngoài\n- Có thể kết nối với ống gấp cứng hoặc ống mềm để phù hợp với nhiều điều kiện sử dụng\nhút bụi bẩn ở những khe cửa, khe bàn, ghế và những không gian hẹp, tràn nhà, rèm cửa\n|\nĐầu Chổi Hút Cạnh\n|\n| - Cấu tạo có thể kéo dài để dùng đầu chổi vừa quét vừa hút hoặc thu ngắn đầu chổi lại để chỉ sử dụng miệng hút cứng.\n- Công dụng dùng thu dọn vệ sinh các cạnh nhỏ như cạnh tường, cạnh cửa sổ, dọn nội thất ô tô, hút vỏ kẹo, vỏ hạt ở các cạnh của sofa\n- Có thể kết nối với ống gấp cứng hoặc ống mềm để phù hợp với nhiều điều kiện sử dụng.\n|\nĐấu hút nhỏ\n|\n| - Cấu tạo là một thanh nhỏ dài, đâu hút thiết kế vát chéo có khoét cạnh\n- Mục đích sử dụng dùng để hút các khe nhỏ hẹp mà các thiết bị vệ sinh khác không thể làm sạch được như cạnh ghế ngồi trên ô tô, cạnh góc tiếp nối của sofa. Cạnh cửa sổ, ….\n- Miệng đầu hút nhỏ giúp tăng công suất hút nên dễ dàng dọn sạch sẽ bụi bẩn và rác tại các vị trí này\n- Có thể kết nối với ống gấp cứng hoặc ống mềm để phù hợp với nhiều điều kiện sử dụng\n|\nĐầu chải\n|\n| '- Cấu tạo gồm đầu hút ở giữa có thiết kế các răng lược để chải lông thú cưng, đồng thời kết hợp cơ chế gạt lông thú ra để gỡ khỏi các răng lược thông minh.\n- Đầu hút cũng giúp cho bụi hoặc các sợi lông tơ rụng ra trong lúc chải lông cho thú cưng được thu lại ngay lập tức mà không bay ra ngoài biến thành bụi mịn có hại cho sức khỏe.\n- Lắp kết hợp với ống dây mềm để dễ dàng thao tác hơn.\n|"
+    },
+    {
+      "externalId": "faq:v08:v08:005",
+      "productSku": "V08",
+      "question": "Hệ thống khoan rác cấu tạo có gì vượt trội? Có dễ thay thế phụ kiện hay không?",
+      "answer": "Dung tích khoang rác: 800 ml =>> Hộp chứa cực lớn, giúp sử dụng trong thời gian dài liên tục, mà không phải đổ rác nhiều lần\nUltty V08 sử dụng hệ thống lọc kk 4 lớp, màng lọc heap H13 giúp bảo vệ môi trường trong lành, tránh trường hợp ô nhiễm ngược\nKhoang rác có nắp mở bên dưới dễ dàng đổ rác và vệ sinh.\nTất cả các phụ kiện có thể tháo rời và rửa sạch bằng nước."
+    },
+    {
+      "externalId": "faq:v08:v08:006",
+      "productSku": "V08",
+      "question": "Ultty V08 hút sàn như thế nào?",
+      "answer": "Máy hút bụi được thiết thế theo dạng ống với tay cầm thuận tiện.\nỐng hút dạng gấp xoay 180 độ giúp dễ dàng vệ sinh gầm bàn, ghế, giường tủ mà không cần cúi người xuống.\n4 cụm đèn Led gắn trước chổi hút giúp phát hiện , vệ sinh tốt hơn ngày cả trong môi trường thiếu sáng.\nTrang bị thêm bánh xe giúp việc di chuyển và đổi chiều trong khi sử dụng sẽ dễ dàng và thuận tiện hơn."
+    },
+    {
+      "externalId": "faq:v08:v08:007",
+      "productSku": "V08",
+      "question": "Ultty V08 lau sàn có sạch không? Có gì đặc biết so với sản phẩm khác ngoài thị trường?",
+      "answer": "Dạ, máy lau rất là sạch ạ.\nThiết kế 2 chổi lau xoay 360 độ, đồng thời tạo 1 lực xuống mặt sàn nhà giúp đánh bật mọi vết bẩn, ngay cả những vết bẩn lâu ngày.\nKết hợp ống hút bụi giúp thực hiện đồng thời 2 tác vụ\nCó 4 đèn LED gắn trước chổi lau giúp phát hiện, vệ sinh tốt hơn ngày cả trong môi trường thiếu sáng\nChất liệu giẻ lau: vải vi sợi microfiber siêu mềm mượt, ngấm hút nước tốt, không để lại vệt nước sau khi lau.\nKhoang chứa nước lau sàn kiểm soát việc tháo nước để duy trì độ ướt tối ưu trên sàn cứng trong khi lau chùi thay vì lau nhà ướt nhẹp nước.\nDễ dàng tháo giẻ lau để giặt sạch bằng tay hoặc bằng máy giặt."
+    },
+    {
+      "externalId": "faq:v08:v08:008",
+      "productSku": "V08",
+      "question": "Có sử dụng hút nội thất oto không?",
+      "answer": "- Có\n- Tùy vị chí sử dụng đầu hút sofa+ đầu chổi hút cạnh + đầu hút nhỏ\n- Dùng máy hút, hút vào các khe nhỏ của các đường may vải bọc ghế, gầm ghế, bọc cần số và bất cứ chỗ nào bụi bẩn có thể mắc kẹt.\n|\n|"
+    },
+    {
+      "externalId": "faq:v08:v08:009",
+      "productSku": "V08",
+      "question": "Ultty V08 có hút được Sofa, đệm , gường không?",
+      "answer": "Có\nSofa, giường nệm thường được cấu trúc từ phần đệm mút tương đối dày, bên ngoài phù vải nỉ, da hoặc cotton,... nên nếu áp dụng cách giặt nước truyền thống sẽ rất lâu khô, sinh ra mùi hôi khó chịu và ảnh hưởng đến tuổi thọ của sản phẩm.\n- Ultty V08 sử dụng đầu hút vệ sinh đệm, sofa chuyên dụng với cấu tạo có chổi quét , miệng hút, và đệm bảo vệ bên ngoài. Hút bụi chăn đệm, sofa, mà bụi của nó là bụi siêu mịn, hút được cả tóc (lông)"
+    },
+    {
+      "externalId": "faq:v08:v08:010",
+      "productSku": "V08",
+      "question": "Có hút được lông chó mèo không?",
+      "answer": "Có\n- Sử dụng đầu chải.\n- Cấu tạo gồm đầu hút ở giữa có thiết kế các răng lược để chải lông thú cưng, đồng thời kết hợp cơ chế gạt lông thú ra để gỡ khỏi các răng lược thông minh.\n- Đầu hút cũng giúp cho bụi hoặc các sợi lông tơ rụng ra trong lúc chải lông cho thú cưng được thu lại ngay lập tức mà không bay ra ngoài biến thành bụi mịn có hại cho sức khỏe.\nLắp kết hợp với ống dây mềm để dễ dàng thao tác vệ sinh hút lông thủ cưng ở mọi vị trí: gầm gường, nệm, sofa."
+    },
+    {
+      "externalId": "faq:v08:v08:011",
+      "productSku": "V08",
+      "question": "Trọng lượng của máy V08 là bao nhiêu? Có dễ di chuyển không?",
+      "answer": "Trọng lượng máy nhẹ, chỉ 1.1kg\nLà dòng nhẹ nhất ở Việt Nam hiện tại, dễ dàng di chuyển, cầm nắm, vệ sinh."
+    },
+    {
+      "externalId": "faq:v08:v08:012",
+      "productSku": "V08",
+      "question": "Độ ồn của máy như thế nào?",
+      "answer": "Dạ, máy V08 có công nghệ khử tiếng ồn 2 lớp, ở chế độ cao nhất độ ồn chỉ có 78 dB thôi ạ, với mức độ này không làm khó chịu cho người dùng và người già, trẻ nhỏ."
+    },
+    {
+      "externalId": "faq:v08:v08:013",
+      "productSku": "V08",
+      "question": "Màn hình hiển thị ntn ? Có dễ sử dụng hay không?",
+      "answer": "Màn hình hiển thị LED, điều khiển bằng cảm ứng.\nHiển thị : mức công suất hiện tại, % pin, đèn cảnh báo lỗi.\nThông số kỹ thuật:"
+    },
+    {
+      "externalId": "faq:v08:v08:014",
+      "productSku": "V08",
+      "question": "Nên mua robot hút bụi lau nhà hay mua cây hút bụi lau nhà cầm tay?",
+      "answer": "Nếu có điều kiện nên mua cả 2 vì mỗi loại có ưu điểm khác nhau.\n. + Máy hút bụi có thể tuy chỉnh các chức năng hút trên tay cầm một cách dễ dàng. Đầu hút đa dạng, linh hoạt làm sạch trên nhiều bề mặt mà robot không vệ sinh được\n+ Robot lau nhà có thể tự động quét dọn, lau nhà mà không cần hỗ trợ từ con người, tính tự động hóa cao hơn.\nCòn nếu lựa chọn 1 trong 2 sản phẩm thì ưu tiên mua máy hút bụi lau cầm tay vì:\n+ Máy hút bụi lau nhà đa năng vừa hút vừa lau nhà và hút được “nhiều địa hình, vị trí mà robot k thể vệ sinh được như: Cầu thang, sofa, thảm, trần nhà, khe cửa, rèm, tủ, cửa sổ…\n+ Robot chỉ làm việc ở các mặt phẳng có độ chênh lệch về cao độ không quá 2cm sẽ bất tiện cho gia đình có thiết kế nhiều gian phòng chênh nhau, như ban công, nhà vệ sinh, các phòng tách biệt, nhà tầng"
+    }
+  ],
+  "advice": [
+    {
+      "externalId": "advice:bb:bb-grey:intro",
+      "productSku": "BB-GREY",
+      "title": "FAQ Quạt lọc không khí BB — tổng quan",
+      "body": "Các công năng chính của quạt lọc không khí BB\nLàm mát với 9 cấp độ gió và 4 chế độ hoạt động\nLọc không khí bằng bằng màng lọc Hepa H13++\nDiệt virút vi khuẩn bằng công nghệ Plasmacluster ion\nĐèn khí quyển học kết hợp công năng làm đèn trang trí đèn ngủ\nCài đặt thông minh qua app điện thoại nên dễ dàng điều khiển và kiểm soát chất lượng không khí thông qua app.\nThiết kế sang trọng đạt giải thiết kế ấn tượng IFA2023 tại Châu Âu và Mỹ, với 3 chân kim loại giả gỗ và quạt sơn màu titanium grey kết hợp màu viền sâm panh."
+    },
+    {
+      "externalId": "advice:bb:bb-rose:intro",
+      "productSku": "BB-ROSE",
+      "title": "FAQ Quạt lọc không khí BB — tổng quan",
+      "body": "Các công năng chính của quạt lọc không khí BB\nLàm mát với 9 cấp độ gió và 4 chế độ hoạt động\nLọc không khí bằng bằng màng lọc Hepa H13++\nDiệt virút vi khuẩn bằng công nghệ Plasmacluster ion\nĐèn khí quyển học kết hợp công năng làm đèn trang trí đèn ngủ\nCài đặt thông minh qua app điện thoại nên dễ dàng điều khiển và kiểm soát chất lượng không khí thông qua app.\nThiết kế sang trọng đạt giải thiết kế ấn tượng IFA2023 tại Châu Âu và Mỹ, với 3 chân kim loại giả gỗ và quạt sơn màu titanium grey kết hợp màu viền sâm panh."
+    },
+    {
+      "externalId": "advice:cr022:skj-cr022:intro",
+      "productSku": "SKJ-CR022",
+      "title": "FAQ Quạt lọc không khí bù ẩm SKJ-CR022 — tổng quan",
+      "body": "Ưu điểm lựa chọn sản phẩm lọc không khí bù ẩm Ultty SKJ - CR022:\nLàm mát bằng 3 công nghệ bội khí hiện đại bậc nhất\nMàng lọc HEPA H14 360 độ loại bỏ 99,97% bụi bẩn, vi khuẩn\nBù ẩm 3 chế độ và tự động\nDiệt khuẩn bằng tia UVC\nMàn hình hiển thị màu chất lượng không khí:màu xanh, đỏ , vàng theo hàm lượng độ mịn trong không khí( đơn vị đến 2.5 pm)\nĐiều khiển, theo dõi thuận tiện qua App điện thoại\nThiết kế sang trọng, nhỏ gọn\nDễ vệ sinh, lắp đặt\nCông năng của sản phẩm\nCông nghệ tạo gió"
+    }
+  ],
+  "links": [
+    {
+      "externalId": "link:bb:bb-grey:001",
+      "productSku": "BB-GREY",
+      "kind": "video",
+      "title": "Video dẫn trong FAQ Quạt lọc không khí BB",
+      "url": "https://youtube.com/shorts/__OAqOtz1gk?feature=share"
+    },
+    {
+      "externalId": "link:bb:bb-grey:002",
+      "productSku": "BB-GREY",
+      "kind": "video",
+      "title": "Video dẫn trong FAQ Quạt lọc không khí BB",
+      "url": "https://www.tiktok.com/@ulttyvietnam_/video/7238460602388073733?is_from_webapp=1&sender_device=pc&web_id=735051383621189786"
+    },
+    {
+      "externalId": "link:bb:bb-rose:003",
+      "productSku": "BB-ROSE",
+      "kind": "video",
+      "title": "Video dẫn trong FAQ Quạt lọc không khí BB",
+      "url": "https://youtube.com/shorts/__OAqOtz1gk?feature=share"
+    },
+    {
+      "externalId": "link:bb:bb-rose:004",
+      "productSku": "BB-ROSE",
+      "kind": "video",
+      "title": "Video dẫn trong FAQ Quạt lọc không khí BB",
+      "url": "https://www.tiktok.com/@ulttyvietnam_/video/7238460602388073733?is_from_webapp=1&sender_device=pc&web_id=735051383621189786"
+    }
+  ]
+}

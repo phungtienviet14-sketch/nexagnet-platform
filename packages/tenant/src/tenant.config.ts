@@ -6,8 +6,10 @@ import {
   demoMessagesSchema,
   knowledgeSnapshotSchema,
   tenantConfigSchema,
+  tenantContentManifestSchema,
   type DemoMessages,
   type TenantConfig,
+  type TenantContentManifest,
   type TenantKnowledge,
 } from './tenant.schema.js';
 
@@ -86,6 +88,8 @@ function readPackFile<S extends z.ZodType>(relativePath: string, schema: S): z.i
 let cachedConfig: TenantConfig | undefined;
 let cachedKnowledge: TenantKnowledge | undefined;
 let cachedDemoMessages: DemoMessages | undefined;
+// `null` = da doc dia va goi khach KHONG co file noi dung; `undefined` = chua doc lan nao.
+let cachedContentManifest: TenantContentManifest | null | undefined;
 
 export function loadTenantConfig(): TenantConfig {
   cachedConfig ??= readPackFile('tenant.json', tenantConfigSchema);
@@ -125,6 +129,26 @@ export function loadDemoMessages(): DemoMessages {
     ? readPackFile('data/demo-messages.json', demoMessagesSchema)
     : [];
   return cachedDemoMessages;
+}
+
+/**
+ * Noi dung tu van dong goi kem goi khach (FAQ / bai tu van / link video-catalog).
+ *
+ * TUY CHON: khach chua nhap noi dung thi khong co file -> `null`, va he thong van chay (agent tu
+ * van fail-closed thanh handoff Sale). CO file nhung SAI schema thi NEM luc boot — mot manifest
+ * hong ma bo qua trong im lang la cach chac chan de phat hien thieu FAQ vao dung luc dang chat
+ * voi khach.
+ *
+ * Day la HAT GIONG: import chay o trang thai `draft`, phai co nguoi duyet len `active` moi duoc
+ * dung de tra loi (xem `ContentService`).
+ */
+export function loadTenantContentManifest(): TenantContentManifest | null {
+  if (cachedContentManifest !== undefined) return cachedContentManifest;
+  const path = join(tenantDir(), 'data/content-manifest.json');
+  cachedContentManifest = existsSync(path)
+    ? readPackFile('data/content-manifest.json', tenantContentManifestSchema)
+    : null;
+  return cachedContentManifest;
 }
 
 /** Giong noi cua khach trong prompt LLM (thay cho ten khach truoc day hardcode trong code). */
@@ -167,4 +191,5 @@ export function resetTenantCache(): void {
   cachedConfig = undefined;
   cachedKnowledge = undefined;
   cachedDemoMessages = undefined;
+  cachedContentManifest = undefined;
 }

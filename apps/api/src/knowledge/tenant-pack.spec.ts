@@ -31,7 +31,9 @@ describe('goi khach dang chay <-> nhan', () => {
       priceOverrides: 0,
       dealers: 3,
       groups: 2,
-      glossary: 24,
+      // 24 muc goc + 27 cap viet tat nhap tu ho so khach (`Viet tat_.docx`, 13/08/2026);
+      // 2 cap con lai trong file da co san trong 24 muc goc nen khong nhap lai.
+      glossary: 51,
     });
   });
 

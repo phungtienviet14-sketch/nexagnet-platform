@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   loadDemoMessages,
   loadTenantConfig,
+  loadTenantContentManifest,
   loadTenantKnowledge,
   resetTenantCache,
   tenantBranding,
@@ -157,6 +158,48 @@ describe('doc goi khach', () => {
   it('co data/demo-messages.json -> doc theo thu tu trong file', () => {
     useFakePack({ 'tenant.json': VALID_CONFIG, 'data/demo-messages.json': ['tin 1', 'tin 2'] });
     expect(loadDemoMessages()).toEqual(['tin 1', 'tin 2']);
+  });
+});
+
+describe('loadTenantContentManifest', () => {
+  const VALID_MANIFEST = {
+    source: { kind: 'local_manifest', sourceId: 'faq-mau' },
+    faqs: [
+      {
+        externalId: 'faq:mau:001',
+        productSku: 'SP-MAU',
+        question: 'Bao hanh bao lau?',
+        answer: '2 nam.',
+      },
+    ],
+  };
+
+  it('khong co data/content-manifest.json -> null, KHONG nem (khach chua nhap noi dung)', () => {
+    useFakePack({ 'tenant.json': VALID_CONFIG });
+    expect(loadTenantContentManifest()).toBeNull();
+  });
+
+  it('co file hop le -> doc duoc FAQ, va default cua schema import duoc ap (assets rong)', () => {
+    useFakePack({ 'tenant.json': VALID_CONFIG, 'data/content-manifest.json': VALID_MANIFEST });
+    const manifest = loadTenantContentManifest();
+    expect(manifest?.faqs).toHaveLength(1);
+    expect(manifest?.faqs[0]).toMatchObject({ productSku: 'SP-MAU', status: 'draft' });
+    expect(manifest?.assets).toEqual([]);
+  });
+
+  it('file sai schema -> NEM luc nap, khong im lang bo qua', () => {
+    useFakePack({
+      'tenant.json': VALID_CONFIG,
+      'data/content-manifest.json': { source: { kind: 'khong-ton-tai', sourceId: 'x' } },
+    });
+    expect(() => loadTenantContentManifest()).toThrow(/sai schema/i);
+  });
+
+  it('doc dia dung mot lan roi giu cache; resetTenantCache() moi doc lai', () => {
+    useFakePack({ 'tenant.json': VALID_CONFIG, 'data/content-manifest.json': VALID_MANIFEST });
+    expect(loadTenantContentManifest()).toBe(loadTenantContentManifest());
+    resetTenantCache();
+    expect(loadTenantContentManifest()?.faqs).toHaveLength(1);
   });
 });
 

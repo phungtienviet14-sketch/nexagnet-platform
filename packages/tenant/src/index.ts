@@ -1,6 +1,7 @@
 export {
   loadDemoMessages,
   loadTenantConfig,
+  loadTenantContentManifest,
   loadTenantKnowledge,
   resetTenantCache,
   tenantBranding,
@@ -24,6 +25,7 @@ export {
   blockedCapabilitySchema,
   tenantReadinessSchema,
   tenantConfigSchema,
+  tenantContentManifestSchema,
   type DemoMessages,
   type CampaignConfig,
   type ErpAdapterName,
@@ -32,5 +34,6 @@ export {
   type RetailAdvice,
   type TenantReadiness,
   type TenantConfig,
+  type TenantContentManifest,
   type TenantKnowledge,
 } from './tenant.schema.js';
