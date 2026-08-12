@@ -2,7 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
+import { skusMissingWholesale } from '../../lib/price-rows';
 import { settingsApi, type PricePeriodPrice } from '../../lib/settings';
+import { PriceRowsEditor } from './PriceRowsEditor';
 import { SettingsPanelState } from './SettingsPanelState';
 
 function parseRows(text: string): PricePeriodPrice[] {
@@ -29,18 +31,17 @@ export function PricePeriodsSettings() {
   const [localError, setLocalError] = useState<string>();
   const selected = periods.find((period) => period.id === selectedId) ?? periods.find((period) => period.status === 'draft');
   const draftId = selected?.status === 'draft' ? selected.id : '';
+  // `rows` la NGUON SU THAT cua man hinh: bang o so sua truc tiep vao day. Dan JSON chi con la
+  // mot duong NAP vao `rows` (nhap hang loat), khong con la noi Sale phai go tay tung dau ngoac.
+  const [rows, setRows] = useState<PricePeriodPrice[]>([]);
   useEffect(() => {
     if (!selected) return;
-    setImportText(JSON.stringify(selected.prices.map(({ id: _id, ...row }) => row), null, 2));
+    const current = selected.prices.map(({ id: _id, ...row }) => row);
+    setRows(current);
+    setImportText(JSON.stringify(current, null, 2));
     setLocalError(undefined);
   }, [selected]);
-  const rows = useMemo(() => {
-    try {
-      return parseRows(importText);
-    } catch {
-      return [];
-    }
-  }, [importText]);
+  const missingWholesale = useMemo(() => skusMissingWholesale(rows), [rows]);
 
   const refresh = () => client.invalidateQueries({ queryKey: ['settings-price-periods'] });
   const create = useMutation({ mutationFn: () => settingsApi.createPricePeriod(validMonth), onSuccess: refresh });
@@ -57,14 +58,27 @@ export function PricePeriodsSettings() {
   const activate = useMutation({ mutationFn: () => settingsApi.activatePricePeriod(draftId), onSuccess: refresh });
   const mutationError = create.error ?? copy.error ?? preview.error ?? apply.error ?? validate.error ?? activate.error;
 
+  /** Chan gui len khi bang con trong hoac con SKU thieu don gia CTV. */
   const prepareRows = () => {
+    if (rows.length === 0) {
+      setLocalError('Bảng giá đang trống — copy kỳ trước hoặc nạp JSON trước khi gửi.');
+      return false;
+    }
+    if (missingWholesale.length > 0) {
+      setLocalError(`Còn thiếu đơn giá CTV cho: ${missingWholesale.join(', ')}`);
+      return false;
+    }
+    setLocalError(undefined);
+    return true;
+  };
+
+  /** Duong nhap hang loat: doc JSON vao bang, sai cu phap thi bao ngay chu khong nuot. */
+  const loadJsonIntoTable = () => {
     try {
-      const parsed = parseRows(importText);
+      setRows(parseRows(importText));
       setLocalError(undefined);
-      return parsed.length > 0;
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : 'Dữ liệu import không hợp lệ.');
-      return false;
     }
   };
 
@@ -111,10 +125,24 @@ export function PricePeriodsSettings() {
 
       {draftId && (
         <>
-          <label className="settings-field">
-            <span>Dữ liệu giá JSON để import/chỉnh sửa</span>
-            <textarea rows={8} value={importText} onChange={(event) => setImportText(event.target.value)} />
-          </label>
+          <PriceRowsEditor rows={rows} onChange={setRows} disabled={apply.isPending} />
+          {missingWholesale.length > 0 && (
+            <SettingsPanelState
+              tone="error"
+              title="Còn SKU chưa có đơn giá CTV"
+              detail={`Không kích hoạt được kỳ khi còn thiếu: ${missingWholesale.join(', ')}`}
+            />
+          )}
+          <details className="settings-bulk-import">
+            <summary>Nhập hàng loạt bằng JSON (không bắt buộc)</summary>
+            <label className="settings-field">
+              <span>Dán JSON rồi bấm “Nạp vào bảng”</span>
+              <textarea rows={8} value={importText} onChange={(event) => setImportText(event.target.value)} />
+            </label>
+            <button className="settings-button settings-button--quiet" type="button" onClick={loadJsonIntoTable}>
+              Nạp vào bảng
+            </button>
+          </details>
           <label className="settings-checkbox-field">
             <input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} />
             <span>Cho phép ghi đè dòng operator đã sửa (có chủ ý)</span>

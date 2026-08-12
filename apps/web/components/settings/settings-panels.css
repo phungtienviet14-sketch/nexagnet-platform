@@ -832,11 +832,31 @@
 .settings-audit-row details {
   margin-top: 0.6rem;
 }
-.settings-audit-row summary {
+.settings-audit-row summary,
+.settings-bulk-import summary {
   color: var(--accent);
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 700;
+}
+/* Duong nhap hang loat (dan JSON) — thu sau bang o so, mo ra khi that su can. */
+.settings-bulk-import {
+  margin-top: 0.8rem;
+}
+/* O nhap gia trong bang: du rong cho so 8 chu so, khong lam vo cot tren man hep. */
+.settings-table td input[type='number'] {
+  width: 100%;
+  min-width: 7.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: right;
+}
+.settings-table td input[type='number']:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .settings-diff {
   display: grid;
