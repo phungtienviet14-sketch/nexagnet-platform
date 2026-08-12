@@ -12,6 +12,7 @@
     "test": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:deploy-routes",
     "test:deploy-routes": "node --test deploy/netviet/caddy-route-contract.test.mjs",
     "test:tenant-runtime": "node --test apps/web/tenant-runtime.contract.mjs",
+    "test:image-isolation": "node --test deploy/netviet/image-isolation.contract.mjs",
     "typecheck": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,mjs}\"",

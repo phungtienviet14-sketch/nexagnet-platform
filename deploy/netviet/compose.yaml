@@ -123,10 +123,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      # GOI KHACH cap luc CHAY, khong nuong vao image (xem deploy/netviet/Dockerfile).
-      # `:?` chu khong phai `:-<mac dinh>`: thieu bien tren stack cua khach B ma lang le nap du lieu
-      # cua khach A la su co ro ri du lieu — de no dung han con hon de chay sai.
-      TENANT: ${TENANT:?TENANT chua duoc dat trong .runtime/secrets.env (chay render-secrets.sh)}
+      # GOI KHACH mount tu NGOAI image. Image la ban chung cho moi khach va khong mang goi nao
+      # (.dockerignore loai `tenants/`), nen du lieu thuong mai cua tung khach — gia si, dieu khoan
+      # cong no, chat ID nhom Zalo — chi co mat tren dung stack cua ho.
+      # Dung TENANT_DIR chu khong phai TENANT: trong image khong co thu muc `tenants/` de tra slug.
+      TENANT_DIR: /srv/tenant
       DATABASE_URL: postgresql://zalo:${ZALO_DB_PASSWORD}@postgres:5432/zalo
       PERSISTENCE: prisma
       PARSER_MODE: ${PARSER_MODE:-flowise}
@@ -156,6 +157,8 @@ services:
         exec node apps/api/dist/main.js
     volumes:
       - ./.runtime/zalo:/runtime/zalo
+      # `:ro` — goi khach la hat giong seed, tien trinh khong duoc ghi nguoc vao no.
+      - ./tenant-pack:/srv/tenant:ro
     healthcheck:
       test:
         [
@@ -179,8 +182,10 @@ services:
     restart: always
     environment:
       # Thuong hieu (tieu de trang, manifest PWA, icon) doc tu goi khach nay luc CHAY.
-      # Xem chu thich o service `api` ve ly do dung `:?` thay vi mot gia tri mac dinh.
-      TENANT: ${TENANT:?TENANT chua duoc dat trong .runtime/secrets.env (chay render-secrets.sh)}
+      # Xem chu thich o service `api` ve ly do dung TENANT_DIR thay vi TENANT.
+      TENANT_DIR: /srv/tenant
+    volumes:
+      - ./tenant-pack:/srv/tenant:ro
     command:
       [
         "apps/web/node_modules/.bin/next",

@@ -24,3 +24,9 @@ docs/khach-hang/*/nguon-goc/ho-so-khao-sat
 docs/khach-hang/*/design-app
 *.docx
 docs/pdf
+# GOI KHACH — CACH LY DU LIEU. `tenants/<slug>/data/knowledge.json` chua gia si, dieu khoan cong no
+# va chat ID nhom Zalo that. Image la BAN CHUNG cho moi khach, nen mot goi nam trong image nghia la
+# khach B tu host co the `docker save` roi doc gia si cua khach A. Image chi mang code + schema +
+# loader; du lieu that den luc CHAY qua volume mount (TENANT_DIR) hoac tu DB.
+# Khoa bang deploy/netviet/image-isolation.contract.mjs — no kiem IMAGE THAT, khong chi kiem file nay.
+tenants

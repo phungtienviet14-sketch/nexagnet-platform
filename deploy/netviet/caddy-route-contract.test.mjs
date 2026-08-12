@@ -121,11 +121,28 @@ test('image khong mang danh tinh khach — TENANT den tu lop deploy luc chay', a
 
   // Co ARG/ENV TENANT trong Dockerfile la image gan chet vao mot khach.
   assert.doesNotMatch(dockerfile, /^\s*(?:ARG|ENV)\s+TENANT/m);
+  // Va khong duoc COPY goi khach nao vao image.
+  assert.doesNotMatch(dockerfile, /^\s*COPY\s+[^\n]*tenants/m);
+});
 
-  // Renderer la noi DUY NHAT viet danh tinh khach ra; compose phai chuyen no vao ca api lan web.
-  assert.match(renderSecrets, /^TENANT=\$\{TENANT_SLUG\}$/m);
-  assert.equal(compose.match(/^\s*TENANT: \$\{TENANT:\?/gm)?.length, 2);
+// CACH LY DU LIEU. Image la ban chung cho moi khach; `tenants/<slug>/data/knowledge.json` chua gia
+// si, dieu khoan cong no va chat ID nhom Zalo. Mot goi nam trong image = khach tu host `docker save`
+// ra la doc duoc so lieu cua khach khac. Kiem tra tren IMAGE THAT: image-isolation.contract.mjs.
+test('du lieu khach den tu volume mount, khong nam trong image', async () => {
+  const dockerignore = await readFile(new URL('../../.dockerignore', import.meta.url), 'utf8');
+  const deployRemote = await readFile(new URL('./deploy-remote.sh', import.meta.url), 'utf8');
 
-  // `:?` chu khong phai `:-<mac dinh>`: thieu bien thi dung han, khong lang le nap du lieu khach khac.
-  assert.doesNotMatch(compose, /TENANT:\s*\$\{TENANT:-/);
+  // Build context khong co `tenants/` -> khong `COPY` nao cham toi duoc, ke ca `COPY . .`.
+  assert.match(dockerignore, /^tenants$/m);
+
+  // Ca api lan web deu doc goi tu volume chi-doc, khong tu trong image.
+  assert.equal(compose.match(/^\s*TENANT_DIR: \/srv\/tenant$/gm)?.length, 2);
+  assert.equal(compose.match(/^\s*- \.\/tenant-pack:\/srv\/tenant:ro$/gm)?.length, 2);
+
+  // Goi khach phai co mat tren VM truoc khi stack len, va thieu thi dung han chu khong boot rong.
+  assert.match(deployRemote, /tenant-pack\/tenant\.json/);
+  assert.match(deployRemote, /rsync -a --delete "\$remote_parent\/tenant-pack\/"/);
+
+  // TENANT khong con di qua secrets.env: goi duoc mount thang, khong tra slug trong image nua.
+  assert.doesNotMatch(renderSecrets, /^TENANT=/m);
 });

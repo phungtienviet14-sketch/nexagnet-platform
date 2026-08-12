@@ -49,7 +49,8 @@ RUN corepack pnpm --filter @netviet/api exec prisma generate
 # NEXT_PUBLIC_API_URL="" -> lib/api.ts BASE="" -> trinh duyet goi /orders, /events... same-origin.
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=""
-RUN corepack pnpm --filter @netviet/shared --filter @netviet/api --filter @netviet/web build
+RUN corepack pnpm --filter @netviet/shared --filter @netviet/tenant \
+  --filter @netviet/api --filter @netviet/web build
 
 # ---------- runtime: stage gon, chi mang theo app da build ----------
 FROM base AS runtime

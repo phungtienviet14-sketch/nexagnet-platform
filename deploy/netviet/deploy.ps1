@@ -582,6 +582,24 @@ function Deploy-Stack {
     '--quiet'
   )
 
+  # GOI KHACH di RIENG, khong nam trong image. Image la ban chung cho moi khach (.dockerignore loai
+  # `tenants/`), nen gia si + dieu khoan cong no + chat ID nhom Zalo cua mot khach chi duoc len dung
+  # VM cua khach do. Compose mount thu muc nay vao api/web o che do chi-doc.
+  $tenantSlug = if ($env:TENANT) { $env:TENANT } else { 'ultty' }
+  $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+  $tenantPack = Join-Path $repoRoot "tenants/$tenantSlug"
+  if (-not (Test-Path $tenantPack)) {
+    throw "Khong tim thay goi khach '$tenantPack'. Dat TENANT=<slug> khop mot thu muc trong tenants/."
+  }
+  Invoke-GcloudRetry -Arguments @(
+    'compute', 'scp', '--recurse', $tenantPack,
+    "${VmName}:$remoteParent/tenant-pack",
+    "--zone=$Zone",
+    '--tunnel-through-iap',
+    '--project', $ProjectId,
+    '--quiet'
+  )
+
   Invoke-Gcloud @(
     'compute', 'ssh', $VmName,
     "--zone=$Zone",

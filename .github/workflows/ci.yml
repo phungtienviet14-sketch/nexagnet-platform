@@ -108,3 +108,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -f deploy/netviet/Dockerfile -t netviet-zalo:${{ github.sha }} .
       - run: docker build -f deploy/flowise/Dockerfile -t netviet-flowise:${{ github.sha }} .
+      # CACH LY DU LIEU GIUA CAC KHACH: mo image vua build ra xem, doi hoi khong co goi khach nao
+      # ben trong. Kiem tren image that chu khong kiem .dockerignore — mot COPY viet sai van co the
+      # dua du lieu vao du file cau hinh trong nhu dung.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Image khong duoc chua du lieu cua bat ky khach nao
+        run: node --test deploy/netviet/image-isolation.contract.mjs
+        env:
+          APP_IMAGE: netviet-zalo:${{ github.sha }}

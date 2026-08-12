@@ -51,3 +51,16 @@ logs/
 # Chinh cac file trien khai (khong can vao image; da COPY co chon loc trong Dockerfile)
 deploy/hf-demo/README.md
 deploy/hf-demo/README.space.md
+
+# ---------------------------------------------------------------------------
+# GOI KHACH: file nay CO Y khong loai `tenants/`, khac voi .dockerignore o goc repo.
+#
+# Ly do: image chinh (deploy/netviet) la ban CHUNG cho moi khach nen tuyet doi khong duoc mang goi
+# khach nao; con Space nay la demo MOT khach, chay PERSISTENCE=memory va offline hoan toan, nen goi
+# khach la nguon du lieu duy nhat — HF Space khong mount volume duoc.
+#
+# ⚠️ HE QUA CAN BIET: Space la CONG KHAI, ma tenants/ultty/data/knowledge.json chua gia si that,
+# dieu khoan cong no cua tung dai ly va chat ID nhom Zalo that. Mo Space nay voi du lieu that =
+# cong bo bang gia si cua khach. Truoc khi mo cong khai: hoac thay bang goi demo da lam sach so
+# lieu, hoac co xac nhan cua khach. Xem docs/ke-hoach/nen-tang-da-khach.md.
+# ---------------------------------------------------------------------------

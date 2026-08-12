@@ -20,7 +20,17 @@ app_dir='/srv/netviet/apps/zalo-ultty'
 
 install -d -m 0750 "$app_dir/.runtime"
 install -d -m 0700 "$app_dir/.runtime/zalo"
-rsync -a --exclude '.runtime' "$source_dir/" "$app_dir/"
+rsync -a --exclude '.runtime' --exclude 'tenant-pack' "$source_dir/" "$app_dir/"
+
+# GOI KHACH. Khong nam trong image (.dockerignore loai `tenants/`) vi image la ban CHUNG cho moi
+# khach — mot goi nam trong do nghia la khach nay `docker save` ra la doc duoc gia si cua khach kia.
+# deploy.ps1 upload rieng goi cua dung stack nay; compose mount vao api/web o che do chi-doc.
+if [[ ! -f "$remote_parent/tenant-pack/tenant.json" ]]; then
+  echo "Thieu goi khach tai $remote_parent/tenant-pack — api/web se khong boot duoc." >&2
+  exit 1
+fi
+install -d -m 0750 "$app_dir/tenant-pack"
+rsync -a --delete "$remote_parent/tenant-pack/" "$app_dir/tenant-pack/"
 chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/"*.sh
 cp "$app_dir/systemd/"*.service "$app_dir/systemd/"*.timer /etc/systemd/system/
 systemctl daemon-reload

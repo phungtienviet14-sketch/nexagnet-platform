@@ -28,7 +28,8 @@ ENV NEXT_PUBLIC_API_URL=""
 # nghia cua "mot image dung cho moi khach". Neu ai do them mot trang tinh doc goi khach, loader se
 # nem va build do ngay tai day, thay vi lang le nuong ten khach vao image.
 # Hop dong nay duoc khoa bang apps/web/tenant-runtime.contract.mjs.
-RUN corepack pnpm --filter @netviet/shared --filter @netviet/api --filter @netviet/web build
+RUN corepack pnpm --filter @netviet/shared --filter @netviet/tenant \
+  --filter @netviet/api --filter @netviet/web build
 
 FROM base AS runtime
 ENV NODE_ENV=production
