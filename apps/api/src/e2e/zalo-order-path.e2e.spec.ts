@@ -127,6 +127,7 @@ describe('G1-13 — E2E tin Zalo -> DB -> parser -> rules -> outbound (DI that)'
   });
 
   it('don hop le trong nguong tenant: tin -> DB -> don `sent` -> outbound co nhan tu dong', async () => {
+    const before = transport.sent.length;
     await transport.deliver(zaloMessage('e2e-ok-1', 'gui 10 ghe felix', mappedGroup));
 
     const stored = await ctx.get(MessagesRepository).findByExternalMessage('zalo', 'e2e-ok-1');
@@ -145,10 +146,12 @@ describe('G1-13 — E2E tin Zalo -> DB -> parser -> rules -> outbound (DI that)'
     expect(view?.status).toBe('sent');
     expect(view?.erpCode).toBeUndefined();
     expect(view?.salesHandoff).toMatchObject({ action: 'manual_erp_entry', status: 'pending' });
-    // Gui ra dung kenh da nhan tin (zca) va co nhan noi dung tu dong theo dieu khoan Zalo.
-    expect(transport.sent).toHaveLength(1);
-    expect(transport.sent[0]!.chatId).toBe(mappedGroup);
-    expect(transport.sent[0]!.text).toContain('Tin tự động');
+    // Gui ra DUNG MOT lan, dung kenh da nhan tin (zca), co nhan noi dung tu dong theo dieu khoan
+    // Zalo. Dem theo moc `before` chu khong theo so tuyet doi: bai nay khong duoc phu thuoc vao
+    // viec no chay dau tien trong file.
+    expect(transport.sent).toHaveLength(before + 1);
+    expect(transport.sent[before]!.chatId).toBe(mappedGroup);
+    expect(transport.sent[before]!.text).toContain('Tin tự động');
   }, 30_000);
 
   it('vuot nguong tenant: KHONG gui gi, giu Sale can thiep truoc outbound', async () => {
