@@ -23,6 +23,8 @@ export interface MasterDataDeal {
   dealerId: string;
   sku: string;
   price: number;
+  /** Ngưỡng số lượng để deal có hiệu lực; `null` = áp mọi số lượng. */
+  minQuantity: number | null;
   enabled: boolean;
   effectiveFrom: string | null;
   effectiveTo: string | null;
@@ -204,6 +206,8 @@ function parseDeal(value: unknown): MasterDataDeal | undefined {
     dealerId,
     sku,
     price: finite(value.price),
+    // Thiếu/không phải số = không giới hạn số lượng, KHÔNG suy ra 0 (0 sẽ thành "deal luôn áp").
+    minQuantity: typeof value.minQuantity === 'number' ? finite(value.minQuantity) : null,
     enabled: value.enabled === true,
     effectiveFrom: text(value.effectiveFrom) ?? null,
     effectiveTo: text(value.effectiveTo) ?? null,

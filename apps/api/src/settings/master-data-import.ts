@@ -42,6 +42,8 @@ export const importedDealSchema = z
     dealerId: idSchema,
     sku: idSchema,
     price: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    // Nguong so luong de deal co hieu luc; bo trong = ap moi so luong.
+    minQuantity: z.number().int().positive().nullish(),
     enabled: z.boolean().default(true),
     effectiveFrom: instantSchema,
     effectiveTo: instantSchema,

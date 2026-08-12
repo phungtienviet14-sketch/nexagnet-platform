@@ -62,8 +62,21 @@ const priceSchema = z
     validMonth: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
   })
   .strict();
+/**
+ * Deal rieng day du: ngoai gia con co NGUONG SO LUONG va THOI GIAN HIEU LUC — ba thu Sale phai
+ * nhap duoc, neu khong thi deal chi dung duoc mot nua (vd "lay 5 cai moi duoc gia nay, ap tu
+ * 01/08 den 31/08"). Bo trong = khong gioi han.
+ */
 const overrideSchema = z
-  .object({ dealerId: idSchema, sku: idSchema, price: moneySchema })
+  .object({
+    dealerId: idSchema,
+    sku: idSchema,
+    price: moneySchema,
+    minQuantity: z.coerce.number().int().positive().nullish(),
+    effectiveFrom: z.coerce.date().nullish(),
+    effectiveTo: z.coerce.date().nullish(),
+    enabled: z.boolean().optional(),
+  })
   .strict();
 const glossarySchema = z.object({ meaning: z.string().trim().min(1).max(1_000) }).strict();
 
@@ -187,10 +200,14 @@ export class SourceTruthWriteService {
       }
       case 'overrides': {
         const value = parse(overrideSchema, body);
+        // Sua deal phai ghi CA nguong so luong lan thoi gian hieu luc. Truoc day `update` chi ghi
+        // `price`, nen Sale sua "tu 5 cai" thanh "tu 10 cai" xong bam luu ma so cu van nguyen —
+        // hong am tham, khong bao loi.
+        const { dealerId, sku, ...rest } = value;
         await this.prisma.dealerPriceOverride.upsert({
-          where: { dealerId_sku: { dealerId: value.dealerId, sku: value.sku } },
-          update: { price: value.price },
-          create: value,
+          where: { dealerId_sku: { dealerId, sku } },
+          update: rest,
+          create: { dealerId, sku, ...rest },
         });
         return;
       }

@@ -113,6 +113,11 @@ const RESOURCES: readonly ResourceDefinition[] = [
       { key: 'dealerId', label: 'ID đại lý', required: true, identifier: true },
       { key: 'sku', label: 'SKU', required: true, identifier: true },
       { key: 'price', label: 'Đơn giá riêng', type: 'number', required: true },
+      // Ba truong duoi day de trong = khong gioi han. Co that trong hoi thoai khach:
+      // "Lay SL 5 cai gia co tot hon k e" -> deal chi ap tu 5 cai tro len.
+      { key: 'minQuantity', label: 'SL tối thiểu', type: 'number', nullable: true },
+      { key: 'effectiveFrom', label: 'Hiệu lực từ (YYYY-MM-DD)', nullable: true },
+      { key: 'effectiveTo', label: 'Hiệu lực đến (YYYY-MM-DD)', nullable: true },
     ],
   },
   {
