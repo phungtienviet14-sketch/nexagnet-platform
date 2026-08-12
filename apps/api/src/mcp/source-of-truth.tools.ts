@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { PrismaClient } from '@prisma/client';
+import { currentPriceMonth } from '../knowledge/price-periods.js';
 
 /**
  * LOGIC THUAN cho MCP tool "Nguon su that" (tach khoi transport de test doc lap).
@@ -56,7 +57,7 @@ export const setPriceInput = z.object({
   retailPrice: z.number().int().nonnegative().optional(),
   listPrice: z.number().int().nonnegative().optional(),
   /** Thang hieu luc, vd "2026-07". */
-  validMonth: z.string().trim().min(1).optional(),
+  validMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
 });
 
 export const addGlossaryInput = z.object({
@@ -94,20 +95,25 @@ function parseInput<S extends z.ZodType>(schema: S, input: unknown): Parsed<z.in
 
 /** Danh muc SP kem gia si (Don gia CTV) + gia ban le tham chieu. */
 export async function listProducts(prisma: PrismaClient): Promise<ToolResult> {
-  const rows = await prisma.product.findMany({
-    include: { price: true },
-    orderBy: { sku: 'asc' },
-  });
+  const [rows, period] = await Promise.all([
+    prisma.product.findMany({ orderBy: { sku: 'asc' } }),
+    prisma.pricePeriod.findFirst({
+      where: { validMonth: currentPriceMonth(), status: 'active' },
+      include: { prices: true },
+    }),
+  ]);
+  const priceBySku = new Map((period?.prices ?? []).map((price) => [price.sku, price]));
   const products = rows.map((p) => ({
     sku: p.sku,
     name: p.name,
     unit: p.unit,
     aliases: p.aliases,
-    wholesale: p.price?.wholesale ?? null,
-    minRetailPrice: p.price?.minRetailPrice ?? null,
-    retailPrice: p.price?.retailPrice ?? null,
-    listPrice: p.price?.listPrice ?? null,
-    validMonth: p.price?.validMonth ?? null,
+    wholesale: priceBySku.get(p.sku)?.wholesale ?? null,
+    minRetailPrice: priceBySku.get(p.sku)?.minRetailPrice ?? null,
+    retailPrice: priceBySku.get(p.sku)?.retailPrice ?? null,
+    listPrice: priceBySku.get(p.sku)?.listPrice ?? null,
+    validMonth: period?.validMonth ?? null,
+    pricePeriodStatus: period?.status ?? null,
   }));
   return success({ count: products.length, products });
 }
@@ -235,11 +241,24 @@ export async function setPrice(prisma: PrismaClient, input: unknown): Promise<To
     ...(minRetailPrice !== undefined ? { minRetailPrice } : {}),
     ...(retailPrice !== undefined ? { retailPrice } : {}),
     ...(listPrice !== undefined ? { listPrice } : {}),
-    ...(validMonth !== undefined ? { validMonth } : {}),
   };
+  const month = validMonth;
+  const existingPeriod = await prisma.pricePeriod.findFirst({
+    where: { validMonth: month, status: 'draft' },
+  });
+  const period =
+    existingPeriod ??
+    (await prisma.pricePeriod.create({
+      data: {
+        id: `mcp-${month}`,
+        validMonth: month,
+        status: 'draft',
+        source: 'mcp',
+      },
+    }));
   const price = await prisma.price.upsert({
-    where: { sku },
-    create: { sku, ...data },
+    where: { periodId_sku: { periodId: period.id, sku } },
+    create: { periodId: period.id, sku, ...data },
     update: data,
   });
   return success({
@@ -249,7 +268,9 @@ export async function setPrice(prisma: PrismaClient, input: unknown): Promise<To
       minRetailPrice: price.minRetailPrice,
       retailPrice: price.retailPrice,
       listPrice: price.listPrice,
-      validMonth: price.validMonth,
+      validMonth: period.validMonth,
+      periodStatus: period.status,
+      pricePeriodStatus: period.status,
     },
   });
 }

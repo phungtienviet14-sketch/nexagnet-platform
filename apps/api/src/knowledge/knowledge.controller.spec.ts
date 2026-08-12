@@ -7,7 +7,9 @@ import { KnowledgeService } from './knowledge.service.js';
  * qua KnowledgeService nen phan anh dung du lieu console se hien.
  */
 describe('KnowledgeController (nguon su that)', () => {
-  const controller = new KnowledgeController(new KnowledgeService());
+  const controller = new KnowledgeController(
+    new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z')),
+  );
 
   it('lo gia si (Don gia CTV) that theo bang gia thang 7', () => {
     const products = controller.products();

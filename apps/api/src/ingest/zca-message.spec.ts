@@ -12,6 +12,13 @@ function makeMessage(opts: {
   uidFrom?: string;
   dName?: string;
   ts?: string;
+  quote?: {
+    ownerId?: string;
+    globalMsgId?: number;
+    msg?: string;
+    fromD?: string;
+    ts?: number;
+  };
 }): Message {
   return {
     type: opts.type ?? ThreadType.Group,
@@ -24,6 +31,7 @@ function makeMessage(opts: {
       uidFrom: opts.uidFrom ?? 'u1',
       dName: opts.dName ?? 'Phùng Việt',
       ts: opts.ts ?? '1783404428055',
+      quote: opts.quote,
     },
   } as unknown as Message;
 }
@@ -142,5 +150,29 @@ describe('zcaMessageToChannelMessage', () => {
     expect(m?.text).toBe('test');
     expect(m?.senderExternalId).toBeUndefined();
     expect(m?.senderDisplayName).toBeUndefined();
+  });
+
+  it('map quote zca-js thanh replyTo de resolve context ben vung', () => {
+    const m = zcaMessageToChannelMessage(
+      makeMessage({
+        content: 'c them 5c nhe',
+        quote: {
+          ownerId: 'u-dealer',
+          globalMsgId: 987654,
+          msg: '10 ELNI',
+          fromD: 'Meta HN',
+          ts: 1783404400000,
+        },
+      }),
+      false,
+    );
+
+    expect(m?.replyTo).toMatchObject({
+      externalMessageId: '987654',
+      senderExternalId: 'u-dealer',
+      senderDisplayName: 'Meta HN',
+      text: '10 ELNI',
+    });
+    expect(m?.replyTo?.sentAt).toEqual(new Date(1783404400000));
   });
 });

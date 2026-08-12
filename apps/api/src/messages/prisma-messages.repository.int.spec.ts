@@ -98,4 +98,34 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('PrismaMessagesRepository (Pos
     const saved = await repo.save(sampleMessage('it-m-orphan'));
     await expect(repo.attachOrder('khong-ton-tai', saved.id)).resolves.toBeUndefined();
   });
+
+  it('round-trip reply metadata + bounded lookup chi trong cung chat', async () => {
+    const original = sampleMessage('it-context-original');
+    await repo.save(original);
+    await repo.save({
+      ...sampleMessage('it-context-other-chat'),
+      externalChatId: 'it-msg-chat-other',
+      text: '99 NOI-CHIEN',
+    });
+    const reply: ChannelMessage = {
+      ...sampleMessage('it-context-reply'),
+      text: 'c them 5c nhe',
+      sentAt: new Date('2026-07-11T00:01:00.000Z'),
+      replyTo: { externalMessageId: original.externalMessageId, text: original.text },
+    };
+    await repo.save(reply);
+
+    const loadedReply = await repo.findByExternalMessage('zalo', reply.externalMessageId);
+    const recent = await repo.findRecent(
+      'zalo',
+      CHAT_ID,
+      reply.sentAt,
+      reply.externalMessageId,
+      5,
+    );
+
+    expect(loadedReply?.replyTo?.externalMessageId).toBe(original.externalMessageId);
+    expect(recent.map((row) => row.externalMessageId)).toContain(original.externalMessageId);
+    expect(recent.map((row) => row.externalMessageId)).not.toContain('it-context-other-chat');
+  });
 });

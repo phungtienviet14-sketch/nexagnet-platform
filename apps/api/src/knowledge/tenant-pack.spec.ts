@@ -42,5 +42,13 @@ describe('goi khach dang chay <-> nhan', () => {
     expect(cfg.persona.parserIntro).toContain('PHAN LOAI Y DINH');
     expect(cfg.persona.mentionName).toBe('Bot ultty AI orders');
     expect(cfg.branding.productName).toBe('Ultty AI');
+    expect(cfg.orderAutomation).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
+    expect(cfg.retailAdvice.priceField).toBe('minRetailPrice');
+    expect(cfg.readiness.blockedCapabilities.map((item) => item.key)).toEqual([
+      'vat',
+      'cod_ship',
+      'debt_7_days',
+      'promotions',
+    ]);
   });
 });

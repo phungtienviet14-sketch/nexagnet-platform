@@ -2,7 +2,8 @@
 
 import type { KeyboardEvent, ReactNode } from 'react';
 
-export type SettingsTabId = 'zalo' | 'members' | 'source-truth' | 'rules' | 'automation' | 'audit';
+export type SettingsTabId =
+  'zalo' | 'members' | 'source-truth' | 'content' | 'rules' | 'campaigns' | 'automation' | 'users' | 'audit';
 
 export interface SettingsTab {
   id: SettingsTabId;

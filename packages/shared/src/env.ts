@@ -35,13 +35,21 @@ export const envSchema = z.object({
   // CONG TAC XAC THUC TOAN HE THONG (mot bien duy nhat, de bat lai):
   //   api-key = MAC DINH. Guard toan cuc theo header `x-api-key` khi API_KEY co gia tri,
   //             kiem Origin cho mutation, CORS bo theo CORS_ORIGIN, AdminJS doi dang nhap.
+  //   session = dang nhap nguoi dung bang cookie HttpOnly + RBAC. Production/customer luu phien
+  //             trong Postgres qua Prisma, khong dung MemoryStore.
   //   none    = TAT TOAN BO xac thuc cua ung dung: khong x-api-key, khong kiem Origin,
   //             CORS mo, AdminJS khong doi dang nhap. Caddy cung bo Basic Auth (xem Caddyfile).
   // `none` la QUYET DINH VAN HANH cho VM dev/demo (yeu cau nguoi dung 04/08/2026) — doi lai
   // he thong luon truy cap duoc khong can mat khau. CHI dung khi nhom/du lieu la TEST, khong PII
   // that: bat ky ai biet URL deu doc duoc bang gia/don va goi duoc /broadcast (gui tin Zalo THAT).
   // Truoc khi chay du lieu khach: dat lai AUTH_MODE=api-key + API_KEY va bat lai Basic Auth.
-  AUTH_MODE: z.enum(['api-key', 'none']).default('api-key'),
+  AUTH_MODE: z.enum(['api-key', 'session', 'none']).default('api-key'),
+  SESSION_SECRET: z
+    .string()
+    .min(32, 'SESSION_SECRET qua ngan — dung chuoi ngau nhien >= 32 ky tu')
+    .optional(),
+  SESSION_COOKIE_NAME: z.string().trim().min(1).max(64).default('netviet.sid'),
+  SESSION_MAX_AGE_MS: z.coerce.number().int().positive().default(8 * 60 * 60 * 1_000),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
@@ -51,10 +59,17 @@ export const envSchema = z.object({
   FLOWISE_FLOW_ID: z.string().min(1).optional(),
   FLOWISE_API_KEY: z.string().min(1).optional(),
   FLOWISE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  // Bao cao bake-off golden set do tenant mount vao runtime. Optional; readiness layer tu doc/validate.
+  GOLDEN_EVAL_REPORT_PATH: z.string().trim().min(1).optional(),
   ZALO_BOT_TOKEN: z.string().optional(),
   ZALO_BOT_WEBHOOK_SECRET: z.string().optional(),
   // Che do parser: mock | claude | deepseek truc tiep | flowise (Agentflow V2 noi bo).
   PARSER_MODE: z.enum(['mock', 'claude', 'deepseek', 'flowise']).default('mock'),
+  // Phan loai du lieu dang chay:
+  //   test     = mock/demo/dev, khong PII that; cho phep parser/kho/media mock de lap trinh nhanh.
+  //   customer = du lieu khach hang that; bat readiness gate ben duoi de fail-fast neu cau hinh
+  //              con duong demo/test (mock parser, DeepSeek, memory DB, khong auth, khong luu media).
+  DATA_CLASSIFICATION: z.enum(['test', 'customer']).default('test'),
   // KENH ZALO — nguon su that DUY NHAT chon kenh doc/gui tin:
   //   mock  = offline (demo qua /demo/simulate) — mac dinh, khong can dang nhap Zalo.
   //   bot   = Zalo Bot Platform chinh thuc (can ZALO_BOT_TOKEN) — CHI nhan tin @mention.
@@ -156,12 +171,23 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   // khach) va GET /knowledge (bang gia + map nhom -> dai ly) — phoi ra Internet ma khong khoa la
   // su co bao mat, khong phai thieu sot nho. Fail fast luc khoi dong (CLAUDE.md - Luu y bao mat).
   // AUTH_MODE=none = da CHU DONG chon chay khong xac thuc (VM dev/demo). Van la mot lua chon
-  // TUONG MINH, greppable — khac han "quen dat API_KEY", nen fail-fast duoi day duoc mien.
-  const authDisabled = data.AUTH_MODE === 'none';
-  if (data.NODE_ENV === 'production' && !data.API_KEY && !authDisabled) {
+  // TUONG MINH, greppable — khac han "quen dat API_KEY", nen fail-fast duoi day duoc mien:
+  // dieu kien `AUTH_MODE === 'api-key'` da loai san 'none' va 'session'.
+  if (data.NODE_ENV === 'production' && data.AUTH_MODE === 'api-key' && !data.API_KEY) {
     throw new EnvValidationError([
       'API_KEY: BAT BUOC khi NODE_ENV=production (API co /broadcast gui tin Zalo that + /knowledge lo bang gia). Moi truong dev/demo khong can khoa thi dat AUTH_MODE=none',
     ]);
+  }
+  if (data.AUTH_MODE === 'session') {
+    const sessionIssues = [
+      !data.SESSION_SECRET
+        ? 'SESSION_SECRET: BAT BUOC khi AUTH_MODE=session (chuoi ngau nhien >= 32 ky tu)'
+        : null,
+      data.NODE_ENV === 'production' && data.PERSISTENCE !== 'prisma'
+        ? 'PERSISTENCE: production + AUTH_MODE=session bat buoc dung prisma/Postgres, khong dung MemoryStore'
+        : null,
+    ].filter((issue): issue is string => issue !== null);
+    if (sessionIssues.length > 0) throw new EnvValidationError(sessionIssues);
   }
   if (data.PARSER_MODE === 'flowise') {
     const missingFlowiseVariables = [
@@ -171,6 +197,33 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     ].filter((issue): issue is string => issue !== null);
     if (missingFlowiseVariables.length > 0) {
       throw new EnvValidationError(missingFlowiseVariables);
+    }
+  }
+  if (data.PARSER_MODE === 'claude' && !data.ANTHROPIC_API_KEY) {
+    throw new EnvValidationError([
+      'ANTHROPIC_API_KEY: BAT BUOC khi PARSER_MODE=claude; khong duoc roi ve MockParser',
+    ]);
+  }
+  if (data.DATA_CLASSIFICATION === 'customer') {
+    const customerReadinessIssues = [
+      data.PARSER_MODE !== 'claude'
+        ? 'PARSER_MODE: du lieu khach that bat buoc dung claude (LLM duoc phe duyet), khong dung mock/deepseek/flowise'
+        : null,
+      !data.ANTHROPIC_API_KEY
+        ? 'ANTHROPIC_API_KEY: BAT BUOC khi DATA_CLASSIFICATION=customer'
+        : null,
+      data.PERSISTENCE !== 'prisma'
+        ? 'PERSISTENCE: du lieu khach that bat buoc dung prisma/Postgres, khong dung memory'
+        : null,
+      data.AUTH_MODE === 'none'
+        ? 'AUTH_MODE: du lieu khach that khong duoc tat xac thuc'
+        : null,
+      data.CHANNEL_MODE !== 'mock' && data.MEDIA_STORE === 'none'
+        ? 'MEDIA_STORE: du lieu khach that + kenh Zalo that bat buoc dung local/s3, khong duoc none'
+        : null,
+    ].filter((issue): issue is string => issue !== null);
+    if (customerReadinessIssues.length > 0) {
+      throw new EnvValidationError(customerReadinessIssues);
     }
   }
   // MEDIA_STORE=s3 ma thieu cau hinh -> FAIL FAST. Neu am tham quay ve "khong luu" thi anh moi
@@ -204,7 +257,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   // Panel /admin sua duoc bang gia, map nhom -> dai ly va chinh sach. Bat o production bang
   // credential dev (hoac chuoi ngan) = giao quyen ghi nguon su that cho bat ky ai doc repo.
-  if (data.NODE_ENV === 'production' && data.ADMIN_UI === 'on' && !authDisabled) {
+  if (data.NODE_ENV === 'production' && data.ADMIN_UI === 'on' && data.AUTH_MODE === 'api-key') {
     const weakAdminCredentials = [
       data.ADMIN_PASSWORD === DEV_ADMIN_PASSWORD
         ? 'ADMIN_PASSWORD: dang dung gia tri MAC DINH dev — bat buoc doi khi ADMIN_UI=on o production'

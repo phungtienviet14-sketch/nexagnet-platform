@@ -1,4 +1,4 @@
-import type { ParseResult } from '@netviet/shared';
+import type { ConversationContext, ParseResult } from '@netviet/shared';
 import type { GlossaryEntry, Product } from '../knowledge/domain.js';
 
 /**
@@ -16,6 +16,8 @@ export interface ParserInput {
   dealerNameRaw?: string;
   /** Ten bot de boc @mention khoi noi dung */
   botName?: string;
+  /** Quote + mot cua so lich su da duoc gioi han va resolve tu kho tin nhan. */
+  context?: ConversationContext;
 }
 
 export interface OrderParser {

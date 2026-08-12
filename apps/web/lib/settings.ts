@@ -1,3 +1,14 @@
+import type {
+  ContentImportManifest,
+  ContentImportPreview,
+  ContentImportResult,
+  ContentLifecycleStatus,
+  ContentSnapshotView,
+} from '@netviet/shared';
+import { authFetch } from './auth';
+import { masterDataApi } from './master-data';
+export * from './master-data';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export type ChannelMode = 'mock' | 'bot' | 'zca' | 'hybrid';
@@ -9,6 +20,10 @@ export type HandlingMode = 'inherit_group' | 'process' | 'ignore' | 'manual_revi
 /** `message_stream` = hoc tu chinh luong tin, vi Zalo khong tra danh sach thanh vien (04/08/2026). */
 export type ParticipantSource = 'zca_sync' | 'manual' | 'message_stream';
 export type RuleStatus = 'draft' | 'preview' | 'active' | 'archived';
+export type CampaignStatus =
+  'draft' | 'approved' | 'scheduled' | 'running' | 'completed' | 'partially_failed' | 'cancelled';
+export type CampaignKind =
+  'one_off' | 'recurring' | 'birthday' | 'lunar_month_start' | 'lunar_full_moon';
 export type SourceTruthResource =
   'dealers' | 'groups' | 'products' | 'prices' | 'overrides' | 'glossary';
 
@@ -52,6 +67,11 @@ export interface SettingsSummary {
   zcaDisplayName?: string;
   botIdentity: BotIdentitySummary;
   autoSend: boolean;
+  orderAutomation: {
+    enabled: boolean;
+    maxAutoConfirmQuantity: number;
+  } | null;
+  businessBlockers: Array<{ key: string; label: string; reason: string }>;
   sourceTruth: {
     status: Availability;
     productCount: number;
@@ -136,6 +156,47 @@ export interface SourceTruthSection {
   error?: string;
 }
 
+export type PricePeriodStatus = 'draft' | 'active' | 'archived';
+export interface PricePeriodPrice {
+  id?: string;
+  sku: string;
+  wholesale: number;
+  minRetailPrice?: number | null;
+  retailPrice?: number | null;
+  listPrice?: number | null;
+}
+export interface PricePeriod {
+  id: string;
+  validMonth: string | null;
+  status: PricePeriodStatus;
+  source?: string;
+  note?: string;
+  prices: PricePeriodPrice[];
+  createdAt?: string;
+  activatedAt?: string;
+}
+export interface PricePeriodsView {
+  currentMonth: string;
+  currentPeriodId: string | null;
+  missingCurrentPeriod: boolean;
+  periods: PricePeriod[];
+}
+export interface PriceImportPreview {
+  valid: boolean;
+  created: number;
+  updated: number;
+  unchanged: number;
+  errors: string[];
+  warnings: string[];
+}
+export interface PricePeriodValidation {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  productCount: number;
+  priceCount: number;
+}
+
 export interface RuleConfigVersion {
   id: string;
   version: string;
@@ -173,6 +234,51 @@ export interface AuditFilters {
   entityType?: string;
   page?: number;
   limit?: number;
+}
+
+export interface CampaignPolicy {
+  defaultWindow: { start: string; end: string };
+  minSpacingSeconds: number;
+  maxTargets: number;
+  rateLimitPerMinute: number;
+  claimLeaseSeconds: number;
+  tickIntervalSeconds: number;
+  retry: { maxAttempts: number; baseBackoffSeconds: number };
+}
+
+export interface CampaignView {
+  id: string;
+  name: string;
+  content: string;
+  kind: CampaignKind;
+  templateKey?: string;
+  recurrence?: JsonObject;
+  metadata: JsonObject;
+  status: CampaignStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  windowStart?: string;
+  windowEnd?: string;
+  createdAt: string;
+  targets: Array<{ id: string; chatId: string; displayName?: string; enabled: boolean }>;
+  deliveries: Array<{
+    id: string;
+    targetId: string;
+    status: 'pending' | 'claimed' | 'sent' | 'failed' | 'cancelled';
+    scheduledFor: string;
+    attempts: number;
+    lastError?: string;
+  }>;
+}
+
+export interface CampaignDraftInput {
+  name: string;
+  content: string;
+  kind: CampaignKind;
+  templateKey?: string;
+  recurrence?: JsonObject;
+  targets: Array<{ groupId?: string; chatId: string; displayName?: string; metadata: JsonObject }>;
+  metadata: JsonObject;
 }
 
 export interface AuditPage {
@@ -294,8 +400,16 @@ export function parseSettingsSummary(value: unknown): SettingsSummary {
   const rules = getNestedRecord(record, 'rules');
   const zca = getNestedRecord(record, 'zca');
   const autoSendRecord = getNestedRecord(record, 'autoSend');
+  const orderAutomationRecord = getNestedRecord(record, 'orderAutomation');
   const rawGroups = arrayValue(record.groups ?? zca.groups);
   const groups = rawGroups.map(parseGroupSummary).filter((group) => group !== undefined);
+  const businessBlockers = arrayValue(record.businessBlockers).flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const key = stringValue(item.key);
+    const label = stringValue(item.label);
+    const reason = stringValue(item.reason);
+    return key && label && reason ? [{ key, label, reason }] : [];
+  });
   const hasData = Object.keys(record).length > 0;
   const autoSend = booleanValue(
     isRecord(record.autoSend)
@@ -319,6 +433,17 @@ export function parseSettingsSummary(value: unknown): SettingsSummary {
       : {}),
     botIdentity: parseBotIdentity(record.botIdentity),
     autoSend,
+    orderAutomation:
+      typeof orderAutomationRecord.enabled === 'boolean' &&
+      typeof orderAutomationRecord.maxAutoConfirmQuantity === 'number' &&
+      Number.isInteger(orderAutomationRecord.maxAutoConfirmQuantity) &&
+      orderAutomationRecord.maxAutoConfirmQuantity > 0
+        ? {
+            enabled: orderAutomationRecord.enabled,
+            maxAutoConfirmQuantity: orderAutomationRecord.maxAutoConfirmQuantity,
+          }
+        : null,
+    businessBlockers,
     sourceTruth: {
       status: Object.keys(sourceTruth).length ? 'available' : 'unavailable',
       productCount: numberValue(sourceTruth.productCount),
@@ -475,7 +600,7 @@ function isJsonValue(value: unknown): value is JsonValue {
 }
 
 async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const response = await authFetch(`${API_BASE}${path}`, init);
   const text = await response.text();
   let parsed: unknown = null;
   if (text) {
@@ -614,6 +739,95 @@ function parseSourceTruthRows(resource: SourceTruthResource, value: unknown): So
   });
 }
 
+function parsePrice(value: unknown): PricePeriodPrice | undefined {
+  if (!isRecord(value)) return undefined;
+  const sku = stringValue(value.sku);
+  if (!sku || typeof value.wholesale !== 'number' || !Number.isFinite(value.wholesale))
+    return undefined;
+  return {
+    ...(stringValue(value.id) ? { id: stringValue(value.id) } : {}),
+    sku,
+    wholesale: value.wholesale,
+    ...(typeof value.minRetailPrice === 'number' || value.minRetailPrice === null
+      ? { minRetailPrice: value.minRetailPrice }
+      : {}),
+    ...(typeof value.retailPrice === 'number' || value.retailPrice === null
+      ? { retailPrice: value.retailPrice }
+      : {}),
+    ...(typeof value.listPrice === 'number' || value.listPrice === null
+      ? { listPrice: value.listPrice }
+      : {}),
+  };
+}
+
+function parsePricePeriod(value: unknown): PricePeriod | undefined {
+  if (!isRecord(value)) return undefined;
+  const id = stringValue(value.id);
+  if (!id) return undefined;
+  return {
+    id,
+    validMonth: stringValue(value.validMonth) ?? null,
+    status: enumValue(value.status, ['draft', 'active', 'archived'] as const, 'draft'),
+    ...(stringValue(value.source) ? { source: stringValue(value.source) } : {}),
+    ...(stringValue(value.note) ? { note: stringValue(value.note) } : {}),
+    prices: arrayValue(value.prices)
+      .map(parsePrice)
+      .filter((row) => row !== undefined),
+    ...(stringValue(value.createdAt) ? { createdAt: stringValue(value.createdAt) } : {}),
+    ...(stringValue(value.activatedAt) ? { activatedAt: stringValue(value.activatedAt) } : {}),
+  };
+}
+
+export function parsePricePeriods(value: unknown): PricePeriodsView {
+  const unwrapped = unwrapEnvelope(value);
+  const record = isRecord(unwrapped) ? unwrapped : {};
+  const currentMonth = stringValue(record.currentMonth) ?? new Date().toISOString().slice(0, 7);
+  const periods = arrayValue(record.periods)
+    .map(parsePricePeriod)
+    .filter((period) => period !== undefined);
+  const currentPeriodId = stringValue(record.currentPeriodId) ?? null;
+  // Fail closed: neu API khong noi ro/khong co active exact month thi UI phai canh bao.
+  const hasCurrent = periods.some(
+    (period) =>
+      period.id === currentPeriodId &&
+      period.validMonth === currentMonth &&
+      period.status === 'active',
+  );
+  return {
+    currentMonth,
+    currentPeriodId: hasCurrent ? currentPeriodId : null,
+    missingCurrentPeriod: !hasCurrent,
+    periods,
+  };
+}
+
+function parsePricePreview(value: unknown): PriceImportPreview {
+  const record = isRecord(unwrapEnvelope(value)) ? (unwrapEnvelope(value) as UnknownRecord) : {};
+  return {
+    valid: booleanValue(record.valid, false),
+    created: numberValue(record.created),
+    updated: numberValue(record.updated),
+    unchanged: numberValue(record.unchanged),
+    errors: arrayValue(record.errors).filter((item): item is string => typeof item === 'string'),
+    warnings: arrayValue(record.warnings).filter(
+      (item): item is string => typeof item === 'string',
+    ),
+  };
+}
+
+function parsePriceValidation(value: unknown): PricePeriodValidation {
+  const record = isRecord(unwrapEnvelope(value)) ? (unwrapEnvelope(value) as UnknownRecord) : {};
+  return {
+    valid: booleanValue(record.valid, false),
+    errors: arrayValue(record.errors).filter((item): item is string => typeof item === 'string'),
+    warnings: arrayValue(record.warnings).filter(
+      (item): item is string => typeof item === 'string',
+    ),
+    productCount: numberValue(record.productCount),
+    priceCount: numberValue(record.priceCount),
+  };
+}
+
 async function getSourceTruth(): Promise<SourceTruthSection[]> {
   const resources: SourceTruthResource[] = [
     'dealers',
@@ -743,8 +957,196 @@ function parseAuditPage(value: unknown, filters: AuditFilters): AuditPage {
   };
 }
 
+const CAMPAIGN_STATUSES: readonly CampaignStatus[] = [
+  'draft',
+  'approved',
+  'scheduled',
+  'running',
+  'completed',
+  'partially_failed',
+  'cancelled',
+];
+const CAMPAIGN_KINDS: readonly CampaignKind[] = [
+  'one_off',
+  'recurring',
+  'birthday',
+  'lunar_month_start',
+  'lunar_full_moon',
+];
+
+function parseCampaign(value: unknown): CampaignView | undefined {
+  if (!isRecord(value)) return undefined;
+  const id = stringValue(value.id);
+  const name = stringValue(value.name);
+  const content = stringValue(value.content);
+  const createdAt = stringValue(value.createdAt);
+  if (!id || !name || !content || !createdAt) return undefined;
+  const targets = arrayValue(value.targets).flatMap((target) => {
+    if (!isRecord(target)) return [];
+    const targetId = stringValue(target.id);
+    const chatId = stringValue(target.chatId);
+    if (!targetId || !chatId) return [];
+    return [
+      {
+        id: targetId,
+        chatId,
+        ...(stringValue(target.displayName)
+          ? { displayName: stringValue(target.displayName) }
+          : {}),
+        enabled: booleanValue(target.enabled, true),
+      },
+    ];
+  });
+  const deliveries = arrayValue(value.deliveries).flatMap((delivery) => {
+    if (!isRecord(delivery)) return [];
+    const deliveryId = stringValue(delivery.id);
+    const targetId = stringValue(delivery.targetId);
+    const scheduledFor = stringValue(delivery.scheduledFor);
+    if (!deliveryId || !targetId || !scheduledFor) return [];
+    return [
+      {
+        id: deliveryId,
+        targetId,
+        status: enumValue(
+          delivery.status,
+          ['pending', 'claimed', 'sent', 'failed', 'cancelled'] as const,
+          'pending',
+        ),
+        scheduledFor,
+        attempts: numberValue(delivery.attempts),
+        ...(stringValue(delivery.lastError) ? { lastError: stringValue(delivery.lastError) } : {}),
+      },
+    ];
+  });
+  return {
+    id,
+    name,
+    content,
+    kind: enumValue(value.kind, CAMPAIGN_KINDS, 'one_off'),
+    ...(stringValue(value.templateKey) ? { templateKey: stringValue(value.templateKey) } : {}),
+    ...(isRecord(value.recurrence) ? { recurrence: safeJsonObject(value.recurrence) } : {}),
+    metadata: isRecord(value.metadata) ? safeJsonObject(value.metadata) : {},
+    status: enumValue(value.status, CAMPAIGN_STATUSES, 'draft'),
+    ...(stringValue(value.approvedBy) ? { approvedBy: stringValue(value.approvedBy) } : {}),
+    ...(stringValue(value.approvedAt) ? { approvedAt: stringValue(value.approvedAt) } : {}),
+    ...(stringValue(value.windowStart) ? { windowStart: stringValue(value.windowStart) } : {}),
+    ...(stringValue(value.windowEnd) ? { windowEnd: stringValue(value.windowEnd) } : {}),
+    createdAt,
+    targets,
+    deliveries,
+  };
+}
+
+export function parseCampaigns(value: unknown): CampaignView[] {
+  const unwrapped = unwrapEnvelope(value);
+  const rows = Array.isArray(unwrapped)
+    ? unwrapped
+    : isRecord(unwrapped)
+      ? arrayValue(unwrapped.campaigns ?? unwrapped.items)
+      : [];
+  return rows.map(parseCampaign).filter((campaign) => campaign !== undefined);
+}
+
+function parseCampaignPolicy(value: unknown): CampaignPolicy {
+  const unwrapped = unwrapEnvelope(value);
+  const record = isRecord(unwrapped) ? unwrapped : {};
+  const window = isRecord(record.defaultWindow) ? record.defaultWindow : {};
+  const retry = isRecord(record.retry) ? record.retry : {};
+  return {
+    defaultWindow: {
+      start: stringValue(window.start) ?? '08:00',
+      end: stringValue(window.end) ?? '12:00',
+    },
+    minSpacingSeconds: numberValue(record.minSpacingSeconds, 30),
+    maxTargets: numberValue(record.maxTargets, 1),
+    rateLimitPerMinute: numberValue(record.rateLimitPerMinute, 1),
+    claimLeaseSeconds: numberValue(record.claimLeaseSeconds, 60),
+    tickIntervalSeconds: numberValue(record.tickIntervalSeconds, 10),
+    retry: {
+      maxAttempts: numberValue(retry.maxAttempts, 1),
+      baseBackoffSeconds: numberValue(retry.baseBackoffSeconds, 60),
+    },
+  };
+}
+
+async function campaignMutation(path: string, body: unknown): Promise<CampaignView> {
+  const campaign = parseCampaign(unwrapEnvelope(await requestJson(path, jsonInit('POST', body))));
+  if (!campaign) throw new Error('API tra ve campaign khong hop le');
+  return campaign;
+}
+
 export const settingsApi = {
+  ...masterDataApi,
   summary: getSummary,
+  pricePeriods: async (): Promise<PricePeriodsView> =>
+    parsePricePeriods(await requestJson('/settings/price-periods', { cache: 'no-store' })),
+  createPricePeriod: async (validMonth: string, note?: string): Promise<PricePeriod> => {
+    const period = parsePricePeriod(
+      unwrapEnvelope(
+        await requestJson(
+          '/settings/price-periods',
+          jsonInit('POST', { validMonth, ...(note ? { note } : {}) }),
+        ),
+      ),
+    );
+    if (!period) throw new Error('API trả về kỳ giá không hợp lệ');
+    return period;
+  },
+  copyPricePeriod: async (sourceId: string, validMonth: string): Promise<PricePeriod> => {
+    const period = parsePricePeriod(
+      unwrapEnvelope(
+        await requestJson(
+          `/settings/price-periods/${encodeURIComponent(sourceId)}/copy`,
+          jsonInit('POST', { validMonth }),
+        ),
+      ),
+    );
+    if (!period) throw new Error('API trả về kỳ giá copy không hợp lệ');
+    return period;
+  },
+  previewPriceImport: async (
+    periodId: string,
+    rows: readonly PricePeriodPrice[],
+    overwrite = false,
+  ): Promise<PriceImportPreview> =>
+    parsePricePreview(
+      await requestJson(
+        `/settings/price-periods/${encodeURIComponent(periodId)}/import/preview`,
+        jsonInit('POST', { rows, overwrite }),
+      ),
+    ),
+  applyPriceImport: async (
+    periodId: string,
+    rows: readonly PricePeriodPrice[],
+    overwrite = false,
+  ): Promise<PriceImportPreview> => {
+    const value = unwrapEnvelope(
+      await requestJson(
+        `/settings/price-periods/${encodeURIComponent(periodId)}/import/apply`,
+        jsonInit('POST', { rows, overwrite, confirmed: true }),
+      ),
+    );
+    return parsePricePreview(isRecord(value) ? value.preview : value);
+  },
+  validatePricePeriod: async (periodId: string): Promise<PricePeriodValidation> =>
+    parsePriceValidation(
+      await requestJson(
+        `/settings/price-periods/${encodeURIComponent(periodId)}/validate`,
+        jsonInit('POST', {}),
+      ),
+    ),
+  activatePricePeriod: async (periodId: string): Promise<PricePeriod> => {
+    const period = parsePricePeriod(
+      unwrapEnvelope(
+        await requestJson(
+          `/settings/price-periods/${encodeURIComponent(periodId)}/activate`,
+          jsonInit('POST', { confirmed: true }),
+        ),
+      ),
+    );
+    if (!period) throw new Error('API trả về kỳ giá active không hợp lệ');
+    return period;
+  },
   listParticipants: async (
     groupId: string,
     filters: ParticipantFilters,
@@ -908,10 +1310,7 @@ export const settingsApi = {
   },
   setAutoSend: async (enabled: boolean): Promise<{ autoSend: boolean }> => {
     const value = unwrapEnvelope(
-      await requestJson(
-        '/settings/automation/auto-send',
-        jsonInit('PUT', enabled ? { enabled: true, acknowledged: true } : { enabled: false }),
-      ),
+      await requestJson('/settings/automation/auto-send', jsonInit('PUT', { enabled })),
     );
     const record = isRecord(value) ? value : {};
     return {
@@ -922,8 +1321,90 @@ export const settingsApi = {
   },
   audit: async (filters: AuditFilters): Promise<AuditPage> =>
     parseAuditPage(await requestJson(`/settings/audit${buildAuditQuery(filters)}`), filters),
+  campaigns: async (): Promise<CampaignView[]> =>
+    parseCampaigns(await requestJson('/campaigns', { cache: 'no-store' })),
+  campaignPolicy: async (): Promise<CampaignPolicy> =>
+    parseCampaignPolicy(await requestJson('/campaigns/policy', { cache: 'no-store' })),
+  createCampaign: async (input: CampaignDraftInput): Promise<CampaignView> =>
+    campaignMutation('/campaigns', input),
+  approveCampaign: async (id: string): Promise<CampaignView> =>
+    campaignMutation(`/campaigns/${encodeURIComponent(id)}/approve`, { approved: true }),
+  scheduleCampaign: async (
+    id: string,
+    input: { windowStart: string; windowEnd: string },
+  ): Promise<CampaignView> =>
+    campaignMutation(`/campaigns/${encodeURIComponent(id)}/schedule`, input),
+  retryFailedCampaign: async (id: string): Promise<CampaignView> =>
+    campaignMutation(`/campaigns/${encodeURIComponent(id)}/retry-failed`, { failedOnly: true }),
+  cancelCampaign: async (id: string): Promise<CampaignView> =>
+    campaignMutation(`/campaigns/${encodeURIComponent(id)}/cancel`, { confirmed: true }),
   zaloStatus: async (): Promise<unknown> => requestJson('/zalo/status', { cache: 'no-store' }),
   zaloGroups: async (): Promise<unknown> => requestJson('/zalo/groups', { cache: 'no-store' }),
   logoutZalo: async (): Promise<unknown> =>
     requestJson('/zalo/logout', jsonInit('POST', { confirmed: true })),
+  content: async (): Promise<ContentSnapshotView> =>
+    parseContentSnapshot(await requestJson('/settings/content', { cache: 'no-store' })),
+  reloadContent: async (): Promise<ContentSnapshotView> =>
+    parseContentSnapshot(await requestJson('/settings/content/reload', jsonInit('POST', {}))),
+  previewContentImport: async (manifest: ContentImportManifest): Promise<ContentImportPreview> =>
+    parseContentImportPreview(
+      await requestJson('/settings/content/import/preview', jsonInit('POST', { manifest })),
+    ),
+  applyContentImport: async (manifest: ContentImportManifest): Promise<ContentImportResult> => ({
+    ...parseContentImportPreview(
+      await requestJson(
+        '/settings/content/import/apply',
+        jsonInit('POST', { manifest, confirmed: true }),
+      ),
+    ),
+  }),
+  saveContent: async (
+    kind: 'asset' | 'faq' | 'advice' | 'link',
+    input: Record<string, unknown>,
+    id?: string,
+  ): Promise<ContentSnapshotView> =>
+    parseContentSnapshot(
+      await requestJson(
+        `/settings/content/${kind}${id ? `/${encodeURIComponent(id)}` : ''}`,
+        jsonInit(id ? 'PUT' : 'POST', input),
+      ),
+    ),
+  setContentStatus: async (
+    kind: 'asset' | 'faq' | 'advice' | 'link',
+    id: string,
+    status: ContentLifecycleStatus,
+  ): Promise<ContentSnapshotView> =>
+    parseContentSnapshot(
+      await requestJson(
+        `/settings/content/${kind}/${encodeURIComponent(id)}/status`,
+        jsonInit('PUT', { status }),
+      ),
+    ),
 };
+
+function parseContentSnapshot(value: unknown): ContentSnapshotView {
+  const unwrapped = unwrapEnvelope(value);
+  const record = isRecord(unwrapped) ? unwrapped : {};
+  return {
+    provenance: arrayValue(record.provenance) as ContentSnapshotView['provenance'],
+    assets: arrayValue(record.assets) as ContentSnapshotView['assets'],
+    faqs: arrayValue(record.faqs) as ContentSnapshotView['faqs'],
+    advice: arrayValue(record.advice) as ContentSnapshotView['advice'],
+    links: arrayValue(record.links) as ContentSnapshotView['links'],
+    readiness: arrayValue(record.readiness) as ContentSnapshotView['readiness'],
+  };
+}
+
+function parseContentImportPreview(value: unknown): ContentImportResult {
+  const unwrapped = unwrapEnvelope(value);
+  const record = isRecord(unwrapped) ? unwrapped : {};
+  return {
+    creates: numberValue(record.creates),
+    updates: numberValue(record.updates),
+    unchanged: numberValue(record.unchanged),
+    conflicts: numberValue(record.conflicts),
+    errors: arrayValue(record.errors).filter((item): item is string => typeof item === 'string'),
+    applied: numberValue(record.applied),
+    skippedConflicts: numberValue(record.skippedConflicts),
+  };
+}

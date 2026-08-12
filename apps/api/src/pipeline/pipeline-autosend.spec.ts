@@ -7,7 +7,6 @@ import type { ChannelMessage } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
-import { KiotVietMockAdapter } from '../erp/kiotviet.mock.adapter.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
@@ -19,12 +18,12 @@ import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 const GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-hn')!.chatId;
 
 function build(settings?: RuntimeSettingsService) {
-  const knowledge = new KnowledgeService();
+  const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
   const repo = new InMemoryOrdersRepository();
   const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
   const adapter = new MockAdapter();
   const outbound = new OutboundChannelRouter(adapter, new MockAdapter(), new MockAdapter());
-  const orders = new OrdersService(repo, outbound, new KiotVietMockAdapter(knowledge));
+  const orders = new OrdersService(repo, outbound);
   const pipeline = new PipelineService(orchestrator, orders, undefined, settings);
   return { pipeline, adapter };
 }
@@ -41,36 +40,26 @@ function msg(text: string): ChannelMessage {
   };
 }
 
-describe('PipelineService AUTO_SEND (AI tu chot khi khong rui ro)', () => {
-  it('đơn KHÔNG rủi ro -> AI tự chốt: gửi nhóm + đồng bộ KiotViet, status synced', async () => {
+describe('PipelineService AUTO_SEND (policy tenant GĐ1)', () => {
+  it('đúng 50 SP -> tự gửi dù risk cũ leo thang, dừng ở sent và giao việc Sale, không gọi ERP', async () => {
     const { pipeline, adapter } = build();
-    const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'));
+    const view = await pipeline.process(msg('@Bot ultty AI orders 50 quat mini'));
 
-    expect(view.trace?.supervisor.riskLevel).toBe('none');
-    expect(view.status).toBe('synced'); // tu duyet, khong can Sale
-    expect(view.kiotVietCode).toMatch(/^KV-/);
-    expect(adapter.sent).toHaveLength(1); // da gui xac nhan vao nhom
+    expect(view.trace?.supervisor.escalate).toBe(true);
+    expect(view.status).toBe('sent');
+    expect(view.kiotVietCode).toBeUndefined();
+    expect(view.salesHandoff).toMatchObject({ action: 'manual_erp_entry', status: 'pending' });
+    expect(adapter.sent).toHaveLength(1);
     expect(adapter.sent[0]!.text).toContain('Tin tự động');
   });
 
-  it('đơn LỚN (Giám sát leo thang) -> KHÔNG tự gửi, giữ Sale duyệt', async () => {
+  it('51 SP -> KHÔNG tự gửi, giữ Sale can thiệp trước outbound', async () => {
     const { pipeline, adapter } = build();
-    const view = await pipeline.process(msg('@Bot ultty AI orders 50 ghe felix'));
+    const view = await pipeline.process(msg('@Bot ultty AI orders 51 quat mini'));
 
-    expect(view.trace?.supervisor.escalate).toBe(true);
-    expect(view.status).toBe('needs_edit'); // khong synced
+    expect(view.status).toBe('needs_edit');
     expect(view.kiotVietCode).toBeUndefined();
-    expect(adapter.sent).toHaveLength(0); // KHONG tu gui
-  });
-
-  it('đơn có cảnh báo/số lượng lớn (Giám sát theo dõi) -> KHÔNG tự gửi', async () => {
-    const { pipeline, adapter } = build();
-    // 30 x quat mini (ELNA 450k) = 13,5tr < 20tr (khong escalate) nhung SL >= 30 -> watch.
-    const view = await pipeline.process(msg('@Bot ultty AI orders 30 quat mini'));
-
-    // watch (SL >= 30) hoac bat ky rui ro nao -> khong auto-send.
-    expect(view.trace?.supervisor.riskLevel).not.toBe('none');
-    expect(view.status).not.toBe('synced');
+    expect(view.salesHandoff).toBeUndefined();
     expect(adapter.sent).toHaveLength(0);
   });
 
@@ -84,8 +73,9 @@ describe('PipelineService AUTO_SEND (AI tu chot khi khong rui ro)', () => {
     expect(adapter.sent).toHaveLength(0);
 
     settings.setAutoSend(true);
-    const synced = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'));
-    expect(synced.status).toBe('synced');
+    const sent = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'));
+    expect(sent.status).toBe('sent');
+    expect(sent.salesHandoff?.status).toBe('pending');
     expect(adapter.sent).toHaveLength(1);
   });
 });

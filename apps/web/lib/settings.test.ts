@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resetAuthClientForTests } from './auth';
 import {
   buildParticipantQuery,
   filterParticipants,
   normalizeSourceTruthChanges,
   parseSettingsSummary,
+  parseCampaigns,
+  parsePricePeriods,
   resolveSourceTruthRowId,
   settingsApi,
   type GroupParticipant,
@@ -35,11 +38,45 @@ const PARTICIPANTS: GroupParticipant[] = [
 ];
 
 describe('settings response schemas', () => {
+  it('fails closed for unknown campaign states and drops malformed targets', () => {
+    expect(
+      parseCampaigns([
+        {
+          id: 'c1',
+          name: 'CSKH',
+          content: 'Xin chao',
+          kind: 'future-kind',
+          status: 'future-state',
+          createdAt: '2026-08-12T00:00:00.000Z',
+          targets: [{ id: 't1', chatId: 'g1' }, { id: 'bad' }],
+          deliveries: [],
+        },
+      ])[0],
+    ).toMatchObject({ kind: 'one_off', status: 'draft', targets: [{ id: 't1', chatId: 'g1' }] });
+  });
+  it('price freshness fails closed unless exact current active period is explicit', () => {
+    expect(
+      parsePricePeriods({
+        currentMonth: '2026-08',
+        currentPeriodId: 'jul',
+        periods: [{ id: 'jul', validMonth: '2026-07', status: 'active', prices: [] }],
+      }),
+    ).toMatchObject({ currentPeriodId: null, missingCurrentPeriod: true });
+    expect(
+      parsePricePeriods({
+        currentMonth: '2026-08',
+        currentPeriodId: 'aug',
+        periods: [{ id: 'aug', validMonth: '2026-08', status: 'active', prices: [] }],
+      }),
+    ).toMatchObject({ currentPeriodId: 'aug', missingCurrentPeriod: false });
+  });
   it('keeps the operator page usable when summary fields are absent', () => {
     expect(parseSettingsSummary({})).toEqual(
       expect.objectContaining({
         channelMode: 'mock',
         autoSend: false,
+        orderAutomation: null,
+        businessBlockers: [],
         sourceTruth: expect.objectContaining({ status: 'unavailable' }),
         rules: expect.objectContaining({ status: 'unavailable' }),
         groups: [],
@@ -60,6 +97,7 @@ describe('settings response schemas', () => {
       data: {
         channelMode: 'hybrid',
         autoSend: { enabled: true },
+        orderAutomation: { enabled: true, maxAutoConfirmQuantity: 50 },
         botIdentity: { state: 'ready', id: 'bot-1', name: 'Ultty Bot', token: 'hidden' },
         groups: [{ id: 'zca-1', name: 'Đại lý Hà Nội', allowed: true, memberCount: 12 }],
       },
@@ -67,6 +105,7 @@ describe('settings response schemas', () => {
 
     expect(summary.channelMode).toBe('hybrid');
     expect(summary.autoSend).toBe(true);
+    expect(summary.orderAutomation).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
     expect(summary.botIdentity).toEqual({ state: 'ready', id: 'bot-1', name: 'Ultty Bot' });
     expect(summary.groups).toEqual([
       expect.objectContaining({ zcaChatId: 'zca-1', name: 'Đại lý Hà Nội', allowed: true }),
@@ -171,6 +210,7 @@ describe('source-truth form view model', () => {
 describe('settings API contracts', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    resetAuthClientForTests();
   });
 
   it('syncs members through the planned allowlisted group endpoint', async () => {
@@ -184,6 +224,105 @@ describe('settings API contracts', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:3001/zalo/groups/zca%20group%2F1/members/sync',
       expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('creates, approves, schedules, retries and cancels campaigns through explicit actions', async () => {
+    const campaign = {
+      id: 'campaign/1',
+      name: 'CSKH',
+      content: 'Xin chao',
+      kind: 'one_off',
+      status: 'draft',
+      metadata: {},
+      createdAt: '2026-08-12T00:00:00.000Z',
+      targets: [{ id: 't1', chatId: 'g1', enabled: true }],
+      deliveries: [],
+    };
+    const fetchMock = vi.fn(async () => Response.json(campaign));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await settingsApi.createCampaign({
+      name: 'CSKH',
+      content: 'Xin chao',
+      kind: 'birthday',
+      recurrence: { timezone: 'Asia/Ho_Chi_Minh' },
+      targets: [{ chatId: 'g1', metadata: {} }],
+      metadata: {},
+    });
+    await settingsApi.approveCampaign('campaign/1');
+    await settingsApi.scheduleCampaign('campaign/1', {
+      windowStart: '2026-08-12T01:00:00.000Z',
+      windowEnd: '2026-08-12T05:00:00.000Z',
+    });
+    await settingsApi.retryFailedCampaign('campaign/1');
+    await settingsApi.cancelCampaign('campaign/1');
+
+    // Mutation dau tien keo theo MOT vong bat tay `/auth/csrf` (sau do duoc nho), nen moi
+    // lenh nghiep vu lui mot bac.
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3001/auth/csrf',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:3001/campaigns/campaign%2F1/approve',
+      expect.objectContaining({ body: JSON.stringify({ approved: true }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      'http://localhost:3001/campaigns/campaign%2F1/retry-failed',
+      expect.objectContaining({ body: JSON.stringify({ failedOnly: true }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      'http://localhost:3001/campaigns/campaign%2F1/cancel',
+      expect.objectContaining({ body: JSON.stringify({ confirmed: true }) }),
+    );
+  });
+
+  it('previews then applies a price import with explicit confirmation', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      return Response.json(
+        url.endsWith('/apply')
+          ? {
+              preview: {
+                valid: true,
+                created: 1,
+                updated: 0,
+                unchanged: 0,
+                errors: [],
+                warnings: [],
+              },
+            }
+          : { valid: true, created: 1, updated: 0, unchanged: 0, errors: [], warnings: [] },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const rows = [{ sku: 'A', wholesale: 100 }];
+
+    await settingsApi.previewPriceImport('period/1', rows);
+    await settingsApi.applyPriceImport('period/1', rows);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3001/auth/csrf',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:3001/settings/price-periods/period%2F1/import/preview',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ rows, overwrite: false }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:3001/settings/price-periods/period%2F1/import/apply',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ rows, overwrite: false, confirmed: true }),
+      }),
     );
   });
 
@@ -277,6 +416,8 @@ describe('settings API contracts', () => {
   it('previews and atomically applies bulk participant changes through the collection endpoint', async () => {
     const fetchMock = vi
       .fn()
+      // Lan mutation dau tien di qua vong bat tay `/auth/csrf`, sau do token duoc nho.
+      .mockResolvedValueOnce(Response.json({ csrfToken: 'csrf-1' }))
       .mockResolvedValueOnce(Response.json({ affectedCount: 2, warnings: [] }))
       .mockResolvedValueOnce(Response.json({ participants: PARTICIPANTS, total: 2 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -289,7 +430,7 @@ describe('settings API contracts', () => {
     await settingsApi.bulkUpdateParticipants('group-1', request);
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+      2,
       'http://localhost:3001/groups/group-1/participants',
       expect.objectContaining({
         method: 'PATCH',
@@ -301,7 +442,7 @@ describe('settings API contracts', () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'http://localhost:3001/groups/group-1/participants',
       expect.objectContaining({
         method: 'PATCH',
@@ -318,6 +459,8 @@ describe('settings API contracts', () => {
   it('keeps create identifiers in the body and strips immutable identifiers on update', async () => {
     const fetchMock = vi
       .fn()
+      // Lan mutation dau tien di qua vong bat tay `/auth/csrf`, sau do token duoc nho.
+      .mockResolvedValueOnce(Response.json({ csrfToken: 'csrf-1' }))
       .mockResolvedValueOnce(Response.json([]))
       .mockResolvedValueOnce(Response.json([]));
     vi.stubGlobal('fetch', fetchMock);
@@ -334,7 +477,7 @@ describe('settings API contracts', () => {
     });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+      2,
       'http://localhost:3001/settings/source-truth/products',
       expect.objectContaining({
         method: 'PUT',
@@ -342,7 +485,7 @@ describe('settings API contracts', () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'http://localhost:3001/settings/source-truth/prices/FELIX',
       expect.objectContaining({
         method: 'PUT',
@@ -351,7 +494,7 @@ describe('settings API contracts', () => {
     );
   });
 
-  it('uses the shared automation facade and sends the two-step acknowledgement', async () => {
+  it('uses the shared automation facade without re-requesting D4 acknowledgement', async () => {
     const fetchMock = vi.fn(async () => Response.json({ autoSend: true }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -360,7 +503,7 @@ describe('settings API contracts', () => {
       'http://localhost:3001/settings/automation/auto-send',
       expect.objectContaining({
         method: 'PUT',
-        body: JSON.stringify({ enabled: true, acknowledged: true }),
+        body: JSON.stringify({ enabled: true }),
       }),
     );
   });
@@ -434,5 +577,64 @@ describe('settings API contracts', () => {
       phone: '[đã ẩn]',
       nested: { accessToken: '[đã ẩn]' },
     });
+  });
+
+  it('parses content readiness and sends preview/apply as explicit two-step import', async () => {
+    const manifest = {
+      source: { kind: 'local_manifest' as const, sourceId: 'inventory-v1' },
+      assets: [],
+      faqs: [],
+      advice: [],
+      links: [],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          provenance: [],
+          assets: [],
+          faqs: [],
+          advice: [],
+          links: [],
+          readiness: [{ productSku: 'ELNI', ready: false, missing: ['active_image'] }],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ csrfToken: 'csrf-test' }))
+      .mockResolvedValueOnce(
+        Response.json({ creates: 1, updates: 0, unchanged: 0, conflicts: 0, errors: [] }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          creates: 1,
+          updates: 0,
+          unchanged: 0,
+          conflicts: 0,
+          errors: [],
+          applied: 1,
+          skippedConflicts: 0,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(settingsApi.content()).resolves.toEqual(
+      expect.objectContaining({
+        readiness: [{ productSku: 'ELNI', ready: false, missing: ['active_image'] }],
+      }),
+    );
+    await settingsApi.previewContentImport(manifest);
+    await expect(settingsApi.applyContentImport(manifest)).resolves.toEqual(
+      expect.objectContaining({ applied: 1 }),
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:3001/settings/content/import/preview',
+      expect.objectContaining({ body: JSON.stringify({ manifest }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      'http://localhost:3001/settings/content/import/apply',
+      expect.objectContaining({ body: JSON.stringify({ manifest, confirmed: true }) }),
+    );
   });
 });

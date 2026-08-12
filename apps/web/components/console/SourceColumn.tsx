@@ -3,14 +3,12 @@
 import type { OrderView } from '@netviet/shared';
 import { useState } from 'react';
 import { AppliedRulesPanel } from './AppliedRulesPanel';
-import { KiotVietPanel } from './KiotVietPanel';
 import { KnowledgePanel } from './KnowledgePanel';
 
-type Tab = 'kb' | 'kv' | 'rules';
+type Tab = 'kb' | 'rules';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'kb', label: 'Kho tri thức' },
-  { id: 'kv', label: 'KiotViet' },
   { id: 'rules', label: 'Luật đã áp' },
 ];
 
@@ -39,7 +37,6 @@ export function SourceColumn({ order }: { order?: OrderView }) {
 
       <div role="tabpanel" id={`src-panel-${tab}`} aria-labelledby={`src-tab-${tab}`}>
         {tab === 'kb' && <KnowledgePanel order={order} />}
-        {tab === 'kv' && <KiotVietPanel />}
         {tab === 'rules' && <AppliedRulesPanel order={order} />}
       </div>
     </aside>

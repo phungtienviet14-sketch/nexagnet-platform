@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ReplyChannel } from '@netviet/shared';
+import type { ChannelCapabilities, OutboundContent, ReplyChannel } from '@netviet/shared';
 import { ChannelAdapter } from './channel-adapter.js';
 import {
   BOT_CHANNEL_ADAPTER,
@@ -23,6 +23,23 @@ export class OutboundChannelRouter {
   ): Promise<void> {
     if (!replyChannel) throw new Error('Thieu replyChannel: tu choi doan kenh gui');
     await this.adapter(replyChannel).sendMessage(chatId, text);
+  }
+
+  capabilities(replyChannel: ReplyChannel): ChannelCapabilities {
+    return this.adapter(replyChannel).capabilities;
+  }
+
+  async sendContent(
+    replyChannel: ReplyChannel | undefined,
+    chatId: string,
+    content: OutboundContent,
+  ): Promise<void> {
+    if (!replyChannel) throw new Error('Thieu replyChannel: tu choi doan kenh gui');
+    const adapter = this.adapter(replyChannel);
+    if (content.image && !adapter.capabilities.image) {
+      throw new Error(`Kênh ${adapter.name} không hỗ trợ ảnh outbound`);
+    }
+    await adapter.sendContent(chatId, content);
   }
 
   private adapter(replyChannel: ReplyChannel): ChannelAdapter {

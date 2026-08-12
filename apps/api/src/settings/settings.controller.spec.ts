@@ -6,6 +6,7 @@ import type { RuleConfigService } from '../rule-config/rule-config.service.js';
 import type { GroupMappingService } from './group-mapping.service.js';
 import type { SettingsQueryService } from './settings-query.service.js';
 import type { SourceTruthWriteService } from './source-truth-write.service.js';
+import type { PricePeriodsService } from './price-periods.service.js';
 import { createDefaultRuleConfigPayload } from '../rule-config/rule-config.defaults.js';
 import { SettingsController } from './settings.controller.js';
 
@@ -46,14 +47,32 @@ function build() {
     })),
     setHidden: vi.fn(async () => ({ chatId: 'chat-1', status: 'ignored' as const })),
   } as unknown as GroupMappingService;
+  const pricePeriods = {
+    list: vi.fn(async () => ({ periods: [] })),
+    createDraft: vi.fn(async () => ({ id: 'p1', status: 'draft' })),
+    copyDraft: vi.fn(async () => ({ id: 'p2', status: 'draft' })),
+    previewImport: vi.fn(async () => ({ valid: true })),
+    applyImport: vi.fn(async () => ({ periodId: 'p1' })),
+    validate: vi.fn(async () => ({ valid: true })),
+    activate: vi.fn(async () => ({ id: 'p1', status: 'active' })),
+  } as unknown as PricePeriodsService;
   return {
-    controller: new SettingsController(query, writes, runtime, rules, audit, groupMapping),
+    controller: new (SettingsController as unknown as new (...args: unknown[]) => SettingsController)(
+      query,
+      writes,
+      runtime,
+      rules,
+      audit,
+      groupMapping,
+      pricePeriods,
+    ),
     query,
     writes,
     runtime,
     rules,
     audit,
     groupMapping,
+    pricePeriods,
   };
 }
 
@@ -65,18 +84,10 @@ describe('SettingsController', () => {
     expect(query.summary).toHaveBeenCalledTimes(1);
   });
 
-  it('AUTO_SEND on bat buoc acknowledged=true va ghi audit', async () => {
+  it('AUTO_SEND la kill switch van hanh, khong hoi lai van ban D4, va van ghi audit', async () => {
     const { controller, runtime, audit } = build();
 
-    await expect(
-      controller.setAutoSend({ enabled: true }, undefined, 'operator', 'req-1'),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    await controller.setAutoSend(
-      { enabled: true, acknowledged: true },
-      undefined,
-      'operator',
-      'req-1',
-    );
+    await controller.setAutoSend({ enabled: true }, undefined, 'operator', 'req-1');
 
     expect(runtime.setAutoSend).toHaveBeenCalledWith(true);
     expect(audit.append).toHaveBeenCalledWith(
@@ -118,7 +129,7 @@ describe('SettingsController', () => {
     expect(audit.append).toHaveBeenCalledTimes(3);
   });
 
-  it('preview rules computes a pure TH2 sample without writing an order', async () => {
+  it('preview rules keeps blocked VAT/COD/ship fields unresolved instead of using provisional numbers', async () => {
     const { controller, rules } = build();
     vi.mocked(rules.preview).mockResolvedValueOnce({
       id: 'r1',
@@ -161,11 +172,12 @@ describe('SettingsController', () => {
 
     expect(preview.totals).toEqual({
       itemsSubtotal: 1_000_000,
-      shippingFee: 30_000,
-      vatAmount: 100_000,
-      codFee: 20_000,
-      grandTotal: 1_150_000,
+      shippingFee: null,
+      vatAmount: null,
+      codFee: null,
+      grandTotal: null,
     });
+    expect(preview.warnings.join(' ')).toMatch(/VAT.*COD.*ship/i);
   });
 
   it('creates an override with both immutable composite identifiers preserved', async () => {

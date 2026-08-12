@@ -95,4 +95,34 @@ describe('channelMessageSchema', () => {
 
     expect(result.success).toBe(false);
   });
+
+  it('giu tham chieu reply de pipeline dung conversation context', () => {
+    const parsed = channelMessageSchema.parse({
+      ...validMessage,
+      externalMessageId: 'm-reply',
+      text: 'c them 5c nhe',
+      replyTo: {
+        externalMessageId: 'm-original',
+        senderExternalId: 'dealer-1',
+        senderDisplayName: 'Meta HN',
+        text: '10 ELNI',
+        sentAt: '2026-08-12T01:59:00.000Z',
+      },
+    });
+
+    expect(parsed.replyTo).toMatchObject({
+      externalMessageId: 'm-original',
+      text: '10 ELNI',
+    });
+    expect(parsed.replyTo?.sentAt).toBeInstanceOf(Date);
+  });
+
+  it('tu choi reply reference khong co ca id lan noi dung', () => {
+    const result = channelMessageSchema.safeParse({
+      ...validMessage,
+      replyTo: {},
+    });
+
+    expect(result.success).toBe(false);
+  });
 });

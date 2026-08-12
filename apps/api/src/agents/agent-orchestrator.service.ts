@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { tenantRetailAdvice } from '@netviet/tenant';
 import {
   AGENT_ROLES,
   INTENT_LABELS,
@@ -14,9 +15,11 @@ import {
   type AgentStreamEvent,
   type AgentTrace,
   type ChannelMessage,
+  type ConversationContext,
   type Intent,
   type OrderStatus,
   type OrderView,
+  type OutboundContent,
   type ParseResult,
   type PricedOrder,
   type ReplyChannel,
@@ -33,14 +36,15 @@ import { priceOrder, routeStatus } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
 import { DEFAULT_AGENTS_CONFIG, type AgentsConfig } from './agents.config.js';
 import { RuleConfigService } from '../rule-config/rule-config.service.js';
+import { ContentService } from '../content/content.service.js';
 import { toAgentsConfig, toRulesConfig } from '../rule-config/rule-config.defaults.js';
+import { validateContextualParse } from '../pipeline/contextual-parse.js';
 import {
   POLICY_LABELS,
   annotatePolicy,
   assessRisk,
   buildQuoteLines,
   classifyWarranty,
-  describeProducts,
 } from './risk-rules.js';
 
 /** Du lieu 1 vai da chay (de dung 1 AgentStep). */
@@ -56,6 +60,7 @@ interface DispatchResult {
   priced: PricedOrder | null;
   status: OrderStatus;
   reply?: string;
+  outbound?: OutboundContent;
   roles: Map<AgentRole, RoleData>;
 }
 
@@ -87,6 +92,7 @@ export class AgentOrchestrator {
     private readonly orders: OrdersRepository,
     @Optional() private readonly events?: AgentEventsService,
     @Optional() private readonly ruleConfigs?: RuleConfigService,
+    @Optional() private readonly content?: ContentService,
   ) {}
 
   /**
@@ -97,7 +103,12 @@ export class AgentOrchestrator {
   async run(
     message: ChannelMessage,
     botName?: string,
-    opts?: { orderId?: string; rerun?: boolean; senderTypeOverride?: SenderType },
+    opts?: {
+      orderId?: string;
+      rerun?: boolean;
+      senderTypeOverride?: SenderType;
+      conversationContext?: ConversationContext;
+    },
   ): Promise<OrderView> {
     const orderId = opts?.orderId ?? randomUUID();
     const createdAt = new Date().toISOString();
@@ -137,14 +148,21 @@ export class AgentOrchestrator {
 
     // ROUTER — 1 lan parse (LLM hoac mock). do tre THAT nam o day.
     emit({ type: 'agent.progress', orderId, role: 'router', phase: 'active' });
-    const parseResult = await this.parser.parse({
+    const rawParseResult = await this.parser.parse({
       text: message.text,
       imageUrl: message.imageUrl,
       products: this.knowledge.products(),
       glossary: this.knowledge.glossary(),
       dealerNameRaw: resolved.dealer?.name,
       botName,
+      context: opts?.conversationContext,
     });
+    const parseResult = validateContextualParse(
+      rawParseResult,
+      message.text,
+      this.knowledge.products(),
+      opts?.conversationContext,
+    );
     const usedLlm = this.parser.name !== 'mock';
     const intent = parseResult.intent;
     const primaryRole = INTENT_TO_ROLE[intent];
@@ -174,16 +192,31 @@ export class AgentOrchestrator {
       await pace();
       emit({ type: 'agent.progress', orderId, role, phase: 'active' });
       await pace();
-      emit({ type: 'agent.progress', orderId, role, phase: 'done', step: this.buildStep(role, data, NO_SUP) });
+      emit({
+        type: 'agent.progress',
+        orderId,
+        role,
+        phase: 'done',
+        step: this.buildStep(role, data, NO_SUP),
+      });
     }
 
     // SUPERVISOR — rules tat dinh, 0 LLM.
     const intentConfidence = parseResult.confidence.intent ?? 0.8;
     await pace();
     emit({ type: 'agent.progress', orderId, role: 'supervisor', phase: 'active' });
-    const supervisor = assessRisk(dispatch.priced, intentConfidence, senderKnown, normText, agentsConfig);
+    const supervisor = assessRisk(
+      dispatch.priced,
+      intentConfidence,
+      senderKnown,
+      normText,
+      agentsConfig,
+    );
     dispatch.roles.set('supervisor', {
-      action: supervisor.riskLevel === 'none' ? 'Không phát hiện rủi ro' : `Rủi ro: ${supervisor.reasons.join('; ')}`,
+      action:
+        supervisor.riskLevel === 'none'
+          ? 'Không phát hiện rủi ro'
+          : `Rủi ro: ${supervisor.reasons.join('; ')}`,
       notes: supervisor.reasons,
       source: 'rules',
       handoff: supervisor.escalate,
@@ -195,9 +228,18 @@ export class AgentOrchestrator {
       phase: 'done',
       step: this.buildStep('supervisor', dispatch.roles.get('supervisor'), supervisor),
     });
-    const status = supervisor.escalate && dispatch.status === 'pending_review' ? 'needs_edit' : dispatch.status;
+    const status =
+      supervisor.escalate && dispatch.status === 'pending_review' ? 'needs_edit' : dispatch.status;
 
-    const trace = this.buildTrace(dispatch.roles, primaryRole, resolved, usedLlm, supervisor, dispatch.reply);
+    const trace = this.buildTrace(
+      dispatch.roles,
+      primaryRole,
+      resolved,
+      usedLlm,
+      supervisor,
+      dispatch.reply,
+      dispatch.outbound,
+    );
     this.logStep(intent, resolved, supervisor);
 
     const view: OrderView = {
@@ -245,7 +287,10 @@ export class AgentOrchestrator {
       });
       roles.set('sales', {
         action: `Bóc ${priced.lines.length} dòng, áp giá ${SENDER_LABELS[resolved.senderType]}, dựng xác nhận ${priced.orderType}`,
-        notes: [`Tổng (rules engine): ${formatVnd(priced.grandTotal)}`, 'Số lượng: trích xuất · đơn giá/tổng: rules'],
+        notes: [
+          `Tổng (rules engine): ${formatVnd(priced.grandTotal)}`,
+          'Số lượng: trích xuất · đơn giá/tổng: rules',
+        ],
         source: 'rules',
       });
       // Collaborator: Chinh sach & tai chinh chu thich cho don (chi format tu priced)
@@ -258,28 +303,64 @@ export class AgentOrchestrator {
     }
 
     if (intent === 'hoi_san_pham') {
-      const descs = describeProducts(normText, this.knowledge.products());
+      const baseAdvice = this.content?.productAdvice(normText, this.knowledge.products()) ?? {
+        ready: false,
+        productSkus: [],
+        missing: ['approved_product_content'],
+        text: 'Thông tin đã duyệt chưa đủ để trả lời chính xác. Sale sẽ xác minh và phản hồi anh/chị sớm ạ.',
+      };
+      const asksPrice = /(^|\s)(gia|bao nhieu|bao gia|price)(\s|$)/.test(normText);
+      const strategy = tenantRetailAdvice();
+      const quote = asksPrice
+        ? buildQuoteLines(normText, this.knowledge.products(), this.knowledge.prices(), strategy)
+        : [];
+      const pricingReady = !asksPrice || quote.length >= baseAdvice.productSkus.length;
+      const advice = {
+        ...baseAdvice,
+        ready: baseAdvice.ready && pricingReady,
+        missing: pricingReady
+          ? baseAdvice.missing
+          : [...baseAdvice.missing, 'current_retail_price'],
+        text:
+          baseAdvice.ready && !pricingReady
+            ? 'Bảng giá hiện hành chưa đủ để tư vấn chính xác. Sale sẽ kiểm tra và phản hồi anh/chị sớm ạ.'
+            : asksPrice && quote.length
+              ? `${baseAdvice.text}\n${quote.map((item) => `• ${item.name}: ${formatVnd(item.unitPrice)}`).join('\n')}\n${strategy.qualifier}`
+              : baseAdvice.text,
+      };
       roles.set('product_advisor', {
-        action: 'Tư vấn sản phẩm từ kho tri thức',
-        notes: descs.map((d) => d.name),
+        action: advice.ready
+          ? 'Tư vấn sản phẩm từ nội dung đã duyệt'
+          : 'Thiếu nội dung đã duyệt — chuyển Sale xác minh',
+        notes: advice.ready ? advice.productSkus : advice.missing,
         source: 'knowledge',
+        handoff: !advice.ready,
       });
-      const reply = descs.length
-        ? descs.map((d) => `• ${d.name}: ${d.description}`).join('\n')
-        : 'Anh/chị quan tâm sản phẩm nào ạ? Em gửi thông tin chi tiết.';
-      return { priced: null, status: 'pending_review', reply, roles };
+      return {
+        priced: null,
+        status: advice.ready ? 'pending_review' : 'needs_edit',
+        reply: advice.text,
+        outbound: advice,
+        roles,
+      };
     }
 
     if (intent === 'hoi_gia') {
-      const quote = buildQuoteLines(normText, this.knowledge.products(), this.knowledge.prices());
+      const strategy = tenantRetailAdvice();
+      const quote = buildQuoteLines(
+        normText,
+        this.knowledge.products(),
+        this.knowledge.prices(),
+        strategy,
+      );
       roles.set('policy_finance', {
         action: `Báo giá theo cấp ${SENDER_LABELS[resolved.senderType]} (tra bảng giá)`,
         notes: quote.map((q) => `${q.name}: ${formatVnd(q.unitPrice)}`),
         source: 'knowledge',
       });
       const reply = quote.length
-        ? quote.map((q) => `• ${q.name}: ${formatVnd(q.unitPrice)}`).join('\n')
-        : 'Anh/chị cho em xin tên sản phẩm để báo giá ạ.';
+        ? `${quote.map((q) => `• ${q.name}: ${formatVnd(q.unitPrice)}`).join('\n')}\n${strategy.qualifier}`
+        : 'Em chưa có bảng giá hiện hành hoặc chưa nhận diện đủ sản phẩm; Sale sẽ kiểm tra và phản hồi ạ.';
       return { priced: null, status: 'pending_review', reply, roles };
     }
 
@@ -344,8 +425,11 @@ export class AgentOrchestrator {
     usedLlm: boolean,
     supervisor: SupervisorSummary,
     reply?: string,
+    outbound?: OutboundContent,
   ): AgentTrace {
-    const steps: AgentStep[] = AGENT_ROLES.map((role) => this.buildStep(role, roles.get(role), supervisor));
+    const steps: AgentStep[] = AGENT_ROLES.map((role) =>
+      this.buildStep(role, roles.get(role), supervisor),
+    );
     return {
       steps,
       primaryRole,
@@ -354,11 +438,16 @@ export class AgentOrchestrator {
       brainMode: this.parser.name,
       supervisor,
       reply,
+      outbound,
     };
   }
 
   /** Dung 1 AgentStep tu RoleData (dung chung cho streaming tung buoc + buildTrace). */
-  private buildStep(role: AgentRole, data: RoleData | undefined, supervisor: SupervisorSummary): AgentStep {
+  private buildStep(
+    role: AgentRole,
+    data: RoleData | undefined,
+    supervisor: SupervisorSummary,
+  ): AgentStep {
     return {
       role,
       label: ROLE_LABELS[role],
@@ -371,7 +460,11 @@ export class AgentOrchestrator {
     };
   }
 
-  private stepStatus(role: AgentRole, data: RoleData | undefined, supervisor: SupervisorSummary): AgentStepStatus {
+  private stepStatus(
+    role: AgentRole,
+    data: RoleData | undefined,
+    supervisor: SupervisorSummary,
+  ): AgentStepStatus {
     if (role === 'supervisor') {
       if (supervisor.escalate) return 'handoff';
       return supervisor.riskLevel === 'watch' ? 'flagged' : 'active';
@@ -381,9 +474,13 @@ export class AgentOrchestrator {
   }
 
   private logStep(intent: Intent, resolved: ResolvedGroup, supervisor: SupervisorSummary): void {
-    this.logger.log(`[Agent:router] intent=${intent} sender=${resolved.senderType} → ${INTENT_TO_ROLE[intent]}`);
+    this.logger.log(
+      `[Agent:router] intent=${intent} sender=${resolved.senderType} → ${INTENT_TO_ROLE[intent]}`,
+    );
     if (supervisor.riskLevel !== 'none') {
-      this.logger.warn(`[Agent:supervisor] risk=${supervisor.riskLevel} escalate=${supervisor.escalate}`);
+      this.logger.warn(
+        `[Agent:supervisor] risk=${supervisor.riskLevel} escalate=${supervisor.escalate}`,
+      );
     }
   }
 }

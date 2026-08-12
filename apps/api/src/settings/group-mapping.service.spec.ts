@@ -173,7 +173,23 @@ describe('GroupMappingService.setHidden (go nhom khoi danh sach)', () => {
     });
     const args = update.mock.calls[0]![0];
     expect(args.where).toEqual({ platform_chatId: { platform: 'zalo', chatId: 'chat-1' } });
-    expect(args.data).toEqual({ status: 'ignored' });
+    // Go nhom KHONG dung toi dealerId — chi doi status. Kem mot dong lich su append-only de
+    // sau nay truy duoc ai go, luc nao, tu trang thai nao.
+    expect(Object.keys(args.data)).not.toContain('dealerId');
+    expect(args.data).toMatchObject({
+      status: 'ignored',
+      mappingHistory: {
+        create: {
+          previousDealerId: 'meta-hn',
+          nextDealerId: 'meta-hn',
+          previousStatus: 'mapped',
+          nextStatus: 'ignored',
+          source: 'hidden',
+          actor: 'operator',
+          requestId: null,
+        },
+      },
+    });
   });
 
   it('dua lai nhom con dai ly -> ve mapped, khong bat chon lai', async () => {
@@ -185,7 +201,21 @@ describe('GroupMappingService.setHidden (go nhom khoi danh sach)', () => {
       chatId: 'chat-1',
       status: 'mapped',
     });
-    expect(update.mock.calls[0]![0].data).toEqual({ status: 'mapped' });
+    expect(Object.keys(update.mock.calls[0]![0].data)).not.toContain('dealerId');
+    expect(update.mock.calls[0]![0].data).toMatchObject({
+      status: 'mapped',
+      mappingHistory: {
+        create: {
+          previousDealerId: 'meta-hn',
+          nextDealerId: 'meta-hn',
+          previousStatus: 'ignored',
+          nextStatus: 'mapped',
+          source: 'restore',
+          actor: 'operator',
+          requestId: null,
+        },
+      },
+    });
   });
 
   it('dua lai nhom khong con dai ly -> ve pending chu khong doan bua', async () => {

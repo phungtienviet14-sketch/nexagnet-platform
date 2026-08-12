@@ -12,9 +12,19 @@ describe('Prisma capability contract for operator settings', () => {
     'enum ParticipantHandlingMode',
     'enum ParticipantSource',
     'enum RuleConfigStatus',
+    'enum PricePeriodStatus',
     'model GroupParticipant',
     'model RuleConfigVersion',
     'model AuditLog',
+    'enum ContentStatus',
+    'model SourceProvenance',
+    'model Asset',
+    'model ProductAsset',
+    'model FAQ',
+    'model AdviceContent',
+    'model ContentLink',
+    'model ContentReadiness',
+    'model PricePeriod',
   ])('declares %s', (declaration) => {
     expect(schema).toContain(declaration);
   });
@@ -30,5 +40,11 @@ describe('Prisma capability contract for operator settings', () => {
 
   it('persists the rules version used by an order', () => {
     expect(schema).toContain('ruleConfigVersion Int?');
+  });
+
+  it('versions prices by period instead of one mutable row per SKU', () => {
+    expect(schema).toContain('@@unique([periodId, sku])');
+    expect(schema).toContain('periodId');
+    expect(schema).not.toContain('sku            String   @id');
   });
 });

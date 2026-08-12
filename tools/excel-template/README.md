@@ -2,7 +2,7 @@
 
 Công cụ soạn **file mẫu Excel gửi khách** (chị Nguyễn Thu Phương) điền dữ liệu A4:
 danh sách đại lý/CTV + ghép nhóm Zalo ↔ đại lý. Đây là **việc kế tiếp #1 (11/07/2026)** —
-hạng mục Phase 3 duy nhất không bị khách chặn ([../../docs/ke-hoach/nen-tang.md](../../docs/ke-hoach/nen-tang.md) §1.3, cổng **A4**).
+hạng mục Phase 3 duy nhất không bị khách chặn ([../../docs/phat-trien/ke-hoach/nen-tang.md](../../docs/phat-trien/ke-hoach/nen-tang.md) §1.3, cổng **A4**).
 
 ## Sinh lại file
 
@@ -11,7 +11,7 @@ python tools/excel-template/generate_a4_template.py
 # cần: pip install openpyxl   (chỉ là công cụ soạn mẫu — KHÔNG phải dependency runtime)
 ```
 
-Đầu ra: [`docs/khach-hang/ultty/trao-doi/A4_dai-ly_map-nhom_U-Ultty.xlsx`](../../docs/khach-hang/ultty/trao-doi/A4_dai-ly_map-nhom_U-Ultty.xlsx)
+Đầu ra: [`docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx`](../../docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx)
 (3 sheet: **Hướng dẫn** · **1. Đại lý & CTV** · **2. Map nhóm Zalo**). Đã kèm sẵn 3 đại lý + 2 nhóm
 thật từ khảo sát (`apps/api/src/knowledge/seed.ts`) làm dữ liệu khởi tạo → file round-trip đúng seed hiện tại.
 
@@ -20,7 +20,7 @@ Sửa mẫu → sửa script rồi chạy lại, đừng sửa tay file .xlsx.
 
 ## Ánh xạ cột → field (dành cho importer sau này)
 
-Importer (`read-excel-file` — [nen-tang.md §1.3](../../docs/ke-hoach/nen-tang.md)) đọc file khách trả về và ghi
+Importer (`read-excel-file` — [nen-tang.md §1.3](../../docs/phat-trien/ke-hoach/nen-tang.md)) đọc file khách trả về và ghi
 `Dealer` + `Group` (schema tại `apps/api/prisma/schema.prisma`). Header ở **dòng 1**, dữ liệu từ **dòng 2**.
 
 ### Sheet `1. Đại lý & CTV` → model `Dealer`

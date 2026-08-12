@@ -41,10 +41,30 @@ export function zcaMessageToChannelMessage(
     senderDisplayName: emptyToUndefined(data.dName),
     text: trimmed,
     imageUrl,
+    replyTo: quoteToReply(data.quote),
     sentAt: tsToDate(data.ts),
   };
   const parsed = channelMessageSchema.safeParse(candidate);
   return parsed.success ? parsed.data : null;
+}
+
+function quoteToReply(quote: Message['data']['quote']): ChannelMessage['replyTo'] {
+  if (!quote) return undefined;
+  const externalMessageId =
+    Number.isFinite(quote.globalMsgId) && quote.globalMsgId > 0
+      ? String(quote.globalMsgId)
+      : Number.isFinite(quote.cliMsgId) && quote.cliMsgId > 0
+        ? String(quote.cliMsgId)
+        : undefined;
+  const text = quote.msg?.trim() || undefined;
+  if (!externalMessageId && !text) return undefined;
+  return {
+    externalMessageId,
+    senderExternalId: emptyToUndefined(quote.ownerId),
+    senderDisplayName: emptyToUndefined(quote.fromD),
+    text,
+    sentAt: Number.isFinite(quote.ts) && quote.ts > 0 ? new Date(quote.ts) : undefined,
+  };
 }
 
 /** Tach text + imageUrl tu content (string = text; object = anh/attachment). */

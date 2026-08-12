@@ -10,6 +10,21 @@ export const PLATFORMS = ['zalo'] as const;
 export const MESSAGE_SOURCES = ['copilot_paste', 'bot_webhook', 'zca_listener'] as const;
 export const CHAT_TYPES = ['private', 'group'] as const;
 
+export const replyReferenceSchema = z
+  .object({
+    /** ID tin goc neu kenh cung cap; dung de resolve ban ghi ben vung trong cung hoi thoai. */
+    externalMessageId: z.string().min(1).optional(),
+    senderExternalId: z.string().min(1).optional(),
+    senderDisplayName: z.string().min(1).optional(),
+    /** Ban text inline cua quote. Chi la fallback khi khong resolve duoc ID trong DB. */
+    text: z.string().max(10_000).optional(),
+    imageUrl: z.string().url().optional(),
+    sentAt: z.coerce.date().optional(),
+  })
+  .refine((reply) => Boolean(reply.externalMessageId || reply.text?.trim() || reply.imageUrl), {
+    message: 'Reply phai co externalMessageId, text hoac imageUrl',
+  });
+
 export const channelMessageSchema = z
   .object({
     /** ID tin nhan phia kenh — dung de idempotent, khong xu ly trung */
@@ -32,6 +47,8 @@ export const channelMessageSchema = z
     text: z.string().max(10_000),
     /** photo_url neu tin la anh (Zalo message.image.received) — Claude doc bang vision */
     imageUrl: z.string().url().optional(),
+    /** Tin duoc reply/quote, neu adapter kenh co cung cap. */
+    replyTo: replyReferenceSchema.optional(),
     sentAt: z.coerce.date(),
   })
   // Tin phai mang it nhat MOT thu: chu hoac anh. Khong ca hai = tin he thong/rong -> khong luu.
@@ -41,3 +58,25 @@ export const channelMessageSchema = z
   });
 
 export type ChannelMessage = z.infer<typeof channelMessageSchema>;
+export type ReplyReference = z.infer<typeof replyReferenceSchema>;
+
+export interface ConversationMessage {
+  externalMessageId: string;
+  text: string;
+  imageUrl?: string;
+  senderExternalId?: string;
+  senderDisplayName?: string;
+  sentAt: Date;
+}
+
+export interface ConversationParticipant {
+  externalId: string;
+  displayName?: string;
+}
+
+/** Context parser co gioi han; khong bao gom toan bo lich su hoi thoai. */
+export interface ConversationContext {
+  quotedMessage?: ConversationMessage;
+  recentMessages: ConversationMessage[];
+  participants: ConversationParticipant[];
+}

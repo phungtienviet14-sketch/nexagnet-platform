@@ -1,6 +1,4 @@
 import type {
-  BroadcastRequest,
-  BroadcastResult,
   AutoSendState,
   DemoConfig,
   DemoGroup,
@@ -10,6 +8,7 @@ import type {
   OrderView,
 } from '@netviet/shared';
 import type { ZaloGroup, ZaloStatus } from './zalo';
+import { authFetch } from './auth';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -40,64 +39,62 @@ async function toJson<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  orders: (): Promise<OrderView[]> => fetch(`${BASE}/orders`).then((r) => toJson<OrderView[]>(r)),
+  orders: (): Promise<OrderView[]> => authFetch(`${BASE}/orders`).then((r) => toJson<OrderView[]>(r)),
   messages: (): Promise<OrderView[]> =>
-    fetch(`${BASE}/messages`).then((r) => toJson<OrderView[]>(r)),
+    authFetch(`${BASE}/messages`).then((r) => toJson<OrderView[]>(r)),
   approve: (id: string): Promise<OrderView> =>
-    fetch(`${BASE}/orders/${id}/approve`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
+    authFetch(`${BASE}/orders/${id}/approve`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
+  completeSalesHandoff: (id: string): Promise<OrderView> =>
+    authFetch(`${BASE}/orders/${id}/sales-handoff/complete`, { method: 'POST' }).then((r) =>
+      toJson<OrderView>(r),
+    ),
   reject: (id: string): Promise<OrderView> =>
-    fetch(`${BASE}/orders/${id}/reject`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
+    authFetch(`${BASE}/orders/${id}/reject`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
   /** "Chay lai" — goi LAI LLM that voi cung id (real-time, phat lai stream). */
   rerun: (id: string): Promise<OrderView> =>
-    fetch(`${BASE}/demo/rerun/${id}`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
+    authFetch(`${BASE}/demo/rerun/${id}`, { method: 'POST' }).then((r) => toJson<OrderView>(r)),
   simulate: ({ text, chatId }: SimulateInput): Promise<OrderView> =>
-    fetch(`${BASE}/demo/simulate`, {
+    authFetch(`${BASE}/demo/simulate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, chatId }),
     }).then((r) => toJson<OrderView>(r)),
-  samples: (): Promise<string[]> => fetch(`${BASE}/demo/samples`).then((r) => toJson<string[]>(r)),
+  samples: (): Promise<string[]> => authFetch(`${BASE}/demo/samples`).then((r) => toJson<string[]>(r)),
   groups: (): Promise<DemoGroup[]> =>
-    fetch(`${BASE}/demo/groups`).then((r) => toJson<DemoGroup[]>(r)),
+    authFetch(`${BASE}/demo/groups`).then((r) => toJson<DemoGroup[]>(r)),
   kiotVietProducts: (): Promise<ErpProduct[]> =>
-    fetch(`${BASE}/kiotviet/products`).then((r) => toJson<ErpProduct[]>(r)),
+    authFetch(`${BASE}/kiotviet/products`).then((r) => toJson<ErpProduct[]>(r)),
   kiotVietOrders: (): Promise<ErpOrder[]> =>
-    fetch(`${BASE}/kiotviet/orders`).then((r) => toJson<ErpOrder[]>(r)),
-  broadcast: (req: BroadcastRequest): Promise<BroadcastResult> =>
-    fetch(`${BASE}/broadcast`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-    }).then((r) => toJson<BroadcastResult>(r)),
+    authFetch(`${BASE}/kiotviet/orders`).then((r) => toJson<ErpOrder[]>(r)),
   knowledge: (): Promise<KnowledgeSummary> =>
-    fetch(`${BASE}/knowledge/summary`).then((r) => toJson<KnowledgeSummary>(r)),
-  config: (): Promise<DemoConfig> => fetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),
+    authFetch(`${BASE}/knowledge/summary`).then((r) => toJson<KnowledgeSummary>(r)),
+  config: (): Promise<DemoConfig> => authFetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),
   setAutoSend: (enabled: boolean): Promise<AutoSendState> =>
-    fetch(`${BASE}/settings/automation/auto-send`, {
+    authFetch(`${BASE}/settings/automation/auto-send`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(enabled ? { enabled: true, acknowledged: true } : { enabled: false }),
+      body: JSON.stringify({ enabled }),
     }).then((r) => toJson<AutoSendState>(r)),
   zaloStatus: (): Promise<ZaloStatus> =>
-    fetch(`${BASE}/zalo/status`, { cache: 'no-store' }).then((r) => toJson<ZaloStatus>(r)),
+    authFetch(`${BASE}/zalo/status`, { cache: 'no-store' }).then((r) => toJson<ZaloStatus>(r)),
   zaloQr: (): Promise<{ image: string }> =>
-    fetch(`${BASE}/zalo/qr`, { cache: 'no-store' }).then((r) => toJson<{ image: string }>(r)),
+    authFetch(`${BASE}/zalo/qr`, { cache: 'no-store' }).then((r) => toJson<{ image: string }>(r)),
   zaloLogin: (): Promise<ZaloStatus> =>
-    fetch(`${BASE}/zalo/login`, {
+    authFetch(`${BASE}/zalo/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ acceptedRisk: true }),
     }).then((r) => toJson<ZaloStatus>(r)),
   zaloLogout: (): Promise<ZaloStatus> =>
-    fetch(`${BASE}/zalo/logout`, {
+    authFetch(`${BASE}/zalo/logout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ confirmed: true }),
     }).then((r) => toJson<ZaloStatus>(r)),
   zaloGroups: (): Promise<ZaloGroup[]> =>
-    fetch(`${BASE}/zalo/groups`, { cache: 'no-store' }).then((r) => toJson<ZaloGroup[]>(r)),
+    authFetch(`${BASE}/zalo/groups`, { cache: 'no-store' }).then((r) => toJson<ZaloGroup[]>(r)),
   saveZaloGroups: (groupIds: string[]): Promise<ZaloStatus> =>
-    fetch(`${BASE}/zalo/allowed-groups`, {
+    authFetch(`${BASE}/zalo/allowed-groups`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groupIds }),

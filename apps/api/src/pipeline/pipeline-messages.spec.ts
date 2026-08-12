@@ -7,6 +7,7 @@ import {
   MessagesRepository,
   type SaveMessageResult,
 } from '../messages/messages.repository.js';
+import { ConversationContextBuilder } from '../messages/conversation-context.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { MockParser } from './mock-parser.js';
 import { PipelineService } from './pipeline.service.js';
@@ -51,9 +52,19 @@ class ThrowingMessagesRepository extends MessagesRepository {
 }
 
 function build(messages: MessagesRepository) {
-  const knowledge = new KnowledgeService();
+  const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
   const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, new InMemoryOrdersRepository());
-  return new PipelineService(orchestrator, undefined, messages);
+  return new PipelineService(
+    orchestrator,
+    undefined,
+    messages,
+    undefined,
+    undefined,
+    knowledge,
+    undefined,
+    undefined,
+    new ConversationContextBuilder(messages),
+  );
 }
 
 function msg(text: string, externalMessageId: string): ChannelMessage {
@@ -102,7 +113,7 @@ describe('Pipeline luu MOI tin vao MessagesRepository (Phase 3)', () => {
   });
 
   it('tin da ton tai trong kho ben vung -> KHONG chay orchestrator tao don lan nua', async () => {
-    const knowledge = new KnowledgeService();
+    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
     const orders = new InMemoryOrdersRepository();
     const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, orders);
     const pipeline = new PipelineService(orchestrator, undefined, new DuplicateMessagesRepository());
@@ -155,12 +166,49 @@ describe('Pipeline luu MOI tin vao MessagesRepository (Phase 3)', () => {
   });
 
   it('khong cau hinh MessagesRepository (backward compat) -> pipeline chay nhu cu', async () => {
-    const knowledge = new KnowledgeService();
+    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
     const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, new InMemoryOrdersRepository());
     const pipeline = new PipelineService(orchestrator);
 
     const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien', 'm-compat'), BOT_NAME);
 
     expect(view.intent).toBe('dat_don');
+  });
+
+  it('reply bo sung so luong dung context da luu de ke thua mot SKU', async () => {
+    const repo = new InMemoryMessagesRepository();
+    const pipeline = build(repo);
+    await pipeline.process(msg('10 ghe felix', 'm-original'), BOT_NAME);
+
+    const view = await pipeline.process(
+      {
+        ...msg('c them 5c nhe', 'm-reply'),
+        replyTo: { externalMessageId: 'm-original', text: '10 ghe felix' },
+      },
+      BOT_NAME,
+    );
+
+    expect(view.intent).toBe('dat_don');
+    expect(view.parsed?.items).toHaveLength(1);
+    expect(view.parsed?.items[0]?.quantity).toBe(5);
+    expect(view.parsed?.items[0]?.skuRaw.toLowerCase()).toContain('felix');
+  });
+
+  it('reply co nhieu SKU -> handoff an toan, khong tao don doan', async () => {
+    const repo = new InMemoryMessagesRepository();
+    const pipeline = build(repo);
+    await pipeline.process(msg('10 ghe felix va 2 noi chien', 'm-many'), BOT_NAME);
+
+    const view = await pipeline.process(
+      {
+        ...msg('c them 5c nhe', 'm-ambiguous'),
+        replyTo: { externalMessageId: 'm-many' },
+      },
+      BOT_NAME,
+    );
+
+    expect(view.intent).toBe('khac');
+    expect(view.parsed).toBeNull();
+    expect(view.priced).toBeNull();
   });
 });

@@ -37,8 +37,8 @@ export const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = 
   pending_review: { label: 'Chờ duyệt', cls: 'chip-review' },
   needs_edit: { label: 'Cần kiểm tra', cls: 'chip-edit' },
   approved: { label: 'Đã duyệt', cls: 'chip-done' },
-  sent: { label: 'Đã gửi nhóm', cls: 'chip-done' },
-  synced: { label: 'Hoàn tất', cls: 'chip-done' },
+  sent: { label: 'Đã gửi · chờ nhập ERP', cls: 'chip-done' },
+  synced: { label: 'Đã đồng bộ ERP', cls: 'chip-done' },
   rejected: { label: 'Đã từ chối', cls: 'chip-rejected' },
 };
 

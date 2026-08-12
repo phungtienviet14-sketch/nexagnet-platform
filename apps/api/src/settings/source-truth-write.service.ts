@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { currentPriceMonth } from '../knowledge/price-periods.js';
 
 export const SOURCE_TRUTH_RESOURCES = [
   'dealers',
@@ -179,15 +180,10 @@ export class SourceTruthWriteService {
         return;
       }
       case 'prices': {
-        const value = parse(priceSchema, body);
-        const product = await this.prisma.product.findUnique({ where: { sku: id } });
-        if (!product) throw new BadRequestException(`SKU ${id} khong ton tai`);
-        await this.prisma.price.upsert({
-          where: { sku: id },
-          update: value,
-          create: { sku: id, ...value },
-        });
-        return;
+        parse(priceSchema, body);
+        throw new BadRequestException(
+          'Bảng giá chỉ được sửa qua lifecycle /settings/price-periods (draft → preview → activate)',
+        );
       }
       case 'overrides': {
         const value = parse(overrideSchema, body);
@@ -218,7 +214,10 @@ export class SourceTruthWriteService {
       case 'products':
         return this.prisma.product.findUnique({ where: { sku: id } });
       case 'prices':
-        return this.prisma.price.findUnique({ where: { sku: id } });
+        return this.prisma.price.findFirst({
+          where: { sku: id, period: { validMonth: currentPriceMonth(), status: 'active' } },
+          include: { period: true },
+        });
       case 'overrides':
         return null;
       case 'glossary':

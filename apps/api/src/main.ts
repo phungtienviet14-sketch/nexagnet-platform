@@ -3,11 +3,14 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { loadEnv } from '@netviet/shared';
 import dotenv from 'dotenv';
 import { setKnowledgeReloader } from './admin/knowledge-refresh.js';
 import { AppModule } from './app.module.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
+import { PrismaService } from './config/prisma.service.js';
+import { configureSession } from './auth/session-bootstrap.js';
 
 // Nap .env (o goc repo) truoc khi validate env.
 for (const candidate of [resolve(process.cwd(), '.env'), resolve(process.cwd(), '../../.env')]) {
@@ -23,7 +26,8 @@ const logger = new Logger('Bootstrap');
 const env = loadEnv();
 
 // forRoot() dung module theo env: mount /admin (AdminJS) khi ADMIN_UI=on + PERSISTENCE=prisma.
-const app = await NestFactory.create(await AppModule.forRoot());
+const app = await NestFactory.create<NestExpressApplication>(await AppModule.forRoot());
+configureSession(app, env, app.get(PrismaService));
 // AUTH_MODE=none (VM dev/demo): khong con xac thuc nao de bao ve -> CORS khoa theo mot origin chi
 // gay ket khi mo qua IP/loopback/tunnel. Phan anh dung origin goi den de trinh duyet nao cung dung duoc.
 app.enableCors(

@@ -9,8 +9,16 @@ describe('SourceTruthWriteService', () => {
   const reload = vi.fn(async () => undefined);
   const append = vi.fn(async () => undefined);
   const prisma = {
-    price: { findUnique: vi.fn(async () => null), upsert: vi.fn(async () => undefined) },
+    price: {
+      findFirst: vi.fn(async () => null),
+      findUnique: vi.fn(async () => null),
+      upsert: vi.fn(async () => undefined),
+    },
     product: { findUnique: vi.fn(async () => ({ sku: 'FELIX' })) },
+    pricePeriod: {
+      findFirst: vi.fn(async () => ({ id: 'period-2026-08' })),
+      create: vi.fn(async () => ({ id: 'period-2026-08' })),
+    },
   } as unknown as PrismaService;
   const knowledge = {
     reload,
@@ -39,26 +47,15 @@ describe('SourceTruthWriteService', () => {
     expect(prisma.price.upsert).not.toHaveBeenCalled();
   });
 
-  it('ghi gia typed, audit va reload snapshot sau khi DB thanh cong', async () => {
+  it('chan duong ghi gia legacy de bat buoc lifecycle draft-preview-activate', async () => {
     const service = new SourceTruthWriteService(prisma, knowledge, audit, 'prisma');
 
-    await service.write('prices', 'FELIX', { wholesale: 1_100_000 }, 'operator', 'req-1');
-
-    expect(prisma.price.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { sku: 'FELIX' },
-        update: expect.objectContaining({ wholesale: 1_100_000 }),
-      }),
-    );
-    expect(append).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actor: 'operator',
-        action: 'source_truth.update',
-        entityType: 'prices',
-        entityId: 'FELIX',
-      }),
-    );
-    expect(reload).toHaveBeenCalledTimes(1);
+    await expect(
+      service.write('prices', 'FELIX', { wholesale: 1_100_000 }, 'operator', 'req-1'),
+    ).rejects.toThrow('/settings/price-periods');
+    expect(prisma.price.upsert).not.toHaveBeenCalled();
+    expect(append).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it('uses the typed canonical Prisma table for every source-truth resource', async () => {
@@ -71,7 +68,11 @@ describe('SourceTruthWriteService', () => {
           where.sku === 'FELIX' ? { sku: 'FELIX' } : null),
         upsert: method(),
       },
-      price: { findUnique: method(), upsert: method() },
+      price: { findFirst: method(), findUnique: method(), upsert: method() },
+      pricePeriod: {
+        findFirst: vi.fn(async () => ({ id: 'period-2026-08' })),
+        create: method(),
+      },
       dealerPriceOverride: { upsert: method() },
       glossaryEntry: { findUnique: method(), upsert: method() },
     } as unknown as PrismaService;
@@ -107,7 +108,6 @@ describe('SourceTruthWriteService', () => {
       'operator',
       null,
     );
-    await service.write('prices', 'FELIX', { wholesale: 1_000_000 }, 'operator', null);
     await service.write(
       'overrides',
       'dealer-1:FELIX',
@@ -120,16 +120,17 @@ describe('SourceTruthWriteService', () => {
     expect(fullPrisma.dealer.upsert).toHaveBeenCalled();
     expect(fullPrisma.group.upsert).toHaveBeenCalled();
     expect(fullPrisma.product.upsert).toHaveBeenCalled();
-    expect(fullPrisma.price.upsert).toHaveBeenCalled();
+    expect(fullPrisma.price.upsert).not.toHaveBeenCalled();
     expect(fullPrisma.dealerPriceOverride.upsert).toHaveBeenCalled();
     expect(fullPrisma.glossaryEntry.upsert).toHaveBeenCalled();
-    expect(append).toHaveBeenCalledTimes(6);
-    expect(reload).toHaveBeenCalledTimes(6);
+    expect(append).toHaveBeenCalledTimes(5);
+    expect(reload).toHaveBeenCalledTimes(5);
   });
 
   it('returns safe errors for a missing SKU and database constraint failures', async () => {
     const missingPrisma = {
-      price: { findUnique: vi.fn(async () => null), upsert: vi.fn() },
+      price: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null), upsert: vi.fn() },
+      pricePeriod: { findFirst: vi.fn(async () => null), create: vi.fn() },
       product: { findUnique: vi.fn(async () => null) },
       dealer: {
         findUnique: vi.fn(async () => null),
@@ -140,7 +141,7 @@ describe('SourceTruthWriteService', () => {
 
     await expect(
       service.write('prices', 'MISSING', { wholesale: 1 }, 'operator', null),
-    ).rejects.toThrow('SKU MISSING khong ton tai');
+    ).rejects.toThrow('/settings/price-periods');
     await expect(
       service.write(
         'dealers',

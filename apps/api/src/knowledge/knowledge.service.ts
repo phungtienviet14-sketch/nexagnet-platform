@@ -16,6 +16,7 @@ import type {
   Product,
 } from './domain.js';
 import { KnowledgeRepository } from './knowledge.repository.js';
+import { selectCurrentSnapshotPrices } from './price-periods.js';
 import { SEED } from './seed.js';
 
 /** Ket qua map 1 nhom Zalo -> ngu canh dai ly/chi nhanh (dung trong pipeline + UI). */
@@ -34,10 +35,16 @@ export interface ResolvedGroup {
 @Injectable()
 export class KnowledgeService implements OnModuleInit {
   private readonly logger = new Logger('KnowledgeService');
-  private snapshot: KnowledgeSnapshot = SEED;
+  private snapshot: KnowledgeSnapshot;
 
   // @Optional: test dung `new KnowledgeService()` (khong DI) van chay voi SEED nhu cu.
-  constructor(@Optional() private readonly repo?: KnowledgeRepository) {}
+  constructor(
+    @Optional() private readonly repo?: KnowledgeRepository,
+    /** Clock co the co dinh trong unit test; runtime bo trong va dung currentPriceMonth(). */
+    @Optional() initialNow?: Date,
+  ) {
+    this.snapshot = { ...SEED, prices: selectCurrentSnapshotPrices(SEED, initialNow) };
+  }
 
   /** Nap nguon su that vao bo nho luc boot: Prisma (PERSISTENCE=prisma) hoac giu SEED (mac dinh). */
   async onModuleInit(): Promise<void> {

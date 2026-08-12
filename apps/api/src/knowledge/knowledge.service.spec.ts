@@ -8,6 +8,15 @@ import { KnowledgeService } from './knowledge.service.js';
 describe('KnowledgeService.resolveByChatId (dinh tuyen da nhom)', () => {
   const knowledge = new KnowledgeService();
 
+  it('khong dung lai bang gia seed thang cu khi runtime da sang thang moi', () => {
+    const futureMonthKnowledge = new KnowledgeService(
+      undefined,
+      new Date('2026-08-12T00:00:00.000Z'),
+    );
+
+    expect(futureMonthKnowledge.prices()).toEqual([]);
+  });
+
   it('dung dung group ID zca da duoc operator chon cho Meta HN va Thai Nguyen', () => {
     expect(knowledge.groups()).toEqual(
       expect.arrayContaining([

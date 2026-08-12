@@ -121,7 +121,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('MCP source-of-truth tools (Po
     });
     expect(result.ok).toBe(true);
 
-    const row = await prisma.price.findUnique({ where: { sku: SKU } });
+    const row = await prisma.price.findFirst({
+      where: { sku: SKU, period: { validMonth: '2026-07', status: 'draft' } },
+    });
     expect(row?.wholesale).toBe(1_234_000);
     expect(row?.retailPrice).toBe(1_500_000);
   });

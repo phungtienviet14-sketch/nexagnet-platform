@@ -15,15 +15,35 @@ async function main(): Promise<void> {
     const data = { name: p.name, aliases: p.aliases, unit: p.unit, description: p.description };
     await prisma.product.upsert({ where: { sku: p.sku }, create: { sku: p.sku, ...data }, update: data });
   }
+  const period = SEED.pricePeriod;
+  if (SEED.prices.length > 0 && (!period?.validMonth || period.status !== 'active')) {
+    throw new Error('Tenant seed co gia nhung thieu ky gia active hop le');
+  }
+  const pricePeriod = period?.validMonth
+    ? await prisma.pricePeriod.upsert({
+        where: { id: `seed-${period.validMonth}` },
+        create: {
+          id: `seed-${period.validMonth}`,
+          validMonth: period.validMonth,
+          status: period.status,
+          source: 'tenant-bootstrap',
+        },
+        update: { status: period.status },
+      })
+    : null;
   for (const pr of SEED.prices) {
     const data = {
       wholesale: pr.wholesale,
       minRetailPrice: pr.minRetailPrice,
       retailPrice: pr.retailPrice,
       listPrice: pr.listPrice,
-      validMonth: '2026-07',
     };
-    await prisma.price.upsert({ where: { sku: pr.sku }, create: { sku: pr.sku, ...data }, update: data });
+    if (!pricePeriod) continue;
+    await prisma.price.upsert({
+      where: { periodId_sku: { periodId: pricePeriod.id, sku: pr.sku } },
+      create: { periodId: pricePeriod.id, sku: pr.sku, ...data },
+      update: data,
+    });
   }
   for (const d of SEED.dealers) {
     const data = { name: d.name, aliases: d.aliases, tier: d.tier, defaultPolicy: d.defaultPolicy };

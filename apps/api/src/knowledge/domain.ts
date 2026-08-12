@@ -19,7 +19,18 @@ export interface Product {
  * Bang gia thang 7.2026 (4 muc). Dai ly/CTV TRA gia si = `wholesale` (cot "Don gia CTV").
  * Cac muc con lai la tham chieu bao gia (dai ly ban ra cho khach le).
  */
+export const PRICE_FIELDS = ['wholesale', 'minRetailPrice', 'retailPrice', 'listPrice'] as const;
+export type PriceField = (typeof PRICE_FIELDS)[number];
+export type PricePeriodStatus = 'draft' | 'active' | 'archived';
+
+export interface RetailAdviceStrategy {
+  priceField: PriceField;
+  qualifier: string;
+}
+
 export interface PriceRow {
+  id?: string;
+  periodId?: string;
   sku: string;
   /** Don gia CTV — gia SI dai ly/CTV tra (dung tinh don). */
   wholesale: number;
@@ -29,6 +40,9 @@ export interface PriceRow {
   retailPrice?: number;
   /** Gia ban le TOI THIEU — san dai ly/CTV duoc ban ra. */
   minRetailPrice?: number;
+  /** Ky gia cua row. Runtime chi duoc dung active + dung YYYY-MM hien tai. */
+  validMonth?: string | null;
+  periodStatus?: PricePeriodStatus;
 }
 
 /**
@@ -64,6 +78,8 @@ export interface GlossaryEntry {
 }
 
 export interface KnowledgeSnapshot {
+  /** Ky gia seed/active dang duoc nap. Null = chua co bang gia hop le. */
+  pricePeriod: { validMonth: string | null; status: PricePeriodStatus } | null;
   products: Product[];
   prices: PriceRow[];
   /** Deal rieng theo dealer+sku (override wholesale). Rong khi chua co so lieu. */

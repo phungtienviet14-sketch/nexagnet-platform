@@ -1,0 +1,46 @@
+.auth-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(330px, 0.75fr);
+  padding: clamp(1.25rem, 4vw, 4rem);
+  gap: clamp(2rem, 6vw, 7rem);
+  align-items: center;
+  background:
+    linear-gradient(90deg, transparent 49.9%, var(--line) 50%, transparent 50.1%),
+    radial-gradient(circle at 12% 18%, var(--accent-soft), transparent 30%), var(--bg);
+}
+
+.login-brief { max-width: 780px; }
+.login-kicker { font: 700 0.72rem/1 var(--font-mono); letter-spacing: 0.14em; color: var(--accent); }
+.login-brief h1 { margin: 1.3rem 0; font: 500 clamp(2.8rem, 6vw, 6rem)/0.96 var(--font-display); letter-spacing: -0.045em; }
+.login-brief > p:not(.login-kicker) { max-width: 58ch; color: var(--text-dim); font-size: 1.08rem; }
+.login-brief dl { margin-top: clamp(2rem, 7vh, 5rem); border-top: 1px solid var(--line-strong); }
+.login-brief dl div { display: grid; grid-template-columns: 8rem 1fr; padding: 0.75rem 0; border-bottom: 1px solid var(--line); }
+.login-brief dt { color: var(--text-dim); }
+.login-brief dd { margin: 0; font-weight: 650; }
+
+.login-card { position: relative; padding: clamp(1.5rem, 4vw, 3.25rem); background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-md); }
+.login-card__mark { position: absolute; right: 1.2rem; top: 1.2rem; display: grid; place-items: center; width: 2.5rem; aspect-ratio: 1; border: 1px solid var(--line-strong); border-radius: 50%; font: 700 0.75rem var(--font-mono); }
+.login-card h2 { margin: 0.75rem 0 2rem; font: 500 2.1rem var(--font-display); }
+.login-card form { display: grid; gap: 0.55rem; }
+.login-card label { margin-top: 0.65rem; font-weight: 700; }
+.login-card input { width: 100%; padding: 0.85rem 0.9rem; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface-2); color: var(--text); font: inherit; }
+.login-card input:focus-visible { outline: 3px solid var(--accent-soft); border-color: var(--accent); }
+.login-card button { margin-top: 1rem; padding: 0.9rem; border: 0; border-radius: var(--r-sm); background: var(--accent); color: white; font: 750 0.92rem var(--font-body); cursor: pointer; }
+.login-card button:disabled { opacity: 0.6; cursor: progress; }
+.login-card small { display: block; margin-top: 1rem; color: var(--text-dim); }
+.login-error { margin: 0.7rem 0 0; padding: 0.7rem; color: var(--danger); background: var(--danger-soft); border-left: 3px solid var(--danger); }
+
+@media (max-width: 760px) {
+  .login-shell { grid-template-columns: 1fr; background: var(--bg); }
+  .login-brief dl { display: none; }
+  .login-brief h1 { font-size: clamp(2.3rem, 12vw, 4rem); }
+}

@@ -13,9 +13,18 @@ type Props = {
   onRerun: (id: string) => void;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  onCompleteSalesHandoff: (id: string) => void;
 };
 
-export function AgentTheater({ item, reveal, isBusy, onRerun, onApprove, onReject }: Props) {
+export function AgentTheater({
+  item,
+  reveal,
+  isBusy,
+  onRerun,
+  onApprove,
+  onReject,
+  onCompleteSalesHandoff,
+}: Props) {
   if (!item) {
     return (
       <div className="empty">
@@ -33,7 +42,7 @@ export function AgentTheater({ item, reveal, isBusy, onRerun, onApprove, onRejec
     : item.processing
       ? 'đang gọi AI…'
       : '—';
-  // Don da dong bo/gui KiotViet -> khong chay lai (backend cung chan, giu idempotent).
+  // Don da gui khach -> khong chay lai (backend cung chan, tranh gui trung).
   const isFinalized = item.order?.status === 'synced' || item.order?.status === 'sent';
   const canRerun = !item.processing && !isFinalized;
 
@@ -60,7 +69,7 @@ export function AgentTheater({ item, reveal, isBusy, onRerun, onApprove, onRejec
           className="btn btn-ghost"
           style={{ padding: '0.2rem 0.55rem' }}
           disabled={!canRerun}
-          title={isFinalized ? 'Đơn đã đồng bộ KiotViet' : undefined}
+          title={isFinalized ? 'Đơn đã gửi khách, không thể chạy lại' : undefined}
           onClick={() => onRerun(item.id)}
         >
           {item.processing ? '⏳ đang chạy…' : '▶ Chạy lại (gọi lại AI)'}
@@ -80,7 +89,13 @@ export function AgentTheater({ item, reveal, isBusy, onRerun, onApprove, onRejec
 
       {item.order && (
         <div className={`reveal-block ${reveal.revealed ? '' : 'hidden'}`}>
-          <OrderDetailPanel order={item.order} isBusy={isBusy} onApprove={onApprove} onReject={onReject} />
+          <OrderDetailPanel
+            order={item.order}
+            isBusy={isBusy}
+            onApprove={onApprove}
+            onReject={onReject}
+            onCompleteSalesHandoff={onCompleteSalesHandoff}
+          />
         </div>
       )}
     </>

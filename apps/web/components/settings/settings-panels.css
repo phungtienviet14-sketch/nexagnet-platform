@@ -484,6 +484,160 @@
   min-width: 120px;
   border-left: 1px solid var(--ok);
 }
+
+.settings-content {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-content > section {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  padding: 18px;
+}
+
+.settings-content h3 {
+  margin: 0 0 12px;
+}
+
+.settings-content-readiness__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.settings-content-readiness article {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.settings-content-readiness .is-ready {
+  color: var(--ok);
+}
+
+.settings-content-readiness .is-missing {
+  color: var(--warn);
+  font-size: 0.82rem;
+}
+
+.settings-content-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.settings-content-editor label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.settings-content-editor input,
+.settings-content-editor select,
+.settings-content-editor textarea,
+.settings-content-import textarea {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 12px;
+}
+
+.settings-content-editor textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.settings-content-editor__wide {
+  grid-column: 1 / -1;
+}
+
+.settings-content-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-content-list > article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.settings-content-list > article > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-content-list p,
+.settings-content-list code {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-content-list__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-content-list__actions span {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.settings-content-import textarea {
+  min-height: 260px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.settings-content-import > div {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.settings-campaign-targets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem;
+  margin-block: 1rem;
+  border: 1px solid var(--line);
+}
+.settings-campaign-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.5fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.settings-campaign-row small,
+.settings-campaign-row p {
+  display: block;
+  color: var(--text-dim);
+}
+.settings-campaign-schedule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  grid-column: 1 / -1;
+}
+@media (max-width: 850px) {
+  .settings-campaign-row {
+    grid-template-columns: 1fr;
+  }
+}
 .settings-automation-console {
   display: grid;
   grid-template-columns: minmax(180px, 0.55fr) minmax(300px, 1.45fr);
@@ -797,4 +951,41 @@
   .settings-diff {
     grid-template-columns: 1fr;
   }
+}
+/* User access ledger: rows read like an operator manifest rather than generic cards. */
+.users-create {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 0.8rem;
+  align-items: end;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.users-create label { display: grid; gap: 0.35rem; font-weight: 700; }
+.users-create input,
+.users-create select,
+.users-list select {
+  padding: 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+.users-notice { padding: 0.7rem 0.9rem; color: var(--ok); background: var(--ok-soft); }
+.users-list { display: grid; margin-top: 1rem; border-top: 1px solid var(--line); }
+.users-list article {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) 9rem auto auto;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.users-list article div { display: grid; }
+.users-list small { color: var(--text-dim); }
+.users-list .is-disabled { opacity: 0.55; }
+@media (max-width: 920px) {
+  .users-create { grid-template-columns: 1fr 1fr; }
+  .users-list article { grid-template-columns: 1fr 1fr; }
 }

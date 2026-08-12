@@ -1,5 +1,5 @@
 // Prisma schema — Phase 3 (luu tru ben Postgres).
-// Nguon su that mo hinh: docs/nghiep-vu.md + docs/so-do-he-thong.md (ERD).
+// Nguon su that mo hinh: docs/khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md + docs/phat-trien/kien-truc/he-thong.md (ERD).
 // GHI CHU QUAN TRONG: app VAN chay in-memory mac dinh (PERSISTENCE=memory). Prisma chi bat khi
 // PERSISTENCE=prisma -> demo/test khong can DB. Migration tao khi co Postgres: docker compose up -d postgres.
 
@@ -17,6 +17,11 @@ datasource db {
 enum DealerTier {
   dai_ly
   ctv
+}
+
+enum DealerStatus {
+  active
+  inactive
 }
 
 enum PolicyType {
@@ -84,6 +89,73 @@ enum RuleConfigStatus {
   archived
 }
 
+enum CampaignStatus {
+  draft
+  approved
+  scheduled
+  running
+  completed
+  partially_failed
+  cancelled
+}
+
+enum CampaignDeliveryStatus {
+  pending
+  claimed
+  sent
+  failed
+  cancelled
+}
+
+enum CampaignKind {
+  one_off
+  recurring
+  birthday
+  lunar_month_start
+  lunar_full_moon
+}
+
+enum PricePeriodStatus {
+  draft
+  active
+  archived
+}
+
+enum ContentStatus {
+  draft
+  reviewed
+  approved
+  active
+}
+
+enum ContentAssetKind {
+  image
+  video
+  pdf
+  catalog
+  company_profile
+}
+
+enum ContentSourceKind {
+  local_manifest
+  google_drive
+  object_storage
+  operator
+}
+
+enum ContentLinkKind {
+  video
+  catalog
+  company_profile
+}
+
+enum UserRole {
+  SALE
+  MANAGER
+  ACCOUNTING
+  ADMIN
+}
+
 // ----- Nguon su that (tang 6) -----
 
 model Dealer {
@@ -94,6 +166,8 @@ model Dealer {
   tier          DealerTier
   defaultPolicy PolicyType
   phone         String?
+  status        DealerStatus         @default(active)
+  metadata      Json?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
   groups        Group[]
@@ -103,24 +177,44 @@ model Dealer {
 
 /// 1 nhom Zalo -> 1 dai ly. Map theo (platform, chatId) — KHONG theo ten nhom.
 model Group {
-  id           String             @id @default(cuid())
-  platform     String             @default("zalo")
-  chatId       String
-  name         String?
-  branch       String?
-  dealerId     String?
-  dealer       Dealer?            @relation(fields: [dealerId], references: [id])
-  status       GroupMappingStatus @default(pending)
-  source       String? // manual | auto_suggest | import
-  lastSeenAt   DateTime?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  messages     Message[]
-  orders       Order[]
-  participants GroupParticipant[]
+  id              String             @id @default(cuid())
+  platform        String             @default("zalo")
+  chatId          String
+  name            String?
+  branch          String?
+  dealerId        String?
+  dealer          Dealer?            @relation(fields: [dealerId], references: [id])
+  status          GroupMappingStatus @default(pending)
+  source          String? // manual | auto_suggest | import
+  lastSeenAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  messages        Message[]
+  orders          Order[]
+  participants    GroupParticipant[]
+  campaignTargets CampaignTarget[]
+  mappingHistory  GroupMappingHistory[]
 
   @@unique([platform, chatId])
   @@index([status])
+}
+
+/// Lich su append-only cho moi lan map/remap/unmap. Group khong bi xoa nen tin/don va lich su
+/// luon quy ve cung mot khoa tu nhien (platform, chatId).
+model GroupMappingHistory {
+  id               String             @id @default(cuid())
+  groupId          String
+  group            Group              @relation(fields: [groupId], references: [id])
+  previousDealerId String?
+  nextDealerId     String?
+  previousStatus   GroupMappingStatus
+  nextStatus       GroupMappingStatus
+  source           String
+  actor            String
+  requestId        String?
+  createdAt        DateTime           @default(now())
+
+  @@index([groupId, createdAt])
 }
 
 model GroupParticipant {
@@ -147,38 +241,137 @@ model GroupParticipant {
 }
 
 model Product {
-  sku         String                @id
-  name        String
-  aliases     String[]              @default([])
-  unit        String
-  description String?
-  price       Price?
-  overrides   DealerPriceOverride[]
-  orderItems  OrderItem[]
+  sku          String                @id
+  name         String
+  aliases      String[]              @default([])
+  unit         String
+  description  String?
+  prices       Price[]
+  overrides    DealerPriceOverride[]
+  orderItems   OrderItem[]
+  assets       ProductAsset[]
+  faqs         FAQ[]
+  advice       AdviceContent[]
+  contentLinks ContentLink[]
+  readiness    ContentReadiness?
 }
 
 /// Bang gia thang (gia dai ly/CTV TRA = wholesale = "Don gia CTV").
 model Price {
-  sku            String   @id
-  product        Product  @relation(fields: [sku], references: [sku])
+  id             String      @id @default(cuid())
+  periodId       String
+  period         PricePeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  sku            String
+  product        Product     @relation(fields: [sku], references: [sku])
   wholesale      Int
   minRetailPrice Int?
   retailPrice    Int?
   listPrice      Int?
-  validMonth     String? // vd "2026-07"
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([periodId, sku])
+  @@index([sku])
+}
+
+model Campaign {
+  id          String             @id @default(cuid())
+  name        String
+  content     String
+  kind        CampaignKind       @default(one_off)
+  templateKey String?
+  recurrence  Json?
+  metadata    Json               @default("{}")
+  status      CampaignStatus     @default(draft)
+  approvedBy  String?
+  approvedAt  DateTime?
+  windowStart DateTime?
+  windowEnd   DateTime?
+  scheduledAt DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  targets     CampaignTarget[]
+  deliveries  CampaignDelivery[]
+
+  @@index([status, scheduledAt])
+}
+
+model CampaignTarget {
+  id          String            @id @default(cuid())
+  campaignId  String
+  campaign    Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  groupId     String?
+  group       Group?            @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  chatId      String
+  displayName String?
+  enabled     Boolean           @default(true)
+  metadata    Json              @default("{}")
+  createdAt   DateTime          @default(now())
+  delivery    CampaignDelivery?
+
+  @@unique([campaignId, chatId])
+  @@index([groupId])
+}
+
+model CampaignDelivery {
+  id             String                 @id @default(cuid())
+  campaignId     String
+  campaign       Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  targetId       String                 @unique
+  target         CampaignTarget         @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  status         CampaignDeliveryStatus @default(pending)
+  scheduledFor   DateTime
+  nextAttemptAt  DateTime?
+  attempts       Int                    @default(0)
+  claimedAt      DateTime?
+  claimedBy      String?
+  claimExpiresAt DateTime?
+  sentAt         DateTime?
+  lastError      String?
+  idempotencyKey String                 @unique
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([status, scheduledFor, nextAttemptAt])
+  @@index([claimExpiresAt])
+  @@index([campaignId, status])
+}
+
+/// Mot ky gia co vong doi draft -> active -> archived. validMonth nullable CHI de giu du lieu
+/// legacy khong co thang; row null luon archived va khong bao gio duoc dung/activate.
+model PricePeriod {
+  id          String            @id @default(cuid())
+  validMonth  String?
+  status      PricePeriodStatus @default(draft)
+  source      String?
+  note        String?
+  createdBy   String?
+  activatedBy String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  activatedAt DateTime?
+  prices      Price[]
+
+  @@index([validMonth])
+  @@index([status])
 }
 
 /// Deal rieng: override gia si theo dealer + sku.
 model DealerPriceOverride {
-  id       String  @id @default(cuid())
-  dealerId String
-  dealer   Dealer  @relation(fields: [dealerId], references: [id])
-  sku      String
-  product  Product @relation(fields: [sku], references: [sku])
-  price    Int
+  id            String   @id @default(cuid())
+  dealerId      String
+  dealer        Dealer   @relation(fields: [dealerId], references: [id])
+  sku           String
+  product       Product  @relation(fields: [sku], references: [sku])
+  price         Int
+  enabled       Boolean  @default(true)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([dealerId, sku])
+  @@index([enabled, effectiveFrom, effectiveTo])
 }
 
 model GlossaryEntry {
@@ -186,16 +379,131 @@ model GlossaryEntry {
   meaning String
 }
 
+// ----- Product content (metadata only; binary remains in Drive/object storage) -----
+
+model SourceProvenance {
+  id         String            @id
+  kind       ContentSourceKind
+  sourceId   String
+  locator    String?
+  hash       String?
+  version    String?
+  importedAt DateTime          @default(now())
+  assets     Asset[]
+  faqs       FAQ[]
+  advice     AdviceContent[]
+  links      ContentLink[]
+
+  @@unique([kind, sourceId])
+}
+
+model Asset {
+  id             String            @id
+  externalId     String
+  kind           ContentAssetKind
+  title          String?
+  locator        String
+  mimeType       String?
+  source         ContentSourceKind
+  sourceFileId   String?
+  hash           String?
+  version        String?
+  status         ContentStatus     @default(draft)
+  provenanceId   String?
+  provenance     SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
+  operatorEdited Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  products       ProductAsset[]
+
+  @@unique([provenanceId, externalId])
+  @@index([status, kind])
+}
+
+model ProductAsset {
+  productSku String
+  product    Product @relation(fields: [productSku], references: [sku], onDelete: Cascade)
+  assetId    String
+  asset      Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([productSku, assetId])
+  @@index([assetId])
+}
+
+model FAQ {
+  id             String            @id
+  externalId     String
+  productSku     String?
+  product        Product?          @relation(fields: [productSku], references: [sku], onDelete: SetNull)
+  question       String
+  answer         String
+  status         ContentStatus     @default(draft)
+  provenanceId   String?
+  provenance     SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
+  operatorEdited Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([provenanceId, externalId])
+  @@index([productSku, status])
+}
+
+model AdviceContent {
+  id             String            @id
+  externalId     String
+  productSku     String?
+  product        Product?          @relation(fields: [productSku], references: [sku], onDelete: SetNull)
+  title          String
+  body           String
+  status         ContentStatus     @default(draft)
+  provenanceId   String?
+  provenance     SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
+  operatorEdited Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([provenanceId, externalId])
+  @@index([productSku, status])
+}
+
+model ContentLink {
+  id             String            @id
+  externalId     String
+  productSku     String?
+  product        Product?          @relation(fields: [productSku], references: [sku], onDelete: SetNull)
+  kind           ContentLinkKind
+  title          String
+  url            String
+  status         ContentStatus     @default(draft)
+  provenanceId   String?
+  provenance     SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
+  operatorEdited Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([provenanceId, externalId])
+  @@index([productSku, status, kind])
+}
+
+model ContentReadiness {
+  key        String   @id
+  productSku String?  @unique
+  product    Product? @relation(fields: [productSku], references: [sku], onDelete: Cascade)
+  ready      Boolean  @default(false)
+  missing    String[] @default([])
+  checkedAt  DateTime @updatedAt
+}
+
 // ----- Tin nhan & don (tuan thu: luu MOI tin ngay khi nhan) -----
 
 model Message {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   externalMessageId String
-  platform          String   @default("zalo")
+  platform          String    @default("zalo")
   source            String // zca_listener | bot | copilot
   chatId            String
   groupId           String?
-  group             Group?   @relation(fields: [groupId], references: [id])
+  group             Group?    @relation(fields: [groupId], references: [id])
   senderExternalId  String?
   senderDisplayName String?
   text              String
@@ -208,7 +516,7 @@ model Message {
   mediaFetchedAt    DateTime?
   mediaError        String?
   sentAt            DateTime
-  receivedAt        DateTime @default(now())
+  receivedAt        DateTime  @default(now())
   raw               Json?
   orders            Order[]
 
@@ -308,11 +616,30 @@ model ParseFeedback {
 // ----- Quan tri (Phase 5) -----
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?  @unique
-  role      String // sale | ke_toan | quan_ly
-  createdAt DateTime @default(now())
+  id                String    @id @default(cuid())
+  username          String    @unique
+  name              String
+  email             String?   @unique
+  phone             String?   @unique
+  passwordHash      String
+  role              UserRole
+  disabledAt        DateTime?
+  credentialVersion Int       @default(1)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+}
+
+/// Persistent backing store for express-session. `data` contains the serialized server-side
+/// session; the browser receives only the opaque signed sid cookie.
+model Session {
+  id        String   @id
+  sid       String   @unique
+  data      String
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
 
 model KpiEvent {

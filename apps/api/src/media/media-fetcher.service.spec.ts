@@ -207,6 +207,39 @@ describe('MediaFetcherService.archive', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(messages.calls).toHaveLength(0);
   });
+
+  it('observability dem thanh cong/that bai va cong khai storage health khong lo secret', async () => {
+    const jpeg = await anhThat();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        call += 1;
+        return call === 1 ? traLoi(jpeg) : new Response('', { status: 503 });
+      }),
+    );
+    const { fetcher } = build();
+
+    await fetcher.archive('msg-ok', URL_ANH, SENT_AT);
+    await fetcher.archive('msg-fail', URL_ANH, SENT_AT);
+
+    expect(fetcher.health()).toMatchObject({
+      storage: { name: 'fake', enabled: true, state: 'degraded' },
+      downloads: { attempted: 2, succeeded: 1, failed: 1, inflight: 0 },
+    });
+    expect(fetcher.health().downloads.lastError).toContain('503');
+  });
+
+  it('storage none duoc bao disabled, khong tinh la download attempt', async () => {
+    const { fetcher } = build(new NoopMediaStore());
+
+    await fetcher.archive('msg-none', URL_ANH, SENT_AT);
+
+    expect(fetcher.health()).toEqual({
+      storage: { name: 'none', enabled: false, state: 'disabled' },
+      downloads: { attempted: 0, succeeded: 0, failed: 0, inflight: 0 },
+    });
+  });
 });
 
 describe('MediaFetcherService.schedule + drain — tai NGOAI duong di cua tin', () => {

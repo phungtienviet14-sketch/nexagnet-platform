@@ -18,6 +18,9 @@ export const parserProvider: Provider = {
       logger.log('Parser: ClaudeParser (AI that - Anthropic)');
       return new ClaudeParser(env.ANTHROPIC_API_KEY);
     }
+    if (env.PARSER_MODE === 'claude') {
+      throw new Error('ANTHROPIC_API_KEY bat buoc khi PARSER_MODE=claude');
+    }
     if (env.PARSER_MODE === 'deepseek' && env.DEEPSEEK_API_KEY) {
       logger.log('Parser: DeepSeekParser (AI that - DeepSeek)');
       return new DeepSeekParser(env.DEEPSEEK_API_KEY);

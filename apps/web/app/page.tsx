@@ -11,6 +11,7 @@ import { TopBar, type ConsoleView } from '../components/console/TopBar';
 import { useAgentStream } from '../hooks/useAgentStream';
 import { api } from '../lib/api';
 import { buildFeedItems, deriveReveal } from '../lib/live';
+import { requiresSalesAction } from '../lib/sales-work';
 
 const EMPTY_ORDERS: OrderView[] = [];
 
@@ -59,9 +60,12 @@ export default function HomePage() {
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ['messages'] });
-    void qc.invalidateQueries({ queryKey: ['kiotviet'] });
   };
   const approveM = useMutation({ mutationFn: api.approve, onSuccess: invalidate });
+  const completeHandoffM = useMutation({
+    mutationFn: api.completeSalesHandoff,
+    onSuccess: invalidate,
+  });
   const rejectM = useMutation({ mutationFn: api.reject, onSuccess: invalidate });
   const rerunM = useMutation({ mutationFn: api.rerun, onSuccess: invalidate });
   const autoSendM = useMutation({
@@ -72,12 +76,14 @@ export default function HomePage() {
       );
     },
   });
-  const isBusy = approveM.isPending || rejectM.isPending;
-  const actionError = approveM.error ?? rejectM.error ?? rerunM.error ?? autoSendM.error;
+  const isBusy = approveM.isPending || completeHandoffM.isPending || rejectM.isPending;
+  const actionError =
+    approveM.error ?? completeHandoffM.error ?? rejectM.error ?? rerunM.error ?? autoSendM.error;
 
   // Doi don dang chon -> xoa loi hanh dong cu (tranh banner loi treo qua don khac).
   useEffect(() => {
     approveM.reset();
+    completeHandoffM.reset();
     rejectM.reset();
     rerunM.reset();
     // Chi chay khi doi selectedId.
@@ -92,7 +98,7 @@ export default function HomePage() {
     if (
       enabled &&
       !window.confirm(
-        'Bật Tự gửi sẽ cho phép hệ thống tự gửi xác nhận vào nhóm Zalo và tạo đơn KiotViet mock khi Giám sát xác định không có rủi ro. Bạn có chắc muốn bật?',
+        'Bật kill switch Tự gửi? Hệ thống chỉ gửi đơn đủ dữ liệu trong ngưỡng policy tenant, sau đó giao việc Sale nhập ERP thủ công.',
       )
     ) {
       return;
@@ -102,7 +108,7 @@ export default function HomePage() {
 
   const orderCount = items.filter((i) => i.intent === 'dat_don').length;
   const pendingCount = items.filter(
-    (i) => i.intent === 'dat_don' && (i.status === 'pending_review' || i.status === 'needs_edit'),
+    (item) => item.order && item.intent === 'dat_don' && requiresSalesAction(item.order),
   ).length;
   const groupCount = new Set(items.map((i) => i.chatId)).size;
 
@@ -141,6 +147,7 @@ export default function HomePage() {
               onRerun={handleRerun}
               onApprove={(id) => approveM.mutate(id)}
               onReject={(id) => rejectM.mutate(id)}
+              onCompleteSalesHandoff={(id) => completeHandoffM.mutate(id)}
             />
           </main>
           <SourceColumn order={selectedItem?.order} />

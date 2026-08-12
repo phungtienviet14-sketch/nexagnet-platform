@@ -155,7 +155,7 @@ server.registerTool(
   'set_price',
   {
     description:
-      'Cập nhật bảng giá cho 1 SKU (wholesale bắt buộc; minRetailPrice/retailPrice/listPrice/validMonth tuỳ chọn). Kiểm tra SKU tồn tại.',
+      'Cập nhật NHÁP bảng giá cho 1 SKU (wholesale + validMonth bắt buộc; không tự kích hoạt). Kiểm tra SKU tồn tại.',
     inputSchema: setPriceInput.shape,
     annotations: WRITE_HINTS,
   },

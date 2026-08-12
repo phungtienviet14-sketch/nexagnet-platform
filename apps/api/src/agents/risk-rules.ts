@@ -1,5 +1,5 @@
 import type { PolicyType, PricedOrder, SupervisorSummary } from '@netviet/shared';
-import type { PriceRow, Product } from '../knowledge/domain.js';
+import type { PriceRow, Product, RetailAdviceStrategy } from '../knowledge/domain.js';
 import { formatVnd, normalize } from '../rules/text.js';
 import { tenantPersona } from '@netviet/tenant';
 import type { AgentsConfig } from './agents.config.js';
@@ -50,11 +50,13 @@ export function buildQuoteLines(
   normText: string,
   products: Product[],
   prices: PriceRow[],
+  strategy: RetailAdviceStrategy,
 ): { name: string; unitPrice: number }[] {
   return productsInText(normText, products)
     .map((p) => {
       const row = prices.find((r) => r.sku === p.sku);
-      return row ? { name: p.name, unitPrice: row.wholesale } : null;
+      const unitPrice = row?.[strategy.priceField];
+      return typeof unitPrice === 'number' && unitPrice > 0 ? { name: p.name, unitPrice } : null;
     })
     .filter((x): x is { name: string; unitPrice: number } => x !== null);
 }
@@ -77,9 +79,8 @@ export function classifyWarranty(
 export function annotatePolicy(priced: PricedOrder): string[] {
   const notes: string[] = [];
   if (priced.policy) notes.push(POLICY_LABELS[priced.policy]);
-  notes.push(priced.vat ? `VAT 10%: ${formatVnd(priced.vatAmount)}` : 'Không xuất VAT');
-  if (priced.codCollect) notes.push(`Thu hộ COD: ${formatVnd(priced.codFee)}`);
-  notes.push(priced.shippingFee === 0 ? 'Miễn phí ship (đơn ≥2 SP)' : `Phí ship: ${formatVnd(priced.shippingFee)}`);
+  if (priced.warnings.some((warning) => /VAT/i.test(warning))) notes.push('VAT: Chưa cấu hình');
+  if (priced.orderType === 'TH2') notes.push('Phí ship/COD: Chưa cấu hình');
   return notes;
 }
 

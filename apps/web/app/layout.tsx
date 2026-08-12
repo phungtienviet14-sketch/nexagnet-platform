@@ -3,7 +3,9 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import './console.css';
+import './auth.css';
 import { Providers } from './providers';
+import { AuthGate } from '../components/auth/AuthGate';
 
 /**
  * MOT IMAGE CHAY DUOC MOI KHACH. Mac dinh Next.js prerender TINH cac route nay luc `next build`,
@@ -49,7 +51,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     // bug that ben trong — chi tac dung o dung 2 the goc nay.
     <html lang="vi" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <Providers branding={{ ...branding, shortName }}>{children}</Providers>
+        <Providers branding={{ ...branding, shortName }}>
+          <AuthGate>{children}</AuthGate>
+        </Providers>
       </body>
     </html>
   );

@@ -20,8 +20,6 @@ import {
   RuleConfigLifecycleError,
   RuleConfigService,
 } from '../rule-config/rule-config.service.js';
-import { toRulesConfig } from '../rule-config/rule-config.defaults.js';
-import { computeShipping } from '../rules/rules.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import {
   GroupMappingService,
@@ -29,6 +27,7 @@ import {
   groupMappingSchema,
 } from './group-mapping.service.js';
 import { SettingsQueryService } from './settings-query.service.js';
+import { PricePeriodsService } from './price-periods.service.js';
 import {
   SOURCE_TRUTH_RESOURCES,
   SourceTruthWriteService,
@@ -37,10 +36,7 @@ import {
 
 const resourceSchema = z.enum(SOURCE_TRUTH_RESOURCES);
 const idSchema = z.string().trim().min(1).max(128);
-const autoSendSchema = z.discriminatedUnion('enabled', [
-  z.object({ enabled: z.literal(true), acknowledged: z.literal(true) }).strict(),
-  z.object({ enabled: z.literal(false) }).strict(),
-]);
+const autoSendSchema = z.object({ enabled: z.boolean() }).strict();
 const ruleDraftSchema = z.object({ payload: z.unknown() }).strict();
 const previewSchema = z
   .object({
@@ -79,11 +75,81 @@ export class SettingsController {
     private readonly rules: RuleConfigService,
     private readonly audit: AuditLogService,
     private readonly groupMapping: GroupMappingService,
+    private readonly pricePeriods: PricePeriodsService,
   ) {}
 
   @Get('summary')
   summary() {
     return this.queryService.summary();
+  }
+
+  @Get('price-periods')
+  pricePeriodList() {
+    return this.pricePeriods.list();
+  }
+
+  @Post('price-periods')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  createPricePeriod(
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    return this.pricePeriods.createDraft(body, actorName(actor), requestId ?? null);
+  }
+
+  @Post('price-periods/:id/copy')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  copyPricePeriod(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    return this.pricePeriods.copyDraft(id, body, actorName(actor), requestId ?? null);
+  }
+
+  @Post('price-periods/:id/import/preview')
+  previewPriceImport(@Param('id') id: string, @Body() body: unknown) {
+    return this.pricePeriods.previewImport(id, body);
+  }
+
+  @Post('price-periods/:id/import/apply')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  applyPriceImport(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    return this.pricePeriods.applyImport(id, body, actorName(actor), requestId ?? null);
+  }
+
+  @Post('price-periods/:id/validate')
+  validatePricePeriod(@Param('id') id: string) {
+    return this.pricePeriods.validate(id);
+  }
+
+  @Post('price-periods/:id/activate')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  activatePricePeriod(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    if (!activateSchema.safeParse(body).success) {
+      throw new BadRequestException('Phải xác nhận trước khi kích hoạt kỳ giá');
+    }
+    return this.pricePeriods.activate(id, actorName(actor), requestId ?? null);
   }
 
   @Get('source-truth/:resource')
@@ -247,20 +313,13 @@ export class SettingsController {
     if (!parsed.success) throw new BadRequestException('Don mau preview khong hop le');
     try {
       const version = await this.rules.preview(id);
-      const cfg = toRulesConfig(version.payload);
       const sample = parsed.data.sampleOrder;
-      const shippingFee =
-        sample.orderType === 'TH1'
-          ? 0
-          : computeShipping(sample.totalQuantity, sample.region, cfg);
-      const vatAmount = sample.wantVat ? Math.round(sample.itemsSubtotal * cfg.vatRate) : 0;
-      const codFee = sample.orderType === 'TH2' && sample.codCollect ? cfg.codFee : 0;
       const totals = {
         itemsSubtotal: sample.itemsSubtotal,
-        shippingFee,
-        vatAmount,
-        codFee,
-        grandTotal: sample.itemsSubtotal + shippingFee + vatAmount + codFee,
+        shippingFee: null,
+        vatAmount: null,
+        codFee: null,
+        grandTotal: null,
       };
       await this.audit.append({
         actor: actorName(actor),
@@ -273,7 +332,9 @@ export class SettingsController {
       return {
         version,
         totals,
-        warnings: ['A3/D8/D15 van la gia tri tam tinh; can xac minh truoc production.'],
+        warnings: [
+          'VAT, COD và ship đang thiếu cấu hình nghiệp vụ chính thức; preview không dùng số tạm.',
+        ],
         trace: [`Rules v${version.version} da qua schema typed va san sang kich hoat.`],
       };
     } catch (error) {
@@ -321,7 +382,7 @@ export class SettingsController {
     this.assertMutationOrigin(origin);
     const parsed = autoSendSchema.safeParse(body);
     if (!parsed.success) {
-      throw new BadRequestException('Bat AUTO_SEND can xac nhan ro rang; tat chi can enabled=false');
+      throw new BadRequestException('Payload AUTO_SEND phai chi gom enabled=true|false');
     }
     const before = { autoSend: this.runtime.autoSend() };
     const after = this.runtime.setAutoSend(parsed.data.enabled);

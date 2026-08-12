@@ -2,6 +2,7 @@ import type { FieldConfidence, Intent, ParsedOrder, ParsedOrderItem, ParseResult
 import type { Product } from '../knowledge/domain.js';
 import { normalize } from '../rules/text.js';
 import type { OrderParser, ParserInput } from './order-parser.js';
+import { mentionedSkus } from './contextual-parse.js';
 
 /**
  * Parser TAT DINH (khong dung LLM) — dung cho demo offline / khong co ANTHROPIC_API_KEY.
@@ -92,7 +93,7 @@ export class MockParser implements OrderParser {
   readonly name = 'mock';
 
   async parse(input: ParserInput): Promise<ParseResult> {
-    const cleaned = stripMention(input.text, input.botName);
+    const cleaned = inheritUnambiguousProduct(stripMention(input.text, input.botName), input);
     const normText = normalize(cleaned);
     const items = extractItems(normText, input.products);
     const intent = classifyIntent(normText, items);
@@ -125,4 +126,18 @@ export class MockParser implements OrderParser {
 
     return { intent, order, confidence };
   }
+}
+
+/** Mock demo cung tuan thu semantics context, nhung chi ke thua khi tham chieu co dung mot SKU. */
+function inheritUnambiguousProduct(currentText: string, input: ParserInput): string {
+  if (mentionedSkus(currentText, input.products).size > 0 || !/\d+/.test(currentText)) {
+    return currentText;
+  }
+  const reference = input.context?.quotedMessage ?? input.context?.recentMessages.at(-1);
+  if (!reference) return currentText;
+  const skus = mentionedSkus(reference.text, input.products);
+  if (skus.size !== 1) return currentText;
+  const sku = [...skus][0]!;
+  const product = input.products.find((candidate) => candidate.sku === sku);
+  return product ? `${currentText} ${product.name}` : currentText;
 }

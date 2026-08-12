@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service.js';
 import type { KnowledgeSnapshot } from './domain.js';
 import { KnowledgeRepository } from './knowledge.repository.js';
+import { currentPriceMonth } from './price-periods.js';
 
 /**
  * Nguon su that tren Postgres (PERSISTENCE=prisma). Nap 1 lan thanh KnowledgeSnapshot.
@@ -15,12 +16,28 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
   }
 
   async loadSnapshot(): Promise<KnowledgeSnapshot> {
-    const [products, prices, overrides, dealers, groups, glossary] = await Promise.all([
+    const currentMonth = currentPriceMonth();
+    const now = new Date();
+    const [products, pricePeriod, overrides, dealers, groups, glossary] = await Promise.all([
       this.prisma.product.findMany(),
-      this.prisma.price.findMany(),
-      this.prisma.dealerPriceOverride.findMany(),
-      this.prisma.dealer.findMany(),
-      this.prisma.group.findMany({ where: { status: 'mapped', NOT: { dealerId: null } } }),
+      this.prisma.pricePeriod.findFirst({
+        where: { validMonth: currentMonth, status: 'active' },
+        include: { prices: true },
+      }),
+      this.prisma.dealerPriceOverride.findMany({
+        where: {
+          enabled: true,
+          AND: [
+            { OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: now } }] },
+            { OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }] },
+          ],
+          dealer: { status: 'active' },
+        },
+      }),
+      this.prisma.dealer.findMany({ where: { status: 'active' } }),
+      this.prisma.group.findMany({
+        where: { status: 'mapped', NOT: { dealerId: null }, dealer: { status: 'active' } },
+      }),
       this.prisma.glossaryEntry.findMany(),
     ]);
 
@@ -32,12 +49,19 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
         unit: p.unit,
         description: p.description ?? undefined,
       })),
-      prices: prices.map((p) => ({
+      pricePeriod: pricePeriod
+        ? { validMonth: pricePeriod.validMonth, status: pricePeriod.status }
+        : null,
+      prices: (pricePeriod?.prices ?? []).map((p) => ({
+        id: p.id,
+        periodId: p.periodId,
         sku: p.sku,
         wholesale: p.wholesale,
         minRetailPrice: p.minRetailPrice ?? undefined,
         retailPrice: p.retailPrice ?? undefined,
         listPrice: p.listPrice ?? undefined,
+        validMonth: pricePeriod?.validMonth,
+        periodStatus: pricePeriod?.status,
       })),
       priceOverrides: overrides.map((o) => ({ dealerId: o.dealerId, sku: o.sku, price: o.price })),
       dealers: dealers.map((d) => ({

@@ -37,6 +37,17 @@ export function isBotChannelActive(mode: AppEnv['CHANNEL_MODE']): boolean {
   return mode === 'bot' || mode === 'hybrid';
 }
 
+export interface BotPollerStatus {
+  state: 'disabled' | 'running' | 'degraded';
+  transport: 'long_poll';
+  received: number;
+  processed: number;
+  failed: number;
+  lastSuccessfulPollAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+}
+
 /**
  * Bot chinh thuc chi doc tin NHOM. Cong "nhom da map dai ly" da chuyen xuong
  * PipelineService.intake (04/08/2026): truoc day no chan ca viec LUU tin, ma Zalo khong phat lai
@@ -111,6 +122,16 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('BotPoller');
   private running = false;
   private readonly guard = new MessageGuard();
+  private telemetry: BotPollerStatus = {
+    state: 'disabled',
+    transport: 'long_poll',
+    received: 0,
+    processed: 0,
+    failed: 0,
+    lastSuccessfulPollAt: null,
+    lastErrorAt: null,
+    lastError: null,
+  };
 
   constructor(
     private readonly pipeline: PipelineService,
@@ -126,12 +147,18 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.running = true;
+    this.telemetry = { ...this.telemetry, state: 'running' };
     void this.loop(env.ZALO_BOT_TOKEN, resolveBotName(), env.AUTO_ACK, env.CHANNEL_MODE);
     this.logger.log(`BOT_MODE=on -> bat dau long polling getUpdates. Auto-ack=${env.AUTO_ACK}.`);
   }
 
   onModuleDestroy(): void {
     this.running = false;
+    this.telemetry = { ...this.telemetry, state: 'disabled' };
+  }
+
+  status(): BotPollerStatus {
+    return { ...this.telemetry };
   }
 
   private async loop(
@@ -145,13 +172,21 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
         const res = await callBotApi(token, 'getUpdates', { timeout: 20 });
         if (!res.ok) {
           if (res.error_code === 408) continue; // idle binh thuong
+          this.recordFailure(`getUpdates ${res.error_code}: ${res.description}`);
           this.logger.warn(`getUpdates loi ${res.error_code}: ${res.description}`);
           await sleep(3000);
           continue;
         }
+        this.telemetry = {
+          ...this.telemetry,
+          state: 'running',
+          lastSuccessfulPollAt: new Date().toISOString(),
+          lastError: null,
+        };
         for (const update of normalizeUpdates(res.result)) {
           const message = updateToChannelMessage(update);
           if (!message) continue;
+          this.telemetry = { ...this.telemetry, received: this.telemetry.received + 1 };
           const allowedGroupIds = this.zca?.status().allowedGroupIds ?? [];
           const accepted = shouldAcceptBotMessage(message, {
             mode,
@@ -175,10 +210,12 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
           if (!result) {
             // That bai het luot -> KHONG danh dau. Tin con duong chay lai (khong nuot don im lang).
             this.guard.release(id);
+            this.recordFailure(`Pipeline that bai sau retry: ${id}`);
             continue;
           }
           // Bo qua CO CHU Y (da luu chua map / trung / thanh vien ignore) van la "xong".
           this.guard.complete(id);
+          this.telemetry = { ...this.telemetry, processed: this.telemetry.processed + 1 };
           if (result.outcome !== 'processed') {
             this.logger.log(`Tin ${id} -> ${result.outcome} (khong tao don)`);
             continue;
@@ -189,10 +226,22 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
           }
         }
       } catch (error) {
-        this.logger.warn(`Loi mang getUpdates: ${error instanceof Error ? error.message : String(error)}`);
+        const message = error instanceof Error ? error.message : String(error);
+        this.recordFailure(message);
+        this.logger.warn(`Loi mang getUpdates: ${message}`);
         await sleep(3000);
       }
     }
+  }
+
+  private recordFailure(message: string): void {
+    this.telemetry = {
+      ...this.telemetry,
+      state: 'degraded',
+      failed: this.telemetry.failed + 1,
+      lastErrorAt: new Date().toISOString(),
+      lastError: message,
+    };
   }
 
   /** Gui tin auto-ack (best-effort): loi khong lam gian doan doc tin, tin da luu tren app. */

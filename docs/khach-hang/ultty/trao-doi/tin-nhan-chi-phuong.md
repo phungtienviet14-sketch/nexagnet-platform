@@ -1,6 +1,6 @@
 # Tin nhắn gửi chị Phương (kèm file Excel A4)
 
-> Đính kèm khi gửi: [`A4_dai-ly_map-nhom_U-Ultty.xlsx`](A4_dai-ly_map-nhom_U-Ultty.xlsx)
+> Đính kèm khi gửi: [`a4-dai-ly-map-nhom-ultty.xlsx`](a4-dai-ly-map-nhom-ultty.xlsx)
 > Bản ngắn sẵn gửi (Zalo) — 3 việc ưu tiên đỏ. Danh sách đầy đủ ở cuối để hỏi khi gọi.
 
 ---

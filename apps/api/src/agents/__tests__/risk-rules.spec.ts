@@ -88,19 +88,57 @@ describe('buildQuoteLines (báo giá tất định)', () => {
   const prices: PriceRow[] = [{ sku: 'GHE-FELIX', wholesale: 1_150_000 }];
 
   it('tra dung gia si (Don gia CTV) tu bang gia chung', () => {
-    const q = buildQuoteLines('bao gia ghe felix', products, prices);
+    const q = buildQuoteLines('bao gia ghe felix', products, prices, {
+      priceField: 'wholesale',
+      qualifier: 'Giá tham khảo.',
+    });
     expect(q).toEqual([{ name: 'Ghế Felix', unitPrice: 1_150_000 }]);
   });
 
+  it('dung field tu strategy va khong hard-code gia si cho tu van ban le', () => {
+    const q = buildQuoteLines(
+      'bao gia ghe felix',
+      products,
+      [{ sku: 'GHE-FELIX', wholesale: 1_150_000, minRetailPrice: 1_590_000 }],
+      { priceField: 'minRetailPrice', qualifier: 'Giá tối thiểu tham khảo.' },
+    );
+    expect(q).toEqual([{ name: 'Ghế Felix', unitPrice: 1_590_000 }]);
+  });
+
+  it('tenant khac co the chon retailPrice ma khong sua core', () => {
+    const q = buildQuoteLines(
+      'bao gia ghe felix',
+      products,
+      [{ sku: 'GHE-FELIX', wholesale: 1_150_000, retailPrice: 1_790_000 }],
+      { priceField: 'retailPrice', qualifier: 'Giá đề xuất.' },
+    );
+    expect(q[0]?.unitPrice).toBe(1_790_000);
+  });
+
+  it('khong tra so 0 khi field duoc cau hinh chua co gia', () => {
+    expect(
+      buildQuoteLines('bao gia ghe felix', products, prices, {
+        priceField: 'minRetailPrice',
+        qualifier: 'Giá tối thiểu tham khảo.',
+      }),
+    ).toEqual([]);
+  });
+
   it('khong khop SP -> mang rong', () => {
-    expect(buildQuoteLines('bao gia ban an go', products, prices)).toEqual([]);
+    expect(
+      buildQuoteLines('bao gia ban an go', products, prices, {
+        priceField: 'wholesale',
+        qualifier: 'Giá tham khảo.',
+      }),
+    ).toEqual([]);
   });
 });
 
 describe('annotatePolicy — chỉ format từ PricedOrder', () => {
-  it('nhac chinh sach + trang thai VAT tu priced', () => {
+  it('nhac chinh sach nhung khong tu suy dien mac dinh VAT/ship', () => {
     const notes = annotatePolicy(priced(5_000_000, 5));
     expect(notes.join(' ')).toContain('Công nợ 30 ngày');
-    expect(notes).toContain('Không xuất VAT');
+    expect(notes).not.toContain('Không xuất VAT');
+    expect(notes.join(' ')).not.toMatch(/Miễn phí ship/i);
   });
 });

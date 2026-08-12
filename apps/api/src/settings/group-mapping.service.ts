@@ -71,11 +71,25 @@ export class GroupMappingService {
       ...(input.name === undefined ? {} : { name: input.name }),
       ...(input.branch === undefined ? {} : { branch: input.branch }),
     } as const;
+    const mappingHistory = {
+      previousDealerId: before?.dealerId ?? null,
+      nextDealerId: input.dealerId,
+      previousStatus: before?.status ?? 'pending',
+      nextStatus: status,
+      source: 'manual',
+      actor,
+      requestId,
+    } as const;
 
     await this.prisma.group.upsert({
       where: { platform_chatId: { platform: 'zalo', chatId } },
-      update: { ...shared },
-      create: { platform: 'zalo', chatId, ...shared },
+      update: { ...shared, mappingHistory: { create: mappingHistory } },
+      create: {
+        platform: 'zalo',
+        chatId,
+        ...shared,
+        mappingHistory: { create: mappingHistory },
+      },
     });
 
     await this.audit.append({
@@ -127,7 +141,20 @@ export class GroupMappingService {
     const status = hidden ? 'ignored' : before.dealerId ? 'mapped' : 'pending';
     await this.prisma.group.update({
       where: { platform_chatId: { platform: 'zalo', chatId } },
-      data: { status },
+      data: {
+        status,
+        mappingHistory: {
+          create: {
+            previousDealerId: before.dealerId,
+            nextDealerId: before.dealerId,
+            previousStatus: before.status,
+            nextStatus: status,
+            source: hidden ? 'hidden' : 'restore',
+            actor,
+            requestId,
+          },
+        },
+      },
     });
 
     await this.audit.append({

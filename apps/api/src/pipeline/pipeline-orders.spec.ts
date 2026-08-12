@@ -1,11 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ChannelMessage } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
-import { KiotVietMockAdapter } from '../erp/kiotviet.mock.adapter.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { MockParser } from './mock-parser.js';
@@ -16,14 +15,14 @@ const BOT_NAME = 'Bot ultty AI orders';
 const GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-hn')!.chatId;
 
 function build() {
-  const knowledge = new KnowledgeService();
+  const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
   const repo = new InMemoryOrdersRepository();
   const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
   const pipeline = new PipelineService(orchestrator);
   const adapter = new MockAdapter();
   const zcaAdapter = new MockAdapter();
   const outbound = new OutboundChannelRouter(adapter, zcaAdapter, new MockAdapter());
-  const orders = new OrdersService(repo, outbound, new KiotVietMockAdapter(knowledge));
+  const orders = new OrdersService(repo, outbound);
   return { pipeline, orders, adapter, zcaAdapter };
 }
 
@@ -60,8 +59,12 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
 
     const approved = await orders.approve(view.id);
 
-    expect(approved.status).toBe('synced');
-    expect(approved.kiotVietCode).toMatch(/^KV-/);
+    expect(approved.status).toBe('sent');
+    expect(approved.kiotVietCode).toBeUndefined();
+    expect(approved.salesHandoff).toMatchObject({
+      action: 'manual_erp_entry',
+      status: 'pending',
+    });
     expect(adapter.sent).toHaveLength(1);
     expect(adapter.sent[0]!.chatId).toBe(GROUP);
     expect(adapter.sent[0]!.text).toContain('Nồi chiên không dầu');
@@ -90,7 +93,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
         throw new Error('rate limit');
       }
     }
-    const knowledge = new KnowledgeService();
+    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
     const repo = new InMemoryOrdersRepository();
     const pipeline = new PipelineService(new AgentOrchestrator(new MockParser(), knowledge, repo));
     const outbound = new OutboundChannelRouter(
@@ -98,7 +101,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
       new MockAdapter(),
       new MockAdapter(),
     );
-    const orders = new OrdersService(repo, outbound, new KiotVietMockAdapter(knowledge));
+    const orders = new OrdersService(repo, outbound);
 
     const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
     await expect(orders.approve(view.id)).rejects.toThrow();
@@ -110,7 +113,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
 
   it('tin tu NHOM KHAC -> map dung dai ly/chinh sach/ten nhom cua nhom do (dinh tuyen da nhom)', async () => {
     const { pipeline, orders, adapter } = build();
-    const knowledge = new KnowledgeService();
+    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
     const tn = knowledge.groups().find((g) => g.dealerId === 'dl-thai-nguyen');
     expect(tn, 'seed can co nhom map -> dl-thai-nguyen').toBeDefined();
 
@@ -138,7 +141,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     expect(adapter.sent.at(-1)?.chatId).toBe(tn!.chatId);
   });
 
-  it('duyet 2 lan cung 1 don -> khong gui lai, khong tao ma KiotViet moi (idempotent, M4)', async () => {
+  it('duyet 2 lan cung 1 don -> khong gui/tạo handoff lai (idempotent, M4)', async () => {
     const { pipeline, orders, adapter } = build();
     const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
 
@@ -146,8 +149,82 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     const second = await orders.approve(view.id);
 
     expect(adapter.sent).toHaveLength(1); // chi gui Zalo 1 lan
-    expect(second.status).toBe('synced');
-    expect(second.kiotVietCode).toBe(first.kiotVietCode); // khong tao ma moi
+    expect(second.status).toBe('sent');
+    expect(second.salesHandoff).toEqual(first.salesHandoff);
+  });
+
+  it('hai thao tac gui dong thoi cung chia se mot outbound dang chay', async () => {
+    class DelayedAdapter extends ChannelAdapter {
+      readonly name = 'delayed';
+      sent = 0;
+      private releaseGate!: () => void;
+      private readonly gate = new Promise<void>((resolve) => {
+        this.releaseGate = resolve;
+      });
+
+      async sendMessage(): Promise<void> {
+        this.sent += 1;
+        await this.gate;
+      }
+
+      release(): void {
+        this.releaseGate();
+      }
+    }
+
+    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const repo = new InMemoryOrdersRepository();
+    const pipeline = new PipelineService(new AgentOrchestrator(new MockParser(), knowledge, repo));
+    const delayed = new DelayedAdapter();
+    const orders = new OrdersService(
+      repo,
+      new OutboundChannelRouter(delayed, new MockAdapter(), new MockAdapter()),
+    );
+    const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
+
+    const first = orders.approve(view.id);
+    const second = orders.approve(view.id);
+    await vi.waitFor(() => expect(delayed.sent).toBe(1));
+    delayed.release();
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(delayed.sent).toBe(1);
+    expect(secondResult.salesHandoff).toEqual(firstResult.salesHandoff);
+  });
+
+  it('Sale danh dau handoff nhap ERP hoan tat va thao tac lap la idempotent', async () => {
+    const { pipeline, orders, adapter } = build();
+    const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
+    const sent = await orders.approve(view.id);
+
+    const completed = await orders.completeSalesHandoff(sent.id);
+    const repeated = await orders.completeSalesHandoff(sent.id);
+
+    expect(completed.status).toBe('sent');
+    expect(completed.salesHandoff?.status).toBe('completed');
+    expect(repeated.salesHandoff).toEqual(completed.salesHandoff);
+    expect(adapter.sent).toHaveLength(1);
+  });
+
+  it('khong cho reject don da gui roi approve lai gay gui trung', async () => {
+    const { pipeline, orders, adapter } = build();
+    const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
+    await orders.approve(view.id);
+
+    await expect(orders.reject(view.id)).rejects.toThrow();
+    await expect(orders.getOrThrow(view.id)).resolves.toMatchObject({ status: 'sent' });
+    await orders.approve(view.id);
+    expect(adapter.sent).toHaveLength(1);
+  });
+
+  it('don da tu choi la trang thai cuoi, khong the approve va gui ra nhom', async () => {
+    const { pipeline, orders, adapter } = build();
+    const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien'), BOT_NAME);
+    await orders.reject(view.id);
+
+    await expect(orders.approve(view.id)).rejects.toThrow();
+    await expect(orders.getOrThrow(view.id)).resolves.toMatchObject({ status: 'rejected' });
+    expect(adapter.sent).toHaveLength(0);
   });
 
   it('tin hoi gia khong phai don -> khong nam trong danh sach don, khong duyet duoc', async () => {

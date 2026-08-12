@@ -14,6 +14,8 @@ tenants/<slug>/
   tenant.json               Danh tính + thương hiệu + persona.
                             Schema: packages/tenant/src/tenant.schema.ts
   data/knowledge.json       Hạt giống nguồn sự thật: SP, giá, đại lý, map nhóm Zalo, glossary
+  data/runtime-policy.json  (đích) Hạt giống policy auto-confirm, retail advice, campaign
+  data/content-manifest.json (đích) Provenance/mapping/readiness FAQ, catalog, ảnh, video; không chứa binary
   data/demo-messages.json   (tùy chọn) Tin mẫu cho luồng demo. Thiếu file ⇒ mảng rỗng, không lỗi.
 ```
 
@@ -50,8 +52,20 @@ tenants/<slug>/
 | `mentionName` | Chuỗi dùng để **bóc @mention** khỏi tin đến — đúng như nó xuất hiện trong nhóm Zalo. Khác `botName` (tên hiển thị). Biến `BOT_NAME` ghi đè được cho từng môi trường. |
 | `productFallbackDescription` | Mô tả thay thế khi một SP chưa có `description` (vai Tư vấn SP). |
 
-`data/knowledge.json` khớp 1-1 với `KnowledgeSnapshot` (`apps/api/src/knowledge/domain.ts`):
-`products`, `prices`, `priceOverrides`, `dealers`, `groups`, `glossary`.
+`data/knowledge.json` hiện khớp 1-1 với `KnowledgeSnapshot` (`apps/api/src/knowledge/domain.ts`):
+`products`, `prices`, `priceOverrides`, `dealers`, `groups`, `glossary`. Các file `runtime-policy.json` và
+`content-manifest.json` là cấu trúc đích đã chốt 12/08/2026, chỉ được thêm cùng schema zod + importer/test;
+không tạo file ad-hoc trước code.
+
+Policy runtime phải tách rõ:
+
+- `orderAutomation`: bật/tắt theo tenant và ngưỡng tổng số lượng inclusive; `null` nghĩa là chưa chốt nên fail-closed. GĐ1 luôn nhập ERP thủ công, không có mode tích hợp;
+- `retailAdvice`: field giá hợp lệ + qualifier template;
+- `campaign`: timezone, cửa sổ/spacing/giới hạn mục tiêu;
+- content manifest: Drive file ID/URL, MIME/checksum/modified time, product mapping, content type, trạng thái duyệt/readiness.
+
+File ảnh/video/catalog gốc ở Drive/object storage. Gói tenant và DB chỉ giữ metadata/link/provenance; không copy
+binary và không nhét nội dung khách vào code chung.
 
 ## Chọn gói khách lúc chạy
 
@@ -104,7 +118,8 @@ Với `PERSISTENCE=memory` (mặc định, demo/CI) thì gói khách là nguồn
 1. `mkdir -p tenants/<slug>/data`
 2. Chép `tenant.json` từ khách có sẵn, sửa 5 trường.
 3. Đổ `data/knowledge.json` — thiếu dữ liệu thì để mảng rỗng, **không** bịa số.
-4. Chạy `TENANT=<slug> pnpm --filter @netviet/api test` — schema sai sẽ báo ngay.
+4. Khi các schema policy/content đã được triển khai, nạp seed có provenance; bảng giá thiếu tháng hoặc FAQ chưa duyệt phải giữ trạng thái thiếu/inactive.
+5. Chạy `TENANT=<slug> pnpm --filter @netviet/api test` — schema sai sẽ báo ngay.
 
 ## Dữ liệu thương mại
 

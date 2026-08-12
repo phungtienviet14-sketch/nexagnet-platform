@@ -37,14 +37,9 @@ describe('matchProduct', () => {
 });
 
 describe('computeShipping', () => {
-  it('mien phi khi tong so luong >= 2', () => {
-    expect(computeShipping(10, 'Thai Nguyen', cfg)).toBe(0);
-  });
-  it('1 SP giao tinh -> cuoc Viettel', () => {
-    expect(computeShipping(1, 'Thai Nguyen', cfg)).toBe(cfg.shipFeeTinh);
-  });
-  it('1 SP giao noi thanh HN -> cuoc Grab', () => {
-    expect(computeShipping(1, 'HN', cfg)).toBe(cfg.shipFeeNoiThanh);
+  it('fail closed vì GĐ1 chưa có bảng vùng/cước chính thức', () => {
+    expect(() => computeShipping(10, 'Thai Nguyen', cfg)).toThrow(/thiếu cấu hình.*vận chuyển/i);
+    expect(() => computeShipping(1, 'HN', cfg)).toThrow(/thiếu cấu hình.*vận chuyển/i);
   });
 });
 
@@ -84,10 +79,11 @@ describe('priceOrder — TH1', () => {
     expect(priced.grandTotal).toBe(11_500_000);
   });
 
-  it('CO VAT khi khach ghi "xuat VAT" (wantVat=true)', () => {
+  it('KHONG tinh VAT khi khach yeu cau vi policy dang blocked', () => {
     const priced = priceOrder({ ...parsed, noVat: false, wantVat: true }, ctx());
-    expect(priced.vatAmount).toBe(1_150_000);
-    expect(priced.grandTotal).toBe(12_650_000);
+    expect(priced.vatAmount).toBe(0);
+    expect(priced.grandTotal).toBe(11_500_000);
+    expect(priced.warnings.join(' ')).toMatch(/thiếu cấu hình.*VAT/i);
   });
 
   it('ap gia SI ke ca CHUA map dai ly (bang gia chung), van canh bao dai ly la', () => {
@@ -168,12 +164,14 @@ describe('priceOrder — TH2 COD', () => {
     noVat: true,
   };
 
-  it('1 SP giao tinh co cuoc + phi COD, format co ten khach', () => {
+  it('khong dung bang cuoc tam; danh dau thieu cau hinh va khong cong vao tong', () => {
     const priced = priceOrder(parsed, ctx());
-    expect(priced.shippingFee).toBe(cfg.shipFeeTinh);
-    expect(priced.codFee).toBe(cfg.codFee);
-    expect(priced.grandTotal).toBe(1_150_000 + cfg.shipFeeTinh + cfg.codFee);
+    expect(priced.shippingFee).toBe(0);
+    expect(priced.codFee).toBe(0);
+    expect(priced.grandTotal).toBe(1_150_000);
+    expect(priced.warnings.join(' ')).toMatch(/thiếu cấu hình.*ship.*COD/i);
     expect(priced.confirmationText).toContain('Chị Lan');
+    expect(priced.confirmationText).not.toContain('Phí ship: 30.000đ');
   });
 });
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { loadEnv } from '@netviet/shared';
+import { tenantOrderAutomation, tenantReadiness } from '@netviet/tenant';
 import { BotIdentityService } from '../channels/bot-identity.service.js';
 import { ZaloUserClient, type ZaloGroupView } from '../channels/zalo-user.client.js';
 import { PrismaService } from '../config/prisma.service.js';
@@ -37,6 +38,8 @@ export class SettingsQueryService {
       zcaState: zcaStatus.state,
       botIdentity: this.botIdentity.status(),
       autoSend: { enabled: this.runtime.autoSend() === 'on' },
+      orderAutomation: tenantOrderAutomation(),
+      businessBlockers: tenantReadiness().blockedCapabilities,
       sourceTruth: {
         status: env.PERSISTENCE === 'prisma' ? 'available' : 'fallback',
         productCount: this.knowledge.products().length,
@@ -155,7 +158,22 @@ export class SettingsQueryService {
       case 'products':
         return this.prisma.product.findMany({ orderBy: { sku: 'asc' } });
       case 'prices':
-        return this.prisma.price.findMany({ orderBy: { sku: 'asc' } });
+        return this.prisma.price
+          .findMany({ include: { period: true }, orderBy: { sku: 'asc' } })
+          .then((rows) =>
+            rows.map((row) => ({
+              id: row.id,
+              periodId: row.periodId,
+              sku: row.sku,
+              wholesale: row.wholesale,
+              minRetailPrice: row.minRetailPrice,
+              retailPrice: row.retailPrice,
+              listPrice: row.listPrice,
+              validMonth: row.period.validMonth,
+              periodStatus: row.period.status,
+              updatedAt: row.updatedAt,
+            })),
+          );
       case 'overrides':
         return this.prisma.dealerPriceOverride.findMany({ orderBy: [{ dealerId: 'asc' }, { sku: 'asc' }] });
       case 'glossary':

@@ -110,10 +110,10 @@ export class DemoController {
     if (!existing) {
       throw new NotFoundException(`Khong tim thay tin ${id} de chay lai`);
     }
-    // Don da dong bo KiotViet -> KHONG chay lai (giu idempotent M4: tranh ghi de mat
-    // kiotVietCode roi duyet lai gay day don trung).
-    if (existing.status === 'synced') {
-      throw new BadRequestException('Đơn đã đồng bộ KiotViet — không thể chạy lại');
+    // Don da gui khach la trang thai cuoi cua luong xac nhan: khong ghi de hay gui trung.
+    // `synced` duoc giu de bao ve du lieu legacy tu truoc GĐ1 send-only.
+    if (existing.status === 'sent' || existing.status === 'synced') {
+      throw new BadRequestException('Đơn đã gửi khách — không thể chạy lại');
     }
     const message = channelMessageSchema.parse({
       externalMessageId: `rerun-${id}-${Date.now()}`,

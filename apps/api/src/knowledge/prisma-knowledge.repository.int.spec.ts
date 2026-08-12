@@ -21,8 +21,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('PrismaKnowledgeRepository (Po
     expect(snap.dealers.length).toBeGreaterThanOrEqual(3);
     expect(snap.glossary.length).toBeGreaterThan(0);
 
-    // Gia si Felix khop bang gia thang 7 (doi chieu nguon goc).
-    expect(snap.prices.find((p) => p.sku === 'FELIX')?.wholesale).toBe(1_250_000);
+    // Seed hien chi co T7/2026; runtime T8 phai fail closed, khong fallback T7.
+    expect(snap.pricePeriod).toBeNull();
+    expect(snap.prices).toEqual([]);
 
     // Chi nhom DA MAP moi vao snapshot -> deu co dealerId (dung y "hop thu nhom chua map").
     expect(snap.groups.length).toBeGreaterThan(0);

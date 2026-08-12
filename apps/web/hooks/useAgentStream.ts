@@ -49,7 +49,7 @@ export function useAgentStream(
       return;
     }
     let opened = false;
-    const es = new EventSource(EVENTS_URL);
+    const es = new EventSource(EVENTS_URL, { withCredentials: true });
 
     es.onopen = () => {
       setConnected(true);

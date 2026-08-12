@@ -70,12 +70,16 @@ describe('DemoController', () => {
     );
   });
 
-  it('chan rerun don khong ton tai hoac da dong bo', async () => {
+  it('chan rerun don khong ton tai, da gui khach hoac da dong bo', async () => {
     findById.mockResolvedValueOnce(null);
     await expect(controller.rerun('missing')).rejects.toThrow(NotFoundException);
 
     findById.mockResolvedValueOnce({ status: 'synced' });
     await expect(controller.rerun('synced')).rejects.toThrow(BadRequestException);
+
+    findById.mockResolvedValueOnce({ status: 'sent' });
+    await expect(controller.rerun('sent')).rejects.toThrow(BadRequestException);
+    expect(processMessage).not.toHaveBeenCalled();
   });
 
   it('rerun dung order id va khong tao ban tin tho moi', async () => {

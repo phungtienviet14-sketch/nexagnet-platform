@@ -43,6 +43,7 @@ export class FlowiseParser implements OrderParser {
             glossaryJson: JSON.stringify(input.glossary),
             dealerNameRaw: input.dealerNameRaw ?? '',
             botName: input.botName ?? '',
+            contextJson: JSON.stringify(input.context ?? null),
           },
           streaming: false,
         }),

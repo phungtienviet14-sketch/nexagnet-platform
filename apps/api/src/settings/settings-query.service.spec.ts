@@ -64,6 +64,7 @@ describe('SettingsQueryService', () => {
         inactiveParticipants: 1,
       }),
     ]);
+    expect(summary.orderAutomation).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
   });
 
   it('serves every memory source-truth resource and maps live zca groups to dealers', async () => {
@@ -96,6 +97,7 @@ describe('SettingsQueryService', () => {
       await expect(service.sourceTruth(resource)).resolves.toHaveLength(1);
     }
     await expect(service.summary()).resolves.toMatchObject({
+      orderAutomation: { enabled: true, maxAutoConfirmQuantity: 50 },
       groups: [{ zcaChatId: 'zca-chat-1', dealerName: 'Dai ly pilot' }],
       sourceTruth: { status: 'fallback', productCount: 1, dealerCount: 1 },
     });

@@ -2,7 +2,7 @@
  * PoC cau hoi Beta - chay long polling va thong ke moi update nhan duoc.
  *
  * Cach dung:  pnpm poc:updates   (tu goc repo)
- * Dung bang Ctrl+C -> in bang tong ket de dien vao docs/so-do-he-thong.md (Phu luc A)
+ * Dung bang Ctrl+C -> in bang tong ket de dien vao docs/phat-trien/kien-truc/he-thong.md (Phu luc A)
  *
  * LUU Y: getUpdates khong hoat dong neu bot dang gan webhook.
  * Chay `pnpm --filter @netviet/poc-zalo-bot webhook delete` truoc neu can.
@@ -59,7 +59,7 @@ function printSummary(): void {
   }
   console.log(`Loi API               : ${stats.errors}`);
   console.log(`Log day du            : ${logFile}`);
-  console.log('Dien ket qua vao docs/so-do-he-thong.md — Phu luc A (3 cau hoi Beta).');
+  console.log('Dien ket qua vao docs/phat-trien/kien-truc/he-thong.md — Phu luc A (3 cau hoi Beta).');
   console.log('===============================================');
 }
 

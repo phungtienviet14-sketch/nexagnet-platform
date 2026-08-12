@@ -22,6 +22,13 @@ export type PolicyType = (typeof POLICY_TYPES)[number];
 
 export type ReplyChannel = 'mock' | 'bot' | 'zca';
 
+export interface SalesHandoff {
+  /** Generic base action; tenant UI may render the configured ERP/provider name. */
+  action: 'manual_erp_entry';
+  status: 'pending' | 'completed';
+  createdAt: string;
+}
+
 export interface PricedLine {
   skuRaw: string;
   /** SKU chuan sau khi map; null neu khong khop danh muc */
@@ -74,8 +81,10 @@ export interface OrderView {
   parsed: ParsedOrder | null;
   priced: PricedOrder | null;
   confidence: FieldConfidence;
-  /** Ma don KiotViet sau khi day len (GD1: mock; GD2: API that) */
+  /** Ma ERP legacy/tuong lai; GĐ1 khong tao field nay. */
   kiotVietCode?: string;
+  /** Hang viec ben vung cho Sale sau khi khach da nhan xac nhan. */
+  salesHandoff?: SalesHandoff;
   /** Loai nguoi gui suy tu nhom (multi-agent 6 con). */
   senderType?: SenderType;
   /** Vet 6 vai agent da phoi hop xu ly tin (multi-agent 6 con). */

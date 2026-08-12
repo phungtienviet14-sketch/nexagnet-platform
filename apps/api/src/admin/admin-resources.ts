@@ -75,11 +75,27 @@ export function buildKnowledgeResources(
       },
     },
     {
+      resource: res('PricePeriod'),
+      options: {
+        navigation: NAV,
+        listProperties: ['validMonth', 'status', 'source', 'activatedAt', 'updatedAt'],
+        actions: {
+          new: { isAccessible: false },
+          edit: { isAccessible: false },
+          delete: { isAccessible: false },
+        },
+      },
+    },
+    {
       resource: res('Price'),
       options: {
         navigation: NAV,
-        listProperties: ['sku', 'wholesale', 'retailPrice', 'validMonth', 'updatedAt'],
-        actions: { ...writeHooks(prisma, 'Price') },
+        listProperties: ['periodId', 'sku', 'wholesale', 'minRetailPrice', 'retailPrice', 'listPrice', 'updatedAt'],
+        actions: {
+          new: { isAccessible: false },
+          edit: { isAccessible: false },
+          delete: { isAccessible: false },
+        },
       },
     },
     {

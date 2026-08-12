@@ -88,8 +88,8 @@ export function TopBar({
           onClick={() => onAutoSendChange(!autoSendOn)}
           title={
             autoSendOn
-              ? 'AI tự chốt + gửi đơn khi không có rủi ro (Giám sát phát hiện vấn đề mới gọi Sale)'
-              : 'AI soạn, Sale duyệt 1-chạm'
+              ? 'Tự gửi đơn đủ dữ liệu trong ngưỡng policy tenant; sau đó Sale nhập ERP thủ công'
+              : 'Kill switch đang tắt; mọi đơn chuyển Sale trước khi gửi'
           }
         >
           <span className="dot" />
@@ -108,7 +108,7 @@ export function TopBar({
         </div>
         <div className="counter">
           <b className="num">{pendingCount}</b>
-          <span>Chờ duyệt</span>
+          <span>Việc Sale</span>
         </div>
         <div className="counter">
           <b className="num">{groupCount}</b>

@@ -22,7 +22,6 @@ export function FeedColumn({ items, selectedId, onSelect }: Props) {
     onSuccess: () => {
       // SSE tu day don vao cache; polling can invalidate. Giu ca 2 cho an toan.
       void qc.invalidateQueries({ queryKey: ['messages'] });
-      void qc.invalidateQueries({ queryKey: ['kiotviet'] });
     },
   });
 

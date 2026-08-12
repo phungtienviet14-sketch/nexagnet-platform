@@ -8,10 +8,70 @@ import { z } from 'zod';
  *
  * LUU Y: day la HAT GIONG, khong phai nguon su that luc chay. Voi PERSISTENCE=prisma, sau lan
  * seed dau tien thi Postgres moi la nguon su that (sua qua /admin hoac MCP) — xem
- * docs/ke-hoach/nen-tang-da-khach.md §5.
+ * docs/phat-trien/ke-hoach/nen-tang-da-khach.md §5.
  */
 
 const nonEmpty = z.string().min(1);
+export const retailPriceFieldSchema = z.enum([
+  'wholesale',
+  'minRetailPrice',
+  'retailPrice',
+  'listPrice',
+]);
+
+export const retailAdviceSchema = z
+  .object({
+    priceField: retailPriceFieldSchema,
+    qualifier: nonEmpty,
+  })
+  .strict();
+
+export const blockedCapabilitySchema = z
+  .object({
+    key: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/).max(100),
+    label: nonEmpty.max(200),
+    reason: nonEmpty.max(1_000),
+  })
+  .strict();
+
+export const tenantReadinessSchema = z
+  .object({
+    /** Cac blocker nghiep vu do tenant khai bao; core chi hien thi, khong suy dien hanh vi. */
+    blockedCapabilities: z.array(blockedCapabilitySchema).max(100),
+  })
+  .strict();
+
+export const orderAutomationSchema = z
+  .object({
+    /** Policy kinh doanh cua tenant; AUTO_SEND runtime chi la kill switch van hanh. */
+    enabled: z.boolean(),
+    /** Tong so luong toi da duoc tu xac nhan, tinh inclusive tren tat ca dong hang. */
+    maxAutoConfirmQuantity: z.number().int().positive().max(1_000_000),
+  })
+  .strict();
+
+const timeOfDaySchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'gio phai co dang HH:mm');
+
+export const campaignConfigSchema = z
+  .object({
+    defaultWindow: z
+      .object({ start: timeOfDaySchema, end: timeOfDaySchema })
+      .strict()
+      .refine((window) => window.end > window.start, 'campaign.defaultWindow.end phai sau start'),
+    minSpacingSeconds: z.number().int().positive().max(86_400),
+    maxTargets: z.number().int().positive().max(100_000),
+    rateLimitPerMinute: z.number().int().positive().max(10_000),
+    claimLeaseSeconds: z.number().int().positive().max(3_600),
+    tickIntervalSeconds: z.number().int().positive().max(300),
+    retry: z
+      .object({
+        maxAttempts: z.number().int().positive().max(20),
+        baseBackoffSeconds: z.number().int().positive().max(86_400),
+      })
+      .strict(),
+    features: z.object({ lunarCalendarEnabled: z.boolean() }).strict(),
+  })
+  .strict();
 
 export const tenantConfigSchema = z.object({
   /** Tang khi doi cau truc goi khach theo kieu pha vo tuong thich. */
@@ -62,6 +122,16 @@ export const tenantConfigSchema = z.object({
    * do la luc can xet lai phuong an C.
    */
   policies: z.array(z.enum(POLICY_TYPES)).min(1),
+  /**
+   * Null = tenant chua chot policy, fail-closed va khong tu gui. Khong dung default code vi
+   * nguong la du lieu kinh doanh rieng tung khach.
+   */
+  orderAutomation: orderAutomationSchema.nullable(),
+  /** Gioi han van han campaign cua tung silo; noi dung/lich thuc te nam trong Postgres. */
+  campaign: campaignConfigSchema,
+  /** Chien luoc tu van gia le; core chi doc field va cau giai thich nay. */
+  retailAdvice: retailAdviceSchema,
+  readiness: tenantReadinessSchema,
   persona: z.object({
     /** Cau mo dau prompt parser. Truoc B1 cau nay hardcode ten khach trong parser-prompt.ts. */
     parserIntro: nonEmpty,
@@ -83,12 +153,23 @@ export const tenantConfigSchema = z.object({
 });
 
 export type TenantConfig = z.infer<typeof tenantConfigSchema>;
+export type OrderAutomation = z.infer<typeof orderAutomationSchema>;
+export type CampaignConfig = z.infer<typeof campaignConfigSchema>;
+export type RetailAdvice = z.infer<typeof retailAdviceSchema>;
+export type TenantReadiness = z.infer<typeof tenantReadinessSchema>;
 
 /**
  * Hat giong nguon su that. Khop 1-1 voi interface `KnowledgeSnapshot` cua apps/api — ben do co
  * mot phep gan kiem kieu de hai hinh khong tro nhau luc nao khong biet.
  */
 export const knowledgeSnapshotSchema = z.object({
+  pricePeriod: z
+    .object({
+      validMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable(),
+      status: z.enum(['draft', 'active', 'archived']),
+    })
+    .strict()
+    .nullable(),
   products: z.array(
     z.object({
       sku: nonEmpty,

@@ -1,11 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BotPoller,
   isAllowedBotMessage,
   isBotChannelActive,
   shouldAcceptBotMessage,
   shouldAutoAck,
   updateToChannelMessage,
 } from './bot-poller.js';
+
+describe('BotPoller observability', () => {
+  it('reports an explicit disabled long-poll transport before startup', () => {
+    const poller = new BotPoller(
+      {} as ConstructorParameters<typeof BotPoller>[0],
+      {} as ConstructorParameters<typeof BotPoller>[1],
+    );
+
+    expect(poller.status()).toEqual({
+      state: 'disabled',
+      transport: 'long_poll',
+      received: 0,
+      processed: 0,
+      failed: 0,
+      lastSuccessfulPollAt: null,
+      lastErrorAt: null,
+      lastError: null,
+    });
+  });
+});
 
 describe('updateToChannelMessage', () => {
   it('map tin text nhom', () => {

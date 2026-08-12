@@ -35,11 +35,19 @@ describe('loadEnv', () => {
     expect(env.ZALO_BOT_TOKEN).toBeUndefined();
   });
 
+  it('nhan duong dan report golden eval do tenant mount ma khong hardcode default', () => {
+    expect(loadEnv({}).GOLDEN_EVAL_REPORT_PATH).toBeUndefined();
+    expect(loadEnv({ GOLDEN_EVAL_REPORT_PATH: '/run/tenant/golden-eval.json' }).GOLDEN_EVAL_REPORT_PATH).toBe(
+      '/run/tenant/golden-eval.json',
+    );
+  });
+
   it('mac dinh parser=mock, bot=off de demo chay khong can key/token', () => {
     const env = loadEnv({});
 
     expect(env.PARSER_MODE).toBe('mock');
     expect(env.BOT_MODE).toBe('off');
+    expect(env.DATA_CLASSIFICATION).toBe('test');
     // Dot B1: ten bot la cua TUNG KHACH -> nhan dung chung khong mang mac dinh nao. Nguon that su
     // la goi khach (`persona.mentionName`, xem apps/api/src/channels/bot-name.ts); bien nay chi con
     // la duong GHI DE theo moi truong chay.
@@ -214,5 +222,94 @@ describe('loadEnv', () => {
 
   it('AUTH_MODE khong hop le -> nem loi thay vi am tham tat xac thuc', () => {
     expect(() => loadEnv({ AUTH_MODE: 'off' })).toThrowError(EnvValidationError);
+  });
+
+  it('AUTH_MODE=session bat buoc co secret va chi dung MemoryStore trong test/dev', () => {
+    expect(() => loadEnv({ AUTH_MODE: 'session' })).toThrowError(EnvValidationError);
+    expect(
+      loadEnv({ AUTH_MODE: 'session', SESSION_SECRET: 's'.repeat(48) }).AUTH_MODE,
+    ).toBe('session');
+    expect(() =>
+      loadEnv({
+        NODE_ENV: 'production',
+        AUTH_MODE: 'session',
+        SESSION_SECRET: 's'.repeat(48),
+        PERSISTENCE: 'memory',
+      }),
+    ).toThrowError(EnvValidationError);
+  });
+
+  it('customer readiness accepts cookie sessions and still forbids none', () => {
+    const customer = {
+      DATA_CLASSIFICATION: 'customer',
+      PARSER_MODE: 'claude',
+      ANTHROPIC_API_KEY: 'anthropic-key',
+      PERSISTENCE: 'prisma',
+      AUTH_MODE: 'session',
+      SESSION_SECRET: 's'.repeat(48),
+    } as const;
+
+    expect(loadEnv(customer).AUTH_MODE).toBe('session');
+    expect(() => loadEnv({ ...customer, AUTH_MODE: 'none' })).toThrowError(EnvValidationError);
+  });
+
+  // --- DATA_CLASSIFICATION: gate du lieu khach that ---
+
+  it('du lieu khach that bat buoc dung Claude + Anthropic key', () => {
+    const base = {
+      DATA_CLASSIFICATION: 'customer',
+      PERSISTENCE: 'prisma',
+      AUTH_MODE: 'api-key',
+      API_KEY: 'x'.repeat(32),
+    } as const;
+
+    expect(() => loadEnv({ ...base, PARSER_MODE: 'mock' })).toThrowError(EnvValidationError);
+    expect(() => loadEnv({ ...base, PARSER_MODE: 'deepseek', DEEPSEEK_API_KEY: 'deepseek-key' })).toThrowError(
+      EnvValidationError,
+    );
+    expect(() => loadEnv({ ...base, PARSER_MODE: 'claude' })).toThrowError(EnvValidationError);
+    expect(loadEnv({ ...base, PARSER_MODE: 'claude', ANTHROPIC_API_KEY: 'anthropic-key' }).PARSER_MODE).toBe(
+      'claude',
+    );
+  });
+
+  it('du lieu khach that bat buoc persistence prisma va auth khong duoc none', () => {
+    const safe = {
+      DATA_CLASSIFICATION: 'customer',
+      PARSER_MODE: 'claude',
+      ANTHROPIC_API_KEY: 'anthropic-key',
+      API_KEY: 'x'.repeat(32),
+    } as const;
+
+    expect(() => loadEnv({ ...safe, PERSISTENCE: 'memory' })).toThrowError(EnvValidationError);
+    expect(() => loadEnv({ ...safe, PERSISTENCE: 'prisma', AUTH_MODE: 'none' })).toThrowError(
+      EnvValidationError,
+    );
+    expect(loadEnv({ ...safe, PERSISTENCE: 'prisma', AUTH_MODE: 'api-key' }).DATA_CLASSIFICATION).toBe(
+      'customer',
+    );
+  });
+
+  it('du lieu khach that + kenh Zalo that khong duoc MEDIA_STORE=none', () => {
+    const base = {
+      DATA_CLASSIFICATION: 'customer',
+      PARSER_MODE: 'claude',
+      ANTHROPIC_API_KEY: 'anthropic-key',
+      PERSISTENCE: 'prisma',
+      AUTH_MODE: 'api-key',
+      API_KEY: 'x'.repeat(32),
+    } as const;
+
+    expect(() => loadEnv({ ...base, CHANNEL_MODE: 'bot', ZALO_BOT_TOKEN: 'bot-token-test' })).toThrowError(
+      EnvValidationError,
+    );
+    expect(
+      loadEnv({
+        ...base,
+        CHANNEL_MODE: 'bot',
+        ZALO_BOT_TOKEN: 'bot-token-test',
+        MEDIA_STORE: 'local',
+      }).MEDIA_STORE,
+    ).toBe('local');
   });
 });

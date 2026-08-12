@@ -1,29 +1,70 @@
-# PoC Parser — Eval độ ổn định phân loại intent
+# PoC Parser — Golden eval trước go-live
 
-Đo **độ chính xác phân loại 7 intent** của parser (DeepSeek/Claude/mock) qua **đúng pipeline thật**
-(gọi API `/demo/simulate`), để verify **trước buổi demo** khi chạy `PARSER_MODE=deepseek`.
+Tool này đo parser + rules qua API thật (`POST /demo/simulate`) bằng golden dataset do khách cung cấp.
+Dataset không commit vào source.
 
 ## Cách chạy
 
-1. Chạy API với parser cần đo (ví dụ AI thật):
+1. Chạy API với runtime cần đo, ví dụ đường production cho dữ liệu khách:
+
    ```bash
-   PARSER_MODE=deepseek BOT_MODE=off pnpm dev:api      # cần DEEPSEEK_API_KEY trong .env
+   DATA_CLASSIFICATION=customer PARSER_MODE=claude PERSISTENCE=prisma AUTH_MODE=api-key pnpm dev:api
    ```
-2. Chạy eval (terminal khác):
+
+2. Chạy eval ở terminal khác:
+
    ```bash
+   GOLDEN_DATASET_PATH=/abs/path/golden-orders.json \
+   EVAL_REPORT_PATH=/run/tenant/golden-eval-report.json \
    pnpm --filter @netviet/poc-parser eval
    ```
 
-Kết quả: bảng % đúng theo từng intent + tổng + danh sách tin phân loại sai (`expected → got`).
-Ngưỡng đề xuất demo: **intent-accuracy ≥ 90%**. Nếu chưa đạt → tune prompt/few-shot ở
-[apps/api/src/pipeline/parser-prompt.ts](../../apps/api/src/pipeline/parser-prompt.ts) +
-[packages/shared/src/intents.ts](../../packages/shared/src/intents.ts).
+Nếu mỗi case không có `chatId`, đặt thêm:
 
-## Dữ liệu
+```bash
+EVAL_CHAT_ID=<zalo-chat-id>
+```
 
-`eval-set.json` — 35 tin nhắn Zalo tiếng Việt (không dấu, viết tắt) phủ 7 intent + bẫy TH2/nhiều SP/
-glossary/adversarial, mỗi tin gắn `expectedIntent`. Khi có **tin thật của khách** (checklist B1-B2),
-bổ sung/thay vào đây + thêm golden output để đo cả field-accuracy.
+`EVAL_REPORT_PATH` là tùy chọn. Khi có, tool ghi báo cáo JSON theo cách atomic để runtime
+đọc cho màn hình **Sẵn sàng vận hành**; file này là dữ liệu triển khai của tenant, không đưa vào image.
 
-## Biến môi trường
-`API_URL` (mặc định `http://localhost:3001`) · `EVAL_CHAT_ID` (mặc định nhóm Meta HN) · `EVAL_THROTTLE_MS` (300).
+## Exit code
+
+- `0`: golden pass, `goLiveReady=true`.
+- `1`: chạy được nhưng có mismatch hoặc lỗi eval.
+- `2`: thiếu golden dataset, output có `goLiveReady=false` và `reason=missing_golden_dataset`.
+
+## Schema dataset tối thiểu
+
+```json
+[
+  {
+    "text": "Meta HN gui 2 FELIX",
+    "chatId": "optional-if-EVAL_CHAT_ID-is-set",
+    "expected": {
+      "intent": "dat_don",
+      "dealerName": "Meta HN",
+      "policy": "cong_no_30",
+      "autoConfirmEligible": true,
+      "order": {
+        "orderType": "TH1",
+        "items": [{ "sku": "FELIX", "quantity": 2 }],
+        "grandTotal": 2300000
+      }
+    }
+  }
+]
+```
+
+## Metrics
+
+Tool tính:
+
+- intent accuracy;
+- field accuracy;
+- SKU accuracy;
+- quantity accuracy;
+- dealer accuracy;
+- policy resolution accuracy;
+- total/rules correctness;
+- auto-confirm eligibility accuracy.

@@ -1,17 +1,21 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useBranding } from '../../lib/branding';
 import { parseSettingsSummary, settingsApi } from '../../lib/settings';
 import { AuditSettings } from './AuditSettings';
 import { AutomationSettings } from './AutomationSettings';
+import { CampaignSettings } from './CampaignSettings';
+import { ContentSettings } from './ContentSettings';
 import { ParticipantsSettings } from './ParticipantsSettings';
 import { RulesSettings } from './RulesSettings';
 import { SettingsPanelState } from './SettingsPanelState';
 import { SettingsTabs, type SettingsTab, type SettingsTabId } from './SettingsTabs';
 import { SourceTruthSettings } from './SourceTruthSettings';
 import { ZaloSettings } from './ZaloSettings';
+import { UsersSettings } from './UsersSettings';
+import { useAuth } from '../auth/AuthGate';
 
 const EMPTY_SUMMARY = parseSettingsSummary({});
 
@@ -24,7 +28,13 @@ const CHANNEL_LABELS = {
 
 export function SettingsShell() {
   const branding = useBranding();
+  const auth = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTabId>('zalo');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'campaigns') {
+      setActiveTab('campaigns');
+    }
+  }, []);
   const summaryQuery = useQuery({
     queryKey: ['settings-summary'],
     queryFn: settingsApi.summary,
@@ -67,11 +77,32 @@ export function SettingsShell() {
       panel: <RulesSettings />,
     },
     {
+      id: 'campaigns',
+      code: 'CS',
+      label: 'Chiến dịch CSKH',
+      description: 'Duyệt, lên lịch, theo dõi gửi',
+      panel: <CampaignSettings groups={summary.groups} />,
+    },
+    {
+      id: 'content',
+      code: 'ND',
+      label: 'Nội dung sản phẩm',
+      description: 'FAQ, media, catalog, provenance',
+      panel: <ContentSettings />,
+    },
+    {
       id: 'automation',
       code: 'AT',
       label: 'Tự động hóa',
-      description: 'AUTO_SEND và cổng D4',
+      description: 'Policy tenant và kill switch',
       panel: <AutomationSettings summary={summary} />,
+    },
+    {
+      id: 'users',
+      code: 'PQ',
+      label: 'Người dùng & vai trò',
+      description: 'Tài khoản, quyền, mật khẩu',
+      panel: <UsersSettings />,
     },
     {
       id: 'audit',
@@ -90,6 +121,9 @@ export function SettingsShell() {
             <span aria-hidden="true">←</span> Trung tâm điều hành
           </a>
           <span className="settings-environment">OPERATOR · PILOT</span>
+          {auth.user && (
+            <span className="settings-environment">{auth.user.name} · {auth.user.role}</span>
+          )}
         </div>
         <div className="settings-hero__title">
           <div>
@@ -134,7 +168,15 @@ export function SettingsShell() {
             />
             <small>Cổng an toàn</small>
             <strong>AUTO_SEND {summary.autoSend ? 'ON' : 'OFF'}</strong>
-            <p>{summary.autoSend ? 'Chỉ đơn không rủi ro' : 'Sale duyệt mọi đơn'}</p>
+            <p>
+              {summary.orderAutomation
+                ? !summary.orderAutomation.enabled
+                  ? 'Policy tự gửi của tenant đang tắt'
+                  : summary.autoSend
+                    ? `Tự gửi đơn đủ dữ liệu ≤ ${summary.orderAutomation.maxAutoConfirmQuantity} SP`
+                    : `Policy ≤ ${summary.orderAutomation.maxAutoConfirmQuantity} SP · kill switch tắt`
+                : 'Chưa cấu hình policy · hệ thống không tự gửi'}
+            </p>
           </article>
         </section>
       </header>

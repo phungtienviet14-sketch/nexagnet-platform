@@ -33,6 +33,28 @@ export type StoredMessage = ChannelMessage & {
 
 export abstract class MessagesRepository {
   abstract save(message: ChannelMessage): Promise<SaveMessageResult>;
+  async findByExternalMessage(
+    platform: ChannelMessage['platform'],
+    externalMessageId: string,
+  ): Promise<StoredMessage | null> {
+    void platform;
+    void externalMessageId;
+    return null;
+  }
+  async findRecent(
+    platform: ChannelMessage['platform'],
+    chatId: string,
+    before: Date,
+    excludeExternalMessageId: string,
+    limit: number,
+  ): Promise<StoredMessage[]> {
+    void platform;
+    void chatId;
+    void before;
+    void excludeExternalMessageId;
+    void limit;
+    return [];
+  }
   /** Noi don voi tin goc (FK orders.messageId). Order khong ton tai -> bo qua, khong loi. */
   abstract attachOrder(orderId: string, messageId: string): Promise<void>;
   /**
@@ -56,10 +78,36 @@ export class InMemoryMessagesRepository extends MessagesRepository {
     return { id, duplicate: false };
   }
 
-  /** Memory khong co bang orders de noi FK — no-op (chi co y nghia o che do prisma). */
-  async attachOrder(): Promise<void> {}
+  override async findByExternalMessage(
+    platform: ChannelMessage['platform'],
+    externalMessageId: string,
+  ): Promise<StoredMessage | null> {
+    return this.store.get(`${platform}:${externalMessageId}`) ?? null;
+  }
 
-  async recordMedia(messageId: string, media: MessageMedia): Promise<void> {
+  override async findRecent(
+    platform: ChannelMessage['platform'],
+    chatId: string,
+    before: Date,
+    excludeExternalMessageId: string,
+    limit: number,
+  ): Promise<StoredMessage[]> {
+    return [...this.store.values()]
+      .filter(
+        (row) =>
+          row.platform === platform &&
+          row.externalChatId === chatId &&
+          row.externalMessageId !== excludeExternalMessageId &&
+          row.sentAt.getTime() <= before.getTime(),
+      )
+      .sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime())
+      .slice(0, Math.max(0, limit));
+  }
+
+  /** Memory khong co bang orders de noi FK — no-op (chi co y nghia o che do prisma). */
+  override async attachOrder(): Promise<void> {}
+
+  override async recordMedia(messageId: string, media: MessageMedia): Promise<void> {
     for (const [key, row] of this.store) {
       if (row.id !== messageId) continue;
       // Thay ca dong thay vi sua tai cho (coding-style: khong mutate).

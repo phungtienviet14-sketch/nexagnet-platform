@@ -137,6 +137,26 @@ export function tenantBranding(): TenantConfig['branding'] {
   return loadTenantConfig().branding;
 }
 
+/** Policy tu xac nhan don cua tenant; null nghia la chua duoc phe duyet, phai fail-closed. */
+export function tenantOrderAutomation(): TenantConfig['orderAutomation'] {
+  return loadTenantConfig().orderAutomation;
+}
+
+/** Policy phan phoi/retry campaign cua tenant; du lieu campaign runtime van nam trong Postgres. */
+export function tenantCampaignConfig(): TenantConfig['campaign'] {
+  return loadTenantConfig().campaign;
+}
+
+/** Chien luoc tu van gia le cua tenant; khong re nhanh theo slug trong core. */
+export function tenantRetailAdvice(): TenantConfig['retailAdvice'] {
+  return loadTenantConfig().retailAdvice;
+}
+
+/** Blocker do tenant khai bao de health/settings hien thi ma core khong biet ten khach. */
+export function tenantReadiness(): TenantConfig['readiness'] {
+  return loadTenantConfig().readiness;
+}
+
 /** Chi dung trong test: xoa cache de doc lai goi khach sau khi doi TENANT/TENANT_DIR. */
 export function resetTenantCache(): void {
   cachedConfig = undefined;

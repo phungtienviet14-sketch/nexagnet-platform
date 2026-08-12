@@ -10,7 +10,11 @@ const BOT = 'Bot ultty AI orders';
 const META_HN = SEED.groups.find((group) => group.dealerId === 'meta-hn')!.chatId;
 
 function build(): AgentOrchestrator {
-  return new AgentOrchestrator(new MockParser(), new KnowledgeService(), new InMemoryOrdersRepository());
+  return new AgentOrchestrator(
+    new MockParser(),
+    new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z')),
+    new InMemoryOrdersRepository(),
+  );
 }
 
 function msg(
@@ -76,11 +80,11 @@ describe('AgentOrchestrator — multi-agent 6 con', () => {
     expect(view.trace?.reply).toContain('Felix');
   });
 
-  it('hoi_san_pham (câu hỏi, không số lượng) -> Tư vấn SP, KHONG bi nuot thanh don', async () => {
+  it('hoi_san_pham (câu hỏi, không số lượng) -> handoff an toàn khi chưa có content duyệt', async () => {
     const view = await build().run(msg('ghe felix co tot khong c oi'), BOT);
     expect(view.intent).toBe('hoi_san_pham');
     expect(view.priced).toBeNull();
-    expect(view.trace?.steps.find((s) => s.role === 'product_advisor')?.status).toBe('active');
+    expect(view.trace?.steps.find((s) => s.role === 'product_advisor')?.status).toBe('handoff');
   });
 
   it('bảo hành -> Hậu mãi handoff kỹ thuật', async () => {

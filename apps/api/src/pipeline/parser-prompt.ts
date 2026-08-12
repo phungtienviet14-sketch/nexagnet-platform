@@ -22,6 +22,7 @@ export function buildSystemPrompt(
     .map((p) => `- ${p.name} (goi tat: ${p.aliases.join(', ')})`)
     .join('\n');
   const glossary = input.glossary.map((g) => `${g.term}=${g.meaning}`).join(', ');
+  const context = formatContext(input);
 
   return [
     persona.parserIntro,
@@ -37,6 +38,7 @@ export function buildSystemPrompt(
     '- noVat=true khi khach ghi "khong VAT"/"ko lay VAT". wantVat=true khi khach ghi "xuat VAT"/"co VAT"/"lay hoa don". Mac dinh ca hai false.',
     '- codCollect=true khi co "thu ho"/"COD". Neu TH2: dien customerName/customerPhone/customerAddress khi co.',
     '- CHI dien truong khach THUC SU ghi; khong biet thi BO QUA (dung dien 0 hay chuoi rong gia).',
+    '- Neu tin hien tai la reply/bo sung, chi ke thua SKU/order reference khi quote/context xac dinh DUY NHAT. Context mo ho -> intent=khac, confidence thap, KHONG doan.',
     '',
     'confidence.intent = do tin cay phan loai (so tu 0 den 1). Neu tin mo ho / khong chac thuoc 6 loai dau -> intent=khac va confidence.intent thap.',
     '',
@@ -47,11 +49,27 @@ export function buildSystemPrompt(
     '- Vi du intent=bao_hanh_khieu_nai: {"intent":"bao_hanh_khieu_nai","confidence":{"intent":0.9}}',
     '',
     input.dealerNameRaw ? `Nhom nay thuoc dai ly: ${input.dealerNameRaw}.` : '',
+    context,
     `Danh muc SKU:\n${skus}`,
     `Tu dien viet tat: ${glossary}`,
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+function formatContext(input: ParserInput): string {
+  const context = input.context;
+  if (!context) return '';
+  const lines = [
+    context.quotedMessage ? `TIN DUOC REPLY: ${context.quotedMessage.text}` : '',
+    ...context.recentMessages.map(
+      (message, index) =>
+        `LICH SU ${index + 1} (${message.senderDisplayName ?? message.senderExternalId ?? 'unknown'}): ${message.text}`,
+    ),
+  ].filter(Boolean);
+  return lines.length > 0
+    ? `CONTEXT CHI DE THAM CHIEU (tin hien tai van la yeu cau chinh):\n${lines.join('\n')}`
+    : '';
 }
 
 /**

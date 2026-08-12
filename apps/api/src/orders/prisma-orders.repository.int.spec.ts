@@ -89,17 +89,23 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('PrismaOrdersRepository (Postg
   });
 
   it('update -> merge patch, findById phan anh', async () => {
+    const salesHandoff = {
+      action: 'manual_erp_entry' as const,
+      status: 'pending' as const,
+      createdAt: '2026-08-12T01:02:03.000Z',
+    };
     const found = await repo.update('it-order-felix', {
-      status: 'synced',
-      kiotVietCode: 'KV-IT-1',
+      status: 'sent',
+      salesHandoff,
     });
-    expect(found?.status).toBe('synced');
-    expect(found?.kiotVietCode).toBe('KV-IT-1');
+    expect(found?.status).toBe('sent');
+    expect(found?.salesHandoff).toEqual(salesHandoff);
     expect(found?.priced?.grandTotal).toBe(12_500_000); // patch khong lam mat field cu
 
-    const again = await repo.findById('it-order-felix');
-    expect(again?.status).toBe('synced');
-    expect(again?.kiotVietCode).toBe('KV-IT-1');
+    const repoAfterRestart = new PrismaOrdersRepository(prisma);
+    const again = await repoAfterRestart.findById('it-order-felix');
+    expect(again?.status).toBe('sent');
+    expect(again?.salesHandoff).toEqual(salesHandoff);
   });
 
   it('update id la -> null', async () => {

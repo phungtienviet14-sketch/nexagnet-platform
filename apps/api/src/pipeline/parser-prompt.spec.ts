@@ -28,6 +28,32 @@ describe('buildSystemPrompt', () => {
     expect(p).toContain('TN=Thái Nguyên');
     expect(p).toContain('wantVat');
   });
+
+  it('dua quote va lich su bounded vao prompt kem quy tac khong doan', () => {
+    const p = buildSystemPrompt({
+      ...input,
+      context: {
+        quotedMessage: {
+          externalMessageId: 'm-1',
+          text: '10 Ghế Felix',
+          sentAt: new Date('2026-08-12T02:00:00.000Z'),
+        },
+        recentMessages: [
+          {
+            externalMessageId: 'm-2',
+            text: 'giao ve TN',
+            senderDisplayName: 'Meta HN',
+            sentAt: new Date('2026-08-12T02:01:00.000Z'),
+          },
+        ],
+        participants: [],
+      },
+    });
+
+    expect(p).toContain('TIN DUOC REPLY: 10 Ghế Felix');
+    expect(p).toContain('LICH SU 1 (Meta HN): giao ve TN');
+    expect(p).toContain('Context mo ho');
+  });
 });
 
 describe('ensureIntentConfidence', () => {

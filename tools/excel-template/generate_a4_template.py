@@ -6,16 +6,16 @@ Sinh MẪU EXCEL A4 gửi khách (chị Nguyễn Thu Phương) điền:
   - Map nhóm Zalo -> Đại lý (model Prisma `Group`)
 
 Đây là VIỆC KẾ TIẾP #1 (11/07/2026) — hạng mục Phase 3 DUY NHẤT không bị khách chặn:
-"mẫu file gửi khách soạn ngay không cần chờ" (docs/ke-hoach/nen-tang.md §1.3, cổng A4).
+"mẫu file gửi khách soạn ngay không cần chờ" (docs/phat-trien/ke-hoach/nen-tang.md §1.3, cổng A4).
 
 Cột + dropdown khớp ĐÚNG enum trong apps/api/prisma/schema.prisma để importer sau này
-(read-excel-file, xem docs/ke-hoach/nen-tang.md §1.3) đọc vào không cần suy đoán.
+(read-excel-file, xem docs/phat-trien/ke-hoach/nen-tang.md §1.3) đọc vào không cần suy đoán.
 Bảng ánh xạ nhãn tiếng Việt -> giá trị enum: xem tools/excel-template/README.md.
 
 Chạy:
     python tools/excel-template/generate_a4_template.py
 Đầu ra:
-    docs/khach-hang/ultty/trao-doi/A4_dai-ly_map-nhom_U-Ultty.xlsx
+    docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx
 Cần: openpyxl (pip install openpyxl). KHÔNG phải dependency runtime — chỉ là công cụ soạn mẫu.
 """
 
@@ -315,7 +315,7 @@ def main() -> None:
 
     out_dir = Path(__file__).resolve().parents[2] / "docs" / "mau"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "A4_dai-ly_map-nhom_U-Ultty.xlsx"
+    out_path = out_dir / "a4-dai-ly-map-nhom-ultty.xlsx"
     wb.save(out_path)
     print(f"Đã tạo: {out_path}")
     print(f"  Sheet: {wb.sheetnames}")

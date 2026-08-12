@@ -1,4 +1,5 @@
 {
+  "pricePeriod": { "validMonth": "2026-07", "status": "active" },
   "products": [
     {
       "sku": "ELNI",

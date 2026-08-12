@@ -25,6 +25,11 @@ export class OrdersController {
   reject(@Param('id') id: string): Promise<OrderView> {
     return this.orders.reject(id);
   }
+
+  @Post(':id/sales-handoff/complete')
+  completeSalesHandoff(@Param('id') id: string): Promise<OrderView> {
+    return this.orders.completeSalesHandoff(id);
+  }
 }
 
 @Controller('messages')

@@ -1,89 +1,89 @@
 /**
- * Eval harness — do do on dinh phan loai intent cua parser (DeepSeek/Claude/mock)
- * qua DUNG pipeline that: goi API /demo/simulate cho tung tin trong eval-set.json,
- * so intent thu duoc voi expectedIntent, in bang do chinh xac + danh sach sai.
+ * Golden eval harness cho cổng go-live parser/rules.
  *
- * Cach dung (can API dang chay, PARSER_MODE=deepseek de do AI that):
- *   pnpm --filter @netviet/poc-parser eval
- * Bien moi truong: API_URL (mac dinh http://localhost:3001), EVAL_CHAT_ID, EVAL_THROTTLE_MS.
+ * Chạy:
+ *   GOLDEN_DATASET_PATH=/abs/path/golden-orders.json pnpm --filter @netviet/poc-parser eval
+ *
+ * Dataset là external input của khách, không commit vào source. Nếu thiếu dataset, tool trả
+ * GO_LIVE_READY=false reason=missing_golden_dataset và exit code 2 để CI/readiness gate phân biệt
+ * với mismatch thật (exit code 1).
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-
-interface EvalCase {
-  text: string;
-  expectedIntent: string;
-  notes: string;
-}
+import {
+  computeGoldenMetrics,
+  missingGoldenDatasetResult,
+  parseGoldenDataset,
+  type GoldenCase,
+  type OrderViewLike,
+} from './eval-core.js';
+import { writeEvalReport } from './eval-report.js';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3001';
-const CHAT_ID = process.env.EVAL_CHAT_ID ?? 'zgr-f8a7101d77709e2ec761'; // nhom Meta HN (dai_ly)
 const THROTTLE_MS = Number(process.env.EVAL_THROTTLE_MS ?? 300);
-const TARGET_ACCURACY = 90;
+const GOLDEN_DATASET_PATH = process.env.GOLDEN_DATASET_PATH ?? process.env.EVAL_GOLDEN_PATH;
+const EVAL_REPORT_PATH = process.env.EVAL_REPORT_PATH;
+const DEFAULT_CHAT_ID = process.env.EVAL_CHAT_ID;
 
-const cases: EvalCase[] = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, '../eval-set.json'), 'utf8'),
-);
-
-async function classify(text: string): Promise<{ intent: string; llmCalls: number }> {
+async function simulate(testCase: GoldenCase): Promise<OrderViewLike> {
+  const chatId = testCase.chatId ?? DEFAULT_CHAT_ID;
+  if (!chatId) {
+    throw new Error('EVAL_CHAT_ID bat buoc neu golden case khong co chatId');
+  }
   const res = await fetch(`${API_URL}/demo/simulate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, chatId: CHAT_ID }),
+    body: JSON.stringify({ text: testCase.text, chatId }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const view = (await res.json()) as { intent: string; trace?: { llmCalls: number; brainMode: string } };
-  return { intent: view.intent, llmCalls: view.trace?.llmCalls ?? 0 };
+  return (await res.json()) as OrderViewLike;
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
 async function main(): Promise<void> {
-  console.log(`Eval ${cases.length} tin qua ${API_URL}/demo/simulate (nhom Meta HN)\n`);
-  const perIntent = new Map<string, { ok: number; total: number }>();
-  const mismatches: { text: string; expected: string; got: string }[] = [];
-  let brain = '?';
-
-  for (let i = 0; i < cases.length; i++) {
-    const c = cases[i]!;
-    let got = 'ERROR';
-    try {
-      const r = await classify(c.text);
-      got = r.intent;
-      brain = r.llmCalls > 0 ? 'llm' : 'mock';
-    } catch (e) {
-      got = `ERROR:${e instanceof Error ? e.message : String(e)}`;
-    }
-    const bucket = perIntent.get(c.expectedIntent) ?? { ok: 0, total: 0 };
-    bucket.total++;
-    const ok = got === c.expectedIntent;
-    if (ok) bucket.ok++;
-    else mismatches.push({ text: c.text, expected: c.expectedIntent, got });
-    perIntent.set(c.expectedIntent, bucket);
-    process.stdout.write(ok ? '.' : 'x');
-    if (i < cases.length - 1) await sleep(THROTTLE_MS);
+  if (!GOLDEN_DATASET_PATH) {
+    output(missingGoldenDatasetResult());
+    process.exitCode = 2;
+    return;
   }
-  console.log('\n');
-
-  let totalOk = 0;
-  let total = 0;
-  console.log('| Intent | Đúng/Tổng | % |');
-  console.log('|---|---|---|');
-  for (const intent of [...perIntent.keys()].sort()) {
-    const s = perIntent.get(intent)!;
-    totalOk += s.ok;
-    total += s.total;
-    console.log(`| ${intent} | ${s.ok}/${s.total} | ${Math.round((s.ok / s.total) * 100)}% |`);
+  const path = resolve(GOLDEN_DATASET_PATH);
+  if (!existsSync(path)) {
+    output({ goLiveReady: false, reason: 'missing_golden_dataset', path });
+    process.exitCode = 2;
+    return;
   }
-  const acc = Math.round((totalOk / total) * 100);
-  console.log(`| **TỔNG** | **${totalOk}/${total}** | **${acc}%** |`);
 
-  if (mismatches.length) {
-    console.log(`\nSai (${mismatches.length}):`);
-    for (const m of mismatches) console.log(`  [${m.expected} → ${m.got}]  "${m.text}"`);
+  const cases = parseGoldenDataset(JSON.parse(readFileSync(path, 'utf8')));
+  const views: OrderViewLike[] = [];
+  for (let index = 0; index < cases.length; index++) {
+    const view = await simulate(cases[index]!);
+    views.push(view);
+    process.stdout.write('.');
+    if (index < cases.length - 1) await sleep(THROTTLE_MS);
   }
-  console.log(`\nParser brain: ${brain}. Ngưỡng đề xuất demo: intent-accuracy ≥ ${TARGET_ACCURACY}%.`);
-  console.log(acc >= TARGET_ACCURACY ? '✅ ĐẠT ngưỡng.' : '⚠️ CHƯA đạt — cần tune prompt / few-shot.');
+  process.stdout.write('\n');
+
+  const result = computeGoldenMetrics(cases, views);
+  output(result);
+  process.exitCode = result.goLiveReady ? 0 : 1;
 }
 
-void main();
+void main().catch((error: unknown) => {
+  output({
+    goLiveReady: false,
+    reason: 'eval_failed',
+    error: error instanceof Error ? error.message : String(error),
+  }, true);
+  process.exitCode = 1;
+});
+
+function output<T extends object>(result: T, stderr = false): void {
+  const report = { ...result, evaluatedAt: new Date().toISOString() };
+  const serialized = JSON.stringify(report, null, 2);
+  if (stderr) console.error(serialized);
+  else console.log(serialized);
+  if (!EVAL_REPORT_PATH) return;
+
+  writeEvalReport(EVAL_REPORT_PATH, serialized);
+}

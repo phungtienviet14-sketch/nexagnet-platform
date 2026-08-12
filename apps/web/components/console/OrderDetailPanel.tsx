@@ -9,6 +9,7 @@ type Props = {
   isBusy: boolean;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  onCompleteSalesHandoff: (id: string) => void;
 };
 
 function ReplyBox({ reply }: { reply: string }) {
@@ -16,7 +17,7 @@ function ReplyBox({ reply }: { reply: string }) {
   return (
     <div className="reply-box">
       <div className="reply-head">
-        <span>Nháp trả lời · Sale duyệt, AI không tự gửi</span>
+        <span>Nội dung trả lời đã tạo từ dữ liệu và rules</span>
         <button type="button" className="reply-copy" onClick={copy}>
           Copy
         </button>
@@ -26,7 +27,13 @@ function ReplyBox({ reply }: { reply: string }) {
   );
 }
 
-export function OrderDetailPanel({ order, isBusy, onApprove, onReject }: Props) {
+export function OrderDetailPanel({
+  order,
+  isBusy,
+  onApprove,
+  onReject,
+  onCompleteSalesHandoff,
+}: Props) {
   const status = STATUS_META[order.status];
   const canAct = order.status === 'pending_review' || order.status === 'needs_edit';
   const reply = order.trace?.reply;
@@ -122,11 +129,11 @@ export function OrderDetailPanel({ order, isBusy, onApprove, onReject }: Props) 
         </ul>
       )}
 
-      {order.trace?.supervisor.escalate ? (
+      {canAct && order.trace?.supervisor.escalate ? (
         <div className="handoff-banner">
           ⚑ Chuyển người thật: {order.trace.supervisor.reasons.join('; ')}
         </div>
-      ) : order.trace?.supervisor.riskLevel === 'watch' ? (
+      ) : canAct && order.trace?.supervisor.riskLevel === 'watch' ? (
         <div className="watch-banner">
           ⚠ Giám sát theo dõi: {order.trace.supervisor.reasons.join('; ')}
         </div>
@@ -145,13 +152,35 @@ export function OrderDetailPanel({ order, isBusy, onApprove, onReject }: Props) 
             disabled={isBusy}
             onClick={() => onApprove(order.id)}
           >
-            Duyệt &amp; gửi nhóm
+            Sale kiểm tra &amp; gửi nhóm
           </button>
+        </div>
+      ) : order.status === 'sent' ? (
+        <div className="oc-done">
+          <span>✓ Khách đã nhận xác nhận trong nhóm Zalo</span>
+          {order.salesHandoff?.status === 'pending' && (
+            <>
+              <span>⚑ Việc Sale: nhập đơn thủ công vào ERP</span>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={isBusy}
+                onClick={() => onCompleteSalesHandoff(order.id)}
+              >
+                Đánh dấu đã nhập ERP
+              </button>
+            </>
+          )}
+          {order.salesHandoff?.status === 'completed' && (
+            <span>✓ Sale đã xác nhận nhập ERP thủ công</span>
+          )}
         </div>
       ) : order.status === 'synced' ? (
         <div className="oc-done">
           <span>✓ Đã gửi xác nhận vào nhóm Zalo</span>
-          <span>✓ Lên KiotViet · {order.kiotVietCode}</span>
+          <span>
+            ✓ Đã đồng bộ ERP{order.kiotVietCode ? ` · ${order.kiotVietCode}` : ''}
+          </span>
         </div>
       ) : (
         <div className="non-order">Trạng thái: {status.label}</div>

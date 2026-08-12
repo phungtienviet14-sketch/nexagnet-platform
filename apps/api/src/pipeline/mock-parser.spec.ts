@@ -72,4 +72,44 @@ describe('MockParser', () => {
     expect(r.order?.items).toHaveLength(1);
     expect(r.order?.items?.[0]?.quantity).toBe(2);
   });
+
+  it('reply bo sung so luong ke thua SKU tu quote duy nhat', async () => {
+    const r = await parser.parse({
+      text: 'c them 5c nhe',
+      products,
+      glossary,
+      context: {
+        quotedMessage: {
+          externalMessageId: 'm-original',
+          text: '10 ghe felix',
+          sentAt: new Date('2026-08-12T02:00:00.000Z'),
+        },
+        recentMessages: [],
+        participants: [],
+      },
+    });
+
+    expect(r.intent).toBe('dat_don');
+    expect(r.order?.items).toEqual([{ skuRaw: 'ghe felix', quantity: 5 }]);
+  });
+
+  it('reply mo ho co nhieu SKU -> khong doan', async () => {
+    const r = await parser.parse({
+      text: 'c them 5c nhe',
+      products,
+      glossary,
+      context: {
+        quotedMessage: {
+          externalMessageId: 'm-original',
+          text: '10 ghe felix va 2 noi chien',
+          sentAt: new Date('2026-08-12T02:00:00.000Z'),
+        },
+        recentMessages: [],
+        participants: [],
+      },
+    });
+
+    expect(r.intent).toBe('khac');
+    expect(r.order).toBeUndefined();
+  });
 });

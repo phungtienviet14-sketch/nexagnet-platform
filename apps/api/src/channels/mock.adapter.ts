@@ -13,6 +13,7 @@ export interface SentMessage {
 @Injectable()
 export class MockAdapter extends ChannelAdapter {
   readonly name = 'mock';
+  override readonly capabilities = { text: true, image: true, video: false, file: false } as const;
   private readonly logger = new Logger('MockAdapter');
   readonly sent: SentMessage[] = [];
 

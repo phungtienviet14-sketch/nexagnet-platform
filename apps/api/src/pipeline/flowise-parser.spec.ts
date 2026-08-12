@@ -66,6 +66,7 @@ describe('FlowiseParser', () => {
         glossaryJson: JSON.stringify(input.glossary),
         dealerNameRaw: input.dealerNameRaw,
         botName: input.botName,
+        contextJson: 'null',
       },
       streaming: false,
     });

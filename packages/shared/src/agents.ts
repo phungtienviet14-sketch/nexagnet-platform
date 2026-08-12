@@ -1,4 +1,5 @@
 import type { Intent } from './order.js';
+import type { OutboundContent } from './content.js';
 
 /**
  * Multi-agent 6 con theo docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md §5.1 — pham vi demo.
@@ -97,4 +98,6 @@ export interface AgentTrace {
   supervisor: SupervisorSummary;
   /** Van ban de xuat tra loi (co-pilot: Sale copy, GD1 khong auto-gui). */
   reply?: string;
+  /** Payload du kien de channel gui dung capability; video/catalog luon la link. */
+  outbound?: OutboundContent;
 }

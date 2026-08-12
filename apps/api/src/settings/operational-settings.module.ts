@@ -11,6 +11,7 @@ import {
   RuleConfigRepository,
 } from '../rule-config/rule-config.repository.js';
 import { RuleConfigService } from '../rule-config/rule-config.service.js';
+import { PricePeriodsService } from './price-periods.service.js';
 
 @Global()
 @Module({
@@ -34,7 +35,14 @@ import { RuleConfigService } from '../rule-config/rule-config.service.js';
     },
     RuleConfigService,
     AuditLogService,
+    PricePeriodsService,
   ],
-  exports: [RuleConfigRepository, RuleConfigService, AuditLogRepository, AuditLogService],
+  exports: [
+    RuleConfigRepository,
+    RuleConfigService,
+    AuditLogRepository,
+    AuditLogService,
+    PricePeriodsService,
+  ],
 })
 export class OperationalSettingsModule {}

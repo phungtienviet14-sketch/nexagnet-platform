@@ -47,6 +47,25 @@ const VALID_CONFIG = {
     composerPlaceholder: 'vd: @Bot gui 10 mon A ve HN',
   },
   policies: ['cong_no_30', 'thanh_toan_ngay'],
+  orderAutomation: {
+    enabled: true,
+    maxAutoConfirmQuantity: 50,
+  },
+  campaign: {
+    defaultWindow: { start: '08:00', end: '12:00' },
+    minSpacingSeconds: 30,
+    maxTargets: 500,
+    rateLimitPerMinute: 30,
+    claimLeaseSeconds: 60,
+    tickIntervalSeconds: 10,
+    retry: { maxAttempts: 4, baseBackoffSeconds: 60 },
+    features: { lunarCalendarEnabled: false },
+  },
+  retailAdvice: {
+    priceField: 'minRetailPrice',
+    qualifier: 'Gia toi thieu tham khao.',
+  },
+  readiness: { blockedCapabilities: [] },
   persona: {
     parserIntro: 'Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Khach Mau.',
     botName: 'Khach Mau',
@@ -91,7 +110,7 @@ describe('chon goi khach', () => {
 });
 
 describe('doc goi khach', () => {
-  it('doc duoc danh tinh, persona va branding', () => {
+  it('doc duoc danh tinh, persona, branding va policy tu xac nhan don', () => {
     useFakePack({ 'tenant.json': VALID_CONFIG });
 
     const cfg = loadTenantConfig();
@@ -99,6 +118,13 @@ describe('doc goi khach', () => {
     expect(cfg.displayName).toBe('Cong ty Khach Mau');
     expect(cfg.persona.mentionName).toBe('Bot khach mau');
     expect(tenantBranding().productName).toBe('Khach Mau AI');
+    expect(cfg.orderAutomation).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
+    expect(cfg.campaign.rateLimitPerMinute).toBe(30);
+    expect(cfg.retailAdvice).toEqual({
+      priceField: 'minRetailPrice',
+      qualifier: 'Gia toi thieu tham khao.',
+    });
+    expect(cfg.readiness.blockedCapabilities).toEqual([]);
   });
 
   /**
@@ -164,12 +190,62 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
     expect(() => loadTenantConfig()).toThrow(/monogram/);
   });
 
+  it.each([0, -1, 1.5])(
+    'nguong tu xac nhan %s khong phai so nguyen duong -> chan',
+    (maxAutoConfirmQuantity) => {
+      useFakePack({
+        'tenant.json': {
+          ...VALID_CONFIG,
+          orderAutomation: { enabled: true, maxAutoConfirmQuantity },
+        },
+      });
+      expect(() => loadTenantConfig()).toThrow(/orderAutomation\.maxAutoConfirmQuantity/);
+    },
+  );
+
+  it('campaign co cua so nguoc hoac spacing khong duong -> chan luc boot', () => {
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        campaign: {
+          ...VALID_CONFIG.campaign,
+          defaultWindow: { start: '12:00', end: '08:00' },
+          minSpacingSeconds: 0,
+        },
+      },
+    });
+    expect(() => loadTenantConfig()).toThrow(/campaign/);
+  });
+
+  it('retailAdvice chi chap nhan price field thuoc domain chung', () => {
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        retailAdvice: { priceField: 'giaRiengUltty', qualifier: 'Khong hop le' },
+      },
+    });
+    expect(() => loadTenantConfig()).toThrow(/retailAdvice\.priceField/);
+  });
+
+  it('readiness blocker co schema generic strict, khong chap nhan key tuy tien', () => {
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        readiness: {
+          blockedCapabilities: [{ key: 'VAT Viết Hoa', label: 'VAT', reason: 'Chưa chốt' }],
+        },
+      },
+    });
+    expect(() => loadTenantConfig()).toThrow(/readiness\.blockedCapabilities\.0\.key/);
+  });
+
   // D28 phuong an B: khach khai bao TAP CON chinh sach ho that su ban. Hai gia tri nam o hai file
   // khac nhau nen khong schema don le nao bat duoc — phai kiem cheo luc nap.
   it('dai ly dung chinh sach khach KHONG khai bao -> chan, chi ro dai ly nao', () => {
     useFakePack({
       'tenant.json': { ...VALID_CONFIG, policies: ['thanh_toan_ngay'] },
       'data/knowledge.json': {
+        pricePeriod: null,
         products: [],
         prices: [],
         priceOverrides: [],
@@ -188,6 +264,7 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
     useFakePack({
       'tenant.json': VALID_CONFIG,
       'data/knowledge.json': {
+        pricePeriod: null,
         products: [],
         prices: [],
         priceOverrides: [],

@@ -6,14 +6,17 @@ import {
   type OrderView,
   type SenderType,
 } from '@netviet/shared';
+import { tenantOrderAutomation } from '@netviet/tenant';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { GroupDiscoveryService } from '../groups/group-discovery.service.js';
 import { GroupParticipantsRepository } from '../groups/group-participants.repository.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { MediaFetcherService } from '../media/media-fetcher.service.js';
 import { MessagesRepository, type SaveMessageResult } from '../messages/messages.repository.js';
+import { ConversationContextBuilder } from '../messages/conversation-context.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
+import { shouldAutoConfirmOrder } from './order-auto-confirmation.js';
 
 /**
  * Ket qua nhan tin CO NHAN. Truoc 04/08/2026 `process()` tra `null` cho ca "bo qua co chu y"
@@ -34,8 +37,7 @@ export type IntakeResult =
  * Tang 3+4 — adapter mong uy quyen cho AgentOrchestrator (multi-agent 6 con).
  * Giu chu ky process(message, botName) de DemoController/BotPoller khong doi.
  *
- * AUTO_SEND (GD2): neu bat, AI TU CHOT don + gui xac nhan vao nhom (khong can Sale) —
- * CHI khi Giam sat khong phat hien rui ro; co van de -> giu Sale duyet. Mac dinh off.
+ * GĐ1: policy tenant quyet dinh gioi han tu xac nhan; AUTO_SEND chi la kill switch van hanh.
  */
 @Injectable()
 export class PipelineService {
@@ -50,6 +52,7 @@ export class PipelineService {
     @Optional() private readonly knowledge?: KnowledgeService,
     @Optional() private readonly groupDiscovery?: GroupDiscoveryService,
     @Optional() private readonly media?: MediaFetcherService,
+    @Optional() private readonly conversationContext?: ConversationContextBuilder,
   ) {}
 
   /**
@@ -130,22 +133,34 @@ export class PipelineService {
     opts?: { orderId?: string; rerun?: boolean; allowDuplicateSkip?: boolean },
   ): Promise<OrderView> {
     const senderTypeOverride = participantRankToSenderType(participant?.customerRank);
+    const conversationContext = await this.conversationContext?.build(message);
     const view = await this.orchestrator.run(message, botName, {
       ...opts,
       ...(senderTypeOverride ? { senderTypeOverride } : {}),
+      ...(conversationContext ? { conversationContext } : {}),
     });
     if (saved) await this.linkOrder(view.id, saved.id);
 
     if (this.shouldAutoSend(view, participant?.handlingMode === 'manual_review') && this.orders) {
       try {
-        this.logger.log(`[AUTO_SEND] AI tu chot ${view.id} (Giam sat: khong rui ro)`);
-        // approve = gui xac nhan Zalo + day KiotViet + phat order.updated. Loi gui (H1) ->
-        // giu pending_review de Sale duyet lai (khong ket, khong mat don).
-        return await this.orders.approve(view.id);
+        this.logger.log(`[AUTO_SEND] Tu xac nhan ${view.id} theo policy tenant`);
+        return await this.orders.sendConfirmation(view.id);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         this.logger.warn(`[AUTO_SEND] that bai cho ${view.id} — giu Sale duyet: ${detail}`);
         return view;
+      }
+    }
+    if (
+      this.shouldAutoReplyProduct(view, participant?.handlingMode === 'manual_review') &&
+      this.orders
+    ) {
+      try {
+        this.logger.log(`[AUTO_SEND] Tư vấn sản phẩm ${view.id} từ content active`);
+        return await this.orders.sendProductAdvice(view.id);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`[AUTO_SEND] tư vấn thất bại cho ${view.id}: ${detail}`);
       }
     }
     return view;
@@ -221,7 +236,9 @@ export class PipelineService {
       return result;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Luu tin ${message.externalMessageId} that bai (pipeline van chay): ${detail}`);
+      this.logger.error(
+        `Luu tin ${message.externalMessageId} that bai (pipeline van chay): ${detail}`,
+      );
       return null;
     }
   }
@@ -248,15 +265,25 @@ export class PipelineService {
   }
 
   /**
-   * Auto-send chi khi: bat AUTO_SEND, la DON da dinh gia, va Giam sat (rule engine tat dinh)
-   * bao KHONG rui ro. watch/escalate deu coi la "co van de" -> giu Sale duyet.
+   * Policy outbound tach khoi nguong risk cua Giam sat. Du lieu thieu/sai va manual-review van
+   * fail-closed; tong so luong so voi nguong tenant theo semantics inclusive.
    */
   private shouldAutoSend(view: OrderView, manualReview = false): boolean {
+    return shouldAutoConfirmOrder(view, {
+      policy: tenantOrderAutomation(),
+      killSwitchEnabled: (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on',
+      manualReview,
+    });
+  }
+
+  private shouldAutoReplyProduct(view: OrderView, manualReview = false): boolean {
     return (
       !manualReview &&
       (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on' &&
-      view.intent === 'dat_don' &&
-      view.priced !== null &&
+      view.intent === 'hoi_san_pham' &&
+      view.status === 'pending_review' &&
+      Boolean(view.trace?.outbound) &&
+      view.trace?.steps.find((step) => step.role === 'product_advisor')?.handoff !== true &&
       view.trace?.supervisor.riskLevel === 'none'
     );
   }

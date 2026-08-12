@@ -18,6 +18,32 @@ export interface MediaFetcherOptions {
   readonly concurrency: number;
 }
 
+export interface MediaHealthSnapshot {
+  storage: {
+    name: string;
+    enabled: boolean;
+    state: 'disabled' | 'healthy' | 'degraded';
+  };
+  downloads: {
+    attempted: number;
+    succeeded: number;
+    failed: number;
+    inflight: number;
+    lastSucceededAt?: string;
+    lastFailedAt?: string;
+    lastError?: string;
+  };
+}
+
+interface DownloadCounters {
+  readonly attempted: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly lastSucceededAt?: string;
+  readonly lastFailedAt?: string;
+  readonly lastError?: string;
+}
+
 /**
  * Tai anh Zalo ve kho ben vung (Dot A' Task 2).
  *
@@ -35,6 +61,7 @@ export class MediaFetcherService implements OnApplicationShutdown {
   private readonly logger = new Logger('MediaFetcher');
   private readonly limit: ReturnType<typeof pLimit>;
   private readonly inflight = new Set<Promise<void>>();
+  private counters: DownloadCounters = { attempted: 0, succeeded: 0, failed: 0 };
 
   constructor(
     private readonly store: MediaStore,
@@ -68,24 +95,57 @@ export class MediaFetcherService implements OnApplicationShutdown {
     await this.drain();
   }
 
+  /** Snapshot chi so lieu van hanh; khong lo bucket, endpoint hay credential. */
+  health(): MediaHealthSnapshot {
+    const enabled = this.store.enabled;
+    return {
+      storage: {
+        name: this.store.name,
+        enabled,
+        state: !enabled ? 'disabled' : this.counters.failed > 0 ? 'degraded' : 'healthy',
+      },
+      downloads: {
+        ...this.counters,
+        inflight: this.inflight.size,
+      },
+    };
+  }
+
   /**
    * Tai 1 anh ve kho va ghi ket qua vao dong tin. KHONG BAO GIO NEM.
    * `null` = kho tat (MEDIA_STORE=none): khong lam gi va cung khong ghi mediaError gia.
    */
   async archive(messageId: string, imageUrl: string, sentAt: Date): Promise<MessageMedia | null> {
     if (!this.store.enabled) return null;
+    this.counters = { ...this.counters, attempted: this.counters.attempted + 1 };
     let media: MessageMedia;
     try {
-      media = await this.download(messageId, imageUrl, sentAt);
+      const downloaded = await this.download(messageId, imageUrl, sentAt);
+      media = downloaded;
+      this.counters = {
+        ...this.counters,
+        succeeded: this.counters.succeeded + 1,
+        lastSucceededAt: downloaded.fetchedAt.toISOString(),
+      };
     } catch (error) {
       media = { error: errorText(error).slice(0, MAX_ERROR_LENGTH) };
+      this.counters = {
+        ...this.counters,
+        failed: this.counters.failed + 1,
+        lastFailedAt: new Date().toISOString(),
+        lastError: media.error,
+      };
       this.logger.warn(`Khong luu duoc anh cua tin ${messageId}: ${media.error}`);
     }
     await this.record(messageId, media);
     return media;
   }
 
-  private async download(messageId: string, imageUrl: string, sentAt: Date): Promise<MessageMedia> {
+  private async download(
+    messageId: string,
+    imageUrl: string,
+    sentAt: Date,
+  ): Promise<{ key: string; bytes: number; fetchedAt: Date; error?: undefined }> {
     // Chan TRUOC khi ra mang: URL den tu tin nhan, tuc du lieu ben ngoai (SSRF).
     if (!isAllowedMediaHost(imageUrl, this.options.allowedHosts)) {
       throw new Error('Host khong nam trong MEDIA_ALLOWED_HOSTS');

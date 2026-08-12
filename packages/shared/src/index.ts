@@ -5,8 +5,15 @@ export {
   PLATFORMS,
   MESSAGE_SOURCES,
   CHAT_TYPES,
+  replyReferenceSchema,
 } from './channel-message.js';
-export type { ChannelMessage } from './channel-message.js';
+export type {
+  ChannelMessage,
+  ReplyReference,
+  ConversationMessage,
+  ConversationParticipant,
+  ConversationContext,
+} from './channel-message.js';
 export {
   INTENTS,
   ORDER_TYPES,
@@ -36,6 +43,7 @@ export type {
   ReplyChannel,
   PricedLine,
   PricedOrder,
+  SalesHandoff,
   OrderView,
 } from './order-view.js';
 export type { ErpProduct, ErpOrder } from './erp.js';
@@ -53,6 +61,33 @@ export type {
 } from './agent-stream.js';
 export { broadcastRequestSchema, MAX_BROADCAST_TEXT } from './broadcast.js';
 export type { BroadcastRequest, BroadcastResult, BroadcastTargetResult } from './broadcast.js';
+export {
+  CAMPAIGN_STATUSES,
+  CAMPAIGN_DELIVERY_STATUSES,
+  CAMPAIGN_KINDS,
+  campaignTargetInputSchema,
+  campaignRecurrenceSchema,
+  recurringCampaignSchema,
+  birthdayCampaignSchema,
+  lunarCampaignSchema,
+  createCampaignSchema,
+  approveCampaignSchema,
+  scheduleCampaignSchema,
+  retryCampaignSchema,
+  cancelCampaignSchema,
+} from './campaign.js';
+export type {
+  CampaignStatus,
+  CampaignDeliveryStatus,
+  CampaignKind,
+  CampaignTargetInput,
+  CampaignRecurrence,
+  CreateCampaignInput,
+  ScheduleCampaignInput,
+  CampaignTargetView,
+  CampaignDeliveryView,
+  CampaignView,
+} from './campaign.js';
 export {
   CUSTOMER_RANKS,
   OPERATIONAL_ROLES,
@@ -117,3 +152,34 @@ export type {
   SenderType,
   SupervisorSummary,
 } from './agents.js';
+export {
+  CONTENT_LIFECYCLE_STATUSES,
+  ASSET_KINDS,
+  CONTENT_LINK_KINDS,
+  CONTENT_SOURCE_KINDS,
+  contentLifecycleStatusSchema,
+  assetKindSchema,
+  contentLinkKindSchema,
+  contentSourceKindSchema,
+  contentImportManifestSchema,
+  outboundContentSchema,
+} from './content.js';
+export type {
+  ContentLifecycleStatus,
+  AssetKind,
+  ContentLinkKind,
+  ContentSourceKind,
+  ContentImportManifest,
+  OutboundContent,
+  ChannelCapabilities,
+  ContentProvenanceView,
+  ContentAssetView,
+  FaqView,
+  AdviceContentView,
+  ContentLinkView,
+  ContentReadinessView,
+  ContentSnapshotView,
+  ContentImportPreview,
+  ContentImportResult,
+  ProductAdviceResult,
+} from './content.js';

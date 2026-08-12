@@ -49,15 +49,13 @@ function priceFor(
   return row ? row.wholesale : null;
 }
 
-function isNoiThanh(region: string, cfg: RulesConfig): boolean {
-  const r = normalize(region);
-  return cfg.noiThanhKeywords.some((k) => r === k || r.includes(k));
-}
-
-/** Don >= nguong so luong -> mien ship; 1 SP -> cuoc theo khu vuc. */
-export function computeShipping(totalQuantity: number, region: string, cfg: RulesConfig): number {
-  if (totalQuantity >= cfg.freeShipMinQuantity) return 0;
-  return isNoiThanh(region, cfg) ? cfg.shipFeeNoiThanh : cfg.shipFeeTinh;
+/**
+ * API legacy giữ để không phá call-site trong một lần nâng cấp. Các cột cước cũ chỉ là dữ liệu
+ * tạm, không phải production truth; GĐ1 phải fail closed cho tới khi tenant có bảng vùng/cước
+ * chính thức và một adapter/rule version đã được duyệt.
+ */
+export function computeShipping(_totalQuantity: number, _region: string, _cfg: RulesConfig): never {
+  throw new Error('Thiếu cấu hình nghiệp vụ vận chuyển chính thức');
 }
 
 // Nhan chinh sach — thuat ngu that tu PO/quy trinh khach (cong no tinh tu NGAY NHAN HANG;
@@ -85,7 +83,7 @@ function buildConfirmation(p: Omit<PricedOrder, 'confirmationText'>, now: Date):
     lines.push(`• ${l.quantity} x ${name} — ${formatVnd(l.unitPrice)}/SP = ${formatVnd(l.lineTotal)}`);
   }
   lines.push(`Tiền hàng: ${formatVnd(p.itemsSubtotal)}`);
-  lines.push(`Phí ship: ${p.shippingFee === 0 ? 'Miễn phí' : formatVnd(p.shippingFee)}`);
+  if (p.orderType === 'TH2') lines.push('Phí ship/COD: Chưa cấu hình — Sale sẽ xác nhận');
   if (p.vat) lines.push(`VAT: ${formatVnd(p.vatAmount)}`);
   if (p.codCollect) lines.push(`Thu hộ COD: ${formatVnd(p.codFee)}`);
   lines.push('━━━━━━━━━━━━');
@@ -115,17 +113,14 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
   });
 
   const itemsSubtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
-  const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
-  const region = parsed.customerAddress ?? ctx.branch ?? '';
-  // Don giao DAI LY (TH1) MIEN PHI ship (PO: "Mien phi giao hang dung thoi han khong mop meo be vo").
-  // TH2 = giao thang khach le cua dai ly -> cuoc theo vung (tam tinh, cho bieu cuoc khach — A3).
-  const shippingFee = parsed.orderType === 'TH2' ? computeShipping(totalQuantity, region, ctx.cfg) : 0;
+  // GĐ1 không có bảng vùng/cước/COD chính thức. Giữ field số = 0 để tương thích persistence,
+  // nhưng KHÔNG diễn giải là miễn phí và luôn cảnh báo TH2 để chặn auto-confirm.
+  const shippingFee = 0;
   const codCollect = parsed.orderType === 'TH2' && parsed.codCollect === true;
-  const codFee = codCollect ? ctx.cfg.codFee : 0;
-  // Nghiep vu: MAC DINH KHONG VAT (VAT tuy truong hop). Chi ap VAT khi khach ghi ro
-  // "xuat VAT" (wantVat) va khong ghi "ko VAT" (noVat).
-  const vat = parsed.wantVat === true && parsed.noVat !== true;
-  const vatAmount = vat ? Math.round(itemsSubtotal * ctx.cfg.vatRate) : 0;
+  const codFee = 0;
+  // VAT đang thiếu quyết định tenant. Không mặc định có/không VAT; yêu cầu VAT sẽ chuyển Sale.
+  const vat = false;
+  const vatAmount = 0;
   const grandTotal = itemsSubtotal + shippingFee + vatAmount + codFee;
 
   const warnings: string[] = [];
@@ -133,6 +128,12 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
     if (!l.matched) warnings.push(`Chưa map được sản phẩm: "${l.skuRaw}"`);
   }
   if (!ctx.dealer) warnings.push('Chưa xác định đại lý từ nhóm Zalo');
+  if (parsed.orderType === 'TH2') {
+    warnings.push('Thiếu cấu hình: phí ship/COD và bảng vùng chính thức');
+  }
+  if (parsed.wantVat === true && parsed.noVat !== true) {
+    warnings.push('Thiếu cấu hình: chính sách VAT chưa được duyệt');
+  }
   // totalRaw <= 0 = parser dien mac dinh (khong phai khach ghi) -> bo qua doi chieu.
   if (parsed.totalRaw != null && parsed.totalRaw > 0 && itemsSubtotal > 0) {
     const diffRatio = Math.abs(itemsSubtotal - parsed.totalRaw) / Math.max(parsed.totalRaw, 1);

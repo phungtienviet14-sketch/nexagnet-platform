@@ -20,7 +20,7 @@ tính đúng số tiền. Trả lời được đến đâu, chúng tôi nhập 
 - [ ] **1.2** Bảng giá tháng 7 chúng tôi nhận được có 19 sản phẩm. Còn mặt hàng nào đang bán mà **chưa có trong bảng** không?
 - [ ] **1.3** Mỗi đại lý/CTV đang áp chính sách nào trong 4 loại: **công nợ 30 ngày · công nợ 45 ngày · ký gửi · thanh toán ngay**?
 
-> Mục 1.3 có sẵn file Excel để điền cho nhanh: `A4_dai-ly_map-nhom_U-Ultty.xlsx` (cùng thư mục này).
+> Mục 1.3 có sẵn file Excel để điền cho nhanh: `a4-dai-ly-map-nhom-ultty.xlsx` (cùng thư mục này).
 > Chị điền dần cũng được, ưu tiên 10–20 đại lý hay đặt hàng nhất.
 
 ---
@@ -102,7 +102,7 @@ Chị trả lời trực tiếp vào file này, hoặc nhắn/gọi cũng đư�
 ---
 
 <details>
-<summary>Dành cho đội kỹ thuật — đối chiếu với <code>docs/ke-hoach/tong-quan.md</code></summary>
+<summary>Dành cho đội kỹ thuật — đối chiếu với <code>docs/phat-trien/ke-hoach/tong-quan.md</code></summary>
 
 | Mục checklist | Mã trong kế hoạch |
 |---|---|

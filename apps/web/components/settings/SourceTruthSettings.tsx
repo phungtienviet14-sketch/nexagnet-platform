@@ -9,6 +9,7 @@ import {
   type SourceTruthRow,
 } from '../../lib/settings';
 import { SettingsPanelState } from './SettingsPanelState';
+import { PricePeriodsSettings } from './PricePeriodsSettings';
 
 type FieldDefinition = {
   key: string;
@@ -101,20 +102,6 @@ const RESOURCES: readonly ResourceDefinition[] = [
       { key: 'name', label: 'Tên sản phẩm', required: true },
       { key: 'unit', label: 'Đơn vị tính', required: true },
       { key: 'description', label: 'Mô tả', nullable: true },
-    ],
-  },
-  {
-    resource: 'prices',
-    label: 'Bốn cột giá',
-    shortLabel: 'Bảng giá',
-    description: 'Giá niêm yết, bán lẻ, bán lẻ tối thiểu và đơn giá CTV.',
-    fields: [
-      { key: 'sku', label: 'SKU', required: true, identifier: true },
-      { key: 'wholesale', label: 'Đơn giá CTV', type: 'number', required: true },
-      { key: 'minRetailPrice', label: 'Giá bán lẻ tối thiểu', type: 'number', nullable: true },
-      { key: 'retailPrice', label: 'Giá bán lẻ', type: 'number', nullable: true },
-      { key: 'listPrice', label: 'Giá niêm yết', type: 'number', nullable: true },
-      { key: 'validMonth', label: 'Tháng áp dụng', type: 'month', nullable: true },
     ],
   },
   {
@@ -339,6 +326,8 @@ export function SourceTruthSettings({ adminUiEnabled }: SourceTruthProps) {
         <b>nếu thiếu</b>
         <span className="settings-danger">Cần Sale nhập tay</span>
       </div>
+
+      <PricePeriodsSettings />
 
       <div className="settings-resource-layout">
         <nav className="settings-resource-nav" aria-label="Loại dữ liệu nguồn sự thật">
