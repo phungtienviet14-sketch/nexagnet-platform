@@ -38,8 +38,10 @@ pháp lý + công tắc vận hành**, không phải code. Xem [van-hanh/checkli
 **Baseline hiện tại — XANH TOÀN BỘ:** `api 574 pass/23 skip` · `web 43` · `shared 83` ·
 `tenant 26` · `poc-parser 4` · `deploy-routes 10` · `typecheck 0` · `lint 0` · `build 0`.
 
-**▶️ VIỆC TIẾP THEO KHÔNG PHẢI LẬP TRÌNH.** 9 cổng go-live máy tự chấm hiện đạt **1/9**
-(`tenant.loaded`). Đường ngắn nhất tới pilot, đúng thứ tự:
+**▶️ VIỆC TIẾP THEO KHÔNG PHẢI LẬP TRÌNH.** 9 cổng go-live máy tự chấm hiện đạt **3/9** —
+`tenant.loaded` ✅ · `dealers.configured` ✅ (3 đại lý seed) · `groups.mapped` ✅ (2 nhóm seed).
+Sáu cổng còn thiếu: `price.current_period` · `parser.production` · `media.production` ·
+`channel.production` · `auth.production` · `golden.evaluated`. Đường ngắn nhất tới pilot, đúng thứ tự:
 
 1. **A6 — bảng giá tháng hiện hành.** Chặn *thực tế* nặng nhất: tra giá fail-closed chỉ nhận kỳ
    `active` đúng tháng hiện tại, seed là `2026-07` ⇒ **0 giá active ⇒ MỌI đơn rơi handoff, kể cả đơn
