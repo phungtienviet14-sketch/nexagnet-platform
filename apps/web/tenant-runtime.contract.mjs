@@ -70,6 +70,7 @@ function writePack(spec) {
         monogram: spec.monogram,
         composerPlaceholder: `vd: @Bot ${spec.slug} gui 10 mon A ve HN`,
       },
+      policies: ['cong_no_30', 'thanh_toan_ngay'],
       persona: {
         parserIntro: `Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho ${spec.productName}.`,
         botName: spec.productName,

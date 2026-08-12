@@ -48,6 +48,20 @@ export const tenantConfigSchema = z.object({
     /** Cau goi y trong o soan tin cua console — chua vi du dat hang cua chinh khach. */
     composerPlaceholder: nonEmpty,
   }),
+  /**
+   * D28 (chot 12/08/2026, phuong an B): chinh sach ban hang khach nay THUC SU dung — mot TAP CON
+   * cua `POLICY_TYPES`. Khong dung bang `Policy` rieng, khong doi enum Prisma.
+   *
+   * Ly do chon B: khong cho nao trong code re nhanh theo policy (`policy ===` / `switch (policy)`
+   * = 0 ket qua toan repo); phi COD chay theo co `codCollect` cua don chu khong theo policy. Policy
+   * hom nay la NHAN MO TA chu khong phai luat tinh tien, nen mot bang rieng chi mua linh hoat chua
+   * ai can, doi lai mat luoi an toan luc bien dich. Danh sach nay cho phep tung khach thu hep xuong
+   * dung nhung gi ho ban, ma van giu kieu tinh.
+   *
+   * Them chinh sach that su MOI (khach khac han) van phai sua `POLICY_TYPES` + migration Prisma —
+   * do la luc can xet lai phuong an C.
+   */
+  policies: z.array(z.enum(POLICY_TYPES)).min(1),
   persona: z.object({
     /** Cau mo dau prompt parser. Truoc B1 cau nay hardcode ten khach trong parser-prompt.ts. */
     parserIntro: nonEmpty,

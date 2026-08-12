@@ -92,8 +92,28 @@ export function loadTenantConfig(): TenantConfig {
   return cachedConfig;
 }
 
+/**
+ * Chinh sach mac dinh cua tung dai ly phai nam trong danh sach khach khai bao (D28, phuong an B).
+ * Kiem o day chu khong o zod schema vi hai gia tri nam o HAI file khac nhau — `tenant.json` va
+ * `data/knowledge.json` — nen khong mot schema don le nao nhin thay ca hai.
+ */
+function assertDealerPoliciesDeclared(knowledge: TenantKnowledge): void {
+  const declared = new Set<string>(loadTenantConfig().policies);
+  const lac = knowledge.dealers.filter((dealer) => !declared.has(dealer.defaultPolicy));
+  if (lac.length === 0) return;
+
+  const chiTiet = lac.map((d) => `  - ${d.id}: ${d.defaultPolicy}`).join('\n');
+  throw new Error(
+    'Goi khach mau thuan: dai ly dung chinh sach khong co trong tenant.json.policies ' +
+      `[${[...declared].join(', ')}]\n${chiTiet}`,
+  );
+}
+
 export function loadTenantKnowledge(): TenantKnowledge {
-  cachedKnowledge ??= readPackFile('data/knowledge.json', knowledgeSnapshotSchema);
+  if (cachedKnowledge) return cachedKnowledge;
+  const knowledge = readPackFile('data/knowledge.json', knowledgeSnapshotSchema);
+  assertDealerPoliciesDeclared(knowledge);
+  cachedKnowledge = knowledge;
   return cachedKnowledge;
 }
 

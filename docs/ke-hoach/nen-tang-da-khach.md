@@ -270,7 +270,23 @@ Nghiệm thu: shared **69** · tenant **11** · api **433 passed / 21 skipped** 
 
 ---
 
-## 9b. D28 — PolicyType: phân tích để chốt (CHƯA thực hiện)
+## 9b. D28 — PolicyType: **ĐÃ CHỐT 12/08/2026 = phương án B** (đã thực hiện)
+
+> **Quyết định:** `tenant.json.policies[]` là **tập con của `POLICY_TYPES`** hiện có. **Không** dựng
+> bảng `Policy`, **không** đổi enum Prisma, **không** migration.
+>
+> Đã làm: `tenantConfigSchema.policies` (zod, `min(1)`) · kiểm chéo lúc nạp — đại lý dùng chính sách
+> không khai báo thì ném, chỉ rõ đại lý nào (`assertDealerPoliciesDeclared` trong
+> [tenant.config.ts](../../packages/tenant/src/tenant.config.ts)) · `tenants/ultty` khai cả 5 (đúng
+> 4 chính sách trong `CLAUDE.md`, công nợ tách 30/45) nên **hành vi Ultty không đổi**.
+>
+> Kiểm chéo đặt ở loader chứ không ở schema vì hai giá trị nằm ở **hai file khác nhau**
+> (`tenant.json` ↔ `data/knowledge.json`) — không schema đơn lẻ nào nhìn thấy cả hai.
+>
+> **Khi nào xét lại phương án C:** khi có khách cần một chính sách thật sự mới (không nằm trong 5
+> giá trị hiện tại). Lúc đó vẫn phải sửa `POLICY_TYPES` + migration — chính là tín hiệu để dựng bảng.
+
+Phân tích dẫn tới quyết định trên giữ nguyên bên dưới.
 
 ### Định nghĩa nằm ở 2 nơi, phải khớp bằng tay
 
@@ -331,7 +347,7 @@ Căn cứ: theo báo giá, Amico dùng `cong_no_30 / thanh_toan_ngay / cod` — 
 |---|---|---|
 | **D26** | **Xác nhận mô hình Silo** (mỗi khách một stack, không dùng chung DB) làm nguyên tắc nền tảng, kèm ngưỡng mở lại ở §3 | Toàn bộ lộ trình §9 |
 | **D27** | **Đặt hạ tầng Amico ở đâu** — GCP như Ultty, hay nhà cung cấp trong nước để đúng câu "dữ liệu lưu tại Việt Nam" trong báo giá | Ký hợp đồng Amico + D22 |
-| **D28** | **Chính sách bán hàng: giữ `enum` hay chuyển thành bảng?** Enum cứng thì khách có chính sách lạ là phải sửa schema + migration | B2, và mọi khách thứ 3 trở đi |
+| ~~**D28**~~ | ✅ **CHỐT 12/08/2026 = phương án B**: `tenant.json.policies[]` là tập con của `POLICY_TYPES`, chưa dựng bảng `Policy`. Xem §9b | *(đã xong)* |
 | **D29** | **Có dựng Flowise cho khách mới không?** Bỏ đi thì stack nhẹ hơn nhiều và bớt một mặt tấn công; đổi lại mất giao diện sửa luồng LLM không cần lập trình | B3, cỡ máy, báo giá hạ tầng |
 | **D30** | **Tên thương hiệu nền tảng** (`@netviet/*`? tên sản phẩm hiển thị cho khách?) — đổi càng muộn càng đắt | B1 |
 | **D31** | **Ai giữ secret khi khách tự host** — NetViet có được giữ bản sao khóa Zalo/ERP của khách không, hay chỉ khách giữ | B3 + hợp đồng |

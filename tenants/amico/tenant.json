@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "slug": "amico",
+  "displayName": "Công ty Amico",
+  "shortName": "Amico",
+  "branding": {
+    "productName": "Trợ lý đơn hàng Amico",
+    "installName": "Amico — Trợ lý đơn hàng AI",
+    "pageTitle": "Trợ lý đơn hàng Amico — Trung tâm điều hành",
+    "pageDescription": "Console: 6 agent xử lý đơn hàng Zalo cho Công ty Amico",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#f5f7fb",
+    "monogram": "A",
+    "composerPlaceholder": "vd: @Bot Amico gui 10 thung hang ve HN cho c, ko lay VAT"
+  },
+  "policies": ["cong_no_30", "cong_no_45", "ky_gui", "thanh_toan_ngay", "cod"],
+  "persona": {
+    "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Amico.",
+    "botName": "Amico",
+    "mentionName": "Bot Amico",
+    "productFallbackDescription": "Sản phẩm của Công ty Amico."
+  }
+}

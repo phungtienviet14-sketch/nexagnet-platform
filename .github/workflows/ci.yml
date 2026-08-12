@@ -77,6 +77,25 @@ jobs:
         env:
           RUN_PRISMA_IT: '1'
 
+  # MOT NEN TANG — NHIEU KHACH. Chay rieng tung goi khach de mot goi hong khong nup sau goi kia:
+  # `fail-fast: false` cho ta thay ca hai ket qua thay vi dung o goi dau tien.
+  # (Chung minh doi TENANT thi thuong hieu doi theo nam o job `verify` — buoc test:tenant-runtime.)
+  tenant-packs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        tenant: [ultty, amico]
+    env:
+      TENANT: ${{ matrix.tenant }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter "@netviet/tenant..." build
+      - name: Nap goi khach ${{ matrix.tenant }} bang loader that
+        run: pnpm --filter @netviet/tenant test
+
   e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

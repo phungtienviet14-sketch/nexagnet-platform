@@ -13,6 +13,7 @@
     "monogram": "U",
     "composerPlaceholder": "vd: @Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT"
   },
+  "policies": ["cong_no_30", "cong_no_45", "ky_gui", "thanh_toan_ngay", "cod"],
   "persona": {
     "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho U Ultty (gia dung cao cap).",
     "botName": "Ultty",

@@ -46,6 +46,7 @@ const VALID_CONFIG = {
     monogram: 'K',
     composerPlaceholder: 'vd: @Bot gui 10 mon A ve HN',
   },
+  policies: ['cong_no_30', 'thanh_toan_ngay'],
   persona: {
     parserIntro: 'Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Khach Mau.',
     botName: 'Khach Mau',
@@ -161,6 +162,26 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
       'tenant.json': { ...VALID_CONFIG, branding: { ...VALID_CONFIG.branding, monogram: 'ABCD' } },
     });
     expect(() => loadTenantConfig()).toThrow(/monogram/);
+  });
+
+  // D28 phuong an B: khach khai bao TAP CON chinh sach ho that su ban. Hai gia tri nam o hai file
+  // khac nhau nen khong schema don le nao bat duoc — phai kiem cheo luc nap.
+  it('dai ly dung chinh sach khach KHONG khai bao -> chan, chi ro dai ly nao', () => {
+    useFakePack({
+      'tenant.json': { ...VALID_CONFIG, policies: ['thanh_toan_ngay'] },
+      'data/knowledge.json': {
+        products: [],
+        prices: [],
+        priceOverrides: [],
+        dealers: [
+          { id: 'dl-mau', name: 'DL Mau', aliases: [], tier: 'dai_ly', defaultPolicy: 'cong_no_45' },
+        ],
+        groups: [],
+        glossary: [],
+      },
+    });
+
+    expect(() => loadTenantKnowledge()).toThrow(/dl-mau: cong_no_45/);
   });
 
   it('chinh sach cong no la tu KHONG co trong POLICY_TYPES -> chan', () => {
