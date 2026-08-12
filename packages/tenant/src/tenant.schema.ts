@@ -27,14 +27,24 @@ export const tenantConfigSchema = z.object({
    * `TopBar.tsx`, `SettingsShell.tsx`, `Composer.tsx`) — doi khach la phai sua ma nguon app.
    */
   branding: z.object({
-    /** Ten san pham tren thanh tieu de console. */
+    /** Ten san pham tren thanh tieu de console. Cung la `short_name` cua PWA manifest. */
     productName: nonEmpty,
+    /** Ten day du khi cai PWA (`name` cua manifest) — hien duoi icon tren man hinh chinh. */
+    installName: nonEmpty,
     /** <title> cua trang. */
     pageTitle: nonEmpty,
     /** Mo ta trang (the description + PWA). */
     pageDescription: nonEmpty,
-    /** Mau chu dao cho `theme-color` cua trinh duyet. */
+    /** Mau chu dao cho `theme-color` cua trinh duyet, va la mau nen cua icon. */
     themeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'themeColor: dang #rrggbb'),
+    /** Mau nen PWA luc khoi dong, va la mau chu monogram tren icon. */
+    backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'backgroundColor: dang #rrggbb'),
+    /**
+     * Chu dat giua icon app (1-3 ky tu). Icon duoc SINH luc chay tu monogram + hai mau o tren
+     * (`app/icon.svg/route.ts`) chu khong con la file tinh trong `public/` — file tinh se di theo
+     * image va lam image gan chet vao mot khach.
+     */
+    monogram: z.string().min(1).max(3),
     /** Cau goi y trong o soan tin cua console — chua vi du dat hang cua chinh khach. */
     composerPlaceholder: nonEmpty,
   }),

@@ -38,9 +38,12 @@ const VALID_CONFIG = {
   shortName: 'Khach Mau',
   branding: {
     productName: 'Khach Mau AI',
+    installName: 'Khach Mau — Tro ly don hang AI',
     pageTitle: 'Khach Mau AI — Trung tam dieu hanh',
     pageDescription: 'Console xu ly don hang Zalo cho Khach Mau.',
     themeColor: '#0f62fe',
+    backgroundColor: '#f7f4ee',
+    monogram: 'K',
     composerPlaceholder: 'vd: @Bot gui 10 mon A ve HN',
   },
   persona: {
@@ -62,7 +65,12 @@ describe('chon goi khach', () => {
   // CO Y khong co mac dinh: quen dat TENANT tren stack cua khach B ma lang le nap du lieu khach A
   // la su co ro ri du lieu, khong phai bat tien nho.
   it('thieu ca TENANT lan TENANT_DIR -> nem, KHONG doan khach nao', () => {
+    // Tu xoa bien thay vi tin vao moi truong goi test: day la test DAU TIEN trong file nen chua
+    // co afterEach nao chay, ma CI lai dat TENANT=ultty o muc job cho bo test cua apps/api.
+    delete process.env.TENANT;
+    delete process.env.TENANT_DIR;
     resetTenantCache();
+
     expect(() => tenantDir()).toThrow(/Thieu bien TENANT/);
   });
 
@@ -90,6 +98,27 @@ describe('doc goi khach', () => {
     expect(cfg.displayName).toBe('Cong ty Khach Mau');
     expect(cfg.persona.mentionName).toBe('Bot khach mau');
     expect(tenantBranding().productName).toBe('Khach Mau AI');
+  });
+
+  /**
+   * Cot loi cua "MOT image chay duoc MOI khach": khong duoc co chuoi thuong hieu nao bi chot luc
+   * nap module. Doi goi khach roi doc lai thi phai ra chuoi cua goi MOI.
+   * Chung minh o muc artifact (build mot lan, chay hai lan) nam o apps/web/tenant-runtime.contract.mjs.
+   */
+  it('doi goi khach luc chay -> branding doi theo, khong con dinh goi cu', () => {
+    useFakePack({ 'tenant.json': VALID_CONFIG });
+    expect(tenantBranding().productName).toBe('Khach Mau AI');
+
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        slug: 'khach-hai',
+        branding: { ...VALID_CONFIG.branding, productName: 'Khach Hai AI', monogram: 'H' },
+      },
+    });
+
+    expect(tenantBranding().productName).toBe('Khach Hai AI');
+    expect(tenantBranding().monogram).toBe('H');
   });
 
   it('khong co data/demo-messages.json -> mang rong, khong nem', () => {
@@ -125,6 +154,13 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
       'tenant.json': { ...VALID_CONFIG, branding: { ...VALID_CONFIG.branding, themeColor: 'do' } },
     });
     expect(() => loadTenantConfig()).toThrow(/themeColor/);
+  });
+
+  it('monogram dai qua 3 ky tu -> chan (icon se tran ra ngoai o vuong)', () => {
+    useFakePack({
+      'tenant.json': { ...VALID_CONFIG, branding: { ...VALID_CONFIG.branding, monogram: 'ABCD' } },
+    });
+    expect(() => loadTenantConfig()).toThrow(/monogram/);
   });
 
   it('chinh sach cong no la tu KHONG co trong POLICY_TYPES -> chan', () => {

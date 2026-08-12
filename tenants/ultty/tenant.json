@@ -5,9 +5,12 @@
   "shortName": "U Ultty",
   "branding": {
     "productName": "Ultty AI",
+    "installName": "U Ultty — Trợ lý đơn hàng AI",
     "pageTitle": "Ultty AI — Trung tâm điều hành",
     "pageDescription": "Console demo: 6 agent xử lý đơn hàng Zalo cho U Ultty Việt Nam",
     "themeColor": "#b45f43",
+    "backgroundColor": "#f7f4ee",
+    "monogram": "U",
     "composerPlaceholder": "vd: @Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT"
   },
   "persona": {
