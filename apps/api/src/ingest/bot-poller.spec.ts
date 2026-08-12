@@ -28,6 +28,59 @@ describe('BotPoller observability', () => {
   });
 });
 
+describe('updateToChannelMessage — tin tra loi (reply/quote)', () => {
+  it('map trich dan sang replyTo de parser co ngu canh, giong kenh zca', () => {
+    const m = updateToChannelMessage({
+      event_name: 'message.text.received',
+      message: {
+        message_id: 'm2',
+        text: 'them 5 cai nua nhe',
+        date: 1783404430000,
+        from: { id: 'u1', display_name: 'Phùng Việt', is_bot: false },
+        chat: { id: 'zgr-x', chat_type: 'GROUP' },
+        reply_to_message: {
+          message_id: 'm1',
+          text: '10 ghe felix',
+          date: 1783404428000,
+          from: { id: 'u2', display_name: 'Meta HN', is_bot: false },
+        },
+      },
+    });
+
+    expect(m?.replyTo?.externalMessageId).toBe('m1');
+    expect(m?.replyTo?.text).toBe('10 ghe felix');
+    expect(m?.replyTo?.senderExternalId).toBe('u2');
+    expect(m?.replyTo?.sentAt).toEqual(new Date(1783404428000));
+  });
+
+  it('khong co trich dan -> replyTo undefined, hanh vi y nhu truoc', () => {
+    const m = updateToChannelMessage({
+      message: {
+        message_id: 'm3',
+        text: 'chot don',
+        from: { id: 'u1', is_bot: false },
+        chat: { id: 'zgr-x', chat_type: 'GROUP' },
+      },
+    });
+
+    expect(m?.replyTo).toBeUndefined();
+  });
+
+  it('trich dan rong (khong id, khong chu, khong anh) -> bo qua chu khong tao ngu canh rong', () => {
+    const m = updateToChannelMessage({
+      message: {
+        message_id: 'm4',
+        text: 'chot don',
+        from: { id: 'u1', is_bot: false },
+        chat: { id: 'zgr-x', chat_type: 'GROUP' },
+        reply_to_message: { text: '   ' },
+      },
+    });
+
+    expect(m?.replyTo).toBeUndefined();
+  });
+});
+
 describe('updateToChannelMessage', () => {
   it('map tin text nhom', () => {
     const m = updateToChannelMessage({

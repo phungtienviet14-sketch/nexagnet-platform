@@ -14,7 +14,12 @@ import {
 } from '@netviet/shared';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
-import { callBotApi, normalizeUpdates, type BotUpdate } from '../channels/zalo-bot.client.js';
+import {
+  callBotApi,
+  normalizeUpdates,
+  type BotQuotedMessage,
+  type BotUpdate,
+} from '../channels/zalo-bot.client.js';
 import { ZaloUserClient } from '../channels/zalo-user.client.js';
 import { resolveBotName } from '../channels/bot-name.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
@@ -106,9 +111,30 @@ export function updateToChannelMessage(update: BotUpdate): ChannelMessage | null
     text,
     imageUrl,
     sentAt: m.date ? new Date(m.date) : new Date(),
+    replyTo: quoteToReply(m.reply_to_message),
   };
   const parsed = channelMessageSchema.safeParse(candidate);
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Song song `quoteToReply` ben zca-message.ts: tin tra loi la can cu de parser hieu "them 5 cai
+ * nua" tro ve dung SKU. Thieu du lieu thi tra undefined — khong co ngu canh con an toan hon
+ * ngu canh doan bua (contextual-parse se fail-safe ve intent `khac`).
+ */
+function quoteToReply(quote: BotQuotedMessage | undefined): ChannelMessage['replyTo'] {
+  if (!quote) return undefined;
+  const text = (quote.text ?? quote.caption)?.trim() || undefined;
+  const imageUrl = toHttpUrl(quote.photo_url);
+  if (!quote.message_id && !text && !imageUrl) return undefined;
+  return {
+    externalMessageId: quote.message_id,
+    text,
+    imageUrl,
+    senderExternalId: quote.from?.id,
+    senderDisplayName: quote.from?.display_name,
+    sentAt: quote.date ? new Date(quote.date) : undefined,
+  };
 }
 
 /**

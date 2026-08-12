@@ -11,6 +11,16 @@ export interface BotApiResponse<T = unknown> {
   description?: string;
 }
 
+/** Phan tin duoc trich dan lai — cung hinh dang voi `message`, khong long them mot cap nua. */
+export interface BotQuotedMessage {
+  message_id?: string;
+  text?: string;
+  caption?: string;
+  photo_url?: string;
+  date?: number;
+  from?: { id?: string; display_name?: string; is_bot?: boolean };
+}
+
 export interface BotUpdate {
   event_name?: string;
   message?: {
@@ -21,6 +31,13 @@ export interface BotUpdate {
     date?: number;
     from?: { id?: string; display_name?: string; is_bot?: boolean };
     chat?: { id?: string; chat_type?: string };
+    /**
+     * ⚠️ CHUA KIEM CHUNG TREN ZALO THAT: runtime dang khoa `CHANNEL_MODE=mock` nen chua co ban
+     * ghi update that nao de doi chieu ten truong. Doc theo kieu PHONG THU — thieu truong thi
+     * `replyTo` la undefined va hanh vi y het truoc day (khong co ngu canh -> khong auto-confirm).
+     * Khi bat kenh that, log mot update co trich dan roi doi lai ten neu Zalo dung ten khac.
+     */
+    reply_to_message?: BotQuotedMessage;
   };
 }
 
