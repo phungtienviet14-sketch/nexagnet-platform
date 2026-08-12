@@ -3,7 +3,7 @@
 > **Cảnh báo lịch sử:** bản đầu của tài liệu này (09/07/2026, suy từ code + CLAUDE.md) **có sai lệch**. Bản này viết lại bằng cách đọc **hồ sơ gốc của khách**, và ghi rõ chỗ nào **code đang khác nguồn gốc**.
 >
 > **Vai trò tài liệu:** mô tả nghiệp vụ THẬT + đối chiếu với **as-built** (hệ thống đang làm gì). Đây là tài liệu tra cứu cho Sale/kế toán/khách và cho người code.
-> **Phân biệt:** `docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md` = đề xuất giải pháp NetViet (giữ nguyên) · [kiến trúc hệ thống](../../../phat-trien/kien-truc/he-thong.md) = quyết định + sơ đồ kỹ thuật hợp nhất · tài liệu này = **nghiệp vụ + sai lệch**.
+> **Phân biệt:** `docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md` = đề xuất giải pháp NetViet (giữ nguyên) · [kiến trúc hệ thống](../../../kien-truc/he-thong.md) = quyết định + sơ đồ kỹ thuật hợp nhất · tài liệu này = **nghiệp vụ + sai lệch**.
 >
 > **Không chứa PII.** Hồ sơ gốc có SĐT/địa chỉ/số tài khoản/tên người — đã gitignore, **không trích vào đây**.
 > Cập nhật: **12/08/2026** theo quyết định GĐ1 mới nhất và inventory Google Drive.

@@ -2,8 +2,8 @@
 
 > **Vai trò tài liệu:** bản KỸ THUẬT hợp nhất — toàn bộ **sơ đồ hệ thống (12 sơ đồ Mermaid)** + **quyết định thiết kế đã chốt** + **phụ lục bằng chứng PoC**. Xem trên GitHub hoặc VS Code (extension Markdown Preview Mermaid).
 > **Hợp nhất 11/07/2026:** nuốt trọn `thiet-ke-ky-thuat-hop-nhat.md` (quyết định kỹ thuật — §2/§3/§15) và 2 tài liệu PoC `poc-zalo-bot.md`, `poc-parser.md` (→ Phụ lục A/B) — 3 file gốc đã xóa, git history còn.
-> **Đối chiếu code/yêu cầu 12/08/2026:** base đa khách đã tách tenant; lát cắt P1 auto-confirm đã khớp sơ đồ (`sent` + handoff Sale, không gọi ERP). Bảng sai lệch còn lại ở [nghiệp vụ Ultty](../../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md).
-> Nghiệp vụ + sai lệch nguồn gốc: [nghiệp vụ Ultty](../../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) · Kế hoạch + trạng thái: [tổng quan](../ke-hoach/tong-quan.md).
+> **Đối chiếu code/yêu cầu 12/08/2026:** base đa khách đã tách tenant; lát cắt P1 auto-confirm đã khớp sơ đồ (`sent` + handoff Sale, không gọi ERP). Bảng sai lệch còn lại ở [nghiệp vụ Ultty](../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md).
+> Nghiệp vụ + sai lệch nguồn gốc: [nghiệp vụ Ultty](../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) · Kế hoạch + trạng thái: [tổng quan](../phat-trien/ke-hoach/tong-quan.md).
 
 **Mục lục:** §1 Bối cảnh · §2 Quyết định kỹ thuật · §3 Ma trận kênh Zalo · §4 Kiến trúc 6 tầng · §5 Bản đồ module · §6 Luồng 1 đơn hàng · §7 Pipeline chi tiết · §8 Vòng đời đơn · §9 Bảy intent · §10 Nguồn sự thật động · §11 Realtime SSE · §12 ERD · §13 Runtime & cờ env · §14 Chọn kênh · §15 Tích hợp, KPI, bảo mật, rủi ro · Phụ lục A/B (PoC).
 
@@ -53,7 +53,7 @@ flowchart LR
 | Hạng mục | Quyết định | Ghi chú |
 |---|---|---|
 | Kiến trúc 6 tầng, intent taxonomy, luồng chính sách/bảo hành, checklist chốt đơn | Theo NetViet (`docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md` §3, §5 — giữ nguyên) | Nghiệp vụ không đổi |
-| Lộ trình 3 giai đoạn, KPI, managed service | Theo NetViet (§6, §7) | Sơ đồ lộ trình: [tổng quan](../ke-hoach/tong-quan.md) |
+| Lộ trình 3 giai đoạn, KPI, managed service | Theo NetViet (§6, §7) | Sơ đồ lộ trình: [tổng quan](../phat-trien/ke-hoach/tong-quan.md) |
 | Stack | TypeScript (Node 22) · NestJS · Next.js · PostgreSQL + **Prisma 6 (pin, KHÔNG nâng v7** — `@adminjs/prisma` chưa hỗ trợ) · Flowise 3.1.4 · Claude/DeepSeek API · monorepo pnpm | BullMQ/Redis có trong stack nhưng **chưa dùng** (YAGNI — thêm khi pipeline thật sự cần queue) |
 | Kênh Zalo GĐ1 | **Hai Bot cùng nhóm qua `CHANNEL_MODE=hybrid`** (03/08/2026): native @mention Bot chính thức → Bot Platform; không tag Bot → zca. Các mode đơn `mock\|bot\|zca` vẫn giữ để rollback/test | `getMe` lấy Bot UID; zca so metadata `mentions[].uid`, bỏ tin do Bot chính thức gửi; không lấy được UID thì zca fail-closed. Điều kiện zca: **tài khoản phụ** + **văn bản chấp nhận rủi ro** |
 | Multi-agent 6 vai | 6 vai chuyên trách **dưới 1 orchestrator, dùng chung 1 lần gọi LLM/tin** (Router parse) — KHÔNG phải 6 LLM độc lập | Chi phí như 1 orchestrator; rules engine tính tiền |
@@ -478,7 +478,7 @@ Bảng độc lập (chưa nối quan hệ): `glossary_entries` (24 mục) · `u
 > - **Ghi rồi:** `dealers` · `groups` · `products` · `prices` · `dealer_price_overrides` · `glossary_entries` (qua seed + `/admin` + MCP), `messages` (ghi trước pipeline, chống trùng) và `orders` (khi `PERSISTENCE=prisma`; dòng đơn nằm trong cột JSON `view`, scalar denormalize để lọc).
 > - **Model có, CHƯA ghi:** `order_items` (dữ liệu dòng đang nằm trong `orders.view`) · `parse_feedback` · `users` · `kpi_events` (Phase 5).
 > - Các bảng thuộc **đích GĐ sau, CHƯA có model**: `conversations` · `warranty_tickets` · `policies` (điều khoản dạng bảng — hiện là enum trên dealer + rules-config) · `audit_logs`.
-> Schema thật: [apps/api/prisma/schema.prisma](../../../apps/api/prisma/schema.prisma). Mặc định app chạy in-memory (`PERSISTENCE=memory`).
+> Schema thật: [apps/api/prisma/schema.prisma](../../apps/api/prisma/schema.prisma). Mặc định app chạy in-memory (`PERSISTENCE=memory`).
 
 ---
 
@@ -518,7 +518,7 @@ flowchart LR
     PGD -->|"pg_dump nightly"| GCS
 ```
 
-**Cờ env quyết định hành vi** (đủ bộ: [packages/shared/src/env.ts](../../../packages/shared/src/env.ts) — validate lúc boot, fail fast):
+**Cờ env quyết định hành vi** (đủ bộ: [packages/shared/src/env.ts](../../packages/shared/src/env.ts) — validate lúc boot, fail fast):
 
 | Cờ | Giá trị (mặc định **đậm**) | Quyết định gì |
 |---|---|---|
@@ -621,7 +621,7 @@ Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ k
 
 ## Phụ lục A — Kết quả PoC Zalo Bot Platform (07/07/2026)
 
-*(gốc: `poc-zalo-bot.md` — hợp nhất 11/07/2026; log thô: `tools/poc-zalo-bot/logs/`, chạy lại theo [tools/poc-zalo-bot/README.md](../../../tools/poc-zalo-bot/README.md))*
+*(gốc: `poc-zalo-bot.md` — hợp nhất 11/07/2026; log thô: `tools/poc-zalo-bot/logs/`, chạy lại theo [tools/poc-zalo-bot/README.md](../../tools/poc-zalo-bot/README.md))*
 
 **Bot:** `Bot ultty AI orders` · nhóm test `zgr-f8a7101d77709e2ec761`.
 
@@ -642,11 +642,11 @@ getChatMembersCount    => 404 Not Found
 getChatAdministrators  => 404 Not Found
 ```
 
-`getMe` trả 200 trên **cùng dạng đường dẫn** ⇒ 404 nghĩa là **method không tồn tại**, không phải thiếu quyền hay sai chat_id. Kết luận: Bot Platform **không cấp danh sách thành viên** ở gói BASIC. Cộng với việc `getGroupInfo` của zca trả mảng rỗng, **luồng tin là nguồn duy nhất còn lại** để dựng danh sách thành viên — xem `ParticipantSource.message_stream` (§12) và [tổng quan trạng thái](../ke-hoach/tong-quan.md).
+`getMe` trả 200 trên **cùng dạng đường dẫn** ⇒ 404 nghĩa là **method không tồn tại**, không phải thiếu quyền hay sai chat_id. Kết luận: Bot Platform **không cấp danh sách thành viên** ở gói BASIC. Cộng với việc `getGroupInfo` của zca trả mảng rỗng, **luồng tin là nguồn duy nhất còn lại** để dựng danh sách thành viên — xem `ParticipantSource.message_stream` (§12) và [tổng quan trạng thái](../phat-trien/ke-hoach/tong-quan.md).
 
 **Bổ sung 05/08/2026 — còn một trường UID nữa trong chính response đó.** Kiểu `GroupInfoResponse` của zca-js 2.1.2 khai `gridInfoMap[groupId]: GroupInfo & { memVerList: string[] }`. `memVerList` là danh sách `"uid_version"` Zalo dùng để bắt cache hồ sơ — **không** nằm trong model `GroupInfo` nên dễ bị bỏ sót, và code trước đó chỉ đọc `memberIds` + `currentMems`. `fetchGroupMembers` nay đọc cả ba. Đây **chưa** phải kết luận: log VM cũ không đếm `memVerList` nên chưa biết Zalo có điền hay cũng bỏ trống; dòng cảnh báo đã thêm số đếm để lần bấm "Đồng bộ" kế tiếp trả lời dứt điểm. Rà API còn lại của zca-js 2.1.2 (`getGroupMembersInfo`, `getGroupBlockedMember`, `getPendingGroupMembers`) — **không có** endpoint liệt kê thành viên phân trang nào; `hasMoreMember=0` nên cũng không có trang tiếp. npm chốt ở 2.1.2, không có bản mới hơn để nâng.
 
-**Nguyên nhân gốc đã rõ (05/08/2026): Zalo CHỦ ĐỘNG đóng, không phải mình làm sai.** Hai issue trên repo zca-js chốt lại điều này, và nó **loại bỏ cả hai giả thuyết** còn treo trong [tổng quan trạng thái](../ke-hoach/tong-quan.md) (lệch phiên bản thư viện / tài khoản bị hạn chế):
+**Nguyên nhân gốc đã rõ (05/08/2026): Zalo CHỦ ĐỘNG đóng, không phải mình làm sai.** Hai issue trên repo zca-js chốt lại điều này, và nó **loại bỏ cả hai giả thuyết** còn treo trong [tổng quan trạng thái](../phat-trien/ke-hoach/tong-quan.md) (lệch phiên bản thư viện / tài khoản bị hạn chế):
 
 | Issue | Nội dung |
 |---|---|
@@ -677,7 +677,7 @@ getChatAdministrators  => 404 Not Found
 
 **Chạy lại qua `FlowiseParser` + Flowise 3.1.4 ngày 31/07/2026:** **35/35 = 100%**, ngang baseline gọi DeepSeek trực tiếp; mọi response thành công qua `parseResultSchema` và trace ghi `llmCalls=1`. Bộ đề hiện chỉ có nhãn intent, chưa có golden field — chưa được dùng để tuyên bố field-accuracy; cổng đó vẫn là B1-B2.
 
-**Lịch sử tune (bài học nằm trong code dùng chung [parser-prompt.ts](../../../apps/api/src/pipeline/parser-prompt.ts)):**
+**Lịch sử tune (bài học nằm trong code dùng chung [parser-prompt.ts](../../apps/api/src/pipeline/parser-prompt.ts)):**
 
 | Mốc | Accuracy | Nguyên nhân / cách sửa |
 |---|---|---|

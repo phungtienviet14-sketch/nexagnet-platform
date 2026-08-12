@@ -1,7 +1,7 @@
 # KẾ HOẠCH NỀN TẢNG — ĐỢT 0 (Phase 3 còn lại → Phase 6)
 
 > **Vai trò:** kế hoạch con mô tả PHẠM VI các việc nền — điều kiện cứng trước khi làm tính năng mới ([tinh-nang-dai-han.md](tinh-nang-dai-han.md)). **Không chứa trạng thái** — tiến độ/✅/⬜ xem [tong-quan.md](tong-quan.md) §3.1; mã D/A/B/C/E (quyết định + dữ liệu) định nghĩa ở [tong-quan.md](tong-quan.md) §4.
-> Nguồn ngữ cảnh: [nghiệp vụ Ultty](../../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) (nghiệp vụ + bảng sai lệch §13) · [kiến trúc hệ thống](../kien-truc/he-thong.md) (kiến trúc as-built).
+> Nguồn ngữ cảnh: [nghiệp vụ Ultty](../../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) (nghiệp vụ + bảng sai lệch §13) · [kiến trúc hệ thống](../../kien-truc/he-thong.md) (kiến trúc as-built).
 
 **Nguyên tắc bất biến khi làm nền** (không thương lượng): LLM không tính tiền/không quyết chính sách · outbound theo policy tenant (đơn đủ dữ liệu trong ngưỡng tự gửi; vượt ngưỡng/lỗi thì chuyển người) · `AUTO_SEND` chỉ là kill switch · nguồn sự thật động trong Postgres (không hardcode) · mặc định `PERSISTENCE=memory` để demo/CI không cần DB · mỗi increment xanh test/lint/typecheck rồi mới sang increment sau.
 
@@ -50,7 +50,7 @@ Căn cứ: bảng sai lệch [nghiệp vụ Ultty §13](../../khach-hang/ultty/n
 ## 3. Phase 5 — Auth + KPI + Feedback loop
 
 - **Auth theo vai** `BPKD / KSNB / BPVH / Kế toán / Quản lý` — quy trình thật có **2 cổng KSNB** ([nghiệp vụ Ultty §3](../../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md)); vai "Giám sát" trong hệ thống ánh xạ KSNB. Hiện **mọi endpoint chưa có auth** (kể cả `POST /knowledge/reload`) → chặn production. Phương án đã chốt sau tra lại 11/07: **`express-session` (sẵn có) + guard/`@Roles()` tự viết + `argon2` 0.44** — bỏ tầng passport (chi tiết [tinh-nang-dai-han.md §7.2](tinh-nang-dai-han.md)).
-- **Ghi `kpi_events`** (model có sẵn, chưa ghi): message_received · order_created · approved/rejected · sửa field — đủ tính 4 KPI ([kiến trúc §15.2](../kien-truc/he-thong.md)). Dashboard (F3) chỉ là tầng đọc phía trên.
+- **Ghi `kpi_events`** (model có sẵn, chưa ghi): message_received · order_created · approved/rejected · sửa field — đủ tính 4 KPI ([kiến trúc §15.2](../../kien-truc/he-thong.md)). Dashboard (F3) chỉ là tầng đọc phía trên.
 - **Feedback loop:** lưu cặp (tin gốc, AI output, bản Sale sửa) vào `parse_feedback` → đề xuất glossary/few-shot mới. Cổng: **D5** (danh sách người dùng + vai).
 
 ---

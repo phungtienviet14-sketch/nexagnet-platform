@@ -1,11 +1,23 @@
 # Mục lục tài liệu
 
-Tài liệu được tách theo **chủ sở hữu và mục đích sử dụng**, không theo định dạng file.
+Tài liệu tách theo **tuổi thọ và chủ sở hữu**, không theo định dạng file. Ba nhánh cấp 1:
 
-| Khu vực | Dùng cho | Điểm vào |
+| Khu vực | Vai trò | Nhịp thay đổi | Điểm vào |
+|---|---|---|---|
+| [`kien-truc/`](kien-truc/nen-tang-da-khach.md) | **Canonical.** Hệ thống được thiết kế thế nào — đúng cho mọi khách, mọi thời điểm | Hiếm; đổi là quyết định kiến trúc | [`kien-truc/nen-tang-da-khach.md`](kien-truc/nen-tang-da-khach.md) |
+| [`phat-trien/`](phat-trien/README.md) | **Công việc.** Đang làm gì, xong gì, kiểm thử ra sao | Liên tục | [`phat-trien/ke-hoach/tong-quan.md`](phat-trien/ke-hoach/tong-quan.md) |
+| [`khach-hang/`](khach-hang/README.md) | **Theo khách.** Hồ sơ nguồn, trao đổi, nghiệp vụ, bản bàn giao | Theo từng khách | [`khach-hang/ultty/README.md`](khach-hang/ultty/README.md) |
+
+### Hai tài liệu trong `kien-truc/` khác vai nhau
+
+| File | Là gì | Không phải gì |
 |---|---|---|
-| [`khach-hang/`](khach-hang/README.md) | Hồ sơ nguồn, trao đổi, nghiệp vụ, thiết kế và bản bàn giao của từng khách | [`khach-hang/ultty/README.md`](khach-hang/ultty/README.md) |
-| [`phat-trien/`](phat-trien/README.md) | Kiến trúc, kế hoạch và bằng chứng kiểm thử do đội phát triển/AI coding tạo để triển khai code | [`phat-trien/ke-hoach/tong-quan.md`](phat-trien/ke-hoach/tong-quan.md) |
+| [`nen-tang-da-khach.md`](kien-truc/nen-tang-da-khach.md) | **Kiến trúc tổng quát cao nhất** — core/tenant, port/adapter, silo, cách ly dữ liệu, bất biến bảo mật | Không phải kế hoạch, không chứa trạng thái, không nhắc tên khách |
+| [`he-thong.md`](kien-truc/he-thong.md) | **Thiết kế kỹ thuật & as-built** — sơ đồ, quyết định kỹ thuật, phụ lục PoC | Không được mâu thuẫn với file trên |
+
+> ⚠️ Đừng nhầm [`kien-truc/nen-tang-da-khach.md`](kien-truc/nen-tang-da-khach.md) (kiến trúc) với
+> [`phat-trien/ke-hoach/dot-0-nen-tang.md`](phat-trien/ke-hoach/dot-0-nen-tang.md) (kế hoạch Đợt 0).
+> Tên từng gần giống nhau nên đã đổi tên file kế hoạch cho khỏi lẫn.
 
 ## Quy ước đặt tên
 

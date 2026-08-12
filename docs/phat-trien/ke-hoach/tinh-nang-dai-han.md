@@ -1,8 +1,8 @@
 # KẾ HOẠCH TÍNH NĂNG DÀI HẠN — ĐỢT 1-4 (6 tính năng mới, định hướng)
 
 > **Vai trò:** kế hoạch con mô tả THIẾT KẾ ĐỊNH HƯỚNG cho 6 nhóm tính năng mới, xếp theo phụ thuộc kỹ thuật + giá trị nghiệp vụ. Có thể bổ sung/bỏ bớt theo quyết định khách — mỗi tính năng có "cổng vào" rõ ràng; chưa qua cổng thì chưa code phần chạm thật.
-> **Không chứa trạng thái** — tiến độ đợt/cổng đã chốt hay chưa: [tong-quan.md](tong-quan.md) §3.2 + §4-D. Nền phải xong trước (Đợt 0): [nen-tang.md](nen-tang.md).
-> Lập: 10/07/2026 · chuyển vào `ke-hoach/` + bóc trạng thái: 11/07/2026. Nguồn ngữ cảnh: [nghiệp vụ Ultty](../../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) · [kiến trúc hệ thống](../kien-truc/he-thong.md) · `docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md` (GĐ2-3 NetViet).
+> **Không chứa trạng thái** — tiến độ đợt/cổng đã chốt hay chưa: [tong-quan.md](tong-quan.md) §3.2 + §4-D. Nền phải xong trước (Đợt 0): [nen-tang.md](dot-0-nen-tang.md).
+> Lập: 10/07/2026 · chuyển vào `ke-hoach/` + bóc trạng thái: 11/07/2026. Nguồn ngữ cảnh: [nghiệp vụ Ultty](../../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) · [kiến trúc hệ thống](../../kien-truc/he-thong.md) · `docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md` (GĐ2-3 NetViet).
 
 ---
 
@@ -16,7 +16,7 @@
 
 ---
 
-## 1. Nền phải xong trước (Đợt 0 — chi tiết ở [nen-tang.md](nen-tang.md))
+## 1. Nền phải xong trước (Đợt 0 — chi tiết ở [nen-tang.md](dot-0-nen-tang.md))
 
 | Nền | Vì sao tính năng mới cần nó |
 |---|---|
@@ -144,7 +144,7 @@ flowchart LR
 
 | Đợt | Gồm | Điều kiện vào đợt (cổng) | Đầu ra nghiệm thu |
 |---|---|---|---|
-| **0 — Nền** | [nen-tang.md](nen-tang.md) | — | Pilot 1-2 nhóm, 4 KPI có số thật |
+| **0 — Nền** | [nen-tang.md](dot-0-nen-tang.md) | — | Pilot 1-2 nhóm, 4 KPI có số thật |
 | **1 — Giá trị nhanh** | F6a → F1 → F3 v1 | D10 · D11 · D14 | Sửa đơn qua chat có diff+duyệt; dashboard 4 KPI sống |
 | **2 — Dòng tiền** | F2 → F5 v1 | D9 · D13 | Đơn `paid` tự động ≥X%; danh sách nhắc nợ hằng ngày |
 | **3 — Năng lực AI** | F4 (PoC → thật) · F6b v1 | D12 · D14 | Số eval ảnh công bố; hàng đợi nghi vấn cho KSNB |
@@ -220,7 +220,7 @@ flowchart LR
 | F5 + Đợt 0 Excel | 🔄 **ĐỔI 11/07: `read-excel-file` 9.x (import) + `write-excel-file` 4.x (export)** — thay `exceljs` | exceljs LOẠI sau tra lại 11/07: release cuối 19/10/2023 (~3 năm), 655 issues/140 PR không ai merge, Snyk "inactive", cộng đồng tự fork. Cặp thay thế MIT, deps tối thiểu (fflate), release 06-07/2026; `read-excel-file` có schema map header→field (+ zod validate) cho số dư/A4; `write-excel-file` đủ header đậm/độ rộng cột/format `#,##0` cho bảng đối soát. GIỮ CẤM `xlsx`/`node-xlsx` (CVE); SheetJS CE bản vá chỉ phát qua CDN riêng + writer không style — loại |
 | F5 tính phạt 1%/ngày | *(không dep — BUILD integer thuần)* — chốt 11/07 | VND = số nguyên; chỗ duy nhất sinh thập phân là phạt %: `round(nợ × ngày/100)` → chốt quy tắc làm tròn với kế toán + unit test + assert `Number.isSafeInteger`. dinero.js v2 stable 03/2026 nhưng giải bài đa tiền tệ — YAGNI |
 | F6 | *(không dep mới)* — ✅ 11/07 CONFIRM | Luật tất định TS thuần + zca/SSE sẵn có; phần quyết định là chuẩn hóa tiếng Việt (NFD bỏ dấu — built-in) + Levenshtein ~25 LOC. Khi thật cần dep: ưu tiên **`leven`** 4.1.0 (còn maintain, ESM) thay `fastest-levenshtein` (đóng băng từ 08/2022); search-in-list 200-300 đại lý → `@leeoniya/ufuzzy`/`fuzzysort` |
-| Đợt 0 KiotViet API | **Tự viết client mỏng** sau `KiotVietAdapter` sẵn có | KHÔNG có client chính thức. SDK cộng đồng `kiotviet-client-sdk` 0.4.0 (13★, active 06/2026) chỉ dùng **tham khảo**, không làm dep (0.x, adoption thấp). Chi tiết auth/limit: [nen-tang.md §2](nen-tang.md) |
+| Đợt 0 KiotViet API | **Tự viết client mỏng** sau `KiotVietAdapter` sẵn có | KHÔNG có client chính thức. SDK cộng đồng `kiotviet-client-sdk` 0.4.0 (13★, active 06/2026) chỉ dùng **tham khảo**, không làm dep (0.x, adoption thấp). Chi tiết auth/limit: [nen-tang.md §2](dot-0-nen-tang.md) |
 | Đợt 0 auth | 🔄 **ĐỔI 11/07: `express-session` (sẵn có) + guard/`@Roles()` tự viết + `argon2` 0.44** | Bỏ tầng passport: 5-10 user nội bộ, 5 vai cố định → login route + `SessionAuthGuard` + `RolesGuard` ~50-80 LOC (phần `passport-local` — đóng băng từ 2014 — làm hộ). `argon2` 0.44: prebuilds nằm trong tarball (win/linux) — không cần build tools; fallback `@node-rs/argon2`. LOẠI `better-auth` (17 deps + telemetry) · `lucia` (deprecated chính thức); `@nestjs/passport` = dự phòng. MemoryStore mất session khi restart → cần bền thêm `connect-redis` sau |
 
 ### 7.3 Phát hiện quan trọng ngoài lề (từ đợt nghiên cứu)

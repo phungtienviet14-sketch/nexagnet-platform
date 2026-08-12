@@ -34,5 +34,5 @@ $c = <dump-dom output>
 ## Quy ước nội dung
 
 - **PDF (thư mục cha) = bản cho SẾP/KHÁCH**: không tên biến env, không tên bảng DB/module, không thuật ngữ (intent, rules engine, state machine...). Không dùng chữ "Co-pilot" (dễ nhầm Microsoft Copilot) — viết "chế độ Sale dán tay".
-- **Chi tiết kỹ thuật:** [nghiệp vụ Ultty](../../nghiep-vu/mo-ta-nghiep-vu.md) · [kiến trúc hệ thống](../../../../phat-trien/kien-truc/he-thong.md) · [trạng thái](../../../../phat-trien/ke-hoach/tong-quan.md) · [kế hoạch dài hạn](../../../../phat-trien/ke-hoach/tinh-nang-dai-han.md). Sửa tài liệu nguồn trước, rồi phản ánh bản rút gọn vào HTML.
+- **Chi tiết kỹ thuật:** [nghiệp vụ Ultty](../../nghiep-vu/mo-ta-nghiep-vu.md) · [kiến trúc hệ thống](../../../../kien-truc/he-thong.md) · [trạng thái](../../../../phat-trien/ke-hoach/tong-quan.md) · [kế hoạch dài hạn](../../../../phat-trien/ke-hoach/tinh-nang-dai-han.md). Sửa tài liệu nguồn trước, rồi phản ánh bản rút gọn vào HTML.
 - **3 PDF đã tái sinh ngày 12/08/2026** từ nguồn HTML v2.1 sau khi đồng bộ quyết định Giai đoạn 1 mới nhất. Khi nghiệp vụ/kỹ thuật đổi tiếp, sửa `.md` trước, phản ánh bản rút gọn vào HTML rồi tái sinh và kiểm tra hình ảnh.

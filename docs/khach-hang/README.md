@@ -5,7 +5,7 @@ Nơi giữ tài liệu **của khách, làm việc với khách hoặc bàn giao
 > **Đừng nhầm với [`tenants/`](../../tenants/README.md)** (đã có từ Đợt B1): thư mục này là
 > **tài liệu cho người đọc** (hồ sơ, báo giá, trao đổi, ảnh design). `tenants/<slug>/` là
 > **cấu hình máy đọc** (JSON có zod schema, dữ liệu seed) mà hệ thống nạp lúc chạy.
-> Slug hai bên đặt trùng nhau. Xem [`../phat-trien/ke-hoach/nen-tang-da-khach.md`](../phat-trien/ke-hoach/nen-tang-da-khach.md).
+> Slug hai bên đặt trùng nhau. Xem [`../kien-truc/nen-tang-da-khach.md`](../kien-truc/nen-tang-da-khach.md).
 
 ## Quy ước
 

@@ -2,7 +2,7 @@
 
 > **Nguồn kế hoạch:** [GĐ1 Ultty §4 CHẶN E + §6 Đợt A′](../../ke-hoach/gd1-ultty.md) · trạng thái ở [tổng quan §1](../../ke-hoach/tong-quan.md).
 > Chạy: **11/08/2026**. Nhánh: `main`. Commit: `03a6a03` (RED) → `4c6f1fa` (GREEN) → `8205ba3` (refactor + phủ nốt).
-> Tiếp nối [Task 1](dot-a-phay-task-1.md) — Task 1 cho tin chỉ-ảnh **vào DB**, Task 2 cho **file ảnh** vào kho.
+> Tiếp nối [Task 1](2026-08-11-tin-chi-anh.md) — Task 1 cho tin chỉ-ảnh **vào DB**, Task 2 cho **file ảnh** vào kho.
 
 ---
 
