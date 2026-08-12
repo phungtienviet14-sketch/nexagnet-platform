@@ -152,6 +152,11 @@ export function tenantRetailAdvice(): TenantConfig['retailAdvice'] {
   return loadTenantConfig().retailAdvice;
 }
 
+/** He thong ERP cua khach; nhan chi biet cong `ErpPort`, khong biet ten nha cung cap (G1-12). */
+export function tenantErp(): TenantConfig['erp'] {
+  return loadTenantConfig().erp;
+}
+
 /** Blocker do tenant khai bao de health/settings hien thi ma core khong biet ten khach. */
 export function tenantReadiness(): TenantConfig['readiness'] {
   return loadTenantConfig().readiness;

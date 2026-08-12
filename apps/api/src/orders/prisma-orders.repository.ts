@@ -7,7 +7,7 @@ import { OrdersRepository } from './orders.repository.js';
 /**
  * Repository don tren Postgres (Prisma) — bat khi PERSISTENCE=prisma.
  * Round-trip qua cot `view` (Json) de KHONG mat field OrderView (priced/trace/confidence long nhau).
- * Cac cot scalar (status/chatId/intent/dealerName/grandTotal/kiotVietCode) la ban denormalize
+ * Cac cot scalar (status/chatId/intent/dealerName/grandTotal/erpCode) la ban denormalize
  * de truy van/loc/bao cao sau nay.
  */
 @Injectable()
@@ -51,7 +51,7 @@ export class PrismaOrdersRepository extends OrdersRepository {
       dealerName: view.dealerName ?? null,
       groupName: view.groupName ?? null,
       grandTotal: view.priced?.grandTotal ?? null,
-      kiotVietCode: view.kiotVietCode ?? null,
+      erpCode: view.erpCode ?? null,
       ruleConfigVersion: view.ruleConfigVersion ?? null,
       createdAt: new Date(view.createdAt),
       view: view as unknown as Prisma.InputJsonValue,

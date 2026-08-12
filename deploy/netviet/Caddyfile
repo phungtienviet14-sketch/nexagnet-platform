@@ -28,7 +28,7 @@
 (app_routes) {
 	# Liet ke TUNG endpoint API duoi /settings thay vi /settings/*: `/settings/` (co dau / cuoi)
 	# van khop /settings/* nen se bi day sang NestJS va tra 404 — nguoi van hanh tuong chua co trang.
-	@api path /events /orders* /messages* /demo* /kiotviet* /knowledge* /broadcast* /health /zalo/* /groups/* /settings/summary /settings/source-truth* /settings/groups/* /settings/rules* /settings/automation* /settings/audit* /admin*
+	@api path /events /orders* /messages* /demo* /erp* /kiotviet* /knowledge* /broadcast* /health /zalo/* /groups/* /settings/summary /settings/source-truth* /settings/groups/* /settings/rules* /settings/automation* /settings/audit* /admin*
 	handle @api {
 		reverse_proxy api:3001 {
 			header_up x-api-key "{$API_KEY}"

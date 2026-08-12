@@ -3,11 +3,14 @@ import type { ErpOrder, ErpProduct } from '@netviet/shared';
 import { ErpPort } from './erp.port.js';
 
 /**
- * Cong DOC trang thai ERP cho tab "KiotViet" tren app.
- * Duong dan giu nguyen `/kiotviet` (app web + hop dong route dang dung) du cong da trung tinh —
- * doi duong dan la viec cua Dot B4 khi co khach thu hai dung ERP khac.
+ * Cong DOC trang thai ERP cho tab ERP tren app.
+ *
+ * Duong dan chinh la `/erp` (G1-12) — nen tang dung chung khong duoc dat ten route theo mot nha
+ * cung cap. `/kiotviet` giu lai lam BI DANH de khong pha thu gi con tro vao duong cu (Caddy
+ * `@api` va proxy cua ban demo deu dang liet ke duong nay); bo han la viec cua mot dot don dep
+ * rieng, sau khi da xac nhan khong con ai goi.
  */
-@Controller('kiotviet')
+@Controller(['erp', 'kiotviet'])
 export class ErpController {
   constructor(private readonly erp: ErpPort) {}
 

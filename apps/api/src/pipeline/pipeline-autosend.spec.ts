@@ -47,7 +47,7 @@ describe('PipelineService AUTO_SEND (policy tenant GĐ1)', () => {
 
     expect(view.trace?.supervisor.escalate).toBe(true);
     expect(view.status).toBe('sent');
-    expect(view.kiotVietCode).toBeUndefined();
+    expect(view.erpCode).toBeUndefined();
     expect(view.salesHandoff).toMatchObject({ action: 'manual_erp_entry', status: 'pending' });
     expect(adapter.sent).toHaveLength(1);
     expect(adapter.sent[0]!.text).toContain('Tin tự động');
@@ -58,7 +58,7 @@ describe('PipelineService AUTO_SEND (policy tenant GĐ1)', () => {
     const view = await pipeline.process(msg('@Bot ultty AI orders 51 quat mini'));
 
     expect(view.status).toBe('needs_edit');
-    expect(view.kiotVietCode).toBeUndefined();
+    expect(view.erpCode).toBeUndefined();
     expect(view.salesHandoff).toBeUndefined();
     expect(adapter.sent).toHaveLength(0);
   });

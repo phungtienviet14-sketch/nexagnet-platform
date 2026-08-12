@@ -9,6 +9,7 @@ import {
   resetTenantCache,
   tenantBranding,
   tenantDir,
+  tenantErp,
 } from '../tenant.config.js';
 
 /**
@@ -156,6 +157,28 @@ describe('doc goi khach', () => {
   it('co data/demo-messages.json -> doc theo thu tu trong file', () => {
     useFakePack({ 'tenant.json': VALID_CONFIG, 'data/demo-messages.json': ['tin 1', 'tin 2'] });
     expect(loadDemoMessages()).toEqual(['tin 1', 'tin 2']);
+  });
+});
+
+/**
+ * G1-12: nen tang chi biet cong `ErpPort`; DANH TINH nha cung cap ERP la du lieu cua khach.
+ * VALID_CONFIG co y KHONG khai bao `erp` — de mac dinh fail-closed duoc kiem that su.
+ */
+describe('he thong ERP cua khach', () => {
+  it('goi khach khong khai bao -> none, KHONG gan bua nha cung cap nao', () => {
+    useFakePack({ 'tenant.json': VALID_CONFIG });
+    expect(loadTenantConfig().erp).toEqual({ adapter: 'none' });
+    expect(tenantErp()).toEqual({ adapter: 'none' });
+  });
+
+  it('khai bao adapter -> doc dung gia tri do', () => {
+    useFakePack({ 'tenant.json': { ...VALID_CONFIG, erp: { adapter: 'kiotviet_mock' } } });
+    expect(tenantErp().adapter).toBe('kiotviet_mock');
+  });
+
+  it('adapter khong co hien thuc -> chan luc boot, khong chay tiep voi cong rong', () => {
+    useFakePack({ 'tenant.json': { ...VALID_CONFIG, erp: { adapter: 'erp-khong-ton-tai' } } });
+    expect(() => loadTenantConfig()).toThrow(/Goi khach sai schema[\s\S]*erp\.adapter/);
   });
 });
 

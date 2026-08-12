@@ -4,16 +4,21 @@ import { useQuery } from '@tanstack/react-query';
 import { api, formatVnd } from '../../lib/api';
 import { timeOf } from '../../lib/labels';
 
-/** KiotViet (mock) — ton kho la source of truth kho; don da dong bo sau khi Sale duyet. */
-export function KiotVietPanel() {
+/**
+ * Trang thai ERP cua khach — ton kho la source of truth kho; don xuat hien sau khi da day len ERP.
+ *
+ * KHONG gan vao `SourceColumn` trong GD1: GD1 khong day don len ERP (Sale nhap tay), nen mot tab
+ * hien "don da dong bo" se noi sai su that. Giu lai cho giai doan bat tich hop ERP.
+ */
+export function ErpPanel() {
   const productsQ = useQuery({
-    queryKey: ['kiotviet', 'products'],
-    queryFn: api.kiotVietProducts,
+    queryKey: ['erp', 'products'],
+    queryFn: api.erpProducts,
     refetchInterval: 3000,
   });
   const ordersQ = useQuery({
-    queryKey: ['kiotviet', 'orders'],
-    queryFn: api.kiotVietOrders,
+    queryKey: ['erp', 'orders'],
+    queryFn: api.erpOrders,
     refetchInterval: 3000,
   });
 
@@ -23,7 +28,7 @@ export function KiotVietPanel() {
   return (
     <div>
       <div className="kb-block">
-        <p className="kb-title">Tồn kho · source of truth (mock)</p>
+        <p className="kb-title">Tồn kho · source of truth</p>
         {products.length === 0 && <div className="empty">Chưa tải được danh mục.</div>}
         {products.map((p) => (
           <div className="kv-item" key={p.sku}>

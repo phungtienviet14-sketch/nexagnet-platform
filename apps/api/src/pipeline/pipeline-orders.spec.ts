@@ -60,7 +60,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     const approved = await orders.approve(view.id);
 
     expect(approved.status).toBe('sent');
-    expect(approved.kiotVietCode).toBeUndefined();
+    expect(approved.erpCode).toBeUndefined();
     expect(approved.salesHandoff).toMatchObject({
       action: 'manual_erp_entry',
       status: 'pending',
@@ -108,7 +108,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
 
     const after = await orders.getOrThrow(view.id);
     expect(after.status).toBe('pending_review'); // van con nut Duyet -> retry duoc
-    expect(after.kiotVietCode).toBeUndefined(); // chua len KiotViet
+    expect(after.erpCode).toBeUndefined(); // chua len ERP
   });
 
   it('tin tu NHOM KHAC -> map dung dai ly/chinh sach/ten nhom cua nhom do (dinh tuyen da nhom)', async () => {

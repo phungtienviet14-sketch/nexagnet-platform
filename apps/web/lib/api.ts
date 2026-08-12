@@ -62,10 +62,10 @@ export const api = {
   samples: (): Promise<string[]> => authFetch(`${BASE}/demo/samples`).then((r) => toJson<string[]>(r)),
   groups: (): Promise<DemoGroup[]> =>
     authFetch(`${BASE}/demo/groups`).then((r) => toJson<DemoGroup[]>(r)),
-  kiotVietProducts: (): Promise<ErpProduct[]> =>
-    authFetch(`${BASE}/kiotviet/products`).then((r) => toJson<ErpProduct[]>(r)),
-  kiotVietOrders: (): Promise<ErpOrder[]> =>
-    authFetch(`${BASE}/kiotviet/orders`).then((r) => toJson<ErpOrder[]>(r)),
+  erpProducts: (): Promise<ErpProduct[]> =>
+    authFetch(`${BASE}/erp/products`).then((r) => toJson<ErpProduct[]>(r)),
+  erpOrders: (): Promise<ErpOrder[]> =>
+    authFetch(`${BASE}/erp/orders`).then((r) => toJson<ErpOrder[]>(r)),
   knowledge: (): Promise<KnowledgeSummary> =>
     authFetch(`${BASE}/knowledge/summary`).then((r) => toJson<KnowledgeSummary>(r)),
   config: (): Promise<DemoConfig> => authFetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),

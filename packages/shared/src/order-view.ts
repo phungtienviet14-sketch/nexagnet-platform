@@ -81,8 +81,8 @@ export interface OrderView {
   parsed: ParsedOrder | null;
   priced: PricedOrder | null;
   confidence: FieldConfidence;
-  /** Ma ERP legacy/tuong lai; GĐ1 khong tao field nay. */
-  kiotVietCode?: string;
+  /** Ma don ben ERP cua khach — trung tinh theo nha cung cap; GĐ1 khong tao field nay. */
+  erpCode?: string;
   /** Hang viec ben vung cho Sale sau khi khach da nhan xac nhan. */
   salesHandoff?: SalesHandoff;
   /** Loai nguoi gui suy tu nhom (multi-agent 6 con). */

@@ -547,7 +547,8 @@ model Order {
   priced            Json?
   trace             Json?
   grandTotal        Int?
-  kiotVietCode      String?
+  /// Ma don ben ERP cua khach. Trung tinh theo nha cung cap (G1-12); GD1 khong ghi truong nay.
+  erpCode           String?
   ruleConfigVersion Int?
   /// Ban day du OrderView (nguon su that cho repo — round-trip khong mat field long nhau).
   view              Json?

@@ -18,7 +18,8 @@ const API_PATHS = [
   '/orders/:path*', // /orders/:id/approve, /reject
   '/messages',
   '/demo/:path*', // /demo/config, /demo/simulate, /demo/samples, /demo/groups, /demo/rerun/:id
-  '/kiotviet/:path*', // /kiotviet/products, /kiotviet/orders
+  '/erp/:path*', // /erp/products, /erp/orders
+  '/kiotviet/:path*', // bi danh cu cua /erp — giu de ban da deploy khong 404
   '/knowledge/:path*', // /knowledge/summary...
   '/broadcast',
   '/health',

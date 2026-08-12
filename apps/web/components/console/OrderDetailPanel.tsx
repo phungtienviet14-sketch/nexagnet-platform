@@ -179,7 +179,7 @@ export function OrderDetailPanel({
         <div className="oc-done">
           <span>✓ Đã gửi xác nhận vào nhóm Zalo</span>
           <span>
-            ✓ Đã đồng bộ ERP{order.kiotVietCode ? ` · ${order.kiotVietCode}` : ''}
+            ✓ Đã đồng bộ ERP{order.erpCode ? ` · ${order.erpCode}` : ''}
           </span>
         </div>
       ) : (

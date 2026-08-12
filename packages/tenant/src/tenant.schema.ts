@@ -50,6 +50,20 @@ export const orderAutomationSchema = z
   })
   .strict();
 
+/**
+ * He thong ban hang/kho cua khach. NEN TANG chi biet cong `ErpPort`; ten nha cung cap chi duoc
+ * xuat hien o DAY (du lieu cua khach) va trong chinh thu muc adapter — khong o nhan (G1-12).
+ * Them khach dung ERP khac = them mot hien thuc + mot gia tri enum, khong sua nhan.
+ */
+export const erpAdapterSchema = z.enum([
+  /** Khach chua noi ERP nao: doc tra rong, day don thi NEM. Mac dinh — fail-closed. */
+  'none',
+  /** Gia lap trong bo nho cho khach dung KiotViet khi ben do chua bat API. */
+  'kiotviet_mock',
+]);
+
+export const erpConfigSchema = z.object({ adapter: erpAdapterSchema }).strict();
+
 const timeOfDaySchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'gio phai co dang HH:mm');
 
 export const campaignConfigSchema = z
@@ -127,6 +141,12 @@ export const tenantConfigSchema = z.object({
    * nguong la du lieu kinh doanh rieng tung khach.
    */
   orderAutomation: orderAutomationSchema.nullable(),
+  /**
+   * Khong khai bao -> `none`. Mac dinh nay CO Y fail-closed: goi khach im lang ve ERP thi he
+   * thong khong duoc tu gan cho ho nha cung cap nao, va moi loi goi day don se nem thay vi tra
+   * ve mot ma don gia.
+   */
+  erp: erpConfigSchema.default({ adapter: 'none' }),
   /** Gioi han van han campaign cua tung silo; noi dung/lich thuc te nam trong Postgres. */
   campaign: campaignConfigSchema,
   /** Chien luoc tu van gia le; core chi doc field va cau giai thich nay. */
@@ -156,6 +176,8 @@ export type TenantConfig = z.infer<typeof tenantConfigSchema>;
 export type OrderAutomation = z.infer<typeof orderAutomationSchema>;
 export type CampaignConfig = z.infer<typeof campaignConfigSchema>;
 export type RetailAdvice = z.infer<typeof retailAdviceSchema>;
+export type ErpConfig = z.infer<typeof erpConfigSchema>;
+export type ErpAdapterName = z.infer<typeof erpAdapterSchema>;
 export type TenantReadiness = z.infer<typeof tenantReadinessSchema>;
 
 /**

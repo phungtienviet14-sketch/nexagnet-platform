@@ -83,7 +83,7 @@ export function useAgentStream(
         });
       } else if (e.type === 'order.finalized') {
         qc.setQueryData<OrderView[]>(['messages'], (prev) => upsert(prev, e.order));
-        void qc.invalidateQueries({ queryKey: ['kiotviet'] });
+        void qc.invalidateQueries({ queryKey: ['erp'] });
         setRuns((prev) => {
           if (!prev.has(e.order.id)) return prev;
           const next = new Map(prev);
@@ -92,7 +92,7 @@ export function useAgentStream(
         });
       } else if (e.type === 'order.updated') {
         qc.setQueryData<OrderView[]>(['messages'], (prev) => upsert(prev, e.order));
-        void qc.invalidateQueries({ queryKey: ['kiotviet'] });
+        void qc.invalidateQueries({ queryKey: ['erp'] });
       }
     };
 

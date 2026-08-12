@@ -18,9 +18,15 @@ import { ReadinessService } from './readiness/readiness.service.js';
  *
  * Bai test nay compile ca do thi phu thuoc, nen bat ky loi nao cung kieu do se do ngay tai CI.
  */
-/** `createApplicationContext` dung DUNG do thi DI nhu luc chay that, chi bo tang HTTP. */
+/**
+ * `createApplicationContext` dung DUNG do thi DI nhu luc chay that, chi bo tang HTTP.
+ *
+ * Giu muc `error`: khi do thi DI hong, Nest goi `process.abort()` — voi `logger: false` thi worker
+ * vitest chet ma KHONG in ra dong "Nest can't resolve dependencies of ...", nen nguoi sua chi thay
+ * mot vu sap khong ly do. Chinh cai test nay ton tai de chi ra mat xich hong, nen no phai noi duoc.
+ */
 async function createContext() {
-  return NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: false });
+  return NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
 }
 
 describe('AppModule khoi dong duoc that su', () => {

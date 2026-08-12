@@ -34,8 +34,7 @@ import { DemoController } from './demo/demo.controller.js';
 import { HealthController } from './health/health.controller.js';
 import { BotPoller } from './ingest/bot-poller.js';
 import { ZcaListener } from './ingest/zca-listener.js';
-import { ErpPort } from './erp/erp.port.js';
-import { KiotVietMockAdapter } from './erp/kiotviet.mock.adapter.js';
+import { erpProvider } from './erp/erp.provider.js';
 import { ErpController } from './erp/erp.controller.js';
 import { KnowledgeController } from './knowledge/knowledge.controller.js';
 import { KnowledgeModule } from './knowledge/knowledge.module.js';
@@ -161,7 +160,8 @@ import { ReadinessService } from './readiness/readiness.service.js';
           : new InMemoryMessagesRepository(),
       inject: [PrismaService],
     },
-    { provide: ErpPort, useClass: KiotVietMockAdapter },
+    // Cong ERP chon theo goi khach (G1-12) — nhan khong biet ten nha cung cap nao.
+    erpProvider,
     // Kho luu anh + worker tai anh (Dot A' Task 2). Mac dinh MEDIA_STORE=none -> khong I/O gi,
     // demo/CI chay y nhu truoc; bat bang MEDIA_STORE=s3 khi co bucket.
     mediaStoreProvider,
