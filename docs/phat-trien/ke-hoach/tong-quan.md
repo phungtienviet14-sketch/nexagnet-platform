@@ -284,6 +284,35 @@ Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đ
 > — cùng nội dung A/B/D dưới đây nhưng viết lại thành câu hỏi nghiệp vụ cho chị Phương trả lời trực
 > tiếp. Bảng ở đây là bản kỹ thuật; đừng gửi bảng này cho khách.
 
+### A0 — 🔴 PHÁT HIỆN TỪ ẢNH CHỤP TIN NHẮN THẬT (12/08/2026) — cần khách xác nhận
+
+> Nguồn: 6 ảnh chụp nhóm Zalo thật khách gửi (`nguon-goc/ho-so-khao-sat/gd1/anh_chup_tin_nhan_khach/`,
+> gitignore). Đây là **bằng chứng vận hành thật**, mạnh hơn tài liệu — nhưng **mâu thuẫn với bảng
+> giá T7**, nên không được tự sửa nguồn sự thật theo nó. Phải hỏi chị Phương.
+
+| # | Quan sát trong ảnh | Mâu thuẫn với | Cần chốt |
+|---|---|---|---|
+| A0.1 | Ghế **FELIX bán 1.150.000** cho SL 5 — xuất hiện ở **2 đại lý khác nhau** (KNA 24/07, Vua Nhà Bếp Đức 25/07), cùng một mức | Bảng giá T7 ghi `wholesale = 1.250.000` | Đây là **deal riêng theo SL** hay **giá CTV thật đã đổi**? → quyết định A2 vs sửa bảng giá |
+| A0.2 | **ELNI bán 1.900.000** (`HN_25.7_BHHP / 1 x Elni ---1900k`) | Bảng giá T7 ghi `wholesale = 2.150.000` | Cùng câu hỏi như A0.1 |
+| A0.3 | **"Tặng 1 Elna"** khi mua 1 ELNI | Chưa có promotion engine (A7) | Khuyến mãi này còn hiệu lực không? Điều kiện gì? → đây là **nguồn thật đầu tiên** cho A7 |
+| A0.4 | Đại lý hỏi *"Đơn này nhà mình có xuất hoá đơn ko c ạ"* → Sale trả lời **"có e nhé"** | D8 (VAT mặc định) đang treo | VAT xuất **theo yêu cầu từng đơn**, không mặc định? → gợi ý câu trả lời cho D8 |
+
+**Hệ quả nếu không chốt:** hệ thống sẽ báo giá theo bảng T7 (1.250.000/2.150.000) trong khi Sale
+thực tế chốt 1.150.000/1.900.000 ⇒ **mọi đơn đều lệch tiền**. Golden eval sẽ đỏ đúng ở điểm này —
+đó là hành vi đúng, không phải lỗi harness.
+
+**Ghi nhận thêm — 3 nhóm đại lý trong ảnh chưa có trong nguồn sự thật:** `BHHP` (C1 Bách Hóa),
+`KNA`, `Vua Nhà Bếp Đức`. Cần bổ sung vào A4 trước khi pilot các nhóm này.
+
+**Format xác nhận thật của Sale** (khớp TH1 trong CLAUDE.md, dùng làm mẫu outbound):
+
+```text
+E gửi xác nhận đơn ạ
+HN_24.07_KNA
+5 ghế trẻ em ô tô EUS FELIX x 1150
+Tổng thanh toán: 5.750.000
+```
+
 ### A — Nguồn sự thật
 
 | # | Cần gì | Chi tiết hỏi | Chặn | TT |
