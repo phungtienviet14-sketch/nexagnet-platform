@@ -9,6 +9,7 @@ import { AutomationSettings } from './AutomationSettings';
 import { CampaignSettings } from './CampaignSettings';
 import { ContentSettings } from './ContentSettings';
 import { ParticipantsSettings } from './ParticipantsSettings';
+import { ReadinessSettings } from './ReadinessSettings';
 import { RulesSettings } from './RulesSettings';
 import { SettingsPanelState } from './SettingsPanelState';
 import { SettingsTabs, type SettingsTab, type SettingsTabId } from './SettingsTabs';
@@ -96,6 +97,13 @@ export function SettingsShell() {
       label: 'Tự động hóa',
       description: 'Policy tenant và kill switch',
       panel: <AutomationSettings summary={summary} />,
+    },
+    {
+      id: 'readiness',
+      code: 'SS',
+      label: 'Sẵn sàng vận hành',
+      description: 'Cổng go-live: thiếu gì, chặn gì',
+      panel: <ReadinessSettings />,
     },
     {
       id: 'users',

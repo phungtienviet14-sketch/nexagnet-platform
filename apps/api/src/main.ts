@@ -1,24 +1,16 @@
 import 'reflect-metadata';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+// PHAI dung ngay sau reflect-metadata va TRUOC moi import nghiep vu: AppModule keo theo
+// knowledge/seed.ts, ma file do doc process.env.TENANT ngay luc import.
+import './config/load-dotenv.js';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { loadEnv } from '@netviet/shared';
-import dotenv from 'dotenv';
 import { setKnowledgeReloader } from './admin/knowledge-refresh.js';
 import { AppModule } from './app.module.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { PrismaService } from './config/prisma.service.js';
 import { configureSession } from './auth/session-bootstrap.js';
-
-// Nap .env (o goc repo) truoc khi validate env.
-for (const candidate of [resolve(process.cwd(), '.env'), resolve(process.cwd(), '../../.env')]) {
-  if (existsSync(candidate)) {
-    dotenv.config({ path: candidate });
-    break;
-  }
-}
 
 const logger = new Logger('Bootstrap');
 

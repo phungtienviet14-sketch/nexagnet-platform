@@ -38,9 +38,7 @@ import { ErpPort } from './erp/erp.port.js';
 import { KiotVietMockAdapter } from './erp/kiotviet.mock.adapter.js';
 import { ErpController } from './erp/erp.controller.js';
 import { KnowledgeController } from './knowledge/knowledge.controller.js';
-import { KnowledgeRepository, SeedKnowledgeRepository } from './knowledge/knowledge.repository.js';
-import { KnowledgeService } from './knowledge/knowledge.service.js';
-import { PrismaKnowledgeRepository } from './knowledge/prisma-knowledge.repository.js';
+import { KnowledgeModule } from './knowledge/knowledge.module.js';
 import { mediaFetcherProvider, mediaStoreProvider } from './media/media.provider.js';
 import { MediaHealthController } from './media/media-health.controller.js';
 import { InMemoryMessagesRepository, MessagesRepository } from './messages/messages.repository.js';
@@ -62,10 +60,15 @@ import { SourceTruthWriteService } from './settings/source-truth-write.service.j
 import { OperationalSettingsModule } from './settings/operational-settings.module.js';
 import { MasterDataController } from './settings/master-data.controller.js';
 import { MasterDataService } from './settings/master-data.service.js';
+import { AuditLogService } from './audit/audit-log.service.js';
+import { KnowledgeService } from './knowledge/knowledge.service.js';
+import { ReadinessController } from './readiness/readiness.controller.js';
+import { ReadinessService } from './readiness/readiness.service.js';
 
 @Module({
   imports: [
     PrismaModule,
+    KnowledgeModule,
     AuthModule,
     OperationalSettingsModule,
     GroupParticipantsModule,
@@ -86,6 +89,7 @@ import { MasterDataService } from './settings/master-data.service.js';
     CampaignController,
     MediaHealthController,
     MasterDataController,
+    ReadinessController,
   ],
   providers: [
     {
@@ -110,7 +114,6 @@ import { MasterDataService } from './settings/master-data.service.js';
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
-    KnowledgeService,
     RuntimeSettingsService,
     AgentEventsService,
     {
@@ -126,7 +129,19 @@ import { MasterDataService } from './settings/master-data.service.js';
     SettingsQueryService,
     GroupMappingService,
     SourceTruthWriteService,
-    MasterDataService,
+    {
+      // MasterDataService CO Y nhan phu thuoc bang kieu CAU TRUC (de test khong can Nest), nen
+      // Nest khong tu resolve duoc — phai dung factory chi ro the hien that.
+      provide: MasterDataService,
+      useFactory: (
+        prisma: PrismaService,
+        knowledge: KnowledgeService,
+        audit: AuditLogService,
+      ): MasterDataService =>
+        new MasterDataService(prisma, knowledge, audit, loadEnv().PERSISTENCE),
+      inject: [PrismaService, KnowledgeService, AuditLogService],
+    },
+    ReadinessService,
     {
       provide: CampaignRepository,
       useFactory: (prisma: PrismaService): CampaignRepository =>
@@ -144,15 +159,6 @@ import { MasterDataService } from './settings/master-data.service.js';
         loadEnv().PERSISTENCE === 'prisma'
           ? new PrismaMessagesRepository(prisma)
           : new InMemoryMessagesRepository(),
-      inject: [PrismaService],
-    },
-    {
-      // Nguon su that: Prisma (PERSISTENCE=prisma) hoac SEED in-memory (mac dinh).
-      provide: KnowledgeRepository,
-      useFactory: (prisma: PrismaService): KnowledgeRepository =>
-        loadEnv().PERSISTENCE === 'prisma'
-          ? new PrismaKnowledgeRepository(prisma)
-          : new SeedKnowledgeRepository(),
       inject: [PrismaService],
     },
     { provide: ErpPort, useClass: KiotVietMockAdapter },

@@ -1075,9 +1075,42 @@ async function campaignMutation(path: string, body: unknown): Promise<CampaignVi
   return campaign;
 }
 
+
+/** Man "San sang van hanh" (§12 gd1-ultty). Chi doc; khong bia du lieu khach. */
+export type ReadinessStatus = 'ready' | 'missing' | 'warning' | 'blocked';
+
+export interface ReadinessCheckView {
+  key: string;
+  label: string;
+  status: ReadinessStatus;
+  blocking: boolean;
+  detail: string;
+}
+
+export interface ReadinessView {
+  codeComplete: boolean;
+  goLiveReady: boolean;
+  checkedAt: string;
+  reasons: string[];
+  checks: ReadinessCheckView[];
+}
+
+export function parseReadiness(value: unknown): ReadinessView {
+  const record = (value ?? {}) as Record<string, unknown>;
+  return {
+    codeComplete: record.codeComplete === true,
+    goLiveReady: record.goLiveReady === true,
+    checkedAt: typeof record.checkedAt === 'string' ? record.checkedAt : '',
+    reasons: arrayValue(record.reasons).filter((item): item is string => typeof item === 'string'),
+    checks: arrayValue(record.checks) as ReadinessCheckView[],
+  };
+}
+
 export const settingsApi = {
   ...masterDataApi,
   summary: getSummary,
+  readiness: async (): Promise<ReadinessView> =>
+    parseReadiness(await requestJson('/settings/readiness', { cache: 'no-store' })),
   pricePeriods: async (): Promise<PricePeriodsView> =>
     parsePricePeriods(await requestJson('/settings/price-periods', { cache: 'no-store' })),
   createPricePeriod: async (validMonth: string, note?: string): Promise<PricePeriod> => {

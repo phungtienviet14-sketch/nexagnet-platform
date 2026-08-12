@@ -4,6 +4,7 @@ import { AuditLogRepository, InMemoryAuditLogRepository } from '../audit/audit-l
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaAuditLogRepository } from '../audit/prisma-audit-log.repository.js';
 import { PrismaModule } from '../config/prisma.module.js';
+import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { PrismaRuleConfigRepository } from '../rule-config/prisma-rule-config.repository.js';
 import {
@@ -15,7 +16,7 @@ import { PricePeriodsService } from './price-periods.service.js';
 
 @Global()
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, KnowledgeModule],
   providers: [
     {
       provide: RuleConfigRepository,

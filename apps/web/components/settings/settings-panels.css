@@ -989,3 +989,47 @@
   .users-create { grid-template-columns: 1fr 1fr; }
   .users-list article { grid-template-columns: 1fr 1fr; }
 }
+
+/* Man "San sang van hanh" (§12) — muc thieu phai doc ra la thieu, khong to mau nhu da xong. */
+.settings-readiness-list {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.settings-readiness-item {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border-left: 3px solid var(--settings-border, #d8d2c7);
+  background: var(--settings-surface-muted, rgba(0, 0, 0, 0.02));
+}
+
+.settings-readiness-item__label { font-weight: 600; }
+
+.settings-readiness-item__status {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.settings-readiness-item__detail {
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.settings-readiness-item--ready { border-left-color: #2f855a; }
+.settings-readiness-item--missing { border-left-color: #c53030; }
+.settings-readiness-item--warning { border-left-color: #b7791f; }
+.settings-readiness-item--blocked { border-left-color: #6b7280; }
+
+.settings-blocked-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}

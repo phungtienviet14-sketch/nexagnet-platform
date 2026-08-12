@@ -35,6 +35,26 @@ Kèm một lỗi **thật** được sửa trong Đợt A: `lib/auth.ts` không 
 không trả trường nào ⇒ **mọi** mutation bắt thêm một vòng `/auth/csrf`, im lặng và không bao
 giờ dừng. Nay cache `?? null`.
 
+> ### ⚠️ ĐÍNH CHÍNH audit (phát hiện ở Đợt D): **API trước đó KHÔNG khởi động được**
+>
+> Bảng audit ngày 12/08 đánh P2.1 và P4-import là **DONE** dựa trên code + call-site + migration
+> + test. Kết luận đó **sai ở một điểm quyết định**: toàn bộ test API dựng service bằng
+> `new Service(...)` nên **chưa từng chạm container DI của Nest**. Khi chạy thật `pnpm dev:api`,
+> ứng dụng ngã ở boot vì **ba lỗi** — nghĩa là các module Codex thêm vào **chưa từng chạy lần nào**:
+>
+> 1. `PricePeriodsService` tiêm `KnowledgeService` trong khi `OperationalSettingsModule` không có
+>    provider đó (`KnowledgeService` khi ấy là provider riêng của `AppModule`).
+> 2. `MasterDataService` khai báo phụ thuộc bằng **kiểu cấu trúc** (`RuntimePrisma`/`KnowledgeReloader`/
+>    `AuditAppender`) nên Nest chỉ thấy `Object` — không thể là provider lớp trần.
+> 3. `.env` được nạp **sau** khi `AppModule` đã import xong, mà `AppModule` kéo theo `knowledge/seed.ts`
+>    đọc `process.env.TENANT` ngay lúc import ⇒ từ khi B1 bỏ giá trị mặc định của `TENANT`,
+>    `pnpm dev:api` **không boot được bằng `.env`** dù `.env.example` vẫn hướng dẫn đặt ở đó.
+>
+> Đã sửa cả ba (KnowledgeModule `@Global` giữ **một** thể hiện · factory cho `MasterDataService` ·
+> tách `config/load-dotenv.ts` import đầu tiên). **Bài học ghi lại:** "có code + test xanh" không
+> đồng nghĩa "chạy được". Đã thêm `app.module.boot.spec.ts` compile **toàn bộ đồ thị DI thật**, nên
+> lỗi cùng kiểu sẽ đỏ ngay ở CI thay vì chờ tới lúc deploy.
+
 | Capability | Status | Evidence | Gap |
 |---|---|---|---|
 | Kiến trúc canonical | **DONE** | `nen-tang-da-khach.md` generic, không tên khách, không trạng thái | — |
