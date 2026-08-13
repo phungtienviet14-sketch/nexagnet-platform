@@ -57,6 +57,10 @@ async function json(route: Route, body: unknown, status = 200): Promise<void> {
 }
 
 async function mockSettings(page: Page): Promise<void> {
+  // AuthGate must finish before the settings shell can render. E2E intentionally exercises the
+  // unauthenticated local/CI mode; pilot session authentication is covered by API/integration smoke.
+  await page.route('**/auth/config', (route) => json(route, { mode: 'none' }));
+  await page.route('**/auth/csrf', (route) => json(route, { csrfToken: null }));
   await page.route('**/settings/summary', (route) => json(route, summary));
   await page.route('**/zalo/logout', (route) =>
     json(route, { state: 'logged_out', allowedGroupIds: [], botIdentity: summary.botIdentity }),
@@ -260,7 +264,7 @@ test('Sale previews and saves a campaign draft for mapped allowlisted groups', a
   await page.getByRole('tab', { name: /Chiến dịch CSKH/ }).click();
   await page.getByLabel('Tên chiến dịch').fill('Chăm sóc tháng 8');
   await page.getByLabel('Nội dung gửi').fill('Chúc quý đại lý một ngày tốt lành');
-  await page.getByLabel('Nhom pilot').check();
+  await page.getByRole('checkbox', { name: 'Nhom pilot' }).check();
   await page.getByRole('button', { name: 'Xem trước' }).click();
   await expect(page.getByText('Số nhóm')).toBeVisible();
   await page.getByRole('button', { name: 'Lưu bản nháp' }).click();
@@ -286,5 +290,5 @@ test('operator sees content readiness, provenance and previews an idempotent imp
   await expect(page.getByText('local_manifest:inventory')).toBeVisible();
 
   await page.getByRole('button', { name: 'Preview' }).click();
-  await expect(page.getByRole('status')).toContainText('không đổi 1');
+  await expect(page.getByRole('status').filter({ hasText: 'không đổi 1' })).toBeVisible();
 });

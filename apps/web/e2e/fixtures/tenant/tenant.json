@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "slug": "e2e-fixture",
+  "displayName": "Doanh nghiệp kiểm thử E2E",
+  "shortName": "E2E",
+  "branding": {
+    "productName": "Trợ lý đơn hàng E2E",
+    "installName": "E2E — Trợ lý đơn hàng AI",
+    "pageTitle": "Trợ lý đơn hàng E2E — Trung tâm điều hành",
+    "pageDescription": "Tenant fixture trung tính cho kiểm thử giao diện",
+    "themeColor": "#315b7d",
+    "backgroundColor": "#f5f7fb",
+    "monogram": "E2E",
+    "composerPlaceholder": "Nhập tin nhắn kiểm thử"
+  },
+  "policies": ["thanh_toan_ngay"],
+  "orderAutomation": null,
+  "erp": { "adapter": "none" },
+  "campaign": {
+    "defaultWindow": { "start": "08:00", "end": "12:00" },
+    "minSpacingSeconds": 30,
+    "maxTargets": 10,
+    "rateLimitPerMinute": 10,
+    "claimLeaseSeconds": 60,
+    "tickIntervalSeconds": 10,
+    "retry": { "maxAttempts": 2, "baseBackoffSeconds": 30 },
+    "features": { "lunarCalendarEnabled": false }
+  },
+  "retailAdvice": {
+    "priceField": "retailPrice",
+    "qualifier": "Giá kiểm thử, không dùng cho giao dịch thật."
+  },
+  "readiness": { "blockedCapabilities": [] },
+  "persona": {
+    "parserIntro": "Bạn là bộ phân loại và trích xuất dữ liệu kiểm thử.",
+    "botName": "E2E",
+    "mentionName": "Bot E2E",
+    "productFallbackDescription": "Sản phẩm kiểm thử."
+  }
+}

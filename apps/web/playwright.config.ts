@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolve } from 'node:path';
+
+const TEST_TENANT_DIR = resolve(__dirname, 'e2e/fixtures/tenant');
 
 export default defineConfig({
   testDir: './e2e',
@@ -15,6 +18,6 @@ export default defineConfig({
     url: 'http://127.0.0.1:3010/settings',
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { ...process.env, NEXT_PUBLIC_API_URL: '' },
+    env: { ...process.env, TENANT_DIR: TEST_TENANT_DIR, NEXT_PUBLIC_API_URL: '' },
   },
 });
