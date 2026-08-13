@@ -35,13 +35,37 @@ pháp lý + công tắc vận hành**, không phải code. Xem [van-hanh/checkli
 | `fe13f7b` | Đợt G — E2E đường tin Zalo trên **đồ thị DI thật** (G1-13) |
 | `21265d5`, `809c0f6`, `c024e29` | dọn ảnh design sai + sắp xếp lại tài liệu |
 
-**Baseline hiện tại — XANH TOÀN BỘ:** `api 574 pass/23 skip` · `web 43` · `shared 83` ·
-`tenant 26` · `poc-parser 4` · `deploy-routes 10` · `typecheck 0` · `lint 0` · `build 0`.
+**Baseline hiện tại — XANH TOÀN BỘ:** `api 600 pass/23 skip` · `web 62` · `shared 83` ·
+`tenant 30` · `poc-parser 4` · `deploy-routes 11` · `typecheck 0` · `lint 0` · `build 0`.
 
-**▶️ VIỆC TIẾP THEO KHÔNG PHẢI LẬP TRÌNH.** 9 cổng go-live máy tự chấm hiện đạt **3/9** —
-`tenant.loaded` ✅ · `dealers.configured` ✅ (3 đại lý seed) · `groups.mapped` ✅ (2 nhóm seed).
-Sáu cổng còn thiếu: `price.current_period` · `parser.production` · `media.production` ·
-`channel.production` · `auth.production` · `golden.evaluated`. Đường ngắn nhất tới pilot, đúng thứ tự:
+### ✅ ĐÃ DEPLOY VÀ CHẠY THẬT TRÊN PILOT (13/08/2026)
+
+Lần deploy đầu tiên kể từ 08/08. `DEPLOY EXIT: 0`, smoke test trên stack thật đạt:
+
+```
+Pilot smoke OK: SSE + 6-agent trace + approve; SMOKE_ORDER_STATUS=sent
+Persistence smoke OK: 8a078e7b-facd-48ee-bca9-c459bc921265   (sống qua restart)
+```
+
+**Ba lỗi CHỈ lộ ra khi deploy thật** — cả ba đều là "code xanh nhưng đường đi hỏng":
+
+1. **Caddy thiếu đường đi cho 10 route API.** `/settings/readiness`, `/settings/price-periods*`,
+   `/settings/content*`, `/settings/users*`, `/campaigns*`, `/auth*`, `/health/media`… đều rơi
+   xuống Next.js và trả **trang 404 HTML**. Nặng nhất là `price-periods`: đó là màn Sale nhập bảng
+   giá tháng hiện hành, tức **cổng go-live số 1 không đóng được qua bản đã deploy** — trong khi kế
+   hoạch ghi "UI nhập đã có sẵn, chỉ thiếu số" (đúng trong code, sai trên bản chạy). Đã sửa;
+   `caddy-route-contract.test.mjs` nay **đọc ngược từ controller** nên lệch lần nữa là CI đỏ.
+2. **Smoke test của deploy đòi hợp đồng CŨ** — Sale duyệt thì đơn phải `synced` và có
+   `kiotVietCode`. GĐ1 dừng ở `sent` + hàng việc nhập ERP tay, còn `kiotVietCode` đã đổi tên thành
+   `erpCode` ở G1-12 ⇒ **mọi lần deploy kể từ G1-12 đều chết ở bước smoke, sau khi đã build và đẩy
+   image xong**. Không ai thấy vì pilot chưa deploy lại. Bài kiểm nay bám hợp đồng GĐ1 và chặt hơn.
+3. **`scp --recurse` retry làm lồng gói khách một cấp** (`tenant-pack/<slug>/tenant.json`) khi SSH
+   rớt giữa chừng — deploy chết ở bước kiểm gói khách. Nay tự gỡ phẳng rồi đi tiếp.
+
+**▶️ 9 cổng go-live nay đạt 4/9** (đo thật trên `GET /settings/readiness`, 13/08):
+`tenant.loaded` ✅ · `dealers.configured` ✅ · `groups.mapped` ✅ · **`media.production` ✅ (mới)**.
+Năm cổng còn thiếu: `price.current_period` · `parser.production` · `channel.production` ·
+`auth.production` · `golden.evaluated`. Đường ngắn nhất tới pilot, đúng thứ tự:
 
 1. **A6 — bảng giá tháng hiện hành.** Chặn *thực tế* nặng nhất: tra giá fail-closed chỉ nhận kỳ
    `active` đúng tháng hiện tại, seed là `2026-07` ⇒ **0 giá active ⇒ MỌI đơn rơi handoff, kể cả đơn
@@ -51,11 +75,28 @@ Sáu cổng còn thiếu: `price.current_period` · `parser.production` · `medi
    này thì `CHANNEL_MODE` không được rời `mock`.
 3. **A4** (map nhóm ↔ đại lý cho nhóm pilot) · **A2/A3** (deal riêng, biểu phí COD/ship).
 4. **Công tắc deploy đang khóa có chủ ý:** `render-secrets.sh` ép `CHANNEL_MODE='mock'` và
-   `AUTH_MODE='none'` mỗi lần deploy; `MEDIA_STORE`/`DATA_CLASSIFICATION` chưa render nên mặc định
-   `none`/`test`. Mở từng cái theo trình tự §5 của checklist go-live, **không mở đồng loạt**.
+   `AUTH_MODE='none'` mỗi lần deploy; `DATA_CLASSIFICATION` chưa render nên mặc định `test`. Mở
+   từng cái theo trình tự §5 của checklist go-live, **không mở đồng loạt**.
+   *(`MEDIA_STORE` đã hết là việc tồn: từ 13/08 render-secrets đặt `gcs` khi biết bucket.)*
 5. **B1-B2** — golden dataset; chưa có thì `golden.evaluated` không bao giờ `ready`.
 6. **Parser**: stack pilot chạy `PARSER_MODE=flowise` → DeepSeek, **chưa nằm trong danh sách bên thứ
    3 được duyệt** (KiotViet + Claude). Dữ liệu khách thật phải đổi `claude` hoặc bổ sung DPA.
+
+### Dữ liệu khách đã nhập (13/08/2026)
+
+- **FAQ:** 4 file DOCX trong hồ sơ khách → **95 FAQ + 3 bài tổng quan + 4 link video** cho 5 SKU
+  (BB-GREY · BB-ROSE · SKJ-CR022 · HERCULES · V08), đóng gói thành
+  `tenants/ultty/data/content-manifest.json` và nạp lúc boot qua đúng đường import của `/settings`.
+  Đã xác nhận trên pilot: **95 FAQ, tất cả ở `draft`**, provenance `local_manifest:ultty-faq-bo-san-pham`.
+  Fail-closed nguyên vẹn: `content readiness 0/19` vì chưa SKU nào có ảnh + link `active`, nên agent
+  tư vấn vẫn chuyển handoff. Muốn dùng phải duyệt `draft → reviewed → approved → active`.
+  ⚠️ 3 câu trả lời của khách có ghi **số tiền** (giá niêm yết CR022, giá màng lọc) — phải đối chiếu
+  kỳ giá hiện hành trước khi duyệt lên `active`; giá thuộc bảng giá, không thuộc FAQ.
+- **Viết tắt:** `Viết tắt_.docx` → **27 cặp mới**, glossary gói khách 24 → **51**. Pilot đã đồng bộ
+  đủ 51 qua `PUT /settings/source-truth/glossary/:term` (có audit).
+  ⚠️ **Bất đối xứng cần biết:** `content-manifest.json` tự nạp mỗi lần boot, còn `knowledge.json`
+  thì **không** — sau lần seed đầu, Postgres là nguồn sự thật (quyết định kiến trúc 6). Nên thêm từ
+  viết tắt vào gói khách **không** tự vào DB; phải ghi qua `/settings` hoặc chạy lại seed.
 
 **⚠️ BẪY MÔI TRƯỜNG — phiên sau phải biết, nếu không sẽ mất thời gian đúng như phiên này:**
 1. `pnpm dev:api` cần `TENANT=ultty`. File `.env` ở gốc repo **thiếu dòng này** (đã thêm cục bộ
@@ -67,6 +108,10 @@ Sáu cổng còn thiếu: `price.current_period` · `parser.production` · `medi
    có tên không phải `password` (xem `auth.service.spec.ts`), **không** dùng `--no-verify`.
 5. **Test xanh KHÔNG có nghĩa là chạy được.** Mọi spec API dựng service bằng `new Service(...)` nên
    không chạm DI. Đã thêm `app.module.boot.spec.ts` compile đồ thị DI thật — **đừng xóa/skip nó**.
+6. **Cây làm việc phải SẠCH trước khi deploy** — `deploy.ps1:512` chặn nếu còn thay đổi chưa commit,
+   và nó chặn **trước** bước build. Sửa file giữa lúc deploy đang chạy = hỏng cả lần deploy.
+7. **`pnpm dev:web` không đọc `.env` ở gốc repo** (Next.js chỉ đọc `apps/web/.env*`) nên trang chết
+   với "Thieu bien TENANT". Đặt `TENANT=ultty` trong `apps/web/.env.local`. Cùng họ bẫy với mục 1.
 
 ---
 
