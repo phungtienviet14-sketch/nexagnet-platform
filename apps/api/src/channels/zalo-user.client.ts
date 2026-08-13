@@ -73,6 +73,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   private destroyed = false;
   private messageHandler: ZcaMessageHandler | null = null;
   private connectionState: ZaloConnectionState = 'disabled';
+  private errorKind: 'saved_credential' | 'listener' | 'qr' | undefined;
   private displayName: string | undefined;
   private lastError: string | undefined;
   private qrImage: string | null = null;
@@ -105,7 +106,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   }
 
   isReady(): boolean {
-    return this.api !== null;
+    return this.api !== null && this.connectionState === 'ready';
   }
 
   isGroupAllowed(groupId: string): boolean {
@@ -134,7 +135,9 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       throw new Error('CHANNEL_MODE khong bat zca');
     }
     if (this.api || this.connectionTask) return;
-    void this.connect(true);
+    // Operator da chu dong yeu cau QR sau mot lan restore loi: thay phien cu bang QR moi,
+    // nhung KHONG xoa allowlist. Full logout van la thao tac rieng va xoa ca hai.
+    void this.connect(true, this.errorKind === 'saved_credential');
   }
 
   async setAllowedGroupIds(groupIds: readonly string[]): Promise<void> {
@@ -151,6 +154,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     this.connectionState = 'logged_out';
     this.displayName = undefined;
     this.lastError = undefined;
+    this.errorKind = undefined;
     this.qrImage = null;
     this.qrExpiresAt = null;
     this.threadTypes.clear();
@@ -376,22 +380,29 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     await this.api.sendMessage(text, threadId, resolvedType);
   }
 
-  private connect(allowQr: boolean): Promise<void> {
+  private connect(allowQr: boolean, replaceSavedCredential = false): Promise<void> {
     if (this.connectionTask) return this.connectionTask;
-    this.connectionTask = this.performConnect(allowQr).finally(() => {
+    this.connectionTask = this.performConnect(allowQr, replaceSavedCredential).finally(() => {
       this.connectionTask = null;
     });
     return this.connectionTask;
   }
 
-  private async performConnect(allowQr: boolean): Promise<void> {
+  private async performConnect(allowQr: boolean, replaceSavedCredential: boolean): Promise<void> {
     const generation = this.connectionGeneration;
     this.connectionState = 'connecting';
     this.lastError = undefined;
+    this.errorKind = undefined;
     const zalo = new Zalo({ selfListen: this.selfListen, checkUpdate: false, logging: false });
+    let usedSavedCredential = false;
     try {
+      if (replaceSavedCredential) {
+        await Promise.all([this.removePrivateFile(this.credPath), this.removePrivateFile(this.qrPath)]);
+        this.logger.log('Operator yeu cau QR moi sau loi phien cu; da bo phien cu, giu nguyen allowlist.');
+      }
       const cred = await this.readCred();
       if (cred) {
+        usedSavedCredential = true;
         this.logger.log('Dang nhap zca-js bang phien da luu...');
         this.api = await zalo.login(cred);
       } else if (allowQr) {
@@ -407,7 +418,9 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
         this.api = null;
         return;
       }
-      this.connectionState = 'ready';
+      // `login()` tra ve API chua co nghia la receive-side da nghe duoc. Chi event `connected`
+      // cua listener moi duoc phep dua state sang ready.
+      this.connectionState = 'connecting';
       this.qrImage = null;
       this.qrExpiresAt = null;
       this.logger.log('zca-js dang nhap thanh cong - listener chi xu ly nhom trong allowlist.');
@@ -417,9 +430,11 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       const message = errMsg(error);
       this.api = null;
       this.connectionState = 'error';
+      this.errorKind = usedSavedCredential ? 'saved_credential' : 'qr';
       this.qrImage = null;
       this.qrExpiresAt = null;
-      this.lastError = 'Khong the ket noi Zalo. Hay tao QR moi hoac kiem tra phien da luu.';
+      this.lastError =
+        'Khong the ket noi bang phien da luu. Hay chon Tao QR moi; danh sach nhom van duoc giu.';
       this.logger.error(`zca-js dang nhap that bai: ${message}`);
     }
   }
@@ -428,9 +443,25 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     if (!this.api || this.destroyed) return;
     const listener = this.api.listener;
     listener.on('message', (message) => this.threadTypes.set(message.threadId, message.type));
-    listener.on('connected', () => this.logger.log('zca-js listener: connected'));
-    listener.on('closed', (code, reason) => this.logger.warn(`zca-js listener closed (${code}): ${reason}`));
-    listener.on('error', (error) => this.logger.warn(`zca-js listener error: ${errMsg(error)}`));
+    listener.on('connected', () => {
+      this.connectionState = 'ready';
+      this.lastError = undefined;
+      this.errorKind = undefined;
+      this.logger.log('zca-js listener: connected');
+    });
+    listener.on('closed', (code, reason) => {
+      this.connectionState = 'connecting';
+      this.lastError = 'Listener Zalo mat ket noi; he thong dang thu ket noi lai.';
+      this.logger.warn(`zca-js listener closed (${code}): ${reason}`);
+    });
+    listener.on('error', (error) => {
+      this.stopListener();
+      this.api = null;
+      this.connectionState = 'error';
+      this.errorKind = 'listener';
+      this.lastError = 'Listener Zalo dang loi; hay kiem tra ket noi hoac tao QR moi.';
+      this.logger.warn(`zca-js listener error: ${errMsg(error)}`);
+    });
     if (this.messageHandler) listener.on('message', this.messageHandler);
     listener.start({ retryOnClose: true });
     this.started = true;
@@ -469,6 +500,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
         break;
       case LoginQRCallbackEventType.QRCodeDeclined:
         this.connectionState = 'error';
+        this.errorKind = 'qr';
         this.lastError = 'Dang nhap da bi tu choi tren dien thoai.';
         this.qrImage = null;
         this.qrExpiresAt = null;

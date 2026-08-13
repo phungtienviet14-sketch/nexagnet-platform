@@ -22,6 +22,17 @@ vi.mock('zca-js', async (importOriginal) => {
   };
 });
 
+function connectedListener() {
+  let connected: (() => void) | undefined;
+  return {
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      if (event === 'connected') connected = handler;
+    }),
+    start: vi.fn(() => connected?.()),
+    stop: vi.fn(),
+  };
+}
+
 describe('isCredentials (validate phien zca da luu truoc khi login)', () => {
   it('chap nhan cred hop le (imei + userAgent chuoi + co cookie)', () => {
     expect(isCredentials({ imei: 'abc', userAgent: 'UA', cookie: [] })).toBe(true);
@@ -117,11 +128,59 @@ describe('ZaloUserClient runtime', () => {
     expect(zcaMocks.loginQR).not.toHaveBeenCalled();
   });
 
+  it('thu phien cu mot lan, roi tao QR moi theo thao tac ro rang ma van giu allowlist', async () => {
+    await writeFile(
+      join(runtimeDir, 'zalo-cred.json'),
+      JSON.stringify({ imei: 'stale-imei', userAgent: 'UA', cookie: [] }),
+      'utf8',
+    );
+    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['g1']), 'utf8');
+    zcaMocks.login.mockRejectedValue(new Error('stale session'));
+    zcaMocks.loginQR.mockImplementation(async (_options, callback?: LoginQRCallback) => {
+      callback?.({
+        type: LoginQRCallbackEventType.QRCodeGenerated,
+        data: {
+          code: 'code',
+          image: 'fresh-qr',
+          options: { enabledCheckOCR: false, enabledMultiLayer: false },
+          token: 'token',
+        },
+        actions: {
+          saveToFile: vi.fn(async () => undefined),
+          retry: vi.fn(),
+          abort: vi.fn(),
+        },
+      });
+      return new Promise<API>(() => undefined);
+    });
+
+    const { ZaloUserClient } = await import('./zalo-user.client.js');
+    const client = new ZaloUserClient();
+    await client.onModuleInit();
+    await vi.waitFor(() => expect(client.status().state).toBe('error'));
+
+    expect(zcaMocks.login).toHaveBeenCalledTimes(1);
+    expect(zcaMocks.loginQR).not.toHaveBeenCalled();
+    expect(client.status()).toMatchObject({ allowedGroupIds: ['g1'] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    client.startQrLogin();
+    await vi.waitFor(() => expect(client.status().state).toBe('qr_ready'));
+
+    expect(zcaMocks.login).toHaveBeenCalledTimes(1);
+    expect(zcaMocks.loginQR).toHaveBeenCalledTimes(1);
+    expect(client.qrDataUrl()).toBe('data:image/png;base64,fresh-qr');
+    expect(client.status().allowedGroupIds).toEqual(['g1']);
+    await expect(readFile(join(runtimeDir, 'zalo-cred.json'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
   it('tao QR theo yeu cau, ket noi, liet ke nhom va gui tin', async () => {
     const callbacks: LoginQRCallback[] = [];
     let finishLogin!: (api: API) => void;
     const loginPending = new Promise<API>((resolve) => (finishLogin = resolve));
-    const listener = { on: vi.fn(), start: vi.fn(), stop: vi.fn() };
+    const listener = connectedListener();
     const fakeApi = {
       listener,
       sendMessage: vi.fn(async () => undefined),
@@ -171,8 +230,48 @@ describe('ZaloUserClient runtime', () => {
     expect(listener.stop).toHaveBeenCalled();
   });
 
+  it('ha trang thai khi listener mat ket noi va chi ready lai sau connected', async () => {
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    const listener = {
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => handlers.set(event, handler)),
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+    const fakeApi = { listener } as unknown as API;
+    await writeFile(
+      join(runtimeDir, 'zalo-cred.json'),
+      JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
+      'utf8',
+    );
+    zcaMocks.login.mockResolvedValue(fakeApi);
+
+    const { ZaloUserClient } = await import('./zalo-user.client.js');
+    const client = new ZaloUserClient();
+    await client.onModuleInit();
+    await vi.waitFor(() => expect(client.status().state).toBe('connecting'));
+    await vi.waitFor(() => expect(listener.start).toHaveBeenCalled());
+    expect(client.isReady()).toBe(false);
+
+    handlers.get('connected')?.();
+    expect(client.status()).toMatchObject({ state: 'ready' });
+    expect(client.isReady()).toBe(true);
+
+    handlers.get('closed')?.(1006, 'network lost');
+    expect(client.status()).toMatchObject({ state: 'connecting' });
+    expect(client.isReady()).toBe(false);
+
+    handlers.get('connected')?.();
+    expect(client.status()).toMatchObject({ state: 'ready' });
+    expect(client.isReady()).toBe(true);
+
+    handlers.get('error')?.(new Error('listener failed'));
+    expect(client.status()).toMatchObject({ state: 'error' });
+    expect(client.isReady()).toBe(false);
+    expect(listener.stop).toHaveBeenCalled();
+  });
+
   it('dang xuat dung listener, xoa credential va xoa allowlist', async () => {
-    const listener = { on: vi.fn(), start: vi.fn(), stop: vi.fn() };
+    const listener = connectedListener();
     const fakeApi = { listener } as unknown as API;
     await writeFile(
       join(runtimeDir, 'zalo-cred.json'),
@@ -198,7 +297,7 @@ describe('ZaloUserClient runtime', () => {
   it('chi fetch thanh vien khi da dang nhap va nhom nam trong allowlist', async () => {
     const getGroupInfo = vi.fn();
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo,
     } as unknown as API;
     await writeFile(
@@ -230,7 +329,7 @@ describe('ZaloUserClient runtime', () => {
       unchangeds_profile: [],
     }));
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getOwnId: vi.fn(() => 'own-uid'),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
@@ -264,7 +363,7 @@ describe('ZaloUserClient runtime', () => {
   it('lay thanh vien tu currentMems khi Zalo tra memberIds rong', async () => {
     const getGroupMembersInfo = vi.fn();
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getOwnId: vi.fn(() => 'own-uid'),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
@@ -315,7 +414,7 @@ describe('ZaloUserClient runtime', () => {
   // day du, vi tang persistence se danh inactive toan bo thanh vien da phan loai.
   it('coi la dong bo THIEU khi Zalo bao co thanh vien nhung khong tra danh sach', async () => {
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getOwnId: vi.fn(() => 'own-uid'),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
@@ -351,7 +450,7 @@ describe('ZaloUserClient runtime', () => {
 
   it('nhom that su rong (totalMember = so tai khoan he thong) van la dong bo day du', async () => {
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getOwnId: vi.fn(() => 'own-uid'),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
@@ -396,7 +495,7 @@ describe('ZaloUserClient runtime', () => {
       unchangeds_profile: [],
     }));
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
         unchangedsGroup: [],
@@ -442,7 +541,7 @@ describe('ZaloUserClient runtime', () => {
       })
       .mockRejectedValueOnce(new Error('rate limited'));
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
         unchangedsGroup: [],
@@ -482,7 +581,7 @@ describe('ZaloUserClient runtime', () => {
 
   it('marks missing profiles as partial instead of treating the snapshot as complete', async () => {
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
         unchangedsGroup: [],
@@ -514,7 +613,7 @@ describe('ZaloUserClient runtime', () => {
 
   it('returns a complete snapshot and falls back to zaloName for an empty display name', async () => {
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
         unchangedsGroup: [],
@@ -550,7 +649,7 @@ describe('ZaloUserClient runtime', () => {
 
   it('fails the whole snapshot before persistence when group metadata is missing', async () => {
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: vi.fn(async () => ({ removedsGroup: [], unchangedsGroup: [], gridInfoMap: {} })),
     } as unknown as API;
     await writeFile(
@@ -572,7 +671,7 @@ describe('ZaloUserClient runtime', () => {
   // KHONG khoa (lockViewMember=0). Truoc do dong bo tra ve 0 nguoi; `memVerList` van co UID.
   it('lay lai UID tu memVerList khi Zalo bo trong memberIds lan currentMems', async () => {
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getOwnId: vi.fn(() => 'own-uid'),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
@@ -617,7 +716,7 @@ describe('ZaloUserClient runtime', () => {
   // memVerList la nguon vet vat: mot phan tu la khong duoc lam hong ca lan dong bo.
   it('bo qua phan tu memVerList di dang thay vi lam hong ca lan dong bo', async () => {
     const fakeApi = {
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
         unchangedsGroup: [],
@@ -729,7 +828,7 @@ describe('ZaloUserClient.fetchGroupMembers — duong link moi', () => {
       totalMember: 3,
     }));
     const client = await connect({
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getOwnId: vi.fn(() => 'own-uid'),
       getGroupInfo: emptyGroupInfo(),
       getGroupLinkDetail: vi.fn(async () => ({ link: 'https://zalo.me/g/abc123', enabled: 1 })),
@@ -757,7 +856,7 @@ describe('ZaloUserClient.fetchGroupMembers — duong link moi', () => {
     const getGroupLinkInfo = vi.fn();
     const enableGroupLink = vi.fn();
     const client = await connect({
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: emptyGroupInfo(),
       getGroupLinkDetail: vi.fn(async () => ({ enabled: 0 })),
       getGroupLinkInfo,
@@ -773,7 +872,7 @@ describe('ZaloUserClient.fetchGroupMembers — duong link moi', () => {
 
   it('link moi loi -> lan dong bo van tra snapshot an toan, khong nem', async () => {
     const client = await connect({
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: emptyGroupInfo(),
       getGroupLinkDetail: vi.fn(async () => {
         throw new Error('Zalo tu choi');
@@ -791,7 +890,7 @@ describe('ZaloUserClient.fetchGroupMembers — duong link moi', () => {
   // Con trang sau ma bao complete=true thi tang persistence se danh INACTIVE nhung nguoi chua doc toi.
   it('con trang thanh vien chua doc -> complete=false', async () => {
     const client = await connect({
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: emptyGroupInfo(200),
       getGroupLinkDetail: vi.fn(async () => ({ link: 'https://zalo.me/g/abc123', enabled: 1 })),
       getGroupLinkInfo: vi.fn(async () => ({
@@ -811,7 +910,7 @@ describe('ZaloUserClient.fetchGroupMembers — duong link moi', () => {
   it('duong chinh co du lieu -> KHONG dong toi link moi', async () => {
     const getGroupLinkDetail = vi.fn();
     const client = await connect({
-      listener: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
+      listener: connectedListener(),
       getGroupInfo: vi.fn(async () => ({
         removedsGroup: [],
         unchangedsGroup: [],
