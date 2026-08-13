@@ -44,9 +44,12 @@ export class ReadinessService {
           productionAllowed: PRODUCTION_PARSERS.has(env.PARSER_MODE),
           credentialsPresent: env.PARSER_MODE !== 'claude' || Boolean(env.ANTHROPIC_API_KEY),
         },
+        // `healthy` phai den tu mot request THAT toi kho (S3MediaStore.check -> HeadBucket).
+        // Truoc day no doc co `enabled` — hang so `true` cua S3MediaStore — nen dat du bon bien
+        // MEDIA_* la cong nay xanh, ke ca khi bucket go nham ten hay khoa het han.
         media: {
           enabled: env.MEDIA_STORE !== 'none',
-          healthy: this.media?.enabled ?? false,
+          healthy: (await this.media?.check())?.healthy ?? false,
         },
         channel: {
           mode: env.CHANNEL_MODE,

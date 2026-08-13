@@ -43,6 +43,7 @@ env \
   APP_IMAGE="$app_image" \
   FLOWISE_IMAGE="$flowise_image" \
   PUBLIC_IP="$public_ip" \
+  BACKUP_BUCKET="$backup_bucket" \
   "$app_dir/render-secrets.sh"
 "$app_dir/deploy-stack.sh"
 env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" "$app_dir/backup.sh"

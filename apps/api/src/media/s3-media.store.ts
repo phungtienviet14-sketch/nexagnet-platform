@@ -1,5 +1,5 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { MediaStore } from './media-store.js';
+import { HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { MediaStore, type MediaStoreHealth } from './media-store.js';
 
 export interface S3MediaConfig {
   readonly bucket: string;
@@ -21,8 +21,13 @@ export class S3MediaStore extends MediaStore {
   readonly name = 's3';
   readonly enabled = true;
   private readonly client: S3Client;
+  private cached?: { at: number; value: MediaStoreHealth };
 
-  constructor(private readonly config: S3MediaConfig) {
+  constructor(
+    private readonly config: S3MediaConfig,
+    private readonly ttlMs = 30_000,
+    private readonly clock: () => number = Date.now,
+  ) {
     super();
     this.client = new S3Client({
       region: config.region,
@@ -34,6 +39,38 @@ export class S3MediaStore extends MediaStore {
       // GCS XML API va MinIO deu can path-style; virtual-host style khong chay tren ca hai.
       forcePathStyle: true,
     });
+  }
+
+  /**
+   * Cham THAT vao bucket (`HeadBucket`) thay vi bao "da bat la coi nhu chay duoc".
+   *
+   * Ba loi thuong gap ma chi cach nay moi thay: go nham ten bucket, khoa HMAC het han/sai quyen,
+   * va bucket nam o project khac. Ca ba deu de bien `MEDIA_STORE=s3` thanh mot cong readiness xanh
+   * gia trong khi anh dau tien tu Zalo se rot.
+   *
+   * Ket qua duoc giu lai trong `ttlMs` vi `/settings/readiness` co the bi hoi lien tuc; nguoc lai
+   * moi lan mo tab la mot request ra ngoai mang.
+   */
+  override async check(): Promise<MediaStoreHealth> {
+    const now = this.clock();
+    if (this.cached && now - this.cached.at < this.ttlMs) return this.cached.value;
+    const value = await this.probe();
+    this.cached = { at: now, value };
+    return value;
+  }
+
+  private async probe(): Promise<MediaStoreHealth> {
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: this.config.bucket }));
+      return { healthy: true, detail: `s3: doc duoc bucket ${this.config.bucket}` };
+    } catch (error: unknown) {
+      // Thong diep cua AWS SDK khong chua khoa, nhung van cat ngan de khong do ca stack vao UI.
+      const reason = error instanceof Error ? error.message : String(error);
+      return {
+        healthy: false,
+        detail: `s3: khong doc duoc bucket ${this.config.bucket} — ${reason.slice(0, 200)}`,
+      };
+    }
   }
 
   async put(key: string, body: Buffer, contentType: string): Promise<void> {

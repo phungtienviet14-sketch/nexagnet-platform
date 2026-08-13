@@ -10,7 +10,7 @@ interface KnowledgeStub {
   groups: unknown[];
 }
 
-function build(knowledge: KnowledgeStub, mediaEnabled = false): ReadinessService {
+function build(knowledge: KnowledgeStub, mediaHealthy = false): ReadinessService {
   return new ReadinessService(
     {
       prices: () => knowledge.prices,
@@ -18,7 +18,11 @@ function build(knowledge: KnowledgeStub, mediaEnabled = false): ReadinessService
       groups: () => knowledge.groups,
     } as unknown as KnowledgeService,
     { list: async () => [] } as unknown as CampaignRepository,
-    { enabled: mediaEnabled } as unknown as MediaStore,
+    // Kho anh tra ket qua CHAM THAT (`check`), khong phai co tinh `enabled`: bat MEDIA_STORE ma
+    // bucket sai ten/khoa het han thi cong nay phai do.
+    {
+      check: async () => ({ healthy: mediaHealthy, detail: 'stub' }),
+    } as unknown as MediaStore,
   );
 }
 

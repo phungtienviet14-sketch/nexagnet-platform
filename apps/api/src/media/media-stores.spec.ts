@@ -11,6 +11,10 @@ vi.mock('@aws-sdk/client-s3', () => ({
   PutObjectCommand: class {
     constructor(readonly input: Record<string, unknown>) {}
   },
+  HeadBucketCommand: class {
+    readonly kind = 'HeadBucket';
+    constructor(readonly input: Record<string, unknown>) {}
+  },
 }));
 
 const { LocalMediaStore } = await import('./local-media.store.js');
@@ -79,5 +83,71 @@ describe('S3MediaStore — GCS hom nay, OVHcloud sau nay, cung mot code', () => 
     });
     expect(store.enabled).toBe(true);
     expect(store.name).toBe('s3');
+  });
+});
+
+/**
+ * Cong readiness `media.production` truoc day doc co `enabled` — HANG SO `true` cua S3MediaStore —
+ * nen dat du bon bien MEDIA_* la cong xanh, ke ca khi bucket khong ton tai. `check()` phai cham
+ * that vao bucket thi loi cau hinh moi lo ra TRUOC khi co anh khach.
+ */
+describe('S3MediaStore.check — cham that vao bucket', () => {
+  const CONFIG = {
+    bucket: 'kho-anh',
+    endpoint: 'https://storage.googleapis.com',
+    region: 'auto',
+    accessKeyId: 'AKIA-GIA-LAP',
+    secretAccessKey: 'secret-gia-lap',
+  };
+
+  afterEach(() => send.mockReset());
+
+  it('bucket doc duoc -> healthy, va di bang HeadBucket dung ten bucket', async () => {
+    send.mockResolvedValue({});
+    const result = await new S3MediaStore(CONFIG).check();
+
+    expect(result.healthy).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]![0]).toMatchObject({
+      kind: 'HeadBucket',
+      input: { Bucket: 'kho-anh' },
+    });
+  });
+
+  it('bucket sai ten / khoa het han -> KHONG healthy, kem ly do doc duoc', async () => {
+    send.mockRejectedValue(new Error('NoSuchBucket: The specified bucket does not exist'));
+    const result = await new S3MediaStore(CONFIG).check();
+
+    expect(result.healthy).toBe(false);
+    expect(result.detail).toContain('kho-anh');
+    expect(result.detail).toContain('NoSuchBucket');
+  });
+
+  it('khong ro ri khoa ra thong diep cho nguoi van hanh doc', async () => {
+    send.mockRejectedValue(new Error('SignatureDoesNotMatch'));
+    const result = await new S3MediaStore(CONFIG).check();
+
+    expect(result.detail).not.toContain(CONFIG.secretAccessKey);
+    expect(result.detail).not.toContain(CONFIG.accessKeyId);
+  });
+
+  it('giu ket qua trong TTL — /settings/readiness bi hoi lien tuc khong bien thanh spam mang', async () => {
+    send.mockResolvedValue({});
+    let now = 1_000;
+    const store = new S3MediaStore(CONFIG, 30_000, () => now);
+
+    await store.check();
+    await store.check();
+    expect(send).toHaveBeenCalledTimes(1);
+
+    now += 30_001;
+    await store.check();
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('NoopMediaStore.check', () => {
+  it('kho none -> KHONG healthy: khong luu anh thi khong the goi la san sang', async () => {
+    await expect(new NoopMediaStore().check()).resolves.toMatchObject({ healthy: false });
   });
 });

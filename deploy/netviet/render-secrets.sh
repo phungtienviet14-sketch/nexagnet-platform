@@ -49,6 +49,28 @@ FLOWISE_TOKEN_HASH_SECRET="$(secret zalo-ultty-flowise-token-hash-secret)"
 # API chay AUTH_MODE=none; API_KEY o tren van render san de bat lai chi bang mot bien.
 AUTH_MODE='none'
 
+# --- Kho anh (MEDIA_STORE) ---------------------------------------------------------------------
+# Link anh Zalo chet trong <=35 ngay => khong tai ve la mat vinh vien. Nhung bat kho anh cung la
+# bat mot duong ghi PII ra object storage, nen phai la lua chon CO Y:
+#   - thieu bat ky manh nao (bucket / access key / secret) -> MEDIA_STORE=none, khong doan;
+#   - du ca ba -> s3.
+# `MEDIA_BUCKET` MAC DINH tro vao dung bucket sao luu dang mang rule lifecycle prefix `media/`
+# (60 ngay -> Nearline, 365 ngay -> Coldline, KHONG co rule Delete) — xem gcs-lifecycle.json va
+# deploy.ps1 (`$BackupBucket`). Tro nham bucket thi rule giu anh khong co tac dung MA CUNG KHONG
+# bao loi, nen mac dinh o day duoc chot theo bucket that thay vi de nguoi deploy tu go.
+MEDIA_ACCESS_KEY_ID="$(optional_secret zalo-ultty-media-access-key-id)"
+MEDIA_SECRET_ACCESS_KEY="$(optional_secret zalo-ultty-media-secret-access-key)"
+# BACKUP_BUCKET den tu deploy duoi dang `gs://<ten>`; SDK S3 chi can ten tran.
+MEDIA_BUCKET="${MEDIA_BUCKET:-${BACKUP_BUCKET#gs://}}"
+MEDIA_ENDPOINT="${MEDIA_ENDPOINT:-https://storage.googleapis.com}"
+MEDIA_REGION="${MEDIA_REGION:-auto}"
+if [[ -n "${MEDIA_BUCKET}" && -n "${MEDIA_ACCESS_KEY_ID}" && -n "${MEDIA_SECRET_ACCESS_KEY}" ]]; then
+  MEDIA_STORE='s3'
+else
+  MEDIA_STORE='none'
+  echo "render-secrets: MEDIA_STORE=none (thieu bucket hoac khoa HMAC) — anh Zalo se KHONG duoc luu." >&2
+fi
+
 cat >"${RUNTIME_DIR}/secrets.env" <<EOF
 APP_IMAGE=${APP_IMAGE_VALUE}
 FLOWISE_IMAGE=${FLOWISE_IMAGE_VALUE}
@@ -65,6 +87,12 @@ DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
 ZALO_BOT_TOKEN=${ZALO_BOT_TOKEN}
 API_KEY=${API_KEY}
 AUTH_MODE=${AUTH_MODE}
+MEDIA_STORE=${MEDIA_STORE}
+MEDIA_BUCKET=${MEDIA_BUCKET}
+MEDIA_ENDPOINT=${MEDIA_ENDPOINT}
+MEDIA_REGION=${MEDIA_REGION}
+MEDIA_ACCESS_KEY_ID=${MEDIA_ACCESS_KEY_ID}
+MEDIA_SECRET_ACCESS_KEY=${MEDIA_SECRET_ACCESS_KEY}
 FLOWISE_SECRETKEY=${FLOWISE_SECRETKEY}
 FLOWISE_ADMIN_EMAIL=${FLOWISE_ADMIN_EMAIL}
 FLOWISE_ADMIN_PASSWORD=${FLOWISE_ADMIN_PASSWORD}
