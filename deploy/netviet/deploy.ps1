@@ -386,7 +386,6 @@ function Ensure-Secrets {
   # set-channel-mode.sh; co token KHONG tu bat bot/hybrid.
   Ensure-Secret 'zalo-ultty-zalo-bot-token' { Get-LocalEnvValue 'ZALO_BOT_TOKEN' }
   Ensure-Secret 'zalo-ultty-api-key' { New-RandomSecret }
-  Ensure-Secret 'zalo-ultty-session-secret' { New-RandomSecret -Bytes 48 }
   Ensure-Secret 'zalo-ultty-flowise-secretkey' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-flowise-admin-email' { $OperatorEmail }
   Ensure-FlowiseAdminPasswordSecret

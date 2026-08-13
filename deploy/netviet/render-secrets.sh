@@ -46,7 +46,9 @@ ZALO_BOT_TOKEN="$(optional_secret zalo-ultty-zalo-bot-token)"
 CHANNEL_MODE="$("${SCRIPT_DIR}/channel-mode.sh" read "${RUNTIME_DIR}/channel-mode.env")"
 echo "render-secrets: CHANNEL_MODE=${CHANNEL_MODE} (mock neu chua co override duoc phe duyet)." >&2
 API_KEY=$(secret zalo-ultty-api-key)
-SESSION_SECRET="$(secret zalo-ultty-session-secret)"
+# VM da duoc cap quyen doc API key. Dan xuat domain-separated session signing key thay vi doi IAM
+# de them mot secret moi; gia tri goc khong nam trong command args va khong duoc ghi log.
+SESSION_SECRET="$(printf 'netviet-api-session-v1:%s' "${API_KEY}" | sha256sum | cut -d' ' -f1)"
 PILOT_OPERATOR_PASSWORD="$(secret zalo-ultty-operator-password)"
 FLOWISE_SECRETKEY="$(secret zalo-ultty-flowise-secretkey)"
 FLOWISE_ADMIN_EMAIL="$(secret zalo-ultty-flowise-admin-email)"

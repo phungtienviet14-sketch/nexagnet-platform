@@ -226,7 +226,9 @@ test('PowerShell deploy creates the remote tenant-pack destination before Window
 });
 
 test('public pilot uses persistent session auth and bootstraps one operator without resetting it', () => {
-  assert.match(renderSecrets, /secret zalo-ultty-session-secret/);
+  assert.match(renderSecrets, /netviet-api-session-v1/);
+  assert.match(renderSecrets, /sha256sum/);
+  assert.doesNotMatch(renderSecrets, /secret zalo-ultty-session-secret/);
   assert.match(renderSecrets, /^AUTH_MODE='session'$/m);
   assert.match(compose, /SESSION_SECRET: \$\{SESSION_SECRET\}/);
   const migrateIndex = deployStack.indexOf('prisma migrate deploy');
