@@ -79,7 +79,7 @@ smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n
 smoke_order_id="${smoke_order_id%%;*}"
 smoke_order_status="$(sed -n 's/.*SMOKE_ORDER_STATUS=//p' <<<"${smoke_output}" | tail -n 1)"
 if [[ ! "${smoke_order_id}" =~ ^[0-9a-f-]{36}$ ]] || \
-  [[ ! "${smoke_order_status}" =~ ^(pending_review|needs_edit|synced)$ ]]; then
+  [[ ! "${smoke_order_status}" =~ ^(pending_review|needs_edit|sent)$ ]]; then
   echo "Khong lay duoc order id tu pilot smoke test." >&2
   exit 1
 fi

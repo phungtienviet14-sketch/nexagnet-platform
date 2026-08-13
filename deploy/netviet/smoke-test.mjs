@@ -11,7 +11,7 @@ await expectOk('/health');
 if (verifyOrderId) {
   const persisted = await getJson(`/orders/${encodeURIComponent(verifyOrderId)}`);
   assertPilotOrder(persisted, verifyOrderId);
-  const expectedStatus = verifyOrderStatus ?? (requiresZaloLogin ? 'needs_edit' : 'synced');
+  const expectedStatus = verifyOrderStatus ?? (requiresZaloLogin ? 'needs_edit' : 'sent');
   if (persisted.status !== expectedStatus) {
     throw new Error(`Don sau restart sai trang thai ${expectedStatus}: ${persisted.status}`);
   }
@@ -60,15 +60,25 @@ if (verifyOrderId) {
       }
     }
 
+    // HOP DONG GD1: duyet -> GUI XAC NHAN vao nhom roi DUNG o `sent`, kem mot hang viec bao Sale
+    // tu nhap ERP. KHONG co buoc dong bo ERP nao trong GD1 (CLAUDE.md quyet dinh 4 va 7), nen
+    // `synced` + ma ERP la hop dong CU. Bai nay van doi hop dong cu va vi vay chan MOI lan deploy
+    // ke tu G1-12 — lan deploy dau tien sau do moi lo ra (13/08/2026).
     if (!requiresZaloLogin) {
       const approved = await postJson(`/orders/${encodeURIComponent(order.id)}/approve`);
-      if (approved.status !== 'synced' || !approved.kiotVietCode) {
-        throw new Error(`Sale approve khong dong bo duoc don ${order.id}`);
+      if (approved.status !== 'sent') {
+        throw new Error(`Sale approve khong gui duoc xac nhan don ${order.id}: ${approved.status}`);
+      }
+      if (approved.salesHandoff?.status !== 'pending') {
+        throw new Error(`Don ${order.id} da gui nhung khong tao hang viec nhap ERP cho Sale`);
+      }
+      if (approved.erpCode) {
+        throw new Error(`Don ${order.id} co ma ERP — GD1 khong duoc goi ERP`);
       }
     }
 
     const saved = await getJson(`/orders/${encodeURIComponent(order.id)}`);
-    const expectedStatuses = requiresZaloLogin ? ['pending_review', 'needs_edit'] : ['synced'];
+    const expectedStatuses = requiresZaloLogin ? ['pending_review', 'needs_edit'] : ['sent'];
     if (!expectedStatuses.includes(saved.status)) {
       throw new Error(`Don ${order.id} co trang thai ngoai du kien: ${saved.status}`);
     }
