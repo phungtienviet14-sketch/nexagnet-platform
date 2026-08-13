@@ -11,8 +11,8 @@ vi.mock('@aws-sdk/client-s3', () => ({
   PutObjectCommand: class {
     constructor(readonly input: Record<string, unknown>) {}
   },
-  HeadBucketCommand: class {
-    readonly kind = 'HeadBucket';
+  ListObjectsV2Command: class {
+    readonly kind = 'ListObjectsV2';
     constructor(readonly input: Record<string, unknown>) {}
   },
 }));
@@ -102,15 +102,20 @@ describe('S3MediaStore.check — cham that vao bucket', () => {
 
   afterEach(() => send.mockReset());
 
-  it('bucket doc duoc -> healthy, va di bang HeadBucket dung ten bucket', async () => {
+  /**
+   * Phai la ListObjectsV2 chu KHONG phai HeadBucket: tren pilot GCP tai khoan dich vu chi co
+   * `roles/storage.objectAdmin` (quyen tren object), khong co `storage.buckets.get` — HeadBucket
+   * se 403 ngay ca khi cau hinh dung.
+   */
+  it('bucket doc duoc -> healthy, va di bang quyen tren OBJECT chu khong phai tren bucket', async () => {
     send.mockResolvedValue({});
     const result = await new S3MediaStore(CONFIG).check();
 
     expect(result.healthy).toBe(true);
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0]![0]).toMatchObject({
-      kind: 'HeadBucket',
-      input: { Bucket: 'kho-anh' },
+      kind: 'ListObjectsV2',
+      input: { Bucket: 'kho-anh', Prefix: 'media/', MaxKeys: 1 },
     });
   });
 

@@ -1,4 +1,4 @@
-import { HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { MediaStore, type MediaStoreHealth } from './media-store.js';
 
 export interface S3MediaConfig {
@@ -59,9 +59,20 @@ export class S3MediaStore extends MediaStore {
     return value;
   }
 
+  /**
+   * Liet ke 1 object duoi prefix `media/` chu KHONG dung `HeadBucket`.
+   *
+   * Ly do rat cu the: tren pilot GCP, tai khoan dich vu chi co `roles/storage.objectAdmin` — quyen
+   * tren OBJECT, khong co `storage.buckets.get`. `HeadBucket` se tra 403 ngay ca khi cau hinh
+   * hoan toan dung, tuc la doi mot bao-xanh-gia lay mot bao-do-gia. `ListObjectsV2` chi can
+   * `storage.objects.list`, va van phan biet du ba kieu hong can bat: sai ten bucket
+   * (NoSuchBucket), khoa sai/het han (403), va bucket o project khac.
+   */
   private async probe(): Promise<MediaStoreHealth> {
     try {
-      await this.client.send(new HeadBucketCommand({ Bucket: this.config.bucket }));
+      await this.client.send(
+        new ListObjectsV2Command({ Bucket: this.config.bucket, Prefix: 'media/', MaxKeys: 1 }),
+      );
       return { healthy: true, detail: `s3: doc duoc bucket ${this.config.bucket}` };
     } catch (error: unknown) {
       // Thong diep cua AWS SDK khong chua khoa, nhung van cat ngan de khong do ca stack vao UI.
