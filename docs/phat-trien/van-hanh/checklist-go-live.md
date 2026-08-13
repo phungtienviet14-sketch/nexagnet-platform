@@ -34,7 +34,7 @@ vụ khách nhập (§4), và quyết định go/no-go của người (§6).
 | `dealers.configured` | ≥ 1 đại lý | `/settings` → Nguồn sự thật → Đại lý; hoặc import Excel **A4** | Sale |
 | `groups.mapped` | ≥ 1 nhóm Zalo đã map đại lý | `/settings` → Map nhóm Zalo → chọn đại lý từ dropdown (không gõ chatId tay) | Sale |
 | `parser.production` | `PARSER_MODE=claude` **và** có `ANTHROPIC_API_KEY` | Đặt 2 biến. Xem ràng buộc bên thứ 3 ở §3.3 | Deploy |
-| `media.production` | `MEDIA_STORE≠none` **và** kho trả healthy | `MEDIA_STORE=s3` + `MEDIA_BUCKET` + `MEDIA_ENDPOINT` + `MEDIA_ACCESS_KEY_ID` + `MEDIA_SECRET_ACCESS_KEY`; giữ `MEDIA_ALLOWED_HOSTS` mặc định `zdn.vn` | Deploy |
+| `media.production` | `MEDIA_STORE≠none` **và** kho trả healthy | Trên GCP dùng `MEDIA_STORE=gcs` + `MEDIA_BUCKET`; API dùng ADC của service account gắn trên VM, không tạo HMAC/static key | Deploy |
 | `channel.production` | Kênh production **và runtime đã chứng minh sống**: zca listener `ready`; bot có identity + poll heartbeat; hybrid cần cả hai | Xem §2 — **có điều kiện pháp lý chặn trước** | Deploy (sau §3.1) |
 | `auth.production` | `AUTH_MODE≠none`; nếu `session` thì `PERSISTENCE=prisma` | Xem §2 — bật lại 4 lớp đã tắt 04/08/2026 | Deploy |
 | `golden.evaluated` | Có báo cáo golden **và** đạt ngưỡng | Chạy harness [tools/poc-parser](../../../tools/poc-parser) → trỏ `GOLDEN_EVAL_REPORT_PATH` vào báo cáo | Dev (cần **B1-B2**) |
@@ -46,6 +46,13 @@ Hai mục **không chặn** (cảnh báo/thông tin): `campaign.data` (chưa có
 > nhận kỳ `active` **đúng tháng hiện tại**, không bao giờ rơi về tháng trước. Thiếu kỳ tháng này thì
 > hệ thống vẫn chạy, vẫn đọc tin, nhưng **mọi đơn đều rơi về Sale** — kể cả đơn hợp lệ dưới ngưỡng.
 > Bật kênh Zalo khi chưa có bảng giá tháng hiện hành là bật một hệ thống không tự chốt được đơn nào.
+
+Pre-pilot được phép tạo kỳ `testOnly=true` với đúng 1–2 SKU và tên/note nêu rõ TEST (ví dụ
+`PREPILOT_TEST_ONLY_2026-08-13`). Kỳ này có thể cấp giá cho UAT nhưng `source=test_only` nên
+**không bao giờ làm xanh** `price.current_period`; API danh sách vẫn trả `missingCurrentPeriod=true`.
+Backend chỉ cho activate khi `DATA_CLASSIFICATION=test` và từ chối nếu tháng đó đã có kỳ production
+active, vì vậy test-only không thể archive/thay thế bảng giá thật.
+Kết thúc UAT phải gọi `POST /settings/price-periods/:id/archive` với `{ "confirmed": true }`.
 
 ---
 
@@ -138,23 +145,15 @@ Làm đúng thứ tự. Mỗi bước có cách tự kiểm chứng; bước sau
    Đây là bước bắt hệ thống tự tố cáo phần còn thiếu, làm sớm để lộ sai sớm.
 4. **Bật xác thực** (§2.2) + đặt `PERSISTENCE=prisma` → kiểm: gọi thẳng `/settings` không đăng nhập
    phải nhận 401, sai vai phải nhận 403.
-5. **Bật kho media** (`MEDIA_STORE=s3`) → kiểm: `GET /health/media` trả `reachability.healthy = true`
+5. **Bật kho media** (`MEDIA_STORE=gcs`) → kiểm: `GET /health/media` trả `reachability.healthy = true`
    (đây là kết quả **chạm thật** vào bucket; `storage.state` chỉ suy từ bộ đếm tải ảnh nên trước khi
    có ảnh đầu tiên nó luôn báo "healthy" kể cả khi bucket không tồn tại).
-   `deploy/netviet/render-secrets.sh` đã render sẵn 6 biến `MEDIA_*` và **chỉ** đặt `s3` khi có đủ
-   bucket + 2 khoá HMAC; thiếu một cái → `none` kèm cảnh báo ra stderr.
-   ⚠️ **Bẫy:** rule lifecycle `media/` gắn vào **bucket sao lưu**; `MEDIA_BUCKET` trỏ sai bucket thì
+   `deploy/netviet/render-secrets.sh` render bucket; service account gắn trên VM cấp ADC cho GCS,
+   không đưa credential tĩnh vào env/container.
+   ⚠️ **Bẫy:** rule lifecycle `media/` gắn vào bucket lưu trữ; `MEDIA_BUCKET` trỏ sai bucket thì
    rule giữ ảnh 60/365 ngày **không có tác dụng mà cũng không báo lỗi**. Vì vậy `MEDIA_BUCKET` mặc
    định lấy thẳng từ `BACKUP_BUCKET` mà deploy truyền vào, không để người deploy gõ tay.
-   ⛔ **Chặn hiện tại (13/08/2026): không tạo được khoá HMAC trên project pilot.**
-   `gcloud storage hmac create` trả `HTTPError 412: Request violates constraint
-   'constraints/iam.disableServiceAccountKeyCreation'` — chính sách **cấp tổ chức** đang chặn tạo
-   khoá cho service account. Hai đường đi, đều là **quyết định của chủ tổ chức**, không phải việc
-   sửa code: (a) xin ngoại lệ policy cho project `netviet-host-968934832433`; hoặc (b) cấp khoá HMAC
-   từ một project/tài khoản lưu trữ khác rồi nạp vào 2 secret
-   `zalo-ultty-media-access-key-id` / `zalo-ultty-media-secret-access-key`.
-   Trong lúc chờ, hệ thống **fail-closed đúng**: `MEDIA_STORE=none`, cổng `media.production` báo
-   `missing` chứ không báo xanh giả.
+   Không đổi IAM/org policy và không tạo HMAC/static key chỉ để làm cổng xanh.
 6. **Chạy golden eval** → trỏ `GOLDEN_EVAL_REPORT_PATH`; chưa đạt ngưỡng thì dừng ở đây.
 7. **Bật kênh Zalo cuối cùng** (§2.1), **`AUTO_SEND=off`** trước → chạy 1-2 nhóm pilot ở chế độ Sale
    duyệt tay, đối chiếu đơn AI tính với đơn Sale tự tính.

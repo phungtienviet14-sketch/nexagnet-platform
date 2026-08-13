@@ -122,6 +122,10 @@ export class KnowledgeService implements OnModuleInit {
     return this.snapshot.prices;
   }
 
+  pricePeriod(): KnowledgeSnapshot['pricePeriod'] {
+    return this.snapshot.pricePeriod;
+  }
+
   /** Deal rieng theo dealer+sku (override wholesale). Rong khi chua co so lieu khach. */
   priceOverrides(): DealerPriceOverride[] {
     return this.snapshot.priceOverrides;

@@ -11,6 +11,7 @@ interface KnowledgeStub {
   prices: unknown[];
   dealers: unknown[];
   groups: unknown[];
+  pricePeriod?: { status: 'draft' | 'active' | 'archived'; source?: string | null } | null;
 }
 
 interface ChannelStub {
@@ -30,6 +31,7 @@ function build(
       prices: () => knowledge.prices,
       dealers: () => knowledge.dealers,
       groups: () => knowledge.groups,
+      pricePeriod: () => knowledge.pricePeriod ?? { status: 'active', source: 'operator' },
     } as unknown as KnowledgeService,
     { list: async () => [] } as unknown as CampaignRepository,
     // Kho anh tra ket qua CHAM THAT (`check`), khong phai co tinh `enabled`: bat MEDIA_STORE ma
@@ -59,6 +61,18 @@ describe('ReadinessService', () => {
     // Day dung la trang thai that hom nay: seed la ky 2026-07 con thang hien tai la 2026-08,
     // fail-closed cua P2.1 tra ve rong nen KHONG don nao tu xac nhan duoc.
     const result = await build({ ...FULL, prices: [] }).evaluate();
+
+    expect(result.goLiveReady).toBe(false);
+    expect(result.reasons).toContain('missing_current_price_period');
+    expect(result.checks.find((c) => c.key === 'price.current_period')?.status).toBe('missing');
+  });
+
+  it('active test-only price period does not satisfy production current price readiness', async () => {
+    const result = await build({
+      ...FULL,
+      prices: [{ sku: 'A' }],
+      pricePeriod: { status: 'active', source: 'test_only' },
+    }).evaluate();
 
     expect(result.goLiveReady).toBe(false);
     expect(result.reasons).toContain('missing_current_price_period');

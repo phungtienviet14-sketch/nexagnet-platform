@@ -86,6 +86,24 @@ Hai nhóm pre-pilot TEST hiện được phép:
 
 Chỉ nhóm được operator chọn mới được lưu và chuyển sang Flowise/DeepSeek.
 
+### Bảng giá UAT không làm xanh giả readiness
+
+Khi chưa có bảng giá thật tháng hiện hành, có thể tạo một kỳ API với `testOnly: true`, note ví dụ
+`PREPILOT_TEST_ONLY_2026-08-13`, rồi import đúng 1–2 SKU TEST. Backend lưu
+`source=test_only`; kỳ có thể active để chạy case UAT nhưng `price.current_period` và
+`missingCurrentPeriod` vẫn báo thiếu dữ liệu production. Không copy kỳ tháng trước thành test-only.
+Activation chỉ chạy khi `DATA_CLASSIFICATION=test` và bị từ chối nếu đã có kỳ production active
+cùng tháng; kỳ TEST không được phép archive hay thay thế kỳ thật.
+
+Sau buổi test, archive đúng ID kỳ vừa tạo (session ADMIN/MANAGER + CSRF/origin như mọi mutation):
+
+```text
+POST /settings/price-periods/<period-id>/archive
+{ "confirmed": true }
+```
+
+Archive reload nguồn sự thật ngay; không xóa record/audit và không cần sửa trực tiếp PostgreSQL.
+
 Khi bản source mới được deploy, badge **Tự gửi: OFF** trên console là công tắc runtime. Bật cần
 xác nhận và chỉ áp dụng cho tin mới được Giám sát kết luận không rủi ro; restart API sẽ đưa nó
 về `AUTO_SEND` trong env.

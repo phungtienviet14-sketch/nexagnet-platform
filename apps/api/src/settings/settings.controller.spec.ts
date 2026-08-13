@@ -55,6 +55,7 @@ function build() {
     applyImport: vi.fn(async () => ({ periodId: 'p1' })),
     validate: vi.fn(async () => ({ valid: true })),
     activate: vi.fn(async () => ({ id: 'p1', status: 'active' })),
+    archive: vi.fn(async () => ({ id: 'p1', status: 'archived' })),
   } as unknown as PricePeriodsService;
   return {
     controller: new (SettingsController as unknown as new (...args: unknown[]) => SettingsController)(
@@ -93,6 +94,19 @@ describe('SettingsController', () => {
     expect(audit.append).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'automation.auto_send', after: { autoSend: 'on' } }),
     );
+  });
+
+  it('archives a price period only after explicit confirmation', async () => {
+    const { controller, pricePeriods } = build();
+
+    expect(() =>
+      controller.archivePricePeriod('p1', { confirmed: false }, undefined, 'operator'),
+    ).toThrow(BadRequestException);
+    expect(pricePeriods.archive).not.toHaveBeenCalled();
+
+    await controller.archivePricePeriod('p1', { confirmed: true }, undefined, 'operator', 'req-archive');
+
+    expect(pricePeriods.archive).toHaveBeenCalledWith('p1', 'operator', 'req-archive');
   });
 
   it('rules phai qua draft -> preview -> activate va moi buoc co audit', async () => {

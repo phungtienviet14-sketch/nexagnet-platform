@@ -22,6 +22,7 @@ export interface Product {
 export const PRICE_FIELDS = ['wholesale', 'minRetailPrice', 'retailPrice', 'listPrice'] as const;
 export type PriceField = (typeof PRICE_FIELDS)[number];
 export type PricePeriodStatus = 'draft' | 'active' | 'archived';
+export const TEST_ONLY_PRICE_PERIOD_SOURCE = 'test_only';
 
 export interface RetailAdviceStrategy {
   priceField: PriceField;
@@ -87,7 +88,7 @@ export interface GlossaryEntry {
 
 export interface KnowledgeSnapshot {
   /** Ky gia seed/active dang duoc nap. Null = chua co bang gia hop le. */
-  pricePeriod: { validMonth: string | null; status: PricePeriodStatus } | null;
+  pricePeriod: { validMonth: string | null; status: PricePeriodStatus; source?: string | null } | null;
   products: Product[];
   prices: PriceRow[];
   /** Deal rieng theo dealer+sku (override wholesale). Rong khi chua co so lieu. */

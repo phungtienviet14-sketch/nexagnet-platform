@@ -6,6 +6,7 @@ import { CampaignRepository } from '../campaigns/campaign.repository.js';
 import { BotIdentityService } from '../channels/bot-identity.service.js';
 import { ZaloUserClient } from '../channels/zalo-user.client.js';
 import { BotPoller } from '../ingest/bot-poller.js';
+import { TEST_ONLY_PRICE_PERIOD_SOURCE } from '../knowledge/domain.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { MediaStore } from '../media/media-store.js';
 import { parseGoldenEvalReport, type GoldenReadiness } from './golden-eval-report.js';
@@ -42,7 +43,7 @@ export class ReadinessService {
         tenantLoaded: blockedCapabilities !== null,
         // Fail-closed cua P2.1: `prices()` chi tra ky dang active DUNG thang hien tai, khong
         // bao gio roi ve thang truoc. Rong = thang nay chua co bang gia.
-        currentPricePeriod: this.knowledge.prices().length > 0,
+        currentPricePeriod: this.hasProductionCurrentPricePeriod(),
         dealerCount: this.knowledge.dealers().length,
         enabledGroupMappingCount: this.knowledge.groups().length,
         parser: {
@@ -67,6 +68,15 @@ export class ReadinessService {
         blockedCapabilities: blockedCapabilities ?? [],
       },
       now,
+    );
+  }
+
+  private hasProductionCurrentPricePeriod(): boolean {
+    const period = this.knowledge.pricePeriod();
+    return (
+      this.knowledge.prices().length > 0 &&
+      period?.status === 'active' &&
+      period.source !== TEST_ONLY_PRICE_PERIOD_SOURCE
     );
   }
 

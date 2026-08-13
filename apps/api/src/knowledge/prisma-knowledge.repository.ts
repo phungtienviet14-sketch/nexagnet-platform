@@ -50,7 +50,7 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
         description: p.description ?? undefined,
       })),
       pricePeriod: pricePeriod
-        ? { validMonth: pricePeriod.validMonth, status: pricePeriod.status }
+        ? { validMonth: pricePeriod.validMonth, status: pricePeriod.status, source: pricePeriod.source }
         : null,
       prices: (pricePeriod?.prices ?? []).map((p) => ({
         id: p.id,

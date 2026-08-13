@@ -162,6 +162,23 @@ export class SettingsController {
     return this.pricePeriods.activate(id, actorName(actor), requestId ?? null);
   }
 
+  @Roles('MANAGER', 'ADMIN')
+  @Post('price-periods/:id/archive')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  archivePricePeriod(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    if (!activateSchema.safeParse(body).success) {
+      throw new BadRequestException('Phải xác nhận trước khi lưu trữ kỳ giá');
+    }
+    return this.pricePeriods.archive(id, actorName(actor), requestId ?? null);
+  }
+
   @Get('source-truth/:resource')
   sourceTruth(@Param('resource') resource: string) {
     return this.queryService.sourceTruth(parseResource(resource));

@@ -10,6 +10,7 @@ import { loadEnv } from '@netviet/shared';
 import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaService } from '../config/prisma.service.js';
+import { TEST_ONLY_PRICE_PERIOD_SOURCE } from '../knowledge/domain.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { currentPriceMonth } from '../knowledge/price-periods.js';
 
@@ -25,6 +26,16 @@ const importRowSchema = z
   })
   .strict();
 const importRowsSchema = z.array(importRowSchema).min(1).max(10_000);
+const pricePeriodDraftSchema = z
+  .object({
+    validMonth: monthSchema,
+    note: z.string().max(500).optional(),
+    testOnly: z.boolean().optional(),
+  })
+  .strict();
+const pricePeriodCopySchema = z
+  .object({ validMonth: monthSchema, note: z.string().max(500).optional() })
+  .strict();
 
 export type PriceImportRow = z.infer<typeof importRowSchema>;
 export interface PriceImportPreview {
@@ -110,9 +121,24 @@ export class PricePeriodsService {
     return {
       currentMonth,
       currentPeriodId:
-        periods.find((period) => period.validMonth === currentMonth && period.status === 'active')?.id ?? null,
+        periods.find(
+          (period) =>
+            period.validMonth === currentMonth &&
+            period.status === 'active' &&
+            !isTestOnlyPeriod(period.source),
+        )?.id ?? null,
+      testOnlyCurrentPeriodId:
+        periods.find(
+          (period) =>
+            period.validMonth === currentMonth &&
+            period.status === 'active' &&
+            isTestOnlyPeriod(period.source),
+        )?.id ?? null,
       missingCurrentPeriod: !periods.some(
-        (period) => period.validMonth === currentMonth && period.status === 'active',
+        (period) =>
+          period.validMonth === currentMonth &&
+          period.status === 'active' &&
+          !isTestOnlyPeriod(period.source),
       ),
       periods,
     };
@@ -120,10 +146,16 @@ export class PricePeriodsService {
 
   async createDraft(input: unknown, actor: string, requestId: string | null) {
     this.assertWritable();
-    const parsed = z.object({ validMonth: monthSchema, note: z.string().max(500).optional() }).strict().safeParse(input);
+    const parsed = pricePeriodDraftSchema.safeParse(input);
     if (!parsed.success) throw new BadRequestException('Kỳ giá phải có validMonth dạng YYYY-MM');
+    const { testOnly, ...draft } = parsed.data;
     const period = await this.prisma.pricePeriod.create({
-      data: { ...parsed.data, status: 'draft', source: 'operator', createdBy: actorName(actor) },
+      data: {
+        ...draft,
+        status: 'draft',
+        source: testOnly ? TEST_ONLY_PRICE_PERIOD_SOURCE : 'operator',
+        createdBy: actorName(actor),
+      },
       include: { prices: true },
     });
     await this.record('price_period.create', period.id, actor, null, period, requestId);
@@ -132,13 +164,14 @@ export class PricePeriodsService {
 
   async copyDraft(sourceId: string, input: unknown, actor: string, requestId: string | null) {
     this.assertWritable();
-    const parsed = z.object({ validMonth: monthSchema, note: z.string().max(500).optional() }).strict().safeParse(input);
+    const parsed = pricePeriodCopySchema.safeParse(input);
     if (!parsed.success) throw new BadRequestException('Kỳ đích phải có validMonth dạng YYYY-MM');
+    const draft = parsed.data;
     const source = await this.period(sourceId);
     const period = await this.prisma.pricePeriod.create({
       data: {
-        validMonth: parsed.data.validMonth,
-        note: parsed.data.note,
+        validMonth: draft.validMonth,
+        note: draft.note,
         status: 'draft',
         source: `copy:${source.id}`,
         createdBy: actorName(actor),
@@ -207,7 +240,13 @@ export class PricePeriodsService {
       errors.push('Kỳ giá thiếu validMonth YYYY-MM hợp lệ');
     }
     const missing = products.filter((product) => !bySku.has(product.sku)).map((product) => product.sku);
-    if (missing.length > 0) errors.push(`Thiếu giá cho SKU: ${missing.join(', ')}`);
+    if (isTestOnlyPeriod(period.source)) {
+      if (period.prices.length < 1 || period.prices.length > 2) {
+        errors.push('Kỳ giá test-only chỉ được có 1-2 SKU để smoke pre-pilot');
+      }
+    } else if (missing.length > 0) {
+      errors.push(`Thiếu giá cho SKU: ${missing.join(', ')}`);
+    }
     const invalid = period.prices.filter((price) => price.wholesale <= 0).map((price) => price.sku);
     if (invalid.length > 0) errors.push(`Wholesale phải lớn hơn 0: ${invalid.join(', ')}`);
     return { valid: errors.length === 0, errors, warnings: [], productCount: products.length, priceCount: period.prices.length };
@@ -217,12 +256,36 @@ export class PricePeriodsService {
     this.assertWritable();
     const period = await this.period(periodId);
     if (period.status !== 'draft') throw new ConflictException('Chỉ kỳ draft mới được activate');
+    const testOnly = isTestOnlyPeriod(period.source);
+    if (testOnly && loadEnv().DATA_CLASSIFICATION !== 'test') {
+      throw new ConflictException('Kỳ giá test-only chỉ được activate trong môi trường dữ liệu TEST');
+    }
     const result = await this.validate(periodId);
     if (!result.valid || !period.validMonth) throw new BadRequestException(result.errors);
     const activatedAt = new Date();
     const activated = await this.prisma.$transaction(async (tx) => {
+      if (testOnly) {
+        const productionPeriod = await tx.pricePeriod.findFirst({
+          where: {
+            validMonth: period.validMonth,
+            status: 'active',
+            NOT: { source: TEST_ONLY_PRICE_PERIOD_SOURCE },
+          },
+          select: { id: true },
+        });
+        if (productionPeriod) {
+          throw new ConflictException(
+            'Không activate kỳ test-only khi đã có kỳ production active cùng tháng',
+          );
+        }
+      }
       await tx.pricePeriod.updateMany({
-        where: { validMonth: period.validMonth, status: 'active', NOT: { id: periodId } },
+        where: {
+          validMonth: period.validMonth,
+          status: 'active',
+          NOT: { id: periodId },
+          ...(testOnly ? { source: TEST_ONLY_PRICE_PERIOD_SOURCE } : {}),
+        },
         data: { status: 'archived' },
       });
       return tx.pricePeriod.update({
@@ -233,6 +296,21 @@ export class PricePeriodsService {
     await this.record('price_period.activate', periodId, actor, period, activated, requestId);
     await this.knowledge.reload();
     return activated;
+  }
+
+  async archive(periodId: string, actor: string, requestId: string | null) {
+    this.assertWritable();
+    const period = await this.period(periodId);
+    if (period.status !== 'active' && period.status !== 'draft') {
+      throw new ConflictException('Chỉ kỳ active hoặc draft mới được archive');
+    }
+    const archived = await this.prisma.pricePeriod.update({
+      where: { id: periodId },
+      data: { status: 'archived' },
+    });
+    await this.record('price_period.archive', periodId, actor, period, archived, requestId);
+    await this.knowledge.reload();
+    return archived;
   }
 
   private async period(id: string) {
@@ -260,4 +338,8 @@ export class PricePeriodsService {
 function actorName(actor: string): string {
   const parsed = z.string().trim().min(1).max(200).safeParse(actor);
   return parsed.success ? parsed.data : 'operator';
+}
+
+function isTestOnlyPeriod(source: string | null | undefined): boolean {
+  return source === TEST_ONLY_PRICE_PERIOD_SOURCE;
 }

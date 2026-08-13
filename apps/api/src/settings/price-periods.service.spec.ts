@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AuditLogService } from '../audit/audit-log.service.js';
 import type { PrismaService } from '../config/prisma.service.js';
 import type { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { currentPriceMonth } from '../knowledge/price-periods.js';
 import { PricePeriodsService, buildPriceImportPreview } from './price-periods.service.js';
 
 const rows = [
@@ -48,6 +49,7 @@ describe('PricePeriodsService lifecycle', () => {
     const prisma = {
       pricePeriod: {
         findMany: vi.fn(async () => []),
+        findFirst: vi.fn(async () => null),
         findUnique: vi.fn(async () => ({
           id: 'p1', validMonth: '2026-08', status: 'draft', prices: rows,
         })),
@@ -75,11 +77,132 @@ describe('PricePeriodsService lifecycle', () => {
     });
   });
 
+  it('stores explicit test-only drafts in the existing source field', async () => {
+    const { service, prisma } = make();
+
+    await service.createDraft({ validMonth: '2026-08', testOnly: true }, 'sale', null);
+
+    expect(prisma.pricePeriod.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ source: 'test_only', status: 'draft' }),
+      include: { prices: true },
+    });
+  });
+
+  it('keeps a current test-only period visible but never reports it as production current', async () => {
+    const { service, prisma } = make();
+    const validMonth = currentPriceMonth();
+    vi.mocked(prisma.pricePeriod.findMany).mockResolvedValue([
+      {
+        id: 'test-current',
+        validMonth,
+        status: 'active',
+        source: 'test_only',
+        prices: [rows[0]],
+        _count: { prices: 1 },
+      },
+    ] as never);
+
+    await expect(service.list()).resolves.toMatchObject({
+      currentPeriodId: null,
+      testOnlyCurrentPeriodId: 'test-current',
+      missingCurrentPeriod: true,
+    });
+  });
+
   it('rejects activation until every catalog SKU has a valid price', async () => {
     const { service, prisma } = make();
     vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
       id: 'p1', validMonth: '2026-08', status: 'draft', prices: [rows[0]],
     } as never);
+    await expect(service.activate('p1', 'sale', null)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('allows explicit test-only periods to activate with one or two priced SKUs', async () => {
+    const { service, prisma, knowledge } = make();
+    vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
+      id: 'p1',
+      validMonth: '2026-08',
+      status: 'draft',
+      source: 'test_only',
+      prices: [rows[0]],
+    } as never);
+
+    await expect(service.activate('p1', 'sale', 'req')).resolves.toMatchObject({ status: 'active' });
+
+    expect(prisma.pricePeriod.update).toHaveBeenCalledWith({
+      where: { id: 'p1' },
+      data: expect.objectContaining({ status: 'active' }),
+    });
+    expect(prisma.pricePeriod.updateMany).toHaveBeenCalledWith({
+      where: {
+        validMonth: '2026-08',
+        status: 'active',
+        NOT: { id: 'p1' },
+        source: 'test_only',
+      },
+      data: { status: 'archived' },
+    });
+    expect(knowledge.reload).toHaveBeenCalled();
+  });
+
+  it('refuses to replace an active production period with test-only prices', async () => {
+    const { service, prisma } = make();
+    vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
+      id: 'p1',
+      validMonth: '2026-08',
+      status: 'draft',
+      source: 'test_only',
+      prices: [rows[0]],
+    } as never);
+    vi.mocked(prisma.pricePeriod.findFirst).mockResolvedValue({ id: 'production-current' } as never);
+
+    await expect(service.activate('p1', 'sale', null)).rejects.toThrow(
+      'đã có kỳ production active cùng tháng',
+    );
+    expect(prisma.pricePeriod.updateMany).not.toHaveBeenCalled();
+    expect(prisma.pricePeriod.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses test-only activation when the runtime is classified as customer data', async () => {
+    const { service, prisma } = make();
+    vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
+      id: 'p1',
+      validMonth: '2026-08',
+      status: 'draft',
+      source: 'test_only',
+      prices: [rows[0]],
+    } as never);
+    vi.stubEnv('DATA_CLASSIFICATION', 'customer');
+    vi.stubEnv('PARSER_MODE', 'claude');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    vi.stubEnv('PERSISTENCE', 'prisma');
+    vi.stubEnv('AUTH_MODE', 'session');
+    vi.stubEnv('SESSION_SECRET', 'x'.repeat(32));
+    vi.stubEnv('CHANNEL_MODE', 'mock');
+
+    try {
+      await expect(service.activate('p1', 'sale', null)).rejects.toThrow(
+        'chỉ được activate trong môi trường dữ liệu TEST',
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(prisma.pricePeriod.updateMany).not.toHaveBeenCalled();
+    expect(prisma.pricePeriod.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps test-only activation bounded to at most two priced SKUs', async () => {
+    const { service, prisma } = make();
+    vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
+      id: 'p1',
+      validMonth: '2026-08',
+      status: 'draft',
+      source: 'test_only',
+      prices: [...rows, { sku: 'C', wholesale: 300 }],
+    } as never);
+    vi.mocked(prisma.product.findMany).mockResolvedValue([{ sku: 'A' }, { sku: 'B' }, { sku: 'C' }] as never);
+
     await expect(service.activate('p1', 'sale', null)).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -92,6 +215,56 @@ describe('PricePeriodsService lifecycle', () => {
       data: { status: 'archived' },
     });
     expect(knowledge.reload).toHaveBeenCalled();
+  });
+
+  it.each(['active', 'draft'] as const)('archives an exact %s period with audit and reload', async (status) => {
+    const { service, prisma, audit, knowledge } = make();
+    vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
+      id: 'p1',
+      validMonth: '2026-08',
+      status,
+      source: 'test_only',
+      prices: [rows[0]],
+    } as never);
+    vi.mocked(prisma.pricePeriod.update).mockResolvedValue({
+      id: 'p1',
+      validMonth: '2026-08',
+      status: 'archived',
+      source: 'test_only',
+    } as never);
+
+    await expect(service.archive('p1', 'sale', 'req-archive')).resolves.toMatchObject({
+      id: 'p1',
+      status: 'archived',
+    });
+
+    expect(prisma.pricePeriod.update).toHaveBeenCalledWith({
+      where: { id: 'p1' },
+      data: { status: 'archived' },
+    });
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'price_period.archive',
+        entityType: 'PricePeriod',
+        entityId: 'p1',
+        requestId: 'req-archive',
+      }),
+    );
+    expect(knowledge.reload).toHaveBeenCalled();
+  });
+
+  it('refuses to archive an already archived period', async () => {
+    const { service, prisma, knowledge } = make();
+    vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
+      id: 'p1',
+      validMonth: '2026-08',
+      status: 'archived',
+      prices: [rows[0]],
+    } as never);
+
+    await expect(service.archive('p1', 'sale', null)).rejects.toThrow('Chỉ kỳ active hoặc draft');
+    expect(prisma.pricePeriod.update).not.toHaveBeenCalled();
+    expect(knowledge.reload).not.toHaveBeenCalled();
   });
 
   it('applies an explicitly confirmed preview and keeps upsert idempotency key', async () => {
