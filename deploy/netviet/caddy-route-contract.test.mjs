@@ -8,6 +8,7 @@ const compose = await readFile(new URL('./compose.yaml', import.meta.url), 'utf8
 const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.url), 'utf8');
 const channelMode = await readFile(new URL('./channel-mode.sh', import.meta.url), 'utf8');
 const setChannelMode = await readFile(new URL('./set-channel-mode.sh', import.meta.url), 'utf8');
+const deployPs1 = await readFile(new URL('./deploy.ps1', import.meta.url), 'utf8');
 
 test('operator page /zalo goes to Next.js while /zalo/* stays on the API', () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
@@ -215,6 +216,12 @@ test('deploy smoke cannot approve through a live Zalo API transport', async () =
     await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8'),
     /if \(!liveZaloTransport\) \{[\s\S]*\/approve/,
   );
+});
+
+test('PowerShell deploy creates the remote tenant-pack destination before Windows pscp uploads', () => {
+  const createParent = deployPs1.indexOf("install -d -m 0700 '$remoteParent' '$remoteParent/tenant-pack'");
+  const uploadTenant = deployPs1.indexOf('"${VmName}:$remoteParent/tenant-pack"');
+  assert.ok(createParent >= 0 && createParent < uploadTenant);
 });
 
 // MOT IMAGE — MOI KHACH. Truoc 12/08/2026 image co `ARG TENANT=ultty` va `next build` nuong ten

@@ -572,7 +572,10 @@ function Deploy-Stack {
     '--tunnel-through-iap',
     '--project', $ProjectId,
     '--quiet',
-    '--command', "install -d -m 0700 '$remoteParent'"
+    # Windows gcloud uses pscp, which refuses an absent final destination for a recursive upload.
+    # Create tenant-pack up front; deploy-remote.sh deliberately flattens the resulting
+    # tenant-pack/<slug>/tenant.json layout before installing it.
+    '--command', "install -d -m 0700 '$remoteParent' '$remoteParent/tenant-pack'"
   )
   Invoke-GcloudRetry -Arguments @(
     'compute', 'scp', '--recurse', $PSScriptRoot,
