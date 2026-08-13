@@ -246,7 +246,7 @@ trong cửa sổ thời gian.
 | Method | Path | Vai |
 |---|---|---|
 | GET | `/knowledge/summary` · `/knowledge/products` · `/knowledge/groups` · `/knowledge/glossary` | 4 vai |
-| POST | `/knowledge/reload` | 4 vai |
+| POST | `/knowledge/reload` | MANAGER · ADMIN |
 | GET | `/demo/config` · `/demo/samples` · `/demo/groups` | SALE · MANAGER · ADMIN |
 | POST | `/demo/simulate` | SALE · MANAGER · ADMIN |
 | POST | `/demo/rerun/:id` | SALE · MANAGER · ADMIN |
