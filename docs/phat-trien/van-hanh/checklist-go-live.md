@@ -65,11 +65,11 @@ Mỗi lần đổi mode recreate API nên `AUTO_SEND` trở về `off`. Rollback
 `mock`. Cổng readiness không còn tin riêng env: `connecting`, `qr_ready`, `error`, `logged_out`, bot
 chưa poll thành công đều là `missing` và detail nêu state thật.
 
-**2.2 Xác thực.** Cùng file đặt `AUTH_MODE='none'` và Caddy đã bỏ Basic Auth (quyết định người vận
-hành 04/08/2026, khi VM được chốt là môi trường dev/demo không PII). Hệ quả phải nói thẳng: **VM mở
-public 80/443 ⇒ ai biết URL cũng đọc/sửa được nguồn sự thật và gọi được `/broadcast`.** Chỉ hợp lệ
-với dữ liệu TEST. Trước khi có PII thật phải bật lại cả 4 lớp — cách làm ở
-[deploy/netviet/README.md](../../../deploy/netviet/README.md).
+**2.2 Xác thực.** Pre-pilot public dùng `AUTH_MODE=session`: user `operator`, Argon2id, session bền
+vững trong PostgreSQL, cookie Secure/HttpOnly/SameSite và CSRF cho mutation. Password lấy từ Secret
+Manager `zalo-ultty-operator-password`; deploy đầu chỉ tạo ADMIN khi chưa tồn tại, deploy sau không
+reset credential. Không đưa API key vào bundle browser. `AUTH_MODE=none` chỉ dành cho local/CI
+không public.
 
 **Lưới an toàn nên bật cùng lúc:** `DATA_CLASSIFICATION=customer`. Cổng này ép sẵn
 `PARSER_MODE=claude` + `ANTHROPIC_API_KEY` + `PERSISTENCE=prisma` + auth ngay **lúc boot**

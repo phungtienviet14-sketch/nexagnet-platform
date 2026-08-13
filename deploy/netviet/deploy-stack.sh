@@ -54,6 +54,10 @@ done
 "${COMPOSE[@]}" --profile tools run --rm bootstrap
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/flowise/contract-test.mjs
+"${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
+  apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
+"${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
+  node deploy/netviet/bootstrap-auth-user.mjs
 # Always recreate the application processes before injecting a smoke message. Besides picking up the
 # new image, this resets the in-memory AUTO_SEND switch to the compose fail-safe `off` value. Without
 # this, an unchanged container that an operator had temporarily enabled could send the smoke fixture
@@ -76,7 +80,8 @@ for attempt in {1..60}; do
 done
 smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -T \
-  -e PILOT_BASE_URL=http://gateway:8080 \
+  --add-host "${OPERATOR_DOMAIN}:host-gateway" \
+  -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
   -e "CHANNEL_MODE=${channel_mode}" \
   bootstrap node --input-type=module - < smoke-test.mjs)"
 echo "${smoke_output}"
@@ -102,7 +107,8 @@ for attempt in {1..60}; do
 done
 "${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -T \
-  -e PILOT_BASE_URL=http://gateway:8080 \
+  --add-host "${OPERATOR_DOMAIN}:host-gateway" \
+  -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
   -e "CHANNEL_MODE=${channel_mode}" \
   -e "VERIFY_ORDER_ID=${smoke_order_id}" \
   -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
@@ -110,15 +116,15 @@ done
 echo "Stack zalo-ultty da healthy tai 127.0.0.1:8080."
 
 source .runtime/secrets.env
-# Moi truong dev/demo: khong con Basic Auth -> smoke test goi thang, khong `--user`.
-# Ba hostname deu phai tra 2xx MA KHONG can credential; con doi mat khau = Caddyfile bi bat lai.
+# Public endpoints/UI shell phai reachable qua TLS, trong khi protected API phai tu choi anonymous.
 for attempt in {1..60}; do
   if curl -fsS --max-time 10 --resolve "${DEMO_DOMAIN}:443:127.0.0.1" \
     "https://${DEMO_DOMAIN}/health" >/dev/null && \
     curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
     "https://${OPERATOR_DOMAIN}/zalo" >/dev/null && \
-    curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
-    "https://${OPERATOR_DOMAIN}/zalo/status" >/dev/null && \
+    [[ "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+      --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
+      "https://${OPERATOR_DOMAIN}/zalo/status")" == '401' ]] && \
     curl -fsS --max-time 10 --resolve "${FLOWISE_DOMAIN}:443:127.0.0.1" \
     "https://${FLOWISE_DOMAIN}/api/v1/ping" >/dev/null; then
     break

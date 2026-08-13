@@ -46,6 +46,8 @@ ZALO_BOT_TOKEN="$(optional_secret zalo-ultty-zalo-bot-token)"
 CHANNEL_MODE="$("${SCRIPT_DIR}/channel-mode.sh" read "${RUNTIME_DIR}/channel-mode.env")"
 echo "render-secrets: CHANNEL_MODE=${CHANNEL_MODE} (mock neu chua co override duoc phe duyet)." >&2
 API_KEY=$(secret zalo-ultty-api-key)
+SESSION_SECRET="$(secret zalo-ultty-session-secret)"
+PILOT_OPERATOR_PASSWORD="$(secret zalo-ultty-operator-password)"
 FLOWISE_SECRETKEY="$(secret zalo-ultty-flowise-secretkey)"
 FLOWISE_ADMIN_EMAIL="$(secret zalo-ultty-flowise-admin-email)"
 FLOWISE_ADMIN_PASSWORD="$(secret zalo-ultty-flowise-admin-password)"
@@ -53,11 +55,11 @@ FLOWISE_JWT_SECRET="$(secret zalo-ultty-flowise-jwt-secret)"
 FLOWISE_REFRESH_SECRET="$(secret zalo-ultty-flowise-refresh-secret)"
 FLOWISE_SESSION_SECRET="$(secret zalo-ultty-flowise-session-secret)"
 FLOWISE_TOKEN_HASH_SECRET="$(secret zalo-ultty-flowise-token-hash-secret)"
-# MOI TRUONG DEV/DEMO — KHONG XAC THUC (quyet dinh nguoi van hanh 04/08/2026):
-# Caddy khong con Basic Auth nen KHONG lay/hash zalo-ultty-demo-password va
-# zalo-ultty-operator-password nua (hai secret van con trong Secret Manager de bat lai sau).
-# API chay AUTH_MODE=none; API_KEY o tren van render san de bat lai chi bang mot bien.
-AUTH_MODE='none'
+# PRE-PILOT PUBLIC — SESSION AUTH:
+# Caddy khong can Basic Auth; NestJS dung login session/role/CSRF va PostgreSQL session store.
+# URL pilot public phai dung session server-side. API key van render san cho automation tuong lai,
+# nhung khong dua vao browser. User bootstrap chi tao lan dau, deploy sau khong reset password.
+AUTH_MODE='session'
 
 # --- Kho anh (MEDIA_STORE) ---------------------------------------------------------------------
 # Link anh Zalo chet trong <=35 ngay => khong tai ve la mat vinh vien. Nhung bat kho anh cung la
@@ -98,6 +100,10 @@ DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
 ZALO_BOT_TOKEN=${ZALO_BOT_TOKEN}
 API_KEY=${API_KEY}
 AUTH_MODE=${AUTH_MODE}
+SESSION_SECRET=${SESSION_SECRET}
+PILOT_OPERATOR_USERNAME=operator
+PILOT_OPERATOR_NAME=Pilot Operator
+PILOT_OPERATOR_PASSWORD=${PILOT_OPERATOR_PASSWORD}
 MEDIA_STORE=${MEDIA_STORE}
 MEDIA_BUCKET=${MEDIA_BUCKET}
 FLOWISE_SECRETKEY=${FLOWISE_SECRETKEY}

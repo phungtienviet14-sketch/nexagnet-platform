@@ -5,8 +5,12 @@ const verifyOrderId = process.env.VERIFY_ORDER_ID?.trim();
 const verifyOrderStatus = process.env.VERIFY_ORDER_STATUS?.trim();
 const channelMode = process.env.CHANNEL_MODE?.trim() ?? 'mock';
 const liveZaloTransport = ['bot', 'zca', 'hybrid'].includes(channelMode);
+const authMode = process.env.PILOT_AUTH_MODE?.trim() ?? 'none';
+let sessionCookie;
+let csrfToken;
 
 await expectOk('/health');
+if (authMode === 'session') await authenticate();
 
 if (verifyOrderId) {
   const persisted = await getJson(`/orders/${encodeURIComponent(verifyOrderId)}`);
@@ -21,7 +25,7 @@ if (verifyOrderId) {
   const abort = new AbortController();
   const events = [];
   const stream = await fetch(`${baseUrl}/events`, {
-    headers: { Accept: 'text/event-stream' },
+    headers: authenticatedHeaders({ Accept: 'text/event-stream' }),
     signal: abort.signal,
   });
   if (!stream.ok || !stream.body) {
@@ -138,17 +142,50 @@ async function expectOk(path) {
 }
 
 async function getJson(path) {
-  const response = await fetch(`${baseUrl}${path}`);
+  const response = await fetch(`${baseUrl}${path}`, { headers: authenticatedHeaders() });
   return parseJson(response, path);
 }
 
 async function postJson(path, body) {
   const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: authenticatedHeaders(body ? { 'Content-Type': 'application/json' } : undefined, true),
     body: body ? JSON.stringify(body) : undefined,
   });
   return parseJson(response, path);
+}
+
+async function authenticate() {
+  const username = process.env.PILOT_OPERATOR_USERNAME?.trim();
+  const password = process.env.PILOT_OPERATOR_PASSWORD;
+  if (!username || !password) throw new Error('Thieu credential smoke session.');
+
+  const csrfResponse = await fetch(`${baseUrl}/auth/csrf`);
+  const csrf = await parseJson(csrfResponse, '/auth/csrf');
+  sessionCookie = responseCookie(csrfResponse);
+  csrfToken = csrf.csrfToken;
+  if (!sessionCookie || !csrfToken) throw new Error('Khong tao duoc pre-login session/CSRF.');
+
+  const loginResponse = await fetch(`${baseUrl}/auth/login`, {
+    method: 'POST',
+    headers: authenticatedHeaders({ 'Content-Type': 'application/json' }, true),
+    body: JSON.stringify({ username, password }),
+  });
+  const login = await parseJson(loginResponse, '/auth/login');
+  sessionCookie = responseCookie(loginResponse) ?? sessionCookie;
+  csrfToken = login.csrfToken;
+  if (!csrfToken) throw new Error('Login khong tra CSRF token.');
+}
+
+function authenticatedHeaders(initial = undefined, mutation = false) {
+  const headers = new Headers(initial);
+  if (sessionCookie) headers.set('cookie', sessionCookie);
+  if (mutation && csrfToken) headers.set('x-csrf-token', csrfToken);
+  return headers;
+}
+
+function responseCookie(response) {
+  return response.headers.get('set-cookie')?.split(';', 1)[0];
 }
 
 async function parseJson(response, path) {

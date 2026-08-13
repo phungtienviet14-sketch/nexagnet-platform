@@ -9,6 +9,8 @@ const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.
 const channelMode = await readFile(new URL('./channel-mode.sh', import.meta.url), 'utf8');
 const setChannelMode = await readFile(new URL('./set-channel-mode.sh', import.meta.url), 'utf8');
 const deployPs1 = await readFile(new URL('./deploy.ps1', import.meta.url), 'utf8');
+const smokeTest = await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8');
+const authBootstrap = await readFile(new URL('./bootstrap-auth-user.mjs', import.meta.url), 'utf8');
 
 test('operator page /zalo goes to Next.js while /zalo/* stays on the API', () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
@@ -17,10 +19,8 @@ test('operator page /zalo goes to Next.js while /zalo/* stays on the API', () =>
   assert.doesNotMatch(apiMatcher, /(?:^|\s)\/zalo\*(?:\s|$)/);
 });
 
-// Quyet dinh van hanh 04/08/2026: VM la moi truong dev/demo, TAT HET xac thuc de he thong luon
-// vao duoc. Test nay khoa quyet dinh do: khong con Basic Auth, va API chay AUTH_MODE=none.
-// Neu sau nay bat lai bao ve (du lieu khach that), sua ca test nay cung luc voi Caddyfile.
-test('dev/demo VM serves both hostnames without any authentication', () => {
+// Caddy chi route; NestJS session/role/CSRF la mot lop auth duy nhat cho ca hai hostname.
+test('Caddy routes both hostnames consistently; application session guard owns authentication', () => {
   // Bo dong comment truoc khi kiem: chinh comment cua khoi nay co nhac `basic_auth` de huong dan
   // bat lai — chi directive THAT (dong khong bat dau bang #) moi tinh la co xac thuc.
   const directives = caddyfile
@@ -30,7 +30,7 @@ test('dev/demo VM serves both hostnames without any authentication', () => {
 
   assert.doesNotMatch(directives, /basic_auth/);
   assert.doesNotMatch(directives, /PASSWORD_HASH/);
-  assert.match(compose, /AUTH_MODE:\s*\$\{AUTH_MODE:-none\}/);
+  assert.match(compose, /AUTH_MODE:\s*\$\{AUTH_MODE:-session\}/);
 });
 
 // `/settings/*` cu nuot ca `/settings/` (dau / cuoi) va day sang NestJS -> 404 giua buoi demo.
@@ -184,9 +184,10 @@ test('every process that mutates compose takes the shared lock', async () => {
   assert.match(unit, /ExecStart=\/usr\/bin\/flock -w 300 \S*compose\.lock \/usr\/bin\/docker compose/);
 });
 
-test('deployment smoke checks both the operator page and Zalo status API', () => {
+test('deployment smoke checks public pages and requires auth for Zalo status API', () => {
   assert.match(deployStack, /"https:\/\/\$\{OPERATOR_DOMAIN\}\/zalo"/);
   assert.match(deployStack, /"https:\/\/\$\{OPERATOR_DOMAIN\}\/zalo\/status"/);
+  assert.match(deployStack, /== '401'/);
 });
 
 // Deploy moi van fail-safe mock, nhung pre-pilot duoc phep luu mot override CO Y trong `.runtime`.
@@ -222,6 +223,23 @@ test('PowerShell deploy creates the remote tenant-pack destination before Window
   const createParent = deployPs1.indexOf("install -d -m 0700 '$remoteParent' '$remoteParent/tenant-pack'");
   const uploadTenant = deployPs1.indexOf('"${VmName}:$remoteParent/tenant-pack"');
   assert.ok(createParent >= 0 && createParent < uploadTenant);
+});
+
+test('public pilot uses persistent session auth and bootstraps one operator without resetting it', () => {
+  assert.match(renderSecrets, /secret zalo-ultty-session-secret/);
+  assert.match(renderSecrets, /^AUTH_MODE='session'$/m);
+  assert.match(compose, /SESSION_SECRET: \$\{SESSION_SECRET\}/);
+  const migrateIndex = deployStack.indexOf('prisma migrate deploy');
+  const authBootstrapIndex = deployStack.indexOf('bootstrap-auth-user.mjs');
+  assert.ok(migrateIndex >= 0 && migrateIndex < authBootstrapIndex, 'migrate before auth bootstrap');
+  assert.match(deployStack, /PILOT_BASE_URL=https:\/\/\$\{OPERATOR_DOMAIN\}/);
+  assert.equal(deployStack.match(/--add-host "\$\{OPERATOR_DOMAIN\}:host-gateway"/g)?.length, 2);
+  assert.match(authBootstrap, /findUnique/);
+  assert.match(authBootstrap, /Da co operator/);
+  assert.doesNotMatch(authBootstrap, /update\s*\(/);
+  assert.match(smokeTest, /\/auth\/login/);
+  assert.match(smokeTest, /x-csrf-token/);
+  assert.match(smokeTest, /cookie/i);
 });
 
 // MOT IMAGE — MOI KHACH. Truoc 12/08/2026 image co `ARG TENANT=ultty` va `next build` nuong ten

@@ -1,62 +1,45 @@
 # Pilot trên VM `netviet`
 
-> Stack này là pre-pilot TEST: có công tắc runtime **Tự gửi**, đăng nhập/đăng xuất Zalo và override
-> kênh explicit. Không dùng nhóm khách thật hoặc PII thật.
+> Stack này là pre-pilot TEST: có session đăng nhập server-side, công tắc runtime **Tự gửi**,
+> đăng nhập/đăng xuất Zalo và override kênh explicit. Không dùng nhóm khách thật hoặc PII thật.
 
 Topology: `Caddy HTTPS → web/api → Flowise/PostgreSQL`. Public chỉ mở `80/443`; API,
 PostgreSQL, Flowise port gốc và SSH không được mở trực tiếp.
 
 Với IP hiện tại `35.187.235.82`:
 
-- Demo khách hàng: `https://demo.35-187-235-82.sslip.io` — **mở thẳng, không đăng nhập**.
-- Vận hành/đăng nhập Zalo: `https://operator.35-187-235-82.sslip.io/zalo` — **mở thẳng, không đăng nhập**.
+- Demo khách hàng: `https://demo.35-187-235-82.sslip.io` — yêu cầu đăng nhập session.
+- Vận hành/đăng nhập Zalo: `https://operator.35-187-235-82.sslip.io/zalo` — yêu cầu đăng nhập session.
 - Flowise admin: `https://flowise.35-187-235-82.sslip.io` — email
   `phungtienviet14@gmail.com`, mật khẩu lấy từ Secret Manager (xem mục dưới).
 
 IP được promote thành regional static address `netviet-public-ip`; Caddy tự cấp và gia hạn TLS.
 
-## Môi trường dev/demo — đã tắt toàn bộ xác thực (04/08/2026)
+## Xác thực pre-pilot
 
-Quyết định của người vận hành: VM này là **môi trường dev/demo**, không cần xác thực phức tạp.
-Bốn lớp dưới đây **đã tắt**, mỗi lớp đều bật lại được:
+VM public dùng `AUTH_MODE=session`: Argon2id, session bền vững trong PostgreSQL, cookie
+Secure/HttpOnly/SameSite và CSRF cho mutation. Operator đăng nhập bằng user `operator`; password
+lấy từ Secret Manager `zalo-ultty-operator-password`. Deploy đầu tạo ADMIN nếu chưa có; deploy sau
+**không reset** password hay session. API key không được đưa vào browser.
 
-| Lớp | Trước | Nay | Bật lại bằng |
-|---|---|---|---|
-| Basic Auth `demo` / `netviet` ở Caddy | 2 khối `basic_auth` | bỏ hẳn | thêm lại `basic_auth` vào `Caddyfile` + khôi phục phần hash trong `render-secrets.sh` |
-| Header `x-api-key` (guard toàn cục NestJS) | bắt buộc ở production | bỏ qua | `AUTH_MODE=api-key` |
-| Kiểm `Origin` chống CSRF cho mutation | 403 khi sai origin | bỏ qua | `AUTH_MODE=api-key` |
-| Đăng nhập AdminJS `/admin` | email + mật khẩu | không hỏi | `AUTH_MODE=api-key` |
+`AUTH_MODE=none` chỉ dành cho local/CI không public. Pre-pilot vẫn chỉ dùng **nhóm Zalo và dữ liệu
+TEST**, không PII khách thật; `AUTO_SEND` giữ `off` đến Phase B có kiểm soát.
 
-Công tắc duy nhất là biến `AUTH_MODE` (`api-key` | `none`), mặc định của schema vẫn là `api-key`;
-`render-secrets.sh` ghi `AUTH_MODE=none` vào `.runtime/secrets.env` cho riêng VM này. Secret
-`zalo-ultty-api-key`, `zalo-ultty-demo-password`, `zalo-ultty-operator-password` **vẫn còn** trong
-Secret Manager — bật lại không phải tạo mới.
-
-**Rủi ro đã chấp nhận:** VM mở public trên 80/443. Không còn xác thực nghĩa là bất kỳ ai biết địa
-chỉ đều đọc được bảng giá/đơn/thành viên nhóm, sửa được nguồn sự thật và gọi được `POST /broadcast`
-(gửi tin Zalo **thật** tới nhóm khách). Vì vậy:
-
-- Chỉ dùng **nhóm Zalo và dữ liệu TEST**, không PII khách thật (đúng ràng buộc DeepSeek + zca đã
-  ghi ở `CLAUDE.md`).
-- `AUTO_SEND` giữ `off`; broadcast vẫn cần chọn kênh + ID đích rõ ràng.
-- Trước khi chạy dữ liệu khách thật: đặt `AUTH_MODE=api-key`, bật lại Basic Auth, và làm xác thực
-  người dùng thật (quyết định **D5**, chưa làm).
-
-**Cập nhật 04/08/2026 (đợt 2) — đã bỏ `@blocked` trên hostname demo.** Trước đó demo trả 404
+**Routing hai hostname.** Đã bỏ `@blocked` trên hostname demo. Trước đó demo trả 404
 "Khong co quyen truy cap" cho `/zalo* /broadcast* /settings* /groups* /admin*`. Hệ quả thực tế:
 người vận hành mở `demo.../settings` chỉ thấy báo lỗi và tưởng hệ thống **chưa có** trang cấu hình.
-Nay **hai hostname hành xử giống hệt nhau** — không còn "trang này chạy ở kia thì không".
+Nay **hai hostname đều route tới cùng app**, rồi session guard áp dụng giống nhau — không còn
+"trang này chạy ở kia thì không".
 
 | | Trước | Nay |
 |---|---|---|
-| `demo.../settings` | 404 | **200** |
-| `demo.../zalo` | 404 | 200 |
-| `demo.../broadcast` | 404 | 200 — **gửi tin Zalo THẬT** |
-| `operator.../*` | 200 | 200 |
+| `demo.../settings` | 404 | route app, cần session |
+| `demo.../zalo` | 404 | route app, cần session |
+| `demo.../broadcast` | 404 | route app, cần session + role |
+| `operator.../*` | route app | route app, cần session |
 
-Đánh đổi đã biết: `/broadcast` gọi được từ cả hostname demo. Muốn chặn lại thì thêm khối
-`@blocked path /broadcast*` vào block `{$DEMO_DOMAIN}` trong `Caddyfile` — 4 dòng, có mẫu trong
-comment ngay trên block đó.
+`/broadcast` có thể được route từ cả hostname nhưng không gọi ẩn danh; guard session/role/CSRF vẫn
+chặn trước khi gửi.
 
 Riêng **Flowise vẫn đòi đăng nhập**: Flowise 3.x bắt buộc có tài khoản, không có cờ tắt. Lấy mật
 khẩu (không chia sẻ màn hình khi chạy):
