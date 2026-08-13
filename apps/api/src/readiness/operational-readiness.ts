@@ -15,7 +15,7 @@ export interface OperationalReadinessInput {
   enabledGroupMappingCount: number;
   parser: { provider: string; productionAllowed: boolean; credentialsPresent: boolean };
   media: { enabled: boolean; healthy: boolean };
-  channel: { mode: string; connected: boolean; productionTransport: boolean };
+  channel: { mode: string; connected: boolean; productionTransport: boolean; detail: string };
   auth: { enabled: boolean; persistentSessions: boolean };
   goldenEval: { evaluated: boolean; passed: boolean; reason?: string };
   campaignDataCount: number;
@@ -71,7 +71,8 @@ export function evaluateOperationalReadiness(
       'Kênh nhận/gửi production',
       input.channel.connected && input.channel.productionTransport,
       'channel_not_production_ready',
-      input.channel.mode,
+      input.channel.detail,
+      `channel_not_production_ready:${input.channel.detail}`,
     ),
     check(
       'auth.production',
@@ -127,12 +128,13 @@ function check(
   ready: boolean,
   missingReason: string,
   readyDetail = 'ready',
+  missingDetail = missingReason,
 ): ReadinessCheck {
   return {
     key,
     label,
     status: ready ? 'ready' : 'missing',
     blocking: true,
-    detail: ready ? readyDetail : missingReason,
+    detail: ready ? readyDetail : missingDetail,
   };
 }

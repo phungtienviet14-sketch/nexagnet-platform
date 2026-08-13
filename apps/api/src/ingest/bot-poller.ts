@@ -197,18 +197,19 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
       try {
         const res = await callBotApi(token, 'getUpdates', { timeout: 20 });
         if (!res.ok) {
-          if (res.error_code === 408) continue; // idle binh thuong
+          if (res.error_code === 408) {
+            // Long-poll timeout rong la heartbeat THANH CONG: API Bot da nhan request va khong co
+            // update. Ghi lai de readiness phan biet poll loop moi khoi dong voi transport da duoc
+            // chung minh song.
+            this.recordPollSuccess();
+            continue;
+          }
           this.recordFailure(`getUpdates ${res.error_code}: ${res.description}`);
           this.logger.warn(`getUpdates loi ${res.error_code}: ${res.description}`);
           await sleep(3000);
           continue;
         }
-        this.telemetry = {
-          ...this.telemetry,
-          state: 'running',
-          lastSuccessfulPollAt: new Date().toISOString(),
-          lastError: null,
-        };
+        this.recordPollSuccess();
         for (const update of normalizeUpdates(res.result)) {
           const message = updateToChannelMessage(update);
           if (!message) continue;
@@ -258,6 +259,15 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
         await sleep(3000);
       }
     }
+  }
+
+  private recordPollSuccess(): void {
+    this.telemetry = {
+      ...this.telemetry,
+      state: 'running',
+      lastSuccessfulPollAt: new Date().toISOString(),
+      lastError: null,
+    };
   }
 
   private recordFailure(message: string): void {
