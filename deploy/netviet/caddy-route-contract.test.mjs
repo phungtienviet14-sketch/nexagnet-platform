@@ -235,7 +235,7 @@ test('public pilot uses persistent session auth and bootstraps one operator with
   const authBootstrapIndex = deployStack.indexOf('bootstrap-auth-user.mjs');
   assert.ok(migrateIndex >= 0 && migrateIndex < authBootstrapIndex, 'migrate before auth bootstrap');
   assert.match(deployStack, /PILOT_BASE_URL=https:\/\/\$\{OPERATOR_DOMAIN\}/);
-  assert.equal(deployStack.match(/--add-host "\$\{OPERATOR_DOMAIN\}:host-gateway"/g)?.length, 2);
+  assert.match(compose, /extra_hosts:[\s\S]*"\$\{OPERATOR_DOMAIN\}:host-gateway"/);
   assert.match(deployStack, /runtime_value OPERATOR_DOMAIN/);
   assert.doesNotMatch(deployStack, /source \.runtime\/secrets\.env/);
   assert.match(authBootstrap, /findUnique/);

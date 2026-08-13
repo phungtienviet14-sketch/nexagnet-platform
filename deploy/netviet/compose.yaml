@@ -113,6 +113,8 @@ services:
     networks:
       - backend
       - data
+    extra_hosts:
+      - "${OPERATOR_DOMAIN}:host-gateway"
 
   api:
     image: ${APP_IMAGE}

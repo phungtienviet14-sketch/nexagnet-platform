@@ -93,7 +93,6 @@ for attempt in {1..60}; do
 done
 smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -T \
-  --add-host "${OPERATOR_DOMAIN}:host-gateway" \
   -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
   -e "CHANNEL_MODE=${channel_mode}" \
   bootstrap node --input-type=module - < smoke-test.mjs)"
@@ -120,7 +119,6 @@ for attempt in {1..60}; do
 done
 "${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -T \
-  --add-host "${OPERATOR_DOMAIN}:host-gateway" \
   -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
   -e "CHANNEL_MODE=${channel_mode}" \
   -e "VERIFY_ORDER_ID=${smoke_order_id}" \
