@@ -25,6 +25,20 @@ rsync -a --exclude '.runtime' --exclude 'tenant-pack' "$source_dir/" "$app_dir/"
 # GOI KHACH. Khong nam trong image (.dockerignore loai `tenants/`) vi image la ban CHUNG cho moi
 # khach — mot goi nam trong do nghia la khach nay `docker save` ra la doc duoc gia si cua khach kia.
 # deploy.ps1 upload rieng goi cua dung stack nay; compose mount vao api/web o che do chi-doc.
+# `gcloud compute scp --recurse SRC DEST` theo dung ngu nghia scp: DEST CHUA co -> tao DEST la ban
+# sao cua SRC; DEST DA co -> chep SRC VAO TRONG DEST. Deploy co retry, nen mot lan scp hong giua
+# chung (SSH rot — da gap 13/08/2026) roi thu lai se cho ra `tenant-pack/<slug>/tenant.json` thay vi
+# `tenant-pack/tenant.json`. Truoc day ca lan deploy chet o day, sau khi da build va day image xong.
+# Go phang lai thay vi bo cuoc: du lieu van day du, chi la long them mot cap thu muc.
+if [[ ! -f "$remote_parent/tenant-pack/tenant.json" ]]; then
+  nested="$(find "$remote_parent/tenant-pack" -mindepth 2 -maxdepth 2 -name tenant.json -printf '%h\n' 2>/dev/null | head -n 1)"
+  if [[ -n "$nested" ]]; then
+    echo "Goi khach bi long trong $nested (scp chay lai) — go phang." >&2
+    mv "$nested" "$remote_parent/tenant-pack.flat"
+    rm -rf "$remote_parent/tenant-pack"
+    mv "$remote_parent/tenant-pack.flat" "$remote_parent/tenant-pack"
+  fi
+fi
 if [[ ! -f "$remote_parent/tenant-pack/tenant.json" ]]; then
   echo "Thieu goi khach tai $remote_parent/tenant-pack — api/web se khong boot duoc." >&2
   exit 1
