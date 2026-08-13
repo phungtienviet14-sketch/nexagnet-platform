@@ -4,6 +4,36 @@ import { api } from './api';
 describe('operator mutations', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('uses same-origin URLs for a mutation when NEXT_PUBLIC_API_URL is empty', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', '');
+    vi.resetModules();
+    const { api: sameOriginApi } = await import('./api');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf-1' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ autoSend: 'on' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sameOriginApi.setAutoSend(true)).resolves.toEqual({ autoSend: 'on' });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/auth/csrf',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/settings/automation/auto-send',
+      expect.objectContaining({ method: 'PUT', credentials: 'include' }),
+    );
   });
 
   it('bat kill switch tu gui ma khong gui lai acknowledgement D4 da chot', async () => {

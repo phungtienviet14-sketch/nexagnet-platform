@@ -10,7 +10,8 @@ import type {
 import type { ZaloGroup, ZaloStatus } from './zalo';
 import { authFetch } from './auth';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? (typeof window === 'undefined' ? 'http://localhost:3001' : '');
 
 /** Kenh SSE 6 agent real-time. */
 export const EVENTS_URL = `${BASE}/events`;

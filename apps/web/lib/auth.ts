@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? (typeof window === 'undefined' ? 'http://localhost:3001' : '');
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export type AuthRole = 'SALE' | 'MANAGER' | 'ACCOUNTING' | 'ADMIN';
@@ -87,7 +88,12 @@ export const authApi = {
 async function currentCsrfToken(input: RequestInfo | URL): Promise<string | null> {
   if (csrfToken !== undefined) return csrfToken;
   const target = input instanceof Request ? input.url : input.toString();
-  const csrfUrl = new URL('/auth/csrf', target.startsWith('http') ? target : API_BASE).toString();
+  const absoluteBase = target.startsWith('http')
+    ? target
+    : API_BASE.startsWith('http')
+      ? API_BASE
+      : null;
+  const csrfUrl = absoluteBase ? new URL('/auth/csrf', absoluteBase).toString() : '/auth/csrf';
   const response = await fetch(csrfUrl, { credentials: 'include', cache: 'no-store' });
   const result = await readJson<{ csrfToken?: string | null }>(response);
   // `?? null` la co y: khi API khong tra truong nao (AUTH_MODE=none/api-key) ma gan thang
