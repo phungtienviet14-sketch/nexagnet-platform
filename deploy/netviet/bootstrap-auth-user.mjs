@@ -1,6 +1,8 @@
 import process from 'node:process';
-import { PrismaClient } from '@prisma/client';
-import { argon2id, hash } from 'argon2';
+// This deploy tool lives outside a pnpm workspace package. Resolve through apps/api, which owns
+// both dependencies, instead of relying on a forbidden root-hoist that differs by pnpm layout.
+import { PrismaClient } from '../../apps/api/node_modules/@prisma/client/default.js';
+import { argon2id, hash } from '../../apps/api/node_modules/argon2/argon2.cjs';
 
 const username = required('PILOT_OPERATOR_USERNAME');
 const name = required('PILOT_OPERATOR_NAME');

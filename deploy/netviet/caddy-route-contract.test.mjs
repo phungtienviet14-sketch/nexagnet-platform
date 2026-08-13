@@ -237,6 +237,7 @@ test('public pilot uses persistent session auth and bootstraps one operator with
   assert.match(deployStack, /PILOT_BASE_URL=https:\/\/\$\{OPERATOR_DOMAIN\}/);
   assert.equal(deployStack.match(/--add-host "\$\{OPERATOR_DOMAIN\}:host-gateway"/g)?.length, 2);
   assert.match(authBootstrap, /findUnique/);
+  assert.match(authBootstrap, /apps\/api\/node_modules\/@prisma\/client\/default\.js/);
   assert.match(authBootstrap, /Da co operator/);
   assert.doesNotMatch(authBootstrap, /update\s*\(/);
   assert.match(smokeTest, /\/auth\/login/);
