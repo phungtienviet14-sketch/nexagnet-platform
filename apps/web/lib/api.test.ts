@@ -8,6 +8,63 @@ describe('operator mutations', () => {
     vi.resetModules();
   });
 
+  it('uses same-origin URLs for a GET when NEXT_PUBLIC_API_URL is empty', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', '');
+    vi.resetModules();
+    const { api: sameOriginApi } = await import('./api');
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sameOriginApi.orders()).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/orders',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('treats whitespace API configuration as same-origin', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', '  \t ');
+    vi.resetModules();
+    const { api: sameOriginApi } = await import('./api');
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sameOriginApi.orders()).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/orders',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('keeps an explicitly configured absolute API base', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.test');
+    vi.resetModules();
+    const { api: absoluteApi } = await import('./api');
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(absoluteApi.orders()).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.test/orders',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
   it('uses same-origin URLs for a mutation when NEXT_PUBLIC_API_URL is empty', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', '');
     vi.resetModules();

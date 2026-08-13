@@ -1,5 +1,6 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? (typeof window === 'undefined' ? 'http://localhost:3001' : '');
+import { publicApiBase } from './api-base';
+
+const API_BASE = publicApiBase();
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export type AuthRole = 'SALE' | 'MANAGER' | 'ACCOUNTING' | 'ADMIN';

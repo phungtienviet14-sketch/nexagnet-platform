@@ -638,3 +638,39 @@ describe('settings API contracts', () => {
     );
   });
 });
+
+describe('settings same-origin configuration', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('uses relative settings and master-data URLs for whitespace configuration', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', '   ');
+    vi.resetModules();
+    const { settingsApi: sameOriginSettings } = await import('./settings');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/settings/readiness') {
+        return new Response(
+          JSON.stringify({ codeComplete: true, goLiveReady: false, checks: [], reasons: [] }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ dealers: [], deals: [], groups: [] }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sameOriginSettings.readiness()).resolves.toMatchObject({ codeComplete: true });
+    await expect(sameOriginSettings.masterData()).resolves.toMatchObject({
+      dealers: [],
+      deals: [],
+      groups: [],
+    });
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      '/settings/readiness',
+      '/settings/master-data',
+    ]);
+  });
+});

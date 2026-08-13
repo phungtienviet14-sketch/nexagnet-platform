@@ -14,7 +14,55 @@ function headerOf(mock: ReturnType<typeof vi.fn>, nth: number, name: string): st
 describe('auth client', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.resetModules();
     resetAuthClientForTests();
+  });
+
+  it('keeps login, logout and user settings same-origin when API configuration is empty', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', '');
+    vi.resetModules();
+    const { authApi: sameOriginAuth } = await import('./auth');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/auth/csrf') {
+        return new Response(JSON.stringify({ csrfToken: 'before-login' }), { status: 200 });
+      }
+      if (url === '/auth/login') {
+        return new Response(
+          JSON.stringify({
+            csrfToken: 'after-login',
+            user: { id: 'u1', username: 'sale.one', name: 'Sale One', role: 'SALE' },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/auth/config') {
+        return new Response(JSON.stringify({ mode: 'none' }), { status: 200 });
+      }
+      if (url === '/settings/users') {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sameOriginAuth.config()).resolves.toEqual({ mode: 'none' });
+    await expect(sameOriginAuth.users()).resolves.toEqual([]);
+    await expect(sameOriginAuth.login('sale.one', 'correct-password')).resolves.toMatchObject({
+      csrfToken: 'after-login',
+    });
+    await expect(sameOriginAuth.logout()).resolves.toBeUndefined();
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      '/auth/config',
+      '/settings/users',
+      '/auth/csrf',
+      '/auth/login',
+      '/auth/logout',
+    ]);
+    expect(headerOf(fetchMock, 4, 'x-csrf-token')).toBe('before-login');
+    expect(headerOf(fetchMock, 5, 'x-csrf-token')).toBe('after-login');
   });
 
   it('includes cookies and obtains a CSRF token before a mutation', async () => {

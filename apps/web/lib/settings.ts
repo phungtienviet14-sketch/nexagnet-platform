@@ -6,10 +6,11 @@ import type {
   ContentSnapshotView,
 } from '@netviet/shared';
 import { authFetch } from './auth';
+import { publicApiBase } from './api-base';
 import { masterDataApi } from './master-data';
 export * from './master-data';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_BASE = publicApiBase();
 
 export type ChannelMode = 'mock' | 'bot' | 'zca' | 'hybrid';
 export type Availability = 'available' | 'fallback' | 'unavailable';

@@ -1,6 +1,7 @@
 import { authFetch } from './auth';
+import { publicApiBase } from './api-base';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_BASE = publicApiBase();
 
 type UnknownRecord = Record<string, unknown>;
 export type MasterDataResource = 'dealer' | 'deal' | 'group';
