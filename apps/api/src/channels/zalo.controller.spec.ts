@@ -5,6 +5,7 @@ import {
   ZaloNotConnectedError,
   type ZaloUserClient,
 } from './zalo-user.client.js';
+import type { AuditLogService } from '../audit/audit-log.service.js';
 import type { BotIdentityService } from './bot-identity.service.js';
 import type { GroupParticipantsService } from '../groups/group-participants.service.js';
 import { GroupParticipantGroupNotFoundError } from '../groups/prisma-group-participants.repository.js';
@@ -63,23 +64,68 @@ describe('ZaloController', () => {
     });
   });
 
-  it('khong tao QR neu operator chua xac nhan rui ro zca', () => {
-    expect(() =>
-      controller.login({ acceptedRisk: false }, 'https://operator.example.com'),
-    ).toThrow(BadRequestException);
+  it('khong tao QR neu operator chua xac nhan rui ro zca', async () => {
+    await expect(
+      controller.login(
+        { acceptedRisk: false, acceptedSecondaryAccount: true },
+        'https://operator.example.com',
+      ),
+    ).rejects.toThrow(BadRequestException);
     expect(startQrLogin).not.toHaveBeenCalled();
   });
 
-  it('chan mutation tu origin khac de chong CSRF', () => {
-    expect(() => controller.login({ acceptedRisk: true }, 'https://evil.example')).toThrow(
-      ForbiddenException,
+  // D20: xac nhan tai khoan phu la mot xac nhan RIENG. Tick moi o rui ro ToS ma bo qua o nay la
+  // van co the dang nhap bang tai khoan Sale chinh — dung thu phai tranh.
+  it('khong tao QR neu chua xac nhan dang dung tai khoan phu/SIM rieng', async () => {
+    await expect(
+      controller.login(
+        { acceptedRisk: true, acceptedSecondaryAccount: false },
+        'https://operator.example.com',
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(startQrLogin).not.toHaveBeenCalled();
+  });
+
+  it('chan mutation tu origin khac de chong CSRF', async () => {
+    await expect(
+      controller.login(
+        { acceptedRisk: true, acceptedSecondaryAccount: true },
+        'https://evil.example',
+      ),
+    ).rejects.toThrow(ForbiddenException);
+    expect(startQrLogin).not.toHaveBeenCalled();
+  });
+
+  it('bat dau QR khi da xac nhan CA HAI va origin dung', async () => {
+    await controller.login(
+      { acceptedRisk: true, acceptedSecondaryAccount: true },
+      'https://operator.example.com',
     );
-    expect(startQrLogin).not.toHaveBeenCalled();
+    expect(startQrLogin).toHaveBeenCalledTimes(1);
   });
 
-  it('bat dau QR khi da xac nhan va origin dung', () => {
-    controller.login({ acceptedRisk: true }, 'https://operator.example.com');
-    expect(startQrLogin).toHaveBeenCalledTimes(1);
+  it('ghi lai ai xac nhan rui ro, TRUOC khi tao QR', async () => {
+    const append = vi.fn().mockResolvedValue(undefined);
+    const audited = new ZaloController(client, identity, participants, {
+      append,
+    } as unknown as AuditLogService);
+
+    await audited.login(
+      { acceptedRisk: true, acceptedSecondaryAccount: true },
+      'https://operator.example.com',
+      'nguoi-van-hanh',
+    );
+
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'nguoi-van-hanh',
+        action: 'zalo.login.risk_accepted',
+        after: expect.objectContaining({ acceptedRisk: true, acceptedSecondaryAccount: true }),
+      }),
+    );
+    expect(append.mock.invocationCallOrder[0]!).toBeLessThan(
+      startQrLogin.mock.invocationCallOrder[0]!,
+    );
   });
 
   it('validate allowlist toi da 10 group id', async () => {

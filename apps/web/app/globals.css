@@ -370,6 +370,26 @@ body {
   font-weight: 700;
   margin: 1rem 0;
 }
+/* Moi o tick la mot rui ro rieng: dong dam la dieu phai xac nhan, dong nho la hau qua neu sai. */
+.risk-check > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.risk-check > span > small {
+  font-weight: 400;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.risk-check input[type='checkbox'] {
+  margin-top: 0.25rem;
+  flex: none;
+}
+.risk-box__note {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
 .qr-panel {
   display: grid;
   grid-template-columns: minmax(240px, 320px) 1fr;

@@ -27,7 +27,22 @@ import { GroupParticipantGroupNotFoundError } from '../groups/prisma-group-parti
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { Roles } from '../auth/roles.decorator.js';
 
-const loginSchema = z.object({ acceptedRisk: z.literal(true) }).strict();
+/**
+ * Hai xac nhan RIENG BIET truoc khi tao QR, khong gop lam mot vi day la hai rui ro khac nhau:
+ *  - `acceptedRisk` (D16): zca-js vi pham ToS Zalo => tai khoan CO THE bi khoa bat ky luc nao;
+ *  - `acceptedSecondaryAccount` (D20): tai khoan dung o day phai la tai khoan phu/SIM rieng.
+ *    Dang nhap bang tai khoan Sale chinh la mat luon kenh lam viec cua Sale khi Zalo khoa.
+ *
+ * Day la GHI NHAN co truy vet (audit), KHONG phai cong chan go-live: he thong khong the tu kiem
+ * mot so dien thoai co phai SIM rieng hay khong. Nguoi van hanh xac nhan, he thong luu lai ai
+ * xac nhan luc nao.
+ */
+const loginSchema = z
+  .object({
+    acceptedRisk: z.literal(true),
+    acceptedSecondaryAccount: z.literal(true),
+  })
+  .strict();
 const logoutSchema = z.object({ confirmed: z.literal(true) }).strict();
 const allowGroupsSchema = z.object({
   groupIds: z.array(z.string().trim().min(1).max(128)).max(10),
@@ -66,12 +81,33 @@ export class ZaloController {
   }
 
   @Post('login')
-  login(@Body() body: unknown, @Headers('origin') origin?: string) {
+  async login(
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
     this.assertMutationOrigin(origin);
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
-      throw new BadRequestException('Phai xac nhan rui ro zca-js va dung tai khoan phu truoc khi tao QR');
+      throw new BadRequestException(
+        'Phai xac nhan CA HAI dieu: rui ro ToS zca-js, va dang dung tai khoan phu/SIM rieng',
+      );
     }
+    // Ghi TRUOC khi tao QR: neu ghi sau va tien trinh chet giua chung thi co phien dang nhap
+    // ma khong co dau vet ai cho phep — dung thu can nhat khi tai khoan bi Zalo khoa.
+    await this.audit?.append({
+      actor,
+      action: 'zalo.login.risk_accepted',
+      entityType: 'ZaloRuntime',
+      entityId: 'zca',
+      after: {
+        acceptedRisk: parsed.data.acceptedRisk,
+        acceptedSecondaryAccount: parsed.data.acceptedSecondaryAccount,
+        channelMode: this.env.CHANNEL_MODE,
+      },
+      requestId,
+    });
     this.client.startQrLogin();
     return this.status();
   }

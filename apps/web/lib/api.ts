@@ -83,7 +83,9 @@ export const api = {
     authFetch(`${BASE}/zalo/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acceptedRisk: true }),
+      // Hai xac nhan tach roi: rui ro ToS (D16) va tai khoan phu/SIM rieng (D20). Man hinh
+      // /zalo bat tick tung o rieng, API ghi ca hai vao nhat ky thay doi.
+      body: JSON.stringify({ acceptedRisk: true, acceptedSecondaryAccount: true }),
     }).then((r) => toJson<ZaloStatus>(r)),
   zaloLogout: (): Promise<ZaloStatus> =>
     authFetch(`${BASE}/zalo/logout`, {

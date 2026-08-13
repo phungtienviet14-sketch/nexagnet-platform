@@ -3,11 +3,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
-import { zaloStateLabel } from '../../lib/zalo';
+import {
+  ZALO_RISK_ACKNOWLEDGEMENTS,
+  zaloLoginAvailability,
+  zaloStateLabel,
+  type ZaloRiskAcknowledgement,
+} from '../../lib/zalo';
+
+type AcknowledgementState = Record<ZaloRiskAcknowledgement['id'], boolean>;
+const NOTHING_ACCEPTED: AcknowledgementState = { tos_risk: false, secondary_account: false };
 
 export default function ZaloLoginPage() {
   const queryClient = useQueryClient();
-  const [acceptedRisk, setAcceptedRisk] = useState(false);
+  const [accepted, setAccepted] = useState<AcknowledgementState>(NOTHING_ACCEPTED);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const statusQuery = useQuery({
     queryKey: ['zalo-status'],
@@ -46,7 +54,7 @@ export default function ZaloLoginPage() {
     mutationFn: api.zaloLogout,
     onSuccess: (next) => {
       setSelectedGroups([]);
-      setAcceptedRisk(false);
+      setAccepted(NOTHING_ACCEPTED);
       queryClient.setQueryData(['zalo-status'], next);
       queryClient.removeQueries({ queryKey: ['zalo-groups'] });
       queryClient.removeQueries({ queryKey: ['zalo-qr'] });
@@ -63,6 +71,8 @@ export default function ZaloLoginPage() {
   };
   const error =
     statusQuery.error ?? loginMutation.error ?? groupsQuery.error ?? saveMutation.error ?? logoutMutation.error;
+  const availability = zaloLoginAvailability(status);
+  const allAccepted = ZALO_RISK_ACKNOWLEDGEMENTS.every((item) => accepted[item.id]);
 
   const handleLogout = () => {
     if (
@@ -119,26 +129,43 @@ export default function ZaloLoginPage() {
           </div>
         )}
 
-        {(status?.state === 'logged_out' || status?.state === 'error') && (
+        {availability.kind === 'channel_locked' && (
+          <div className="operator-callout">
+            <strong>{availability.title}</strong>
+            <p>{availability.detail}</p>
+          </div>
+        )}
+
+        {availability.kind === 'available' && (
           <div className="risk-box">
-            <h2>Trước khi tạo QR</h2>
-            <ul>
-              <li>Dùng tài khoản phụ/SIM riêng, không dùng tài khoản Sale chính.</li>
-              <li>zca-js không phải kênh chính thức và tài khoản có thể bị Zalo khóa.</li>
-              <li>Chỉ các nhóm chọn ở bước dưới mới được gửi sang Flowise/DeepSeek.</li>
-            </ul>
-            <label className="risk-check">
-              <input
-                type="checkbox"
-                checked={acceptedRisk}
-                onChange={(event) => setAcceptedRisk(event.target.checked)}
-              />
-              Tôi hiểu rủi ro và đang dùng tài khoản phụ cho buổi demo
-            </label>
+            <h2>Đọc kỹ trước khi tạo QR</h2>
+            <p>
+              Hai điều dưới đây phải xác nhận riêng. Hệ thống không tự kiểm được, nên xác nhận của
+              bạn được ghi vào nhật ký thay đổi kèm thời điểm.
+            </p>
+            {ZALO_RISK_ACKNOWLEDGEMENTS.map((item) => (
+              <label key={item.id} className="risk-check">
+                <input
+                  type="checkbox"
+                  checked={accepted[item.id]}
+                  onChange={(event) =>
+                    setAccepted((current) => ({ ...current, [item.id]: event.target.checked }))
+                  }
+                />
+                <span>
+                  <b>{item.label}</b>
+                  <small>{item.detail}</small>
+                </span>
+              </label>
+            ))}
+            <p className="risk-box__note">
+              Chỉ những nhóm chọn ở bước sau mới được đưa sang AI. Tin của nhóm ngoài danh sách vẫn
+              được lưu nhưng không gửi đi đâu cả.
+            </p>
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!acceptedRisk || loginMutation.isPending}
+              disabled={!allAccepted || loginMutation.isPending}
               onClick={() => loginMutation.mutate()}
             >
               {loginMutation.isPending ? 'Đang tạo QR…' : 'Tạo mã QR đăng nhập'}
