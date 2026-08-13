@@ -382,7 +382,8 @@ function Ensure-Secrets {
   Ensure-Secret 'zalo-ultty-zalo-db-password' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-flowise-db-password' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-deepseek-api-key' { Get-LocalEnvValue 'DEEPSEEK_API_KEY' }
-  # Co secret nay -> render-secrets.sh render CHANNEL_MODE=hybrid (hai bot cung nhom).
+  # Token chi duoc render san. Kenh van mock neu operator chua tao override co y bang
+  # set-channel-mode.sh; co token KHONG tu bat bot/hybrid.
   Ensure-Secret 'zalo-ultty-zalo-bot-token' { Get-LocalEnvValue 'ZALO_BOT_TOKEN' }
   Ensure-Secret 'zalo-ultty-api-key' { New-RandomSecret }
   Ensure-Secret 'zalo-ultty-flowise-secretkey' { New-RandomSecret }

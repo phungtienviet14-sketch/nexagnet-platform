@@ -6,6 +6,8 @@ const caddyfile = await readFile(new URL('./Caddyfile', import.meta.url), 'utf8'
 const deployStack = await readFile(new URL('./deploy-stack.sh', import.meta.url), 'utf8');
 const compose = await readFile(new URL('./compose.yaml', import.meta.url), 'utf8');
 const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.url), 'utf8');
+const channelMode = await readFile(new URL('./channel-mode.sh', import.meta.url), 'utf8');
+const setChannelMode = await readFile(new URL('./set-channel-mode.sh', import.meta.url), 'utf8');
 
 test('operator page /zalo goes to Next.js while /zalo/* stays on the API', () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
@@ -150,10 +152,14 @@ test('every process that mutates compose takes the shared lock', async () => {
     'deploy-stack.sh': deployStack,
     'health-check.sh': await readFile(new URL('./health-check.sh', import.meta.url), 'utf8'),
     'rollback.sh': await readFile(new URL('./rollback.sh', import.meta.url), 'utf8'),
+    'set-channel-mode.sh': setChannelMode,
   };
 
   for (const [name, source] of Object.entries(scripts)) {
-    assert.ok(source.includes(lockPath), `${name} khong mo ${lockPath}`);
+    assert.ok(
+      source.includes(lockPath) || source.includes('${RUNTIME_DIR}/compose.lock'),
+      `${name} khong mo ${lockPath}`,
+    );
     assert.match(source, /flock\s+-[wn]/, `${name} khong goi flock`);
   }
 
@@ -162,6 +168,16 @@ test('every process that mutates compose takes the shared lock', async () => {
   // Deploy va rollback thi doi, vi bo cuoc giua chung nguy hiem hon la cho.
   assert.match(scripts['deploy-stack.sh'], /flock -w 300 9/);
   assert.match(scripts['rollback.sh'], /flock -w 300 9/);
+  assert.match(scripts['set-channel-mode.sh'], /flock -w 300 9/);
+  assert.ok(
+    scripts['set-channel-mode.sh'].indexOf('flock -w 300 9') <
+      scripts['set-channel-mode.sh'].indexOf('channel-mode.sh" write'),
+    'channel override must be written only after the compose lock is held',
+  );
+  assert.ok(
+    renderSecrets.indexOf('flock -w 300 9') < renderSecrets.indexOf('cat >"${RUNTIME_DIR}/secrets.env"'),
+    'secrets.env must be written only after the compose lock is held',
+  );
 
   const unit = await readFile(new URL('./systemd/netviet-stack.service', import.meta.url), 'utf8');
   assert.match(unit, /ExecStart=\/usr\/bin\/flock -w 300 \S*compose\.lock \/usr\/bin\/docker compose/);
@@ -172,13 +188,33 @@ test('deployment smoke checks both the operator page and Zalo status API', () =>
   assert.match(deployStack, /"https:\/\/\$\{OPERATOR_DOMAIN\}\/zalo\/status"/);
 });
 
-// Quyết định nghiệm thu 08/08/2026: pilot chỉ dùng dữ liệu TEST và phải giữ cả Bot/zca tắt.
-// Khóa ở cả renderer lẫn smoke test để một token đang tồn tại không tự bật hybrid sau deploy.
-test('pilot deploy always keeps CHANNEL_MODE=mock', () => {
-  assert.match(renderSecrets, /^CHANNEL_MODE='mock'$/m);
-  assert.doesNotMatch(renderSecrets, /^\s*CHANNEL_MODE='(?:hybrid|zca)'$/m);
-  assert.equal(deployStack.match(/-e CHANNEL_MODE=mock/g)?.length, 2);
-  assert.doesNotMatch(deployStack, /-e CHANNEL_MODE=(?:hybrid|zca)/);
+// Deploy moi van fail-safe mock, nhung pre-pilot duoc phep luu mot override CO Y trong `.runtime`.
+// Runtime directory khong bi rsync ghi de, nen deploy retry khong am tham tat zca da phe duyet.
+test('pilot deploy defaults to mock and preserves only an explicit validated channel override', () => {
+  assert.match(channelMode, /echo 'mock'/);
+  assert.match(channelMode, /mock\|bot\|zca\|hybrid/);
+  assert.match(channelMode, /CHANNEL_MODE khong hop le/);
+  assert.match(channelMode, /mktemp/);
+  assert.match(renderSecrets, /channel-mode\.sh" read/);
+  assert.match(setChannelMode, /channel-mode\.sh" write/);
+  assert.match(setChannelMode, /--force-recreate api/);
+  assert.equal(deployStack.match(/-e "CHANNEL_MODE=\$\{channel_mode\}"/g)?.length, 2);
+  assert.doesNotMatch(deployStack, /-e CHANNEL_MODE=mock/);
+  assert.match(deployStack, /channel-mode\.sh" read/);
+  assert.match(setChannelMode, /rollback_runtime/);
+  assert.match(compose, /AUTO_SEND:\s*"off"/);
+});
+
+test('deploy smoke cannot approve through a live Zalo API transport', async () => {
+  assert.match(deployStack, /channel_mode="\$\("\$\{APP_DIR\}\/channel-mode\.sh" read/);
+  assert.match(deployStack, /-e "CHANNEL_MODE=\$\{channel_mode\}"/);
+  const recreateIndex = deployStack.indexOf('up -d --no-deps --force-recreate api web');
+  const smokeIndex = deployStack.indexOf('smoke_output=');
+  assert.ok(recreateIndex >= 0 && recreateIndex < smokeIndex, 'API must reset AUTO_SEND before smoke');
+  assert.match(
+    await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8'),
+    /if \(!liveZaloTransport\) \{[\s\S]*\/approve/,
+  );
 });
 
 // MOT IMAGE — MOI KHACH. Truoc 12/08/2026 image co `ARG TENANT=ultty` va `next build` nuong ten

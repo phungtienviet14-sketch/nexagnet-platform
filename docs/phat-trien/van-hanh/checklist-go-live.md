@@ -35,7 +35,7 @@ vụ khách nhập (§4), và quyết định go/no-go của người (§6).
 | `groups.mapped` | ≥ 1 nhóm Zalo đã map đại lý | `/settings` → Map nhóm Zalo → chọn đại lý từ dropdown (không gõ chatId tay) | Sale |
 | `parser.production` | `PARSER_MODE=claude` **và** có `ANTHROPIC_API_KEY` | Đặt 2 biến. Xem ràng buộc bên thứ 3 ở §3.3 | Deploy |
 | `media.production` | `MEDIA_STORE≠none` **và** kho trả healthy | `MEDIA_STORE=s3` + `MEDIA_BUCKET` + `MEDIA_ENDPOINT` + `MEDIA_ACCESS_KEY_ID` + `MEDIA_SECRET_ACCESS_KEY`; giữ `MEDIA_ALLOWED_HOSTS` mặc định `zdn.vn` | Deploy |
-| `channel.production` | `CHANNEL_MODE ∈ {bot, zca, hybrid}` | Xem §2 — **có điều kiện pháp lý chặn trước** | Deploy (sau §3.1) |
+| `channel.production` | Kênh production **và runtime đã chứng minh sống**: zca listener `ready`; bot có identity + poll heartbeat; hybrid cần cả hai | Xem §2 — **có điều kiện pháp lý chặn trước** | Deploy (sau §3.1) |
 | `auth.production` | `AUTH_MODE≠none`; nếu `session` thì `PERSISTENCE=prisma` | Xem §2 — bật lại 4 lớp đã tắt 04/08/2026 | Deploy |
 | `golden.evaluated` | Có báo cáo golden **và** đạt ngưỡng | Chạy harness [tools/poc-parser](../../../tools/poc-parser) → trỏ `GOLDEN_EVAL_REPORT_PATH` vào báo cáo | Dev (cần **B1-B2**) |
 
@@ -49,12 +49,21 @@ Hai mục **không chặn** (cảnh báo/thông tin): `campaign.data` (chưa có
 
 ---
 
-## 2. Hai công tắc đang bị khóa có chủ ý
+## 2. Hai công tắc fail-safe có chủ ý
 
 Không phải sót — đã khóa bằng source để lần deploy sau không tự bật lại.
 
-**2.1 Kênh Zalo.** [render-secrets.sh](../../../deploy/netviet/render-secrets.sh) ép
-`CHANNEL_MODE='mock'` mỗi lần deploy. Mở khóa = sửa source có review, **sau khi §3.1 và §3.2 xong**.
+**2.1 Kênh Zalo.** Deploy mới vẫn mặc định `mock`. Pre-pilot TEST chỉ bật bằng thao tác explicit:
+
+```bash
+sudo /srv/netviet/apps/zalo-ultty/set-channel-mode.sh zca
+```
+
+Lựa chọn được lưu ở `.runtime/channel-mode.env` (0600), được validate trong tập
+`mock|bot|zca|hybrid`, và được giữ qua lần deploy kế tiếp. Token Bot tồn tại **không tự bật kênh**.
+Mỗi lần đổi mode recreate API nên `AUTO_SEND` trở về `off`. Rollback nhanh dùng cùng lệnh với
+`mock`. Cổng readiness không còn tin riêng env: `connecting`, `qr_ready`, `error`, `logged_out`, bot
+chưa poll thành công đều là `missing` và detail nêu state thật.
 
 **2.2 Xác thực.** Cùng file đặt `AUTH_MODE='none'` và Caddy đã bỏ Basic Auth (quyết định người vận
 hành 04/08/2026, khi VM được chốt là môi trường dev/demo không PII). Hệ quả phải nói thẳng: **VM mở
@@ -167,7 +176,8 @@ Làm đúng thứ tự. Mỗi bước có cách tự kiểm chứng; bước sau
 **Rollback nhanh nhất, theo thứ tự thiệt hại tăng dần:**
 
 1. `AUTO_SEND=off` — dừng tự gửi, vẫn đọc và vẫn lưu tin. Đổi được ngay trên `/settings`, không cần deploy.
-2. `CHANNEL_MODE=mock` — ngắt hẳn đọc/gửi Zalo, hệ thống chạy offline tất định.
+2. `sudo /srv/netviet/apps/zalo-ultty/set-channel-mode.sh mock` — ngắt hẳn đọc/gửi Zalo và
+   recreate API; `AUTO_SEND` cũng về `off`.
 3. Rollback ảnh + restore DB — [deploy/netviet/rollback.sh](../../../deploy/netviet/rollback.sh),
    [restore-check.sh](../../../deploy/netviet/restore-check.sh).
 

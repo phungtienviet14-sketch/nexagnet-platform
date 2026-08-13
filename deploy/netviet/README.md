@@ -1,8 +1,7 @@
 # Pilot trên VM `netviet`
 
-> Source PC ngày 01/08/2026 đã bổ sung công tắc runtime **Tự gửi** và nút **Đăng xuất tài khoản
-> Zalo**, nhưng **chưa deploy** theo yêu cầu người vận hành đang demo. Bản public GCP chưa có hai
-> thao tác mới này.
+> Stack này là pre-pilot TEST: có công tắc runtime **Tự gửi**, đăng nhập/đăng xuất Zalo và override
+> kênh explicit. Không dùng nhóm khách thật hoặc PII thật.
 
 Topology: `Caddy HTTPS → web/api → Flowise/PostgreSQL`. Public chỉ mở `80/443`; API,
 PostgreSQL, Flowise port gốc và SSH không được mở trực tiếp.
@@ -77,20 +76,42 @@ gcloud secrets versions access latest --project netviet-host-968934832433 --secr
   để sự cố lặp lại vẫn nhìn thấy được.
 
 Deploy dùng PostgreSQL thật, Flowise + DeepSeek thật, `PARSER_MODE=flowise`, `AUTO_SEND=off`;
-chỉ KiotViet là mock. `render-secrets.sh` khóa `CHANNEL_MODE=mock` để Bot Platform và zca không
-đọc/gửi dữ liệu trong pilot đã nghiệm thu. Token Bot có thể vẫn tồn tại trong Secret Manager
-nhưng không làm kênh hoạt động. Bật lại kênh Zalo cần một thay đổi source được duyệt riêng;
-không sửa tay runtime vì lần deploy kế tiếp sẽ đưa về `mock`.
-ZCA không tự tạo QR khi chưa xác nhận rủi ro trên UI. Allowlist bootstrap mặc định rỗng; trạng
-thái test hiện đã chọn **Meta HN** (`2508572440887686813`) và **Thái Nguyên**
-(`3787434804745256898`). Cần nhập thêm Bot Platform `chat.id` tương ứng vào Knowledge và cùng
-trỏ về đúng đại lý trước E2E hybrid. Chỉ các nhóm
-được operator chọn mới được lưu và chuyển sang Flowise/DeepSeek.
+chỉ ERP là mock/không được gọi trong luồng GĐ1. Deploy mới mặc định `CHANNEL_MODE=mock`. Token Bot
+có thể vẫn tồn tại trong Secret Manager nhưng không tự làm kênh hoạt động.
+
+Pre-pilot TEST bật kênh bằng script vận hành (không sửa tay container hoặc `secrets.env`):
+
+```bash
+sudo /srv/netviet/apps/zalo-ultty/set-channel-mode.sh zca
+```
+
+Script validate mode, lưu approval ở `.runtime/channel-mode.env`, cập nhật env atomically, giữ khóa
+compose chung và chỉ recreate API. File `.runtime` không bị deploy ghi đè nên lần deploy sau giữ
+`zca` đã phê duyệt. Đổi mode/restart luôn đưa `AUTO_SEND` về `off` theo compose. Deploy cũng luôn
+force-recreate API/web trước khi bơm fixture, rồi smoke bỏ qua approve/send khi đang dùng một kênh
+Zalo thật (`bot`, `zca`, `hybrid`).
+
+ZCA không tự tạo QR khi chưa xác nhận hai điều kiện trên UI. Nếu session lưu hết hiệu lực, boot chỉ
+thử đúng một lần; lần operator chủ động tạo QR tiếp theo thay session cũ nhưng **giữ allowlist**.
+Full logout là thao tác mạnh hơn: dừng listener, xóa credential **và xóa allowlist**, vì tài khoản
+sau không được kế thừa phạm vi của tài khoản trước. UI có cảnh báo; sau logout phải chọn nhóm lại.
+
+Hai nhóm pre-pilot TEST hiện được phép:
+
+- `5418371951945064288`
+- `6732452832330077759`
+
+Chỉ nhóm được operator chọn mới được lưu và chuyển sang Flowise/DeepSeek.
 
 Khi bản source mới được deploy, badge **Tự gửi: OFF** trên console là công tắc runtime. Bật cần
 xác nhận và chỉ áp dụng cho tin mới được Giám sát kết luận không rủi ro; restart API sẽ đưa nó
-về `AUTO_SEND` trong env. Trang Operator có nút đăng xuất: dừng listener, xóa credential cục bộ
-và xóa allowlist, vì vậy lần đăng nhập sau phải quét QR và chọn nhóm lại.
+về `AUTO_SEND` trong env.
+
+Rollback kênh và kill switch bằng một lệnh (recreate API làm `AUTO_SEND=off`):
+
+```bash
+sudo /srv/netviet/apps/zalo-ultty/set-channel-mode.sh mock
+```
 
 ## CI/CD
 

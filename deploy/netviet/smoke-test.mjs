@@ -4,14 +4,14 @@ const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://127.0.0.1:8080').replace(
 const verifyOrderId = process.env.VERIFY_ORDER_ID?.trim();
 const verifyOrderStatus = process.env.VERIFY_ORDER_STATUS?.trim();
 const channelMode = process.env.CHANNEL_MODE?.trim() ?? 'mock';
-const requiresZaloLogin = channelMode === 'zca' || channelMode === 'hybrid';
+const liveZaloTransport = ['bot', 'zca', 'hybrid'].includes(channelMode);
 
 await expectOk('/health');
 
 if (verifyOrderId) {
   const persisted = await getJson(`/orders/${encodeURIComponent(verifyOrderId)}`);
   assertPilotOrder(persisted, verifyOrderId);
-  const expectedStatus = verifyOrderStatus ?? (requiresZaloLogin ? 'needs_edit' : 'sent');
+  const expectedStatus = verifyOrderStatus ?? (liveZaloTransport ? 'needs_edit' : 'sent');
   if (persisted.status !== expectedStatus) {
     throw new Error(`Don sau restart sai trang thai ${expectedStatus}: ${persisted.status}`);
   }
@@ -64,7 +64,7 @@ if (verifyOrderId) {
     // tu nhap ERP. KHONG co buoc dong bo ERP nao trong GD1 (CLAUDE.md quyet dinh 4 va 7), nen
     // `synced` + ma ERP la hop dong CU. Bai nay van doi hop dong cu va vi vay chan MOI lan deploy
     // ke tu G1-12 — lan deploy dau tien sau do moi lo ra (13/08/2026).
-    if (!requiresZaloLogin) {
+    if (!liveZaloTransport) {
       const approved = await postJson(`/orders/${encodeURIComponent(order.id)}/approve`);
       if (approved.status !== 'sent') {
         throw new Error(`Sale approve khong gui duoc xac nhan don ${order.id}: ${approved.status}`);
@@ -78,12 +78,12 @@ if (verifyOrderId) {
     }
 
     const saved = await getJson(`/orders/${encodeURIComponent(order.id)}`);
-    const expectedStatuses = requiresZaloLogin ? ['pending_review', 'needs_edit'] : ['sent'];
+    const expectedStatuses = liveZaloTransport ? ['pending_review', 'needs_edit'] : ['sent'];
     if (!expectedStatuses.includes(saved.status)) {
       throw new Error(`Don ${order.id} co trang thai ngoai du kien: ${saved.status}`);
     }
 
-    const scope = requiresZaloLogin ? 'draft (Zalo dang cho operator login)' : 'approve';
+    const scope = liveZaloTransport ? 'draft (API dang dung kenh Zalo that)' : 'approve mock';
     process.stdout.write(
       `Pilot smoke OK: SSE + 6-agent trace + ${scope}; SMOKE_ORDER_ID=${order.id}; SMOKE_ORDER_STATUS=${saved.status}\n`,
     );

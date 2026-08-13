@@ -21,6 +21,7 @@ if ! flock -w 300 9; then
 fi
 
 COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml)
+channel_mode="$("${APP_DIR}/channel-mode.sh" read "${APP_DIR}/.runtime/channel-mode.env")"
 
 "${COMPOSE[@]}" pull postgres flowise gateway
 "${COMPOSE[@]}" up -d postgres
@@ -53,7 +54,11 @@ done
 "${COMPOSE[@]}" --profile tools run --rm bootstrap
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/flowise/contract-test.mjs
-"${COMPOSE[@]}" up -d api web
+# Always recreate the application processes before injecting a smoke message. Besides picking up the
+# new image, this resets the in-memory AUTO_SEND switch to the compose fail-safe `off` value. Without
+# this, an unchanged container that an operator had temporarily enabled could send the smoke fixture
+# through a live Zalo transport before smoke-test.mjs gets a chance to inspect the channel mode.
+"${COMPOSE[@]}" up -d --no-deps --force-recreate api web
 # Caddy khong tu reload khi noi dung bind-mounted Caddyfile thay doi.
 "${COMPOSE[@]}" up -d --force-recreate gateway
 "${COMPOSE[@]}" ps
@@ -72,7 +77,7 @@ done
 smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -T \
   -e PILOT_BASE_URL=http://gateway:8080 \
-  -e CHANNEL_MODE=mock \
+  -e "CHANNEL_MODE=${channel_mode}" \
   bootstrap node --input-type=module - < smoke-test.mjs)"
 echo "${smoke_output}"
 smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n 1)"
@@ -98,7 +103,7 @@ done
 "${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -T \
   -e PILOT_BASE_URL=http://gateway:8080 \
-  -e CHANNEL_MODE=mock \
+  -e "CHANNEL_MODE=${channel_mode}" \
   -e "VERIFY_ORDER_ID=${smoke_order_id}" \
   -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
   bootstrap node --input-type=module - < smoke-test.mjs

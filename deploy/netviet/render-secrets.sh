@@ -6,6 +6,7 @@ PROJECT_ID="${GCP_PROJECT_ID:-netviet-host-968934832433}"
 APP_IMAGE_VALUE="${APP_IMAGE:?APP_IMAGE is required}"
 FLOWISE_IMAGE_VALUE="${FLOWISE_IMAGE:?FLOWISE_IMAGE is required}"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/netviet/apps/zalo-ultty/.runtime}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # GOI KHACH khong di qua file nay. Image khong mang goi nao va cung khong tra slug -> `tenants/`;
 # thay vao do deploy.ps1 upload goi cua dung stack nay va compose mount vao api/web bang TENANT_DIR.
 PUBLIC_IP_VALUE="${PUBLIC_IP:?PUBLIC_IP is required}"
@@ -15,6 +16,14 @@ OPERATOR_DOMAIN="operator.${PUBLIC_IP_LABEL}.sslip.io"
 FLOWISE_DOMAIN="flowise.${PUBLIC_IP_LABEL}.sslip.io"
 
 mkdir -p "${RUNTIME_DIR}"
+
+# Serialize runtime env writes with explicit mode changes and compose rollout. This lock is released
+# before deploy-stack.sh obtains it again; no nested lock/deadlock.
+exec 9>"${RUNTIME_DIR}/compose.lock"
+if ! flock -w 300 9; then
+  echo "Khong lay duoc khoa runtime sau 300s." >&2
+  exit 1
+fi
 
 secret() {
   gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1"
@@ -30,11 +39,12 @@ POSTGRES_ADMIN_PASSWORD="$(secret zalo-ultty-postgres-admin-password)"
 ZALO_DB_PASSWORD="$(secret zalo-ultty-zalo-db-password)"
 FLOWISE_DB_PASSWORD="$(secret zalo-ultty-flowise-db-password)"
 DEEPSEEK_API_KEY="$(secret zalo-ultty-deepseek-api-key)"
-# Token Bot van duoc render san de co the kiem tra danh tinh, nhung pilot soak da nghiem thu voi
-# kenh Zalo TAT. Giu CHANNEL_MODE=mock qua moi lan deploy de khong vo tinh bat Bot/zca hoac dua
-# PII that vao pipeline; chi doi bang mot thay doi source duoc duyet rieng.
+# Token Bot van duoc render san de co the kiem tra danh tinh. Kenh mac dinh van la mock; chi file
+# `.runtime/channel-mode.env` do operator tao CO Y moi duoc phep bat bot/zca/hybrid. `.runtime`
+# khong bi rsync ghi de, nen deploy lai se GIU lua chon da phe duyet thay vi am tham tat kenh.
 ZALO_BOT_TOKEN="$(optional_secret zalo-ultty-zalo-bot-token)"
-CHANNEL_MODE='mock'
+CHANNEL_MODE="$("${SCRIPT_DIR}/channel-mode.sh" read "${RUNTIME_DIR}/channel-mode.env")"
+echo "render-secrets: CHANNEL_MODE=${CHANNEL_MODE} (mock neu chua co override duoc phe duyet)." >&2
 API_KEY=$(secret zalo-ultty-api-key)
 FLOWISE_SECRETKEY="$(secret zalo-ultty-flowise-secretkey)"
 FLOWISE_ADMIN_EMAIL="$(secret zalo-ultty-flowise-admin-email)"
