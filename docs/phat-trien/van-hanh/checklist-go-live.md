@@ -129,9 +129,23 @@ Làm đúng thứ tự. Mỗi bước có cách tự kiểm chứng; bước sau
    Đây là bước bắt hệ thống tự tố cáo phần còn thiếu, làm sớm để lộ sai sớm.
 4. **Bật xác thực** (§2.2) + đặt `PERSISTENCE=prisma` → kiểm: gọi thẳng `/settings` không đăng nhập
    phải nhận 401, sai vai phải nhận 403.
-5. **Bật kho media** (`MEDIA_STORE=s3`) → kiểm: `MediaHealthController` báo healthy.
+5. **Bật kho media** (`MEDIA_STORE=s3`) → kiểm: `GET /health/media` trả `reachability.healthy = true`
+   (đây là kết quả **chạm thật** vào bucket; `storage.state` chỉ suy từ bộ đếm tải ảnh nên trước khi
+   có ảnh đầu tiên nó luôn báo "healthy" kể cả khi bucket không tồn tại).
+   `deploy/netviet/render-secrets.sh` đã render sẵn 6 biến `MEDIA_*` và **chỉ** đặt `s3` khi có đủ
+   bucket + 2 khoá HMAC; thiếu một cái → `none` kèm cảnh báo ra stderr.
    ⚠️ **Bẫy:** rule lifecycle `media/` gắn vào **bucket sao lưu**; `MEDIA_BUCKET` trỏ sai bucket thì
-   rule giữ ảnh 60/365 ngày **không có tác dụng mà cũng không báo lỗi**.
+   rule giữ ảnh 60/365 ngày **không có tác dụng mà cũng không báo lỗi**. Vì vậy `MEDIA_BUCKET` mặc
+   định lấy thẳng từ `BACKUP_BUCKET` mà deploy truyền vào, không để người deploy gõ tay.
+   ⛔ **Chặn hiện tại (13/08/2026): không tạo được khoá HMAC trên project pilot.**
+   `gcloud storage hmac create` trả `HTTPError 412: Request violates constraint
+   'constraints/iam.disableServiceAccountKeyCreation'` — chính sách **cấp tổ chức** đang chặn tạo
+   khoá cho service account. Hai đường đi, đều là **quyết định của chủ tổ chức**, không phải việc
+   sửa code: (a) xin ngoại lệ policy cho project `netviet-host-968934832433`; hoặc (b) cấp khoá HMAC
+   từ một project/tài khoản lưu trữ khác rồi nạp vào 2 secret
+   `zalo-ultty-media-access-key-id` / `zalo-ultty-media-secret-access-key`.
+   Trong lúc chờ, hệ thống **fail-closed đúng**: `MEDIA_STORE=none`, cổng `media.production` báo
+   `missing` chứ không báo xanh giả.
 6. **Chạy golden eval** → trỏ `GOLDEN_EVAL_REPORT_PATH`; chưa đạt ngưỡng thì dừng ở đây.
 7. **Bật kênh Zalo cuối cùng** (§2.1), **`AUTO_SEND=off`** trước → chạy 1-2 nhóm pilot ở chế độ Sale
    duyệt tay, đối chiếu đơn AI tính với đơn Sale tự tính.
