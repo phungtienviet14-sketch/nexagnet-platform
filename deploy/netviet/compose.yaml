@@ -148,15 +148,15 @@ services:
       AUTH_MODE: ${AUTH_MODE:-none}
       # Kho anh. MAC DINH `none` = khong luu anh nao: link anh Zalo chet trong <=35 ngay nen day
       # la mat vinh vien, PHAI la mot lua chon co y chu khong phai hieu ung phu cua lan deploy.
-      # render-secrets.sh chi dat `s3` khi CO DU bucket + hai khoa HMAC; thieu mot cai -> `none`.
+      # render-secrets.sh dat `gcs` khi biet bucket; khong biet -> `none`.
+      #
+      # KHONG CO KHOA NAO O DAY: container ke thua tai khoan dich vu gan san cua VM (ADC), nen
+      # khong co bi mat dai han de phat/xoay vong/lo. Thu hoi = go IAM binding.
       # Bucket phai la bucket dang mang rule lifecycle prefix `media/` (giu 60/365 ngay) —
       # tro nham bucket thi rule khong co tac dung ma cung khong bao loi.
       MEDIA_STORE: ${MEDIA_STORE:-none}
       MEDIA_BUCKET: ${MEDIA_BUCKET:-}
-      MEDIA_ENDPOINT: ${MEDIA_ENDPOINT:-}
-      MEDIA_REGION: ${MEDIA_REGION:-auto}
-      MEDIA_ACCESS_KEY_ID: ${MEDIA_ACCESS_KEY_ID:-}
-      MEDIA_SECRET_ACCESS_KEY: ${MEDIA_SECRET_ACCESS_KEY:-}
+      MEDIA_GCS_ENDPOINT: ${MEDIA_GCS_ENDPOINT:-https://storage.googleapis.com}
       # Cong chan SSRF: chi tai anh tu host cua Zalo. Khop theo bien dau cham nen `evil-zdn.vn`
       # bi chan; de rong = chan het.
       MEDIA_ALLOWED_HOSTS: ${MEDIA_ALLOWED_HOSTS:-zdn.vn}

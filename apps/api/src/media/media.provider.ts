@@ -1,6 +1,7 @@
 import { Logger, type Provider } from '@nestjs/common';
 import { loadEnv } from '@netviet/shared';
 import { MessagesRepository } from '../messages/messages.repository.js';
+import { GcsMediaStore } from './gcs-media.store.js';
 import { LocalMediaStore } from './local-media.store.js';
 import { MediaFetcherService } from './media-fetcher.service.js';
 import { parseAllowedHosts } from './media-policy.js';
@@ -38,6 +39,14 @@ export const mediaStoreProvider: Provider = {
           accessKeyId: MEDIA_ACCESS_KEY_ID,
           secretAccessKey: MEDIA_SECRET_ACCESS_KEY,
         });
+      }
+      case 'gcs': {
+        // `loadEnv()` da fail-fast khi thieu bucket. ADC khong co bien nao de kiem o day: thieu
+        // quyen chi lo ra khi goi that, va cho lo ra dung la `MediaStore.check()`.
+        const { MEDIA_BUCKET } = env;
+        if (!MEDIA_BUCKET) throw new Error('MEDIA_STORE=gcs nhung thieu MEDIA_BUCKET');
+        logger.log(`Kho anh: GcsMediaStore (bucket ${MEDIA_BUCKET}, xac thuc bang ADC)`);
+        return new GcsMediaStore({ bucket: MEDIA_BUCKET, endpoint: env.MEDIA_GCS_ENDPOINT });
       }
       case 'local':
         logger.log(`Kho anh: LocalMediaStore (${env.MEDIA_LOCAL_DIR}) — chi dung cho dev`);

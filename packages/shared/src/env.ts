@@ -122,15 +122,25 @@ export const envSchema = z.object({
   // URL khong co chu ky/`expires` nen khong phai pre-signed). DB chi luu link = 35 ngay nua mat.
   //   none  = MAC DINH: khong tai anh ve (demo/CI offline, khong can bucket).
   //   local = ghi xuong dia — CHI cho dev.
-  //   s3    = chuan S3. GCS hom nay (XML API + khoa HMAC), OVHcloud sau nay, MinIO khi dev.
-  //           KHONG dung @google-cloud/storage de khong khoa chat vao Google (chot 11/08/2026).
-  MEDIA_STORE: z.enum(['none', 'local', 's3']).default('none'),
+  //   gcs   = Google Cloud Storage bang JSON API + ADC (tai khoan dich vu GAN SAN tren may chu).
+  //           KHONG co khoa tinh nao. Dung tren pilot GCP hom nay — xem ghi chu duoi.
+  //   s3    = chuan S3: OVHcloud/MinIO, va ca GCS neu co khoa HMAC.
+  //
+  // Vi sao co CA HAI (13/08/2026): quyet dinh 11/08 chon chuan S3 de doi GCP -> OVHcloud khong phai
+  // sua code. Ranh gioi giu duoc dieu do la CONG `MediaStore`, khong phai viec chi co mot hien thuc.
+  // Thuc te chan duong S3-tren-GCS: GCS chi ky S3 bang khoa HMAC, ma to chuc dang bat
+  // `constraints/iam.disableServiceAccountKeyCreation` nen KHONG tao duoc khoa. Doi lai, ADC dung
+  // danh tinh may chu, khong sinh bi mat dai han nao — an toan hon han khoa tinh. `s3` giu nguyen
+  // cho OVHcloud; chuyen nha cung cap van chi la doi bien moi truong.
+  MEDIA_STORE: z.enum(['none', 'local', 'gcs', 's3']).default('none'),
   MEDIA_BUCKET: z.string().min(1).optional(),
   MEDIA_ENDPOINT: z.string().url().optional(),
   MEDIA_REGION: z.string().default('auto'),
   MEDIA_ACCESS_KEY_ID: z.string().min(1).optional(),
   MEDIA_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   MEDIA_LOCAL_DIR: z.string().default('./tmp/media'),
+  /** Diem cuoi JSON API cua GCS. Tach khoi MEDIA_ENDPOINT (cua S3) de hai duong khong lan nhau. */
+  MEDIA_GCS_ENDPOINT: z.string().url().default('https://storage.googleapis.com'),
   // Tran byte cho mot anh. Vuot -> huy tai giua chung, ghi mediaError, tin VAN o trong DB.
   MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(15_000_000),
   MEDIA_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
@@ -219,7 +229,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
         ? 'AUTH_MODE: du lieu khach that khong duoc tat xac thuc'
         : null,
       data.CHANNEL_MODE !== 'mock' && data.MEDIA_STORE === 'none'
-        ? 'MEDIA_STORE: du lieu khach that + kenh Zalo that bat buoc dung local/s3, khong duoc none'
+        ? 'MEDIA_STORE: du lieu khach that + kenh Zalo that bat buoc dung local/gcs/s3, khong duoc none'
         : null,
     ].filter((issue): issue is string => issue !== null);
     if (customerReadinessIssues.length > 0) {
@@ -238,6 +248,11 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     if (missingMediaVariables.length > 0) {
       throw new EnvValidationError(missingMediaVariables);
     }
+  }
+  // `gcs` chi can bucket: danh tinh den tu tai khoan dich vu gan san (ADC), khong co khoa de dat.
+  // Thieu quyen thi lo ra o `MediaStore.check()` chu khong phai o day — env khong biet IAM.
+  if (data.MEDIA_STORE === 'gcs' && !data.MEDIA_BUCKET) {
+    throw new EnvValidationError(['MEDIA_BUCKET: BAT BUOC khi MEDIA_STORE=gcs']);
   }
   if (data.CHANNEL_MODE === 'hybrid' && !data.ZALO_BOT_TOKEN) {
     throw new EnvValidationError([

@@ -17,6 +17,7 @@ vi.mock('@aws-sdk/client-s3', () => ({
   },
 }));
 
+const { GcsMediaStore } = await import('./gcs-media.store.js');
 const { LocalMediaStore } = await import('./local-media.store.js');
 const { NoopMediaStore } = await import('./noop-media.store.js');
 const { S3MediaStore } = await import('./s3-media.store.js');
@@ -148,6 +149,99 @@ describe('S3MediaStore.check — cham that vao bucket', () => {
     now += 30_001;
     await store.check();
     expect(send).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * Duong dung tren GCP tu 13/08/2026: xac thuc bang ADC (tai khoan dich vu gan san cua may chu),
+ * KHONG co khoa tinh. To chuc bat `constraints/iam.disableServiceAccountKeyCreation` nen khong tao
+ * duoc khoa HMAC — ma khong co HMAC thi GCS khong ky duoc request S3.
+ */
+describe('GcsMediaStore — GCP bang ADC, khong khoa tinh', () => {
+  const CONFIG = { bucket: 'kho-anh', endpoint: 'https://storage.googleapis.com' };
+  const auth = { getAccessToken: async () => 'ya29.token-gia-lap' };
+  let calls: { url: string; init?: RequestInit }[] = [];
+
+  function stubFetch(responder: (url: string) => Response): void {
+    calls = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return responder(url);
+    });
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('put -> POST uploadType=media, dung bucket/khoa/content-type, kem Bearer token', async () => {
+    stubFetch(() => new Response('{}', { status: 200 }));
+
+    await new GcsMediaStore(CONFIG, auth).put(KEY, BODY, 'image/webp');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(
+      'https://storage.googleapis.com/upload/storage/v1/b/kho-anh/o' +
+        `?uploadType=media&name=${encodeURIComponent(KEY)}`,
+    );
+    const headers = calls[0]!.init?.headers as Record<string, string>;
+    expect(headers.authorization).toBe('Bearer ya29.token-gia-lap');
+    expect(headers['content-type']).toBe('image/webp');
+  });
+
+  it('GCS tu choi ghi -> NEM, de MediaFetcher ghi mediaError chu khong mat anh trong im lang', async () => {
+    stubFetch(() => new Response('Forbidden', { status: 403 }));
+
+    await expect(new GcsMediaStore(CONFIG, auth).put(KEY, BODY, 'image/webp')).rejects.toThrow(
+      /403/,
+    );
+  });
+
+  it('check -> liet ke object theo prefix media/, KHONG doc metadata bucket', async () => {
+    stubFetch(() => new Response('{"kind":"storage#objects"}', { status: 200 }));
+
+    const result = await new GcsMediaStore(CONFIG, auth).check();
+
+    expect(result.healthy).toBe(true);
+    expect(calls[0]!.url).toBe(
+      'https://storage.googleapis.com/storage/v1/b/kho-anh/o?maxResults=1&prefix=media/',
+    );
+  });
+
+  it('thieu quyen -> KHONG healthy, kem ma loi doc duoc', async () => {
+    stubFetch(() => new Response('caller does not have permission', { status: 403 }));
+
+    const result = await new GcsMediaStore(CONFIG, auth).check();
+
+    expect(result.healthy).toBe(false);
+    expect(result.detail).toContain('403');
+    expect(result.detail).toContain('kho-anh');
+  });
+
+  it('khong lay duoc danh tinh (chay ngoai GCP) -> KHONG healthy, khong nem ra ngoai', async () => {
+    stubFetch(() => new Response('{}', { status: 200 }));
+    const broken = {
+      getAccessToken: async () => {
+        throw new Error('Could not load the default credentials');
+      },
+    };
+
+    const result = await new GcsMediaStore(CONFIG, broken).check();
+
+    expect(result.healthy).toBe(false);
+    expect(result.detail).toMatch(/danh tinh/i);
+  });
+
+  it('giu ket qua trong TTL — readiness bi hoi lien tuc khong thanh spam mang', async () => {
+    stubFetch(() => new Response('{}', { status: 200 }));
+    let now = 1_000;
+    const store = new GcsMediaStore(CONFIG, auth, 30_000, () => now);
+
+    await store.check();
+    await store.check();
+    expect(calls).toHaveLength(1);
+
+    now += 30_001;
+    await store.check();
+    expect(calls).toHaveLength(2);
   });
 });
 
