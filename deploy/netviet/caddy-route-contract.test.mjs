@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 
 const caddyfile = await readFile(new URL('./Caddyfile', import.meta.url), 'utf8');
@@ -54,6 +54,74 @@ test('every /settings page path reaches Next.js while only the listed APIs reach
   assert.doesNotMatch(apiMatcher, /(?:^|\s)\/settings\/groups\*(?:\s|$)/);
   assert.match(apiMatcher, /(?:^|\s)\/groups\/\*(?:\s|$)/);
   assert.match(apiMatcher, /(?:^|\s)\/admin\*(?:\s|$)/);
+});
+
+/**
+ * Doc NGUOC tu controller thay vi chep tay danh sach.
+ *
+ * Vi sao: 13/08/2026 phat hien tren ban deploy that, `/settings/readiness`, `/settings/price-periods*`,
+ * `/settings/content*`, `/settings/users*`, `/campaigns*` va `/health/media` deu tra 404 — code co
+ * du, Caddyfile thi khong biet, nen chung roi xuong Next.js. Nang nhat la `price-periods`: do la
+ * man hinh Sale nhap bang gia thang hien hanh, tuc la cong go-live so 1 khong the dong duoc qua UI
+ * da deploy. Danh sach chep tay se lai lech lan nua; test nay bat CI do ngay khi them controller.
+ */
+async function controllerFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) files.push(...(await controllerFiles(path)));
+    else if (entry.name.endsWith('.controller.ts')) files.push(path);
+  }
+  return files;
+}
+
+/** Duong dan API co duoc matcher phu khong: khop chinh xac, hoac qua glob `*` / `/*`. */
+function covered(tokens, path) {
+  return tokens.some(
+    (token) =>
+      token === path ||
+      token === `${path}*` ||
+      token === `${path}/*` ||
+      (token.endsWith('*') && path.startsWith(token.slice(0, -1)) && token.length > 1),
+  );
+}
+
+test('moi namespace controller deu co duong di qua Caddy — khong route nao roi xuong Next.js', async () => {
+  const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
+  const tokens = apiMatcher.trim().split(/\s+/);
+  const srcDir = new URL('../../apps/api/src', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+
+  const required = new Set();
+  for (const file of await controllerFiles(srcDir)) {
+    const source = await readFile(file, 'utf8');
+    const prefixes = [...source.matchAll(/@Controller\(\s*(\[[^\]]*\]|'[^']*')?\s*\)/g)].flatMap(
+      (match) => [...(match[1] ?? "''").matchAll(/'([^']*)'/g)].map((inner) => inner[1]),
+    );
+    for (const prefix of prefixes) {
+      if (prefix === 'settings') {
+        // Namespace `/settings` dung chung voi TRANG web -> phai liet ke tung endpoint mot.
+        for (const method of source.matchAll(/@(?:Get|Post|Put|Patch|Delete)\(\s*'([^']+)'/g)) {
+          required.add(`/settings/${method[1].split('/')[0]}`);
+        }
+      } else if (prefix !== '') {
+        required.add(`/${prefix}`);
+      } else {
+        // Controller khong co tien to: lay thang duong dan cua tung phuong thuc (vd @Sse('events')).
+        for (const method of source.matchAll(/@(?:Get|Post|Put|Patch|Delete|Sse)\(\s*'([^']+)'/g)) {
+          required.add(`/${method[1].split('/')[0]}`);
+        }
+      }
+    }
+  }
+
+  assert.ok(required.size > 10, `chi doc duoc ${required.size} route — regex controller da hong`);
+  const missing = [...required].filter((path) => !covered(tokens, path)).sort();
+  assert.deepEqual(
+    missing,
+    [],
+    `Caddyfile thieu duong di cho: ${missing.join(', ')} -> tren ban deploy se tra 404 trang Next.js`,
+  );
 });
 
 // Quyet dinh 04/08/2026 (dot 2): hostname demo va operator hanh xu GIONG NHAU. Truoc do demo tra
