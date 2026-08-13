@@ -22,6 +22,19 @@ fi
 
 COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml)
 channel_mode="$("${APP_DIR}/channel-mode.sh" read "${APP_DIR}/.runtime/channel-mode.env")"
+runtime_value() {
+  local key="$1"
+  sed -n "s/^${key}=//p" .runtime/secrets.env | tail -n 1
+}
+DEMO_DOMAIN="$(runtime_value DEMO_DOMAIN)"
+OPERATOR_DOMAIN="$(runtime_value OPERATOR_DOMAIN)"
+FLOWISE_DOMAIN="$(runtime_value FLOWISE_DOMAIN)"
+for domain in "${DEMO_DOMAIN}" "${OPERATOR_DOMAIN}" "${FLOWISE_DOMAIN}"; do
+  if [[ ! "${domain}" =~ ^[a-z0-9.-]+$ ]]; then
+    echo "Runtime domain khong hop le; khong chay smoke." >&2
+    exit 65
+  fi
+done
 
 "${COMPOSE[@]}" pull postgres flowise gateway
 "${COMPOSE[@]}" up -d postgres
@@ -115,7 +128,6 @@ done
   bootstrap node --input-type=module - < smoke-test.mjs
 echo "Stack zalo-ultty da healthy tai 127.0.0.1:8080."
 
-source .runtime/secrets.env
 # Public endpoints/UI shell phai reachable qua TLS, trong khi protected API phai tu choi anonymous.
 for attempt in {1..60}; do
   if curl -fsS --max-time 10 --resolve "${DEMO_DOMAIN}:443:127.0.0.1" \
