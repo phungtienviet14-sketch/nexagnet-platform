@@ -16,13 +16,7 @@ import {
 export type ZcaMessageHandler = (message: Message) => void | Promise<void>;
 
 export type ZaloConnectionState =
-  | 'disabled'
-  | 'logged_out'
-  | 'connecting'
-  | 'qr_ready'
-  | 'qr_scanned'
-  | 'ready'
-  | 'error';
+  'disabled' | 'logged_out' | 'connecting' | 'qr_ready' | 'qr_scanned' | 'ready' | 'error';
 
 export interface ZaloStatus {
   channelMode: 'mock' | 'bot' | 'zca' | 'hybrid';
@@ -36,6 +30,7 @@ export interface ZaloStatus {
 
 export interface ZaloGroupView {
   id: string;
+  globalId?: string;
   name: string;
   memberCount: number;
   allowed: boolean;
@@ -135,8 +130,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       throw new Error('CHANNEL_MODE khong bat zca');
     }
     if (this.api || this.connectionTask) return;
-    // Operator da chu dong yeu cau QR sau mot lan restore loi: thay phien cu bang QR moi,
-    // nhung KHONG xoa allowlist. Full logout van la thao tac rieng va xoa ca hai.
+    // QR moi co the la tai khoan khac. Allowlist cu phai bi cach ly vi groupId phu thuoc tai khoan.
     void this.connect(true, this.errorKind === 'saved_credential');
   }
 
@@ -174,6 +168,9 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       for (const group of Object.values(response.gridInfoMap)) {
         groups.push({
           id: group.groupId,
+          ...(normalizeExternalId(group.globalId)
+            ? { globalId: normalizeExternalId(group.globalId) }
+            : {}),
           name: group.name,
           memberCount: group.totalMember,
           allowed: this.allowedGroupIds.has(group.groupId),
@@ -181,6 +178,11 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       }
     }
     return groups.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+  }
+
+  async listGroupIdentities(groupIds: readonly string[]): Promise<ZaloGroupView[]> {
+    const requested = new Set(normalizeAllowedGroupIds(groupIds));
+    return (await this.listGroups()).filter((group) => requested.has(group.id));
   }
 
   /**
@@ -263,7 +265,11 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       .map((memberId) => embeddedProfiles.get(memberId))
       .filter((profile): profile is GroupParticipantProfile => profile !== undefined);
     const failedMemberIds: string[] = [];
-    const missingProfileIds = memberIds.filter((memberId) => !embeddedProfiles.has(memberId));
+    // `currentMems`/invite-link co ten + avatar nhung khong co stable `globalId`. Van batch-fetch
+    // nhung profile nay de giu phan loai thanh vien khi routing UID thay doi theo tai khoan.
+    const missingProfileIds = memberIds.filter(
+      (memberId) => !embeddedProfiles.get(memberId)?.globalId,
+    );
     for (let offset = 0; offset < missingProfileIds.length; offset += MEMBER_PROFILE_BATCH_SIZE) {
       const batch = missingProfileIds.slice(offset, offset + MEMBER_PROFILE_BATCH_SIZE);
       try {
@@ -271,13 +277,16 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
         for (const memberId of batch) {
           const profile = response.profiles[memberId];
           if (!profile) {
-            failedMemberIds.push(memberId);
+            if (!embeddedProfiles.has(memberId)) failedMemberIds.push(memberId);
             continue;
           }
-          members.push(normalizeMemberProfile(memberId, profile));
+          const normalized = normalizeMemberProfile(memberId, profile);
+          const existingIndex = members.findIndex((member) => member.externalUserId === memberId);
+          if (existingIndex >= 0) members[existingIndex] = normalized;
+          else members.push(normalized);
         }
       } catch {
-        failedMemberIds.push(...batch);
+        failedMemberIds.push(...batch.filter((memberId) => !embeddedProfiles.has(memberId)));
         this.logger.warn(
           `Dong bo profile Zalo bi partial: group=${groupId}, batchSize=${batch.length}, failed=${batch.length}`,
         );
@@ -397,8 +406,14 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     let usedSavedCredential = false;
     try {
       if (replaceSavedCredential) {
-        await Promise.all([this.removePrivateFile(this.credPath), this.removePrivateFile(this.qrPath)]);
-        this.logger.log('Operator yeu cau QR moi sau loi phien cu; da bo phien cu, giu nguyen allowlist.');
+        await Promise.all([
+          this.removePrivateFile(this.credPath),
+          this.removePrivateFile(this.qrPath),
+          this.setAllowedGroupIds([]),
+        ]);
+        this.logger.log(
+          'Operator yeu cau QR moi sau loi phien cu; da bo phien va cach ly allowlist cu.',
+        );
       }
       const cred = await this.readCred();
       if (cred) {
@@ -406,8 +421,9 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
         this.logger.log('Dang nhap zca-js bang phien da luu...');
         this.api = await zalo.login(cred);
       } else if (allowQr) {
-        this.api = await zalo.loginQR({ userAgent: DEFAULT_USER_AGENT, qrPath: this.qrPath }, (event) =>
-          this.onQrEvent(event),
+        this.api = await zalo.loginQR(
+          { userAgent: DEFAULT_USER_AGENT, qrPath: this.qrPath },
+          (event) => this.onQrEvent(event),
         );
       } else {
         this.connectionState = 'logged_out';
@@ -434,7 +450,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.qrImage = null;
       this.qrExpiresAt = null;
       this.lastError =
-        'Khong the ket noi bang phien da luu. Hay chon Tao QR moi; danh sach nhom van duoc giu.';
+        'Khong the ket noi bang phien da luu. Hay chon Tao QR moi va chon lai nhom cho tai khoan moi.';
       this.logger.error(`zca-js dang nhap that bai: ${message}`);
     }
   }
@@ -511,7 +527,9 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
           imei: event.data.imei,
           cookie: event.data.cookie,
           userAgent: event.data.userAgent,
-        }).catch((error: unknown) => this.logger.warn(`Khong luu duoc phien zca-js: ${errMsg(error)}`));
+        }).catch((error: unknown) =>
+          this.logger.warn(`Khong luu duoc phien zca-js: ${errMsg(error)}`),
+        );
         break;
     }
   }
@@ -572,7 +590,8 @@ export function isCredentials(value: unknown): value is Credentials {
 }
 
 export function normalizeAllowedGroupIds(groupIds: readonly string[]): string[] {
-  if (groupIds.length > MAX_ALLOWED_GROUPS) throw new Error(`Chi duoc cho phep toi da ${MAX_ALLOWED_GROUPS} nhom`);
+  if (groupIds.length > MAX_ALLOWED_GROUPS)
+    throw new Error(`Chi duoc cho phep toi da ${MAX_ALLOWED_GROUPS} nhom`);
   const normalized = [...new Set(groupIds.map((groupId) => groupId.trim()))].sort();
   if (normalized.some((groupId) => groupId.length === 0 || groupId.length > 128)) {
     throw new Error('ID nhom khong hop le');
@@ -623,13 +642,15 @@ function normalizeMemberIds(memberIds: readonly string[]): string[] {
 
 function normalizeMemberProfile(
   externalUserId: string,
-  profile: { displayName: string; zaloName: string; avatar: string },
+  profile: { displayName: string; zaloName: string; avatar: string; globalId?: string },
 ): GroupParticipantProfile {
   const displayName = profile.displayName.trim() || profile.zaloName.trim() || externalUserId;
   const zaloName = profile.zaloName.trim();
   const avatarUrl = normalizeHttpUrl(profile.avatar);
+  const globalId = normalizeExternalId(profile.globalId);
   return {
     externalUserId,
+    ...(globalId ? { globalId } : {}),
     displayName,
     ...(zaloName ? { zaloName } : {}),
     ...(avatarUrl ? { avatarUrl } : {}),
@@ -643,6 +664,12 @@ function normalizeHttpUrl(value: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function normalizeExternalId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 && normalized.length <= 128 ? normalized : undefined;
 }
 
 function errMsg(error: unknown): string {

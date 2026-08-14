@@ -21,7 +21,10 @@ function makeZcaMessage(msgId: string, content = 'gui 10 ghe felix', threadId = 
 function setup(intent: Intent = 'dat_don', officialBotId: string | null = 'official-bot-1') {
   let captured: ZcaMessageHandler | undefined;
   const intake = vi.fn(
-    async (): Promise<IntakeResult> => ({ outcome: 'processed', view: { intent } as OrderView }),
+    async (..._args: Parameters<PipelineService['intake']>): Promise<IntakeResult> => ({
+      outcome: 'processed',
+      view: { intent } as OrderView,
+    }),
   );
   const sendMessage = vi.fn(
     async (_replyChannel: 'bot' | 'zca' | 'mock', _chatId: string, _text: string): Promise<void> =>
@@ -187,6 +190,8 @@ describe('ZcaListener', () => {
     const handler = getHandler()!;
     await expect(handler(makeZcaMessage('a'))).resolves.toBeUndefined();
     expect(intake).toHaveBeenCalledTimes(2); // 1 goc + 1 lan thu lai
+    expect(intake.mock.calls[0]?.[2]).toEqual({ retryPersisted: false });
+    expect(intake.mock.calls[1]?.[2]).toEqual({ retryPersisted: true });
   });
 
   it('pipeline loi HET LUOT -> KHONG danh dau da xu ly, tin den lai thi VAN chay lai', async () => {

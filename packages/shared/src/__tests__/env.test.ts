@@ -17,6 +17,14 @@ describe('loadEnv', () => {
     expect(env.PORT).toBe(8080);
   });
 
+  it('cau hinh cua so gom burst co gioi han va cho phep tat bang 0', () => {
+    expect(loadEnv({}).MESSAGE_BURST_WINDOW_MS).toBe(1_200);
+    expect(loadEnv({ MESSAGE_BURST_WINDOW_MS: '0' }).MESSAGE_BURST_WINDOW_MS).toBe(0);
+    expect(() => loadEnv({ MESSAGE_BURST_WINDOW_MS: '10001' })).toThrowError(
+      EnvValidationError,
+    );
+  });
+
   it('nem EnvValidationError kem ten bien khi gia tri sai', () => {
     expect(() => loadEnv({ DATABASE_URL: 'khong-phai-url' })).toThrowError(EnvValidationError);
     try {

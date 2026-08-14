@@ -33,6 +33,7 @@ describe('SettingsQueryService', () => {
           {
             id: 'group-db-1',
             chatId: 'zca-chat-1',
+            globalId: 'stable-group-1',
             name: 'Nhom pilot',
             dealerId: 'dealer-1',
             dealer: { name: 'Dai ly 1' },
@@ -67,6 +68,60 @@ describe('SettingsQueryService', () => {
     expect(summary.orderAutomation).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
   });
 
+  it('joins a live group from another Zalo account by globalId instead of showing a duplicate', async () => {
+    const zca = {
+      status: () => ({ state: 'ready', allowedGroupIds: ['zca-chat-account-2'] }),
+      listGroups: vi.fn(async () => [
+        {
+          id: 'zca-chat-account-2',
+          globalId: 'stable-group-1',
+          name: 'Nhom pilot',
+          allowed: true,
+          memberCount: 2,
+        },
+      ]),
+    } as unknown as ZaloUserClient;
+    const prisma = {
+      group: {
+        findMany: vi.fn(async () => [
+          {
+            id: 'group-db-1',
+            chatId: 'zca-chat-account-1',
+            globalId: 'stable-group-1',
+            name: 'Nhom pilot',
+            status: 'mapped',
+            dealerId: 'dealer-1',
+            dealer: { name: 'Dai ly 1' },
+            participants: [],
+          },
+        ]),
+      },
+    } as unknown as PrismaService;
+    const service = new SettingsQueryService(
+      zca,
+      { status: () => ({ state: 'ready' }) } as unknown as BotIdentityService,
+      {
+        products: () => [],
+        dealers: () => [],
+        groupViews: () => [],
+      } as unknown as KnowledgeService,
+      { autoSend: () => 'off' } as unknown as RuntimeSettingsService,
+      { getActive: vi.fn(async () => null) } as unknown as RuleConfigService,
+      prisma,
+    );
+
+    const summary = await service.summary();
+
+    expect(summary.groups).toHaveLength(1);
+    expect(summary.groups[0]).toMatchObject({
+      groupId: 'group-db-1',
+      zcaChatId: 'zca-chat-account-2',
+      globalId: 'stable-group-1',
+      status: 'mapped',
+      dealerId: 'dealer-1',
+    });
+  });
+
   it('serves every memory source-truth resource and maps live zca groups to dealers', async () => {
     process.env.PERSISTENCE = 'memory';
     const zca = {
@@ -93,7 +148,14 @@ describe('SettingsQueryService', () => {
       {} as PrismaService,
     );
 
-    for (const resource of ['dealers', 'groups', 'products', 'prices', 'overrides', 'glossary'] as const) {
+    for (const resource of [
+      'dealers',
+      'groups',
+      'products',
+      'prices',
+      'overrides',
+      'glossary',
+    ] as const) {
       await expect(service.sourceTruth(resource)).resolves.toHaveLength(1);
     }
     await expect(service.summary()).resolves.toMatchObject({
@@ -123,7 +185,14 @@ describe('SettingsQueryService', () => {
       prisma,
     );
 
-    for (const resource of ['dealers', 'groups', 'products', 'prices', 'overrides', 'glossary'] as const) {
+    for (const resource of [
+      'dealers',
+      'groups',
+      'products',
+      'prices',
+      'overrides',
+      'glossary',
+    ] as const) {
       await expect(service.sourceTruth(resource)).resolves.toEqual([]);
     }
     expect(prisma.dealer.findMany).toHaveBeenCalledWith({ orderBy: { name: 'asc' } });

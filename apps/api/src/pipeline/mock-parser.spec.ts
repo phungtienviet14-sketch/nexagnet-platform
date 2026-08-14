@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GlossaryEntry, Product } from '../knowledge/domain.js';
+import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { MockParser } from './mock-parser.js';
 
 const products: Product[] = [
@@ -55,6 +56,18 @@ describe('MockParser', () => {
   it('mac dinh noVat=false khi khong ghi ko VAT', async () => {
     const r = await run('gui 3 ghe felix');
     expect(r.order?.noVat).toBe(false);
+  });
+
+  it('nhan dien typo thuc te "quat tich dine" tu goi du lieu tenant', async () => {
+    const knowledge = new KnowledgeService();
+    const r = await parser.parse({
+      text: 'gửi tn cho chị 4 con quạt tích đinẹ nhé',
+      products: knowledge.products(),
+      glossary: knowledge.glossary(),
+    });
+
+    expect(r.intent).toBe('dat_don');
+    expect(r.order?.items).toEqual([{ skuRaw: 'quat tich dine', quantity: 4 }]);
   });
 
   it('combo khong bi dem trung voi SP thanh phan (alias con la substring)', async () => {

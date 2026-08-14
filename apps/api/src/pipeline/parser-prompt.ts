@@ -38,6 +38,7 @@ export function buildSystemPrompt(
     '- noVat=true khi khach ghi "khong VAT"/"ko lay VAT". wantVat=true khi khach ghi "xuat VAT"/"co VAT"/"lay hoa don". Mac dinh ca hai false.',
     '- codCollect=true khi co "thu ho"/"COD". Neu TH2: dien customerName/customerPhone/customerAddress khi co.',
     '- CHI dien truong khach THUC SU ghi; khong biet thi BO QUA (dung dien 0 hay chuoi rong gia).',
+    '- Neu tin hien tai gom nhieu dong "TIN n [thoi gian]", day la MOT luot nhan lien tiep cua CUNG nguoi gui. Doc theo thu tu thoi gian; noi dung o tin SAU thay the noi dung mau thuan o tin truoc.',
     '- Neu tin hien tai la reply/bo sung, chi ke thua SKU/order reference khi quote/context xac dinh DUY NHAT. Context mo ho -> intent=khac, confidence thap, KHONG doan.',
     '',
     'confidence.intent = do tin cay phan loai (so tu 0 den 1). Neu tin mo ho / khong chac thuoc 6 loai dau -> intent=khac va confidence.intent thap.',
@@ -64,7 +65,7 @@ function formatContext(input: ParserInput): string {
     context.quotedMessage ? `TIN DUOC REPLY: ${context.quotedMessage.text}` : '',
     ...context.recentMessages.map(
       (message, index) =>
-        `LICH SU ${index + 1} (${message.senderDisplayName ?? message.senderExternalId ?? 'unknown'}): ${message.text}`,
+        `LICH SU ${index + 1} [${message.sentAt.toISOString()}] (${message.senderDisplayName ?? message.senderExternalId ?? 'unknown'}): ${message.text}`,
     ),
   ].filter(Boolean);
   return lines.length > 0

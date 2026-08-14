@@ -7,7 +7,7 @@ import type {
   KnowledgeSummary,
   OrderView,
 } from '@netviet/shared';
-import type { ZaloGroup, ZaloStatus } from './zalo';
+import type { ZaloGroup, ZaloGroupIdentityLink, ZaloStatus } from './zalo';
 import { authFetch } from './auth';
 import { publicApiBase } from './api-base';
 
@@ -30,7 +30,8 @@ async function toJson<T>(res: Response): Promise<T> {
     let message = text.slice(0, 160);
     try {
       const body = JSON.parse(text) as { message?: string | string[] };
-      if (body.message) message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
+      if (body.message)
+        message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
     } catch {
       // giu message tho
     }
@@ -40,7 +41,8 @@ async function toJson<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  orders: (): Promise<OrderView[]> => authFetch(`${BASE}/orders`).then((r) => toJson<OrderView[]>(r)),
+  orders: (): Promise<OrderView[]> =>
+    authFetch(`${BASE}/orders`).then((r) => toJson<OrderView[]>(r)),
   messages: (): Promise<OrderView[]> =>
     authFetch(`${BASE}/messages`).then((r) => toJson<OrderView[]>(r)),
   approve: (id: string): Promise<OrderView> =>
@@ -60,7 +62,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, chatId }),
     }).then((r) => toJson<OrderView>(r)),
-  samples: (): Promise<string[]> => authFetch(`${BASE}/demo/samples`).then((r) => toJson<string[]>(r)),
+  samples: (): Promise<string[]> =>
+    authFetch(`${BASE}/demo/samples`).then((r) => toJson<string[]>(r)),
   groups: (): Promise<DemoGroup[]> =>
     authFetch(`${BASE}/demo/groups`).then((r) => toJson<DemoGroup[]>(r)),
   erpProducts: (): Promise<ErpProduct[]> =>
@@ -69,7 +72,8 @@ export const api = {
     authFetch(`${BASE}/erp/orders`).then((r) => toJson<ErpOrder[]>(r)),
   knowledge: (): Promise<KnowledgeSummary> =>
     authFetch(`${BASE}/knowledge/summary`).then((r) => toJson<KnowledgeSummary>(r)),
-  config: (): Promise<DemoConfig> => authFetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),
+  config: (): Promise<DemoConfig> =>
+    authFetch(`${BASE}/demo/config`).then((r) => toJson<DemoConfig>(r)),
   setAutoSend: (enabled: boolean): Promise<AutoSendState> =>
     authFetch(`${BASE}/settings/automation/auto-send`, {
       method: 'PUT',
@@ -96,11 +100,17 @@ export const api = {
     }).then((r) => toJson<ZaloStatus>(r)),
   zaloGroups: (): Promise<ZaloGroup[]> =>
     authFetch(`${BASE}/zalo/groups`, { cache: 'no-store' }).then((r) => toJson<ZaloGroup[]>(r)),
-  saveZaloGroups: (groupIds: string[]): Promise<ZaloStatus> =>
+  saveZaloGroups: ({
+    groupIds,
+    links = [],
+  }: {
+    groupIds: string[];
+    links?: ZaloGroupIdentityLink[];
+  }): Promise<ZaloStatus> =>
     authFetch(`${BASE}/zalo/allowed-groups`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groupIds }),
+      body: JSON.stringify({ groupIds, links }),
     }).then((r) => toJson<ZaloStatus>(r)),
 };
 

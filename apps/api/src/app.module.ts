@@ -17,10 +17,7 @@ import { AgentOrchestrator } from './agents/agent-orchestrator.service.js';
 import { BroadcastController } from './broadcast/broadcast.controller.js';
 import { BroadcastService } from './broadcast/broadcast.service.js';
 import { CampaignController } from './campaigns/campaign.controller.js';
-import {
-  CampaignRepository,
-  InMemoryCampaignRepository,
-} from './campaigns/campaign.repository.js';
+import { CampaignRepository, InMemoryCampaignRepository } from './campaigns/campaign.repository.js';
 import { CampaignScheduler } from './campaigns/campaign.scheduler.js';
 import { CampaignService } from './campaigns/campaign.service.js';
 import { CAMPAIGN_POLICY } from './campaigns/campaign.tokens.js';
@@ -63,6 +60,7 @@ import { AuditLogService } from './audit/audit-log.service.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { ReadinessController } from './readiness/readiness.controller.js';
 import { ReadinessService } from './readiness/readiness.service.js';
+import { GroupIdentityService } from './groups/group-identity.service.js';
 
 @Module({
   imports: [
@@ -127,6 +125,7 @@ import { ReadinessService } from './readiness/readiness.service.js';
     ConversationContextBuilder,
     SettingsQueryService,
     GroupMappingService,
+    GroupIdentityService,
     SourceTruthWriteService,
     {
       // MasterDataService CO Y nhan phu thuoc bang kieu CAU TRUC (de test khong can Nest), nen

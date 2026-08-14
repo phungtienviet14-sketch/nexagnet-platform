@@ -569,6 +569,8 @@ flowchart TB
 
 **Map nhóm:** Bot Platform `chat.id` và zca `threadId` là hai ID khác nhau. Cần tạo hai bản ghi Group cùng trỏ về một Dealer. Bot Platform chỉ đưa tin nhóm đã map vào pipeline; zca còn qua allowlist operator riêng trước LLM.
 
+Riêng giữa nhiều **tài khoản zca**, `threadId/groupId` chỉ là routing ID theo tài khoản và có thể đổi; cùng một nhóm dùng `GroupInfo.globalId` làm identity canonical. Đổi tài khoản sẽ rebind routing ID vào cùng Group sau khi operator xác nhận liên kết legacy, không tạo Group nghiệp vụ mới và không ghép theo tên.
+
 Chi tiết hành vi zca as-built: bỏ tin do chính tài khoản gửi (trừ khi `ZALO_SELF_LISTEN=on`) · tin chỉ-ảnh nay được lưu và tải media bất đồng bộ khi bật store · chống trùng 2.000 id gần nhất · tự ghi nhận nhóm/người gửi · mỗi tài khoản chỉ 1 listener (mở Zalo Web cùng tài khoản → listener dừng). Trang Operator đăng xuất cục bộ dừng listener, xóa credential/QR/allowlist; không phải thu hồi phiên phía Zalo.
 
 > **Điều kiện chặn kênh zca:** dùng **tài khoản Zalo phụ** (không dùng tài khoản Sale chính) + **văn bản chấp nhận rủi ro của khách** (vi phạm ToS Zalo, có thể bị khóa tài khoản; Luật BVDLCN 91/2025/QH15 + NĐ 356/2025).

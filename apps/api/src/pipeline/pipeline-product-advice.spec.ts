@@ -78,6 +78,22 @@ describe('product advice outbound', () => {
     expect(outbound.sent[0]?.text).toContain('Catalog: https://catalog.example.test/elni');
   });
 
+  it('sends active text advice when optional image and links are absent', async () => {
+    const textOnlyContent = { ...activeContent(), assets: [], links: [] };
+    const { pipeline, outbound } = await build({
+      autoSend: 'on',
+      content: new InMemoryContentRepository(textOnlyContent, ['ELNI']),
+    });
+
+    const view = await pipeline.process(message());
+
+    expect(view.status).toBe('sent');
+    expect(outbound.sent).toHaveLength(1);
+    expect(outbound.sent[0]?.text).toContain('Lau bằng khăn mềm');
+    expect(outbound.sent[0]?.text).not.toContain('Ảnh:');
+    expect(outbound.sent[0]?.text).not.toContain('Catalog:');
+  });
+
   it('does not send when AUTO_SEND kill switch is off', async () => {
     const { pipeline, outbound } = await build({ autoSend: 'off' });
 

@@ -34,17 +34,29 @@ export class ConversationContextBuilder {
     };
   }
 
-  async build(current: ChannelMessage): Promise<ConversationContext> {
+  async build(
+    current: ChannelMessage,
+    excludeExternalMessageIds: readonly string[] = [],
+  ): Promise<ConversationContext> {
+    const excludedIds = new Set(excludeExternalMessageIds);
     const quotedMessage = await this.resolveQuote(current);
-    const rows = await this.messages.findRecent(
-      current.platform,
-      current.externalChatId,
-      current.sentAt,
-      current.externalMessageId,
-      this.limits.maxMessages + 1,
-    );
+    const rows = current.senderExternalId
+      ? await this.messages.findRecent(
+          current.platform,
+          current.externalChatId,
+          current.sentAt,
+          current.externalMessageId,
+          this.limits.maxMessages + 1,
+          current.senderExternalId,
+        )
+      : [];
     const recentMessages = boundedRecent(
-      rows.filter((row) => row.externalMessageId !== quotedMessage?.externalMessageId),
+      rows.filter(
+        (row) =>
+          row.externalMessageId !== quotedMessage?.externalMessageId &&
+          !excludedIds.has(row.externalMessageId) &&
+          sameParticipant(row, current),
+      ),
       this.limits,
     );
     const participants = normalizeParticipants(current, quotedMessage, recentMessages);
@@ -75,6 +87,12 @@ export class ConversationContextBuilder {
       sentAt: reply.sentAt ?? current.sentAt,
     };
   }
+}
+
+/** Co sender id thi context chi duoc lay cua dung thanh vien; thieu id thi fail closed, khong tron. */
+function sameParticipant(row: StoredMessage, current: ChannelMessage): boolean {
+  if (!current.senderExternalId) return false;
+  return row.senderExternalId === current.senderExternalId;
 }
 
 function boundedRecent(

@@ -47,12 +47,14 @@ export abstract class MessagesRepository {
     before: Date,
     excludeExternalMessageId: string,
     limit: number,
+    senderExternalId?: string,
   ): Promise<StoredMessage[]> {
     void platform;
     void chatId;
     void before;
     void excludeExternalMessageId;
     void limit;
+    void senderExternalId;
     return [];
   }
   /** Noi don voi tin goc (FK orders.messageId). Order khong ton tai -> bo qua, khong loi. */
@@ -91,6 +93,7 @@ export class InMemoryMessagesRepository extends MessagesRepository {
     before: Date,
     excludeExternalMessageId: string,
     limit: number,
+    senderExternalId?: string,
   ): Promise<StoredMessage[]> {
     return [...this.store.values()]
       .filter(
@@ -98,6 +101,7 @@ export class InMemoryMessagesRepository extends MessagesRepository {
           row.platform === platform &&
           row.externalChatId === chatId &&
           row.externalMessageId !== excludeExternalMessageId &&
+          (!senderExternalId || row.senderExternalId === senderExternalId) &&
           row.sentAt.getTime() <= before.getTime(),
       )
       .sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime())
@@ -105,7 +109,7 @@ export class InMemoryMessagesRepository extends MessagesRepository {
   }
 
   /** Memory khong co bang orders de noi FK — no-op (chi co y nghia o che do prisma). */
-  override async attachOrder(): Promise<void> {}
+  override async attachOrder(_orderId?: string, _messageId?: string): Promise<void> {}
 
   override async recordMedia(messageId: string, media: MessageMedia): Promise<void> {
     for (const [key, row] of this.store) {

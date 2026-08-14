@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import {
   ZALO_RISK_ACKNOWLEDGEMENTS,
+  confirmedLegacyGroupLinks,
   zaloLoginAvailability,
   zaloStateLabel,
   type ZaloRiskAcknowledgement,
@@ -70,7 +71,11 @@ export default function ZaloLoginPage() {
     saveMutation.reset();
   };
   const error =
-    statusQuery.error ?? loginMutation.error ?? groupsQuery.error ?? saveMutation.error ?? logoutMutation.error;
+    statusQuery.error ??
+    loginMutation.error ??
+    groupsQuery.error ??
+    saveMutation.error ??
+    logoutMutation.error;
   const availability = zaloLoginAvailability(status);
   const allAccepted = ZALO_RISK_ACKNOWLEDGEMENTS.every((item) => accepted[item.id]);
 
@@ -84,18 +89,29 @@ export default function ZaloLoginPage() {
     }
   };
 
+  const handleSaveGroups = () => {
+    const links = confirmedLegacyGroupLinks(groupsQuery.data ?? [], selectedGroups, (message) =>
+      window.confirm(message),
+    );
+    saveMutation.mutate({ groupIds: selectedGroups, links });
+  };
+
   return (
     <main className="zalo-operator">
       <nav className="operator-nav" aria-label="Điều hướng trang vận hành">
-        <a className="operator-back" href="/">← Trung tâm điều hành</a>
-        <a className="operator-back" href="/settings">Cấu hình vận hành →</a>
+        <a className="operator-back" href="/">
+          ← Trung tâm điều hành
+        </a>
+        <a className="operator-back" href="/settings">
+          Cấu hình vận hành →
+        </a>
       </nav>
       <section className="operator-card">
         <p className="operator-kicker">Kênh nhận tin thật</p>
         <h1>Kết nối tài khoản Zalo</h1>
         <p className="operator-lead">
-          ZCA chạy bằng tài khoản Zalo cá nhân. Phiên đăng nhập chỉ lưu trong volume riêng trên server;
-          mật khẩu và cookie không đi qua trình duyệt.
+          ZCA chạy bằng tài khoản Zalo cá nhân. Phiên đăng nhập chỉ lưu trong volume riêng trên
+          server; mật khẩu và cookie không đi qua trình duyệt.
         </p>
 
         <div className={`operator-status state-${status?.state ?? 'connecting'}`} role="status">
@@ -121,7 +137,9 @@ export default function ZaloLoginPage() {
         {error && <div className="error-banner">⚠ {error.message}</div>}
         {status?.error && <div className="error-banner">⚠ {status.error}</div>}
         {status?.channelMode === 'hybrid' && (
-          <div className={status.botIdentity?.state === 'ready' ? 'operator-callout' : 'error-banner'}>
+          <div
+            className={status.botIdentity?.state === 'ready' ? 'operator-callout' : 'error-banner'}
+          >
             Bot Zalo chính thức:{' '}
             {status.botIdentity?.state === 'ready'
               ? `${status.botIdentity.name ?? 'Bot'} · ID ${status.botIdentity.id}`
@@ -189,7 +207,9 @@ export default function ZaloLoginPage() {
         )}
 
         {status?.state === 'qr_scanned' && (
-          <div className="operator-callout">Đã nhận QR. Hãy bấm xác nhận đăng nhập trên điện thoại.</div>
+          <div className="operator-callout">
+            Đã nhận QR. Hãy bấm xác nhận đăng nhập trên điện thoại.
+          </div>
         )}
       </section>
 
@@ -198,8 +218,8 @@ export default function ZaloLoginPage() {
           <p className="operator-kicker">Privacy allowlist</p>
           <h2>Chọn nhóm được phép xử lý</h2>
           <p>
-            Mặc định hệ thống không đưa bất kỳ nhóm nào vào AI. Chọn tối đa 10 nhóm demo; các nhóm khác
-            bị bỏ qua trước khi lưu tin và trước khi gọi LLM.
+            Mặc định hệ thống không đưa bất kỳ nhóm nào vào AI. Chọn tối đa 10 nhóm demo; các nhóm
+            khác bị bỏ qua trước khi lưu tin và trước khi gọi LLM.
           </p>
           {groupsQuery.isLoading && <p>Đang lấy danh sách nhóm…</p>}
           <div className="group-picker">
@@ -213,7 +233,9 @@ export default function ZaloLoginPage() {
                 />
                 <span>
                   <strong>{group.name}</strong>
-                  <small>{group.memberCount} thành viên · {group.id}</small>
+                  <small>
+                    {group.memberCount} thành viên · {group.id}
+                  </small>
                 </span>
               </label>
             ))}
@@ -224,7 +246,7 @@ export default function ZaloLoginPage() {
               type="button"
               className="btn btn-primary"
               disabled={saveMutation.isPending}
-              onClick={() => saveMutation.mutate(selectedGroups)}
+              onClick={handleSaveGroups}
             >
               {saveMutation.isPending ? 'Đang lưu…' : 'Lưu và bắt đầu nhận tin'}
             </button>

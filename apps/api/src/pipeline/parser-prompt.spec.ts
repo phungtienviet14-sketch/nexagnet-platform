@@ -51,7 +51,7 @@ describe('buildSystemPrompt', () => {
     });
 
     expect(p).toContain('TIN DUOC REPLY: 10 Ghế Felix');
-    expect(p).toContain('LICH SU 1 (Meta HN): giao ve TN');
+    expect(p).toContain('LICH SU 1 [2026-08-12T02:01:00.000Z] (Meta HN): giao ve TN');
     expect(p).toContain('Context mo ho');
   });
 });

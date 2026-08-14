@@ -90,6 +90,51 @@ describe('ContentService', () => {
     expect(advice.missing).toContain('approved_faq_or_advice');
   });
 
+  it('allows approved text advice when optional image and catalog links are absent', async () => {
+    const repo = new InMemoryContentRepository({
+      provenance: [],
+      assets: [],
+      faqs: [
+        {
+          id: 'faq-princess',
+          externalId: 'faq-princess',
+          productSku: 'PRINCESS-EASYFILL',
+          question: 'Giới thiệu máy ép chậm Princess',
+          answer: 'Nội dung giới thiệu đã được duyệt.',
+          status: 'draft',
+          operatorEdited: false,
+        },
+      ],
+      advice: [],
+      links: [],
+      readiness: [],
+    });
+    const service = new ContentService(repo);
+    await service.reload();
+
+    const products = [
+      {
+        sku: 'PRINCESS-EASYFILL',
+        name: 'Máy ép chậm Princess Easy Fill',
+        aliases: ['máy ép chậm Princess'],
+      },
+    ];
+    const draft = service.productAdvice('giới thiệu sản phẩm Máy ép chậm Princess', products);
+    expect(draft.ready).toBe(false);
+    expect(draft.missing).toEqual(['approved_faq_or_advice']);
+
+    for (const status of ['reviewed', 'approved', 'active'] as const) {
+      await service.setStatus('faq', 'faq-princess', status);
+    }
+    const advice = service.productAdvice('giới thiệu sản phẩm Máy ép chậm Princess', products);
+
+    expect(advice.ready).toBe(true);
+    expect(advice.missing).toEqual([]);
+    expect(advice.text).toContain('Nội dung giới thiệu đã được duyệt');
+    expect(advice.image).toBeUndefined();
+    expect(advice.links).toBeUndefined();
+  });
+
   it('enforces review and approval before activation, while allowing unapprove', async () => {
     const repo = new InMemoryContentRepository({
       provenance: [],
@@ -122,7 +167,7 @@ describe('ContentService', () => {
     expect(service.snapshot().readiness[0]).toMatchObject({
       productSku: 'ELNI',
       ready: false,
-      missing: expect.arrayContaining(['active_image', 'active_catalog_or_video_link']),
+      missing: ['approved_faq_or_advice'],
     });
   });
 });

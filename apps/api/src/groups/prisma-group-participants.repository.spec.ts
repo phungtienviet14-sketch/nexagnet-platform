@@ -84,6 +84,96 @@ describe('PrismaGroupParticipantsRepository', () => {
     expect(tx.groupParticipant.updateMany).not.toHaveBeenCalled();
   });
 
+  it('keeps the classified participant when a new account reports a different routing UID', async () => {
+    const update = vi.fn(async () => undefined);
+    const create = vi.fn(async () => undefined);
+    const tx = {
+      group: { findUnique: vi.fn(async () => ({ id: 'group-db-1' })) },
+      groupParticipant: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'participant-classified',
+            globalId: 'stable-user-1',
+          })
+          .mockResolvedValueOnce(null),
+        update,
+        create,
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)),
+    } as unknown as PrismaService;
+
+    await new PrismaGroupParticipantsRepository(prisma).synchronize({
+      groupId: 'chat-from-account-2',
+      members: [
+        {
+          externalUserId: 'uid-from-account-2',
+          globalId: 'stable-user-1',
+          displayName: 'Khach A',
+        },
+      ],
+      complete: true,
+      syncedAt: '2026-08-14T01:00:00.000Z',
+    });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'participant-classified' },
+        data: expect.objectContaining({ externalUserId: 'uid-from-account-2' }),
+      }),
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('removes only an unclassified message-stream route row before rebinding the stable participant', async () => {
+    const update = vi.fn(async () => undefined);
+    const deleteParticipant = vi.fn(async () => undefined);
+    const tx = {
+      group: { findUnique: vi.fn(async () => ({ id: 'group-db-1' })) },
+      groupParticipant: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({ id: 'participant-stable', globalId: 'stable-user-1' })
+          .mockResolvedValueOnce({
+            id: 'participant-route-temp',
+            globalId: null,
+            source: 'message_stream',
+            customerRank: 'unknown',
+            operationalRole: 'unknown',
+            handlingMode: 'inherit_group',
+          }),
+        delete: deleteParticipant,
+        update,
+        create: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)),
+    } as unknown as PrismaService;
+
+    await new PrismaGroupParticipantsRepository(prisma).synchronize({
+      groupId: 'chat-from-account-2',
+      members: [
+        {
+          externalUserId: 'uid-from-account-2',
+          globalId: 'stable-user-1',
+          displayName: 'Khach A',
+        },
+      ],
+      complete: true,
+      syncedAt: '2026-08-14T01:00:00.000Z',
+    });
+
+    expect(deleteParticipant).toHaveBeenCalledWith({ where: { id: 'participant-route-temp' } });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'participant-stable' } }),
+    );
+  });
+
   it('fails sync before writes when the zca group is not mapped', async () => {
     const tx = {
       group: { findUnique: vi.fn(async () => null) },

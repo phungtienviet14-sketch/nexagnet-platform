@@ -67,11 +67,13 @@ export class PrismaMessagesRepository extends MessagesRepository {
     before: Date,
     excludeExternalMessageId: string,
     limit: number,
+    senderExternalId?: string,
   ): Promise<import('./messages.repository.js').StoredMessage[]> {
     const rows = await this.prisma.message.findMany({
       where: {
         platform,
         chatId,
+        ...(senderExternalId ? { senderExternalId } : {}),
         sentAt: { lte: before },
         NOT: { externalMessageId: excludeExternalMessageId },
       },
@@ -82,8 +84,19 @@ export class PrismaMessagesRepository extends MessagesRepository {
   }
 
   override async attachOrder(orderId: string, messageId: string): Promise<void> {
-    // updateMany: don khong duoc luu (vd cau hoi khong tao dong don) -> 0 dong, khong throw.
-    await this.prisma.order.updateMany({ where: { id: orderId }, data: { messageId } });
+    // Do not let a later message in a burst overwrite the first-message compatibility FK.
+    // The explicit join is the complete provenance source; messageId remains read-compatible.
+    const order = await this.prisma.order.findUnique({ where: { id: orderId }, select: { id: true } });
+    if (!order) return;
+    await this.prisma.orderMessage.upsert({
+      where: { orderId_messageId: { orderId, messageId } },
+      create: { orderId, messageId },
+      update: {},
+    });
+    await this.prisma.order.updateMany({
+      where: { id: orderId, messageId: null },
+      data: { messageId },
+    });
   }
 
   override async recordMedia(messageId: string, media: MessageMedia): Promise<void> {

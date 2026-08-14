@@ -15,7 +15,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('PrismaKnowledgeRepository (Po
     await prisma.$disconnect();
   });
 
-  it('loadSnapshot tra nguon su that da seed (19 SP, dai ly, nhom da map, glossary)', async () => {
+  it('loadSnapshot tra nguon su that da seed (19 SP, dai ly, glossary; group la runtime)', async () => {
     const snap = await repo.loadSnapshot();
     expect(snap.products.length).toBeGreaterThanOrEqual(19);
     expect(snap.dealers.length).toBeGreaterThanOrEqual(3);
@@ -25,8 +25,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('PrismaKnowledgeRepository (Po
     expect(snap.pricePeriod).toBeNull();
     expect(snap.prices).toEqual([]);
 
-    // Chi nhom DA MAP moi vao snapshot -> deu co dealerId (dung y "hop thu nhom chua map").
-    expect(snap.groups.length).toBeGreaterThan(0);
+    // Seed khong tao Group tu routing ID cua mot tai khoan Zalo. Neu runtime da phat hien/map nhom,
+    // snapshot chi tra nhom DA MAP va moi dong deu co dealerId; DB moi hoan toan co the la mang rong.
     expect(snap.groups.every((g) => Boolean(g.dealerId))).toBe(true);
   });
 });

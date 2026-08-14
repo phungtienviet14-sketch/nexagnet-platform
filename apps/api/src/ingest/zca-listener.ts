@@ -82,7 +82,8 @@ export class ZcaListener implements OnModuleInit {
     if (!this.guard.claim(id)) return;
 
     const result = await processWithRetry(
-      () => this.pipeline.intake(channelMessage, botName),
+      (attempt) =>
+        this.pipeline.intake(channelMessage, botName, { retryPersisted: attempt > 1 }),
       id,
       this.logger,
     );

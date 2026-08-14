@@ -67,9 +67,9 @@ describe('normalizeAllowedGroupIds', () => {
 
   it('tu choi id rong hoac vuot gioi han an toan', () => {
     expect(() => normalizeAllowedGroupIds([''])).toThrow('ID nhom');
-    expect(() => normalizeAllowedGroupIds(Array.from({ length: 11 }, (_, index) => `group-${index}`))).toThrow(
-      '10 nhom',
-    );
+    expect(() =>
+      normalizeAllowedGroupIds(Array.from({ length: 11 }, (_, index) => `group-${index}`)),
+    ).toThrow('10 nhom');
   });
 });
 
@@ -128,7 +128,7 @@ describe('ZaloUserClient runtime', () => {
     expect(zcaMocks.loginQR).not.toHaveBeenCalled();
   });
 
-  it('thu phien cu mot lan, roi tao QR moi theo thao tac ro rang ma van giu allowlist', async () => {
+  it('thu phien cu mot lan, roi tao QR moi va cach ly allowlist cua tai khoan cu', async () => {
     await writeFile(
       join(runtimeDir, 'zalo-cred.json'),
       JSON.stringify({ imei: 'stale-imei', userAgent: 'UA', cookie: [] }),
@@ -170,7 +170,10 @@ describe('ZaloUserClient runtime', () => {
     expect(zcaMocks.login).toHaveBeenCalledTimes(1);
     expect(zcaMocks.loginQR).toHaveBeenCalledTimes(1);
     expect(client.qrDataUrl()).toBe('data:image/png;base64,fresh-qr');
-    expect(client.status().allowedGroupIds).toEqual(['g1']);
+    expect(client.status().allowedGroupIds).toEqual([]);
+    await expect(readFile(join(runtimeDir, 'zalo-allowed-groups.json'), 'utf8')).resolves.toBe(
+      '[]',
+    );
     await expect(readFile(join(runtimeDir, 'zalo-cred.json'), 'utf8')).rejects.toMatchObject({
       code: 'ENOENT',
     });
@@ -189,8 +192,8 @@ describe('ZaloUserClient runtime', () => {
         removedsGroup: [],
         unchangedsGroup: [],
         gridInfoMap: {
-          g1: { groupId: 'g1', name: 'Nhóm demo', totalMember: 12 },
-          g2: { groupId: 'g2', name: 'Nhóm riêng', totalMember: 3 },
+          g1: { groupId: 'g1', globalId: 'global-group-1', name: 'Nhóm demo', totalMember: 12 },
+          g2: { groupId: 'g2', globalId: 'global-group-2', name: 'Nhóm riêng', totalMember: 3 },
         },
       })),
     } as unknown as API;
@@ -198,7 +201,12 @@ describe('ZaloUserClient runtime', () => {
       if (callback) callbacks.push(callback);
       callback?.({
         type: LoginQRCallbackEventType.QRCodeGenerated,
-        data: { code: 'code', image: 'base64qr', options: { enabledCheckOCR: false, enabledMultiLayer: false }, token: 'token' },
+        data: {
+          code: 'code',
+          image: 'base64qr',
+          options: { enabledCheckOCR: false, enabledMultiLayer: false },
+          token: 'token',
+        },
         actions: { saveToFile: vi.fn(async () => undefined), retry: vi.fn(), abort: vi.fn() },
       });
       return loginPending;
@@ -215,14 +223,16 @@ describe('ZaloUserClient runtime', () => {
 
     await client.setAllowedGroupIds(['g1']);
     expect(client.isGroupAllowed('g1')).toBe(true);
-    expect(JSON.parse(await readFile(join(runtimeDir, 'zalo-allowed-groups.json'), 'utf8'))).toEqual(['g1']);
+    expect(
+      JSON.parse(await readFile(join(runtimeDir, 'zalo-allowed-groups.json'), 'utf8')),
+    ).toEqual(['g1']);
 
     finishLogin(fakeApi);
     await vi.waitFor(() => expect(client.status().state).toBe('ready'));
     const groups = await client.listGroups();
     expect(groups).toEqual([
-      { id: 'g1', name: 'Nhóm demo', memberCount: 12, allowed: true },
-      { id: 'g2', name: 'Nhóm riêng', memberCount: 3, allowed: false },
+      { id: 'g1', globalId: 'global-group-1', name: 'Nhóm demo', memberCount: 12, allowed: true },
+      { id: 'g2', globalId: 'global-group-2', name: 'Nhóm riêng', memberCount: 3, allowed: false },
     ]);
     await client.sendMessage('g1', 'xin chao', ThreadType.Group);
     expect(fakeApi.sendMessage).toHaveBeenCalledWith('xin chao', 'g1', ThreadType.Group);
@@ -233,7 +243,9 @@ describe('ZaloUserClient runtime', () => {
   it('ha trang thai khi listener mat ket noi va chi ready lai sau connected', async () => {
     const handlers = new Map<string, (...args: unknown[]) => void>();
     const listener = {
-      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => handlers.set(event, handler)),
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) =>
+        handlers.set(event, handler),
+      ),
       start: vi.fn(),
       stop: vi.fn(),
     };
@@ -290,8 +302,12 @@ describe('ZaloUserClient runtime', () => {
 
     expect(client.status()).toMatchObject({ state: 'logged_out', allowedGroupIds: [] });
     expect(listener.stop).toHaveBeenCalled();
-    await expect(readFile(join(runtimeDir, 'zalo-cred.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(JSON.parse(await readFile(join(runtimeDir, 'zalo-allowed-groups.json'), 'utf8'))).toEqual([]);
+    await expect(readFile(join(runtimeDir, 'zalo-cred.json'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect(
+      JSON.parse(await readFile(join(runtimeDir, 'zalo-allowed-groups.json'), 'utf8')),
+    ).toEqual([]);
   });
 
   it('chi fetch thanh vien khi da dang nhap va nhom nam trong allowlist', async () => {
@@ -343,7 +359,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -361,7 +381,18 @@ describe('ZaloUserClient runtime', () => {
   // Nhom that trong pilot (04/08/2026) tra memberIds RONG va do thanh vien vao currentMems.
   // Truoc khi sua, dong bo tra 0 nguoi nhung van bao complete -> hong am tham.
   it('lay thanh vien tu currentMems khi Zalo tra memberIds rong', async () => {
-    const getGroupMembersInfo = vi.fn();
+    const getGroupMembersInfo = vi.fn(async () => ({
+      profiles: {
+        'user-1': {
+          id: 'user-1',
+          globalId: 'stable-user-1',
+          displayName: ' Chi Phuong ',
+          zaloName: ' phuong ',
+          avatar: ' https://img.test/1.jpg ',
+        },
+      },
+      unchangeds_profile: [],
+    }));
     const fakeApi = {
       listener: connectedListener(),
       getOwnId: vi.fn(() => 'own-uid'),
@@ -376,7 +407,12 @@ describe('ZaloUserClient runtime', () => {
             currentMems: [
               { id: 'own-uid', dName: 'Nhan Vien AI', zaloName: 'nhanvienai', avatar: '' },
               { id: 'official-bot-1', dName: 'Bot', zaloName: 'bot', avatar: '' },
-              { id: 'user-1', dName: ' Chi Phuong ', zaloName: ' phuong ', avatar: ' https://img.test/1.jpg ' },
+              {
+                id: 'user-1',
+                dName: ' Chi Phuong ',
+                zaloName: ' phuong ',
+                avatar: ' https://img.test/1.jpg ',
+              },
             ],
           },
         },
@@ -388,7 +424,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -397,12 +437,13 @@ describe('ZaloUserClient runtime', () => {
 
     const result = await client.fetchGroupMembers('group-1', ['official-bot-1']);
 
-    // Ho so da nam san trong currentMems -> khong duoc goi them API lay ho so.
-    expect(getGroupMembersInfo).not.toHaveBeenCalled();
+    // currentMems khong co globalId -> enrich mot batch de identity khong doi theo tai khoan.
+    expect(getGroupMembersInfo).toHaveBeenCalledWith(['user-1']);
     expect(result).toMatchObject({ complete: true, expectedCount: 1, failedMemberIds: [] });
     expect(result.members).toEqual([
       {
         externalUserId: 'user-1',
+        globalId: 'stable-user-1',
         displayName: 'Chi Phuong',
         zaloName: 'phuong',
         avatarUrl: 'https://img.test/1.jpg',
@@ -430,7 +471,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -471,7 +516,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -508,7 +557,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -554,7 +607,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -597,7 +654,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -621,7 +682,13 @@ describe('ZaloUserClient runtime', () => {
       })),
       getGroupMembersInfo: vi.fn(async () => ({
         profiles: {
-          'user-1': { id: 'user-1', displayName: ' ', zaloName: ' Zalo User ', avatar: 'file:///unsafe' },
+          'user-1': {
+            id: 'user-1',
+            globalId: 'stable-user-1',
+            displayName: ' ',
+            zaloName: ' Zalo User ',
+            avatar: 'file:///unsafe',
+          },
         },
         unchangeds_profile: [],
       })),
@@ -631,7 +698,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -643,21 +714,36 @@ describe('ZaloUserClient runtime', () => {
       complete: true,
       expectedCount: 1,
       failedMemberIds: [],
-      members: [{ externalUserId: 'user-1', displayName: 'Zalo User', zaloName: 'Zalo User' }],
+      members: [
+        {
+          externalUserId: 'user-1',
+          globalId: 'stable-user-1',
+          displayName: 'Zalo User',
+          zaloName: 'Zalo User',
+        },
+      ],
     });
   });
 
   it('fails the whole snapshot before persistence when group metadata is missing', async () => {
     const fakeApi = {
       listener: connectedListener(),
-      getGroupInfo: vi.fn(async () => ({ removedsGroup: [], unchangedsGroup: [], gridInfoMap: {} })),
+      getGroupInfo: vi.fn(async () => ({
+        removedsGroup: [],
+        unchangedsGroup: [],
+        gridInfoMap: {},
+      })),
     } as unknown as API;
     await writeFile(
       join(runtimeDir, 'zalo-cred.json'),
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -699,7 +785,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -742,7 +832,11 @@ describe('ZaloUserClient runtime', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
     zcaMocks.login.mockResolvedValue(fakeApi);
     const { ZaloUserClient } = await import('./zalo-user.client.js');
     const client = new ZaloUserClient();
@@ -780,7 +874,11 @@ describe('ZaloUserClient.fetchGroupMembers — duong link moi', () => {
       JSON.stringify({ imei: 'imei-test', userAgent: 'UA', cookie: [] }),
       'utf8',
     );
-    await writeFile(join(runtimeDir, 'zalo-allowed-groups.json'), JSON.stringify(['group-1']), 'utf8');
+    await writeFile(
+      join(runtimeDir, 'zalo-allowed-groups.json'),
+      JSON.stringify(['group-1']),
+      'utf8',
+    );
   });
 
   afterEach(async () => {
@@ -821,7 +919,12 @@ describe('ZaloUserClient.fetchGroupMembers — duong link moi', () => {
     const getGroupLinkInfo = vi.fn(async (_payload: { link: string }) => ({
       groupId: 'group-1',
       currentMems: [
-        { id: 'user-1', dName: ' Chi Phuong ', zaloName: ' phuong ', avatar: 'https://img.test/1.jpg' },
+        {
+          id: 'user-1',
+          dName: ' Chi Phuong ',
+          zaloName: ' phuong ',
+          avatar: 'https://img.test/1.jpg',
+        },
         { id: 'user-2', dName: 'Anh Nam', zaloName: 'nam', avatar: '' },
       ],
       hasMoreMember: 0,

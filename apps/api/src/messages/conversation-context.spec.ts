@@ -75,4 +75,31 @@ describe('ConversationContextBuilder', () => {
     expect(context.recentMessages.reduce((sum, row) => sum + row.text.length, 0)).toBeLessThanOrEqual(100);
     expect(context.recentMessages).toHaveLength(1);
   });
+
+  it('chi dua lich su cua dung thanh vien va loai cac tin dang nam trong burst', async () => {
+    const repository = new InMemoryMessagesRepository();
+    await repository.save(message('mine-before', '4 ELNI', '2026-08-12T02:00:00.000Z'));
+    for (let index = 1; index <= 10; index += 1) {
+      await repository.save(
+        message(
+          `other-member-${index}`,
+          '20 FELIX',
+          `2026-08-12T02:00:${String(index).padStart(2, '0')}.000Z`,
+          { senderExternalId: 'dealer-2', senderDisplayName: 'Thanh vien khac' },
+        ),
+      );
+    }
+    await repository.save(message('burst-part', 'lay VAT', '2026-08-12T02:00:11.000Z'));
+
+    const context = await new ConversationContextBuilder(repository).build(
+      message('current', 'doi y', '2026-08-12T02:00:12.000Z'),
+      ['burst-part'],
+    );
+
+    expect(context.recentMessages.map((row) => row.externalMessageId)).toEqual(['mine-before']);
+    expect(context.participants).toEqual([
+      { externalId: 'dealer-1', displayName: 'Meta HN' },
+    ]);
+  });
+
 });

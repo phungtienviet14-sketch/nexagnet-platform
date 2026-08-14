@@ -31,6 +31,7 @@ const isoTimestampSchema = z.string().datetime({ offset: true });
 export const groupParticipantProfileSchema = z
   .object({
     externalUserId: participantIdSchema,
+    globalId: participantIdSchema.optional(),
     displayName: z.string().trim().min(1).max(500),
     zaloName: optionalProfileTextSchema,
     avatarUrl: z.url().max(2_048).optional(),
@@ -42,6 +43,7 @@ export const groupParticipantSchema = z
     id: participantIdSchema,
     groupId: participantIdSchema,
     externalUserId: participantIdSchema,
+    globalId: participantIdSchema.optional(),
     displayName: z.string().trim().min(1).max(500),
     zaloName: optionalProfileTextSchema,
     avatarUrl: z.url().max(2_048).optional(),

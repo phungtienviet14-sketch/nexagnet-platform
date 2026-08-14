@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   BotPoller,
   isAllowedBotMessage,
@@ -25,6 +25,118 @@ describe('BotPoller observability', () => {
       lastErrorAt: null,
       lastError: null,
     });
+  });
+
+  it('dua cac tin trong cung mot batch vao pipeline dong thoi de burst co the gom tin', async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstPending = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const started: string[] = [];
+    const intake = vi.fn(async (message: { externalMessageId: string }) => {
+      started.push(message.externalMessageId);
+      if (message.externalMessageId === 'batch-1') await firstPending;
+      return { outcome: 'skipped_unmapped_group' as const };
+    });
+    const poller = new BotPoller(
+      { intake } as unknown as ConstructorParameters<typeof BotPoller>[0],
+      {} as ConstructorParameters<typeof BotPoller>[1],
+    );
+    const updates = [
+      {
+        message: {
+          message_id: 'batch-1',
+          text: 'gui 4 quat tich dine',
+          from: { id: 'member-1', is_bot: false },
+          chat: { id: 'group-1', chat_type: 'GROUP' },
+        },
+      },
+      {
+        message: {
+          message_id: 'batch-2',
+          text: 'lay vat',
+          from: { id: 'member-1', is_bot: false },
+          chat: { id: 'group-1', chat_type: 'GROUP' },
+        },
+      },
+    ];
+
+    const batch = (
+      poller as unknown as {
+        processUpdates(
+          raw: unknown,
+          botName: string,
+          autoAck: 'on' | 'off',
+          mode: 'bot',
+        ): Promise<void>;
+      }
+    ).processUpdates(updates, 'Orders', 'off', 'bot');
+    await vi.waitFor(() => expect(started).toEqual(['batch-1', 'batch-2']));
+    releaseFirst?.();
+    await batch;
+
+    expect(intake).toHaveBeenCalledTimes(2);
+  });
+
+  it('tiep tuc long-poll khi batch truoc con cho burst, de gom duoc tin o poll ke tiep', async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstPending = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const stopPolling = vi.fn();
+    const intake = vi.fn(async (message: { externalMessageId: string }) => {
+      if (message.externalMessageId === 'poll-1') await firstPending;
+      if (message.externalMessageId === 'poll-2') {
+        stopPolling();
+      }
+      return { outcome: 'skipped_unmapped_group' as const };
+    });
+    const poller = new BotPoller(
+      { intake } as unknown as ConstructorParameters<typeof BotPoller>[0],
+      {} as ConstructorParameters<typeof BotPoller>[1],
+    );
+    const internals = poller as unknown as {
+      running: boolean;
+      fetchUpdates(token: string): Promise<unknown>;
+      loop(
+        token: string,
+        botName: string,
+        autoAck: 'on' | 'off',
+        mode: 'bot',
+      ): Promise<void>;
+    };
+    stopPolling.mockImplementation(() => {
+      internals.running = false;
+      releaseFirst?.();
+    });
+    const update = (id: string, text: string) => ({
+      message: {
+        message_id: id,
+        text,
+        from: { id: 'member-1', is_bot: false },
+        chat: { id: 'group-1', chat_type: 'GROUP' },
+      },
+    });
+    const fetchUpdates = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, result: [update('poll-1', 'gui 4 quat')] })
+      .mockResolvedValueOnce({ ok: true, result: [update('poll-2', 'lay vat')] });
+    internals.fetchUpdates = fetchUpdates;
+    internals.running = true;
+
+    const loop = internals.loop('token', 'Orders', 'off', 'bot');
+    let polledAgainBeforeRelease = false;
+    try {
+      await vi.waitFor(() => expect(fetchUpdates).toHaveBeenCalledTimes(2), { timeout: 100 });
+      polledAgainBeforeRelease = true;
+    } finally {
+      internals.running = false;
+      releaseFirst?.();
+    }
+    await loop;
+
+    expect(polledAgainBeforeRelease).toBe(true);
+    expect(intake).toHaveBeenCalledTimes(2);
   });
 });
 

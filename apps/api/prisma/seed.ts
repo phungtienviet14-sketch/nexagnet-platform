@@ -13,7 +13,11 @@ const prisma = new PrismaClient();
 async function main(): Promise<void> {
   for (const p of SEED.products) {
     const data = { name: p.name, aliases: p.aliases, unit: p.unit, description: p.description };
-    await prisma.product.upsert({ where: { sku: p.sku }, create: { sku: p.sku, ...data }, update: data });
+    await prisma.product.upsert({
+      where: { sku: p.sku },
+      create: { sku: p.sku, ...data },
+      update: data,
+    });
   }
   const period = SEED.pricePeriod;
   if (SEED.prices.length > 0 && (!period?.validMonth || period.status !== 'active')) {
@@ -47,7 +51,11 @@ async function main(): Promise<void> {
   }
   for (const d of SEED.dealers) {
     const data = { name: d.name, aliases: d.aliases, tier: d.tier, defaultPolicy: d.defaultPolicy };
-    await prisma.dealer.upsert({ where: { id: d.id }, create: { id: d.id, ...data }, update: data });
+    await prisma.dealer.upsert({
+      where: { id: d.id },
+      create: { id: d.id, ...data },
+      update: data,
+    });
   }
   for (const o of SEED.priceOverrides) {
     await prisma.dealerPriceOverride.upsert({
@@ -56,25 +64,9 @@ async function main(): Promise<void> {
       update: { price: o.price },
     });
   }
-  for (const g of SEED.groups) {
-    // Update CO Y KHONG dung toi status/dealerId/source. Truoc 05/08/2026 no ghi de
-    // `status: 'mapped'` cho moi nhom trong SEED, nen chay lai seed la nhung nhom nguoi van hanh
-    // da go (status=ignored) song day va quay lai bang — dung hai nhom `source=seed` con sot tu
-    // dot test truoc. Quyet dinh cua nguoi van hanh phai thang du lieu bootstrap.
-    await prisma.group.upsert({
-      where: { platform_chatId: { platform: 'zalo', chatId: g.chatId } },
-      create: {
-        platform: 'zalo',
-        chatId: g.chatId,
-        name: g.name,
-        branch: g.branch,
-        dealerId: g.dealerId,
-        status: 'mapped' as const,
-        source: 'seed',
-      },
-      update: { name: g.name, branch: g.branch },
-    });
-  }
+  // KHONG seed Group vao Postgres: `SEED.groups[].chatId` chi la routing ID cua tai khoan Zalo
+  // dung cho demo memory, khong phai identity ben vung. Runtime tao/doi soat nhom tu zca va luu
+  // `globalId`; neu seed lai cac chatId cu thi moi lan deploy co the hoi sinh nhom trung.
   for (const gl of SEED.glossary) {
     await prisma.glossaryEntry.upsert({
       where: { term: gl.term },
@@ -83,7 +75,7 @@ async function main(): Promise<void> {
     });
   }
   console.log(
-    `Seeded Postgres: ${SEED.products.length} SP, ${SEED.dealers.length} dai ly, ${SEED.groups.length} nhom, ${SEED.glossary.length} glossary.`,
+    `Seeded Postgres: ${SEED.products.length} SP, ${SEED.dealers.length} dai ly, 0 nhom runtime, ${SEED.glossary.length} glossary.`,
   );
 }
 

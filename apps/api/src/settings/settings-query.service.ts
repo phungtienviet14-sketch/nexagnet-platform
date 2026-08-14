@@ -7,10 +7,7 @@ import { PrismaService } from '../config/prisma.service.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { RuleConfigService } from '../rule-config/rule-config.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
-import {
-  SOURCE_TRUTH_RESOURCES,
-  type SourceTruthResource,
-} from './source-truth-write.service.js';
+import { SOURCE_TRUTH_RESOURCES, type SourceTruthResource } from './source-truth-write.service.js';
 
 @Injectable()
 export class SettingsQueryService {
@@ -97,6 +94,7 @@ export class SettingsQueryService {
       select: {
         id: true,
         chatId: true,
+        globalId: true,
         name: true,
         status: true,
         dealerId: true,
@@ -105,8 +103,13 @@ export class SettingsQueryService {
       },
     });
     const storedByChat = new Map(stored.map((group) => [group.chatId, group]));
+    const storedByGlobalId = new Map(
+      stored.flatMap((group) => (group.globalId ? [[group.globalId, group] as const] : [])),
+    );
     const liveGroups = zcaGroups.map((group) => {
-      const row = storedByChat.get(group.id);
+      const row =
+        (group.globalId ? storedByGlobalId.get(group.globalId) : undefined) ??
+        storedByChat.get(group.id);
       const participants = row?.participants ?? [];
       const lastSyncedAt = participants
         .map((participant) => participant.syncedAt)
@@ -125,8 +128,14 @@ export class SettingsQueryService {
       };
     });
     const liveChatIds = new Set(zcaGroups.map((group) => group.id));
+    const liveGlobalIds = new Set(
+      zcaGroups.flatMap((group) => (group.globalId ? [group.globalId] : [])),
+    );
     const storedOnly = stored
-      .filter((group) => !liveChatIds.has(group.chatId))
+      .filter(
+        (group) =>
+          !liveChatIds.has(group.chatId) && !(group.globalId && liveGlobalIds.has(group.globalId)),
+      )
       .map((group) => {
         const lastSyncedAt = group.participants
           .map((participant) => participant.syncedAt)
@@ -142,7 +151,8 @@ export class SettingsQueryService {
           dealerId: group.dealerId ?? undefined,
           dealerName: group.dealer?.name ?? mapping.get(group.chatId)?.dealerName ?? undefined,
           activeParticipants: group.participants.filter((participant) => participant.active).length,
-          inactiveParticipants: group.participants.filter((participant) => !participant.active).length,
+          inactiveParticipants: group.participants.filter((participant) => !participant.active)
+            .length,
           lastSyncedAt: lastSyncedAt?.toISOString(),
         };
       });
@@ -175,7 +185,9 @@ export class SettingsQueryService {
             })),
           );
       case 'overrides':
-        return this.prisma.dealerPriceOverride.findMany({ orderBy: [{ dealerId: 'asc' }, { sku: 'asc' }] });
+        return this.prisma.dealerPriceOverride.findMany({
+          orderBy: [{ dealerId: 'asc' }, { sku: 'asc' }],
+        });
       case 'glossary':
         return this.prisma.glossaryEntry.findMany({ orderBy: { term: 'asc' } });
     }

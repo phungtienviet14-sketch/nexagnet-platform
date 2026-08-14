@@ -1,11 +1,5 @@
 export type ZaloConnectionState =
-  | 'disabled'
-  | 'logged_out'
-  | 'connecting'
-  | 'qr_ready'
-  | 'qr_scanned'
-  | 'ready'
-  | 'error';
+  'disabled' | 'logged_out' | 'connecting' | 'qr_ready' | 'qr_scanned' | 'ready' | 'error';
 
 export interface ZaloStatus {
   channelMode: 'mock' | 'bot' | 'zca' | 'hybrid';
@@ -24,9 +18,39 @@ export interface ZaloStatus {
 
 export interface ZaloGroup {
   id: string;
+  globalId?: string;
   name: string;
   memberCount: number;
   allowed: boolean;
+  legacyCandidate?: {
+    groupId: string;
+    chatId: string;
+    name: string;
+    dealerName?: string;
+  };
+}
+
+export interface ZaloGroupIdentityLink {
+  currentChatId: string;
+  existingGroupId: string;
+}
+
+export function confirmedLegacyGroupLinks(
+  groups: readonly ZaloGroup[],
+  selectedGroupIds: readonly string[],
+  confirm: (message: string) => boolean,
+): ZaloGroupIdentityLink[] {
+  const selected = new Set(selectedGroupIds);
+  return groups.flatMap((group) => {
+    const candidate = group.legacyCandidate;
+    if (!selected.has(group.id) || !candidate) return [];
+    const accepted = confirm(
+      `“${group.name}” có vẻ là nhóm đã cấu hình cho ${candidate.dealerName ?? 'đại lý cũ'}.\n\n` +
+        `ID tài khoản trước: ${candidate.chatId}\nID tài khoản hiện tại: ${group.id}\n\n` +
+        'Liên kết hai ID này thành cùng một nhóm? Cấu hình đại lý và lịch sử cũ sẽ được giữ nguyên.',
+    );
+    return accepted ? [{ currentChatId: group.id, existingGroupId: candidate.groupId }] : [];
+  });
 }
 
 const STATE_LABELS: Record<ZaloConnectionState, string> = {

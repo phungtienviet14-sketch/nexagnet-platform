@@ -1,0 +1,37 @@
+{
+  "source": {
+    "kind": "local_manifest",
+    "sourceId": "ultty-demo-product-advice",
+    "locator": "tenants/ultty/data/demo-content-manifest.json",
+    "version": "2026-08-14"
+  },
+  "assets": [],
+  "faqs": [
+    {
+      "externalId": "faq:demo:princess-easyfill:001",
+      "productSku": "PRINCESS-EASYFILL",
+      "question": "Giới thiệu sản phẩm Máy ép chậm Princess Easy Fill",
+      "answer": "[DỮ LIỆU DEMO — CHƯA ĐƯỢC KHÁCH PHÊ DUYỆT] Máy ép chậm Princess Easy Fill có thiết kế miệng nạp lớn, phù hợp để ép chậm và giảm lượng bã trong quá trình sử dụng."
+    },
+    {
+      "externalId": "faq:demo:princess-easyfill:002",
+      "productSku": "PRINCESS-EASYFILL",
+      "question": "Điểm nổi bật của Máy ép chậm Princess Easy Fill là gì?",
+      "answer": "[DỮ LIỆU DEMO — CHƯA ĐƯỢC KHÁCH PHÊ DUYỆT] Điểm nổi bật dùng để thử luồng tư vấn là miệng nạp lớn và khả năng ép ít bã. Vui lòng không dùng câu này làm nội dung bán hàng thật trước khi khách duyệt."
+    },
+    {
+      "externalId": "faq:demo:princess-12l:001",
+      "productSku": "PRINCESS-12L",
+      "question": "Giới thiệu Nồi chiên không dầu Princess 12L",
+      "answer": "[DỮ LIỆU DEMO — CHƯA ĐƯỢC KHÁCH PHÊ DUYỆT] Nồi chiên không dầu Princess có dung tích 12 lít, khoang lớn và nhiều chế độ để thử luồng giới thiệu sản phẩm."
+    },
+    {
+      "externalId": "faq:demo:aroma:001",
+      "productSku": "AROMA",
+      "question": "Giới thiệu Máy khuếch tán tinh dầu ULTTY AROMA",
+      "answer": "[DỮ LIỆU DEMO — CHƯA ĐƯỢC KHÁCH PHÊ DUYỆT] ULTTY AROMA là máy khuếch tán tinh dầu, dùng để tạo hương và bổ sung độ ẩm nhẹ; nội dung này chỉ phục vụ kiểm thử."
+    }
+  ],
+  "advice": [],
+  "links": []
+}

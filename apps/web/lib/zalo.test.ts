@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ZALO_RISK_ACKNOWLEDGEMENTS,
+  confirmedLegacyGroupLinks,
   zaloLoginAvailability,
   zaloStateLabel,
   type ZaloStatus,
@@ -21,6 +22,56 @@ describe('zaloStateLabel', () => {
   it('khong mo ta ready thanh mock', () => {
     expect(zaloStateLabel('ready')).toContain('Đã kết nối');
     expect(zaloStateLabel('ready').toLowerCase()).not.toContain('mock');
+  });
+});
+
+describe('confirmedLegacyGroupLinks', () => {
+  it('only links a legacy group after the operator confirms the exact old and new IDs', () => {
+    const confirm = vi.fn(() => true);
+    const links = confirmedLegacyGroupLinks(
+      [
+        {
+          id: 'chat-new',
+          globalId: 'stable-1',
+          name: 'Nhóm đại lý An',
+          memberCount: 3,
+          allowed: false,
+          legacyCandidate: {
+            groupId: 'group-db-1',
+            chatId: 'chat-old',
+            name: 'Nhóm đại lý An',
+            dealerName: 'Đại lý An',
+          },
+        },
+      ],
+      ['chat-new'],
+      confirm,
+    );
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/chat-old[\s\S]*chat-new/));
+    expect(links).toEqual([{ currentChatId: 'chat-new', existingGroupId: 'group-db-1' }]);
+  });
+
+  it('does not link when the operator declines', () => {
+    expect(
+      confirmedLegacyGroupLinks(
+        [
+          {
+            id: 'chat-new',
+            name: 'Nhóm',
+            memberCount: 3,
+            allowed: false,
+            legacyCandidate: {
+              groupId: 'group-db-1',
+              chatId: 'chat-old',
+              name: 'Nhóm',
+            },
+          },
+        ],
+        ['chat-new'],
+        () => false,
+      ),
+    ).toEqual([]);
   });
 });
 

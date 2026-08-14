@@ -28,6 +28,7 @@ import { MessageGuard, processWithRetry } from './message-guard.js';
 
 /** Tin auto-ack khi LLM khong hieu (intent=Khac). Gan them AUTO_LABEL khi gui. */
 export const AUTO_ACK_TEXT = 'Đã ghi nhận, Sale sẽ phản hồi anh/chị sớm ạ';
+const MAX_IN_FLIGHT_BATCHES = 8;
 
 /**
  * Chi auto-ack khi: bat cong tac (AUTO_ACK=on) VA intent la 'khac' (LLM khong hieu).
@@ -148,6 +149,7 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('BotPoller');
   private running = false;
   private readonly guard = new MessageGuard();
+  private readonly inFlightBatches = new Set<Promise<void>>();
   private telemetry: BotPollerStatus = {
     state: 'disabled',
     transport: 'long_poll',
@@ -178,9 +180,10 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`BOT_MODE=on -> bat dau long polling getUpdates. Auto-ack=${env.AUTO_ACK}.`);
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     this.running = false;
     this.telemetry = { ...this.telemetry, state: 'disabled' };
+    await Promise.allSettled([...this.inFlightBatches]);
   }
 
   status(): BotPollerStatus {
@@ -195,7 +198,7 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     while (this.running) {
       try {
-        const res = await callBotApi(token, 'getUpdates', { timeout: 20 });
+        const res = await this.fetchUpdates(token);
         if (!res.ok) {
           if (res.error_code === 408) {
             // Long-poll timeout rong la heartbeat THANH CONG: API Bot da nhan request va khong co
@@ -210,54 +213,101 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
           continue;
         }
         this.recordPollSuccess();
-        for (const update of normalizeUpdates(res.result)) {
-          const message = updateToChannelMessage(update);
-          if (!message) continue;
-          this.telemetry = { ...this.telemetry, received: this.telemetry.received + 1 };
-          const allowedGroupIds = this.zca?.status().allowedGroupIds ?? [];
-          const accepted = shouldAcceptBotMessage(message, {
-            mode,
-            allowlistActive: allowedGroupIds.length > 0,
-            isAllowed: (chatId) => allowedGroupIds.includes(chatId),
-          });
-          if (!accepted) {
-            this.logger.warn(
-              `Bo qua tin Bot Platform (khong phai nhom hoac ngoai allowlist): ${message.externalChatId}`,
-            );
-            continue;
-          }
-          const id = message.externalMessageId;
-          if (!this.guard.claim(id)) continue;
-
-          const result = await processWithRetry(
-            () => this.pipeline.intake(message, botName),
-            id,
-            this.logger,
-          );
-          if (!result) {
-            // That bai het luot -> KHONG danh dau. Tin con duong chay lai (khong nuot don im lang).
-            this.guard.release(id);
-            this.recordFailure(`Pipeline that bai sau retry: ${id}`);
-            continue;
-          }
-          // Bo qua CO CHU Y (da luu chua map / trung / thanh vien ignore) van la "xong".
-          this.guard.complete(id);
-          this.telemetry = { ...this.telemetry, processed: this.telemetry.processed + 1 };
-          if (result.outcome !== 'processed') {
-            this.logger.log(`Tin ${id} -> ${result.outcome} (khong tao don)`);
-            continue;
-          }
-          this.logger.log(`Da xu ly tin ${id} -> intent=${result.view.intent}`);
-          if (shouldAutoAck(result.view.intent, autoAck)) {
-            await this.sendAutoAck(message.externalChatId);
-          }
-        }
+        this.startUpdateBatch(res.result, botName, autoAck, mode);
+        await this.waitForProcessingCapacity();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.recordFailure(message);
         this.logger.warn(`Loi mang getUpdates: ${message}`);
         await sleep(3000);
       }
+    }
+  }
+
+  private fetchUpdates(token: string) {
+    return callBotApi(token, 'getUpdates', { timeout: 20 });
+  }
+
+  private startUpdateBatch(
+    raw: unknown,
+    botName: string,
+    autoAck: 'on' | 'off',
+    mode: AppEnv['CHANNEL_MODE'],
+  ): void {
+    const task = this.processUpdates(raw, botName, autoAck, mode).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.recordFailure(`Xu ly batch Bot that bai: ${message}`);
+      this.logger.warn(`Xu ly batch Bot that bai: ${message}`);
+    });
+    this.inFlightBatches.add(task);
+    void task.finally(() => this.inFlightBatches.delete(task));
+  }
+
+  private async waitForProcessingCapacity(): Promise<void> {
+    if (this.inFlightBatches.size < MAX_IN_FLIGHT_BATCHES) return;
+    await Promise.race(this.inFlightBatches);
+  }
+
+  /**
+   * Bat dau xu ly moi update trong cung mot lan poll ma khong cho tin truoc ket thuc.
+   * Day chi la dieu phoi co hoc: Pipeline/LLM van la noi hieu cac tin lien tiep co bo sung
+   * hay thay doi y dinh hay khong.
+   */
+  private async processUpdates(
+    raw: unknown,
+    botName: string,
+    autoAck: 'on' | 'off',
+    mode: AppEnv['CHANNEL_MODE'],
+  ): Promise<void> {
+    const allowedGroupIds = this.zca?.status().allowedGroupIds ?? [];
+    const tasks = normalizeUpdates(raw).map(async (update) => {
+      const message = updateToChannelMessage(update);
+      if (!message) return;
+      this.telemetry = { ...this.telemetry, received: this.telemetry.received + 1 };
+      const accepted = shouldAcceptBotMessage(message, {
+        mode,
+        allowlistActive: allowedGroupIds.length > 0,
+        isAllowed: (chatId) => allowedGroupIds.includes(chatId),
+      });
+      if (!accepted) {
+        this.logger.warn(
+          `Bo qua tin Bot Platform (khong phai nhom hoac ngoai allowlist): ${message.externalChatId}`,
+        );
+        return;
+      }
+      await this.processAcceptedMessage(message, botName, autoAck);
+    });
+    await Promise.all(tasks);
+  }
+
+  private async processAcceptedMessage(
+    message: ChannelMessage,
+    botName: string,
+    autoAck: 'on' | 'off',
+  ): Promise<void> {
+    const id = message.externalMessageId;
+    if (!this.guard.claim(id)) return;
+    const result = await processWithRetry(
+      (attempt) => this.pipeline.intake(message, botName, { retryPersisted: attempt > 1 }),
+      id,
+      this.logger,
+    );
+    if (!result) {
+      // That bai het luot -> KHONG danh dau. Tin con duong chay lai (khong nuot don im lang).
+      this.guard.release(id);
+      this.recordFailure(`Pipeline that bai sau retry: ${id}`);
+      return;
+    }
+    // Bo qua CO CHU Y (da luu chua map / trung / thanh vien ignore) van la "xong".
+    this.guard.complete(id);
+    this.telemetry = { ...this.telemetry, processed: this.telemetry.processed + 1 };
+    if (result.outcome !== 'processed') {
+      this.logger.log(`Tin ${id} -> ${result.outcome} (khong tao don)`);
+      return;
+    }
+    this.logger.log(`Da xu ly tin ${id} -> intent=${result.view.intent}`);
+    if (shouldAutoAck(result.view.intent, autoAck)) {
+      await this.sendAutoAck(message.externalChatId);
     }
   }
 

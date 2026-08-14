@@ -38,6 +38,65 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
 
       const syncedAt = new Date(input.syncedAt);
       for (const member of input.members) {
+        if (member.globalId) {
+          const [stableMatch, routeMatch] = await Promise.all([
+            transaction.groupParticipant.findUnique({
+              where: {
+                groupId_globalId: { groupId: group.id, globalId: member.globalId },
+              },
+              select: { id: true, globalId: true },
+            }),
+            transaction.groupParticipant.findUnique({
+              where: {
+                groupId_externalUserId: {
+                  groupId: group.id,
+                  externalUserId: member.externalUserId,
+                },
+              },
+              select: {
+                id: true,
+                globalId: true,
+                source: true,
+                customerRank: true,
+                operationalRole: true,
+                handlingMode: true,
+              },
+            }),
+          ]);
+          const disposableRouteMatch =
+            stableMatch &&
+            routeMatch &&
+            stableMatch.id !== routeMatch.id &&
+            routeMatch.source === 'message_stream' &&
+            routeMatch.customerRank === 'unknown' &&
+            routeMatch.operationalRole === 'unknown' &&
+            routeMatch.handlingMode === 'inherit_group';
+          if (disposableRouteMatch) {
+            await transaction.groupParticipant.delete({ where: { id: routeMatch.id } });
+          } else if (
+            (stableMatch && routeMatch && stableMatch.id !== routeMatch.id) ||
+            (routeMatch?.globalId && routeMatch.globalId !== member.globalId)
+          ) {
+            throw new Error('Xung dot globalId va routing UID cua thanh vien Zalo');
+          }
+          const existing = stableMatch ?? routeMatch;
+          const data = {
+            externalUserId: member.externalUserId,
+            globalId: member.globalId,
+            displayName: member.displayName,
+            zaloName: member.zaloName ?? null,
+            avatarUrl: member.avatarUrl ?? null,
+            active: true,
+            lastSeenAt: syncedAt,
+            syncedAt,
+          };
+          if (existing) {
+            await transaction.groupParticipant.update({ where: { id: existing.id }, data });
+          } else {
+            await transaction.groupParticipant.create({ data: { groupId: group.id, ...data } });
+          }
+          continue;
+        }
         await transaction.groupParticipant.upsert({
           where: {
             groupId_externalUserId: {
@@ -82,7 +141,10 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
     });
   }
 
-  async list(groupId: string, filters: GroupParticipantsQuery): Promise<GroupParticipantListResult> {
+  async list(
+    groupId: string,
+    filters: GroupParticipantsQuery,
+  ): Promise<GroupParticipantListResult> {
     const where: Prisma.GroupParticipantWhereInput = {
       groupId,
       ...(filters.customerRank ? { customerRank: filters.customerRank } : {}),
@@ -171,6 +233,22 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
     return row ? toView(row) : null;
   }
 
+  override async requiresIdentityReview(
+    externalChatId: string,
+    externalUserId: string,
+  ): Promise<boolean> {
+    void externalUserId;
+    const possibleRestrictiveStableIdentity = await this.prisma.groupParticipant.count({
+      where: {
+        active: true,
+        globalId: { not: null },
+        handlingMode: { in: ['ignore', 'manual_review'] },
+        group: { is: { platform: 'zalo', chatId: externalChatId } },
+      },
+    });
+    return possibleRestrictiveStableIdentity > 0;
+  }
+
   async recordSeen(
     externalChatId: string,
     profile: GroupParticipantProfile,
@@ -210,6 +288,7 @@ function toView(row: {
   id: string;
   groupId: string;
   externalUserId: string;
+  globalId: string | null;
   displayName: string;
   zaloName: string | null;
   avatarUrl: string | null;
@@ -227,6 +306,7 @@ function toView(row: {
     id: row.id,
     groupId: row.groupId,
     externalUserId: row.externalUserId,
+    ...(row.globalId ? { globalId: row.globalId } : {}),
     displayName: row.displayName,
     ...(row.zaloName ? { zaloName: row.zaloName } : {}),
     ...(row.avatarUrl ? { avatarUrl: row.avatarUrl } : {}),

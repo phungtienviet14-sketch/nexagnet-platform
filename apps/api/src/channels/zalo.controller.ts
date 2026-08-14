@@ -26,6 +26,7 @@ import { GroupParticipantsService } from '../groups/group-participants.service.j
 import { GroupParticipantGroupNotFoundError } from '../groups/prisma-group-participants.repository.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { Roles } from '../auth/roles.decorator.js';
+import { GroupIdentityService } from '../groups/group-identity.service.js';
 
 /**
  * Hai xac nhan RIENG BIET truoc khi tao QR, khong gop lam mot vi day la hai rui ro khac nhau:
@@ -44,9 +45,22 @@ const loginSchema = z
   })
   .strict();
 const logoutSchema = z.object({ confirmed: z.literal(true) }).strict();
-const allowGroupsSchema = z.object({
-  groupIds: z.array(z.string().trim().min(1).max(128)).max(10),
-}).strict();
+const allowGroupsSchema = z
+  .object({
+    groupIds: z.array(z.string().trim().min(1).max(128)).max(10),
+    links: z
+      .array(
+        z
+          .object({
+            currentChatId: z.string().trim().min(1).max(128),
+            existingGroupId: z.string().trim().min(1).max(128),
+          })
+          .strict(),
+      )
+      .max(10)
+      .optional(),
+  })
+  .strict();
 const syncMembersParamsSchema = z.object({ groupId: z.string().trim().min(1).max(128) }).strict();
 const syncMembersBodySchema = z.object({}).strict();
 
@@ -61,6 +75,7 @@ export class ZaloController {
     private readonly botIdentity: BotIdentityService,
     @Optional() private readonly participants?: GroupParticipantsService,
     @Optional() private readonly audit?: AuditLogService,
+    @Optional() private readonly groupIdentity?: GroupIdentityService,
   ) {}
 
   @Get('status')
@@ -76,8 +91,12 @@ export class ZaloController {
   }
 
   @Get('groups')
-  groups() {
-    return this.client.listGroups();
+  async groups() {
+    const groups = await this.client.listGroups();
+    if (this.env.PERSISTENCE === 'prisma' && !this.groupIdentity) {
+      throw new ServiceUnavailableException('Dich vu dinh danh nhom chua san sang');
+    }
+    return this.groupIdentity ? this.groupIdentity.withLegacyCandidates(groups) : groups;
   }
 
   @Post('login')
@@ -113,7 +132,13 @@ export class ZaloController {
   }
 
   @Put('allowed-groups')
-  async allowGroups(@Body() body: unknown, @Headers('origin') origin?: string) {
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async allowGroups(
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
     this.assertMutationOrigin(origin);
     const parsed = allowGroupsSchema.safeParse(body);
     if (!parsed.success) {
@@ -121,14 +146,38 @@ export class ZaloController {
     }
     const before = this.client.status().allowedGroupIds;
     const groupIds = normalizeAllowedGroupIds(parsed.data.groupIds);
+    if (this.env.PERSISTENCE === 'prisma' && (!this.groupIdentity || !this.audit)) {
+      throw new ServiceUnavailableException('Dich vu dinh danh hoac audit nhom chua san sang');
+    }
+    if (this.groupIdentity) {
+      const identities = await this.client.listGroupIdentities(groupIds);
+      await this.audit?.append({
+        actor,
+        action: 'zalo.group_identity.reconcile.requested',
+        entityType: 'Group',
+        entityId: 'zca-allowlist',
+        before: { groupIds: before },
+        after: { groupIds, links: parsed.data.links ?? [] },
+        requestId,
+      });
+      // Cach ly truoc khi doi identity: neu reconcile/file write loi thi listener fail-closed,
+      // khong tiep tuc xu ly bang routing ID cua tai khoan truoc.
+      await this.client.setAllowedGroupIds([]);
+      await this.groupIdentity.reconcileAllowedGroups(
+        identities,
+        groupIds,
+        parsed.data.links ?? [],
+      );
+    }
     await this.client.setAllowedGroupIds(groupIds);
     await this.audit?.append({
-      actor: 'operator',
+      actor,
       action: 'zalo.allowlist.update',
       entityType: 'ZaloRuntime',
       entityId: 'allowed-groups',
       before: { groupIds: before },
-      after: { groupIds },
+      after: { groupIds, links: parsed.data.links ?? [] },
+      requestId,
     });
     return this.status();
   }

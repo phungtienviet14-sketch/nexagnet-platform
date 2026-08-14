@@ -99,6 +99,9 @@ export const envSchema = z.object({
   // Giam sat khong phat hien rui ro (riskLevel='none'); co van de -> giu Sale duyet. Mac dinh
   // off theo GD1 (CLAUDE.md: AI khong tu gui khi CHUA co van ban dong y cua khach).
   AUTO_SEND: z.enum(['on', 'off']).default('off'),
+  // Gom cac tin ngan gui lien tiep cua CUNG nhom + CUNG thanh vien thanh mot luot parse.
+  // Tin tho van duoc luu rieng ngay khi nhan; 0 = tat. Cua so ngan de khong tron hai y dinh doc lap.
+  MESSAGE_BURST_WINDOW_MS: z.coerce.number().int().nonnegative().max(10_000).default(1_200),
   // Ten bot de boc @mention khoi noi dung tin. KHONG co mac dinh (Dot B1): ten bot la cua tung
   // khach, de mac dinh o day nghia la nhan dung chung mang san ten bot cua MOT khach. Nguon that
   // su la goi khach (`persona.mentionName`); bien nay chi con la duong GHI DE theo moi truong

@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ZaloGroupNotAllowedError,
@@ -15,6 +19,15 @@ describe('ZaloController', () => {
   const apiCredentialFixture = 'x'.repeat(32);
   const startQrLogin = vi.fn();
   const setAllowedGroupIds = vi.fn();
+  const listGroupIdentities = vi.fn(async () => [
+    {
+      id: 'group-1',
+      globalId: 'stable-group-1',
+      name: 'Nhom 1',
+      memberCount: 3,
+      allowed: false,
+    },
+  ]);
   const logout = vi.fn(async () => undefined);
   const fetchGroupMembers = vi.fn(async () => ({
     groupId: 'group-1',
@@ -27,6 +40,7 @@ describe('ZaloController', () => {
     status: vi.fn(() => ({ channelMode: 'zca', state: 'logged_out', allowedGroupIds: [] })),
     startQrLogin,
     listGroups: vi.fn(async () => []),
+    listGroupIdentities,
     setAllowedGroupIds,
     logout,
     fetchGroupMembers,
@@ -46,12 +60,14 @@ describe('ZaloController', () => {
     syncedAt: '2026-08-03T01:00:00.000Z',
   }));
   const participants = { synchronize } as unknown as GroupParticipantsService;
+  const reconcileAllowedGroups = vi.fn(async () => undefined);
   let controller: ZaloController;
 
   beforeEach(() => {
     process.env.NODE_ENV = 'production';
     process.env.API_KEY = apiCredentialFixture;
     process.env.CHANNEL_MODE = 'zca';
+    process.env.PERSISTENCE = 'memory';
     process.env.ZALO_OPERATOR_ORIGIN = 'https://operator.example.com';
     vi.clearAllMocks();
     controller = new ZaloController(client, identity, participants);
@@ -136,6 +152,76 @@ describe('ZaloController', () => {
       ),
     ).rejects.toThrow(BadRequestException);
     expect(setAllowedGroupIds).not.toHaveBeenCalled();
+  });
+
+  it('reconciles stable group identities before enabling the new account allowlist', async () => {
+    const append = vi.fn(async () => undefined);
+    const controllerWithIdentity = new ZaloController(
+      client,
+      identity,
+      participants,
+      { append } as unknown as AuditLogService,
+      { reconcileAllowedGroups } as never,
+    );
+
+    await controllerWithIdentity.allowGroups(
+      { groupIds: ['group-1'] },
+      'https://operator.example.com',
+    );
+
+    expect(listGroupIdentities).toHaveBeenCalledWith(['group-1']);
+    expect(reconcileAllowedGroups).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'group-1', globalId: 'stable-group-1' })],
+      ['group-1'],
+      [],
+    );
+    expect(setAllowedGroupIds).toHaveBeenNthCalledWith(1, []);
+    expect(setAllowedGroupIds).toHaveBeenNthCalledWith(2, ['group-1']);
+    expect(reconcileAllowedGroups.mock.invocationCallOrder[0]!).toBeLessThan(
+      setAllowedGroupIds.mock.invocationCallOrder[1]!,
+    );
+  });
+
+  it('fails closed in prisma mode when identity or audit wiring is missing', async () => {
+    process.env.PERSISTENCE = 'prisma';
+    const unwired = new ZaloController(client, identity, participants);
+
+    await expect(
+      unwired.allowGroups({ groupIds: ['group-1'] }, 'https://operator.example.com'),
+    ).rejects.toThrow(ServiceUnavailableException);
+    expect(setAllowedGroupIds).not.toHaveBeenCalled();
+  });
+
+  it('audits an explicit legacy link request before reconciliation can mutate group identity', async () => {
+    const append = vi.fn(async () => undefined);
+    const controllerWithIdentity = new ZaloController(
+      client,
+      identity,
+      participants,
+      { append } as unknown as AuditLogService,
+      { reconcileAllowedGroups } as never,
+    );
+
+    await controllerWithIdentity.allowGroups(
+      {
+        groupIds: ['group-1'],
+        links: [{ currentChatId: 'group-1', existingGroupId: 'group-db-old' }],
+      },
+      'https://operator.example.com',
+      'manager-1',
+      'req-1',
+    );
+
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'manager-1',
+        action: 'zalo.group_identity.reconcile.requested',
+        requestId: 'req-1',
+      }),
+    );
+    expect(append.mock.invocationCallOrder[0]!).toBeLessThan(
+      reconcileAllowedGroups.mock.invocationCallOrder[0]!,
+    );
   });
 
   it('dang xuat chi khi origin operator hop le va co xac nhan', async () => {

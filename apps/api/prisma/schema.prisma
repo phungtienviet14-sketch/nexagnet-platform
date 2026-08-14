@@ -166,7 +166,7 @@ model Dealer {
   tier          DealerTier
   defaultPolicy PolicyType
   phone         String?
-  status        DealerStatus         @default(active)
+  status        DealerStatus          @default(active)
   metadata      Json?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
@@ -175,20 +175,23 @@ model Dealer {
   orders        Order[]
 }
 
-/// 1 nhom Zalo -> 1 dai ly. Map theo (platform, chatId) — KHONG theo ten nhom.
+/// 1 nhom Zalo -> 1 dai ly. Identity theo globalId khi Zalo co tra; chatId chi de routing.
 model Group {
-  id              String             @id @default(cuid())
-  platform        String             @default("zalo")
+  id              String                @id @default(cuid())
+  platform        String                @default("zalo")
   chatId          String
+  /// Dinh danh on dinh cua Zalo cho cung mot nhom qua nhieu tai khoan. `chatId` chi la routing
+  /// ID theo tai khoan dang dang nhap va co the thay doi khi doi tai khoan zca.
+  globalId        String?               @unique
   name            String?
   branch          String?
   dealerId        String?
-  dealer          Dealer?            @relation(fields: [dealerId], references: [id])
-  status          GroupMappingStatus @default(pending)
+  dealer          Dealer?               @relation(fields: [dealerId], references: [id])
+  status          GroupMappingStatus    @default(pending)
   source          String? // manual | auto_suggest | import
   lastSeenAt      DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
   messages        Message[]
   orders          Order[]
   participants    GroupParticipant[]
@@ -199,8 +202,8 @@ model Group {
   @@index([status])
 }
 
-/// Lich su append-only cho moi lan map/remap/unmap. Group khong bi xoa nen tin/don va lich su
-/// luon quy ve cung mot khoa tu nhien (platform, chatId).
+/// Lich su append-only cho moi lan map/remap/unmap. Group canonical giu nguyen id noi bo khi
+/// routing chatId thay doi theo tai khoan Zalo.
 model GroupMappingHistory {
   id               String             @id @default(cuid())
   groupId          String
@@ -222,6 +225,8 @@ model GroupParticipant {
   groupId         String
   group           Group                   @relation(fields: [groupId], references: [id], onDelete: Cascade)
   externalUserId  String
+  /// Dinh danh on dinh cua thanh vien qua nhieu tai khoan zca; externalUserId chi la routing UID.
+  globalId        String?
   displayName     String
   zaloName        String?
   avatarUrl       String?
@@ -236,6 +241,7 @@ model GroupParticipant {
   updatedAt       DateTime                @updatedAt
 
   @@unique([groupId, externalUserId])
+  @@unique([groupId, globalId])
   @@index([groupId, active])
   @@index([externalUserId])
 }
@@ -358,19 +364,19 @@ model PricePeriod {
 
 /// Deal rieng: override gia si theo dealer + sku.
 model DealerPriceOverride {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   dealerId      String
-  dealer        Dealer   @relation(fields: [dealerId], references: [id])
+  dealer        Dealer    @relation(fields: [dealerId], references: [id])
   sku           String
-  product       Product  @relation(fields: [sku], references: [sku])
+  product       Product   @relation(fields: [sku], references: [sku])
   price         Int
   /// So luong toi thieu de deal co hieu luc. NULL = ap cho moi so luong (hanh vi truoc 12/08/2026).
   minQuantity   Int?
-  enabled       Boolean  @default(true)
+  enabled       Boolean   @default(true)
   effectiveFrom DateTime?
   effectiveTo   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([dealerId, sku])
   @@index([enabled, effectiveFrom, effectiveTo])
@@ -520,7 +526,8 @@ model Message {
   sentAt            DateTime
   receivedAt        DateTime  @default(now())
   raw               Json?
-  orders            Order[]
+  orders            Order[] // legacy first-message relation
+  orderProvenance   OrderMessage[]
 
   @@unique([platform, externalMessageId])
   @@index([chatId])
@@ -558,9 +565,23 @@ model Order {
   updatedAt         DateTime        @updatedAt
   items             OrderItem[]
   feedback          ParseFeedback[]
+  sourceMessages    OrderMessage[]
 
   @@index([status])
   @@index([chatId])
+}
+
+/// Complete, append-only provenance for orders assembled from one or more chat messages.
+/// Order.messageId is retained as a forward-compatible legacy pointer to the first message.
+model OrderMessage {
+  orderId   String
+  messageId String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([orderId, messageId])
+  @@index([messageId])
 }
 
 model RuleConfigVersion {

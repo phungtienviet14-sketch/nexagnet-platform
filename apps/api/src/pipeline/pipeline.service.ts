@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional, type OnModuleDestroy } from '@nestjs/common';
 import {
   loadEnv,
   type ChannelMessage,
@@ -33,6 +33,20 @@ export type IntakeResult =
   | { outcome: 'processed'; view: OrderView }
   | { outcome: Exclude<IntakeOutcome, 'processed'>; view?: undefined };
 
+interface PendingBurst {
+  readonly messages: readonly ChannelMessage[];
+  readonly saved: readonly SaveMessageResult[];
+  readonly botName?: string;
+  readonly participant: GroupParticipant | null;
+  readonly promise: Promise<OrderView>;
+  readonly resolve: (view: OrderView) => void;
+  readonly reject: (error: unknown) => void;
+  readonly timer: NodeJS.Timeout;
+}
+
+const MAX_BURST_MESSAGES = 4;
+const MAX_BURST_CHARACTERS = 4_000;
+
 /**
  * Tang 3+4 — adapter mong uy quyen cho AgentOrchestrator (multi-agent 6 con).
  * Giu chu ky process(message, botName) de DemoController/BotPoller khong doi.
@@ -40,8 +54,10 @@ export type IntakeResult =
  * GĐ1: policy tenant quyet dinh gioi han tu xac nhan; AUTO_SEND chi la kill switch van hanh.
  */
 @Injectable()
-export class PipelineService {
+export class PipelineService implements OnModuleDestroy {
   private readonly logger = new Logger('PipelineService');
+  private readonly pendingBursts = new Map<string, PendingBurst>();
+  private readonly burstWindowMs: number;
 
   constructor(
     private readonly orchestrator: AgentOrchestrator,
@@ -53,7 +69,15 @@ export class PipelineService {
     @Optional() private readonly groupDiscovery?: GroupDiscoveryService,
     @Optional() private readonly media?: MediaFetcherService,
     @Optional() private readonly conversationContext?: ConversationContextBuilder,
-  ) {}
+    @Optional() burstWindowMs?: number,
+  ) {
+    const env = loadEnv();
+    this.burstWindowMs = burstWindowMs ?? (env.NODE_ENV === 'test' ? 0 : env.MESSAGE_BURST_WINDOW_MS);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await Promise.all([...this.pendingBursts.keys()].map((key) => this.flushBurst(key)));
+  }
 
   /**
    * Cong vao cho hai worker doc tin (ZcaListener, BotPoller).
@@ -63,7 +87,11 @@ export class PipelineService {
    * sang parser/LLM moi doi nhom da map dai ly. Truoc 04/08/2026 hai listener chan ca hai buoc
    * cung luc nen tin cua nhom chua map bi VUT — ma Zalo khong phat lai.
    */
-  async intake(message: ChannelMessage, botName?: string): Promise<IntakeResult> {
+  async intake(
+    message: ChannelMessage,
+    botName?: string,
+    options: { retryPersisted?: boolean } = {},
+  ): Promise<IntakeResult> {
     const participant = await this.findParticipant(message);
     if (participant?.handlingMode === 'ignore') {
       // Nguoi van hanh CHU DONG loai nguoi nay -> khong luu, khong xu ly (khac han "chua cau hinh").
@@ -74,7 +102,9 @@ export class PipelineService {
     }
 
     const saved = await this.saveMessage(message);
-    if (saved?.duplicate) return { outcome: 'duplicate' };
+    // A retry owned by this same ingest worker may legitimately see the row written by its
+    // first attempt. Only that explicitly-scoped retry may cross the durable idempotency gate.
+    if (saved?.duplicate && !options.retryPersisted) return { outcome: 'duplicate' };
 
     await this.observeGroup(message.externalChatId);
     // Chay cho CA nhom chua map: chi noi dung bi chan khoi LLM, con danh tinh nguoi nhan tin thi
@@ -89,8 +119,100 @@ export class PipelineService {
       return { outcome: 'stored_only' };
     }
 
-    const view = await this.runPipeline(message, botName, participant, saved);
+    const view = await this.enqueueOrRun(message, botName, participant, saved);
     return { outcome: 'processed', view };
+  }
+
+  private enqueueOrRun(
+    message: ChannelMessage,
+    botName: string | undefined,
+    participant: GroupParticipant | null,
+    saved: SaveMessageResult | null,
+  ): Promise<OrderView> {
+    const key = burstKey(message);
+    const current = this.pendingBursts.get(key);
+    // An image normally bypasses the wait window. If text from the same sender is already
+    // pending, however, append the image and atomically consume/cancel that pending timer so
+    // there is exactly one orchestrator run.
+    if (
+      message.imageUrl &&
+      current &&
+      saved &&
+      canAppendToBurst(current.messages, message, this.burstWindowMs)
+    ) {
+      clearTimeout(current.timer);
+      this.pendingBursts.set(key, {
+        ...current,
+        messages: [...current.messages, message],
+        saved: [...current.saved, saved],
+      });
+      void this.flushBurst(key);
+      return current.promise;
+    }
+    if (this.burstWindowMs === 0 || !saved || message.imageUrl) {
+      return this.runPipeline(message, botName, participant, saved);
+    }
+    if (current && canAppendToBurst(current.messages, message, this.burstWindowMs)) {
+      clearTimeout(current.timer);
+      const next = this.scheduleBurst(key, {
+        ...current,
+        messages: [...current.messages, message],
+        saved: [...current.saved, saved],
+      });
+      this.pendingBursts.set(key, next);
+      return current.promise;
+    }
+    if (current) void this.flushBurst(key);
+
+    let resolve!: (view: OrderView) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<OrderView>((ok, fail) => {
+      resolve = ok;
+      reject = fail;
+    });
+    const pending = this.scheduleBurst(key, {
+      messages: [message],
+      saved: [saved],
+      botName,
+      participant,
+      promise,
+      resolve,
+      reject,
+      timer: undefined as unknown as NodeJS.Timeout,
+    });
+    this.pendingBursts.set(key, pending);
+    return promise;
+  }
+
+  private scheduleBurst(key: string, burst: PendingBurst): PendingBurst {
+    return {
+      ...burst,
+      timer: setTimeout(() => void this.flushBurst(key), this.burstWindowMs),
+    };
+  }
+
+  private async flushBurst(key: string): Promise<void> {
+    const burst = this.pendingBursts.get(key);
+    if (!burst) return;
+    this.pendingBursts.delete(key);
+    clearTimeout(burst.timer);
+    try {
+      const orderedSaved = burst.messages
+        .map((message, index) => ({ message, saved: burst.saved[index]! }))
+        .sort((left, right) => left.message.sentAt.getTime() - right.message.sentAt.getTime())
+        .map(({ saved }) => saved);
+      const view = await this.runPipeline(
+        combineBurst(burst.messages),
+        burst.botName,
+        burst.participant,
+        orderedSaved,
+        undefined,
+        burst.messages.map((message) => message.externalMessageId),
+      );
+      burst.resolve(view);
+    } catch (error) {
+      burst.reject(error);
+    }
   }
 
   async process(
@@ -129,17 +251,19 @@ export class PipelineService {
     message: ChannelMessage,
     botName: string | undefined,
     participant: GroupParticipant | null,
-    saved: SaveMessageResult | null,
+    saved: SaveMessageResult | readonly SaveMessageResult[] | null,
     opts?: { orderId?: string; rerun?: boolean; allowDuplicateSkip?: boolean },
+    contextExclusions: readonly string[] = [],
   ): Promise<OrderView> {
     const senderTypeOverride = participantRankToSenderType(participant?.customerRank);
-    const conversationContext = await this.conversationContext?.build(message);
+    const conversationContext = await this.conversationContext?.build(message, contextExclusions);
     const view = await this.orchestrator.run(message, botName, {
       ...opts,
       ...(senderTypeOverride ? { senderTypeOverride } : {}),
       ...(conversationContext ? { conversationContext } : {}),
     });
-    if (saved) await this.linkOrder(view.id, saved.id);
+    const savedMessages = saved ? (Array.isArray(saved) ? saved : [saved]) : [];
+    for (const row of savedMessages) await this.linkOrder(view.id, row.id);
 
     if (this.shouldAutoSend(view, participant?.handlingMode === 'manual_review') && this.orders) {
       try {
@@ -168,7 +292,31 @@ export class PipelineService {
 
   private async findParticipant(message: ChannelMessage): Promise<GroupParticipant | null> {
     if (!message.senderExternalId || !this.participants) return null;
-    return this.participants.findBySender(message.externalChatId, message.senderExternalId);
+    const participant = await this.participants.findBySender(
+      message.externalChatId,
+      message.senderExternalId,
+    );
+    const unclassifiedRoutingIdentity =
+      !participant ||
+      (participant.source === 'message_stream' &&
+        !participant.globalId &&
+        participant.customerRank === 'unknown' &&
+        participant.operationalRole === 'unknown' &&
+        participant.handlingMode === 'inherit_group');
+    if (
+      unclassifiedRoutingIdentity &&
+      await this.participants.requiresIdentityReview(
+        message.externalChatId,
+        message.senderExternalId,
+      )
+    ) {
+      this.logger.warn(
+        `UID routing ${message.senderExternalId} chua reconcile voi stable identity; ` +
+          'fail closed manual_review, khong auto-send.',
+      );
+      return identityReviewParticipant(message);
+    }
+    return participant;
   }
 
   /**
@@ -289,8 +437,59 @@ export class PipelineService {
   }
 }
 
+function burstKey(message: ChannelMessage): string {
+  const sender = message.senderExternalId ?? `anonymous:${message.externalMessageId}`;
+  // `source` chi la adapter van chuyen. Trong hybrid, hai tin lien tiep cua cung mot nguoi co
+  // the lan luot di qua Bot va zca; tach theo source se cat doi cung mot luot hoi cua khach.
+  return `${message.platform}:${message.externalChatId}:${sender}`;
+}
+
+function canAppendToBurst(
+  current: readonly ChannelMessage[],
+  next: ChannelMessage,
+  windowMs: number,
+): boolean {
+  const previous = current.at(-1);
+  if (!previous || current.length >= MAX_BURST_MESSAGES) return false;
+  const characters = current.reduce((sum, message) => sum + message.text.length, 0) + next.text.length;
+  const gapMs = Math.abs(next.sentAt.getTime() - previous.sentAt.getTime());
+  return characters <= MAX_BURST_CHARACTERS && gapMs <= Math.max(windowMs * 2, 5_000);
+}
+
+function combineBurst(messages: readonly ChannelMessage[]): ChannelMessage {
+  const ordered = [...messages].sort((left, right) => left.sentAt.getTime() - right.sentAt.getTime());
+  const latest = ordered.at(-1)!;
+  if (ordered.length === 1) return latest;
+  return {
+    ...latest,
+    imageUrl: [...ordered].reverse().find((message) => message.imageUrl)?.imageUrl,
+    text: ordered
+      .map((message, index) => `TIN ${index + 1} [${message.sentAt.toISOString()}]: ${message.text}`)
+      .join('\n'),
+  };
+}
+
 function participantRankToSenderType(
   rank: 'dai_ly' | 'ctv' | 'khach_le' | 'unknown' | undefined,
 ): SenderType | undefined {
   return rank && rank !== 'unknown' ? rank : undefined;
+}
+
+function identityReviewParticipant(message: ChannelMessage): GroupParticipant {
+  const timestamp = message.sentAt.toISOString();
+  return {
+    id: `identity-review:${message.senderExternalId ?? 'unknown'}`,
+    groupId: message.externalChatId,
+    externalUserId: message.senderExternalId ?? 'unknown',
+    displayName: message.senderDisplayName ?? 'Thanh vien chua doi soat',
+    customerRank: 'unknown',
+    operationalRole: 'unknown',
+    handlingMode: 'manual_review',
+    active: true,
+    source: 'message_stream',
+    lastSeenAt: timestamp,
+    syncedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
 }

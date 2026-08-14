@@ -47,6 +47,20 @@ export abstract class GroupParticipantsRepository {
   ): Promise<GroupParticipant | null>;
 
   /**
+   * True when an unknown routing UID could belong to an existing stable participant whose
+   * restrictive handling policy must not be bypassed after a zca account switch. Implementations
+   * must not guess identity: callers only fail closed to manual review until synchronization.
+   */
+  async requiresIdentityReview(
+    externalChatId: string,
+    externalUserId: string,
+  ): Promise<boolean> {
+    void externalChatId;
+    void externalUserId;
+    return false;
+  }
+
+  /**
    * Ghi nhan mot nguoi VUA NHAN TIN trong nhom — nguon danh sach thanh vien duy nhat con dung
    * duoc sau khi Zalo tra `getGroupInfo` rong va Bot Platform khong co API thanh vien (04/08/2026).
    *
@@ -166,6 +180,20 @@ export class InMemoryGroupParticipantsRepository extends GroupParticipantsReposi
     return participant ? { ...participant } : null;
   }
 
+  override async requiresIdentityReview(
+    externalChatId: string,
+    externalUserId: string,
+  ): Promise<boolean> {
+    void externalUserId;
+    return this.store.some(
+      (candidate) =>
+        candidate.groupId === externalChatId &&
+        candidate.active &&
+        Boolean(candidate.globalId) &&
+        ['ignore', 'manual_review'].includes(candidate.handlingMode),
+    );
+  }
+
   async recordSeen(
     externalChatId: string,
     profile: GroupParticipantProfile,
@@ -208,6 +236,7 @@ function createParticipant(
     id: randomUUID(),
     groupId,
     externalUserId: profile.externalUserId,
+    ...(profile.globalId ? { globalId: profile.globalId } : {}),
     displayName: profile.displayName,
     ...(profile.zaloName ? { zaloName: profile.zaloName } : {}),
     ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
@@ -230,6 +259,7 @@ function refreshParticipant(
 ): GroupParticipant {
   return {
     ...participant,
+    ...(profile.globalId ? { globalId: profile.globalId } : {}),
     displayName: profile.displayName,
     ...(profile.zaloName ? { zaloName: profile.zaloName } : {}),
     ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),

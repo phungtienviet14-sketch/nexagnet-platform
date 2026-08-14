@@ -1,10 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import type {
-  ActionContext,
-  ActionRequest,
-  ActionResponse,
-  ResourceWithOptions,
-} from 'adminjs';
+import type { ActionContext, ActionRequest, ActionResponse, ResourceWithOptions } from 'adminjs';
 import { refreshKnowledge } from './knowledge-refresh.js';
 import { recordSourceTruthAudit } from '../audit/source-truth-audit.js';
 
@@ -28,7 +23,8 @@ function writeHooks(prisma: PrismaClient, entityType: string) {
       request: ActionRequest,
       context: ActionContext,
     ): Promise<ActionResponse> => {
-      const record = response.record as { id?: string; params?: Record<string, unknown> } | undefined;
+      const record = response.record as
+        { id?: string; params?: Record<string, unknown> } | undefined;
       const admin = context.currentAdmin as { email?: string } | undefined;
       await recordSourceTruthAudit(prisma, {
         actor: admin?.email ?? 'adminjs',
@@ -45,6 +41,13 @@ function writeHooks(prisma: PrismaClient, entityType: string) {
     edit: { after: afterWrite('update') },
     delete: { after: afterWrite('delete') },
   };
+}
+
+function stripGroupIdentityFields(request: ActionRequest): ActionRequest {
+  const payload = request.payload as Record<string, unknown> | undefined;
+  if (!payload) return request;
+  const { chatId: _chatId, globalId: _globalId, platform: _platform, ...editable } = payload;
+  return { ...request, payload: editable };
 }
 
 export function buildKnowledgeResources(
@@ -90,7 +93,15 @@ export function buildKnowledgeResources(
       resource: res('Price'),
       options: {
         navigation: NAV,
-        listProperties: ['periodId', 'sku', 'wholesale', 'minRetailPrice', 'retailPrice', 'listPrice', 'updatedAt'],
+        listProperties: [
+          'periodId',
+          'sku',
+          'wholesale',
+          'minRetailPrice',
+          'retailPrice',
+          'listPrice',
+          'updatedAt',
+        ],
         actions: {
           new: { isAccessible: false },
           edit: { isAccessible: false },
@@ -118,11 +129,26 @@ export function buildKnowledgeResources(
       resource: res('Group'),
       options: {
         navigation: NAV,
-        listProperties: ['chatId', 'name', 'branch', 'status', 'dealerId', 'lastSeenAt'],
+        listProperties: [
+          'chatId',
+          'globalId',
+          'name',
+          'branch',
+          'status',
+          'dealerId',
+          'lastSeenAt',
+        ],
+        editProperties: ['name', 'branch', 'status', 'dealerId'],
         filterProperties: ['status', 'platform', 'dealerId', 'branch'],
         sort: { sortBy: 'lastSeenAt', direction: 'desc' },
         actions: {
           ...writeHooks(prisma, 'Group'),
+          new: { isAccessible: false },
+          delete: { isAccessible: false },
+          edit: {
+            before: stripGroupIdentityFields,
+            after: writeHooks(prisma, 'Group').edit.after,
+          },
           // Mac dinh mo "hop thu nhom chua map": chua co filter nao -> loc status=pending.
           list: {
             before: async (request: ActionRequest): Promise<ActionRequest> => {

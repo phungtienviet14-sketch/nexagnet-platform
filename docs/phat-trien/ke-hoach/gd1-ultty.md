@@ -390,6 +390,15 @@ Acceptance:
 - test ambiguous context;
 - thiếu context thì handoff/ask clarification, không auto-confirm.
 
+### 8.1. Một lượt nhắn nhiều mảnh và thay đổi ý định
+
+- Backend chỉ làm điều phối cơ học: lưu từng tin thô ngay khi nhận, rồi gom tối đa 4 tin/4.000 ký tự trong `MESSAGE_BURST_WINDOW_MS` theo đúng `(platform, externalChatId, senderExternalId)`. `source` không tham gia khóa vì trong hybrid, hai mảnh của cùng một lượt hỏi có thể đi qua hai adapter khác nhau.
+- Agent Điều phối/LLM nhận nguyên văn từng mảnh kèm timestamp và tự quyết định quan hệ bổ sung/đổi ý; khi nội dung mâu thuẫn, prompt yêu cầu hiểu ý định rõ ràng ở tin sau là ý định hiện tại. Backend không fuzzy-match hoặc viết rules để suy diễn thay LLM.
+- Context lịch sử tự động chỉ lấy tin của đúng `senderExternalId`; không âm thầm đưa tin của thành viên khác trong cùng nhóm vào parser. Quote/reply do người dùng chủ động chọn vẫn được chuyển nguyên văn để LLM đánh giá quan hệ ngữ nghĩa. Tin đang nằm trong burst bị loại khỏi history để không lặp nội dung hai lần.
+- Bot long-poll tiếp tục nhận batch kế tiếp trong lúc batch trước chờ cửa sổ burst (tối đa 8 batch đang xử lý), nên hai mảnh không cần nằm trong cùng một phản hồi `getUpdates` mới được gom.
+- Backend vẫn giữ quyền kiểm tra tất định sau LLM: SKU phải thuộc danh mục, dữ liệu mơ hồ phải handoff và policy tiền/VAT/ship không do LLM quyết.
+- Phạm vi hiện tại xử lý thay đổi **trước khi một lượt nhắn được chốt thành đơn**. Sửa/hủy một đơn đã tồn tại vẫn fail-safe về Sale cho tới khi D10 chốt trạng thái nào được sửa/hủy; chưa đưa danh sách đơn gần đây cho LLM để tự mutate đơn.
+
 ## 9. Auth và quyền vận hành
 
 Không pilot dữ liệu thật với anonymous mode.

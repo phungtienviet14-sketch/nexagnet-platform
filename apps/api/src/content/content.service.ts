@@ -149,17 +149,6 @@ function buildReadiness(productSkus: string[], snapshot: ContentSnapshotView) {
       snapshot.faqs.some((item) => item.productSku === productSku && active(item.status)) ||
       snapshot.advice.some((item) => item.productSku === productSku && active(item.status));
     if (!hasText) missing.push('approved_faq_or_advice');
-    if (
-      !snapshot.assets.some(
-        (item) =>
-          item.kind === 'image' && item.productSkus.includes(productSku) && active(item.status),
-      )
-    ) {
-      missing.push('active_image');
-    }
-    if (!snapshot.links.some((item) => item.productSku === productSku && active(item.status))) {
-      missing.push('active_catalog_or_video_link');
-    }
     return { productSku, ready: missing.length === 0, missing };
   });
 }

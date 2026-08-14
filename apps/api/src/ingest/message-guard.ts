@@ -67,7 +67,7 @@ export class MessageGuard {
  * `delayMs` tach ra lam tham so de test chay khong can cho.
  */
 export async function processWithRetry<T>(
-  run: () => Promise<T>,
+  run: (attempt: number) => Promise<T>,
   messageId: string,
   logger: RetryLogger,
   delayMs: number = RETRY_DELAY_MS,
@@ -75,7 +75,7 @@ export async function processWithRetry<T>(
   const total = MAX_PROCESS_RETRIES + 1;
   for (let attempt = 1; attempt <= total; attempt++) {
     try {
-      return await run();
+      return await run(attempt);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       if (attempt < total) {
