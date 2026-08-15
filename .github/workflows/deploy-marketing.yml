@@ -1,7 +1,11 @@
 name: deploy-marketing
 
 # Pipeline CD rieng biet cho trang Marketing Nexagnet (nexagnet247.com / apps/marketing).
-# Tach biet hoan toan khoi cac pipeline deploy tenant silo (Ultty, Amico).
+# Tach biet hoan toan khoi cac pipeline deploy tenant silo (Ultty, Amico): trang nay la noi dung
+# CONG KHAI cua NetViet, khong mang du lieu thuong mai cua bat ky khach nao.
+#
+# Dich den: Cloud Run `nexagnet-marketing` (asia-southeast1). Xac thuc GCP bang Workload Identity
+# Federation nhu cac pipeline con lai — khong luu service account key JSON trong GitHub secrets.
 
 on:
   workflow_dispatch:
@@ -18,14 +22,24 @@ on:
     branches: [main]
     paths:
       - 'apps/marketing/**'
+      # Lockfile nam trong paths vi Dockerfile va setup-workspace deu chay
+      # `pnpm install --frozen-lockfile`: mot lan sua lockfile ma khong chay lai pipeline nay se de
+      # lai trang thai "build da hong nhung khong ai biet" (da xay ra 15/08/2026).
+      - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-marketing.yml'
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: deploy-marketing-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: netviet-host-968934832433
+  GCP_REGION: asia-southeast1
+  SERVICE_NAME: nexagnet-marketing
 
 jobs:
   build-and-verify:
@@ -42,3 +56,70 @@ jobs:
           echo "### Build Marketing site thanh cong!" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Target: \`apps/marketing\` (@nexagnet/marketing)" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Domain dich: nexagnet247.com" >> "${GITHUB_STEP_SUMMARY}"
+
+  deploy:
+    name: Deploy to Cloud Run
+    needs: build-and-verify
+    # `preview` chi build de xem thu, khong day len dich vu dang phuc vu cong chung.
+    if: github.event_name == 'push' || inputs.environment == 'production'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push image
+        env:
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          registry="${GCP_REGION}-docker.pkg.dev"
+          image="${registry}/${GCP_PROJECT_ID}/netviet/${SERVICE_NAME}"
+          gcloud auth configure-docker "${registry}" --quiet
+          # Build context la GOC REPO, khong phai apps/marketing: Dockerfile COPY pnpm-workspace.yaml
+          # va pnpm-lock.yaml de cai dat theo workspace.
+          docker build \
+            --file apps/marketing/Dockerfile \
+            --label "org.opencontainers.image.revision=${GIT_SHA}" \
+            --tag "${image}:${GIT_SHA}" \
+            --tag "${image}:latest" \
+            .
+          docker push "${image}:${GIT_SHA}"
+          docker push "${image}:latest"
+
+      - name: Deploy revision to Cloud Run
+        env:
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/netviet/${SERVICE_NAME}"
+          # Trien khai theo SHA chu khong theo `:latest` — tag co the bi day de, nen `latest` khong
+          # noi duoc revision dang chay ung voi commit nao.
+          gcloud run deploy "${SERVICE_NAME}" \
+            --image "${image}:${GIT_SHA}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --quiet
+
+      - name: Report deployed URL
+        run: |
+          set -euo pipefail
+          url="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format='value(status.url)')"
+          {
+            echo "### Marketing da len song"
+            echo ""
+            echo "- Cloud Run: ${url}"
+            echo "- Revision theo commit: \`${GITHUB_SHA}\`"
+          } >>"${GITHUB_STEP_SUMMARY}"

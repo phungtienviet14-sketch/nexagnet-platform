@@ -1,0 +1,50 @@
+name: deploy-tenant
+
+# Cong VAO cua CD da khach. `reusable-deploy-tenant.yml` chi la `workflow_call` — khong co file nay
+# thi khong gi kich hoat duoc no, va duong da khach chi ton tai tren giay.
+#
+# Chon khach bang `tenant` (phai khop mot thu muc trong `tenants/`). Image day len registry la ban
+# TRUNG TINH dung chung; rieng goi khach + anh catalog di ngoai image va duoc upload theo tung stack.
+#
+# CO Y chi chay bang tay (`workflow_dispatch`): deploy mot khach cu the la quyet dinh van hanh, khong
+# phai he qua cua mot lan push. Duong tu dong theo push van la `deploy.yml` (mac dinh tenant `ultty`).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tenant:
+        description: 'Khach hang — slug thu muc trong tenants/'
+        required: true
+        type: choice
+        options:
+          - ultty
+          - amico
+        default: 'ultty'
+      environment:
+        description: 'Moi truong dich'
+        required: true
+        type: choice
+        options:
+          - dev
+          - production
+        default: 'dev'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  # Khoa theo KHACH, khong theo moi truong: dev va production hien tro cung mot VM, nen hai lan
+  # deploy cung mot khach ma chay song song se gianh cung mot thu muc stack.
+  # `cancel-in-progress: false` — cat ngang mot lan deploy dang doi container la cach tao ra
+  # trang thai nua voi.
+  group: deploy-tenant-${{ inputs.tenant }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-deploy-tenant.yml
+    with:
+      tenant: ${{ inputs.tenant }}
+      environment: ${{ inputs.environment }}
+    secrets: inherit
