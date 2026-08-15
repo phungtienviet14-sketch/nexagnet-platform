@@ -36,16 +36,18 @@ import { SEED } from '../knowledge/seed.js';
     { provide: ContentSourcePort, useClass: LocalManifestContentSource },
     { provide: TENANT_CONTENT_MANIFEST, useFactory: () => loadTenantContentManifest() },
     /**
-     * Ban soan tu van bam theo PARSER_MODE co chu y: no gui FAQ + lich su hoi thoai sang LLM,
-     * tuc cung mat tuan thu voi parser. Tach thanh bien rieng se de sinh ra trang thai "parser
-     * dung Claude nhung composer dung DeepSeek" ma khong ai co y dinh chon.
-     * Khong co API key -> Noop -> giu nguyen ban noi FAQ, khong sap.
+     * Ban soan tu van di theo cong tac RIENG `ADVICE_COMPOSER`, khong bam theo PARSER_MODE.
+     *
+     * Ly do: pilot chay `PARSER_MODE=flowise` (noi bo). Neu bam theo parser thi hoac ban soan chet
+     * hoan toan tren pilot, hoac Claude bi them vao luong du lieu nhu mot he qua PHU cua viec chon
+     * parser. Ca hai deu sai: viec them mot ben nhan du lieu phai la quyet dinh co y cua nguoi van
+     * hanh. Thieu cong tac hoac thieu API key -> Noop -> giu nguyen ban noi FAQ, khong sap.
      */
     {
       provide: AdviceComposer,
       useFactory: (): AdviceComposer => {
         const env = loadEnv();
-        return env.PARSER_MODE === 'claude' && env.ANTHROPIC_API_KEY
+        return env.ADVICE_COMPOSER === 'claude' && env.ANTHROPIC_API_KEY
           ? new ClaudeAdviceComposer(env.ANTHROPIC_API_KEY)
           : new NoopAdviceComposer();
       },

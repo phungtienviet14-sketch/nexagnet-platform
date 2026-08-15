@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
-import { MediaStore } from './media-store.js';
+import { MediaStore, contentTypeForKey, type MediaObject } from './media-store.js';
 
 /**
  * Kho tren dia may — CHI cho dev/test. Production dung `S3MediaStore`: ke hoach ghi ro anh
@@ -27,5 +27,20 @@ export class LocalMediaStore extends MediaStore {
     }
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, body);
+  }
+
+  override async get(key: string): Promise<MediaObject | null> {
+    const target = resolve(this.root, key);
+    // Cung mot rao nhu `put`: khoa kem `../` la duong DOC file bat ky ngoai thu muc goc — nguy
+    // hiem hon ca ghi, vi route catalog la route CONG KHAI (Zalo phai fetch duoc, khong co auth).
+    if (!target.startsWith(this.root + sep)) {
+      throw new Error(`Khoa vuot ra ngoai thu muc goc, tu choi doc: "${key}"`);
+    }
+    try {
+      return { body: await readFile(target), contentType: contentTypeForKey(key) };
+    } catch {
+      // Khong co file = 404 o tang tren, khong phai loi he thong.
+      return null;
+    }
   }
 }

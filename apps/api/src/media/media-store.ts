@@ -14,6 +14,19 @@ export abstract class MediaStore {
   abstract put(key: string, body: Buffer, contentType: string): Promise<void>;
 
   /**
+   * Doc mot object ra. Truoc 15/08/2026 kho nay CHI GHI duoc: no sinh ra de tai anh Zalo ve truoc
+   * khi link chet (<=35 ngay). Nhung tai lieu khach (muc 1.1) con yeu cau GUI anh san pham DI, ma
+   * Zalo phai fetch duoc mot URL — nen phai doc nguoc ra duoc.
+   *
+   * Mac dinh tra `null` (cung khuon `check()`): kho khong ho tro doc thi route catalog tra 404
+   * chu khong lam sap API.
+   */
+  async get(key: string): Promise<MediaObject | null> {
+    void key;
+    return null;
+  }
+
+  /**
    * Kho CO THAT SU dung duoc khong — kiem bang mot request that toi noi luu, khong phai doc lai
    * bien moi truong.
    *
@@ -29,6 +42,33 @@ export abstract class MediaStore {
       ? { healthy: true, detail: `${this.name}: san sang` }
       : { healthy: false, detail: `${this.name}: khong luu anh` };
   }
+}
+
+const CONTENT_TYPES: Readonly<Record<string, string>> = {
+  webp: 'image/webp',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  pdf: 'application/pdf',
+};
+
+/**
+ * Suy content-type tu duoi khoa. Kho S3/GCS co luu content-type luc ghi, nhung khong phai kho nao
+ * cung tra lai duoc (LocalMediaStore ghi thang ra dia, khong co cho de luu metadata) — nen suy tu
+ * duoi file la cach DUY NHAT dung chung cho ca ba kho.
+ */
+export function contentTypeForKey(key: string): string {
+  const extension = key.split('.').pop()?.toLowerCase() ?? '';
+  return CONTENT_TYPES[extension] ?? 'application/octet-stream';
+}
+
+/** Mot object doc ra tu kho. `contentType` de route tra dung header cho Zalo. */
+export interface MediaObject {
+  readonly body: Buffer;
+  readonly contentType: string;
 }
 
 export interface MediaStoreHealth {

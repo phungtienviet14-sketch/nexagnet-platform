@@ -65,6 +65,28 @@ export const envSchema = z.object({
   ZALO_BOT_WEBHOOK_SECRET: z.string().optional(),
   // Che do parser: mock | claude | deepseek truc tiep | flowise (Agentflow V2 noi bo).
   PARSER_MODE: z.enum(['mock', 'claude', 'deepseek', 'flowise']).default('mock'),
+  /**
+   * Ban soan tu van (AdviceComposer): LLM viet lai cau tra loi tu van tu cac manh FAQ DA DUYET,
+   * thay cho viec noi nguyen van. `off` = giu ban noi FAQ nhu truoc 15/08/2026.
+   *
+   * Vi sao la cong tac RIENG chu khong bam theo PARSER_MODE: pilot dang chay `PARSER_MODE=flowise`
+   * (Agentflow NOI BO). Bat ban soan Claude o do la them MOT NGUOI NHAN DU LIEU moi vao luong —
+   * Claude nam trong danh sach ben thu 3 duoc duyet (CLAUDE.md), nhung viec them phai la mot quyet
+   * dinh CO Y CUA NGUOI VAN HANH, khong phai he qua phu cua viec chon parser. Mac dinh `off`.
+   */
+  ADVICE_COMPOSER: z.enum(['off', 'claude']).default('off'),
+  /**
+   * Thu muc chua ANH/VIDEO CATALOG SAN PHAM, phuc vu qua route cong khai `/media/catalog/*`.
+   *
+   * TACH HAN khoi `MEDIA_*` co chu y — hai loai du lieu nay khac han nhau ve ban chat:
+   *   MEDIA_*     = anh KHACH gui vao. PII (CCCD, dia chi), bucket PHAI private, thuoc ho so D22.
+   *   CATALOG_DIR = anh san pham cong ty phat hanh. Tai lieu tiep thi, PHAI cong khai de Zalo fetch.
+   * De chung mot kho nghia la mot loi cau hinh duy nhat co the phat PII ra Internet. Tach thanh hai
+   * duong rieng thi dieu do khong the xay ra ke ca khi cau hinh sai.
+   */
+  CATALOG_DIR: z.string().default('./catalog-assets'),
+  /** Goc URL cong khai cua API — de sinh locator tuyet doi cho Zalo di tai anh ve. */
+  PUBLIC_BASE_URL: z.string().url().optional(),
   // Phan loai du lieu dang chay:
   //   test     = mock/demo/dev, khong PII that; cho phep parser/kho/media mock de lap trinh nhanh.
   //   customer = du lieu khach hang that; bat readiness gate ben duoi de fail-fast neu cau hinh

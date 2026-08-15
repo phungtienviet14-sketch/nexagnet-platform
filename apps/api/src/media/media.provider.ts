@@ -1,6 +1,7 @@
 import { Logger, type Provider } from '@nestjs/common';
 import { loadEnv } from '@netviet/shared';
 import { MessagesRepository } from '../messages/messages.repository.js';
+import { CATALOG_STORE } from './catalog.tokens.js';
 import { GcsMediaStore } from './gcs-media.store.js';
 import { LocalMediaStore } from './local-media.store.js';
 import { MediaFetcherService } from './media-fetcher.service.js';
@@ -55,6 +56,23 @@ export const mediaStoreProvider: Provider = {
         logger.log('Kho anh: none — KHONG luu anh ve (mac dinh demo/CI)');
         return new NoopMediaStore();
     }
+  },
+};
+
+/**
+ * Kho ANH CATALOG — luon la thu muc tren dia, KHONG phu thuoc MEDIA_STORE.
+ *
+ * Anh catalog la tai san TINH cua ban phat hanh (di kem image/volume), khong phai du lieu chay
+ * nhu anh khach gui vao. Buoc no theo MEDIA_STORE se keo theo hai he qua khong mong muon: khi
+ * MEDIA_STORE=none (demo/CI) thi anh san pham cung bien mat, va khi MEDIA_STORE=gcs thi anh tiep
+ * thi lai nam trong dung cai bucket PRIVATE danh cho PII.
+ */
+export const catalogStoreProvider: Provider = {
+  provide: CATALOG_STORE,
+  useFactory: (): MediaStore => {
+    const env = loadEnv();
+    new Logger('MediaProvider').log(`Kho anh catalog: ${env.CATALOG_DIR}`);
+    return new LocalMediaStore(env.CATALOG_DIR);
   },
 };
 

@@ -1,5 +1,15 @@
-import { ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { MediaStore, type MediaStoreHealth } from './media-store.js';
+import {
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  MediaStore,
+  contentTypeForKey,
+  type MediaObject,
+  type MediaStoreHealth,
+} from './media-store.js';
 
 export interface S3MediaConfig {
   readonly bucket: string;
@@ -39,6 +49,27 @@ export class S3MediaStore extends MediaStore {
       // GCS XML API va MinIO deu can path-style; virtual-host style khong chay tren ca hai.
       forcePathStyle: true,
     });
+  }
+
+  /**
+   * Doc object ve. `NoSuchKey` la "chua co anh do" -> `null`; cac loi khac NEM de route lo ra 5xx
+   * that chu khong gia vo la khong co anh.
+   */
+  override async get(key: string): Promise<MediaObject | null> {
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      );
+      const bytes = await response.Body?.transformToByteArray();
+      if (!bytes) return null;
+      return {
+        body: Buffer.from(bytes),
+        contentType: response.ContentType ?? contentTypeForKey(key),
+      };
+    } catch (error: unknown) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
   }
 
   /**
@@ -94,4 +125,14 @@ export class S3MediaStore extends MediaStore {
       }),
     );
   }
+}
+
+/**
+ * Phan biet "khong co object" voi loi that. SDK v3 dat ten loi o `name`, con GCS XML API tra
+ * `NoSuchKey` kem HTTP 404 — nhan ca hai de doi nha cung cap khong lam ro 404 thanh 500.
+ */
+function isNotFound(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false;
+  const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return candidate.name === 'NoSuchKey' || candidate.$metadata?.httpStatusCode === 404;
 }

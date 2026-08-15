@@ -1,5 +1,10 @@
 import { GoogleAuth } from 'google-auth-library';
-import { MediaStore, type MediaStoreHealth } from './media-store.js';
+import {
+  MediaStore,
+  contentTypeForKey,
+  type MediaObject,
+  type MediaStoreHealth,
+} from './media-store.js';
 
 export interface GcsMediaConfig {
   readonly bucket: string;
@@ -74,6 +79,31 @@ export class GcsMediaStore extends MediaStore {
       // van nam nguyen trong DB. Nuot loi o day thi anh mat ma khong con dau vet nao.
       throw new Error(`GCS tu choi ghi ${key}: HTTP ${response.status} ${await safeBody(response)}`);
     }
+  }
+
+  /**
+   * Doc object ve. Duong JSON API voi `alt=media` — cung endpoint va cung quyen voi `put`, khong
+   * xin them scope nao.
+   *
+   * 404 tra `null` (chua co anh do). Cac loi khac NEM: route catalog phai lo ra 5xx that chu khong
+   * duoc gia vo la "khong co anh" — mot bucket sai quyen ma im lang thanh 404 la kieu loi tha ma
+   * khong ai di tim.
+   */
+  override async get(key: string): Promise<MediaObject | null> {
+    const url =
+      `${this.config.endpoint}/storage/v1/b/${encodeURIComponent(this.config.bucket)}/o/` +
+      `${encodeURIComponent(key)}?alt=media`;
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${await this.auth.getAccessToken()}` },
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(`GCS tu choi doc ${key}: HTTP ${response.status} ${await safeBody(response)}`);
+    }
+    return {
+      body: Buffer.from(await response.arrayBuffer()),
+      contentType: response.headers.get('content-type') ?? contentTypeForKey(key),
+    };
   }
 
   /**

@@ -35,8 +35,13 @@ import { erpProvider } from './erp/erp.provider.js';
 import { ErpController } from './erp/erp.controller.js';
 import { KnowledgeController } from './knowledge/knowledge.controller.js';
 import { KnowledgeModule } from './knowledge/knowledge.module.js';
-import { mediaFetcherProvider, mediaStoreProvider } from './media/media.provider.js';
+import {
+  catalogStoreProvider,
+  mediaFetcherProvider,
+  mediaStoreProvider,
+} from './media/media.provider.js';
 import { MediaHealthController } from './media/media-health.controller.js';
+import { CatalogMediaController } from './media/catalog-media.controller.js';
 import { InMemoryMessagesRepository, MessagesRepository } from './messages/messages.repository.js';
 import { PrismaMessagesRepository } from './messages/prisma-messages.repository.js';
 import { ConversationContextBuilder } from './messages/conversation-context.js';
@@ -85,6 +90,7 @@ import { GroupIdentityService } from './groups/group-identity.service.js';
     SettingsController,
     CampaignController,
     MediaHealthController,
+    CatalogMediaController,
     MasterDataController,
     ReadinessController,
   ],
@@ -164,6 +170,7 @@ import { GroupIdentityService } from './groups/group-identity.service.js';
     // Kho luu anh + worker tai anh (Dot A' Task 2). Mac dinh MEDIA_STORE=none -> khong I/O gi,
     // demo/CI chay y nhu truoc; bat bang MEDIA_STORE=s3 khi co bucket.
     mediaStoreProvider,
+    catalogStoreProvider,
     mediaFetcherProvider,
     parserProvider,
     ZaloUserClient,
