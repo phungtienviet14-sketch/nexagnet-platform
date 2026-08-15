@@ -91,25 +91,41 @@ scp_vm() {
     --quiet
 }
 
-ssh_vm "install -d -m 0700 '${remote_parent}'"
-# deploy-remote.sh kiem tra duong dan phai la <parent>/netviet — giu nguyen ten thu muc bundle.
-scp_vm "${BUNDLE_DIR}" "${remote_parent}/"
+# MOT LAN TRUYEN, KHONG PHAI HANG TRAM LAN.
+# `gcloud compute scp --recurse` bat tay MOT PHIEN QUA DUONG HAM IAP CHO TUNG TEP. Lan deploy
+# 15/08/2026 chung minh gia cua no: rieng thu muc bundle (~30 tep) mat 7 phut, roi 102 anh catalog
+# treo 48 phut cho toi khi timeout 60 phut cua job giet ca lan deploy (chinh gcloud canh bao duong
+# ham cham khi thieu NumPy). deploy.ps1 chay tay thoat duoc vi mang noi bo nhanh hon nhieu.
+# Dong goi thanh MOT archive roi bung tren VM: giu y nguyen bo cuc ma deploy-remote.sh doi
+# (<parent>/netviet, <parent>/tenant-pack, <parent>/catalog-assets), nhung chi ton mot lan bat tay.
+staging="$(mktemp -d)"
+trap 'rm -rf -- "${staging}"' EXIT
+install -d "${staging}/payload"
+
+# deploy-remote.sh khang dinh duong dan cua no phai la <parent>/netviet — giu dung ten thu muc.
+cp -r "${BUNDLE_DIR}" "${staging}/payload/netviet"
 
 # GOI KHACH + ANH CATALOG di NGOAI image (`.dockerignore` loai `tenants/`): image la ban CHUNG cho
 # moi khach, mot goi nam trong do nghia la khach nay `docker save` ra la doc duoc gia si cua khach
 # kia. deploy-remote.sh doi dung hai duong dan nay va se `exit 1` neu thieu goi khach.
-# DEST co y KHONG tao truoc: `scp --recurse SRC DEST-CHUA-CO` tao DEST la ban sao cua SRC, cho ra
-# `tenant-pack/tenant.json` phang dung nhu deploy-remote.sh mong doi. (Neu mot lan chay lai lam
-# long them cap thu muc, deploy-remote.sh van co buoc go phang du phong.)
-scp_vm "${TENANT_PACK_DIR}" "${remote_parent}/tenant-pack"
+cp -r "${TENANT_PACK_DIR}" "${staging}/payload/tenant-pack"
 
 # Thieu anh thi he thong VAN chay — chi la tu van gui di khong kem anh. Nen canh bao, khong chan
 # ca lan deploy: chan mot su co nho bang mot su co lon la doi khong dang.
 if [[ -d "${CATALOG_ASSETS_DIR}" ]] && [[ -n "$(ls -A "${CATALOG_ASSETS_DIR}" 2>/dev/null)" ]]; then
-  scp_vm "${CATALOG_ASSETS_DIR}" "${remote_parent}/catalog-assets"
+  cp -r "${CATALOG_ASSETS_DIR}" "${staging}/payload/catalog-assets"
 else
   echo "Khong co '${CATALOG_ASSETS_DIR}' — tu van se gui khong kem anh." >&2
 fi
+
+# `.runtime` chua secret da render cua lan chay truoc: no thuoc ve VM, khong duoc di tu runner len
+# roi de len chinh no. Checkout cua CI von khong co thu muc nay — loai o day la de phong.
+tar -czf "${staging}/payload.tar.gz" --exclude='./netviet/.runtime' -C "${staging}/payload" .
+echo "Goi trien khai: $(du -h "${staging}/payload.tar.gz" | cut -f1), $(find "${staging}/payload" -type f | wc -l) tep." >&2
+
+ssh_vm "install -d -m 0700 '${remote_parent}'"
+scp_vm "${staging}/payload.tar.gz" "${remote_parent}/payload.tar.gz"
+ssh_vm "tar -xzf '${remote_parent}/payload.tar.gz' -C '${remote_parent}' && rm -f '${remote_parent}/payload.tar.gz'"
 
 ssh_vm "sudo bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}'"
 
