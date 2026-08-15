@@ -133,6 +133,13 @@ export class ContentService implements OnModuleInit {
       productSkus,
       missing: [],
       text: body.join('\n'),
+      // Giu rieng tung manh de `AdviceComposer` soan lai; `text` o tren la ban fallback khi
+      // khong co ban soan (hoac ban soan bi tu choi vi lo noi con so tien).
+      snippets: [
+        ...selectedFaqs.map((faq) => ({ question: faq.question, body: faq.answer })),
+        ...advice.map((item) => ({ body: item.body })),
+      ],
+      productNames: matched.map((product) => product.name),
       ...(images.length ? { images } : {}),
       ...(links.length ? { links } : {}),
     };

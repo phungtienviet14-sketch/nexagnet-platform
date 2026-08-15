@@ -21,12 +21,14 @@ import {
   type OrderView,
   type OutboundContent,
   type ParseResult,
+  type ProductAdviceResult,
   type PricedOrder,
   type ReplyChannel,
   type SenderType,
   type SupervisorSummary,
 } from '@netviet/shared';
 import { KnowledgeService, type ResolvedGroup } from '../knowledge/knowledge.service.js';
+import { AdviceComposer } from '../content/advice-composer.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
@@ -93,7 +95,39 @@ export class AgentOrchestrator {
     @Optional() private readonly events?: AgentEventsService,
     @Optional() private readonly ruleConfigs?: RuleConfigService,
     @Optional() private readonly content?: ContentService,
+    @Optional() private readonly composer?: AdviceComposer,
   ) {}
+
+  /**
+   * Soan lai cau tra loi tu van bang LLM tren dung nhung manh DA DUYET (Uu tien 2 — bao cao
+   * 15/08/2026). Truoc day `text` la `body.join('\n')`, tuc noi nguyen van FAQ.
+   *
+   * Fail-safe hai lop: khong co composer / khong co manh nao / ban soan rong hoac lo noi con so
+   * tien -> `compose()` tra `null` -> giu NGUYEN ban tra bang. Khach luon nhan duoc noi dung da
+   * duyet; ban soan chi lam no muot hon chu khong phai dieu kien de tra loi.
+   */
+  private async composeAdvice(
+    dispatch: DispatchResult,
+    intent: Intent,
+    customerText: string,
+    context?: ConversationContext,
+  ): Promise<{ dispatch: DispatchResult; composed: boolean }> {
+    const advice = dispatch.outbound as ProductAdviceResult | undefined;
+    if (intent !== 'hoi_san_pham' || !this.composer || !advice?.snippets?.length) {
+      return { dispatch, composed: false };
+    }
+    const text = await this.composer.compose({
+      customerText,
+      productNames: advice.productNames ?? [],
+      snippets: advice.snippets,
+      context,
+    });
+    if (!text) return { dispatch, composed: false };
+    return {
+      dispatch: { ...dispatch, reply: text, outbound: { ...advice, text } },
+      composed: true,
+    };
+  }
 
   /**
    * Xu ly 1 tin. Phat su kien STREAMING (order.created -> agent.progress tung vai ->
@@ -169,7 +203,24 @@ export class AgentOrchestrator {
     const normText = normalize(message.text);
 
     // DISPATCH worker theo intent (dong bo), roi phat tung vai theo thu tu.
-    const dispatch = this.dispatch(parseResult, resolved, normText, rulesConfig, agentsConfig);
+    const dispatched = this.dispatch(parseResult, resolved, normText, rulesConfig, agentsConfig);
+    const { dispatch, composed } = await this.composeAdvice(
+      dispatched,
+      intent,
+      message.text,
+      opts?.conversationContext,
+    );
+    if (composed) {
+      const advisor = dispatch.roles.get('product_advisor');
+      if (advisor) {
+        dispatch.roles.set('product_advisor', {
+          ...advisor,
+          action: 'Soạn tư vấn từ nội dung đã duyệt (LLM soạn văn, không tự ra số)',
+          source: 'llm',
+          usedLlm: true,
+        });
+      }
+    }
     dispatch.roles.set('router', {
       action: `Phân loại: ${INTENT_LABELS[intent]} · người gửi: ${SENDER_LABELS[resolved.senderType]} → ${ROLE_LABELS[primaryRole]}`,
       notes: [resolved.groupName ? `Nhóm: ${resolved.groupName}` : 'Nhóm chưa map đại lý'],
@@ -231,11 +282,12 @@ export class AgentOrchestrator {
     const status =
       supervisor.escalate && dispatch.status === 'pending_review' ? 'needs_edit' : dispatch.status;
 
+    const llmCalls = (usedLlm ? 1 : 0) + (composed ? 1 : 0);
     const trace = this.buildTrace(
       dispatch.roles,
       primaryRole,
       resolved,
-      usedLlm,
+      llmCalls,
       supervisor,
       dispatch.reply,
       dispatch.outbound,
@@ -422,7 +474,7 @@ export class AgentOrchestrator {
     roles: Map<AgentRole, RoleData>,
     primaryRole: AgentRole,
     resolved: ResolvedGroup,
-    usedLlm: boolean,
+    llmCalls: number,
     supervisor: SupervisorSummary,
     reply?: string,
     outbound?: OutboundContent,
@@ -434,7 +486,7 @@ export class AgentOrchestrator {
       steps,
       primaryRole,
       senderType: resolved.senderType,
-      llmCalls: usedLlm ? 1 : 0,
+      llmCalls,
       brainMode: this.parser.name,
       supervisor,
       reply,

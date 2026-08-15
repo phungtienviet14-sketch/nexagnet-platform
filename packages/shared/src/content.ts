@@ -238,4 +238,12 @@ export interface ProductAdviceResult extends OutboundContent {
   ready: boolean;
   productSkus: string[];
   missing: string[];
+  /**
+   * Cac manh FAQ/advice DA DUYET da duoc chon, giu rieng tung manh (chua noi chuoi). `text` la ban
+   * noi nguyen van dung lam FALLBACK; `AdviceComposer` doc `snippets` de soan lai cho tu nhien.
+   * Tach hai thu ra vi ban soan co the that bai — luc do van con ban tra bang de gui.
+   */
+  snippets?: { question?: string; body: string }[];
+  /** Ten san pham da nhan dien — de ban soan goi dung ten, khong tu dat ten khac. */
+  productNames?: string[];
 }
