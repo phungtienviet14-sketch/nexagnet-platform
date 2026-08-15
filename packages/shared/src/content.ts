@@ -88,8 +88,12 @@ export const contentImportManifestSchema = z
   })
   .strict();
 
-/** Toi da bao nhieu anh duoc dinh kem MOT luot tu van. Nhieu hon la spam nhom Zalo. */
-export const MAX_OUTBOUND_IMAGES = 5;
+/**
+ * Toi da bao nhieu anh duoc dinh kem MOT luot tu van (chot 15/08/2026: 3).
+ * Bot Platform khong co "send album" — moi anh la mot request — nen con so nay cung la so request
+ * ban vao rate limit cua nhom. Ba anh du thay san pham ma chua bi coi la spam.
+ */
+export const MAX_OUTBOUND_IMAGES = 3;
 
 export const outboundContentSchema = z
   .object({
