@@ -1,0 +1,217 @@
+/* =========================================================================
+   nexagnet Design System Tokens & Base Styles
+   Enterprise AI Operations Platform (nexagnet247.com)
+   ========================================================================= */
+
+:root {
+  /* Brand Palette */
+  --bg: #F5F3EE;
+  --bg-subtle: #ECE9E1;
+  --text-primary: #111318;
+  --text-secondary: #656762;
+  --text-tertiary: #8E908A;
+  
+  --brand-accent: #3D5AFE;
+  --brand-accent-hover: #2945FF;
+  --soft-accent: #E9ECFF;
+  --soft-accent-subtle: #F2F4FF;
+
+  --success: #197A55;
+  --success-soft: rgba(25, 122, 85, 0.09);
+  --success-border: rgba(25, 122, 85, 0.22);
+  
+  --warn: #B5740D;
+  --warn-soft: rgba(181, 116, 13, 0.08);
+
+  /* Surface & Borders */
+  --surface-card: #FFFFFF;
+  --surface-card-subtle: #FAF9F6;
+  --surface-frame: #FFFFFF;
+  --surface-elevated: #FFFFFF;
+
+  --border-subtle: rgba(17, 19, 24, 0.08);
+  --border-medium: rgba(17, 19, 24, 0.14);
+  --border-strong: rgba(17, 19, 24, 0.24);
+  --border-brand: rgba(61, 90, 254, 0.3);
+
+  /* Radii per Spec */
+  --radius-btn: 9px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-frame: 16px;
+
+  /* Shadows (Restrained, infrastructural) */
+  --shadow-subtle: 0 1px 3px rgba(17, 19, 24, 0.04), 0 4px 12px rgba(17, 19, 24, 0.02);
+  --shadow-card: 0 2px 8px rgba(17, 19, 24, 0.04), 0 16px 36px rgba(17, 19, 24, 0.05);
+  --shadow-frame: 0 4px 20px rgba(17, 19, 24, 0.04), 0 24px 60px rgba(17, 19, 24, 0.07);
+  --shadow-popover: 0 8px 24px rgba(17, 19, 24, 0.12);
+
+  /* Layout */
+  --max-width: 1280px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+code, kbd, samp, pre {
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+}
+
+/* Typography Utilities */
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.text-accent { color: var(--brand-accent); }
+.text-success { color: var(--success); }
+
+/* Buttons */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--text-primary);
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 12px 22px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--text-primary);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.btn-primary:hover {
+  background-color: #222630;
+  border-color: #222630;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(17, 19, 24, 0.12);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: rgba(255, 255, 255, 0.8);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 500;
+  padding: 12px 22px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--border-medium);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+.btn-secondary:hover {
+  background-color: #FFFFFF;
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(17, 19, 24, 0.05);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
+/* Restrained Container */
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
+/* Subtle node motif background elements */
+.node-grid-subtle {
+  background-image: radial-gradient(rgba(17, 19, 24, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Pulsing Status Dot */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--success);
+  position: relative;
+  display: inline-block;
+}
+
+.status-dot::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  background-color: var(--success);
+  opacity: 0.4;
+  animation: pulse-ring 2.4s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  50%, 100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Accessibility: Respect Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .status-dot::after {
+    animation: none !important;
+  }
+}

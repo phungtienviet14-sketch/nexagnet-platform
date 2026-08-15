@@ -1,0 +1,93 @@
+name: Reusable Deploy Tenant Silo
+
+on:
+  workflow_call:
+    inputs:
+      tenant:
+        description: 'Tenant slug (vi du: ultty, amico)'
+        required: true
+        type: string
+      environment:
+        description: 'Target GitHub environment (vi du: production, staging, pilot-ultty)'
+        required: true
+        type: string
+      vm_name:
+        description: 'GCP Compute Engine VM name'
+        required: false
+        type: string
+        default: 'netviet'
+      gcp_project_id:
+        description: 'GCP Project ID'
+        required: false
+        type: string
+        default: 'netviet-host-968934832433'
+      gcp_region:
+        description: 'GCP Region'
+        required: false
+        type: string
+        default: 'asia-southeast1'
+      gcp_zone:
+        description: 'GCP Zone'
+        required: false
+        type: string
+        default: 'asia-southeast1-b'
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER:
+        required: false
+      GCP_DEPLOY_SERVICE_ACCOUNT:
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-silo:
+    name: Deploy Silo [${{ inputs.tenant }} -> ${{ inputs.environment }}]
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 60
+    env:
+      TENANT: ${{ inputs.tenant }}
+      GCP_PROJECT_ID: ${{ inputs.gcp_project_id }}
+      GCP_REGION: ${{ inputs.gcp_region }}
+      GCP_ZONE: ${{ inputs.gcp_zone }}
+      VM_NAME: ${{ inputs.vm_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate tenant pack exists
+        run: |
+          if [[ ! -d "tenants/${{ inputs.tenant }}" ]]; then
+            echo "❌ Lỗi: Thư mục tenant 'tenants/${{ inputs.tenant }}' không tồn tại trong repository!" >&2
+            exit 1
+          fi
+          echo "✔ Đã tìm thấy tenant package: tenants/${{ inputs.tenant }}"
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT || vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build, push neutral image and roll out tenant silo
+        run: bash deploy/netviet/deploy-ci.sh
+        env:
+          GIT_SHA: ${{ github.sha }}
+          TENANT: ${{ inputs.tenant }}
+          ENVIRONMENT: ${{ inputs.environment == 'production' && 'prod' || inputs.environment }}
+
+      - name: Report tenant endpoints
+        run: |
+          public_ip="$(gcloud compute addresses describe netviet-public-ip \
+            --region "${GCP_REGION}" --project "${GCP_PROJECT_ID}" --format='value(address)')"
+          label="${public_ip//./-}"
+          {
+            echo "### Deploy xong cho Tenant: **${{ inputs.tenant }}** (Env: \`${{ inputs.environment }}\`)"
+            echo ""
+            echo "- Demo: https://demo.${label}.sslip.io"
+            echo "- Van hanh Zalo: https://operator.${label}.sslip.io/zalo"
+            echo "- Cau hinh: https://operator.${label}.sslip.io/settings"
+          } >>"${GITHUB_STEP_SUMMARY}"

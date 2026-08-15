@@ -1,0 +1,44 @@
+name: deploy-marketing
+
+# Pipeline CD rieng biet cho trang Marketing Nexagnet (nexagnet247.com / apps/marketing).
+# Tach biet hoan toan khoi cac pipeline deploy tenant silo (Ultty, Amico).
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Moi truong dich cho Marketing'
+        required: true
+        type: choice
+        options:
+          - production
+          - preview
+        default: 'production'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/marketing/**'
+      - '.github/workflows/deploy-marketing.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-marketing-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-verify:
+    name: Build & Verify Marketing Site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - name: Build Marketing Site
+        run: pnpm --filter @nexagnet/marketing build
+      - name: Report Build Ready
+        run: |
+          echo "### Build Marketing site thanh cong!" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Target: \`apps/marketing\` (@nexagnet/marketing)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Domain dich: nexagnet247.com" >> "${GITHUB_STEP_SUMMARY}"

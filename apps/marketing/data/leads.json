@@ -1,0 +1,13 @@
+[
+  {
+    "leadId": "lead_1786799021999_v2xa7",
+    "createdAt": "2026-08-15T13:03:42.000Z",
+    "fullName": "Nguyen Van An",
+    "phone": "0912345678",
+    "email": "an.nguyen@example.com",
+    "company": "Cong ty TNHH Demo",
+    "workflow": "orders",
+    "note": "Khao sat don hang Zalo",
+    "source": "nexagnet247.com/demo"
+  }
+]
