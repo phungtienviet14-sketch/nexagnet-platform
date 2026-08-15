@@ -21,6 +21,7 @@ class FakeCatalogStore extends MediaStore {
 function fakeResponse(): Response & { headers: Record<string, string>; body?: Buffer } {
   const res = {
     headers: {} as Record<string, string>,
+    body: undefined as Buffer | undefined,
     setHeader(name: string, value: string) {
       res.headers[name] = value;
     },

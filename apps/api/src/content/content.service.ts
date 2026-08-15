@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
   MAX_OUTBOUND_IMAGES,
+  loadEnv,
   type ContentAssetView,
   type ContentLifecycleStatus,
   type ContentSnapshotView,
@@ -61,6 +62,43 @@ export class ContentService implements OnModuleInit {
     return this.reload();
   }
 
+  /**
+   * Duyet HANG LOAT qua tung buoc `draft -> reviewed -> approved -> active`.
+   *
+   * Vi sao can: goi khach nap 102 anh san pham, deu o `draft`, ma `productAdvice` chi doc `active`.
+   * Duyet tay la 102 x 3 lan bam — tuc trong thuc te khong ai duyet, va anh khong bao gio den tay
+   * khach. Van DI QUA `setStatus` (khong ghi thang) de moi buoc chuyen van bi luat chuyen trang
+   * thai kiem, va van la mot hanh dong CO Y cua nguoi van hanh chu khong phai tu dong luc boot.
+   */
+  async bulkSetStatus(
+    kind: ContentEntityKind,
+    ids: readonly string[],
+    target: ContentLifecycleStatus,
+  ): Promise<{ changed: number; skipped: string[] }> {
+    const skipped: string[] = [];
+    let changed = 0;
+    for (const id of ids) {
+      try {
+        // Moi vong lay lai trang thai hien tai: `setStatus` reload cache sau moi buoc.
+        while (collection(this.cache, kind).find((item) => item.id === id)?.status !== target) {
+          const current = collection(this.cache, kind).find((item) => item.id === id);
+          if (!current) throw new Error(`Không tìm thấy ${kind} ${id}`);
+          const next = ALLOWED_TRANSITIONS[current.status].find((candidate) =>
+            STATUS_ORDER.indexOf(candidate) > STATUS_ORDER.indexOf(current.status),
+          );
+          if (!next) throw new Error(`Không có đường lên ${target} từ ${current.status}`);
+          await this.setStatus(kind, id, next);
+        }
+        changed += 1;
+      } catch (error: unknown) {
+        // Mot ban ghi hong khong duoc lam do ca me: ghi lai roi di tiep.
+        skipped.push(`${id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    this.logger.log(`Duyệt hàng loạt ${kind} → ${target}: ${changed} đổi, ${skipped.length} bỏ qua.`);
+    return { changed, skipped };
+  }
+
   productAdvice(text: string, products: ProductRef[]): ProductAdviceResult {
     const norm = normalize(text);
     const matched = products.filter((product) =>
@@ -109,18 +147,24 @@ export class ContentService implements OnModuleInit {
       active(asset.status) && asset.productSkus.some((sku) => productSkus.includes(sku));
     const images = this.cache.assets
       .filter((asset) => asset.kind === 'image' && forThisProduct(asset))
-      .slice(0, MAX_OUTBOUND_IMAGES)
-      .map((asset) => ({ url: asset.locator, ...(asset.title ? { alt: asset.title } : {}) }));
+      // Locator tuong doi ma chua dat PUBLIC_BASE_URL -> BO anh do. Gui mot URL Zalo khong tai
+      // duoc thi tin di ma khong co anh, con te hon la khong hua co anh.
+      .flatMap((asset) => {
+        const url = absoluteLocator(asset.locator);
+        return url ? [{ url, ...(asset.title ? { alt: asset.title } : {}) }] : [];
+      })
+      .slice(0, MAX_OUTBOUND_IMAGES);
     // Asset kind='video' truoc 15/08/2026 bi BO QUA hoan toan: `productAdvice` chi doc kind='image'.
     // Zalo khong co API gui video (sendVideo tra 404 — xac minh 11/08/2026) nen video di bang LINK,
     // gop chung vao `links` de moi kenh render cung mot kieu.
     const videoAssetLinks = this.cache.assets
       .filter((asset) => asset.kind === 'video' && forThisProduct(asset))
-      .map((asset) => ({
-        kind: 'video' as const,
-        label: asset.title ?? 'Video sản phẩm',
-        url: asset.locator,
-      }));
+      .flatMap((asset) => {
+        const url = absoluteLocator(asset.locator);
+        return url
+          ? [{ kind: 'video' as const, label: asset.title ?? 'Video sản phẩm', url }]
+          : [];
+      });
     const curatedLinks = this.cache.links
       .filter(
         (link) =>
@@ -144,6 +188,19 @@ export class ContentService implements OnModuleInit {
       ...(links.length ? { links } : {}),
     };
   }
+}
+
+/**
+ * Doi locator cua goi khach thanh URL TUYET DOI de Zalo di tai duoc.
+ *
+ * Goi khach luu duong dan tuong doi (`/media/catalog/...`) de mot goi chay duoc tren ca local,
+ * demo va pilot. Ten mien duoc ghep vao O DAY — luc gui — chu khong luc dong goi.
+ * Chua dat `PUBLIC_BASE_URL` thi tra `null`: ben goi bo anh do thay vi gui mot URL gay.
+ */
+function absoluteLocator(locator: string): string | null {
+  if (!locator.startsWith('/')) return locator;
+  const base = loadEnv().PUBLIC_BASE_URL;
+  return base ? `${base.replace(/\/+$/, '')}${locator}` : null;
 }
 
 /** Tra ve nhieu hon vai cau la thanh mot buc tuong chu — khach Zalo khong doc. */
@@ -177,6 +234,9 @@ function dedupeByUrl<T extends { url: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((item) => (seen.has(item.url) ? false : (seen.add(item.url), true)));
 }
+
+/** Thu tu tien cua vong doi — de `bulkSetStatus` biet buoc nao la "di len". */
+const STATUS_ORDER: ContentLifecycleStatus[] = ['draft', 'reviewed', 'approved', 'active'];
 
 const ALLOWED_TRANSITIONS: Record<ContentLifecycleStatus, ContentLifecycleStatus[]> = {
   draft: ['reviewed'],

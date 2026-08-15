@@ -136,6 +136,12 @@ services:
       # cong no, chat ID nhom Zalo — chi co mat tren dung stack cua ho.
       # Dung TENANT_DIR chu khong phai TENANT: trong image khong co thu muc `tenants/` de tra slug.
       TENANT_DIR: /srv/tenant
+      # Anh CATALOG san pham — cung ly do mount ngoai image nhu goi khach: anh cua tung khach,
+      # khong phai cua ban chung. TACH khoi MEDIA_* (anh khach gui vao, co PII, bucket private).
+      CATALOG_DIR: /srv/catalog
+      # Zalo TU di tai anh ve tu URL nay, nen phai la ten mien cong khai that. Goi khach luu
+      # locator TUONG DOI de mot goi chay duoc ca local/demo/pilot; API ghep goc nay luc gui.
+      PUBLIC_BASE_URL: https://${OPERATOR_DOMAIN}
       DATABASE_URL: postgresql://zalo:${ZALO_DB_PASSWORD}@postgres:5432/zalo
       PERSISTENCE: prisma
       PARSER_MODE: ${PARSER_MODE:-flowise}
@@ -182,6 +188,8 @@ services:
       - ./.runtime/zalo:/runtime/zalo
       # `:ro` — goi khach la hat giong seed, tien trinh khong duoc ghi nguoc vao no.
       - ./tenant-pack:/srv/tenant:ro
+      # `:ro` — anh catalog do buoc dung ngoai sinh ra; tien trinh chi DOC de phuc vu Zalo.
+      - ./catalog-assets:/srv/catalog:ro
     healthcheck:
       test:
         [

@@ -15,6 +15,18 @@ export const assetKindSchema = z.enum(ASSET_KINDS);
 export const contentLinkKindSchema = z.enum(CONTENT_LINK_KINDS);
 export const contentSourceKindSchema = z.enum(CONTENT_SOURCE_KINDS);
 
+/** URL tuyet doi, hoac duong dan bat dau bang `/` (khong cho `//` — do la URL luoc giao thuc). */
+export const assetLocatorSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2_000)
+  .refine(
+    (value) =>
+      (value.startsWith('/') && !value.startsWith('//')) || z.string().url().safeParse(value).success,
+    { message: 'locator phai la URL tuyet doi hoac duong dan bat dau bang "/"' },
+  );
+
 const importedBaseSchema = z.object({
   externalId: z.string().trim().min(1).max(200),
   status: contentLifecycleStatusSchema.default('draft'),
@@ -37,7 +49,15 @@ export const contentImportManifestSchema = z
           .extend({
             kind: assetKindSchema,
             title: z.string().trim().max(500).optional(),
-            locator: z.string().trim().url().max(2_000),
+            /**
+             * URL tuyet doi HOAC duong dan tuyet doi trong chinh he thong (`/media/catalog/...`).
+             *
+             * Cho phep duong dan tuong doi co chu y: goi khach la HAT GIONG dung chung cho local,
+             * demo va pilot — ma ba noi do khac ten mien. Nhung domain vao manifest nghia la moi
+             * moi truong can mot goi khac, va mot lan deploy nham goi la anh tro sang he thong
+             * khac. `PUBLIC_BASE_URL` ghep vao luc GUI, khong phai luc dong goi.
+             */
+            locator: assetLocatorSchema,
             mimeType: z.string().trim().max(200).optional(),
             sourceFileId: z.string().trim().max(500).optional(),
             hash: z.string().trim().max(256).optional(),

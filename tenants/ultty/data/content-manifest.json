@@ -5,7 +5,1130 @@
     "locator": "docs/khach-hang/ultty/nguon-goc/ho-so-khao-sat/gd1/AI Zalo_/FAQ bộ sản phẩm_",
     "version": "2026-08-13"
   },
-  "assets": [],
+  "assets": [
+    {
+      "externalId": "img-AROMA-7303505c6147ab17",
+      "kind": "image",
+      "title": "AROMA — ảnh 1",
+      "locator": "/media/catalog/AROMA/7303505c6147ab17.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "AROMA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-AROMA-efcc1599c859e896",
+      "kind": "image",
+      "title": "AROMA — ảnh 2",
+      "locator": "/media/catalog/AROMA/efcc1599c859e896.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "AROMA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-AROMA-5a0f099034efc411",
+      "kind": "image",
+      "title": "AROMA — ảnh 3",
+      "locator": "/media/catalog/AROMA/5a0f099034efc411.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "AROMA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-AROMA-2d61f99bf0709b5f",
+      "kind": "image",
+      "title": "AROMA — ảnh 4",
+      "locator": "/media/catalog/AROMA/2d61f99bf0709b5f.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "AROMA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-AROMA-8cf9b0b78b479e2d",
+      "kind": "image",
+      "title": "AROMA — ảnh 5",
+      "locator": "/media/catalog/AROMA/8cf9b0b78b479e2d.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "AROMA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-AROMA-8e3020148fd7d7b8",
+      "kind": "image",
+      "title": "AROMA — ảnh 6",
+      "locator": "/media/catalog/AROMA/8e3020148fd7d7b8.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "AROMA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-B23-e93910d4546f6abd",
+      "kind": "image",
+      "title": "B23 — ảnh 1",
+      "locator": "/media/catalog/B23/e93910d4546f6abd.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "B23"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-B23-41d2a1410478816d",
+      "kind": "image",
+      "title": "B23 — ảnh 2",
+      "locator": "/media/catalog/B23/41d2a1410478816d.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "B23"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-B23-c2fa3cc82b0addbf",
+      "kind": "image",
+      "title": "B23 — ảnh 3",
+      "locator": "/media/catalog/B23/c2fa3cc82b0addbf.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "B23"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-B23-6acf6ccea170d61c",
+      "kind": "image",
+      "title": "B23 — ảnh 4",
+      "locator": "/media/catalog/B23/6acf6ccea170d61c.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "B23"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-B23-0de088e11d4a5b17",
+      "kind": "image",
+      "title": "B23 — ảnh 5",
+      "locator": "/media/catalog/B23/0de088e11d4a5b17.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "B23"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-B23-4e7e601305ed9ea2",
+      "kind": "image",
+      "title": "B23 — ảnh 6",
+      "locator": "/media/catalog/B23/4e7e601305ed9ea2.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "B23"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-GREY-b13612fe55b91cb0",
+      "kind": "image",
+      "title": "BB-GREY — ảnh 1",
+      "locator": "/media/catalog/BB-GREY/b13612fe55b91cb0.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-GREY"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-GREY-31705bca957ff9a5",
+      "kind": "image",
+      "title": "BB-GREY — ảnh 2",
+      "locator": "/media/catalog/BB-GREY/31705bca957ff9a5.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-GREY"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-GREY-984b22e8781fbc68",
+      "kind": "image",
+      "title": "BB-GREY — ảnh 3",
+      "locator": "/media/catalog/BB-GREY/984b22e8781fbc68.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-GREY"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-GREY-bd37ccb1134c1763",
+      "kind": "image",
+      "title": "BB-GREY — ảnh 4",
+      "locator": "/media/catalog/BB-GREY/bd37ccb1134c1763.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-GREY"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-GREY-8e32e9b47a9d3121",
+      "kind": "image",
+      "title": "BB-GREY — ảnh 5",
+      "locator": "/media/catalog/BB-GREY/8e32e9b47a9d3121.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-GREY"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-GREY-ef5b3804b5729918",
+      "kind": "image",
+      "title": "BB-GREY — ảnh 6",
+      "locator": "/media/catalog/BB-GREY/ef5b3804b5729918.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-GREY"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-ROSE-1a9bebb0e9cce5f2",
+      "kind": "image",
+      "title": "BB-ROSE — ảnh 1",
+      "locator": "/media/catalog/BB-ROSE/1a9bebb0e9cce5f2.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-ROSE"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-ROSE-1266b9b2744e3634",
+      "kind": "image",
+      "title": "BB-ROSE — ảnh 2",
+      "locator": "/media/catalog/BB-ROSE/1266b9b2744e3634.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-ROSE"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-ROSE-d79cd50de1222222",
+      "kind": "image",
+      "title": "BB-ROSE — ảnh 3",
+      "locator": "/media/catalog/BB-ROSE/d79cd50de1222222.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-ROSE"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-ROSE-af48258b7e4c840b",
+      "kind": "image",
+      "title": "BB-ROSE — ảnh 4",
+      "locator": "/media/catalog/BB-ROSE/af48258b7e4c840b.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-ROSE"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-ROSE-8d0581c9118ae0b8",
+      "kind": "image",
+      "title": "BB-ROSE — ảnh 5",
+      "locator": "/media/catalog/BB-ROSE/8d0581c9118ae0b8.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-ROSE"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-BB-ROSE-d79f12425db4b3e8",
+      "kind": "image",
+      "title": "BB-ROSE — ảnh 6",
+      "locator": "/media/catalog/BB-ROSE/d79f12425db4b3e8.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "BB-ROSE"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-CLAGE-CEX9-1e31c5a01b3ed348",
+      "kind": "image",
+      "title": "CLAGE-CEX9 — ảnh 1",
+      "locator": "/media/catalog/CLAGE-CEX9/1e31c5a01b3ed348.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "CLAGE-CEX9"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-CLAGE-CEX9-d9be1772f0ffa648",
+      "kind": "image",
+      "title": "CLAGE-CEX9 — ảnh 2",
+      "locator": "/media/catalog/CLAGE-CEX9/d9be1772f0ffa648.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "CLAGE-CEX9"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-CLAGE-CEX9-bd2b26d8d8f3b673",
+      "kind": "image",
+      "title": "CLAGE-CEX9 — ảnh 3",
+      "locator": "/media/catalog/CLAGE-CEX9/bd2b26d8d8f3b673.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "CLAGE-CEX9"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-CLAGE-CEX9-0b5ee08fc42d2375",
+      "kind": "image",
+      "title": "CLAGE-CEX9 — ảnh 4",
+      "locator": "/media/catalog/CLAGE-CEX9/0b5ee08fc42d2375.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "CLAGE-CEX9"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-CLAGE-CEX9-7e3ca9b85da42d7e",
+      "kind": "image",
+      "title": "CLAGE-CEX9 — ảnh 5",
+      "locator": "/media/catalog/CLAGE-CEX9/7e3ca9b85da42d7e.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "CLAGE-CEX9"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-CLAGE-CEX9-7b2d26f6d8f74365",
+      "kind": "image",
+      "title": "CLAGE-CEX9 — ảnh 6",
+      "locator": "/media/catalog/CLAGE-CEX9/7b2d26f6d8f74365.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "CLAGE-CEX9"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-COMBO-WFX-PF360-e169eab9a47aa833",
+      "kind": "image",
+      "title": "COMBO-WFX-PF360 — ảnh 1",
+      "locator": "/media/catalog/COMBO-WFX-PF360/e169eab9a47aa833.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "COMBO-WFX-PF360"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-COMBO-WFX-PF360-72c538335bfb2d14",
+      "kind": "image",
+      "title": "COMBO-WFX-PF360 — ảnh 2",
+      "locator": "/media/catalog/COMBO-WFX-PF360/72c538335bfb2d14.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "COMBO-WFX-PF360"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-COMBO-WFX-PF360-b0ea8f649904d634",
+      "kind": "image",
+      "title": "COMBO-WFX-PF360 — ảnh 3",
+      "locator": "/media/catalog/COMBO-WFX-PF360/b0ea8f649904d634.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "COMBO-WFX-PF360"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-COMBO-WFX-PF360-798ba5dd8b38bdfa",
+      "kind": "image",
+      "title": "COMBO-WFX-PF360 — ảnh 4",
+      "locator": "/media/catalog/COMBO-WFX-PF360/798ba5dd8b38bdfa.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "COMBO-WFX-PF360"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-COMBO-WFX-PF360-da8864d2a77a67e3",
+      "kind": "image",
+      "title": "COMBO-WFX-PF360 — ảnh 5",
+      "locator": "/media/catalog/COMBO-WFX-PF360/da8864d2a77a67e3.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "COMBO-WFX-PF360"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-COMBO-WFX-PF360-2fa020418d696833",
+      "kind": "image",
+      "title": "COMBO-WFX-PF360 — ảnh 6",
+      "locator": "/media/catalog/COMBO-WFX-PF360/2fa020418d696833.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "COMBO-WFX-PF360"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNA-fd9ebbad0579e70d",
+      "kind": "image",
+      "title": "ELNA — ảnh 1",
+      "locator": "/media/catalog/ELNA/fd9ebbad0579e70d.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNA-e6372284cd8876fa",
+      "kind": "image",
+      "title": "ELNA — ảnh 2",
+      "locator": "/media/catalog/ELNA/e6372284cd8876fa.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNA-b3534fffaf7b64b4",
+      "kind": "image",
+      "title": "ELNA — ảnh 3",
+      "locator": "/media/catalog/ELNA/b3534fffaf7b64b4.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNA-ae81d2dce8b53706",
+      "kind": "image",
+      "title": "ELNA — ảnh 4",
+      "locator": "/media/catalog/ELNA/ae81d2dce8b53706.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNA-3b42b5e0d0a42c69",
+      "kind": "image",
+      "title": "ELNA — ảnh 5",
+      "locator": "/media/catalog/ELNA/3b42b5e0d0a42c69.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNA-badf5186c2b4fefd",
+      "kind": "image",
+      "title": "ELNA — ảnh 6",
+      "locator": "/media/catalog/ELNA/badf5186c2b4fefd.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNA"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNI-14adcd1e47e78248",
+      "kind": "image",
+      "title": "ELNI — ảnh 1",
+      "locator": "/media/catalog/ELNI/14adcd1e47e78248.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNI"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNI-1d5d34516d7bcbf3",
+      "kind": "image",
+      "title": "ELNI — ảnh 2",
+      "locator": "/media/catalog/ELNI/1d5d34516d7bcbf3.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNI"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNI-c7aa114d161810ba",
+      "kind": "image",
+      "title": "ELNI — ảnh 3",
+      "locator": "/media/catalog/ELNI/c7aa114d161810ba.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNI"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNI-565237f974854f33",
+      "kind": "image",
+      "title": "ELNI — ảnh 4",
+      "locator": "/media/catalog/ELNI/565237f974854f33.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNI"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNI-3b86073e2b060379",
+      "kind": "image",
+      "title": "ELNI — ảnh 5",
+      "locator": "/media/catalog/ELNI/3b86073e2b060379.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNI"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-ELNI-226c75e664b22497",
+      "kind": "image",
+      "title": "ELNI — ảnh 6",
+      "locator": "/media/catalog/ELNI/226c75e664b22497.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "ELNI"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-FELIX-05793a8d4d63c9c2",
+      "kind": "image",
+      "title": "FELIX — ảnh 1",
+      "locator": "/media/catalog/FELIX/05793a8d4d63c9c2.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "FELIX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-FELIX-2235052d6049a6d0",
+      "kind": "image",
+      "title": "FELIX — ảnh 2",
+      "locator": "/media/catalog/FELIX/2235052d6049a6d0.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "FELIX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-FELIX-ac455f7fbd2b88cf",
+      "kind": "image",
+      "title": "FELIX — ảnh 3",
+      "locator": "/media/catalog/FELIX/ac455f7fbd2b88cf.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "FELIX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-FELIX-e66ff092b6c09edd",
+      "kind": "image",
+      "title": "FELIX — ảnh 4",
+      "locator": "/media/catalog/FELIX/e66ff092b6c09edd.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "FELIX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-FELIX-9112960e947357da",
+      "kind": "image",
+      "title": "FELIX — ảnh 5",
+      "locator": "/media/catalog/FELIX/9112960e947357da.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "FELIX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-FELIX-7241262ec928f91b",
+      "kind": "image",
+      "title": "FELIX — ảnh 6",
+      "locator": "/media/catalog/FELIX/7241262ec928f91b.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "FELIX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-HERCULES-f5928de5e891c9f1",
+      "kind": "image",
+      "title": "HERCULES — ảnh 1",
+      "locator": "/media/catalog/HERCULES/f5928de5e891c9f1.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "HERCULES"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-HERCULES-f8cf151e5a7144e0",
+      "kind": "image",
+      "title": "HERCULES — ảnh 2",
+      "locator": "/media/catalog/HERCULES/f8cf151e5a7144e0.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "HERCULES"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-HERCULES-7925eaa2ced5f23d",
+      "kind": "image",
+      "title": "HERCULES — ảnh 3",
+      "locator": "/media/catalog/HERCULES/7925eaa2ced5f23d.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "HERCULES"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-HERCULES-5604ce0fabba5b6d",
+      "kind": "image",
+      "title": "HERCULES — ảnh 4",
+      "locator": "/media/catalog/HERCULES/5604ce0fabba5b6d.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "HERCULES"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-HERCULES-dcabda23861d37a9",
+      "kind": "image",
+      "title": "HERCULES — ảnh 5",
+      "locator": "/media/catalog/HERCULES/dcabda23861d37a9.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "HERCULES"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-HERCULES-7c74fddc22284b23",
+      "kind": "image",
+      "title": "HERCULES — ảnh 6",
+      "locator": "/media/catalog/HERCULES/7c74fddc22284b23.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "HERCULES"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-MKL-a97bc6d70108d2b9",
+      "kind": "image",
+      "title": "MKL — ảnh 1",
+      "locator": "/media/catalog/MKL/a97bc6d70108d2b9.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "MKL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-MKL-02d9291f9ce3896c",
+      "kind": "image",
+      "title": "MKL — ảnh 2",
+      "locator": "/media/catalog/MKL/02d9291f9ce3896c.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "MKL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-MKL-8bb8108984e3aa0d",
+      "kind": "image",
+      "title": "MKL — ảnh 3",
+      "locator": "/media/catalog/MKL/8bb8108984e3aa0d.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "MKL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-MKL-8d79c4b1a96ca833",
+      "kind": "image",
+      "title": "MKL — ảnh 4",
+      "locator": "/media/catalog/MKL/8d79c4b1a96ca833.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "MKL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-MKL-1100aa086c713fe8",
+      "kind": "image",
+      "title": "MKL — ảnh 5",
+      "locator": "/media/catalog/MKL/1100aa086c713fe8.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "MKL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-MKL-f9586825ab7cf69c",
+      "kind": "image",
+      "title": "MKL — ảnh 6",
+      "locator": "/media/catalog/MKL/f9586825ab7cf69c.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "MKL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-PRINCESS-EASYFILL-19dec4a217bd202f",
+      "kind": "image",
+      "title": "PRINCESS-EASYFILL — ảnh 1",
+      "locator": "/media/catalog/PRINCESS-EASYFILL/19dec4a217bd202f.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "PRINCESS-EASYFILL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-PRINCESS-EASYFILL-e276b5a5735d19ab",
+      "kind": "image",
+      "title": "PRINCESS-EASYFILL — ảnh 2",
+      "locator": "/media/catalog/PRINCESS-EASYFILL/e276b5a5735d19ab.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "PRINCESS-EASYFILL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-PRINCESS-EASYFILL-11bb157bbb4c01b9",
+      "kind": "image",
+      "title": "PRINCESS-EASYFILL — ảnh 3",
+      "locator": "/media/catalog/PRINCESS-EASYFILL/11bb157bbb4c01b9.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "PRINCESS-EASYFILL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-PRINCESS-EASYFILL-b921c4692682356e",
+      "kind": "image",
+      "title": "PRINCESS-EASYFILL — ảnh 4",
+      "locator": "/media/catalog/PRINCESS-EASYFILL/b921c4692682356e.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "PRINCESS-EASYFILL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-PRINCESS-EASYFILL-0f3073858f68f766",
+      "kind": "image",
+      "title": "PRINCESS-EASYFILL — ảnh 5",
+      "locator": "/media/catalog/PRINCESS-EASYFILL/0f3073858f68f766.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "PRINCESS-EASYFILL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-PRINCESS-EASYFILL-d1e175da3d6cf8e6",
+      "kind": "image",
+      "title": "PRINCESS-EASYFILL — ảnh 6",
+      "locator": "/media/catalog/PRINCESS-EASYFILL/d1e175da3d6cf8e6.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "PRINCESS-EASYFILL"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SCW18-e30c1114add4cc11",
+      "kind": "image",
+      "title": "SCW18 — ảnh 1",
+      "locator": "/media/catalog/SCW18/e30c1114add4cc11.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SCW18"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SCW18-33bf93061dc3f776",
+      "kind": "image",
+      "title": "SCW18 — ảnh 2",
+      "locator": "/media/catalog/SCW18/33bf93061dc3f776.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SCW18"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SCW18-a2ced72ad7e16733",
+      "kind": "image",
+      "title": "SCW18 — ảnh 3",
+      "locator": "/media/catalog/SCW18/a2ced72ad7e16733.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SCW18"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SCW18-3c27165e5ffbb2b4",
+      "kind": "image",
+      "title": "SCW18 — ảnh 4",
+      "locator": "/media/catalog/SCW18/3c27165e5ffbb2b4.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SCW18"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SCW18-19c4563326363eab",
+      "kind": "image",
+      "title": "SCW18 — ảnh 5",
+      "locator": "/media/catalog/SCW18/19c4563326363eab.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SCW18"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SCW18-63e079b9a7df2105",
+      "kind": "image",
+      "title": "SCW18 — ảnh 6",
+      "locator": "/media/catalog/SCW18/63e079b9a7df2105.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SCW18"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR018HM-7789ea5e36664cf9",
+      "kind": "image",
+      "title": "SKJ-CR018HM — ảnh 1",
+      "locator": "/media/catalog/SKJ-CR018HM/7789ea5e36664cf9.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR018HM"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR018HM-38002277728ed7f5",
+      "kind": "image",
+      "title": "SKJ-CR018HM — ảnh 2",
+      "locator": "/media/catalog/SKJ-CR018HM/38002277728ed7f5.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR018HM"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR018HM-e9de8dc80d0dd0bb",
+      "kind": "image",
+      "title": "SKJ-CR018HM — ảnh 3",
+      "locator": "/media/catalog/SKJ-CR018HM/e9de8dc80d0dd0bb.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR018HM"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR018HM-128469f9c2edde82",
+      "kind": "image",
+      "title": "SKJ-CR018HM — ảnh 4",
+      "locator": "/media/catalog/SKJ-CR018HM/128469f9c2edde82.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR018HM"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR018HM-b3c3b9bc39e00eda",
+      "kind": "image",
+      "title": "SKJ-CR018HM — ảnh 5",
+      "locator": "/media/catalog/SKJ-CR018HM/b3c3b9bc39e00eda.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR018HM"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR018HM-d6311221dc58a62e",
+      "kind": "image",
+      "title": "SKJ-CR018HM — ảnh 6",
+      "locator": "/media/catalog/SKJ-CR018HM/d6311221dc58a62e.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR018HM"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR022-ff343128122c1d39",
+      "kind": "image",
+      "title": "SKJ-CR022 — ảnh 1",
+      "locator": "/media/catalog/SKJ-CR022/ff343128122c1d39.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR022"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR022-940ae87cb194ba3e",
+      "kind": "image",
+      "title": "SKJ-CR022 — ảnh 2",
+      "locator": "/media/catalog/SKJ-CR022/940ae87cb194ba3e.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR022"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR022-95575ee59a1b55d9",
+      "kind": "image",
+      "title": "SKJ-CR022 — ảnh 3",
+      "locator": "/media/catalog/SKJ-CR022/95575ee59a1b55d9.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR022"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR022-e60eae36d8b39010",
+      "kind": "image",
+      "title": "SKJ-CR022 — ảnh 4",
+      "locator": "/media/catalog/SKJ-CR022/e60eae36d8b39010.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR022"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR022-caa5f0c8aa1db684",
+      "kind": "image",
+      "title": "SKJ-CR022 — ảnh 5",
+      "locator": "/media/catalog/SKJ-CR022/caa5f0c8aa1db684.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR022"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-SKJ-CR022-b4fb85b5a15272e4",
+      "kind": "image",
+      "title": "SKJ-CR022 — ảnh 6",
+      "locator": "/media/catalog/SKJ-CR022/b4fb85b5a15272e4.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "SKJ-CR022"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-V08-7f5f452517ec356a",
+      "kind": "image",
+      "title": "V08 — ảnh 1",
+      "locator": "/media/catalog/V08/7f5f452517ec356a.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "V08"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-V08-4d54c39dca9c25a8",
+      "kind": "image",
+      "title": "V08 — ảnh 2",
+      "locator": "/media/catalog/V08/4d54c39dca9c25a8.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "V08"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-V08-6a11613b03947b52",
+      "kind": "image",
+      "title": "V08 — ảnh 3",
+      "locator": "/media/catalog/V08/6a11613b03947b52.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "V08"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-V08-b5ba3c40371bed92",
+      "kind": "image",
+      "title": "V08 — ảnh 4",
+      "locator": "/media/catalog/V08/b5ba3c40371bed92.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "V08"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-V08-10a9cba5339fb836",
+      "kind": "image",
+      "title": "V08 — ảnh 5",
+      "locator": "/media/catalog/V08/10a9cba5339fb836.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "V08"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-V08-d3feed8df79afb8c",
+      "kind": "image",
+      "title": "V08 — ảnh 6",
+      "locator": "/media/catalog/V08/d3feed8df79afb8c.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "V08"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-WFX-e6363460d141a314",
+      "kind": "image",
+      "title": "WFX — ảnh 1",
+      "locator": "/media/catalog/WFX/e6363460d141a314.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "WFX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-WFX-2feae4d2ecec72b9",
+      "kind": "image",
+      "title": "WFX — ảnh 2",
+      "locator": "/media/catalog/WFX/2feae4d2ecec72b9.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "WFX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-WFX-a94b421c643f0ee3",
+      "kind": "image",
+      "title": "WFX — ảnh 3",
+      "locator": "/media/catalog/WFX/a94b421c643f0ee3.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "WFX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-WFX-39dd5ad0137429b6",
+      "kind": "image",
+      "title": "WFX — ảnh 4",
+      "locator": "/media/catalog/WFX/39dd5ad0137429b6.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "WFX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-WFX-0eaa8a5b06cec3ea",
+      "kind": "image",
+      "title": "WFX — ảnh 5",
+      "locator": "/media/catalog/WFX/0eaa8a5b06cec3ea.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "WFX"
+      ],
+      "status": "draft"
+    },
+    {
+      "externalId": "img-WFX-ec305f649a68890b",
+      "kind": "image",
+      "title": "WFX — ảnh 6",
+      "locator": "/media/catalog/WFX/ec305f649a68890b.webp",
+      "mimeType": "image/webp",
+      "productSkus": [
+        "WFX"
+      ],
+      "status": "draft"
+    }
+  ],
   "faqs": [
     {
       "externalId": "faq:bb:bb-grey:001",
