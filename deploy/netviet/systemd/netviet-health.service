@@ -1,9 +1,0 @@
-[Unit]
-Description=NetViet private pilot health check
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-ExecStart=/srv/netviet/apps/zalo-ultty/health-check.sh
-User=root

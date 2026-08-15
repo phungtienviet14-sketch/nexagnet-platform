@@ -1,0 +1,50 @@
+# TANG EDGE — mot stack DUY NHAT tren VM, dung ngoai moi stack khach.
+#
+# Chi mot tien trinh giu duoc :80/:443, nen cong vao phai la cua rieng no chu khong the nam trong
+# compose project cua mot khach nao. Truoc thay doi nay, `gateway` song trong project `zalo-ultty`:
+# khach thu hai len la gianh cong, va "nhieu khach tren mot VM" khong the xay ra.
+#
+# Edge khong biet truoc danh sach khach: no `import /etc/caddy/tenants/*.caddy`, con moi lan deploy
+# mot khach ghi ra mot manh roi nap lai Caddy. Xem edge/Caddyfile.
+
+name: netviet-edge
+
+services:
+  gateway:
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    # `always` (khong phai `unless-stopped`): edge sap thi MOI khach cung mat duong vao, ke ca khi
+    # ai do `docker stop` thu cong roi VM reboot.
+    restart: always
+    env_file:
+      - ./.runtime/caddy.env
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Manh cau hinh cua tung khach. `:ro` — do buoc deploy sinh ra, Caddy chi doc.
+      - ./tenants:/etc/caddy/tenants:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      # Kiem suc khoe cua RIENG edge, khong phu thuoc khach nao dang chay: mot khach dang deploy
+      # khong duoc lam edge bi coi la hong.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - edge
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  edge:
+    # `external` cho ca edge lan stack khach: mang do deploy-remote.sh tao truoc, nen thu tu dung
+    # stack nao truoc khong con quan trong.
+    name: netviet-edge
+    external: true

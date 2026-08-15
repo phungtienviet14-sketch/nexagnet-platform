@@ -1,7 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-ultty}"
+TENANT_SLUG="${TENANT_SLUG:-ultty}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
+EDGE_DIR="${EDGE_DIR:-/srv/netviet/edge}"
 cd "${APP_DIR}"
 
 if [[ ! -s .runtime/secrets.env ]]; then
@@ -36,7 +38,7 @@ for domain in "${DEMO_DOMAIN}" "${OPERATOR_DOMAIN}" "${FLOWISE_DOMAIN}"; do
   fi
 done
 
-"${COMPOSE[@]}" pull postgres flowise gateway
+"${COMPOSE[@]}" pull postgres flowise
 "${COMPOSE[@]}" up -d postgres
 for attempt in {1..60}; do
   if "${COMPOSE[@]}" exec -T postgres pg_isready -U netviet_admin -d postgres >/dev/null; then
@@ -76,17 +78,21 @@ done
 # this, an unchanged container that an operator had temporarily enabled could send the smoke fixture
 # through a live Zalo transport before smoke-test.mjs gets a chance to inspect the channel mode.
 "${COMPOSE[@]}" up -d --no-deps --force-recreate api web
-# Caddy khong tu reload khi noi dung bind-mounted Caddyfile thay doi.
-"${COMPOSE[@]}" up -d --force-recreate gateway
 "${COMPOSE[@]}" ps
+
+# NAP LAI EDGE, KHONG DUNG LAI. Manh cau hinh cua khach nay vua duoc ghi lai, ma Caddy khong tu
+# theo doi tep bind-mount. `caddy reload` doi cau hinh tai cho, nen cac khach KHAC dang duoc phuc vu
+# khong bi rot ket noi chi vi mot khach deploy — dieu se xay ra neu dung `restart`.
+EDGE_COMPOSE=(docker compose --env-file "${EDGE_DIR}/.runtime/caddy.env" -f "${EDGE_DIR}/compose.yaml")
+"${EDGE_COMPOSE[@]}" exec -T gateway caddy reload --config /etc/caddy/Caddyfile
 
 for attempt in {1..60}; do
   if curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
     break
   fi
   if [[ "${attempt}" -eq 60 ]]; then
-    echo "Gateway khong healthy sau 2 phut." >&2
-    "${COMPOSE[@]}" logs --tail=100 gateway >&2
+    echo "Edge khong healthy sau 2 phut." >&2
+    "${EDGE_COMPOSE[@]}" logs --tail=100 gateway >&2
     exit 1
   fi
   sleep 2
@@ -107,12 +113,16 @@ if [[ ! "${smoke_order_id}" =~ ^[0-9a-f-]{36}$ ]] || \
 fi
 
 "${COMPOSE[@]}" restart api
+# Kiem qua chinh hostname cua khach nay, khong qua 127.0.0.1:8080 nhu truoc: :8080 gio la suc khoe
+# cua RIENG edge, no xanh ke ca khi api cua khach nay chet.
 for attempt in {1..60}; do
-  if curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
+  if curl -fsS --max-time 5 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
+    "https://${OPERATOR_DOMAIN}/health" >/dev/null; then
     break
   fi
   if [[ "${attempt}" -eq 60 ]]; then
     echo "API khong healthy sau restart." >&2
+    "${COMPOSE[@]}" logs --tail=100 api >&2
     exit 1
   fi
   sleep 2
@@ -124,7 +134,7 @@ done
   -e "VERIFY_ORDER_ID=${smoke_order_id}" \
   -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
   bootstrap node --input-type=module - < smoke-test.mjs
-echo "Stack zalo-ultty da healthy tai 127.0.0.1:8080."
+echo "Stack zalo-${TENANT_SLUG} da healthy sau edge."
 
 # Public endpoints/UI shell phai reachable qua TLS, trong khi protected API phai tu choi anonymous.
 for attempt in {1..60}; do

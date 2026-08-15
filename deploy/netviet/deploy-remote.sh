@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "$#" -ne 5 ]]; then
-  echo "Usage: $0 GCP_PROJECT_ID APP_IMAGE FLOWISE_IMAGE BACKUP_BUCKET PUBLIC_IP" >&2
+if [[ "$#" -lt 5 || "$#" -gt 6 ]]; then
+  echo "Usage: $0 GCP_PROJECT_ID APP_IMAGE FLOWISE_IMAGE BACKUP_BUCKET PUBLIC_IP [TENANT_SLUG]" >&2
   exit 64
 fi
 
@@ -11,9 +11,19 @@ app_image="$2"
 flowise_image="$3"
 backup_bucket="$4"
 public_ip="$5"
+# Slug khach quyet dinh thu muc stack. Mac dinh 'ultty' giu nguyen hanh vi cua moi lan deploy truoc
+# thay doi nay — deploy.ps1 chua truyen tham so thu 6 van ra dung stack no van deploy tu truoc.
+tenant_slug="${6:-ultty}"
+[[ "$tenant_slug" =~ ^[a-z0-9-]+$ ]] || {
+  echo "TENANT_SLUG khong hop le: '$tenant_slug'." >&2
+  exit 64
+}
 source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 remote_parent="$(dirname "$source_dir")"
-app_dir='/srv/netviet/apps/zalo-ultty'
+# MOI KHACH MOT THU MUC. Voi slug 'ultty' duong dan nay bang y het duong dan cu, nen stack dang
+# chay khong phai di chuyen gi.
+app_dir="/srv/netviet/apps/zalo-${tenant_slug}"
+edge_dir='/srv/netviet/edge'
 
 [[ "$source_dir" =~ ^/tmp/netviet-deploy-[0-9]+/netviet$ ]]
 [[ "$remote_parent" =~ ^/tmp/netviet-deploy-[0-9]+$ ]]
@@ -62,20 +72,67 @@ else
   echo "Khong co anh catalog — tu van se gui khong kem anh." >&2
 fi
 chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/"*.sh
+
+# --- CHUYEN TIEP TU BO CUC MOT-KHACH -------------------------------------------------------------
+# Ban cu chay Caddy BEN TRONG compose project cua khach, va container do dang giu :80/:443. Compose
+# khong tu don no khi service bien mat khoi file, nen edge se khong bind duoc cong va ca lan deploy
+# chet o buoc dung edge. Tim theo NHAN compose (khong theo ten container) roi go dung no.
+legacy_gateway="$(docker ps -aq \
+  --filter "label=com.docker.compose.project=zalo-${tenant_slug}" \
+  --filter "label=com.docker.compose.service=gateway" || true)"
+if [[ -n "${legacy_gateway}" ]]; then
+  echo "Go gateway cu nam trong stack khach (giu :80/:443) truoc khi dung edge." >&2
+  docker rm -f ${legacy_gateway}
+fi
+
+# Unit khong-template cua ban cu van con `enable` tren VM va van tro vao cung thu muc, nen neu de
+# lai thi moi nhip timer se co hai tien trinh cung lam mot viec. Ban moi la `netviet-*@<slug>`.
+for legacy_unit in netviet-stack.service netviet-backup.timer netviet-backup.service \
+  netviet-health.timer netviet-health.service netviet-soak.service; do
+  if systemctl list-unit-files "${legacy_unit}" --no-legend 2>/dev/null | grep -q .; then
+    systemctl disable --now "${legacy_unit}" >/dev/null 2>&1 || true
+    rm -f "/etc/systemd/system/${legacy_unit}"
+  fi
+done
+
+# --- TANG EDGE DUNG CHUNG ------------------------------------------------------------------------
+# Mang `netviet-edge` la mat phang duy nhat noi edge toi api/web/flowise cua tung khach. Tao o day,
+# TRUOC ca hai stack, nen thu tu dung stack nao truoc khong con quan trong (ca hai khai `external`).
+docker network inspect netviet-edge >/dev/null 2>&1 || docker network create netviet-edge
+install -d -m 0750 "$edge_dir"
+install -d -m 0750 "$edge_dir/tenants"
+install -d -m 0750 "$edge_dir/.runtime"
+# `--exclude tenants` va `--exclude .runtime`: manh cau hinh cua CAC KHACH KHAC dang nam trong do.
+# Dong bo dap len se xoa mat khach khac moi lan mot khach duoc deploy.
+rsync -a --exclude 'tenants' --exclude '.runtime' "$source_dir/edge/" "$edge_dir/"
+
 cp "$app_dir/systemd/"*.service "$app_dir/systemd/"*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now netviet-backup.timer netviet-health.timer
-# netviet-stack.service: `enable` (khong `--now`) — deploy-stack.sh ngay duoi day tu dua stack len;
-# unit chi can co mat de lan reboot sau tu chay lai `docker compose up -d`.
-systemctl enable netviet-stack.service
+# UNIT THEO KHACH (`@<slug>`): moi khach mot instance rieng, nen dung mot stack khong dung toi
+# khach khac. `%i` trong unit template la slug.
+systemctl enable --now "netviet-backup@${tenant_slug}.timer" "netviet-health@${tenant_slug}.timer"
+# netviet-stack@<slug>.service: `enable` (khong `--now`) — deploy-stack.sh ngay duoi day tu dua
+# stack len; unit chi can co mat de lan reboot sau tu chay lai `docker compose up -d`.
+systemctl enable "netviet-stack@${tenant_slug}.service"
+systemctl enable --now netviet-edge.service
+
 env \
   GCP_PROJECT_ID="$gcp_project_id" \
   APP_IMAGE="$app_image" \
   FLOWISE_IMAGE="$flowise_image" \
   PUBLIC_IP="$public_ip" \
   BACKUP_BUCKET="$backup_bucket" \
+  TENANT_SLUG="$tenant_slug" \
+  APP_DIR="$app_dir" \
+  EDGE_DIR="$edge_dir" \
+  PRIMARY_TENANT="${PRIMARY_TENANT:-ultty}" \
   "$app_dir/render-secrets.sh"
-"$app_dir/deploy-stack.sh"
-env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" "$app_dir/backup.sh"
-systemctl start --no-block netviet-soak.service
+
+# Edge phai len TRUOC stack khach: deploy-stack.sh ket thuc bang smoke test qua HTTPS cong khai,
+# ma duong do di xuyen edge.
+(cd "$edge_dir" && docker compose --env-file .runtime/caddy.env -f compose.yaml up -d)
+
+env TENANT_SLUG="$tenant_slug" APP_DIR="$app_dir" EDGE_DIR="$edge_dir" "$app_dir/deploy-stack.sh"
+env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" APP_DIR="$app_dir" "$app_dir/backup.sh"
+systemctl start --no-block "netviet-soak@${tenant_slug}.service"
 rm -rf -- "$remote_parent"

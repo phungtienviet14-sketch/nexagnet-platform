@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-ultty}"
+TENANT_SLUG="${TENANT_SLUG:-ultty}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-gs://netviet-host-968934832433-backups}"
 DURATION_SECONDS="${DURATION_SECONDS:-86400}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-60}"

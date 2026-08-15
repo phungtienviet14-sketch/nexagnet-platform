@@ -1,9 +1,0 @@
-[Unit]
-Description=NetViet Zalo and Flowise PostgreSQL backup
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-ExecStart=/srv/netviet/apps/zalo-ultty/backup.sh
-User=root

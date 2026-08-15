@@ -2,7 +2,8 @@
 set -euo pipefail
 umask 077
 
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-ultty}"
+TENANT_SLUG="${TENANT_SLUG:-ultty}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
 IMAGE="${1:?Usage: rollback.sh REGISTRY/IMAGE@sha256:DIGEST [deepseek|flowise]}"
 PARSER_MODE_VALUE="${2:-deepseek}"
 
@@ -51,6 +52,7 @@ fi
 
 COMPOSE=(docker compose --env-file "${ENV_FILE}" -f compose.yaml)
 "${COMPOSE[@]}" pull api web
-"${COMPOSE[@]}" up -d api web gateway
-curl -fsS --retry 30 --retry-delay 2 http://127.0.0.1:8080/health >/dev/null
+"${COMPOSE[@]}" up -d api web
+operator_domain="$(sed -n "s/^OPERATOR_DOMAIN=//p" .runtime/secrets.env | tail -n 1)"
+curl -fsS --retry 30 --retry-delay 2 --resolve "${operator_domain}:443:127.0.0.1" "https://${operator_domain}/health" >/dev/null
 echo "Rollback thanh cong: parser=${PARSER_MODE_VALUE}, image=${IMAGE}"

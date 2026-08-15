@@ -1,0 +1,20 @@
+[Unit]
+# Dua TANG EDGE len moi lan VM khoi dong. `restart: always` trong edge/compose.yaml da lo phan
+# container con ton tai; unit nay lo truong hop container bi xoa (docker compose down, don dep,
+# doi image tay) — luc do khong con gi de Docker restart.
+#
+# Khac cac unit khac trong thu muc nay, day KHONG phai unit template: chi co dung MOT edge tren
+# VM, vi chi mot tien trinh giu duoc :80/:443. Cac stack khach la `netviet-stack@<slug>.service`.
+Description=NetViet edge gateway (dung chung cho moi khach, always on)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/srv/netviet/edge
+ExecStart=/usr/bin/docker compose --env-file .runtime/caddy.env -f compose.yaml up -d
+User=root
+
+[Install]
+WantedBy=multi-user.target

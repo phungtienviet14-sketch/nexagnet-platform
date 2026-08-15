@@ -1,0 +1,11 @@
+[Unit]
+Description=Soak test 24 gio cho khach %i
+After=netviet-health@%i.service
+
+[Service]
+Type=simple
+Environment=APP_DIR=/srv/netviet/apps/zalo-%i
+Environment=TENANT_SLUG=%i
+ExecStart=/srv/netviet/apps/zalo-%i/soak-test.sh
+User=root
+Restart=no

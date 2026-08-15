@@ -2,18 +2,18 @@
 # Dua stack len moi lan VM khoi dong. `restart: always` trong compose.yaml da lo phan container
 # con ton tai; unit nay lo truong hop container bi xoa (docker compose down, don dep, doi image
 # tay) — luc do khong con gi de Docker restart. Hai lop cong lai = "he thong luon chay".
-Description=NetViet zalo-ultty stack (dev/demo, always on)
+Description=NetViet stack khach %i (dev/demo, always on)
 After=docker.service
 Requires=docker.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/srv/netviet/apps/zalo-ultty
+WorkingDirectory=/srv/netviet/apps/zalo-%i
 # Cung khoa voi deploy-stack.sh va health-check.sh: hai tien trinh `docker compose up` chay
 # chong nhau lam deploy chet ("removal of container ... is already in progress", 04/08/2026).
 # `--no-recreate` mot minh KHONG du de tranh dung nhau. Boot thi doi duoc, nen dung -w 300.
-ExecStart=/usr/bin/flock -w 300 /srv/netviet/apps/zalo-ultty/.runtime/compose.lock /usr/bin/docker compose --env-file .runtime/secrets.env -f compose.yaml up -d --no-recreate
+ExecStart=/usr/bin/flock -w 300 /srv/netviet/apps/zalo-%i/.runtime/compose.lock /usr/bin/docker compose --env-file .runtime/secrets.env -f compose.yaml up -d --no-recreate
 User=root
 
 [Install]

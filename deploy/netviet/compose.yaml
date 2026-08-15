@@ -1,4 +1,12 @@
-name: zalo-ultty
+# STACK CUA MOT KHACH. Moi khach chay mot ban rieng cua file nay: rieng project, rieng volume,
+# rieng PostgreSQL, rieng Flowise — dung mo hinh silo trong docs/kien-truc/nen-tang-da-khach.md
+# ("khong dung shared DB/tenantId trong phase silo").
+#
+# Ten project quyet dinh ten volume, nen no phai mang slug. Voi slug `ultty` chuoi nay cho ra dung
+# `zalo-ultty` nhu truoc thay doi — stack dang chay giu nguyen volume va du lieu PostgreSQL cua no.
+#
+# KHONG con service `gateway` o day: :80/:443 nay thuoc tang edge dung chung (deploy/netviet/edge/).
+name: zalo-${TENANT_SLUG}
 
 services:
   postgres:
@@ -73,8 +81,8 @@ services:
       LOG_SANITIZE_BODY_FIELDS: password,credential,apiKey,token,secret
       LOG_SANITIZE_HEADER_FIELDS: authorization,cookie,x-api-key
       FLOWISE_FILE_SIZE_LIMIT: 1mb
-    ports:
-      - "127.0.0.1:3002:3000"
+    # KHONG con mo cong tren host: voi nhieu khach thi 127.0.0.1:3002 chi phuc vu duoc mot nguoi.
+    # Duong vao Flowise nay di qua edge theo hostname rieng cua tung khach.
     volumes:
       - flowise-data:/home/node/.flowise
     healthcheck:
@@ -84,8 +92,13 @@ services:
       retries: 30
       start_period: 30s
     networks:
-      - backend
-      - data
+      backend:
+      data:
+      # Alias mang MANG SLUG: tren mang edge dung chung, hai khach deu co service ten `flowise`,
+      # nen ten service khong con phan biet duoc ai voi ai. Manh Caddy cua khach tro vao alias nay.
+      edge:
+        aliases:
+          - flowise-${TENANT_SLUG}
 
   bootstrap:
     image: ${APP_IMAGE}
@@ -203,8 +216,11 @@ services:
       retries: 20
       start_period: 20s
     networks:
-      - backend
-      - data
+      backend:
+      data:
+      edge:
+        aliases:
+          - api-${TENANT_SLUG}
 
   web:
     image: ${APP_IMAGE}
@@ -240,46 +256,24 @@ services:
       retries: 20
       start_period: 20s
     networks:
-      - backend
-
-  gateway:
-    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
-    # `always` (khong phai `unless-stopped`): stack phai tu quay lai ke ca sau khi ai do
-    # `docker stop` thu cong roi VM reboot — yeu cau "he thong tren VM luon chay".
-    restart: always
-    depends_on:
-      api:
-        condition: service_healthy
-      web:
-        condition: service_healthy
-    environment:
-      API_KEY: ${API_KEY}
-    env_file:
-      - ./.runtime/caddy.env
-    ports:
-      - "127.0.0.1:8080:8080"
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - backend
+      backend:
+      edge:
+        aliases:
+          - web-${TENANT_SLUG}
 
 volumes:
   postgres-data:
   flowise-data:
-  caddy-data:
-  caddy-config:
 
 networks:
   backend:
   data:
     internal: true
+  # MANG DUNG CHUNG voi tang edge. `external` — mang do deploy-remote.sh tao san, nen dung stack
+  # edge hay stack khach truoc deu duoc.
+  #
+  # Day la mat phang mang DUY NHAT bac qua giua cac khach, va no CO Y chi noi toi edge: `backend`
+  # va `data` van rieng tung project, nen api cua khach nay khong nhin thay PostgreSQL cua khach kia.
+  edge:
+    name: netviet-edge
+    external: true

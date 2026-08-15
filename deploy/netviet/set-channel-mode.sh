@@ -7,7 +7,8 @@ if [[ "$#" -ne 1 ]]; then
   exit 64
 fi
 
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-ultty}"
+TENANT_SLUG="${TENANT_SLUG:-ultty}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
 RUNTIME_DIR="${RUNTIME_DIR:-${APP_DIR}/.runtime}"
 mode="$1"
 cd "$APP_DIR"

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 
-const caddyfile = await readFile(new URL('./Caddyfile', import.meta.url), 'utf8');
+const caddyfile = await readFile(new URL('./edge/Caddyfile', import.meta.url), 'utf8');
 const deployStack = await readFile(new URL('./deploy-stack.sh', import.meta.url), 'utf8');
 const compose = await readFile(new URL('./compose.yaml', import.meta.url), 'utf8');
 const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.url), 'utf8');
@@ -129,13 +129,46 @@ test('moi namespace controller deu co duong di qua Caddy — khong route nao roi
 
 // Quyet dinh 04/08/2026 (dot 2): hostname demo va operator hanh xu GIONG NHAU. Truoc do demo tra
 // 404 cho /settings* nen nguoi van hanh tuong trang cau hinh chua ton tai.
+//
+// Sau khi tach edge (15/08/2026), hostname khong con nam trong Caddyfile: edge dung chung cho moi
+// khach va khong biet truoc ten mien nao, con tung khach duoc render ra mot manh rieng. Nen khang
+// dinh nay chuyen sang doc BO SINH MANH trong render-secrets.sh.
 test('the demo hostname no longer 404s the operator surface', () => {
-  const demoBlock = caddyfile.match(/\{\$DEMO_DOMAIN\}[\s\S]*?\n\}/)?.[0] ?? '';
+  const demoBlock = renderSecrets.match(/\$\{DEMO_DOMAIN\}\$\{DEMO_ALIASES[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.notEqual(demoBlock, '');
+  assert.notEqual(demoBlock, '', 'render-secrets.sh khong con sinh khoi site cho hostname demo');
   assert.doesNotMatch(demoBlock, /@blocked/);
   assert.doesNotMatch(demoBlock, /Khong co quyen truy cap/);
   assert.match(demoBlock, /import app_routes/);
+});
+
+// MOI KHACH MOT KHOANG RIENG. Hostname, alias mang va ten secret deu phai mang slug: thieu mot cho
+// thoi la khach thu hai giam len khach thu nhat — dung ten mien cua nhau, hoac te hon, dung
+// PostgreSQL cua nhau.
+test('moi khach co hostname, alias mang va secret rieng', () => {
+  // Hostname: `<vai tro>-<slug>` chu khong phai `<vai tro>` tran.
+  assert.match(renderSecrets, /DEMO_DOMAIN="demo-\$\{TENANT_SLUG\}\./);
+  assert.match(renderSecrets, /OPERATOR_DOMAIN="operator-\$\{TENANT_SLUG\}\./);
+
+  // Upstream tro vao alias mang mang slug, khong tro vao ten service (`api`/`web` trung nhau giua
+  // cac khach tren mang edge dung chung).
+  assert.match(renderSecrets, /import app_routes api-\$\{TENANT_SLUG\} web-\$\{TENANT_SLUG\}/);
+  assert.doesNotMatch(renderSecrets, /import app_routes api web/);
+
+  // Secret: khong mot ten secret nao duoc tro cung vao mot khach.
+  assert.match(renderSecrets, /secret zalo-\$\{TENANT_SLUG\}-api-key/);
+  assert.doesNotMatch(renderSecrets, /secret zalo-[a-z]+-[a-z-]*password/);
+
+  // Ten compose project quyet dinh ten volume — khong mang slug thi hai khach dung chung volume
+  // PostgreSQL, tuc la dung chung du lieu.
+  assert.match(compose, /^name: zalo-\$\{TENANT_SLUG\}$/m);
+  assert.match(compose, /- api-\$\{TENANT_SLUG\}$/m);
+  assert.match(compose, /- web-\$\{TENANT_SLUG\}$/m);
+  assert.match(compose, /- flowise-\$\{TENANT_SLUG\}$/m);
+
+  // Gateway phai da roi khoi stack khach: con o lai thi khach thu hai gianh :443 voi khach dau.
+  assert.doesNotMatch(compose, /^\s{2}gateway:$/m);
+  assert.doesNotMatch(compose, /"443:443"/);
 });
 
 test('AUTO_SEND keeps a single audited mutation surface', () => {
@@ -180,7 +213,7 @@ test('every process that mutates compose takes the shared lock', async () => {
     'secrets.env must be written only after the compose lock is held',
   );
 
-  const unit = await readFile(new URL('./systemd/netviet-stack.service', import.meta.url), 'utf8');
+  const unit = await readFile(new URL('./systemd/netviet-stack@.service', import.meta.url), 'utf8');
   assert.match(unit, /ExecStart=\/usr\/bin\/flock -w 300 \S*compose\.lock \/usr\/bin\/docker compose/);
 });
 

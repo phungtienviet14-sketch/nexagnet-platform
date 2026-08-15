@@ -14,6 +14,11 @@ VM="${VM_NAME:-netviet}"
 # GOI KHACH chon bang slug. Mac dinh `ultty` giu nguyen hanh vi cua cac lan deploy truoc, nen
 # workflow `deploy.yml` cu (khong truyen TENANT) van ra dung stack no van deploy tu truoc toi nay.
 TENANT_SLUG="${TENANT:-ultty}"
+# KHACH "CHINH" giu ten mien TRAN (`operator.<ip>.sslip.io`) lam ten chinh thuc; moi khach khac
+# dung ten mang slug. Khong phai tham my: `OPERATOR_DOMAIN` di thang vao `PUBLIC_BASE_URL` va Zalo
+# TU tai anh catalog ve tu do, nen doi ten mien cua khach dang chay se lam chet anh trong moi tin
+# da gui. Dat rong neu muon MOI khach deu dung ten mang slug.
+PRIMARY_TENANT="${PRIMARY_TENANT:-ultty}"
 GIT_SHA_VALUE="${GIT_SHA:-$(git rev-parse HEAD)}"
 REGISTRY_HOST="${REGION}-docker.pkg.dev"
 REPOSITORY='netviet'
@@ -127,6 +132,6 @@ ssh_vm "install -d -m 0700 '${remote_parent}'"
 scp_vm "${staging}/payload.tar.gz" "${remote_parent}/payload.tar.gz"
 ssh_vm "tar -xzf '${remote_parent}/payload.tar.gz' -C '${remote_parent}' && rm -f '${remote_parent}/payload.tar.gz'"
 
-ssh_vm "sudo bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}'"
+ssh_vm "sudo PRIMARY_TENANT='${PRIMARY_TENANT}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}'"
 
 echo "Deploy xong: tenant=${TENANT_SLUG} app=${app_digest}"

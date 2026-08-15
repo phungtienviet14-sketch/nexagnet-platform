@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-ultty}"
+TENANT_SLUG="${TENANT_SLUG:-ultty}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
 cd "${APP_DIR}"
 
 # Cung khoa voi deploy-stack.sh. Dang deploy thi BO QUA nhip nay: container len xuong la co chu y,
@@ -20,7 +21,7 @@ declare -A previous_restarts=()
 
 if [[ -s "${STATE_FILE}" ]]; then
   while IFS='=' read -r service count; do
-    if [[ "${service}" =~ ^(postgres|flowise|api|web|gateway)$ ]] && [[ "${count}" =~ ^[0-9]+$ ]]; then
+    if [[ "${service}" =~ ^(postgres|flowise|api|web)$ ]] && [[ "${count}" =~ ^[0-9]+$ ]]; then
       previous_restarts["${service}"]="${count}"
     fi
   done <"${STATE_FILE}"
@@ -33,7 +34,7 @@ trap 'rm -f -- "${next_state}"' EXIT
 # An toan vi da giu khoa compose o tren (khong con chay chong len deploy).
 # Van GHI LOG moi lan phai chua de khong che giau su co lap di lap lai.
 healed=""
-for service in postgres flowise api web gateway; do
+for service in postgres flowise api web; do
   container_id="$("${COMPOSE[@]}" ps -q "${service}")"
   if [[ -z "${container_id}" ]] || \
     [[ "$(docker inspect --format '{{.State.Status}}' "${container_id}")" != "running" ]]; then
@@ -47,11 +48,18 @@ if [[ -n "${healed}" ]]; then
   sleep 15
 fi
 
-if ! curl -fsS --max-time 10 http://127.0.0.1:8080/health >/dev/null; then
-  failure="gateway health endpoint failed"
+# Kiem qua HOSTNAME CUA CHINH KHACH NAY, khong qua 127.0.0.1:8080. Sau khi tach edge, :8080 la
+# suc khoe cua rieng edge — no xanh ke ca khi api cua khach nay chet, nen dung no o day thi timer
+# se bao "khoe" cho mot stack da hong. `--resolve` de khong phu thuoc DNS ra ngoai.
+operator_domain="$(sed -n 's/^OPERATOR_DOMAIN=//p' .runtime/secrets.env | tail -n 1)"
+if [[ ! "${operator_domain}" =~ ^[a-z0-9.-]+$ ]]; then
+  failure="OPERATOR_DOMAIN khong doc duoc tu secrets.env"
+elif ! curl -fsS --max-time 10 --resolve "${operator_domain}:443:127.0.0.1" \
+  "https://${operator_domain}/health" >/dev/null; then
+  failure="health endpoint cua khach ${TENANT_SLUG} that bai"
 fi
 
-for service in postgres flowise api web gateway; do
+for service in postgres flowise api web; do
   container_id="$("${COMPOSE[@]}" ps -q "${service}")"
   if [[ -z "${container_id}" ]]; then
     failure="${failure} ${service}=missing"

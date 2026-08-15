@@ -27,3 +27,4 @@ bash add-google-cloud-ops-agent-repo.sh --also-install
 rm -f add-google-cloud-ops-agent-repo.sh
 
 install -d -m 0750 /srv/netviet/apps/zalo-ultty/.runtime
+install -d -m 0750 /srv/netviet/edge/.runtime /srv/netviet/edge/tenants

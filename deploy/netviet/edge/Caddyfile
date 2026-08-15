@@ -1,3 +1,15 @@
+# GATEWAY DUNG CHUNG cho MOI khach tren VM.
+#
+# VI SAO TACH RA: chi MOT tien trinh giu duoc :80/:443. Khi Caddy con nam trong compose project cua
+# tung khach thi khach thu hai len la gianh cong voi khach thu nhat — nen "nhieu khach tren mot VM"
+# khong the la chuyen cau hinh, no doi mot tang edge rieng.
+#
+# Edge KHONG biet truoc co bao nhieu khach. Moi lan deploy mot khach ghi ra mot manh
+# `/etc/caddy/tenants/<slug>.caddy` roi nap lai Caddy; edge chi viec `import` ca thu muc.
+# Them/bot mot khach vi the khong phai sua file nay.
+#
+# Chung chi TLS nam o volume `caddy-data` cua edge, dung chung cho moi hostname.
+
 {
 	admin off
 	email {$ACME_EMAIL}
@@ -25,6 +37,12 @@
 	}
 }
 
+# THAM SO HOA UPSTREAM. Truoc day snippet nay tro cung vao `api:3001`/`web:3000` — dung duoc khi
+# Caddy o cung compose project voi mot khach duy nhat. Nay edge dung ngoai moi stack, nen tung khach
+# phai tu noi minh o dau:
+#   {args[0]} = alias mang cua api  (vi du `api-<slug>`)
+#   {args[1]} = alias mang cua web  (vi du `web-<slug>`)
+#   {args[2]} = API key cua chinh khach do — KHONG dung chung giua cac khach.
 (app_routes) {
 	# Liet ke TUNG endpoint API duoi /settings thay vi /settings/*: `/settings/` (co dau / cuoi)
 	# van khop /settings/* nen se bi day sang NestJS va tra 404 — nguoi van hanh tuong chua co trang.
@@ -35,50 +53,27 @@
 	# neu thieu, nen dung sua tay danh sach nay ma khong chay test.
 	@api path /events /orders* /messages* /demo* /erp* /kiotviet* /knowledge* /broadcast* /campaigns* /auth* /health /health/media /media/catalog/* /zalo/* /groups/* /settings/summary /settings/source-truth* /settings/groups/* /settings/rules* /settings/automation* /settings/audit* /settings/readiness /settings/price-periods* /settings/dealers/* /settings/deals/* /settings/content* /settings/master-data* /settings/users* /admin*
 	handle @api {
-		reverse_proxy api:3001 {
-			header_up x-api-key "{$API_KEY}"
+		reverse_proxy {args[0]}:3001 {
+			header_up x-api-key "{args[2]}"
 			header_up -Authorization
 			flush_interval -1
 		}
 	}
 
 	handle {
-		reverse_proxy web:3000 {
+		reverse_proxy {args[1]}:3000 {
 			header_up -Authorization
 		}
 	}
 }
 
+# SUC KHOE CUA RIENG EDGE, khong phai cua khach nao. Truoc day :8080 phuc vu app_routes cua mot
+# khach duy nhat; voi nhieu khach thi mot cong khong noi thay cho tat ca, nen deploy-stack.sh nay
+# kiem suc khoe tung khach qua chinh hostname cua ho (`curl --resolve`).
 http://:8080 {
-	import app_headers
-	import app_routes
+	respond /health "edge ok" 200
 }
 
-# MOI TRUONG DEV/DEMO — KHONG CO XAC THUC (quyet dinh nguoi van hanh 04/08/2026).
-# Ca hai hostname duoi day mo cong khai, khong Basic Auth; API phia sau chay AUTH_MODE=none.
-#
-# 04/08/2026 (dot 2): BO not @blocked tren hostname demo. Truoc do demo tra 404 cho /settings*,
-# /zalo*, /groups*, /broadcast*, /admin* -> nguoi van hanh mo demo.../settings chi thay
-# "Khong co quyen truy cap" va tuong he thong chua co trang cau hinh. Nay HAI hostname hanh xu
-# GIONG HET NHAU, khong con "trang nay chay o cho kia thi khong".
-# DANH DOI da biet: /broadcast gui tin Zalo THAT, gio goi duoc tu ca hostname demo.
-# Bat lai bao ve: them `basic_auth` + khoi @blocked o day, va dat AUTH_MODE=api-key
-# trong .runtime/secrets.env (xem README muc "Moi truong dev/demo").
-{$DEMO_DOMAIN} {
-	import secure_headers
-	import app_headers
-	import app_routes
-}
-
-{$OPERATOR_DOMAIN} {
-	import secure_headers
-	import app_headers
-	import app_routes
-}
-
-{$FLOWISE_DOMAIN} {
-	import secure_headers
-	reverse_proxy flowise:3000 {
-		header_down Set-Cookie (.*) "$1; Secure"
-	}
-}
+# MANH CAU HINH CUA TUNG KHACH. Thu muc rong -> edge van len va van tra /health, chi la chua route
+# hostname nao: dung trang thai ta muon luc dung VM moi, truoc khi khach dau tien duoc deploy.
+import /etc/caddy/tenants/*.caddy
