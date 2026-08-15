@@ -30,7 +30,7 @@ const prisma = new PrismaClient();
 try {
   const images = await prisma.asset.findMany({
     where: { kind: 'image' },
-    select: { id: true, externalId: true, status: true },
+    select: { id: true, externalId: true, status: true, operatorEdited: true },
     orderBy: { externalId: 'asc' },
   });
   if (!images.length) {
@@ -39,9 +39,13 @@ try {
   }
 
   const targetIndex = STATUS_ORDER.indexOf(TARGET);
-  const toPromote = images.filter((asset) => STATUS_ORDER.indexOf(asset.status) < targetIndex);
+  // Trang thai dich la "dung status VA duoc bao ve" — mot ban ghi da `active` nhung thieu
+  // `operatorEdited` van se bi lan boot sau ha ve `draft`, tuc chua thuc su duyet xong.
+  const toPromote = images.filter(
+    (asset) => STATUS_ORDER.indexOf(asset.status) < targetIndex || !asset.operatorEdited,
+  );
   process.stdout.write(
-    `${images.length} anh trong DB; ${toPromote.length} can dua len "${TARGET}".\n`,
+    `${images.length} anh trong DB; ${toPromote.length} can dua len "${TARGET}" (hoac thieu co bao ve).\n`,
   );
   if (!toPromote.length) {
     process.stdout.write('Khong co gi phai doi.\n');
@@ -51,9 +55,17 @@ try {
   // Mot lenh updateMany: khong di tung buoc `draft->reviewed->approved->active` vi day khong phai
   // thao tac cua nguoi dung tren UI ma la mot quyet dinh van hanh DUY NHAT — ghi ba lan chi tao ba
   // dong lich su cho cung mot y dinh.
+  //
+  // `operatorEdited: true` la BAT BUOC, khong phai trang tri.
+  //
+  // `TenantPackContentBootstrap` nap lai manifest o MOI lan boot, va `ContentImportService` gan
+  // cung `status: 'draft'`. Thu duy nhat giu mot ban ghi khoi bi ha nguoc la co `operatorEdited`:
+  // import thay co nay thi danh `conflict` va BO QUA ban ghi. Lan chay dau (15/08/2026) chi doi
+  // `status` nen ca 102 anh bi tra ve `draft` ngay lan khoi dong lai dau tien — duyet xong nhu chua
+  // duyet, va khong co gi bao loi ca.
   const updated = await prisma.asset.updateMany({
     where: { id: { in: toPromote.map((asset) => asset.id) } },
-    data: { status: TARGET },
+    data: { status: TARGET, operatorEdited: true },
   });
 
   // Ghi dau vet: bo qua buoc nay thi trong DB se co 102 anh o `active` ma khong ai biet ai bat.
