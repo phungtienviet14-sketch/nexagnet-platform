@@ -30,3 +30,9 @@ docs/pdf
 # loader; du lieu that den luc CHAY qua volume mount (TENANT_DIR) hoac tu DB.
 # Khoa bang deploy/netviet/image-isolation.contract.mjs — no kiem IMAGE THAT, khong chi kiem file nay.
 tenants
+# FIXTURE KIEM THU mang dung hinh dang goi khach (`tenant.json`) nen guardrail tren bao do, du du
+# lieu ben trong la tong hop (`slug: e2e-fixture`). Cach dung khong phai la noi long guardrail: bo
+# test E2E von khong co viec gi trong image chay that. Playwright chay tu checkout o job `e2e` cua
+# CI chu khong chay tu image, va khong file nguon nao import `apps/api/src/e2e`, nen loai o day
+# khong lam hong kiem thu nao — chi bot thu ra khoi image.
+**/e2e
