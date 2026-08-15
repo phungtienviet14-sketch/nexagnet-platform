@@ -5,7 +5,6 @@ import {
   type ContentAssetView,
   type ContentLifecycleStatus,
   type ContentSnapshotView,
-  type OutboundContent,
   type ProductAdviceResult,
 } from '@netviet/shared';
 import { normalize } from '../rules/text.js';
