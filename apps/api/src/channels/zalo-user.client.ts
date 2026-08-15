@@ -52,6 +52,14 @@ export class ZaloGroupNotAllowedError extends Error {}
  * Quan ly phien zca-js va allowlist nhom. Neu da co credential thi tu reconnect khi boot;
  * neu chua co, QR chi duoc tao sau thao tac xac nhan rui ro tren trang operator.
  */
+/** Anh gui kem qua zca. `filename` phai co duoi — zca-js doi kieu `${string}.${string}`. */
+export interface ZaloOutboundImage {
+  readonly data: Buffer;
+  readonly filename: `${string}.${string}`;
+  readonly width?: number;
+  readonly height?: number;
+}
+
 @Injectable()
 export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('ZaloUserClient');
@@ -387,6 +395,40 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     if (!this.api) throw new Error('zca-js chua dang nhap - khong the gui tin');
     const resolvedType = type ?? this.threadTypes.get(threadId) ?? ThreadType.Group;
     await this.api.sendMessage(text, threadId, resolvedType);
+  }
+
+  /**
+   * Gui tin KEM ANH. zca-js nhan attachment thang bang Buffer (`AttachmentSource`), nen khong phai
+   * ghi file tam — khong co rac de don, khong co duong ro anh ra dia may chu.
+   *
+   * Khac han Bot Platform: ben do moi anh la mot `sendPhoto` rieng, con o day ca chum anh di trong
+   * MOT tin, dung nhu nguoi that gui.
+   */
+  async sendMessageWithImages(
+    threadId: string,
+    text: string,
+    images: readonly ZaloOutboundImage[],
+    type?: ThreadType,
+  ): Promise<void> {
+    if (!this.api) throw new Error('zca-js chua dang nhap - khong the gui tin');
+    if (!images.length) return this.sendMessage(threadId, text, type);
+    const resolvedType = type ?? this.threadTypes.get(threadId) ?? ThreadType.Group;
+    await this.api.sendMessage(
+      {
+        msg: text,
+        attachments: images.map((image) => ({
+          data: image.data,
+          filename: image.filename,
+          metadata: {
+            totalSize: image.data.length,
+            ...(image.width ? { width: image.width } : {}),
+            ...(image.height ? { height: image.height } : {}),
+          },
+        })),
+      },
+      threadId,
+      resolvedType,
+    );
   }
 
   private connect(allowQr: boolean, replaceSavedCredential = false): Promise<void> {

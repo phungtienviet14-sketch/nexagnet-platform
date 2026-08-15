@@ -45,6 +45,22 @@ if [[ ! -f "$remote_parent/tenant-pack/tenant.json" ]]; then
 fi
 install -d -m 0750 "$app_dir/tenant-pack"
 rsync -a --delete "$remote_parent/tenant-pack/" "$app_dir/tenant-pack/"
+
+# ANH CATALOG SAN PHAM. Cung ly do di ngoai image nhu goi khach (anh cua tung khach, image la ban
+# chung), nhung KHAC o cho: thieu goi khach thi api khong boot duoc, con thieu anh thi he thong van
+# chay — chi la tu van gui di khong kem anh. Nen o day CANH BAO chu khong `exit 1`: chan ca lan
+# deploy vi thieu anh la doi mot su co nho lay mot su co lon.
+install -d -m 0750 "$app_dir/catalog-assets"
+# Cung cai bay long thu muc nhu tenant-pack: deploy.ps1 phai tao san DEST (pscp tu choi DEST vang
+# mat), ma `scp --recurse SRC DEST-DA-CO` thi chep SRC VAO TRONG DEST -> `catalog-assets/catalog-assets/`.
+catalog_src="$remote_parent/catalog-assets"
+[[ -d "$catalog_src/catalog-assets" ]] && catalog_src="$catalog_src/catalog-assets"
+if [[ -d "$catalog_src" ]] && [[ -n "$(ls -A "$catalog_src" 2>/dev/null)" ]]; then
+  rsync -a --delete "$catalog_src/" "$app_dir/catalog-assets/"
+  echo "Anh catalog: $(find "$app_dir/catalog-assets" -type f | wc -l) tep." >&2
+else
+  echo "Khong co anh catalog — tu van se gui khong kem anh." >&2
+fi
 chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/"*.sh
 cp "$app_dir/systemd/"*.service "$app_dir/systemd/"*.timer /etc/systemd/system/
 systemctl daemon-reload

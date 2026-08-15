@@ -575,7 +575,7 @@ function Deploy-Stack {
     # Windows gcloud uses pscp, which refuses an absent final destination for a recursive upload.
     # Create tenant-pack up front; deploy-remote.sh deliberately flattens the resulting
     # tenant-pack/<slug>/tenant.json layout before installing it.
-    '--command', "install -d -m 0700 '$remoteParent' '$remoteParent/tenant-pack'"
+    '--command', "install -d -m 0700 '$remoteParent' '$remoteParent/tenant-pack' '$remoteParent/catalog-assets'"
   )
   Invoke-GcloudRetry -Arguments @(
     'compute', 'scp', '--recurse', $PSScriptRoot,
@@ -603,6 +603,22 @@ function Deploy-Stack {
     '--project', $ProjectId,
     '--quiet'
   )
+
+  # ANH CATALOG SAN PHAM — cung ly do di ngoai image nhu goi khach. Khac goi khach o cho THIEU
+  # DUOC: khong co anh thi tu van van gui, chi la khong kem anh. Nen o day chi canh bao.
+  $catalogAssets = Join-Path $repoRoot 'catalog-assets'
+  if (Test-Path $catalogAssets) {
+    Invoke-GcloudRetry -Arguments @(
+      'compute', 'scp', '--recurse', $catalogAssets,
+      "${VmName}:$remoteParent/catalog-assets",
+      "--zone=$Zone",
+      '--tunnel-through-iap',
+      '--project', $ProjectId,
+      '--quiet'
+    )
+  } else {
+    Write-Warning "Khong co '$catalogAssets' — tu van se gui khong kem anh. Chay: node apps/api/scripts/build-catalog-assets.mjs"
+  }
 
   Invoke-Gcloud @(
     'compute', 'ssh', $VmName,
