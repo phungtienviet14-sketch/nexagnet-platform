@@ -81,16 +81,17 @@ export class OrdersService {
       throw new UnprocessableEntityException('Thiếu kênh phản hồi, không thể gửi tư vấn');
     }
     const capabilities = this.outbound.capabilities(replyChannel);
-    const { image, ...withoutImage } = content;
+    const { images, ...withoutImages } = content;
     const supported: OutboundContent = capabilities.image
       ? { ...content, text: content.text + AUTO_LABEL }
       : {
-          ...withoutImage,
-          // Kênh không có API ảnh thật (hiện tại là zca) vẫn phải giữ locator cho khách,
-          // không được âm thầm làm mất asset. Video/PDF/catalog cũng theo cùng nguyên tắc URL.
-          text: [content.text, image ? `Ảnh sản phẩm: ${image.url}` : null]
-            .filter((line): line is string => Boolean(line))
-            .join('\n') + AUTO_LABEL,
+          ...withoutImages,
+          // Kênh không có API ảnh thật vẫn phải giữ locator cho khách, không được âm thầm làm mất
+          // asset. Video/PDF/catalog cũng theo cùng nguyên tắc URL.
+          text:
+            [content.text, ...(images ?? []).map((image) => `Ảnh sản phẩm: ${image.url}`)].join(
+              '\n',
+            ) + AUTO_LABEL,
         };
     try {
       await this.outbound.sendContent(replyChannel, view.chatId, supported);

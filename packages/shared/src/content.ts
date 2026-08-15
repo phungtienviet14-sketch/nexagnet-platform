@@ -88,15 +88,27 @@ export const contentImportManifestSchema = z
   })
   .strict();
 
+/** Toi da bao nhieu anh duoc dinh kem MOT luot tu van. Nhieu hon la spam nhom Zalo. */
+export const MAX_OUTBOUND_IMAGES = 5;
+
 export const outboundContentSchema = z
   .object({
     text: z.string().trim().min(1).max(20_000),
-    image: z
-      .object({
-        url: z.string().url().max(2_000),
-        alt: z.string().trim().max(500).optional(),
-      })
-      .strict()
+    /**
+     * Anh san pham dinh kem. Truoc 15/08/2026 day la MOT anh (`image`) va `ContentService` chon
+     * bang `.find()` — tuc khach chi nhan duoc dung 1 tam du goi khach co ca bo anh. Tai lieu
+     * khach (muc 1.1) yeu cau "Hinh anh" cho TUNG san pham, so nhieu.
+     */
+    images: z
+      .array(
+        z
+          .object({
+            url: z.string().url().max(2_000),
+            alt: z.string().trim().max(500).optional(),
+          })
+          .strict(),
+      )
+      .max(MAX_OUTBOUND_IMAGES)
       .optional(),
     links: z
       .array(
@@ -120,11 +132,17 @@ export type ContentSourceKind = z.infer<typeof contentSourceKindSchema>;
 export type ContentImportManifest = z.infer<typeof contentImportManifestSchema>;
 export type OutboundContent = z.infer<typeof outboundContentSchema>;
 
+/**
+ * Nang luc gui THAT cua tung kenh. `video`/`file` truoc 15/08/2026 la literal `false`, tuc he
+ * thong kieu CAM vinh vien viec khai bao mot kenh gui duoc video — ke ca khi kenh do lam duoc.
+ * Gio la `boolean`: Bot Platform van khai `false` (sendVideo/sendFile tra 404, da xac minh
+ * 11/08/2026), rieng zca gui duoc attachment nen duoc quyen khai `true`.
+ */
 export interface ChannelCapabilities {
   text: true;
   image: boolean;
-  video: false;
-  file: false;
+  video: boolean;
+  file: boolean;
 }
 
 export interface ContentProvenanceView {

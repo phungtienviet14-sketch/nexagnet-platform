@@ -1,8 +1,11 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import type {
-  ContentLifecycleStatus,
-  ContentSnapshotView,
-  ProductAdviceResult,
+import {
+  MAX_OUTBOUND_IMAGES,
+  type ContentAssetView,
+  type ContentLifecycleStatus,
+  type ContentSnapshotView,
+  type OutboundContent,
+  type ProductAdviceResult,
 } from '@netviet/shared';
 import { normalize } from '../rules/text.js';
 import { ContentRepository, type ContentEntityKind } from './content.repository.js';
@@ -91,37 +94,81 @@ export class ContentService implements OnModuleInit {
     if (!faqs.length && !advice.length)
       return safeHandoff(productSkus, ['approved_product_content']);
 
-    const selectedFaqs = faqs.filter((faq) => {
-      const words = normalize(faq.question)
-        .split(/\s+/)
-        .filter((word) => word.length >= 3);
-      return words.length === 0 || words.some((word) => norm.includes(word));
-    });
+    const selectedFaqs = rankFaqs(faqs, norm).slice(0, MAX_FAQ_ANSWERS);
+    // Truoc 15/08/2026 cho nay la `selectedFaqs.length ? selectedFaqs : faqs` — khong khop tu nao
+    // thi do TOAN BO FAQ cua san pham (BB-GREY co 21 FAQ) vao mot tin. Khong khop nghia la CHUA
+    // hieu khach hoi gi: co `advice` chung thi dung advice, khong co thi chuyen Sale.
+    if (!selectedFaqs.length && !advice.length) {
+      return safeHandoff(productSkus, ['matching_faq']);
+    }
     const body = [
-      ...(selectedFaqs.length ? selectedFaqs : faqs).map((faq) => faq.answer),
+      ...selectedFaqs.map((faq) => faq.answer),
       ...advice.map((item) => item.body),
     ];
-    const image = this.cache.assets.find(
-      (asset) =>
-        asset.kind === 'image' &&
-        active(asset.status) &&
-        asset.productSkus.some((sku) => productSkus.includes(sku)),
-    );
-    const links = this.cache.links
+    const forThisProduct = (asset: ContentAssetView): boolean =>
+      active(asset.status) && asset.productSkus.some((sku) => productSkus.includes(sku));
+    const images = this.cache.assets
+      .filter((asset) => asset.kind === 'image' && forThisProduct(asset))
+      .slice(0, MAX_OUTBOUND_IMAGES)
+      .map((asset) => ({ url: asset.locator, ...(asset.title ? { alt: asset.title } : {}) }));
+    // Asset kind='video' truoc 15/08/2026 bi BO QUA hoan toan: `productAdvice` chi doc kind='image'.
+    // Zalo khong co API gui video (sendVideo tra 404 — xac minh 11/08/2026) nen video di bang LINK,
+    // gop chung vao `links` de moi kenh render cung mot kieu.
+    const videoAssetLinks = this.cache.assets
+      .filter((asset) => asset.kind === 'video' && forThisProduct(asset))
+      .map((asset) => ({
+        kind: 'video' as const,
+        label: asset.title ?? 'Video sản phẩm',
+        url: asset.locator,
+      }));
+    const curatedLinks = this.cache.links
       .filter(
         (link) =>
           active(link.status) && (!link.productSku || productSkus.includes(link.productSku)),
       )
       .map((link) => ({ kind: link.kind, label: link.title, url: link.url }));
+    const links = dedupeByUrl([...curatedLinks, ...videoAssetLinks]).slice(0, MAX_OUTBOUND_LINKS);
     return {
       ready: true,
       productSkus,
       missing: [],
       text: body.join('\n'),
-      ...(image ? { image: { url: image.locator, alt: image.title } } : {}),
+      ...(images.length ? { images } : {}),
       ...(links.length ? { links } : {}),
     };
   }
+}
+
+/** Tra ve nhieu hon vai cau la thanh mot buc tuong chu — khach Zalo khong doc. */
+const MAX_FAQ_ANSWERS = 3;
+/** Bang voi tran `links` trong `outboundContentSchema`. */
+const MAX_OUTBOUND_LINKS = 20;
+
+/**
+ * Xep FAQ theo so tu khoa cua CAU HOI xuat hien trong tin khach, cao xuong thap; bo cac FAQ khong
+ * khop tu nao. Truoc day chi loc `some(...)` roi giu nguyen thu tu DB, nen mot FAQ khop 1 tu vu vo
+ * ("nha") duoc xep ngang mot FAQ khop 4 tu.
+ */
+function rankFaqs<T extends { question: string }>(faqs: T[], normalizedText: string): T[] {
+  return faqs
+    .map((faq) => {
+      const words = new Set(
+        normalize(faq.question)
+          .split(/\s+/)
+          .filter((word) => word.length >= 3),
+      );
+      const hits = [...words].filter((word) => normalizedText.includes(word)).length;
+      return { faq, hits };
+    })
+    .filter((scored) => scored.hits > 0)
+    .sort((left, right) => right.hits - left.hits)
+    .map((scored) => scored.faq);
+}
+
+/** Link video co the den tu ca `links` da bien tap lan asset kind='video' — khong gui trung URL. */
+function dedupeByUrl<T extends { url: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => (seen.has(item.url) ? false : (seen.add(item.url), true)));
 }
 
 const ALLOWED_TRANSITIONS: Record<ContentLifecycleStatus, ContentLifecycleStatus[]> = {

@@ -21,11 +21,11 @@ export abstract class ChannelAdapter {
    * Video/PDF/catalog di bang link trong text, khong gia lap sendVideo/sendFile.
    */
   async sendContent(chatId: string, content: OutboundContent): Promise<void> {
-    if (content.image && !this.capabilities.image) {
+    if (content.images?.length && !this.capabilities.image) {
       throw new Error(`Kênh ${this.name} không hỗ trợ ảnh outbound`);
     }
     const links = content.links?.map((link) => `${link.label}: ${link.url}`) ?? [];
-    const imageLine = content.image ? [`Ảnh: ${content.image.url}`] : [];
-    await this.sendMessage(chatId, [content.text, ...imageLine, ...links].join('\n'));
+    const imageLines = content.images?.map((image) => `Ảnh: ${image.url}`) ?? [];
+    await this.sendMessage(chatId, [content.text, ...imageLines, ...links].join('\n'));
   }
 }

@@ -23,21 +23,34 @@ export class BotPlatformAdapter extends ChannelAdapter {
     }
   }
 
+  /**
+   * Bot API khong co "send album": moi lan `sendPhoto` la MOT anh. Anh dau mang caption (toan bo
+   * noi dung tu van + link), cac anh sau gui tran de khong lap lai chu.
+   *
+   * Gui TUAN TU co chu y: song song se doi thu tu anh trong nhom, va Zalo co rate limit theo nhom.
+   */
   override async sendContent(chatId: string, content: OutboundContent): Promise<void> {
     const links = content.links?.map((link) => `${link.label}: ${link.url}`) ?? [];
     const text = [content.text, ...links].join('\n');
-    if (!content.image) {
+    const images = content.images ?? [];
+    if (!images.length) {
       await this.sendMessage(chatId, text);
       return;
     }
-    const res = await callBotApi(this.token, 'sendPhoto', {
-      chat_id: chatId,
-      photo: content.image.url,
-      caption: text,
-    });
-    if (!res.ok) {
-      this.logger.error(`Gui anh that bai (${res.error_code}): ${res.description}`);
-      throw new Error(`Zalo sendPhoto that bai: ${res.description ?? res.error_code}`);
+    for (const [index, image] of images.entries()) {
+      const res = await callBotApi(this.token, 'sendPhoto', {
+        chat_id: chatId,
+        photo: image.url,
+        ...(index === 0 ? { caption: text } : {}),
+      });
+      if (!res.ok) {
+        this.logger.error(`Gui anh that bai (${res.error_code}): ${res.description}`);
+        // Anh dau ROT = khach khong nhan duoc gi ca -> nem de OrdersService giu pending_review.
+        // Anh sau rot thi khach DA co noi dung chinh: log roi di tiep, khong huy ca luot gui.
+        if (index === 0) {
+          throw new Error(`Zalo sendPhoto that bai: ${res.description ?? res.error_code}`);
+        }
+      }
     }
   }
 }

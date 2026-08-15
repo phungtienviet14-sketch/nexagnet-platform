@@ -16,7 +16,7 @@ describe('BotPlatformAdapter outbound content', () => {
     expect(adapter.capabilities).toEqual({ text: true, image: true, video: false, file: false });
     await adapter.sendContent('group-1', {
       text: 'Thông tin sản phẩm',
-      image: { url: 'https://cdn.example.test/photo.webp' },
+      images: [{ url: 'https://cdn.example.test/photo.webp' }],
       links: [{ kind: 'video', label: 'Video', url: 'https://example.test/video' }],
     });
 

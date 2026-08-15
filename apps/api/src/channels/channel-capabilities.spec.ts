@@ -20,7 +20,7 @@ describe('channel content capabilities', () => {
 
     await router.sendContent('bot', 'group-1', {
       text: 'Thông tin sản phẩm',
-      image: { url: 'https://cdn.example.test/p.webp', alt: 'Sản phẩm' },
+      images: [{ url: 'https://cdn.example.test/p.webp', alt: 'Sản phẩm' }],
       links: [{ kind: 'video', label: 'Video', url: 'https://example.test/v' }],
     });
 
@@ -39,7 +39,7 @@ describe('channel content capabilities', () => {
     await expect(
       router.sendContent('zca', 'group-1', {
         text: 'Thông tin',
-        image: { url: 'https://cdn.example.test/p.webp' },
+        images: [{ url: 'https://cdn.example.test/p.webp' }],
       }),
     ).rejects.toThrow(/không hỗ trợ ảnh/i);
   });

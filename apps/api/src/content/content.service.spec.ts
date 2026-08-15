@@ -73,7 +73,7 @@ describe('ContentService', () => {
     expect(advice.ready).toBe(true);
     expect(advice.text).toContain('Lau bằng khăn mềm');
     expect(advice.text).not.toContain('Tốt nhất thị trường');
-    expect(advice.image?.url).toBe('https://cdn.example.test/elni.webp');
+    expect(advice.images?.[0]?.url).toBe('https://cdn.example.test/elni.webp');
     expect(advice.links).toEqual([
       expect.objectContaining({ kind: 'video', url: 'https://video.example.test/elni' }),
     ]);
@@ -131,7 +131,7 @@ describe('ContentService', () => {
     expect(advice.ready).toBe(true);
     expect(advice.missing).toEqual([]);
     expect(advice.text).toContain('Nội dung giới thiệu đã được duyệt');
-    expect(advice.image).toBeUndefined();
+    expect(advice.images).toBeUndefined();
     expect(advice.links).toBeUndefined();
   });
 

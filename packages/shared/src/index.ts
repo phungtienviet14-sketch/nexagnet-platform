@@ -157,6 +157,7 @@ export {
   ASSET_KINDS,
   CONTENT_LINK_KINDS,
   CONTENT_SOURCE_KINDS,
+  MAX_OUTBOUND_IMAGES,
   contentLifecycleStatusSchema,
   assetKindSchema,
   contentLinkKindSchema,

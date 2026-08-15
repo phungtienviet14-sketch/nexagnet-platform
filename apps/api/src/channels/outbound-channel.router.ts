@@ -36,7 +36,7 @@ export class OutboundChannelRouter {
   ): Promise<void> {
     if (!replyChannel) throw new Error('Thieu replyChannel: tu choi doan kenh gui');
     const adapter = this.adapter(replyChannel);
-    if (content.image && !adapter.capabilities.image) {
+    if (content.images?.length && !adapter.capabilities.image) {
       throw new Error(`Kênh ${adapter.name} không hỗ trợ ảnh outbound`);
     }
     await adapter.sendContent(chatId, content);
