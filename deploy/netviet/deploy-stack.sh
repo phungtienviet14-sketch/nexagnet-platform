@@ -99,6 +99,26 @@ if ! "${EDGE_COMPOSE[@]}" exec -T gateway caddy reload --config /etc/caddy/Caddy
   "${EDGE_COMPOSE[@]}" up -d --force-recreate gateway
 fi
 
+# CHO API CUA KHACH NAY SAN SANG — khong duoc bo buoc nay.
+#
+# Truoc khi tach edge, vong doi ben duoi go vao `127.0.0.1:8080/health`, ma cong do khi ay proxy
+# THANG vao api; doi edge khoe cung chinh la doi api khoe. Nay :8080 chi con la suc khoe cua RIENG
+# edge va tra 200 ngay lap tuc, nen neu chi giu vong do thi khong con gi chan smoke test chay khi
+# api vua bi recreate va chua boot xong — smoke test da that bai dung kieu do (502 sau 6 giay,
+# 16/08/2026). api con phai chay `prisma migrate deploy` roi mo Nest nen mat vai chuc giay.
+for attempt in {1..60}; do
+  if curl -fsS --max-time 5 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
+    "https://${OPERATOR_DOMAIN}/health" >/dev/null; then
+    break
+  fi
+  if [[ "${attempt}" -eq 60 ]]; then
+    echo "API cua khach ${TENANT_SLUG} khong healthy sau 5 phut." >&2
+    "${COMPOSE[@]}" logs --tail=100 api >&2
+    exit 1
+  fi
+  sleep 5
+done
+
 for attempt in {1..60}; do
   if curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
     break
