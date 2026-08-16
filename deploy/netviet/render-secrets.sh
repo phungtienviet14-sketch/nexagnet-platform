@@ -54,14 +54,19 @@ if ! flock -w 300 9; then
   exit 1
 fi
 
+# `tr -d '\r'` KHONG phai lam dep. Secret duoc tao tu may Windows co the mang mot ky tu CR o cuoi;
+# `$(...)` cat duoc dau xuong dong nhung KHONG cat CR. Truoc day khong ai thay vi API key di qua
+# `caddy.env` va docker compose tu bo CR khi doc env file. Tu khi key duoc dat thang vao cau hinh
+# Caddy thi CR do vao gia tri header va Caddy tra 502 "invalid header field value for X-Api-Key"
+# (su co 15/08/2026). Loc tai NGUON de moi secret deu sach, khong rieng API key.
 secret() {
-  gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1"
+  gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" | tr -d '\r'
 }
 
 # Secret CHUA duoc tao -> tra chuoi rong thay vi lam hong ca lan deploy. Chi dung cho secret
 # that su tuy chon; secret bat buoc van goi secret() de fail fast.
 optional_secret() {
-  gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" 2>/dev/null || true
+  gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" 2>/dev/null | tr -d '\r' || true
 }
 
 POSTGRES_ADMIN_PASSWORD="$(secret zalo-${TENANT_SLUG}-postgres-admin-password)"

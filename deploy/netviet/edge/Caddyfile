@@ -11,7 +11,17 @@
 # Chung chi TLS nam o volume `caddy-data` cua edge, dung chung cho moi hostname.
 
 {
-	admin off
+	# Endpoint quan tri BAT, nhung chi tren loopback CUA CONTAINER.
+	#
+	# Phai bat vi `caddy reload` lam viec bang cach POST cau hinh len chinh endpoint nay — de `admin
+	# off` thi moi lan deploy mot khach deu chet o buoc nap lai (da xay ra 15/08/2026), va duong
+	# thay the duy nhat la dung lai ca edge, tuc la lam rot ket noi cua MOI khach.
+	#
+	# `127.0.0.1` chu KHONG phai `:2019`: edge nam chung mang `netviet-edge` voi api/web cua moi
+	# khach, nen mot endpoint quan tri nghe tren mang do se cho container cua khach nay quyen viet
+	# lai dinh tuyen cua khach kia. Nghe tren loopback thi chi tien trinh BEN TRONG container edge
+	# (tuc `docker compose exec`) goi duoc.
+	admin 127.0.0.1:2019
 	email {$ACME_EMAIL}
 }
 
