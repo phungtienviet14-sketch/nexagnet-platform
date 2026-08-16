@@ -84,7 +84,20 @@ done
 # theo doi tep bind-mount. `caddy reload` doi cau hinh tai cho, nen cac khach KHAC dang duoc phuc vu
 # khong bi rot ket noi chi vi mot khach deploy — dieu se xay ra neu dung `restart`.
 EDGE_COMPOSE=(docker compose --env-file "${EDGE_DIR}/.runtime/caddy.env" -f "${EDGE_DIR}/compose.yaml")
-"${EDGE_COMPOSE[@]}" exec -T gateway caddy reload --config /etc/caddy/Caddyfile
+# Nap lai la duong NHANH; dung lai la duong DUNG khi nap lai khong the thanh cong.
+#
+# `docker compose up -d` KHONG dung lai container chi vi noi dung mot tep bind-mount doi, nen khi
+# chinh Caddyfile cua edge thay doi thi tien trinh dang chay van la ban cu. Neu ban cu do khong co
+# admin endpoint thi `caddy reload` khong co cho de POST cau hinh len va deploy chet — dung kieu
+# hong da gap hai lan ngay 15-16/08/2026 khi bat admin endpoint lan dau.
+#
+# Nen: thu reload truoc (khach khac khong rot ket noi), that bai thi dung lai edge. Dung lai co lam
+# gian doan ngan MOI khach, nhung no chi xay ra khi chinh cau hinh edge doi — khong phai moi lan
+# mot khach deploy.
+if ! "${EDGE_COMPOSE[@]}" exec -T gateway caddy reload --config /etc/caddy/Caddyfile; then
+  echo "caddy reload that bai -> dung lai edge de nap cau hinh moi." >&2
+  "${EDGE_COMPOSE[@]}" up -d --force-recreate gateway
+fi
 
 for attempt in {1..60}; do
   if curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
