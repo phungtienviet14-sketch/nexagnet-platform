@@ -9,6 +9,7 @@ Khu vực này chứa tài liệu do đội phát triển hoặc AI coding tạo
 3. [`kien-truc/he-thong.md`](../kien-truc/he-thong.md) — kiến trúc base đa khách và sơ đồ as-built/target.
 4. [`../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md`](../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) — nghiệp vụ đã đối chiếu nguồn gốc trước khi sửa rules.
 5. [`van-hanh/checklist-go-live.md`](van-hanh/checklist-go-live.md) — **đọc trước khi bật pilot dữ liệu thật**: 9 cổng máy tự chấm, 2 công tắc đang khóa có chủ ý, chặn pháp lý, trình tự bật và rollback.
+6. [`van-hanh/ci-cd.md`](van-hanh/ci-cd.md) — **đọc trước khi sửa `.github/workflows/` hoặc `deploy/`**: ai là ai (Nexagnet · NetViet · khách), bản đồ pipeline, 7 bất biến, thứ tự lên khách mới, 4 phép kiểm sau deploy, 6 sự cố đã xảy ra thật.
 
 ## Cấu trúc
 

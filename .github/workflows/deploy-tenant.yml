@@ -7,7 +7,18 @@ name: deploy-tenant
 # TRUNG TINH dung chung; rieng goi khach + anh catalog di ngoai image va duoc upload theo tung stack.
 #
 # CO Y chi chay bang tay (`workflow_dispatch`): deploy mot khach cu the la quyet dinh van hanh, khong
-# phai he qua cua mot lan push. Duong tu dong theo push van la `deploy.yml` (mac dinh tenant `ultty`).
+# phai he qua cua mot lan push.
+#
+# Day la CUA DUY NHAT de deploy stack khach. `deploy.yml` (tu dong theo push, co dinh tenant `ultty`)
+# da bi xoa 17/08/2026 vi ba ly do do chinh no gay ra:
+#   1. Voi nhieu khach thi "deploy theo push" khong con y nghia — mot lan push nen dua len khach nao?
+#      Chon cung mot khach la thien vi, chon tat ca la roll-out hang loat khong ai duyet.
+#   2. No chua bao gio deploy duoc lan nao: moi run theo push deu ket thuc bang `cancelled` o cong
+#      duyet `production`. Mot duong CD khong ai dung nhung van xep hang la rac van hanh.
+#   3. Run dang CHO DUYET van chiem lan concurrency cua khach do, nen no CHAN ca nhung lan deploy
+#      tay hop le — da xay ra 17/08: mot lan deploy `dev` nam `pending` 26 phut sau mot run chua ai
+#      duyet. Xoa duong tu dong la bo luon nguon sinh ra hang doi treo do.
+# Muon deploy co cong duyet: chon `environment: production` ngay tai day.
 
 on:
   workflow_dispatch:

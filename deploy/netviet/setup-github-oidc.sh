@@ -4,8 +4,14 @@
 # account `github-deployer`, chi chap nhan token den tu DUNG repository nay.
 #
 #   GCP_PROJECT_ID=netviet-host-968934832433 \
-#   GITHUB_REPOSITORY=phungtienviet14-sketch/ultty-ai-orders \
+#   GITHUB_REPOSITORY=phungtienviet14-sketch/nexagnet-platform \
 #     bash deploy/netviet/setup-github-oidc.sh
+#
+# DOI TEN REPO thi PHAI chay lai file nay (hoac sua tay 2 cho): `attribute-condition` cua provider
+# va `principalSet` cua service account deu cam theo `owner/repo`. Git remote van chay nho GitHub
+# tu redirect, nen de tuong khong co gi hong — nhung OIDC token mang TEN MOI se bi tu choi va moi
+# lan deploy chet o buoc `auth`. Cach doi ten khong co khoang chet: noi dieu kien de nhan CA HAI
+# ten -> doi ten -> chay that mot lan deploy -> siet lai con mot ten.
 #
 # In ra hai gia tri de dat vao GitHub -> Settings -> Secrets and variables -> Actions -> Variables:
 #   GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOY_SERVICE_ACCOUNT

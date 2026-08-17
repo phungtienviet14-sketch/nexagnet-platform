@@ -124,16 +124,15 @@ sudo /srv/netviet/apps/zalo-ultty/set-channel-mode.sh mock
   pnpm 10 chặn postinstall của Prisma).
 - **CD stack khách** — một bản logic duy nhất ở `.github/workflows/reusable-deploy-tenant.yml`
   (build/push image *trung tính* theo digest → rollout lên VM qua IAP bằng `deploy-ci.sh`), gọi từ
-  hai cửa:
-  - `deploy-tenant.yml` — **chạy tay**, chọn `tenant` + `environment` (`dev`/`production`). Đây là
-    cửa dùng cho mọi khách không phải khách chính.
-  - `deploy.yml` — **tự động** khi push `main`, cố định `tenant: ultty` + environment `production`.
-    Có `paths-ignore` cho `apps/marketing/**`, `docs/**` và `**/*.md`: sửa trang marketing hoặc tài
-    liệu thì **không** kéo theo một lần rollout API chờ duyệt.
+  **một cửa duy nhất**: `deploy-tenant.yml` — **chạy tay**, chọn `tenant` + `environment`
+  (`dev` không cổng duyệt, `production` có). Nhóm concurrency `deploy-tenant-<slug>` bảo đảm không
+  bao giờ có hai lần deploy cùng đụng một thư mục stack. Xác thực **keyless** bằng Workload Identity
+  Federation — không lưu service account key JSON trong GitHub.
 
-  Cả hai dùng chung nhóm concurrency `deploy-tenant-<slug>` nên không bao giờ có hai lần deploy
-  cùng đụng một thư mục stack. Xác thực **keyless** bằng Workload Identity Federation — không lưu
-  service account key JSON trong GitHub.
+  > Đường tự động theo push (`deploy.yml`) đã **xoá 17/08/2026**: với nhiều khách thì một lần push
+  > không trả lời được câu hỏi *deploy cho khách nào*, thực tế nó chưa deploy thành công lần nào
+  > (mọi run đều `cancelled` ở cổng duyệt), và một run đang chờ duyệt vẫn **chiếm làn concurrency**
+  > nên chặn luôn các lần deploy tay hợp lệ.
 - **CD trang marketing** (`.github/workflows/deploy-marketing.yml`): build image `apps/marketing`
   rồi `gcloud run deploy` lên Cloud Run `nexagnet-marketing`, triển khai **theo git SHA** chứ không
   theo tag `:latest`. Hoàn toàn tách khỏi stack khách — trang này là nội dung công khai của NetViet.
@@ -141,7 +140,7 @@ sudo /srv/netviet/apps/zalo-ultty/set-channel-mode.sh mock
 Thiết lập CD lần đầu:
 
 ```bash
-GCP_PROJECT_ID=netviet-host-968934832433 GITHUB_REPOSITORY=phungtienviet14-sketch/ultty-ai-orders bash deploy/netviet/setup-github-oidc.sh
+GCP_PROJECT_ID=netviet-host-968934832433 GITHUB_REPOSITORY=phungtienviet14-sketch/nexagnet-platform bash deploy/netviet/setup-github-oidc.sh
 ```
 
 Script in ra hai giá trị; đặt chúng ở **Settings → Secrets and variables → Actions → Variables**:

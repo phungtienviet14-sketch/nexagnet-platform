@@ -1,14 +1,27 @@
-# Dự án: Hệ thống AI xử lý đơn hàng Zalo — U Ultty Việt Nam
+# Dự án: Nền tảng AI xử lý đơn hàng & CSKH trên Zalo (đa khách hàng)
+
+## Ai là ai (đọc trước — hiểu sai chỗ này là đặt tên sai cả code lẫn tài liệu)
+
+| Tên | Vai | Xuất hiện trong repo |
+|---|---|---|
+| **Nexagnet** | Chủ repo, chủ nền tảng — *chúng ta* | repo `nexagnet-platform`, `@nexagnet/marketing`, `nexagnet247.com` |
+| **NetViet** | **Đối tác**, cũng làm giải pháp phần mềm | GCP project `netviet-host-*`, `deploy/netviet/`, `@netviet/api`, VM `netviet` |
+| **Ultty, Amico, …** | **Khách hàng** (của NetViet hoặc của Nexagnet) | `tenants/<slug>/`, stack `zalo-<slug>`, secret `zalo-<slug>-*` |
+
+Nền tảng phục vụ **cả khách của NetViet lẫn khách riêng của Nexagnet**. **Ultty là khách đầu tiên, không phải chủ đề của dự án** — mọi thứ chỉ đúng với một khách phải nằm trong `tenants/<slug>/`, không được rò vào `apps/` hay `packages/` (xem Quyết định kiến trúc #6).
+
+Chữ `netviet` trong tên hạ tầng là **tên riêng của một hệ thống đang chạy**, không phải nhãn thương hiệu cần đồng bộ: GCP project ID không đổi được sau khi tạo, và tên compose project quyết định **tên volume** — đổi là mất dữ liệu PostgreSQL của khách đang chạy. Không đổi.
 
 ## Quy tắc chung (bắt buộc)
 
 - Luôn áp dụng skill `search-first` trước khi viết bất kỳ function/module mới nào
 - Ưu tiên tìm và dùng thư viện có sẵn (npm) thay vì tự implement
 - Rules ECC của project nằm tại `.claude/rules/ecc/` (common, typescript, react, web) — tuân thủ khi viết code
+- **Trước khi sửa `.github/workflows/` hoặc `deploy/`**: đọc [docs/phat-trien/van-hanh/ci-cd.md](docs/phat-trien/van-hanh/ci-cd.md) — 7 bất biến, cách lên khách mới, 6 sự cố đã xảy ra thật và cách nhận diện
 
-## Bối cảnh dự án
+## Bối cảnh khách hàng đầu tiên (Ultty)
 
-Khách hàng: **Công ty Cổ Phần U Ultty Việt Nam** (gia dụng cao cấp). Liên hệ: Nguyễn Thu Phương (Sale chính).
+Khách hàng: **Công ty Cổ Phần U Ultty Việt Nam** (gia dụng cao cấp), khách của NetViet. Liên hệ: Nguyễn Thu Phương (Sale chính).
 
 Hiện trạng vận hành:
 - ~200 nhóm Zalo chăm sóc thường xuyên (+100-150 nhóm thi thoảng), 200-300 đại lý/CTV
