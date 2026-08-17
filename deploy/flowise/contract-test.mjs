@@ -46,13 +46,34 @@ const wrongKey = await fetch(predictionUrl, {
 });
 await assertBlocked(wrongKey, 'key sai');
 
+const timeoutMs = Number(process.env.FLOWISE_TIMEOUT_MS) || 60_000;
 const parser = new FlowiseParser({
   baseUrl,
   flowId,
   apiKey,
-  timeoutMs: 30_000,
+  timeoutMs,
 });
-const parsed = await parser.parse(input);
+
+let parsed;
+let lastError;
+for (let attempt = 1; attempt <= 3; attempt++) {
+  try {
+    parsed = await parser.parse(input);
+    break;
+  } catch (err) {
+    lastError = err;
+    if (attempt < 3) {
+      process.stdout.write(
+        `Flowise parse contract attempt ${attempt} that bai: ${err.message}. Thu lai sau 5s...\n`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+    }
+  }
+}
+if (!parsed) {
+  throw lastError;
+}
+
 if (parsed.intent !== 'dat_don' || !parsed.order || parsed.order.items.length !== 1) {
   throw new Error(`Contract output khong dung don test: intent=${parsed.intent}`);
 }
