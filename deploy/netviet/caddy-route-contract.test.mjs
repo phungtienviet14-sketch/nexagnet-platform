@@ -304,7 +304,9 @@ test('du lieu khach den tu volume mount, khong nam trong image', async () => {
 
   // Ca api lan web deu doc goi tu volume chi-doc, khong tu trong image.
   assert.equal(compose.match(/^\s*TENANT_DIR: \/srv\/tenant$/gm)?.length, 2);
-  assert.equal(compose.match(/^\s*- \.\/tenant-pack:\/srv\/tenant:ro$/gm)?.length, 2);
+  // BA mount: api, web, va `bootstrap` — smoke-test.mjs chay trong bootstrap va doc tin nhan mau
+  // tu goi khach (cau don hop le phu thuoc SKU/dai ly rieng tung khach).
+  assert.equal(compose.match(/^\s*- \.\/tenant-pack:\/srv\/tenant:ro$/gm)?.length, 3);
 
   // Goi khach phai co mat tren VM truoc khi stack len, va thieu thi dung han chu khong boot rong.
   assert.match(deployRemote, /tenant-pack\/tenant\.json/);

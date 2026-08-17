@@ -123,6 +123,9 @@ services:
     command: ["node", "deploy/flowise/bootstrap-flowise.mjs"]
     volumes:
       - ./.runtime:/runtime
+      # smoke-test.mjs chay trong chinh container nay va doc tin nhan mau tu goi khach: cau don
+      # hop le phu thuoc SKU/dai ly/glossary rieng tung khach nen khong the nam trong script.
+      - ./tenant-pack:/srv/tenant:ro
     networks:
       - backend
       - data

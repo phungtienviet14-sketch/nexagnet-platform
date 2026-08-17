@@ -92,6 +92,27 @@ export const campaignConfigSchema = z
   })
   .strict();
 
+/**
+ * TIN NHAN MAU cho smoke test luc deploy.
+ *
+ * Vi sao nam trong GOI KHACH chu khong nam trong script deploy: parser lam viec trong TU DIEN DONG
+ * cua tung khach (SKU, dai ly, glossary rieng). Truoc 17/08/2026 smoke-test.mjs cam cung mot cau
+ * cua mot khach cu the — cau do la don hop le voi khach do, con voi khach khac thi parser tra
+ * `khac` va deploy chet du he thong hoan toan binh thuong. Mot chuoi mang ten dai ly va SKU cua
+ * mot khach cung khong duoc phep nam trong base (CLAUDE.md muc 6).
+ *
+ * KHONG khai bao (`null`) = khach chua co nguon su that de dat hang duoc, vi du goi vua dung.
+ * Luc do smoke chi kiem duoc phan ha tang; xem smoke-test.mjs.
+ */
+export const smokeFixtureSchema = z
+  .object({
+    /** Mot don HOP LE theo dung nguon su that cua khach nay — phai ra intent `dat_don`. */
+    orderText: nonEmpty,
+    /** So luong ma rules engine phai tinh ra tu `orderText`. Smoke doi dung mot dong hang. */
+    expectedQuantity: z.number().int().positive(),
+  })
+  .strict();
+
 export const tenantConfigSchema = z.object({
   /** Tang khi doi cau truc goi khach theo kieu pha vo tuong thich. */
   schemaVersion: z.literal(1),
@@ -157,6 +178,12 @@ export const tenantConfigSchema = z.object({
   /** Chien luoc tu van gia le; core chi doc field va cau giai thich nay. */
   retailAdvice: retailAdviceSchema,
   readiness: tenantReadinessSchema,
+  /**
+   * Null (hoac khong khai bao) = smoke luc deploy KHONG kiem duoc duong dat hang cua khach nay.
+   * Day la trang thai that cua mot goi chua co nguon su that, khong phai loi — nhung no lam yeu
+   * cong kiem tra, nen smoke-test.mjs phai bao to thay vi im lang di qua.
+   */
+  smoke: smokeFixtureSchema.nullable().default(null),
   persona: z.object({
     /** Cau mo dau prompt parser. Truoc B1 cau nay hardcode ten khach trong parser-prompt.ts. */
     parserIntro: nonEmpty,
@@ -184,6 +211,7 @@ export type RetailAdvice = z.infer<typeof retailAdviceSchema>;
 export type ErpConfig = z.infer<typeof erpConfigSchema>;
 export type ErpAdapterName = z.infer<typeof erpAdapterSchema>;
 export type TenantReadiness = z.infer<typeof tenantReadinessSchema>;
+export type SmokeFixture = z.infer<typeof smokeFixtureSchema>;
 
 /**
  * Hat giong nguon su that. Khop 1-1 voi interface `KnowledgeSnapshot` cua apps/api — ben do co

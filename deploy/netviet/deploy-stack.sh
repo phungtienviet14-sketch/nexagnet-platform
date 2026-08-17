@@ -136,38 +136,51 @@ smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
   -e "CHANNEL_MODE=${channel_mode}" \
   bootstrap node --input-type=module - < smoke-test.mjs)"
 echo "${smoke_output}"
-smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n 1)"
-smoke_order_id="${smoke_order_id%%;*}"
-smoke_order_status="$(sed -n 's/.*SMOKE_ORDER_STATUS=//p' <<<"${smoke_output}" | tail -n 1)"
-if [[ ! "${smoke_order_id}" =~ ^[0-9a-f-]{36}$ ]] || \
-  [[ ! "${smoke_order_status}" =~ ^(pending_review|needs_edit|sent)$ ]]; then
-  echo "Khong lay duoc order id tu pilot smoke test." >&2
-  exit 1
-fi
 
-"${COMPOSE[@]}" restart api
-# Kiem qua chinh hostname cua khach nay, khong qua 127.0.0.1:8080 nhu truoc: :8080 gio la suc khoe
-# cua RIENG edge, no xanh ke ca khi api cua khach nay chet.
-for attempt in {1..60}; do
-  if curl -fsS --max-time 5 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
-    "https://${OPERATOR_DOMAIN}/health" >/dev/null; then
-    break
-  fi
-  if [[ "${attempt}" -eq 60 ]]; then
-    echo "API khong healthy sau restart." >&2
-    "${COMPOSE[@]}" logs --tail=100 api >&2
+# GOI KHACH CHUA CO TIN NHAN MAU -> smoke khong tao ra don nao, nen khong co gi de kiem lai sau
+# restart. Khong dung cho deploy chet o day: mot khach vua dung goi (chua co SKU/dai ly) van phai
+# len duoc ha tang thi nguoi ta moi bat dau nhap nguon su that vao duoc.
+#
+# Nhung phai NOI TO ra log rang cong kiem tra duong dat hang da bi bo qua: mot lan deploy xanh ma
+# im lang se bi doc nham la "da kiem het".
+if grep -q 'SMOKE_SKIPPED_ORDER_PATH=1' <<<"${smoke_output}"; then
+  echo "CANH BAO: khach ${TENANT_SLUG} chua khai bao 'smoke' trong tenant.json — lan deploy nay" >&2
+  echo "KHONG chung minh duoc duong dat hang (parse -> tinh gia -> duyet -> gui) chay dung." >&2
+  echo "Stack zalo-${TENANT_SLUG} da healthy sau edge (MOI kiem duoc phan ha tang)."
+else
+  smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n 1)"
+  smoke_order_id="${smoke_order_id%%;*}"
+  smoke_order_status="$(sed -n 's/.*SMOKE_ORDER_STATUS=//p' <<<"${smoke_output}" | tail -n 1)"
+  if [[ ! "${smoke_order_id}" =~ ^[0-9a-f-]{36}$ ]] || \
+    [[ ! "${smoke_order_status}" =~ ^(pending_review|needs_edit|sent)$ ]]; then
+    echo "Khong lay duoc order id tu pilot smoke test." >&2
     exit 1
   fi
-  sleep 2
-done
-"${COMPOSE[@]}" --profile tools run --rm --no-deps \
-  -T \
-  -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
-  -e "CHANNEL_MODE=${channel_mode}" \
-  -e "VERIFY_ORDER_ID=${smoke_order_id}" \
-  -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
-  bootstrap node --input-type=module - < smoke-test.mjs
-echo "Stack zalo-${TENANT_SLUG} da healthy sau edge."
+
+  "${COMPOSE[@]}" restart api
+  # Kiem qua chinh hostname cua khach nay, khong qua 127.0.0.1:8080 nhu truoc: :8080 gio la suc khoe
+  # cua RIENG edge, no xanh ke ca khi api cua khach nay chet.
+  for attempt in {1..60}; do
+    if curl -fsS --max-time 5 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
+      "https://${OPERATOR_DOMAIN}/health" >/dev/null; then
+      break
+    fi
+    if [[ "${attempt}" -eq 60 ]]; then
+      echo "API khong healthy sau restart." >&2
+      "${COMPOSE[@]}" logs --tail=100 api >&2
+      exit 1
+    fi
+    sleep 2
+  done
+  "${COMPOSE[@]}" --profile tools run --rm --no-deps \
+    -T \
+    -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
+    -e "CHANNEL_MODE=${channel_mode}" \
+    -e "VERIFY_ORDER_ID=${smoke_order_id}" \
+    -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
+    bootstrap node --input-type=module - < smoke-test.mjs
+  echo "Stack zalo-${TENANT_SLUG} da healthy sau edge."
+fi
 
 # Public endpoints/UI shell phai reachable qua TLS, trong khi protected API phai tu choi anonymous.
 for attempt in {1..60}; do

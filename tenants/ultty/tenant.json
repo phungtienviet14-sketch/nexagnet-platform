@@ -57,6 +57,10 @@
       }
     ]
   },
+  "smoke": {
+    "orderText": "HN_31.7_Meta HN, 2 x Ghe Felix",
+    "expectedQuantity": 2
+  },
   "persona": {
     "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho U Ultty (gia dung cao cap).",
     "botName": "Ultty",

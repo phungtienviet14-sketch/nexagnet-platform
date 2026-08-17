@@ -1,4 +1,32 @@
+import { readFileSync } from 'node:fs';
 import process from 'node:process';
+
+/**
+ * TIN NHAN MAU den tu GOI KHACH, khong con cam cung trong file nay.
+ *
+ * Parser lam viec trong tu dien DONG cua tung khach, nen mot cau don hop le voi khach nay la
+ * `khac` voi khach kia. Truoc 17/08/2026 file nay cam cung cau don cua mot khach cu the: deploy
+ * khach thu hai chet ngay o day du he thong hoan toan binh thuong, va ten dai ly + SKU cua mot
+ * khach thi nam ngay trong base (CLAUDE.md muc 6 cam dieu do).
+ */
+const tenantDir = (process.env.TENANT_DIR ?? '/srv/tenant').replace(/\/+$/, '');
+function loadSmokeFixture() {
+  try {
+    const config = JSON.parse(readFileSync(`${tenantDir}/tenant.json`, 'utf8'));
+    const fixture = config?.smoke;
+    if (!fixture?.orderText) return null;
+    return {
+      orderText: String(fixture.orderText),
+      expectedQuantity: Number(fixture.expectedQuantity ?? 0),
+      tenant: String(config.slug ?? 'khong-ro'),
+    };
+  } catch {
+    // Doc duoc goi khach hay khong la chuyen cua smoke; khong doc duoc thi coi nhu khong co mau
+    // va di duong ha tang — cho bao to o duoi thay vi nem mot loi khong lien quan.
+    return null;
+  }
+}
+const smokeFixture = loadSmokeFixture();
 
 const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
 const verifyOrderId = process.env.VERIFY_ORDER_ID?.trim();
@@ -20,6 +48,25 @@ if (verifyOrderId) {
     throw new Error(`Don sau restart sai trang thai ${expectedStatus}: ${persisted.status}`);
   }
   process.stdout.write(`Persistence smoke OK: ${verifyOrderId}\n`);
+} else if (!smokeFixture) {
+  // GOI KHACH CHUA CO TIN NHAN MAU -> khong the kiem duong dat hang. Van kiem duoc phan ha tang:
+  // API song, dang nhap duoc, SSE mo duoc. BAO TO ra stdout: mot cong kiem tra bi thu hep ma im
+  // lang thi lan deploy xanh se bi doc nham la "da kiem het".
+  const abort = new AbortController();
+  const stream = await fetch(`${baseUrl}/events`, {
+    headers: authenticatedHeaders({ Accept: 'text/event-stream' }),
+    signal: abort.signal,
+  });
+  if (!stream.ok || !stream.body) {
+    throw new Error(`Khong mo duoc SSE: HTTP ${stream.status}`);
+  }
+  abort.abort();
+  process.stdout.write(
+    'CANH BAO: goi khach khong khai bao `smoke` nen KHONG kiem duoc duong dat hang ' +
+      '(parse -> tinh gia -> duyet -> gui). Chi kiem: /health, dang nhap, SSE.\n' +
+      'Khach nao co nguon su that thi them `smoke` vao tenant.json de bat lai cong kiem tra nay.\n' +
+      'SMOKE_SKIPPED_ORDER_PATH=1\n',
+  );
 } else {
   const marker = `NETVIET-SMOKE-${Date.now()}`;
   const abort = new AbortController();
@@ -35,7 +82,7 @@ if (verifyOrderId) {
 
   try {
     const order = await postJson('/demo/simulate', {
-      text: `HN_31.7_Meta HN, 2 x Ghe Felix ${marker}`,
+      text: `${smokeFixture.orderText} ${marker}`,
     });
     assertPilotOrder(order, order.id);
 
@@ -131,8 +178,11 @@ function assertPilotOrder(order, expectedId) {
   if (!order.trace || order.trace.steps?.length !== 6 || order.trace.llmCalls !== 1) {
     throw new Error(`Trace khong dung 6 vai/1 LLM call cho don ${order.id}`);
   }
-  if (order.priced.lines?.length !== 1 || order.priced.lines[0]?.quantity !== 2) {
-    throw new Error(`Rules engine khong giu dung 2 san pham cho don ${order.id}`);
+  // So luong ky vong den tu goi khach: moi khach mot cau don mau khac nhau nen con so nay khong
+  // the la hang so trong base.
+  const expectedQuantity = smokeFixture?.expectedQuantity;
+  if (order.priced.lines?.length !== 1 || order.priced.lines[0]?.quantity !== expectedQuantity) {
+    throw new Error(`Rules engine khong giu dung ${expectedQuantity} san pham cho don ${order.id}`);
   }
 }
 
