@@ -1,10 +1,16 @@
 [CmdletBinding()]
 param(
   [switch]$NoBrowser,
-  [switch]$CopyFlowisePassword
+  [switch]$CopyFlowisePassword,
+  # KHACH muon mo. Mac dinh 'ultty' — khach chinh, la khach duy nhat giu ten mien TRAN.
+  [string]$Tenant = 'ultty'
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($Tenant -notmatch '^[a-z0-9-]+$') {
+  throw "Tenant khong hop le: '$Tenant'."
+}
 
 $projectId = 'netviet-host-968934832433'
 $gcloud = Get-Command gcloud.cmd -ErrorAction SilentlyContinue
@@ -12,11 +18,16 @@ if (-not $gcloud) {
   $gcloud = Get-Command gcloud -ErrorAction SilentlyContinue
 }
 
+# Quy tac ten mien PHAI khop `deploy/netviet/render-secrets.sh`: khach chinh giu ten tran, khach
+# khac mang slug trong ten. Doan nay khong tu doi duoc ten mien cua ai — chi tro dung cho.
+$hostSuffix = '35-187-235-82.sslip.io'
+$prefix = if ($Tenant -eq 'ultty') { '' } else { "-$Tenant" }
 $urls = [ordered]@{
-  'Demo console'  = 'https://demo.35-187-235-82.sslip.io'
-  'Zalo operator' = 'https://operator.35-187-235-82.sslip.io/zalo'
-  'Flowise Admin' = 'https://flowise.35-187-235-82.sslip.io'
+  'Demo console'  = "https://demo$prefix.$hostSuffix"
+  'Zalo operator' = "https://operator$prefix.$hostSuffix/zalo"
+  'Flowise Admin' = "https://flowise$prefix.$hostSuffix"
 }
+$flowisePasswordSecret = "zalo-$Tenant-flowise-admin-password"
 
 Write-Host 'NetViet demo dang chay tren GCP; PC khong can chay source hoac Docker.'
 Write-Host ''
@@ -25,13 +36,13 @@ Write-Host 'Chi Flowise Admin van doi dang nhap (Flowise 3.x bat buoc co tai kho
 Write-Host '  Flowise email: phungtienviet14@gmail.com'
 Write-Host ''
 Write-Host 'Lay mat khau Flowise (khong chia se man hinh khi chay lenh nay):'
-Write-Host "  gcloud secrets versions access latest --project $projectId --secret zalo-ultty-flowise-admin-password"
+Write-Host "  gcloud secrets versions access latest --project $projectId --secret $flowisePasswordSecret"
 
 if ($CopyFlowisePassword) {
   if (-not $gcloud) {
     throw 'Khong tim thay gcloud trong PATH.'
   }
-  $flowisePassword = (& $gcloud.Source secrets versions access latest --project $projectId --secret zalo-ultty-flowise-admin-password)
+  $flowisePassword = (& $gcloud.Source secrets versions access latest --project $projectId --secret $flowisePasswordSecret)
   if ($LASTEXITCODE -ne 0) {
     throw 'Khong lay duoc mat khau Flowise tu Secret Manager.'
   }

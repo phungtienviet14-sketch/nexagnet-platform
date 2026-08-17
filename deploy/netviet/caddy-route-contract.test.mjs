@@ -171,6 +171,43 @@ test('moi khach co hostname, alias mang va secret rieng', () => {
   assert.doesNotMatch(compose, /"443:443"/);
 });
 
+// Su co 17/08/2026: deploy.ps1 doc $env:TENANT de chon GOI KHACH upload len, nhung goi
+// deploy-remote.sh voi 5 tham so — thieu slug — nen phia VM roi ve mac dinh 'ultty'. Ket qua:
+// `TENANT=amico ./deploy.ps1` ghi goi cua Amico DE LEN thu muc stack cua Ultty, tuc la thay bang
+// gia cua khach nay bang bang gia cua khach kia. Khoa lai: mot nguon slug duy nhat, va phai truyen.
+test('deploy tay truyen slug khach xuong VM thay vi de VM doan', () => {
+  assert.match(deployPs1, /\[string\]\$Tenant = \$\(if \(\$env:TENANT\)/);
+  assert.match(deployPs1, /\$AppDirectory = "\/srv\/netviet\/apps\/zalo-\$TenantSlug"/);
+  assert.match(deployPs1, /deploy-remote\.sh'[^\n]*'\$PublicIp' '\$TenantSlug'/);
+
+  // Khong con ten secret nao cam cung mot khach.
+  assert.doesNotMatch(deployPs1, /Ensure-Secret 'zalo-[a-z0-9-]+-/);
+  assert.match(deployPs1, /\$SecretPrefix = "zalo-\$TenantSlug"/);
+
+  // Tao secret va cap quyen doc phai di tu CUNG mot danh sach: hai danh sach roi thi mot ben them
+  // secret con ben kia quen binding -> stack chet giua chung voi PERMISSION_DENIED.
+  assert.match(deployPs1, /\$secretNames = \$secretSuffixes \| ForEach-Object/);
+});
+
+// Tach edge dung chung (12/08/2026) da bo cong host 3002 cua Flowise, nhung script rotate van goi
+// `--network host` toi 127.0.0.1:3002 — dut duong ma khong ai thay, vi rotate khong nam trong luong
+// deploy. Duong vao dung la mang RIENG cua khach do.
+test('rotate Flowise di vao dung container cua khach, khong qua cong host', async () => {
+  const rotate = await readFile(new URL('./rotate-flowise-admin-password.sh', import.meta.url), 'utf8');
+  // Bo dong comment truoc khi kiem: chinh comment giai thich su co co nhac `--network host` va cong
+  // 3002 cu — chi lenh THAT moi tinh (cung cach test Caddyfile o tren xu ly `basic_auth`).
+  const commands = rotate
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .join('\n');
+
+  assert.doesNotMatch(commands, /--network host/);
+  assert.doesNotMatch(commands, /127\.0\.0\.1:3002/);
+  assert.match(rotate, /network="zalo-\$\{tenant_slug\}_backend"/);
+  assert.match(rotate, /base_url="http:\/\/flowise-\$\{tenant_slug\}:3000"/);
+  assert.doesNotMatch(rotate, /secret zalo-ultty-/);
+});
+
 test('AUTO_SEND keeps a single audited mutation surface', () => {
   // Cong tac AUTO_SEND chi con o PUT /settings/automation/auto-send (co audit).
   // Namespace /demo khong duoc mo lai loi ghi nao.

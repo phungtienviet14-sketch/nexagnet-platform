@@ -8,14 +8,26 @@ param(
   [string]$Zone = 'asia-southeast1-b',
   [string]$VmName = 'netviet',
   [string]$OperatorEmail = 'phungtienviet14@gmail.com',
+  # KHACH duoc deploy. Mac dinh 'ultty' giu nguyen hanh vi cua moi lan chay truoc tham so nay.
+  # Bien moi truong TENANT van duoc chap nhan de khong pha script/thoi quen cu.
+  [string]$Tenant = $(if ($env:TENANT) { $env:TENANT } else { 'ultty' }),
   [switch]$MonitoringOnly
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+if ($Tenant -notmatch '^[a-z0-9-]+$') {
+  throw "Tenant khong hop le: '$Tenant'. Chi cho phep chu thuong, so va dau gach ngang."
+}
+
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$AppDirectory = '/srv/netviet/apps/zalo-ultty'
+# MOI KHACH MOT THU MUC va MOT BO SECRET. Truoc 17/08/2026 hai gia tri nay cam cung 'zalo-ultty'
+# trong khi phan upload goi khach lai doc $env:TENANT — chay `TENANT=amico` se ghi goi cua Amico
+# DE LEN goi cua Ultty trong cung mot thu muc stack. Buoc tu mot nguon duy nhat de khong lech nua.
+$TenantSlug = $Tenant
+$AppDirectory = "/srv/netviet/apps/zalo-$TenantSlug"
+$SecretPrefix = "zalo-$TenantSlug"
 $Network = 'netviet'
 $Subnet = 'netviet-sea1'
 $Repository = 'netviet'
@@ -214,7 +226,7 @@ function Ensure-Secret {
 }
 
 function Ensure-FlowiseAdminPasswordSecret {
-  $name = 'zalo-ultty-flowise-admin-password'
+  $name = "$SecretPrefix-flowise-admin-password"
   Ensure-Secret $name { New-FlowiseAdminPassword }
 
   $current = Invoke-Gcloud -Arguments @(
@@ -378,41 +390,46 @@ function Ensure-RegistryAndBackupBucket {
 }
 
 function Ensure-Secrets {
-  Ensure-Secret 'zalo-ultty-postgres-admin-password' { New-RandomSecret }
-  Ensure-Secret 'zalo-ultty-zalo-db-password' { New-RandomSecret }
-  Ensure-Secret 'zalo-ultty-flowise-db-password' { New-RandomSecret }
-  Ensure-Secret 'zalo-ultty-deepseek-api-key' { Get-LocalEnvValue 'DEEPSEEK_API_KEY' }
+  Ensure-Secret "$SecretPrefix-postgres-admin-password" { New-RandomSecret }
+  Ensure-Secret "$SecretPrefix-zalo-db-password" { New-RandomSecret }
+  Ensure-Secret "$SecretPrefix-flowise-db-password" { New-RandomSecret }
+  Ensure-Secret "$SecretPrefix-deepseek-api-key" { Get-LocalEnvValue 'DEEPSEEK_API_KEY' }
   # Token chi duoc render san. Kenh van mock neu operator chua tao override co y bang
   # set-channel-mode.sh; co token KHONG tu bat bot/hybrid.
-  Ensure-Secret 'zalo-ultty-zalo-bot-token' { Get-LocalEnvValue 'ZALO_BOT_TOKEN' }
-  Ensure-Secret 'zalo-ultty-api-key' { New-RandomSecret }
-  Ensure-Secret 'zalo-ultty-flowise-secretkey' { New-RandomSecret }
-  Ensure-Secret 'zalo-ultty-flowise-admin-email' { $OperatorEmail }
+  Ensure-Secret "$SecretPrefix-zalo-bot-token" { Get-LocalEnvValue 'ZALO_BOT_TOKEN' }
+  Ensure-Secret "$SecretPrefix-api-key" { New-RandomSecret }
+  Ensure-Secret "$SecretPrefix-flowise-secretkey" { New-RandomSecret }
+  Ensure-Secret "$SecretPrefix-flowise-admin-email" { $OperatorEmail }
   Ensure-FlowiseAdminPasswordSecret
-  Ensure-Secret 'zalo-ultty-flowise-jwt-secret' { New-RandomSecret 48 }
-  Ensure-Secret 'zalo-ultty-flowise-refresh-secret' { New-RandomSecret 48 }
-  Ensure-Secret 'zalo-ultty-flowise-session-secret' { New-RandomSecret 48 }
-  Ensure-Secret 'zalo-ultty-flowise-token-hash-secret' { New-RandomSecret 48 }
-  Ensure-Secret 'zalo-ultty-demo-password' { New-FlowiseAdminPassword }
-  Ensure-Secret 'zalo-ultty-operator-password' { New-FlowiseAdminPassword }
+  Ensure-Secret "$SecretPrefix-flowise-jwt-secret" { New-RandomSecret 48 }
+  Ensure-Secret "$SecretPrefix-flowise-refresh-secret" { New-RandomSecret 48 }
+  Ensure-Secret "$SecretPrefix-flowise-session-secret" { New-RandomSecret 48 }
+  Ensure-Secret "$SecretPrefix-flowise-token-hash-secret" { New-RandomSecret 48 }
+  Ensure-Secret "$SecretPrefix-demo-password" { New-FlowiseAdminPassword }
+  Ensure-Secret "$SecretPrefix-operator-password" { New-FlowiseAdminPassword }
 
-  $secretNames = @(
-    'zalo-ultty-postgres-admin-password',
-    'zalo-ultty-zalo-db-password',
-    'zalo-ultty-flowise-db-password',
-    'zalo-ultty-deepseek-api-key',
-    'zalo-ultty-zalo-bot-token',
-    'zalo-ultty-api-key',
-    'zalo-ultty-flowise-secretkey',
-    'zalo-ultty-flowise-admin-email',
-    'zalo-ultty-flowise-admin-password',
-    'zalo-ultty-flowise-jwt-secret',
-    'zalo-ultty-flowise-refresh-secret',
-    'zalo-ultty-flowise-session-secret',
-    'zalo-ultty-flowise-token-hash-secret',
-    'zalo-ultty-demo-password',
-    'zalo-ultty-operator-password'
+  # MOT NGUON DUY NHAT cho ca hai viec: tao secret o tren va cap quyen doc o duoi. Truoc day day la
+  # hai danh sach roi phai tu tay giu khop nhau — dung dip len khach Amico (17/08/2026) thi lech:
+  # secret co that nhung service account cua VM khong co binding, stack chet voi PERMISSION_DENIED
+  # giua chung. `render-secrets.sh` doc dung 13 ten dau tien; demo/operator-password danh cho nguoi.
+  $secretSuffixes = @(
+    'postgres-admin-password',
+    'zalo-db-password',
+    'flowise-db-password',
+    'deepseek-api-key',
+    'zalo-bot-token',
+    'api-key',
+    'flowise-secretkey',
+    'flowise-admin-email',
+    'flowise-admin-password',
+    'flowise-jwt-secret',
+    'flowise-refresh-secret',
+    'flowise-session-secret',
+    'flowise-token-hash-secret',
+    'demo-password',
+    'operator-password'
   )
+  $secretNames = $secretSuffixes | ForEach-Object { "$SecretPrefix-$_" }
   foreach ($name in $secretNames) {
     Invoke-Gcloud @(
       'secrets', 'add-iam-policy-binding', $name,
@@ -589,11 +606,10 @@ function Deploy-Stack {
   # GOI KHACH di RIENG, khong nam trong image. Image la ban chung cho moi khach (.dockerignore loai
   # `tenants/`), nen gia si + dieu khoan cong no + chat ID nhom Zalo cua mot khach chi duoc len dung
   # VM cua khach do. Compose mount thu muc nay vao api/web o che do chi-doc.
-  $tenantSlug = if ($env:TENANT) { $env:TENANT } else { 'ultty' }
   $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-  $tenantPack = Join-Path $repoRoot "tenants/$tenantSlug"
+  $tenantPack = Join-Path $repoRoot "tenants/$TenantSlug"
   if (-not (Test-Path $tenantPack)) {
-    throw "Khong tim thay goi khach '$tenantPack'. Dat TENANT=<slug> khop mot thu muc trong tenants/."
+    throw "Khong tim thay goi khach '$tenantPack'. Dung -Tenant <slug> khop mot thu muc trong tenants/."
   }
   Invoke-GcloudRetry -Arguments @(
     'compute', 'scp', '--recurse', $tenantPack,
@@ -626,7 +642,10 @@ function Deploy-Stack {
     '--tunnel-through-iap',
     '--project', $ProjectId,
     '--quiet',
-    '--command', "sudo bash '$remoteBundle/deploy-remote.sh' '$ProjectId' '$AppImage' '$FlowiseImage' '$BackupBucket' '$PublicIp'"
+    # Tham so thu 6 la SLUG KHACH. Thieu no thi deploy-remote.sh roi ve mac dinh 'ultty' va goi
+    # khach vua upload o tren se duoc cai vao thu muc stack cua Ultty — dung nghia la thay bang gia
+    # cua khach nay bang bang gia cua khach kia.
+    '--command', "sudo bash '$remoteBundle/deploy-remote.sh' '$ProjectId' '$AppImage' '$FlowiseImage' '$BackupBucket' '$PublicIp' '$TenantSlug'"
   )
 }
 

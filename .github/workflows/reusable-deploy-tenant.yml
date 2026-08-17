@@ -80,14 +80,31 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment == 'production' && 'prod' || inputs.environment }}
 
       - name: Report tenant endpoints
+        env:
+          # Phai KHOP mac dinh trong `deploy/netviet/deploy-ci.sh`. Khach chinh giu ten mien TRAN
+          # (`operator.<ip>.sslip.io`) vi ten do di thang vao PUBLIC_BASE_URL — doi ten se lam chet
+          # anh catalog trong moi tin Zalo da gui. Khach khac chi co ten mang slug.
+          PRIMARY_TENANT: ultty
+          TENANT_SLUG: ${{ inputs.tenant }}
         run: |
+          set -euo pipefail
           public_ip="$(gcloud compute addresses describe netviet-public-ip \
             --region "${GCP_REGION}" --project "${GCP_PROJECT_ID}" --format='value(address)')"
           label="${public_ip//./-}"
+          # In ten mien cua CHINH khach vua deploy. Truoc 17/08/2026 buoc nay in ten tran cho moi
+          # khach, nen deploy Amico xong lai bao cao duong dan cua Ultty — nguoi doc bam vao va
+          # tuong minh dang xem he thong cua khach minh vua deploy.
+          if [[ "${TENANT_SLUG}" == "${PRIMARY_TENANT}" ]]; then
+            demo="demo.${label}.sslip.io"
+            operator="operator.${label}.sslip.io"
+          else
+            demo="demo-${TENANT_SLUG}.${label}.sslip.io"
+            operator="operator-${TENANT_SLUG}.${label}.sslip.io"
+          fi
           {
-            echo "### Deploy xong cho Tenant: **${{ inputs.tenant }}** (Env: \`${{ inputs.environment }}\`)"
+            echo "### Deploy xong cho Tenant: **${TENANT_SLUG}** (Env: \`${{ inputs.environment }}\`)"
             echo ""
-            echo "- Demo: https://demo.${label}.sslip.io"
-            echo "- Van hanh Zalo: https://operator.${label}.sslip.io/zalo"
-            echo "- Cau hinh: https://operator.${label}.sslip.io/settings"
+            echo "- Demo: https://${demo}"
+            echo "- Van hanh Zalo: https://${operator}/zalo"
+            echo "- Cau hinh: https://${operator}/settings"
           } >>"${GITHUB_STEP_SUMMARY}"

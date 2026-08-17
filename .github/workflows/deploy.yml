@@ -1,62 +1,45 @@
 name: deploy
 
-# CD cho pilot `netviet`. Xac thuc GCP bang Workload Identity Federation (keyless) — KHONG luu
-# service account key JSON trong GitHub secrets.
+# CD TU DONG cho khach chinh (`ultty`) khi co push vao main.
 #
-# Truoc lan chay dau tien, chay `deploy/netviet/setup-github-oidc.sh` roi dat 2 repository
-# variable: GCP_WORKLOAD_IDENTITY_PROVIDER va GCP_DEPLOY_SERVICE_ACCOUNT.
+# File nay CHI la mot cong goi: toan bo viec deploy nam trong `reusable-deploy-tenant.yml`, dung
+# hiet mot ban voi duong deploy tay `deploy-tenant.yml`. Truoc 17/08/2026 no cheo mot ban logic
+# rieng (checkout + auth + goi deploy-ci.sh) — hai ban song song la cach chac chan de mot ban duoc
+# sua con ban kia thi khong.
 #
 # Job dung environment `production`: dat required reviewers cho environment do thi moi lan deploy
 # se cho nguoi duyet — dung voi rang buoc D4/D16 (chua duoc tu gui/PII that khi chua co van ban).
+#
+# Truoc lan chay dau tien, chay `deploy/netviet/setup-github-oidc.sh` roi dat 2 repository
+# variable: GCP_WORKLOAD_IDENTITY_PROVIDER va GCP_DEPLOY_SERVICE_ACCOUNT.
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    # KHONG deploy ca stack VM khi lan push chi dong toi nhung thu khong chay tren VM do. Truoc day
+    # mot lan sua trang marketing hay mot dong tai lieu cung xep hang mot lan roll-out API va treo
+    # o cong duyet `production` — nhieu den muc khong con ai doc hang doi do nua.
+    paths-ignore:
+      - 'apps/marketing/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/workflows/deploy-marketing.yml'
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: deploy-netviet
+  # Cung nhom voi `deploy-tenant.yml` cho khach `ultty`: mot lan deploy tay va mot lan deploy theo
+  # push khong duoc phep cung sua mot thu muc stack.
+  group: deploy-tenant-ultty
   cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: ubuntu-24.04
-    environment: production
-    timeout-minutes: 60
-    env:
-      GCP_PROJECT_ID: netviet-host-968934832433
-      GCP_REGION: asia-southeast1
-      GCP_ZONE: asia-southeast1-b
-      VM_NAME: netviet
-    steps:
-      - uses: actions/checkout@v4
-
-      - id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - uses: google-github-actions/setup-gcloud@v2
-
-      - name: Build, push and roll out to the pilot VM
-        run: bash deploy/netviet/deploy-ci.sh
-        env:
-          GIT_SHA: ${{ github.sha }}
-
-      - name: Report the public endpoints
-        run: |
-          public_ip="$(gcloud compute addresses describe netviet-public-ip \
-            --region "${GCP_REGION}" --project "${GCP_PROJECT_ID}" --format='value(address)')"
-          label="${public_ip//./-}"
-          {
-            echo "### Deploy xong"
-            echo ""
-            echo "- Demo: https://demo.${label}.sslip.io"
-            echo "- Van hanh Zalo: https://operator.${label}.sslip.io/zalo"
-            echo "- Cau hinh: https://operator.${label}.sslip.io/settings"
-          } >>"${GITHUB_STEP_SUMMARY}"
+    uses: ./.github/workflows/reusable-deploy-tenant.yml
+    with:
+      tenant: ultty
+      environment: production
+    secrets: inherit

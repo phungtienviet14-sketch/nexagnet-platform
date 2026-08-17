@@ -122,9 +122,21 @@ sudo /srv/netviet/apps/zalo-ultty/set-channel-mode.sh mock
   (`pnpm audit --audit-level high`), `images` (build 2 Dockerfile). Composite action
   `.github/actions/setup-workspace` lo pnpm 10.34.4 + Node 22 + `prisma generate` (bắt buộc vì
   pnpm 10 chặn postinstall của Prisma).
-- **CD** (`.github/workflows/deploy.yml`): build/push image theo digest rồi rollout lên VM qua
-  IAP, dùng `deploy-ci.sh`. Xác thực **keyless** bằng Workload Identity Federation — không lưu
+- **CD stack khách** — một bản logic duy nhất ở `.github/workflows/reusable-deploy-tenant.yml`
+  (build/push image *trung tính* theo digest → rollout lên VM qua IAP bằng `deploy-ci.sh`), gọi từ
+  hai cửa:
+  - `deploy-tenant.yml` — **chạy tay**, chọn `tenant` + `environment` (`dev`/`production`). Đây là
+    cửa dùng cho mọi khách không phải khách chính.
+  - `deploy.yml` — **tự động** khi push `main`, cố định `tenant: ultty` + environment `production`.
+    Có `paths-ignore` cho `apps/marketing/**`, `docs/**` và `**/*.md`: sửa trang marketing hoặc tài
+    liệu thì **không** kéo theo một lần rollout API chờ duyệt.
+
+  Cả hai dùng chung nhóm concurrency `deploy-tenant-<slug>` nên không bao giờ có hai lần deploy
+  cùng đụng một thư mục stack. Xác thực **keyless** bằng Workload Identity Federation — không lưu
   service account key JSON trong GitHub.
+- **CD trang marketing** (`.github/workflows/deploy-marketing.yml`): build image `apps/marketing`
+  rồi `gcloud run deploy` lên Cloud Run `nexagnet-marketing`, triển khai **theo git SHA** chứ không
+  theo tag `:latest`. Hoàn toàn tách khỏi stack khách — trang này là nội dung công khai của NetViet.
 
 Thiết lập CD lần đầu:
 
@@ -185,12 +197,34 @@ Script tạo/reconcile project, VPC, firewall, static IP, VM, Artifact Registry,
 backup, monitoring; build image từ commit, bootstrap/contract-test Flowise và smoke test cả
 loopback lẫn ba hostname HTTPS. Image gắn git SHA và script từ chối build khi tracked worktree bẩn.
 
+**Lên một khách mới** — cùng script đó, thêm `-Tenant <slug>` (slug phải khớp một thư mục trong
+`tenants/`). Nó tự tạo đủ 15 secret `zalo-<slug>-*` **kèm version đầu tiên** rồi cấp
+`roles/secretmanager.secretAccessor` cho service account của VM trên đúng bộ secret ấy — hai việc
+này đi từ **một** danh sách, nên không còn cảnh secret có mà quyền đọc thì thiếu:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/netviet/deploy.ps1 -Tenant amico
+```
+
+Các script vận hành khác cũng nhận slug và **mặc định `ultty`**: `rotate-human-secrets.ps1 -Tenant`,
+`open-demo.ps1 -Tenant`, còn phía VM là biến `TENANT_SLUG` (`health-check.sh`, `rollback.sh`,
+`backup.sh`, `soak-test.sh`, `set-channel-mode.sh`).
+
 Truy cập khẩn cấp bằng IAP vẫn được giữ:
 
 ```powershell
 gcloud compute ssh netviet --project netviet-host-968934832433 `
   --zone asia-southeast1-b --tunnel-through-iap `
-  -- -L 8080:127.0.0.1:8080 -L 3002:127.0.0.1:3002
+  -- -L 8080:127.0.0.1:8080
+```
+
+Từ khi tách edge dùng chung (12/08/2026) **Flowise không còn cổng trên host** — nhiều khách thì một
+cổng `3002` chỉ phục vụ được một người. Vào Flowise của một khách bằng hostname riêng của họ
+(`flowise-<slug>.<ip>.sslip.io`, khách chính giữ tên trần `flowise.<ip>.sslip.io`), hoặc từ trong VM
+đi thẳng vào mạng riêng của khách đó:
+
+```bash
+docker run --rm --network zalo-<slug>_backend curlimages/curl -fsS http://flowise-<slug>:3000/api/v1/ping
 ```
 
 Monitoring kiểm tra health/restart container, RAM > 85% và disk > 80%. Backup chạy hằng đêm;
