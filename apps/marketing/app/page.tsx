@@ -1,27 +1,27 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { HeroPlatformEcosystem } from '@/components/home/HeroPlatformEcosystem';
-import { HomeSolutionsOverview } from '@/components/home/HomeSolutionsOverview';
-import { HomeProductsSection } from '@/components/home/HomeProductsSection';
-import { HomeIndustriesSection } from '@/components/home/HomeIndustriesSection';
-import { HomeTrustSection } from '@/components/home/HomeTrustSection';
-import { HomeExpandSection } from '@/components/home/HomeExpandSection';
-import { HomeCTA } from '@/components/home/HomeCTA';
+import { HomeHero } from '@/components/home/HomeHero';
+import { HomeBusinessProblem } from '@/components/home/HomeBusinessProblem';
+import { HomeWhatWeDo } from '@/components/home/HomeWhatWeDo';
+import { HomeDepartmentsGrid } from '@/components/home/HomeDepartmentsGrid';
+import { HomeOwnerView } from '@/components/home/HomeOwnerView';
+import { HomeIndustriesTeaser } from '@/components/home/HomeIndustriesTeaser';
+import { HomeFinalCTA } from '@/components/home/HomeFinalCTA';
 
 export const metadata: Metadata = {
-  title: 'nexagnet — Nền tảng AI cho Doanh nghiệp',
+  title: 'nexagnet — Enterprise AI Operations Platform | Nền tảng AI cho Vận hành Doanh nghiệp',
   description:
-    'nexagnet giúp doanh nghiệp ứng dụng AI vào bán hàng, chăm sóc khách hàng và vận hành nội bộ theo từng module có kiểm soát an toàn.',
+    'Nexagnet giúp doanh nghiệp đưa AI vào các quy trình giữa khách hàng, nhân viên, dữ liệu và hệ thống — tự động xử lý công việc lặp lại, chuyển ngoại lệ cho con người và tạo một lớp vận hành có kiểm soát.',
   keywords: [
     'nexagnet',
-    'Nền tảng AI cho doanh nghiệp',
-    'Enterprise AI Platform',
-    'AI bán hàng B2B',
-    'AI chăm sóc khách hàng',
-    'Tự động hóa vận hành doanh nghiệp',
+    'Enterprise AI Operations Platform',
+    'Nền tảng AI cho vận hành doanh nghiệp',
+    'Điều hành doanh nghiệp bằng AI',
+    'AI cho phòng ban',
     'Rules Engine tất định',
-    'Kiểm soát con người Human-in-the-loop',
+    'Kiểm soát con người Human in the loop',
+    'Quản trị ngoại lệ doanh nghiệp',
   ],
   alternates: {
     canonical: 'https://nexagnet247.com',
@@ -33,26 +33,26 @@ export default function HomePage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        {/* Section 1: Hero Platform Ecosystem */}
-        <HeroPlatformEcosystem />
+        {/* Section 1: Hero Platform with Business Operations Map */}
+        <HomeHero />
 
-        {/* Section 2: Lĩnh vực ứng dụng (Bán hàng, CSKH, Vận hành) */}
-        <HomeSolutionsOverview />
+        {/* Section 2: Vấn đề cấp doanh nghiệp (Silos vs Connected Layer) */}
+        <HomeBusinessProblem />
 
-        {/* Section 3: Sản phẩm phù hợp (Spotlight: Order Automation) */}
-        <HomeProductsSection />
+        {/* Section 3: 4 Năng lực cốt lõi (Understand, Decide, Orchestrate, Control) */}
+        <HomeWhatWeDo />
 
-        {/* Section 4: Ứng dụng theo ngành */}
-        <HomeIndustriesSection />
+        {/* Section 4: Ứng dụng theo Phòng ban (Executive, Sales, Marketing, CSKH, Ops, Finance, HR) */}
+        <HomeDepartmentsGrid />
 
-        {/* Section 5: Kiểm soát & An toàn Doanh nghiệp */}
-        <HomeTrustSection />
+        {/* Section 5: Góc nhìn Điều hành cho Chủ doanh nghiệp (Operations Control Center) */}
+        <HomeOwnerView />
 
-        {/* Section 6: Lộ trình mở rộng từng bước */}
-        <HomeExpandSection />
+        {/* Section 6: Giải pháp theo Mô hình Ngành */}
+        <HomeIndustriesTeaser />
 
-        {/* Section 7: Final Lead Gen & Demo CTA */}
-        <HomeCTA />
+        {/* Section 7: Final CTA & Lead Intake */}
+        <HomeFinalCTA />
       </main>
       <Footer />
     </div>

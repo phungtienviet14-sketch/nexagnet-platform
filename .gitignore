@@ -25,11 +25,13 @@ logs/
 *.sqlite
 *.db
 
-# OS / editor
+# OS / editor / vendor agent tools
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+.agents/
+agents/
 
 # Temp
 *.tmp
