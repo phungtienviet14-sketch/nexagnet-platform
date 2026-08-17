@@ -5,20 +5,28 @@ const baseUrl = requiredEnv('FLOWISE_BASE_URL').replace(/\/+$/, '');
 const flowId = requiredEnv('FLOWISE_FLOW_ID');
 const apiKey = requiredEnv('FLOWISE_API_KEY');
 const predictionUrl = `${baseUrl}/api/v1/prediction/${encodeURIComponent(flowId)}`;
+// DU LIEU GIA, CO Y. File nay nam trong `deploy/` — phan dung chung cho MOI khach — nen no khong
+// duoc mang SKU, ten san pham hay ten dai ly cua bat ky khach nao (nguyen tac #6 trong CLAUDE.md).
+// Truoc 17/08/2026 cho nay dung don that cua khach dau tien, tuc la ky su cua moi khach ve sau doc
+// repo la thay bang hang va ten dai ly cua ho.
+//
+// Parser lam viec trong TU DIEN DONG: danh muc duoi day duoc truyen thang vao request, nen test
+// khong phu thuoc nguon su that cua khach nao. Doi cho nay thi giu nguyen HINH DANG don (mau TH1:
+// `ChiNhanh_Ngay_TenDaiLy, SoLuong x MaSP`) — do moi la thu dang duoc kiem.
 const input = {
-  text: 'HN_31.7_Meta HN, 2 x Ghe Felix',
+  text: 'HN_31.7_Dai Ly Mau, 2 x Ban Mau',
   imageUrl: undefined,
   products: [
     {
-      sku: 'GHE-FELIX',
-      name: 'Ghế nâng an toàn trẻ em EUS Felix',
-      aliases: ['felix', 'ghe felix'],
+      sku: 'SP-MAU-01',
+      name: 'Bàn mẫu dùng cho contract test',
+      aliases: ['ban mau', 'ban mau 01'],
       unit: 'cái',
     },
   ],
   glossary: [{ term: 'HN', meaning: 'Hà Nội' }],
-  dealerNameRaw: 'Meta HN',
-  botName: 'Bot NetViet',
+  dealerNameRaw: 'Dai Ly Mau',
+  botName: 'Bot Contract Test',
 };
 
 const unauthenticated = await fetch(predictionUrl, {
