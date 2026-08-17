@@ -13,6 +13,12 @@ export default tseslint.config(
       '**/next-env.d.ts',
       '**/logs/**',
       '**/.claude/worktrees/**',
+      // Bo cong cu agent duoc cai vao repo ('.agents/', 'agents/'): do la ma nguon VENDOR cua
+      // skill/plugin, khong phai ma nguon du an, va no khong theo rule TypeScript cua ta. De lai
+      // thi mot lan cai skill se sinh hang nghin loi lint va CHAN moi lan push (17/08/2026: 1249
+      // loi tren 32 tep, khong tep nao thuoc ma nguon du an).
+      '**/.agents/**',
+      'agents/**',
     ],
   },
   js.configs.recommended,
