@@ -129,7 +129,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('MCP source-of-truth tools (Po
   });
 
   it('set_price loi ro rang khi SKU khong ton tai', async () => {
-    const result = await setPrice(prisma, { sku: 'SKU-KHONG-CO', wholesale: 1000 });
+    // `validMonth` la truong BAT BUOC cua setPriceInput. Thieu no thi zod chan ngay o cua va loi tra
+    // ve noi ve validMonth — test mang ten "SKU khong ton tai" nhung khong he cham toi nhanh do nua.
+    const result = await setPrice(prisma, {
+      sku: 'SKU-KHONG-CO',
+      wholesale: 1000,
+      validMonth: '2026-07',
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain('Sản phẩm');
   });
