@@ -447,8 +447,13 @@ export class SettingsController {
     // AUTH_MODE=none (VM dev/demo): xac thuc da tat -> khong kiem Origin nua. Xem env.ts.
     if (this.env.AUTH_MODE === 'none') return;
     if (this.env.NODE_ENV !== 'production') return;
-    const allowed = new Set([this.env.CORS_ORIGIN, this.env.ZALO_OPERATOR_ORIGIN].filter(Boolean));
-    if (!origin || !allowed.has(origin)) {
+    const allowed = new Set(
+      [this.env.CORS_ORIGIN, this.env.ZALO_OPERATOR_ORIGIN]
+        .filter((url): url is string => Boolean(url))
+        .map((url) => url.replace(/\/+$/, '')),
+    );
+    const normalizedOrigin = origin?.replace(/\/+$/, '');
+    if (!normalizedOrigin || !allowed.has(normalizedOrigin)) {
       throw new ForbiddenException('Origin trang cau hinh khong hop le');
     }
   }

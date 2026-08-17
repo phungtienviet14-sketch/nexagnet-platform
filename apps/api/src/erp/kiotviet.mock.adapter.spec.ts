@@ -37,7 +37,7 @@ function order(lines: PricedLine[]): PricedOrder {
 
 describe('KiotVietMockAdapter (trang thai cho tab KiotViet)', () => {
   it('seed danh muc tu nguon su that, ton kho ban dau > 0', () => {
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const kv = new KiotVietMockAdapter(knowledge);
     const products = kv.listProducts();
 
@@ -49,7 +49,7 @@ describe('KiotVietMockAdapter (trang thai cho tab KiotViet)', () => {
   });
 
   it('day don -> tao ma KV-, luu vao danh sach, tru ton kho dung SKU', async () => {
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const kv = new KiotVietMockAdapter(knowledge);
     const sku = knowledge.products()[0]!.sku;
 
@@ -64,7 +64,7 @@ describe('KiotVietMockAdapter (trang thai cho tab KiotViet)', () => {
   });
 
   it('nhieu don -> moi nhat dung dau danh sach, ma don tang dan', async () => {
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const kv = new KiotVietMockAdapter(knowledge);
     const sku = knowledge.products()[0]!.sku;
 
@@ -77,7 +77,7 @@ describe('KiotVietMockAdapter (trang thai cho tab KiotViet)', () => {
   });
 
   it('day don vuot ton -> ton kho chan san 0, khong am (M2)', async () => {
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const kv = new KiotVietMockAdapter(knowledge);
     const sku = knowledge.products()[0]!.sku;
 
@@ -87,7 +87,7 @@ describe('KiotVietMockAdapter (trang thai cho tab KiotViet)', () => {
   });
 
   it('dong khong map SKU (sku=null) -> khong tru ton, khong loi', async () => {
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const kv = new KiotVietMockAdapter(knowledge);
     const before = kv.listProducts().map((p) => p.stock);
 

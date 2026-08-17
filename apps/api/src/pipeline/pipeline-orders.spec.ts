@@ -15,7 +15,7 @@ const BOT_NAME = 'Bot ultty AI orders';
 const GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-hn')!.chatId;
 
 function build() {
-  const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+  const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
   const repo = new InMemoryOrdersRepository();
   const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
   const pipeline = new PipelineService(orchestrator);
@@ -93,7 +93,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
         throw new Error('rate limit');
       }
     }
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const repo = new InMemoryOrdersRepository();
     const pipeline = new PipelineService(new AgentOrchestrator(new MockParser(), knowledge, repo));
     const outbound = new OutboundChannelRouter(
@@ -113,7 +113,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
 
   it('tin tu NHOM KHAC -> map dung dai ly/chinh sach/ten nhom cua nhom do (dinh tuyen da nhom)', async () => {
     const { pipeline, orders, adapter } = build();
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const tn = knowledge.groups().find((g) => g.dealerId === 'dl-thai-nguyen');
     expect(tn, 'seed can co nhom map -> dl-thai-nguyen').toBeDefined();
 
@@ -172,7 +172,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
       }
     }
 
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const repo = new InMemoryOrdersRepository();
     const pipeline = new PipelineService(new AgentOrchestrator(new MockParser(), knowledge, repo));
     const delayed = new DelayedAdapter();

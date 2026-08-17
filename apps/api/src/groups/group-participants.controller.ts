@@ -120,8 +120,13 @@ export class GroupParticipantsController {
     if (this.env.NODE_ENV !== 'production') return;
     // Trang /settings nam tren domain OPERATOR (Caddy chan /settings* o domain demo) nen phai
     // chap nhan ca hai origin — giong SettingsController, tranh 403 dung luc sua phan loai.
-    const allowed = new Set([this.env.CORS_ORIGIN, this.env.ZALO_OPERATOR_ORIGIN].filter(Boolean));
-    if (!origin || !allowed.has(origin)) {
+    const allowed = new Set(
+      [this.env.CORS_ORIGIN, this.env.ZALO_OPERATOR_ORIGIN]
+        .filter((url): url is string => Boolean(url))
+        .map((url) => url.replace(/\/+$/, '')),
+    );
+    const normalizedOrigin = origin?.replace(/\/+$/, '');
+    if (!normalizedOrigin || !allowed.has(normalizedOrigin)) {
       throw new ForbiddenException('Origin cau hinh thanh vien khong hop le');
     }
   }

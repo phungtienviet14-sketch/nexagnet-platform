@@ -35,7 +35,7 @@ async function build(options: {
   priceClock?: Date;
 }) {
   const ordersRepo = new InMemoryOrdersRepository();
-  const knowledge = new KnowledgeService(undefined, options.priceClock ?? new Date('2026-07-15'));
+  const knowledge = new KnowledgeService(undefined, options.priceClock ?? new Date('2026-08-15'));
   const content = new ContentService(
     options.content ?? new InMemoryContentRepository(activeContent(), ['ELNI']),
   );
@@ -126,7 +126,7 @@ describe('product advice outbound', () => {
     const { pipeline, outbound } = await build({
       autoSend: 'on',
       parser,
-      priceClock: new Date('2026-08-15'),
+      priceClock: new Date('2026-09-15'),
     });
 
     const view = await pipeline.process(message('ELNI co tot khong, gia bao nhieu?'));

@@ -12,7 +12,7 @@ const META_HN = SEED.groups.find((group) => group.dealerId === 'meta-hn')!.chatI
 function build(): AgentOrchestrator {
   return new AgentOrchestrator(
     new MockParser(),
-    new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z')),
+    new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z')),
     new InMemoryOrdersRepository(),
   );
 }

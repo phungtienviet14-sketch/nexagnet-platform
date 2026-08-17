@@ -247,6 +247,18 @@ describe('ZaloController', () => {
     expect(synchronize).toHaveBeenCalledWith(expect.objectContaining({ groupId: 'group-1' }));
   });
 
+  it('chap nhan ca CORS_ORIGIN va ZALO_OPERATOR_ORIGIN (co hoac khong co trailing slash)', async () => {
+    process.env.CORS_ORIGIN = 'https://demo.example.com';
+    controller = new ZaloController(client, identity, participants);
+
+    await expect(
+      controller.syncGroupMembers('group-1', {}, 'https://demo.example.com/'),
+    ).resolves.toMatchObject({ complete: true });
+    await expect(
+      controller.syncGroupMembers('group-1', {}, 'https://operator.example.com/'),
+    ).resolves.toMatchObject({ complete: true });
+  });
+
   it('rate-limit endpoint dong bo thanh vien nhay cam', () => {
     expect(Reflect.getMetadata('THROTTLER:LIMITdefault', controller.syncGroupMembers)).toBe(5);
     expect(Reflect.getMetadata('THROTTLER:TTLdefault', controller.syncGroupMembers)).toBe(60_000);

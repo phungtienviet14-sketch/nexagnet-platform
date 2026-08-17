@@ -244,7 +244,13 @@ export class ZaloController {
     // va chi lam ket khi mo qua IP/loopback/tunnel. Xem env.ts.
     if (this.env.AUTH_MODE === 'none') return;
     if (this.env.NODE_ENV !== 'production') return;
-    if (!origin || origin !== this.env.ZALO_OPERATOR_ORIGIN) {
+    const allowed = new Set(
+      [this.env.CORS_ORIGIN, this.env.ZALO_OPERATOR_ORIGIN]
+        .filter((url): url is string => Boolean(url))
+        .map((url) => url.replace(/\/+$/, '')),
+    );
+    const normalizedOrigin = origin?.replace(/\/+$/, '');
+    if (!normalizedOrigin || !allowed.has(normalizedOrigin)) {
       throw new ForbiddenException('Origin van hanh Zalo khong hop le');
     }
   }

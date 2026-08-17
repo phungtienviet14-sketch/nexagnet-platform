@@ -9,4 +9,4 @@ import 'reflect-metadata';
 process.env.TENANT ??= 'ultty';
 // Test fixtures intentionally use the July 2026 tenant seed. Production/runtime does not set this
 // variable, so price lookup still fails closed to the real current month.
-process.env.PRICE_CURRENT_MONTH ??= '2026-07';
+process.env.PRICE_CURRENT_MONTH ??= '2026-08';

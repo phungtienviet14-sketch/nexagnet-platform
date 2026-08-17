@@ -11,7 +11,7 @@ describe('KnowledgeService.resolveByChatId (dinh tuyen da nhom)', () => {
   it('khong dung lai bang gia seed thang cu khi runtime da sang thang moi', () => {
     const futureMonthKnowledge = new KnowledgeService(
       undefined,
-      new Date('2026-08-12T00:00:00.000Z'),
+      new Date('2026-09-12T00:00:00.000Z'),
     );
 
     expect(futureMonthKnowledge.prices()).toEqual([]);

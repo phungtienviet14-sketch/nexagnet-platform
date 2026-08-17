@@ -52,7 +52,7 @@ class ThrowingMessagesRepository extends MessagesRepository {
 }
 
 function build(messages: MessagesRepository) {
-  const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+  const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
   const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, new InMemoryOrdersRepository());
   return new PipelineService(
     orchestrator,
@@ -113,7 +113,7 @@ describe('Pipeline luu MOI tin vao MessagesRepository (Phase 3)', () => {
   });
 
   it('tin da ton tai trong kho ben vung -> KHONG chay orchestrator tao don lan nua', async () => {
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const orders = new InMemoryOrdersRepository();
     const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, orders);
     const pipeline = new PipelineService(orchestrator, undefined, new DuplicateMessagesRepository());
@@ -166,7 +166,7 @@ describe('Pipeline luu MOI tin vao MessagesRepository (Phase 3)', () => {
   });
 
   it('khong cau hinh MessagesRepository (backward compat) -> pipeline chay nhu cu', async () => {
-    const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+    const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, new InMemoryOrdersRepository());
     const pipeline = new PipelineService(orchestrator);
 

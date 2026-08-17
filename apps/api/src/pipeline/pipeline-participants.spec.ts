@@ -10,7 +10,7 @@ import type { RuntimeSettingsService } from '../runtime/runtime-settings.service
 import { MockParser } from './mock-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
-const knowledge = new KnowledgeService(undefined, new Date('2026-07-15T00:00:00.000Z'));
+const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
 const GROUP = knowledge.groups().find((group) => group.dealerId === 'meta-hn')!.chatId;
 
 function message(id: string): ChannelMessage {
