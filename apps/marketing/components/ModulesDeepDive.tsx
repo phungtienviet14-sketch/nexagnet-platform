@@ -46,7 +46,7 @@ const MODULES: ModuleTab[] = [
       },
     ],
     impactMetric: {
-      value: '< 5 giây',
+      value: 'Tức thì',
       label: 'Thời gian hoàn tất xử lý & đối soát một đơn hàng',
     },
     previewContent: {

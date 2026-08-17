@@ -1,77 +1,147 @@
+'use client';
+
 import Link from 'next/link';
 
 export function Footer() {
+  const currentYear = new Date().getFullYear();
+
   return (
     <footer className="footer-root" role="contentinfo">
       <div className="container">
-        <div className="footer-main-grid">
-          {/* Brand Info Column */}
+        <div className="footer-grid">
+          {/* Cột Thương hiệu */}
           <div className="footer-brand-col">
-            <Link href="/" className="brand-link" aria-label="Trang chủ nexagnet">
+            <Link href="/" className="footer-brand-link" aria-label="Trang chủ nexagnet">
               <span className="brand-motif" aria-hidden="true">
                 <span className="brand-dot" />
               </span>
               <span className="brand-wordmark">nexagnet</span>
             </Link>
-
-            <p className="footer-brand-desc">
-              Nền tảng AI Agent theo module cho doanh nghiệp. Tự động hóa từng quy trình vận hành từ hội thoại đa kênh mà vẫn duy trì quy tắc kinh doanh và quyền kiểm soát tối cao của con người.
+            <p className="footer-tagline">
+              Nền tảng AI cho Doanh nghiệp. Giúp doanh nghiệp ứng dụng AI vào bán hàng, chăm sóc khách hàng và vận hành nội bộ theo từng module có kiểm soát.
             </p>
-
-            <div className="footer-philosophy-pill">
-              <span>AI thấu hiểu → Quy tắc quyết định → Con người kiểm soát</span>
+            <div className="footer-trust-badge">
+              <span className="trust-dot" />
+              <span>Bảo vệ dữ liệu theo Luật 91/2025/QH15 &amp; NĐ 356/2025</span>
             </div>
           </div>
 
-          {/* Links Column 1: Nền tảng */}
+          {/* Cột Sản phẩm & Giải pháp */}
           <div className="footer-links-col">
-            <h4 className="footer-heading">Nền tảng</h4>
-            <ul className="footer-list">
-              <li><a href="#platform">Kiến trúc 3 Lớp</a></li>
-              <li><a href="#platform">Rules Engine Tất định</a></li>
-              <li><a href="#platform">Cổng Kiểm duyệt Nhân sự</a></li>
-              <li><a href="#security">Bảo mật & Quản trị</a></li>
-              <li><a href="#demo">Yêu cầu Demo</a></li>
+            <div className="footer-col-title">SẢN PHẨM &amp; GIẢI PHÁP</div>
+            <ul className="footer-links-list">
+              <li>
+                <Link href="/products/order-automation" className="footer-link highlight">
+                  ★ Xử lý Đơn hàng (Order Automation)
+                </Link>
+              </li>
+
+              <li>
+                <Link href="/solutions/sales" className="footer-link">
+                  Giải pháp Bán hàng
+                </Link>
+              </li>
+              <li>
+                <Link href="/solutions/customer-service" className="footer-link">
+                  Giải pháp Chăm sóc Khách hàng
+                </Link>
+              </li>
+              <li>
+                <Link href="/solutions/operations" className="footer-link">
+                  Giải pháp Vận hành
+                </Link>
+              </li>
+              <li>
+                <Link href="/solutions/internal-knowledge" className="footer-link">
+                  Tri thức Doanh nghiệp
+                </Link>
+              </li>
             </ul>
           </div>
 
-          {/* Links Column 2: Phân hệ Vận hành */}
+          {/* Cột Ngành & Nền tảng */}
           <div className="footer-links-col">
-            <h4 className="footer-heading">Phân hệ Vận hành</h4>
-            <ul className="footer-list">
-              <li><a href="#modules">Xử lý Đơn hàng (Orders)</a></li>
-              <li><a href="#modules">Tri thức & CSKH (Knowledge)</a></li>
-              <li><a href="#modules">Chiến dịch CSKH (Campaigns)</a></li>
-              <li><a href="#modules">Quy trình Tùy biến</a></li>
-              <li><a href="#demo">Đăng ký Tư vấn Module</a></li>
+            <div className="footer-col-title">NGÀNH &amp; NỀN TẢNG</div>
+            <ul className="footer-links-list">
+              <li>
+                <Link href="/industries/retail-distribution" className="footer-link">
+                  Bán lẻ &amp; Phân phối
+                </Link>
+              </li>
+              <li>
+                <Link href="/industries/spa-beauty" className="footer-link">
+                  Spa &amp; Thẩm mỹ
+                </Link>
+              </li>
+              <li>
+                <Link href="/industries/real-estate" className="footer-link">
+                  Bất động sản
+                </Link>
+              </li>
+              <li>
+                <Link href="/industries/education" className="footer-link">
+                  Giáo dục &amp; Đào tạo
+                </Link>
+              </li>
+              <li>
+                <Link href="/platform" className="footer-link">
+                  Tổng quan Nền tảng
+                </Link>
+              </li>
+              <li>
+                <Link href="/platform/control" className="footer-link">
+                  Kiểm soát &amp; Quản trị
+                </Link>
+              </li>
             </ul>
           </div>
 
-          {/* Links Column 3: Tuân thủ & Tài nguyên */}
+          {/* Cột Tài nguyên & Liên hệ */}
           <div className="footer-links-col">
-            <h4 className="footer-heading">Chính sách & Pháp lý</h4>
-            <ul className="footer-list">
-              <li><Link href="/privacy">Chính sách Quyền riêng tư</Link></li>
-              <li><Link href="/privacy#principles">Nguyên tắc Bảo vệ Dữ liệu</Link></li>
-              <li><Link href="/privacy#storage">Lưu trữ & Kiểm soát Truy cập</Link></li>
-              <li><Link href="/privacy#rights">Quyền của Doanh nghiệp</Link></li>
-              <li><Link href="/privacy#contact">Đầu mối Liên hệ</Link></li>
+            <div className="footer-col-title">TÀI NGUYÊN &amp; LIÊN HỆ</div>
+            <ul className="footer-links-list">
+              <li>
+                <Link href="/resources/faq" className="footer-link">
+                  Câu hỏi Thường gặp (FAQ)
+                </Link>
+              </li>
+              <li>
+                <Link href="/resources/roadmap" className="footer-link">
+                  Lộ trình Phát triển
+                </Link>
+              </li>
+              <li>
+                <span className="footer-link-text">Tư vấn giải pháp:</span>
+                <a href="mailto:contact@nexagnet247.com" className="footer-link highlight">
+                  contact@nexagnet247.com
+                </a>
+              </li>
+              <li>
+                <span className="footer-link-text">Hỗ trợ kỹ thuật:</span>
+                <a href="mailto:support@nexagnet247.com" className="footer-link">
+                  support@nexagnet247.com
+                </a>
+              </li>
+              <li>
+                <Link href="/privacy" className="footer-link">
+                  Chính sách Bảo mật Dữ liệu
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
 
-        {/* Bottom Bar: Copyright & Principles */}
+        {/* Bottom Bar */}
         <div className="footer-bottom-bar">
           <div className="footer-copy">
-            © {new Date().getFullYear()} nexagnet platform (nexagnet247.com). Tất cả các quyền được bảo lưu.
+            © {currentYear} nexagnet (nexagnet247.com). Nền tảng AI cho Doanh nghiệp.
           </div>
-
           <div className="footer-legal-links">
-            <span className="legal-item">Bảo mật đa tầng</span>
-            <span className="legal-sep" aria-hidden="true">•</span>
-            <span className="legal-item">Lõi Quy tắc Tất định</span>
-            <span className="legal-sep" aria-hidden="true">•</span>
-            <span className="legal-item">Hạ tầng phân lập</span>
+            <Link href="/privacy">Chính sách bảo mật</Link>
+            <span className="sep">·</span>
+            <Link href="/#demo">Điều khoản dịch vụ</Link>
+            <span className="sep">·</span>
+            <Link href="/sitemap.xml">Sitemap</Link>
           </div>
         </div>
       </div>
