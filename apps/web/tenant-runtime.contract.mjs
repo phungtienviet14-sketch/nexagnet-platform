@@ -71,6 +71,24 @@ function writePack(spec) {
         composerPlaceholder: `vd: @Bot ${spec.slug} gui 10 mon A ve HN`,
       },
       policies: ['cong_no_30', 'thanh_toan_ngay'],
+      // Bon truong duoi day la BAT BUOC trong `tenantConfigSchema` nhung khong lien quan gi den
+      // thuong hieu — hop dong nay chi kiem thuong hieu. Thieu chung thi loader nem luc phuc vu
+      // request, `/` khong bao gio tra 200, va test chi bao "qua 120000ms van chua khoi dong" —
+      // mot thong bao khong he chi ra rang nguyen nhan la goi khach thieu truong (su co 15/08/2026,
+      // job `verify` chet timeout 20 phut suot hai ngay). Gia tri o day co tinh trung tinh.
+      orderAutomation: { enabled: false, maxAutoConfirmQuantity: 1 },
+      campaign: {
+        defaultWindow: { start: '08:00', end: '20:00' },
+        minSpacingSeconds: 60,
+        maxTargets: 10,
+        rateLimitPerMinute: 10,
+        claimLeaseSeconds: 60,
+        tickIntervalSeconds: 30,
+        retry: { maxAttempts: 3, baseBackoffSeconds: 60 },
+        features: { lunarCalendarEnabled: false },
+      },
+      retailAdvice: { priceField: 'retailPrice', qualifier: 'gia tham khao' },
+      readiness: { blockedCapabilities: [] },
       persona: {
         parserIntro: `Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho ${spec.productName}.`,
         botName: spec.productName,
@@ -107,13 +125,31 @@ const isUp = async () => {
 async function startServer(tenantDir) {
   const env = { ...process.env, TENANT_DIR: tenantDir, NODE_ENV: 'production' };
   delete env.TENANT; // bo di cho khong con duong nao mo ho ve goi khach dang duoc dung
+  // Giu lai stderr thay vi 'ignore': khi server khong len duoc, ly do that (vd goi khach thieu
+  // truong -> loader nem) nam o day. Truoc day no bi nem di va test chi noi duoc "qua 120s".
   const child = spawn(process.execPath, [NEXT_BIN, 'start', '-p', String(PORT)], {
     cwd: WEB_DIR,
     env,
-    stdio: 'ignore',
+    stdio: ['ignore', 'ignore', 'pipe'],
     detached: process.platform !== 'win32',
   });
-  await waitFor(isUp, `khoi dong duoc next start o ${BASE}`);
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += String(chunk);
+  });
+
+  try {
+    await waitFor(isUp, `khoi dong duoc next start o ${BASE}`);
+  } catch (error) {
+    // PHAI don tien trinh con truoc khi nem. Neu khong, `next start` con song se giu event loop cua
+    // node --test mo mai — job CI khong "do" ma "treo" den khi het timeout 20 phut, va nguoi doc
+    // log thay mot job bi huy chu khong thay mot test that bai (su co 15-17/08/2026).
+    await stopServer(child).catch(() => {});
+    const detail = stderr.trim().split('\n').slice(-12).join('\n');
+    throw new Error(`${error.message}${detail ? `\n--- stderr cua next start ---\n${detail}` : ''}`, {
+      cause: error,
+    });
+  }
   return child;
 }
 
