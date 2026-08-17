@@ -84,6 +84,25 @@ done
 # theo doi tep bind-mount. `caddy reload` doi cau hinh tai cho, nen cac khach KHAC dang duoc phuc vu
 # khong bi rot ket noi chi vi mot khach deploy — dieu se xay ra neu dung `restart`.
 EDGE_COMPOSE=(docker compose --env-file "${EDGE_DIR}/.runtime/caddy.env" -f "${EDGE_DIR}/compose.yaml")
+
+# EDGE DI NGUOC VAO MANG RIENG CUA KHACH, chu khong keo khach ra mot mang dung chung.
+#
+# Duong nguoc lai (noi api/web/flowise vao mot mang chung) da duoc thu va HONG: Docker tu dang ky
+# TEN SERVICE lam alias DNS tren MOI mang container tham gia, nen tren mang chung ca hai khach deu
+# tra loi cho cung cai ten `api`/`web`/`flowise`. Api cua khach nay phan giai `flowise` ra HAI dia
+# chi roi noi nham sang Flowise cua khach kia (17/08/2026, Flowise HTTP 404) — vua sai dia chi, vua
+# cho container cua hai khach goi thang duoc sang nhau.
+#
+# Noi tu phia edge thi moi khach van dong kin trong mang cua ho; chi mot minh edge bac qua, va no
+# goi tung khach bang alias mang slug. Buoc nay phai chay TRUOC `caddy reload` + vong doi suc khoe
+# ben duoi: ca hai deu di xuyen edge, ma edge chua noi vao mang khach thi khong toi duoc api.
+edge_gateway="$("${EDGE_COMPOSE[@]}" ps -q gateway | head -n 1)"
+if [[ -z "${edge_gateway}" ]]; then
+  echo "Khong tim thay container gateway cua edge — khong noi duoc vao mang khach." >&2
+  exit 1
+fi
+# Da noi roi thi `network connect` bao loi; day la buoc idempotent nen nuot loi do.
+docker network connect "zalo-${TENANT_SLUG}_backend" "${edge_gateway}" 2>/dev/null || true
 # Nap lai la duong NHANH; dung lai la duong DUNG khi nap lai khong the thanh cong.
 #
 # `docker compose up -d` KHONG dung lai container chi vi noi dung mot tep bind-mount doi, nen khi
