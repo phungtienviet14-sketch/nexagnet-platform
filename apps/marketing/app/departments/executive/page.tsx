@@ -69,25 +69,25 @@ const EXECUTIVE_PAIN_POINTS = [
 
 const EXECUTIVE_CAPABILITIES = [
   {
-    icon: '🔍',
+    icon: 'search',
     title: 'Lọc nhiễu vận hành hàng ngày',
     desc: 'Hàng ngàn tin nhắn và thao tác lặp lại được xử lý tự động theo quy tắc; hệ thống chỉ lọc và đẩy lên các trường hợp thực sự cần sự can thiệp của con người.',
     bullets: ['Tự động hóa 80% tác vụ tiêu chuẩn', 'Giảm 90% thời gian đọc tin rác không cần thiết', 'Tập trung sự chú ý vào các ngoại lệ cốt lõi'],
   },
   {
-    icon: '🚦',
+    icon: 'metrics',
     title: 'Giám sát điểm nghẽn quy trình liên phòng ban',
     desc: 'Hiển thị trạng thái luồng công việc theo thời gian thực: phòng ban nào đang xử lý tốt, khâu nào đang bị ứ đọng để kịp thời điều phối.',
     bullets: ['Theo dõi tiến độ đơn hàng và yêu cầu', 'Cảnh báo sớm khi quy trình vượt thời gian chuẩn', 'Minh bạch trách nhiệm của từng bộ phận'],
   },
   {
-    icon: '🛡️',
+    icon: 'governance',
     title: 'Cổng phê duyệt ngoại lệ có kiểm soát',
     desc: 'Mọi đề xuất chiết khấu lớn, đơn hàng vượt hạn mức công nợ hoặc khiếu nại nhạy cảm đều được gom hồ sơ đầy đủ để quản lý ký duyệt.',
     bullets: ['Hồ sơ đính kèm bối cảnh tin nhắn gốc', 'Phê duyệt nhanh chóng trong 1 chạm', 'Không sợ nhân viên cam kết sai chính sách'],
   },
   {
-    icon: '📋',
+    icon: 'audit',
     title: 'Nhật ký kiểm toán & Lưu vết quyết định',
     desc: 'Lưu trữ minh bạch 100% căn cứ xử lý: Từ tin nhắn đầu vào, kết quả tính toán của Rules Engine đến tài khoản người phê duyệt.',
     bullets: ['Truy xuất nguồn gốc giao dịch tức thời', 'Phục vụ thanh tra và kiểm soát nội bộ', 'Tuân thủ bảo vệ dữ liệu theo Luật 91/2025/QH15'],

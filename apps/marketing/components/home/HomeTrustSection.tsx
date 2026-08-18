@@ -1,26 +1,27 @@
 'use client';
 
 import Link from 'next/link';
+import { NexagnetIcon } from '@/components/shared/EnterpriseIcons';
 
 interface TrustPillar {
-  icon: string;
+  iconKey: string;
   title: string;
   desc: string;
 }
 
 const TRUST_PILLARS: TrustPillar[] = [
   {
-    icon: '🗄️',
+    iconKey: 'knowledge',
     title: 'Dữ liệu Doanh nghiệp là Nguồn sự thật',
     desc: 'Bảng giá, thông tin sản phẩm và chính sách kinh doanh được quản trị tập trung trong cơ sở dữ liệu. Mọi câu trả lời của AI đều phải tham chiếu từ nguồn này.',
   },
   {
-    icon: '⚖️',
+    iconKey: 'rules',
     title: 'Quy tắc kinh doanh được tính toán tất định',
     desc: 'AI không tự tính tiền, không tự quyết chính sách. Toàn bộ logic giá, chiết khấu và công nợ do Rules Engine độc lập tính toán chính xác 100%.',
   },
   {
-    icon: '🛡️',
+    iconKey: 'governance',
     title: 'Con người luôn giữ quyền kiểm soát',
     desc: 'Hệ thống tự động thực thi trong ngưỡng an toàn được cấu hình trước; các đơn lớn hoặc ngoại lệ lập tức chuyển giao cho nhân sự duyệt trước khi phát tin.',
   },
@@ -50,7 +51,9 @@ export function HomeTrustSection() {
         <div className="trust-pillars-grid">
           {TRUST_PILLARS.map((tp, idx) => (
             <div key={idx} className="trust-pillar-card">
-              <div className="t-icon-box">{tp.icon}</div>
+              <div className="t-icon-box">
+                <NexagnetIcon name={tp.iconKey} size={24} containerStyle="subtle" />
+              </div>
               <h3 className="t-title">{tp.title}</h3>
               <p className="t-desc">{tp.desc}</p>
             </div>

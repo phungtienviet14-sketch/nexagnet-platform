@@ -56,25 +56,25 @@ const FINANCE_PAIN_POINTS = [
 
 const FINANCE_CAPABILITIES = [
   {
-    icon: '📊',
+    icon: 'metrics',
     title: 'Thu thập & Chuẩn hóa dữ liệu giao dịch',
     desc: 'Tự động trích xuất đầy đủ thông tin: Mã khách hàng, mã SKU, số lượng, đơn giá, thuế VAT và thông tin xuất hóa đơn từ tin nhắn hội thoại.',
     bullets: ['Chuẩn hóa dữ liệu đầu vào theo cấu trúc chuẩn', 'Tự động tính thuế VAT và tổng tiền tất định', 'Phát hiện ngay các đơn hàng thiếu thông tin xuất VAT'],
   },
   {
-    icon: '💳',
+    icon: 'finance',
     title: 'Đối chiếu chính sách thanh toán & Công nợ',
     desc: 'Hệ thống đối soát tự động điều khoản thanh toán (công nợ 30/45 ngày, ký gửi, thanh toán ngay, COD) theo từng hồ sơ đối tác trong cơ sở dữ liệu.',
     bullets: ['Kiểm tra hạn mức nợ khả dụng trước khi xuất hàng', 'Cảnh báo khi đối tác có hóa đơn quá hạn', 'Tuyệt đối không để AI tự quyết định thay đổi hạn mức'],
   },
   {
-    icon: '🧾',
+    icon: 'ledger',
     title: 'Gom chứng từ & Chuẩn bị bảng kê cho Kế toán',
     desc: 'Tự động gom ảnh chụp ủy nhiệm chi, hóa đơn và biên lai giao nhận theo từng mã đơn hàng để kế toán dễ dàng đối soát.',
     bullets: ['Tập trung toàn bộ chứng từ vào một hồ sơ duy nhất', 'Hỗ trợ kế toán sao chép/nhập dữ liệu vào phần mềm', 'Tiết kiệm 70% thời gian tìm kiếm chứng từ'],
   },
   {
-    icon: '🛡️',
+    icon: 'governance',
     title: 'Cổng phê duyệt ngoại lệ tài chính có kiểm soát',
     desc: 'Mọi đề xuất chiết khấu đặc biệt hoặc gia hạn nợ bắt buộc phải qua cổng phê duyệt của Kế toán trưởng hoặc Giám đốc tài chính.',
     bullets: ['Quyền quyết định tài chính 100% thuộc về con người', 'Minh bạch căn cứ và người ký duyệt', 'Lưu nhật ký kiểm toán phục vụ thanh tra nội bộ'],

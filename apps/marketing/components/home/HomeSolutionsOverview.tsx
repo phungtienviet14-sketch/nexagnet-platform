@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { NexagnetIcon } from '@/components/shared/EnterpriseIcons';
 
 interface SolutionPillar {
-  icon: string;
+  iconKey: string;
   title: string;
   desc: string;
   href: string;
@@ -12,21 +13,21 @@ interface SolutionPillar {
 
 const PILLARS: SolutionPillar[] = [
   {
-    icon: '💼',
+    iconKey: 'sales',
     title: 'Bán hàng & Phân phối',
     desc: 'Hỗ trợ đội ngũ kinh doanh tiếp nhận yêu cầu, tra cứu giá đại lý và soạn đơn nhanh chóng, chính xác.',
     href: '/solutions/sales',
     tags: ['Tiếp nhận báo giá', 'Bóc tách đơn hàng', 'Tra cứu tồn kho'],
   },
   {
-    icon: '💬',
+    iconKey: 'customer-service',
     title: 'Chăm sóc Khách hàng',
     desc: 'Giải đáp thắc mắc 24/7 theo tài liệu duyệt, đảm bảo câu trả lời nhất quán và chuyển giao nhân sự mượt mà.',
     href: '/solutions/customer-service',
     tags: ['Trích dẫn chính sách', 'Giải đáp kỹ thuật', 'Bàn giao chuyên viên'],
   },
   {
-    icon: '⚙️',
+    iconKey: 'operations',
     title: 'Vận hành Doanh nghiệp',
     desc: 'Tự động hóa các tác vụ lặp lại, đối soát dữ liệu và phân luồng an toàn qua các chốt chặn kiểm duyệt.',
     href: '/solutions/operations',
@@ -56,7 +57,9 @@ export function HomeSolutionsOverview() {
         <div className="solutions-cards-grid">
           {PILLARS.map((p, idx) => (
             <div key={idx} className="solution-pillar-card">
-              <div className="pillar-icon-box">{p.icon}</div>
+              <div className="pillar-icon-box">
+                <NexagnetIcon name={p.iconKey} size={24} containerStyle="subtle" />
+              </div>
               <h3 className="pillar-title">{p.title}</h3>
               <p className="pillar-desc">{p.desc}</p>
 

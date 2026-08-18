@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 
 const INTEGRATION_CATEGORIES = [
   {
-    icon: '💬',
+    icon: 'chat',
     title: 'Kênh Giao tiếp Hội thoại',
     desc: 'Tiếp nhận tin nhắn tự nhiên từ các nền tảng chat phổ biến mà không làm thay đổi thói quen của khách hàng và đối tác.',
     badge: 'ĐANG CHẠY THỰC TẾ',
@@ -31,7 +31,7 @@ const INTEGRATION_CATEGORIES = [
     ],
   },
   {
-    icon: '🏢',
+    icon: 'integration',
     title: 'Phần mềm Quản trị & ERP (Tùy chọn kết nối)',
     desc: 'Hỗ trợ đồng bộ dữ liệu đơn hàng và tồn kho qua cổng kết nối ErpPort chuẩn hóa khi doanh nghiệp có nhu cầu mở rộng.',
     badge: 'TÙY CHỌN CẤU HÌNH / ERP PORT',
@@ -42,7 +42,7 @@ const INTEGRATION_CATEGORIES = [
     ],
   },
   {
-    icon: '🗄️',
+    icon: 'knowledge',
     title: 'Cơ sở Dữ liệu & Nguồn sự thật',
     desc: 'Lưu trữ và quản trị tập trung danh mục sản phẩm, bảng giá, hạn mức công nợ và glossary từ điển đóng.',
     badge: 'SẴN SÀNG TRIỂN KHAI',
@@ -53,7 +53,7 @@ const INTEGRATION_CATEGORIES = [
     ],
   },
   {
-    icon: '🤖',
+    icon: 'ai',
     title: 'Mô hình Trí tuệ Nhân tạo (AI Providers)',
     desc: 'Hỗ trợ linh hoạt các mô hình ngôn ngữ lớn hàng đầu với cơ chế kiểm soát dữ liệu và prompt bảo mật.',
     badge: 'SẴN SÀNG TRIỂN KHAI',

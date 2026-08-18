@@ -56,25 +56,25 @@ const HR_PAIN_POINTS = [
 
 const HR_CAPABILITIES = [
   {
-    icon: '📖',
+    icon: 'knowledge',
     title: 'Tra cứu cẩm nang quy chế & Chính sách 24/7',
     desc: 'AI hỗ trợ giải đáp tức thì các câu hỏi về nội quy lao động, chế độ phúc lợi và quy trình công ty dựa trên tài liệu đã ban hành.',
     bullets: ['Trích dẫn chính xác theo sổ tay nhân viên', 'Giải đáp nhanh chóng qua kênh chat nội bộ', 'Giảm 80% câu hỏi lặp lại cho HR'],
   },
   {
-    icon: '📝',
+    icon: 'document',
     title: 'Tiếp nhận phiếu đề xuất & Đơn từ nội bộ',
     desc: 'Tự động thu thập thông tin xin nghỉ phép, đề xuất công tác hoặc cấp phát thiết bị và chuyển giao cho quản lý trực tiếp phê duyệt.',
     bullets: ['Chuẩn hóa thông tin đề xuất theo biểu mẫu', 'Kiểm tra điều kiện số ngày phép khả dụng', 'Tạo thẻ việc cho quản lý ký duyệt'],
   },
   {
-    icon: '🎓',
+    icon: 'education',
     title: 'Hỗ trợ Onboarding & Hướng dẫn nhân sự mới',
     desc: 'Cung cấp trợ lý ảo đồng hành cùng nhân viên mới: Hướng dẫn văn hóa, quy trình làm việc, giới thiệu các phòng ban và tài liệu cần đọc.',
     bullets: ['Lộ trình làm quen chuẩn hóa theo từng vị trí', 'Giải đáp thắc mắc thường gặp của nhân sự mới', 'Nâng cao trải nghiệm gắn kết nhân viên'],
   },
   {
-    icon: '🛡️',
+    icon: 'governance',
     title: 'Quản trị phân quyền & Phê duyệt minh bạch',
     desc: 'Mọi phiếu đề xuất đều được chuyển đúng cấp quản lý có thẩm quyền và lưu vết thời gian phê duyệt rõ ràng.',
     bullets: ['Phân cấp phê duyệt theo sơ đồ tổ chức', 'Thông báo tức thì qua kênh trao đổi nội bộ', 'Lưu nhật ký kiểm toán phục vụ quản trị'],

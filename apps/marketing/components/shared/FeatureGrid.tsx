@@ -1,7 +1,10 @@
 'use client';
 
-interface FeatureItem {
-  icon: string;
+import React from 'react';
+import { NexagnetIcon } from '@/components/shared/EnterpriseIcons';
+
+export interface FeatureItem {
+  icon?: string | React.ReactNode;
   title: string;
   desc: string;
   bullets?: string[];
@@ -41,7 +44,15 @@ export function FeatureGrid({
           {features.map((feat, idx) => (
             <div key={idx} className="feature-card">
               <div className="feat-header">
-                <div className="feat-icon-wrap">{feat.icon}</div>
+                <div className="feat-icon-wrap">
+                  {typeof feat.icon === 'string' ? (
+                    <NexagnetIcon name={feat.icon} size={22} containerStyle="subtle" />
+                  ) : feat.icon ? (
+                    feat.icon
+                  ) : (
+                    <NexagnetIcon name="rules" size={22} containerStyle="subtle" />
+                  )}
+                </div>
                 {feat.badge && <span className="feat-badge">{feat.badge}</span>}
               </div>
 
@@ -52,7 +63,11 @@ export function FeatureGrid({
                 <div className="feat-bullets-list">
                   {feat.bullets.map((b, bIdx) => (
                     <div key={bIdx} className="feat-bullet-line">
-                      <span className="b-check">✓</span>
+                      <span className="b-check" aria-hidden="true">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M13.3 4.3L6 11.6 2.7 8.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
                       <span>{b}</span>
                     </div>
                   ))}

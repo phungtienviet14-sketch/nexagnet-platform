@@ -22,37 +22,37 @@ export const metadata: Metadata = {
 
 const GOVERNANCE_FEATURES = [
   {
-    icon: '🗄️',
+    icon: 'knowledge',
     title: 'Nguồn sự thật tập trung (Source of Truth)',
     desc: 'Bảng giá, danh mục SKU, thông tin đại lý và chính sách thương mại được lưu trữ trong cơ sở dữ liệu (PostgreSQL/DB). AI và Rules Engine đều đọc trực tiếp từ nguồn này.',
     bullets: ['Quản trị qua Bảng điều khiển Admin Panel', 'Cập nhật giá và đại lý thấy hiệu lực ngay', 'Không lưu dữ liệu rải rác trên file máy tính cá nhân'],
   },
   {
-    icon: '⚖️',
+    icon: 'rules',
     title: 'Rules Engine tất định độc lập',
     desc: 'Tách bạch hoàn toàn khỏi mô hình AI. Toàn bộ phép tính tiền, thuế VAT, chiết khấu và hạn mức công nợ được thực thi bằng mã nguồn TypeScript thuần túy.',
     bullets: ['Tính toán chính xác 100% không có sai số', 'Áp dụng biểu quy tắc riêng theo từng cấp đối tác', 'Không để AI tự suy đoán hay bịa đặt con số'],
   },
   {
-    icon: '🛡️',
+    icon: 'governance',
     title: 'Cổng kiểm duyệt nhân sự (Human-in-the-Loop)',
     desc: 'Thiết lập ngưỡng an toàn rõ ràng: Giao dịch hợp lệ trong hạn mức được gửi xác nhận ngay; các đơn vượt hạn mức hoặc có cảnh báo chuyển Sales duyệt trước.',
     bullets: ['Cài đặt ngưỡng tự động hóa (VD: SL ≤ 50)', 'Hàng việc Sales bám theo ngữ cảnh tin nhắn gốc', 'Quyền quyết định cuối cùng luôn thuộc về con người'],
   },
   {
-    icon: '📋',
+    icon: 'audit',
     title: 'Nhật ký kiểm toán toàn diện (Audit Trail)',
     desc: 'Ghi vết chi tiết từng bước: từ tin nhắn gốc, dữ liệu AI trích xuất, kết quả đối soát quy tắc, đến nội dung gửi đi và người duyệt đơn.',
     bullets: ['Minh bạch căn cứ ra quyết định của hệ thống', 'Tra cứu lại lịch sử mọi giao dịch', 'Xuất báo cáo kiểm toán phục vụ thanh tra nội bộ'],
   },
   {
-    icon: '👥',
+    icon: 'hr',
     title: 'Cổng phân quyền & Phê duyệt nhân sự (RBAC)',
     desc: 'Phân quyền chặt chẽ theo vai trò: Trợ lý bán hàng, Kế toán, Quản trị viên. Đơn vượt hạn mức an toàn luôn yêu cầu quản lý có thẩm quyền duyệt.',
     bullets: ['Tách biệt quyền hạn theo phòng ban', 'Bảo vệ thông tin tài chính và khách hàng nhạy cảm', 'Lưu vết tài khoản phê duyệt từng giao dịch'],
   },
   {
-    icon: '🛑',
+    icon: 'kill-switch',
     title: 'Công tắc ngắt khẩn cấp (Kill-Switch)',
     desc: 'Cho phép quản trị viên tạm dừng gửi tin tự động ngay lập tức trong 1 click khi phát hiện rủi ro kênh trao đổi hoặc sự cố đường truyền.',
     bullets: ['Tạm dừng phát tin tức thì', 'Chuyển toàn bộ luồng sang chế độ duyệt tay', 'Bảo vệ tuyệt đối uy tín của doanh nghiệp'],

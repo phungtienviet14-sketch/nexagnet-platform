@@ -28,25 +28,25 @@ export const metadata: Metadata = {
 
 const KNOWLEDGE_FEATURES = [
   {
-    icon: '🗄️',
+    icon: 'knowledge',
     title: 'Một Nguồn sự thật duy nhất (Source of Truth)',
     desc: 'Bảng giá, danh mục mã SKU, quy chế chính sách và sổ tay dịch vụ được lưu trữ tập trung trong cơ sở dữ liệu (PostgreSQL/DB).',
     bullets: ['Cập nhật một nơi, toàn bộ hệ thống thấy ngay', 'Không lưu dữ liệu phân tán trên file cá nhân', 'Đồng bộ tức thời với Rules Engine và AI'],
   },
   {
-    icon: '🔍',
+    icon: 'search',
     title: 'Tra cứu ngôn ngữ tự nhiên chuẩn xác',
     desc: 'Hỗ trợ tìm kiếm thông số kỹ thuật, chính sách bảo hành và điều khoản thương mại bằng câu hỏi tự nhiên theo từ điển đóng.',
     bullets: ['Trích dẫn chính xác theo văn bản nguồn', 'Không bịa đặt thông tin khi chưa có dữ liệu duyệt', 'Tự động ánh xạ từ viết tắt vào mã SKU chuẩn'],
   },
   {
-    icon: '🏢',
+    icon: 'integration',
     title: 'Dùng chung cho đa phòng ban trong công ty',
     desc: 'Một hạ tầng tri thức phục vụ đồng thời cho Sales (báo giá), CSKH (giải đáp bảo hành), HR (quy chế) và Vận hành (quy trình).',
     bullets: ['Phân quyền xem và sửa đổi theo từng vai trò (RBAC)', 'Bảo vệ thông tin tài chính và dữ liệu nhạy cảm', 'Tạo tính nhất quán xuyên suốt doanh nghiệp'],
   },
   {
-    icon: '🛠️',
+    icon: 'settings',
     title: 'Quản trị động qua Admin Panel & Hội thoại',
     desc: 'Nhân sự có thể dễ dàng thêm mới SKU, sửa giá đại lý, cập nhật chính sách qua giao diện trực quan hoặc qua trao đổi với AI Agent.',
     bullets: ['Giao diện Admin Panel dễ sử dụng', 'Xem trước và thẩm định trước khi xuất bản', 'Lưu nhật ký lịch sử các lần sửa đổi'],

@@ -28,25 +28,25 @@ export const metadata: Metadata = {
 
 const CAMPAIGN_FEATURES = [
   {
-    icon: '⏳',
+    icon: 'queue',
     title: 'Hàng đợi phát tin giãn cách an toàn',
     desc: 'Không bắn tin đồng loạt gây nghẽn đường truyền. Hệ thống tự động phân bổ và giãn cách thời gian (8–15 giây/nhóm) để đảm bảo an toàn cho tài khoản.',
     bullets: ['Giãn cách thông minh chống cơ chế chặn spam', 'Phân bổ đều trong cửa sổ thời gian cấu hình', 'Không giữ request HTTP bằng vòng sleep giả lập'],
   },
   {
-    icon: '🎯',
+    icon: 'campaign',
     title: 'Phân đoạn đối tượng & Cá nhân hóa thông điệp',
     desc: 'Gửi đúng nội dung tới đúng nhóm đối tác: Đại lý Cấp 1, CTV hay khách hàng thân thiết với lời chào cá nhân hóa theo từng đại lý.',
     bullets: ['Lọc danh sách theo phân cấp đối tác', 'Tự động chèn tên và mã đối tác vào nội dung', 'Tăng tỷ lệ mở và phản hồi tích cực'],
   },
   {
-    icon: '🛑',
+    icon: 'kill-switch',
     title: 'Công tắc dừng khẩn cấp (Kill-Switch) tức thì',
     desc: 'Cho phép người quản lý tạm dừng toàn bộ hàng đợi phát tin ngay lập tức chỉ với 1 click khi phát hiện sai lệch nội dung hoặc sự cố đường truyền.',
     bullets: ['Dừng hàng đợi phát tin ngay lập tức', 'Bảo vệ uy tín và mối quan hệ với đại lý', 'Báo cáo chi tiết số lượng tin đã gửi và còn tồn'],
   },
   {
-    icon: '🔄',
+    icon: 'refresh',
     title: 'Tự động đọc hiểu phản hồi trả về',
     desc: 'Khi đại lý hoặc khách hàng phản hồi sau chiến dịch, AI tự động nhận diện ý định và chuyển thẳng cho nhân viên Sales phụ trách chăm sóc.',
     bullets: ['Phân loại phản hồi tích cực, hỏi thêm hay khiếu nại', 'Chuyển giao cơ hội kinh doanh cho Sales', 'Khép kín vòng lặp từ tiếp thị đến chốt đơn'],

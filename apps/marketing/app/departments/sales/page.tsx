@@ -62,25 +62,25 @@ const SALES_PAIN_POINTS = [
 
 const SALES_CAPABILITIES = [
   {
-    icon: '⚡',
+    icon: 'pipeline',
     title: 'Tiếp nhận & Chuẩn hóa nhu cầu tức thì',
     desc: 'AI tự động đọc hiểu tin nhắn đặt hàng và yêu cầu báo giá từ các kênh hội thoại, bóc tách mã sản phẩm và số lượng ngay khi nhận tin.',
     bullets: ['Ánh xạ từ viết tắt vào danh mục SKU chuẩn', 'Nhận diện thông tin người nhận và địa chỉ giao', 'Bỏ qua tin nhắn chào hỏi xã giao không liên quan'],
   },
   {
-    icon: '🎯',
+    icon: 'rules',
     title: 'Tra cứu bảng giá & Chính sách chính xác',
     desc: 'Rules Engine đối chiếu biểu giá theo đúng cấp đại lý, tính toán chiết khấu và đối soát hạn mức công nợ tất định 100% từ Nguồn sự thật.',
     bullets: ['Áp dụng đúng chính sách theo từng hồ sơ đối tác', 'Tính toán thuế VAT và phụ phí vận chuyển tự động', 'Tuyệt đối không để AI tự ý suy đoán mức giá'],
   },
   {
-    icon: '🤝',
+    icon: 'deal',
     title: 'Tự động xác nhận hoặc chuyển Sales chốt',
     desc: 'Đơn hàng trong ngưỡng an toàn tự động phát tin xác nhận; các đơn hàng dự án lớn hoặc có yêu cầu đàm phán chuyển giao ngay cho Sales phụ trách.',
     bullets: ['Hàng việc Sales bám theo ngữ cảnh tin nhắn gốc', 'Giảm 80% thời gian gõ tay nhập liệu thủ công', 'Bám sát cơ hội kinh doanh không bị bỏ sót'],
   },
   {
-    icon: '📊',
+    icon: 'metrics',
     title: 'Quản trị quy trình từ Lead đến Đơn hàng',
     desc: 'Chuẩn hóa toàn bộ hành trình bán hàng từ tiếp nhận lead, sàng lọc nhu cầu, tra cứu tri thức đến chuyển giao xuất kho vận hành.',
     bullets: ['Minh bạch trạng thái từng cơ hội bán hàng', 'Nhắc việc follow-up đúng thời điểm', 'Lưu nhật ký tương tác phục vụ đánh giá'],

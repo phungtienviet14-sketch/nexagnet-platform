@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { NexagnetIcon } from '@/components/shared/EnterpriseIcons';
 
 interface ChannelCard {
   name: string;
   tag: string;
-  icon: string;
+  iconKey: string;
   desc: string;
   features: string[];
 }
@@ -14,7 +15,7 @@ const CHANNELS: ChannelCard[] = [
   {
     name: 'Zalo Cá nhân & Zalo OA',
     tag: 'ĐẶC QUYỀN DOANH NGHIỆP VN',
-    icon: '💬',
+    iconKey: 'chat',
     desc: 'Đọc và phản hồi tin nhắn trong nhóm đại lý, nhóm CTV hoặc tin nhắn 1-1 qua Zalo cá nhân/OA mà không cần @mention bắt buộc.',
     features: [
       'Đọc hiểu tin nhắn viết tắt, không dấu',
@@ -25,7 +26,7 @@ const CHANNELS: ChannelCard[] = [
   {
     name: 'Messenger & Fanpage',
     tag: 'TƯ VẤN & BÁN LẺ 24/7',
-    icon: '⚡',
+    iconKey: 'pipeline',
     desc: 'Tự động phản hồi bình luận quảng cáo, nhắn tin tư vấn chi tiết, gửi hình ảnh/video sản phẩm và chốt đơn ngay trên Facebook.',
     features: [
       'Ẩn bình luận chứa SĐT chống cướp khách',
@@ -36,7 +37,7 @@ const CHANNELS: ChannelCard[] = [
   {
     name: 'Website Live Widget',
     tag: 'TƯ VẤN & THU LEAD WEB',
-    icon: '🌐',
+    iconKey: 'integration',
     desc: 'Tích hợp 1 dòng mã (embed script) lên mọi nền tảng website (WordPress, Next.js, Webflow, Shopify) để tư vấn và chuyển đổi traffic thành lead.',
     features: [
       'Chủ động mở lời chào theo trang đang xem',
@@ -47,7 +48,7 @@ const CHANNELS: ChannelCard[] = [
   {
     name: 'Telegram & Kênh Nội Bộ',
     tag: 'ĐIỀU HÀNH & CẢNH BÁO TỨC THÌ',
-    icon: '✈️',
+    iconKey: 'campaign',
     desc: 'Gửi thông báo đơn hàng mới, cảnh báo vượt ngưỡng an toàn và báo cáo doanh thu ngày tức thì về nhóm quản lý.',
     features: [
       'Thông báo trạng thái đơn hàng thời gian thực',
@@ -80,7 +81,9 @@ export function OmnichannelSection() {
           {CHANNELS.map((ch, idx) => (
             <div key={idx} className="channel-card">
               <div className="ch-top">
-                <div className="ch-icon">{ch.icon}</div>
+                <div className="ch-icon">
+                  <NexagnetIcon name={ch.iconKey} size={22} containerStyle="subtle" />
+                </div>
                 <span className="ch-tag">{ch.tag}</span>
               </div>
               <h3 className="ch-name">{ch.name}</h3>
@@ -88,7 +91,7 @@ export function OmnichannelSection() {
               <div className="ch-features-list">
                 {ch.features.map((feat, fIdx) => (
                   <div key={fIdx} className="ch-feat-item">
-                    <span className="feat-dot" />
+                    <span className="feat-dot" aria-hidden="true" />
                     <span>{feat}</span>
                   </div>
                 ))}

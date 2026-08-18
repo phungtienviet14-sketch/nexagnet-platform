@@ -3,10 +3,11 @@
 import React from 'react';
 import Link from 'next/link';
 import { HeroLocationBadge } from '../shared/HeroLocationBadge';
+import { NexagnetIcon } from '../shared/EnterpriseIcons';
 
 interface HubHeroProps {
-  eyebrow: string;
-  badge: string;
+  eyebrow?: string;
+  badge?: string;
   title: string;
   subtitle: string;
   primaryCtaText?: string;
@@ -14,13 +15,13 @@ interface HubHeroProps {
 }
 
 const DEPT_PILLS = [
-  { label: 'Bán hàng (Sales)', href: '/departments/sales', icon: '💼' },
-  { label: 'Vận hành (Operations)', href: '/departments/operations', icon: '📦' },
-  { label: 'CSKH (Support)', href: '/departments/customer-service', icon: '🎧' },
-  { label: 'Marketing', href: '/departments/marketing', icon: '📣' },
-  { label: 'Tài chính - Kế toán', href: '/departments/finance', icon: '💳' },
-  { label: 'Nhân sự (HR)', href: '/departments/hr', icon: '👥' },
-  { label: 'Ban Giám đốc', href: '/departments/executive', icon: '🏛️' },
+  { label: 'Bán hàng (Sales)', href: '/departments/sales', iconKey: 'sales' },
+  { label: 'Vận hành (Operations)', href: '/departments/operations', iconKey: 'operations' },
+  { label: 'CSKH (Support)', href: '/departments/customer-service', iconKey: 'customer-service' },
+  { label: 'Marketing', href: '/departments/marketing', iconKey: 'marketing' },
+  { label: 'Tài chính - Kế toán', href: '/departments/finance', iconKey: 'finance' },
+  { label: 'Nhân sự (HR)', href: '/departments/hr', iconKey: 'hr' },
+  { label: 'Ban Giám đốc', href: '/departments/executive', iconKey: 'executive' },
 ];
 
 export function HubHero({
@@ -45,9 +46,15 @@ export function HubHero({
           />
         </div>
 
-        <div className="hub-hero-header text-center">
-          <h1 className="hero-headline animate-hero-headline">{title}</h1>
-          <p className="hero-subheadline animate-hero-subheadline mx-auto">{subtitle}</p>
+        {/* Centered Command Hierarchy */}
+        <div className="hero-content-centered">
+          <h1 className="hero-headline text-center max-w-4xl mx-auto animate-hero-headline">
+            {title}
+          </h1>
+
+          <p className="hero-subheadline text-center max-w-3xl mx-auto animate-hero-subheadline">
+            {subtitle}
+          </p>
 
           <div className="hero-cta-group justify-center animate-hero-cta">
             <Link href="#demo" className="btn-primary hero-btn-main">
@@ -72,9 +79,11 @@ export function HubHero({
           <div className="matrix-pills-list">
             {DEPT_PILLS.map((dept, idx) => (
               <Link key={idx} href={dept.href} className="matrix-pill-item">
-                <span className="matrix-icon">{dept.icon}</span>
+                <span className="matrix-icon">
+                  <NexagnetIcon name={dept.iconKey} size={16} containerStyle="naked" />
+                </span>
                 <span className="matrix-text">{dept.label}</span>
-                <span className="matrix-arrow">→</span>
+                <span className="matrix-arrow" aria-hidden="true">→</span>
               </Link>
             ))}
           </div>

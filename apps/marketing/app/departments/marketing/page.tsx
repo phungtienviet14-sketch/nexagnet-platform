@@ -62,25 +62,25 @@ const MARKETING_PAIN_POINTS = [
 
 const MARKETING_CAPABILITIES = [
   {
-    icon: '📢',
+    icon: 'campaign',
     title: 'Điều phối chiến dịch & Phát tin giãn cách',
     desc: 'Lên lịch và gửi thông báo chương trình khuyến mãi, bảng giá mới tới hàng trăm nhóm đại lý theo hàng đợi giãn cách an toàn chống nghẽn kênh.',
     bullets: ['Giãn cách tự động 8–15 giây/nhóm', 'Cá nhân hóa lời chào theo tên đại lý', 'Công tắc dừng phát tin khẩn cấp tức thì'],
   },
   {
-    icon: '🎯',
+    icon: 'pipeline',
     title: 'Phân loại lead theo ý định & Mức độ quan tâm',
     desc: 'AI tự động đọc hiểu phản hồi của khách hàng sau chiến dịch, phân loại lead theo nhu cầu sản phẩm, ngân sách và thời điểm mua.',
     bullets: ['Phân loại ý định quan tâm, hỏi giá hoặc khiếu nại', 'Gắn thẻ khách hàng theo danh mục sản phẩm', 'Tự động luân chuyển về đội ngũ Sales phụ trách'],
   },
   {
-    icon: '📚',
+    icon: 'knowledge',
     title: 'Tri thức nội dung & Cẩm nang truyền thông',
     desc: 'Hợp nhất toàn bộ tài liệu bán hàng, brochure kỹ thuật, hình ảnh và video sản phẩm tại một nguồn sự thật duy nhất.',
     bullets: ['Cập nhật một nơi, toàn bộ đội ngũ thấy ngay', 'Tra cứu tức thì theo ngôn ngữ tự nhiên', 'Đảm bảo tính nhất quán của thông điệp thương hiệu'],
   },
   {
-    icon: '🔄',
+    icon: 'refresh',
     title: 'Kích hoạt chăm sóc & Tương tác lại tự động',
     desc: 'Thiết lập các luồng kích hoạt chăm sóc định kỳ cho khách hàng cũ hoặc khách hàng đã từng hỏi giá nhưng chưa chốt.',
     bullets: ['Nhắc lịch bảo dưỡng, chăm sóc định kỳ', 'Gửi lời chúc sinh nhật hoặc ưu đãi đặc quyền', 'Phân bổ các lần gửi trong cửa sổ thời gian hợp lý'],

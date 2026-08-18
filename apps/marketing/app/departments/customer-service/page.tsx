@@ -62,25 +62,25 @@ const CS_PAIN_POINTS = [
 
 const CS_CAPABILITIES = [
   {
-    icon: '💬',
+    icon: 'cskh',
     title: 'Phản hồi nhất quán 24/7 theo tài liệu duyệt',
     desc: 'AI trả lời chính xác các câu hỏi thường gặp dựa trên cẩm nang sản phẩm, chính sách bảo hành đã được doanh nghiệp thẩm định.',
     bullets: ['Trích dẫn chuẩn xác theo tài liệu nguồn', 'Văn phong chuyên nghiệp, chuẩn mực', 'Tuyệt đối không bịa đặt thông tin khi chưa có nguồn'],
   },
   {
-    icon: '🔍',
+    icon: 'search',
     title: 'Tra cứu thông tin & Hỗ trợ bóc tách sự cố',
     desc: 'Hệ thống tự động khai thác đầy đủ các thông tin cần thiết: Mã sản phẩm, hiện tượng lỗi, ảnh chụp chứng từ để làm rõ yêu cầu.',
     bullets: ['Thu thập đầy đủ thông tin trước khi chuyển người', 'Phân loại mức độ khẩn cấp của khiếu nại', 'Hỗ trợ đính kèm hình ảnh và video mô tả'],
   },
   {
-    icon: '🚀',
+    icon: 'routing',
     title: 'Chuyển giao chuyên viên & Gom hồ sơ ngoại lệ',
     desc: 'Với các tình huống vượt chính sách hoặc cần chuyên môn sâu, hệ thống tự động gom toàn bộ ngữ cảnh và tạo thẻ việc cho chuyên viên.',
     bullets: ['Chuyển giao mượt mà không bắt khách lặp lại', 'Thông báo tức thì cho chuyên viên phụ trách', 'Gắn nhãn thời hạn xử lý (SLA) rõ ràng'],
   },
   {
-    icon: '📊',
+    icon: 'audit',
     title: 'Lưu vết lịch sử tương tác toàn diện',
     desc: 'Hợp nhất toàn bộ lịch sử trao đổi qua các kênh vào một hồ sơ khách hàng duy nhất để toàn bộ đội ngũ nắm bắt.',
     bullets: ['Dễ dàng bàn giao giữa các ca trực', 'Lưu nhật ký phục vụ đánh giá chất lượng', 'Bảo vệ dữ liệu khách hàng theo pháp luật'],

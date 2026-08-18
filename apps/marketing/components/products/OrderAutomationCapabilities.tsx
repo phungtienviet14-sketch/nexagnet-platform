@@ -1,7 +1,9 @@
 'use client';
 
+import { NexagnetIcon } from '@/components/shared/EnterpriseIcons';
+
 interface CapDetail {
-  icon: string;
+  iconKey: string;
   title: string;
   desc: string;
   bullets: string[];
@@ -9,7 +11,7 @@ interface CapDetail {
 
 const CAPABILITIES: CapDetail[] = [
   {
-    icon: '📝',
+    iconKey: 'document',
     title: 'Linh hoạt cấu hình cấu trúc đơn hàng B2B',
     desc: 'Dễ dàng tùy biến theo các hình thức giao nhận và mô hình phân phối của từng doanh nghiệp.',
     bullets: [
@@ -18,7 +20,7 @@ const CAPABILITIES: CapDetail[] = [
     ],
   },
   {
-    icon: '💳',
+    iconKey: 'finance',
     title: 'Tùy biến chính sách thương mại theo cấp đối tác',
     desc: 'Tự động nhận diện và đối soát đúng điều khoản tài chính theo từng hồ sơ đối tác trong Nguồn sự thật.',
     bullets: [
@@ -28,7 +30,7 @@ const CAPABILITIES: CapDetail[] = [
     ],
   },
   {
-    icon: '📷',
+    iconKey: 'ai',
     title: 'Module Vision AI đọc ảnh bảng kê (Tùy chọn mở rộng)',
     desc: 'Năng lực trích xuất đơn hàng từ ảnh chụp bảng kê hoặc tin nhắn viết tay với cơ chế kiểm soát chất lượng hình ảnh.',
     bullets: [
@@ -38,7 +40,7 @@ const CAPABILITIES: CapDetail[] = [
     ],
   },
   {
-    icon: '🛡️',
+    iconKey: 'governance',
     title: 'Phân luồng an toàn & Kill-Switch khẩn cấp',
     desc: 'Đảm bảo sự an tâm tuyệt đối cho doanh nghiệp khi đưa tự động hóa vào vận hành thực tế.',
     bullets: [
@@ -73,13 +75,19 @@ export function OrderAutomationCapabilities() {
         <div className="caps-details-grid">
           {CAPABILITIES.map((cap, idx) => (
             <div key={idx} className="cap-detail-card">
-              <div className="cap-icon-box">{cap.icon}</div>
+              <div className="cap-icon-box">
+                <NexagnetIcon name={cap.iconKey} size={22} containerStyle="subtle" />
+              </div>
               <h3 className="cap-title">{cap.title}</h3>
               <p className="cap-desc">{cap.desc}</p>
               <div className="cap-bullets-list">
                 {cap.bullets.map((b, bIdx) => (
                   <div key={bIdx} className="cap-bullet-item">
-                    <span className="b-check">✓</span>
+                    <span className="b-check" aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M13.3 4.3L6 11.6 2.7 8.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
                     <span>{b}</span>
                   </div>
                 ))}

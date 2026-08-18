@@ -110,13 +110,13 @@ export default async function Image() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <span style={{ fontSize: '15px', fontWeight: 600, color: '#111318' }}>
-              ✓ AI trích xuất có ràng buộc
+              • AI trích xuất có ràng buộc
             </span>
             <span style={{ fontSize: '15px', fontWeight: 600, color: '#111318' }}>
-              ✓ Rules Engine tất định
+              • Rules Engine tất định
             </span>
             <span style={{ fontSize: '15px', fontWeight: 600, color: '#111318' }}>
-              ✓ Cổng kiểm duyệt nhân sự
+              • Cổng kiểm duyệt nhân sự
             </span>
           </div>
           <span style={{ fontSize: '16px', fontWeight: 700, color: '#3D5AFE' }}>

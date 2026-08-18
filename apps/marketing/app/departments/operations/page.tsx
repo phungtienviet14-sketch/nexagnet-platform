@@ -62,25 +62,25 @@ const OPERATIONS_PAIN_POINTS = [
 
 const OPERATIONS_CAPABILITIES = [
   {
-    icon: '⚙️',
+    icon: 'routing',
     title: 'Luân chuyển công việc tự động theo luồng chuẩn',
     desc: 'Tự động tạo phiếu việc và chuyển giao nhiệm vụ tới đúng phòng ban (Kho, Giao vận, Kế toán) ngay khi đơn hàng được xác nhận.',
     bullets: ['Loại bỏ thao tác nhắn tin giao việc thủ công', 'Gán việc theo chuyên môn và khu vực', 'Gắn mã định danh và thời hạn xử lý (SLA)'],
   },
   {
-    icon: '⚖️',
+    icon: 'rules',
     title: 'Kiểm tra điều kiện quy tắc tự động',
     desc: 'Rules Engine tự động kiểm tra tính hợp lệ của đơn hàng: Đủ hàng tồn kho, đúng bảng giá, hợp lệ công nợ trước khi kích hoạt lệnh xuất kho.',
     bullets: ['Đối soát chính sách tự động 100%', 'Cảnh báo tức thời nếu phát hiện điều kiện chưa đạt', 'Bảo vệ an toàn quy tắc vận hành doanh nghiệp'],
   },
   {
-    icon: '📋',
+    icon: 'audit',
     title: 'Hàng việc tập trung & Quản trị ngoại lệ',
     desc: 'Cung cấp một màn hình Hàng việc thống nhất, hiển thị rõ việc nào AI đã xử lý, việc nào cần con người thực hiện và việc nào đang bị nghẽn.',
     bullets: ['Minh bạch trạng thái từng quy trình', 'Gom hồ sơ ngoại lệ để xử lý nhanh', 'Lưu nhật ký kiểm toán phục vụ đối chiếu'],
   },
   {
-    icon: '📊',
+    icon: 'metrics',
     title: 'Giám sát tiến độ & Cảnh báo tắc nghẽn',
     desc: 'Người quản lý có cái nhìn toàn cảnh về tình hình xử lý công việc trong ngày, nhận cảnh báo sớm khi có đơn hàng bị trễ hạn.',
     bullets: ['Theo dõi năng suất theo thời gian thực', 'Phát hiện nút thắt cổ chai trong chuỗi quy trình', 'Báo cáo tổng kết vận hành định kỳ'],

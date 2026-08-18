@@ -7681,7 +7681,142 @@
 
 .ind-card-icon {
   font-size: 22px;
-  line-height: 1;
+}
+
+.feat-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ========================================================================= */
+/* NEXAGNET ICON SYSTEM (Geometric, Restrained Enterprise Craft)             */
+/* ========================================================================= */
+
+.nexagnet-icon-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.nexagnet-icon-container svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Container Variant: Naked (Clean inline geometry, zero chrome) */
+.nexagnet-icon-naked {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--brand-accent, #0284c7);
+}
+
+/* Container Variant: Subtle (Micro-tinted enterprise badge) */
+.nexagnet-icon-subtle {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(2, 132, 199, 0.06);
+  border: 1px solid rgba(2, 132, 199, 0.12);
+  color: var(--brand-accent, #0284c7);
+}
+
+/* Container Variant: Line (Minimal stroke border) */
+.nexagnet-icon-line {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1.25px solid var(--border-medium, #e2e8f0);
+  color: var(--text-primary, #0f172a);
+}
+
+/* Container Variant: Accent (Vibrant brand highlight) */
+.nexagnet-icon-accent {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.12) 0%, rgba(14, 165, 233, 0.04) 100%);
+  border: 1px solid rgba(2, 132, 199, 0.2);
+  color: var(--brand-accent, #0284c7);
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.08);
+}
+
+/* Hover micro-interaction on parent cards */
+.feature-card:hover .nexagnet-icon-container,
+.control-feature-card:hover .nexagnet-icon-container,
+.solution-pillar-card:hover .nexagnet-icon-container,
+.trust-pillar-card:hover .nexagnet-icon-container,
+.problem-card:hover .nexagnet-icon-container,
+.sector-card:hover .nexagnet-icon-container,
+.channel-card:hover .nexagnet-icon-container,
+.cap-detail-card:hover .nexagnet-icon-container {
+  transform: translateY(-2px);
+  color: #0369a1;
+}
+
+.feature-card:hover .nexagnet-icon-subtle,
+.control-feature-card:hover .nexagnet-icon-subtle,
+.solution-pillar-card:hover .nexagnet-icon-subtle,
+.trust-pillar-card:hover .nexagnet-icon-subtle,
+.problem-card:hover .nexagnet-icon-subtle,
+.sector-card:hover .nexagnet-icon-subtle,
+.channel-card:hover .nexagnet-icon-subtle,
+.cap-detail-card:hover .nexagnet-icon-subtle {
+  background: rgba(2, 132, 199, 0.12);
+  border-color: rgba(2, 132, 199, 0.24);
+}
+
+.feat-badge {
+  font-size: 10.5px;
+  font-weight: 750;
+  color: var(--brand-accent);
+  background-color: var(--soft-accent);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.feat-title {
+  font-size: 17px;
+  font-weight: 750;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.feat-desc {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.feat-bullets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.feat-bullet-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.b-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--success, #16a34a);
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .ind-card-title {

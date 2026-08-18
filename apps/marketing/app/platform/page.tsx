@@ -21,25 +21,25 @@ export const metadata: Metadata = {
 
 const PLATFORM_LAYERS = [
   {
-    icon: '📥',
+    icon: 'chat',
     title: '1. Tầng Tiếp nhận Kênh (Channel & Ingest)',
     desc: 'Lắng nghe và thu nhận tin nhắn từ các kênh giao tiếp phổ biến (Zalo, Messenger, Web chat) theo kiến trúc không làm gián đoạn trao đổi hiện tại.',
     bullets: ['Hỗ trợ hội thoại văn bản tự nhiên, viết tắt, không dấu', 'Cơ chế Co-pilot dán tay dự phòng linh hoạt', 'Tối thiểu hóa dữ liệu truyền tải theo Luật 91/2025/QH15'],
   },
   {
-    icon: '🧠',
+    icon: 'ai',
     title: '2. Tầng Trích xuất AI (Language Understanding)',
     desc: 'Sử dụng mô hình ngôn ngữ lớn (LLM) để phân loại ý định (7 intent) và trích xuất thực thể theo từ điển đóng (Closed Dictionary).',
     bullets: ['Ép output về JSON Schema cố định qua tool-use', 'Không để AI tự ý suy đoán mức giá hay chính sách', 'Ánh xạ chuẩn xác vào danh mục mã SKU doanh nghiệp'],
   },
   {
-    icon: '⚖️',
+    icon: 'rules',
     title: '3. Tầng Quy tắc Nghiệp vụ (Rules Engine)',
     desc: 'Code TypeScript độc lập tính toán chính xác 100% logic kinh doanh: bảng giá theo cấp đại lý, thuế VAT, chiết khấu và hạn mức công nợ.',
     bullets: ['Độc lập hoàn toàn khỏi mô hình AI', 'Đọc trực tiếp từ Nguồn sự thật (Postgres/DB)', 'Không có hiện tượng trôi lệch số liệu hoặc ảo giác'],
   },
   {
-    icon: '🛡️',
+    icon: 'governance',
     title: '4. Tầng Kiểm soát & Phân luồng (Governance)',
     desc: 'Định tuyến an toàn: Đơn hàng hợp lệ trong ngưỡng tự động thực thi; các đơn lớn hoặc có cảnh báo chuyển nhân sự phê duyệt.',
     bullets: ['Cổng duyệt Human-in-the-Loop cho nhân sự', 'Nhật ký kiểm toán toàn diện (Audit Trail)', 'Công tắc ngắt khẩn cấp (Kill-switch) tức thì'],
