@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { DepartmentHero } from '@/components/departments/DepartmentHero';
+import { HubHero } from '@/components/departments/HubHero';
 import { HomeDepartmentsGrid } from '@/components/home/HomeDepartmentsGrid';
 import { HomeOwnerView } from '@/components/home/HomeOwnerView';
 import { HomeCTA } from '@/components/home/HomeCTA';
@@ -28,11 +28,10 @@ export default function DepartmentsHubPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <DepartmentHero
-          breadcrumbs={[{ label: 'Phòng ban' }]}
+        <HubHero
           eyebrow="HỆ THỐNG PHÒNG BAN DOANH NGHIỆP"
           badge="7 KHỐI PHÒNG BAN"
-          title="Đưa AI vào từng phòng ban theo quy trình chuẩn."
+          title="7 Phòng ban — 1 Nền tảng AI Vận hành Chung."
           subtitle="Một doanh nghiệp có nhiều phòng ban và nhiều mắt xích luân chuyển. Nexagnet cho phép bắt đầu giải quyết bài toán của một bộ phận cụ thể rồi mở rộng sang các phòng ban khác."
           primaryCtaText="Trao đổi về phòng ban của bạn"
           supportingPill="Kết nối liên phòng ban · Rules Engine tất định · Con người kiểm soát"

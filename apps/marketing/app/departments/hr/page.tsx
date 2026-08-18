@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { DepartmentHero } from '@/components/departments/DepartmentHero';
+import { HRHeroVisual } from '@/components/departments/DepartmentHeroVisuals';
 import { DepartmentPainPoints } from '@/components/departments/DepartmentPainPoints';
 import { DepartmentCapabilities } from '@/components/departments/DepartmentCapabilities';
 import { DepartmentWorkflow } from '@/components/departments/DepartmentWorkflow';
@@ -139,6 +140,7 @@ export default function HRDepartmentPage() {
           subtitle="Hỗ trợ giải đáp cẩm nang quy chế tự động 24/7, chuẩn hóa quy trình onboarding và tiếp nhận phiếu đề xuất nội bộ có kiểm soát phê duyệt của quản lý."
           primaryCtaText="Trao đổi về giải pháp Nhân sự"
           supportingPill="Cẩm nang quy chế 24/7 · Tiếp nhận đề xuất chuẩn · Phê duyệt phân cấp"
+          visual={<HRHeroVisual />}
         />
 
         <DepartmentPainPoints

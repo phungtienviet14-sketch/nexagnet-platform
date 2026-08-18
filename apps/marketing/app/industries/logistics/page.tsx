@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { LogisticsVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -34,7 +35,9 @@ export default function LogisticsIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <IndustryHero
+          slug="logistics"
+          categoryName="Vận tải & Logistics"
           breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Vận tải & Logistics' }]}
           eyebrow="ỨNG DỤNG NGÀNH / LOGISTICS & FREIGHT"
           badge="VẬN TẢI & LOGISTICS"
@@ -42,6 +45,7 @@ export default function LogisticsIndustryPage() {
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Logistics"
           supportingPill="Báo giá cước tự động · Điều phối chuyến xe · Thu thập chứng từ POD qua chat"
+          visual={<LogisticsVisual />}
         />
 
         <IndustryChallenges

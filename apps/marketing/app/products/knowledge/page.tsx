@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { ProductHero } from '@/components/products/ProductHero';
+import { KnowledgeHeroVisual } from '@/components/products/ProductHeroVisuals';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
 import { ControlCallout } from '@/components/shared/ControlCallout';
@@ -99,14 +100,16 @@ export default function KnowledgeProductPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
-          breadcrumbs={[{ label: 'Sản phẩm', href: '/#products' }, { label: 'Tri thức Doanh nghiệp (Knowledge)' }]}
-          eyebrow="MODULE SẢN PHẨM / ENTERPRISE KNOWLEDGE ENGINE"
+        <ProductHero
+          moduleCode="MODULE 02"
+          moduleName="Knowledge Hub"
           badge="NGUỒN SỰ THẬT DUY NHẤT"
+          breadcrumbs={[{ label: 'Sản phẩm', href: '/#products' }, { label: 'Tri thức Doanh nghiệp (Knowledge)' }]}
           title="Tri thức Doanh nghiệp tập trung (Knowledge Engine)"
           subtitle="Hợp nhất cẩm nang sản phẩm, bảng giá đại lý, quy trình nội bộ và chính sách dịch vụ tại một Nguồn sự thật duy nhất (Source of Truth) phục vụ cho toàn bộ phòng ban."
           primaryCtaText="Trao đổi về Knowledge Engine"
           supportingPill="Một nguồn sự thật · Dùng chung đa phòng ban · Cập nhật động tức thời"
+          visual={<KnowledgeHeroVisual />}
         />
 
         <FeatureGrid

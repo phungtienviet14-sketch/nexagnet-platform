@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { ManufacturingVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -34,14 +35,17 @@ export default function ManufacturingIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
-          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Sản xuất & Gia công' }]}
+        <IndustryHero
+          slug="manufacturing"
+          categoryName="Sản xuất & Chế tạo"
+          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Sản xuất & Chế tạo' }]}
           eyebrow="ỨNG DỤNG NGÀNH / MANUFACTURING & FMCG"
           badge="SẢN XUẤT & GIA CÔNG"
           title="Giải pháp AI cho Sản xuất, Gia công & FMCG"
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Sản xuất"
           supportingPill="Bóc tách quy cách vật tư · Luân chuyển lệnh sản xuất · Kiểm soát định mức hao hụt"
+          visual={<ManufacturingVisual />}
         />
 
         <IndustryChallenges

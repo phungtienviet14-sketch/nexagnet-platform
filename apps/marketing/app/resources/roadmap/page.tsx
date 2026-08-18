@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { ResourceHero } from '@/components/resources/ResourceHero';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { ControlCallout } from '@/components/shared/ControlCallout';
 import { RelatedModules } from '@/components/shared/RelatedModules';
@@ -82,7 +82,7 @@ export default function ResourcesRoadmapPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <ResourceHero
           breadcrumbs={[{ label: 'Tài nguyên', href: '/#resources' }, { label: 'Lộ trình Phát triển' }]}
           eyebrow="ĐỊNH HƯỚNG PHÁT TRIỂN / ECOSYSTEM ROADMAP"
           badge="LỘ TRÌNH MINH BẠCH"

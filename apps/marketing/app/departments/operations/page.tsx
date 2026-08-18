@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { DepartmentHero } from '@/components/departments/DepartmentHero';
+import { OperationsHeroVisual } from '@/components/departments/DepartmentHeroVisuals';
 import { DepartmentPainPoints } from '@/components/departments/DepartmentPainPoints';
 import { DepartmentCapabilities } from '@/components/departments/DepartmentCapabilities';
 import { DepartmentWorkflow } from '@/components/departments/DepartmentWorkflow';
@@ -145,6 +146,7 @@ export default function OperationsDepartmentPage() {
           subtitle="Tự động luân chuyển tác vụ, kiểm tra điều kiện xuất hàng, quản lý ngoại lệ và đưa dữ liệu về một hàng việc thống nhất cho toàn bộ đội ngũ."
           primaryCtaText="Trao đổi về giải pháp Vận hành"
           supportingPill="Luân chuyển tác vụ tự động · Kiểm tra điều kiện tất định · Hàng việc minh bạch"
+          visual={<OperationsHeroVisual />}
         />
 
         <DepartmentPainPoints

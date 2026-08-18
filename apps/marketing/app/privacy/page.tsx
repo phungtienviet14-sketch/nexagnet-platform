@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { HeroLocationBadge } from '@/components/shared/HeroLocationBadge';
 
 export const metadata: Metadata = {
   title: 'Chính sách Quyền riêng tư — nexagnet',
@@ -33,9 +34,16 @@ export default function PrivacyPage() {
       <main className="privacy-main" role="main">
         <div className="container privacy-container">
           <div className="privacy-content-card">
-            <div className="privacy-badge">CHÍNH SÁCH QUYỀN RIÊNG TƯ</div>
-            <h1 className="privacy-title">Bảo vệ Dữ liệu & Quyền riêng tư</h1>
-            <p className="privacy-updated">Cập nhật lần cuối: Tháng 8, 2026</p>
+            <div className="mb-6">
+              <HeroLocationBadge
+                family="legal"
+                categoryLabel="PHÁP LÝ & BẢO MẬT"
+                currentPage="Chính sách Quyền riêng tư"
+                badge="LUẬT 91/2025/QH15"
+              />
+            </div>
+            <h1 className="privacy-title">Bảo vệ Dữ liệu &amp; Quyền riêng tư</h1>
+            <p className="privacy-updated">Cập nhật lần cuối: Tháng 8, 2026 · Tuân thủ Luật 91/2025/QH15 &amp; NĐ 356/2025</p>
 
             <section className="privacy-section">
               <h2>1. Giới thiệu & Cam kết cốt lõi</h2>

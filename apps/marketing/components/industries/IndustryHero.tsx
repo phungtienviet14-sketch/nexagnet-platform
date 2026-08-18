@@ -2,46 +2,48 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { HeroLocationBadge, type BreadcrumbItem, type PageFamily } from './HeroLocationBadge';
+import { HeroLocationBadge, type BreadcrumbItem } from '../shared/HeroLocationBadge';
 
-interface PageHeroProps {
-  breadcrumbs: BreadcrumbItem[];
-  eyebrow: string;
+interface IndustryHeroProps {
+  slug?: string;
+  categoryName?: string;
+  eyebrow?: string;
+  badge?: string;
   title: string;
   subtitle: string;
   primaryCtaText?: string;
   primaryCtaHref?: string;
   secondaryCtaText?: string;
   secondaryCtaHref?: string;
-  badge?: string;
   supportingPill?: string;
-  family?: PageFamily;
+  breadcrumbs?: BreadcrumbItem[];
   visual?: React.ReactNode;
 }
 
-export function PageHero({
-  breadcrumbs,
-  eyebrow,
+export function IndustryHero({
+  slug: _slug,
+  categoryName,
+  eyebrow = 'GIẢI PHÁP NGÀNH NGHỀ CHUYÊN SÂU',
+  badge,
   title,
   subtitle,
-  primaryCtaText = 'Yêu cầu Demo',
+  primaryCtaText = 'Trao đổi về ngành của bạn',
   primaryCtaHref = '#demo',
-  secondaryCtaText,
-  secondaryCtaHref,
-  badge,
+  secondaryCtaText = 'Xem tất cả ngành',
+  secondaryCtaHref = '/#industries',
   supportingPill,
-  family = 'departments',
+  breadcrumbs = [],
   visual,
-}: PageHeroProps) {
-  const currentCrumb = breadcrumbs[breadcrumbs.length - 1]?.label || eyebrow;
+}: IndustryHeroProps) {
+  const currentCrumb = breadcrumbs[breadcrumbs.length - 1]?.label || categoryName || title;
 
   return (
-    <section className="hero-section page-hero-standard" aria-label={title}>
+    <section className="hero-section industry-hero-asymmetric" aria-label={title}>
       <div className="container">
         {/* Where Am I Location Indicator */}
         <div className="hero-location-wrapper">
           <HeroLocationBadge
-            family={family}
+            family="industries"
             categoryLabel={eyebrow}
             currentPage={currentCrumb}
             breadcrumbs={breadcrumbs}
@@ -49,7 +51,8 @@ export function PageHero({
           />
         </div>
 
-        <div className={visual ? 'department-hero-grid' : 'page-hero-content text-left'}>
+        <div className="industry-hero-grid">
+          {/* Left Column: Domain Narrative & Context */}
           <div className="hero-text-col">
             <h1 className="hero-headline animate-hero-headline">{title}</h1>
 
@@ -78,6 +81,7 @@ export function PageHero({
             )}
           </div>
 
+          {/* Right Column: Signature Industry Operational Artifact */}
           {visual && (
             <div className="hero-visual-col animate-hero-visual">
               <div className="hero-visual-shell">

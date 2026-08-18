@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { ProductHero } from '@/components/products/ProductHero';
+import { CampaignsHeroVisual } from '@/components/products/ProductHeroVisuals';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
 import { ControlCallout } from '@/components/shared/ControlCallout';
@@ -99,14 +100,16 @@ export default function CampaignsProductPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
-          breadcrumbs={[{ label: 'Sản phẩm', href: '/#products' }, { label: 'Điều phối Chiến dịch (Campaigns)' }]}
-          eyebrow="MODULE SẢN PHẨM / CAMPAIGN ORCHESTRATION"
+        <ProductHero
+          moduleCode="MODULE 03"
+          moduleName="Campaigns"
           badge="PHÁT TIN AN TOÀN & CÓ KIỂM SOÁT"
+          breadcrumbs={[{ label: 'Sản phẩm', href: '/#products' }, { label: 'Điều phối Chiến dịch (Campaigns)' }]}
           title="Điều phối Chiến dịch & Thông báo đa kênh (Campaigns)"
           subtitle="Lên lịch và gửi thông báo chính sách, bảng giá mới và chăm sóc khách hàng theo hàng đợi giãn cách an toàn, chống nghẽn kênh và có cổng duyệt của quản lý."
           primaryCtaText="Trao đổi về Campaign Orchestration"
           supportingPill="Hàng đợi giãn cách an toàn · Phân đoạn đối tượng · Kill-switch dừng khẩn cấp"
+          visual={<CampaignsHeroVisual />}
         />
 
         <FeatureGrid

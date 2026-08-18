@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { ProfessionalServicesVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -34,7 +35,9 @@ export default function ProfessionalServicesIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <IndustryHero
+          slug="professional-services"
+          categoryName="Luật & Dịch vụ Doanh nghiệp"
           breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Luật & Dịch vụ Doanh nghiệp' }]}
           eyebrow="ỨNG DỤNG NGÀNH / LEGAL & CONSULTING"
           badge="LUẬT & TƯ VẤN"
@@ -42,6 +45,7 @@ export default function ProfessionalServicesIndustryPage() {
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Tư vấn - Pháp lý"
           supportingPill="Tư vấn biểu phí niêm yết · Thu thập hồ sơ đầu vào · Cảnh báo hạn nộp cơ quan nhà nước"
+          visual={<ProfessionalServicesVisual />}
         />
 
         <IndustryChallenges

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { DepartmentHero } from '@/components/departments/DepartmentHero';
+import { FinanceHeroVisual } from '@/components/departments/DepartmentHeroVisuals';
 import { DepartmentPainPoints } from '@/components/departments/DepartmentPainPoints';
 import { DepartmentCapabilities } from '@/components/departments/DepartmentCapabilities';
 import { DepartmentWorkflow } from '@/components/departments/DepartmentWorkflow';
@@ -139,6 +140,7 @@ export default function FinanceDepartmentPage() {
           subtitle="Hỗ trợ bộ phận Tài chính - Kế toán chuẩn hóa số liệu đơn hàng, kiểm tra hạn mức công nợ tự động và gom chứng từ đầy đủ để nhân sự phê duyệt an toàn."
           primaryCtaText="Trao đổi về giải pháp Tài chính"
           supportingPill="Chuẩn hóa dữ liệu · Đối soát công nợ tất định · Quyền quyết định thuộc về con người"
+          visual={<FinanceHeroVisual />}
         />
 
         <DepartmentPainPoints

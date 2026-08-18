@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { PlatformHero } from '@/components/platform/PlatformHero';
+import { PlatformOverviewVisual } from '@/components/platform/PlatformHeroVisuals';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
 import { ControlCallout } from '@/components/shared/ControlCallout';
@@ -96,7 +97,7 @@ export default function PlatformOverviewPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <PlatformHero
           breadcrumbs={[{ label: 'Nền tảng', href: '/#platform' }, { label: 'Tổng quan Nền tảng' }]}
           eyebrow="KIẾN TRÚC KỸ THUẬT NỀN TẢNG"
           badge="KIẾN TRÚC ĐA TẦNG"
@@ -104,6 +105,7 @@ export default function PlatformOverviewPage() {
           subtitle="nexagnet kết hợp khả năng đọc hiểu ngôn ngữ tự nhiên của AI với logic quy tắc nghiệp vụ tất định (Rules Engine) và cổng kiểm duyệt của con người để mang lại sự an tâm tuyệt đối trong vận hành."
           primaryCtaText="Yêu cầu Tư vấn Kiến trúc"
           supportingPill="Kiến trúc 4 tầng · Rules Engine tất định · Bảo vệ dữ liệu theo Luật 91/2025"
+          visual={<PlatformOverviewVisual />}
         />
 
         <FeatureGrid

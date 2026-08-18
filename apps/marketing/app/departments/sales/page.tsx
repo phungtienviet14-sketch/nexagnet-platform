@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { DepartmentHero } from '@/components/departments/DepartmentHero';
+import { SalesHeroVisual } from '@/components/departments/DepartmentHeroVisuals';
 import { DepartmentPainPoints } from '@/components/departments/DepartmentPainPoints';
 import { DepartmentCapabilities } from '@/components/departments/DepartmentCapabilities';
 import { DepartmentWorkflow } from '@/components/departments/DepartmentWorkflow';
@@ -149,6 +150,7 @@ export default function SalesDepartmentPage() {
           subtitle="Giúp đội ngũ kinh doanh tiếp nhận yêu cầu, tra cứu báo giá và chuẩn hóa đơn hàng nhanh chóng, chính xác mà không làm thay đổi thói quen nhắn tin của đối tác."
           primaryCtaText="Trao đổi về giải pháp Bán hàng"
           supportingPill="Báo giá chuẩn xác · Bóc tách đơn tức thì · Đồng hành cùng Sales"
+          visual={<SalesHeroVisual />}
         />
 
         <DepartmentPainPoints

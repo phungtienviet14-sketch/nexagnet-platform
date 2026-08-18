@@ -2,46 +2,44 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { HeroLocationBadge, type BreadcrumbItem, type PageFamily } from './HeroLocationBadge';
+import { HeroLocationBadge, type BreadcrumbItem } from '../shared/HeroLocationBadge';
 
-interface PageHeroProps {
-  breadcrumbs: BreadcrumbItem[];
-  eyebrow: string;
+interface PlatformHeroProps {
+  eyebrow?: string;
+  badge?: string;
   title: string;
   subtitle: string;
   primaryCtaText?: string;
   primaryCtaHref?: string;
   secondaryCtaText?: string;
   secondaryCtaHref?: string;
-  badge?: string;
   supportingPill?: string;
-  family?: PageFamily;
+  breadcrumbs?: BreadcrumbItem[];
   visual?: React.ReactNode;
 }
 
-export function PageHero({
-  breadcrumbs,
-  eyebrow,
+export function PlatformHero({
+  eyebrow = 'KIẾN TRÚC KỸ THUẬT NỀN TẢNG',
+  badge,
   title,
   subtitle,
-  primaryCtaText = 'Yêu cầu Demo',
+  primaryCtaText = 'Yêu cầu Tư vấn Kiến trúc',
   primaryCtaHref = '#demo',
-  secondaryCtaText,
-  secondaryCtaHref,
-  badge,
+  secondaryCtaText = 'Xem chi tiết Kiểm soát',
+  secondaryCtaHref = '/platform/control',
   supportingPill,
-  family = 'departments',
+  breadcrumbs = [],
   visual,
-}: PageHeroProps) {
-  const currentCrumb = breadcrumbs[breadcrumbs.length - 1]?.label || eyebrow;
+}: PlatformHeroProps) {
+  const currentCrumb = breadcrumbs[breadcrumbs.length - 1]?.label || title;
 
   return (
-    <section className="hero-section page-hero-standard" aria-label={title}>
+    <section className="hero-section platform-hero-tech" aria-label={title}>
       <div className="container">
         {/* Where Am I Location Indicator */}
         <div className="hero-location-wrapper">
           <HeroLocationBadge
-            family={family}
+            family="platform"
             categoryLabel={eyebrow}
             currentPage={currentCrumb}
             breadcrumbs={breadcrumbs}
@@ -49,7 +47,8 @@ export function PageHero({
           />
         </div>
 
-        <div className={visual ? 'department-hero-grid' : 'page-hero-content text-left'}>
+        <div className="platform-hero-grid">
+          {/* Left Column: Architecture Context */}
           <div className="hero-text-col">
             <h1 className="hero-headline animate-hero-headline">{title}</h1>
 
@@ -78,6 +77,7 @@ export function PageHero({
             )}
           </div>
 
+          {/* Right Column: Technical Architecture Visual */}
           {visual && (
             <div className="hero-visual-col animate-hero-visual">
               <div className="hero-visual-shell">

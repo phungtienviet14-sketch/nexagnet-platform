@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { EducationVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -33,14 +34,17 @@ export default function EducationIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
-          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Giáo dục & Đào tạo' }]}
+        <IndustryHero
+          slug="education"
+          categoryName="Giáo dục & Tuyển sinh"
+          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Giáo dục & Tuyển sinh' }]}
           eyebrow="ỨNG DỤNG NGÀNH / EDUCATION & ADMISSIONS"
           badge="GIÁO DỤC & TUYỂN SINH"
           title="Giải pháp AI cho Giáo dục & Tuyển sinh"
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Giáo dục"
           supportingPill="Tư vấn khóa học 24/7 · Biểu phí niêm yết · Đăng ký thi thử & Tư vấn 1-1"
+          visual={<EducationVisual />}
         />
 
         <IndustryChallenges

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { RealEstateVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -33,14 +34,17 @@ export default function RealEstateIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
-          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Bất động sản & Sàn Phân phối' }]}
+        <IndustryHero
+          slug="real-estate"
+          categoryName="Bất động sản & Sàn Phân phối"
+          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Bất động sản & Dự án' }]}
           eyebrow="ỨNG DỤNG NGÀNH / REAL ESTATE & BROKERAGE"
           badge="BẤT ĐỘNG SẢN & DỰ ÁN"
           title="Giải pháp AI cho Bất động sản & Sàn Phân phối"
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Bất động sản"
           supportingPill="Sàng lọc nhu cầu · Gửi tài liệu chính thống · Bàn giao môi giới chuyên trách"
+          visual={<RealEstateVisual />}
         />
 
         <IndustryChallenges

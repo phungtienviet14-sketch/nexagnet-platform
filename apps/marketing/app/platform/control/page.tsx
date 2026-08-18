@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { PlatformHero } from '@/components/platform/PlatformHero';
+import { PlatformControlVisual } from '@/components/platform/PlatformHeroVisuals';
 import { ArchitectureThreeLayers } from '@/components/home/ArchitectureThreeLayers';
 import { UnifiedControlSection } from '@/components/home/UnifiedControlSection';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
@@ -78,7 +79,7 @@ export default function PlatformControlPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <PlatformHero
           breadcrumbs={[{ label: 'Nền tảng', href: '/platform' }, { label: 'Kiểm soát & Quản trị' }]}
           eyebrow="TRỌNG TÂM DOANH NGHIỆP / CONTROL & GOVERNANCE"
           badge="AN TOÀN TUYỆT ĐỐI"
@@ -86,6 +87,7 @@ export default function PlatformControlPage() {
           subtitle="Khám phá kiến trúc 3 lớp bảo vệ, Rules Engine tất định, Cổng kiểm duyệt nhân sự và Nhật ký kiểm toán toàn diện giúp doanh nghiệp an tâm khi ứng dụng AI vào vận hành."
           primaryCtaText="Yêu cầu Demo Cơ chế Kiểm soát"
           supportingPill="Rules Engine tất định · Cổng duyệt Human-in-the-Loop · Nhật ký kiểm toán 100%"
+          visual={<PlatformControlVisual />}
         />
 
         {/* Kiến trúc 3 Lớp Interactive Section */}

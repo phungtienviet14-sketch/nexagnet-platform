@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { RetailDistributionVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -34,14 +35,17 @@ export default function RetailDistributionIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
-          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Bán lẻ & Phân phối' }]}
+        <IndustryHero
+          slug="retail-distribution"
+          categoryName="Bán lẻ & Phân phối"
+          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Bán lẻ & Phân phối (B2B)' }]}
           eyebrow="ỨNG DỤNG NGÀNH / RETAIL & DISTRIBUTION"
           badge="B2B & ĐẠI LÝ"
           title="Giải pháp AI cho Bán lẻ & Phân phối (B2B)"
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Phân phối"
           supportingPill="Xử lý đơn hàng Zalo · Đối soát giá đại lý · Kiểm soát hạn mức công nợ"
+          visual={<RetailDistributionVisual />}
         />
 
         <IndustryChallenges

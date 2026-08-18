@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { HealthcareClinicVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -34,7 +35,9 @@ export default function HealthcareClinicIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <IndustryHero
+          slug="healthcare-clinic"
+          categoryName="Y tế & Phòng khám"
           breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Y tế & Phòng khám' }]}
           eyebrow="ỨNG DỤNG NGÀNH / HEALTHCARE & CLINIC"
           badge="Y TẾ & PHÒNG KHÁM"
@@ -42,6 +45,7 @@ export default function HealthcareClinicIndustryPage() {
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Phòng khám"
           supportingPill="Đặt lịch khám 24/7 · Cẩm nang y khoa chuẩn · Nhắc lịch tái khám tự động"
+          visual={<HealthcareClinicVisual />}
         />
 
         <IndustryChallenges

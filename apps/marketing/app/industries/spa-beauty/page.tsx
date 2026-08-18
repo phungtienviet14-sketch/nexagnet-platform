@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { SpaBeautyVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -33,14 +34,17 @@ export default function SpaBeautyIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
-          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Spa, Thẩm mỹ & Sức khỏe' }]}
+        <IndustryHero
+          slug="spa-beauty"
+          categoryName="Spa & Thẩm mỹ viện"
+          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Spa & Thẩm mỹ viện' }]}
           eyebrow="ỨNG DỤNG NGÀNH / SPA & BEAUTY CARE"
           badge="DỊCH VỤ & LÀM ĐẸP"
           title="Giải pháp AI cho Spa, Thẩm mỹ & Chăm sóc Sức khỏe"
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Spa & Làm đẹp"
           supportingPill="Tư vấn dịch vụ 24/7 · Hỗ trợ tiếp nhận lịch · Chăm sóc sau liệu trình"
+          visual={<SpaBeautyVisual />}
         />
 
         <IndustryChallenges

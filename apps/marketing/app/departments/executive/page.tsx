@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { DepartmentHero } from '@/components/departments/DepartmentHero';
+import { ExecutiveHeroVisual } from '@/components/departments/DepartmentHeroVisuals';
 import { DepartmentPainPoints } from '@/components/departments/DepartmentPainPoints';
 import { DepartmentCapabilities } from '@/components/departments/DepartmentCapabilities';
 import { DepartmentWorkflow } from '@/components/departments/DepartmentWorkflow';
@@ -156,6 +157,7 @@ export default function ExecutiveDepartmentPage() {
           subtitle="Nexagnet giúp ban lãnh đạo lọc nhiễu vận hành hàng ngày, nhìn toàn cảnh trạng thái các luồng công việc chính và tập trung đưa ra quyết định cho các ngoại lệ quan trọng."
           primaryCtaText="Trao đổi về mô hình điều hành"
           supportingPill="Lọc nhiễu vận hành · Giám sát điểm nghẽn · Cổng duyệt Human-in-the-loop"
+          visual={<ExecutiveHeroVisual />}
         />
 
         <DepartmentPainPoints

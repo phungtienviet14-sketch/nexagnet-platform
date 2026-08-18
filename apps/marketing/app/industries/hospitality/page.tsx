@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { HospitalityVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -33,14 +34,17 @@ export default function HospitalityIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
-          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Khách sạn & Dịch vụ' }]}
+        <IndustryHero
+          slug="hospitality"
+          categoryName="Khách sạn & Nghỉ dưỡng"
+          breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Khách sạn & Nghỉ dưỡng' }]}
           eyebrow="ỨNG DỤNG NGÀNH / HOSPITALITY & GUEST SERVICES"
           badge="KHÁCH SẠN & DỊCH VỤ"
           title="Giải pháp AI cho Khách sạn, Lưu trú & Dịch vụ"
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Khách sạn"
           supportingPill="Tư vấn dịch vụ 24/7 · Phân luồng buồng phòng · Giám sát hàng việc liên phòng ban"
+          visual={<HospitalityVisual />}
         />
 
         <IndustryChallenges

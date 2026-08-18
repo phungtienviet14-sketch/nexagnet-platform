@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { FinancialServicesVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -34,7 +35,9 @@ export default function FinancialServicesIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <IndustryHero
+          slug="financial-services"
+          categoryName="Tài chính & Bảo hiểm"
           breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Tài chính & Bảo hiểm' }]}
           eyebrow="ỨNG DỤNG NGÀNH / FINANCIAL & INSURANCE"
           badge="TÀI CHÍNH & BẢO HIỂM"
@@ -42,6 +45,7 @@ export default function FinancialServicesIndustryPage() {
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Tài chính - Bảo hiểm"
           supportingPill="Tiếp nhận hồ sơ đa kênh · Đối soát hạn mức quyền lợi · Lưu vết kiểm toán 100%"
+          visual={<FinancialServicesVisual />}
         />
 
         <IndustryChallenges

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { PlatformHero } from '@/components/platform/PlatformHero';
+import { PlatformIntegrationsVisual } from '@/components/platform/PlatformHeroVisuals';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { ControlCallout } from '@/components/shared/ControlCallout';
 import { RelatedModules } from '@/components/shared/RelatedModules';
@@ -84,7 +85,7 @@ export default function PlatformIntegrationsPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <PlatformHero
           breadcrumbs={[{ label: 'Nền tảng', href: '/platform' }, { label: 'Hạ tầng Tích hợp' }]}
           eyebrow="KẾT NỐI HỆ THỐNG / INTEGRATIONS"
           badge="KẾT NỐI LINH HOẠT"
@@ -92,6 +93,7 @@ export default function PlatformIntegrationsPage() {
           subtitle="nexagnet được thiết kế để hòa nhập mượt mà vào hệ thống công nghệ sẵn có của doanh nghiệp — từ các nhóm chat trao đổi hàng ngày đến cơ sở dữ liệu và phần mềm quản trị."
           primaryCtaText="Yêu cầu Tư vấn Tích hợp"
           supportingPill="Kết nối Zalo đa kênh · Cổng ErpPort linh hoạt · Không xáo trộn vận hành"
+          visual={<PlatformIntegrationsVisual />}
         />
 
         <FeatureGrid

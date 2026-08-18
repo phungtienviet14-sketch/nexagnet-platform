@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { ConstructionInteriorVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -34,7 +35,9 @@ export default function ConstructionInteriorIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <IndustryHero
+          slug="construction-interior"
+          categoryName="Xây dựng & Nội thất"
           breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Xây dựng & Nội thất' }]}
           eyebrow="ỨNG DỤNG NGÀNH / CONSTRUCTION & INTERIOR"
           badge="XÂY DỰNG & NỘI THẤT"
@@ -42,6 +45,7 @@ export default function ConstructionInteriorIndustryPage() {
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Xây dựng"
           supportingPill="Dự toán sơ bộ nhanh · Kiểm soát vật tư công trường · Nghiệm thu giai đoạn"
+          visual={<ConstructionInteriorVisual />}
         />
 
         <IndustryChallenges

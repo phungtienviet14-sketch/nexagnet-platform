@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { ResourceHero } from '@/components/resources/ResourceHero';
 import { FAQAccordion } from '@/components/shared/FAQAccordion';
 import { ControlCallout } from '@/components/shared/ControlCallout';
 import { HomeCTA } from '@/components/home/HomeCTA';
@@ -51,11 +51,11 @@ export default function ResourcesFAQPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <ResourceHero
           breadcrumbs={[{ label: 'Tài nguyên', href: '/#resources' }, { label: 'Câu hỏi Thường gặp' }]}
           eyebrow="TÀI NGUYÊN / FREQUENTLY ASKED QUESTIONS"
           badge="HỎI ĐÁP TOÀN DIỆN"
-          title="Câu hỏi thường gặp về nexagnet"
+          title="Câu hỏi thường gặp về Nền tảng nexagnet"
           subtitle="Tổng hợp những điều doanh nghiệp quan tâm nhất về định vị nền tảng, cơ chế kiểm soát, phương thức triển khai và an toàn dữ liệu."
           primaryCtaText="Đặt câu hỏi trực tiếp"
           supportingPill="Minh bạch năng lực · Kiểm soát an toàn · Giải đáp 100% thắc mắc"

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { DepartmentHero } from '@/components/departments/DepartmentHero';
+import { MarketingHeroVisual } from '@/components/departments/DepartmentHeroVisuals';
 import { DepartmentPainPoints } from '@/components/departments/DepartmentPainPoints';
 import { DepartmentCapabilities } from '@/components/departments/DepartmentCapabilities';
 import { DepartmentWorkflow } from '@/components/departments/DepartmentWorkflow';
@@ -145,6 +146,7 @@ export default function MarketingDepartmentPage() {
           subtitle="Hợp nhất thông điệp chiến dịch, phân loại lead theo nhu cầu và kích hoạt các luồng thông báo, chăm sóc tự động theo hàng đợi an toàn."
           primaryCtaText="Trao đổi về giải pháp Marketing"
           supportingPill="Điều phối chiến dịch giãn cách · Phân loại lead tự động · Nguồn tri thức tập trung"
+          visual={<MarketingHeroVisual />}
         />
 
         <DepartmentPainPoints

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { DepartmentHero } from '@/components/departments/DepartmentHero';
+import { CustomerServiceHeroVisual } from '@/components/departments/DepartmentHeroVisuals';
 import { DepartmentPainPoints } from '@/components/departments/DepartmentPainPoints';
 import { DepartmentCapabilities } from '@/components/departments/DepartmentCapabilities';
 import { DepartmentWorkflow } from '@/components/departments/DepartmentWorkflow';
@@ -145,6 +146,7 @@ export default function CustomerServiceDepartmentPage() {
           subtitle="Hệ thống hỗ trợ tiếp nhận đa kênh, giải đáp câu hỏi chuẩn theo tài liệu duyệt và tự động gom hồ sơ chuyển giao các trường hợp phức tạp cho chuyên viên."
           primaryCtaText="Trao đổi về giải pháp CSKH"
           supportingPill="Giải đáp 24/7 · Trích dẫn chuẩn xác · Gom hồ sơ ngoại lệ"
+          visual={<CustomerServiceHeroVisual />}
         />
 
         <DepartmentPainPoints

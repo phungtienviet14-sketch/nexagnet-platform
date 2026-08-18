@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { PageHero } from '@/components/shared/PageHero';
+import { IndustryHero } from '@/components/industries/IndustryHero';
+import { FnbChainsVisual } from '@/components/industries/IndustryHeroVisuals';
 import { IndustryChallenges } from '@/components/shared/IndustryChallenges';
 import { FeatureGrid } from '@/components/shared/FeatureGrid';
 import { WorkflowPreview } from '@/components/shared/WorkflowPreview';
@@ -34,7 +35,9 @@ export default function FnbChainsIndustryPage() {
     <div className="marketing-page-root">
       <Navbar />
       <main>
-        <PageHero
+        <IndustryHero
+          slug="fnb-chains"
+          categoryName="Chuỗi F&B & Nhà hàng"
           breadcrumbs={[{ label: 'Ngành', href: '/#industries' }, { label: 'Chuỗi Nhà hàng & F&B' }]}
           eyebrow="ỨNG DỤNG NGÀNH / RESTAURANT & F&B"
           badge="F&B & CHUỖI NHÀ HÀNG"
@@ -42,6 +45,7 @@ export default function FnbChainsIndustryPage() {
           subtitle={DATA.subtitle}
           primaryCtaText="Trao đổi về giải pháp Chuỗi F&B"
           supportingPill="Tiếp nhận đặt bàn 24/7 · Điều phối Bếp trung tâm · Phân luồng sự cố tức thì"
+          visual={<FnbChainsVisual />}
         />
 
         <IndustryChallenges
