@@ -2,7 +2,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Logger } from '@nestjs/common';
 import { INTENTS, parseResultSchema, type ParseResult } from '@netviet/shared';
 import type { OrderParser, ParserInput } from './order-parser.js';
-import { buildSystemPrompt, ensureIntentConfidence, normalizeParserOutput } from './parser-prompt.js';
+import {
+  buildStaticPrompt,
+  buildTurnContext,
+  ensureIntentConfidence,
+  normalizeParserOutput,
+} from './parser-prompt.js';
 
 /**
  * Parser THAT dung Claude (tool use). Dung prompt chung (7 intent + few-shot) de phan loai
@@ -64,6 +69,19 @@ export class ClaudeParser implements OrderParser {
     this.client = new Anthropic({ apiKey });
   }
 
+  /**
+   * Bang chung cache co chay hay khong. Tu tin thu HAI trong cung mot khach, `cache_read` phai
+   * > 0; van bang 0 nghia la co thu bien dong da lot vao phan tinh va dang pha prefix.
+   */
+  private logCacheUsage(usage: Anthropic.Usage | undefined): void {
+    if (!usage) return;
+    const read = usage.cache_read_input_tokens ?? 0;
+    const written = usage.cache_creation_input_tokens ?? 0;
+    this.logger.log(
+      `[cache] doc=${read} ghi=${written} vao=${usage.input_tokens} ra=${usage.output_tokens}`,
+    );
+  }
+
   async parse(input: ParserInput): Promise<ParseResult> {
     const content: Anthropic.ContentBlockParam[] = [];
     if (input.imageUrl) {
@@ -76,11 +94,12 @@ export class ClaudeParser implements OrderParser {
         const response = await this.client.messages.create({
           model: this.model,
           max_tokens: 1024,
-          system: buildSystemPrompt(input),
+          system: buildSystem(input),
           tools: [EXTRACT_TOOL],
           tool_choice: { type: 'tool', name: 'extract_order' },
           messages: [{ role: 'user', content }],
         });
+        this.logCacheUsage(response.usage);
 
         const toolUse = response.content.find((b) => b.type === 'tool_use');
         if (!toolUse || toolUse.type !== 'tool_use') {
@@ -112,4 +131,24 @@ function fallback(): ParseResult {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * `system` la MANG block de dat duoc diem cat cache:
+ *   block 0 = phan tinh (danh muc SKU, glossary, 7 intent, few-shot) -> `cache_control` ephemeral
+ *   block 1 = phan bien dong (dai ly + lich su hoi thoai) -> nam SAU diem cat
+ *
+ * Thu tu nay la DIEU KIEN de cache chay: prompt caching so khop tien to, nen moi thu doi theo
+ * tung tin bat buoc phai nam sau moi thu on dinh.
+ */
+function buildSystem(input: ParserInput): Anthropic.TextBlockParam[] {
+  const turn = buildTurnContext(input);
+  return [
+    {
+      type: 'text',
+      text: buildStaticPrompt(input),
+      cache_control: { type: 'ephemeral' },
+    },
+    ...(turn ? [{ type: 'text' as const, text: turn }] : []),
+  ];
 }

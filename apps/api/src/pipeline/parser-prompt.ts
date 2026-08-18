@@ -12,7 +12,15 @@ import type { ParserInput } from './order-parser.js';
  * hardcode trong nhan nua (Dot B1). Tham so `persona` de test truyen thang, khoi cham dia.
  */
 
-export function buildSystemPrompt(
+/**
+ * PHAN TINH — giong het nhau cho MOI tin cua cung mot khach. Day la phan duoc cache
+ * (`cache_control: ephemeral`), nen tuyet doi khong duoc chua thu gi doi theo tung tin:
+ * prompt caching la PREFIX MATCH, chi mot byte doi la mat cache tu do tro di.
+ *
+ * Truoc Pha 2, ten dai ly va lich su hoi thoai nam TRUOC danh muc SKU + glossary, nen ngay ca
+ * khi bat cache thi hai phan on dinh nhat va ton token nhat cung khong bao gio cache duoc.
+ */
+export function buildStaticPrompt(
   input: ParserInput,
   persona: TenantConfig['persona'] = tenantPersona(),
 ): string {
@@ -23,7 +31,6 @@ export function buildSystemPrompt(
     .map((p) => `- ${p.name} (goi tat: ${p.aliases.join(', ')})`)
     .join('\n');
   const glossary = input.glossary.map((g) => `${g.term}=${g.meaning}`).join(', ');
-  const context = formatContext(input);
 
   return [
     persona.parserIntro,
@@ -50,13 +57,36 @@ export function buildSystemPrompt(
     '- Vi du intent=hoi_gia: {"intent":"hoi_gia","confidence":{"intent":0.9}}',
     '- Vi du intent=bao_hanh_khieu_nai: {"intent":"bao_hanh_khieu_nai","confidence":{"intent":0.9}}',
     '',
-    input.dealerNameRaw ? `Nhom nay thuoc dai ly: ${input.dealerNameRaw}.` : '',
-    context,
     `Danh muc SKU:\n${skus}`,
     `Tu dien viet tat: ${glossary}`,
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/**
+ * PHAN BIEN DONG — doi theo tung nhom va tung tin. Phai nam SAU diem cat cache.
+ * Rong khi khong co dai ly lan lich su: khong chen khoi trong vao prompt.
+ */
+export function buildTurnContext(input: ParserInput): string {
+  return [
+    input.dealerNameRaw ? `Nhom nay thuoc dai ly: ${input.dealerNameRaw}.` : '',
+    formatContext(input),
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * Prompt day du (tinh + bien dong) trong MOT chuoi. DeepSeek/Flowise dung ban nay vi API cua
+ * ho khong co khai niem cache breakpoint; Claude dung `buildStaticPrompt` + `buildTurnContext`
+ * rieng de cat cache dung cho.
+ */
+export function buildSystemPrompt(
+  input: ParserInput,
+  persona: TenantConfig['persona'] = tenantPersona(),
+): string {
+  return [buildStaticPrompt(input, persona), buildTurnContext(input)].filter(Boolean).join('\n');
 }
 
 /**
