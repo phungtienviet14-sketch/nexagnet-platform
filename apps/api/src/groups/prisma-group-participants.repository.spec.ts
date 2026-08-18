@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../config/prisma.service.js';
+import { GroupParticipantIdentityConflictError } from './participant-identity-merge.js';
 import {
   GroupParticipantGroupNotFoundError,
   PrismaGroupParticipantsRepository,
@@ -267,5 +268,149 @@ describe('PrismaGroupParticipantsRepository', () => {
       ),
     ).resolves.toHaveLength(2);
     expect(transaction.groupParticipant.updateMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Duong da lam hong dong bo tren pilot (18/08/2026): Sale phan loai dung nhung hang do luong tin
+ * sinh ra — chinh la viec tab "Thanh vien" ton tai de lam — roi bam Dong bo va nhan 502
+ * "Xung dot globalId va routing UID". Cang dung dung tinh nang cang chac chan hong.
+ */
+describe('gop danh tinh khi mot nguoi bi tach thanh hai hang', () => {
+  const makeTx = (
+    stableMatch: Record<string, unknown> | null,
+    routeMatch: Record<string, unknown> | null,
+  ) => ({
+    group: { findUnique: vi.fn(async () => ({ id: 'group-db-1' })) },
+    groupParticipant: {
+      findUnique: vi.fn().mockResolvedValueOnce(stableMatch).mockResolvedValueOnce(routeMatch),
+      delete: vi.fn(async () => undefined),
+      update: vi.fn(async () => undefined),
+      create: vi.fn(async () => undefined),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    },
+  });
+  const asPrisma = (tx: ReturnType<typeof makeTx>) =>
+    ({
+      $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)),
+    }) as unknown as PrismaService;
+
+  const member = {
+    externalUserId: 'uid-tu-luong-tin',
+    globalId: 'stable-user-1',
+    displayName: 'Chi Phuong',
+  };
+  const sync = (prisma: PrismaService) =>
+    new PrismaGroupParticipantsRepository(prisma).synchronize({
+      groupId: 'chat-1',
+      members: [member],
+      complete: true,
+      syncedAt: '2026-08-18T01:00:00.000Z',
+    });
+
+  it('KHONG con nem loi khi hang route da duoc Sale phan loai', async () => {
+    const tx = makeTx(
+      {
+        id: 'participant-stable',
+        globalId: 'stable-user-1',
+        source: 'zca_sync',
+        customerRank: 'unknown',
+        operationalRole: 'unknown',
+        handlingMode: 'inherit_group',
+      },
+      {
+        id: 'participant-da-phan-loai',
+        globalId: null,
+        source: 'manual',
+        customerRank: 'dai_ly',
+        operationalRole: 'khach_hang',
+        handlingMode: 'manual_review',
+      },
+    );
+
+    await expect(sync(asPrisma(tx))).resolves.toMatchObject({ upsertedCount: 1 });
+
+    // Phan loai cua Sale phai chay sang hang song, khong duoc bien mat.
+    expect(tx.groupParticipant.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'participant-stable' },
+        data: expect.objectContaining({
+          externalUserId: 'uid-tu-luong-tin',
+          customerRank: 'dai_ly',
+          operationalRole: 'khach_hang',
+          handlingMode: 'manual_review',
+          source: 'manual',
+        }),
+      }),
+    );
+    expect(tx.groupParticipant.delete).toHaveBeenCalledWith({
+      where: { id: 'participant-da-phan-loai' },
+    });
+  });
+
+  it('phan loai san co tren hang song khong bi hang kia de len', async () => {
+    const tx = makeTx(
+      {
+        id: 'participant-stable',
+        globalId: 'stable-user-1',
+        source: 'manual',
+        customerRank: 'dai_ly',
+        operationalRole: 'khach_hang',
+        handlingMode: 'manual_review',
+      },
+      {
+        id: 'participant-route',
+        globalId: null,
+        source: 'message_stream',
+        customerRank: 'unknown',
+        operationalRole: 'unknown',
+        handlingMode: 'inherit_group',
+      },
+    );
+
+    await sync(asPrisma(tx));
+
+    expect(tx.groupParticipant.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerRank: 'dai_ly',
+          operationalRole: 'khach_hang',
+          handlingMode: 'manual_review',
+          source: 'manual',
+        }),
+      }),
+    );
+  });
+
+  it('van nem — co ten thanh vien — khi routing UID thuoc ve mot globalId KHAC', async () => {
+    const tx = makeTx(null, {
+      id: 'participant-nguoi-khac',
+      globalId: 'stable-user-2',
+      source: 'zca_sync',
+      customerRank: 'unknown',
+      operationalRole: 'unknown',
+      handlingMode: 'inherit_group',
+    });
+
+    await expect(sync(asPrisma(tx))).rejects.toThrow(GroupParticipantIdentityConflictError);
+    await expect(sync(asPrisma(makeTx(null, {
+      id: 'participant-nguoi-khac',
+      globalId: 'stable-user-2',
+      source: 'zca_sync',
+      customerRank: 'unknown',
+      operationalRole: 'unknown',
+      handlingMode: 'inherit_group',
+    })))).rejects.toThrow(/Chi Phuong[\s\S]*participant-nguoi-khac|participant-nguoi-khac[\s\S]*Chi Phuong/);
+  });
+
+  it('khong gop nham khi chi co mot hang — duong binh thuong van nguyen', async () => {
+    const tx = makeTx(null, null);
+    await sync(asPrisma(tx));
+    expect(tx.groupParticipant.delete).not.toHaveBeenCalled();
+    expect(tx.groupParticipant.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ groupId: 'group-db-1', globalId: 'stable-user-1' }),
+      }),
+    );
   });
 });

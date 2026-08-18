@@ -47,6 +47,8 @@ import {
   assessRisk,
   buildQuoteLines,
   classifyWarranty,
+  quotePriceField,
+  quoteQualifier,
 } from './risk-rules.js';
 
 /** Du lieu 1 vai da chay (de dung 1 AgentStep). */
@@ -364,7 +366,13 @@ export class AgentOrchestrator {
       const asksPrice = /(^|\s)(gia|bao nhieu|bao gia|price)(\s|$)/.test(normText);
       const strategy = tenantRetailAdvice();
       const quote = asksPrice
-        ? buildQuoteLines(normText, this.knowledge.products(), this.knowledge.prices(), strategy)
+        ? buildQuoteLines(
+            normText,
+            this.knowledge.products(),
+            this.knowledge.prices(),
+            strategy,
+            resolved.senderType,
+          )
         : [];
       const pricingReady = !asksPrice || quote.length >= baseAdvice.productSkus.length;
       const advice = {
@@ -377,7 +385,7 @@ export class AgentOrchestrator {
           baseAdvice.ready && !pricingReady
             ? 'Bảng giá hiện hành chưa đủ để tư vấn chính xác. Sale sẽ kiểm tra và phản hồi anh/chị sớm ạ.'
             : asksPrice && quote.length
-              ? `${baseAdvice.text}\n${quote.map((item) => `• ${item.name}: ${formatVnd(item.unitPrice)}`).join('\n')}\n${strategy.qualifier}`
+              ? `${baseAdvice.text}\n${quote.map((item) => `• ${item.name}: ${formatVnd(item.unitPrice)}`).join('\n')}\n${quoteQualifier(strategy, resolved.senderType)}`
               : baseAdvice.text,
       };
       roles.set('product_advisor', {
@@ -404,14 +412,18 @@ export class AgentOrchestrator {
         this.knowledge.products(),
         this.knowledge.prices(),
         strategy,
+        resolved.senderType,
       );
+      const quotedField = quotePriceField(strategy, resolved.senderType);
       roles.set('policy_finance', {
-        action: `Báo giá theo cấp ${SENDER_LABELS[resolved.senderType]} (tra bảng giá)`,
+        // Nhan phai noi dung truong gia da tra cuu. Truoc day luon ghi "theo cap <X>" trong khi
+        // code khong he doc `senderType` — Sale doc nhan tuong he thong da phan cap san.
+        action: `Báo giá cho ${SENDER_LABELS[resolved.senderType]} — tra cột ${quotedField === 'wholesale' ? 'Đơn giá CTV (giá sỉ)' : 'giá lẻ'}`,
         notes: quote.map((q) => `${q.name}: ${formatVnd(q.unitPrice)}`),
         source: 'knowledge',
       });
       const reply = quote.length
-        ? `${quote.map((q) => `• ${q.name}: ${formatVnd(q.unitPrice)}`).join('\n')}\n${strategy.qualifier}`
+        ? `${quote.map((q) => `• ${q.name}: ${formatVnd(q.unitPrice)}`).join('\n')}\n${quoteQualifier(strategy, resolved.senderType)}`
         : 'Em chưa có bảng giá hiện hành hoặc chưa nhận diện đủ sản phẩm; Sale sẽ kiểm tra và phản hồi ạ.';
       return { priced: null, status: 'pending_review', reply, roles };
     }

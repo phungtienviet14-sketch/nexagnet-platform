@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   ForbiddenException,
   Get,
@@ -29,6 +30,7 @@ import {
 import { BotIdentityService } from './bot-identity.service.js';
 import { GroupParticipantsService } from '../groups/group-participants.service.js';
 import { GroupParticipantGroupNotFoundError } from '../groups/prisma-group-participants.repository.js';
+import { GroupParticipantIdentityConflictError } from '../groups/participant-identity-merge.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { Roles } from '../auth/roles.decorator.js';
 import { GroupIdentityService } from '../groups/group-identity.service.js';
@@ -240,6 +242,11 @@ export class ZaloController {
       }
       if (error instanceof GroupParticipantGroupNotFoundError) {
         throw new BadRequestException('Nhom Zalo chua duoc map vao nguon su that');
+      }
+      // Xung dot du lieu NOI BO, khong phai loi cong ngoai: tra 409 chu khong phai 502, va giu
+      // nguyen van thong bao vi no neu ro thanh vien nao dang dung do va phai sua o dau.
+      if (error instanceof GroupParticipantIdentityConflictError) {
+        throw new ConflictException(`Loi dong bo thanh vien Zalo: ${error.message}`);
       }
       if (error instanceof ZaloGroupNotFoundError) {
         throw new NotFoundException('Khong tim thay thong tin nhom tren Zalo');

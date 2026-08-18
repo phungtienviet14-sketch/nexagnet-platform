@@ -7,6 +7,8 @@ import 'reflect-metadata';
  * `??=` de van chay duoc bo test tren goi khac: TENANT=<slug> pnpm --filter @netviet/api test.
  */
 process.env.TENANT ??= 'ultty';
-// Test fixtures intentionally use the July 2026 tenant seed. Production/runtime does not set this
-// variable, so price lookup still fails closed to the real current month.
+// Chot thang de bo test khong phu thuoc dong ho that. Phai KHOP `pricePeriod.validMonth` cua goi
+// khach, va ky do phai co `note` neu thang khong trung van ban goc (xem tenant.schema.ts). Ban
+// hien tai: ky 2026-08 lay nguyen bieu gia "Thong bao gia thang 07.2026" — khach xac nhan
+// 18/08/2026 thang 8 khong co thong bao moi. Runtime KHONG dat bien nay nen van fail closed.
 process.env.PRICE_CURRENT_MONTH ??= '2026-08';

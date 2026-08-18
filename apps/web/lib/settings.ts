@@ -1114,12 +1114,20 @@ export const settingsApi = {
     parseReadiness(await requestJson('/settings/readiness', { cache: 'no-store' })),
   pricePeriods: async (): Promise<PricePeriodsView> =>
     parsePricePeriods(await requestJson('/settings/price-periods', { cache: 'no-store' })),
-  createPricePeriod: async (validMonth: string, note?: string): Promise<PricePeriod> => {
+  createPricePeriod: async (
+    validMonth: string,
+    note?: string,
+    testOnly = false,
+  ): Promise<PricePeriod> => {
     const period = parsePricePeriod(
       unwrapEnvelope(
         await requestJson(
           '/settings/price-periods',
-          jsonInit('POST', { validMonth, ...(note ? { note } : {}) }),
+          jsonInit('POST', {
+            validMonth,
+            ...(note ? { note } : {}),
+            ...(testOnly ? { testOnly: true } : {}),
+          }),
         ),
       ),
     );
@@ -1179,6 +1187,18 @@ export const settingsApi = {
       ),
     );
     if (!period) throw new Error('API trả về kỳ giá active không hợp lệ');
+    return period;
+  },
+  archivePricePeriod: async (periodId: string): Promise<PricePeriod> => {
+    const period = parsePricePeriod(
+      unwrapEnvelope(
+        await requestJson(
+          `/settings/price-periods/${encodeURIComponent(periodId)}/archive`,
+          jsonInit('POST', { confirmed: true }),
+        ),
+      ),
+    );
+    if (!period) throw new Error('API trả về kỳ giá lưu trữ không hợp lệ');
     return period;
   },
   listParticipants: async (

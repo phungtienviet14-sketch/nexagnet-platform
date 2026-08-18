@@ -19,15 +19,28 @@ export interface PriceContext {
   now?: Date;
 }
 
-/** Map ten/viet tat SP ve SKU chuan (so khop khong dau). */
+/**
+ * Map ten/viet tat SP ve SKU chuan (so khop khong dau).
+ *
+ * Lay khop DAI NHAT, khong phai khop dau tien. Alias cua mot SP co the la CHUOI CON cua SP khac
+ * ("wfx" nam trong "combo wfx"), nen duyet theo thu tu danh muc roi tra ve ngay se chon SP NGAN
+ * hon — sai SKU, sai gia, ma dong don van `matched=true` khong sinh warning nao, tuc auto-confirm
+ * gui thang gia sai cho khach. `mock-parser.ts` da uu tien cum dai truoc vi dung ly do nay; day la
+ * cong CUOI truoc khi ra tien nen phai giu cung bat bien.
+ */
 export function matchProduct(skuRaw: string, products: Product[]): Product | null {
   const q = normalize(skuRaw);
   if (!q) return null;
+  let best: { product: Product; length: number } | null = null;
   for (const product of products) {
-    const candidates = [product.name, ...product.aliases].map(normalize);
-    if (candidates.some((c) => c.length >= 3 && q.includes(c))) return product;
+    for (const candidate of [product.name, ...product.aliases]) {
+      const normalized = normalize(candidate);
+      if (normalized.length < 3 || !q.includes(normalized)) continue;
+      // Bang do dai thi giu SP dung truoc trong danh muc: thu tu on dinh, khong doi theo runtime.
+      if (!best || normalized.length > best.length) best = { product, length: normalized.length };
+    }
   }
-  return null;
+  return best?.product ?? null;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ParsedOrder } from '@netviet/shared';
 import type { Dealer, PriceRow, Product } from '../knowledge/domain.js';
+import { SEED } from '../knowledge/seed.js';
 import { DEFAULT_RULES_CONFIG } from './config.js';
 import { computeShipping, matchProduct, priceOrder, routeStatus } from './rules.js';
 
@@ -33,6 +34,55 @@ describe('matchProduct', () => {
   });
   it('tra null khi khong khop danh muc', () => {
     expect(matchProduct('ban an go', products)).toBeNull();
+  });
+});
+
+/**
+ * Fixture hai dong o tren KHONG co alias chong nhau nen khong bao gio cham duoc bay nay. Danh muc
+ * THAT cua goi khach thi co: alias "wfx" cua `WFX` la chuoi con cua "combo wfx" cua
+ * `COMBO-WFX-PF360`. Khop dau tien thay vi khop dai nhat se ban SAI SKU voi gia RE hon ma khong
+ * sinh warning nao — tuc auto-confirm gui thang xac nhan sai gia cho khach.
+ */
+describe('matchProduct tren danh muc THAT cua goi khach', () => {
+  const comboSku = 'COMBO-WFX-PF360';
+  const combo = SEED.products.find((product) => product.sku === comboSku);
+  const standalone = SEED.products.find((product) => product.sku === 'WFX');
+
+  it('goi khach van con ca bo combo lan may le — bay chuoi con la that', () => {
+    expect(combo, `goi khach phai co ${comboSku}`).toBeDefined();
+    expect(standalone, 'goi khach phai co WFX').toBeDefined();
+    expect(combo!.aliases.some((alias) => alias.includes('wfx'))).toBe(true);
+  });
+
+  it.each([
+    ['combo wfx'],
+    ['wfx pf360'],
+    ['lay 5 combo wfx pf360'],
+    ['COMBO Máy rửa khử khuẩn thực phẩm WFX + Chậu rổ quay rau PF360'],
+  ])('«%s» ra bo combo chu khong phai may le', (text) => {
+    expect(matchProduct(text, SEED.products)?.sku).toBe(comboSku);
+  });
+
+  it('may le van ra may le khi tin khong nhac combo', () => {
+    expect(matchProduct('2 may rua thuc pham wfx', SEED.products)?.sku).toBe('WFX');
+  });
+
+  it('dinh gia dung bo combo — khong ha xuong gia may le', () => {
+    const comboPrice = SEED.prices.find((row) => row.sku === comboSku)?.wholesale;
+    const priced = priceOrder(
+      { orderType: 'TH1', items: [{ skuRaw: 'combo wfx', quantity: 5 }] } as ParsedOrder,
+      {
+        dealer: null,
+        branch: null,
+        products: SEED.products,
+        prices: SEED.prices,
+        priceOverrides: [],
+        cfg: DEFAULT_RULES_CONFIG,
+      },
+    );
+    expect(priced.lines[0]?.sku).toBe(comboSku);
+    expect(priced.lines[0]?.unitPrice).toBe(comboPrice);
+    expect(priced.itemsSubtotal).toBe((comboPrice ?? 0) * 5);
   });
 });
 

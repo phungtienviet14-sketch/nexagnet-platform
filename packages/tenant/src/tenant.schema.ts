@@ -222,6 +222,13 @@ export const knowledgeSnapshotSchema = z.object({
     .object({
       validMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable(),
       status: z.enum(['draft', 'active', 'archived']),
+      /**
+       * NGUON GOC cua bieu gia — phai ghi khi `validMonth` KHONG trung thang in tren van ban goc
+       * cua khach. Doi mot nhan thang tran, khong kem cau tra loi "can cu vao dau", la lam gia
+       * bang gia: cong readiness `price.current_period` xanh len ma khong ai con lan duoc ve toi
+       * to giay nao (CLAUDE.md quyet dinh #10).
+       */
+      note: z.string().min(1).max(500).optional(),
     })
     .strict()
     .nullable(),

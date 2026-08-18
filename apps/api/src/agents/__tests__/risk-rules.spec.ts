@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { PricedOrder } from '@netviet/shared';
-import type { PriceRow, Product } from '../../knowledge/domain.js';
+import type { PriceRow, Product, RetailAdviceStrategy } from '../../knowledge/domain.js';
 import { DEFAULT_AGENTS_CONFIG } from '../agents.config.js';
-import { annotatePolicy, assessRisk, buildQuoteLines, classifyWarranty } from '../risk-rules.js';
+import {
+  annotatePolicy,
+  assessRisk,
+  buildQuoteLines,
+  classifyWarranty,
+  quotePriceField,
+  quoteQualifier,
+} from '../risk-rules.js';
 
 const CFG = DEFAULT_AGENTS_CONFIG;
 
@@ -140,5 +147,51 @@ describe('annotatePolicy — chỉ format từ PricedOrder', () => {
     expect(notes.join(' ')).toContain('Công nợ 30 ngày');
     expect(notes).not.toContain('Không xuất VAT');
     expect(notes.join(' ')).not.toMatch(/Miễn phí ship/i);
+  });
+});
+
+/**
+ * Quyet dinh nghiep vu 18/08/2026: trong nhom dai ly, hoi gia thi tra GIA SI (Don gia CTV).
+ * Truoc do luon tra `minRetailPrice` cho moi nguoi — dai ly hoi ELNI nhan 3.100.000d trong khi gia
+ * ho thuc su mua la 2.150.000d (+44%).
+ */
+describe('bao gia theo cap nguoi hoi', () => {
+  const products: Product[] = [
+    { sku: 'ELNI', name: 'Quat tich dien ELNI', aliases: ['elni'], unit: 'cai' },
+  ];
+  const prices: PriceRow[] = [
+    { sku: 'ELNI', wholesale: 2_150_000, minRetailPrice: 3_100_000, retailPrice: 3_850_000 },
+  ];
+  const strategy: RetailAdviceStrategy = {
+    priceField: 'minRetailPrice',
+    qualifier: 'Đây là mức giá bán lẻ tối thiểu để tham khảo.',
+  };
+
+  it.each([['dai_ly'], ['ctv']] as const)('%s nhan don gia CTV (gia si)', (senderType) => {
+    expect(buildQuoteLines('elni bao nhieu', products, prices, strategy, senderType)).toEqual([
+      { name: 'Quat tich dien ELNI', unitPrice: 2_150_000 },
+    ]);
+    expect(quotePriceField(strategy, senderType)).toBe('wholesale');
+  });
+
+  it.each([['khach_le'], ['unknown']] as const)(
+    '%s van nhan truong gia le cau hinh theo tenant',
+    (senderType) => {
+      expect(buildQuoteLines('elni bao nhieu', products, prices, strategy, senderType)).toEqual([
+        { name: 'Quat tich dien ELNI', unitPrice: 3_100_000 },
+      ]);
+    },
+  );
+
+  it('khong dan cau qualifier gia le vao mot bao gia si', () => {
+    expect(quoteQualifier(strategy, 'dai_ly')).not.toBe(strategy.qualifier);
+    expect(quoteQualifier(strategy, 'dai_ly')).toMatch(/sỉ|CTV/);
+    expect(quoteQualifier(strategy, 'khach_le')).toBe(strategy.qualifier);
+  });
+
+  it('mac dinh khong truyen senderType thi giu nguyen hanh vi cu (gia le)', () => {
+    expect(buildQuoteLines('elni bao nhieu', products, prices, strategy)).toEqual([
+      { name: 'Quat tich dien ELNI', unitPrice: 3_100_000 },
+    ]);
   });
 });

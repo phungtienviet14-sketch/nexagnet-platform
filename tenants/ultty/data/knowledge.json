@@ -1,5 +1,9 @@
 {
-  "pricePeriod": { "validMonth": "2026-08", "status": "active" },
+  "pricePeriod": {
+    "validMonth": "2026-08",
+    "status": "active",
+    "note": "Giu nguyen bieu gia theo van ban goc \"THONG BAO GIA THANG 07.2026\" cua Cong ty CP U ULTTY Viet Nam (ho-so-khao-sat/gd1/AI Zalo_/Thong bao gia thang 7.2026.pdf, 19 SP). Khach xac nhan 18/08/2026: thang 8 KHONG co thong bao gia moi, gia giu nguyen. Doi ky thi phai co van ban moi."
+  },
   "products": [
     {
       "sku": "ELNI",

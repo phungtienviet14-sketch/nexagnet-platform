@@ -88,7 +88,13 @@ export interface GlossaryEntry {
 
 export interface KnowledgeSnapshot {
   /** Ky gia seed/active dang duoc nap. Null = chua co bang gia hop le. */
-  pricePeriod: { validMonth: string | null; status: PricePeriodStatus; source?: string | null } | null;
+  pricePeriod: {
+    validMonth: string | null;
+    status: PricePeriodStatus;
+    source?: string | null;
+    /** Nguon goc bieu gia — phai co khi `validMonth` khac thang in tren van ban goc cua khach. */
+    note?: string | null;
+  } | null;
   products: Product[];
   prices: PriceRow[];
   /** Deal rieng theo dealer+sku (override wholesale). Rong khi chua co so lieu. */

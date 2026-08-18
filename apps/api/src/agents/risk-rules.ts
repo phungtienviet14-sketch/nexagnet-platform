@@ -1,4 +1,4 @@
-import type { PolicyType, PricedOrder, SupervisorSummary } from '@netviet/shared';
+import type { PolicyType, PricedOrder, SenderType, SupervisorSummary } from '@netviet/shared';
 import type { PriceRow, Product, RetailAdviceStrategy } from '../knowledge/domain.js';
 import { formatVnd, normalize } from '../rules/text.js';
 import { tenantPersona } from '@netviet/tenant';
@@ -18,16 +18,37 @@ export const POLICY_LABELS: Record<PolicyType, string> = {
   cod: 'COD (thu hộ khi giao)',
 };
 
-/** Cac SP duoc nhac trong tin (so khop ten/alias khong dau). */
+/**
+ * Cac SP duoc nhac trong tin (so khop ten/alias khong dau).
+ *
+ * Khop cum DAI truoc roi TIEU THU vung da khop — cung thuat toan `mock-parser.ts` dung. Khong lam
+ * vay thi "combo wfx" tra ve CA `COMBO-WFX-PF360` lan `WFX` (alias "wfx" la chuoi con), tuc bao
+ * gia hai dong cho mot san pham khach hoi. Van tra nhieu SP khi tin nhac nhieu SP o cac vung KHAC
+ * nhau ("2 quat cr022 + 1 may bat muoi").
+ */
 function productsInText(normText: string, products: Product[]): Product[] {
-  const found: Product[] = [];
-  for (const product of products) {
-    const candidates = [product.name, ...product.aliases]
-      .map(normalize)
-      .filter((c) => c.length >= 3);
-    if (candidates.some((c) => normText.includes(c))) found.push(product);
+  const candidates = products
+    .flatMap((product) =>
+      [product.name, ...product.aliases].map((raw) => ({ product, text: normalize(raw) })),
+    )
+    .filter((candidate) => candidate.text.length >= 3)
+    .sort((a, b) => b.text.length - a.text.length);
+
+  const consumed: Array<[number, number]> = [];
+  const matched: { product: Product; index: number }[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate.product.sku)) continue;
+    const index = normText.indexOf(candidate.text);
+    if (index < 0) continue;
+    const end = index + candidate.text.length;
+    if (consumed.some(([start, stop]) => index < stop && start < end)) continue;
+    consumed.push([index, end]);
+    seen.add(candidate.product.sku);
+    matched.push({ product: candidate.product, index });
   }
-  return found;
+  // Thu tu tu nhien theo vi tri trong tin — bao gia doc theo dung thu tu khach viet.
+  return matched.sort((a, b) => a.index - b.index).map((entry) => entry.product);
 }
 
 /**
@@ -45,20 +66,50 @@ export function describeProducts(
   }));
 }
 
-/** Bao gia: TRA CUU gia si (Don gia CTV) tu bang gia chung (khong hoi LLM). */
+/**
+ * Bao gia: TRA CUU bang gia chung (khong hoi LLM).
+ *
+ * Truong gia phu thuoc NGUOI HOI, quyet dinh nghiep vu 18/08/2026:
+ *  - dai ly / CTV  -> `wholesale` (Don gia CTV) — ho hoi gia HO nhap, khong phai gia ban le.
+ *  - con lai       -> truong cau hinh cua tenant (`retailAdvice.priceField`) + cau qualifier.
+ *
+ * Truoc do luon tra `minRetailPrice` cho MOI nguoi trong khi nhan AgentTrace ghi "bao gia theo cap
+ * dai ly" — Sale doc nhan tuong he thong da phan cap, con dai ly nhan mot con so cao hon 44% so
+ * voi gia ho thuc su mua.
+ */
 export function buildQuoteLines(
   normText: string,
   products: Product[],
   prices: PriceRow[],
   strategy: RetailAdviceStrategy,
+  senderType: SenderType = 'unknown',
 ): { name: string; unitPrice: number }[] {
+  const priceField = quotePriceField(strategy, senderType);
   return productsInText(normText, products)
     .map((p) => {
       const row = prices.find((r) => r.sku === p.sku);
-      const unitPrice = row?.[strategy.priceField];
+      const unitPrice = row?.[priceField];
       return typeof unitPrice === 'number' && unitPrice > 0 ? { name: p.name, unitPrice } : null;
     })
     .filter((x): x is { name: string; unitPrice: number } => x !== null);
+}
+
+/** Dai ly/CTV mua theo gia si; moi cap khac dung truong gia le cau hinh theo tenant. */
+export function quotePriceField(
+  strategy: RetailAdviceStrategy,
+  senderType: SenderType,
+): RetailAdviceStrategy['priceField'] {
+  return senderType === 'dai_ly' || senderType === 'ctv' ? 'wholesale' : strategy.priceField;
+}
+
+/**
+ * Cau chu di kem bao gia. Gia si la gia GIAO DICH THAT cua dai ly nen khong duoc dan cau qualifier
+ * "day chi la gia tham khao" cua gia le vao — noi vay la noi sai ve chinh con so vua bao.
+ */
+export function quoteQualifier(strategy: RetailAdviceStrategy, senderType: SenderType): string {
+  return senderType === 'dai_ly' || senderType === 'ctv'
+    ? 'Đây là đơn giá CTV (giá sỉ) áp dụng cho đại lý/CTV theo bảng giá hiện hành.'
+    : strategy.qualifier;
 }
 
 /** Hau mai: phan nhanh bao hanh theo tu khoa (khong tu phan dinh loi). */

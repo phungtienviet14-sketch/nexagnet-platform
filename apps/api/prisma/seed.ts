@@ -31,8 +31,11 @@ async function main(): Promise<void> {
           validMonth: period.validMonth,
           status: period.status,
           source: 'tenant-bootstrap',
+          // Nguon goc phai di theo bieu gia xuong DB, neu khong nguoi van hanh mo `/settings` chi
+          // thay mot ky "active" ma khong biet can cu vao van ban nao cua khach.
+          ...(period.note ? { note: period.note } : {}),
         },
-        update: { status: period.status },
+        update: { status: period.status, ...(period.note ? { note: period.note } : {}) },
       })
     : null;
   for (const pr of SEED.prices) {

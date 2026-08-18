@@ -8,6 +8,10 @@ import type {
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service.js';
 import {
+  GroupParticipantIdentityConflictError,
+  mergeClassification,
+} from './participant-identity-merge.js';
+import {
   GroupParticipantsRepository,
   type GroupParticipantListResult,
   type GroupParticipantRepositorySyncInput,
@@ -39,12 +43,20 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
       const syncedAt = new Date(input.syncedAt);
       for (const member of input.members) {
         if (member.globalId) {
+          const identitySelect = {
+            id: true,
+            globalId: true,
+            source: true,
+            customerRank: true,
+            operationalRole: true,
+            handlingMode: true,
+          } as const;
           const [stableMatch, routeMatch] = await Promise.all([
             transaction.groupParticipant.findUnique({
               where: {
                 groupId_globalId: { groupId: group.id, globalId: member.globalId },
               },
-              select: { id: true, globalId: true },
+              select: identitySelect,
             }),
             transaction.groupParticipant.findUnique({
               where: {
@@ -53,32 +65,41 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
                   externalUserId: member.externalUserId,
                 },
               },
-              select: {
-                id: true,
-                globalId: true,
-                source: true,
-                customerRank: true,
-                operationalRole: true,
-                handlingMode: true,
-              },
+              select: identitySelect,
             }),
           ]);
-          const disposableRouteMatch =
-            stableMatch &&
-            routeMatch &&
-            stableMatch.id !== routeMatch.id &&
-            routeMatch.source === 'message_stream' &&
-            routeMatch.customerRank === 'unknown' &&
-            routeMatch.operationalRole === 'unknown' &&
-            routeMatch.handlingMode === 'inherit_group';
-          if (disposableRouteMatch) {
-            await transaction.groupParticipant.delete({ where: { id: routeMatch.id } });
-          } else if (
-            (stableMatch && routeMatch && stableMatch.id !== routeMatch.id) ||
-            (routeMatch?.globalId && routeMatch.globalId !== member.globalId)
-          ) {
-            throw new Error('Xung dot globalId va routing UID cua thanh vien Zalo');
+
+          // `groupId_globalId` la unique, nen hang mang dung `member.globalId` chi co the la
+          // `stableMatch`. Suy ra hang route khac no thi hoac `globalId = null` (cung mot nguoi,
+          // hang sinh tu luong tin), hoac mang globalId KHAC (routing UID thuoc ve nguoi khac).
+          const routeBelongsToSomeoneElse = Boolean(
+            routeMatch?.globalId && routeMatch.globalId !== member.globalId,
+          );
+          if (routeMatch && routeBelongsToSomeoneElse) {
+            throw new GroupParticipantIdentityConflictError({
+              displayName: member.displayName,
+              externalUserId: member.externalUserId,
+              incomingGlobalId: member.globalId,
+              conflictingGlobalId: routeMatch.globalId as string,
+              conflictingParticipantId: routeMatch.id,
+              ...(stableMatch ? { stableParticipantId: stableMatch.id } : {}),
+            });
           }
+
+          // Cung mot nguoi bi tach doi -> GOP: hut phan loai sang hang co globalId roi xoa hang
+          // kia. KHONG nem nua — hang route bi tach ra chinh la hang Sale vua phan loai o tab
+          // Thanh vien, nen nem loi bien "dung dung tinh nang" thanh "hong dong bo vinh vien".
+          const splitIdentity = Boolean(
+            stableMatch && routeMatch && stableMatch.id !== routeMatch.id,
+          );
+          const mergedClassification =
+            splitIdentity && stableMatch && routeMatch
+              ? mergeClassification(stableMatch, routeMatch)
+              : null;
+          if (splitIdentity && routeMatch) {
+            await transaction.groupParticipant.delete({ where: { id: routeMatch.id } });
+          }
+
           const existing = stableMatch ?? routeMatch;
           const data = {
             externalUserId: member.externalUserId,
@@ -89,6 +110,7 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
             active: true,
             lastSeenAt: syncedAt,
             syncedAt,
+            ...(mergedClassification ?? {}),
           };
           if (existing) {
             await transaction.groupParticipant.update({ where: { id: existing.id }, data });

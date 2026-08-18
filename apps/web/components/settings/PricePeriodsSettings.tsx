@@ -7,6 +7,9 @@ import { settingsApi, type PricePeriodPrice, type PricePeriod } from '../../lib/
 import { PriceRowsEditor } from './PriceRowsEditor';
 import { SettingsPanelState } from './SettingsPanelState';
 
+/** Khop `TEST_ONLY_PRICE_PERIOD_SOURCE` phia API — ky UAT khong bao gio lam xanh readiness. */
+const TEST_ONLY_SOURCE = 'test_only';
+
 function parseRows(text: string): PricePeriodPrice[] {
   const value: unknown = JSON.parse(text);
   if (!Array.isArray(value)) throw new Error('Import phải là một mảng JSON.');
@@ -35,6 +38,10 @@ export function PricePeriodsSettings() {
   const [overwrite, setOverwrite] = useState(true);
   const [localError, setLocalError] = useState<string>();
   const [actionSuccess, setActionSuccess] = useState<string>();
+  // Ky UAT: co gia de chay thu nhung KHONG duoc lam xanh cong readiness. Backend da co san co che
+  // (`source=test_only`, chi activate khi DATA_CLASSIFICATION=test) — truoc day UI khong co duong
+  // nao bat no, nen cach duy nhat de test auto-confirm la doi nhan thang cua bang gia THAT.
+  const [testOnly, setTestOnly] = useState(false);
 
   // Auto-select draft period if available, otherwise active current period, otherwise first period
   const selected: PricePeriod | undefined = useMemo(() => {
@@ -69,10 +76,28 @@ export function PricePeriodsSettings() {
   };
 
   const create = useMutation({
-    mutationFn: () => settingsApi.createPricePeriod(validMonth),
+    mutationFn: () =>
+      settingsApi.createPricePeriod(
+        validMonth,
+        testOnly ? `UAT_TEST_ONLY_${validMonth}` : undefined,
+        testOnly,
+      ),
     onSuccess: (newPeriod) => {
       setSelectedId(newPeriod.id);
-      setActionSuccess(`Đã tạo kỳ nháp ${newPeriod.validMonth}`);
+      setActionSuccess(
+        testOnly
+          ? `Đã tạo kỳ NHÁP TEST ${newPeriod.validMonth} — kỳ này không làm xanh cổng sẵn sàng vận hành`
+          : `Đã tạo kỳ nháp ${newPeriod.validMonth}`,
+      );
+      void refresh();
+    },
+  });
+
+  const archive = useMutation({
+    mutationFn: (periodId: string) => settingsApi.archivePricePeriod(periodId),
+    onSuccess: (archived) => {
+      setSelectedId('');
+      setActionSuccess(`Đã lưu trữ kỳ giá ${archived.validMonth} — kỳ này thôi áp dụng từ bây giờ`);
       void refresh();
     },
   });
@@ -108,7 +133,19 @@ export function PricePeriodsSettings() {
     },
   });
 
-  const mutationError = create.error ?? copy.error ?? preview.error ?? apply.error ?? validate.error ?? activate.error;
+  const mutationError =
+    create.error ??
+    copy.error ??
+    preview.error ??
+    apply.error ??
+    validate.error ??
+    activate.error ??
+    archive.error;
+
+  const isTestOnly = (period: PricePeriod) => period.source === TEST_ONLY_SOURCE;
+  const periodLabel = (period: PricePeriod) =>
+    `Tháng ${period.validMonth ?? '---'} · ${period.status.toUpperCase()}` +
+    `${isTestOnly(period) ? ' · CHỈ ĐỂ TEST' : ''} (${period.prices.length} SKU)`;
 
   const prepareRows = () => {
     if (rows.length === 0) {
@@ -211,7 +248,7 @@ export function PricePeriodsSettings() {
             {periods.length === 0 && <option value="">Chưa có kỳ nào</option>}
             {periods.map((period) => (
               <option key={period.id} value={period.id}>
-                Tháng {period.validMonth ?? '---'} · Trạng thái: {period.status.toUpperCase()} ({period.prices.length} SKU)
+                {periodLabel(period)}
               </option>
             ))}
           </select>
@@ -230,8 +267,32 @@ export function PricePeriodsSettings() {
           >
             Sao chép kỳ này sang nháp mới
           </button>
+          <button
+            className="settings-button settings-button--quiet"
+            type="button"
+            style={{ whiteSpace: 'nowrap' }}
+            disabled={!validMonth || create.isPending}
+            onClick={() => create.mutate()}
+          >
+            Tạo kỳ trống
+          </button>
         </div>
       </div>
+
+      {/* Doi nhan thang cua bang gia THAT de "cho co gia" la lam gia bang gia va lam xanh gia cong
+          readiness. Duong dung la ky TEST: co gia de chay thu, nhung readiness van bao thieu. */}
+      <label className="settings-checkbox-field" style={{ margin: '0 0 0.25rem' }}>
+        <input
+          type="checkbox"
+          checked={testOnly}
+          onChange={(event) => setTestOnly(event.target.checked)}
+        />
+        <span>
+          Kỳ này <b>chỉ để test (UAT)</b> — có giá để chạy thử nhưng <b>không</b> được tính là bảng
+          giá chính thức. Cần <code>DATA_CLASSIFICATION=test</code> mới kích hoạt được, và nhớ lưu
+          trữ khi test xong.
+        </span>
+      </label>
 
       {selected && !isDraft && (
         <div style={{ background: '#F3F4F6', borderRadius: '6px', padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -239,17 +300,43 @@ export function PricePeriodsSettings() {
             <p style={{ margin: 0, fontSize: '0.875rem', color: '#374151' }}>
               Kỳ <b>{selected.validMonth}</b> đang ở trạng thái <b>{selected.status.toUpperCase()}</b> ({selected.prices.length} SKU). Để chỉnh sửa giá, hãy tạo bản nháp mới hoặc sao chép kỳ này.
             </p>
+            {isTestOnly(selected) && (
+              <p style={{ margin: '0.35rem 0 0', fontSize: '0.8125rem', color: '#B45309' }}>
+                Kỳ <b>CHỈ ĐỂ TEST</b> — cấp giá cho UAT nhưng không bao giờ làm xanh cổng “Sẵn sàng
+                vận hành”. Lưu trữ kỳ này khi kết thúc đợt test.
+              </p>
+            )}
           </div>
-          <button
-            type="button"
-            className="settings-button settings-button--quiet"
-            onClick={() => {
-              setValidMonth(selected.validMonth || currentMonth);
-              copy.mutate(selected.id);
-            }}
-          >
-            Tạo bản nháp từ kỳ này để sửa
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="settings-button settings-button--quiet"
+              onClick={() => {
+                setValidMonth(selected.validMonth || currentMonth);
+                copy.mutate(selected.id);
+              }}
+            >
+              Tạo bản nháp từ kỳ này để sửa
+            </button>
+            {selected.status === 'active' && (
+              <button
+                type="button"
+                className="settings-button settings-button--quiet"
+                disabled={archive.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Lưu trữ bảng giá tháng ${selected.validMonth}? Kỳ này thôi áp dụng ngay, và nếu không còn kỳ nào khác cho tháng hiện tại thì mọi đơn sẽ chuyển hết về Sale.`,
+                    )
+                  ) {
+                    archive.mutate(selected.id);
+                  }
+                }}
+              >
+                Lưu trữ kỳ này
+              </button>
+            )}
+          </div>
         </div>
       )}
 
