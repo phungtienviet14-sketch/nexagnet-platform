@@ -515,6 +515,12 @@ model Message {
   senderExternalId  String?
   senderDisplayName String?
   text              String
+  // Pha 1 (18/08/2026) — huong tin: 'inbound' = khach/dai ly gui vao, 'outbound' = he thong gui ra.
+  // Cot da ton tai tren DB tu migration 20260815140000_message_direction; truoc do schema thieu
+  // field nay nen `prisma migrate dev` se sinh migration DROP cot. Dung xoa.
+  direction         String    @default("inbound")
+  // Vai nguoi gui, de dung lai lich su hoi thoai co nhan cho LLM. 'customer' | 'bot' | 'sale'.
+  senderRole        String    @default("customer")
   imageUrl          String?
   // Dot A' Task 2 — anh da TAI VE kho ben vung. `imageUrl` la link Zalo, chet sau <=35 ngay
   // (Zalo xoa object phia server); `mediaKey` moi la thu con lai sau do.
@@ -531,6 +537,8 @@ model Message {
 
   @@unique([platform, externalMessageId])
   @@index([chatId])
+  // Cua so hoi thoai doc theo nhom + thoi gian giam dan (ConversationContextBuilder.build).
+  @@index([chatId, sentAt])
 }
 
 model Order {
