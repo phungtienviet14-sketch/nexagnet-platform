@@ -94,7 +94,9 @@ export class OrdersService {
             ) + AUTO_LABEL,
         };
     try {
-      await this.outbound.sendContent(replyChannel, view.chatId, supported);
+      await this.outbound.sendContent(replyChannel, view.chatId, supported, 'bot', {
+        quote: view.quoteTarget,
+      });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new ServiceUnavailableException(
@@ -126,6 +128,8 @@ export class OrdersService {
         view.replyChannel ?? legacyReplyChannel(),
         view.chatId,
         view.priced.confirmationText + AUTO_LABEL,
+        'bot',
+        { quote: view.quoteTarget },
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);

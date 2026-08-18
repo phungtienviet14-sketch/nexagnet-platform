@@ -324,6 +324,9 @@ export class AgentOrchestrator {
       senderType: resolved.senderType,
       trace,
       ...(activeRuleConfig ? { ruleConfigVersion: activeRuleConfig.version } : {}),
+      // De xac nhan gui ra la mot cau TRA LOI dung tin nay, khong phai mot cau troi noi
+      // giua nhom 200 dai ly dang ban tin.
+      ...(message.quoteTarget ? { quoteTarget: message.quoteTarget } : {}),
     };
     const saved = await this.orders.create(view);
     emit({ type: 'order.finalized', order: saved });

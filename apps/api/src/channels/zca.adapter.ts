@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type { OutboundContent } from '@netviet/shared';
 import type { OutboundReceipt } from '../messages/outbound-recorder.js';
-import { ChannelAdapter } from './channel-adapter.js';
+import { ChannelAdapter, type SendOptions } from './channel-adapter.js';
 import type { ZaloOutboundImage, ZaloUserClient } from './zalo-user.client.js';
 
 /** Chan mot URL doc hoac mot tep khong lo lam nghen tien trinh gui. */
@@ -28,8 +28,12 @@ export class ZcaAdapter extends ChannelAdapter {
     super();
   }
 
-  async sendMessage(chatId: string, text: string): Promise<OutboundReceipt> {
-    return this.client.sendMessage(chatId, text);
+  async sendMessage(
+    chatId: string,
+    text: string,
+    options?: SendOptions,
+  ): Promise<OutboundReceipt> {
+    return this.client.sendMessage(chatId, text, options);
   }
 
   /**
@@ -41,11 +45,12 @@ export class ZcaAdapter extends ChannelAdapter {
   override async sendContent(
     chatId: string,
     content: OutboundContent,
+    options?: SendOptions,
   ): Promise<OutboundReceipt> {
     const links = content.links?.map((link) => `${link.label}: ${link.url}`) ?? [];
     const text = [content.text, ...links].join('\n');
     const urls = content.images?.map((image) => image.url) ?? [];
-    if (!urls.length) return this.sendMessage(chatId, text);
+    if (!urls.length) return this.sendMessage(chatId, text, options);
 
     const images: ZaloOutboundImage[] = [];
     for (const url of urls) {
@@ -56,7 +61,7 @@ export class ZcaAdapter extends ChannelAdapter {
       this.logger.warn('Khong tai duoc anh nao — gui text kem link anh.');
       return this.sendMessage(chatId, [text, ...urls.map((url) => `Ảnh: ${url}`)].join('\n'));
     }
-    return this.client.sendMessageWithImages(chatId, text, images);
+    return this.client.sendMessageWithImages(chatId, text, images, options);
   }
 
   private async download(url: string): Promise<ZaloOutboundImage | null> {

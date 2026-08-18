@@ -1,4 +1,5 @@
 import type { AgentTrace, SenderType } from './agents.js';
+import type { ZaloQuoteTarget } from './channel-message.js';
 import type { FieldConfidence, Intent, OrderStatus, OrderType, ParsedOrder } from './order.js';
 
 /**
@@ -91,4 +92,10 @@ export interface OrderView {
   trace?: AgentTrace;
   /** Version rules typed da ap dung; bo trong nghia la defaults trong code. */
   ruleConfigVersion?: number;
+  /**
+   * Tin da kich hoat don nay, de xac nhan duoc gui dang TRA LOI dung tin do. Trong nhom 200
+   * dai ly ban tin lien tuc, mot cau xac nhan khong trich dan la mot cau khong biet cua ai.
+   * Chi co khi kenh cap du kien (zca); vang mat -> gui thuong nhu truoc.
+   */
+  quoteTarget?: ZaloQuoteTarget;
 }

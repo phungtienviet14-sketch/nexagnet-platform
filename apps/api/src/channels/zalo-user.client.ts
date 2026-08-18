@@ -11,8 +11,11 @@ import {
   type Credentials,
   type LoginQRCallbackEvent,
   type Message,
+  type SendMessageQuote,
 } from 'zca-js';
+import type { ZaloQuoteTarget } from '@netviet/shared';
 import type { OutboundReceipt } from '../messages/outbound-recorder.js';
+import type { SendOptions } from './channel-adapter.js';
 
 export type ZcaMessageHandler = (message: Message) => void | Promise<void>;
 
@@ -430,11 +433,16 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   async sendMessage(
     threadId: string,
     text: string,
+    options?: SendOptions,
     type?: ThreadType,
   ): Promise<OutboundReceipt> {
     if (!this.api) throw new Error('zca-js chua dang nhap - khong the gui tin');
     const resolvedType = type ?? this.threadTypes.get(threadId) ?? ThreadType.Group;
-    const result = await this.api.sendMessage(text, threadId, resolvedType);
+    // Khong co quote thi gui CHUOI THUAN nhu truoc — giu nguyen duong dang chay.
+    const payload = options?.quote
+      ? { msg: text, quote: toSendQuote(options.quote) }
+      : text;
+    const result = await this.api.sendMessage(payload, threadId, resolvedType);
     return toReceipt(result);
   }
 
@@ -449,14 +457,16 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     threadId: string,
     text: string,
     images: readonly ZaloOutboundImage[],
+    options?: SendOptions,
     type?: ThreadType,
   ): Promise<OutboundReceipt> {
     if (!this.api) throw new Error('zca-js chua dang nhap - khong the gui tin');
-    if (!images.length) return this.sendMessage(threadId, text, type);
+    if (!images.length) return this.sendMessage(threadId, text, options, type);
     const resolvedType = type ?? this.threadTypes.get(threadId) ?? ThreadType.Group;
     const result = await this.api.sendMessage(
       {
         msg: text,
+        ...(options?.quote ? { quote: toSendQuote(options.quote) } : {}),
         attachments: images.map((image) => ({
           data: image.data,
           filename: image.filename,
@@ -770,4 +780,22 @@ function toReceipt(result: { message: { msgId: number } | null }): OutboundRecei
   return typeof msgId === 'number' && Number.isFinite(msgId)
     ? { externalMessageId: String(msgId) }
     : {};
+}
+
+/**
+ * `ZaloQuoteTarget` -> `SendMessageQuote` cua zca-js. Cung tam truong, chi khac cho `content` va
+ * `propertyExt` duoc giu `unknown` phia ta (zca-js tra ve string voi tin chu, object voi anh).
+ * Ep kieu o DUNG mot cho nay thay vi de `any` lan ra ca luong gui.
+ */
+function toSendQuote(target: ZaloQuoteTarget): SendMessageQuote {
+  return {
+    msgId: target.msgId,
+    cliMsgId: target.cliMsgId,
+    msgType: target.msgType,
+    uidFrom: target.uidFrom,
+    ts: target.ts,
+    ttl: target.ttl,
+    content: target.content,
+    propertyExt: target.propertyExt,
+  } as SendMessageQuote;
 }

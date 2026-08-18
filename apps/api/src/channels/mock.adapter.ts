@@ -19,6 +19,7 @@ export class MockAdapter extends ChannelAdapter {
   readonly sent: SentMessage[] = [];
 
   async sendMessage(chatId: string, text: string): Promise<OutboundReceipt> {
+    // Mock khong mo phong trich dan: khong co gi de kiem chung, va giu log de doc.
     this.sent.push({ chatId, text });
     this.logger.log(`[MOCK gui -> ${chatId}]\n${text}`);
     // Mock khong co id that; recorder se tu sinh `out:<uuid>`.

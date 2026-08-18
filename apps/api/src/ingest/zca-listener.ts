@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { loadEnv, type AppEnv } from '@netviet/shared';
+import { loadEnv, type AppEnv, type ZaloQuoteTarget } from '@netviet/shared';
 import type { Message } from 'zca-js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { resolveBotName } from '../channels/bot-name.js';
@@ -101,14 +101,14 @@ export class ZcaListener implements OnModuleInit {
     }
     this.logger.log(`Da xu ly tin ${id} -> intent=${result.view.intent}`);
     if (shouldAutoAck(result.view.intent, autoAck)) {
-      await this.sendAutoAck(channelMessage.externalChatId);
+      await this.sendAutoAck(channelMessage.externalChatId, channelMessage.quoteTarget);
     }
   }
 
   /** Gui tin auto-ack (best-effort): loi khong lam gian doan doc tin. */
-  private async sendAutoAck(chatId: string): Promise<void> {
+  private async sendAutoAck(chatId: string, quote?: ZaloQuoteTarget): Promise<void> {
     try {
-      await this.outbound.sendMessage('zca', chatId, AUTO_ACK_TEXT + AUTO_LABEL);
+      await this.outbound.sendMessage('zca', chatId, AUTO_ACK_TEXT + AUTO_LABEL, 'bot', { quote });
       this.logger.log(`Da gui auto-ack (intent=khac) toi ${chatId}`);
     } catch (error) {
       this.logger.warn(`Gui auto-ack that bai: ${error instanceof Error ? error.message : String(error)}`);

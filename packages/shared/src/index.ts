@@ -8,6 +8,7 @@ export {
   SENDER_ROLES,
   MESSAGE_DIRECTIONS,
   replyReferenceSchema,
+  zaloQuoteTargetSchema,
 } from './channel-message.js';
 export type {
   ChannelMessage,
@@ -17,6 +18,7 @@ export type {
   ConversationContext,
   SenderRole,
   MessageDirection,
+  ZaloQuoteTarget,
 } from './channel-message.js';
 export {
   INTENTS,

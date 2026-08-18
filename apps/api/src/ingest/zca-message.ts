@@ -42,10 +42,30 @@ export function zcaMessageToChannelMessage(
     text: trimmed,
     imageUrl,
     replyTo: quoteToReply(data.quote),
+    quoteTarget: toQuoteTarget(data),
     sentAt: tsToDate(data.ts),
   };
   const parsed = channelMessageSchema.safeParse(candidate);
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Giu lai du kien de sau nay TRICH DAN chinh tin nay. Tam truong duoi la nguyen van
+ * `SendMessageQuote` cua zca-js — bat lay luc nhan vi luc gui thi khong con `TMessage` nua.
+ * Khong co `msgId` thi khong quote duoc: tra undefined thay vi dung du kien nua voi.
+ */
+function toQuoteTarget(data: Message['data']): ChannelMessage['quoteTarget'] {
+  if (!data.msgId) return undefined;
+  return {
+    msgId: data.msgId,
+    cliMsgId: data.cliMsgId ?? '',
+    msgType: data.msgType ?? '',
+    uidFrom: data.uidFrom ?? '',
+    ts: data.ts ?? '',
+    ttl: data.ttl ?? 0,
+    content: data.content,
+    propertyExt: data.propertyExt,
+  };
 }
 
 function quoteToReply(quote: Message['data']['quote']): ChannelMessage['replyTo'] {

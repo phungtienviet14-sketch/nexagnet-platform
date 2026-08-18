@@ -25,6 +25,26 @@ export type SenderRole = (typeof SENDER_ROLES)[number];
 export const MESSAGE_DIRECTIONS = ['inbound', 'outbound'] as const;
 export type MessageDirection = (typeof MESSAGE_DIRECTIONS)[number];
 
+/**
+ * Du kien de REPLY DUNG TIN tren Zalo. Tam truong nay chinh la `SendMessageQuote` cua zca-js
+ * 2.1.2 — deu la truong cua tin den, nen chi can giu lai luc nhan la gui trich dan duoc.
+ *
+ * Kieu hoa thay vi de `unknown`: `PLATFORMS` chi co 'zalo', nen dung mot kieu chung chung cho
+ * cac nen tang chua ton tai la truu tuong hoa som (YAGNI). Doi khi that su co nen tang thu hai.
+ */
+export const zaloQuoteTargetSchema = z.object({
+  msgId: z.string().min(1),
+  cliMsgId: z.string(),
+  msgType: z.string(),
+  uidFrom: z.string(),
+  ts: z.string(),
+  ttl: z.number(),
+  /** string voi tin chu, object voi anh/attachment — zca-js tra lai y nguyen. */
+  content: z.unknown(),
+  propertyExt: z.unknown().optional(),
+});
+export type ZaloQuoteTarget = z.infer<typeof zaloQuoteTargetSchema>;
+
 export const replyReferenceSchema = z
   .object({
     /** ID tin goc neu kenh cung cap; dung de resolve ban ghi ben vung trong cung hoi thoai. */
@@ -64,6 +84,11 @@ export const channelMessageSchema = z
     imageUrl: z.string().url().optional(),
     /** Tin duoc reply/quote, neu adapter kenh co cung cap. */
     replyTo: replyReferenceSchema.optional(),
+    /**
+     * Du kien de sau nay TRICH DAN CHINH tin nay khi tra loi. Di theo `raw` xuong DB nen khong
+     * can cot rieng. Vang mat khi kenh khong cap du truong (Bot Platform, copilot, mock).
+     */
+    quoteTarget: zaloQuoteTargetSchema.optional(),
     sentAt: z.coerce.date(),
   })
   // Tin phai mang it nhat MOT thu: chu hoac anh. Khong ca hai = tin he thong/rong -> khong luu.

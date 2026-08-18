@@ -1,7 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { ChannelCapabilities, OutboundContent, ReplyChannel, SenderRole } from '@netviet/shared';
 import { OutboundRecorder, type OutboundReceipt } from '../messages/outbound-recorder.js';
-import { ChannelAdapter } from './channel-adapter.js';
+import { ChannelAdapter, type SendOptions } from './channel-adapter.js';
 import {
   BOT_CHANNEL_ADAPTER,
   MOCK_CHANNEL_ADAPTER,
@@ -29,9 +29,10 @@ export class OutboundChannelRouter {
     chatId: string,
     text: string,
     senderRole: SenderRole = 'bot',
+    options?: SendOptions,
   ): Promise<OutboundReceipt> {
     if (!replyChannel) throw new Error('Thieu replyChannel: tu choi doan kenh gui');
-    const receipt = await this.adapter(replyChannel).sendMessage(chatId, text);
+    const receipt = await this.adapter(replyChannel).sendMessage(chatId, text, options);
     await this.remember(chatId, text, receipt, senderRole);
     return receipt;
   }
@@ -45,13 +46,14 @@ export class OutboundChannelRouter {
     chatId: string,
     content: OutboundContent,
     senderRole: SenderRole = 'bot',
+    options?: SendOptions,
   ): Promise<OutboundReceipt> {
     if (!replyChannel) throw new Error('Thieu replyChannel: tu choi doan kenh gui');
     const adapter = this.adapter(replyChannel);
     if (content.images?.length && !adapter.capabilities.image) {
       throw new Error(`Kênh ${adapter.name} không hỗ trợ ảnh outbound`);
     }
-    const receipt = await adapter.sendContent(chatId, content);
+    const receipt = await adapter.sendContent(chatId, content, options);
     // Luu phan CHU: anh/link da nam trong text hoac di kem, con mach hoi thoai can van ban.
     await this.remember(chatId, content.text, receipt, senderRole);
     return receipt;

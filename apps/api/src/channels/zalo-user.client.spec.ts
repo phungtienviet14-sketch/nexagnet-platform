@@ -234,7 +234,7 @@ describe('ZaloUserClient runtime', () => {
       { id: 'g1', globalId: 'global-group-1', name: 'Nhóm demo', memberCount: 12, allowed: true },
       { id: 'g2', globalId: 'global-group-2', name: 'Nhóm riêng', memberCount: 3, allowed: false },
     ]);
-    await client.sendMessage('g1', 'xin chao', ThreadType.Group);
+    await client.sendMessage('g1', 'xin chao', undefined, ThreadType.Group);
     expect(fakeApi.sendMessage).toHaveBeenCalledWith('xin chao', 'g1', ThreadType.Group);
     client.onModuleDestroy();
     expect(listener.stop).toHaveBeenCalled();
