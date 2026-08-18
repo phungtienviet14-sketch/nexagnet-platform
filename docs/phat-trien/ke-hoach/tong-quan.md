@@ -14,6 +14,59 @@
 - **🟢 DRIVE ĐÃ KIỂM KÊ TOÀN CÂY (12/08/2026):** 122 thư mục, 825 file. Boundary chốt: binary gốc ở Drive/object storage; provenance, product mapping, FAQ, link catalog/video và nội dung tư vấn ở DB/config, quản trị qua `/settings`. Chỉ 5 FAQ dạng DOCX có nội dung; EUS Felix có media nhưng FAQ trống. **Không có bảng giá tháng 8** và **không có nguồn xác nhận công thức 30+1/10+1** ⇒ A6/A7 còn thiếu, không fallback/không suy diễn.
 - **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Ba điểm lệch tiếp theo (baseline đỏ · RBAC hở · readiness mồ côi) **cũng đã đóng** ở Đợt A/B/D.)*
 
+### 1.-1 ▶️▶️ BÀN GIAO PHIÊN 18/08/2026 — ĐỌC MỤC NÀY TRƯỚC MỌI THỨ
+
+**Commit:** `b92bb82` trên `main`, đã push, đã deploy `ultty → dev` (run `32101561978`, 4/4 phép kiểm §5 đạt, cách ly mạng trả đúng một địa chỉ).
+
+**Đã sửa trong phiên này (code review 6 phát hiện, đóng 5):**
+
+1. **`matchProduct` trả sai SKU khi alias là chuỗi con** — `rules.ts` duyệt danh mục rồi trả về khớp ĐẦU TIÊN; alias `wfx` của `WFX` là chuỗi con của `combo wfx`, mà `WFX` đứng trước trong danh mục. Ba trong năm cách gọi bộ combo — kể cả tên đầy đủ chính thức — ra 1.750.000đ thay vì 1.950.000đ, `matched=true`, không warning, nên `shouldAutoConfirmOrder` cho qua và AUTO_SEND gửi giá sai cho khách. Nay lấy khớp DÀI NHẤT. Cùng bẫy ở `productsInText` (đường báo giá) đã vá bằng thuật toán khớp-dài-trước + tiêu thụ vùng. **Test cũ không bắt được vì fixture chỉ 2 SP không chồng alias** — nay có 7 test chạy trên danh mục THẬT của gói khách.
+2. **Kỳ giá tháng 8 không có nguồn gốc** — `c6306b3` đổi `validMonth` 2026-07→2026-08 mà không đổi giá nào. A6 nay đã có câu trả lời: nguồn có thẩm quyền là `ho-so-khao-sat/gd1/AI Zalo_/Thông báo giá tháng 7.2026.pdf` (19 SP, đối chiếu khớp từng dòng), khách xác nhận 18/08 rằng tháng 8 không có thông báo mới. Thêm trường `note` vào `tenant.schema.ts` + `KnowledgeSnapshot`, seed ghi xuống DB. **Đổi nhãn tháng mà không ghi căn cứ là cái QĐ #10 cấm; ghi căn cứ thì hợp lệ.**
+3. **Đồng bộ thành viên hỏng vĩnh viễn sau khi Sale phân loại** — code chỉ cho gộp hàng trùng khi hàng route còn nguyên mặc định, mà tab "Thành viên" tồn tại chính để Sale phân loại những hàng đó (`update()` ghi `source='manual'`). Càng dùng đúng càng chắc hỏng. Nay `participant-identity-merge.ts` gộp thật: giữ hàng có `globalId`, hút phân loại sang, không bao giờ hạ cấp `manual`. Chỉ còn ném khi routing UID thuộc `globalId` KHÁC, và là **409** kèm tên thành viên + cả hai id (trước là 502 Bad Gateway — sai loại lỗi, khiến người vận hành đi tìm nhầm phía Zalo).
+4. **Báo giá trong nhóm đại lý trả GIÁ SỈ** (quyết định nghiệp vụ 18/08) — AgentTrace ghi "báo giá theo cấp X" nhưng code không hề đọc `senderType`, luôn trả `minRetailPrice`; đại lý hỏi ELNI nhận 3.100.000đ trong khi giá họ mua là 2.150.000đ. Nay `dai_ly`/`ctv` → `wholesale`, kèm qualifier riêng.
+5. **`/settings` → Kỳ giá** nay bật được cờ kỳ TEST (UAT): cơ chế `test_only` đã có sẵn ở backend nhưng UI không có đường nào bật, nên cách duy nhất để test auto-confirm là đổi nhãn bảng giá thật. Thêm ô tick, nút "Tạo kỳ trống", nhãn "CHỈ ĐỂ TEST", nút "Lưu trữ kỳ này".
+
+**Kiểm:** typecheck + lint exit 0 · API **698 pass / 24 skip** (mốc 681/24, +17 test, không ca cũ nào đổi trạng thái) · shared 84 · tenant 30 · web 70 · poc-parser 4 · route 17 · `web build` + `test:tenant-runtime` xanh.
+
+#### ⛔ HAI ĐIỂM CHẶN PHẢI GỠ TRƯỚC KHI GIAO CHO ĐỒNG NGHIỆP
+
+**(a) Kỳ giá tháng 8 trên pilot chỉ có 2 SKU.** Truy vấn DB pilot 18/08:
+
+```text
+P|cmsr863hs0003qq01mkg146c7|2026-08|active  |test_only |skus=2    <- kỳ đang áp dụng
+P|cmsr6qh190002mv0154fxqpg0|2026-08|archived|test_only |skus=2
+P|migrated-202607          |2026-07|active  |migration |skus=19
+```
+
+Bảng 19 SKU nằm ở kỳ **tháng 7**, mà tra giá fail-closed đúng tháng hiện tại ⇒ trên pilot **chỉ 2 SKU có giá**, 17 SKU còn lại rơi hết về Sale, và bài kiểm bẫy combo không định giá được. Deploy **không** chạy lại tenant seed nên kỳ `seed-2026-08` kèm `note` provenance chưa lên pilot. Gỡ bằng một trong hai: chạy `tsx prisma/seed.ts` trên pilot, hoặc dựng kỳ 2026-08 đủ 19 SKU qua `/settings` → Kỳ giá → *Sao chép kỳ này sang nháp mới* từ kỳ 2026-07 rồi kích hoạt.
+
+**(b) Bảng `User` trả về RỖNG** trong khi `AUTH_MODE=session` và `/zalo/status` trả 401. Nếu đúng là rỗng thì **không ai đăng nhập được**, kể cả đồng nghiệp. Xác minh lại trước khi giao:
+
+```sql
+select email, role from "User";
+```
+
+(DB pilot: container `zalo-ultty-postgres`, user `netviet_admin`, db `zalo` — **không** phải `netviet`/`postgres`.)
+
+#### Trạng thái pilot lúc bàn giao
+
+```text
+CHANNEL_MODE=zca   AUTO_SEND=off   PARSER_MODE=flowise   PERSISTENCE=prisma
+AUTH_MODE=session  DATA_CLASSIFICATION=<rỗng → mặc định test>
+zca listener: connected (đăng nhập bằng phiên đã lưu, KHÔNG cần quét QR lại)
+Group mapped: 2 (Meta HN, Thái Nguyên) · Dealer: 3 · GroupParticipant: 2 · Order: 153
+demo:     https://demo.35-187-235-82.sslip.io
+operator: https://operator.35-187-235-82.sslip.io
+```
+
+**Quyết định của chủ dự án 18/08:** `CHANNEL_MODE=zca` + `AUTO_SEND=on` đúng là cấu hình muốn giao cho đồng nghiệp test. `AUTO_SEND` bật bằng badge **Tự gửi** trên console (`PUT /settings/automation/auto-send`, vai MANAGER/ADMIN, có audit) — recreate API luôn đưa về `off`, đó là thiết kế. Điều kiện chặn chưa gỡ: tài khoản Zalo phụ + văn bản chấp nhận rủi ro ToS (D16); và `PARSER_MODE=flowise` → DeepSeek chưa nằm trong danh sách bên thứ 3 được duyệt nên chỉ dùng nhóm/dữ liệu TEST.
+
+⚠️ **Kiểm allowlist trước khi bật AUTO_SEND** — hai nhóm đang mapped là nhóm đại lý thật. Bật tự gửi là bot nhắn thẳng vào đó.
+
+⚠️ **`apps/marketing/**` (~24 file) trong cây làm việc là của phiên Claude song song, CHƯA commit.** Commit `b92bb82` cố ý không đụng tới. Push chung lên `main` sẽ tự động deploy trang marketing chưa ai review.
+
+---
+
 ### 1.0 ▶️ BÀN GIAO CHO PHIÊN SAU (cập nhật 12/08/2026 — đọc mục này TRƯỚC)
 
 **Nhánh:** `gd1/code-complete` (tách khỏi `main` tại `d14f7a4`). **Chưa push, chưa merge.**
