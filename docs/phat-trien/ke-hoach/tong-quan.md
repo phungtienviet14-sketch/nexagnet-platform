@@ -14,6 +14,165 @@
 - **🟢 DRIVE ĐÃ KIỂM KÊ TOÀN CÂY (12/08/2026):** 122 thư mục, 825 file. Boundary chốt: binary gốc ở Drive/object storage; provenance, product mapping, FAQ, link catalog/video và nội dung tư vấn ở DB/config, quản trị qua `/settings`. Chỉ 5 FAQ dạng DOCX có nội dung; EUS Felix có media nhưng FAQ trống. **Không có bảng giá tháng 8** và **không có nguồn xác nhận công thức 30+1/10+1** ⇒ A6/A7 còn thiếu, không fallback/không suy diễn.
 - **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Ba điểm lệch tiếp theo (baseline đỏ · RBAC hở · readiness mồ côi) **cũng đã đóng** ở Đợt A/B/D.)*
 
+### 1.-2 ▶️▶️▶️ BÀN GIAO PHIÊN 18/08/2026 (PHIÊN 2) — KHẢO SÁT + KẾ HOẠCH, CHƯA SỬA CODE
+
+**Commit:** không có. Phiên này **chỉ khảo sát và lập kế hoạch**, không sửa một dòng code nào. HEAD lúc bàn giao: `8e1334e`, working tree sạch.
+
+**Yêu cầu gốc:** agent tư vấn bán hàng phải thông minh hơn — bot reply đúng tin nhắn muốn trả lời, LLM thấy được khách đang reply tin nào, và nạp được lịch sử chat nhóm vào LLM một cách hợp lý. Kèm khảo sát nguyên nhân AI trả lời kém thông minh/kém tự nhiên khi tư vấn và chốt đơn, rà soát công nghệ đã chuẩn chưa, và chạy `search-first` xem có giải pháp sẵn.
+
+#### ⛔ ĐIỂM CHẶN PHẢI GỠ ĐẦU TIÊN — SCHEMA DRIFT
+
+Migration `20260815140000_message_direction` (commit `69e7c4f`) đã thêm cột `direction` vào bảng `Message` **trên DB**, nhưng `schema.prisma` **không có field này** và **không dòng code nào dùng nó**. Việc làm dở của một phiên trước.
+
+Hệ quả: chạy `pnpm prisma migrate dev` ở trạng thái hiện tại sẽ sinh migration **DROP cột `direction`** — vì với Prisma, `schema.prisma` mới là nguồn sự thật, không phải thư mục migrations.
+
+Gỡ trước mọi thứ khác — thêm vào `apps/api/prisma/schema.prisma`, model `Message`:
+
+```prisma
+direction String @default("inbound")
+```
+
+rồi `pnpm prisma generate` và `pnpm prisma migrate status` để xác nhận hết drift.
+
+#### BA NGUYÊN NHÂN GỐC (đã xác minh trong code)
+
+**1. Bot không bao giờ thấy câu trả lời của chính nó.** Hai chỗ cộng hưởng:
+
+- `messages/conversation-context.ts:97` — `sameParticipant()` chỉ lấy tin có `senderExternalId` trùng người gửi hiện tại, và fail-closed khi thiếu id. Nên "lịch sử" đưa cho LLM là 6 tin gần nhất **của riêng khách**: không có câu bot đã trả lời, cũng không có tin của Sale.
+- `messages.save()` chỉ được gọi tại **một chỗ duy nhất** là `pipeline/pipeline.service.ts:375` — tức chỉ tin inbound. Mọi tin bot gửi đi (`orders/orders.service.ts:97` và `:125`, `ingest/zca-listener.ts:111`, `campaigns/campaign.service.ts:147`) **không bao giờ vào DB**.
+
+Vì vậy bot lặp lại chính nó và không hiểu "cái đó", "vậy giá bao nhiêu", "còn loại kia thì sao" — vế trước của mạch hội thoại đã bị xoá khỏi context trước khi tới LLM. Comment trong `content/advice-composer.ts` ghi *"để trả lời tiếp mạch, không lặp lại điều đã nói"*, nhưng dữ liệu để làm việc đó chưa từng tồn tại. **Đây là nguyên nhân lớn nhất của "trả lời kém tự nhiên".**
+
+**2. Không reply đúng tin, dù zca-js hỗ trợ sẵn.** `channels/channel-adapter.ts:22` khai `sendMessage(chatId, text)` — không có tham số quote; `channels/zalo-user.client.ts:427` truyền string thuần vào `api.sendMessage`. Trong khi zca-js 2.1.2 đã có sẵn:
+
+```ts
+// node_modules/zca-js/dist/apis/sendMessage.d.ts
+export type MessageContent = { msg: string; quote?: SendMessageQuote; mentions?: Mention[]; ... };
+export type SendMessageQuote = { content; msgType; propertyExt; uidFrom; msgId; cliMsgId; ts; ttl };
+```
+
+Cả 8 trường của `SendMessageQuote` đều là trường của `TMessage` inbound. Cột `raw Json?` đã có sẵn trong model `Message` nhưng chưa dùng để giữ payload này. **Không cần thư viện mới — chỉ cần nối dây.**
+
+**3. Quote resolution nhiều khả năng đang hỏng vì lệch ID space.** `ingest/zca-message.ts:38` lưu tin theo `data.msgId` (**string**), nhưng `:53` tra cứu tin được quote theo `String(quote.globalMsgId)` (**number**), fallback `quote.cliMsgId`. Nếu hai không gian ID này khác nhau thì `findByExternalMessage()` luôn trượt, rơi xuống nhánh inline fallback ở `conversation-context.ts:78` — chỉ còn `quote.msg` text thô, **mất ảnh và mất danh tính người gửi đã chuẩn hoá**. ⚠️ **Chưa xác minh được** trong phiên này vì cần phiên zca sống.
+
+#### CÔNG NGHỆ — BỐN ĐIỂM CHƯA CHUẨN
+
+**4. Cả hai chỗ ra quyết định ngôn ngữ đều chạy model rẻ nhất.**
+
+| Vị trí | Hiện tại |
+|---|---|
+| `pipeline/claude-parser.ts:12` | `claude-haiku-4-5-20251001` |
+| `content/advice-composer.ts:47` | `claude-haiku-4-5-20251001` |
+| `packages/shared/src/env.ts:77` | `ADVICE_COMPOSER` default = **`'off'`** |
+
+Điểm cuối đáng chú ý nhất: khi `ADVICE_COMPOSER=off`, `composeAdvice()` trả `null` và hệ thống **nối nguyên văn FAQ bằng `body.join('\n')`**. Đó chính xác là "trả lời như robot" — vì nó *đúng là* đang copy-paste bảng FAQ chứ không sinh câu trả lời. Model hiện hành phù hợp hơn: `claude-sonnet-5` hoặc `claude-opus-5`.
+
+**5. Prompt caching = 0, và thứ tự prompt đang tự phá cache.** Grep `cache_control` toàn repo: không có kết quả nào. Mỗi tin nhắn trả full giá cho toàn bộ danh mục SKU + glossary + 7 định nghĩa intent + few-shot. Tệ hơn, `pipeline/parser-prompt.ts` xếp **phần biến động trước phần ổn định**:
+
+```text
+input.dealerNameRaw,              <- đổi theo nhóm
+context,                          <- ĐỔI MỖI TIN NHẮN
+`Danh muc SKU:\n${skus}`,         <- ổn định, nhưng nằm SAU phần biến động
+`Tu dien viet tat: ${glossary}`,  <- ổn định, nằm SAU
+```
+
+Prompt caching là **prefix match** — mọi thứ sau byte đầu tiên thay đổi đều mất cache. Kể cả thêm `cache_control` hôm nay, danh mục SKU và glossary **vẫn sẽ không bao giờ cache được**. Phải đảo thứ tự trước. Đây cũng là thứ đang chặn việc nâng model: chi phí và độ trễ bị thổi lên vô ích nên nâng Haiku → Sonnet trông đắt hơn thực tế.
+
+**6. Retrieval FAQ là đếm từ trùng thô.** `content/content.service.ts:215` `rankFaqs()` đếm số từ ≥3 ký tự của câu hỏi FAQ xuất hiện trong tin khách. `normalize()` có bỏ dấu ✅ nhưng **không xử lý viết tắt** — mà viết tắt chính là đặc thù đầu vào đã ghi trong CLAUDE.md. Khách gõ `"bn tien"`, `"co ship ko"`, `"sp nay"` thì không khớp từ nào với FAQ viết đủ, dẫn tới `!selectedFaqs.length` và chuyển Sale. AI im lặng không phải vì thiếu dữ liệu, mà vì **không tìm ra dữ liệu mình đang có**.
+
+**7. Cửa sổ context hẹp và có lỗ hổng thứ tự.** `conversation-context.ts:19` đặt `maxMessages: 6, maxCharacters: 4_000`. Trong `boundedRecent()` dùng `continue` thay vì `break` khi vượt `maxCharacters` — một tin dài bị bỏ qua nhưng vẫn xét tiếp tin **cũ hơn**, làm lịch sử đưa cho LLM **thủng lỗ giữa chừng** mà LLM không biết: nó tưởng hai tin liền kề trong khi thực tế có tin ở giữa đã biến mất. Ngoài ra `formatContext` gắn ISO timestamp đầy đủ (tốn token, khó đọc) và **không có nhãn vai trò**; `advice-composer.ts` còn gán cứng `'Khach'` cho mọi tin không có displayName.
+
+#### KẾT QUẢ `search-first`
+
+Preflight: `rg` ✅ · `npm` 11.16.0 ✅ · `gh` ✅ (đã auth) · skills dir ✅ — không kênh nào bị bỏ qua.
+
+| Nhu cầu | Kết luận | Lý do |
+|---|---|---|
+| Reply/quote Zalo | 🟢 **ADOPT** — zca-js 2.1.2 đã có | `MessageContent.quote` native, zero dependency mới |
+| Prompt caching | 🟢 **ADOPT** — Anthropic native | `cache_control: {type:'ephemeral'}`; phải đảo thứ tự prompt trước |
+| Conversation memory | 🟠 **BUILD** (mỏng, có tham khảo) | `mem0ai` 3.1.6 (Apache-2.0), `@mastra/memory` 1.26.2 (Apache-2.0), `langchain` 1.5.9 (MIT) đều kéo cả framework agent vào — xung đột trực tiếp với **Quyết định #5** (LLM không tính tiền/không quyết chính sách). License đều sạch, vấn đề là kiến trúc. Sliding window + rolling summary ~150 dòng TS, không đáng đánh đổi. |
+| RAG tiếng Việt | 🟡 **Đợt sau** | `pgvector` 0.3.0 (MIT) + Postgres đã có sẵn → đường nâng cấp rõ. Trước mắt nới `rankFaqs` (BM25-ish + mở rộng viết tắt qua glossary đã có). |
+
+Đã kiểm license trước khi đề xuất theo yêu cầu mô hình bán dịch vụ: cả ba framework memory đều Apache-2.0/MIT, **không** dính điều khoản cấm multi-tenant kiểu Dify.
+
+#### KẾ HOẠCH 5 PHA (đã lập, chờ thực thi)
+
+| Pha | Nội dung | Phức tạp | Ước lượng |
+|---|---|---|---|
+| **0** | Gỡ schema drift `direction` (mục ⛔ ở trên) | Thấp | 15 phút |
+| **1** | Bot nhớ được cuộc trò chuyện: migration `senderRole` + index `(chatId, sentAt)`; `ChannelAdapter.sendMessage()` trả `OutboundReceipt`; `OutboundChannelRouter` lưu tin outbound; **xoá** `sameParticipant`; `continue`→`break`; nới cửa sổ 6→16 tin; gắn nhãn `[KHÁCH]`/`[BOT]`/`[SALE]` + thời gian tương đối | **Cao** (chạm 8+ file, đổi chữ ký interface) | 4-6h |
+| **2** | Prompt caching: tách `buildStaticPrompt()` / `buildTurnContext()`, `cache_control` ở block cuối, context chuyển sang `messages`; log `usage.cache_read_input_tokens` để xác minh | Trung bình | 2-3h |
+| **3** | Nâng model + bật composer: thêm `PARSER_MODEL`/`ADVICE_MODEL` vào env (hết hardcode), bake-off 20-30 tin thật theo **Quyết định #3** | Thấp (code) / TB (đo) | 1h + 2h |
+| **4** | Quote/reply đúng tin: **spike đo lệch ID space trước**, lưu raw quote payload, `sendMessage(chatId, text, opts?)`, truyền object `{msg, quote}` | Trung bình | 3-4h |
+| **5** | Retrieval FAQ: BM25-ish, mở rộng viết tắt qua glossary, nới `MAX_FAQ_ANSWERS`, log FAQ trượt cho vòng feedback | Thấp | 2h |
+
+**Tổng 14-19h.** Riêng Pha 0+1 (≈5h) đã giải quyết nguyên nhân gốc lớn nhất.
+
+**Thứ tự phụ thuộc:** `0 → 1 → 2 → 3`; Pha 4 làm song song được (spike chạy độc lập); Pha 5 độc lập hoàn toàn. **Pha 3 phải sau Pha 2** — nâng model trước khi có cache sẽ thổi chi phí lên nhiều lần và làm sai lệch đánh giá bake-off.
+
+#### PATTERN PHẢI BÁM (đã khảo sát, đừng phát minh lại)
+
+| Hạng mục | Nguồn | Pattern |
+|---|---|---|
+| Migration | `prisma/migrations/20260815140000_message_direction/` | Thư mục `YYYYMMDDHHMMSS_snake_name/`, raw SQL, dùng `IF NOT EXISTS` |
+| Seam memory\|prisma | `app.module.ts:159-167` | `useFactory` đọc `loadEnv().PERSISTENCE`, inject `PrismaService` |
+| Dependency tuỳ chọn | `agents/agent-orchestrator.service.ts:88-94` | `@Optional() private readonly x?: T` — thiếu thì degrade, không crash |
+| Fail-safe LLM | `content/advice-composer.ts:104` | Lỗi → `return null` → caller giữ nguyên đường cũ. **Không bao giờ để LLM hỏng làm rớt tin** |
+| Kiểu union bất biến | `messages/messages.repository.ts:24` | `MessageMedia` — hoặc thành công hoặc lỗi, không bao giờ cả hai |
+| Chốt chặn outbound | `channels/outbound-channel.router.ts` | Một điểm duy nhất định tuyến `bot`/`zca`/`mock` — chỗ hợp lý để lưu tin outbound |
+
+#### HAI QUYẾT ĐỊNH CẦN CHỐT TRƯỚC KHI CODE PHA 3
+
+**(a) Chọn model** — đây là quyết định chi phí, không phải kỹ thuật:
+
+| Lựa chọn | Giá (in/out /1M) | Ghi chú |
+|---|---|---|
+| `claude-sonnet-5` | $3/$15 — **đang giảm $2/$10 đến 31/08/2026** | Gần chất lượng Opus trên tác vụ agentic |
+| `claude-opus-5` | $5/$25 | Chất lượng cao nhất |
+| Giữ `claude-haiku-4-5` | $1/$5 | Hiện trạng — chính là nguyên nhân "kém thông minh" |
+
+Phương án lai đề xuất: **parser = Sonnet 5** (trích xuất có ràng buộc, không cần suy luận sâu), **composer = Opus 5** (viết câu cho khách đọc).
+
+**(b) Phạm vi thực thi** — làm tuần tự cả 5 pha, hay ưu tiên Pha 0+1 trước để thấy kết quả sớm rồi đánh giá lại.
+
+#### HAI ĐIỂM CHƯA XÁC MINH — CẦN DỮ LIỆU THẬT
+
+1. **`data.msgId` có bằng `String(quote.globalMsgId)` không** — quyết định Pha 4 làm được hay phải đổi khoá tra cứu sang `(uidFrom, ts)`. Đo bằng một phiên zca ngắn, log cả hai giá trị khi có người reply.
+2. **Tỉ lệ FAQ trượt thực tế do viết tắt** — quyết định mức đầu tư cho Pha 5. Đo bằng cách log các ca `safeHandoff(['matching_faq'])`.
+
+#### RỦI RO ĐÃ NHẬN DIỆN
+
+| Rủi ro | Khả năng | Mức độ | Giảm thiểu |
+|---|---|---|---|
+| `prisma migrate dev` xoá cột `direction` | **Cao** nếu bỏ Pha 0 | 🔴 Mất dữ liệu | Pha 0 là chốt chặn bắt buộc |
+| Đổi chữ ký `ChannelAdapter` làm vỡ nhiều test | Cao | 🟡 | Đổi kiểu trả về trước, giữ tham số cũ; chạy test sau mỗi adapter |
+| ID space zca không map được | Trung bình | 🟠 Chặn Pha 4 | Spike trước khi code; dự phòng `(uidFrom, ts)` |
+| Nâng model tăng chi phí ngoài dự kiến | Trung bình | 🟠 | Pha 2 trước; log token usage; `PARSER_MODEL` env đảo ngược tức thì |
+| Lịch sử dài hơn → lộ nhiều PII sang LLM hơn | Trung bình | 🔴 Pháp lý | Với `PARSER_MODE=deepseek` **cấm tuyệt đối** dữ liệu thật (CLAUDE.md mục Bảo mật). Chỉ mở rộng context khi `PARSER_MODE=claude` |
+| Phiên Claude song song cùng sửa repo | Trung bình | 🟡 | `git status` trước mỗi commit |
+| SDK `@anthropic-ai/sdk@^0.68.0` không hỗ trợ `cache_control` | Thấp | 🟡 | Xác minh ở task đầu Pha 2, nâng SDK nếu cần |
+
+#### LỆNH XÁC MINH
+
+```bash
+cd apps/api && pnpm prisma migrate status && pnpm prisma generate && pnpm typecheck && pnpm test
+```
+
+⚠️ Mốc test trong bàn giao phiên trước là **698 pass / 24 skip** (API). **Re-baseline trước khi bắt đầu** — HEAD đã tiến tới `8e1334e` sau đó.
+
+#### NGHIỆM THU
+
+- [ ] `prisma migrate status` không báo drift
+- [ ] Bot đọc được reply của chính nó trong context (có test)
+- [ ] Lịch sử không thủng lỗ khi có tin dài (có test)
+- [ ] `cache_read_input_tokens > 0` từ tin thứ 2 trong cùng nhóm
+- [ ] Bot reply đúng tin trên nhóm Zalo test
+- [ ] Bake-off cho thấy cải thiện đo được so với Haiku
+- [ ] `pnpm test` xanh, không ca cũ nào đổi trạng thái
+- [ ] Không có tên khách nào rò vào `apps/` hay `packages/` (**Quyết định #6**)
+
+---
+
 ### 1.-1 ▶️▶️ BÀN GIAO PHIÊN 18/08/2026 — ĐỌC MỤC NÀY TRƯỚC MỌI THỨ
 
 **Commit:** `b92bb82` trên `main`, đã push, đã deploy `ultty → dev` (run `32101561978`, 4/4 phép kiểm §5 đạt, cách ly mạng trả đúng một địa chỉ).
