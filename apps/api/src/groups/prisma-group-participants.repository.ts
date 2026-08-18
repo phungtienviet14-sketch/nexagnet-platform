@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type {
   GroupParticipant,
   GroupParticipantProfile,
@@ -8,6 +8,7 @@ import type {
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service.js';
 import {
+  dropAmbiguousGlobalIds,
   GroupParticipantIdentityConflictError,
   mergeClassification,
 } from './participant-identity-merge.js';
@@ -22,6 +23,8 @@ export class GroupParticipantGroupNotFoundError extends Error {}
 
 @Injectable()
 export class PrismaGroupParticipantsRepository extends GroupParticipantsRepository {
+  private readonly logger = new Logger(PrismaGroupParticipantsRepository.name);
+
   constructor(private readonly prisma: PrismaService) {
     super();
   }
@@ -40,8 +43,25 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
         );
       }
 
+      // Zalo co the tra CUNG mot `globalId` cho nhieu nguoi khac nhau. Giu lai thi vong duoi tim
+      // hang theo globalId truoc va thanh vien sau GHI DE len thanh vien truoc -> ca nhom con dung
+      // MOT hang. Bo globalId truoc khi ghi, xem `dropAmbiguousGlobalIds`.
+      const { members, ambiguousGlobalIds } = dropAmbiguousGlobalIds(input.members);
+      if (ambiguousGlobalIds.length > 0) {
+        this.logger.warn(
+          `Zalo tra globalId trung cho nhieu thanh vien khac nhau — bo globalId, dinh danh bang ` +
+            `routing UID: group=${input.groupId} globalIds=${ambiguousGlobalIds.join(',')}`,
+        );
+        // Hang da luu gia tri hong tu lan dong bo TRUOC van con giu no. De nguyen thi lan sau
+        // `stableMatch` van bat trung sang nguoi khac, tuc loi tai dien du snapshot da sach.
+        await transaction.groupParticipant.updateMany({
+          where: { groupId: group.id, globalId: { in: ambiguousGlobalIds } },
+          data: { globalId: null },
+        });
+      }
+
       const syncedAt = new Date(input.syncedAt);
-      for (const member of input.members) {
+      for (const member of members) {
         if (member.globalId) {
           const identitySelect = {
             id: true,
@@ -148,7 +168,7 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
 
       let deactivatedCount = 0;
       if (input.complete) {
-        const observed = input.members.map((member) => member.externalUserId);
+        const observed = members.map((member) => member.externalUserId);
         const result = await transaction.groupParticipant.updateMany({
           where: {
             groupId: group.id,
@@ -159,7 +179,7 @@ export class PrismaGroupParticipantsRepository extends GroupParticipantsReposito
         });
         deactivatedCount = result.count;
       }
-      return { upsertedCount: input.members.length, deactivatedCount };
+      return { upsertedCount: members.length, deactivatedCount };
     });
   }
 

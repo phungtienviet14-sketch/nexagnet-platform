@@ -88,3 +88,50 @@ export function mergeClassification(
       SOURCE_RANK[absorbed.source] > SOURCE_RANK[stable.source] ? absorbed.source : stable.source,
   };
 }
+
+/**
+ * Bo `globalId` khi Zalo tra CUNG mot gia tri cho nhieu NGUOI khac nhau.
+ *
+ * Quan sat tren pilot 18/08/2026: hai nguoi khac nhau o hai nhom khac nhau — "Phung Viet"
+ * (uid 6393514232638846563) va "Hieu" (uid 5502489242612647045) — deu mang
+ * `globalId = GS9MS5FE2V7D9R7EMDKJU3KDQMTOJEO0`. Kieu cua zca-js khai `globalId: string` cho tung
+ * ho so, nhung du lieu that cho thay Zalo KHONG bao dam gia tri nay duy nhat theo nguoi (nghi can:
+ * thanh vien khong phai ban be thi tra ve mot gia tri dung chung).
+ *
+ * Mot gia tri trung nhau giua hai nguoi thi khong con la dinh danh, va giu lai la tu ban vao chan:
+ *
+ *   1. Bang co `@@unique([groupId, globalId])` -> ca nhom chi nhet duoc DUNG MOT hang.
+ *   2. `synchronize` tim hang theo `globalId` TRUOC routing UID, nen thanh vien thu hai tim thay
+ *      hang cua thanh vien thu nhat va GHI DE len no. Dong bo 5 nguoi -> con dung 1 hang, trong
+ *      khi bao cao van noi "5" vi `upsertedCount` dem theo input.
+ *
+ * Nen: `globalId` nao ung voi >1 routing UID trong cung snapshot thi BO khoi tat ca thanh vien
+ * mang no, quay ve dinh danh bang routing UID. Doi lai la mat kha nang giu phan loai khi UID doi
+ * theo tai khoan zca — nhung mot `globalId` dung chung von khong mang thong tin gi de ma giu.
+ *
+ * Dem theo UID PHAN BIET chu khong theo so lan xuat hien: cung mot nguoi lot vao snapshot hai lan
+ * la trung lap vo hai, khong phai xung dot danh tinh.
+ */
+export function dropAmbiguousGlobalIds<T extends { externalUserId: string; globalId?: string }>(
+  members: readonly T[],
+): { members: T[]; ambiguousGlobalIds: string[] } {
+  const uidsByGlobalId = new Map<string, Set<string>>();
+  for (const member of members) {
+    if (!member.globalId) continue;
+    const bucket = uidsByGlobalId.get(member.globalId) ?? new Set<string>();
+    bucket.add(member.externalUserId);
+    uidsByGlobalId.set(member.globalId, bucket);
+  }
+  const ambiguous = new Set(
+    [...uidsByGlobalId].filter(([, uids]) => uids.size > 1).map(([globalId]) => globalId),
+  );
+  if (ambiguous.size === 0) return { members: [...members], ambiguousGlobalIds: [] };
+  return {
+    members: members.map((member) => {
+      if (!member.globalId || !ambiguous.has(member.globalId)) return member;
+      const { globalId: _ambiguous, ...rest } = member;
+      return rest as unknown as T;
+    }),
+    ambiguousGlobalIds: [...ambiguous],
+  };
+}

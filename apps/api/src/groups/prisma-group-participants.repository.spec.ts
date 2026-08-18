@@ -414,3 +414,110 @@ describe('gop danh tinh khi mot nguoi bi tach thanh hai hang', () => {
     );
   });
 });
+
+/**
+ * Hoi quy cho su co pilot 18/08/2026: dong bo xong moi nhom CHI CON MOT thanh vien.
+ *
+ * Zalo tra cung mot `globalId` cho nhieu nguoi khac nhau; vong `synchronize` tim hang theo
+ * globalId truoc routing UID nen nguoi thu hai ghi de len nguoi thu nhat. Nam nguoi vao, mot hang
+ * ra, ma bao cao van noi "5" vi dem theo input.
+ */
+describe('PrismaGroupParticipantsRepository — globalId trung nhau giua nhieu nguoi', () => {
+  const makeTx = () => ({
+    group: { findUnique: vi.fn(async () => ({ id: 'group-db-1' })) },
+    groupParticipant: {
+      findUnique: vi.fn(async () => null),
+      upsert: vi.fn(async () => undefined),
+      create: vi.fn(async () => undefined),
+      update: vi.fn(async () => undefined),
+      delete: vi.fn(async () => undefined),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    },
+  });
+  const asPrisma = (tx: ReturnType<typeof makeTx>) =>
+    ({
+      $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)),
+    }) as unknown as PrismaService;
+
+  const collidingSnapshot = {
+    groupId: 'zca-chat-1',
+    members: [
+      { externalUserId: 'uid-1', displayName: 'Chi Phuong', globalId: 'GS9MS5FE' },
+      { externalUserId: 'uid-2', displayName: 'Anh Hieu', globalId: 'GS9MS5FE' },
+      { externalUserId: 'uid-3', displayName: 'Chi Lan', globalId: 'GS9MS5FE' },
+    ],
+    complete: true,
+    syncedAt: '2026-08-18T03:00:00.000Z',
+  };
+
+  it('giu DU ca ba nguoi thay vi de nguoi sau ghi de len nguoi truoc', async () => {
+    const tx = makeTx();
+    const result = await new PrismaGroupParticipantsRepository(asPrisma(tx)).synchronize(
+      collidingSnapshot,
+    );
+
+    // Bo globalId -> ca ba di duong routing UID, moi nguoi mot hang.
+    expect(tx.groupParticipant.upsert).toHaveBeenCalledTimes(3);
+    for (const externalUserId of ['uid-1', 'uid-2', 'uid-3']) {
+      expect(tx.groupParticipant.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { groupId_externalUserId: { groupId: 'group-db-1', externalUserId } },
+        }),
+      );
+    }
+    // Duong globalId khong duoc dung -> khong hang nao bi tra cuu roi ghi de.
+    expect(tx.groupParticipant.findUnique).not.toHaveBeenCalled();
+    expect(result.upsertedCount).toBe(3);
+  });
+
+  it('xoa luon gia tri hong da luu tu lan dong bo truoc', async () => {
+    const tx = makeTx();
+    await new PrismaGroupParticipantsRepository(asPrisma(tx)).synchronize(collidingSnapshot);
+
+    expect(tx.groupParticipant.updateMany).toHaveBeenCalledWith({
+      where: { groupId: 'group-db-1', globalId: { in: ['GS9MS5FE'] } },
+      data: { globalId: null },
+    });
+  });
+
+  it('khong ai bi danh inactive: ca ba UID deu nam trong danh sach quan sat', async () => {
+    const tx = makeTx();
+    await new PrismaGroupParticipantsRepository(asPrisma(tx)).synchronize(collidingSnapshot);
+
+    expect(tx.groupParticipant.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          externalUserId: { notIn: ['uid-1', 'uid-2', 'uid-3'] },
+        }),
+      }),
+    );
+  });
+
+  it('globalId PHAN BIET van di duong on dinh — khong pha duong binh thuong', async () => {
+    const tx = makeTx();
+    await new PrismaGroupParticipantsRepository(asPrisma(tx)).synchronize({
+      ...collidingSnapshot,
+      members: [
+        { externalUserId: 'uid-1', displayName: 'Chi Phuong', globalId: 'stable-1' },
+        { externalUserId: 'uid-2', displayName: 'Anh Hieu', globalId: 'stable-2' },
+      ],
+    });
+
+    expect(tx.groupParticipant.findUnique).toHaveBeenCalled();
+    expect(tx.groupParticipant.upsert).not.toHaveBeenCalled();
+  });
+
+  it('cung mot nguoi lot vao snapshot hai lan khong bi coi la xung dot', async () => {
+    const tx = makeTx();
+    await new PrismaGroupParticipantsRepository(asPrisma(tx)).synchronize({
+      ...collidingSnapshot,
+      members: [
+        { externalUserId: 'uid-1', displayName: 'Chi Phuong', globalId: 'stable-1' },
+        { externalUserId: 'uid-1', displayName: 'Chi Phuong', globalId: 'stable-1' },
+      ],
+    });
+
+    expect(tx.groupParticipant.findUnique).toHaveBeenCalled();
+    expect(tx.groupParticipant.upsert).not.toHaveBeenCalled();
+  });
+});
