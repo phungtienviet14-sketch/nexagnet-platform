@@ -76,6 +76,20 @@ export const envSchema = z.object({
    */
   ADVICE_COMPOSER: z.enum(['off', 'claude']).default('off'),
   /**
+   * Model cho tung viec. Truoc 18/08/2026 hai gia tri nay hardcode `claude-haiku-4-5` ngay
+   * trong ma nguon — vua khong doi duoc khi chay, vua la nguyen nhan truc tiep cua "AI tra loi
+   * kem thong minh": ca hai cho RA QUYET DINH NGON NGU deu chay model re nhat.
+   *
+   * Chia viec theo dung do kho:
+   *   PARSER_MODEL = trich xuat co rang buoc trong tu dien dong (tool use ep JSON) -> Sonnet 5.
+   *   ADVICE_MODEL = viet cau cho KHACH doc -> Opus 5. Day la chu khach that su nhin thay.
+   *
+   * De bien moi truong (khong phai hang so) chinh la duong dao nguoc tuc thi neu chi phi vuot
+   * du kien: doi mot dong .env va restart, khong can build lai.
+   */
+  PARSER_MODEL: z.string().trim().min(1).default('claude-sonnet-5'),
+  ADVICE_MODEL: z.string().trim().min(1).default('claude-opus-5'),
+  /**
    * Thu muc chua ANH/VIDEO CATALOG SAN PHAM, phuc vu qua route cong khai `/media/catalog/*`.
    *
    * TACH HAN khoi `MEDIA_*` co chu y — hai loai du lieu nay khac han nhau ve ban chat:

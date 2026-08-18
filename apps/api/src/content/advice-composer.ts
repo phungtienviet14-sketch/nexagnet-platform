@@ -48,7 +48,8 @@ export class NoopAdviceComposer extends AdviceComposer {
   }
 }
 
-const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
+/** Chi la luoi an toan cho test dung thang lop nay; runtime LUON truyen `env.ADVICE_MODEL`. */
+const DEFAULT_MODEL = 'claude-opus-5';
 const MAX_TOKENS = 700;
 
 /**

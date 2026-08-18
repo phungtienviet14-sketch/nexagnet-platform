@@ -48,7 +48,7 @@ import { SEED } from '../knowledge/seed.js';
       useFactory: (): AdviceComposer => {
         const env = loadEnv();
         return env.ADVICE_COMPOSER === 'claude' && env.ANTHROPIC_API_KEY
-          ? new ClaudeAdviceComposer(env.ANTHROPIC_API_KEY)
+          ? new ClaudeAdviceComposer(env.ANTHROPIC_API_KEY, env.ADVICE_MODEL)
           : new NoopAdviceComposer();
       },
     },

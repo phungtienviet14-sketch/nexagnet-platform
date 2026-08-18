@@ -15,8 +15,8 @@ export const parserProvider: Provider = {
     const env = loadEnv();
     const logger = new Logger('ParserProvider');
     if (env.PARSER_MODE === 'claude' && env.ANTHROPIC_API_KEY) {
-      logger.log('Parser: ClaudeParser (AI that - Anthropic)');
-      return new ClaudeParser(env.ANTHROPIC_API_KEY);
+      logger.log(`Parser: ClaudeParser (AI that - Anthropic, model=${env.PARSER_MODEL})`);
+      return new ClaudeParser(env.ANTHROPIC_API_KEY, env.PARSER_MODEL);
     }
     if (env.PARSER_MODE === 'claude') {
       throw new Error('ANTHROPIC_API_KEY bat buoc khi PARSER_MODE=claude');

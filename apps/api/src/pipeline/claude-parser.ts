@@ -14,7 +14,8 @@ import {
  * on dinh; tool ep JSON schema. Doc anh qua vision tu imageUrl. Retry 1 lan khi loi tam thoi.
  * NGUYEN TAC: chi trich xuat + phan loai, KHONG tinh tien.
  */
-const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
+/** Chi la luoi an toan cho test dung thang lop nay; runtime LUON truyen `env.PARSER_MODEL`. */
+const DEFAULT_MODEL = 'claude-sonnet-5';
 const MAX_RETRIES = 1;
 const RETRY_DELAY_MS = 400;
 const OK_CONFIDENCE = 0.7;
