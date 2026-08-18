@@ -1,4 +1,5 @@
 import { INTENT_DEFINITIONS } from '@netviet/shared';
+import { formatTranscript } from '../messages/conversation-transcript.js';
 import { tenantPersona, type TenantConfig } from '@netviet/tenant';
 import type { ParserInput } from './order-parser.js';
 
@@ -58,15 +59,17 @@ export function buildSystemPrompt(
     .join('\n');
 }
 
+/**
+ * Lich su hoi thoai co NHAN VAI + thoi gian tuong doi (Pha 1). Ban cu ghi ISO timestamp day du
+ * va khong ghi vai, nen LLM vua ton token vua khong biet cau nao la cua chinh no.
+ */
 function formatContext(input: ParserInput): string {
   const context = input.context;
   if (!context) return '';
+  const now = input.sentAt ?? new Date();
   const lines = [
     context.quotedMessage ? `TIN DUOC REPLY: ${context.quotedMessage.text}` : '',
-    ...context.recentMessages.map(
-      (message, index) =>
-        `LICH SU ${index + 1} [${message.sentAt.toISOString()}] (${message.senderDisplayName ?? message.senderExternalId ?? 'unknown'}): ${message.text}`,
-    ),
+    ...formatTranscript(context, now),
   ].filter(Boolean);
   return lines.length > 0
     ? `CONTEXT CHI DE THAM CHIEU (tin hien tai van la yeu cau chinh):\n${lines.join('\n')}`

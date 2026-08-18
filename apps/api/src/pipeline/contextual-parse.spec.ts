@@ -22,6 +22,7 @@ describe('validateContextualParse', () => {
       quotedMessage: {
         externalMessageId: 'm-1',
         text: '10 ELNI',
+        senderRole: 'customer',
         sentAt: new Date('2026-08-12T02:00:00.000Z'),
       },
       recentMessages: [],
@@ -37,6 +38,7 @@ describe('validateContextualParse', () => {
       quotedMessage: {
         externalMessageId: 'm-1',
         text: '10 ELNI va 3 ELNA',
+        senderRole: 'customer',
         sentAt: new Date('2026-08-12T02:00:00.000Z'),
       },
       recentMessages: [],
@@ -51,6 +53,7 @@ describe('validateContextualParse', () => {
       quotedMessage: {
         externalMessageId: 'm-1',
         text: '10 ELNI',
+        senderRole: 'customer',
         sentAt: new Date('2026-08-12T02:00:00.000Z'),
       },
       recentMessages: [],

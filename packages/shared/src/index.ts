@@ -5,6 +5,8 @@ export {
   PLATFORMS,
   MESSAGE_SOURCES,
   CHAT_TYPES,
+  SENDER_ROLES,
+  MESSAGE_DIRECTIONS,
   replyReferenceSchema,
 } from './channel-message.js';
 export type {
@@ -13,6 +15,8 @@ export type {
   ConversationMessage,
   ConversationParticipant,
   ConversationContext,
+  SenderRole,
+  MessageDirection,
 } from './channel-message.js';
 export {
   INTENTS,

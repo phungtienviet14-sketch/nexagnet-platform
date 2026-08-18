@@ -18,6 +18,8 @@ export interface ParserInput {
   botName?: string;
   /** Quote + mot cua so lich su da duoc gioi han va resolve tu kho tin nhan. */
   context?: ConversationContext;
+  /** Thoi diem tin hien tai — moc de tinh thoi gian tuong doi trong lich su. Thieu: bay gio. */
+  sentAt?: Date;
 }
 
 export interface OrderParser {

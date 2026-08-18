@@ -95,6 +95,7 @@ describe('MockParser', () => {
         quotedMessage: {
           externalMessageId: 'm-original',
           text: '10 ghe felix',
+          senderRole: 'customer',
           sentAt: new Date('2026-08-12T02:00:00.000Z'),
         },
         recentMessages: [],
@@ -115,6 +116,7 @@ describe('MockParser', () => {
         quotedMessage: {
           externalMessageId: 'm-original',
           text: '10 ghe felix va 2 noi chien',
+          senderRole: 'customer',
           sentAt: new Date('2026-08-12T02:00:00.000Z'),
         },
         recentMessages: [],

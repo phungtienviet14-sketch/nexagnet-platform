@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryMessagesRepository } from '../messages/messages.repository.js';
-import { OutboundRecorder } from '../messages/outbound-recorder.js';
-import type { ChannelAdapter } from './channel-adapter.js';
+import { OutboundRecorder, type OutboundReceipt } from '../messages/outbound-recorder.js';
+import { ChannelAdapter } from './channel-adapter.js';
 import { OutboundChannelRouter } from './outbound-channel.router.js';
 
-function adapter(name: string) {
-  return {
-    name,
-    sendMessage: vi.fn(async () => ({})),
-  } as unknown as ChannelAdapter;
+/** Lop that (khong phai object cast) de thua ke `sendContent` mac dinh cua ChannelAdapter. */
+function adapter(name: string, receipt: OutboundReceipt = {}): ChannelAdapter {
+  class TestAdapter extends ChannelAdapter {
+    readonly name = name;
+    readonly sendMessage = vi.fn(async () => receipt);
+  }
+  return new TestAdapter();
 }
 
 describe('OutboundChannelRouter', () => {
@@ -53,10 +55,7 @@ describe('OutboundChannelRouter', () => {
 
   it('id that tu kenh duoc dung lam externalMessageId cua tin outbound', async () => {
     const repository = new InMemoryMessagesRepository();
-    const zca = {
-      name: 'zca',
-      sendMessage: vi.fn(async () => ({ externalMessageId: '123456789' })),
-    } as unknown as ChannelAdapter;
+    const zca = adapter('zca', { externalMessageId: '123456789' });
     const router = new OutboundChannelRouter(
       adapter('bot'),
       zca,

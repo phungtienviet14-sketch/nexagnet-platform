@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Message as PrismaMessage, Prisma } from '@prisma/client';
-import { channelMessageSchema, type ChannelMessage } from '@netviet/shared';
+import { channelMessageSchema, SENDER_ROLES, type ChannelMessage, type SenderRole } from '@netviet/shared';
 import { PrismaService } from '../config/prisma.service.js';
 import {
   MessagesRepository,
   type MessageMedia,
+  type SaveMessageOptions,
   type SaveMessageResult,
 } from './messages.repository.js';
 
@@ -19,7 +20,10 @@ export class PrismaMessagesRepository extends MessagesRepository {
     super();
   }
 
-  async save(message: ChannelMessage): Promise<SaveMessageResult> {
+  async save(
+    message: ChannelMessage,
+    options: SaveMessageOptions = {},
+  ): Promise<SaveMessageResult> {
     try {
       const row = await this.prisma.message.create({
         data: {
@@ -31,6 +35,8 @@ export class PrismaMessagesRepository extends MessagesRepository {
           senderDisplayName: message.senderDisplayName ?? null,
           text: message.text,
           imageUrl: message.imageUrl ?? null,
+          direction: options.direction ?? 'inbound',
+          senderRole: options.senderRole ?? 'customer',
           sentAt: message.sentAt,
           raw: message as unknown as Prisma.InputJsonValue,
         },
@@ -67,13 +73,11 @@ export class PrismaMessagesRepository extends MessagesRepository {
     before: Date,
     excludeExternalMessageId: string,
     limit: number,
-    senderExternalId?: string,
   ): Promise<import('./messages.repository.js').StoredMessage[]> {
     const rows = await this.prisma.message.findMany({
       where: {
         platform,
         chatId,
-        ...(senderExternalId ? { senderExternalId } : {}),
         sentAt: { lte: before },
         NOT: { externalMessageId: excludeExternalMessageId },
       },
@@ -142,9 +146,17 @@ function toStoredMessage(row: PrismaMessage): import('./messages.repository.js')
   return {
     ...base,
     id: row.id,
+    // Huong/vai la COT rieng, khong nam trong `raw` (raw la ban chup tin luc nhan).
+    direction: row.direction === 'outbound' ? 'outbound' : 'inbound',
+    senderRole: toSenderRole(row.senderRole),
     mediaKey: row.mediaKey ?? undefined,
     mediaBytes: row.mediaBytes ?? undefined,
     mediaFetchedAt: row.mediaFetchedAt ?? undefined,
     mediaError: row.mediaError ?? undefined,
   };
+}
+
+/** Cot la TEXT tu do phia DB — ep ve union, gia tri la khong doc duoc thi coi la khach. */
+function toSenderRole(value: string): SenderRole {
+  return (SENDER_ROLES as readonly string[]).includes(value) ? (value as SenderRole) : 'customer';
 }

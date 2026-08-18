@@ -12,6 +12,7 @@ class TestChannel extends ChannelAdapter {
   async sendMessage(chatId: string, text: string) {
     if (this.fail) throw new Error('429');
     this.sent.push({ chatId, text });
+    return {};
   }
 }
 

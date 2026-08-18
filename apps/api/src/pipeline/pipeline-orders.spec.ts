@@ -89,7 +89,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
   it('gui Zalo LOI -> don giu pending_review de duyet lai (khong ket, H1)', async () => {
     class FailingAdapter extends ChannelAdapter {
       readonly name = 'fail';
-      async sendMessage(): Promise<void> {
+      async sendMessage(): Promise<never> {
         throw new Error('rate limit');
       }
     }
@@ -162,9 +162,10 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
         this.releaseGate = resolve;
       });
 
-      async sendMessage(): Promise<void> {
+      async sendMessage(): Promise<Record<string, never>> {
         this.sent += 1;
         await this.gate;
+        return {};
       }
 
       release(): void {

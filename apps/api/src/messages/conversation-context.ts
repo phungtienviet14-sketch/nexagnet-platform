@@ -12,9 +12,15 @@ export interface ConversationContextLimits {
   maxCharacters: number;
 }
 
+/**
+ * 16 tin (Pha 1, truoc do 6). Mot luot chot don thuc te tren Zalo — hoi gia, hoi ship, doi so
+ * luong, xac nhan — thuong dai hon 6 tin, nen cua so cu cat mat chinh doan LLM can de hieu
+ * "cai do", "vay tong bao nhieu". Ngan sach ky tu van la tran cung: 16 tin ngan thi vao het,
+ * vai tin dai thi cat bot, khong bao gio vuot han muc token.
+ */
 export const DEFAULT_CONTEXT_LIMITS: Readonly<ConversationContextLimits> = {
-  maxMessages: 6,
-  maxCharacters: 4_000,
+  maxMessages: 16,
+  maxCharacters: 8_000,
 };
 
 @Injectable()
@@ -40,22 +46,20 @@ export class ConversationContextBuilder {
   ): Promise<ConversationContext> {
     const excludedIds = new Set(excludeExternalMessageIds);
     const quotedMessage = await this.resolveQuote(current);
-    const rows = current.senderExternalId
-      ? await this.messages.findRecent(
-          current.platform,
-          current.externalChatId,
-          current.sentAt,
-          current.externalMessageId,
-          this.limits.maxMessages + 1,
-          current.senderExternalId,
-        )
-      : [];
+    // Lich su cua CA NHOM, khong loc theo nguoi gui: cau tra loi cua bot va tin cua Sale la
+    // ve TRUOC cua mach hoi thoai. Loc chung di chinh la ly do bot lap lai chinh no.
+    const rows = await this.messages.findRecent(
+      current.platform,
+      current.externalChatId,
+      current.sentAt,
+      current.externalMessageId,
+      this.limits.maxMessages + 1,
+    );
     const recentMessages = boundedRecent(
       rows.filter(
         (row) =>
           row.externalMessageId !== quotedMessage?.externalMessageId &&
-          !excludedIds.has(row.externalMessageId) &&
-          sameParticipant(row, current),
+          !excludedIds.has(row.externalMessageId),
       ),
       this.limits,
     );
@@ -84,15 +88,12 @@ export class ConversationContextBuilder {
       imageUrl: reply.imageUrl,
       senderExternalId: reply.senderExternalId,
       senderDisplayName: reply.senderDisplayName,
+      // Quote inline khong resolve duoc ve dong trong DB thi khong biet vai — tin duoc reply
+      // gan nhu luon la tin khach, va doan sai 'bot' se lam LLM tuong minh da noi cau do.
+      senderRole: 'customer',
       sentAt: reply.sentAt ?? current.sentAt,
     };
   }
-}
-
-/** Co sender id thi context chi duoc lay cua dung thanh vien; thieu id thi fail closed, khong tron. */
-function sameParticipant(row: StoredMessage, current: ChannelMessage): boolean {
-  if (!current.senderExternalId) return false;
-  return row.senderExternalId === current.senderExternalId;
 }
 
 function boundedRecent(
@@ -103,7 +104,10 @@ function boundedRecent(
   let usedCharacters = 0;
   for (const row of newestFirst) {
     if (selected.length >= limits.maxMessages) break;
-    if (usedCharacters + row.text.length > limits.maxCharacters) continue;
+    // `break`, KHONG `continue`: het ngan sach thi dung han. Bo qua mot tin dai roi van lay
+    // tin CU HON se tao lich su thung lo — LLM doc thay hai tin canh nhau va tuong chung lien
+    // tiep, trong khi that ra co mot tin da bien mat o giua.
+    if (usedCharacters + row.text.length > limits.maxCharacters) break;
     selected.push(toContextMessage(row));
     usedCharacters += row.text.length;
   }
@@ -117,6 +121,7 @@ function toContextMessage(row: StoredMessage): ConversationMessage {
     imageUrl: row.imageUrl,
     senderExternalId: row.senderExternalId,
     senderDisplayName: row.senderDisplayName,
+    senderRole: row.senderRole,
     sentAt: row.sentAt,
   };
 }

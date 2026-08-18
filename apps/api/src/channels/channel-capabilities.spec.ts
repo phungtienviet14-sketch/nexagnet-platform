@@ -6,7 +6,7 @@ function adapter(capabilities: ChannelAdapter['capabilities']): ChannelAdapter {
   class TestAdapter extends ChannelAdapter {
     readonly name = 'test';
     override readonly capabilities = capabilities;
-    readonly sendMessage = vi.fn(async () => undefined);
+    readonly sendMessage = vi.fn(async () => ({}));
   }
   return new TestAdapter();
 }

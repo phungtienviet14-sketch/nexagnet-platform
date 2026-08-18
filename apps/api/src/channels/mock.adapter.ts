@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { OutboundReceipt } from '../messages/outbound-recorder.js';
 import { ChannelAdapter } from './channel-adapter.js';
 
 export interface SentMessage {
@@ -17,8 +18,10 @@ export class MockAdapter extends ChannelAdapter {
   private readonly logger = new Logger('MockAdapter');
   readonly sent: SentMessage[] = [];
 
-  async sendMessage(chatId: string, text: string): Promise<void> {
+  async sendMessage(chatId: string, text: string): Promise<OutboundReceipt> {
     this.sent.push({ chatId, text });
     this.logger.log(`[MOCK gui -> ${chatId}]\n${text}`);
+    // Mock khong co id that; recorder se tu sinh `out:<uuid>`.
+    return {};
   }
 }

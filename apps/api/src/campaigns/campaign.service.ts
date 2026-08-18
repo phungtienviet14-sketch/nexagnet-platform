@@ -1,9 +1,10 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { loadEnv, type CampaignView, type CreateCampaignInput, type ScheduleCampaignInput } from '@netviet/shared';
 import type { CampaignConfig } from '@netviet/tenant';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { AUTO_LABEL } from '../channels/auto-label.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
+import { OutboundRecorder } from '../messages/outbound-recorder.js';
 import { CAMPAIGN_POLICY } from './campaign.tokens.js';
 import { distributeCampaignDeliveries } from './campaign-schedule.js';
 import { CampaignRepository } from './campaign.repository.js';
@@ -27,6 +28,9 @@ export class CampaignService {
     private readonly audit: AuditLogService,
     @Inject(CAMPAIGN_POLICY) private readonly policy: CampaignConfig,
     @Inject('CAMPAIGN_WORKER_ID') private readonly workerId: string,
+    // Campaign gui THANG qua adapter (khong qua OutboundChannelRouter), nen phai tu ghi lai
+    // tin da gui — neu khong, tin CSKH se vang mat khoi lich su hoi thoai cua nhom.
+    @Optional() private readonly recorder?: OutboundRecorder,
   ) {}
 
   async list(): Promise<CampaignView[]> {
@@ -144,8 +148,10 @@ export class CampaignService {
           // Zalo adapters expose no provider idempotency key, so do not claim exactly-once here.
           // `idempotencyKey` still prevents duplicate planned rows and is ready for a future
           // channel receipt/dedup capability.
-          await this.channel.sendMessage(claim.chatId, claim.content + AUTO_LABEL);
+          const text = claim.content + AUTO_LABEL;
+          const receipt = await this.channel.sendMessage(claim.chatId, text);
           await this.repository.markSent(claim.deliveryId, new Date());
+          await this.recorder?.record({ chatId: claim.chatId, text, receipt });
         } catch (error) {
           const message = safeDeliveryError(error);
           const retryable = claim.attempts < this.policy.retry.maxAttempts;

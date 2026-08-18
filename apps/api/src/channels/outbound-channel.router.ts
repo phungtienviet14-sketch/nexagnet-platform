@@ -1,5 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
-import type { ChannelCapabilities, OutboundContent, ReplyChannel } from '@netviet/shared';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import type { ChannelCapabilities, OutboundContent, ReplyChannel, SenderRole } from '@netviet/shared';
+import { OutboundRecorder, type OutboundReceipt } from '../messages/outbound-recorder.js';
 import { ChannelAdapter } from './channel-adapter.js';
 import {
   BOT_CHANNEL_ADAPTER,
@@ -7,22 +8,32 @@ import {
   ZCA_CHANNEL_ADAPTER,
 } from './channel.tokens.js';
 
-/** Gui phan hoi ve dung kenh da nhan tin, khong suy doan trong hybrid mode. */
+/**
+ * Gui phan hoi ve dung kenh da nhan tin, khong suy doan trong hybrid mode.
+ *
+ * Cung la CHOT CHAN duy nhat luu tin outbound (Pha 1): moi duong gui di qua day, nen day la cho
+ * dung de ghi lai "he thong da noi gi", thay vi rai lenh luu o tung call-site.
+ */
 @Injectable()
 export class OutboundChannelRouter {
   constructor(
     @Inject(BOT_CHANNEL_ADAPTER) private readonly bot: ChannelAdapter,
     @Inject(ZCA_CHANNEL_ADAPTER) private readonly zca: ChannelAdapter,
     @Inject(MOCK_CHANNEL_ADAPTER) private readonly mock: ChannelAdapter,
+    // Optional: thieu recorder thi van gui binh thuong, chi mat lich su (degrade, khong crash).
+    @Optional() private readonly recorder?: OutboundRecorder,
   ) {}
 
   async sendMessage(
     replyChannel: ReplyChannel | undefined,
     chatId: string,
     text: string,
-  ): Promise<void> {
+    senderRole: SenderRole = 'bot',
+  ): Promise<OutboundReceipt> {
     if (!replyChannel) throw new Error('Thieu replyChannel: tu choi doan kenh gui');
-    await this.adapter(replyChannel).sendMessage(chatId, text);
+    const receipt = await this.adapter(replyChannel).sendMessage(chatId, text);
+    await this.remember(chatId, text, receipt, senderRole);
+    return receipt;
   }
 
   capabilities(replyChannel: ReplyChannel): ChannelCapabilities {
@@ -33,13 +44,26 @@ export class OutboundChannelRouter {
     replyChannel: ReplyChannel | undefined,
     chatId: string,
     content: OutboundContent,
-  ): Promise<void> {
+    senderRole: SenderRole = 'bot',
+  ): Promise<OutboundReceipt> {
     if (!replyChannel) throw new Error('Thieu replyChannel: tu choi doan kenh gui');
     const adapter = this.adapter(replyChannel);
     if (content.images?.length && !adapter.capabilities.image) {
       throw new Error(`Kênh ${adapter.name} không hỗ trợ ảnh outbound`);
     }
-    await adapter.sendContent(chatId, content);
+    const receipt = await adapter.sendContent(chatId, content);
+    // Luu phan CHU: anh/link da nam trong text hoac di kem, con mach hoi thoai can van ban.
+    await this.remember(chatId, content.text, receipt, senderRole);
+    return receipt;
+  }
+
+  private async remember(
+    chatId: string,
+    text: string,
+    receipt: OutboundReceipt,
+    senderRole: SenderRole,
+  ): Promise<void> {
+    await this.recorder?.record({ chatId, text, receipt, senderRole });
   }
 
   private adapter(replyChannel: ReplyChannel): ChannelAdapter {

@@ -12,6 +12,7 @@ import {
   type LoginQRCallbackEvent,
   type Message,
 } from 'zca-js';
+import type { OutboundReceipt } from '../messages/outbound-recorder.js';
 
 export type ZcaMessageHandler = (message: Message) => void | Promise<void>;
 
@@ -421,10 +422,20 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async sendMessage(threadId: string, text: string, type?: ThreadType): Promise<void> {
+  /**
+   * Tra ve id tin da gui (Pha 1). zca-js tra `{ message: { msgId: number } }`; day CUNG khong
+   * gian id voi `TMessage.msgId` cua tin inbound (chi khac kieu: number vs string), nen tin
+   * outbound luu trong DB tra cuu duoc bang cung mot khoa.
+   */
+  async sendMessage(
+    threadId: string,
+    text: string,
+    type?: ThreadType,
+  ): Promise<OutboundReceipt> {
     if (!this.api) throw new Error('zca-js chua dang nhap - khong the gui tin');
     const resolvedType = type ?? this.threadTypes.get(threadId) ?? ThreadType.Group;
-    await this.api.sendMessage(text, threadId, resolvedType);
+    const result = await this.api.sendMessage(text, threadId, resolvedType);
+    return toReceipt(result);
   }
 
   /**
@@ -439,11 +450,11 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     text: string,
     images: readonly ZaloOutboundImage[],
     type?: ThreadType,
-  ): Promise<void> {
+  ): Promise<OutboundReceipt> {
     if (!this.api) throw new Error('zca-js chua dang nhap - khong the gui tin');
     if (!images.length) return this.sendMessage(threadId, text, type);
     const resolvedType = type ?? this.threadTypes.get(threadId) ?? ThreadType.Group;
-    await this.api.sendMessage(
+    const result = await this.api.sendMessage(
       {
         msg: text,
         attachments: images.map((image) => ({
@@ -459,6 +470,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       threadId,
       resolvedType,
     );
+    return toReceipt(result);
   }
 
   private connect(allowQr: boolean, replaceSavedCredential = false): Promise<void> {
@@ -746,4 +758,16 @@ function normalizeExternalId(value: unknown): string | undefined {
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * zca-js tra `{ message: { msgId: number } | null, attachment: [...] }`. `msgId` la so; ta luu
+ * dang chuoi cho khop `TMessage.msgId` cua tin inbound (cung gia tri, khac kieu serialize).
+ * Khong co id thi tra `{}` — recorder tu sinh id noi bo, khong duoc lam rot viec luu tin.
+ */
+function toReceipt(result: { message: { msgId: number } | null }): OutboundReceipt {
+  const msgId = result?.message?.msgId;
+  return typeof msgId === 'number' && Number.isFinite(msgId)
+    ? { externalMessageId: String(msgId) }
+    : {};
 }

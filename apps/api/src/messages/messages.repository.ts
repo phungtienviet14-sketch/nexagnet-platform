@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { ChannelMessage } from '@netviet/shared';
+import type { ChannelMessage, MessageDirection, SenderRole } from '@netviet/shared';
 
 /** Ket qua luu tin: id dong trong DB + co phai tin trung (da luu truoc do) khong. */
 export interface SaveMessageResult {
@@ -22,9 +22,20 @@ export type MessageMedia =
   | { key: string; bytes: number; fetchedAt: Date; error?: undefined }
   | { key?: undefined; bytes?: undefined; fetchedAt?: undefined; error: string };
 
-/** Dong tin da luu, kem ket qua tai anh (neu co). */
+/**
+ * Sieu du lieu khong den tu kenh ma tu CHO GOI: tin nay do ai gui va gui theo huong nao.
+ * Mac dinh la tin khach gui vao — moi call-site cu giu nguyen hanh vi.
+ */
+export interface SaveMessageOptions {
+  direction?: MessageDirection;
+  senderRole?: SenderRole;
+}
+
+/** Dong tin da luu, kem huong/vai va ket qua tai anh (neu co). */
 export type StoredMessage = ChannelMessage & {
   id: string;
+  direction: MessageDirection;
+  senderRole: SenderRole;
   mediaKey?: string;
   mediaBytes?: number;
   mediaFetchedAt?: Date;
@@ -32,7 +43,10 @@ export type StoredMessage = ChannelMessage & {
 };
 
 export abstract class MessagesRepository {
-  abstract save(message: ChannelMessage): Promise<SaveMessageResult>;
+  abstract save(
+    message: ChannelMessage,
+    options?: SaveMessageOptions,
+  ): Promise<SaveMessageResult>;
   async findByExternalMessage(
     platform: ChannelMessage['platform'],
     externalMessageId: string,
@@ -41,20 +55,22 @@ export abstract class MessagesRepository {
     void externalMessageId;
     return null;
   }
+  /**
+   * Cua so hoi thoai cua CA NHOM (khong loc theo nguoi gui — Pha 1). Loc theo nguoi gui la
+   * nguyen nhan goc lam bot khong doc duoc cau tra loi cua chinh no lan tin cua Sale.
+   */
   async findRecent(
     platform: ChannelMessage['platform'],
     chatId: string,
     before: Date,
     excludeExternalMessageId: string,
     limit: number,
-    senderExternalId?: string,
   ): Promise<StoredMessage[]> {
     void platform;
     void chatId;
     void before;
     void excludeExternalMessageId;
     void limit;
-    void senderExternalId;
     return [];
   }
   /** Noi don voi tin goc (FK orders.messageId). Order khong ton tai -> bo qua, khong loi. */
@@ -71,12 +87,20 @@ export class InMemoryMessagesRepository extends MessagesRepository {
   // Key trung voi unique DB: `${platform}:${externalMessageId}`
   private readonly store = new Map<string, StoredMessage>();
 
-  async save(message: ChannelMessage): Promise<SaveMessageResult> {
+  async save(
+    message: ChannelMessage,
+    options: SaveMessageOptions = {},
+  ): Promise<SaveMessageResult> {
     const key = `${message.platform}:${message.externalMessageId}`;
     const existing = this.store.get(key);
     if (existing) return { id: existing.id, duplicate: true };
     const id = randomUUID();
-    this.store.set(key, { ...message, id });
+    this.store.set(key, {
+      ...message,
+      id,
+      direction: options.direction ?? 'inbound',
+      senderRole: options.senderRole ?? 'customer',
+    });
     return { id, duplicate: false };
   }
 
@@ -93,7 +117,6 @@ export class InMemoryMessagesRepository extends MessagesRepository {
     before: Date,
     excludeExternalMessageId: string,
     limit: number,
-    senderExternalId?: string,
   ): Promise<StoredMessage[]> {
     return [...this.store.values()]
       .filter(
@@ -101,7 +124,6 @@ export class InMemoryMessagesRepository extends MessagesRepository {
           row.platform === platform &&
           row.externalChatId === chatId &&
           row.externalMessageId !== excludeExternalMessageId &&
-          (!senderExternalId || row.senderExternalId === senderExternalId) &&
           row.sentAt.getTime() <= before.getTime(),
       )
       .sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime())

@@ -7,8 +7,23 @@ import { z } from 'zod';
  */
 export const PLATFORMS = ['zalo'] as const;
 // Nguon tin: dan tay (copilot) | webhook/poll Bot Platform | listener zca-js (userbot ca nhan).
-export const MESSAGE_SOURCES = ['copilot_paste', 'bot_webhook', 'zca_listener'] as const;
+// `system_outbound` = tin CHINH HE THONG gui ra nhom. Truoc Pha 1 (18/08/2026) tin outbound khong
+// bao gio duoc luu, nen bot khong doc duoc cau tra loi cua chinh minh va lap lai chinh no.
+export const MESSAGE_SOURCES = [
+  'copilot_paste',
+  'bot_webhook',
+  'zca_listener',
+  'system_outbound',
+] as const;
 export const CHAT_TYPES = ['private', 'group'] as const;
+
+/** Ai noi cau nay. Quyet dinh nhan hien thi cho LLM trong lich su hoi thoai. */
+export const SENDER_ROLES = ['customer', 'bot', 'sale'] as const;
+export type SenderRole = (typeof SENDER_ROLES)[number];
+
+/** Huong tin so voi he thong. Suy ra duoc tu senderRole nhung luu rieng de query truc tiep. */
+export const MESSAGE_DIRECTIONS = ['inbound', 'outbound'] as const;
+export type MessageDirection = (typeof MESSAGE_DIRECTIONS)[number];
 
 export const replyReferenceSchema = z
   .object({
@@ -66,6 +81,8 @@ export interface ConversationMessage {
   imageUrl?: string;
   senderExternalId?: string;
   senderDisplayName?: string;
+  /** BAT BUOC: khong co nhan vai thi LLM khong phan biet duoc cau nao cua bot, cau nao cua khach. */
+  senderRole: SenderRole;
   sentAt: Date;
 }
 

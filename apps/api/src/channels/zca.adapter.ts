@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { OutboundContent } from '@netviet/shared';
+import type { OutboundReceipt } from '../messages/outbound-recorder.js';
 import { ChannelAdapter } from './channel-adapter.js';
 import type { ZaloOutboundImage, ZaloUserClient } from './zalo-user.client.js';
 
@@ -27,8 +28,8 @@ export class ZcaAdapter extends ChannelAdapter {
     super();
   }
 
-  async sendMessage(chatId: string, text: string): Promise<void> {
-    await this.client.sendMessage(chatId, text);
+  async sendMessage(chatId: string, text: string): Promise<OutboundReceipt> {
+    return this.client.sendMessage(chatId, text);
   }
 
   /**
@@ -37,7 +38,10 @@ export class ZcaAdapter extends ChannelAdapter {
    * Anh tai duoc bao nhieu thi gui bay nhieu: mot URL hong khong duoc lam rot ca cau tra loi tu
    * van. Hong het thi lui ve gui text kem link anh — khach van co thu de bam.
    */
-  override async sendContent(chatId: string, content: OutboundContent): Promise<void> {
+  override async sendContent(
+    chatId: string,
+    content: OutboundContent,
+  ): Promise<OutboundReceipt> {
     const links = content.links?.map((link) => `${link.label}: ${link.url}`) ?? [];
     const text = [content.text, ...links].join('\n');
     const urls = content.images?.map((image) => image.url) ?? [];
@@ -52,7 +56,7 @@ export class ZcaAdapter extends ChannelAdapter {
       this.logger.warn('Khong tai duoc anh nao — gui text kem link anh.');
       return this.sendMessage(chatId, [text, ...urls.map((url) => `Ảnh: ${url}`)].join('\n'));
     }
-    await this.client.sendMessageWithImages(chatId, text, images);
+    return this.client.sendMessageWithImages(chatId, text, images);
   }
 
   private async download(url: string): Promise<ZaloOutboundImage | null> {

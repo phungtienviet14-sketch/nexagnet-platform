@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Logger } from '@nestjs/common';
 import type { ConversationContext } from '@netviet/shared';
+import { formatTranscript } from '../messages/conversation-transcript.js';
 
 /**
  * Tang soan van ban tu van (Uu tien 2 — bao cao chan doan 15/08/2026).
@@ -29,6 +30,8 @@ export interface AdviceComposeInput {
   readonly snippets: readonly AdviceSnippet[];
   /** Lich su hoi thoai (neu co) — de tra loi tiep mach, khong lap lai dieu da noi. */
   readonly context?: ConversationContext;
+  /** Moc thoi gian de tinh thoi gian tuong doi trong lich su. Thieu thi lay bay gio. */
+  readonly now?: Date;
 }
 
 export abstract class AdviceComposer {
@@ -123,7 +126,7 @@ export function buildComposerSystemPrompt(input: AdviceComposeInput): string {
         : `[${index + 1}] ${snippet.body}`,
     )
     .join('\n');
-  const history = formatHistory(input.context);
+  const history = formatHistory(input.context, input.now ?? new Date());
   return [
     'Ban la nhan vien tu van ban hang, dang tra loi trong nhom Zalo cua dai ly/khach hang.',
     'Nhiem vu: doc dung dieu khach vua hoi, roi tra loi bang giong noi tu nhien cua nguoi ban hang — KHONG dan nguyen van tai lieu.',
@@ -147,13 +150,15 @@ export function buildComposerSystemPrompt(input: AdviceComposeInput): string {
     .join('\n');
 }
 
-function formatHistory(context: ConversationContext | undefined): string {
+/**
+ * Pha 1: dung chung `formatTranscript` voi parser. Ban cu gan cung 'Khach' cho moi dong khong
+ * co displayName — ke ca dong do CHINH BOT viet — nen LLM khong bao gio biet minh da noi gi.
+ */
+function formatHistory(context: ConversationContext | undefined, now: Date): string {
   if (!context) return '';
   const lines = [
     context.quotedMessage ? `Khach reply tin: ${context.quotedMessage.text}` : '',
-    ...context.recentMessages.map(
-      (message) => `${message.senderDisplayName ?? 'Khach'}: ${message.text}`,
-    ),
+    ...formatTranscript(context, now),
   ].filter(Boolean);
   return lines.length ? `\nLICH SU HOI THOAI GAN DAY:\n${lines.join('\n')}` : '';
 }

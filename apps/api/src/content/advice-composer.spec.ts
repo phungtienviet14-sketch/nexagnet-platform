@@ -43,12 +43,14 @@ describe('buildComposerSystemPrompt', () => {
   it('dua lich su hoi thoai vao prompt de tra loi tiep mach', () => {
     const prompt = buildComposerSystemPrompt({
       ...INPUT,
+      now: new Date('2026-08-15T03:02:00.000Z'),
       context: {
         recentMessages: [
           {
             externalMessageId: 'm1',
             text: 'shop con hut am nao khong',
             senderDisplayName: 'Chị Lan',
+            senderRole: 'customer',
             sentAt: new Date('2026-08-15T03:00:00.000Z'),
           },
         ],
@@ -56,7 +58,7 @@ describe('buildComposerSystemPrompt', () => {
       },
     });
     expect(prompt).toContain('LICH SU HOI THOAI GAN DAY');
-    expect(prompt).toContain('Chị Lan: shop con hut am nao khong');
+    expect(prompt).toContain('[KHACH Chị Lan] (2 phut truoc): shop con hut am nao khong');
   });
 
   it('khong co lich su thi khong chen khoi rong', () => {

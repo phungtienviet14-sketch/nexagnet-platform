@@ -45,6 +45,7 @@ import { CatalogMediaController } from './media/catalog-media.controller.js';
 import { InMemoryMessagesRepository, MessagesRepository } from './messages/messages.repository.js';
 import { PrismaMessagesRepository } from './messages/prisma-messages.repository.js';
 import { ConversationContextBuilder } from './messages/conversation-context.js';
+import { OutboundRecorder } from './messages/outbound-recorder.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
 import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
 import { PrismaOrdersRepository } from './orders/prisma-orders.repository.js';
@@ -165,6 +166,8 @@ import { GroupIdentityService } from './groups/group-identity.service.js';
           : new InMemoryMessagesRepository(),
       inject: [PrismaService],
     },
+    // Ghi lai tin HE THONG DA GUI (Pha 1) — de vong sau bot doc duoc chinh cau tra loi cua no.
+    OutboundRecorder,
     // Cong ERP chon theo goi khach (G1-12) — nhan khong biet ten nha cung cap nao.
     erpProvider,
     // Kho luu anh + worker tai anh (Dot A' Task 2). Mac dinh MEDIA_STORE=none -> khong I/O gi,

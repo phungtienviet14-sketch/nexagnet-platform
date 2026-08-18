@@ -112,6 +112,7 @@ describe('G1-13 — E2E tin Zalo -> DB -> parser -> rules -> outbound (DI that)'
     client.isGroupAllowed = () => true;
     client.sendMessage = async (chatId: string, text: string) => {
       sent.push({ chatId, text });
+      return {};
     };
     transport = fake;
 

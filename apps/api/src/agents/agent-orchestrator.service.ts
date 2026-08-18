@@ -76,6 +76,11 @@ export function replyChannelForSource(source: ChannelMessage['source']): ReplyCh
       return 'zca';
     case 'copilot_paste':
       return 'mock';
+    case 'system_outbound':
+      // Tin HE THONG DA GUI khong bao gio di nguoc vao duong tra loi. Toi day la loi lap trinh,
+      // khong phai tinh huong runtime — nem ro thay vi doan bua mot kenh (cung tinh than voi
+      // `Thieu replyChannel: tu choi doan kenh gui` trong OutboundChannelRouter).
+      throw new Error('system_outbound khong phai tin den: khong co kenh tra loi');
   }
 }
 
@@ -112,7 +117,8 @@ export class AgentOrchestrator {
     dispatch: DispatchResult,
     intent: Intent,
     customerText: string,
-    context?: ConversationContext,
+    context: ConversationContext | undefined,
+    now: Date,
   ): Promise<{ dispatch: DispatchResult; composed: boolean }> {
     const advice = dispatch.outbound as ProductAdviceResult | undefined;
     if (intent !== 'hoi_san_pham' || !this.composer || !advice?.snippets?.length) {
@@ -123,6 +129,7 @@ export class AgentOrchestrator {
       productNames: advice.productNames ?? [],
       snippets: advice.snippets,
       context,
+      now,
     });
     if (!text) return { dispatch, composed: false };
     return {
@@ -192,6 +199,9 @@ export class AgentOrchestrator {
       dealerNameRaw: resolved.dealer?.name,
       botName,
       context: opts?.conversationContext,
+      // Moc de tinh thoi gian tuong doi trong lich su ("5 phut truoc"). Lay tu tin, khong
+      // lay dong ho may chu: tin co the vao muon, va rerun phai cho ra cung mot prompt.
+      sentAt: message.sentAt,
     });
     const parseResult = validateContextualParse(
       rawParseResult,
@@ -211,6 +221,7 @@ export class AgentOrchestrator {
       intent,
       message.text,
       opts?.conversationContext,
+      message.sentAt,
     );
     if (composed) {
       const advisor = dispatch.roles.get('product_advisor');

@@ -32,10 +32,13 @@ describe('buildSystemPrompt', () => {
   it('dua quote va lich su bounded vao prompt kem quy tac khong doan', () => {
     const p = buildSystemPrompt({
       ...input,
+      // Moc thoi gian co dinh -> "5 phut truoc" on dinh, test khong phu thuoc dong ho.
+      sentAt: new Date('2026-08-12T02:06:00.000Z'),
       context: {
         quotedMessage: {
           externalMessageId: 'm-1',
           text: '10 Ghế Felix',
+          senderRole: 'customer',
           sentAt: new Date('2026-08-12T02:00:00.000Z'),
         },
         recentMessages: [
@@ -43,6 +46,7 @@ describe('buildSystemPrompt', () => {
             externalMessageId: 'm-2',
             text: 'giao ve TN',
             senderDisplayName: 'Meta HN',
+            senderRole: 'customer',
             sentAt: new Date('2026-08-12T02:01:00.000Z'),
           },
         ],
@@ -51,7 +55,7 @@ describe('buildSystemPrompt', () => {
     });
 
     expect(p).toContain('TIN DUOC REPLY: 10 Ghế Felix');
-    expect(p).toContain('LICH SU 1 [2026-08-12T02:01:00.000Z] (Meta HN): giao ve TN');
+    expect(p).toContain('[KHACH Meta HN] (5 phut truoc): giao ve TN');
     expect(p).toContain('Context mo ho');
   });
 });
