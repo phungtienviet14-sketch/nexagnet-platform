@@ -21,11 +21,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('PrismaKnowledgeRepository (Po
     expect(snap.dealers.length).toBeGreaterThanOrEqual(3);
     expect(snap.glossary.length).toBeGreaterThan(0);
 
-    // Seed chi co ky T7/2026, va `vitest.setup.ts` ghim PRICE_CURRENT_MONTH='2026-07' de bo test
-    // chay tren dung ky do — nen o day ky gia PHAI hien ra. Truoc 17/08/2026 cho nay khang dinh
-    // `toBeNull()` voi ly le "runtime dang la T8": ly le do dung khi test chay theo dong ho that,
-    // nhung tu khi co bien ghim thi no chi con dung cho toi het thang 7 va sau do do vinh vien.
-    expect(snap.pricePeriod?.validMonth).toBe('2026-07');
+    // Seed co ky T8/2026, va `vitest.setup.ts` ghim PRICE_CURRENT_MONTH='2026-08' de bo test
+    // chay tren dung ky do — nen o day ky gia PHAI hien ra.
+    expect(snap.pricePeriod?.validMonth).toBe('2026-08');
     expect(snap.prices.length).toBeGreaterThan(0);
 
     // Seed khong tao Group tu routing ID cua mot tai khoan Zalo. Neu runtime da phat hien/map nhom,
@@ -34,12 +32,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('PrismaKnowledgeRepository (Po
   });
 
   // Rang buoc nghiep vu (CLAUDE.md #10): thang khong co bang gia thi GIU TRANG THAI THIEU, tuyet doi
-  // khong muon gia thang truoc. Khang dinh nay truoc day chi dung NHO dong ho that da sang thang 8 —
-  // tuc la no se tu tat khi seed duoc cap nhat sang ky moi. O day ep thang bang bien de no kiem dung
-  // thu no noi la kiem, khong phu thuoc hom nay la ngay nao.
+  // khong muon gia thang truoc.
   it('thang khong co ky gia active thi fail closed, khong muon gia ky truoc', async () => {
     const pinned = process.env.PRICE_CURRENT_MONTH;
-    process.env.PRICE_CURRENT_MONTH = '2026-08';
+    process.env.PRICE_CURRENT_MONTH = '2026-09';
     try {
       const snap = await repo.loadSnapshot();
       expect(snap.pricePeriod).toBeNull();
