@@ -63,8 +63,17 @@ export const envSchema = z.object({
   GOLDEN_EVAL_REPORT_PATH: z.string().trim().min(1).optional(),
   ZALO_BOT_TOKEN: z.string().optional(),
   ZALO_BOT_WEBHOOK_SECRET: z.string().optional(),
-  // Che do parser: mock | claude | deepseek truc tiep | flowise (Agentflow V2 noi bo).
-  PARSER_MODE: z.enum(['mock', 'claude', 'deepseek', 'flowise']).default('mock'),
+  /**
+   * Che do parser: claude | deepseek truc tiep | flowise (Agentflow V2 noi bo).
+   *
+   * KHONG con `mock` (18/08/2026). Truoc do `mock` vua la mot lua chon hop le vua la MAC DINH,
+   * nen mot stack quen dat bien nay se chay parser GIA (khop mau, khong goi LLM) tren du lieu
+   * that: moi don deu sai, khong log loi, khong ai biet. Parser gia gio nam trong `__tests__/`
+   * va chi den duoc bang cach test tu dung no.
+   *
+   * Mac dinh `deepseek` de khop cau hinh pilot; van phai co DEEPSEEK_API_KEY (fail-fast duoi).
+   */
+  PARSER_MODE: z.enum(['claude', 'deepseek', 'flowise']).default('deepseek'),
   /**
    * Ban soan tu van (AdviceComposer): LLM viet lai cau tra loi tu van tu cac manh FAQ DA DUYET,
    * thay cho viec noi nguyen van. `off` = giu ban noi FAQ nhu truoc 15/08/2026.
@@ -89,6 +98,8 @@ export const envSchema = z.object({
    */
   PARSER_MODEL: z.string().trim().min(1).default('claude-sonnet-5'),
   ADVICE_MODEL: z.string().trim().min(1).default('claude-opus-5'),
+  /** Model khi PARSER_MODE=deepseek. Xem ghi chu nang luc trong deepseek-parser.ts. */
+  DEEPSEEK_MODEL: z.string().trim().min(1).default('deepseek-v4-flash'),
   /**
    * Thu muc chua ANH/VIDEO CATALOG SAN PHAM, phuc vu qua route cong khai `/media/catalog/*`.
    *
@@ -250,13 +261,21 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   if (data.PARSER_MODE === 'claude' && !data.ANTHROPIC_API_KEY) {
     throw new EnvValidationError([
-      'ANTHROPIC_API_KEY: BAT BUOC khi PARSER_MODE=claude; khong duoc roi ve MockParser',
+      'ANTHROPIC_API_KEY: BAT BUOC khi PARSER_MODE=claude; khong duoc roi ve parser gia',
+    ]);
+  }
+  // Cung ly do voi nhanh claude o tren: khong co khoa thi parser.provider am tham tra ve
+  // MockParser — production se chay parser TAT DINH ma khong ai biet, moi don deu sai.
+  // Truoc 18/08/2026 nhanh nay thieu; no thanh ra dang khi deepseek tro thanh parser mac dinh.
+  if (data.PARSER_MODE === 'deepseek' && !data.DEEPSEEK_API_KEY) {
+    throw new EnvValidationError([
+      'DEEPSEEK_API_KEY: BAT BUOC khi PARSER_MODE=deepseek; khong duoc roi ve parser gia',
     ]);
   }
   if (data.DATA_CLASSIFICATION === 'customer') {
     const customerReadinessIssues = [
       data.PARSER_MODE !== 'claude'
-        ? 'PARSER_MODE: du lieu khach that bat buoc dung claude (LLM duoc phe duyet), khong dung mock/deepseek/flowise'
+        ? 'PARSER_MODE: du lieu khach that bat buoc dung claude (LLM duoc phe duyet), khong dung deepseek/flowise'
         : null,
       !data.ANTHROPIC_API_KEY
         ? 'ANTHROPIC_API_KEY: BAT BUOC khi DATA_CLASSIFICATION=customer'

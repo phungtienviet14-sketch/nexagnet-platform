@@ -25,7 +25,11 @@ import { join } from 'node:path';
 process.env.PERSISTENCE = 'memory';
 process.env.CHANNEL_MODE = 'zca';
 process.env.AUTO_SEND = 'on';
-process.env.PARSER_MODE = 'mock';
+// Parser TAT DINH cho e2e: khong con qua PARSER_MODE (gia tri `mock` da bi go 18/08/2026),
+// ma bang cach ghi de provider ORDER_PARSER ben duoi — fake thuoc ve test, khong thuoc
+// ve cau hinh runtime.
+process.env.PARSER_MODE = 'deepseek';
+process.env.DEEPSEEK_API_KEY = 'sk-test-khong-goi-that';
 process.env.STREAM_STEP_DELAY_MS = '0';
 process.env.TENANT ??= 'ultty';
 // Cach ly tuyet doi khoi phien Zalo that cua may dev: tro credential/allowlist vao thu muc tam
@@ -36,9 +40,20 @@ process.env.ZALO_ALLOWED_GROUPS_PATH = join(SECRETS_SANDBOX, 'zalo-allowed-group
 
 import type { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ThreadType, type Message } from 'zca-js';
 import { AppModule } from '../app.module.js';
+
+// Parser TAT DINH cho e2e. Thay o TANG PROVIDER chu khong qua PARSER_MODE: gia tri `mock`
+// da bi go khoi cau hinh (18/08/2026) vi production tung roi vao no ma khong ai biet.
+// Fake gio thuoc ve test, va e2e tu chon no — phan DI con lai van la that.
+vi.mock('../pipeline/parser.provider.js', async () => {
+  const [{ FakeParser }, { ORDER_PARSER }] = await Promise.all([
+    import('../pipeline/__tests__/fake-parser.js'),
+    import('../pipeline/parser.tokens.js'),
+  ]);
+  return { parserProvider: { provide: ORDER_PARSER, useFactory: () => new FakeParser() } };
+});
 import { BotIdentityService } from '../channels/bot-identity.service.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { ZaloUserClient, type ZcaMessageHandler } from '../channels/zalo-user.client.js';

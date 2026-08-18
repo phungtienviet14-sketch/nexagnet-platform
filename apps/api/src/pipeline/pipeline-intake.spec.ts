@@ -14,7 +14,7 @@ import { ConversationContextBuilder } from '../messages/conversation-context.js'
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import type { OrdersService } from '../orders/orders.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
-import { MockParser } from './mock-parser.js';
+import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
 const BOT_NAME = 'Bot ultty AI orders';
@@ -47,7 +47,7 @@ function build(options: {
   const knowledge = new KnowledgeService();
   const orders = new InMemoryOrdersRepository();
   const messages = options.messages ?? new InMemoryMessagesRepository();
-  const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, orders);
+  const orchestrator = new AgentOrchestrator(new FakeParser(), knowledge, orders);
   const pipeline = new PipelineService(
     orchestrator,
     options.ordersService,

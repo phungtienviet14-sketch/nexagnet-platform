@@ -14,7 +14,7 @@ Console demo: 6 agent AI xử lý đơn hàng Zalo cho **Công ty Cổ Phần U 
 
 Bản demo này chạy **hoàn toàn offline** — không cần dịch vụ ngoài, không cần nhập secret nào:
 
-- `PARSER_MODE=mock` — parser tất định (không gọi LLM).
+- `PARSER_MODE=deepseek` — parser thật; Space cần `DEEPSEEK_API_KEY` trong Secrets. (`mock` đã bị gỡ khỏi cấu hình 18/08/2026.)
 - `CHANNEL_MODE=mock` — không kết nối Zalo; bơm tin giả qua nút **Giả lập tin**.
 - `PERSISTENCE=memory` — không cần PostgreSQL/Redis.
 

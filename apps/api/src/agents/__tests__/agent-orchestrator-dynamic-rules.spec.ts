@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChannelMessage } from '@netviet/shared';
 import { KnowledgeService } from '../../knowledge/knowledge.service.js';
 import { InMemoryOrdersRepository } from '../../orders/orders.repository.js';
-import { MockParser } from '../../pipeline/mock-parser.js';
+import { FakeParser } from '../../pipeline/__tests__/fake-parser.js';
 import { createDefaultRuleConfigPayload } from '../../rule-config/rule-config.defaults.js';
 import { InMemoryRuleConfigRepository } from '../../rule-config/rule-config.repository.js';
 import { RuleConfigService } from '../../rule-config/rule-config.service.js';
@@ -32,7 +32,7 @@ describe('AgentOrchestrator rules versioned', () => {
       'operator',
     );
     const orchestrator = new AgentOrchestrator(
-      new MockParser(),
+      new FakeParser(),
       knowledge,
       new InMemoryOrdersRepository(),
       undefined,

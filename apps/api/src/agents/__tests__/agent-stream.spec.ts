@@ -6,7 +6,7 @@ import type { AgentStreamEvent, ChannelMessage } from '@netviet/shared';
 import { KnowledgeService } from '../../knowledge/knowledge.service.js';
 import { SEED } from '../../knowledge/seed.js';
 import { InMemoryOrdersRepository } from '../../orders/orders.repository.js';
-import { MockParser } from '../../pipeline/mock-parser.js';
+import { FakeParser } from '../../pipeline/__tests__/fake-parser.js';
 import { AgentEventsService } from '../agent-events.service.js';
 import { AgentOrchestrator } from '../agent-orchestrator.service.js';
 
@@ -35,7 +35,7 @@ describe('AgentOrchestrator — streaming su kien', () => {
     const events = new AgentEventsService();
     const { list, stop } = capture(events);
     const orch = new AgentOrchestrator(
-      new MockParser(),
+      new FakeParser(),
       new KnowledgeService(),
       new InMemoryOrdersRepository(),
       events,
@@ -82,7 +82,7 @@ describe('AgentOrchestrator — streaming su kien', () => {
   it('khong co subscriber → van tra ve OrderView day du (backward-compatible)', async () => {
     const events = new AgentEventsService(); // khong subscribe
     const orch = new AgentOrchestrator(
-      new MockParser(),
+      new FakeParser(),
       new KnowledgeService(),
       new InMemoryOrdersRepository(),
       events,
@@ -95,7 +95,7 @@ describe('AgentOrchestrator — streaming su kien', () => {
   it('rerun voi orderId → GIU nguyen id, KHONG tao don moi', async () => {
     const events = new AgentEventsService();
     const repo = new InMemoryOrdersRepository();
-    const orch = new AgentOrchestrator(new MockParser(), new KnowledgeService(), repo, events);
+    const orch = new AgentOrchestrator(new FakeParser(), new KnowledgeService(), repo, events);
 
     const first = await orch.run(msg('@Bot ultty AI orders 3 noi chien'));
     const rerun = await orch.run(msg('@Bot ultty AI orders 3 noi chien'), undefined, {

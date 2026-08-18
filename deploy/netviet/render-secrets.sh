@@ -125,7 +125,14 @@ APP_IMAGE=${APP_IMAGE_VALUE}
 FLOWISE_IMAGE=${FLOWISE_IMAGE_VALUE}
 # compose.yaml dung bien nay cho \`name:\` (=> ten volume) va cho alias mang tren edge.
 TENANT_SLUG=${TENANT_SLUG}
-PARSER_MODE=flowise
+# 18/08/2026 — doi flowise -> deepseek. Ly do: Flowise la MOT TANG TRUNG GIAN nua dat tren cung
+# DeepSeek o dau kia, nen no khong them chat luong ma chi them mot cho co the hong va mot cho
+# kho lan vet. Goi thang deepseek-v4-flash bo tang do: cung mo hinh, it thanh phan hon, va
+# parser lay lai duoc prompt chung do REPO quan ly (7 intent + few-shot + glossary + cua so hoi
+# thoai Pha 1) thay vi mot ban sao nam trong Agentflow khong ai review.
+# Dat qua bien de doi nguoc chi bang mot dong: PARSER_MODE=flowise ./render-secrets.sh ...
+PARSER_MODE=${PARSER_MODE:-deepseek}
+DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-flash}
 CHANNEL_MODE=${CHANNEL_MODE}
 GCP_PROJECT_ID=${PROJECT_ID}
 DEMO_DOMAIN=${DEMO_DOMAIN}

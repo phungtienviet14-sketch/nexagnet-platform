@@ -3,7 +3,7 @@ import type { AgentStep, ChannelMessage } from '@netviet/shared';
 import { KnowledgeService } from '../../knowledge/knowledge.service.js';
 import { SEED } from '../../knowledge/seed.js';
 import { InMemoryOrdersRepository } from '../../orders/orders.repository.js';
-import { MockParser } from '../../pipeline/mock-parser.js';
+import { FakeParser } from '../../pipeline/__tests__/fake-parser.js';
 import { AgentOrchestrator } from '../agent-orchestrator.service.js';
 
 const BOT = 'Bot ultty AI orders';
@@ -11,7 +11,7 @@ const META_HN = SEED.groups.find((group) => group.dealerId === 'meta-hn')!.chatI
 
 function build(): AgentOrchestrator {
   return new AgentOrchestrator(
-    new MockParser(),
+    new FakeParser(),
     new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z')),
     new InMemoryOrdersRepository(),
   );

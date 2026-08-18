@@ -7,7 +7,7 @@ import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
-import { MockParser } from './mock-parser.js';
+import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
 const BOT_NAME = 'Bot ultty AI orders';
@@ -17,7 +17,7 @@ const GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-h
 function build() {
   const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
   const repo = new InMemoryOrdersRepository();
-  const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
+  const orchestrator = new AgentOrchestrator(new FakeParser(), knowledge, repo);
   const pipeline = new PipelineService(orchestrator);
   const adapter = new MockAdapter();
   const zcaAdapter = new MockAdapter();
@@ -95,7 +95,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     }
     const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const repo = new InMemoryOrdersRepository();
-    const pipeline = new PipelineService(new AgentOrchestrator(new MockParser(), knowledge, repo));
+    const pipeline = new PipelineService(new AgentOrchestrator(new FakeParser(), knowledge, repo));
     const outbound = new OutboundChannelRouter(
       new FailingAdapter(),
       new MockAdapter(),
@@ -175,7 +175,7 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
 
     const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const repo = new InMemoryOrdersRepository();
-    const pipeline = new PipelineService(new AgentOrchestrator(new MockParser(), knowledge, repo));
+    const pipeline = new PipelineService(new AgentOrchestrator(new FakeParser(), knowledge, repo));
     const delayed = new DelayedAdapter();
     const orders = new OrdersService(
       repo,

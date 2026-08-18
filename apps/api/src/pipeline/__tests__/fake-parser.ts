@@ -1,8 +1,14 @@
+/**
+ * PARSER GIA — CHI DUNG TRONG TEST/DEMO OFFLINE. Nam trong `__tests__/` co chu y: truoc
+ * 18/08/2026 no la `MockParser` trong `src/pipeline/` va la MOT LUA CHON cua `PARSER_MODE`,
+ * tuc production co the roi vao no — am tham, khong log loi, moi don deu duoc trich xuat
+ * bang mot bo mau co dinh. Gio khong con duong nao tu cau hinh dan toi lop nay.
+ */
 import type { FieldConfidence, Intent, ParsedOrder, ParsedOrderItem, ParseResult } from '@netviet/shared';
-import type { Product } from '../knowledge/domain.js';
-import { normalize } from '../rules/text.js';
-import type { OrderParser, ParserInput } from './order-parser.js';
-import { mentionedSkus } from './contextual-parse.js';
+import type { Product } from '../../knowledge/domain.js';
+import { normalize } from '../../rules/text.js';
+import type { OrderParser, ParserInput } from '../order-parser.js';
+import { mentionedSkus } from '../contextual-parse.js';
 
 /**
  * Parser TAT DINH (khong dung LLM) — dung cho demo offline / khong co ANTHROPIC_API_KEY.
@@ -89,7 +95,7 @@ function classifyIntent(normText: string, items: ExtractedItem[]): Intent {
   return 'khac';
 }
 
-export class MockParser implements OrderParser {
+export class FakeParser implements OrderParser {
   readonly name = 'mock';
 
   async parse(input: ParserInput): Promise<ParseResult> {

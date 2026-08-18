@@ -10,7 +10,7 @@ import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
-import { MockParser } from './mock-parser.js';
+import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 
@@ -20,7 +20,7 @@ const GROUP = new KnowledgeService().groups().find((g) => g.dealerId === 'meta-h
 function build(settings?: RuntimeSettingsService) {
   const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
   const repo = new InMemoryOrdersRepository();
-  const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, repo);
+  const orchestrator = new AgentOrchestrator(new FakeParser(), knowledge, repo);
   const adapter = new MockAdapter();
   const outbound = new OutboundChannelRouter(adapter, new MockAdapter(), new MockAdapter());
   const orders = new OrdersService(repo, outbound);

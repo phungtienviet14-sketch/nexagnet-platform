@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ClaudeParser } from './claude-parser.js';
-import { MockParser } from './mock-parser.js';
+import { DeepSeekParser } from './deepseek-parser.js';
 import { parserProvider } from './parser.provider.js';
 
 const factory = parserProvider as { useFactory: () => unknown };
@@ -23,11 +23,19 @@ describe('parserProvider', () => {
     }
   });
 
-  it('mac dinh dung MockParser cho dev/test offline', () => {
-    expect(factory.useFactory()).toBeInstanceOf(MockParser);
+  it('KHONG con duong nao tu cau hinh dan toi parser gia (18/08/2026)', () => {
+    // Mac dinh moi la `deepseek`; thieu khoa thi nem, KHONG roi ve parser gia nhu truoc.
+    expect(() => factory.useFactory()).toThrow(/DEEPSEEK_API_KEY/);
   });
 
-  it('PARSER_MODE=claude thieu ANTHROPIC_API_KEY phai fail-fast, khong roi ve MockParser', () => {
+  it('PARSER_MODE=deepseek co key thi dung DeepSeekParser', () => {
+    process.env.PARSER_MODE = 'deepseek';
+    process.env.DEEPSEEK_API_KEY = 'deepseek-key';
+
+    expect(factory.useFactory()).toBeInstanceOf(DeepSeekParser);
+  });
+
+  it('PARSER_MODE=claude thieu ANTHROPIC_API_KEY phai fail-fast, khong roi ve parser gia', () => {
     process.env.PARSER_MODE = 'claude';
 
     expect(() => factory.useFactory()).toThrow(/ANTHROPIC_API_KEY/);

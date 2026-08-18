@@ -4,7 +4,6 @@ import { loadEnv } from '@netviet/shared';
 import { ClaudeParser } from './claude-parser.js';
 import { DeepSeekParser } from './deepseek-parser.js';
 import { FlowiseParser } from './flowise-parser.js';
-import { MockParser } from './mock-parser.js';
 import type { OrderParser } from './order-parser.js';
 import { ORDER_PARSER } from './parser.tokens.js';
 
@@ -21,9 +20,10 @@ export const parserProvider: Provider = {
     if (env.PARSER_MODE === 'claude') {
       throw new Error('ANTHROPIC_API_KEY bat buoc khi PARSER_MODE=claude');
     }
-    if (env.PARSER_MODE === 'deepseek' && env.DEEPSEEK_API_KEY) {
-      logger.log('Parser: DeepSeekParser (AI that - DeepSeek)');
-      return new DeepSeekParser(env.DEEPSEEK_API_KEY);
+    if (env.PARSER_MODE === 'deepseek') {
+      // loadEnv da fail-fast neu thieu khoa — khong con duong am tham ve FakeParser.
+      logger.log(`Parser: DeepSeekParser (AI that - DeepSeek, model=${env.DEEPSEEK_MODEL})`);
+      return new DeepSeekParser(env.DEEPSEEK_API_KEY!, env.DEEPSEEK_MODEL);
     }
     if (env.PARSER_MODE === 'flowise') {
       // loadEnv da fail-fast neu thieu mot trong ba bien Flowise.
@@ -35,7 +35,8 @@ export const parserProvider: Provider = {
         timeoutMs: env.FLOWISE_TIMEOUT_MS,
       });
     }
-    logger.log('Parser: MockParser (tat dinh, demo offline)');
-    return new MockParser();
+    // KHONG con nhanh catch-all ve parser gia (18/08/2026). Truoc do day la nhanh bat-tat-ca:
+    // thieu khoa hay go nham ten mode deu roi vao MockParser ma khong bao gi.
+    throw new Error(`PARSER_MODE=${env.PARSER_MODE} khong duoc ho tro`);
   },
 };

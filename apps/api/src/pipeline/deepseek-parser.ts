@@ -13,7 +13,25 @@ import {
  * Dung prompt chung (7 intent + few-shot) de phan loai on dinh; retry 1 lan khi loi
  * mang/5xx/429; loi cuoi -> fallback intent=khac (confidence.intent=0 de Giam sat gan co).
  * LUU Y: DeepSeek KHONG doc anh (moi bien the) — don anh can Claude/Co-pilot. KHONG tinh tien.
- * Model: deepseek-v4-flash (deepseek-chat/deepseek-reasoner bi khai tu 24/07/2026 15:59 UTC).
+ *
+ * MODEL MAC DINH: deepseek-v4-flash (ra 24/04/2026, MIT; deepseek-chat/deepseek-reasoner bi khai
+ * tu 24/07/2026 15:59 UTC va nay alias ve Flash). Cap nhat 18/08/2026:
+ *   - MoE thua thot 284B tong / 13B kich hoat moi token (256 expert dinh tuyen, 6 active).
+ *   - Cua so 1M token, output toi da 384K — cung muc voi V4 Pro; chon Flash la chon
+ *     chi-phi-tren-chat-luong, KHONG phai danh doi do dai context.
+ *   - Gia API goc 0.14$/1M vao, 0.28$/1M ra (~1/3 muc ra cua V4 Pro); cache hit 0.0028$/1M vao.
+ *   - GPQA Diamond 89.6%, TAU-Bench 77.5% (so nha cung cap cong bo).
+ *   - API noi ca giao thuc OpenAI ChatCompletions lan Anthropic.
+ *
+ * VI SAO HOP VOI VIEC O DAY: viec cua parser la TRICH XUAT CO RANG BUOC trong tu dien dong
+ * (18-20 SKU + glossary) roi ep ve JSON schema co dinh — khong phai suy luan mo. Cua so 1M
+ * token cung du sac cho cua so hoi thoai da noi rong o Pha 1 ma khong lo tran.
+ *
+ * RANG BUOC TUAN THU (CLAUDE.md, muc Bao mat) — DOC TRUOC KHI BAT VOI DU LIEU THAT:
+ * DeepSeek CHUA nam trong danh sach ben thu 3 duoc duyet (moi chi co KiotViet + Claude), ma
+ * kenh zca doc MOI tin trong nhom roi day sang parser. Nen: demo/test khong PII -> dung duoc;
+ * chay that voi du lieu khach -> hoac doi PARSER_MODE=claude, hoac bo sung DeepSeek vao thoa
+ * thuan xu ly du lieu TRUOC khi bat.
  */
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 const DEFAULT_MODEL = 'deepseek-v4-flash';

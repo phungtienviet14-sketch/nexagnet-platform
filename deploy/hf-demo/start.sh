@@ -13,7 +13,7 @@ set -eu
 
 cd /app
 
-echo "[start] API (NestJS) tren cong ${PORT} — PARSER_MODE=${PARSER_MODE:-mock} CHANNEL_MODE=${CHANNEL_MODE:-mock} PERSISTENCE=${PERSISTENCE:-memory}"
+echo "[start] API (NestJS) tren cong ${PORT} — PARSER_MODE=${PARSER_MODE:-deepseek} CHANNEL_MODE=${CHANNEL_MODE:-mock} PERSISTENCE=${PERSISTENCE:-memory}"
 node apps/api/dist/main.js &
 API_PID=$!
 

@@ -5,8 +5,12 @@
 # reverse-proxy cac path API sang NestJS API noi bo tren cong 3001 qua next.config rewrites.
 # Trinh duyet goi API "same-origin" -> khong dinh CORS, khong can biet URL that cua Space.
 #
-# Che do DEMO chay OFFLINE hoan toan (khong can dich vu ngoai, khong bake secret):
-#   PARSER_MODE=mock  CHANNEL_MODE=mock  PERSISTENCE=memory
+# Che do DEMO khong bake secret: CHANNEL_MODE=mock (khong dang nhap Zalo), PERSISTENCE=memory.
+#
+# THAY DOI 18/08/2026: `PARSER_MODE=mock` DA BI GO khoi cau hinh (parser gia tung la mac dinh
+# nen mot stack quen dat bien nay se khop-mau tren du lieu that ma khong bao gi). Space nay vi
+# vay CAN mot khoa LLM that: dat `DEEPSEEK_API_KEY` trong phan Secrets cua Space.
+# Thieu khoa -> API fail-fast luc khoi dong, CO Y (thay vi chay parser gia am tham).
 #
 # Build context BAT BUOC = goc repo (Dockerfile COPY apps/, packages/, tools/, lockfile...).
 # Vi du build tay:  docker build -f deploy/hf-demo/Dockerfile -t ultty-demo .
@@ -59,8 +63,9 @@ ENV NODE_ENV=production
 # day, luc CHAY. Space nay la demo cua Ultty -> TENANT=ultty. Doi khach: `docker run -e TENANT=...`
 # hoac sua bien nay, KHONG phai build lai theo khach.
 ENV TENANT=ultty
-# Che do DEMO offline — khong secret nao.
-ENV PARSER_MODE=mock
+# Parser THAT (parser gia da bi go 18/08/2026). Khoa lay tu Secrets cua Space, khong bake vao image.
+ENV PARSER_MODE=deepseek
+# Kenh van la mock: demo khong dang nhap Zalo, khong doc nhom that.
 ENV CHANNEL_MODE=mock
 ENV PERSISTENCE=memory
 # API noi bo (3001) + web cong cong (7860). HF yeu cau app nghe 0.0.0.0:7860.

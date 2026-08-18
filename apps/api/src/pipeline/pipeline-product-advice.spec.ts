@@ -10,7 +10,7 @@ import { SEED } from '../knowledge/seed.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
-import { MockParser } from './mock-parser.js';
+import { FakeParser } from './__tests__/fake-parser.js';
 import type { OrderParser, ParserInput } from './order-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
@@ -41,7 +41,7 @@ async function build(options: {
   );
   await content.reload();
   const orchestrator = new AgentOrchestrator(
-    options.parser ?? new MockParser(),
+    options.parser ?? new FakeParser(),
     knowledge,
     ordersRepo,
     undefined,

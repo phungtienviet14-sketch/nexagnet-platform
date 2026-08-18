@@ -26,7 +26,10 @@ describe('DemoController', () => {
     process.env.CORS_ORIGIN = 'https://demo.example.com';
     process.env.AUTO_SEND = 'off';
     process.env.CHANNEL_MODE = 'mock';
-    process.env.PARSER_MODE = 'mock';
+    // `mock` khong con la mot PARSER_MODE hop le (18/08/2026). Test nay chi doc lai gia tri
+    // qua /demo/mode nen dung mode that nao cung duoc; parser khong he duoc goi.
+    process.env.PARSER_MODE = 'deepseek';
+    process.env.DEEPSEEK_API_KEY = 'sk-test-khong-goi-that';
     vi.clearAllMocks();
     controller = new DemoController(
       { process: processMessage } as unknown as PipelineService,
@@ -43,7 +46,7 @@ describe('DemoController', () => {
   it('tra config runtime, samples va danh sach nhom da map', () => {
     expect(controller.config()).toMatchObject({
       channelMode: 'mock',
-      parserMode: 'mock',
+      parserMode: 'deepseek',
       autoSend: 'off',
     });
     expect(controller.samples()).toHaveLength(4);

@@ -2,7 +2,8 @@
 
 Hướng dẫn này dành cho **người không rành kỹ thuật**. Làm theo đúng thứ tự là chạy được.
 Bản demo chạy **offline hoàn toàn** — **KHÔNG cần nhập bất kỳ secret / API key nào**
-(`PARSER_MODE=mock`, `CHANNEL_MODE=mock`, `PERSISTENCE=memory` đã đặt sẵn trong Dockerfile).
+(`CHANNEL_MODE=mock`, `PERSISTENCE=memory` đã đặt sẵn trong Dockerfile).
+**Từ 18/08/2026 Space cần `DEEPSEEK_API_KEY` trong Secrets** — `PARSER_MODE=mock` đã bị gỡ khỏi cấu hình (parser giả từng là mặc định, nên một stack quên đặt biến này sẽ khớp-mẫu trên dữ liệu thật mà không báo gì).
 
 > ⚠️ **BẢO MẬT — đọc trước:**
 > - Để Space ở chế độ **Private** (riêng tư) khi tạo.

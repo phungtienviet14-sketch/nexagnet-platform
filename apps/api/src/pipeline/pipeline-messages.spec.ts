@@ -9,7 +9,7 @@ import {
 } from '../messages/messages.repository.js';
 import { ConversationContextBuilder } from '../messages/conversation-context.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
-import { MockParser } from './mock-parser.js';
+import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
 const BOT_NAME = 'Bot ultty AI orders';
@@ -53,7 +53,7 @@ class ThrowingMessagesRepository extends MessagesRepository {
 
 function build(messages: MessagesRepository) {
   const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
-  const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, new InMemoryOrdersRepository());
+  const orchestrator = new AgentOrchestrator(new FakeParser(), knowledge, new InMemoryOrdersRepository());
   return new PipelineService(
     orchestrator,
     undefined,
@@ -115,7 +115,7 @@ describe('Pipeline luu MOI tin vao MessagesRepository (Phase 3)', () => {
   it('tin da ton tai trong kho ben vung -> KHONG chay orchestrator tao don lan nua', async () => {
     const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const orders = new InMemoryOrdersRepository();
-    const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, orders);
+    const orchestrator = new AgentOrchestrator(new FakeParser(), knowledge, orders);
     const pipeline = new PipelineService(orchestrator, undefined, new DuplicateMessagesRepository());
 
     const result = await pipeline.process(
@@ -167,7 +167,7 @@ describe('Pipeline luu MOI tin vao MessagesRepository (Phase 3)', () => {
 
   it('khong cau hinh MessagesRepository (backward compat) -> pipeline chay nhu cu', async () => {
     const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
-    const orchestrator = new AgentOrchestrator(new MockParser(), knowledge, new InMemoryOrdersRepository());
+    const orchestrator = new AgentOrchestrator(new FakeParser(), knowledge, new InMemoryOrdersRepository());
     const pipeline = new PipelineService(orchestrator);
 
     const view = await pipeline.process(msg('@Bot ultty AI orders 3 noi chien', 'm-compat'), BOT_NAME);

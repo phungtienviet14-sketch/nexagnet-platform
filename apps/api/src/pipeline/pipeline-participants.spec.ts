@@ -7,7 +7,7 @@ import { InMemoryMessagesRepository } from '../messages/messages.repository.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import type { OrdersService } from '../orders/orders.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
-import { MockParser } from './mock-parser.js';
+import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
 const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
@@ -48,7 +48,7 @@ describe('Pipeline ap dung cau hinh thanh vien', () => {
     const participants = await participantRepo({ handlingMode: 'ignore' });
     const orders = new InMemoryOrdersRepository();
     const messages = new InMemoryMessagesRepository();
-    const parser = new MockParser();
+    const parser = new FakeParser();
     const parseSpy = vi.spyOn(parser, 'parse');
     const pipeline = new PipelineService(
       new AgentOrchestrator(parser, knowledge, orders),
@@ -73,7 +73,7 @@ describe('Pipeline ap dung cau hinh thanh vien', () => {
     const orders = { approve } as unknown as OrdersService;
     const runtime = { autoSend: () => 'on' } as unknown as RuntimeSettingsService;
     const pipeline = new PipelineService(
-      new AgentOrchestrator(new MockParser(), knowledge, orderRepo),
+      new AgentOrchestrator(new FakeParser(), knowledge, orderRepo),
       orders,
       new InMemoryMessagesRepository(),
       runtime,
@@ -90,7 +90,7 @@ describe('Pipeline ap dung cau hinh thanh vien', () => {
     const participants = await participantRepo({ customerRank: 'khach_le', handlingMode: 'process' });
     const orderRepo = new InMemoryOrdersRepository();
     const pipeline = new PipelineService(
-      new AgentOrchestrator(new MockParser(), knowledge, orderRepo),
+      new AgentOrchestrator(new FakeParser(), knowledge, orderRepo),
       undefined,
       new InMemoryMessagesRepository(),
       undefined,
@@ -99,7 +99,7 @@ describe('Pipeline ap dung cau hinh thanh vien', () => {
 
     const ranked = await pipeline.process(message('ranked-1'));
     const baseline = await new PipelineService(
-      new AgentOrchestrator(new MockParser(), knowledge, new InMemoryOrdersRepository()),
+      new AgentOrchestrator(new FakeParser(), knowledge, new InMemoryOrdersRepository()),
     ).process(message('baseline-1'));
 
     expect(ranked.senderType).toBe('khach_le');

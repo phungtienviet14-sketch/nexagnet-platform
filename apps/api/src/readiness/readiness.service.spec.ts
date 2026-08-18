@@ -87,7 +87,7 @@ describe('ReadinessService', () => {
   });
 
   it('parser/media/kenh cua demo deu bi danh missing chu khong tu cho qua', async () => {
-    vi.stubEnv('PARSER_MODE', 'mock');
+    vi.stubEnv('PARSER_MODE', 'deepseek');
     vi.stubEnv('MEDIA_STORE', 'none');
     vi.stubEnv('CHANNEL_MODE', 'mock');
     try {

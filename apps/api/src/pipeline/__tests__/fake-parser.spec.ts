@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { GlossaryEntry, Product } from '../knowledge/domain.js';
-import { KnowledgeService } from '../knowledge/knowledge.service.js';
-import { MockParser } from './mock-parser.js';
+import type { GlossaryEntry, Product } from '../../knowledge/domain.js';
+import { KnowledgeService } from '../../knowledge/knowledge.service.js';
+import { FakeParser } from './fake-parser.js';
 
 const products: Product[] = [
   { sku: 'GHE-FELIX', name: 'Ghế Felix', aliases: ['felix', 'ghe felix'], unit: 'cai' },
@@ -11,13 +11,13 @@ const glossary: GlossaryEntry[] = [
   { term: 'TN', meaning: 'Thái Nguyên' },
   { term: 'c', meaning: 'chị' },
 ];
-const parser = new MockParser();
+const parser = new FakeParser();
 
 function run(text: string) {
   return parser.parse({ text, products, glossary, botName: 'Bot ultty AI orders' });
 }
 
-describe('MockParser', () => {
+describe('FakeParser', () => {
   it('trich xuat don TH1: so luong + SP + khong VAT', async () => {
     const r = await run('@Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT');
     expect(r.intent).toBe('dat_don');

@@ -7,7 +7,7 @@ import { MediaFetcherService } from '../media/media-fetcher.service.js';
 import { MediaStore } from '../media/media-store.js';
 import { InMemoryMessagesRepository } from '../messages/messages.repository.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
-import { MockParser } from './mock-parser.js';
+import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
 const BOT_NAME = 'Bot ultty AI orders';
@@ -35,7 +35,7 @@ function build() {
     concurrency: 3,
   });
   const orchestrator = new AgentOrchestrator(
-    new MockParser(),
+    new FakeParser(),
     knowledge,
     new InMemoryOrdersRepository(),
   );
