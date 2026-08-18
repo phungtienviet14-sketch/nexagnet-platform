@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   groupParticipantSyncSnapshotSchema,
   type GroupParticipantSyncResult,
@@ -15,13 +15,22 @@ export class GroupParticipantNotFoundError extends Error {}
 
 @Injectable()
 export class GroupParticipantsService {
+  private readonly logger = new Logger(GroupParticipantsService.name);
+
   constructor(
     private readonly repository: GroupParticipantsRepository,
     @Optional() private readonly audit?: AuditLogService,
   ) {}
 
   async synchronize(snapshot: unknown, now = new Date()): Promise<GroupParticipantSyncResult> {
-    const parsed = groupParticipantSyncSnapshotSchema.parse(snapshot);
+    const parsedResult = groupParticipantSyncSnapshotSchema.safeParse(snapshot);
+    if (!parsedResult.success) {
+      this.logger.error(
+        `Snapshot dong bo thanh vien khong hop le: ${parsedResult.error.message}`,
+      );
+      throw parsedResult.error;
+    }
+    const parsed = parsedResult.data;
     const syncedAt = now.toISOString();
     const persisted = await this.repository.synchronize({
       groupId: parsed.groupId,

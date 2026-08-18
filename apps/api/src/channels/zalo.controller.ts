@@ -1,10 +1,13 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Body,
   Controller,
   ForbiddenException,
   Get,
   Headers,
+  HttpException,
+  Logger,
   NotFoundException,
   Optional,
   Post,
@@ -16,7 +19,9 @@ import { Throttle } from '@nestjs/throttler';
 import { loadEnv } from '@netviet/shared';
 import { z } from 'zod';
 import {
+  ZaloApiCommunicationError,
   ZaloGroupNotAllowedError,
+  ZaloGroupNotFoundError,
   ZaloNotConnectedError,
   ZaloUserClient,
   normalizeAllowedGroupIds,
@@ -68,6 +73,7 @@ const syncMembersBodySchema = z.object({}).strict();
 @Roles('MANAGER', 'ADMIN')
 @Controller('zalo')
 export class ZaloController {
+  private readonly logger = new Logger(ZaloController.name);
   private readonly env = loadEnv();
 
   constructor(
@@ -235,7 +241,29 @@ export class ZaloController {
       if (error instanceof GroupParticipantGroupNotFoundError) {
         throw new BadRequestException('Nhom Zalo chua duoc map vao nguon su that');
       }
-      throw error;
+      if (error instanceof ZaloGroupNotFoundError) {
+        throw new NotFoundException('Khong tim thay thong tin nhom tren Zalo');
+      }
+      if (error instanceof ZaloApiCommunicationError) {
+        throw new BadGatewayException(error.message);
+      }
+      if (error instanceof z.ZodError) {
+        this.logger.error(
+          `Du lieu dong bo thanh vien Zalo khong dung schema: ${error.message}`,
+        );
+        throw new BadRequestException('Du lieu thanh vien tra ve tu Zalo khong hop le');
+      }
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(
+        `Loi dong bo thanh vien Zalo nhom ${groupId}: ${error instanceof Error ? error.stack : String(error)}`,
+      );
+      throw new BadGatewayException(
+        error instanceof Error
+          ? `Loi dong bo thanh vien Zalo: ${error.message}`
+          : 'Loi he thong khi dong bo thanh vien Zalo',
+      );
     }
   }
 

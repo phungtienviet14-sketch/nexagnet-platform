@@ -47,6 +47,18 @@ const MEMBER_PROFILE_BATCH_SIZE = 50;
 
 export class ZaloNotConnectedError extends Error {}
 export class ZaloGroupNotAllowedError extends Error {}
+export class ZaloGroupNotFoundError extends Error {
+  constructor(message = 'Khong tim thay nhom Zalo da cho phep') {
+    super(message);
+    this.name = 'ZaloGroupNotFoundError';
+  }
+}
+export class ZaloApiCommunicationError extends Error {
+  constructor(message: string, override readonly cause?: unknown) {
+    super(message, cause !== undefined ? { cause } : undefined);
+    this.name = 'ZaloApiCommunicationError';
+  }
+}
 
 /**
  * Quan ly phien zca-js va allowlist nhom. Neu da co credential thi tu reconnect khi boot;
@@ -207,11 +219,29 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       throw new ZaloGroupNotAllowedError('Nhom khong nam trong allowlist');
     }
 
-    const groupResponse = await api.getGroupInfo(groupId);
+    let groupResponse: Awaited<ReturnType<API['getGroupInfo']>>;
+    try {
+      groupResponse = await api.getGroupInfo(groupId);
+    } catch (err) {
+      this.logger.error(`Loi goi getGroupInfo tren Zalo Web cho nhom ${groupId}: ${errMsg(err)}`);
+      throw new ZaloApiCommunicationError(
+        `Khong the lay thong tin nhom tu Zalo Web: ${errMsg(err)}`,
+        err,
+      );
+    }
+
+    const gridInfoMap = groupResponse?.gridInfoMap;
+    if (!gridInfoMap || typeof gridInfoMap !== 'object') {
+      this.logger.error(
+        `Response getGroupInfo tu Zalo Web khong co gridInfoMap: ${JSON.stringify(groupResponse)}`,
+      );
+      throw new ZaloApiCommunicationError('Zalo Web tra ve phan hoi khong hop le khi lay thong tin nhom');
+    }
+
     const group =
-      groupResponse.gridInfoMap[groupId] ??
-      Object.values(groupResponse.gridInfoMap).find((candidate) => candidate.groupId === groupId);
-    if (!group) throw new Error('Khong tim thay nhom Zalo da cho phep');
+      gridInfoMap[groupId] ??
+      Object.values(gridInfoMap).find((candidate) => candidate.groupId === groupId);
+    if (!group) throw new ZaloGroupNotFoundError('Khong tim thay nhom Zalo da cho phep');
 
     // Tai khoan phu dang chay listener va Bot Platform KHONG phai "thanh vien can phan loai":
     // ho la cong cu cua chinh he thong. De lot vao danh sach thi nguoi van hanh phai tu doan xem

@@ -1,11 +1,16 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import {
+  ZaloApiCommunicationError,
   ZaloGroupNotAllowedError,
+  ZaloGroupNotFoundError,
   ZaloNotConnectedError,
   type ZaloUserClient,
 } from './zalo-user.client.js';
@@ -289,13 +294,31 @@ describe('ZaloController', () => {
   it.each([
     [new ZaloGroupNotAllowedError('not allowed'), ForbiddenException],
     [new ZaloNotConnectedError('logged out'), ServiceUnavailableException],
-  ])('maps zca sync gate errors to safe HTTP errors', async (zcaError, httpError) => {
+    [new ZaloGroupNotFoundError('group not found'), NotFoundException],
+    [new ZaloApiCommunicationError('api network error'), BadGatewayException],
+    [new Error('unhandled unexpected error'), BadGatewayException],
+  ])('maps zca sync errors to safe HTTP errors', async (zcaError, httpError) => {
     fetchGroupMembers.mockRejectedValueOnce(zcaError);
 
     await expect(
       controller.syncGroupMembers('group-1', {}, 'https://operator.example.com'),
     ).rejects.toThrow(httpError);
     expect(synchronize).not.toHaveBeenCalled();
+  });
+
+  it('maps zod schema validation errors in sync to bad request', async () => {
+    const zodError = new z.ZodError([
+      {
+        code: z.ZodIssueCode.custom,
+        path: ['members'],
+        message: 'invalid member',
+      },
+    ]);
+    synchronize.mockRejectedValueOnce(zodError);
+
+    await expect(
+      controller.syncGroupMembers('group-1', {}, 'https://operator.example.com'),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('maps an unmapped source-truth group to a safe bad request', async () => {
