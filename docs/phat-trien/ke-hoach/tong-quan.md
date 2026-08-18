@@ -4,6 +4,7 @@
 > **Kế hoạch con:** [gd1-ultty.md](gd1-ultty.md) (**GĐ1 theo spec khách, đọc trước khi làm tiếp**) · [nen-tang.md](dot-0-nen-tang.md) (Đợt 0 — nền phải xong) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4 — 6 tính năng mới) · [nen-tang-da-khach.md](../../kien-truc/nen-tang-da-khach.md) (**Đợt B1-B5 — base dùng chung cho nhiều khách**, lập 11/08 khi có khách thứ 2 Amico; đề xuất D26-D31).
 > **Thủ tục bật pilot:** [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) — **đọc trước khi đụng vào biến môi trường của stack khách**.
 > **Thay thế (11/07/2026):** `tien-do-va-ke-hoach.md` + `checklist-du-lieu-khach.md` + phần trạng thái của `ke-hoach-dai-han.md` + 2 plan code trong `.claude/plans/` — tất cả đã xóa, git history còn.
+> Cập nhật: **18/08/2026 (phiên 3)** — đã thực thi kế hoạch 5 pha agent tư vấn (Pha 0-4 xong, Pha 5 còn), gỡ bỏ MockParser khỏi cấu hình (**breaking**), đổi parser sang DeepSeek V4 Flash. Chi tiết §1.-3.
 > Cập nhật: **12/08/2026** — GĐ1 **code-complete** (G1-01…G1-14, 8 commit trên `gd1/code-complete`); 9 cổng go-live đạt 1/9, phần còn lại là dữ liệu + pháp lý + công tắc vận hành.
 
 ---
@@ -13,6 +14,81 @@
 - **🟢 PHẠM VI GĐ1 ĐÃ CHỐT (12/08/2026):** AI được tự gửi vào nhóm. Đơn hợp lệ có tổng số lượng `≤` ngưỡng tenant (Ultty hiện chốt **50**) → rules tính → gửi xác nhận → trạng thái `sent`/hàng việc báo Sale nhập KiotViet thủ công; `>` ngưỡng hoặc thiếu dữ liệu → Sale can thiệp trước gửi. GĐ1 không gọi ERP/KiotViet. Business policy nằm trong gói tenant; `AUTO_SEND` chỉ là kill switch runtime có audit.
 - **🟢 DRIVE ĐÃ KIỂM KÊ TOÀN CÂY (12/08/2026):** 122 thư mục, 825 file. Boundary chốt: binary gốc ở Drive/object storage; provenance, product mapping, FAQ, link catalog/video và nội dung tư vấn ở DB/config, quản trị qua `/settings`. Chỉ 5 FAQ dạng DOCX có nội dung; EUS Felix có media nhưng FAQ trống. **Không có bảng giá tháng 8** và **không có nguồn xác nhận công thức 30+1/10+1** ⇒ A6/A7 còn thiếu, không fallback/không suy diễn.
 - **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Ba điểm lệch tiếp theo (baseline đỏ · RBAC hở · readiness mồ côi) **cũng đã đóng** ở Đợt A/B/D.)*
+
+### 1.-3 ▶️▶️▶️▶️ BÀN GIAO PHIÊN 18/08/2026 (PHIÊN 3) — ĐÃ THỰC THI KẾ HOẠCH 5 PHA
+
+**HEAD:** `e4e5727` trên `main`, working tree sạch, **chưa push, chưa deploy**.
+**Test:** api **758 pass / 24 skip** · shared 84 · tenant 30 · web 70 · poc-parser 4. Typecheck xanh.
+*(Baseline đầu phiên: api 703/24 — +55 test, không ca cũ nào đổi trạng thái.)*
+
+6 commit, mỗi commit là một chốt chặn TDD (RED → GREEN):
+
+| Commit | Nội dung |
+|---|---|
+| `53eec84` | Pha 0 — gỡ schema drift `direction` |
+| `9955b19` | RED: reproducer Pha 1 |
+| `e8f1323` | Pha 1 — bot nhớ được cuộc trò chuyện |
+| `51fd15a` | Pha 2 — prompt caching |
+| `594be17` | Pha 3 — model thành cấu hình |
+| `ed5cae1` | Pha 4 — reply đúng tin |
+| `e4e5727` | **BREAKING** — gỡ bỏ MockParser khỏi cấu hình |
+
+#### ĐÃ XONG
+
+**Pha 0 — schema drift.** `schema.prisma` thiếu `direction` (migration `20260815140000` đã thêm cột trên DB). Đã thêm `direction` + `senderRole` + index `(chatId, sentAt)`, migration mới `20260818170000_message_sender_role`. `migrate diff` không còn báo lệch trên bảng `Message` — chỉ còn 2 artifact `updatedAt` có sẵn từ trước ở `DealerPriceOverride`/`User`, không liên quan.
+
+**Pha 1 — bot nhớ được cuộc trò chuyện.** Đây là nguyên nhân gốc lớn nhất và đã đóng hết 5 điểm:
+- `OutboundRecorder` mới lưu tin hệ thống đã gửi. `ChannelAdapter.sendMessage()` trả `OutboundReceipt`; zca lấy được `msgId` **thật** từ zca-js, Bot Platform lấy `message_id`, mock tự sinh `out:<uuid>`. `OutboundChannelRouter` là chốt chặn; `CampaignService` gửi thẳng qua adapter nên được nối riêng.
+- **Xoá** `sameParticipant()` — hội thoại nhóm là của cả nhóm; `findRecent` bỏ tham số `senderExternalId`.
+- `boundedRecent`: `continue` → `break` (lịch sử không còn thủng lỗ).
+- Cửa sổ 6 tin/4k ký tự → **16 tin/8k**.
+- `conversation-transcript.ts` là nơi **duy nhất** định dạng lịch sử: `[KHACH Tên] (5 phut truoc): …` / `[BOT]` / `[SALE]`. Cả parser-prompt lẫn advice-composer dùng chung. Mốc thời gian lấy từ `message.sentAt`, không lấy đồng hồ máy chủ → rerun cho ra cùng prompt.
+
+**Pha 2 — prompt caching.** Tách `buildStaticPrompt()` (persona, 7 intent + few-shot, danh mục SKU, glossary) khỏi `buildTurnContext()` (đại lý, lịch sử). `ClaudeParser` gửi `system` dạng **mảng block**: block 0 đánh dấu `cache_control: ephemeral`, phần biến động nằm sau điểm cắt. Log `[cache] doc=.. ghi=..` mỗi lần gọi. Test khoá đúng bất biến thật: phần tĩnh của hai tin ở hai nhóm khác nhau phải **giống hệt** (`a === b`).
+→ **Rủi ro "SDK không hỗ trợ `cache_control`" đã đóng**: `@anthropic-ai/sdk@0.68.0` có sẵn `CacheControlEphemeral` + `usage.cache_read_input_tokens`. Không phải nâng SDK.
+
+**Pha 3 — model thành cấu hình.** Thêm `PARSER_MODEL` (mặc định `claude-sonnet-5`), `ADVICE_MODEL` (mặc định `claude-opus-5`), `DEEPSEEK_MODEL` (mặc định `deepseek-v4-flash`). Hết hardcode `claude-haiku-4-5` trong mã nguồn.
+→ **Giữ nguyên `ADVICE_COMPOSER` mặc định `off` trong base, có chủ ý**: bật = thêm một bên nhận dữ liệu vào luồng, phải là quyết định của người vận hành (`env.ts:72`), và lật mặc định trong base sẽ bật cho **mọi khách** cùng lúc — trái Quyết định #6. Bật bằng biến môi trường khi triển khai.
+
+**Pha 4 — reply đúng tin.** `ZaloQuoteTarget` (8 trường của `SendMessageQuote`) bắt lúc nhận, đi theo cột JSON có sẵn (`Message.raw`, `Order.view`) nên **không cần migration**. `sendMessage(chatId, text, options?)` xuyên suốt adapter → router → `ZaloUserClient`. Xác nhận đơn, tư vấn và auto-ack đều trích dẫn tin gốc. Không có quote thì gửi chuỗi thuần y như cũ.
+→ **Điểm treo #1 của kế hoạch đã đóng — không cần phiên zca sống.** Typing zca-js cho thấy `TMessage.msgId` là *string* còn `TQuote.globalMsgId` là *number*: **cùng một global id**, khác cách serialize. Test `khong gian ID cua zca-js khop giua tin den va quote` khoá lại: tin lưu theo `msgId` tra cứu được bằng `String(globalMsgId)` và resolve **về dòng trong DB**, không rơi xuống nhánh inline. Không thêm khoá dự phòng `(uidFrom, ts)` — không có bằng chứng nó cần.
+
+**Ngoài kế hoạch — đổi parser sang DeepSeek V4 Flash (yêu cầu trong phiên).** Thông số tra cứu 18/08: MoE 284B tổng / 13B kích hoạt, context **1M token**, output tối đa 384K, giá gốc **$0.14/1M vào — $0.28/1M ra** (cache hit $0.0028/1M), GPQA Diamond 89.6%, TAU-Bench 77.5%, MIT, API nói cả giao thức OpenAI lẫn Anthropic. Ghi đầy đủ trong doc comment `deepseek-parser.ts`.
+**Lý do đổi `flowise` → `deepseek`** (ghi trong `render-secrets.sh`): Flowise là **một tầng trung gian nữa** đặt trên cùng DeepSeek ở đầu kia — không thêm chất lượng, chỉ thêm một chỗ có thể hỏng và một chỗ khó lần vết. Gọi thẳng bỏ tầng đó, và parser lấy lại được prompt chung do **repo** quản lý (7 intent + few-shot + glossary + cửa sổ hội thoại Pha 1) thay vì một bản sao nằm trong Agentflow không ai review. Đảo ngược bằng một dòng: `PARSER_MODE=flowise`.
+
+**Ngoài kế hoạch — gỡ bỏ MockParser (BREAKING, yêu cầu trong phiên).** `mock` vừa là lựa chọn hợp lệ vừa là **mặc định** của `PARSER_MODE`, và `parser.provider.ts` còn nhánh bắt-tất-cả `return new MockParser()`. Nghĩa là **bất kỳ cấu hình sai nào** — quên đặt biến, thiếu khoá, gõ nhầm tên mode — đều dẫn production tới một parser khớp-mẫu không gọi LLM, không log lỗi, không ai biết.
+- `PARSER_MODE: z.enum(['claude','deepseek','flowise']).default('deepseek')`
+- thiếu `DEEPSEEK_API_KEY` → fail-fast lúc khởi động (nhánh claude đã có từ trước, deepseek thì thiếu)
+- `mock-parser.ts` → `src/pipeline/__tests__/fake-parser.ts` (`FakeParser`); e2e chọn nó bằng `vi.mock` trên provider, không qua biến môi trường
+- cổng `DATA_CLASSIFICATION=customer` **vẫn ép** `PARSER_MODE=claude` — DeepSeek chưa nằm trong danh sách bên thứ 3 được duyệt
+
+#### ⛔ VIỆC NGƯỜI VẬN HÀNH PHẢI LÀM TRƯỚC KHI DEPLOY
+
+1. **Space Hugging Face** (`deploy/hf-demo`) trước chạy `PARSER_MODE=mock` nên không cần secret nào. Nay **phải đặt `DEEPSEEK_API_KEY` trong Secrets của Space**, nếu không API fail-fast lúc khởi động — **có chủ ý**, thay vì chạy parser giả âm thầm.
+2. **Stack khách** (`deploy/netviet`): `render-secrets.sh` nay render `PARSER_MODE=deepseek`. Xác nhận `DEEPSEEK_API_KEY` đã có trong Secret Manager trước khi deploy. Muốn giữ Flowise: `PARSER_MODE=flowise ./render-secrets.sh …`.
+3. **Chưa push, chưa deploy.** 6 commit đang nằm ở local `main`.
+
+#### CÒN LẠI
+
+**Pha 5 — retrieval FAQ (chưa làm).** `content.service.ts:215` `rankFaqs()` vẫn là đếm từ trùng thô; `normalize()` bỏ dấu ✅ nhưng **không xử lý viết tắt** — mà viết tắt là đặc thù đầu vào. Khách gõ `"bn tien"`, `"co ship ko"`, `"sp nay"` thì không khớp từ nào, dẫn tới `!selectedFaqs.length` và chuyển Sale. Việc cần làm: BM25-ish, mở rộng viết tắt qua glossary tenant (đã có sẵn), nới `MAX_FAQ_ANSWERS`, log ca `safeHandoff(['matching_faq'])` để đo tỉ lệ trượt thật. Ước lượng 2h, độc lập hoàn toàn với 5 pha trên.
+
+**Bake-off model (Quyết định #3) — chưa chạy.** Cần tin nhắn thật + khoá API. Lưu ý pilot nay chạy `PARSER_MODE=deepseek` nên `ClaudeParser` **không nằm trên đường đo** — muốn so Sonnet 5 vs DeepSeek V4 Flash phải đo ngoài luồng chạy.
+
+**Chưa xác minh trên hệ thật:** `cache_read_input_tokens > 0` từ tin thứ 2 (cần một phiên chạy thật, đã có log `[cache]` để đọc) và bot reply đúng tin trên nhóm Zalo test (cần phiên zca sống).
+
+#### LỆNH XÁC MINH
+
+```bash
+cd apps/api && pnpm prisma generate && pnpm typecheck && pnpm test
+```
+
+Kiểm drift (DB local là `netviet`, không phải `ultty` như `.env` trỏ):
+
+```bash
+DATABASE_URL="postgresql://netviet:netviet_local@localhost:5432/netviet" pnpm prisma migrate status
+```
+
+---
 
 ### 1.-2 ▶️▶️▶️ BÀN GIAO PHIÊN 18/08/2026 (PHIÊN 2) — KHẢO SÁT + KẾ HOẠCH, CHƯA SỬA CODE
 
