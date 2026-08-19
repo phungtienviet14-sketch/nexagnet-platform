@@ -687,4 +687,4 @@ getChatAdministrators  => 404 Not Found
 | Fix 1 | 91% | Prompt rõ "intent≠dat_don thì KHÔNG có order" + normalizer bỏ `order` thừa trước validate |
 | Fix 2 | **100%** | Tiền dạng chuỗi ("11tr5", "1.150k") → ép về số (`coerceVnd`); không đọc được thì bỏ field tùy chọn |
 
-**Lưu ý:** `PARSER_MODE=mock` (tất định) vẫn là lưới an toàn offline. Khi có tin thật của khách (mục B1-B2), thay/bổ sung vào `eval-set.json` + golden output để đo cả **field-accuracy** — đó mới là cổng go-live.
+**Lưu ý (cập nhật 18/08/2026):** `PARSER_MODE=mock` **đã bị gỡ** — parser giả từng vừa là lựa chọn hợp lệ vừa là mặc định, nên mọi cấu hình sai đều đưa production tới parser khớp-mẫu mà không báo gì. Lưới an toàn offline nay là `CHANNEL_MODE=mock` (kênh tất định); parser giả chỉ còn trong test (`src/pipeline/__tests__/fake-parser.ts`). Khi có tin thật của khách (mục B1-B2), thay/bổ sung vào `eval-set.json` + golden output để đo cả **field-accuracy** — đó mới là cổng go-live.
