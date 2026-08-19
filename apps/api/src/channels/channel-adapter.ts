@@ -47,6 +47,6 @@ export abstract class ChannelAdapter {
     }
     const links = content.links?.map((link) => `${link.label}: ${link.url}`) ?? [];
     const imageLines = content.images?.map((image) => `Ảnh: ${image.url}`) ?? [];
-    return this.sendMessage(chatId, [content.text, ...imageLines, ...links].join('\n'));
+    return this.sendMessage(chatId, [content.text, ...imageLines, ...links].join('\n'), options);
   }
 }

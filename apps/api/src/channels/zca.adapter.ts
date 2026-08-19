@@ -28,11 +28,7 @@ export class ZcaAdapter extends ChannelAdapter {
     super();
   }
 
-  async sendMessage(
-    chatId: string,
-    text: string,
-    options?: SendOptions,
-  ): Promise<OutboundReceipt> {
+  async sendMessage(chatId: string, text: string, options?: SendOptions): Promise<OutboundReceipt> {
     return this.client.sendMessage(chatId, text, options);
   }
 
@@ -59,7 +55,11 @@ export class ZcaAdapter extends ChannelAdapter {
     }
     if (!images.length) {
       this.logger.warn('Khong tai duoc anh nao — gui text kem link anh.');
-      return this.sendMessage(chatId, [text, ...urls.map((url) => `Ảnh: ${url}`)].join('\n'));
+      return this.sendMessage(
+        chatId,
+        [text, ...urls.map((url) => `Ảnh: ${url}`)].join('\n'),
+        options,
+      );
     }
     return this.client.sendMessageWithImages(chatId, text, images, options);
   }

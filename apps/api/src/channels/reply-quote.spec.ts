@@ -3,8 +3,10 @@ import { ThreadType, type Message } from 'zca-js';
 import { InMemoryMessagesRepository } from '../messages/messages.repository.js';
 import { ConversationContextBuilder } from '../messages/conversation-context.js';
 import { zcaMessageToChannelMessage } from '../ingest/zca-message.js';
+import { ChannelAdapter, type SendOptions } from './channel-adapter.js';
 import { ZcaAdapter } from './zca.adapter.js';
 import type { ZaloUserClient } from './zalo-user.client.js';
+import type { OutboundReceipt } from '../messages/outbound-recorder.js';
 
 /** Mot tin zca-js that: `msgId` la CHUOI, con `quote.globalMsgId` la SO. */
 function zcaMessage(over: Partial<Message['data']> = {}, threadId = 'group-1'): Message {
@@ -110,5 +112,58 @@ describe('khong gian ID cua zca-js khop giua tin den va quote', () => {
       text: '10 ghe felix',
       senderDisplayName: 'Meta HN',
     });
+  });
+});
+
+describe('sendContent giu trich dan tren MOI adapter', () => {
+  /**
+   * Pha 4 noi day 8 truong quote xuyen suot, nhung lop CO SO nuot mat: `sendContent` nhan
+   * `options` roi goi `sendMessage` KHONG kem no. Duong nay la duong cua MockAdapter (co-pilot)
+   * va cua moi adapter khong override — tuc ban tu van co anh/link gui di khong trich dan gi.
+   * ESLint bat duoc vi `options` thanh tham so khong dung.
+   */
+  class RecordingAdapter extends ChannelAdapter {
+    readonly name = 'recording';
+    readonly seen: (SendOptions | undefined)[] = [];
+
+    async sendMessage(
+      _chatId: string,
+      _text: string,
+      options?: SendOptions,
+    ): Promise<OutboundReceipt> {
+      this.seen.push(options);
+      return {};
+    }
+  }
+
+  it('lop co so chuyen tiep quote xuong sendMessage', async () => {
+    const adapter = new RecordingAdapter();
+    const quote = zcaMessageToChannelMessage(zcaMessage(), false)?.quoteTarget;
+
+    await adapter.sendContent('group-1', { text: 'Da duyet a nhe' }, { quote });
+
+    expect(adapter.seen).toEqual([{ quote }]);
+  });
+
+  it('zca: tai anh hong van phai giu trich dan o nhanh lui ve text', async () => {
+    const sendMessage = vi.fn(async () => ({ externalMessageId: '5' }));
+    const client = { sendMessage } as unknown as ZaloUserClient;
+    const adapter = new ZcaAdapter(client);
+    const quote = zcaMessageToChannelMessage(zcaMessage(), false)?.quoteTarget;
+    // Moi URL anh deu hong -> adapter lui ve gui text kem link anh.
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('ETIMEDOUT'));
+
+    await adapter.sendContent(
+      'group-1',
+      { text: 'Tu van', images: [{ url: 'https://cdn.test/a.webp' }] },
+      { quote },
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      'group-1',
+      expect.stringContaining('https://cdn.test/a.webp'),
+      { quote },
+    );
+    vi.restoreAllMocks();
   });
 });
