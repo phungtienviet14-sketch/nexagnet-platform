@@ -151,10 +151,39 @@ export async function POST(request: Request) {
       source: 'nexagnet247.com/demo',
     };
 
-    // 5. Persist lead
+    // 5. Persist lead locally
     persistLeadLocally(newLead);
 
-    // 6. Safe server audit logging (PII masked)
+    // 6. Dispatch to Platform Notification Core (Zalo & Email)
+    const platformApiUrl =
+      process.env.INTERNAL_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      'http://127.0.0.1:3001';
+
+    try {
+      const dispatchResponse = await fetch(`${platformApiUrl}/notifications/leads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-actor': 'marketing-form',
+          ...(process.env.INTERNAL_API_KEY ? { 'x-api-key': process.env.INTERNAL_API_KEY } : {}),
+        },
+        body: JSON.stringify(newLead),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (dispatchResponse.ok) {
+        console.info(`[Lead Dispatch] Successfully dispatched lead ${leadId} to notification core`);
+      } else {
+        const errText = await dispatchResponse.text().catch(() => '');
+        console.warn(`[Lead Dispatch] Notification core returned ${dispatchResponse.status}: ${errText}`);
+      }
+    } catch (dispatchErr) {
+      // Non-blocking: Lead is still saved, log dispatch warning
+      console.warn(`[Lead Dispatch] Failed to reach notification core: ${(dispatchErr as Error).message}`);
+    }
+
+    // 7. Safe server audit logging (PII masked)
     console.info(
       `[Lead Submitted] ID=${leadId} Company="${company}" Workflow=${workflow} Email=${maskPII(
         email,
