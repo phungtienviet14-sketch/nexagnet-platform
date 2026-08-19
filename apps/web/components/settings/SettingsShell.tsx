@@ -16,6 +16,7 @@ import { SettingsTabs, type SettingsTab, type SettingsTabId } from './SettingsTa
 import { SourceTruthSettings } from './SourceTruthSettings';
 import { ZaloSettings } from './ZaloSettings';
 import { UsersSettings } from './UsersSettings';
+import { NotificationSettings } from './NotificationSettings';
 import { useAuth } from '../auth/AuthGate';
 
 const EMPTY_SUMMARY = parseSettingsSummary({});
@@ -97,6 +98,13 @@ export function SettingsShell() {
       label: 'Tự động hóa',
       description: 'Policy tenant và kill switch',
       panel: <AutomationSettings summary={summary} />,
+    },
+    {
+      id: 'notifications',
+      code: 'TB',
+      label: 'Thông báo & Leads',
+      description: 'Gửi Zalo (Phùng Việt, Hiệu), SMTP',
+      panel: <NotificationSettings summary={summary} onRefreshSummary={() => summaryQuery.refetch()} />,
     },
     {
       id: 'readiness',

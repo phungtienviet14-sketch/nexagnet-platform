@@ -1462,3 +1462,91 @@ function parseContentImportPreview(value: unknown): ContentImportResult {
     skippedConflicts: numberValue(record.skippedConflicts),
   };
 }
+
+export interface NotificationSettingsView {
+  email: {
+    enabled: boolean;
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+    from: string;
+    recipients: string[];
+  };
+  zalo: {
+    enabled: boolean;
+    targetMemberNames: string[];
+    targetMemberIds: string[];
+    targetGroupIds: string[];
+  };
+}
+
+export interface LeadHistoryItem {
+  leadId: string;
+  payload: {
+    fullName: string;
+    phone: string;
+    email: string;
+    company: string;
+    workflow: string;
+    note?: string;
+    source?: string;
+    createdAt?: string;
+  };
+  dispatchResult: {
+    leadId: string;
+    zalo: {
+      success: boolean;
+      message?: string;
+      recipientsSent?: string[];
+    };
+    email: {
+      success: boolean;
+      message?: string;
+      recipientsSent?: string[];
+    };
+    dispatchedAt: string;
+  };
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  getSettings: async (): Promise<NotificationSettingsView> =>
+    (await requestJson('/settings/notifications')) as NotificationSettingsView,
+  updateEmail: async (
+    config: Partial<NotificationSettingsView['email']>,
+  ): Promise<NotificationSettingsView> =>
+    (await requestJson('/settings/notifications/email', jsonInit('PUT', config))) as NotificationSettingsView,
+  updateZalo: async (
+    config: Partial<NotificationSettingsView['zalo']>,
+  ): Promise<NotificationSettingsView> =>
+    (await requestJson('/settings/notifications/zalo', jsonInit('PUT', config))) as NotificationSettingsView,
+  testEmail: async (payload: {
+    to?: string;
+    config?: Partial<NotificationSettingsView['email']>;
+  }): Promise<{ success: boolean; message?: string }> =>
+    (await requestJson('/settings/notifications/test-email', jsonInit('POST', payload))) as {
+      success: boolean;
+      message?: string;
+    },
+  testZalo: async (payload: {
+    targetNames?: string[];
+    targetMemberIds?: string[];
+    targetGroupId?: string;
+  }): Promise<{ success: boolean; message?: string; recipientsSent?: string[] }> =>
+    (await requestJson('/settings/notifications/test-zalo', jsonInit('POST', payload))) as {
+      success: boolean;
+      message?: string;
+      recipientsSent?: string[];
+    },
+  getLeads: async (): Promise<LeadHistoryItem[]> =>
+    (await requestJson('/settings/notifications/leads')) as LeadHistoryItem[],
+  retryLead: async (
+    leadId: string,
+  ): Promise<{ success: boolean; result: LeadHistoryItem['dispatchResult'] }> =>
+    (await requestJson(
+      `/settings/notifications/leads/${encodeURIComponent(leadId)}/retry`,
+      jsonInit('POST', {}),
+    )) as { success: boolean; result: LeadHistoryItem['dispatchResult'] },
+};
