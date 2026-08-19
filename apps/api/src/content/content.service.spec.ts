@@ -170,4 +170,41 @@ describe('ContentService', () => {
       missing: ['approved_faq_or_advice'],
     });
   });
+
+  it('tra loi duoc tin viet tat nho glossary tenant thay vi chuyen Sale (Pha 5)', async () => {
+    const repo = new InMemoryContentRepository({
+      provenance: [],
+      assets: [],
+      faqs: [
+        {
+          id: 'faq-gia',
+          externalId: 'faq-gia',
+          productSku: 'ELNI',
+          question: 'Công suất bao nhiêu watt?',
+          answer: 'Công suất 45W ở chế độ tiêu chuẩn.',
+          status: 'active',
+          operatorEdited: false,
+        },
+      ],
+      advice: [],
+      links: [],
+      readiness: [],
+    });
+    const service = new ContentService(repo);
+    await service.reload();
+    const products = [{ sku: 'ELNI', name: 'ELNI' }];
+    const glossary = [
+      { term: 'cs', meaning: 'công suất' },
+      { term: 'bn', meaning: 'bao nhiêu' },
+      { term: 'w', meaning: 'watt' },
+    ];
+
+    // Khong co glossary: khong tu nao cua cau hoi FAQ khop -> chuyen Sale (hien trang truoc Pha 5).
+    expect(service.productAdvice('ELNI cs bn w', products).missing).toEqual(['matching_faq']);
+
+    const advice = service.productAdvice('ELNI cs bn w', products, glossary);
+
+    expect(advice.ready).toBe(true);
+    expect(advice.text).toContain('45W');
+  });
 });

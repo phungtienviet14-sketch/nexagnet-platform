@@ -371,7 +371,7 @@ export class AgentOrchestrator {
     }
 
     if (intent === 'hoi_san_pham') {
-      const baseAdvice = this.content?.productAdvice(normText, this.knowledge.products()) ?? {
+      const baseAdvice = this.content?.productAdvice(normText, this.knowledge.products(), this.knowledge.glossary()) ?? {
         ready: false,
         productSkus: [],
         missing: ['approved_product_content'],

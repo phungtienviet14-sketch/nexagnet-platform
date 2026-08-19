@@ -8,6 +8,7 @@ import {
   type ProductAdviceResult,
 } from '@netviet/shared';
 import { normalize } from '../rules/text.js';
+import { rankFaqs, type GlossaryTerm } from './faq-ranking.js';
 import { ContentRepository, type ContentEntityKind } from './content.repository.js';
 
 type ProductRef = { sku: string; name: string; aliases?: string[] };
@@ -82,8 +83,8 @@ export class ContentService implements OnModuleInit {
         while (collection(this.cache, kind).find((item) => item.id === id)?.status !== target) {
           const current = collection(this.cache, kind).find((item) => item.id === id);
           if (!current) throw new Error(`Không tìm thấy ${kind} ${id}`);
-          const next = ALLOWED_TRANSITIONS[current.status].find((candidate) =>
-            STATUS_ORDER.indexOf(candidate) > STATUS_ORDER.indexOf(current.status),
+          const next = ALLOWED_TRANSITIONS[current.status].find(
+            (candidate) => STATUS_ORDER.indexOf(candidate) > STATUS_ORDER.indexOf(current.status),
           );
           if (!next) throw new Error(`Không có đường lên ${target} từ ${current.status}`);
           await this.setStatus(kind, id, next);
@@ -94,11 +95,17 @@ export class ContentService implements OnModuleInit {
         skipped.push(`${id}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    this.logger.log(`Duyệt hàng loạt ${kind} → ${target}: ${changed} đổi, ${skipped.length} bỏ qua.`);
+    this.logger.log(
+      `Duyệt hàng loạt ${kind} → ${target}: ${changed} đổi, ${skipped.length} bỏ qua.`,
+    );
     return { changed, skipped };
   }
 
-  productAdvice(text: string, products: ProductRef[]): ProductAdviceResult {
+  productAdvice(
+    text: string,
+    products: ProductRef[],
+    glossary: readonly GlossaryTerm[] = [],
+  ): ProductAdviceResult {
     const norm = normalize(text);
     const matched = products.filter((product) =>
       [product.sku, product.name, ...(product.aliases ?? [])]
@@ -131,17 +138,19 @@ export class ContentService implements OnModuleInit {
     if (!faqs.length && !advice.length)
       return safeHandoff(productSkus, ['approved_product_content']);
 
-    const selectedFaqs = rankFaqs(faqs, norm).slice(0, MAX_FAQ_ANSWERS);
+    const selectedFaqs = rankFaqs(faqs, norm, glossary);
     // Truoc 15/08/2026 cho nay la `selectedFaqs.length ? selectedFaqs : faqs` — khong khop tu nao
     // thi do TOAN BO FAQ cua san pham (BB-GREY co 21 FAQ) vao mot tin. Khong khop nghia la CHUA
     // hieu khach hoi gi: co `advice` chung thi dung advice, khong co thi chuyen Sale.
     if (!selectedFaqs.length && !advice.length) {
+      // Do ti le truot THAT cua retrieval: khong co dong log nay thi khong biet Pha 5 an bao
+      // nhieu. Ghi cau da chuan hoa (khong phai tin goc) + so FAQ ung vien de lan lai duoc.
+      this.logger.warn(
+        `FAQ truot: "${norm}" — ${faqs.length} FAQ ung vien cua ${productSkus.join(',')}, khong cau nao khop.`,
+      );
       return safeHandoff(productSkus, ['matching_faq']);
     }
-    const body = [
-      ...selectedFaqs.map((faq) => faq.answer),
-      ...advice.map((item) => item.body),
-    ];
+    const body = [...selectedFaqs.map((faq) => faq.answer), ...advice.map((item) => item.body)];
     const forThisProduct = (asset: ContentAssetView): boolean =>
       active(asset.status) && asset.productSkus.some((sku) => productSkus.includes(sku));
     const images = this.cache.assets
@@ -160,9 +169,7 @@ export class ContentService implements OnModuleInit {
       .filter((asset) => asset.kind === 'video' && forThisProduct(asset))
       .flatMap((asset) => {
         const url = absoluteLocator(asset.locator);
-        return url
-          ? [{ kind: 'video' as const, label: asset.title ?? 'Video sản phẩm', url }]
-          : [];
+        return url ? [{ kind: 'video' as const, label: asset.title ?? 'Video sản phẩm', url }] : [];
       });
     const curatedLinks = this.cache.links
       .filter(
@@ -202,31 +209,8 @@ function absoluteLocator(locator: string): string | null {
   return base ? `${base.replace(/\/+$/, '')}${locator}` : null;
 }
 
-/** Tra ve nhieu hon vai cau la thanh mot buc tuong chu — khach Zalo khong doc. */
-const MAX_FAQ_ANSWERS = 3;
 /** Bang voi tran `links` trong `outboundContentSchema`. */
 const MAX_OUTBOUND_LINKS = 20;
-
-/**
- * Xep FAQ theo so tu khoa cua CAU HOI xuat hien trong tin khach, cao xuong thap; bo cac FAQ khong
- * khop tu nao. Truoc day chi loc `some(...)` roi giu nguyen thu tu DB, nen mot FAQ khop 1 tu vu vo
- * ("nha") duoc xep ngang mot FAQ khop 4 tu.
- */
-function rankFaqs<T extends { question: string }>(faqs: T[], normalizedText: string): T[] {
-  return faqs
-    .map((faq) => {
-      const words = new Set(
-        normalize(faq.question)
-          .split(/\s+/)
-          .filter((word) => word.length >= 3),
-      );
-      const hits = [...words].filter((word) => normalizedText.includes(word)).length;
-      return { faq, hits };
-    })
-    .filter((scored) => scored.hits > 0)
-    .sort((left, right) => right.hits - left.hits)
-    .map((scored) => scored.faq);
-}
 
 /** Link video co the den tu ca `links` da bien tap lan asset kind='video' — khong gui trung URL. */
 function dedupeByUrl<T extends { url: string }>(items: T[]): T[] {
