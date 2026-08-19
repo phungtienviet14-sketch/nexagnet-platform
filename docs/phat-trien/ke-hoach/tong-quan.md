@@ -69,6 +69,10 @@ Bộ xếp hạng cũ đếm số từ ≥3 ký tự của **câu hỏi FAQ** xu
 - **Chưa xác minh trên hệ thật:** `cache_read_input_tokens > 0` từ tin thứ 2 (đã có log `[cache]` để đọc) · bot reply đúng tin trên nhóm Zalo test (cần phiên zca sống) · tỉ lệ FAQ trượt thật (đã có log `FAQ truot:` để đếm).
 - **RAG tiếng Việt bằng `pgvector`** — đường nâng cấp đã khảo sát ở phiên 2, chưa mở. BM25 hiện tại là bước trước nó, không phải bước thay nó.
 
+#### KỊCH BẢN NGHIỆM THU
+
+[kiem-thu/2026-08-19-kich-ban-test-agent-tu-van.md](../kiem-thu/2026-08-19-kich-ban-test-agent-tu-van.md) — 23 ca thủ công theo 6 nhóm (viết tắt · âm tính · nhớ hội thoại · đơn hàng · reply đúng tin · caching), kèm bảng "pha nào quan sát được ở đâu" và điều kiện tiên quyết duyệt FAQ lên `active`. Nhóm A/B đã đối chiếu với 21 FAQ thật của BB-GREY.
+
 #### LỆNH XÁC MINH
 
 ```bash
