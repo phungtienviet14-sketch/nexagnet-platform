@@ -27,10 +27,14 @@ Nội dung nạp từ gói tenant vào ở trạng thái **`draft`**. `productAd
 curl -s https://operator.<IP>.sslip.io/settings/content | jq '.faqs | group_by(.status) | map({status: .[0].status, n: length})'
 ```
 
-Duyệt từng bước `draft → reviewed → approved → active` (**không nhảy cóc** — chuyển sai bậc bị từ chối). Quyền `MANAGER`/`ADMIN`, giới hạn 5 request/phút, tối đa 500 id mỗi lần:
+Vòng đời có 4 bậc `draft → reviewed → approved → active`. **Hai đường duyệt hành xử khác nhau — đừng lẫn:**
+
+- **Từng bản ghi** (nút trên `/settings`, `POST /settings/content/:kind/:id`): chỉ đi được **một bậc mỗi lần**, nhảy cóc bị từ chối.
+- **Hàng loạt** (`POST /settings/content/:kind/bulk-status`): **tự đi hết các bậc** trong một lần gọi — đặt thẳng `"status": "active"` là đủ. Bản ghi nào hỏng thì bị bỏ qua và liệt kê trong `skipped`, không làm đổ cả mẻ.
 
 ```bash
-POST /settings/content/faq/bulk-status   {"ids": [...], "status": "reviewed"}
+POST /settings/content/faq/bulk-status   {"ids": [...], "status": "active"}
+# quyền MANAGER|ADMIN · 5 request/phút · tối đa 500 id mỗi lần
 ```
 
 ---
