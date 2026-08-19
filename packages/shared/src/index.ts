@@ -190,3 +190,21 @@ export type {
   ContentImportResult,
   ProductAdviceResult,
 } from './content.js';
+export {
+  leadPayloadSchema,
+  emailNotificationConfigSchema,
+  zaloNotificationConfigSchema,
+  notificationSettingsSchema,
+  leadDispatchResultSchema,
+  testEmailPayloadSchema,
+  testZaloPayloadSchema,
+} from './notifications.js';
+export type {
+  LeadPayload,
+  EmailNotificationConfig,
+  ZaloNotificationConfig,
+  NotificationSettings,
+  LeadDispatchResult,
+  TestEmailPayload,
+  TestZaloPayload,
+} from './notifications.js';
