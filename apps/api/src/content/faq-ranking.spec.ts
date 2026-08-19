@@ -110,3 +110,30 @@ describe('rankFaqs — san diem tuong doi', () => {
     expect(rankFaqs(faqs, 'bao hanh bao lau', GLOSSARY)).toHaveLength(5);
   });
 });
+
+describe('rankFaqs — bang chung mong thi khong tra loi', () => {
+  it('mot tu CHUNG khop khong du — tra sai con te hon chuyen Sale', () => {
+    // Ca that (21 FAQ BB-GREY): khach hoi cong suat, ma BB-GREY khong co cau nao ve cong suat.
+    // "cong" trung mat chu giua "cong suat" va "cong nghe" — khong bo loc tan suat nao bat duoc
+    // dieu do, chi co luat "bang chung phai day hon mot tu" moi chan.
+    const faqs = [
+      faq('cn1', 'Công nghệ lọc không khí của quạt BB là công nghệ gì?'),
+      faq('cn2', 'Công nghệ Plasmacluster ion có tác dụng gì?'),
+    ];
+
+    expect(rankFaqs(faqs, 'con nay cs bn w b', GLOSSARY)).toEqual([]);
+  });
+
+  it('mot tu khop la tu DUY NHAT trong tap FAQ thi van du', () => {
+    // "hanh" (bao hanh) chi xuat hien o dung mot cau -> khop mot tu nhung la bang chung chac.
+    const faqs = [
+      faq('bh', 'Quạt được bảo hành bao lâu?'),
+      faq('mau', 'Màu sắc của quạt BB?'),
+      faq('on', 'Quạt ồn thế e?'),
+    ];
+
+    expect(rankFaqs(faqs, 'bao hanh bnhieu lau b', GLOSSARY).map((item) => item.id)).toEqual([
+      'bh',
+    ]);
+  });
+});

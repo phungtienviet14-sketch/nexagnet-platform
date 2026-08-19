@@ -76,6 +76,18 @@ const STOPWORDS = new Set([
   'kia',
   'rat',
   'hoac',
+  // Tu DE HOI: chung noi khach dang hoi, khong noi khach hoi VE CAI GI. Bo chung la bat buoc sau
+  // khi co mo rong viet tat, vi `bn` no ra `bao nhieu` — hai token khong mang nghia san pham
+  // nhung du hiem trong tap FAQ de an diem IDF cao. Do tren du lieu that (21 FAQ BB-GREY):
+  // "con nay cs bn w b" (cong suat bao nhieu watt) truoc khi bo cho ra 5 ket qua dan dau boi
+  // "BB loc duoc dien tich bao nhieu m2" — trong khi BB-GREY KHONG CO cau nao ve cong suat, tuc
+  // dung ra phai chuyen Sale. Tra lai sai con te hon khong tra loi.
+  // `bao` trung mat chu voi "bao" trong "bao hanh"/"bao duong", nhung hai cum do van nhan dien
+  // duoc bang `hanh`/`duong` — da kiem bang test "bao hanh bao lau".
+  'bao',
+  'nhieu',
+  'nao',
+  'lau',
 ]);
 
 /** Cat theo moi thu khong phai chu/so — dau cau, emoji, xuong dong. */
@@ -113,6 +125,36 @@ function queryTokens(normalized: string, glossary: readonly GlossaryTerm[]): Set
 }
 
 /**
+ * Duoi nguong nay thi mot lan khop chua phai bang chung: khach go 5-6 tu ma cau FAQ chi trung
+ * DUNG MOT tu chung thuong la trung mat chu, khong phai trung y.
+ */
+const MIN_MATCHED_TERMS = 2;
+
+/**
+ * Co du bang chung de dua cau FAQ nay ra khong?
+ *
+ * Do tren du lieu that (21 FAQ BB-GREY, 19/08/2026): khach hoi "con nay cs bn w b" (cong suat bao
+ * nhieu watt) trong khi BB-GREY KHONG CO cau nao ve cong suat. Bon cau van duoc keo ra, deu chi
+ * vi trung DUNG MOT tu: "cong" (trung mat chu giua "cong suat" va "cong nghe") va "may". Khong bo
+ * loc tan suat nao bat duoc kieu trung mat chu do — chi co dem so tu da khop.
+ *
+ * Tra loi sai chu de con te hon chuyen Sale, nen mac dinh la TU CHOI. Hai ngoai le:
+ * - Truy van qua ngan (<=2 tu noi dung): khong con gi de doi hoi them.
+ * - Tu da khop la tu DUY NHAT trong ca tap FAQ (`df === 1`): "hanh" trong "bao hanh" chi xuat
+ *   hien o dung mot cau, khop mot tu nhung la bang chung chac.
+ */
+function isEvidenceEnough(
+  matched: readonly string[],
+  queryTerms: number,
+  documentFrequency: ReadonlyMap<string, number>,
+): boolean {
+  if (matched.length >= MIN_MATCHED_TERMS) return true;
+  if (queryTerms <= MIN_MATCHED_TERMS) return true;
+  const only = matched[0];
+  return only !== undefined && documentFrequency.get(only) === 1;
+}
+
+/**
  * Xep FAQ theo do lien quan voi tin khach, cao xuong thap; bo cac FAQ khong khop token nao va cac
  * FAQ khop qua yeu so voi cau dan dau. Tra ve toi da `MAX_FAQ_ANSWERS`.
  *
@@ -141,6 +183,7 @@ export function rankFaqs<T extends { question: string }>(
   const scored = faqs
     .map((faq, index) => {
       const document = documents[index] ?? [];
+      const matched: string[] = [];
       let score = 0;
       for (const term of query) {
         const seen = documentFrequency.get(term) ?? 0;
@@ -152,10 +195,13 @@ export function rankFaqs<T extends { question: string }>(
           (frequency * (K1 + 1)) /
           (frequency + K1 * (1 - B + (B * document.length) / averageLength));
         score += idf * saturation;
+        matched.push(term);
       }
-      return { faq, score };
+      return { faq, score, matched };
     })
-    .filter((entry) => entry.score > 0)
+    .filter(
+      (entry) => entry.score > 0 && isEvidenceEnough(entry.matched, query.size, documentFrequency),
+    )
     .sort((left, right) => right.score - left.score);
 
   const best = scored[0]?.score ?? 0;
