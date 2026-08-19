@@ -4,6 +4,7 @@
 > **Kế hoạch con:** [gd1-ultty.md](gd1-ultty.md) (**GĐ1 theo spec khách, đọc trước khi làm tiếp**) · [nen-tang.md](dot-0-nen-tang.md) (Đợt 0 — nền phải xong) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4 — 6 tính năng mới) · [nen-tang-da-khach.md](../../kien-truc/nen-tang-da-khach.md) (**Đợt B1-B5 — base dùng chung cho nhiều khách**, lập 11/08 khi có khách thứ 2 Amico; đề xuất D26-D31).
 > **Thủ tục bật pilot:** [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) — **đọc trước khi đụng vào biến môi trường của stack khách**.
 > **Thay thế (11/07/2026):** `tien-do-va-ke-hoach.md` + `checklist-du-lieu-khach.md` + phần trạng thái của `ke-hoach-dai-han.md` + 2 plan code trong `.claude/plans/` — tất cả đã xóa, git history còn.
+> Cập nhật: **19/08/2026 (phiên 4)** — **kế hoạch 5 pha HOÀN TẤT**: Pha 5 (retrieval FAQ theo BM25 + mở rộng viết tắt) xong; vá lỗ trích dẫn của lớp cơ sở `ChannelAdapter`; neo luật ignore `agents/`. Chi tiết §1.-4.
 > Cập nhật: **18/08/2026 (phiên 3)** — đã thực thi kế hoạch 5 pha agent tư vấn (Pha 0-4 xong, Pha 5 còn), gỡ bỏ MockParser khỏi cấu hình (**breaking**), đổi parser sang DeepSeek V4 Flash. Chi tiết §1.-3.
 > Cập nhật: **12/08/2026** — GĐ1 **code-complete** (G1-01…G1-14, 8 commit trên `gd1/code-complete`); 9 cổng go-live đạt 1/9, phần còn lại là dữ liệu + pháp lý + công tắc vận hành.
 
@@ -14,6 +15,67 @@
 - **🟢 PHẠM VI GĐ1 ĐÃ CHỐT (12/08/2026):** AI được tự gửi vào nhóm. Đơn hợp lệ có tổng số lượng `≤` ngưỡng tenant (Ultty hiện chốt **50**) → rules tính → gửi xác nhận → trạng thái `sent`/hàng việc báo Sale nhập KiotViet thủ công; `>` ngưỡng hoặc thiếu dữ liệu → Sale can thiệp trước gửi. GĐ1 không gọi ERP/KiotViet. Business policy nằm trong gói tenant; `AUTO_SEND` chỉ là kill switch runtime có audit.
 - **🟢 DRIVE ĐÃ KIỂM KÊ TOÀN CÂY (12/08/2026):** 122 thư mục, 825 file. Boundary chốt: binary gốc ở Drive/object storage; provenance, product mapping, FAQ, link catalog/video và nội dung tư vấn ở DB/config, quản trị qua `/settings`. Chỉ 5 FAQ dạng DOCX có nội dung; EUS Felix có media nhưng FAQ trống. **Không có bảng giá tháng 8** và **không có nguồn xác nhận công thức 30+1/10+1** ⇒ A6/A7 còn thiếu, không fallback/không suy diễn.
 - **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Ba điểm lệch tiếp theo (baseline đỏ · RBAC hở · readiness mồ côi) **cũng đã đóng** ở Đợt A/B/D.)*
+
+### 1.-4 ▶️▶️▶️▶️▶️ BÀN GIAO PHIÊN 19/08/2026 (PHIÊN 4) — PHA 5 XONG, KẾ HOẠCH 5 PHA HOÀN TẤT
+
+**HEAD:** `fe7a123` trên `main`. **Test:** api **771 pass / 24 skip** · shared 84 · tenant 30 · web 70 · poc-parser 4. Đã chạy **đủ 4 lệnh cổng** của [ci-cd.md §3](../van-hanh/ci-cd.md) — `lint` + `typecheck` + `test` + hợp đồng route Caddy (17/17) — lần đầu tiên trong chuỗi phiên này.
+
+| Commit | Nội dung |
+|---|---|
+| `d074aef` | **fix** — `sendContent` của lớp cơ sở nuốt mất `options` của Pha 4 |
+| `456e24f` | **Pha 5** — retrieval FAQ theo BM25 + mở rộng viết tắt qua glossary |
+| `fe7a123` | **chore** — neo luật ignore `agents/` vào gốc + sửa doc `PARSER_MODE=mock` lạc hậu |
+
+#### PHA 5 — RETRIEVAL FAQ (xong)
+
+Bộ xếp hạng cũ đếm số từ ≥3 ký tự của **câu hỏi FAQ** xuất hiện trong tin khách bằng `String.includes`. Hai lỗ hổng độc lập, cả hai đều đóng:
+
+1. **`includes` khớp chuỗi con, không khớp token** — `"gia"` khớp bên trong `"giao hang"`, nên FAQ về giá bị kéo lên khi khách hỏi giao hàng.
+2. **Không biết gì về viết tắt** — mà viết tắt không dấu là đặc thù đầu vào ghi trong CLAUDE.md. Khách gõ `"bn tien"`, `"cs bn w"`, `"ve sinh ntn"` thì không khớp từ nào với FAQ viết đủ → `safeHandoff(['matching_faq'])` → chuyển Sale.
+
+`content/faq-ranking.ts` (module riêng, 10 test độc lập):
+- **BM25 trên token.** IDF dùng biến **không-bao-giờ-âm** `ln(1 + (N−n+0.5)/(n+0.5))` — tập FAQ một sản phẩm chỉ 1-21 câu, biến cổ điển có thể ra số âm và **lật ngược thứ tự**.
+- **Mở rộng viết tắt qua glossary tenant** (Ultty đã có sẵn 51 mục). Viết tắt một từ khớp theo **token nguyên vẹn**, không khớp chuỗi con — nếu không thì `c`=chị sẽ nổ trong mọi từ có chữ "c". Mục nhiều từ khớp theo cụm. Nghĩa có chú thích trong ngoặc được bóc trước khi tách token.
+- Mở rộng là **cộng thêm**, không thay thế: token gốc ở lại trong túi truy vấn, nên một bản dịch sai chỉ thêm nhiễu chứ không làm mất tín hiệu thật. Và nó **chỉ ảnh hưởng việc CHỌN FAQ nào** — không một chữ nào của khách bị viết lại.
+- **Stopword cố ý giữ ngắn, có ghi lý do trong code.** Sau khi bỏ dấu, nhiều hư từ trùng mặt chữ với từ nội dung. Đã cân nhắc rồi **loại**: `khi` (trùng "khí" — máy lọc không khí), `voi` (vòi), `cua` (cửa), `ban` (bàn/bán), `chi` (chi phí), `gio` (gió/giờ), `day` (dây), `dau` (đầu/dầu).
+- `MAX_FAQ_ANSWERS` 3 → **5**, chỉ an toàn vì có thêm `RELATIVE_SCORE_FLOOR` = 30% điểm câu dẫn đầu chặn câu khớp yếu.
+
+`productAdvice(text, products, glossary?)` — glossary đi từ `AgentOrchestrator` qua `KnowledgeService.glossary()`. Tham số tuỳ chọn nên gọi cũ không vỡ, và `ContentService` **không** phải phụ thuộc `KnowledgeService`.
+
+**Log `FAQ truot: …`** khi rơi vào `matching_faq` — đây chính là phép đo mà kế hoạch yêu cầu (điểm chưa xác minh #2 của phiên 2: *tỉ lệ FAQ trượt thực tế do viết tắt*). Ghi câu **đã chuẩn hoá**, không ghi tin gốc.
+
+#### HAI LỖI PHÁT HIỆN NGOÀI KẾ HOẠCH
+
+**1. `sendContent` của lớp cơ sở nuốt mất trích dẫn (`d074aef`).** Pha 4 nối dây 8 trường quote xuyên suốt adapter → router → client, nhưng `ChannelAdapter.sendContent` nhận `options` rồi gọi `sendMessage` **không kèm nó**. Đó là đường của MockAdapter (co-pilot) và của **mọi adapter không override** — tức bản tư vấn có ảnh/link gửi đi không trích dẫn gì, đúng cái mà bàn giao phiên 3 tuyên bố là đã làm. `ZcaAdapter` có truyền, trừ nhánh lùi về khi tải ảnh hỏng. `BotPlatformAdapter` **giữ nguyên**: Bot Platform không có API quote, bỏ đi là trung thực.
+
+> Lỗ hổng này lộ ra vì `pnpm lint` (`options` khai mà không dùng). **Phiên 3 chưa chạy lệnh này**, nên nó ở lại qua cả 7 commit. Bài học: 4 lệnh cổng của `ci-cd.md` §3 là **bốn**, không phải hai.
+
+**2. `.gitignore` đang nuốt module 6-agent production (`fe7a123`).** Luật trần `agents/` (không có `/` đầu) khớp **mọi** thư mục cùng tên ở **mọi** độ sâu. Ý định ban đầu là bỏ qua `./agents` ở gốc (vendor tools), nhưng thực tế nó bỏ qua cả `apps/api/src/agents/`. 8 file hiện có sống sót vì đã track từ trước — **không mất dữ liệu** — nhưng file MỚI đặt vào đó sẽ bị bỏ im lặng, và `git add` một file đã track trong đó cũng bị từ chối. Đã đổi thành `/agents/`.
+
+#### TRẠNG THÁI KẾ HOẠCH 5 PHA — HOÀN TẤT
+
+| Pha | Trạng thái |
+|---|---|
+| 0 — schema drift `direction` | ✅ phiên 3 |
+| 1 — bot nhớ hội thoại | ✅ phiên 3 |
+| 2 — prompt caching | ✅ phiên 3 |
+| 3 — model thành cấu hình | ✅ phiên 3 |
+| 4 — reply đúng tin | ✅ phiên 3, **vá lỗ lớp cơ sở** phiên 4 |
+| 5 — retrieval FAQ | ✅ **phiên 4** |
+
+#### CÒN LẠI (không thuộc kế hoạch 5 pha)
+
+- **Bake-off model (Quyết định #3) — chưa chạy.** Cần tin nhắn thật + khoá API. Pilot chạy `PARSER_MODE=deepseek` nên `ClaudeParser` **không nằm trên đường đo**; muốn so Sonnet 5 vs DeepSeek V4 Flash phải đo ngoài luồng chạy.
+- **Chưa xác minh trên hệ thật:** `cache_read_input_tokens > 0` từ tin thứ 2 (đã có log `[cache]` để đọc) · bot reply đúng tin trên nhóm Zalo test (cần phiên zca sống) · tỉ lệ FAQ trượt thật (đã có log `FAQ truot:` để đếm).
+- **RAG tiếng Việt bằng `pgvector`** — đường nâng cấp đã khảo sát ở phiên 2, chưa mở. BM25 hiện tại là bước trước nó, không phải bước thay nó.
+
+#### LỆNH XÁC MINH
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && node --test deploy/netviet/caddy-route-contract.test.mjs
+```
+
+---
 
 ### 1.-3 ▶️▶️▶️▶️ BÀN GIAO PHIÊN 18/08/2026 (PHIÊN 3) — ĐÃ THỰC THI KẾ HOẠCH 5 PHA
 
