@@ -14,14 +14,28 @@ Không phải pha nào cũng thấy được trên stack pilot. Đây là sự t
 | 1 — bot nhớ hội thoại | ✅ có | Không phụ thuộc parser hay kênh |
 | 2 — prompt caching | ❌ **không chạy** | `cache_control` chỉ nằm trong `ClaudeParser`; pilot chạy `PARSER_MODE=deepseek` |
 | 3 — model thành cấu hình | 🟡 một nửa | `DEEPSEEK_MODEL=deepseek-v4-flash` có đặt; `ADVICE_MODEL` vô dụng vì bản soạn đang tắt (xem ⚠️ dưới) |
-| 4 — reply đúng tin | 🟡 chỉ khi kênh là zca | `CHANNEL_MODE` đang khoá ở `mock` **có chủ ý** |
+| 4 — reply đúng tin | ✅ có | Kênh **đang là `zca`** (Zalo thật). `AUTO_SEND=off` nên Sale bấm gửi chứ tin không tự đi — trích dẫn vẫn áp dụng ở cả hai đường |
 | 5 — retrieval FAQ | ✅ có | Thuần rules, không phụ thuộc parser/kênh |
 
 > ⚠️ **`render-secrets.sh` không render `ANTHROPIC_API_KEY` và không đặt `ADVICE_COMPOSER`.** Nên trên pilot `AdviceComposer` là **Noop**: câu trả lời tư vấn là bản **nối nguyên văn FAQ**, không phải câu được soạn lại. Đó chính là hiện tượng "AI trả lời như robot" đã ghi trong khảo sát phiên 2 (nguyên nhân #4) — code đã sửa xong nhưng **cấu hình triển khai chưa bật**. Đây là công tắc vận hành có tác động lớn nhất còn lại; bật nó thêm một bên nhận dữ liệu vào luồng nên phải là quyết định của người vận hành, không phải hệ quả phụ của một lần deploy.
 
-### Điều kiện tiên quyết — FAQ phải ở trạng thái `active`
+### Trạng thái thật của pilot (đo 19/08/2026)
 
-Nội dung nạp từ gói tenant vào ở trạng thái **`draft`**. `productAdvice` **chỉ đọc `active`**. Chưa duyệt thì **mọi ca test tư vấn đều chuyển Sale** và bạn sẽ tưởng Pha 5 hỏng.
+Đọc trực tiếp từ container và DB đang chạy, không suy từ file cấu hình:
+
+| Công tắc | Giá trị | Nghĩa khi test |
+|---|---|---|
+| `CHANNEL_MODE` | `zca` | Kênh Zalo **thật**, không phải mock — nhóm E chạy được |
+| `AUTO_SEND` | `off` | **Không tin nào tự đi ra khách.** Sale phải bấm gửi. Đây là lưới an toàn khi test |
+| `PARSER_MODE` | `deepseek` | Nhóm F (caching) không quan sát được |
+| `ADVICE_COMPOSER` | *(rỗng)* | Bản soạn là Noop — câu trả lời là bản nối nguyên văn FAQ |
+| `PERSISTENCE` | `prisma` | Postgres là nguồn sự thật; gói tenant chỉ là hạt giống |
+
+**Nội dung đã duyệt xong — không còn gì chờ:** FAQ `active` **99** · ảnh `active` **102** · bài tư vấn `active` **3** · link `active` **4**.
+
+### Nếu lên một khách MỚI thì mới phải duyệt
+
+Nội dung nạp lần đầu từ gói tenant vào ở trạng thái **`draft`**, mà `productAdvice` **chỉ đọc `active`**. Chưa duyệt thì **mọi ca tư vấn đều chuyển Sale** và người test sẽ tưởng Pha 5 hỏng. Kiểm trước khi kết luận:
 
 ```bash
 curl -s https://operator.<IP>.sslip.io/settings/content | jq '.faqs | group_by(.status) | map({status: .[0].status, n: length})'
@@ -45,7 +59,7 @@ POST /settings/content/faq/bulk-status   {"ids": [...], "status": "active"}
 |---|---|---|
 | **A. Local** (đầy đủ nhất) | `pnpm dev:api` + `POST /demo/simulate` | Đo được cả Pha 2 nếu đặt `PARSER_MODE=claude` |
 | **B. Console pilot** | Màn "Trung tâm điều hành" → ô nhập tin demo | Nghiệm thu trên đúng cấu hình đang chạy |
-| **C. Nhóm Zalo thật** | Cần `CHANNEL_MODE=zca` + tài khoản phụ + văn bản chấp nhận rủi ro | **Chỉ** sau khi làm đủ [checklist-go-live](../van-hanh/checklist-go-live.md) |
+| **C. Nhóm Zalo thật** | Kênh **đã ở `zca`**; cần tài khoản phụ + văn bản chấp nhận rủi ro theo [checklist-go-live](../van-hanh/checklist-go-live.md) | Nghiệm thu nhóm E. `AUTO_SEND=off` là lưới an toàn — không tin nào tự đi ra |
 
 Đường A và B bơm tin qua **cùng một pipeline**:
 
@@ -137,7 +151,7 @@ Ngưỡng tenant Ultty: `maxAutoConfirmQuantity = 50`, **inclusive** — đúng 
 
 Bất biến giữ ở mọi ca: **số lượng do LLM trích xuất, đơn giá và tổng do rules engine tính**. Nếu con số khách tự ghi khác kết quả rules thì lấy rules, và đơn phải bị giữ lại.
 
-## 6. Nhóm E — Pha 4: reply đúng tin *(cần `CHANNEL_MODE=zca`)*
+## 6. Nhóm E — Pha 4: reply đúng tin *(kênh đã ở `zca` — chạy được)*
 
 | # | Thao tác | Kỳ vọng |
 |---|---|---|
@@ -168,7 +182,7 @@ Gửi **2 tin liên tiếp** vào 2 nhóm khác nhau rồi đọc log:
 | B — âm tính | 5 | **5/5** — một ca bịa là trượt cả nhóm |
 | C — nhớ hội thoại | 3 | 3/3, và DB có `senderRole='bot'` |
 | D — đơn hàng | 5 | 5/5, tổng tiền khớp rules |
-| E — reply đúng tin | 3 | 3/3 *(bỏ qua nếu kênh là mock)* |
+| E — reply đúng tin | 3 | 3/3 |
 | F — caching | 1 | `doc > 0` *(bỏ qua nếu parser là deepseek)* |
 
 Nhóm B nặng hơn nhóm A: nới recall mà mất precision là đi lùi, vì tư vấn sai đi thẳng tới khách.
