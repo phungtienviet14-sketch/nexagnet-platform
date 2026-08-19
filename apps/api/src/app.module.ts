@@ -67,6 +67,12 @@ import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { ReadinessController } from './readiness/readiness.controller.js';
 import { ReadinessService } from './readiness/readiness.service.js';
 import { GroupIdentityService } from './groups/group-identity.service.js';
+import { NotificationsController } from './notifications/notifications.controller.js';
+import { SettingsNotificationsController } from './notifications/settings-notifications.controller.js';
+import { NotificationSettingsRepository } from './notifications/notification-settings.repository.js';
+import { EmailLeadDispatcher } from './notifications/email-lead-dispatcher.js';
+import { ZaloLeadDispatcher } from './notifications/zalo-lead-dispatcher.js';
+import { LeadDispatchService } from './notifications/lead-dispatch.service.js';
 
 @Module({
   imports: [
@@ -94,6 +100,8 @@ import { GroupIdentityService } from './groups/group-identity.service.js';
     CatalogMediaController,
     MasterDataController,
     ReadinessController,
+    NotificationsController,
+    SettingsNotificationsController,
   ],
   providers: [
     {
@@ -189,6 +197,10 @@ import { GroupIdentityService } from './groups/group-identity.service.js';
     CampaignScheduler,
     BotPoller,
     ZcaListener,
+    NotificationSettingsRepository,
+    EmailLeadDispatcher,
+    ZaloLeadDispatcher,
+    LeadDispatchService,
   ],
 })
 export class AppModule {

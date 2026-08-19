@@ -24,6 +24,7 @@ logs/
 # Database
 *.sqlite
 *.db
+apps/api/data/
 
 # OS / editor / vendor agent tools
 .DS_Store
