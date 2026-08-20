@@ -4,6 +4,10 @@
 > **Kế hoạch con:** [gd1-ultty.md](gd1-ultty.md) (**GĐ1 theo spec khách, đọc trước khi làm tiếp**) · [nen-tang.md](dot-0-nen-tang.md) (Đợt 0 — nền phải xong) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4 — 6 tính năng mới) · [nen-tang-da-khach.md](../../kien-truc/nen-tang-da-khach.md) (**Đợt B1-B5 — base dùng chung cho nhiều khách**, lập 11/08 khi có khách thứ 2 Amico; đề xuất D26-D31).
 > **Thủ tục bật pilot:** [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) — **đọc trước khi đụng vào biến môi trường của stack khách**.
 > **Thay thế (11/07/2026):** `tien-do-va-ke-hoach.md` + `checklist-du-lieu-khach.md` + phần trạng thái của `ke-hoach-dai-han.md` + 2 plan code trong `.claude/plans/` — tất cả đã xóa, git history còn.
+> Cập nhật: **21/08/2026** — dựng **stack `ultty-gd1-test` RIÊNG** trên cùng VM, không đụng stack DEV
+> `zalo-ultty`. Hạ tầng nay keyed theo **STACK SLUG = tenant + môi trường**; `dev`/`production` suy ra
+> lại đúng tên cũ nên không stack nào phải di chuyển. **Rà lại bảng SAI LỆCH nghiệp vụ**: 5 hàng lỗi
+> thời, code ĐI TRƯỚC tài liệu. 7 lỗi tiềm ẩn lộ ra, đều cùng một hình dạng. Chi tiết §7.
 > Cập nhật: **20/08/2026** — refactor foundation đa khách hoàn tất: tenant contract v2, capability-aware
 > Nest composition, web experience registry, fixture knowledge-only không Zalo/order và CI tự kiểm
 > toàn bộ `tenants/`. Không triển khai hoặc suy diễn domain/UI khách thứ ba. Chi tiết §1.-5 và
@@ -869,8 +873,6 @@ Tổng thanh toán: 5.750.000
 | **Việc kế tiếp đề xuất #2 (11/07):** ghi **`kpi_events`** (message_received · order_created · approved/rejected · sửa field) | Phase 5 phần KHÔNG cần dữ liệu khách; model có sẵn chưa ghi — nền cho dashboard F3 ([nen-tang.md §3](dot-0-nen-tang.md)) |
 | Worktree cũ `.claude/worktrees/cool-maxwell-2f02b3/` | Được loại khỏi phạm vi lint; không xóa dữ liệu người dùng |
 
----
-
 ## 6. Chuyển đổi Dify → Flowise và pilot GCP (28-31/07/2026)
 
 **Mốc nền trước chuyển đổi:**
@@ -921,3 +923,92 @@ Tổng thanh toán: 5.750.000
 - Pilot hiện chỉ dùng dữ liệu TEST với `CHANNEL_MODE=mock`, `PARSER_MODE=flowise`, DeepSeek và `AUTO_SEND=off`. Đây là **kill switch của môi trường pilot**, không phủ định policy GĐ1 production đã chốt. Bot Platform/zca đều bị vô hiệu hóa; không dùng PII thật.
 
 **Cổng còn lại ngoài D18c:** nhận B1-B2 để đo field-accuracy cho D18b; D21 vẫn cần trước sizing 200-350 nhóm thật. Việc bật lại Bot/zca là quyết định vận hành riêng, không nằm trong nghiệm thu hạ tầng D18c.
+
+---
+
+## 7. Bàn giao phiên — môi trường Ultty GD1-test (21/08/2026)
+
+### 7.1 Vì sao phải tách stack
+
+Trước phiên này, `ultty/dev` và `ultty/production` là **CÙNG MỘT STACK** dưới hai cổng duyệt: mọi tên
+hạ tầng (thư mục · compose project ⇒ **tên volume** · tiền tố secret · mạng · alias edge · hostname ·
+unit systemd) đều suy ra từ **tenant slug** một mình. Deploy một nhãn `gd1-test` sẽ **ghi đè thẳng
+lên stack DEV đang chạy**.
+
+Nguồn danh tính nay là **STACK SLUG = tenant + môi trường** (`deploy/netviet/stack-identity.mjs`).
+Bất biến 3 (ci-cd.md) **giữ nguyên chứ không nới**: vẫn MỘT giá trị quyết định đồng thời tất cả tên
+đó. `dev`/`production`/`legacy` suy ra lại đúng tenant slug ⇒ **không stack nào phải di chuyển**.
+
+**Gói khách KHÔNG fork** — vẫn một `tenants/ultty/` cho cả hai stack.
+
+### 7.2 Đã dựng
+
+| | |
+|---|---|
+| Secret | 15 secret `zalo-ultty-gd1-test-*`, VM đọc được, **sạch CR/LF** (kiểm mức byte) |
+| GitHub | environment `gd1-test` + `GD1_TEST_APPROVED_GROUP_HASHES` (hash 2 nhóm TEST; **ID thật không vào git**) |
+| Runtime | prisma · zca · deepseek · gcs · session · **AUTO_SEND=off** — ép cứng trong `render-secrets.sh` |
+| Verify | `collect-deployment-evidence.mjs` (chỉ **quan sát**) + `verify-deployment.mjs` (chỉ **phán xử**) |
+| Runbook | [`van-hanh/ultty-gd1-test-runbook.md`](../van-hanh/ultty-gd1-test-runbook.md) |
+| Backup | tách theo stack (`stacks/<slug>/`) — trước đó 2 stack chia đôi cửa sổ 7 đêm của nhau |
+
+### 7.3 Bảy lỗi tiềm ẩn lộ ra — **cùng một hình dạng**
+
+Không lỗi nào nhìn thấy được bằng đọc code; tất cả chỉ lộ khi **chạy thật vào đích thật**.
+
+| # | Lỗi | Nếu không phát hiện |
+|---|---|---|
+| 1 | Probe preflight gọi `node` trên VM host — VM **không có** node ngoài container | 13/13 secret báo "VM không đọc được" — báo động giả ở đúng chỗ không được phép sai |
+| 2 | Collector trỏ `/readiness`, đọc tenant từ `/health` — route thật là `/settings/readiness` (có auth) | Bằng chứng luôn thiếu trường, verify không bao giờ xanh |
+| 3 | Preflight gọi `secrets versions list` từ CI runner — `github-deployer@` **không có role Secret Manager nào** | Chặn deploy vì một vấn đề **không tồn tại** |
+| 4 | Cổng rollback bắt buộc 2 digest cho **mọi** lần deploy gd1-test | Lần deploy đầu — lần duy nhất chắc chắn không có digest — bị chặn |
+| 5 | `printf` rollback thêm trường `"stack"` mà thiếu tham số | Mọi trường sau lệch; `capturedAt` rỗng; **chỉ lộ đúng lúc cần rollback** |
+| 6 | `require()` trên tệp `mktemp` không đuôi → nạp JSON như JavaScript | Deploy chết **ngay sau khi preflight vừa báo PASS** |
+| 7 | Bản vá áp **một nửa**: `deploy-remote.sh` dùng `$first_release` mà không định nghĩa | Cổng cũ chặn đúng lần deploy mà cờ sinh ra để cho phép |
+
+Lỗi 3 **không** sửa bằng cấp thêm quyền cho CI: probe trên VM (bằng chính SA của VM) đã chứng minh
+cả ba tính chất — tồn tại, có version enabled, đọc được — về đúng principal thật sự cần secret.
+
+### 7.4 Rà nghiệp vụ — bảng SAI LỆCH §13 **lỗi thời 5 hàng**
+
+Chiều lệch **ngược với dự đoán**: code **ĐI TRƯỚC** tài liệu.
+
+| Hàng | Bảng nói | Code thật |
+|---|---|---|
+| 1 VAT · 2 COD · 3 ship | 20k / 30k / 40k / VAT 0,1 | **Bỏ hết số đoán** → `null` + cảnh báo + chuyển Sale |
+| 13 giá lẻ | trả giá sỉ, thiếu qualifier | ✅ xong 18/08 — **phân theo người hỏi** |
+| 14 campaign | `/broadcast` gửi ngay bằng `sleep` | ✅ xong — có scheduler; đường cũ **ném lỗi** |
+
+Hàng 13: cách sửa của code **tốt hơn** đề xuất trong bảng — trả giá lẻ cho đại lý là báo **cao hơn
+~44%** so với giá họ thật sự mua.
+
+**Hai điều phát hiện thêm khi đọc code:**
+
+1. **Mọi cảnh báo đều chặn auto-confirm** (`warnings.length > 0 → false`), nên TH2 và đơn xin VAT về
+   Sale **nhìn từ ngoài giống hệt nhau** → phải đối chiếu **lý do**, không chỉ kết cục.
+2. **`AUTO_SEND=off` chặn auto-confirm hoàn toàn** — trên gd1-test **không đơn nào** tự xác nhận, kể
+   cả đơn hợp lệ ≤50. Đã ghi rõ vào hướng dẫn test, nếu không quan sát đúng đầu tiên của người test
+   sẽ bị ghi thành lỗi.
+
+**Cần bạn xác nhận:** `blockedCapabilities` (VAT · COD · công nợ 7 ngày · khuyến mãi) trong
+`operational-readiness.ts` là `blocking: false` — **không chặn go-live**. Nghĩa là Pilot có thể bật
+khi 4 mảng đó còn trống. Hợp lý (hệ thống từ chối tự xử lý, đẩy Sale) nhưng là **quyết định nghiệp
+vụ**, nên cần người chốt.
+
+### 7.5 Việc kế tiếp — cần người, không tự làm được
+
+1. **Gieo allowlist** 2 nhóm TEST vào `.runtime/zalo/zalo-allowed-groups.json` của stack mới (lệnh
+   trong runbook §4.1).
+2. **Quét QR bằng tài khoản Zalo PHỤ** — một tài khoản chỉ chịu được **một** listener; stack DEV
+   đang giữ tài khoản hiện tại.
+3. **Gửi một tin TEST thật** mang marker → chạy collector + verifier → mới có proof E2E.
+
+### 7.6 Cố ý KHÔNG làm
+
+- Chưa deploy Pilot/production, WATA, Amico.
+- Không đổi tên hạ tầng legacy, không xoá volume/secret, không nới cổng an toàn nào.
+- Stack DEV `zalo-ultty` giữ nguyên `AUTO_SEND=on` — ngoài phạm vi phiên này.
+- `/tmp/netviet-deploy-*` trên VM còn sót từ các lần deploy hỏng (chứa gói khách, mode 0700 root).
+  `deploy-remote.sh` chỉ dọn khi **thành công** — đáng dọn, nhưng là việc riêng.
+
+---
