@@ -28,6 +28,10 @@ try {
       const machineProof = {
         plan: result.plan,
         rollback: result.input?.deployment?.rollback,
+        // Lan deploy dau khong co anh cu de quay ve. Phia shell phai biet dieu do tu day, neu
+        // khong no se doi hai digest va chan dung lan deploy dau tien — lan duy nhat chac chan
+        // khong the co digest nao.
+        firstRelease: result.plan?.firstRelease === true,
       };
       await writeFile(
         process.env.GD1_TEST_PREFLIGHT_OUTPUT,

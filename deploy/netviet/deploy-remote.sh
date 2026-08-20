@@ -125,10 +125,19 @@ write_release_json() {
 
 if [[ "$deployment_environment" == 'gd1-test' ]]; then
   rollback_file="$(mktemp "${app_dir}/.runtime/rollback.XXXXXX")"
-  printf '{"tenant":"%s","environment":"%s","stack":"%s","target":"%s","appDigest":"%s","flowiseDigest":"%s","capturedAt":"%s"}\n' \
-    "$tenant_slug" "$deployment_environment" "$deployment_target_id" \
-    "$rollback_app_image" "$rollback_flowise_image" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    >"$rollback_file"
+  if [[ "$first_release" == '1' ]]; then
+    # STACK MOI THI KHONG CO ANH DE QUAY VE. De trong hai digest ma khong noi gi se bi doc thanh
+    # "chua kip ghi"; cau nay noi thang la khong co, va duong lui la GO STACK XUONG.
+    printf '{"tenant":"%s","environment":"%s","stack":"%s","target":"%s","firstRelease":true,"rollback":"tear down this stack; no previous image exists","capturedAt":"%s"}\n' \
+      "$tenant_slug" "$deployment_environment" "$stack_slug" "$deployment_target_id" \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >"$rollback_file"
+  else
+    printf '{"tenant":"%s","environment":"%s","stack":"%s","target":"%s","appDigest":"%s","flowiseDigest":"%s","capturedAt":"%s"}\n' \
+      "$tenant_slug" "$deployment_environment" "$stack_slug" "$deployment_target_id" \
+      "$rollback_app_image" "$rollback_flowise_image" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      >"$rollback_file"
+  fi
   chmod 0600 "$rollback_file"
   mv -f -- "$rollback_file" "$app_dir/.runtime/rollback-release.json"
 fi
