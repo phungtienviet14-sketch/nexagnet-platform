@@ -431,3 +431,28 @@ test('printf metadata release/rollback co so tham so khop so %s', () => {
     );
   }
 });
+
+// Su co 21/08/2026: stack gd1-test len khoe manh nhung smoke chet vi tin dat hang mau bi phan loai
+// 'khac'. Ly do: voi PERSISTENCE=prisma, KnowledgeService nap tu Postgres va BO QUA seed trong bo
+// nho, nen DB moi = danh muc rong = parser khong co gi de doi chieu. Dung cho BAT KY stack moi nao,
+// khong rieng gd1-test.
+test('deploy gieo nguon su that TRUOC khi chay smoke, va chi khi DB rong', async () => {
+  const deployStack = await readFile(new URL('./deploy-stack.sh', import.meta.url), 'utf8');
+  const seed = await readFile(new URL('./seed-tenant-knowledge.mjs', import.meta.url), 'utf8');
+
+  const seedIndex = deployStack.indexOf('seed-tenant-knowledge.mjs');
+  const migrateIndex = deployStack.indexOf('prisma migrate deploy');
+  const smokeIndex = deployStack.indexOf('smoke-test.mjs');
+
+  assert.ok(seedIndex > 0, 'deploy phai gieo nguon su that');
+  assert.ok(migrateIndex < seedIndex, 'phai migrate truoc khi gieo');
+  assert.ok(seedIndex < smokeIndex, 'phai gieo truoc khi smoke chay duong dat hang');
+
+  // Gieo MOT LAN. Goi khach la hat giong; sau lan dau Postgres moi la nguon su that, nen mot lan
+  // deploy lai khong duoc ghi de thu Sale da sua qua /admin.
+  assert.match(seed, /product\.count\(\)/);
+  assert.match(seed, /khong gieo lai/);
+  // ...va phai la mot giao dich, neu khong mot goi hong nua chung se de lai DB nua voi ma lan sau
+  // van thay "da co san pham" roi bo qua.
+  assert.match(seed, /\$transaction/);
+});
