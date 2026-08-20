@@ -70,7 +70,8 @@ Với mỗi tin, xem 3 cột:
 - Sau khi xác nhận, **Sale vẫn phải tự nhập KiotViet bằng tay**. GĐ1 **chưa nối** KiotViet/Base —
   đây là đúng thiết kế, không phải thiếu sót.
 - **TH1** (giao cho đại lý) → **miễn cước**.
-- **TH2** (giao thẳng khách của đại lý) → có cước + có thể có thu hộ (COD).
+- **TH2** (giao thẳng khách của đại lý) → **luôn chuyển Sale** ở giai đoạn này, vì chưa có bảng cước
+  và biểu phí COD chính thức. Xem §6 để hiểu vì sao các con số hiện 0.
 
 ---
 
@@ -103,21 +104,25 @@ Với **mỗi lỗi**, ghi lại: **(a)** câu bạn gõ nguyên văn, **(b)** k
 
 ---
 
-## 6. ⚠️ Những chỗ ĐÃ BIẾT là chưa đúng — không cần báo lại
+## 6. ⚠️ Những chỗ ĐÃ BIẾT — không cần báo lại
 
-Các mục dưới đây đã được ghi nhận và đang chờ khách cung cấp dữ liệu hoặc chốt chính sách. **Nếu gặp,
-xin bỏ qua** — báo lại chỉ làm loãng danh sách lỗi thật.
+Các mục dưới đây đã được ghi nhận rồi. Hàng có ✅ là **đã sửa xong** (ghi ở đây để bạn khỏi tưởng là
+lỗi); hàng còn lại đang **chờ khách cung cấp dữ liệu hoặc chốt chính sách**. **Nếu gặp, xin bỏ qua** —
+báo lại chỉ làm loãng danh sách lỗi thật.
 
 | Chỗ | Hiện tại đang làm gì | Đúng ra phải thế nào |
 |---|---|---|
-| **VAT** | Mặc định **không** VAT, chỉ áp khi tin có chữ "xuất VAT" | Phải theo **chính sách từng đại lý** (hợp đồng công nợ ghi *giá đã gồm GTGT*) |
-| **Phí COD** | Một mức **phẳng 20.000đ** | Theo **bảng phí riêng** — chưa có bảng |
-| **Cước ship** | Tạm 30.000đ nội thành / 40.000đ tỉnh | Theo **biểu cước Grab/Viettel** — chưa có biểu |
+| **Cước ship & phí COD** | **Chưa cấu hình.** Hệ thống hiển thị **0đ** nhưng **KHÔNG coi là miễn phí** — mọi đơn **TH2** đều kèm cảnh báo *"Thiếu cấu hình: phí ship/COD và bảng vùng chính thức"* và **bị chuyển Sale**, không tự xác nhận | Theo **bảng phí COD** + **biểu cước Grab/Viettel** — khách chưa cung cấp |
+| **VAT** | **Chưa cấu hình.** Không mặc định có hay không VAT. Tin yêu cầu xuất VAT → cảnh báo *"chính sách VAT chưa được duyệt"* → **chuyển Sale** | Phải theo **chính sách từng đại lý** (hợp đồng công nợ ghi *giá đã gồm GTGT*) |
 | **Công nợ 7 ngày** | Chưa có | Khảo sát có nhắc; **chưa rõ** là chính sách riêng hay điều khoản của ký gửi |
-| **Tư vấn giá lẻ** | Đang trả **giá sỉ** | Phải trả **giá lẻ tối thiểu** kèm câu lưu ý "giá tham khảo" |
+| **Tư vấn giá lẻ** | ✅ Đã đúng: **đại lý/CTV hỏi → giá sỉ** (giá họ thật sự mua); **người khác hỏi → giá lẻ tối thiểu + câu lưu ý "giá tham khảo"** | — (đã xong 18/08/2026) |
 | **Khuyến mãi** | **Tắt** hoàn toàn | Chưa có nguồn xác nhận công thức → cố ý không đoán |
-| **Chiến dịch CSKH** | Gửi ngay, chưa có lịch | Phải Sale duyệt → lên lịch → rải đều trong khung giờ |
+| **Chiến dịch CSKH** | ✅ Đã có duyệt + lên lịch + rải đều; đường gửi thẳng cũ **bị chặn** | — (đã xong) |
 | **Duyệt nội bộ** | 1 Sale duyệt 1 chạm | Quy trình thật có **2 cổng kiểm soát nội bộ** + phiếu giao hàng 4 chữ ký |
+
+> **Đọc số 0 cho đúng.** Thấy ship/COD/VAT = 0 thì **không phải** hệ thống tính sai thành miễn phí —
+> là nó **từ chối đoán** khi chưa có bảng cước chính thức, rồi đẩy đơn sang Sale. Đây là hành vi cố ý.
+> Ngược lại, nếu một đơn **TH2 tự xác nhận** mà không chuyển Sale thì **đó mới là lỗi** — báo ngay.
 
 **Còn thiếu dữ liệu đầu vào (đang chờ khách):** bảng phí COD · biểu cước ship · bảng giá tháng
 08/2026 (hiện mới có T7) · danh sách đại lý/CTV đầy đủ + map nhóm Zalo · công thức khuyến mãi.

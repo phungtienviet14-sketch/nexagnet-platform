@@ -32,6 +32,10 @@ deployment_target_id="${DEPLOYMENT_TARGET_ID:-legacy-default}"
 release_git_sha="${RELEASE_GIT_SHA:-0000000000000000000000000000000000000000}"
 release_workflow_run_id="${RELEASE_WORKFLOW_RUN_ID:-0}"
 rollback_app_image="${ROLLBACK_APP_IMAGE:-}"
+# Lan release DAU TIEN cua mot stack khong co anh cu de quay ve, nen khong the doi rollback digest.
+# deploy-ci.sh suy ra tu preflight roi truyen xuong; mac dinh 0 = coi nhu da co ban truoc do, tuc
+# la SIET chat hon, nen mot bien bi mat khong the lam yeu cong nay.
+first_release="${GD1_FIRST_RELEASE:-0}"
 rollback_flowise_image="${ROLLBACK_FLOWISE_IMAGE:-}"
 [[ "$tenant_slug" =~ ^[a-z0-9-]+$ ]] || {
   echo "TENANT_SLUG khong hop le: '$tenant_slug'." >&2
@@ -57,7 +61,7 @@ rollback_flowise_image="${ROLLBACK_FLOWISE_IMAGE:-}"
   echo 'RELEASE_WORKFLOW_RUN_ID phai la so.' >&2
   exit 64
 }
-if [[ "$deployment_environment" == 'gd1-test' ]]; then
+if [[ "$deployment_environment" == 'gd1-test' && "$first_release" != '1' ]]; then
   for digest in "$rollback_app_image" "$rollback_flowise_image"; do
     [[ "$digest" =~ @sha256:[a-f0-9]{64}$ ]] || {
       echo 'GD1-test bat buoc co rollback digest cho ca app va Flowise.' >&2

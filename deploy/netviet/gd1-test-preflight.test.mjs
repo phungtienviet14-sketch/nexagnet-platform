@@ -617,3 +617,29 @@ test('deploy-ci doc ket qua preflight bang JSON.parse, khong bang require()', as
     assert.match(line, /JSON\.parse/, 'phai parse JSON tuong minh');
   }
 });
+
+// Su co 21/08/2026: mot ban va duoc ap MOT NUA. deploy-ci.sh biet lan nay la first release va bo
+// qua yeu cau rollback digest, nhung deploy-remote.sh tren VM van giu cong CU va chan dung lan
+// deploy do — dinh nghia `first_release` chua bao gio duoc ghi vao tep. Hai nua phai di cung nhau:
+// mot nua khong co nua kia thi hoac chan nham, hoac (te hon) mo nham.
+test('deploy-remote nhan va ton trong co first release cua deploy-ci', async () => {
+  const deployRemote = await readFile(new URL('./deploy-remote.sh', import.meta.url), 'utf8');
+  const deployCi = await readFile(new URL('./deploy-ci.sh', import.meta.url), 'utf8');
+
+  // deploy-ci phai TRUYEN co xuong VM.
+  assert.match(deployCi, /GD1_FIRST_RELEASE='\$\{first_release:-0\}'/);
+
+  // deploy-remote phai NHAN co, va mac dinh phai la '0' (siet chat hon, khong phai long hon).
+  assert.match(deployRemote, /first_release="\$\{GD1_FIRST_RELEASE:-0\}"/);
+
+  // ...va cong rollback digest phai thuc su doc co do.
+  const guard = deployRemote.match(
+    /if \[\[ "\$deployment_environment" == 'gd1-test'[^\n]*\]\]; then\n {2}for digest in/,
+  );
+  assert.ok(guard, 'khong tim thay cong rollback digest cua gd1-test');
+  assert.match(
+    guard[0],
+    /first_release" != '1'/,
+    'cong rollback digest phai bo qua khi la first release, neu khong lan deploy dau bi chan',
+  );
+});
