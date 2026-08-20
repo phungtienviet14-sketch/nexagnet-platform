@@ -14,6 +14,8 @@ VM="${VM_NAME:-netviet}"
 # GOI KHACH chon bang slug. Mac dinh `ultty` giu nguyen hanh vi cua cac lan deploy truoc, nen
 # workflow `deploy.yml` cu (khong truyen TENANT) van ra dung stack no van deploy tu truoc toi nay.
 TENANT_SLUG="${TENANT:-ultty}"
+DEPLOYMENT_ENVIRONMENT="${ENVIRONMENT:-legacy}"
+DEPLOYMENT_TARGET_ID="${DEPLOYMENT_TARGET_ID:-legacy-default}"
 # KHACH "CHINH" giu ten mien TRAN (`operator.<ip>.sslip.io`) lam ten chinh thuc; moi khach khac
 # dung ten mang slug. Khong phai tham my: `OPERATOR_DOMAIN` di thang vao `PUBLIC_BASE_URL` va Zalo
 # TU tai anh catalog ve tu do, nen doi ten mien cua khach dang chay se lam chet anh trong moi tin
@@ -33,6 +35,14 @@ CATALOG_ASSETS_DIR="${REPOSITORY_ROOT}/catalog-assets"
   echo "TENANT khong hop le: '${TENANT_SLUG}' (chi cho phep a-z, 0-9 va dau gach ngang)." >&2
   exit 64
 }
+[[ "${DEPLOYMENT_ENVIRONMENT}" =~ ^[a-z0-9-]+$ ]] || {
+  echo "ENVIRONMENT khong hop le: '${DEPLOYMENT_ENVIRONMENT}'." >&2
+  exit 64
+}
+[[ "${DEPLOYMENT_TARGET_ID}" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || {
+  echo "DEPLOYMENT_TARGET_ID khong hop le: '${DEPLOYMENT_TARGET_ID}'." >&2
+  exit 64
+}
 # Fail-fast NGAY BAY GIO chu khong doi toi luc deploy-remote.sh: thieu goi khach thi api/web khong
 # boot duoc, ma phat hien o day thi chua ton cong build va push image.
 [[ -f "${TENANT_PACK_DIR}/tenant.json" ]] || {
@@ -44,6 +54,28 @@ APP_IMAGE="${REGISTRY_HOST}/${PROJECT_ID}/${REPOSITORY}/zalo-ultty:${GIT_SHA_VAL
 FLOWISE_IMAGE="${REGISTRY_HOST}/${PROJECT_ID}/${REPOSITORY}/flowise-3.1.4-deepseek-fix:${GIT_SHA_VALUE}"
 
 cd "${REPOSITORY_ROOT}"
+
+rollback_app_image=''
+rollback_flowise_image=''
+if [[ "${TENANT_SLUG}" == "ultty" && "${DEPLOYMENT_ENVIRONMENT}" == "gd1-test" ]]; then
+  [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] || {
+    echo 'GITHUB_RUN_ID bat buoc cho release identity cua GD1-test.' >&2
+    exit 1
+  }
+  preflight_output="$(mktemp)"
+  chmod 600 "${preflight_output}"
+  GD1_TEST_PREFLIGHT_OUTPUT="${preflight_output}" node deploy/netviet/run-gd1-test-preflight.mjs
+  rollback_app_image="$(node -e "const p=require(process.argv[1]); process.stdout.write(p.rollback?.appImage ?? '')" "${preflight_output}")"
+  rollback_flowise_image="$(node -e "const p=require(process.argv[1]); process.stdout.write(p.rollback?.flowiseImage ?? '')" "${preflight_output}")"
+  rm -f -- "${preflight_output}"
+  for digest in "${rollback_app_image}" "${rollback_flowise_image}"; do
+    [[ "${digest}" =~ @sha256:[a-f0-9]{64}$ ]] || {
+      echo 'Preflight khong tra du rollback digest app + Flowise.' >&2
+      exit 1
+    }
+  done
+fi
+
 gcloud auth configure-docker "${REGISTRY_HOST}" --quiet
 
 docker build \
@@ -132,6 +164,16 @@ ssh_vm "install -d -m 0700 '${remote_parent}'"
 scp_vm "${staging}/payload.tar.gz" "${remote_parent}/payload.tar.gz"
 ssh_vm "tar -xzf '${remote_parent}/payload.tar.gz' -C '${remote_parent}' && rm -f '${remote_parent}/payload.tar.gz'"
 
-ssh_vm "sudo PRIMARY_TENANT='${PRIMARY_TENANT}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}'"
+ssh_vm "sudo env PRIMARY_TENANT='${PRIMARY_TENANT}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'"
 
-echo "Deploy xong: tenant=${TENANT_SLUG} app=${app_digest}"
+echo "Deploy xong: tenant=${TENANT_SLUG} environment=${DEPLOYMENT_ENVIRONMENT} target=${DEPLOYMENT_TARGET_ID} app=${app_digest} flowise=${flowise_digest}"
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  {
+    echo "### Release: ${TENANT_SLUG} / ${DEPLOYMENT_ENVIRONMENT}"
+    echo "- Target: \`${DEPLOYMENT_TARGET_ID}\`"
+    echo "- Git SHA: \`${GIT_SHA_VALUE}\`"
+    echo "- App: \`${app_digest}\`"
+    echo "- Flowise: \`${flowise_digest}\`"
+    echo "- Workflow run: \`${GITHUB_RUN_ID:-0}\`"
+  } >>"${GITHUB_STEP_SUMMARY}"
+fi

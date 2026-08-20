@@ -8,6 +8,7 @@ FLOWISE_IMAGE_VALUE="${FLOWISE_IMAGE:?FLOWISE_IMAGE is required}"
 # SLUG KHACH quyet dinh: thu muc stack, ten compose project (=> ten volume), tien to ten secret,
 # alias mang tren edge va hostname. Mot bien sai cho ra mot stack khac hoan toan, nen chan ky tu la.
 TENANT_SLUG="${TENANT_SLUG:?TENANT_SLUG is required}"
+DEPLOYMENT_ENVIRONMENT="${DEPLOYMENT_ENVIRONMENT:-legacy}"
 [[ "${TENANT_SLUG}" =~ ^[a-z0-9-]+$ ]] || {
   echo "TENANT_SLUG khong hop le: '${TENANT_SLUG}'." >&2
   exit 64
@@ -80,6 +81,22 @@ ZALO_BOT_TOKEN="$(optional_secret zalo-${TENANT_SLUG}-zalo-bot-token)"
 CHANNEL_MODE="$("${SCRIPT_DIR}/channel-mode.sh" read "${RUNTIME_DIR}/channel-mode.env")"
 echo "render-secrets: CHANNEL_MODE=${CHANNEL_MODE} (zca mac dinh cho pilot GĐ1)." >&2
 AUTO_SEND="${AUTO_SEND:-on}"
+PARSER_MODE="${PARSER_MODE:-deepseek}"
+DATA_CLASSIFICATION="${DATA_CLASSIFICATION:-test}"
+if [[ "${DEPLOYMENT_ENVIRONMENT}" == 'gd1-test' ]]; then
+  [[ "${TENANT_SLUG}" == 'ultty' ]] || {
+    echo 'Runtime profile gd1-test chi duoc dang ky cho tenant ultty.' >&2
+    exit 64
+  }
+  [[ "${CHANNEL_MODE}" == 'zca' ]] || {
+    echo 'Ultty GD1-test bat buoc CHANNEL_MODE=zca; khong fallback sang channel khac.' >&2
+    exit 1
+  }
+  CHANNEL_MODE='zca'
+  PARSER_MODE='deepseek'
+  AUTO_SEND='off'
+  DATA_CLASSIFICATION='test'
+fi
 API_KEY=$(secret zalo-${TENANT_SLUG}-api-key)
 # VM da duoc cap quyen doc API key. Dan xuat domain-separated session signing key thay vi doi IAM
 # de them mot secret moi; gia tri goc khong nam trong command args va khong duoc ghi log.
@@ -132,10 +149,11 @@ TENANT_SLUG=${TENANT_SLUG}
 # parser lay lai duoc prompt chung do REPO quan ly (7 intent + few-shot + glossary + cua so hoi
 # thoai Pha 1) thay vi mot ban sao nam trong Agentflow khong ai review.
 # Dat qua bien de doi nguoc chi bang mot dong: PARSER_MODE=flowise ./render-secrets.sh ...
-PARSER_MODE=${PARSER_MODE:-deepseek}
+PARSER_MODE=${PARSER_MODE}
 DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-flash}
 CHANNEL_MODE=${CHANNEL_MODE}
 AUTO_SEND=${AUTO_SEND}
+DATA_CLASSIFICATION=${DATA_CLASSIFICATION}
 GCP_PROJECT_ID=${PROJECT_ID}
 DEMO_DOMAIN=${DEMO_DOMAIN}
 OPERATOR_DOMAIN=${OPERATOR_DOMAIN}

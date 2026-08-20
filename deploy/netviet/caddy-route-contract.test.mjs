@@ -9,8 +9,11 @@ const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.
 const channelMode = await readFile(new URL('./channel-mode.sh', import.meta.url), 'utf8');
 const setChannelMode = await readFile(new URL('./set-channel-mode.sh', import.meta.url), 'utf8');
 const deployPs1 = await readFile(new URL('./deploy.ps1', import.meta.url), 'utf8');
+const deployCi = await readFile(new URL('./deploy-ci.sh', import.meta.url), 'utf8');
+const deployRemote = await readFile(new URL('./deploy-remote.sh', import.meta.url), 'utf8');
 const smokeTest = await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8');
 const authBootstrap = await readFile(new URL('./bootstrap-auth-user.mjs', import.meta.url), 'utf8');
+const rollback = await readFile(new URL('./rollback.sh', import.meta.url), 'utf8');
 
 test('operator page /zalo goes to Next.js while /zalo/* stays on the API', () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
@@ -277,6 +280,27 @@ test('pilot deploy defaults to zca and auto-send, while preserving a validated c
   assert.match(compose, /AUTO_SEND:\s*\$\{AUTO_SEND:-on\}/);
 });
 
+test('Ultty GD1-test renders an explicit no-mock safety profile without changing pilot defaults', () => {
+  assert.match(renderSecrets, /DEPLOYMENT_ENVIRONMENT/);
+  assert.match(renderSecrets, /gd1-test[\s\S]*CHANNEL_MODE='zca'/);
+  assert.match(renderSecrets, /gd1-test[\s\S]*PARSER_MODE='deepseek'/);
+  assert.match(renderSecrets, /gd1-test[\s\S]*AUTO_SEND='off'/);
+  assert.match(renderSecrets, /gd1-test[\s\S]*DATA_CLASSIFICATION='test'/);
+  assert.match(renderSecrets, /^DATA_CLASSIFICATION=\$\{DATA_CLASSIFICATION\}$/m);
+  assert.match(compose, /DATA_CLASSIFICATION:\s*\$\{DATA_CLASSIFICATION:-test\}/);
+  assert.match(deployRemote, /DEPLOYMENT_ENVIRONMENT/);
+  assert.match(deployCi, /DEPLOYMENT_ENVIRONMENT="\$\{ENVIRONMENT:-legacy\}"/);
+  assert.match(deployCi, /'\$\{DEPLOYMENT_ENVIRONMENT\}'/);
+});
+
+test('rollback restores both immutable app and Flowise images without touching the database', () => {
+  assert.match(rollback, /APP_IMAGE.*FLOWISE_IMAGE/);
+  assert.match(rollback, /\^FLOWISE_IMAGE=/);
+  assert.match(rollback, /pull api web flowise/);
+  assert.match(rollback, /up -d flowise/);
+  assert.doesNotMatch(rollback, /migrate reset|prisma migrate down|drop database/i);
+});
+
 test('deploy smoke cannot approve through a live Zalo API transport', async () => {
   assert.match(deployStack, /channel_mode="\$\("\$\{APP_DIR\}\/channel-mode\.sh" read/);
   assert.match(deployStack, /-e "CHANNEL_MODE=\$\{channel_mode\}"/);
@@ -334,7 +358,6 @@ test('image khong mang danh tinh khach — TENANT den tu lop deploy luc chay', a
 // ra la doc duoc so lieu cua khach khac. Kiem tra tren IMAGE THAT: image-isolation.contract.mjs.
 test('du lieu khach den tu volume mount, khong nam trong image', async () => {
   const dockerignore = await readFile(new URL('../../.dockerignore', import.meta.url), 'utf8');
-  const deployRemote = await readFile(new URL('./deploy-remote.sh', import.meta.url), 'utf8');
 
   // Build context khong co `tenants/` -> khong `COPY` nao cham toi duoc, ke ca `COPY . .`.
   assert.match(dockerignore, /^tenants$/m);

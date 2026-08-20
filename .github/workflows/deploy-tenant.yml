@@ -37,10 +37,12 @@ on:
         type: choice
         options:
           - dev
+          - gd1-test
           - production
         default: 'dev'
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 

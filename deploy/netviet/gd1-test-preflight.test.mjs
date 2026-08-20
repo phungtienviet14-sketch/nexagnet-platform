@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { formatDeploymentPlan, validateGd1TestPreflight } from './gd1-test-preflight.mjs';
+import {
+  collectGd1TestPreflight,
+  formatDeploymentPlan,
+  hashZaloGroupId,
+  validateGd1TestPreflight,
+} from './gd1-test-preflight.mjs';
 
 const digest = (character) =>
   `asia-southeast1-docker.pkg.dev/example/netviet/app@sha256:${character.repeat(64)}`;
@@ -111,6 +117,98 @@ test('accepts an explicit no-mock Ultty GD1-test deployment contract', () => {
   assert.equal(result.plan.expectedIntegrations, 'channel=zca, parser=deepseek, media=gcs');
 });
 
+test('collector builds a validated redacted snapshot from live read-only probes', async () => {
+  const commands = [];
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const appImage = digest('d');
+  const flowiseImage = digest('e');
+  const env = {
+    TENANT: 'ultty',
+    ENVIRONMENT: 'gd1-test',
+    GCP_PROJECT_ID: 'example',
+    GCP_REGION: 'asia-southeast1',
+    GCP_ZONE: 'asia-southeast1-b',
+    VM_NAME: 'netviet',
+    GIT_SHA: 'a'.repeat(40),
+    GITHUB_REF: 'refs/heads/main',
+    GD1_TEST_TARGET_CONFIRMED: '1',
+    GD1_TEST_CI_CONCLUSION: 'success',
+    GD1_TEST_APPROVED_GROUP_HASHES: rawGroups.map(hashZaloGroupId).join(','),
+  };
+  const run = async (program, args) => {
+    commands.push([program, ...args].join(' '));
+    const commandText = args.join(' ');
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('loadEnv')) {
+      return [
+        'PERSISTENCE=prisma',
+        'CHANNEL_MODE=zca',
+        'PARSER_MODE=deepseek',
+        'MEDIA_STORE=gcs',
+        'AUTH_MODE=session',
+        'AUTO_SEND=off',
+        'DATA_CLASSIFICATION=test',
+      ].join('\n');
+    }
+    if (commandText.includes('zalo-allowed-groups.json')) {
+      return rawGroups.map(hashZaloGroupId).join('\n');
+    }
+    if (commandText.includes('zalo-cred.json')) return 'regular file|600|512\n';
+    if (commandText.includes('runtime_value APP_IMAGE')) return `${appImage}\n`;
+    if (commandText.includes('runtime_value FLOWISE_IMAGE')) return `${flowiseImage}\n`;
+    if (commandText.includes('secrets versions list')) return '1\n';
+    if (commandText.includes('secrets versions access')) return 'nonempty|0|0\n';
+    if (commandText.includes('smoke-test.mjs')) return 'Pilot smoke OK\n';
+    throw new Error(`unexpected command: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.plan.approvedAllowedGroupCount, 2);
+  assert.equal(result.input.deployment.rollback.appImage, appImage);
+  assert.equal(result.input.deployment.providerProof.healthPassed, true);
+  assert.equal(result.input.deployment.providerProof.fallbackDisabled, true);
+  assert.deepEqual(result.input.deployment.approvedAllowedGroups, rawGroups.map(hashZaloGroupId));
+  assert.deepEqual(result.input.deployment.observedAllowedGroups, rawGroups.map(hashZaloGroupId));
+  const commandLog = commands.join('\n');
+  assert.match(commandLog, /smoke-test\.mjs/);
+  for (const rawGroup of rawGroups) assert.doesNotMatch(commandLog, new RegExp(rawGroup));
+});
+
+test('collector fails closed without approved TEST group hashes', async () => {
+  const result = await collectGd1TestPreflight({
+    env: {
+      TENANT: 'ultty',
+      ENVIRONMENT: 'gd1-test',
+      GCP_PROJECT_ID: 'example',
+      GIT_SHA: 'a'.repeat(40),
+      GITHUB_REF: 'refs/heads/main',
+      GD1_TEST_TARGET_CONFIRMED: '1',
+      GD1_TEST_CI_CONCLUSION: 'success',
+    },
+    run: async () => {
+      throw new Error('collector should not probe remote state before static inputs are complete');
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /approved TEST group hashes/);
+});
+
+test('deploy-ci runs Ultty GD1-test preflight before any image build or push', async () => {
+  const deployCi = await readFile(new URL('./deploy-ci.sh', import.meta.url), 'utf8');
+  const preflightIndex = deployCi.indexOf('node deploy/netviet/run-gd1-test-preflight.mjs');
+  const buildIndex = deployCi.indexOf('docker build');
+  const pushIndex = deployCi.indexOf('docker push');
+
+  assert.ok(preflightIndex > 0, 'deploy-ci must invoke the GD1-test preflight');
+  assert.ok(preflightIndex < buildIndex, 'preflight must run before app image build');
+  assert.ok(preflightIndex < pushIndex, 'preflight must run before image push');
+  assert.match(deployCi, /\$\{TENANT_SLUG\}"\s*==\s*"ultty"/);
+  assert.match(deployCi, /\$\{DEPLOYMENT_ENVIRONMENT\}"\s*==\s*"gd1-test"/);
+});
+
 test('rejects an unconfirmed or ambiguous deployment target', () => {
   const base = validInput();
   const input = {
@@ -189,6 +287,23 @@ test('rejects an unapproved Zalo group or an incomplete approved set', () => {
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join('\n'), /allowed groups do not exactly match/);
+});
+
+test('rejects GD1-test snapshots that do not name exactly two approved TEST groups', () => {
+  const base = validInput();
+  const input = {
+    ...base,
+    deployment: {
+      ...base.deployment,
+      approvedAllowedGroups: ['group-test-a'],
+      observedAllowedGroups: ['group-test-a'],
+    },
+  };
+
+  const result = validateGd1TestPreflight(input);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /exactly two approved TEST groups/);
 });
 
 test('rejects missing ZCA credentials and unhealthy secret metadata', () => {
