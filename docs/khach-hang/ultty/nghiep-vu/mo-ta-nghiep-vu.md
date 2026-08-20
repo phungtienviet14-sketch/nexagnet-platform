@@ -197,11 +197,16 @@ Bảo hành **18–36 tháng**. AI **tiếp nhận + phân nhánh + tạo phiế
 
 ## 13. ⚠️ BẢNG SAI LỆCH: nguồn gốc ↔ code hiện tại
 
+> **Rà lại 21/08/2026.** Năm hàng dưới đây đã **lỗi thời** so với code và được cập nhật trong lần rà
+> này: #1 #2 #3 (engine **không còn đoán số** — bỏ hẳn 20k/30k/40k/VAT 0,1, chuyển sang `null` +
+> cảnh báo + đẩy Sale), #13 và #14 (**đã xong**). Bài học: bảng này **tụt lại sau code**, nên đọc nó
+> phải kèm ngày rà. Khi sửa rules engine, đối chiếu code trước rồi mới tin bảng.
+
 | # | Nguồn gốc nói | Code / tài liệu cũ nói | Mức | Hành động |
 |---|---|---|---|---|
-| 1 | **VAT:** hợp đồng công nợ B2B ghi *"giá bao gồm GTGT, xuất hóa đơn theo từng lần giao hàng thành công"*; ký gửi → xuất HĐ cuối tháng. Khảo sát: *"tùy trường hợp"*, kế toán xuất nháp → khách kiểm → xuất. | Mặc định **KHÔNG VAT**, chỉ áp khi khách ghi "xuất VAT". | **Cần sửa** | VAT-default nên theo **chính sách/đại lý** (cấu hình), không phải luôn off. |
-| 2 | **Phí COD** tính theo **"biểu mẫu riêng"** (bảng phí), báo trước để đại lý xác nhận. | Phí **phẳng 20.000đ**. | **Cần sửa** | Xin **bảng phí COD** (A3); làm dạng bảng-cấu-hình, không phải 1 số. |
-| 3 | **Cước ship** 1 SP: Grab nội thành / Viettel tỉnh — **không có mức tiền** ở bất kỳ file nào đã đọc. | 30.000đ / 40.000đ. | **Tạm tính** | Xin biểu cước (A3). TH1 miễn ship thì ✅ đúng. |
+| 1 | **VAT:** hợp đồng công nợ B2B ghi *"giá bao gồm GTGT, xuất hóa đơn theo từng lần giao hàng thành công"*; ký gửi → xuất HĐ cuối tháng. Khảo sát: *"tùy trường hợp"*, kế toán xuất nháp → khách kiểm → xuất. | ~~Mặc định **KHÔNG VAT**~~ → nay `vatRate = null`, engine đặt VAT = 0 **kèm cảnh báo** *"chính sách VAT chưa được duyệt"* và **chuyển Sale**. | 🟡 **Đã hết đoán, còn chờ quyết định** | Không còn mặc định sai. Vẫn cần **D8** (VAT theo chính sách/đại lý) mới tính được thật. |
+| 2 | **Phí COD** tính theo **"biểu mẫu riêng"** (bảng phí), báo trước để đại lý xác nhận. | ~~Phí **phẳng 20.000đ**~~ → nay `codFee = null`, engine đặt 0 **kèm cảnh báo** *"Thiếu cấu hình: phí ship/COD và bảng vùng chính thức"*, mọi đơn TH2 **chuyển Sale**. | 🟡 **Đã hết đoán, còn chờ dữ liệu** | Xin **bảng phí COD** (A3). Số 0 hiện tại **không** nghĩa là miễn phí. |
+| 3 | **Cước ship** 1 SP: Grab nội thành / Viettel tỉnh — **không có mức tiền** ở bất kỳ file nào đã đọc. | ~~30.000đ / 40.000đ~~ → nay `shipFeeNoiThanh`/`shipFeeTinh` = `null`, xử lý như hàng #2. | 🟡 **Đã hết đoán, còn chờ dữ liệu** | Xin biểu cước (A3). TH1 miễn ship vẫn ✅ đúng. |
 | 4 | Khảo sát liệt kê **PO "Công nợ 7 ngày"**; hồ sơ chỉ có PO 30/45/ký gửi. | Chỉ `cong_no_30`, `cong_no_45`. | **Cần xác minh** | Hỏi khách: có chính sách 7 ngày riêng, hay là điều khoản TT-7-ngày của ký gửi? |
 | 5 | Quy trình có **2 cổng duyệt KSNB** + **BPVH**; PGH cần 4 chữ ký; PO đóng dấu treo. | "1 Sale duyệt 1 chạm"; không có KSNB/BPVH; không sinh PGH/PO. | **Ghi chú** | Phase sau: mô hình vai + trạng thái sau `synced`. Ảnh hưởng auth (Phase 5). |
 | 6 | Điều khoản công nợ: **phạt 1%/ngày**, **>60 ngày ngừng cấp**, **đợt sau trả đợt trước**, **báo trước 5 ngày**. | Không mô hình hoá. | **Ghi chú** | Module theo dõi công nợ (sau). |
@@ -211,8 +216,8 @@ Bảo hành **18–36 tháng**. AI **tiếp nhận + phân nhánh + tạo phiế
 | 10 | **Bảng giá 19 SKU** (Đơn giá CTV). | `seed.ts` `wholesale`. | ✅ **ĐÚNG** | Không đổi. |
 | 11 | **TH1 miễn phí giao hàng.** | `orderType==='TH1' → shippingFee=0`. | ✅ **ĐÚNG** | Không đổi. |
 | 12 | GĐ1: đơn hợp lệ `≤50` tự gửi; `>50` Sale can thiệp trước gửi; sau gửi Sale nhập KiotViet tay. | Policy tenant inclusive + `sent` + handoff Sale bền trong `OrderView`; không gọi ERP. | ✅ **ĐÚNG sau P1** | Giữ risk giám sát tách biệt khỏi policy outbound. |
-| 13 | Tư vấn lẻ dùng giá bán lẻ tối thiểu kèm qualifier. | `hoi_gia` đang dùng `wholesale`; chưa có qualifier config. | **Cần sửa P2** | Field/template tenant + price freshness. |
-| 14 | Campaign phải Sale duyệt, gửi theo lịch và phân bổ trong cửa sổ. | `/broadcast` gửi ngay bằng vòng `sleep`, không persistence/scheduler. | **Cần sửa P3** | Campaign/delivery state machine + durable scheduler/limiter. |
+| 13 | Tư vấn lẻ dùng giá bán lẻ tối thiểu kèm qualifier. | ~~`hoi_gia` dùng `wholesale`; chưa có qualifier~~ → nay **phân theo người hỏi**: đại lý/CTV → `wholesale` (giá họ thật sự mua); người khác → `retailAdvice.priceField` của tenant + câu qualifier. | ✅ **XONG 18/08/2026** | Tốt hơn đề xuất cũ: trả giá lẻ cho đại lý là báo cao hơn ~44% so với giá họ mua. |
+| 14 | Campaign phải Sale duyệt, gửi theo lịch và phân bổ trong cửa sổ. | ~~`/broadcast` gửi ngay bằng vòng `sleep`~~ → nay có `CampaignScheduler` + schedule/occurrence/repository, wire trong `app-composition`; đường `/broadcast` cũ **ném lỗi** trừ `dryRun`. | ✅ **XONG** | Đường vòng qua approval đã bị chặn ở code, không chỉ ở quy ước. |
 | 15 | Khuyến mãi chỉ áp khi có nguồn xác nhận công thức. | Chưa có model; ảnh/tên gọi chưa đủ suy ra. | **Giữ inactive** | Không hard-code 30+1/10+1. |
 | 16 | File Drive là nguồn gốc; metadata/FAQ/mapping/link quản trị trong DB/config. | Chưa có schema/import/settings; nhiều folder FAQ/EUS trống. | **Cần sửa P4** | Provenance/readiness + import idempotent + UI chuyên biệt. |
 
