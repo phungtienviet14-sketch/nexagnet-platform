@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
+import { resolveStackIdentity } from './stack-identity.mjs';
+
 const execFileAsync = promisify(execFile);
 
 const REQUIRED_CAPABILITIES = [
@@ -46,7 +48,6 @@ const DEFAULT_GCP_PROJECT_ID = 'netviet-host-968934832433';
 const DEFAULT_GCP_REGION = 'asia-southeast1';
 const DEFAULT_GCP_ZONE = 'asia-southeast1-b';
 const DEFAULT_VM_NAME = 'netviet';
-const ULTYY_APP_DIR = '/srv/netviet/apps/zalo-ultty';
 const REQUIRED_APPROVED_TEST_GROUP_COUNT = 2;
 
 export function hashZaloGroupId(groupId) {
@@ -112,6 +113,7 @@ function parseZcaSession(output) {
 function parseSecretProbe(output) {
   const [nonEmpty, carriageReturn, lineFeed] = output.trim().split('|');
   return {
+    accessible: nonEmpty === 'nonempty' || nonEmpty === 'empty',
     nonEmpty: nonEmpty === 'nonempty',
     hasCarriageReturn: carriageReturn === '1',
     hasLineFeed: lineFeed === '1',
@@ -145,7 +147,11 @@ function sshArgs(env, command) {
   ];
 }
 
-function remoteRuntimeCommand() {
+function remoteStackExistsCommand(appDir) {
+  return `test -f '${appDir}/.runtime/secrets.env' && echo present || echo absent`;
+}
+
+function remoteRuntimeCommand(appDir) {
   const keys = [
     'PERSISTENCE',
     'CHANNEL_MODE',
@@ -163,15 +169,15 @@ function remoteRuntimeCommand() {
   ].join(' ');
   return [
     'set -euo pipefail',
-    `cd '${ULTYY_APP_DIR}'`,
+    `cd '${appDir}'`,
     `docker compose --env-file .runtime/secrets.env -f compose.yaml exec -T api node --input-type=module -e '${program}'`,
   ].join('; ');
 }
 
-function remoteProviderSmokeCommand(hostname) {
+function remoteProviderSmokeCommand(appDir, hostname) {
   return [
     'set -euo pipefail',
-    `cd '${ULTYY_APP_DIR}'`,
+    `cd '${appDir}'`,
     'docker compose --env-file .runtime/secrets.env -f compose.yaml --profile tools run --rm --no-deps -T',
     `-e 'PILOT_BASE_URL=https://${hostname}'`,
     "-e 'CHANNEL_MODE=zca'",
@@ -179,40 +185,58 @@ function remoteProviderSmokeCommand(hostname) {
   ].join(' ');
 }
 
-function remoteAllowedGroupsHashCommand() {
+function remoteAllowedGroupsHashCommand(appDir) {
+  // python3, khong phai node: VM host KHONG cai node (da xac minh 20/08/2026) — node chi co ben
+  // trong container. Mot probe goi `node` tren host luon that bai va bi doc nham thanh "khong doc
+  // duoc", tuc la preflight bao dong gia dung vao dung cho no phai chinh xac nhat.
   return [
     'set -euo pipefail',
-    `node - <<'NODE'`,
-    `const { createHash } = require('node:crypto');`,
-    `const { readFileSync } = require('node:fs');`,
-    `const path = '${ULTYY_APP_DIR}/.runtime/zalo/zalo-allowed-groups.json';`,
-    `const groups = JSON.parse(readFileSync(path, 'utf8'));`,
-    `if (!Array.isArray(groups)) process.exit(66);`,
-    `for (const group of groups) {`,
-    `  if (typeof group !== 'string' || !group.trim()) process.exit(67);`,
-    `  console.log(createHash('sha256').update(group.trim(), 'utf8').digest('hex'));`,
-    `}`,
-    'NODE',
+    `python3 - <<'PY'`,
+    'import hashlib, json, sys',
+    `path = '${appDir}/.runtime/zalo/zalo-allowed-groups.json'`,
+    'try:',
+    "    groups = json.load(open(path, encoding='utf-8'))",
+    'except FileNotFoundError:',
+    '    sys.exit(65)',
+    'if not isinstance(groups, list):',
+    '    sys.exit(66)',
+    'for group in groups:',
+    '    if not isinstance(group, str) or not group.strip():',
+    '        sys.exit(67)',
+    "    print(hashlib.sha256(group.strip().encode('utf-8')).hexdigest())",
+    'PY',
   ].join('\n');
 }
 
-function remoteZcaSessionCommand() {
-  return `stat -c '%F|%a|%s' '${ULTYY_APP_DIR}/.runtime/zalo/zalo-cred.json'`;
+function remoteZcaSessionCommand(appDir) {
+  return `stat -c '%F|%a|%s' '${appDir}/.runtime/zalo/zalo-cred.json'`;
 }
 
-function remoteRuntimeValueCommand(key) {
+function remoteRuntimeValueCommand(appDir, key) {
   return [
     'set -euo pipefail',
-    `cd '${ULTYY_APP_DIR}'`,
+    `cd '${appDir}'`,
     'runtime_value() { sed -n "s/^$1=//p" .runtime/secrets.env | tail -n 1; }',
     `runtime_value ${key}`,
   ].join('; ');
 }
 
 function remoteSecretProbeCommand(projectId, secretName) {
+  // Chi dung tien ich POSIX co san tren VM (`tr`, `wc`, `stat`) — xem chu thich o
+  // remoteAllowedGroupsHashCommand ve ly do khong dung node o day.
+  // Gia tri secret KHONG bao gio ra stdout: no di vao mot tep tam roi chi co ba con so duoc in.
   return [
     'set -euo pipefail',
-    `gcloud secrets versions access latest --project '${projectId}' --secret '${secretName}' 2>/dev/null | node -e "let v=''; process.stdin.setEncoding('utf8'); process.stdin.on('data', c => v += c); process.stdin.on('end', () => { const non=v.length>0?'nonempty':'empty'; const cr=v.includes('\\\\r')?'1':'0'; const lf=v.includes('\\\\n')?'1':'0'; console.log([non,cr,lf].join('|')); });"`,
+    "probe=$(mktemp)",
+    'trap \'rm -f -- "$probe"\' EXIT',
+    `gcloud secrets versions access latest --project '${projectId}' --secret '${secretName}' >"$probe" 2>/dev/null || { echo 'denied|0|0'; exit 0; }`,
+    'bytes=$(stat -c %s "$probe")',
+    "cr=$(tr -dc '\\r' <\"$probe\" | wc -c)",
+    "lf=$(tr -dc '\\n' <\"$probe\" | wc -c)",
+    'if [ "$bytes" -gt 0 ]; then non=nonempty; else non=empty; fi',
+    'if [ "$cr" -gt 0 ]; then crf=1; else crf=0; fi',
+    'if [ "$lf" -gt 0 ]; then lff=1; else lff=0; fi',
+    'echo "$non|$crf|$lff"',
   ].join('; ');
 }
 
@@ -228,11 +252,11 @@ async function safeRun(run, program, args) {
   }
 }
 
-async function collectSecretMetadata({ env, run, tenantSlug }) {
+async function collectSecretMetadata({ env, run, stackSlug }) {
   const projectId = env.GCP_PROJECT_ID ?? DEFAULT_GCP_PROJECT_ID;
   const secrets = [];
   for (const suffix of REQUIRED_SECRET_SUFFIXES) {
-    const name = `zalo-${tenantSlug}-${suffix}`;
+    const name = `zalo-${stackSlug}-${suffix}`;
     const enabled = await safeRun(run, 'gcloud', [
       'secrets',
       'versions',
@@ -258,7 +282,7 @@ async function collectSecretMetadata({ env, run, tenantSlug }) {
       name,
       exists: enabled.ok,
       enabledVersion: enabled.ok && isNonEmptyString(enabled.stdout),
-      vmCanAccess: probed.ok,
+      vmCanAccess: probed.ok && probe.accessible === true,
       nonEmpty: probe.nonEmpty === true,
       hasCarriageReturn: probe.hasCarriageReturn === true,
       hasLineFeed: probe.hasLineFeed === true,
@@ -282,6 +306,16 @@ function staticCollectionErrors(env, approvedAllowedGroups) {
   }
   return errors;
 }
+
+/**
+ * Runtime the gd1-test profile is contracted to produce.
+ *
+ * On a FIRST release the stack does not exist yet, so there is nothing to observe. Declaring the
+ * planned runtime here is not a substitute for proof: it is checked against REQUIRED_RUNTIME so a
+ * wrong plan is rejected before build, and the real values are then observed by the post-deploy
+ * verifier. Nothing is ever reported as verified on the strength of this object alone.
+ */
+const PLANNED_GD1_TEST_RUNTIME = Object.freeze({ ...REQUIRED_RUNTIME });
 
 export async function collectGd1TestPreflight(options = {}) {
   const env = options.env ?? process.env;
@@ -314,30 +348,68 @@ export async function collectGd1TestPreflight(options = {}) {
       ])
     ).trim();
     const label = publicIp.replaceAll('.', '-');
-    const runtime = parseRuntimeEnv(await run('gcloud', sshArgs(env, remoteRuntimeCommand())));
-    const observedAllowedGroups = parseGroupHashes(
-      await run('gcloud', sshArgs(env, remoteAllowedGroupsHashCommand())),
-    );
-    const zcaSession = parseZcaSession(await run('gcloud', sshArgs(env, remoteZcaSessionCommand())));
-    const appImage = (await run('gcloud', sshArgs(env, remoteRuntimeValueCommand('APP_IMAGE')))).trim();
-    const flowiseImage = (
-      await run('gcloud', sshArgs(env, remoteRuntimeValueCommand('FLOWISE_IMAGE')))
-    ).trim();
     const tenant = JSON.parse(await readFile(tenantPath, 'utf8'));
-    const credentials = {
-      zcaSession,
-      requiredSecrets: await collectSecretMetadata({ env, run, tenantSlug: tenant.slug }),
-    };
-    const providerSmoke = await safeRun(
+    const identity = resolveStackIdentity({
+      tenant: tenant.slug,
+      environment: env.ENVIRONMENT,
+      primaryTenant: env.PRIMARY_TENANT ?? 'ultty',
+      hostSuffix: `${label}.sslip.io`,
+    });
+
+    // FIRST RELEASE vs REDEPLOY. A brand new stack has no runtime, no session and no previous
+    // image, so probing it would fail for the wrong reason. Detect it explicitly rather than
+    // letting each probe fail and be read as a safety violation.
+    const stackProbe = await safeRun(
       run,
       'gcloud',
-      sshArgs(env, remoteProviderSmokeCommand(`operator.${label}.sslip.io`)),
+      sshArgs(env, remoteStackExistsCommand(identity.appDir)),
     );
+    const firstRelease = !(stackProbe.ok && stackProbe.stdout.trim() === 'present');
+
+    const runtime = firstRelease
+      ? { ...PLANNED_GD1_TEST_RUNTIME }
+      : parseRuntimeEnv(await run('gcloud', sshArgs(env, remoteRuntimeCommand(identity.appDir))));
+    const observedAllowedGroups = firstRelease
+      ? []
+      : parseGroupHashes(
+          await run('gcloud', sshArgs(env, remoteAllowedGroupsHashCommand(identity.appDir))),
+        );
+    const zcaSession = firstRelease
+      ? { deferred: true }
+      : parseZcaSession(
+          await run('gcloud', sshArgs(env, remoteZcaSessionCommand(identity.appDir))),
+        );
+    const appImage = firstRelease
+      ? ''
+      : (
+          await run('gcloud', sshArgs(env, remoteRuntimeValueCommand(identity.appDir, 'APP_IMAGE')))
+        ).trim();
+    const flowiseImage = firstRelease
+      ? ''
+      : (
+          await run(
+            'gcloud',
+            sshArgs(env, remoteRuntimeValueCommand(identity.appDir, 'FLOWISE_IMAGE')),
+          )
+        ).trim();
+    const credentials = {
+      firstRelease,
+      zcaSession,
+      requiredSecrets: await collectSecretMetadata({ env, run, stackSlug: identity.stackSlug }),
+    };
+    const providerSmoke = firstRelease
+      ? { ok: false, deferred: true }
+      : await safeRun(
+          run,
+          'gcloud',
+          sshArgs(env, remoteProviderSmokeCommand(identity.appDir, identity.operatorDomain)),
+        );
     const providerProof = {
+      firstRelease,
       adapter: runtime.parser,
       credentialReady: credentials.requiredSecrets.some(
         (secret) =>
-          secret.name === `zalo-${tenant.slug}-deepseek-api-key` &&
+          secret.name === `${identity.secretPrefix}deepseek-api-key` &&
           secret.enabledVersion &&
           secret.vmCanAccess &&
           secret.nonEmpty,
@@ -356,18 +428,20 @@ export async function collectGd1TestPreflight(options = {}) {
       deployment: {
         environment: env.ENVIRONMENT,
         targetConfirmed: env.GD1_TEST_TARGET_CONFIRMED === '1' || env.GD1_TEST_TARGET_CONFIRMED === 'true',
+        stack: identity.stackSlug,
+        firstRelease,
         target: {
-          id: 'current-shared-vm',
+          id: env.DEPLOYMENT_TARGET_ID ?? 'current-shared-vm',
           server: vmName,
           gcpProjectId: projectId,
           region,
           zone,
-          appDir: ULTYY_APP_DIR,
-          composeProject: 'zalo-ultty',
+          appDir: identity.appDir,
+          composeProject: identity.composeProject,
           database: 'zalo',
-          network: 'zalo-ultty_backend',
-          hostname: `operator.${label}.sslip.io`,
-          secretPrefix: 'zalo-ultty-',
+          network: identity.backendNetwork,
+          hostname: identity.operatorDomain,
+          secretPrefix: identity.secretPrefix,
         },
         git: {
           ref: env.GITHUB_REF,
@@ -379,7 +453,7 @@ export async function collectGd1TestPreflight(options = {}) {
         observedAllowedGroups,
         providerProof,
         credentials,
-        rollback: { appImage, flowiseImage },
+        rollback: firstRelease ? { firstRelease: true } : { appImage, flowiseImage },
       },
     };
     const result = validateGd1TestPreflight(input);
@@ -468,6 +542,26 @@ function runtimeErrors(runtime) {
 }
 
 function providerErrors(providerProof, runtime) {
+  // Smoke provider chay BEN TRONG stack, nen o lan deploy dau khong co gi de chay no. Credential
+  // van bat buoc phai san sang ngay bay gio; con lan goi that duoc chung minh o buoc verify sau
+  // deploy, va khong duoc phep ghi la "da chung minh" truoc do.
+  if (providerProof?.firstRelease === true) {
+    const errors = [];
+    if (providerProof?.adapter !== runtime?.parser) {
+      errors.push('provider adapter must match the selected parser');
+    }
+    if (providerProof?.credentialReady !== true) {
+      errors.push('provider credential must be ready before a first release');
+    }
+    if (providerProof?.fallbackDisabled !== true) {
+      errors.push('provider fallback must be disabled');
+    }
+    return errors;
+  }
+  return providerErrorsForLiveStack(providerProof, runtime);
+}
+
+function providerErrorsForLiveStack(providerProof, runtime) {
   const errors = [];
   if (providerProof?.adapter !== runtime?.parser) {
     errors.push('parser provider proof must match the selected parser');
@@ -485,16 +579,22 @@ function providerErrors(providerProof, runtime) {
   return errors;
 }
 
-function credentialErrors(credentials, tenantSlug) {
+function credentialErrors(credentials, secretPrefix) {
   const errors = [];
   const zcaSession = credentials?.zcaSession;
-  if (
-    zcaSession?.exists !== true ||
-    zcaSession?.regularFile !== true ||
-    zcaSession?.mode !== '600' ||
-    zcaSession?.nonEmpty !== true
-  ) {
-    errors.push('ZCA session credential must be a non-empty regular file with mode 600');
+  // Phien zca duoc tao bang cach QUET QR tren trang operator cua chinh stack do, tuc la sau khi
+  // stack ton tai. O lan deploy dau chua the co phien — day KHONG phai mock: adapter zca that van
+  // duoc nap, chi la chua dang nhap. Bang chung phien `ready` thuoc ve buoc verify sau deploy va
+  // la dieu kien bat buoc TRUOC khi chay E2E, khong phai truoc khi dung stack len.
+  if (credentials?.firstRelease !== true) {
+    if (
+      zcaSession?.exists !== true ||
+      zcaSession?.regularFile !== true ||
+      zcaSession?.mode !== '600' ||
+      zcaSession?.nonEmpty !== true
+    ) {
+      errors.push('ZCA session credential must be a non-empty regular file with mode 600');
+    }
   }
 
   if (!Array.isArray(credentials?.requiredSecrets) || credentials.requiredSecrets.length === 0) {
@@ -502,7 +602,7 @@ function credentialErrors(credentials, tenantSlug) {
     return errors;
   }
 
-  const expectedNames = REQUIRED_SECRET_SUFFIXES.map((suffix) => `zalo-${tenantSlug}-${suffix}`);
+  const expectedNames = REQUIRED_SECRET_SUFFIXES.map((suffix) => `${secretPrefix}${suffix}`);
   const receivedNames = credentials.requiredSecrets.map((secret) => secret?.name);
   if (!exactStringSet(expectedNames, receivedNames)) {
     errors.push('required secret inventory does not exactly match the Ultty GD1-test contract');
@@ -540,11 +640,21 @@ function releaseErrors(deployment) {
   if (deployment?.git?.ciConclusion !== 'success') {
     errors.push('exact deployment SHA CI conclusion must be success');
   }
-  if (!DIGEST_PATTERN.test(deployment?.rollback?.appImage ?? '')) {
-    errors.push('app rollback image must be pinned by digest');
-  }
-  if (!DIGEST_PATTERN.test(deployment?.rollback?.flowiseImage ?? '')) {
-    errors.push('Flowise rollback image must be pinned by digest');
+  // MOT STACK MOI KHONG CO ANH DE QUAY VE. Doi hai rollback digest ngay o lan deploy dau chi de
+  // lai hai lua chon, ca hai deu te: bia ra mot digest gia, hoac khong bao gio deploy duoc lan
+  // dau. Khai bao thang `firstRelease` la duong thu ba trung thuc — va duong rollback tuong ung
+  // khong phai "quay ve anh cu" ma la "go stack moi xuong", vi truoc no khong co gi ca.
+  if (deployment?.firstRelease === true) {
+    if (deployment?.rollback?.firstRelease !== true) {
+      errors.push('a first release must declare rollback.firstRelease instead of digests');
+    }
+  } else {
+    if (!DIGEST_PATTERN.test(deployment?.rollback?.appImage ?? '')) {
+      errors.push('app rollback image must be pinned by digest');
+    }
+    if (!DIGEST_PATTERN.test(deployment?.rollback?.flowiseImage ?? '')) {
+      errors.push('Flowise rollback image must be pinned by digest');
+    }
   }
   return errors;
 }
@@ -562,6 +672,19 @@ function createPlan(tenant, deployment) {
     composeProject: deployment.target.composeProject,
     expectedIntegrations: `channel=${deployment.runtime.channel}, parser=${deployment.runtime.parser}, media=${deployment.runtime.mediaStore}`,
     approvedAllowedGroupCount: deployment.approvedAllowedGroups.length,
+    firstRelease: deployment.firstRelease === true,
+    stack: deployment.stack,
+    deferredToPostDeploy: Object.freeze(
+      deployment.firstRelease === true
+        ? [
+            'observed runtime modes',
+            'zca session ready',
+            'runtime allowlist equals the approved TEST set',
+            'live provider call',
+            'rollback target (first release has none: rollback is stack teardown)',
+          ]
+        : [],
+    ),
   });
 }
 
@@ -574,10 +697,14 @@ export function validateGd1TestPreflight(input) {
     ...runtimeErrors(deployment?.runtime),
     ...tenantErrors(tenant, deployment?.runtime),
     ...providerErrors(deployment?.providerProof, deployment?.runtime),
-    ...credentialErrors(deployment?.credentials, tenant?.slug),
+    ...credentialErrors(deployment?.credentials, deployment?.target?.secretPrefix),
   ];
 
+  // Allowlist cua mot stack moi duoc GIEO luc deploy, nen chua co gi de doi chieu o lan dau. Bo
+  // duoc PHE DUYET thi van bat buoc dung hai ID (kiem ngay duoi), va buoc verify sau deploy phai
+  // doi chieu allowlist that voi dung bo do truoc khi bat ky tin nao duoc xu ly.
   if (
+    deployment?.firstRelease !== true &&
     !exactStringSet(deployment?.approvedAllowedGroups, deployment?.observedAllowedGroups)
   ) {
     errors.push('observed Zalo allowed groups do not exactly match the approved TEST group set');
@@ -615,5 +742,13 @@ export function formatDeploymentPlan(plan) {
     `Compose project: ${plan.composeProject}`,
     `Expected integrations: ${plan.expectedIntegrations}`,
     `Allowed Zalo groups: ${plan.approvedAllowedGroupCount} approved IDs (redacted)`,
+    `Stack: ${plan.stack}`,
+    `First release: ${plan.firstRelease ? 'yes' : 'no'}`,
+    ...(plan.deferredToPostDeploy.length > 0
+      ? [
+          'NOT PROVED YET, deferred to post-deploy verification:',
+          ...plan.deferredToPostDeploy.map((item) => `  - ${item}`),
+        ]
+      : []),
   ].join('\n');
 }

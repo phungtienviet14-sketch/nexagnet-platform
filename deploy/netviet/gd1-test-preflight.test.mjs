@@ -139,6 +139,9 @@ test('collector builds a validated redacted snapshot from live read-only probes'
     commands.push([program, ...args].join(' '));
     const commandText = args.join(' ');
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      return 'present\n';
+    }
     if (commandText.includes('loadEnv')) {
       return [
         'PERSISTENCE=prisma',
@@ -220,6 +223,86 @@ test('the gd1-test runtime profile is refused for any tenant other than Ultty', 
   assert.match(renderSecrets, /\$\{TENANT_SLUG\}"\s*==\s*'ultty'/);
   assert.match(renderSecrets, /AUTO_SEND='off'/);
   assert.match(renderSecrets, /CHANNEL_MODE='zca'/);
+});
+
+test('a first release is collectable and names what it has not proved yet', async () => {
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = {
+    TENANT: 'ultty',
+    ENVIRONMENT: 'gd1-test',
+    GCP_PROJECT_ID: 'example',
+    GCP_REGION: 'asia-southeast1',
+    GCP_ZONE: 'asia-southeast1-b',
+    VM_NAME: 'netviet',
+    GIT_SHA: 'a'.repeat(40),
+    GITHUB_REF: 'refs/heads/main',
+    GD1_TEST_TARGET_CONFIRMED: '1',
+    GD1_TEST_CI_CONCLUSION: 'success',
+    GD1_TEST_APPROVED_GROUP_HASHES: rawGroups.map(hashZaloGroupId).join(','),
+  };
+  const run = async (program, args) => {
+    const commandText = args.join(' ');
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    // The stack does not exist yet: this is what the probe really returns on a first release.
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      return 'absent\n';
+    }
+    if (commandText.includes('secrets versions list')) return '1\n';
+    if (commandText.includes('secrets versions access')) return 'nonempty|0|0\n';
+    throw new Error(`probe must not run against a stack that does not exist: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.plan.firstRelease, true);
+  assert.equal(result.plan.stack, 'ultty-gd1-test');
+  assert.equal(result.plan.composeProject, 'zalo-ultty-gd1-test');
+  assert.equal(result.input.deployment.rollback.firstRelease, true);
+  // Nothing may be reported as proved on a first release just because it could not be probed.
+  assert.ok(result.plan.deferredToPostDeploy.includes('zca session ready'));
+  assert.ok(result.plan.deferredToPostDeploy.includes('live provider call'));
+  assert.match(formatDeploymentPlan(result.plan), /NOT PROVED YET/);
+});
+
+test('a first release still targets a stack of its own, never the live one', async () => {
+  const identityProbes = [];
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = {
+    TENANT: 'ultty',
+    ENVIRONMENT: 'gd1-test',
+    GCP_PROJECT_ID: 'example',
+    GIT_SHA: 'a'.repeat(40),
+    GITHUB_REF: 'refs/heads/main',
+    GD1_TEST_TARGET_CONFIRMED: '1',
+    GD1_TEST_CI_CONCLUSION: 'success',
+    GD1_TEST_APPROVED_GROUP_HASHES: rawGroups.map(hashZaloGroupId).join(','),
+  };
+  const run = async (program, args) => {
+    const commandText = args.join(' ');
+    identityProbes.push(commandText);
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      return 'absent\n';
+    }
+    if (commandText.includes('secrets versions list')) return '1\n';
+    if (commandText.includes('secrets versions access')) return 'nonempty|0|0\n';
+    throw new Error(`unexpected: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  const target = result.input.deployment.target;
+  assert.equal(target.appDir, '/srv/netviet/apps/zalo-ultty-gd1-test');
+  assert.equal(target.composeProject, 'zalo-ultty-gd1-test');
+  assert.equal(target.network, 'zalo-ultty-gd1-test_backend');
+  assert.equal(target.secretPrefix, 'zalo-ultty-gd1-test-');
+  assert.equal(target.hostname, 'operator-ultty-gd1-test.203-0-113-10.sslip.io');
+  // The live stack's paths must never appear in a gd1-test probe.
+  const probeLog = identityProbes.join('\n');
+  assert.doesNotMatch(probeLog, /apps\/zalo-ultty\//);
+  assert.doesNotMatch(probeLog, /--secret zalo-ultty-(?!gd1-test-)/);
 });
 
 test('rejects an unconfirmed or ambiguous deployment target', () => {

@@ -207,12 +207,15 @@ test('dev va production van suy ra dung stack slug cu', () => {
 // gia cua khach nay bang bang gia cua khach kia. Khoa lai: mot nguon slug duy nhat, va phai truyen.
 test('deploy tay truyen slug khach xuong VM thay vi de VM doan', () => {
   assert.match(deployPs1, /\[string\]\$Tenant = \$\(if \(\$env:TENANT\)/);
-  assert.match(deployPs1, /\$AppDirectory = "\/srv\/netviet\/apps\/zalo-\$TenantSlug"/);
+  // Thu muc va tien to secret theo STACK (tenant + moi truong), con GOI KHACH van chon theo
+  // TENANT. Mac dinh `$Stack` rong => StackSlug = TenantSlug, nen moi lan chay cu khong doi hanh vi.
+  assert.match(deployPs1, /\$StackSlug = if \(\$Stack\) \{ \$Stack \} else \{ \$TenantSlug \}/);
+  assert.match(deployPs1, /\$AppDirectory = "\/srv\/netviet\/apps\/zalo-\$StackSlug"/);
   assert.match(deployPs1, /deploy-remote\.sh'[^\n]*'\$PublicIp' '\$TenantSlug'/);
 
   // Khong con ten secret nao cam cung mot khach.
   assert.doesNotMatch(deployPs1, /Ensure-Secret 'zalo-[a-z0-9-]+-/);
-  assert.match(deployPs1, /\$SecretPrefix = "zalo-\$TenantSlug"/);
+  assert.match(deployPs1, /\$SecretPrefix = "zalo-\$StackSlug"/);
 
   // Tao secret va cap quyen doc phai di tu CUNG mot danh sach: hai danh sach roi thi mot ben them
   // secret con ben kia quen binding -> stack chet giua chung voi PERMISSION_DENIED.
