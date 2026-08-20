@@ -75,6 +75,13 @@ done
   apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/netviet/bootstrap-auth-user.mjs
+# GIEO NGUON SU THAT tu goi khach — CHI khi Postgres con rong.
+# Voi PERSISTENCE=prisma, KnowledgeService nap snapshot tu DB va bo qua SEED trong bo nho, nen mot
+# stack MOI len voi danh muc rong: parser khong co san pham de doi chieu va tin dat hang mau cua
+# smoke bi phan loai 'khac'. Script tu bo qua khi DB da co du lieu, nen deploy lai khong bao gio
+# ghi de thu Sale da sua qua /admin.
+"${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
+  node deploy/netviet/seed-tenant-knowledge.mjs
 # Always recreate the application processes before injecting a smoke message. Pilot GĐ1 khoi dong
 # lai voi AUTO_SEND=on; smoke-test.mjs nhan ra kenh Zalo that va TUYET DOI khong approve fixture,
 # nen khong co tin thu nao bi gui vao nhom that.
