@@ -422,7 +422,7 @@ test('rejects missing ZCA credentials and unhealthy secret metadata', () => {
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join('\n'), /ZCA session credential/);
-  assert.match(result.errors.join('\n'), /VM cannot access/);
+  assert.match(result.errors.join('\n'), /VM cannot read required secret/);
   assert.match(result.errors.join('\n'), /CR\/LF/);
 });
 
