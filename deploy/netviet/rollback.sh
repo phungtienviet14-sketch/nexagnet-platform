@@ -2,8 +2,10 @@
 set -euo pipefail
 umask 077
 
-TENANT_SLUG="${TENANT_SLUG:-ultty}"
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
+# Cac script van hanh tac dong len mot STACK (mot thu muc, mot compose project, mot bo volume),
+# khong phai len mot khach. Voi dev/production STACK_SLUG == TENANT_SLUG nen khong co gi doi.
+STACK_SLUG="${STACK_SLUG:-${TENANT_SLUG:-ultty}}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${STACK_SLUG}}"
 APP_IMAGE_VALUE="${1:?Usage: rollback.sh APP_IMAGE@sha256:DIGEST FLOWISE_IMAGE@sha256:DIGEST [deepseek|flowise]}"
 FLOWISE_IMAGE_VALUE="${2:?Usage: rollback.sh APP_IMAGE@sha256:DIGEST FLOWISE_IMAGE@sha256:DIGEST [deepseek|flowise]}"
 PARSER_MODE_VALUE="${3:-deepseek}"

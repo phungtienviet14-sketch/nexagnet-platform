@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 
+import { resolveStackSlug } from './stack-identity.mjs';
+
 const caddyfile = await readFile(new URL('./edge/Caddyfile', import.meta.url), 'utf8');
 const deployStack = await readFile(new URL('./deploy-stack.sh', import.meta.url), 'utf8');
 const compose = await readFile(new URL('./compose.yaml', import.meta.url), 'utf8');
@@ -14,6 +16,7 @@ const deployRemote = await readFile(new URL('./deploy-remote.sh', import.meta.ur
 const smokeTest = await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8');
 const authBootstrap = await readFile(new URL('./bootstrap-auth-user.mjs', import.meta.url), 'utf8');
 const rollback = await readFile(new URL('./rollback.sh', import.meta.url), 'utf8');
+const backup = await readFile(new URL('./backup.sh', import.meta.url), 'utf8');
 
 test('operator page /zalo goes to Next.js while /zalo/* stays on the API', () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
@@ -148,30 +151,54 @@ test('the demo hostname no longer 404s the operator surface', () => {
 // MOI KHACH MOT KHOANG RIENG. Hostname, alias mang va ten secret deu phai mang slug: thieu mot cho
 // thoi la khach thu hai giam len khach thu nhat — dung ten mien cua nhau, hoac te hon, dung
 // PostgreSQL cua nhau.
-test('moi khach co hostname, alias mang va secret rieng', () => {
-  // Hostname: `<vai tro>-<slug>` chu khong phai `<vai tro>` tran.
-  assert.match(renderSecrets, /DEMO_DOMAIN="demo-\$\{TENANT_SLUG\}\./);
-  assert.match(renderSecrets, /OPERATOR_DOMAIN="operator-\$\{TENANT_SLUG\}\./);
+test('moi STACK co hostname, alias mang, secret va volume rieng', () => {
+  // Bat bien 3 (ci-cd.md) khong doi: MOT nguon duy nhat quyet dinh dong thoi thu muc stack, ten
+  // compose project (=> ten volume), tien to secret, alias mang va hostname. Nguon do nay la
+  // STACK SLUG (tenant + moi truong) thay vi tenant slug, vi mot khach co the co hai stack —
+  // `ultty` dang chay va `ultty-gd1-test` — va hai stack do khong duoc dung chung gi.
+  // Mac dinh `${STACK_SLUG:-${TENANT_SLUG}}` giu nguyen hanh vi cu cho moi duong goi chua truyen.
 
-  // Upstream tro vao alias mang mang slug, khong tro vao ten service (`api`/`web` trung nhau giua
-  // cac khach tren mang edge dung chung).
-  assert.match(renderSecrets, /import app_routes api-\$\{TENANT_SLUG\} web-\$\{TENANT_SLUG\}/);
+  // Hostname: `<vai tro>-<stack>` chu khong phai `<vai tro>` tran.
+  assert.match(renderSecrets, /DEMO_DOMAIN="demo-\$\{STACK_SLUG\}\./);
+  assert.match(renderSecrets, /OPERATOR_DOMAIN="operator-\$\{STACK_SLUG\}\./);
+
+  // Upstream tro vao alias mang mang stack slug, khong tro vao ten service (`api`/`web` trung nhau
+  // giua cac stack tren mang edge dung chung).
+  assert.match(renderSecrets, /import app_routes api-\$\{STACK_SLUG\} web-\$\{STACK_SLUG\}/);
   assert.doesNotMatch(renderSecrets, /import app_routes api web/);
 
-  // Secret: khong mot ten secret nao duoc tro cung vao mot khach.
-  assert.match(renderSecrets, /secret zalo-\$\{TENANT_SLUG\}-api-key/);
+  // Secret: khong mot ten secret nao duoc tro cung vao mot stack.
+  assert.match(renderSecrets, /secret zalo-\$\{STACK_SLUG\}-api-key/);
   assert.doesNotMatch(renderSecrets, /secret zalo-[a-z]+-[a-z-]*password/);
 
-  // Ten compose project quyet dinh ten volume — khong mang slug thi hai khach dung chung volume
-  // PostgreSQL, tuc la dung chung du lieu.
-  assert.match(compose, /^name: zalo-\$\{TENANT_SLUG\}$/m);
-  assert.match(compose, /- api-\$\{TENANT_SLUG\}$/m);
-  assert.match(compose, /- web-\$\{TENANT_SLUG\}$/m);
-  assert.match(compose, /- flowise-\$\{TENANT_SLUG\}$/m);
+  // Ten compose project quyet dinh ten volume — khong mang stack slug thi hai stack dung chung
+  // volume PostgreSQL, tuc la dung chung du lieu.
+  assert.match(compose, /^name: zalo-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
+  assert.match(compose, /- api-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
+  assert.match(compose, /- web-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
+  assert.match(compose, /- flowise-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
 
-  // Gateway phai da roi khoi stack khach: con o lai thi khach thu hai gianh :443 voi khach dau.
+  // Thu muc stack, unit systemd va tien to backup cung phai theo stack, neu khong stack moi se
+  // ghi de len thu muc, timer va cua so luu tru cua stack dang chay.
+  assert.match(deployRemote, /app_dir="\/srv\/netviet\/apps\/zalo-\$\{stack_slug\}"/);
+  assert.match(deployRemote, /netviet-backup@\$\{stack_slug\}\.timer/);
+  assert.match(deployRemote, /netviet-stack@\$\{stack_slug\}\.service/);
+  assert.match(backup, /BACKUP_ROOT="\$\{BACKUP_BUCKET\}\/stacks\/\$\{STACK_SLUG\}"/);
+
+  // Gateway phai da roi khoi stack khach: con o lai thi stack thu hai gianh :443 voi stack dau.
   assert.doesNotMatch(compose, /^\s{2}gateway:$/m);
   assert.doesNotMatch(compose, /"443:443"/);
+});
+
+// Stack dang chay KHONG DUOC DOI TEN. Ten compose project quyet dinh ten volume, nen `ultty/dev`
+// va `ultty/production` phai tiep tuc suy ra dung `ultty` — neu khong, lan deploy tiep theo se
+// tao volume moi va bo lai toan bo du lieu PostgreSQL cua khach o volume cu.
+test('dev va production van suy ra dung stack slug cu', () => {
+  for (const environment of ['dev', 'production', 'legacy']) {
+    assert.equal(resolveStackSlug('ultty', environment), 'ultty');
+    assert.equal(resolveStackSlug('amico', environment), 'amico');
+  }
+  assert.equal(resolveStackSlug('ultty', 'gd1-test'), 'ultty-gd1-test');
 });
 
 // Su co 17/08/2026: deploy.ps1 doc $env:TENANT de chon GOI KHACH upload len, nhung goi

@@ -6,6 +6,6 @@ Requires=docker.service
 [Service]
 Type=oneshot
 Environment=APP_DIR=/srv/netviet/apps/zalo-%i
-Environment=TENANT_SLUG=%i
+Environment=STACK_SLUG=%i
 ExecStart=/srv/netviet/apps/zalo-%i/backup.sh
 User=root

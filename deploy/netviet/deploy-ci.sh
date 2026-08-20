@@ -16,6 +16,9 @@ VM="${VM_NAME:-netviet}"
 TENANT_SLUG="${TENANT:-ultty}"
 DEPLOYMENT_ENVIRONMENT="${ENVIRONMENT:-legacy}"
 DEPLOYMENT_TARGET_ID="${DEPLOYMENT_TARGET_ID:-legacy-default}"
+# STACK SLUG = tenant + moi truong. Quy tac nam MOT CHO duy nhat (stack-identity.mjs); o day goi
+# chinh no thay vi chep lai, de duong CI va duong tay khong bao gio suy ra khac nhau.
+STACK_SLUG="${STACK_SLUG:-}"
 # KHACH "CHINH" giu ten mien TRAN (`operator.<ip>.sslip.io`) lam ten chinh thuc; moi khach khac
 # dung ten mang slug. Khong phai tham my: `OPERATOR_DOMAIN` di thang vao `PUBLIC_BASE_URL` va Zalo
 # TU tai anh catalog ve tu do, nen doi ten mien cua khach dang chay se lam chet anh trong moi tin
@@ -43,6 +46,17 @@ CATALOG_ASSETS_DIR="${REPOSITORY_ROOT}/catalog-assets"
   echo "DEPLOYMENT_TARGET_ID khong hop le: '${DEPLOYMENT_TARGET_ID}'." >&2
   exit 64
 }
+# stack-identity.mjs la ESM, nen goi qua --input-type=module thay vi require().
+STACK_SLUG="$(printf '%s' "import { resolveStackSlug } from './deploy/netviet/stack-identity.mjs';
+process.stdout.write(resolveStackSlug(process.env.TENANT_SLUG, process.env.DEPLOYMENT_ENVIRONMENT));" \
+  | TENANT_SLUG="${TENANT_SLUG}" DEPLOYMENT_ENVIRONMENT="${DEPLOYMENT_ENVIRONMENT}" \
+    node --input-type=module)"
+[[ "${STACK_SLUG}" =~ ^[a-z0-9-]+$ ]] || {
+  echo "Khong suy ra duoc STACK_SLUG cho ${TENANT_SLUG}/${DEPLOYMENT_ENVIRONMENT}." >&2
+  exit 64
+}
+echo "Stack: ${STACK_SLUG} (tenant=${TENANT_SLUG}, environment=${DEPLOYMENT_ENVIRONMENT})" >&2
+
 # Fail-fast NGAY BAY GIO chu khong doi toi luc deploy-remote.sh: thieu goi khach thi api/web khong
 # boot duoc, ma phat hien o day thi chua ton cong build va push image.
 [[ -f "${TENANT_PACK_DIR}/tenant.json" ]] || {
@@ -57,7 +71,7 @@ cd "${REPOSITORY_ROOT}"
 
 rollback_app_image=''
 rollback_flowise_image=''
-if [[ "${TENANT_SLUG}" == "ultty" && "${DEPLOYMENT_ENVIRONMENT}" == "gd1-test" ]]; then
+if [[ "${DEPLOYMENT_ENVIRONMENT}" == "gd1-test" ]]; then
   [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] || {
     echo 'GITHUB_RUN_ID bat buoc cho release identity cua GD1-test.' >&2
     exit 1
@@ -164,12 +178,13 @@ ssh_vm "install -d -m 0700 '${remote_parent}'"
 scp_vm "${staging}/payload.tar.gz" "${remote_parent}/payload.tar.gz"
 ssh_vm "tar -xzf '${remote_parent}/payload.tar.gz' -C '${remote_parent}' && rm -f '${remote_parent}/payload.tar.gz'"
 
-ssh_vm "sudo env PRIMARY_TENANT='${PRIMARY_TENANT}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'"
+ssh_vm "sudo env PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'"
 
-echo "Deploy xong: tenant=${TENANT_SLUG} environment=${DEPLOYMENT_ENVIRONMENT} target=${DEPLOYMENT_TARGET_ID} app=${app_digest} flowise=${flowise_digest}"
+echo "Deploy xong: tenant=${TENANT_SLUG} environment=${DEPLOYMENT_ENVIRONMENT} stack=${STACK_SLUG} target=${DEPLOYMENT_TARGET_ID} app=${app_digest} flowise=${flowise_digest}"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Release: ${TENANT_SLUG} / ${DEPLOYMENT_ENVIRONMENT}"
+    echo "- Stack: \`${STACK_SLUG}\`"
     echo "- Target: \`${DEPLOYMENT_TARGET_ID}\`"
     echo "- Git SHA: \`${GIT_SHA_VALUE}\`"
     echo "- App: \`${app_digest}\`"

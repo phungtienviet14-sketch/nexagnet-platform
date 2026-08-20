@@ -205,8 +205,21 @@ test('deploy-ci runs Ultty GD1-test preflight before any image build or push', a
   assert.ok(preflightIndex > 0, 'deploy-ci must invoke the GD1-test preflight');
   assert.ok(preflightIndex < buildIndex, 'preflight must run before app image build');
   assert.ok(preflightIndex < pushIndex, 'preflight must run before image push');
-  assert.match(deployCi, /\$\{TENANT_SLUG\}"\s*==\s*"ultty"/);
   assert.match(deployCi, /\$\{DEPLOYMENT_ENVIRONMENT\}"\s*==\s*"gd1-test"/);
+});
+
+// Cong "chi ultty moi co gd1-test" khong con nam trong deploy-ci.sh: deploy-ci gate theo MOI
+// TRUONG, con rang buoc khach nam o hai cho khong the di vong — registry (chi dang ky
+// ultty/gd1-test) va render-secrets.sh (tu choi render profile gd1-test cho khach khac).
+// Kiem o day de mot lan "don dep" khong lang le go mat cong do.
+test('the gd1-test runtime profile is refused for any tenant other than Ultty', async () => {
+  const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.url), 'utf8');
+  const profileIndex = renderSecrets.indexOf("DEPLOYMENT_ENVIRONMENT}\" == 'gd1-test'");
+
+  assert.ok(profileIndex > 0, 'render-secrets must carry an explicit gd1-test profile');
+  assert.match(renderSecrets, /\$\{TENANT_SLUG\}"\s*==\s*'ultty'/);
+  assert.match(renderSecrets, /AUTO_SEND='off'/);
+  assert.match(renderSecrets, /CHANNEL_MODE='zca'/);
 });
 
 test('rejects an unconfirmed or ambiguous deployment target', () => {

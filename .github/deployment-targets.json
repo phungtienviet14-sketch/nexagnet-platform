@@ -13,6 +13,7 @@
     {
       "tenant": "ultty",
       "environment": "dev",
+      "stackSlug": "ultty",
       "githubEnvironment": "dev",
       "runtimeEnvironment": "dev",
       "target": "current-shared-vm",
@@ -21,6 +22,7 @@
     {
       "tenant": "ultty",
       "environment": "gd1-test",
+      "stackSlug": "ultty-gd1-test",
       "githubEnvironment": "gd1-test",
       "runtimeEnvironment": "gd1-test",
       "target": "current-shared-vm",
@@ -29,6 +31,7 @@
     {
       "tenant": "ultty",
       "environment": "production",
+      "stackSlug": "ultty",
       "githubEnvironment": "production",
       "runtimeEnvironment": "prod",
       "target": "current-shared-vm",
@@ -37,6 +40,7 @@
     {
       "tenant": "amico",
       "environment": "dev",
+      "stackSlug": "amico",
       "githubEnvironment": "dev",
       "runtimeEnvironment": "dev",
       "target": "current-shared-vm",
@@ -45,6 +49,7 @@
     {
       "tenant": "amico",
       "environment": "production",
+      "stackSlug": "amico",
       "githubEnvironment": "production",
       "runtimeEnvironment": "prod",
       "target": "current-shared-vm",

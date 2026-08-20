@@ -48,9 +48,16 @@ jobs:
           REQUESTED_ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
-          node <<'NODE'
-          const fs = require('node:fs');
+          node --input-type=module <<'NODE'
+          const fs = await import('node:fs');
+          const { pathToFileURL } = await import('node:url');
           const registry = JSON.parse(fs.readFileSync('.github/deployment-targets.json', 'utf8'));
+          // pathToFileURL, khong phai ghep chuoi: mot duong dan tuyet doi tho khong phai la ESM URL
+          // hop le (tren Windows no thanh scheme `c:`), nen ghep chuoi chay duoc tren CI ma vo ly
+          // khi chay tay o may lap trinh vien.
+          const { resolveStackSlug } = await import(
+            pathToFileURL('deploy/netviet/stack-identity.mjs').href
+          );
           const tenant = process.env.REQUESTED_TENANT;
           const environment = process.env.REQUESTED_ENVIRONMENT;
           const deployment = registry.deployments.find(
@@ -71,6 +78,16 @@ jobs:
             console.error(`Unsupported deployment target id: ${deployment.target}`);
             process.exit(66);
           }
+          // The stack slug decides the compose project name, and the compose project name decides
+          // the volume names. A registry entry that disagrees with the rule would point a new
+          // environment at a running stack's PostgreSQL volume, so refuse rather than reconcile.
+          const stackSlug = resolveStackSlug(tenant, environment);
+          if (deployment.stackSlug !== stackSlug) {
+            console.error(
+              `Deployment registry declares stack ${deployment.stackSlug} but the rule derives ${stackSlug}`,
+            );
+            process.exit(68);
+          }
           const required = ['vmName', 'gcpProjectId', 'region', 'zone', 'primaryTenant'];
           for (const field of required) {
             if (typeof target[field] !== 'string' || target[field].trim() === '') {
@@ -80,6 +97,7 @@ jobs:
           }
           const output = fs.createWriteStream(process.env.GITHUB_OUTPUT, { flags: 'a' });
           for (const [key, value] of Object.entries({
+            stack_slug: stackSlug,
             target_id: deployment.target,
             vm_name: target.vmName,
             gcp_project_id: target.gcpProjectId,
@@ -130,6 +148,7 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           TENANT: ${{ inputs.tenant }}
           ENVIRONMENT: ${{ steps.target.outputs.runtime_environment }}
+          STACK_SLUG: ${{ steps.target.outputs.stack_slug }}
           GCP_PROJECT_ID: ${{ steps.target.outputs.gcp_project_id }}
           GCP_REGION: ${{ steps.target.outputs.gcp_region }}
           GCP_ZONE: ${{ steps.target.outputs.gcp_zone }}
@@ -150,6 +169,7 @@ jobs:
           GCP_REGION: ${{ steps.target.outputs.gcp_region }}
           PRIMARY_TENANT: ${{ steps.target.outputs.primary_tenant }}
           TENANT_SLUG: ${{ inputs.tenant }}
+          STACK_SLUG: ${{ steps.target.outputs.stack_slug }}
         run: |
           set -euo pipefail
           public_ip="$(gcloud compute addresses describe netviet-public-ip \
@@ -158,15 +178,18 @@ jobs:
           # In ten mien cua CHINH khach vua deploy. Truoc 17/08/2026 buoc nay in ten tran cho moi
           # khach, nen deploy Amico xong lai bao cao duong dan cua Ultty — nguoi doc bam vao va
           # tuong minh dang xem he thong cua khach minh vua deploy.
-          if [[ "${TENANT_SLUG}" == "${PRIMARY_TENANT}" ]]; then
+          # So sanh theo STACK chu khong theo tenant: stack thu hai cua cung mot khach
+          # (`ultty-gd1-test`) khong giu ten mien tran, nen bao cao no bang ten tran la chi sai
+          # duong dan cho nguoi doc — dung cai bay 17/08/2026 nhung o chieu moi truong.
+          if [[ "${STACK_SLUG}" == "${PRIMARY_TENANT}" ]]; then
             demo="demo.${label}.sslip.io"
             operator="operator.${label}.sslip.io"
           else
-            demo="demo-${TENANT_SLUG}.${label}.sslip.io"
-            operator="operator-${TENANT_SLUG}.${label}.sslip.io"
+            demo="demo-${STACK_SLUG}.${label}.sslip.io"
+            operator="operator-${STACK_SLUG}.${label}.sslip.io"
           fi
           {
-            echo "### Deploy xong cho Tenant: **${TENANT_SLUG}** (Env: \`${{ inputs.environment }}\`)"
+            echo "### Deploy xong cho Tenant: **${TENANT_SLUG}** (Env: \`${{ inputs.environment }}\`, Stack: \`${STACK_SLUG}\`)"
             echo ""
             echo "- Demo: https://${demo}"
             echo "- Van hanh Zalo: https://${operator}/zalo"

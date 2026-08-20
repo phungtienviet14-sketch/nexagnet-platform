@@ -5,15 +5,26 @@ umask 077
 PROJECT_ID="${GCP_PROJECT_ID:-netviet-host-968934832433}"
 APP_IMAGE_VALUE="${APP_IMAGE:?APP_IMAGE is required}"
 FLOWISE_IMAGE_VALUE="${FLOWISE_IMAGE:?FLOWISE_IMAGE is required}"
-# SLUG KHACH quyet dinh: thu muc stack, ten compose project (=> ten volume), tien to ten secret,
-# alias mang tren edge va hostname. Mot bien sai cho ra mot stack khac hoan toan, nen chan ky tu la.
+# SLUG KHACH chon GOI KHACH (bang gia, dai ly, chat ID nhom) — no tra loi "phuc vu ai".
+# STACK SLUG quyet dinh HA TANG: thu muc stack, ten compose project (=> ten volume), tien to ten
+# secret, alias mang tren edge va hostname — no tra loi "chay o dau". Hai thu nay TRUNG NHAU voi
+# dev/production (`ultty`), va TACH RA voi moi truong ky thuat (`ultty-gd1-test`), nen mot tenant
+# co the co hai stack ma khong stack nao dam vao volume cua stack kia.
+# Quy tac duy nhat nam trong deploy/netviet/stack-identity.mjs; o day chi nhan gia tri da suy ra.
+# Mot bien sai cho ra mot stack khac hoan toan, nen chan ky tu la.
 TENANT_SLUG="${TENANT_SLUG:?TENANT_SLUG is required}"
 DEPLOYMENT_ENVIRONMENT="${DEPLOYMENT_ENVIRONMENT:-legacy}"
+# Mac dinh = TENANT_SLUG: moi duong goi cu (deploy.ps1, systemd cu) giu nguyen hanh vi.
+STACK_SLUG="${STACK_SLUG:-${TENANT_SLUG}}"
 [[ "${TENANT_SLUG}" =~ ^[a-z0-9-]+$ ]] || {
   echo "TENANT_SLUG khong hop le: '${TENANT_SLUG}'." >&2
   exit 64
 }
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
+[[ "${STACK_SLUG}" =~ ^[a-z0-9-]+$ ]] || {
+  echo "STACK_SLUG khong hop le: '${STACK_SLUG}'." >&2
+  exit 64
+}
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${STACK_SLUG}}"
 RUNTIME_DIR="${RUNTIME_DIR:-${APP_DIR}/.runtime}"
 EDGE_DIR="${EDGE_DIR:-/srv/netviet/edge}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,13 +41,15 @@ HOST_SUFFIX="${PUBLIC_IP_LABEL}.sslip.io"
 # Ly do khong phai tham my — `OPERATOR_DOMAIN` di thang vao `PUBLIC_BASE_URL`, va Zalo TU tai anh
 # catalog ve tu URL do. Doi ten mien cua khach dang chay se lam chet anh trong moi tin da gui.
 # Khach chinh vi the duoc phuc vu o CA HAI ten; khach moi chi co ten mang slug.
-DEMO_DOMAIN="demo-${TENANT_SLUG}.${HOST_SUFFIX}"
-OPERATOR_DOMAIN="operator-${TENANT_SLUG}.${HOST_SUFFIX}"
-FLOWISE_DOMAIN="flowise-${TENANT_SLUG}.${HOST_SUFFIX}"
+DEMO_DOMAIN="demo-${STACK_SLUG}.${HOST_SUFFIX}"
+OPERATOR_DOMAIN="operator-${STACK_SLUG}.${HOST_SUFFIX}"
+FLOWISE_DOMAIN="flowise-${STACK_SLUG}.${HOST_SUFFIX}"
 DEMO_ALIASES=''
 OPERATOR_ALIASES=''
 FLOWISE_ALIASES=''
-if [[ "${PRIMARY_TENANT:-}" == "${TENANT_SLUG}" ]]; then
+# So sanh voi STACK_SLUG chu khong phai TENANT_SLUG: stack thu hai cua CUNG mot khach
+# (`ultty-gd1-test`) khong duoc phep cuop ten mien tran cua stack dang chay (`ultty`).
+if [[ "${PRIMARY_TENANT:-}" == "${STACK_SLUG}" ]]; then
   DEMO_ALIASES="${DEMO_DOMAIN}"
   OPERATOR_ALIASES="${OPERATOR_DOMAIN}"
   FLOWISE_ALIASES="${FLOWISE_DOMAIN}"
@@ -70,14 +83,14 @@ optional_secret() {
   gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" 2>/dev/null | tr -d '\r' || true
 }
 
-POSTGRES_ADMIN_PASSWORD="$(secret zalo-${TENANT_SLUG}-postgres-admin-password)"
-ZALO_DB_PASSWORD="$(secret zalo-${TENANT_SLUG}-zalo-db-password)"
-FLOWISE_DB_PASSWORD="$(secret zalo-${TENANT_SLUG}-flowise-db-password)"
-DEEPSEEK_API_KEY="$(secret zalo-${TENANT_SLUG}-deepseek-api-key)"
+POSTGRES_ADMIN_PASSWORD="$(secret zalo-${STACK_SLUG}-postgres-admin-password)"
+ZALO_DB_PASSWORD="$(secret zalo-${STACK_SLUG}-zalo-db-password)"
+FLOWISE_DB_PASSWORD="$(secret zalo-${STACK_SLUG}-flowise-db-password)"
+DEEPSEEK_API_KEY="$(secret zalo-${STACK_SLUG}-deepseek-api-key)"
 # Token Bot van duoc render san de co the kiem tra danh tinh.
 # Pilot GĐ1 chay ZCA mac dinh; `.runtime/channel-mode.env` khong bi rsync ghi de nen deploy lai
 # giu override co y cua operator va khong am tham roi ve mock.
-ZALO_BOT_TOKEN="$(optional_secret zalo-${TENANT_SLUG}-zalo-bot-token)"
+ZALO_BOT_TOKEN="$(optional_secret zalo-${STACK_SLUG}-zalo-bot-token)"
 CHANNEL_MODE="$("${SCRIPT_DIR}/channel-mode.sh" read "${RUNTIME_DIR}/channel-mode.env")"
 echo "render-secrets: CHANNEL_MODE=${CHANNEL_MODE} (zca mac dinh cho pilot GĐ1)." >&2
 AUTO_SEND="${AUTO_SEND:-on}"
@@ -97,18 +110,18 @@ if [[ "${DEPLOYMENT_ENVIRONMENT}" == 'gd1-test' ]]; then
   AUTO_SEND='off'
   DATA_CLASSIFICATION='test'
 fi
-API_KEY=$(secret zalo-${TENANT_SLUG}-api-key)
+API_KEY=$(secret zalo-${STACK_SLUG}-api-key)
 # VM da duoc cap quyen doc API key. Dan xuat domain-separated session signing key thay vi doi IAM
 # de them mot secret moi; gia tri goc khong nam trong command args va khong duoc ghi log.
 SESSION_SECRET="$(printf 'netviet-api-session-v1:%s' "${API_KEY}" | sha256sum | cut -d' ' -f1)"
-PILOT_OPERATOR_PASSWORD="$(secret zalo-${TENANT_SLUG}-operator-password)"
-FLOWISE_SECRETKEY="$(secret zalo-${TENANT_SLUG}-flowise-secretkey)"
-FLOWISE_ADMIN_EMAIL="$(secret zalo-${TENANT_SLUG}-flowise-admin-email)"
-FLOWISE_ADMIN_PASSWORD="$(secret zalo-${TENANT_SLUG}-flowise-admin-password)"
-FLOWISE_JWT_SECRET="$(secret zalo-${TENANT_SLUG}-flowise-jwt-secret)"
-FLOWISE_REFRESH_SECRET="$(secret zalo-${TENANT_SLUG}-flowise-refresh-secret)"
-FLOWISE_SESSION_SECRET="$(secret zalo-${TENANT_SLUG}-flowise-session-secret)"
-FLOWISE_TOKEN_HASH_SECRET="$(secret zalo-${TENANT_SLUG}-flowise-token-hash-secret)"
+PILOT_OPERATOR_PASSWORD="$(secret zalo-${STACK_SLUG}-operator-password)"
+FLOWISE_SECRETKEY="$(secret zalo-${STACK_SLUG}-flowise-secretkey)"
+FLOWISE_ADMIN_EMAIL="$(secret zalo-${STACK_SLUG}-flowise-admin-email)"
+FLOWISE_ADMIN_PASSWORD="$(secret zalo-${STACK_SLUG}-flowise-admin-password)"
+FLOWISE_JWT_SECRET="$(secret zalo-${STACK_SLUG}-flowise-jwt-secret)"
+FLOWISE_REFRESH_SECRET="$(secret zalo-${STACK_SLUG}-flowise-refresh-secret)"
+FLOWISE_SESSION_SECRET="$(secret zalo-${STACK_SLUG}-flowise-session-secret)"
+FLOWISE_TOKEN_HASH_SECRET="$(secret zalo-${STACK_SLUG}-flowise-token-hash-secret)"
 # PRE-PILOT PUBLIC — SESSION AUTH:
 # Caddy khong can Basic Auth; NestJS dung login session/role/CSRF va PostgreSQL session store.
 # URL pilot public phai dung session server-side. API key van render san cho automation tuong lai,
@@ -141,8 +154,10 @@ fi
 cat >"${RUNTIME_DIR}/secrets.env" <<EOF
 APP_IMAGE=${APP_IMAGE_VALUE}
 FLOWISE_IMAGE=${FLOWISE_IMAGE_VALUE}
-# compose.yaml dung bien nay cho \`name:\` (=> ten volume) va cho alias mang tren edge.
 TENANT_SLUG=${TENANT_SLUG}
+# compose.yaml dung bien nay cho \`name:\` (=> ten volume) va cho alias mang tren edge.
+STACK_SLUG=${STACK_SLUG}
+DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT}
 # 18/08/2026 — doi flowise -> deepseek. Ly do: Flowise la MOT TANG TRUNG GIAN nua dat tren cung
 # DeepSeek o dau kia, nen no khong them chat luong ma chi them mot cho co the hong va mot cho
 # kho lan vet. Goi thang deepseek-v4-flash bo tang do: cung mo hinh, it thanh phan hon, va
@@ -198,24 +213,24 @@ chmod 600 "${EDGE_DIR}/.runtime/caddy.env"
 # edge dung chung, moi khach deu co service ten `api`, nen ten service khong con phan biet duoc.
 #
 # `\$1` duoc thoat de di NGUYEN VAN vao Caddy (nhom bat cua header_down), khong bi bash nuot.
-tenant_site="${EDGE_DIR}/tenants/${TENANT_SLUG}.caddy"
+tenant_site="${EDGE_DIR}/tenants/${STACK_SLUG}.caddy"
 cat >"${tenant_site}" <<EOF
-# SINH TU DONG boi render-secrets.sh cho khach '${TENANT_SLUG}'. Dung sua tay: lan deploy sau ghi de.
+# SINH TU DONG boi render-secrets.sh cho stack '${STACK_SLUG}'. Dung sua tay: lan deploy sau ghi de.
 ${DEMO_DOMAIN}${DEMO_ALIASES:+, ${DEMO_ALIASES}} {
 	import secure_headers
 	import app_headers
-	import app_routes api-${TENANT_SLUG} web-${TENANT_SLUG} "${API_KEY}"
+	import app_routes api-${STACK_SLUG} web-${STACK_SLUG} "${API_KEY}"
 }
 
 ${OPERATOR_DOMAIN}${OPERATOR_ALIASES:+, ${OPERATOR_ALIASES}} {
 	import secure_headers
 	import app_headers
-	import app_routes api-${TENANT_SLUG} web-${TENANT_SLUG} "${API_KEY}"
+	import app_routes api-${STACK_SLUG} web-${STACK_SLUG} "${API_KEY}"
 }
 
 ${FLOWISE_DOMAIN}${FLOWISE_ALIASES:+, ${FLOWISE_ALIASES}} {
 	import secure_headers
-	reverse_proxy flowise-${TENANT_SLUG}:3000 {
+	reverse_proxy flowise-${STACK_SLUG}:3000 {
 		header_down Set-Cookie (.*) "\$1; Secure"
 	}
 }

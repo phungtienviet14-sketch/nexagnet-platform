@@ -1,8 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-TENANT_SLUG="${TENANT_SLUG:-ultty}"
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
+# Cac script van hanh tac dong len mot STACK (mot thu muc, mot compose project, mot bo volume),
+# khong phai len mot khach. Voi dev/production STACK_SLUG == TENANT_SLUG nen khong co gi doi.
+STACK_SLUG="${STACK_SLUG:-${TENANT_SLUG:-ultty}}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${STACK_SLUG}}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-gs://netviet-host-968934832433-backups}"
 DURATION_SECONDS="${DURATION_SECONDS:-86400}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-60}"
