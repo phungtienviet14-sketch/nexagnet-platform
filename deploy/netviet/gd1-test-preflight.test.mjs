@@ -596,3 +596,24 @@ test('rejects a missing observed Zalo group inventory without throwing', () => {
 test('refuses to print an absent deployment plan', () => {
   assert.throws(() => formatDeploymentPlan(undefined), /validated deployment plan/);
 });
+
+// Su co 20/08/2026: preflight CHAY DUNG va in ra ke hoach, nhung deploy chet ngay sau do khi doc
+// lai chinh ket qua cua no. `mktemp` tao tep KHONG CO DUOI, va `require()` nap tep khong duoi
+// nhu JavaScript chu khong phai JSON -> "SyntaxError: Unexpected token ':'". Lop bao ve dat sai
+// cho nay tu no lam hong lan deploy ma no sinh ra de bao ve.
+test('deploy-ci doc ket qua preflight bang JSON.parse, khong bang require()', async () => {
+  const deployCi = await readFile(new URL('./deploy-ci.sh', import.meta.url), 'utf8');
+  const preflightReads = deployCi
+    .split('\n')
+    .filter((line) => line.includes('preflight_output') && line.includes('node -e'));
+
+  assert.ok(preflightReads.length >= 3, 'phai co it nhat 3 lan doc ket qua preflight');
+  for (const line of preflightReads) {
+    assert.doesNotMatch(
+      line,
+      /require\(process\.argv\[1\]\)/,
+      'khong duoc nap ket qua preflight bang require(): tep tam khong co duoi .json',
+    );
+    assert.match(line, /JSON\.parse/, 'phai parse JSON tuong minh');
+  }
+});

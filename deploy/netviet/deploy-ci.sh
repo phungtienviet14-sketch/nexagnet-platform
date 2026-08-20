@@ -76,12 +76,12 @@ if [[ "${DEPLOYMENT_ENVIRONMENT}" == "gd1-test" ]]; then
     echo 'GITHUB_RUN_ID bat buoc cho release identity cua GD1-test.' >&2
     exit 1
   }
-  preflight_output="$(mktemp)"
+  preflight_output="$(mktemp --suffix=.json)"
   chmod 600 "${preflight_output}"
   GD1_TEST_PREFLIGHT_OUTPUT="${preflight_output}" node deploy/netviet/run-gd1-test-preflight.mjs
-  rollback_app_image="$(node -e "const p=require(process.argv[1]); process.stdout.write(p.rollback?.appImage ?? '')" "${preflight_output}")"
-  rollback_flowise_image="$(node -e "const p=require(process.argv[1]); process.stdout.write(p.rollback?.flowiseImage ?? '')" "${preflight_output}")"
-  first_release="$(node -e "const p=require(process.argv[1]); process.stdout.write(p.firstRelease === true ? '1' : '0')" "${preflight_output}")"
+  rollback_app_image="$(node -e "const {readFileSync}=require('node:fs'); const p=JSON.parse(readFileSync(process.argv[1],'utf8')); process.stdout.write(p.rollback?.appImage ?? '')" "${preflight_output}")"
+  rollback_flowise_image="$(node -e "const {readFileSync}=require('node:fs'); const p=JSON.parse(readFileSync(process.argv[1],'utf8')); process.stdout.write(p.rollback?.flowiseImage ?? '')" "${preflight_output}")"
+  first_release="$(node -e "const {readFileSync}=require('node:fs'); const p=JSON.parse(readFileSync(process.argv[1],'utf8')); process.stdout.write(p.firstRelease === true ? '1' : '0')" "${preflight_output}")"
   rm -f -- "${preflight_output}"
   # STACK MOI THI KHONG CO GI DE QUAY VE. Doi hai digest o lan deploy dau se chan dung lan duy
   # nhat chac chan khong the co digest — va duong lui cua no khong phai "ghim lai anh cu" ma la
