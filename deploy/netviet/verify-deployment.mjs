@@ -31,7 +31,9 @@ export function verifyDeployment({ tenant, release, evidence }) {
     (path) => `proof contains secret-bearing field: ${path}`,
   );
   const releaseErrors = validateRelease(tenant, release, evidence?.release);
-  const baseErrors = validateBaseEvidence(tenant, evidence);
+  // `release.stack` la nguon; release cu khong co truong nay thi roi ve tenant slug.
+  const stackSlug = nonEmpty(release?.stack) ? release.stack : tenant?.slug;
+  const baseErrors = validateBaseEvidence(tenant, evidence, stackSlug);
   const messagingErrors = capabilities.has('messaging') ? validateMessaging(evidence) : [];
   const salesErrors = capabilities.has('sales-order') ? validateSalesOrder(evidence) : [];
   const notificationResult = evaluateNotifications(capabilities, evidence?.notifications);
@@ -100,13 +102,13 @@ function compareObservedRelease(expected, observed) {
   );
 }
 
-function validateBaseEvidence(tenant, evidence) {
+function validateBaseEvidence(tenant, evidence, stackSlug) {
   if (!evidence || typeof evidence !== 'object') return ['deployment evidence is required'];
   return [
     ...validateContainers(evidence.containers),
     ...validateHttpIdentity(tenant, evidence.api, evidence.web),
     ...validateDatabase(evidence.database),
-    ...validateNetwork(tenant, evidence.network),
+    ...validateNetwork(tenant, evidence.network, stackSlug),
     ...validateAuth(evidence.auth),
     ...validateReadiness(evidence.readiness),
   ];
@@ -144,8 +146,11 @@ function validateDatabase(database) {
   ].filter(Boolean);
 }
 
-function validateNetwork(tenant, network) {
-  const expectedPrefix = `zalo-${tenant?.slug ?? ''}`;
+function validateNetwork(tenant, network, stackSlug) {
+  // Mang thuoc ve STACK chu khong phai tenant: stack thu hai cua cung mot khach
+  // (`ultty-gd1-test`) mang `zalo-ultty-gd1-test_backend`. Mac dinh ve tenant slug de moi
+  // release cu — von khong ghi truong `stack` — van kiem dung nhu truoc.
+  const expectedPrefix = `zalo-${stackSlug ?? tenant?.slug ?? ''}`;
   return [
     network?.backendNetwork !== `${expectedPrefix}_backend`
       ? 'tenant backend network identity is incorrect'

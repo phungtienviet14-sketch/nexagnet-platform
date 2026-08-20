@@ -332,3 +332,59 @@ test('CLI emits machine-readable proof and returns a failing exit code for forbi
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+// Mot khach co the co HAI stack. Mang thuoc ve STACK, nen verifier phai doi
+// `zalo-ultty-gd1-test_backend` cho stack gd1-test — neu no van doi theo tenant slug thi chinh
+// lan deploy ma no sinh ra de kiem tra se bi bao truot.
+test('network identity follows the stack, not the tenant', () => {
+  const stackRelease = { ...release(), stack: 'ultty-gd1-test' };
+  const stackEvidence = {
+    ...evidence(),
+    release: stackRelease,
+    network: {
+      ...evidence().network,
+      backendNetwork: 'zalo-ultty-gd1-test_backend',
+      dataNetwork: 'zalo-ultty-gd1-test_data',
+    },
+  };
+
+  const result = verifyDeployment({
+    tenant: tenant(),
+    release: stackRelease,
+    evidence: stackEvidence,
+  });
+  assert.equal(
+    result.errors.filter((error) => error.includes('network identity')).length,
+    0,
+    result.errors.join('\n'),
+  );
+
+  // Va stack gd1-test KHONG duoc di qua bang mang cua stack dang chay.
+  const borrowed = verifyDeployment({
+    tenant: tenant(),
+    release: stackRelease,
+    evidence: {
+      ...stackEvidence,
+      network: {
+        ...stackEvidence.network,
+        backendNetwork: 'zalo-ultty_backend',
+        dataNetwork: 'zalo-ultty_data',
+      },
+    },
+  });
+  assert.match(borrowed.errors.join('\n'), /network identity is incorrect/);
+});
+
+// Release cu khong ghi truong `stack`; chung phai tiep tuc kiem theo tenant slug nhu truoc.
+test('a release without a stack field still verifies against the tenant slug', () => {
+  const result = verifyDeployment({
+    tenant: tenant(),
+    release: release(),
+    evidence: evidence(),
+  });
+  assert.equal(
+    result.errors.filter((error) => error.includes('network identity')).length,
+    0,
+    result.errors.join('\n'),
+  );
+});
