@@ -134,18 +134,63 @@ function curlCommand(hostname, path, extra = '') {
 }
 
 async function collectApi(ctx) {
+  // Status di qua HTTPS cong khai: no chung minh ca duong edge -> api chu khong chi rieng api.
   const status = (
     await ssh(curlCommand(ctx.identity.operatorDomain, '/health', '-o /dev/null -w %{http_code}'), ctx.gcp)
   ).trim();
-  const body = await ssh(curlCommand(ctx.identity.operatorDomain, '/health'), ctx.gcp);
+  // Danh tinh tenant KHONG lay tu /health (endpoint do la @Public va chi tra uptime). Nguon that
+  // la GOI KHACH dang duoc mount vao chinh container api — tra loi dung cau hoi "api nay dang
+  // phuc vu khach nao", thay vi mot endpoint tu khai bao.
+  const slug = await ssh(
+    `sudo docker exec $(sudo docker ps -q -f 'label=com.docker.compose.project=${ctx.identity.composeProject}' ` +
+      `-f 'label=com.docker.compose.service=api') cat /srv/tenant/tenant.json`,
+    ctx.gcp,
+  );
   let tenant;
   try {
-    const parsed = JSON.parse(body);
-    tenant = parsed.tenant ?? parsed.tenantSlug ?? parsed.tenant?.slug;
+    tenant = JSON.parse(slug).slug;
   } catch {
     tenant = undefined;
   }
   return { status: Number(status), tenant };
+}
+
+/**
+ * Endpoint van hanh (`/settings/readiness`, `/zalo/status`, `/health/media`) nam sau auth, nen phai
+ * DANG NHAP THAT moi doc duoc. Chay trong container `bootstrap` vi chinh no da co san
+ * PILOT_OPERATOR_* trong env va noi duoc toi `api:3001` qua mang rieng cua stack — dung co che ma
+ * smoke test dang dung. Mat khau khong bao gio ra stdout va khong bao gio vao tep bang chung;
+ * thu duy nhat di ra la ket qua cua tung endpoint.
+ */
+async function collectAuthenticated(ctx) {
+  const script = [
+    "const base = 'http://api:3001';",
+    "const jar = new Map();",
+    "const put = (r) => { for (const c of (r.headers.getSetCookie?.() ?? [])) { const [kv] = c.split(';'); const i = kv.indexOf('='); jar.set(kv.slice(0, i), kv.slice(i + 1)); } };",
+    "const cookie = () => [...jar].map(([k, v]) => k + '=' + v).join('; ');",
+    "const csrfRes = await fetch(base + '/auth/csrf'); put(csrfRes);",
+    "const { csrfToken } = await csrfRes.json();",
+    "const login = await fetch(base + '/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', cookie: cookie(), 'x-csrf-token': csrfToken ?? '' }, body: JSON.stringify({ username: process.env.PILOT_OPERATOR_USERNAME, password: process.env.PILOT_OPERATOR_PASSWORD }) });",
+    "put(login);",
+    "const loginBody = login.ok ? await login.json() : null;",
+    "const token = loginBody?.csrfToken ?? csrfToken;",
+    "const get = async (path) => { const r = await fetch(base + path, { headers: { cookie: cookie(), 'x-csrf-token': token ?? '' } }); return { status: r.status, body: r.ok ? await r.json() : null }; };",
+    "const anon = await fetch(base + '/zalo/status');",
+    "const out = { loginStatus: login.status, csrfIssued: typeof csrfToken === 'string' && csrfToken.length > 0, anonymousStatus: anon.status, readiness: await get('/settings/readiness'), zalo: await get('/zalo/status'), media: await get('/health/media') };",
+    "console.log('EVIDENCE_JSON=' + JSON.stringify(out));",
+  ].join(' ');
+  const stdout = await ssh(
+    [
+      'set -euo pipefail',
+      `cd '${ctx.identity.appDir}'`,
+      `sudo docker compose --env-file .runtime/secrets.env -f compose.yaml --profile tools run --rm --no-deps -T ` +
+        `bootstrap node --input-type=module -e ${JSON.stringify(script)}`,
+    ].join('; '),
+    ctx.gcp,
+  );
+  const line = stdout.split(/\r?\n/).find((row) => row.startsWith('EVIDENCE_JSON='));
+  if (!line) throw new Error('authenticated probe produced no evidence line');
+  return JSON.parse(line.slice('EVIDENCE_JSON='.length));
 }
 
 async function collectWeb(ctx) {
@@ -219,13 +264,10 @@ async function probeCrossTenant(ctx) {
   return reach.trim() === 'reachable';
 }
 
-async function collectAuth(ctx) {
-  const mode = (
-    await ssh(
-      `sudo sed -n 's/^AUTH_MODE=//p' '${ctx.identity.appDir}/.runtime/secrets.env' | tail -n 1`,
-      ctx.gcp,
-    )
-  ).trim();
+async function collectAuth(ctx, authed) {
+  const mode = await collectRuntimeValue(ctx, 'AUTH_MODE');
+  // Cong khai qua HTTPS: mot request an danh phai bi tu choi o dung bien gioi ma nguoi dung that
+  // se cham vao, khong phai chi o vong lap trong mang Docker.
   const unauthorized = (
     await ssh(
       curlCommand(ctx.identity.operatorDomain, '/zalo/status', '-o /dev/null -w %{http_code}'),
@@ -235,21 +277,18 @@ async function collectAuth(ctx) {
   return {
     mode,
     unauthorizedStatus: Number(unauthorized),
-    // Proving a login means holding a password, which must never enter a proof artifact. The
-    // deploy's own auth bootstrap + the 401 above are what this run can honestly attest to;
-    // an operator confirms the interactive login and records it out of band.
-    operatorLoginVerified: undefined,
-    csrfVerified: undefined,
+    operatorLoginVerified: authed?.loginStatus === 200 || authed?.loginStatus === 201,
+    csrfVerified: authed?.csrfIssued === true && authed?.anonymousStatus === 401,
   };
 }
 
-async function collectReadiness(ctx) {
-  const body = await ssh(curlCommand(ctx.identity.operatorDomain, '/readiness'), ctx.gcp);
-  const parsed = JSON.parse(body);
+function collectReadiness(authed) {
+  const body = authed?.readiness?.body;
+  if (!body) return undefined;
   return {
-    reachable: true,
-    goLiveReady: parsed.goLiveReady === true,
-    checks: Array.isArray(parsed.checks) ? parsed.checks : [],
+    reachable: authed.readiness.status === 200,
+    goLiveReady: body.goLiveReady === true,
+    checks: Array.isArray(body.checks) ? body.checks : [],
   };
 }
 
@@ -262,21 +301,13 @@ async function collectRuntimeValue(ctx, key) {
   ).trim();
 }
 
-async function collectZaloState(ctx) {
+async function collectZaloState(ctx, authed) {
   const channel = await collectRuntimeValue(ctx, 'CHANNEL_MODE');
-  const status = await ssh(
-    `sudo docker exec $(sudo docker ps -q -f 'label=com.docker.compose.project=${ctx.identity.composeProject}' ` +
-      `-f 'label=com.docker.compose.service=api') ` +
-      `node -e "fetch('http://127.0.0.1:3001/zalo/status').then(r=>r.text()).then(t=>console.log(t))" || true`,
-    ctx.gcp,
-  );
-  let state;
-  try {
-    state = JSON.parse(status.trim()).state;
-  } catch {
-    state = undefined;
-  }
-  return { implementation: channel, real: channel === 'zca' || channel === 'bot' || channel === 'hybrid', state };
+  return {
+    implementation: channel,
+    real: ['zca', 'bot', 'hybrid'].includes(channel),
+    state: authed?.zalo?.body?.state,
+  };
 }
 
 /**
@@ -368,16 +399,17 @@ async function collectCorrelation(ctx, marker) {
   };
 }
 
-async function collectMedia(ctx) {
+async function collectMedia(ctx, authed) {
   const store = await collectRuntimeValue(ctx, 'MEDIA_STORE');
   const bucket = await collectRuntimeValue(ctx, 'MEDIA_BUCKET');
   const reachable = bucket
     ? (await ssh(`gcloud storage ls 'gs://${bucket}' >/dev/null 2>&1 && echo ok || echo fail`, ctx.gcp)).trim()
     : 'fail';
+  const reported = authed?.media?.body?.reachability;
   return {
     implementation: store,
     real: store === 'gcs' || store === 's3',
-    healthy: reachable === 'ok',
+    healthy: reachable === 'ok' && reported?.ok !== false,
     reachabilityChecked: true,
   };
 }
@@ -412,6 +444,8 @@ async function main() {
 
   process.stderr.write(`Collecting evidence for stack ${identity.stackSlug} on ${gcp.vm}...\n`);
 
+  const authed = await probe('authenticated', () => collectAuthenticated(ctx));
+
   const evidence = {
     release: await probe('release', () => collectRelease(ctx)),
     containers: await probe('containers', () => collectContainers(ctx)),
@@ -419,12 +453,12 @@ async function main() {
     web: await probe('web', () => collectWeb(ctx)),
     database: await probe('database', () => collectDatabase(ctx)),
     network: await probe('network', () => collectNetwork(ctx)),
-    auth: await probe('auth', () => collectAuth(ctx)),
-    readiness: await probe('readiness', () => collectReadiness(ctx)),
-    media: await probe('media', () => collectMedia(ctx)),
+    auth: await probe('auth', () => collectAuth(ctx, authed)),
+    readiness: collectReadiness(authed),
+    media: await probe('media', () => collectMedia(ctx, authed)),
   };
 
-  const zaloState = await probe('zalo', () => collectZaloState(ctx));
+  const zaloState = await probe('zalo', () => collectZaloState(ctx, authed));
   if (typeof args.correlation === 'string' && args.correlation.trim() !== '') {
     const correlated = await probe('correlation', () => collectCorrelation(ctx, args.correlation.trim()));
     if (correlated?.zalo) evidence.zalo = { ...zaloState, ...correlated.zalo };
