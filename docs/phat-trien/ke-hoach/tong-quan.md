@@ -7,7 +7,8 @@
 > Cập nhật: **21/08/2026** — dựng **stack `ultty-gd1-test` RIÊNG** trên cùng VM, không đụng stack DEV
 > `zalo-ultty`. Hạ tầng nay keyed theo **STACK SLUG = tenant + môi trường**; `dev`/`production` suy ra
 > lại đúng tên cũ nên không stack nào phải di chuyển. **Rà lại bảng SAI LỆCH nghiệp vụ**: 5 hàng lỗi
-> thời, code ĐI TRƯỚC tài liệu. 7 lỗi tiềm ẩn lộ ra, đều cùng một hình dạng. Chi tiết §7.
+> thời, code ĐI TRƯỚC tài liệu. **Deploy đã xanh** (run 32408247990). 10 lỗi tiềm ẩn lộ ra, đều
+> cùng một hình dạng. Chi tiết §7.
 > Cập nhật: **20/08/2026** — refactor foundation đa khách hoàn tất: tenant contract v2, capability-aware
 > Nest composition, web experience registry, fixture knowledge-only không Zalo/order và CI tự kiểm
 > toàn bộ `tenants/`. Không triển khai hoặc suy diễn domain/UI khách thứ ba. Chi tiết §1.-5 và
@@ -941,6 +942,23 @@ Bất biến 3 (ci-cd.md) **giữ nguyên chứ không nới**: vẫn MỘT giá
 
 **Gói khách KHÔNG fork** — vẫn một `tenants/ultty/` cho cả hai stack.
 
+### 7.1b KẾT QUẢ — đã deploy thật
+
+Deploy thành công lần thứ **4**: run
+[`32408247990`](https://github.com/phungtienviet14-sketch/nexagnet-platform/actions/runs/32408247990),
+git SHA `dd89e05`, 14 phút. Ba lần trước đỏ vì 3 lỗi khác nhau (§7.3 mục 6, 7 và 8) — **không lần
+nào chạm tới máy chủ**, vì cổng fail-fast nằm trước bước build và trước mọi thay đổi trên VM.
+
+| | |
+|---|---|
+| Stack | `ultty-gd1-test` — 4 container **healthy** |
+| Cách ly | `getent hosts flowise` trả **đúng 1** địa chỉ; `crossTenantReachable=false` |
+| DEV | **không bị đụng** — PostgreSQL của nó `Up 7 days` xuyên suốt cả 4 lần deploy |
+| Smoke | `SMOKE_ORDER_STATUS=pending_review` — đúng với `AUTO_SEND=off`, không tin nào gửi ra |
+| Verifier | 7 thành phần **REAL**; tổng thể **FAIL** vì chưa có tin Zalo thật — đúng ở thời điểm này |
+
+Bằng chứng đầy đủ: [`van-hanh/ultty-gd1-test-proof.md`](../van-hanh/ultty-gd1-test-proof.md).
+
 ### 7.2 Đã dựng
 
 | | |
@@ -952,7 +970,7 @@ Bất biến 3 (ci-cd.md) **giữ nguyên chứ không nới**: vẫn MỘT giá
 | Runbook | [`van-hanh/ultty-gd1-test-runbook.md`](../van-hanh/ultty-gd1-test-runbook.md) |
 | Backup | tách theo stack (`stacks/<slug>/`) — trước đó 2 stack chia đôi cửa sổ 7 đêm của nhau |
 
-### 7.3 Bảy lỗi tiềm ẩn lộ ra — **cùng một hình dạng**
+### 7.3 Mười lỗi tiềm ẩn lộ ra — **cùng một hình dạng**
 
 Không lỗi nào nhìn thấy được bằng đọc code; tất cả chỉ lộ khi **chạy thật vào đích thật**.
 
@@ -965,6 +983,9 @@ Không lỗi nào nhìn thấy được bằng đọc code; tất cả chỉ l�
 | 5 | `printf` rollback thêm trường `"stack"` mà thiếu tham số | Mọi trường sau lệch; `capturedAt` rỗng; **chỉ lộ đúng lúc cần rollback** |
 | 6 | `require()` trên tệp `mktemp` không đuôi → nạp JSON như JavaScript | Deploy chết **ngay sau khi preflight vừa báo PASS** |
 | 7 | Bản vá áp **một nửa**: `deploy-remote.sh` dùng `$first_release` mà không định nghĩa | Cổng cũ chặn đúng lần deploy mà cờ sinh ra để cho phép |
+| 8 | **Deploy chưa bao giờ gieo nguồn sự thật.** Với `PERSISTENCE=prisma`, DB rỗng ⇒ danh mục rỗng ⇒ parser phân loại `khac` | Đúng cho **MỌI** stack mới. Các stack cũ chỉ trông ổn vì **đã gieo bằng tay** — quy trình "lên khách mới" thiếu hẳn một bước |
+| 9 | Collector không spawn được `gcloud` trên Windows (`ENOENT` → `EINVAL` sau CVE-2024-27980) | Công cụ thu bằng chứng không chạy được trên máy người vận hành |
+| 10 | Probe xác thực gọi `http://api:3001` — cookie phiên mang `Secure` nên không bao giờ được gửi | Triệu chứng `403 CSRF` **trông như sai mật khẩu trong khi thật ra sai giao thức** |
 
 Lỗi 3 **không** sửa bằng cấp thêm quyền cho CI: probe trên VM (bằng chính SA của VM) đã chứng minh
 cả ba tính chất — tồn tại, có version enabled, đọc được — về đúng principal thật sự cần secret.

@@ -22,6 +22,7 @@
  */
 
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 import { promisify } from 'node:util';
@@ -34,6 +35,42 @@ const DEFAULT_PROJECT = 'netviet-host-968934832433';
 const DEFAULT_ZONE = 'asia-southeast1-b';
 const DEFAULT_VM = 'netviet';
 const SSH_TIMEOUT_MS = 180_000;
+
+/**
+ * How to invoke gcloud, as [program, ...leadingArgs].
+ *
+ * On Linux (CI, and the VM) a bare 'gcloud' is spawnable and that is the end of it. On Windows the
+ * CLI is gcloud.cmd, which execFile will not resolve from a bare name ('spawn gcloud ENOENT'), and
+ * which Node then refuses to spawn without a shell ('spawn EINVAL', tightened after
+ * CVE-2024-27980). Turning on shell:true would fix the spawn and break the payload: the SSH
+ * '--command' arguments carry quotes, $ and backticks that cmd.exe would mangle.
+ *
+ * So on Windows go around the wrapper entirely and run the SDK's own entry point with the Python
+ * it ships, which is a plain executable and keeps the argument array intact.
+ * GCLOUD_BIN overrides everything for anyone whose install does not match.
+ */
+function resolveGcloud() {
+  const override = process.env.GCLOUD_BIN;
+  if (override) return [override];
+  if (process.platform !== 'win32') return ['gcloud'];
+
+  const roots = [
+    process.env.CLOUDSDK_ROOT_DIR,
+    'C:/Program Files (x86)/Google/Cloud SDK/google-cloud-sdk',
+    'C:/Program Files/Google/Cloud SDK/google-cloud-sdk',
+  ].filter(Boolean);
+  for (const root of roots) {
+    const entry = `${root}/lib/gcloud.py`;
+    const python = process.env.CLOUDSDK_PYTHON ?? `${root}/platform/bundledpython/python.exe`;
+    if (existsSync(entry) && existsSync(python)) return [python, entry];
+  }
+  // Nothing matched: fall back to the wrapper so the failure names gcloud rather than a guess.
+  return ['gcloud.cmd'];
+}
+
+const GCLOUD_INVOCATION = resolveGcloud();
+const GCLOUD = GCLOUD_INVOCATION[0];
+const GCLOUD_PREFIX = GCLOUD_INVOCATION.slice(1);
 
 function parseArguments(argv) {
   const args = argv.reduce((state, value, index) => {
@@ -53,8 +90,9 @@ function parseArguments(argv) {
 
 async function ssh(command, { project, zone, vm }) {
   const { stdout } = await execFileAsync(
-    'gcloud',
+    GCLOUD,
     [
+      ...GCLOUD_PREFIX,
       'compute',
       'ssh',
       vm,
@@ -163,8 +201,14 @@ async function collectApi(ctx) {
  * thu duy nhat di ra la ket qua cua tung endpoint.
  */
 async function collectAuthenticated(ctx) {
+  // HTTPS qua ten mien that, KHONG phai http://api:3001.
+  // Cookie phien mang co Secure, nen express-session khong bao gio gui no qua HTTP thuong: probe
+  // cu nhan duoc csrfToken nhung khong nhan duoc cookie, va login tra 403 "CSRF token khong hop le"
+  // — trong nhu sai mat khau trong khi that ra la sai giao thuc. Di qua edge cung dung voi cai can
+  // chung minh hon: dung con duong ma nguoi that di. compose da map extra_hosts OPERATOR_DOMAIN ->
+  // host-gateway cho service bootstrap, dung co che smoke-test dang dung.
   const script = [
-    "const base = 'http://api:3001';",
+    `const base = 'https://${ctx.identity.operatorDomain}';`,
     "const jar = new Map();",
     "const put = (r) => { for (const c of (r.headers.getSetCookie?.() ?? [])) { const [kv] = c.split(';'); const i = kv.indexOf('='); jar.set(kv.slice(0, i), kv.slice(i + 1)); } };",
     "const cookie = () => [...jar].map(([k, v]) => k + '=' + v).join('; ');",
@@ -423,8 +467,9 @@ async function main() {
   };
   const publicIp = (
     await execFileAsync(
-      'gcloud',
+      GCLOUD,
       [
+        ...GCLOUD_PREFIX,
         'compute', 'addresses', 'describe', 'netviet-public-ip',
         '--region', args.region ?? 'asia-southeast1',
         '--project', gcp.project,
