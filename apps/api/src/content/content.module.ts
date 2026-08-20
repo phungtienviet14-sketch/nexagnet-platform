@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { loadEnv } from '@netviet/shared';
 import { loadTenantContentManifest } from '@netviet/tenant';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { PrismaModule } from '../config/prisma.module.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { AdviceComposer, ClaudeAdviceComposer, NoopAdviceComposer } from './advice-composer.js';
@@ -26,7 +26,7 @@ import { SEED } from '../knowledge/seed.js';
       provide: ContentRepository,
       inject: [PrismaService],
       useFactory: (prisma: PrismaService): ContentRepository =>
-        loadEnv().PERSISTENCE === 'prisma'
+        loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaContentRepository(prisma)
           : new InMemoryContentRepository(
               {},
@@ -46,7 +46,7 @@ import { SEED } from '../knowledge/seed.js';
     {
       provide: AdviceComposer,
       useFactory: (): AdviceComposer => {
-        const env = loadEnv();
+        const env = loadFoundationEnv();
         return env.ADVICE_COMPOSER === 'claude' && env.ANTHROPIC_API_KEY
           ? new ClaudeAdviceComposer(env.ANTHROPIC_API_KEY, env.ADVICE_MODEL)
           : new NoopAdviceComposer();

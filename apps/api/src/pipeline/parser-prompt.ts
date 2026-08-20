@@ -1,6 +1,6 @@
 import { INTENT_DEFINITIONS } from '@netviet/shared';
 import { formatTranscript } from '../messages/conversation-transcript.js';
-import { tenantPersona, type TenantConfig } from '@netviet/tenant';
+import { tenantPersona, type LegacyTenantPersona } from '@netviet/tenant';
 import type { ParserInput } from './order-parser.js';
 
 /**
@@ -22,7 +22,7 @@ import type { ParserInput } from './order-parser.js';
  */
 export function buildStaticPrompt(
   input: ParserInput,
-  persona: TenantConfig['persona'] = tenantPersona(),
+  persona: LegacyTenantPersona = tenantPersona(),
 ): string {
   const intents = INTENT_DEFINITIONS.map(
     (d) => `- ${d.intent}: ${d.description}\n  Vi du: ${d.examples.map((e) => `"${e}"`).join(' | ')}`,
@@ -84,7 +84,7 @@ export function buildTurnContext(input: ParserInput): string {
  */
 export function buildSystemPrompt(
   input: ParserInput,
-  persona: TenantConfig['persona'] = tenantPersona(),
+  persona: LegacyTenantPersona = tenantPersona(),
 ): string {
   return [buildStaticPrompt(input, persona), buildTurnContext(input)].filter(Boolean).join('\n');
 }

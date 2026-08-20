@@ -20,8 +20,8 @@ const DEFAULT_SETTINGS: NotificationSettings = {
     recipients: [],
   },
   zalo: {
-    enabled: true,
-    targetMemberNames: ['Phùng Việt', 'Hiệu'],
+    enabled: false,
+    targetMemberNames: [],
     targetMemberIds: [],
     targetGroupIds: [],
   },
@@ -80,6 +80,8 @@ export class NotificationSettingsRepository {
         const parsed = JSON.parse(raw);
         const validated = notificationSettingsSchema.safeParse(parsed);
         if (validated.success) {
+          // Schema defaults are fail-closed, but values explicitly persisted by an operator remain
+          // authoritative and are preserved exactly after validation.
           this.currentSettings = validated.data;
           return;
         }

@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { PrismaModule } from '../config/prisma.module.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { KnowledgeRepository, SeedKnowledgeRepository } from './knowledge.repository.js';
@@ -25,7 +25,7 @@ import { PrismaKnowledgeRepository } from './prisma-knowledge.repository.js';
       // PERSISTENCE=prisma -> Postgres; mac dinh memory (demo/CI khong can DB).
       provide: KnowledgeRepository,
       useFactory: (prisma: PrismaService): KnowledgeRepository =>
-        loadEnv().PERSISTENCE === 'prisma'
+        loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaKnowledgeRepository(prisma)
           : new SeedKnowledgeRepository(),
       inject: [PrismaService],

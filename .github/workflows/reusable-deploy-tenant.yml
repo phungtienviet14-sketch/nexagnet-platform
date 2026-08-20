@@ -11,26 +11,6 @@ on:
         description: 'Target GitHub environment (vi du: production, staging, pilot-ultty)'
         required: true
         type: string
-      vm_name:
-        description: 'GCP Compute Engine VM name'
-        required: false
-        type: string
-        default: 'netviet'
-      gcp_project_id:
-        description: 'GCP Project ID'
-        required: false
-        type: string
-        default: 'netviet-host-968934832433'
-      gcp_region:
-        description: 'GCP Region'
-        required: false
-        type: string
-        default: 'asia-southeast1'
-      gcp_zone:
-        description: 'GCP Zone'
-        required: false
-        type: string
-        default: 'asia-southeast1-b'
     secrets:
       GCP_WORKLOAD_IDENTITY_PROVIDER:
         required: false
@@ -38,6 +18,7 @@ on:
         required: false
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
@@ -49,10 +30,6 @@ jobs:
     timeout-minutes: 60
     env:
       TENANT: ${{ inputs.tenant }}
-      GCP_PROJECT_ID: ${{ inputs.gcp_project_id }}
-      GCP_REGION: ${{ inputs.gcp_region }}
-      GCP_ZONE: ${{ inputs.gcp_zone }}
-      VM_NAME: ${{ inputs.vm_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -64,6 +41,77 @@ jobs:
           fi
           echo "✔ Đã tìm thấy tenant package: tenants/${{ inputs.tenant }}"
 
+      - name: Resolve deployment target
+        id: target
+        env:
+          REQUESTED_TENANT: ${{ inputs.tenant }}
+          REQUESTED_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const fs = await import('node:fs');
+          const { pathToFileURL } = await import('node:url');
+          const registry = JSON.parse(fs.readFileSync('.github/deployment-targets.json', 'utf8'));
+          // pathToFileURL, khong phai ghep chuoi: mot duong dan tuyet doi tho khong phai la ESM URL
+          // hop le (tren Windows no thanh scheme `c:`), nen ghep chuoi chay duoc tren CI ma vo ly
+          // khi chay tay o may lap trinh vien.
+          const { resolveStackSlug } = await import(
+            pathToFileURL('deploy/netviet/stack-identity.mjs').href
+          );
+          const tenant = process.env.REQUESTED_TENANT;
+          const environment = process.env.REQUESTED_ENVIRONMENT;
+          const deployment = registry.deployments.find(
+            (entry) => entry.tenant === tenant && entry.environment === environment,
+          );
+          if (!deployment) {
+            console.error(`Unsupported deployment target: tenant=${tenant} environment=${environment}`);
+            process.exit(64);
+          }
+          if (deployment.githubEnvironment !== environment) {
+            console.error(
+              `Deployment registry mismatch: ${tenant}/${environment} maps to GitHub environment ${deployment.githubEnvironment}`,
+            );
+            process.exit(65);
+          }
+          const target = registry.targets[deployment.target];
+          if (!target) {
+            console.error(`Unsupported deployment target id: ${deployment.target}`);
+            process.exit(66);
+          }
+          // The stack slug decides the compose project name, and the compose project name decides
+          // the volume names. A registry entry that disagrees with the rule would point a new
+          // environment at a running stack's PostgreSQL volume, so refuse rather than reconcile.
+          const stackSlug = resolveStackSlug(tenant, environment);
+          if (deployment.stackSlug !== stackSlug) {
+            console.error(
+              `Deployment registry declares stack ${deployment.stackSlug} but the rule derives ${stackSlug}`,
+            );
+            process.exit(68);
+          }
+          const required = ['vmName', 'gcpProjectId', 'region', 'zone', 'primaryTenant'];
+          for (const field of required) {
+            if (typeof target[field] !== 'string' || target[field].trim() === '') {
+              console.error(`Deployment target ${deployment.target} is missing ${field}`);
+              process.exit(67);
+            }
+          }
+          const output = fs.createWriteStream(process.env.GITHUB_OUTPUT, { flags: 'a' });
+          for (const [key, value] of Object.entries({
+            stack_slug: stackSlug,
+            target_id: deployment.target,
+            vm_name: target.vmName,
+            gcp_project_id: target.gcpProjectId,
+            gcp_region: target.region,
+            gcp_zone: target.zone,
+            primary_tenant: target.primaryTenant,
+            runtime_environment: deployment.runtimeEnvironment,
+            preflight: deployment.preflight,
+          })) {
+            output.write(`${key}=${value}\n`);
+          }
+          output.end();
+          NODE
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -72,20 +120,56 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Verify exact main SHA passed CI
+        id: ci
+        if: steps.target.outputs.preflight == 'gd1-test'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF}" == 'refs/heads/main' ]] || {
+            echo 'GD1-test deployment must run from refs/heads/main.' >&2
+            exit 1
+          }
+          runs="$(gh api --method GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+            -f head_sha="${GITHUB_SHA}" -f branch=main -f status=completed -f per_page=20)"
+          conclusion="$(jq -r --arg sha "${GITHUB_SHA}" \
+            '[.workflow_runs[] | select(.head_sha == $sha)][0].conclusion // ""' <<<"${runs}")"
+          [[ "${conclusion}" == 'success' ]] || {
+            echo "Exact SHA ${GITHUB_SHA} does not have a successful completed CI run." >&2
+            exit 1
+          }
+          echo 'conclusion=success' >>"${GITHUB_OUTPUT}"
+
       - name: Build, push neutral image and roll out tenant silo
         run: bash deploy/netviet/deploy-ci.sh
         env:
           GIT_SHA: ${{ github.sha }}
           TENANT: ${{ inputs.tenant }}
-          ENVIRONMENT: ${{ inputs.environment == 'production' && 'prod' || inputs.environment }}
+          ENVIRONMENT: ${{ steps.target.outputs.runtime_environment }}
+          STACK_SLUG: ${{ steps.target.outputs.stack_slug }}
+          GCP_PROJECT_ID: ${{ steps.target.outputs.gcp_project_id }}
+          GCP_REGION: ${{ steps.target.outputs.gcp_region }}
+          GCP_ZONE: ${{ steps.target.outputs.gcp_zone }}
+          VM_NAME: ${{ steps.target.outputs.vm_name }}
+          PRIMARY_TENANT: ${{ steps.target.outputs.primary_tenant }}
+          DEPLOYMENT_TARGET_ID: ${{ steps.target.outputs.target_id }}
+          GITHUB_REF: ${{ github.ref }}
+          GD1_TEST_TARGET_CONFIRMED: ${{ steps.target.outputs.preflight == 'gd1-test' && '1' || '0' }}
+          GD1_TEST_CI_CONCLUSION: ${{ steps.ci.outputs.conclusion }}
+          GD1_TEST_APPROVED_GROUP_HASHES: ${{ vars.GD1_TEST_APPROVED_GROUP_HASHES }}
 
       - name: Report tenant endpoints
         env:
           # Phai KHOP mac dinh trong `deploy/netviet/deploy-ci.sh`. Khach chinh giu ten mien TRAN
           # (`operator.<ip>.sslip.io`) vi ten do di thang vao PUBLIC_BASE_URL — doi ten se lam chet
           # anh catalog trong moi tin Zalo da gui. Khach khac chi co ten mang slug.
-          PRIMARY_TENANT: ultty
+          GCP_PROJECT_ID: ${{ steps.target.outputs.gcp_project_id }}
+          GCP_REGION: ${{ steps.target.outputs.gcp_region }}
+          PRIMARY_TENANT: ${{ steps.target.outputs.primary_tenant }}
           TENANT_SLUG: ${{ inputs.tenant }}
+          STACK_SLUG: ${{ steps.target.outputs.stack_slug }}
         run: |
           set -euo pipefail
           public_ip="$(gcloud compute addresses describe netviet-public-ip \
@@ -94,15 +178,18 @@ jobs:
           # In ten mien cua CHINH khach vua deploy. Truoc 17/08/2026 buoc nay in ten tran cho moi
           # khach, nen deploy Amico xong lai bao cao duong dan cua Ultty — nguoi doc bam vao va
           # tuong minh dang xem he thong cua khach minh vua deploy.
-          if [[ "${TENANT_SLUG}" == "${PRIMARY_TENANT}" ]]; then
+          # So sanh theo STACK chu khong theo tenant: stack thu hai cua cung mot khach
+          # (`ultty-gd1-test`) khong giu ten mien tran, nen bao cao no bang ten tran la chi sai
+          # duong dan cho nguoi doc — dung cai bay 17/08/2026 nhung o chieu moi truong.
+          if [[ "${STACK_SLUG}" == "${PRIMARY_TENANT}" ]]; then
             demo="demo.${label}.sslip.io"
             operator="operator.${label}.sslip.io"
           else
-            demo="demo-${TENANT_SLUG}.${label}.sslip.io"
-            operator="operator-${TENANT_SLUG}.${label}.sslip.io"
+            demo="demo-${STACK_SLUG}.${label}.sslip.io"
+            operator="operator-${STACK_SLUG}.${label}.sslip.io"
           fi
           {
-            echo "### Deploy xong cho Tenant: **${TENANT_SLUG}** (Env: \`${{ inputs.environment }}\`)"
+            echo "### Deploy xong cho Tenant: **${TENANT_SLUG}** (Env: \`${{ inputs.environment }}\`, Stack: \`${STACK_SLUG}\`)"
             echo ""
             echo "- Demo: https://${demo}"
             echo "- Van hanh Zalo: https://${operator}/zalo"

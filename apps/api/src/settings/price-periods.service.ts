@@ -6,9 +6,9 @@ import {
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { loadEnv } from '@netviet/shared';
 import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { TEST_ONLY_PRICE_PERIOD_SOURCE } from '../knowledge/domain.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
@@ -108,7 +108,7 @@ export class PricePeriodsService {
     private readonly knowledge: KnowledgeService,
     @Optional() persistenceOverride?: 'memory' | 'prisma',
   ) {
-    this.persistence = persistenceOverride ?? loadEnv().PERSISTENCE;
+    this.persistence = persistenceOverride ?? loadFoundationEnv().PERSISTENCE;
   }
 
   async list() {
@@ -257,7 +257,7 @@ export class PricePeriodsService {
     const period = await this.period(periodId);
     if (period.status !== 'draft') throw new ConflictException('Chỉ kỳ draft mới được activate');
     const testOnly = isTestOnlyPeriod(period.source);
-    if (testOnly && loadEnv().DATA_CLASSIFICATION !== 'test') {
+    if (testOnly && loadFoundationEnv().DATA_CLASSIFICATION !== 'test') {
       throw new ConflictException('Kỳ giá test-only chỉ được activate trong môi trường dữ liệu TEST');
     }
     const result = await this.validate(periodId);

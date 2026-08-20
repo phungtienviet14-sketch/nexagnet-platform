@@ -11,6 +11,16 @@ param(
   # KHACH duoc deploy. Mac dinh 'ultty' giu nguyen hanh vi cua moi lan chay truoc tham so nay.
   # Bien moi truong TENANT van duoc chap nhan de khong pha script/thoi quen cu.
   [string]$Tenant = $(if ($env:TENANT) { $env:TENANT } else { 'ultty' }),
+  # STACK duoc bootstrap. Tenant tra loi "phuc vu khach nao"; stack tra loi "chay o dau" — thu muc,
+  # compose project (=> volume) va TIEN TO SECRET. Mac dinh bang tenant nen moi lan chay cu khong
+  # doi hanh vi; `-Stack ultty-gd1-test` bootstrap bo secret cho moi truong ky thuat GD1-test ma
+  # KHONG dung toi bo secret cua stack dang chay.
+  [string]$Stack = '',
+  # Chi tao secret + cap quyen doc roi dung. ci-cd.md §4.2 cam dung script nay de rollout mot khach
+  # dang van hanh; nhung buoc bootstrap secret thi van phai di qua day, vi day la noi DUY NHAT ma
+  # danh sach secret va danh sach cap quyen di ra tu cung mot mang (su co 6.5: hai danh sach roi
+  # lech nhau, secret co ma service account khong doc duoc).
+  [switch]$SecretsOnly,
   [switch]$MonitoringOnly
 )
 
@@ -26,8 +36,12 @@ $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 # trong khi phan upload goi khach lai doc $env:TENANT — chay `TENANT=amico` se ghi goi cua Amico
 # DE LEN goi cua Ultty trong cung mot thu muc stack. Buoc tu mot nguon duy nhat de khong lech nua.
 $TenantSlug = $Tenant
-$AppDirectory = "/srv/netviet/apps/zalo-$TenantSlug"
-$SecretPrefix = "zalo-$TenantSlug"
+$StackSlug = if ($Stack) { $Stack } else { $TenantSlug }
+if ($StackSlug -notmatch '^[a-z0-9-]+$') {
+  throw "Stack khong hop le: '$StackSlug'. Chi cho phep chu thuong, so va dau gach ngang."
+}
+$AppDirectory = "/srv/netviet/apps/zalo-$StackSlug"
+$SecretPrefix = "zalo-$StackSlug"
 $Network = 'netviet'
 $Subnet = 'netviet-sea1'
 $Repository = 'netviet'
@@ -778,6 +792,15 @@ if (-not $activeAccount) {
 if ($MonitoringOnly) {
   Ensure-Monitoring
   Write-Host "Monitoring healthy for VM $VmName."
+  exit 0
+}
+
+if ($SecretsOnly) {
+  # CO Y khong goi Ensure-ServiceAccount: no sua IAM o muc PROJECT, viec khong lien quan toi
+  # bootstrap secret, va no da lam het quota doc cloudresourcemanager mot lan (20/08/2026).
+  # Quyen doc tung secret duoc cap ngay trong Ensure-Secrets, tu chinh danh sach tao secret.
+  Ensure-Secrets
+  Write-Host "Secret bootstrap healthy for stack $StackSlug (prefix $SecretPrefix-)."
   exit 0
 }
 

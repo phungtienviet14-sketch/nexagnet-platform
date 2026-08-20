@@ -11,7 +11,7 @@ sửa bất cứ thứ gì trong `.github/workflows/` hoặc `deploy/`.
 |---|---|---|
 | **Nexagnet** | Chủ repo, chủ nền tảng | `nexagnet-platform` (tên repo), `@nexagnet/marketing`, `nexagnet247.com` |
 | **NetViet** | Đối tác, cũng làm giải pháp phần mềm | `netviet-host-968934832433` (GCP project), `deploy/netviet/`, `@netviet/api`, VM `netviet`, mạng `netviet-edge` |
-| **Ultty, Amico, …** | **Khách hàng** (của NetViet hoặc của Nexagnet) | `tenants/<slug>/`, stack `zalo-<slug>`, secret `zalo-<slug>-*` |
+| **Ultty, Amico, …** | **Khách hàng** (của NetViet hoặc của Nexagnet) | `tenants/<slug>/`; stack/secret `zalo-<slug>` là tên hạ tầng legacy hiện hành, không phải platform domain |
 
 Nền tảng này phục vụ **cả khách của NetViet lẫn khách riêng của Nexagnet**. Ultty chỉ là khách đầu
 tiên, không phải chủ đề của dự án.
@@ -26,7 +26,7 @@ tiên, không phải chủ đề của dự án.
 ## 1. Bản đồ pipeline
 
 ```
-push main ──┬─→ ci.yml ─────────────── 7 job, chặn mọi thứ nếu đỏ
+push main ──┬─→ ci.yml ─────────────── 6 job, chặn mọi thứ nếu đỏ
             │
             └─→ deploy-marketing.yml ─ chỉ khi đụng apps/marketing/** hoặc pnpm-lock.yaml
 
@@ -35,7 +35,7 @@ chạy tay ───→ deploy-tenant.yml ─────→ reusable-deploy-ten
 
 | Workflow | Kích hoạt | Cổng duyệt | Đích |
 |---|---|---|---|
-| `ci.yml` | push `main`, mọi PR | — | 7 job: `verify`, `integration`, `e2e`, `audit`, `images`, `tenant-packs (×N khách)` |
+| `ci.yml` | push `main`, mọi PR | — | 6 job: `verify`, `integration`, `tenant-packs`, `e2e`, `audit`, `images` |
 | `deploy-tenant.yml` | **chạy tay** | `dev` = không; `production` = có | Stack một khách trên VM |
 | `deploy-marketing.yml` | push `main` (đường dẫn marketing) | không | Cloud Run `nexagnet-marketing` |
 | `reusable-deploy-tenant.yml` | `workflow_call` | theo `environment` truyền vào | — (thư viện, không tự chạy) |
@@ -56,12 +56,16 @@ sửa bước deploy, sửa ở đó — đừng chép sang file khác.
 1. **Một image, mọi khách.** Image không được mang tên, dữ liệu hay thương hiệu của bất kỳ khách
    nào. `.dockerignore` loại `tenants/` và `**/e2e`. Hai test canh cổng này:
    `deploy/netviet/caddy-route-contract.test.mjs` và `apps/web/tenant-runtime.contract.mjs`
-   (build một lần, chạy hai gói khách giả, đòi thương hiệu đổi theo).
+   (build một lần, chạy hai gói giả có experience khác nhau, đòi branding/composition đổi theo).
 2. **Gói khách đi ngoài image.** `tenants/<slug>/` được upload riêng theo từng stack và mount
    **chỉ-đọc**. Một gói nằm trong image nghĩa là ai `docker save` cũng đọc được giá sỉ của khách kia.
-3. **Slug khách là một nguồn duy nhất.** Nó quyết định *đồng thời*: thư mục stack, tên compose
-   project (⇒ **tên volume**), tiền tố secret, alias mạng, hostname. Đừng để một đường suy ra slug
-   còn đường kia mặc định — đó chính là lỗi 17/08 (xem §6.1).
+3. **STACK SLUG là một nguồn duy nhất.** `STACK SLUG = tenant + môi trường`
+   (`deploy/netviet/stack-identity.mjs`). Nó quyết định *đồng thời*: thư mục stack, tên compose
+   project (⇒ **tên volume**), tiền tố secret, alias mạng, hostname, unit systemd, tiền tố backup.
+   Đừng để một đường suy ra slug còn đường kia mặc định — đó chính là lỗi 17/08 (xem §6.1).
+   `dev`/`production`/`legacy` suy ra **đúng tenant slug**, nên stack đang chạy không đổi tên;
+   môi trường khác (`gd1-test`) ra một stack hoàn toàn riêng. **Tenant slug vẫn là thứ chọn GÓI
+   KHÁCH** — một khách có hai stack thì vẫn chỉ có một `tenants/<slug>/`, không fork.
 4. **Mỗi khách một mạng Docker riêng.** Docker tự đăng ký tên service làm alias DNS trên **mọi**
    mạng đã join; chung mạng là hai khách cùng trả lời cho `api`/`flowise` và DNS round-robin sẽ
    trộn chúng vào nhau. Edge `docker network connect` **ngược vào** từng mạng khách.
@@ -98,6 +102,10 @@ Test Prisma (`*.int.spec.ts`) **không chạy được nếu không có Postgres
 `integration` trên CI là nơi duy nhất chứng minh chúng. Đừng tuyên bố "đã kiểm" khi mới chỉ thấy
 chúng `skipped`.
 
+Job `tenant-packs` chạy `tenant-packs.spec.ts`, tự liệt kê **mọi thư mục** trong `tenants/`, nạp
+từng gói bằng loader thật và kiểm slug trùng tên thư mục. Không thêm matrix tên khách vào CI. Job
+này kiểm package contract; nó không thay thế DB integration hoặc web single-artifact contract.
+
 ---
 
 ## 4. Deploy
@@ -111,18 +119,25 @@ gh workflow run deploy-tenant.yml -f tenant=ultty -f environment=dev
 `dev` không có cổng duyệt; `production` sẽ dừng chờ người duyệt. Hai lần deploy cùng một khách
 không bao giờ chạy song song (`concurrency: deploy-tenant-<slug>`).
 
+**Môi trường `gd1-test`** là một **stack RIÊNG** trên cùng VM, không phải một nhãn khác của stack
+dev: nó có thư mục, compose project, volume, mạng, hostname và secret riêng. Xem
+[`ultty-gd1-test-runbook.md`](ultty-gd1-test-runbook.md) trước khi đụng vào nó.
+
 ### 4.2 Lên một khách mới — thứ tự bắt buộc
 
 1. Tạo `tenants/<slug>/tenant.json` + `tenants/<slug>/data/knowledge.json`. Zod validate lúc boot,
    sai là fail-fast. Job `tenant-packs` trên CI kiểm mọi gói.
-2. Bootstrap secret + quyền (chạy từ PC, **một lệnh**, idempotent):
+2. Nếu là bootstrap hạ tầng lần đầu hoặc khôi phục sự cố **đã được phê duyệt**, bootstrap secret +
+   quyền bằng một lệnh idempotent:
    ```powershell
    powershell -ExecutionPolicy Bypass -File deploy/netviet/deploy.ps1 -Tenant <slug>
    ```
    Lệnh này tạo đủ 15 secret `zalo-<slug>-*` **kèm version đầu tiên** rồi cấp
    `roles/secretmanager.secretAccessor` cho service account của VM — hai việc đi từ **một** danh
-   sách nên không lệch nhau được.
-3. Thêm `<slug>` vào danh sách `tenant` trong `.github/workflows/deploy-tenant.yml`.
+   sách nên không lệch nhau được. **Không dùng script này để rollout tenant đang vận hành.**
+3. Thêm `<slug>` vào allowlist input `tenant` trong `.github/workflows/deploy-tenant.yml`. Danh sách
+   deploy vẫn cố ý thủ công vì chọn production target là external action; inventory động có approval
+   riêng là backlog, không dùng CI inventory để tự mở target deploy.
 4. Deploy: `gh workflow run deploy-tenant.yml -f tenant=<slug> -f environment=dev`.
 5. Kiểm (§5).
 
@@ -222,5 +237,6 @@ trình đụng compose đều lấy chung một khoá (`.runtime/compose.lock`) 
 
 - [`../ke-hoach/tong-quan.md`](../ke-hoach/tong-quan.md) — nguồn trạng thái duy nhất.
 - [`checklist-go-live.md`](checklist-go-live.md) — điều kiện bật pilot dữ liệu thật.
+- [`ultty-gd1-test-runbook.md`](ultty-gd1-test-runbook.md) — môi trường kỹ thuật GD1-test.
 - [`../../kien-truc/nen-tang-da-khach.md`](../../kien-truc/nen-tang-da-khach.md) — kiến trúc đa khách.
 - [`../../../deploy/netviet/README.md`](../../../deploy/netviet/README.md) — chi tiết vận hành VM.

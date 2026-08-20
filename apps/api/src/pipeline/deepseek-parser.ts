@@ -11,7 +11,8 @@ import {
 /**
  * Parser THAT dung DeepSeek (API tuong thich OpenAI, JSON mode).
  * Dung prompt chung (7 intent + few-shot) de phan loai on dinh; retry 1 lan khi loi
- * mang/5xx/429; loi cuoi -> fallback intent=khac (confidence.intent=0 de Giam sat gan co).
+ * mang/5xx/429; loi cuoi -> nem loi de ingest giu tin da luu va bao loi ro rang. Khong bien loi
+ * provider/structured output thanh mot business result `intent=khac` gia.
  * LUU Y: DeepSeek KHONG doc anh (moi bien the) — don anh can Claude/Co-pilot. KHONG tinh tien.
  *
  * MODEL MAC DINH: deepseek-v4-flash (ra 24/04/2026, MIT; deepseek-chat/deepseek-reasoner bi khai
@@ -58,8 +59,9 @@ export class DeepSeekParser implements OrderParser {
     const system = buildSystemPrompt(input);
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      let response: Response;
       try {
-        const response = await fetch(DEEPSEEK_URL, {
+        response = await fetch(DEEPSEEK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
           body: JSON.stringify({
@@ -77,55 +79,55 @@ export class DeepSeekParser implements OrderParser {
           }),
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });
-
-        if (!response.ok) {
-          const body = await response.text();
-          this.logger.error(`DeepSeek loi ${response.status}: ${body.slice(0, 200)}`);
-          if (this.retriable(response.status) && attempt < MAX_RETRIES) {
-            await sleep(RETRY_DELAY_MS);
-            continue;
-          }
-          return fallback();
-        }
-
-        const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-        const content = data.choices?.[0]?.message?.content;
-        if (!content) {
-          this.logger.warn('DeepSeek khong tra noi dung.');
-          if (attempt < MAX_RETRIES) {
-            await sleep(RETRY_DELAY_MS);
-            continue;
-          }
-          return fallback();
-        }
-
-        return this.toResult(content);
       } catch (error) {
-        // Loi mang/timeout -> retry (con luot); het luot -> fallback.
+        // Loi mang/timeout -> retry (con luot); het luot -> nem loi, khong tao ket qua gia.
         this.logger.error(`Loi goi DeepSeek: ${error instanceof Error ? error.message : String(error)}`);
         if (attempt < MAX_RETRIES) {
           await sleep(RETRY_DELAY_MS);
           continue;
         }
-        return fallback();
+        throw new Error('DeepSeek request failed after retry', { cause: error });
       }
+
+      if (!response.ok) {
+        // Khong log body cua provider: no co the chua request context/PII hoac diagnostic nhay cam.
+        this.logger.error(`DeepSeek loi HTTP ${response.status}.`);
+        if (this.retriable(response.status) && attempt < MAX_RETRIES) {
+          await sleep(RETRY_DELAY_MS);
+          continue;
+        }
+        throw new Error(`DeepSeek request failed with HTTP ${response.status}`);
+      }
+
+      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) {
+        this.logger.warn('DeepSeek khong tra noi dung.');
+        if (attempt < MAX_RETRIES) {
+          await sleep(RETRY_DELAY_MS);
+          continue;
+        }
+        throw new Error('DeepSeek returned an empty response');
+      }
+
+      return this.toResult(content);
     }
-    return fallback();
+    throw new Error('DeepSeek request exhausted retries');
   }
 
-  /** Output content -> ParseResult qua schema; schema hong thi fallback (khong retry vi LLM da tra). */
+  /** Output content -> ParseResult qua schema; schema hong thi fail-fast (khong retry vi LLM da tra). */
   private toResult(content: string): ParseResult {
     let json: unknown;
     try {
       json = parseJsonLoose(content);
     } catch {
       this.logger.warn('DeepSeek tra JSON khong parse duoc.');
-      return fallback();
+      throw new Error('DeepSeek returned invalid JSON');
     }
     const parsed = parseResultSchema.safeParse(normalizeParserOutput(json));
     if (!parsed.success) {
-      this.logger.warn(`Output DeepSeek khong hop schema: ${parsed.error.message}`);
-      return fallback();
+      this.logger.warn('Output DeepSeek khong hop parseResultSchema.');
+      throw new Error('DeepSeek returned invalid structured output');
     }
     return { ...parsed.data, confidence: ensureIntentConfidence(parsed.data.confidence, OK_CONFIDENCE) };
   }
@@ -133,11 +135,6 @@ export class DeepSeekParser implements OrderParser {
   private retriable(status: number): boolean {
     return status >= 500 || status === 429;
   }
-}
-
-/** Loi/khong hieu -> khac + confidence.intent=0 (Giam sat se gan co "do tin cay thap"). */
-function fallback(): ParseResult {
-  return { intent: 'khac', confidence: { intent: 0 } };
 }
 
 function sleep(ms: number): Promise<void> {

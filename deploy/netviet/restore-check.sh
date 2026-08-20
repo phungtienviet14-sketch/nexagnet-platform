@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-ultty}"
+STACK_SLUG="${STACK_SLUG:-${TENANT_SLUG:-ultty}}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${STACK_SLUG}}"
 DATABASE="${1:?Usage: restore-check.sh zalo|flowise /absolute/path/to/database.dump}"
 DUMP_PATH="${2:?Usage: restore-check.sh zalo|flowise /absolute/path/to/database.dump}"
 

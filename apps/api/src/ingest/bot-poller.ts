@@ -12,7 +12,7 @@ import {
   type ChannelMessage,
   type Intent,
 } from '@netviet/shared';
-import { AUTO_LABEL } from '../channels/auto-label.js';
+import { autoLabel } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import {
   callBotApi,
@@ -333,7 +333,7 @@ export class BotPoller implements OnModuleInit, OnModuleDestroy {
   /** Gui tin auto-ack (best-effort): loi khong lam gian doan doc tin, tin da luu tren app. */
   private async sendAutoAck(chatId: string): Promise<void> {
     try {
-      await this.outbound.sendMessage('bot', chatId, AUTO_ACK_TEXT + AUTO_LABEL);
+      await this.outbound.sendMessage('bot', chatId, AUTO_ACK_TEXT + autoLabel());
       this.logger.log(`Da gui auto-ack (intent=khac) toi ${chatId}`);
     } catch (error) {
       this.logger.warn(`Gui auto-ack that bai: ${error instanceof Error ? error.message : String(error)}`);

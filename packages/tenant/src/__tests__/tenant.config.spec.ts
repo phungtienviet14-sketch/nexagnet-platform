@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   loadDemoMessages,
@@ -9,8 +10,19 @@ import {
   loadTenantKnowledge,
   resetTenantCache,
   tenantBranding,
+  tenantBootstrap,
+  tenantCampaignConfig,
+  tenantCapabilities,
   tenantDir,
   tenantErp,
+  tenantExperience,
+  tenantHasCapability,
+  tenantIdentity,
+  tenantIntegrations,
+  tenantOrderAutomation,
+  tenantPersona,
+  tenantReadiness,
+  tenantRetailAdvice,
 } from '../tenant.config.js';
 
 /**
@@ -18,6 +30,7 @@ import {
  * Cac khang dinh ve du lieu that cua mot khach cu the nam ben apps/api (`tenant-pack.spec.ts`).
  */
 const tmpDirs: string[] = [];
+const KNOWLEDGE_ONLY_FIXTURE = fileURLToPath(new URL('./fixtures/knowledge-only', import.meta.url));
 
 function useFakePack(files: Record<string, unknown>): string {
   const dir = mkdtempSync(join(tmpdir(), 'tenant-pack-'));
@@ -34,10 +47,9 @@ function useFakePack(files: Record<string, unknown>): string {
 
 /** Goi khach hop le toi thieu — diem xuat phat, roi sua tung truong de kiem tung nhanh. */
 const VALID_CONFIG = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   slug: 'khach-mau',
-  displayName: 'Cong ty Khach Mau',
-  shortName: 'Khach Mau',
+  identity: { displayName: 'Cong ty Khach Mau', shortName: 'Khach Mau' },
   branding: {
     productName: 'Khach Mau AI',
     installName: 'Khach Mau — Tro ly don hang AI',
@@ -48,31 +60,54 @@ const VALID_CONFIG = {
     monogram: 'K',
     composerPlaceholder: 'vd: @Bot gui 10 mon A ve HN',
   },
-  policies: ['cong_no_30', 'thanh_toan_ngay'],
-  orderAutomation: {
-    enabled: true,
-    maxAutoConfirmQuantity: 50,
+  experience: 'operations-console',
+  capabilities: [
+    'knowledge',
+    'messaging',
+    'sales-order',
+    'campaign',
+    'operations',
+    'notifications',
+  ],
+  integrations: {
+    channel: { allowedAdapters: ['mock', 'bot', 'zca', 'hybrid'] },
+    parser: { allowedAdapters: ['deepseek', 'claude', 'flowise'] },
+    erp: { adapter: 'none' },
+    contentSource: { adapter: 'local_manifest' },
   },
-  campaign: {
-    defaultWindow: { start: '08:00', end: '12:00' },
-    minSpacingSeconds: 30,
-    maxTargets: 500,
-    rateLimitPerMinute: 30,
-    claimLeaseSeconds: 60,
-    tickIntervalSeconds: 10,
-    retry: { maxAttempts: 4, baseBackoffSeconds: 60 },
-    features: { lunarCalendarEnabled: false },
+  policies: {
+    salesOrder: {
+      supportedDealerPolicies: ['cong_no_30', 'thanh_toan_ngay'],
+      automation: { enabled: true, maxAutoConfirmQuantity: 50 },
+      retailAdvice: {
+        priceField: 'minRetailPrice',
+        qualifier: 'Gia toi thieu tham khao.',
+      },
+    },
+    campaign: {
+      defaultWindow: { start: '08:00', end: '12:00' },
+      minSpacingSeconds: 30,
+      maxTargets: 500,
+      rateLimitPerMinute: 30,
+      claimLeaseSeconds: 60,
+      tickIntervalSeconds: 10,
+      retry: { maxAttempts: 4, baseBackoffSeconds: 60 },
+      features: { lunarCalendarEnabled: false },
+    },
+    readiness: { blockedCapabilities: [] },
   },
-  retailAdvice: {
-    priceField: 'minRetailPrice',
-    qualifier: 'Gia toi thieu tham khao.',
-  },
-  readiness: { blockedCapabilities: [] },
   persona: {
-    parserIntro: 'Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Khach Mau.',
-    botName: 'Khach Mau',
-    mentionName: 'Bot khach mau',
-    productFallbackDescription: 'San pham cua Khach Mau.',
+    messaging: { botName: 'Khach Mau', mentionName: 'Bot khach mau' },
+    salesOrder: {
+      parserIntro: 'Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Khach Mau.',
+    },
+    knowledge: { productFallbackDescription: 'San pham cua Khach Mau.' },
+  },
+  bootstrap: {
+    knowledge: { path: 'data/knowledge.json' },
+    salesOrder: { path: 'data/knowledge.json' },
+    content: { path: 'data/content-manifest.json' },
+    demoMessages: { path: 'data/demo-messages.json' },
   },
 };
 
@@ -112,21 +147,65 @@ describe('chon goi khach', () => {
 });
 
 describe('doc goi khach', () => {
-  it('doc duoc danh tinh, persona, branding va policy tu xac nhan don', () => {
+  it('doc duoc danh tinh, persona, branding, experience, capabilities va integrations', () => {
     useFakePack({ 'tenant.json': VALID_CONFIG });
 
     const cfg = loadTenantConfig();
 
-    expect(cfg.displayName).toBe('Cong ty Khach Mau');
-    expect(cfg.persona.mentionName).toBe('Bot khach mau');
+    expect(tenantIdentity().displayName).toBe('Cong ty Khach Mau');
+    expect(tenantExperience()).toBe('operations-console');
+    expect(tenantCapabilities()).toContain('sales-order');
+    expect(tenantHasCapability('sales-order')).toBe(true);
+    expect(tenantIntegrations()).toEqual({
+      channel: { allowedAdapters: ['mock', 'bot', 'zca', 'hybrid'] },
+      parser: { allowedAdapters: ['deepseek', 'claude', 'flowise'] },
+      erp: { adapter: 'none' },
+      contentSource: { adapter: 'local_manifest' },
+    });
+    expect(cfg.persona.messaging?.mentionName).toBe('Bot khach mau');
+    expect(tenantPersona()).toEqual({
+      parserIntro: 'Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Khach Mau.',
+      botName: 'Khach Mau',
+      mentionName: 'Bot khach mau',
+      productFallbackDescription: 'San pham cua Khach Mau.',
+    });
     expect(tenantBranding().productName).toBe('Khach Mau AI');
-    expect(cfg.orderAutomation).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
-    expect(cfg.campaign.rateLimitPerMinute).toBe(30);
-    expect(cfg.retailAdvice).toEqual({
+    expect(cfg.policies.salesOrder?.automation).toEqual({
+      enabled: true,
+      maxAutoConfirmQuantity: 50,
+    });
+    expect(cfg.policies.campaign?.rateLimitPerMinute).toBe(30);
+    expect(cfg.policies.salesOrder?.retailAdvice).toEqual({
       priceField: 'minRetailPrice',
       qualifier: 'Gia toi thieu tham khao.',
     });
-    expect(cfg.readiness.blockedCapabilities).toEqual([]);
+    expect(cfg.policies.readiness.blockedCapabilities).toEqual([]);
+    expect(tenantOrderAutomation()).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
+    expect(tenantCampaignConfig().rateLimitPerMinute).toBe(30);
+    expect(tenantRetailAdvice().priceField).toBe('minRetailPrice');
+    expect(tenantReadiness().blockedCapabilities).toEqual([]);
+    expect(tenantBootstrap().knowledge?.path).toBe('data/knowledge.json');
+  });
+
+  it('cho phep tenant knowledge-only khong dung channel/parser/sales-order', () => {
+    process.env.TENANT_DIR = KNOWLEDGE_ONLY_FIXTURE;
+    resetTenantCache();
+
+    expect(tenantExperience()).toBe('knowledge-workspace');
+    expect(tenantCapabilities()).toEqual(['knowledge']);
+    expect(tenantIntegrations().channel).toBeUndefined();
+    expect(loadTenantConfig().policies.salesOrder).toBeUndefined();
+    expect(loadTenantConfig().persona).toEqual({});
+    expect(() => tenantPersona()).toThrow(/Capability sales-order khong duoc bat/);
+    expect(loadTenantKnowledge()).toEqual({
+      pricePeriod: null,
+      products: [],
+      prices: [],
+      priceOverrides: [],
+      dealers: [],
+      groups: [],
+      glossary: [{ term: 'FAQ', meaning: 'Frequently asked question' }],
+    });
   });
 
   /**
@@ -205,27 +284,45 @@ describe('loadTenantContentManifest', () => {
 
 /**
  * G1-12: nen tang chi biet cong `ErpPort`; DANH TINH nha cung cap ERP la du lieu cua khach.
- * VALID_CONFIG co y KHONG khai bao `erp` — de mac dinh fail-closed duoc kiem that su.
+ * ERP la integration active rieng, khong phai capability hay nhanh theo tenant slug.
  */
 describe('he thong ERP cua khach', () => {
   it('goi khach khong khai bao -> none, KHONG gan bua nha cung cap nao', () => {
-    useFakePack({ 'tenant.json': VALID_CONFIG });
-    expect(loadTenantConfig().erp).toEqual({ adapter: 'none' });
+    const { erp: _bo, ...integrations } = VALID_CONFIG.integrations;
+    useFakePack({ 'tenant.json': { ...VALID_CONFIG, integrations } });
+    expect(loadTenantConfig().integrations.erp).toBeUndefined();
     expect(tenantErp()).toEqual({ adapter: 'none' });
   });
 
   it('khai bao adapter -> doc dung gia tri do', () => {
-    useFakePack({ 'tenant.json': { ...VALID_CONFIG, erp: { adapter: 'kiotviet_mock' } } });
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        integrations: { ...VALID_CONFIG.integrations, erp: { adapter: 'kiotviet_mock' } },
+      },
+    });
     expect(tenantErp().adapter).toBe('kiotviet_mock');
   });
 
   it('adapter khong co hien thuc -> chan luc boot, khong chay tiep voi cong rong', () => {
-    useFakePack({ 'tenant.json': { ...VALID_CONFIG, erp: { adapter: 'erp-khong-ton-tai' } } });
-    expect(() => loadTenantConfig()).toThrow(/Goi khach sai schema[\s\S]*erp\.adapter/);
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        integrations: { ...VALID_CONFIG.integrations, erp: { adapter: 'erp-khong-ton-tai' } },
+      },
+    });
+    expect(() => loadTenantConfig()).toThrow(
+      /Goi khach sai schema[\s\S]*integrations\.erp\.adapter/,
+    );
   });
 });
 
 describe('goi khach hong -> nem ngay, khong chay tiep', () => {
+  it.each([1, 3])('schemaVersion=%s -> chan, khong silent migrate/fallback', (schemaVersion) => {
+    useFakePack({ 'tenant.json': { ...VALID_CONFIG, schemaVersion } });
+    expect(() => loadTenantConfig()).toThrow(/schemaVersion/);
+  });
+
   it('thieu file thi bao ro duong dan', () => {
     useFakePack({ 'tenant.json': VALID_CONFIG });
     expect(() => loadTenantKnowledge()).toThrow(/Goi khach thieu file/);
@@ -262,10 +359,18 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
       useFakePack({
         'tenant.json': {
           ...VALID_CONFIG,
-          orderAutomation: { enabled: true, maxAutoConfirmQuantity },
+          policies: {
+            ...VALID_CONFIG.policies,
+            salesOrder: {
+              ...VALID_CONFIG.policies.salesOrder,
+              automation: { enabled: true, maxAutoConfirmQuantity },
+            },
+          },
         },
       });
-      expect(() => loadTenantConfig()).toThrow(/orderAutomation\.maxAutoConfirmQuantity/);
+      expect(() => loadTenantConfig()).toThrow(
+        /policies\.salesOrder\.automation\.maxAutoConfirmQuantity/,
+      );
     },
   );
 
@@ -273,10 +378,13 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
     useFakePack({
       'tenant.json': {
         ...VALID_CONFIG,
-        campaign: {
-          ...VALID_CONFIG.campaign,
-          defaultWindow: { start: '12:00', end: '08:00' },
-          minSpacingSeconds: 0,
+        policies: {
+          ...VALID_CONFIG.policies,
+          campaign: {
+            ...VALID_CONFIG.policies.campaign,
+            defaultWindow: { start: '12:00', end: '08:00' },
+            minSpacingSeconds: 0,
+          },
         },
       },
     });
@@ -287,7 +395,13 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
     useFakePack({
       'tenant.json': {
         ...VALID_CONFIG,
-        retailAdvice: { priceField: 'giaRiengUltty', qualifier: 'Khong hop le' },
+        policies: {
+          ...VALID_CONFIG.policies,
+          salesOrder: {
+            ...VALID_CONFIG.policies.salesOrder,
+            retailAdvice: { priceField: 'giaRiengUltty', qualifier: 'Khong hop le' },
+          },
+        },
       },
     });
     expect(() => loadTenantConfig()).toThrow(/retailAdvice\.priceField/);
@@ -297,26 +411,119 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
     useFakePack({
       'tenant.json': {
         ...VALID_CONFIG,
-        readiness: {
-          blockedCapabilities: [{ key: 'VAT Viết Hoa', label: 'VAT', reason: 'Chưa chốt' }],
+        policies: {
+          ...VALID_CONFIG.policies,
+          readiness: {
+            blockedCapabilities: [{ key: 'VAT Viết Hoa', label: 'VAT', reason: 'Chưa chốt' }],
+          },
         },
       },
     });
     expect(() => loadTenantConfig()).toThrow(/readiness\.blockedCapabilities\.0\.key/);
   });
 
+  it('sales-order bat buoc co day du cac truong gia/dai ly/group', () => {
+    useFakePack({
+      'tenant.json': VALID_CONFIG,
+      'data/knowledge.json': { products: [], glossary: [] },
+    });
+    expect(() => loadTenantKnowledge()).toThrow(/prices/);
+  });
+
+  it('experience khong duoc ho tro -> chan luc boot', () => {
+    useFakePack({ 'tenant.json': { ...VALID_CONFIG, experience: 'wata-tuong-lai' } });
+    expect(() => loadTenantConfig()).toThrow(/experience/);
+  });
+
+  it.each(['knowledge', 'messaging', 'sales-order', 'operations'])(
+    'operations-console thieu capability %s -> chan theo experience contract',
+    (missingCapability) => {
+      useFakePack({
+        'tenant.json': {
+          ...VALID_CONFIG,
+          capabilities: VALID_CONFIG.capabilities.filter(
+            (capability) => capability !== missingCapability,
+          ),
+        },
+      });
+      expect(() => loadTenantConfig()).toThrow(
+        new RegExp(`operations-console yeu cau capability ${missingCapability}`),
+      );
+    },
+  );
+
+  it('capability khong duoc registry ho tro -> chan luc boot', () => {
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        capabilities: [...VALID_CONFIG.capabilities, 'finance'],
+      },
+    });
+    expect(() => loadTenantConfig()).toThrow(/capabilities/);
+  });
+
+  it('sales-order thieu dependency knowledge -> chan luc boot', () => {
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        capabilities: VALID_CONFIG.capabilities.filter((capability) => capability !== 'knowledge'),
+      },
+    });
+    expect(() => loadTenantConfig()).toThrow(/sales-order yeu cau capability knowledge/);
+  });
+
+  it('messaging thieu channel integration -> chan luc boot', () => {
+    const { channel: _bo, ...integrations } = VALID_CONFIG.integrations;
+    useFakePack({ 'tenant.json': { ...VALID_CONFIG, integrations } });
+    expect(() => loadTenantConfig()).toThrow(/integrations\.channel/);
+  });
+
+  it('campaign thieu policy campaign -> chan luc boot', () => {
+    const { campaign: _bo, ...policies } = VALID_CONFIG.policies;
+    useFakePack({ 'tenant.json': { ...VALID_CONFIG, policies } });
+    expect(() => loadTenantConfig()).toThrow(/policies\.campaign/);
+  });
+
+  it.each(['../outside.json', 'data/../../outside.json', 'C:\\outside.json', '/outside.json'])(
+    'bootstrap path %s khong duoc thoat khoi tenant pack',
+    (path) => {
+      useFakePack({
+        'tenant.json': {
+          ...VALID_CONFIG,
+          bootstrap: { ...VALID_CONFIG.bootstrap, knowledge: { path } },
+        },
+      });
+      expect(() => loadTenantConfig()).toThrow(/bootstrap\.knowledge\.path/);
+    },
+  );
+
   // D28 phuong an B: khach khai bao TAP CON chinh sach ho that su ban. Hai gia tri nam o hai file
   // khac nhau nen khong schema don le nao bat duoc — phai kiem cheo luc nap.
   it('dai ly dung chinh sach khach KHONG khai bao -> chan, chi ro dai ly nao', () => {
     useFakePack({
-      'tenant.json': { ...VALID_CONFIG, policies: ['thanh_toan_ngay'] },
+      'tenant.json': {
+        ...VALID_CONFIG,
+        policies: {
+          ...VALID_CONFIG.policies,
+          salesOrder: {
+            ...VALID_CONFIG.policies.salesOrder,
+            supportedDealerPolicies: ['thanh_toan_ngay'],
+          },
+        },
+      },
       'data/knowledge.json': {
         pricePeriod: null,
         products: [],
         prices: [],
         priceOverrides: [],
         dealers: [
-          { id: 'dl-mau', name: 'DL Mau', aliases: [], tier: 'dai_ly', defaultPolicy: 'cong_no_45' },
+          {
+            id: 'dl-mau',
+            name: 'DL Mau',
+            aliases: [],
+            tier: 'dai_ly',
+            defaultPolicy: 'cong_no_45',
+          },
         ],
         groups: [],
         glossary: [],

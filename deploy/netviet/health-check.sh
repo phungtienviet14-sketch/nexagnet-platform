@@ -1,8 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-TENANT_SLUG="${TENANT_SLUG:-ultty}"
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
+# Cac script van hanh tac dong len mot STACK (mot thu muc, mot compose project, mot bo volume),
+# khong phai len mot khach. Voi dev/production STACK_SLUG == TENANT_SLUG nen khong co gi doi.
+STACK_SLUG="${STACK_SLUG:-${TENANT_SLUG:-ultty}}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${STACK_SLUG}}"
 cd "${APP_DIR}"
 
 # Cung khoa voi deploy-stack.sh. Dang deploy thi BO QUA nhip nay: container len xuong la co chu y,
@@ -56,7 +58,7 @@ if [[ ! "${operator_domain}" =~ ^[a-z0-9.-]+$ ]]; then
   failure="OPERATOR_DOMAIN khong doc duoc tu secrets.env"
 elif ! curl -fsS --max-time 10 --resolve "${operator_domain}:443:127.0.0.1" \
   "https://${operator_domain}/health" >/dev/null; then
-  failure="health endpoint cua khach ${TENANT_SLUG} that bai"
+  failure="health endpoint cua khach ${STACK_SLUG} that bai"
 fi
 
 for service in postgres flowise api web; do

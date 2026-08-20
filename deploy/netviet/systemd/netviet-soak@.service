@@ -5,7 +5,7 @@ After=netviet-health@%i.service
 [Service]
 Type=simple
 Environment=APP_DIR=/srv/netviet/apps/zalo-%i
-Environment=TENANT_SLUG=%i
+Environment=STACK_SLUG=%i
 ExecStart=/srv/netviet/apps/zalo-%i/soak-test.sh
 User=root
 Restart=no

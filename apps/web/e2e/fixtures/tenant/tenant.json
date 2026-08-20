@@ -1,8 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "slug": "e2e-fixture",
-  "displayName": "Doanh nghiệp kiểm thử E2E",
-  "shortName": "E2E",
+  "identity": {
+    "displayName": "Doanh nghiệp kiểm thử E2E",
+    "shortName": "E2E"
+  },
   "branding": {
     "productName": "Trợ lý đơn hàng E2E",
     "installName": "E2E — Trợ lý đơn hàng AI",
@@ -13,28 +15,50 @@
     "monogram": "E2E",
     "composerPlaceholder": "Nhập tin nhắn kiểm thử"
   },
-  "policies": ["thanh_toan_ngay"],
-  "orderAutomation": null,
-  "erp": { "adapter": "none" },
-  "campaign": {
-    "defaultWindow": { "start": "08:00", "end": "12:00" },
-    "minSpacingSeconds": 30,
-    "maxTargets": 10,
-    "rateLimitPerMinute": 10,
-    "claimLeaseSeconds": 60,
-    "tickIntervalSeconds": 10,
-    "retry": { "maxAttempts": 2, "baseBackoffSeconds": 30 },
-    "features": { "lunarCalendarEnabled": false }
+  "experience": "operations-console",
+  "capabilities": [
+    "knowledge",
+    "messaging",
+    "sales-order",
+    "campaign",
+    "operations",
+    "notifications"
+  ],
+  "policies": {
+    "salesOrder": {
+      "supportedDealerPolicies": ["thanh_toan_ngay"],
+      "automation": null,
+      "retailAdvice": {
+        "priceField": "retailPrice",
+        "qualifier": "Giá kiểm thử, không dùng cho giao dịch thật."
+      }
+    },
+    "campaign": {
+      "defaultWindow": { "start": "08:00", "end": "12:00" },
+      "minSpacingSeconds": 30,
+      "maxTargets": 10,
+      "rateLimitPerMinute": 10,
+      "claimLeaseSeconds": 60,
+      "tickIntervalSeconds": 10,
+      "retry": { "maxAttempts": 2, "baseBackoffSeconds": 30 },
+      "features": { "lunarCalendarEnabled": false }
+    },
+    "readiness": { "blockedCapabilities": [] }
   },
-  "retailAdvice": {
-    "priceField": "retailPrice",
-    "qualifier": "Giá kiểm thử, không dùng cho giao dịch thật."
+  "integrations": {
+    "channel": { "allowedAdapters": ["mock", "bot", "zca", "hybrid"] },
+    "parser": { "allowedAdapters": ["deepseek", "claude", "flowise"] },
+    "erp": { "adapter": "none" },
+    "contentSource": { "adapter": "local_manifest" }
   },
-  "readiness": { "blockedCapabilities": [] },
   "persona": {
-    "parserIntro": "Bạn là bộ phân loại và trích xuất dữ liệu kiểm thử.",
-    "botName": "E2E",
-    "mentionName": "Bot E2E",
-    "productFallbackDescription": "Sản phẩm kiểm thử."
-  }
+    "messaging": { "botName": "E2E", "mentionName": "Bot E2E" },
+    "salesOrder": { "parserIntro": "Bạn là bộ phân loại và trích xuất dữ liệu kiểm thử." },
+    "knowledge": { "productFallbackDescription": "Sản phẩm kiểm thử." }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" },
+    "salesOrder": { "path": "data/knowledge.json" }
+  },
+  "smoke": null
 }

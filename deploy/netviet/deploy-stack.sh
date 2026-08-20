@@ -1,8 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-TENANT_SLUG="${TENANT_SLUG:-ultty}"
-APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${TENANT_SLUG}}"
+# Cac script van hanh tac dong len mot STACK (mot thu muc, mot compose project, mot bo volume),
+# khong phai len mot khach. Voi dev/production STACK_SLUG == TENANT_SLUG nen khong co gi doi.
+STACK_SLUG="${STACK_SLUG:-${TENANT_SLUG:-ultty}}"
+APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${STACK_SLUG}}"
 EDGE_DIR="${EDGE_DIR:-/srv/netviet/edge}"
 cd "${APP_DIR}"
 
@@ -101,7 +103,7 @@ if [[ -z "${edge_gateway}" ]]; then
   exit 1
 fi
 # Da noi roi thi `network connect` bao loi; day la buoc idempotent nen nuot loi do.
-docker network connect "zalo-${TENANT_SLUG}_backend" "${edge_gateway}" 2>/dev/null || true
+docker network connect "zalo-${STACK_SLUG}_backend" "${edge_gateway}" 2>/dev/null || true
 # Nap lai la duong NHANH; dung lai la duong DUNG khi nap lai khong the thanh cong.
 #
 # `docker compose up -d` KHONG dung lai container chi vi noi dung mot tep bind-mount doi, nen khi
@@ -130,7 +132,7 @@ for attempt in {1..60}; do
     break
   fi
   if [[ "${attempt}" -eq 60 ]]; then
-    echo "API cua khach ${TENANT_SLUG} khong healthy sau 5 phut." >&2
+    echo "API cua khach ${STACK_SLUG} khong healthy sau 5 phut." >&2
     "${COMPOSE[@]}" logs --tail=100 api >&2
     exit 1
   fi
@@ -162,9 +164,9 @@ echo "${smoke_output}"
 # Nhung phai NOI TO ra log rang cong kiem tra duong dat hang da bi bo qua: mot lan deploy xanh ma
 # im lang se bi doc nham la "da kiem het".
 if grep -q 'SMOKE_SKIPPED_ORDER_PATH=1' <<<"${smoke_output}"; then
-  echo "CANH BAO: khach ${TENANT_SLUG} chua khai bao 'smoke' trong tenant.json — lan deploy nay" >&2
+  echo "CANH BAO: khach ${STACK_SLUG} chua khai bao 'smoke' trong tenant.json — lan deploy nay" >&2
   echo "KHONG chung minh duoc duong dat hang (parse -> tinh gia -> duyet -> gui) chay dung." >&2
-  echo "Stack zalo-${TENANT_SLUG} da healthy sau edge (MOI kiem duoc phan ha tang)."
+  echo "Stack zalo-${STACK_SLUG} da healthy sau edge (MOI kiem duoc phan ha tang)."
 else
   smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n 1)"
   smoke_order_id="${smoke_order_id%%;*}"
@@ -197,7 +199,7 @@ else
     -e "VERIFY_ORDER_ID=${smoke_order_id}" \
     -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
     bootstrap node --input-type=module - < smoke-test.mjs
-  echo "Stack zalo-${TENANT_SLUG} da healthy sau edge."
+  echo "Stack zalo-${STACK_SLUG} da healthy sau edge."
 fi
 
 # Public endpoints/UI shell phai reachable qua TLS, trong khi protected API phai tu choi anonymous.

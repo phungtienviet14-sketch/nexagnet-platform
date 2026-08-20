@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "$#" -lt 5 || "$#" -gt 6 ]]; then
-  echo "Usage: $0 GCP_PROJECT_ID APP_IMAGE FLOWISE_IMAGE BACKUP_BUCKET PUBLIC_IP [TENANT_SLUG]" >&2
+if [[ "$#" -lt 5 || "$#" -gt 7 ]]; then
+  echo "Usage: $0 GCP_PROJECT_ID APP_IMAGE FLOWISE_IMAGE BACKUP_BUCKET PUBLIC_IP [TENANT_SLUG] [DEPLOYMENT_ENVIRONMENT]" >&2
   exit 64
 fi
 
@@ -14,15 +14,62 @@ public_ip="$5"
 # Slug khach quyet dinh thu muc stack. Mac dinh 'ultty' giu nguyen hanh vi cua moi lan deploy truoc
 # thay doi nay — deploy.ps1 chua truyen tham so thu 6 van ra dung stack no van deploy tu truoc.
 tenant_slug="${6:-ultty}"
+deployment_environment="${7:-legacy}"
+# STACK SLUG quyet dinh HA TANG (thu muc, compose project => volume, mang, unit systemd);
+# tenant slug chi chon GOI KHACH duoc mount vao. Voi dev/production/legacy hai gia tri bang nhau,
+# nen stack dang chay khong phai di chuyen gi. Quy tac suy ra nam trong stack-identity.mjs va
+# duoc deploy-ci.sh truyen xuong; lap lai o day de duong goi tay khong roi ve sai stack.
+case "${deployment_environment}" in
+  dev|production|legacy) derived_stack_slug="${tenant_slug}" ;;
+  *) derived_stack_slug="${tenant_slug}-${deployment_environment}" ;;
+esac
+stack_slug="${STACK_SLUG:-${derived_stack_slug}}"
+[[ "${stack_slug}" == "${derived_stack_slug}" ]] || {
+  echo "STACK_SLUG '${stack_slug}' khong khop quy tac cho ${tenant_slug}/${deployment_environment}." >&2
+  exit 64
+}
+deployment_target_id="${DEPLOYMENT_TARGET_ID:-legacy-default}"
+release_git_sha="${RELEASE_GIT_SHA:-0000000000000000000000000000000000000000}"
+release_workflow_run_id="${RELEASE_WORKFLOW_RUN_ID:-0}"
+rollback_app_image="${ROLLBACK_APP_IMAGE:-}"
+rollback_flowise_image="${ROLLBACK_FLOWISE_IMAGE:-}"
 [[ "$tenant_slug" =~ ^[a-z0-9-]+$ ]] || {
   echo "TENANT_SLUG khong hop le: '$tenant_slug'." >&2
   exit 64
 }
+[[ "$deployment_environment" =~ ^[a-z0-9-]+$ ]] || {
+  echo "DEPLOYMENT_ENVIRONMENT khong hop le: '$deployment_environment'." >&2
+  exit 64
+}
+[[ "$stack_slug" =~ ^[a-z0-9-]+$ ]] || {
+  echo "STACK_SLUG khong hop le: '$stack_slug'." >&2
+  exit 64
+}
+[[ "$deployment_target_id" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || {
+  echo "DEPLOYMENT_TARGET_ID khong hop le: '$deployment_target_id'." >&2
+  exit 64
+}
+[[ "$release_git_sha" =~ ^[a-f0-9]{40}$ ]] || {
+  echo 'RELEASE_GIT_SHA phai la full SHA.' >&2
+  exit 64
+}
+[[ "$release_workflow_run_id" =~ ^[0-9]+$ ]] || {
+  echo 'RELEASE_WORKFLOW_RUN_ID phai la so.' >&2
+  exit 64
+}
+if [[ "$deployment_environment" == 'gd1-test' ]]; then
+  for digest in "$rollback_app_image" "$rollback_flowise_image"; do
+    [[ "$digest" =~ @sha256:[a-f0-9]{64}$ ]] || {
+      echo 'GD1-test bat buoc co rollback digest cho ca app va Flowise.' >&2
+      exit 1
+    }
+  done
+fi
 source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 remote_parent="$(dirname "$source_dir")"
-# MOI KHACH MOT THU MUC. Voi slug 'ultty' duong dan nay bang y het duong dan cu, nen stack dang
-# chay khong phai di chuyen gi.
-app_dir="/srv/netviet/apps/zalo-${tenant_slug}"
+# MOI STACK MOT THU MUC. Voi stack slug 'ultty' duong dan nay bang y het duong dan cu, nen stack
+# dang chay khong phai di chuyen gi; 'ultty-gd1-test' ra mot thu muc hoan toan khac.
+app_dir="/srv/netviet/apps/zalo-${stack_slug}"
 edge_dir='/srv/netviet/edge'
 
 [[ "$source_dir" =~ ^/tmp/netviet-deploy-[0-9]+/netviet$ ]]
@@ -55,6 +102,36 @@ if [[ ! -f "$remote_parent/tenant-pack/tenant.json" ]]; then
 fi
 install -d -m 0750 "$app_dir/tenant-pack"
 rsync -a --delete "$remote_parent/tenant-pack/" "$app_dir/tenant-pack/"
+tenant_schema_version="$(sed -n 's/^[[:space:]]*"schemaVersion"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$app_dir/tenant-pack/tenant.json" | head -n 1)"
+[[ "$tenant_schema_version" =~ ^[0-9]+$ ]] || {
+  echo 'Khong doc duoc tenant schemaVersion de ghi release identity.' >&2
+  exit 1
+}
+
+write_release_json() {
+  local destination="$1"
+  local release_app_image="$2"
+  local release_flowise_image="$3"
+  local deployed_at="$4"
+  local temporary
+  temporary="$(mktemp "${app_dir}/.runtime/release.XXXXXX")"
+  printf '{"tenant":"%s","environment":"%s","stack":"%s","target":"%s","gitSha":"%s","appDigest":"%s","flowiseDigest":"%s","tenantSchemaVersion":%s,"workflowRunId":"%s","deployedAt":"%s"}\n' \
+    "$tenant_slug" "$deployment_environment" "$stack_slug" "$deployment_target_id" "$release_git_sha" \
+    "$release_app_image" "$release_flowise_image" "$tenant_schema_version" \
+    "$release_workflow_run_id" "$deployed_at" >"$temporary"
+  chmod 0600 "$temporary"
+  mv -f -- "$temporary" "$destination"
+}
+
+if [[ "$deployment_environment" == 'gd1-test' ]]; then
+  rollback_file="$(mktemp "${app_dir}/.runtime/rollback.XXXXXX")"
+  printf '{"tenant":"%s","environment":"%s","stack":"%s","target":"%s","appDigest":"%s","flowiseDigest":"%s","capturedAt":"%s"}\n' \
+    "$tenant_slug" "$deployment_environment" "$deployment_target_id" \
+    "$rollback_app_image" "$rollback_flowise_image" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    >"$rollback_file"
+  chmod 0600 "$rollback_file"
+  mv -f -- "$rollback_file" "$app_dir/.runtime/rollback-release.json"
+fi
 
 # ANH CATALOG SAN PHAM. Cung ly do di ngoai image nhu goi khach (anh cua tung khach, image la ban
 # chung), nhung KHAC o cho: thieu goi khach thi api khong boot duoc, con thieu anh thi he thong van
@@ -78,7 +155,7 @@ chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/"*.sh
 # khong tu don no khi service bien mat khoi file, nen edge se khong bind duoc cong va ca lan deploy
 # chet o buoc dung edge. Tim theo NHAN compose (khong theo ten container) roi go dung no.
 legacy_gateway="$(docker ps -aq \
-  --filter "label=com.docker.compose.project=zalo-${tenant_slug}" \
+  --filter "label=com.docker.compose.project=zalo-${stack_slug}" \
   --filter "label=com.docker.compose.service=gateway" || true)"
 if [[ -n "${legacy_gateway}" ]]; then
   echo "Go gateway cu nam trong stack khach (giu :80/:443) truoc khi dung edge." >&2
@@ -110,10 +187,10 @@ cp "$app_dir/systemd/"*.service "$app_dir/systemd/"*.timer /etc/systemd/system/
 systemctl daemon-reload
 # UNIT THEO KHACH (`@<slug>`): moi khach mot instance rieng, nen dung mot stack khong dung toi
 # khach khac. `%i` trong unit template la slug.
-systemctl enable --now "netviet-backup@${tenant_slug}.timer" "netviet-health@${tenant_slug}.timer"
+systemctl enable --now "netviet-backup@${stack_slug}.timer" "netviet-health@${stack_slug}.timer"
 # netviet-stack@<slug>.service: `enable` (khong `--now`) — deploy-stack.sh ngay duoi day tu dua
 # stack len; unit chi can co mat de lan reboot sau tu chay lai `docker compose up -d`.
-systemctl enable "netviet-stack@${tenant_slug}.service"
+systemctl enable "netviet-stack@${stack_slug}.service"
 systemctl enable --now netviet-edge.service
 
 env \
@@ -123,16 +200,23 @@ env \
   PUBLIC_IP="$public_ip" \
   BACKUP_BUCKET="$backup_bucket" \
   TENANT_SLUG="$tenant_slug" \
+  STACK_SLUG="$stack_slug" \
   APP_DIR="$app_dir" \
   EDGE_DIR="$edge_dir" \
   PRIMARY_TENANT="${PRIMARY_TENANT:-ultty}" \
+  DEPLOYMENT_ENVIRONMENT="$deployment_environment" \
   "$app_dir/render-secrets.sh"
 
 # Edge phai len TRUOC stack khach: deploy-stack.sh ket thuc bang smoke test qua HTTPS cong khai,
 # ma duong do di xuyen edge.
 (cd "$edge_dir" && docker compose --env-file .runtime/caddy.env -f compose.yaml up -d)
 
-env TENANT_SLUG="$tenant_slug" APP_DIR="$app_dir" EDGE_DIR="$edge_dir" "$app_dir/deploy-stack.sh"
-env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" APP_DIR="$app_dir" "$app_dir/backup.sh"
-systemctl start --no-block "netviet-soak@${tenant_slug}.service"
+env TENANT_SLUG="$tenant_slug" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" EDGE_DIR="$edge_dir" "$app_dir/deploy-stack.sh"
+env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" "$app_dir/backup.sh"
+write_release_json \
+  "$app_dir/.runtime/release.json" \
+  "$app_image" \
+  "$flowise_image" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+systemctl start --no-block "netviet-soak@${stack_slug}.service"
 rm -rf -- "$remote_parent"

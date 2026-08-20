@@ -2,15 +2,17 @@
   "name": "netviet-zalo-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "Nen tang AI Agent xu ly don hang Zalo (base dung chung nhieu khach)",
+  "description": "Nen tang AI Agent doanh nghiep da khach hang theo capability va experience",
   "engines": {
     "node": ">=22"
   },
   "packageManager": "pnpm@10.34.4",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:deploy-routes",
+    "test": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:deploy-routes && pnpm test:deploy-contracts",
     "test:deploy-routes": "node --test deploy/netviet/caddy-route-contract.test.mjs",
+    "test:deploy-preflight": "node --test deploy/netviet/gd1-test-preflight.test.mjs",
+    "test:deploy-contracts": "pnpm test:deploy-preflight && node --test deploy/netviet/stack-identity.test.mjs deploy/netviet/deployment-targets.contract.test.mjs deploy/netviet/verify-deployment.test.mjs",
     "test:tenant-runtime": "node --test apps/web/tenant-runtime.contract.mjs",
     "test:image-isolation": "node --test deploy/netviet/image-isolation.contract.mjs",
     "typecheck": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r typecheck",

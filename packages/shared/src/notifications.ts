@@ -33,11 +33,11 @@ export type EmailNotificationConfig = z.infer<typeof emailNotificationConfigSche
 
 export const zaloNotificationConfigSchema = z
   .object({
-    enabled: z.boolean().default(true),
+    enabled: z.boolean().default(false),
     targetMemberNames: z
       .array(z.string().trim().min(1).max(100))
       .max(10)
-      .default(['Phùng Việt', 'Hiệu']),
+      .default([]),
     targetMemberIds: z.array(z.string().trim().min(1).max(128)).max(10).default([]),
     targetGroupIds: z.array(z.string().trim().min(1).max(128)).max(10).default([]),
   })

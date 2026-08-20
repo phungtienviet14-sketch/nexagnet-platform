@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "slug": "knowledge-only",
+  "identity": {
+    "displayName": "Knowledge Only Fixture",
+    "shortName": "Knowledge"
+  },
+  "branding": {
+    "productName": "Knowledge Workspace",
+    "installName": "Knowledge Workspace",
+    "pageTitle": "Knowledge Workspace",
+    "pageDescription": "Generic non-commercial tenant fixture.",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#f5f7fb",
+    "monogram": "K",
+    "composerPlaceholder": "Search shared knowledge"
+  },
+  "experience": "knowledge-workspace",
+  "capabilities": ["knowledge"],
+  "policies": {
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {
+    "contentSource": { "adapter": "local_manifest" }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" }
+  }
+}

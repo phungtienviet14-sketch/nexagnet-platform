@@ -203,7 +203,7 @@ export function PricePeriodsSettings() {
       <div className="settings-subheading" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h3>Quản lý Bảng giá & Kỳ giá sản phẩm</h3>
-          <p>Cấu hình bảng giá theo tháng cho toàn bộ sản phẩm Ultty. Hệ thống áp dụng bảng giá có trạng thái Active đúng tháng hiện hành.</p>
+          <p>Cấu hình bảng giá theo tháng cho toàn bộ sản phẩm. Hệ thống áp dụng bảng giá có trạng thái Active đúng tháng hiện hành.</p>
         </div>
         {activeCurrentPeriod ? (
           <span className="settings-badge" style={{ backgroundColor: '#10B981', color: '#fff', padding: '0.35rem 0.75rem', borderRadius: '4px', fontWeight: 600 }}>

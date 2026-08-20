@@ -1,4 +1,11 @@
-import { loadTenantConfig, loadTenantKnowledge } from '@netviet/tenant';
+import {
+  loadTenantConfig,
+  loadTenantKnowledge,
+  tenantOrderAutomation,
+  tenantPersona,
+  tenantReadiness,
+  tenantRetailAdvice,
+} from '@netviet/tenant';
 import { describe, expect, it } from 'vitest';
 import { SEED } from './seed.js';
 
@@ -41,12 +48,12 @@ describe('goi khach dang chay <-> nhan', () => {
     const cfg = loadTenantConfig();
 
     expect(cfg.slug).toBe('ultty');
-    expect(cfg.persona.parserIntro).toContain('PHAN LOAI Y DINH');
-    expect(cfg.persona.mentionName).toBe('Bot ultty AI orders');
+    expect(tenantPersona().parserIntro).toContain('PHAN LOAI Y DINH');
+    expect(tenantPersona().mentionName).toBe('Bot ultty AI orders');
     expect(cfg.branding.productName).toBe('Ultty AI');
-    expect(cfg.orderAutomation).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
-    expect(cfg.retailAdvice.priceField).toBe('minRetailPrice');
-    expect(cfg.readiness.blockedCapabilities.map((item) => item.key)).toEqual([
+    expect(tenantOrderAutomation()).toEqual({ enabled: true, maxAutoConfirmQuantity: 50 });
+    expect(tenantRetailAdvice().priceField).toBe('minRetailPrice');
+    expect(tenantReadiness().blockedCapabilities.map((item) => item.key)).toEqual([
       'vat',
       'cod_ship',
       'debt_7_days',

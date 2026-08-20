@@ -41,20 +41,21 @@ describe('DeepSeekParser (fetch mock — khong goi API that)', () => {
     expect(r.intent).toBe('van_chuyen');
   });
 
-  it('loi 500 -> RETRY roi fallback khac (confidence 0)', async () => {
+  it('loi 500 -> RETRY roi fail-fast, khong tao business result gia', async () => {
     const f = fetchReturning(500, 'server error');
     vi.stubGlobal('fetch', f);
-    const r = await new DeepSeekParser('key').parse(input);
-    expect(r.intent).toBe('khac');
-    expect(r.confidence.intent).toBe(0);
+    await expect(new DeepSeekParser('key').parse(input)).rejects.toThrow(
+      'DeepSeek request failed with HTTP 500',
+    );
     expect(f).toHaveBeenCalledTimes(2); // 1 goc + 1 retry
   });
 
-  it('JSON hong -> fallback khac, KHONG retry', async () => {
+  it('JSON hong -> fail-fast, KHONG retry va khong tao business result gia', async () => {
     const f = fetchReturning(200, 'day khong phai json');
     vi.stubGlobal('fetch', f);
-    const r = await new DeepSeekParser('key').parse(input);
-    expect(r.intent).toBe('khac');
+    await expect(new DeepSeekParser('key').parse(input)).rejects.toThrow(
+      'DeepSeek returned invalid JSON',
+    );
     expect(f).toHaveBeenCalledTimes(1);
   });
 });

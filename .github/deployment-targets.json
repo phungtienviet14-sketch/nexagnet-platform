@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "current-shared-vm": {
+      "vmName": "netviet",
+      "gcpProjectId": "netviet-host-968934832433",
+      "region": "asia-southeast1",
+      "zone": "asia-southeast1-b",
+      "primaryTenant": "ultty"
+    }
+  },
+  "deployments": [
+    {
+      "tenant": "ultty",
+      "environment": "dev",
+      "stackSlug": "ultty",
+      "githubEnvironment": "dev",
+      "runtimeEnvironment": "dev",
+      "target": "current-shared-vm",
+      "preflight": "standard"
+    },
+    {
+      "tenant": "ultty",
+      "environment": "gd1-test",
+      "stackSlug": "ultty-gd1-test",
+      "githubEnvironment": "gd1-test",
+      "runtimeEnvironment": "gd1-test",
+      "target": "current-shared-vm",
+      "preflight": "gd1-test"
+    },
+    {
+      "tenant": "ultty",
+      "environment": "production",
+      "stackSlug": "ultty",
+      "githubEnvironment": "production",
+      "runtimeEnvironment": "prod",
+      "target": "current-shared-vm",
+      "preflight": "standard"
+    },
+    {
+      "tenant": "amico",
+      "environment": "dev",
+      "stackSlug": "amico",
+      "githubEnvironment": "dev",
+      "runtimeEnvironment": "dev",
+      "target": "current-shared-vm",
+      "preflight": "standard"
+    },
+    {
+      "tenant": "amico",
+      "environment": "production",
+      "stackSlug": "amico",
+      "githubEnvironment": "production",
+      "runtimeEnvironment": "prod",
+      "target": "current-shared-vm",
+      "preflight": "standard"
+    }
+  ]
+}

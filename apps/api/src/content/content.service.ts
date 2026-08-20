@@ -1,12 +1,12 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
   MAX_OUTBOUND_IMAGES,
-  loadEnv,
   type ContentAssetView,
   type ContentLifecycleStatus,
   type ContentSnapshotView,
   type ProductAdviceResult,
 } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { normalize } from '../rules/text.js';
 import { rankFaqs, type GlossaryTerm } from './faq-ranking.js';
 import { ContentRepository, type ContentEntityKind } from './content.repository.js';
@@ -205,7 +205,7 @@ export class ContentService implements OnModuleInit {
  */
 function absoluteLocator(locator: string): string | null {
   if (!locator.startsWith('/')) return locator;
-  const base = loadEnv().PUBLIC_BASE_URL;
+  const base = loadFoundationEnv().PUBLIC_BASE_URL;
   return base ? `${base.replace(/\/+$/, '')}${locator}` : null;
 }
 

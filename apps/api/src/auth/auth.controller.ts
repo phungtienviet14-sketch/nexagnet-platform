@@ -8,7 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import type { Response } from 'express';
 import { AuthService } from './auth.service.js';
 import type { ChangePasswordInput, LoginInput } from './auth.schemas.js';
@@ -25,14 +25,14 @@ export class AuthController {
   @Public()
   csrf(@Req() request: AuthenticatedRequest): { csrfToken: string | null } {
     return {
-      csrfToken: loadEnv().AUTH_MODE === 'session' ? generateCsrfToken(request) : null,
+      csrfToken: loadFoundationEnv().AUTH_MODE === 'session' ? generateCsrfToken(request) : null,
     };
   }
 
   @Get('config')
   @Public()
   config() {
-    return { mode: loadEnv().AUTH_MODE };
+    return { mode: loadFoundationEnv().AUTH_MODE };
   }
 
   @Post('login')
@@ -77,7 +77,7 @@ export class AuthController {
     await this.auth.recordLogout(user);
     revokeCsrfToken(request);
     await destroySession(request);
-    response.clearCookie(loadEnv().SESSION_COOKIE_NAME, { path: '/' });
+    response.clearCookie(loadFoundationEnv().SESSION_COOKIE_NAME, { path: '/' });
     return { ok: true };
   }
 }

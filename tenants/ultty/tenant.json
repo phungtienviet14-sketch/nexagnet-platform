@@ -1,8 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "slug": "ultty",
-  "displayName": "Công ty Cổ Phần U Ultty Việt Nam",
-  "shortName": "U Ultty",
+  "identity": {
+    "displayName": "Công ty Cổ Phần U Ultty Việt Nam",
+    "shortName": "U Ultty"
+  },
   "branding": {
     "productName": "Ultty AI",
     "installName": "U Ultty — Trợ lý đơn hàng AI",
@@ -13,58 +15,88 @@
     "monogram": "U",
     "composerPlaceholder": "vd: @Bot ultty AI orders gui 10 ghe felix ve TN cho c, ko lay VAT"
   },
-  "policies": ["cong_no_30", "cong_no_45", "ky_gui", "thanh_toan_ngay", "cod"],
-  "orderAutomation": {
-    "enabled": true,
-    "maxAutoConfirmQuantity": 50
-  },
-  "erp": { "adapter": "kiotviet_mock" },
-  "campaign": {
-    "defaultWindow": { "start": "08:00", "end": "12:00" },
-    "minSpacingSeconds": 30,
-    "maxTargets": 500,
-    "rateLimitPerMinute": 30,
-    "claimLeaseSeconds": 60,
-    "tickIntervalSeconds": 10,
-    "retry": { "maxAttempts": 4, "baseBackoffSeconds": 60 },
-    "features": { "lunarCalendarEnabled": false }
-  },
-  "retailAdvice": {
-    "priceField": "minRetailPrice",
-    "qualifier": "Đây là mức giá bán lẻ tối thiểu để tham khảo; giá bán thực tế có thể cao hơn tùy chính sách và thời điểm."
-  },
-  "readiness": {
-    "blockedCapabilities": [
-      {
-        "key": "vat",
-        "label": "VAT",
-        "reason": "Chưa chốt giá đã gồm VAT, VAT theo đại lý hay chỉ xuất khi khách yêu cầu."
+  "experience": "operations-console",
+  "capabilities": [
+    "knowledge",
+    "messaging",
+    "sales-order",
+    "campaign",
+    "operations",
+    "notifications"
+  ],
+  "policies": {
+    "salesOrder": {
+      "supportedDealerPolicies": ["cong_no_30", "cong_no_45", "ky_gui", "thanh_toan_ngay", "cod"],
+      "automation": {
+        "enabled": true,
+        "maxAutoConfirmQuantity": 50
       },
-      {
-        "key": "cod_ship",
-        "label": "COD và cước vận chuyển",
-        "reason": "Chưa có bảng phí COD/Grab/Viettel, định nghĩa nội thành và bảng vùng chính thức."
-      },
-      {
-        "key": "debt_7_days",
-        "label": "Công nợ 7 ngày",
-        "reason": "Chưa xác định là PolicyType riêng hay điều khoản thanh toán của policy khác."
-      },
-      {
-        "key": "promotions",
-        "label": "Khuyến mãi",
-        "reason": "Chưa có nguồn xác nhận cách cộng dồn, SKU quà, giá quà và quy tắc stack."
+      "retailAdvice": {
+        "priceField": "minRetailPrice",
+        "qualifier": "Đây là mức giá bán lẻ tối thiểu để tham khảo; giá bán thực tế có thể cao hơn tùy chính sách và thời điểm."
       }
-    ]
+    },
+    "campaign": {
+      "defaultWindow": { "start": "08:00", "end": "12:00" },
+      "minSpacingSeconds": 30,
+      "maxTargets": 500,
+      "rateLimitPerMinute": 30,
+      "claimLeaseSeconds": 60,
+      "tickIntervalSeconds": 10,
+      "retry": { "maxAttempts": 4, "baseBackoffSeconds": 60 },
+      "features": { "lunarCalendarEnabled": false }
+    },
+    "readiness": {
+      "blockedCapabilities": [
+        {
+          "key": "vat",
+          "label": "VAT",
+          "reason": "Chưa chốt giá đã gồm VAT, VAT theo đại lý hay chỉ xuất khi khách yêu cầu."
+        },
+        {
+          "key": "cod_ship",
+          "label": "COD và cước vận chuyển",
+          "reason": "Chưa có bảng phí COD/Grab/Viettel, định nghĩa nội thành và bảng vùng chính thức."
+        },
+        {
+          "key": "debt_7_days",
+          "label": "Công nợ 7 ngày",
+          "reason": "Chưa xác định là PolicyType riêng hay điều khoản thanh toán của policy khác."
+        },
+        {
+          "key": "promotions",
+          "label": "Khuyến mãi",
+          "reason": "Chưa có nguồn xác nhận cách cộng dồn, SKU quà, giá quà và quy tắc stack."
+        }
+      ]
+    }
+  },
+  "integrations": {
+    "channel": { "allowedAdapters": ["mock", "bot", "zca", "hybrid"] },
+    "parser": { "allowedAdapters": ["deepseek", "claude", "flowise"] },
+    "erp": { "adapter": "kiotviet_mock" },
+    "contentSource": { "adapter": "local_manifest" }
   },
   "smoke": {
     "orderText": "HN_31.7_Meta HN, 2 x Ghe Felix",
     "expectedQuantity": 2
   },
   "persona": {
-    "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho U Ultty (gia dung cao cap).",
-    "botName": "Ultty",
-    "mentionName": "Bot ultty AI orders",
-    "productFallbackDescription": "Sản phẩm gia dụng cao cấp U Ultty."
+    "messaging": {
+      "botName": "Ultty",
+      "mentionName": "Bot ultty AI orders"
+    },
+    "salesOrder": {
+      "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho U Ultty (gia dung cao cap)."
+    },
+    "knowledge": {
+      "productFallbackDescription": "Sản phẩm gia dụng cao cấp U Ultty."
+    }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" },
+    "salesOrder": { "path": "data/knowledge.json" },
+    "content": { "path": "data/content-manifest.json" },
+    "demoMessages": { "path": "data/demo-messages.json" }
   }
 }

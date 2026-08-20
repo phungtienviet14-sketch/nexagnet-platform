@@ -4,10 +4,13 @@ import { fileURLToPath } from 'node:url';
 import type { z } from 'zod';
 import {
   demoMessagesSchema,
+  knowledgeOnlySnapshotSchema,
   knowledgeSnapshotSchema,
   tenantConfigSchema,
   tenantContentManifestSchema,
   type DemoMessages,
+  type CapabilityId,
+  type ExperienceId,
   type TenantConfig,
   type TenantContentManifest,
   type TenantKnowledge,
@@ -102,21 +105,52 @@ export function loadTenantConfig(): TenantConfig {
  * `data/knowledge.json` — nen khong mot schema don le nao nhin thay ca hai.
  */
 function assertDealerPoliciesDeclared(knowledge: TenantKnowledge): void {
-  const declared = new Set<string>(loadTenantConfig().policies);
+  const declared = new Set<string>(
+    loadTenantConfig().policies.salesOrder?.supportedDealerPolicies ?? [],
+  );
   const lac = knowledge.dealers.filter((dealer) => !declared.has(dealer.defaultPolicy));
   if (lac.length === 0) return;
 
   const chiTiet = lac.map((d) => `  - ${d.id}: ${d.defaultPolicy}`).join('\n');
   throw new Error(
-    'Goi khach mau thuan: dai ly dung chinh sach khong co trong tenant.json.policies ' +
+    'Goi khach mau thuan: dai ly dung chinh sach khong co trong ' +
+      'tenant.json.policies.salesOrder.supportedDealerPolicies ' +
       `[${[...declared].join(', ')}]\n${chiTiet}`,
   );
 }
 
 export function loadTenantKnowledge(): TenantKnowledge {
   if (cachedKnowledge) return cachedKnowledge;
-  const knowledge = readPackFile('data/knowledge.json', knowledgeSnapshotSchema);
-  assertDealerPoliciesDeclared(knowledge);
+  const config = loadTenantConfig();
+  if (!config.capabilities.includes('knowledge')) {
+    throw new Error('Capability knowledge khong duoc bat cho tenant nay');
+  }
+
+  const salesOrderEnabled = config.capabilities.includes('sales-order');
+  const relativePath = salesOrderEnabled
+    ? config.bootstrap.salesOrder?.path
+    : config.bootstrap.knowledge?.path;
+  if (!relativePath) {
+    throw new Error(
+      `Thieu bootstrap.${salesOrderEnabled ? 'salesOrder' : 'knowledge'} cho capability knowledge`,
+    );
+  }
+
+  const knowledge = salesOrderEnabled
+    ? readPackFile(relativePath, knowledgeSnapshotSchema)
+    : (() => {
+        const base = readPackFile(relativePath, knowledgeOnlySnapshotSchema);
+        return {
+          pricePeriod: null,
+          products: base.products,
+          prices: [],
+          priceOverrides: [],
+          dealers: [],
+          groups: [],
+          glossary: base.glossary,
+        } satisfies TenantKnowledge;
+      })();
+  if (salesOrderEnabled) assertDealerPoliciesDeclared(knowledge);
   cachedKnowledge = knowledge;
   return cachedKnowledge;
 }
@@ -124,10 +158,10 @@ export function loadTenantKnowledge(): TenantKnowledge {
 /** Tin mau cho luong demo. Goi khach khong co file nay -> mang rong (demo khong co goi y san). */
 export function loadDemoMessages(): DemoMessages {
   if (cachedDemoMessages) return cachedDemoMessages;
-  const path = join(tenantDir(), 'data/demo-messages.json');
-  cachedDemoMessages = existsSync(path)
-    ? readPackFile('data/demo-messages.json', demoMessagesSchema)
-    : [];
+  const relativePath = loadTenantConfig().bootstrap.demoMessages?.path;
+  if (!relativePath) return (cachedDemoMessages = []);
+  const path = join(tenantDir(), relativePath);
+  cachedDemoMessages = existsSync(path) ? readPackFile(relativePath, demoMessagesSchema) : [];
   return cachedDemoMessages;
 }
 
@@ -144,16 +178,46 @@ export function loadDemoMessages(): DemoMessages {
  */
 export function loadTenantContentManifest(): TenantContentManifest | null {
   if (cachedContentManifest !== undefined) return cachedContentManifest;
-  const path = join(tenantDir(), 'data/content-manifest.json');
+  const relativePath = loadTenantConfig().bootstrap.content?.path;
+  if (!relativePath) return (cachedContentManifest = null);
+  const path = join(tenantDir(), relativePath);
   cachedContentManifest = existsSync(path)
-    ? readPackFile('data/content-manifest.json', tenantContentManifestSchema)
+    ? readPackFile(relativePath, tenantContentManifestSchema)
     : null;
   return cachedContentManifest;
 }
 
-/** Giong noi cua khach trong prompt LLM (thay cho ten khach truoc day hardcode trong code). */
-export function tenantPersona(): TenantConfig['persona'] {
-  return loadTenantConfig().persona;
+export interface LegacyTenantPersona {
+  parserIntro: string;
+  botName: string;
+  mentionName: string;
+  productFallbackDescription: string;
+}
+
+function assertCapability(capability: CapabilityId): TenantConfig {
+  const config = loadTenantConfig();
+  if (!config.capabilities.includes(capability)) {
+    throw new Error(`Capability ${capability} khong duoc bat cho tenant ${config.slug}`);
+  }
+  return config;
+}
+
+/** Shape legacy cho pipeline sales-order; tenant khong bat capability lien quan se fail ro rang. */
+export function tenantPersona(): LegacyTenantPersona {
+  const config = assertCapability('sales-order');
+  assertCapability('messaging');
+  const messaging = config.persona.messaging;
+  const salesOrder = config.persona.salesOrder;
+  const knowledge = config.persona.knowledge;
+  if (!messaging || !salesOrder || !knowledge) {
+    throw new Error('Tenant sales-order thieu persona capability-scoped');
+  }
+  return {
+    parserIntro: salesOrder.parserIntro,
+    botName: messaging.botName,
+    mentionName: messaging.mentionName,
+    productFallbackDescription: knowledge.productFallbackDescription,
+  };
 }
 
 /** Chuoi giao dien cua khach (thay cho chuoi hardcode trong apps/web). */
@@ -162,28 +226,61 @@ export function tenantBranding(): TenantConfig['branding'] {
 }
 
 /** Policy tu xac nhan don cua tenant; null nghia la chua duoc phe duyet, phai fail-closed. */
-export function tenantOrderAutomation(): TenantConfig['orderAutomation'] {
-  return loadTenantConfig().orderAutomation;
+export function tenantIdentity(): TenantConfig['identity'] {
+  return loadTenantConfig().identity;
+}
+
+export function tenantExperience(): ExperienceId {
+  return loadTenantConfig().experience;
+}
+
+export function tenantCapabilities(): readonly CapabilityId[] {
+  return loadTenantConfig().capabilities;
+}
+
+export function tenantHasCapability(capability: CapabilityId): boolean {
+  return loadTenantConfig().capabilities.includes(capability);
+}
+
+export function tenantIntegrations(): TenantConfig['integrations'] {
+  return loadTenantConfig().integrations;
+}
+
+export function tenantBootstrap(): TenantConfig['bootstrap'] {
+  return loadTenantConfig().bootstrap;
+}
+
+/** Policy tu xac nhan don cua tenant; null nghia la chua duoc phe duyet, phai fail-closed. */
+export function tenantOrderAutomation(): NonNullable<
+  TenantConfig['policies']['salesOrder']
+>['automation'] {
+  return assertCapability('sales-order').policies.salesOrder?.automation ?? null;
 }
 
 /** Policy phan phoi/retry campaign cua tenant; du lieu campaign runtime van nam trong Postgres. */
-export function tenantCampaignConfig(): TenantConfig['campaign'] {
-  return loadTenantConfig().campaign;
+export function tenantCampaignConfig(): NonNullable<TenantConfig['policies']['campaign']> {
+  const campaign = assertCapability('campaign').policies.campaign;
+  if (!campaign) throw new Error('Tenant campaign thieu policies.campaign');
+  return campaign;
 }
 
 /** Chien luoc tu van gia le cua tenant; khong re nhanh theo slug trong core. */
-export function tenantRetailAdvice(): TenantConfig['retailAdvice'] {
-  return loadTenantConfig().retailAdvice;
+export function tenantRetailAdvice(): NonNullable<
+  TenantConfig['policies']['salesOrder']
+>['retailAdvice'] {
+  const salesOrder = assertCapability('sales-order').policies.salesOrder;
+  if (!salesOrder) throw new Error('Tenant sales-order thieu policies.salesOrder');
+  return salesOrder.retailAdvice;
 }
 
 /** He thong ERP cua khach; nhan chi biet cong `ErpPort`, khong biet ten nha cung cap (G1-12). */
-export function tenantErp(): TenantConfig['erp'] {
-  return loadTenantConfig().erp;
+export function tenantErp(): NonNullable<TenantConfig['integrations']['erp']> {
+  return loadTenantConfig().integrations.erp ?? { adapter: 'none' };
 }
 
 /** Blocker do tenant khai bao de health/settings hien thi ma core khong biet ten khach. */
-export function tenantReadiness(): TenantConfig['readiness'] {
-  return loadTenantConfig().readiness;
+export function tenantReadiness(): TenantConfig['policies']['readiness'] {
+  return loadTenantConfig().policies.readiness;
 }
 
 /** Chi dung trong test: xoa cache de doc lai goi khach sau khi doi TENANT/TENANT_DIR. */
