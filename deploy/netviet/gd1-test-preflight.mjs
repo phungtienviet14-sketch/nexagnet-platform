@@ -252,37 +252,41 @@ async function safeRun(run, program, args) {
   }
 }
 
+/**
+ * Probe every required secret FROM THE VM, and treat that as authoritative.
+ *
+ * There used to be a second, runner-side `gcloud secrets versions list` supplying `exists` and
+ * `enabledVersion`. It was both redundant and privileged: the CI deployer holds no Secret Manager
+ * role at all (verified 20/08/2026 — artifactregistry.writer, compute.osAdminLogin, compute.viewer,
+ * iap.tunnelResourceAccessor and nothing else), so that call failed for every secret and would have
+ * blocked the deploy while reporting a problem that did not exist.
+ *
+ * Granting the runner project-wide secret metadata read would have fixed the symptom and widened
+ * the blast radius for nothing. `gcloud secrets versions access latest`, run as the VM's own
+ * service account, already proves all three things at once, and proves them about the principal
+ * that actually needs the secret at runtime:
+ *   - a secret that does not exist          -> access fails -> blocked
+ *   - a secret with no ENABLED version      -> `latest` resolves to nothing -> access fails -> blocked
+ *   - a secret the VM may not read          -> access fails -> blocked
+ * Every blocking case is still caught; only the redundant privileged call is gone.
+ */
 async function collectSecretMetadata({ env, run, stackSlug }) {
   const projectId = env.GCP_PROJECT_ID ?? DEFAULT_GCP_PROJECT_ID;
   const secrets = [];
   for (const suffix of REQUIRED_SECRET_SUFFIXES) {
     const name = `zalo-${stackSlug}-${suffix}`;
-    const enabled = await safeRun(run, 'gcloud', [
-      'secrets',
-      'versions',
-      'list',
-      '--project',
-      projectId,
-      '--secret',
-      name,
-      '--filter',
-      'state=ENABLED',
-      '--limit',
-      '1',
-      '--format',
-      'value(name)',
-    ]);
     const probed = await safeRun(
       run,
       'gcloud',
       sshArgs(env, remoteSecretProbeCommand(projectId, name)),
     );
     const probe = probed.ok ? parseSecretProbe(probed.stdout) : {};
+    const readable = probed.ok && probe.accessible === true;
     secrets.push({
       name,
-      exists: enabled.ok,
-      enabledVersion: enabled.ok && isNonEmptyString(enabled.stdout),
-      vmCanAccess: probed.ok && probe.accessible === true,
+      exists: readable,
+      enabledVersion: readable,
+      vmCanAccess: readable,
       nonEmpty: probe.nonEmpty === true,
       hasCarriageReturn: probe.hasCarriageReturn === true,
       hasLineFeed: probe.hasLineFeed === true,
@@ -614,7 +618,11 @@ function credentialErrors(credentials, secretPrefix) {
     if (secret?.enabledVersion !== true) {
       errors.push(`required secret ${label} has no enabled version`);
     }
-    if (secret?.vmCanAccess !== true) errors.push(`VM cannot access required secret ${label}`);
+    if (secret?.vmCanAccess !== true) {
+      errors.push(
+        `VM cannot read required secret ${label} (missing, no enabled version, or IAM not granted)`,
+      );
+    }
     if (secret?.nonEmpty !== true) errors.push(`required secret ${label} is empty`);
     if (secret?.hasCarriageReturn === true || secret?.hasLineFeed === true) {
       errors.push(`required secret ${label} contains CR/LF`);
