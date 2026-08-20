@@ -218,7 +218,22 @@ export class EnvValidationError extends Error {
   }
 }
 
-export function loadEnv(source: Record<string, string | undefined> = process.env): AppEnv {
+type ParserMode = AppEnv['PARSER_MODE'];
+type ChannelMode = AppEnv['CHANNEL_MODE'];
+
+export interface EnvRuntimeRequirements {
+  /** `false` khi composition khong nap capability can parser. Mac dinh giu contract cu. */
+  parser?: false | { allowedModes?: readonly ParserMode[] };
+  /** `false` khi composition khong nap capability messaging/channel. Mac dinh giu contract cu. */
+  channel?: false | { allowedModes?: readonly ChannelMode[] };
+}
+
+const DEFAULT_RUNTIME_REQUIREMENTS = { parser: {}, channel: {} } as const;
+
+export function loadEnv(
+  source: Record<string, string | undefined> = process.env,
+  requirements: EnvRuntimeRequirements = DEFAULT_RUNTIME_REQUIREMENTS,
+): AppEnv {
   const result = envSchema.safeParse(source);
   if (!result.success) {
     const issues = result.error.issues.map(
@@ -226,7 +241,36 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     );
     throw new EnvValidationError(issues);
   }
-  const data = result.data;
+  const parsedData = result.data;
+  // Tuong thich nguoc: chuan hoa truoc khi validate credential. Neu BOT_MODE=on thi do chinh la
+  // bot mode va phai qua cung cua ZALO_BOT_TOKEN; khong duoc validate `mock` roi doi thanh `bot`.
+  const data =
+    source.CHANNEL_MODE === undefined && parsedData.BOT_MODE === 'on' && parsedData.CHANNEL_MODE === 'mock'
+      ? { ...parsedData, CHANNEL_MODE: 'bot' as const }
+      : parsedData;
+  const parserRequired = requirements.parser !== false;
+  const channelRequired = requirements.channel !== false;
+  const parserRequirement = requirements.parser === false ? undefined : requirements.parser;
+  const channelRequirement = requirements.channel === false ? undefined : requirements.channel;
+
+  if (
+    parserRequired &&
+    parserRequirement?.allowedModes &&
+    !parserRequirement.allowedModes.includes(data.PARSER_MODE)
+  ) {
+    throw new EnvValidationError([
+      `PARSER_MODE=${data.PARSER_MODE}: khong nam trong integrations.parser.allowedAdapters cua tenant`,
+    ]);
+  }
+  if (
+    channelRequired &&
+    channelRequirement?.allowedModes &&
+    !channelRequirement.allowedModes.includes(data.CHANNEL_MODE)
+  ) {
+    throw new EnvValidationError([
+      `CHANNEL_MODE=${data.CHANNEL_MODE}: khong nam trong integrations.channel.allowedAdapters cua tenant`,
+    ]);
+  }
   // Production BAT BUOC co API_KEY. API nay co POST /broadcast (gui tin Zalo THAT toi nhieu nhom
   // khach) va GET /knowledge (bang gia + map nhom -> dai ly) — phoi ra Internet ma khong khoa la
   // su co bao mat, khong phai thieu sot nho. Fail fast luc khoi dong (CLAUDE.md - Luu y bao mat).
@@ -249,7 +293,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     ].filter((issue): issue is string => issue !== null);
     if (sessionIssues.length > 0) throw new EnvValidationError(sessionIssues);
   }
-  if (data.PARSER_MODE === 'flowise') {
+  if (parserRequired && data.PARSER_MODE === 'flowise') {
     const missingFlowiseVariables = [
       !data.FLOWISE_BASE_URL ? 'FLOWISE_BASE_URL: BAT BUOC khi PARSER_MODE=flowise' : null,
       !data.FLOWISE_FLOW_ID ? 'FLOWISE_FLOW_ID: BAT BUOC khi PARSER_MODE=flowise' : null,
@@ -259,7 +303,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
       throw new EnvValidationError(missingFlowiseVariables);
     }
   }
-  if (data.PARSER_MODE === 'claude' && !data.ANTHROPIC_API_KEY) {
+  if (parserRequired && data.PARSER_MODE === 'claude' && !data.ANTHROPIC_API_KEY) {
     throw new EnvValidationError([
       'ANTHROPIC_API_KEY: BAT BUOC khi PARSER_MODE=claude; khong duoc roi ve parser gia',
     ]);
@@ -267,17 +311,17 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   // Cung ly do voi nhanh claude o tren: khong co khoa thi parser.provider am tham tra ve
   // MockParser — production se chay parser TAT DINH ma khong ai biet, moi don deu sai.
   // Truoc 18/08/2026 nhanh nay thieu; no thanh ra dang khi deepseek tro thanh parser mac dinh.
-  if (data.PARSER_MODE === 'deepseek' && !data.DEEPSEEK_API_KEY) {
+  if (parserRequired && data.PARSER_MODE === 'deepseek' && !data.DEEPSEEK_API_KEY) {
     throw new EnvValidationError([
       'DEEPSEEK_API_KEY: BAT BUOC khi PARSER_MODE=deepseek; khong duoc roi ve parser gia',
     ]);
   }
   if (data.DATA_CLASSIFICATION === 'customer') {
     const customerReadinessIssues = [
-      data.PARSER_MODE !== 'claude'
+      parserRequired && data.PARSER_MODE !== 'claude'
         ? 'PARSER_MODE: du lieu khach that bat buoc dung claude (LLM duoc phe duyet), khong dung deepseek/flowise'
         : null,
-      !data.ANTHROPIC_API_KEY
+      parserRequired && !data.ANTHROPIC_API_KEY
         ? 'ANTHROPIC_API_KEY: BAT BUOC khi DATA_CLASSIFICATION=customer'
         : null,
       data.PERSISTENCE !== 'prisma'
@@ -286,7 +330,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
       data.AUTH_MODE === 'none'
         ? 'AUTH_MODE: du lieu khach that khong duoc tat xac thuc'
         : null,
-      data.CHANNEL_MODE !== 'mock' && data.MEDIA_STORE === 'none'
+      channelRequired && data.CHANNEL_MODE !== 'mock' && data.MEDIA_STORE === 'none'
         ? 'MEDIA_STORE: du lieu khach that + kenh Zalo that bat buoc dung local/gcs/s3, khong duoc none'
         : null,
     ].filter((issue): issue is string => issue !== null);
@@ -312,12 +356,17 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   if (data.MEDIA_STORE === 'gcs' && !data.MEDIA_BUCKET) {
     throw new EnvValidationError(['MEDIA_BUCKET: BAT BUOC khi MEDIA_STORE=gcs']);
   }
-  if (data.CHANNEL_MODE === 'hybrid' && !data.ZALO_BOT_TOKEN) {
+  if (
+    channelRequired &&
+    (data.CHANNEL_MODE === 'bot' || data.CHANNEL_MODE === 'hybrid') &&
+    !data.ZALO_BOT_TOKEN
+  ) {
     throw new EnvValidationError([
-      'ZALO_BOT_TOKEN: BAT BUOC khi CHANNEL_MODE=hybrid de xac dinh Bot va tranh xu ly trung',
+        `ZALO_BOT_TOKEN: BAT BUOC khi CHANNEL_MODE=${data.CHANNEL_MODE}; khong duoc roi ve kenh gia`,
     ]);
   }
   if (
+    channelRequired &&
     data.NODE_ENV === 'production' &&
     (data.CHANNEL_MODE === 'zca' || data.CHANNEL_MODE === 'hybrid')
   ) {
@@ -348,10 +397,6 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     if (weakAdminCredentials.length > 0) {
       throw new EnvValidationError(weakAdminCredentials);
     }
-  }
-  // Tuong thich nguoc: cau hinh cu chi co BOT_MODE=on (chua biet CHANNEL_MODE) -> coi la kenh 'bot'.
-  if (source.CHANNEL_MODE === undefined && data.BOT_MODE === 'on' && data.CHANNEL_MODE === 'mock') {
-    return { ...data, CHANNEL_MODE: 'bot' };
   }
   return data;
 }

@@ -6,7 +6,7 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { csrfSync } from 'csrf-sync';
 import type { Request, Response } from 'express';
 
@@ -34,7 +34,7 @@ export class CsrfGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    if (loadEnv().AUTH_MODE !== 'session') return true;
+    if (loadFoundationEnv().AUTH_MODE !== 'session') return true;
     const request = context.switchToHttp().getRequest<Request>();
     if (SAFE_METHODS.has(request.method.toUpperCase())) return true;
     const isExempt = this.reflector.getAllAndOverride<boolean>(CSRF_EXEMPT_KEY, [

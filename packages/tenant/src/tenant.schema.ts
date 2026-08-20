@@ -33,7 +33,10 @@ export const retailAdviceSchema = z
 
 export const blockedCapabilitySchema = z
   .object({
-    key: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/).max(100),
+    key: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9_-]*$/)
+      .max(100),
     label: nonEmpty.max(200),
     reason: nonEmpty.max(1_000),
   })
@@ -68,6 +71,63 @@ export const erpAdapterSchema = z.enum([
 ]);
 
 export const erpConfigSchema = z.object({ adapter: erpAdapterSchema }).strict();
+
+export const CHANNEL_ADAPTERS = ['mock', 'bot', 'zca', 'hybrid'] as const;
+export const PARSER_ADAPTERS = ['claude', 'deepseek', 'flowise'] as const;
+export const CONTENT_SOURCE_ADAPTERS = ['local_manifest', 'google_drive'] as const;
+export const CAPABILITY_IDS = [
+  'knowledge',
+  'messaging',
+  'sales-order',
+  'campaign',
+  'operations',
+  'notifications',
+] as const;
+export const EXPERIENCE_IDS = ['operations-console', 'knowledge-workspace'] as const;
+
+export const capabilityIdSchema = z.enum(CAPABILITY_IDS);
+export const experienceIdSchema = z.enum(EXPERIENCE_IDS);
+export const channelAdapterSchema = z.enum(CHANNEL_ADAPTERS);
+export const parserAdapterSchema = z.enum(PARSER_ADAPTERS);
+export const contentSourceAdapterSchema = z.enum(CONTENT_SOURCE_ADAPTERS);
+
+const uniqueNonEmptyArray = <T extends z.ZodType>(item: T) =>
+  z
+    .array(item)
+    .min(1)
+    .refine((items) => new Set(items).size === items.length, 'khong duoc khai bao trung');
+
+export const channelIntegrationSchema = z
+  .object({ allowedAdapters: uniqueNonEmptyArray(channelAdapterSchema) })
+  .strict();
+
+export const parserIntegrationSchema = z
+  .object({ allowedAdapters: uniqueNonEmptyArray(parserAdapterSchema) })
+  .strict();
+
+export const contentSourceIntegrationSchema = z
+  .object({ adapter: contentSourceAdapterSchema })
+  .strict();
+
+/** Duong dan trong goi tenant: tuong doi, khong duoc thoat khoi tenantDir(). */
+export const bootstrapPathSchema = nonEmpty
+  .max(500)
+  .refine((path) => !/^(?:[\\/]|[A-Za-z]:)/.test(path), 'phai la duong dan tuong doi')
+  .refine(
+    (path) => !path.split(/[\\/]/).some((segment) => segment === '..'),
+    'khong duoc chua thanh phan ..',
+  );
+
+const bootstrapEntrySchema = z.object({ path: bootstrapPathSchema }).strict();
+
+export const tenantBootstrapSchema = z
+  .object({
+    knowledge: bootstrapEntrySchema.optional(),
+    salesOrder: bootstrapEntrySchema.optional(),
+    content: bootstrapEntrySchema.optional(),
+    demoMessages: bootstrapEntrySchema.optional(),
+  })
+  .strict();
 
 const timeOfDaySchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'gio phai co dang HH:mm');
 
@@ -113,98 +173,176 @@ export const smokeFixtureSchema = z
   })
   .strict();
 
-export const tenantConfigSchema = z.object({
-  /** Tang khi doi cau truc goi khach theo kieu pha vo tuong thich. */
-  schemaVersion: z.literal(1),
-  /** Trung ten thu muc `tenants/<slug>/` va `docs/khach-hang/<slug>/`. */
-  slug: z.string().regex(/^[a-z0-9-]+$/, 'slug: chi chu thuong, so va gach noi'),
-  /** Ten phap nhan day du — dung tren chung tu/bao cao. */
-  displayName: nonEmpty,
-  /** Ten goi tat — dung trong cau chu hien thi. */
-  shortName: nonEmpty,
-  /**
-   * Chuoi giao dien. Truoc Dot B1 nhung chuoi nay nam thang trong `apps/web` (`layout.tsx`,
-   * `TopBar.tsx`, `SettingsShell.tsx`, `Composer.tsx`) — doi khach la phai sua ma nguon app.
-   */
-  branding: z.object({
-    /** Ten san pham tren thanh tieu de console. Cung la `short_name` cua PWA manifest. */
-    productName: nonEmpty,
-    /** Ten day du khi cai PWA (`name` cua manifest) — hien duoi icon tren man hinh chinh. */
-    installName: nonEmpty,
-    /** <title> cua trang. */
-    pageTitle: nonEmpty,
-    /** Mo ta trang (the description + PWA). */
-    pageDescription: nonEmpty,
-    /** Mau chu dao cho `theme-color` cua trinh duyet, va la mau nen cua icon. */
-    themeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'themeColor: dang #rrggbb'),
-    /** Mau nen PWA luc khoi dong, va la mau chu monogram tren icon. */
-    backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'backgroundColor: dang #rrggbb'),
-    /**
-     * Chu dat giua icon app (1-3 ky tu). Icon duoc SINH luc chay tu monogram + hai mau o tren
-     * (`app/icon.svg/route.ts`) chu khong con la file tinh trong `public/` — file tinh se di theo
-     * image va lam image gan chet vao mot khach.
-     */
-    monogram: z.string().min(1).max(3),
-    /** Cau goi y trong o soan tin cua console — chua vi du dat hang cua chinh khach. */
-    composerPlaceholder: nonEmpty,
-  }),
-  /**
-   * D28 (chot 12/08/2026, phuong an B): chinh sach ban hang khach nay THUC SU dung — mot TAP CON
-   * cua `POLICY_TYPES`. Khong dung bang `Policy` rieng, khong doi enum Prisma.
-   *
-   * Ly do chon B: khong cho nao trong code re nhanh theo policy (`policy ===` / `switch (policy)`
-   * = 0 ket qua toan repo); phi COD chay theo co `codCollect` cua don chu khong theo policy. Policy
-   * hom nay la NHAN MO TA chu khong phai luat tinh tien, nen mot bang rieng chi mua linh hoat chua
-   * ai can, doi lai mat luoi an toan luc bien dich. Danh sach nay cho phep tung khach thu hep xuong
-   * dung nhung gi ho ban, ma van giu kieu tinh.
-   *
-   * Them chinh sach that su MOI (khach khac han) van phai sua `POLICY_TYPES` + migration Prisma —
-   * do la luc can xet lai phuong an C.
-   */
-  policies: z.array(z.enum(POLICY_TYPES)).min(1),
-  /**
-   * Null = tenant chua chot policy, fail-closed va khong tu gui. Khong dung default code vi
-   * nguong la du lieu kinh doanh rieng tung khach.
-   */
-  orderAutomation: orderAutomationSchema.nullable(),
-  /**
-   * Khong khai bao -> `none`. Mac dinh nay CO Y fail-closed: goi khach im lang ve ERP thi he
-   * thong khong duoc tu gan cho ho nha cung cap nao, va moi loi goi day don se nem thay vi tra
-   * ve mot ma don gia.
-   */
-  erp: erpConfigSchema.default({ adapter: 'none' }),
-  /** Gioi han van han campaign cua tung silo; noi dung/lich thuc te nam trong Postgres. */
-  campaign: campaignConfigSchema,
-  /** Chien luoc tu van gia le; core chi doc field va cau giai thich nay. */
-  retailAdvice: retailAdviceSchema,
-  readiness: tenantReadinessSchema,
-  /**
-   * Null (hoac khong khai bao) = smoke luc deploy KHONG kiem duoc duong dat hang cua khach nay.
-   * Day la trang thai that cua mot goi chua co nguon su that, khong phai loi — nhung no lam yeu
-   * cong kiem tra, nen smoke-test.mjs phai bao to thay vi im lang di qua.
-   */
-  smoke: smokeFixtureSchema.nullable().default(null),
-  persona: z.object({
-    /** Cau mo dau prompt parser. Truoc B1 cau nay hardcode ten khach trong parser-prompt.ts. */
-    parserIntro: nonEmpty,
-    /**
-     * Ten bot trong nhan "Tin tu dong tu Bot <botName>" gan vao MOI tin he thong gui ra nhom.
-     * Dieu khoan Zalo bat buoc gan nhan noi dung do AI tao -> chuoi nay DEN TAY khach cua khach,
-     * doi la doi thu nguoi ta doc duoc. Tach rieng khoi shortName vi hai cho xung ho khac nhau.
-     */
-    botName: nonEmpty,
-    /**
-     * Ten dung de BOC @mention khoi noi dung tin den. Khac `botName`: day la chuoi dung nhu no
-     * xuat hien trong nhom Zalo (vd "Bot ultty AI orders"), con botName la ten hien thi.
-     * Bien moi truong BOT_NAME van ghi de duoc cho tung moi truong chay.
-     */
-    mentionName: nonEmpty,
-    /** Mo ta thay the khi mot SP trong kho tri thuc chua co description (vai Tu van SP). */
-    productFallbackDescription: nonEmpty,
-  }),
-});
+const salesOrderPolicySchema = z
+  .object({
+    supportedDealerPolicies: uniqueNonEmptyArray(z.enum(POLICY_TYPES)),
+    /** Null = chua phe duyet policy tu dong, fail-closed. */
+    automation: orderAutomationSchema.nullable(),
+    retailAdvice: retailAdviceSchema,
+  })
+  .strict();
+
+const tenantPoliciesSchema = z
+  .object({
+    salesOrder: salesOrderPolicySchema.optional(),
+    campaign: campaignConfigSchema.optional(),
+    readiness: tenantReadinessSchema,
+  })
+  .strict();
+
+const tenantIntegrationsSchema = z
+  .object({
+    /** Runtime env chon mot adapter trong allowlist nay; API se fail-fast neu nam ngoai. */
+    channel: channelIntegrationSchema.optional(),
+    parser: parserIntegrationSchema.optional(),
+    /** ERP la mot adapter active; `none` giu fail-closed cho GĐ1. */
+    erp: erpConfigSchema.optional(),
+    contentSource: contentSourceIntegrationSchema.optional(),
+  })
+  .strict();
+
+const tenantPersonaSchema = z
+  .object({
+    messaging: z.object({ botName: nonEmpty, mentionName: nonEmpty }).strict().optional(),
+    salesOrder: z.object({ parserIntro: nonEmpty }).strict().optional(),
+    knowledge: z.object({ productFallbackDescription: nonEmpty }).strict().optional(),
+  })
+  .strict();
+
+const capabilityRequirements = {
+  knowledge: { dependencies: [] },
+  messaging: { dependencies: [], integration: 'channel', persona: 'messaging' },
+  'sales-order': {
+    dependencies: ['knowledge', 'messaging'],
+    integration: 'parser',
+    policy: 'salesOrder',
+    persona: 'salesOrder',
+  },
+  campaign: { dependencies: ['messaging'], policy: 'campaign' },
+  operations: { dependencies: [] },
+  notifications: { dependencies: ['messaging'] },
+} as const satisfies Record<
+  z.infer<typeof capabilityIdSchema>,
+  {
+    dependencies: readonly z.infer<typeof capabilityIdSchema>[];
+    integration?: keyof z.infer<typeof tenantIntegrationsSchema>;
+    policy?: keyof z.infer<typeof tenantPoliciesSchema>;
+    persona?: keyof z.infer<typeof tenantPersonaSchema>;
+  }
+>;
+
+export const EXPERIENCE_REQUIREMENTS = {
+  'operations-console': ['knowledge', 'messaging', 'sales-order', 'operations'],
+  'knowledge-workspace': ['knowledge'],
+} as const satisfies Record<
+  z.infer<typeof experienceIdSchema>,
+  readonly z.infer<typeof capabilityIdSchema>[]
+>;
+
+export const tenantConfigSchema = z
+  .object({
+    /** V2 la boundary pha vo co chu y; v1/unknown khong duoc silent migrate. */
+    schemaVersion: z.literal(2),
+    slug: z.string().regex(/^[a-z0-9-]+$/, 'slug: chi chu thuong, so va gach noi'),
+    identity: z.object({ displayName: nonEmpty, shortName: nonEmpty }).strict(),
+    branding: z
+      .object({
+        productName: nonEmpty,
+        installName: nonEmpty,
+        pageTitle: nonEmpty,
+        pageDescription: nonEmpty,
+        themeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'themeColor: dang #rrggbb'),
+        backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'backgroundColor: dang #rrggbb'),
+        monogram: z.string().min(1).max(3),
+        composerPlaceholder: nonEmpty,
+      })
+      .strict(),
+    experience: experienceIdSchema,
+    capabilities: uniqueNonEmptyArray(capabilityIdSchema),
+    policies: tenantPoliciesSchema,
+    integrations: tenantIntegrationsSchema,
+    persona: tenantPersonaSchema.default({}),
+    bootstrap: tenantBootstrapSchema,
+    smoke: smokeFixtureSchema.nullable().default(null),
+  })
+  .strict()
+  .superRefine((config, ctx) => {
+    const enabled = new Set(config.capabilities);
+
+    for (const capability of config.capabilities) {
+      const requirement = capabilityRequirements[capability];
+      for (const dependency of requirement.dependencies) {
+        if (!enabled.has(dependency)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['capabilities'],
+            message: `${capability} yeu cau capability ${dependency}`,
+          });
+        }
+      }
+      if ('integration' in requirement && !config.integrations[requirement.integration]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['integrations', requirement.integration],
+          message: `${capability} yeu cau integration ${requirement.integration}`,
+        });
+      }
+      if ('policy' in requirement && !config.policies[requirement.policy]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['policies', requirement.policy],
+          message: `${capability} yeu cau policy ${requirement.policy}`,
+        });
+      }
+      if ('persona' in requirement && !config.persona[requirement.persona]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['persona', requirement.persona],
+          message: `${capability} yeu cau persona ${requirement.persona}`,
+        });
+      }
+    }
+
+    if (enabled.has('knowledge') && !config.bootstrap.knowledge) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['bootstrap', 'knowledge'],
+        message: 'knowledge yeu cau bootstrap.knowledge',
+      });
+    }
+    if (enabled.has('sales-order')) {
+      if (!config.bootstrap.salesOrder) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['bootstrap', 'salesOrder'],
+          message: 'sales-order yeu cau bootstrap.salesOrder',
+        });
+      }
+      if (!config.persona.knowledge) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['persona', 'knowledge'],
+          message: 'sales-order yeu cau persona knowledge',
+        });
+      }
+    }
+
+    for (const requiredCapability of EXPERIENCE_REQUIREMENTS[config.experience]) {
+      if (!enabled.has(requiredCapability)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['experience'],
+          message: `${config.experience} yeu cau capability ${requiredCapability}`,
+        });
+      }
+    }
+  });
 
 export type TenantConfig = z.infer<typeof tenantConfigSchema>;
+export type CapabilityId = z.infer<typeof capabilityIdSchema>;
+export type ExperienceId = z.infer<typeof experienceIdSchema>;
+export type TenantBootstrap = z.infer<typeof tenantBootstrapSchema>;
+export type TenantIntegrations = z.infer<typeof tenantIntegrationsSchema>;
 export type OrderAutomation = z.infer<typeof orderAutomationSchema>;
 export type CampaignConfig = z.infer<typeof campaignConfigSchema>;
 export type RetailAdvice = z.infer<typeof retailAdviceSchema>;
@@ -220,7 +358,10 @@ export type SmokeFixture = z.infer<typeof smokeFixtureSchema>;
 export const knowledgeSnapshotSchema = z.object({
   pricePeriod: z
     .object({
-      validMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable(),
+      validMonth: z
+        .string()
+        .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+        .nullable(),
       status: z.enum(['draft', 'active', 'archived']),
       /**
        * NGUON GOC cua bieu gia — phai ghi khi `validMonth` KHONG trung thang in tren van ban goc
@@ -273,6 +414,28 @@ export const knowledgeSnapshotSchema = z.object({
   ),
   glossary: z.array(z.object({ term: nonEmpty, meaning: nonEmpty })),
 });
+
+/**
+ * Knowledge-only tenant khong phai khai bao gia/dai ly/group cua sales-order. Loader se chuyen
+ * boundary nay ve `TenantKnowledge` day du bang cac mang sales rong de consumer chung khong phai
+ * re nhanh theo tenant.
+ */
+export const knowledgeOnlySnapshotSchema = z
+  .object({
+    products: z
+      .array(
+        z.object({
+          sku: nonEmpty,
+          name: nonEmpty,
+          aliases: z.array(z.string()),
+          unit: nonEmpty,
+          description: z.string().optional(),
+        }),
+      )
+      .default([]),
+    glossary: z.array(z.object({ term: nonEmpty, meaning: nonEmpty })).default([]),
+  })
+  .strict();
 
 export type TenantKnowledge = z.infer<typeof knowledgeSnapshotSchema>;
 

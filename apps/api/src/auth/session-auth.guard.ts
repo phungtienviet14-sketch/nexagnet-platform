@@ -5,7 +5,7 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { AuthService } from './auth.service.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import type { AuthenticatedRequest } from './session.types.js';
@@ -18,7 +18,7 @@ export class SessionAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    if (loadEnv().AUTH_MODE !== 'session') return true;
+    if (loadFoundationEnv().AUTH_MODE !== 'session') return true;
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),

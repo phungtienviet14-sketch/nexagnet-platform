@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { BroadcastRequest, BroadcastResult } from '@netviet/shared';
-import { AUTO_LABEL } from '../channels/auto-label.js';
+import { autoLabel } from '../channels/auto-label.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 
 /**
@@ -24,7 +24,7 @@ export class BroadcastService {
     }
     return {
       dryRun: true,
-      labeledText: request.text + AUTO_LABEL,
+      labeledText: request.text + autoLabel(),
       total: targets.length,
       sent: 0,
       failed: 0,

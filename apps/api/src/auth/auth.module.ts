@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { OperationalSettingsModule } from '../settings/operational-settings.module.js';
 import { PrismaModule } from '../config/prisma.module.js';
 import { PrismaService } from '../config/prisma.service.js';
@@ -18,7 +18,7 @@ import { UsersController } from './users.controller.js';
     {
       provide: UserRepository,
       useFactory: (prisma: PrismaService): UserRepository =>
-        loadEnv().PERSISTENCE === 'prisma'
+        loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaUserRepository(prisma)
           : new InMemoryUserRepository(),
       inject: [PrismaService],

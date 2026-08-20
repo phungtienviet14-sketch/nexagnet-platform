@@ -1,7 +1,7 @@
 import type { DynamicModule } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
 import type { AppEnv } from '@netviet/shared';
-import { loadTenantConfig } from '@netviet/tenant';
+import { tenantIdentity } from '@netviet/tenant';
 import { PrismaService } from '../config/prisma.service.js';
 import { buildKnowledgeResources } from './admin-resources.js';
 
@@ -36,7 +36,7 @@ export async function buildAdminModule(env: AppEnv): Promise<DynamicModule> {
       adminJsOptions: {
         rootPath: '/admin',
         branding: {
-          companyName: `${loadTenantConfig().shortName} — Nguồn sự thật`,
+          companyName: `${tenantIdentity().shortName} — Nguồn sự thật`,
           withMadeWithLove: false,
         },
         resources: buildKnowledgeResources(prisma, getModelByName),

@@ -15,7 +15,7 @@ import {
 /**
  * Chon kenh GUI theo CHANNEL_MODE:
  *   zca  -> ZcaAdapter (userbot ca nhan qua ZaloUserClient)
- *   bot  -> BotPlatformAdapter (can ZALO_BOT_TOKEN; thieu token -> Mock + canh bao)
+ *   bot  -> BotPlatformAdapter (can ZALO_BOT_TOKEN; thieu token -> fail-fast)
  *   hybrid -> MockAdapter mac dinh; moi luot gui phai chon bot/zca qua OutboundChannelRouter
  *   mock -> MockAdapter (khong gui Zalo)
  * Doc tin (ingest) do BotPoller / ZcaListener tu chon theo cung CHANNEL_MODE.
@@ -31,12 +31,9 @@ export const channelProvider: Provider = {
         logger.log('Kenh gui: ZcaAdapter (zca-js — userbot tai khoan ca nhan)');
         return new ZcaAdapter(zaloUser);
       case 'bot':
-        if (env.ZALO_BOT_TOKEN) {
-          logger.log('Kenh gui: BotPlatformAdapter (Zalo Bot Platform)');
-          return new BotPlatformAdapter(env.ZALO_BOT_TOKEN);
-        }
-        logger.warn('CHANNEL_MODE=bot nhung thieu ZALO_BOT_TOKEN -> dung MockAdapter.');
-        return new MockAdapter();
+        if (!env.ZALO_BOT_TOKEN) throw new Error('ZALO_BOT_TOKEN bat buoc khi CHANNEL_MODE=bot');
+        logger.log('Kenh gui: BotPlatformAdapter (Zalo Bot Platform)');
+        return new BotPlatformAdapter(env.ZALO_BOT_TOKEN);
       default:
         logger.log('Kenh gui: MockAdapter (khong gui Zalo)');
         return new MockAdapter();
@@ -49,8 +46,14 @@ export const namedChannelProviders: Provider[] = [
   {
     provide: BOT_CHANNEL_ADAPTER,
     useFactory: (): ChannelAdapter => {
-      const token = loadEnv().ZALO_BOT_TOKEN;
-      return token ? new BotPlatformAdapter(token) : new MockAdapter();
+      const env = loadEnv();
+      if (env.ZALO_BOT_TOKEN) return new BotPlatformAdapter(env.ZALO_BOT_TOKEN);
+      if (env.CHANNEL_MODE === 'bot' || env.CHANNEL_MODE === 'hybrid') {
+        throw new Error('ZALO_BOT_TOKEN bat buoc cho named bot adapter');
+      }
+      // Named adapter nay khong duoc router dung trong mock/zca mode; giu no inert de full graph cu
+      // van boot ma khong yeu cau credential cua adapter dang tat.
+      return new MockAdapter();
     },
   },
   {

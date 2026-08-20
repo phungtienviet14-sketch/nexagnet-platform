@@ -4,6 +4,10 @@
 > **Kế hoạch con:** [gd1-ultty.md](gd1-ultty.md) (**GĐ1 theo spec khách, đọc trước khi làm tiếp**) · [nen-tang.md](dot-0-nen-tang.md) (Đợt 0 — nền phải xong) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4 — 6 tính năng mới) · [nen-tang-da-khach.md](../../kien-truc/nen-tang-da-khach.md) (**Đợt B1-B5 — base dùng chung cho nhiều khách**, lập 11/08 khi có khách thứ 2 Amico; đề xuất D26-D31).
 > **Thủ tục bật pilot:** [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) — **đọc trước khi đụng vào biến môi trường của stack khách**.
 > **Thay thế (11/07/2026):** `tien-do-va-ke-hoach.md` + `checklist-du-lieu-khach.md` + phần trạng thái của `ke-hoach-dai-han.md` + 2 plan code trong `.claude/plans/` — tất cả đã xóa, git history còn.
+> Cập nhật: **20/08/2026** — refactor foundation đa khách hoàn tất: tenant contract v2, capability-aware
+> Nest composition, web experience registry, fixture knowledge-only không Zalo/order và CI tự kiểm
+> toàn bộ `tenants/`. Không triển khai hoặc suy diễn domain/UI khách thứ ba. Chi tiết §1.-5 và
+> [audit code đa khách](../../kien-truc/multi-customer-code-review.md).
 > Cập nhật: **19/08/2026 (phiên 4)** — **kế hoạch 5 pha HOÀN TẤT**: Pha 5 (retrieval FAQ theo BM25 + mở rộng viết tắt) xong; vá lỗ trích dẫn của lớp cơ sở `ChannelAdapter`; neo luật ignore `agents/`. Chi tiết §1.-4.
 > Cập nhật: **18/08/2026 (phiên 3)** — đã thực thi kế hoạch 5 pha agent tư vấn (Pha 0-4 xong, Pha 5 còn), gỡ bỏ MockParser khỏi cấu hình (**breaking**), đổi parser sang DeepSeek V4 Flash. Chi tiết §1.-3.
 > Cập nhật: **12/08/2026** — GĐ1 **code-complete** (G1-01…G1-14, 8 commit trên `gd1/code-complete`); 9 cổng go-live đạt 1/9, phần còn lại là dữ liệu + pháp lý + công tắc vận hành.
@@ -15,6 +19,31 @@
 - **🟢 PHẠM VI GĐ1 ĐÃ CHỐT (12/08/2026):** AI được tự gửi vào nhóm. Đơn hợp lệ có tổng số lượng `≤` ngưỡng tenant (Ultty hiện chốt **50**) → rules tính → gửi xác nhận → trạng thái `sent`/hàng việc báo Sale nhập KiotViet thủ công; `>` ngưỡng hoặc thiếu dữ liệu → Sale can thiệp trước gửi. GĐ1 không gọi ERP/KiotViet. Business policy nằm trong gói tenant; `AUTO_SEND` chỉ là kill switch runtime có audit.
 - **🟢 DRIVE ĐÃ KIỂM KÊ TOÀN CÂY (12/08/2026):** 122 thư mục, 825 file. Boundary chốt: binary gốc ở Drive/object storage; provenance, product mapping, FAQ, link catalog/video và nội dung tư vấn ở DB/config, quản trị qua `/settings`. Chỉ 5 FAQ dạng DOCX có nội dung; EUS Felix có media nhưng FAQ trống. **Không có bảng giá tháng 8** và **không có nguồn xác nhận công thức 30+1/10+1** ⇒ A6/A7 còn thiếu, không fallback/không suy diễn.
 - **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Ba điểm lệch tiếp theo (baseline đỏ · RBAC hở · readiness mồ côi) **cũng đã đóng** ở Đợt A/B/D.)*
+
+### 1.-5 ▶️▶️▶️▶️▶️▶️ REFACTOR FOUNDATION ĐA KHÁCH (20/08/2026) — HOÀN TẤT
+
+- **Tenant v2:** `identity`, `branding`, `experience`, `capabilities`, `policies`, `integrations`,
+  `persona`, `bootstrap`; v1/unknown version bị chặn, không silent fallback. Hai gói tenant hiện tại
+  đã migrate.
+- **Capability boundary:** registry requirement typed chỉ chứa capability có code thật. Nest root
+  compose foundation + controller/provider/module được bật; full operations graph của tenant hiện
+  tại giữ nguyên.
+- **Sales-order không còn là platform prerequisite:** fixture `knowledge-only` load và boot API mà
+  không khai Zalo/channel, parser/ERP, dealer, price, order hoặc group mapping.
+- **Experience boundary:** console ba cột được move nguyên vào `operations-console`; route runtime
+  resolve qua `ExperienceRegistry`. `knowledge-workspace` là composition tối thiểu dùng lại
+  knowledge UI, không phải thiết kế khách thứ ba.
+- **CI:** `tenant-packs.spec.ts` tự enumerate mọi thư mục `tenants/`; workflow không giữ matrix tên
+  khách. Deploy allowlist vẫn thủ công như một safety gate và là backlog nếu cần inventory quản trị.
+- **Không đổi:** Prisma schema/order state/rules/auto-confirm, mô hình mỗi tenant một DB, image dùng
+  chung, dữ liệu tenant ngoài image, quy trình rollout chỉ qua CI/CD.
+- **DB-backed proof:** Postgres thật, 15 migration apply, seed thành công;
+  `RUN_PRISMA_IT=1` → 112 file pass, 809 test pass, chỉ 1 DeepSeek external eval skip.
+
+Debt còn lại sau structural slice: notification Zalo vẫn import vendor SDK trực tiếp; readiness và
+knowledge repository internals còn sales-order-shaped dù surface không mount cho tenant khác;
+content source contract đã khai nhưng runtime binding vẫn local; route `/zalo` legacy còn tồn tại.
+Không mục nào được che bằng fake capability hoặc nhánh theo tenant.
 
 ### 1.-4 ▶️▶️▶️▶️▶️ BÀN GIAO PHIÊN 19/08/2026 (PHIÊN 4) — PHA 5 XONG, KẾ HOẠCH 5 PHA HOÀN TẤT
 
@@ -658,7 +687,7 @@ flowchart LR
 | Phase 3 còn lại — **import Excel A4** (đại lý + map nhóm, dùng `read-excel-file` — 🔄 11/07 thay `exceljs`) | 🟡 **mẫu gửi khách ĐÃ soạn 13/07** — `docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx` (3 sheet, dropdown khớp enum `Dealer`/`Group`, kèm 3 đại lý + 2 nhóm thật) sinh từ `tools/excel-template/`; **importer** đọc file khách trả về ⬜ chờ A4 |
 | Phase 4 — ERP/KiotViet Excel/API + map SKU↔mã số · Base | ⬜ **sau GĐ1**, không nằm trên đường găng task hiện tại; C1 vẫn cần khi mở phase |
 | Phase 5 — auth theo vai (2 cổng KSNB) + ghi `kpi_events` + feedback loop | ⬜ chờ D5 |
-| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS ở chế độ dev/demo không auth; Flowise/DeepSeek/Postgres thật, KiotViet và kênh Zalo mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. Console `/settings` đã deploy; **CI/CD đã có** (`.github/workflows/ci.yml` gồm Prisma IT + Playwright + audit + `images` + `tenant-packs` theo từng khách; CD keyless qua Workload Identity Federation). **Job `verify` chết timeout 20 phút liên tục từ 15/08 tới 17/08** — gói khách giả trong `apps/web/tenant-runtime.contract.mjs` thiếu 4 trường bắt buộc mà `tenantConfigSchema` thêm sau đó, nên `next start` không phục vụ nổi request; tệ hơn, `next start` hỏng vẫn không bị dọn nên `node --test` treo đến hết timeout thay vì báo lỗi sau 2 phút. Đã sửa 17/08 (fixture + dọn tiến trình con + giữ stderr): 20 phút → 3,9 giây. 2 repository variable đã đặt; environment `production` yêu cầu người duyệt và chỉ cho deploy từ `main`. **CD đa khách hoàn tất 17/08**: một bản logic duy nhất ở `reusable-deploy-tenant.yml`, gọi từ một cửa `deploy-tenant.yml` (chạy tay, chọn khách + môi trường `dev`/`production`). Đường tự động theo push `deploy.yml` đã xoá — nó chưa deploy thành công lần nào và một run chờ duyệt còn chiếm làn concurrency chặn cả deploy tay. Trang marketing đi đường riêng `deploy-marketing.yml` → Cloud Run `nexagnet-marketing`, deploy theo git SHA. Repo đổi tên `ultty-ai-orders` → **`nexagnet-platform`** (kèm cập nhật 2 chốt WIF `assertion.repository`/`principalSet`, nếu không CD chết ở bước `auth`). Việc bật kênh Zalo thật được tách khỏi nghiệm thu hạ tầng D18c |
+| Phase 6 — deploy 1 VM + webhook always-on + sao lưu + **pilot 1-2 nhóm → go/no-go** | 🟡 hạ tầng `netviet` đã public qua HTTPS ở chế độ dev/demo không auth; Flowise/DeepSeek/Postgres thật, KiotViet và kênh Zalo mock; smoke · persistence · backup/restore · monitoring · rollback · soak 24 giờ đạt. Console `/settings` đã deploy; **CI/CD đã có** (`.github/workflows/ci.yml` gồm Prisma IT + Playwright + audit + `images` + `tenant-packs` tự enumerate toàn bộ thư mục tenant; CD keyless qua Workload Identity Federation). **Job `verify` chết timeout 20 phút liên tục từ 15/08 tới 17/08** — gói khách giả trong `apps/web/tenant-runtime.contract.mjs` thiếu 4 trường bắt buộc mà `tenantConfigSchema` thêm sau đó, nên `next start` không phục vụ nổi request; tệ hơn, `next start` hỏng vẫn không bị dọn nên `node --test` treo đến hết timeout thay vì báo lỗi sau 2 phút. Đã sửa 17/08 (fixture + dọn tiến trình con + giữ stderr): 20 phút → 3,9 giây. 2 repository variable đã đặt; environment `production` yêu cầu người duyệt và chỉ cho deploy từ `main`. **CD đa khách hoàn tất 17/08**: một bản logic duy nhất ở `reusable-deploy-tenant.yml`, gọi từ một cửa `deploy-tenant.yml` (chạy tay, chọn khách + môi trường `dev`/`production`). Đường tự động theo push `deploy.yml` đã xoá — nó chưa deploy thành công lần nào và một run chờ duyệt còn chiếm làn concurrency chặn cả deploy tay. Trang marketing đi đường riêng `deploy-marketing.yml` → Cloud Run `nexagnet-marketing`, deploy theo git SHA. Repo đổi tên `ultty-ai-orders` → **`nexagnet-platform`** (kèm cập nhật 2 chốt WIF `assertion.repository`/`principalSet`, nếu không CD chết ở bước `auth`). Việc bật kênh Zalo thật được tách khỏi nghiệm thu hạ tầng D18c |
 | **GĐ1 G1-01…G1-14 — đợt A→G lập lại từ as-built** | ✅ XONG 12/08/2026 (8 commit, xem §1.0). GĐ1 **code-complete**; phần chưa chạy được là dữ liệu khách + văn bản pháp lý + công tắc vận hành → [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) |
 | Việc "thật hơn" treo — đọc 6 quy trình gốc chưa phản ánh · nghiệp vụ vận chuyển 2.3 · PWA 5 tab | ⬜ sau GĐ1 |
 
@@ -779,9 +808,9 @@ Tổng thanh toán: 5.750.000
 | **D23** | **Đơn vị kinh tế**: giá bán/khách, biên lợi nhuận, điểm hòa vốn. Hiện chỉ biết hạ tầng ~$44/khách/tháng; chưa có chi phí LLM, nhân sự, onboarding (hàng chục giờ công/khách) | Chốt mô hình kinh doanh | ⬜ |
 | **D24** | **Ai trực + SLA** khi có 5 khách trả tiền (bus factor hiện = 1). Lưu ý: SLA 99.9% ≈ 43 phút/tháng — kiến trúc 1 droplet/1 vùng **không cam kết nổi** | Ký hợp đồng khách đầu tiên | ⬜ |
 | **D25** | **Hai Bot cùng một nhóm:** native @mention Bot Zalo → Bot Platform xử lý/trả lời; không tag → tài khoản zca xử lý/trả lời. Chỉ metadata mention native được tính; nếu không lấy được Bot UID thì zca fail-closed | Kiến trúc kênh hybrid | ✅ user duyệt + code 03/08, **đã deploy pilot 03/08**; còn E2E live trên nhóm test |
-| **D26** | Mô hình silo: mỗi khách một stack/DB, không thêm `tenantId` khi chưa dùng DB chung | Base đa khách | 🟡 đề xuất, chưa chốt chính thức |
+| **D26** | Mô hình silo: mỗi khách một stack/DB, không thêm `tenantId` khi chưa dùng DB chung | Base đa khách | ✅ bất biến kiến trúc hiện hành; refactor 20/08 giữ nguyên |
 | **D27** | Nơi đặt hạ tầng khách sau | Hợp đồng/hồ sơ dữ liệu | ⬜ |
-| **D28** | `tenant.json.policies[]` là tập con của enum chung; chưa dựng bảng Policy | Schema tenant | ✅ 12/08/2026 |
+| **D28** | `tenant.json.policies.salesOrder.supportedDealerPolicies` là tập con của enum chung; chưa dựng bảng Policy | Schema tenant | ✅ migrate contract v2 ngày 20/08/2026 |
 | **D29** | Có dựng Flowise cho khách mới hay gọi parser trực tiếp | Cỡ máy/bề mặt tấn công | ⬜ |
 | **D30** | Tên thương hiệu nền tảng | Package/UI chung | ⬜ |
 | **D31** | Ai giữ secret khi khách tự host | Deploy/hợp đồng | ⬜ |

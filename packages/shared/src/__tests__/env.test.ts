@@ -126,8 +126,38 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...PARSER, CHANNEL_MODE: 'hybrid' })).toThrowError(EnvValidationError);
   });
 
+  it('CHANNEL_MODE=bot thieu token Bot Platform -> fail fast, khong roi ve kenh gia', () => {
+    expect(() => loadEnv({ ...PARSER, CHANNEL_MODE: 'bot' })).toThrowError(EnvValidationError);
+    expect(() => loadEnv({ ...PARSER, CHANNEL_MODE: 'bot' })).toThrow(/ZALO_BOT_TOKEN/);
+  });
+
+  it('bo qua credential parser/channel khi capability tuong ung khong duoc nap', () => {
+    const env = loadEnv(
+      { PARSER_MODE: 'deepseek', CHANNEL_MODE: 'zca' },
+      { parser: false, channel: false },
+    );
+
+    expect(env.PARSER_MODE).toBe('deepseek');
+    expect(env.CHANNEL_MODE).toBe('zca');
+  });
+
+  it('fail fast khi runtime chon adapter nam ngoai allowlist cua tenant', () => {
+    expect(() =>
+      loadEnv(
+        { ...PARSER, CHANNEL_MODE: 'zca' },
+        { parser: { allowedModes: ['deepseek'] }, channel: { allowedModes: ['mock', 'bot'] } },
+      ),
+    ).toThrow(/CHANNEL_MODE=zca/);
+    expect(() =>
+      loadEnv(
+        { PARSER_MODE: 'deepseek', DEEPSEEK_API_KEY: 'sk-test' },
+        { parser: { allowedModes: ['claude'] }, channel: false },
+      ),
+    ).toThrow(/PARSER_MODE=deepseek/);
+  });
+
   it('tuong thich nguoc: BOT_MODE=on (chua dat CHANNEL_MODE) -> suy ra kenh bot', () => {
-    const env = loadEnv({ ...PARSER, BOT_MODE: 'on' });
+    const env = loadEnv({ ...PARSER, BOT_MODE: 'on', ZALO_BOT_TOKEN: 'bot-token-test' });
 
     expect(env.CHANNEL_MODE).toBe('bot');
   });

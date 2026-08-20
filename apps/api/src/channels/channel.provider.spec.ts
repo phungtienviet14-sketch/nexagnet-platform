@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ChannelAdapter } from './channel-adapter.js';
 import { BotPlatformAdapter } from './bot-platform.adapter.js';
-import { channelProvider } from './channel.provider.js';
+import { channelProvider, namedChannelProviders } from './channel.provider.js';
 import { MockAdapter } from './mock.adapter.js';
 import { ZcaAdapter } from './zca.adapter.js';
 import type { ZaloUserClient } from './zalo-user.client.js';
@@ -37,9 +37,16 @@ describe('channelProvider (chon kenh gui theo CHANNEL_MODE)', () => {
     expect(factory(fakeClient)).toBeInstanceOf(BotPlatformAdapter);
   });
 
-  it('bot NHUNG thieu token -> MockAdapter (fallback an toan, khong gui 401)', () => {
+  it('bot NHUNG thieu token -> fail-fast, khong roi ve MockAdapter', () => {
     process.env.CHANNEL_MODE = 'bot';
-    expect(factory(fakeClient)).toBeInstanceOf(MockAdapter);
+    expect(() => factory(fakeClient)).toThrow(/ZALO_BOT_TOKEN/);
+  });
+
+  it('named bot adapter thieu token cung fail-fast', () => {
+    process.env.CHANNEL_MODE = 'bot';
+    const namedBotFactory = (namedChannelProviders[0] as { useFactory: () => ChannelAdapter })
+      .useFactory;
+    expect(() => namedBotFactory()).toThrow(/ZALO_BOT_TOKEN/);
   });
 
   it('mock -> MockAdapter', () => {

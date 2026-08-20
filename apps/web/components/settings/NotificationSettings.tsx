@@ -126,7 +126,7 @@ export function NotificationSettings({ summary, onRefreshSummary }: Props) {
     e.preventDefault();
     const current = settings?.zalo || {
       enabled: true,
-      targetMemberNames: ['Phùng Việt', 'Hiệu'],
+      targetMemberNames: [],
       targetMemberIds: [],
       targetGroupIds: [],
     };
@@ -148,7 +148,7 @@ export function NotificationSettings({ summary, onRefreshSummary }: Props) {
         <div>
           <h2>Thông báo & Điều phối Leads (Zalo & Email)</h2>
           <p>
-            Tự động gửi thông tin khách hàng từ form <strong>“Đăng ký trao đổi giải pháp 1-1”</strong> (trên website marketing) về tin nhắn Zalo của thành viên phụ trách (<strong>Phùng Việt</strong> & <strong>Hiệu</strong>) và hòm thư Email quản trị.
+            Tự động gửi thông tin khách hàng từ form <strong>“Đăng ký trao đổi giải pháp 1-1”</strong> (trên website marketing) về tin nhắn Zalo của thành viên phụ trách và hòm thư Email quản trị.
           </p>
         </div>
       </header>
@@ -199,8 +199,8 @@ export function NotificationSettings({ summary, onRefreshSummary }: Props) {
                 type="text"
                 className="settings-input"
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                placeholder="Phùng Việt, Hiệu"
-                defaultValue={(settings?.zalo.targetMemberNames || ['Phùng Việt', 'Hiệu']).join(', ')}
+                placeholder="Tên thành viên 1, Tên thành viên 2"
+                defaultValue={(settings?.zalo.targetMemberNames ?? []).join(', ')}
                 onChange={(e) => setZaloNamesInput(e.target.value)}
               />
               <small style={{ color: '#64748b', fontSize: '12px', display: 'block', marginTop: '4px' }}>

@@ -1,4 +1,4 @@
-import { loadTenantConfig } from '@netviet/tenant';
+import { tenantPersona } from '@netviet/tenant';
 
 /**
  * Nhan tin tu dong (dieu khoan Zalo Bot Platform — bao cao muc 6.3).
@@ -7,4 +7,6 @@ import { loadTenantConfig } from '@netviet/tenant';
  * Ten bot lay tu goi khach (`persona.botName`) — chuoi nay DEN TAY dai ly cua khach nen
  * moi khach phai xung dung ten cua ho, khong duoc de ten khach khac trong nhan.
  */
-export const AUTO_LABEL = `\n— Tin tự động từ Bot ${loadTenantConfig().persona.botName}`;
+export function autoLabel(): string {
+  return `\n— Tin tự động từ Bot ${tenantPersona().botName}`;
+}

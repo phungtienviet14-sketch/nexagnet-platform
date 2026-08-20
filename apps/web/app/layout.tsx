@@ -6,6 +6,7 @@ import './console.css';
 import './auth.css';
 import { Providers } from './providers';
 import { AuthGate } from '../components/auth/AuthGate';
+import { toPublicTenantDescriptor } from '../lib/tenant-runtime';
 
 /**
  * MOT IMAGE CHAY DUOC MOI KHACH. Mac dinh Next.js prerender TINH cac route nay luc `next build`,
@@ -44,14 +45,14 @@ export function generateViewport(): Viewport {
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  const { branding, shortName } = loadTenantConfig();
+  const tenant = toPublicTenantDescriptor(loadTenantConfig());
   return (
     // suppressHydrationWarning: bo qua lech thuoc tinh do extension trinh duyet chen
     // vao <html>/<body> truoc khi React hydrate (vd mdl-js, bis_register). Khong giau
     // bug that ben trong — chi tac dung o dung 2 the goc nay.
     <html lang="vi" suppressHydrationWarning>
-      <body suppressHydrationWarning>
-        <Providers branding={{ ...branding, shortName }}>
+      <body data-experience={tenant.experience} suppressHydrationWarning>
+        <Providers tenant={tenant}>
           <AuthGate>{children}</AuthGate>
         </Providers>
       </body>

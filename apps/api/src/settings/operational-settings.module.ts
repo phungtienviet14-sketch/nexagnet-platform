@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { AuditLogRepository, InMemoryAuditLogRepository } from '../audit/audit-log.repository.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaAuditLogRepository } from '../audit/prisma-audit-log.repository.js';
@@ -21,7 +21,7 @@ import { PricePeriodsService } from './price-periods.service.js';
     {
       provide: RuleConfigRepository,
       useFactory: (prisma: PrismaService): RuleConfigRepository =>
-        loadEnv().PERSISTENCE === 'prisma'
+        loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaRuleConfigRepository(prisma)
           : new InMemoryRuleConfigRepository(),
       inject: [PrismaService],
@@ -29,7 +29,7 @@ import { PricePeriodsService } from './price-periods.service.js';
     {
       provide: AuditLogRepository,
       useFactory: (prisma: PrismaService): AuditLogRepository =>
-        loadEnv().PERSISTENCE === 'prisma'
+        loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaAuditLogRepository(prisma)
           : new InMemoryAuditLogRepository(),
       inject: [PrismaService],

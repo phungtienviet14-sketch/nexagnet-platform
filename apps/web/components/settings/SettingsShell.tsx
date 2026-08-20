@@ -18,6 +18,8 @@ import { ZaloSettings } from './ZaloSettings';
 import { UsersSettings } from './UsersSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { useAuth } from '../auth/AuthGate';
+import { useTenantRuntime } from '../../lib/tenant-runtime-context';
+import { resolveActiveSettingsTab, selectSettingsTabIds } from './settings-composition';
 
 const EMPTY_SUMMARY = parseSettingsSummary({});
 
@@ -29,13 +31,65 @@ const CHANNEL_LABELS = {
 } as const;
 
 export function SettingsShell() {
+  const tenant = useTenantRuntime();
+  if (tenant.experience === 'knowledge-workspace') {
+    return <KnowledgeSettingsShell />;
+  }
+  return <OperationsSettingsShell />;
+}
+
+function KnowledgeSettingsShell() {
   const branding = useBranding();
+  const tenant = useTenantRuntime();
+  const tabIds = selectSettingsTabIds(tenant);
+  const tabs: readonly SettingsTab[] = tabIds.includes('content')
+    ? [
+        {
+          id: 'content',
+          code: 'ND',
+          label: 'Nội dung tri thức',
+          description: 'FAQ, media, catalog, provenance',
+          panel: <ContentSettings />,
+        },
+      ]
+    : [];
+
+  if (tabs.length === 0) {
+    throw new Error('Knowledge workspace thieu capability knowledge');
+  }
+
+  return (
+    <main className="settings-shell" data-experience="knowledge-workspace">
+      <header className="settings-hero">
+        <div className="settings-hero__nav">
+          <a href="/" className="settings-back-link">
+            <span aria-hidden="true">←</span> Không gian tri thức
+          </a>
+        </div>
+        <div className="settings-hero__title">
+          <div>
+            <p className="settings-eyebrow">{branding.shortName} · Nguồn tri thức</p>
+            <h1>Quản lý nội dung</h1>
+          </div>
+          <p>Duyệt và cập nhật nội dung dùng chung cho trợ lý doanh nghiệp.</p>
+        </div>
+      </header>
+      <SettingsTabs tabs={tabs} activeTab="content" onChange={() => undefined} />
+    </main>
+  );
+}
+
+function OperationsSettingsShell() {
+  const branding = useBranding();
+  const tenant = useTenantRuntime();
   const auth = useAuth();
-  const [activeTab, setActiveTab] = useState<SettingsTabId>('zalo');
+  const visibleTabIds = selectSettingsTabIds(tenant);
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(() =>
+    resolveActiveSettingsTab(visibleTabIds, 'zalo'),
+  );
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('tab') === 'campaigns') {
-      setActiveTab('campaigns');
-    }
+    const requested = new URLSearchParams(window.location.search).get('tab') ?? undefined;
+    setActiveTab(resolveActiveSettingsTab(visibleTabIds, requested ?? activeTab));
   }, []);
   const summaryQuery = useQuery({
     queryKey: ['settings-summary'],
@@ -43,7 +97,7 @@ export function SettingsShell() {
     refetchInterval: 15_000,
   });
   const summary = summaryQuery.data ?? EMPTY_SUMMARY;
-  const tabs: readonly SettingsTab[] = [
+  const allTabs: readonly SettingsTab[] = [
     {
       id: 'zalo',
       code: 'ZA',
@@ -103,7 +157,7 @@ export function SettingsShell() {
       id: 'notifications',
       code: 'TB',
       label: 'Thông báo & Leads',
-      description: 'Gửi Zalo (Phùng Việt, Hiệu), SMTP',
+      description: 'Gửi Zalo và SMTP',
       panel: <NotificationSettings summary={summary} onRefreshSummary={() => summaryQuery.refetch()} />,
     },
     {
@@ -128,6 +182,8 @@ export function SettingsShell() {
       panel: <AuditSettings />,
     },
   ];
+  const visibleIds = new Set(visibleTabIds);
+  const tabs = allTabs.filter((tab) => visibleIds.has(tab.id));
 
   return (
     <main className="settings-shell">

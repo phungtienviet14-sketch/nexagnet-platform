@@ -3,6 +3,10 @@
 > **Vai trò:** tài liệu kiến trúc tổng quát cao nhất của hệ thống. File này mô tả mô hình sản phẩm dùng chung cho mọi khách hàng: cách chia layer/module, ranh giới core/tenant, runtime tenant, cách ly dữ liệu, port/adapter, source-of-truth và các bất biến bảo mật.
 >
 > **Không chứa trạng thái tiến độ.** Mọi trạng thái đã xong/chưa làm/blocked nằm duy nhất ở `tong-quan.md`. File này cũng không ghi lịch sử quyết định, không mô tả riêng khách nào và không dùng ví dụ dữ liệu thương mại của khách.
+>
+> **As-built 20/08/2026:** tenant contract v2, capability-aware Nest composition và web experience
+> registry đã có. Tài liệu [`he-thong.md`](he-thong.md) mô tả chi tiết experience
+> `operations-console` + capability `sales-order`; nó không đại diện cho mọi tenant/domain.
 
 ---
 
@@ -49,92 +53,135 @@ Bất biến:
 
 ```mermaid
 flowchart TB
-    subgraph Tenant["Tenant package + runtime config"]
-        TC["tenant.json"]
+    subgraph Tenant["Tenant package v2 + runtime config"]
+        TC["identity · branding · experience<br/>capabilities · policies · integrations<br/>persona · bootstrap"]
         TD["tenant data/import files"]
         TS["secrets/env"]
     end
 
-    subgraph Ports["Ports & adapters"]
-        CH["ChannelPort"]
-        PA["ParserPort"]
+    subgraph Foundation["Platform foundation"]
+        TR["tenant loader + schema registry"]
+        AU["auth · audit · persistence · health"]
+        CR["Nest capability composition"]
+    end
+
+    subgraph Capabilities["Capabilities hiện có"]
+        KN["knowledge/content"]
+        MSG["messaging"]
+        SO["sales-order"]
+        CA["campaign"]
+        OP["operations"]
+        NO["notifications"]
+    end
+
+    subgraph Ports["Integration ports & adapters"]
+        CH["ChannelAdapter"]
+        PA["OrderParser"]
         EP["ErpPort"]
-        IV["InvoicePort"]
         MS["MediaStorePort"]
         CS["ContentSourcePort"]
-        DP["DocumentPort"]
     end
 
-    subgraph Core["Base core"]
-        IN["ingest/messages"]
-        PX["pipeline/orchestrator"]
-        RU["rules engine"]
-        OR["orders/handoff"]
-        KN["knowledge/settings"]
-        AU["auth/audit/readiness"]
-        CA["campaign/outbox"]
+    subgraph Web["Web product code"]
+        ER["ExperienceRegistry"]
+        OC["operations-console"]
+        KW["knowledge-workspace"]
     end
 
-    Tenant --> Ports
-    Ports --> Core
+    TC --> TR --> CR --> Capabilities
+    TD --> Capabilities
+    TS --> Ports
+    Ports --> Capabilities
+    TC --> ER
+    ER --> OC
+    ER --> KW
 ```
 
-### 2.1 Core
+### 2.1 Platform foundation và capability
 
-Core là phần dùng chung, không biết tenant cụ thể nào tồn tại. Core chứa:
+Foundation là phần dùng chung không biết tenant cụ thể nào tồn tại: tenant loader/schema, auth/RBAC,
+audit, persistence, health và composition runtime. Domain code hiện có được định danh thành capability:
 
-- channel ingestion chuẩn hóa tin nhắn;
-- message persistence, idempotency, retry/replay;
-- parser orchestration;
-- deterministic rules engine;
-- order lifecycle và handoff;
-- settings/source-of-truth;
-- campaign/outbox;
-- content knowledge;
-- auth/RBAC/audit;
-- readiness/health/eval.
+| Capability | Phạm vi as-built |
+|---|---|
+| `knowledge` | catalog/content/glossary và bootstrap nguồn tri thức |
+| `messaging` | channel adapter, outbound, group participant |
+| `sales-order` | parser/orchestrator/rules/order lifecycle/handoff |
+| `campaign` | campaign persistence/scheduler/delivery |
+| `operations` | settings, master data, readiness |
+| `notifications` | lead notification surfaces hiện hành |
 
-Core chỉ được phụ thuộc vào interface, schema và dữ liệu runtime đã validate. Core không chứa giá, SKU, đại lý, FAQ, media catalog, campaign content hay thông điệp thương mại riêng khách.
+`packages/tenant/src/tenant.schema.ts` giữ metadata dependency/config/integration bắt buộc theo
+capability. `apps/api/src/app-composition.ts` gắn controller/provider/module với owner typed;
+`AppModule.forRoot()` chỉ đưa phần được bật vào Nest graph. Đây là composition metadata, không phải
+Service Locator: Nest vẫn khởi tạo và resolve dependency bình thường.
+
+Core/capability code chỉ phụ thuộc interface, schema và dữ liệu runtime đã validate. Nó không chứa
+giá, SKU, đại lý, FAQ, media catalog, campaign content hay thông điệp thương mại riêng khách.
 
 ### 2.2 Tenant package
 
 Tenant package là gói dữ liệu/cấu hình, không phải fork code. Gói này chứa:
 
-- danh tính tenant: slug, display name, branding;
-- persona parser/bot;
-- danh sách feature/integration được bật;
-- seed mặc định nếu cần bootstrap;
-- cấu hình policy runtime ban đầu;
-- manifest import/content nếu tenant cung cấp;
-- metadata hạ tầng riêng khi deploy.
+- `schemaVersion: 2`, slug và `identity`;
+- runtime `branding`;
+- một `experience` đã đăng ký;
+- danh sách `capabilities` được bật;
+- `policies`, `integrations`, `persona` theo capability;
+- path `bootstrap` tương đối tới seed/import;
+- smoke fixture tùy chọn của chính tenant.
+
+Version khác 2 hoặc field không thuộc contract bị chặn, không silent migration. Capability dependency
+được validate chéo: ví dụ `sales-order` yêu cầu `knowledge` + `messaging`, parser, policy/persona và
+sales-order bootstrap. Tenant chỉ bật `knowledge` không phải khai Zalo, dealer, price, order hay group
+mapping.
 
 Tenant package là **hạt giống**, không phải nguồn sự thật vĩnh viễn. Khi stack chạy với PostgreSQL, runtime source-of-truth là DB; thay đổi vận hành đi qua `/settings`, admin/importer/MCP và được audit.
 
-### 2.3 Ports/adapters
+### 2.3 Experience/UI
+
+Experience là product code dùng lại được, không phải tenant code:
+
+```text
+tenant.json.experience
+        ↓
+ExperienceRegistry
+        ├── operations-console  (console hiện hành)
+        └── knowledge-workspace (knowledge-only proof)
+```
+
+Registry khai capability UI bắt buộc; route `/` resolve ID đã validate và fail rõ nếu registry thiếu.
+Settings navigation được compose từ capability + public integration metadata. Branding được đọc lúc
+runtime; đổi tenant không rebuild image. Shared primitive/design infrastructure tiếp tục dùng chung.
+
+### 2.4 Ports/adapters
 
 Mọi tích hợp bên ngoài đi qua port:
 
 | Port | Trách nhiệm | Adapter ví dụ |
 |---|---|---|
-| `ChannelPort` | nhận/gửi tin theo kênh | mock, official bot, userbot, future OA |
-| `ParserPort` | hiểu ngôn ngữ, intent, extraction | mock, Claude, Flowise, provider khác |
+| `ChannelAdapter` | gửi tin theo kênh; listener/poller normalize inbound | mock, Bot Platform, zca, hybrid router |
+| `OrderParser` | intent + extraction có schema | Claude, DeepSeek, Flowise |
 | `ErpPort` | đọc/tạo dữ liệu ERP khi phase cho phép | mock, ERP adapter |
-| `InvoicePort` | hóa đơn/draft invoice | none, invoice provider |
-| `MediaStorePort` | lưu binary bền vững | none, local, S3-compatible |
-| `ContentSourcePort` | đọc manifest/content từ nguồn ngoài | local import, Drive, future source |
-| `DocumentPort` | xuất tài liệu/PDF/catalog nếu phase bật | none, PDF provider |
+| `MediaStore`/`CatalogStore`/`MediaFetcher` | lưu/đọc media qua boundary | none, local, S3-compatible, HTTP |
+| `ContentSourcePort` | đọc manifest/content từ nguồn ngoài | local manifest, Google Drive |
 
-Port nằm trong base; adapter được chọn bằng config runtime/tenant. Business logic không import trực tiếp SDK nhà cung cấp.
+Các port trên là symbol as-built; `InvoicePort`/`DocumentPort` chưa tồn tại và không được mô tả như
+đã triển khai. Adapter được tenant allow/chọn rồi env chọn mode cụ thể trong allowlist; mode ngoài
+contract bị chặn. Credential nằm trong secret/env riêng, không nằm trong `tenant.json`. Business logic
+không import trực tiếp SDK nhà cung cấp. Riêng notification-to-Zalo còn bypass channel port và được
+ghi nhận là debt, không dùng nó làm mẫu cho adapter mới.
 
 ## 3. Code vs tenant data
 
 | Thuộc code/base | Thuộc tenant/runtime data |
 |---|---|
-| parser schema, order schema, validation | SKU, alias, glossary |
+| tenant/capability/experience schema, validation | identity, branding, experience selection |
+| parser schema, order schema, deterministic validation | SKU, alias, glossary |
 | rules engine deterministic | bảng giá, kỳ giá, deal riêng |
 | state machine đơn/campaign | đại lý, map nhóm, branch |
-| port/interface | chọn adapter, credential, endpoint |
-| UI/settings generic | FAQ, catalog, video link, campaign content |
+| port/interface + adapter registry | adapter allowlist/selection; credential ở secret riêng |
+| experience/capability UI | FAQ, catalog, video link, campaign content |
 | readiness/eval framework | golden dataset do khách cung cấp |
 | RBAC engine | user thật và role assignment |
 
@@ -146,10 +193,11 @@ Khi boot, application phải:
 
 1. resolve tenant bằng `TENANT` hoặc `TENANT_DIR`;
 2. đọc và validate `tenant.json`;
-3. validate feature/integration config;
-4. validate required secrets theo mode;
-5. seed/import dữ liệu nếu stack mới và được phép;
-6. fail-fast nếu tenant/config/secrets không đủ để chạy mode đã chọn.
+3. kiểm `schemaVersion`, experience, capability dependency/policy/persona/bootstrap;
+4. validate integration allowlist và required secrets theo mode capability đang bật;
+5. compose Nest modules/controllers/providers và web experience;
+6. seed/import dữ liệu nếu stack mới và được phép;
+7. fail-fast nếu tenant/config/secrets không đủ để chạy mode đã chọn.
 
 Không có tenant mặc định ở production. Default tenant trong test chỉ được dùng cho test fixture rõ ràng, không được leak sang runtime thật.
 

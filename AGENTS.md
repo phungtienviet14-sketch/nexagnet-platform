@@ -1,12 +1,36 @@
-# Dự án: Hệ thống AI xử lý đơn hàng Zalo — U Ultty Việt Nam
+# Dự án: Nền tảng AI Agent doanh nghiệp đa khách hàng
 
 ## Quy tắc chung (bắt buộc)
 
 - Luôn áp dụng skill `search-first` trước khi viết bất kỳ function/module mới nào
 - Ưu tiên tìm và dùng thư viện có sẵn (npm) thay vì tự implement
-- Rules ECC của project nằm tại `.Codex/rules/ecc/` (common, typescript, react, web) — tuân thủ khi viết code
+- Rules ECC của project nằm tại `.claude/rules/ecc/` (common, typescript, react, web) — tuân thủ khi viết code
+- **Rollout tenant bắt buộc qua CI/CD:** commit → push `main` → toàn bộ job trong
+  `.github/workflows/ci.yml` xanh → kích hoạt thủ công `.github/workflows/deploy-tenant.yml` với
+  đúng `tenant` và `environment`. CD dùng OIDC, image theo digest, smoke/health sau rollout và
+  khóa concurrency theo tenant.
+- **Không deploy tenant trực tiếp từ máy phát triển.** Không chạy `deploy/netviet/deploy.ps1`,
+  `deploy-ci.sh`, `deploy-remote.sh` hoặc Docker rollout cục bộ để cập nhật tenant đang vận hành.
+  `deploy.ps1` chỉ dành cho bootstrap hạ tầng ban đầu hoặc khôi phục sự cố đã được phê duyệt.
 
-## Bối cảnh dự án
+## Bối cảnh nền tảng và tenant hiện tại
+
+Đây là **một modular monolith đa khách hàng**, không phải một hệ thống Ultty/Zalo/đơn hàng được
+đổi tên. `apps/` + `packages/` là product code dùng chung; `tenants/<slug>/` chỉ chọn
+`experience`, capability, policy, integration và dữ liệu bootstrap bằng contract v2. Không fork
+code, không nhánh theo slug khách, mỗi tenant tiếp tục chạy một DB/secrets/stack riêng.
+
+Experience đang có:
+
+- `operations-console`: console vận hành/sales-order đang dùng cho các tenant hiện tại;
+- `knowledge-workspace`: composition tối thiểu chứng minh tenant chỉ dùng knowledge có thể boot và
+  render mà không cần Zalo, dealer, price, order hoặc group mapping.
+
+Khách tiếp theo chưa có requirement đầy đủ. Không suy diễn domain/UI/integration của khách đó và
+không thêm code riêng khách. Tài liệu kỹ thuật sales-order/Zalo dưới đây là **ngữ cảnh tenant
+Ultty và experience operations-console hiện hành**, không phải định nghĩa của toàn platform.
+
+### Tenant Ultty — ngữ cảnh nghiệp vụ sales-order hiện hành
 
 Khách hàng: **Công ty Cổ Phần U Ultty Việt Nam** (gia dụng cao cấp). Liên hệ: Nguyễn Thu Phương (Sale chính).
 
@@ -57,7 +81,7 @@ Hệ thống tài liệu — mục lục tại [docs/README.md](docs/README.md),
 3. Chọn model qua bake-off trên 20-30 tin nhắn thật: đo tỷ lệ JSON hợp lệ, độ chính xác field-level, khả năng dùng đúng glossary.
 4. **GĐ1: AI được tự gửi vào nhóm** (chốt 12/08/2026). Văn bản đồng ý của công ty đã có, không hỏi/làm lại. Đơn hợp lệ có tổng số lượng `≤ orderAutomation.maxAutoConfirmQuantity` được gửi ngay; `>` ngưỡng hoặc thiếu dữ liệu chuyển Sale trước khi gửi. `AUTO_SEND` là **kill switch vận hành**, không phải nơi chứa policy tenant. Sau khi gửi, trạng thái/việc bền vững phải báo Sale nhập KiotViet thủ công; không gọi `ErpPort` trong GĐ1. Điều kiện riêng của zca (tài khoản phụ + chấp nhận rủi ro ToS) vẫn áp dụng cho **kênh**, không phải quyền auto-send.
 5. **Tách bạch LLM vs rules**: LLM chỉ phân loại intent + trích xuất + soạn văn bản; giá/ship/chính sách/VAT do rules engine TypeScript tính từ nguồn sự thật trong DB. Không đảo ngược nguyên tắc này.
-6. **Base dùng chung ⟂ gói khách (từ Đợt B1, 12/08/2026)** — hệ thống phục vụ NHIỀU khách (Ultty, Amico, …), nên `apps/` + `packages/` là NỀN TẢNG TRUNG TÍNH: **không được nhắc tên khách nào trong đó**. Mọi thứ chỉ đúng với một khách nằm ở `tenants/<slug>/` — `tenant.json` (danh tính + `persona.parserIntro`) và `data/knowledge.json` (SP/giá/đại lý/map nhóm/glossary), có zod schema, hỏng thì fail-fast lúc boot. Chọn khách: `TENANT=<slug>`, hoặc `TENANT_DIR=<path>` cho khách chạy hạ tầng riêng (mount gói ngoài image). Gói khách là **hạt giống**, không phải nguồn sự thật lúc chạy — với `PERSISTENCE=prisma` thì sau lần seed đầu Postgres mới là nguồn sự thật. Xem `tenants/README.md` + [docs/kien-truc/nen-tang-da-khach.md](docs/kien-truc/nen-tang-da-khach.md).
+6. **Base dùng chung ⟂ gói khách (contract v2, 20/08/2026)** — hệ thống phục vụ NHIỀU khách (Ultty, Amico, …), nên `apps/` + `packages/` là NỀN TẢNG TRUNG TÍNH: **không được nhắc tên khách nào trong đó**. Mọi thứ chỉ đúng với một khách nằm ở `tenants/<slug>/`. `tenant.json` tách rõ `identity`, `branding`, `experience`, `capabilities`, `policies`, `integrations`, `persona`, `bootstrap`; version không hỗ trợ bị chặn, không silent migrate/fallback. Bootstrap chỉ bắt buộc theo capability: tenant `knowledge`-only không phải giả cấu hình Zalo/order. Chọn khách: `TENANT=<slug>`, hoặc `TENANT_DIR=<path>` cho khách chạy hạ tầng riêng (mount gói ngoài image). Gói khách là **hạt giống**, không phải nguồn sự thật lúc chạy — với `PERSISTENCE=prisma` thì sau lần seed đầu Postgres mới là nguồn sự thật. Xem `tenants/README.md` + [docs/kien-truc/nen-tang-da-khach.md](docs/kien-truc/nen-tang-da-khach.md).
 7. **Tích hợp ERP đi qua cổng `ErpPort`** (`apps/api/src/erp/erp.port.ts`), nhưng cổng này **không được gọi trong luồng GĐ1**. KiotViet chỉ là một hiện thực tương lai. Task hiện tại không làm Nhanh.vn/MISA/Amico, không fork code và không thêm nhánh theo tên khách.
 8. **Tư vấn giá lẻ** dùng trường giá được cấu hình theo tenant (Ultty seed trỏ `minRetailPrice`) và câu qualifier cấu hình nói rõ đây là mức tham khảo/tối thiểu. Không hard-code tên cột/câu chữ riêng khách trong base.
 9. **Campaign CSKH** là năng lực base: draft → Sale duyệt → lên lịch → phân bổ các lần gửi trong cửa sổ thời gian; không bắn đồng loạt, không giữ request HTTP bằng vòng `sleep`. Lịch, khoảng phân bổ, spacing và giới hạn mục tiêu là config tenant.

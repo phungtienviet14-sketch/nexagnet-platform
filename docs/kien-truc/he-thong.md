@@ -1,15 +1,23 @@
-# SƠ ĐỒ & THIẾT KẾ KỸ THUẬT — NỀN TẢNG AI AGENT ĐA KHÁCH
+# SƠ ĐỒ & THIẾT KẾ KỸ THUẬT — EXPERIENCE OPERATIONS/SALES-ORDER
 
 > **Vai trò tài liệu:** bản KỸ THUẬT hợp nhất — toàn bộ **sơ đồ hệ thống (12 sơ đồ Mermaid)** + **quyết định thiết kế đã chốt** + **phụ lục bằng chứng PoC**. Xem trên GitHub hoặc VS Code (extension Markdown Preview Mermaid).
 > **Hợp nhất 11/07/2026:** nuốt trọn `thiet-ke-ky-thuat-hop-nhat.md` (quyết định kỹ thuật — §2/§3/§15) và 2 tài liệu PoC `poc-zalo-bot.md`, `poc-parser.md` (→ Phụ lục A/B) — 3 file gốc đã xóa, git history còn.
-> **Đối chiếu code/yêu cầu 12/08/2026:** base đa khách đã tách tenant; lát cắt P1 auto-confirm đã khớp sơ đồ (`sent` + handoff Sale, không gọi ERP). Bảng sai lệch còn lại ở [nghiệp vụ Ultty](../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md).
+> **Phạm vi:** tài liệu này mô tả experience `operations-console`, capability `sales-order` và các
+> integration hiện đang dùng cho luồng Ultty. Đây **không phải toàn bộ platform** và không phải
+> contract bắt buộc cho tenant/domain khác. Kiến trúc nền tảng chung nằm tại
+> [nền tảng đa khách](nen-tang-da-khach.md); audit/refactor 20/08 ở
+> [multi-customer code review](multi-customer-code-review.md).
+> **Đối chiếu code/yêu cầu 20/08/2026:** tenant contract v2 chọn capability/integration/experience;
+> backend compose graph theo capability và web resolve experience lúc chạy. Lát cắt P1 auto-confirm
+> vẫn khớp sơ đồ (`sent` + handoff Sale, không gọi ERP). Bảng sai lệch nghiệp vụ còn lại ở
+> [nghiệp vụ Ultty](../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md).
 > Nghiệp vụ + sai lệch nguồn gốc: [nghiệp vụ Ultty](../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) · Kế hoạch + trạng thái: [tổng quan](../phat-trien/ke-hoach/tong-quan.md).
 
 **Mục lục:** §1 Bối cảnh · §2 Quyết định kỹ thuật · §3 Ma trận kênh Zalo · §4 Kiến trúc 6 tầng · §5 Bản đồ module · §6 Luồng 1 đơn hàng · §7 Pipeline chi tiết · §8 Vòng đời đơn · §9 Bảy intent · §10 Nguồn sự thật động · §11 Realtime SSE · §12 ERD · §13 Runtime & cờ env · §14 Chọn kênh · §15 Tích hợp, KPI, bảo mật, rủi ro · Phụ lục A/B (PoC).
 
 ---
 
-## 1. Bối cảnh tổng thể (ai dùng, hệ thống nói chuyện với gì)
+## 1. Bối cảnh experience operations-console (ai dùng, hệ thống nói chuyện với gì)
 
 ```mermaid
 flowchart LR
@@ -62,11 +70,11 @@ flowchart LR
 | Cách ly khách v1 | Một Compose stack + DB/user/secret/volume/network riêng cho mỗi dự án; chưa cần `tenantId` khi không dùng chung DB | Stack đầu: `/srv/netviet/apps/zalo-ultty` |
 | ERP/kho | KHÔNG xây module kho riêng. GĐ1 không gọi ERP; Sale nhập tay. Khi tích hợp sau này, ERP tenant là source of truth tồn kho | 10-20 đơn/ngày không cần cache |
 | Lưu trữ | Mặc định **in-memory** (`PERSISTENCE=memory` — demo/CI không cần DB); bật Postgres bằng `PERSISTENCE=prisma` (cờ riêng, tách khỏi `DATABASE_URL`) | as-built Phase 3 |
-| Nguồn sự thật ĐỘNG | Trang **`/settings`** cho người vận hành (6 tab: Kênh Zalo · Nhóm & thành viên · Đại lý/SP/giá · Rules · Tự động hóa · Lịch sử) + panel **`/admin`** (AdminJS auto-CRUD, power-user) + **MCP tool** (8 tool) — tất cả đi qua một `SourceTruthWriteService` (transaction → audit → reload snapshot) | Thay cho tab "Prompt AI" của PWA trong thiết kế cũ; `/settings` là mặt chính, `/admin` giữ làm fallback |
+| Nguồn sự thật ĐỘNG | Trang **`/settings`** compose tab theo capability/integration (operations-console hiện có kênh, nhóm, master data/rules/campaign/content/automation/notification/readiness/user/audit) + panel **`/admin`** (AdminJS, power-user) + **MCP tool** — mutation nguồn sự thật đi qua `SourceTruthWriteService` (transaction → audit → reload snapshot) | Tenant knowledge-only chỉ thấy content; `/admin` vẫn gated bởi `ADMIN_UI=on` + Prisma |
 | Policy GĐ1 theo tenant | Auto-confirm ceiling inclusive · ERP mode · retail advice field/qualifier · campaign window/spacing/max-target là runtime config có audit | Không hard-code 50/tên khách trong base; `AUTO_SEND` chỉ kill switch |
 | Campaign CSKH | Năng lực base: draft → approved → scheduled → running → completed/partially_failed/cancelled; delivery được phân bổ trong cửa sổ và claim bền vững | Không dùng broadcast `for + sleep` trong HTTP request |
 | Drive/content | Binary gốc ở Drive/object storage; provenance, mapping SP, FAQ, link catalog/video, nội dung tư vấn và readiness ở DB/config + `/settings` | Inventory 12/08: 122 folder/825 file; thiếu T8 và promo formula |
-| App Sale | Demo = **console PC 3 cột** (Feed · 6-agent theater SSE · Nguồn sự thật); PWA mobile 5 tab theo `docs/khach-hang/ultty/thiet-ke-giao-dien/` = hướng sản phẩm, làm sau | Quyết định treo D3 |
+| Experience web hiện hành | `operations-console` = **console PC 3 cột** (Feed · 6-agent theater SSE · Nguồn sự thật), giữ nguyên UX tenant hiện tại. `knowledge-workspace` là extension-point tối thiểu không order/Zalo; không phải thiết kế khách thứ ba | Experience là product code trong `apps/web/experiences/`, tenant chỉ chọn ID |
 
 ---
 
@@ -83,7 +91,7 @@ Mọi kênh đi qua interface `ChannelAdapter` → đổi kênh không đập h�
 
 ---
 
-## 4. Kiến trúc 6 tầng (NetViet) → module code thực tế
+## 4. Kiến trúc 6 tầng của capability sales-order → module code thực tế
 
 ```mermaid
 flowchart TB
@@ -143,10 +151,16 @@ flowchart TB
 
 ## 5. Bản đồ module & phụ thuộc (as-built)
 
+Root graph không còn là một `AppModule` cố định. `loadTenantConfig()` validate contract v2;
+`buildAppComposition(capabilities)` lọc metadata owner typed rồi trả modules/controllers/providers
+cho `AppModule.forRoot()`. Nest DI vẫn resolve dependency; business service không tra service theo ID.
+
 ```mermaid
 flowchart LR
+    TEN2["packages/tenant<br/>contract v2 + capability requirements"]
     subgraph APIAPP["apps/api — NestJS"]
-        MAIN["main.ts<br/>validate env → AppModule.forRoot()"]
+        MAIN["main.ts<br/>AppModule.forRoot()"]
+        COMP["app-composition.ts<br/>foundation + enabled capabilities"]
         ING2["ingest/<br/>ZcaListener · BotPoller"]
         PIP2["pipeline/<br/>PipelineService + OrderParser<br/>(mock · deepseek · claude · flowise)"]
         AGE2["agents/<br/>AgentOrchestrator · risk-rules<br/>AgentEventsService"]
@@ -161,13 +175,19 @@ flowchart LR
         ADM2["admin/ — AdminJS /admin<br/>(chỉ khi ADMIN_UI=on + prisma)"]
     end
     MCP2["mcp/server.ts — tiến trình RIÊNG<br/>8 tool nguồn sự thật"]
-    WEB2["apps/web — console Next.js"]
+    WEB2["apps/web<br/>ExperienceRegistry"]
+    OPSX["operations-console"]
+    KNOWX["knowledge-workspace"]
     SHA2["packages/shared — zod schemas + types<br/>(hợp đồng chung api ⇄ web ⇄ tools)"]
     PG2[("Postgres<br/>chỉ khi PERSISTENCE=prisma")]
     FLO2["Flowise 3.1.4<br/>zalo-order-parser-v1"]
     LLM2["DeepSeek / Claude API"]
 
-    MAIN --> ING2
+    TEN2 --> MAIN --> COMP
+    COMP --> ING2
+    TEN2 --> WEB2
+    WEB2 --> OPSX
+    WEB2 --> KNOWX
     ING2 --> PIP2 --> AGE2
     PIP2 -->|"PARSER_MODE=flowise"| FLO2
     FLO2 -->|"1 structured LLM call"| LLM2
@@ -192,7 +212,11 @@ flowchart LR
     SHA2 -.-> WEB2
 ```
 
-Console web hiện gọi REST `/orders` · `/messages` · `/knowledge/*` · `/broadcast`; tab KiotViet đã ẩn khỏi console GĐ1. Route `/kiotviet/*` và mock adapter còn trong code cho dữ liệu legacy/bề mặt phase ERP tương lai nhưng không nằm trong luồng xác nhận đơn. Target GĐ1 thay gửi trực tiếp `/broadcast` bằng API campaign bền vững.
+`operations-console` hiện gọi REST `/orders` · `/messages` · `/knowledge/*` · `/broadcast`; tab
+KiotViet đã ẩn khỏi console GĐ1. Route `/kiotviet/*` và mock adapter còn trong code cho dữ liệu
+legacy/bề mặt phase ERP tương lai nhưng không nằm trong luồng xác nhận đơn. `knowledge-workspace`
+chỉ dùng knowledge/content surface và không yêu cầu Zalo/order. Target GĐ1 thay gửi trực tiếp
+`/broadcast` bằng API campaign bền vững.
 
 ---
 

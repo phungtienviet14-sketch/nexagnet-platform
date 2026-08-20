@@ -5,9 +5,8 @@ import './config/load-dotenv.js';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { loadEnv } from '@netviet/shared';
 import { setKnowledgeReloader } from './admin/knowledge-refresh.js';
-import { AppModule } from './app.module.js';
+import { AppModule, loadAppEnv } from './app.module.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
 import { PrismaService } from './config/prisma.service.js';
 import { configureSession } from './auth/session-bootstrap.js';
@@ -15,7 +14,7 @@ import { configureSession } from './auth/session-bootstrap.js';
 const logger = new Logger('Bootstrap');
 
 // Validate env truoc khi lam bat ky viec gi khac - fail fast (CLAUDE.md).
-const env = loadEnv();
+const env = loadAppEnv();
 
 // forRoot() dung module theo env: mount /admin (AdminJS) khi ADMIN_UI=on + PERSISTENCE=prisma.
 const app = await NestFactory.create<NestExpressApplication>(await AppModule.forRoot());

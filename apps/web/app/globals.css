@@ -645,6 +645,60 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 
+.knowledge-workspace {
+  width: min(880px, calc(100% - 2rem));
+  margin: 8vh auto;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.knowledge-workspace__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+.knowledge-workspace__monogram {
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: white;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+.knowledge-workspace__eyebrow {
+  margin: 0 0 0.45rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.knowledge-workspace h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.75rem);
+}
+.knowledge-workspace__header p:last-child {
+  max-width: 56ch;
+  color: var(--text-dim);
+}
+.knowledge-workspace__link {
+  display: inline-flex;
+  margin-top: 2rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 @media (max-width: 1040px) {
   .grid {
     grid-template-columns: 1fr;

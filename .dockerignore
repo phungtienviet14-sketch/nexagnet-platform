@@ -36,3 +36,7 @@ tenants
 # CI chu khong chay tu image, va khong file nguon nao import `apps/api/src/e2e`, nen loai o day
 # khong lam hong kiem thu nao — chi bot thu ra khoi image.
 **/e2e
+# Unit/integration fixtures are checkout-only verification data. They are not runtime code and some
+# deliberately mirror a tenant package (`tenant.json`, `knowledge.json`) to exercise fail-fast loading.
+# Keep the structural image guard strict: exclude the test trees instead of teaching it fixture names.
+**/__tests__

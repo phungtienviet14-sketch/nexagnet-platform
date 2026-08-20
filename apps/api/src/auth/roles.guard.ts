@@ -5,7 +5,7 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import type { AuthenticatedRequest } from './session.types.js';
 import type { UserRole } from './auth.types.js';
 import { ROLES_KEY } from './roles.decorator.js';
@@ -15,7 +15,7 @@ export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    if (loadEnv().AUTH_MODE !== 'session') return true;
+    if (loadFoundationEnv().AUTH_MODE !== 'session') return true;
     const required = this.reflector.getAllAndOverride<readonly UserRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),

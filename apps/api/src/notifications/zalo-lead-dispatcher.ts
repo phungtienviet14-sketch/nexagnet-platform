@@ -50,6 +50,21 @@ export class ZaloLeadDispatcher {
   }
 
   private async dispatchMessage(text: string, config: ZaloNotificationConfig): Promise<ZaloDispatchResult> {
+    const targetGroupIds = config.targetGroupIds ?? [];
+    const targetMemberIds = config.targetMemberIds ?? [];
+    const targetMemberNames = config.targetMemberNames ?? [];
+    if (
+      targetGroupIds.length === 0 &&
+      targetMemberIds.length === 0 &&
+      targetMemberNames.length === 0
+    ) {
+      return {
+        success: false,
+        message: 'Chưa cấu hình người nhận Zalo; không gửi thông báo.',
+        recipientsSent: [],
+      };
+    }
+
     if (!this.zaloClient.isReady()) {
       const status = this.zaloClient.status();
       const msg = `Tài khoản Zalo chưa sẵn sàng gửi (Trạng thái: ${status.state}, Channel: ${status.channelMode}). Vui lòng quét mã QR để đăng nhập.`;
@@ -61,8 +76,8 @@ export class ZaloLeadDispatcher {
     const errors: string[] = [];
 
     // 1. Gửi vào các targetGroupIds được cấu hình
-    if (config.targetGroupIds && config.targetGroupIds.length > 0) {
-      for (const groupId of config.targetGroupIds) {
+    if (targetGroupIds.length > 0) {
+      for (const groupId of targetGroupIds) {
         try {
           await this.zaloClient.sendMessage(groupId, text, undefined, ThreadType.Group);
           recipientsSent.push(`Group: ${groupId}`);
@@ -76,8 +91,8 @@ export class ZaloLeadDispatcher {
     }
 
     // 2. Gửi trực tiếp tới các targetMemberIds
-    if (config.targetMemberIds && config.targetMemberIds.length > 0) {
-      for (const memberId of config.targetMemberIds) {
+    if (targetMemberIds.length > 0) {
+      for (const memberId of targetMemberIds) {
         try {
           await this.zaloClient.sendMessage(memberId, text, undefined, ThreadType.User);
           recipientsSent.push(`Member ID: ${memberId}`);
@@ -90,14 +105,13 @@ export class ZaloLeadDispatcher {
       }
     }
 
-    // 3. Tìm thành viên theo targetMemberNames (Phùng Việt, Hiệu...) trong các nhóm đã đồng bộ
-    const targetNames = config.targetMemberNames || ['Phùng Việt', 'Hiệu'];
-    if (targetNames.length > 0 && this.participantsRepo) {
+    // 3. Tìm thành viên theo tên được cấu hình tường minh trong các nhóm đã đồng bộ.
+    if (targetMemberNames.length > 0 && this.participantsRepo) {
       try {
         const allowedGroupIds = this.zaloClient.status().allowedGroupIds || [];
         for (const groupId of allowedGroupIds) {
           const { participants } = await this.participantsRepo.list(groupId, { active: true });
-          for (const targetName of targetNames) {
+          for (const targetName of targetMemberNames) {
             const normalizedTarget = targetName.toLowerCase().trim();
             const matched = participants.filter(
               (p) =>
@@ -131,7 +145,7 @@ export class ZaloLeadDispatcher {
     if (recipientsSent.length === 0) {
       const msg = errors.length > 0
         ? `Không thể gửi tin nhắn Zalo: ${errors.join('; ')}`
-        : `Không tìm thấy người nhận Zalo phù hợp (Danh sách tìm: ${targetNames.join(', ')}). Vui lòng đồng bộ thành viên nhóm hoặc cấu hình Target Group/Member ID.`;
+        : `Không tìm thấy người nhận Zalo phù hợp (Danh sách tìm: ${targetMemberNames.join(', ')}). Vui lòng đồng bộ thành viên nhóm hoặc cấu hình Target Group/Member ID.`;
       return { success: false, message: msg, recipientsSent: [] };
     }
 

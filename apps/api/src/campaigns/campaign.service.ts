@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { loadEnv, type CampaignView, type CreateCampaignInput, type ScheduleCampaignInput } from '@netviet/shared';
 import type { CampaignConfig } from '@netviet/tenant';
 import { AuditLogService } from '../audit/audit-log.service.js';
-import { AUTO_LABEL } from '../channels/auto-label.js';
+import { autoLabel } from '../channels/auto-label.js';
 import { ChannelAdapter } from '../channels/channel-adapter.js';
 import { OutboundRecorder } from '../messages/outbound-recorder.js';
 import { CAMPAIGN_POLICY } from './campaign.tokens.js';
@@ -148,7 +148,7 @@ export class CampaignService {
           // Zalo adapters expose no provider idempotency key, so do not claim exactly-once here.
           // `idempotencyKey` still prevents duplicate planned rows and is ready for a future
           // channel receipt/dedup capability.
-          const text = claim.content + AUTO_LABEL;
+          const text = claim.content + autoLabel();
           const receipt = await this.channel.sendMessage(claim.chatId, text);
           await this.repository.markSent(claim.deliveryId, new Date());
           await this.recorder?.record({ chatId: claim.chatId, text, receipt });

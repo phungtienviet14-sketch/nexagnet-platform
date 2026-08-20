@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 
 /**
@@ -30,8 +30,8 @@ import { IS_PUBLIC_KEY } from './public.decorator.js';
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
   private readonly logger = new Logger('ApiKeyGuard');
-  private readonly apiKey = loadEnv().API_KEY;
-  private readonly authMode = loadEnv().AUTH_MODE;
+  private readonly apiKey = loadFoundationEnv().API_KEY;
+  private readonly authMode = loadFoundationEnv().AUTH_MODE;
 
   constructor(private readonly reflector: Reflector) {
     if (this.authMode === 'none') {

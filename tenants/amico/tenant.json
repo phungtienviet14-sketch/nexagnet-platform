@@ -1,8 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "slug": "amico",
-  "displayName": "Công ty Amico",
-  "shortName": "Amico",
+  "identity": {
+    "displayName": "Công ty Amico",
+    "shortName": "Amico"
+  },
   "branding": {
     "productName": "Trợ lý đơn hàng Amico",
     "installName": "Amico — Trợ lý đơn hàng AI",
@@ -13,30 +15,58 @@
     "monogram": "A",
     "composerPlaceholder": "vd: @Bot Amico gui 10 thung hang ve HN cho c, ko lay VAT"
   },
-  "policies": ["cong_no_30", "cong_no_45", "ky_gui", "thanh_toan_ngay", "cod"],
-  "orderAutomation": null,
-  "erp": { "adapter": "none" },
-  "campaign": {
-    "defaultWindow": { "start": "08:00", "end": "12:00" },
-    "minSpacingSeconds": 30,
-    "maxTargets": 500,
-    "rateLimitPerMinute": 30,
-    "claimLeaseSeconds": 60,
-    "tickIntervalSeconds": 10,
-    "retry": { "maxAttempts": 4, "baseBackoffSeconds": 60 },
-    "features": { "lunarCalendarEnabled": false }
+  "experience": "operations-console",
+  "capabilities": [
+    "knowledge",
+    "messaging",
+    "sales-order",
+    "campaign",
+    "operations",
+    "notifications"
+  ],
+  "policies": {
+    "salesOrder": {
+      "supportedDealerPolicies": ["cong_no_30", "cong_no_45", "ky_gui", "thanh_toan_ngay", "cod"],
+      "automation": null,
+      "retailAdvice": {
+        "priceField": "retailPrice",
+        "qualifier": "Đây là giá bán lẻ tham khảo; giá thực tế phụ thuộc chính sách đang có hiệu lực."
+      }
+    },
+    "campaign": {
+      "defaultWindow": { "start": "08:00", "end": "12:00" },
+      "minSpacingSeconds": 30,
+      "maxTargets": 500,
+      "rateLimitPerMinute": 30,
+      "claimLeaseSeconds": 60,
+      "tickIntervalSeconds": 10,
+      "retry": { "maxAttempts": 4, "baseBackoffSeconds": 60 },
+      "features": { "lunarCalendarEnabled": false }
+    },
+    "readiness": {
+      "blockedCapabilities": []
+    }
   },
-  "retailAdvice": {
-    "priceField": "retailPrice",
-    "qualifier": "Đây là giá bán lẻ tham khảo; giá thực tế phụ thuộc chính sách đang có hiệu lực."
-  },
-  "readiness": {
-    "blockedCapabilities": []
+  "integrations": {
+    "channel": { "allowedAdapters": ["mock", "bot", "zca", "hybrid"] },
+    "parser": { "allowedAdapters": ["deepseek", "claude", "flowise"] },
+    "erp": { "adapter": "none" },
+    "contentSource": { "adapter": "local_manifest" }
   },
   "persona": {
-    "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Amico.",
-    "botName": "Amico",
-    "mentionName": "Bot Amico",
-    "productFallbackDescription": "Sản phẩm của Công ty Amico."
+    "messaging": {
+      "botName": "Amico",
+      "mentionName": "Bot Amico"
+    },
+    "salesOrder": {
+      "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Amico."
+    },
+    "knowledge": {
+      "productFallbackDescription": "Sản phẩm của Công ty Amico."
+    }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" },
+    "salesOrder": { "path": "data/knowledge.json" }
   }
 }

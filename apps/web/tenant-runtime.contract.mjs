@@ -10,9 +10,8 @@ import { fileURLToPath } from 'node:url';
 /**
  * HOP DONG "MOT IMAGE — MOI KHACH".
  *
- * Build MOT lan (khong dat TENANT), roi chay HAI lan voi hai goi khach khac nhau va doi hoi thuong
- * hieu doi theo. Neu con bat ky chuoi thuong hieu nao bi nuong vao artifact luc build, lan chay thu
- * hai se lo ra ten cua goi thu nhat va test nay do.
+ * Build MOT lan (khong dat TENANT), roi chay HAI experience tren hai goi khach khac nhau. Contract
+ * chung minh ca branding LAN composition doi luc runtime ma BUILD_ID khong doi.
  *
  * Chay:
  *   pnpm --filter @netviet/web build     # CO Y khong dat TENANT
@@ -37,15 +36,17 @@ const PACK_A = {
   themeColor: '#0f62fe',
   backgroundColor: '#f7f4ee',
   monogram: 'M',
+  experience: 'operations-console',
 };
 const PACK_B = {
   slug: 'khach-hai',
   productName: 'Khach Hai AI',
-  installName: 'Khach Hai — Tro ly don hang AI',
-  pageTitle: 'Khach Hai AI — Trung tam dieu hanh',
+  installName: 'Khach Hai — Khong gian tri thuc',
+  pageTitle: 'Khach Hai AI — Khong gian tri thuc',
   themeColor: '#8a1f5c',
   backgroundColor: '#fdf7f0',
   monogram: 'HA',
+  experience: 'knowledge-workspace',
 };
 
 const tmpDirs = [];
@@ -56,45 +57,73 @@ function writePack(spec) {
   writeFileSync(
     join(dir, 'tenant.json'),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       slug: spec.slug,
-      displayName: `Cong ty ${spec.productName}`,
-      shortName: spec.productName,
+      identity: {
+        displayName: `Cong ty ${spec.productName}`,
+        shortName: spec.productName,
+      },
       branding: {
         productName: spec.productName,
         installName: spec.installName,
         pageTitle: spec.pageTitle,
-        pageDescription: `Console xu ly don hang Zalo cho ${spec.productName}.`,
+        pageDescription: `${spec.productName} runtime experience.`,
         themeColor: spec.themeColor,
         backgroundColor: spec.backgroundColor,
         monogram: spec.monogram,
-        composerPlaceholder: `vd: @Bot ${spec.slug} gui 10 mon A ve HN`,
+        composerPlaceholder: 'Nhap noi dung',
       },
-      policies: ['cong_no_30', 'thanh_toan_ngay'],
-      // Bon truong duoi day la BAT BUOC trong `tenantConfigSchema` nhung khong lien quan gi den
-      // thuong hieu — hop dong nay chi kiem thuong hieu. Thieu chung thi loader nem luc phuc vu
-      // request, `/` khong bao gio tra 200, va test chi bao "qua 120000ms van chua khoi dong" —
-      // mot thong bao khong he chi ra rang nguyen nhan la goi khach thieu truong (su co 15/08/2026,
-      // job `verify` chet timeout 20 phut suot hai ngay). Gia tri o day co tinh trung tinh.
-      orderAutomation: { enabled: false, maxAutoConfirmQuantity: 1 },
-      campaign: {
-        defaultWindow: { start: '08:00', end: '20:00' },
-        minSpacingSeconds: 60,
-        maxTargets: 10,
-        rateLimitPerMinute: 10,
-        claimLeaseSeconds: 60,
-        tickIntervalSeconds: 30,
-        retry: { maxAttempts: 3, baseBackoffSeconds: 60 },
-        features: { lunarCalendarEnabled: false },
-      },
-      retailAdvice: { priceField: 'retailPrice', qualifier: 'gia tham khao' },
-      readiness: { blockedCapabilities: [] },
-      persona: {
-        parserIntro: `Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho ${spec.productName}.`,
-        botName: spec.productName,
-        mentionName: `Bot ${spec.slug}`,
-        productFallbackDescription: `San pham cua ${spec.productName}.`,
-      },
+      experience: spec.experience,
+      capabilities:
+        spec.experience === 'operations-console'
+          ? ['knowledge', 'messaging', 'sales-order', 'campaign', 'operations', 'notifications']
+          : ['knowledge'],
+      policies:
+        spec.experience === 'operations-console'
+          ? {
+              salesOrder: {
+                supportedDealerPolicies: ['thanh_toan_ngay'],
+                automation: { enabled: false, maxAutoConfirmQuantity: 1 },
+                retailAdvice: { priceField: 'retailPrice', qualifier: 'gia tham khao' },
+              },
+              campaign: {
+                defaultWindow: { start: '08:00', end: '20:00' },
+                minSpacingSeconds: 60,
+                maxTargets: 10,
+                rateLimitPerMinute: 10,
+                claimLeaseSeconds: 60,
+                tickIntervalSeconds: 30,
+                retry: { maxAttempts: 3, baseBackoffSeconds: 60 },
+                features: { lunarCalendarEnabled: false },
+              },
+              readiness: { blockedCapabilities: [] },
+            }
+          : { readiness: { blockedCapabilities: [] } },
+      integrations:
+        spec.experience === 'operations-console'
+          ? {
+              channel: { allowedAdapters: ['mock'] },
+              parser: { allowedAdapters: ['claude'] },
+              erp: { adapter: 'none' },
+              contentSource: { adapter: 'local_manifest' },
+            }
+          : { contentSource: { adapter: 'local_manifest' } },
+      persona:
+        spec.experience === 'operations-console'
+          ? {
+              messaging: { botName: spec.productName, mentionName: `Bot ${spec.slug}` },
+              salesOrder: { parserIntro: `Parser fixture cho ${spec.productName}.` },
+              knowledge: { productFallbackDescription: `San pham cua ${spec.productName}.` },
+            }
+          : {},
+      bootstrap:
+        spec.experience === 'operations-console'
+          ? {
+              knowledge: { path: 'data/knowledge.json' },
+              salesOrder: { path: 'data/knowledge.json' },
+            }
+          : { knowledge: { path: 'data/knowledge.json' } },
+      smoke: null,
     }),
     'utf8',
   );
@@ -182,6 +211,26 @@ async function readBranding() {
   return { html, manifest: JSON.parse(manifest), icon };
 }
 
+function assertExperience(seen, spec, label) {
+  assert.match(
+    seen.html,
+    new RegExp(`data-experience="${spec.experience}"`),
+    `${label}: experience composition`,
+  );
+}
+
+function assertKnowledgeWorkspaceHasNoOperationsSurface(seen) {
+  for (const marker of [
+    'data-experience="operations-console"',
+    'Luồng xử lý 6 agent',
+    'Kênh Zalo',
+    'Đại lý &amp; giá',
+    'AUTO_SEND',
+  ]) {
+    assert.ok(!seen.html.includes(marker), `knowledge workspace khong duoc co marker: ${marker}`);
+  }
+}
+
 function assertMatchesPack(seen, spec, label) {
   assert.match(seen.html, new RegExp(`<title>${spec.pageTitle}</title>`), `${label}: <title>`);
   assert.equal(seen.manifest.name, spec.installName, `${label}: manifest.name`);
@@ -210,7 +259,7 @@ function assertNoTraceOf(seen, spec, label) {
   }
 }
 
-test('cung MOT artifact, doi goi khach luc chay -> thuong hieu doi theo', async (t) => {
+test('cung MOT artifact, doi tenant luc chay -> branding va experience deu doi', async (t) => {
   const buildIdPath = join(WEB_DIR, '.next', 'BUILD_ID');
   assert.ok(
     existsSync(buildIdPath),
@@ -233,16 +282,26 @@ test('cung MOT artifact, doi goi khach luc chay -> thuong hieu doi theo', async 
     await stopServer(serverA);
   }
   assertMatchesPack(seenA, PACK_A, 'goi A');
+  assertExperience(seenA, PACK_A, 'goi A');
   assertNoTraceOf(seenA, PACK_B, 'goi A');
 
   const serverB = await startServer(dirB);
   let seenB;
+  let zaloResponseB;
   try {
     seenB = await readBranding();
+    const response = await fetch(`${BASE}/zalo`, { redirect: 'manual' });
+    zaloResponseB = { status: response.status, html: await response.text() };
   } finally {
     await stopServer(serverB);
   }
   assertMatchesPack(seenB, PACK_B, 'goi B');
+  assertExperience(seenB, PACK_B, 'goi B');
+  assertKnowledgeWorkspaceHasNoOperationsSurface(seenB);
+  assert.ok(
+    zaloResponseB.status === 404 || /404|could not be found/i.test(zaloResponseB.html),
+    'knowledge-only tenant phai render notFound cho route /zalo',
+  );
   // Trong tam: lan chay thu hai khong duoc con dau vet cua goi thu nhat.
   assertNoTraceOf(seenB, PACK_A, 'goi B');
 

@@ -11,22 +11,62 @@ không được nhắc tên khách nào trong đó. Mọi thứ chỉ đúng v�
 
 ```
 tenants/<slug>/
-  tenant.json               Danh tính + thương hiệu + persona.
+  tenant.json               Contract runtime v2.
                             Schema: packages/tenant/src/tenant.schema.ts
-  data/knowledge.json       Hạt giống nguồn sự thật: SP, giá, đại lý, map nhóm Zalo, glossary
-  data/runtime-policy.json  (đích) Hạt giống policy auto-confirm, retail advice, campaign
-  data/content-manifest.json (đích) Provenance/mapping/readiness FAQ, catalog, ảnh, video; không chứa binary
-  data/demo-messages.json   (tùy chọn) Tin mẫu cho luồng demo. Thiếu file ⇒ mảng rỗng, không lỗi.
+  data/knowledge.json       Bootstrap knowledge; shape phụ thuộc capability sales-order.
+  data/content-manifest.json (tùy chọn) Provenance/mapping FAQ, catalog, ảnh, video; không chứa binary.
+  data/demo-messages.json   (tùy chọn) Tin mẫu; thiếu file ⇒ mảng rỗng, không lỗi.
 ```
 
-`tenant.json` — **danh tính**:
+Tên file bootstrap không bị hard-code vào consumer: `tenant.json.bootstrap.*.path` trỏ tới file
+tương ứng. Path phải tương đối, không được có `..` hoặc thoát khỏi tenant directory.
+
+## Contract `tenant.json` v2
+
+`schemaVersion: 2` là breaking boundary có chủ ý. Loader chỉ nhận đúng version đang hỗ trợ; v1,
+version tương lai và field thừa đều bị chặn lúc boot. Không có silent migration hoặc chuỗi `??`
+fallback để giữ config cũ vô hạn.
 
 | Trường | Ý nghĩa |
 |---|---|
-| `schemaVersion` | Hiện là `1`. Tăng khi đổi cấu trúc kiểu phá vỡ tương thích. |
+| `schemaVersion` | Hiện là `2`; tăng khi đổi contract theo cách phá vỡ tương thích. |
 | `slug` | Chữ thường/số/gạch nối. Trùng tên thư mục và `docs/khach-hang/<slug>/`. |
-| `displayName` | Tên pháp nhân đầy đủ — dùng trên chứng từ. |
-| `shortName` | Tên gọi tắt trong câu chữ hiển thị. |
+| `identity` | `displayName`, `shortName`; danh tính tổ chức, không phải tên experience/domain. |
+| `branding` | Chuỗi/màu runtime dùng trong metadata, shell, PWA và composer. |
+| `experience` | Chọn một UI composition product-code đã đăng ký. |
+| `capabilities` | Danh sách capability được bật; không phải túi boolean special case. |
+| `policies` | Policy theo capability (`salesOrder`, `campaign`) và blocker readiness. |
+| `integrations` | Adapter được phép/chọn; credential thật vẫn nằm trong secret/env riêng của stack. |
+| `persona` | Persona theo capability (`messaging`, `salesOrder`, `knowledge`). |
+| `bootstrap` | Path tương đối tới seed/import của capability. |
+| `smoke` | Fixture smoke tùy chọn của chính tenant; `null` thì báo skip order path, không giả PASS. |
+
+### Capability registry
+
+Các capability hiện có đến từ code thật, không phải taxonomy tương lai:
+
+| Capability | Phụ thuộc/config bắt buộc |
+|---|---|
+| `knowledge` | `bootstrap.knowledge` (hoặc `bootstrap.salesOrder` khi sales-order bật) |
+| `messaging` | `integrations.channel`, `persona.messaging` |
+| `sales-order` | `knowledge` + `messaging`, parser integration, sales-order policy/persona/bootstrap |
+| `campaign` | `messaging`, campaign policy |
+| `operations` | Không có dependency domain; compose bề mặt vận hành hiện có |
+| `notifications` | `messaging` |
+
+Schema kiểm dependency, policy, persona, integration và bootstrap ngay khi load. Backend dùng cùng
+capability ID để compose controller/provider/module qua Nest DI; capability tắt không được nạp chỉ
+để rồi ẩn bằng UI.
+
+### Experience registry
+
+| Experience | Capability bắt buộc | Vai trò |
+|---|---|---|
+| `operations-console` | `knowledge` + `messaging` + `sales-order` + `operations`; campaign/notifications tùy chọn | Console ba cột và settings theo capability; giữ UX tenant hiện tại. |
+| `knowledge-workspace` | `knowledge` | Composition tối thiểu không cần messaging, Zalo hay sales-order. |
+
+Experience là product code trong `apps/web/experiences/`; tenant chỉ chọn ID. Không đặt reusable UI
+trong `tenants/<slug>/` và không re-nhánh theo slug.
 
 **`branding.*` — mọi chuỗi/màu người dùng nhìn thấy trên app web.** Trước Đợt B1 nằm thẳng trong
 `apps/web`; `installName`/`backgroundColor`/`monogram` thêm ngày 12/08/2026 khi bỏ nốt hai file tĩnh
@@ -43,25 +83,26 @@ tenants/<slug>/
 | `monogram` | 1-3 ký tự đặt giữa icon. Icon **sinh lúc chạy** (`app/icon.svg/route.ts`), không còn là file tĩnh. |
 | `composerPlaceholder` | Câu gợi ý trong ô soạn tin — chứa ví dụ đặt hàng của chính khách. |
 
-**`persona.*` — giọng của khách trong prompt LLM và trong tin gửi ra Zalo:**
+**`persona.*` — giọng theo capability:**
 
 | Trường | Ý nghĩa |
 |---|---|
-| `parserIntro` | Câu mở đầu prompt parser (tên khách + ngành hàng). Trước Đợt B1 hardcode trong `parser-prompt.ts`. |
-| `botName` | Tên bot trong nhãn `— Tin tự động từ Bot <botName>` gắn vào **mọi tin gửi ra nhóm Zalo**. Điều khoản Zalo bắt buộc gắn nhãn nội dung do AI tạo ⇒ chuỗi này **đến tay đại lý của khách**, đặt sai là khách đọc thấy tên công ty khác. |
-| `mentionName` | Chuỗi dùng để **bóc @mention** khỏi tin đến — đúng như nó xuất hiện trong nhóm Zalo. Khác `botName` (tên hiển thị). Biến `BOT_NAME` ghi đè được cho từng môi trường. |
-| `productFallbackDescription` | Mô tả thay thế khi một SP chưa có `description` (vai Tư vấn SP). |
+| `salesOrder.parserIntro` | Câu mở đầu prompt parser; chỉ bắt buộc khi bật sales-order. |
+| `messaging.botName` | Tên bot trong nhãn nội dung tự động; chỉ bắt buộc khi bật messaging. |
+| `messaging.mentionName` | Chuỗi bóc mention theo channel hiện hành; `BOT_NAME` là runtime override. |
+| `knowledge.productFallbackDescription` | Mô tả thay thế cho luồng tư vấn sản phẩm; sales-order hiện yêu cầu. |
 
-`data/knowledge.json` hiện khớp 1-1 với `KnowledgeSnapshot` (`apps/api/src/knowledge/domain.ts`):
-`products`, `prices`, `priceOverrides`, `dealers`, `groups`, `glossary`. Các file `runtime-policy.json` và
-`content-manifest.json` là cấu trúc đích đã chốt 12/08/2026, chỉ được thêm cùng schema zod + importer/test;
-không tạo file ad-hoc trước code.
+Khi bật `sales-order`, knowledge bootstrap khớp `KnowledgeSnapshot`: `products`, `prices`,
+`priceOverrides`, `dealers`, `groups`, `glossary` và kỳ giá. Với tenant `knowledge`-only, file chỉ
+cần `products` + `glossary`; loader chuẩn hóa các collection sales thành mảng rỗng. Vì vậy tenant
+không dùng order không phải tạo dealer, price hoặc group mapping giả.
 
 Policy runtime phải tách rõ:
 
-- `orderAutomation`: bật/tắt theo tenant và ngưỡng tổng số lượng inclusive; `null` nghĩa là chưa chốt nên fail-closed. GĐ1 luôn nhập ERP thủ công, không có mode tích hợp;
-- `retailAdvice`: field giá hợp lệ + qualifier template;
-- `campaign`: timezone, cửa sổ/spacing/giới hạn mục tiêu;
+- `policies.salesOrder.automation`: bật/tắt theo tenant và ngưỡng tổng số lượng inclusive; `null`
+  nghĩa là chưa chốt nên fail-closed. GĐ1 luôn nhập ERP thủ công;
+- `policies.salesOrder.retailAdvice`: field giá hợp lệ + qualifier template;
+- `policies.campaign`: cửa sổ/spacing/giới hạn mục tiêu/retry;
 - content manifest: Drive file ID/URL, MIME/checksum/modified time, product mapping, content type, trạng thái duyệt/readiness.
 
 File ảnh/video/catalog gốc ở Drive/object storage. Gói tenant và DB chỉ giữ metadata/link/provenance; không copy
@@ -98,8 +139,10 @@ Hai lưới an toàn giữ điều này khỏi trôi:
 - **CI build `apps/web` không có `TENANT`.** Ai đó thêm một trang tĩnh đọc gói khách ⇒ loader ném ⇒
   CI đỏ ngay, thay vì lặng lẽ nướng tên khách vào image.
 - **`pnpm test:tenant-runtime`** (`apps/web/tenant-runtime.contract.mjs`) — build một lần, chạy hai
-  lần với hai gói khách giả, đòi thương hiệu đổi theo và **không sót chuỗi của gói kia**; kiểm cả
-  `BUILD_ID` không đổi để chứng minh đúng là một artifact.
+  lần với hai gói giả có experience khác nhau, đòi branding/composition đổi và **không sót chuỗi
+  của gói kia**; kiểm cả `BUILD_ID` không đổi để chứng minh đúng là một artifact.
+- **`packages/tenant/src/__tests__/tenant-packs.spec.ts`** tự liệt kê mọi thư mục thật trong
+  `tenants/`, validate từng gói và kiểm slug trùng tên thư mục. CI không giữ matrix tên khách riêng.
 - `deploy/netviet/caddy-route-contract.test.mjs` chặn `ARG/ENV TENANT` quay lại Dockerfile.
 
 Gốc repo được dò bằng cách đi ngược tìm `pnpm-workspace.yaml`, **không** dựa vào `process.cwd()` —
@@ -115,11 +158,15 @@ Với `PERSISTENCE=memory` (mặc định, demo/CI) thì gói khách là nguồn
 
 ## Thêm khách mới
 
-1. `mkdir -p tenants/<slug>/data`
-2. Chép `tenant.json` từ khách có sẵn, sửa 5 trường.
-3. Đổ `data/knowledge.json` — thiếu dữ liệu thì để mảng rỗng, **không** bịa số.
-4. Khi các schema policy/content đã được triển khai, nạp seed có provenance; bảng giá thiếu tháng hoặc FAQ chưa duyệt phải giữ trạng thái thiếu/inactive.
-5. Chạy `TENANT=<slug> pnpm --filter @netviet/api test` — schema sai sẽ báo ngay.
+1. Tạo `tenants/<slug>/data` và `tenant.json` v2 theo schema; chỉ bật capability có thật sự dùng.
+2. Chọn experience đã đăng ký và khai đủ dependency/policy/integration/persona/bootstrap mà schema yêu cầu.
+3. Tạo knowledge bootstrap đúng shape capability; thiếu dữ liệu thì để mảng rỗng, **không** bịa số.
+4. Nạp content có provenance; bảng giá thiếu tháng hoặc FAQ chưa duyệt phải giữ trạng thái thiếu/inactive.
+5. Chạy `pnpm --filter @netviet/tenant test` — test tự phát hiện gói mới, schema/slug sai báo ngay.
+6. Chạy `TENANT=<slug> pnpm --filter @netviet/api test` và contract experience liên quan.
+
+CI tự kiểm mọi thư mục tenant. Danh sách lựa chọn trong workflow deploy vẫn là allowlist thủ công có
+chủ ý; tự động hóa inventory deploy là backlog vì thay đổi target production cần cổng duyệt riêng.
 
 ## Dữ liệu thương mại
 

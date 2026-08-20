@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { loadEnv, type OrderView, type OutboundContent, type ReplyChannel } from '@netviet/shared';
 import { AgentEventsService } from '../agents/agent-events.service.js';
-import { AUTO_LABEL } from '../channels/auto-label.js';
+import { autoLabel } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { OrdersRepository } from './orders.repository.js';
 
@@ -83,7 +83,7 @@ export class OrdersService {
     const capabilities = this.outbound.capabilities(replyChannel);
     const { images, ...withoutImages } = content;
     const supported: OutboundContent = capabilities.image
-      ? { ...content, text: content.text + AUTO_LABEL }
+      ? { ...content, text: content.text + autoLabel() }
       : {
           ...withoutImages,
           // Kênh không có API ảnh thật vẫn phải giữ locator cho khách, không được âm thầm làm mất
@@ -91,7 +91,7 @@ export class OrdersService {
           text:
             [content.text, ...(images ?? []).map((image) => `Ảnh sản phẩm: ${image.url}`)].join(
               '\n',
-            ) + AUTO_LABEL,
+            ) + autoLabel(),
         };
     try {
       await this.outbound.sendContent(replyChannel, view.chatId, supported, 'bot', {
@@ -127,7 +127,7 @@ export class OrdersService {
       await this.outbound.sendMessage(
         view.replyChannel ?? legacyReplyChannel(),
         view.chatId,
-        view.priced.confirmationText + AUTO_LABEL,
+        view.priced.confirmationText + autoLabel(),
         'bot',
         { quote: view.quoteTarget },
       );
