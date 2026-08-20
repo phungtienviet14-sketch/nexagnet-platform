@@ -63,4 +63,20 @@ describe('validateContextualParse', () => {
     expect(result.intent).toBe('khac');
     expect(result.order).toBeUndefined();
   });
+
+  it('cau hoi gia follow-up co SKU khong bi bien thanh don mac dinh 1 chiec', () => {
+    const result = validateContextualParse(parsed('ELNI'), 'the con elni thi sao', PRODUCTS, {
+      recentMessages: [
+        {
+          externalMessageId: 'm-1',
+          text: 'bb grey bao nhieu tien',
+          senderRole: 'customer',
+          sentAt: new Date('2026-08-12T02:00:00.000Z'),
+        },
+      ],
+      participants: [],
+    });
+
+    expect(result).toEqual({ intent: 'hoi_gia', confidence: { intent: 0.9 } });
+  });
 });

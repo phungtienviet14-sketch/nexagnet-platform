@@ -194,6 +194,26 @@ describe('Pipeline luu MOI tin vao MessagesRepository (Phase 3)', () => {
     expect(view.parsed?.items[0]?.skuRaw.toLowerCase()).toContain('felix');
   });
 
+  it('giu mach hoi thoai cung chatId: hoi gia BB Grey -> ELNI -> dat 2 cai do', async () => {
+    const repo = new InMemoryMessagesRepository();
+    const pipeline = build(repo);
+
+    const c1 = await pipeline.process(msg('bb grey bao nhieu tien', 'c1'), BOT_NAME);
+    const c2 = await pipeline.process(msg('the con elni thi sao', 'c2'), BOT_NAME);
+    const c3 = await pipeline.process(msg('lay 2 cai do', 'c3'), BOT_NAME);
+
+    expect(c1.intent).toBe('hoi_gia');
+    expect(c1.trace?.reply).toMatch(/bb|grey/i);
+    expect(c1.trace?.reply).not.toMatch(/chua nhan dien|chưa nhận diện/i);
+    expect(c2.intent).toBe('hoi_gia');
+    expect(c2.trace?.reply).toMatch(/elni/i);
+    expect(c2.trace?.reply).not.toMatch(/chua nhan dien|chưa nhận diện/i);
+    expect(c3.intent).toBe('dat_don');
+    expect(c3.parsed?.items).toEqual([
+      expect.objectContaining({ quantity: 2, skuRaw: expect.stringMatching(/elni/i) }),
+    ]);
+  });
+
   it('reply co nhieu SKU -> handoff an toan, khong tao don doan', async () => {
     const repo = new InMemoryMessagesRepository();
     const pipeline = build(repo);
