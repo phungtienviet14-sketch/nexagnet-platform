@@ -5,7 +5,7 @@ export type AutoSendMode = 'on' | 'off';
 
 /**
  * Cong tac van hanh trong bo nho. Moi lan API khoi dong lai se quay ve AUTO_SEND trong env
- * (production mac dinh off) de khong vo tinh giu quyen tu gui sau restart.
+ * (pilot GĐ1 mac dinh on) de don hop le trong nguong tenant duoc tu gui sau restart.
  */
 @Injectable()
 export class RuntimeSettingsService {

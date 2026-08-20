@@ -73,12 +73,13 @@ POSTGRES_ADMIN_PASSWORD="$(secret zalo-${TENANT_SLUG}-postgres-admin-password)"
 ZALO_DB_PASSWORD="$(secret zalo-${TENANT_SLUG}-zalo-db-password)"
 FLOWISE_DB_PASSWORD="$(secret zalo-${TENANT_SLUG}-flowise-db-password)"
 DEEPSEEK_API_KEY="$(secret zalo-${TENANT_SLUG}-deepseek-api-key)"
-# Token Bot van duoc render san de co the kiem tra danh tinh. Kenh mac dinh van la mock; chi file
-# `.runtime/channel-mode.env` do operator tao CO Y moi duoc phep bat bot/zca/hybrid. `.runtime`
-# khong bi rsync ghi de, nen deploy lai se GIU lua chon da phe duyet thay vi am tham tat kenh.
+# Token Bot van duoc render san de co the kiem tra danh tinh.
+# Pilot GĐ1 chay ZCA mac dinh; `.runtime/channel-mode.env` khong bi rsync ghi de nen deploy lai
+# giu override co y cua operator va khong am tham roi ve mock.
 ZALO_BOT_TOKEN="$(optional_secret zalo-${TENANT_SLUG}-zalo-bot-token)"
 CHANNEL_MODE="$("${SCRIPT_DIR}/channel-mode.sh" read "${RUNTIME_DIR}/channel-mode.env")"
-echo "render-secrets: CHANNEL_MODE=${CHANNEL_MODE} (mock neu chua co override duoc phe duyet)." >&2
+echo "render-secrets: CHANNEL_MODE=${CHANNEL_MODE} (zca mac dinh cho pilot GĐ1)." >&2
+AUTO_SEND="${AUTO_SEND:-on}"
 API_KEY=$(secret zalo-${TENANT_SLUG}-api-key)
 # VM da duoc cap quyen doc API key. Dan xuat domain-separated session signing key thay vi doi IAM
 # de them mot secret moi; gia tri goc khong nam trong command args va khong duoc ghi log.
@@ -134,6 +135,7 @@ TENANT_SLUG=${TENANT_SLUG}
 PARSER_MODE=${PARSER_MODE:-deepseek}
 DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-flash}
 CHANNEL_MODE=${CHANNEL_MODE}
+AUTO_SEND=${AUTO_SEND}
 GCP_PROJECT_ID=${PROJECT_ID}
 DEMO_DOMAIN=${DEMO_DOMAIN}
 OPERATOR_DOMAIN=${OPERATOR_DOMAIN}

@@ -73,10 +73,9 @@ done
   apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/netviet/bootstrap-auth-user.mjs
-# Always recreate the application processes before injecting a smoke message. Besides picking up the
-# new image, this resets the in-memory AUTO_SEND switch to the compose fail-safe `off` value. Without
-# this, an unchanged container that an operator had temporarily enabled could send the smoke fixture
-# through a live Zalo transport before smoke-test.mjs gets a chance to inspect the channel mode.
+# Always recreate the application processes before injecting a smoke message. Pilot GĐ1 khoi dong
+# lai voi AUTO_SEND=on; smoke-test.mjs nhan ra kenh Zalo that va TUYET DOI khong approve fixture,
+# nen khong co tin thu nao bi gui vao nhom that.
 "${COMPOSE[@]}" up -d --no-deps --force-recreate api web
 "${COMPOSE[@]}" ps
 

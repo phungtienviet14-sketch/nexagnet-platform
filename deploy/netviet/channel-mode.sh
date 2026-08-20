@@ -23,7 +23,7 @@ validate() {
 case "$action" in
   read)
     if [[ ! -e "$file" ]]; then
-      echo 'mock'
+      echo 'zca'
       exit 0
     fi
     if [[ ! -f "$file" ]]; then

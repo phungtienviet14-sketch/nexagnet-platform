@@ -260,10 +260,9 @@ test('deployment smoke checks public pages and requires auth for Zalo status API
   assert.match(deployStack, /== '401'/);
 });
 
-// Deploy moi van fail-safe mock, nhung pre-pilot duoc phep luu mot override CO Y trong `.runtime`.
-// Runtime directory khong bi rsync ghi de, nen deploy retry khong am tham tat zca da phe duyet.
-test('pilot deploy defaults to mock and preserves only an explicit validated channel override', () => {
-  assert.match(channelMode, /echo 'mock'/);
+// Pilot GĐ1 dung zca va tu gui theo policy tenant; `.runtime` van luu duoc override co y.
+test('pilot deploy defaults to zca and auto-send, while preserving a validated channel override', () => {
+  assert.match(channelMode, /echo 'zca'/);
   assert.match(channelMode, /mock\|bot\|zca\|hybrid/);
   assert.match(channelMode, /CHANNEL_MODE khong hop le/);
   assert.match(channelMode, /mktemp/);
@@ -274,7 +273,8 @@ test('pilot deploy defaults to mock and preserves only an explicit validated cha
   assert.doesNotMatch(deployStack, /-e CHANNEL_MODE=mock/);
   assert.match(deployStack, /channel-mode\.sh" read/);
   assert.match(setChannelMode, /rollback_runtime/);
-  assert.match(compose, /AUTO_SEND:\s*"off"/);
+  assert.match(compose, /CHANNEL_MODE:\s*\$\{CHANNEL_MODE:-zca\}/);
+  assert.match(compose, /AUTO_SEND:\s*\$\{AUTO_SEND:-on\}/);
 });
 
 test('deploy smoke cannot approve through a live Zalo API transport', async () => {

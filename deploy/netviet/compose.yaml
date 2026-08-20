@@ -162,14 +162,14 @@ services:
       FLOWISE_TIMEOUT_MS: ${FLOWISE_TIMEOUT_MS:-60000}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
-      CHANNEL_MODE: ${CHANNEL_MODE:-mock}
+      CHANNEL_MODE: ${CHANNEL_MODE:-zca}
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
       ZALO_CRED_PATH: /runtime/zalo/zalo-cred.json
       ZALO_ALLOWED_GROUPS_PATH: /runtime/zalo/zalo-allowed-groups.json
       ZALO_OPERATOR_ORIGIN: https://${OPERATOR_DOMAIN}
       ZALO_SELF_LISTEN: "off"
       AUTO_ACK: "off"
-      AUTO_SEND: "off"
+      AUTO_SEND: ${AUTO_SEND:-on}
       API_KEY: ${API_KEY}
       # Pilot public dung session server-side; `none` chi danh cho local/CI khong public.
       # API_KEY van render san cho automation tuong lai, khong dua vao browser.

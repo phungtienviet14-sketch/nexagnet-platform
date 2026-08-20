@@ -74,7 +74,7 @@ if ! "${COMPOSE[@]}" up -d --no-deps --force-recreate api; then
 fi
 for attempt in {1..60}; do
   if curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
-    echo "CHANNEL_MODE=$mode da ap dung; AUTO_SEND=off sau khi recreate API."
+    echo "CHANNEL_MODE=$mode da ap dung; AUTO_SEND=on theo policy pilot GĐ1."
     exit 0
   fi
   if [[ "$attempt" -eq 60 ]]; then
