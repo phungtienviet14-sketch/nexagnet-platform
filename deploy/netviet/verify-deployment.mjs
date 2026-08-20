@@ -52,7 +52,7 @@ export function verifyDeployment({ tenant, release, evidence }) {
     warnings: notificationResult.warnings,
     release: release ?? null,
     readiness: evidence?.readiness ?? null,
-    components: buildComponents(capabilities, tenant, evidence, notificationResult),
+    components: buildComponents(capabilities, tenant, evidence, notificationResult, stackSlug),
   };
 }
 
@@ -292,9 +292,9 @@ function evaluateNotifications(capabilities, notifications) {
   };
 }
 
-function buildComponents(capabilities, tenant, evidence, notificationResult) {
+function buildComponents(capabilities, tenant, evidence, notificationResult, stackSlug) {
   return {
-    ...buildCoreComponents(tenant, evidence),
+    ...buildCoreComponents(tenant, evidence, stackSlug),
     ...buildCapabilityComponents(capabilities, evidence),
     erp: component(
       'NOT IN GD1 SCOPE',
@@ -310,7 +310,7 @@ function buildComponents(capabilities, tenant, evidence, notificationResult) {
   };
 }
 
-function buildCoreComponents(tenant, evidence) {
+function buildCoreComponents(tenant, evidence, stackSlug) {
   const containerHealthy = (name) =>
     evidence?.containers?.[name]?.state === 'running' &&
     evidence?.containers?.[name]?.health === 'healthy';
@@ -336,7 +336,7 @@ function buildCoreComponents(tenant, evidence) {
       evidence?.database?.migrationHead,
     ),
     network: component(
-      validateNetwork(tenant, evidence?.network).length === 0 ? 'REAL' : 'FAILED',
+      validateNetwork(tenant, evidence?.network, stackSlug).length === 0 ? 'REAL' : 'FAILED',
       evidence?.network?.backendNetwork,
       'tenant backend/data isolation',
     ),

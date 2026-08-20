@@ -388,3 +388,35 @@ test('a release without a stack field still verifies against the tenant slug', (
     result.errors.join('\n'),
   );
 });
+
+// Su co 21/08/2026: bang tom tat bao 'network: FAILED' trong khi danh sach loi KHONG co loi mang
+// nao — vi phan dung bang goi lai validateNetwork ma QUEN truyen stack slug, nen no roi ve tenant
+// slug va doi 'zalo-ultty_backend'. Mot ban tom tat tu mau thuan voi chinh danh sach loi cua no
+// con te hon la mot trong hai cai sai rieng le: nguoi doc khong biet tin ben nao.
+test('bang tom tat khong duoc mau thuan voi danh sach loi', () => {
+  const stackRelease = { ...release(), stack: 'ultty-gd1-test' };
+  const stackEvidence = {
+    ...evidence(),
+    release: stackRelease,
+    network: {
+      ...evidence().network,
+      backendNetwork: 'zalo-ultty-gd1-test_backend',
+      dataNetwork: 'zalo-ultty-gd1-test_data',
+    },
+  };
+
+  const result = verifyDeployment({
+    tenant: tenant(),
+    release: stackRelease,
+    evidence: stackEvidence,
+  });
+
+  const networkErrors = result.errors.filter((e) => e.includes('network'));
+  const networkComponent = result.components.network.status;
+  assert.equal(
+    networkErrors.length === 0,
+    networkComponent === 'REAL',
+    `bang tom tat noi network=${networkComponent} nhung co ${networkErrors.length} loi mang`,
+  );
+  assert.equal(networkComponent, 'REAL', result.errors.join('\n'));
+});
