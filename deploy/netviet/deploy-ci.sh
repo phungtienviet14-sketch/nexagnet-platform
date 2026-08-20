@@ -81,13 +81,21 @@ if [[ "${DEPLOYMENT_ENVIRONMENT}" == "gd1-test" ]]; then
   GD1_TEST_PREFLIGHT_OUTPUT="${preflight_output}" node deploy/netviet/run-gd1-test-preflight.mjs
   rollback_app_image="$(node -e "const p=require(process.argv[1]); process.stdout.write(p.rollback?.appImage ?? '')" "${preflight_output}")"
   rollback_flowise_image="$(node -e "const p=require(process.argv[1]); process.stdout.write(p.rollback?.flowiseImage ?? '')" "${preflight_output}")"
+  first_release="$(node -e "const p=require(process.argv[1]); process.stdout.write(p.firstRelease === true ? '1' : '0')" "${preflight_output}")"
   rm -f -- "${preflight_output}"
-  for digest in "${rollback_app_image}" "${rollback_flowise_image}"; do
-    [[ "${digest}" =~ @sha256:[a-f0-9]{64}$ ]] || {
-      echo 'Preflight khong tra du rollback digest app + Flowise.' >&2
-      exit 1
-    }
-  done
+  # STACK MOI THI KHONG CO GI DE QUAY VE. Doi hai digest o lan deploy dau se chan dung lan duy
+  # nhat chac chan khong the co digest — va duong lui cua no khong phai "ghim lai anh cu" ma la
+  # "go stack moi xuong", vi truoc no khong co gi ca.
+  if [[ "${first_release}" == '1' ]]; then
+    echo 'GD1-test: lan release DAU TIEN cua stack nay — rollback = go stack xuong, khong co digest cu.' >&2
+  else
+    for digest in "${rollback_app_image}" "${rollback_flowise_image}"; do
+      [[ "${digest}" =~ @sha256:[a-f0-9]{64}$ ]] || {
+        echo 'Preflight khong tra du rollback digest app + Flowise.' >&2
+        exit 1
+      }
+    done
+  fi
 fi
 
 gcloud auth configure-docker "${REGISTRY_HOST}" --quiet
@@ -178,7 +186,7 @@ ssh_vm "install -d -m 0700 '${remote_parent}'"
 scp_vm "${staging}/payload.tar.gz" "${remote_parent}/payload.tar.gz"
 ssh_vm "tar -xzf '${remote_parent}/payload.tar.gz' -C '${remote_parent}' && rm -f '${remote_parent}/payload.tar.gz'"
 
-ssh_vm "sudo env PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'"
+ssh_vm "sudo env PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'"
 
 echo "Deploy xong: tenant=${TENANT_SLUG} environment=${DEPLOYMENT_ENVIRONMENT} stack=${STACK_SLUG} target=${DEPLOYMENT_TARGET_ID} app=${app_digest} flowise=${flowise_digest}"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

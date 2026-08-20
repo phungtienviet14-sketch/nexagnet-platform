@@ -405,3 +405,29 @@ test('du lieu khach den tu volume mount, khong nam trong image', async () => {
   // TENANT khong con di qua secrets.env: goi duoc mount thang, khong tra slug trong image nua.
   assert.doesNotMatch(renderSecrets, /^TENANT=/m);
 });
+
+// Metadata release/rollback duoc sinh bang `printf`, ma printf KHONG bao loi khi so `%s` nhieu hon
+// so tham so — no lang le dien chuoi rong va lam LECH moi truong phia sau. Da xay ra that: them
+// truong "stack" vao format ma quen them tham so, khien `capturedAt` rong va `appDigest` nhan
+// nham gia tri cua truong ben canh. Mot tep rollback sai la thu chi bi phat hien dung luc can
+// rollback, nen dem so o day.
+test('printf metadata release/rollback co so tham so khop so %s', () => {
+  // Khong rang buoc kieu xuong dong: tep nay co the la CRLF tren may Windows.
+  const blocks = [
+    ...deployRemote.matchAll(
+      /printf '(\{[^']*\})([\s\S]*?)>"\$(?:temporary|rollback_file)"/g,
+    ),
+  ];
+
+  assert.ok(blocks.length >= 3, `phai tim thay ca 3 khoi printf metadata, thay ${blocks.length}`);
+
+  for (const [, format, args] of blocks) {
+    const placeholders = (format.match(/%s/g) ?? []).length;
+    const supplied = (args.match(/"\$(?:\w+|\([^)]*\))"/g) ?? []).length;
+    assert.equal(
+      supplied,
+      placeholders,
+      `printf co ${placeholders} placeholder nhung ${supplied} tham so: ${format.slice(0, 90)}`,
+    );
+  }
+});
