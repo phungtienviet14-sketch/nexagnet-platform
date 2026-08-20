@@ -65,7 +65,14 @@ Với mỗi tin, xem 3 cột:
 
 ## 4. Quy tắc GĐ1 cần nhớ khi đối chiếu
 
-- Đơn **hợp lệ** và **tổng số lượng ≤ 50** → hệ thống tự soạn xác nhận.
+- Đơn **hợp lệ** và **tổng số lượng ≤ 50** → *về nguyên tắc* hệ thống tự soạn xác nhận.
+
+> 🔒 **Nhưng ở môi trường test này thì KHÔNG đơn nào tự gửi** — công tắc `AUTO_SEND` đang **tắt có
+> chủ ý**. Nghĩa là **mọi** đơn, kể cả đơn hợp lệ ≤50, đều dừng ở trạng thái **chờ Sale**.
+> **Đừng báo "đơn hợp lệ mà không tự xác nhận" là lỗi** — đó là thiết kế của môi trường này.
+>
+> Cái cần kiểm ở đây là **AI đọc đúng chưa** và **tính đúng chưa**, chứ không phải hành vi tự gửi.
+> Hành vi tự gửi sẽ được nghiệm thu riêng ở bước Pilot.
 - Đơn **> 50** hoặc **thiếu dữ liệu** (không rõ mã hàng / giá / đại lý) → **chuyển Sale** xử lý trước.
 - Sau khi xác nhận, **Sale vẫn phải tự nhập KiotViet bằng tay**. GĐ1 **chưa nối** KiotViet/Base —
   đây là đúng thiết kế, không phải thiếu sót.
@@ -122,7 +129,9 @@ báo lại chỉ làm loãng danh sách lỗi thật.
 
 > **Đọc số 0 cho đúng.** Thấy ship/COD/VAT = 0 thì **không phải** hệ thống tính sai thành miễn phí —
 > là nó **từ chối đoán** khi chưa có bảng cước chính thức, rồi đẩy đơn sang Sale. Đây là hành vi cố ý.
-> Ngược lại, nếu một đơn **TH2 tự xác nhận** mà không chuyển Sale thì **đó mới là lỗi** — báo ngay.
+> Cái đáng kiểm là **lý do** đơn bị chuyển Sale có đúng không: đơn TH2 phải kèm cảnh báo *"Thiếu cấu
+> hình: phí ship/COD và bảng vùng chính thức"*, đơn xin VAT phải kèm *"chính sách VAT chưa được
+> duyệt"*. Sai **lý do** cũng là lỗi đáng báo, dù kết cục (chuyển Sale) trông giống nhau.
 
 **Còn thiếu dữ liệu đầu vào (đang chờ khách):** bảng phí COD · biểu cước ship · bảng giá tháng
 08/2026 (hiện mới có T7) · danh sách đại lý/CTV đầy đủ + map nhóm Zalo · công thức khuyến mãi.
