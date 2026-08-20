@@ -10,12 +10,6 @@ import {
 
 const registry = JSON.parse(readFileSync('.github/deployment-targets.json', 'utf8'));
 
-function deploymentFor(tenant, environment) {
-  return registry.deployments.find(
-    (entry) => entry.tenant === tenant && entry.environment === environment,
-  );
-}
-
 // The whole safety story of adding a second Ultty stack rests on this test: the compose project
 // name decides the volume names, so any environment that already runs on the VM must keep
 // resolving to the bare tenant slug. A regression here silently renames
