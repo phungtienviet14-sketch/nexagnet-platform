@@ -59,9 +59,13 @@ sửa bước deploy, sửa ở đó — đừng chép sang file khác.
    (build một lần, chạy hai gói giả có experience khác nhau, đòi branding/composition đổi theo).
 2. **Gói khách đi ngoài image.** `tenants/<slug>/` được upload riêng theo từng stack và mount
    **chỉ-đọc**. Một gói nằm trong image nghĩa là ai `docker save` cũng đọc được giá sỉ của khách kia.
-3. **Slug khách là một nguồn duy nhất.** Nó quyết định *đồng thời*: thư mục stack, tên compose
-   project (⇒ **tên volume**), tiền tố secret, alias mạng, hostname. Đừng để một đường suy ra slug
-   còn đường kia mặc định — đó chính là lỗi 17/08 (xem §6.1).
+3. **STACK SLUG là một nguồn duy nhất.** `STACK SLUG = tenant + môi trường`
+   (`deploy/netviet/stack-identity.mjs`). Nó quyết định *đồng thời*: thư mục stack, tên compose
+   project (⇒ **tên volume**), tiền tố secret, alias mạng, hostname, unit systemd, tiền tố backup.
+   Đừng để một đường suy ra slug còn đường kia mặc định — đó chính là lỗi 17/08 (xem §6.1).
+   `dev`/`production`/`legacy` suy ra **đúng tenant slug**, nên stack đang chạy không đổi tên;
+   môi trường khác (`gd1-test`) ra một stack hoàn toàn riêng. **Tenant slug vẫn là thứ chọn GÓI
+   KHÁCH** — một khách có hai stack thì vẫn chỉ có một `tenants/<slug>/`, không fork.
 4. **Mỗi khách một mạng Docker riêng.** Docker tự đăng ký tên service làm alias DNS trên **mọi**
    mạng đã join; chung mạng là hai khách cùng trả lời cho `api`/`flowise` và DNS round-robin sẽ
    trộn chúng vào nhau. Edge `docker network connect` **ngược vào** từng mạng khách.
@@ -114,6 +118,10 @@ gh workflow run deploy-tenant.yml -f tenant=ultty -f environment=dev
 
 `dev` không có cổng duyệt; `production` sẽ dừng chờ người duyệt. Hai lần deploy cùng một khách
 không bao giờ chạy song song (`concurrency: deploy-tenant-<slug>`).
+
+**Môi trường `gd1-test`** là một **stack RIÊNG** trên cùng VM, không phải một nhãn khác của stack
+dev: nó có thư mục, compose project, volume, mạng, hostname và secret riêng. Xem
+[`ultty-gd1-test-runbook.md`](ultty-gd1-test-runbook.md) trước khi đụng vào nó.
 
 ### 4.2 Lên một khách mới — thứ tự bắt buộc
 
@@ -229,5 +237,6 @@ trình đụng compose đều lấy chung một khoá (`.runtime/compose.lock`) 
 
 - [`../ke-hoach/tong-quan.md`](../ke-hoach/tong-quan.md) — nguồn trạng thái duy nhất.
 - [`checklist-go-live.md`](checklist-go-live.md) — điều kiện bật pilot dữ liệu thật.
+- [`ultty-gd1-test-runbook.md`](ultty-gd1-test-runbook.md) — môi trường kỹ thuật GD1-test.
 - [`../../kien-truc/nen-tang-da-khach.md`](../../kien-truc/nen-tang-da-khach.md) — kiến trúc đa khách.
 - [`../../../deploy/netviet/README.md`](../../../deploy/netviet/README.md) — chi tiết vận hành VM.
