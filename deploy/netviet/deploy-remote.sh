@@ -218,6 +218,8 @@ env \
   EDGE_DIR="$edge_dir" \
   PRIMARY_TENANT="${PRIMARY_TENANT:-ultty}" \
   DEPLOYMENT_ENVIRONMENT="$deployment_environment" \
+  RELEASE_GIT_SHA="$release_git_sha" \
+  RELEASE_DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   "$app_dir/render-secrets.sh"
 
 # Edge phai len TRUOC stack khach: deploy-stack.sh ket thuc bang smoke test qua HTTPS cong khai,

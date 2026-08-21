@@ -41,6 +41,7 @@ import { OrdersRepository } from '../orders/orders.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
 import { AgentEventsService } from './agent-events.service.js';
+import { TelemetryService } from '../observability/telemetry.service.js';
 import { DEFAULT_RULES_CONFIG, type RulesConfig } from '../rules/config.js';
 import { matchProduct, priceOrder, routeStatus } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
@@ -114,6 +115,8 @@ export class AgentOrchestrator {
     @Optional()
     @Inject(ORDER_COMMANDS)
     private readonly orderCommands?: OrderCommandPort,
+    /** Vang mat -> khong quan sat; nghiep vu va moi test cu chay y het (muc 20). */
+    @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
   /**
@@ -139,10 +142,46 @@ export class AgentOrchestrator {
     // 5 ghe Felix), nhung gui thang xac nhan cua no se de don CU song nguyen — Sale go ca hai vao
     // KiotViet va khach nhan 25 cai ghe. Luot do phai qua agent de no goi `sua_don`.
     const orderIsComplete = input.intent === 'dat_don' && dispatch.priced !== null;
-    if (!this.advisor || (orderIsComplete && !input.amendRequest)) {
+    if (!this.advisor) {
+      /*
+       * MA QUAN TRONG NHAT trong ca he thong quan sat.
+       *
+       * Su co 19/08 -> 21/08/2026: `ADVICE_COMPOSER` rong tren stack suot HAI NGAY, tuc agent
+       * CHUA TUNG goi LLM. Trieu chung ben ngoai chi la "AI tra loi y het nhau" — khong the phan
+       * biet duoc voi "LLM tra loi kem". Hai ngay do la thoi gian di tim mot dau vet khong ton tai.
+       * Tu day no la mot dong `decision` co the loc: `reason=COMPOSER_DISABLED`.
+       */
+      this.telemetry?.decision({
+        point: 'advisor.compose',
+        outcome: 'denied',
+        reason: 'COMPOSER_DISABLED',
+      });
+      return { dispatch, composed: false, handoff: false };
+    }
+    if (orderIsComplete && !input.amendRequest) {
+      this.telemetry?.decision({
+        point: 'advisor.compose',
+        outcome: 'denied',
+        reason: 'DETERMINISTIC_PATH_SUFFICIENT',
+      });
       return { dispatch, composed: false, handoff: false };
     }
 
+    // Quyen GHI cua agent la thu duoc CAP, khong phai thu no tu co — nen viec cap/khong cap phai
+    // nhin duoc. Khong co dong nay thi "vi sao agent khong sua duoc don" la mot cau hoi phai tra
+    // loi bang cach doc source.
+    const writeGranted = Boolean(this.orderCommands && input.senderExternalId);
+    this.telemetry?.decision({
+      point: 'agent.tool_authorization',
+      outcome: writeGranted ? 'allowed' : 'denied',
+      reason: writeGranted
+        ? 'GRANTED'
+        : this.orderCommands
+          ? 'SENDER_NOT_IDENTIFIED'
+          : 'WRITE_PORT_ABSENT',
+    });
+
+    const startedAt = Date.now();
     const reply = await this.advisor.reply({
       customerText: input.customerText,
       ...(input.context ? { context: input.context } : {}),
@@ -173,7 +212,40 @@ export class AgentOrchestrator {
       },
       now: input.now,
     });
-    if (!reply) return { dispatch, composed: false, handoff: false };
+
+    // Mot ban ghi AI cho MOI ket cuc — ke ca khi `reply` la `null`. Duong lui ve ban tat dinh la
+    // duong CHAY NHIEU NHAT khi co su co, nen no la duong bat buoc phai co dau vet.
+    this.telemetry?.aiCall({
+      provider: this.advisor.name,
+      model: loadEnv().ADVICE_MODEL,
+      operation: 'compose',
+      durationMs: Date.now() - startedAt,
+      status: reply ? 'ok' : 'error',
+      ...(reply?.usedTools.length ? { toolNames: reply.usedTools } : {}),
+      attributes: {
+        intent: input.intent,
+        handoff: reply?.handoff ?? null,
+        // Bo loc telemetry quyet dinh noi dung nay co duoc luu hay khong theo muc rieng tu —
+        // khong phai cho goi tu quyet dinh (muc 14: khong sanitize rai rac).
+        customerText: input.customerText,
+        ...(reply ? { reply: reply.text } : {}),
+      },
+    });
+
+    if (!reply) {
+      this.telemetry?.decision({
+        point: 'advisor.compose',
+        outcome: 'degraded',
+        reason: 'LLM_RETURNED_NOTHING',
+      });
+      return { dispatch, composed: false, handoff: false };
+    }
+    this.telemetry?.decision({
+      point: 'advisor.compose',
+      outcome: 'allowed',
+      reason: 'COMPOSED',
+      detail: { toolRounds: reply.usedTools.length, handoff: reply.handoff ? 1 : 0 },
+    });
 
     /*
      * Ban soan cua agent THAY THE phan quyet tat dinh, khong chong len no.
@@ -281,6 +353,7 @@ export class AgentOrchestrator {
 
     // ROUTER — 1 lan parse (LLM hoac mock). do tre THAT nam o day.
     emit({ type: 'agent.progress', orderId, role: 'router', phase: 'active' });
+    const parseStartedAt = Date.now();
     const rawParseResult = await this.parser.parse({
       text: message.text,
       imageUrl: message.imageUrl,
@@ -296,6 +369,20 @@ export class AgentOrchestrator {
       // nen chung khong pha prompt cache cua phan tinh.
       ...(opts?.pendingDraft ? { pendingDraft: opts.pendingDraft } : {}),
       ...(opts?.answeringQuestion ? { awaitingAnswer: true } : {}),
+    });
+    // LLM #1 (Router). Do tre THAT cua ca luot nam o day — truoc do khong ai do no.
+    this.telemetry?.aiCall({
+      provider: this.parser.name,
+      model: loadEnv().PARSER_MODEL,
+      operation: 'parse',
+      durationMs: Date.now() - parseStartedAt,
+      status: 'ok',
+      attributes: {
+        intent: rawParseResult.intent,
+        intentConfidence: rawParseResult.confidence.intent ?? null,
+        hasImage: Boolean(message.imageUrl),
+        customerText: message.text,
+      },
     });
     const validated = validateContextualParse(
       rawParseResult,
@@ -406,6 +493,25 @@ export class AgentOrchestrator {
         ? 'needs_edit'
         : dispatch.status;
 
+    // Giam sat da co `reasons[]` san — day la hinh mau tot nhat dang co trong repo, nen o day
+    // chi CHUYEN TIEP no vao trace chu khong dinh nghia lai mot hinh dang khac.
+    this.telemetry?.decision({
+      point: 'supervisor.risk',
+      outcome: supervisor.escalate ? 'denied' : 'allowed',
+      reason: supervisor.riskLevel === 'none' ? 'ALLOWED' : 'SUPERVISOR_FLAGGED_RISK',
+      detail: { riskLevel: supervisor.riskLevel, reasons: supervisor.reasons },
+    });
+    if (status !== dispatch.status) {
+      // Vi sao don bi day sang `needs_edit` — hai nguyen nhan rat khac nhau gop chung mot ket qua.
+      this.telemetry?.stateChange({
+        entity: 'Order',
+        entityId: orderId,
+        from: dispatch.status,
+        to: status,
+        reason: supervisor.escalate ? 'SUPERVISOR_FLAGGED_RISK' : 'LINE_NOT_FULLY_PRICED',
+      });
+    }
+
     const llmCalls = (usedLlm ? 1 : 0) + (composed ? 1 : 0);
     const trace = this.buildTrace(
       dispatch.roles,
@@ -438,6 +544,9 @@ export class AgentOrchestrator {
       // pham vi, va `lich_su_don` khong the loc theo nguoi.
       ...(message.senderExternalId ? { senderExternalId: message.senderExternalId } : {}),
       trace,
+      // Neo don vao LUOT da sinh ra no. Day la thu bien mot don trong console thanh mot diem
+      // xuat phat de lan nguoc toan bo duong xu ly (muc 25).
+      ...(this.telemetry?.traceId() ? { traceId: this.telemetry.traceId()! } : {}),
       ...(activeRuleConfig ? { ruleConfigVersion: activeRuleConfig.version } : {}),
       // De xac nhan gui ra la mot cau TRA LOI dung tin nay, khong phai mot cau troi noi
       // giua nhom 200 dai ly dang ban tin.

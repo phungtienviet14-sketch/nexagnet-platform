@@ -116,6 +116,16 @@ export interface OrderView {
   senderExternalId?: string;
   /** Vet 6 vai agent da phoi hop xu ly tin (multi-agent 6 con). */
   trace?: AgentTrace;
+  /**
+   * Dinh danh LUOT XU LY da sinh ra don nay — 32 ky tu hex theo chuan W3C Trace Context.
+   *
+   * Khac `trace` (vet 6 vai, de Sale nhin): day la soi chi de NGUOI VAN HANH lan nguoc ve moi
+   * dong log, moi quyet dinh va moi lan goi LLM cua dung luot do. Co no thi cau hoi
+   * "vi sao don nay khong tu gui" tra loi duoc bang mot lenh loc, thay vi doc source.
+   *
+   * Tuy chon: don cu (truoc 21/08/2026) va don tao ngoai mot luot co quan sat thi khong co.
+   */
+  traceId?: string;
   /** Version rules typed da ap dung; bo trong nghia la defaults trong code. */
   ruleConfigVersion?: number;
   /**

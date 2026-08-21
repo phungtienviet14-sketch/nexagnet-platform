@@ -18,6 +18,7 @@
     "typecheck": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,mjs}\"",
+    "trace": "node tools/trace-view.mjs",
     "dev:api": "pnpm --filter @netviet/api dev",
     "dev:web": "pnpm --filter @netviet/web dev",
     "poc:doctor": "pnpm --filter @netviet/poc-zalo-bot run doctor",
