@@ -15,6 +15,7 @@ import {
 import { AgentEventsService } from '../agents/agent-events.service.js';
 import { autoLabel } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
+import { canAmendOrder, type AmendVerdict } from './amend-window.js';
 import { OrdersRepository } from './orders.repository.js';
 
 @Injectable()
@@ -79,8 +80,16 @@ export class OrdersService {
     const view = await this.getOrThrow(id);
     if (view.status === 'sent') return view;
     const content = view.trace?.outbound;
-    if (view.intent !== 'hoi_san_pham' || view.status !== 'pending_review' || !content) {
-      throw new UnprocessableEntityException('Tư vấn chưa đủ nội dung đã duyệt để gửi');
+    // MOI intent tu van deu gui duoc, khong rieng `hoi_san_pham`: cau hoi bao hanh/cong no/van
+    // chuyen cung do agent soan tu tai lieu da duyet va cung phai den duoc khach.
+    // `needs_edit` duoc phep vi day la duong Sale BAM DUYET sau khi doc — khac auto-send.
+    if (view.intent === 'dat_don' || !content) {
+      throw new UnprocessableEntityException('Tin nay khong co noi dung tu van de gui');
+    }
+    if (view.status !== 'pending_review' && view.status !== 'needs_edit') {
+      throw new UnprocessableEntityException(
+        `Đơn ở trạng thái ${view.status}, không thể gửi tư vấn`,
+      );
     }
     const replyChannel = view.replyChannel ?? legacyReplyChannel();
     if (!replyChannel) {
@@ -186,9 +195,63 @@ export class OrdersService {
     }
   }
 
-  /** Nut Sale xac nhan ngoai le dung cung luong send-only cua GĐ1. */
+  /**
+   * Nut "Duyet & gui" cua Sale — DINH TUYEN THEO NOI DUNG dang co.
+   *
+   * Truoc 21/08/2026 ham nay goi thang `sendConfirmation()`, ma ham do nem 422 "Tin nay khong
+   * phai don hang" ngay khi `priced` rong. Console lai hien dung mot nut cho ca `pending_review`
+   * lan `needs_edit`, nen MOI tin tu van deu bam vao mot loi — dung nhung tin ma cong handoff
+   * tat dinh vua day ve `needs_edit`. Con `sendProductAdvice()` thi khong route nao goi toi.
+   *
+   * Thu tu xet co y: don da tinh gia di truoc, vi mot don vua co `priced` vua co `outbound` thi
+   * ban XAC NHAN moi la chung tu — ban tu van chi la loi dan kem.
+   */
   async approve(id: string): Promise<OrderView> {
-    return this.sendConfirmation(id);
+    const view = await this.getOrThrow(id);
+    if (view.status === 'sent' || view.status === 'synced') return view;
+    if (view.priced) return this.sendConfirmation(id);
+    if (view.trace?.outbound) return this.sendProductAdvice(id);
+    throw new UnprocessableEntityException(
+      'Tin nay chua co ban xac nhan hay ban tu van nao de gui',
+    );
+  }
+
+  /**
+   * HUY mot don — duong duy nhat de LLM (hoac Sale) dong mot don lai.
+   *
+   * Khac `reject()`: `reject` la Sale tu choi mot don CHUA gui. Ham nay di qua `canAmendOrder()`
+   * nen no huy duoc ca don DA GUI, mien Sale chua go vao ERP — dung tinh huong khach bao "huy don
+   * cu 20 lay 5 cai thoi" sau khi da nhan xac nhan.
+   *
+   * Dong luon viec nhap ERP: mot don da huy ma con nam trong hang viec cua Sale la cach chac chan
+   * de no duoc go vao KiotViet sau do.
+   */
+  async cancelOrder(id: string, reason: string): Promise<OrderView> {
+    const view = await this.getOrThrow(id);
+    if (view.status === 'rejected') return view;
+    const verdict = canAmendOrder(view);
+    if (!verdict.allowed) throw new UnprocessableEntityException(verdict.message);
+
+    const cancelled = (await this.repo.update(id, {
+      status: 'rejected',
+      cancelReason: reason,
+      ...(view.salesHandoff
+        ? { salesHandoff: { ...view.salesHandoff, status: 'cancelled' as const } }
+        : {}),
+    }))!;
+    this.events?.emit({ type: 'order.updated', order: cancelled });
+    return cancelled;
+  }
+
+  /** Noi hai don thay the nhau, sau khi don moi da duoc tao. */
+  async linkSupersede(oldId: string, newId: string): Promise<void> {
+    await this.repo.update(oldId, { supersededByOrderId: newId });
+    await this.repo.update(newId, { supersedesOrderId: oldId });
+  }
+
+  /** Don con sua duoc khong — de ben goi hoi TRUOC khi hua voi khach. */
+  async amendVerdict(id: string): Promise<AmendVerdict> {
+    return canAmendOrder(await this.getOrThrow(id));
   }
 
   async reject(id: string): Promise<OrderView> {

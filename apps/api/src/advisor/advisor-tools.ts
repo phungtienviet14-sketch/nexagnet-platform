@@ -7,6 +7,12 @@ import { rankFaqs } from '../content/faq-ranking.js';
 import { DEFAULT_RULES_CONFIG } from '../rules/config.js';
 import { matchProduct, priceOrder } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
+import {
+  ORDER_TOOL_SPECS,
+  isOrderTool,
+  runOrderTool,
+  type OrderToolDeps,
+} from './order-tools.js';
 
 /**
  * CONG CU cua agent tu van: cua duy nhat de LLM cham vao nguon su that.
@@ -20,8 +26,9 @@ import { formatVnd, normalize } from '../rules/text.js';
  * trong ket qua deu do `priceOrder()` / bang gia tao ra; LLM chi duoc NHAC LAI. `money-guard.ts`
  * kiem lai dieu do sau khi LLM viet xong.
  *
- * MOI CONG CU DEU CHI DOC. Khong co cong cu nao ghi DB, gui tin hay doi trang thai don — mot LLM
- * bi chen prompt qua tin nhan Zalo cua khach thi cung khong lam duoc gi ngoai viec doc.
+ * CONG CU TRONG FILE NAY DEU CHI DOC. Cong cu GHI (huy don, sua don) nam rieng o
+ * `order-tools.ts` — tach file de ranh gioi "doc vs ghi" la ranh gioi NHIN THAY DUOC, khong phai
+ * mot quy uoc phai tin. Doc mo hinh de doa o dau file do truoc khi them bat ky cong cu ghi nao.
  */
 
 export interface AdvisorToolContext {
@@ -33,6 +40,13 @@ export interface AdvisorToolContext {
   readonly senderExternalId?: string;
   /** Don gan day cua chinh nguoi nay — chi doc, da loc san theo nhom + nguoi gui. */
   readonly recentOrders?: readonly OrderView[];
+  /**
+   * Cong GHI. VANG MAT = agent khong duoc chao ra cong cu huy/sua don nao ca.
+   *
+   * Mac dinh la vang mat co chu y: mot moi truong chua co y thuc ve chuyen nay (test, CI, demo
+   * offline) thi khong tu nhien co quyen doi trang thai don.
+   */
+  readonly orderCommands?: OrderToolDeps;
 }
 
 export interface AdvisorToolSpec {
@@ -105,11 +119,33 @@ export const ADVISOR_TOOLS: readonly AdvisorToolSpec[] = [
   },
 ];
 
+/**
+ * Bo cong cu chao ra cho MOT luot, theo dung quyen cua ngu canh do.
+ *
+ * Cong cu ghi chi xuat hien khi ben goi da cap `orderCommands`. Loc o day thay vi de LLM tu kiem
+ * che: mot cong cu da chao ra roi thi som muon cung co luc duoc goi.
+ *
+ * `lich_su_don` bi thay bang `tra_cuu_don` khi co cong ghi — hai cong cu cung tra ve danh sach don
+ * chi lam LLM chon nham, va `tra_cuu_don` moi la cai tra ve ma don dung de huy/sua.
+ */
+export function advisorToolsFor(ctx: AdvisorToolContext): readonly AdvisorToolSpec[] {
+  if (!ctx.orderCommands) return ADVISOR_TOOLS;
+  return [
+    ...ADVISOR_TOOLS.filter((spec) => spec.name !== 'lich_su_don'),
+    ...ORDER_TOOL_SPECS.map((spec) => ({ ...spec, inputSchema: { ...spec.inputSchema } })),
+  ];
+}
+
 export async function runAdvisorTool(
   name: string,
   input: Record<string, unknown>,
   ctx: AdvisorToolContext,
 ): Promise<AdvisorToolResult> {
+  if (isOrderTool(name)) {
+    return ctx.orderCommands
+      ? runOrderTool(name, input, ctx.orderCommands)
+      : { loi: 'He thong chua bat quyen thay doi don o kenh nay.' };
+  }
   switch (name) {
     case 'tra_cuu_san_pham':
       return findProducts(String(input.tu_khoa ?? ''), ctx);

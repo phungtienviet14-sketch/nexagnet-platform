@@ -119,6 +119,23 @@ gh workflow run deploy-tenant.yml -f tenant=ultty -f environment=dev
 `dev` không có cổng duyệt; `production` sẽ dừng chờ người duyệt. Hai lần deploy cùng một khách
 không bao giờ chạy song song (`concurrency: deploy-tenant-<slug>`).
 
+> **Merge xong ĐỪNG bấm deploy ngay.** Deploy đòi **đúng SHA** đang ở `main` phải có một lần chạy
+> `ci.yml` **đã hoàn tất và xanh** — mà lần chạy đó chỉ bắt đầu khi merge. Bấm sớm thì fail ngay ở
+> bước kiểm với dòng:
+>
+> ```
+> Exact SHA <sha> does not have a successful completed CI run.
+> ```
+>
+> Đây là cổng an toàn chứ không phải lỗi: nó chặn việc deploy một commit chưa ai kiểm. Đợi CI của
+> `main` xanh rồi chạy lại — không cần sửa gì.
+>
+> ```bash
+> gh run list --workflow=ci.yml --branch main --limit 1 --json headSha,status,conclusion
+> ```
+>
+> Đã mất một lượt deploy vì chuyện này ngày 21/08/2026 (run 32444569841).
+
 **Môi trường `gd1-test`** là một **stack RIÊNG** trên cùng VM, không phải một nhãn khác của stack
 dev: nó có thư mục, compose project, volume, mạng, hostname và secret riêng. Xem
 [`ultty-gd1-test-runbook.md`](ultty-gd1-test-runbook.md) trước khi đụng vào nó.

@@ -2,7 +2,7 @@
 
 import type { OrderView } from '@netviet/shared';
 import { formatVnd } from '../../lib/api';
-import { INTENT_LABEL, POLICY_LABEL, STATUS_META, timeOf } from '../../lib/labels';
+import { INTENT_LABEL, POLICY_LABEL, statusMetaFor, timeOf } from '../../lib/labels';
 
 type Props = {
   order: OrderView;
@@ -34,7 +34,7 @@ export function OrderDetailPanel({
   onReject,
   onCompleteSalesHandoff,
 }: Props) {
-  const status = STATUS_META[order.status];
+  const status = statusMetaFor(order);
   const canAct = order.status === 'pending_review' || order.status === 'needs_edit';
   const reply = order.trace?.reply;
   const p = order.priced;
@@ -53,7 +53,39 @@ export function OrderDetailPanel({
           <span className={`chip ${status.cls}`}>{status.label}</span>
         </div>
         {reply && <ReplyBox reply={reply} />}
-        <div className="non-order">Không phải đơn hàng — chuyển Sale xử lý.</div>
+        {/*
+          Truoc 21/08/2026 nhanh nay tra ve som VA KHONG CO NUT NAO — chi mot dong chu "chuyen
+          Sale xu ly". Nen mot cau bao gia da tinh xong van khong the gui tu giao dien. Nay tin
+          nao DA CO ban tra loi soan san thi Sale bam gui duoc ngay tai day.
+        */}
+        {canAct && order.trace?.outbound ? (
+          <div className="oc-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={isBusy}
+              onClick={() => onReject(order.id)}
+            >
+              Từ chối
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={isBusy}
+              onClick={() => onApprove(order.id)}
+            >
+              Duyệt &amp; gửi
+            </button>
+          </div>
+        ) : canAct ? (
+          <div className="non-order">
+            Chưa có nội dung đã duyệt để gửi — Sale trả lời thủ công giúp khách ạ.
+          </div>
+        ) : order.status === 'sent' ? (
+          <div className="oc-done">✓ Khách đã nhận trả lời trong nhóm Zalo</div>
+        ) : (
+          <div className="non-order">Không phải đơn hàng.</div>
+        )}
       </div>
     );
   }

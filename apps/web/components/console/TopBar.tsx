@@ -3,12 +3,14 @@
 import { useBranding } from '../../lib/branding';
 import type { DemoConfig } from '@netviet/shared';
 
-export type ConsoleView = 'console' | 'broadcast';
+export type ConsoleView = 'console' | 'queue' | 'broadcast';
 
 type Props = {
   orderCount: number;
   pendingCount: number;
   groupCount: number;
+  /** So tin dang cho Sale bam gui — hien ngay tren nut de khong ai phai di tim. */
+  queueCount: number;
   config?: DemoConfig;
   view: ConsoleView;
   onViewChange: (view: ConsoleView) => void;
@@ -53,6 +55,7 @@ export function TopBar({
   groupCount,
   config,
   view,
+  queueCount,
   onViewChange,
   streaming,
   connected,
@@ -121,6 +124,15 @@ export function TopBar({
           aria-pressed={view === 'console'}
         >
           🖥 Đơn hàng
+        </button>
+        <button
+          type="button"
+          className={`nav-btn ${view === 'queue' ? 'active' : ''}`}
+          onClick={() => onViewChange('queue')}
+          aria-pressed={view === 'queue'}
+        >
+          ✅ Duyệt &amp; gửi
+          {queueCount > 0 && <span className="nav-badge">{queueCount}</span>}
         </button>
         <button
           type="button"

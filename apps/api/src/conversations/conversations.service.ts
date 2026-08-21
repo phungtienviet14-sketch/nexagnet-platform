@@ -15,7 +15,9 @@ import {
   canAskAgain,
   isAwaiting,
   isLive,
+  recentlyClosedOrder,
   reduceThread,
+  type ClosedOrderContext,
   type ThreadKey,
   type ThreadPolicy,
 } from './conversation-thread.js';
@@ -64,6 +66,16 @@ export class ConversationsService {
   /** Tin ke tiep cua khach co dang la CAU TRA LOI cho cau bot vua hoi khong. */
   async isAnsweringQuestion(key: ThreadKey, now: Date): Promise<boolean> {
     return isAwaiting(await this.threads.find(key), now);
+  }
+
+  /**
+   * Don VUA CHOT cua khach nay (trong cua so sua doi), hoac `null`.
+   *
+   * Tach hoan toan khoi `pendingDraft`: day la ngu canh CHI DOC de hieu "cai do"/"don cu" tro ve
+   * dau, khong phai mot don nhap duoc gop tiep.
+   */
+  async recentlyClosed(key: ThreadKey, now: Date): Promise<ClosedOrderContext | null> {
+    return recentlyClosedOrder(await this.threads.find(key), now);
   }
 
   /**
@@ -206,5 +218,6 @@ function toView(
     awaitingSlots: status === 'awaiting_answer' ? thread.awaitingSlots : [],
     askCount: thread.askCount,
     ...(thread.lastQuestion ? { question: thread.lastQuestion } : {}),
+    ...(thread.senderDisplayName ? { senderDisplayName: thread.senderDisplayName } : {}),
   };
 }

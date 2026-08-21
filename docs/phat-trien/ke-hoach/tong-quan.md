@@ -1077,3 +1077,72 @@ vụ**, nên cần người chốt.
   `deploy-remote.sh` chỉ dọn khi **thành công** — đáng dọn, nhưng là việc riêng.
 
 ---
+
+## 8. Hội thoại chốt đơn + quản lý đơn qua công cụ (21/08/2026)
+
+Nguồn: buổi test thật của anh Việt trên console demo. Kế hoạch thi công:
+[`.claude/plans/hoi-thoai-chot-don-quan-ly-don.plan.md`](../../../.claude/plans/hoi-thoai-chot-don-quan-ly-don.plan.md).
+
+### 8.1 Đánh giá thư viện — **KHÔNG** dùng LangGraph
+
+| Gói | License | Kết luận |
+|---|---|---|
+| `@langchain/langgraph` 1.4.12 | MIT | ❌ Không dùng |
+| `@langchain/mcp-adapters` 1.1.4 | MIT | ❌ Không dùng |
+| `@modelcontextprotocol/sdk` 1.29 | MIT | ✅ Đã có sẵn — mở rộng |
+
+Ba lý do đo được, không phải cảm tính:
+1. **132 gói bắc cầu**; `@langchain/core` phụ thuộc **cứng** vào `langsmith` (client telemetry).
+   Tracing là opt-in qua env var, nhưng nó tạo đường xuất dữ liệu **cách đúng một biến môi
+   trường** — trong repo mà danh sách bên thứ 3 được duyệt là hữu hạn và ghi trong hợp đồng.
+2. `@langchain/langgraph-checkpoint-postgres` dùng `pg` thô, **tự tạo và tự migrate**
+   `checkpoints`/`checkpoint_blobs`/`checkpoint_writes`/`checkpoint_migrations`. Repo pin
+   **Prisma 6**. Hai hệ migration cùng ghi vào Postgres của khách đang chạy = drift.
+3. Thứ nó thay thế (FSM 4 trạng thái, thuần) **đang chạy đúng**. Ba lỗi khách gặp là lỗi logic ở
+   dispatch/handoff/status — thay orchestrator sẽ viết lại phần đang đúng, để nguyên phần đang sai.
+
+Thay vào đó: **một registry công cụ, hai cổng** — advisor in-process (đường nhanh cho Zalo) và
+MCP stdio (cho agent ngoài) dùng chung định nghĩa.
+
+### 8.2 Ba lỗi đã sửa (đều có test hồi quy)
+
+| Lỗi | Nguyên nhân gốc | ✅ |
+|---|---|---|
+| Tư vấn bị đẩy sang Sale quá dễ | Cổng tất định chấm `handoff` chỉ nhìn tin hiện tại; `markComposedRole` **OR** cờ cũ vào kết quả mới; `shouldAutoReplyProduct` chỉ xét `hoi_san_pham` → **6/7 intent** không bao giờ tự trả lời được | ✅ |
+| Không huỷ/sửa được đơn | Sau khi chốt, mạch `closed` → `isLive` loại → ngữ cảnh bị vứt; không có intent/công cụ nào sửa được đơn | ✅ |
+| Không có nút "Duyệt & gửi" dùng được | `approve()` → `sendConfirmation()` ném 422 khi `priced` rỗng — tức **mọi tin tư vấn**; `sendProductAdvice()` không có route | ✅ |
+
+### 8.3 Cổng chống lệch ERP (bất biến mới)
+
+Mốc khoá là **`salesHandoff`**, không phải `status`:
+
+| Trạng thái | `salesHandoff` | LLM sửa được? |
+|---|---|---|
+| `draft`/`pending_review`/`needs_edit`/`approved` | — | ✅ chưa gửi khách |
+| `sent` | `pending` | ✅ Sale **chưa** nhập ERP |
+| `sent` | `completed` | ❌ **đã vào ERP** — khoá cứng |
+| `rejected`/`synced` | — | ❌ |
+
+**Sửa đơn = huỷ + thay thế** (`supersedesOrderId`/`supersededByOrderId`), không sửa tại chỗ:
+con số khách đã nhận xác nhận là một bản ghi, không phải một biến.
+
+### 8.4 Công cụ GHI của agent — ranh giới bảo mật
+
+`apps/api/src/advisor/order-tools.ts` (tách khỏi `advisor-tools.ts` chỉ-đọc). Ba công cụ:
+`tra_cuu_don`, `huy_don`, `sua_don`.
+
+**Tin nhắn Zalo là dữ liệu KHÔNG tin cậy** và đi thẳng vào prompt. Phạm vi vì thế được ép trong
+handler, **không** bằng lời dặn trong prompt:
+- chỉ chạm được đơn cùng `chatId` **và** cùng `senderExternalId`;
+- ngoài phạm vi trả *"không tìm thấy"* (không phải *"không được phép"* — một lời từ chối cũng là
+  một xác nhận rằng mã đơn đó có thật);
+- kênh không cấp uid người gửi → agent chỉ còn quyền đọc;
+- **không có công cụ xoá**; huỷ là một trạng thái.
+
+### 8.5 Còn treo
+
+- ⬜ Chưa có eval thật với LLM sống cho luồng sửa đơn (test hiện dùng port giả). Cần một buổi
+  test tay như buổi 21/08 để xác nhận DeepSeek gọi đúng `sua_don`.
+- ⬜ Bộ từ khoá `amend-detect.ts` là hữu hạn; cách nói mới sẽ lọt. Mở rộng theo log thật.
+- ⬜ Công cụ đã nghĩ ra nhưng **chưa làm**: `doi_thong_tin_nhan` (sửa người nhận TH2),
+  `ghi_chu_don`, `chuyen_sale` có cấu trúc, `luu_tri_nho_khach` (địa chỉ quen theo group+sender).

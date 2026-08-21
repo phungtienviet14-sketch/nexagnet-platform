@@ -1020,3 +1020,137 @@
     transition: none;
   }
 }
+
+/* ─── Hang cho "Duyet & gui" ────────────────────────────────────────────────
+   Man rieng, khong phai cot thu tu: xem chi tiet §ApprovalQueue.tsx. Moi dong
+   phai tra loi duoc ba cau trong mot lan liec — DANG CHO AI, SE GUI GI, va
+   CO CAN NGUOI THAT KHONG — nen thu tu thi giac la nhan loai > ten nguoi >
+   tin goc > ban se gui. */
+.nav-badge {
+  display: inline-block;
+  min-width: 1.15rem;
+  margin-left: 0.35rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: white;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.15rem;
+  text-align: center;
+}
+.nav-btn.active .nav-badge {
+  background: white;
+  color: var(--accent);
+}
+
+.queue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  overflow-y: auto;
+  padding-bottom: 1rem;
+}
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.queue-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.8rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+.queue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.q-kind {
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.q-kind--order {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.q-kind--advice {
+  background: var(--llm-soft);
+  color: var(--llm);
+}
+.q-who {
+  font-weight: 650;
+  color: var(--text);
+}
+.q-group {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.q-total {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text);
+}
+.queue-asked {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.q-quote {
+  font-style: italic;
+}
+.queue-preview {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  max-height: 7.5rem;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border-left: 2px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+.queue-why {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--warn-ink);
+  background: var(--warn-soft);
+  padding: 0.35rem 0.55rem;
+  border-radius: var(--r-sm);
+}
+.queue-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+.queue-empty {
+  margin: auto;
+  max-width: 30rem;
+  text-align: center;
+  color: var(--text-dim);
+}
+.queue-empty-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--text);
+}
+.queue-empty-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}

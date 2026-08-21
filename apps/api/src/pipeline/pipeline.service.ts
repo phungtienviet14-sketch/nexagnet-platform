@@ -18,6 +18,7 @@ import { ConversationsService } from '../conversations/conversations.service.js'
 import type { ThreadKey } from '../conversations/conversation-thread.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
+import { detectAmend } from './amend-detect.js';
 import { shouldAutoConfirmOrder } from './order-auto-confirmation.js';
 
 /**
@@ -59,6 +60,8 @@ const MAX_BURST_CHARACTERS = 4_000;
 export class PipelineService implements OnModuleDestroy {
   private readonly logger = new Logger('PipelineService');
   private readonly pendingBursts = new Map<string, PendingBurst>();
+  /** Duoi cho theo (kenh, nhom, nguoi gui) — xem `enqueuePerSender`. */
+  private readonly senderQueues = new Map<string, Promise<void>>();
   private readonly burstWindowMs: number;
 
   constructor(
@@ -249,8 +252,53 @@ export class PipelineService implements OnModuleDestroy {
     return this.runPipeline(message, botName, participant, saved, opts);
   }
 
-  /** Phan chung cua `intake` va `process`: chay 6 agent, noi don voi tin, xet auto-send. */
-  private async runPipeline(
+  /**
+   * Xep hang theo TUNG NGUOI: hai tin cua cung mot khach khong duoc chay chong nhau.
+   *
+   * Mach hoi thoai la doc-sua-ghi quanh mot lan goi LLM keo dai vai giay. Hai tin cua cung mot
+   * nguoi chay song song se cung doc mot trang thai cu roi cung ghi de len nhau — cau tra loi
+   * "20" co the ghi de mat don nhap ma tin truoc vua tao. Cua so gom tin lam nhe chuyen nay
+   * nhung khong loai bo duoc: hai tin cach nhau hon cua so van chong nhau duoc.
+   *
+   * Khoa theo (kenh, nhom, NGUOI GUI) chu khong theo nhom: 200 dai ly trong mot nhom van phai
+   * duoc tu van SONG SONG — noi dung khoa la mach cua tung nguoi, khong phai ca nhom.
+   */
+  private enqueuePerSender(message: ChannelMessage, run: () => Promise<OrderView>): Promise<OrderView> {
+    const key = burstKey(message);
+    const previous = this.senderQueues.get(key) ?? Promise.resolve();
+    // Tin truoc HONG khong duoc keo tin sau hong theo — nen nuot loi o MAT XICH, khong o ket qua.
+    const current = previous.then(run, run);
+    const tail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.senderQueues.set(key, tail);
+    void tail.then(() => {
+      // Chi don khi khong con ai xep sau minh, de Map khong phinh theo so nguoi da tung nhan tin.
+      if (this.senderQueues.get(key) === tail) this.senderQueues.delete(key);
+    });
+    return current;
+  }
+
+  /**
+   * Phan chung cua `intake` va `process`: chay 6 agent, noi don voi tin, xet auto-send.
+   * Di qua duoi cho theo nguoi gui de mach hoi thoai khong bi hai tin cua cung mot khach
+   * doc-sua-ghi de len nhau.
+   */
+  private runPipeline(
+    message: ChannelMessage,
+    botName: string | undefined,
+    participant: GroupParticipant | null,
+    saved: SaveMessageResult | readonly SaveMessageResult[] | null,
+    opts?: { orderId?: string; rerun?: boolean; allowDuplicateSkip?: boolean },
+    contextExclusions: readonly string[] = [],
+  ): Promise<OrderView> {
+    return this.enqueuePerSender(message, () =>
+      this.runPipelineTurn(message, botName, participant, saved, opts, contextExclusions),
+    );
+  }
+
+  private async runPipelineTurn(
     message: ChannelMessage,
     botName: string | undefined,
     participant: GroupParticipant | null,
@@ -269,12 +317,22 @@ export class PipelineService implements OnModuleDestroy {
     const answeringQuestion = Boolean(
       threadKey && !opts?.rerun && (await this.conversations?.isAnsweringQuestion(threadKey, now)),
     );
+    // DON VUA CHOT cua chinh nguoi nay. Doc rieng khoi `pendingDraft` co chu y: mach da chot thi
+    // KHONG duoc gop tiep, nhung van phai NHO — khong co no, "cho a lay 5 cai" ngay sau khi chot
+    // 20 ghe Felix se den noi ma khong biet "cai" la cai gi (loi khach bao 21/08/2026).
+    const closedOrder =
+      threadKey && !opts?.rerun ? await this.conversations?.recentlyClosed(threadKey, now) : null;
+    const amend = detectAmend(message.text);
     const view = await this.orchestrator.run(message, botName, {
       ...opts,
       ...(senderTypeOverride ? { senderTypeOverride } : {}),
       ...(conversationContext ? { conversationContext } : {}),
       ...(pendingDraft ? { pendingDraft } : {}),
       ...(answeringQuestion ? { answeringQuestion } : {}),
+      ...(closedOrder ? { closedOrder } : {}),
+      // Chi bao "dang sua don" khi CO don de sua. Mot cau "huy don" khi khong co don nao vua chot
+      // la mot cau hoi binh thuong, khong phai mot lenh.
+      ...(amend.isAmend && closedOrder ? { amendRequest: amend } : {}),
     });
     const savedMessages = saved ? (Array.isArray(saved) ? saved : [saved]) : [];
     for (const row of savedMessages) await this.linkOrder(view.id, row.id);
@@ -291,9 +349,9 @@ export class PipelineService implements OnModuleDestroy {
         return this.settleThread(threadKey, message, view, now, false);
       }
     }
-    if (this.shouldAutoReplyProduct(view, manualReview) && this.orders) {
+    if (this.shouldAutoReplyAdvice(view, manualReview) && this.orders) {
       try {
-        this.logger.log(`[AUTO_SEND] Tư vấn sản phẩm ${view.id} từ content active`);
+        this.logger.log(`[AUTO_SEND] Tư vấn ${view.intent} ${view.id}`);
         const replied = await this.orders.sendProductAdvice(view.id);
         return await this.settleThread(threadKey, message, replied, now, false);
       } catch (error) {
@@ -320,12 +378,20 @@ export class PipelineService implements OnModuleDestroy {
     if (!key || !this.conversations) return view;
     const autoSendOn = (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on';
     // Van CAP NHAT mach khi tat cong tac (de Sale nhin duoc don nhap), chi khong GUI.
+    // Cau hoi lai do AGENT soan, neu co. `ConversationsService` da nhan tham so nay tu dau nhung
+    // KHONG AI TRUYEN, nen ban mau tat dinh luon thang — va do la ly do khach nhan dung mot cau
+    // "minh lay san pham nao a?" ba lan lien tiep (log 21/08/2026).
+    //
+    // Chi lay khi `composed`: chuoi mac dinh cua nhanh `khac` ("Da em da ghi nhan a...") khong
+    // phai mot cau hoi, gui no thay cho cau hoi that la lam mach dung han.
+    const composedQuestion = view.trace?.composed ? view.trace.reply : undefined;
     const conversation = await this.conversations.settle({
       key,
       message,
       view,
       now,
       closed,
+      ...(composedQuestion ? { composedQuestion } : {}),
       ...(autoSendOn && !manualReview ? {} : { muted: true }),
     });
     if (!conversation) return view;
@@ -468,16 +534,27 @@ export class PipelineService implements OnModuleDestroy {
     });
   }
 
-  private shouldAutoReplyProduct(view: OrderView, manualReview = false): boolean {
-    return (
-      !manualReview &&
-      (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on' &&
-      view.intent === 'hoi_san_pham' &&
-      view.status === 'pending_review' &&
-      Boolean(view.trace?.outbound) &&
-      view.trace?.steps.find((step) => step.role === 'product_advisor')?.handoff !== true &&
-      view.trace?.supervisor.riskLevel === 'none'
-    );
+  /**
+   * Duoc phep TU TRA LOI mot cau tu van chua.
+   *
+   * Truoc 21/08/2026 ham nay chi xet `hoi_san_pham` va chi soi vai `product_advisor`. Hau qua:
+   * cau hoi bao hanh (`bao_hanh_khieu_nai`), hoi gia, hoi cong no, hoi van chuyen va nhom `khac`
+   * KHONG BAO GIO tu tra loi duoc — 6/7 intent — du agent da soan xong cau tra loi tu tai lieu
+   * da duyet. Khach hoi mot loat va nhan lai im lang.
+   *
+   * Nay xet vai CHINH cua intent (`trace.primaryRole`) — dung cai vai da soan cau tra loi.
+   * `dat_don` van di duong rieng: don du du kien thi gui XAC NHAN, con thieu thi HOI LAI.
+   */
+  private shouldAutoReplyAdvice(view: OrderView, manualReview = false): boolean {
+    if (manualReview) return false;
+    if ((this.settings?.autoSend() ?? loadEnv().AUTO_SEND) !== 'on') return false;
+    if (view.intent === 'dat_don') return false;
+    const trace = view.trace;
+    if (view.status !== 'pending_review' || !trace?.outbound) return false;
+    if (trace.supervisor.riskLevel !== 'none') return false;
+    // Vai da soan cau tra loi tu xin chuyen nguoi that thi ton trong — do la chot chan cuoi
+    // cua chinh LLM, khong phai mot phan quyet tat dinh da cu.
+    return trace.steps.find((step) => step.role === trace.primaryRole)?.handoff !== true;
   }
 }
 

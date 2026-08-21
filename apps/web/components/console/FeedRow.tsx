@@ -1,7 +1,7 @@
 'use client';
 
 import { SENDER_LABELS, type OrderStatus } from '@netviet/shared';
-import { INTENT_LABEL, STATUS_META } from '../../lib/labels';
+import { INTENT_LABEL, statusMetaFor } from '../../lib/labels';
 import type { FeedItem } from '../../lib/live';
 
 type Props = {
@@ -12,7 +12,7 @@ type Props = {
 
 export function FeedRow({ item, active, onSelect }: Props) {
   const sender = item.senderType ?? 'unknown';
-  const status = item.processing ? null : STATUS_META[item.status as OrderStatus];
+  const status = item.processing ? null : statusMetaFor({ status: item.status as OrderStatus, ...(item.order?.salesHandoff ? { salesHandoff: item.order.salesHandoff } : {}) });
 
   return (
     <button

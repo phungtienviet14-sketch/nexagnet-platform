@@ -8,7 +8,12 @@ import {
   type AdvisorReply,
   type AdvisorRequest,
 } from './advisor-agent.js';
-import { ADVISOR_TOOLS, runAdvisorTool, type AdvisorToolResult } from './advisor-tools.js';
+import {
+  advisorToolsFor,
+  runAdvisorTool,
+  type AdvisorToolResult,
+  type AdvisorToolSpec,
+} from './advisor-tools.js';
 
 /**
  * AGENT TU VAN chay tren DeepSeek (API tuong thich OpenAI, function calling).
@@ -76,7 +81,7 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
 
     try {
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-        const message = await this.call(messages);
+        const message = await this.call(messages, advisorToolsFor(request.tools));
         const calls = message?.tool_calls ?? [];
         if (!message) return null;
         if (!calls.length) {
@@ -113,14 +118,17 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
     }
   }
 
-  private async call(messages: readonly DeepSeekMessage[]): Promise<DeepSeekMessage | null> {
+  private async call(
+    messages: readonly DeepSeekMessage[],
+    tools: readonly AdvisorToolSpec[],
+  ): Promise<DeepSeekMessage | null> {
     const response = await fetch(DEEPSEEK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
         model: this.model,
         messages,
-        tools: ADVISOR_TOOLS.map((spec) => ({
+        tools: tools.map((spec) => ({
           type: 'function',
           function: {
             name: spec.name,

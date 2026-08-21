@@ -37,10 +37,28 @@ export const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = 
   pending_review: { label: 'Chờ duyệt', cls: 'chip-review' },
   needs_edit: { label: 'Cần kiểm tra', cls: 'chip-edit' },
   approved: { label: 'Đã duyệt', cls: 'chip-done' },
-  sent: { label: 'Đã gửi · chờ nhập ERP', cls: 'chip-done' },
+  // Trung tinh: `sent` dung cho CA don hang lan cau tra loi tu van. Viec nhap ERP chi phat sinh
+  // voi don hang, nen no duoc gan them o `statusMetaFor()` chu khong nam san trong nhan.
+  sent: { label: 'Đã gửi', cls: 'chip-done' },
   synced: { label: 'Đã đồng bộ ERP', cls: 'chip-done' },
   rejected: { label: 'Đã từ chối', cls: 'chip-rejected' },
 };
+
+/**
+ * Nhan trang thai CO NGU CANH cua tin.
+ *
+ * Truoc 21/08/2026 nhan `sent` luon la "Da gui - cho nhap ERP". Nay mot cau bao gia hay mot cau
+ * tu van cung di qua trang thai `sent`, va noi voi Sale rang no "cho nhap ERP" la giao cho ho
+ * mot viec khong ton tai. Chi don hang moi sinh viec do, va viec do nam o `salesHandoff`.
+ */
+export function statusMetaFor(order: {
+  status: OrderStatus;
+  salesHandoff?: { status: 'pending' | 'completed' | 'cancelled' };
+}): { label: string; cls: string } {
+  const base = STATUS_META[order.status];
+  if (order.status !== 'sent' || order.salesHandoff?.status !== 'pending') return base;
+  return { ...base, label: `${base.label} · chờ nhập ERP` };
+}
 
 export const INTENT_LABEL: Record<Intent, string> = {
   dat_don: 'Đặt đơn',

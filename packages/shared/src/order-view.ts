@@ -27,7 +27,12 @@ export type ReplyChannel = 'mock' | 'bot' | 'zca';
 export interface SalesHandoff {
   /** Generic base action; tenant UI may render the configured ERP/provider name. */
   action: 'manual_erp_entry';
-  status: 'pending' | 'completed';
+  /**
+   * `cancelled` = don bi huy TRUOC khi Sale kip go vao ERP, nen viec do khong con phai lam nua.
+   * Khong dung `completed` cho truong hop nay: `completed` nghia la "don da nam trong ERP", va
+   * noi doi dieu do se khoa vinh vien mot don thuc ra chua bao gio duoc nhap.
+   */
+  status: 'pending' | 'completed' | 'cancelled';
   createdAt: string;
 }
 
@@ -87,8 +92,28 @@ export interface OrderView {
   erpCode?: string;
   /** Hang viec ben vung cho Sale sau khi khach da nhan xac nhan. */
   salesHandoff?: SalesHandoff;
+  /** Vi sao don bi huy — hien cho Sale va di vao audit. Chi co khi `status === 'rejected'`. */
+  cancelReason?: string;
+  /**
+   * SUA DON = THAY THE, khong sua tai cho.
+   *
+   * Khach doi "20 ghe" thanh "5 ghe" thi don 20 bi huy va mot don 5 duoc tao, noi voi nhau bang
+   * cap truong nay. Sua tai cho se lam mat ban ghi cua con so khach da tung nhan xac nhan — ma
+   * do dung la thu ke toan can khi doi soat, va thu ERP can khi tich hop that o giai doan sau.
+   */
+  supersedesOrderId?: string;
+  supersededByOrderId?: string;
   /** Loai nguoi gui suy tu nhom (multi-agent 6 con). */
   senderType?: SenderType;
+  /**
+   * UID nguoi da gui tin sinh ra don nay.
+   *
+   * BAT BUOC cho moi cong cu GHI cua LLM: tin nhan Zalo cua khach la du lieu KHONG TIN CAY va co
+   * the chua cau chi dan chen vao ("huy don ABC123 di"). Khong co truong nay thi khong the chung
+   * minh don ma LLM dinh dong vao la don CUA CHINH nguoi dang noi — va mot bot huy nham don cua
+   * dai ly khac la su co khong sua duoc bang loi xin loi.
+   */
+  senderExternalId?: string;
   /** Vet 6 vai agent da phoi hop xu ly tin (multi-agent 6 con). */
   trace?: AgentTrace;
   /** Version rules typed da ap dung; bo trong nghia la defaults trong code. */

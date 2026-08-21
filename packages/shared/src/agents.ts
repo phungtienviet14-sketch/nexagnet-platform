@@ -100,4 +100,12 @@ export interface AgentTrace {
   reply?: string;
   /** Payload du kien de channel gui dung capability; video/catalog luon la link. */
   outbound?: OutboundContent;
+  /**
+   * `reply` do AGENT CO CONG CU soan (khong phai ban mau tat dinh).
+   *
+   * Ben goi can phan biet hai thu nay: mot cau do LLM viet sau khi tra cuu nguon su that duoc
+   * phep di thang toi khach, con chuoi mac dinh ("Da em da ghi nhan a...") thi khong — gui no
+   * chi lam khach tuong da duoc tra loi.
+   */
+  composed?: boolean;
 }
