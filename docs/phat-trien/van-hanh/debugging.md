@@ -15,13 +15,24 @@
 | **`decision`** | Một **cổng nghiệp vụ** đã mở hay đóng, **kèm lý do có mã**. Đây là thứ trả lời "vì sao". |
 | **`ai_call`** | Một lần gọi LLM: model, độ trễ, token, công cụ đã dùng. |
 
-**Công cụ duy nhất bạn cần:**
+**Hai đường vào — chọn cái gần bạn nhất:**
+
+| Bạn là ai | Dùng gì |
+|---|---|
+| Sale / người vận hành | Mở đơn trong console → bấm **"Xem luồng xử lý"** |
+| Developer / trực sự cố | `docker logs … \| node tools/trace-view.mjs` |
+
+Nút trên console đọc từ **bộ đệm trong tiến trình API** (300 lượt gần nhất) — đủ cho "vừa xảy ra
+xong". Lượt cũ hơn, hoặc lượt của một container đã restart, chỉ còn trong log máy chủ:
 
 ```bash
 docker logs zalo-ultty-gd1-test-api-1 2>&1 | node tools/trace-view.mjs
 ```
 
 Nó biến hàng nghìn dòng JSON thành cây nghiệp vụ đọc được.
+
+> Console mặc định **ẩn bước kỹ thuật** (`*.persist`) — bấm "Hiện chi tiết kỹ thuật" khi cần.
+> Bản dòng lệnh luôn hiện đủ.
 
 > ⚠️ Không ra gì? Kiểm tra `LOG_FORMAT=json` trên stack. Thiếu nó thì log là text, không phải JSON.
 > Xem §6.
@@ -248,3 +259,60 @@ pnpm trace --trace <traceId>
 | Token của đường `compose` chưa có | `AdvisorReply` chưa mang `usage`; cần sửa cả bản Claude lẫn DeepSeek. |
 | Chưa có trace xuyên tiến trình sang Flowise | Hợp đồng `traceparent` đã sẵn sàng, chưa nối. |
 | Một VM một stack — chưa gộp log nhiều host | Đúng ý đồ ở quy mô hiện tại. |
+
+---
+
+## 10. Sự cố hạ tầng đã gặp: deploy đỏ vì SSH, không phải vì code
+
+Ngày 21/08/2026, hai lần deploy `gd1-test` đỏ ở hai chỗ khác nhau nhưng **cùng một gốc**:
+
+| Triệu chứng trong log CI | Thực tế |
+|---|---|
+| `Permission denied (publickey)` khi `gcloud compute ssh` | SSH/OS Login chập chờn |
+| `required secret #12 does not exist / has no enabled version / is empty` | **Báo động giả** — secret vẫn tồn tại và enabled |
+
+**Vì sao dòng thứ hai gây hiểu nhầm:** `collectSecretMetadata()` đặt
+`readable = probed.ok && probe.accessible === true`. Khi **lệnh SSH probe** hỏng, `probed.ok` là
+`false`, nên cả bốn cờ (`exists`, `enabledVersion`, `vmCanAccess`, `nonEmpty`) đều thành `false`
+cùng lúc — in ra thành bốn dòng nghe như secret bị xoá.
+
+**Cách phân biệt trong 30 giây** trước khi đi tạo lại secret:
+
+```bash
+gcloud secrets versions list zalo-<stack>-<suffix> --project <project> --limit=3
+```
+
+Có dòng `enabled` → secret ổn, lỗi nằm ở SSH. **Chạy lại deploy.** Cả hai lần trong ngày đều
+xanh ở lần chạy lại.
+
+Bốn cờ cùng đỏ một lúc là **dấu hiệu của probe hỏng**, không phải của bốn vấn đề riêng biệt.
+
+---
+
+## 11. ⚠️ Đừng tự ý `--force-recreate` container edge
+
+Ngày 21/08/2026 một lần `docker compose up -d --force-recreate gateway` trên edge làm **cả bốn
+stack trả 502 cùng lúc** — `ultty` (production), `ultty-gd1-test`, `wata`, `amico`.
+
+**Vì sao:** edge đi ngược vào silo của từng khách bằng `docker network connect`. Tạo lại container
+làm **rụng hết** các network attachment đó, nên Caddy không còn đường tới `api-<slug>`/`web-<slug>`.
+`deploy-stack.sh` có nối lại, nhưng **chỉ cho stack đang deploy** — các khách khác không có lần
+deploy nào để tự nối lại.
+
+**Khắc phục trong 30 giây** nếu đã lỡ:
+
+```bash
+for s in ultty ultty-gd1-test wata amico; do sudo docker network connect zalo-${s}_backend netviet-edge-gateway-1 2>/dev/null; done
+```
+
+Rồi kiểm tra:
+
+```bash
+for d in demo-ultty demo-ultty-gd1-test demo-wata demo-amico; do curl -s -o /dev/null -w "$d %{http_code}\n" https://$d.35-187-235-82.sslip.io/health; done
+```
+
+`deploy-remote.sh` nay tự quét `zalo-*_backend` và nối lại **mọi** khách sau khi đưa edge lên, nên
+đường deploy chuẩn không còn dính lỗi này. Cảnh báo trên dành cho thao tác tay.
+
+**Đổi Caddyfile thì gần như không cần recreate nữa:** rsync đã chuyển sang `--inplace` và
+deploy có bước `caddy reload` (§10 giải thích vì sao cần cả hai).

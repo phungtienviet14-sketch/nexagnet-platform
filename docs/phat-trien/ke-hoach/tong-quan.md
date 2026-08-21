@@ -1146,3 +1146,90 @@ handler, **không** bằng lời dặn trong prompt:
 - ⬜ Bộ từ khoá `amend-detect.ts` là hữu hạn; cách nói mới sẽ lọt. Mở rộng theo log thật.
 - ⬜ Công cụ đã nghĩ ra nhưng **chưa làm**: `doi_thong_tin_nhan` (sửa người nhận TH2),
   `ghi_chu_don`, `chuyen_sale` có cấu trúc, `luu_tri_nho_khach` (địa chỉ quen theo group+sender).
+
+---
+
+## 9. Nền tảng quan sát (observability) — 21/08/2026
+
+> Nền tảng + bảng chấm điểm công nghệ: [docs/kien-truc/observability-review.md](../../kien-truc/observability-review.md)
+> · Runbook lần vết: [docs/phat-trien/van-hanh/debugging.md](../van-hanh/debugging.md)
+
+### 9.1 Vấn đề đã giải
+
+Không phải "thiếu log" (42 file đã dùng Nest `Logger`, **0** `console.log`) mà là **không có sợi
+chỉ xuyên suốt** + **tầng AI hoàn toàn không quan sát được**.
+
+Đường tin Zalo không đi qua HTTP nên không có chỗ gắn `x-request-id`, và **ba trong bốn** kết cục
+của `intake` (`ignored`, `duplicate`, `stored_only`) không bao giờ tới chỗ sinh `orderId` — tức
+đúng những ca khó debug nhất lại là những ca không có định danh nào.
+
+### 9.2 Quyết định công nghệ — giữ nguyên, **không** thêm backend
+
+| Ứng viên | Quyết định | Lý do |
+|---|---|---|
+| OpenTelemetry | **ADOPT quy ước, KHÔNG lấy runtime** | Giữ W3C `traceparent` + GenAI semconv; đã cài rồi **gỡ** cả 4 gói `@opentelemetry/*` |
+| Langfuse | ❌ REJECT | 6 service, 4 vCPU + 8 GB *riêng*, cho 10–20 đơn/ngày |
+| Grafana Tempo | ❌ REJECT | Kéo theo Redpanda/Kafka **kể cả single-binary** |
+| Loki / SigNoz / Sentry / Collector | ⏸ DEFER | Chưa cần ở quy mô hiện tại |
+| Prisma instrumentation | ⏸ DEFER | Bản `6.19.3` khớp pin, bật sau |
+
+**Lý do quyết định không phải chi phí** (VM nâng được) mà là **cách ly silo**: mỗi khách đang có
+Postgres/mạng riêng — có sự cố thật 17/08 khi dùng chung — nên một backend dùng chung sẽ **gom PII
+năm khách vào một kho**. Cách ly bằng `tenantId` trong label là cách ly bằng lời hứa.
+
+**Kết quả ròng: 0 dependency runtime mới, 0 container mới.**
+
+### 9.3 Đã dựng
+
+- `apps/api/src/observability/` — `TelemetryService` (`step`/`decision`/`stateChange`/`dataChange`/`aiCall`),
+  `trace-context.ts` (ALS mang traceId W3C), `decision-reasons.ts` (**mã lý do có kiểu**),
+  `telemetry-redaction.ts` (bộ lọc tập trung, quét **cả giá trị**), `structured-logging.ts` (NDJSON),
+  `recent-traces.sink.ts` (vòng đệm có trần cho console).
+- `tools/trace-view.mjs` — dựng cây nghiệp vụ từ NDJSON (`pnpm trace`).
+- Console: nút **"Xem luồng xử lý"** + `TraceViewer.tsx`; mặc định ẩn bước kỹ thuật.
+- `docs/phat-trien/van-hanh/debugging.md` — runbook 3 ca thật + bảng tra mã lý do.
+- Quy tắc viết code: `.claude/rules/ecc/common/code-review.md` §Observability.
+
+### 9.4 Sáu lỗi thật do chính việc này tìm ra
+
+Đều đã khoá bằng test hồi quy hoặc ghi vào runbook:
+
+1. **BẢO MẬT** — `scrubSecrets` dùng `(match, ...groups)` rồi đoán nhóm bắt bằng `typeof === 'string'`;
+   `String.replace` còn truyền **cả chuỗi gốc** vào cuối đối số, nên `Bearer <token>` bị thay bằng
+   chính chuỗi gốc và **token vẫn nằm nguyên** trong telemetry.
+2. Span gốc **tự làm cha của chính nó** → mọi cây trace bị trải phẳng.
+3. `DEPLOYMENT_ENVIRONMENT` render vào `secrets.env` nhưng **không có trong compose** → chưa bao
+   giờ tới container (do contract test của task song song bắt).
+4. Khoá giả trong test bị bộ quét secret của pre-commit chặn — **đúng**, không phải cảnh báo thừa.
+5. **`AI parse deepseek/claude-sonnet-5`** — provider đúng, **model sai**: orchestrator đọc
+   `PARSER_MODEL` (mặc định Claude) trong khi chạy DeepSeek. Nhãn model sai **tệ hơn không có nhãn**.
+6. `/observability/traces` thiếu ở matcher `@api` của Caddy → trên bản deploy trả 404 Next.js,
+   trong khi local vẫn chạy (do `caddy-route-contract.test.mjs` bắt).
+
+### 9.5 Trạng thái triển khai
+
+- ✅ Merge main: PR #25 (`eafaa88`) + PR #26 (`fe671fb`, `7ec817d`).
+- ✅ Deploy `ultty-gd1-test` release `0767ab8a` — biến đã tới container
+  (`LOG_FORMAT=json`, `DEPLOYMENT_ENVIRONMENT=gd1-test`, `RELEASE_GIT_SHA`, `DATA_CLASSIFICATION=test`),
+  log production **đã là NDJSON**, zca listener **connected**.
+- ✅ Trace thật đầu tiên trên stack (từ smoke test lúc deploy) — dựng được cây nghiệp vụ đầy đủ.
+
+### 9.6 Còn treo
+
+- ⬜ **Proof bằng tin nhắn thật trong nhóm TEST** — cần **người** gửi tin vào nhóm allowlist
+  (`7845230969630877446` hoặc `8827137437588696665`). Trace hiện có đến từ smoke test
+  (`/demo/simulate`), tức đi qua `process()` chứ không phải `intake()`, nên **chưa chứng minh được**
+  hai bản ghi `message.intake` + `message.persist` của đường zca thật.
+- ⬜ **Token của đường `compose`** chưa đếm được: `AdvisorReply` chưa mang `usage`; phải sửa cả bản
+  Claude lẫn DeepSeek. Đường `parse` đã có.
+- ⬜ Trace xuyên tiến trình sang Flowise — hợp đồng `traceparent` đã sẵn, chưa nối.
+- ⬜ Vòng đệm console **mất khi restart**. Cần lâu hơn thì `docker logs`, hoặc dựng SigNoz **trên
+  VM riêng** (không phải VM khách, để giữ cách ly).
+
+### 9.7 Cố ý KHÔNG làm
+
+- Không thêm Tempo/Loki/Langfuse/SigNoz — xem §9.2.
+- Không auto-instrumentation (làm nổ số span; một lượt phải nhìn ra 5–15 bước, không phải hàng trăm).
+- Không đổi nghiệp vụ để phục vụ UI debug. `shouldAutoConfirmOrder` giữ nguyên chữ ký; bản có lý do
+  là hàm **mới** (`evaluateAutoConfirm`), hàm cũ uỷ quyền cho nó.
+- Không bật `AUTO_SEND` để test quan sát.

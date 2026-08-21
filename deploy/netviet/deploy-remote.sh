@@ -194,7 +194,22 @@ install -d -m 0750 "$edge_dir/tenants"
 install -d -m 0750 "$edge_dir/.runtime"
 # `--exclude tenants` va `--exclude .runtime`: manh cau hinh cua CAC KHACH KHAC dang nam trong do.
 # Dong bo dap len se xoa mat khach khac moi lan mot khach duoc deploy.
-rsync -a --exclude 'tenants' --exclude '.runtime' "$source_dir/edge/" "$edge_dir/"
+# `--inplace` KHONG phai toi uu toc do — no la dieu kien de cau hinh moi toi duoc Caddy.
+#
+# `Caddyfile` duoc bind-mount theo TUNG FILE (`./Caddyfile:/etc/caddy/Caddyfile:ro`), ma Docker
+# neo mot bind-mount file vao INODE chu khong vao duong dan. `rsync` mac dinh ghi file tam roi
+# `rename` de len — tuc tao INODE MOI — nen container van doc inode CU va khong bao gio thay noi
+# dung moi. Khong co loi nao duoc in ra: rsync bao thanh cong, file tren host dung, `caddy reload`
+# tra ve 0, va route moi thi khong ton tai.
+#
+# Do chinh xac cai da xay ra 21/08/2026 khi them route `/observability/traces*`:
+#   host      -> grep -c observability = 1
+#   container -> grep -c observability = 0
+# Cung mot duong dan, khac noi dung.
+#
+# `--inplace` ghi de NGAY TREN inode dang co, nen container thay ngay. Luu y: lan dau chuyen sang
+# `--inplace` van can container duoc tao lai MOT LAN, vi no dang giu inode cu tu truoc do.
+rsync -a --inplace --exclude 'tenants' --exclude '.runtime' "$source_dir/edge/" "$edge_dir/"
 
 cp "$app_dir/systemd/"*.service "$app_dir/systemd/"*.timer /etc/systemd/system/
 systemctl daemon-reload
@@ -225,6 +240,41 @@ env \
 # Edge phai len TRUOC stack khach: deploy-stack.sh ket thuc bang smoke test qua HTTPS cong khai,
 # ma duong do di xuyen edge.
 (cd "$edge_dir" && docker compose --env-file .runtime/caddy.env -f compose.yaml up -d)
+
+# NAP LAI CAU HINH CADDY — bat buoc, khong phai tuy chon.
+#
+# `Caddyfile` duoc BIND-MOUNT (`./Caddyfile:/etc/caddy/Caddyfile:ro`). Doi NOI DUNG mot file mount
+# KHONG lam doi spec cua compose, nen `docker compose up -d` o tren coi container la da dung va
+# KHONG restart no. Ket qua: rsync chep Caddyfile moi len VM thanh cong, nhung Caddy van chay cau
+# hinh cu — im lang, khong bao loi.
+#
+# Da can that ngay 21/08/2026: them route `/observability/traces*`, file tren VM co du route, ma
+# endpoint van tra 404 trang Next.js; `docker inspect` cho thay container Caddy khoi dong tu
+# 16/08, tuc dang chay cau hinh cua nam ngay truoc.
+#
+# `caddy reload` nap nong, khong dut ket noi — quan trong vi edge nay dung chung cho MOI khach.
+# Loi reload KHONG duoc lam do ca lan deploy: cau hinh cu van dang phuc vu, va mot route moi thieu
+# thi nhe hon mot lan deploy bi danh dau that bai sau khi stack khach da len xong.
+if ! docker exec netviet-edge-gateway-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile; then
+  echo 'CANH BAO: nap lai Caddy that bai — route moi (neu co) chua co hieu luc.' >&2
+  echo 'Kiem tra: docker exec netviet-edge-gateway-1 caddy validate --config /etc/caddy/Caddyfile' >&2
+fi
+
+# NOI LAI EDGE VOI MANG CUA MOI KHACH — khong chi khach dang deploy.
+#
+# `deploy-stack.sh` co `docker network connect` nhung chi cho STACK DANG DEPLOY. Do la du khi edge
+# song lien tuc; no KHONG du khi container edge bi tao lai, vi tao lai container lam RUNG het cac
+# network attachment — va cac khach KHAC thi khong co lan deploy nao de tu noi lai.
+#
+# Hau qua da xay ra that 21/08/2026: mot lan `--force-recreate gateway` lam CA BON stack tra 502
+# cung luc (`ultty`, `ultty-gd1-test`, `wata`, `amico`), vi edge khong con duong vao silo nao.
+#
+# Quet theo mang `zalo-*_backend` dang ton tai thay vi giu mot danh sach khach cung trong script:
+# mot danh sach cung se lac hau ngay lan len khach tiep theo.
+for backend_network in $(docker network ls --filter 'name=^zalo-.*_backend$' --format '{{.Name}}'); do
+  # Da noi roi thi lenh bao loi; buoc nay idempotent nen nuot loi do (giong deploy-stack.sh).
+  docker network connect "$backend_network" netviet-edge-gateway-1 2>/dev/null || true
+done
 
 env TENANT_SLUG="$tenant_slug" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" EDGE_DIR="$edge_dir" "$app_dir/deploy-stack.sh"
 env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" "$app_dir/backup.sh"
