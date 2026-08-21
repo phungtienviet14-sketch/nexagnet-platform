@@ -87,6 +87,18 @@ POSTGRES_ADMIN_PASSWORD="$(secret zalo-${STACK_SLUG}-postgres-admin-password)"
 ZALO_DB_PASSWORD="$(secret zalo-${STACK_SLUG}-zalo-db-password)"
 FLOWISE_DB_PASSWORD="$(secret zalo-${STACK_SLUG}-flowise-db-password)"
 DEEPSEEK_API_KEY="$(secret zalo-${STACK_SLUG}-deepseek-api-key)"
+# AGENT TU VAN. `optional_secret` chu khong `secret`: khong co khoa thi agent lui ve
+# `NoopAdvisorAgent` va he thong giu nguyen duong tat dinh — thieu mot cau tra loi muot hon khong
+# duoc phep lam chet ca stack.
+ANTHROPIC_API_KEY="$(optional_secret zalo-${STACK_SLUG}-anthropic-api-key)"
+# Cong tac RIENG, khong bam theo PARSER_MODE: parser va nguoi soan cau chu la HAI quyet dinh xu ly
+# du lieu. Co khoa -> bat; khong co -> 'off' (Noop). Claude nam trong danh sach ben thu ba da duoc
+# duyet, nen bat cong tac nay KHONG mo them mot ben nhan du lieu chua duyet nao.
+if [[ -n "${ANTHROPIC_API_KEY}" ]]; then
+  ADVICE_COMPOSER="${ADVICE_COMPOSER:-claude}"
+else
+  ADVICE_COMPOSER='off'
+fi
 # Token Bot van duoc render san de co the kiem tra danh tinh.
 # Pilot GĐ1 chay ZCA mac dinh; `.runtime/channel-mode.env` khong bi rsync ghi de nen deploy lai
 # giu override co y cua operator va khong am tham roi ve mock.
@@ -165,6 +177,8 @@ DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT}
 # thoai Pha 1) thay vi mot ban sao nam trong Agentflow khong ai review.
 # Dat qua bien de doi nguoc chi bang mot dong: PARSER_MODE=flowise ./render-secrets.sh ...
 PARSER_MODE=${PARSER_MODE}
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+ADVICE_COMPOSER=${ADVICE_COMPOSER}
 DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-flash}
 CHANNEL_MODE=${CHANNEL_MODE}
 AUTO_SEND=${AUTO_SEND}
