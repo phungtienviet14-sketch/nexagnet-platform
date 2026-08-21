@@ -461,6 +461,19 @@ test('deploy gieo nguon su that TRUOC khi chay smoke, va chi khi DB rong', async
 // 'Goi khach thieu dealers'. Seeder doi MOI khach khai dai ly, tuc la keo khai niem cua
 // `sales-order` vao base — trai quyet dinh kien truc #6. Guard chi duoc ap cho khach CO nang luc
 // do; khach khac loai phai len duoc ma khong can khai mot mang rong vo nghia.
+// Su co 21/08/2026 (tiep): stack WATA len khoe manh, api boot, seed xong — roi smoke chet voi
+// 'Khong mo duoc SSE: HTTP 404'. Nhanh RUT GON cua smoke van doi mo duoc `/events`, ma endpoint do
+// thuoc `sales-order`. Cong smoke phai thu hep theo NANG LUC, va bat bien 7 doi no BAO TO khi thu
+// hep — im lang thi mot lan deploy xanh se bi doc nham la 'da kiem het'.
+test('smoke: cong SSE thu hep theo nang luc va bao to khi thu hep', async () => {
+  const smoke = await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8');
+
+  assert.match(smoke, /hasSalesOrder/);
+  assert.match(smoke, /SMOKE_SKIPPED_SSE=1/);
+  // Khong doc duoc goi khach -> van doi SSE. Lam yeu cong smoke o nhanh nay la vi pham bat bien 7.
+  assert.match(smoke, /tenantCapabilities === null \|\| tenantCapabilities\.includes\('sales-order'\)/);
+});
+
 test('gieo nguon su that: `dealers` chi bat buoc voi khach co nang luc sales-order', async () => {
   const seed = await readFile(new URL('./seed-tenant-knowledge.mjs', import.meta.url), 'utf8');
 
