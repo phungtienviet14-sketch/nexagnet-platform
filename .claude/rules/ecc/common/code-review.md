@@ -122,3 +122,56 @@ This rule works with:
 - [security.md](security.md) - Security checklist
 - [git-workflow.md](git-workflow.md) - Commit standards
 - [agents.md](agents.md) - Agent delegation
+
+## Observability (bổ sung 21/08/2026)
+
+> Nền tảng: [docs/kien-truc/observability-review.md](../../../../docs/kien-truc/observability-review.md) ·
+> Runbook: [docs/phat-trien/van-hanh/debugging.md](../../../../docs/phat-trien/van-hanh/debugging.md)
+
+### Definition of Done cho một tính năng nghiệp vụ
+
+Ngoài checklist ở trên, thêm:
+
+- [ ] **Ranh giới nghiệp vụ quan trọng** được bọc `telemetry.step('<mien>.<viec>')`
+- [ ] **Mỗi quyết định quan trọng** gọi `telemetry.decision()` kèm **lý do có mã**
+- [ ] **Chuyển trạng thái** của thực thể có máy trạng thái gọi `telemetry.stateChange()`
+- [ ] **Lỗi** tương quan được với trace (tự động nếu nằm trong một `step`)
+- [ ] **Không rò bí mật** — mọi giá trị đi qua `sanitizeTelemetry`, không sanitize rải rác
+
+### KHÔNG trace mọi hàm
+
+| Nên trace | Không trace |
+|---|---|
+| `conversation.resolve`, `order.persist`, `outbound.decide` | `normalizeString`, `mapFoo`, `validateX`, `formatY` |
+
+Một lượt chạy 50 hàm vẫn chỉ nên nhìn ra **5–15 bước**. Quy tắc nhanh: tên bước phải là
+`<miền>.<việc>` và đọc lên nghe ra **việc nghiệp vụ**, không phải tên hàm.
+
+### Lý do quyết định phải CÓ KIỂU
+
+```ts
+// SAI — không lọc được, hai người viết hai câu khác nhau cho cùng một lý do
+telemetry.decision({ point, outcome: 'denied', reason: 'đơn quá lớn nên không gửi' });
+
+// ĐÚNG — thêm mã vào apps/api/src/observability/decision-reasons.ts trước
+telemetry.decision({
+  point: 'order.auto_confirm',
+  outcome: 'denied',
+  reason: 'QUANTITY_ABOVE_THRESHOLD',
+  detail: { totalQuantity, threshold },
+});
+```
+
+Một cổng nghiệp vụ có N đường từ chối phải phân biệt được **N lý do**, không gộp thành một
+`boolean`. Mẫu tham chiếu: `evaluateAutoConfirm()` trong
+`apps/api/src/pipeline/order-auto-confirmation.ts`.
+
+### Observability KHÔNG được là dependency của thành công nghiệp vụ
+
+`TelemetryService` luôn tiêm dạng `@Optional()`, và mọi lời gọi telemetry đều fail-open.
+Nếu bạn viết code mà **thiếu telemetry thì nghiệp vụ hỏng**, đó là lỗi cần sửa.
+
+### Observability là NỀN TẢNG, không phải capability
+
+Đăng ký ở `app-composition.ts` với owner `foundation`. Mọi khách đều được quan sát; cái khác nhau
+giữa các khách là **mức chi tiết nội dung** (`privacyModeFor`), không phải có trace hay không.

@@ -49,6 +49,7 @@ import { catalogStoreProvider, mediaFetcherProvider, mediaStoreProvider } from '
 import { CatalogMediaController } from './media/catalog-media.controller.js';
 import { MediaHealthController } from './media/media-health.controller.js';
 import { ConversationContextBuilder } from './messages/conversation-context.js';
+import { ObservabilityModule } from './observability/observability.module.js';
 import { InMemoryMessagesRepository, MessagesRepository } from './messages/messages.repository.js';
 import { OutboundRecorder } from './messages/outbound-recorder.js';
 import { PrismaMessagesRepository } from './messages/prisma-messages.repository.js';
@@ -86,6 +87,9 @@ interface Owned<T> { readonly owner: CapabilityOwner; readonly value: T }
 const owned = <T>(owner: CapabilityOwner, value: T): Owned<T> => ({ owner, value });
 
 const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] = [
+  // `foundation`, KHONG phai mot capability: moi khach deu phai quan sat duoc (muc 12).
+  // Cai khac nhau giua cac khach la muc chi tiet noi dung, khong phai co trace hay khong.
+  owned('foundation', ObservabilityModule),
   owned('foundation', PrismaModule),
   owned('knowledge', KnowledgeModule),
   owned('foundation', AuthModule),

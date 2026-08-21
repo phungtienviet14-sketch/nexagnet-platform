@@ -18,8 +18,10 @@ import { ConversationsService } from '../conversations/conversations.service.js'
 import type { ThreadKey } from '../conversations/conversation-thread.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
+import { TelemetryService } from '../observability/telemetry.service.js';
+import type { AutoReplyReason } from '../observability/decision-reasons.js';
 import { detectAmend } from './amend-detect.js';
-import { shouldAutoConfirmOrder } from './order-auto-confirmation.js';
+import { evaluateAutoConfirm } from './order-auto-confirmation.js';
 
 /**
  * Ket qua nhan tin CO NHAN. Truoc 04/08/2026 `process()` tra `null` cho ca "bo qua co chu y"
@@ -76,6 +78,11 @@ export class PipelineService implements OnModuleDestroy {
     @Optional() private readonly conversationContext?: ConversationContextBuilder,
     @Optional() private readonly conversations?: ConversationsService,
     @Optional() burstWindowMs?: number,
+    /**
+     * Vang mat -> khong quan sat, nhung nghiep vu chay y het (muc 20 + moi test cu khong phai
+     * doi mot dong). Day la ly do no la `@Optional()` chu khong phai mot dependency bat buoc.
+     */
+    @Optional() private readonly telemetry?: TelemetryService,
   ) {
     const env = loadEnv();
     this.burstWindowMs = burstWindowMs ?? (env.NODE_ENV === 'test' ? 0 : env.MESSAGE_BURST_WINDOW_MS);
@@ -83,6 +90,16 @@ export class PipelineService implements OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await Promise.all([...this.pendingBursts.keys()].map((key) => this.flushBurst(key)));
+  }
+
+  /**
+   * Chay mot buoc nghiep vu, co quan sat neu co telemetry va khong neu khong.
+   *
+   * Ton tai de cho goi khong phai viet `this.telemetry ? this.telemetry.step(n, f) : f()` mot
+   * chuc lan — moi lan la mot co hoi viet sai (da suyt viet sai dung o `message.persist`).
+   */
+  private observed<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    return this.telemetry ? this.telemetry.step(name, fn) : fn();
   }
 
   /**
@@ -98,19 +115,57 @@ export class PipelineService implements OnModuleDestroy {
     botName?: string,
     options: { retryPersisted?: boolean } = {},
   ): Promise<IntakeResult> {
+    const run = (): Promise<IntakeResult> => this.intakeTurn(message, botName, options);
+    if (!this.telemetry) return run();
+    /*
+     * CONG VAO cua trace — day la NOI DUY NHAT mo mot luot.
+     *
+     * Phai o day chu khong o `AgentOrchestrator.run()`: ba trong bon ket qua cua `intake`
+     * (`ignored`, `duplicate`, `stored_only`) KHONG BAO GIO di toi cho sinh `orderId`. Mo trace
+     * muon hon dong nghia voi viec dung nhung ca kho debug nhat lai la nhung ca khong co trace.
+     */
+    return this.telemetry.runTurn(
+      {
+        chatId: message.externalChatId,
+        externalMessageId: message.externalMessageId,
+        channel: message.source,
+        ...(message.senderExternalId ? { senderExternalId: message.senderExternalId } : {}),
+      },
+      run,
+    );
+  }
+
+  private async intakeTurn(
+    message: ChannelMessage,
+    botName: string | undefined,
+    options: { retryPersisted?: boolean },
+  ): Promise<IntakeResult> {
     const participant = await this.findParticipant(message);
     if (participant?.handlingMode === 'ignore') {
       // Nguoi van hanh CHU DONG loai nguoi nay -> khong luu, khong xu ly (khac han "chua cau hinh").
       this.logger.log(
         `Bo qua tin cua thanh vien ignore: group=${message.externalChatId}, sender=${message.senderExternalId}`,
       );
+      this.telemetry?.decision({
+        point: 'message.intake',
+        outcome: 'denied',
+        reason: 'PARTICIPANT_IGNORED',
+      });
       return { outcome: 'ignored' };
     }
 
-    const saved = await this.saveMessage(message);
+    const saved = await this.observed('message.persist', () => this.saveMessage(message));
+    if (saved) this.telemetry?.enrich({ messageId: saved.id });
     // A retry owned by this same ingest worker may legitimately see the row written by its
     // first attempt. Only that explicitly-scoped retry may cross the durable idempotency gate.
-    if (saved?.duplicate && !options.retryPersisted) return { outcome: 'duplicate' };
+    if (saved?.duplicate && !options.retryPersisted) {
+      this.telemetry?.decision({
+        point: 'message.intake',
+        outcome: 'denied',
+        reason: 'DUPLICATE_MESSAGE',
+      });
+      return { outcome: 'duplicate' };
+    }
 
     await this.observeGroup(message.externalChatId);
     // Chay cho CA nhom chua map: chi noi dung bi chan khoi LLM, con danh tinh nguoi nhan tin thi
@@ -122,9 +177,19 @@ export class PipelineService implements OnModuleDestroy {
         `Nhom chua map nguon su that: ${message.externalChatId} — tin DA LUU, chua dua sang parser. ` +
           'Chon dai ly cho nhom nay o /settings de bat xu ly don.',
       );
+      this.telemetry?.decision({
+        point: 'message.intake',
+        outcome: 'denied',
+        reason: 'GROUP_NOT_MAPPED',
+      });
       return { outcome: 'stored_only' };
     }
 
+    this.telemetry?.decision({
+      point: 'message.intake',
+      outcome: 'allowed',
+      reason: 'ACCEPTED',
+    });
     const view = await this.enqueueOrRun(message, botName, participant, saved);
     return { outcome: 'processed', view };
   }
@@ -236,6 +301,26 @@ export class PipelineService implements OnModuleDestroy {
     botName?: string,
     opts?: { orderId?: string; rerun?: boolean; allowDuplicateSkip?: boolean },
   ): Promise<OrderView | null> {
+    const run = (): Promise<OrderView | null> => this.processTurn(message, botName, opts);
+    // Cong vao THU HAI (demo, nut "Chay lai"). Chi mo trace khi CHUA o trong trace nao — neu
+    // khong, mot lan rerun long trong mot luot khac se cat doi cay trace thanh hai cay roi.
+    if (!this.telemetry || this.telemetry.traceId()) return run();
+    return this.telemetry.runTurn(
+      {
+        chatId: message.externalChatId,
+        externalMessageId: message.externalMessageId,
+        channel: message.source,
+        ...(message.senderExternalId ? { senderExternalId: message.senderExternalId } : {}),
+      },
+      run,
+    );
+  }
+
+  private async processTurn(
+    message: ChannelMessage,
+    botName: string | undefined,
+    opts?: { orderId?: string; rerun?: boolean; allowDuplicateSkip?: boolean },
+  ): Promise<OrderView | null> {
     const participant = await this.findParticipant(message);
     if (participant?.handlingMode === 'ignore') {
       this.logger.log(
@@ -323,40 +408,88 @@ export class PipelineService implements OnModuleDestroy {
     const closedOrder =
       threadKey && !opts?.rerun ? await this.conversations?.recentlyClosed(threadKey, now) : null;
     const amend = detectAmend(message.text);
-    const view = await this.orchestrator.run(message, botName, {
+    const view = await this.observed('agent.run', () =>
+      this.orchestrator.run(message, botName, {
       ...opts,
       ...(senderTypeOverride ? { senderTypeOverride } : {}),
       ...(conversationContext ? { conversationContext } : {}),
       ...(pendingDraft ? { pendingDraft } : {}),
       ...(answeringQuestion ? { answeringQuestion } : {}),
       ...(closedOrder ? { closedOrder } : {}),
-      // Chi bao "dang sua don" khi CO don de sua. Mot cau "huy don" khi khong co don nao vua chot
-      // la mot cau hoi binh thuong, khong phai mot lenh.
-      ...(amend.isAmend && closedOrder ? { amendRequest: amend } : {}),
-    });
+        // Chi bao "dang sua don" khi CO don de sua. Mot cau "huy don" khi khong co don nao vua
+        // chot la mot cau hoi binh thuong, khong phai mot lenh.
+        ...(amend.isAmend && closedOrder ? { amendRequest: amend } : {}),
+      }),
+    );
+    // Tu day tro di moi ban ghi cua luot nay deu neo duoc vao don va y dinh.
+    this.telemetry?.enrich({ orderId: view.id, intent: view.intent });
     const savedMessages = saved ? (Array.isArray(saved) ? saved : [saved]) : [];
     for (const row of savedMessages) await this.linkOrder(view.id, row.id);
 
     const manualReview = participant?.handlingMode === 'manual_review';
-    if (this.shouldAutoSend(view, manualReview) && this.orders) {
+
+    const autoConfirm = evaluateAutoConfirm(view, {
+      policy: tenantOrderAutomation(),
+      killSwitchEnabled: (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on',
+      manualReview,
+    });
+    this.telemetry?.decision({
+      point: 'order.auto_confirm',
+      outcome: autoConfirm.allowed ? 'allowed' : 'denied',
+      reason: autoConfirm.reason,
+      ...(autoConfirm.detail ? { detail: autoConfirm.detail } : {}),
+    });
+    if (autoConfirm.allowed && this.orders) {
       try {
         this.logger.log(`[AUTO_SEND] Tu xac nhan ${view.id} theo policy tenant`);
-        const sent = await this.orders.sendConfirmation(view.id);
+        const sent = await this.observed('outbound.send_confirmation', () =>
+          this.orders!.sendConfirmation(view.id),
+        );
+        this.telemetry?.stateChange({
+          entity: 'Order',
+          entityId: view.id,
+          from: view.status,
+          to: sent.status,
+          reason: 'ALLOWED',
+        });
         return await this.settleThread(threadKey, message, sent, now, true);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         this.logger.warn(`[AUTO_SEND] that bai cho ${view.id} — giu Sale duyet: ${detail}`);
+        // `degraded`, khong phai `denied`: cong da MO, viec that bai o duong gui. Hai thu nay
+        // doi hoi hai hanh dong sua khac han nhau, nen chung khong duoc mang cung mot nhan.
+        this.telemetry?.decision({
+          point: 'order.auto_confirm',
+          outcome: 'degraded',
+          reason: 'ALLOWED',
+          detail: { sendFailed: 1 },
+        });
         return this.settleThread(threadKey, message, view, now, false);
       }
     }
-    if (this.shouldAutoReplyAdvice(view, manualReview) && this.orders) {
+
+    const autoReply = this.evaluateAutoReplyAdvice(view, manualReview);
+    this.telemetry?.decision({
+      point: 'advice.auto_reply',
+      outcome: autoReply.allowed ? 'allowed' : 'denied',
+      reason: autoReply.reason,
+    });
+    if (autoReply.allowed && this.orders) {
       try {
         this.logger.log(`[AUTO_SEND] Tư vấn ${view.intent} ${view.id}`);
-        const replied = await this.orders.sendProductAdvice(view.id);
+        const replied = await this.observed('outbound.send_advice', () =>
+          this.orders!.sendProductAdvice(view.id),
+        );
         return await this.settleThread(threadKey, message, replied, now, false);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         this.logger.warn(`[AUTO_SEND] tư vấn thất bại cho ${view.id}: ${detail}`);
+        this.telemetry?.decision({
+          point: 'advice.auto_reply',
+          outcome: 'degraded',
+          reason: 'ALLOWED',
+          detail: { sendFailed: 1 },
+        });
       }
     }
     return this.settleThread(threadKey, message, view, now, false, manualReview);
@@ -523,18 +656,6 @@ export class PipelineService implements OnModuleDestroy {
   }
 
   /**
-   * Policy outbound tach khoi nguong risk cua Giam sat. Du lieu thieu/sai va manual-review van
-   * fail-closed; tong so luong so voi nguong tenant theo semantics inclusive.
-   */
-  private shouldAutoSend(view: OrderView, manualReview = false): boolean {
-    return shouldAutoConfirmOrder(view, {
-      policy: tenantOrderAutomation(),
-      killSwitchEnabled: (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on',
-      manualReview,
-    });
-  }
-
-  /**
    * Duoc phep TU TRA LOI mot cau tu van chua.
    *
    * Truoc 21/08/2026 ham nay chi xet `hoi_san_pham` va chi soi vai `product_advisor`. Hau qua:
@@ -545,16 +666,30 @@ export class PipelineService implements OnModuleDestroy {
    * Nay xet vai CHINH cua intent (`trace.primaryRole`) — dung cai vai da soan cau tra loi.
    * `dat_don` van di duong rieng: don du du kien thi gui XAC NHAN, con thieu thi HOI LAI.
    */
-  private shouldAutoReplyAdvice(view: OrderView, manualReview = false): boolean {
-    if (manualReview) return false;
-    if ((this.settings?.autoSend() ?? loadEnv().AUTO_SEND) !== 'on') return false;
-    if (view.intent === 'dat_don') return false;
+  private evaluateAutoReplyAdvice(
+    view: OrderView,
+    manualReview = false,
+  ): { allowed: boolean; reason: AutoReplyReason } {
+    if (manualReview) return { allowed: false, reason: 'MANUAL_REVIEW' };
+    if ((this.settings?.autoSend() ?? loadEnv().AUTO_SEND) !== 'on') {
+      return { allowed: false, reason: 'KILL_SWITCH_OFF' };
+    }
+    if (view.intent === 'dat_don') {
+      return { allowed: false, reason: 'ORDER_INTENT_HAS_OWN_PATH' };
+    }
     const trace = view.trace;
-    if (view.status !== 'pending_review' || !trace?.outbound) return false;
-    if (trace.supervisor.riskLevel !== 'none') return false;
+    if (view.status !== 'pending_review') {
+      return { allowed: false, reason: 'STATUS_NOT_PENDING_REVIEW' };
+    }
+    if (!trace?.outbound) return { allowed: false, reason: 'NO_OUTBOUND_CONTENT' };
+    if (trace.supervisor.riskLevel !== 'none') {
+      return { allowed: false, reason: 'SUPERVISOR_FLAGGED_RISK' };
+    }
     // Vai da soan cau tra loi tu xin chuyen nguoi that thi ton trong — do la chot chan cuoi
     // cua chinh LLM, khong phai mot phan quyet tat dinh da cu.
-    return trace.steps.find((step) => step.role === trace.primaryRole)?.handoff !== true;
+    return trace.steps.find((step) => step.role === trace.primaryRole)?.handoff === true
+      ? { allowed: false, reason: 'AGENT_REQUESTED_HANDOFF' }
+      : { allowed: true, reason: 'ALLOWED' };
   }
 }
 

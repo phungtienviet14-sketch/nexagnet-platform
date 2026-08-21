@@ -196,6 +196,22 @@ services:
       CORS_ORIGIN: https://${DEMO_DOMAIN}
       ADMIN_UI: "off"
       STREAM_MODE: "on"
+      # QUAN SAT (21/08/2026) — xem docs/phat-trien/van-hanh/debugging.md.
+      # Nhac lai cai bay o tren: khoi `environment` nay liet ke TUONG MINH, nen mot bien co trong
+      # `secrets.env` ma thieu o day thi KHONG BAO GIO toi container.
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL: ${LOG_LEVEL:-log}
+      TELEMETRY_PRIVACY: ${TELEMETRY_PRIVACY:-}
+      # `dev` | `gd1-test` | `pilot` | `production`. render-secrets.sh phat bien nay tu lau nhung
+      # KHONG AI dua no vao day, nen no chua bao gio toi container — dung cai bay ma chinh khoi
+      # chu thich o dau service canh bao. Trace can no de tach du lieu theo moi truong; thieu no
+      # thi moi ban ghi deu roi ve `production` cua NODE_ENV va gd1-test lan voi pilot.
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-}
+      # Neo moi trace vao dung ban build dang chay. Khong co ba bien nay thi cau hoi
+      # "bug nay o commit nao" phai tra loi bang cach SSH len VM doc release.json roi doi chieu tay.
+      RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}
+      RELEASE_APP_DIGEST: ${RELEASE_APP_DIGEST:-}
+      RELEASE_DEPLOYED_AT: ${RELEASE_DEPLOYED_AT:-}
     command:
       - sh
       - -ec

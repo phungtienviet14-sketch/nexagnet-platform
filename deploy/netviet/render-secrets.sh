@@ -180,6 +180,21 @@ TENANT_SLUG=${TENANT_SLUG}
 # compose.yaml dung bien nay cho \`name:\` (=> ten volume) va cho alias mang tren edge.
 STACK_SLUG=${STACK_SLUG}
 DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT}
+# QUAN SAT (21/08/2026). \`json\` bat NDJSON co dinh kem traceId/tenant/release cho MOI dong log,
+# de \`docker logs ... | node tools/trace-view.mjs\` dung lai duoc cay nghiep vu.
+LOG_FORMAT=${LOG_FORMAT:-json}
+LOG_LEVEL=${LOG_LEVEL:-log}
+# Muc chi tiet noi dung trong telemetry. De TRONG = suy tu DATA_CLASSIFICATION
+# (test -> full, customer -> redacted). Bi mat bi xoa o MOI muc, khong ngoai le.
+TELEMETRY_PRIVACY=${TELEMETRY_PRIVACY:-}
+# NEO RELEASE cho trace — tra loi "bug nay xay ra tren commit nao" ma khong phai SSH doc file.
+#
+# Dung BIEN chu khong mount \`.runtime/release.json\`: file do duoc \`deploy-remote.sh\` ghi SAU
+# \`deploy-stack.sh\`, tuc SAU \`docker compose up\`. Mount mot file chua ton tai thi Docker tao ra
+# mot THU MUC trung ten — hong ca mount lan lan ghi release.json ke tiep.
+RELEASE_GIT_SHA=${RELEASE_GIT_SHA:-}
+RELEASE_APP_DIGEST=${APP_IMAGE_VALUE}
+RELEASE_DEPLOYED_AT=${RELEASE_DEPLOYED_AT:-}
 # 18/08/2026 — doi flowise -> deepseek. Ly do: Flowise la MOT TANG TRUNG GIAN nua dat tren cung
 # DeepSeek o dau kia, nen no khong them chat luong ma chi them mot cho co the hong va mot cho
 # kho lan vet. Goi thang deepseek-v4-flash bo tang do: cung mo hinh, it thanh phan hon, va

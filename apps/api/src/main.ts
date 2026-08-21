@@ -16,6 +16,18 @@ const logger = new Logger('Bootstrap');
 // Validate env truoc khi lam bat ky viec gi khac - fail fast (CLAUDE.md).
 const env = loadAppEnv();
 
+/*
+ * DINH DANG LOG dat TRUOC khi Nest khoi tao, de ca log luc boot cung ra dung dinh dang.
+ *
+ * `LOG_FORMAT=json` bat NDJSON co dinh kem trace context; mac dinh (`text`) giu nguyen ban in
+ * co mau cua Nest cho nguoi doc bang mat khi phat trien. Doi transport, KHONG doi API: 42 file
+ * dang goi `new Logger(...)` khong phai sua mot dong nao.
+ */
+if (process.env.LOG_FORMAT === 'json') {
+  const { StructuredNestLogger } = await import('./observability/structured-logging.js');
+  Logger.overrideLogger(new StructuredNestLogger(process.env.LOG_LEVEL ?? 'log'));
+}
+
 // forRoot() dung module theo env: mount /admin (AdminJS) khi ADMIN_UI=on + PERSISTENCE=prisma.
 const app = await NestFactory.create<NestExpressApplication>(await AppModule.forRoot());
 configureSession(app, env, app.get(PrismaService));
