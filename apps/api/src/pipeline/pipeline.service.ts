@@ -60,6 +60,8 @@ const MAX_BURST_CHARACTERS = 4_000;
 export class PipelineService implements OnModuleDestroy {
   private readonly logger = new Logger('PipelineService');
   private readonly pendingBursts = new Map<string, PendingBurst>();
+  /** Duoi cho theo (kenh, nhom, nguoi gui) — xem `enqueuePerSender`. */
+  private readonly senderQueues = new Map<string, Promise<void>>();
   private readonly burstWindowMs: number;
 
   constructor(
@@ -250,8 +252,53 @@ export class PipelineService implements OnModuleDestroy {
     return this.runPipeline(message, botName, participant, saved, opts);
   }
 
-  /** Phan chung cua `intake` va `process`: chay 6 agent, noi don voi tin, xet auto-send. */
-  private async runPipeline(
+  /**
+   * Xep hang theo TUNG NGUOI: hai tin cua cung mot khach khong duoc chay chong nhau.
+   *
+   * Mach hoi thoai la doc-sua-ghi quanh mot lan goi LLM keo dai vai giay. Hai tin cua cung mot
+   * nguoi chay song song se cung doc mot trang thai cu roi cung ghi de len nhau — cau tra loi
+   * "20" co the ghi de mat don nhap ma tin truoc vua tao. Cua so gom tin lam nhe chuyen nay
+   * nhung khong loai bo duoc: hai tin cach nhau hon cua so van chong nhau duoc.
+   *
+   * Khoa theo (kenh, nhom, NGUOI GUI) chu khong theo nhom: 200 dai ly trong mot nhom van phai
+   * duoc tu van SONG SONG — noi dung khoa la mach cua tung nguoi, khong phai ca nhom.
+   */
+  private enqueuePerSender(message: ChannelMessage, run: () => Promise<OrderView>): Promise<OrderView> {
+    const key = burstKey(message);
+    const previous = this.senderQueues.get(key) ?? Promise.resolve();
+    // Tin truoc HONG khong duoc keo tin sau hong theo — nen nuot loi o MAT XICH, khong o ket qua.
+    const current = previous.then(run, run);
+    const tail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.senderQueues.set(key, tail);
+    void tail.then(() => {
+      // Chi don khi khong con ai xep sau minh, de Map khong phinh theo so nguoi da tung nhan tin.
+      if (this.senderQueues.get(key) === tail) this.senderQueues.delete(key);
+    });
+    return current;
+  }
+
+  /**
+   * Phan chung cua `intake` va `process`: chay 6 agent, noi don voi tin, xet auto-send.
+   * Di qua duoi cho theo nguoi gui de mach hoi thoai khong bi hai tin cua cung mot khach
+   * doc-sua-ghi de len nhau.
+   */
+  private runPipeline(
+    message: ChannelMessage,
+    botName: string | undefined,
+    participant: GroupParticipant | null,
+    saved: SaveMessageResult | readonly SaveMessageResult[] | null,
+    opts?: { orderId?: string; rerun?: boolean; allowDuplicateSkip?: boolean },
+    contextExclusions: readonly string[] = [],
+  ): Promise<OrderView> {
+    return this.enqueuePerSender(message, () =>
+      this.runPipelineTurn(message, botName, participant, saved, opts, contextExclusions),
+    );
+  }
+
+  private async runPipelineTurn(
     message: ChannelMessage,
     botName: string | undefined,
     participant: GroupParticipant | null,
