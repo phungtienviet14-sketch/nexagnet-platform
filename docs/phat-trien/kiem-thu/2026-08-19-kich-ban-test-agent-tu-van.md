@@ -38,7 +38,13 @@ gcloud compute ssh netviet --zone asia-southeast1-b --tunnel-through-iap --quiet
   --command "docker exec \$(docker ps -q -f name=zalo-$S-api) sh -c 'echo ADVICE_COMPOSER=\$ADVICE_COMPOSER; echo ANTHROPIC=\${ANTHROPIC_API_KEY:+set}'"
 ```
 
-Phải thấy `ADVICE_COMPOSER=claude` và `ANTHROPIC=set`. Rỗng = agent tắt, dừng lại.
+Phải thấy `ADVICE_COMPOSER=claude` **hoặc** `deepseek`, và khoá tương ứng có đặt. Rỗng = agent tắt, dừng lại.
+
+> **Trên `gd1-test`, agent tư vấn chạy `deepseek`** (21/08/2026). Không phải lựa chọn về chất lượng
+> mà về hoàn cảnh: khoá Anthropic đang báo `credit balance is too low`, và stack này có
+> `DATA_CLASSIFICATION=test` + chỉ nhóm/dữ liệu TEST nên nằm đúng phạm vi CLAUDE.md cho phép dùng
+> DeepSeek. **Stack chạy dữ liệu khách thật phải là `claude`** — hoặc bổ sung DeepSeek vào thoả
+> thuận xử lý dữ liệu trước khi bật.
 
 ```bash
 gcloud compute ssh netviet --zone asia-southeast1-b --tunnel-through-iap --quiet \
@@ -116,7 +122,30 @@ Ban soan chua con so khong co trong ket qua cong cu (990.000đ) — bo ban soan.
 
 Thấy dòng này: hệ thống đã **làm đúng** (bỏ bản soạn, khách nhận bản tra bảng). Đếm số lần xuất hiện = tỉ lệ LLM định bịa số.
 
-### 2.1 Sáu công cụ và khi nào chúng phải được gọi
+### 2.1 Đo nhanh bằng eval thật (không cần Zalo)
+
+Bốn câu hỏi ở trên chạy được ngay trên máy, gọi API thật, in ra bốn câu trả lời để so:
+
+```bash
+cd apps/api && RUN_LLM_TESTS=1 ADVICE_COMPOSER=deepseek DEEPSEEK_API_KEY=<khoá>   pnpm exec vitest run src/advisor/live-check.spec.ts
+```
+
+Mặc định **skip** (không tính phí API trong CI), cùng khuôn với `deepseek-eval.spec.ts`. Test tự
+`expect` bốn câu trả lời **khác nhau** — đó chính là điều kiện nhóm A.
+
+Đo ngày 21/08/2026 với `deepseek-v4-flash`:
+
+| Câu hỏi | Công cụ đã gọi | Kết quả |
+|---|---|---|
+| `v08 bao nhieu tien` | `tra_cuu_san_pham`, `bao_gia` | Báo **4.900.000đ/chiếc** kèm ghi chú giá sỉ CTV/đại lý |
+| `v08 dung nhu nao` | `tra_cuu_san_pham`, `tra_cuu_tai_lieu` | Liệt kê 6 tính năng/đầu phụ kiện từ FAQ đã duyệt |
+| `v08 hut duoc san go k` | `tra_cuu_san_pham`, `tra_cuu_tai_lieu` | Trả lời từ FAQ đã duyệt |
+| `bao hanh may thang` | *(không gọi)* | Hỏi lại khách đang nói về sản phẩm nào — **đúng**, vì không có ngữ cảnh |
+
+Con số `4.900.000đ` đến từ công cụ `bao_gia` (rules engine đọc bảng giá), **không phải** mô hình tự
+nghĩ ra — và chặn hậu kiểm sẽ bỏ bản soạn nếu nó tự nghĩ ra.
+
+### 2.2 Sáu công cụ và khi nào chúng phải được gọi
 
 | Công cụ | Phải xuất hiện khi |
 |---|---|
@@ -309,7 +338,7 @@ pnpm lint && pnpm typecheck && pnpm test && node --test deploy/netviet/caddy-rou
 
 | Nhóm | File test |
 |---|---|
-| A | `apps/api/src/advisor/advisor-agent.spec.ts` (9 ca — vòng lặp công cụ, cache breakpoint) |
+| A | `apps/api/src/advisor/advisor-agent.spec.ts` (9 ca — vòng lặp công cụ, cache breakpoint) · `live-check.spec.ts` (eval thật, mặc định skip) |
 | A, B | `apps/api/src/advisor/money-guard.spec.ts` (7 ca) · `content/faq-ranking.spec.ts` (12 ca) |
 | C | `apps/api/src/messages/` — conversation context + outbound recorder |
 | D | `apps/api/src/conversations/` (21 ca) · `pipeline/pipeline-conversation.spec.ts` (5 ca) |
