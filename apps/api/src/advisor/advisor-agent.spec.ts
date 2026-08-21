@@ -59,7 +59,8 @@ describe('ClaudeAdvisorAgent — vong lap cong cu', () => {
     expect(reply?.text).toContain('ạ');
     expect(reply?.usedTools).toEqual(['bao_gia']);
     // Luot thu hai phai mang theo tool_result cua luot dau — khong co no thi LLM viet trong tri nho.
-    const secondTurn = create.mock.calls[1]?.[0] as { messages: { role: string; content: unknown }[] };
+    const secondCall = create.mock.calls[1] as unknown as [{ messages: { role: string; content: unknown }[] }];
+    const secondTurn = secondCall[0];
     const lastMessage = secondTurn.messages.at(-1)!;
     expect(lastMessage.role).toBe('user');
     expect(JSON.stringify(lastMessage.content)).toContain(String(price));
