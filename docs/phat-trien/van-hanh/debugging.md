@@ -286,3 +286,33 @@ Có dòng `enabled` → secret ổn, lỗi nằm ở SSH. **Chạy lại deploy.
 xanh ở lần chạy lại.
 
 Bốn cờ cùng đỏ một lúc là **dấu hiệu của probe hỏng**, không phải của bốn vấn đề riêng biệt.
+
+---
+
+## 11. ⚠️ Đừng tự ý `--force-recreate` container edge
+
+Ngày 21/08/2026 một lần `docker compose up -d --force-recreate gateway` trên edge làm **cả bốn
+stack trả 502 cùng lúc** — `ultty` (production), `ultty-gd1-test`, `wata`, `amico`.
+
+**Vì sao:** edge đi ngược vào silo của từng khách bằng `docker network connect`. Tạo lại container
+làm **rụng hết** các network attachment đó, nên Caddy không còn đường tới `api-<slug>`/`web-<slug>`.
+`deploy-stack.sh` có nối lại, nhưng **chỉ cho stack đang deploy** — các khách khác không có lần
+deploy nào để tự nối lại.
+
+**Khắc phục trong 30 giây** nếu đã lỡ:
+
+```bash
+for s in ultty ultty-gd1-test wata amico; do sudo docker network connect zalo-${s}_backend netviet-edge-gateway-1 2>/dev/null; done
+```
+
+Rồi kiểm tra:
+
+```bash
+for d in demo-ultty demo-ultty-gd1-test demo-wata demo-amico; do curl -s -o /dev/null -w "$d %{http_code}\n" https://$d.35-187-235-82.sslip.io/health; done
+```
+
+`deploy-remote.sh` nay tự quét `zalo-*_backend` và nối lại **mọi** khách sau khi đưa edge lên, nên
+đường deploy chuẩn không còn dính lỗi này. Cảnh báo trên dành cho thao tác tay.
+
+**Đổi Caddyfile thì gần như không cần recreate nữa:** rsync đã chuyển sang `--inplace` và
+deploy có bước `caddy reload` (§10 giải thích vì sao cần cả hai).

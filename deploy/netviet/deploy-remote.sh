@@ -260,6 +260,22 @@ if ! docker exec netviet-edge-gateway-1 caddy reload --config /etc/caddy/Caddyfi
   echo 'Kiem tra: docker exec netviet-edge-gateway-1 caddy validate --config /etc/caddy/Caddyfile' >&2
 fi
 
+# NOI LAI EDGE VOI MANG CUA MOI KHACH — khong chi khach dang deploy.
+#
+# `deploy-stack.sh` co `docker network connect` nhung chi cho STACK DANG DEPLOY. Do la du khi edge
+# song lien tuc; no KHONG du khi container edge bi tao lai, vi tao lai container lam RUNG het cac
+# network attachment — va cac khach KHAC thi khong co lan deploy nao de tu noi lai.
+#
+# Hau qua da xay ra that 21/08/2026: mot lan `--force-recreate gateway` lam CA BON stack tra 502
+# cung luc (`ultty`, `ultty-gd1-test`, `wata`, `amico`), vi edge khong con duong vao silo nao.
+#
+# Quet theo mang `zalo-*_backend` dang ton tai thay vi giu mot danh sach khach cung trong script:
+# mot danh sach cung se lac hau ngay lan len khach tiep theo.
+for backend_network in $(docker network ls --filter 'name=^zalo-.*_backend$' --format '{{.Name}}'); do
+  # Da noi roi thi lenh bao loi; buoc nay idempotent nen nuot loi do (giong deploy-stack.sh).
+  docker network connect "$backend_network" netviet-edge-gateway-1 2>/dev/null || true
+done
+
 env TENANT_SLUG="$tenant_slug" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" EDGE_DIR="$edge_dir" "$app_dir/deploy-stack.sh"
 env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" "$app_dir/backup.sh"
 write_release_json \
