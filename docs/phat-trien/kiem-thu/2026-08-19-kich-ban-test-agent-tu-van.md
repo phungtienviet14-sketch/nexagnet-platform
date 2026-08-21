@@ -18,6 +18,7 @@ Bản 19/08 của tài liệu này ghi một cảnh báo mà **hoá ra chính l�
 | `ADVICE_COMPOSER` | *(rỗng)* → **Noop** | *(rỗng)* → **Noop** |
 | `ANTHROPIC_API_KEY` | *(không đặt)* | *(không đặt)* |
 | Nội dung `active` | FAQ **99** · advice 3 · ảnh 102 | FAQ **1**/95 · còn lại `draft` |
+| *(sau 21/08)* | chưa đổi | `ADVICE_COMPOSER=deepseek` · FAQ **95** active |
 | `AUTO_SEND` | `on` | `off` |
 | `CHANNEL_MODE` | `zca` | `zca` |
 | `PARSER_MODE` | `deepseek` | `deepseek` |
@@ -127,7 +128,7 @@ Thấy dòng này: hệ thống đã **làm đúng** (bỏ bản soạn, khách 
 Bốn câu hỏi ở trên chạy được ngay trên máy, gọi API thật, in ra bốn câu trả lời để so:
 
 ```bash
-cd apps/api && RUN_LLM_TESTS=1 ADVICE_COMPOSER=deepseek DEEPSEEK_API_KEY=<khoá>   pnpm exec vitest run src/advisor/live-check.spec.ts
+cd apps/api && RUN_LLM_TESTS=1 ADVICE_COMPOSER=deepseek DEEPSEEK_API_KEY=<khoá> pnpm exec vitest run src/advisor/live-check.spec.ts
 ```
 
 Mặc định **skip** (không tính phí API trong CI), cùng khuôn với `deepseek-eval.spec.ts`. Test tự
