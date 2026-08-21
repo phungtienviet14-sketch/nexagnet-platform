@@ -15,13 +15,24 @@
 | **`decision`** | Một **cổng nghiệp vụ** đã mở hay đóng, **kèm lý do có mã**. Đây là thứ trả lời "vì sao". |
 | **`ai_call`** | Một lần gọi LLM: model, độ trễ, token, công cụ đã dùng. |
 
-**Công cụ duy nhất bạn cần:**
+**Hai đường vào — chọn cái gần bạn nhất:**
+
+| Bạn là ai | Dùng gì |
+|---|---|
+| Sale / người vận hành | Mở đơn trong console → bấm **"Xem luồng xử lý"** |
+| Developer / trực sự cố | `docker logs … \| node tools/trace-view.mjs` |
+
+Nút trên console đọc từ **bộ đệm trong tiến trình API** (300 lượt gần nhất) — đủ cho "vừa xảy ra
+xong". Lượt cũ hơn, hoặc lượt của một container đã restart, chỉ còn trong log máy chủ:
 
 ```bash
 docker logs zalo-ultty-gd1-test-api-1 2>&1 | node tools/trace-view.mjs
 ```
 
 Nó biến hàng nghìn dòng JSON thành cây nghiệp vụ đọc được.
+
+> Console mặc định **ẩn bước kỹ thuật** (`*.persist`) — bấm "Hiện chi tiết kỹ thuật" khi cần.
+> Bản dòng lệnh luôn hiện đủ.
 
 > ⚠️ Không ra gì? Kiểm tra `LOG_FORMAT=json` trên stack. Thiếu nó thì log là text, không phải JSON.
 > Xem §6.
@@ -248,3 +259,30 @@ pnpm trace --trace <traceId>
 | Token của đường `compose` chưa có | `AdvisorReply` chưa mang `usage`; cần sửa cả bản Claude lẫn DeepSeek. |
 | Chưa có trace xuyên tiến trình sang Flowise | Hợp đồng `traceparent` đã sẵn sàng, chưa nối. |
 | Một VM một stack — chưa gộp log nhiều host | Đúng ý đồ ở quy mô hiện tại. |
+
+---
+
+## 10. Sự cố hạ tầng đã gặp: deploy đỏ vì SSH, không phải vì code
+
+Ngày 21/08/2026, hai lần deploy `gd1-test` đỏ ở hai chỗ khác nhau nhưng **cùng một gốc**:
+
+| Triệu chứng trong log CI | Thực tế |
+|---|---|
+| `Permission denied (publickey)` khi `gcloud compute ssh` | SSH/OS Login chập chờn |
+| `required secret #12 does not exist / has no enabled version / is empty` | **Báo động giả** — secret vẫn tồn tại và enabled |
+
+**Vì sao dòng thứ hai gây hiểu nhầm:** `collectSecretMetadata()` đặt
+`readable = probed.ok && probe.accessible === true`. Khi **lệnh SSH probe** hỏng, `probed.ok` là
+`false`, nên cả bốn cờ (`exists`, `enabledVersion`, `vmCanAccess`, `nonEmpty`) đều thành `false`
+cùng lúc — in ra thành bốn dòng nghe như secret bị xoá.
+
+**Cách phân biệt trong 30 giây** trước khi đi tạo lại secret:
+
+```bash
+gcloud secrets versions list zalo-<stack>-<suffix> --project <project> --limit=3
+```
+
+Có dòng `enabled` → secret ổn, lỗi nằm ở SSH. **Chạy lại deploy.** Cả hai lần trong ngày đều
+xanh ở lần chạy lại.
+
+Bốn cờ cùng đỏ một lúc là **dấu hiệu của probe hỏng**, không phải của bốn vấn đề riêng biệt.
