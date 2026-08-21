@@ -206,6 +206,32 @@ sách. Mật khẩu Flowise phải đủ 4 nhóm ký tự (regex trong `Ensure-F
 `gcloud compute scp --recurse` mở một tunnel cho **mỗi tệp**. 102 ảnh catalog = 48 phút. Đã đổi
 sang gói **một** archive tar rồi giải nén trên VM: 31 giây.
 
+### 6.7 Khách KHÔNG bán hàng qua Zalo — 4 cổng tự vấp liên tiếp (21/08/2026)
+Lên khách `wata` (`knowledge` + `operations`, **không** `messaging`, **không** `sales-order`) làm lộ
+một giả định nằm rải khắp base: *mọi khách đều là khách bán hàng qua Zalo*. Bốn lần deploy, bốn chỗ
+khác nhau, cùng một nguyên nhân — và mỗi lần chỉ lộ ra sau ~12 phút chạy pipeline:
+
+| Vấp ở | Triệu chứng | Giả định sai |
+|---|---|---|
+| Gieo nguồn sự thật | `Goi khach thieu dealers` | seeder bắt **mọi** gói khách khai `dealers` |
+| `api` boot | `Nest can't resolve dependencies of the SettingsQueryService` | provider của `operations` inject provider của `messaging` |
+| Smoke | `Khong mo duoc SSE: HTTP 404` | nhánh rút gọn vẫn đòi mở `/events` (thuộc `sales-order`) |
+| Public HTTPS | `Public HTTPS smoke test that bai` | cổng probe `/zalo` + `/zalo/status` (thuộc `messaging`) |
+
+**Nguyên tắc rút ra:** cổng kiểm phải thu hẹp **theo năng lực khách**, và đọc không được gói khách
+thì **ngả về phía kiểm nhiều hơn** — bất biến 7 cấm làm yếu cổng smoke. Thu hẹp tới đâu phải in ra
+tới đó (`SMOKE_SKIPPED_ORDER_PATH`, `SMOKE_SKIPPED_SSE`), nếu không một lần deploy xanh sẽ bị đọc
+nhầm là "đã kiểm hết".
+
+**Đã khoá bằng test:** `apps/api/src/app.module.knowledge-operations.boot.spec.ts` boot thật
+AppModule với tổ hợp `knowledge` + `operations`. Trước đó chỉ có spec `knowledge-only` — nó không
+bật `operations` nên không bắt được gì; chính **tổ hợp** mới là chỗ trống. Ba cổng deploy còn lại có
+assertion trong `deploy/netviet/caddy-route-contract.test.mjs`.
+
+> **Lên khách mới không có `messaging`/`sales-order`:** chạy trước
+> `pnpm --filter @netviet/api exec vitest run src/app.module.knowledge-operations.boot.spec.ts`
+> và `node --test deploy/netviet/caddy-route-contract.test.mjs` — rẻ hơn 12 phút pipeline rất nhiều.
+
 ---
 
 ## 7. Rollback
