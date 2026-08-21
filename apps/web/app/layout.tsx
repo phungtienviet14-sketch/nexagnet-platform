@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import './console.css';
 import './auth.css';
+import '../experiences/agent-workforce/agent-workforce.css';
 import { Providers } from './providers';
 import { AuthGate } from '../components/auth/AuthGate';
 import { toPublicTenantDescriptor } from '../lib/tenant-runtime';

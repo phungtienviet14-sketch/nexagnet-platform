@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 2,
+  "slug": "wata",
+  "identity": {
+    "displayName": "Công ty Cổ phần Công nghệ WATA",
+    "shortName": "WATATECH"
+  },
+  "branding": {
+    "productName": "WATA AI Workforce Platform",
+    "installName": "WATA — AI Workforce Control Plane",
+    "pageTitle": "WATA — AI Workforce Control Plane",
+    "pageDescription": "Nền tảng điều phối và giám sát đội ngũ AI doanh nghiệp WATATECH",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#0a0f1d",
+    "monogram": "W",
+    "composerPlaceholder": "Hỏi trợ lý điều hành hoặc tra cứu nghiệp vụ..."
+  },
+  "experience": "agent-workforce",
+  "capabilities": [
+    "knowledge",
+    "operations"
+  ],
+  "policies": {
+    "readiness": {
+      "blockedCapabilities": []
+    }
+  },
+  "integrations": {
+    "contentSource": {
+      "adapter": "local_manifest"
+    }
+  },
+  "persona": {},
+  "bootstrap": {
+    "knowledge": {
+      "path": "data/knowledge.json"
+    }
+  },
+  "smoke": null
+}

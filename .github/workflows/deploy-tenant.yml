@@ -30,6 +30,7 @@ on:
         options:
           - ultty
           - amico
+          - wata
         default: 'ultty'
       environment:
         description: 'Moi truong dich'
