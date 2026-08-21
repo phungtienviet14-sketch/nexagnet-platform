@@ -1,3 +1,4 @@
+export * from './trace-view.js';
 export { envSchema, loadEnv, EnvValidationError } from './env.js';
 export type { AppEnv } from './env.js';
 export {

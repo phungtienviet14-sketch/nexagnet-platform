@@ -49,7 +49,7 @@ export class DeepSeekParser implements OrderParser {
 
   constructor(
     private readonly apiKey: string,
-    private readonly model: string = DEFAULT_MODEL,
+    readonly model: string = DEFAULT_MODEL,
   ) {}
 
   async parse(input: ParserInput): Promise<ParseResult> {

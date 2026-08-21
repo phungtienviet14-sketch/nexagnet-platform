@@ -56,6 +56,9 @@ export interface AdvisorReply {
 
 export abstract class AdvisorAgent {
   abstract readonly name: string;
+  /** Model THAT dang chay. Xem chu thich cung ten trong `OrderParser` — nhan model sai
+   *  con te hon khong co nhan. `NoopAdvisorAgent` khong co model nao. */
+  readonly model?: string;
   /** `null` = khong soan duoc; ben goi PHAI co duong tat dinh de lui ve. */
   abstract reply(request: AdvisorRequest): Promise<AdvisorReply | null>;
 }
@@ -115,7 +118,7 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
 
   constructor(
     apiKey: string,
-    private readonly model: string = DEFAULT_MODEL,
+    override readonly model: string = DEFAULT_MODEL,
   ) {
     super();
     this.client = new Anthropic({ apiKey });

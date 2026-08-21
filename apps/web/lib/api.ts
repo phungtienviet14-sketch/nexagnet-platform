@@ -6,6 +6,7 @@ import type {
   ErpProduct,
   KnowledgeSummary,
   OrderView,
+  TraceView,
 } from '@netviet/shared';
 import type { ZaloGroup, ZaloGroupIdentityLink, ZaloStatus } from './zalo';
 import { authFetch } from './auth';
@@ -116,4 +117,19 @@ export const api = {
 
 export function formatVnd(amount: number): string {
   return `${Math.round(amount).toLocaleString('vi-VN')}đ`;
+}
+
+/**
+ * LUOT XU LY cua mot don — nguon cho nut "Xem luong xu ly".
+ *
+ * `null` khi luot da roi khoi vong dem cua API (xem `RecentTracesSink`). Do la trang thai BINH
+ * THUONG voi don cu, khong phai loi — nen tra `null` thay vi nem, de UI noi duoc mot cau tu te
+ * thay vi hien mot thong bao do.
+ */
+export async function fetchOrderTrace(orderId: string): Promise<TraceView | null> {
+  const response = await authFetch(`${BASE}/observability/traces/by-order/${orderId}`, {
+    cache: 'no-store',
+  });
+  if (response.status === 404) return null;
+  return toJson<TraceView>(response);
 }

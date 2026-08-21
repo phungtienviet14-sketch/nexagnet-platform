@@ -28,5 +28,16 @@ export interface ParserInput {
 
 export interface OrderParser {
   readonly name: string;
+  /**
+   * Model THAT dang chay, de telemetry khoi phai doan.
+   *
+   * Them ngay 21/08/2026 sau khi trace tren stack that ghi `deepseek/claude-sonnet-5` — provider
+   * dung, model sai. Nguyen nhan: orchestrator doc `PARSER_MODEL` (mac dinh cua Claude) trong khi
+   * parser dang chay la DeepSeek voi `DEEPSEEK_MODEL`. Mot nhan model sai con te hon khong co
+   * nhan: no lam nguoi debug di tim loi o dung mo hinh khong he chay.
+   *
+   * Tuy chon vi `MockParser` khong co model nao ca.
+   */
+  readonly model?: string;
   parse(input: ParserInput): Promise<ParseResult>;
 }
