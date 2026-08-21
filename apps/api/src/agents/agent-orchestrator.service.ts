@@ -147,12 +147,38 @@ export class AgentOrchestrator {
     });
     if (!reply) return { dispatch, composed: false, handoff: false };
 
+    /*
+     * Ban soan cua agent THAY THE phan quyet tat dinh, khong chong len no.
+     *
+     * Cong tat dinh (`productAdvice`) chi nhin van ban tin HIEN TAI. Mot cau noi tiep khong nhac
+     * ten SP — "co den ngu khong", "bao hanh bao lau", "loc duoc bao nhieu m2" — luon bi no cham
+     * la thieu du lieu, du danh muc co san FAQ da duyet cho dung san pham do. Agent thi co ca
+     * lich su hoi thoai lan cong cu tra cuu; khi no tra loi xong ma KHONG tu xin chuyen Sale thi
+     * ket luan cu da het gia tri. Giu lai ket luan cu chinh la loi khien khach hoi mot loat cau
+     * tra loi duoc ma bot im lang (21/08/2026).
+     */
     const advice = dispatch.outbound as ProductAdviceResult | undefined;
     return {
       dispatch: {
         ...dispatch,
         reply: reply.text,
-        ...(advice ? { outbound: { ...advice, text: reply.text } } : {}),
+        // MOI intent tu van deu can `outbound`, khong rieng `hoi_san_pham`: khong co no thi duong
+        // gui khong co gi de gui, va cau tra loi da soan xong se nam lai trong DB.
+        //
+        // Tru `dat_don`: luot chot don da co duong rieng — mach hoi thoai gui CAU HOI LAI. Dat
+        // them `outbound` o day se thanh hai tin cho cung mot y.
+        ...(input.intent === 'dat_don'
+          ? {}
+          : {
+              outbound: {
+                ...(advice ?? {}),
+                ready: !reply.handoff,
+                productSkus: advice?.productSkus ?? [],
+                missing: reply.handoff ? (advice?.missing ?? ['agent_handoff']) : [],
+                text: reply.text,
+              } satisfies ProductAdviceResult,
+              status: reply.handoff ? ('needs_edit' as const) : ('pending_review' as const),
+            }),
       },
       composed: true,
       handoff: reply.handoff,
@@ -348,6 +374,7 @@ export class AgentOrchestrator {
       supervisor,
       dispatch.reply,
       dispatch.outbound,
+      composed,
     );
     this.logStep(intent, resolved, supervisor);
 
@@ -552,6 +579,7 @@ export class AgentOrchestrator {
     supervisor: SupervisorSummary,
     reply?: string,
     outbound?: OutboundContent,
+    composed = false,
   ): AgentTrace {
     const steps: AgentStep[] = AGENT_ROLES.map((role) =>
       this.buildStep(role, roles.get(role), supervisor),
@@ -565,6 +593,7 @@ export class AgentOrchestrator {
       supervisor,
       reply,
       outbound,
+      ...(composed ? { composed: true } : {}),
     };
   }
 
@@ -637,7 +666,11 @@ function markComposedRole(dispatch: DispatchResult, role: AgentRole, handoff: bo
     notes: current?.notes ?? [],
     source: 'llm',
     usedLlm: true,
-    ...(handoff ? { handoff: true } : current?.handoff ? { handoff: true } : {}),
+    // KHONG "OR" voi co cu. Phan quyet tat dinh duoc dua ra TRUOC khi agent chay va chi nhin
+    // duoc mot tin le; agent tra loi xong roi thi CHINH NO la nguon su that ve viec co can
+    // nguoi that hay khong. Giu lai co cu la giu lai mot ket luan da bi thay the — va do la
+    // ly do 6/7 intent khong bao gio tu tra loi duoc truoc 21/08/2026.
+    ...(handoff ? { handoff: true } : {}),
   });
 }
 

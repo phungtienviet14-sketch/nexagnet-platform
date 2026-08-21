@@ -291,9 +291,9 @@ export class PipelineService implements OnModuleDestroy {
         return this.settleThread(threadKey, message, view, now, false);
       }
     }
-    if (this.shouldAutoReplyProduct(view, manualReview) && this.orders) {
+    if (this.shouldAutoReplyAdvice(view, manualReview) && this.orders) {
       try {
-        this.logger.log(`[AUTO_SEND] Tư vấn sản phẩm ${view.id} từ content active`);
+        this.logger.log(`[AUTO_SEND] Tư vấn ${view.intent} ${view.id}`);
         const replied = await this.orders.sendProductAdvice(view.id);
         return await this.settleThread(threadKey, message, replied, now, false);
       } catch (error) {
@@ -468,16 +468,27 @@ export class PipelineService implements OnModuleDestroy {
     });
   }
 
-  private shouldAutoReplyProduct(view: OrderView, manualReview = false): boolean {
-    return (
-      !manualReview &&
-      (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on' &&
-      view.intent === 'hoi_san_pham' &&
-      view.status === 'pending_review' &&
-      Boolean(view.trace?.outbound) &&
-      view.trace?.steps.find((step) => step.role === 'product_advisor')?.handoff !== true &&
-      view.trace?.supervisor.riskLevel === 'none'
-    );
+  /**
+   * Duoc phep TU TRA LOI mot cau tu van chua.
+   *
+   * Truoc 21/08/2026 ham nay chi xet `hoi_san_pham` va chi soi vai `product_advisor`. Hau qua:
+   * cau hoi bao hanh (`bao_hanh_khieu_nai`), hoi gia, hoi cong no, hoi van chuyen va nhom `khac`
+   * KHONG BAO GIO tu tra loi duoc — 6/7 intent — du agent da soan xong cau tra loi tu tai lieu
+   * da duyet. Khach hoi mot loat va nhan lai im lang.
+   *
+   * Nay xet vai CHINH cua intent (`trace.primaryRole`) — dung cai vai da soan cau tra loi.
+   * `dat_don` van di duong rieng: don du du kien thi gui XAC NHAN, con thieu thi HOI LAI.
+   */
+  private shouldAutoReplyAdvice(view: OrderView, manualReview = false): boolean {
+    if (manualReview) return false;
+    if ((this.settings?.autoSend() ?? loadEnv().AUTO_SEND) !== 'on') return false;
+    if (view.intent === 'dat_don') return false;
+    const trace = view.trace;
+    if (view.status !== 'pending_review' || !trace?.outbound) return false;
+    if (trace.supervisor.riskLevel !== 'none') return false;
+    // Vai da soan cau tra loi tu xin chuyen nguoi that thi ton trong — do la chot chan cuoi
+    // cua chinh LLM, khong phai mot phan quyet tat dinh da cu.
+    return trace.steps.find((step) => step.role === trace.primaryRole)?.handoff !== true;
   }
 }
 

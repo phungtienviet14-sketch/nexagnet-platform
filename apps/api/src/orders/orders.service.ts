@@ -79,8 +79,16 @@ export class OrdersService {
     const view = await this.getOrThrow(id);
     if (view.status === 'sent') return view;
     const content = view.trace?.outbound;
-    if (view.intent !== 'hoi_san_pham' || view.status !== 'pending_review' || !content) {
-      throw new UnprocessableEntityException('Tư vấn chưa đủ nội dung đã duyệt để gửi');
+    // MOI intent tu van deu gui duoc, khong rieng `hoi_san_pham`: cau hoi bao hanh/cong no/van
+    // chuyen cung do agent soan tu tai lieu da duyet va cung phai den duoc khach.
+    // `needs_edit` duoc phep vi day la duong Sale BAM DUYET sau khi doc — khac auto-send.
+    if (view.intent === 'dat_don' || !content) {
+      throw new UnprocessableEntityException('Tin nay khong co noi dung tu van de gui');
+    }
+    if (view.status !== 'pending_review' && view.status !== 'needs_edit') {
+      throw new UnprocessableEntityException(
+        `Đơn ở trạng thái ${view.status}, không thể gửi tư vấn`,
+      );
     }
     const replyChannel = view.replyChannel ?? legacyReplyChannel();
     if (!replyChannel) {
