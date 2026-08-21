@@ -67,9 +67,39 @@ const MAX_TOKENS = 8_000;
  * Bon vong la du cho chuoi dai nhat that su xay ra: tra cuu SP -> tra cuu tai lieu -> bao gia ->
  * tinh don. Cao hon nua chi lam tang do tre ma khach dang cho trong nhom.
  */
-const MAX_TOOL_ROUNDS = 4;
+export const MAX_TOOL_ROUNDS = 4;
 /** Danh dau LLM tu nhan la khong tra loi duoc — de ben goi dinh tuyen Sale, khong doan tu van ban. */
-const HANDOFF_MARKER = '[CHUYEN_SALE]';
+export const HANDOFF_MARKER = '[CHUYEN_SALE]';
+
+/**
+ * Van ban tho tu LLM -> `AdvisorReply`, DUNG CHUNG cho moi nha cung cap.
+ *
+ * Day la cho dat chan hau kiem tien, nen no phai la MOT ham: mot nha cung cap thu hai bo qua buoc
+ * nay se la mot duong vong quanh bat bien #5 ma khong ai thay tu ben ngoai.
+ */
+export function finalizeAdvisorReply(
+  raw: string,
+  toolOutputs: readonly AdvisorToolResult[],
+  usedTools: string[],
+  logger: Logger,
+): AdvisorReply | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const handoff = trimmed.includes(HANDOFF_MARKER);
+  const text = trimmed.replaceAll(HANDOFF_MARKER, '').trim();
+  if (!text) return null;
+
+  const invented = unverifiedAmounts(text, toolOutputs);
+  if (invented.length) {
+    logger.warn(
+      `Ban soan chua con so khong co trong ket qua cong cu (${invented.join(', ')}) — bo ban soan.`,
+    );
+    return null;
+  }
+  logger.log(`[advisor] cong cu=${usedTools.join(',') || 'khong'} handoff=${handoff}`);
+  return { text, usedTools, handoff };
+}
 
 export class ClaudeAdvisorAgent extends AdvisorAgent {
   readonly name = 'claude';
@@ -155,23 +185,8 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
     const raw = response.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
       .map((block) => block.text)
-      .join('')
-      .trim();
-    if (!raw) return null;
-
-    const handoff = raw.includes(HANDOFF_MARKER);
-    const text = raw.replaceAll(HANDOFF_MARKER, '').trim();
-    if (!text) return null;
-
-    const invented = unverifiedAmounts(text, toolOutputs);
-    if (invented.length) {
-      this.logger.warn(
-        `Ban soan chua con so khong co trong ket qua cong cu (${invented.join(', ')}) — bo ban soan.`,
-      );
-      return null;
-    }
-    this.logger.log(`[advisor] cong cu=${usedTools.join(',') || 'khong'} handoff=${handoff}`);
-    return { text, usedTools, handoff };
+      .join('');
+    return finalizeAdvisorReply(raw, toolOutputs, usedTools, this.logger);
   }
 }
 
@@ -207,7 +222,8 @@ export const ADVISOR_STATIC_PROMPT = [
   'CACH LAM VIEC — bat buoc theo dung thu tu:',
   '1. Doc lich su hoi thoai de hieu khach dang noi ve cai gi. "cai do", "no", "the con..." deu tro ve thu vua noi.',
   '2. GOI CONG CU de lay du kien. Tuyet doi khong tra loi ve san pham, gia, chinh sach hay don hang bang tri nho cua ban.',
-  '3. Viet cau tra loi tu ket qua cong cu.',
+  '3. Viet cau tra loi tu ket qua cong cu. BAT BUOC: cong cu da tra ve du kien (gia, thong so, chinh sach) thi cau tra loi PHAI NEU RA du kien do. Mot cau chao suong hay mot cau "em da tra cuu xong" la cau tra loi HONG — khach khong nhan duoc thong tin nao.',
+  '4. Chua du du kien thi goi THEM cong cu; dung ket thuc luot bang mot cau chung chung.',
   '',
   'RANG BUOC KHONG DUOC PHA:',
   '- Moi CON SO TIEN ban viet ra phai la con so mot cong cu vua tra ve. Khong duoc uoc luong, khong duoc cong tru nham, khong duoc suy ra gia tu san pham khac. He thong kiem lai va se BO cau tra loi cua ban neu co con so la.',

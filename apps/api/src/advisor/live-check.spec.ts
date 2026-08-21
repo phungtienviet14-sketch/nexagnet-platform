@@ -13,17 +13,23 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ClaudeAdvisorAgent } from './advisor-agent.js';
+import { DeepSeekAdvisorAgent } from './deepseek-advisor.js';
 import { InMemoryContentRepository } from '../content/content.repository.js';
 import { ContentImportService } from '../content/content-import.service.js';
 import { ContentService } from '../content/content.service.js';
 import { LocalManifestContentSource } from '../content/local-manifest-content.source.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 
-const KEY = process.env.ANTHROPIC_API_KEY ?? '';
+/**
+ * Chon nha cung cap bang `ADVICE_COMPOSER` de eval nay do DUNG cai dang chay tren stack, khong do
+ * mot duong khac roi bao cao nham.
+ */
+const PROVIDER = process.env.ADVICE_COMPOSER ?? 'claude';
+const KEY = PROVIDER === 'deepseek' ? (process.env.DEEPSEEK_API_KEY ?? '') : (process.env.ANTHROPIC_API_KEY ?? '');
 const shouldRun = process.env.RUN_LLM_TESTS === '1' && Boolean(KEY);
 const suite = shouldRun ? describe : describe.skip;
 
-suite('agent tu van — Claude API that', () => {
+suite(`agent tu van — API that (${PROVIDER})`, () => {
   it('bon cau hoi khac nhau ve V08 -> bon cau tra loi KHAC nhau', async () => {
     const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
     const repo = new InMemoryContentRepository(
@@ -46,7 +52,10 @@ suite('agent tu van — Claude API that', () => {
     await content.reload();
     console.log('FAQ active:', content.snapshot().faqs.filter((f) => f.status === 'active').length);
 
-    const agent = new ClaudeAdvisorAgent(KEY, 'claude-opus-5');
+    const agent =
+      PROVIDER === 'deepseek'
+        ? new DeepSeekAdvisorAgent(KEY, process.env.ADVICE_DEEPSEEK_MODEL ?? 'deepseek-v4-flash')
+        : new ClaudeAdvisorAgent(KEY, process.env.ADVICE_MODEL ?? 'claude-opus-5');
     const questions = [
       'v08 bao nhieu tien',
       'v08 dung nhu nao',

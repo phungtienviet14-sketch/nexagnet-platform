@@ -44,6 +44,9 @@ export interface AdvisorToolSpec {
 /** Ket qua tra ve cho LLM: JSON gon, khong phai cau chu — LLM tu viet cau chu. */
 export type AdvisorToolResult = Record<string, unknown>;
 
+/** Tran so muc tai lieu do vao prompt. Du de LLM chon, chua den muc thoi phong chi phi moi luot. */
+const MAX_DOCS = 8;
+
 const object = (
   properties: Record<string, unknown>,
   required: string[] = [],
@@ -156,20 +159,35 @@ function findDocs(sku: string, question: string, ctx: AdvisorToolContext): Advis
     rows.filter((row) => row.status === 'active');
   const faqs = active(snapshot.faqs).filter((faq) => !faq.productSku || faq.productSku === sku);
   const advice = active(snapshot.advice).filter((row) => !row.productSku || row.productSku === sku);
+  // BM25 truot KHONG dong nghia voi "chua co tai lieu". Truoc 21/08 hai truong hop nay tra ve
+  // cung mot ket qua rong, nen agent bao "chua co tai lieu duyet" cho mot san pham co 14 FAQ da
+  // duyet — do la mot cau noi SAI voi khach, khong phai mot cau than trong.
+  //
+  // Truot thi do CA tap FAQ cua san pham cho LLM tu chon: no hieu cau hoi tot hon mot bo dem tu.
+  // An toan vi day la tai lieu DA DUYET va no chi di vao prompt, khong di thang toi khach.
   const ranked = rankFaqs(faqs, normalize(question), ctx.knowledge.glossary());
+  const fellBack = ranked.length === 0 && faqs.length > 0;
+  const selected = (ranked.length ? ranked : faqs).slice(0, MAX_DOCS);
   const docs = [
-    ...ranked.map((faq) => ({ hoi: faq.question, dap: faq.answer })),
+    ...selected.map((faq) => ({ hoi: faq.question, dap: faq.answer })),
     ...advice.map((row) => ({ tieu_de: row.title, noi_dung: row.body })),
-  ].slice(0, 6);
+  ].slice(0, MAX_DOCS);
+  if (!docs.length) {
+    return {
+      tai_lieu: [],
+      // Cau nay di THANG vao prompt cua LLM, nen phai noi ro phai lam gi — khong de no tu suy.
+      ghi_chu:
+        'Chua co tai lieu DA DUYET cho san pham nay. KHONG duoc tu tra loi tu kien thuc chung: hay noi that la se nho Sale xac minh.',
+    };
+  }
   return {
     tai_lieu: docs,
-    ...(docs.length
-      ? {}
-      : {
-          // Cau nay di THANG vao prompt cua LLM, nen phai noi ro phai lam gi — khong de no tu suy.
+    ...(fellBack
+      ? {
           ghi_chu:
-            'Chua co tai lieu DA DUYET cho san pham nay. KHONG duoc tu tra loi tu kien thuc chung: hay noi that la se nho Sale xac minh.',
-        }),
+            'Khong co muc nao khop that sat cau hoi. Day la tai lieu da duyet cua san pham — hay tu chon phan tra loi dung cau hoi; khong phan nao tra loi duoc thi noi that la se nho Sale xac minh.',
+        }
+      : {}),
   };
 }
 

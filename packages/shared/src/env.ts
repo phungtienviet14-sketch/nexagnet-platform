@@ -83,7 +83,13 @@ export const envSchema = z.object({
    * Claude nam trong danh sach ben thu 3 duoc duyet (CLAUDE.md), nhung viec them phai la mot quyet
    * dinh CO Y CUA NGUOI VAN HANH, khong phai he qua phu cua viec chon parser. Mac dinh `off`.
    */
-  ADVICE_COMPOSER: z.enum(['off', 'claude']).default('off'),
+  ADVICE_COMPOSER: z.enum(['off', 'claude', 'deepseek']).default('off'),
+  /**
+   * Model cho AGENT TU VAN khi `ADVICE_COMPOSER=deepseek`. Tach khoi `DEEPSEEK_MODEL` (parser) vi
+   * hai viec khac do kho: parser trich xuat co rang buoc, agent tu van VIET CAU cho khach doc va
+   * phai goi cong cu nhieu vong.
+   */
+  ADVICE_DEEPSEEK_MODEL: z.string().trim().min(1).default('deepseek-v4-flash'),
   /**
    * Model cho tung viec. Truoc 18/08/2026 hai gia tri nay hardcode `claude-haiku-4-5` ngay
    * trong ma nguon — vua khong doi duoc khi chay, vua la nguyen nhan truc tiep cua "AI tra loi
