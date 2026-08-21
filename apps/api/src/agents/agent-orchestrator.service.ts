@@ -31,14 +31,18 @@ import {
 } from '@netviet/shared';
 import { KnowledgeService, type ResolvedGroup } from '../knowledge/knowledge.service.js';
 import { AdvisorAgent } from '../advisor/advisor-agent.js';
+import { ORDER_COMMANDS } from '../advisor/order-commands.token.js';
+import type { OrderCommandPort } from '../advisor/order-tools.js';
 import { ContentService } from '../content/content.service.js';
 import { mergeConversationTurn } from '../conversations/conversation-merge.js';
+import type { ClosedOrderContext } from '../conversations/conversation-thread.js';
+import type { AmendSignal } from '../pipeline/amend-detect.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
 import { AgentEventsService } from './agent-events.service.js';
 import { DEFAULT_RULES_CONFIG, type RulesConfig } from '../rules/config.js';
-import { priceOrder, routeStatus } from '../rules/rules.js';
+import { matchProduct, priceOrder, routeStatus } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
 import { DEFAULT_AGENTS_CONFIG, type AgentsConfig } from './agents.config.js';
 import { RuleConfigService } from '../rule-config/rule-config.service.js';
@@ -106,6 +110,10 @@ export class AgentOrchestrator {
     @Optional() private readonly ruleConfigs?: RuleConfigService,
     @Optional() private readonly content?: ContentService,
     @Optional() private readonly advisor?: AdvisorAgent,
+    /** Cong GHI cho agent. Vang mat -> agent chi co quyen doc (mac dinh cua test/CI). */
+    @Optional()
+    @Inject(ORDER_COMMANDS)
+    private readonly orderCommands?: OrderCommandPort,
   ) {}
 
   /**
@@ -126,8 +134,14 @@ export class AgentOrchestrator {
   ): Promise<{ dispatch: DispatchResult; composed: boolean; handoff: boolean }> {
     // `dat_don` DA DU du kien di duong tat dinh: van ban xac nhan la mot chung tu, khong phai mot
     // cau tro chuyen — de LLM viet lai no la mo mot cho khong can thiet cho con so di lac.
+    //
+    // TRU luot SUA DON: luc do van ban tho van boc ra mot don hoan chinh ("... lay 5 cai thoi" ->
+    // 5 ghe Felix), nhung gui thang xac nhan cua no se de don CU song nguyen — Sale go ca hai vao
+    // KiotViet va khach nhan 25 cai ghe. Luot do phai qua agent de no goi `sua_don`.
     const orderIsComplete = input.intent === 'dat_don' && dispatch.priced !== null;
-    if (!this.advisor || orderIsComplete) return { dispatch, composed: false, handoff: false };
+    if (!this.advisor || (orderIsComplete && !input.amendRequest)) {
+      return { dispatch, composed: false, handoff: false };
+    }
 
     const reply = await this.advisor.reply({
       customerText: input.customerText,
@@ -135,6 +149,8 @@ export class AgentOrchestrator {
       ...(input.senderDisplayName ? { senderDisplayName: input.senderDisplayName } : {}),
       ...(input.draft ? { pendingDraft: input.draft } : {}),
       ...(input.missingSlots?.length ? { missingSlots: input.missingSlots } : {}),
+      ...(input.closedOrder ? { closedOrder: input.closedOrder } : {}),
+      ...(input.amendRequest ? { amendRequest: input.amendRequest } : {}),
       tools: {
         knowledge: this.knowledge,
         ...(this.content ? { content: this.content } : {}),
@@ -142,6 +158,18 @@ export class AgentOrchestrator {
         senderType: input.resolved.senderType,
         chatId: input.chatId,
         ...(input.senderExternalId ? { senderExternalId: input.senderExternalId } : {}),
+        // Quyen GHI chi duoc cap khi biet CHAC nguoi dang noi la ai. Kenh khong cap uid nguoi gui
+        // thi khong the chung minh don thuoc ve ho — luc do agent chi con quyen doc.
+        ...(this.orderCommands && input.senderExternalId
+          ? {
+              orderCommands: {
+                port: this.orderCommands,
+                scope: { chatId: input.chatId, senderExternalId: input.senderExternalId },
+                resolveSku: (keyword: string) =>
+                  matchProduct(keyword, this.knowledge.products())?.sku ?? null,
+              },
+            }
+          : {}),
       },
       now: input.now,
     });
@@ -174,9 +202,13 @@ export class AgentOrchestrator {
         // MOI intent tu van deu can `outbound`, khong rieng `hoi_san_pham`: khong co no thi duong
         // gui khong co gi de gui, va cau tra loi da soan xong se nam lai trong DB.
         //
+        // LUOT SUA DON: cong cu `sua_don` da tao don thay the roi. Bo `priced` cua ban boc tho
+        // di, neu khong `run()` se luu them MOT don nua cho cung mot y dinh — va don thua do se
+        // duoc Sale go vao KiotViet nhu that.
+        ...(input.amendRequest ? { priced: null, status: 'pending_review' as const } : {}),
         // Tru `dat_don`: luot chot don da co duong rieng — mach hoi thoai gui CAU HOI LAI. Dat
         // them `outbound` o day se thanh hai tin cho cung mot y.
-        ...(input.intent === 'dat_don'
+        ...(input.intent === 'dat_don' && !input.amendRequest
           ? {}
           : {
               outbound: composedOutbound,
@@ -205,6 +237,10 @@ export class AgentOrchestrator {
       pendingDraft?: OrderDraft;
       /** Bot vua hoi va dang cho dung nguoi nay tra loi. */
       answeringQuestion?: boolean;
+      /** Don VUA CHOT cua nguoi nay — ngu canh chi doc, de hieu "cai do"/"don cu". */
+      closedOrder?: ClosedOrderContext;
+      /** Tin nay la mot yeu cau SUA/HUY don da chot, khong phai mot don moi. */
+      amendRequest?: AmendSignal;
     },
   ): Promise<OrderView> {
     const orderId = opts?.orderId ?? randomUUID();
@@ -298,6 +334,8 @@ export class AgentOrchestrator {
       ...(message.senderExternalId ? { senderExternalId: message.senderExternalId } : {}),
       ...(turn.draft ? { draft: turn.draft } : {}),
       ...(turn.gaps ? { missingSlots: turn.gaps.askable } : {}),
+      ...(opts?.closedOrder ? { closedOrder: opts.closedOrder } : {}),
+      ...(opts?.amendRequest ? { amendRequest: opts.amendRequest } : {}),
     });
     if (composed) {
       markComposedRole(dispatch, primaryRole, handoff);
@@ -396,6 +434,9 @@ export class AgentOrchestrator {
       priced: dispatch.priced,
       confidence: parseResult.confidence,
       senderType: resolved.senderType,
+      // Neo don vao NGUOI da dat no: khong co no thi cong cu ghi cua LLM khong the kiem tra
+      // pham vi, va `lich_su_don` khong the loc theo nguoi.
+      ...(message.senderExternalId ? { senderExternalId: message.senderExternalId } : {}),
       trace,
       ...(activeRuleConfig ? { ruleConfigVersion: activeRuleConfig.version } : {}),
       // De xac nhan gui ra la mot cau TRA LOI dung tin nay, khong phai mot cau troi noi
@@ -655,6 +696,8 @@ interface ComposeReplyInput {
   readonly senderExternalId?: string;
   readonly draft?: OrderDraft;
   readonly missingSlots?: readonly ClarifySlot[];
+  readonly closedOrder?: ClosedOrderContext;
+  readonly amendRequest?: AmendSignal;
 }
 
 /**

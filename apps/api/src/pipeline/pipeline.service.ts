@@ -18,6 +18,7 @@ import { ConversationsService } from '../conversations/conversations.service.js'
 import type { ThreadKey } from '../conversations/conversation-thread.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
+import { detectAmend } from './amend-detect.js';
 import { shouldAutoConfirmOrder } from './order-auto-confirmation.js';
 
 /**
@@ -269,12 +270,22 @@ export class PipelineService implements OnModuleDestroy {
     const answeringQuestion = Boolean(
       threadKey && !opts?.rerun && (await this.conversations?.isAnsweringQuestion(threadKey, now)),
     );
+    // DON VUA CHOT cua chinh nguoi nay. Doc rieng khoi `pendingDraft` co chu y: mach da chot thi
+    // KHONG duoc gop tiep, nhung van phai NHO — khong co no, "cho a lay 5 cai" ngay sau khi chot
+    // 20 ghe Felix se den noi ma khong biet "cai" la cai gi (loi khach bao 21/08/2026).
+    const closedOrder =
+      threadKey && !opts?.rerun ? await this.conversations?.recentlyClosed(threadKey, now) : null;
+    const amend = detectAmend(message.text);
     const view = await this.orchestrator.run(message, botName, {
       ...opts,
       ...(senderTypeOverride ? { senderTypeOverride } : {}),
       ...(conversationContext ? { conversationContext } : {}),
       ...(pendingDraft ? { pendingDraft } : {}),
       ...(answeringQuestion ? { answeringQuestion } : {}),
+      ...(closedOrder ? { closedOrder } : {}),
+      // Chi bao "dang sua don" khi CO don de sua. Mot cau "huy don" khi khong co don nao vua chot
+      // la mot cau hoi binh thuong, khong phai mot lenh.
+      ...(amend.isAmend && closedOrder ? { amendRequest: amend } : {}),
     });
     const savedMessages = saved ? (Array.isArray(saved) ? saved : [saved]) : [];
     for (const row of savedMessages) await this.linkOrder(view.id, row.id);

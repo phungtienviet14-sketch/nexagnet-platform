@@ -114,6 +114,44 @@ export function reduceThread(
   }
 }
 
+/**
+ * Bao lau sau khi chot don thi mot tin moi van con duoc coi la NOI TIEP don vua chot.
+ *
+ * Ngan hon `ttlMinutes` co chu y: ke thua ngu canh de SUA mot don la viec rui ro hon ke thua de
+ * gop them du kien, nen no phai het han som hon.
+ */
+export const AMEND_WINDOW_MINUTES = 30;
+
+/**
+ * Don VUA CHOT cua nguoi nay, de tin ke tiep con hieu "cai do" la cai gi.
+ *
+ * VI SAO PHAI TACH KHOI `isLive`: `isLive` tra loi cau "co duoc ke thua DON NHAP khong", va cau
+ * tra loi cho mach da chot dung la KHONG — hoi sinh mot don nhap da chot se lam tin sau am tham
+ * gop vao mot don khach da dat xong. Nhung "khong duoc gop tiep" khong co nghia la "phai quen".
+ *
+ * Truoc 21/08/2026 hai cau hoi nay bi trom lam mot, nen sau khi bot chot don 20 ghe Felix va
+ * khach go "cho a lay 5 cai", he thong khong con nho "cai" la cai gi va hoi lai "minh lay san
+ * pham nao a?" — dung loi khach bao. Ham nay tra ve NGU CANH CHI DOC: du de hieu khach dang noi
+ * ve don nao, khong du de tu y gop vao don do.
+ */
+export interface ClosedOrderContext {
+  readonly orderId: string;
+  /** Don da chot, chi de doi chieu — KHONG duoc dung lam `previous` cho `mergeDraft`. */
+  readonly draft: OrderDraft;
+  readonly closedAt: string;
+}
+
+export function recentlyClosedOrder(
+  thread: ConversationThread | null,
+  now: Date,
+  windowMinutes: number = AMEND_WINDOW_MINUTES,
+): ClosedOrderContext | null {
+  if (thread?.status !== 'closed' || !thread.lastOrderId) return null;
+  const elapsedMs = now.getTime() - new Date(thread.updatedAt).getTime();
+  if (elapsedMs > windowMinutes * 60_000) return null;
+  return { orderId: thread.lastOrderId, draft: thread.draft, closedAt: thread.updatedAt };
+}
+
 /** Con luot hoi khong. Het luot la mot ly do chuyen Sale, khong phai mot ly do im lang. */
 export function canAskAgain(
   thread: ConversationThread | null,

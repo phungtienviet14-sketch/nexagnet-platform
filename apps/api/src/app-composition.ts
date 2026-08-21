@@ -61,6 +61,9 @@ import { ZaloLeadDispatcher } from './notifications/zalo-lead-dispatcher.js';
 import { MessagesController, OrdersController } from './orders/orders.controller.js';
 import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
 import { OrdersService } from './orders/orders.service.js';
+import { OrderAmendmentService } from './orders/order-amendment.service.js';
+import { OrderCommandAdapter } from './orders/order-command.adapter.js';
+import { ORDER_COMMANDS } from './advisor/order-commands.token.js';
 import { PrismaOrdersRepository } from './orders/prisma-orders.repository.js';
 import { parserProvider } from './pipeline/parser.provider.js';
 import { PipelineService } from './pipeline/pipeline.service.js';
@@ -181,6 +184,11 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('sales-order', AgentOrchestrator),
   owned('sales-order', PipelineService),
   owned('sales-order', OrdersService),
+  owned('sales-order', OrderAmendmentService),
+  // Cong GHI cua agent. Dang ky RIENG khoi `AgentOrchestrator` de doc duoc tu day rang quyen
+  // doi trang thai don la mot thu duoc CAP, khong phai mot thu orchestrator tu co.
+  owned('sales-order', OrderCommandAdapter),
+  owned('sales-order', { provide: ORDER_COMMANDS, useExisting: OrderCommandAdapter }),
   owned('messaging', BroadcastService),
   owned('campaign', CampaignService),
   owned('campaign', CampaignScheduler),

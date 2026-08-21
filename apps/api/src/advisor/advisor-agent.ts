@@ -1,12 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Logger } from '@nestjs/common';
 import type { ClarifySlot, ConversationContext, OrderDraft } from '@netviet/shared';
+import type { ClosedOrderContext } from '../conversations/conversation-thread.js';
+import type { AmendSignal } from '../pipeline/amend-detect.js';
 import { formatTranscript } from '../messages/conversation-transcript.js';
 import { unverifiedAmounts } from './money-guard.js';
 import {
-  ADVISOR_TOOLS,
+  advisorToolsFor,
   runAdvisorTool,
   type AdvisorToolContext,
+  type AdvisorToolSpec,
   type AdvisorToolResult,
 } from './advisor-tools.js';
 
@@ -35,6 +38,10 @@ export interface AdvisorRequest {
   readonly pendingDraft?: OrderDraft;
   /** Slot he thong xac dinh la con thieu; LLM duoc goi y hoi dung nhung thu nay. */
   readonly missingSlots?: readonly ClarifySlot[];
+  /** Don VUA CHOT cua chinh khach nay — de hieu "cai do"/"don cu" tro ve dau. */
+  readonly closedOrder?: ClosedOrderContext;
+  /** He thong da nhan dien tin nay la yeu cau SUA/HUY don, khong phai don moi. */
+  readonly amendRequest?: AmendSignal;
   readonly tools: AdvisorToolContext;
   readonly now?: Date;
 }
@@ -127,7 +134,7 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
           model: this.model,
           max_tokens: MAX_TOKENS,
           system: buildAdvisorSystem(request),
-          tools: [...ADVISOR_TOOLS].map(toAnthropicTool),
+          tools: advisorToolsFor(request.tools).map(toAnthropicTool),
           messages,
         });
         if (response.stop_reason === 'refusal') {
@@ -190,7 +197,7 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
   }
 }
 
-function toAnthropicTool(spec: (typeof ADVISOR_TOOLS)[number]): Anthropic.Tool {
+function toAnthropicTool(spec: AdvisorToolSpec): Anthropic.Tool {
   return {
     name: spec.name,
     description: spec.description,
@@ -258,6 +265,7 @@ export function buildAdvisorTurnContext(request: AdvisorRequest): string {
       : 'NGUOI DANG HOI: chua ro ten.',
     resolved.dealer ? `Nhom nay thuoc dai ly: ${resolved.dealer.name}.` : 'Nhom nay CHUA map dai ly.',
     formatDraft(request.pendingDraft, request.missingSlots),
+    formatClosedOrder(request),
     formatHistory(request.context, now),
   ].filter(Boolean);
   return lines.join('\n');
@@ -279,6 +287,37 @@ function formatDraft(draft: OrderDraft | undefined, missing: readonly ClarifySlo
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/**
+ * Don VUA CHOT + (neu co) lenh sua don.
+ *
+ * Khong co khoi nay, mot tin nhu "cho a lay 5 cai" ngay sau khi chot 20 ghe Felix den noi ma
+ * khong con gi de neo vao, va agent chi con cach hoi lai "minh lay san pham nao a?" — dung cai
+ * canh khach bao la bot khong hieu (21/08/2026).
+ */
+function formatClosedOrder(request: AdvisorRequest): string {
+  const closed = request.closedOrder;
+  if (!closed) return '';
+  const items = closed.draft.items
+    .map((item) => `${item.skuRaw ?? '(chua ro)'} x ${item.quantity ?? '(chua ro)'}`)
+    .join('; ');
+  const lines = [
+    `DON VUA CHOT XONG cua nguoi nay (ma don: ${closed.orderId}, luc ${closed.closedAt}):`,
+    items ? `- ${items}` : '- (khong doc duoc dong hang)',
+  ];
+  if (request.amendRequest) {
+    lines.push(
+      request.amendRequest.isCancelOnly
+        ? 'KHACH DANG MUON HUY DON NAY. Goi `tra_cuu_don` de lay dung ma don, roi goi `huy_don`. Sau do bao khach da huy xong.'
+        : 'KHACH DANG MUON DOI DON NAY, khong phai dat them don moi. Goi `tra_cuu_don` de lay dung ma don, roi goi `sua_don` voi TOAN BO dong hang moi. Khong duoc de don cu song song voi don moi.',
+    );
+  } else {
+    lines.push(
+      'Tin moi cua khach co the noi tiep don nay ("cai do", "cai nay"). Neu khong ro khach muon DOI don nay hay DAT THEM don moi, hay HOI LAI mot cau ngan cho ro truoc khi lam gi.',
+    );
+  }
+  return lines.join('\n');
 }
 
 function formatHistory(context: ConversationContext | undefined, now: Date): string {

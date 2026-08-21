@@ -15,6 +15,7 @@ import {
 import { AgentEventsService } from '../agents/agent-events.service.js';
 import { autoLabel } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
+import { canAmendOrder, type AmendVerdict } from './amend-window.js';
 import { OrdersRepository } from './orders.repository.js';
 
 @Injectable()
@@ -213,6 +214,44 @@ export class OrdersService {
     throw new UnprocessableEntityException(
       'Tin nay chua co ban xac nhan hay ban tu van nao de gui',
     );
+  }
+
+  /**
+   * HUY mot don — duong duy nhat de LLM (hoac Sale) dong mot don lai.
+   *
+   * Khac `reject()`: `reject` la Sale tu choi mot don CHUA gui. Ham nay di qua `canAmendOrder()`
+   * nen no huy duoc ca don DA GUI, mien Sale chua go vao ERP — dung tinh huong khach bao "huy don
+   * cu 20 lay 5 cai thoi" sau khi da nhan xac nhan.
+   *
+   * Dong luon viec nhap ERP: mot don da huy ma con nam trong hang viec cua Sale la cach chac chan
+   * de no duoc go vao KiotViet sau do.
+   */
+  async cancelOrder(id: string, reason: string): Promise<OrderView> {
+    const view = await this.getOrThrow(id);
+    if (view.status === 'rejected') return view;
+    const verdict = canAmendOrder(view);
+    if (!verdict.allowed) throw new UnprocessableEntityException(verdict.message);
+
+    const cancelled = (await this.repo.update(id, {
+      status: 'rejected',
+      cancelReason: reason,
+      ...(view.salesHandoff
+        ? { salesHandoff: { ...view.salesHandoff, status: 'cancelled' as const } }
+        : {}),
+    }))!;
+    this.events?.emit({ type: 'order.updated', order: cancelled });
+    return cancelled;
+  }
+
+  /** Noi hai don thay the nhau, sau khi don moi da duoc tao. */
+  async linkSupersede(oldId: string, newId: string): Promise<void> {
+    await this.repo.update(oldId, { supersededByOrderId: newId });
+    await this.repo.update(newId, { supersedesOrderId: oldId });
+  }
+
+  /** Don con sua duoc khong — de ben goi hoi TRUOC khi hua voi khach. */
+  async amendVerdict(id: string): Promise<AmendVerdict> {
+    return canAmendOrder(await this.getOrThrow(id));
   }
 
   async reject(id: string): Promise<OrderView> {
