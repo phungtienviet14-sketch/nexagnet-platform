@@ -44,7 +44,6 @@ suite('agent tu van — Claude API that', () => {
     const faqIds = content.snapshot().faqs.map((faq) => faq.id);
     await content.bulkSetStatus('faq', faqIds, 'active');
     await content.reload();
-    // eslint-disable-next-line no-console
     console.log('FAQ active:', content.snapshot().faqs.filter((f) => f.status === 'active').length);
 
     const agent = new ClaudeAdvisorAgent(KEY, 'claude-opus-5');
@@ -68,8 +67,7 @@ suite('agent tu van — Claude API that', () => {
           chatId: 'live-check',
         },
       });
-      // eslint-disable-next-line no-console
-      console.log(
+        console.log(
         `\n>>> ${question}\n<<< [${reply?.usedTools.join(',') ?? 'NULL'}] ${reply?.text ?? '(null)'}`,
       );
       answers.push(reply?.text ?? '');
