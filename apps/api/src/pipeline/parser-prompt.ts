@@ -196,20 +196,33 @@ function coerceOrderNumbers(order: Record<string, unknown>): Record<string, unkn
 }
 
 /**
- * Chuan hoa output tho tu LLM truoc khi validate schema (phong 2 loi thuong gap):
- * 1) LLM chen khoi "order" RONG cho ca intent KHONG phai don -> bo "order" khi intent != dat_don.
+ * Chuan hoa output tho tu LLM truoc khi validate schema (phong 3 loi thuong gap):
+ * 1) LLM chen khoi "order"/"draft" RONG cho ca intent KHONG phai don -> bo khi intent != dat_don.
  * 2) LLM tra so tien dang CHUOI ("11tr5","1.150k") -> ep ve so; khong doc duoc thi bo field tuy chon.
+ * 3) LLM tra so luong dang CHUOI ("20") -> ep ve so nguyen.
+ *
+ * `draft` (don NUA VOI — Pha 6) di qua DUNG bo ep kieu voi `order`. Bo sot buoc nay la mot loi im
+ * lang dac trung: `partialOrderSchema` doi `quantity` la so, LLM tra `"20"`, ca `parseResultSchema`
+ * hong -> parser roi ve `intent=khac` -> cau tra loi cua khach bi vut, va khong co dong log nao noi
+ * vi sao.
  */
 export function normalizeParserOutput(raw: unknown): unknown {
   if (raw === null || typeof raw !== 'object') return raw;
   const src = raw as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(src)) {
-    if (key === 'order') continue;
+    if (key === 'order' || key === 'draft') continue;
     out[key] = src[key];
   }
-  if (src.intent === 'dat_don' && src.order && typeof src.order === 'object') {
+  if (src.intent !== 'dat_don') return out;
+  if (src.order && typeof src.order === 'object') {
     out.order = coerceOrderNumbers(src.order as Record<string, unknown>);
+  }
+  if (src.draft && typeof src.draft === 'object') {
+    const draft = coerceOrderNumbers(src.draft as Record<string, unknown>);
+    // Don nhap RONG khong mang thong tin gi; giu lai chi lam `mergeConversationTurn` mo mot mach
+    // cho mot tin khong he noi ve don hang.
+    if (Array.isArray(draft.items) && draft.items.length > 0) out.draft = draft;
   }
   return out;
 }
