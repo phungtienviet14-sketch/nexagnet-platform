@@ -200,8 +200,11 @@ async function amendOrder(
       ma_don_cu: found.order.id,
       ma_don_moi: replacement.id,
       don_moi: summarize(replacement),
+      // NOI DUNG SU THAT, khong hua thay he thong: don thay the nam trong hang cho "Duyet & gui"
+      // cua Sale, KHONG tu bay ra nhom. Truoc do cho nay ghi "he thong se gui ban xac nhan moi",
+      // ma khong duong nao gui — agent se bao khach mot thu khong xay ra.
       ghi_chu:
-        'He thong se gui ban xac nhan moi. Ban chi can bao khach da doi xong, KHONG can ke lai tung dong.',
+        'Da ghi nhan don moi. Bao khach la da doi xong va Sale se gui lai ban xac nhan moi ngay. KHONG duoc tu doc lai con so tien.',
     };
   } catch (error: unknown) {
     return { da_sua: false, loi: errorText(error) };

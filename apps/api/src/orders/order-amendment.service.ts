@@ -34,6 +34,13 @@ export class OrderAmendmentService {
    *
    * Tra ve don MOI. Don cu chuyen `rejected` va viec nhap ERP cua no bi dong — de Sale khong go
    * ca hai vao KiotViet.
+   *
+   * DON MOI KHONG TU GUI. No nam o `routeStatus(priced)` (thuong la `pending_review`), tuc vao
+   * hang cho "Duyet & gui" cua Sale. Day la lua chon co chu y, khong phai thieu sot: ban xac nhan
+   * la mot chung tu tien, va mot lan doi don — thu vua di qua mot cau tieng Viet viet tat cua
+   * khach roi qua mot LLM — dang duoc mot nguoi liec qua truoc khi con so thu hai bay vao nhom.
+   * Agent duoc dan noi dung dieu do voi khach ("Sale se gui lai ban xac nhan moi"), khong duoc
+   * hua rang he thong tu gui.
    */
   async replaceItems(
     originalId: string,
