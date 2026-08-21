@@ -4,7 +4,14 @@
  * tuc production co the roi vao no — am tham, khong log loi, moi don deu duoc trich xuat
  * bang mot bo mau co dinh. Gio khong con duong nao tu cau hinh dan toi lop nay.
  */
-import type { FieldConfidence, Intent, ParsedOrder, ParsedOrderItem, ParseResult } from '@netviet/shared';
+import type {
+  FieldConfidence,
+  Intent,
+  OrderType,
+  ParsedOrder,
+  ParsedOrderItem,
+  ParseResult,
+} from '@netviet/shared';
 import type { Product } from '../../knowledge/domain.js';
 import { normalize } from '../../rules/text.js';
 import type { OrderParser, ParserInput } from '../order-parser.js';
@@ -111,24 +118,43 @@ export class FakeParser implements OrderParser {
     }
 
     const phoneMatch = normText.match(/0\d{9}/);
-    const orderType = phoneMatch ? 'TH2' : 'TH1';
-    const orderItems: ParsedOrderItem[] = items.map((it) => ({
-      skuRaw: it.skuRaw,
-      quantity: it.quantity,
-    }));
+    const orderType: OrderType = phoneMatch ? 'TH2' : 'TH1';
     items.forEach((it, i) => {
       confidence[`items.${i}.quantity`] = it.explicit ? 0.9 : 0.5;
       confidence[`items.${i}.product`] = 0.9;
     });
-
-    const order: ParsedOrder = {
+    const base = {
       orderType,
       dealerNameRaw: input.dealerNameRaw,
-      items: orderItems,
       noVat: NO_VAT_KEYWORDS.test(normText),
       wantVat: WANT_VAT_KEYWORDS.test(normText),
       ...(phoneMatch ? { customerPhone: phoneMatch[0] } : {}),
     };
+
+    // Khach KHONG viet so luong -> don NUA VOI, khong phai don 1 chiec (Pha 6).
+    //
+    // Truoc do cho nay dien `quantity: 1` cho moi dong khong co so. "gui ghe felix ve TN cho c"
+    // thanh mot don 1 ghe, di het duong rules engine ma khong sinh canh bao nao, va o duoi nguong
+    // tu xac nhan nen duoc GUI THANG cho khach. Nay no la `draft` va he thong se hoi lai.
+    if (items.some((it) => !it.explicit)) {
+      return {
+        intent,
+        draft: {
+          ...base,
+          items: items.map((it) => ({
+            skuRaw: it.skuRaw,
+            ...(it.explicit ? { quantity: it.quantity } : {}),
+          })),
+        },
+        confidence,
+      };
+    }
+
+    const orderItems: ParsedOrderItem[] = items.map((it) => ({
+      skuRaw: it.skuRaw,
+      quantity: it.quantity,
+    }));
+    const order: ParsedOrder = { ...base, items: orderItems };
 
     return { intent, order, confidence };
   }

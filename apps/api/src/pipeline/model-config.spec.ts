@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { envSchema } from '@netviet/shared';
-import { ClaudeAdviceComposer } from '../content/advice-composer.js';
+import { ClaudeAdvisorAgent } from '../advisor/advisor-agent.js';
 import { ClaudeParser } from './claude-parser.js';
 
 /** Env toi thieu de schema parse duoc; tung test chi them dung bien no quan tam. */
@@ -53,19 +53,24 @@ describe('model duoc truyen xuong dung noi goi API', () => {
     expect(firstCall(create)).toMatchObject({ model: 'claude-opus-5' });
   });
 
-  it('ClaudeAdviceComposer goi dung model duoc cau hinh', async () => {
-    const composer = new ClaudeAdviceComposer('sk-test', 'claude-opus-5');
+  it('ClaudeAdvisorAgent goi dung model duoc cau hinh', async () => {
+    const advisor = new ClaudeAdvisorAgent('sk-test', 'claude-opus-5');
     const create = vi.fn(async () => ({
+      stop_reason: 'end_turn',
       content: [{ type: 'text', text: 'Da anh nhe' }] as { type: string; text: string }[],
     }));
     // @ts-expect-error — thay client that bang stub
-    composer.client = { messages: { create } };
+    advisor.client = { messages: { create } };
 
-    await composer.compose({
+    await advisor.reply({
       customerText: 'con hang ko',
-      productNames: ['Ghế Felix'],
-      snippets: [{ body: 'Con hang.' }],
-    });
+      tools: {
+        knowledge: { products: () => [], prices: () => [], glossary: () => [] },
+        resolved: { dealer: null, branch: null, groupName: null, senderType: 'unknown' },
+        senderType: 'unknown',
+        chatId: 'g1',
+      },
+    } as never);
 
     expect(firstCall(create)).toMatchObject({ model: 'claude-opus-5' });
   });

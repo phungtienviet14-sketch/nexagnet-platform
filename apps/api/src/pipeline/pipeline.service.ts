@@ -14,6 +14,8 @@ import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { MediaFetcherService } from '../media/media-fetcher.service.js';
 import { MessagesRepository, type SaveMessageResult } from '../messages/messages.repository.js';
 import { ConversationContextBuilder } from '../messages/conversation-context.js';
+import { ConversationsService } from '../conversations/conversations.service.js';
+import type { ThreadKey } from '../conversations/conversation-thread.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { shouldAutoConfirmOrder } from './order-auto-confirmation.js';
@@ -69,6 +71,7 @@ export class PipelineService implements OnModuleDestroy {
     @Optional() private readonly groupDiscovery?: GroupDiscoveryService,
     @Optional() private readonly media?: MediaFetcherService,
     @Optional() private readonly conversationContext?: ConversationContextBuilder,
+    @Optional() private readonly conversations?: ConversationsService,
     @Optional() burstWindowMs?: number,
   ) {
     const env = loadEnv();
@@ -257,37 +260,78 @@ export class PipelineService implements OnModuleDestroy {
   ): Promise<OrderView> {
     const senderTypeOverride = participantRankToSenderType(participant?.customerRank);
     const conversationContext = await this.conversationContext?.build(message, contextExclusions);
+    // MACH HOI THOAI cua CHINH nguoi gui tin nay (Pha 6). Doc TRUOC khi parse: don nhap dang do
+    // la thu quyet dinh mot tin "20" co nghia gi.
+    const threadKey = ConversationsService.keyOf(message);
+    const now = new Date();
+    const pendingDraft =
+      threadKey && !opts?.rerun ? await this.conversations?.pendingDraft(threadKey, now) : null;
+    const answeringQuestion = Boolean(
+      threadKey && !opts?.rerun && (await this.conversations?.isAnsweringQuestion(threadKey, now)),
+    );
     const view = await this.orchestrator.run(message, botName, {
       ...opts,
       ...(senderTypeOverride ? { senderTypeOverride } : {}),
       ...(conversationContext ? { conversationContext } : {}),
+      ...(pendingDraft ? { pendingDraft } : {}),
+      ...(answeringQuestion ? { answeringQuestion } : {}),
     });
     const savedMessages = saved ? (Array.isArray(saved) ? saved : [saved]) : [];
     for (const row of savedMessages) await this.linkOrder(view.id, row.id);
 
-    if (this.shouldAutoSend(view, participant?.handlingMode === 'manual_review') && this.orders) {
+    const manualReview = participant?.handlingMode === 'manual_review';
+    if (this.shouldAutoSend(view, manualReview) && this.orders) {
       try {
         this.logger.log(`[AUTO_SEND] Tu xac nhan ${view.id} theo policy tenant`);
-        return await this.orders.sendConfirmation(view.id);
+        const sent = await this.orders.sendConfirmation(view.id);
+        return await this.settleThread(threadKey, message, sent, now, true);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         this.logger.warn(`[AUTO_SEND] that bai cho ${view.id} — giu Sale duyet: ${detail}`);
-        return view;
+        return this.settleThread(threadKey, message, view, now, false);
       }
     }
-    if (
-      this.shouldAutoReplyProduct(view, participant?.handlingMode === 'manual_review') &&
-      this.orders
-    ) {
+    if (this.shouldAutoReplyProduct(view, manualReview) && this.orders) {
       try {
         this.logger.log(`[AUTO_SEND] Tư vấn sản phẩm ${view.id} từ content active`);
-        return await this.orders.sendProductAdvice(view.id);
+        const replied = await this.orders.sendProductAdvice(view.id);
+        return await this.settleThread(threadKey, message, replied, now, false);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         this.logger.warn(`[AUTO_SEND] tư vấn thất bại cho ${view.id}: ${detail}`);
       }
     }
-    return view;
+    return this.settleThread(threadKey, message, view, now, false, manualReview);
+  }
+
+  /**
+   * Chot mach hoi thoai sau khi da xu ly xong tin: cap nhat don nhap, va HOI LAI khach neu con
+   * thieu du kien hoi duoc. Kill switch `AUTO_SEND=off` va `manual_review` chan ca duong nay —
+   * mot cau hoi tu dong gui vao nhom cung la mot tin tu dong gui vao nhom.
+   */
+  private async settleThread(
+    key: ThreadKey | null,
+    message: ChannelMessage,
+    view: OrderView,
+    now: Date,
+    closed: boolean,
+    manualReview = false,
+  ): Promise<OrderView> {
+    if (!key || !this.conversations) return view;
+    const autoSendOn = (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on';
+    // Van CAP NHAT mach khi tat cong tac (de Sale nhin duoc don nhap), chi khong GUI.
+    const conversation = await this.conversations.settle({
+      key,
+      message,
+      view,
+      now,
+      closed,
+      ...(autoSendOn && !manualReview ? {} : { muted: true }),
+    });
+    if (!conversation) return view;
+    const updated = { ...view, conversation };
+    await this.orders?.patchConversation(view.id, conversation);
+    return updated;
   }
 
   private async findParticipant(message: ChannelMessage): Promise<GroupParticipant | null> {

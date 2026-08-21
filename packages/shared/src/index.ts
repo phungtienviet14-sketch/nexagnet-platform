@@ -27,6 +27,7 @@ export {
   intentResultSchema,
   parsedOrderItemSchema,
   parsedOrderSchema,
+  partialOrderSchema,
   fieldConfidenceSchema,
   parseResultSchema,
 } from './order.js';
@@ -36,10 +37,20 @@ export type {
   OrderType,
   ParsedOrderItem,
   ParsedOrder,
+  PartialOrder,
   FieldConfidence,
   ParseResult,
   OrderStatus,
 } from './order.js';
+export { CLARIFY_SLOTS, THREAD_STATUSES } from './conversation.js';
+export type {
+  ClarifySlot,
+  ThreadStatus,
+  OrderDraft,
+  OrderDraftItem,
+  ConversationThread,
+  ConversationThreadView,
+} from './conversation.js';
 export { INTENT_DEFINITIONS } from './intents.js';
 export type { IntentDef } from './intents.js';
 export { DEALER_TIERS, POLICY_TYPES } from './order-view.js';

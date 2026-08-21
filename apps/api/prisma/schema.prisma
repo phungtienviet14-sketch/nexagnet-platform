@@ -592,6 +592,36 @@ model OrderMessage {
   @@index([messageId])
 }
 
+/// MACH HOI THOAI theo TUNG KHACH trong MOT nhom (Pha 6 — 21/08/2026).
+///
+/// Khoa la `(chatId, senderExternalId)`, KHONG phai chatId: mot nhom Zalo co 200 dai ly cung ban
+/// tin, khoa theo nhom nghia la cau tra loi "20 cai" cua nguoi nay dien vao don nhap cua nguoi kia.
+///
+/// `draft` la JSON cua `OrderDraft` (don NUA VOI). Khong tach thanh bang dong hang: no la trang
+/// thai tam, song vai chuc phut roi chot thanh `Order` — bang con chi them viec don dep.
+model ConversationThread {
+  id               String   @id @default(cuid())
+  chatId           String
+  senderExternalId String
+  senderDisplayName String?
+  /// collecting | awaiting_answer | closed | handed_off
+  status           String   @default("collecting")
+  draft            Json
+  /// Slot dang cho khach tra loi: product | quantity | recipient
+  awaitingSlots    String[] @default([])
+  askCount         Int      @default(0)
+  lastQuestion     String?
+  lastOrderId      String?
+  /// Qua moc nay, tin sau mo mach MOI — khong ke thua don nhap cu.
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([chatId, senderExternalId])
+  @@index([chatId, status])
+  @@index([expiresAt])
+}
+
 model RuleConfigVersion {
   id          String           @id @default(cuid())
   version     Int              @unique @default(autoincrement())

@@ -1,0 +1,269 @@
+import Anthropic from '@anthropic-ai/sdk';
+import { Logger } from '@nestjs/common';
+import type { ClarifySlot, ConversationContext, OrderDraft } from '@netviet/shared';
+import { formatTranscript } from '../messages/conversation-transcript.js';
+import { unverifiedAmounts } from './money-guard.js';
+import {
+  ADVISOR_TOOLS,
+  runAdvisorTool,
+  type AdvisorToolContext,
+  type AdvisorToolResult,
+} from './advisor-tools.js';
+
+/**
+ * AGENT TU VAN CO CONG CU — LLM tu quyet dinh luc nao can tra cuu nguon su that, roi tu viet cau
+ * tra loi dua tren ket qua tra cuu + lich su hoi thoai cua chinh khach do.
+ *
+ * NO THAY CAI GI: truoc 21/08/2026, cau tra loi tu van khong phai do LLM sinh ra. `productAdvice()`
+ * chi doc noi dung `active`; chua duyet thi tra ve MOT CHUOI HARD-CODE ("Thong tin da duyet chua
+ * du..."), va `AdviceComposer` chi duoc goi khi da co san snippet. Ket qua: hoi V08 muoi cau khac
+ * nhau van ra dung mot cau — dung nhu khach bao, va do khong phai loi xac suat, do la chua he co
+ * lan goi LLM nao.
+ *
+ * BAT BIEN GIU NGUYEN (CLAUDE.md #5): LLM khong tinh tien. Con so den tu `bao_gia`/`tinh_don` —
+ * hai cong cu chay rules engine tat dinh — va `unverifiedAmounts()` kiem lai sau khi LLM viet xong.
+ * Lo mot con so khong co trong ket qua cong cu -> BO ban soan, ben goi dung duong tat dinh.
+ */
+
+export interface AdvisorRequest {
+  /** Tin hien tai, nguyen van (chua normalize) — LLM can dau cau va ngu khi. */
+  readonly customerText: string;
+  readonly context?: ConversationContext;
+  /** Ten khach dang hoi — de goi dung nguoi trong nhom nhieu nguoi. */
+  readonly senderDisplayName?: string;
+  /** Don nhap dang do cua CHINH khach nay (neu co) — de LLM khong hoi lai thu da biet. */
+  readonly pendingDraft?: OrderDraft;
+  /** Slot he thong xac dinh la con thieu; LLM duoc goi y hoi dung nhung thu nay. */
+  readonly missingSlots?: readonly ClarifySlot[];
+  readonly tools: AdvisorToolContext;
+  readonly now?: Date;
+}
+
+export interface AdvisorReply {
+  readonly text: string;
+  /** Cong cu da goi, theo thu tu — di vao AgentTrace de Sale nhin duoc LLM da tra cuu gi. */
+  readonly usedTools: string[];
+  /** True khi LLM ket luan phai chuyen nguoi that. */
+  readonly handoff: boolean;
+}
+
+export abstract class AdvisorAgent {
+  abstract readonly name: string;
+  /** `null` = khong soan duoc; ben goi PHAI co duong tat dinh de lui ve. */
+  abstract reply(request: AdvisorRequest): Promise<AdvisorReply | null>;
+}
+
+/** Mac dinh: khong co agent. Giu nguyen duong tat dinh cu — dung cho demo/CI offline. */
+export class NoopAdvisorAgent extends AdvisorAgent {
+  readonly name = 'noop';
+  async reply(): Promise<AdvisorReply | null> {
+    return null;
+  }
+}
+
+const DEFAULT_MODEL = 'claude-opus-5';
+const MAX_TOKENS = 8_000;
+/**
+ * Bon vong la du cho chuoi dai nhat that su xay ra: tra cuu SP -> tra cuu tai lieu -> bao gia ->
+ * tinh don. Cao hon nua chi lam tang do tre ma khach dang cho trong nhom.
+ */
+const MAX_TOOL_ROUNDS = 4;
+/** Danh dau LLM tu nhan la khong tra loi duoc — de ben goi dinh tuyen Sale, khong doan tu van ban. */
+const HANDOFF_MARKER = '[CHUYEN_SALE]';
+
+export class ClaudeAdvisorAgent extends AdvisorAgent {
+  readonly name = 'claude';
+  private readonly logger = new Logger('AdvisorAgent');
+  private readonly client: Anthropic;
+
+  constructor(
+    apiKey: string,
+    private readonly model: string = DEFAULT_MODEL,
+  ) {
+    super();
+    this.client = new Anthropic({ apiKey });
+  }
+
+  async reply(request: AdvisorRequest): Promise<AdvisorReply | null> {
+    const messages: Anthropic.MessageParam[] = [
+      { role: 'user', content: request.customerText.trim() || '(khach gui mot anh)' },
+    ];
+    const toolOutputs: AdvisorToolResult[] = [];
+    const usedTools: string[] = [];
+
+    try {
+      for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+        const response = await this.client.messages.create({
+          model: this.model,
+          max_tokens: MAX_TOKENS,
+          system: buildAdvisorSystem(request),
+          tools: [...ADVISOR_TOOLS].map(toAnthropicTool),
+          messages,
+        });
+        if (response.stop_reason === 'refusal') {
+          this.logger.warn('LLM tu choi tra loi — dung duong tat dinh.');
+          return null;
+        }
+        if (response.stop_reason !== 'tool_use') {
+          return this.finalize(response, toolOutputs, usedTools);
+        }
+        // Vong CUOI van tra `tool_use` nghia la LLM chua chiu ket luan; ep no viet cau tra loi
+        // bang du kien da co thay vi tra ve tay khong.
+        if (round === MAX_TOOL_ROUNDS) {
+          this.logger.warn(`Het ${MAX_TOOL_ROUNDS} vong cong cu — dung duong tat dinh.`);
+          return null;
+        }
+        const calls = response.content.filter(
+          (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
+        );
+        const results = await Promise.all(
+          calls.map(async (call) => {
+            usedTools.push(call.name);
+            // `input` la JSON do LLM sinh — coi nhu du lieu ngoai, tung cong cu tu ep kieu.
+            const output = await runAdvisorTool(
+              call.name,
+              (call.input ?? {}) as Record<string, unknown>,
+              request.tools,
+            );
+            toolOutputs.push(output);
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: call.id,
+              content: JSON.stringify(output),
+            };
+          }),
+        );
+        messages.push({ role: 'assistant', content: response.content });
+        // MOT tin nguoi dung chua TAT CA tool_result: tach ra nhieu tin se day LLM ve phia goi
+        // cong cu tuan tu, cham hon han ma khong duoc gi.
+        messages.push({ role: 'user', content: results });
+      }
+      return null;
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      // Fail-safe: hong thi khach van nhan duoc duong tat dinh, chi la kem tu nhien hon.
+      this.logger.warn(`Agent tu van that bai, dung duong tat dinh: ${detail}`);
+      return null;
+    }
+  }
+
+  private finalize(
+    response: Anthropic.Message,
+    toolOutputs: readonly AdvisorToolResult[],
+    usedTools: string[],
+  ): AdvisorReply | null {
+    const raw = response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+      .trim();
+    if (!raw) return null;
+
+    const handoff = raw.includes(HANDOFF_MARKER);
+    const text = raw.replaceAll(HANDOFF_MARKER, '').trim();
+    if (!text) return null;
+
+    const invented = unverifiedAmounts(text, toolOutputs);
+    if (invented.length) {
+      this.logger.warn(
+        `Ban soan chua con so khong co trong ket qua cong cu (${invented.join(', ')}) — bo ban soan.`,
+      );
+      return null;
+    }
+    this.logger.log(`[advisor] cong cu=${usedTools.join(',') || 'khong'} handoff=${handoff}`);
+    return { text, usedTools, handoff };
+  }
+}
+
+function toAnthropicTool(spec: (typeof ADVISOR_TOOLS)[number]): Anthropic.Tool {
+  return {
+    name: spec.name,
+    description: spec.description,
+    // `strict: true` va `output_config.effort` la tham so cua API hien tai nhung CHUA co trong
+    // `@anthropic-ai/sdk@0.68.0` dang pin. Khong tu nang SDK trong thay doi nay vi `ClaudeParser`
+    // dung chung client; thay vao do MOI cong cu tu ep kieu dau vao trong `runAdvisorTool`.
+    input_schema: spec.inputSchema as Anthropic.Tool.InputSchema,
+  };
+}
+
+/**
+ * `system` la MANG block de dat duoc diem cat cache (giong `ClaudeParser`):
+ *   block 0 = phan TINH (vai tro, rang buoc, huong dan dung cong cu) -> `cache_control` ephemeral
+ *   block 1 = phan BIEN DONG (danh tinh khach, lich su, don nhap) -> nam SAU diem cat
+ * Prompt caching so khop TIEN TO, nen moi thu doi theo tung tin bat buoc phai nam sau moi thu on dinh.
+ */
+export function buildAdvisorSystem(request: AdvisorRequest): Anthropic.TextBlockParam[] {
+  const turn = buildAdvisorTurnContext(request);
+  return [
+    { type: 'text', text: ADVISOR_STATIC_PROMPT, cache_control: { type: 'ephemeral' } },
+    ...(turn ? [{ type: 'text' as const, text: turn }] : []),
+  ];
+}
+
+export const ADVISOR_STATIC_PROMPT = [
+  'Ban la nhan vien tu van ban hang, dang nhan tin trong nhom Zalo cua dai ly/khach hang.',
+  'Khach viet tieng Viet VIET TAT, KHONG DAU. Ban tra loi bang tieng Viet CO DAU.',
+  '',
+  'CACH LAM VIEC — bat buoc theo dung thu tu:',
+  '1. Doc lich su hoi thoai de hieu khach dang noi ve cai gi. "cai do", "no", "the con..." deu tro ve thu vua noi.',
+  '2. GOI CONG CU de lay du kien. Tuyet doi khong tra loi ve san pham, gia, chinh sach hay don hang bang tri nho cua ban.',
+  '3. Viet cau tra loi tu ket qua cong cu.',
+  '',
+  'RANG BUOC KHONG DUOC PHA:',
+  '- Moi CON SO TIEN ban viet ra phai la con so mot cong cu vua tra ve. Khong duoc uoc luong, khong duoc cong tru nham, khong duoc suy ra gia tu san pham khac. He thong kiem lai va se BO cau tra loi cua ban neu co con so la.',
+  '- Thong so, cong dung, cam ket bao hanh: chi noi nhung gi co trong ket qua `tra_cuu_tai_lieu`. Tai lieu tra ve rong nghia la CHUA DUOC DUYET — khong duoc lay tu kien thuc chung cua ban.',
+  '- Khong bia ten san pham. Chi noi ve san pham `tra_cuu_san_pham` tra ve.',
+  `- Khi khong du du kien de tra loi dung, viet mot cau ngan noi se nho Sale kiem tra roi them ${HANDOFF_MARKER} o cuoi. Doan bua te hon nhieu so voi noi that.`,
+  '',
+  'KHI KHACH MUON DAT HANG:',
+  '- Thieu thong tin (chua ro san pham nao, chua co so luong, don giao thang khach le ma thieu nguoi nhan) thi HOI LAI khach dung thu con thieu, moi luot hoi toi da 2 y.',
+  '- Da du thong tin thi goi `tinh_don` roi xac nhan lai voi khach. He thong se gui ban xac nhan chinh thuc sau, nen ban khong can ke lai tung dong.',
+  '- Da hoi mot lan roi thi khong hoi lai y do bang cau khac.',
+  '',
+  'CACH VIET:',
+  '- Xung "em", goi khach la "anh/chi" hoac goi thang ten neu biet. Lich su, than thien.',
+  '- Toi da 4 cau. Tra loi THANG dieu khach vua hoi truoc.',
+  '- Khong markdown, khong bullet, khong tieu de. Viet nhu dang nhan tin Zalo.',
+  '- Dieu da noi trong lich su thi khong lap lai.',
+].join('\n');
+
+export function buildAdvisorTurnContext(request: AdvisorRequest): string {
+  const now = request.now ?? new Date();
+  const resolved = request.tools.resolved;
+  const lines = [
+    request.senderDisplayName
+      ? `NGUOI DANG HOI: ${request.senderDisplayName}. Tra loi RIENG nguoi nay; trong nhom con nhieu nguoi khac dang nhan tin.`
+      : 'NGUOI DANG HOI: chua ro ten.',
+    resolved.dealer ? `Nhom nay thuoc dai ly: ${resolved.dealer.name}.` : 'Nhom nay CHUA map dai ly.',
+    formatDraft(request.pendingDraft, request.missingSlots),
+    formatHistory(request.context, now),
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+/**
+ * Don nhap dang do CUA CHINH nguoi nay. Vi sao phai dua vao: khong co no, LLM chi thay mot tin
+ * "20" troi noi va khong biet 20 cai gi — dung cai canh khien khach phai go lai tu dau.
+ */
+function formatDraft(draft: OrderDraft | undefined, missing: readonly ClarifySlot[] = []): string {
+  if (!draft?.items.length && !missing.length) return '';
+  const items = (draft?.items ?? [])
+    .map((item) => `${item.skuRaw ?? '(chua ro san pham)'} x ${item.quantity ?? '(chua ro so luong)'}`)
+    .join('; ');
+  return [
+    'DON DANG THU THAP CUA NGUOI NAY (do he thong giu, khong phai ban tu nho):',
+    items ? `- Dong hang: ${items}` : '- Chua co dong hang nao.',
+    missing.length ? `- He thong xac dinh con thieu: ${missing.join(', ')}.` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function formatHistory(context: ConversationContext | undefined, now: Date): string {
+  if (!context) return '';
+  const lines = [
+    context.quotedMessage ? `Khach dang reply tin: ${context.quotedMessage.text}` : '',
+    ...formatTranscript(context, now),
+  ].filter(Boolean);
+  return lines.length ? `\nLICH SU HOI THOAI TRONG NHOM (moi dong ghi ro ai noi):\n${lines.join('\n')}` : '';
+}
