@@ -96,7 +96,7 @@ export class ClaudeParser implements OrderParser {
   private readonly client: Anthropic;
   private readonly logger = new Logger('ClaudeParser');
 
-  constructor(apiKey: string, private readonly model: string = DEFAULT_MODEL) {
+  constructor(apiKey: string, readonly model: string = DEFAULT_MODEL) {
     this.client = new Anthropic({ apiKey });
   }
 

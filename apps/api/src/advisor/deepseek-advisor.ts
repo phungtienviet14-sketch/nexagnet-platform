@@ -63,7 +63,7 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
 
   constructor(
     private readonly apiKey: string,
-    private readonly model: string = DEFAULT_MODEL,
+    override readonly model: string = DEFAULT_MODEL,
   ) {
     super();
   }

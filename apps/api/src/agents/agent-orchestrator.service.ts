@@ -217,7 +217,8 @@ export class AgentOrchestrator {
     // duong CHAY NHIEU NHAT khi co su co, nen no la duong bat buoc phai co dau vet.
     this.telemetry?.aiCall({
       provider: this.advisor.name,
-      model: loadEnv().ADVICE_MODEL,
+      // Hoi chinh agent, khong doc `ADVICE_MODEL` (mac dinh cua nhanh Claude) — cung ly do voi parser.
+      model: this.advisor.model ?? this.advisor.name,
       operation: 'compose',
       durationMs: Date.now() - startedAt,
       status: reply ? 'ok' : 'error',
@@ -373,7 +374,10 @@ export class AgentOrchestrator {
     // LLM #1 (Router). Do tre THAT cua ca luot nam o day — truoc do khong ai do no.
     this.telemetry?.aiCall({
       provider: this.parser.name,
-      model: loadEnv().PARSER_MODEL,
+      // Hoi chinh parser, KHONG doc `PARSER_MODEL`: bien do la mac dinh cua nhanh Claude, nen khi
+      // dang chay DeepSeek thi trace ghi `deepseek/claude-sonnet-5` — da xay ra tren stack that
+      // ngay 21/08/2026. `flowise` khong co model rieng (Flowise tu chon ben trong flow).
+      model: this.parser.model ?? this.parser.name,
       operation: 'parse',
       durationMs: Date.now() - parseStartedAt,
       status: 'ok',

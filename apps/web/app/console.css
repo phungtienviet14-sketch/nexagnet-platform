@@ -1154,3 +1154,144 @@
   font-size: 0.8rem;
   line-height: 1.5;
 }
+
+/* ---------- Xem luong xu ly (trace viewer) ---------- */
+/*
+  Dung TOKEN co san (--ok/--warn/--danger/--line/--surface-2): bang mau da co ca hai che do
+  sang/toi o globals.css, nen viewer tu dung theo ma khong phai khai bao lai mot bang thu hai.
+*/
+.oc-trace-cta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--line);
+}
+
+.oc-trace-note {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  max-width: 42ch;
+  line-height: 1.4;
+}
+
+.tv {
+  margin-top: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.tv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.tv-head-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.tv-meta {
+  margin-left: 0.5rem;
+  font: 0.74rem/1 var(--font-mono);
+  color: var(--text-dim);
+}
+
+.tv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  /* Cay sau co the tran ngang tren man hep — cho no cuon trong khung, khong day ca trang. */
+  overflow-x: auto;
+}
+
+.tv-node {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-left: 2px solid transparent;
+  align-items: baseline;
+}
+
+.tv-mark {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+
+.tv-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.tv-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.tv-kind {
+  font: 600 0.66rem/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.tv-label {
+  font: 600 0.84rem/1.3 var(--font-mono);
+}
+
+.tv-ms {
+  font: 0.72rem/1 var(--font-mono);
+  color: var(--text-dim);
+}
+
+.tv-reason,
+.tv-detail {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
+.tv-code {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font: 0.7rem/1.3 var(--font-mono);
+}
+
+/* Ket cuc to mau theo NGHIA, khong to cho dep: do = cong dong, cam = duong du phong. */
+.tv-node.tv-ok .tv-mark { color: var(--ok); }
+.tv-node.tv-degraded .tv-mark { color: var(--warn); }
+.tv-node.tv-denied .tv-mark { color: var(--danger); }
+.tv-node.tv-denied .tv-label { color: var(--danger); }
+
+.tv-toggle {
+  width: 100%;
+  padding: 0.45rem;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  font: 0.76rem var(--font-body);
+  cursor: pointer;
+}
+
+.tv-toggle:hover {
+  color: var(--accent);
+  background: var(--surface);
+}

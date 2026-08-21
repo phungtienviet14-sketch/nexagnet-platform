@@ -1,8 +1,10 @@
 'use client';
 
-import type { OrderView } from '@netviet/shared';
-import { formatVnd } from '../../lib/api';
+import { useState } from 'react';
+import type { OrderView, TraceView } from '@netviet/shared';
+import { fetchOrderTrace, formatVnd } from '../../lib/api';
 import { INTENT_LABEL, POLICY_LABEL, statusMetaFor, timeOf } from '../../lib/labels';
+import { TraceViewer } from './TraceViewer';
 
 type Props = {
   order: OrderView;
@@ -27,6 +29,77 @@ function ReplyBox({ reply }: { reply: string }) {
   );
 }
 
+/**
+ * Trang thai cua panel "Xem luong xu ly".
+ *
+ * Tach thanh hook rieng de `OrderDetailPanel` khong phinh them bon bien trang thai — panel do
+ * von da lo viec nghiep vu (duyet/tu choi/nhap ERP), va viec debug khong duoc lam no kho doc hon.
+ *
+ * `notFound` la mot trang thai RIENG, khong phai `error`: luot da roi khoi vong dem cua API la
+ * chuyen BINH THUONG voi don cu (xem `RecentTracesSink`), va noi voi nguoi dung mot cau tu te
+ * khac han voi bao mot loi do.
+ */
+function useTracePanel(order: OrderView) {
+  const [view, setView] = useState<TraceView | null>(null);
+  const [state, setState] = useState<'idle' | 'loading' | 'notFound' | 'error'>('idle');
+
+  const open = async (): Promise<void> => {
+    setState('loading');
+    try {
+      const found = await fetchOrderTrace(order.id);
+      if (!found) {
+        setState('notFound');
+        return;
+      }
+      setView(found);
+      setState('idle');
+    } catch {
+      // Quan sat hong KHONG duoc lam hong man hinh nghiep vu — cung tinh than fail-open voi
+      // tang telemetry o API.
+      setState('error');
+    }
+  };
+
+  const close = (): void => {
+    setView(null);
+    setState('idle');
+  };
+
+  return { view, state, open, close };
+}
+
+/**
+ * Nut "Xem luong xu ly" + panel ket qua.
+ *
+ * TACH KHOI khoi hanh dong nghiep vu co chu y: xem luong la viec CHAN DOAN, khong phai mot buoc
+ * trong quy trinh cua Sale. De lan vao cung hang voi "Duyet & gui" se lam mot nut vo hai trong
+ * giong mot nut co hau qua.
+ */
+function TracePanel({ trace }: { trace: ReturnType<typeof useTracePanel> }) {
+  if (trace.view) return <TraceViewer trace={trace.view} onClose={trace.close} />;
+  return (
+    <div className="oc-trace-cta">
+      <button
+        type="button"
+        className="btn btn-ghost"
+        disabled={trace.state === 'loading'}
+        onClick={() => void trace.open()}
+      >
+        {trace.state === 'loading' ? 'Đang tải luồng…' : 'Xem luồng xử lý'}
+      </button>
+      {trace.state === 'notFound' && (
+        <span className="oc-trace-note">
+          Không còn lưu luồng của đơn này — bộ đệm chỉ giữ các lượt gần đây. Luồng cũ hơn vẫn tra
+          được từ log máy chủ.
+        </span>
+      )}
+      {trace.state === 'error' && (
+        <span className="oc-trace-note">Không đọc được luồng xử lý lúc này.</span>
+      )}
+    </div>
+  );
+}
+
 export function OrderDetailPanel({
   order,
   isBusy,
@@ -37,6 +110,7 @@ export function OrderDetailPanel({
   const status = statusMetaFor(order);
   const canAct = order.status === 'pending_review' || order.status === 'needs_edit';
   const reply = order.trace?.reply;
+  const trace = useTracePanel(order);
   const p = order.priced;
 
   // Tin khong phai don (hoi gia / tu van / khac) — chi co nhap tra loi.
@@ -53,6 +127,11 @@ export function OrderDetailPanel({
           <span className={`chip ${status.cls}`}>{status.label}</span>
         </div>
         {reply && <ReplyBox reply={reply} />}
+        {/*
+          Nhanh KHONG-PHAI-DON (tu van, hoi dap, `khac`) cung phai xem duoc luong.
+          Do moi la cho hay bi hoi nhat: "vi sao bot tra loi the nay", "vi sao bot im lang".
+        */}
+        <TracePanel trace={trace} />
         {/*
           Truoc 21/08/2026 nhanh nay tra ve som VA KHONG CO NUT NAO — chi mot dong chu "chuyen
           Sale xu ly". Nen mot cau bao gia da tinh xong van khong the gui tu giao dien. Nay tin
@@ -172,6 +251,7 @@ export function OrderDetailPanel({
       ) : null}
 
       {reply && <ReplyBox reply={reply} />}
+      <TracePanel trace={trace} />
 
       {canAct ? (
         <div className="oc-actions">

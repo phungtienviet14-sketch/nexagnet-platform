@@ -1,7 +1,9 @@
 import { Global, Logger, Module } from '@nestjs/common';
 import { loadTenantConfig } from '@netviet/tenant';
 import { resolveReleaseIdentity, formatRelease } from './release-identity.js';
+import { RecentTracesSink } from './recent-traces.sink.js';
 import { StructuredLogSink } from './structured-logging.js';
+import { TraceController } from './trace.controller.js';
 import { TelemetryService } from './telemetry.service.js';
 import type { TelemetrySink } from './telemetry-record.js';
 import { privacyModeFor } from './telemetry-redaction.js';
@@ -19,10 +21,13 @@ import { privacyModeFor } from './telemetry-redaction.js';
  */
 @Global()
 @Module({
+  controllers: [TraceController],
   providers: [
+    RecentTracesSink,
     {
       provide: TelemetryService,
-      useFactory: (): TelemetryService => {
+      inject: [RecentTracesSink],
+      useFactory: (recentTraces: RecentTracesSink): TelemetryService => {
         const telemetry = new TelemetryService();
         const logger = new Logger('Observability');
 
@@ -42,10 +47,11 @@ import { privacyModeFor } from './telemetry-redaction.js';
           process.env.TELEMETRY_PRIVACY,
         );
 
-        // Mot sink duy nhat o buoc nay: NDJSON ra stdout. Do la lua chon co y —
-        // docs/kien-truc/observability-review.md §13 giai thich vi sao chua dung backend rieng.
+        // Hai sink, khong backend nao ben ngoai — xem docs/kien-truc/observability-review.md §13.
+        //   · `StructuredLogSink`  -> NDJSON ra stdout, cho `docker logs | tools/trace-view.mjs`;
+        //   · `RecentTracesSink`   -> vong dem co tran, cho nut "Xem luong xu ly" tren console.
         // Them sink khac (Postgres cua tenant, OTLP) chi la them phan tu vao mang nay.
-        const sinks: TelemetrySink[] = [new StructuredLogSink()];
+        const sinks: TelemetrySink[] = [new StructuredLogSink(), recentTraces];
 
         telemetry.configure({ release, privacy, sinks });
 
