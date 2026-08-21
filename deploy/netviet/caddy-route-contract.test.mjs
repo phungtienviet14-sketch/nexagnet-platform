@@ -456,3 +456,18 @@ test('deploy gieo nguon su that TRUOC khi chay smoke, va chi khi DB rong', async
   // van thay "da co san pham" roi bo qua.
   assert.match(seed, /\$transaction/);
 });
+
+// Su co 21/08/2026: deploy khach `wata` (chi co `knowledge` + `operations`) chet o buoc gieo voi
+// 'Goi khach thieu dealers'. Seeder doi MOI khach khai dai ly, tuc la keo khai niem cua
+// `sales-order` vao base — trai quyet dinh kien truc #6. Guard chi duoc ap cho khach CO nang luc
+// do; khach khac loai phai len duoc ma khong can khai mot mang rong vo nghia.
+test('gieo nguon su that: `dealers` chi bat buoc voi khach co nang luc sales-order', async () => {
+  const seed = await readFile(new URL('./seed-tenant-knowledge.mjs', import.meta.url), 'utf8');
+
+  assert.match(seed, /capabilities\.includes\('sales-order'\)/);
+  assert.doesNotMatch(
+    seed,
+    /const dealers = required\(/,
+    'dealers khong duoc bat buoc vo dieu kien cho moi khach',
+  );
+});
