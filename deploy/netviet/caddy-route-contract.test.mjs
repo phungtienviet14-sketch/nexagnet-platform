@@ -465,6 +465,19 @@ test('deploy gieo nguon su that TRUOC khi chay smoke, va chi khi DB rong', async
 // 'Khong mo duoc SSE: HTTP 404'. Nhanh RUT GON cua smoke van doi mo duoc `/events`, ma endpoint do
 // thuoc `sales-order`. Cong smoke phai thu hep theo NANG LUC, va bat bien 7 doi no BAO TO khi thu
 // hep — im lang thi mot lan deploy xanh se bi doc nham la 'da kiem het'.
+// Su co 21/08/2026 (het): stack WATA healthy, smoke qua, roi cong public HTTPS van do vi no probe
+// `/zalo` + `/zalo/status` — hai route do nang luc `messaging` phuc vu. Khach khong bat kenh thi
+// Next render notFound, tuc la cong dang doi mot thu DUNG RA khong duoc ton tai.
+test('cong public HTTPS probe theo nang luc, va khach khong-messaging van bi kiem', async () => {
+  const deployStack = await readFile(new URL('./deploy-stack.sh', import.meta.url), 'utf8');
+
+  assert.match(deployStack, /has_messaging/);
+  // Khach khong co kenh KHONG duoc mien kiem: van phai phuc vu vo dieu hanh qua TLS.
+  assert.match(deployStack, /OPERATOR_DOMAIN\}\/"/);
+  // Doc khong duoc goi khach -> nga ve phia doi day du cong, khong phai bo qua.
+  assert.match(deployStack, /van doi day du cong \/zalo/);
+});
+
 test('smoke: cong SSE thu hep theo nang luc va bao to khi thu hep', async () => {
   const smoke = await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8');
 
