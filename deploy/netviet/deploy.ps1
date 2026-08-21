@@ -408,6 +408,11 @@ function Ensure-Secrets {
   Ensure-Secret "$SecretPrefix-zalo-db-password" { New-RandomSecret }
   Ensure-Secret "$SecretPrefix-flowise-db-password" { New-RandomSecret }
   Ensure-Secret "$SecretPrefix-deepseek-api-key" { Get-LocalEnvValue 'DEEPSEEK_API_KEY' }
+  # Khoa Claude cho AGENT TU VAN (`ADVICE_COMPOSER=claude`). Tach khoi parser co chu y: parser va
+  # nguoi soan cau tra loi la HAI quyet dinh xu ly du lieu khac nhau. Claude nam trong danh sach
+  # ben thu ba DA DUOC DUYET (CLAUDE.md), DeepSeek thi chua — nen day cung la duong de dua cau chu
+  # gui cho khach sang mot nha cung cap hop le ma khong phai doi parser.
+  Ensure-Secret "$SecretPrefix-anthropic-api-key" { Get-LocalEnvValue 'ANTHROPIC_API_KEY' }
   # Token chi duoc render san. Kenh van mock neu operator chua tao override co y bang
   # set-channel-mode.sh; co token KHONG tu bat bot/hybrid.
   Ensure-Secret "$SecretPrefix-zalo-bot-token" { Get-LocalEnvValue 'ZALO_BOT_TOKEN' }
@@ -425,12 +430,13 @@ function Ensure-Secrets {
   # MOT NGUON DUY NHAT cho ca hai viec: tao secret o tren va cap quyen doc o duoi. Truoc day day la
   # hai danh sach roi phai tu tay giu khop nhau — dung dip len khach Amico (17/08/2026) thi lech:
   # secret co that nhung service account cua VM khong co binding, stack chet voi PERMISSION_DENIED
-  # giua chung. `render-secrets.sh` doc dung 13 ten dau tien; demo/operator-password danh cho nguoi.
+  # giua chung. `render-secrets.sh` doc 14 ten dau tien; demo/operator-password danh cho nguoi.
   $secretSuffixes = @(
     'postgres-admin-password',
     'zalo-db-password',
     'flowise-db-password',
     'deepseek-api-key',
+    'anthropic-api-key',
     'zalo-bot-token',
     'api-key',
     'flowise-secretkey',

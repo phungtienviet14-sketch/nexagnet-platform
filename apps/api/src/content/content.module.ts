@@ -3,7 +3,8 @@ import { loadTenantContentManifest } from '@netviet/tenant';
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import { PrismaModule } from '../config/prisma.module.js';
 import { PrismaService } from '../config/prisma.service.js';
-import { AdviceComposer, ClaudeAdviceComposer, NoopAdviceComposer } from './advice-composer.js';
+import { AdvisorAgent, ClaudeAdvisorAgent, NoopAdvisorAgent } from '../advisor/advisor-agent.js';
+import { DeepSeekAdvisorAgent } from '../advisor/deepseek-advisor.js';
 import { ContentController } from './content.controller.js';
 import { ContentImportService } from './content-import.service.js';
 import { ContentManagementService } from './content-management.service.js';
@@ -44,12 +45,18 @@ import { SEED } from '../knowledge/seed.js';
      * hanh. Thieu cong tac hoac thieu API key -> Noop -> giu nguyen ban noi FAQ, khong sap.
      */
     {
-      provide: AdviceComposer,
-      useFactory: (): AdviceComposer => {
+      provide: AdvisorAgent,
+      useFactory: (): AdvisorAgent => {
         const env = loadFoundationEnv();
-        return env.ADVICE_COMPOSER === 'claude' && env.ANTHROPIC_API_KEY
-          ? new ClaudeAdviceComposer(env.ANTHROPIC_API_KEY, env.ADVICE_MODEL)
-          : new NoopAdviceComposer();
+        // Thieu khoa cua chinh nha cung cap da chon -> Noop, KHONG am tham roi sang nha cung cap
+        // khac. Doi ben nhan du lieu phai la mot quyet dinh co y, khong phai mot fallback.
+        if (env.ADVICE_COMPOSER === 'claude' && env.ANTHROPIC_API_KEY) {
+          return new ClaudeAdvisorAgent(env.ANTHROPIC_API_KEY, env.ADVICE_MODEL);
+        }
+        if (env.ADVICE_COMPOSER === 'deepseek' && env.DEEPSEEK_API_KEY) {
+          return new DeepSeekAdvisorAgent(env.DEEPSEEK_API_KEY, env.ADVICE_DEEPSEEK_MODEL);
+        }
+        return new NoopAdvisorAgent();
       },
     },
     ContentService,
@@ -57,6 +64,6 @@ import { SEED } from '../knowledge/seed.js';
     ContentManagementService,
     TenantPackContentBootstrap,
   ],
-  exports: [ContentService, ContentRepository, AdviceComposer],
+  exports: [ContentService, ContentRepository, AdvisorAgent],
 })
 export class ContentModule {}

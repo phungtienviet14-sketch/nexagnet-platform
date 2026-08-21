@@ -61,10 +61,42 @@ export type ParsedOrder = z.infer<typeof parsedOrderSchema>;
 export const fieldConfidenceSchema = z.record(z.string(), z.number().min(0).max(1));
 export type FieldConfidence = z.infer<typeof fieldConfidenceSchema>;
 
+/**
+ * Don NUA VOI ma parser doc duoc nhung chua du de dua vao rules engine.
+ *
+ * Vi sao phai co truong rieng: `parsedOrderSchema` doi `items[].quantity` la so nguyen duong BAT
+ * BUOC, nen mot tin that nhu "gui ghe felix ve TN cho c" khong bieu dien duoc — parser buoc phai
+ * hoac bia mot so luong, hoac vut ca don. Do la ly do KY THUAT khien bot khong the hoi lai "bao
+ * nhieu cai a?" ma chi biet chuyen Sale. Khai bao inline (khong import tu `conversation.ts`) de
+ * tranh vong phu thuoc giua hai module cua cung mot goi.
+ */
+export const partialOrderSchema = z.object({
+  orderType: z.enum(ORDER_TYPES).optional(),
+  items: z
+    .array(
+      z.object({
+        skuRaw: z.string().min(1).optional(),
+        quantity: z.number().int().positive().optional(),
+        unitPriceRaw: z.number().nonnegative().optional(),
+      }),
+    )
+    .default([]),
+  totalRaw: z.number().nonnegative().optional(),
+  noVat: z.boolean().optional(),
+  wantVat: z.boolean().optional(),
+  customerName: z.string().optional(),
+  customerPhone: z.string().optional(),
+  customerAddress: z.string().optional(),
+  codCollect: z.boolean().optional(),
+});
+export type PartialOrder = z.infer<typeof partialOrderSchema>;
+
 /** Ket qua parser tra ve cho tang pipeline */
 export const parseResultSchema = z.object({
   intent: z.enum(INTENTS),
   order: parsedOrderSchema.optional(),
+  /** Chi xuat hien khi intent=dat_don ma `order` khong dung duoc vi thieu truong bat buoc. */
+  draft: partialOrderSchema.optional(),
   confidence: fieldConfidenceSchema.default({}),
 });
 export type ParseResult = z.infer<typeof parseResultSchema>;

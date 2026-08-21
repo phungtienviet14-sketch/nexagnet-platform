@@ -15,8 +15,10 @@ import {
   type AgentStreamEvent,
   type AgentTrace,
   type ChannelMessage,
+  type ClarifySlot,
   type ConversationContext,
   type Intent,
+  type OrderDraft,
   type OrderStatus,
   type OrderView,
   type OutboundContent,
@@ -28,7 +30,9 @@ import {
   type SupervisorSummary,
 } from '@netviet/shared';
 import { KnowledgeService, type ResolvedGroup } from '../knowledge/knowledge.service.js';
-import { AdviceComposer } from '../content/advice-composer.js';
+import { AdvisorAgent } from '../advisor/advisor-agent.js';
+import { ContentService } from '../content/content.service.js';
+import { mergeConversationTurn } from '../conversations/conversation-merge.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
@@ -38,7 +42,6 @@ import { priceOrder, routeStatus } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
 import { DEFAULT_AGENTS_CONFIG, type AgentsConfig } from './agents.config.js';
 import { RuleConfigService } from '../rule-config/rule-config.service.js';
-import { ContentService } from '../content/content.service.js';
 import { toAgentsConfig, toRulesConfig } from '../rule-config/rule-config.defaults.js';
 import { validateContextualParse } from '../pipeline/contextual-parse.js';
 import {
@@ -102,39 +105,57 @@ export class AgentOrchestrator {
     @Optional() private readonly events?: AgentEventsService,
     @Optional() private readonly ruleConfigs?: RuleConfigService,
     @Optional() private readonly content?: ContentService,
-    @Optional() private readonly composer?: AdviceComposer,
+    @Optional() private readonly advisor?: AdvisorAgent,
   ) {}
 
   /**
-   * Soan lai cau tra loi tu van bang LLM tren dung nhung manh DA DUYET (Uu tien 2 — bao cao
-   * 15/08/2026). Truoc day `text` la `body.join('\n')`, tuc noi nguyen van FAQ.
+   * Cau tra loi do AGENT CO CONG CU sinh ra (Pha 6 — 21/08/2026).
    *
-   * Fail-safe hai lop: khong co composer / khong co manh nao / ban soan rong hoac lo noi con so
-   * tien -> `compose()` tra `null` -> giu NGUYEN ban tra bang. Khach luon nhan duoc noi dung da
-   * duyet; ban soan chi lam no muot hon chu khong phai dieu kien de tra loi.
+   * Truoc day cho nay chi soan lai nhung manh FAQ ma `dispatch()` da tra cuu san, va CHI cho
+   * `hoi_san_pham` khi da co snippet. Hai hau qua that: (1) san pham chua duyet noi dung thi moi
+   * cau hoi khac nhau deu ra dung mot chuoi hard-code; (2) cac intent con lai khong bao gio di
+   * qua LLM. Nay agent TU goi cong cu tra cuu nguon su that roi tu viet cau tra loi.
+   *
+   * Fail-safe khong doi: `reply()` tra `null` (tat, hong, het vong, hoac lo mot con so tien khong
+   * co trong ket qua cong cu) -> GIU NGUYEN duong tat dinh cu. Khach luon nhan duoc mot cau tra
+   * loi; agent chi lam no dung nguoi dung viec hon.
    */
-  private async composeAdvice(
+  private async composeReply(
     dispatch: DispatchResult,
-    intent: Intent,
-    customerText: string,
-    context: ConversationContext | undefined,
-    now: Date,
-  ): Promise<{ dispatch: DispatchResult; composed: boolean }> {
-    const advice = dispatch.outbound as ProductAdviceResult | undefined;
-    if (intent !== 'hoi_san_pham' || !this.composer || !advice?.snippets?.length) {
-      return { dispatch, composed: false };
-    }
-    const text = await this.composer.compose({
-      customerText,
-      productNames: advice.productNames ?? [],
-      snippets: advice.snippets,
-      context,
-      now,
+    input: ComposeReplyInput,
+  ): Promise<{ dispatch: DispatchResult; composed: boolean; handoff: boolean }> {
+    // `dat_don` DA DU du kien di duong tat dinh: van ban xac nhan la mot chung tu, khong phai mot
+    // cau tro chuyen — de LLM viet lai no la mo mot cho khong can thiet cho con so di lac.
+    const orderIsComplete = input.intent === 'dat_don' && dispatch.priced !== null;
+    if (!this.advisor || orderIsComplete) return { dispatch, composed: false, handoff: false };
+
+    const reply = await this.advisor.reply({
+      customerText: input.customerText,
+      ...(input.context ? { context: input.context } : {}),
+      ...(input.senderDisplayName ? { senderDisplayName: input.senderDisplayName } : {}),
+      ...(input.draft ? { pendingDraft: input.draft } : {}),
+      ...(input.missingSlots?.length ? { missingSlots: input.missingSlots } : {}),
+      tools: {
+        knowledge: this.knowledge,
+        ...(this.content ? { content: this.content } : {}),
+        resolved: input.resolved,
+        senderType: input.resolved.senderType,
+        chatId: input.chatId,
+        ...(input.senderExternalId ? { senderExternalId: input.senderExternalId } : {}),
+      },
+      now: input.now,
     });
-    if (!text) return { dispatch, composed: false };
+    if (!reply) return { dispatch, composed: false, handoff: false };
+
+    const advice = dispatch.outbound as ProductAdviceResult | undefined;
     return {
-      dispatch: { ...dispatch, reply: text, outbound: { ...advice, text } },
+      dispatch: {
+        ...dispatch,
+        reply: reply.text,
+        ...(advice ? { outbound: { ...advice, text: reply.text } } : {}),
+      },
       composed: true,
+      handoff: reply.handoff,
     };
   }
 
@@ -151,6 +172,10 @@ export class AgentOrchestrator {
       rerun?: boolean;
       senderTypeOverride?: SenderType;
       conversationContext?: ConversationContext;
+      /** Don nhap dang do cua CHINH nguoi gui tin nay (mach hoi thoai — Pha 6). */
+      pendingDraft?: OrderDraft;
+      /** Bot vua hoi va dang cho dung nguoi nay tra loi. */
+      answeringQuestion?: boolean;
     },
   ): Promise<OrderView> {
     const orderId = opts?.orderId ?? randomUUID();
@@ -202,13 +227,30 @@ export class AgentOrchestrator {
       // Moc de tinh thoi gian tuong doi trong lich su ("5 phut truoc"). Lay tu tin, khong
       // lay dong ho may chu: tin co the vao muon, va rerun phai cho ra cung mot prompt.
       sentAt: message.sentAt,
+      // Mach hoi thoai (Pha 6): don nhap + "dang cho tra loi" nam trong PHAN BIEN DONG cua prompt,
+      // nen chung khong pha prompt cache cua phan tinh.
+      ...(opts?.pendingDraft ? { pendingDraft: opts.pendingDraft } : {}),
+      ...(opts?.answeringQuestion ? { awaitingAnswer: true } : {}),
     });
-    const parseResult = validateContextualParse(
+    const validated = validateContextualParse(
       rawParseResult,
       message.text,
       this.knowledge.products(),
       opts?.conversationContext,
+      // Mach dang cho khach tra loi thi ke thua ngu canh la CO CO SO, khong phai LLM tu doan:
+      // chinh he thong vua hoi va dang giu don nhap. Guard chi con canh truong hop khong co mach.
+      Boolean(opts?.answeringQuestion),
     );
+    // GHEP luot tin vao mach chot don: "20" sau cau hoi "may cai a?" thanh so luong cua don dang do.
+    const turn = mergeConversationTurn({
+      result: validated,
+      text: message.text,
+      pendingDraft: opts?.pendingDraft ?? null,
+      answeringQuestion: Boolean(opts?.answeringQuestion),
+      products: this.knowledge.products(),
+      dealerKnown: senderKnown,
+    });
+    const parseResult = turn.result;
     const usedLlm = this.parser.name !== 'mock';
     const intent = parseResult.intent;
     const primaryRole = INTENT_TO_ROLE[intent];
@@ -216,23 +258,20 @@ export class AgentOrchestrator {
 
     // DISPATCH worker theo intent (dong bo), roi phat tung vai theo thu tu.
     const dispatched = this.dispatch(parseResult, resolved, normText, rulesConfig, agentsConfig);
-    const { dispatch, composed } = await this.composeAdvice(
-      dispatched,
+    const { dispatch, composed, handoff } = await this.composeReply(dispatched, {
       intent,
-      message.text,
-      opts?.conversationContext,
-      message.sentAt,
-    );
+      customerText: message.text,
+      resolved,
+      chatId: message.externalChatId,
+      now: message.sentAt,
+      ...(opts?.conversationContext ? { context: opts.conversationContext } : {}),
+      ...(message.senderDisplayName ? { senderDisplayName: message.senderDisplayName } : {}),
+      ...(message.senderExternalId ? { senderExternalId: message.senderExternalId } : {}),
+      ...(turn.draft ? { draft: turn.draft } : {}),
+      ...(turn.gaps ? { missingSlots: turn.gaps.askable } : {}),
+    });
     if (composed) {
-      const advisor = dispatch.roles.get('product_advisor');
-      if (advisor) {
-        dispatch.roles.set('product_advisor', {
-          ...advisor,
-          action: 'Soạn tư vấn từ nội dung đã duyệt (LLM soạn văn, không tự ra số)',
-          source: 'llm',
-          usedLlm: true,
-        });
-      }
+      markComposedRole(dispatch, primaryRole, handoff);
     }
     dispatch.roles.set('router', {
       action: `Phân loại: ${INTENT_LABELS[intent]} · người gửi: ${SENDER_LABELS[resolved.senderType]} → ${ROLE_LABELS[primaryRole]}`,
@@ -292,8 +331,13 @@ export class AgentOrchestrator {
       phase: 'done',
       step: this.buildStep('supervisor', dispatch.roles.get('supervisor'), supervisor),
     });
+    // Don con thieu du kien KHONG duoc dung o `pending_review`: o trang thai do no du dieu kien
+    // auto-send, tuc gui cho khach mot xac nhan cua mot don chua ai chot.
+    const incomplete = turn.gaps !== null && !turn.gaps.complete;
     const status =
-      supervisor.escalate && dispatch.status === 'pending_review' ? 'needs_edit' : dispatch.status;
+      (supervisor.escalate || incomplete) && dispatch.status === 'pending_review'
+        ? 'needs_edit'
+        : dispatch.status;
 
     const llmCalls = (usedLlm ? 1 : 0) + (composed ? 1 : 0);
     const trace = this.buildTrace(
@@ -327,6 +371,10 @@ export class AgentOrchestrator {
       // De xac nhan gui ra la mot cau TRA LOI dung tin nay, khong phai mot cau troi noi
       // giua nhom 200 dai ly dang ban tin.
       ...(message.quoteTarget ? { quoteTarget: message.quoteTarget } : {}),
+      ...(turn.draft ? { pendingDraft: turn.draft } : {}),
+      ...(turn.gaps
+        ? { draftGaps: { askable: turn.gaps.askable, blocking: turn.gaps.blocking } }
+        : {}),
     };
     const saved = await this.orders.create(view);
     emit({ type: 'order.finalized', order: saved });
@@ -561,6 +609,36 @@ export class AgentOrchestrator {
       );
     }
   }
+}
+
+/** Du kien mot luot soan cau tra loi. Gom rieng de chu ky `composeReply` khong phinh ra 10 tham so. */
+interface ComposeReplyInput {
+  readonly intent: Intent;
+  readonly customerText: string;
+  readonly resolved: ResolvedGroup;
+  readonly chatId: string;
+  readonly now: Date;
+  readonly context?: ConversationContext;
+  readonly senderDisplayName?: string;
+  readonly senderExternalId?: string;
+  readonly draft?: OrderDraft;
+  readonly missingSlots?: readonly ClarifySlot[];
+}
+
+/**
+ * Danh dau vai da dung LLM co cong cu. Danh vao vai CHINH cua intent chu khong co dinh
+ * `product_advisor`: mot cau hoi cong no do Chinh sach-Tai chinh tra loi, ghi cong cho Tu van SP
+ * la ghi sai vet.
+ */
+function markComposedRole(dispatch: DispatchResult, role: AgentRole, handoff: boolean): void {
+  const current = dispatch.roles.get(role);
+  dispatch.roles.set(role, {
+    action: 'Tra cứu nguồn sự thật bằng công cụ rồi tự soạn câu trả lời (LLM không tự ra số)',
+    notes: current?.notes ?? [],
+    source: 'llm',
+    usedLlm: true,
+    ...(handoff ? { handoff: true } : current?.handoff ? { handoff: true } : {}),
+  });
 }
 
 function sleep(ms: number): Promise<void> {

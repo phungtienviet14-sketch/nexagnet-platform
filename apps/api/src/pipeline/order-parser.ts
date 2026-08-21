@@ -1,4 +1,4 @@
-import type { ConversationContext, ParseResult } from '@netviet/shared';
+import type { ConversationContext, OrderDraft, ParseResult } from '@netviet/shared';
 import type { GlossaryEntry, Product } from '../knowledge/domain.js';
 
 /**
@@ -20,6 +20,10 @@ export interface ParserInput {
   context?: ConversationContext;
   /** Thoi diem tin hien tai — moc de tinh thoi gian tuong doi trong lich su. Thieu: bay gio. */
   sentAt?: Date;
+  /** Don NUA VOI dang thu thap cua chinh nguoi gui (mach hoi thoai — Pha 6). */
+  pendingDraft?: OrderDraft;
+  /** He thong vua hoi va dang cho DUNG nguoi nay tra loi. */
+  awaitingAnswer?: boolean;
 }
 
 export interface OrderParser {

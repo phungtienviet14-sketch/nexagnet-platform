@@ -1,5 +1,6 @@
 import type { AgentTrace, SenderType } from './agents.js';
 import type { ZaloQuoteTarget } from './channel-message.js';
+import type { ClarifySlot, ConversationThreadView, OrderDraft } from './conversation.js';
 import type { FieldConfidence, Intent, OrderStatus, OrderType, ParsedOrder } from './order.js';
 
 /**
@@ -98,4 +99,17 @@ export interface OrderView {
    * Chi co khi kenh cap du kien (zca); vang mat -> gui thuong nhu truoc.
    */
   quoteTarget?: ZaloQuoteTarget;
+  /**
+   * Don NHAP dang thu thap qua nhieu luot cua CHINH nguoi gui tin nay (Pha 6). Khac `parsed`:
+   * `parsed` la don DAY DU da du dieu kien dua vao rules engine, con day la trang thai nua voi —
+   * "biet ban ghe Felix, chua biet may cai". Vang mat khi tin khong thuoc mot luot chot don.
+   */
+  pendingDraft?: OrderDraft;
+  /**
+   * Con thieu gi de chot duoc don. `askable` la thu HOI DUOC khach; `blocking` la thu chi noi bo
+   * quyet duoc (chua map dai ly, chua duyet VAT, chua co bieu cuoc) — nhung thu do di thang Sale.
+   */
+  draftGaps?: { askable: ClarifySlot[]; blocking: string[] };
+  /** Trang thai mach hoi thoai cua nguoi gui, de console hien "dang cho khach tra loi". */
+  conversation?: ConversationThreadView;
 }

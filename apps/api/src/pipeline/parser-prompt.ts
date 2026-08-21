@@ -49,11 +49,19 @@ export function buildStaticPrompt(
     '- Neu tin hien tai gom nhieu dong "TIN n [thoi gian]", day la MOT luot nhan lien tiep cua CUNG nguoi gui. Doc theo thu tu thoi gian; noi dung o tin SAU thay the noi dung mau thuan o tin truoc.',
     '- Neu tin hien tai la reply/bo sung, chi ke thua SKU/order reference khi quote/context xac dinh DUY NHAT. Context mo ho -> intent=khac, confidence thap, KHONG doan.',
     '',
+    'DON NUA VOI (truong "draft") — dung khi khach RO RANG muon dat nhung THIEU du kien bat buoc:',
+    '- Biet san pham, chua biet so luong ("gui ghe felix ve TN cho c") -> intent=dat_don, KHONG dien "order", dien "draft":{"items":[{"skuRaw":"ghe felix"}]}.',
+    '- Biet so luong, chua ro san pham ("cho a lay 5 cai") -> "draft":{"items":[{"quantity":5}]}.',
+    '- Don giao thang khach le ma thieu SDT/dia chi -> "draft" kem orderType TH2 va nhung truong da biet.',
+    '- TUYET DOI KHONG bia so luong hay ten san pham de lam cho "order" du. He thong se HOI LAI khach phan con thieu; bia mot con so o day la gui cho khach mot xac nhan sai.',
+    '- Khi phan DON DANG THU THAP ben duoi co du kien, tin hien tai co the la CAU TRA LOI cho cau he thong vua hoi: mot tin chi co con so ("20", "20 cai") la SO LUONG cua don do -> intent=dat_don, "draft":{"items":[{"quantity":20}]}.',
+    '',
     'confidence.intent = do tin cay phan loai (so tu 0 den 1). Neu tin mo ho / khong chac thuoc 6 loai dau -> intent=khac va confidence.intent thap.',
     '',
     'Tra ve DUY NHAT mot JSON (khong markdown, khong giai thich):',
     '- QUAN TRONG: truong "order" CHI xuat hien khi intent=dat_don. Cac intent khac TUYET DOI KHONG co "order".',
     '- Vi du intent=dat_don: {"intent":"dat_don","order":{"orderType":"TH1","items":[{"skuRaw":"ghe felix","quantity":10}],"noVat":true},"confidence":{"intent":0.95}}',
+    '- Vi du dat_don THIEU so luong: {"intent":"dat_don","draft":{"items":[{"skuRaw":"ghe felix"}]},"confidence":{"intent":0.8}}',
     '- Vi du intent=hoi_gia: {"intent":"hoi_gia","confidence":{"intent":0.9}}',
     '- Vi du intent=bao_hanh_khieu_nai: {"intent":"bao_hanh_khieu_nai","confidence":{"intent":0.9}}',
     '',
@@ -71,6 +79,7 @@ export function buildStaticPrompt(
 export function buildTurnContext(input: ParserInput): string {
   return [
     input.dealerNameRaw ? `Nhom nay thuoc dai ly: ${input.dealerNameRaw}.` : '',
+    formatPendingDraft(input),
     formatContext(input),
   ]
     .filter(Boolean)
@@ -87,6 +96,29 @@ export function buildSystemPrompt(
   persona: LegacyTenantPersona = tenantPersona(),
 ): string {
   return [buildStaticPrompt(input, persona), buildTurnContext(input)].filter(Boolean).join('\n');
+}
+
+/**
+ * Don dang thu thap cua CHINH nguoi gui tin nay (Pha 6). Nam trong phan BIEN DONG — no doi theo
+ * tung nguoi va tung luot, nen de vao phan tinh la pha prompt cache tu do tro di.
+ *
+ * Khong co khoi nay thi mot tin "20" chi la mot tin "20": parser khong co cach nao biet do la cau
+ * tra loi cho cau hoi ma chinh he thong vua gui.
+ */
+function formatPendingDraft(input: ParserInput): string {
+  const draft = input.pendingDraft;
+  if (!draft?.items.length) return '';
+  const items = draft.items
+    .map((item) => `${item.skuRaw ?? '(chua ro SP)'} x ${item.quantity ?? '(chua ro so luong)'}`)
+    .join('; ');
+  return [
+    `DON DANG THU THAP CUA NGUOI GUI: ${items}.`,
+    input.awaitingAnswer
+      ? 'He thong VUA HOI nguoi nay va dang cho tra loi — tin hien tai rat co the la cau tra loi do.'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /**
@@ -164,20 +196,33 @@ function coerceOrderNumbers(order: Record<string, unknown>): Record<string, unkn
 }
 
 /**
- * Chuan hoa output tho tu LLM truoc khi validate schema (phong 2 loi thuong gap):
- * 1) LLM chen khoi "order" RONG cho ca intent KHONG phai don -> bo "order" khi intent != dat_don.
+ * Chuan hoa output tho tu LLM truoc khi validate schema (phong 3 loi thuong gap):
+ * 1) LLM chen khoi "order"/"draft" RONG cho ca intent KHONG phai don -> bo khi intent != dat_don.
  * 2) LLM tra so tien dang CHUOI ("11tr5","1.150k") -> ep ve so; khong doc duoc thi bo field tuy chon.
+ * 3) LLM tra so luong dang CHUOI ("20") -> ep ve so nguyen.
+ *
+ * `draft` (don NUA VOI — Pha 6) di qua DUNG bo ep kieu voi `order`. Bo sot buoc nay la mot loi im
+ * lang dac trung: `partialOrderSchema` doi `quantity` la so, LLM tra `"20"`, ca `parseResultSchema`
+ * hong -> parser roi ve `intent=khac` -> cau tra loi cua khach bi vut, va khong co dong log nao noi
+ * vi sao.
  */
 export function normalizeParserOutput(raw: unknown): unknown {
   if (raw === null || typeof raw !== 'object') return raw;
   const src = raw as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(src)) {
-    if (key === 'order') continue;
+    if (key === 'order' || key === 'draft') continue;
     out[key] = src[key];
   }
-  if (src.intent === 'dat_don' && src.order && typeof src.order === 'object') {
+  if (src.intent !== 'dat_don') return out;
+  if (src.order && typeof src.order === 'object') {
     out.order = coerceOrderNumbers(src.order as Record<string, unknown>);
+  }
+  if (src.draft && typeof src.draft === 'object') {
+    const draft = coerceOrderNumbers(src.draft as Record<string, unknown>);
+    // Don nhap RONG khong mang thong tin gi; giu lai chi lam `mergeConversationTurn` mo mot mach
+    // cho mot tin khong he noi ve don hang.
+    if (Array.isArray(draft.items) && draft.items.length > 0) out.draft = draft;
   }
   return out;
 }

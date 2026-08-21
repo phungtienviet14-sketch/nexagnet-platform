@@ -13,6 +13,12 @@ export function validateContextualParse(
   currentText: string,
   products: Product[],
   context?: ConversationContext,
+  /**
+   * He thong DANG cho nguoi nay tra loi mot cau hoi cua chinh no (Pha 6). Luc do viec ke thua SKU
+   * tu ngu canh khong con la LLM tu doan — mach hoi thoai giu san don nhap, va `mergeConversationTurn`
+   * moi la cho quyet dinh dong hang nao duoc dien. Guard nay lui lai de khong vut mat cau tra loi.
+   */
+  answeringQuestion = false,
 ): ParseResult {
   // "the con ELNI thi sao" khong phai la mot don 1 chiec: trong mach hoi gia lien ke,
   // do la cau hoi gia cho SKU ke tiep. LLM duoc nhan transcript de tu suy luan, nhung
@@ -24,6 +30,7 @@ export function validateContextualParse(
   }
   if (result.intent !== 'dat_don' || !result.order) return result;
   if (mentionedSkus(currentText, products).size > 0) return result;
+  if (answeringQuestion) return result;
 
   const reference = context?.quotedMessage ?? context?.recentMessages.at(-1);
   if (!reference) return SAFE_FALLBACK;
@@ -41,7 +48,10 @@ function isPriceFollowUp(
   products: Product[],
   context?: ConversationContext,
 ): boolean {
-  if (result.intent !== 'dat_don' || !result.order) return false;
+  // Nhan ca don DAY DU lan don NUA VOI (`draft`): tu Pha 6, "the con ELNI thi sao" khong con ra
+  // mot don 1 chiec ma ra mot `draft` khong so luong — neu chi xet `order` thi cau hoi gia nay
+  // roi thang xuong nhanh dat_don va bot di hoi khach "may cai a?" cho mot cau hoi gia.
+  if (result.intent !== 'dat_don' || (!result.order && !result.draft)) return false;
   const current = normalize(currentText);
   const previous = context?.recentMessages.at(-1);
   return (

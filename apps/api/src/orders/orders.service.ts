@@ -5,7 +5,13 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { loadEnv, type OrderView, type OutboundContent, type ReplyChannel } from '@netviet/shared';
+import {
+  loadEnv,
+  type ConversationThreadView,
+  type OrderView,
+  type OutboundContent,
+  type ReplyChannel,
+} from '@netviet/shared';
 import { AgentEventsService } from '../agents/agent-events.service.js';
 import { autoLabel } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
@@ -163,6 +169,21 @@ export class OrdersService {
     }))!;
     this.events?.emit({ type: 'order.updated', order: completed });
     return completed;
+  }
+
+  /**
+   * Ghi trang thai MACH HOI THOAI vao don da luu (Pha 6).
+   *
+   * Tach khoi `sendConfirmation`/`sendProductAdvice` co chu y: mach duoc chot SAU khi tin da gui
+   * xong, nen no khong duoc phep lam that bai mot lan gui da thanh cong. Loi o day chi log.
+   */
+  async patchConversation(id: string, conversation: ConversationThreadView): Promise<void> {
+    try {
+      const updated = await this.repo.update(id, { conversation });
+      if (updated) this.events?.emit({ type: 'order.updated', order: updated });
+    } catch {
+      // Don van dung; chi mat mot nhan trang thai tren console.
+    }
   }
 
   /** Nut Sale xac nhan ngoai le dung cung luong send-only cua GĐ1. */

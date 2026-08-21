@@ -4,6 +4,10 @@
 > **Kế hoạch con:** [gd1-ultty.md](gd1-ultty.md) (**GĐ1 theo spec khách, đọc trước khi làm tiếp**) · [nen-tang.md](dot-0-nen-tang.md) (Đợt 0 — nền phải xong) · [tinh-nang-dai-han.md](tinh-nang-dai-han.md) (Đợt 1-4 — 6 tính năng mới) · [nen-tang-da-khach.md](../../kien-truc/nen-tang-da-khach.md) (**Đợt B1-B5 — base dùng chung cho nhiều khách**, lập 11/08 khi có khách thứ 2 Amico; đề xuất D26-D31).
 > **Thủ tục bật pilot:** [van-hanh/checklist-go-live.md](../van-hanh/checklist-go-live.md) — **đọc trước khi đụng vào biến môi trường của stack khách**.
 > **Thay thế (11/07/2026):** `tien-do-va-ke-hoach.md` + `checklist-du-lieu-khach.md` + phần trạng thái của `ke-hoach-dai-han.md` + 2 plan code trong `.claude/plans/` — tất cả đã xóa, git history còn.
+> Cập nhật: **21/08/2026 (phiên 6)** — **Pha 6**: hội thoại nhiều lượt (bot hỏi lại khách rồi chốt
+> đơn, mỗi khách một mạch riêng trong cùng nhóm) + agent tư vấn **có công cụ** tự tra cứu nguồn sự
+> thật. Tìm ra nguyên nhân "AI trả lời y hệt nhau": `ADVICE_COMPOSER` rỗng trên **mọi** stack nên
+> câu trả lời chưa từng đi qua LLM. Chi tiết §1.-6.
 > Cập nhật: **21/08/2026** — dựng **stack `ultty-gd1-test` RIÊNG** trên cùng VM, không đụng stack DEV
 > `zalo-ultty`. Hạ tầng nay keyed theo **STACK SLUG = tenant + môi trường**; `dev`/`production` suy ra
 > lại đúng tên cũ nên không stack nào phải di chuyển. **Rà lại bảng SAI LỆCH nghiệp vụ**: 5 hàng lỗi
@@ -24,6 +28,46 @@
 - **🟢 PHẠM VI GĐ1 ĐÃ CHỐT (12/08/2026):** AI được tự gửi vào nhóm. Đơn hợp lệ có tổng số lượng `≤` ngưỡng tenant (Ultty hiện chốt **50**) → rules tính → gửi xác nhận → trạng thái `sent`/hàng việc báo Sale nhập KiotViet thủ công; `>` ngưỡng hoặc thiếu dữ liệu → Sale can thiệp trước gửi. GĐ1 không gọi ERP/KiotViet. Business policy nằm trong gói tenant; `AUTO_SEND` chỉ là kill switch runtime có audit.
 - **🟢 DRIVE ĐÃ KIỂM KÊ TOÀN CÂY (12/08/2026):** 122 thư mục, 825 file. Boundary chốt: binary gốc ở Drive/object storage; provenance, product mapping, FAQ, link catalog/video và nội dung tư vấn ở DB/config, quản trị qua `/settings`. Chỉ 5 FAQ dạng DOCX có nội dung; EUS Felix có media nhưng FAQ trống. **Không có bảng giá tháng 8** và **không có nguồn xác nhận công thức 30+1/10+1** ⇒ A6/A7 còn thiếu, không fallback/không suy diễn.
 - **✅ GĐ1 P1 AUTO-CONFIRM XONG THEO TDD (12/08/2026):** policy tenant inclusive (Ultty 50) tách khỏi risk 30 SP/20 triệu; `50` gửi, `51` giữ Sale; `OrdersService.sendConfirmation()` dừng ở `sent`, không phụ thuộc/gọi ERP; `salesHandoff` bền trong `OrderView` + SSE + hàng “Việc Sale” và có thao tác hoàn tất; gửi/rerun/reject lặp bị chặn theo state, hai thao tác gửi đồng thời trong một process dùng chung một outbound; endpoint/UI không hỏi lại văn bản D4. *(Cập nhật 12/08 sau audit: ba điểm "còn lệch" ghi ở đây — tư vấn giá dùng `wholesale`, chưa có campaign/scheduler, knowledge Drive chưa có schema/import/settings — **đều đã được làm** và đã wire vào runtime. Xem bảng §1.1. Ba điểm lệch tiếp theo (baseline đỏ · RBAC hở · readiness mồ côi) **cũng đã đóng** ở Đợt A/B/D.)*
+
+### 1.-6 ▶️▶️▶️▶️▶️▶️▶️ PHA 6 (21/08/2026) — HỘI THOẠI NHIỀU LƯỢT + AGENT TƯ VẤN CÓ CÔNG CỤ
+
+**Phản ánh của khách:** hỏi vài câu khác nhau về V08, AI trả lời **y hệt nhau**. Người dùng chỉ đúng: một mô hình xác suất không thể lặp lại nguyên văn. Kết luận sau khi đo trên container đang chạy — **câu trả lời đó chưa từng đi qua LLM**.
+
+| Đo 21/08 | `zalo-ultty` (pilot) | `zalo-ultty-gd1-test` |
+|---|---|---|
+| `ADVICE_COMPOSER` | *(rỗng)* → Noop | *(rỗng)* → Noop |
+| `ANTHROPIC_API_KEY` | *(không đặt)* | *(không đặt)* |
+| Nội dung `active` | FAQ 99 · advice 3 · ảnh 102 | FAQ **1**/95, còn lại `draft` |
+
+Hai nguyên nhân độc lập, cùng một triệu chứng:
+
+1. **`render-secrets.sh` chưa bao giờ phát `ANTHROPIC_API_KEY` lẫn `ADVICE_COMPOSER`** ⇒ `NoopAdviceComposer` trên mọi stack ⇒ câu trả lời = `body.join('
+')` = **dán nguyên văn FAQ**. Cảnh báo này đã nằm trong [kịch bản test 19/08](../kiem-thu/2026-08-19-kich-ban-test-agent-tu-van.md) nhưng chưa ai nối nó với phản ánh của khách.
+2. **Nội dung gói tenant nạp ở `draft`**, mà `productAdvice()` chỉ đọc `active` ⇒ `safeHandoff()` trả về **một chuỗi hard-code** cho mọi câu hỏi.
+
+**Và bot chưa bao giờ hành động theo mạch:** tin thiếu dữ liệu → `needs_edit` → nằm chờ Sale. Tệ hơn, `FakeParser` điền `quantity=1` cho dòng không có số, nên `"gui ghe felix ve TN cho c"` thành đơn **1 chiếc**, không sinh cảnh báo nào, dưới ngưỡng 50 nên **gửi thẳng cho khách**.
+
+#### Đã làm
+
+- **Mạch chốt đơn theo từng khách** (`apps/api/src/conversations/`). Đơn **nửa vời** (`ParseResult.draft`) biểu diễn được "biết bán ghế Felix, chưa biết mấy cái"; hệ thống hỏi lại, gộp câu trả lời, rồi chốt. Khoá `(chatId, senderExternalId)` — hai khách hỏi cùng lúc là hai mạch độc lập. Bền trên Postgres (`ConversationThread`), TTL 45 phút, tối đa 2 câu hỏi rồi chuyển Sale.
+- **Agent tư vấn có công cụ** (`apps/api/src/advisor/`). 6 công cụ **chỉ đọc** (`tra_cuu_san_pham`, `tra_cuu_tai_lieu`, `bao_gia`, `tinh_don`, `tra_cuu_chinh_sach`, `lich_su_don`) để LLM tự tra cứu nguồn sự thật rồi tự viết câu trả lời. Thay hẳn `AdviceComposer` — không giữ hai đường soạn song song.
+- **Bất biến #5 không đảo ngược.** LLM không *tính* tiền: con số đến từ `bao_gia`/`tinh_don` (rules engine tất định), và `unverifiedAmounts()` kiểm lại sau khi LLM viết. Lọt một con số không có trong kết quả công cụ ⇒ **bỏ bản soạn**, lùi về đường tất định.
+- **Vá hai lỗ im lặng của parser thật:** tool `extract_order` của Claude không khai `draft` (nên Claude buộc phải bịa số lượng), và `normalizeParserOutput` không ép kiểu trong `draft` (LLM trả `"20"` ⇒ cả `parseResultSchema` hỏng ⇒ `intent=khac` ⇒ câu trả lời của khách bị vứt, không log).
+- **Hạ tầng:** `render-secrets.sh` phát `ANTHROPIC_API_KEY` (optional secret) + tự bật `ADVICE_COMPOSER=claude` khi có khoá; `deploy.ps1` thêm `<prefix>-anthropic-api-key` vào cả danh sách tạo secret lẫn danh sách cấp IAM.
+
+#### Vận hành đã làm tay (21/08)
+
+- Tạo secret `zalo-ultty-gd1-test-anthropic-api-key` + cấp `secretAccessor` cho `netviet-vm@`.
+- Duyệt nội dung trên `gd1-test`: FAQ **94** · advice 3 · link 4 · ảnh 102 lên `active`.
+
+#### Còn chờ NGƯỜI quyết
+
+- **`AUTO_SEND` trên `gd1-test` đang `off` (ép cứng trong runtime profile).** Câu hỏi lại chịu **chung** kill switch với bản xác nhận — một câu hỏi tự động cũng là một tin tự động. Nên trên `gd1-test` thấy được `pendingDraft`/`draftGaps`/`conversation` trên console, nhưng **không tin nào ra nhóm**. Muốn nghiệm thu nhóm D/E đầu-cuối phải bật `AUTO_SEND` — [ci-cd.md §8](../van-hanh/ci-cd.md) xếp đây vào loại "dừng lại và hỏi người".
+- Stack `zalo-ultty` (pilot) chưa có secret `zalo-ultty-anthropic-api-key`; chưa tạo thì agent tư vấn vẫn tắt ở đó.
+
+Kịch bản test đã viết lại theo Pha 6: [2026-08-19-kich-ban-test-agent-tu-van.md](../kiem-thu/2026-08-19-kich-ban-test-agent-tu-van.md) — thêm nhóm D (hỏi lại & chốt đơn) và nhóm E (nhiều khách cùng lúc).
+
+**Test:** api **825 pass / 24 skip** (+32 ca mới) · shared 89 · tenant 48 · web 89 · poc 4 · caddy 22 · stack-identity 9 · deployment-targets 5 · gd1-test-preflight 23.
 
 ### 1.-5 ▶️▶️▶️▶️▶️▶️ REFACTOR FOUNDATION ĐA KHÁCH (20/08/2026) — HOÀN TẤT
 

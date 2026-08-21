@@ -28,6 +28,12 @@ import { PrismaModule } from './config/prisma.module.js';
 import { PrismaService } from './config/prisma.service.js';
 import { loadFoundationEnv } from './config/foundation-env.js';
 import { ContentModule } from './content/content.module.js';
+import {
+  ConversationThreadsRepository,
+  InMemoryConversationThreadsRepository,
+} from './conversations/conversation-threads.repository.js';
+import { ConversationsService } from './conversations/conversations.service.js';
+import { PrismaConversationThreadsRepository } from './conversations/prisma-conversation-threads.repository.js';
 import { DemoController } from './demo/demo.controller.js';
 import { ErpController } from './erp/erp.controller.js';
 import { erpProvider } from './erp/erp.provider.js';
@@ -123,6 +129,15 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     inject: [PrismaService],
   }),
   owned('sales-order', ConversationContextBuilder),
+  owned('sales-order', {
+    provide: ConversationThreadsRepository,
+    useFactory: (prisma: PrismaService): ConversationThreadsRepository =>
+      loadFoundationEnv().PERSISTENCE === 'prisma'
+        ? new PrismaConversationThreadsRepository(prisma)
+        : new InMemoryConversationThreadsRepository(),
+    inject: [PrismaService],
+  }),
+  owned('sales-order', ConversationsService),
   owned('operations', SettingsQueryService),
   owned('operations', GroupMappingService),
   owned('operations', GroupIdentityService),

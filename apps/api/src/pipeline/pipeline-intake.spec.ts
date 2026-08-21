@@ -58,6 +58,7 @@ function build(options: {
     options.discovery,
     undefined,
     new ConversationContextBuilder(messages),
+    undefined,
     options.burstWindowMs,
   );
   return { pipeline, orchestrator, orders };

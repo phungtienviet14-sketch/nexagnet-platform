@@ -55,6 +55,36 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         },
         required: ['orderType', 'items'],
       },
+      /**
+       * Don NUA VOI (Pha 6): khach ro rang muon dat nhung thieu truong bat buoc. Moi truong deu
+       * TUY CHON — day chinh la cho de bieu dien "biet ban ghe Felix, chua biet may cai" ma
+       * `order` (quantity bat buoc) khong bieu dien duoc. Khong co no, mo hinh buoc phai bia mot
+       * so luong hoac vut ca don.
+       */
+      draft: {
+        type: 'object',
+        properties: {
+          orderType: { type: 'string', enum: ['TH1', 'TH2'] },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                skuRaw: { type: 'string' },
+                quantity: { type: 'integer' },
+                unitPriceRaw: { type: 'number' },
+              },
+            },
+          },
+          noVat: { type: 'boolean' },
+          wantVat: { type: 'boolean' },
+          customerName: { type: 'string' },
+          customerPhone: { type: 'string' },
+          customerAddress: { type: 'string' },
+          codCollect: { type: 'boolean' },
+        },
+        required: ['items'],
+      },
       confidence: { type: 'object', additionalProperties: { type: 'number' } },
     },
     required: ['intent'],
