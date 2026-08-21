@@ -158,6 +158,15 @@ export class AgentOrchestrator {
      * tra loi duoc ma bot im lang (21/08/2026).
      */
     const advice = dispatch.outbound as ProductAdviceResult | undefined;
+    // Dung bien co kieu thay vi object literal ngay trong spread: `ProductAdviceResult` co them
+    // truong so voi `OutboundContent`, ma literal thi bi TS chan boi excess-property check.
+    const composedOutbound: ProductAdviceResult = {
+      ...(advice ?? {}),
+      ready: !reply.handoff,
+      productSkus: advice?.productSkus ?? [],
+      missing: reply.handoff ? (advice?.missing ?? ['agent_handoff']) : [],
+      text: reply.text,
+    };
     return {
       dispatch: {
         ...dispatch,
@@ -170,13 +179,7 @@ export class AgentOrchestrator {
         ...(input.intent === 'dat_don'
           ? {}
           : {
-              outbound: {
-                ...(advice ?? {}),
-                ready: !reply.handoff,
-                productSkus: advice?.productSkus ?? [],
-                missing: reply.handoff ? (advice?.missing ?? ['agent_handoff']) : [],
-                text: reply.text,
-              } satisfies ProductAdviceResult,
+              outbound: composedOutbound,
               status: reply.handoff ? ('needs_edit' as const) : ('pending_review' as const),
             }),
       },

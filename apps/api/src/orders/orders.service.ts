@@ -194,9 +194,25 @@ export class OrdersService {
     }
   }
 
-  /** Nut Sale xac nhan ngoai le dung cung luong send-only cua GĐ1. */
+  /**
+   * Nut "Duyet & gui" cua Sale — DINH TUYEN THEO NOI DUNG dang co.
+   *
+   * Truoc 21/08/2026 ham nay goi thang `sendConfirmation()`, ma ham do nem 422 "Tin nay khong
+   * phai don hang" ngay khi `priced` rong. Console lai hien dung mot nut cho ca `pending_review`
+   * lan `needs_edit`, nen MOI tin tu van deu bam vao mot loi — dung nhung tin ma cong handoff
+   * tat dinh vua day ve `needs_edit`. Con `sendProductAdvice()` thi khong route nao goi toi.
+   *
+   * Thu tu xet co y: don da tinh gia di truoc, vi mot don vua co `priced` vua co `outbound` thi
+   * ban XAC NHAN moi la chung tu — ban tu van chi la loi dan kem.
+   */
   async approve(id: string): Promise<OrderView> {
-    return this.sendConfirmation(id);
+    const view = await this.getOrThrow(id);
+    if (view.status === 'sent' || view.status === 'synced') return view;
+    if (view.priced) return this.sendConfirmation(id);
+    if (view.trace?.outbound) return this.sendProductAdvice(id);
+    throw new UnprocessableEntityException(
+      'Tin nay chua co ban xac nhan hay ban tu van nao de gui',
+    );
   }
 
   async reject(id: string): Promise<OrderView> {

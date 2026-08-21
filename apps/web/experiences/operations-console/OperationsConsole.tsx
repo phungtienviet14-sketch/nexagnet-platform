@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OrderView } from '@netviet/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentTheater } from '../../components/console/AgentTheater';
+import { ApprovalQueue } from '../../components/console/ApprovalQueue';
 import { BroadcastPanel } from '../../components/console/BroadcastPanel';
 import { FeedColumn } from '../../components/console/FeedColumn';
 import { SourceColumn } from '../../components/console/SourceColumn';
@@ -11,7 +12,7 @@ import { TopBar, type ConsoleView } from '../../components/console/TopBar';
 import { useAgentStream } from '../../hooks/useAgentStream';
 import { api } from '../../lib/api';
 import { buildFeedItems, deriveReveal } from '../../lib/live';
-import { requiresSalesAction } from '../../lib/sales-work';
+import { awaitingApproval, requiresSalesAction } from '../../lib/sales-work';
 
 const EMPTY_ORDERS: OrderView[] = [];
 
@@ -98,6 +99,13 @@ export function OperationsConsole() {
     (item) => item.order && item.intent === 'dat_don' && requiresSalesAction(item.order),
   ).length;
   const groupCount = new Set(items.map((item) => item.chatId)).size;
+  // Dem tren `orders` (nguon that) chu khong tren `items`: feed co the dang chay hoat canh
+  // streaming cho mot don, va mot con dem nhay theo hoat canh la mot con dem khong tin duoc.
+  const queueCount = orders.filter(awaitingApproval).length;
+  const inspectFromQueue = (id: string) => {
+    setSelectedId(id);
+    setView('console');
+  };
 
   return (
     <div className="shell" data-experience="operations-console">
@@ -105,6 +113,7 @@ export function OperationsConsole() {
         orderCount={orderCount}
         pendingCount={pendingCount}
         groupCount={groupCount}
+        queueCount={queueCount}
         config={configQ.data}
         view={view}
         onViewChange={setView}
@@ -117,6 +126,21 @@ export function OperationsConsole() {
       {view === 'broadcast' ? (
         <div className="col theater">
           <BroadcastPanel />
+        </div>
+      ) : view === 'queue' ? (
+        <div className="col theater">
+          {actionError && (
+            <div className="error-banner" role="alert">
+              ⚠ {actionError.message}
+            </div>
+          )}
+          <ApprovalQueue
+            orders={orders}
+            isBusy={isBusy}
+            onApprove={(id) => approveM.mutate(id)}
+            onReject={(id) => rejectM.mutate(id)}
+            onInspect={inspectFromQueue}
+          />
         </div>
       ) : (
         <div className="grid">

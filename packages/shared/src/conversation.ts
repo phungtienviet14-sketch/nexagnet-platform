@@ -61,4 +61,12 @@ export interface ConversationThreadView {
   awaitingSlots: ClarifySlot[];
   askCount: number;
   question?: string;
+  /**
+   * Ten nguoi dang o dau mach nay.
+   *
+   * Trong mot nhom 200 dai ly co the co vai nguoi cung dang duoc hoi lai mot luc. Hang cho cua
+   * Sale ma khong noi ro DANG CHO AI thi moi dong deu giong nhau, va Sale phai mo tung don ra
+   * doi chieu — dung cai viec ma hang cho sinh ra de khoi phai lam.
+   */
+  senderDisplayName?: string;
 }

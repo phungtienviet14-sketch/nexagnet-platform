@@ -206,5 +206,6 @@ function toView(
     awaitingSlots: status === 'awaiting_answer' ? thread.awaitingSlots : [],
     askCount: thread.askCount,
     ...(thread.lastQuestion ? { question: thread.lastQuestion } : {}),
+    ...(thread.senderDisplayName ? { senderDisplayName: thread.senderDisplayName } : {}),
   };
 }
