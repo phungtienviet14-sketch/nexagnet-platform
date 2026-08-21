@@ -378,12 +378,20 @@ export class PipelineService implements OnModuleDestroy {
     if (!key || !this.conversations) return view;
     const autoSendOn = (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on';
     // Van CAP NHAT mach khi tat cong tac (de Sale nhin duoc don nhap), chi khong GUI.
+    // Cau hoi lai do AGENT soan, neu co. `ConversationsService` da nhan tham so nay tu dau nhung
+    // KHONG AI TRUYEN, nen ban mau tat dinh luon thang — va do la ly do khach nhan dung mot cau
+    // "minh lay san pham nao a?" ba lan lien tiep (log 21/08/2026).
+    //
+    // Chi lay khi `composed`: chuoi mac dinh cua nhanh `khac` ("Da em da ghi nhan a...") khong
+    // phai mot cau hoi, gui no thay cho cau hoi that la lam mach dung han.
+    const composedQuestion = view.trace?.composed ? view.trace.reply : undefined;
     const conversation = await this.conversations.settle({
       key,
       message,
       view,
       now,
       closed,
+      ...(composedQuestion ? { composedQuestion } : {}),
       ...(autoSendOn && !manualReview ? {} : { muted: true }),
     });
     if (!conversation) return view;
