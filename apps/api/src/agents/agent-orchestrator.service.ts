@@ -558,7 +558,21 @@ export class AgentOrchestrator {
       const reply = quote.length
         ? `${quote.map((q) => `• ${q.name}: ${formatVnd(q.unitPrice)}`).join('\n')}\n${quoteQualifier(strategy, resolved.senderType)}`
         : 'Em chưa có bảng giá hiện hành hoặc chưa nhận diện đủ sản phẩm; Sale sẽ kiểm tra và phản hồi ạ.';
-      return { priced: null, status: 'pending_review', reply, roles };
+      return {
+        priced: null,
+        status: 'pending_review',
+        reply,
+        // Bao gia do RULES ENGINE tra tu bang gia hien hanh la mot cau tra loi GUI DUOC. Truoc
+        // 21/08/2026 nhanh nay khong dung `outbound`, nen no khong vao duoc hang cho va nut duyet
+        // cua Sale bam vao la ra 422 — mot cau tra loi dung nam lai trong DB.
+        // Khong co dong gia nao thi khong dung: luc do `reply` chi la mot loi hen.
+        ...(quote.length
+          ? {
+              outbound: sendableAdvice(reply, quote.map((q) => q.name)),
+            }
+          : {}),
+        roles,
+      };
     }
 
     if (intent === 'chinh_sach_cong_no') {
@@ -571,7 +585,18 @@ export class AgentOrchestrator {
       const reply = policy
         ? `Chính sách áp dụng cho ${resolved.dealer?.name}: ${POLICY_LABELS[policy]}.`
         : 'Em kiểm tra chính sách theo cấp đại lý và phản hồi ngay ạ.';
-      return { priced: null, status: 'pending_review', reply, roles };
+      return {
+        priced: null,
+        status: 'pending_review',
+        reply,
+        // Chinh sach doc thang tu cap dai ly da map — gui duoc. Chua xac dinh duoc cap thi khong.
+        ...(policy
+          ? {
+              outbound: sendableAdvice(reply),
+            }
+          : {}),
+        roles,
+      };
     }
 
     if (intent === 'van_chuyen') {
@@ -718,6 +743,22 @@ function markComposedRole(dispatch: DispatchResult, role: AgentRole, handoff: bo
     // ly do 6/7 intent khong bao gio tu tra loi duoc truoc 21/08/2026.
     ...(handoff ? { handoff: true } : {}),
   });
+}
+
+/**
+ * Ban tra loi TAT DINH da du dieu kien gui.
+ *
+ * Phai la mot HAM tra kieu tuong minh chu khong phai object literal tai cho: `ProductAdviceResult`
+ * co them truong so voi `OutboundContent`, ma literal thi bi TS chan boi excess-property check.
+ */
+function sendableAdvice(text: string, productNames: string[] = []): ProductAdviceResult {
+  return {
+    text,
+    ready: true,
+    productSkus: [],
+    missing: [],
+    ...(productNames.length ? { productNames } : {}),
+  };
 }
 
 function sleep(ms: number): Promise<void> {

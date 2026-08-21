@@ -228,12 +228,31 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
     expect(adapter.sent).toHaveLength(0);
   });
 
-  it('tin hoi gia khong phai don -> khong nam trong danh sach don, khong duyet duoc', async () => {
+  it('tin hoi gia khong phai don -> khong nam trong danh sach don', async () => {
     const { pipeline, orders } = build();
     const view = await pipeline.process(msg('ghe felix bao nhieu tien c oi'), BOT_NAME);
 
     expect(view.intent).toBe('hoi_gia');
     expect(await orders.listOrders()).toHaveLength(0);
-    await expect(orders.approve(view.id)).rejects.toThrow();
+  });
+
+  /**
+   * Truoc 21/08/2026 test nay con doi `approve()` phai NEM LOI cho tin hoi gia. Do la mo ta dung
+   * cua hanh vi cu, va cung la dung cai loi khach bao: bang gia da co, rules engine da tra ra don
+   * gia, Giam sat khong thay rui ro — ma Sale bam nut duyet thi nhan 422. Cau tra loi dung nam
+   * lai trong DB.
+   *
+   * Bat bien THAT o day khong phai "khong duyet duoc", ma la "khong phai don hang" — no van
+   * khong duoc vao `listOrders()` va khong sinh viec nhap ERP.
+   */
+  it('tin hoi gia CO bang gia thi Sale duyet gui duoc, va khong sinh viec nhap ERP', async () => {
+    const { pipeline, orders } = build();
+    const view = await pipeline.process(msg('ghe felix bao nhieu tien c oi'), BOT_NAME);
+
+    const sent = await orders.approve(view.id);
+
+    expect(sent.status).toBe('sent');
+    expect(sent.salesHandoff).toBeUndefined();
+    expect(await orders.listOrders()).toHaveLength(0);
   });
 });
