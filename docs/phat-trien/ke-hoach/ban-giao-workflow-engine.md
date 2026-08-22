@@ -240,3 +240,102 @@ test rồi gọi đó là E2E.
 8. Audit tài nguyên VM **bằng số đo mới**, rồi mới quyết định deploy `ultty-gd1-test`.
 
 **Chưa được tuyên bố READY FOR GD1-TEST** cho tới khi 1–6 xanh.
+
+---
+
+# Phụ lục — phiên 5 (22/08/2026): WORKER CHẠY THẬT
+
+> HEAD đầu phiên `8c9f9f5` → cuối phiên `e5f1ba1` · 7 commit
+> Kế hoạch: [.claude/plans/hatchet-worker-foundation.plan.md](../../../.claude/plans/hatchet-worker-foundation.plan.md)
+
+## 13. Một câu
+
+Nền tảng đã đi từ **"trigger được nhưng không có worker"** sang **"một sự kiện nghiệp vụ đi trọn
+chuỗi qua biên production thật và kết thúc ở hệ ngoài"** — và bằng chứng ghim phiên bản của Gate A
+**vẫn đứng vững trên dây nối production**, không chỉ trên spike.
+
+## 14. Việc đã xong (W0–W3, W5 của kế hoạch)
+
+| | Việc | Bằng chứng |
+|---|---|---|
+| W0 | Gói khách fixture bật engine | `packages/tenant/src/__tests__/fixtures/workflow-enabled{,-v2}/` + 4 test qua **loader thật** |
+| W1 | Tiến trình worker riêng | `worker-main.ts` · `workflow-worker.{module,service,adapter}.ts` · `hatchet/hatchet-workflow-worker.adapter.ts` |
+| W2 | Ba bước `integration-handoff` | `workflows/integration-handoff.steps.ts` — 13 test thuần, 6 mã lý do có kiểu |
+| W3 | **E2E qua biên production** | `workflow-e2e.int.spec.ts` — 3/3 trên Hatchet thật |
+| W5 | **Hồi quy ghim phiên bản** | cùng file — run v1 đang dở **không** bị worker v2 cướp |
+| — | Sửa lỗi tương quan trace | `1e213c8` |
+
+**Kết quả test:** apps/api **1095 passed / 28 skipped** · packages/tenant **64** · packages/shared **89** · tsc + eslint xanh.
+
+## 15. Hai quyết định kiến trúc, có bằng chứng
+
+### 15.1 Worker là container RIÊNG
+`deploy/netviet/deploy-stack.sh:88` chạy `up -d --force-recreate api web` mỗi lần deploy. Worker
+nằm trong `api` ⇒ mọi run `.v1` đang dở **nằm chờ vĩnh viễn** và bước DRAIN của §2 **không thực
+hiện được**. Đây là lý do có bằng chứng, không phải "best practice".
+
+### 15.2 Worker boot MODULE HẸP, không boot `AppModule` ⚠️ **phát hiện mới của phiên này**
+Năm lớp làm việc thật trong `onModuleInit`: `ZcaListener`, `ZaloUserClient`, `BotPoller`,
+`CampaignScheduler`, `WorkflowScheduler`. Worker boot `AppModule` sẽ mở **listener zca thứ hai**
+trên cùng tài khoản Zalo — mà một tài khoản chỉ chịu được **một** listener, nên listener của `api`
+bị đá ra. **Kênh đọc chính của GĐ1 chết vì một container phụ khởi động.**
+`workflow-worker.module.spec.ts` giữ điều này bằng 4 khẳng định chạy trên DI thật.
+
+## 16. Bốn phát hiện đắt nhất
+
+1. **Worker mất ~38 giây để đăng ký xong** trên engine nguội (~12s khi ấm). Con số này **phải** vào
+   `start_period` của healthcheck ở compose — đừng đoán.
+2. **`NestFactory` gọi `process.abort()` khi đồ thị DI hỏng** — nó giết luôn worker của vitest, nên
+   bài test "thiếu phiên bản → phải NÉM" làm sập cả file thay vì đỏ một khẳng định. Phải
+   `abortOnError: false`.
+3. **`IntegrationHandoffInput` phải là `type` chứ không `interface`** — TS suy ra index signature
+   ngầm cho type alias nhưng không cho interface, mà SDK đòi `JsonObject`. Đổi thành interface làm
+   adapter không biên dịch được, với thông báo lỗi chẳng liên quan gì tới nguyên nhân.
+4. **Lỗi tương quan trace, bắt được lúc chạy E2E chứ không phải lúc review:** cầu nối sinh một
+   `traceId` mới khi không có trace bao quanh và gửi sang engine, nhưng hàng outbox chỉ được ghi
+   `traceId` khi **đã có** trace sẵn. Ngoài một trace, hai bản ghi của cùng một việc không bao giờ
+   nối lại được. Sửa ở `1e213c8`.
+
+## 17. Cách đọc "run nào chạy code nào" — từ BÊN NGOÀI
+
+```
+v1 = resolve -> dispatch -> settle              => điểm cuối chỉ thấy POST
+v2 = resolve -> PREFLIGHT -> dispatch -> settle => điểm cuối thấy GET rồi mới POST
+```
+Nên một lần `GET` mang khoá của run v1 **là** bằng chứng worker v2 đã cướp run cũ. Khẳng định
+trung tâm của hồi quy là `lookupsFor(keyV1) === 0`. Không phải mổ ruột engine.
+
+`v2` **không phải phiên bản bịa ra**: Gate C định nghĩa ba mức `key`/`lookup`/`none` nhưng chưa gì
+hiện thực mức giữa. `preflight` lấp đúng khoảng trống đó.
+
+## 18. Chạy lại
+
+```bash
+docker compose -p pocwf -f tools/poc-workflow-engine/compose/hatchet.compose.yml up -d
+```
+```bash
+RUN_WORKFLOW_IT=1 WORKFLOW_ENGINE_TOKEN=<token> WORKFLOW_ENGINE_HOST_PORT=localhost:7744 WORKFLOW_ENGINE_TLS_STRATEGY=none pnpm --filter @netviet/api exec vitest run src/workflow/workflow-e2e
+```
+
+## 19. CHƯA LÀM — nói thẳng
+
+| Hạng mục | Trạng thái |
+|---|---|
+| **W3 C/E** — worker bị `kill -9` giữa chừng; hai worker cùng phiên bản | ⬜ có sẵn `WorkerProcess.kill()` nhưng **chưa viết kịch bản** |
+| **W4** — Hatchet chết → outbox giữ; lên lại → gửi tiếp; API chết sau commit trước trigger (**cần Postgres thật**); tick trùng; replay không an toàn | ⬜ |
+| **W6** — riêng tư tại biên thật: đọc `input` của run **trên engine** | ⬜ (unit test đã có, chưa đọc engine) |
+| **W7** — audit có `engineRunId`; DI ba cấu hình khách; `settle` ghi audit | ⬜ |
+| **W8** — compose production cho Hatchet + service `workflow-worker` + hợp đồng biến môi trường | ⬜ |
+| **W9** — đo tài nguyên VM bằng số mới → quyết định deploy `ultty-gd1-test` | ⬜ |
+| Nút "Mở workflow run" trên console | ⬜ |
+| Xác nhận dashboard bằng mắt | ⬜ cần người |
+| Gộp mã lý do vào `observability/decision-reasons.ts` | ⬜ **vẫn bị chặn** — file đang có thay đổi chưa commit của Phase 0 |
+| Ghi `tong-quan.md` | ⬜ **vẫn bị chặn** — file đang bẩn +320 dòng của Phase 0 |
+
+## 20. ⛔ CHƯA READY FOR GD1-TEST
+
+Thiếu: crash recovery, ma trận hỏng, riêng tư tại biên thật, audit/DI, hồ sơ triển khai, đo tài
+nguyên VM. **Không được deploy** cho tới khi W4/W6/W7/W8/W9 xanh.
+
+Việc kế tiếp đúng thứ tự: **W4 #4 (outbox crash-window)** — nó là mục duy nhất cần Postgres thật
+(`docker compose -f docker-compose.yml up -d`), nên dựng nó trước để không phải quay lại lần nữa.
