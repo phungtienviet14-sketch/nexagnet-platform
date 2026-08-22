@@ -129,3 +129,114 @@ cd tools/poc-workflow-engine && pnpm spike:shared && pnpm spike:versioned
 ```bash
 pnpm --filter @netviet/api exec vitest run src/workflow
 ```
+
+---
+
+# Phụ lục — phiên 4 (22/08/2026): audit + chốt thiết kế, KHÔNG sửa code
+
+> Phiên này dừng sớm theo yêu cầu. **Không có dòng code nào được viết**, HEAD vẫn `f07e123`.
+> Phần dưới là kết quả audit và thiết kế đã chốt — ghi lại để phiên sau không phải suy luận lại.
+
+## 9. Audit trạng thái
+
+```
+HEAD                      f07e123  (ahead 8 so với origin)
+Phase 0 observability     VẪN CHƯA COMMIT
+tenants/wata/             VẪN CHƯA COMMIT
+Hatchet POC stack         đang chạy (3 container, cổng 5744/7744/8744)
+```
+
+⇒ **Vẫn KHÔNG được ghi `tong-quan.md`** (nó đang giữ bàn giao chưa commit của Phase 0). Điều kiện
+để gộp mã lý do quyết định vào `observability/decision-reasons.ts` (§6.2) **cũng chưa đạt**.
+
+## 10. ⚠️ Phát hiện quyết định: worker KHÔNG được nằm trong tiến trình API
+
+Bàn giao trước giả định worker chạy trong tiến trình API. **Bằng chứng trong repo bác bỏ giả định đó.**
+
+`deploy/netviet/deploy-stack.sh:88`:
+```bash
+"${COMPOSE[@]}" up -d --no-deps --force-recreate api web
+```
+
+Mỗi lần deploy **huỷ và tạo lại container `api`**. Nếu worker sống trong đó thì:
+
+1. deploy phiên bản mới → container `api` cũ **biến mất ngay**;
+2. worker duy nhất đang phục vụ `integration-handoff.v1` biến mất cùng nó;
+3. mọi run `.v1` đang dở **nằm chờ vĩnh viễn** — đúng chế độ hỏng mà Gate A mô tả;
+4. bước **DRAIN** của runbook §2 trở thành **không thực hiện được**: không có cách nào giữ worker
+   phiên bản cũ sống trong khi phiên bản mới lên, vì cả hai dùng chung một container.
+
+Nói cách khác: nhúng worker vào API **phá phần vận hành của Gate A**, dù phần kỹ thuật vẫn đúng.
+Đây là lý do có bằng chứng, không phải "best practice".
+
+**Thiết kế chốt:** worker là **container riêng, cùng image, khác lệnh chạy**, vòng đời độc lập với
+`api`. Deploy `api` không đụng tới worker; nâng phiên bản workflow là thao tác riêng theo đúng
+REGISTER → ACTIVATE → DRAIN → DEACTIVATE → REMOVE.
+
+```yaml
+# deploy/netviet/compose.yaml — phác thảo
+workflow-worker:
+  image: ${APP_IMAGE}          # cùng image với api
+  command: ["node", "dist/workflow/worker-main.js"]
+  environment:
+    WORKFLOW_WORKER_VERSION: v1   # MỘT phiên bản cho MỖI container — bất biến của Gate A
+  restart: always
+```
+
+Hệ quả phải nhớ: `compose.yaml` liệt kê biến môi trường **tường minh** ⇒ mọi biến mới của workflow
+phải được khai ở đó **và** phủ bởi `deploy/netviet/secrets-passthrough.contract.test.mjs`, nếu
+không sẽ lặp lại đúng sự cố `f4ed3ee` (biến render ra mà không bao giờ tới container).
+
+## 11. Thiết kế đã chốt cho phiên sau
+
+### 11.1 `integration-handoff.v1` — ba bước
+| Bước | Việc | Lý do từ chối có kiểu |
+|---|---|---|
+| `resolve` | tên đích **logic** (`erp-primary`) → URL thật, đọc từ env `WORKFLOW_DESTINATION_<TEN>` | `DESTINATION_NOT_CONFIGURED` |
+| `dispatch` | POST kèm `Idempotency-Key: <operationKey>` + `traceparent`; `retries: 3`, backoff | `UPSTREAM_5XX` · `UPSTREAM_TIMEOUT` · `RATE_LIMITED` |
+| `settle` | ghi kết quả, trả `engineVersion` + `externalRef` | — |
+
+URL đích **không** nằm trong `tenant.json` (gói khách nằm trong git) — chỉ tên logic nằm đó.
+
+### 11.2 Khoá thao tác: worker **tính lại**, không nhận kèm
+Worker dựng lại `operationKey` bằng `buildOperationKey()` từ chính input (`tenant`, `entityType`,
+`entityId`, `operation`, `operationVersion`, `destination`) + `nexagnet.environment` trong
+`additionalMetadata`. Không mang khoá đi hai lần — và việc dựng lại được **chính là** bằng chứng
+khoá có tính tất định.
+
+### 11.3 `v2` — không phải phiên bản giả để test
+`v2` **thêm bước `preflight`** trước `dispatch`: với đích có `idempotency: 'lookup'`, hỏi hệ ngoài
+xem khoá thao tác đã tạo bản ghi chưa; có rồi thì bỏ qua `dispatch`.
+
+Đây là việc **có thật đang thiếu**: Gate C định nghĩa ba mức `key`/`lookup`/`none` nhưng chưa gì
+hiện thực mức `lookup`. Dùng nó làm phiên bản thứ hai vừa lấp đúng khoảng trống, vừa là phương
+tiện tự nhiên cho hồi quy versioning — thay vì bịa một v2 rỗng chỉ để có hai phiên bản.
+
+### 11.4 Hồi quy versioning — không cần bịa bước chờ
+Để có một run `.v1` **đang dở** lúc v2 lên: cho điểm cuối có kiểm soát **treo** (`mode=timeout`).
+Run v1 nằm trong `dispatch`; khởi động worker v2; thả điểm cuối; `dispatch` + `settle` của run cũ
+**phải** chạy trên worker v1 (vì action `integration-handoff.v1:settle` chỉ tồn tại ở đó).
+Không phải thêm `durableTask` chỉ để test.
+
+### 11.5 Fixture cho E2E qua biên production
+Gói khách **trung tính** (`knowledge-only` + `workflowEngine` bật), nạp bằng `TENANT_DIR` — **đặt
+ngoài `tenants/`** để `tenant-packs.spec.ts` không hiểu nhầm là khách thật. Đề xuất:
+`tools/poc-workflow-engine/fixtures/tenant-alpha/`.
+
+E2E phải bắt đầu từ `AppModule.forRoot()` thật → `WorkflowHandoffService.handoff()` →
+`WorkflowDispatcher.tick()` → engine → worker. **Không** được gọi thẳng `hatchet.runNoWait()` từ
+test rồi gọi đó là E2E.
+
+## 12. Thứ tự thực thi đề xuất cho phiên sau
+
+1. `worker-main.ts` + `WorkflowWorkerService` (đăng ký **đúng một** phiên bản qua `engineWorkflowName`).
+2. `workflows/integration-handoff.v1.ts` — ba bước ở §11.1.
+3. Fixture tenant + kịch bản E2E thật (§11.5).
+4. Ma trận hỏng: điểm cuối 500 → retry · engine chết → outbox giữ · engine lên → gửi tiếp ·
+   API chết sau commit trước trigger · worker chết giữa chừng → hồi phục · tick trùng.
+5. `v2` + hồi quy versioning (§11.3–§11.4).
+6. Hồi quy riêng tư **tại biên thật**: đọc `input` của run trên engine, khẳng định không PII/bí mật.
+7. Compose production cho Hatchet + hợp đồng biến môi trường.
+8. Audit tài nguyên VM **bằng số đo mới**, rồi mới quyết định deploy `ultty-gd1-test`.
+
+**Chưa được tuyên bố READY FOR GD1-TEST** cho tới khi 1–6 xanh.
