@@ -1259,13 +1259,62 @@ theo `name`, vì đổi tên một bản Noop là gây lại lỗi cũ. Test nay
   `docker logs`; **redeploy mất luôn `docker logs`** (container mới). Dữ liệu nghiệp vụ trong
   Postgres không bao giờ mất. ⏸ **Không** lưu trace vào Postgres — xem §9.7.
 
-**Còn treo:**
+### 9.8 BÀN GIAO phiên 22/08/2026 (phiên 2) — đã ship, còn một việc CẦN NGƯỜI
 
-- ⬜ **`ADVICE_COMPOSER` đang RỖNG trên `ultty-gd1-test`** (đo 22/08: `printenv` trả rỗng vì
-  `compose.yaml` của release `1e009a44` chưa có dòng passthrough). Agent tư vấn **không chạy** trên
-  stack đó. Dòng `ADVICE_COMPOSER: ${ADVICE_COMPOSER:-off}` nằm trong compose ở nhánh làm việc
-  nhưng **chưa deploy**. Bật = thêm một bên nhận dữ liệu → quyết định của người vận hành.
-- ⬜ Bản sửa `COMPOSER_DISABLED` + token + `traceparent` **chưa deploy** lên `gd1-test`.
+**Đã merge + deploy.** PR #28 → `main` = `33e1bda`. Stack `ultty-gd1-test` đang chạy đúng SHA đó.
+17/17 container healthy trước và sau. Không đụng edge, không đụng stack khác.
+
+**Đã xác minh TRÊN STACK THẬT** (trace `73fd484a80d1b78045dd600a41e49ad8`, release `33e1bda9ac4d`):
+
+| Việc | Bằng chứng |
+|---|---|
+| Token đếm được — **lần đầu tiên** | `* AI parse deepseek/deepseek-v4-flash 1018ms **4140->41 tok**` |
+| `COMPOSER_DISABLED` chạy được | `x advisor.compose -> denied COMPOSER_DISABLED` |
+| Hết `AI compose noop/noop` | không còn bản ghi `ai_call` nào cho `compose` |
+| Hết `LLM_RETURNED_NOTHING` sai chỗ | không xuất hiện |
+| Kill switch | `AUTO_SEND=off`, cả hai cổng `KILL_SWITCH_OFF` |
+
+⚠️ **Lượt trên là smoke test lúc deploy** (`channel=copilot_paste`), **không phải tin Zalo thật.**
+
+**VIỆC CẦN NGƯỜI — checkpoint cuối của Phase A:**
+
+Gửi **một tin bất kỳ** vào nhóm allowlist (`7845230969630877446` hoặc `8827137437588696665`),
+rồi chạy:
+
+```bash
+gcloud compute ssh netviet --zone asia-southeast1-b --tunnel-through-iap --command "docker logs zalo-ultty-gd1-test-api-1 2>&1 | grep -a '\"traceId\"'" > logs.ndjson && node tools/trace-view.mjs --no-color < logs.ndjson
+```
+
+Phải thấy **thêm** hai dòng mà smoke test không có: `. message.persist` và
+`v message.intake -> allowed ACCEPTED`, kèm `channel=zca_listener`. Đủ hai dòng đó là Phase A xanh
+hoàn toàn.
+
+**Phase B (bật AI composer thật) — audit đã xong, chỉ còn MỘT dòng chặn:**
+
+| Câu hỏi | Trả lời (đọc từ source, không suy đoán) |
+|---|---|
+| `ADVICE_COMPOSER` nhận gì? | `off` · `claude` · `deepseek` (`env.ts:86`), mặc định `off` |
+| gd1-test sẽ dùng provider nào? | **`deepseek`** — `render-secrets.sh` đã **ép cứng** cho `gd1-test`, không cần sửa gì |
+| Model thật? | `ADVICE_DEEPSEEK_MODEL`, mặc định `deepseek-v4-flash` |
+| Secret đã có chưa? | ✅ `DEEPSEEK_API_KEY` đã ở trong container; `zalo-ultty-gd1-test-anthropic-api-key` cũng đã tạo (nhưng khoá Anthropic hết credit 21/08) |
+| Dữ liệu gửi ra provider? | Nội dung tin + lịch sử hội thoại của nhóm. Chỉ hợp lệ vì `DATA_CLASSIFICATION=test` + nhóm TEST (CLAUDE.md §Bảo mật). **Chạy dữ liệu khách thật phải đổi sang `claude`.** |
+| Còn thiếu gì? | **Chỉ `compose.yaml`** — khối `environment:` của service `api` chưa liệt kê `ADVICE_COMPOSER`, nên giá trị `render-secrets.sh` phát ra **không bao giờ tới container**. Đúng cái bẫy đã làm hỏng 19–21/08. |
+
+**Vì sao chưa làm:** 7 dòng vá đó đang nằm trong **working tree của task WATA song song**
+(cùng `deploy/netviet/secrets-passthrough.contract.test.mjs` để test nó), **chưa commit**. Deploy
+chạy từ SHA đã merge chứ không từ working tree, nên Phase B không thể chạy tới khi hunk đó được
+commit. Hunk hoàn toàn không liên quan WATA — nó là passthrough của agent tư vấn. **Quyết định
+ai commit nó là việc của người**, không tự ý lấy code chưa commit của phiên khác.
+
+**Phase C đã xong trước hạn:** `apps/api/src/advisor/di-reachability.contract.spec.ts` — hợp đồng
+kiểm mã lý do reachable bằng **đúng dây nối production** (`createAdvisorAgent()` tách khỏi
+`content.module.ts`, cùng khuôn `parser.provider.ts`). Phủ `COMPOSER_DISABLED`,
+`DETERMINISTIC_PATH_SUFFICIENT`, composer thật đã bật, và nhãn provider/model của parser.
+
+**Backup NDJSON trước deploy** (chứa nội dung tin thật — **không commit**):
+`~/netviet-trace-backups/gd1-test-predeploy-1e009a44-20260822T101112Z.ndjson`
+
+**Chưa đủ điều kiện bắt đầu n8n.**
 
 ### 9.7 Cố ý KHÔNG làm
 

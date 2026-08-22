@@ -165,6 +165,13 @@ services:
       FLOWISE_TIMEOUT_MS: ${FLOWISE_TIMEOUT_MS:-60000}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      # AGENT TU VAN (Pha 6). Block `environment` nay liet ke TUONG MINH, nen mot bien co trong
+      # `secrets.env` ma khong co o day thi KHONG BAO GIO toi container — dung cai bay da lam
+      # `ADVICE_COMPOSER` rong tren stack suot tu 19/08 den 21/08 du render-secrets.sh da phat no.
+      ADVICE_COMPOSER: ${ADVICE_COMPOSER:-off}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ADVICE_MODEL: ${ADVICE_MODEL:-claude-opus-5}
+      ADVICE_DEEPSEEK_MODEL: ${ADVICE_DEEPSEEK_MODEL:-deepseek-v4-flash}
       CHANNEL_MODE: ${CHANNEL_MODE:-zca}
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
       ZALO_CRED_PATH: /runtime/zalo/zalo-cred.json
