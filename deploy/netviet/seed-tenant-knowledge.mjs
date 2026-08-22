@@ -41,7 +41,14 @@ try {
   const knowledge = JSON.parse(await readFile(`${TENANT_DIR}/${knowledgePath}`, 'utf8'));
 
   const products = required(knowledge.products, 'products');
-  const dealers = required(knowledge.dealers, 'dealers');
+  // `dealers` la khai niem RIENG cua nang luc `sales-order`. Doi hoi no o MOI khach la keo khai
+  // niem ban hang vao base (quyet dinh kien truc #6): mot khach chi bat `knowledge` thi khong co
+  // dai ly nao ca, va goi khach cua ho dung la khong nen co truong do. Guard van giu nguyen cho
+  // khach CO `sales-order` — thieu dai ly o day la goi khach hong that, khong phai khach khac loai.
+  const capabilities = tenant.capabilities ?? [];
+  const dealers = capabilities.includes('sales-order')
+    ? required(knowledge.dealers, 'dealers')
+    : (knowledge.dealers ?? []);
   const groups = knowledge.groups ?? [];
   const glossary = knowledge.glossary ?? [];
   const prices = knowledge.prices ?? [];

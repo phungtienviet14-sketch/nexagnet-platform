@@ -25,19 +25,25 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   const refresh = async (): Promise<void> => {
-    const config = await authApi.config();
-    setMode(config.mode);
-    if (config.mode !== 'session') {
-      setUser(null);
-      return;
-    }
     try {
-      const current = await authApi.me();
-      setUser(current.user);
-      if (pathname === '/login') router.replace('/');
+      const config = await authApi.config();
+      setMode(config.mode);
+      if (config.mode !== 'session') {
+        setUser(null);
+        return;
+      }
+      try {
+        const current = await authApi.me();
+        setUser(current.user);
+        if (pathname === '/login') router.replace('/');
+      } catch {
+        setUser(null);
+        if (pathname !== '/login') router.replace('/login');
+      }
     } catch {
+      // Khi API endpoint khong phan hoi (vd: chay web doc lap / demo mock), fallback mode 'none'
+      setMode('none');
       setUser(null);
-      if (pathname !== '/login') router.replace('/login');
     }
   };
 

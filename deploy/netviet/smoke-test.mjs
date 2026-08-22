@@ -27,6 +27,24 @@ function loadSmokeFixture() {
   }
 }
 const smokeFixture = loadSmokeFixture();
+/**
+ * SSE `/events` thuoc nang luc `sales-order` (StreamController). Khach chi bat `knowledge` +
+ * `operations` khong co endpoint do, nen doi mo duoc SSE la doi mot thu khong ton tai — deploy
+ * WATA 21/08/2026 chet dung o day voi HTTP 404 du ca stack hoan toan binh thuong.
+ *
+ * Khong doc duoc goi khach -> GIU NGUYEN doi hoi cu. Bat bien 7 (ci-cd.md) cam lam yeu cong smoke:
+ * mot goi khach khong doc duoc phai nga ve phia kiem NHIEU hon, khong phai kiem it hon.
+ */
+function loadTenantCapabilities() {
+  try {
+    const config = JSON.parse(readFileSync(`${tenantDir}/tenant.json`, 'utf8'));
+    return Array.isArray(config?.capabilities) ? config.capabilities.map(String) : null;
+  } catch {
+    return null;
+  }
+}
+const tenantCapabilities = loadTenantCapabilities();
+const hasSalesOrder = tenantCapabilities === null || tenantCapabilities.includes('sales-order');
 
 const baseUrl = (process.env.PILOT_BASE_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
 const verifyOrderId = process.env.VERIFY_ORDER_ID?.trim();
@@ -52,21 +70,31 @@ if (verifyOrderId) {
   // GOI KHACH CHUA CO TIN NHAN MAU -> khong the kiem duong dat hang. Van kiem duoc phan ha tang:
   // API song, dang nhap duoc, SSE mo duoc. BAO TO ra stdout: mot cong kiem tra bi thu hep ma im
   // lang thi lan deploy xanh se bi doc nham la "da kiem het".
-  const abort = new AbortController();
-  const stream = await fetch(`${baseUrl}/events`, {
-    headers: authenticatedHeaders({ Accept: 'text/event-stream' }),
-    signal: abort.signal,
-  });
-  if (!stream.ok || !stream.body) {
-    throw new Error(`Khong mo duoc SSE: HTTP ${stream.status}`);
+  if (hasSalesOrder) {
+    const abort = new AbortController();
+    const stream = await fetch(`${baseUrl}/events`, {
+      headers: authenticatedHeaders({ Accept: 'text/event-stream' }),
+      signal: abort.signal,
+    });
+    if (!stream.ok || !stream.body) {
+      throw new Error(`Khong mo duoc SSE: HTTP ${stream.status}`);
+    }
+    abort.abort();
+    process.stdout.write(
+      'CANH BAO: goi khach khong khai bao `smoke` nen KHONG kiem duoc duong dat hang ' +
+        '(parse -> tinh gia -> duyet -> gui). Chi kiem: /health, dang nhap, SSE.\n' +
+        'Khach nao co nguon su that thi them `smoke` vao tenant.json de bat lai cong kiem tra nay.\n' +
+        'SMOKE_SKIPPED_ORDER_PATH=1\n',
+    );
+  } else {
+    process.stdout.write(
+      'CANH BAO: khach khong bat `sales-order` nen KHONG co duong dat hang lan SSE `/events`. ' +
+        `Nang luc khai bao: ${(tenantCapabilities ?? []).join(', ') || 'khong ro'}.\n` +
+        'Chi kiem: /health va dang nhap.\n' +
+        'SMOKE_SKIPPED_ORDER_PATH=1\n' +
+        'SMOKE_SKIPPED_SSE=1\n',
+    );
   }
-  abort.abort();
-  process.stdout.write(
-    'CANH BAO: goi khach khong khai bao `smoke` nen KHONG kiem duoc duong dat hang ' +
-      '(parse -> tinh gia -> duyet -> gui). Chi kiem: /health, dang nhap, SSE.\n' +
-      'Khach nao co nguon su that thi them `smoke` vao tenant.json de bat lai cong kiem tra nay.\n' +
-      'SMOKE_SKIPPED_ORDER_PATH=1\n',
-  );
 } else {
   const marker = `NETVIET-SMOKE-${Date.now()}`;
   const abort = new AbortController();

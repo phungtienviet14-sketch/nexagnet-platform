@@ -83,7 +83,11 @@ export const CAPABILITY_IDS = [
   'operations',
   'notifications',
 ] as const;
-export const EXPERIENCE_IDS = ['operations-console', 'knowledge-workspace'] as const;
+export const EXPERIENCE_IDS = [
+  'operations-console',
+  'knowledge-workspace',
+  'agent-workforce',
+] as const;
 
 export const capabilityIdSchema = z.enum(CAPABILITY_IDS);
 export const experienceIdSchema = z.enum(EXPERIENCE_IDS);
@@ -234,6 +238,7 @@ const capabilityRequirements = {
 export const EXPERIENCE_REQUIREMENTS = {
   'operations-console': ['knowledge', 'messaging', 'sales-order', 'operations'],
   'knowledge-workspace': ['knowledge'],
+  'agent-workforce': ['knowledge', 'operations'],
 } as const satisfies Record<
   z.infer<typeof experienceIdSchema>,
   readonly z.infer<typeof capabilityIdSchema>[]

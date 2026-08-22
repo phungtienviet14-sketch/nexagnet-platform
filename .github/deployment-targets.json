@@ -54,6 +54,24 @@
       "runtimeEnvironment": "prod",
       "target": "current-shared-vm",
       "preflight": "standard"
+    },
+    {
+      "tenant": "wata",
+      "environment": "dev",
+      "stackSlug": "wata",
+      "githubEnvironment": "dev",
+      "runtimeEnvironment": "dev",
+      "target": "current-shared-vm",
+      "preflight": "standard"
+    },
+    {
+      "tenant": "wata",
+      "environment": "production",
+      "stackSlug": "wata",
+      "githubEnvironment": "production",
+      "runtimeEnvironment": "prod",
+      "target": "current-shared-vm",
+      "preflight": "standard"
     }
   ]
 }

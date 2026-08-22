@@ -456,3 +456,44 @@ test('deploy gieo nguon su that TRUOC khi chay smoke, va chi khi DB rong', async
   // van thay "da co san pham" roi bo qua.
   assert.match(seed, /\$transaction/);
 });
+
+// Su co 21/08/2026: deploy khach `wata` (chi co `knowledge` + `operations`) chet o buoc gieo voi
+// 'Goi khach thieu dealers'. Seeder doi MOI khach khai dai ly, tuc la keo khai niem cua
+// `sales-order` vao base — trai quyet dinh kien truc #6. Guard chi duoc ap cho khach CO nang luc
+// do; khach khac loai phai len duoc ma khong can khai mot mang rong vo nghia.
+// Su co 21/08/2026 (tiep): stack WATA len khoe manh, api boot, seed xong — roi smoke chet voi
+// 'Khong mo duoc SSE: HTTP 404'. Nhanh RUT GON cua smoke van doi mo duoc `/events`, ma endpoint do
+// thuoc `sales-order`. Cong smoke phai thu hep theo NANG LUC, va bat bien 7 doi no BAO TO khi thu
+// hep — im lang thi mot lan deploy xanh se bi doc nham la 'da kiem het'.
+// Su co 21/08/2026 (het): stack WATA healthy, smoke qua, roi cong public HTTPS van do vi no probe
+// `/zalo` + `/zalo/status` — hai route do nang luc `messaging` phuc vu. Khach khong bat kenh thi
+// Next render notFound, tuc la cong dang doi mot thu DUNG RA khong duoc ton tai.
+test('cong public HTTPS probe theo nang luc, va khach khong-messaging van bi kiem', async () => {
+  const deployStack = await readFile(new URL('./deploy-stack.sh', import.meta.url), 'utf8');
+
+  assert.match(deployStack, /has_messaging/);
+  // Khach khong co kenh KHONG duoc mien kiem: van phai phuc vu vo dieu hanh qua TLS.
+  assert.match(deployStack, /OPERATOR_DOMAIN\}\/"/);
+  // Doc khong duoc goi khach -> nga ve phia doi day du cong, khong phai bo qua.
+  assert.match(deployStack, /van doi day du cong \/zalo/);
+});
+
+test('smoke: cong SSE thu hep theo nang luc va bao to khi thu hep', async () => {
+  const smoke = await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8');
+
+  assert.match(smoke, /hasSalesOrder/);
+  assert.match(smoke, /SMOKE_SKIPPED_SSE=1/);
+  // Khong doc duoc goi khach -> van doi SSE. Lam yeu cong smoke o nhanh nay la vi pham bat bien 7.
+  assert.match(smoke, /tenantCapabilities === null \|\| tenantCapabilities\.includes\('sales-order'\)/);
+});
+
+test('gieo nguon su that: `dealers` chi bat buoc voi khach co nang luc sales-order', async () => {
+  const seed = await readFile(new URL('./seed-tenant-knowledge.mjs', import.meta.url), 'utf8');
+
+  assert.match(seed, /capabilities\.includes\('sales-order'\)/);
+  assert.doesNotMatch(
+    seed,
+    /const dealers = required\(/,
+    'dealers khong duoc bat buoc vo dieu kien cho moi khach',
+  );
+});
