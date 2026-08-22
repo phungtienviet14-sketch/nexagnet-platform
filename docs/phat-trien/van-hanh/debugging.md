@@ -43,20 +43,24 @@ Nó biến hàng nghìn dòng JSON thành cây nghiệp vụ đọc được.
 
 ```
 TRACE dd1e6c044bd0300a22cd9d3c22163dd9
-  ultty/gd1-test · release=c37ee0440a1b · nhom=2508572440887686813 · 6ms
-  . pipeline.turn 6ms
-    . message.persist 0ms
-    v message.intake -> allowed ACCEPTED
-    . agent.run 4ms
-      * AI parse deepseek/deepseek-v4-flash 1420ms 2310->96 tok
-      v agent.tool_authorization -> allowed GRANTED
-      * AI compose deepseek/deepseek-v4-flash 2870ms 3980->210 tok cong cu=[tra_cuu_san_pham,sua_don]
-      v advisor.compose -> allowed COMPOSED {"toolRounds":2,"handoff":0}
-      ~~ Order.quantity: 20 -> 5
-      v supervisor.risk -> allowed ALLOWED {"riskLevel":"none"}
-    x order.auto_confirm -> denied QUANTITY_ABOVE_THRESHOLD {"totalQuantity":80,"threshold":50}
-    >> Order pending_review -> needs_edit (QUANTITY_ABOVE_THRESHOLD)
+  ultty/gd1-test · release=c37ee0440a1b · nhom=2508572440887686813 · 2412ms
+  . message.persist 9ms
+  v message.intake -> allowed ACCEPTED
+  . agent.run 2412ms
+    * AI parse deepseek/deepseek-v4-flash 1420ms 2310->96 tok
+    v agent.tool_authorization -> allowed GRANTED
+    * AI compose deepseek/deepseek-v4-flash 2870ms 3980->210 tok cong cu=[tra_cuu_san_pham,sua_don]
+    v advisor.compose -> allowed COMPOSED {"toolRounds":2,"handoff":0}
+    ~~ Order.quantity: 20 -> 5
+    v supervisor.risk -> allowed ALLOWED {"riskLevel":"none"}
+  x order.auto_confirm -> denied QUANTITY_ABOVE_THRESHOLD {"totalQuantity":80,"threshold":50}
+  >> Order pending_review -> needs_edit (QUANTITY_ABOVE_THRESHOLD)
 ```
+
+> **Cây này PHẲNG ở tầng ngoài, có chủ ý.** `message.persist`, `message.intake`, `agent.run` và
+> `order.auto_confirm` là anh em cùng cấp — **không có span gốc `pipeline.turn`**. Chính `traceId`
+> ở dòng đầu là thứ gom chúng lại. Nếu bạn thấy tài liệu hay ví dụ nào vẽ một span bao ngoài, đó là
+> tài liệu sai, không phải bản deploy sai (đã sửa 22/08/2026).
 
 **Cách đọc:**
 
@@ -171,7 +175,22 @@ Và ở `advisor.compose`:
 
 | Mã | Nghĩa |
 |---|---|
-| `COMPOSER_DISABLED` | ⚠️ **`ADVICE_COMPOSER` đang tắt — agent CHƯA TỪNG gọi LLM.** Đây chính là sự cố 19–21/08. Triệu chứng bên ngoài là "AI trả lời y hệt nhau". |
+| `COMPOSER_DISABLED` | ⚠️ **`ADVICE_COMPOSER` đang tắt — agent CHƯA TỪNG gọi LLM.** Đây chính là sự cố 19–21/08. Triệu chứng bên ngoài là "AI trả lời y hệt nhau". Bật bằng `ADVICE_COMPOSER=claude\|deepseek` **và** khoá tương ứng — thiếu một trong hai là quay lại đúng mã này. |
+
+> **Bẫy đã cắn lần thứ hai (22/08/2026).** Trên bản deploy `1e009a44` mã trên **không bao giờ
+> xuất hiện**, dù `ADVICE_COMPOSER` thật sự đang rỗng. Lý do: DI luôn tiêm một `AdvisorAgent`, và
+> khi công tắc rỗng thì cái được tiêm là `NoopAdvisorAgent` chứ không phải `undefined` — nên
+> orchestrator đi tiếp, gọi `reply()` (trả `null` ngay lập tức) rồi ghi:
+>
+> ```
+> * AI compose noop/noop 0ms
+> ~ advisor.compose -> degraded LLM_RETURNED_NOTHING
+> ```
+>
+> Đọc theo bảng này thì đó là "LLM hỏng/hết vòng công cụ" — **sai hoàn toàn**, vì chưa có lần gọi
+> LLM nào. Đã sửa: `AdvisorAgent.composes` là cờ có kiểu, `NoopAdvisorAgent` đặt `false`, và
+> orchestrator dừng trước khi ghi span AI giả. **Nếu bạn đang debug một bản cũ hơn `1e009a44` và
+> thấy `noop/noop`, hãy đọc nó là `COMPOSER_DISABLED`.**
 | `DETERMINISTIC_PATH_SUFFICIENT` | Đơn đủ dữ kiện, không cần LLM viết lại — bình thường |
 | `LLM_RETURNED_NOTHING` | LLM hỏng/hết vòng công cụ/lộ số tiền không có trong kết quả công cụ → lui về đường tất định |
 | `COMPOSED` | Agent đã soạn. `detail.handoff=1` nghĩa là nó tự xin chuyển Sale |
@@ -256,9 +275,34 @@ pnpm trace --trace <traceId>
 | Giới hạn | Ảnh hưởng |
 |---|---|
 | Trace sống trong `docker logs` (xoay theo cấu hình Docker) | Không truy được lượt quá cũ. Cần lâu hơn thì dựng backend — xem [observability-review.md §13](../../kien-truc/observability-review.md). |
-| Token của đường `compose` chưa có | `AdvisorReply` chưa mang `usage`; cần sửa cả bản Claude lẫn DeepSeek. |
-| Chưa có trace xuyên tiến trình sang Flowise | Hợp đồng `traceparent` đã sẵn sàng, chưa nối. |
 | Một VM một stack — chưa gộp log nhiều host | Đúng ý đồ ở quy mô hiện tại. |
+
+### 9.1 Cái gì mất, mất lúc nào (đo 22/08/2026)
+
+Hai sự kiện **rất khác nhau** hay bị gộp làm một:
+
+| | `docker restart` (API tự khởi động lại) | **Redeploy** (`compose up` tạo container mới) |
+|---|---|---|
+| Vòng đệm console (`RecentTracesSink`, 300 lượt) | **MẤT** | **MẤT** |
+| `docker logs` NDJSON — nguồn đầy đủ của mọi trace | **CÒN** | ❌ **MẤT VĨNH VIỄN** (log gắn với container cũ, container cũ bị xoá) |
+| `Message`, `Order`, `OrderMessage`, `AuditLog` trong Postgres | **CÒN** | **CÒN** |
+| `traceId` để tra ngược | **CÒN** trong log | mất — nhưng `--order <orderId>` vẫn tra được **nếu** log còn |
+
+**Đọc ra:** dữ liệu **nghiệp vụ** không bao giờ mất — Postgres của khách là nguồn bền vững và nó
+giữ đủ tin, đơn, và mối nối giữa hai thứ đó. Cái mất là **vết suy luận** (quyết định, lý do, lần
+gọi LLM, thời gian), và nó mất **theo vòng đời container**, không theo thời gian.
+
+⚠️ **Hệ quả thực dụng:** *sau khi deploy, mọi trace trước đó đã mất.* Cần giữ bằng chứng của một
+sự cố thì **kéo log ra file TRƯỚC khi deploy bản sửa**:
+
+```bash
+gcloud compute ssh netviet --zone asia-southeast1-b --tunnel-through-iap --command "docker logs zalo-ultty-gd1-test-api-1 2>&1" > su-co.ndjson
+```
+
+**Chưa làm gì thêm, có chủ ý** (xem [tong-quan.md §9.7](../ke-hoach/tong-quan.md)): lưu trace vào
+Postgres nghĩa là thêm bảng + migration trên bốn stack khách đang chạy, cộng chính sách lưu trữ
+cho dữ liệu có PII — đúng cái độ phức tạp mà §9.2 đã cân nhắc rồi từ chối. Ở mức 10–20 đơn/ngày,
+"kéo log ra file trước khi deploy" giải quyết đủ.
 
 ---
 

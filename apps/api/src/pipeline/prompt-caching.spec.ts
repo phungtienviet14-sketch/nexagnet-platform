@@ -100,6 +100,27 @@ describe('ClaudeParser gui prompt theo dang cache duoc', () => {
     return { parser, create };
   }
 
+  /*
+   * Token doc tu cache phai NAM TRONG con so bao ra. Anthropic tra `input_tokens` KHONG gom
+   * `cache_read_input_tokens`, nen chi lay `input_tokens` thi tu tin thu hai tro di trace se bao
+   * mot prompt teo di dot ngot — dung luc prompt caching bat dau chay. Nguoi doc se tuong prompt
+   * bi cat, trong khi that ra no van nguyen ven.
+   */
+  it('bao so token GOM ca phan doc tu cache', async () => {
+    const parser = new ClaudeParser('test-key');
+    const create = vi.fn(async () => ({
+      content: [{ type: 'tool_use', name: 'extract_order', input: { intent: 'hoi_gia' } }],
+      usage: { input_tokens: 310, output_tokens: 96, cache_read_input_tokens: 2_000 },
+    }));
+    // @ts-expect-error — thay client that bang stub trong test
+    parser.client = { messages: { create } };
+    const reported: unknown[] = [];
+
+    await parser.parse({ ...INPUT, reportUsage: (u) => reported.push(u) });
+
+    expect(reported).toEqual([{ inputTokens: 2_310, outputTokens: 96 }]);
+  });
+
   it('system la MANG block, block tinh duoc danh dau cache_control ephemeral', async () => {
     const { parser, create } = parserWithSpy();
 

@@ -7,6 +7,10 @@ import {
   normalizeParserOutput,
   parseJsonLoose,
 } from './parser-prompt.js';
+import {
+  reportOpenAiCompatibleUsage,
+  type OpenAiCompatibleUsage,
+} from '../observability/llm-usage.js';
 
 /**
  * Parser THAT dung DeepSeek (API tuong thich OpenAI, JSON mode).
@@ -99,7 +103,13 @@ export class DeepSeekParser implements OrderParser {
         throw new Error(`DeepSeek request failed with HTTP ${response.status}`);
       }
 
-      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        usage?: OpenAiCompatibleUsage;
+      };
+      // Bao TRUOC khi kiem noi dung: mot lan tra ve rong (roi retry) van la mot lan da dot token,
+      // va tong cua ca luot phai gom du ca nhung lan do.
+      reportOpenAiCompatibleUsage(data.usage, input.reportUsage);
       const content = data.choices?.[0]?.message?.content;
       if (!content) {
         this.logger.warn('DeepSeek khong tra noi dung.');

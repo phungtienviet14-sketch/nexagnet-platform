@@ -42,6 +42,7 @@ import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
 import { AgentEventsService } from './agent-events.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
+import { createUsageMeter, type LlmUsage } from '../observability/llm-usage.js';
 import { DEFAULT_RULES_CONFIG, type RulesConfig } from '../rules/config.js';
 import { matchProduct, priceOrder, routeStatus } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
@@ -142,7 +143,12 @@ export class AgentOrchestrator {
     // 5 ghe Felix), nhung gui thang xac nhan cua no se de don CU song nguyen — Sale go ca hai vao
     // KiotViet va khach nhan 25 cai ghe. Luot do phai qua agent de no goi `sua_don`.
     const orderIsComplete = input.intent === 'dat_don' && dispatch.priced !== null;
-    if (!this.advisor) {
+    // `!this.advisor` KHONG DU. DI luon tiem mot `AdvisorAgent`; khi `ADVICE_COMPOSER` rong thi
+    // cai duoc tiem la `NoopAdvisorAgent` chu khong phai `undefined` (`content.module.ts`), nen
+    // truoc 22/08/2026 nhanh nay khong bao gio chay tren stack that — do dung tren trace that
+    // `6c46754f...`: `AI compose noop/noop` + `LLM_RETURNED_NOTHING`, tuc bao "LLM hong" cho mot
+    // lan goi chua he xay ra. `composes` la co CO KIEU, xem `AdvisorAgent`.
+    if (!this.advisor || !this.advisor.composes) {
       /*
        * MA QUAN TRONG NHAT trong ca he thong quan sat.
        *
@@ -182,7 +188,9 @@ export class AgentOrchestrator {
     });
 
     const startedAt = Date.now();
+    const usage = createUsageMeter();
     const reply = await this.advisor.reply({
+      reportUsage: usage.report,
       customerText: input.customerText,
       ...(input.context ? { context: input.context } : {}),
       ...(input.senderDisplayName ? { senderDisplayName: input.senderDisplayName } : {}),
@@ -222,6 +230,9 @@ export class AgentOrchestrator {
       operation: 'compose',
       durationMs: Date.now() - startedAt,
       status: reply ? 'ok' : 'error',
+      // Tong cua CA cac vong cong cu, ke ca khi cuoi cung lui ve duong tat dinh: mot luot dot bon
+      // vong roi tra `null` la luot dat nhat trong ngay, va no phai nhin thay duoc.
+      ...usageFields(usage.total()),
       ...(reply?.usedTools.length ? { toolNames: reply.usedTools } : {}),
       attributes: {
         intent: input.intent,
@@ -355,7 +366,9 @@ export class AgentOrchestrator {
     // ROUTER — 1 lan parse (LLM hoac mock). do tre THAT nam o day.
     emit({ type: 'agent.progress', orderId, role: 'router', phase: 'active' });
     const parseStartedAt = Date.now();
+    const parseUsage = createUsageMeter();
     const rawParseResult = await this.parser.parse({
+      reportUsage: parseUsage.report,
       text: message.text,
       imageUrl: message.imageUrl,
       products: this.knowledge.products(),
@@ -381,6 +394,7 @@ export class AgentOrchestrator {
       operation: 'parse',
       durationMs: Date.now() - parseStartedAt,
       status: 'ok',
+      ...usageFields(parseUsage.total()),
       attributes: {
         intent: rawParseResult.intent,
         intentConfidence: rawParseResult.confidence.intent ?? null,
@@ -843,6 +857,14 @@ interface ComposeReplyInput {
  * `product_advisor`: mot cau hoi cong no do Chinh sach-Tai chinh tra loi, ghi cong cho Tu van SP
  * la ghi sai vet.
  */
+/**
+ * Khong dem duoc -> KHONG co truong token, thay vi `0 -> 0`. Xem `createUsageMeter()`: mot trace
+ * ghi `0->0 tok` doc len giong "lan goi nay mien phi", va do la mot cau tra loi sai.
+ */
+function usageFields(usage: LlmUsage | null): { inputTokens?: number; outputTokens?: number } {
+  return usage ? { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } : {};
+}
+
 function markComposedRole(dispatch: DispatchResult, role: AgentRole, handoff: boolean): void {
   const current = dispatch.roles.get(role);
   dispatch.roles.set(role, {

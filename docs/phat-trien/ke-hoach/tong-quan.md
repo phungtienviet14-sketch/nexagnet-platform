@@ -1190,6 +1190,29 @@ năm khách vào một kho**. Cách ly bằng `tenantId` trong label là cách l
 - `docs/phat-trien/van-hanh/debugging.md` — runbook 3 ca thật + bảng tra mã lý do.
 - Quy tắc viết code: `.claude/rules/ecc/common/code-review.md` §Observability.
 
+### 9.4bis Lỗi thứ BẢY — chỉ tin nhắn Zalo thật mới lộ ra (22/08/2026)
+
+`COMPOSER_DISABLED` được gọi là "mã quan trọng nhất trong cả hệ thống quan sát" (§9.4 mục 1) —
+và trên bản deploy nó **chưa bao giờ chạy**. Trace thật `6c46754f…` ghi:
+
+```
+* AI compose noop/noop 0ms          ← một span AI cho lần gọi CHƯA HỀ XẢY RA
+~ advisor.compose -> degraded LLM_RETURNED_NOTHING
+```
+
+Nguyên nhân: cổng viết là `if (!this.advisor)`, nhưng `content.module.ts` **luôn** tiêm một
+`AdvisorAgent`; `ADVICE_COMPOSER` rỗng thì cái được tiêm là `NoopAdvisorAgent`, **không phải
+`undefined`**. Orchestrator đi tiếp, gọi `reply()` (trả `null` tức thì), rồi ghi nhãn "LLM không
+trả về gì" — đúng cái nhãn đẩy người debug về phía mô hình, trong khi mô hình chưa từng được gọi.
+Cùng loại lỗi với mục 5 (**nhãn sai tệ hơn không có nhãn**), lần này ở tầng quyết định.
+
+**Vì sao test không bắt được:** `observability-e2e.spec.ts` khẳng định `COMPOSER_DISABLED` với
+`advisor: undefined` — một cấu hình DI không bao giờ tồn tại trên stack. Test xanh, stack sai.
+
+**Đã sửa:** `AdvisorAgent.composes` (cờ có kiểu, `NoopAdvisorAgent` đặt `false`) — không so sánh
+theo `name`, vì đổi tên một bản Noop là gây lại lỗi cũ. Test nay chạy **cả hai** cấu hình, và bản
+`NoopAdvisorAgent` đã được xác nhận ĐỎ trước khi sửa.
+
 ### 9.4 Sáu lỗi thật do chính việc này tìm ra
 
 Đều đã khoá bằng test hồi quy hoặc ghi vào runbook:
@@ -1214,17 +1237,35 @@ năm khách vào một kho**. Cách ly bằng `tenantId` trong label là cách l
   log production **đã là NDJSON**, zca listener **connected**.
 - ✅ Trace thật đầu tiên trên stack (từ smoke test lúc deploy) — dựng được cây nghiệp vụ đầy đủ.
 
-### 9.6 Còn treo
+### 9.6 Trạng thái sau phiên 22/08/2026
 
-- ⬜ **Proof bằng tin nhắn thật trong nhóm TEST** — cần **người** gửi tin vào nhóm allowlist
-  (`7845230969630877446` hoặc `8827137437588696665`). Trace hiện có đến từ smoke test
-  (`/demo/simulate`), tức đi qua `process()` chứ không phải `intake()`, nên **chưa chứng minh được**
-  hai bản ghi `message.intake` + `message.persist` của đường zca thật.
-- ⬜ **Token của đường `compose`** chưa đếm được: `AdvisorReply` chưa mang `usage`; phải sửa cả bản
-  Claude lẫn DeepSeek. Đường `parse` đã có.
-- ⬜ Trace xuyên tiến trình sang Flowise — hợp đồng `traceparent` đã sẵn, chưa nối.
-- ⬜ Vòng đệm console **mất khi restart**. Cần lâu hơn thì `docker logs`, hoặc dựng SigNoz **trên
-  VM riêng** (không phải VM khách, để giữ cách ly).
+- ✅ **Proof bằng tin nhắn Zalo THẬT** trên `ultty-gd1-test`, release `1e009a44`:
+  trace **`6c46754f16819d5ef410e1259a553df2`**, nhóm allowlist `7845230969630877446`,
+  `externalMessageId=8179411825589`, người gửi *Phùng Việt*, nội dung `"v08 bao nhieu tien"`,
+  lúc `2026-08-22T01:57:34.891Z`. Đường đi là `ZcaListener → intake()` (`channel=zca_listener`),
+  **không** phải `/demo/simulate`. Đủ cả `message.persist` (9 ms) + `message.intake → ACCEPTED`,
+  và đối chiếu được với DB: `Message cmt3qagx00002nx0194i1fna1` → `OrderMessage` →
+  `Order a614c70e-a4cf-45c0-809a-b8180f94454c` (`pending_review`, `hoi_gia`).
+- ✅ **Token của CẢ HAI đường LLM.** Phát hiện khi đối chiếu trace thật: đường `parse` **cũng chưa
+  từng** có token (bản ghi trước 22/08 không có trường nào) — `ClaudeParser` chỉ log chuỗi
+  `[cache]`, `DeepSeekParser` không đọc `usage`. Nay cả `parse` lẫn `compose` báo qua
+  `ParserInput.reportUsage` / `AdvisorRequest.reportUsage` (`observability/llm-usage.ts`), cộng dồn
+  qua mọi vòng công cụ, ghi cả khi LLM trả `null`. Không đụng `@netviet/shared`.
+- ✅ **`traceparent` W3C sang Flowise** — `FlowiseParser` đính header của lượt đang chạy. Không đổi
+  Flowise, không thêm backend. Cố ý **không** dùng `overrideConfig.sessionId` (đó là khoá bộ nhớ
+  hội thoại của Flowise; ghi đè sẽ đổi hành vi nghiệp vụ để phục vụ debug).
+- ✅ **Xác định chính xác dữ liệu mất** — bảng ở
+  [debugging.md §9.1](../van-hanh/debugging.md). Tóm tắt: `docker restart` mất vòng đệm, **giữ**
+  `docker logs`; **redeploy mất luôn `docker logs`** (container mới). Dữ liệu nghiệp vụ trong
+  Postgres không bao giờ mất. ⏸ **Không** lưu trace vào Postgres — xem §9.7.
+
+**Còn treo:**
+
+- ⬜ **`ADVICE_COMPOSER` đang RỖNG trên `ultty-gd1-test`** (đo 22/08: `printenv` trả rỗng vì
+  `compose.yaml` của release `1e009a44` chưa có dòng passthrough). Agent tư vấn **không chạy** trên
+  stack đó. Dòng `ADVICE_COMPOSER: ${ADVICE_COMPOSER:-off}` nằm trong compose ở nhánh làm việc
+  nhưng **chưa deploy**. Bật = thêm một bên nhận dữ liệu → quyết định của người vận hành.
+- ⬜ Bản sửa `COMPOSER_DISABLED` + token + `traceparent` **chưa deploy** lên `gd1-test`.
 
 ### 9.7 Cố ý KHÔNG làm
 

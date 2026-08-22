@@ -1,5 +1,6 @@
 import type { ConversationContext, OrderDraft, ParseResult } from '@netviet/shared';
 import type { GlossaryEntry, Product } from '../knowledge/domain.js';
+import type { LlmUsageReporter } from '../observability/llm-usage.js';
 
 /**
  * Tang 3 — lop parser. Interface de thay doi bo phan tich (Mock tat dinh cho demo
@@ -24,6 +25,11 @@ export interface ParserInput {
   pendingDraft?: OrderDraft;
   /** He thong vua hoi va dang cho DUNG nguoi nay tra loi. */
   awaitingAnswer?: boolean;
+  /**
+   * Cho parser bao so token cua lan goi API nay. Tuy chon: parser khong dem duoc (Mock, Flowise)
+   * thi bo trong va trace khong co truong token — dung hanh vi cu.
+   */
+  reportUsage?: LlmUsageReporter;
 }
 
 export interface OrderParser {
