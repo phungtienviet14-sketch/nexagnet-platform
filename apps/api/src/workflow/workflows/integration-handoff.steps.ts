@@ -120,15 +120,22 @@ export function resolveDestination(destination: string, env: NodeJS.ProcessEnv):
 
 // ------------------------------------------------- 2. dung lai khoa thao tac
 
-/** Dung hop dong dau vao v1 (`workflow-registry.ts`) — sau truong, khong truong nao mang PII. */
-export interface IntegrationHandoffInput {
+/**
+ * Dung hop dong dau vao v1 (`workflow-registry.ts`) — sau truong, khong truong nao mang PII.
+ *
+ * `type` chu khong phai `interface`, va do la mot rang buoc THAT chu khong phai so thich:
+ * TypeScript suy ra index signature NGAM cho type alias nhung KHONG cho interface, ma SDK cua
+ * engine doi dau vao thoa `JsonObject` (`{ [x: string]: JsonValue }`). Doi thanh `interface` se
+ * lam adapter khong bien dich duoc — voi mot thong bao loi chang lien quan gi toi nguyen nhan.
+ */
+export type IntegrationHandoffInput = {
   readonly tenant: string;
   readonly entityType: string;
   readonly entityId: string;
   readonly operation: string;
   readonly operationVersion: number;
   readonly destination: string;
-}
+};
 
 /**
  * DUNG LAI khoa thao tac tu input + moi truong, thay vi nhan no kem theo.
