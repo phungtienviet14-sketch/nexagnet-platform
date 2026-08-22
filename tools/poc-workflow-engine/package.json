@@ -1,0 +1,26 @@
+{
+  "name": "@netviet/poc-workflow-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "POC danh gia durable workflow engine (Hatchet). Khong nam trong duong chay production.",
+  "scripts": {
+    "endpoint": "tsx src/proof-endpoint.ts",
+    "worker": "tsx src/worker.ts",
+    "worker:v2": "POCWF_VERSION=v2 tsx src/worker.ts",
+    "trigger": "tsx src/trigger.ts",
+    "typecheck": "tsc --noEmit",
+    "spike:shared": "tsx src/version-spike.ts --strategy=shared",
+    "spike:versioned": "tsx src/version-spike.ts --strategy=versioned"
+  },
+  "dependencies": {
+    "@hatchet-dev/typescript-sdk": "1.28.2",
+    "dotenv": "^16.4.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2"
+  }
+}

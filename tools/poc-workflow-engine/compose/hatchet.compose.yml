@@ -1,0 +1,100 @@
+# Hatchet self-host — CAU HINH TOI THIEU cho POC danh gia workflow engine.
+#
+# Khac ban docker-compose chinh thuc o hai diem, ca hai deu la lua chon CHINH THUC:
+#   1. BO RabbitMQ  -> `SERVER_MSGQUEUE_KIND: postgres` (nhu docker-compose.release.yml cua Hatchet).
+#      Muc dich: do xem san toi thieu that su can bao nhieu service.
+#   2. GHIM version -> khong dung `latest`, de do lai duoc.
+#
+# Cong doi sang dai 57xx/77xx/87xx de KHONG dung vao bat ky stack nao dang chay.
+# Toan bo stack nay xoa duoc bang: docker compose -p pocwf down -v
+
+name: pocwf
+
+x-hatchet-env: &hatchet-env
+  DATABASE_URL: "postgres://hatchet:hatchet@postgres:5432/hatchet"
+  SERVER_MSGQUEUE_KIND: postgres
+  SERVER_AUTH_COOKIE_DOMAIN: localhost
+  SERVER_AUTH_COOKIE_INSECURE: "t"
+  SERVER_GRPC_BIND_ADDRESS: "0.0.0.0"
+  SERVER_GRPC_INSECURE: "t"
+  SERVER_GRPC_PORT: "7070"
+  SERVER_GRPC_BROADCAST_ADDRESS: "localhost:7744"
+  SERVER_INTERNAL_CLIENT_INTERNAL_GRPC_BROADCAST_ADDRESS: "hatchet-engine:7070"
+  SERVER_URL: "http://localhost:8744"
+  SERVER_SECURITY_CHECK_ENABLED: "false"
+
+services:
+  postgres:
+    image: postgres:15.6
+    command: postgres -c 'max_connections=1000'
+    restart: always
+    hostname: postgres
+    environment:
+      POSTGRES_USER: hatchet
+      POSTGRES_PASSWORD: hatchet
+      POSTGRES_DB: hatchet
+    ports:
+      - "5744:5432"
+    volumes:
+      - pocwf_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d hatchet -U hatchet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  migration:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-migrate:v0.101.27
+    command: /hatchet/hatchet-migrate
+    environment:
+      DATABASE_URL: "postgres://hatchet:hatchet@postgres:5432/hatchet"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  setup-config:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-admin:v0.101.27
+    command: /hatchet/hatchet-admin quickstart --skip certs --generated-config-dir /hatchet/config --overwrite=false
+    environment: *hatchet-env
+    volumes:
+      - pocwf_certs:/hatchet/certs
+      - pocwf_config:/hatchet/config
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  hatchet-engine:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-engine:v0.101.27
+    command: /hatchet/hatchet-engine --config /hatchet/config
+    restart: on-failure
+    depends_on:
+      setup-config:
+        condition: service_completed_successfully
+    ports:
+      - "7744:7070"
+    environment: *hatchet-env
+    volumes:
+      - pocwf_certs:/hatchet/certs
+      - pocwf_config:/hatchet/config
+
+  hatchet-dashboard:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-dashboard:v0.101.27
+    command: sh ./entrypoint.sh --config /hatchet/config
+    restart: on-failure
+    depends_on:
+      setup-config:
+        condition: service_completed_successfully
+    ports:
+      - "8744:80"
+    environment: *hatchet-env
+    volumes:
+      - pocwf_certs:/hatchet/certs
+      - pocwf_config:/hatchet/config
+
+volumes:
+  pocwf_postgres_data:
+  pocwf_config:
+  pocwf_certs:

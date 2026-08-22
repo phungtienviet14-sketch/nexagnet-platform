@@ -1,0 +1,124 @@
+{
+  "strategy": "shared",
+  "startedAt": "2026-08-22T10:00:24.195Z",
+  "workflowKey": "version-spike",
+  "runs": [
+    {
+      "label": "B-new",
+      "runId": "8e4720a2-6ba4-4a60-bff2-aabec1a9d2c5",
+      "workflowName": "version-spike",
+      "steps": [
+        {
+          "taskName": "begin",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-shared-v1",
+          "workflowName": "version-spike"
+        }
+      ],
+      "status": "RUNNING"
+    },
+    {
+      "label": "A-old",
+      "runId": "83eaccde-57ab-422d-b4cc-c66c26e12f22",
+      "workflowName": "version-spike",
+      "steps": [
+        {
+          "taskName": "finish",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-shared-v1",
+          "workflowName": "version-spike"
+        },
+        {
+          "taskName": "resume",
+          "engineVersion": "v2",
+          "workerName": "spike-worker-shared-v2",
+          "workflowName": "version-spike"
+        },
+        {
+          "taskName": "park",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-shared-v1",
+          "workflowName": "version-spike"
+        },
+        {
+          "taskName": "begin",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-shared-v1",
+          "workflowName": "version-spike"
+        }
+      ],
+      "status": "COMPLETED"
+    },
+    {
+      "label": "C-orphan",
+      "runId": "501ff7a2-15c0-427b-aa88-42aea06a0a22",
+      "workflowName": "version-spike",
+      "steps": [
+        {
+          "taskName": "finish",
+          "engineVersion": "v2",
+          "workerName": "spike-worker-shared-v2",
+          "workflowName": "version-spike"
+        },
+        {
+          "taskName": "resume",
+          "engineVersion": "v2",
+          "workerName": "spike-worker-shared-v2",
+          "workflowName": "version-spike"
+        },
+        {
+          "taskName": "park",
+          "engineVersion": "v2",
+          "workerName": "spike-worker-shared-v2",
+          "workflowName": "version-spike"
+        },
+        {
+          "taskName": "begin",
+          "engineVersion": "v2",
+          "workerName": "spike-worker-shared-v2",
+          "workflowName": "version-spike"
+        }
+      ],
+      "status": "COMPLETED"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "2",
+      "name": "run A dung lai o buoc cho ben vung",
+      "pass": true,
+      "detail": "runId=83eaccde-57ab-422d-b4cc-c66c26e12f22"
+    },
+    {
+      "id": "4",
+      "name": "run MOI chay code v2",
+      "pass": false,
+      "detail": "begin=v1"
+    },
+    {
+      "id": "6",
+      "name": "MOI buoc cua run cu chay code v1",
+      "pass": false,
+      "detail": "finish=v1 resume=v2 park=v1 begin=v1  <-- TRON PHIEN BAN: resume"
+    },
+    {
+      "id": "7",
+      "name": "worker v1 da xa het viec truoc khi rut",
+      "pass": true,
+      "detail": "con 0 run chua ket thuc"
+    },
+    {
+      "id": "8",
+      "name": "tat worker cu khong lam hong lich su run cu",
+      "pass": true,
+      "detail": "4 buoc, status=COMPLETED"
+    },
+    {
+      "id": "9",
+      "name": "worker v1 bien mat -> run cu NAM CHO, khong bi code v2 cuop",
+      "pass": false,
+      "detail": "finish=v2 resume=v2 park=v2 begin=v2  <-- BI CUOP: finish,resume,park,begin"
+    }
+  ],
+  "verdict": "FAIL"
+}
