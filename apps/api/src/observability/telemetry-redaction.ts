@@ -155,7 +155,17 @@ function normalizeKey(key: string): string {
   return key.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function isSecretKey(key: string): boolean {
+/**
+ * Ba vi tu duoi day duoc EXPORT (22/08/2026) cho bien gioi workflow engine
+ * (`workflow/workflow-input.ts`). Ly do: mot payload roi khoi tien trinh sang engine ngoai phai
+ * di qua CUNG danh sach khoa nhay cam ma telemetry dung. Neu ben do tu viet danh sach thu hai
+ * thi hai danh sach se lech nhau, va cho lech chinh la cho ro ri.
+ *
+ * KHAC NHAU o CHO XU LY, khong o cho NHAN DIEN: telemetry CHE roi ghi tiep (quan sat khong duoc
+ * lam sap nghiep vu); workflow input thi NEM (mot payload co bi mat khong duoc phep roi khoi ta
+ * du bi che hay khong — va che im lang se lam workflow chay tiep voi du lieu hong).
+ */
+export function isSecretKey(key: string): boolean {
   const k = normalizeKey(key);
   return (
     SECRET_KEYS.has(k) ||
@@ -167,12 +177,12 @@ function isSecretKey(key: string): boolean {
   );
 }
 
-function isPiiKey(key: string): boolean {
+export function isPiiKey(key: string): boolean {
   const k = normalizeKey(key);
   return PII_KEYS.has(k) || k.endsWith('phone') || k.endsWith('address') || k.endsWith('email');
 }
 
-function isContentKey(key: string): boolean {
+export function isContentKey(key: string): boolean {
   return CONTENT_KEYS.has(normalizeKey(key));
 }
 
