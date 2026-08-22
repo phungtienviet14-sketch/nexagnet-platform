@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "slug": "workflow-enabled",
+  "identity": {
+    "displayName": "Workflow Enabled Fixture",
+    "shortName": "Workflow"
+  },
+  "branding": {
+    "productName": "Workflow Workspace",
+    "installName": "Workflow Workspace",
+    "pageTitle": "Workflow Workspace",
+    "pageDescription": "Generic non-commercial tenant fixture with a workflow engine binding.",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#f5f7fb",
+    "monogram": "W",
+    "composerPlaceholder": "Search shared knowledge"
+  },
+  "experience": "knowledge-workspace",
+  "capabilities": ["knowledge"],
+  "policies": {
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {
+    "contentSource": { "adapter": "local_manifest" },
+    "workflowEngine": {
+      "adapter": "hatchet",
+      "credentialRef": "WORKFLOW_ENGINE_TOKEN",
+      "bindings": [
+        {
+          "key": "integration-handoff",
+          "version": "v1",
+          "enabled": true,
+          "destination": "proof-endpoint",
+          "idempotency": "key",
+          "operationVersion": 1,
+          "retry": { "maxAttempts": 5, "baseBackoffSeconds": 1 }
+        }
+      ]
+    }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" }
+  }
+}
