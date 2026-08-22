@@ -274,6 +274,55 @@ export async function dispatchHandoff(
   return { externalRef: body.externalRef, status: response.status };
 }
 
+// ---------------------------------------------------------------- 4. preflight
+
+export interface PreflightResult {
+  /** He ngoai DA co ban ghi cho khoa nay -> khong duoc goi `dispatch` nua. */
+  readonly alreadyApplied: boolean;
+  readonly externalRef?: string;
+}
+
+/**
+ * TRA CUU TRUOC — hien thuc muc idempotency `lookup` (buoc rieng cua `integration-handoff.v2`).
+ *
+ * `operation-key.ts` dinh nghia ba muc `key` / `lookup` / `none` tu Gate C, nhung cho toi truoc
+ * v2 thi CHUA GI hien thuc muc giua. Muc `lookup` la: he ngoai TRA CUU DUOC ban ghi da tao
+ * nhung KHONG nhan khoa idempotency — nen an toan chi dat duoc bang cach HOI TRUOC khi ghi.
+ *
+ * Do cung la ly do v2 ton tai va la mot phien ban THAT, khong phai mot phien ban bia ra de co
+ * hai phien ban cho de kiem hoi quy.
+ *
+ * KHONG NEM khi tra cuu that bai: mot lan tra cuu hong khong duoc bien thanh mot lan ban giao
+ * hong. Tra `alreadyApplied: false` va de `dispatch` di tiep — o muc `lookup` thi tra cuu la
+ * mot lop GIAM RUI RO, khong phai mot cong chan.
+ */
+export async function preflightLookup(
+  args: { readonly url: string; readonly operationKey: string },
+  deps: DispatchDeps = {},
+): Promise<PreflightResult> {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const url = new URL(args.url);
+  url.searchParams.set('key', args.operationKey);
+
+  try {
+    const response = await fetchImpl(url.toString(), {
+      method: 'GET',
+      headers: { 'idempotency-key': args.operationKey },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return { alreadyApplied: false };
+
+    const body = (await response.json()) as { externalRef?: unknown };
+    return typeof body.externalRef === 'string' && body.externalRef !== ''
+      ? { alreadyApplied: true, externalRef: body.externalRef }
+      : { alreadyApplied: false };
+  } catch {
+    return { alreadyApplied: false };
+  }
+}
+
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

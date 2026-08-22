@@ -3,6 +3,7 @@ import type { WorkflowWorkerDeps, WorkflowWorkerHandle } from '../workflow-worke
 import type { WorkerRegistration } from '../worker-registration.js';
 import {
   dispatchHandoff,
+  preflightLookup,
   recomputeOperationKey,
   resolveDestination,
   type IntegrationHandoffInput,
@@ -67,28 +68,72 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
         const url = resolveDestination(input.destination, env);
         // KHONG log URL: o mot cau hinh khach khac no co the mang token trong query.
         ctx.logger.info(`resolve ${input.destination} -> da co URL`);
-        return { url, destination: input.destination };
+        return { url, destination: input.destination, alreadyApplied: false, externalRef: '' };
       },
     });
+
+    /**
+     * ①bis preflight — CHI CO O v2, va do la toan bo khac biet giua hai phien ban.
+     *
+     * Muc idempotency `lookup` (Gate C) la: he ngoai tra cuu duoc ban ghi da tao nhung KHONG
+     * nhan khoa idempotency. Voi loai dich den do, an toan chi dat duoc bang cach HOI TRUOC khi
+     * ghi — va cho toi truoc v2 thi muc giua nay chua gi hien thuc.
+     *
+     * Buoc nay la ly do v2 la mot phien ban THAT chu khong phai mot phien ban bia ra de co hai
+     * phien ban cho de kiem hoi quy.
+     */
+    const upstream =
+      this.registration.workflowVersion === 'v1'
+        ? resolve
+        : workflow.task({
+            name: 'preflight',
+            parents: [resolve],
+            retries: 2,
+            fn: async (input: IntegrationHandoffInput, ctx) => {
+              const { url, destination } = await ctx.parentOutput(resolve);
+              const operationKey = recomputeOperationKey(input, ctx.additionalMetadata());
+              const found = await preflightLookup({ url, operationKey });
+              if (found.alreadyApplied) {
+                ctx.logger.info('preflight: he ngoai DA co ban ghi cho khoa nay -> bo dispatch');
+              }
+              return {
+                url,
+                destination,
+                alreadyApplied: found.alreadyApplied,
+                externalRef: found.externalRef ?? '',
+              };
+            },
+          });
 
     // ② dispatch — buoc DUY NHAT co tac dung phu ra ngoai. Ba lan thu + backoff luy thua.
     const dispatch = workflow.task({
       name: 'dispatch',
-      parents: [resolve],
+      parents: [upstream],
       retries: 3,
       backoff: { factor: 2, maxSeconds: 60 },
       fn: async (input: IntegrationHandoffInput, ctx) => {
-        const { url } = await ctx.parentOutput(resolve);
+        const before = await ctx.parentOutput(upstream);
         const metadata = ctx.additionalMetadata();
         // DUNG LAI khoa thay vi nhan kem — xem `integration-handoff.steps.ts`. Viec dung lai
         // duoc chinh la bang chung khoa co tinh tat dinh, va tinh do moi chan duoc don trung
         // khi engine chay lai task nay (Hatchet tu cong bo at-least-once).
         const operationKey = recomputeOperationKey(input, metadata);
-        const traceparent = metadata.traceparent ?? '';
 
-        const result = await dispatchHandoff({ url, operationKey, traceparent, input });
+        // v2 da tra cuu va thay ban ghi ton tai -> KHONG goi lai. Day la cho muc `lookup` tra
+        // cong: khong co header nao chan trung ho ta o phia he ngoai.
+        if (before.alreadyApplied) {
+          return { externalRef: before.externalRef, status: 200, operationKey, skipped: true };
+        }
+
+        const traceparent = metadata.traceparent ?? '';
+        const result = await dispatchHandoff({
+          url: before.url,
+          operationKey,
+          traceparent,
+          input,
+        });
         ctx.logger.info(`dispatch lan ${ctx.retryCount() + 1} -> ${result.externalRef}`);
-        return { ...result, operationKey };
+        return { ...result, operationKey, skipped: false };
       },
     });
 

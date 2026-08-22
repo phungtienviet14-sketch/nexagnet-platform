@@ -63,10 +63,25 @@ export interface WorkflowTemplate {
   readonly versions: Readonly<Record<string, WorkflowInputContract<never>>>;
 }
 
+/**
+ * HOP DONG DAU VAO v2 — GIONG HET v1, va do la mot khang dinh chu khong phai su luoi.
+ *
+ * v2 khac v1 o CAC BUOC (no them `preflight` truoc `dispatch` de hien thuc muc idempotency
+ * `lookup`), khong khac o du lieu nhan vao. Theo bang "khi nao phai len phien ban moi" cua
+ * runbook §2, doi hop dong dau vao la mot ly do RIENG de len phien ban; o day khong doi.
+ *
+ * Giu hai hang tro toi cung mot hop dong (thay vi mot hang dung chung) de khi v3 doi hop dong
+ * that thi cho phai sua la MOT dong o day, khong phai go ra mot cau truc dung chung.
+ */
+export const integrationHandoffV2Input = integrationHandoffV1Input;
+
 const TEMPLATES = {
   [INTEGRATION_HANDOFF_KEY]: {
     key: INTEGRATION_HANDOFF_KEY,
-    versions: { v1: integrationHandoffV1Input as unknown as WorkflowInputContract<never> },
+    versions: {
+      v1: integrationHandoffV1Input as unknown as WorkflowInputContract<never>,
+      v2: integrationHandoffV2Input as unknown as WorkflowInputContract<never>,
+    },
   },
 } as const satisfies Record<string, WorkflowTemplate>;
 
