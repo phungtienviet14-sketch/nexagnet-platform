@@ -18,6 +18,8 @@ export {
   tenantPersona,
   tenantRetailAdvice,
   tenantReadiness,
+  tenantWorkflowBinding,
+  tenantWorkflowEngine,
   type LegacyTenantPersona,
 } from './tenant.config.js';
 export {
@@ -67,3 +69,15 @@ export {
   type TenantKnowledge,
   type TenantIntegrations,
 } from './tenant.schema.js';
+export {
+  NO_WORKFLOW_ENGINE,
+  WORKFLOW_ENGINE_ADAPTERS,
+  idempotencySupportSchema,
+  workflowBindingSchema,
+  workflowEngineAdapterSchema,
+  workflowEngineIntegrationSchema,
+  type IdempotencySupport,
+  type WorkflowBinding,
+  type WorkflowEngineAdapterName,
+  type WorkflowEngineIntegration,
+} from './workflow-binding.schema.js';

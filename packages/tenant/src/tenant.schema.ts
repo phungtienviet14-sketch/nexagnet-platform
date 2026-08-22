@@ -5,6 +5,7 @@ import {
   type ContentImportManifest,
 } from '@netviet/shared';
 import { z } from 'zod';
+import { workflowEngineIntegrationSchema } from './workflow-binding.schema.js';
 
 /**
  * Schema GOI KHACH (`tenants/<slug>/`). Goi khach la DU LIEU doc luc chay chu khong phai code,
@@ -83,7 +84,11 @@ export const CAPABILITY_IDS = [
   'operations',
   'notifications',
 ] as const;
-export const EXPERIENCE_IDS = ['operations-console', 'knowledge-workspace'] as const;
+export const EXPERIENCE_IDS = [
+  'operations-console',
+  'knowledge-workspace',
+  'agent-workforce',
+] as const;
 
 export const capabilityIdSchema = z.enum(CAPABILITY_IDS);
 export const experienceIdSchema = z.enum(EXPERIENCE_IDS);
@@ -198,6 +203,12 @@ const tenantIntegrationsSchema = z
     /** ERP la mot adapter active; `none` giu fail-closed cho GĐ1. */
     erp: erpConfigSchema.optional(),
     contentSource: contentSourceIntegrationSchema.optional(),
+    /**
+     * Workflow engine ben ngoai. TUY CHON co chu dich: khach khong khai bao thi nhan
+     * `DisabledWorkflowEngineAdapter` va boot binh thuong — quan sat/nghiep vu khong phu thuoc
+     * vao viec co engine hay khong. Xem `workflow-binding.schema.ts`.
+     */
+    workflowEngine: workflowEngineIntegrationSchema.optional(),
   })
   .strict();
 
@@ -234,6 +245,7 @@ const capabilityRequirements = {
 export const EXPERIENCE_REQUIREMENTS = {
   'operations-console': ['knowledge', 'messaging', 'sales-order', 'operations'],
   'knowledge-workspace': ['knowledge'],
+  'agent-workforce': ['knowledge', 'operations'],
 } as const satisfies Record<
   z.infer<typeof experienceIdSchema>,
   readonly z.infer<typeof capabilityIdSchema>[]
