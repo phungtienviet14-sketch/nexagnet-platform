@@ -201,6 +201,37 @@ describe('buildWorkflowMetadata', () => {
     expect((thrown as WorkflowInputRejected).reason).toBe('PII_VALUE_IN_INPUT');
   });
 
+  it('HOI QUY: traceId hex trong nhu so dien thoai VAN phai qua duoc', () => {
+    // `0` + 31 chu so khop mau SDT Viet Nam `(?:\+84|0)(?:[\s.-]?\d){8,10}`. Truoc ban sua
+    // 22/08/2026 cong nay quet moi neo nhu van ban tu do, nen no tu choi MOT PHAN cac luot chay
+    // hop le mot cach NGAU NHIEN theo trace id — khong tai lap duoc, va danh vao chinh lop bao ve.
+    const numericTraceId = `0${'1'.repeat(31)}`;
+
+    const metadata = buildWorkflowMetadata({
+      ...base,
+      traceId: numericTraceId,
+      traceparent: `00-${numericTraceId}-${'b'.repeat(16)}-01`,
+    });
+
+    expect(metadata['nexagnet.traceId']).toBe(numericTraceId);
+  });
+
+  it('tu choi traceId sai khuon 32 hex — kiem bang KHUON, chat hon quet noi dung', () => {
+    expect(() => buildWorkflowMetadata({ ...base, traceId: 'khong-phai-hex' })).toThrow(
+      WorkflowInputRejected,
+    );
+  });
+
+  it('VAN quet noi dung o `entityId` — day moi la cho co the lot mot SDT that', () => {
+    let thrown: unknown;
+    try {
+      buildWorkflowMetadata({ ...base, entityId: '0912345678' });
+    } catch (error) {
+      thrown = error;
+    }
+    expect((thrown as WorkflowInputRejected).reason).toBe('PII_VALUE_IN_INPUT');
+  });
+
   it('bo neo rong thay vi ghi khoa co gia tri rong', () => {
     const metadata = buildWorkflowMetadata({ ...base, entityId: '' });
 

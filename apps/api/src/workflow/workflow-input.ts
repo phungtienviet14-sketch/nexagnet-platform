@@ -176,6 +176,9 @@ export interface WorkflowCorrelation {
 }
 
 const TRACEPARENT = /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/;
+const TRACE_ID = /^[0-9a-f]{32}$/;
+/** Danh tinh co hinh dang CO DINH: khach, moi truong, khoa/phien ban khuon, loai thuc the. */
+const SLUG_LIKE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 /**
  * `additionalMetadata` cua run — thu operator dung de TIM LAI mot run tren dashboard.
@@ -189,26 +192,56 @@ export function buildWorkflowMetadata(correlation: WorkflowCorrelation): Record<
     throw new WorkflowInputRejected('MALFORMED_TRACEPARENT', 'traceparent');
   }
 
-  const anchors: ReadonlyArray<readonly [string, string]> = [
+  /**
+   * HAI CACH KIEM cho HAI LOAI NEO — day la mot ban SUA, khong phai trang tri.
+   *
+   * Ban dau moi neo deu bi quet noi dung nhu van ban tu do. Test bat duoc hau qua ngay:
+   * `traceId` la 32 ky tu hex, va mot chuoi hex bat dau bang '0' roi toan chu so KHOP mau so
+   * dien thoai Viet Nam `(?:\+84|0)(?:[\s.-]?\d){8,10}`. Nghia la cong nay se tu choi mot phan
+   * cac luot chay HOP LE, mot cach NGAU NHIEN theo trace id — kieu loi te nhat: khong tai lap
+   * duoc, va no danh vao chinh lop bao ve.
+   *
+   *   HINH DANG CO DINH (traceId, tenant, environment, workflowKey/Version, entityType)
+   *     -> kiem bang KHUON. Chat hon quet noi dung: mot chuoi khong dung khuon thi khong lot,
+   *        va mot chuoi dung khuon thi khong the la SDT/email.
+   *
+   *   HINH DANG MO (entityId)
+   *     -> QUET noi dung. Day moi la cho mot lap trinh vien co the vo tinh truyen SDT vao thay
+   *        cho id noi bo, nen day la cho can quet.
+   */
+  if (!TRACE_ID.test(correlation.traceId)) {
+    throw new WorkflowInputRejected('MALFORMED_TRACEPARENT', 'nexagnet.traceId');
+  }
+
+  const shaped: ReadonlyArray<readonly [string, string]> = [
     ['nexagnet.traceId', correlation.traceId],
     ['nexagnet.tenant', correlation.tenant],
     ['nexagnet.environment', correlation.environment],
     ['nexagnet.entityType', correlation.entityType],
-    ['nexagnet.entityId', correlation.entityId],
     ['nexagnet.workflowKey', correlation.workflowKey],
     ['nexagnet.workflowVersion', correlation.workflowVersion],
   ];
 
   const metadata: Record<string, string> = { traceparent: correlation.traceparent };
-  for (const [key, value] of anchors) {
+  for (const [key, value] of shaped) {
     // Neo rong thi BO HAN, khong ghi khoa co gia tri rong: mot khoa rong tren dashboard trong
     // giong "da tra loi la khong co" trong khi su that la "chua ai dien".
     if (!value) continue;
-    if (scrubSecrets(value) !== value) {
+    if (!SLUG_LIKE.test(value)) {
+      throw new WorkflowInputRejected('CONTRACT_VIOLATION', key, `'${value}' sai khuon danh tinh`);
+    }
+    metadata[key] = value;
+  }
+
+  if (correlation.entityId) {
+    const key = 'nexagnet.entityId';
+    if (scrubSecrets(correlation.entityId) !== correlation.entityId) {
       throw new WorkflowInputRejected('SECRET_VALUE_IN_INPUT', key);
     }
-    if (scrubPii(value) !== value) throw new WorkflowInputRejected('PII_VALUE_IN_INPUT', key);
-    metadata[key] = value;
+    if (scrubPii(correlation.entityId) !== correlation.entityId) {
+      throw new WorkflowInputRejected('PII_VALUE_IN_INPUT', key);
+    }
+    metadata[key] = correlation.entityId;
   }
   return metadata;
 }
