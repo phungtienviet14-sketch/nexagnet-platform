@@ -14,6 +14,11 @@ import {
   type AdvisorToolResult,
   type AdvisorToolSpec,
 } from './advisor-tools.js';
+import {
+  reportOpenAiCompatibleUsage,
+  type LlmUsageReporter,
+  type OpenAiCompatibleUsage,
+} from '../observability/llm-usage.js';
 
 /**
  * AGENT TU VAN chay tren DeepSeek (API tuong thich OpenAI, function calling).
@@ -81,7 +86,11 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
 
     try {
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-        const message = await this.call(messages, advisorToolsFor(request.tools));
+        const message = await this.call(
+          messages,
+          advisorToolsFor(request.tools),
+          request.reportUsage,
+        );
         const calls = message?.tool_calls ?? [];
         if (!message) return null;
         if (!calls.length) {
@@ -121,6 +130,7 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
   private async call(
     messages: readonly DeepSeekMessage[],
     tools: readonly AdvisorToolSpec[],
+    reportUsage?: LlmUsageReporter,
   ): Promise<DeepSeekMessage | null> {
     const response = await fetch(DEEPSEEK_URL, {
       method: 'POST',
@@ -148,7 +158,12 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
       this.logger.warn(`DeepSeek loi HTTP ${response.status} — dung duong tat dinh.`);
       return null;
     }
-    const data = (await response.json()) as { choices?: Array<{ message?: DeepSeekMessage }> };
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: DeepSeekMessage }>;
+      usage?: OpenAiCompatibleUsage;
+    };
+    // Bao TRUOC khi doc `choices`: mot lan goi tra ve rong van la mot lan da dot token.
+    reportOpenAiCompatibleUsage(data.usage, reportUsage);
     return data.choices?.[0]?.message ?? null;
   }
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ParserInput } from './order-parser.js';
 import { FlowiseParser } from './flowise-parser.js';
+import { currentTraceId, runInTrace } from '../observability/trace-context.js';
 
 const input: ParserInput = {
   text: 'HN_30.6_Meta HN, 2 x Ghe Felix',
@@ -41,6 +42,40 @@ function parser(timeoutMs = 30_000): FlowiseParser {
 }
 
 afterEach(() => vi.restoreAllMocks());
+
+describe('FlowiseParser — noi soi chi trace sang tien trinh khac', () => {
+  it('dinh `traceparent` W3C mang DUNG traceId cua luot dang chay', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(200, { json: validResult }));
+    vi.stubGlobal('fetch', fetchMock);
+    const release = { tenant: 'ultty', environment: 'gd1-test', gitSha: 'a'.repeat(40) };
+
+    const traceId = await runInTrace(
+      { release, anchors: { chatId: 'c1' } },
+      async (): Promise<string> => {
+        await parser().parse(input);
+        return currentTraceId()!;
+      },
+    );
+
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    // `00-<32 hex>-<16 hex>-01` — khuon W3C. Flowise/n8n/SigNoz/Langfuse deu doc dung khuon nay,
+    // nen gan san bay gio nghia la khong phai sua duong goi khi bat mot trong so do.
+    expect(headers.traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
+    expect(headers.traceparent).toContain(traceId);
+    // Khoa cu khong duoc mat: header moi la THEM vao, khong thay the.
+    expect(headers.Authorization).toBe('Bearer test-key');
+  });
+
+  it('chay ngoai moi trace (script, boot) -> KHONG gui header rong', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(200, { json: validResult }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await parser().parse(input);
+
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(headers).not.toHaveProperty('traceparent');
+  });
+});
 
 describe('FlowiseParser', () => {
   it('gui dung Prediction API contract va chi goi Flowise mot lan', async () => {

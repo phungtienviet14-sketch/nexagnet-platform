@@ -8,12 +8,12 @@ const input: ParserInput = {
   glossary: [],
 };
 
-function fetchReturning(status: number, content?: string) {
+function fetchReturning(status: number, content?: string, usage?: unknown) {
   return vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
     text: async () => content ?? '',
-    json: async () => ({ choices: [{ message: { content } }] }),
+    json: async () => ({ choices: [{ message: { content } }], ...(usage ? { usage } : {}) }),
   });
 }
 
@@ -25,6 +25,28 @@ describe('DeepSeekParser (fetch mock — khong goi API that)', () => {
     const r = await new DeepSeekParser('key').parse(input);
     expect(r.intent).toBe('hoi_gia');
     expect(r.confidence.intent).toBe(0.95);
+  });
+
+  it('bao so token cua lan goi API cho ben quan sat', async () => {
+    const body = JSON.stringify({ intent: 'hoi_gia', confidence: { intent: 0.9 } });
+    vi.stubGlobal(
+      'fetch',
+      fetchReturning(200, body, { prompt_tokens: 2_310, completion_tokens: 96 }),
+    );
+    const reported: unknown[] = [];
+
+    await new DeepSeekParser('key').parse({ ...input, reportUsage: (u) => reported.push(u) });
+
+    expect(reported).toEqual([{ inputTokens: 2_310, outputTokens: 96 }]);
+  });
+
+  it('khong co `reportUsage` -> chay y het nhu cu (quan sat khong duoc la dieu kien cua nghiep vu)', async () => {
+    const body = JSON.stringify({ intent: 'hoi_gia', confidence: { intent: 0.9 } });
+    vi.stubGlobal('fetch', fetchReturning(200, body, { prompt_tokens: 10, completion_tokens: 2 }));
+
+    await expect(new DeepSeekParser('key').parse(input)).resolves.toMatchObject({
+      intent: 'hoi_gia',
+    });
   });
 
   it('output thieu confidence -> gan mac dinh > 0', async () => {

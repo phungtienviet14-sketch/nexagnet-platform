@@ -104,6 +104,21 @@ export function toTraceparent(traceId: string, spanId: string): string {
   return `00-${traceId}-${spanId}-01`;
 }
 
+/**
+ * Header `traceparent` cua LUOT HIEN TAI, de dinh vao mot lan goi HTTP ra ngoai.
+ *
+ * Tra `{}` khi dang chay ngoai moi trace (script CLI, boot) — de cho goi viet duoc
+ * `{ ...traceparentHeader() }` ma khong phai kiem `null`, va khong bao gio gui mot header rong.
+ *
+ * `currentSpanId` rong nghia la dang o span goc; luc do sinh mot id moi cho phan `parent-id`:
+ * ben nhan can MOT span cha hop le, va trace id — thu de noi hai ben — van dung.
+ */
+export function traceparentHeader(): { traceparent: string } | Record<string, never> {
+  const scope = storage.getStore();
+  if (!scope) return {};
+  return { traceparent: toTraceparent(scope.traceId, scope.currentSpanId ?? newSpanId()) };
+}
+
 const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/;
 
 /**

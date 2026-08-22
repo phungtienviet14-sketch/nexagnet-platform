@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import type { ClarifySlot, ConversationContext, OrderDraft } from '@netviet/shared';
 import type { ClosedOrderContext } from '../conversations/conversation-thread.js';
 import type { AmendSignal } from '../pipeline/amend-detect.js';
+import { reportAnthropicUsage, type LlmUsageReporter } from '../observability/llm-usage.js';
 import { formatTranscript } from '../messages/conversation-transcript.js';
 import { unverifiedAmounts } from './money-guard.js';
 import {
@@ -44,6 +45,11 @@ export interface AdvisorRequest {
   readonly amendRequest?: AmendSignal;
   readonly tools: AdvisorToolContext;
   readonly now?: Date;
+  /**
+   * Cho agent bao so token — MOT LAN cho MOI vong goi cong cu, ben goi tu cong don. Tuy chon,
+   * de `NoopAdvisorAgent` va cac ban gia trong test khong phai biet gi ve no.
+   */
+  readonly reportUsage?: LlmUsageReporter;
 }
 
 export interface AdvisorReply {
@@ -59,6 +65,18 @@ export abstract class AdvisorAgent {
   /** Model THAT dang chay. Xem chu thich cung ten trong `OrderParser` — nhan model sai
    *  con te hon khong co nhan. `NoopAdvisorAgent` khong co model nao. */
   readonly model?: string;
+  /**
+   * CO goi LLM that khong? `false` = khong co ban soan nao duoc cau hinh.
+   *
+   * Vi sao la mot co CO KIEU chu khong phai `advisor == null` hay so sanh `name === 'noop'`:
+   * DI luon tiem MOT `AdvisorAgent` (token bat buoc), nen "chua cau hinh" den tay ben goi duoi
+   * dang `NoopAdvisorAgent` chu khong phai `undefined`. Khong co co nay thi nhanh
+   * `COMPOSER_DISABLED` KHONG BAO GIO chay tren stack that — do dung la thu do duoc tren trace
+   * that `6c46754f...` ngay 22/08/2026: `ADVICE_COMPOSER` rong hien ra thanh `AI compose noop/noop`
+   * + `LLM_RETURNED_NOTHING`, tuc dung cai nhan chi nguoi debug sang "LLM hong" trong khi LLM chua
+   * he duoc goi. So sanh theo `name` thi mot ban Noop thu hai doi ten la gay lai loi cu.
+   */
+  readonly composes: boolean = true;
   /** `null` = khong soan duoc; ben goi PHAI co duong tat dinh de lui ve. */
   abstract reply(request: AdvisorRequest): Promise<AdvisorReply | null>;
 }
@@ -66,6 +84,7 @@ export abstract class AdvisorAgent {
 /** Mac dinh: khong co agent. Giu nguyen duong tat dinh cu — dung cho demo/CI offline. */
 export class NoopAdvisorAgent extends AdvisorAgent {
   readonly name = 'noop';
+  override readonly composes = false;
   async reply(): Promise<AdvisorReply | null> {
     return null;
   }
@@ -140,6 +159,9 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
           tools: advisorToolsFor(request.tools).map(toAnthropicTool),
           messages,
         });
+        // Bao NGAY sau khi co response, TRUOC moi duong thoat: cac duong `return null` ben duoi
+        // (tu choi, het vong, lo so tien) deu la nhung lan da dot token that.
+        reportAnthropicUsage(response.usage, request.reportUsage);
         if (response.stop_reason === 'refusal') {
           this.logger.warn('LLM tu choi tra loi — dung duong tat dinh.');
           return null;

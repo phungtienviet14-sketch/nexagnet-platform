@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ChannelMessage, Intent, ParseResult } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
-import { AdvisorAgent, type AdvisorReply } from '../advisor/advisor-agent.js';
+import {
+  AdvisorAgent,
+  NoopAdvisorAgent,
+  type AdvisorReply,
+  type AdvisorRequest,
+} from '../advisor/advisor-agent.js';
+import type { LlmUsage } from '../observability/llm-usage.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryContentRepository } from '../content/content.repository.js';
@@ -13,7 +19,7 @@ import type { TelemetryRecord, TelemetrySink } from '../observability/telemetry-
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
-import type { OrderParser } from './order-parser.js';
+import type { OrderParser, ParserInput } from './order-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
 /**
@@ -38,18 +44,27 @@ class RecordingSink implements TelemetrySink {
 
 class StubAdvisor extends AdvisorAgent {
   readonly name = 'stub';
-  constructor(private readonly canned: AdvisorReply | null) {
+  constructor(
+    private readonly canned: AdvisorReply | null,
+    /** Mot phan tu = mot VONG goi cong cu; agent that bao tung vong, ben goi cong don. */
+    private readonly rounds: readonly LlmUsage[] = [],
+  ) {
     super();
   }
-  async reply(): Promise<AdvisorReply | null> {
+  async reply(request: AdvisorRequest): Promise<AdvisorReply | null> {
+    for (const round of this.rounds) request.reportUsage?.(round);
     return this.canned;
   }
 }
 
 class StubParser implements OrderParser {
   readonly name = 'stub';
-  constructor(private readonly intent: Intent) {}
-  async parse(): Promise<ParseResult> {
+  constructor(
+    private readonly intent: Intent,
+    private readonly usage?: LlmUsage,
+  ) {}
+  async parse(input: ParserInput): Promise<ParseResult> {
+    if (this.usage) input.reportUsage?.(this.usage);
     return { intent: this.intent, confidence: { intent: 0.95 } };
   }
 }
@@ -70,6 +85,7 @@ async function build(options: {
   advisor?: AdvisorAgent;
   intent?: Intent;
   autoSend?: 'on' | 'off';
+  parseUsage?: LlmUsage;
 }) {
   const sink = new RecordingSink();
   const telemetry = new TelemetryService();
@@ -84,7 +100,7 @@ async function build(options: {
   const content = new ContentService(new InMemoryContentRepository({}, ['ELNI']));
   await content.reload();
   const orchestrator = new AgentOrchestrator(
-    new StubParser(options.intent ?? 'hoi_san_pham'),
+    new StubParser(options.intent ?? 'hoi_san_pham', options.parseUsage),
     knowledge,
     ordersRepo,
     undefined,
@@ -251,20 +267,35 @@ describe('CAU HOI: "AI tra loi dung nhung he thong khong gui" — CASE C', () =>
     expect(autoReply.reason).toBe('KILL_SWITCH_OFF');
   });
 
-  it('SU CO 19/08-21/08: `ADVICE_COMPOSER` rong hien ra thanh mot dong loc duoc', async () => {
-    // Khong co advisor = dung tinh trang da chay tren stack suot hai ngay.
-    const { pipeline, sink } = await build({ advisor: undefined });
+  /*
+   * HAI cach "khong co ban soan", va ca hai phai doc len GIONG NHAU.
+   *
+   * Ban dau test nay chi chay `advisor: undefined` — mot cau hinh KHONG BAO GIO xay ra tren stack:
+   * `content.module.ts` luon tiem mot `AdvisorAgent`, va khi `ADVICE_COMPOSER` rong thi cai duoc
+   * tiem la `NoopAdvisorAgent`. Nen test xanh trong khi stack that van ghi sai — do dung cai do
+   * duoc tren trace that `6c46754f...` ngay 22/08/2026 (`AI compose noop/noop` +
+   * `LLM_RETURNED_NOTHING`, tuc bao "LLM hong" cho mot lan goi chua he xay ra).
+   */
+  it.each([
+    ['NoopAdvisorAgent (dung cai stack that tiem khi ADVICE_COMPOSER rong)', new NoopAdvisorAgent()],
+    ['khong tiem advisor nao (CI/demo offline)', undefined],
+  ])(
+    'SU CO 19/08-21/08: `ADVICE_COMPOSER` rong hien ra thanh mot dong loc duoc — %s',
+    async (_label, advisor) => {
+      const { pipeline, sink } = await build({ advisor });
 
-    await pipeline.process(message('ELNI co den ngu khong'));
+      await pipeline.process(message('ELNI co den ngu khong'));
 
-    const compose = decisions(sink).find((d) => d.point === 'advisor.compose')!;
-    // Trieu chung ben ngoai ("AI tra loi y het nhau") khong phan biet duoc voi "LLM tra loi kem".
-    // Ma nay phan biet duoc: agent CHUA TUNG duoc goi.
-    expect(compose.reason).toBe('COMPOSER_DISABLED');
-    expect(compose.outcome).toBe('denied');
-    // …va dung vay, khong co lan goi LLM `compose` nao ca.
-    expect(aiCalls(sink).map((call) => call.operation)).not.toContain('compose');
-  });
+      const compose = decisions(sink).find((d) => d.point === 'advisor.compose')!;
+      // Trieu chung ben ngoai ("AI tra loi y het nhau") khong phan biet duoc voi "LLM tra loi kem".
+      // Ma nay phan biet duoc: agent CHUA TUNG duoc goi.
+      expect(compose.reason).toBe('COMPOSER_DISABLED');
+      expect(compose.outcome).toBe('denied');
+      // …va dung vay, khong co lan goi LLM `compose` nao ca. Mot ban ghi `AI compose noop/noop` o
+      // day con te hon khong co ban ghi nao: no lam nguoi debug tin da co mot lan goi LLM.
+      expect(aiCalls(sink).map((call) => call.operation)).not.toContain('compose');
+    },
+  );
 
   it('phan biet "LLM khong tra ve gi" (degraded) voi "cong dong co chu y" (denied)', async () => {
     const { pipeline, sink } = await build({ advisor: new StubAdvisor(null) });
@@ -274,6 +305,57 @@ describe('CAU HOI: "AI tra loi dung nhung he thong khong gui" — CASE C', () =>
     const compose = decisions(sink).find((d) => d.point === 'advisor.compose')!;
     expect(compose.outcome).toBe('degraded');
     expect(compose.reason).toBe('LLM_RETURNED_NOTHING');
+  });
+});
+
+describe('CAU HOI: "luot nay dot bao nhieu token, va o dau?"', () => {
+  it('ca hai lan goi LLM deu co so token — parse VA compose', async () => {
+    const { pipeline, sink } = await build({
+      parseUsage: { inputTokens: 2_310, outputTokens: 96 },
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: ['tra_cuu_san_pham'], handoff: false }, [
+        { inputTokens: 3_100, outputTokens: 120 },
+        { inputTokens: 880, outputTokens: 90 },
+      ]),
+    });
+
+    await pipeline.process(message('ELNI co den ngu khong'));
+
+    const parse = aiCalls(sink).find((call) => call.operation === 'parse')!;
+    expect(parse.inputTokens).toBe(2_310);
+    expect(parse.outputTokens).toBe(96);
+
+    // Agent tu van goi API MOT LAN cho MOI vong cong cu. Chi ghi vong cuoi la bao thieu — hoa don
+    // that la tong, va do la con so nguoi doc trace can de tra loi "vi sao thang nay tang tien".
+    const compose = aiCalls(sink).find((call) => call.operation === 'compose')!;
+    expect(compose.inputTokens).toBe(3_980);
+    expect(compose.outputTokens).toBe(210);
+  });
+
+  it('LLM tra ve rong van phai ghi token — do la luot dat nhat va de mat dau nhat', async () => {
+    const { pipeline, sink } = await build({
+      advisor: new StubAdvisor(null, [{ inputTokens: 4_000, outputTokens: 500 }]),
+    });
+
+    await pipeline.process(message('ELNI co den ngu khong'));
+
+    const compose = aiCalls(sink).find((call) => call.operation === 'compose')!;
+    expect(compose.status).toBe('error');
+    expect(compose.inputTokens).toBe(4_000);
+    expect(compose.outputTokens).toBe(500);
+  });
+
+  it('nha cung cap khong bao gi -> KHONG co truong token, khong phai `0`', async () => {
+    const { pipeline, sink } = await build({
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+    });
+
+    await pipeline.process(message('ELNI co den ngu khong'));
+
+    // `0 -> 0 tok` doc len giong "lan goi nay mien phi". Vang mat moi la su that.
+    for (const call of aiCalls(sink)) {
+      expect(call.inputTokens).toBeUndefined();
+      expect(call.outputTokens).toBeUndefined();
+    }
   });
 });
 

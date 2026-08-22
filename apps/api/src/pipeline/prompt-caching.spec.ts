@@ -100,6 +100,48 @@ describe('ClaudeParser gui prompt theo dang cache duoc', () => {
     return { parser, create };
   }
 
+  /*
+   * Token doc tu cache phai NAM TRONG con so bao ra. Anthropic tra `input_tokens` KHONG gom
+   * `cache_read_input_tokens`, nen chi lay `input_tokens` thi tu tin thu hai tro di trace se bao
+   * mot prompt teo di dot ngot — dung luc prompt caching bat dau chay. Nguoi doc se tuong prompt
+   * bi cat, trong khi that ra no van nguyen ven.
+   */
+  it('bao so token GOM ca phan doc tu cache', async () => {
+    const parser = new ClaudeParser('test-key');
+    const create = vi.fn(async () => ({
+      content: [{ type: 'tool_use', name: 'extract_order', input: { intent: 'hoi_gia' } }],
+      usage: { input_tokens: 310, output_tokens: 96, cache_read_input_tokens: 2_000 },
+    }));
+    // @ts-expect-error — thay client that bang stub trong test
+    parser.client = { messages: { create } };
+    const reported: unknown[] = [];
+
+    await parser.parse({ ...INPUT, reportUsage: (u) => reported.push(u) });
+
+    expect(reported).toEqual([{ inputTokens: 2_310, outputTokens: 96 }]);
+  });
+
+  /*
+   * Provider khong tra `usage` -> luot parse VAN chay. Neu test nay do, nghia la code dem token
+   * dang la dieu kien de nghiep vu chay dung — dung dieu bi cam (`code-review.md` §Observability).
+   */
+  it('provider khong tra `usage` -> parse van ra ket qua, khong nem', async () => {
+    const parser = new ClaudeParser('test-key');
+    const create = vi.fn(async () => ({
+      content: [{ type: 'tool_use', name: 'extract_order', input: { intent: 'hoi_gia' } }],
+      // Khong co `usage` — mot proxy hoac ban SDK khac hoan toan co the tra nhu the.
+    }));
+    // @ts-expect-error — thay client that bang stub trong test
+    parser.client = { messages: { create } };
+    const reported: unknown[] = [];
+
+    const result = await parser.parse({ ...INPUT, reportUsage: (u) => reported.push(u) });
+
+    expect(result.intent).toBe('hoi_gia');
+    expect(reported).toEqual([]);
+    expect(create).toHaveBeenCalledTimes(1); // khong retry — day khong phai loi
+  });
+
   it('system la MANG block, block tinh duoc danh dau cache_control ephemeral', async () => {
     const { parser, create } = parserWithSpy();
 

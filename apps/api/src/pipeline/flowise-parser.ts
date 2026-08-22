@@ -1,5 +1,6 @@
 import { parseResultSchema, type ParseResult } from '@netviet/shared';
 import type { OrderParser, ParserInput } from './order-parser.js';
+import { traceparentHeader } from '../observability/trace-context.js';
 
 export interface FlowiseParserOptions {
   baseUrl: string;
@@ -34,6 +35,21 @@ export class FlowiseParser implements OrderParser {
         headers: {
           Authorization: `Bearer ${this.options.apiKey}`,
           'Content-Type': 'application/json',
+          /*
+           * Noi soi chi trace sang TIEN TRINH KHAC theo W3C Trace Context.
+           *
+           * Flowise chay trong container rieng cua chinh khach do va khong ghi NDJSON cua ta, nen
+           * hom nay header nay khong lam ra them mot dong log nao — no la mot header la va Flowise
+           * bo qua. Ly do van dat: gia tri cua no la luc CO su co. `traceparent` la chuan ma
+           * Flowise/n8n/SigNoz/Langfuse deu doc; gan san bay gio nghia la ngay ta bat mot trong so
+           * do, moi lan goi da mang san dung `traceId` cua luot nghiep vu — thay vi phai sua lai
+           * mot duong goi dang chay tren bon stack khach.
+           *
+           * KHONG dung `overrideConfig.sessionId` cho viec nay: `sessionId` la khoa BO NHO HOI
+           * THOAI cua Flowise; dat no bang traceId (moi tin mot gia tri) se lam Flowise mat mach
+           * hoi thoai. Do la doi hanh vi nghiep vu de phuc vu debug — dung dieu muc 9.7 cam.
+           */
+          ...traceparentHeader(),
         },
         body: JSON.stringify({
           form: {
