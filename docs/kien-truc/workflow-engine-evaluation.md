@@ -503,7 +503,27 @@ nghiệp vụ nào. Hai việc phải xong trước khi nối thật: **(a)** ch
 **Temporal là phương án dự phòng nghiêm túc** — thắng rõ về versioning; nếu §8.3 trở thành nỗi
 đau thật khi vận hành, mở lại Temporal chứ **không** tự viết lớp versioning cho Hatchet.
 
-### 10.1 Giai đoạn tiếp theo (đề xuất, chưa thi công)
+### 10.1 Giai đoạn tiếp theo — ĐÃ THI CÔNG 22/08/2026 (phiên 2)
+
+Bốn trong năm việc dưới đây **đã xong và có test**; runbook vận hành ở
+[workflow-engine-runbook.md](../phat-trien/van-hanh/workflow-engine-runbook.md).
+
+| # | Việc | Trạng thái | Ở đâu |
+|---|---|---|---|
+| 1 | `WorkflowEnginePort` + adapter Hatchet + shim ESM | ✅ | `apps/api/src/workflow/` |
+| 2 | Ràng buộc workflow ↔ tenant | ✅ | `packages/tenant/src/workflow-binding.schema.ts` |
+| 3 | Cầu nối sự kiện miền → workflow (**một** nơi) | ✅ | `workflow-handoff.service.ts` |
+| 4 | Liên kết `engineRunId` ↔ `traceId` ↔ `AuditLog` | ✅ (phần ghi) | `workflow-handoff.service.ts` · nút console: chưa |
+| 5 | Workflow nghiệp vụ đầu tiên | ⬜ | chỉ có khuôn trung tính `integration-handoff.v1` |
+
+Thêm hai việc **không có trong đề xuất ban đầu** nhưng hoá ra là bắt buộc:
+
+- **Outbox giao dịch** — trigger trực tiếp sau commit không đảm bảo sự kiện không mất. Xem
+  `workflow-outbox.repository.ts`.
+- **Biên riêng tư dạng danh sách trắng** — §6.5 nói "phải che trước khi gọi engine"; hoá ra *che*
+  là chưa đủ, phải **chặn**. Xem `workflow-input.ts`.
+
+### 10.2 Đề xuất ban đầu (giữ lại để đối chiếu)
 
 1. `WorkflowEnginePort` + adapter Hatchet + shim ESM (§8.4) — nhỏ, một cổng.
 2. Ràng buộc workflow ↔ tenant đọc từ `tenants/<slug>/tenant.json`.
