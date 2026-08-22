@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import type { ClarifySlot, ConversationContext, OrderDraft } from '@netviet/shared';
 import type { ClosedOrderContext } from '../conversations/conversation-thread.js';
 import type { AmendSignal } from '../pipeline/amend-detect.js';
-import type { LlmUsageReporter } from '../observability/llm-usage.js';
+import { reportAnthropicUsage, type LlmUsageReporter } from '../observability/llm-usage.js';
 import { formatTranscript } from '../messages/conversation-transcript.js';
 import { unverifiedAmounts } from './money-guard.js';
 import {
@@ -161,10 +161,7 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
         });
         // Bao NGAY sau khi co response, TRUOC moi duong thoat: cac duong `return null` ben duoi
         // (tu choi, het vong, lo so tien) deu la nhung lan da dot token that.
-        request.reportUsage?.({
-          inputTokens: response.usage.input_tokens,
-          outputTokens: response.usage.output_tokens,
-        });
+        reportAnthropicUsage(response.usage, request.reportUsage);
         if (response.stop_reason === 'refusal') {
           this.logger.warn('LLM tu choi tra loi — dung duong tat dinh.');
           return null;

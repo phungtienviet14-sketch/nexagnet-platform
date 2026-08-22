@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createUsageMeter,
+  reportAnthropicUsage,
   reportOpenAiCompatibleUsage,
   type OpenAiCompatibleUsage,
 } from './llm-usage.js';
@@ -41,6 +42,53 @@ describe('createUsageMeter', () => {
     a.report({ inputTokens: 10, outputTokens: 1 });
     expect(a.total()).toEqual({ inputTokens: 20, outputTokens: 2 });
     expect(b.total()).toEqual({ inputTokens: 500, outputTokens: 50 });
+  });
+});
+
+describe('reportAnthropicUsage', () => {
+  it('cong ca token doc tu cache vao phan input', () => {
+    const meter = createUsageMeter();
+    reportAnthropicUsage(
+      { input_tokens: 310, output_tokens: 96, cache_read_input_tokens: 2_000 },
+      meter.report,
+    );
+    expect(meter.total()).toEqual({ inputTokens: 2_310, outputTokens: 96 });
+  });
+
+  it('khong co cache -> giu nguyen input_tokens', () => {
+    const meter = createUsageMeter();
+    reportAnthropicUsage({ input_tokens: 20, output_tokens: 5 }, meter.report);
+    expect(meter.total()).toEqual({ inputTokens: 20, outputTokens: 5 });
+  });
+
+  /*
+   * BAT BIEN: quan sat KHONG duoc la dieu kien de nghiep vu chay dung.
+   *
+   * Kieu cua SDK khai `usage` la bat buoc nen `response.usage.input_tokens` bien dich duoc — nhung
+   * mot proxy hay mot ban SDK khac co the khong tra no. Ca `ClaudeParser.parse` lan
+   * `ClaudeAdvisorAgent.reply` deu doc no BEN TRONG mot `try`, nen mot `TypeError` o day khong nem
+   * ra ngoai ma bien thanh "LLM tra ve rong" -> advisor lui ve duong tat dinh, hoac ca luot parse
+   * hong. Tuc code DEM TOKEN se lam hong CAU TRA LOI cho khach.
+   */
+  it('khoi `usage` vang mat -> khong no, khong ghi so', () => {
+    const meter = createUsageMeter();
+    expect(() => reportAnthropicUsage(undefined, meter.report)).not.toThrow();
+    expect(meter.total()).toBeNull();
+  });
+
+  it('khoi `usage` thieu truong -> bo qua, khong ghi mot nua su that', () => {
+    const meter = createUsageMeter();
+    reportAnthropicUsage({ cache_read_input_tokens: 2_000 }, meter.report);
+    expect(meter.total()).toBeNull();
+  });
+
+  it('`cache_read_input_tokens` la null (SDK tra null thay vi thieu) van dem duoc', () => {
+    const meter = createUsageMeter();
+    reportAnthropicUsage(
+      { input_tokens: 42, output_tokens: 7, cache_read_input_tokens: null },
+      meter.report,
+    );
+    expect(meter.total()).toEqual({ inputTokens: 42, outputTokens: 7 });
   });
 });
 

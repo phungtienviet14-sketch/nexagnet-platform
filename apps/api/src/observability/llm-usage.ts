@@ -52,6 +52,39 @@ export function createUsageMeter(): LlmUsageMeter {
   };
 }
 
+/** Khoi `usage` cua Anthropic. Moi truong deu tuy chon — xem `reportAnthropicUsage`. */
+export interface AnthropicCompatibleUsage {
+  readonly input_tokens?: number;
+  readonly output_tokens?: number;
+  readonly cache_read_input_tokens?: number | null;
+}
+
+/**
+ * Doi khoi `usage` cua Anthropic sang `LlmUsage`. Dung chung cho `ClaudeParser` va
+ * `ClaudeAdvisorAgent` — CA HAI deu gui prompt co `cache_control` ephemeral.
+ *
+ * HAI ly do ham nay ton tai thay vi doc thang `response.usage.input_tokens`:
+ *
+ * 1. `input_tokens` KHONG bao gom token doc tu cache. Chi lay no thi tu tin thu hai tro di trace
+ *    bao mot prompt teo di dot ngot — dung luc prompt caching bat dau chay — va nguoi doc se tuong
+ *    prompt bi cat trong khi no van nguyen ven.
+ * 2. **Fail-open.** Kieu cua SDK khai `usage` la bat buoc, nhung mot proxy, mot ban SDK khac hay
+ *    mot ban gia trong test co the khong co no. Doc thang se nem `TypeError` — ma ca hai cho goi
+ *    deu nam trong `try`, nen loi do bi nuot thanh "LLM tra ve rong" (advisor lui ve duong tat
+ *    dinh) hoac thanh mot luot parse hong. Tuc code QUAN SAT lam hong NGHIEP VU, dung dieu
+ *    `.claude/rules/ecc/common/code-review.md` cam. Thieu so lieu thi bo truong token, khong sap.
+ */
+export function reportAnthropicUsage(
+  usage: AnthropicCompatibleUsage | undefined,
+  report: LlmUsageReporter | undefined,
+): void {
+  if (!report || !usage) return;
+  report({
+    inputTokens: (usage.input_tokens ?? Number.NaN) + (usage.cache_read_input_tokens ?? 0),
+    outputTokens: usage.output_tokens ?? Number.NaN,
+  });
+}
+
 /** Khoi `usage` theo giao thuc OpenAI — DeepSeek va moi provider tuong thich deu dung khuon nay. */
 export interface OpenAiCompatibleUsage {
   readonly prompt_tokens?: number;

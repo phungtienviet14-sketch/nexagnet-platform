@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Logger } from '@nestjs/common';
 import { INTENTS, parseResultSchema, type ParseResult } from '@netviet/shared';
 import type { OrderParser, ParserInput } from './order-parser.js';
+import { reportAnthropicUsage } from '../observability/llm-usage.js';
 import {
   buildStaticPrompt,
   buildTurnContext,
@@ -131,12 +132,7 @@ export class ClaudeParser implements OrderParser {
           messages: [{ role: 'user', content }],
         });
         this.logCacheUsage(response.usage);
-        // `input_tokens` cua Anthropic KHONG bao gom token doc tu cache — cong ca hai lai moi ra
-        // kich thuoc prompt that su gui di, tuc con so nguoi doc trace mong doi.
-        input.reportUsage?.({
-          inputTokens: response.usage.input_tokens + (response.usage.cache_read_input_tokens ?? 0),
-          outputTokens: response.usage.output_tokens,
-        });
+        reportAnthropicUsage(response.usage, input.reportUsage);
 
         const toolUse = response.content.find((b) => b.type === 'tool_use');
         if (!toolUse || toolUse.type !== 'tool_use') {

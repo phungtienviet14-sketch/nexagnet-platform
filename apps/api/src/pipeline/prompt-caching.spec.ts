@@ -121,6 +121,27 @@ describe('ClaudeParser gui prompt theo dang cache duoc', () => {
     expect(reported).toEqual([{ inputTokens: 2_310, outputTokens: 96 }]);
   });
 
+  /*
+   * Provider khong tra `usage` -> luot parse VAN chay. Neu test nay do, nghia la code dem token
+   * dang la dieu kien de nghiep vu chay dung — dung dieu bi cam (`code-review.md` §Observability).
+   */
+  it('provider khong tra `usage` -> parse van ra ket qua, khong nem', async () => {
+    const parser = new ClaudeParser('test-key');
+    const create = vi.fn(async () => ({
+      content: [{ type: 'tool_use', name: 'extract_order', input: { intent: 'hoi_gia' } }],
+      // Khong co `usage` — mot proxy hoac ban SDK khac hoan toan co the tra nhu the.
+    }));
+    // @ts-expect-error — thay client that bang stub trong test
+    parser.client = { messages: { create } };
+    const reported: unknown[] = [];
+
+    const result = await parser.parse({ ...INPUT, reportUsage: (u) => reported.push(u) });
+
+    expect(result.intent).toBe('hoi_gia');
+    expect(reported).toEqual([]);
+    expect(create).toHaveBeenCalledTimes(1); // khong retry — day khong phai loi
+  });
+
   it('system la MANG block, block tinh duoc danh dau cache_control ephemeral', async () => {
     const { parser, create } = parserWithSpy();
 
