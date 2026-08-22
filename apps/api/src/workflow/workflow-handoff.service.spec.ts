@@ -161,6 +161,23 @@ describe('WorkflowHandoffService — cau noi duy nhat tu nghiep vu sang engine',
     ).toBe(true);
   });
 
+  it('NGOAI mot trace: hang outbox va metadata cua engine mang CUNG mot traceId', async () => {
+    // Loi that, bat duoc luc chay E2E chu khong phai luc review (22/08/2026):
+    // cau noi sinh mot traceId MOI khi khong co trace bao quanh (script CLI, seed, dispatcher
+    // tick) va gui no sang engine — nhung hang outbox lai chi duoc ghi traceId khi DA co trace
+    // san. Hau qua: dung trong truong hop khong co trace, ban ghi ben Nexagnet va lan chay ben
+    // engine KHONG BAO GIO noi lai duoc voi nhau, ma do lai la ca muc dich cua §9 runbook.
+    const { handoff, outbox } = await buildHandoff(TENANT_A, 'tenant-alpha');
+
+    await handoff.handoff(REQUEST);
+
+    const row = await outbox.findByOperationKey(KEY_A);
+    const metadataTraceId = (row?.metadata as Record<string, string>)['nexagnet.traceId'];
+
+    expect(metadataTraceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(row?.traceId).toBe(metadataTraceId);
+  });
+
   it('nem khi goi khach tro toi mot phien ban khuon ma ban dang chay KHONG mang', async () => {
     const { handoff } = await buildHandoff(
       { ...TENANT_A, bindings: [{ ...binding, version: 'v9' }] },

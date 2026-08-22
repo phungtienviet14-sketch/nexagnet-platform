@@ -159,7 +159,14 @@ export class WorkflowHandoffService {
         entityId: request.entityId,
         payload,
         metadata,
-        ...(scope?.traceId ? { traceId: scope.traceId } : {}),
+        // DUNG `traceId` DA PHAN GIAI o tren, khong phai `scope?.traceId`.
+        //
+        // Khac biet chi lo ra khi KHONG co trace bao quanh (script CLI, seed, mot lan tick cua
+        // dispatcher): luc do cau noi sinh mot traceId moi va gui no sang engine, nhung neu o
+        // day chi ghi khi da co scope thi hang outbox mang `null`. Hau qua la ban ghi ben
+        // Nexagnet va lan chay ben engine khong bao gio noi lai duoc — dung dieu §9 runbook
+        // ton tai de bao dam. Bat duoc luc chay E2E that, khong phai luc review.
+        traceId,
         maxAttempts: binding.retry.maxAttempts,
         baseBackoffSeconds: binding.retry.baseBackoffSeconds,
       },
