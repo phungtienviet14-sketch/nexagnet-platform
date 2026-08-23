@@ -102,13 +102,36 @@ Chỉ sau khi DRAIN = 0. Lịch sử run v1 **không bị ảnh hưởng** (đã
 - Engine + dashboard + Postgres nằm trong **mạng nội bộ của stack**; chỉ dashboard được lộ ra
   ngoài qua edge, và phải có xác thực.
 
-### 4.2 TLS — POC khác production
-```
-POC local (được phép):      HATCHET_CLIENT_TLS_STRATEGY=none
-Deployment thật (bắt buộc): SERVER_GRPC_INSECURE=false + TLS ở edge
-```
-`tlsStrategy: 'none'` trong `HatchetEngineConfig` **chỉ** để chạy local. Mặc định của adapter là
-**có TLS** — phải đặt biến môi trường mới tắt được, và đó là một hành động có chủ ý.
+### 4.2 TLS — ranh giới quyết định là MẠNG, không phải chữ "production"
+
+> **Sửa 23/08/2026 (quyết định Q2-A).** Bản trước viết `SERVER_GRPC_INSECURE=false` là *bắt buộc
+> cho deployment thật*. Câu đó nói **đúng kết luận vì sai lý do**, và sai lý do thì sẽ được áp
+> dụng sai chỗ. Lý do thật không phải "đây là production" — mà là **lưu lượng có rời một ranh
+> giới host hay không**.
+
+| Đường | TLS | Vì sao |
+|---|---|---|
+| Trình duyệt → dashboard | **TLS ở Caddy, bắt buộc** | đi qua Internet |
+| api/worker → engine (gRPC) | **`none`** | **không rời** mạng Docker `internal: true` trên một VM |
+
+**gRPC nội bộ chạy `insecure` là một quyết định đã cân nhắc, không phải nợ kỹ thuật.** Kẻ tấn công
+muốn nghe được đường đó phải **đã có root trên VM** hoặc **đang thực thi mã trong một container
+cùng stack** — tới lúc đó TLS không cứu được gì, vì token cũng nằm trong biến môi trường của chính
+những container ấy. Đổi lại, TLS nội bộ thêm **hạn chứng chỉ** làm một chế độ hỏng mới mà **không
+có gì giám sát nó**, và triệu chứng lúc hết hạn (mọi run treo) giống hệt "engine chết".
+
+**Ranh giới mạng là điều kiện, nên nó được ÉP BẰNG TEST, không bằng lời hứa** —
+`deploy/netviet/workflow-isolation.contract.test.mjs`:
+
+- engine + Postgres của nó **không có** khối `ports:`;
+- mạng `data` phải `internal: true` (bỏ `internal` đi ⇒ test ĐỎ, vì lúc đó lý do trên hết đúng);
+- dashboard ra ngoài **chỉ** qua route Caddy có `basic_auth`;
+- `SERVER_AUTH_COOKIE_INSECURE` phải là `"f"` trên cả ba service có cookie.
+
+**Rủi ro tồn dư, nói thẳng:** một container bị chiếm **trong cùng stack** đọc được lưu lượng gRPC
+tới engine. Chấp nhận, vì cùng kẻ tấn công đó đã đọc được `WORKFLOW_ENGINE_TOKEN` từ môi trường.
+Muốn đóng nốt thì đi Q2-B (TLS nội bộ thật) — và **phải kèm giám sát hạn chứng chỉ**, nếu không nó
+đổi một rủi ro đã biết lấy một sự cố định kỳ.
 
 ### 4.3 Token
 - Token API của tenant Hatchet là **bí mật**: nằm trong Secret Manager, render vào `secrets.env`,
@@ -163,8 +186,23 @@ Trước mỗi lần nâng: đọc changelog → kiểm migration → kiểm tư
 **Lịch sử thực thi là tài sản vận hành, không phải rác** — nếu mục tiêu là con người debug được.
 
 - Sao lưu **Postgres của engine**, tách hoàn toàn khỏi sao lưu DB nghiệp vụ (`deploy/netviet/backup.sh`).
-- Phục hồi = khôi phục Postgres engine + khởi động lại engine ở **đúng phiên bản image**. Ngược
-  phiên bản engine so với schema đã migrate là một cách hỏng thật.
+- ⛔ **VÀ PHẢI SAO LƯU VOLUME `hatchet-config` CÙNG LÚC — dump Postgres một mình nó KHÔNG phải là
+  backup.** `/hatchet/config/server.yaml` giữ `encryption.masterKeyset` và
+  `encryption.jwt.privateJWTKeyset`. **Đã đo 23/08/2026** trên chính `deploy/netviet/compose.yaml`:
+  phục hồi dump mà **thiếu** volume này thì engine vẫn lên **Healthy**, DB vẫn đủ **182 bảng**, mà
+  khoá là một khoá **khác hẳn** (`52fee191…` thay vì `d71d31b2…`) — tức mọi thứ đã mã hoá bằng khoá
+  cũ thành rác và mọi token đã phát hết hiệu lực. **Một lần phục hồi XANH ra dữ liệu không đọc
+  được** là chế độ hỏng nguy hiểm nhất ở đây, vì không có lỗi nào để mà thấy.
+  Bằng chứng đầy đủ (cả ca dương lẫn ca âm):
+  [backup-restore-d6-23-08-2026.md](../../../tools/poc-workflow-engine/evidence/backup-restore-d6-23-08-2026.md).
+- Phục hồi, **đúng thứ tự**: `up hatchet-postgres` → `pg_restore` → **khôi phục volume
+  `hatchet-config`** → `up hatchet-engine`. Bước config phải xong **trước** khi `hatchet-setup-config`
+  chạy; `--overwrite=false` khi đó giữ nguyên khoá đã phục hồi (đã kiểm: sha khoá khớp tuyệt đối).
+- Khởi động lại engine ở **đúng phiên bản image**. Ngược phiên bản engine so với schema đã migrate
+  là một cách hỏng thật.
+- `restore-check.sh hatchet <dump>` chạy trên **service `hatchet-postgres`** với user `hatchet`,
+  không phải trên Postgres nghiệp vụ. **Giới hạn của nó:** chứng minh *dump đọc lại được*, **không**
+  chứng minh *dữ liệu giải mã được* — phần đó do volume config quyết định.
 - **Giới hạn phải biết:** `SERVER_LIMITS_DEFAULT_TENANT_RETENTION_PERIOD` mặc định **720h (30
   ngày)** — run ở trạng thái cuối **bị xoá**. Nên:
   - bản ghi **bền vững** nằm ở `AuditLog` + `WorkflowOutbox` của Nexagnet (`engineRunId`,
@@ -183,7 +221,24 @@ Trước mỗi lần nâng: đọc changelog → kiểm migration → kiểm tư
 | Dashboard | ~30 MB | |
 | Engine | ~20 MB | |
 | **Một instance** | **~270 MB** | + ~1,04 GB dung lượng image (dùng chung giữa các stack trên cùng VM) |
-| Worker | — | chạy **trong tiến trình API** hiện có, không thêm container |
+| Worker | **CHƯA ĐO** | container **RIÊNG** `workflow-worker-v1` — xem cảnh báo ngay dưới |
+
+> ⚠️ **SỬA 23/08/2026 — dòng Worker ở bảng trên trước đây ghi *"chạy trong tiến trình API hiện có,
+> không thêm container"*. Câu đó đã LỖI THỜI** kể từ khi phiên 4 đảo quyết định. Worker nay là một
+> **container riêng**, và lý do là một sự cố đo được chứ không phải sở thích kiến trúc:
+> `deploy-stack.sh` chạy `up -d --no-deps --force-recreate api web` **mỗi lần deploy**. Worker nằm
+> trong `api` thì mỗi lần deploy sẽ giết worker duy nhất đang phục vụ `.v1`, mọi run đang dở **nằm
+> chờ vĩnh viễn**, và thủ tục DRAIN ở §2 trở thành **không thực hiện được** (không có cách nào giữ
+> worker phiên bản cũ sống trong khi phiên bản mới lên).
+>
+> **RAM của worker chưa có số thật.** Nó cần token, mà token chỉ có sau
+> `bootstrap-workflow-engine.sh` trên VM. Phải đo ở D8/D9. **Không** suy ra từ container `api`:
+> worker boot `WorkflowWorkerModule` hẹp hơn nhiều, nên mượn số của `api` sẽ là *một con số sai
+> được trình bày như một số đo*.
+>
+> Số ~270 MB ở bảng trên là cụm engine (Postgres + engine + dashboard), **chưa gồm worker**. Đo
+> lại 23/08 trên chính `deploy/netviet/compose.yaml`: **252 MiB** (205 + 28 + 19) — xem
+> [backup-restore-d6-23-08-2026.md](../../../tools/poc-workflow-engine/evidence/backup-restore-d6-23-08-2026.md).
 
 | Số stack bật engine | RAM thêm |
 |---:|---:|
