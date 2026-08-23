@@ -339,3 +339,186 @@ nguyên VM. **Không được deploy** cho tới khi W4/W6/W7/W8/W9 xanh.
 
 Việc kế tiếp đúng thứ tự: **W4 #4 (outbox crash-window)** — nó là mục duy nhất cần Postgres thật
 (`docker compose -f docker-compose.yml up -d`), nên dựng nó trước để không phải quay lại lần nữa.
+
+---
+
+# Phụ lục — phiên 6 (23/08/2026): ĐỘ TIN CẬY W4–W12, đo bằng hạ tầng thật
+
+> HEAD đầu phiên `ead4dfc` → cuối phiên `b8a80c0` · 6 commit
+> Kế hoạch: [.claude/plans/hatchet-reliability-gates.plan.md](../../../.claude/plans/hatchet-reliability-gates.plan.md)
+
+## 21. Một câu
+
+Nền tảng đã đi từ **"đường đi hạnh phúc chạy được"** sang **"đường đi khi mọi thứ chết đã được
+đo"** — outbox sống qua một lần sập tiến trình, engine chết rồi lên lại không mất việc, worker bị
+`kill -9` giữa chừng vẫn về đích với **một** bản ghi, và dữ liệu engine thực sự lưu đã được đọc
+ngược để đối chiếu. **Vẫn CHƯA READY FOR GD1-TEST**, và §31 nói rõ còn thiếu gì.
+
+## 22. Bảng kết quả — mỗi dòng là một phép đo, không phải một ý kiến
+
+| Gate | Kết luận | Bằng chứng |
+|---|---|---|
+| **W4** sập sau commit / trước engine | ✅ | `workflow-outbox-durability.int.spec.ts` 3/3, Postgres thật |
+| **W4b** sập trước commit (đối chứng) | ✅ | cùng file — đơn và hàng **cùng biến mất** |
+| **W5** engine chết → lên lại | ✅ | `workflow-recovery.int.spec.ts` 4/4, `docker stop/start` thật |
+| **W5b** ba dạng gửi trùng | ✅ đo riêng | xem §24 |
+| **W6** worker `kill -9` giữa chừng | ✅ | `workflow-worker-recovery.int.spec.ts` |
+| **W7** hai worker cùng phiên bản + DRAIN | ✅ | cùng file — `countInFlight` về 0 |
+| **W8** riêng tư đọc từ engine thật | ✅ | `workflow-privacy-engine-read.int.spec.ts` 9/9 |
+| **W9** ma trận DI A/B/C | ✅ | `workflow-di-matrix.spec.ts` |
+| **W10** ranh giới module worker | ✅ | `workflow-worker.module.spec.ts` — hợp đồng theo **hình dạng** |
+| **W11** lý do hỏng có kiểu | ✅ | `workflow-dispatch-failures.ts` + 9 test |
+| **W12** audit ↔ `engineRunId` | ✅ | `workflow-dispatcher.spec.ts` |
+
+**Test:** apps/api **1126 passed / 46 skipped** · IT chạy tuần tự **154/154** ·
+packages/tenant **65** · packages/shared **89** · tsc + eslint xanh.
+
+## 23. Bằng chứng W4 — và cách nó tự chứng minh là KHÔNG rỗng
+
+Tiến trình con (`__tests__/crash-window-child.ts`) boot `AppModule` **thật**, ghi `Order` +
+hàng outbox trong **một** `$transaction`, COMMIT, in ra, rồi `SIGKILL` **chính nó**.
+`process.exit()` không dùng được: nó vẫn chạy hook `exit` — đó là "tắt", không phải "chết".
+
+Sau khi con chết: đơn **còn**, hàng outbox **còn** (`pending`, `attempts=0`, `engineRunId=null`),
+điểm cuối **chưa nhận gì**, engine **chưa có run**. Tiến trình Nexagnet thứ hai lên →
+`WorkflowScheduler` thật nhặt hàng → chạy trọn → **một** POST, **một** bản ghi.
+
+**Đã kiểm chứng bài này thật sự đo độ bền**, không phải tuyên bố suông: chạy lại chính nó với
+`PERSISTENCE=memory` thì bài ② và ③ **ĐỎ**. Bài ① vẫn xanh — và đó là đúng: nó đo một chế độ
+hỏng **khác** ("hàng outbox có thoát ra ngoài giao dịch không").
+
+## 24. Bảo đảm giao hàng — ba dòng, không gộp
+
+```
+outbox → engine        at-least-once     lease + backoff; KHÔNG mất, CÓ THỂ gửi lại
+tạo run trên engine    KHÔNG dedup       đo được: 2 run cho cùng một thao tác
+tác dụng phụ bên ngoài dedup NGHIỆP VỤ   2 POST, 1 bản ghi — cùng `Idempotency-Key`
+```
+
+**Không dùng chữ "exactly-once" ở bất kỳ đâu.** Lý do có tên:
+`TriggerWorkflowCommand.operationKey` có trong hợp đồng cổng nhưng
+`hatchet-workflow-engine.adapter.ts:trigger()` **không truyền nó** sang `runNoWait`, nên engine
+không có gì để chặn trùng lúc tạo run. Đo tại `workflow-recovery.int.spec.ts` (kịch bản "timeout
+mơ hồ": engine ĐÃ nhận, bên gọi không biết). **Chưa sửa** — sửa là đổi ngữ nghĩa của cổng và phải
+là quyết định có chủ ý.
+
+## 25. Năm cái bẫy đã vấp — cả năm đều làm test XANH GIẢ hoặc đo sai chỗ
+
+1. **Bộ lọc `additionalMetadata` sai hình dạng.** Viết mảng `"khoá:giá trị"` thay vì một object.
+   Nó luôn trả **0 hàng** — mà phần lớn chỗ dùng lại khẳng định **bằng 0**. W4 xanh vì phép đo
+   không bao giờ đo được gì. Đã sửa, đã chạy lại W4, và giờ có một ca **dương tính** (`=== 2`)
+   giữ cho nó không âm thầm chết lại.
+2. **Phép đo sống/chết dùng `runs.list`** — đi qua REST của container **dashboard**, nên tắt
+   `hatchet-engine` không làm nó im. Đổi sang mở kết nối TCP tới đúng **cổng gRPC**.
+3. **Bài test `import` hằng số từ tiến trình tự-giết** ⇒ `main()` chạy ngay trong worker của
+   vitest và SIGKILL giết runner. Triệu chứng (`ERR_IPC_CHANNEL_CLOSED`) chẳng chỉ về nguyên nhân.
+4. **Đếm dòng log stdout của worker** để biết bước nào chạy ở đâu — `ctx.logger` của SDK gửi log
+   về **engine**, nên chỉ bắt được một phần (4/6). Một phép đo bắt được một phần là phép đo **sai**.
+5. **Đọc số run của engine ngay lập tức** — danh sách run là một mô hình **đọc** và nó bắt kịp sau
+   một nhịp. Đã từng ra `1` thay vì `2` một lần. Khẳng định đúng là "rốt cuộc sẽ có hai run".
+
+## 26. ⚠️ Các bài IT của workflow PHẢI chạy TUẦN TỰ
+
+```bash
+pnpm --filter @netviet/api exec vitest run src/workflow --no-file-parallelism
+```
+
+Đo được: song song 5 file → **9 bài ĐỎ**; tuần tự → **154/154 xanh**.
+
+Nguyên nhân **không** phải test mong manh. Năm file đều đăng ký **cùng** tên
+`integration-handoff.v1` với **cùng** một engine; engine định tuyến theo **tên**, nên worker của
+file A nhận run do file B kích hoạt, rồi phân giải `WORKFLOW_DESTINATION_PROOF_ENDPOINT` từ **môi
+trường của chính nó** và gửi dữ liệu đó tới đích của A.
+
+**Đây là bằng chứng chạy được cho bất biến §4.1 của runbook** — mỗi khách/môi trường **một
+instance Hatchet riêng**. Hai bản triển khai dùng chung một engine sẽ **cướp run của nhau** và gửi
+dữ liệu của nhau ra ngoài. Đó là lỗi **cách ly dữ liệu**, không phải phiền toái về lịch chạy.
+
+## 27. Hai phát hiện còn mở (đã ghi nhận, chưa sửa — có lý do)
+
+**① Hai bản sao cùng phiên bản không quy được run về ai.**
+`resolveWorkerRegistration()` sinh `workerName` tất định theo phiên bản, nên hai container v1 đăng
+ký dưới **cùng một tên**; payload thì không mang danh tính tiến trình (đúng — biên riêng tư).
+Cái **không** hỏng: việc vẫn chạy hết, giết một con thì con còn lại gánh tiếp (đã đo).
+Cái hỏng: khi một bản sao cư xử lạ, không có đường nào chỉ ra là bản nào.
+Đề xuất: thêm hậu tố danh tính tiến trình vào `workerName`. Chưa sửa vì phân phối việc và chuyển
+giao đều đang đúng.
+
+**② Khe hở trong bộ quét bí mật dùng chung.**
+`telemetry-redaction.ts` dùng mẫu đòi 16+ ký tự **chữ-số** ngay sau tiền tố `sk-`. Khoá có gạch ở
+thân — kể cả **định dạng khoá OpenAI hiện hành** — **thoát được**. Ảnh hưởng cả telemetry, không
+riêng workflow. Đã đặc tả hiện trạng trong `workflow-privacy-engine-read.int.spec.ts` (bảng
+`knownGaps`, kèm ghi chú chuyển sang bảng `mustBlock` khi sửa xong).
+Chưa sửa ở đây: bộ quét là hạ tầng dùng chung và observability đang có luồng khác làm việc.
+
+## 28. Điều thật sự bảo vệ `input` — nói rõ để không ai nhầm hai lớp
+
+Đọc ngược từ engine: `input` **đúng bằng** sáu trường hợp đồng, `additionalMetadata` **đúng bằng**
+tám neo tương quan, và không chuỗi cấm nào xuất hiện trong cả bản ghi.
+
+Nhưng thứ tạo ra kết quả đó là **HỢP ĐỒNG** (danh sách trắng sáu trường tham chiếu; `entityId`
+theo định nghĩa là định danh nội bộ do ta sinh ra), **không phải** bộ quét nội dung. Bộ quét là
+lớp thứ hai và nó **không** bắt được tên người hay địa chỉ tự do — đó là giới hạn **về nguyên
+tắc** của quét theo mẫu, không phải một mẫu còn thiếu.
+
+## 29. Đo thời gian đăng ký worker (cho `start_period` của compose)
+
+| Lần đo | Kết quả |
+|---|---|
+| 22/08 engine nguội | ~38 s |
+| 22/08 engine ấm | ~12 s |
+| 23/08 (engine chạy 9 giờ) | **6,3 s** rồi **30,1 s** |
+
+**Biến động lớn và không ổn định** — chính điều đó là kết luận. Đề xuất `start_period: 90s`
+(≈2,4× lần đo tệ nhất), **không** đặt sát 38 s. Và healthcheck phải dựa trên **READY thật**, không
+phải "tiến trình còn sống": một worker sống mà chưa đăng ký là chế độ hỏng tệ nhất — container
+xanh, healthcheck xanh, mọi run nằm chờ mãi mãi.
+
+## 30. Việc song song — KHÔNG chạm
+
+`git status` cuối phiên: Phase 0 observability (`decision-reasons.ts` vẫn +71 dòng chưa commit),
+`orders/`, `apps/web/`, `apps/mini/`, `tenants/wata/`, `tong-quan.md`, `debugging.md`,
+`tools/trace-view.mjs`, `packages/tenant/src/tenant.schema.ts` — **không file nào bị chạm**.
+Sáu commit của phiên chỉ đụng `apps/api/src/workflow/`.
+
+**Món nợ đã ghi:** gộp `workflow-dispatch-failures.ts` vào `observability/decision-reasons.ts`
+sau khi Phase 0 vào. Cũng vì lý do đó, phiên này **vẫn không ghi** `tong-quan.md`.
+
+**Ghi chú không liên quan tới phiên này:** `pnpm typecheck` ở mức workspace ĐỎ tại `apps/mini/`
+(JSX không có `JSX.IntrinsicElements`). `apps/mini/` là việc song song chưa track; lỗi có trước
+phiên này và không do phiên này gây ra. Đã typecheck `@netviet/api` riêng: xanh.
+
+## 31. ⛔ VẪN CHƯA READY FOR GD1-TEST
+
+Độ tin cậy **đã xanh**. Phần triển khai **chưa bắt đầu** — và đó là lựa chọn có chủ ý, không phải
+hết giờ: làm dở một hồ sơ deploy còn tệ hơn không làm.
+
+| Hạng mục | Trạng thái |
+|---|---|
+| Readiness của worker (máy đọc được) | ⬜ **chặn compose** — thiết kế đã rõ (§29), chưa viết |
+| `deploy/netviet/compose.yaml` + service `workflow-worker` | ⬜ chưa bắt đầu |
+| Postgres riêng cho engine (volume, healthcheck, không publish cổng) | ⬜ chưa bắt đầu |
+| TLS + mạng nội bộ (POC đang `TLS_STRATEGY=none`) | ⬜ chưa bắt đầu |
+| Hợp đồng biến môi trường (`secrets-passthrough.contract.test.mjs`) | ⬜ chưa bắt đầu |
+| Backup/restore Postgres của engine | ⬜ chưa bắt đầu |
+| Audit tài nguyên VM bằng số mới | ⬜ chưa bắt đầu |
+| Gộp mã lý do vào `decision-reasons.ts` | ⬜ vẫn bị chặn bởi Phase 0 |
+| Ghi `tong-quan.md` | ⬜ vẫn bị chặn bởi Phase 0 |
+
+**Việc kế tiếp, chính xác:** *readiness của tiến trình worker*. Nó là điều kiện chặn của compose,
+nó là mục duy nhất còn lại trong chuỗi độ tin cậy, và §29 đã có số đo để thiết kế nó tử tế thay vì
+đoán. Đề xuất: một điểm cuối HTTP chỉ nghe **loopback** trong container (healthcheck của Docker
+chạy *bên trong* container, nên không cần phơi cổng nào ra ngoài), trả 200 **sau** khi
+`waitUntilReady()` của SDK trả về.
+
+## 32. Chạy lại
+
+```bash
+docker compose -f docker-compose.yml up -d postgres && pnpm --filter @netviet/api exec prisma migrate deploy
+```
+```bash
+docker compose -p pocwf -f tools/poc-workflow-engine/compose/hatchet.compose.yml up -d
+```
+```bash
+RUN_PRISMA_IT=1 RUN_WORKFLOW_IT=1 WORKFLOW_ENGINE_TOKEN=<token> WORKFLOW_ENGINE_HOST_PORT=localhost:7744 WORKFLOW_ENGINE_TLS_STRATEGY=none DATABASE_URL=postgresql://netviet:netviet_local@localhost:5432/netviet pnpm --filter @netviet/api exec vitest run src/workflow --no-file-parallelism
+```
