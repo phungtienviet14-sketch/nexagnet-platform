@@ -2,17 +2,17 @@
   "schemaVersion": 2,
   "slug": "wata",
   "identity": {
-    "displayName": "Công ty Cổ phần Công nghệ WATA",
-    "shortName": "WATATECH"
+    "displayName": "Công ty Cổ phần Truyền thông & Công nghệ NetViet",
+    "shortName": "NetViet"
   },
   "branding": {
-    "productName": "WATA AI Workforce Platform",
-    "installName": "WATA — AI Workforce Control Plane",
-    "pageTitle": "WATA — AI Workforce Control Plane",
-    "pageDescription": "Nền tảng điều phối và giám sát đội ngũ AI doanh nghiệp WATATECH",
-    "themeColor": "#0f62fe",
-    "backgroundColor": "#0a0f1d",
-    "monogram": "W",
+    "productName": "NetViet AI Workforce Platform",
+    "installName": "NetViet — AI Workforce Control Plane",
+    "pageTitle": "NetViet AI — Workforce Control Plane",
+    "pageDescription": "Nền tảng điều phối và giám sát đội ngũ AI doanh nghiệp NetViet",
+    "themeColor": "#ba1c24",
+    "backgroundColor": "#ffffff",
+    "monogram": "NV",
     "composerPlaceholder": "Hỏi trợ lý điều hành hoặc tra cứu nghiệp vụ..."
   },
   "experience": "agent-workforce",
