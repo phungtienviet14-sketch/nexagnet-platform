@@ -31,7 +31,6 @@ export function TopNav({ activeView, onChangeView, alertsCount = 4 }: TopNavProp
       <div className="wf-topbar__brand">
         <div className="wf-topbar__logo-wrap">
           {branding.logoPath ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={branding.logoPath}
               alt={`${branding.shortName} logo`}
