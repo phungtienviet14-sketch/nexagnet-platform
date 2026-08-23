@@ -626,6 +626,237 @@
 .wf-kpi-card--warning { border-top: 3px solid var(--wf-orange); }
 .wf-kpi-card--neutral { border-top: 3px solid var(--wf-cyan); }
 
+/* Overview Analytics */
+.wf-overview-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.wf-overview-charts__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.wf-overview-charts__eyebrow {
+  margin: 0 0 0.2rem;
+  color: var(--wf-primary);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.wf-overview-charts__title {
+  margin: 0;
+  color: var(--wf-text-primary);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.wf-overview-charts__meta {
+  color: var(--wf-text-muted);
+  font-size: 0.72rem;
+}
+
+.wf-overview-charts__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 1fr) minmax(220px, 0.7fr);
+  gap: 1rem;
+}
+
+.wf-overview-card {
+  min-width: 0;
+  margin: 0;
+  padding: 1.1rem 1.2rem;
+  background: var(--wf-surface-card);
+  border: 1px solid var(--wf-border-card);
+  border-radius: var(--wf-radius-lg);
+  box-shadow: var(--wf-shadow-card);
+}
+
+.wf-overview-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.wf-overview-card__header h4 {
+  margin: 0;
+  color: var(--wf-text-primary);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.wf-overview-card__header p {
+  margin: 0.2rem 0 0;
+  color: var(--wf-text-muted);
+  font-size: 0.68rem;
+}
+
+.wf-overview-card__metric {
+  min-width: 2rem;
+  color: var(--wf-primary);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.wf-overview-card__metric--attention { color: #ea580c; }
+
+.wf-throughput-chart {
+  display: block;
+  width: 100%;
+  height: 128px;
+  overflow: visible;
+}
+
+.wf-throughput-chart__grid {
+  stroke: var(--wf-border-subtle);
+  stroke-dasharray: 3 5;
+}
+
+.wf-throughput-chart__baseline { stroke: var(--wf-border-card); }
+
+.wf-throughput-chart__area {
+  fill: var(--wf-primary);
+  fill-opacity: 0.1;
+  stroke: none;
+}
+
+.wf-throughput-chart__line {
+  fill: none;
+  stroke: var(--wf-primary);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.wf-throughput-chart__point {
+  fill: var(--wf-surface-card);
+  stroke: var(--wf-primary);
+  stroke-width: 2.5;
+}
+
+.wf-throughput-chart__axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0.1rem;
+  color: var(--wf-text-muted);
+  font-size: 0.63rem;
+}
+
+.wf-agent-load-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.wf-agent-load-chart__row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(65px, 1.35fr) 1.5rem;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--wf-text-body);
+  font-size: 0.68rem;
+}
+
+.wf-agent-load-chart__label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.wf-agent-load-chart__dot,
+.wf-attention-chart__marker {
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.wf-agent-load-chart__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+}
+
+.wf-agent-load-chart__track {
+  height: 0.45rem;
+  overflow: hidden;
+  background: var(--wf-surface-muted);
+  border-radius: 999px;
+}
+
+.wf-agent-load-chart__bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.wf-agent-load-chart__row strong,
+.wf-attention-chart__item strong {
+  color: var(--wf-text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.wf-agent-load-chart__dot--executive,
+.wf-agent-load-chart__bar--executive { background: var(--wf-primary); }
+.wf-agent-load-chart__dot--commercial,
+.wf-agent-load-chart__bar--commercial { background: #f58220; }
+.wf-agent-load-chart__dot--legal-finance,
+.wf-agent-load-chart__bar--legal-finance { background: #0b5cab; }
+.wf-agent-load-chart__dot--manufacturing,
+.wf-agent-load-chart__bar--manufacturing { background: #059669; }
+.wf-agent-load-chart__dot--strategic,
+.wf-agent-load-chart__bar--strategic { background: #7c3aed; }
+
+.wf-attention-chart__segments {
+  display: flex;
+  height: 0.85rem;
+  overflow: hidden;
+  background: var(--wf-surface-muted);
+  border-radius: 999px;
+}
+
+.wf-attention-chart__segment {
+  min-width: 0;
+}
+
+.wf-attention-chart__segment--critical,
+.wf-attention-chart__marker--critical { background: #dc2626; }
+.wf-attention-chart__segment--warning,
+.wf-attention-chart__marker--warning { background: #ea580c; }
+.wf-attention-chart__segment--info,
+.wf-attention-chart__marker--info { background: #0b5cab; }
+
+.wf-attention-chart__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+.wf-attention-chart__item {
+  display: grid;
+  grid-template-columns: 0.55rem 1fr 1.25rem;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--wf-text-body);
+  font-size: 0.7rem;
+}
+
+.wf-attention-chart__marker {
+  width: 0.48rem;
+  height: 0.48rem;
+}
+
 /* Split Section: Activity Chart & Attention Queue */
 .wf-section-split {
   display: grid;
@@ -2874,6 +3105,8 @@
    ========================================================================= */
 @media (max-width: 1280px) {
   .wf-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .wf-overview-charts__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wf-overview-card--trend { grid-column: span 2; }
   .wf-agents-grid,
   .wf-connectors-grid,
   .wf-models-grid,
@@ -2888,6 +3121,8 @@
   .wf-workbench,
   .wf-alerts-layout,
   .wf-documents-layout { grid-template-columns: 1fr; }
+  .wf-overview-charts__grid { grid-template-columns: 1fr; }
+  .wf-overview-card--trend { grid-column: auto; }
   .wf-workbench-main { height: 560px; }
   .wf-agent-detail-metrics { grid-template-columns: repeat(2, 1fr); }
 }
@@ -2908,6 +3143,7 @@
     justify-content: flex-start;
   }
   .wf-kpi-grid,
+  .wf-overview-charts__grid,
   .wf-agents-grid,
   .wf-connectors-grid,
   .wf-models-grid,
@@ -2919,6 +3155,7 @@
   .wf-hero-banner,
   .wf-directory-hero,
   .wf-upload-dropzone { flex-direction: column; }
+  .wf-overview-charts__heading { align-items: flex-start; flex-direction: column; }
   .wf-agent-detail-header { flex-direction: column; }
 }
 
