@@ -248,6 +248,25 @@ test('route dashboard chi duoc phat khi cong tac BAT, va phai co cong xac thuc',
   assert.match(route, /import secure_headers/);
 });
 
+test('cong tac CHI duoc bat cho gd1-test — production khong the bat nham', () => {
+  // Cong tac mot minh no bao ve khoi "bat nham vi goi khach khai binding". No KHONG bao ve khoi
+  // "go nham ten moi truong luc deploy": `tenants/ultty/tenant.json` dung chung cho ca hai stack,
+  // nen mot lan `WORKFLOW_ENGINE=on ./render-secrets.sh` chay nham vao production se vu trang
+  // dispatcher tren stack that cua khach — noi khong co engine nao de goi.
+  const guardAt = renderSecrets.indexOf("if [[ \"${WORKFLOW_ENGINE}\" == 'on' ]]; then");
+  assert.notEqual(guardAt, -1, 'khong tim thay nhanh bat cong tac');
+
+  // Cai chan phai nam NGAY trong nhanh do, TRUOC moi thu khac — ke ca truoc cac kiem tra secret.
+  // Cat toi dong `fi` dau tien sau nhanh — dung de soi dung than cua nhanh, khong lan sang
+  // phan con lai cua script.
+  const branch = renderSecrets.slice(guardAt, renderSecrets.indexOf('\nfi\n', guardAt) + 1);
+  assert.match(
+    branch,
+    /DEPLOYMENT_ENVIRONMENT\}" != 'gd1-test'/,
+    'render-secrets.sh cho phep bat workflow engine o moi truong khac gd1-test',
+  );
+  assert.match(branch, /exit 64/, 'chan moi truong sai phai DUNG HAN, khong phai canh bao');
+});
 test('bam mat khau cua dashboard KHONG duoc phat vao secrets.env', () => {
   // secrets.env di vao `--env-file` cua compose, tuc la toi MOI container cua stack. Bam mat khau
   // cua edge khong co viec gi o do; no thuoc ve manh cau hinh Caddy.

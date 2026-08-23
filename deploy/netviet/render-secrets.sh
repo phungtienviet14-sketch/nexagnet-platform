@@ -141,6 +141,19 @@ WORKFLOW_ENGINE_TOKEN="$(optional_secret zalo-${STACK_SLUG}-workflow-engine-toke
 WORKFLOW_DASHBOARD_HTPASSWD="$(optional_secret zalo-${STACK_SLUG}-workflow-dashboard-htpasswd)"
 
 if [[ "${WORKFLOW_ENGINE}" == 'on' ]]; then
+  # CHI `gd1-test` DUOC PHEP BAT. Day la cai chan cuoi cung, va no o day vi cong tac mot minh no
+  # chua du: cong tac bao ve khoi "bat nham vi goi khach khai binding", nhung khong bao ve khoi
+  # "go nham ten moi truong khi deploy". `tenants/ultty/tenant.json` dung CHUNG cho ca hai stack,
+  # nen mot lan `WORKFLOW_ENGINE=on ./render-secrets.sh` chay nham vao `production` se vu trang
+  # dispatcher tren stack that cua khach — noi khong co engine nao de goi.
+  #
+  # Chan o TANG RENDER chu khong phai tang code: den luc code chay thi bien da nam trong
+  # secrets.env roi, va container khong biet no dang phuc vu moi truong nao ngoai mot cai nhan.
+  if [[ "${DEPLOYMENT_ENVIRONMENT}" != 'gd1-test' ]]; then
+    echo "WORKFLOW_ENGINE=on chi duoc phep cho DEPLOYMENT_ENVIRONMENT=gd1-test" >&2
+    echo "(dang la '${DEPLOYMENT_ENVIRONMENT}', stack ${STACK_SLUG})." >&2
+    exit 64
+  fi
   # FAIL-CLOSED. "Bat engine nhung khong co mat khau DB" va "bat dashboard nhung khong co cong
   # xac thuc" deu la cau hinh sai co hau qua bao mat — dung han o day, khong deploy roi vam.
   [[ -n "${HATCHET_DB_PASSWORD}" ]] || {
