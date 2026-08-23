@@ -1,9 +1,16 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  ProofEndpoint,
+  RUN_COMPLETE_TIMEOUT_MS,
+  WORKFLOW_FIXTURE,
+  WORKFLOW_FIXTURE_V2,
+  WorkerProcess,
+  baseEnv,
+  bootAppContext,
+  waitFor,
+  type BootedApp,
+  type HandoffApi,
+} from './__tests__/workflow-it.harness.js';
 
 /**
  * E2E QUA BIEN PRODUCTION THAT — khong duoc phep goi tat.
@@ -25,276 +32,33 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *   RUN_WORKFLOW_IT=1 pnpm --filter @netviet/api exec vitest run src/workflow/workflow-e2e
  *
  * Bien bat buoc: WORKFLOW_ENGINE_TOKEN (+ HOST_PORT/TLS_STRATEGY neu khong dung mac dinh).
+ *
+ * BO DO (`ProofEndpoint`, `WorkerProcess`, `waitFor`, `bootAppContext`) nam o
+ * `__tests__/workflow-it.harness.ts` — dung chung voi cac bai kiem do tin cay khac.
  */
-
-const here = dirname(fileURLToPath(import.meta.url));
-const apiDir = resolve(here, '../..');
-const WORKFLOW_FIXTURE = resolve(
-  apiDir,
-  '../../packages/tenant/src/__tests__/fixtures/workflow-enabled',
-);
-/** Cung khuon, chi khac `version: 'v2'` + `idempotency: 'lookup'`. */
-const WORKFLOW_FIXTURE_V2 = resolve(
-  apiDir,
-  '../../packages/tenant/src/__tests__/fixtures/workflow-enabled-v2',
-);
-
-/**
- * Worker mat ~38 giay de dang ky xong tren may dev (do duoc 22/08/2026). Moi thoi han duoi day
- * lay tu con so do chu khong phai tu cam giac — va chinh no la con so phai vao `start_period`
- * cua healthcheck luc viet compose.
- */
-const WORKER_READY_TIMEOUT_MS = 120_000;
-const RUN_COMPLETE_TIMEOUT_MS = 90_000;
-
-// ------------------------------------------------------- diem cuoi co kiem soat
-
-interface EndpointCall {
-  readonly idempotencyKey: string | null;
-  readonly traceparent: string | null;
-  readonly body: Record<string, unknown>;
-  readonly attempt: number;
-}
-
-/**
- * He ngoai GIA LAP nhung la mot may chu HTTP THAT — no phai tra 500/429/treo theo yeu cau de
- * chung minh retry chay that chu khong phai chi doc tai lieu. Dem theo khoa idempotency de do
- * duoc "mot tac dung co bi ap dung hai lan khong".
- */
-class ProofEndpoint {
-  private server?: Server;
-  readonly calls: EndpointCall[] = [];
-  /** Cac lan TRA CUU (GET) — dau van tay rieng cua buoc `preflight`, tuc la cua code v2. */
-  readonly lookups: string[] = [];
-  private readonly attemptsByKey = new Map<string, number>();
-  private readonly appliedKeys = new Set<string>();
-  /** Cac yeu cau dang bi GIU. Duong de tao ra mot run "dang do" ma khong phai doan thoi gian. */
-  private readonly held: Array<() => void> = [];
-  mode: 'ok' | 'fail_then_ok' | 'rate_limited' | 'hold' = 'ok';
-  failTimes = 2;
-
-  async listen(): Promise<number> {
-    this.server = createServer((req, res) => {
-      // TRA CUU (muc idempotency `lookup`) — CHI code v2 goi duong nay, vi chi v2 co buoc
-      // `preflight`. Do la cach test doc duoc "run nay chay bang phien ban nao" tu BEN NGOAI,
-      // khong phai bang cach moi ruot engine.
-      if (req.method === 'GET') {
-        const key = new URL(req.url ?? '/', 'http://x').searchParams.get('key') ?? 'no-key';
-        this.lookups.push(key);
-        if (this.appliedKeys.has(key)) {
-          res.writeHead(200, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ externalRef: `EXT-${key}` }));
-          return;
-        }
-        res.writeHead(404).end(JSON.stringify({ error: 'NOT_FOUND' }));
-        return;
-      }
-
-      let raw = '';
-      req.on('data', (chunk) => {
-        raw += chunk;
-      });
-      req.on('end', () => {
-        const key = String(req.headers['idempotency-key'] ?? 'no-key');
-        const attempt = (this.attemptsByKey.get(key) ?? 0) + 1;
-        this.attemptsByKey.set(key, attempt);
-        this.calls.push({
-          idempotencyKey: (req.headers['idempotency-key'] as string) ?? null,
-          traceparent: (req.headers.traceparent as string) ?? null,
-          body: JSON.parse(raw || '{}') as Record<string, unknown>,
-          attempt,
-        });
-
-        const succeed = (): void => {
-          this.appliedKeys.add(key);
-          res.writeHead(200, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ externalRef: `EXT-${key}` }));
-        };
-
-        if (this.mode === 'hold') {
-          // GIU yeu cau lai — run nam trong buoc `dispatch` cho toi khi test tha ra. Day la cach
-          // tao mot run "dang do" CO KIEM SOAT, thay vi them mot buoc cho chi de test co cho chen.
-          this.held.push(succeed);
-          return;
-        }
-        if (this.mode === 'rate_limited') {
-          res.writeHead(429).end(JSON.stringify({ error: 'RATE_LIMITED' }));
-          return;
-        }
-        if (this.mode === 'fail_then_ok' && attempt <= this.failTimes) {
-          res.writeHead(500).end(JSON.stringify({ error: 'UPSTREAM_UNAVAILABLE' }));
-          return;
-        }
-        succeed();
-      });
-    });
-
-    await new Promise<void>((done) => {
-      this.server!.listen(0, '127.0.0.1', done);
-    });
-    return (this.server!.address() as AddressInfo).port;
-  }
-
-  /** Tha het cac yeu cau dang bi giu. */
-  release(): void {
-    for (const respond of this.held.splice(0)) respond();
-  }
-
-  attemptsFor(key: string): number {
-    return this.attemptsByKey.get(key) ?? 0;
-  }
-
-  lookupsFor(key: string): number {
-    return this.lookups.filter((seen) => seen === key).length;
-  }
-
-  async close(): Promise<void> {
-    this.release();
-    await new Promise<void>((done) => {
-      this.server?.close(() => done());
-    });
-  }
-}
-
-// ---------------------------------------------------------- tien trinh worker
-
-/**
- * Tien trinh worker duoi quyen kiem soat cua test: len duoc, tat duoc, GIET duoc.
- * Khuon lay tu `tools/poc-workflow-engine/src/version-spike.ts` — no da chay that.
- */
-class WorkerProcess {
-  private child?: ChildProcess;
-  private output = '';
-
-  constructor(
-    private readonly version: string,
-    private readonly env: NodeJS.ProcessEnv,
-  ) {}
-
-  async start(): Promise<void> {
-    const child = spawn(
-      process.execPath,
-      ['--import', '@swc-node/register/esm-register', 'src/workflow/worker-main.ts'],
-      {
-        cwd: apiDir,
-        env: { ...this.env, WORKFLOW_WORKER_VERSION: this.version },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
-    );
-    const collect = (chunk: Buffer): void => {
-      this.output += chunk.toString();
-    };
-    // `stdio` da khai bao 'pipe' cho ca hai, nen hai luong nay chac chan co mat.
-    child.stdout!.on('data', collect);
-    child.stderr!.on('data', collect);
-    this.child = child;
-
-    // Cho DONG READY that su, khong `sleep` mot con so doan mo. Do la giao keo giua worker va
-    // test — worker chi in dong nay sau khi `waitUntilReady()` cua SDK tra ve.
-    await waitFor(
-      () => this.output.includes(`READY workflow=integration-handoff.${this.version}`),
-      WORKER_READY_TIMEOUT_MS,
-      () => `worker ${this.version} khong bao READY. Output:\n${this.output.slice(-2000)}`,
-    );
-  }
-
-  /** Tat SACH — duong ma `docker stop` di qua. */
-  async stop(): Promise<void> {
-    if (!this.child) return;
-    this.child.kill('SIGTERM');
-    await this.exited();
-  }
-
-  /** GIET — mo phong container bi OOM hoac VM mat dien. Khong co co hoi don dep. */
-  async kill(): Promise<void> {
-    if (!this.child) return;
-    this.child.kill('SIGKILL');
-    await this.exited();
-  }
-
-  private async exited(): Promise<void> {
-    const child = this.child;
-    await new Promise<void>((done) => {
-      if (!child || child.exitCode !== null) {
-        done();
-        return;
-      }
-      child.once('exit', () => done());
-    });
-    this.child = undefined;
-  }
-}
-
-async function waitFor(
-  predicate: () => boolean | Promise<boolean>,
-  timeoutMs: number,
-  describeFailure: () => string,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await predicate()) return;
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  throw new Error(`HET GIO sau ${timeoutMs}ms: ${describeFailure()}`);
-}
-
-// ------------------------------------------------------------------ bo test
-
-interface HandoffApi {
-  handoff: (request: {
-    workflowKey: string;
-    operation: string;
-    entityType: string;
-    entityId: string;
-  }) => Promise<{ outcome: string; reason: string; operationKey?: string }>;
-}
 
 describe.runIf(process.env.RUN_WORKFLOW_IT === '1')(
   'E2E: Nexagnet that -> outbox -> engine -> worker rieng -> diem cuoi',
   () => {
     const endpoint = new ProofEndpoint();
     let worker: WorkerProcess;
-    let appContext: { get: (token: never, opts?: object) => unknown; close: () => Promise<void> };
+    let app: BootedApp;
     let handoff: HandoffApi;
 
     beforeAll(async () => {
       const port = await endpoint.listen();
+      const env = baseEnv(WORKFLOW_FIXTURE, port);
 
-      const engineEnv: NodeJS.ProcessEnv = {
-        ...process.env,
-        TENANT_DIR: WORKFLOW_FIXTURE,
-        PERSISTENCE: 'memory',
-        CHANNEL_MODE: 'mock',
-        NODE_ENV: 'test',
-        WORKFLOW_ENGINE_HOST_PORT: process.env.WORKFLOW_ENGINE_HOST_PORT ?? 'localhost:7744',
-        WORKFLOW_ENGINE_TLS_STRATEGY: process.env.WORKFLOW_ENGINE_TLS_STRATEGY ?? 'none',
-        WORKFLOW_DESTINATION_PROOF_ENDPOINT: `http://127.0.0.1:${port}/handoff`,
-      };
-      delete engineEnv.TENANT;
-
-      worker = new WorkerProcess('v1', engineEnv);
+      worker = new WorkerProcess('v1', env);
       await worker.start();
 
-      // Boot AppModule THAT — nap dong SAU khi da dat bien, vi `app.module.ts` keo theo loader
-      // goi khach va loader do doc `process.env.TENANT` NGAY LUC IMPORT.
-      Object.assign(process.env, engineEnv);
-      delete process.env.TENANT;
-      const { resetTenantCache } = await import('@netviet/tenant');
-      resetTenantCache();
-      const { NestFactory } = await import('@nestjs/core');
-      const { AppModule } = await import('../app.module.js');
-      const { WorkflowHandoffService } = await import('./workflow-handoff.service.js');
-
-      appContext = (await NestFactory.createApplicationContext(await AppModule.forRoot(), {
-        logger: ['error'],
-        abortOnError: false,
-      })) as never;
-      handoff = appContext.get(WorkflowHandoffService as never, { strict: false }) as HandoffApi;
+      app = await bootAppContext(env);
+      handoff = app.handoff;
     }, 240_000);
 
     afterAll(async () => {
       await worker?.stop();
-      await appContext?.close();
+      await app?.context.close();
       await endpoint.close();
     }, 60_000);
 
@@ -355,7 +119,7 @@ describe.runIf(process.env.RUN_WORKFLOW_IT === '1')(
 
       // Ba lan NHAN, nhung ca ba mang CUNG mot khoa idempotency — nen he ngoai co du thong tin
       // de chi tao mot ban ghi. Do la toan bo diem cua `operation-key.ts`.
-      const seen = endpoint.calls.filter((c) => c.idempotencyKey === key);
+      const seen = endpoint.callsFor(key);
       expect(seen.length).toBeGreaterThanOrEqual(3);
       expect(new Set(seen.map((c) => c.idempotencyKey)).size).toBe(1);
     }, 180_000);
@@ -384,72 +148,31 @@ describe.runIf(process.env.RUN_WORKFLOW_IT === '1')(
     const endpoint = new ProofEndpoint();
     let workerV1: WorkerProcess;
     let workerV2: WorkerProcess;
-    let ctxV1: { get: (t: never, o?: object) => unknown; close: () => Promise<void> };
-    let ctxV2: { get: (t: never, o?: object) => unknown; close: () => Promise<void> };
-    let handoffV1: HandoffApi;
-    let handoffV2: HandoffApi;
+    let appV1: BootedApp;
+    let appV2: BootedApp;
     let endpointPort = 0;
-
-    const baseEnv = (fixture: string, port: number): NodeJS.ProcessEnv => {
-      const env: NodeJS.ProcessEnv = {
-        ...process.env,
-        TENANT_DIR: fixture,
-        PERSISTENCE: 'memory',
-        CHANNEL_MODE: 'mock',
-        NODE_ENV: 'test',
-        WORKFLOW_ENGINE_HOST_PORT: process.env.WORKFLOW_ENGINE_HOST_PORT ?? 'localhost:7744',
-        WORKFLOW_ENGINE_TLS_STRATEGY: process.env.WORKFLOW_ENGINE_TLS_STRATEGY ?? 'none',
-        WORKFLOW_DESTINATION_PROOF_ENDPOINT: `http://127.0.0.1:${port}/handoff`,
-      };
-      delete env.TENANT;
-      return env;
-    };
-
-    async function bootContext(fixture: string, port: number): Promise<{
-      context: { get: (t: never, o?: object) => unknown; close: () => Promise<void> };
-      handoff: HandoffApi;
-    }> {
-      Object.assign(process.env, baseEnv(fixture, port));
-      delete process.env.TENANT;
-      const { resetTenantCache } = await import('@netviet/tenant');
-      resetTenantCache();
-      const { NestFactory } = await import('@nestjs/core');
-      const { AppModule } = await import('../app.module.js');
-      const { WorkflowHandoffService } = await import('./workflow-handoff.service.js');
-      const context = (await NestFactory.createApplicationContext(await AppModule.forRoot(), {
-        logger: ['error'],
-        abortOnError: false,
-      })) as never as { get: (t: never, o?: object) => unknown; close: () => Promise<void> };
-      return {
-        context,
-        handoff: context.get(WorkflowHandoffService as never, { strict: false }) as HandoffApi,
-      };
-    }
 
     beforeAll(async () => {
       endpointPort = await endpoint.listen();
-      const port = endpointPort;
       // v1 len TRUOC va o lai suot bai — do la dieu kien cua ca thi nghiem: v2 khong duoc phep
       // thay the v1, no phai chay SONG SONG.
-      workerV1 = new WorkerProcess('v1', baseEnv(WORKFLOW_FIXTURE, port));
+      workerV1 = new WorkerProcess('v1', baseEnv(WORKFLOW_FIXTURE, endpointPort));
       await workerV1.start();
-      const bootedV1 = await bootContext(WORKFLOW_FIXTURE, port);
-      ctxV1 = bootedV1.context;
-      handoffV1 = bootedV1.handoff;
+      appV1 = await bootAppContext(baseEnv(WORKFLOW_FIXTURE, endpointPort));
     }, 300_000);
 
     afterAll(async () => {
       await workerV2?.stop();
       await workerV1?.stop();
-      await ctxV2?.close();
-      await ctxV1?.close();
+      await appV2?.context.close();
+      await appV1?.context.close();
       await endpoint.close();
     }, 90_000);
 
     it('run v1 dang do KHONG bi worker v2 cuop, va run moi di v2', async () => {
       // ① mot run v1 di vao `dispatch` roi BI GIU o do.
       endpoint.mode = 'hold';
-      const v1 = await handoffV1.handoff({
+      const v1 = await appV1.handoff.handoff({
         workflowKey: 'integration-handoff',
         operation: 'sync',
         entityType: 'work-item',
@@ -467,10 +190,8 @@ describe.runIf(process.env.RUN_WORKFLOW_IT === '1')(
       await workerV2.start();
 
       // ③ run MOI, tren goi khach da ACTIVATE v2.
-      const bootedV2 = await bootContext(WORKFLOW_FIXTURE_V2, endpointPort);
-      ctxV2 = bootedV2.context;
-      handoffV2 = bootedV2.handoff;
-      const v2 = await handoffV2.handoff({
+      appV2 = await bootAppContext(baseEnv(WORKFLOW_FIXTURE_V2, endpointPort));
+      const v2 = await appV2.handoff.handoff({
         workflowKey: 'integration-handoff',
         operation: 'sync',
         entityType: 'work-item',
