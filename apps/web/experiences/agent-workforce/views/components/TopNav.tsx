@@ -76,11 +76,6 @@ export function TopNav({ activeView, onChangeView, alertsCount = 4 }: TopNavProp
       </nav>
 
       <div className="wf-topbar__actions">
-        <span className="wf-demo-tag" title={`Môi trường thử nghiệm minh họa ${branding.productName}`}>
-          <span className="wf-demo-tag__dot" aria-hidden="true" />
-          DỮ LIỆU DEMO
-        </span>
-
         <div className="wf-status-indicator" title="Tất cả dịch vụ AI đang hoạt động bình thường">
           <span className="wf-status-indicator__dot" />
           <span className="wf-status-indicator__text">6/6 Agent Online</span>

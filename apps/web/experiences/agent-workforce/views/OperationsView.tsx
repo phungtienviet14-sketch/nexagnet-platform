@@ -126,7 +126,7 @@ export function OperationsView() {
           <div className="wf-section-info">
             <h3 id="connectors-heading">Cổng kết nối dữ liệu</h3>
             <p>
-              Phân định giữa nguồn dữ liệu đang hoạt động thật, dữ liệu mẫu và cổng sẵn sàng theo lộ trình.
+              Theo dõi nguồn dữ liệu đang hoạt động và các cổng sẵn sàng theo lộ trình.
             </p>
           </div>
 

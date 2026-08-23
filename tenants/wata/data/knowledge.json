@@ -33,7 +33,7 @@
       "name": "NetViet AI Cố vấn Chiến lược",
       "aliases": ["AI Cố vấn", "Strategic Advisor", "AI Phân tích"],
       "unit": "module",
-      "description": "Phân tích số liệu quản trị, phát hiện bất thường thông minh (Smart Alerts) và mô phỏng kịch bản What-If."
+      "description": "Phân tích số liệu quản trị, phát hiện bất thường thông minh (Smart Alerts) và phân tích kịch bản What-If."
     },
     {
       "sku": "NV-AI-INFRA",
@@ -49,6 +49,6 @@
     { "term": "MPS", "meaning": "Master Production Schedule - Kế hoạch sản xuất tổng thể." },
     { "term": "Vision QC", "meaning": "Kiểm tra chất lượng sản phẩm tự động bằng thị giác máy tính trên chuyền sản xuất." },
     { "term": "PdM", "meaning": "Predictive Maintenance - Bảo trì dự đoán dựa trên cảm biến rung, nhiệt và dữ liệu vận hành." },
-    { "term": "What-If Simulation", "meaning": "Mô phỏng tác động của các biến động chi phí, nguyên vật liệu hoặc nhu cầu thị trường." }
+    { "term": "What-If Analysis", "meaning": "Phân tích tác động của các biến động chi phí, nguyên vật liệu hoặc nhu cầu thị trường." }
   ]
 }

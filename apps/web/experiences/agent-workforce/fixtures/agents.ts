@@ -85,7 +85,7 @@ export const AGENT_GROUPS: readonly AgentGroup[] = [
         description: 'Chấm điểm và xếp hạng mức độ ưu tiên của khách hàng tiềm năng dựa trên hồ sơ và tương tác.',
         status: 'DEMO',
         category: 'Khách hàng & Leads',
-        readinessNote: 'Đang đánh giá trên tập dữ liệu thử nghiệm phân khúc B2B.',
+        readinessNote: 'Đang đánh giá trên dữ liệu phân khúc B2B.',
       },
       {
         id: 'sales-forecast',
@@ -145,7 +145,7 @@ export const AGENT_GROUPS: readonly AgentGroup[] = [
         description: 'Quét và phát hiện các điều khoản bất lợi, sai lệch điều khoản thanh toán, phạt vi phạm hoặc bất khả kháng.',
         status: 'DEMO',
         category: 'Pháp chế & Hợp đồng',
-        readinessNote: 'Demo trích xuất các điều khoản trọng yếu và chấm điểm rủi ro.',
+        readinessNote: 'Trích xuất các điều khoản trọng yếu và chấm điểm rủi ro.',
       },
       {
         id: 'fin-ocr',
@@ -153,7 +153,7 @@ export const AGENT_GROUPS: readonly AgentGroup[] = [
         description: 'Trích xuất thông tin hóa đơn VAT, phiếu xuất kho, ủy nhiệm chi sang dữ liệu có cấu trúc.',
         status: 'DEMO',
         category: 'Kế toán & Chứng từ',
-        readinessNote: 'Chạy trên bộ mẫu chứng từ hóa đơn kế toán mô phỏng.',
+        readinessNote: 'Đang cấu hình trên chứng từ hóa đơn kế toán.',
       },
       {
         id: 'fin-debt',
@@ -213,7 +213,7 @@ export const AGENT_GROUPS: readonly AgentGroup[] = [
         description: 'Phân tích dữ liệu vận hành máy móc để cảnh báo sự cố hỏng hóc trước khi xảy ra dừng chuyền.',
         status: 'DEMO',
         category: 'Bảo trì & Thiết bị',
-        readinessNote: 'Mô phỏng phân tích tín hiệu cảm biến nhiệt/rung của cụm máy CNC.',
+        readinessNote: 'Phân tích tín hiệu cảm biến nhiệt/rung của cụm máy CNC.',
       },
       {
         id: 'mfg-inventory',
@@ -295,7 +295,7 @@ export const AGENT_GROUPS: readonly AgentGroup[] = [
     name: 'AI Cố vấn chiến lược',
     title: 'Strategic Advisory AI',
     roleDescription:
-      'Cung cấp bức tranh toàn cảnh vận hành cho ban điều hành, tổng hợp Smart Alerts cảnh báo rủi ro và mô phỏng kịch bản What-If.',
+      'Cung cấp bức tranh toàn cảnh vận hành cho ban điều hành, tổng hợp Smart Alerts cảnh báo rủi ro và phân tích kịch bản What-If.',
     status: 'AVAILABLE',
     activeTasksToday: 12,
     latencyMs: 450,
@@ -304,7 +304,7 @@ export const AGENT_GROUPS: readonly AgentGroup[] = [
     recentLogs: [
       { time: '11:45', event: 'Phát hiện 4 cảnh báo cần can thiệp trong chuỗi cung ứng và pháp chế', status: 'warn' },
       { time: '09:00', event: 'Tổng hợp báo cáo hiệu suất hoạt động 6 bộ phận tuần 33', status: 'ok' },
-      { time: '08:00', event: 'Chạy mô phỏng kịch bản tăng giá nguyên liệu đầu vào 8%', status: 'info' },
+      { time: '08:00', event: 'Phân tích kịch bản tăng giá nguyên liệu đầu vào 8%', status: 'info' },
     ],
     capabilities: [
       {
@@ -329,14 +329,14 @@ export const AGENT_GROUPS: readonly AgentGroup[] = [
         description: 'Theo dõi tỷ lệ giải ngân ngân sách so với kế hoạch và cảnh báo nguy cơ vượt trần chi phí.',
         status: 'DEMO',
         category: 'Ngân sách & Tài chính',
-        readinessNote: 'Mô phỏng đối chiếu hạn mức ngân sách phòng ban.',
+        readinessNote: 'Đối chiếu hạn mức ngân sách phòng ban.',
       },
       {
         id: 'strat-what-if',
         name: 'What-If simulation',
-        description: 'Mô phỏng tác động khi thay đổi giá bán, chi phí nguyên liệu hoặc biến động năng lực sản xuất.',
+        description: 'Phân tích tác động khi thay đổi giá bán, chi phí nguyên liệu hoặc biến động năng lực sản xuất.',
         status: 'DEMO',
-        category: 'Chiến lược & Mô phỏng',
+        category: 'Chiến lược & Phân tích kịch bản',
         readinessNote: 'Hỗ trợ tính toán tác động kịch bản trên mô hình chi phí.',
       },
     ],

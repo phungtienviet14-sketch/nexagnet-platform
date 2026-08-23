@@ -243,28 +243,6 @@
   gap: 0.75rem;
 }
 
-.wf-demo-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.22rem 0.6rem;
-  border-radius: var(--wf-radius-sm);
-  background: var(--wf-cyan-subtle);
-  border: 1px solid var(--wf-cyan-border);
-  color: var(--wf-cyan);
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.wf-demo-tag__dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--wf-cyan);
-}
-
 .wf-status-indicator {
   display: flex;
   align-items: center;

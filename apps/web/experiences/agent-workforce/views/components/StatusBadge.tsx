@@ -18,7 +18,7 @@ interface StatusBadgeProps {
 
 const LABELS: Record<string, string> = {
   AVAILABLE: 'SẴN SÀNG',
-  DEMO: 'THỬ NGHIỆM',
+  DEMO: 'ĐANG CẤU HÌNH',
   PLANNED: 'ĐỊNH HƯỚNG',
   critical: 'Khẩn cấp',
   warning: 'Cảnh báo',

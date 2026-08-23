@@ -85,7 +85,7 @@ export function DirectoryView({
           </div>
           <div className="wf-summary-stat">
             <span className="wf-summary-stat__val wf-summary-stat__val--demo">{demoCaps}</span>
-            <span className="wf-summary-stat__lbl">Thử nghiệm</span>
+            <span className="wf-summary-stat__lbl">Đang cấu hình</span>
           </div>
           <div className="wf-summary-stat">
             <span className="wf-summary-stat__val wf-summary-stat__val--plan">{plannedCaps}</span>
@@ -259,7 +259,7 @@ export function DirectoryView({
                       className={`wf-filter-chip ${statusFilter === 'DEMO' ? 'wf-filter-chip--active' : ''}`}
                       onClick={() => setStatusFilter('DEMO')}
                     >
-                      Thử nghiệm ({selectedAgent.capabilities.filter((c) => c.status === 'DEMO').length})
+                      Đang cấu hình ({selectedAgent.capabilities.filter((c) => c.status === 'DEMO').length})
                     </button>
                     <button
                       type="button"
