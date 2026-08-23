@@ -7,6 +7,7 @@ import type { AgentGroup, AgentGroupId, SmartAlert } from '../services/types';
 import { ActivityChart } from './components/ActivityChart';
 import { AgentCard } from './components/AgentCard';
 import { KpiCard } from './components/KpiCard';
+import { OverviewCharts } from './components/OverviewCharts';
 import { StatusBadge } from './components/StatusBadge';
 
 interface ControlPlaneViewProps {
@@ -110,6 +111,8 @@ export function ControlPlaneView({
           onClick={onNavigateToOperations}
         />
       </section>
+
+      {activities.length > 0 && <OverviewCharts activities={activities} alerts={alerts} />}
 
       {/* Split Section: Activity Chart + Human Attention Queue */}
       <section className="wf-section-split">
