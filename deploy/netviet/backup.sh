@@ -55,9 +55,51 @@ for database in zalo flowise; do
   test -s "${TMP_DIR}/${database}-${STAMP}.dump"
 done
 
+# --- WORKFLOW ENGINE (Hatchet) ------------------------------------------------------------------
+# HAM RIENG, co y KHONG nhet vao vong `for database in zalo flowise` o tren: engine chay tren mot
+# service khac, mot PostgreSQL khac, mot bo dang nhap khac. Gop vao se buoc vong do phai biet ve
+# mot thu khong lien quan toi no.
+backup_workflow_engine() {
+  local container
+  container="$("${COMPOSE[@]}" --profile workflow ps -q hatchet-postgres 2>/dev/null | head -n 1)"
+  # Stack khong bat engine thi khong co gi de sao luu — day la duong BINH THUONG cua moi khach
+  # chua dung workflow, khong phai mot loi can bao.
+  [[ -n "${container}" ]] || return 0
+
+  "${COMPOSE[@]}" --profile workflow exec -T hatchet-postgres \
+    pg_dump --username hatchet --format=custom --no-owner --dbname hatchet \
+    >"${TMP_DIR}/hatchet-${STAMP}.dump"
+  test -s "${TMP_DIR}/hatchet-${STAMP}.dump"
+
+  # ⚠️ VOLUME `hatchet-config` PHAI DI CUNG DUMP — day la phan de bi bo sot nhat ca file nay.
+  #
+  # DA KIEM tren engine that (v0.101.27, 23/08/2026): `/hatchet/config/server.yaml` chua
+  #     encryption.masterKeyset
+  #     encryption.jwt.privateJWTKeyset / publicJWTKeyset
+  # Mat tep do thi:
+  #   · du lieu da ma hoa trong dump KHONG giai ma lai duoc, du restore Postgres thanh cong, va
+  #   · moi token da phat deu het hieu luc vi khoa ky JWT bien mat.
+  # Tuc la mot backup chi co dump Postgres la BACKUP VO DUNG — no se PHUC HOI XANH roi khong doc
+  # duoc gi. Chua tai lieu nao trong repo ghi dieu nay truoc 23/08/2026.
+  #
+  # Tar chay BEN TRONG container engine (busybox tar co san) nen khong phai keo them image nao va
+  # khong phai doan ten volume theo compose project.
+  #
+  # Tep nay MANG BI MAT (khoa ma hoa). No di vao cung bucket rieng tu voi cac dump khac, va phai
+  # duoc doi xu nhu bi mat — khong phai nhu "mot tep cau hinh".
+  "${COMPOSE[@]}" --profile workflow exec -T hatchet-engine \
+    tar czf - -C /hatchet/config . >"${TMP_DIR}/hatchet-config-${STAMP}.tar.gz"
+  test -s "${TMP_DIR}/hatchet-config-${STAMP}.tar.gz"
+}
+backup_workflow_engine
+
 if [[ "${VERIFY_RESTORE:-0}" == "1" ]]; then
   "${APP_DIR}/restore-check.sh" zalo "${TMP_DIR}/zalo-${STAMP}.dump"
   "${APP_DIR}/restore-check.sh" flowise "${TMP_DIR}/flowise-${STAMP}.dump"
+  # Chi kiem khi stack that su co engine — `backup_workflow_engine` tu bo qua thi khong co dump.
+  if [[ -s "${TMP_DIR}/hatchet-${STAMP}.dump" ]]; then
+    "${APP_DIR}/restore-check.sh" hatchet "${TMP_DIR}/hatchet-${STAMP}.dump"
+  fi
 fi
 
 sha256sum "${TMP_DIR}"/*.dump >"${TMP_DIR}/SHA256SUMS"

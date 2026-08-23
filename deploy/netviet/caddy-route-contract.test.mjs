@@ -257,6 +257,13 @@ test('every process that mutates compose takes the shared lock', async () => {
     'health-check.sh': await readFile(new URL('./health-check.sh', import.meta.url), 'utf8'),
     'rollback.sh': await readFile(new URL('./rollback.sh', import.meta.url), 'utf8'),
     'set-channel-mode.sh': setChannelMode,
+    // Duc token cho workflow engine cung `docker compose up` cum Hatchet, nen no la mot tien
+    // trinh SUA compose — phai xep cung hang khoa. Thieu no o day thi bao dam nay im lang khong
+    // phu script moi nhat.
+    'bootstrap-workflow-engine.sh': await readFile(
+      new URL('./bootstrap-workflow-engine.sh', import.meta.url),
+      'utf8',
+    ),
   };
 
   for (const [name, source] of Object.entries(scripts)) {
@@ -392,11 +399,17 @@ test('du lieu khach den tu volume mount, khong nam trong image', async () => {
   // Build context khong co `tenants/` -> khong `COPY` nao cham toi duoc, ke ca `COPY . .`.
   assert.match(dockerignore, /^tenants$/m);
 
-  // Ca api lan web deu doc goi tu volume chi-doc, khong tu trong image.
-  assert.equal(compose.match(/^\s*TENANT_DIR: \/srv\/tenant$/gm)?.length, 2);
-  // BA mount: api, web, va `bootstrap` — smoke-test.mjs chay trong bootstrap va doc tin nhan mau
-  // tu goi khach (cau don hop le phu thuoc SKU/dai ly rieng tung khach).
-  assert.equal(compose.match(/^\s*- \.\/tenant-pack:\/srv\/tenant:ro$/gm)?.length, 3);
+  // BA tien trinh doc goi tu volume chi-doc, khong tu trong image: `api`, `web`, va
+  // `workflow-worker-v1`. Worker can goi khach vi `activeWorkflowEngine()` phai biet khach nay
+  // rang buoc khuon nao va `credentialRef` tro toi bien moi truong nao.
+  assert.equal(compose.match(/^\s*TENANT_DIR: \/srv\/tenant$/gm)?.length, 3);
+  // BON mount: api, web, `bootstrap` va `workflow-worker-v1`. `bootstrap` co mat vi smoke-test.mjs
+  // chay trong do va doc tin nhan mau tu goi khach (cau don hop le phu thuoc SKU/dai ly rieng
+  // tung khach).
+  //
+  // DEM SO chu khong chi kiem "co ton tai" la CO Y: them mot tien trinh doc goi khach phai la mot
+  // quyet dinh duoc noi ra o day, khong phai mot dong `volumes:` lang le trong mot lan review.
+  assert.equal(compose.match(/^\s*- \.\/tenant-pack:\/srv\/tenant:ro$/gm)?.length, 4);
 
   // Goi khach phai co mat tren VM truoc khi stack len, va thieu thi dung han chu khong boot rong.
   assert.match(deployRemote, /tenant-pack\/tenant\.json/);

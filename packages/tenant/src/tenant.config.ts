@@ -15,6 +15,11 @@ import {
   type TenantContentManifest,
   type TenantKnowledge,
 } from './tenant.schema.js';
+import {
+  NO_WORKFLOW_ENGINE,
+  type WorkflowBinding,
+  type WorkflowEngineIntegration,
+} from './workflow-binding.schema.js';
 
 /**
  * Nap GOI KHACH (`tenants/<slug>/`) — ranh gioi giua NEN TANG dung chung va DU LIEU rieng cua
@@ -279,6 +284,21 @@ export function tenantErp(): NonNullable<TenantConfig['integrations']['erp']> {
 }
 
 /** Blocker do tenant khai bao de health/settings hien thi ma core khong biet ten khach. */
+/**
+ * Rang buoc workflow cua khach. Khach khong khai bao -> `NO_WORKFLOW_ENGINE` (fail-closed),
+ * KHONG nem: mot khach khong dung workflow engine phai boot binh thuong.
+ */
+export function tenantWorkflowEngine(): WorkflowEngineIntegration {
+  return loadTenantConfig().integrations.workflowEngine ?? NO_WORKFLOW_ENGINE;
+}
+
+/** Rang buoc DANG BAT cho mot khuon workflow. `undefined` = khach khong chay khuon nay. */
+export function tenantWorkflowBinding(workflowKey: string): WorkflowBinding | undefined {
+  const integration = tenantWorkflowEngine();
+  if (integration.adapter === 'none') return undefined;
+  return integration.bindings.find((binding) => binding.key === workflowKey && binding.enabled);
+}
+
 export function tenantReadiness(): TenantConfig['policies']['readiness'] {
   return loadTenantConfig().policies.readiness;
 }

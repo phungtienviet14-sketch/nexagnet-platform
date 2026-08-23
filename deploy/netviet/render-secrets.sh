@@ -44,6 +44,14 @@ HOST_SUFFIX="${PUBLIC_IP_LABEL}.sslip.io"
 DEMO_DOMAIN="demo-${STACK_SLUG}.${HOST_SUFFIX}"
 OPERATOR_DOMAIN="operator-${STACK_SLUG}.${HOST_SUFFIX}"
 FLOWISE_DOMAIN="flowise-${STACK_SLUG}.${HOST_SUFFIX}"
+# DASHBOARD CUA WORKFLOW ENGINE. KHONG co alias "tran" nhu demo/operator/flowise, va do la co y:
+# engine la thu MOI, khong co ten mien cu nao dang chay de phai giu tuong thich. Mot ten it hon la
+# mot be mat cong khai it hon.
+#
+# Ten nay chi duoc PHAT THANH ROUTE khi `WORKFLOW_ENGINE=on` (xem cuoi file). Neu phat vo dieu
+# kien thi moi khach deu moc them mot hostname cong khai tra 502, va Caddy se di xin chung chi
+# ACME cho mot ten khong phuc vu gi — vua ton han muc Let's Encrypt vua lo ra mot be mat that.
+WORKFLOW_DOMAIN="workflow-${STACK_SLUG}.${HOST_SUFFIX}"
 DEMO_ALIASES=''
 OPERATOR_ALIASES=''
 FLOWISE_ALIASES=''
@@ -107,6 +115,59 @@ fi
 ZALO_BOT_TOKEN="$(optional_secret zalo-${STACK_SLUG}-zalo-bot-token)"
 CHANNEL_MODE="$("${SCRIPT_DIR}/channel-mode.sh" read "${RUNTIME_DIR}/channel-mode.env")"
 echo "render-secrets: CHANNEL_MODE=${CHANNEL_MODE} (zca mac dinh cho pilot GĐ1)." >&2
+# --- WORKFLOW ENGINE (Hatchet) -----------------------------------------------------------------
+# CONG TAC VAN HANH, MAC DINH TAT — quyet dinh Q1-A.
+#
+# `deploy-remote.sh:108` rsync CUNG MOT `tenant-pack` cho `zalo-ultty` (production) lan
+# `zalo-ultty-gd1-test`. Nen goi khach mot minh no KHONG tach duoc hai moi truong: khai
+# `integrations.workflowEngine` de bat cho gd1-test se dong thoi vu trang dispatcher tren
+# production o lan deploy ke tiep. Bien nay lam viec do — cung khuon `AUTO_SEND` (CLAUDE.md QD#4:
+# kill switch van hanh KHONG phai noi chua policy tenant).
+#
+# Mac dinh `off` la ca diem: mot cong tac mac dinh `on` khong bao ve duoc gi.
+WORKFLOW_ENGINE="${WORKFLOW_ENGINE:-off}"
+WORKFLOW_ENGINE_NAMESPACE="${WORKFLOW_ENGINE_NAMESPACE:-}"
+# TEN SECRET MANG STACK SLUG — do la cach ly o TANG BI MAT, dung mot lop voi ten volume va alias
+# mang. `zalo-ultty-hatchet-db-password` va `zalo-ultty-gd1-test-hatchet-db-password` la hai thu
+# khac nhau, nen hai stack khong the vo tinh dung chung mot Postgres cua engine.
+HATCHET_DB_PASSWORD="$(optional_secret zalo-${STACK_SLUG}-hatchet-db-password)"
+# VONG GA-TRUNG CUA TOKEN: token chi ton tai SAU khi engine da migrate + quickstart, nen o lan
+# deploy DAU TIEN no khong the co san trong Secret Manager. `optional_secret` de lan dau khong
+# chet; `bootstrap-workflow-engine.sh` duc token roi day len, va lan render sau moi co gia tri.
+WORKFLOW_ENGINE_TOKEN="$(optional_secret zalo-${STACK_SLUG}-workflow-engine-token)"
+# Bam bcrypt cho CONG THU HAI truoc dashboard (`caddy hash-password`). Hatchet co dang nhap rieng,
+# nhung dashboard co nut Replay — no CHAY LAI TAC DUNG PHU, va Hatchet khong biet gi ve ba muc an
+# toan o `operation-key.ts`. Mot lop nua truoc mot nut nhu the la dang gia.
+WORKFLOW_DASHBOARD_HTPASSWD="$(optional_secret zalo-${STACK_SLUG}-workflow-dashboard-htpasswd)"
+
+if [[ "${WORKFLOW_ENGINE}" == 'on' ]]; then
+  # CHI `gd1-test` DUOC PHEP BAT. Day la cai chan cuoi cung, va no o day vi cong tac mot minh no
+  # chua du: cong tac bao ve khoi "bat nham vi goi khach khai binding", nhung khong bao ve khoi
+  # "go nham ten moi truong khi deploy". `tenants/ultty/tenant.json` dung CHUNG cho ca hai stack,
+  # nen mot lan `WORKFLOW_ENGINE=on ./render-secrets.sh` chay nham vao `production` se vu trang
+  # dispatcher tren stack that cua khach — noi khong co engine nao de goi.
+  #
+  # Chan o TANG RENDER chu khong phai tang code: den luc code chay thi bien da nam trong
+  # secrets.env roi, va container khong biet no dang phuc vu moi truong nao ngoai mot cai nhan.
+  if [[ "${DEPLOYMENT_ENVIRONMENT}" != 'gd1-test' ]]; then
+    echo "WORKFLOW_ENGINE=on chi duoc phep cho DEPLOYMENT_ENVIRONMENT=gd1-test" >&2
+    echo "(dang la '${DEPLOYMENT_ENVIRONMENT}', stack ${STACK_SLUG})." >&2
+    exit 64
+  fi
+  # FAIL-CLOSED. "Bat engine nhung khong co mat khau DB" va "bat dashboard nhung khong co cong
+  # xac thuc" deu la cau hinh sai co hau qua bao mat — dung han o day, khong deploy roi vam.
+  [[ -n "${HATCHET_DB_PASSWORD}" ]] || {
+    echo "WORKFLOW_ENGINE=on nhung thieu secret zalo-${STACK_SLUG}-hatchet-db-password." >&2
+    exit 78
+  }
+  [[ -n "${WORKFLOW_DASHBOARD_HTPASSWD}" ]] || {
+    echo "WORKFLOW_ENGINE=on nhung thieu secret zalo-${STACK_SLUG}-workflow-dashboard-htpasswd." >&2
+    echo "Sinh bang: docker run --rm caddy:2-alpine caddy hash-password --plaintext '<mat khau>'" >&2
+    exit 78
+  }
+  echo "render-secrets: WORKFLOW_ENGINE=on cho stack ${STACK_SLUG}." >&2
+fi
+
 AUTO_SEND="${AUTO_SEND:-on}"
 PARSER_MODE="${PARSER_MODE:-deepseek}"
 DATA_CLASSIFICATION="${DATA_CLASSIFICATION:-test}"
@@ -212,6 +273,17 @@ GCP_PROJECT_ID=${PROJECT_ID}
 DEMO_DOMAIN=${DEMO_DOMAIN}
 OPERATOR_DOMAIN=${OPERATOR_DOMAIN}
 FLOWISE_DOMAIN=${FLOWISE_DOMAIN}
+# WORKFLOW ENGINE. Ca nam bien deu di DU BA TANG (render -> block \`environment:\` cua dung service
+# -> secrets-passthrough.contract.test.mjs). Bo mot tang = tinh nang im lang khong chay; da xay ra
+# that voi \`ADVICE_COMPOSER\` va voi \`DEPLOYMENT_ENVIRONMENT\`.
+#
+# \`WORKFLOW_DASHBOARD_HTPASSWD\` CO Y khong nam o day: no la cau hinh cua EDGE, di thang vao manh
+# Caddy ben duoi. Dua mot bam mat khau vao secrets.env la phat no cho MOI container cua stack.
+WORKFLOW_ENGINE=${WORKFLOW_ENGINE}
+WORKFLOW_ENGINE_NAMESPACE=${WORKFLOW_ENGINE_NAMESPACE}
+WORKFLOW_ENGINE_TOKEN=${WORKFLOW_ENGINE_TOKEN}
+HATCHET_DB_PASSWORD=${HATCHET_DB_PASSWORD}
+WORKFLOW_DOMAIN=${WORKFLOW_DOMAIN}
 POSTGRES_ADMIN_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
 ZALO_DB_PASSWORD=${ZALO_DB_PASSWORD}
 FLOWISE_DB_PASSWORD=${FLOWISE_DB_PASSWORD}
@@ -274,6 +346,35 @@ ${FLOWISE_DOMAIN}${FLOWISE_ALIASES:+, ${FLOWISE_ALIASES}} {
 	}
 }
 EOF
+
+# DASHBOARD CUA WORKFLOW ENGINE — CHI phat route khi cong tac BAT.
+#
+# Day la duong RA NGOAI DUY NHAT cua ca cum Hatchet: engine va Postgres cua no nam tren mang
+# `internal: true` va khong service nao co khoi `ports:`. Do cung la ly do quyet dinh Q2-A dung
+# duoc — gRPC noi bo chay khong TLS vi no KHONG DI QUA RANH GIOI HOST NAO, chu khong phai vi
+# "day khong phai production". `workflow-isolation.contract.test.mjs` ep dung ranh gioi do.
+#
+# HAI CONG chu khong mot: `basic_auth` o edge, roi dang nhap cua chinh Hatchet. Ly do khong phai
+# "bao mat theo lop" chung chung — dashboard co nut REPLAY chay lai tac dung phu, va Hatchet
+# khong biet gi ve ba muc an toan trong `operation-key.ts`. Sale nhan vai VIEWER (runbook §4.4).
+#
+# `Set-Cookie ... Secure` KHONG duoc them o day (khac route Flowise): Hatchet tu gan co Secure vi
+# compose dat `SERVER_AUTH_COOKIE_INSECURE=f`. Them lan hai se sinh ra cookie co hai chu `Secure`.
+if [[ "${WORKFLOW_ENGINE}" == 'on' ]]; then
+  cat >>"${tenant_site}" <<EOF
+
+${WORKFLOW_DOMAIN} {
+	import secure_headers
+	basic_auth {
+		operator ${WORKFLOW_DASHBOARD_HTPASSWD}
+	}
+	# :80 la nginx cua image dashboard — no phuc vu giao dien VA proxy \`/api\` sang tien trinh
+	# \`hatchet-api\` chay cung container tren :8080 (da kiem bang \`ps\` trong container).
+	reverse_proxy hatchet-${STACK_SLUG}:80
+}
+EOF
+fi
+
 # Manh nay mang API key cua khach, nen doi xu nhu secret chu khong nhu cau hinh.
 chmod 600 "${tenant_site}"
 

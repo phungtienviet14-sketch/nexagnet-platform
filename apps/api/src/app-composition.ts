@@ -79,6 +79,7 @@ import { SettingsController } from './settings/settings.controller.js';
 import { SettingsQueryService } from './settings/settings-query.service.js';
 import { SourceTruthWriteService } from './settings/source-truth-write.service.js';
 import { StreamController } from './stream/stream.controller.js';
+import { WorkflowModule } from './workflow/workflow.module.js';
 import { tenantCampaignConfig } from '@netviet/tenant';
 
 type CapabilityOwner = CapabilityId | 'foundation';
@@ -97,6 +98,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   owned('messaging', GroupParticipantsModule),
   owned('knowledge', ContentModule),
   owned('foundation', ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }])),
+  // `foundation`, cung ly do voi ObservabilityModule: ban giao ben vung la nang luc ma BAT KY
+  // mien nao cung co the can. Khach khong khai bao `integrations.workflowEngine` van nap module
+  // nay va nhan cong VO HIEU HOA — boot binh thuong, dispatcher khong khoi dong.
+  owned('foundation', WorkflowModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [

@@ -219,6 +219,25 @@ services:
       RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}
       RELEASE_APP_DIGEST: ${RELEASE_APP_DIGEST:-}
       RELEASE_DEPLOYED_AT: ${RELEASE_DEPLOYED_AT:-}
+      # WORKFLOW ENGINE — phia NEXAGNET (xep hang + dispatcher). Tien trinh worker la mot service
+      # RIENG o cuoi file; day chi la ben GUI VIEC DI.
+      #
+      # `WORKFLOW_ENGINE` MAC DINH `off`, va do la ca diem cua quyet dinh Q1-A: `deploy-remote.sh`
+      # rsync CUNG MOT `tenant-pack` cho `zalo-ultty` (production) lan `zalo-ultty-gd1-test`, nen
+      # goi khach mot minh no khong tach duoc hai moi truong. Cong tac lam viec do. Mot cong tac
+      # mac dinh `on` khong bao ve duoc gi.
+      #
+      # KHONG co `depends_on` toi `hatchet-engine` o day, va do la CO Y: `api` khong mang profile
+      # nao, nen mot `depends_on` toi service co profile se KEO CA CUM HATCHET LEN moi lan deploy
+      # — dung cai ma `profiles: ["workflow"]` sinh ra de tranh. `api` boot duoc ma khong can
+      # engine vi cong Hatchet khoi tao TRE (W9 do dieu do tren do thi Nest that).
+      WORKFLOW_ENGINE: ${WORKFLOW_ENGINE:-off}
+      WORKFLOW_ENGINE_TOKEN: ${WORKFLOW_ENGINE_TOKEN:-}
+      # GHI CUNG, khong phai bien — xem ly do day du o service `workflow-worker-v1`.
+      WORKFLOW_ENGINE_HOST_PORT: hatchet-engine:7070
+      WORKFLOW_ENGINE_TLS_STRATEGY: none
+      WORKFLOW_ENGINE_DASHBOARD_URL: https://${WORKFLOW_DOMAIN}
+      WORKFLOW_ENGINE_NAMESPACE: ${WORKFLOW_ENGINE_NAMESPACE:-}
     command:
       - sh
       - -ec
@@ -287,9 +306,273 @@ services:
         aliases:
           - web-${STACK_SLUG:-${TENANT_SLUG}}
 
+  # ==========================================================================================
+  # WORKFLOW ENGINE (Hatchet) — TOAN BO CUM NAY NAM SAU `profiles: ["workflow"]`.
+  #
+  # `zalo-ultty` (production) KHONG duoc moc them 6 container vi mot tinh nang chua ai bat.
+  # Compose chi dung toi nhom nay khi co `--profile workflow`, va `deploy-stack.sh` chi truyen co
+  # do khi `WORKFLOW_ENGINE=on`. Do la MOT NUA cua quyet dinh Q1-A; nua kia la cong tac trong
+  # `apps/api/src/workflow/workflow-engine-switch.ts` (mac dinh `off`, ep boi ca W9-B1).
+  #
+  # KHONG COPY compose cua POC (`tools/poc-workflow-engine/compose/hatchet.compose.yml`). Ban do
+  # co ba thu khong duoc phep len production, va ca ba deu co chu dich o CHO CUA NO:
+  #   1. `ports:` publish 5744/7744/8744 ra host — nhieu khach tren mot VM se gianh cong nhau;
+  #   2. mat khau `hatchet/hatchet` viet thang trong file;
+  #   3. `SERVER_AUTH_COOKIE_INSECURE: "t"` — cookie phien cua dashboard mat co Secure.
+  #
+  # CACH LY (D3 se bien thanh test hop dong): MOI STACK MOT ENGINE RIENG. §26 da chung minh chay
+  # duoc rang hai ban trien khai dung chung mot engine CUOP RUN cua nhau va gui du lieu cua nhau
+  # ra ngoai — do la loi cach ly du lieu, khong phai bat tien van hanh. Nen:
+  #   · `hatchet-postgres` va `hatchet-engine` chi nam tren `data` (`internal: true`);
+  #   · KHONG service nao trong cum co khoi `ports:`;
+  #   · volume khai o CHINH file nay => theo compose project => theo stack;
+  #   · dia chi engine duoc GHI CUNG `hatchet-engine:7070`, khong phai mot bien moi truong.
+  #
+  # ⚠️ VOLUME `hatchet-config` QUAN TRONG NGANG POSTGRES CUA ENGINE. `hatchet-admin quickstart`
+  # sinh cau hinh co KHOA MA HOA vao do. Mat volume nay = du lieu engine da ma hoa khong doc lai
+  # duoc, ke ca khi restore Postgres thanh cong. Backup chi dump Postgres la BACKUP VO DUNG (D6).
+  # ==========================================================================================
+
+  hatchet-postgres:
+    profiles: ["workflow"]
+    # PostgreSQL RIENG cho engine, khong dung chung voi `postgres` cua nghiep vu. 15.6 (khac 16
+    # cua nghiep vu) la CO Y: schema cua Hatchet do chinh ho migrate, va ghep chung hai vong doi
+    # nang cap vao mot server la tu buoc minh nang cap ca hai cung luc.
+    image: postgres:15.6@sha256:1ebd963e5c598f944a4e9ba27de4c95289d663dcc73731025aa53c5254094d8f
+    restart: always
+    # POC copy `max_connections=1000` tu compose chinh thuc cua Hatchet. DA DO tren engine that:
+    # engine giu 20 ket noi (12 `server`, 4 `server:pubsub`, 2 `server:ddl`), 1 active. 200 la
+    # 10x so do — con du bien khi v1 va v2 cung song luc DRAIN — ma khong bat VM tra cho 1000 khe
+    # ket noi de phuc vu 10-20 don/ngay. D7 dem RAM bang so that, nen cho nay khong duoc phong tay.
+    command: postgres -c 'max_connections=200'
+    environment:
+      POSTGRES_USER: hatchet
+      POSTGRES_PASSWORD: ${HATCHET_DB_PASSWORD}
+      POSTGRES_DB: hatchet
+    volumes:
+      - hatchet-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d hatchet -U hatchet"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - data
+
+  hatchet-migration:
+    profiles: ["workflow"]
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-migrate:v0.101.27@sha256:fcac4e42fdd18d7bdb8dd9249019cb8c7a85393496f440f3d5309a2c9e38970f
+    # MOT LAN roi thoat. `no` la mac dinh cua compose nhung viet ra day de khong ai doc nham thanh
+    # "quen dat" — ca file nay khai `restart` tuong minh cho moi service.
+    restart: "no"
+    command: /hatchet/hatchet-migrate
+    environment:
+      DATABASE_URL: postgres://hatchet:${HATCHET_DB_PASSWORD}@hatchet-postgres:5432/hatchet
+    depends_on:
+      hatchet-postgres:
+        condition: service_healthy
+    networks:
+      - data
+
+  hatchet-setup-config:
+    profiles: ["workflow"]
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-admin:v0.101.27@sha256:c5116b5c5b88d388c80423d69099436305cb0bfc088439133d1d55ecf51f56e3
+    restart: "no"
+    # `--overwrite=false` => CHAY LAI DUOC. Deploy lan hai khong duoc sinh lai khoa ma hoa: sinh
+    # lai = moi thu da ma hoa bang khoa cu tro thanh rac, va trieu chung se la "engine len binh
+    # thuong nhung khong doc duoc gi".
+    # `--skip certs` di kem quyet dinh Q2-A (tls `none` tren mang `internal: true`). Volume
+    # `hatchet-certs` van duoc mount du dang rong, de doi sang Q2-B sau nay khong phai chay lai
+    # quickstart voi mot bo volume khac.
+    command: /hatchet/hatchet-admin quickstart --skip certs --generated-config-dir /hatchet/config --overwrite=false
+    environment:
+      DATABASE_URL: postgres://hatchet:${HATCHET_DB_PASSWORD}@hatchet-postgres:5432/hatchet
+      SERVER_MSGQUEUE_KIND: postgres
+      SERVER_GRPC_BIND_ADDRESS: "0.0.0.0"
+      SERVER_GRPC_PORT: "7070"
+      # Dia chi nay duoc NHUNG VAO TOKEN luc quickstart, nen no phai la ten DNS NOI BO cua stack.
+      # Neu de `localhost:7744` nhu POC thi token phat ra chi tro dung tren may dev.
+      SERVER_GRPC_BROADCAST_ADDRESS: hatchet-engine:7070
+      SERVER_GRPC_INSECURE: "t"
+      SERVER_INTERNAL_CLIENT_INTERNAL_GRPC_BROADCAST_ADDRESS: hatchet-engine:7070
+      SERVER_URL: https://${WORKFLOW_DOMAIN}
+      SERVER_AUTH_COOKIE_DOMAIN: ${WORKFLOW_DOMAIN}
+      SERVER_AUTH_COOKIE_INSECURE: "f"
+      SERVER_SECURITY_CHECK_ENABLED: "false"
+    volumes:
+      - hatchet-certs:/hatchet/certs
+      - hatchet-config:/hatchet/config
+    depends_on:
+      hatchet-migration:
+        condition: service_completed_successfully
+      hatchet-postgres:
+        condition: service_healthy
+    networks:
+      - data
+
+  hatchet-engine:
+    profiles: ["workflow"]
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-engine:v0.101.27@sha256:b77689e3c9281284e29fee70e671d7e9c1bf5394b592e94d4f37e57c148afcd5
+    restart: always
+    command: /hatchet/hatchet-engine --config /hatchet/config
+    environment:
+      DATABASE_URL: postgres://hatchet:${HATCHET_DB_PASSWORD}@hatchet-postgres:5432/hatchet
+      SERVER_MSGQUEUE_KIND: postgres
+      SERVER_GRPC_BIND_ADDRESS: "0.0.0.0"
+      SERVER_GRPC_PORT: "7070"
+      SERVER_GRPC_BROADCAST_ADDRESS: hatchet-engine:7070
+      # Q2-A: gRPC noi bo chay `insecure`. Luu luong nay KHONG roi mot mang Docker `internal: true`
+      # tren mot VM — no khong di qua ranh gioi host nao. Ke tan cong phai da co root tren VM hoac
+      # dang thuc thi ma trong mot container CUNG STACK; luc do TLS khong cuu duoc gi, con han cert
+      # thi them mot che do hong moi ma khong co gi giam sat no. Rui ro ton du duoc ghi ra van ban
+      # va D3 ep bang test: khong `ports:`, mang `internal: true`, dashboard chi ra ngoai qua edge.
+      SERVER_GRPC_INSECURE: "t"
+      SERVER_INTERNAL_CLIENT_INTERNAL_GRPC_BROADCAST_ADDRESS: hatchet-engine:7070
+      SERVER_URL: https://${WORKFLOW_DOMAIN}
+      SERVER_AUTH_COOKIE_DOMAIN: ${WORKFLOW_DOMAIN}
+      SERVER_AUTH_COOKIE_INSECURE: "f"
+      # Tat kiem tra phien ban tu xa: mot ban trien khai rieng cua khach khong goi ra Internet de
+      # bao minh dang chay gi.
+      SERVER_SECURITY_CHECK_ENABLED: "false"
+    volumes:
+      - hatchet-certs:/hatchet/certs
+      - hatchet-config:/hatchet/config
+    depends_on:
+      hatchet-setup-config:
+        condition: service_completed_successfully
+    # Cong 8733 la may chu suc khoe RIENG cua engine — DA DO tren v0.101.27: `/live` va `/ready`
+    # tra 200, `/health` tra 404. `wget` co san trong image (da kiem), nen khong phai them gi.
+    # Neu mot ban sau nay tat may chu do mac dinh, healthcheck se do => container `unhealthy` =>
+    # NHIN THAY DUOC. Do la huong hong dung.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "-T", "3", "http://127.0.0.1:8733/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - data
+
+  hatchet-dashboard:
+    profiles: ["workflow"]
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-dashboard:v0.101.27@sha256:3fec32e19a90361af1b2a7c1a0d59886ac0fe1aaee69fe3a03bcd8890c23da66
+    restart: always
+    command: sh ./entrypoint.sh --config /hatchet/config
+    environment:
+      DATABASE_URL: postgres://hatchet:${HATCHET_DB_PASSWORD}@hatchet-postgres:5432/hatchet
+      SERVER_MSGQUEUE_KIND: postgres
+      SERVER_GRPC_BROADCAST_ADDRESS: hatchet-engine:7070
+      SERVER_GRPC_INSECURE: "t"
+      SERVER_INTERNAL_CLIENT_INTERNAL_GRPC_BROADCAST_ADDRESS: hatchet-engine:7070
+      SERVER_URL: https://${WORKFLOW_DOMAIN}
+      SERVER_AUTH_COOKIE_DOMAIN: ${WORKFLOW_DOMAIN}
+      # TLS ket thuc tai Caddy; giua edge va container nay la mang Docker. KHAC POC o dung cho
+      # nay: `f` bat co Secure tren cookie phien, nen cookie khong bao gio roi ra Internet tran.
+      SERVER_AUTH_COOKIE_INSECURE: "f"
+      SERVER_SECURITY_CHECK_ENABLED: "false"
+    volumes:
+      - hatchet-certs:/hatchet/certs
+      - hatchet-config:/hatchet/config
+    depends_on:
+      hatchet-setup-config:
+        condition: service_completed_successfully
+    # Image nay chay HAI tien trinh (da kiem bang `ps` trong container): `hatchet-api` tren :8080
+    # va nginx tren :80 phuc vu giao dien + proxy `/api`. Nen edge chi can tro toi :80.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "-T", "3", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      backend:
+        aliases:
+          # Edge di NGUOC vao mang cua khach roi goi bang alias mang slug — cung khuon
+          # `api-`/`web-`/`flowise-`. Goi bang TEN SERVICE se lap lai su co 17/08/2026: tren mot
+          # mang ma edge tham gia, moi khach deu tra loi cho cung cai ten `hatchet-dashboard`.
+          - hatchet-${STACK_SLUG:-${TENANT_SLUG}}
+      data:
+
+  workflow-worker-v1:
+    profiles: ["workflow"]
+    # CUNG IMAGE voi `api`, KHAC LENH CHAY. Mot container = MOT phien ban khuon.
+    #
+    # TEN SERVICE MANG PHIEN BAN, va do la dieu kien de thu tuc DRAIN cua runbook §2 dung duoc:
+    # `workflow-worker-v1` va `workflow-worker-v2` phai CUNG SONG trong khi
+    # REGISTER -> ACTIVATE -> DRAIN (countInFlight(v1)=0) -> DEACTIVATE -> REMOVE chay het. Neu
+    # ten service khong mang phien ban thi nang cap khuon = huy container dang phuc vu, va moi run
+    # `.v1` dang do se nam cho vinh vien.
+    image: ${APP_IMAGE}
+    restart: always
+    depends_on:
+      hatchet-engine:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # Goi khach mount ngoai image — cung ly do da ghi o service `api`.
+      TENANT_DIR: /srv/tenant
+      WORKFLOW_ENGINE: ${WORKFLOW_ENGINE:-off}
+      WORKFLOW_ENGINE_TOKEN: ${WORKFLOW_ENGINE_TOKEN:-}
+      # GHI CUNG, khong phai bien: dia chi engine la mot su that ve TOPO cua chinh file nay, va
+      # de no thanh bien chinh la lo hong ma D3 phai dong — mot gia tri sai o secrets.env se tro
+      # hai stack vao cung mot engine, dung che do hong da do o §26.
+      WORKFLOW_ENGINE_HOST_PORT: hatchet-engine:7070
+      WORKFLOW_ENGINE_TLS_STRATEGY: none
+      WORKFLOW_ENGINE_NAMESPACE: ${WORKFLOW_ENGINE_NAMESPACE:-}
+      # Bat buoc, khong co mac dinh: thieu no thi tien trinh NEM luc boot chu khong song ma
+      # khong dang ky khuon nao (`resolveWorkerRegistration`).
+      WORKFLOW_WORKER_VERSION: v1
+      WORKFLOW_WORKER_HEALTH_PORT: "8085"
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL: ${LOG_LEVEL:-log}
+      TELEMETRY_PRIVACY: ${TELEMETRY_PRIVACY:-}
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-}
+      RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}
+      RELEASE_APP_DIGEST: ${RELEASE_APP_DIGEST:-}
+      RELEASE_DEPLOYED_AT: ${RELEASE_DEPLOYED_AT:-}
+    command: ["node", "apps/api/dist/workflow/worker-main.js"]
+    volumes:
+      - ./tenant-pack:/srv/tenant:ro
+    # KHONG CO `ports:` — co y, va `worker-health.server.ts` ghi ro dieu do: may chu suc khoe nghe
+    # 127.0.0.1 BEN TRONG container vi healthcheck cua Docker cung chay ben trong. Mot khoi
+    # `ports:` o day se mo cho tu moi container khac tren stack vao.
+    #
+    # `start_period: 90s` la BIEN AN TOAN, khong phai so do readiness: no phai bao duoc lan do te
+    # nhat cua §29 (38 s cho CA tien trinh len — nap SDK, boot Nest, ket noi), chu khong phai cua
+    # so hep 316-343 ms giua `hatchet.worker()` va `waitUntilReady()`.
+    #
+    # `/ready` 200 CHI khi READY (va DEGRADED trong thoi gian an han). Mat engine sau READY thi
+    # tien trinh KHONG thoat — Compose khong tu restart container `unhealthy`, nen cap gia tri nay
+    # cho ra HONG NHIN THAY DUOC ma khong phai mot con bao restart.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8085/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 90s
+    networks:
+      # `data` de goi engine. `backend` KHONG phai cho tien: `data` khai `internal: true` nen mot
+      # container chi nam tren do KHONG CO duong ra Internet, ma cac buoc ban giao phai goi duoc
+      # diem cuoi ben ngoai (`WORKFLOW_DESTINATION_*`, D5) va diem cuoi trung lap cua D9.
+      # Do la ly do DUY NHAT worker co mat tren `backend` — dung xoa vi thay "khong dung toi".
+      - backend
+      - data
+
 volumes:
   postgres-data:
   flowise-data:
+  # Ba volume cua engine. CA BA deu phai vao backup (D6), khong chi cai dau: `hatchet-config` giu
+  # khoa ma hoa, nen dump Postgres ma mat config thi restore ra du lieu khong giai ma duoc.
+  hatchet-postgres-data:
+  hatchet-config:
+  hatchet-certs:
 
 networks:
   # KHONG khach nao dung chung mang voi khach nao.

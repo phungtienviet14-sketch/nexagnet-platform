@@ -75,7 +75,22 @@
     "channel": { "allowedAdapters": ["mock", "bot", "zca", "hybrid"] },
     "parser": { "allowedAdapters": ["deepseek", "claude", "flowise"] },
     "erp": { "adapter": "kiotviet_mock" },
-    "contentSource": { "adapter": "local_manifest" }
+    "contentSource": { "adapter": "local_manifest" },
+    "workflowEngine": {
+      "adapter": "hatchet",
+      "credentialRef": "WORKFLOW_ENGINE_TOKEN",
+      "bindings": [
+        {
+          "key": "integration-handoff",
+          "version": "v1",
+          "enabled": true,
+          "destination": "proof-endpoint",
+          "idempotency": "key",
+          "operationVersion": 1,
+          "retry": { "maxAttempts": 5, "baseBackoffSeconds": 1 }
+        }
+      ]
+    }
   },
   "smoke": {
     "orderText": "HN_31.7_Meta HN, 2 x Ghe Felix",

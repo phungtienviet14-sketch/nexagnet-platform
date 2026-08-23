@@ -82,6 +82,36 @@ done
 # ghi de thu Sale da sua qua /admin.
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/netviet/seed-tenant-knowledge.mjs
+# WORKFLOW ENGINE — dung TRUOC `api`, va CHI khi cong tac bat.
+#
+# `--profile workflow` la thu duy nhat lam cum Hatchet ton tai. Stack khong bat thi doan nay khong
+# chay va compose tham chi khong biet toi 6 service do — production `zalo-ultty` giu nguyen 5
+# container nhu truoc.
+#
+# VI SAO TRUOC `api`: api la ben GUI VIEC DI. Neu api len truoc engine thi `WorkflowScheduler` tick
+# moi 5 giay va that bai vai lan roi moi thanh cong. Do khong lam hong du lieu (hang outbox con
+# nguyen, dispatcher co lease) nhung no do mot vet loi vao log ngay lan deploy, va nguoi truc se
+# di tim mot su co khong co that.
+#
+# KHONG dung `--force-recreate` o day: worker dang phuc vu run cua phien ban no, va huy no giua
+# chung la dung che do hong ma `worker-main.ts` duoc tach ra de tranh. Nang phien ban khuon di
+# theo thu tuc REGISTER -> ACTIVATE -> DRAIN -> DEACTIVATE -> REMOVE cua runbook §2, khong theo
+# mot lan deploy.
+workflow_engine="$(runtime_value WORKFLOW_ENGINE)"
+if [[ "${workflow_engine}" == 'on' ]]; then
+  if [[ -z "$(runtime_value WORKFLOW_ENGINE_TOKEN)" ]]; then
+    echo "WORKFLOW_ENGINE=on nhung secrets.env chua co WORKFLOW_ENGINE_TOKEN." >&2
+    echo "Chay bootstrap-workflow-engine.sh (duc token) roi render-secrets.sh, roi chay lai." >&2
+    exit 78
+  fi
+  # `--wait` doi HEALTHY chu khong chi doi "da tao". Worker co `start_period: 90s` nen han 300s la
+  # bien an toan quanh lan do te nhat cua §29 (38 s cho ca tien trinh len), khong phai mot con so
+  # tron cho dep.
+  "${COMPOSE[@]}" --profile workflow up -d --wait --wait-timeout 300 \
+    hatchet-engine hatchet-dashboard workflow-worker-v1
+  "${COMPOSE[@]}" --profile workflow ps
+fi
+
 # Always recreate the application processes before injecting a smoke message. Pilot GĐ1 khoi dong
 # lai voi AUTO_SEND=on; smoke-test.mjs nhan ra kenh Zalo that va TUYET DOI khong approve fixture,
 # nen khong co tin thu nao bi gui vao nhom that.

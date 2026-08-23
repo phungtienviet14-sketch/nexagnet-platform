@@ -1,0 +1,106 @@
+{
+  "strategy": "versioned",
+  "startedAt": "2026-08-22T10:04:19.930Z",
+  "workflowKey": "version-spike",
+  "runs": [
+    {
+      "label": "B-new",
+      "runId": "6b435e27-6593-4456-9811-d7d73cf60e45",
+      "workflowName": "version-spike.v2",
+      "steps": [
+        {
+          "taskName": "begin",
+          "engineVersion": "v2",
+          "workerName": "spike-worker-versioned-v2",
+          "workflowName": "version-spike.v2"
+        }
+      ],
+      "status": "RUNNING"
+    },
+    {
+      "label": "A-old",
+      "runId": "03076458-351d-4201-80d9-35cd3a7784c3",
+      "workflowName": "version-spike.v1",
+      "steps": [
+        {
+          "taskName": "finish",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-versioned-v1",
+          "workflowName": "version-spike.v1"
+        },
+        {
+          "taskName": "resume",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-versioned-v1",
+          "workflowName": "version-spike.v1"
+        },
+        {
+          "taskName": "park",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-versioned-v1",
+          "workflowName": "version-spike.v1"
+        },
+        {
+          "taskName": "begin",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-versioned-v1",
+          "workflowName": "version-spike.v1"
+        }
+      ],
+      "status": "COMPLETED"
+    },
+    {
+      "label": "C-orphan",
+      "runId": "c3eed5a8-a682-4b0a-a76b-5579b93415ba",
+      "workflowName": "version-spike.v1",
+      "steps": [
+        {
+          "taskName": "begin",
+          "engineVersion": "v1",
+          "workerName": "spike-worker-versioned-v1",
+          "workflowName": "version-spike.v1"
+        }
+      ],
+      "status": "RUNNING"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "2",
+      "name": "run A dung lai o buoc cho ben vung",
+      "pass": true,
+      "detail": "runId=03076458-351d-4201-80d9-35cd3a7784c3"
+    },
+    {
+      "id": "4",
+      "name": "run MOI chay code v2",
+      "pass": true,
+      "detail": "begin=v2"
+    },
+    {
+      "id": "6",
+      "name": "MOI buoc cua run cu chay code v1",
+      "pass": true,
+      "detail": "finish=v1 resume=v1 park=v1 begin=v1"
+    },
+    {
+      "id": "7",
+      "name": "worker v1 da xa het viec truoc khi rut",
+      "pass": true,
+      "detail": "con 0 run chua ket thuc"
+    },
+    {
+      "id": "8",
+      "name": "tat worker cu khong lam hong lich su run cu",
+      "pass": true,
+      "detail": "4 buoc, status=COMPLETED"
+    },
+    {
+      "id": "9",
+      "name": "worker v1 bien mat -> run cu NAM CHO, khong bi code v2 cuop",
+      "pass": true,
+      "detail": "begin=v1  status=RUNNING"
+    }
+  ],
+  "verdict": "PASS"
+}

@@ -505,22 +505,22 @@ model ContentReadiness {
 // ----- Tin nhan & don (tuan thu: luu MOI tin ngay khi nhan) -----
 
 model Message {
-  id                String    @id @default(cuid())
+  id                String         @id @default(cuid())
   externalMessageId String
-  platform          String    @default("zalo")
+  platform          String         @default("zalo")
   source            String // zca_listener | bot | copilot
   chatId            String
   groupId           String?
-  group             Group?    @relation(fields: [groupId], references: [id])
+  group             Group?         @relation(fields: [groupId], references: [id])
   senderExternalId  String?
   senderDisplayName String?
   text              String
   // Pha 1 (18/08/2026) — huong tin: 'inbound' = khach/dai ly gui vao, 'outbound' = he thong gui ra.
   // Cot da ton tai tren DB tu migration 20260815140000_message_direction; truoc do schema thieu
   // field nay nen `prisma migrate dev` se sinh migration DROP cot. Dung xoa.
-  direction         String    @default("inbound")
+  direction         String         @default("inbound")
   // Vai nguoi gui, de dung lai lich su hoi thoai co nhan cho LLM. 'customer' | 'bot' | 'sale'.
-  senderRole        String    @default("customer")
+  senderRole        String         @default("customer")
   imageUrl          String?
   // Dot A' Task 2 — anh da TAI VE kho ben vung. `imageUrl` la link Zalo, chet sau <=35 ngay
   // (Zalo xoa object phia server); `mediaKey` moi la thu con lai sau do.
@@ -530,7 +530,7 @@ model Message {
   mediaFetchedAt    DateTime?
   mediaError        String?
   sentAt            DateTime
-  receivedAt        DateTime  @default(now())
+  receivedAt        DateTime       @default(now())
   raw               Json?
   orders            Order[] // legacy first-message relation
   orderProvenance   OrderMessage[]
@@ -600,22 +600,22 @@ model OrderMessage {
 /// `draft` la JSON cua `OrderDraft` (don NUA VOI). Khong tach thanh bang dong hang: no la trang
 /// thai tam, song vai chuc phut roi chot thanh `Order` — bang con chi them viec don dep.
 model ConversationThread {
-  id               String   @id @default(cuid())
-  chatId           String
-  senderExternalId String
+  id                String   @id @default(cuid())
+  chatId            String
+  senderExternalId  String
   senderDisplayName String?
   /// collecting | awaiting_answer | closed | handed_off
-  status           String   @default("collecting")
-  draft            Json
+  status            String   @default("collecting")
+  draft             Json
   /// Slot dang cho khach tra loi: product | quantity | recipient
-  awaitingSlots    String[] @default([])
-  askCount         Int      @default(0)
-  lastQuestion     String?
-  lastOrderId      String?
+  awaitingSlots     String[] @default([])
+  askCount          Int      @default(0)
+  lastQuestion      String?
+  lastOrderId       String?
   /// Qua moc nay, tin sau mo mach MOI — khong ke thua don nhap cu.
-  expiresAt        DateTime
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@unique([chatId, senderExternalId])
   @@index([chatId, status])
@@ -712,4 +712,57 @@ model KpiEvent {
   at      DateTime @default(now())
 
   @@index([type])
+}
+
+/// Trang thai mot hang OUTBOX. `dispatched` = engine DA nhan; no KHONG noi gi ve viec workflow
+/// chay xong hay chua — do la viec cua engine, va Nexagnet khong nhan ban sao lich su do.
+enum WorkflowOutboxStatus {
+  pending
+  claimed
+  dispatched
+  failed
+  cancelled
+}
+
+/// BAN GIAO TIN CAY tu DB nghiep vu sang workflow engine (bai toan ghi hai noi).
+///
+/// Hang nay duoc ghi TRONG CUNG `$transaction` voi thay doi nghiep vu, nen khong co cua so nao
+/// de mot su kien bien mat giua "Order da commit" va "engine da nhan". Xem
+/// `apps/api/src/workflow/workflow-outbox.repository.ts` de biet ranh gioi voi Hatchet.
+///
+/// KHONG phai workflow engine thu hai: khong buoc, khong cay thuc thi, khong replay, khong lich su.
+model WorkflowOutbox {
+  id                 String               @id @default(cuid())
+  /// Khoa thao tac cua Nexagnet. DUY NHAT — xep hai lan cung mot thao tac chi ra mot hang.
+  operationKey       String               @unique
+  workflowKey        String
+  /// Phien ban khuon (`v1`). Ghim tai thoi diem XEP HANG: mot su kien xep hom qua phai chay
+  /// bang phien ban cua hom qua, ke ca khi hom nay khach da chuyen sang v2.
+  workflowVersion    String
+  entityType         String
+  entityId           String
+  /// Da qua `buildWorkflowInput` — danh sach trang, khong PII, khong bi mat.
+  payload            Json
+  /// Da qua `buildWorkflowMetadata` — chi neo tuong quan.
+  metadata           Json
+  traceId            String?
+  status             WorkflowOutboxStatus @default(pending)
+  attempts           Int                  @default(0)
+  maxAttempts        Int
+  baseBackoffSeconds Int
+  nextAttemptAt      DateTime?
+  claimedAt          DateTime?
+  claimedBy          String?
+  claimExpiresAt     DateTime?
+  dispatchedAt       DateTime?
+  /// Tham chieu sang lan thuc thi ben engine. Day la SOI DAY duy nhat Nexagnet giu — lich su
+  /// chi tiet nam ben engine va bi xoa sau 30 ngay theo cau hinh luu tru cua no.
+  engineRunId        String?
+  lastError          String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([claimExpiresAt])
+  @@index([entityType, entityId])
 }

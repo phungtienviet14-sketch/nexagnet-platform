@@ -1,0 +1,28 @@
+--- RUN ---
+{
+  "status": "COMPLETED",
+  "duration": 44372,
+  "workflowVersionId": "f78a0210-57e4-4da9-9d74-e177504398bd",
+  "additionalMetadata": {
+    "nexagnet.orderRef": "PROOF-VER-1",
+    "nexagnet.tenant": "tenant-alpha",
+    "nexagnet.traceId": "ada1b0107df75cdc85e464efb00f92a5",
+    "traceparent": "00-ada1b0107df75cdc85e464efb00f92a5-e7ecdc20fdb55c08-01"
+  },
+  "output": {
+    "approvedByHuman": false,
+    "attemptsUsed": 1,
+    "engineVersion": "v2",
+    "externalRef": "EXT-tenant-alpha:PROOF-VER-1",
+    "settlementPlanned": true,
+    "v2Note": "buoc finalize cua v2 co them truong nay",
+    "waitedSeconds": 44,
+    "workflowRunId": "e3aa7487-fab5-44c8-8eea-713f5e35a16a"
+  }
+}
+--- TASKS ---
+{"taskName":"finalize-1787388456251","status":"COMPLETED","attempt":1,"errorMessage":"","output":{"approvedByHuman":false,"attemptsUsed":1,"engineVersion":"v2","externalRef":"EXT-tenant-alpha:PROOF-VER-1","settlementPlanned":true,"v2Note":"buoc finalize cua v2 co them truong nay","waitedSeconds":44,"workflowRunId":"e3aa7487-fab5-44c8-8eea-713f5e35a16a"}}
+{"taskName":"await-approval-1787388412265","status":"COMPLETED","attempt":2,"errorMessage":"","output":{"approvedByHuman":false,"resolvedBy":"CREATE","waitedSeconds":44}}
+{"taskName":"dispatch-1787388412132","status":"COMPLETED","attempt":1,"errorMessage":"","output":{"appliedNow":true,"attemptsUsed":1,"externalRef":"EXT-tenant-alpha:PROOF-VER-1","receivedTraceparent":"00-ada1b0107df75cdc85e464efb00f92a5-e7ecdc20fdb55c08-01"}}
+{"taskName":"map-1787388411992","status":"COMPLETED","attempt":1,"errorMessage":"","output":{"endpointPath":"/erp/orders","idempotencyKey":"tenant-alpha:PROOF-VER-1","sanitizedCustomer":{"address":"12***st","name":"Nguoi Dat Thu Nghiem","phone":"09***23"},"totalQuantity":12}}
+{"taskName":"validate-1787388411921","status":"COMPLETED","attempt":1,"errorMessage":"","output":{"engineVersion":"v1","maxAttempts":3,"orderRef":"PROOF-VER-1","tenant":"tenant-alpha","traceparent":"00-ada1b0107df75cdc85e464efb00f92a5-e7ecdc20fdb55c08-01","valid":true}}
