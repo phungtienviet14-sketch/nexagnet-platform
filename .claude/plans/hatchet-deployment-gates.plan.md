@@ -455,3 +455,85 @@ Giả thuyết đúng, và §2 của [evidence/reset-pocwf-23-08-2026.md](../../
 giữ toàn bộ bằng chứng + quy trình vận hành rút ra.
 
 ⇒ **D1 ĐÓNG.** Cổng chặn compose đã mở. Việc kế tiếp: **D2**.
+
+---
+
+### D2–D7 — PHIÊN 8 (23/08/2026), HEAD đầu phiên `4e5b634`
+
+#### Hồi quy hết-heap: nguyên nhân THẬT, và nó không phải cái gì trong hai nghi vấn ban đầu
+
+Nghi vấn ghi trong bàn giao là *vòng import* hoặc *thứ tự khởi tạo provider*. **Cả hai đều SAI.**
+
+```
+await expect(boot()).rejects.toThrow(/WORKFLOW_ENGINE_TOKEN_MISSING/);
+```
+
+Công tắc mặc định `off` làm `boot()` **không còn ném** (đúng thiết kế). Khi promise RESOLVE,
+vitest dựng `AssertionError` mang `showDiff: true` và `actual` = chính `NestApplicationContext` —
+đối tượng giữ `container`: mọi module, mọi provider, cả đồ thị DI. Vitest tuần tự hoá `actual` để
+vẽ diff và gửi qua IPC → đi bộ qua một đồ thị khổng lồ có chu trình → 4 GB.
+
+**Đo từng bước, không suy luận:**
+
+| Bài | Kết quả |
+|---|---|
+| ca A riêng | ✅ xanh, 74 MB |
+| ca B riêng | ✅ ĐỎ SẠCH, đọc được, 6,7 s |
+| ca C riêng | ❌ OOM 4 GB, 2,5 phút |
+| ca C, đổi **duy nhất** dòng khẳng định | ✅ 11 s, 84 MB, đỏ sạch |
+| bắt lỗi lại rồi soi | `keys=message\|showDiff\|expected\|actual`, `actualCtor=NestApplicationContext`, có `container` |
+
+**Một giả thuyết đã bị BÁC BỎ bằng phép đo**, và việc bác bỏ nó mới là chỗ tìm ra nguyên nhân:
+tuần tự hoá một context Nest trong `.rejects` **khi ta tự bắt lỗi** chỉ tốn **71 ký tự / 2 ms**.
+Nên "vitest serialize context" một mình nó không phải nguyên nhân — phải là lỗi **THOÁT RA** cho
+vitest xử lý.
+
+`err.message` chỉ 71 ký tự; cả 4 GB nằm trong `err.actual`. Đó là lý do cú OOM trông như không
+liên quan gì tới khẳng định, và là lý do phiên trước nghi môi trường.
+
+#### Đã xong
+
+| | Việc | Bằng chứng |
+|---|---|---|
+| **D2** | 6 service sau `profiles: ["workflow"]` | `config --services`: không profile → 5 (production y nguyên); có profile → 11 |
+| **D3** | `workflow-isolation.contract.test.mjs` | 15 bài, **7 ca ÂM TÍNH** — mã lý do có kiểu (`DIA_CHI_ENGINE_LA:…`) |
+| **D4** | Q2-A + route dashboard | chỉ phát khi công tắc bật · `basic_auth` (Caddy 2.11.4 — đã kiểm bản thật) |
+| **D5** | 5 biến đủ ba tầng + `bootstrap-workflow-engine.sh` | passthrough contract xanh |
+| **D6** | backup/restore | **ca dương + ca âm**, chạy trên compose THẬT |
+| **D7** | audit VM | số mới, và nó **CHẶN** |
+
+**Đo được, thay cho phỏng đoán:** `max_connections` — POC copy 1000 của Hatchet; engine thật giữ
+**20** kết nối ⇒ chọn 200. Healthcheck engine: cổng **8733** `/live` `/ready` (không phải `/health`).
+Dashboard chạy **hai** tiến trình (`hatchet-api` :8080 + nginx :80). Tenant `default` UUID
+`707d0855-…` là hằng số trong bản gieo — nhưng vẫn **đọc theo `slug`**, không gõ cứng.
+
+**Lệch khỏi kế hoạch, nói rõ:** `WORKFLOW_ENGINE_HOST_PORT` **ghi cứng** `hatchet-engine:7070`
+thay vì là biến (kế hoạch D5 liệt nó vào danh sách biến). Địa chỉ engine là sự thật về **topo**
+của chính compose; để nó thành biến là để ngỏ đúng lỗ hổng D3 phải đóng.
+
+#### D7 — tìm ra một cổng ĐỎ thật, rồi mở được nó
+
+```
+Đĩa /   77 G · dùng 70 G · CÒN 6,6 G · 92%
+Images  68,11 GB · RECLAIMABLE 52,01 GB (76%)
+        <- 40 bản KHÔNG TAG của flowise-3.1.4-deepseek-fix, mỗi bản 9,29 GB
+RAM     7,8 Gi · available 3,6 Gi · swap 0        <- RAM thì ĐỦ
+```
+
+Hatchet cần ≈1,1 GB ⇒ 94%. Và mỗi lần deploy bất kỳ khách nào lại để lại một ảnh không tag nữa.
+Khi đĩa đầy, thứ chết trước là **PostgreSQL của khách đang chạy**, không phải Hatchet.
+
+**ĐÃ XỬ LÝ — nới đĩa 80 → 200 GB, KHÔNG downtime** (người dùng cho phép nâng VM). Chọn nới đĩa
+chứ **không** đổi machine type: đổi machine type phải tắt máy ⇒ ngắt **cả 4 khách**, mà RAM/CPU
+thì đã đo là **không thiếu**.
+
+```
+/  77 G · còn 6,6 G · 92%   ->   193 G · còn 123 G · 37%
+```
+
+Không downtime, chứng minh bằng bằng chứng: sau khi nới, **17/17 container vẫn `healthy` và uptime
+KHÔNG ĐỔI** (`Up 10 days`, `Up 7 days`, …) — không cái nào khởi động lại.
+
+⇒ **D7 XANH.** Còn nợ không chặn: 40 ảnh không tag × 9,29 GB vẫn tích luỹ mỗi lần deploy; nới đĩa
+mua thời gian chứ không sửa cái tích luỹ. Để lại cho một phiên vận hành riêng, làm có chọn lọc,
+**không** `prune -a` mù.

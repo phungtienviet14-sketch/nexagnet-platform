@@ -633,31 +633,62 @@ nên phải cấp cổng riêng; đó là **mô hình đúng**, không phải m�
 **Nợ vẫn treo:** gộp `workflow-dispatch-failures.ts` vào `decision-reasons.ts` · ghi `tong-quan.md`.
 Cả hai vẫn bị Phase 0 chặn.
 
-## 41. ⛔ VẪN CHƯA READY FOR GD1-TEST — 1/9 cổng
+## 41. READY FOR GD1-TEST — 7/9 cổng, D8 là việc kế tiếp
 
 | Cổng | Trạng thái |
 |---|---|
-| **D1** readiness của worker | ✅ **XONG** |
-| D2 compose production (+ công tắc `WORKFLOW_ENGINE` của Q1) | ⬜ |
-| D3 cách ly thành hợp đồng test | ⬜ |
-| D4 mạng + TLS (Q2-A) + sửa runbook §4.2 | ⬜ |
-| D5 hợp đồng bí mật + bootstrap token (vòng gà–trứng) | ⬜ |
-| D6 backup/restore Postgres engine **+ volume `hatchet-config`** | ⬜ |
-| D7 audit VM bằng số mới | ⬜ |
-| D8 deploy CHỈ `ultty-gd1-test` | ⬜ |
-| D9 E2E trung lập + nghiệm thu dashboard + **đo lại DRAIN** | ⬜ |
+| **D1** readiness của worker | ✅ **XONG** (phiên 7) |
+| **D2** compose production + công tắc `WORKFLOW_ENGINE` | ✅ **XONG** |
+| **D3** cách ly thành hợp đồng test | ✅ **XONG** — 15 bài, 7 ca âm tính |
+| **D4** mạng + TLS (Q2-A) + sửa runbook §4.2 | ✅ **XONG** |
+| **D5** hợp đồng bí mật + bootstrap token | ✅ **XONG** |
+| **D6** backup/restore + volume `hatchet-config` | ✅ **XONG** — chứng minh cả ca dương lẫn ca âm |
+| **D7** audit VM bằng số mới | ✅ **XONG** — đĩa đỏ 92%, đã nới 80→200 GB không downtime |
+| D8 deploy CHỈ `ultty-gd1-test` | ⬜ **SẴN SÀNG CHẠY** |
+| D9 E2E trung lập + dashboard + đo lại DRAIN | ⬜ phụ thuộc D8 |
 
 ## 42. Việc kế tiếp, chính xác
 
-**D2 — compose production.** Đọc §2 và §4 của kế hoạch trước. Hai thứ chặn nó, cả hai đã có câu
-trả lời sẵn trong kế hoạch:
+**Một quyết định của người, rồi mới tới code.**
 
-1. **Chưa khách nào khai `integrations.workflowEngine`** — và `tenants/ultty/tenant.json` dùng
-   **chung** cho `zalo-ultty` (production) lẫn `zalo-ultty-gd1-test` (`deploy-remote.sh:108` rsync
-   cùng một `tenant-pack`). Hiện thực Q1-A: công tắc `WORKFLOW_ENGINE`, **mặc định off**, kèm test
-   hợp đồng ép mặc định đó.
-2. **Volume `hatchet-config` giữ khoá mã hoá** — backup chỉ dump Postgres là backup **vô dụng**.
-   Chưa tài liệu nào trong repo ghi điều này. Vào D6.
+### Đĩa VM: đã xử lý (23/08/2026)
+
+Audit tìm ra `/` ở **92%, còn 6,6 GB** — chặn thật, vì mỗi lần deploy bất kỳ khách nào lại để lại
+một ảnh flowise không tag 9,29 GB (đang có **40** bản, 52 GB thu hồi được), và khi đĩa đầy thì thứ
+chết trước là **PostgreSQL của khách đang chạy**.
+
+Đã **nới đĩa 80 → 200 GB, KHÔNG downtime** (`pd-balanced` nới nóng được + `growpart` + `resize2fs`
+online). **Không** đổi machine type — cái đó phải tắt máy ⇒ ngắt cả 4 khách, mà RAM/CPU đã đo là
+không thiếu (3,6 Gi available, load 0,9/nhân).
+
+```
+/  77 G · còn 6,6 G · 92%   ->   193 G · còn 123 G · 37%
+```
+
+17/17 container vẫn `healthy`, **uptime không đổi** ⇒ không cái nào khởi động lại.
+
+**Còn nợ, không chặn D8:** 40 ảnh không tag vẫn tích luỹ. Nới đĩa mua thời gian chứ không sửa cái
+tích luỹ. Dọn thì an toàn (`rollback.sh:64` kéo lại từ AR theo digest, AR giữ 47 bản có tag) nhưng
+để một phiên vận hành riêng, có chọn lọc, **không** `prune -a` mù.
+
+### Việc kế tiếp
+
+1. **D8** — thứ tự bắt buộc: tạo 2 secret của người
+   (`zalo-ultty-gd1-test-hatchet-db-password`, `zalo-ultty-gd1-test-workflow-dashboard-htpasswd`;
+   cái sau sinh bằng `docker run --rm caddy:2-alpine caddy hash-password --plaintext '<mk>'`)
+   → `render-secrets.sh` với `WORKFLOW_ENGINE=on` → `bootstrap-workflow-engine.sh` (đúc token)
+   → `render-secrets.sh` lại → `deploy-stack.sh`.
+   `render-secrets.sh` **fail-closed** (exit 78) nếu bật công tắc mà thiếu một trong hai secret.
+2. **Đo RAM thật của `workflow-worker-v1`** — hiện là ô **CHƯA ĐO** trong runbook §7. Không mượn
+   số của `api`: worker boot `WorkflowWorkerModule` hẹp hơn nhiều.
+3. **D9** + **D9-b** churn/soak, và **đo lại DRAIN trên container Linux** (món nợ của phiên 7 —
+   Windows không có SIGTERM thật).
+
+## 43bis. Điểm cần quyết ở D7, KHÔNG tự đổi
+
+`postgres:15.6` (không alpine) tốn **608 MB** đĩa; `postgres:15-alpine` tiết kiệm ~550 MB. Chưa
+đổi vì 15.6 là bản Hatchet kiểm thử trên compose chính thức của họ, và khác biệt musl/glibc là một
+biến số mới không ai đo. Với đĩa đang 92% thì đây là một lựa chọn thật, cần quyết bằng số.
 
 ## 43. Chạy lại
 
