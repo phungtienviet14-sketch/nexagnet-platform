@@ -12,6 +12,7 @@
     "pageDescription": "Nền tảng điều phối và giám sát đội ngũ AI doanh nghiệp NetViet",
     "themeColor": "#ba1c24",
     "backgroundColor": "#ffffff",
+    "logoPath": "/netviet-logo.png",
     "monogram": "NV",
     "composerPlaceholder": "Hỏi trợ lý điều hành hoặc tra cứu nghiệp vụ..."
   },

@@ -1,10 +1,7 @@
 /* =========================================================================
-   NetViet Agent Workforce Experience — Enterprise Design System & Tokens
+   Agent Workforce Experience — Enterprise Design System & Tokens
    Calibrated Premium Light Theme (High-Clarity, Eye-Comfort & Anti-Glare Contrast)
-   Brand Colors extracted from NetViet TV Identity:
-   - NetViet Crimson Red: #BA1C24
-   - NetViet Amber Orange: #F58220
-   - NetViet Royal Blue: #0B5CAB
+   Tenant primary color is injected by the experience shell.
    Scoped under [data-experience="agent-workforce"]
    ========================================================================= */
 
@@ -25,7 +22,7 @@
   --wf-border-subtle: #e2e8f0;
   --wf-border-card: #e2e8f0;
   --wf-border-hover: #cbd5e1;
-  --wf-border-focus: #ba1c24;
+  --wf-border-focus: var(--wf-primary);
 
   /* --- Eye-Comfort Typography (High-Clarity WCAG AA Contrast) --- */
   --wf-text-primary: #0f172a;
@@ -33,12 +30,12 @@
   --wf-text-muted: #64748b;
   --wf-text-dim: #94a3b8;
 
-  /* --- NetViet Brand & Semantic Accents --- */
-  --wf-primary: #ba1c24;
-  --wf-primary-hover: #9b141b;
-  --wf-primary-subtle: rgba(186, 28, 36, 0.08);
-  --wf-primary-border: rgba(186, 28, 36, 0.22);
-  --wf-primary-glow: rgba(186, 28, 36, 0.15);
+  /* --- Tenant Brand & Semantic Accents --- */
+  --wf-primary: var(--wf-tenant-primary, #475569);
+  --wf-primary-hover: color-mix(in srgb, var(--wf-primary) 82%, #0f172a);
+  --wf-primary-subtle: color-mix(in srgb, var(--wf-primary) 8%, transparent);
+  --wf-primary-border: color-mix(in srgb, var(--wf-primary) 22%, transparent);
+  --wf-primary-glow: color-mix(in srgb, var(--wf-primary) 15%, transparent);
 
   --wf-orange: #f58220;
   --wf-orange-hover: #dc6e12;
@@ -144,7 +141,7 @@
   width: 34px;
   height: 34px;
   border-radius: var(--wf-radius-sm);
-  background: linear-gradient(135deg, var(--wf-primary) 0%, #9b141b 100%);
+  background: linear-gradient(135deg, var(--wf-primary) 0%, var(--wf-primary-hover) 100%);
   color: #ffffff;
   font-weight: 800;
   font-size: 0.95rem;
@@ -228,7 +225,7 @@
 .wf-nav-btn--active {
   background: var(--wf-primary) !important;
   color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(186, 28, 36, 0.28);
+  box-shadow: 0 2px 6px var(--wf-primary-glow);
 }
 
 .wf-nav-btn__badge {
@@ -516,7 +513,7 @@
   background: var(--wf-primary);
   color: #ffffff;
   border-color: var(--wf-primary);
-  box-shadow: 0 1px 3px rgba(186, 28, 36, 0.25);
+  box-shadow: 0 1px 3px var(--wf-primary-glow);
 }
 .wf-btn--primary:hover:not(:disabled) {
   background: var(--wf-primary-hover);
@@ -734,7 +731,7 @@
   box-shadow: 0 0 8px var(--wf-primary-glow);
 }
 
-.wf-bar-segment--exec { background: #ba1c24; }
+.wf-bar-segment--exec { background: var(--wf-primary); }
 .wf-bar-segment--sales { background: #f58220; }
 .wf-bar-segment--fin { background: #0b5cab; }
 .wf-bar-segment--mfg { background: #059669; }
@@ -2294,7 +2291,7 @@
 .wf-progress-spinner {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(186, 28, 36, 0.25);
+  border: 2px solid var(--wf-primary-border);
   border-top-color: var(--wf-primary);
   border-radius: 50%;
   animation: wfSpin 0.7s linear infinite;
@@ -2605,7 +2602,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 0.85rem;
-  padding: 0.85rem 11.5rem;
+  padding: 0.85rem 1.15rem;
   background: var(--wf-orange-subtle);
   border: 1px solid var(--wf-orange-border);
   border-radius: var(--wf-radius-md);

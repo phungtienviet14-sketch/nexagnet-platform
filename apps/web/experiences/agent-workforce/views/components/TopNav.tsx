@@ -30,12 +30,18 @@ export function TopNav({ activeView, onChangeView, alertsCount = 4 }: TopNavProp
     <header className="wf-topbar" role="banner">
       <div className="wf-topbar__brand">
         <div className="wf-topbar__logo-wrap">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/netviet-logo.png"
-            alt="NetViet TV"
-            className="wf-topbar__logo-img"
-          />
+          {branding.logoPath ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={branding.logoPath}
+              alt={`${branding.shortName} logo`}
+              className="wf-topbar__logo-img"
+            />
+          ) : (
+            <span className="wf-topbar__monogram" aria-hidden="true">
+              {branding.monogram}
+            </span>
+          )}
         </div>
         <div className="wf-topbar__titles">
           <div className="wf-topbar__main-row">

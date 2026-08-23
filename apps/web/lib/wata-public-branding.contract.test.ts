@@ -12,6 +12,7 @@ describe('Wata public branding contract', () => {
         readonly installName: string;
         readonly pageTitle: string;
         readonly pageDescription: string;
+        readonly logoPath?: string;
       };
     };
     const publicBranding = JSON.stringify({
@@ -26,7 +27,8 @@ describe('Wata public branding contract', () => {
 
     expect(publicBranding).toContain('NetViet');
     expect(publicBranding).not.toMatch(/wata|watatech/i);
-    expect(header).toContain('/netviet-logo.png');
+    expect(tenant.branding.logoPath).toBe('/netviet-logo.png');
+    expect(header).toContain('branding.logoPath');
     expect(header).not.toMatch(/wata|watatech/i);
   });
 });
