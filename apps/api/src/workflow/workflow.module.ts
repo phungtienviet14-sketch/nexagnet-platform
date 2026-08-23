@@ -5,7 +5,7 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import { tenantWorkflowEngine } from '@netviet/tenant';
+import { activeWorkflowEngine } from './workflow-engine-switch.js';
 import { randomUUID } from 'node:crypto';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaService } from '../config/prisma.service.js';
@@ -45,7 +45,7 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     // Khach chua bat engine thi khong dung bo dem: mot timer chay mai de khong tim thay gi la
     // rac, va no lam log cua khach do nhieu ma khong noi len dieu gi.
-    if (tenantWorkflowEngine().adapter === 'none') {
+    if (activeWorkflowEngine().adapter === 'none') {
       this.logger.log('Workflow engine: none — khong khoi dong dispatcher.');
       return;
     }
@@ -90,7 +90,7 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
           : new InMemoryWorkflowOutboxRepository(),
       inject: [PrismaService],
     },
-    { provide: WORKFLOW_BINDINGS, useFactory: tenantWorkflowEngine },
+    { provide: WORKFLOW_BINDINGS, useFactory: activeWorkflowEngine },
     {
       provide: WORKFLOW_RUNTIME_IDENTITY,
       useFactory: (): WorkflowRuntimeIdentity => {
@@ -101,7 +101,7 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
     {
       provide: WorkflowEnginePort,
       useFactory: async (): Promise<WorkflowEnginePort> => {
-        const integration = tenantWorkflowEngine();
+        const integration = activeWorkflowEngine();
         new Logger('WorkflowEngineProvider').log(`Cong workflow engine: ${integration.adapter}`);
         // BI MAT doc tu BIEN MOI TRUONG ma goi khach TRO TOI, khong tu goi khach. Goi khach nam
         // trong git; token thi khong bao gio duoc nam trong git.

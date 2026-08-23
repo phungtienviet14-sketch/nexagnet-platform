@@ -111,7 +111,20 @@ describe('WorkflowWorkerModule — module HEP cho tien trinh worker', () => {
     delete process.env[WORKFLOW_WORKER_VERSION_ENV];
     // Fail-fast la co y: mot worker song nhung khong dang ky workflow nao la truong hop TE NHAT —
     // container xanh, healthcheck xanh, va moi run nam cho mai mai.
-    await expect(bootWorker()).rejects.toThrow(/WORKFLOW_WORKER_VERSION/);
+    //
+    // THU GON KET CUC TRUOC KHI KHANG DINH — khong dung `expect(bootWorker()).rejects`.
+    // Neu mot ngay boot KHONG con nem (vi du them mot mac dinh cho phien ban), khuon `.rejects`
+    // se dinh ca `NestApplicationContext` vao `actual` cua AssertionError, va vitest tuan tu hoa
+    // no thanh mot cu OOM 4 GB thay vi mot dong khang dinh doc duoc. Da xay ra that 23/08/2026 —
+    // xem `nest-context-assertion.contract.spec.ts`.
+    let message = 'boot KHONG nem';
+    try {
+      const booted = await bootWorker();
+      await booted.close();
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/WORKFLOW_WORKER_VERSION/);
   }, 60_000);
 
   /**

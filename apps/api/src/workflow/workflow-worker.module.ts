@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { tenantWorkflowEngine } from '@netviet/tenant';
+import { activeWorkflowEngine } from './workflow-engine-switch.js';
 import { resolveWorkerRegistration, type WorkerRegistration } from './worker-registration.js';
 import type { WorkflowEngineName } from './workflow-engine.port.js';
 import type { WorkflowWorkerCredentials } from './workflow-worker.adapter.js';
@@ -42,12 +42,12 @@ import {
     },
     {
       provide: WORKFLOW_WORKER_ENGINE,
-      useFactory: (): WorkflowEngineName => tenantWorkflowEngine().adapter,
+      useFactory: (): WorkflowEngineName => activeWorkflowEngine().adapter,
     },
     {
       provide: WORKFLOW_WORKER_CREDENTIALS,
       useFactory: (): WorkflowWorkerCredentials => {
-        const integration = tenantWorkflowEngine();
+        const integration = activeWorkflowEngine();
         // BI MAT doc tu BIEN MOI TRUONG ma goi khach TRO TOI, khong tu goi khach. Cung khuon
         // `workflow.module.ts` — goi khach nam trong git, token thi khong bao gio.
         const token = integration.credentialRef
