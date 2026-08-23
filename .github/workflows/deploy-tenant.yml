@@ -40,6 +40,18 @@ on:
           - gd1-test
           - production
         default: 'dev'
+      workflow_engine:
+        # MAC DINH `off`, va do la ca diem: mot cong tac mac dinh `on` khong bao ve duoc gi.
+        # Bat `on` o moi truong khac `gd1-test` se lam `render-secrets.sh` DUNG HAN (exit 64) -
+        # `tenants/ultty/tenant.json` dung CHUNG cho ca production lan gd1-test, nen cai chan do
+        # la thu duy nhat giua mot lan go nham va mot dispatcher chay tren stack that cua khach.
+        description: 'Bat workflow engine (Hatchet)? CHI co tac dung voi environment=gd1-test'
+        required: false
+        type: choice
+        options:
+          - 'off'
+          - 'on'
+        default: 'off'
 
 permissions:
   actions: read
@@ -60,4 +72,5 @@ jobs:
     with:
       tenant: ${{ inputs.tenant }}
       environment: ${{ inputs.environment }}
+      workflow_engine: ${{ inputs.workflow_engine }}
     secrets: inherit

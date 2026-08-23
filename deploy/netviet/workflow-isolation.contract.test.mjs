@@ -284,6 +284,41 @@ test('bam mat khau cua dashboard KHONG duoc phat vao secrets.env', () => {
   assert.match(emitted, /^WORKFLOW_ENGINE_TOKEN=/m);
 });
 
+// =========================================================== chuoi truyen bien qua duong CD
+
+test('WORKFLOW_ENGINE di DU NAM TANG tu nut bam CI xuong render-secrets', () => {
+  // Cung triet ly voi `secrets-passthrough.contract.test.mjs`: bo MOT tang la tinh nang im lang
+  // khong chay. Da xay ra that hai lan (`ADVICE_COMPOSER`, `DEPLOYMENT_ENVIRONMENT`), va ca hai
+  // lan deu deploy XANH roi khong ai biet gi trong nhieu ngay.
+  const tiers = [
+    ['deploy-tenant.yml', 'workflow_engine:'],
+    ['deploy-tenant.yml', 'workflow_engine: ${{ inputs.workflow_engine }}'],
+    ['reusable-deploy-tenant.yml', 'workflow_engine:'],
+    ['reusable-deploy-tenant.yml', 'WORKFLOW_ENGINE: ${{ inputs.workflow_engine }}'],
+    ['../../deploy/netviet/deploy-ci.sh', "WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}'"],
+    ['../../deploy/netviet/deploy-remote.sh', 'WORKFLOW_ENGINE="${WORKFLOW_ENGINE:-off}"'],
+  ];
+
+  for (const [file, needle] of tiers) {
+    const full = file.startsWith('..')
+      ? join(here, file.replace('../../deploy/netviet/', ''))
+      : join(here, '../../.github/workflows', file);
+    assert.ok(
+      readFileSync(full, 'utf8').includes(needle),
+      `${file} thieu \`${needle}\` — chuoi truyen bien dut o day, va hau qua la nut bam tren CI` +
+        ' se khong bat duoc gi ma cung khong bao loi.',
+    );
+  }
+});
+
+test('mac dinh cua nut bam CI la `off`, khong phai `on`', () => {
+  const dispatch = readFileSync(join(here, '../../.github/workflows/deploy-tenant.yml'), 'utf8');
+  const at = dispatch.indexOf('workflow_engine:');
+  assert.notEqual(at, -1);
+  // Mot input mac dinh `on` bien moi lan bam deploy thanh mot lan bat engine.
+  assert.match(dispatch.slice(at, at + 700), /default: 'off'/);
+});
+
 // =============================================================================== ca AM TINH
 //
 // Mot bo quet chua bao gio DO thi khong chung minh duoc gi. Cac ca duoi day dung compose GIA,
