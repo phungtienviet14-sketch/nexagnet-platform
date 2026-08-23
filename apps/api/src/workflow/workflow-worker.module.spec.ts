@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CampaignScheduler } from '../campaigns/campaign.scheduler.js';
 import { ZaloUserClient } from '../channels/zalo-user.client.js';
+import { BotPoller } from '../ingest/bot-poller.js';
 import { ZcaListener } from '../ingest/zca-listener.js';
 import { WorkflowScheduler } from './workflow.module.js';
 import { WorkflowWorkerModule } from './workflow-worker.module.js';
@@ -88,6 +89,9 @@ describe('WorkflowWorkerModule — module HEP cho tien trinh worker', () => {
 
     expect(resolvable(context, ZcaListener)).toBe(false);
     expect(resolvable(context, ZaloUserClient)).toBe(false);
+    // `BotPoller` co trong binh luan cua module tu dau nhung KHONG co trong khang dinh nao —
+    // tuc la no duoc bao ve bang mot cau van, va mot cau van thi khong do.
+    expect(resolvable(context, BotPoller)).toBe(false);
 
     await context.close();
   }, 60_000);
@@ -108,5 +112,58 @@ describe('WorkflowWorkerModule — module HEP cho tien trinh worker', () => {
     // Fail-fast la co y: mot worker song nhung khong dang ky workflow nao la truong hop TE NHAT —
     // container xanh, healthcheck xanh, va moi run nam cho mai mai.
     await expect(bootWorker()).rejects.toThrow(/WORKFLOW_WORKER_VERSION/);
+  }, 60_000);
+
+  /**
+   * HOP DONG THEO HINH DANG, khong theo danh sach ten.
+   *
+   * Bon khang dinh o tren giu duoc bon lop MA TA DA BIET TEN. Chung khong giu duoc lop thu sau:
+   * neu mai co nguoi them mot service lam viec that trong `onModuleInit` roi import nham vao day,
+   * moi bai tren van xanh va tien trinh worker lai lang le mo mot vong lap thu hai tren stack.
+   *
+   * Bai duoi day hoi mot cau khac: do thi DI cua module worker co DUNG BANG danh sach duoc phep
+   * khong. Them mot provider vao `WorkflowWorkerModule` se lam bai nay DO — va do la y muon:
+   * viec them do phai la mot quyet dinh duoc noi ra, khong phai mot dong import tien tay.
+   */
+  it('do thi DI cua module worker DUNG BANG danh sach duoc phep — them provider la phai noi ra', async () => {
+    const context = await bootWorker();
+
+    // Doc thang tu container cua Nest: day la danh sach THAT, khong phai danh sach ta nho.
+    const container = (context as unknown as { container: { getModules: () => Map<unknown, {
+      metatype?: { name?: string };
+      providers: Map<unknown, unknown>;
+    }> } }).container;
+
+    const found = new Set<string>();
+    for (const [, module] of container.getModules()) {
+      if (module.metatype?.name !== 'WorkflowWorkerModule') continue;
+      for (const [token] of module.providers) {
+        found.add(typeof token === 'symbol' ? String(token) : String((token as { name?: string })?.name ?? token));
+      }
+    }
+
+    // MOT tien trinh worker chi can dung nhung thu nay. Khong hon.
+    const allowed = new Set([
+      'WorkflowWorkerService',
+      'Symbol(WORKFLOW_WORKER_REGISTRATION)',
+      'Symbol(WORKFLOW_WORKER_ENGINE)',
+      'Symbol(WORKFLOW_WORKER_CREDENTIALS)',
+      // Nest tu them chinh module va cac tro giup noi bo cua no vao danh sach provider.
+      'WorkflowWorkerModule',
+      'ModuleRef',
+      'ApplicationConfig',
+      'Reflector',
+      'SerializedGraph',
+      'LazyModuleLoader',
+    ]);
+
+    // CHONG XANH GIA: neu vong lap tren khong khop module nao thi `found` rong va phep tru
+    // duoi day cho ra rong — bai test se "xanh" ma khong do gi. Chan bang cach doi thay dung
+    // cac provider ma ta BIET chac phai co.
+    expect(found).toContain('WorkflowWorkerService');
+    expect(found).toContain('Symbol(WORKFLOW_WORKER_REGISTRATION)');
+
+    const unexpected = [...found].filter((name) => !allowed.has(name));
+    expect(unexpected).toEqual([]);
   }, 60_000);
 });
