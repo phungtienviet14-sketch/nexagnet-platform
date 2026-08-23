@@ -258,6 +258,15 @@ export const tenantConfigSchema = z
         pageDescription: nonEmpty,
         themeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'themeColor: dang #rrggbb'),
         backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'backgroundColor: dang #rrggbb'),
+        /** Tai nguyen logo cong khai duoc dong goi cung app; chi chap nhan duong dan tuyet doi an toan. */
+        logoPath: z
+          .string()
+          .regex(/^\/[A-Za-z0-9][A-Za-z0-9._/-]*$/, 'logoPath: phai la duong dan public bat dau bang /')
+          .refine(
+            (path) => !path.split('/').some((segment) => segment === '..'),
+            'logoPath: khong duoc chua thanh phan ..',
+          )
+          .optional(),
         monogram: z.string().min(1).max(3),
         composerPlaceholder: nonEmpty,
       })

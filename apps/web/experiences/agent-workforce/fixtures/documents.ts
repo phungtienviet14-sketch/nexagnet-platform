@@ -11,8 +11,8 @@ export const SAMPLE_DOCUMENTS: readonly DocumentItem[] = [
     mode: 'contract_review',
     analysis: {
       metadata: {
-        'Số hợp đồng': 'HĐ-2026-VF09/WATATECH-VF',
-        'Bên bán (Bên A)': 'Công ty Cổ phần Công nghệ WATA',
+        'Số hợp đồng': 'HĐ-2026-VF09/DEMO-VF',
+        'Bên bán (Bên A)': 'Doanh nghiệp minh họa',
         'Bên mua (Bên B)': 'Tập đoàn Sản xuất Công nghiệp & Xe điện VinFast',
         'Tổng giá trị': '3.850.000.000 VNĐ (Chưa VAT)',
         'Thời hạn thực hiện': '12 tháng (kể từ 01/09/2026)',
@@ -58,7 +58,7 @@ export const SAMPLE_DOCUMENTS: readonly DocumentItem[] = [
         {
           rule: 'Bảo vệ quyền sở hữu trí tuệ và bí mật kinh doanh',
           result: 'pass',
-          detail: 'Quyền tác giả và tài sản trí tuệ đối với phần mềm/thuật toán được xác lập rõ ràng thuộc WATA.',
+          detail: 'Quyền tác giả và tài sản trí tuệ đối với phần mềm/thuật toán được xác lập rõ ràng thuộc doanh nghiệp.',
         },
       ],
       provenance: 'AI Kế toán & Pháp chế trích xuất và đối chiếu Quy chế Quản trị Hợp đồng QC-PL-02.',
@@ -78,7 +78,7 @@ export const SAMPLE_DOCUMENTS: readonly DocumentItem[] = [
         'Mẫu số / Ký hiệu': '1/001 — C26TDP',
         'Số hóa đơn': '0002891',
         'Ngày lập': '15/07/2026',
-        'Đơn vị bán': 'Công ty Cổ phần Công nghệ WATA (MST: 0108998877)',
+        'Đơn vị bán': 'Doanh nghiệp minh họa (MST: 0108998877)',
         'Đơn vị mua': 'Công ty TNHH Cơ khí Chính xác Đại Phát (MST: 0314567890)',
         'Hình thức thanh toán': 'Chuyển khoản (Net-30)',
       },
@@ -134,7 +134,7 @@ export const SAMPLE_DOCUMENTS: readonly DocumentItem[] = [
     analysis: {
       metadata: {
         'Mã tài liệu': 'SOP-WH-04/V2.1',
-        'Cơ quan ban hành': 'Khối Vận hành & Sản xuất WATATECH',
+        'Cơ quan ban hành': 'Khối Vận hành & Công nghệ',
         'Ngày hiệu lực': '01/06/2026',
         'Phạm vi áp dụng': 'Toàn bộ hệ thống kho vật tư Nhà máy 1 và Nhà máy 2',
         'Tiêu chuẩn tham chiếu': 'ISO 9001:2015 & Hệ thống 5S',

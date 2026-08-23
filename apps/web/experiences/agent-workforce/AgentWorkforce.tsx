@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, type CSSProperties } from 'react';
+import { useBranding } from '../../lib/branding';
 import {
   buildNavigationUrl,
   parseNavigationState,
@@ -18,6 +19,7 @@ import { DocumentsView } from './views/DocumentsView';
 import { OperationsView } from './views/OperationsView';
 
 export function AgentWorkforce() {
+  const branding = useBranding();
   const [navState, setNavState] = useState<WorkforceNavigationState>(() => {
     if (typeof window !== 'undefined') {
       return parseNavigationState(window.location.search);
@@ -89,7 +91,11 @@ export function AgentWorkforce() {
 
   return (
     <WorkforceClientsProvider>
-      <div className="wf-shell" data-experience="agent-workforce">
+      <div
+        className="wf-shell"
+        data-experience="agent-workforce"
+        style={{ '--wf-tenant-primary': branding.themeColor } as CSSProperties}
+      >
         <TopNav
           activeView={navState.view}
           onChangeView={handleChangeView}

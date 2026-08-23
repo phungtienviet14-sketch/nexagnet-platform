@@ -29,9 +29,19 @@ export function TopNav({ activeView, onChangeView, alertsCount = 4 }: TopNavProp
   return (
     <header className="wf-topbar" role="banner">
       <div className="wf-topbar__brand">
-        <span className="wf-topbar__monogram" aria-hidden="true">
-          {branding.monogram}
-        </span>
+        <div className="wf-topbar__logo-wrap">
+          {branding.logoPath ? (
+            <img
+              src={branding.logoPath}
+              alt={`${branding.shortName} logo`}
+              className="wf-topbar__logo-img"
+            />
+          ) : (
+            <span className="wf-topbar__monogram" aria-hidden="true">
+              {branding.monogram}
+            </span>
+          )}
+        </div>
         <div className="wf-topbar__titles">
           <div className="wf-topbar__main-row">
             <h1 className="wf-topbar__title">{branding.productName}</h1>
@@ -66,7 +76,7 @@ export function TopNav({ activeView, onChangeView, alertsCount = 4 }: TopNavProp
       </nav>
 
       <div className="wf-topbar__actions">
-        <span className="wf-demo-tag" title="Môi trường thử nghiệm minh họa sản phẩm WATA">
+        <span className="wf-demo-tag" title={`Môi trường thử nghiệm minh họa ${branding.productName}`}>
           <span className="wf-demo-tag__dot" aria-hidden="true" />
           DỮ LIỆU DEMO
         </span>

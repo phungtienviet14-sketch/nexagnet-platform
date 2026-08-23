@@ -346,6 +346,16 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
     expect(() => loadTenantConfig()).toThrow(/themeColor/);
   });
 
+  it('logoPath chi nhan tai nguyen public an toan', () => {
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        branding: { ...VALID_CONFIG.branding, logoPath: 'https://example.test/logo.svg' },
+      },
+    });
+    expect(() => loadTenantConfig()).toThrow(/logoPath/);
+  });
+
   it('monogram dai qua 3 ky tu -> chan (icon se tran ra ngoai o vuong)', () => {
     useFakePack({
       'tenant.json': { ...VALID_CONFIG, branding: { ...VALID_CONFIG.branding, monogram: 'ABCD' } },

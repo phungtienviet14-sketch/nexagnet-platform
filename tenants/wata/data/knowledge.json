@@ -1,43 +1,43 @@
 {
   "products": [
     {
-      "sku": "WATA-AI-EXEC",
-      "name": "WATA AI Trợ lý điều hành",
+      "sku": "NV-AI-EXEC",
+      "name": "NetViet AI Trợ lý điều hành",
       "aliases": ["Trợ lý điều hành", "Executive Assistant", "AI Điều hành"],
       "unit": "module",
       "description": "Bộ trợ lý AI hỗ trợ lãnh đạo: tóm tắt lịch trình, soạn thảo văn bản, tra cứu tri thức và tổng hợp chỉ số vận hành."
     },
     {
-      "sku": "WATA-AI-SALES",
-      "name": "WATA AI Kinh doanh & Bán hàng",
+      "sku": "NV-AI-SALES",
+      "name": "NetViet AI Kinh doanh & Bán hàng",
       "aliases": ["AI Sales", "AI Kinh doanh", "Commercial AI"],
       "unit": "module",
       "description": "Tự động tạo báo giá, chấm điểm lead tiềm năng, dự báo doanh số và hỗ trợ tư vấn bán hàng đa kênh."
     },
     {
-      "sku": "WATA-AI-FIN-LEGAL",
-      "name": "WATA AI Kế toán & Pháp chế",
+      "sku": "NV-AI-FIN-LEGAL",
+      "name": "NetViet AI Kế toán & Pháp chế",
       "aliases": ["AI Pháp chế", "AI Kế toán", "Legal & Finance AI"],
       "unit": "module",
       "description": "Rà soát điều khoản hợp đồng, bóc tách hóa đơn/chứng từ, theo dõi công nợ và cảnh báo rủi ro tài chính."
     },
     {
-      "sku": "WATA-AI-MFG",
-      "name": "WATA AI Vận hành Sản xuất",
+      "sku": "NV-AI-MFG",
+      "name": "NetViet AI Vận hành Sản xuất",
       "aliases": ["AI Sản xuất", "Manufacturing AI", "AI Nhà máy"],
       "unit": "module",
       "description": "Tối ưu hóa lập lịch sản xuất, dự báo bảo trì máy móc (PdM), kiểm soát chất lượng thị giác (Vision QC) và cân bằng chuyền."
     },
     {
-      "sku": "WATA-AI-STRAT",
-      "name": "WATA AI Cố vấn Chiến lược",
+      "sku": "NV-AI-STRAT",
+      "name": "NetViet AI Cố vấn Chiến lược",
       "aliases": ["AI Cố vấn", "Strategic Advisor", "AI Phân tích"],
       "unit": "module",
       "description": "Phân tích số liệu quản trị, phát hiện bất thường thông minh (Smart Alerts) và mô phỏng kịch bản What-If."
     },
     {
-      "sku": "WATA-AI-INFRA",
-      "name": "WATA Hạ tầng Agent Trung tâm",
+      "sku": "NV-AI-INFRA",
+      "name": "NetViet Hạ tầng Agent Trung tâm",
       "aliases": ["Agent Infra", "Control Plane", "Hạ tầng Agent"],
       "unit": "module",
       "description": "Cổng kết nối dữ liệu, quản lý mô hình nền tảng, phân quyền RBAC và giám sát vận hành toàn bộ hệ thống Agent."
