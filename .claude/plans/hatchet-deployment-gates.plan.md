@@ -402,3 +402,30 @@ chứng minh đăng ký của worker còn hiệu lực. Bắt được "engine c
 **Món nợ:** `classifyFatal()` cố ý chỉ nhận mã của chính repo. Lỗi auth của Hatchet chưa được ĐO
 trên engine thật nên không đoán mẫu chuỗi — token sai sẽ thử lại mãi, nhưng `/ready` 503 nên hỏng
 vẫn **nhìn thấy được**. Đo hình dạng chuỗi thật rồi mới thêm `ENGINE_AUTH_REJECTED`.
+
+### ⛔ CHẶN MÔI TRƯỜNG — engine POC đã thoái hoá, KHÔNG phải hồi quy code
+
+Bộ IT đầy đủ chạy hai lần cho **hai tập bài đỏ khác nhau** (5 rồi 7, chỉ trùng 3) — tức là **không
+tất định**. Trước khi sửa, đã làm **A/B thật** với `8e22047` trên **cùng** engine:
+
+| Bài | Code gốc `8e22047` | Code D1 |
+|---|---|---|
+| W6 — worker `kill -9` | ❌ hết giờ 90 s, chưa vào `dispatch` | ✅ xanh (39 s) |
+| W7 — hai worker cùng phiên bản | ❌ 5/6 run xong | ❌ 5/6 run xong |
+
+**Baseline hỏng bằng hoặc tệ hơn ⇒ các bài đỏ còn lại KHÔNG do D1.** Triệu chứng là *run không
+tiến triển* (engine nhận trigger, worker không nhận việc), không phải khẳng định sai.
+
+Đã sửa **một** hồi quy có thật do D1 gây ra và **đo được** (`EADDRINUSE` trên cổng health dùng
+chung) — commit `a89306b`. Sau khi khởi động lại engine, W6 từ đỏ chuyển **xanh**, xác nhận trạng
+thái engine là một biến số thật.
+
+**Kết luận:** stack `pocwf` đã chạy >24 giờ qua nhiều vòng `docker stop/start` và tích luỹ đăng ký
+worker cũ (§27① — mọi worker cùng phiên bản đăng ký **cùng một tên**). Con số 154/154 của §22 đo
+trên engine tươi hơn.
+
+**ĐÃ GIẢI QUYẾT (23/08).** Reset `pocwf` sạch → **bộ IT đầy đủ 189/189 · 20/20 file XANH**.
+Giả thuyết đúng, và §2 của [evidence/reset-pocwf-23-08-2026.md](../../tools/poc-workflow-engine/evidence/reset-pocwf-23-08-2026.md)
+giữ toàn bộ bằng chứng + quy trình vận hành rút ra.
+
+⇒ **D1 ĐÓNG.** Cổng chặn compose đã mở. Việc kế tiếp: **D2**.

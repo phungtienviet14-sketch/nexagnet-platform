@@ -522,3 +522,153 @@ docker compose -p pocwf -f tools/poc-workflow-engine/compose/hatchet.compose.yml
 ```bash
 RUN_PRISMA_IT=1 RUN_WORKFLOW_IT=1 WORKFLOW_ENGINE_TOKEN=<token> WORKFLOW_ENGINE_HOST_PORT=localhost:7744 WORKFLOW_ENGINE_TLS_STRATEGY=none DATABASE_URL=postgresql://netviet:netviet_local@localhost:5432/netviet pnpm --filter @netviet/api exec vitest run src/workflow --no-file-parallelism
 ```
+
+---
+
+# Phụ lục — phiên 7 (23/08/2026): READINESS CỦA WORKER (D1)
+
+> HEAD đầu phiên `8e22047` → cuối phiên `a89306b` · 2 commit + 1 commit bằng chứng
+> Kế hoạch: [.claude/plans/hatchet-deployment-gates.plan.md](../../../.claude/plans/hatchet-deployment-gates.plan.md)
+> Bằng chứng reset: [evidence/reset-pocwf-23-08-2026.md](../../../tools/poc-workflow-engine/evidence/reset-pocwf-23-08-2026.md)
+
+## 33. Một câu
+
+Cổng **chặn compose** đã đóng: worker giờ trả lời được câu "đã nhận việc được chưa" bằng một
+**trạng thái đo được**, không phải một con số `sleep` — và ba luật của nó chống được cả hai chế độ
+hỏng đối nghịch (bão restart *và* container xanh mà run treo). **D1 XONG. D2–D9 CHƯA BẮT ĐẦU.**
+
+## 34. Quyết định đã chốt
+
+| | Chọn | Hệ quả |
+|---|---|---|
+| **Q1** bật engine cho gd1-test | **A** — công tắc `WORKFLOW_ENGINE=on\|off`, mặc định **off** | `tenants/ultty/tenant.json` khai binding; production KHÔNG bị vũ trang vì công tắc mặc định tắt. **Chưa hiện thực** — việc của D2 |
+| **Q2** TLS gRPC nội bộ | **A** — `tls none` trên mạng `internal:true` + hợp đồng test ép cổng không publish | Phải sửa runbook §4.2: lý do thật là **ranh giới mạng**, không phải chữ "production" |
+| **Q3** trùng run | chỉ báo cáo | Không đổi `WorkflowEnginePort` |
+
+## 35. D1 — readiness, và ba luật của nó
+
+```
+STARTING → CONNECTING → REGISTERING → READY
+                                        ↓ mất engine
+                                     DEGRADED → READY
+SIGTERM bất kỳ lúc nào → DRAINING → STOPPED
+```
+
+| Điểm cuối | 200 khi | Dùng cho |
+|---|---|---|
+| `/live` | mọi trạng thái trừ `STOPPED` và trừ FATAL | tiến trình còn sống |
+| `/ready` | **chỉ** `READY`, và `DEGRADED` trong 30 s ân hạn | healthcheck của Docker |
+
+1. **Mất engine sau READY → KHÔNG thoát tiến trình.** W5 đã đo: engine chết rồi lên lại không mất
+   việc. Thoát ở đây biến một lần restart engine thành một cơn bão restart worker.
+2. **`DEGRADED` quá ân hạn → `/ready` 503 nhưng `/live` VẪN 200.** Compose **không** tự restart
+   container unhealthy (khác Kubernetes), nên cặp giá trị này cho ra *hỏng nhìn thấy được* mà
+   không cho ra *bão restart*. Đây chính là chỗ đóng chế độ hỏng §29.
+3. **Hỏng CẤU HÌNH → `/live` 503 → thoát khác 0.** Đã chứng kiến chạy thật: thiếu token →
+   `CONFIG_INVALID` → thoát ngay thay vì treo thành container xanh.
+
+**Ba module, tách ra để kiểm được riêng:** `worker-readiness.ts` (máy trạng thái THUẦN, đồng hồ
+tiêm vào) · `worker-health.server.ts` (`node:http`, **chỉ loopback**, thân theo danh sách TRẮNG) ·
+`engine-reachability.ts` (bộ dò TCP tới đúng cổng gRPC — §25 bẫy #2).
+
+## 36. Kết quả đo
+
+```
+đơn vị (3 spec mới)                31 test
+workflow không-IT (14 file)       165/165
+BỘ IT ĐẦY ĐỦ trên engine SẠCH     189/189 · 20/20 file
+tsc + eslint                       xanh
+```
+
+## 37. Hai điều PHẢI đọc đúng, đừng đọc thành nhiều hơn
+
+**① `registrationMs` = 316 / 343 / 391 / 463 ms — KHÔNG so được với §29.**
+Số này đo cửa sổ **HẸP HƠN**: từ lúc gọi `hatchet.worker()` tới lúc `waitUntilReady()` trả về.
+Các số 6,3 s / 12 s / 30,1 s / 38 s của §29 đo **cả tiến trình lên** (nạp SDK ~800 ms + boot Nest +
+kết nối). Hai phép đo khác nhau. **`start_period: 90s` GIỮ NGUYÊN** — nó phải bao được §29.
+
+**② Bộ dò TCP: mở được ≠ đăng ký còn hiệu lực.**
+Bắt được "engine chết / khởi động lại / mạng đứt" (chế độ hỏng đã đo ở W5). **Không** bắt được
+"engine sống nhưng đã quên worker này". Đã ghi giới hạn này trong chính file code.
+
+## 38. ⚠️ CHƯA ĐO ĐƯỢC — rút sạch (DRAIN)
+
+Windows **không có SIGTERM thật**: Node dịch `kill('SIGTERM')` thành `TerminateProcess`, nên
+`enableShutdownHooks()` **không bao giờ chạy** trên máy dev. Đã đo trực tiếp để xác nhận chứ không
+suy đoán: `/ready` 200 trước khi giết, sau khi giết log **không** có dòng `Rut worker`.
+
+Khẳng định đó đã bị **chặn theo nền tảng** (`if (process.platform !== 'win32')`) kèm lý do —
+*một nhãn sai tệ hơn không có nhãn*. Đường `DRAINING → stop() → STOPPED` là điều kiện của thủ tục
+DRAIN ở runbook §2, nên đây là **món nợ có thật**: phải đo lại ở **D9, trên container Linux**.
+
+## 39. Bài học đắt nhất của phiên — và nó không phải bài học về code
+
+Bộ IT đầy đủ đỏ 5 rồi 7 bài, **hai tập khác nhau**. Cách phản ứng đúng là A/B, không phải sửa test:
+
+| Bài | code gốc `8e22047` | code D1 |
+|---|---|---|
+| W6 `kill -9` | ❌ hết giờ | ✅ xanh |
+| W7 hai worker | ❌ 5/6 | ❌ 5/6 |
+
+Baseline hỏng **bằng hoặc tệ hơn** ⇒ không phải hồi quy. Dựng lại engine sạch → **189/189**.
+
+**Engine POC thoái hoá** sau nhiều vòng `stop/start` do chính các bài W5/W6/W7 gây ra. Cơ chế khớp
+§27①: mọi worker cùng phiên bản đăng ký **cùng một tên**, đăng ký của tiến trình đã chết tích lại,
+engine giao việc cho bản sao không còn tồn tại → run nằm chờ.
+
+**Quy tắc rút ra:** trước khi tin một kết quả IT ĐỎ, dựng lại engine sạch rồi đo lại (~2 phút).
+"Code hỏng" và "engine mệt" có triệu chứng **giống hệt nhau**: *run không tiến triển*.
+⚠️ Nhưng đỏ trên engine VỪA dựng sạch thì **không** được gọi là ô nhiễm môi trường nữa.
+
+**Và một hồi quy CÓ THẬT do D1 gây ra** (`a89306b`): `EADDRINUSE` trên cổng health dùng chung.
+Trên production đúng — mỗi worker một container. Harness IT chạy nhiều worker trên **cùng một máy**
+nên phải cấp cổng riêng; đó là **mô hình đúng**, không phải mẹo làm test xanh.
+
+## 40. Việc song song — KHÔNG chạm
+
+29 path của phiên khác (`decision-reasons.ts`, `orders/`, `apps/web/`, `apps/mini/`, `tenants/wata/`,
+`tong-quan.md`, `debugging.md`, `tools/trace-view.mjs`, `packages/tenant/src/tenant.schema.ts`) —
+**không file nào bị chạm**. A/B dùng sao lưu ra scratchpad, **không** `git stash`, chính vì lý do đó.
+
+**Nợ vẫn treo:** gộp `workflow-dispatch-failures.ts` vào `decision-reasons.ts` · ghi `tong-quan.md`.
+Cả hai vẫn bị Phase 0 chặn.
+
+## 41. ⛔ VẪN CHƯA READY FOR GD1-TEST — 1/9 cổng
+
+| Cổng | Trạng thái |
+|---|---|
+| **D1** readiness của worker | ✅ **XONG** |
+| D2 compose production (+ công tắc `WORKFLOW_ENGINE` của Q1) | ⬜ |
+| D3 cách ly thành hợp đồng test | ⬜ |
+| D4 mạng + TLS (Q2-A) + sửa runbook §4.2 | ⬜ |
+| D5 hợp đồng bí mật + bootstrap token (vòng gà–trứng) | ⬜ |
+| D6 backup/restore Postgres engine **+ volume `hatchet-config`** | ⬜ |
+| D7 audit VM bằng số mới | ⬜ |
+| D8 deploy CHỈ `ultty-gd1-test` | ⬜ |
+| D9 E2E trung lập + nghiệm thu dashboard + **đo lại DRAIN** | ⬜ |
+
+## 42. Việc kế tiếp, chính xác
+
+**D2 — compose production.** Đọc §2 và §4 của kế hoạch trước. Hai thứ chặn nó, cả hai đã có câu
+trả lời sẵn trong kế hoạch:
+
+1. **Chưa khách nào khai `integrations.workflowEngine`** — và `tenants/ultty/tenant.json` dùng
+   **chung** cho `zalo-ultty` (production) lẫn `zalo-ultty-gd1-test` (`deploy-remote.sh:108` rsync
+   cùng một `tenant-pack`). Hiện thực Q1-A: công tắc `WORKFLOW_ENGINE`, **mặc định off**, kèm test
+   hợp đồng ép mặc định đó.
+2. **Volume `hatchet-config` giữ khoá mã hoá** — backup chỉ dump Postgres là backup **vô dụng**.
+   Chưa tài liệu nào trong repo ghi điều này. Vào D6.
+
+## 43. Chạy lại
+
+```bash
+docker compose -f docker-compose.yml up -d postgres && pnpm --filter @netviet/api exec prisma migrate deploy
+```
+```bash
+docker compose -p pocwf -f tools/poc-workflow-engine/compose/hatchet.compose.yml up -d
+```
+```bash
+RUN_PRISMA_IT=1 RUN_WORKFLOW_IT=1 WORKFLOW_ENGINE_TOKEN=<token> WORKFLOW_ENGINE_HOST_PORT=localhost:7744 WORKFLOW_ENGINE_TLS_STRATEGY=none DATABASE_URL=postgresql://netviet:netviet_local@localhost:5432/netviet pnpm --filter @netviet/api exec vitest run src/workflow --no-file-parallelism
+```
+
+Token nằm ở `tools/poc-workflow-engine/.env` (gitignored). Đúc lại: xem §7 của bằng chứng reset.
