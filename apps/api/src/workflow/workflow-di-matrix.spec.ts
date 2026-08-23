@@ -24,11 +24,16 @@ import { WorkflowScheduler } from './workflow.module.js';
  * dong thoi vu trang dispatcher tren production. Cong tac van hanh la chieu thu hai, va bai nay
  * do CA HAI, khong phai mot.
  *
- *   goi khach \ cong tac    off (mac dinh)               on
- *   ----------------------  ---------------------------  ---------------------------------
- *   khong khai workflow     A  none, ban giao `skipped`  A2 VAN none — cong tac khong de ra engine
- *   khai hatchet, du token  B1 none  <- KHANG DINH Q1-A  B2 adapter that, dispatcher co mat
- *   khai hatchet, thieu     C1 boot BINH THUONG          C2 boot NEM ngay
+ *   goi khach \ cong tac      off (mac dinh)              on
+ *   ------------------------  --------------------------  --------------------------------
+ *   GOI THAT cua Ultty        A  none + ban giao `skipped` (= cau hinh PRODUCTION)
+ *   chua khai workflow                                    A2 VAN none — cong tac khong de ra engine
+ *   khai hatchet, du token    B1 none  <- KHANG DINH Q1-A  B2 adapter that, dispatcher co mat
+ *   khai hatchet, thieu       C1 boot BINH THUONG          C2 boot NEM ngay
+ *
+ * Ca A dung GOI KHACH THAT, khong phai fixture: tu 23/08/2026 `tenants/ultty/tenant.json` DA khai
+ * `integrations.workflowEngine`, nen A chinh la thu ma `zalo-ultty` (production) se chay. Neu A
+ * doi mau, production doi hanh vi.
  *
  * B1 la o quan trong nhat ca bang: no la thu duy nhat dung giua "bat engine cho gd1-test" va
  * "vu trang production". Neu no doi thanh `hatchet`, mot lan deploy production se khoi dong
@@ -39,10 +44,11 @@ import { WorkflowScheduler } from './workflow.module.js';
  * va do se la mot hoi quy that su.
  */
 
-const WORKFLOW_FIXTURE = resolve(
+const FIXTURES = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../../../../packages/tenant/src/__tests__/fixtures/workflow-enabled',
+  '../../../../packages/tenant/src/__tests__/fixtures',
 );
+const WORKFLOW_FIXTURE = resolve(FIXTURES, 'workflow-enabled');
 
 interface Ctx {
   get: (token: never, options?: object) => unknown;
@@ -131,9 +137,21 @@ describe('W9 — ma tran DI: goi khach × cong tac van hanh, tren do thi Nest th
     }
   };
 
-  const useTenantWithoutWorkflow = (): void => {
+  /**
+   * Goi khach THAT cua Ultty — tu 23/08/2026 no DA khai `integrations.workflowEngine`, va
+   * `deploy-remote.sh:108` rsync dung goi nay sang CA `zalo-ultty` (production) lan
+   * `zalo-ultty-gd1-test`. Nen day khong phai mot fixture: day la CAU HINH PRODUCTION.
+   */
+  const useRealUlttyPack = (): void => {
     delete process.env.TENANT_DIR;
     process.env.TENANT = 'ultty';
+    resetTenantCache();
+  };
+
+  /** Khach CHUA khai workflow. Phai la fixture rieng — `ultty` khong con dong vai nay duoc. */
+  const useTenantWithoutWorkflow = (): void => {
+    delete process.env.TENANT;
+    process.env.TENANT_DIR = resolve(FIXTURES, 'knowledge-only');
     resetTenantCache();
   };
 
@@ -145,8 +163,8 @@ describe('W9 — ma tran DI: goi khach × cong tac van hanh, tren do thi Nest th
 
   // ------------------------------------------------- A · khach khong khai workflow
 
-  it('A — khach KHONG khai workflow, cong tac off: boot binh thuong, khong doi token, ban giao bao dung ly do', async () => {
-    useTenantWithoutWorkflow();
+  it('A — GOI KHACH THAT cua Ultty + cong tac off = cau hinh PRODUCTION: khong doi token, ban giao bao dung ly do', async () => {
+    useRealUlttyPack();
     // Va KHONG co token. Day la mot nua cua khang dinh: khach khong dung engine thi khong phai
     // cau hinh gi ca — nguoc lai thi moi khach deu phai mang mot bien ma ho khong dung toi.
     delete process.env.WORKFLOW_ENGINE_TOKEN;
@@ -171,7 +189,7 @@ describe('W9 — ma tran DI: goi khach × cong tac van hanh, tren do thi Nest th
     expect(result.reason).toBe('NO_TENANT_BINDING');
   }, 90_000);
 
-  it('A2 — khach KHONG khai workflow nhung cong tac ON: VAN none, va boot khong nem', async () => {
+  it('A2 — khach CHUA khai workflow nhung cong tac ON: VAN none, va boot khong nem', async () => {
     // Hai cong doc lap. Bat cong tac o mot khach chua khai workflow khong duoc de ra mot engine
     // tu hu khong, va cung khong duoc lam sap tien trinh — do la mot cau hinh HOP LE (mot stack
     // dung chung mot bo bien moi truong cho nhieu khach).
