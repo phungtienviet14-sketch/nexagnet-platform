@@ -6,6 +6,11 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { WorkflowWorkerModule } from './workflow-worker.module.js';
 import { WorkflowWorkerService } from './workflow-worker.service.js';
+import {
+  WORKER_HEALTH_DEFAULT_PORT,
+  WORKER_HEALTH_PORT_ENV,
+  startWorkerHealthServer,
+} from './worker-health.server.js';
 
 /**
  * DIEM VAO CUA TIEN TRINH WORKER — container RIENG, cung image voi `api`, khac lenh chay.
@@ -42,5 +47,35 @@ const context = await NestFactory.createApplicationContext(WorkflowWorkerModule)
 context.enableShutdownHooks();
 
 const worker = context.get(WorkflowWorkerService);
-await worker.start();
-logger.log(`Tien trinh worker dang phuc vu ${worker.registeredWorkflowName}`);
+
+/**
+ * MAY CHU SUC KHOE LEN TRUOC WORKER — thu tu nay la ca diem cua no.
+ *
+ * Dang ky voi engine mat 6–38 s (§29) va co the that bai roi thu lai. Trong suot khoang do
+ * `docker healthcheck` van hoi, va cau tra loi dung la "CHUA san sang, vi dang REGISTERING" —
+ * chu khong phai mot ket noi bi tu choi, thu doc ra giong het mot tien trinh da chet.
+ *
+ * Nghe LOOPBACK: healthcheck cua Docker chay BEN TRONG container, nen khong cong nao can ra
+ * ngoai va compose khong duoc them khoi `ports:` cho worker.
+ */
+const health = await startWorkerHealthServer({
+  readiness: worker.readiness,
+  port: Number(process.env[WORKER_HEALTH_PORT_ENV] ?? WORKER_HEALTH_DEFAULT_PORT),
+  workflowName: worker.registeredWorkflowName,
+});
+logger.log(`Health worker: http://127.0.0.1:${health.port}/ready`);
+
+// KHONG `await`: `startWithRetry()` co the chay rat lau khi engine chua len, va giu diem vao o
+// day se lam tien trinh khong xu ly duoc SIGTERM trong luc do — tuc la `docker stop` phai doi
+// het thoi gian an han roi SIGKILL, dung cai gia ma `enableShutdownHooks()` dang tranh.
+void worker.startWithRetry().then(() => {
+  const snapshot = worker.readiness.snapshot();
+  if (snapshot.fatal) {
+    // LAN DUY NHAT tien trinh tu ket lieu: hong cau hinh, thu lai khong bao gio cuu duoc.
+    // Thoat khac 0 lam no lo ra ngay luc deploy thay vi thanh mot container xanh khong lam gi.
+    logger.error(`${snapshot.fatal.reason}: ${snapshot.fatal.detail}`);
+    void context.close().finally(() => process.exit(1));
+    return;
+  }
+  logger.log(`Tien trinh worker dang phuc vu ${worker.registeredWorkflowName}`);
+});

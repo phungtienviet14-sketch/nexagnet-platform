@@ -40,11 +40,30 @@ export interface WorkflowWorkerCredentials {
   readonly namespace?: string;
 }
 
+/**
+ * Buoc ma `start()` dang lam. Hai buoc nay CO THAT va khac nhau ve cach xu ly:
+ *
+ *   connecting   dang mo ket noi gRPC — chua toi duoc engine la loi MANG/engine chua len
+ *   registering  da noi duoc, dang cho engine xac nhan khuon — cho toi 38 s la BINH THUONG (§29)
+ *
+ * Gop hai buoc thanh mot "dang khoi dong" se lam nguoi truc dem khong biet phai di xem mang hay
+ * chi phai doi them.
+ */
+export type WorkerStartPhase = 'connecting' | 'registering';
+
 export interface WorkflowWorkerDeps {
   /** Nguon doc `WORKFLOW_DESTINATION_*`. Tiem vao de test khong phai sua `process.env` toan cuc. */
   readonly env?: NodeJS.ProcessEnv;
   /** So viec chay song song tren mot tien trinh. */
   readonly slots?: number;
+  /**
+   * Bao ra ngoai `start()` dang o buoc nao.
+   *
+   * VI SAO LA CALLBACK chu khong phai de ben goi tu suy: chi file adapter moi biet luc nao
+   * client thuc su mo ket noi va luc nao engine bat dau xac nhan khuon. Ben goi doan hai moc do
+   * chinh la quay lai lam `sleep` — dung thu ma readiness sinh ra de thay the.
+   */
+  readonly onPhase?: (phase: WorkerStartPhase) => void;
 }
 
 export async function createWorkflowWorker(

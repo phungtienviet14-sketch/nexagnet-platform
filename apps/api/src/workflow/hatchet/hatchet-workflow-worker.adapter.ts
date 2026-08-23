@@ -50,6 +50,9 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
 
   async start(): Promise<void> {
     const env = this.deps.env ?? process.env;
+    // `hatchet()` khoi tao client = MO KET NOI gRPC. Bao buoc TRUOC khi goi, vi neu engine chua
+    // len thi loi se nem tu chinh dong duoi va readiness phai dang o dung `CONNECTING` luc do.
+    this.deps.onPhase?.('connecting');
     const hatchet = this.hatchet();
 
     // ------------------------------------------------------------ dinh nghia khuon
@@ -160,6 +163,9 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
     });
 
     // ------------------------------------------------------------ khoi dong
+    // Tu day tro di la DANG KY: engine phai xac nhan worker nay phuc vu action nao. Do la doan
+    // da do duoc 6,3 s / 12 s / 30,1 s / 38 s (§29) — tuc la "cham" o day KHONG phai trieu chung.
+    this.deps.onPhase?.('registering');
     this.worker = (await hatchet.worker(this.registration.workerName, {
       workflows: [workflow],
       slots: this.deps.slots ?? 5,
