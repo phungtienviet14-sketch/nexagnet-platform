@@ -156,10 +156,24 @@ hằng số trong README — và nó khớp, nên hằng số đó là mặc đ�
 ⚠️ **Điều này KHÔNG được dùng làm lời bào chữa mặc định.** Nếu bộ IT đỏ trên engine VỪA dựng sạch
 thì nguyên nhân là code hoặc cách ly test, và phải điều tra như vậy.
 
+⛔ **VÀ NÓ KHÔNG PHẢI GIẢI PHÁP PRODUCTION.** Đoạn trên là thủ tục **CHẨN ĐOÁN** cho máy dev, chỉ
+vậy thôi. Một hệ production không thể yêu cầu xoá volume để chạy tiếp — nếu `gd1-test` cần điều đó
+thì đấy là một lỗi phải sửa, không phải một quy trình vận hành.
+
 ### Hệ quả cho D2 — deploy production
 
-Đây là một tính chất **vận hành** của Hatchet, không phải của test. Trên `gd1-test`, worker sẽ bị
-khởi động lại theo mỗi lần deploy, và §27① vẫn còn nguyên: hai bản sao cùng phiên bản mang cùng
-một `workerName`. Phải theo dõi xem đăng ký cũ có tự hết hạn theo lease hay không, và nếu không thì
-đề xuất §27① (thêm hậu tố danh tính tiến trình vào `workerName`) chuyển từ *nên làm* thành *phải
-làm*.
+⚠️ **Nguyên nhân ở §2 vẫn là GIẢ THUYẾT, chưa chứng minh.** Việc reset làm bộ test xanh lại là
+bằng chứng *tương quan*, không phải bằng chứng *cơ chế*. Hai khả năng còn mở:
+
+| Khả năng | Hệ quả |
+|---|---|
+| chỉ là artifact của POC/harness (nhiều tiến trình một máy, cùng `workerName`, vòng đời do test điều khiển) | không phải lỗi production |
+| Hatchet **thật sự** tích đăng ký worker chết theo thời gian | `gd1-test` thoái hoá dần theo mỗi lần deploy; §27① thành **PHẢI làm** |
+
+Đã thêm **cổng D9-b** vào kế hoạch để trả lời dứt điểm: churn/soak trên **cùng một** engine,
+**không** reset volume, nhiều vòng `start → kill → restart` cùng phiên bản, rồi chứng minh run mới
+vẫn được worker sống nhận và hoàn tất. Đo số vòng, thời gian nhận việc theo vòng, số đăng ký engine
+giữ cho cùng `workerName`, và lease có tự hết hạn không.
+
+Nếu phải đổi `workerName` để có danh tính tiến trình: **research hành vi chính thức của Hatchet
+trước, chứng minh bằng test, rồi mới đổi.** `workerName` là thứ engine định tuyến theo.

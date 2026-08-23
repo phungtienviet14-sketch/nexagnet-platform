@@ -281,6 +281,32 @@ Không ERP/CRM thật. Đề xuất: một route nội bộ của API, chặn th
 Chứng minh: readiness · run hoàn tất · trace · audit · riêng tư · engine restart phục hồi · worker
 restart phục hồi.
 
+#### D9-b — CHURN/SOAK ĐĂNG KÝ WORKER *(cổng bổ sung, 23/08/2026)*
+
+**Câu hỏi phải trả lời dứt điểm:** phiên 7 thấy engine POC thoái hoá sau nhiều vòng stop/start, và
+đã *giả định* nguyên nhân là đăng ký worker chết tích luỹ (§27①). **Giả định đó chưa được chứng
+minh.** Hai khả năng dẫn tới hai hành động hoàn toàn khác nhau:
+
+| Khả năng | Hệ quả |
+|---|---|
+| **Chỉ là artifact của POC/harness** (nhiều tiến trình trên một máy, cùng `workerName`, vòng đời do test điều khiển) | Không phải lỗi production. Ghi lại và đi tiếp |
+| **Hatchet THẬT SỰ tích đăng ký worker chết theo thời gian** | Lỗi production. `gd1-test` sẽ thoái hoá dần theo mỗi lần deploy, và §27① chuyển từ *nên làm* thành **PHẢI làm** |
+
+**Thiết kế bài đo:** trên **CÙNG một** engine, **KHÔNG reset volume**, lặp nhiều vòng
+`worker start → kill/crash → restart` **cùng một phiên bản workflow**; sau N vòng, kích hoạt run
+mới và chứng minh chúng **vẫn được worker đang sống nhận và chạy xong**.
+
+Phải đo được, không chỉ pass/fail: số vòng · thời gian nhận việc theo từng vòng (có tăng dần
+không) · số đăng ký engine đang giữ cho cùng `workerName` · lease có tự hết hạn không.
+
+**Ràng buộc cứng:**
+- ⛔ **"Dựng lại engine sạch" KHÔNG phải giải pháp production.** Nó là **thủ tục CHẨN ĐOÁN** cho
+  máy dev, và chỉ được dùng như vậy. Một hệ production không thể yêu cầu xoá volume để chạy tiếp.
+- Nếu cần đổi `workerName` để có danh tính tiến trình / dọn dẹp tốt hơn: **research hành vi chính
+  thức của Hatchet trước, rồi chứng minh bằng test, rồi mới đổi.** Không đổi theo suy đoán —
+  `workerName` là thứ engine định tuyến theo, và đoán sai ở đây là một chế độ hỏng lúc deploy.
+- **Không redesign D1.** Cổng này ĐO, không sửa.
+
 Dashboard: chuẩn bị **URL + checklist**, user tự đăng nhập. Kiểm: danh sách run · phiên bản workflow
 · bước · số lần thử · lỗi · input/output đã che · metadata · trace · nút replay/cancel.
 **Không** clone dashboard.
