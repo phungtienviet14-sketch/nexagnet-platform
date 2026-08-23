@@ -46,7 +46,7 @@ export function AgentCard({ agent, onSelect }: AgentCardProps) {
 
       <div className="wf-agent-card__caps">
         <span className="wf-cap-tag wf-cap-tag--avail">{availableCount} Sẵn sàng</span>
-        <span className="wf-cap-tag wf-cap-tag--demo">{demoCount} Thử nghiệm</span>
+        <span className="wf-cap-tag wf-cap-tag--demo">{demoCount} Đang cấu hình</span>
         {plannedCount > 0 && (
           <span className="wf-cap-tag wf-cap-tag--plan">{plannedCount} Định hướng</span>
         )}

@@ -38,5 +38,29 @@ describe('Wata public branding contract', () => {
     expect(header).toContain('branding.logoPath');
     expect(header).not.toMatch(/wata|watatech/i);
     expect(sharedExperienceCopy).not.toMatch(/netviet|wata|watatech/i);
+    expect(header).not.toMatch(/dữ liệu demo|môi trường thử nghiệm minh họa/i);
+
+    const customerFacingPaths = [
+      'experiences/agent-workforce/views/components/TopNav.tsx',
+      'experiences/agent-workforce/views/components/AgentCard.tsx',
+      'experiences/agent-workforce/views/components/StatusBadge.tsx',
+      'experiences/agent-workforce/views/DirectoryView.tsx',
+      'experiences/agent-workforce/views/DocumentsView.tsx',
+      'experiences/agent-workforce/views/OperationsView.tsx',
+      'experiences/agent-workforce/fixtures/agents.ts',
+      'experiences/agent-workforce/fixtures/assistant.ts',
+      'experiences/agent-workforce/fixtures/documents.ts',
+      'experiences/agent-workforce/fixtures/operations.ts',
+    ] as const;
+    const customerFacingCopy = customerFacingPaths
+      .map((path) => readFileSync(resolve(process.cwd(), path), 'utf8'))
+      .join('\n');
+    const tenantKnowledge = readFileSync(
+      resolve(process.cwd(), '../../tenants/wata/data/knowledge.json'),
+      'utf8',
+    );
+
+    expect(customerFacingCopy).not.toMatch(/dữ liệu demo|thử nghiệm|dữ liệu mẫu|file mẫu|minh họa|mô phỏng/i);
+    expect(tenantKnowledge).not.toMatch(/mô phỏng/i);
   });
 });

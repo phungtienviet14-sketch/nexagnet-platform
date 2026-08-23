@@ -132,7 +132,7 @@ export function DocumentsView({
                 )
               }
             >
-              {isUploading ? 'Đang phân tích...' : 'Thử tải file mẫu →'}
+              {isUploading ? 'Đang phân tích...' : 'Tải tài liệu để phân tích →'}
             </button>
           </div>
         </div>

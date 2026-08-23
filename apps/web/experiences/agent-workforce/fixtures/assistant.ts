@@ -52,7 +52,7 @@ export const DETERMINISTIC_ASSISTANT_RESPONSES: Record<string, Omit<AssistantMes
     text: 'Dưới đây là tóm tắt nhanh **2 cảnh báo cấp độ Khẩn cấp (Critical)** từ hệ thống Smart Alerts:\n\n1. **Pháp chế — Hợp đồng VinFast (HĐ-2026-VF09):**\n   - *Vấn đề:* Mức phạt chậm giao hàng bị ấn định 1.5%/ngày, tối đa 15% giá trị hợp đồng.\n   - *Đề xuất:* Đàm phán giữ mức 0.5%/ngày (tổng không quá 8%) và loại trừ thời gian chờ nghiệm thu mẫu.\n\n2. **Sản xuất — Nguy cơ trễ hạn đơn hàng SO-8842:**\n   - *Vấn đề:* Cảm biến máy Laser CNC-03 báo mòn bạc đạn, công suất giảm 40%.\n   - *Phương án:* Điều chuyển 60% phôi sang máy phụ CNC-05, bảo trì máy chính trong ca đêm để đảm bảo giao hàng đúng ngày 22/08.',
     sources: [
       { title: 'AI Kế toán & Pháp chế', category: 'Pháp lý', snippet: 'Phân tích điều khoản hợp đồng đối chiếu Quy chế Quản trị Hợp đồng.', docId: 'doc-contract-01' },
-      { title: 'AI Sản xuất (PdM & Solver)', category: 'Vận hành xưởng', snippet: 'Tín hiệu cảm biến rung máy CNC-03 và mô phỏng cân bằng tải.' },
+      { title: 'AI Sản xuất (PdM & Solver)', category: 'Vận hành xưởng', snippet: 'Tín hiệu cảm biến rung máy CNC-03 và đánh giá cân bằng tải.' },
     ],
     actionSuggestions: [
       { label: 'Xem phân tích hợp đồng', actionType: 'view_doc', targetId: 'doc-contract-01' },

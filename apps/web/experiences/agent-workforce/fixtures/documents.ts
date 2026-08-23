@@ -11,8 +11,8 @@ export const SAMPLE_DOCUMENTS: readonly DocumentItem[] = [
     mode: 'contract_review',
     analysis: {
       metadata: {
-        'Số hợp đồng': 'HĐ-2026-VF09/DEMO-VF',
-        'Bên bán (Bên A)': 'Doanh nghiệp minh họa',
+        'Số hợp đồng': 'HĐ-2026-VF09/VF',
+        'Bên bán (Bên A)': 'Doanh nghiệp cung ứng',
         'Bên mua (Bên B)': 'Tập đoàn Sản xuất Công nghiệp & Xe điện VinFast',
         'Tổng giá trị': '3.850.000.000 VNĐ (Chưa VAT)',
         'Thời hạn thực hiện': '12 tháng (kể từ 01/09/2026)',
@@ -78,7 +78,7 @@ export const SAMPLE_DOCUMENTS: readonly DocumentItem[] = [
         'Mẫu số / Ký hiệu': '1/001 — C26TDP',
         'Số hóa đơn': '0002891',
         'Ngày lập': '15/07/2026',
-        'Đơn vị bán': 'Doanh nghiệp minh họa (MST: 0108998877)',
+        'Đơn vị bán': 'Doanh nghiệp cung ứng (MST: 0108998877)',
         'Đơn vị mua': 'Công ty TNHH Cơ khí Chính xác Đại Phát (MST: 0314567890)',
         'Hình thức thanh toán': 'Chuyển khoản (Net-30)',
       },

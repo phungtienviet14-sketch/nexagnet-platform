@@ -122,7 +122,7 @@ export const MCP_TOOLS: readonly McpToolInfo[] = [
     name: 'scheduling_solver_bridge',
     group: 'Sản xuất & Điều độ',
     status: 'demo',
-    permissions: 'Execute (Mô phỏng lập lịch)',
+    permissions: 'Execute (Điều độ lập lịch)',
     description: 'Kết nối mô hình tối ưu hóa cân bằng chuyền và tính toán ETA đơn hàng.',
   },
 ];
