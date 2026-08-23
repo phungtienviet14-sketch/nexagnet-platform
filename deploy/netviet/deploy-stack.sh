@@ -210,16 +210,38 @@ else
 fi
 
 # Public endpoints/UI shell phai reachable qua TLS, trong khi protected API phai tu choi anonymous.
+#
+# NANG LUC CUA KHACH QUYET DINH ROUTE NAO TON TAI. `/zalo` do nang luc `messaging` phuc vu; khach
+# khong bat no thi Next render notFound, va `curl -fsS` that bai — DUNG RA phai vay. Deploy WATA
+# 21/08/2026 chet dung o cong nay du ca stack da healthy va smoke da qua.
+#
+# Khong doc duoc goi khach -> GIU NGUYEN doi hoi cu (bat bien 7: khong lam yeu cong kiem).
+if caps="$(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1],encoding="utf-8")).get("capabilities") or []))' "${APP_DIR}/tenant-pack/tenant.json" 2>/dev/null)"; then
+  has_messaging=0
+  [[ " ${caps} " == *" messaging "* ]] && has_messaging=1
+else
+  echo "Khong doc duoc nang luc tu tenant-pack — van doi day du cong /zalo." >&2
+  has_messaging=1
+fi
+
+public_gates_ok() {
+  curl -fsS --max-time 10 --resolve "${DEMO_DOMAIN}:443:127.0.0.1" "https://${DEMO_DOMAIN}/health" >/dev/null || return 1
+  curl -fsS --max-time 10 --resolve "${FLOWISE_DOMAIN}:443:127.0.0.1" "https://${FLOWISE_DOMAIN}/api/v1/ping" >/dev/null || return 1
+  if [[ "${has_messaging}" -eq 1 ]]; then
+    curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" "https://${OPERATOR_DOMAIN}/zalo" >/dev/null || return 1
+    local status
+    status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" "https://${OPERATOR_DOMAIN}/zalo/status")"
+    [[ "${status}" == '401' ]] || return 1
+  else
+    # Khach khong co kenh van phai co VO DIEU HANH phuc vu qua TLS. Kiem trang goc thay cho /zalo:
+    # bo han cong nay se cho mot khach khong-messaging deploy xanh ma khong ai kiem gi ca.
+    curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" "https://${OPERATOR_DOMAIN}/" >/dev/null || return 1
+  fi
+  return 0
+}
+
 for attempt in {1..60}; do
-  if curl -fsS --max-time 10 --resolve "${DEMO_DOMAIN}:443:127.0.0.1" \
-    "https://${DEMO_DOMAIN}/health" >/dev/null && \
-    curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
-    "https://${OPERATOR_DOMAIN}/zalo" >/dev/null && \
-    [[ "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
-      --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
-      "https://${OPERATOR_DOMAIN}/zalo/status")" == '401' ]] && \
-    curl -fsS --max-time 10 --resolve "${FLOWISE_DOMAIN}:443:127.0.0.1" \
-    "https://${FLOWISE_DOMAIN}/api/v1/ping" >/dev/null; then
+  if public_gates_ok; then
     break
   fi
   if [[ "${attempt}" -eq 60 ]]; then
@@ -228,4 +250,6 @@ for attempt in {1..60}; do
   fi
   sleep 2
 done
-echo "Public HTTPS healthy: https://${DEMO_DOMAIN} | https://${OPERATOR_DOMAIN}/zalo | https://${FLOWISE_DOMAIN}"
+operator_probe="/zalo"
+[[ "${has_messaging}" -eq 1 ]] || operator_probe="/"
+echo "Public HTTPS healthy: https://${DEMO_DOMAIN} | https://${OPERATOR_DOMAIN}${operator_probe} | https://${FLOWISE_DOMAIN}"

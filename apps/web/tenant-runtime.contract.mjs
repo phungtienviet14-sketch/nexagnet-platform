@@ -48,6 +48,16 @@ const PACK_B = {
   monogram: 'HA',
   experience: 'knowledge-workspace',
 };
+const PACK_C = {
+  slug: 'khach-ba',
+  productName: 'Khach Ba AI',
+  installName: 'Khach Ba — AI Workforce Control Plane',
+  pageTitle: 'Khach Ba AI — AI Workforce Control Plane',
+  themeColor: '#1d4ed8',
+  backgroundColor: '#0a0f1d',
+  monogram: 'BA',
+  experience: 'agent-workforce',
+};
 
 const tmpDirs = [];
 
@@ -77,7 +87,9 @@ function writePack(spec) {
       capabilities:
         spec.experience === 'operations-console'
           ? ['knowledge', 'messaging', 'sales-order', 'campaign', 'operations', 'notifications']
-          : ['knowledge'],
+          : spec.experience === 'agent-workforce'
+            ? ['knowledge', 'operations']
+            : ['knowledge'],
       policies:
         spec.experience === 'operations-console'
           ? {
@@ -269,6 +281,7 @@ test('cung MOT artifact, doi tenant luc chay -> branding va experience deu doi',
 
   const dirA = writePack(PACK_A);
   const dirB = writePack(PACK_B);
+  const dirC = writePack(PACK_C);
 
   t.after(() => {
     for (const dir of tmpDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -284,6 +297,7 @@ test('cung MOT artifact, doi tenant luc chay -> branding va experience deu doi',
   assertMatchesPack(seenA, PACK_A, 'goi A');
   assertExperience(seenA, PACK_A, 'goi A');
   assertNoTraceOf(seenA, PACK_B, 'goi A');
+  assertNoTraceOf(seenA, PACK_C, 'goi A');
 
   const serverB = await startServer(dirB);
   let seenB;
@@ -302,13 +316,25 @@ test('cung MOT artifact, doi tenant luc chay -> branding va experience deu doi',
     zaloResponseB.status === 404 || /404|could not be found/i.test(zaloResponseB.html),
     'knowledge-only tenant phai render notFound cho route /zalo',
   );
-  // Trong tam: lan chay thu hai khong duoc con dau vet cua goi thu nhat.
   assertNoTraceOf(seenB, PACK_A, 'goi B');
+  assertNoTraceOf(seenB, PACK_C, 'goi B');
+
+  const serverC = await startServer(dirC);
+  let seenC;
+  try {
+    seenC = await readBranding();
+  } finally {
+    await stopServer(serverC);
+  }
+  assertMatchesPack(seenC, PACK_C, 'goi C');
+  assertExperience(seenC, PACK_C, 'goi C');
+  assertNoTraceOf(seenC, PACK_A, 'goi C');
+  assertNoTraceOf(seenC, PACK_B, 'goi C');
 
   assert.equal(
     readFileSync(buildIdPath, 'utf8'),
     buildIdBefore,
-    'BUILD_ID doi -> da build lai giua hai lan chay, phep chung minh khong con gia tri',
+    'BUILD_ID doi -> da build lai giua cac lan chay, phep chung minh khong con gia tri',
   );
-  t.diagnostic(`BUILD_ID khong doi (${buildIdBefore.trim()}) — mot artifact cho ca hai khach`);
+  t.diagnostic(`BUILD_ID khong doi (${buildIdBefore.trim()}) — mot artifact cho ca ba khach`);
 });

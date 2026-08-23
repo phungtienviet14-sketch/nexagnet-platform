@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "slug": "knowledge-operations",
+  "identity": {
+    "displayName": "Knowledge Operations Fixture",
+    "shortName": "Workforce"
+  },
+  "branding": {
+    "productName": "Agent Workforce",
+    "installName": "Agent Workforce",
+    "pageTitle": "Agent Workforce",
+    "pageDescription": "Generic non-commercial tenant fixture.",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#0a0f1d",
+    "monogram": "W",
+    "composerPlaceholder": "Search shared knowledge"
+  },
+  "experience": "agent-workforce",
+  "capabilities": ["knowledge", "operations"],
+  "policies": {
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {
+    "contentSource": { "adapter": "local_manifest" }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" }
+  }
+}

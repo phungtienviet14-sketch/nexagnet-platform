@@ -86,6 +86,18 @@ const knowledgeTenant = {
   bootstrap: { knowledge: { path: 'data/knowledge.json' } },
 } as const satisfies TenantConfig;
 
+const workforceTenant = {
+  ...operationsTenant,
+  slug: 'fixture-workforce',
+  identity: { displayName: 'Fixture Workforce', shortName: 'Workforce' },
+  experience: 'agent-workforce',
+  capabilities: ['knowledge', 'operations'],
+  policies: { readiness: { blockedCapabilities: [] } },
+  integrations: { contentSource: { adapter: 'local_manifest' } },
+  persona: {},
+  bootstrap: { knowledge: { path: 'data/knowledge.json' } },
+} as const satisfies TenantConfig;
+
 const leanOperationsTenant = {
   ...operationsTenant,
   slug: 'fixture-lean-operations',
@@ -110,9 +122,10 @@ describe('ExperienceRegistry', () => {
     }
   });
 
-  it('resolves both reusable compositions without falling back to another experience', () => {
+  it('resolves all reusable compositions without falling back to another experience', () => {
     expect(resolveExperience('operations-console').id).toBe('operations-console');
     expect(resolveExperience('knowledge-workspace').id).toBe('knowledge-workspace');
+    expect(resolveExperience('agent-workforce').id).toBe('agent-workforce');
     expect(() => resolveExperience('missing' as never)).toThrow(/experience/i);
   });
 
@@ -169,6 +182,13 @@ describe('settings composition', () => {
 
     expect(tabs).toEqual(['content']);
     expect(tabs).not.toEqual(expect.arrayContaining(['zalo', 'source-truth', 'campaigns']));
+  });
+
+  it('keeps an agent-workforce experience focused on content, readiness, users, and audit without Zalo or sales-order panels', () => {
+    const tabs = selectSettingsTabIds(toPublicTenantDescriptor(workforceTenant));
+
+    expect(tabs).toEqual(['content', 'readiness', 'users', 'audit']);
+    expect(tabs).not.toEqual(expect.arrayContaining(['zalo', 'members', 'source-truth', 'rules', 'campaigns', 'automation', 'notifications']));
   });
 
   it('chooses the first visible panel when Zalo or a requested tab is unavailable', () => {

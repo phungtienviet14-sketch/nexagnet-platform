@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { loadEnv } from '@netviet/shared';
-import { tenantOrderAutomation, tenantReadiness } from '@netviet/tenant';
+import { tenantHasCapability, tenantOrderAutomation, tenantReadiness } from '@netviet/tenant';
 import { BotIdentityService } from '../channels/bot-identity.service.js';
 import { ZaloUserClient, type ZaloGroupView } from '../channels/zalo-user.client.js';
 import { PrismaService } from '../config/prisma.service.js';
@@ -12,8 +12,11 @@ import { SOURCE_TRUTH_RESOURCES, type SourceTruthResource } from './source-truth
 @Injectable()
 export class SettingsQueryService {
   constructor(
-    private readonly zca: ZaloUserClient,
-    private readonly botIdentity: BotIdentityService,
+    // `messaging` la nang luc TUY CHON. Mot khach chi bat `knowledge` + `operations` khong nap
+    // module kenh Zalo, nen hai provider nay khong ton tai trong AppModule cua ho — doi chung
+    // bat buoc lam ca tien trinh api khong boot (deploy WATA 21/08/2026 chet dung o day).
+    @Optional() private readonly zca: ZaloUserClient | null,
+    @Optional() private readonly botIdentity: BotIdentityService | null,
     private readonly knowledge: KnowledgeService,
     private readonly runtime: RuntimeSettingsService,
     private readonly rules: RuleConfigService,
@@ -22,7 +25,7 @@ export class SettingsQueryService {
 
   async summary() {
     const env = loadEnv();
-    const zcaStatus = this.zca.status();
+    const zcaStatus = this.zca?.status() ?? null;
     const activeRule = await this.rules.getActive();
     const groups = await this.groupSummaries();
     return {
@@ -32,10 +35,12 @@ export class SettingsQueryService {
       // Nguon su that lai dang chia nut "Mo Admin nang cao" -> bam ra trang loi giua buoi demo.
       adminUi: env.ADMIN_UI,
       zca: zcaStatus,
-      zcaState: zcaStatus.state,
-      botIdentity: this.botIdentity.status(),
+      zcaState: zcaStatus?.state ?? 'unavailable',
+      botIdentity: this.botIdentity?.status() ?? { state: 'disabled' as const },
       autoSend: { enabled: this.runtime.autoSend() === 'on' },
-      orderAutomation: tenantOrderAutomation(),
+      // `tenantOrderAutomation()` assert nang luc `sales-order` va NEM neu khach khong bat.
+      // Trang /settings cua khach chi co `operations` van phai tra loi duoc, nen hoi truoc.
+      orderAutomation: tenantHasCapability('sales-order') ? tenantOrderAutomation() : null,
       businessBlockers: tenantReadiness().blockedCapabilities,
       sourceTruth: {
         status: env.PERSISTENCE === 'prisma' ? 'available' : 'fallback',
@@ -75,6 +80,9 @@ export class SettingsQueryService {
   }
 
   private async groupSummaries(): Promise<unknown[]> {
+    // Danh sach nhom la du lieu CUA kenh Zalo. Khach khong bat `messaging` khong co kenh nao,
+    // nen khong co nhom nao de tom tat — tra rong thay vi doan ra mot trang thai kenh gia.
+    if (!this.zca) return [];
     const zcaStatus = this.zca.status();
     let zcaGroups: ZaloGroupView[] = [];
     try {
