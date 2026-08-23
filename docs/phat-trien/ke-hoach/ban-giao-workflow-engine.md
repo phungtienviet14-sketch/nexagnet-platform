@@ -647,48 +647,86 @@ Cả hai vẫn bị Phase 0 chặn.
 | D8 deploy CHỈ `ultty-gd1-test` | ⬜ **SẴN SÀNG CHẠY** |
 | D9 E2E trung lập + dashboard + đo lại DRAIN | ⬜ phụ thuộc D8 |
 
-## 42. Việc kế tiếp, chính xác
+## 42. ⛔ HAI CỔNG ĐANG CHẶN D8 — cả hai cần NGƯỜI quyết
 
-**Một quyết định của người, rồi mới tới code.**
+Code đã xong và đã commit. **8 commit nằm ở local, CHƯA push.** Không có gì được deploy.
 
-### Đĩa VM: đã xử lý (23/08/2026)
-
-Audit tìm ra `/` ở **92%, còn 6,6 GB** — chặn thật, vì mỗi lần deploy bất kỳ khách nào lại để lại
-một ảnh flowise không tag 9,29 GB (đang có **40** bản, 52 GB thu hồi được), và khi đĩa đầy thì thứ
-chết trước là **PostgreSQL của khách đang chạy**.
-
-Đã **nới đĩa 80 → 200 GB, KHÔNG downtime** (`pd-balanced` nới nóng được + `growpart` + `resize2fs`
-online). **Không** đổi machine type — cái đó phải tắt máy ⇒ ngắt cả 4 khách, mà RAM/CPU đã đo là
-không thiếu (3,6 Gi available, load 0,9/nhân).
+### 42.1 Hook `[ECC pre-push]` chặn push vì code KHÔNG được push
 
 ```
-/  77 G · còn 6,6 G · 92%   ->   193 G · còn 123 G · 37%
+✖ 7 problems (7 errors, 0 warnings)
+[ECC pre-push] FAILED: lint failed
 ```
 
-17/17 container vẫn `healthy`, **uptime không đổi** ⇒ không cái nào khởi động lại.
+Cả 7 lỗi là `unused-import` trong **`apps/mini/`**:
 
-**Còn nợ, không chặn D8:** 40 ảnh không tag vẫn tích luỹ. Nới đĩa mua thời gian chứ không sửa cái
-tích luỹ. Dọn thì an toàn (`rollback.sh:64` kéo lại từ AR theo digest, AR giữ 47 bản có tag) nhưng
-để một phiên vận hành riêng, có chọn lọc, **không** `prune -a` mù.
+| File | Lỗi |
+|---|---|
+| `apps/mini/src/App.tsx` | `ZMPRouter` khai mà không dùng |
+| `apps/mini/src/components/AgentTimeline.tsx` | `STATUS_ICONS` |
+| `apps/mini/src/pages/ActivityPage.tsx` | `StatusBadge` |
+| `apps/mini/src/pages/OrderDetailPage.tsx` | `Button`, `OrderView` |
+| `apps/mini/src/pages/ProfilePage.tsx` | `Box`, `LiveIndicator` |
 
-### Việc kế tiếp
+**`git ls-files apps/mini` = 0.** Thư mục hoàn toàn **untracked**, thuộc việc song song ⇒ **nó
+không nằm trong nội dung được push**. Hook lint cả cây làm việc nên nó chặn vì thứ nó sẽ không đẩy đi.
 
-1. **D8** — thứ tự bắt buộc: tạo 2 secret của người
-   (`zalo-ultty-gd1-test-hatchet-db-password`, `zalo-ultty-gd1-test-workflow-dashboard-htpasswd`;
-   cái sau sinh bằng `docker run --rm caddy:2-alpine caddy hash-password --plaintext '<mk>'`)
-   → `render-secrets.sh` với `WORKFLOW_ENGINE=on` → `bootstrap-workflow-engine.sh` (đúc token)
-   → `render-secrets.sh` lại → `deploy-stack.sh`.
-   `render-secrets.sh` **fail-closed** (exit 78) nếu bật công tắc mà thiếu một trong hai secret.
-2. **Đo RAM thật của `workflow-worker-v1`** — hiện là ô **CHƯA ĐO** trong runbook §7. Không mượn
-   số của `api`: worker boot `WorkflowWorkerModule` hẹp hơn nhiều.
-3. **D9** + **D9-b** churn/soak, và **đo lại DRAIN trên container Linux** (món nợ của phiên 7 —
-   Windows không có SIGTERM thật).
+Không tự xử vì cả hai đường đều trái chỉ thị: sửa `apps/mini/` là **chạm việc song song**;
+`--no-verify` là **bỏ qua hook** mà chưa ai cho phép. **Người quyết.**
 
-## 43bis. Điểm cần quyết ở D7, KHÔNG tự đổi
+### 42.2 Deploy gd1-test bắt buộc từ `refs/heads/main`
 
-`postgres:15.6` (không alpine) tốn **608 MB** đĩa; `postgres:15-alpine` tiết kiệm ~550 MB. Chưa
-đổi vì 15.6 là bản Hatchet kiểm thử trên compose chính thức của họ, và khác biệt musl/glibc là một
-biến số mới không ai đo. Với đĩa đang 92% thì đây là một lựa chọn thật, cần quyết bằng số.
+[`reusable-deploy-tenant.yml:128`](../../../.github/workflows/reusable-deploy-tenant.yml):
+
+```
+[[ "${GITHUB_REF}" == 'refs/heads/main' ]] || {
+  echo 'GD1-test deployment must run from refs/heads/main.' >&2; exit 1; }
+# + đúng SHA đó phải có CI ci.yml `conclusion=success` trên branch main
+```
+
+⇒ D8 qua CI **đòi merge nhánh vào `main`** — và nhánh đang mang **35 commit chưa push**, trong đó
+**27 commit là của các phiên trước**, không phải của phiên 8. Merge vào main là quyết định vượt
+phạm vi "làm tiếp D2–D9". **Người quyết.**
+
+---
+
+## 42bis. D8 — runbook chính xác, chạy khi hai cổng trên mở
+
+**Đã làm sẵn (không phải làm lại):** ba secret đã tạo trên `netviet-host-968934832433`:
+
+| Secret | Nội dung |
+|---|---|
+| `zalo-ultty-gd1-test-hatchet-db-password` | 32 ký tự chữ+số (an toàn trong URL `postgres://`) |
+| `zalo-ultty-gd1-test-workflow-dashboard-htpasswd` | bcrypt `$2a$`, 60 ký tự |
+| `zalo-ultty-gd1-test-workflow-dashboard-password` | bản rõ để đăng nhập dashboard |
+
+Đọc mật khẩu dashboard (user Basic Auth là `operator`):
+
+```bash
+gcloud secrets versions access latest --project netviet-host-968934832433 --secret zalo-ultty-gd1-test-workflow-dashboard-password
+```
+
+**Trình tự deploy:**
+
+1. Mở hai cổng §42.
+2. Actions → **deploy-tenant** → Run workflow, nhánh **main**:
+   `tenant=ultty` · `environment=gd1-test` · `workflow_engine=on`.
+3. Lần chạy này sẽ **THẤT BẠI có chủ ý** ở `deploy-stack.sh` với `exit 78`:
+   *"WORKFLOW_ENGINE=on nhưng secrets.env chưa có WORKFLOW_ENGINE_TOKEN"*. Đó là **vòng gà–trứng
+   đã biết trước**, không phải hỏng: token chỉ tồn tại sau khi engine đã migrate + quickstart.
+   Nhưng lúc này compose + engine đã lên trên VM.
+4. SSH vào VM, đúc token (idempotent — đã có secret thì nó tự dừng):
+   ```bash
+   sudo STACK_SLUG=ultty-gd1-test bash /srv/netviet/apps/zalo-ultty-gd1-test/bootstrap-workflow-engine.sh
+   ```
+5. Chạy lại bước 2. Lần này `render-secrets.sh` đọc được token và deploy đi hết.
+
+> **Chưa đo được cho tới bước này:** RAM thật của `workflow-worker-v1`. Ô đó trong runbook §7 đang
+> ghi **CHƯA ĐO**, và **không được mượn số của `api`** — worker boot `WorkflowWorkerModule` hẹp hơn
+> nhiều. Đo xong thì sửa runbook §7.
+
+**Sau D8 là D9 + D9-b**, và món nợ **DRAIN** của phiên 7 (Windows không có SIGTERM thật) phải đo
+lại ở đây — trên container Linux.
 
 ## 43. Chạy lại
 
@@ -703,3 +741,89 @@ RUN_PRISMA_IT=1 RUN_WORKFLOW_IT=1 WORKFLOW_ENGINE_TOKEN=<token> WORKFLOW_ENGINE_
 ```
 
 Token nằm ở `tools/poc-workflow-engine/.env` (gitignored). Đúc lại: xem §7 của bằng chứng reset.
+
+---
+
+## 44. PHIÊN 8 (23/08/2026) — đã làm gì, và đo bằng gì
+
+HEAD đầu phiên `4e5b634` → cuối phiên `c590f52`. **8 commit, CHƯA push.**
+
+### 44.1 Hồi quy hết-heap: nguyên nhân thật KHÔNG phải hai nghi vấn ban đầu
+
+Bàn giao phiên 7 nghi *vòng import* hoặc *thứ tự khởi tạo provider*. **Cả hai đều sai.**
+
+```
+await expect(boot()).rejects.toThrow(/WORKFLOW_ENGINE_TOKEN_MISSING/);
+```
+
+Công tắc mặc định `off` làm `boot()` **không còn ném** (đúng thiết kế). Khi promise RESOLVE,
+vitest dựng `AssertionError` mang `showDiff: true` và `actual` = chính `NestApplicationContext` —
+đối tượng giữ `container`: mọi module, mọi provider, cả đồ thị DI. Vitest tuần tự hoá `actual` để
+vẽ diff **và gửi qua IPC** về tiến trình báo cáo, rồi đi bộ qua một đồ thị khổng lồ có chu trình.
+
+| Bài | Kết quả |
+|---|---|
+| ca A riêng | ✅ 74 MB |
+| ca B riêng | ✅ **ĐỎ SẠCH, đọc được**, 6,7 s |
+| ca C riêng | ❌ **OOM 4 GB, 2,5 phút** |
+| ca C, đổi **duy nhất** dòng khẳng định | ✅ 11 s, 84 MB |
+| bắt lỗi lại rồi soi | `keys=message\|showDiff\|expected\|actual` · `actualCtor=NestApplicationContext` · có `container` |
+
+**Một giả thuyết bị BÁC BỎ bằng phép đo, và chính chỗ đó mới ra nguyên nhân:** tuần tự hoá một
+context Nest trong `.rejects` **khi TA TỰ BẮT LỖI** chỉ tốn **71 ký tự / 2 ms**. Nên "vitest
+serialize context" một mình nó không phải nguyên nhân — phải là lỗi **THOÁT RA** cho vitest.
+
+`err.message` chỉ 71 ký tự; cả 4 GB nằm trong `err.actual`. Đó là lý do cú OOM trông như không
+liên quan gì tới khẳng định — và là lý do phiên trước đi nghi môi trường.
+
+Đã chặn tái phát: `apps/api/src/workflow/nest-context-assertion.contract.spec.ts` (quét cả thư
+mục, có bài chống-xanh-giả, và một bài **đo lại cơ chế của vitest** — vitest đổi thì bài đó đỏ).
+
+### 44.2 D2–D7 — đo, không đoán
+
+| Việc | Số đo thật |
+|---|---|
+| `max_connections` | POC copy 1000 của Hatchet; engine thật giữ **20** kết nối ⇒ chọn **200** |
+| healthcheck engine | cổng **8733**, `/live` `/ready` = 200, `/health` = **404** |
+| dashboard | chạy **HAI** tiến trình: `hatchet-api` :8080 + nginx :80 proxy `/api` ⇒ edge trỏ :80 |
+| tenant `default` | UUID `707d0855-…` là hằng số trong bản gieo — **vẫn đọc theo `slug`**, không gõ cứng |
+| RAM cụm engine | **252 MiB** (205 + 28 + 19) |
+| ảnh Hatchet | ≈ **1,04 GB** (dùng chung mọi stack trên cùng VM) |
+
+**D6 chứng minh cả hai chiều** trên `deploy/netviet/compose.yaml` THẬT (project dùng một lần
+`zalo-d6proof`; `pocwf` không bị đụng):
+
+- **ca dương** — backup → `down -v` → restore cả dump lẫn volume config: tenant 2→2, bảng 182→182,
+  `masterKeyset` sha `d71d31b2…` **giữ nguyên**, engine chạy đúng digest đã ghim.
+- **ca âm** — restore dump mà **bỏ** volume `hatchet-config`: engine vẫn **Healthy**, DB vẫn **182
+  bảng**, nhưng khoá là `52fee191…` **khác hẳn**. ⇒ **một lần phục hồi XANH ra dữ liệu không đọc
+  được.** Đó là lý do dump Postgres một mình nó KHÔNG phải backup.
+
+**D7 tìm ra một cổng đỏ thật** — đĩa `/` **92%, còn 6,6 GB**, do **40 bản không tag** của
+`flowise-3.1.4-deepseek-fix` × 9,29 GB (52 GB thu hồi được). Đã **nới đĩa 80→200 GB, KHÔNG
+downtime** (`pd-balanced` nới nóng + `growpart` + `resize2fs`): còn **123 GB, 37%**. Chứng minh
+không downtime bằng bằng chứng: 17/17 container vẫn `healthy`, **uptime không đổi**.
+
+> **Còn nợ (không chặn):** 40 ảnh không tag vẫn tích luỹ mỗi lần deploy. Dọn thì an toàn — đã kiểm
+> `rollback.sh:64` kéo lại từ Artifact Registry **theo digest** (AR giữ 47 bản có tag) — nhưng để
+> một phiên vận hành riêng, làm có chọn lọc, **không** `prune -a` mù.
+
+### 44.3 Lệch khỏi kế hoạch — nói rõ để không ai tưởng là sót
+
+`WORKFLOW_ENGINE_HOST_PORT` được **ghi cứng** `hatchet-engine:7070` thay vì là biến (kế hoạch §D5
+liệt nó vào danh sách biến). Lý do: địa chỉ engine là sự thật về **topo** của chính compose; để nó
+thành biến là để ngỏ đúng lỗ hổng D3 phải đóng — một giá trị sai trong `secrets.env` sẽ trỏ hai
+stack vào một engine (§26). Có ca âm tính ép điều này.
+
+### 44.4 Điểm cần quyết, KHÔNG tự đổi
+
+`postgres:15.6` (không alpine) tốn **608 MB** đĩa; `postgres:15-alpine` tiết kiệm ~550 MB. Chưa
+đổi vì 15.6 là bản Hatchet kiểm thử trên compose chính thức của họ, và khác biệt musl/glibc là một
+biến số mới không ai đo. Sau khi nới đĩa thì không còn gấp.
+
+### 44.5 Việc song song — KHÔNG file nào bị chạm
+
+16 file đã track của phiên khác được **băm SHA-256 đầu phiên và đối chiếu lại sau mỗi bước** —
+không đổi một byte. Không dùng `git stash`. `tenants/ultty/` **không** nằm trong 29 path đó nên
+được sửa (thêm binding); `tenants/wata/` thì không đụng.
+

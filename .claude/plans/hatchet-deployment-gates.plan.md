@@ -537,3 +537,21 @@ KHÔNG ĐỔI** (`Up 10 days`, `Up 7 days`, …) — không cái nào khởi đ�
 ⇒ **D7 XANH.** Còn nợ không chặn: 40 ảnh không tag × 9,29 GB vẫn tích luỹ mỗi lần deploy; nới đĩa
 mua thời gian chứ không sửa cái tích luỹ. Để lại cho một phiên vận hành riêng, làm có chọn lọc,
 **không** `prune -a` mù.
+
+### ⛔ PHIÊN 8 DỪNG Ở ĐÂY — hai cổng cần NGƯỜI quyết
+
+**8 commit ở local, CHƯA push. Không có gì được deploy.**
+
+1. **Hook `[ECC pre-push]`** chạy `pnpm lint` cả cây làm việc → chặn push vì **7 lỗi
+   unused-import trong `apps/mini/`**. `git ls-files apps/mini` = **0** ⇒ thư mục untracked của
+   việc song song, **không nằm trong nội dung push**. Không tự xử: sửa nó = chạm việc song song;
+   `--no-verify` = bỏ qua hook mà chưa ai cho phép.
+2. **`reusable-deploy-tenant.yml:128`** bắt deploy gd1-test **phải chạy từ `refs/heads/main`** +
+   SHA đó có CI xanh trên main ⇒ D8 qua CI **đòi merge 35 commit vào main** (27 trong đó là của
+   các phiên trước).
+
+Chi tiết + runbook D8 từng bước: [ban-giao-workflow-engine.md](../../docs/phat-trien/ke-hoach/ban-giao-workflow-engine.md) §42, §42bis, §44.
+
+**Đã làm sẵn cho D8:** 3 secret trên `netviet-host-968934832433`
+(`zalo-ultty-gd1-test-hatchet-db-password`, `-workflow-dashboard-htpasswd`,
+`-workflow-dashboard-password`). Đĩa VM đã nới 80→200 GB (92% → 37%), không downtime.
