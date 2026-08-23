@@ -403,6 +403,10 @@ export function baseEnv(
     PERSISTENCE: 'memory',
     CHANNEL_MODE: 'mock',
     NODE_ENV: 'test',
+    // Cong tac van hanh mac dinh `off` (an toan cho production). Goi khach fixture o day CO BAT
+    // engine, nen khong bat cong tac thi adapter giai ra `none` va worker tu choi khoi dong voi
+    // `WORKFLOW_WORKER_ENGINE_UNSUPPORTED` — ca bo IT do ma khong lien quan gi den engine that.
+    WORKFLOW_ENGINE: 'on',
     WORKFLOW_ENGINE_HOST_PORT: process.env.WORKFLOW_ENGINE_HOST_PORT ?? 'localhost:7744',
     WORKFLOW_ENGINE_TLS_STRATEGY: process.env.WORKFLOW_ENGINE_TLS_STRATEGY ?? 'none',
     WORKFLOW_DESTINATION_PROOF_ENDPOINT: `http://127.0.0.1:${endpointPort}/handoff`,
