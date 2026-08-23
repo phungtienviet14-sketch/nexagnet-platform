@@ -58,10 +58,27 @@ const worker = context.get(WorkflowWorkerService);
  * Nghe LOOPBACK: healthcheck cua Docker chay BEN TRONG container, nen khong cong nao can ra
  * ngoai va compose khong duoc them khoi `ports:` cho worker.
  */
+const healthPort = Number(process.env[WORKER_HEALTH_PORT_ENV] ?? WORKER_HEALTH_DEFAULT_PORT);
 const health = await startWorkerHealthServer({
   readiness: worker.readiness,
-  port: Number(process.env[WORKER_HEALTH_PORT_ENV] ?? WORKER_HEALTH_DEFAULT_PORT),
+  port: healthPort,
   workflowName: worker.registeredWorkflowName,
+}).catch((error: unknown) => {
+  /**
+   * KHONG de `EADDRINUSE` tho noi len thanh mot unhandled rejection.
+   *
+   * Tren production moi worker la mot container rieng, nen cong nay luon ranh — mot lan dung
+   * cong nghia la CAU HINH SAI (hai worker chung mot khong gian mang), va thong bao phai noi
+   * duoc dieu do. Da vap that: them readiness vao lam nam bai IT do ngay, vi harness chay nhieu
+   * worker tren cung mot may.
+   */
+  const detail = error instanceof Error ? error.message : String(error);
+  throw new Error(
+    `WORKFLOW_WORKER_HEALTH_PORT_UNAVAILABLE: khong mo duoc diem cuoi suc khoe tren cong ` +
+      `${healthPort} (${detail}). Moi tien trinh worker can mot cong RIENG; tren production dieu ` +
+      `do tu dung vi moi worker la mot container. Dat ${WORKER_HEALTH_PORT_ENV} neu chay nhieu ` +
+      `worker chung mot khong gian mang.`,
+  );
 });
 logger.log(`Health worker: http://127.0.0.1:${health.port}/ready`);
 

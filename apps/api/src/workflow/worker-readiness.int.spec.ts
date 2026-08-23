@@ -92,7 +92,6 @@ describe.skipIf(!RUN_IT)('readiness cua worker tren engine THAT', () => {
     await endpoint.close();
     if (registrationSamples.length > 0) {
       const worst = Math.max(...registrationSamples);
-      // eslint-disable-next-line no-console -- so do nay la SAN PHAM cua bai, phai doc duoc.
       console.log(
         `[DO] thoi gian dang ky worker: ${registrationSamples.map((ms) => `${ms} ms`).join(' · ')} ` +
           `| ten nhat ${worst} ms -> start_period phai >= ${Math.ceil((worst * 2.4) / 1000)}s`,
@@ -101,11 +100,10 @@ describe.skipIf(!RUN_IT)('readiness cua worker tren engine THAT', () => {
   }, 120_000);
 
   it('cold start: `/ready` tra 503 SUOT luc dang ky, chi 200 khi engine da xac nhan', async () => {
-    const port = 8191;
-    const worker = new WorkerProcess('v1', {
-      ...baseEnv(WORKFLOW_FIXTURE, endpointPort),
-      WORKFLOW_WORKER_HEALTH_PORT: String(port),
-    });
+    const worker = new WorkerProcess('v1', baseEnv(WORKFLOW_FIXTURE, endpointPort));
+    // Cong do HARNESS cap — moi tien trinh mot cong rieng, mo hinh dung "moi container mot
+    // khong gian cong". Go cung mot con so o day se bi harness ghi de.
+    const port = worker.healthPort;
 
     // Do TRONG LUC khoi dong, khong phai sau. Neu chi kiem sau khi READY thi mot healthcheck
     // luon tra 200 (ke ca khi chua dang ky) van se qua bai — dung che do hong ta dang chan.
@@ -145,11 +143,10 @@ describe.skipIf(!RUN_IT)('readiness cua worker tren engine THAT', () => {
   }, 180_000);
 
   it('mat engine SAU khi READY: het ready, van live, CUNG MOT tien trinh phuc hoi', async () => {
-    const port = 8193;
-    const worker = new WorkerProcess('v1', {
-      ...baseEnv(WORKFLOW_FIXTURE, endpointPort),
-      WORKFLOW_WORKER_HEALTH_PORT: String(port),
-    });
+    const worker = new WorkerProcess('v1', baseEnv(WORKFLOW_FIXTURE, endpointPort));
+    // Cong do HARNESS cap — moi tien trinh mot cong rieng, mo hinh dung "moi container mot
+    // khong gian cong". Go cung mot con so o day se bi harness ghi de.
+    const port = worker.healthPort;
 
     try {
       await worker.start();
@@ -160,12 +157,19 @@ describe.skipIf(!RUN_IT)('readiness cua worker tren engine THAT', () => {
       compose('stop', '-t', '2', 'hatchet-engine');
 
       // Bo do phai TU phat hien, khong ai bao no. Han an han 30 s + nhip do 5 s => cho toi 90 s.
+      // Giu lai trang thai cuoi doc duoc, de neu bai do thi thong bao noi duoc worker DANG nghi gi
+      // — `waitFor` chi nhan mot ham dong bo nen khong hoi lai duoc luc dung thong bao.
+      let last: HealthBody | undefined;
       await waitFor(
-        async () => (await healthOrNull(port, '/ready'))?.status === 503,
+        async () => {
+          const snapshot = await healthOrNull(port, '/ready');
+          last = snapshot?.body;
+          return snapshot?.status === 503;
+        },
         90_000,
-        async () =>
+        () =>
           `worker VAN bao ready sau khi engine chet — dung che do hong "container xanh, run ` +
-          `treo mai mai". Trang thai: ${JSON.stringify((await healthOrNull(port, '/ready'))?.body)}`,
+          `treo mai mai". Trang thai: ${JSON.stringify(last)}`,
       );
 
       const degraded = await health(port, '/ready');
@@ -192,11 +196,10 @@ describe.skipIf(!RUN_IT)('readiness cua worker tren engine THAT', () => {
   }, 300_000);
 
   it('SIGTERM: rut sach roi moi thoat, va khong sot handle nao giu tien trinh song', async () => {
-    const port = 8194;
-    const worker = new WorkerProcess('v1', {
-      ...baseEnv(WORKFLOW_FIXTURE, endpointPort),
-      WORKFLOW_WORKER_HEALTH_PORT: String(port),
-    });
+    const worker = new WorkerProcess('v1', baseEnv(WORKFLOW_FIXTURE, endpointPort));
+    // Cong do HARNESS cap — moi tien trinh mot cong rieng, mo hinh dung "moi container mot
+    // khong gian cong". Go cung mot con so o day se bi harness ghi de.
+    const port = worker.healthPort;
 
     await worker.start();
     expect((await health(port, '/ready')).status).toBe(200);

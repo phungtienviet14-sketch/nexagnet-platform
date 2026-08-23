@@ -234,9 +234,29 @@ export interface WorkerProcessOptions {
  * Tien trinh worker duoi quyen kiem soat cua test: len duoc, tat duoc, GIET duoc.
  * Khuon lay tu `tools/poc-workflow-engine/src/version-spike.ts` — no da chay that.
  */
+/**
+ * CAP PHAT CONG HEALTH RIENG cho tung tien trinh worker.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO CAN: tien trinh worker mo mot diem cuoi suc khoe tren mot cong CO DINH
+ * (`WORKER_HEALTH_DEFAULT_PORT`). Tren PRODUCTION dieu do dung — moi worker la mot container
+ * rieng, tuc mot khong gian cong rieng, nen `workflow-worker-v1` va `workflow-worker-v2` cung
+ * dung 8085 ma khong dung nhau.
+ *
+ * Nhung O DAY moi worker la mot TIEN TRINH tren CUNG mot may. Hai worker => `EADDRINUSE` =>
+ * tien trinh thu hai chet truoc khi bao READY. Da do that: bai W7 (hai worker cung phien ban)
+ * va bai hoi quy ghim phien ban (v1 + v2 song song) deu do ngay khi readiness duoc them vao.
+ *
+ * Cap cong rieng o day la MO HINH DUNG cua "moi container mot khong gian cong", khong phai mot
+ * meo lam cho test xanh.
+ */
+let nextHealthPort = 8300;
+
 export class WorkerProcess {
   private child?: ChildProcess;
   private text = '';
+  /** Cong health rieng cua tien trinh nay. Doc duoc de bai test hoi `/ready` truc tiep. */
+  readonly healthPort = nextHealthPort++;
 
   constructor(
     readonly version: string,
@@ -282,7 +302,13 @@ export class WorkerProcess {
       ['--import', '@swc-node/register/esm-register', 'src/workflow/worker-main.ts'],
       {
         cwd: apiDir,
-        env: { ...this.env, WORKFLOW_WORKER_VERSION: this.version },
+        env: {
+          ...this.env,
+          WORKFLOW_WORKER_VERSION: this.version,
+          // Cong RIENG cho tung tien trinh — xem chu thich o `nextHealthPort`. Tren production
+          // moi worker mot container nen khong can, o day thi bat buoc.
+          WORKFLOW_WORKER_HEALTH_PORT: String(this.healthPort),
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
