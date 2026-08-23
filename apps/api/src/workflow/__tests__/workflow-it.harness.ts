@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { connect, type AddressInfo } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -233,7 +233,30 @@ export class WorkerProcess {
     return this.text;
   }
 
-  async start(): Promise<void> {
+  /**
+   * Khoi dong va CHO toi khi engine da biet worker nay.
+   *
+   * CO THU LAI, va do khong phai su de dat: mot cong gRPC dang lang nghe KHONG dong nghia engine
+   * da san sang phuc vu `PutWorkflow`. Ngay sau khi engine khoi dong lai, worker co the chet
+   * ngay luc dang ky voi `UNAVAILABLE`. Production giai quyet dieu nay bang `restart: always`;
+   * bo do nay mo phong dung co che do, nen bai kiem do CHINH hanh vi ma compose se do.
+   */
+  async start(attempts = 3): Promise<void> {
+    let last: unknown;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        await this.spawnOnce();
+        return;
+      } catch (error) {
+        last = error;
+        await this.kill();
+        if (attempt < attempts) await new Promise((r) => setTimeout(r, 3_000));
+      }
+    }
+    throw last;
+  }
+
+  private async spawnOnce(): Promise<void> {
     const child = spawn(
       process.execPath,
       ['--import', '@swc-node/register/esm-register', 'src/workflow/worker-main.ts'],
@@ -249,12 +272,22 @@ export class WorkerProcess {
     // `stdio` da khai bao 'pipe' cho ca hai, nen hai luong nay chac chan co mat.
     child.stdout!.on('data', collect);
     child.stderr!.on('data', collect);
+    let exitedEarly = false;
+    child.once('exit', () => {
+      exitedEarly = true;
+    });
     this.child = child;
 
     // Cho DONG READY that su, khong `sleep` mot con so doan mo. Do la giao keo giua worker va
     // test — worker chi in dong nay sau khi `waitUntilReady()` cua SDK tra ve.
     await waitFor(
-      () => this.text.includes(`READY workflow=integration-handoff.${this.version}`),
+      () => {
+        if (this.text.includes(`READY workflow=integration-handoff.${this.version}`)) return true;
+        // Chet TRUOC khi bao READY: khong co ly do gi cho tiep het thoi han. Bao ngay de vong
+        // thu lai o `start()` xu ly, thay vi dot 120 giay cho mot tien trinh khong con ton tai.
+        if (exitedEarly) throw new Error(`worker ${this.label} thoat truoc khi bao READY`);
+        return false;
+      },
       WORKER_READY_TIMEOUT_MS,
       () => `worker ${this.label} khong bao READY. Output:\n${this.text.slice(-2000)}`,
     );
@@ -385,6 +418,99 @@ export async function bootAppContext(env: NodeJS.ProcessEnv): Promise<BootedApp>
   };
 }
 
+// ------------------------------------------- tien trinh con "commit roi chet"
+
+export interface CrashWindowResult {
+  readonly outcome: 'COMMITTED' | 'ROLLED_BACK' | 'FAILED';
+  /** `Order.id` — cung la `entityId` cua hang outbox. */
+  readonly orderId: string;
+  readonly operationKey: string;
+  readonly output: string;
+}
+
+const CRASH_WINDOW_CHILD = 'src/workflow/__tests__/crash-window-child.ts';
+
+/**
+ * Chay `crash-window-child.ts` va doc mot dong ket qua cua no.
+ *
+ * DUNG CHUNG boi bai do ben (W4) va bai hoi phuc (W5), va ly do khong chi la tranh sao chep:
+ * ca hai bai deu can mot hang outbox duoc tao qua CUA CHINH roi khong con tien trinh nao song
+ * de tick ho. Neu moi bai tu dung mot cach tao hang thi hai bai dang do hai thu khac nhau ma
+ * ten goi giong nhau.
+ *
+ * KHONG khang dinh ma thoat: o che do mac dinh tien trinh TU SIGKILL chinh minh, nen ma thoat la
+ * `null` + signal `SIGKILL`. Do la BANG CHUNG no da chet that chu khong phai thoat sach.
+ */
+export async function runCrashWindowChild(
+  args: string[],
+  env: NodeJS.ProcessEnv,
+): Promise<CrashWindowResult> {
+  return new Promise((settle, reject) => {
+    const child = spawn(
+      process.execPath,
+      ['--import', '@swc-node/register/esm-register', CRASH_WINDOW_CHILD, ...args],
+      { cwd: apiDir, env, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let output = '';
+    const collect = (c: Buffer): void => {
+      output += c.toString();
+    };
+    child.stdout.on('data', collect);
+    child.stderr.on('data', collect);
+    child.on('exit', () => {
+      const line = output.split('\n').find((l) => l.startsWith('CHILD '));
+      if (!line) {
+        reject(new Error(`tien trinh con khong bao ket qua. Output:\n${output.slice(-3000)}`));
+        return;
+      }
+      const [, outcome, orderId, operationKey] = line.trim().split(' ');
+      settle({
+        outcome: outcome as CrashWindowResult['outcome'],
+        orderId: orderId ?? '',
+        operationKey: operationKey ?? '',
+        output,
+      });
+    });
+  });
+}
+
+// ------------------------------------------------------- engine con song khong
+
+/**
+ * Cong gRPC cua engine co dang lang nghe khong.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO KHONG DUNG `runs.list()` LAM PHEP DO SONG/CHET — da vap dung vao (23/08/2026):
+ *
+ * `runs.list()` di qua REST, ma REST duoc phuc vu qua container DASHBOARD (cong 8744). Tat
+ * `hatchet-engine` KHONG lam REST im, nen phep do do bao "engine van song" trong khi worker thi
+ * `ECONNREFUSED` o cong gRPC. Hai kenh, hai cong, hai container — mot phep do tren kenh nay
+ * khong noi duoc gi ve kenh kia.
+ *
+ * Bai kiem hoi phuc dung phep do SAI se cho ket qua nguoc han: no tuong da tao duoc canh
+ * "engine chet" trong khi thuc te chua.
+ *
+ * Nen: do DUNG cong ma worker va adapter dung, va do bang cach ma chung do — mo mot ket noi TCP.
+ */
+export async function enginePortOpen(hostPort?: string): Promise<boolean> {
+  const target = hostPort ?? process.env.WORKFLOW_ENGINE_HOST_PORT ?? 'localhost:7744';
+  const index = target.lastIndexOf(':');
+  const host = target.slice(0, index);
+  const port = Number(target.slice(index + 1));
+
+  return new Promise((settle) => {
+    const socket = connect({ host, port });
+    const done = (open: boolean): void => {
+      socket.destroy();
+      settle(open);
+    };
+    socket.setTimeout(2_000);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+  });
+}
+
 // -------------------------------------------------- doc nguoc tu engine THAT
 
 interface EngineReadClient {
@@ -415,6 +541,16 @@ export async function engineReadClient(): Promise<EngineReadClient> {
  *
  * Dung cho khang dinh "engine CHUA co run nao" o bai cua so sup — va do la khang dinh chi doc
  * duoc o day, khong doc duoc tu phia Nexagnet.
+ *
+ * ---------------------------------------------------------------------------
+ * ⚠️ HINH DANG CUA BO LOC LA MOT DOI TUONG, KHONG PHAI MANG `"khoa:gia tri"`.
+ *
+ * Da viet sai mot lan (23/08/2026) va do la loai sai NGUY HIEM NHAT trong ca bo kiem: bo loc sai
+ * tra ve 0 hang, ma phan lon cho dung ham nay lai khang dinh **bang 0**. Bai test XANH, va no
+ * xanh vi phep do khong bao gio do duoc gi — dung nghia "nhan sai con te hon khong co nhan".
+ *
+ * Nen `countEngineRuns` phai duoc kiem bang mot ca DUONG TINH o dau do (bai timeout mo ho khang
+ * dinh `=== 2`), neu khong thi khong ai biet no con chay khong.
  */
 export async function countEngineRuns(
   workflowName: string,
@@ -424,7 +560,7 @@ export async function countEngineRuns(
   const client = await engineReadClient();
   const result = await client.runs.list({
     workflowNames: [workflowName],
-    additionalMetadata: [`${metadataKey}:${metadataValue}`],
+    additionalMetadata: { [metadataKey]: metadataValue },
     onlyTasks: false,
     limit: 50,
     includePayloads: false,

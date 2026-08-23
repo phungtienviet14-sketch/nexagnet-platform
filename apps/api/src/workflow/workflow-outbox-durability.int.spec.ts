@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../config/prisma.service.js';
 import {
@@ -7,10 +6,10 @@ import {
   RUN_COMPLETE_TIMEOUT_MS,
   WORKFLOW_FIXTURE,
   WorkerProcess,
-  apiDir,
   baseEnv,
   bootAppContext,
   countEngineRuns,
+  runCrashWindowChild,
   waitFor,
   type BootedApp,
 } from './__tests__/workflow-it.harness.js';
@@ -55,53 +54,7 @@ import {
  *     pnpm --filter @netviet/api exec vitest run src/workflow/workflow-outbox-durability
  */
 
-const CHILD = 'src/workflow/__tests__/crash-window-child.ts';
 const ENGINE_WORKFLOW_NAME = 'integration-handoff.v1';
-
-interface ChildResult {
-  readonly outcome: 'COMMITTED' | 'ROLLED_BACK' | 'FAILED';
-  readonly orderId: string;
-  readonly operationKey: string;
-  readonly output: string;
-}
-
-/**
- * Chay tien trinh con va doc mot dong ket qua cua no.
- *
- * KHONG khang dinh ma thoat: o che do mac dinh tien trinh tu SIGKILL chinh minh, nen ma thoat
- * la `null` + signal `SIGKILL`. Do la BANG CHUNG no da chet that chu khong phai thoat sach —
- * neu mot ngay no thoat voi ma 0 thi bai nay dang do mot thu khac voi thu no nghi.
- */
-async function runChild(args: string[], env: NodeJS.ProcessEnv): Promise<ChildResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      ['--import', '@swc-node/register/esm-register', CHILD, ...args],
-      { cwd: apiDir, env, stdio: ['ignore', 'pipe', 'pipe'] },
-    );
-    let output = '';
-    child.stdout.on('data', (c: Buffer) => {
-      output += c.toString();
-    });
-    child.stderr.on('data', (c: Buffer) => {
-      output += c.toString();
-    });
-    child.on('exit', () => {
-      const line = output.split('\n').find((l) => l.startsWith('CHILD '));
-      if (!line) {
-        reject(new Error(`tien trinh con khong bao ket qua. Output:\n${output.slice(-3000)}`));
-        return;
-      }
-      const [, outcome, orderId, operationKey] = line.trim().split(' ');
-      resolve({
-        outcome: outcome as ChildResult['outcome'],
-        orderId: orderId ?? '',
-        operationKey: operationKey ?? '',
-        output,
-      });
-    });
-  });
-}
 
 describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT === '1')(
   'W4 — outbox giao dich: cua so sup, tren Postgres THAT',
@@ -151,7 +104,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT 
     it('CHET TRUOC COMMIT -> ca don lan hang outbox deu KHONG ton tai', async () => {
       const before = await prisma.workflowOutbox.count();
 
-      const child = await runChild(['--abort-before-commit'], childEnv);
+      const child = await runCrashWindowChild(['--abort-before-commit'], childEnv);
       expect(child.outcome).toBe('ROLLED_BACK');
 
       // Tien trinh con DA ghi ca hai truoc khi nem — nen neu rollback khong bao trum ca hai,
@@ -177,7 +130,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT 
     // ------------------------------------------------------------------ 6.1
 
     it('CHET SAU COMMIT, TRUOC ENGINE -> ca hai CON, engine chua co run, roi HOI PHUC gui tiep', async () => {
-      const child = await runChild([], childEnv);
+      const child = await runCrashWindowChild([], childEnv);
       expect(child.outcome).toBe('COMMITTED');
       expect(child.orderId).not.toBe('');
       expect(child.operationKey).not.toBe('');
@@ -247,7 +200,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT 
     // -------------------------------------------------- tuong quan trace 4 lop
 
     it('CUNG MOT traceId di xuyen 4 lop — gia tri that, khong phai khuon regex', async () => {
-      const child = await runChild([], childEnv);
+      const child = await runCrashWindowChild([], childEnv);
       expect(child.outcome).toBe('COMMITTED');
 
       // ① lop Nexagnet: hang outbox trong Postgres.
