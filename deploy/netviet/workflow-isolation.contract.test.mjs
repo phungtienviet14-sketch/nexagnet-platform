@@ -31,6 +31,7 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const compose = readFileSync(join(here, 'compose.yaml'), 'utf8');
+const renderSecrets = readFileSync(join(here, 'render-secrets.sh'), 'utf8');
 
 /** Cac service thuoc cum workflow — chung chia chung mot bo luat cach ly. */
 const ENGINE_SIDE = ['hatchet-postgres', 'hatchet-engine'];
@@ -195,6 +196,73 @@ test('cookie phien cua dashboard khong duoc chay che do insecure', () => {
         'cookie phien cua dashboard.',
     );
   }
+});
+
+// =========================================================== cach ly o TANG BI MAT va TANG EDGE
+
+test('moi secret cua workflow engine deu mang STACK SLUG, khong phai tenant slug', () => {
+  // Cach ly o tang bi mat, cung mot lop voi ten volume va alias mang. `zalo-ultty-...` va
+  // `zalo-ultty-gd1-test-...` phai la hai thu khac nhau, neu khong thi mot moi truong ky thuat
+  // va production dung chung mot Postgres cua engine.
+  const names = [...renderSecrets.matchAll(/optional_secret zalo-(\$\{[A-Z_]+\})-([a-z0-9-]+)/g)];
+  const workflowSecrets = names.filter(([, , suffix]) =>
+    /^(hatchet-db-password|workflow-engine-token|workflow-dashboard-htpasswd)$/.test(suffix),
+  );
+
+  assert.equal(
+    workflowSecrets.length,
+    3,
+    'Mong doi dung 3 secret cua workflow engine trong render-secrets.sh.',
+  );
+  for (const [, slugVar, suffix] of workflowSecrets) {
+    assert.equal(
+      slugVar,
+      '${STACK_SLUG}',
+      `secret zalo-...-${suffix} phai keyed theo STACK_SLUG. Dung TENANT_SLUG se lam ` +
+        '`ultty` (production) va `ultty-gd1-test` doc CUNG mot bi mat.',
+    );
+  }
+});
+
+test('route dashboard chi duoc phat khi cong tac BAT, va phai co cong xac thuc', () => {
+  const routeAt = renderSecrets.indexOf('${WORKFLOW_DOMAIN} {');
+  assert.notEqual(routeAt, -1, 'khong tim thay khoi route cua dashboard trong render-secrets.sh');
+
+  // Phat vo dieu kien = moi khach moc them mot hostname cong khai tra 502, va Caddy di xin chung
+  // chi ACME cho mot ten khong phuc vu gi.
+  const before = renderSecrets.slice(0, routeAt);
+  const guardAt = before.lastIndexOf("if [[ \"${WORKFLOW_ENGINE}\" == 'on' ]]; then");
+  assert.notEqual(guardAt, -1, 'route dashboard khong nam trong nhanh `WORKFLOW_ENGINE == on`');
+  assert.equal(
+    before.slice(guardAt).includes('\nfi\n'),
+    false,
+    'nhanh bao ve da dong TRUOC khi toi route — route dang duoc phat vo dieu kien',
+  );
+
+  // Cat toi `EOF` dong heredoc, KHONG toi dau `}` dau tien: `${WORKFLOW_DOMAIN}` tu no da chua
+  // mot `}` nen cach do se cat ra mot manh rong roi "chung minh" duoc bat ky dieu gi.
+  const route = renderSecrets.slice(routeAt, renderSecrets.indexOf('\nEOF', routeAt));
+  // Caddy 2.11: directive la `basic_auth` (`basicauth` la ten cu).
+  assert.match(route, /basic_auth \{/, 'route dashboard thieu cong xac thuc o edge');
+  assert.match(route, /reverse_proxy hatchet-\$\{STACK_SLUG\}:80/);
+  assert.match(route, /import secure_headers/);
+});
+
+test('bam mat khau cua dashboard KHONG duoc phat vao secrets.env', () => {
+  // secrets.env di vao `--env-file` cua compose, tuc la toi MOI container cua stack. Bam mat khau
+  // cua edge khong co viec gi o do; no thuoc ve manh cau hinh Caddy.
+  const heredocAt = renderSecrets.indexOf('cat >"${RUNTIME_DIR}/secrets.env"');
+  const heredoc = renderSecrets.slice(heredocAt, renderSecrets.indexOf('\nEOF', heredocAt));
+  // Chi soi DONG PHAT BIEN, bo qua chu thich — chinh khoi chu thich trong heredoc giai thich vi
+  // sao bien nay khong duoc o day, va mot bo quet to cao loi giai thich cua chinh no se bi "sua"
+  // bang cach xoa loi giai thich di.
+  const emitted = heredoc
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .join('\n');
+  assert.doesNotMatch(emitted, /WORKFLOW_DASHBOARD_HTPASSWD/);
+  // CHONG XANH GIA: bo loc phai van con giu lai cac bien that.
+  assert.match(emitted, /^WORKFLOW_ENGINE_TOKEN=/m);
 });
 
 // =============================================================================== ca AM TINH

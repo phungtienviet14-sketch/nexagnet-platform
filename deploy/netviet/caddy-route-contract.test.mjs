@@ -257,6 +257,13 @@ test('every process that mutates compose takes the shared lock', async () => {
     'health-check.sh': await readFile(new URL('./health-check.sh', import.meta.url), 'utf8'),
     'rollback.sh': await readFile(new URL('./rollback.sh', import.meta.url), 'utf8'),
     'set-channel-mode.sh': setChannelMode,
+    // Duc token cho workflow engine cung `docker compose up` cum Hatchet, nen no la mot tien
+    // trinh SUA compose — phai xep cung hang khoa. Thieu no o day thi bao dam nay im lang khong
+    // phu script moi nhat.
+    'bootstrap-workflow-engine.sh': await readFile(
+      new URL('./bootstrap-workflow-engine.sh', import.meta.url),
+      'utf8',
+    ),
   };
 
   for (const [name, source] of Object.entries(scripts)) {
