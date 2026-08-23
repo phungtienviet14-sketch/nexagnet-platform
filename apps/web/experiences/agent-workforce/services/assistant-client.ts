@@ -63,7 +63,7 @@ export class DemoAssistantClient implements AssistantClient {
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           sources: [
             {
-              title: 'Cơ sở Tri thức NetViet',
+              title: 'Cơ sở tri thức doanh nghiệp',
               category: 'Hệ thống',
               snippet: 'Tổng hợp từ 6 nhóm Agent nghiệp vụ và nguồn sự thật doanh nghiệp.',
             },

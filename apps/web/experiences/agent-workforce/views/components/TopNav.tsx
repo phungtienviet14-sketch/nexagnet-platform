@@ -77,7 +77,7 @@ export function TopNav({ activeView, onChangeView, alertsCount = 4 }: TopNavProp
       </nav>
 
       <div className="wf-topbar__actions">
-        <span className="wf-demo-tag" title="Môi trường thử nghiệm minh họa nền tảng AI NetViet">
+        <span className="wf-demo-tag" title={`Môi trường thử nghiệm minh họa ${branding.productName}`}>
           <span className="wf-demo-tag__dot" aria-hidden="true" />
           DỮ LIỆU DEMO
         </span>

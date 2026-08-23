@@ -680,7 +680,7 @@
   background: var(--wf-surface-subtle);
   border: 1px solid var(--wf-border-subtle);
 }
-.wf-legend-tag--exec { color: #ba1c24; }
+.wf-legend-tag--exec { color: var(--wf-primary); }
 .wf-legend-tag--sales { color: #ea580c; }
 .wf-legend-tag--fin { color: #0b5cab; }
 .wf-legend-tag--mfg { color: #059669; }
@@ -723,7 +723,7 @@
   border-radius: 3px 3px 0 0;
   overflow: hidden;
   background: var(--wf-surface-muted);
-  transition: height var(--wf-dur-smooth) var(--wf-ease-out);
+  transition: background-color var(--wf-dur-smooth) var(--wf-ease-out);
 }
 
 .wf-chart-col--active .wf-chart-bar-stack {
@@ -810,8 +810,8 @@
   box-shadow: var(--wf-shadow-sm);
 }
 
-.wf-attention-item--critical { border-left: 3px solid var(--wf-red); }
-.wf-attention-item--warning { border-left: 3px solid var(--wf-orange); }
+.wf-attention-item--critical { border-color: var(--wf-red); background: var(--wf-red-subtle); }
+.wf-attention-item--warning { border-color: var(--wf-orange); background: var(--wf-orange-subtle); }
 
 .wf-attention-item__top {
   display: flex;
@@ -944,7 +944,7 @@
   border-radius: var(--wf-radius-lg);
 }
 
-.wf-agent-avatar--exec { background: linear-gradient(135deg, #ba1c24, #e11d48); }
+.wf-agent-avatar--exec { background: linear-gradient(135deg, var(--wf-primary), var(--wf-primary-hover)); }
 .wf-agent-avatar--commercial { background: linear-gradient(135deg, #ea580c, #f58220); }
 .wf-agent-avatar--legal_finance { background: linear-gradient(135deg, #0b5cab, #2563eb); }
 .wf-agent-avatar--manufacturing { background: linear-gradient(135deg, #059669, #10b981); }
@@ -1616,7 +1616,7 @@
 }
 
 .wf-structured-row--highlight {
-  border-left: 3px solid var(--wf-orange);
+  border: 1px solid var(--wf-orange-border);
   background: var(--wf-orange-subtle);
 }
 
@@ -1965,8 +1965,8 @@
   background: var(--wf-primary-subtle) !important;
 }
 
-.wf-alert-inbox-item--critical { border-left: 3px solid var(--wf-red); }
-.wf-alert-inbox-item--warning { border-left: 3px solid var(--wf-orange); }
+.wf-alert-inbox-item--critical { border-color: var(--wf-red); background: var(--wf-red-subtle); }
+.wf-alert-inbox-item--warning { border-color: var(--wf-orange); background: var(--wf-orange-subtle); }
 
 .wf-alert-inbox-item__top {
   display: flex;
@@ -2508,15 +2508,15 @@
 }
 
 .wf-finding-item--flagged {
-  border-left: 3px solid var(--wf-orange);
+  border-color: var(--wf-orange);
   background: var(--wf-orange-subtle);
 }
 .wf-finding-item--deviated {
-  border-left: 3px solid var(--wf-red);
+  border-color: var(--wf-red);
   background: var(--wf-red-subtle);
 }
 .wf-finding-item--pass {
-  border-left: 3px solid var(--wf-green);
+  border-color: var(--wf-green);
   background: var(--wf-green-subtle);
 }
 

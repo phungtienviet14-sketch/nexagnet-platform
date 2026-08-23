@@ -4,11 +4,11 @@ export const INITIAL_ASSISTANT_CONVERSATION: readonly AssistantMessage[] = [
   {
     id: 'msg-welcome',
     sender: 'assistant',
-    text: 'Xin chào Tổng Giám đốc và Ban Điều hành. Tôi là **AI Trợ lý điều hành NetViet**, kết nối trực tiếp với 6 nhóm Agent nghiệp vụ để hỗ trợ theo dõi công việc, tra cứu quy trình và điều phối quyết định vận hành hôm nay.',
+    text: 'Xin chào Tổng Giám đốc và Ban Điều hành. Tôi là **AI Trợ lý điều hành**, kết nối trực tiếp với 6 nhóm Agent nghiệp vụ để hỗ trợ theo dõi công việc, tra cứu quy trình và điều phối quyết định vận hành hôm nay.',
     timestamp: 'Hôm nay, 08:00',
     sources: [
       {
-        title: 'Nguồn tri thức điều hành NetViet',
+        title: 'Nguồn tri thức điều hành',
         category: 'Hệ thống',
         snippet: 'Đã nạp quy chế vận hành, 6 nhóm Agent chuyên trách và danh mục 34 năng lực.',
       },
