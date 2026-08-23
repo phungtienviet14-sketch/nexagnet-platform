@@ -540,7 +540,7 @@ mua thời gian chứ không sửa cái tích luỹ. Để lại cho một phiê
 
 ### ⛔ PHIÊN 8 DỪNG Ở ĐÂY — hai cổng cần NGƯỜI quyết
 
-**8 commit ở local, CHƯA push. Không có gì được deploy.**
+**9 commit ở local, CHƯA push. Không có gì được deploy.**
 
 1. **Hook `[ECC pre-push]`** chạy `pnpm lint` cả cây làm việc → chặn push vì **7 lỗi
    unused-import trong `apps/mini/`**. `git ls-files apps/mini` = **0** ⇒ thư mục untracked của

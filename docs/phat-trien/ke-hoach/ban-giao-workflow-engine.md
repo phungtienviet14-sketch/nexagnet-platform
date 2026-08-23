@@ -649,7 +649,7 @@ Cả hai vẫn bị Phase 0 chặn.
 
 ## 42. ⛔ HAI CỔNG ĐANG CHẶN D8 — cả hai cần NGƯỜI quyết
 
-Code đã xong và đã commit. **8 commit nằm ở local, CHƯA push.** Không có gì được deploy.
+Code đã xong và đã commit. **9 commit nằm ở local, CHƯA push.** Không có gì được deploy.
 
 ### 42.1 Hook `[ECC pre-push]` chặn push vì code KHÔNG được push
 
@@ -746,7 +746,7 @@ Token nằm ở `tools/poc-workflow-engine/.env` (gitignored). Đúc lại: xem 
 
 ## 44. PHIÊN 8 (23/08/2026) — đã làm gì, và đo bằng gì
 
-HEAD đầu phiên `4e5b634` → cuối phiên `c590f52`. **8 commit, CHƯA push.**
+HEAD đầu phiên `4e5b634` → cuối phiên `c590f52`. **9 commit, CHƯA push.**
 
 ### 44.1 Hồi quy hết-heap: nguyên nhân thật KHÔNG phải hai nghi vấn ban đầu
 
