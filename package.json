@@ -12,7 +12,7 @@
     "test": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:deploy-routes && pnpm test:deploy-contracts",
     "test:deploy-routes": "node --test deploy/netviet/caddy-route-contract.test.mjs",
     "test:deploy-preflight": "node --test deploy/netviet/gd1-test-preflight.test.mjs",
-    "test:deploy-contracts": "pnpm test:deploy-preflight && node --test deploy/netviet/stack-identity.test.mjs deploy/netviet/deployment-targets.contract.test.mjs deploy/netviet/verify-deployment.test.mjs deploy/netviet/secrets-passthrough.contract.test.mjs",
+    "test:deploy-contracts": "pnpm test:deploy-preflight && node --test deploy/netviet/stack-identity.test.mjs deploy/netviet/deployment-targets.contract.test.mjs deploy/netviet/verify-deployment.test.mjs deploy/netviet/secrets-passthrough.contract.test.mjs deploy/netviet/workflow-isolation.contract.test.mjs",
     "test:tenant-runtime": "node --test apps/web/tenant-runtime.contract.mjs",
     "test:image-isolation": "node --test deploy/netviet/image-isolation.contract.mjs",
     "typecheck": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r typecheck",
