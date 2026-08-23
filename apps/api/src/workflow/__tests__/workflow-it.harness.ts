@@ -17,6 +17,26 @@ import { fileURLToPath } from 'node:url';
  *
  * KHONG import `vitest` o day. Bo do phai dung duoc ca tu mot tien trinh con thuong (xem
  * `crash-window-child.ts`), noi khong co runner nao chay.
+ *
+ * ---------------------------------------------------------------------------
+ * ⚠️ CAC BAI KIEM DUNG BO DO NAY PHAI CHAY TUAN TU:
+ *
+ *     pnpm --filter @netviet/api exec vitest run src/workflow --no-file-parallelism
+ *
+ * Khong phai vi chung "hoi mong manh". Ly do la mot su that ve KIEN TRUC, va no da lo ra bang
+ * mot phep do (23/08/2026): chay song song 5 file -> 9 bai DO; chay tuan tu -> 154/154 XANH.
+ *
+ * Nguyen nhan: moi file dung MOT tien trinh worker rieng, nhung ca nam deu dang ky CUNG mot ten
+ * `integration-handoff.v1` voi CUNG mot engine. Engine dinh tuyen theo TEN, nen worker cua file
+ * A nhan duoc run do file B kich hoat — roi no phan giai `WORKFLOW_DESTINATION_PROOF_ENDPOINT`
+ * tu MOI TRUONG CUA CHINH NO va goi vao diem cuoi cua file A. File B ngoi doi mot lan goi khong
+ * bao gio toi.
+ *
+ * DIEU NAY KHONG CHI DUNG VOI TEST. No la bang chung chay duoc cho bat bien §4.1 cua runbook —
+ * MOI KHACH / MOI MOI TRUONG MOT INSTANCE HATCHET RIENG. Hai ban trien khai dung chung mot engine
+ * va cung dang ky mot ten workflow se CUOP RUN CUA NHAU, va moi ben se gui du lieu cua ben kia
+ * toi dich den cua chinh minh. Day la mot loi CACH LY DU LIEU, khong phai mot phien toai ve lich
+ * chay. Nam file test o tren tinh co da dien lai dung kich ban do.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));

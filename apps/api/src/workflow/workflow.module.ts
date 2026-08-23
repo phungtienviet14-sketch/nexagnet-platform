@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { tenantWorkflowEngine } from '@netviet/tenant';
 import { randomUUID } from 'node:crypto';
+import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import { resolveReleaseIdentity } from '../observability/release-identity.js';
@@ -127,13 +128,28 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
     WorkflowHandoffService,
     {
       provide: WorkflowDispatcher,
-      useFactory: (outbox: WorkflowOutboxRepository, engine: WorkflowEnginePort) =>
-        new WorkflowDispatcher(outbox, engine, {
-          // Moi tien trinh mot dinh danh rieng — de biet AI dang giu lease khi phai go roi.
-          workerId: `workflow-dispatcher-${randomUUID()}`,
-          leaseSeconds: LEASE_SECONDS,
-        }),
-      inject: [WorkflowOutboxRepository, WorkflowEnginePort],
+      useFactory: (
+        outbox: WorkflowOutboxRepository,
+        engine: WorkflowEnginePort,
+        audit: AuditLogService | undefined,
+      ) =>
+        new WorkflowDispatcher(
+          outbox,
+          engine,
+          {
+            // Moi tien trinh mot dinh danh rieng — de biet AI dang giu lease khi phai go roi.
+            workerId: `workflow-dispatcher-${randomUUID()}`,
+            leaseSeconds: LEASE_SECONDS,
+          },
+          // `optional` de mot ban trien khai khong co audit van chay duoc: quan sat khong bao
+          // gio duoc la DIEU KIEN de nghiep vu thanh cong.
+          audit,
+        ),
+      inject: [
+        WorkflowOutboxRepository,
+        WorkflowEnginePort,
+        { token: AuditLogService, optional: true },
+      ],
     },
     WorkflowScheduler,
   ],

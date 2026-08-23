@@ -346,6 +346,17 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT 
 
       // ③ BA CON SO, BA TANG khac nhau. Day la toan bo ket luan cua bai nay, va chung PHAI duoc
       //    bao rieng chu khong duoc gop thanh mot chu "exactly-once".
+      //
+      //    CHO con so on dinh chu khong doc mot phat: danh sach run cua engine la mot mo hinh
+      //    DOC, va no bat kip sau mot nhip. Doc ngay sau khi he ngoai bi goi lan hai da tung ra
+      //    `1` mot lan trong mot luot chay ca bo — mot bai test lung lay, khong phai mot phat
+      //    hien. Khang dinh dung la "roi cuoc se co hai run", nen phai viet dung nhu vay.
+      await waitFor(
+        async () =>
+          (await countEngineRuns(ENGINE_WORKFLOW_NAME, 'nexagnet.entityId', child.orderId)) >= 2,
+        60_000,
+        () => 'engine chua liet ke du hai run cho cung mot thao tac',
+      );
       const engineRuns = await countEngineRuns(
         ENGINE_WORKFLOW_NAME,
         'nexagnet.entityId',

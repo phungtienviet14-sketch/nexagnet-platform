@@ -197,4 +197,78 @@ describe('WorkflowDispatcher — su kien nghiep vu KHONG DUOC MAT', () => {
     expect(trigger).toHaveBeenCalledTimes(2);
     expect(await repository.countPending()).toBe(1);
   });
+
+  // ------------------------------------------------- W11: ly do hong CO KIEU
+
+  it('loi cua engine duoc PHAN LOAI truoc khi ghi — `lastError` mo dau bang MA, khong phai van xuoi', async () => {
+    await repository.enqueue(entry({ operationKey: 'k-ma', entityId: 'ord_ma' }));
+    vi.spyOn(engine, 'trigger').mockRejectedValueOnce(
+      new Error('/WorkflowService/TriggerWorkflow UNAVAILABLE: connect ECONNREFUSED ::1:7744'),
+    );
+
+    await dispatcher.tick(new Date());
+
+    const row = await repository.findByOperationKey('k-ma');
+    // Mot cot toan van xuoi khong loc duoc. Nguoi truc dem can `WHERE lastError LIKE 'ENGINE_UNAVAILABLE%'`
+    // chu khong phai doc tung dong.
+    expect(row!.lastError!.startsWith('ENGINE_UNAVAILABLE:')).toBe(true);
+    // Van ban goc VAN CON: ma tra loi "loai gi", van ban tra loi "cu the chuyen gi".
+    expect(row!.lastError).toContain('ECONNREFUSED');
+  });
+
+  // -------------------------------------- W12: lien ket audit <-> engineRunId
+
+  it('ban giao THANH CONG ghi mot dong audit mang engineRunId va traceId', async () => {
+    // `WorkflowHandoffService` ghi audit luc XEP HANG, khi `engineRunId` chua ton tai. Hang
+    // outbox thi co engineRunId nhung no la HANG DOI, khong phai kho luu. Khong co dong nay thi
+    // lien ket `engineRunId <-> traceId <-> thuc the` dut dung o cho runbook §6 hua la no lien.
+    const appended: Array<Record<string, unknown>> = [];
+    const audit = {
+      append: async (command: Record<string, unknown>) => {
+        appended.push(command);
+        return command as never;
+      },
+    };
+    const withAudit = new WorkflowDispatcher(
+      repository,
+      engine,
+      { workerId: 'w-audit', leaseSeconds: 60 },
+      audit as never,
+    );
+    await repository.enqueue(entry({ operationKey: 'k-audit', entityId: 'ord_audit' }));
+
+    await withAudit.tick(new Date());
+
+    const row = await repository.findByOperationKey('k-audit');
+    expect(row!.status).toBe('dispatched');
+
+    const line = appended.find((a) => a.action === 'workflow.handoff.dispatched');
+    expect(line).toBeDefined();
+    // Bon manh phai cung nam tren MOT dong, neu khong thi khong noi lai duoc voi nhau.
+    expect((line!.after as Record<string, unknown>).engineRunId).toBe(row!.engineRunId);
+    expect(line!.entityId).toBe('ord_audit');
+    expect(line!.requestId).toBe(row!.traceId ?? null);
+    // KHONG copy lich su run cua engine ve DB nghiep vu — chi mot dong THAM CHIEU.
+    expect(Object.keys(line!.after as object).sort()).toEqual(
+      ['engineRunId', 'operationKey', 'workflowKey', 'workflowVersion'].sort(),
+    );
+  });
+
+  it('audit hong KHONG lam hong ban giao — fail-open, dung bat bien cua tang quan sat', async () => {
+    const exploding = {
+      append: () => {
+        throw new Error('audit chet');
+      },
+    };
+    const withBrokenAudit = new WorkflowDispatcher(
+      repository,
+      engine,
+      { workerId: 'w-audit-hong', leaseSeconds: 60 },
+      exploding as never,
+    );
+    await repository.enqueue(entry({ operationKey: 'k-audit-hong', entityId: 'ord_ah' }));
+
+    await expect(withBrokenAudit.tick(new Date())).resolves.not.toThrow();
+    expect((await repository.findByOperationKey('k-audit-hong'))!.status).toBe('dispatched');
+  });
 });
