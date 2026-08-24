@@ -1209,7 +1209,8 @@ năm khách vào một kho**. Cách ly bằng `tenantId` trong label là cách l
 ### 9.3 Đã dựng
 
 - `apps/api/src/observability/` — `TelemetryService` (`step`/`decision`/`stateChange`/`dataChange`/`aiCall`),
-  `trace-context.ts` (ALS mang traceId W3C), `decision-reasons.ts` (**mã lý do có kiểu**),
+  `trace-context.ts` (ALS mang traceId W3C), **mã lý do có kiểu** (từ 24/08/2026 tách theo capability:
+  `observability/decision-vocabulary.ts` giữ khuôn, mỗi capability giữ `*-decisions.ts` của nó),
   `telemetry-redaction.ts` (bộ lọc tập trung, quét **cả giá trị**), `structured-logging.ts` (NDJSON),
   `recent-traces.sink.ts` (vòng đệm có trần cho console).
 - `tools/trace-view.mjs` — dựng cây nghiệp vụ từ NDJSON (`pnpm trace`).
@@ -1343,6 +1344,150 @@ kiểm mã lý do reachable bằng **đúng dây nối production** (`createAdvi
 
 **Chưa đủ điều kiện bắt đầu n8n.**
 
+### 9.9 BÀN GIAO phiên 22/08/2026 (phiên 3) — Phase B XONG, composer thật đã chạy
+
+**Đã merge + deploy.** PR #29 → `main` = **`64fc1e91bf5822f986daa7f96d836f618e424b0f`**.
+Deploy run `32552097651`, `ultty`/`gd1-test`, success. 17/17 container healthy. Không đụng edge,
+không production, không WATA.
+
+#### Việc đã làm: một dòng chặn suốt ba ngày
+
+`render-secrets.sh` đã ép cứng `ADVICE_COMPOSER=deepseek` cho `gd1-test` từ 21/08 và **đã ghi
+đúng vào `secrets.env` trên VM**. Nhưng khối `environment:` của service `api` trong `compose.yaml`
+liệt kê biến **tường minh**, và biến này không có trong danh sách — nên giá trị không bao giờ tới
+container. Agent tư vấn là `Noop` sau **mọi** lần deploy thành công. Hỏng **im lặng**: không lỗi,
+không cảnh báo, không health check nào đỏ.
+
+Đo được trước khi vá, trên stack thật:
+
+| Nguồn | Giá trị |
+|---|---|
+| `/srv/netviet/apps/zalo-ultty-gd1-test/.runtime/secrets.env` | `ADVICE_COMPOSER=deepseek` |
+| `docker exec … printenv ADVICE_COMPOSER` | **rỗng** |
+
+**Bản vá đi kèm một HỢP ĐỒNG**, không chỉ bốn dòng yaml:
+`deploy/netviet/secrets-passthrough.contract.test.mjs` đọc heredoc ghi `secrets.env` trong
+`render-secrets.sh`, đọc mọi `${BIEN}` trong `compose.yaml`, và đòi giao của hai bên không bỏ sót
+ai. Biến có lý do chính đáng để **không** vào container (vd `PILOT_OPERATOR_PASSWORD` —
+`bootstrap-auth-user.mjs` đọc thẳng từ `secrets.env`) phải khai trong `NOT_FOR_COMPOSE` **kèm lý
+do**, nên danh sách miễn trừ khó phình ra trong im lặng. Chạy trong CI qua
+`pnpm test:deploy-contracts`.
+
+Đã xác nhận test **ĐỎ** trên `compose.yaml` của `main` (`33e1bda`) trước khi vá:
+`orphans: ANTHROPIC_API_KEY, ADVICE_COMPOSER`.
+
+> 7 dòng vá đó nằm trong working tree của task WATA song song (§9.8). Đã **tách đúng phần chung**:
+> commit chỉ gồm `compose.yaml` + hợp đồng + 1 dòng `package.json`. Thay đổi WATA giữ nguyên
+> chưa commit, không đụng tới.
+
+#### Env container sau deploy (bước verify)
+
+```
+RELEASE_GIT_SHA       = 64fc1e91bf5822f986daa7f96d836f618e424b0f
+ADVICE_COMPOSER       = deepseek          (trước deploy: RỖNG)
+ADVICE_DEEPSEEK_MODEL = deepseek-v4-flash
+AUTO_SEND (env)       = off               (xem mục công tắc bên dưới)
+DEEPSEEK_API_KEY      = có mặt (không in giá trị)
+17/17 container healthy · zca-js listener: connected
+```
+
+Bằng chứng bản vá chạy: **cùng một smoke test lúc deploy**, trên `33e1bda` ra
+`advisor.compose → denied COMPOSER_DISABLED`; trên `64fc1e9` ra `DETERMINISTIC_PATH_SUFFICIENT`
+(trace `66a31722951fc720e44dcc969ac5c4b8`) — tức advisor đã là agent thật (`composes=true`) và
+**tự** từ chối vì đơn đã tính đủ giá, không phải vì công tắc tắt.
+
+#### Proof bằng ba tin Zalo THẬT — nhóm `8827137437588696665`, `channel=zca_listener`
+
+| | CASE 1 | CASE 2 | CASE 3 |
+|---|---|---|---|
+| tin | `v08 bao nhieu tien` | `V08 với Felix cái nào hợp nhà khoảng 70m2 có mèo hơn?` | `thế còn bảo hành bao lâu?` |
+| **traceId** | `b44d631ccf83ac96706585179a91c2a6` | `943157fdc0f81124fbcd035f1723a5ec` | `cbd3524071ca39238d996d166c43b2e7` |
+| intent → vai | `hoi_gia` → policy_finance | `hoi_san_pham` → product_advisor | `bao_hanh_khieu_nai` → after_sales |
+| AI parse | deepseek-v4-flash 582ms **4143→18 tok** | 691ms **4194→21 tok** | 788ms **4449→23 tok** |
+| AI compose | deepseek-v4-flash 2658ms **10031→161 tok** | 7912ms **15382→778 tok** | 3444ms **11041→262 tok** |
+| công cụ | `tra_cuu_san_pham`,`bao_gia` (2 vòng) | `tra_cuu_san_pham`×3,`tra_cuu_tai_lieu` (4 vòng) | `tra_cuu_san_pham`,`tra_cuu_tai_lieu` (2 vòng) |
+| `advisor.compose` | COMPOSED handoff=0 | COMPOSED handoff=0 | COMPOSED handoff=0 |
+| `order.auto_confirm` | denied KILL_SWITCH_OFF | denied NOT_ORDER_INTENT | denied NOT_ORDER_INTENT |
+| `advice.auto_reply` | denied KILL_SWITCH_OFF | **allowed** → gửi 310ms | **allowed** → gửi 227ms |
+
+Cả sáu lần gọi LLM đều **đếm được token**, kể cả đường `compose`. Provider/model thật ở cả hai
+đường: `deepseek / deepseek-v4-flash`.
+
+**CASE 1 — bất biến #5 đo được.** `hoi_gia` không phải `dat_don` nên không đi nhánh
+`DETERMINISTIC_PATH_SUFFICIENT`; agent gọi `bao_gia` (rules engine) rồi mới viết câu. Câu ra
+*"…V08 có giá là 4.900.000đ/chiếc"*; bảng `Price`: `V08.wholesale = 4900000`, người hỏi là
+`dai_ly` → đúng cấp giá, **con số do tool trả về, không phải LLM tính**. Không có
+`LLM_RETURNED_NOTHING`, không có `COMPOSER_DISABLED`.
+
+**CASE 2 — bắt được câu hỏi sai tiền đề.** 4 vòng công cụ, 778 token ra. Không so sánh bừa: tra
+danh mục, thấy `FELIX` là **ghế nâng trẻ em** chứ không phải máy hút bụi, rồi hỏi lại khách — kèm
+đúng thông số V08 lấy từ `tra_cuu_tai_lieu`. `handoff=false`.
+
+**CASE 3 — mạch hội thoại, bằng chứng đanh nhất.** Tin gốc **không có một chữ nào** nhắc sản phẩm.
+Trả lời: *"…**V08** được bảo hành **24 tháng**, 1 đổi 1 trong vòng 7 ngày đầu…"* — khớp **từng
+chữ** với FAQ `status=active` của **V08** trong DB, trong khi cùng bảng đó có BB-GREY *3 năm*,
+HERCULES *2 năm*, SKJ-CR022 *2 năm*. Chọn đúng vì **ngữ cảnh**, không phải đoán. Prompt parse phình
+đúng chiều: 4143 → 4194 → **4449** token.
+
+#### Công tắc AUTO_SEND trên gd1-test — đã bật CÓ CHỦ Ý
+
+`AuditLog`: `2026-08-22 05:24:46.273 | operator | automation.auto_send | off → on`, bật từ giao
+diện `/settings` giữa CASE 1 và CASE 2. **Đây là quyết định của người vận hành và được phép trên
+`gd1-test`** (nhóm TEST, `DATA_CLASSIFICATION=test`). Ba câu trả lời AI đã gửi thật vào nhóm; CASE 1
+đi qua đường Sale duyệt tay, CASE 2/3 đi qua `advice.auto_reply`.
+
+⚠️ **Bẫy cho phiên sau:** công tắc nằm **trong bộ nhớ** (`RuntimeSettingsService`), env vẫn là
+`AUTO_SEND=off`. Nên `docker exec … printenv AUTO_SEND` trả `off` **trong khi hệ thống đang tự
+gửi** — hai nguồn nói hai điều khác nhau, và env là cái **sai**. Mọi lần restart/redeploy API sẽ
+đưa công tắc về `off`; muốn bật lại phải vào `/settings`. Đọc trạng thái thật ở
+`/settings/summary`, đừng suy từ `printenv`.
+
+#### ❗ Việc còn treo #1 — một tin ra nhóm khách mà KHÔNG có vết nào
+
+Trace `b44d631c` kết thúc lúc `05:24:44.128Z` bằng `advice.auto_reply → denied KILL_SWITCH_OFF`.
+**3,8 giây sau**, lúc `05:24:47.909Z`, câu trả lời CASE 1 vẫn ra nhóm (`Message`
+`direction=outbound`, `source=system_outbound`). Grep toàn bộ `docker logs` cửa sổ
+`05:24:44–05:24:59`: **không một dòng nào**. `AuditLog` từ 05:20: chỉ `auth.login` +
+`automation.auto_send`.
+
+Nguyên nhân: `POST /orders/:id/approve` (`orders.controller.ts:23` → `orders.service.ts:209`) gọi
+thẳng `sendConfirmation()`/`sendProductAdvice()` mà **không `telemetry.*`, không `audit.append()`**.
+
+**Hậu quả:** đọc trace lượt đó sẽ kết luận *"hệ thống không gửi gì"* — **SAI**. Đúng loại lỗi
+"nhãn sai tệ hơn không có nhãn" mà cả Pha 9 sinh ra để diệt, lần này ở đường **người bấm nút**.
+Cố ý **không** sửa trong phiên 3 (ngoài phạm vi Phase B). Việc cần làm: bọc `telemetry.step` +
+`telemetry.decision` với **mã lý do có kiểu** (nay ở `orders/sales-order-decisions.ts`), thêm
+`audit.append()` cho approve/reject/completeSalesHandoff, và quyết định (kèm ghi lý do vào code)
+xem lượt duyệt tay nên nối vào **đúng `traceId` của tin gốc** qua `OrderMessage` hay tạo trace mới.
+
+#### ❗ Việc còn treo #2 — nút "Xem luồng xử lý" chưa có người xác nhận
+
+Verify được từ phía server: edge route `/observability/traces*` tới được API (trả **401**, không
+phải 404 → route đúng, guard đúng), ba trace nằm trong vòng đệm, có `orderId` thật để tra
+(`9b174290…`, `9e68ea16…`, `1bdde1ce…`). Phần **bấm nút** cần session — console chạy
+`AUTH_MODE=session`, và tác nhân AI không nhập mật khẩu thay người. Mở
+`https://operator-ultty-gd1-test.35-187-235-82.sslip.io/` rồi bấm trên một trong ba đơn đó.
+
+#### Backup NDJSON (chứa nội dung tin thật — KHÔNG commit)
+
+```
+~/netviet-trace-backups/gd1-test-phaseB-64fc1e91-20260822T052633Z.ndjson
+~/netviet-trace-backups/gd1-test-predeploy-33e1bda9-20260822T042801Z.ndjson
+```
+
+Nhớ [debugging.md §9.1](../van-hanh/debugging.md): **redeploy là mất `docker logs` vĩnh viễn.**
+Kéo log ra file TRƯỚC khi deploy bản sửa.
+
+#### Kết luận cho n8n
+
+**Phase B đạt.** Composer thật chạy, provider/model/token/công cụ/mạch hội thoại đều chứng minh
+được bằng tin Zalo thật, không phải `/demo/simulate`.
+
+**Chưa nên bắt đầu n8n** cho tới khi đóng **việc còn treo #1**. Lý do không phải hình thức: n8n sẽ
+thêm một **đường gửi thứ ba**, mà hệ hiện tại đã có một đường gửi không để lại vết. Nối
+orchestration vào một hệ còn chỗ mù thì mỗi lỗi mới sẽ tốn gấp đôi thời gian tìm — đúng cái giá
+19–21/08 đã trả một lần rồi. Sửa trước rẻ hơn nhiều.
+
 ### 9.7 Cố ý KHÔNG làm
 
 - Không thêm Tempo/Loki/Langfuse/SigNoz — xem §9.2.
@@ -1350,3 +1495,206 @@ kiểm mã lý do reachable bằng **đúng dây nối production** (`createAdvi
 - Không đổi nghiệp vụ để phục vụ UI debug. `shouldAutoConfirmOrder` giữ nguyên chữ ký; bản có lý do
   là hàm **mới** (`evaluateAutoConfirm`), hàm cũ uỷ quyền cho nó.
 - Không bật `AUTO_SEND` để test quan sát.
+
+---
+
+## 10. Nền tảng tự động hoá — đóng chỗ mù thao tác người + quyết định n8n (22/08/2026, phiên 4)
+
+> Tài liệu kiến trúc đầy đủ: [docs/kien-truc/automation-architecture.md](../../kien-truc/automation-architecture.md)
+
+### 10.1 ✅ Việc còn treo #1 của §9.9 — ĐÃ ĐÓNG (chưa deploy)
+
+Đường `POST /orders/:id/approve` · `reject` · `sales-handoff/complete` nay có **trace + quyết định
+có mã + chuyển trạng thái + audit + danh tính người bấm**.
+
+Nguyên nhân gốc hoá ra là **hai tầng**, không phải một "quên gọi logger":
+
+1. **Không có gốc trace ở biên HTTP.** `telemetry.runTurn()` chỉ được gọi ở hai chỗ, cả hai trong
+   `pipeline.service.ts`. Nên kể cả khi `OrdersService` có phát telemetry, bản ghi cũng mang
+   `traceId: 'no-trace'` — và `RecentTracesSink.record()` **vứt thẳng** loại bản ghi đó.
+2. `OrdersService` **không tiêm** `TelemetryService` lẫn `AuditLogService`.
+
+**Quyết định trace cho thao tác người: trace MỚI + `causationTraceId`** (không dùng lại `traceId`
+của tin gốc). Lý do đầy đủ ở [automation-architecture.md §1.3](../../kien-truc/automation-architecture.md);
+tóm tắt: một trace là một giao dịch, và cú bấm chuột xảy ra sau đó vài giây tới vài giờ. Dùng lại
+traceId cũ sẽ khiến `totalMs` của mọi lượt tự động bị tính bằng thời gian suy nghĩ của con người —
+chôn vùi tín hiệu độ trễ thật. OpenTelemetry giải bài này bằng **link**, không phải parent-child.
+
+Thêm: `by-order` (nút "Xem luồng xử lý") **giữ nguyên nghĩa "lượt gốc"** — lượt dẫn xuất bị loại
+bằng chính mô hình dữ liệu (`causationTraceId` có mặt ⟺ do lượt khác gây ra).
+
+| Kiểm chứng | Kết quả |
+|---|---|
+| Test hồi quy mới `orders/manual-action-observability.spec.ts` | **ĐỎ 8/10 trên HEAD `f4ed3ee`** trước khi vá (`expected 0 to be greater than 0` — không một bản ghi telemetry nào), **10/10 xanh** sau khi vá |
+| Hợp đồng DI bằng container Nest thật `orders/manual-action-di.contract.spec.ts` | xanh — `@Optional()` không được nối dây sẽ lặng lẽ thành `undefined`, đúng hình dạng sự cố `NoopAdvisorAgent` |
+| Toàn bộ suite API | **993 passed / 0 failed / 25 skipped** · deploy contracts 53/53 |
+| `tsc --noEmit` · `eslint` | sạch |
+| Rà soát bảo mật (`security-reviewer`) | 2 phát hiện **đã sửa** (chặn `x-actor` bịa; audit hỏng nay lọc được qua bước `audit.persist`); 1 phát hiện **CAO có trước** — neo trace không qua bộ lọc nên UID Zalo của khách lọt ra NDJSON — tách thành việc riêng, xem [automation-architecture.md §1.6](../../kien-truc/automation-architecture.md) |
+
+⚠️ **Chưa merge, chưa deploy.** Đang nằm trên nhánh `feat/hoi-thoai-chot-don-main` cùng worktree
+với việc WATA (không đụng tới).
+
+### 10.2 ⏸ n8n — QUYẾT ĐỊNH: **DEFER**
+
+Hai chặn, cả hai đo được:
+
+**1. Giấy phép — P0.** Sustainable Use License cho phép dùng *"cho mục đích kinh doanh nội bộ của
+chính bạn"*, và cấm đích danh *"hosting n8n and charging people money to access it"* +
+*"white-labeling n8n and offering it to your customers for money"*. Help Center của n8n nói thẳng:
+vận hành workflow/credential **của khách** trong instance của mình ⇒ **Enterprise license**; nhúng
+vào sản phẩm ⇒ **Embed license**. Từ 28/07/2026 Nexagnet bán dịch vụ cho khách ngoài, nên MODEL 1
+và MODEL 2 đều rơi vào diện phải trả tiền.
+
+**2. Community edition không có ranh giới tenant nào.** Projects và RBAC là tính năng **trả tiền**.
+Nên shared-instance-project-per-tenant hoặc là đụng giấy phép, hoặc là không cách ly được — không
+có cấu hình nào tránh được cả hai. Điều này đâm thẳng vào bất biến §9.2 (*cách ly bằng nhãn là cách
+ly bằng lời hứa*, có sự cố thật 17/08).
+
+**Và kể cả không có hai chặn trên thì hôm nay vẫn chưa nên làm:** `ErpPort.pushOrder()` **không có
+một call-site nào** ngoài thư mục `erp/` — số tích hợp ngoài đang chạy là **0**. n8n sẽ không bỏ
+được dòng code nào, không giảm độ phức tạp nào, và không cải thiện độ tin cậy nào (retry + lease +
+idempotency đã chạy sẵn trong `CampaignDelivery`). Ba lần "không" ⇒ không thêm service.
+
+**Phát hiện đáng giá nhất của phần audit:** repo **đã có** một transactional outbox, chỉ chưa đặt
+tên — `CampaignDelivery` + `claimDue()` (`FOR UPDATE … SKIP LOCKED`, lease, `attempts`,
+`nextAttemptAt`, backoff, `idempotencyKey @unique`, rate limit) + `CampaignScheduler`. Khi có việc
+tự động hoá đầu tiên, **khái quát hoá khuôn này**, đừng thêm Redis/BullMQ/Kafka.
+
+**Con đường sạch giấy phép nếu sau này cần:** khách **tự host** automation của họ (n8n/Make/Cloud
+Function), Nexagnet chỉ bắn webhook có ký + `traceparent` + `idempotencyKey` tới một endpoint khai
+trong gói tenant. n8n xác nhận trường hợp này **không cần** giấy phép thương mại nào của ta, và
+cách ly tenant là tuyệt đối vì hạ tầng nằm bên khách.
+
+**Điều kiện mở lại:** (a) có use case tích hợp ngoài thật đã chốt với khách; (b) khách tự host và
+chỉ cần webhook; (c) có xác nhận bằng văn bản từ `license@n8n.io`; (d) số adapter tự viết vượt ~3
+cái mỗi khách.
+
+### 10.3 ⚠️ Nợ kỹ thuật phát hiện trong lúc làm — CHƯA sửa
+
+`CampaignService` tiêm `AuditLogService` **bắt buộc**, nhưng `AuditLogService` thuộc capability
+`operations`, còn `campaign` chỉ phụ thuộc `messaging`. Một khách khai `campaign` mà không khai
+`operations` sẽ **không boot được**. Chưa nổ vì `ultty`/`amico` đều khai đủ 6 capability. Cần hợp
+đồng boot theo **tổ hợp** capability, không chỉ hai đầu mút `knowledge-only` và `đủ-hết`.
+
+### 10.4 Công tắc AUTO_SEND trên gd1-test — đã VERIFY, không đụng vào
+
+Đọc từ nguồn thật chứ không suy từ `printenv` (env vẫn là `off` và env là cái **sai**):
+
+| Bằng chứng | Giá trị |
+|---|---|
+| `AuditLog` mới nhất cho `automation.auto_send` | `2026-08-22 05:24:46 · operator · {"autoSend": "on"}` |
+| `docker inspect` API container | `StartedAt = 2026-08-22T04:51:43Z`, **`RestartCount = 0`** |
+| Thời điểm đọc | `2026-08-22T07:10Z`, cùng tiến trình đó |
+
+Toggle đặt lúc 05:24:46 nằm **sau** lúc container khởi động và **chưa có lần restart nào** ⇒
+`RuntimeSettingsService` vẫn giữ **`on`**. Đây là quyết định có chủ ý của người vận hành, **không
+thay đổi**. Mọi lần redeploy sẽ đưa về `off`; muốn bật lại phải vào `/settings` — máy không tự bật.
+
+> Sổ audit này cũng là bằng chứng thực nghiệm cho §10.1: **không có một dòng `order.approve` nào**
+> trong bảng, dù CASE 1 đi qua đúng đường đó lúc 05:24:47.
+
+### 10.5 Việc kế tiếp
+
+1. **Cần người:** review + merge phần Phase 0 ở §10.1, rồi deploy. Nhớ kéo NDJSON ra file **trước**
+   khi deploy (redeploy là mất `docker logs` vĩnh viễn).
+2. Sau deploy: bấm "Duyệt & gửi" một đơn trên `gd1-test`, rồi
+   `docker logs … | node tools/trace-view.mjs` — phải thấy một `TRACE … ← từ <trace tin gốc>` kèm
+   `nguoi=<username>`, và một dòng `order.approve` trong `AuditLog`.
+3. Việc còn treo #2 của §9.9 (nút "Xem luồng xử lý" chưa có người xác nhận) vẫn treo — cần phiên
+   đăng nhập, tác nhân AI không nhập mật khẩu thay người.
+4. **Không** dựng `AutomationPort` cho tới khi một trong bốn điều kiện §10.2 xảy ra.
+
+---
+
+## 11. Durable workflow engine — nghiên cứu + POC chạy thật (22/08/2026, phiên 5)
+
+> Tài liệu đầy đủ: [workflow-engine-evaluation.md](../../kien-truc/workflow-engine-evaluation.md) ·
+> POC: [`tools/poc-workflow-engine/`](../../../tools/poc-workflow-engine/README.md)
+
+### 11.1 ✅ QUYẾT ĐỊNH: **ADOPT HATCHET — cho NỀN TẢNG, chưa cho production**
+
+Điểm có trọng số: **Hatchet 85** · Temporal 83 · Trigger.dev 78 · Windmill 54.
+
+| Ứng viên | Giấy phép | Kết luận |
+|---|---|---|
+| **Hatchet** v0.101.27 | **MIT thuần** (không có `ee/`) | 🟢 **CHỌN** |
+| Temporal | MIT (server) | 🟢 dự phòng nghiêm túc — thắng rõ về versioning |
+| Trigger.dev v4.5.12 | Apache 2.0 | 🟢 license sạch nhưng **loại** (xem 11.3) |
+| Windmill | AGPLv3 + CE độc quyền | 🔴 **LOẠI** — cấm "serve as a managed service / wrap" |
+
+### 11.2 POC đã CHẠY THẬT — không phải bảng so sánh
+
+Hatchet self-host dựng bằng Docker Compose: **58 giây**, **3 container**, **~270 MB RAM lúc rảnh**,
+**không cần RabbitMQ** (`SERVER_MSGQUEUE_KIND=postgres`). Phụ thuộc bắt buộc duy nhất: PostgreSQL.
+
+Workflow TypeScript 5 bước (`validate → map → dispatch → await-approval → finalize`) đã chứng minh:
+
+| Kịch bản | Kết quả |
+|---|---|
+| Run thành công nhiều bước | ✅ |
+| Run lỗi có **mã lý do** đọc được | ✅ `PAYLOAD_INVALID: customer,totalQuantity` |
+| Retry + backoff luỹ thừa thật | ✅ 3 lần thử, giãn 3 s → 8 s |
+| **Giết cứng worker giữa chừng** | ✅ run tiếp tục trên worker MỚI, **bước đã xong không chạy lại** (đếm được: đúng 1 lần gọi ra ngoài) |
+| Chờ + tiếp tục (sự kiện người duyệt) | ✅ |
+| Huỷ | ✅ |
+| Replay (run đã huỷ & run đã lỗi) | ✅ — **lưu ý: replay CHẠY LẠI tác dụng phụ** |
+| `traceparent` W3C của Nexagnet → tận hệ ngoài | ✅ nguyên vẹn |
+| Xem input / output / cây bước / lần thử | ✅ |
+
+**Giá trị so với `CampaignDelivery`:** engine thay được **~90%** hạ tầng ta *định* tự viết
+(`AutomationRun/Job/Step/Attempt`, lease, retry, replay, lịch sử, chờ bền vững, huỷ, dashboard).
+`CampaignDelivery` chỉ phủ ô đầu tiên (hàng đợi bền vững) — nó **không** có bước, lần thử có lịch
+sử, replay, chờ, phiên bản, hay giao diện vận hành.
+
+### 11.3 ⚠️ Ba điều phải nhớ, không được giấu
+
+1. **Hatchet KHÔNG ghim phiên bản code cho run đang chạy.** POC chứng minh bằng dữ liệu: cùng một
+   run có bước `validate` chạy code **v1** và `finalize` chạy code **v2**. → Bắt buộc có chuẩn code
+   (chỉ thêm bước ở cuối; đổi phá vỡ ⇒ workflow tên mới). **Rủi ro số 1** của lựa chọn này.
+2. **`input` của run được lưu NGUYÊN VĂN** và ai vào dashboard cũng đọc được. → **Che dữ liệu
+   phải làm TRƯỚC khi gọi engine**, không phải trong bước đầu của workflow (Luật BVDLCN 91/2025/QH15).
+3. **Trigger.dev bị loại vì `Checkpoints: Cloud ✅ / Self-hosted ❌`** (tài liệu chính thức) — đúng
+   ca dùng "chờ Sale duyệt" của ta — cộng với yêu cầu tối thiểu **≥ 7 vCPU / 14 GB RAM** mỗi stack.
+
+### 11.4 Việc kế tiếp
+
+1. **Cần người:** mở `http://localhost:8744` xác nhận dashboard bằng mắt — bước duy nhất chưa xong
+   (tác nhân AI không nhập mật khẩu thay người, giống việc còn treo #2 ở §10.5).
+2. Chốt chuẩn code cho versioning (11.3.1) + quy tắc che dữ liệu trước khi gọi engine (11.3.2)
+   **trước** khi nối vào `apps/api`.
+3. Rồi mới: `WorkflowEnginePort` + adapter + ràng buộc workflow↔tenant trong `tenants/<slug>/tenant.json`.
+4. Workflow thật đầu tiên nên là **chiến dịch CSKH** — vì `CampaignDelivery` là đường lui an toàn.
+5. **Không** tự viết lớp versioning cho Hatchet. Nếu 11.3.1 thành nỗi đau thật → mở lại **Temporal**.
+
+### 11.5 Cố ý KHÔNG làm — ⚠️ **PHẠM VI CỦA PHIÊN 5, HẾT HIỆU LỰC 24/08/2026**
+
+> Mục này ghi phạm vi **lúc ra quyết định ở phiên 5 (22/08/2026)**. Giữ nguyên câu chữ vì nó là hồ
+> sơ của một quyết định có thật, **không phải mô tả hiện trạng**. Hiện trạng ở §11.6.
+
+- ~~**Không** nối Hatchet vào `apps/api`, **không** deploy lên VM, **không** thêm vào `AppModule`.~~
+  → **đã làm cả ba** (§11.6).
+- **Không** POC Windmill (license chặn) và **không** POC n8n (đã DEFER ở §10.2 cùng lý do). *(còn đúng)*
+- **Không** tự dựng `AutomationRun/Job/Attempt` nữa — §10.5 mục 4 nay có câu trả lời: engine lo. *(còn đúng)*
+
+### 11.6 Trạng thái workflow engine — cập nhật 24/08/2026
+
+> Bằng chứng thô + nhật ký từng phiên: [`ban-giao-workflow-engine.md`](ban-giao-workflow-engine.md).
+> Vận hành: [`../van-hanh/workflow-engine-runbook.md`](../van-hanh/workflow-engine-runbook.md).
+> Cách chạy kiểm: [`../van-hanh/chay-kiem-workflow-engine.md`](../van-hanh/chay-kiem-workflow-engine.md).
+
+| Việc | Trạng thái |
+|---|---|
+| Nền tảng trong `apps/api/src/workflow/` — cổng, adapter, outbox giao dịch, cầu nối, ràng buộc tenant | ✅ |
+| Readiness của tiến trình worker (`/ready` · `/live`) — điều kiện chặn của compose | ✅ 23/08 |
+| Worker là **container riêng** `workflow-worker-v1` (không nằm trong `api`) | ✅ |
+| Deploy cụm Hatchet lên VM, stack `ultty-gd1-test` — 4 container healthy | ✅ 24/08, deploy run `32683218604` |
+| Đúc token idempotent từ VM (`bootstrap-workflow-engine.sh`) | ✅ 24/08 |
+| DRAIN thật trên container Linux (SIGTERM → exit 0) | ✅ 24/08 |
+| **24 bài IT chạy trên engine thật TRONG CI** (job `workflow-integration`) | ✅ 24/08, merge SHA `7942121`, `201 passed (201)` |
+| Bật engine cho khách **production** | ⬜ **KHÔNG** — công tắc `WORKFLOW_ENGINE` mặc định `off`, chỉ bật cho `gd1-test` |
+| Workflow **nghiệp vụ** đầu tiên (khuôn hiện tại `integration-handoff.v1` là trung tính) | ⬜ chưa bắt đầu |
+| TLS gRPC nội bộ (đang `tls none` trên mạng `internal: true`) | ⬜ quyết định Q2-A, chưa đổi |
+
+> ⚠️ **"D8" ở tài liệu này và "D8" của workflow engine là HAI thứ khác nhau.** Ở đây D8 =
+> **VAT-default** (§ bảng quyết định — vẫn ⬜). Trong `ban-giao-workflow-engine.md`, D8 = mốc đưa
+> engine lên VM (đã xong 24/08/2026). Đừng đọc lẫn hai hệ đánh số.
