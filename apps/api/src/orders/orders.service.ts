@@ -15,7 +15,7 @@ import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import type { DecisionOutcome, DecisionPointOf } from '../observability/decision-vocabulary.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
-import { canAmendOrder, type AmendVerdict } from './amend-window.js';
+import { amendDecisionReason, canAmendOrder, type AmendVerdict } from './amend-window.js';
 import {
   SALES_ORDER_DECISIONS,
   type ManualApproveReason,
@@ -283,8 +283,15 @@ export class OrdersService {
    */
   async cancelOrder(id: string, reason: string): Promise<OrderView> {
     const view = await this.getOrThrow(id);
-    if (view.status === 'rejected') return view;
+    this.anchorToOrder(view);
+    if (view.status === 'rejected') {
+      // Tra ve som, KHONG nem — nhung van la mot phan quyet cua cua so sua don, nen no phai de
+      // lai dau vet y nhu cac duong khac.
+      this.decideAmendWindow(canAmendOrder({ ...view, status: 'rejected' }));
+      return view;
+    }
     const verdict = canAmendOrder(view);
+    this.decideAmendWindow(verdict);
     if (!verdict.allowed) throw new UnprocessableEntityException(verdict.message);
 
     const cancelled = (await this.repo.update(id, {
@@ -379,6 +386,22 @@ export class OrdersService {
       chatId: view.chatId,
       intent: view.intent,
       ...(view.traceId ? { causationTraceId: view.traceId } : {}),
+    });
+  }
+
+  /**
+   * Ghi phan quyet cua CUA SO SUA DON.
+   *
+   * Tach khoi `decide()` vi bo ma khac han: day la cong cua KHACH xin doi don, con `decide()`
+   * phuc vu ba cong NGUOI BAM NUT. `outcome` doc thang tu phan quyet — khong co duong nao ghi
+   * `allowed` cho mot lan tu choi.
+   */
+  private decideAmendWindow(verdict: AmendVerdict): void {
+    this.telemetry?.decision({
+      vocabulary: SALES_ORDER_DECISIONS,
+      point: 'order.amend_window',
+      outcome: verdict.allowed ? 'allowed' : 'denied',
+      reason: amendDecisionReason(verdict),
     });
   }
 

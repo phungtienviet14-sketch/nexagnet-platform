@@ -109,9 +109,28 @@ export const PRICING_REASONS = [
 export type PricingReason = (typeof PRICING_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
- * order.amend_window — canAmendOrder()
+ * order.amend_window — canAmendOrder(), tai `cancelOrder()` va `replaceItems()`
+ *
+ * Day la cong DUY NHAT tu choi mot yeu cau HUY/SUA cua chinh khach hang, va loi tu choi di toi
+ * tan tay khach duoi dang mot cau tieng Viet. Khong ghi lai thi doc trace se ket luan "he thong
+ * khong lam gi" — dung nhan sai cua su co 22/08/2026, lan nay o duong khach xin doi don.
+ *
+ * BON ma tu choi chu khong phai mot `AMEND_BLOCKED`: bon trang thai the gioi nay doi bon hanh
+ * dong sua khac han nhau (sua goi khach / khong lam gi / doi soat ERP / nho Sale go tay), va mot
+ * ma gop se buoc nguoi loc phai mo source doc lai bon dieu kien roi doan. Cung ly do da tach
+ * `evaluateAutoConfirm()` ra khoi mot ham `boolean`.
  * ------------------------------------------------------------------ */
-export const AMEND_WINDOW_REASONS = ['AMEND_ALLOWED', 'AMEND_BLOCKED'] as const;
+export const AMEND_WINDOW_REASONS = [
+  'AMEND_ALLOWED',
+  /** `khong_phai_don` — tin nay chua bao gio la mot don. */
+  'AMEND_NOT_AN_ORDER',
+  /** `da_tu_choi` — don da huy truoc do; huy lan hai khong phai mot loi. */
+  'AMEND_ALREADY_REJECTED',
+  /** `da_dong_bo_erp` — don da sang he thong ban hang. */
+  'AMEND_SYNCED_TO_ERP',
+  /** `da_nhap_erp` — Sale DA go tay vao ERP: diem KHONG QUAY LAI cua GĐ1. */
+  'AMEND_HANDED_TO_ERP',
+] as const;
 export type AmendWindowReason = (typeof AMEND_WINDOW_REASONS)[number];
 
 export type SalesOrderDecisionReason =
@@ -166,6 +185,9 @@ export const SALES_ORDER_DECISIONS = defineDecisionVocabulary({
     TOTAL_MISMATCH: 'Tổng khách ghi lệch tổng hệ thống quá ngưỡng',
 
     AMEND_ALLOWED: 'Còn trong cửa sổ sửa đơn',
-    AMEND_BLOCKED: 'Ngoài cửa sổ sửa đơn',
+    AMEND_NOT_AN_ORDER: 'Tin này không phải một đơn hàng',
+    AMEND_ALREADY_REJECTED: 'Đơn đã bị huỷ trước đó',
+    AMEND_SYNCED_TO_ERP: 'Đơn đã đồng bộ sang hệ thống bán hàng',
+    AMEND_HANDED_TO_ERP: 'Sale đã nhập đơn vào hệ thống bán hàng'
   } satisfies Record<SalesOrderDecisionReason, string>,
 });

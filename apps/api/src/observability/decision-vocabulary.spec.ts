@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHANNEL_DECISIONS } from '../channels/channel-decisions.js';
@@ -65,5 +65,45 @@ describe('tu vung quyet dinh: nen tang giu KHUON, capability giu TU NGU', () => 
 
   it('ma la khong biet -> tra chinh no, khong nem (fail-open cua tang quan sat)', () => {
     expect(decisionReasonLabel('MOT_MA_CHUA_AI_KHAI')).toBe('MOT_MA_CHUA_AI_KHAI');
+  });
+});
+
+/**
+ * TU VUNG PHAI MO TA SU THAT DANG XAY RA.
+ *
+ * `order.amend_window` ton tai trong bo tu vung tu 24/08/2026 ma KHONG co diem phat nao trong
+ * source. Mot diem quyet dinh khong ai phat la te hon la khong khai bao no: no hua voi nguoi doc
+ * trace rang co mot cho de nhin, va cho do trong rong. Nguoi debug se ket luan "nhanh nay khong
+ * chay" trong khi that ra no chay va da tu choi khach.
+ *
+ * Bai nay quet MA NGUON that chu khong doc mot danh sach nao: mot diem chi duoc coi la co nguoi
+ * phat khi ten cua no xuat hien trong mot tep khong phai spec va khong phai chinh tep tu vung.
+ */
+describe('moi diem quyet dinh deu co nguoi phat that', () => {
+  const sourceFiles = (dir: string): string[] =>
+    readdirSync(dir).flatMap((entry) => {
+      const full = resolve(dir, entry);
+      if (statSync(full).isDirectory()) return entry === 'node_modules' ? [] : sourceFiles(full);
+      if (!entry.endsWith('.ts')) return [];
+      // Bo spec (chung gia lap loi goi) va bo chinh cac tep khai bao tu vung.
+      if (entry.endsWith('.spec.ts') || entry.endsWith('-decisions.ts')) return [];
+      return [full];
+    });
+
+  const corpus = sourceFiles(srcDir)
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+
+  const ALL_POINTS = [
+    ...TURN_DECISIONS.points.map((point) => [TURN_DECISIONS.owner, point] as const),
+    ...SALES_ORDER_DECISIONS.points.map((point) => [SALES_ORDER_DECISIONS.owner, point] as const),
+    ...CHANNEL_DECISIONS.points.map((point) => [CHANNEL_DECISIONS.owner, point] as const),
+  ];
+
+  it.each(ALL_POINTS)('%s / %s co it nhat mot diem phat trong source', (_owner, point) => {
+    expect(
+      corpus,
+      `'${point}' co trong bo tu vung nhung khong tep nao phat no — hoac noi vao diem nghiep vu that, hoac bo khoi tu vung`,
+    ).toContain(`'${point}'`);
   });
 });
