@@ -221,7 +221,7 @@ Trước mỗi lần nâng: đọc changelog → kiểm migration → kiểm tư
 | Dashboard | ~30 MB | |
 | Engine | ~20 MB | |
 | **Một instance** | **~270 MB** | + ~1,04 GB dung lượng image (dùng chung giữa các stack trên cùng VM) |
-| Worker | **CHƯA ĐO** | container **RIÊNG** `workflow-worker-v1` — xem cảnh báo ngay dưới |
+| Worker | **88–108 MiB** | container **RIÊNG** `workflow-worker-v1` — đo thật 24/08/2026, xem dưới |
 
 > ⚠️ **SỬA 23/08/2026 — dòng Worker ở bảng trên trước đây ghi *"chạy trong tiến trình API hiện có,
 > không thêm container"*. Câu đó đã LỖI THỜI** kể từ khi phiên 4 đảo quyết định. Worker nay là một
@@ -231,20 +231,43 @@ Trước mỗi lần nâng: đọc changelog → kiểm migration → kiểm tư
 > chờ vĩnh viễn**, và thủ tục DRAIN ở §2 trở thành **không thực hiện được** (không có cách nào giữ
 > worker phiên bản cũ sống trong khi phiên bản mới lên).
 >
-> **RAM của worker chưa có số thật.** Nó cần token, mà token chỉ có sau
-> `bootstrap-workflow-engine.sh` trên VM. Phải đo ở D8/D9. **Không** suy ra từ container `api`:
-> worker boot `WorkflowWorkerModule` hẹp hơn nhiều, nên mượn số của `api` sẽ là *một con số sai
-> được trình bày như một số đo*.
+> **✅ ĐÃ ĐO 24/08/2026 (D8) — worker `88–108 MiB`.** Số đo trên chính stack `ultty-gd1-test`
+> sau khi `bootstrap-workflow-engine.sh` đúc được token, bằng `docker stats --no-stream`:
+>
+> | Container | Lần 1 (worker ~3 phút) | Lần 2 (sau khởi động lại, +45 giây) | Lần 3 (sau deploy xanh) |
+> |---|---:|---:|---:|
+> | `hatchet-postgres` | 240,4 MiB | 261,6 MiB | 263,8 MiB |
+> | `hatchet-engine` | 36,2 MiB | 36,5 MiB | 37,8 MiB |
+> | `hatchet-dashboard` | 25,0 MiB | 25,1 MiB | 26,0 MiB |
+> | **Cụm engine** | **301,5 MiB** | **323,1 MiB** | **327,7 MiB** |
+> | **`workflow-worker-v1`** | **91,5 MiB** | **108,1 MiB** | **88,7 MiB** |
+> | **Tổng cả worker** | **393,0 MiB** | **431,2 MiB** | **416,4 MiB** |
+>
+> Ghi **một khoảng chứ không một con số** vì ba lần đo cách nhau vài phút đã lệch ~19 MiB —
+> báo một con số duy nhất sẽ là *độ chính xác giả*. Lấy **~110 MiB/worker** khi lập kế hoạch
+> (cận trên của khoảng, không phải trung bình: lập kế hoạch theo lần đo tệ nhất).
+>
+> **Không** suy ra từ container `api` — và nay có bằng chứng cho lời cảnh báo đó: đo cùng lúc,
+> `api` = **117,9 MiB** còn worker = **91,5 MiB**. Mượn số của `api` sẽ thổi phồng ~29%.
 >
 > Số ~270 MB ở bảng trên là cụm engine (Postgres + engine + dashboard), **chưa gồm worker**. Đo
 > lại 23/08 trên chính `deploy/netviet/compose.yaml`: **252 MiB** (205 + 28 + 19) — xem
 > [backup-restore-d6-23-08-2026.md](../../../tools/poc-workflow-engine/evidence/backup-restore-d6-23-08-2026.md).
+> Cụm trên VM thật (301–323 MiB) **cao hơn POC ~20–28%**: POC đo "lúc rảnh", còn đây là engine đã
+> nhận đăng ký worker và có lưu lượng thật.
 
-| Số stack bật engine | RAM thêm |
+| Số stack bật engine | RAM thêm (cụm engine + **1 worker**) |
 |---:|---:|
-| 1 (`ultty/gd1-test`) | ~0,27 GB |
-| 2 | ~0,54 GB |
-| 4 | ~1,08 GB |
+| 1 (`ultty/gd1-test`) | **~0,43 GB** |
+| 2 | ~0,86 GB |
+| 4 | ~1,72 GB |
+
+> Bảng này trước đây ghi 0,27 / 0,54 / 1,08 GB — đó là cụm engine **chưa cộng worker**, tức thiếu
+> ~40% cho mỗi stack. Số mới lấy từ lần đo 24/08 (cụm 323 MiB + worker 108 MiB ≈ 431 MiB).
+> Thủ tục DRAIN ở §2 cho **hai** worker cùng sống (`v1` + `v2`) trong lúc nâng phiên bản khuôn,
+> nên lúc chuyển phiên bản phải cộng thêm **~110 MiB** nữa cho stack đang nâng.
+>
+> Đo trên VM `netviet` lúc bật 1 stack (24/08): còn **3262 MB available** / 7936 MB, đĩa 39%.
 
 **Trước khi deploy lên VM `netviet` phải kiểm bằng số thật**, không ước lượng:
 ```bash

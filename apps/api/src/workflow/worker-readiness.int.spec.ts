@@ -226,7 +226,21 @@ describe.skipIf(!RUN_IT)('readiness cua worker tren engine THAT', () => {
      * chung minh rut sach" tren Windows thi no dang noi doi, va con duong DRAIN cua runbook §2
      * se di vao production ma chua ai do.
      *
-     * MON NO: do lai o D9 (bang chung sau deploy) tren gd1-test, noi worker chay trong container.
+     * MON NO DA TRA — do that 24/08/2026 (D8) tren gd1-test, container Linux, SIGTERM that:
+     *
+     *   truoc SIGTERM: so dong 'Rut worker' = 0
+     *   docker kill --signal=SIGTERM zalo-ultty-gd1-test-workflow-worker-v1-1
+     *   sau:           container `exited` voi EXIT CODE 0 (thoat sach, khong bi SIGKILL het han)
+     *                  log co '[WorkflowWorkerService] Rut worker
+     *                  workflow-worker-integration-handoff-v1'
+     *                  so dong 'Rut worker' = 1
+     *
+     * Tuc la tren Linux, `enableShutdownHooks()` CO chay va duong DRAINING -> stop() -> STOPPED
+     * cua runbook §2 la co that. Exit code 0 moi la phan quan trong: no phan biet "rut sach xong
+     * roi thoat" voi "het han an han roi bi giet".
+     *
+     * Cai `if` duoi day VAN GIU cho Windows — no khong phai mon no nua ma la mot su that ve may
+     * host. Xoa no di thi bai nay se do tren may dev va noi doi ve ly do.
      */
     if (process.platform !== 'win32') {
       expect(worker.output).toContain('Rut worker');

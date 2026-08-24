@@ -239,6 +239,25 @@ function Ensure-Secret {
   }
 }
 
+# VO SECRET — tao secret nhung CO Y khong gieo version nao.
+#
+# Dung cho secret ma GIA TRI phai den tu noi khac, va mot gia tri ngau nhien sinh o day se la
+# gia tri SAI ma khong ai phat hien duoc cho toi luc chay:
+#   - bam bcrypt cua dashboard: phai do `caddy hash-password` sinh (PowerShell khong co bcrypt);
+#   - token cua workflow engine: JWT do CHINH engine duc sau migrate + quickstart.
+#
+# Tao vo o day de VM co the `versions add` ma KHONG can `secrets.create` cap project: mot service
+# account phuc vu bon stack tren cung mot VM khong duoc phep de ra secret moi o bat ky dau.
+# Ben doc deu fail-closed khi vo con rong (render-secrets.sh:161/163, deploy-stack.sh:105).
+function Ensure-SecretShell {
+  param(
+    [Parameter(Mandatory)][string]$Name
+  )
+  if (-not (Test-GcloudResource @('secrets', 'describe', $Name, '--project', $ProjectId))) {
+    Invoke-Gcloud @('secrets', 'create', $Name, '--replication-policy=automatic', '--project', $ProjectId, '--quiet')
+  }
+}
+
 function Ensure-FlowiseAdminPasswordSecret {
   $name = "$SecretPrefix-flowise-admin-password"
   Ensure-Secret $name { New-FlowiseAdminPassword }
@@ -426,6 +445,20 @@ function Ensure-Secrets {
   Ensure-Secret "$SecretPrefix-flowise-token-hash-secret" { New-RandomSecret 48 }
   Ensure-Secret "$SecretPrefix-demo-password" { New-FlowiseAdminPassword }
   Ensure-Secret "$SecretPrefix-operator-password" { New-FlowiseAdminPassword }
+  # WORKFLOW ENGINE (Hatchet) — ba secret ma `render-secrets.sh` doc that su (dong 133/137/141).
+  #
+  # SU CO 23/08/2026: ba cai nay truoc day duoc tao TAY o phien 7/8, tuc chi chay NUA DAU cua thu
+  # tuc hai-nua. Deploy gd1-test chet voi "thieu secret zalo-ultty-gd1-test-hatchet-db-password"
+  # trong khi secret CO THAT — VM chi khong co binding de doc. `optional_secret` nuot
+  # PERMISSION_DENIED thanh chuoi rong nen loi IAM hien ra thanh "thieu secret", va mat tron mot
+  # vong deploy de tim. Dua chung vao day de "hai viec di tu MOT danh sach" thanh dung nhu
+  # ci-cd.md §4.2 da hua.
+  #
+  # `workflow-dashboard-password` CO Y khong nam trong danh sach: khong ai doc no bang may — no la
+  # ban ro cho NGUOI. Them vao day la cap cho VM quyen doc mot thu VM khong dung.
+  Ensure-Secret "$SecretPrefix-hatchet-db-password" { New-RandomSecret }
+  Ensure-SecretShell "$SecretPrefix-workflow-dashboard-htpasswd"
+  Ensure-SecretShell "$SecretPrefix-workflow-engine-token"
 
   # MOT NGUON DUY NHAT cho ca hai viec: tao secret o tren va cap quyen doc o duoi. Truoc day day la
   # hai danh sach roi phai tu tay giu khop nhau — dung dip len khach Amico (17/08/2026) thi lech:
@@ -447,7 +480,10 @@ function Ensure-Secrets {
     'flowise-session-secret',
     'flowise-token-hash-secret',
     'demo-password',
-    'operator-password'
+    'operator-password',
+    'hatchet-db-password',
+    'workflow-dashboard-htpasswd',
+    'workflow-engine-token'
   )
   $secretNames = $secretSuffixes | ForEach-Object { "$SecretPrefix-$_" }
   foreach ($name in $secretNames) {
@@ -459,6 +495,22 @@ function Ensure-Secrets {
       '--quiet'
     )
   }
+
+  # NGOAI LE DUY NHAT trong ca ham: token cua workflow engine la secret duy nhat VM phai GHI, chu
+  # khong chi doc. `bootstrap-workflow-engine.sh` duc token TREN VM (engine moi biet gia tri) roi
+  # `versions add` vao day.
+  #
+  # `secretVersionAdder` = `versions.add`, KHONG kem `secrets.create` — do la diem mau chot: VM ghi
+  # duoc version vao DUNG mot vo da co san, va van khong the de ra secret moi o bat ky dau. Phuong
+  # an "cap roles/secretmanager.admin cap project" bi loai vi no cho VM doc/ghi MOI secret cua MOI
+  # khach tren cung may (zalo-ultty prod, amico, wata) — ban tron cach ly bi mat lay mot lan tien.
+  Invoke-Gcloud @(
+    'secrets', 'add-iam-policy-binding', "$SecretPrefix-workflow-engine-token",
+    "--member=serviceAccount:$ServiceAccount",
+    '--role=roles/secretmanager.secretVersionAdder',
+    '--project', $ProjectId,
+    '--quiet'
+  )
 }
 
 function Ensure-Vm {
