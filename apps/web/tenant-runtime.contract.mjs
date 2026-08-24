@@ -86,7 +86,15 @@ function writePack(spec) {
       experience: spec.experience,
       capabilities:
         spec.experience === 'operations-console'
-          ? ['knowledge', 'messaging', 'sales-order', 'campaign', 'operations', 'notifications']
+          ? [
+              'knowledge',
+              'messaging',
+              'turn-processing',
+              'sales-order',
+              'campaign',
+              'operations',
+              'notifications',
+            ]
           : spec.experience === 'agent-workforce'
             ? ['knowledge', 'operations']
             : ['knowledge'],
@@ -124,7 +132,7 @@ function writePack(spec) {
         spec.experience === 'operations-console'
           ? {
               messaging: { botName: spec.productName, mentionName: `Bot ${spec.slug}` },
-              salesOrder: { parserIntro: `Parser fixture cho ${spec.productName}.` },
+              turnProcessing: { parserIntro: `Parser fixture cho ${spec.productName}.` },
               knowledge: { productFallbackDescription: `San pham cua ${spec.productName}.` },
             }
           : {},
@@ -187,9 +195,12 @@ async function startServer(tenantDir) {
     // log thay mot job bi huy chu khong thay mot test that bai (su co 15-17/08/2026).
     await stopServer(child).catch(() => {});
     const detail = stderr.trim().split('\n').slice(-12).join('\n');
-    throw new Error(`${error.message}${detail ? `\n--- stderr cua next start ---\n${detail}` : ''}`, {
-      cause: error,
-    });
+    throw new Error(
+      `${error.message}${detail ? `\n--- stderr cua next start ---\n${detail}` : ''}`,
+      {
+        cause: error,
+      },
+    );
   }
   return child;
 }

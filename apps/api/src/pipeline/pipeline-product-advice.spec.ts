@@ -9,6 +9,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { SEED } from '../knowledge/seed.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { TurnReplyService } from '../turns/turn-reply.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { FakeParser } from './__tests__/fake-parser.js';
 import type { OrderParser, ParserInput } from './order-parser.js';
@@ -52,7 +53,8 @@ async function build(options: {
   const zca = new MockAdapter();
   const outbound = new MockAdapter();
   const router = new OutboundChannelRouter(bot, zca, outbound);
-  const orders = new OrdersService(ordersRepo, router);
+  const turnReply = new TurnReplyService(ordersRepo, router);
+  const orders = new OrdersService(ordersRepo, router, undefined, undefined, undefined, turnReply);
   const settings = { autoSend: () => options.autoSend } as RuntimeSettingsService;
   const pipeline = new PipelineService(
     orchestrator,
@@ -61,6 +63,13 @@ async function build(options: {
     settings,
     undefined,
     knowledge,
+    undefined, // groupDiscovery
+    undefined, // media
+    undefined, // conversationContext
+    undefined, // conversations
+    undefined, // burstWindowMs
+    undefined, // telemetry
+    turnReply,
   );
   return { pipeline, outbound };
 }

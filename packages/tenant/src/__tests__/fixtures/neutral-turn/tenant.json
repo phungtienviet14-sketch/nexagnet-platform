@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 2,
+  "slug": "neutral-turn",
+  "identity": {
+    "displayName": "Neutral Turn Fixture",
+    "shortName": "Neutral"
+  },
+  "branding": {
+    "productName": "Neutral Assistant",
+    "installName": "Neutral Assistant",
+    "pageTitle": "Neutral Assistant",
+    "pageDescription": "Tenant fixture that talks to people without selling anything.",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#f5f7fb",
+    "monogram": "N",
+    "composerPlaceholder": "Ask anything"
+  },
+  "experience": "knowledge-workspace",
+  "capabilities": ["knowledge", "messaging", "turn-processing"],
+  "policies": {
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {
+    "channel": { "allowedAdapters": ["mock"] },
+    "parser": { "allowedAdapters": ["deepseek"] }
+  },
+  "persona": {
+    "messaging": { "botName": "Neutral", "mentionName": "Bot Neutral" },
+    "turnProcessing": { "parserIntro": "Ban la bo PHAN LOAI Y DINH cho mot to ho tro." },
+    "knowledge": { "productFallbackDescription": "Dich vu ho tro." }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" }
+  }
+}

@@ -19,6 +19,7 @@
   "capabilities": [
     "knowledge",
     "messaging",
+    "turn-processing",
     "sales-order",
     "campaign",
     "operations",
@@ -58,7 +59,7 @@
       "botName": "Amico",
       "mentionName": "Bot Amico"
     },
-    "salesOrder": {
+    "turnProcessing": {
       "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Amico."
     },
     "knowledge": {

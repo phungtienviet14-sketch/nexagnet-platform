@@ -1,0 +1,13 @@
+{
+  "products": [
+    {
+      "sku": "DV-01",
+      "name": "Goi bao tri",
+      "aliases": ["bao tri", "goi bao tri"],
+      "unit": "goi",
+      "description": "Goi bao tri dinh ky."
+    }
+  ],
+  "glossary": [{ "term": "BH", "meaning": "Bao hanh" }],
+  "groups": [{ "chatId": "group-neutral-1", "name": "Nhom ho tro", "branch": "HN" }]
+}

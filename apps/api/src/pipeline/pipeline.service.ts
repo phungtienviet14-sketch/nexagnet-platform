@@ -17,12 +17,10 @@ import { ConversationContextBuilder } from '../messages/conversation-context.js'
 import { ConversationsService } from '../conversations/conversations.service.js';
 import type { ThreadKey } from '../conversations/conversation-thread.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
-import type {
-  AutoReplyReason,
-  ConversationReason,
-} from '../observability/decision-reasons.js';
+import type { AutoReplyReason, ConversationReason } from '../observability/decision-reasons.js';
 import { detectAmend } from './amend-detect.js';
 import { evaluateAutoConfirm } from './order-auto-confirmation.js';
 
@@ -86,9 +84,16 @@ export class PipelineService implements OnModuleDestroy {
      * doi mot dong). Day la ly do no la `@Optional()` chu khong phai mot dependency bat buoc.
      */
     @Optional() private readonly telemetry?: TelemetryService,
+    /**
+     * Duong TRA LOI trung tinh. Tach khoi `OrdersService`: truoc 24/08/2026 mot khach khong ban
+     * hang van doc duoc tin nhung khong tra loi duoc, vi cai gui cau tra loi nam trong dich vu
+     * don hang. Dat CUOI danh sach co chu y — cac bo test dang truyen tham so theo vi tri.
+     */
+    @Optional() private readonly turnReply?: TurnReplyService,
   ) {
     const env = loadEnv();
-    this.burstWindowMs = burstWindowMs ?? (env.NODE_ENV === 'test' ? 0 : env.MESSAGE_BURST_WINDOW_MS);
+    this.burstWindowMs =
+      burstWindowMs ?? (env.NODE_ENV === 'test' ? 0 : env.MESSAGE_BURST_WINDOW_MS);
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -351,7 +356,10 @@ export class PipelineService implements OnModuleDestroy {
    * Khoa theo (kenh, nhom, NGUOI GUI) chu khong theo nhom: 200 dai ly trong mot nhom van phai
    * duoc tu van SONG SONG — noi dung khoa la mach cua tung nguoi, khong phai ca nhom.
    */
-  private enqueuePerSender(message: ChannelMessage, run: () => Promise<OrderView>): Promise<OrderView> {
+  private enqueuePerSender(
+    message: ChannelMessage,
+    run: () => Promise<OrderView>,
+  ): Promise<OrderView> {
     const key = burstKey(message);
     const previous = this.senderQueues.get(key) ?? Promise.resolve();
     // Tin truoc HONG khong duoc keo tin sau hong theo — nen nuot loi o MAT XICH, khong o ket qua.
@@ -417,8 +425,8 @@ export class PipelineService implements OnModuleDestroy {
         threadKey && !opts?.rerun ? await this.conversations?.pendingDraft(threadKey, now) : null;
       const answeringQuestion = Boolean(
         threadKey &&
-          !opts?.rerun &&
-          (await this.conversations?.isAnsweringQuestion(threadKey, now)),
+        !opts?.rerun &&
+        (await this.conversations?.isAnsweringQuestion(threadKey, now)),
       );
       // DON VUA CHOT cua chinh nguoi nay. Doc rieng khoi `pendingDraft` co chu y: mach da chot
       // thi KHONG duoc gop tiep, nhung van phai NHO.
@@ -450,12 +458,12 @@ export class PipelineService implements OnModuleDestroy {
     });
     const view = await this.observed('agent.run', () =>
       this.orchestrator.run(message, botName, {
-      ...opts,
-      ...(senderTypeOverride ? { senderTypeOverride } : {}),
-      ...(conversationContext ? { conversationContext } : {}),
-      ...(pendingDraft ? { pendingDraft } : {}),
-      ...(answeringQuestion ? { answeringQuestion } : {}),
-      ...(closedOrder ? { closedOrder } : {}),
+        ...opts,
+        ...(senderTypeOverride ? { senderTypeOverride } : {}),
+        ...(conversationContext ? { conversationContext } : {}),
+        ...(pendingDraft ? { pendingDraft } : {}),
+        ...(answeringQuestion ? { answeringQuestion } : {}),
+        ...(closedOrder ? { closedOrder } : {}),
         // Chi bao "dang sua don" khi CO don de sua. Mot cau "huy don" khi khong co don nao vua
         // chot la mot cau hoi binh thuong, khong phai mot lenh.
         ...(amend.isAmend && closedOrder ? { amendRequest: amend } : {}),
@@ -514,11 +522,11 @@ export class PipelineService implements OnModuleDestroy {
       outcome: autoReply.allowed ? 'allowed' : 'denied',
       reason: autoReply.reason,
     });
-    if (autoReply.allowed && this.orders) {
+    if (autoReply.allowed && this.turnReply) {
       try {
         this.logger.log(`[AUTO_SEND] Tư vấn ${view.intent} ${view.id}`);
         const replied = await this.observed('outbound.send_advice', () =>
-          this.orders!.sendProductAdvice(view.id),
+          this.turnReply!.sendAdviceReply(view.id),
         );
         return await this.settleThread(threadKey, message, replied, now, false);
       } catch (error) {
@@ -588,10 +596,10 @@ export class PipelineService implements OnModuleDestroy {
         participant.handlingMode === 'inherit_group');
     if (
       unclassifiedRoutingIdentity &&
-      await this.participants.requiresIdentityReview(
+      (await this.participants.requiresIdentityReview(
         message.externalChatId,
         message.senderExternalId,
-      )
+      ))
     ) {
       this.logger.warn(
         `UID routing ${message.senderExternalId} chua reconcile voi stable identity; ` +
@@ -747,20 +755,25 @@ function canAppendToBurst(
 ): boolean {
   const previous = current.at(-1);
   if (!previous || current.length >= MAX_BURST_MESSAGES) return false;
-  const characters = current.reduce((sum, message) => sum + message.text.length, 0) + next.text.length;
+  const characters =
+    current.reduce((sum, message) => sum + message.text.length, 0) + next.text.length;
   const gapMs = Math.abs(next.sentAt.getTime() - previous.sentAt.getTime());
   return characters <= MAX_BURST_CHARACTERS && gapMs <= Math.max(windowMs * 2, 5_000);
 }
 
 function combineBurst(messages: readonly ChannelMessage[]): ChannelMessage {
-  const ordered = [...messages].sort((left, right) => left.sentAt.getTime() - right.sentAt.getTime());
+  const ordered = [...messages].sort(
+    (left, right) => left.sentAt.getTime() - right.sentAt.getTime(),
+  );
   const latest = ordered.at(-1)!;
   if (ordered.length === 1) return latest;
   return {
     ...latest,
     imageUrl: [...ordered].reverse().find((message) => message.imageUrl)?.imageUrl,
     text: ordered
-      .map((message, index) => `TIN ${index + 1} [${message.sentAt.toISOString()}]: ${message.text}`)
+      .map(
+        (message, index) => `TIN ${index + 1} [${message.sentAt.toISOString()}]: ${message.text}`,
+      )
       .join('\n'),
   };
 }
@@ -789,7 +802,6 @@ function identityReviewParticipant(message: ChannelMessage): GroupParticipant {
     updatedAt: timestamp,
   };
 }
-
 
 /**
  * Mach hoi thoai da xep tin nay vao dau — mot ma, khong phai nam boolean roi rac.

@@ -151,7 +151,9 @@ export function loadTenantKnowledge(): TenantKnowledge {
           prices: [],
           priceOverrides: [],
           dealers: [],
-          groups: [],
+          // Nhom KHONG rong o day nua: no la cong "duoc phep dua sang LLM", va khach khong ban
+          // hang cung phai khai duoc nhom cua ho. Cai vang mat la `dealerId`, khong phai nhom.
+          groups: base.groups,
           glossary: base.glossary,
         } satisfies TenantKnowledge;
       })();
@@ -207,18 +209,23 @@ function assertCapability(capability: CapabilityId): TenantConfig {
   return config;
 }
 
-/** Shape legacy cho pipeline sales-order; tenant khong bat capability lien quan se fail ro rang. */
+/**
+ * Shape legacy cho duong xu ly luot; tenant khong bat capability lien quan se fail ro rang.
+ *
+ * Neo vao `turn-processing` chu KHONG phai `sales-order` (24/08/2026): prompt parser, ten bot va
+ * mo ta san pham dat lai deu can cho mot khach chi tra loi tin nhan.
+ */
 export function tenantPersona(): LegacyTenantPersona {
-  const config = assertCapability('sales-order');
+  const config = assertCapability('turn-processing');
   assertCapability('messaging');
   const messaging = config.persona.messaging;
-  const salesOrder = config.persona.salesOrder;
+  const turnProcessing = config.persona.turnProcessing;
   const knowledge = config.persona.knowledge;
-  if (!messaging || !salesOrder || !knowledge) {
-    throw new Error('Tenant sales-order thieu persona capability-scoped');
+  if (!messaging || !turnProcessing || !knowledge) {
+    throw new Error('Tenant turn-processing thieu persona capability-scoped');
   }
   return {
-    parserIntro: salesOrder.parserIntro,
+    parserIntro: turnProcessing.parserIntro,
     botName: messaging.botName,
     mentionName: messaging.mentionName,
     productFallbackDescription: knowledge.productFallbackDescription,
@@ -255,11 +262,20 @@ export function tenantBootstrap(): TenantConfig['bootstrap'] {
   return loadTenantConfig().bootstrap;
 }
 
-/** Policy tu xac nhan don cua tenant; null nghia la chua duoc phe duyet, phai fail-closed. */
+/**
+ * Policy tu xac nhan don cua tenant; `null` nghia la KHONG tu xac nhan — fail-closed.
+ *
+ * `null` bao gom ca hai truong hop, co chu y: (a) khach ban hang nhung chua duoc phe duyet policy;
+ * (b) khach KHONG ban hang. Ca hai deu dan toi cung mot hanh vi dung — khong tu gui don — nen
+ * ep ben goi phan biet chung chi tao ra mot cai bay: truoc 24/08/2026 ham nay NEM o (b), va
+ * `PipelineService` goi no cho MOI luot, nen mot khach khong ban hang khong chay noi mot luot nao.
+ */
 export function tenantOrderAutomation(): NonNullable<
   TenantConfig['policies']['salesOrder']
 >['automation'] {
-  return assertCapability('sales-order').policies.salesOrder?.automation ?? null;
+  const config = loadTenantConfig();
+  if (!config.capabilities.includes('sales-order')) return null;
+  return config.policies.salesOrder?.automation ?? null;
 }
 
 /** Policy phan phoi/retry campaign cua tenant; du lieu campaign runtime van nam trong Postgres. */
@@ -276,6 +292,21 @@ export function tenantRetailAdvice(): NonNullable<
   const salesOrder = assertCapability('sales-order').policies.salesOrder;
   if (!salesOrder) throw new Error('Tenant sales-order thieu policies.salesOrder');
   return salesOrder.retailAdvice;
+}
+
+/**
+ * Nhu tren, nhung `null` khi khach KHONG ban hang — thay vi nem.
+ *
+ * Duong xu ly luot (turn-processing) chay cho ca khach khong ban gi, va no van gap cau hoi co
+ * chu "gia". Truoc 24/08/2026 no goi thang `tenantRetailAdvice()`, nen mot khach chi tra loi tin
+ * nhan vap `Capability sales-order khong duoc bat` ngay giua mot luot. `null` o day co nghia
+ * chinh xac la: "khong bao gia" — mot cau tra loi hop le, khong phai mot loi cau hinh.
+ */
+export function tenantRetailAdviceOrNull():
+  NonNullable<TenantConfig['policies']['salesOrder']>['retailAdvice'] | null {
+  const config = loadTenantConfig();
+  if (!config.capabilities.includes('sales-order')) return null;
+  return tenantRetailAdvice();
 }
 
 /** He thong ERP cua khach; nhan chi biet cong `ErpPort`, khong biet ten nha cung cap (G1-12). */

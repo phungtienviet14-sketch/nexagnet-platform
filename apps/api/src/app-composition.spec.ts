@@ -5,6 +5,7 @@ import { buildAppComposition } from './app-composition.js';
 const OPERATIONS_CAPABILITIES = [
   'knowledge',
   'messaging',
+  'turn-processing',
   'sales-order',
   'campaign',
   'operations',

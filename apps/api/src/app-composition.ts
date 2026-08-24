@@ -45,7 +45,11 @@ import { ZcaListener } from './ingest/zca-listener.js';
 import { KnowledgeController } from './knowledge/knowledge.controller.js';
 import { KnowledgeModule } from './knowledge/knowledge.module.js';
 import { KnowledgeService } from './knowledge/knowledge.service.js';
-import { catalogStoreProvider, mediaFetcherProvider, mediaStoreProvider } from './media/media.provider.js';
+import {
+  catalogStoreProvider,
+  mediaFetcherProvider,
+  mediaStoreProvider,
+} from './media/media.provider.js';
 import { CatalogMediaController } from './media/catalog-media.controller.js';
 import { MediaHealthController } from './media/media-health.controller.js';
 import { ConversationContextBuilder } from './messages/conversation-context.js';
@@ -59,8 +63,14 @@ import { NotificationSettingsRepository } from './notifications/notification-set
 import { NotificationsController } from './notifications/notifications.controller.js';
 import { SettingsNotificationsController } from './notifications/settings-notifications.controller.js';
 import { ZaloLeadDispatcher } from './notifications/zalo-lead-dispatcher.js';
-import { MessagesController, OrdersController } from './orders/orders.controller.js';
-import { InMemoryOrdersRepository, OrdersRepository } from './orders/orders.repository.js';
+import { OrdersController } from './orders/orders.controller.js';
+import { OrdersRepository } from './orders/orders.repository.js';
+import {
+  InMemoryTurnRecordsRepository,
+  TurnRecordsRepository,
+} from './turns/turn-records.repository.js';
+import { TurnReplyService } from './turns/turn-reply.service.js';
+import { MessagesController } from './turns/turns.controller.js';
 import { OrdersService } from './orders/orders.service.js';
 import { OrderAmendmentService } from './orders/order-amendment.service.js';
 import { OrderCommandAdapter } from './orders/order-command.adapter.js';
@@ -83,7 +93,10 @@ import { WorkflowModule } from './workflow/workflow.module.js';
 import { tenantCampaignConfig } from '@netviet/tenant';
 
 type CapabilityOwner = CapabilityId | 'foundation';
-interface Owned<T> { readonly owner: CapabilityOwner; readonly value: T }
+interface Owned<T> {
+  readonly owner: CapabilityOwner;
+  readonly value: T;
+}
 
 const owned = <T>(owner: CapabilityOwner, value: T): Owned<T> => ({ owner, value });
 
@@ -107,12 +120,12 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('foundation', HealthController),
   owned('sales-order', OrdersController),
-  owned('sales-order', MessagesController),
+  owned('turn-processing', MessagesController),
   owned('sales-order', DemoController),
   owned('sales-order', ErpController),
   owned('knowledge', KnowledgeController),
   owned('messaging', BroadcastController),
-  owned('sales-order', StreamController),
+  owned('turn-processing', StreamController),
   owned('messaging', ZaloController),
   owned('operations', SettingsController),
   owned('campaign', CampaignController),
@@ -124,24 +137,34 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('notifications', SettingsNotificationsController),
 ];
 
-const guardProviders: readonly Provider[] = [ApiKeyGuard, SessionAuthGuard, CsrfGuard, RolesGuard, ThrottlerGuard].map(
-  (useClass) => ({ provide: APP_GUARD, useClass }),
-);
+const guardProviders: readonly Provider[] = [
+  ApiKeyGuard,
+  SessionAuthGuard,
+  CsrfGuard,
+  RolesGuard,
+  ThrottlerGuard,
+].map((useClass) => ({ provide: APP_GUARD, useClass }));
 
 const PROVIDERS: readonly Owned<Provider>[] = [
   ...guardProviders.map((provider) => owned('foundation' as const, provider)),
   owned('operations', RuntimeSettingsService),
-  owned('sales-order', AgentEventsService),
-  owned('sales-order', {
-    provide: OrdersRepository,
-    useFactory: (prisma: PrismaService): OrdersRepository =>
+  owned('turn-processing', AgentEventsService),
+  // Kho LUOT — trung tinh. Bang Postgres van ten `Order` (khong di tru du lieu), nhung QUYEN SO
+  // HUU thi khong: moi y dinh deu sinh mot ban ghi o day, ke ca o khach khong ban gi.
+  owned('turn-processing', {
+    provide: TurnRecordsRepository,
+    useFactory: (prisma: PrismaService): TurnRecordsRepository =>
       loadFoundationEnv().PERSISTENCE === 'prisma'
         ? new PrismaOrdersRepository(prisma)
-        : new InMemoryOrdersRepository(),
+        : new InMemoryTurnRecordsRepository(),
     inject: [PrismaService],
   }),
-  owned('sales-order', ConversationContextBuilder),
-  owned('sales-order', {
+  // `OrdersRepository` la CUNG MOT INSTANCE, doc bang ngon ngu don hang. `useExisting` chu khong
+  // phai mot factory thu hai: hai kho tach roi la cach chac chan de don va luot lech nhau.
+  owned('sales-order', { provide: OrdersRepository, useExisting: TurnRecordsRepository }),
+  owned('turn-processing', TurnReplyService),
+  owned('turn-processing', ConversationContextBuilder),
+  owned('turn-processing', {
     provide: ConversationThreadsRepository,
     useFactory: (prisma: PrismaService): ConversationThreadsRepository =>
       loadFoundationEnv().PERSISTENCE === 'prisma'
@@ -149,7 +172,7 @@ const PROVIDERS: readonly Owned<Provider>[] = [
         : new InMemoryConversationThreadsRepository(),
     inject: [PrismaService],
   }),
-  owned('sales-order', ConversationsService),
+  owned('turn-processing', ConversationsService),
   owned('operations', SettingsQueryService),
   owned('operations', GroupMappingService),
   owned('operations', GroupIdentityService),
@@ -170,8 +193,13 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     inject: [PrismaService],
   }),
   owned('campaign', { provide: CAMPAIGN_POLICY, useFactory: tenantCampaignConfig }),
-  owned('campaign', { provide: 'CAMPAIGN_WORKER_ID', useFactory: () => `campaign-worker-${randomUUID()}` }),
-  owned('sales-order', {
+  owned('campaign', {
+    provide: 'CAMPAIGN_WORKER_ID',
+    useFactory: () => `campaign-worker-${randomUUID()}`,
+  }),
+  // Kho TIN — thuoc `messaging`: nhan mot tin thi phai luu duoc no, ke ca khi khach khong bat
+  // duong xu ly luot nao (CLAUDE.md: "Luu moi tin nhan/don ve DB ngay khi nhan").
+  owned('messaging', {
     provide: MessagesRepository,
     useFactory: (prisma: PrismaService): MessagesRepository =>
       loadFoundationEnv().PERSISTENCE === 'prisma'
@@ -181,17 +209,17 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   }),
   owned('messaging', OutboundRecorder),
   owned('sales-order', erpProvider),
-  owned('sales-order', mediaStoreProvider),
+  owned('turn-processing', mediaStoreProvider),
   owned('sales-order', catalogStoreProvider),
-  owned('sales-order', mediaFetcherProvider),
-  owned('sales-order', parserProvider),
+  owned('turn-processing', mediaFetcherProvider),
+  owned('turn-processing', parserProvider),
   owned('messaging', ZaloUserClient),
   owned('messaging', BotIdentityService),
   ...namedChannelProviders.map((provider) => owned('messaging' as const, provider)),
   owned('messaging', channelProvider),
   owned('messaging', OutboundChannelRouter),
-  owned('sales-order', AgentOrchestrator),
-  owned('sales-order', PipelineService),
+  owned('turn-processing', AgentOrchestrator),
+  owned('turn-processing', PipelineService),
   owned('sales-order', OrdersService),
   owned('sales-order', OrderAmendmentService),
   // Cong GHI cua agent. Dang ky RIENG khoi `AgentOrchestrator` de doc duoc tu day rang quyen
@@ -201,8 +229,12 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('messaging', BroadcastService),
   owned('campaign', CampaignService),
   owned('campaign', CampaignScheduler),
-  owned('sales-order', BotPoller),
-  owned('sales-order', ZcaListener),
+  // NGO VAO cua mot luot. Thuoc `turn-processing` chu khong phai `messaging` vi bang chung nam
+  // trong chinh constructor: ca hai BAT BUOC co `PipelineService`. Mot listener khong co cho
+  // giao tin la mot tien trinh doc PII roi vut di. `messaging` so huu ADAPTER (gui/nhan), con
+  // ai NHAN VIEC tu adapter la chuyen cua duong xu ly luot.
+  owned('turn-processing', BotPoller),
+  owned('turn-processing', ZcaListener),
   owned('notifications', NotificationSettingsRepository),
   owned('notifications', EmailLeadDispatcher),
   owned('notifications', ZaloLeadDispatcher),

@@ -19,6 +19,7 @@
   "capabilities": [
     "knowledge",
     "messaging",
+    "turn-processing",
     "sales-order",
     "campaign",
     "operations",
@@ -101,7 +102,7 @@
       "botName": "Ultty",
       "mentionName": "Bot ultty AI orders"
     },
-    "salesOrder": {
+    "turnProcessing": {
       "parserIntro": "Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho U Ultty (gia dung cao cap)."
     },
     "knowledge": {

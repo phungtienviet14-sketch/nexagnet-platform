@@ -64,6 +64,7 @@ const VALID_CONFIG = {
   capabilities: [
     'knowledge',
     'messaging',
+    'turn-processing',
     'sales-order',
     'campaign',
     'operations',
@@ -98,7 +99,7 @@ const VALID_CONFIG = {
   },
   persona: {
     messaging: { botName: 'Khach Mau', mentionName: 'Bot khach mau' },
-    salesOrder: {
+    turnProcessing: {
       parserIntro: 'Ban la bo PHAN LOAI Y DINH + TRICH XUAT don hang cho Khach Mau.',
     },
     knowledge: { productFallbackDescription: 'San pham cua Khach Mau.' },
@@ -196,7 +197,7 @@ describe('doc goi khach', () => {
     expect(tenantIntegrations().channel).toBeUndefined();
     expect(loadTenantConfig().policies.salesOrder).toBeUndefined();
     expect(loadTenantConfig().persona).toEqual({});
-    expect(() => tenantPersona()).toThrow(/Capability sales-order khong duoc bat/);
+    expect(() => tenantPersona()).toThrow(/Capability turn-processing khong duoc bat/);
     expect(loadTenantKnowledge()).toEqual({
       pricePeriod: null,
       products: [],
@@ -445,7 +446,7 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
     expect(() => loadTenantConfig()).toThrow(/experience/);
   });
 
-  it.each(['knowledge', 'messaging', 'sales-order', 'operations'])(
+  it.each(['knowledge', 'messaging', 'turn-processing', 'sales-order', 'operations'])(
     'operations-console thieu capability %s -> chan theo experience contract',
     (missingCapability) => {
       useFakePack({

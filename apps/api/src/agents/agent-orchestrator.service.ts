@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { tenantRetailAdvice } from '@netviet/tenant';
+import { tenantHasCapability, tenantRetailAdviceOrNull } from '@netviet/tenant';
 import {
   AGENT_ROLES,
   INTENT_LABELS,
@@ -37,7 +37,7 @@ import { ContentService } from '../content/content.service.js';
 import { mergeConversationTurn } from '../conversations/conversation-merge.js';
 import type { ClosedOrderContext } from '../conversations/conversation-thread.js';
 import type { AmendSignal } from '../pipeline/amend-detect.js';
-import { OrdersRepository } from '../orders/orders.repository.js';
+import { TurnRecordsRepository } from '../turns/turn-records.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
 import { AgentEventsService } from './agent-events.service.js';
@@ -107,7 +107,12 @@ export class AgentOrchestrator {
   constructor(
     @Inject(ORDER_PARSER) private readonly parser: OrderParser,
     private readonly knowledge: KnowledgeService,
-    private readonly orders: OrdersRepository,
+    /**
+     * Kho LUOT, khong phai kho DON: orchestrator ghi mot ban ghi cho MOI y dinh (hoi san pham,
+     * bao hanh, dat don). Neo vao `TurnRecordsRepository` de mot khach khong ban hang van luu
+     * duoc luot cua ho — xem `turns/turn-records.repository.ts`.
+     */
+    private readonly turns: TurnRecordsRepository,
     @Optional() private readonly events?: AgentEventsService,
     @Optional() private readonly ruleConfigs?: RuleConfigService,
     @Optional() private readonly content?: ContentService,
@@ -333,7 +338,20 @@ export class AgentOrchestrator {
     const resolved = opts?.senderTypeOverride
       ? { ...baseResolved, senderType: opts.senderTypeOverride }
       : baseResolved;
-    const senderKnown = resolved.dealer !== null;
+    /*
+     * "Da xac dinh duoc nguoi doi dien chua?" — o muc ma tenant NAY doi hoi.
+     *
+     * Khach co ban hang: phai map duoc nhom -> dai ly, vi khong biet dai ly thi khong biet ap
+     * bang gia/chinh sach nao, va giam sat phai day sang nguoi that.
+     * Khach KHONG ban hang: khong co so dai ly nao de doi chieu — nhom nam trong danh sach duoc
+     * phep DA LA danh tinh. Truoc 24/08/2026 dong nay luon `false` o ho, nen MOI luot deu bi
+     * giam sat day sang nguoi that va AI khong bao gio tra loi.
+     *
+     * Day la mot phep kiem NANG LUC (thu ma nen tang ho tro), khong phai mot nhanh theo ten
+     * khach — xem HARD REQUIREMENT #1 trong ke hoach da khach.
+     */
+    const requiresDealerIdentity = tenantHasCapability('sales-order');
+    const senderKnown = resolved.dealer !== null || !requiresDealerIdentity;
     const activeRuleConfig = await this.ruleConfigs?.getActive();
     const rulesConfig = activeRuleConfig
       ? toRulesConfig(activeRuleConfig.payload)
@@ -606,7 +624,7 @@ export class AgentOrchestrator {
         ? { draftGaps: { askable: turn.gaps.askable, blocking: turn.gaps.blocking } }
         : {}),
     };
-    const saved = await this.orders.create(view);
+    const saved = await this.turns.create(view);
     emit({ type: 'order.finalized', order: saved });
     return saved;
   }
@@ -672,23 +690,31 @@ export class AgentOrchestrator {
     }
 
     if (intent === 'hoi_san_pham') {
-      const baseAdvice = this.content?.productAdvice(normText, this.knowledge.products(), this.knowledge.glossary()) ?? {
+      const baseAdvice = this.content?.productAdvice(
+        normText,
+        this.knowledge.products(),
+        this.knowledge.glossary(),
+      ) ?? {
         ready: false,
         productSkus: [],
         missing: ['approved_product_content'],
         text: 'Thông tin đã duyệt chưa đủ để trả lời chính xác. Sale sẽ xác minh và phản hồi anh/chị sớm ạ.',
       };
-      const asksPrice = /(^|\s)(gia|bao nhieu|bao gia|price)(\s|$)/.test(normText);
-      const strategy = tenantRetailAdvice();
-      const quote = asksPrice
-        ? buildQuoteLines(
-            normText,
-            this.knowledge.products(),
-            this.knowledge.prices(),
-            strategy,
-            resolved.senderType,
-          )
-        : [];
+      // `strategy === null` -> khach nay KHONG ban hang. Cau hoi co chu "gia" khi do khong
+      // phai mot cau hoi bao gia ma nen tang nay tra loi duoc, nen no khong bat nhanh bao gia.
+      const strategy = tenantRetailAdviceOrNull();
+      const asksPrice =
+        strategy !== null && /(^|\s)(gia|bao nhieu|bao gia|price)(\s|$)/.test(normText);
+      const quote =
+        asksPrice && strategy
+          ? buildQuoteLines(
+              normText,
+              this.knowledge.products(),
+              this.knowledge.prices(),
+              strategy,
+              resolved.senderType,
+            )
+          : [];
       const pricingReady = !asksPrice || quote.length >= baseAdvice.productSkus.length;
       const advice = {
         ...baseAdvice,
@@ -699,7 +725,7 @@ export class AgentOrchestrator {
         text:
           baseAdvice.ready && !pricingReady
             ? 'Bảng giá hiện hành chưa đủ để tư vấn chính xác. Sale sẽ kiểm tra và phản hồi anh/chị sớm ạ.'
-            : asksPrice && quote.length
+            : asksPrice && quote.length && strategy
               ? `${baseAdvice.text}\n${quote.map((item) => `• ${item.name}: ${formatVnd(item.unitPrice)}`).join('\n')}\n${quoteQualifier(strategy, resolved.senderType)}`
               : baseAdvice.text,
       };
@@ -721,15 +747,19 @@ export class AgentOrchestrator {
     }
 
     if (intent === 'hoi_gia') {
-      const strategy = tenantRetailAdvice();
-      const quote = buildQuoteLines(
-        normText,
-        this.knowledge.products(),
-        this.knowledge.prices(),
-        strategy,
-        resolved.senderType,
-      );
-      const quotedField = quotePriceField(strategy, resolved.senderType);
+      // Khach khong ban hang khong co bang gia nao de tra — roi thang xuong nhanh "chua co
+      // bang gia", tuc chuyen nguoi that, thay vi nem giua mot luot.
+      const strategy = tenantRetailAdviceOrNull();
+      const quote = strategy
+        ? buildQuoteLines(
+            normText,
+            this.knowledge.products(),
+            this.knowledge.prices(),
+            strategy,
+            resolved.senderType,
+          )
+        : [];
+      const quotedField = strategy ? quotePriceField(strategy, resolved.senderType) : null;
       roles.set('policy_finance', {
         // Nhan phai noi dung truong gia da tra cuu. Truoc day luon ghi "theo cap <X>" trong khi
         // code khong he doc `senderType` — Sale doc nhan tuong he thong da phan cap san.
@@ -737,9 +767,10 @@ export class AgentOrchestrator {
         notes: quote.map((q) => `${q.name}: ${formatVnd(q.unitPrice)}`),
         source: 'knowledge',
       });
-      const reply = quote.length
-        ? `${quote.map((q) => `• ${q.name}: ${formatVnd(q.unitPrice)}`).join('\n')}\n${quoteQualifier(strategy, resolved.senderType)}`
-        : 'Em chưa có bảng giá hiện hành hoặc chưa nhận diện đủ sản phẩm; Sale sẽ kiểm tra và phản hồi ạ.';
+      const reply =
+        quote.length && strategy
+          ? `${quote.map((q) => `• ${q.name}: ${formatVnd(q.unitPrice)}`).join('\n')}\n${quoteQualifier(strategy, resolved.senderType)}`
+          : 'Em chưa có bảng giá hiện hành hoặc chưa nhận diện đủ sản phẩm; Sale sẽ kiểm tra và phản hồi ạ.';
       return {
         priced: null,
         status: 'pending_review',
@@ -750,7 +781,10 @@ export class AgentOrchestrator {
         // Khong co dong gia nao thi khong dung: luc do `reply` chi la mot loi hen.
         ...(quote.length
           ? {
-              outbound: sendableAdvice(reply, quote.map((q) => q.name)),
+              outbound: sendableAdvice(
+                reply,
+                quote.map((q) => q.name),
+              ),
             }
           : {}),
         roles,
