@@ -19,6 +19,7 @@
   "capabilities": [
     "knowledge",
     "messaging",
+    "turn-processing",
     "sales-order",
     "campaign",
     "operations",
@@ -53,7 +54,7 @@
   },
   "persona": {
     "messaging": { "botName": "E2E", "mentionName": "Bot E2E" },
-    "salesOrder": { "parserIntro": "Bạn là bộ phân loại và trích xuất dữ liệu kiểm thử." },
+    "turnProcessing": { "parserIntro": "Bạn là bộ phân loại và trích xuất dữ liệu kiểm thử." },
     "knowledge": { "productFallbackDescription": "Sản phẩm kiểm thử." }
   },
   "bootstrap": {
