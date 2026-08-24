@@ -1462,10 +1462,21 @@ liên tiếp. Đó là bằng chứng chạy được rằng cổng này thật 
 
 1. ~~`RUN_WORKFLOW_IT` chưa nối vào `ci.yml`~~ — **ĐÓNG** (§47), xác nhận bằng run `32687783483`:
    **201/201, 0 skip**.
-2. **`optional_secret` + lớp gọi probe của preflight** gộp mất ba sự thật khác nhau ("chưa tạo" /
-   "không có quyền" / "không hỏi được"). Đã tốn **hai** vòng deploy (§45.4, §46.6). **Còn nguyên.**
+2. ~~**`optional_secret` + lớp gọi probe của preflight** gộp mất ba sự thật khác nhau ("chưa tạo" /
+   "không có quyền" / "không hỏi được"). Đã tốn **hai** vòng deploy (§45.4, §46.6).~~
+   → **ĐÓNG 24/08/2026** (phiên 12): sửa cả ba lớp — probe trên VM phân loại stderr, preflight thêm
+   `probeStatus` (`readable`/`missing`/`denied`/`unknown`/`unreachable`), `optional_secret`
+   fail-closed. preflight **30/30**, contracts **57/57**, kiểm đột biến cho **5 đỏ**.
+   ⚠️ Bán kính ảnh hưởng phải nói với người trước khi merge — xem
+   [`ban-giao-phien-12.md`](ban-giao-phien-12.md) §4.4.
 3. **Smoke của deploy phụ thuộc LLM không tất định** (§46.7) — deploy có thể đỏ vì lý do không phải
-   deploy. **Còn nguyên.**
-4. `docs/phat-trien/ke-hoach/tong-quan.md:1643` còn ghi *"Không nối Hatchet vào apps/api, không deploy
-   lên VM"* — lỗi thời từ phiên 5. Tệp đang bị phiên song song sửa nên phiên 11 **không đụng**.
-5. `apps/mini/` còn 7 lỗi `no-unused-vars` làm `pnpm lint` toàn repo đỏ — việc của phiên song song.
+   deploy. → **CODE XONG 24/08/2026, TEST CHƯA XANH.** Retry có giới hạn (`INTENT_RETRY_LIMIT=3`) +
+   `SMOKE_INTENT_ATTEMPTS=k` đã viết; bài hợp đồng `smoke-intent-retry.contract.test.mjs` **tự treo
+   vì `spawnSync` chặn event loop** và chưa nối vào `package.json`. Cách sửa đã chẩn đoán rõ:
+   [`ban-giao-phien-12.md`](ban-giao-phien-12.md) §5.2.
+4. ~~`docs/phat-trien/ke-hoach/tong-quan.md:1643` còn ghi *"Không nối Hatchet vào apps/api, không
+   deploy lên VM"* — lỗi thời từ phiên 5.~~ → **ĐÓNG** bởi commit `2a7d211`: §11.5 đã gạch ngang và
+   trỏ sang §11.6.
+5. ~~`apps/mini/` còn 7 lỗi `no-unused-vars` làm `pnpm lint` toàn repo đỏ.~~ → **ĐÓNG**: đo
+   24/08/2026 `pnpm lint` **exit 0**, `apps/mini` 18 tệp 0 lỗi. Nhưng `apps/mini/` vẫn **untracked**
+   — bản sửa mất nếu `git clean`.
