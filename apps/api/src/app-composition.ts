@@ -123,7 +123,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('foundation', HealthController),
   owned('sales-order', OrdersController),
   owned('turn-processing', MessagesController),
-  owned('sales-order', DemoController),
+  // Bo MO PHONG cua duong xu ly luot, khong phai mot man hinh ban hang: `/demo/simulate` la cong
+  // duy nhat chay tron pipeline that ma khong can Zalo (smoke test deploy, do tre observability,
+  // eval parser). Khach trung tinh phai chay thu duoc mot luot.
+  owned('turn-processing', DemoController),
   owned('sales-order', ErpController),
   owned('knowledge', KnowledgeController),
   owned('messaging', BroadcastController),
@@ -131,8 +134,16 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('messaging', ZaloController),
   owned('operations', SettingsController),
   owned('campaign', CampaignController),
-  owned('sales-order', MediaHealthController),
-  owned('sales-order', CatalogMediaController),
+  // Suc khoe kho anh KHACH GUI VAO (`MediaStore`) — ca hai dependency deu thuoc `turn-processing`.
+  owned('turn-processing', MediaHealthController),
+  // ANH CATALOG SAN PHAM thuoc `knowledge`, khong thuoc ban hang.
+  //
+  // `ContentService` (knowledge) doi locator tuong doi cua goi khach (`/media/catalog/...`) thanh
+  // URL tuyet doi roi dua vao `images`/`links` — tuc URL do di THANG toi khach qua Zalo. Route
+  // phuc vu chinh nhung byte do phai o cung capability, neu khong thi mot khach co tri thuc ma
+  // khong ban hang se gui di mot duong dan anh ma chinh API cua no tra 404: khong ngoai le, khong
+  // canh bao, chi la mot tin nhan den noi thieu anh.
+  owned('knowledge', CatalogMediaController),
   owned('operations', MasterDataController),
   owned('operations', ReadinessController),
   owned('notifications', NotificationsController),
@@ -212,7 +223,7 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('messaging', OutboundRecorder),
   owned('sales-order', erpProvider),
   owned('turn-processing', mediaStoreProvider),
-  owned('sales-order', catalogStoreProvider),
+  owned('knowledge', catalogStoreProvider),
   owned('turn-processing', mediaFetcherProvider),
   owned('turn-processing', parserProvider),
   owned('messaging', ZaloUserClient),
