@@ -633,7 +633,7 @@ nên phải cấp cổng riêng; đó là **mô hình đúng**, không phải m�
 **Nợ vẫn treo:** gộp `workflow-dispatch-failures.ts` vào `decision-reasons.ts` · ghi `tong-quan.md`.
 Cả hai vẫn bị Phase 0 chặn.
 
-## 41. READY FOR GD1-TEST — 7/9 cổng, D8 là việc kế tiếp
+## 41. READY FOR GD1-TEST — 8/9 cổng (D8 xong 24/08, xem §46), còn D9
 
 | Cổng | Trạng thái |
 |---|---|
@@ -644,8 +644,8 @@ Cả hai vẫn bị Phase 0 chặn.
 | **D5** hợp đồng bí mật + bootstrap token | ✅ **XONG** |
 | **D6** backup/restore + volume `hatchet-config` | ✅ **XONG** — chứng minh cả ca dương lẫn ca âm |
 | **D7** audit VM bằng số mới | ✅ **XONG** — đĩa đỏ 92%, đã nới 80→200 GB không downtime |
-| D8 deploy CHỈ `ultty-gd1-test` | ⬜ **SẴN SÀNG CHẠY** |
-| D9 E2E trung lập + dashboard + đo lại DRAIN | ⬜ phụ thuộc D8 |
+| D8 deploy CHỈ `ultty-gd1-test` | ✅ **XONG 24/08/2026** — run `32679972471` success, worker healthy; xem §46 |
+| D9 E2E trung lập + dashboard + đo lại DRAIN | ⬜ **hết phụ thuộc** (D8 xong). Phần **DRAIN đã đo** ở §46.10; còn E2E trung lập + dashboard |
 
 ## 42. ⛔ HAI CỔNG ĐANG CHẶN D8 — cả hai cần NGƯỜI quyết
 
@@ -827,3 +827,396 @@ biến số mới không ai đo. Sau khi nới đĩa thì không còn gấp.
 không đổi một byte. Không dùng `git stash`. `tenants/ultty/` **không** nằm trong 29 path đó nên
 được sửa (thêm binding); `tenants/wata/` thì không đụng.
 
+
+---
+
+## 45. PHIÊN 9 (23/08/2026) — merge PR #33, cổng CI qua, **D8 CHẶN ở IAM**
+
+### 45.1 Chuỗi bằng chứng
+
+| Mục | Giá trị |
+|---|---|
+| PR head trước merge | `19f720e5a301c87f31de9703d199c5adfb221b48` |
+| `origin/main` đầu phiên | `84146ab8cc395a607dc6fa2392f688b05293c726` |
+| PR CI trước merge | run `32643200549`, `head_sha=19f720e`, `conclusion=success`, 6/6 job |
+| Merge method | **merge commit** (không squash/rebase) |
+| **Merge SHA** | **`302d5b1e5073df440bdeb6a460fc61d77705aeda`** |
+| Parents của merge SHA | `84146ab` + `19f720e` — hai cha, đúng hình dạng merge commit |
+| Nhánh sau merge | `refs/heads/feat/hoi-thoai-chot-don-main` → `19f720e`, **KHÔNG xoá** |
+| `ci.yml` trên main | run `32644423214`, `head_sha=302d5b1e`, `conclusion=success`, **không bị `cancel-in-progress` cắt** |
+
+Số đo lấy từ **log CI thật trên merge SHA**, không phải từ máy local:
+
+| Script | Kết quả trên `302d5b1e` |
+|---|---|
+| `test:deploy-routes` (`caddy-route-contract`) | 25 pass / 0 fail / 0 skip |
+| `test:deploy-preflight` (`gd1-test-preflight`) | 23 pass / 0 fail / 0 skip |
+| `test:deploy-contracts` (5 tệp, có `workflow-isolation`) | 48 pass / 0 fail / 0 skip |
+
+> **Sửa số bàn giao phiên 8:** phiên 8 ghi `test:deploy-routes: 22`. CI trên merge SHA đo được
+> **25**. Dùng số CI.
+
+### 45.2 Hai false-green của phiên 8 — kiểm lại bằng log, không bằng lời
+
+**False-green #1 — ĐÃ ĐÓNG THẬT.** Dòng lệnh trong log job `verify` của run `32644423214` có
+`deploy/netviet/workflow-isolation.contract.test.mjs` nằm trong `node --test`, và batch đó trả
+48 pass / 0 skip. Contract này chạy được vì `pnpm test` ở gốc chain sang `test:deploy-contracts`,
+và job `verify` chạy `pnpm test`.
+
+**False-green #2 / known debt — CÒN NGUYÊN, và nay có số.** `RUN_WORKFLOW_IT` **không xuất hiện ở
+bất kỳ dòng nào** trong `.github/workflows/ci.yml`; job `integration` chỉ đặt `RUN_PRISMA_IT: '1'`.
+Hệ quả đo được trên merge SHA — **cả hai** job đều bỏ qua đủ 6 tệp:
+
+| Tệp | Bỏ qua |
+|---|---|
+| `src/workflow/workflow-privacy-engine-read.int.spec.ts` | 9 |
+| `src/workflow/workflow-recovery.int.spec.ts` | 4 |
+| `src/workflow/workflow-e2e.int.spec.ts` | 3 |
+| `src/workflow/workflow-outbox-durability.int.spec.ts` | 3 |
+| `src/workflow/worker-readiness.int.spec.ts` | 3 |
+| `src/workflow/workflow-worker-recovery.int.spec.ts` | 2 |
+| **Tổng** | **24** |
+
+⇒ **`ci.yml` xanh KHÔNG chứng minh 24 bài IT trên Hatchet thật.** Câu này phải đi kèm mọi lần
+trích dẫn "CI xanh" cho tới khi `RUN_WORKFLOW_IT` được nối vào CI.
+
+### 45.3 D8 — deploy lần 1: exit 78 **KHÔNG PHẢI** cái exit 78 đã hẹn
+
+Run `32644808987`, `event=workflow_dispatch`, `head_sha=302d5b1e` (đúng merge SHA).
+Bước `Verify exact main SHA passed CI` → **success** (cổng CI tự xác minh bên trong deploy).
+Bước `Build, push neutral image and roll out tenant silo` → **failure, exit code 78**.
+
+Runbook §42bis bước 3 hẹn exit 78 từ `deploy-stack.sh:105`
+(*"secrets.env chua co WORKFLOW_ENGINE_TOKEN"*). **Thực tế nhận được dòng khác:**
+
+```
+WORKFLOW_ENGINE=on nhung thieu secret zalo-ultty-gd1-test-hatchet-db-password.
+```
+
+Đó là `render-secrets.sh:161` — nhánh fail-closed **khác**, xảy ra **sớm hơn** một bước, và
+**không phải** vòng gà–trứng đã thiết kế. Deploy chết trước khi cụm Hatchet kịp lên, nên bước 4
+(đúc token) **không có tiền đề để chạy**.
+
+### 45.4 Root cause: secret có, nhưng VM không được cấp quyền đọc
+
+`render-secrets.sh:91` đọc bằng `optional_secret`, tức `gcloud ... 2>/dev/null || true` — lỗi
+`PERMISSION_DENIED` **bị nuốt** và trả về chuỗi rỗng, không phân biệt được với "secret chưa tạo".
+Cổng fail-closed ở dòng 161 vì thế báo "thiếu secret" trong khi secret **có thật**.
+
+Đo hai đầu:
+
+| Kiểm | Kết quả |
+|---|---|
+| `gcloud secrets describe` từ máy trạm (chủ dự án) | secret **tồn tại**, version 1 `enabled` (tạo 23/08 11:28:38) |
+| `gcloud secrets versions access` **từ chính VM** (`netviet-vm@`) | **READ DENIED** |
+
+Audit IAM từng secret của stack `ultty-gd1-test`:
+
+| Secret | Binding `netviet-vm@` |
+|---|---|
+| `zalo-ultty-gd1-test-hatchet-db-password` | ❌ **policy rỗng** (`{"etag":"ACAB"}`) |
+| `zalo-ultty-gd1-test-workflow-dashboard-htpasswd` | ❌ **policy rỗng** |
+| `zalo-ultty-gd1-test-workflow-dashboard-password` | ❌ **policy rỗng** |
+| `zalo-ultty-gd1-test-postgres-admin-password` | ✅ `roles/secretmanager.secretAccessor` |
+| `zalo-ultty-gd1-test-anthropic-api-key` | ✅ `roles/secretmanager.secretAccessor` |
+| `zalo-ultty-gd1-test-deepseek-api-key` | ✅ `roles/secretmanager.secretAccessor` |
+
+Cấp project, `netviet-vm@` chỉ có `artifactregistry.reader`, `logging.logWriter`,
+`monitoring.metricWriter` — **không có role Secret Manager nào**.
+
+**Vì sao lệch:** `ci-cd.md §4.2` nói tạo secret và cấp `secretAccessor` là *"hai việc đi từ **một**
+danh sách nên không lệch nhau được"*. Danh sách đó là `$secretSuffixes` trong `deploy.ps1:440`,
+gồm 15 secret — và **ba secret workflow không nằm trong đó**. Chúng được tạo tay ở phiên 7/8, nên
+chỉ chạy nửa đầu của thủ tục hai-nửa. Phiên 8 ghi *"Đã làm sẵn cho D8: 3 secret"* — đúng phần
+"tạo", thiếu phần "cấp quyền".
+
+Kèm theo: `ultty-gd1-test-deployment-review.md:99` khẳng định *"The VM service account has direct
+`roles/secretmanager.secretAccessor` on **every audited secret**"*. Câu đó vẫn đúng theo nghĩa đen
+(audit chạy khi mới có 14–15 secret) nhưng **đọc lên thì mạnh hơn sự thật hiện tại** — ba secret
+mới ra đời sau lần audit và phá bất biến trong im lặng.
+
+### 45.5 Blocker thứ hai, nặng hơn: cổng idempotent của bootstrap **vô hiệu**
+
+`bootstrap-workflow-engine.sh` chạy **trên VM** dưới danh tính `netviet-vm@` và cần:
+
+| Thao tác trong script | Quyền cần | VM có? |
+|---|---|---|
+| `gcloud secrets describe` (cổng idempotent) | `secretmanager.secrets.get` | ❌ |
+| `gcloud secrets create --data-file=-` (đúc token) | `secrets.create` + `versions.add` | ❌ |
+| `render-secrets.sh` đọc lại token sau đó | `versions.access` trên secret mới | ❌ |
+
+Đo trực tiếp trên VM, **trên cùng một secret đã được cấp `secretAccessor`**:
+
+```
+versions access  -> OK
+describe         -> DENIED
+list             -> DENIED
+```
+
+`roles/secretmanager.secretAccessor` chỉ cho `versions.access`, **không** cho `secrets.get`.
+Nên khối này trong script:
+
+```bash
+if gcloud secrets describe "${SECRET_NAME}" ... >/dev/null 2>&1; then
+  echo "Secret ... da ton tai — KHONG duc token moi."; exit 0
+fi
+```
+
+**luôn rơi vào nhánh sai**, ở mọi lần chạy, kể cả khi secret đã tồn tại. Tính chất an toàn mà chính
+đầu script tuyên bố — *"Duc token lan hai KHONG lam token cu het hieu luc… DA CO SECRET THI DUNG
+HAN"* — **không hoạt động**. Hôm nay nó vô hại vì `create` cũng bị chặn; nhưng nếu ai đó chỉ cấp
+quyền `create` để "cho chạy được", script sẽ **đúc token trùng mỗi lần chạy lại** — đúng cái hỏng
+mà khối chú thích đó được viết ra để chặn.
+
+⇒ **Runbook §42bis bước 4 chưa từng chạy được.** Nó được viết mà không kiểm tra danh tính gcloud
+trên VM có quyền tạo secret hay không.
+
+### 45.6 Vì sao dừng thay vì tự vá
+
+Vá nửa dễ (cấp `secretAccessor` cho 2 secret) là thao tác cơ học. Vá nửa còn lại **không**: nó là
+quyết định an ninh — cấp quyền **tạo secret cấp project** cho một service account đang phục vụ
+**bốn stack trên cùng một VM**, trong đó có production của khách. Đó là việc của người, và làm
+trước khi hỏi sẽ là mở rộng đặc quyền không ai duyệt.
+
+Ba đường đi, chưa chọn:
+
+| Đường | Việc | Đánh đổi |
+|---|---|---|
+| **A** | Cấp `roles/secretmanager.admin` cấp project cho `netviet-vm@` | Chạy ngay, nhưng VM đọc/ghi được **mọi** secret của **mọi** khách. Bán trọn cách ly bí mật để đổi lấy một lần bootstrap |
+| **B** | Tạo sẵn vỏ secret từ máy trạm, cấp VM `secretVersionAdder` + `viewer` **chỉ trên secret đó** | Đặc quyền tối thiểu, nhưng **phải sửa `bootstrap-workflow-engine.sh`**: `create --data-file=-` phải tách thành `versions add`, và cổng idempotent phải đổi sang thứ VM kiểm được |
+| **C** | Đúc token bằng docker trên VM, đẩy lên Secret Manager bằng danh tính máy trạm | Không đụng IAM của VM, nhưng token **đi qua stdout SSH** — phá đúng bất biến *"token chỉ đi qua một ống docker→gcloud, không chạm đĩa, không `echo`"* |
+
+**Khuyến nghị: B.** Nó giữ được cả cách ly bí mật lẫn bất biến "token không chạm đĩa", và nó buộc
+phải sửa cổng idempotent — thứ dù sao cũng đang hỏng. A là món nợ an ninh vĩnh viễn đổi lấy tiện
+lợi một lần; C phá bất biến mà `bootstrap-workflow-engine.sh` được viết ra để giữ.
+
+Kèm theo, dù chọn đường nào: **thêm ba secret workflow vào `$secretSuffixes` của `deploy.ps1`**,
+để "hai việc đi từ một danh sách" thành đúng như `ci-cd.md §4.2` đã hứa.
+
+### 45.7 Trạng thái hạ tầng sau lần deploy hỏng — không có thiệt hại
+
+Deploy chết ở `render-secrets.sh`, tức **trước** mọi thao tác container.
+
+| Đối tượng | Trạng thái |
+|---|---|
+| `zalo-ultty-gd1-test` | api/web/flowise **up 34 giờ (healthy)**, postgres 2 ngày — **không restart** |
+| **`AUTO_SEND` của gd1-test** | container `api` không restart ⇒ toggle runtime `on` (operator bật 22/08 05:24:46Z) **còn nguyên**. *Lần deploy thành công sẽ đưa về `off`* — bật lại là việc của người, `ci-cd.md §8` |
+| `zalo-ultty` (dev/prod) | up 3–10 ngày, healthy — không đụng |
+| `zalo-amico` | up 6–7 ngày, healthy — không đụng |
+| `zalo-wata` | up 6–7 giờ, healthy — không đụng |
+| `netviet-edge-gateway` | up 45 giờ, healthy — không đụng |
+| RAM VM | 7936 MB tổng, **3685 MB available** — đủ cho cụm Hatchet (~270 MB + worker chưa đo) |
+| Đĩa | 70G / 193G = **37%** (D7 đã nới 80→200 GB) |
+
+Hai thay đổi **có** xảy ra, cả hai lành tính và idempotent:
+1. Image trung tính đã build + push lên Artifact Registry, tag `302d5b1e`,
+   digest `sha256:732fbe7ec8247f1c7f3d931b3f277aac6264889328f4f0d154c2f710b8b9c7b9`.
+2. Gói triển khai (3.9 MB, 161 tệp) + 102 ảnh catalog đã rsync lên thư mục stack của VM.
+   Container chưa dùng tới chúng vì chưa recreate.
+
+**RAM thật của `workflow-worker-v1` vẫn CHƯA ĐO** — ô đó trong runbook §7 giữ nguyên. Không được
+mượn số của `api`.
+
+### 45.8 Việc kế tiếp
+
+1. **Người chọn A/B/C ở §45.6.** Đây là cổng duy nhất đang chặn D8.
+2. Thực thi lựa chọn đó (B thì kèm sửa `bootstrap-workflow-engine.sh`).
+3. Thêm 3 secret workflow vào `$secretSuffixes` trong `deploy.ps1`.
+4. Chạy lại `deploy-tenant` trên `main`. Lúc đó exit 78 **đúng chỗ hẹn**
+   (`deploy-stack.sh:105`) mới là dấu hiệu lành.
+5. Đúc token → deploy lại → đo RAM `workflow-worker-v1` → sửa runbook §7.
+6. Cân nhắc để `optional_secret` phân biệt "chưa tạo" với "không có quyền" — chính chỗ nuốt lỗi
+   này biến một lỗi IAM thành thông báo "thiếu secret", và làm mất 1 vòng deploy để tìm ra.
+
+**Blocker cuối phiên:** IAM của `netviet-vm@` trên Secret Manager (§45.4 + §45.5). Chưa deploy được.
+
+
+## 46. PHIÊN 10 (24/08/2026) — **D8 XONG**: hai lỗ IAM đóng, token đúc được, worker chạy
+
+### 46.1 Kết quả một dòng
+
+`deploy-tenant` run **`32679972471`** trên `main` (`302d5b1e`), `workflow_engine=on` → **success**.
+`workflow-worker-v1` `Up (healthy)` trên `ultty-gd1-test`. Hai món nợ đo đạc của §38 và §7 **đã trả**.
+
+### 46.2 Lỗ 1 — IAM đọc secret: đóng
+
+Cấp `roles/secretmanager.secretAccessor` cho `netviet-vm@` trên **đúng hai** secret mà
+`render-secrets.sh` thật sự đọc (dòng 133, 141). **Không** cấp trên `workflow-dashboard-password`
+— không ai đọc nó bằng máy, nó là bản rõ cho người.
+
+Đo **từ chính VM**, không phải từ máy trạm:
+
+| Secret | Trước | Sau |
+|---|---|---|
+| `hatchet-db-password` | policy rỗng, READ DENIED | ✅ đọc được **32 byte** |
+| `workflow-dashboard-htpasswd` | policy rỗng, READ DENIED | ✅ đọc được **60 byte** |
+| `workflow-dashboard-password` | policy rỗng | ✅ **vẫn DENIED** (đúng thiết kế) |
+
+Bằng chứng cuối: `.runtime/secrets.env` trên VM có `HATCHET_DB_PASSWORD` **khác rỗng**.
+
+### 46.3 Lỗ 2 — cổng idempotent: đóng, nhưng **KHÔNG** bằng cách brief đề xuất
+
+Chọn **đường B**. Vỏ secret `zalo-ultty-gd1-test-workflow-engine-token` tạo từ máy trạm (0 version);
+VM chỉ được `secretAccessor` + `secretVersionAdder` **trên đúng secret đó**.
+
+> **Brief đề xuất `viewer` + cổng `versions list`. Đo ra thì cách đó sai, và sai theo hướng nguy hiểm.**
+>
+> `versions list` chạy **từ VM** trả về **RỖNG cả khi secret CÓ version** — thiếu quyền list thì
+> gcloud im lặng trả rỗng chứ không báo lỗi. Đo trực tiếp: `hatchet-db-password` có 1 version
+> enabled (máy trạm xác nhận, VM `access` được 32 byte) nhưng `versions list` từ VM trả `[]`.
+> Dùng nó làm cổng ⇒ cổng **luôn** nói "chưa đúc" ⇒ **đúc token trùng mỗi lần chạy lại** — đúng cái
+> hỏng mà script được viết ra để chặn. Đây là **bẫy y hệt `optional_secret`**, ở một tầng khác.
+
+Cổng mới dùng `versions access`, phân biệt **ba** trạng thái (đo thật trên VM 24/08):
+
+| Trạng thái | rc | stderr | Xử lý |
+|---|---:|---|---|
+| có version, có quyền | 0 | rỗng | **dừng hẳn**, không đúc |
+| 0 version, có quyền | 1 | `NOT_FOUND` | đúc |
+| có version, **không quyền** | 1 | `PERMISSION_DENIED` | **exit 77, KHÔNG đúc** |
+
+Trường hợp ba là lý do không được viết `if ! access; then duc`: một lỗi IAM hay một lần mạng chập
+chờn sẽ bị đọc thành "chưa có token". **Fail-closed.**
+
+Giá trị token **không hề vào biến**: `2>&1 >/dev/null` (đúng thứ tự đó) đẩy stdout ra `/dev/null`
+và chỉ bắt stderr. Đã test cả ba nhánh bằng `gcloud` giả có in token ra stdout — `gate_err` rỗng.
+
+Đổi `secrets create --data-file=-` thành `versions add --data-file=-`. Đo bằng secret nháp rồi xoá:
+`versions add` chạy được với **chỉ** `secretVersionAdder`, **không cần** `viewer` ⇒ đã thu hồi
+`viewer` để IAM thật khớp đúng cái `deploy.ps1` khai.
+
+### 46.4 `deploy.ps1` — "một danh sách" hoá ra là **hai**
+
+`ci-cd.md §4.2` nói tạo secret và cấp quyền "đi từ MỘT danh sách nên không lệch nhau được".
+Thực tế: `Ensure-Secret` (tạo) và `$secretSuffixes` (cấp quyền) là **hai** danh sách rời, phải tự
+giữ khớp — đúng cái đã lệch và gây ra lỗ 1.
+
+`Invoke-Gcloud` **throw** khi lỗi ⇒ thêm suffix mà không tạo secret sẽ **làm chết deploy của MỌI
+stack**. Nên phải thêm cả hai nửa. Đã thêm:
+
+- `Ensure-Secret ... hatchet-db-password { New-RandomSecret }` — giá trị ngẫu nhiên là đúng;
+- **`Ensure-SecretShell`** (hàm mới) cho `workflow-dashboard-htpasswd` và `workflow-engine-token` —
+  tạo **vỏ, không gieo version**, vì với hai cái này một giá trị ngẫu nhiên là **giá trị SAI**
+  (bcrypt phải do `caddy hash-password` sinh; JWT phải do chính engine đúc);
+- ba suffix vào `$secretSuffixes`, cộng **một binding ngoại lệ** `secretVersionAdder` cho token.
+
+### 46.5 Bốn lần deploy — đọc cho đúng
+
+| Run | Kết quả | Nghĩa |
+|---|---|---|
+| `32652816139` | exit **78** tại `deploy-stack.sh:105` | ✅ **dấu hiệu LÀNH** — lỗ 1 đóng, còn lại đúng vòng gà–trứng đã thiết kế |
+| `32678448773` | preflight FAILED "required secret #1" | ❌ **báo động giả** — xem 46.6 |
+| `32678711563` | smoke FAILED `dat_don: khac` | ❌ **không phải lỗi hạ tầng** — xem 46.7 |
+| **`32679972471`** | **success** | ✅ preflight PASSED · Flowise contract OK · Pilot smoke OK · Persistence smoke OK |
+
+### 46.6 Món nợ `optional_secret` vừa cắn lần thứ hai, ở chỗ khác
+
+Run `32678448773` chết với bốn dòng:
+
+```
+- required secret #1 does not exist
+- required secret #1 has no enabled version
+- VM cannot read required secret #1 (missing, no enabled version, or IAM not granted)
+- required secret #1 is empty
+```
+
+`#1` = `postgres-admin-password`. **Cả bốn dòng đều sai.** Đo ngay sau đó từ VM: đọc được **64 byte**.
+
+Nguyên nhân: trong `gd1-test-preflight.mjs`, **hai sự thật rất khác nhau đổ vào cùng một kết luận**:
+
+- SSH hỏng → `safeRun` trả `ok:false` → `readable=false`
+- gcloud từ chối trên VM → `denied|0|0` → `accessible=false` → `readable=false`
+
+Cả hai in ra bốn khẳng định về **secret**, trong khi sự thật có thể là *"không với tới được VM để
+hỏi"*. Script probe phía VM viết rất cẩn thận (không để giá trị ra stdout, phân biệt `denied`),
+nhưng lớp gọi nó thì gộp mất. Run kế tiếp preflight PASSED mà không sửa gì ⇒ **transient**.
+
+**Mất thêm một vòng deploy nữa vì đúng một lỗi lớp: nhầm "không kiểm được" với "kiểm ra sai".**
+
+### 46.7 Smoke `khac` — là chất lượng parser, không phải D8
+
+Run `32678711563` chết ở smoke: `Flowise khong tao duoc don dat_don: khac`. Log API cho thấy
+DeepSeek parse **thành công** (`status:"ok"`) nhưng gán nhầm nhãn:
+
+```
+gen_ai.operation.name=parse  intent="khac"  intentConfidence=0.3
+customerText="HN_31.7_Meta HN, 2 x Ghe Felix NETVIET-SMOKE-..."
+```
+
+Chính model đó ở bước compose lại **tự mâu thuẫn** — nó soạn *"em xác nhận đơn ạ … tổng cộng
+2.500.000đ"*. Tức là hiểu đúng đây là đơn, chỉ gán sai `intent`.
+
+Run kế tiếp **cùng commit, cùng cấu hình** thì smoke OK. ⇒ **không tất định**, và **không liên quan
+tới `workflow_engine=on`** (lời gọi parse nằm trước mọi dispatch). Đây là đánh đổi DeepSeek đã ghi
+ở `render-secrets.sh` (khoá Anthropic hết credit). **Chưa sửa** — ghi nhận là rủi ro có thật:
+smoke của deploy phụ thuộc một LLM không tất định, nên deploy có thể đỏ vì lý do không phải deploy.
+
+### 46.8 Đúc token — và cổng idempotent chạy thật
+
+```
+Duc token cho tenant 707d0855-80ab-4e1f-a156-f1c4546cbf52 ...
+Created version [1] of the secret [zalo-ultty-gd1-test-workflow-engine-token].
+XONG.                                                            exit 0
+```
+
+Chạy **lần hai** ngay sau đó:
+
+```
+Secret ... da co version — KHONG duc token moi.                  exit 0
+```
+
+`versions list` từ máy trạm: **đúng 1 version, enabled**. Hai lần chạy, một token.
+**Tính chất mà đầu script tuyên bố từ phiên 7 nay mới thật sự hoạt động lần đầu.**
+
+### 46.9 §7 runbook — RAM worker: **đã đo**
+
+Ba lần đo bằng `docker stats --no-stream`: worker **88,7 / 91,5 / 108,1 MiB** ⇒ ghi **88–108 MiB**,
+lập kế hoạch lấy **~110 MiB**. Ghi khoảng chứ không một con số: ba lần lệch ~19 MiB.
+
+Cảnh báo "đừng mượn số của `api`" nay **có bằng chứng**: đo cùng lúc, `api` = **117,9 MiB** còn
+worker = **91,5 MiB** — mượn sẽ thổi phồng ~29%.
+
+Bảng "RAM thêm mỗi stack" cũ (0,27 GB) **thiếu worker ~40%**; đã sửa thành **~0,43 GB**.
+
+### 46.10 §38 — món nợ DRAIN: **đã trả**, trên Linux thật
+
+```
+trước SIGTERM:  số dòng 'Rut worker' = 0
+docker kill --signal=SIGTERM zalo-ultty-gd1-test-workflow-worker-v1-1
+sau:            container `exited`, EXIT CODE 0
+                log: [WorkflowWorkerService] Rut worker workflow-worker-integration-handoff-v1
+                số dòng 'Rut worker' = 1
+```
+
+**Exit code 0 mới là phần quan trọng** — nó phân biệt "rút sạch xong rồi thoát" với "hết hạn ân hạn
+rồi bị giết". Đường `DRAINING → stop() → STOPPED` của runbook §2 là có thật.
+Cổng `process.platform !== 'win32'` **giữ nguyên**: đó là sự thật về máy host, không phải nợ.
+
+### 46.11 ⚠️ VIỆC CỦA NGƯỜI — `AUTO_SEND` đã bị đưa về `off`
+
+`render-secrets.sh:185` ghi cứng `AUTO_SEND='off'` cho gd1-test. Deploy thành công **đã ghi đè**
+toggle runtime `on` mà operator bật tay 22/08 05:24:46Z. Xác nhận trên VM: `AUTO_SEND=off`, và log
+có `decision=order.auto_confirm outcome=denied reason=KILL_SWITCH_OFF`.
+
+**Không tự bật lại** — theo `ci-cd.md §8` đó là việc của người.
+
+### 46.12 Các stack khác — không bị đụng
+
+`netviet-edge-gateway` Up 2 ngày · `zalo-ultty` 3–10 ngày · `zalo-amico` 6–8 ngày · `zalo-wata` 18 giờ
+— tất cả `healthy`, **không container nào restart**. VM còn **3317 MB available**, đĩa **40%**.
+
+### 46.13 Nợ mang sang phiên sau
+
+1. **`bootstrap-workflow-engine.sh` trên VM đang KHÁC `main`.** Bản đã sửa được `scp` thẳng lên VM
+   (quyết định của người trong phiên này) vì pre-push đỏ. `deploy-ci.sh:165` đóng gói cả
+   `deploy/netviet/` ⇒ **lần deploy kế tiếp sẽ ghi đè bản cũ (hỏng) lên VM**. Token đã có nên vô hại
+   ngay, nhưng ai chạy lại bootstrap sẽ gặp exit 1 (`secrets.create` DENIED) — **hỏng ồn ào, không
+   âm thầm đúc trùng**. **Phải merge để đóng hẳn.**
+2. **Chưa push**: `441b83a` (tài liệu §45) + các sửa của phiên này. Pre-push đỏ vì **7 lỗi
+   `no-unused-vars` trong `apps/mini/`** (việc song song, untracked): `App.tsx`, `AgentTimeline.tsx`,
+   `ActivityPage.tsx`, `OrderDetailPage.tsx`, `ProfilePage.tsx`.
+3. **`RUN_WORKFLOW_IT` vẫn CHƯA nối vào `ci.yml`** — 24 bài IT trên Hatchet thật vẫn bị skip.
+   **"CI xanh" KHÔNG chứng minh chúng.** Câu này vẫn phải đi kèm mọi lần trích dẫn "CI xanh".
+4. **`optional_secret` + lớp gọi probe của preflight** nên phân biệt "chưa tạo" / "không có quyền" /
+   "không hỏi được". Đã tốn **hai** vòng deploy vì đúng lỗi lớp này (§45.4 và §46.6).
+5. **Smoke của deploy phụ thuộc LLM không tất định** (§46.7).

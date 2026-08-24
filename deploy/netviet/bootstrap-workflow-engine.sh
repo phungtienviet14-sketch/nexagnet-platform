@@ -19,10 +19,21 @@ set -euo pipefail
 #
 # Duc token lan hai KHONG lam token cu het hieu luc, nen se co hai token cung song va khong ai
 # biet cai nao dang duoc dung. Te hon: neu ai do chay lai script trong luc deploy, worker co the
-# nhan mot token moi trong khi api con giu cai cu. Nen: DA CO SECRET THI DUNG HAN, khong duc them.
+# nhan mot token moi trong khi api con giu cai cu. Nen: DA CO VERSION THI DUNG HAN, khong duc them.
 #
 # Xoay vong token la mot thao tac RIENG va CO Y (xem runbook), khong phai hieu ung phu cua mot lan
 # chay lai bootstrap.
+#
+# SUA 23/08/2026 — cong idempotent cu (`gcloud secrets describe`) CHUA BAO GIO chay dung tren VM:
+# `describe` can `secretmanager.secrets.get`, ma `roles/secretmanager.secretAccessor` KHONG cho
+# quyen do. Do tren VM, cung mot secret: access -> OK | describe -> DENIED | list -> DENIED.
+# Nen `if describe` LUON roi vao nhanh sai, va tinh chat "da co thi dung han" o tren chua bao gio
+# hoat dong. No vo hai chi vi `secrets.create` cung bi chan; ai do cap them `create` de "cho chay
+# duoc" se bien script nay thanh may duc token trung — dung cai hong no duoc viet ra de chan.
+#
+# Cong moi dung `versions access`, tuc DUNG MOT quyen ma VM da co that. KHONG dung `versions list`:
+# do tren VM, `list` tra ve RONG ca khi secret CO version (thieu quyen list thi im lang tra rong
+# chu khong bao loi) — dung mot cai bay nhu `optional_secret` cua render-secrets.sh.
 #
 # ================================================================================================
 # TOKEN KHONG DUOC: vao git · vao `tenant.json` (o do chi co `credentialRef` = TEN BIEN) · vao log ·
@@ -76,10 +87,31 @@ COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml --profil
 #
 # Kiem TRUOC khi dung engine len: neu token da co thi khong co ly do gi phai dong cham vao mot
 # engine dang chay.
-if gcloud secrets describe "${SECRET_NAME}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
-  echo "Secret ${SECRET_NAME} da ton tai — KHONG duc token moi."
+#
+# `2>&1 >/dev/null` (dung thu tu do): gia tri token di thang ra /dev/null — KHONG vao bien, KHONG
+# duoc echo — con stderr thi bat lai de PHAN BIET ba truong hop. Do that tren VM 23/08/2026:
+#
+#   co version, co quyen   -> rc=0, stderr rong          => DA DUC ROI, dung han
+#   0 version,  co quyen   -> rc=1, stderr NOT_FOUND     => chua duc, di tiep
+#   co version, khong quyen-> rc=1, stderr PERMISSION_DENIED => KHONG biet, phai dung
+#
+# Truong hop ba la ly do khong duoc viet `if ! access; then duc token`: mot loi IAM (hay mot lan
+# mang chap chon) se bi doc thanh "chua co token" va script se duc them mot cai nua. Fail-closed:
+# chi di tiep khi Secret Manager NOI RO la chua co version.
+gate_err="$(gcloud secrets versions access latest \
+  --project "${PROJECT_ID}" --secret "${SECRET_NAME}" 2>&1 >/dev/null)" && gate_rc=0 || gate_rc=$?
+
+if [[ ${gate_rc} -eq 0 ]]; then
+  echo "Secret ${SECRET_NAME} da co version — KHONG duc token moi."
   echo "Xoay vong token la thao tac rieng, co y; xem workflow-engine-runbook.md."
   exit 0
+fi
+if ! grep -q 'NOT_FOUND' <<<"${gate_err}"; then
+  echo "Khong doc duoc trang thai cua ${SECRET_NAME} (rc=${gate_rc}) — DUNG, khong duc token." >&2
+  echo "Khong phai NOT_FOUND, nen khong the ket luan la 'chua co token'. Doan cuoi cua loi:" >&2
+  echo "${gate_err}" | tail -3 >&2
+  echo "Neu la PERMISSION_DENIED: VM can secretAccessor + secretVersionAdder tren dung secret nay." >&2
+  exit 77
 fi
 
 # ------------------------------------------------------------------ ① DUNG ENGINE LEN
@@ -111,6 +143,12 @@ fi
 # Token di THANG tu `docker` sang `gcloud` qua mot ong. Khong ghi ra tep tam (tep tam song sot qua
 # ca lan script chet giua chung), khong `echo`, khong dat vao bien moi truong cua tien trinh khac.
 #
+# `versions add` chu KHONG `secrets create`: VO secret duoc tao san tu MAY TRAM (`deploy.ps1`,
+# `$secretSuffixes`), va VM chi duoc cap quyen tren DUNG secret do — `secretVersionAdder` (ghi
+# version) + `secretAccessor` (doc lai o cong tren). VM KHONG co `secrets.create` cap project, va
+# do la co y: mot service account phuc vu bon stack tren cung VM khong duoc phep de ra secret moi
+# o bat ky dau. Doi lai, neu vo secret chua ton tai thi buoc nay bao NOT_FOUND — xem thong bao loi.
+#
 # `grep` loc theo HINH DANG JWT (ba doan base64url) vi lenh tren con in ca dong thong bao; khong
 # loc thi ta se day mot dong log len Secret Manager, va trieu chung sau do la worker bao token sai
 # ma khong ai hieu vi sao.
@@ -118,9 +156,14 @@ echo "Duc token cho tenant ${TENANT_ID} va day len ${SECRET_NAME}..."
 if ! "${COMPOSE[@]}" run --rm --no-deps -T hatchet-setup-config \
   /hatchet/hatchet-admin token create --config /hatchet/config --tenant-id "${TENANT_ID}" \
   | tr -d '\r' | grep -E '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_.-]+$' | tail -n 1 \
-  | gcloud secrets create "${SECRET_NAME}" \
-      --project "${PROJECT_ID}" --replication-policy=automatic --data-file=-; then
-  echo "Duc/day token that bai. Secret ${SECRET_NAME} CHUA duoc tao." >&2
+  | gcloud secrets versions add "${SECRET_NAME}" \
+      --project "${PROJECT_ID}" --data-file=-; then
+  echo "Duc/day token that bai. ${SECRET_NAME} CHUA co version nao." >&2
+  echo "Neu loi la NOT_FOUND: VO secret chua duoc tao. Tao tu MAY TRAM (khong tao tu VM):" >&2
+  echo "  gcloud secrets create ${SECRET_NAME} --project ${PROJECT_ID} --replication-policy=automatic" >&2
+  echo "  gcloud secrets add-iam-policy-binding ${SECRET_NAME} --project ${PROJECT_ID} \\" >&2
+  echo "    --member=serviceAccount:<VM_SA> --role=roles/secretmanager.secretVersionAdder" >&2
+  echo "  (va them roles/secretmanager.secretAccessor de render-secrets.sh doc lai duoc)" >&2
   echo "Neu lenh in ra thu gi do khong phai JWT ba doan, xem lai bang tay:" >&2
   echo "  ${COMPOSE[*]} run --rm --no-deps hatchet-setup-config /hatchet/hatchet-admin token create --config /hatchet/config --tenant-id ${TENANT_ID}" >&2
   exit 1
