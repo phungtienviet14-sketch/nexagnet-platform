@@ -1179,6 +1179,33 @@ năm khách vào một kho**. Cách ly bằng `tenantId` trong label là cách l
 
 **Kết quả ròng: 0 dependency runtime mới, 0 container mới.**
 
+> ### ⚠️ §9.2 ĐÃ BỊ ĐẢO MỘT PHẦN — 24/08/2026
+>
+> Dòng *"OpenTelemetry — ADOPT quy ước, KHÔNG lấy runtime"* ở bảng trên **hết hiệu lực**. POC ngày
+> 24/08 đã dựng **runtime OTel thật** và chấm **GO (8/10 tiêu chí)**; các gói `@opentelemetry/*`
+> nay **có mặt và đang được dùng** (`apps/api/src/observability/otel/`). Ai đọc bảng trên rồi đi
+> gỡ chúng sẽ phá một thứ đang chạy.
+>
+> Điều **không** đổi là lý do gốc: cấm **backend DÙNG CHUNG cho nhiều khách**. Hướng đang theo là
+> **một backend cho MỖI stack**, vẫn giữ nguyên silo.
+>
+> Trạng thái cổng (24/08/2026, phiên 14):
+>
+> | Cổng | Kết quả |
+> |---|---|
+> | Runtime OpenTelemetry chạy trong tiến trình thật | ✅ PASS |
+> | POC ClickStack/HyperDX | ✅ PASS — **vẫn ở mức POC**, chưa production |
+> | Tương quan trace xuyên Nexagnet → Hatchet → worker → HTTP | ✅ PASS |
+> | Worker crash/recovery giữ tương quan + tác dụng phụ đúng 1 lần | ✅ PASS |
+> | Riêng tư trên dây của tiến trình worker | ✅ PASS |
+> | Bài gỡ rối cho NGƯỜI | ✅ PASS bằng **CASE A** — chủ dự án chỉ dùng ClickStack/HyperDX, không đọc source/log/SQL, xác định đúng AI/Flowise HTTP 500, trace `5ed5fd27b185f020f6110c32f4569567`. **CASE B đã dựng và đã kiểm chứng là giải được nhưng KHÔNG chạy** — đóng theo quyết định chủ dự án. Đây **không** phải "CASE B PASS". |
+> | Nạp preload OTel vào compose triển khai | ⬜ **cố ý chưa làm** — xem nợ §K của bàn giao |
+>
+> Chi tiết + bằng chứng: [ban-giao-phien-14.md](ban-giao-phien-14.md) ·
+> [ban-giao-phien-13.md](ban-giao-phien-13.md). **Prisma instrumentation** ở bảng trên cũng không
+> còn "DEFER": đã bật, đã ghim `@6.19.3`, và đã phải viết bộ lọc vì nó phát 7 span/truy vấn.
+
+
 ### 9.3 Đã dựng
 
 - `apps/api/src/observability/` — `TelemetryService` (`step`/`decision`/`stateChange`/`dataChange`/`aiCall`),

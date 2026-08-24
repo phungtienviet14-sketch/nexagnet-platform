@@ -243,6 +243,30 @@ node --test deploy/netviet/secrets-passthrough.contract.test.mjs
 
 ---
 
+## 6ter. Lượt do NGƯỜI bấm nút — `order.manual_approve` / `order.manual_reject` / `order.sales_handoff`
+
+Sự cố 22/08/2026 là lý do mục này tồn tại. Trace `b44d631c` kết ở `advice.auto_reply → denied
+KILL_SWITCH_OFF` lúc `05:24:44.128Z`; **3,8 giây sau** một câu trả lời vẫn ra nhóm thật lúc
+`05:24:47.909Z`, và grep cả cửa sổ log đó **không ra một dòng nào**. Đọc trace lượt đó sẽ kết luận
+*"hệ thống không gửi gì"* — sai. Chỉ bảng `Message` (`direction=outbound`) mới thấy.
+
+Từ 24/08/2026 ba cổng người bấm nút ghi **cả quyết định có mã lẫn audit**:
+
+| Bấm gì | Điểm quyết định | Mã đọc lên nói gì |
+|---|---|---|
+| Duyệt & gửi | `order.manual_approve` | `ALREADY_SENT` chống bấm hai lần · `ROUTED_TO_CONFIRMATION` gửi chứng từ · `ROUTED_TO_ADVICE` gửi bản tư vấn · `NOTHING_TO_SEND` nút hiện ra mà không có gì để gửi · `SEND_FAILED` cổng đã mở nhưng lần gửi hỏng |
+| Từ chối | `order.manual_reject` | `ALREADY_REJECTED` · `STATUS_NOT_REJECTABLE` (đơn đã gửi thì đường huỷ là `huy_don`, không phải `reject`) · `REJECTED` |
+| Đã nhập ERP | `order.sales_handoff` | `NO_PENDING_HANDOFF` · `HANDOFF_ALREADY_COMPLETED` · `HANDOFF_COMPLETED` |
+
+`SEND_FAILED` tách khỏi các mã `denied` **có chủ ý**: "người duyệt không cho phép" và "người duyệt
+cho phép nhưng Zalo trả lỗi" cần hai hành động sửa khác hẳn nhau.
+
+Lượt người bấm nút còn mang thêm hai neo mà lượt tự động không có — `actor` (ai bấm) và
+`causationTraceId` (lượt nào đã gây ra nó). Thiếu hai mảnh này thì một lượt "Duyệt & gửi" trông y
+hệt một lượt tự động không rõ từ đâu ra. `tools/trace-view.mjs` in cả hai.
+
+---
+
 ## 7. Điều gì **không** nằm trong trace (có chủ ý)
 
 | Không có | Vì sao |
@@ -250,8 +274,7 @@ node --test deploy/netviet/secrets-passthrough.contract.test.mjs
 | Bí mật (mật khẩu, JWT, khoá API, credential DB) | Bị xoá ở **mọi** mức, kể cả `full`. Không có chế độ nào để bật. |
 | PII trên stack khách thật | `DATA_CLASSIFICATION=customer` → mức `redacted`: SĐT/email/địa chỉ/tên bị xoá. |
 | Prompt thô trên stack khách thật | Cùng lý do. Trên `gd1-test` (`DATA_CLASSIFICATION=test`) thì có. |
-| Token đếm được | Mới nối cho đường parse; đường `compose` chưa chuyển `usage` ra ngoài — xem §9. |
-| Truy vấn DB | Chưa bật `@prisma/instrumentation`. Đã có kế hoạch, chưa cần. |
+| Câu SQL thô | `@prisma/instrumentation` **đã bật** (24/08/2026) nhưng chỉ giữ mức `prisma:client:operation` — model + action + thời lượng. Câu SQL (`prisma:engine:db_query`) chỉ hiện khi `OTEL_PRISMA_DETAIL=full`, và đó là công tắc **mở khi điều tra**: bật lên thì số span mỗi lượt đo được tăng từ 14 lên 26, vượt ngân sách 18 của mục 10 rules. |
 | Mọi lời gọi hàm | **Cố ý.** Chỉ trace ranh giới nghiệp vụ. Một lượt chạy 50 hàm vẫn chỉ hiện ra 5–15 bước. |
 
 ---

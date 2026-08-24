@@ -1,0 +1,61 @@
+# ClickStack (HyperDX) ALL-IN-ONE — CHI DE POC danh gia backend quan sat.
+#
+# DAY KHONG PHAI MOT HOP DONG TRIEN KHAI. Anh all-in-one gop ClickHouse + collector + UI +
+# MongoDB vao MOT container, tuc gop luon ca vong doi va gioi han tai nguyen cua chung. Tot cho
+# viec do xem "co giai duoc bai debug khong"; chua tra loi duoc gi ve production. Quyet dinh
+# production phai duoc danh gia RIENG sau khi co so do (yeu cau muc 8 cua phien).
+#
+# CACH LY — ba dieu duoi day la ly do file nay ton tai thay vi mot lenh `docker run`:
+#   1. `name: pocobs`      -> project rieng, khong dinh vao `pocwf`/`z`/`zalo-*`.
+#   2. volume co tien to   -> du lieu quan sat cua POC khong bao gio tron vao volume khach.
+#   3. cong day 47xx/87xx  -> khong dung cong nao dang duoc stack khac giu (5432/6379/5744/7744/8744).
+#
+# Xoa sach:  docker compose -p pocobs down -v
+
+name: pocobs
+
+services:
+  clickstack:
+    image: docker.hyperdx.io/hyperdx/hyperdx-all-in-one:latest
+    restart: unless-stopped
+    environment:
+      # CHE DO LOCAL KHONG XAC THUC — cua chinh nha cung cap mo ra (`/etc/local/entry.base.sh`:
+      # gia tri nay bat `HYPERDX_IMAGE=all-in-one-noauth`).
+      #
+      # VI SAO DUNG NO O DAY: mac dinh `REQUIRED_AUTH` bat phai tao tai khoan qua UI truoc khi
+      # collector duoc cap khoa ingestion — tuc mot buoc THU CONG chan dung viec do dac cua POC,
+      # va mot tai khoan + mat khau khong ai can toi sau khi phien nay ket thuc.
+      #
+      # DIEU KIEN DE DIEU NAY CHAP NHAN DUOC, ca ba deu phai dung:
+      #   1. cong chi mo tren 127.0.0.1 (xem `ports` duoi);
+      #   2. du lieu la TEST, khong co PII khach that;
+      #   3. stack nay bi xoa khi POC xong.
+      # KHONG DUOC mang cau hinh nay sang bat ky ban trien khai nao — do la mot backend quan sat
+      # khong xac thuc, tuc toan bo noi dung nghiep vu mo cho ai cham toi duoc cong.
+      IS_LOCAL_APP_MODE: DANGEROUSLY_is_local_app_mode💀
+    # PHAI GHI DE ENTRYPOINT, khong chi dat bien moi truong.
+    #
+    # Entrypoint mac dinh cua anh la `sh /etc/local/entry.sh`, va dong DAU TIEN cua file do la
+    # `export IS_LOCAL_APP_MODE="REQUIRED_AUTH"` — no GHI DE bien ta truyen vao roi moi `source`
+    # phan chung. Nen dat bien qua compose khong co tac dung nao: da thu, `HYPERDX_IMAGE` van ra
+    # `all-in-one-auth`, pipeline `traces` van gan receiver `nop`, va cong 4317/4318 khong bao gio
+    # duoc bind.
+    #
+    # Goi THANG `entry.base.sh` (chinh script chung ma `entry.sh` source) la duong toi thieu de
+    # bien duoc ton trong, khong phai mot ban va: ta bo qua DUNG mot dong gan cung, khong sua gi
+    # ben trong anh.
+    entrypoint: ['bash', '/etc/local/entry.base.sh']
+    ports:
+      # CHI mo tren loopback. Mac dinh cua Docker la 0.0.0.0 — tren mot may co IP LAN thi do la
+      # mo cong quan sat ra ca mang, va telemetry la thu chua nhieu ve nghiep vu nhat.
+      - '127.0.0.1:8766:8080' # UI HyperDX
+      - '127.0.0.1:4766:4318' # OTLP/HTTP
+      - '127.0.0.1:4767:4317' # OTLP/gRPC
+      - '127.0.0.1:8767:8123' # ClickHouse HTTP — chi de do dia/dem span, khong de ung dung goi
+    volumes:
+      - pocobs_data:/data/db
+      - pocobs_logs:/var/log/clickhouse-server
+
+volumes:
+  pocobs_data:
+  pocobs_logs:
