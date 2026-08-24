@@ -1273,8 +1273,9 @@ Container sau deploy: 8/8 healthy. `AUTO_SEND=off` · `WORKFLOW_ENGINE=on`.
 
 ## 47. Một câu
 
-24 bài IT của workflow engine **thật sự chạy trên CI** từ nay, trên một cụm Hatchet do chính CI dựng
-lên; và có một hợp đồng chặn việc tắt chúng lại trong im lặng. Câu cảnh báo *"CI xanh KHÔNG chứng
+24 bài IT của workflow engine **thật sự chạy trên CI** từ nay — đo được: run `32687783483`,
+**201/201, 0 skip**, 261,6 s — trên một cụm Hatchet do chính CI dựng lên; và có một hợp đồng chặn
+việc tắt chúng lại trong im lặng. Câu cảnh báo *"CI xanh KHÔNG chứng
 minh 24 bài IT"* — phải đi kèm mọi lần trích dẫn "CI xanh" từ §45.2 tới nay — **hết hiệu lực**.
 
 ## 47.1 Vấn đề không phải một dòng env, và đây là lý do
@@ -1432,14 +1433,35 @@ làm bài đỏ, kèm 10 mẫu cuối để đọc. Hai `expect` cuối **giữ 
 > ở bước 3 là **độ trễ phát hiện của harness**, không phải khoảng hở của sản phẩm — trong tiến trình
 > worker, `lifecycle.ready()` là câu lệnh kế tiếp ngay sau `await handle.start()`.
 
-## 47.7 Điều bằng chứng này VẪN CHƯA nói
+## 47.7 Lần chạy CI thứ hai — ĐÓNG
 
-Bản sửa ở §47.6 mới được đo trên máy dev. Nó chỉ thực sự đóng khi **job `workflow-integration` xanh
-trên runner** — cùng cái runner đã bắt được lỗi đua này. Đừng ghi "xong" trước lần chạy đó.
+Run `32687783483`, `head_sha=fe6e0c3`, job `workflow-integration` = **success**, 7/7 job pass.
+
+```
+Test Files  22 passed (22)
+     Tests  201 passed (201)
+  Duration  261.59s
+```
+
+**Dòng `201 passed (201)` là bằng chứng, không phải tên job xanh.** Nếu `RUN_WORKFLOW_IT` chưa bật
+thì vitest sẽ in một phân đoạn `24 skipped` ở đúng dòng đó — như nó đã im lặng làm suốt từ khi 24 bài
+này ra đời. Không có phân đoạn đó ⇒ cả 24 bài đã chạy trên engine Hatchet thật, trên runner.
+
+| | Máy dev | Runner, lần 1 | Runner, lần 2 |
+|---|---:|---:|---:|
+| Bộ IT `src/workflow` | 570,4 s | 279,3 s | **261,6 s** |
+| Kết quả | 201/201 | 200/201 (§47.6) | **201/201** |
+
+### Lần đỏ ở §47.6 là thứ ĐÁNG GIÁ, không phải phiền toái
+
+Một cổng mới mà xanh ngay lần đầu **không phân biệt được** với một cổng không chạy gì — đúng căn
+bệnh mà cả phiên này đi chữa. Runner bắt được một lỗi đua mà máy dev đã bỏ lọt qua **bốn** lần chạy
+liên tiếp. Đó là bằng chứng chạy được rằng cổng này thật sự đo một cái gì đó.
 
 ## 47.8 Nợ mang sang phiên sau
 
-1. ~~`RUN_WORKFLOW_IT` chưa nối vào `ci.yml`~~ — **ĐÓNG** (§47).
+1. ~~`RUN_WORKFLOW_IT` chưa nối vào `ci.yml`~~ — **ĐÓNG** (§47), xác nhận bằng run `32687783483`:
+   **201/201, 0 skip**.
 2. **`optional_secret` + lớp gọi probe của preflight** gộp mất ba sự thật khác nhau ("chưa tạo" /
    "không có quyền" / "không hỏi được"). Đã tốn **hai** vòng deploy (§45.4, §46.6). **Còn nguyên.**
 3. **Smoke của deploy phụ thuộc LLM không tất định** (§46.7) — deploy có thể đỏ vì lý do không phải

@@ -66,7 +66,7 @@ gh run view <run-id>
 
 | Nơi chạy | Thời gian bộ IT |
 |---|---:|
-| Runner GitHub (24/08/2026, lần chạy đầu) | **279 s** |
+| Runner GitHub (24/08/2026, hai lần chạy) | **279 s** · **262 s** |
 | Máy dev Windows + Docker Desktop | **570 s** |
 
 Runner **nhanh gấp đôi máy dev** — nên nếu thấy nó lâu hơn nhiều, đó là tín hiệu chứ không phải
@@ -109,6 +109,10 @@ Test Files  22 passed (22)
      Tests  201 passed (201)
   Duration  570.43s
 ```
+
+> **Nhìn vào dòng `Tests`, đó là chỗ nói thật.** `201 passed (201)` nghĩa là cả 24 bài đã chạy.
+> Nếu thiếu cờ, dòng đó sẽ thành `177 passed | 24 skipped (201)` — và **màn hình vẫn xanh**. Đó
+> chính xác là thứ đã xảy ra trên CI suốt nhiều tuần trước 24/08/2026.
 
 Trong 201 bài đó có đúng **24 bài chạy trên engine thật**:
 
