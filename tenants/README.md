@@ -49,7 +49,8 @@ Các capability hiện có đến từ code thật, không phải taxonomy tươ
 |---|---|
 | `knowledge` | `bootstrap.knowledge` (hoặc `bootstrap.salesOrder` khi sales-order bật) |
 | `messaging` | `integrations.channel`, `persona.messaging` |
-| `sales-order` | `knowledge` + `messaging`, parser integration, sales-order policy/persona/bootstrap |
+| `turn-processing` | `knowledge` + `messaging`, `integrations.parser`, `persona.turnProcessing` |
+| `sales-order` | `turn-processing` (kéo theo `knowledge` + `messaging`), `policies.salesOrder`, `bootstrap.salesOrder` |
 | `campaign` | `messaging`, campaign policy |
 | `operations` | Không có dependency domain; compose bề mặt vận hành hiện có |
 | `notifications` | `messaging` |

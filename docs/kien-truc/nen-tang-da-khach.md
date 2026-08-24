@@ -68,6 +68,7 @@ flowchart TB
     subgraph Capabilities["Capabilities hiện có"]
         KN["knowledge/content"]
         MSG["messaging"]
+        TP["turn-processing"]
         SO["sales-order"]
         CA["campaign"]
         OP["operations"]
@@ -105,11 +106,33 @@ audit, persistence, health và composition runtime. Domain code hiện có đư�
 | Capability | Phạm vi as-built |
 |---|---|
 | `knowledge` | catalog/content/glossary và bootstrap nguồn tri thức |
-| `messaging` | channel adapter, outbound, group participant |
-| `sales-order` | parser/orchestrator/rules/order lifecycle/handoff |
+| `messaging` | channel adapter, outbound, group participant, kho tin nhắn |
+| `turn-processing` | parser, orchestrator 6 vai, ngữ cảnh, mạch hội thoại, kho lượt, đường trả lời, SSE agent theater |
+| `sales-order` | rules/giá, order lifecycle, duyệt tay, handoff ERP |
 | `campaign` | campaign persistence/scheduler/delivery |
 | `operations` | settings, master data, readiness |
 | `notifications` | lead notification surfaces hiện hành |
+
+> **Đảo quyền sở hữu 24/08/2026 — `turn-processing`.** Cho tới bản này, `sales-order` sở hữu
+> parser, `AgentOrchestrator`, `PipelineService`, mạch hội thoại, kho lượt và cả đường gửi câu trả
+> lời. Hệ quả: một khách chỉ muốn AI đọc/trả lời tin nhắn vẫn phải khai bảng giá, đại lý, chính sách
+> bán hàng và một cổng ERP. Không ai quyết định như vậy — `sales-order` đơn giản là capability duy
+> nhất tồn tại lúc pipeline được viết, nên nó thừa kế tất cả.
+>
+> Ba chỗ rò rỉ chỉ lộ ra khi có một khách trung tính chạy thật, không phải khi đọc code:
+> `AgentOrchestrator.dispatch()` gọi `tenantRetailAdvice()` cho **mọi** câu hỏi sản phẩm;
+> `PipelineService.runPipelineTurn()` gọi `tenantOrderAutomation()` cho **mọi** lượt; và
+> `assessRisk(senderKnown=false)` khiến khách không có sổ đại lý bị giám sát đẩy sang người thật ở
+> **mọi** lượt — tức AI không bao giờ trả lời. Cả ba nay đã gắn vào đúng capability đòi hỏi chúng.
+>
+> `OrdersRepository` vẫn còn nhưng là một **góc nhìn**: composition nối nó vào cùng instance
+> `TurnRecordsRepository` bằng `useExisting`. Bảng Postgres (`Order`) và kiểu `OrderView` **giữ
+> nguyên** — ranh giới cần sửa là quyền sở hữu, không phải lưu trữ, nên không có di trú dữ liệu.
+>
+> Bằng chứng chạy được: `apps/api/src/turns/neutral-tenant.boot.spec.ts` (boot Nest thật, không
+> resolve được `OrdersService`/`OrdersRepository`/`OrderCommandAdapter`/`ErpPort`/`CampaignService`),
+> `neutral-turn.spec.ts` (một lượt đi hết đường và trả lời ra kênh, kèm trace),
+> `turn-processing.composition.spec.ts` (bảng sở hữu).
 
 `packages/tenant/src/tenant.schema.ts` giữ metadata dependency/config/integration bắt buộc theo
 capability. `apps/api/src/app-composition.ts` gắn controller/provider/module với owner typed;
@@ -132,8 +155,8 @@ Tenant package là gói dữ liệu/cấu hình, không phải fork code. Gói n
 - smoke fixture tùy chọn của chính tenant.
 
 Version khác 2 hoặc field không thuộc contract bị chặn, không silent migration. Capability dependency
-được validate chéo: ví dụ `sales-order` yêu cầu `knowledge` + `messaging`, parser, policy/persona và
-sales-order bootstrap. Tenant chỉ bật `knowledge` không phải khai Zalo, dealer, price, order hay group
+được validate chéo: ví dụ `turn-processing` yêu cầu `knowledge` + `messaging` + integration `parser` +
+`persona.turnProcessing`, còn `sales-order` yêu cầu thêm chính `turn-processing` và `policies.salesOrder`. Tenant chỉ bật `knowledge` không phải khai Zalo, dealer, price, order hay group
 mapping.
 
 Tenant package là **hạt giống**, không phải nguồn sự thật vĩnh viễn. Khi stack chạy với PostgreSQL, runtime source-of-truth là DB; thay đổi vận hành đi qua `/settings`, admin/importer/MCP và được audit.
