@@ -72,6 +72,8 @@ import {
 import { TurnReplyService } from './turns/turn-reply.service.js';
 import { MessagesController } from './turns/turns.controller.js';
 import { OrdersService } from './orders/orders.service.js';
+import { SalesOrderOutcomeService } from './orders/sales-order-outcome.service.js';
+import { TurnOutcomePort } from './turns/turn-outcome.port.js';
 import { OrderAmendmentService } from './orders/order-amendment.service.js';
 import { OrderCommandAdapter } from './orders/order-command.adapter.js';
 import { ORDER_COMMANDS } from './advisor/order-commands.token.js';
@@ -222,6 +224,14 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('turn-processing', PipelineService),
   owned('sales-order', OrdersService),
   owned('sales-order', OrderAmendmentService),
+  // CONG TU XAC NHAN DON — den cung `sales-order` va bien mat cung no.
+  //
+  // `turn-processing` cong bo mot cong TRUNG TINH (`TurnOutcomePort`: "co ai nhan luot nay
+  // khong?"); ban hang la ben duy nhat hom nay cam vao do. Khach khong bat `sales-order` khong
+  // co provider nao cho token nay, `PipelineService` nhan `undefined` qua `@Optional()`, va moi
+  // luot di thang sang duong tra loi tu van — dung hanh vi cua mot khach khong ban gi.
+  owned('sales-order', SalesOrderOutcomeService),
+  owned('sales-order', { provide: TurnOutcomePort, useExisting: SalesOrderOutcomeService }),
   // Cong GHI cua agent. Dang ky RIENG khoi `AgentOrchestrator` de doc duoc tu day rang quyen
   // doi trang thai don la mot thu duoc CAP, khong phai mot thu orchestrator tu co.
   owned('sales-order', OrderCommandAdapter),

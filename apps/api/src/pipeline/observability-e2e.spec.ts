@@ -18,6 +18,7 @@ import { TelemetryService } from '../observability/telemetry.service.js';
 import type { TelemetryRecord, TelemetrySink } from '../observability/telemetry-record.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { SalesOrderOutcomeService } from '../orders/sales-order-outcome.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import type { OrderParser, ParserInput } from './order-parser.js';
@@ -118,7 +119,7 @@ async function build(options: {
   const settings = { autoSend: () => options.autoSend ?? 'on' } as RuntimeSettingsService;
   const pipeline = new PipelineService(
     orchestrator,
-    orders,
+    new SalesOrderOutcomeService(orders, telemetry),
     undefined,
     settings,
     undefined,
@@ -424,7 +425,10 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
     const turnReply = new TurnReplyService(ordersRepo, router);
     const pipeline = new PipelineService(
       orchestrator,
-      new OrdersService(ordersRepo, router, undefined, telemetry, undefined, turnReply),
+      new SalesOrderOutcomeService(
+        new OrdersService(ordersRepo, router, undefined, telemetry, undefined, turnReply),
+        telemetry,
+      ),
       undefined,
       { autoSend: () => 'on' } as RuntimeSettingsService,
       undefined,
@@ -465,7 +469,9 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
     const turnReply = new TurnReplyService(ordersRepo, router);
     const pipeline = new PipelineService(
       orchestrator,
-      new OrdersService(ordersRepo, router, undefined, undefined, undefined, turnReply),
+      new SalesOrderOutcomeService(
+        new OrdersService(ordersRepo, router, undefined, undefined, undefined, turnReply),
+      ),
       undefined,
       { autoSend: () => 'on' } as RuntimeSettingsService,
       undefined,

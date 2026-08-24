@@ -9,6 +9,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { SEED } from '../knowledge/seed.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { SalesOrderOutcomeService } from '../orders/sales-order-outcome.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { FakeParser } from './__tests__/fake-parser.js';
@@ -58,7 +59,7 @@ async function build(options: {
   const settings = { autoSend: () => options.autoSend } as RuntimeSettingsService;
   const pipeline = new PipelineService(
     orchestrator,
-    orders,
+    new SalesOrderOutcomeService(orders),
     undefined,
     settings,
     undefined,

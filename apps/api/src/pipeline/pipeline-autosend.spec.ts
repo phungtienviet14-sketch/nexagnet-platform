@@ -10,6 +10,7 @@ import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { SalesOrderOutcomeService } from '../orders/sales-order-outcome.service.js';
 import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
@@ -24,7 +25,12 @@ function build(settings?: RuntimeSettingsService) {
   const adapter = new MockAdapter();
   const outbound = new OutboundChannelRouter(adapter, new MockAdapter(), new MockAdapter());
   const orders = new OrdersService(repo, outbound);
-  const pipeline = new PipelineService(orchestrator, orders, undefined, settings);
+  const pipeline = new PipelineService(
+    orchestrator,
+    new SalesOrderOutcomeService(orders),
+    undefined,
+    settings,
+  );
   return { pipeline, adapter };
 }
 

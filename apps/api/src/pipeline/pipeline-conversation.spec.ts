@@ -14,6 +14,7 @@ import { ConversationContextBuilder } from '../messages/conversation-context.js'
 import { InMemoryMessagesRepository } from '../messages/messages.repository.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { SalesOrderOutcomeService } from '../orders/sales-order-outcome.service.js';
 import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
@@ -44,7 +45,7 @@ function build() {
   );
   const pipeline = new PipelineService(
     orchestrator,
-    orders,
+    new SalesOrderOutcomeService(orders),
     messages,
     undefined,
     undefined,

@@ -6,6 +6,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { InMemoryMessagesRepository } from '../messages/messages.repository.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import type { OrdersService } from '../orders/orders.service.js';
+import { SalesOrderOutcomeService } from '../orders/sales-order-outcome.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
@@ -74,7 +75,7 @@ describe('Pipeline ap dung cau hinh thanh vien', () => {
     const runtime = { autoSend: () => 'on' } as unknown as RuntimeSettingsService;
     const pipeline = new PipelineService(
       new AgentOrchestrator(new FakeParser(), knowledge, orderRepo),
-      orders,
+      new SalesOrderOutcomeService(orders),
       new InMemoryMessagesRepository(),
       runtime,
       participants,

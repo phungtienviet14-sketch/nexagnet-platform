@@ -13,6 +13,7 @@ import {
 import { ConversationContextBuilder } from '../messages/conversation-context.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import type { OrdersService } from '../orders/orders.service.js';
+import { SalesOrderOutcomeService } from '../orders/sales-order-outcome.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
@@ -50,7 +51,7 @@ function build(options: {
   const orchestrator = new AgentOrchestrator(new FakeParser(), knowledge, orders);
   const pipeline = new PipelineService(
     orchestrator,
-    options.ordersService,
+    options.ordersService ? new SalesOrderOutcomeService(options.ordersService) : undefined,
     messages,
     options.settings,
     options.participants,
