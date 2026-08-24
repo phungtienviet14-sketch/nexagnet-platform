@@ -15,9 +15,10 @@ import {
   type OrderView,
 } from '@netviet/shared';
 import { loadDemoMessages } from '@netviet/tenant';
+import { Optional } from '@nestjs/common';
 import { resolveBotName } from '../channels/bot-name.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
-import { OrdersRepository } from '../orders/orders.repository.js';
+import { TurnRecordsRepository } from '../turns/turn-records.repository.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { Roles } from '../auth/roles.decorator.js';
@@ -38,6 +39,12 @@ interface SimulateBody {
 /**
  * Cong demo: bom 1 tin GIA vao dung pipeline (khong can Zalo) — luoi an toan
  * khi trinh demo neu mang/Zalo truc trac.
+ *
+ * THUOC `turn-processing`, khong phai `sales-order` (24/08/2026). Trong ca tep khong co mot dong
+ * nao ve don, gia, dai ly hay ERP: no bom mot tin gia vao pipeline roi tra ve BAN GHI LUOT. Va
+ * `/demo/simulate` la cong DUY NHAT chay tron pipeline that ma khong can Zalo — smoke test luc
+ * deploy, bo do tre cua observability va bo eval parser deu di qua no. De no duoi `sales-order`
+ * nghia la mot khach trung tinh khong co cach nao chay thu mot luot sau khi len, dung luc can nhat.
  */
 @Roles('SALE', 'MANAGER', 'ADMIN')
 @Controller('demo')
@@ -45,8 +52,13 @@ export class DemoController {
   constructor(
     private readonly pipeline: PipelineService,
     private readonly knowledge: KnowledgeService,
-    private readonly orders: OrdersRepository,
-    private readonly settings: RuntimeSettingsService,
+    /** Kho LUOT (`OrdersRepository` la cung instance, doc bang ngon ngu don hang). */
+    private readonly turnRecords: TurnRecordsRepository,
+    /**
+     * `operations` la mot capability RIENG — mot khach co hoi thoai khong bat buoc phai co console
+     * van hanh. Vang mat thi doc thang kill switch tu moi truong, cung khuon `PipelineService`.
+     */
+    @Optional() private readonly settings?: RuntimeSettingsService,
   ) {}
 
   @Get('samples')
@@ -64,7 +76,7 @@ export class DemoController {
       parserMode: env.PARSER_MODE,
       botName: resolveBotName(),
       streamMode: env.STREAM_MODE,
-      autoSend: this.settings.autoSend(),
+      autoSend: this.settings?.autoSend() ?? env.AUTO_SEND,
       zaloOperatorUrl: env.ZALO_OPERATOR_ORIGIN
         ? `${env.ZALO_OPERATOR_ORIGIN.replace(/\/$/, '')}/zalo`
         : undefined,
@@ -108,7 +120,7 @@ export class DemoController {
    */
   @Post('rerun/:id')
   async rerun(@Param('id') id: string): Promise<OrderView> {
-    const existing = await this.orders.findById(id);
+    const existing = await this.turnRecords.findById(id);
     if (!existing) {
       throw new NotFoundException(`Khong tim thay tin ${id} de chay lai`);
     }

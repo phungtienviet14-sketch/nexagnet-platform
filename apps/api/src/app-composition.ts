@@ -72,6 +72,8 @@ import {
 import { TurnReplyService } from './turns/turn-reply.service.js';
 import { MessagesController } from './turns/turns.controller.js';
 import { OrdersService } from './orders/orders.service.js';
+import { SalesOrderOutcomeService } from './orders/sales-order-outcome.service.js';
+import { TurnOutcomePort } from './turns/turn-outcome.port.js';
 import { OrderAmendmentService } from './orders/order-amendment.service.js';
 import { OrderCommandAdapter } from './orders/order-command.adapter.js';
 import { ORDER_COMMANDS } from './advisor/order-commands.token.js';
@@ -121,7 +123,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('foundation', HealthController),
   owned('sales-order', OrdersController),
   owned('turn-processing', MessagesController),
-  owned('sales-order', DemoController),
+  // Bo MO PHONG cua duong xu ly luot, khong phai mot man hinh ban hang: `/demo/simulate` la cong
+  // duy nhat chay tron pipeline that ma khong can Zalo (smoke test deploy, do tre observability,
+  // eval parser). Khach trung tinh phai chay thu duoc mot luot.
+  owned('turn-processing', DemoController),
   owned('sales-order', ErpController),
   owned('knowledge', KnowledgeController),
   owned('messaging', BroadcastController),
@@ -129,8 +134,16 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('messaging', ZaloController),
   owned('operations', SettingsController),
   owned('campaign', CampaignController),
-  owned('sales-order', MediaHealthController),
-  owned('sales-order', CatalogMediaController),
+  // Suc khoe kho anh KHACH GUI VAO (`MediaStore`) — ca hai dependency deu thuoc `turn-processing`.
+  owned('turn-processing', MediaHealthController),
+  // ANH CATALOG SAN PHAM thuoc `knowledge`, khong thuoc ban hang.
+  //
+  // `ContentService` (knowledge) doi locator tuong doi cua goi khach (`/media/catalog/...`) thanh
+  // URL tuyet doi roi dua vao `images`/`links` — tuc URL do di THANG toi khach qua Zalo. Route
+  // phuc vu chinh nhung byte do phai o cung capability, neu khong thi mot khach co tri thuc ma
+  // khong ban hang se gui di mot duong dan anh ma chinh API cua no tra 404: khong ngoai le, khong
+  // canh bao, chi la mot tin nhan den noi thieu anh.
+  owned('knowledge', CatalogMediaController),
   owned('operations', MasterDataController),
   owned('operations', ReadinessController),
   owned('notifications', NotificationsController),
@@ -210,7 +223,7 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('messaging', OutboundRecorder),
   owned('sales-order', erpProvider),
   owned('turn-processing', mediaStoreProvider),
-  owned('sales-order', catalogStoreProvider),
+  owned('knowledge', catalogStoreProvider),
   owned('turn-processing', mediaFetcherProvider),
   owned('turn-processing', parserProvider),
   owned('messaging', ZaloUserClient),
@@ -222,6 +235,14 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('turn-processing', PipelineService),
   owned('sales-order', OrdersService),
   owned('sales-order', OrderAmendmentService),
+  // CONG TU XAC NHAN DON — den cung `sales-order` va bien mat cung no.
+  //
+  // `turn-processing` cong bo mot cong TRUNG TINH (`TurnOutcomePort`: "co ai nhan luot nay
+  // khong?"); ban hang la ben duy nhat hom nay cam vao do. Khach khong bat `sales-order` khong
+  // co provider nao cho token nay, `PipelineService` nhan `undefined` qua `@Optional()`, va moi
+  // luot di thang sang duong tra loi tu van — dung hanh vi cua mot khach khong ban gi.
+  owned('sales-order', SalesOrderOutcomeService),
+  owned('sales-order', { provide: TurnOutcomePort, useExisting: SalesOrderOutcomeService }),
   // Cong GHI cua agent. Dang ky RIENG khoi `AgentOrchestrator` de doc duoc tu day rang quyen
   // doi trang thai don la mot thu duoc CAP, khong phai mot thu orchestrator tu co.
   owned('sales-order', OrderCommandAdapter),

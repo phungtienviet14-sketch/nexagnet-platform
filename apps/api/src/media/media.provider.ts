@@ -1,5 +1,6 @@
 import { Logger, type Provider } from '@nestjs/common';
 import { loadEnv } from '@netviet/shared';
+import { loadFoundationEnv } from '../config/foundation-env.js';
 import { MessagesRepository } from '../messages/messages.repository.js';
 import { CATALOG_STORE } from './catalog.tokens.js';
 import { GcsMediaStore } from './gcs-media.store.js';
@@ -66,11 +67,17 @@ export const mediaStoreProvider: Provider = {
  * nhu anh khach gui vao. Buoc no theo MEDIA_STORE se keo theo hai he qua khong mong muon: khi
  * MEDIA_STORE=none (demo/CI) thi anh san pham cung bien mat, va khi MEDIA_STORE=gcs thi anh tiep
  * thi lai nam trong dung cai bucket PRIVATE danh cho PII.
+ *
+ * Doc bang `loadFoundationEnv()` chu KHONG `loadEnv()`: kho nay thuoc `knowledge`, va biet ANH
+ * SAN PHAM NAM O DAU khong duoc doi mot khoa LLM hay mot token Zalo. `loadEnv()` la mot bo kiem
+ * duy nhat cho ca ung dung, nen goi no o day se keo dieu kien cua `parser`/`channel` vao mot khach
+ * chi co tri thuc — va khach do se khong boot noi. Cac kho con lai trong tep nay VAN dung
+ * `loadEnv()`: chung thuoc `turn-processing`, capability do thuc su doi mot parser.
  */
 export const catalogStoreProvider: Provider = {
   provide: CATALOG_STORE,
   useFactory: (): MediaStore => {
-    const env = loadEnv();
+    const env = loadFoundationEnv();
     new Logger('MediaProvider').log(`Kho anh catalog: ${env.CATALOG_DIR}`);
     return new LocalMediaStore(env.CATALOG_DIR);
   },

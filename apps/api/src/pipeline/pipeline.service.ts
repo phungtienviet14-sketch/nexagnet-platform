@@ -6,7 +6,6 @@ import {
   type OrderView,
   type SenderType,
 } from '@netviet/shared';
-import { tenantOrderAutomation } from '@netviet/tenant';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { GroupDiscoveryService } from '../groups/group-discovery.service.js';
 import { GroupParticipantsRepository } from '../groups/group-participants.repository.js';
@@ -16,14 +15,12 @@ import { MessagesRepository, type SaveMessageResult } from '../messages/messages
 import { ConversationContextBuilder } from '../messages/conversation-context.js';
 import { ConversationsService } from '../conversations/conversations.service.js';
 import type { ThreadKey } from '../conversations/conversation-thread.js';
-import { OrdersService } from '../orders/orders.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
+import { TurnOutcomePort } from '../turns/turn-outcome.port.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
-import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
 import { TURN_DECISIONS, type AutoReplyReason, type ConversationReason } from '../turns/turn-decisions.js';
 import { detectAmend } from './amend-detect.js';
-import { evaluateAutoConfirm } from './order-auto-confirmation.js';
 
 /**
  * Ket qua nhan tin CO NHAN. Truoc 04/08/2026 `process()` tra `null` cho ca "bo qua co chu y"
@@ -70,7 +67,15 @@ export class PipelineService implements OnModuleDestroy {
 
   constructor(
     private readonly orchestrator: AgentOrchestrator,
-    @Optional() private readonly orders?: OrdersService,
+    /**
+     * CONG NHAN VIEC cua mot luot — `sales-order` cam cong tu-xac-nhan-don vao day.
+     *
+     * Truoc 24/08/2026 o dung vi tri nay la `OrdersService`, va khoi quyet dinh tu xac nhan nam
+     * THANG trong `runPipelineTurn()`. Nghia la duong xu ly tin cua MOI khach — ke ca khach
+     * khong ban gi — deu di qua mot cau hoi ve don hang. Vang mat cong nay = khong ai nhan viec,
+     * moi luot di thang sang duong tra loi tu van chung.
+     */
+    @Optional() private readonly turnOutcome?: TurnOutcomePort,
     @Optional() private readonly messages?: MessagesRepository,
     @Optional() private readonly settings?: RuntimeSettingsService,
     @Optional() private readonly participants?: GroupParticipantsRepository,
@@ -482,46 +487,18 @@ export class PipelineService implements OnModuleDestroy {
 
     const manualReview = participant?.handlingMode === 'manual_review';
 
-    const autoConfirm = evaluateAutoConfirm(view, {
-      policy: tenantOrderAutomation(),
+    /*
+     * MOT capability co the nhan lay luot nay va dong no theo luat cua chinh no (hom nay: cong tu
+     * xac nhan don cua `sales-order`). Khong ai nhan -> luot di tiep sang duong tra loi tu van
+     * chung ben duoi. Ly do quyet dinh, ten buoc trace va viec chuyen trang thai deu do BEN NHAN
+     * VIEC ghi — turn-processing khong con biet "don", "gia" hay "nguong tenant" la gi.
+     */
+    const outcome = await this.turnOutcome?.settle(view, {
       killSwitchEnabled: (this.settings?.autoSend() ?? loadEnv().AUTO_SEND) === 'on',
       manualReview,
     });
-    this.telemetry?.decision({
-      vocabulary: SALES_ORDER_DECISIONS,
-      point: 'order.auto_confirm',
-      outcome: autoConfirm.allowed ? 'allowed' : 'denied',
-      reason: autoConfirm.reason,
-      ...(autoConfirm.detail ? { detail: autoConfirm.detail } : {}),
-    });
-    if (autoConfirm.allowed && this.orders) {
-      try {
-        this.logger.log(`[AUTO_SEND] Tu xac nhan ${view.id} theo policy tenant`);
-        const sent = await this.observed('outbound.send_confirmation', () =>
-          this.orders!.sendConfirmation(view.id),
-        );
-        this.telemetry?.stateChange({
-          entity: 'Order',
-          entityId: view.id,
-          from: view.status,
-          to: sent.status,
-          reason: 'ALLOWED',
-        });
-        return await this.settleThread(threadKey, message, sent, now, true);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`[AUTO_SEND] that bai cho ${view.id} — giu Sale duyet: ${detail}`);
-        // `degraded`, khong phai `denied`: cong da MO, viec that bai o duong gui. Hai thu nay
-        // doi hoi hai hanh dong sua khac han nhau, nen chung khong duoc mang cung mot nhan.
-        this.telemetry?.decision({
-          vocabulary: SALES_ORDER_DECISIONS,
-          point: 'order.auto_confirm',
-          outcome: 'degraded',
-          reason: 'ALLOWED',
-          detail: { sendFailed: 1 },
-        });
-        return this.settleThread(threadKey, message, view, now, false);
-      }
+    if (outcome?.claimed) {
+      return await this.settleThread(threadKey, message, outcome.view, now, outcome.closed);
     }
 
     const autoReply = this.evaluateAutoReplyAdvice(view, manualReview);
@@ -587,7 +564,7 @@ export class PipelineService implements OnModuleDestroy {
     });
     if (!conversation) return view;
     const updated = { ...view, conversation };
-    await this.orders?.patchConversation(view.id, conversation);
+    await this.turnReply?.patchConversation(view.id, conversation);
     return updated;
   }
 

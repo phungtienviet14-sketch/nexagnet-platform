@@ -4,7 +4,7 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { OrderView, OutboundContent } from '@netviet/shared';
+import type { ConversationThreadView, OrderView, OutboundContent } from '@netviet/shared';
 import { AgentEventsService } from '../agents/agent-events.service.js';
 import { autoLabel } from '../channels/auto-label.js';
 import { legacyReplyChannel } from '../channels/legacy-reply-channel.js';
@@ -89,5 +89,25 @@ export class TurnReplyService {
     const sent = (await this.repo.update(id, { status: 'sent' }))!;
     this.events?.emit({ type: 'order.updated', order: sent });
     return sent;
+  }
+
+  /**
+   * Ghi trang thai MACH HOI THOAI vao ban ghi luot da luu.
+   *
+   * Chuyen tu `OrdersService` sang day 24/08/2026. Mach hoi thoai la tu vung cua turn-processing:
+   * mot to ho tro khong ban gi van co ban nhap dang do va van dang cho khach tra loi. Truoc do
+   * `PipelineService` phai giu mot tham chieu toi `OrdersService` CHI de goi ham nay — tuc mot
+   * khach khong ban hang cung khong ghi noi trang thai mach cua chinh minh.
+   *
+   * Tach khoi duong gui co chu y: mach duoc chot SAU khi tin da ra khoi he thong, nen loi o day
+   * KHONG duoc phep lam that bai mot lan gui da thanh cong — chi log.
+   */
+  async patchConversation(id: string, conversation: ConversationThreadView): Promise<void> {
+    try {
+      const updated = await this.repo.update(id, { conversation });
+      if (updated) this.events?.emit({ type: 'order.updated', order: updated });
+    } catch {
+      // Luot van dung; chi mat mot nhan trang thai tren console.
+    }
   }
 }

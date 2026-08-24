@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OrderView, ParsedOrder } from '@netviet/shared';
-import { shouldAutoConfirmOrder } from '../pipeline/order-auto-confirmation.js';
+import { shouldAutoConfirmOrder } from '../orders/order-auto-confirmation.js';
 import { DEFAULT_RULES_CONFIG } from '../rules/config.js';
 import { priceOrder } from '../rules/rules.js';
 import type { Dealer, KnowledgeSnapshot, Product } from './domain.js';

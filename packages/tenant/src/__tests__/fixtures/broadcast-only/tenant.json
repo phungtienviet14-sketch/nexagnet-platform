@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "slug": "broadcast-only",
+  "identity": {
+    "displayName": "Broadcast Only Fixture",
+    "shortName": "Loa"
+  },
+  "branding": {
+    "productName": "Loa Phuong",
+    "installName": "Loa Phuong",
+    "pageTitle": "Loa Phuong",
+    "pageDescription": "Tenant fixture that only announces; it never reads replies and never sells.",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#f7f4ee",
+    "monogram": "L",
+    "composerPlaceholder": "vd: thong bao lich nghi le"
+  },
+  "experience": "knowledge-workspace",
+  "capabilities": ["knowledge", "messaging", "campaign"],
+  "policies": {
+    "readiness": { "blockedCapabilities": [] },
+    "campaign": {
+      "defaultWindow": { "start": "08:00", "end": "12:00" },
+      "minSpacingSeconds": 30,
+      "maxTargets": 500,
+      "rateLimitPerMinute": 30,
+      "claimLeaseSeconds": 60,
+      "tickIntervalSeconds": 10,
+      "retry": { "maxAttempts": 4, "baseBackoffSeconds": 60 },
+      "features": { "lunarCalendarEnabled": false }
+    }
+  },
+  "integrations": {
+    "channel": { "allowedAdapters": ["mock"] }
+  },
+  "persona": {
+    "messaging": { "botName": "Loa Phuong", "mentionName": "Bot Loa Phuong" },
+    "knowledge": { "productFallbackDescription": "Dich vu cua Loa Phuong." }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" }
+  }
+}

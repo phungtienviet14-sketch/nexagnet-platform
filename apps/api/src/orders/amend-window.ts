@@ -1,4 +1,5 @@
 import type { OrderView } from '@netviet/shared';
+import type { AmendWindowReason } from './sales-order-decisions.js';
 
 /**
  * CUA SO CON SUA DUOC mot don hang.
@@ -51,6 +52,24 @@ export function canAmendOrder(order: OrderView): AmendVerdict {
   }
   // `draft` | `pending_review` | `needs_edit` | `approved`: khach chua nhan gi, sua thoai mai.
   return { allowed: true };
+}
+
+/**
+ * Ma QUAN SAT tuong ung voi mot phan quyet.
+ *
+ * Nam canh chinh bang `BLOCKED` co chu y: them mot duong tu choi ma quen ma quan sat cua no thi
+ * TypeScript bao ngay, thay vi mot ma im lang bien mat khoi trace.
+ */
+const DECISION_REASON: Record<AmendBlockReason, AmendWindowReason> = {
+  khong_phai_don: 'AMEND_NOT_AN_ORDER',
+  da_tu_choi: 'AMEND_ALREADY_REJECTED',
+  da_dong_bo_erp: 'AMEND_SYNCED_TO_ERP',
+  da_nhap_erp: 'AMEND_HANDED_TO_ERP',
+};
+
+/** Phan quyet -> ma quan sat. Mot nguon su that, hai cach doc — cung khuon `evaluateAutoConfirm`. */
+export function amendDecisionReason(verdict: AmendVerdict): AmendWindowReason {
+  return verdict.allowed ? 'AMEND_ALLOWED' : DECISION_REASON[verdict.reason];
 }
 
 /** Don da GUI cho khach roi thi sua no phai bao lai khach; sua don chua gui thi khong can. */
