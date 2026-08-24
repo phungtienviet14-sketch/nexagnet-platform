@@ -1,7 +1,7 @@
 import type { PolicyType, PricedOrder, SenderType, SupervisorSummary } from '@netviet/shared';
 import type { PriceRow, Product, RetailAdviceStrategy } from '../knowledge/domain.js';
 import { formatVnd, normalize } from '../rules/text.js';
-import { tenantPersona } from '@netviet/tenant';
+import { tenantKnowledgePersona } from '@netviet/tenant';
 import type { AgentsConfig } from './agents.config.js';
 
 /**
@@ -54,11 +54,12 @@ function productsInText(normText: string, products: Product[]): Product[] {
 /**
  * Tu van SP: lay mo ta tu kho tri thuc (RAG tat dinh).
  * SP chua co description thi dung cau thay the cua GOI KHACH — khong hardcode ten khach.
+ * Cau do thuoc `knowledge` (kho tri thuc), khong thuoc duong xu ly luot.
  */
 export function describeProducts(
   normText: string,
   products: Product[],
-  fallbackDescription: string = tenantPersona().productFallbackDescription,
+  fallbackDescription: string = tenantKnowledgePersona().productFallbackDescription,
 ): { name: string; description: string }[] {
   return productsInText(normText, products).map((p) => ({
     name: p.name,

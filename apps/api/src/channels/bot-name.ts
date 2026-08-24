@@ -1,10 +1,11 @@
 import { loadEnv } from '@netviet/shared';
-import { tenantPersona } from '@netviet/tenant';
+import { tenantMessagingPersona } from '@netviet/tenant';
 
 /**
  * Ten dung de BOC @mention khoi noi dung tin den.
  *
- * Nguon su that la GOI KHACH (`persona.mentionName`). Truoc Dot B1 gia tri nay la mac dinh cung
+ * Nguon su that la GOI KHACH (`persona.messaging.mentionName`) — doc qua accessor cua
+ * `messaging`, capability so huu ten bot. Truoc Dot B1 gia tri nay la mac dinh cung
  * trong `envSchema` (`BOT_NAME = 'Bot ultty AI orders'`), tuc nhan dung chung mang san ten bot cua
  * MOT khach — them khach thu hai la phai sua schema env.
  *
@@ -12,5 +13,5 @@ import { tenantPersona } from '@netviet/tenant';
  * (vd nhom test dung mot ten bot khac voi production cua chinh khach do).
  */
 export function resolveBotName(): string {
-  return loadEnv().BOT_NAME ?? tenantPersona().mentionName;
+  return loadEnv().BOT_NAME ?? tenantMessagingPersona().mentionName;
 }

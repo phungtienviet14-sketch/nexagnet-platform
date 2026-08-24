@@ -210,25 +210,64 @@ function assertCapability(capability: CapabilityId): TenantConfig {
 }
 
 /**
- * Shape legacy cho duong xu ly luot; tenant khong bat capability lien quan se fail ro rang.
+ * Doc mot KHOI persona thuoc dung capability so huu no.
  *
- * Neo vao `turn-processing` chu KHONG phai `sales-order` (24/08/2026): prompt parser, ten bot va
- * mo ta san pham dat lai deu can cho mot khach chi tra loi tin nhan.
+ * Hai cong, khong phai mot: (1) capability co duoc bat khong, (2) khoi persona cua chinh no co
+ * mat khong. Gop hai cau hoi lai la cach chac chan de mot khach thieu du lieu cua mien A nhan
+ * duoc thong bao noi ve mien B — dung chuyen da xay ra voi shape gop truoc day.
+ */
+function personaBlock<K extends keyof TenantConfig['persona']>(
+  capability: CapabilityId,
+  key: K,
+): NonNullable<TenantConfig['persona'][K]> {
+  const config = assertCapability(capability);
+  const block = config.persona[key];
+  if (!block) {
+    throw new Error(
+      `Tenant ${config.slug} bat capability ${capability} nhung thieu persona.${String(key)}`,
+    );
+  }
+  return block;
+}
+
+/**
+ * Ten bot cua khach — thuoc `messaging`.
+ *
+ * Doc tu `channels/auto-label.ts` (nhan tin tu dong) va `channels/bot-name.ts` (boc @mention).
+ * CA HAI deu chay o khach khong doc tin va khong ban gi: mot chien dich CSKH mot chieu van phai
+ * gan nhan "tin tu dong" theo dieu khoan Zalo. Buoc chung vao `turn-processing` nghia la mot
+ * khach `[messaging, campaign]` — hop le theo hop dong — nem ngay o lan gui tin dau tien.
+ */
+export function tenantMessagingPersona(): NonNullable<TenantConfig['persona']['messaging']> {
+  return personaBlock('messaging', 'messaging');
+}
+
+/** Loi mo dau prompt parser — thuoc `turn-processing`. */
+export function tenantTurnProcessingPersona(): NonNullable<
+  TenantConfig['persona']['turnProcessing']
+> {
+  return personaBlock('turn-processing', 'turnProcessing');
+}
+
+/** Cau thay the khi mot san pham chua co mo ta — thuoc `knowledge`. */
+export function tenantKnowledgePersona(): NonNullable<TenantConfig['persona']['knowledge']> {
+  return personaBlock('knowledge', 'knowledge');
+}
+
+/**
+ * Shape GOP cho prompt parser — noi duy nhat that su can ca ba khoi cung luc.
+ *
+ * Neo vao `turn-processing` chu KHONG phai `sales-order` (24/08/2026). Doi ca ba khoi la DUNG o
+ * day va chi o day: hop dong capability bat `turn-processing` phu thuoc `messaging` + `knowledge`,
+ * nen khach nao dung duoc ham nay thi chac chan da khai du. Ben goi chi can MOT truong thi phai
+ * dung accessor cua capability so huu truong do.
  */
 export function tenantPersona(): LegacyTenantPersona {
-  const config = assertCapability('turn-processing');
-  assertCapability('messaging');
-  const messaging = config.persona.messaging;
-  const turnProcessing = config.persona.turnProcessing;
-  const knowledge = config.persona.knowledge;
-  if (!messaging || !turnProcessing || !knowledge) {
-    throw new Error('Tenant turn-processing thieu persona capability-scoped');
-  }
   return {
-    parserIntro: turnProcessing.parserIntro,
-    botName: messaging.botName,
-    mentionName: messaging.mentionName,
-    productFallbackDescription: knowledge.productFallbackDescription,
+    parserIntro: tenantTurnProcessingPersona().parserIntro,
+    botName: tenantMessagingPersona().botName,
+    mentionName: tenantMessagingPersona().mentionName,
+    productFallbackDescription: tenantKnowledgePersona().productFallbackDescription,
   };
 }
 
