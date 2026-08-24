@@ -1,5 +1,8 @@
 import type { OrderStatus, ParsedOrder, PricedLine, PricedOrder } from '@netviet/shared';
 import type { Dealer, DealerPriceOverride, PriceRow, Product } from '../knowledge/domain.js';
+// CHI import KIEU: `rules/` van khong phu thuoc runtime vao tang quan sat. Dung chung mot bo ma
+// thay vi khai lai o day, vi hai danh sach roi se lech nhau va cho lech la cho mat tin hieu.
+import type { PricingReason } from '../observability/decision-reasons.js';
 import type { RulesConfig } from './config.js';
 import { formatVnd, normalize } from './text.js';
 
@@ -191,4 +194,47 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
 
 export function routeStatus(priced: PricedOrder): OrderStatus {
   return priced.warnings.length > 0 ? 'needs_edit' : 'pending_review';
+}
+
+/**
+ * Doc ket qua tinh gia thanh MA CO KIEU cho telemetry.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO O DAY, va vi sao la HAM THUAN chu khong phai mot loi goi telemetry:
+ *
+ * `rules/` la tang TAT DINH ma ca kien truc dua vao (quyet dinh #5: LLM khong tinh tien). No
+ * phai chay duoc trong mot bai test khong co Nest, khong co DI, khong co gi. Tiem
+ * `TelemetryService` vao day se doi dieu do, va se bien mot lop QUAN SAT thanh dieu kien de mot
+ * lop NGHIEP VU chay — dung cai ma bat bien fail-open cam.
+ *
+ * Nen chia doi: `rules/` NOI ra minh vua ket luan gi (ham nay, thuan tuy), con ben goi — noi da
+ * co telemetry — GHI lai. Cung khuon voi `evaluateAutoConfirm()`.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO KHONG DUNG THANG `warnings: string[]`:
+ *
+ * Nam dieu kien khac nhau deu tro thanh cau tieng Viet co noi suy bien (`"Chua map duoc san
+ * pham: \"ghe felix\""`). Chuoi do khong loc duoc, khong dem duoc theo thoi gian, va doi mot chu
+ * trong cau la vo hieu moi truy van da luu. Ma thi on dinh; cau chu de cho NGUOI doc — nen ham
+ * nay KHONG thay the `warnings`, no la lop thu hai danh cho may.
+ *
+ * Tra ve MANG chu khong phai mot ma: mot don co the vua thieu SKU vua lech tong, va neu mot cai
+ * lam ta khong thay cai kia thi phai sua hai lan moi lo het loi.
+ */
+export function classifyPricing(
+  parsed: ParsedOrder,
+  priced: PricedOrder,
+  cfg: RulesConfig,
+): readonly PricingReason[] {
+  const reasons: PricingReason[] = [];
+  if (priced.lines.some((line) => !line.matched)) reasons.push('SKU_UNRESOLVED');
+  if (!priced.dealerName) reasons.push('DEALER_UNKNOWN');
+  if (parsed.orderType === 'TH2') reasons.push('SHIPPING_TABLE_MISSING');
+  if (parsed.wantVat === true && parsed.noVat !== true) reasons.push('VAT_POLICY_MISSING');
+  if (parsed.totalRaw != null && parsed.totalRaw > 0 && priced.itemsSubtotal > 0) {
+    const diffRatio =
+      Math.abs(priced.itemsSubtotal - parsed.totalRaw) / Math.max(parsed.totalRaw, 1);
+    if (diffRatio > cfg.totalMismatchTolerance) reasons.push('TOTAL_MISMATCH');
+  }
+  return reasons.length > 0 ? reasons : ['PRICED_CLEAN'];
 }

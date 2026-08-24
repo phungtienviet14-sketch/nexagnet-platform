@@ -11,6 +11,7 @@ import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrismaService } from '../config/prisma.service.js';
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import { resolveReleaseIdentity } from '../observability/release-identity.js';
+import { resolveWorkerTraceBridge } from '../observability/worker-trace-bridge.js';
 import { PrismaWorkflowOutboxRepository } from './prisma-workflow-outbox.repository.js';
 import { WorkflowDispatcher } from './workflow-dispatcher.js';
 import {
@@ -128,7 +129,7 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
     WorkflowHandoffService,
     {
       provide: WorkflowDispatcher,
-      useFactory: (
+      useFactory: async (
         outbox: WorkflowOutboxRepository,
         engine: WorkflowEnginePort,
         audit: AuditLogService | undefined,
@@ -144,6 +145,10 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
           // `optional` de mot ban trien khai khong co audit van chay duoc: quan sat khong bao
           // gio duoc la DIEU KIEN de nghiep vu thanh cong.
           audit,
+          // Phan giai bang HAM chu khong bang mot provider — cung ly le voi phia worker: cau noi
+          // nay khong duoc keo `ObservabilityModule` (va qua do `TraceController`) vao do thi phu
+          // thuoc cua workflow. `OTEL_TRACING` khong bat -> NOOP, khong SDK nao duoc nap.
+          await resolveWorkerTraceBridge(),
         ),
       inject: [
         WorkflowOutboxRepository,

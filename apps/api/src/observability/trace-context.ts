@@ -53,10 +53,30 @@ export interface TraceAnchors {
   conversationId?: string;
   orderId?: string;
   intent?: string;
-  /** `zca` | `bot` | `mock` | `http` — kenh tin di vao. */
+  /** `zca` | `bot` | `mock` | `http` | `operator_console` — kenh viec di vao. */
   channel?: string;
   /** UID nguoi gui. La PII: bo loc telemetry xoa no o muc `redacted`. */
   senderExternalId?: string;
+  /**
+   * NGUOI VAN HANH da khoi dong luot nay (username phien, hoac `operator`).
+   * Chi co o luot do NGUOI bam nut; luot tin Zalo tu dong khong co truong nay.
+   */
+  actor?: string;
+  /**
+   * LUOT DA GAY RA luot nay, khi hai luot cach nhau ve THOI GIAN THUC.
+   *
+   * VI SAO KHONG DUNG LAI `traceId` cua tin goc (quyet dinh 22/08/2026):
+   * Mot trace la MOT giao dich. Tin Zalo vao luc T0 chay xong trong ~4 giay; Sale bam "Duyet &
+   * gui" luc T0+4s, hoac +5 phut, hoac sang hom sau. Dung lai traceId cu se lam moi bo dung cay
+   * (ke ca `tools/trace-view.mjs` va `buildTraceView`) tinh do dai luot = khoang cach tu tin den
+   * cu bam chuot — tuc la chon vui tin hieu do tre THAT cua pipeline duoi thoi gian suy nghi cua
+   * mot con nguoi. Do cung la ly do OpenTelemetry co LINK tach khoi quan he cha-con: nhan qua
+   * KHONG dong nghia voi long nhau trong thoi gian.
+   *
+   * Nen: luot moi, `traceId` moi, va MOT SOI DAY tro nguoc ve luot goc. Doc xuoi bang
+   * `--order <id>`, doc nguoc bang chinh truong nay.
+   */
+  causationTraceId?: string;
 }
 
 export interface TraceScope extends TraceAnchors {
@@ -84,6 +104,8 @@ const ANCHOR_KEYS = [
   'intent',
   'channel',
   'senderExternalId',
+  'actor',
+  'causationTraceId',
 ] as const satisfies readonly (keyof TraceAnchors)[];
 
 /** 16 byte hex — dung khuon `trace-id` cua W3C Trace Context. */

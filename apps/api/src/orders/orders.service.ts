@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
   ServiceUnavailableException,
@@ -13,20 +14,47 @@ import {
   type ReplyChannel,
 } from '@netviet/shared';
 import { AgentEventsService } from '../agents/agent-events.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 import { autoLabel } from '../channels/auto-label.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
+import type {
+  DecisionOutcome,
+  DecisionPoint,
+  ManualApproveReason,
+  ManualRejectReason,
+  SalesHandoffReason,
+} from '../observability/decision-reasons.js';
+import { TelemetryService } from '../observability/telemetry.service.js';
 import { canAmendOrder, type AmendVerdict } from './amend-window.js';
 import { OrdersRepository } from './orders.repository.js';
+
+/**
+ * Nguoi bam nut khi phien khong noi duoc ai — giu dung quy uoc `actor` san co cua audit
+ * (`master-data.controller.ts`). KHONG bao gio de trong: mot ban ghi audit khong co actor tra
+ * loi duoc "da xay ra gi" nhung khong tra loi duoc "ai chiu trach nhiem".
+ */
+const UNKNOWN_ACTOR = 'operator';
+
+/** Kenh cua mot luot do NGUOI khoi dong — de loc tach khoi luot tin Zalo tu dong. */
+const OPERATOR_CHANNEL = 'operator_console';
 
 @Injectable()
 export class OrdersService {
   private readonly confirmationsInFlight = new Map<string, Promise<OrderView>>();
   private readonly contentRepliesInFlight = new Map<string, Promise<OrderView>>();
 
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly repo: OrdersRepository,
     private readonly outbound: OutboundChannelRouter,
     @Optional() private readonly events?: AgentEventsService,
+    // Telemetry LUON `@Optional()` va fail-open: thieu quan sat thi don van phai chay.
+    @Optional() private readonly telemetry?: TelemetryService,
+    // `@Optional()` vi `AuditLogService` thuoc capability `operations`, con `OrdersService`
+    // thuoc `sales-order` — mot khach khai `sales-order` ma khong khai `operations` la hop le
+    // theo tenant contract v2, va no phai boot duoc.
+    @Optional() private readonly audit?: AuditLogService,
   ) {}
 
   /** Danh sach DON (intent dat_don). */
@@ -166,16 +194,61 @@ export class OrdersService {
   }
 
   /** Sale dong tac vu nhap ERP thu cong; thao tac lap lai khong tao them handoff. */
-  async completeSalesHandoff(id: string): Promise<OrderView> {
+  async completeSalesHandoff(id: string, actor: string = UNKNOWN_ACTOR): Promise<OrderView> {
+    return this.operatorTurn(id, actor, 'order.complete_handoff', () =>
+      this.completeSalesHandoffTurn(id, actor),
+    );
+  }
+
+  /**
+   * Moc `salesHandoff = completed` la BAT BIEN CHONG LECH ERP (§8.3): sau day LLM khong duoc
+   * sua don nua. Mot chuyen trang thai khoa cung nhu vay phai co vet — ca trace lan so audit.
+   */
+  private async completeSalesHandoffTurn(id: string, actor: string): Promise<OrderView> {
     const view = await this.getOrThrow(id);
+    this.anchorToOrder(view);
+
     if (view.status !== 'sent' || !view.salesHandoff) {
+      this.decide('order.sales_handoff', 'denied', 'NO_PENDING_HANDOFF', { status: view.status });
+      await this.recordManualAction(
+        actor,
+        'order.sales_handoff.complete',
+        view,
+        view,
+        'NO_PENDING_HANDOFF',
+      );
       throw new UnprocessableEntityException('Đơn chưa có việc nhập ERP thủ công để hoàn tất');
     }
-    if (view.salesHandoff.status === 'completed') return view;
+    if (view.salesHandoff.status === 'completed') {
+      this.decide('order.sales_handoff', 'denied', 'HANDOFF_ALREADY_COMPLETED');
+      await this.recordManualAction(
+        actor,
+        'order.sales_handoff.complete',
+        view,
+        view,
+        'HANDOFF_ALREADY_COMPLETED',
+      );
+      return view;
+    }
 
     const completed = (await this.repo.update(id, {
       salesHandoff: { ...view.salesHandoff, status: 'completed' },
     }))!;
+    this.decide('order.sales_handoff', 'allowed', 'HANDOFF_COMPLETED');
+    this.telemetry?.stateChange({
+      entity: 'SalesHandoff',
+      entityId: id,
+      from: view.salesHandoff.status,
+      to: 'completed',
+      reason: 'HANDOFF_COMPLETED',
+    });
+    await this.recordManualAction(
+      actor,
+      'order.sales_handoff.complete',
+      view,
+      completed,
+      'HANDOFF_COMPLETED',
+    );
     this.events?.emit({ type: 'order.updated', order: completed });
     return completed;
   }
@@ -206,14 +279,61 @@ export class OrdersService {
    * Thu tu xet co y: don da tinh gia di truoc, vi mot don vua co `priced` vua co `outbound` thi
    * ban XAC NHAN moi la chung tu — ban tu van chi la loi dan kem.
    */
-  async approve(id: string): Promise<OrderView> {
+  async approve(id: string, actor: string = UNKNOWN_ACTOR): Promise<OrderView> {
+    return this.operatorTurn(id, actor, 'order.approve', () => this.approveTurn(id, actor));
+  }
+
+  private async approveTurn(id: string, actor: string): Promise<OrderView> {
     const view = await this.getOrThrow(id);
-    if (view.status === 'sent' || view.status === 'synced') return view;
-    if (view.priced) return this.sendConfirmation(id);
-    if (view.trace?.outbound) return this.sendProductAdvice(id);
-    throw new UnprocessableEntityException(
-      'Tin nay chua co ban xac nhan hay ban tu van nao de gui',
-    );
+    this.anchorToOrder(view);
+
+    if (view.status === 'sent' || view.status === 'synced') {
+      this.decide('order.manual_approve', 'denied', 'ALREADY_SENT', { status: view.status });
+      await this.recordManualAction(actor, 'order.approve', view, view, 'ALREADY_SENT');
+      return view;
+    }
+
+    // Thu tu xet giu nguyen: mot don vua co `priced` vua co `outbound` thi ban XAC NHAN moi la
+    // chung tu — ban tu van chi la loi dan kem.
+    const route: ManualApproveReason | null = view.priced
+      ? 'ROUTED_TO_CONFIRMATION'
+      : view.trace?.outbound
+        ? 'ROUTED_TO_ADVICE'
+        : null;
+
+    if (!route) {
+      this.decide('order.manual_approve', 'denied', 'NOTHING_TO_SEND', {
+        status: view.status,
+        intent: view.intent,
+      });
+      await this.recordManualAction(actor, 'order.approve', view, view, 'NOTHING_TO_SEND');
+      throw new UnprocessableEntityException(
+        'Tin nay chua co ban xac nhan hay ban tu van nao de gui',
+      );
+    }
+
+    this.decide('order.manual_approve', 'allowed', route);
+    try {
+      const sent =
+        route === 'ROUTED_TO_CONFIRMATION'
+          ? await this.sendConfirmation(id)
+          : await this.sendProductAdvice(id);
+      this.telemetry?.stateChange({
+        entity: 'Order',
+        entityId: id,
+        from: view.status,
+        to: sent.status,
+        reason: route,
+      });
+      await this.recordManualAction(actor, 'order.approve', view, sent, route);
+      return sent;
+    } catch (error) {
+      // `degraded`, khong phai `denied` — cong DA MO, that bai nam o duong gui. Cung phep phan
+      // biet ma `order.auto_confirm` dung o duong tu dong (pipeline.service.ts).
+      this.decide('order.manual_approve', 'degraded', 'SEND_FAILED', { route });
+      await this.recordManualAction(actor, 'order.approve', view, view, 'SEND_FAILED');
+      throw error;
+    }
   }
 
   /**
@@ -254,15 +374,134 @@ export class OrdersService {
     return canAmendOrder(await this.getOrThrow(id));
   }
 
-  async reject(id: string): Promise<OrderView> {
+  async reject(id: string, actor: string = UNKNOWN_ACTOR): Promise<OrderView> {
+    return this.operatorTurn(id, actor, 'order.reject', () => this.rejectTurn(id, actor));
+  }
+
+  private async rejectTurn(id: string, actor: string): Promise<OrderView> {
     const view = await this.getOrThrow(id);
-    if (view.status === 'rejected') return view;
+    this.anchorToOrder(view);
+
+    if (view.status === 'rejected') {
+      this.decide('order.manual_reject', 'denied', 'ALREADY_REJECTED');
+      await this.recordManualAction(actor, 'order.reject', view, view, 'ALREADY_REJECTED');
+      return view;
+    }
     if (!['draft', 'pending_review', 'needs_edit', 'approved'].includes(view.status)) {
+      this.decide('order.manual_reject', 'denied', 'STATUS_NOT_REJECTABLE', {
+        status: view.status,
+      });
+      await this.recordManualAction(actor, 'order.reject', view, view, 'STATUS_NOT_REJECTABLE');
       throw new UnprocessableEntityException(`Đơn ở trạng thái ${view.status}, không thể từ chối`);
     }
+
     const rejected = (await this.repo.update(id, { status: 'rejected' }))!;
+    this.decide('order.manual_reject', 'allowed', 'REJECTED');
+    this.telemetry?.stateChange({
+      entity: 'Order',
+      entityId: id,
+      from: view.status,
+      to: rejected.status,
+      reason: 'REJECTED',
+    });
     this.events?.emit({ type: 'order.updated', order: rejected });
+    await this.recordManualAction(actor, 'order.reject', view, rejected, 'REJECTED');
     return rejected;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Ha tang quan sat cho BA CONG NGUOI BAM NUT.
+   *
+   * SU CO 22/08/2026: trace `b44d631c` ket thuc bang `advice.auto_reply -> denied
+   * KILL_SWITCH_OFF`, roi 3,8 giay sau cau tra loi VAN ra nhom that qua nut "Duyet & gui" — va
+   * khong co MOT DONG NAO trong log lan audit. Doc trace luot do se ket luan "he thong khong gui
+   * gi", tuc la mot cai NHAN SAI — con te hon khong co nhan.
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Mo mot LUOT MOI cho hanh dong cua nguoi van hanh, roi chay no nhu mot buoc nghiep vu.
+   *
+   * `traceId` MOI chu khong dung lai cua tin goc — ly do day du o `TraceAnchors.causationTraceId`.
+   * Da o trong mot trace san thi khong mo them: mot luot long trong luot khac se cat cay trace
+   * thanh hai cay roi, dung bay ma `PipelineService.process()` da tranh.
+   */
+  private operatorTurn<T>(
+    id: string,
+    actor: string,
+    step: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    if (!this.telemetry) return fn();
+    const telemetry = this.telemetry;
+    const run = (): Promise<T> => telemetry.step(step, fn, { actor });
+    if (telemetry.traceId()) return run();
+    return telemetry.runTurn({ orderId: id, channel: OPERATOR_CHANNEL, actor }, run);
+  }
+
+  /** Noi luot cua nguoi voi don VA voi luot tin da sinh ra don do. */
+  private anchorToOrder(view: OrderView): void {
+    this.telemetry?.enrich({
+      chatId: view.chatId,
+      intent: view.intent,
+      ...(view.traceId ? { causationTraceId: view.traceId } : {}),
+    });
+  }
+
+  private decide(
+    point: DecisionPoint,
+    outcome: DecisionOutcome,
+    reason: ManualApproveReason | ManualRejectReason | SalesHandoffReason,
+    detail?: Readonly<Record<string, unknown>>,
+  ): void {
+    this.telemetry?.decision({ point, outcome, reason, ...(detail ? { detail } : {}) });
+  }
+
+  /**
+   * Ghi so audit cho mot thao tac cua nguoi.
+   *
+   * LOI GHI SO KHONG DUOC LAM HONG MOT LAN GUI DA THANH CONG — cung ly do da viet o
+   * `patchConversation()`: ham nay chay SAU khi tin da ra khoi he thong, nen nem loi o day chi
+   * doi mot thanh cong lay mot 500, roi moi Sale bam lai lan nua.
+   *
+   * NHUNG "fail-open" khong duoc dong nghia voi "im lang": mot thao tac co the gui tin that cho
+   * khach (hoac vuot moc khoa ERP §8.3) trong khi dong `AuditLog` khong ghi duoc. Nen lan ghi
+   * duoc boc trong mot BUOC — that bai thanh `event=step status=error step=audit.persist`, loc
+   * duoc va bao dong duoc, thay vi mot dong chu tu do chi tim ra bang grep. Hau to `.persist`
+   * lam `buildTraceView` tu xep no vao nhom ky thuat, nen Sale khong thay them nhieu.
+   */
+  private async recordManualAction(
+    actor: string,
+    action: string,
+    before: OrderView,
+    after: OrderView,
+    reason: string,
+  ): Promise<void> {
+    if (!this.audit) return;
+    const audit = this.audit;
+    const traceId = this.telemetry?.traceId();
+    const write = (): Promise<unknown> =>
+      audit.append({
+        actor,
+        action,
+        entityType: 'Order',
+        entityId: after.id,
+        before: { status: before.status, salesHandoff: before.salesHandoff ?? null },
+        after: {
+          status: after.status,
+          salesHandoff: after.salesHandoff ?? null,
+          reason,
+          // Soi day noi SO AUDIT voi TRACE: audit tra loi "ai, luc nao"; trace tra loi "vi sao".
+          ...(traceId ? { traceId } : {}),
+        },
+      });
+    try {
+      await (this.telemetry ? this.telemetry.step('audit.persist', write, { action }) : write());
+    } catch (error) {
+      this.logger.error(
+        `Khong ghi duoc audit ${action} cho don ${after.id}: ` +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
   }
 }
 

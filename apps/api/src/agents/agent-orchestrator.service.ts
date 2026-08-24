@@ -44,7 +44,7 @@ import { AgentEventsService } from './agent-events.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { createUsageMeter, type LlmUsage } from '../observability/llm-usage.js';
 import { DEFAULT_RULES_CONFIG, type RulesConfig } from '../rules/config.js';
-import { matchProduct, priceOrder, routeStatus } from '../rules/rules.js';
+import { classifyPricing, matchProduct, priceOrder, routeStatus } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
 import { DEFAULT_AGENTS_CONFIG, type AgentsConfig } from './agents.config.js';
 import { RuleConfigService } from '../rule-config/rule-config.service.js';
@@ -367,23 +367,55 @@ export class AgentOrchestrator {
     emit({ type: 'agent.progress', orderId, role: 'router', phase: 'active' });
     const parseStartedAt = Date.now();
     const parseUsage = createUsageMeter();
-    const rawParseResult = await this.parser.parse({
-      reportUsage: parseUsage.report,
-      text: message.text,
-      imageUrl: message.imageUrl,
-      products: this.knowledge.products(),
-      glossary: this.knowledge.glossary(),
-      dealerNameRaw: resolved.dealer?.name,
-      botName,
-      context: opts?.conversationContext,
-      // Moc de tinh thoi gian tuong doi trong lich su ("5 phut truoc"). Lay tu tin, khong
-      // lay dong ho may chu: tin co the vao muon, va rerun phai cho ra cung mot prompt.
-      sentAt: message.sentAt,
-      // Mach hoi thoai (Pha 6): don nhap + "dang cho tra loi" nam trong PHAN BIEN DONG cua prompt,
-      // nen chung khong pha prompt cache cua phan tinh.
-      ...(opts?.pendingDraft ? { pendingDraft: opts.pendingDraft } : {}),
-      ...(opts?.answeringQuestion ? { awaitingAnswer: true } : {}),
-    });
+    /*
+     * BOC LAN GOI PARSE TRONG `try` — bit lo mu da mo tu dau (audit 24/08/2026).
+     *
+     * Truoc thay doi nay `status: 'ok'` duoc ghi CUNG, va lan goi khong nam trong `try`. Nen khi
+     * DeepSeek tra 500, timeout, hoac tra JSON hong thi KHONG co mot ban ghi `ai_call` nao duoc
+     * phat ra: nguoi debug chi thay mot buoc `agent.run` mau do, khong biet nha cung cap nao,
+     * model nao, da dot bao nhieu token. Duong LOI la duong can quan sat NHAT, ma no lai dung la
+     * duong duy nhat khong duoc quan sat.
+     *
+     * `parseUsage.total()` van doc duoc trong nhanh loi: provider co the da tra `usage` o lan thu
+     * dau roi hong o lan retry, va so token do LA tien that da tieu.
+     */
+    let rawParseResult: ParseResult;
+    try {
+      rawParseResult = await this.parser.parse({
+        reportUsage: parseUsage.report,
+        text: message.text,
+        imageUrl: message.imageUrl,
+        products: this.knowledge.products(),
+        glossary: this.knowledge.glossary(),
+        dealerNameRaw: resolved.dealer?.name,
+        botName,
+        context: opts?.conversationContext,
+        // Moc de tinh thoi gian tuong doi trong lich su ("5 phut truoc"). Lay tu tin, khong
+        // lay dong ho may chu: tin co the vao muon, va rerun phai cho ra cung mot prompt.
+        sentAt: message.sentAt,
+        // Mach hoi thoai (Pha 6): don nhap + "dang cho tra loi" nam trong PHAN BIEN DONG cua
+        // prompt, nen chung khong pha prompt cache cua phan tinh.
+        ...(opts?.pendingDraft ? { pendingDraft: opts.pendingDraft } : {}),
+        ...(opts?.answeringQuestion ? { awaitingAnswer: true } : {}),
+      });
+    } catch (error) {
+      this.telemetry?.aiCall({
+        provider: this.parser.name,
+        model: this.parser.model ?? this.parser.name,
+        operation: 'parse',
+        durationMs: Date.now() - parseStartedAt,
+        status: 'error',
+        error,
+        ...usageFields(parseUsage.total()),
+        attributes: {
+          hasImage: Boolean(message.imageUrl),
+          customerText: message.text,
+        },
+      });
+      // NEM TIEP nguyen ven. Telemetry quan sat, khong can thiep: ingest van phai giu tin da luu
+      // va bao loi ro rang, khong duoc bien loi provider thanh mot ket qua nghiep vu gia.
+      throw error;
+    }
     // LLM #1 (Router). Do tre THAT cua ca luot nam o day — truoc do khong ai do no.
     this.telemetry?.aiCall({
       provider: this.parser.name,
@@ -598,6 +630,29 @@ export class AgentOrchestrator {
         prices: this.knowledge.prices(),
         priceOverrides: this.knowledge.priceOverrides(),
         cfg: rulesConfig,
+      });
+      /*
+       * TANG TAT DINH TU KE LAI MINH (24/08/2026). Truoc do `rules/` co dung 0 loi goi telemetry,
+       * nen cau hoi "vi sao ra con so do" chi tra loi duoc bang cach mo source — o dung tang ma
+       * ca kien truc dat cuoc vao (quyet dinh #5: LLM khong tinh tien).
+       *
+       * `detail` chi mang SO, khong mang doi tuong don: ten khach/SDT/dia chi nam trong `priced`
+       * va chung khong co viec gi o day. Muc 18 — ghi delta ngu nghia, khong chup thuc the.
+       */
+      const pricingReasons = classifyPricing(parseResult.order, priced, rulesConfig);
+      this.telemetry?.decision({
+        point: 'rules.price',
+        outcome: pricingReasons[0] === 'PRICED_CLEAN' ? 'allowed' : 'degraded',
+        reason: pricingReasons[0]!,
+        detail: {
+          reasons: [...pricingReasons],
+          lines: priced.lines.length,
+          unmatchedLines: priced.lines.filter((line) => !line.matched).length,
+          itemsSubtotal: priced.itemsSubtotal,
+          grandTotal: priced.grandTotal,
+          totalRaw: parseResult.order.totalRaw ?? null,
+          orderType: priced.orderType,
+        },
       });
       roles.set('sales', {
         action: `Bóc ${priced.lines.length} dòng, áp giá ${SENDER_LABELS[resolved.senderType]}, dựng xác nhận ${priced.orderType}`,

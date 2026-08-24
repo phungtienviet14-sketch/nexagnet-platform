@@ -82,13 +82,20 @@ for (const [traceId, records] of selected) {
     .reduce((max, record) => Math.max(max, record.durationMs ?? 0), 0);
 
   process.stdout.write('\n');
-  process.stdout.write(`${bold('TRACE')} ${cyan(traceId)}\n`);
+  process.stdout.write(
+    `${bold('TRACE')} ${cyan(traceId)}` +
+      (first.causationTraceId ? dim(` ← từ ${first.causationTraceId}`) : '') +
+      '\n',
+  );
   process.stdout.write(
     dim(
       `  ${first.tenant}/${first.environment}` +
         (first.release ? ` · release=${first.release}` : ' · release=?') +
         (first.chatId ? ` · nhom=${first.chatId}` : '') +
         (first.orderId ? ` · don=${first.orderId}` : '') +
+        // Luot do NGUOI bam nut: ai bam, va luot nao da gay ra no. Thieu hai manh nay thi mot
+        // luot "Duyet & gui" trong y het mot luot tu dong khong ro tu dau ra.
+        (first.actor ? ` · nguoi=${first.actor}` : '') +
         (total ? ` · ${total}ms` : ''),
     ) + '\n',
   );

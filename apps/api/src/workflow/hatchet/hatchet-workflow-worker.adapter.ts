@@ -10,6 +10,11 @@ import {
 } from '../workflows/integration-handoff.steps.js';
 import { HatchetClient, type HatchetClientType } from './hatchet-sdk.js';
 import type { HatchetEngineConfig } from './hatchet-workflow-engine.adapter.js';
+import {
+  resolveWorkerTraceBridge,
+  type WorkerTraceBridge,
+  type WorkflowTaskTrace,
+} from '../../observability/worker-trace-bridge.js';
 
 /**
  * Hien thuc tien trinh worker bang Hatchet.
@@ -32,6 +37,60 @@ interface HatchetWorkerLike {
   waitUntilReady(timeoutMs?: number): Promise<void>;
 }
 
+/**
+ * Phan cua `ctx` Hatchet ma CAU NOI TRACE can — va khong mot phan nao khac.
+ *
+ * Khai bao HEP nhu vay co chu dich: no lam thanh van ban dieu ma quy tac rieng tu doi hoi —
+ * cau noi doc `additionalMetadata()` (tui DA di qua `buildWorkflowMetadata()`, tuc da bi quet
+ * PII/bi mat) va `retryCount()`, chu khong doc `input`, khong doc `parentOutput`. Mot nguoi sua
+ * file nay ve sau muon deo them mot truong cua payload len span se phai NOI RONG kieu nay ra
+ * truoc, va do la luc code review nhin thay.
+ */
+interface TaskRunContext {
+  additionalMetadata(): Record<string, string>;
+  retryCount(): number;
+}
+
+/** MOI thu duoc phep di tu mot lan chay len span cua no. Doc ky chu thich cua `TaskRunContext`. */
+function runAnchors(ctx: TaskRunContext): Omit<WorkflowTaskTrace, 'workflowName' | 'taskName'> {
+  // Ca hai lan doc deu fail-open: mot `ctx` cua phien ban SDK khac thieu mot trong hai phuong
+  // thuc phai lam MAT NEO, khong duoc lam hong buoc nghiep vu.
+  let metadata: Record<string, string> = {};
+  try {
+    metadata = ctx.additionalMetadata() ?? {};
+  } catch {
+    /* fail-open */
+  }
+  let attempt = 0;
+  try {
+    attempt = ctx.retryCount();
+  } catch {
+    /* fail-open */
+  }
+
+  const attributes: Record<string, string> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    // `traceparent` la KHUON DAY, khong phai mot neo de loc. No da thanh quan he cha-con cua
+    // span roi; deo them mot ban sao dang van ban chi lam to du lieu ma khong tra loi them cau
+    // hoi nao.
+    if (key === 'traceparent') continue;
+    if (typeof value === 'string' && value !== '') attributes[key] = value;
+  }
+
+  return {
+    traceparent: metadata.traceparent,
+    attempt: Number.isFinite(attempt) ? attempt : 0,
+    attributes,
+  };
+}
+
+/** Duong tiem cho BAI KIEM — khong dung o production. Nam trong thu muc `hatchet/` de kieu cua
+ * SDK khong ro ri ra `workflow-worker.adapter.ts` (file do PHAI trung lap ve engine). */
+export interface HatchetWorkerOverrides {
+  readonly client?: HatchetClientType;
+  readonly traceBridge?: WorkerTraceBridge;
+}
+
 export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
   private readonly logger = new Logger(HatchetWorkflowWorker.name);
   private client?: HatchetClientType;
@@ -46,6 +105,7 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
     private readonly registration: WorkerRegistration,
     private readonly config: HatchetEngineConfig,
     private readonly deps: WorkflowWorkerDeps = {},
+    private readonly overrides: HatchetWorkerOverrides = {},
   ) {}
 
   async start(): Promise<void> {
@@ -54,6 +114,39 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
     // len thi loi se nem tu chinh dong duoi va readiness phai dang o dung `CONNECTING` luc do.
     this.deps.onPhase?.('connecting');
     const hatchet = this.hatchet();
+
+    /**
+     * CAU NOI TRACE cua tien trinh nay — phan giai MOT LAN luc dang ky khuon.
+     *
+     * `OTEL_TRACING` khong bat -> `NOOP_WORKER_TRACE_BRIDGE`, va tu do tro di khong mot dong
+     * nao duoi day biet OpenTelemetry ton tai. Do la ly do phan giai o day chu khong trong tung
+     * `fn`: mot lan doc bien moi truong cho ca vong doi worker, khong phai mot lan cho moi buoc.
+     */
+    const bridge = this.overrides.traceBridge ?? (await resolveWorkerTraceBridge(env));
+    const workflowName = this.registration.engineName;
+
+    /**
+     * BIEN THUC THI CUA WORKER — MOI buoc dang ky o lop nay deu phai di qua day.
+     *
+     * ------------------------------------------------------------------------
+     * VI SAO KHONG BOC O NGOAI `workflow.task({...})` (mot ham `defineTask` tu goi
+     * `workflow.task` ho): boc nhu vay se de mat suy dien kieu cua SDK — `ctx.parentOutput(x)`
+     * lay kieu dau ra cua `x` tu chinh doi tuong task ma `workflow.task` tra ve, va mot lop boc
+     * generic o giua lam kieu do sup ve `unknown`. Doi lai mot dong `traced(...)` trong moi `fn`,
+     * ta giu duoc ca `ctx.logger`, `ctx.parentOutput` va `ctx.additionalMetadata` dung kieu.
+     *
+     * Bat bien "khong buoc nao thoat ra ngoai cau noi" duoc GIU BANG BAI KIEM chu khong bang
+     * kieu: `hatchet-workflow-worker.trace.spec.ts` dem so `fn` dang ky duoc va so lan cau noi
+     * duoc goi, va no do khi hai con so khong bang nhau.
+     */
+    const traced = <T>(
+      taskName: string,
+      ctx: TaskRunContext,
+      run: (outboundTraceparent: string | undefined) => Promise<T> | T,
+    ): Promise<T> =>
+      bridge.task({ workflowName, taskName, ...runAnchors(ctx) }, async (outbound) =>
+        run(outbound),
+      );
 
     // ------------------------------------------------------------ dinh nghia khuon
     const workflow = hatchet.workflow<IntegrationHandoffInput>({
@@ -67,12 +160,13 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
     const resolve = workflow.task({
       name: 'resolve',
       retries: 0,
-      fn: (input: IntegrationHandoffInput, ctx) => {
-        const url = resolveDestination(input.destination, env);
-        // KHONG log URL: o mot cau hinh khach khac no co the mang token trong query.
-        ctx.logger.info(`resolve ${input.destination} -> da co URL`);
-        return { url, destination: input.destination, alreadyApplied: false, externalRef: '' };
-      },
+      fn: (input: IntegrationHandoffInput, ctx) =>
+        traced('resolve', ctx, () => {
+          const url = resolveDestination(input.destination, env);
+          // KHONG log URL: o mot cau hinh khach khac no co the mang token trong query.
+          ctx.logger.info(`resolve ${input.destination} -> da co URL`);
+          return { url, destination: input.destination, alreadyApplied: false, externalRef: '' };
+        }),
     });
 
     /**
@@ -92,20 +186,21 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
             name: 'preflight',
             parents: [resolve],
             retries: 2,
-            fn: async (input: IntegrationHandoffInput, ctx) => {
-              const { url, destination } = await ctx.parentOutput(resolve);
-              const operationKey = recomputeOperationKey(input, ctx.additionalMetadata());
-              const found = await preflightLookup({ url, operationKey });
-              if (found.alreadyApplied) {
-                ctx.logger.info('preflight: he ngoai DA co ban ghi cho khoa nay -> bo dispatch');
-              }
-              return {
-                url,
-                destination,
-                alreadyApplied: found.alreadyApplied,
-                externalRef: found.externalRef ?? '',
-              };
-            },
+            fn: (input: IntegrationHandoffInput, ctx) =>
+              traced('preflight', ctx, async () => {
+                const { url, destination } = await ctx.parentOutput(resolve);
+                const operationKey = recomputeOperationKey(input, ctx.additionalMetadata());
+                const found = await preflightLookup({ url, operationKey });
+                if (found.alreadyApplied) {
+                  ctx.logger.info('preflight: he ngoai DA co ban ghi cho khoa nay -> bo dispatch');
+                }
+                return {
+                  url,
+                  destination,
+                  alreadyApplied: found.alreadyApplied,
+                  externalRef: found.externalRef ?? '',
+                };
+              }),
           });
 
     // ② dispatch — buoc DUY NHAT co tac dung phu ra ngoai. Ba lan thu + backoff luy thua.
@@ -114,30 +209,35 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
       parents: [upstream],
       retries: 3,
       backoff: { factor: 2, maxSeconds: 60 },
-      fn: async (input: IntegrationHandoffInput, ctx) => {
-        const before = await ctx.parentOutput(upstream);
-        const metadata = ctx.additionalMetadata();
-        // DUNG LAI khoa thay vi nhan kem — xem `integration-handoff.steps.ts`. Viec dung lai
-        // duoc chinh la bang chung khoa co tinh tat dinh, va tinh do moi chan duoc don trung
-        // khi engine chay lai task nay (Hatchet tu cong bo at-least-once).
-        const operationKey = recomputeOperationKey(input, metadata);
+      fn: (input: IntegrationHandoffInput, ctx) =>
+        traced('dispatch', ctx, async (outboundTraceparent) => {
+          const before = await ctx.parentOutput(upstream);
+          const metadata = ctx.additionalMetadata();
+          // DUNG LAI khoa thay vi nhan kem — xem `integration-handoff.steps.ts`. Viec dung lai
+          // duoc chinh la bang chung khoa co tinh tat dinh, va tinh do moi chan duoc don trung
+          // khi engine chay lai task nay (Hatchet tu cong bo at-least-once).
+          const operationKey = recomputeOperationKey(input, metadata);
 
-        // v2 da tra cuu va thay ban ghi ton tai -> KHONG goi lai. Day la cho muc `lookup` tra
-        // cong: khong co header nao chan trung ho ta o phia he ngoai.
-        if (before.alreadyApplied) {
-          return { externalRef: before.externalRef, status: 200, operationKey, skipped: true };
-        }
+          // v2 da tra cuu va thay ban ghi ton tai -> KHONG goi lai. Day la cho muc `lookup` tra
+          // cong: khong co header nao chan trung ho ta o phia he ngoai.
+          if (before.alreadyApplied) {
+            return { externalRef: before.externalRef, status: 200, operationKey, skipped: true };
+          }
 
-        const traceparent = metadata.traceparent ?? '';
-        const result = await dispatchHandoff({
-          url: before.url,
-          operationKey,
-          traceparent,
-          input,
-        });
-        ctx.logger.info(`dispatch lan ${ctx.retryCount() + 1} -> ${result.externalRef}`);
-        return { ...result, operationKey, skipped: false };
-      },
+          // `outboundTraceparent` la QUYET DINH CUA CAU NOI, khong phai mot gia tri du phong:
+          //   khong co runtime tracing -> soi day thua ke tu `additionalMetadata` (nhu hom nay);
+          //   co runtime tracing       -> `undefined`, vi `instrumentation-undici` da tiem mot
+          //                               header roi va hai header cung ten se bi noi lai bang
+          //                               dau phay o dau ben kia.
+          const result = await dispatchHandoff({
+            url: before.url,
+            operationKey,
+            traceparent: outboundTraceparent ?? '',
+            input,
+          });
+          ctx.logger.info(`dispatch lan ${ctx.retryCount() + 1} -> ${result.externalRef}`);
+          return { ...result, operationKey, skipped: false };
+        }),
     });
 
     // ③ settle — chot lai ket qua kem dau van tay PHIEN BAN CODE da chay.
@@ -145,21 +245,22 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
       name: 'settle',
       parents: [dispatch],
       retries: 0,
-      fn: async (_input: IntegrationHandoffInput, ctx) => {
-        const upstream = await ctx.parentOutput(dispatch);
-        const metadata = ctx.additionalMetadata();
-        return {
-          externalRef: upstream.externalRef,
-          operationKey: upstream.operationKey,
-          // Dau van tay nay tra loi cau "run do chay bang code phien ban nao" — cung cach
-          // `version-spike.ts` da do duoc Gate A. Khong co no thi hoi quy phien ban khong con
-          // gi de doc.
-          engineVersion: this.registration.workflowVersion,
-          workflowName: this.registration.engineName,
-          workerName: this.registration.workerName,
-          traceId: metadata['nexagnet.traceId'] ?? null,
-        };
-      },
+      fn: (_input: IntegrationHandoffInput, ctx) =>
+        traced('settle', ctx, async () => {
+          const settled = await ctx.parentOutput(dispatch);
+          const metadata = ctx.additionalMetadata();
+          return {
+            externalRef: settled.externalRef,
+            operationKey: settled.operationKey,
+            // Dau van tay nay tra loi cau "run do chay bang code phien ban nao" — cung cach
+            // `version-spike.ts` da do duoc Gate A. Khong co no thi hoi quy phien ban khong con
+            // gi de doc.
+            engineVersion: this.registration.workflowVersion,
+            workflowName: this.registration.engineName,
+            workerName: this.registration.workerName,
+            traceId: metadata['nexagnet.traceId'] ?? null,
+          };
+        }),
     });
 
     // ------------------------------------------------------------ khoi dong
@@ -202,6 +303,7 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
    * engine chua len". Boot va ket noi la hai chuyen khac nhau.
    */
   private hatchet(): HatchetClientType {
+    if (this.overrides.client) return this.overrides.client;
     if (!this.client) {
       this.client = HatchetClient.init({
         token: this.config.token,

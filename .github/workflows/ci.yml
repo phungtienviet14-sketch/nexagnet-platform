@@ -151,6 +151,27 @@ jobs:
         env:
           RUN_PRISMA_IT: '1'
           RUN_WORKFLOW_IT: '1'
+      # BA BAI TUONG QUAN TRACE — buoc RIENG, va co y de sau buoc baseline o tren.
+      #
+      # Chung tu bo qua chinh chung khi `OTEL_TRACING` khong bat. Cai gate do CO CHU DICH: mot
+      # bai kiem quan sat BAT BUOC phai chay se bien tang quan sat thanh dieu kien de nghiep vu
+      # duoc coi la dung — dung dieu muc 10 cua rules cam. Nhung "co chu dich" khong duoc phep
+      # bien thanh "khong bao gio chay o CI": do dung la cai bay `RUN_WORKFLOW_IT` da roi vao im
+      # lang suot nhieu tuan, va la ly do job nay ton tai.
+      #
+      # Tach lam HAI buoc chu khong bat `OTEL_TRACING=on` cho ca 24 bai o tren, vi hai buoc do
+      # hai thu khac nhau: buoc tren chung minh hanh vi nghiep vu khi TAT tracing (bat bien
+      # "tat khong mat gi"), buoc nay chung minh soi day W3C di duoc qua engine khi BAT. Gop lam
+      # mot thi mat phep do thu nhat.
+      #
+      # Bai tu dung may chu OTLP that cua no va tu tro `OTEL_EXPORTER_OTLP_ENDPOINT` cho cac tien
+      # trinh con, nen buoc nay khong can them ha tang nao.
+      - name: Tuong quan trace xuyen engine — OTEL_TRACING=on
+        run: pnpm --filter @netviet/api exec vitest run src/workflow/workflow-trace-correlation.int.spec.ts --no-file-parallelism
+        env:
+          RUN_PRISMA_IT: '1'
+          RUN_WORKFLOW_IT: '1'
+          OTEL_TRACING: 'on'
       # `down -v` chu khong chi `down`: bai W5/W6/W7 co y `stop` engine va `kill -9` worker, nen
       # dang ky cua cac tien trinh da chet tich lai trong Postgres cua engine. Mot runner la moi
       # lan mot may nen buoc nay khong doi gi o CI — no o day de nguoi chay tay tren may minh

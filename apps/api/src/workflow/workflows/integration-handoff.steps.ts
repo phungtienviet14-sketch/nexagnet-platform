@@ -210,6 +210,16 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  *                    o he ngoai — dung thu ta dung ca `operation-key.ts` de tranh.
  *   traceparent      soi day W3C. Dut o day thi cau "tin nay -> don nay -> lan goi nay" khong
  *                    noi lai duoc, va do la toan bo diem cua tang quan sat.
+ *
+ * `traceparent` RONG thi header bi BO HAN, khong gui mot header rong.
+ *
+ * Do khong phai su gon gang: khi runtime tracing dang chay, chinh no da tiem `traceparent` vao
+ * lan `fetch` nay roi (`instrumentation-undici` -> `propagation.inject` -> `request.addHeader`).
+ * Neu ta cung dat mot header cung ten thi yeu cau di ra mang HAI header, va Node o dau kia noi
+ * chung lai bang dau phay — `req.headers.traceparent` thanh mot chuoi khong con dung khuon W3C.
+ * Tuc la bat tracing len se LAM DUT chinh soi day no sinh ra de noi. Ben goi (`traced(...)` o
+ * `hatchet-workflow-worker.adapter.ts`) quyet dinh ai la nguoi dat header; o day chi can khong
+ * gui ra mot header rong.
  */
 export async function dispatchHandoff(
   args: DispatchArgs,
@@ -225,7 +235,7 @@ export async function dispatchHandoff(
       headers: {
         'content-type': 'application/json',
         'idempotency-key': args.operationKey,
-        traceparent: args.traceparent,
+        ...(args.traceparent ? { traceparent: args.traceparent } : {}),
       },
       // Than mang DUNG hop dong dau vao — khong them truong nao. Payload da qua
       // `buildWorkflowInput` truoc khi roi Nexagnet; buoc nay khong duoc lam no "phong phu" hon.

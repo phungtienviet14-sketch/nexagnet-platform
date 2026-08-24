@@ -6,6 +6,10 @@ import type {
   WorkflowOutboxEntry,
   WorkflowOutboxRepository,
 } from './workflow-outbox.repository.js';
+import {
+  NOOP_WORKER_TRACE_BRIDGE,
+  type WorkerTraceBridge,
+} from '../observability/worker-trace-bridge.js';
 
 /**
  * NGUOI DUA THU giua DB nghiep vu va workflow engine.
@@ -41,6 +45,22 @@ export class WorkflowDispatcher {
      * hong nghiep vu. De cuoi danh sach de moi noi goi ba tham so hien co van bien dich duoc.
      */
     private readonly audit?: AuditLogService,
+    /**
+     * CAU NOI TRACE cho DAU GIAO cua hang doi. Mac dinh NOOP, tuc hanh vi hom nay.
+     *
+     * -----------------------------------------------------------------------
+     * VI SAO DIEM NAY CAN MOT SPAN — no la CHO DUT DUY NHAT con lai cua soi day:
+     *
+     * `WorkflowHandoffService` xep hang trong giao dich cua nghiep vu roi TRA VE ngay; lan goi
+     * engine xay ra o mot NHIP KHAC cua `WorkflowScheduler`, tuc ngoai luot nghiep vu. Khong co
+     * span o day thi trace co mot khoang trong khong giai thich duoc giua "da xep hang" va
+     * "worker bat dau chay" — va do dung la khoang ma nguoi debug can do: viec nam trong outbox
+     * bao lau, engine giu no bao lau.
+     *
+     * `traceparent` de noi lai lay tu `item.metadata`, tuc tu chinh tui da di qua
+     * `buildWorkflowMetadata()`. Khong doc `item.payload`.
+     */
+    private readonly trace: WorkerTraceBridge = NOOP_WORKER_TRACE_BRIDGE,
   ) {}
 
   async tick(now: Date = new Date()): Promise<void> {
@@ -65,13 +85,27 @@ export class WorkflowDispatcher {
 
   private async dispatch(item: WorkflowOutboxEntry, now: Date): Promise<void> {
     try {
-      const reference = await this.engine.trigger({
-        workflowKey: item.workflowKey,
-        workflowVersion: item.workflowVersion,
-        input: item.payload,
-        metadata: item.metadata,
-        operationKey: item.operationKey,
-      });
+      const reference = await this.trace.task(
+        {
+          workflowName: `${item.workflowKey}.${item.workflowVersion}`,
+          taskName: 'trigger',
+          kind: 'producer',
+          traceparent: item.metadata.traceparent,
+          // `attempts` da la LAN THU MAY cua hang nay (1 = lan dau) — doi ve goc 0 de cung mot
+          // truc voi `retryCount()` cua engine o phia worker. Hai con so cung ten phai cung
+          // nghia, neu khong thi ai loc theo no cung loc sai mot don vi.
+          attempt: Math.max(0, item.attempts - 1),
+          attributes: anchorsOf(item.metadata),
+        },
+        () =>
+          this.engine.trigger({
+            workflowKey: item.workflowKey,
+            workflowVersion: item.workflowVersion,
+            input: item.payload,
+            metadata: item.metadata,
+            operationKey: item.operationKey,
+          }),
+      );
       await this.outbox.markDispatched(item.id, reference.engineRunId, now);
       this.recordDispatched(item, reference.engineRunId);
       this.logger.log(
@@ -137,4 +171,17 @@ export class WorkflowDispatcher {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * NEO cho span cua dau giao — cung quy tac voi phia worker: chi doc tui `metadata`, va bo
+ * `traceparent` vi no da thanh quan he cha-con cua span roi.
+ */
+function anchorsOf(metadata: Record<string, string>): Record<string, string> {
+  const anchors: Record<string, string> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (key === 'traceparent') continue;
+    if (typeof value === 'string' && value !== '') anchors[key] = value;
+  }
+  return anchors;
 }

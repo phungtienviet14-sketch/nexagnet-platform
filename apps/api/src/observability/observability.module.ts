@@ -1,5 +1,7 @@
 import { Global, Logger, Module } from '@nestjs/common';
 import { loadTenantConfig } from '@netviet/tenant';
+import { OtelTraceBridge } from './otel/otel-trace-bridge.js';
+import { isOtelRunning } from './otel/otel-runtime.js';
 import { resolveReleaseIdentity, formatRelease } from './release-identity.js';
 import { RecentTracesSink } from './recent-traces.sink.js';
 import { StructuredLogSink } from './structured-logging.js';
@@ -53,10 +55,22 @@ import { privacyModeFor } from './telemetry-redaction.js';
         // Them sink khac (Postgres cua tenant, OTLP) chi la them phan tu vao mang nay.
         const sinks: TelemetrySink[] = [new StructuredLogSink(), recentTraces];
 
-        telemetry.configure({ release, privacy, sinks });
+        /*
+         * CAU NOI RUNTIME TRACING — chi lap khi tien trinh DA co runtime chay THAT.
+         *
+         * `isOtelRunning()` doc trang thai do `otel-preload.ts` dat, khong doc lai bien moi
+         * truong. Khac biet nay quan trong: `OTEL_TRACING=on` ma quen `--import` thi preload
+         * khong chay, khong instrumentation nao duoc dang ky, va mot cau noi lap vao luc do se
+         * mo span vao mot provider rong — tuc bao cao la "co quan sat" trong khi khong co. Doc
+         * trang thai THAT thay vi doc y dinh.
+         */
+        const bridge = isOtelRunning() ? new OtelTraceBridge() : undefined;
+
+        telemetry.configure({ release, privacy, sinks, ...(bridge ? { bridge } : {}) });
 
         logger.log(
-          `Telemetry: ${formatRelease(release)} · muc rieng tu=${privacy} · sink=ndjson-stdout`,
+          `Telemetry: ${formatRelease(release)} · muc rieng tu=${privacy} · sink=ndjson-stdout` +
+            (bridge ? ' + otlp' : ''),
         );
         if (release.gitSha === 'unknown') {
           // KHONG phai loi khi chay local. TREN STACK thi day la trieu chung that: `release.json`
