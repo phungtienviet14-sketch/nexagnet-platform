@@ -37,6 +37,8 @@ import { ContentService } from '../content/content.service.js';
 import { mergeConversationTurn } from '../conversations/conversation-merge.js';
 import type { ClosedOrderContext } from '../conversations/conversation-thread.js';
 import type { AmendSignal } from '../pipeline/amend-detect.js';
+import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
+import { TURN_DECISIONS } from '../turns/turn-decisions.js';
 import { TurnRecordsRepository } from '../turns/turn-records.repository.js';
 import type { OrderParser } from '../pipeline/order-parser.js';
 import { ORDER_PARSER } from '../pipeline/parser.tokens.js';
@@ -163,6 +165,7 @@ export class AgentOrchestrator {
        * Tu day no la mot dong `decision` co the loc: `reason=COMPOSER_DISABLED`.
        */
       this.telemetry?.decision({
+        vocabulary: TURN_DECISIONS,
         point: 'advisor.compose',
         outcome: 'denied',
         reason: 'COMPOSER_DISABLED',
@@ -171,6 +174,7 @@ export class AgentOrchestrator {
     }
     if (orderIsComplete && !input.amendRequest) {
       this.telemetry?.decision({
+        vocabulary: TURN_DECISIONS,
         point: 'advisor.compose',
         outcome: 'denied',
         reason: 'DETERMINISTIC_PATH_SUFFICIENT',
@@ -183,6 +187,7 @@ export class AgentOrchestrator {
     // loi bang cach doc source.
     const writeGranted = Boolean(this.orderCommands && input.senderExternalId);
     this.telemetry?.decision({
+      vocabulary: TURN_DECISIONS,
       point: 'agent.tool_authorization',
       outcome: writeGranted ? 'allowed' : 'denied',
       reason: writeGranted
@@ -251,6 +256,7 @@ export class AgentOrchestrator {
 
     if (!reply) {
       this.telemetry?.decision({
+        vocabulary: TURN_DECISIONS,
         point: 'advisor.compose',
         outcome: 'degraded',
         reason: 'LLM_RETURNED_NOTHING',
@@ -258,6 +264,7 @@ export class AgentOrchestrator {
       return { dispatch, composed: false, handoff: false };
     }
     this.telemetry?.decision({
+      vocabulary: TURN_DECISIONS,
       point: 'advisor.compose',
       outcome: 'allowed',
       reason: 'COMPOSED',
@@ -564,6 +571,7 @@ export class AgentOrchestrator {
     // Giam sat da co `reasons[]` san — day la hinh mau tot nhat dang co trong repo, nen o day
     // chi CHUYEN TIEP no vao trace chu khong dinh nghia lai mot hinh dang khac.
     this.telemetry?.decision({
+      vocabulary: TURN_DECISIONS,
       point: 'supervisor.risk',
       outcome: supervisor.escalate ? 'denied' : 'allowed',
       reason: supervisor.riskLevel === 'none' ? 'ALLOWED' : 'SUPERVISOR_FLAGGED_RISK',
@@ -659,6 +667,7 @@ export class AgentOrchestrator {
        */
       const pricingReasons = classifyPricing(parseResult.order, priced, rulesConfig);
       this.telemetry?.decision({
+        vocabulary: SALES_ORDER_DECISIONS,
         point: 'rules.price',
         outcome: pricingReasons[0] === 'PRICED_CLEAN' ? 'allowed' : 'degraded',
         reason: pricingReasons[0]!,

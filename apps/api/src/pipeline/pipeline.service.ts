@@ -20,7 +20,8 @@ import { OrdersService } from '../orders/orders.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
-import type { AutoReplyReason, ConversationReason } from '../observability/decision-reasons.js';
+import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
+import { TURN_DECISIONS, type AutoReplyReason, type ConversationReason } from '../turns/turn-decisions.js';
 import { detectAmend } from './amend-detect.js';
 import { evaluateAutoConfirm } from './order-auto-confirmation.js';
 
@@ -155,6 +156,7 @@ export class PipelineService implements OnModuleDestroy {
         `Bo qua tin cua thanh vien ignore: group=${message.externalChatId}, sender=${message.senderExternalId}`,
       );
       this.telemetry?.decision({
+        vocabulary: TURN_DECISIONS,
         point: 'message.intake',
         outcome: 'denied',
         reason: 'PARTICIPANT_IGNORED',
@@ -168,6 +170,7 @@ export class PipelineService implements OnModuleDestroy {
     // first attempt. Only that explicitly-scoped retry may cross the durable idempotency gate.
     if (saved?.duplicate && !options.retryPersisted) {
       this.telemetry?.decision({
+        vocabulary: TURN_DECISIONS,
         point: 'message.intake',
         outcome: 'denied',
         reason: 'DUPLICATE_MESSAGE',
@@ -186,6 +189,7 @@ export class PipelineService implements OnModuleDestroy {
           'Chon dai ly cho nhom nay o /settings de bat xu ly don.',
       );
       this.telemetry?.decision({
+        vocabulary: TURN_DECISIONS,
         point: 'message.intake',
         outcome: 'denied',
         reason: 'GROUP_NOT_MAPPED',
@@ -194,6 +198,7 @@ export class PipelineService implements OnModuleDestroy {
     }
 
     this.telemetry?.decision({
+      vocabulary: TURN_DECISIONS,
       point: 'message.intake',
       outcome: 'allowed',
       reason: 'ACCEPTED',
@@ -436,6 +441,7 @@ export class PipelineService implements OnModuleDestroy {
     });
     const { conversationContext, pendingDraft, answeringQuestion, closedOrder } = thread;
     this.telemetry?.decision({
+      vocabulary: TURN_DECISIONS,
       point: 'conversation.resolve',
       outcome: 'allowed',
       reason: resolveConversationReason({
@@ -482,6 +488,7 @@ export class PipelineService implements OnModuleDestroy {
       manualReview,
     });
     this.telemetry?.decision({
+      vocabulary: SALES_ORDER_DECISIONS,
       point: 'order.auto_confirm',
       outcome: autoConfirm.allowed ? 'allowed' : 'denied',
       reason: autoConfirm.reason,
@@ -507,6 +514,7 @@ export class PipelineService implements OnModuleDestroy {
         // `degraded`, khong phai `denied`: cong da MO, viec that bai o duong gui. Hai thu nay
         // doi hoi hai hanh dong sua khac han nhau, nen chung khong duoc mang cung mot nhan.
         this.telemetry?.decision({
+          vocabulary: SALES_ORDER_DECISIONS,
           point: 'order.auto_confirm',
           outcome: 'degraded',
           reason: 'ALLOWED',
@@ -518,6 +526,7 @@ export class PipelineService implements OnModuleDestroy {
 
     const autoReply = this.evaluateAutoReplyAdvice(view, manualReview);
     this.telemetry?.decision({
+      vocabulary: TURN_DECISIONS,
       point: 'advice.auto_reply',
       outcome: autoReply.allowed ? 'allowed' : 'denied',
       reason: autoReply.reason,
@@ -533,6 +542,7 @@ export class PipelineService implements OnModuleDestroy {
         const detail = error instanceof Error ? error.message : String(error);
         this.logger.warn(`[AUTO_SEND] tư vấn thất bại cho ${view.id}: ${detail}`);
         this.telemetry?.decision({
+          vocabulary: TURN_DECISIONS,
           point: 'advice.auto_reply',
           outcome: 'degraded',
           reason: 'ALLOWED',

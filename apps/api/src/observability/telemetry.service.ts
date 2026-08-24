@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { DecisionOutcome, DecisionPoint } from './decision-reasons.js';
+import type {
+  DecisionOutcome,
+  DecisionPointOf,
+  DecisionReasonOf,
+  DecisionVocabulary,
+} from './decision-vocabulary.js';
 import {
   combineSinks,
   NOOP_SINK,
@@ -162,13 +167,18 @@ export class TelemetryService {
   /**
    * Ghi mot QUYET DINH NGHIEP VU.
    *
-   * `reason` BAT BUOC — do la ca ly do file nay ton tai. Mot quyet dinh khong co ly do thi chi
-   * lap lai dieu ma `status` da noi, va nguoi debug van phai mo source ra doc.
+   * `reason` BAT BUOC — do la ca ly do co tang nay. Mot quyet dinh khong co ly do thi chi lap lai
+   * dieu ma `status` da noi, va nguoi debug van phai mo source ra doc.
+   *
+   * `vocabulary` la BO TU VUNG CUA MIEN goi (xem `decision-vocabulary.ts`). Nen tang khong con
+   * giu mot enum toan cuc biet ca don lan bang gia lan ban giao ERP; doi lai, kieu o day CHAT
+   * HON truoc: `reason` khong con la `string` tu do ma phai thuoc dung bo tu vung do.
    */
-  decision(input: {
-    point: DecisionPoint;
+  decision<V extends DecisionVocabulary>(input: {
+    vocabulary: V;
+    point: DecisionPointOf<V>;
     outcome: DecisionOutcome;
-    reason: string;
+    reason: DecisionReasonOf<V>;
     detail?: Readonly<Record<string, unknown>>;
   }): void {
     this.emit(() => ({

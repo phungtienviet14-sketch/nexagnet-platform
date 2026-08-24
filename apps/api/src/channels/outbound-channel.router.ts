@@ -2,7 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { ChannelCapabilities, OutboundContent, ReplyChannel, SenderRole } from '@netviet/shared';
 import { OutboundRecorder, type OutboundReceipt } from '../messages/outbound-recorder.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
-import type { ChannelSendReason } from '../observability/decision-reasons.js';
+import { CHANNEL_DECISIONS, type ChannelSendReason } from './channel-decisions.js';
 import { ChannelAdapter, type SendOptions } from './channel-adapter.js';
 import {
   BOT_CHANNEL_ADAPTER,
@@ -120,6 +120,7 @@ export class OutboundChannelRouter {
     detail: Readonly<Record<string, unknown>>,
   ): void {
     this.telemetry?.decision({
+      vocabulary: CHANNEL_DECISIONS,
       point: 'channel.send',
       outcome: reason === 'SENT' ? 'allowed' : 'denied',
       reason,

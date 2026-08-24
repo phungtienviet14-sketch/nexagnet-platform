@@ -2,7 +2,7 @@ import type { OrderStatus, ParsedOrder, PricedLine, PricedOrder } from '@netviet
 import type { Dealer, DealerPriceOverride, PriceRow, Product } from '../knowledge/domain.js';
 // CHI import KIEU: `rules/` van khong phu thuoc runtime vao tang quan sat. Dung chung mot bo ma
 // thay vi khai lai o day, vi hai danh sach roi se lech nhau va cho lech la cho mat tin hieu.
-import type { PricingReason } from '../observability/decision-reasons.js';
+import type { PricingReason } from '../orders/sales-order-decisions.js';
 import type { RulesConfig } from './config.js';
 import { formatVnd, normalize } from './text.js';
 

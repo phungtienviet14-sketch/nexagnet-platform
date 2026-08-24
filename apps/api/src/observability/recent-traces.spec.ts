@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { RecentTracesSink } from './recent-traces.sink.js';
 import { buildTraceView } from './trace-view.builder.js';
 import { TelemetryService } from './telemetry.service.js';
+import { TURN_DECISIONS } from '../turns/turn-decisions.js';
+import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
 
 function telemetryWith(sink: RecentTracesSink): TelemetryService {
   const telemetry = new TelemetryService();
@@ -20,7 +22,7 @@ describe('RecentTracesSink — vong dem co tran', () => {
 
     await telemetry.runTurn({ chatId: 'nhom-1' }, async () => {
       telemetry.enrich({ orderId: 'don-7' });
-      telemetry.decision({ point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
+      telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
     });
 
     const found = sink.findByOrderId('don-7');
@@ -32,7 +34,7 @@ describe('RecentTracesSink — vong dem co tran', () => {
     const sink = new RecentTracesSink();
     const telemetry = telemetryWith(sink);
 
-    telemetry.decision({ point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
+    telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
 
     expect(sink.stats().traces).toBe(0);
   });
@@ -44,7 +46,7 @@ describe('RecentTracesSink — vong dem co tran', () => {
     // 320 > tran 300 luot.
     for (let index = 0; index < 320; index += 1) {
       await telemetry.runTurn({ chatId: `nhom-${index}` }, async () => {
-        telemetry.decision({ point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
+        telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
       });
     }
 
@@ -61,7 +63,7 @@ describe('buildTraceView — cay cho console', () => {
 
     await telemetry.runTurn({ chatId: 'nhom-1' }, async () => {
       await telemetry.step('agent.run', async () => {
-        telemetry.decision({ point: 'advisor.compose', outcome: 'allowed', reason: 'COMPOSED' });
+        telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'advisor.compose', outcome: 'allowed', reason: 'COMPOSED' });
       });
     });
 
@@ -123,10 +125,10 @@ describe('buildTraceView — cay cho console', () => {
 
     await telemetry.runTurn({ chatId: 'nhom-1' }, async () => {
       await telemetry.step('agent.run', async () => {
-        telemetry.decision({ point: 'supervisor.risk', outcome: 'allowed', reason: 'ALLOWED' });
+        telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'supervisor.risk', outcome: 'allowed', reason: 'ALLOWED' });
         telemetry.stateChange({ entity: 'Order', entityId: 'x', from: 'a', to: 'b' });
       });
-      telemetry.decision({ point: 'order.auto_confirm', outcome: 'denied', reason: 'KILL_SWITCH_OFF' });
+      telemetry.decision({ vocabulary: SALES_ORDER_DECISIONS, point: 'order.auto_confirm', outcome: 'denied', reason: 'KILL_SWITCH_OFF' });
     });
 
     const stored = sink.list(1)[0]!;

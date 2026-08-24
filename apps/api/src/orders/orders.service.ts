@@ -12,16 +12,16 @@ import { AuditLogService } from '../audit/audit-log.service.js';
 import { autoLabel } from '../channels/auto-label.js';
 import { legacyReplyChannel } from '../channels/legacy-reply-channel.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
-import type {
-  DecisionOutcome,
-  DecisionPoint,
-  ManualApproveReason,
-  ManualRejectReason,
-  SalesHandoffReason,
-} from '../observability/decision-reasons.js';
+import type { DecisionOutcome, DecisionPointOf } from '../observability/decision-vocabulary.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { canAmendOrder, type AmendVerdict } from './amend-window.js';
+import {
+  SALES_ORDER_DECISIONS,
+  type ManualApproveReason,
+  type ManualRejectReason,
+  type SalesHandoffReason,
+} from './sales-order-decisions.js';
 import { OrdersRepository } from './orders.repository.js';
 
 /**
@@ -398,12 +398,18 @@ export class OrdersService {
   }
 
   private decide(
-    point: DecisionPoint,
+    point: DecisionPointOf<typeof SALES_ORDER_DECISIONS>,
     outcome: DecisionOutcome,
     reason: ManualApproveReason | ManualRejectReason | SalesHandoffReason,
     detail?: Readonly<Record<string, unknown>>,
   ): void {
-    this.telemetry?.decision({ point, outcome, reason, ...(detail ? { detail } : {}) });
+    this.telemetry?.decision({
+      vocabulary: SALES_ORDER_DECISIONS,
+      point,
+      outcome,
+      reason,
+      ...(detail ? { detail } : {}),
+    });
   }
 
   /**

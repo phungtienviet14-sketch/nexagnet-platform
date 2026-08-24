@@ -9,6 +9,7 @@ import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { OtelTraceBridge } from './otel-trace-bridge.js';
 import { TelemetryService } from '../telemetry.service.js';
 import type { TelemetryRecord } from '../telemetry-record.js';
+import { SALES_ORDER_DECISIONS } from '../../orders/sales-order-decisions.js';
 
 /**
  * CAU HOI DUY NHAT bai nay tra loi: cay span cua runtime tracing va cay ban ghi nghiep vu co la
@@ -114,6 +115,7 @@ describe('OtelTraceBridge', () => {
 
     await telemetry.runTurn({}, async () => {
       telemetry.decision({
+        vocabulary: SALES_ORDER_DECISIONS,
         point: 'order.auto_confirm',
         outcome: 'denied',
         reason: 'QUANTITY_ABOVE_THRESHOLD',
