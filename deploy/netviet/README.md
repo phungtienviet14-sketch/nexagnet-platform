@@ -116,12 +116,18 @@ sudo /srv/netviet/apps/zalo-ultty/set-channel-mode.sh mock
 
 ## CI/CD
 
-- **CI** (`.github/workflows/ci.yml`, chạy khi push `main` hoặc mở PR): 5 job song song — `verify`
+- **CI** (`.github/workflows/ci.yml`, chạy khi push `main` hoặc mở PR): 7 job song song — `verify`
   (lint · typecheck · test · build), `integration` (Postgres 16 thật + `prisma migrate deploy` +
-  `RUN_PRISMA_IT=1`), `e2e` (Playwright `/settings`, upload trace khi fail), `audit`
+  `RUN_PRISMA_IT=1`), **`workflow-integration`** (Postgres 16 thật **+ một cụm Hatchet thật** dựng
+  bằng `tools/poc-workflow-engine/start-engine.sh`, rồi chạy 24 bài IT của workflow engine với
+  `RUN_PRISMA_IT=1 RUN_WORKFLOW_IT=1 … --no-file-parallelism`), `tenant-packs` (nạp mọi gói trong
+  `tenants/` bằng loader thật), `e2e` (Playwright `/settings`, upload trace khi fail), `audit`
   (`pnpm audit --audit-level high`), `images` (build 2 Dockerfile). Composite action
   `.github/actions/setup-workspace` lo pnpm 10.34.4 + Node 22 + `prisma generate` (bắt buộc vì
   pnpm 10 chặn postinstall của Prisma).
+  > `workflow-integration` thêm 24/08/2026. Trước đó `RUN_WORKFLOW_IT` **không có ở dòng nào** trong
+  > `ci.yml`, nên 24 bài IT tự bỏ qua chính chúng ở cả `verify` lẫn `integration` — "CI xanh" khi đó
+  > **không** chứng minh gì về workflow engine. Xem `ci-cd.md` §3.
 - **CD stack khách** — một bản logic duy nhất ở `.github/workflows/reusable-deploy-tenant.yml`
   (build/push image *trung tính* theo digest → rollout lên VM qua IAP bằng `deploy-ci.sh`), gọi từ
   **một cửa duy nhất**: `deploy-tenant.yml` — **chạy tay**, chọn `tenant` + `environment`

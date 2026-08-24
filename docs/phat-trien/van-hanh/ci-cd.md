@@ -26,7 +26,7 @@ tiên, không phải chủ đề của dự án.
 ## 1. Bản đồ pipeline
 
 ```
-push main ──┬─→ ci.yml ─────────────── 6 job, chặn mọi thứ nếu đỏ
+push main ──┬─→ ci.yml ─────────────── 7 job, chặn mọi thứ nếu đỏ
             │
             └─→ deploy-marketing.yml ─ chỉ khi đụng apps/marketing/** hoặc pnpm-lock.yaml
 
@@ -35,7 +35,7 @@ chạy tay ───→ deploy-tenant.yml ─────→ reusable-deploy-ten
 
 | Workflow | Kích hoạt | Cổng duyệt | Đích |
 |---|---|---|---|
-| `ci.yml` | push `main`, mọi PR | — | 6 job: `verify`, `integration`, `tenant-packs`, `e2e`, `audit`, `images` |
+| `ci.yml` | push `main`, mọi PR | — | 7 job: `verify`, `integration`, `workflow-integration`, `tenant-packs`, `e2e`, `audit`, `images` |
 | `deploy-tenant.yml` | **chạy tay** | `dev` = không; `production` = có | Stack một khách trên VM |
 | `deploy-marketing.yml` | push `main` (đường dẫn marketing) | không | Cloud Run `nexagnet-marketing` |
 | `reusable-deploy-tenant.yml` | `workflow_call` | theo `environment` truyền vào | — (thư viện, không tự chạy) |
@@ -101,6 +101,31 @@ pnpm --filter @nexagnet/marketing build
 Test Prisma (`*.int.spec.ts`) **không chạy được nếu không có Postgres**; chúng tự bỏ qua. Job
 `integration` trên CI là nơi duy nhất chứng minh chúng. Đừng tuyên bố "đã kiểm" khi mới chỉ thấy
 chúng `skipped`.
+
+**24 bài IT của workflow engine cũng vậy, và đã từng tốn thật.** Sáu tệp trong
+`apps/api/src/workflow/*.int.spec.ts` gate bằng `RUN_WORKFLOW_IT` (18/24 bài gate **cả**
+`RUN_PRISMA_IT`). Từ khi chúng ra đời cho tới 24/08/2026, `RUN_WORKFLOW_IT` **không xuất hiện ở dòng
+nào** trong `ci.yml` — nên chúng tự bỏ qua chính chúng ở **cả hai** job `verify` và `integration`,
+im lặng, và suốt thời gian đó "CI xanh" được trích dẫn như thể đã chứng minh workflow engine. Job
+`workflow-integration` dựng một cụm Hatchet thật rồi chạy chúng; nó là nơi **duy nhất** chứng minh
+chúng.
+
+Chạy lại cùng một thứ trên máy mình bằng đúng một dòng:
+
+```bash
+export WORKFLOW_ENGINE_TOKEN="$(bash tools/poc-workflow-engine/start-engine.sh)"
+```
+
+rồi (cần Postgres nghiệp vụ đã `prisma migrate deploy`):
+
+```bash
+RUN_PRISMA_IT=1 RUN_WORKFLOW_IT=1 WORKFLOW_ENGINE_HOST_PORT=127.0.0.1:7744 WORKFLOW_ENGINE_TLS_STRATEGY=none pnpm --filter @netviet/api exec vitest run src/workflow --no-file-parallelism
+```
+
+`--no-file-parallelism` **không phải tuỳ chọn cho đẹp**: năm tệp IT đăng ký cùng tên
+`integration-handoff.v1` với cùng một engine, chạy song song thì worker của tệp này nhận run của tệp
+kia — 9 bài đỏ. Đó chính là bất biến "mỗi khách/môi trường MỘT engine" đang tự bảo vệ; xem
+`deploy/netviet/workflow-isolation.contract.test.mjs`.
 
 Job `tenant-packs` chạy `tenant-packs.spec.ts`, tự liệt kê **mọi thư mục** trong `tenants/`, nạp
 từng gói bằng loader thật và kiểm slug trùng tên thư mục. Không thêm matrix tên khách vào CI. Job
@@ -279,6 +304,7 @@ trình đụng compose đều lấy chung một khoá (`.runtime/compose.lock`) 
 ## 9. Liên quan
 
 - [`../ke-hoach/tong-quan.md`](../ke-hoach/tong-quan.md) — nguồn trạng thái duy nhất.
+- [`chay-kiem-workflow-engine.md`](chay-kiem-workflow-engine.md) — **hướng dẫn dùng cổng `workflow-integration`**: đọc kết quả CI, chạy lại 24 bài trên máy mình, 4 kiểu đỏ đã đo.
 - [`checklist-go-live.md`](checklist-go-live.md) — điều kiện bật pilot dữ liệu thật.
 - [`ultty-gd1-test-runbook.md`](ultty-gd1-test-runbook.md) — môi trường kỹ thuật GD1-test.
 - [`../../kien-truc/nen-tang-da-khach.md`](../../kien-truc/nen-tang-da-khach.md) — kiến trúc đa khách.
