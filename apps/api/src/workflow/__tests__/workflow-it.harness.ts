@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { connect, type AddressInfo } from 'node:net';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * BO DO DUNG CHUNG cho cac bai kiem DO TIN CAY cua workflow engine.
@@ -252,6 +252,40 @@ export interface WorkerProcessOptions {
  */
 let nextHealthPort = 8300;
 
+/**
+ * `--import` CAN CHO MOT TIEN TRINH WORKER, theo dung thu tu.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO PRELOAD OTEL PHAI NAM O DAY chu khong o `worker-main.ts`:
+ *
+ * `instrumentation-http` lam viec bang cach VA LAI `node:http`, va trong ESM moi cau `import`
+ * cua mot file duoc danh gia TRUOC cau lenh dau tien cua chinh file do. Mot `await import()` dat
+ * o dong 1 cua `worker-main.ts` van chay SAU khi Nest (va qua do `node:http`) da duoc nap. Vao
+ * muon nghia la khong vao duoc — day la cung ly le da viet o dau `otel-runtime.ts`, ap cho tien
+ * trinh thu hai.
+ *
+ * THU TU HAI `--import` KHONG DOI DUOC: `@swc-node/register` phai vao truoc, vi cai thu hai la
+ * mot file `.ts` va Node khong tu doc duoc `.ts`.
+ *
+ * VA: chi them khi `OTEL_TRACING=on`. Tat cong tac -> danh sach doi so GIONG HET truoc, tuc
+ * baseline `OTEL_TRACING=off` chay dung binh nhu cu, khong phai "chay qua mot duong moi ma tinh
+ * co khong hong".
+ */
+export function workerExecArgv(env: NodeJS.ProcessEnv): string[] {
+  const argv = ['--import', '@swc-node/register/esm-register'];
+  if (env.OTEL_TRACING === 'on') {
+    // URL TUYET DOI, khong phai duong dan tuong doi: bo phan giai cua `@swc-node/register` tu
+    // choi `./src/...ts` trong `--import` (`cannot be resolved in file:///.../apps/api/`) trong
+    // khi Node thi lai phan giai duoc. Do la mot mau thuan co that giua hai lop, va cach duy
+    // nhat khong phu thuoc vao ai thang la dua thang mot `file://` URL da phan giai san.
+    argv.push('--import', pathToFileURL(resolve(apiDir, OTEL_PRELOAD)).href);
+  }
+  return argv;
+}
+
+/** Preload OTel — duong dan tuong doi tu `apps/api`, cung file ma `Dockerfile` chay o dang `.js`. */
+const OTEL_PRELOAD = 'src/observability/otel/otel-preload.ts';
+
 export class WorkerProcess {
   private child?: ChildProcess;
   private text = '';
@@ -299,7 +333,7 @@ export class WorkerProcess {
   private async spawnOnce(): Promise<void> {
     const child = spawn(
       process.execPath,
-      ['--import', '@swc-node/register/esm-register', 'src/workflow/worker-main.ts'],
+      [...workerExecArgv(this.env), 'src/workflow/worker-main.ts'],
       {
         cwd: apiDir,
         env: {

@@ -40,6 +40,11 @@ import {
  *     pnpm --filter @netviet/api exec vitest run src/workflow/workflow-worker-recovery
  */
 
+/** `00-<traceId>-<spanId>-<flags>` -> `traceId`. */
+function traceIdOf(traceparent: string | null): string {
+  return (traceparent ?? '').split('-')[1] ?? '';
+}
+
 const LEASE_SECONDS = 60;
 /**
  * Hatchet phai phat hien worker da chet qua nhip tim roi moi giao lai viec. Do khong phai tuc
@@ -129,7 +134,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT 
       expect(endpoint.postsFor(child.operationKey)).toBe(1);
       // Chua AP DUNG: yeu cau dang bi giu, he ngoai chua tra loi, chua tao ban ghi nao.
       expect(endpoint.appliedFor(child.operationKey)).toBe(false);
-      const traceparentBefore = endpoint.callsFor(child.operationKey)[0]!.traceparent;
+      const traceIdBefore = traceIdOf(endpoint.callsFor(child.operationKey)[0]!.traceparent);
 
       // ② GIET. Khong SIGTERM, khong don dep — mo phong container bi OOM hoac VM mat dien.
       await victim.kill();
@@ -163,7 +168,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT 
       //    cua khoa, khong phai bang chung mot chuoi duoc chuyen tiep.
       expect(endpoint.callsFor(child.operationKey).at(-1)!.idempotencyKey).toBe(child.operationKey);
       // ⑦ Va soi trace khong dut qua lan chet do.
-      expect(endpoint.callsFor(child.operationKey).at(-1)!.traceparent).toBe(traceparentBefore);
+      //
+      // DO `traceId`, KHONG do ca chuoi `traceparent`. Mot `traceparent` gom hai phan: `traceId`
+      // (luot nghiep vu — thu phai giu nguyen) va `spanId` cua NGUOI GOI (thu phai doi, vi lan
+      // goi thu hai den tu mot buoc khac tren mot tien trinh khac). Doi ca chuoi bang nhau la
+      // dang khang dinh rang khong co runtime tracing nao duoc phep bat len — va do la mot dieu
+      // bai nay khong co y dinh khang dinh.
+      expect(traceIdOf(endpoint.callsFor(child.operationKey).at(-1)!.traceparent)).toBe(
+        traceIdBefore,
+      );
 
       // ⑧ Run khong mat khoi engine.
       expect(await engine.describeRun(engineRunId)).not.toBeNull();

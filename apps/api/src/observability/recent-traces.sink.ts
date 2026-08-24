@@ -63,17 +63,29 @@ export class RecentTracesSink implements TelemetrySink {
   }
 
   /**
-   * Tim luot da sinh ra mot don. Quet nguoc tu luot MOI NHAT: nguoi debug hau nhu luon hoi ve
+   * Tim luot DA SINH RA mot don. Quet nguoc tu luot MOI NHAT: nguoi debug hau nhu luon hoi ve
    * don vua chay, va don cu thi da roi khoi vong dem tu lau.
+   *
+   * TU 22/08/2026 mot don co the co NHIEU luot: luot tin Zalo tao ra no, roi cac luot NGUOI BAM
+   * NUT (duyet/tu choi/hoan tat ERP) neo vao cung `orderId`. Hop dong cua ham nay — va cua nut
+   * "Xem luong xu ly" — la luot GOC, nen luot dan xuat bi loai bang chinh mo hinh du lieu:
+   * `causationTraceId` co mat <=> luot nay do mot luot khac gay ra. Khong doan theo ten kenh,
+   * khong doan theo thu tu.
+   *
+   * Khong con luot goc trong vong dem (da bi day ra vi tran) thi tra luot dan xuat moi nhat —
+   * mot cau tra loi khong day du van hon mot 404, va `causationTraceId` tren no chi tiep duong
+   * tra cuu trong `docker logs`.
    */
   findByOrderId(orderId: string): StoredTrace | null {
     const entries = [...this.traces.entries()].reverse();
+    let derived: StoredTrace | null = null;
     for (const [traceId, records] of entries) {
-      if (records.some((record) => record.anchors.orderId === orderId)) {
-        return { traceId, records: [...records], startedAt: records[0]!.at };
-      }
+      if (!records.some((record) => record.anchors.orderId === orderId)) continue;
+      const stored: StoredTrace = { traceId, records: [...records], startedAt: records[0]!.at };
+      if (!records.some((record) => record.anchors.causationTraceId)) return stored;
+      derived ??= stored;
     }
-    return null;
+    return derived;
   }
 
   /** Danh sach luot gan day — moi nhat truoc. */

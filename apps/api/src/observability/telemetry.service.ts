@@ -7,6 +7,7 @@ import {
   type TelemetryRecord,
   type TelemetrySink,
 } from './telemetry-record.js';
+import { NOOP_TRACE_BRIDGE, type TraceBridge } from './trace-bridge.js';
 import {
   sanitizeAttributes,
   sanitizeTelemetry,
@@ -45,6 +46,11 @@ export class TelemetryService {
     gitSha: 'unknown',
   };
   private privacy: TelemetryPrivacyMode = 'redacted';
+  /**
+   * Runtime tracing ben ngoai. MAC DINH LA KHONG CO — moi hanh vi trong file nay giong het
+   * truoc khi cau noi ton tai, tru khi ai do chu dong lap mot cai vao. Xem `trace-bridge.ts`.
+   */
+  private bridge: TraceBridge = NOOP_TRACE_BRIDGE;
 
   /**
    * Cau hinh luc boot. Tach khoi constructor de module goi duoc sau khi da doc goi khach —
@@ -54,10 +60,12 @@ export class TelemetryService {
     release: ReleaseIdentity;
     privacy: TelemetryPrivacyMode;
     sinks: readonly TelemetrySink[];
+    bridge?: TraceBridge;
   }): void {
     this.release = input.release;
     this.privacy = input.privacy;
     this.sink = input.sinks.length > 0 ? combineSinks(input.sinks) : NOOP_SINK;
+    this.bridge = input.bridge ?? NOOP_TRACE_BRIDGE;
   }
 
   /** Muc rieng tu dang ap dung — de sink/test doc duoc ma khong phai doan. */
@@ -77,16 +85,26 @@ export class TelemetryService {
    * bao gio di het duong de co `orderId`.
    */
   runTurn<T>(anchors: TraceAnchors, fn: () => T, continueFrom?: string): T {
-    return runInTrace(
-      { release: this.release, anchors, ...(continueFrom ? { continueFrom } : {}) },
-      fn,
-    );
+    // Cau noi mo span goc TRUOC, roi tra ve `traceparent` cua chinh span do. Truyen no vao
+    // `continueFrom` la cach de `traceId` nghiep vu VA `traceId` cua runtime tracing la MOT —
+    // dung lai duong noi tiep trace da co, khong them mot loi ghi nao vao `trace-context.ts`.
+    // Khong co cau noi -> `bridged` la `undefined` -> nhanh nay giong het truoc day.
+    return this.bridge.turn(continueFrom, (bridged) => {
+      const parent = bridged ?? continueFrom;
+      // Neo BAN DAU len span goc. `enrich()` bo sung dan ve sau; ca hai di chung mot duong.
+      this.bridge.anchor(prefixAnchors(anchors));
+      return runInTrace(
+        { release: this.release, anchors, ...(parent ? { continueFrom: parent } : {}) },
+        fn,
+      );
+    });
   }
 
   /** Bo sung neo nghiep vu khi biet them (orderId o buoc 8, intent o buoc 5…). */
   enrich(anchors: Readonly<TraceAnchors>): void {
     try {
       enrichTrace(anchors);
+      this.bridge.anchor(prefixAnchors(anchors));
     } catch {
       /* fail-open */
     }
@@ -111,21 +129,34 @@ export class TelemetryService {
     fn: () => Promise<T>,
     attributes?: Readonly<Record<string, unknown>>,
   ): Promise<T> {
-    const spanId = newSpanId();
-    const parentSpanId = setCurrentSpanId(spanId);
-    const previousStep = setCurrentStep(name);
-    const startedAt = Date.now();
-    try {
-      const result = await fn();
-      this.emitStep(name, spanId, parentSpanId, Date.now() - startedAt, 'ok', attributes);
-      return result;
-    } catch (error) {
-      this.emitStep(name, spanId, parentSpanId, Date.now() - startedAt, 'error', attributes, error);
-      throw error;
-    } finally {
-      setCurrentSpanId(parentSpanId);
-      setCurrentStep(previousStep);
-    }
+    // Cau noi mo span cua runtime tracing va cho lai `spanId` cua no. Ban ghi nghiep vu deo dung
+    // id do, nen span TU DONG sinh ra ben trong `fn` (truy van Prisma, lan goi `fetch`) tu treo
+    // vao dung buoc nay — thay vi thanh mot dam span mo coi canh cay nghiep vu.
+    return this.bridge.step(name, async (bridgedSpanId) => {
+      const spanId = bridgedSpanId ?? newSpanId();
+      const parentSpanId = setCurrentSpanId(spanId);
+      const previousStep = setCurrentStep(name);
+      const startedAt = Date.now();
+      try {
+        const result = await fn();
+        this.emitStep(name, spanId, parentSpanId, Date.now() - startedAt, 'ok', attributes);
+        return result;
+      } catch (error) {
+        this.emitStep(
+          name,
+          spanId,
+          parentSpanId,
+          Date.now() - startedAt,
+          'error',
+          attributes,
+          error,
+        );
+        throw error;
+      } finally {
+        setCurrentSpanId(parentSpanId);
+        setCurrentStep(previousStep);
+      }
+    });
   }
 
   /**
@@ -310,11 +341,97 @@ export class TelemetryService {
    */
   private emit(build: () => TelemetryRecord): void {
     try {
-      this.sink.record(build());
+      const record = build();
+      this.sink.record(record);
+      this.forward(record);
     } catch {
       /* fail-open — xem bat bien so mot o dau file */
     }
   }
+
+  /**
+   * Chuyen mot ban ghi DIEM sang runtime tracing.
+   *
+   * MOT NOI DUY NHAT: dat o day thay vi rai vao tung phuong thuc cong khai, vi `emit()` la cong
+   * ra duy nhat — them mot loai ban ghi moi sau nay se tu di qua day, khong ai phai nho.
+   *
+   * `step` KHONG di qua duong nay: no da la mot span that do `this.bridge.step()` mo. Gui lai
+   * mot lan nua se dem doi moi buoc.
+   */
+  private forward(record: TelemetryRecord): void {
+    switch (record.type) {
+      case 'step':
+        return;
+      case 'ai_call':
+        this.bridge.aiCall({
+          // Ten theo OpenTelemetry GenAI semconv: `<operation> <model>` doc len tren UI la ra
+          // ngay "vua goi cai gi", khong phai mot ten ham.
+          name: `${record.operation} ${record.model}`,
+          durationMs: record.durationMs,
+          status: record.status,
+          ...(record.error ? { error: record.error } : {}),
+          attributes: {
+            'gen_ai.system': record.provider,
+            'gen_ai.request.model': record.model,
+            'gen_ai.operation.name': record.operation,
+            ...(record.inputTokens !== undefined
+              ? { 'gen_ai.usage.input_tokens': record.inputTokens }
+              : {}),
+            ...(record.outputTokens !== undefined
+              ? { 'gen_ai.usage.output_tokens': record.outputTokens }
+              : {}),
+            ...(record.toolRounds !== undefined
+              ? { 'nexagnet.tool_rounds': record.toolRounds }
+              : {}),
+            ...(record.toolNames?.length ? { 'nexagnet.tool_names': [...record.toolNames] } : {}),
+            ...(record.attributes ?? {}),
+          },
+        });
+        return;
+      case 'decision':
+        this.bridge.event('decision', {
+          'nexagnet.decision.point': record.point,
+          'nexagnet.decision.outcome': record.outcome,
+          'nexagnet.decision.reason': record.reason,
+          ...(record.detail ?? {}),
+        });
+        return;
+      case 'state_change':
+        this.bridge.event('state_change', {
+          'nexagnet.entity': record.entity,
+          'nexagnet.entityId': record.entityId,
+          'nexagnet.from': record.from ?? '(moi tao)',
+          'nexagnet.to': record.to,
+          ...(record.reason ? { 'nexagnet.reason': record.reason } : {}),
+        });
+        return;
+      case 'data_change':
+        this.bridge.event('data_change', {
+          'nexagnet.entity': record.entity,
+          'nexagnet.field': record.field,
+          'nexagnet.from': record.from,
+          'nexagnet.to': record.to,
+          ...(record.entityId ? { 'nexagnet.entityId': record.entityId } : {}),
+        });
+        return;
+    }
+  }
+}
+
+/**
+ * Neo nghiep vu -> thuoc tinh span, co tien to `nexagnet.`.
+ *
+ * Tien to khong phai trang tri: no la thu ngan `chatId` cua ta khoi va vao mot khoa cua chuan
+ * OTel (hoac cua mot instrumentation khac) mang cung ten nhung khac nghia — va la thu cho phep
+ * loc "moi thuoc tinh cua Nexagnet" bang mot tien to duy nhat tren UI cua backend.
+ */
+function prefixAnchors(anchors: Readonly<TraceAnchors>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(anchors)) {
+    if (value === undefined || value === null || value === '') continue;
+    out[`nexagnet.${key}`] = value;
+  }
+  return out;
 }
 
 function describeError(error: unknown): { name: string; message: string } {

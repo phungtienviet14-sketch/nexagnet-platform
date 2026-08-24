@@ -19,7 +19,10 @@ import type { ThreadKey } from '../conversations/conversation-thread.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
-import type { AutoReplyReason } from '../observability/decision-reasons.js';
+import type {
+  AutoReplyReason,
+  ConversationReason,
+} from '../observability/decision-reasons.js';
 import { detectAmend } from './amend-detect.js';
 import { evaluateAutoConfirm } from './order-auto-confirmation.js';
 
@@ -392,22 +395,59 @@ export class PipelineService implements OnModuleDestroy {
     contextExclusions: readonly string[] = [],
   ): Promise<OrderView> {
     const senderTypeOverride = participantRankToSenderType(participant?.customerRank);
-    const conversationContext = await this.conversationContext?.build(message, contextExclusions);
     // MACH HOI THOAI cua CHINH nguoi gui tin nay (Pha 6). Doc TRUOC khi parse: don nhap dang do
     // la thu quyet dinh mot tin "20" co nghia gi.
     const threadKey = ConversationsService.keyOf(message);
     const now = new Date();
-    const pendingDraft =
-      threadKey && !opts?.rerun ? await this.conversations?.pendingDraft(threadKey, now) : null;
-    const answeringQuestion = Boolean(
-      threadKey && !opts?.rerun && (await this.conversations?.isAnsweringQuestion(threadKey, now)),
-    );
-    // DON VUA CHOT cua chinh nguoi nay. Doc rieng khoi `pendingDraft` co chu y: mach da chot thi
-    // KHONG duoc gop tiep, nhung van phai NHO — khong co no, "cho a lay 5 cai" ngay sau khi chot
-    // 20 ghe Felix se den noi ma khong biet "cai" la cai gi (loi khach bao 21/08/2026).
-    const closedOrder =
-      threadKey && !opts?.rerun ? await this.conversations?.recentlyClosed(threadKey, now) : null;
     const amend = detectAmend(message.text);
+    /*
+     * BON LAN DOC TRANG THAI GOM VAO MOT BUOC (24/08/2026).
+     *
+     * Chung khong duoc gom vi "cho gon" — chung la MOT cau hoi nghiep vu duy nhat: "tin nay
+     * thuoc ve dau trong mach hoi thoai?". Truoc thay doi nay ca bon deu khong de lai dau vet,
+     * nen dung cho sinh ra loi khach bao 21/08/2026 ("cho a lay 5 cai" den noi ma khong biet
+     * "cai" la cai gi) lai la cho khong nhin thay duoc.
+     *
+     * THU TU va GIA TRI giu nguyen tuyet doi — day la mot ranh gioi quan sat, khong phai mot lan
+     * sua nghiep vu.
+     */
+    const thread = await this.observed('conversation.resolve', async () => {
+      const conversationContext = await this.conversationContext?.build(message, contextExclusions);
+      const pendingDraft =
+        threadKey && !opts?.rerun ? await this.conversations?.pendingDraft(threadKey, now) : null;
+      const answeringQuestion = Boolean(
+        threadKey &&
+          !opts?.rerun &&
+          (await this.conversations?.isAnsweringQuestion(threadKey, now)),
+      );
+      // DON VUA CHOT cua chinh nguoi nay. Doc rieng khoi `pendingDraft` co chu y: mach da chot
+      // thi KHONG duoc gop tiep, nhung van phai NHO.
+      const closedOrder =
+        threadKey && !opts?.rerun ? await this.conversations?.recentlyClosed(threadKey, now) : null;
+      return { conversationContext, pendingDraft, answeringQuestion, closedOrder };
+    });
+    const { conversationContext, pendingDraft, answeringQuestion, closedOrder } = thread;
+    this.telemetry?.decision({
+      point: 'conversation.resolve',
+      outcome: 'allowed',
+      reason: resolveConversationReason({
+        threadKey,
+        rerun: Boolean(opts?.rerun),
+        pendingDraft: Boolean(pendingDraft),
+        answeringQuestion,
+        closedOrder: Boolean(closedOrder),
+        amend: amend.isAmend,
+      }),
+      detail: {
+        // CO BOOLEAN, khong co noi dung: cau hoi o day la "mach da quyet dinh gi", khong phai
+        // "khach da viet gi" — van ban tin da nam o `ai_call` va chi can mot cho.
+        hasPendingDraft: Boolean(pendingDraft),
+        answeringQuestion,
+        hasClosedOrder: Boolean(closedOrder),
+        amendDetected: amend.isAmend,
+        hasHistory: Boolean(conversationContext),
+      },
+    });
     const view = await this.observed('agent.run', () =>
       this.orchestrator.run(message, botName, {
       ...opts,
@@ -748,4 +788,27 @@ function identityReviewParticipant(message: ChannelMessage): GroupParticipant {
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+}
+
+
+/**
+ * Mach hoi thoai da xep tin nay vao dau — mot ma, khong phai nam boolean roi rac.
+ *
+ * THU TU KIEM LA MOT QUYET DINH, khong phai thu tu ngau nhien: `pendingDraft` duoc kiem TRUOC
+ * `closedOrder` vi mot don DANG DO manh hon mot don VUA CHOT — neu ca hai cung co thi tin nay
+ * gop vao don dang do, va ma phai noi dung dieu ma he thong lam.
+ */
+function resolveConversationReason(input: {
+  threadKey: ThreadKey | null | undefined;
+  rerun: boolean;
+  pendingDraft: boolean;
+  answeringQuestion: boolean;
+  closedOrder: boolean;
+  amend: boolean;
+}): ConversationReason {
+  if (!input.threadKey || input.rerun) return 'NO_THREAD_KEY';
+  if (input.answeringQuestion) return 'ANSWERS_QUESTION';
+  if (input.pendingDraft) return 'CONTINUES_DRAFT';
+  if (input.closedOrder) return input.amend ? 'AMENDS_CLOSED_ORDER' : 'AFTER_CLOSED_ORDER';
+  return 'NEW_TURN';
 }

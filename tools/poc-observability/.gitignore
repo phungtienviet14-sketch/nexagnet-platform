@@ -1,0 +1,8 @@
+# Bang chung cua phien POC: to, sinh lai duoc, va co the chua noi dung tin test.
+#
+# Ca thu muc `evidence/` bi loai, khong chi rieng `otlp/` + `logs/` nhu ban dau. Ly do: ban dau
+# bo sot `evidence/human-debug-answer-*.md` (DAP AN cua hai bai tap go roi — commit len la bai tap
+# mat gia tri) va `evidence/otlp-*/` (batch OTLP thuc te co the mang noi dung tin test).
+# Loai ca thu muc thi mot lan chay POC moi sinh them thu muc bang chung nao cung khong lot ra.
+evidence/
+.env.poc
