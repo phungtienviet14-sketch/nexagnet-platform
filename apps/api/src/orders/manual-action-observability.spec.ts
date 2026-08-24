@@ -11,6 +11,7 @@ import type { TelemetryRecord } from '../observability/telemetry-record.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { InMemoryOrdersRepository } from './orders.repository.js';
 import { OrdersService } from './orders.service.js';
+import { TURN_DECISIONS } from '../turns/turn-decisions.js';
 
 /**
  * SU CO 22/08/2026 — MOT TIN RA NHOM KHACH MA KHONG CO MOT VET NAO.
@@ -201,6 +202,7 @@ describe('duong NGUOI BAM NUT phai de lai vet (su co 22/08/2026)', () => {
     // Mot luot tin Zalo goc: khong co `causationTraceId`.
     telemetry.runTurn({ orderId: view.id, chatId: view.chatId, channel: 'zca' }, () => {
       telemetry.decision({
+        vocabulary: TURN_DECISIONS,
         point: 'advice.auto_reply',
         outcome: 'denied',
         reason: 'KILL_SWITCH_OFF',

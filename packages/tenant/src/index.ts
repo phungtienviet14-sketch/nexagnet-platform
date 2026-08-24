@@ -17,6 +17,7 @@ export {
   tenantOrderAutomation,
   tenantPersona,
   tenantRetailAdvice,
+  tenantRetailAdviceOrNull,
   tenantReadiness,
   tenantWorkflowBinding,
   tenantWorkflowEngine,

@@ -1,6 +1,6 @@
 import type { OrderView } from '@netviet/shared';
 import type { OrderAutomation } from '@netviet/tenant';
-import type { AutoConfirmReason } from '../observability/decision-reasons.js';
+import type { AutoConfirmReason } from '../orders/sales-order-decisions.js';
 
 export interface AutoConfirmationContext {
   policy: OrderAutomation | null;

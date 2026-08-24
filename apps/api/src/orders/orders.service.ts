@@ -6,26 +6,22 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import {
-  loadEnv,
-  type ConversationThreadView,
-  type OrderView,
-  type OutboundContent,
-  type ReplyChannel,
-} from '@netviet/shared';
+import type { ConversationThreadView, OrderView } from '@netviet/shared';
 import { AgentEventsService } from '../agents/agent-events.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { autoLabel } from '../channels/auto-label.js';
+import { legacyReplyChannel } from '../channels/legacy-reply-channel.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
-import type {
-  DecisionOutcome,
-  DecisionPoint,
-  ManualApproveReason,
-  ManualRejectReason,
-  SalesHandoffReason,
-} from '../observability/decision-reasons.js';
+import type { DecisionOutcome, DecisionPointOf } from '../observability/decision-vocabulary.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
+import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { canAmendOrder, type AmendVerdict } from './amend-window.js';
+import {
+  SALES_ORDER_DECISIONS,
+  type ManualApproveReason,
+  type ManualRejectReason,
+  type SalesHandoffReason,
+} from './sales-order-decisions.js';
 import { OrdersRepository } from './orders.repository.js';
 
 /**
@@ -41,7 +37,6 @@ const OPERATOR_CHANNEL = 'operator_console';
 @Injectable()
 export class OrdersService {
   private readonly confirmationsInFlight = new Map<string, Promise<OrderView>>();
-  private readonly contentRepliesInFlight = new Map<string, Promise<OrderView>>();
 
   private readonly logger = new Logger(OrdersService.name);
 
@@ -55,16 +50,17 @@ export class OrdersService {
     // thuoc `sales-order` — mot khach khai `sales-order` ma khong khai `operations` la hop le
     // theo tenant contract v2, va no phai boot duoc.
     @Optional() private readonly audit?: AuditLogService,
+    /**
+     * Duong tra loi TRUNG TINH, do `turn-processing` so huu. `@Optional()` vi hang chuc bo test
+     * dung `OrdersService` chi de kiem duong DON — chung khong can duong tu van, va bat chung
+     * dung mot collaborator chung khong dung la mot cach lam ranh gioi trong nen giay.
+     */
+    @Optional() private readonly turnReply?: TurnReplyService,
   ) {}
 
   /** Danh sach DON (intent dat_don). */
   async listOrders(): Promise<OrderView[]> {
     return (await this.repo.list()).filter((v) => v.intent === 'dat_don');
-  }
-
-  /** Feed moi tin da xu ly (raw) cho tab Tin nhan. */
-  async listMessages(): Promise<OrderView[]> {
-    return this.repo.list();
   }
 
   async getOrThrow(id: string): Promise<OrderView> {
@@ -91,64 +87,18 @@ export class OrdersService {
   }
 
   /**
-   * Gui tu van san pham chi tu payload active/approved da duoc AgentOrchestrator dong goi.
-   * Adapter khong ho tro anh thi ha cap ve text + link; khong gia lap sendVideo/sendFile.
+   * Gui tu van san pham — UY QUYEN sang `TurnReplyService` (turn-processing).
+   *
+   * Giu lai o day mot cua duy nhat cho duong NGUOI BAM DUYET (`approve()` -> ROUTED_TO_ADVICE);
+   * ban than viec gui khong con la nghiep vu ban hang nua.
    */
   async sendProductAdvice(id: string): Promise<OrderView> {
-    const inFlight = this.contentRepliesInFlight.get(id);
-    if (inFlight) return inFlight;
-    const sending = this.performSendProductAdvice(id).finally(() => {
-      if (this.contentRepliesInFlight.get(id) === sending) this.contentRepliesInFlight.delete(id);
-    });
-    this.contentRepliesInFlight.set(id, sending);
-    return sending;
-  }
-
-  private async performSendProductAdvice(id: string): Promise<OrderView> {
-    const view = await this.getOrThrow(id);
-    if (view.status === 'sent') return view;
-    const content = view.trace?.outbound;
-    // MOI intent tu van deu gui duoc, khong rieng `hoi_san_pham`: cau hoi bao hanh/cong no/van
-    // chuyen cung do agent soan tu tai lieu da duyet va cung phai den duoc khach.
-    // `needs_edit` duoc phep vi day la duong Sale BAM DUYET sau khi doc — khac auto-send.
-    if (view.intent === 'dat_don' || !content) {
-      throw new UnprocessableEntityException('Tin nay khong co noi dung tu van de gui');
-    }
-    if (view.status !== 'pending_review' && view.status !== 'needs_edit') {
-      throw new UnprocessableEntityException(
-        `Đơn ở trạng thái ${view.status}, không thể gửi tư vấn`,
-      );
-    }
-    const replyChannel = view.replyChannel ?? legacyReplyChannel();
-    if (!replyChannel) {
-      throw new UnprocessableEntityException('Thiếu kênh phản hồi, không thể gửi tư vấn');
-    }
-    const capabilities = this.outbound.capabilities(replyChannel);
-    const { images, ...withoutImages } = content;
-    const supported: OutboundContent = capabilities.image
-      ? { ...content, text: content.text + autoLabel() }
-      : {
-          ...withoutImages,
-          // Kênh không có API ảnh thật vẫn phải giữ locator cho khách, không được âm thầm làm mất
-          // asset. Video/PDF/catalog cũng theo cùng nguyên tắc URL.
-          text:
-            [content.text, ...(images ?? []).map((image) => `Ảnh sản phẩm: ${image.url}`)].join(
-              '\n',
-            ) + autoLabel(),
-        };
-    try {
-      await this.outbound.sendContent(replyChannel, view.chatId, supported, 'bot', {
-        quote: view.quoteTarget,
-      });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+    if (!this.turnReply) {
       throw new ServiceUnavailableException(
-        `Gửi tư vấn sản phẩm thất bại — giữ nguyên để thử lại. (${detail})`,
+        'Duong tra loi tu van chua duoc cau hinh (thieu capability turn-processing)',
       );
     }
-    const sent = (await this.repo.update(id, { status: 'sent' }))!;
-    this.events?.emit({ type: 'order.updated', order: sent });
-    return sent;
+    return this.turnReply.sendAdviceReply(id);
   }
 
   private async performSendConfirmation(id: string): Promise<OrderView> {
@@ -448,12 +398,18 @@ export class OrdersService {
   }
 
   private decide(
-    point: DecisionPoint,
+    point: DecisionPointOf<typeof SALES_ORDER_DECISIONS>,
     outcome: DecisionOutcome,
     reason: ManualApproveReason | ManualRejectReason | SalesHandoffReason,
     detail?: Readonly<Record<string, unknown>>,
   ): void {
-    this.telemetry?.decision({ point, outcome, reason, ...(detail ? { detail } : {}) });
+    this.telemetry?.decision({
+      vocabulary: SALES_ORDER_DECISIONS,
+      point,
+      outcome,
+      reason,
+      ...(detail ? { detail } : {}),
+    });
   }
 
   /**
@@ -503,10 +459,4 @@ export class OrdersService {
       );
     }
   }
-}
-
-/** Don cu chua co replyChannel chi duoc suy ra khi runtime KHONG phai hybrid. */
-function legacyReplyChannel(): ReplyChannel | undefined {
-  const mode = loadEnv().CHANNEL_MODE;
-  return mode === 'hybrid' ? undefined : mode;
 }

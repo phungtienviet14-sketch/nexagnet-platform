@@ -151,16 +151,24 @@ Một lượt chạy 50 hàm vẫn chỉ nên nhìn ra **5–15 bước**. Quy t
 
 ```ts
 // SAI — không lọc được, hai người viết hai câu khác nhau cho cùng một lý do
-telemetry.decision({ point, outcome: 'denied', reason: 'đơn quá lớn nên không gửi' });
+telemetry.decision({ vocabulary, point, outcome: 'denied', reason: 'đơn quá lớn nên không gửi' });
 
-// ĐÚNG — thêm mã vào apps/api/src/observability/decision-reasons.ts trước
+// ĐÚNG — thêm mã vào BỘ TỪ VỰNG CỦA CAPABILITY SỞ HỮU trước
+// (vd apps/api/src/orders/sales-order-decisions.ts), rồi truyền chính bộ đó vào.
 telemetry.decision({
+  vocabulary: SALES_ORDER_DECISIONS,
   point: 'order.auto_confirm',
   outcome: 'denied',
   reason: 'QUANTITY_ABOVE_THRESHOLD',
   detail: { totalQuantity, threshold },
 });
 ```
+
+Từ vựng quyết định thuộc **capability**, không thuộc nền tảng: `observability/decision-vocabulary.ts`
+chỉ giữ khuôn (`DecisionOutcome`, `defineDecisionVocabulary`, sổ nhãn) và **không được nhắc một
+thuật ngữ nghiệp vụ nào** — có test khoá điều đó. Mỗi capability giữ một tệp `*-decisions.ts` trong
+thư mục của chính nó (`turns/turn-decisions.ts`, `orders/sales-order-decisions.ts`,
+`channels/channel-decisions.ts`).
 
 Một cổng nghiệp vụ có N đường từ chối phải phân biệt được **N lý do**, không gộp thành một
 `boolean`. Mẫu tham chiếu: `evaluateAutoConfirm()` trong

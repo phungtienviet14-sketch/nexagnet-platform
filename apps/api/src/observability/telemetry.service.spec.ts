@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { TelemetryService } from './telemetry.service.js';
 import type { TelemetryRecord, TelemetrySink } from './telemetry-record.js';
 import { parseTraceparent, toTraceparent } from './trace-context.js';
+import { TURN_DECISIONS } from '../turns/turn-decisions.js';
+import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
 
 /** Sink thu — giu lai ban ghi trong bo nho de khang dinh. */
 class RecordingSink implements TelemetrySink {
@@ -40,6 +42,7 @@ describe('TelemetryService — mot soi chi xuyen suot', () => {
     await telemetry.runTurn({ chatId: 'nhom-1' }, async () => {
       await telemetry.step('message.intake', async () => undefined);
       telemetry.decision({
+        vocabulary: SALES_ORDER_DECISIONS,
         point: 'order.auto_confirm',
         outcome: 'denied',
         reason: 'QUANTITY_ABOVE_THRESHOLD',
@@ -78,6 +81,7 @@ describe('TelemetryService — mot soi chi xuyen suot', () => {
       await (async () => {
         await (async () => {
           telemetry.decision({
+            vocabulary: TURN_DECISIONS,
             point: 'message.intake',
             outcome: 'allowed',
             reason: 'ACCEPTED',
@@ -99,7 +103,7 @@ describe('TelemetryService — mot soi chi xuyen suot', () => {
         telemetry.runTurn({ chatId }, async () => {
           await new Promise((resolve) => setTimeout(resolve, Math.random() * 5));
           telemetry.enrich({ orderId: `don-${chatId}` });
-          telemetry.decision({ point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
+          telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
         }),
       ),
     );
@@ -118,7 +122,7 @@ describe('TelemetryService — mot soi chi xuyen suot', () => {
     await telemetry.runTurn({ chatId: 'nhom-1' }, async () => {
       telemetry.enrich({ intent: 'dat_don' });
       telemetry.enrich({ orderId: 'don-9' });
-      telemetry.decision({ point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
+      telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
     });
 
     const { anchors } = sink.records[0]!;
@@ -177,7 +181,7 @@ describe('TelemetryService — mot soi chi xuyen suot', () => {
 
     await telemetry.runTurn({}, async () => {
       await telemetry.step('agent.run', async () => {
-        telemetry.decision({ point: 'advisor.compose', outcome: 'allowed', reason: 'COMPOSED' });
+        telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'advisor.compose', outcome: 'allowed', reason: 'COMPOSED' });
       });
     });
 
@@ -235,6 +239,7 @@ describe('TelemetryService — quyet dinh, trang thai, thay doi du lieu', () => 
 
     await telemetry.runTurn({}, async () => {
       telemetry.decision({
+        vocabulary: TURN_DECISIONS,
         point: 'advice.auto_reply',
         outcome: 'denied',
         reason: 'COMPOSER_DISABLED',
@@ -382,7 +387,7 @@ describe('TelemetryService — FAIL-OPEN (muc 20)', () => {
     const telemetry = telemetryWith([new BrokenSink(), healthy, new BrokenSink()]);
 
     await telemetry.runTurn({}, async () => {
-      telemetry.decision({ point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
+      telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' });
     });
 
     expect(healthy.records).toHaveLength(1);
@@ -393,7 +398,7 @@ describe('TelemetryService — FAIL-OPEN (muc 20)', () => {
 
     await telemetry.runTurn({}, async () => {
       expect(() =>
-        telemetry.decision({ point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' }),
+        telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' }),
       ).not.toThrow();
       expect(() =>
         telemetry.stateChange({ entity: 'Order', entityId: 'x', from: 'a', to: 'b' }),
@@ -439,7 +444,7 @@ describe('TelemetryService — FAIL-OPEN (muc 20)', () => {
     const telemetry = telemetryWith([sink]);
 
     expect(() =>
-      telemetry.decision({ point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' }),
+      telemetry.decision({ vocabulary: TURN_DECISIONS, point: 'message.intake', outcome: 'allowed', reason: 'ACCEPTED' }),
     ).not.toThrow();
     expect(sink.records[0]!.traceId).toBe('no-trace');
   });

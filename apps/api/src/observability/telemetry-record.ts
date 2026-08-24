@@ -1,4 +1,4 @@
-import type { DecisionOutcome, DecisionPoint } from './decision-reasons.js';
+import type { DecisionOutcome } from './decision-vocabulary.js';
 import type { SanitizedValue } from './telemetry-redaction.js';
 
 /**
@@ -48,7 +48,13 @@ export interface StepRecord extends TelemetryBase {
  */
 export interface DecisionRecord extends TelemetryBase {
   readonly type: 'decision';
-  readonly point: DecisionPoint;
+  /**
+   * `<mien>.<viec>` — de MO co chu y: ban ghi nay la mot phong bi da serialize ma trace viewer
+   * doc, va no phai nhan duoc diem quyet dinh cua BAT KY capability nao (ke ca mot capability
+   * ke toan them sau). Cong CO KIEU nam o luc phat: `telemetry.decision()` chi nhan `point`
+   * thuoc bo tu vung duoc truyen vao.
+   */
+  readonly point: string;
   readonly outcome: DecisionOutcome;
   readonly reason: string;
   /** So lieu lam ro quyet dinh (nguong, tong so luong…). KHONG dung de ke chuyen. */

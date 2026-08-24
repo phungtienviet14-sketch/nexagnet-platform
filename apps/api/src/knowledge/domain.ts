@@ -75,7 +75,14 @@ export interface Dealer {
 export interface GroupMap {
   /** external_id nhom Zalo (vd zgr-...) */
   chatId: string;
-  dealerId: string;
+  /**
+   * Dai ly gan voi nhom — RANG BUOC CUA SALES-ORDER, khong phai cua nhom.
+   *
+   * Vang mat o khach khong ban hang, va da vang mat tu truoc trong Postgres (nhom `pending` co
+   * `dealerId = null`; `prisma-knowledge.repository.ts` dang ep kieu de che dieu do). Ben doc
+   * phai coi "khong co dai ly" la mot trang thai HOP LE — `DEALER_UNKNOWN` da la mot ma ly do.
+   */
+  dealerId?: string;
   branch: string;
   /** Ten hien thi nhom (UI feed + bo chon nhom khi demo) */
   name: string;

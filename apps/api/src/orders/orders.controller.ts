@@ -80,14 +80,3 @@ export class OrdersController {
     return this.orders.completeSalesHandoff(id, operatorOf(request, fallbackActor));
   }
 }
-
-@Roles('SALE', 'MANAGER', 'ACCOUNTING', 'ADMIN')
-@Controller('messages')
-export class MessagesController {
-  constructor(private readonly orders: OrdersService) {}
-
-  @Get()
-  list(): Promise<OrderView[]> {
-    return this.orders.listMessages();
-  }
-}

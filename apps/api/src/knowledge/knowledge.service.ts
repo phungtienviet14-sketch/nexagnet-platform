@@ -144,7 +144,9 @@ export class KnowledgeService implements OnModuleInit {
     return this.snapshot.groups;
   }
 
-  findDealerById(id: string): Dealer | null {
+  /** `undefined` la dau vao HOP LE: nhom chua gan dai ly (hoac khach khong ban hang) -> null. */
+  findDealerById(id: string | undefined): Dealer | null {
+    if (!id) return null;
     return this.snapshot.dealers.find((d) => d.id === id) ?? null;
   }
 

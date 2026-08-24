@@ -1,5 +1,5 @@
 import type { OrderView, SenderType } from '@netviet/shared';
-import { tenantRetailAdvice } from '@netviet/tenant';
+import { tenantRetailAdviceOrNull } from '@netviet/tenant';
 import { POLICY_LABELS, quotePriceField, quoteQualifier } from '../agents/risk-rules.js';
 import type { ContentService } from '../content/content.service.js';
 import type { KnowledgeService, ResolvedGroup } from '../knowledge/knowledge.service.js';
@@ -228,7 +228,12 @@ function findDocs(sku: string, question: string, ctx: AdvisorToolContext): Advis
 }
 
 function quote(skus: readonly string[], ctx: AdvisorToolContext): AdvisorToolResult {
-  const strategy = tenantRetailAdvice();
+  const strategy = tenantRetailAdviceOrNull();
+  // Khach khong ban hang khong co chien luoc bao gia nao — tra ve mot ket qua NOI RO dieu do, de
+  // LLM khong bia ra mot con so, thay vi nem giua mot vong goi cong cu.
+  if (!strategy) {
+    return { bao_gia: [], loi: 'Goi khach nay khong co bang gia ban le de tra cuu' };
+  }
   const field = quotePriceField(strategy, ctx.senderType);
   const prices = ctx.knowledge.prices();
   const products = ctx.knowledge.products();

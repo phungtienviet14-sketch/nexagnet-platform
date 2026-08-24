@@ -7,6 +7,7 @@ import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { FakeParser } from './__tests__/fake-parser.js';
 import { PipelineService } from './pipeline.service.js';
 
@@ -18,11 +19,12 @@ function build() {
   const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
   const repo = new InMemoryOrdersRepository();
   const orchestrator = new AgentOrchestrator(new FakeParser(), knowledge, repo);
-  const pipeline = new PipelineService(orchestrator);
   const adapter = new MockAdapter();
   const zcaAdapter = new MockAdapter();
   const outbound = new OutboundChannelRouter(adapter, zcaAdapter, new MockAdapter());
-  const orders = new OrdersService(repo, outbound);
+  const turnReply = new TurnReplyService(repo, outbound);
+  const pipeline = new PipelineService(orchestrator);
+  const orders = new OrdersService(repo, outbound, undefined, undefined, undefined, turnReply);
   return { pipeline, orders, adapter, zcaAdapter };
 }
 

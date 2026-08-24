@@ -1,5 +1,5 @@
 import type { TraceNode, TraceNodeOutcome, TraceView } from '@netviet/shared';
-import { decisionReasonLabel } from './decision-reasons.js';
+import { decisionReasonLabel } from './decision-vocabulary.js';
 import type { TelemetryRecord } from './telemetry-record.js';
 import type { StoredTrace } from './recent-traces.sink.js';
 

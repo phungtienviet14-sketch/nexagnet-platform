@@ -5,10 +5,7 @@ import {
   type TenantConfig,
 } from '@netviet/tenant';
 import { describe, expect, it } from 'vitest';
-import {
-  EXPERIENCE_REGISTRY,
-  resolveExperience,
-} from '../experiences/experience-registry';
+import { EXPERIENCE_REGISTRY, resolveExperience } from '../experiences/experience-registry';
 import {
   resolveActiveSettingsTab,
   selectSettingsTabIds,
@@ -33,6 +30,7 @@ const operationsTenant = {
   capabilities: [
     'knowledge',
     'messaging',
+    'turn-processing',
     'sales-order',
     'campaign',
     'operations',
@@ -64,7 +62,7 @@ const operationsTenant = {
   },
   persona: {
     messaging: { botName: 'Fixture Bot', mentionName: 'Fixture Bot' },
-    salesOrder: { parserIntro: 'Fixture parser' },
+    turnProcessing: { parserIntro: 'Fixture parser' },
     knowledge: { productFallbackDescription: 'Fixture product' },
   },
   bootstrap: {
@@ -101,7 +99,7 @@ const workforceTenant = {
 const leanOperationsTenant = {
   ...operationsTenant,
   slug: 'fixture-lean-operations',
-  capabilities: ['knowledge', 'messaging', 'sales-order', 'operations'],
+  capabilities: ['knowledge', 'messaging', 'turn-processing', 'sales-order', 'operations'],
   policies: {
     salesOrder: operationsTenant.policies.salesOrder,
     readiness: { blockedCapabilities: [] },
@@ -188,7 +186,17 @@ describe('settings composition', () => {
     const tabs = selectSettingsTabIds(toPublicTenantDescriptor(workforceTenant));
 
     expect(tabs).toEqual(['content', 'readiness', 'users', 'audit']);
-    expect(tabs).not.toEqual(expect.arrayContaining(['zalo', 'members', 'source-truth', 'rules', 'campaigns', 'automation', 'notifications']));
+    expect(tabs).not.toEqual(
+      expect.arrayContaining([
+        'zalo',
+        'members',
+        'source-truth',
+        'rules',
+        'campaigns',
+        'automation',
+        'notifications',
+      ]),
+    );
   });
 
   it('chooses the first visible panel when Zalo or a requested tab is unavailable', () => {

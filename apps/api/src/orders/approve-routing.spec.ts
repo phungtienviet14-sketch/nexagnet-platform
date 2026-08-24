@@ -4,6 +4,7 @@ import type { AgentTrace, OrderView, PricedOrder } from '@netviet/shared';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryOrdersRepository } from './orders.repository.js';
+import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { OrdersService } from './orders.service.js';
 
 /**
@@ -31,7 +32,12 @@ function build() {
   const repo = new InMemoryOrdersRepository();
   const outbound = new MockAdapter();
   const router = new OutboundChannelRouter(new MockAdapter(), new MockAdapter(), outbound);
-  return { orders: new OrdersService(repo, router), repo, outbound };
+  const turnReply = new TurnReplyService(repo, router);
+  return {
+    orders: new OrdersService(repo, router, undefined, undefined, undefined, turnReply),
+    repo,
+    outbound,
+  };
 }
 
 function baseView(patch: Partial<OrderView>): OrderView {

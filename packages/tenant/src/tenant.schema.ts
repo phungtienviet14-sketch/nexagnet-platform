@@ -79,6 +79,15 @@ export const CONTENT_SOURCE_ADAPTERS = ['local_manifest', 'google_drive'] as con
 export const CAPABILITY_IDS = [
   'knowledge',
   'messaging',
+  /**
+   * XU LY MOT LUOT — trung tinh ve nghiep vu: nhan mot tin, dung ngu canh, goi AI phan loai y
+   * dinh + trich xuat, roi dinh tuyen ket qua. KHONG biet gia, don hay ERP.
+   *
+   * Tach khoi `sales-order` ngay 24/08/2026: truoc do mot khach chi muon tra loi tin nhan phai
+   * bat ca `sales-order`, tuc phai khai bang gia, dai ly va chinh sach ban hang cho mot viec
+   * khong lien quan gi den ban hang.
+   */
+  'turn-processing',
   'sales-order',
   'campaign',
   'operations',
@@ -215,7 +224,8 @@ const tenantIntegrationsSchema = z
 const tenantPersonaSchema = z
   .object({
     messaging: z.object({ botName: nonEmpty, mentionName: nonEmpty }).strict().optional(),
-    salesOrder: z.object({ parserIntro: nonEmpty }).strict().optional(),
+    /** Loi mo dau prompt parser. Thuoc turn-processing: parser chay ca khi khach khong ban gi. */
+    turnProcessing: z.object({ parserIntro: nonEmpty }).strict().optional(),
     knowledge: z.object({ productFallbackDescription: nonEmpty }).strict().optional(),
   })
   .strict();
@@ -223,11 +233,18 @@ const tenantPersonaSchema = z
 const capabilityRequirements = {
   knowledge: { dependencies: [] },
   messaging: { dependencies: [], integration: 'channel', persona: 'messaging' },
-  'sales-order': {
+  'turn-processing': {
     dependencies: ['knowledge', 'messaging'],
     integration: 'parser',
+    persona: 'turnProcessing',
+  },
+  /**
+   * `sales-order` la mot NGUOI DUNG cua turn-processing, khong phai chu cua no. Quan he phu
+   * thuoc di dung mot chieu: ban hang can duong xu ly luot, duong xu ly luot khong can ban hang.
+   */
+  'sales-order': {
+    dependencies: ['knowledge', 'messaging', 'turn-processing'],
     policy: 'salesOrder',
-    persona: 'salesOrder',
   },
   campaign: { dependencies: ['messaging'], policy: 'campaign' },
   operations: { dependencies: [] },
@@ -243,7 +260,7 @@ const capabilityRequirements = {
 >;
 
 export const EXPERIENCE_REQUIREMENTS = {
-  'operations-console': ['knowledge', 'messaging', 'sales-order', 'operations'],
+  'operations-console': ['knowledge', 'messaging', 'turn-processing', 'sales-order', 'operations'],
   'knowledge-workspace': ['knowledge'],
   'agent-workforce': ['knowledge', 'operations'],
 } as const satisfies Record<
@@ -268,7 +285,10 @@ export const tenantConfigSchema = z
         /** Tai nguyen logo cong khai duoc dong goi cung app; chi chap nhan duong dan tuyet doi an toan. */
         logoPath: z
           .string()
-          .regex(/^\/[A-Za-z0-9][A-Za-z0-9._/-]*$/, 'logoPath: phai la duong dan public bat dau bang /')
+          .regex(
+            /^\/[A-Za-z0-9][A-Za-z0-9._/-]*$/,
+            'logoPath: phai la duong dan public bat dau bang /',
+          )
           .refine(
             (path) => !path.split('/').some((segment) => segment === '..'),
             'logoPath: khong duoc chua thanh phan ..',
@@ -430,8 +450,17 @@ export const knowledgeSnapshotSchema = z.object({
       defaultPolicy: z.enum(POLICY_TYPES),
     }),
   ),
+  /**
+   * Nhom duoc phep xu ly. `dealerId` la RANG BUOC CUA SALES-ORDER, khong phai cua nhom: mot khach
+   * khong ban hang van co nhom can doc, va Prisma da cho `dealerId` null tu truoc (nhom `pending`).
+   */
   groups: z.array(
-    z.object({ chatId: nonEmpty, dealerId: nonEmpty, branch: z.string(), name: z.string() }),
+    z.object({
+      chatId: nonEmpty,
+      dealerId: nonEmpty.optional(),
+      branch: z.string(),
+      name: z.string(),
+    }),
   ),
   glossary: z.array(z.object({ term: nonEmpty, meaning: nonEmpty })),
 });
@@ -455,6 +484,10 @@ export const knowledgeOnlySnapshotSchema = z
       )
       .default([]),
     glossary: z.array(z.object({ term: nonEmpty, meaning: nonEmpty })).default([]),
+    /** Danh sach nhom duoc phep dua noi dung sang LLM — cong PII, khong phai map dai ly. */
+    groups: z
+      .array(z.object({ chatId: nonEmpty, name: z.string(), branch: z.string().default('') }))
+      .default([]),
   })
   .strict();
 

@@ -38,7 +38,8 @@ export class SettingsQueryService {
       zcaState: zcaStatus?.state ?? 'unavailable',
       botIdentity: this.botIdentity?.status() ?? { state: 'disabled' as const },
       autoSend: { enabled: this.runtime.autoSend() === 'on' },
-      // `tenantOrderAutomation()` assert nang luc `sales-order` va NEM neu khach khong bat.
+      // `tenantOrderAutomation()` tra `null` khi khach khong bat `sales-order`; giu phep kiem
+      // nang luc o day cho ro y DOC — console khong hien o "tu xac nhan" cho khach khong ban gi.
       // Trang /settings cua khach chi co `operations` van phai tra loi duoc, nen hoi truoc.
       orderAutomation: tenantHasCapability('sales-order') ? tenantOrderAutomation() : null,
       businessBlockers: tenantReadiness().blockedCapabilities,
