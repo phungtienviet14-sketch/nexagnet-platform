@@ -1207,16 +1207,56 @@ có `decision=order.auto_confirm outcome=denied reason=KILL_SWITCH_OFF`.
 
 ### 46.13 Nợ mang sang phiên sau
 
-1. **`bootstrap-workflow-engine.sh` trên VM đang KHÁC `main`.** Bản đã sửa được `scp` thẳng lên VM
-   (quyết định của người trong phiên này) vì pre-push đỏ. `deploy-ci.sh:165` đóng gói cả
-   `deploy/netviet/` ⇒ **lần deploy kế tiếp sẽ ghi đè bản cũ (hỏng) lên VM**. Token đã có nên vô hại
-   ngay, nhưng ai chạy lại bootstrap sẽ gặp exit 1 (`secrets.create` DENIED) — **hỏng ồn ào, không
-   âm thầm đúc trùng**. **Phải merge để đóng hẳn.**
-2. **Chưa push**: `441b83a` (tài liệu §45) + các sửa của phiên này. Pre-push đỏ vì **7 lỗi
-   `no-unused-vars` trong `apps/mini/`** (việc song song, untracked): `App.tsx`, `AgentTimeline.tsx`,
-   `ActivityPage.tsx`, `OrderDetailPage.tsx`, `ProfilePage.tsx`.
+1. ~~`bootstrap-workflow-engine.sh` trên VM khác `main`~~ — **ĐÃ ĐÓNG, xem §46.14.**
+2. ~~Chưa push~~ — **ĐÃ ĐÓNG**: PR #34 merge, xem §46.14. `apps/mini/` vẫn còn 7 lỗi
+   `no-unused-vars` (`App.tsx`, `AgentTimeline.tsx`, `ActivityPage.tsx`, `OrderDetailPage.tsx`,
+   `ProfilePage.tsx`) — **không sửa**, là việc của phiên song song.
 3. **`RUN_WORKFLOW_IT` vẫn CHƯA nối vào `ci.yml`** — 24 bài IT trên Hatchet thật vẫn bị skip.
    **"CI xanh" KHÔNG chứng minh chúng.** Câu này vẫn phải đi kèm mọi lần trích dẫn "CI xanh".
 4. **`optional_secret` + lớp gọi probe của preflight** nên phân biệt "chưa tạo" / "không có quyền" /
    "không hỏi được". Đã tốn **hai** vòng deploy vì đúng lỗi lớp này (§45.4 và §46.6).
 5. **Smoke của deploy phụ thuộc LLM không tất định** (§46.7).
+
+
+## 46.14 Khép vòng — merge PR #34, deploy lại, **hash VM == `main`**
+
+| Mốc | Giá trị |
+|---|---|
+| Push | `19f720e..9ceecf5` bằng `ECC_SKIP_PREPUSH=1` **sau scoped validation** (quyết định của người) |
+| Scoped validation | `bash -n` · `eslint` tệp TS · PowerShell parse `deploy.ps1` · `tsc --noEmit` apps/api · hợp đồng **22/48/23** — tất cả sạch |
+| PR | **#34**, CI **6/6 pass** |
+| Merge SHA | **`51f9da8e270372369ddace2028e8b6a474c2820a`** (2 cha `302d5b1e` + `9ceecf5`) |
+| CI trên merge SHA | run `32682923163` = **success** |
+| Nhánh | `feat/hoi-thoai-chot-don-main` **còn sống** ở `9ceecf5` |
+| Deploy | run **`32683218604`** trên `51f9da8e` = **success** |
+
+### Bằng chứng đã từng lệch thật — và nó lệch đúng như dự đoán
+
+Trước khi merge, đo hai đầu:
+
+```
+VM        dfd40067...  6370 byte
+origin/main dfd40067...  6370 byte   <- KHỬP NHAU, cả hai đều là bản HỎcNG
+bản đã sửa 4a4aa21d...  9386 byte
+```
+
+Tức là deploy thành công lúc 01:32–01:47 **đã ghi đè bản `scp` bằng bản cũ của `main`** —
+đúng cái `deploy-ci.sh:165` được cảnh báo. Token vẫn hợp lệ vì nó được đúc lúc **01:00Z**, *trước*
+lần ghi đè đó.
+
+Sau merge + deploy:
+
+```
+VM        4a4aa21d283756a4c1b60e21021ed370f134349459fa81f8a661044101bbd635  9386 byte
+main      4a4aa21d283756a4c1b60e21021ed370f134349459fa81f8a661044101bbd635  9386 byte   ✅ KHỬP
+```
+
+### Chạy thử bản đến QUA PIPELINE DEPLOY
+
+```
+Secret zalo-ultty-gd1-test-workflow-engine-token da co version — KHONG duc token moi.   exit 0
+versions list -> 1 enabled
+```
+
+⇒ Cổng idempotent hoạt động trên bản **do chính pipeline mang lên**, không phải bản chép tay.
+Container sau deploy: 8/8 healthy. `AUTO_SEND=off` · `WORKFLOW_ENGINE=on`.
