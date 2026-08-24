@@ -30,8 +30,20 @@ import { dirname, join } from 'node:path';
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
-const compose = readFileSync(join(here, 'compose.yaml'), 'utf8');
-const renderSecrets = readFileSync(join(here, 'render-secrets.sh'), 'utf8');
+
+/**
+ * Doc mot tep cau hinh va BO ky tu CR.
+ *
+ * Moi phep khang dinh ben duoi cat theo dong hoac neo `^...$`. Tren may Windows cac tep nay
+ * duoc checkout dang CRLF, nen mot ky tu CR treo o cuoi moi dong lam LECH het: bai kiem bao
+ * "THIEU_SERVICE:hatchet-engine" trong khi service do co that. Do la canh bao GIA — dung loai
+ * loi ma ca tep nay duoc viet ra de chan — va no chi xuat hien tren may dev, khong tren runner.
+ */
+const readConfig = (name) =>
+  readFileSync(join(here, name), 'utf8').replaceAll(String.fromCharCode(13), '');
+
+const compose = readConfig('compose.yaml');
+const renderSecrets = readConfig('render-secrets.sh');
 
 /** Cac service thuoc cum workflow — chung chia chung mot bo luat cach ly. */
 const ENGINE_SIDE = ['hatchet-postgres', 'hatchet-engine'];
@@ -231,7 +243,7 @@ test('route dashboard chi duoc phat khi cong tac BAT, va phai co cong xac thuc',
   // Phat vo dieu kien = moi khach moc them mot hostname cong khai tra 502, va Caddy di xin chung
   // chi ACME cho mot ten khong phuc vu gi.
   const before = renderSecrets.slice(0, routeAt);
-  const guardAt = before.lastIndexOf("if [[ \"${WORKFLOW_ENGINE}\" == 'on' ]]; then");
+  const guardAt = before.lastIndexOf('if [[ "${WORKFLOW_ENGINE}" == \'on\' ]]; then');
   assert.notEqual(guardAt, -1, 'route dashboard khong nam trong nhanh `WORKFLOW_ENGINE == on`');
   assert.equal(
     before.slice(guardAt).includes('\nfi\n'),
@@ -253,7 +265,7 @@ test('cong tac CHI duoc bat cho gd1-test — production khong the bat nham', () 
   // "go nham ten moi truong luc deploy": `tenants/ultty/tenant.json` dung chung cho ca hai stack,
   // nen mot lan `WORKFLOW_ENGINE=on ./render-secrets.sh` chay nham vao production se vu trang
   // dispatcher tren stack that cua khach — noi khong co engine nao de goi.
-  const guardAt = renderSecrets.indexOf("if [[ \"${WORKFLOW_ENGINE}\" == 'on' ]]; then");
+  const guardAt = renderSecrets.indexOf('if [[ "${WORKFLOW_ENGINE}" == \'on\' ]]; then');
   assert.notEqual(guardAt, -1, 'khong tim thay nhanh bat cong tac');
 
   // Cai chan phai nam NGAY trong nhanh do, TRUOC moi thu khac — ke ca truoc cac kiem tra secret.
@@ -319,12 +331,17 @@ test('mac dinh cua nut bam CI la `off`, khong phai `on`', () => {
   assert.match(dispatch.slice(at, at + 700), /default: 'off'/);
 });
 
-
 // ============================== CI PHAI THAT SU CHAY 24 BAI IT DO, KHONG CHI CO MOT JOB TEN DEP
 
 /** Cat mot job ra khoi `ci.yml` de khang dinh nam DUNG trong job do, khong bat nham job ben canh. */
 function ciJobBlock(name) {
-  const ci = readFileSync(join(here, '../../.github/workflows/ci.yml'), 'utf8');
+  // Bo ky tu CR TRUOC khi tim. Tren may Windows `ci.yml` duoc checkout dang CRLF, nen phep tim
+  // mot khoi job theo ky tu xuong dong khong bao gio khop, va bai nay bao "ci.yml khong con
+  // job <ten>" — mot CANH BAO GIA, dung loai loi ma ca tep nay duoc viet ra de chan.
+  const ci = readFileSync(join(here, '../../.github/workflows/ci.yml'), 'utf8').replaceAll(
+    String.fromCharCode(13),
+    '',
+  );
   const start = ci.indexOf(`\n  ${name}:\n`);
   assert.notEqual(start, -1, `ci.yml khong con job \`${name}\``);
   const rest = ci.slice(start + 1);
