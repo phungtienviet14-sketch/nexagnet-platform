@@ -127,6 +127,34 @@ describe.skipIf(!RUN_IT)('readiness cua worker tren engine THAT', () => {
       expect(ready.body.registrationMs).toBeGreaterThan(0);
       registrationSamples.push(ready.body.registrationMs!);
 
+      // CHO poller thay 200, DUNG tat no roi hy vong no da kip thay.
+      //
+      // ---------------------------------------------------------------------------
+      // DAY LA MOT LOI DUA DA LAM CI DO THAT (24/08/2026, job `workflow-integration`, lan chay
+      // dau tien): `expected false to be true` o dung dong `startsWith('200')` — TRONG KHI loi
+      // goi truc tiep ngay tren no da tra 200. Tuc `/ready` khong he sai; PHEP DO sai.
+      //
+      // Co che, doc tu code chu khong doan:
+      //   1. adapter in `READY workflow=...` NGAY SAU `waitUntilReady()`
+      //      (`hatchet-workflow-worker.adapter.ts:185`)
+      //   2. `WorkflowWorkerService.start()` moi goi `lifecycle.ready()` — tuc `/ready` chi lat
+      //      sang 200 SAU dong log o buoc 1
+      //   3. `WorkerProcess.start()` cua harness cho dong log do bang `waitFor`, nhip **250 ms**
+      //
+      // Nen luc `start()` tra ve, cua so con lai de poller (nhip 150 ms) bat duoc mot mau 200
+      // chi la 0-250 ms. Bai kiem dang bao poller chay dua voi chinh dong `polling = false` ngay
+      // duoi no — va khong co gi bao dam no thang. Tren may dev no thang; tren runner no thua.
+      //
+      // Cho co thoi han thi phep do VAN do dung che do hong that (`/ready` KHONG BAO GIO bao 200
+      // qua duong lay mau), ma khong con phu thuoc vao viec ai chay nhanh hon ai.
+      await waitFor(
+        () => observed.some((sample) => sample.startsWith('200')),
+        30_000,
+        () =>
+          '`/ready` khong bao gio tra 200 qua duong LAY MAU du loi goi truc tiep da 200. ' +
+          `10 mau cuoi: ${JSON.stringify(observed.slice(-10))}`,
+      );
+
       polling = false;
       await poller;
 

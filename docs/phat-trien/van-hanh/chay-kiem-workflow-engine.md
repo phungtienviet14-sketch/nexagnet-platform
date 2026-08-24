@@ -62,10 +62,16 @@ gh run view <run-id>
 | `audit` | lỗ hổng phụ thuộc mức cao |
 | `images` | hai Dockerfile build được, và image **không chứa dữ liệu khách nào** |
 
-**Cổng `workflow-integration` chạy lâu hơn hẳn các cổng khác** — trên máy dev là ~9,5 phút, trên CI
-còn thêm thời gian tải ảnh Docker. Đó là **bình thường**: một trong các bài cố ý tắt engine rồi bật
-lại và chờ nó phục hồi; chờ là chính nội dung của phép đo. Thời hạn của cổng đặt ở 60 phút, rộng có
-chủ đích.
+**Cổng `workflow-integration` chạy lâu hơn hẳn các cổng khác.** Số đo thật:
+
+| Nơi chạy | Thời gian bộ IT |
+|---|---:|
+| Runner GitHub (24/08/2026, lần chạy đầu) | **279 s** |
+| Máy dev Windows + Docker Desktop | **570 s** |
+
+Runner **nhanh gấp đôi máy dev** — nên nếu thấy nó lâu hơn nhiều, đó là tín hiệu chứ không phải
+chuyện thường. Chờ là chính nội dung của phép đo: một trong các bài cố ý tắt engine rồi bật lại rồi
+chờ nó phục hồi. Thời hạn của cổng đặt ở 60 phút, rộng có chủ đích.
 
 ## 4. Chạy lại đúng thứ đó trên máy mình
 
@@ -96,7 +102,7 @@ token. Token **không hiện ra màn hình**, nó đi thẳng vào biến môi t
 RUN_PRISMA_IT=1 RUN_WORKFLOW_IT=1 WORKFLOW_ENGINE_HOST_PORT=127.0.0.1:7744 WORKFLOW_ENGINE_TLS_STRATEGY=none DATABASE_URL=postgresql://netviet:netviet_local@localhost:5432/netviet pnpm --filter @netviet/api exec vitest run src/workflow --no-file-parallelism
 ```
 
-Kết quả mong đợi (đo thật 24/08/2026, engine vừa dựng sạch):
+Kết quả mong đợi (đo thật 24/08/2026 trên máy dev, engine vừa dựng sạch):
 
 ```
 Test Files  22 passed (22)
@@ -168,7 +174,18 @@ rồi làm lại bước 2 và bước 3.
 Worker mất **6–38 giây** để đăng ký xong — biến động lớn, đo thật nhiều lần. Nếu bạn thấy ai đó
 định siết các thời hạn chờ cho "gọn", đó là đang biến một máy chậm thành một lỗi giả.
 
-### 6.4 Đỏ ở bước dựng engine
+### 6.4 Đỏ đúng một bài, còn 200 bài kia xanh
+
+Đọc **dòng khẳng định**, đừng đọc tên bài. Lần chạy CI đầu tiên (24/08/2026) đỏ đúng một bài
+`worker-readiness` với `expected false to be true` — trong khi chính bài đó, hai dòng phía trên, đã
+gọi `/ready` và **nhận 200**. Tức sản phẩm không sai; **phép đo** sai: nó bảo một vòng lấy mẫu chạy
+đua với dòng lệnh tắt chính nó, và trên máy dev thì nó thắng còn trên runner thì nó thua.
+
+Bài học dùng được: khi một bài đỏ mà **các khẳng định khác trong cùng bài lại nói ngược lại**, gần
+như chắc chắn là lỗi đua trong cách đo, không phải lỗi trong thứ được đo. Sửa bằng cách **chờ có
+thời hạn** cho tới khi điều kiện xảy ra, đừng nới lỏng khẳng định.
+
+### 6.5 Đỏ ở bước dựng engine
 
 Script sẽ in ra trạng thái container và 50 dòng log cuối của engine. Hai nguyên nhân thường gặp:
 Docker Desktop chưa chạy, hoặc cổng `7744`/`8744`/`5744` đang bị thứ khác chiếm.

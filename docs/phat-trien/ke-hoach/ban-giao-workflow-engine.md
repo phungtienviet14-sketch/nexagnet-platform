@@ -1297,6 +1297,7 @@ Nên phải là **một job riêng** với một lần gọi `vitest` riêng man
 | `tools/poc-workflow-engine/start-engine.sh` | **MỚI** — dựng cụm → đợi cổng 7744 (gRPC) **và 8744 (REST)** → đọc tenant theo `slug` → đúc token → in **duy nhất** token ra stdout |
 | `deploy/netviet/workflow-isolation.contract.test.mjs` | +2 bài (18→20): job phải có **đủ hai cờ** và `--no-file-parallelism`; và CI + script + 2 tệp IT phải trỏ **cùng một** cụm |
 | `docs/phat-trien/van-hanh/chay-kiem-workflow-engine.md` | **MỚI** — hướng dẫn cho người vận hành |
+| `apps/api/src/workflow/worker-readiness.int.spec.ts` | sửa **lỗi đua trong phép đo** mà chính lần chạy CI đầu tiên bắt được — xem §47.6 |
 | `ci-cd.md` · `deploy/netviet/README.md` · `tools/poc-workflow-engine/README.md` · `docs/phat-trien/README.md` | 6 job → **7 job**; POC **không còn xoá được**; đường chạy lại một dòng |
 
 ## 47.3 Ba phát hiện phải ghi lại, nếu không phiên sau sẽ vấp đúng chỗ
@@ -1319,7 +1320,7 @@ Còn `--wait` ứng xử với container một-lần (`migration`, `setup-config
 compose — dựa vào nó là đặt cược vào phiên bản compose của runner. Script tự đo độ sẵn sàng bằng
 **cổng** và bằng **dữ liệu** (`Tenant.slug = 'default'`), không bằng niềm tin.
 
-## 47.4 Bằng chứng — đo trên engine VỪA DỰNG SẠCH
+## 47.4 Bằng chứng trên MÁY DEV — engine vừa dựng sạch
 
 Theo đúng thủ tục §46: `down -v` → `up` → đúc token mới → đo. **Không** đo trên cụm đã chạy 18 giờ.
 
@@ -1374,14 +1375,69 @@ khiển. Đó chính là thứ hợp đồng mới canh.
 | đổi `-p pocwf` → `-p ci-workflow` trong `ci.yml` | 19 pass / **1 fail** |
 | khôi phục | **20 pass / 0 fail** |
 
-## 47.5 Điều bằng chứng này CHƯA nói
+## 47.5 Lần chạy CI thật đầu tiên — PR #36, run `32686705211`
 
-Số ở trên đo trên **máy dev Windows + Docker Desktop**, không phải trên runner GitHub. Nó chứng minh
-*chuỗi lệnh đúng và bộ kiểm xanh trên engine sạch*; nó **chưa** chứng minh runner Linux dựng được cụm
-trong hạn giờ. Con số đó chỉ có sau lần chạy CI thật đầu tiên — và đó là con số phải ghi vào đây ở
-phiên sau, chứ không phải ước lượng.
+Số của runner **đã có**, và nó khác dự đoán theo hướng tốt:
 
-## 47.6 Nợ mang sang phiên sau
+| | Máy dev (Windows + Docker Desktop) | Runner GitHub (ubuntu-24.04) |
+|---|---:|---:|
+| Bộ IT `src/workflow` tuần tự | **570,4 s** | **279,3 s** |
+
+Runner **nhanh gấp đôi máy dev**. `timeout-minutes: 60` do đó dư ~12 lần — giữ nguyên, vì con số
+6–38 s để worker đăng ký là con số **biến động**, không phải con số trung bình.
+
+Các bước hạ tầng của job đều **success ngay lần đầu**, kể cả cái rủi ro nhất:
+
+```
+Initialize containers            ✅   (Postgres 16 service)
+Apply migrations                 ✅
+Seed the source of truth         ✅
+Dung cum Hatchet va duc token    ✅   <- cụm Hatchet dựng được + token đúc được trên Linux
+Chay 24 bai IT ... TUAN TU       ❌   1 failed | 200 passed (201)
+Don cum Hatchet                  ✅   (`if: always()`, `down -v`)
+```
+
+Sáu job kia: `verify` · `integration` · `tenant-packs` · `e2e` · `audit` · `images` — **pass**.
+
+## 47.6 Bài đỏ duy nhất: một LỖI ĐUA TRONG PHÉP ĐO, không phải lỗi sản phẩm
+
+```
+FAIL src/workflow/worker-readiness.int.spec.ts
+  > cold start: `/ready` tra 503 SUOT luc dang ky, chi 200 khi engine da xac nhan
+  AssertionError: expected false to be true   (worker-readiness.int.spec.ts:137)
+```
+
+**Bằng chứng nó không phải lỗi sản phẩm nằm ngay trong chính bài đó:** dòng 123–127 —
+`expect(ready.status).toBe(200)`, `state === 'READY'`, `registrationMs > 0` — **đều pass**. Tức
+`/ready` có trả 200. Khẳng định 503 (dòng 136) cũng pass. Chỉ khẳng định *"vòng lấy mẫu nền cũng
+tình cờ bắt được một mẫu 200"* thất bại.
+
+Cơ chế, đọc từ code chứ không đoán:
+
+| # | Chuyện gì | Ở đâu |
+|---|---|---|
+| 1 | adapter in `READY workflow=…` ngay sau `waitUntilReady()` | `hatchet-workflow-worker.adapter.ts:185` |
+| 2 | **rồi mới** `lifecycle.ready()` → `/ready` lật sang 200 | `workflow-worker.service.ts:83` |
+| 3 | harness chờ dòng log ở bước 1 bằng `waitFor`, **nhịp 250 ms** | `workflow-it.harness.ts:329` |
+
+Nên lúc `worker.start()` trả về, cửa sổ còn lại để poller (nhịp 150 ms) bắt được một mẫu 200 chỉ là
+**0–250 ms** — rồi dòng `polling = false` ngay dưới nó tắt poller. Bài kiểm đang bảo poller **chạy
+đua với chính nó**. Trên máy dev nó thắng (đã chạy 3 lần đều xanh), trên runner nó thua.
+
+**Sửa: chờ có thời hạn, không nới lỏng khẳng định.** Thêm một `waitFor(… startsWith('200'), 30_000)`
+trước khi tắt poller. Chế độ hỏng thật — *`/ready` không bao giờ báo 200 qua đường lấy mẫu* — vẫn
+làm bài đỏ, kèm 10 mẫu cuối để đọc. Hai `expect` cuối **giữ nguyên**.
+
+> **Không** sửa sản phẩm ở đây, và đó là kết luận có căn cứ chứ không phải sự lười: khoảng 0–250 ms
+> ở bước 3 là **độ trễ phát hiện của harness**, không phải khoảng hở của sản phẩm — trong tiến trình
+> worker, `lifecycle.ready()` là câu lệnh kế tiếp ngay sau `await handle.start()`.
+
+## 47.7 Điều bằng chứng này VẪN CHƯA nói
+
+Bản sửa ở §47.6 mới được đo trên máy dev. Nó chỉ thực sự đóng khi **job `workflow-integration` xanh
+trên runner** — cùng cái runner đã bắt được lỗi đua này. Đừng ghi "xong" trước lần chạy đó.
+
+## 47.8 Nợ mang sang phiên sau
 
 1. ~~`RUN_WORKFLOW_IT` chưa nối vào `ci.yml`~~ — **ĐÓNG** (§47).
 2. **`optional_secret` + lớp gọi probe của preflight** gộp mất ba sự thật khác nhau ("chưa tạo" /
