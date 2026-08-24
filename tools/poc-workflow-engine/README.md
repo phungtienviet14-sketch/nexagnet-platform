@@ -4,11 +4,43 @@
 > Bằng chứng thô: [`evidence/poc-run-log.md`](evidence/poc-run-log.md)
 
 **Đây là POC, KHÔNG nằm trong đường chạy production.** Không file nào trong `apps/` hay
-`packages/` import thư mục này. Xoá cả thư mục là hết dấu vết.
+`packages/` import mã nguồn trong thư mục này.
+
+> ⚠️ **NHƯNG THƯ MỤC NÀY KHÔNG CÒN XOÁ ĐƯỢC.** Câu "xoá cả thư mục là hết dấu vết" đã **hết đúng**
+> từ 24/08/2026. Bốn chỗ ngoài POC trỏ vào đây bằng **đường dẫn ghi cứng**:
+>
+> | Nơi trỏ tới | Trỏ vào cái gì |
+> |---|---|
+> | `.github/workflows/ci.yml` — job `workflow-integration` | `start-engine.sh` + `compose/hatchet.compose.yml` |
+> | `apps/api/src/workflow/worker-readiness.int.spec.ts` | `docker compose -p pocwf … stop/start hatchet-engine` |
+> | `apps/api/src/workflow/workflow-recovery.int.spec.ts` | như trên |
+> | `deploy/netviet/workflow-isolation.contract.test.mjs` | canh cho ba chỗ trên **không lệch nhau** |
+>
+> Hai tệp `*.int.spec.ts` **điều khiển** cụm này để mô phỏng engine chết. Nếu CI hoặc test đổi sang
+> tên compose project khác, `docker compose start` sẽ im lặng không làm gì (project không tồn tại),
+> engine thật vẫn chạy, và bài "engine chết rồi sống lại" đỏ vì một lý do không liên quan đến code.
+> Muốn xoá/di chuyển thư mục này thì phải sửa **cả bốn** chỗ trong cùng một commit.
+>
+> Cụm ở đây là engine của **máy dev và của CI** — không phải cụm production. Cụm production nằm ở
+> `deploy/netviet/compose.yaml` sau `--profile workflow`, cổng **không** phát ra host, và nó có
+> script đúc token riêng (`deploy/netviet/bootstrap-workflow-engine.sh`) fail-closed.
 
 Cài bằng `pnpm install --ignore-workspace` nên **`pnpm-lock.yaml` gốc của repo không bị đổi**.
 
-## Chạy lại từ đầu
+## Dựng cụm + đúc token — MỘT dòng
+
+`start-engine.sh` làm cả ba việc (dựng cụm → đợi cổng mở → đúc token) và in **duy nhất** token ra
+stdout. Đây là **đúng script CI chạy**, nên chạy lại nó trên máy mình là tái hiện được CI:
+
+```bash
+export WORKFLOW_ENGINE_TOKEN="$(bash tools/poc-workflow-engine/start-engine.sh)"
+```
+
+Nó đọc tenant id theo `slug = 'default'` từ Postgres của engine chứ **không ghi cứng UUID** — bản
+Hatchet sau đổi UUID vẫn chạy, còn nếu họ đổi cả `slug` thì script **dừng hẳn** thay vì đúc token
+cho nhầm tenant. Cùng lý lẽ với `deploy/netviet/bootstrap-workflow-engine.sh`.
+
+## Chạy lại từ đầu — làm tay từng bước (khi cần gỡ rối)
 
 ```bash
 # 1. Dựng Hatchet self-host (3 container, ~270 MB RAM, ~60s)
@@ -94,13 +126,20 @@ Kết luận + cơ chế: [`evidence/version-gate-a.md`](evidence/version-gate-a
 docker compose -p pocwf -f tools/poc-workflow-engine/compose/hatchet.compose.yml down -v
 ```
 
-Rồi xoá thư mục `tools/poc-workflow-engine/` là xong.
+`down -v` chứ không chỉ `down`: các bài W5/W6/W7 **cố ý** `docker stop` engine và `kill -9` worker,
+nên đăng ký của những tiến trình đã chết tích lại trong Postgres của engine và engine sẽ giao việc
+cho bản sao không còn tồn tại. Triệu chứng là **run không tiến triển — trông y hệt code hỏng**.
+Trước khi tin một kết quả ĐỎ: `down -v` → `start-engine.sh` → đo lại. Nhưng đỏ trên engine vừa dựng
+sạch thì **không** được gọi là ô nhiễm môi trường; lúc đó phải điều tra code.
+
+Xoá hẳn thư mục thì xem cảnh báo ở đầu tệp — có bốn chỗ ngoài POC trỏ vào đây.
 
 ## File
 
 | File | Vai |
 |---|---|
 | `compose/hatchet.compose.yml` | Hatchet self-host tối thiểu (bỏ RabbitMQ, ghim v0.101.27) |
+| `start-engine.sh` | **CI dùng tệp này.** Dựng cụm → đợi cổng 7744 (gRPC) + 8744 (REST) → đúc token, in token ra stdout |
 | `src/workflow.ts` | Workflow trung tính 5 bước — `POCWF_VERSION` đổi v1/v2 |
 | `src/worker.ts` | Tiến trình worker (giết nó để thử recovery) |
 | `src/trigger.ts` | Kích hoạt + sinh `traceparent` W3C đúng khuôn Nexagnet |

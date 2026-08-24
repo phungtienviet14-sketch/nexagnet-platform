@@ -880,6 +880,10 @@ Hệ quả đo được trên merge SHA — **cả hai** job đều bỏ qua đ�
 ⇒ **`ci.yml` xanh KHÔNG chứng minh 24 bài IT trên Hatchet thật.** Câu này phải đi kèm mọi lần
 trích dẫn "CI xanh" cho tới khi `RUN_WORKFLOW_IT` được nối vào CI.
 
+> **HẾT HIỆU LỰC 24/08/2026 — xem §47.** Job `workflow-integration` nay dựng cụm Hatchet thật và
+> chạy đủ 24 bài. Đoạn trên giữ nguyên vì nó là **hồ sơ của trạng thái lúc `302d5b1e`**, không phải
+> mô tả hiện tại.
+
 ### 45.3 D8 — deploy lần 1: exit 78 **KHÔNG PHẢI** cái exit 78 đã hẹn
 
 Run `32644808987`, `event=workflow_dispatch`, `head_sha=302d5b1e` (đúng merge SHA).
@@ -1211,8 +1215,7 @@ có `decision=order.auto_confirm outcome=denied reason=KILL_SWITCH_OFF`.
 2. ~~Chưa push~~ — **ĐÃ ĐÓNG**: PR #34 merge, xem §46.14. `apps/mini/` vẫn còn 7 lỗi
    `no-unused-vars` (`App.tsx`, `AgentTimeline.tsx`, `ActivityPage.tsx`, `OrderDetailPage.tsx`,
    `ProfilePage.tsx`) — **không sửa**, là việc của phiên song song.
-3. **`RUN_WORKFLOW_IT` vẫn CHƯA nối vào `ci.yml`** — 24 bài IT trên Hatchet thật vẫn bị skip.
-   **"CI xanh" KHÔNG chứng minh chúng.** Câu này vẫn phải đi kèm mọi lần trích dẫn "CI xanh".
+3. ~~**`RUN_WORKFLOW_IT` vẫn CHƯA nối vào `ci.yml`**~~ — **ĐÃ ĐÓNG 24/08/2026, xem §47.**
 4. **`optional_secret` + lớp gọi probe của preflight** nên phân biệt "chưa tạo" / "không có quyền" /
    "không hỏi được". Đã tốn **hai** vòng deploy vì đúng lỗi lớp này (§45.4 và §46.6).
 5. **Smoke của deploy phụ thuộc LLM không tất định** (§46.7).
@@ -1260,3 +1263,131 @@ versions list -> 1 enabled
 
 ⇒ Cổng idempotent hoạt động trên bản **do chính pipeline mang lên**, không phải bản chép tay.
 Container sau deploy: 8/8 healthy. `AUTO_SEND=off` · `WORKFLOW_ENGINE=on`.
+
+---
+
+# Phụ lục — phiên 11 (24/08/2026): NỐI `RUN_WORKFLOW_IT` VÀO CI
+
+> HEAD đầu phiên `8c2b0a0` · `origin/main` = `51f9da8e`
+> Đóng món nợ số 3 của §46.13 — **false-green #2**.
+
+## 47. Một câu
+
+24 bài IT của workflow engine **thật sự chạy trên CI** từ nay, trên một cụm Hatchet do chính CI dựng
+lên; và có một hợp đồng chặn việc tắt chúng lại trong im lặng. Câu cảnh báo *"CI xanh KHÔNG chứng
+minh 24 bài IT"* — phải đi kèm mọi lần trích dẫn "CI xanh" từ §45.2 tới nay — **hết hiệu lực**.
+
+## 47.1 Vấn đề không phải một dòng env, và đây là lý do
+
+Bật `RUN_WORKFLOW_IT: '1'` trong job `integration` là **không đủ**, vì hai chuyện độc lập nhau:
+
+1. `baseEnv()` của harness (`workflow-it.harness.ts`) đòi một **engine Hatchet sống** + một
+   **token do chính engine đó đúc**. Không có thì worker từ chối khởi động
+   (`WORKFLOW_WORKER_ENGINE_UNSUPPORTED`) và cả bộ đỏ mà không liên quan gì đến code.
+2. Job `integration` chạy `pnpm --filter @netviet/api test` — **song song theo tệp**. Bật cờ ở đó là
+   tự tay dựng lại kịch bản 9 bài đỏ của §26.
+
+Nên phải là **một job riêng** với một lần gọi `vitest` riêng mang `--no-file-parallelism`.
+
+## 47.2 Đã thêm gì
+
+| Tệp | Việc |
+|---|---|
+| `.github/workflows/ci.yml` | job **`workflow-integration`** — Postgres 16 (service) + cụm Hatchet (docker trên host) + 2 cờ + `--no-file-parallelism`, `timeout-minutes: 60`, `down -v` ở `if: always()` |
+| `tools/poc-workflow-engine/start-engine.sh` | **MỚI** — dựng cụm → đợi cổng 7744 (gRPC) **và 8744 (REST)** → đọc tenant theo `slug` → đúc token → in **duy nhất** token ra stdout |
+| `deploy/netviet/workflow-isolation.contract.test.mjs` | +2 bài (18→20): job phải có **đủ hai cờ** và `--no-file-parallelism`; và CI + script + 2 tệp IT phải trỏ **cùng một** cụm |
+| `docs/phat-trien/van-hanh/chay-kiem-workflow-engine.md` | **MỚI** — hướng dẫn cho người vận hành |
+| `ci-cd.md` · `deploy/netviet/README.md` · `tools/poc-workflow-engine/README.md` · `docs/phat-trien/README.md` | 6 job → **7 job**; POC **không còn xoá được**; đường chạy lại một dòng |
+
+## 47.3 Ba phát hiện phải ghi lại, nếu không phiên sau sẽ vấp đúng chỗ
+
+**(a) `hatchet-dashboard` KHÔNG phải để xem cho vui — bỏ nó là 9 bài đỏ.**
+`engineReadClient()` của harness đọc ngược trạng thái run qua **REST** (`runs.list`), và REST nằm
+trong container `hatchet-dashboard` (image đó chạy hai tiến trình: `hatchet-api` + frontend). Dựng
+cụm mà chỉ `up -d hatchet-engine` — đúng cái `bootstrap-workflow-engine.sh` làm trên VM — sẽ để
+`workflow-privacy-engine-read.int.spec.ts` (9 bài) chết bằng một lỗi mạng khó hiểu. Nên script CI
+`up -d` **cả cụm**, khác có chủ đích với script production.
+
+**(b) `WORKFLOW_ENGINE_HOST_PORT` dùng `127.0.0.1`, không dùng `localhost`.**
+Log của máy dev cho thấy Node phân giải `localhost` ra `::1` trước. Trên runner Linux, Docker chỉ
+phát cổng ra IPv4, nên `localhost` sẽ hiện thành `ECONNREFUSED ::1:7744` — một lỗi mạng **trông y
+hệt engine chết**. Ghi rõ IPv4 là loại bỏ hẳn lớp mơ hồ này.
+
+**(c) `up -d` trần, KHÔNG `--wait`.** `depends_on` trong compose đã mang đủ điều kiện
+(`service_healthy` / `service_completed_successfully`) nên `up -d` đã chặn tới khi quickstart xong.
+Còn `--wait` ứng xử với container một-lần (`migration`, `setup-config`) khác nhau giữa các bản
+compose — dựa vào nó là đặt cược vào phiên bản compose của runner. Script tự đo độ sẵn sàng bằng
+**cổng** và bằng **dữ liệu** (`Tenant.slug = 'default'`), không bằng niềm tin.
+
+## 47.4 Bằng chứng — đo trên engine VỪA DỰNG SẠCH
+
+Theo đúng thủ tục §46: `down -v` → `up` → đúc token mới → đo. **Không** đo trên cụm đã chạy 18 giờ.
+
+**Phép 1 — cả bộ, đúng dòng lệnh CI chạy:**
+
+```
+Test Files  22 passed (22)
+     Tests  201 passed (201)
+  Duration  570.43s
+```
+
+Đủ 24 bài IT chạy thật, **0 skip**:
+
+| Tệp | Bài | Thời gian |
+|---|---:|---:|
+| `workflow-privacy-engine-read.int.spec.ts` | 9 | 18 080 ms |
+| `workflow-recovery.int.spec.ts` | 4 | 192 848 ms |
+| `workflow-e2e.int.spec.ts` | 3 | 92 059 ms |
+| `workflow-outbox-durability.int.spec.ts` | 3 | 61 355 ms |
+| `worker-readiness.int.spec.ts` | 3 | 73 515 ms |
+| `workflow-worker-recovery.int.spec.ts` | 2 | 79 402 ms |
+| **Tổng** | **24** | **517 s / 570 s** |
+
+⇒ 9,5 phút trên máy dev với image đã ấm. `timeout-minutes: 60` **rộng có chủ đích**; siết nó là
+biến một runner chậm thành một job "bị huỷ" (sự cố §6.3 của `ci-cd.md`).
+
+**Phép 2 — chính `start-engine.sh` từ số không:**
+
+```
+docker compose -p pocwf ... down -v          (xoá sạch volume)
+bash tools/poc-workflow-engine/start-engine.sh   -> 18,1 s, token 498 byte, 2 dấu chấm (JWT)
+```
+
+rồi chạy hai tệp IT bằng **đúng token đó** và `WORKFLOW_ENGINE_HOST_PORT=127.0.0.1:7744`:
+
+```
+✓ workflow-e2e.int.spec.ts        (3 tests) 55 612 ms
+✓ worker-readiness.int.spec.ts    (3 tests) 58 445 ms
+Test Files 2 passed (2) · Tests 6 passed (6)
+```
+
+`worker-readiness.int.spec.ts` **gọi `docker compose -p pocwf ... start hatchet-engine`** — nên bài
+này xanh cũng đồng thời chứng minh tên compose project của script khớp với tên các tệp IT điều
+khiển. Đó chính là thứ hợp đồng mới canh.
+
+**Phép 3 — ba ca ÂM TÍNH trên hợp đồng mới** (một bộ quét chưa bao giờ đỏ thì không chứng minh gì):
+
+| Sửa hỏng một đường | Kết quả |
+|---|---|
+| xoá `RUN_WORKFLOW_IT: '1'` khỏi job | 19 pass / **1 fail** |
+| xoá `--no-file-parallelism` | 19 pass / **1 fail** |
+| đổi `-p pocwf` → `-p ci-workflow` trong `ci.yml` | 19 pass / **1 fail** |
+| khôi phục | **20 pass / 0 fail** |
+
+## 47.5 Điều bằng chứng này CHƯA nói
+
+Số ở trên đo trên **máy dev Windows + Docker Desktop**, không phải trên runner GitHub. Nó chứng minh
+*chuỗi lệnh đúng và bộ kiểm xanh trên engine sạch*; nó **chưa** chứng minh runner Linux dựng được cụm
+trong hạn giờ. Con số đó chỉ có sau lần chạy CI thật đầu tiên — và đó là con số phải ghi vào đây ở
+phiên sau, chứ không phải ước lượng.
+
+## 47.6 Nợ mang sang phiên sau
+
+1. ~~`RUN_WORKFLOW_IT` chưa nối vào `ci.yml`~~ — **ĐÓNG** (§47).
+2. **`optional_secret` + lớp gọi probe của preflight** gộp mất ba sự thật khác nhau ("chưa tạo" /
+   "không có quyền" / "không hỏi được"). Đã tốn **hai** vòng deploy (§45.4, §46.6). **Còn nguyên.**
+3. **Smoke của deploy phụ thuộc LLM không tất định** (§46.7) — deploy có thể đỏ vì lý do không phải
+   deploy. **Còn nguyên.**
+4. `docs/phat-trien/ke-hoach/tong-quan.md:1643` còn ghi *"Không nối Hatchet vào apps/api, không deploy
+   lên VM"* — lỗi thời từ phiên 5. Tệp đang bị phiên song song sửa nên phiên 11 **không đụng**.
+5. `apps/mini/` còn 7 lỗi `no-unused-vars` làm `pnpm lint` toàn repo đỏ — việc của phiên song song.

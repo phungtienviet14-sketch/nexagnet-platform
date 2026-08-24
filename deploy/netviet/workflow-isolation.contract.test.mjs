@@ -319,6 +319,72 @@ test('mac dinh cua nut bam CI la `off`, khong phai `on`', () => {
   assert.match(dispatch.slice(at, at + 700), /default: 'off'/);
 });
 
+
+// ============================== CI PHAI THAT SU CHAY 24 BAI IT DO, KHONG CHI CO MOT JOB TEN DEP
+
+/** Cat mot job ra khoi `ci.yml` de khang dinh nam DUNG trong job do, khong bat nham job ben canh. */
+function ciJobBlock(name) {
+  const ci = readFileSync(join(here, '../../.github/workflows/ci.yml'), 'utf8');
+  const start = ci.indexOf(`\n  ${name}:\n`);
+  assert.notEqual(start, -1, `ci.yml khong con job \`${name}\``);
+  const rest = ci.slice(start + 1);
+  const next = rest.slice(1).search(/^ {2}[a-z][a-z0-9-]*:$/m);
+  const block = next === -1 ? rest : rest.slice(0, next + 1);
+  // Cat duoi cac dong trong + chu thich cuoi khoi: chung thuoc ve job KE TIEP (chu thich dan cho
+  // mot job nam TREN ten no). Khong cat thi mot chu thich cua job ben canh co the lam khang dinh
+  // duoi day XANH GIA — dung loai loi ma ca tep nay duoc viet ra de chan.
+  const lines = block.split(/\r?\n/);
+  while (lines.length > 0 && /^\s*(#.*)?$/.test(lines.at(-1))) lines.pop();
+  return lines.join('\n');
+}
+
+test('job `workflow-integration` bat DU HAI co va chay TUAN TU', () => {
+  // Do duoc tren merge SHA `302d5b1e` (23/08/2026): khi `RUN_WORKFLOW_IT` khong xuat hien o dong
+  // nao trong `ci.yml`, dung 6 tep / 24 bai IT tu bo qua CHINH CHUNG o ca `verify` lan
+  // `integration` — khong mot dong canh bao. Do la kieu xanh gia te nhat: no dat ten cho mot bang
+  // chung khong ton tai, va "CI xanh" duoc trich dan nhu the no da chung minh engine.
+  const job = ciJobBlock('workflow-integration');
+
+  assert.match(
+    job,
+    /RUN_WORKFLOW_IT: '1'/,
+    'Thieu `RUN_WORKFLOW_IT` thi ca 24 bai IT tu bo qua va job nay xanh ma khong chay gi.',
+  );
+  assert.match(
+    job,
+    /RUN_PRISMA_IT: '1'/,
+    '18/24 bai gate CA HAI co (do ben outbox doc hang tu Postgres bang mot tien trinh KHAC). ' +
+      'Thieu co nay thi 6 bai chay va 18 bai im lang bo qua.',
+  );
+  assert.match(
+    job,
+    /vitest run src\/workflow --no-file-parallelism/,
+    'Bo `--no-file-parallelism` la 9 bai DO: nam tep dang ky CUNG ten `integration-handoff.v1` ' +
+      'voi CUNG mot engine, nen worker cua tep nay nhan run cua tep kia. Do la chinh bat bien ' +
+      'ma tep nay canh gac, dang tu bao ve.',
+  );
+});
+
+test('CI, script dung engine va hai bai IT phai tro cung MOT cum Hatchet', () => {
+  // `worker-readiness.int.spec.ts` va `workflow-recovery.int.spec.ts` GOI `docker compose ... stop|
+  // start hatchet-engine` de mo phong engine chet. Neu CI dung ten project khac hoac file compose
+  // khac, hai bai do se dieu khien mot project KHONG TON TAI: `docker compose start` im lang khong
+  // lam gi, engine that van chay, va bai "engine chet roi song lai" do vi mot ly do khong lien
+  // quan gi den code. Bon tep duoi day phai doi CUNG MOT LUC.
+  const COMPOSE_PATH = 'tools/poc-workflow-engine/compose/hatchet.compose.yml';
+  const files = [
+    '../../.github/workflows/ci.yml',
+    '../../tools/poc-workflow-engine/start-engine.sh',
+    '../../apps/api/src/workflow/worker-readiness.int.spec.ts',
+    '../../apps/api/src/workflow/workflow-recovery.int.spec.ts',
+  ];
+
+  for (const file of files) {
+    const src = readFileSync(join(here, file), 'utf8');
+    assert.ok(src.includes('pocwf'), `${file} khong con nhac ten compose project \`pocwf\`.`);
+    assert.ok(src.includes(COMPOSE_PATH), `${file} khong con tro toi \`${COMPOSE_PATH}\`.`);
+  }
+});
 // =============================================================================== ca AM TINH
 //
 // Mot bo quet chua bao gio DO thi khong chung minh duoc gi. Cac ca duoi day dung compose GIA,

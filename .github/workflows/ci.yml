@@ -77,6 +77,88 @@ jobs:
         env:
           RUN_PRISMA_IT: '1'
 
+  # 24 BAI IT CUA WORKFLOW ENGINE — job nay ton tai vi "CI xanh" tung KHONG chung minh gi ve engine.
+  #
+  # Do duoc tren merge SHA `302d5b1e` (23/08/2026): `RUN_WORKFLOW_IT` khong xuat hien o BAT KY dong
+  # nao trong file nay, nen ca `verify` lan `integration` deu bo qua dung 6 tep / 24 bai — im lang,
+  # khong mot dong canh bao. Mot bo test tu bo qua chinh no la mot bo test LUON XANH.
+  #
+  # Ba dieu kien duoi day deu BAT BUOC, va thieu cai nao cung cho ra mot kieu do khac nhau:
+  #   · cum Hatchet THAT       — `baseEnv()` cua harness doi mot engine song + mot token do chinh
+  #                              engine duc; khong co thi worker tu choi khoi dong
+  #   · Postgres nghiep vu     — 18/24 bai gate CA `RUN_PRISMA_IT` (do ben outbox doc hang tu DB
+  #                              bang mot tien trinh KHAC voi tien trinh da ghi)
+  #   · `--no-file-parallelism`— nam tep IT dang ky CUNG ten `integration-handoff.v1` voi CUNG mot
+  #                              engine; chay song song thi worker cua tep A nhan run cua tep B.
+  #                              Do 23/08: song song -> 9 bai DO; tuan tu -> xanh. Day KHONG phai
+  #                              test mong manh, day la bat bien "moi khach/moi truong MOT engine"
+  #                              dang tu bao ve (`deploy/netviet/workflow-isolation.contract.test.mjs`).
+  workflow-integration:
+    runs-on: ubuntu-24.04
+    # Thoi han RONG co chu dich. Cum engine phai keo 5 image roi migrate + quickstart, va rieng
+    # worker mat 6-38 giay de dang ky xong — bien dong lon, do 22-24/08/2026. Dat chat thi mot lan
+    # runner cham se hien ra thanh mot job "bi huy" chu khong phai mot bai test do, va khong ai di
+    # tim nguyen nhan (dung su co §6.3 cua ci-cd.md).
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: netviet
+          POSTGRES_PASSWORD: netviet_local
+          POSTGRES_DB: netviet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U netviet"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://netviet:netviet_local@localhost:5432/netviet
+      # Loader goi khach CO Y khong co mac dinh (Dot B1) — CI phai noi ro chay tren goi nao.
+      # Cac bai IT tu dat `TENANT_DIR` toi goi fixture va XOA `TENANT` truoc khi boot, nen bien nay
+      # chi phuc vu cac spec thuong nam chung trong `src/workflow`.
+      TENANT: ultty
+      # `127.0.0.1` chu KHONG `localhost`: tren runner Linux, Docker chi phat cong ra IPv4 con
+      # `localhost` van phan giai ra ca `::1`. Mot lan chon nham ho se hien ra thanh
+      # `ECONNREFUSED ::1:7744` — mot loi mang trong nhu engine chet.
+      WORKFLOW_ENGINE_HOST_PORT: 127.0.0.1:7744
+      WORKFLOW_ENGINE_TLS_STRATEGY: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - run: pnpm --filter "@netviet/tenant..." build
+      - name: Apply migrations to the throwaway Postgres
+        run: pnpm --filter @netviet/api exec prisma migrate deploy --schema prisma/schema.prisma
+      - name: Seed the source of truth
+        run: pnpm --filter @netviet/api exec tsx prisma/seed.ts
+      # Script nay dung ca cum (postgres -> migration -> setup-config -> engine + dashboard), doi
+      # cong mo, roi duc token va in DUY NHAT token ra stdout. Chay lai duoc tren may dev bang dung
+      # mot dong — do la ly do no khong phai mot khoi `run:` viet thang o day.
+      - name: Dung cum Hatchet va duc token
+        # Token di tu stdout cua script -> mot bien -> `$GITHUB_ENV`, khong bao gio cham dia va
+        # khong bao gio duoc in. `::add-mask::` la luoi thu hai: neu sau nay ai do lo `echo` no,
+        # runner van che. (`minted` chu khong phai `TOKEN`: bo quet bi mat cua repo bat moi phep
+        # gan vao mot bien mang ten thong tin dang nhap — o day thi do la mot canh bao gia, nhung
+        # doi ten re hon la tat bo quet.)
+        run: |
+          minted="$(bash tools/poc-workflow-engine/start-engine.sh)"
+          echo "::add-mask::${minted}"
+          echo "WORKFLOW_ENGINE_TOKEN=${minted}" >> "$GITHUB_ENV"
+      - name: Chay 24 bai IT tren engine THAT — TUAN TU
+        run: pnpm --filter @netviet/api exec vitest run src/workflow --no-file-parallelism
+        env:
+          RUN_PRISMA_IT: '1'
+          RUN_WORKFLOW_IT: '1'
+      # `down -v` chu khong chi `down`: bai W5/W6/W7 co y `stop` engine va `kill -9` worker, nen
+      # dang ky cua cac tien trinh da chet tich lai trong Postgres cua engine. Mot runner la moi
+      # lan mot may nen buoc nay khong doi gi o CI — no o day de nguoi chay tay tren may minh
+      # khong noi tiep tren mot engine da thoai hoa.
+      - name: Don cum Hatchet
+        if: always()
+        run: docker compose -p pocwf -f tools/poc-workflow-engine/compose/hatchet.compose.yml down -v
+
   # MOT NEN TANG — NHIEU KHACH. `tenant-packs.spec.ts` tu liet ke MOI thu muc trong `tenants/`,
   # nap tung goi bang loader that va doi slug trong file trung ten thu muc. Them goi moi khong duoc
   # doi hoi sua danh sach CI thu hai. Chung minh mot artifact doi branding/experience nam o `verify`.
