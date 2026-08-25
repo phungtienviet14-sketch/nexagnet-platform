@@ -39,6 +39,15 @@ import {
 
 const RUN_IT = process.env.RUN_WORKFLOW_IT === '1';
 
+/**
+ * KHOA DICH VU cho duong `internal/*`.
+ *
+ * Dat TUONG MINH thay vi de rong: `InternalServiceGuard` FAIL-CLOSED, nen mot bo IT khong co khoa
+ * se thay worker an 401 o moi lan goi ve. Dat no o day cung lam bai nay giong ban that hon — tren
+ * pilot worker CUNG phai mang mot khoa, khong co duong nao khong xac thuc.
+ */
+const SERVICE_KEY = 'it-internal-service-key-0123456789';
+
 const FIXTURE = resolve(
   apiDir,
   '../../packages/tenant/src/__tests__/fixtures/sales-handoff-followup',
@@ -142,8 +151,9 @@ describe.skipIf(!RUN_IT)('sales-handoff-followup — duong nghiep vu that toi Ha
 
     // Cong 0 -> he dieu hanh cap. Phai boot API TRUOC de biet cong nao, roi moi tra cong do cho
     // worker qua `WORKFLOW_DESTINATION_SELF_API`: dich den logic -> URL that la cau hinh HA TANG.
-    api = await bootHttpApi(baseEnv(FIXTURE, 0));
+    api = await bootHttpApi(baseEnv(FIXTURE, 0, { API_KEY: SERVICE_KEY }));
     const env = baseEnv(FIXTURE, 0, {
+      API_KEY: SERVICE_KEY,
       WORKFLOW_DESTINATION_SELF_API: `http://127.0.0.1:${api.port}/internal/sales-handoff`,
     });
     worker = new WorkerProcess('v1', env, { template: 'sales-handoff-followup' });
@@ -227,8 +237,9 @@ describe.skipIf(!RUN_IT)('sales-handoff-followup — lan ngu song sot qua worker
     if (!(await enginePortOpen())) {
       throw new Error('Engine chua mo cong — bai nay can engine THAT, khong gia lap.');
     }
-    api = await bootHttpApi(baseEnv(SLOW_FIXTURE, 0));
+    api = await bootHttpApi(baseEnv(SLOW_FIXTURE, 0, { API_KEY: SERVICE_KEY }));
     env = baseEnv(SLOW_FIXTURE, 0, {
+      API_KEY: SERVICE_KEY,
       WORKFLOW_DESTINATION_SELF_API: `http://127.0.0.1:${api.port}/internal/sales-handoff`,
     });
     first = new WorkerProcess('v1', env, { template: 'sales-handoff-followup', label: 'truoc' });
