@@ -25,6 +25,19 @@ export interface HatchetEngineConfig {
   /** `host:port` cua gRPC engine. Bo trong = lay tu token (token co `grpc_broadcast_address`). */
   readonly hostPort?: string;
   /**
+   * Goc URL cua REST API engine — duong MAY dung de DOC (`describeRun`, `countInFlight`).
+   *
+   * KHAC HAN `dashboardBaseUrl`, va nham hai cai nay chinh la loi da xay ra tren gd1-test
+   * (25/08/2026): `dashboardBaseUrl` la duong CHO NGUOI BAM, cong khai va nam sau basic-auth cua
+   * Caddy. Duong cho MAY phai di thang toi dich vu trong mang noi bo.
+   *
+   * Bo trong = de SDK suy tu claim `server_url` trong token. Do la mac dinh dung cho ban chay
+   * local/POC (engine mo tran), nhung SAI cho moi ban trien khai co Caddy dung truoc: claim do
+   * mang ten mien cong khai, nen moi lan goi REST deu an 401 trong khi gRPC van chay tot — mot
+   * kieu hong chi lo ra o man hinh chan doan, dung luc nguoi ta can no nhat.
+   */
+  readonly apiUrl?: string;
+  /**
    * `none` chi hop le cho POC/local. Deployment that phai co TLS — xem runbook.
    * De o day duoi dang tuy chon co chu dich: gia tri mac dinh la CO TLS.
    */
@@ -56,6 +69,9 @@ export class HatchetWorkflowEngineAdapter extends WorkflowEnginePort {
       this.client = HatchetClient.init({
         token: this.config.token,
         ...(this.config.hostPort ? { host_port: this.config.hostPort } : {}),
+        // Vang mat, KHONG phai chuoi rong: `api_url: ''` se de SDK lay goc rong thay vi rot ve
+        // duong suy-tu-token, tuc bien mot ban trien khai dang chay binh thuong thanh hong.
+        ...(this.config.apiUrl ? { api_url: this.config.apiUrl } : {}),
         ...(this.config.namespace ? { namespace: this.config.namespace } : {}),
         ...(this.config.tlsStrategy
           ? { tls_config: { tls_strategy: this.config.tlsStrategy } }

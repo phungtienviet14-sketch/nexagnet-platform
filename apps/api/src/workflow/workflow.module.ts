@@ -132,6 +132,12 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
           ...(process.env.WORKFLOW_ENGINE_TLS_STRATEGY
             ? { tlsStrategy: process.env.WORKFLOW_ENGINE_TLS_STRATEGY as 'none' | 'tls' | 'mtls' }
             : {}),
+          // DUONG CHO MAY (REST, noi bo) — doc lap voi duong CHO NGUOI BAM ngay duoi. Hai bien
+          // rieng chu khong mot bien dung chung, vi tren ban trien khai that chung tro hai cho
+          // khac nhau: dashboard ra ngoai qua Caddy (co basic-auth), REST thi khong duoc.
+          ...(process.env.WORKFLOW_ENGINE_API_URL
+            ? { apiUrl: process.env.WORKFLOW_ENGINE_API_URL }
+            : {}),
           ...(process.env.WORKFLOW_ENGINE_DASHBOARD_URL
             ? { dashboardBaseUrl: process.env.WORKFLOW_ENGINE_DASHBOARD_URL }
             : {}),
