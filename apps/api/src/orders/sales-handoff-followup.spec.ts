@@ -237,3 +237,20 @@ describe('OrdersService — dat lich theo doi luc chot don', () => {
     vi.restoreAllMocks();
   });
 });
+
+/**
+ * HOP DONG HAI PHIA cua mot cai ten.
+ *
+ * `packages/tenant` tu choi mot goi khach bat theo doi ma thieu rang buoc workflow, va no nhan
+ * dien rang buoc do BANG KHOA. `apps/api` dang ky khuon cung bang khoa do. Hai ben lech nhau
+ * thi mot goi khach hop le se tro thanh mot bao dam khong ai thuc hien — dung kieu hong khong
+ * mot bo test nao ben trong tung goi bat duoc.
+ */
+describe('khoa khuon `sales-handoff-followup` khop giua goi khach va ban dang chay', () => {
+  it('hang so cua tenant schema == khoa cua workflow registry', async () => {
+    const { SALES_HANDOFF_FOLLOWUP_WORKFLOW } = await import('@netviet/tenant');
+    const { SALES_HANDOFF_FOLLOWUP_KEY } = await import('../workflow/workflow-registry.js');
+
+    expect(SALES_HANDOFF_FOLLOWUP_WORKFLOW).toBe(SALES_HANDOFF_FOLLOWUP_KEY);
+  });
+});

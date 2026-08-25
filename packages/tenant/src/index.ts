@@ -48,6 +48,7 @@ export {
   knowledgeOnlySnapshotSchema,
   orderAutomationSchema,
   salesHandoffFollowupSchema,
+  SALES_HANDOFF_FOLLOWUP_WORKFLOW,
   retailAdviceSchema,
   retailPriceFieldSchema,
   parserAdapterSchema,

@@ -73,6 +73,15 @@ export const orderAutomationSchema = z
  * ngoai. Viec cua workflow dau tien la "viec ban giao khong bi quen", khong phai "thay nguoi
  * bang tu dong hoa".
  */
+/**
+ * KHOA cua khuon workflow thuc thi viec theo doi nay.
+ *
+ * Mot HANG SO o day chu khong phai mot chuoi go tay trong `superRefine`: no la mot phan cua HOP
+ * DONG giua goi khach va ban dang chay (`apps/api/src/workflow/workflow-registry.ts` khai cung
+ * khoa nay). Hai ben lech nhau thi goi khach hop le se tro thanh mot bao dam khong ai thuc hien.
+ */
+export const SALES_HANDOFF_FOLLOWUP_WORKFLOW = 'sales-handoff-followup';
+
 export const salesHandoffFollowupSchema = z
   .object({
     enabled: z.boolean(),
@@ -395,6 +404,41 @@ export const tenantConfigSchema = z
           code: 'custom',
           path: ['persona', 'knowledge'],
           message: 'sales-order yeu cau persona knowledge',
+        });
+      }
+    }
+
+    /*
+     * `handoffFollowup.enabled: true` = KHACH DOI MOT BAO DAM, khong phai "khach cho phep".
+     *
+     * Do la mot lua chon co y giua hai cach doc, va cach kia bi loai:
+     *
+     *   (A) policy chi CHO PHEP, binding moi bat thuc thi  -> bat `enabled` ma quen binding thi
+     *       don van gui, khong ai theo doi, va he thong IM LANG. Dung che do hong ma ca khuon
+     *       workflow nay sinh ra de xoa bo — nen no khong duoc phep la mac dinh cua mot loi go.
+     *   (B) `enabled` la mot YEU CAU  -> thieu binding la CAU HINH TU MAU THUAN, va no phai hong
+     *       to ngay luc boot.
+     *
+     * Chon (B). Cung khuon voi rang buoc da co o `workflowEngineIntegrationSchema`: "khai
+     * adapter=none nhung van bat mot binding" cung bi tu choi vi cung mot ly do.
+     *
+     * Tat theo doi thi dat `enabled: false` (hoac bo han khoi goi khach) — ro rang va khong
+     * mau thuan. `enabled: false` KHONG doi hoi binding nao.
+     */
+    if (config.policies.salesOrder?.handoffFollowup?.enabled) {
+      const integration = config.integrations.workflowEngine;
+      const bound = integration?.bindings.some(
+        (binding) => binding.key === SALES_HANDOFF_FOLLOWUP_WORKFLOW && binding.enabled,
+      );
+      if (!bound) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['policies', 'salesOrder', 'handoffFollowup', 'enabled'],
+          message:
+            `handoffFollowup.enabled=true doi mot rang buoc workflow dang bat cho ` +
+            `'${SALES_HANDOFF_FOLLOWUP_WORKFLOW}' trong integrations.workflowEngine.bindings. ` +
+            `Khong co no thi don van gui ma khong ai theo doi. Dat enabled=false neu khong muon ` +
+            `theo doi.`,
         });
       }
     }
