@@ -60,6 +60,31 @@ export const orderAutomationSchema = z
   .strict();
 
 /**
+ * BAO LAU thi mot viec ban giao cho Sale bi coi la "chua ai dong toi".
+ *
+ * DAY LA CHINH SACH CUA KHACH, khong phai hang so cua nen tang — va do la ca ly do no nam trong
+ * goi khach chu khong nam trong code. Mot khach chot don theo ca lam viec va mot khach truc 24/7
+ * co nguong khac han nhau; chon ho mot con so roi goi do la "SLA" la bia ra nghiep vu.
+ *
+ * `null` (mac dinh) = KHONG theo doi. Fail-safe co chu y: khach chua noi bao lau la du lau thi
+ * he thong khong duoc tu quyet, va khong theo doi thi khong bao gio nhac nham.
+ *
+ * PHAM VI CUA v1: het gio thi DANH DAU de nguoi nhin thay — KHONG day ERP, KHONG nhan tin ra
+ * ngoai. Viec cua workflow dau tien la "viec ban giao khong bi quen", khong phai "thay nguoi
+ * bang tu dong hoa".
+ */
+export const salesHandoffFollowupSchema = z
+  .object({
+    enabled: z.boolean(),
+    /**
+     * Tinh tu `salesHandoff.createdAt`. Tran 30 ngay de mot so go nham khong sinh ra mot lan cho
+     * dai hon vong doi luu tru cua engine.
+     */
+    remindAfterSeconds: z.number().int().positive().max(2_592_000),
+  })
+  .strict();
+
+/**
  * He thong ban hang/kho cua khach. NEN TANG chi biet cong `ErpPort`; ten nha cung cap chi duoc
  * xuat hien o DAY (du lieu cua khach) va trong chinh thu muc adapter — khong o nhan (G1-12).
  * Them khach dung ERP khac = them mot hien thuc + mot gia tri enum, khong sua nhan.
@@ -193,6 +218,12 @@ const salesOrderPolicySchema = z
     /** Null = chua phe duyet policy tu dong, fail-closed. */
     automation: orderAutomationSchema.nullable(),
     retailAdvice: retailAdviceSchema,
+    /**
+     * Null (va cung la mac dinh khi khong khai) = KHONG theo doi viec ban giao. Tuy chon co chu
+     * y: moi goi khach dang co van hop le sau thay doi nay, va khach nao chua chon nguong thi
+     * khong bi he thong chon ho.
+     */
+    handoffFollowup: salesHandoffFollowupSchema.nullable().optional(),
   })
   .strict();
 
@@ -385,6 +416,7 @@ export type ExperienceId = z.infer<typeof experienceIdSchema>;
 export type TenantBootstrap = z.infer<typeof tenantBootstrapSchema>;
 export type TenantIntegrations = z.infer<typeof tenantIntegrationsSchema>;
 export type OrderAutomation = z.infer<typeof orderAutomationSchema>;
+export type SalesHandoffFollowup = z.infer<typeof salesHandoffFollowupSchema>;
 export type CampaignConfig = z.infer<typeof campaignConfigSchema>;
 export type RetailAdvice = z.infer<typeof retailAdviceSchema>;
 export type ErpConfig = z.infer<typeof erpConfigSchema>;

@@ -34,6 +34,23 @@ export interface SalesHandoff {
    */
   status: 'pending' | 'completed' | 'cancelled';
   createdAt: string;
+  /**
+   * DAU VET "da co he thong nhac ve viec nay" — do workflow `sales-handoff-followup` ghi.
+   *
+   * TUY CHON, va nam TRONG `view` (cot JSON) nen khong doi schema bang `Order`: viec theo doi
+   * la mot lop QUAN SAT dat len tren mot viec da co, khong phai mot thuc the moi. Vang mat =
+   * chua ai nhac lan nao, va do la trang thai cua gan nhu moi don.
+   *
+   * KHONG phai mot he thong tac vu thu hai: hang viec cua Sale van la
+   * `status === 'sent' && salesHandoff.status === 'pending'` (xem `apps/web/lib/sales-work.ts`).
+   * Truong nay chi noi them "viec do da qua han bao lau roi ma chua ai dong toi".
+   */
+  followUp?: {
+    /** Giai doan da nhac. v1 chi co `'reminder'` — xem `FOLLOWUP_STAGES`. */
+    stage: string;
+    /** ISO-8601, luc danh dau. */
+    at: string;
+  };
 }
 
 export interface PricedLine {

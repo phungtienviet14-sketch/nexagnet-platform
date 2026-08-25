@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "slug": "sales-handoff-followup",
+  "identity": {
+    "displayName": "Sales Handoff Followup Fixture",
+    "shortName": "Handoff"
+  },
+  "branding": {
+    "productName": "Handoff Workspace",
+    "installName": "Handoff Workspace",
+    "pageTitle": "Handoff Workspace",
+    "pageDescription": "Generic selling tenant fixture used to prove the sales-handoff-followup workflow.",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#f5f7fb",
+    "monogram": "H",
+    "composerPlaceholder": "Dat hang"
+  },
+  "experience": "operations-console",
+  "capabilities": [
+    "knowledge",
+    "messaging",
+    "turn-processing",
+    "sales-order",
+    "operations"
+  ],
+  "policies": {
+    "salesOrder": {
+      "supportedDealerPolicies": ["thanh_toan_ngay"],
+      "automation": { "enabled": true, "maxAutoConfirmQuantity": 50 },
+      "retailAdvice": {
+        "priceField": "minRetailPrice",
+        "qualifier": "Gia tham khao."
+      },
+      "handoffFollowup": { "enabled": true, "remindAfterSeconds": 3 }
+    },
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {
+    "channel": { "allowedAdapters": ["mock"] },
+    "parser": { "allowedAdapters": ["deepseek"] },
+    "workflowEngine": {
+      "adapter": "hatchet",
+      "credentialRef": "WORKFLOW_ENGINE_TOKEN",
+      "bindings": [
+        {
+          "key": "sales-handoff-followup",
+          "version": "v1",
+          "enabled": true,
+          "destination": "self-api",
+          "idempotency": "key",
+          "operationVersion": 1,
+          "retry": { "maxAttempts": 5, "baseBackoffSeconds": 1 }
+        }
+      ]
+    }
+  },
+  "persona": {
+    "messaging": { "botName": "Handoff", "mentionName": "Bot Handoff" },
+    "turnProcessing": { "parserIntro": "Ban la bo PHAN LOAI Y DINH cho mot to ban hang." },
+    "knowledge": { "productFallbackDescription": "San pham." }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" },
+    "salesOrder": { "path": "data/knowledge.json" }
+  }
+}
