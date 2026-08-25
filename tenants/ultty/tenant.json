@@ -35,6 +35,10 @@
       "retailAdvice": {
         "priceField": "minRetailPrice",
         "qualifier": "Đây là mức giá bán lẻ tối thiểu để tham khảo; giá bán thực tế có thể cao hơn tùy chính sách và thời điểm."
+      },
+      "handoffFollowup": {
+        "enabled": true,
+        "remindAfterSeconds": 90
       }
     },
     "campaign": {
@@ -86,6 +90,15 @@
           "version": "v1",
           "enabled": true,
           "destination": "proof-endpoint",
+          "idempotency": "key",
+          "operationVersion": 1,
+          "retry": { "maxAttempts": 5, "baseBackoffSeconds": 1 }
+        },
+        {
+          "key": "sales-handoff-followup",
+          "version": "v1",
+          "enabled": true,
+          "destination": "self-api",
           "idempotency": "key",
           "operationVersion": 1,
           "retry": { "maxAttempts": 5, "baseBackoffSeconds": 1 }
