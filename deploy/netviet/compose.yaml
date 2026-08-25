@@ -524,6 +524,11 @@ services:
       # khong dang ky khuon nao (`resolveWorkerRegistration`).
       WORKFLOW_WORKER_VERSION: v1
       WORKFLOW_WORKER_HEALTH_PORT: "8085"
+      # KHOA DICH VU de goi nguoc `internal/*` cua `api`. Cung gia tri ma service `api` nhan
+      # (dong 183) — o `AUTH_MODE=session` day la thu DUY NHAT worker mang duoc: no khong co
+      # cookie, khong co phien va khong co token CSRF. Thieu bien nay thi workflow chay tron
+      # nhung moi lan goi ve deu 401.
+      API_KEY: ${API_KEY}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL: ${LOG_LEVEL:-log}
       TELEMETRY_PRIVACY: ${TELEMETRY_PRIVACY:-}

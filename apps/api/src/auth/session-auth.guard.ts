@@ -9,6 +9,7 @@ import { loadFoundationEnv } from '../config/foundation-env.js';
 import { AuthService } from './auth.service.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import type { AuthenticatedRequest } from './session.types.js';
+import { isInternalServiceRequest } from './internal-service.guard.js';
 
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
@@ -25,6 +26,10 @@ export class SessionAuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    // DA qua xac thuc dich vu-dich vu (`InternalServiceGuard` chay TRUOC guard nay). Mot tien
+    // trinh khong co phien, khong co vai tro va khong co trinh duyet — doi no ba thu do nghia la
+    // duong noi bo khong bao gio dung duoc o che do `session`.
+    if (isInternalServiceRequest(request)) return true;
     const identity = request.session?.user;
     if (!identity) throw new UnauthorizedException('Bạn cần đăng nhập');
     const user = await this.auth.validateSession(identity);

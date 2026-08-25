@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { loadFoundationEnv } from '../config/foundation-env.js';
+import { isInternalServiceRequest } from './internal-service.guard.js';
 import { csrfSync } from 'csrf-sync';
 import type { Request, Response } from 'express';
 
@@ -37,6 +38,10 @@ export class CsrfGuard implements CanActivate {
     if (loadFoundationEnv().AUTH_MODE !== 'session') return true;
     const request = context.switchToHttp().getRequest<Request>();
     if (SAFE_METHODS.has(request.method.toUpperCase())) return true;
+    // DA qua xac thuc dich vu-dich vu (`InternalServiceGuard` chay TRUOC guard nay). Mot tien
+    // trinh khong co phien, khong co vai tro va khong co trinh duyet — doi no ba thu do nghia la
+    // duong noi bo khong bao gio dung duoc o che do `session`.
+    if (isInternalServiceRequest(request)) return true;
     const isExempt = this.reflector.getAllAndOverride<boolean>(CSRF_EXEMPT_KEY, [
       context.getHandler(),
       context.getClass(),

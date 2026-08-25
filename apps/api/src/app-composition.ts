@@ -8,6 +8,7 @@ import { AgentOrchestrator } from './agents/agent-orchestrator.service.js';
 import { ApiKeyGuard } from './auth/api-key.guard.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CsrfGuard } from './auth/csrf.guard.js';
+import { InternalServiceGuard } from './auth/internal-service.guard.js';
 import { RolesGuard } from './auth/roles.guard.js';
 import { SessionAuthGuard } from './auth/session-auth.guard.js';
 import { AuditLogService } from './audit/audit-log.service.js';
@@ -156,6 +157,12 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
 ];
 
 const guardProviders: readonly Provider[] = [
+  /**
+   * PHAI DUNG DAU. Thu tu dang ky `APP_GUARD` chinh la thu tu chay, va ba guard nguoi-dung phia
+   * duoi doc DAU do guard nay dat len yeu cau. Doi cho no xuong duoi nghia la worker bi 401
+   * truoc khi ai kip kiem khoa dich vu cua no.
+   */
+  InternalServiceGuard,
   ApiKeyGuard,
   SessionAuthGuard,
   CsrfGuard,
