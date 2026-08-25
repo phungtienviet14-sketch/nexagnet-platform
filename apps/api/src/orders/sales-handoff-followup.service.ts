@@ -21,15 +21,21 @@ import { SALES_ORDER_DECISIONS, type FollowupMarkReason } from './sales-order-de
  * la can cu — moi lan thuc day phai hoi lai lop nay.
  *
  * ---------------------------------------------------------------------------
- * HAI LOP CHONG TRUNG, va can ca hai:
+ * CHONG TRUNG: MOT LOP QUYET DINH, khong phai hai.
  *
- *   1. `idempotency-key` cua worker — chan lan chay LAP LAI cua cung mot task Hatchet.
- *   2. `markFollowup()` o day — CONG TRANG THAI: chi ghi khi con `pending`, va khong bao gio
- *      ghi de mot giai doan da co. Chan thu ma lop 1 khong the thay: hai lan goi den tu hai
- *      duong khac nhau (vi du mot su kien bi xep hang hai lan voi hai khoa khac nhau).
+ * Ban dau tep nay tuyen bo "hai lop, can ca hai" va ke `idempotency-key` la lop thu nhat. NOI
+ * NHU VAY LA SAI, va soat lai da bat duoc: may chu KHONG luu, khong tieu thu va khong doi soat
+ * khoa do — no chi di theo yeu cau roi vao log/trace. Mot khoa khong ai doc thi khong chan duoc
+ * gi ca.
  *
- * Lop 2 la lop KHONG THE BO. No khong tin vao khoa, khong tin vao engine, chi tin vao trang
- * thai hien tai cua chinh don hang.
+ * Su that dung mot cau: **`compareAndSet` o `markFollowup()` la lop quyet dinh DUY NHAT.**
+ * No khoa hang (`FOR UPDATE`) roi doc-quyet dinh-ghi trong CUNG mot giao dich, nen no chan duoc
+ * ca ba nguon trung: task chay lai, su kien xep hang hai lan, va hai yeu cau chong nhau. No
+ * khong tin vao khoa, khong tin vao engine — chi tin trang thai hien tai cua chinh don hang.
+ *
+ * `Idempotency-Key` van duoc worker gui, va no van co ich — nhung dung voi vai tro CUA NO:
+ * mot neo doi soat trong log/trace ("lan goi nay thuoc thao tac nao"), khong phai mot cong.
+ * Xem `sales-handoff.controller.ts`.
  */
 @Injectable()
 export class SalesHandoffFollowupService {
@@ -64,30 +70,51 @@ export class SalesHandoffFollowupService {
    * thuong: nguoi da xu ly xong trong luc cho, hoac giai doan nay da duoc danh dau roi.
    */
   async markFollowup(orderId: string, stage: string): Promise<FollowupMarkResult | null> {
-    const view = await this.repo.findById(orderId);
-    if (!view) return null;
-
-    const current = describeHandoff(view);
-
-    // CONG 1 — con treo khong? Doc trang thai HIEN TAI, khong phai trang thai luc xep hang.
-    if (current.state !== 'pending') {
-      return this.decided(view, stage, false, 'FOLLOWUP_NOT_PENDING');
-    }
-
-    // CONG 2 — da danh dau giai doan nay chua? Chan chay lai va su kien trung.
-    if (current.followUpStage === stage) {
-      return this.decided(view, stage, false, 'FOLLOWUP_ALREADY_MARKED');
-    }
-
     const at = new Date().toISOString();
-    const updated = await this.repo.update(orderId, {
-      // `salesHandoff` chac chan ton tai: `state === 'pending'` chi dung duoc khi no co.
-      salesHandoff: { ...view.salesHandoff!, followUp: { stage, at } },
-    });
-    if (!updated) return null;
 
-    this.logger.log(`[FOLLOWUP] don ${orderId} qua han — danh dau giai doan '${stage}'`);
-    return this.decided(updated, stage, true, 'FOLLOWUP_MARKED');
+    /*
+     * MOT LAN DI DB, NGUYEN TU. Truoc day day la `findById()` -> kiem -> `update()`, tuc mot
+     * `check-then-act` co cua so: hai yeu cau chong nhau cung doc "chua nhac" roi CA HAI cung
+     * ghi. Do duoc that tren Postgres — 5 lan goi song song ra 5 lan danh dau va 5 ban ghi audit
+     * (`sales-handoff-concurrency.int.spec.ts`).
+     *
+     * `decide` DONG BO va thuan co y: mot `await` o day se mo lai dung cua so vua dong.
+     */
+    const outcome = await this.repo.compareAndSet?.(orderId, (current) => {
+      const state = describeHandoff(current);
+
+      // CONG 1 — con treo khong? Doc trang thai HIEN TAI (da khoa hang), khong phai ban chup
+      // luc xep hang.
+      if (state.state !== 'pending') {
+        return { commit: false, result: 'FOLLOWUP_NOT_PENDING' as FollowupMarkReason };
+      }
+      // CONG 2 — giai doan nay da duoc danh dau chua? Chan chay lai va su kien trung.
+      if (state.followUpStage === stage) {
+        return { commit: false, result: 'FOLLOWUP_ALREADY_MARKED' as FollowupMarkReason };
+      }
+      return {
+        commit: true,
+        // `salesHandoff` chac chan ton tai: `state === 'pending'` chi dung duoc khi no co.
+        patch: { salesHandoff: { ...current.salesHandoff!, followUp: { stage, at } } },
+        result: 'FOLLOWUP_MARKED' as FollowupMarkReason,
+      };
+    });
+
+    if (outcome === undefined) {
+      // Kho khong hien thuc cong nguyen tu. KHONG lui ve duong `check-then-act` cu: lam vay la
+      // im lang tra lai dung lo hong vua vá. Ca hai kho that (Postgres + bo nho) deu co no.
+      throw new Error(
+        'SALES_HANDOFF_CAS_UNSUPPORTED: kho luot khong ho tro compareAndSet — khong the bao dam ' +
+          'danh dau dung mot lan.',
+      );
+    }
+    if (outcome === null) return null;
+
+    const reason = outcome.result;
+    if (reason === 'FOLLOWUP_MARKED') {
+      this.logger.log(`[FOLLOWUP] don ${orderId} qua han — danh dau giai doan '${stage}'`);
+    }
+    return this.decided(outcome.view, stage, reason === 'FOLLOWUP_MARKED', reason);
   }
 
   /**
