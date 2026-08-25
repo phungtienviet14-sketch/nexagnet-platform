@@ -101,6 +101,26 @@ async function twoTurns(): Promise<readonly StoredTrace[]> {
   ];
 }
 
+/**
+ * Hai luot CACH NHAU 2 GIAY — dung hinh dang cua mot luot that co workflow ben duoi.
+ *
+ * Callback cua worker duoc noi vao mach hoi thoai dang co chu khong sinh mot luot moi sau lan
+ * cho, nen khoang giua cac luot con giu duoc la VAI GIAY trong khi workflow chay hang PHUT. Do
+ * la ly do khong duoc suy thoi gian workflow tu timestamp cua luot.
+ */
+async function shortTurns(): Promise<readonly StoredTrace[]> {
+  const sink = new RecentTracesSink();
+  const telemetry = telemetryWith(sink);
+  await rootTurn(telemetry);
+  const root = sink.findAllByOrderId(ORDER_ID)[0]!;
+  await workerTurn(telemetry, root.traceId);
+  const [first, second] = sink.findAllByOrderId(ORDER_ID);
+  return [
+    withStartedAt(first!, '2026-08-25T10:00:00.000Z'),
+    withStartedAt(second!, '2026-08-25T10:00:02.000Z'),
+  ];
+}
+
 describe('luong xu ly — khong bia su kien', () => {
   it('so luot hien ra bang so luot CO THAT trong vong dem', async () => {
     const view = buildOrderDebugView({
@@ -197,6 +217,21 @@ describe('luong xu ly — thieu du lieu thi NOI RA', () => {
 });
 
 describe('luong xu ly — nghia cua thoi gian', () => {
+  /*
+   * BA CON SO, BA CAU HOI KHAC NHAU. Ban truoc gop hai trong so do lam mot va noi doi:
+   * no lay hieu timestamp cua cac LUOT roi dan nhan "co bao gom ca lan cho ben vung".
+   *
+   * Voi mot workflow that (`sales-handoff-followup.v1`, `remindAfterSeconds = 90`) thi lan cho
+   * ben vung KHONG sinh them mot luot sau khi cho: callback cua worker duoc noi vao dung mach
+   * hoi thoai dang co. Nen hieu timestamp giua cac luot ra ~2 giay trong khi workflow that su
+   * chay ~95 giay — va man hinh bao cao 2 giay do la "thoi gian co ca lan cho".
+   *
+   * Ba con so tu day tro di:
+   *   `synchronousMs`            may lam viec trong mot luot. KHONG BAO GIO gom lan cho.
+   *   `engineDurationMs`         cua CHINH engine: startedAt -> finishedAt. CO gom lan cho.
+   *   `turnIntervalMs`           khoang giua cac luot CON GIU DUOC. Khong phai thoi gian workflow.
+   */
+
   it('thoi gian DONG BO lay tu luot goc, khong bao trum lan cho ben vung', async () => {
     const view = buildOrderDebugView({
       orderId: ORDER_ID,
@@ -208,19 +243,159 @@ describe('luong xu ly — nghia cua thoi gian', () => {
     expect(view.durations.synchronousMs).toBeLessThan(5_000);
   });
 
-  it('khoang NHAN QUA bao trum ca lan cho — 96 giay chu khong phai vai mili giay', async () => {
+  it('thoi gian WORKFLOW lay tu moc cua ENGINE, khong suy tu cac luot', async () => {
+    const view = buildOrderDebugView({
+      orderId: ORDER_ID,
+      traces: await twoTurns(),
+      workflowRuns: [
+        workflowRun({
+          engineStatus: 'COMPLETED',
+          engineStartedAt: '2026-08-25T10:00:02.000Z',
+          engineFinishedAt: '2026-08-25T10:01:37.000Z',
+        }),
+      ],
+    });
+
+    const run = view.workflows[0]!;
+    // 10:00:02 -> 10:01:37 = 95 giay. Day la con so THAT cua mot lan cho ben vung 90 giay
+    // cong phan xu ly hai dau — va no chi ra duoc tu moc cua engine.
+    expect(run.engineDurationMs).toBe(95_000);
+    expect(run.engineStartedAt).toBe('2026-08-25T10:00:02.000Z');
+    expect(run.engineFinishedAt).toBe('2026-08-25T10:01:37.000Z');
+  });
+
+  it('thoi gian WORKFLOW khac han khoang giua cac luot — khong duoc lay cai nay thay cai kia', async () => {
+    const view = buildOrderDebugView({
+      orderId: ORDER_ID,
+      traces: await shortTurns(),
+      workflowRuns: [
+        workflowRun({
+          engineStatus: 'COMPLETED',
+          engineStartedAt: '2026-08-25T10:00:02.000Z',
+          engineFinishedAt: '2026-08-25T10:01:37.000Z',
+        }),
+      ],
+    });
+
+    // Hai luot cach nhau 2 giay; workflow chay 95 giay. Neu hai con so nay bang nhau thi mot
+    // trong hai dang duoc suy ra tu cai kia — dung cai loi ban nay di sua.
+    expect(view.durations.turnIntervalMs).toBe(2_000);
+    expect(view.workflows[0]!.engineDurationMs).toBe(95_000);
+  });
+
+  it('workflow DANG CHAY thi khong co thoi luong — khong lay dong ho luc mo man hinh', async () => {
+    const view = buildOrderDebugView({
+      orderId: ORDER_ID,
+      traces: await twoTurns(),
+      workflowRuns: [
+        workflowRun({
+          engineStatus: 'RUNNING',
+          engineStartedAt: '2026-08-25T10:00:02.000Z',
+        }),
+      ],
+    });
+
+    const run = view.workflows[0]!;
+    expect(run.engineStartedAt).toBe('2026-08-25T10:00:02.000Z');
+    expect(run.engineFinishedAt).toBeUndefined();
+    // Do bang `Date.now()` se cho ra mot con so LON DAN moi lan bam F5 — mot phep do gia.
+    expect(run.engineDurationMs).toBeUndefined();
+  });
+
+  it('engine khong cho moc thoi gian thi KHONG bia thoi luong', async () => {
+    const view = buildOrderDebugView({
+      orderId: ORDER_ID,
+      traces: await twoTurns(),
+      // Khong hoi duoc engine: khong `engineStatus`, khong moc nao ca.
+      workflowRuns: [workflowRun()],
+    });
+
+    const run = view.workflows[0]!;
+    expect(run.engineStartedAt).toBeUndefined();
+    expect(run.engineFinishedAt).toBeUndefined();
+    expect(run.engineDurationMs).toBeUndefined();
+  });
+
+  it('moc thoi gian HONG cua engine bi bo qua, khong lam sap man hinh', async () => {
+    const view = buildOrderDebugView({
+      orderId: ORDER_ID,
+      traces: await twoTurns(),
+      workflowRuns: [
+        workflowRun({
+          engineStatus: 'COMPLETED',
+          engineStartedAt: 'khong-phai-ngay',
+          engineFinishedAt: '2026-08-25T10:01:37.000Z',
+        }),
+      ],
+    });
+
+    // Man hinh chan doan phai chiu duoc du lieu xau: mot `NaN` roi xuong giao dien te hon
+    // nhieu so voi mot o "chua xac dinh".
+    expect(view.workflows[0]!.engineDurationMs).toBeUndefined();
+  });
+
+  it('moc ket thuc TRUOC moc bat dau la du lieu xau — khong bao thoi luong am', async () => {
+    const view = buildOrderDebugView({
+      orderId: ORDER_ID,
+      traces: await twoTurns(),
+      workflowRuns: [
+        workflowRun({
+          engineStatus: 'COMPLETED',
+          engineStartedAt: '2026-08-25T10:01:37.000Z',
+          engineFinishedAt: '2026-08-25T10:00:02.000Z',
+        }),
+      ],
+    });
+
+    expect(view.workflows[0]!.engineDurationMs).toBeUndefined();
+  });
+
+  it('nhieu lan ban giao thi moi lan mang thoi luong CUA CHINH NO', async () => {
+    const view = buildOrderDebugView({
+      orderId: ORDER_ID,
+      traces: await twoTurns(),
+      workflowRuns: [
+        workflowRun({
+          operationKey: 'op-1',
+          engineStatus: 'COMPLETED',
+          engineStartedAt: '2026-08-25T10:00:02.000Z',
+          engineFinishedAt: '2026-08-25T10:01:37.000Z',
+        }),
+        workflowRun({
+          operationKey: 'op-2',
+          engineStatus: 'RUNNING',
+          engineStartedAt: '2026-08-25T10:05:00.000Z',
+        }),
+      ],
+    });
+
+    expect(view.workflows.map((run) => run.engineDurationMs)).toEqual([95_000, undefined]);
+  });
+
+  it('don khong co workflow nao thi khong co thoi luong workflow nao', async () => {
+    const view = buildOrderDebugView({
+      orderId: ORDER_ID,
+      traces: await twoTurns(),
+      workflowRuns: [],
+    });
+
+    expect(view.workflows).toEqual([]);
+    expect(view.durations.synchronousMs).toBeDefined();
+  });
+
+  it('khoang giua cac LUOT do dung cai no noi la do — moc dau toi moc cuoi', async () => {
     const view = buildOrderDebugView({
       orderId: ORDER_ID,
       traces: await twoTurns(),
       workflowRuns: [workflowRun()],
     });
 
-    // 10:00:02 -> 10:01:38 = 96 giay. Day chinh la con so ma ban cu bao cao sai thanh "92ms".
-    expect(view.durations.causalSpanMs).toBe(96_000);
-    expect(view.durations.causalSpanMs!).toBeGreaterThan(view.durations.synchronousMs!);
+    // 10:00:02 -> 10:01:38 = 96 giay. Con so nay VAN dung; cai sai la cau noi kem theo no.
+    expect(view.durations.turnIntervalMs).toBe(96_000);
+    expect(view.durations.turnIntervalMs!).toBeGreaterThan(view.durations.synchronousMs!);
   });
 
-  it('chi mot luot thi KHONG bao khoang nhan qua — 0 se bi doc thanh "xong ngay"', async () => {
+  it('chi mot luot thi KHONG bao khoang giua cac luot — 0 se bi doc thanh "xong ngay"', async () => {
     const sink = new RecentTracesSink();
     const telemetry = telemetryWith(sink);
     await rootTurn(telemetry);
@@ -231,7 +406,7 @@ describe('luong xu ly — nghia cua thoi gian', () => {
       workflowRuns: [],
     });
 
-    expect(view.durations.causalSpanMs).toBeUndefined();
+    expect(view.durations.turnIntervalMs).toBeUndefined();
   });
 });
 

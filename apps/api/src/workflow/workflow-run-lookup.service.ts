@@ -46,6 +46,31 @@ export interface WorkflowRunFacts {
   readonly dashboardUrl?: string;
   /** Trang thai THO doc tu engine. Vang mat = KHONG HOI DUOC, khong phai "chua chay". */
   readonly engineStatus?: string;
+  /**
+   * MOC THOI GIAN cua chinh engine, giu nguyen dang chuoi engine tra ve.
+   *
+   * Hai truong nay la nguon DUY NHAT do duoc mot lan cho ben vung. `queuedAt`/`dispatchedAt` o
+   * tren la moc CUA TA — chung tra loi "viec nam trong hang bao lau truoc khi engine nhan", mot
+   * cau hoi khac han. Va cac luot thi khong tra loi duoc gi ve khoang cho, vi lan cho khong sinh
+   * them luot nao.
+   *
+   * Co `engineStartedAt` ma khong co `engineFinishedAt` = run chua ket thuc.
+   */
+  readonly engineStartedAt?: string;
+  readonly engineFinishedAt?: string;
+}
+
+/**
+ * Lat du lieu doc duoc tu engine cho MOT lan chay — noi bo, khong xuat ra khoi tep nay.
+ *
+ * Ton tai de `describe()` tra ve mot thu co kieu thay vi mot bo ba tuy tien, va de cho ghep o
+ * `forEntity` phai CHON tung truong: `describeRun` con tra ve `errorMessage`/`workflowName`, va
+ * chung khong duoc tu troi ra man hinh chan doan chi vi ai do them mot dau `...`.
+ */
+interface EngineRunFacts {
+  readonly status: string;
+  readonly startedAt?: string;
+  readonly finishedAt?: string;
 }
 
 export interface WorkflowRunLookupResult {
@@ -80,9 +105,7 @@ export class WorkflowRunLookup {
         ? workflowRunDashboardUrl(dashboardBase, row.engineRunId)
         : undefined;
 
-      const engineStatus = row.engineRunId
-        ? await this.statusOf(row.engineRunId, notes)
-        : undefined;
+      const engine = row.engineRunId ? await this.describe(row.engineRunId, notes) : undefined;
 
       runs.push({
         key: row.workflowKey,
@@ -95,7 +118,11 @@ export class WorkflowRunLookup {
         engineRunId: row.engineRunId,
         lastError: row.lastError,
         ...(dashboardUrl ? { dashboardUrl } : {}),
-        ...(engineStatus ? { engineStatus } : {}),
+        // TRAI RA tung truong thay vi rai `...engine`: mot lan `describeRun` tra ve them truong
+        // moi thi truong do phai duoc chon vao day co y thuc, khong tu troi ra man hinh.
+        ...(engine?.status ? { engineStatus: engine.status } : {}),
+        ...(engine?.startedAt ? { engineStartedAt: engine.startedAt } : {}),
+        ...(engine?.finishedAt ? { engineFinishedAt: engine.finishedAt } : {}),
       });
     }
 
@@ -103,8 +130,20 @@ export class WorkflowRunLookup {
   }
 
   /**
-   * Trang thai THO cua mot lan thuc thi, hoi truc tiep engine.
+   * Trang thai VA MOC THOI GIAN cua mot lan thuc thi, hoi truc tiep engine.
    *
+   * ---------------------------------------------------------------------------
+   * VI SAO KHONG CHI LAY `status`:
+   *
+   * Ban truoc lam dung the — `return summary.status` — va do la mot cau hep hon cau hoi. Moc
+   * `startedAt`/`finishedAt` bi bo lai ngay tai day, nen man hinh chan doan phia tren het nguon
+   * do thoi gian workflow va phai quay sang hieu timestamp cua cac LUOT. Con so do khong bao gio
+   * bao trum lan cho ben vung (lan cho khong sinh luot moi), nhung no van bi dan nhan la co —
+   * mot workflow 95 giay hien ra la 2 giay.
+   *
+   * Cai gi engine noi ra thi phai di duoc toi noi hien thi.
+   *
+   * ---------------------------------------------------------------------------
    * FAIL-OPEN, va o day dieu do quan trong hon binh thuong: engine khong tra loi la mot trong
    * nhung ly do NGUOI TA MO man hinh nay. Neu chinh no sap vi engine im lang thi cong cu chan
    * doan hong dung luc can nhat.
@@ -112,11 +151,20 @@ export class WorkflowRunLookup {
    * `null` tu `describeRun` la mot CAU TRA LOI (run cu da het han luu tru sau 30 ngay), khac han
    * mot lan goi nem — nen hai truong hop sinh hai ghi chu khac nhau.
    */
-  private async statusOf(engineRunId: string, notes: string[]): Promise<string | undefined> {
+  private async describe(
+    engineRunId: string,
+    notes: string[],
+  ): Promise<EngineRunFacts | undefined> {
     if (!this.engine) return undefined;
     try {
       const summary = await this.engine.describeRun(engineRunId);
-      if (summary) return summary.status;
+      if (summary) {
+        return {
+          status: summary.status,
+          ...(summary.startedAt ? { startedAt: summary.startedAt } : {}),
+          ...(summary.finishedAt ? { finishedAt: summary.finishedAt } : {}),
+        };
+      }
       notes.push(
         `Engine không còn giữ lần chạy '${engineRunId}' — thường là do đã quá hạn lưu trữ. ` +
           'Bản ghi bền vững của Nexagnet vẫn còn trong nhật ký kiểm toán.',

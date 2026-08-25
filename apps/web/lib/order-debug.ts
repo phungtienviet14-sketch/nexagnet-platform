@@ -115,17 +115,37 @@ export function technicalFacts(view: OrderDebugView): readonly TechnicalFact[] {
 }
 
 /**
- * HAI CON SO THOI GIAN, kem cau giai thich nghia — khong bao gio hien mot con so tran trui.
+ * BA CON SO THOI GIAN, kem cau giai thich nghia — khong bao gio hien mot con so tran trui.
  *
- * Day la cho ban cu noi doi: no in `totalMs` cua mot luot canh tenant/release, khong nhan, va
- * nguoi doc ket luan do la tong thoi gian xu ly cua ca don. Voi mot day nhan qua di qua mot lan
- * cho ben vung thi ket luan do lech ba bac do lon.
+ * ---------------------------------------------------------------------------
+ * DAY LA CHO DA NOI DOI HAI LAN, va lan thu hai kho thay hon lan dau:
+ *
+ * ① Ban dau tien in `totalMs` cua mot luot canh tenant/release, khong nhan. Nguoi doc ket luan
+ *    do la tong thoi gian xu ly cua ca don, va ket luan do lech ba bac do lon.
+ *
+ * ② Ban sua loi ① dan cau "Có bao gồm cả lần chờ bền vững của workflow." vao hieu timestamp giua
+ *    cac LUOT. Con so thi dung, cau noi thi sai: mot lan cho ben vung KHONG SINH THEM LUOT —
+ *    worker goi nguoc ve va duoc noi vao mach hoi thoai dang co. Do duoc tren gd1-test:
+ *    `sales-handoff-followup.v1` cho 90 giay, chay tong 95 giay, khoang giua cac luot ra 2 giay,
+ *    va man hinh in "2 giây — có bao gồm cả lần chờ bền vững".
+ *
+ * Nen tu day ba con so, ba nguon, ba cau hoi khac han nhau:
+ *
+ *   Thoi gian xu ly dong bo   tu cac BUOC trong luot goc   may lam viec bao lau
+ *   Thoi gian workflow        tu MOC CUA ENGINE            ke ca lan cho ben vung
+ *   Khoang giua cac luot      tu timestamp cac LUOT        cac luot con ghi lai cach nhau bao xa
+ *
+ * Cau "chờ bền vững" chi duoc phep dung canh con so thu hai — hoac canh con so thu nhat de noi
+ * rang no KHONG bao gom. `order-debug.test.ts` khoa dieu do lai.
  */
 export interface DurationLine {
   readonly label: string;
   readonly value: string;
   readonly hint: string;
 }
+
+/** Hien khi khong do duoc. KHONG phai "0", vi "0" doc len la mot phep do da xay ra. */
+const UNMEASURED = 'chưa xác định';
 
 export function durationLines(view: OrderDebugView): readonly DurationLine[] {
   const lines: DurationLine[] = [];
@@ -138,13 +158,64 @@ export function durationLines(view: OrderDebugView): readonly DurationLine[] {
     });
   }
 
-  if (view.durations.causalSpanMs !== undefined) {
+  lines.push(...workflowDurationLines(view));
+
+  if (view.durations.turnIntervalMs !== undefined) {
     lines.push({
-      label: 'Khoảng từ lượt đầu tới lượt cuối',
-      value: formatDuration(view.durations.causalSpanMs),
-      hint: 'Có bao gồm cả lần chờ bền vững của workflow.',
+      label: 'Khoảng giữa các lượt được ghi nhận',
+      value: formatDuration(view.durations.turnIntervalMs),
+      hint:
+        'Đo từ lúc bắt đầu lượt đầu tới lúc bắt đầu lượt cuối còn trong dữ liệu debug. ' +
+        'Không phải thời gian workflow: lượt cũ có thể đã rời bộ đệm, và một lần chờ của ' +
+        'workflow không sinh thêm lượt nào.',
     });
   }
 
   return lines;
+}
+
+/**
+ * MOT DONG CHO MOI LAN BAN GIAO. Mot don co the kich nhieu workflow, va gop chung lam mot con so
+ * se tao ra dung cai sai vua sua xong: mot con so khong ung voi thu gi co that.
+ *
+ * NHAN PHAI DUY NHAT — component dung nhan lam khoa React, hai nhan trung nhau lam mot dong am
+ * tham bien mat. Nen co tu hai workflow tro len thi nhan mang them ten nghiep vu.
+ */
+function workflowDurationLines(view: OrderDebugView): readonly DurationLine[] {
+  const many = view.workflows.length > 1;
+
+  return view.workflows.map((workflow) => {
+    const label = many ? `Thời gian workflow · ${workflow.displayName}` : 'Thời gian workflow';
+
+    if (workflow.engineDurationMs !== undefined) {
+      return {
+        label,
+        value: formatDuration(workflow.engineDurationMs),
+        hint:
+          'Tính từ khi workflow bắt đầu tới khi engine ghi nhận hoàn tất. ' +
+          'Có bao gồm thời gian chờ bền vững.',
+      };
+    }
+
+    // CHUA XONG, khac han KHONG BIET. Hai tinh huong nay dan nguoi debug di hai huong khac nhau,
+    // nen chung khong duoc dung chung mot cau.
+    if (workflow.engineStartedAt) {
+      return {
+        label,
+        value: UNMEASURED,
+        hint:
+          `Workflow bắt đầu lúc ${clockOf(workflow.engineStartedAt)} và engine chưa ghi nhận ` +
+          'mốc kết thúc — thường là vì nó vẫn đang chạy. Màn hình không tự đếm tiếp: một con ' +
+          'số lớn dần mỗi lần mở là một phép đo giả.',
+      };
+    }
+
+    return {
+      label,
+      value: UNMEASURED,
+      hint:
+        'Engine chưa cung cấp mốc bắt đầu/kết thúc cho lần chạy này. Thời gian workflow chỉ đo ' +
+        'được từ mốc của engine, không suy ra được từ các lượt xử lý.',
+    };
+  });
 }
