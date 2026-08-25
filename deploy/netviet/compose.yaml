@@ -236,6 +236,12 @@ services:
       # GHI CUNG, khong phai bien — xem ly do day du o service `workflow-worker-v1`.
       WORKFLOW_ENGINE_HOST_PORT: hatchet-engine:7070
       WORKFLOW_ENGINE_TLS_STRATEGY: none
+      # DUONG CHO MAY (REST) — NOI BO, khong di qua Caddy. Bien nay va `..._DASHBOARD_URL` ngay
+      # duoi tro HAI CHO KHAC NHAU, va gop chung lam mot chinh la loi da xay ra 25/08/2026:
+      # thieu bien nay, SDK lay goc REST tu claim `server_url` trong token = ten mien cong khai,
+      # von nam sau basic-auth => moi lan `describeRun` deu an 401 trong khi gRPC van chay tot.
+      # Trieu chung o phia nguoi dung: man hinh chan doan thieu hang "Trang thai o engine".
+      WORKFLOW_ENGINE_API_URL: http://hatchet-dashboard
       WORKFLOW_ENGINE_DASHBOARD_URL: https://${WORKFLOW_DOMAIN}
       WORKFLOW_ENGINE_NAMESPACE: ${WORKFLOW_ENGINE_NAMESPACE:-}
     command:
