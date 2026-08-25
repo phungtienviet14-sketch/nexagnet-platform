@@ -67,11 +67,30 @@ export class OtelTraceBridge implements TraceBridge {
   turn<T>(continueFrom: string | undefined, run: (traceparent: string | undefined) => T): T {
     let span: Span;
     try {
-      // `traceparent` tu ben ngoai -> span cua ta la CON cua span do, cung mot `traceId`.
-      // Khong co -> `propagation.extract` khong duoc goi va span thanh goc. Ca hai deu dung.
-      const parent = continueFrom
-        ? propagation.extract(otelContext.active(), { traceparent: continueFrom })
-        : otelContext.active();
+      const active = otelContext.active();
+      /*
+       * BA DUONG, va THU TU giua chung la ca van de:
+       *
+       *   1. DA o trong mot span  -> dung context active NGUYEN VEN, bo qua `continueFrom`;
+       *   2. co `traceparent`     -> extract no, span cua ta thanh CON cua span ben goi;
+       *   3. khong co gi          -> span goc.
+       *
+       * VI SAO (1) PHAI DUNG TRUOC (2) — do bang thuc nghiem, khong suy dien:
+       *
+       * O duong quay lai `internal/sales-handoff`, `HttpInstrumentation` da mo mot span SERVER
+       * cho request va TU extract chinh cai header do. Luc `runTurn` chay thi context active DA
+       * thuoc dung trace. Neu ta extract LAI header, cha cua span luot tro thanh span cua WORKER
+       * — tuc span luot nam CANH span server thay vi TRONG no, va mot nhip cua cay bi lam phang.
+       * Do la kieu hong te nhat: BAT tracing len lam xau di dung cai cay ma tracing sinh ra de noi.
+       *
+       * Noi goi VAN phai truyen `continueFrom`: tang nghiep vu (`trace-context.ts`) khong biet gi
+       * ve OTel va can header do khi OTel TAT. Hai duong khong danh nhau — chung xep thu tu.
+       */
+      const parent = trace.getSpan(active)
+        ? active
+        : continueFrom
+          ? propagation.extract(active, { traceparent: continueFrom })
+          : active;
       span = this.tracer.startSpan('turn', { kind: SpanKind.INTERNAL }, parent);
     } catch {
       return run(undefined);
