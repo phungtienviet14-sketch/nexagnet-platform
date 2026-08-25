@@ -332,6 +332,42 @@ test('dich den `self-api` tro vao MANG NOI BO, va DUNG cong ma service `api` dan
   assert.doesNotMatch(destination, /OPERATOR_DOMAIN|WORKFLOW_DOMAIN/);
 });
 
+test('deploy-stack.sh THUC SU khoi dong moi worker co trong compose', () => {
+  /*
+   * TANG THU HAI cua cung mot cai bay, va no suyt lot trong chinh lan sua nay.
+   *
+   * `deploy-stack.sh` khong bat ca profile len — no LIET KE TUNG SERVICE:
+   *
+   *     compose --profile workflow up -d --wait ... hatchet-engine hatchet-dashboard <cac worker>
+   *
+   * Nen mot service co day du trong `compose.yaml`, dung khuon, dung khoa, dung dich den — ma
+   * vang o dong do — se KHONG BAO GIO duoc khoi dong. Deploy van xanh. Khuon van khong co ai
+   * phuc vu. Y het trieu chung cua mac dinh `WORKFLOW_WORKER_TEMPLATE`, chi khac tang.
+   *
+   * Bai nay doi chieu HAI NGUON: danh sach worker trong compose vs danh sach worker trong script.
+   * Them worker ma quen mot trong hai ben deu DO o day.
+   */
+  const deployStack = readConfig('deploy-stack.sh');
+  const workersInCompose = [...serviceBlocks(compose).keys()].filter((name) =>
+    name.startsWith('workflow-worker'),
+  );
+
+  assert.ok(workersInCompose.length >= 2, 'khong doc duoc danh sach worker tu compose.yaml');
+
+  const startedAt = deployStack.indexOf('--profile workflow up -d');
+  assert.notEqual(startedAt, -1, 'deploy-stack.sh khong con lenh khoi dong cum workflow');
+  // Cat toi `ps` — dung than cua lenh `up`, khong lan sang phan con lai cua script.
+  const startCommand = deployStack.slice(startedAt, deployStack.indexOf('--profile workflow ps'));
+
+  const missing = workersInCompose.filter((name) => !startCommand.includes(name));
+  assert.deepEqual(
+    missing,
+    [],
+    `deploy-stack.sh khong khoi dong: ${missing.join(', ')}. Service co trong compose ma vang o ` +
+      'lenh `up` thi khong bao gio chay, va deploy VAN XANH.',
+  );
+});
+
 test('KHONG lam hong worker `integration-handoff` dang chay', () => {
   // Worker cu dang phuc vu tren gd1-test. Doi ten service = huy container dang chay va moi run
   // `.v1` dang do nam cho vinh vien (runbook §2). Ten no phai giu nguyen, va khuon no phuc vu

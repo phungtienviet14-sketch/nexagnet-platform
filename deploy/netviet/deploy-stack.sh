@@ -107,8 +107,13 @@ if [[ "${workflow_engine}" == 'on' ]]; then
   # `--wait` doi HEALTHY chu khong chi doi "da tao". Worker co `start_period: 90s` nen han 300s la
   # bien an toan quanh lan do te nhat cua §29 (38 s cho ca tien trinh len), khong phai mot con so
   # tron cho dep.
+  #
+  # DANH SACH LIET KE TUONG MINH, va moi worker MOI phai duoc them vao day. Mot service co trong
+  # `compose.yaml` nhung vang o dong nay se KHONG BAO GIO duoc khoi dong — deploy van xanh, va
+  # khuon cua no khong co ai phuc vu. Cung ho voi cai bay `WORKFLOW_WORKER_TEMPLATE` mac dinh:
+  # hong o TANG CAU HINH chu khong o tang code, nen khong bo test don le nao thay duoc.
   "${COMPOSE[@]}" --profile workflow up -d --wait --wait-timeout 300 \
-    hatchet-engine hatchet-dashboard workflow-worker-v1
+    hatchet-engine hatchet-dashboard workflow-worker-v1 workflow-worker-sales-handoff-v1
   "${COMPOSE[@]}" --profile workflow ps
 fi
 
