@@ -67,6 +67,16 @@ export interface WorkflowOutboxEntry extends NewWorkflowOutboxEntry {
   readonly nextAttemptAt: Date | null;
   readonly engineRunId: string | null;
   readonly lastError: string | null;
+  /**
+   * Luc su kien duoc XEP HANG — tuc luc thay doi nghiep vu commit, vi hang nay nam cung giao dich.
+   *
+   * Hai moc thoi gian nay co mat vi mot ly do cu the: man hinh chan doan phai noi duoc "viec nam
+   * trong hang bao lau truoc khi engine nhan". Khong co chung thi mot dispatcher ket va mot
+   * engine cham nhin y het nhau.
+   */
+  readonly queuedAt: Date;
+  /** Luc engine XAC NHAN da nhan. `null` = chua ban giao duoc (con pending/claimed/failed). */
+  readonly dispatchedAt: Date | null;
 }
 
 /**
@@ -101,6 +111,22 @@ export abstract class WorkflowOutboxRepository {
   abstract markAttemptFailed(id: string, error: string, now: Date): Promise<void>;
 
   abstract findByOperationKey(operationKey: string): Promise<WorkflowOutboxEntry | null>;
+
+  /**
+   * MOI ban giao da xep hang cho MOT thuc the nghiep vu, cu nhat truoc.
+   *
+   * Duong DOC, phuc vu man hinh chan doan: nguoi debug co ma don truoc mat chu khong co
+   * `operationKey`, va cau ho hoi la "don nay da kich workflow nao, den dau roi".
+   *
+   * TRA VE MOT DANH SACH chu khong phai mot ban ghi, va do la su that chu khong phai phong xa:
+   * mot thuc the co the sinh nhieu ban giao (nhieu khuon, hoac cung khuon o nhieu giai doan),
+   * va gop chung lam mot se lam nguoi doc tin rang chi co mot.
+   *
+   * KHONG loc theo `entityType`: goi khach quyet dinh khuon nao neo vao ma don duoi loai gi
+   * (`sales-handoff` hom nay, co the them loai khac mai sau). Loc o day se am tham giau mat
+   * dung nhung ban giao ma nguoi debug khong ngo toi.
+   */
+  abstract findByEntityId(entityId: string): Promise<WorkflowOutboxEntry[]>;
 
   abstract countPending(): Promise<number>;
   abstract countFailed(): Promise<number>;
@@ -137,6 +163,8 @@ export class InMemoryWorkflowOutboxRepository extends WorkflowOutboxRepository {
       nextAttemptAt: null,
       engineRunId: null,
       lastError: null,
+      queuedAt: new Date(),
+      dispatchedAt: null,
       claimedBy: null,
       claimExpiresAt: null,
     };
@@ -171,11 +199,12 @@ export class InMemoryWorkflowOutboxRepository extends WorkflowOutboxRepository {
     return claimed;
   }
 
-  async markDispatched(id: string, engineRunId: string, _now: Date): Promise<void> {
+  async markDispatched(id: string, engineRunId: string, now: Date): Promise<void> {
     this.update(id, (row) => ({
       ...row,
       status: 'dispatched',
       engineRunId,
+      dispatchedAt: now,
       lastError: null,
       claimedBy: null,
       claimExpiresAt: null,
@@ -202,6 +231,16 @@ export class InMemoryWorkflowOutboxRepository extends WorkflowOutboxRepository {
 
   async findByOperationKey(operationKey: string): Promise<WorkflowOutboxEntry | null> {
     return this.rows.get(operationKey) ?? null;
+  }
+
+  /**
+   * `Map` giu THU TU CHEN, va thu tu chen chinh la thu tu xep hang — nen khong sap xep theo
+   * `queuedAt` o day. Sap theo dau thoi gian se lam hai hang xep trong cung mot mili giay doi
+   * cho nhau tuy tam trang cua bo sort, va do dung la kieu khac biet lam mot bai kiem thu tu
+   * xanh tren may cham va do tren runner nhanh.
+   */
+  async findByEntityId(entityId: string): Promise<WorkflowOutboxEntry[]> {
+    return [...this.rows.values()].filter((row) => row.entityId === entityId);
   }
 
   async countPending(): Promise<number> {

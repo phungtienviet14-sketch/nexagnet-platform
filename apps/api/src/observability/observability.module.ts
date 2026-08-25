@@ -76,6 +76,15 @@ import { privacyModeFor } from './telemetry-redaction.js';
       },
     },
   ],
-  exports: [TelemetryService],
+  /**
+   * `RecentTracesSink` duoc XUAT (module nay `@Global`, nen tuc la moi noi tiem duoc) de man
+   * hinh chan doan doc lai cac luot ma khong phai dung mot vong dem thu hai.
+   *
+   * Xuat mot SINK ra ngoai nghe co ve pha bien gioi, nhung khong: cai duoc dung o ngoai la cac
+   * duong DOC (`get`/`list`/`findByOrderId`/`findAllByOrderId`). Duong `record` van chi co
+   * `TelemetryService` goi — nghiep vu khong bao gio ghi thang vao sink, va dieu do khong duoc
+   * noi long o day.
+   */
+  exports: [TelemetryService, RecentTracesSink],
 })
 export class ObservabilityModule {}

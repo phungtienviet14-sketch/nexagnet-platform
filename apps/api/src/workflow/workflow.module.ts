@@ -26,6 +26,7 @@ import {
   InMemoryWorkflowOutboxRepository,
   WorkflowOutboxRepository,
 } from './workflow-outbox.repository.js';
+import { WorkflowRunLookup } from './workflow-run-lookup.service.js';
 
 const TICK_INTERVAL_MS = 5_000;
 const LEASE_SECONDS = 60;
@@ -171,9 +172,16 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
       ],
     },
     WorkflowScheduler,
+    WorkflowRunLookup,
   ],
-  // Chi xuat CAU NOI va CONG. Noi goi nghiep vu khong duoc cham vao outbox hay dispatcher —
-  // neu chung ra ngoai thi som muon co nguoi xep hang truc tiep, bo qua bien gioi rieng tu.
-  exports: [WorkflowHandoffService, WorkflowEnginePort],
+  /*
+   * Chi xuat CAU NOI, CONG va DUONG DOC. Noi goi nghiep vu van khong duoc cham vao outbox hay
+   * dispatcher — neu chung ra ngoai thi som muon co nguoi xep hang truc tiep, bo qua bien gioi
+   * rieng tu.
+   *
+   * `WorkflowRunLookup` KHONG pha rang buoc do: no chi co `forEntity()`, va `forEntity()` chi
+   * doc. Cai duoc giu kin la quyen GHI, va quyen do khong duoc mo them o day.
+   */
+  exports: [WorkflowHandoffService, WorkflowEnginePort, WorkflowRunLookup],
 })
 export class WorkflowModule {}

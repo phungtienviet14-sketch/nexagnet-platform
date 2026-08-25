@@ -142,6 +142,21 @@ export class PrismaWorkflowOutboxRepository extends WorkflowOutboxRepository {
     return row ? toEntry(row) : null;
   }
 
+  /**
+   * Duong DOC cho man hinh chan doan. `@@index([entityType, entityId])` da co san; loc mot minh
+   * `entityId` KHONG dung duoc index do (no bat dau bang `entityType`), nen day la mot lan quet
+   * bang. Chap nhan duoc o day va chi o day: bang outbox cua mot khach dem bang hang nghin, va
+   * duong nay chi chay khi co nguoi mo man hinh chan doan — khong nam trong luong xu ly tin.
+   * Khi no thanh van de, cach sua la them index tren rieng `entityId`, khong phai doi hop dong.
+   */
+  async findByEntityId(entityId: string): Promise<WorkflowOutboxEntry[]> {
+    const rows = await this.prisma.workflowOutbox.findMany({
+      where: { entityId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(toEntry);
+  }
+
   async countPending(): Promise<number> {
     return this.prisma.workflowOutbox.count({ where: { status: { in: ['pending', 'claimed'] } } });
   }
@@ -169,5 +184,7 @@ function toEntry(row: WorkflowOutbox): WorkflowOutboxEntry {
     nextAttemptAt: row.nextAttemptAt,
     engineRunId: row.engineRunId,
     lastError: row.lastError,
+    queuedAt: row.createdAt,
+    dispatchedAt: row.dispatchedAt,
   };
 }

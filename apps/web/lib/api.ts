@@ -5,6 +5,7 @@ import type {
   ErpOrder,
   ErpProduct,
   KnowledgeSummary,
+  OrderDebugView,
   OrderView,
   TraceView,
 } from '@netviet/shared';
@@ -132,4 +133,19 @@ export async function fetchOrderTrace(orderId: string): Promise<TraceView | null
   });
   if (response.status === 404) return null;
   return toJson<TraceView>(response);
+}
+
+/**
+ * LUONG XU LY day du cua mot don — nguon cho man hinh chan doan.
+ *
+ * KHAC `fetchOrderTrace` o cho no khong bao gio tra `null`: cau hoi la "he thong con biet gi ve
+ * don nay", va cau do luon co cau tra loi — ke ca khi cau tra loi la "khong con luot nao trong
+ * bo dem", von chinh la thu nguoi debug can doc. Duong o API vi vay cung khong nem 404.
+ */
+export async function fetchOrderDebug(orderId: string): Promise<OrderDebugView> {
+  const response = await authFetch(
+    `${BASE}/observability/debug/orders/${encodeURIComponent(orderId)}`,
+    { cache: 'no-store' },
+  );
+  return toJson<OrderDebugView>(response);
 }

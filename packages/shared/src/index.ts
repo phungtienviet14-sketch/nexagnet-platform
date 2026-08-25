@@ -1,4 +1,12 @@
 export * from './trace-view.js';
+export type {
+  DebugTurn,
+  DebugHandoffStatus,
+  DebugWorkflowStep,
+  DebugWorkflowRun,
+  DebugDurations,
+  OrderDebugView,
+} from './order-debug-view.js';
 export { envSchema, loadEnv, EnvValidationError } from './env.js';
 export type { AppEnv } from './env.js';
 export {
