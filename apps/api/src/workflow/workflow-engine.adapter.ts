@@ -19,6 +19,18 @@ export interface WorkflowEngineCredentials {
   readonly token?: string;
   readonly hostPort?: string;
   readonly tlsStrategy?: 'none' | 'tls' | 'mtls';
+  /**
+   * Goc URL REST cua engine — duong MAY doc. Khac `dashboardBaseUrl` (duong NGUOI bam).
+   *
+   * PHAI CO MAT O DAY, khong chi o `HatchetEngineConfig`: ham duoi day dung lai cau hinh TUNG
+   * TRUONG MOT, nen mot truong khong duoc liet ke o day se RUNG AM THAM giua noi goi va adapter.
+   * Da xay ra that (25/08/2026): `workflow.module.ts` truyen `apiUrl`, adapter biet doc `apiUrl`,
+   * va no van khong bao gio toi noi — vi cai hop o giua khong mang no qua.
+   *
+   * TypeScript KHONG bat duoc: noi goi truyen bang spread co dieu kien
+   * (`...(x ? { apiUrl: x } : {})`), ma spread thi khong chiu kiem tra thuoc tinh thua.
+   */
+  readonly apiUrl?: string;
   readonly dashboardBaseUrl?: string;
   readonly namespace?: string;
 }
@@ -44,6 +56,7 @@ export async function createWorkflowEngineAdapter(
       token: credentials.token,
       ...(credentials.hostPort ? { hostPort: credentials.hostPort } : {}),
       ...(credentials.tlsStrategy ? { tlsStrategy: credentials.tlsStrategy } : {}),
+      ...(credentials.apiUrl ? { apiUrl: credentials.apiUrl } : {}),
       ...(credentials.dashboardBaseUrl ? { dashboardBaseUrl: credentials.dashboardBaseUrl } : {}),
       ...(credentials.namespace ? { namespace: credentials.namespace } : {}),
     });
