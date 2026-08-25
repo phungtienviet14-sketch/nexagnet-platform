@@ -18,6 +18,35 @@ export abstract class TurnRecordsRepository {
   abstract list(): Promise<OrderView[]>;
   abstract findById(id: string): Promise<OrderView | null>;
   abstract update(id: string, patch: Partial<OrderView>): Promise<OrderView | null>;
+
+  /**
+   * Mot lan `update` + mot viec khac trong CUNG MOT GIAO DICH.
+   *
+   * TON TAI DE DONG BAI TOAN GHI HAI NOI: khi mot thay doi nghiep vu phai keo theo mot hang
+   * outbox (`WorkflowOutboxRepository.enqueue`), hai lan ghi do KHONG duoc phep tach roi. Ghi
+   * don xong roi chet truoc khi ghi outbox = mot viec bien mat ma khong ai biet.
+   *
+   * TUY CHON co chu y — `undefined` la mot cau tra loi hop le, khong phai mot thieu sot:
+   *
+   *   Postgres  co giao dich that -> hien thuc no, va `tx` duoc chuyen tiep xuong `enqueue`.
+   *   BO NHO    KHONG hien thuc, va khong can: kho nam trong chinh tien trinh, nen khong co
+   *             kich ban "don da commit con outbox thi chua". Tien trinh chet la mat ca hai.
+   *
+   * Ben goi thay `undefined` thi lam tuan tu — xem `OrdersService.performSendConfirmation`.
+   *
+   * `tx` de `unknown` co chu y, cung ly do voi `WorkflowOutboxTransaction`: cong nay khong duoc
+   * biet Prisma ton tai.
+   *
+   * Khai bang THUOC TINH ham chu khong phai `abstract` co dau `?`: TypeScript van bat mot
+   * `abstract` phai duoc hien thuc du co dau hoi, nen ban trong bo nho se khong bien dich. Mot
+   * thuoc tinh tuy chon thi hien thuc bang phuong thuc lop van thoa — va `this` van dung, vi no
+   * duoc goi qua chinh doi tuong (`this.repo.updateWithin(...)`).
+   */
+  readonly updateWithin?: <T>(
+    id: string,
+    patch: Partial<OrderView>,
+    work: (tx: unknown) => Promise<T>,
+  ) => Promise<{ view: OrderView | null; result: T }>;
 }
 
 /** Kho luot trong bo nho — mac dinh cua demo/CI (`PERSISTENCE=memory`). */

@@ -133,19 +133,56 @@ export const AMEND_WINDOW_REASONS = [
 ] as const;
 export type AmendWindowReason = (typeof AMEND_WINDOW_REASONS)[number];
 
+
+/* ------------------------------------------------------------------ *
+ * order.handoff_followup_schedule / order.handoff_followup_mark
+ * — HAI DAU cua workflow `sales-handoff-followup`.
+ *
+ * Tach lam hai diem chu khong gop: chung tra loi hai cau hoi khac nhau, cach nhau nhieu gio, va
+ * o hai tien trinh khac nhau. "Vi sao don nay khong duoc theo doi?" la mot cau hoi ve luc CHOT
+ * DON; "vi sao no khong duoc nhac?" la mot cau hoi ve luc HET GIO. Gop lai thi khong loc duoc
+ * cai nao ra cai nao.
+ * ------------------------------------------------------------------ */
+
+/** Luc don chuyen `sent` + `salesHandoff.pending`: co dat lich theo doi khong. */
+export const FOLLOWUP_SCHEDULE_REASONS = [
+  /** Goi khach khong khai `handoffFollowup`, hoac khai `enabled: false`. Mac dinh — fail-safe. */
+  'FOLLOWUP_DISABLED',
+  /** Da xep vao outbox trong CUNG giao dich voi thay doi nghiep vu. */
+  'FOLLOWUP_SCHEDULED',
+  /** Khach co policy nhung khong khai rang buoc workflow (hoac adapter=none). Cau hinh HOP LE. */
+  'FOLLOWUP_NO_WORKFLOW_BINDING',
+] as const;
+export type FollowupScheduleReason = (typeof FOLLOWUP_SCHEDULE_REASONS)[number];
+
+/** Luc workflow thuc day va goi nguoc lai: co danh dau khong. CONG EXACTLY-ONCE. */
+export const FOLLOWUP_MARK_REASONS = [
+  /** Danh dau lan nay. Day la lan DUY NHAT cho mot (don, giai doan). */
+  'FOLLOWUP_MARKED',
+  /** Giai doan nay da duoc danh dau roi -> khong ghi de. Chan chay lai/su kien trung. */
+  'FOLLOWUP_ALREADY_MARKED',
+  /** Nguoi da xu ly xong trong luc workflow dang ngu -> khong con gi de nhac. */
+  'FOLLOWUP_NOT_PENDING',
+] as const;
+export type FollowupMarkReason = (typeof FOLLOWUP_MARK_REASONS)[number];
+
 export type SalesOrderDecisionReason =
   | AutoConfirmReason
   | ManualApproveReason
   | ManualRejectReason
   | SalesHandoffReason
   | PricingReason
-  | AmendWindowReason;
+  | AmendWindowReason
+  | FollowupScheduleReason
+  | FollowupMarkReason;
 
 export const SALES_ORDER_DECISIONS = defineDecisionVocabulary({
   owner: 'sales-order',
   points: [
     'order.auto_confirm',
     'order.amend_window',
+    'order.handoff_followup_schedule',
+    'order.handoff_followup_mark',
     'order.manual_approve',
     'order.manual_reject',
     'order.sales_handoff',
@@ -188,6 +225,13 @@ export const SALES_ORDER_DECISIONS = defineDecisionVocabulary({
     AMEND_NOT_AN_ORDER: 'Tin này không phải một đơn hàng',
     AMEND_ALREADY_REJECTED: 'Đơn đã bị huỷ trước đó',
     AMEND_SYNCED_TO_ERP: 'Đơn đã đồng bộ sang hệ thống bán hàng',
-    AMEND_HANDED_TO_ERP: 'Sale đã nhập đơn vào hệ thống bán hàng'
+    AMEND_HANDED_TO_ERP: 'Sale đã nhập đơn vào hệ thống bán hàng',
+
+    FOLLOWUP_DISABLED: 'Khách chưa bật theo dõi việc bàn giao',
+    FOLLOWUP_SCHEDULED: 'Đã đặt lịch theo dõi việc bàn giao',
+    FOLLOWUP_NO_WORKFLOW_BINDING: 'Khách chưa khai ràng buộc workflow cho khuôn này',
+    FOLLOWUP_MARKED: 'Đánh dấu việc bàn giao đã quá hạn, cần người để ý',
+    FOLLOWUP_ALREADY_MARKED: 'Giai đoạn này đã được đánh dấu trước đó',
+    FOLLOWUP_NOT_PENDING: 'Việc bàn giao đã được xử lý trong lúc chờ'
   } satisfies Record<SalesOrderDecisionReason, string>,
 });

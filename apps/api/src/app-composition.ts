@@ -73,6 +73,8 @@ import { TurnReplyService } from './turns/turn-reply.service.js';
 import { MessagesController } from './turns/turns.controller.js';
 import { OrdersService } from './orders/orders.service.js';
 import { SalesOrderOutcomeService } from './orders/sales-order-outcome.service.js';
+import { SalesHandoffController } from './orders/sales-handoff.controller.js';
+import { SalesHandoffFollowupService } from './orders/sales-handoff-followup.service.js';
 import { TurnOutcomePort } from './turns/turn-outcome.port.js';
 import { OrderAmendmentService } from './orders/order-amendment.service.js';
 import { OrderCommandAdapter } from './orders/order-command.adapter.js';
@@ -122,6 +124,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('foundation', HealthController),
   owned('sales-order', OrdersController),
+  // Duong QUAY LAI cua worker workflow. Den cung `sales-order` va bien mat cung no: mot khach
+  // khong ban hang khong co viec ban giao nao de theo doi.
+  owned('sales-order', SalesHandoffController),
   owned('turn-processing', MessagesController),
   // Bo MO PHONG cua duong xu ly luot, khong phai mot man hinh ban hang: `/demo/simulate` la cong
   // duy nhat chay tron pipeline that ma khong can Zalo (smoke test deploy, do tre observability,
@@ -234,6 +239,7 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('turn-processing', AgentOrchestrator),
   owned('turn-processing', PipelineService),
   owned('sales-order', OrdersService),
+  owned('sales-order', SalesHandoffFollowupService),
   owned('sales-order', OrderAmendmentService),
   // CONG TU XAC NHAN DON — den cung `sales-order` va bien mat cung no.
   //

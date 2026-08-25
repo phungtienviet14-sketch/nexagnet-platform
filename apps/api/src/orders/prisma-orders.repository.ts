@@ -39,6 +39,27 @@ export class PrismaOrdersRepository extends OrdersRepository {
     return next;
   }
 
+  /**
+   * `update` + mot viec khac trong CUNG mot giao dich Postgres — xem `TurnRecordsRepository`.
+   *
+   * `work` chay SAU lan ghi don co chu y: hang outbox chi co nghia khi thay doi nghiep vu da
+   * nam trong cung giao dich do. Neu `work` nem, ca hai cung bi cuon lai — dung hanh vi can:
+   * khong bao gio co mot don da `sent` ma viec theo doi cua no bien mat.
+   */
+  override readonly updateWithin = async <T>(
+    id: string,
+    patch: Partial<OrderView>,
+    work: (tx: unknown) => Promise<T>,
+  ): Promise<{ view: OrderView | null; result: T }> => {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.order.findUnique({ where: { id } });
+      if (!row?.view) return { view: null, result: await work(tx) };
+      const next: OrderView = { ...(row.view as unknown as OrderView), ...patch };
+      await tx.order.update({ where: { id }, data: this.toRow(next) });
+      return { view: next, result: await work(tx) };
+    });
+  };
+
   /** OrderView -> hang Order: `view` giu ban day du; scalar de truy van. */
   private toRow(view: OrderView): Prisma.OrderUncheckedCreateInput {
     return {

@@ -7,6 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { OrderView } from '@netviet/shared';
+import { tenantSalesHandoffFollowup } from '@netviet/tenant';
 import { AgentEventsService } from '../agents/agent-events.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { autoLabel } from '../channels/auto-label.js';
@@ -15,9 +16,12 @@ import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import type { DecisionOutcome, DecisionPointOf } from '../observability/decision-vocabulary.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
+import { WorkflowHandoffService } from '../workflow/workflow-handoff.service.js';
+import { SALES_HANDOFF_FOLLOWUP_KEY } from '../workflow/workflow-registry.js';
 import { amendDecisionReason, canAmendOrder, type AmendVerdict } from './amend-window.js';
 import {
   SALES_ORDER_DECISIONS,
+  type FollowupScheduleReason,
   type ManualApproveReason,
   type ManualRejectReason,
   type SalesHandoffReason,
@@ -56,6 +60,14 @@ export class OrdersService {
      * dung mot collaborator chung khong dung la mot cach lam ranh gioi trong nen giay.
      */
     @Optional() private readonly turnReply?: TurnReplyService,
+    /**
+     * CAU NOI DUY NHAT sang workflow engine — `@Optional()` va dat CUOI danh sach co chu y.
+     *
+     * `@Optional()` vi mot khach ban hang khong bat buoc phai chay workflow engine (mac dinh la
+     * khong), va hang chuc bo test dung `OrdersService` truyen tham so THEO VI TRI. Vang mat =
+     * khong dat lich theo doi; don van gui, van luu, van bao Sale y nhu truoc.
+     */
+    @Optional() private readonly workflows?: WorkflowHandoffService,
   ) {}
 
   /** Danh sach DON (intent dat_don). */
@@ -131,16 +143,87 @@ export class OrdersService {
       );
     }
 
-    const sent = (await this.repo.update(id, {
+    const patch: Partial<OrderView> = {
       status: 'sent',
       salesHandoff: {
         action: 'manual_erp_entry',
         status: 'pending',
         createdAt: new Date().toISOString(),
       },
-    }))!;
+    };
+
+    /**
+     * DAY LA DIEM SINH RA VIEC BAN GIAO — va cung la diem dat lich theo doi no.
+     *
+     * Hai lan ghi (don sang `sent` + hang outbox) di CUNG MOT GIAO DICH khi kho ho tro. Do la
+     * ca ly do `updateWithin` ton tai: neu tien trinh chet giua hai lan ghi roi rac, ta se co
+     * mot don da gui cho khach ma khong he thong nao nho phai theo doi no — dung tinh huong
+     * khuon workflow nay sinh ra de xoa bo.
+     *
+     * KHONG goi Hatchet o day. `WorkflowHandoffService` chi ghi mot hang outbox roi tra ve
+     * ngay; dispatcher rieng moi cham toi engine. Goi engine trong giao dich nghiep vu se cot
+     * thoi gian chot don vao do san sang cua mot he thong khac.
+     */
+    const sent = await this.withFollowupScheduled(id, patch);
     this.events?.emit({ type: 'order.updated', order: sent });
     return sent;
+  }
+
+  /**
+   * Ghi thay doi nghiep vu, va xep lich theo doi trong cung giao dich neu khach co bat.
+   *
+   * FAIL-CLOSED VE NGHIEP VU, FAIL-OPEN VE LICH: khach khong khai `handoffFollowup` (mac dinh)
+   * thi khong co lich nao — don van gui binh thuong. Nguoc lai, mot loi khi xep hang KHONG bi
+   * nuot: no cuon lai ca lan ghi don, vi mot don `sent` khong co nguoi theo doi la dung thu ta
+   * dang tim cach loai bo.
+   */
+  private async withFollowupScheduled(id: string, patch: Partial<OrderView>): Promise<OrderView> {
+    const policy = tenantSalesHandoffFollowup();
+    const enabled = Boolean(policy?.enabled) && Boolean(this.workflows);
+
+    if (!enabled) {
+      this.decideSchedule('denied', policy?.enabled ? 'FOLLOWUP_NO_WORKFLOW_BINDING' : 'FOLLOWUP_DISABLED');
+      return (await this.repo.update(id, patch))!;
+    }
+
+    const schedule = async (tx: unknown): Promise<void> => {
+      const result = await this.workflows!.handoff(
+        {
+          workflowKey: SALES_HANDOFF_FOLLOWUP_KEY,
+          operation: 'followup',
+          // THAM CHIEU, khong phai anh chup: worker doc lai don tu DB o moi lan thuc day.
+          entityType: 'sales-handoff',
+          entityId: id,
+        },
+        tx,
+      );
+      // `skipped` = khach co policy nhung chua khai rang buoc workflow. Cau hinh HOP LE, khong
+      // phai loi — nhung phai phan biet duoc voi "da xep hang" khi doc lai trace ve sau.
+      this.decideSchedule(
+        result.outcome === 'queued' ? 'allowed' : 'denied',
+        result.outcome === 'queued' ? 'FOLLOWUP_SCHEDULED' : 'FOLLOWUP_NO_WORKFLOW_BINDING',
+      );
+    };
+
+    // Kho khong ho tro giao dich (ban trong bo nho) -> lam tuan tu. Khong co cua so mat mat o
+    // do: kho song trong chinh tien trinh nay, tien trinh chet la mat ca hai.
+    if (!this.repo.updateWithin) {
+      const updated = (await this.repo.update(id, patch))!;
+      await schedule(undefined);
+      return updated;
+    }
+
+    const { view } = await this.repo.updateWithin(id, patch, schedule);
+    return view!;
+  }
+
+  private decideSchedule(outcome: DecisionOutcome, reason: FollowupScheduleReason): void {
+    this.telemetry?.decision({
+      vocabulary: SALES_ORDER_DECISIONS,
+      point: 'order.handoff_followup_schedule',
+      outcome,
+      reason,
+    });
   }
 
   /** Sale dong tac vu nhap ERP thu cong; thao tac lap lai khong tao them handoff. */
