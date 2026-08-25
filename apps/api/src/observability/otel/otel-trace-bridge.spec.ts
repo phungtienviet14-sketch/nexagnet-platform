@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { context, trace } from '@opentelemetry/api';
+import { context, propagation, SpanKind, trace } from '@opentelemetry/api';
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
@@ -108,6 +108,39 @@ describe('OtelTraceBridge', () => {
     await telemetry.runTurn({}, async () => undefined, `00-${inboundTraceId}-00f067aa0ba902b7-01`);
 
     expect(exporter.getFinishedSpans()[0]!.spanContext().traceId).toBe(inboundTraceId);
+  });
+
+  /**
+   * KICH BAN THAT cua duong quay lai `internal/sales-handoff` khi OTel DANG CHAY.
+   *
+   * `HttpInstrumentation` mo mot span SERVER cho request va TU extract `traceparent` cua worker,
+   * nen luc `runTurn` chay thi context active DA thuoc dung trace roi. Ta van truyen header vao
+   * `continueFrom` — vi tang nghiep vu (`trace-context.ts`) khong biet gi ve OTel va can no khi
+   * OTel TAT.
+   *
+   * Bai nay khoa cau hoi: hai duong do co danh nhau khong? Cau tra loi phai la KHONG — cung mot
+   * `traceId`, va span cua luot long TRONG span server chu khong tro thanh anh em cua no. Neu no
+   * thanh anh em thi bat tracing len se lam PHANG dung cai cay ma ban sua nay vua noi.
+   */
+  it('nests the turn under the ACTIVE server span when both it and the header point at one trace', async () => {
+    const { telemetry } = telemetryWithBridge();
+    const inboundTraceId = '4bf92f3577b34da6a3ce929d0e0e4736';
+    const traceparent = `00-${inboundTraceId}-00f067aa0ba902b7-01`;
+
+    // Dung cai `HttpInstrumentation` lam: mo span SERVER la con cua worker, roi chay handler
+    // BEN TRONG context cua no.
+    const serverParent = propagation.extract(context.active(), { traceparent });
+    const serverSpan = provider
+      .getTracer('test')
+      .startSpan('POST /internal/sales-handoff', { kind: SpanKind.SERVER }, serverParent);
+    await context.with(trace.setSpan(context.active(), serverSpan), () =>
+      telemetry.runTurn({}, async () => undefined, traceparent),
+    );
+    serverSpan.end();
+
+    const turn = byName(exporter.getFinishedSpans(), 'turn');
+    expect(turn.spanContext().traceId).toBe(inboundTraceId);
+    expect(turn.parentSpanContext?.spanId).toBe(serverSpan.spanContext().spanId);
   });
 
   it('records a decision as a span event with its typed reason', async () => {
