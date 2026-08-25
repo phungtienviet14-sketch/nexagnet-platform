@@ -1,5 +1,9 @@
 import { buildOperationKey } from '../operation-key.js';
+import { destinationEnvName, resolveDestinationUrl } from './workflow-destination.js';
 import { INTEGRATION_HANDOFF_KEY } from '../workflow-registry.js';
+
+/** Re-export: bo test cua khuon nay van hoi ten bien, va phep doi nay van la mot phan hop dong. */
+export { destinationEnvName };
 
 /**
  * BA BUOC cua `integration-handoff` duoi dang HAM THUAN — khong Nest, khong Hatchet, khong fetch
@@ -63,59 +67,19 @@ export class HandoffStepFailed extends Error {
 
 // ------------------------------------------------------------------ 1. resolve
 
-/** Tien to bien moi truong chua URL that cua mot dich den logic. */
-const DESTINATION_ENV_PREFIX = 'WORKFLOW_DESTINATION_';
-
 /**
- * TEN LOGIC -> TEN BIEN MOI TRUONG. Quy tac nam DUNG MOT CHO.
+ * Doi ten dich den logic thanh URL that.
  *
- * `destination` la mot slug (`^[a-z0-9][a-z0-9-]*$`, ep boi schema goi khach), nen phep doi nay
- * khong the sinh ra ten bien la. Neu quy tac nam rai rac o code va o compose thi mot ben doi ma
- * ben kia quen se lam dich den bien mat IM LANG.
- */
-export function destinationEnvName(destination: string): string {
-  return `${DESTINATION_ENV_PREFIX}${destination.toUpperCase().replaceAll('-', '_')}`;
-}
-
-/**
- * Doi ten logic thanh URL that.
- *
- * URL KHONG nam trong `tenants/<slug>/tenant.json` — goi khach nam trong git, va mot endpoint noi
- * bo cua khach khong thuoc ve do. Goi khach chi mang cai TEN; anh xa ten -> URL la cau hinh ha tang.
+ * Phep doi nam o `workflow-destination.ts` (dung chung voi khuon khac); o day chi con viec boc
+ * mo ta loi vao MA CO KIEU cua khuon nay. `retryable: false` — mot bien moi truong thieu se van
+ * thieu o lan thu hai, va thu lai chi lam cham luc phat hien ra cau hinh sai.
  */
 export function resolveDestination(destination: string, env: NodeJS.ProcessEnv): string {
-  const variable = destinationEnvName(destination);
-  const raw = env[variable]?.trim();
-  if (!raw) {
-    throw new HandoffStepFailed(
-      'DESTINATION_NOT_CONFIGURED',
-      false,
-      `dich den '${destination}' chua co URL. Dat bien ${variable} trong khoi 'environment:' ` +
-        `cua service worker.`,
-    );
+  const found = resolveDestinationUrl(destination, env);
+  if ('error' in found) {
+    throw new HandoffStepFailed('DESTINATION_NOT_CONFIGURED', false, found.error);
   }
-
-  // Kiem o day chu khong de `fetch` tu nem: mot gia tri sai khuon la LOI CAU HINH cua ta, va no
-  // phai mang ma cua ta chu khong phai mot `TypeError` cua runtime. Chan luon scheme khong phai
-  // http(s) — `file://` di qua duoc thi mot bien dat nham bien thanh mot duong doc file.
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw new HandoffStepFailed(
-      'DESTINATION_NOT_CONFIGURED',
-      false,
-      `${variable} khong phai URL hop le`,
-    );
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new HandoffStepFailed(
-      'DESTINATION_NOT_CONFIGURED',
-      false,
-      `${variable} phai la http(s), dang la '${parsed.protocol}'`,
-    );
-  }
-  return raw;
+  return found.url;
 }
 
 // ------------------------------------------------- 2. dung lai khoa thao tac

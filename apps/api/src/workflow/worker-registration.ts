@@ -1,5 +1,9 @@
 import { engineWorkflowName } from './workflow-engine.port.js';
-import { INTEGRATION_HANDOFF_KEY, workflowInputContract } from './workflow-registry.js';
+import {
+  INTEGRATION_HANDOFF_KEY,
+  workflowInputContract,
+  workflowTemplate,
+} from './workflow-registry.js';
 
 /**
  * PHAN GIAI "tien trinh worker nay mang phien ban nao" — logic THUAN, khong dinh Nest, khong
@@ -31,6 +35,25 @@ import { INTEGRATION_HANDOFF_KEY, workflowInputContract } from './workflow-regis
 /** TEN bien moi truong. Xuat ra de test va compose khong go lai chuoi nay o hai noi. */
 export const WORKFLOW_WORKER_VERSION_ENV = 'WORKFLOW_WORKER_VERSION';
 
+/**
+ * KHUON ma tien trinh worker nay phuc vu.
+ *
+ * CO MAC DINH — khac han `WORKFLOW_WORKER_VERSION` o tren, va su khac biet do la co y:
+ *
+ *   phien ban  doan sai thi worker dang ky mot ten roi chay bang code khac -> KHONG duoc doan.
+ *   khuon      doan sai thi worker dang ky mot ten KHONG AI GOI -> run nam cho, lo ra ngay.
+ *
+ * Mac dinh giu nguyen `integration-handoff` vi mot ly do cu the, khong phai vi tien: container
+ * worker dang chay tren gd1-test (`compose.yaml:525`) chi dat `WORKFLOW_WORKER_VERSION` va
+ * khong biet gi ve bien nay. Bat buoc bien nay se lam container do CHET o lan deploy ke tiep —
+ * mot phien don ranh gioi khong duoc phep lam dut mot worker dang phuc vu.
+ *
+ * Mot khuon = MOT container, cung ly do voi phien ban: engine dinh tuyen theo
+ * `actionId = <tenWorkflow>:<tenBuoc>`, nen mot tien trinh om hai khuon se lam duong bien giua
+ * chung tan bien.
+ */
+export const WORKFLOW_WORKER_TEMPLATE_ENV = 'WORKFLOW_WORKER_TEMPLATE';
+
 export interface WorkerRegistration {
   /** Khoa ON DINH cua khuon — khong doi khi len phien ban. */
   readonly workflowKey: string;
@@ -60,7 +83,12 @@ export function resolveWorkerRegistration(
     );
   }
 
-  const workflowKey = INTEGRATION_HANDOFF_KEY;
+  // `workflowTemplate()` NEM khi khoa khong co trong ban dang chay — dung cho de bat mot bien
+  // go nham, thay vi de worker dang ky mot ten khong ai goi roi nam im cho toi luc co nguoi hoi
+  // "sao run cua toi khong chay".
+  const workflowKey = workflowTemplate(
+    env[WORKFLOW_WORKER_TEMPLATE_ENV]?.trim() || INTEGRATION_HANDOFF_KEY,
+  ).key;
 
   // Thu tu hai buoc kiem la CO Y va khong doi cho duoc:
   //   1. HINH DANG — `engineWorkflowName` tu choi 'latest', 'v1,v2', 'v1 v2', dau ':'… Day cung

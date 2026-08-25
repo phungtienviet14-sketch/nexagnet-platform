@@ -8,6 +8,17 @@ import {
   resolveDestination,
   type IntegrationHandoffInput,
 } from '../workflows/integration-handoff.steps.js';
+import {
+  ensureFollowup,
+  loadHandoffState,
+  recomputeFollowupKey,
+  remainingWaitSeconds,
+  resolveFollowupDestination,
+  type SalesHandoffFollowupInput,
+} from '../workflows/sales-handoff-followup.steps.js';
+import { SALES_HANDOFF_FOLLOWUP_KEY } from '../workflow-registry.js';
+import { FOLLOWUP_STAGES } from '../workflows/sales-handoff-followup.steps.js';
+import { tenantSalesHandoffFollowup } from '@netviet/tenant';
 import { HatchetClient, type HatchetClientType } from './hatchet-sdk.js';
 import type { HatchetEngineConfig } from './hatchet-workflow-engine.adapter.js';
 import {
@@ -31,6 +42,22 @@ import {
  * Bang chung vi sao dieu do quan trong: `evidence/version-gate-a.md` §3 ⑨ — voi mot ten dung
  * chung, mot run dang cho bi worker phien ban moi NUOT TRON tu buoc dau tien.
  */
+/** Doi tuong khuon do SDK tra ve. Chi dung de trao lai cho `hatchet.worker({ workflows })`. */
+type WorkflowDefinition = ReturnType<HatchetClientType['workflow']>;
+
+/**
+ * BIEN THUC THI cua worker, duoi dang mot tham so.
+ *
+ * Truoc khi co khuon thu hai, `traced` la mot closure trong `start()`. Nay hai khuon deu phai
+ * di qua no nen no thanh tham so — nhung bat bien khong doi: KHONG buoc nao thoat ra ngoai cau
+ * noi, va `hatchet-workflow-worker.trace.spec.ts` van la thu giu dieu do.
+ */
+type TracedRunner = <T>(
+  taskName: string,
+  ctx: TaskRunContext,
+  run: (outboundTraceparent: string | undefined) => Promise<T> | T,
+) => Promise<T>;
+
 interface HatchetWorkerLike {
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -149,6 +176,49 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
       );
 
     // ------------------------------------------------------------ dinh nghia khuon
+    //
+    // MOT TIEN TRINH = MOT KHUON. Nhanh nay chon khuon nao duoc dinh nghia, khong phai dinh
+    // nghia ca hai roi chon luc dang ky: engine dinh tuyen viec theo `actionId`, nen mot worker
+    // om ca hai se nhan ca viec cua khuon kia.
+    const workflow =
+      this.registration.workflowKey === SALES_HANDOFF_FOLLOWUP_KEY
+        ? this.defineSalesHandoffFollowup(hatchet, traced, env)
+        : this.defineIntegrationHandoff(hatchet, traced, env);
+
+    // ------------------------------------------------------------ khoi dong
+    // Tu day tro di la DANG KY: engine phai xac nhan worker nay phuc vu action nao. Do la doan
+    // da do duoc 6,3 s / 12 s / 30,1 s / 38 s (§29) — tuc la "cham" o day KHONG phai trieu chung.
+    this.deps.onPhase?.('registering');
+    this.worker = (await hatchet.worker(this.registration.workerName, {
+      workflows: [workflow],
+      slots: this.deps.slots ?? 5,
+    })) as unknown as HatchetWorkerLike;
+
+    // KHONG `await` cai nay: `start()` cua SDK chi giai quyet khi worker DUNG. Await o day se
+    // treo boot vinh vien. Bat loi de mot worker chet giua chung khong thanh unhandled rejection.
+    this.running = this.worker.start().catch((error: unknown) => {
+      this.logger.error(`Worker dung bat thuong: ${message(error)}`);
+    });
+
+    // CHO tuong minh thay vi `sleep` mot con so doan mo. Day la khac biet giua "da goi start()"
+    // va "engine DA BIET worker nay phuc vu action nao" — va chi cai thu hai moi lam cho mot
+    // run kich hoat ngay sau do khong nam `QUEUED`.
+    await this.worker.waitUntilReady();
+    this.logger.log(
+      `READY workflow=${this.registration.engineName} worker=${this.registration.workerName} pid=${process.pid}`,
+    );
+  }
+
+  /**
+   * Khuon `integration-handoff` — ban giao mot tham chieu thuc the toi mot dich den ngoai.
+   *
+   * Tach ra khoi `start()` khi khuon thu hai xuat hien; NOI DUNG giu nguyen tung dong.
+   */
+  private defineIntegrationHandoff(
+    hatchet: HatchetClientType,
+    traced: TracedRunner,
+    env: NodeJS.ProcessEnv,
+  ): WorkflowDefinition {
     const workflow = hatchet.workflow<IntegrationHandoffInput>({
       // TEN MANG PHIEN BAN. Day la co che ghim phien ban cua Gate A, khong phai quy uoc dat ten.
       name: this.registration.engineName,
@@ -263,28 +333,171 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
         }),
     });
 
-    // ------------------------------------------------------------ khoi dong
-    // Tu day tro di la DANG KY: engine phai xac nhan worker nay phuc vu action nao. Do la doan
-    // da do duoc 6,3 s / 12 s / 30,1 s / 38 s (§29) — tuc la "cham" o day KHONG phai trieu chung.
-    this.deps.onPhase?.('registering');
-    this.worker = (await hatchet.worker(this.registration.workerName, {
-      workflows: [workflow],
-      slots: this.deps.slots ?? 5,
-    })) as unknown as HatchetWorkerLike;
+    return workflow as unknown as WorkflowDefinition;
+  }
 
-    // KHONG `await` cai nay: `start()` cua SDK chi giai quyet khi worker DUNG. Await o day se
-    // treo boot vinh vien. Bat loi de mot worker chet giua chung khong thanh unhandled rejection.
-    this.running = this.worker.start().catch((error: unknown) => {
-      this.logger.error(`Worker dung bat thuong: ${message(error)}`);
+  /**
+   * Khuon `sales-handoff-followup` — WORKFLOW NGHIEP VU dau tien tren engine.
+   *
+   * ---------------------------------------------------------------------------
+   * BA BUOC, va vi sao la ba chu khong phai mot:
+   *
+   *   (1) load-state    doc LAI trang thai NGAY BAY GIO. Chay TRUOC lan ngu, khong phai sau:
+   *                     giua luc xep hang va luc worker nhan viec co mot khoang (outbox tick +
+   *                     hang doi engine), va mot don duoc xu ly trong khoang do phai duoc phat
+   *                     hien truoc khi ta dat mot cai hen gio nhieu ngay cho no.
+   *
+   *   (2) wait          `durableTask` + `ctx.sleepFor()`. Day la CA LY DO khuon nay can mot
+   *                     workflow engine: lan ngu nay song sot qua deploy, qua worker chet, qua
+   *                     ca may khoi dong lai. Mot `setTimeout` thi khong.
+   *
+   *   (3) recheck-mark  doc LAI lan nua roi moi danh dau. Buoc nay la noi bat bien "workflow
+   *                     khong so huu su that nghiep vu" duoc thi hanh: neu nguoi that da xu ly
+   *                     trong luc ta ngu, o day ta thay va IM LANG ket thuc.
+   *
+   * Tach ba buoc chu khong gop lam mot `durableTask`: dashboard cua engine hien tung buoc kem
+   * so lan thu, nen "no dang ngu" va "no dang goi API" doc ra ngay — con gop lai thi ca hai
+   * deu hien la mot o dang chay.
+   */
+  private defineSalesHandoffFollowup(
+    hatchet: HatchetClientType,
+    traced: TracedRunner,
+    env: NodeJS.ProcessEnv,
+  ): WorkflowDefinition {
+    /**
+     * NGUONG doc tu GOI KHACH, khong phai hang so trong code.
+     *
+     * Doc MOT LAN luc dang ky khuon: goi khach khong doi trong mot lan chay. Khach khong khai
+     * (`null`) thi van dang ky khuon, vi mot run da xep hang TRUOC khi khach tat policy van
+     * phai chay het cho tu te — no se ket thuc o buoc (1).
+     */
+    const policy = tenantSalesHandoffFollowup();
+    const stage = FOLLOWUP_STAGES[0];
+    // Khoa API noi bo. Vang mat o che do demo/CI (`AUTH_MODE=none`) -> khong gui header.
+    const apiKey = env.API_KEY?.trim();
+
+    const workflow = hatchet.workflow<SalesHandoffFollowupInput>({
+      // TEN MANG PHIEN BAN — co che ghim phien ban cua Gate A.
+      name: this.registration.engineName,
+      description: 'Theo doi mot viec ban giao cho Sale de no khong nam pending vo thoi han.',
     });
 
-    // CHO tuong minh thay vi `sleep` mot con so doan mo. Day la khac biet giua "da goi start()"
-    // va "engine DA BIET worker nay phuc vu action nao" — va chi cai thu hai moi lam cho mot
-    // run kich hoat ngay sau do khong nam `QUEUED`.
-    await this.worker.waitUntilReady();
-    this.logger.log(
-      `READY workflow=${this.registration.engineName} worker=${this.registration.workerName} pid=${process.pid}`,
-    );
+    // (1) load-state — doc lai tu DB nghiep vu. `retries: 2` vi mot lan doc that bai la loi mang,
+    //     khong phai loi nghiep vu; con cau hinh sai thi `resolveFollowupDestination` nem voi
+    //     `retryable: false` va so lan thu khong cuu duoc gi.
+    const loadState = workflow.task({
+      name: 'load-state',
+      retries: 2,
+      fn: (input: SalesHandoffFollowupInput, ctx) =>
+        traced('load-state', ctx, async (outboundTraceparent) => {
+          const baseUrl = resolveFollowupDestination(input.destination, env);
+          const state = await loadHandoffState({
+            baseUrl,
+            entityId: input.entityId,
+            ...(apiKey ? { apiKey } : {}),
+            ...(outboundTraceparent ? { traceparent: outboundTraceparent } : {}),
+          });
+
+          if (state.state !== 'pending') {
+            ctx.logger.info(
+              `load-state ${input.entityId}: viec da xong (${state.state}) -> khong dat hen gio`,
+            );
+            return { baseUrl, stillPending: false, waitSeconds: 0 };
+          }
+          // Khach tat policy sau khi run da xep hang -> khong con nguong de cho. Ket thuc sach
+          // se, khong doan mot con so thay ho.
+          if (!policy?.enabled) {
+            ctx.logger.info(`load-state ${input.entityId}: khach khong bat theo doi -> ket thuc`);
+            return { baseUrl, stillPending: false, waitSeconds: 0 };
+          }
+
+          const waitSeconds = remainingWaitSeconds(
+            state.openedAt,
+            policy.remindAfterSeconds,
+            new Date(),
+          );
+          ctx.logger.info(`load-state ${input.entityId}: con treo, con cho ${waitSeconds}s`);
+          return { baseUrl, stillPending: true, waitSeconds };
+        }),
+    });
+
+    /**
+     * (2) wait — LAN NGU BEN VUNG.
+     *
+     * `durableTask` chu khong phai `task`: `ctx.sleepFor()` cua Hatchet la "global", tuc no dem
+     * theo thoi gian THAT va song sot qua worker restart. Mot `await setTimeout()` trong mot
+     * task thuong se chet cung tien trinh va keo theo ca lan cho.
+     *
+     * `retries: 0` co chu y: mot lan ngu khong "that bai" theo nghia thu lai duoc, va thu lai
+     * mot lan ngu la ngu them mot lan nua.
+     */
+    const wait = workflow.durableTask({
+      name: 'wait',
+      parents: [loadState],
+      retries: 0,
+      /**
+       * Tran thoi gian song cua mot lan chay. Phai LON HON nguong cua khach — nen no doc tu
+       * chinh nguong do cong mot bien an toan, khong phai mot hang so doan mo. Thieu no thi mot
+       * nguong dai hon mac dinh cua engine se bi cat ngang giua chung.
+       */
+      executionTimeout: `${(policy?.remindAfterSeconds ?? 60) + 3600}s`,
+      fn: (_input: SalesHandoffFollowupInput, ctx) =>
+        traced('wait', ctx, async () => {
+          const before = await ctx.parentOutput(loadState);
+          if (!before.stillPending || before.waitSeconds <= 0) {
+            return { slept: false };
+          }
+          await ctx.sleepFor(`${before.waitSeconds}s`);
+          return { slept: true };
+        }),
+    });
+
+    // (3) recheck-mark — doc LAI, roi moi danh dau. Khong tin vao ban chup cua buoc (1).
+    workflow.task({
+      name: 'recheck-mark',
+      parents: [wait],
+      retries: 3,
+      backoff: { factor: 2, maxSeconds: 60 },
+      fn: (input: SalesHandoffFollowupInput, ctx) =>
+        traced('recheck-mark', ctx, async (outboundTraceparent) => {
+          const before = await ctx.parentOutput(loadState);
+          const metadata = ctx.additionalMetadata();
+          const common = {
+            baseUrl: before.baseUrl,
+            entityId: input.entityId,
+            ...(apiKey ? { apiKey } : {}),
+            ...(outboundTraceparent ? { traceparent: outboundTraceparent } : {}),
+          };
+
+          if (!before.stillPending) {
+            return { applied: false, outcome: 'resolved-before-wait', stage };
+          }
+
+          // DOC LAI. Day la cho con nguoi "thang" workflow: neu ho da bam xong trong luc ta ngu,
+          // ta thay o day va khong nhac gi ca.
+          const now = await loadHandoffState(common);
+          if (now.state !== 'pending') {
+            ctx.logger.info(
+              `recheck ${input.entityId}: nguoi da xu ly trong luc cho (${now.state}) -> khong nhac`,
+            );
+            return { applied: false, outcome: `resolved-${now.state}`, stage };
+          }
+
+          const operationKey = recomputeFollowupKey(input, metadata, stage);
+          const marked = await ensureFollowup({ ...common, stage, operationKey });
+          ctx.logger.info(`recheck ${input.entityId}: danh dau=${marked.applied} khoa=${operationKey}`);
+          return {
+            applied: marked.applied,
+            outcome: marked.applied ? 'marked' : 'already-marked',
+            stage,
+            // Dau van tay phien ban code da chay — cung cach `integration-handoff` lam.
+            engineVersion: this.registration.workflowVersion,
+            traceId: metadata['nexagnet.traceId'] ?? null,
+          };
+        }),
+    });
+
+    return workflow as unknown as WorkflowDefinition;
   }
 
   async stop(): Promise<void> {

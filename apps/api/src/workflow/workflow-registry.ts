@@ -57,6 +57,59 @@ export const integrationHandoffV1Input: WorkflowInputContract<{
     .strict(),
 );
 
+/**
+ * `sales-handoff-followup` — khuon NGHIEP VU dau tien.
+ *
+ * Viec no lam: mot viec ban giao cho nguoi that (`salesHandoff = pending`) khong duoc nam do vo
+ * thoi han ma khong he thong nao biet. Workflow ngu mot khoang do goi khach dat, tinh day doc
+ * LAI trang thai tu DB nghiep vu, va chi danh dau khi viec do THUC SU van con treo.
+ *
+ * VI SAO PHAI LA WORKFLOW BEN VUNG chu khong phai `setTimeout` hay mot cron quet bang:
+ *
+ *   `setTimeout` chet cung tien trinh. Deploy lai `api` (chuyen xay ra moi lan release) la mat
+ *   sach moi hen gio dang treo — va khong ai biet da mat cai gi.
+ *
+ *   Cron quet bang thi song sot duoc, nhung no doi nguoc bai toan: phai quet MOI don dang
+ *   pending o MOI tick de tim ra vai don qua han. Voi mot cai dong ho cua rieng no, mot cua so
+ *   quet, va mot cho de lo. Hen gio o day gan vao DUNG mot thuc the, thuc day dung mot lan.
+ *
+ * KHUON NAY KHONG DAY ERP va khong nhan tin ra ngoai — xem `salesHandoffFollowupSchema`.
+ */
+export const SALES_HANDOFF_FOLLOWUP_KEY = 'sales-handoff-followup';
+
+/**
+ * HOP DONG DAU VAO v1 — GIONG HET hinh dang cua `integration-handoff`, va do la mot khang dinh
+ * chu khong phai su luoi: ca hai khuon deu mang di mot THAM CHIEU thuc the chu khong phai anh
+ * chup cua no. Sau truong, khong truong nao mang du lieu ca nhan.
+ *
+ * Cu the o day: `entityId` la ma don NOI BO, khong phai SDT/dia chi/ten khach; noi dung don,
+ * gia va ten dai ly KHONG di sang engine. Worker doc lai ban moi nhat tu DB nghiep vu — dieu
+ * bat buoc voi khuon nay, vi giua luc xep hang va luc thuc day co the da vai ngay troi qua.
+ *
+ * Khai RIENG (thay vi tro toi contract cua khuon kia) de khi mot trong hai doi hinh dang that
+ * thi cho phai sua la MOT dong o day, khong phai go ra mot cau truc dung chung.
+ */
+export const salesHandoffFollowupV1Input: WorkflowInputContract<{
+  tenant: string;
+  entityType: string;
+  entityId: string;
+  operation: string;
+  operationVersion: number;
+  destination: string;
+}> = defineWorkflowInput(
+  z
+    .object({
+      tenant: z.string().min(1).max(64),
+      entityType: z.string().regex(/^[a-z][a-z0-9-]*$/),
+      /** Ma don NOI BO. Khong bao gio la SDT/email/ma khach. */
+      entityId: z.string().min(1).max(128),
+      operation: z.string().regex(/^[a-z][a-z0-9-]*$/),
+      operationVersion: z.number().int().positive(),
+      destination: z.string().regex(/^[a-z][a-z0-9-]*$/),
+    })
+    .strict(),
+);
+
 export interface WorkflowTemplate {
   readonly key: string;
   /** Cac phien ban CODE dang co trong repo nay. Goi khach chi duoc tro toi mot trong so nay. */
@@ -81,6 +134,12 @@ const TEMPLATES = {
     versions: {
       v1: integrationHandoffV1Input as unknown as WorkflowInputContract<never>,
       v2: integrationHandoffV2Input as unknown as WorkflowInputContract<never>,
+    },
+  },
+  [SALES_HANDOFF_FOLLOWUP_KEY]: {
+    key: SALES_HANDOFF_FOLLOWUP_KEY,
+    versions: {
+      v1: salesHandoffFollowupV1Input as unknown as WorkflowInputContract<never>,
     },
   },
 } as const satisfies Record<string, WorkflowTemplate>;
