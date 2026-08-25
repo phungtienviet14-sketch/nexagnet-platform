@@ -239,6 +239,42 @@ describe('W9 — ma tran DI: goi khach × cong tac van hanh, tren do thi Nest th
     expect(resolvable(context, WorkflowScheduler)).toBe(true);
   }, 90_000);
 
+  it('B3 — khoa thao tac mang SLUG THAT cua goi khach, khong phai `unknown`', async () => {
+    /*
+     * DUONG DAY DAY DU cua ban vá 25/08/2026, do tren do thi Nest THAT.
+     *
+     * `useTenantWithWorkflow()` dung dung bo bien ma container that mang: co `TENANT_DIR`, KHONG
+     * co `TENANT`, va khong `release.json` nao duoc mount. Truoc khi sua,
+     * `WORKFLOW_RUNTIME_IDENTITY` duoc dung tu mot `resolveReleaseIdentity()` khong doc goi
+     * khach, nen ca ba nguon deu rong va `tenant` ra `unknown`.
+     *
+     * `tenant` la CHIEU DAU TIEN cua khoa thao tac. Moi khach cung ghi `unknown` nghia la hai
+     * khach sinh ra CUNG mot khoa cho cung mot ma don — tuc cong chong trung cua khach nay nuot
+     * mat viec cua khach kia. Do la loi CACH LY DU LIEU, cung ho voi §26.
+     */
+    useTenantWithWorkflow();
+    process.env.WORKFLOW_ENGINE_TOKEN = 'token-gia-khong-bao-gio-duoc-dung';
+    process.env[WORKFLOW_ENGINE_SWITCH_ENV] = 'on';
+
+    context = await boot();
+
+    const handoff = context.get(WorkflowHandoffService as never, {
+      strict: false,
+    }) as WorkflowHandoffService;
+    const result = await handoff.handoff({
+      workflowKey: 'integration-handoff',
+      operation: 'sync',
+      entityType: 'work-item',
+      entityId: 'WI-danh-tinh',
+    });
+
+    expect(result.outcome).toBe('queued');
+    // Khang dinh CHINH XAC, khong chi "khac unknown": khoa phai mo dau bang slug cua goi khach
+    // dang mount. `workflow-enabled` la slug cua fixture, doc tu `tenant.json` cua chinh no.
+    expect(result.operationKey).toMatch(/^workflow-enabled:/);
+    expect(result.operationKey).not.toContain('unknown');
+  }, 90_000);
+
   // ------------------------------------------------- C · khach khai hatchet, THIEU token
 
   it('C1 — THIEU token nhung cong tac OFF: boot BINH THUONG — cong tac tat thi khong doi token', async () => {

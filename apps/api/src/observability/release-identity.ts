@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { loadTenantConfig } from '@netviet/tenant';
 import type { ReleaseIdentity } from './trace-context.js';
 
 /**
@@ -48,12 +49,32 @@ function readManifest(path: string | undefined): ReleaseManifest | null {
   }
 }
 
+/**
+ * Doc slug tu GOI KHACH dang mount (`TENANT_DIR`/`TENANT`).
+ *
+ * NUOT MOI LOI. Khong doc duoc goi khach la trang thai BINH THUONG o local/CI/script, va mot
+ * tien trinh khong duoc chet chi vi no chua biet minh phuc vu ai. Khong biet -> `undefined`,
+ * roi cac nguon con lai o duoi tra loi.
+ */
+function tenantSlugFromPack(): string | undefined {
+  try {
+    return asString(loadTenantConfig().slug);
+  } catch {
+    return undefined;
+  }
+}
+
 export interface ResolveReleaseInput {
   /** Duong dan `release.json` — `RELEASE_MANIFEST_PATH`. */
   readonly manifestPath?: string | undefined;
   /** Slug khach doc tu goi khach (`tenantConfig().slug`) — nguon dang tin nhat. */
   readonly tenantSlug?: string | undefined;
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Cach doc goi khach. Tiem vao de test khong phai dung mot thu muc that; ban chay that dung
+   * mac dinh nen KHONG noi goi nao phai nho tu truyen slug vao.
+   */
+  readonly readTenantSlug?: () => string | undefined;
 }
 
 /**
@@ -65,12 +86,25 @@ export interface ResolveReleaseInput {
  * Rieng `tenant` DAO nguoc thu tu: goi khach (`TENANT_DIR`) la thu quyet dinh app dang phuc vu ai
  * luc CHAY. Manifest chi ghi lai y dinh cua lan deploy. Hai thu lech nhau la mot su co cau hinh,
  * va luc do ta muon thay ten khach ma app THUC SU dang phuc vu.
+ *
+ * GOI KHACH DUOC DOC O NGAY DAY, khong phai o noi goi. Truoc 25/08/2026 phep doc do nam trong
+ * `observability.module.ts`, va `workflow.module.ts` — noi goi thu hai — khong biet minh phai
+ * lam viec do. Ket qua: stack chay `TENANT_DIR=/srv/tenant` khong dat `TENANT`, khong mount
+ * `release.json`, nen MOI khoa thao tac va MOI metadata workflow deu mang `tenant=unknown`.
+ * Hai ban trien khai da chia lam hai chinh vi thu tu uu tien song o phia NOI GOI; nay no song
+ * o day, va mot noi goi thu ba khong the lap lai loi do.
  */
 export function resolveReleaseIdentity(input: ResolveReleaseInput = {}): ReleaseIdentity {
   const env = input.env ?? process.env;
   const manifest = readManifest(input.manifestPath ?? env.RELEASE_MANIFEST_PATH);
+  const readTenantSlug = input.readTenantSlug ?? tenantSlugFromPack;
 
-  const tenant = input.tenantSlug ?? asString(manifest?.tenant) ?? asString(env.TENANT) ?? UNKNOWN;
+  const tenant =
+    input.tenantSlug ??
+    readTenantSlug() ??
+    asString(manifest?.tenant) ??
+    asString(env.TENANT) ??
+    UNKNOWN;
 
   const environment =
     asString(manifest?.environment) ??
