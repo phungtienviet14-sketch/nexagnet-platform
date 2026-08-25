@@ -136,6 +136,19 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT 
       ['header uy quyen', FAKE_BEARER],
       ['khoa Anthropic', FAKE_ANTHROPIC_KEY],
       ['JWT', FAKE_JWT],
+      /*
+       * HAI DONG DUOI DAY TUNG NAM O `knownGaps` ngay ben duoi, va chuyen len day 25/08/2026 —
+       * dung theo chi dan cua chinh nhom do: "bai nay DO la tin TOT, hay cap nhat sang nhom
+       * `mustBlock` thay vi noi long khang dinh".
+       *
+       * CAI DA DOI KHONG PHAI BO QUET NOI DUNG. No van khong nhan ra ten nguoi hay dia chi —
+       * gioi han ay la VE NGUYEN TAC va van con nguyen. Cai da doi la `entityId` chuyen sang mot
+       * CONG KHUON (`assertEntityId`, sua ngay 25/08/2026 cho bug UUID trong nhu SDT): mot dinh
+       * danh NOI BO khong co khoang trang, khong co dau phay. Nen ca hai gia tri nay bi chan boi
+       * HINH DANG, khong phai boi noi dung.
+       */
+      ['ten nguoi', 'nguyen van a'],
+      ['dia chi tu do', '123 Duong Lang, Ha Noi'],
     ];
 
     it.each(mustBlock)(
@@ -177,29 +190,30 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1' && process.env.RUN_WORKFLOW_IT 
     // ------------------------------- ①bis GIOI HAN DA BIET cua quet noi dung
 
     /**
-     * ⚠️ BA GIA TRI DUOI DAY DI QUA DUOC. Do la ket qua DO DUOC, va no duoc ghi lai o day dung
-     * nhu no la — mot bai test "dac ta hien trang", khong phai mot loi tan thanh.
+     * ⚠️ GIA TRI DUOI DAY DI QUA DUOC. Do la ket qua DO DUOC, va no duoc ghi lai o day dung nhu
+     * no la — mot bai test "dac ta hien trang", khong phai mot loi tan thanh.
      *
-     * VI SAO CHUNG DI QUA:
+     * NHOM NAY TUNG CO BA DONG. Hai dong kia (ten nguoi, dia chi tu do) da chuyen len `mustBlock`
+     * ngay 25/08/2026 vi cong khuon moi cua `entityId` chan duoc chung. Dong con lai o day khong
+     * theo len duoc, va ly do dang de y:
      *
-     *   ten nguoi / dia chi   khong co mau regex nao nhan ra duoc. Ten tieng Viet la tu thuong;
-     *                         dia chi la van ban tu do. Day la gioi han VE NGUYEN TAC cua quet
-     *                         theo mau, khong phai mot mau con thieu.
-     *   khoa co gach o than    mau hien tai la `/sk-[A-Za-z0-9]{16,}/`, doi 16+ ky tu CHU-SO
-     *                         ngay sau `sk-`. `sk-live-…` co dau gach o giua nen KHONG khop.
-     *                         Cung ly do do, `sk-proj-…` (dinh dang khoa OpenAI hien hanh) cung
-     *                         khong khop. Day la mot KHE HO THAT trong bo quet dung chung —
-     *                         `telemetry-redaction.ts` — va no anh huong ca telemetry chu khong
-     *                         rieng workflow. Da bao cao; KHONG sua o day vi bo quet do la ha
-     *                         tang dung chung va dang co luong khac lam viec ben canh.
+     *   mau hien tai la `/sk-[A-Za-z0-9]{16,}/`, doi 16+ ky tu CHU-SO ngay sau `sk-`. `sk-live-…`
+     *   co dau gach o giua nen KHONG khop — cung ly do do, `sk-proj-…` (dinh dang khoa OpenAI
+     *   hien hanh) cung khong khop. Day la mot KHE HO THAT trong bo quet dung chung
+     *   — `telemetry-redaction.ts` — va no anh huong ca telemetry chu khong rieng workflow. Da bao
+     *   cao; KHONG sua o day vi bo quet do la ha tang dung chung va dang co luong khac lam viec
+     *   ben canh.
+     *
+     * VA CONG KHUON KHONG CUU DUOC CHO NAY: `sk-live-0123…` la mot chuoi slug hop le co chu cai,
+     * tuc no thoa CA HAI dieu kien cua `assertEntityId`. Mot cuid noi bo va mot khoa API bi dan
+     * nham vao day co CUNG hinh dang — chi NOI DUNG moi phan biet duoc, va do dung la cho bo quet
+     * con thung. Day la ly do khuon khong thay the duoc quet, va quet khong thay the duoc khuon.
      *
      * DIEU THAT SU BAO VE `input`: HOP DONG — sau truong THAM CHIEU, va `entityId` theo dinh
      * nghia la dinh danh NOI BO do chinh ta sinh ra (cuid). Bo quet la lop thu hai, khong phai
      * lop thu nhat. Bai nay ton tai de khong ai nham lan hai lop do voi nhau.
      */
     const knownGaps: Array<[string, string]> = [
-      ['ten nguoi', 'nguyen van a'],
-      ['dia chi tu do', '123 Duong Lang, Ha Noi'],
       ['khoa co gach giua than', FAKE_HYPHENATED_KEY],
     ];
 
