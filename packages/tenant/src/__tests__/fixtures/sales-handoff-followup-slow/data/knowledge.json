@@ -1,0 +1,23 @@
+{
+  "pricePeriod": { "validMonth": "2026-08", "status": "active", "note": "Fixture." },
+  "products": [
+    {
+      "sku": "AAA",
+      "name": "Generic widget AAA",
+      "aliases": ["aaa", "widget aaa"],
+      "unit": "Chiec",
+      "description": "Generic fixture product."
+    }
+  ],
+  "prices": [
+    { "sku": "AAA", "wholesale": 100000, "minRetailPrice": 150000, "retailPrice": 180000, "listPrice": 200000 }
+  ],
+  "priceOverrides": [],
+  "dealers": [
+    { "id": "dealer-one", "name": "Dealer One", "aliases": ["dealer one"], "tier": "dai_ly", "defaultPolicy": "thanh_toan_ngay" }
+  ],
+  "groups": [
+    { "chatId": "IT-handoff-followup", "dealerId": "dealer-one", "branch": "HN", "name": "Dealer One group" }
+  ],
+  "glossary": [{ "term": "aaa", "meaning": "Widget AAA" }]
+}

@@ -19,6 +19,8 @@ describe('buildAppComposition', () => {
     expect(composition.controllers.map((controller) => controller.name)).toEqual([
       'HealthController',
       'OrdersController',
+      // Duong quay lai cua worker `sales-handoff-followup` — thuoc `sales-order`.
+      'SalesHandoffController',
       'MessagesController',
       'DemoController',
       'ErpController',

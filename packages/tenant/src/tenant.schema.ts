@@ -60,6 +60,40 @@ export const orderAutomationSchema = z
   .strict();
 
 /**
+ * BAO LAU thi mot viec ban giao cho Sale bi coi la "chua ai dong toi".
+ *
+ * DAY LA CHINH SACH CUA KHACH, khong phai hang so cua nen tang — va do la ca ly do no nam trong
+ * goi khach chu khong nam trong code. Mot khach chot don theo ca lam viec va mot khach truc 24/7
+ * co nguong khac han nhau; chon ho mot con so roi goi do la "SLA" la bia ra nghiep vu.
+ *
+ * `null` (mac dinh) = KHONG theo doi. Fail-safe co chu y: khach chua noi bao lau la du lau thi
+ * he thong khong duoc tu quyet, va khong theo doi thi khong bao gio nhac nham.
+ *
+ * PHAM VI CUA v1: het gio thi DANH DAU de nguoi nhin thay — KHONG day ERP, KHONG nhan tin ra
+ * ngoai. Viec cua workflow dau tien la "viec ban giao khong bi quen", khong phai "thay nguoi
+ * bang tu dong hoa".
+ */
+/**
+ * KHOA cua khuon workflow thuc thi viec theo doi nay.
+ *
+ * Mot HANG SO o day chu khong phai mot chuoi go tay trong `superRefine`: no la mot phan cua HOP
+ * DONG giua goi khach va ban dang chay (`apps/api/src/workflow/workflow-registry.ts` khai cung
+ * khoa nay). Hai ben lech nhau thi goi khach hop le se tro thanh mot bao dam khong ai thuc hien.
+ */
+export const SALES_HANDOFF_FOLLOWUP_WORKFLOW = 'sales-handoff-followup';
+
+export const salesHandoffFollowupSchema = z
+  .object({
+    enabled: z.boolean(),
+    /**
+     * Tinh tu `salesHandoff.createdAt`. Tran 30 ngay de mot so go nham khong sinh ra mot lan cho
+     * dai hon vong doi luu tru cua engine.
+     */
+    remindAfterSeconds: z.number().int().positive().max(2_592_000),
+  })
+  .strict();
+
+/**
  * He thong ban hang/kho cua khach. NEN TANG chi biet cong `ErpPort`; ten nha cung cap chi duoc
  * xuat hien o DAY (du lieu cua khach) va trong chinh thu muc adapter — khong o nhan (G1-12).
  * Them khach dung ERP khac = them mot hien thuc + mot gia tri enum, khong sua nhan.
@@ -193,6 +227,12 @@ const salesOrderPolicySchema = z
     /** Null = chua phe duyet policy tu dong, fail-closed. */
     automation: orderAutomationSchema.nullable(),
     retailAdvice: retailAdviceSchema,
+    /**
+     * Null (va cung la mac dinh khi khong khai) = KHONG theo doi viec ban giao. Tuy chon co chu
+     * y: moi goi khach dang co van hop le sau thay doi nay, va khach nao chua chon nguong thi
+     * khong bi he thong chon ho.
+     */
+    handoffFollowup: salesHandoffFollowupSchema.nullable().optional(),
   })
   .strict();
 
@@ -368,6 +408,41 @@ export const tenantConfigSchema = z
       }
     }
 
+    /*
+     * `handoffFollowup.enabled: true` = KHACH DOI MOT BAO DAM, khong phai "khach cho phep".
+     *
+     * Do la mot lua chon co y giua hai cach doc, va cach kia bi loai:
+     *
+     *   (A) policy chi CHO PHEP, binding moi bat thuc thi  -> bat `enabled` ma quen binding thi
+     *       don van gui, khong ai theo doi, va he thong IM LANG. Dung che do hong ma ca khuon
+     *       workflow nay sinh ra de xoa bo — nen no khong duoc phep la mac dinh cua mot loi go.
+     *   (B) `enabled` la mot YEU CAU  -> thieu binding la CAU HINH TU MAU THUAN, va no phai hong
+     *       to ngay luc boot.
+     *
+     * Chon (B). Cung khuon voi rang buoc da co o `workflowEngineIntegrationSchema`: "khai
+     * adapter=none nhung van bat mot binding" cung bi tu choi vi cung mot ly do.
+     *
+     * Tat theo doi thi dat `enabled: false` (hoac bo han khoi goi khach) — ro rang va khong
+     * mau thuan. `enabled: false` KHONG doi hoi binding nao.
+     */
+    if (config.policies.salesOrder?.handoffFollowup?.enabled) {
+      const integration = config.integrations.workflowEngine;
+      const bound = integration?.bindings.some(
+        (binding) => binding.key === SALES_HANDOFF_FOLLOWUP_WORKFLOW && binding.enabled,
+      );
+      if (!bound) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['policies', 'salesOrder', 'handoffFollowup', 'enabled'],
+          message:
+            `handoffFollowup.enabled=true doi mot rang buoc workflow dang bat cho ` +
+            `'${SALES_HANDOFF_FOLLOWUP_WORKFLOW}' trong integrations.workflowEngine.bindings. ` +
+            `Khong co no thi don van gui ma khong ai theo doi. Dat enabled=false neu khong muon ` +
+            `theo doi.`,
+        });
+      }
+    }
+
     for (const requiredCapability of EXPERIENCE_REQUIREMENTS[config.experience]) {
       if (!enabled.has(requiredCapability)) {
         ctx.addIssue({
@@ -385,6 +460,7 @@ export type ExperienceId = z.infer<typeof experienceIdSchema>;
 export type TenantBootstrap = z.infer<typeof tenantBootstrapSchema>;
 export type TenantIntegrations = z.infer<typeof tenantIntegrationsSchema>;
 export type OrderAutomation = z.infer<typeof orderAutomationSchema>;
+export type SalesHandoffFollowup = z.infer<typeof salesHandoffFollowupSchema>;
 export type CampaignConfig = z.infer<typeof campaignConfigSchema>;
 export type RetailAdvice = z.infer<typeof retailAdviceSchema>;
 export type ErpConfig = z.infer<typeof erpConfigSchema>;

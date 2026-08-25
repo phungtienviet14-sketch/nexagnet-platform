@@ -228,6 +228,11 @@ export interface WorkerProcessOptions {
    * cung phien ban mang cung mot ten la dieu bai hai-worker di DO chu khong phai di sua.
    */
   readonly label?: string;
+  /**
+   * KHUON ma tien trinh nay phuc vu. Bo trong = `integration-handoff` (mac dinh cua
+   * `resolveWorkerRegistration`), tuc moi bai kiem viet truoc 25/08/2026 khong doi mot dong.
+   */
+  readonly template?: string;
 }
 
 /**
@@ -339,6 +344,7 @@ export class WorkerProcess {
         env: {
           ...this.env,
           WORKFLOW_WORKER_VERSION: this.version,
+          ...(this.options.template ? { WORKFLOW_WORKER_TEMPLATE: this.options.template } : {}),
           // Cong RIENG cho tung tien trinh — xem chu thich o `nextHealthPort`. Tren production
           // moi worker mot container nen khong can, o day thi bat buoc.
           WORKFLOW_WORKER_HEALTH_PORT: String(this.healthPort),
@@ -362,7 +368,8 @@ export class WorkerProcess {
     // test — worker chi in dong nay sau khi `waitUntilReady()` cua SDK tra ve.
     await waitFor(
       () => {
-        if (this.text.includes(`READY workflow=integration-handoff.${this.version}`)) return true;
+        const template = this.options.template ?? 'integration-handoff';
+        if (this.text.includes(`READY workflow=${template}.${this.version}`)) return true;
         // Chet TRUOC khi bao READY: khong co ly do gi cho tiep het thoi han. Bao ngay de vong
         // thu lai o `start()` xu ly, thay vi dot 120 giay cho mot tien trinh khong con ton tai.
         if (exitedEarly) throw new Error(`worker ${this.label} thoat truoc khi bao READY`);

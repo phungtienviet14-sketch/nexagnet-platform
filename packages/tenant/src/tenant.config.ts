@@ -11,6 +11,7 @@ import {
   type DemoMessages,
   type CapabilityId,
   type ExperienceId,
+  type SalesHandoffFollowup,
   type TenantConfig,
   type TenantContentManifest,
   type TenantKnowledge,
@@ -315,6 +316,20 @@ export function tenantOrderAutomation(): NonNullable<
   const config = loadTenantConfig();
   if (!config.capabilities.includes('sales-order')) return null;
   return config.policies.salesOrder?.automation ?? null;
+}
+
+/**
+ * Nguong "viec ban giao bi bo quen" cua tenant. `null` = KHONG theo doi.
+ *
+ * Cung khuon fail-closed voi `tenantOrderAutomation()`, va vi cung mot ly do: `null` gop ca
+ * "khach khong ban hang" lan "khach ban hang nhung chua chon nguong". Ca hai deu dan toi dung
+ * mot hanh vi — khong nhac ai ca — nen ep ben goi phan biet chung chi de lai mot cai bay cho
+ * khach trung tinh, dung cai bay da lam ca pipeline chet truoc 24/08/2026.
+ */
+export function tenantSalesHandoffFollowup(): SalesHandoffFollowup | null {
+  const config = loadTenantConfig();
+  if (!config.capabilities.includes('sales-order')) return null;
+  return config.policies.salesOrder?.handoffFollowup ?? null;
 }
 
 /** Policy phan phoi/retry campaign cua tenant; du lieu campaign runtime van nam trong Postgres. */
