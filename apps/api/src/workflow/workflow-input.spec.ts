@@ -44,6 +44,26 @@ describe('buildWorkflowInput — danh sach trang', () => {
     expect(built.entityId).toBe('ord_test_1');
   });
 
+  /*
+   * DAY la duong da 500 tren stack that: `assertNoSensitiveContent` di qua PAYLOAD, gap khoa
+   * `entityId`, va quet gia tri cua no nhu van ban tu do. Bai o `buildWorkflowMetadata` (duoi)
+   * giu tang kia cua cung mot bug.
+   */
+  it('HOI QUY: payload mang entityId UUID trong nhu SDT VAN phai qua duoc', () => {
+    const built = buildWorkflowInput(handoffInput, {
+      ...valid,
+      entityId: '501e65d0-9605-4854-8f20-f213eb446ea9',
+    });
+
+    expect(built.entityId).toBe('501e65d0-9605-4854-8f20-f213eb446ea9');
+  });
+
+  it('VAN tu choi payload mang SDT that o `entityId`', () => {
+    expect(() => buildWorkflowInput(handoffInput, { ...valid, entityId: '0912345678' })).toThrow(
+      WorkflowInputRejected,
+    );
+  });
+
   it('loai truong khong khai bao trong hop dong', () => {
     expect(() => buildWorkflowInput(handoffInput, { ...valid, khongKhaiBao: 'gia tri la' })).toThrow(
       WorkflowInputRejected,
@@ -237,5 +257,52 @@ describe('buildWorkflowMetadata', () => {
 
     expect(metadata['nexagnet.entityId']).toBeUndefined();
     expect(metadata['nexagnet.traceId']).toBe(base.traceId);
+  });
+
+  /*
+   * HOI QUY 25/08/2026 — CUNG HO voi bai `traceId` o tren, chi khac cho no danh vao `entityId`.
+   *
+   * DO TREN STACK THAT (`ultty-gd1-test`, release d8cd6093), khong phai gia thiet: ngay lan
+   * `approve` dau tien sau khi bat `handoffFollowup`, API tra 500 va log ghi
+   *
+   *   WORKFLOW_INPUT_REJECTED[PII_VALUE_IN_INPUT] tai 'entityId'
+   *
+   * voi don `501e65d0-9605-4854-8f20-f213eb446ea9`. Trong chuoi do co khuc `0-9605-4854` — dung
+   * mau SDT Viet Nam `(?:\+84|0)(?:[\s.-]?\d){8,10}`.
+   *
+   * VI SAO BO TEST CU KHONG BAT DUOC: moi fixture o tep nay dung `ord_test_1` — mot id BIA cho
+   * dep mat, khong phai hinh dang id ma he that sinh ra (`randomUUID()` / `cuid()`).
+   *
+   * MUC DO: do bang phep thu — 1,2% UUID v4 dinh bay. Tuc khoang 1 tren 83 lan chot don se 500
+   * mot cach NGAU NHIEN. Va vi `outbound.sendMessage()` chay TRUOC giao dich, tren kenh that
+   * khach DA nhan tin roi don moi cuon lai `pending_review` — Sale bam lai la gui LAN HAI.
+   */
+  const UUID_TRONG_NHU_SDT = '501e65d0-9605-4854-8f20-f213eb446ea9';
+
+  it('HOI QUY: entityId dang UUID chua khuc trong nhu SDT VAN phai qua duoc', () => {
+    const metadata = buildWorkflowMetadata({ ...base, entityId: UUID_TRONG_NHU_SDT });
+
+    expect(metadata['nexagnet.entityId']).toBe(UUID_TRONG_NHU_SDT);
+  });
+
+  it('HOI QUY: khong mot UUID/cuid THAT nao bi tu choi', () => {
+    const idsThat = [
+      UUID_TRONG_NHU_SDT,
+      '444f4b43-307e-4207-9cf3-d8c26916fb9b',
+      '58518bab-b930-4c70-8933-223e83a075d7',
+      '00000000-0000-4000-8000-000000000000',
+      '01234567-8901-4234-9012-345678901234',
+      'cmt1w27ej0002o901m4c57a98',
+    ];
+
+    for (const entityId of idsThat) {
+      expect(() => buildWorkflowMetadata({ ...base, entityId })).not.toThrow();
+    }
+  });
+
+  it('VAN tu choi SDT/email that o `entityId` — bao ve khong duoc noi long', () => {
+    for (const xau of ['0912345678', '+84912345678', '0912 345 678', 'khach@vidu.com']) {
+      expect(() => buildWorkflowMetadata({ ...base, entityId: xau })).toThrow(WorkflowInputRejected);
+    }
   });
 });

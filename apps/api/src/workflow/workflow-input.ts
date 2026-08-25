@@ -132,7 +132,67 @@ function assertNoSensitiveContent(value: unknown, path: string, depth: number): 
     if (isSecretKey(key)) throw new WorkflowInputRejected('SECRET_KEY_IN_INPUT', childPath);
     if (isPiiKey(key)) throw new WorkflowInputRejected('PII_KEY_IN_INPUT', childPath);
     if (isContentKey(key)) throw new WorkflowInputRejected('CONTENT_IN_INPUT', childPath);
+    // `entityId` la DINH DANH, khong phai van ban tu do — kiem bang KHUON. Xem `assertEntityId`.
+    if (isEntityIdKey(key) && typeof item === 'string') {
+      assertEntityId(item, childPath);
+      continue;
+    }
     assertNoSensitiveContent(item, childPath, depth + 1);
+  }
+}
+
+/** Khoa mang DINH DANH NOI BO cua thuc the — kiem bang khuon chu khong quet noi dung. */
+function isEntityIdKey(key: string): boolean {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, '') === 'entityid';
+}
+
+/**
+ * `entityId` duoc kiem bang KHUON, khong bang phep quet noi dung — va day la mot ban SUA.
+ *
+ * ---------------------------------------------------------------------------
+ * DA DO TREN STACK THAT (`ultty-gd1-test`, release d8cd6093, 25/08/2026), khong phai gia thiet.
+ * Ngay lan `approve` dau tien sau khi bat `handoffFollowup`, API tra 500:
+ *
+ *     WORKFLOW_INPUT_REJECTED[PII_VALUE_IN_INPUT] tai 'entityId'
+ *
+ * Don do la `501e65d0-9605-4854-8f20-f213eb446ea9`. Trong chuoi ay co khuc `0-9605-4854`, va no
+ * KHOP mau SDT Viet Nam `(?:\+84|0)(?:[\s.-]?\d){8,10}`. Do bang phep thu: **1,2% UUID v4** dinh
+ * bay — tuc khoang 1 tren 83 lan chot don that bai NGAU NHIEN.
+ *
+ * Hau qua khong dung o mot ma loi: `outbound.sendMessage()` chay TRUOC giao dich, nen tren kenh
+ * that KHACH DA NHAN tin xac nhan roi don moi cuon lai `pending_review`. Sale bam lai = gui LAN
+ * HAI cho khach.
+ *
+ * ---------------------------------------------------------------------------
+ * DAY LA CUNG MOT BUG voi cai da sua cho `traceId` ngay 22/08/2026 (xem chu thich o
+ * `buildWorkflowMetadata`), chi khac cho no dap vao truong khac. Ban sua lan truoc chia neo lam
+ * hai loai va CO Y de `entityId` o phia "hinh dang MO" vi "day moi la cho mot lap trinh vien co
+ * the vo tinh truyen SDT vao thay cho id noi bo".
+ *
+ * Y DO DO DUNG, PHUONG TIEN THI SAI. Muc tieu la "khong duoc la SDT/email" — mot phep quet NOI
+ * DUNG khong dat duoc muc tieu do ma con tu choi nham chinh nhung id hop le. Chinh chu thich cua
+ * ban sua truoc da noi ro vi sao khuon manh hon: "mot chuoi khong dung khuon thi khong lot, va
+ * mot chuoi dung khuon thi khong the la SDT/email".
+ *
+ * KHUON O DAY GIU NGUYEN LOI HUA CU:
+ *   · phai dung `SLUG_LIKE`   -> loai email (`@`), SDT co `+84`, va moi chuoi co khoang trang;
+ *   · phai co CHU CAI, HOAC dung khuon UUID -> loai mot day TOAN CHU SO nhu `0912345678`.
+ * Mot so dien thoai khong the thoa ca hai, con `randomUUID()`/`cuid()` thi luon thoa.
+ *
+ * Nhanh UUID ton tai cho truong hop hiem ma UUID khong co chu cai nao (vd
+ * `00000000-0000-4000-8000-000000000000`): thieu no thi ta chi lam bug hiem di ~1800 lan chu
+ * khong xoa han no.
+ *
+ * VI SAO BO TEST CU KHONG BAT DUOC: fixture cua `workflow-input.spec.ts` dung `ord_test_1` — mot
+ * id BIA, khong phai hinh dang id ma he that sinh ra. Bai hoi quy moi dung id THAT.
+ */
+function assertEntityId(value: string, path: string): void {
+  if (!value) return;
+  if (scrubSecrets(value) !== value) {
+    throw new WorkflowInputRejected('SECRET_VALUE_IN_INPUT', path);
+  }
+  if (!SLUG_LIKE.test(value) || (!HAS_LETTER.test(value) && !UUID_LIKE.test(value))) {
+    throw new WorkflowInputRejected('PII_VALUE_IN_INPUT', path);
   }
 }
 
@@ -179,6 +239,10 @@ const TRACEPARENT = /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/;
 const TRACE_ID = /^[0-9a-f]{32}$/;
 /** Danh tinh co hinh dang CO DINH: khach, moi truong, khoa/phien ban khuon, loai thuc the. */
 const SLUG_LIKE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** UUID (moi phien ban). Nhanh du phong cho UUID khong co chu cai nao — xem `assertEntityId`. */
+const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Mot day TOAN CHU SO co the la SDT; mot id noi bo (`cuid()`, UUID) hau nhu luon co chu cai. */
+const HAS_LETTER = /[A-Za-z]/;
 
 /**
  * `additionalMetadata` cua run — thu operator dung de TIM LAI mot run tren dashboard.
@@ -205,9 +269,14 @@ export function buildWorkflowMetadata(correlation: WorkflowCorrelation): Record<
    *     -> kiem bang KHUON. Chat hon quet noi dung: mot chuoi khong dung khuon thi khong lot,
    *        va mot chuoi dung khuon thi khong the la SDT/email.
    *
-   *   HINH DANG MO (entityId)
-   *     -> QUET noi dung. Day moi la cho mot lap trinh vien co the vo tinh truyen SDT vao thay
-   *        cho id noi bo, nen day la cho can quet.
+   *   DINH DANH THUC THE (entityId)
+   *     -> cung kiem bang KHUON, tu 25/08/2026 (`assertEntityId`).
+   *
+   *        Ban dau truong nay o phia "hinh dang MO" va bi QUET noi dung, voi ly do "day moi la
+   *        cho mot lap trinh vien co the vo tinh truyen SDT vao thay cho id noi bo". Y do dung,
+   *        nhung phuong tien sai — va no dinh DUNG cai bay ma doan tren vua mo ta: mot UUID
+   *        chua khuc `0-9605-4854` khop mau SDT, nen 1,2% don bi tu choi NGAU NHIEN. Da do that
+   *        tren `ultty-gd1-test`. Khuon moi van loai SDT/email, nen loi hua khong bi noi long.
    */
   if (!TRACE_ID.test(correlation.traceId)) {
     throw new WorkflowInputRejected('MALFORMED_TRACEPARENT', 'nexagnet.traceId');
@@ -235,12 +304,9 @@ export function buildWorkflowMetadata(correlation: WorkflowCorrelation): Record<
 
   if (correlation.entityId) {
     const key = 'nexagnet.entityId';
-    if (scrubSecrets(correlation.entityId) !== correlation.entityId) {
-      throw new WorkflowInputRejected('SECRET_VALUE_IN_INPUT', key);
-    }
-    if (scrubPii(correlation.entityId) !== correlation.entityId) {
-      throw new WorkflowInputRejected('PII_VALUE_IN_INPUT', key);
-    }
+    // KIEM BANG KHUON, khong quet noi dung — ly do day du o `assertEntityId`. Truoc 25/08/2026
+    // cho nay quet `scrubPii` va tu choi nham 1,2% UUID that.
+    assertEntityId(correlation.entityId, key);
     metadata[key] = correlation.entityId;
   }
   return metadata;
