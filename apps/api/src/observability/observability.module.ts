@@ -1,5 +1,4 @@
 import { Global, Logger, Module } from '@nestjs/common';
-import { loadTenantConfig } from '@netviet/tenant';
 import { OtelTraceBridge } from './otel/otel-trace-bridge.js';
 import { isOtelRunning } from './otel/otel-runtime.js';
 import { resolveReleaseIdentity, formatRelease } from './release-identity.js';
@@ -33,17 +32,10 @@ import { privacyModeFor } from './telemetry-redaction.js';
         const telemetry = new TelemetryService();
         const logger = new Logger('Observability');
 
-        // Slug khach doc tu GOI KHACH — nguon dang tin nhat luc chay (xem release-identity.ts).
-        // Loi doc goi khach khong duoc lam sap boot cua telemetry: khong biet ten khach thi van
-        // quan sat duoc, chi la nhan `unknown`.
-        let tenantSlug: string | undefined;
-        try {
-          tenantSlug = loadTenantConfig().slug;
-        } catch {
-          tenantSlug = undefined;
-        }
-
-        const release = resolveReleaseIdentity({ ...(tenantSlug ? { tenantSlug } : {}) });
+        // Slug khach doc tu GOI KHACH — nguon dang tin nhat luc chay. Phep doc do (va viec nuot
+        // loi khi khong co goi) nam TRONG `resolveReleaseIdentity`, khong o day: khi no con nam
+        // o noi goi thi `workflow.module.ts` da bo sot, va ca stack chay voi `tenant=unknown`.
+        const release = resolveReleaseIdentity();
         const privacy = privacyModeFor(
           process.env.DATA_CLASSIFICATION === 'customer' ? 'customer' : 'test',
           process.env.TELEMETRY_PRIVACY,

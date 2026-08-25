@@ -34,7 +34,7 @@ import { loadFoundationEnv } from '../config/foundation-env.js';
  * `@Public()` bo QUA xac thuc. `internal/*` khong di qua Caddy la mot lop bao ve tot — va bai
  * `caddy-route-contract.test.mjs` giu no bang mot khang dinh phu dinh — nhung mot lop mang
  * KHONG duoc phep la lop xac thuc DUY NHAT: bat ky container nao trong cung mang khach cung goi
- * duoc `http://api:3000/internal/...`. Nen o day van phai co mot bi mat.
+ * duoc `http://api:3001/internal/...`. Nen o day van phai co mot bi mat.
  *
  * ---------------------------------------------------------------------------
  * DUNG `API_KEY` LAM KHOA DICH VU — khong dua them mot bi mat thu hai vao he:

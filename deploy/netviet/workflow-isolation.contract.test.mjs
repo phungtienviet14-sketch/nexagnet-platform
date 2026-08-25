@@ -47,13 +47,23 @@ const renderSecrets = readConfig('render-secrets.sh');
 
 /** Cac service thuoc cum workflow — chung chia chung mot bo luat cach ly. */
 const ENGINE_SIDE = ['hatchet-postgres', 'hatchet-engine'];
+/**
+ * MOI KHUON MOT CONTAINER — nen danh sach nay dai them mot dong moi lan co khuon moi.
+ *
+ * Khong phai lua chon kien truc ma la he qua: engine dinh tuyen viec theo
+ * `actionId = <tenWorkflow>:<tenBuoc>` va mot worker chi nhan viec cua action CHINH NO dang ky.
+ * Mot tien trinh om hai khuon lam duong bien giua chung tan bien, va DRAIN cua khuon nay phai
+ * doi khuon kia ngu day.
+ */
+const WORKER_SERVICES = ['workflow-worker-v1', 'workflow-worker-sales-handoff-v1'];
+
 const WORKFLOW_CLUSTER = [
   'hatchet-postgres',
   'hatchet-migration',
   'hatchet-setup-config',
   'hatchet-engine',
   'hatchet-dashboard',
-  'workflow-worker-v1',
+  ...WORKER_SERVICES,
 ];
 
 /** Dia chi DUY NHAT ma mot ban trien khai duoc phep goi engine. */
@@ -167,6 +177,83 @@ export function isolationViolations(yaml) {
   return problems;
 }
 
+/**
+ * VI PHAM DAY DIEN cua CAC TIEN TRINH WORKER — tach khoi `isolationViolations` co chu y.
+ *
+ * `isolationViolations` tra loi "hai khach co dam vao nhau khong". Ham nay tra loi mot cau khac:
+ * "moi khuon co THUC SU co mot tien trinh phuc vu no khong, va tien trinh do co du thu de lam
+ * viec khong".
+ *
+ * CHE DO HONG MA NO CHAN, do duoc trong lan audit 25/08/2026: `workflow-worker-v1` KHONG khai
+ * `WORKFLOW_WORKER_TEMPLATE`, nen no roi ve mac dinh `integration-handoff`. Tuc la sau khi
+ * `sales-handoff-followup.v1` len main, KHONG CO tien trinh nao phuc vu khuon do — nhung ca
+ * stack van xanh: container chay, healthcheck 200, dashboard co worker. Moi run cua khuon moi
+ * chi nam trong hang doi, vinh vien, khong mot dong canh bao.
+ *
+ * Do la ly do moi khang dinh o day deu la mot MA VI PHAM chu khong phai mot `boolean`: "day
+ * dien worker hong" khong sua duoc; `THIEU_KHUON:workflow-worker-v1` thi sua trong mot phut.
+ */
+export function workerWiringViolations(yaml) {
+  const blocks = serviceBlocks(yaml);
+  const problems = [];
+  const seenTemplates = new Map();
+  const seenPorts = new Map();
+
+  for (const name of WORKER_SERVICES) {
+    const block = blocks.get(name);
+    if (block === undefined) {
+      problems.push(`THIEU_SERVICE:${name}`);
+      continue;
+    }
+
+    // ① KHUON GHI TUONG MINH. `resolveWorkerRegistration` CO mac dinh (`integration-handoff`) va
+    //    mac dinh do phai giu — no la thu giu container dang chay tren gd1-test khoi chet o lan
+    //    deploy ke tiep. Nhung dua vao mac dinh trong FILE NAY thi khac: khi da co hai khuon,
+    //    mot service khong khai khuon la mot worker `integration-handoff` thu hai tra hinh.
+    const [template] = valuesOf(block, 'WORKFLOW_WORKER_TEMPLATE');
+    const [version] = valuesOf(block, 'WORKFLOW_WORKER_VERSION');
+    if (!template) problems.push(`THIEU_KHUON:${name}`);
+    if (!version) problems.push(`THIEU_PHIEN_BAN:${name}`);
+
+    // ② MOT KHUON = MOT CONTAINER. Hai service cung `<khuon>.<phien ban>` la hai tien trinh dang
+    //    ky CUNG mot ten voi engine — chung cuop viec cua nhau, va DRAIN khong con dem duoc gi.
+    if (template && version) {
+      const engineName = `${template}.${version}`;
+      const owner = seenTemplates.get(engineName);
+      if (owner) problems.push(`HAI_WORKER_CUNG_KHUON:${engineName}`);
+      else seenTemplates.set(engineName, name);
+    }
+
+    // ③ KHOA DICH VU. `InternalServiceGuard` FAIL-CLOSED va ban deploy chay `AUTH_MODE=session`,
+    //    nen mot worker khong mang `API_KEY` se chay tron roi an 401 o MOI lan goi ve.
+    if (valuesOf(block, 'API_KEY').length === 0) problems.push(`THIEU_KHOA_DICH_VU:${name}`);
+
+    // ④ KHONG CAP DB CHO WORKER. `WorkflowWorkerModule` co y khong co Prisma: boot `AppModule` o
+    //    tien trinh worker se mo mot listener zca THU HAI tren cung tai khoan Zalo va da ra
+    //    listener cua `api`. Mot `DATABASE_URL` o day la buoc dau tien di nguoc lai quyet dinh do.
+    if (valuesOf(block, 'DATABASE_URL').length > 0) problems.push(`WORKER_CO_DB:${name}`);
+
+    // ⑤ CONG SUC KHOE RIENG. `worker-health.server.ts` nem `..._HEALTH_PORT_UNAVAILABLE` khi cong
+    //    da bi dung — mot thong bao dung nhung chi doc duoc SAU khi container chet.
+    const [port] = valuesOf(block, 'WORKFLOW_WORKER_HEALTH_PORT');
+    if (port) {
+      const owner = seenPorts.get(port);
+      if (owner) problems.push(`TRUNG_CONG_SUC_KHOE:${port}`);
+      else seenPorts.set(port, name);
+    }
+
+    // ⑥ Khuon `sales-handoff-followup` GOI NGUOC API, nen no phai biet goi vao dau. Thieu bien
+    //    nay thi buoc dau tien nem `DESTINATION_NOT_CONFIGURED` voi `retryable: false`.
+    if (template === 'sales-handoff-followup') {
+      if (valuesOf(block, 'WORKFLOW_DESTINATION_SELF_API').length === 0) {
+        problems.push(`THIEU_DICH_DEN:${name}`);
+      }
+    }
+  }
+
+  return problems;
+}
+
 // =============================================================================== file that
 
 test('compose.yaml that su cach ly workflow engine theo tung stack', () => {
@@ -188,6 +275,110 @@ test('khong service workflow nao publish cong ra host', () => {
         'ba ly do KHONG duoc copy no len production.',
     );
   }
+});
+
+// ================================================ MOI KHUON PHAI CO MOT TIEN TRINH PHUC VU NO
+
+test('day dien worker: moi khuon mot container, du khoa, khong DB, cong suc khoe rieng', () => {
+  assert.deepEqual(
+    workerWiringViolations(compose),
+    [],
+    'Day dien worker hong. Che do hong te nhat o day KHONG phai mot container do — ma la mot ' +
+      'stack XANH toan bo trong khi mot khuon khong co ai phuc vu, va moi run cua no nam trong ' +
+      'hang doi vinh vien.',
+  );
+});
+
+test('`sales-handoff-followup.v1` co DUNG mot tien trinh phuc vu, khai tuong minh', () => {
+  // Bai nay doc CU THE, khong chi "khong co vi pham": mot bo quet chung chung se van xanh neu
+  // ai do doi khuon cua service nay sang mot ten khac cung hop le.
+  const block = serviceBlocks(compose).get('workflow-worker-sales-handoff-v1') ?? '';
+
+  assert.deepEqual(valuesOf(block, 'WORKFLOW_WORKER_TEMPLATE'), ['sales-handoff-followup']);
+  assert.deepEqual(valuesOf(block, 'WORKFLOW_WORKER_VERSION'), ['v1']);
+  // Goi khach PHAI duoc mount: nguong "viec ban giao bi bo quen" (`tenantSalesHandoffFollowup()`)
+  // la chinh sach cua KHACH va duoc doc luc dang ky khuon.
+  assert.deepEqual(valuesOf(block, 'TENANT_DIR'), ['/srv/tenant']);
+  assert.match(block, /- \.\/tenant-pack:\/srv\/tenant:ro/);
+});
+
+test('dich den `self-api` tro vao MANG NOI BO, va DUNG cong ma service `api` dang nghe', () => {
+  /*
+   * HAI CACH SAI, ca hai deu deploy XANH roi hong luc chay:
+   *
+   *   sai cong   -> `http://api:3000/...`. Ba chu thich trong repo tung ghi so nay, va no SAI:
+   *                 service `api` nghe `PORT: 3001`. Sai cong thi moi lan goi ve chet o tang mang.
+   *   ra edge    -> `https://${OPERATOR_DOMAIN}/...`. Chay duoc, va do moi la cho nguy: no cong
+   *                 mot endpoint GHI trang thai don hang ra Internet, trong khi thu duy nhat can
+   *                 no dang nam ngay ben trong cung mot mang Docker.
+   */
+  const blocks = serviceBlocks(compose);
+  const worker = blocks.get('workflow-worker-sales-handoff-v1') ?? '';
+  const [destination] = valuesOf(worker, 'WORKFLOW_DESTINATION_SELF_API');
+
+  assert.ok(destination, 'worker sales-handoff khong khai WORKFLOW_DESTINATION_SELF_API');
+
+  // Cong doc TU service `api`, khong go lai hang so — hai noi lech nhau la dung loi can chan.
+  const [apiPort] = valuesOf(blocks.get('api') ?? '', 'PORT');
+  assert.ok(apiPort, 'khong doc duoc `PORT` cua service `api`');
+  assert.equal(
+    destination,
+    `http://api:${apiPort}/internal/sales-handoff`,
+    `dich den phai tro thang toi service \`api\` tren cong ${apiPort} qua mang Docker cua khach.`,
+  );
+
+  // Khang dinh PHU DINH, cung tinh than voi `caddy-route-contract.test.mjs`: khong duoc di qua edge.
+  assert.doesNotMatch(destination, /^https:/, 'dich den noi bo khong duoc dung https qua edge');
+  assert.doesNotMatch(destination, /OPERATOR_DOMAIN|WORKFLOW_DOMAIN/);
+});
+
+test('deploy-stack.sh THUC SU khoi dong moi worker co trong compose', () => {
+  /*
+   * TANG THU HAI cua cung mot cai bay, va no suyt lot trong chinh lan sua nay.
+   *
+   * `deploy-stack.sh` khong bat ca profile len — no LIET KE TUNG SERVICE:
+   *
+   *     compose --profile workflow up -d --wait ... hatchet-engine hatchet-dashboard <cac worker>
+   *
+   * Nen mot service co day du trong `compose.yaml`, dung khuon, dung khoa, dung dich den — ma
+   * vang o dong do — se KHONG BAO GIO duoc khoi dong. Deploy van xanh. Khuon van khong co ai
+   * phuc vu. Y het trieu chung cua mac dinh `WORKFLOW_WORKER_TEMPLATE`, chi khac tang.
+   *
+   * Bai nay doi chieu HAI NGUON: danh sach worker trong compose vs danh sach worker trong script.
+   * Them worker ma quen mot trong hai ben deu DO o day.
+   */
+  const deployStack = readConfig('deploy-stack.sh');
+  const workersInCompose = [...serviceBlocks(compose).keys()].filter((name) =>
+    name.startsWith('workflow-worker'),
+  );
+
+  assert.ok(workersInCompose.length >= 2, 'khong doc duoc danh sach worker tu compose.yaml');
+
+  const startedAt = deployStack.indexOf('--profile workflow up -d');
+  assert.notEqual(startedAt, -1, 'deploy-stack.sh khong con lenh khoi dong cum workflow');
+  // Cat toi `ps` — dung than cua lenh `up`, khong lan sang phan con lai cua script.
+  const startCommand = deployStack.slice(startedAt, deployStack.indexOf('--profile workflow ps'));
+
+  const missing = workersInCompose.filter((name) => !startCommand.includes(name));
+  assert.deepEqual(
+    missing,
+    [],
+    `deploy-stack.sh khong khoi dong: ${missing.join(', ')}. Service co trong compose ma vang o ` +
+      'lenh `up` thi khong bao gio chay, va deploy VAN XANH.',
+  );
+});
+
+test('KHONG lam hong worker `integration-handoff` dang chay', () => {
+  // Worker cu dang phuc vu tren gd1-test. Doi ten service = huy container dang chay va moi run
+  // `.v1` dang do nam cho vinh vien (runbook §2). Ten no phai giu nguyen, va khuon no phuc vu
+  // phai van la `integration-handoff` — them khuon thu hai KHONG duoc dong vao khuon thu nhat.
+  const block = serviceBlocks(compose).get('workflow-worker-v1');
+
+  assert.ok(block !== undefined, 'service `workflow-worker-v1` bi doi ten hoac bi xoa');
+  assert.deepEqual(valuesOf(block, 'WORKFLOW_WORKER_TEMPLATE'), ['integration-handoff']);
+  assert.deepEqual(valuesOf(block, 'WORKFLOW_WORKER_VERSION'), ['v1']);
+  // Worker cu KHONG duoc nhan dich den cua khuon moi — no khong goi `internal/*` bao gio.
+  assert.deepEqual(valuesOf(block, 'WORKFLOW_DESTINATION_SELF_API'), []);
 });
 
 test('khong con mat khau `hatchet/hatchet` viet cung nhu ban POC', () => {
@@ -434,6 +625,22 @@ services:
     profiles: ["workflow"]
     environment:
       WORKFLOW_ENGINE_HOST_PORT: hatchet-engine:7070
+      WORKFLOW_WORKER_TEMPLATE: integration-handoff
+      WORKFLOW_WORKER_VERSION: v1
+      WORKFLOW_WORKER_HEALTH_PORT: "8085"
+      API_KEY: \${API_KEY}
+    networks:
+      - backend
+      - data
+  workflow-worker-sales-handoff-v1:
+    profiles: ["workflow"]
+    environment:
+      WORKFLOW_ENGINE_HOST_PORT: hatchet-engine:7070
+      WORKFLOW_WORKER_TEMPLATE: sales-handoff-followup
+      WORKFLOW_WORKER_VERSION: v1
+      WORKFLOW_WORKER_HEALTH_PORT: "8086"
+      WORKFLOW_DESTINATION_SELF_API: http://api:3001/internal/sales-handoff
+      API_KEY: \${API_KEY}
     networks:
       - backend
       - data
@@ -512,4 +719,87 @@ test('ca am tinh: bo profile workflow phai DO — production se moc them contain
 test('ca am tinh: dashboard mat alias slug phai DO', () => {
   const noAlias = MINIMAL.replace('- hatchet-${STACK_SLUG:-${TENANT_SLUG}}', '- hatchet-dashboard');
   assert.deepEqual(isolationViolations(noAlias), ['DASHBOARD_THIEU_ALIAS_SLUG']);
+});
+
+// ============================================= ca AM TINH cho day dien worker
+//
+// Moi ca duoi day la mot cach hong DA CO THAT hoac chi cach mot dong go nham. Cai chung deu
+// deploy XANH: container len, healthcheck 200, dashboard co worker — va mot khuon khong ai phuc vu.
+
+test('CHONG XANH GIA: day dien worker cua compose gia toi thieu phai SACH', () => {
+  assert.deepEqual(workerWiringViolations(MINIMAL), []);
+});
+
+test('ca am tinh: worker KHONG khai khuon phai DO — day chinh la loi cua ban 24/08', () => {
+  // Truoc 25/08/2026 `workflow-worker-v1` dung y nhu the nay. No roi ve mac dinh
+  // `integration-handoff`, nen khi khuon thu hai len main thi khong ai phuc vu no.
+  const noTemplate = MINIMAL.replace(
+    '      WORKFLOW_WORKER_TEMPLATE: sales-handoff-followup\n',
+    '',
+  );
+
+  // CHI `THIEU_KHUON`, va thu tu do la co y: cai kiem dich den bam theo khuon DA KHAI. Khong
+  // khai khuon thi khong ai biet service nay le ra phuc vu cai gi — nen doi hoi no mot dich den
+  // la doan mo. Sua khuon truoc, roi cai kiem kia moi len tieng.
+  assert.deepEqual(workerWiringViolations(noTemplate), [
+    'THIEU_KHUON:workflow-worker-sales-handoff-v1',
+  ]);
+});
+
+test('ca am tinh: hai worker CUNG khuon + phien ban phai DO', () => {
+  // Chung dang ky CUNG mot ten voi engine -> cuop viec cua nhau, va DRAIN khong dem duoc gi.
+  const clash = MINIMAL.replace(
+    'WORKFLOW_WORKER_TEMPLATE: sales-handoff-followup',
+    'WORKFLOW_WORKER_TEMPLATE: integration-handoff',
+  );
+  assert.deepEqual(workerWiringViolations(clash), [
+    'HAI_WORKER_CUNG_KHUON:integration-handoff.v1',
+  ]);
+});
+
+test('ca am tinh: worker sales-handoff mat dich den phai DO', () => {
+  const noDestination = MINIMAL.replace(
+    '      WORKFLOW_DESTINATION_SELF_API: http://api:3001/internal/sales-handoff\n',
+    '',
+  );
+  assert.deepEqual(workerWiringViolations(noDestination), [
+    'THIEU_DICH_DEN:workflow-worker-sales-handoff-v1',
+  ]);
+});
+
+test('ca am tinh: worker mat API_KEY phai DO — o AUTH_MODE=session no se an 401', () => {
+  const noKey = MINIMAL.replace(
+    '      WORKFLOW_WORKER_HEALTH_PORT: "8086"\n      WORKFLOW_DESTINATION_SELF_API: http://api:3001/internal/sales-handoff\n      API_KEY: ${API_KEY}\n',
+    '      WORKFLOW_WORKER_HEALTH_PORT: "8086"\n      WORKFLOW_DESTINATION_SELF_API: http://api:3001/internal/sales-handoff\n',
+  );
+  assert.deepEqual(workerWiringViolations(noKey), [
+    'THIEU_KHOA_DICH_VU:workflow-worker-sales-handoff-v1',
+  ]);
+});
+
+test('ca am tinh: cap DATABASE_URL cho worker phai DO — do la duong toi listener zca thu hai', () => {
+  const withDb = MINIMAL.replace(
+    '      WORKFLOW_WORKER_TEMPLATE: sales-handoff-followup',
+    '      DATABASE_URL: postgresql://zalo:x@postgres:5432/zalo\n      WORKFLOW_WORKER_TEMPLATE: sales-handoff-followup',
+  );
+  assert.deepEqual(workerWiringViolations(withDb), [
+    'WORKER_CO_DB:workflow-worker-sales-handoff-v1',
+  ]);
+});
+
+test('ca am tinh: hai worker dung chung cong suc khoe phai DO', () => {
+  const samePort = MINIMAL.replace('WORKFLOW_WORKER_HEALTH_PORT: "8086"', 'WORKFLOW_WORKER_HEALTH_PORT: "8085"');
+  assert.deepEqual(workerWiringViolations(samePort), ['TRUNG_CONG_SUC_KHOE:"8085"']);
+});
+
+test('ca am tinh: worker moi mo cong ra host phai DO', () => {
+  // Cung luat voi ca cum — nhac lai o day vi service nay MOI, va mot service moi la luc de nhat
+  // de ai do them `ports:` "cho tien debug".
+  const published = MINIMAL.replace(
+    '  workflow-worker-sales-handoff-v1:\n    profiles: ["workflow"]\n',
+    '  workflow-worker-sales-handoff-v1:\n    profiles: ["workflow"]\n    ports:\n      - "8086:8086"\n',
+  );
+  assert.deepEqual(isolationViolations(published), [
+    'CO_CONG_RA_HOST:workflow-worker-sales-handoff-v1',
+  ]);
 });

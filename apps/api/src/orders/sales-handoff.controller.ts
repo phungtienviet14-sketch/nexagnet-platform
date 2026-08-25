@@ -39,7 +39,7 @@ import {
  *   2. vanh dai mang cua compose — `internal/*` khong nam trong matcher `@api` cua Caddy, va
  *      `caddy-route-contract.test.mjs` giu dieu do bang mot khang dinh PHU DINH.
  *
- * Lop 2 mot minh la khong du: moi container trong cung mang khach deu goi duoc `api:3000`.
+ * Lop 2 mot minh la khong du: moi container trong cung mang khach deu goi duoc `api:3001`.
  */
 /*
  * `@InternalService()` chu KHONG phai `@Roles(...)`: khong co NGUOI nao dung sau hai endpoint

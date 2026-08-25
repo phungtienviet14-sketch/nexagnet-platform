@@ -93,6 +93,20 @@ export class WorkflowScheduler implements OnModuleInit, OnModuleDestroy {
     },
     { provide: WORKFLOW_BINDINGS, useFactory: activeWorkflowEngine },
     {
+      /*
+       * HAI CHIEU CUA KHOA THAO TAC, va ca hai deu phai la su that luc CHAY.
+       *
+       * `resolveReleaseIdentity()` doc slug tu GOI KHACH truoc tien (`TENANT_DIR`/`TENANT`), roi
+       * moi den `release.json` va bien moi truong. Truoc 25/08/2026 phep doc goi khach nam o
+       * `observability.module.ts` chu khong nam trong ham, nen loi goi o day tra ve
+       * `tenant='unknown'` tren dung cau hinh ma stack that dang chay: `TENANT_DIR=/srv/tenant`,
+       * khong co `TENANT`, va `release.json` chua bao gio duoc mount vao container.
+       *
+       * Hau qua khong dung o mot nhan xau: `tenant` la mot CHIEU CUA KHOA THAO TAC
+       * (`buildOperationKey`) va la mot truong cua dau vao workflow. Moi khach deu ghi `unknown`
+       * vao do, nen hai khach khac nhau sinh ra CUNG mot khoa cho cung mot ma don — tuc cong
+       * chong trung cua khach nay co the nuot mat viec cua khach kia.
+       */
       provide: WORKFLOW_RUNTIME_IDENTITY,
       useFactory: (): WorkflowRuntimeIdentity => {
         const release = resolveReleaseIdentity();
