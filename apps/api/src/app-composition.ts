@@ -28,6 +28,7 @@ import { ZaloUserClient } from './channels/zalo-user.client.js';
 import { PrismaModule } from './config/prisma.module.js';
 import { PrismaService } from './config/prisma.service.js';
 import { loadFoundationEnv } from './config/foundation-env.js';
+import { DebugModule } from './debug/debug.module.js';
 import { ContentModule } from './content/content.module.js';
 import {
   ConversationThreadsRepository,
@@ -120,6 +121,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // mien nao cung co the can. Khach khong khai bao `integrations.workflowEngine` van nap module
   // nay va nhan cong VO HIEU HOA — boot binh thuong, dispatcher khong khoi dong.
   owned('foundation', WorkflowModule),
+  // `foundation`: mot khach khong chan doan duoc la mot khach khong ho tro duoc. Module nay chi
+  // DOC (vong dem trace + bang outbox) va khong phu thuoc capability nao — khach khong ban hang
+  // van mo duoc luong xu ly cua mot luot.
+  owned('foundation', DebugModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [

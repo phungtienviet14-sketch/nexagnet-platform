@@ -63,9 +63,18 @@ function NodeRow({ node }: { node: TraceNode }) {
         </span>
         {node.reasonLabel && (
           <span className="tv-reason">
-            {/* Ma de MAY loc, nhan de NGUOI doc — hien ca hai, vi nguoi debug can ca hai. */}
+            {/*
+              Ma de MAY loc, nhan de NGUOI doc — hien ca hai, vi nguoi debug can ca hai.
+
+              TRU KHI CHUNG BANG NHAU. `decisionReasonLabel()` tra ve chinh ma khi ma do chua co
+              nhan, nen truoc ban sua nay man hinh in ra `NO_TENANT_BINDINGNO_TENANT_BINDING` —
+              do duoc bang mot lan chay that. Mot chuoi lap hai lan khong them thong tin nao va
+              lam nguoi doc tuong minh dang nhin hai truong khac nhau.
+            */}
             {node.reasonLabel}
-            <code className="tv-code">{node.reason}</code>
+            {node.reason && node.reason !== node.reasonLabel && (
+              <code className="tv-code">{node.reason}</code>
+            )}
           </span>
         )}
         {node.detail && <span className="tv-detail">{node.detail}</span>}
@@ -74,7 +83,22 @@ function NodeRow({ node }: { node: TraceNode }) {
   );
 }
 
-export function TraceViewer({ trace, onClose }: { trace: TraceView; onClose: () => void }) {
+/**
+ * `onClose` TUY CHON, `label` TUY CHON — hai canh dung khac nhau cua cung mot cay:
+ *
+ *   dung mot minh    (nut "Xem luot" cu)      co nut Dong, tieu de mac dinh
+ *   long trong luong (`OrderFlowPanel`)       khong co nut Dong (khung ngoai lo viec do), va
+ *                                             tieu de la so thu tu luot
+ */
+export function TraceViewer({
+  trace,
+  onClose,
+  label,
+}: {
+  trace: TraceView;
+  onClose?: () => void;
+  label?: string;
+}) {
   const [showTechnical, setShowTechnical] = useState(false);
   const technicalCount = trace.nodes.filter((node) => node.technical).length;
   const visible = showTechnical ? trace.nodes : trace.nodes.filter((node) => !node.technical);
@@ -82,23 +106,32 @@ export function TraceViewer({ trace, onClose }: { trace: TraceView; onClose: () 
   const copyTraceId = () => void navigator.clipboard?.writeText(trace.traceId);
 
   return (
-    <div className="tv" role="region" aria-label="Luồng xử lý">
+    <div className="tv" role="region" aria-label={label ?? 'Luồng xử lý'}>
       <div className="tv-head">
         <div>
-          <b>Luồng xử lý</b>
+          <b>{label ?? 'Luồng xử lý'}</b>
           <span className="tv-meta">
             {trace.tenant}/{trace.environment}
             {trace.release ? ` · bản ${trace.release}` : ''}
-            {trace.totalMs ? ` · ${trace.totalMs}ms` : ''}
+            {/*
+              NHAN CHO CON SO, khong phai mot con so tran trui.
+              `totalMs` la do dai buoc NGOAI CUNG cua RIENG luot nay — no khong bao trum lan cho
+              ben vung cua workflow, cung khong bao trum khoang giua hai luot. Truoc day cho nay
+              in "· 92ms" khong nhan, va nguoi doc ket luan do la tong thoi gian xu ly cua ca don;
+              voi mot day nhan qua di qua mot lan cho, ket luan do lech ba bac do lon.
+            */}
+            {trace.totalMs ? ` · xử lý đồng bộ ${trace.totalMs}ms` : ''}
           </span>
         </div>
         <div className="tv-head-actions">
           <button type="button" className="reply-copy" onClick={copyTraceId} title={trace.traceId}>
             Copy trace ID
           </button>
-          <button type="button" className="reply-copy" onClick={onClose}>
-            Đóng
-          </button>
+          {onClose && (
+            <button type="button" className="reply-copy" onClick={onClose}>
+              Đóng
+            </button>
+          )}
         </div>
       </div>
 

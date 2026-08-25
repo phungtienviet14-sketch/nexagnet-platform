@@ -88,6 +88,29 @@ export class RecentTracesSink implements TelemetrySink {
     return derived;
   }
 
+  /**
+   * MOI luot con giu duoc cua mot don, CU NHAT TRUOC.
+   *
+   * Khac `findByOrderId` mot cach co chu dich, va hai ham nay tra loi hai cau hoi khac nhau:
+   *
+   *   `findByOrderId`     "luot NAO da sinh ra don nay" — mot cau tra loi, uu tien luot goc.
+   *   `findAllByOrderId`  "don nay da di qua nhung dau" — ca chuoi, ke ca cac luot cach nhau
+   *                       hang gio (nguoi bam duyet, worker workflow goi nguoc ve).
+   *
+   * Cau thu hai la cau ma man hinh chan doan hoi. Tra loi no bang cau thu nhat se lam bien mat
+   * dung phan dat gia nhat: cai khoang giua cac luot.
+   *
+   * `Map` giu THU TU CHEN, va thu tu chen la thu tu luot BAT DAU — nen khong sort lai o day.
+   */
+  findAllByOrderId(orderId: string): readonly StoredTrace[] {
+    const found: StoredTrace[] = [];
+    for (const [traceId, records] of this.traces) {
+      if (!records.some((record) => record.anchors.orderId === orderId)) continue;
+      found.push({ traceId, records: [...records], startedAt: records[0]!.at });
+    }
+    return found;
+  }
+
   /** Danh sach luot gan day — moi nhat truoc. */
   list(limit = 50): readonly StoredTrace[] {
     return [...this.traces.entries()]

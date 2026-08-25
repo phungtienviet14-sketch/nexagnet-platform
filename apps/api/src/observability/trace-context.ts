@@ -53,7 +53,18 @@ export interface TraceAnchors {
   conversationId?: string;
   orderId?: string;
   intent?: string;
-  /** `zca` | `bot` | `mock` | `http` | `operator_console` — kenh viec di vao. */
+  /**
+   * KENH viec di vao. Gia tri THAT, khong phai ten che do kenh:
+   *
+   *   `message.source`   -> mot trong `MESSAGE_SOURCES` cua `@netviet/shared`
+   *                         (`copilot_paste` | `bot_webhook` | `zca_listener` | `system_outbound`)
+   *   `operator_console` -> luot do NGUOI bam nut tren console
+   *   `workflow_worker`  -> luot do worker workflow goi nguoc ve
+   *
+   * Chu thich cu o day ghi `zca | bot | mock | http` — do la ten CHE DO KENH (`CHANNEL_MODE`),
+   * khong phai thu duoc ghi vao neo. Mot ban ghi sai o cho nay da lam man hinh chan doan hien
+   * chuoi may thay vi nhan tieng Viet; xem `debug-channel-labels.spec.ts`.
+   */
   channel?: string;
   /** UID nguoi gui. La PII: bo loc telemetry xoa no o muc `redacted`. */
   senderExternalId?: string;

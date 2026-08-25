@@ -1295,3 +1295,208 @@
   color: var(--accent);
   background: var(--surface);
 }
+
+/* ============================================================================
+   LUONG XU LY DON (`.of-*`) — man hinh chan doan.
+
+   Bo cuc theo thu tu nguoi ta hoi: chuyen gi da xay ra -> viec nao dang cho ->
+   mat bao lau -> tra cuu o dau. TEN NGHIEP VU to va dam; KHOA MAY nho, mono,
+   mau nhat — de mat bat duoc nghia truoc, chuoi tra cuu sau.
+   ========================================================================= */
+
+.of {
+  margin-top: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.of-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Hai con so thoi gian: moi con so DINH LIEN cau giai thich nghia cua no. */
+.of-durations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.of-duration {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.of-duration-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.of-duration-value {
+  font: 600 0.95rem/1.2 var(--font-mono);
+}
+
+.of-duration-hint {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
+.of-turns,
+.of-wfs {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.of-turn-head,
+.of-step-head,
+.of-wf-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.of-turn-time {
+  font: 0.74rem/1 var(--font-mono);
+  color: var(--text-dim);
+}
+
+.of-turn-channel {
+  font-size: 0.86rem;
+}
+
+.of-badge {
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.of-section {
+  margin: 0;
+  padding: 0.55rem 0.7rem 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.of-wf {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 0.55rem 0.65rem;
+}
+
+.of-wf-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.of-wf-desc,
+.of-step-desc {
+  margin: 0.25rem 0 0;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+.of-wf-line {
+  margin-top: 0.3rem;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+
+.of-warn {
+  color: var(--warn);
+}
+
+.of-wf-link {
+  margin-top: 0.5rem;
+  display: inline-block;
+  text-decoration: none;
+}
+
+/* Buoc cua khuon: KE HOACH, khong phai trang thai — nen khong to mau theo ket cuc. */
+.of-steps {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0 0 0 0.6rem;
+  border-left: 2px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.of-empty,
+.of-notes {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.of-notes {
+  border-top: 1px solid var(--line);
+  padding-left: 1.5rem;
+}
+
+.of-notes li + li {
+  margin-top: 0.25rem;
+}
+
+.of-tech {
+  border-top: 1px solid var(--line);
+}
+
+.of-tech-list {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.of-tech-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.of-tech-row dt {
+  flex: 0 0 11rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+/* Chuoi dinh danh co the rat dai — cho no cuon trong khung, khong day ca trang. */
+.of-tech-row dd {
+  margin: 0;
+  font-size: 0.76rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

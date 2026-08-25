@@ -6,6 +6,7 @@ import {
   type WorkflowRunReference,
   type WorkflowRunSummary,
 } from '../workflow-engine.port.js';
+import { workflowRunDashboardUrl } from '../workflow-run-dashboard.js';
 import { HatchetClient, type HatchetClientType } from './hatchet-sdk.js';
 
 /**
@@ -125,8 +126,11 @@ export class HatchetWorkflowEngineAdapter extends WorkflowEnginePort {
     return runs.rows?.length ?? 0;
   }
 
+  /**
+   * Cong thuc URL nam o `workflow-run-dashboard.ts`, khong o day: man hinh chan doan cung dung
+   * dung duong do va no khong duoc phep goi engine chi de xin mot cai link.
+   */
   private dashboardUrl(engineRunId: string): string | undefined {
-    if (!this.config.dashboardBaseUrl) return undefined;
-    return `${this.config.dashboardBaseUrl.replace(/\/$/, '')}/runs/${engineRunId}`;
+    return workflowRunDashboardUrl(this.config.dashboardBaseUrl, engineRunId);
   }
 }
