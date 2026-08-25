@@ -87,6 +87,16 @@ export class InMemoryMessagesRepository extends MessagesRepository {
   // Key trung voi unique DB: `${platform}:${externalMessageId}`
   private readonly store = new Map<string, StoredMessage>();
 
+  /**
+   * THU TU DEN cua tung tin — chieu PHA THE cua `findRecent`, xem chu thich o do.
+   *
+   * KHONG dung duoc `id` nhu ban Prisma: o day `id` la `randomUUID()`, khong sap xep duoc theo
+   * thoi gian. `cuid()` cua Prisma mang tien to thoi gian, nen `id desc` ben do CHINH LA "den
+   * sau truoc". Bo dem nay tai lap dung y do o phia bo nho.
+   */
+  private readonly arrival = new Map<string, number>();
+  private arrivals = 0;
+
   async save(
     message: ChannelMessage,
     options: SaveMessageOptions = {},
@@ -101,6 +111,8 @@ export class InMemoryMessagesRepository extends MessagesRepository {
       direction: options.direction ?? 'inbound',
       senderRole: options.senderRole ?? 'customer',
     });
+    this.arrivals += 1;
+    this.arrival.set(key, this.arrivals);
     return { id, duplicate: false };
   }
 
@@ -126,8 +138,29 @@ export class InMemoryMessagesRepository extends MessagesRepository {
           row.externalMessageId !== excludeExternalMessageId &&
           row.sentAt.getTime() <= before.getTime(),
       )
-      .sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime())
+      /*
+       * MOI NHAT TRUOC, va THE PHAI PHA DUOC — `sentAt` bang nhau khong phai ca hiem.
+       *
+       * DA DO THAT (main do 25/08/2026, `pipeline-messages.spec.ts`): ba tin cua mot mach hoi
+       * thoai duoc tao trong cung mot mili-giay tren runner nhanh. Chi so sanh `sentAt` thi bo
+       * so sanh tra 0, `Array#sort` on dinh nen giu nguyen thu tu CHEN — tuc CU TRUOC — va
+       * `boundedRecent()` lat mang lai lan nua, cho ra mot ban ghi hoi thoai NGUOC CHIEU. Hau
+       * qua nghiep vu: "lay 2 cai do" bam vao SKU hoi DAU TIEN thay vi SKU vua nhac.
+       *
+       * Ban Prisma khong dinh loi nay vi no da co `orderBy: [{sentAt:'desc'},{id:'desc'}]`.
+       * Dong duoi la CHINH dieu do o phia bo nho — hai ban trien khai cua cung mot hop dong
+       * khong duoc tra ve hai thu tu khac nhau cho cung mot du lieu.
+       */
+      .sort(
+        (left, right) =>
+          right.sentAt.getTime() - left.sentAt.getTime() ||
+          this.arrivalOf(right) - this.arrivalOf(left),
+      )
       .slice(0, Math.max(0, limit));
+  }
+
+  private arrivalOf(row: StoredMessage): number {
+    return this.arrival.get(`${row.platform}:${row.externalMessageId}`) ?? 0;
   }
 
   /** Memory khong co bang orders de noi FK — no-op (chi co y nghia o che do prisma). */
