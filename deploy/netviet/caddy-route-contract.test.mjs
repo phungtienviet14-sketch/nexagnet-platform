@@ -102,6 +102,11 @@ test('moi namespace controller deu co duong di qua Caddy — khong route nao roi
   const srcDir = new URL('../../apps/api/src', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
   const required = new Set();
+  /**
+   * Namespace CO Y KHONG cong ra edge. Xem khang dinh rieng ngay duoi bai nay — o day chi gom
+   * lai de chung khong bi doi hoi mot duong Caddy.
+   */
+  const internalOnly = new Set();
   for (const file of await controllerFiles(srcDir)) {
     const source = await readFile(file, 'utf8');
     const prefixes = [...source.matchAll(/@Controller\(\s*(\[[^\]]*\]|'[^']*')?\s*\)/g)].flatMap(
@@ -113,6 +118,9 @@ test('moi namespace controller deu co duong di qua Caddy — khong route nao roi
         for (const method of source.matchAll(/@(?:Get|Post|Put|Patch|Delete)\(\s*'([^']+)'/g)) {
           required.add(`/settings/${method[1].split('/')[0]}`);
         }
+      } else if (prefix.startsWith('internal/')) {
+        // KHONG duoc di qua Caddy — xem khang dinh `internal/*` ngay duoi bai nay.
+        internalOnly.add(`/${prefix}`);
       } else if (prefix !== '') {
         required.add(`/${prefix}`);
       } else {
@@ -130,6 +138,26 @@ test('moi namespace controller deu co duong di qua Caddy — khong route nao roi
     missing,
     [],
     `Caddyfile thieu duong di cho: ${missing.join(', ')} -> tren ban deploy se tra 404 trang Next.js`,
+  );
+
+  /*
+   * MAT KIA cua chinh bai nay: co nhung duong PHAI KHONG di qua edge duoc.
+   *
+   * `internal/*` la duong worker workflow goi nguoc lai API (`sales-handoff-followup`). Worker
+   * va `api` nam cung mot mang Docker cua khach, nen no goi thang `http://api:3000/...` va
+   * KHONG can Caddy. Cong duong nay ra edge se bien mot endpoint ghi trang thai don hang thanh
+   * mot thu Internet goi duoc — trong khi thu duy nhat can no lai o ngay ben trong mang.
+   *
+   * Khang dinh nay la PHU DINH co chu y: mot bai kiem chi "bo qua" `internal/*` se im lang khi
+   * co nguoi them no vao Caddyfile — dung luc can noi to nhat.
+   */
+  assert.ok(internalOnly.size > 0, 'khong doc duoc namespace internal/* nao — regex da hong');
+  const exposed = [...internalOnly].filter((path) => covered(tokens, path)).sort();
+  assert.deepEqual(
+    exposed,
+    [],
+    `Caddyfile dang cong duong NOI BO ra edge: ${exposed.join(', ')} -> ` +
+      `worker goi thang qua mang Docker, khong ai can duong nay tu Internet`,
   );
 });
 
