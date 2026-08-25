@@ -144,7 +144,7 @@ test('moi namespace controller deu co duong di qua Caddy — khong route nao roi
    * MAT KIA cua chinh bai nay: co nhung duong PHAI KHONG di qua edge duoc.
    *
    * `internal/*` la duong worker workflow goi nguoc lai API (`sales-handoff-followup`). Worker
-   * va `api` nam cung mot mang Docker cua khach, nen no goi thang `http://api:3000/...` va
+   * va `api` nam cung mot mang Docker cua khach, nen no goi thang `http://api:3001/...` va
    * KHONG can Caddy. Cong duong nay ra edge se bien mot endpoint ghi trang thai don hang thanh
    * mot thu Internet goi duoc — trong khi thu duy nhat can no lai o ngay ben trong mang.
    *
@@ -427,17 +427,23 @@ test('du lieu khach den tu volume mount, khong nam trong image', async () => {
   // Build context khong co `tenants/` -> khong `COPY` nao cham toi duoc, ke ca `COPY . .`.
   assert.match(dockerignore, /^tenants$/m);
 
-  // BA tien trinh doc goi tu volume chi-doc, khong tu trong image: `api`, `web`, va
-  // `workflow-worker-v1`. Worker can goi khach vi `activeWorkflowEngine()` phai biet khach nay
-  // rang buoc khuon nao va `credentialRef` tro toi bien moi truong nao.
-  assert.equal(compose.match(/^\s*TENANT_DIR: \/srv\/tenant$/gm)?.length, 3);
-  // BON mount: api, web, `bootstrap` va `workflow-worker-v1`. `bootstrap` co mat vi smoke-test.mjs
-  // chay trong do va doc tin nhan mau tu goi khach (cau don hop le phu thuoc SKU/dai ly rieng
-  // tung khach).
+  // BON tien trinh doc goi tu volume chi-doc, khong tu trong image: `api`, `web`,
+  // `workflow-worker-v1` va `workflow-worker-sales-handoff-v1`.
+  //
+  // Ca hai worker can goi khach, nhung vi HAI ly do khac nhau — ghi ra day vi so dem ben duoi
+  // chi duoc phep tang khi co nguoi noi duoc ly do thu N:
+  //   · `activeWorkflowEngine()` phai biet khach nay rang buoc khuon nao va `credentialRef` tro
+  //     toi bien moi truong nao — dung cho CA HAI worker;
+  //   · rieng `sales-handoff-followup` con doc `tenantSalesHandoffFollowup()`: nguong "viec ban
+  //     giao bi bo quen" la CHINH SACH CUA KHACH, doc mot lan luc dang ky khuon.
+  assert.equal(compose.match(/^\s*TENANT_DIR: \/srv\/tenant$/gm)?.length, 4);
+  // NAM mount: api, web, `bootstrap` va HAI worker. `bootstrap` co mat vi smoke-test.mjs chay
+  // trong do va doc tin nhan mau tu goi khach (cau don hop le phu thuoc SKU/dai ly rieng tung
+  // khach).
   //
   // DEM SO chu khong chi kiem "co ton tai" la CO Y: them mot tien trinh doc goi khach phai la mot
   // quyet dinh duoc noi ra o day, khong phai mot dong `volumes:` lang le trong mot lan review.
-  assert.equal(compose.match(/^\s*- \.\/tenant-pack:\/srv\/tenant:ro$/gm)?.length, 4);
+  assert.equal(compose.match(/^\s*- \.\/tenant-pack:\/srv\/tenant:ro$/gm)?.length, 5);
 
   // Goi khach phai co mat tren VM truoc khi stack len, va thieu thi dung han chu khong boot rong.
   assert.match(deployRemote, /tenant-pack\/tenant\.json/);

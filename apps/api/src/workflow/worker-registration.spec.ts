@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { engineWorkflowName } from './workflow-engine.port.js';
-import { INTEGRATION_HANDOFF_KEY } from './workflow-registry.js';
-import { WORKFLOW_WORKER_VERSION_ENV, resolveWorkerRegistration } from './worker-registration.js';
+import { INTEGRATION_HANDOFF_KEY, SALES_HANDOFF_FOLLOWUP_KEY } from './workflow-registry.js';
+import {
+  WORKFLOW_WORKER_TEMPLATE_ENV,
+  WORKFLOW_WORKER_VERSION_ENV,
+  resolveWorkerRegistration,
+} from './worker-registration.js';
 
 /**
  * BAT BIEN SO MOT cua Gate A: MOT BAN TRIEN KHAI WORKER DANG KY DUNG MOT PHIEN BAN.
@@ -66,5 +70,72 @@ describe('resolveWorkerRegistration', () => {
     // Ten phai NOI RA phien ban: khi nhin danh sach worker tren dashboard, "cai nao dang phuc vu
     // phien ban nao" phai doc duoc ngay, khong phai suy ra.
     expect(registration.workerName).toContain('v1');
+  });
+});
+
+/**
+ * CHIEU THU HAI: container nay phuc vu KHUON nao.
+ *
+ * Cho toi 25/08/2026 chieu nay chua bao gio duoc dat tuong minh o dau ca — `compose.yaml` chi
+ * dat phien ban, va `resolveWorkerRegistration` roi ve mac dinh `integration-handoff`. Khi mot
+ * khuon THU HAI (`sales-handoff-followup.v1`) len main, hau qua la:
+ *
+ *   · worker duy nhat cua stack van dang ky `integration-handoff.v1`;
+ *   · khong tien trinh nao dang ky `sales-handoff-followup.v1`;
+ *   · va KHONG CO gi bao dong — container xanh, healthcheck 200, dashboard co worker.
+ *
+ * Moi run cua khuon moi chi nam trong hang doi. Vinh vien.
+ *
+ * Nen bien nay duoc do o CA HAI dau: o day (bien -> dang ky) va o
+ * `deploy/netviet/workflow-isolation.contract.test.mjs` (compose -> bien).
+ */
+const withTemplate = (template: string, version = 'v1'): NodeJS.ProcessEnv => ({
+  [WORKFLOW_WORKER_VERSION_ENV]: version,
+  [WORKFLOW_WORKER_TEMPLATE_ENV]: template,
+});
+
+describe('resolveWorkerRegistration — KHUON den tu bien moi truong', () => {
+  it('khong khai khuon -> mac dinh `integration-handoff` (giu container dang chay song)', () => {
+    // Mac dinh nay PHAI giu: container worker tren gd1-test duoc deploy truoc khi bien nay ton
+    // tai. Bat buoc no se lam container do CHET o lan deploy ke tiep.
+    expect(resolveWorkerRegistration(env('v1')).workflowKey).toBe(INTEGRATION_HANDOFF_KEY);
+  });
+
+  it('`WORKFLOW_WORKER_TEMPLATE=sales-handoff-followup` -> dang ky DUNG khuon do', () => {
+    const registration = resolveWorkerRegistration(withTemplate(SALES_HANDOFF_FOLLOWUP_KEY));
+
+    expect(registration.workflowKey).toBe(SALES_HANDOFF_FOLLOWUP_KEY);
+    expect(registration.workflowVersion).toBe('v1');
+    expect(registration.engineName).toBe(engineWorkflowName(SALES_HANDOFF_FOLLOWUP_KEY, 'v1'));
+    expect(registration.engineName).toBe('sales-handoff-followup.v1');
+  });
+
+  it('hai khuon -> HAI ten engine khac nhau, tuc hai tien trinh khong cuop viec cua nhau', () => {
+    // Day la ly do "mot khuon = mot container" doc duoc thanh mot khang dinh: engine dinh tuyen
+    // theo ten, nen hai ten khac nhau la dieu kien de hai worker song song ma khong dam nhau.
+    const integration = resolveWorkerRegistration(withTemplate(INTEGRATION_HANDOFF_KEY));
+    const salesHandoff = resolveWorkerRegistration(withTemplate(SALES_HANDOFF_FOLLOWUP_KEY));
+
+    expect(integration.engineName).not.toBe(salesHandoff.engineName);
+    // Ten TIEN TRINH cung phai khac — hai worker trung ten tren dashboard thi khong ai biet
+    // cai nao dang DRAIN.
+    expect(integration.workerName).not.toBe(salesHandoff.workerName);
+    expect(salesHandoff.workerName).toContain(SALES_HANDOFF_FOLLOWUP_KEY);
+  });
+
+  it('NEM voi khuon khong co trong ban dang chay — bat mot bien go nham NGAY', () => {
+    // Che do hong ma khang dinh nay chan: worker dang ky mot ten khong ai goi, roi nam im cho
+    // toi luc co nguoi hoi "sao run cua toi khong chay".
+    expect(() => resolveWorkerRegistration(withTemplate('khuon-go-nham'))).toThrow(
+      /khuon-go-nham/,
+    );
+  });
+
+  it('khuon rong / chi khoang trang -> ve mac dinh, khong dang ky mot ten rong', () => {
+    // `environment:` cua compose de dang render ra chuoi rong khi mot bien chua duoc dat.
+    expect(resolveWorkerRegistration(withTemplate('')).workflowKey).toBe(INTEGRATION_HANDOFF_KEY);
+    expect(resolveWorkerRegistration(withTemplate('   ')).workflowKey).toBe(
+      INTEGRATION_HANDOFF_KEY,
+    );
   });
 });

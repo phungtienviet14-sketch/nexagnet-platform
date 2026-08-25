@@ -523,6 +523,13 @@ services:
       # Bat buoc, khong co mac dinh: thieu no thi tien trinh NEM luc boot chu khong song ma
       # khong dang ky khuon nao (`resolveWorkerRegistration`).
       WORKFLOW_WORKER_VERSION: v1
+      # GHI TUONG MINH du dang bang dung mac dinh cua `resolveWorkerRegistration`.
+      #
+      # Tu 25/08/2026 stack co HAI worker mang HAI khuon khac nhau. Mot mac dinh ngam con doc
+      # duoc khi chi co mot khuon; khi da co hai thi cau hoi "container nay phuc vu khuon nao"
+      # phai tra loi duoc bang CHINH file nay, khong phai bang cach mo code ra tra cuu xem hang
+      # so mac dinh dang tro vao dau.
+      WORKFLOW_WORKER_TEMPLATE: integration-handoff
       WORKFLOW_WORKER_HEALTH_PORT: "8085"
       # KHOA DICH VU de goi nguoc `internal/*` cua `api`. Cung gia tri ma service `api` nhan
       # (dong 183) — o `AUTH_MODE=session` day la thu DUY NHAT worker mang duoc: no khong co
@@ -567,6 +574,101 @@ services:
       # container chi nam tren do KHONG CO duong ra Internet, ma cac buoc ban giao phai goi duoc
       # diem cuoi ben ngoai (`WORKFLOW_DESTINATION_*`, D5) va diem cuoi trung lap cua D9.
       # Do la ly do DUY NHAT worker co mat tren `backend` — dung xoa vi thay "khong dung toi".
+      - backend
+      - data
+
+  workflow-worker-sales-handoff-v1:
+    profiles: ["workflow"]
+    # ==========================================================================================
+    # CONTAINER THU HAI, va no PHAI la mot container thu hai.
+    #
+    # `worker-registration.ts` ghi ro: engine dinh tuyen viec theo `actionId = <tenWorkflow>:
+    # <tenBuoc>`, va mot worker chi nhan viec cua action CHINH NO dang ky. Mot tien trinh om ca
+    # `integration-handoff` lan `sales-handoff-followup` se lam duong bien giua hai khuon tan
+    # bien — va cung khong nang cap rieng tung khuon duoc nua.
+    #
+    # He qua thuc te, khong phai ly thuyet: hai khuon co nhip song KHAC HAN nhau.
+    # `sales-handoff-followup` NGU nhieu ngay (`durableTask` + `sleepFor`), con
+    # `integration-handoff` chay xong trong vai giay. Gop chung mot container thi mot lan DRAIN
+    # cua khuon nhanh phai doi khuon cham ngu day.
+    #
+    # HAI KHUON = HAI CONTAINER = HAI vong REGISTER -> ACTIVATE -> DRAIN -> DEACTIVATE -> REMOVE
+    # doc lap. `workflow-isolation.contract.test.mjs` giu dung dieu do.
+    # ==========================================================================================
+    image: ${APP_IMAGE}
+    restart: always
+    depends_on:
+      hatchet-engine:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # Goi khach mount ngoai image. Worker nay THUC SU doc no: nguong "viec ban giao bi bo quen"
+      # (`tenantSalesHandoffFollowup()`) la chinh sach cua KHACH, doc mot lan luc dang ky khuon.
+      TENANT_DIR: /srv/tenant
+      WORKFLOW_ENGINE: ${WORKFLOW_ENGINE:-off}
+      WORKFLOW_ENGINE_TOKEN: ${WORKFLOW_ENGINE_TOKEN:-}
+      # GHI CUNG — cung ly do da ghi o `workflow-worker-v1`: mot bien o day cho phep hai stack
+      # cung tro vao MOT engine, dung che do hong cua §26.
+      WORKFLOW_ENGINE_HOST_PORT: hatchet-engine:7070
+      WORKFLOW_ENGINE_TLS_STRATEGY: none
+      WORKFLOW_ENGINE_NAMESPACE: ${WORKFLOW_ENGINE_NAMESPACE:-}
+      # HAI BIEN NAY LA CA DIEM CUA SERVICE. Khuon phai ghi TUONG MINH: mac dinh cua
+      # `resolveWorkerRegistration` la `integration-handoff`, nen thieu dong duoi thi container
+      # nay lang le tro thanh mot worker `integration-handoff` THU HAI — no van len xanh, van
+      # healthy, va khong run `sales-handoff-followup` nao co nguoi phuc vu.
+      WORKFLOW_WORKER_TEMPLATE: sales-handoff-followup
+      WORKFLOW_WORKER_VERSION: v1
+      # Cong RIENG. Dung chung 8085 voi `workflow-worker-v1` thi mot trong hai tien trinh nem
+      # `WORKFLOW_WORKER_HEALTH_PORT_UNAVAILABLE` luc boot — o day moi worker la mot container
+      # nen khong gian mang tach roi, nhung van dat khac nhau de mot lan chay chung mang (harness
+      # test, may dev) khong bien thanh mot loi kho doc.
+      WORKFLOW_WORKER_HEALTH_PORT: "8086"
+      # DICH DEN NOI BO — `self-api` la ten logic trong goi khach; day la anh xa ten -> URL that.
+      #
+      # `api:3001` chu khong phai `3001` cua host: worker goi THANG qua mang Docker cua khach,
+      # KHONG di qua Caddy. `caddy-route-contract.test.mjs` giu mot khang dinh PHU DINH rang
+      # `internal/*` phai VANG MAT khoi matcher cua edge — cong duong nay ra Internet la bien mot
+      # endpoint GHI trang thai don hang thanh thu ai cung goi duoc.
+      #
+      # PORT phai khop `PORT: 3001` cua service `api` (dong 137). Sai port o day thi workflow
+      # chay tron nhung moi lan goi ve deu that bai o tang mang.
+      WORKFLOW_DESTINATION_SELF_API: http://api:3001/internal/sales-handoff
+      # KHOA DICH VU. O `AUTH_MODE=session` day la thu DUY NHAT worker mang duoc: no khong co
+      # cookie, khong co phien, khong co token CSRF. `InternalServiceGuard` FAIL-CLOSED, nen
+      # thieu bien nay = workflow chay tron va moi lan goi ve deu 401.
+      API_KEY: ${API_KEY}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL: ${LOG_LEVEL:-log}
+      TELEMETRY_PRIVACY: ${TELEMETRY_PRIVACY:-}
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-}
+      RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}
+      RELEASE_APP_DIGEST: ${RELEASE_APP_DIGEST:-}
+      RELEASE_DEPLOYED_AT: ${RELEASE_DEPLOYED_AT:-}
+    command: ["node", "apps/api/dist/workflow/worker-main.js"]
+    volumes:
+      - ./tenant-pack:/srv/tenant:ro
+    # KHONG CO `ports:`, va KHONG CO `DATABASE_URL` — hai dieu nay la co y.
+    #
+    # `WorkflowWorkerModule` khong duoc cap Prisma: no boot mot module HEP chu khong phai
+    # `AppModule`, vi `AppModule` se mo mot listener zca THU HAI tren cung tai khoan Zalo va da
+    # ra listener cua `api` — kenh doc chinh cua GD1 chet vi mot container phu khoi dong. Worker
+    # doc trang thai nghiep vu bang cach GOI NGUOC API qua `internal/*`, khong cham DB.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8086/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 90s
+    networks:
+      # Giong `workflow-worker-v1`: `data` de goi engine, `backend` de goi `api` (dich den
+      # `self-api`). `data` khai `internal: true` nen mot container chi nam tren do khong goi
+      # duoc service nao ngoai cum engine.
       - backend
       - data
 
