@@ -97,29 +97,66 @@ export interface DebugWorkflowRun {
   readonly dashboardUrl?: string;
   readonly lastError?: string;
 
+  /**
+   * MOC THOI GIAN CUA CHINH ENGINE — nguon DUY NHAT do duoc mot lan cho ben vung.
+   *
+   * Ba truong nay den tu `describeRun()`, khong suy tu bat cu thu gi ben ta. Do la ca ly do
+   * chung ton tai: mot lan cho ben vung KHONG de lai dau vet nao trong cac luot cua Nexagnet —
+   * worker goi nguoc ve va duoc noi vao mach hoi thoai dang co, khong sinh mot luot moi sau khi
+   * cho. Nen moi con so tinh tu timestamp cua LUOT deu mu ve khoang cho do.
+   *
+   * `engineStartedAt` co ma `engineFinishedAt` vang = run CHUA ket thuc. Ca hai deu vang = khong
+   * hoi duoc engine, hoac engine khong ghi moc cho lan chay nay.
+   */
+  readonly engineStartedAt?: string;
+  readonly engineFinishedAt?: string;
+  /**
+   * `engineFinishedAt - engineStartedAt`. CO bao gom lan cho ben vung, vi engine dem ca no.
+   *
+   * Vang mat khi thieu mot dau moc, khi moc hong, hoac khi moc ket thuc di truoc moc bat dau.
+   * KHONG duoc lap cho trong bang `Date.now()`: con so do se lon dan moi lan bam F5, va mot phep
+   * do doi theo luc nhin la mot phep do gia.
+   */
+  readonly engineDurationMs?: number;
+
   readonly steps: readonly DebugWorkflowStep[];
 }
 
 /**
- * HAI CON SO THOI GIAN, va ly do phai la hai chu khong phai mot.
+ * CAC CON SO DO DUOC TU CAC LUOT — va CHI tu cac luot.
  *
- * Truoc ban nay console hien mot con so duy nhat lay tu `TraceView.totalMs` — do dai buoc ngoai
- * cung cua MOT luot. Voi mot day nhan qua keo dai 92 giay qua mot lan cho ben vung, con so do
- * hien ra la "92ms". No khong sai ve ky thuat va sai hoan toan ve nghia: nguoi doc ket luan he
- * thong phan hoi tuc thi, trong khi thu ho dang nhin la mot viec mat gan hai phut.
+ * ---------------------------------------------------------------------------
+ * MOT LOI DA XAY RA HAI LAN O DAY, moi lan mot kieu:
  *
- * Nen tach: mot con so do CONG VIEC MAY LAM, mot con so do KHOANG NGUOI CHO.
+ * ① Ban dau tien hien mot con so duy nhat lay tu `TraceView.totalMs` — do dai buoc ngoai cung
+ *    cua MOT luot. Mot viec mat gan hai phut hien ra la "92ms".
+ *
+ * ② Ban sua loi ① lai sinh ra mot loi tinh vi hon: no lay hieu timestamp giua luot DAU va luot
+ *    CUOI roi dan len do cau "co bao gom ca lan cho ben vung". Cau do khong dung, vi mot lan
+ *    cho ben vung KHONG SINH THEM LUOT — worker goi nguoc ve va duoc noi vao mach hoi thoai
+ *    dang co. Do duoc tren gd1-test: workflow chay 95 giay, hieu timestamp cac luot ra 2 giay,
+ *    va man hinh goi 2 giay do la "thoi gian co ca lan cho".
+ *
+ * Ket luan: TU DAY KHONG CO CON SO NAO TRONG KHOI NAY DUOC PHEP NHAN LA THOI GIAN WORKFLOW.
+ * Thoi gian workflow chi co mot nguon hop le — `DebugWorkflowRun.engineDurationMs`, tu moc cua
+ * chinh engine.
  */
 export interface DebugDurations {
   /** Do dai xu ly DONG BO cua luot goc. Khong bao gio bao trum lan cho ben vung. */
   readonly synchronousMs?: number;
   /**
-   * Khoang tu luot DAU toi luot CUOI da ghi nhan cho don nay — co bao trum lan cho ben vung.
+   * Khoang tu luc BAT DAU luot dau toi luc BAT DAU luot cuoi CON GIU DUOC trong bo dem.
+   *
+   * DAY KHONG PHAI THOI GIAN WORKFLOW, va khong phai tong thoi gian xu ly don. No do dung mot
+   * thu: cac luot con ghi lai duoc nam cach nhau bao xa. Hai gioi han lam no khong thay duoc
+   * thoi gian workflow:
+   *   — luot cu bi day khoi vong dem thi khoang nay CO NGAN LAI;
+   *   — mot lan cho ben vung khong sinh luot moi thi khoang nay KHONG DAI RA theo no.
    *
    * Vang mat khi chi co mot luot: mot khoang bang 0 se bi doc thanh "xong ngay", trong khi su
    * that la "chua co gi de do".
    */
-  readonly causalSpanMs?: number;
+  readonly turnIntervalMs?: number;
   readonly turnCount: number;
 }
 

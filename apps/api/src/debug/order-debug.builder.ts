@@ -198,8 +198,40 @@ function toWorkflowRun(facts: WorkflowRunFacts): DebugWorkflowRun {
       : {}),
     ...(facts.dashboardUrl ? { dashboardUrl: facts.dashboardUrl } : {}),
     ...(facts.lastError ? { lastError: facts.lastError } : {}),
+    ...(facts.engineStartedAt ? { engineStartedAt: facts.engineStartedAt } : {}),
+    ...(facts.engineFinishedAt ? { engineFinishedAt: facts.engineFinishedAt } : {}),
+    ...engineDuration(facts.engineStartedAt, facts.engineFinishedAt),
     steps: described.steps,
   };
+}
+
+/**
+ * THOI GIAN WORKFLOW — hieu hai moc CUA ENGINE, va khong co duong nao khac.
+ *
+ * ---------------------------------------------------------------------------
+ * BON TRUONG HOP TRA VE RONG, va ca bon deu la "chua xac dinh" chu khong phai "bang khong":
+ *
+ *   thieu `startedAt`    engine chua chay, hoac khong hoi duoc engine
+ *   thieu `finishedAt`   run CHUA KET THUC — ca hay gap nhat khi mo man hinh giua chung
+ *   moc hong             du lieu xau tu engine; mot `NaN` roi xuong giao dien te hon o trong
+ *   ket thuc < bat dau   du lieu xau; thoi luong AM la dau hieu hong, khong phai mot phep do
+ *
+ * KHONG lap cho trong bang `Date.now()` cho truong hop thu hai. Lam the thi con so lon dan moi
+ * lan bam F5 va khong doi chieu duoc voi bat cu ban ghi nao — mot phep do doi theo luc nhin la
+ * mot phep do gia. Man hinh noi "chua xac dinh", va do la cau tra loi that.
+ */
+function engineDuration(
+  startedAt: string | undefined,
+  finishedAt: string | undefined,
+): { engineDurationMs?: number } {
+  if (!startedAt || !finishedAt) return {};
+
+  const started = Date.parse(startedAt);
+  const finished = Date.parse(finishedAt);
+  if (Number.isNaN(started) || Number.isNaN(finished)) return {};
+  if (finished < started) return {};
+
+  return { engineDurationMs: finished - started };
 }
 
 /**
@@ -216,10 +248,14 @@ function engineName(key: string, version: string): string {
 }
 
 /**
- * HAI CON SO, hai cau hoi khac nhau — xem chu thich cua `DebugDurations`.
+ * DO TU CAC LUOT, va CHI tu cac luot — xem chu thich cua `DebugDurations`.
  *
- * `synchronousMs` lay tu luot GOC (luot dau tien), khong phai luot dai nhat: cau hoi la "may
- * mat bao lau de xu ly viec nay", va luot goc la luot lam viec do.
+ * `synchronousMs` lay tu luot GOC (luot dau tien), khong phai luot dai nhat: cau hoi la "may mat
+ * bao lau de xu ly viec nay", va luot goc la luot lam viec do.
+ *
+ * KHONG co thoi gian workflow o day. Ham nay chi nhin thay cac luot, ma mot lan cho ben vung
+ * khong de lai luot nao — nen no khong co cach gi biet ve khoang cho do. Thoi gian workflow
+ * duoc tinh o `engineDuration()`, tu moc cua chinh engine.
  */
 function measure(traces: readonly StoredTrace[]): DebugDurations {
   const first = traces[0];
@@ -228,14 +264,14 @@ function measure(traces: readonly StoredTrace[]): DebugDurations {
 
   // MOT luot thi khong co khoang nao de do. Tra 0 se bi doc thanh "xong ngay lap tuc", trong khi
   // su that la "chua co gi de so sanh" — hai chuyen khac han nhau.
-  const spanMs =
+  const turnIntervalMs =
     first && last && first !== last
       ? Date.parse(last.startedAt) - Date.parse(first.startedAt)
       : undefined;
 
   return {
     ...(synchronousMs !== undefined ? { synchronousMs } : {}),
-    ...(spanMs !== undefined && Number.isFinite(spanMs) ? { causalSpanMs: spanMs } : {}),
+    ...(turnIntervalMs !== undefined && Number.isFinite(turnIntervalMs) ? { turnIntervalMs } : {}),
     turnCount: traces.length,
   };
 }

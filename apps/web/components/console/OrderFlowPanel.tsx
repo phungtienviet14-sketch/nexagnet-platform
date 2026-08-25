@@ -95,6 +95,21 @@ function WorkflowBlock({ run }: { run: DebugWorkflowRun }) {
         </div>
       )}
 
+      {/*
+        NGUON GOC cua con so "Thời gian workflow" o dau man hinh. Hien hai moc canh nhau de nguoi
+        doc KIEM DUOC phep tru do — mot con so thoi luong khong kem moc thi khong ai bac bo duoc,
+        va chinh cho khong bac bo duoc la cho mot con so sai song lau.
+      */}
+      {run.engineStartedAt && (
+        <div className="of-wf-line">
+          <span>Engine chạy:</span>{' '}
+          <b>
+            {clockOf(run.engineStartedAt)}
+            {run.engineFinishedAt ? ` → ${clockOf(run.engineFinishedAt)}` : ' → (chưa kết thúc)'}
+          </b>
+        </div>
+      )}
+
       {run.attempts > 1 && (
         <div className="of-wf-line of-warn">Đã thử bàn giao {run.attempts} lần.</div>
       )}
