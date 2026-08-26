@@ -114,7 +114,7 @@ async function runTurn(options: { parsed: ParseResult; text: string }) {
   const sink = new RecordingSink();
   const telemetry = new TelemetryService();
   telemetry.configure({
-    release: { tenant: 'ultty', environment: 'gd1-test', gitSha: 'a'.repeat(40) },
+    release: { tenant: 'ultty', environment: 'gd1-test', gitSha: 'a'.repeat(40), source: 'manifest' },
     privacy: 'full',
     sinks: [sink],
   });

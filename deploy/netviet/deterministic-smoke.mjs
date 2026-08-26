@@ -183,6 +183,62 @@ async function probeObservability() {
   record('observability');
 }
 
+/**
+ * DANH TINH BAN PHAT HANH, DOC TU TIEN TRINH — khong phai tu tep tren host.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `sudo cat .runtime/release.json` chi chung minh mot tep tren dia. Cau hoi that la: TIEN TRINH
+ * dang phuc vu doc duoc gi? Hai cau nay tach nhau o dung cho hay hong nhat — bind-mount. Ban
+ * truoc 26/08/2026 khong mount tep do vao container, nen tren dia no dung con trong tien trinh
+ * no khong ton tai, va khong mot phep kiem nao thay duoc dieu do.
+ *
+ * VA PHAI KIEM O CA HAI PHA. `deploy-stack.sh` chay `--force-recreate api web` roi chay lai tep
+ * nay voi `DETERMINISTIC_PHASE=post-restart`. Mot tien trinh MOI phai doc lai DUNG ban phat hanh
+ * do; doc ra mot SHA khac nghia la manifest da bi thay duoi chan no.
+ * ---------------------------------------------------------------------------------------------
+ */
+async function probeReleaseIdentity() {
+  const body = await getJson('/observability/traces?limit=1', 'RELEASE_IDENTITY_CONTRACT_FAILED');
+  const release = body?.release;
+  if (!release || typeof release.gitSha !== 'string' || typeof release.source !== 'string') {
+    throw new SmokeFailure(
+      'RELEASE_IDENTITY_CONTRACT_FAILED',
+      'API khong bao duoc danh tinh ban phat hanh dang chay',
+    );
+  }
+
+  // XUNG DOT LA MOT KET QUA RIENG, khong phai mot dang "khong biet". Manifest va bien moi truong
+  // dang noi hai commit khac nhau, va tien trinh da chu dong tu choi chon mot ben.
+  if (release.source === 'conflict') {
+    throw new SmokeFailure(
+      'RELEASE_IDENTITY_MISMATCH',
+      `Danh tinh xung dot: manifest=${release.mismatch?.manifestGitSha} env=${release.mismatch?.envGitSha}`,
+    );
+  }
+
+  // TREN STACK, manifest la nguon CANONICAL. `env`/`none` van chay duoc, nhung chung co nghia la
+  // manifest chua toi duoc tien trinh — dung trieu chung ma milestone nay dong lai. O local/CI
+  // (`EXPECTED_RELEASE_SHA` khong duoc truyen) thi du phong la binh thuong va khong bi phan xu.
+  const expectedSha = process.env.EXPECTED_RELEASE_SHA?.trim();
+  if (expectedSha) {
+    if (release.source !== 'manifest') {
+      throw new SmokeFailure(
+        'RELEASE_IDENTITY_CONTRACT_FAILED',
+        `Danh tinh den tu '${release.source}' chu khong tu manifest — kiem mount .runtime/release.json`,
+      );
+    }
+    if (release.gitSha !== expectedSha) {
+      throw new SmokeFailure(
+        'RELEASE_IDENTITY_MISMATCH',
+        `Tien trinh doc ban phat hanh '${release.gitSha}', lan deploy nay la '${expectedSha}'`,
+      );
+    }
+  }
+
+  record('release-identity', `${release.source}:${release.gitSha.slice(0, 7)}`);
+  return { releaseSha: release.gitSha, releaseSource: release.source };
+}
+
 /** Bo cong san sang van hanh — mot bo kiem TAT DINH doc thang tu nguon su that trong DB. */
 async function probeReadiness() {
   if (!has('operations')) {
@@ -261,6 +317,7 @@ async function main() {
   await probeAnonymousRejected();
   await probeSession();
   await probeObservability();
+  const { releaseSha, releaseSource } = await probeReleaseIdentity();
   const readinessChecks = await probeReadiness();
   const knowledgeProducts = await probeKnowledge();
   await probeTurnRecords();
@@ -281,12 +338,21 @@ async function main() {
         `So cong san sang doi sau khi khoi dong lai: ${baseline.readinessChecks} -> ${readinessChecks}`,
       );
     }
+    // TIEN TRINH MOI, CUNG MOT BAN PHAT HANH. `--force-recreate` dung tien trinh cu va dung mot
+    // tien trinh khac len; neu no doc ra mot SHA khac thi manifest da bi thay duoi chan no giua
+    // hai pha — dung cai bay "release.json cu" ma mount + thu tu ghi phai loai bo.
+    if (baseline.releaseSha != null && baseline.releaseSha !== releaseSha) {
+      throw new SmokeFailure(
+        'RELEASE_IDENTITY_MISMATCH',
+        `Ban phat hanh doi sau khi khoi dong lai: ${baseline.releaseSha} -> ${releaseSha}`,
+      );
+    }
     record('con-nguyen-sau-restart');
   }
 
-  emit('pass', 'DETERMINISTIC_CONTRACT_OK', { phase, probes });
+  emit('pass', 'DETERMINISTIC_CONTRACT_OK', { phase, probes, releaseSha, releaseSource });
   process.stdout.write(
-    `DETERMINISTIC_BASELINE=${JSON.stringify({ knowledgeProducts, readinessChecks })}\n`,
+    `DETERMINISTIC_BASELINE=${JSON.stringify({ knowledgeProducts, readinessChecks, releaseSha, releaseSource })}\n`,
   );
 }
 

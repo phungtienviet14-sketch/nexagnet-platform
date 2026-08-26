@@ -57,7 +57,7 @@ describe.skipIf(!RUN_IT)('markFollowup duoi hai yeu cau SONG SONG (Postgres that
   const records: TelemetryRecord[] = [];
   const telemetry = new TelemetryService();
   telemetry.configure({
-    release: { tenant: 'fixture', environment: 'test', gitSha: 'unknown' },
+    release: { tenant: 'fixture', environment: 'test', gitSha: 'unknown', source: 'none' },
     privacy: 'redacted',
     sinks: [{ record: (record) => records.push(record) }],
   });

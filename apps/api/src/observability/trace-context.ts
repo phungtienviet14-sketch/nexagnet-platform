@@ -27,13 +27,35 @@ import { randomBytes } from 'node:crypto';
  */
 
 /** Danh tinh trien khai — doc mot lan luc boot, khong doi trong doi song tien trinh. */
+/**
+ * NGUON cua `gitSha`. Mot con so khong noi duoc minh tu dau la mot con so khong dung duoc de
+ * quyet dinh rollback.
+ *
+ *   · `manifest` — `release.json` do tang deploy ghi va mount vao container. CANONICAL.
+ *   · `env`      — `RELEASE_GIT_SHA`. DU PHONG: cho stack chua mount manifest, va cho duong
+ *                  goi tay tren VM.
+ *   · `conflict` — ca hai nguon cung tra loi, va tra loi KHAC NHAU. Khong ben nao duoc chon.
+ *   · `none`     — khong nguon nao biet. Trang thai BINH THUONG khi chay local/CI.
+ */
+export type ReleaseIdentitySource = 'manifest' | 'env' | 'conflict' | 'none';
+
+/** Hai gia tri dang tranh nhau, giu lai de nguoi truc doc duoc ma khong phai SSH len VM. */
+export interface ReleaseIdentityMismatch {
+  readonly manifestGitSha: string;
+  readonly envGitSha: string;
+}
+
 export interface ReleaseIdentity {
   /** Slug khach (`ultty`, `wata`, …). */
   readonly tenant: string;
   /** `dev` | `gd1-test` | `pilot` | `production` — tu `DEPLOYMENT_ENVIRONMENT`. */
   readonly environment: string;
-  /** Git SHA day du cua ban dang chay. `unknown` khi chay local/test. */
+  /** Git SHA day du. `unknown` khi chay local/test HOAC khi hai nguon lech nhau. */
   readonly gitSha: string;
+  /** `gitSha` tren den tu dau. Doc kem `gitSha`, khong bao gio doc rieng mot minh. */
+  readonly source: ReleaseIdentitySource;
+  /** Chi co mat khi `source === 'conflict'`. */
+  readonly mismatch?: ReleaseIdentityMismatch;
   /** Digest image ung dung; co tren VM, vang khi chay local. */
   readonly appDigest?: string;
   /** Tem thoi gian deploy (ISO 8601). */

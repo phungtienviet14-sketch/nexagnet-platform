@@ -3,6 +3,7 @@ import type { SourceContext, TraceView } from '@netviet/shared';
 import { RecentTracesSink } from './recent-traces.sink.js';
 import { currentSourceContext } from './source-manifest.js';
 import { TelemetryService } from './telemetry.service.js';
+import type { ReleaseIdentity } from './trace-context.js';
 import { buildTraceView } from './trace-view.builder.js';
 
 /**
@@ -31,11 +32,19 @@ export class TraceController {
     return currentSourceContext(this.telemetry.releaseIdentity());
   }
 
-  /** Danh sach luot gan day — moi nhat truoc. Cho man hinh chan doan. */
+  /**
+   * Danh sach luot gan day — moi nhat truoc. Cho man hinh chan doan.
+   *
+   * `release` nam o VO BOC chu khong chi trong tung luot, va do la co y: mot stack vua deploy
+   * xong co ZERO luot, nen neu danh tinh chi di kem tung `TraceView` thi dung luc can tra loi
+   * "ban nao dang chay" nhat lai khong co cho nao tra loi. Day cung la duong ma bang chung deploy
+   * doc danh tinh TU TIEN TRINH thay vi doc tep tren host.
+   */
   @Get()
   list(@Query('limit') limit?: string): {
     traces: TraceView[];
     stats: ReturnType<RecentTracesSink['stats']>;
+    release: ReleaseIdentity;
   } {
     const parsed = Number(limit);
     const take = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 100) : 20;
@@ -43,6 +52,7 @@ export class TraceController {
     return {
       traces: this.traces.list(take).map((stored) => buildTraceView(stored, context)),
       stats: this.traces.stats(),
+      release: this.telemetry.releaseIdentity(),
     };
   }
 

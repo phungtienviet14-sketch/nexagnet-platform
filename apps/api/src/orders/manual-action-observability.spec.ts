@@ -69,7 +69,7 @@ function build(replyAdapter: ChannelAdapter = new MockAdapter()): Harness {
   const sink = new RecentTracesSink();
   const telemetry = new TelemetryService();
   telemetry.configure({
-    release: { tenant: 'fixture', environment: 'test', gitSha: 'unknown' },
+    release: { tenant: 'fixture', environment: 'test', gitSha: 'unknown', source: 'none' },
     privacy: 'redacted',
     sinks: [sink, { record: (record) => records.push(record) }],
   });
@@ -290,7 +290,7 @@ describe('duong NGUOI BAM NUT phai de lai vet (su co 22/08/2026)', () => {
     const router = new OutboundChannelRouter(new MockAdapter(), new MockAdapter(), outbound);
     const telemetry = new TelemetryService();
     telemetry.configure({
-      release: { tenant: 'fixture', environment: 'test', gitSha: 'unknown' },
+      release: { tenant: 'fixture', environment: 'test', gitSha: 'unknown', source: 'none' },
       privacy: 'redacted',
       sinks: [
         {
@@ -316,7 +316,7 @@ describe('duong NGUOI BAM NUT phai de lai vet (su co 22/08/2026)', () => {
     const records: TelemetryRecord[] = [];
     const telemetry = new TelemetryService();
     telemetry.configure({
-      release: { tenant: 'fixture', environment: 'test', gitSha: 'unknown' },
+      release: { tenant: 'fixture', environment: 'test', gitSha: 'unknown', source: 'none' },
       privacy: 'redacted',
       sinks: [{ record: (record) => records.push(record) }],
     });

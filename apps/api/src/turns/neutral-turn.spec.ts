@@ -62,7 +62,7 @@ beforeAll(async () => {
     const records: Record<string, unknown>[] = [];
     const telemetry = new TelemetryService();
     telemetry.configure({
-      release: { tenant: 'neutral-turn', environment: 'test', gitSha: 'a'.repeat(40) },
+      release: { tenant: 'neutral-turn', environment: 'test', gitSha: 'a'.repeat(40), source: 'manifest' },
       privacy: 'full',
       sinks: [{ record: (entry: unknown) => void records.push(entry as Record<string, unknown>) }],
     } as never);
