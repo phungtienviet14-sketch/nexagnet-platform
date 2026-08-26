@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import 'reflect-metadata';
 import { buildGithubSourceUrl } from '@netviet/shared';
 import { TURN_DECISIONS } from '../turns/turn-decisions.js';
+import { ObservabilityModule } from './observability.module.js';
 import { RecentTracesSink } from './recent-traces.sink.js';
 import { TelemetryService } from './telemetry.service.js';
 import { buildTraceView } from './trace-view.builder.js';
@@ -166,5 +168,31 @@ describe('man hinh chan doan', () => {
     const view = buildTraceView(sink.list(1)[0]!);
     expect(view.sourceContext).toBeUndefined();
     expect(buildGithubSourceUrl({}, view.nodes[0]!.source!)).toBeNull();
+  });
+});
+
+/**
+ * DI: CAI GIU CHO `sourceContext` KHONG AM THAM BIEN MAT.
+ *
+ * `OrderDebugController` tiem `TelemetryService` bang `@Optional()` — vang mat thi man hinh van
+ * chay, chi mat lien ket ma nguon. Do la hanh vi DUNG (quan sat khong duoc lam hong thu no quan
+ * sat), nhung no cung co nghia la mot lan go nham `exports` se lam nut "Mo ma nguon" bien mat
+ * MA KHONG CO GI DO O DAU.
+ *
+ * Repo nay khong cai `@nestjs/testing` va khong dung `createTestingModule` o dau (xem
+ * `di-reachability.contract.spec.ts`: hop dong DI duoc kiem qua chinh day noi cua san pham).
+ * Nen o day ta khoa dung BAT BIEN lam phep tiem do giai duoc: module la `@Global()` VA no XUAT
+ * `TelemetryService`. Mat mot trong hai thi `@Optional()` lang le tra ve `undefined`.
+ *
+ * `RecentTracesSink` di kem trong cung phep kiem vi no la BANG CHUNG: controller do da tiem no
+ * (khong `@Optional()`) va dang chay that tren gd1-test, tuc duong giai nay co that.
+ */
+describe('day noi DI cua man hinh chan doan', () => {
+  it('ObservabilityModule la @Global() va xuat ca hai thu man hinh can', () => {
+    expect(Reflect.getMetadata('__module:global__', ObservabilityModule)).toBe(true);
+
+    const exported = Reflect.getMetadata('exports', ObservabilityModule) as unknown[];
+    expect(exported).toContain(TelemetryService);
+    expect(exported).toContain(RecentTracesSink);
   });
 });
