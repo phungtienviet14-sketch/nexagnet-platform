@@ -1,10 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WorkflowEnginePort, type WorkflowRunSummary } from './workflow-engine.port.js';
 import {
   WorkflowOutboxRepository,
   type WorkflowOutboxEntry,
 } from './workflow-outbox.repository.js';
-import { WORKFLOW_ENGINE_DASHBOARD_URL_ENV } from './workflow-run-dashboard.js';
+import {
+  WORKFLOW_ENGINE_DASHBOARD_URL_ENV,
+  WORKFLOW_ENGINE_TOKEN_ENV,
+} from './workflow-run-dashboard.js';
 import { WorkflowRunLookup } from './workflow-run-lookup.service.js';
 
 /**
@@ -116,11 +119,30 @@ function completedRun(): WorkflowRunSummary {
   };
 }
 
+/**
+ * Tenant CUA ENGINE, nam trong claim `sub` cua token — xem `workflow-run-dashboard.ts`. Route cua
+ * Hatchet la `/tenants/<tenantId>/runs/<runId>`, nen bai kiem nay phai dat CA token thi moi co
+ * duong bam; dat mot minh goc dashboard la tai lap dung cai bug 404 cua 26/08/2026.
+ */
+const ENGINE_TENANT = '707d0855-80ab-4e1a-a102-870c528e60fb';
+const ENGINE_TOKEN = [
+  Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url'),
+  Buffer.from(JSON.stringify({ sub: ENGINE_TENANT })).toString('base64url'),
+  'c2ln',
+].join('.');
+
 const previousDashboardUrl = process.env[WORKFLOW_ENGINE_DASHBOARD_URL_ENV];
+const previousEngineToken = process.env[WORKFLOW_ENGINE_TOKEN_ENV];
+
+beforeEach(() => {
+  process.env[WORKFLOW_ENGINE_TOKEN_ENV] = ENGINE_TOKEN;
+});
 
 afterEach(() => {
   if (previousDashboardUrl === undefined) delete process.env[WORKFLOW_ENGINE_DASHBOARD_URL_ENV];
   else process.env[WORKFLOW_ENGINE_DASHBOARD_URL_ENV] = previousDashboardUrl;
+  if (previousEngineToken === undefined) delete process.env[WORKFLOW_ENGINE_TOKEN_ENV];
+  else process.env[WORKFLOW_ENGINE_TOKEN_ENV] = previousEngineToken;
 });
 
 describe('WorkflowRunLookup — moc thoi gian cua engine di ra toi noi hien thi', () => {
@@ -204,7 +226,7 @@ describe('WorkflowRunLookup — duong bam sang engine', () => {
    * lan chay do, chu khong phai mot id khac hay mot goc doan mo.
    */
 
-  it('href dung dung engineRunId that cua lan chay', async () => {
+  it('href dung ROUTE THAT cua engine va dung engineRunId cua chinh lan chay', async () => {
     process.env[WORKFLOW_ENGINE_DASHBOARD_URL_ENV] = 'https://engine.example/';
     const lookup = new WorkflowRunLookup(
       new FakeOutbox([outboxRow()]),
@@ -213,8 +235,25 @@ describe('WorkflowRunLookup — duong bam sang engine', () => {
 
     const [run] = (await lookup.forEntity(ENTITY_ID)).runs;
 
-    expect(run!.dashboardUrl).toBe('https://engine.example/runs/' + RUN_ID);
+    expect(run!.dashboardUrl).toBe(
+      `https://engine.example/tenants/${ENGINE_TENANT}/runs/${RUN_ID}`,
+    );
     expect(run!.dashboardUrl).toContain(run!.engineRunId!);
+  });
+
+  it('co goc dashboard nhung KHONG co token -> khong suy duoc tenant -> khong co link', async () => {
+    // Khong phai mot truong hop bia: `WORKFLOW_ENGINE=off` van de lai goc dashboard trong
+    // compose. Mot cai link thieu tenant chinh la cai link 404 cua 26/08/2026.
+    process.env[WORKFLOW_ENGINE_DASHBOARD_URL_ENV] = 'https://engine.example';
+    delete process.env[WORKFLOW_ENGINE_TOKEN_ENV];
+    const lookup = new WorkflowRunLookup(
+      new FakeOutbox([outboxRow()]),
+      new FakeEngine(async () => completedRun()),
+    );
+
+    const [run] = (await lookup.forEntity(ENTITY_ID)).runs;
+
+    expect(run!.dashboardUrl).toBeUndefined();
   });
 
   it('khong khai goc dashboard thi KHONG dung mot nut dan toi hu vo', async () => {

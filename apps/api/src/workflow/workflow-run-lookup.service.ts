@@ -2,7 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import type { DebugHandoffStatus } from '@netviet/shared';
 import { WorkflowEnginePort } from './workflow-engine.port.js';
 import { WorkflowOutboxRepository } from './workflow-outbox.repository.js';
-import { resolveDashboardBaseUrl, workflowRunDashboardUrl } from './workflow-run-dashboard.js';
+import { resolveDashboardTarget, workflowRunDashboardUrl } from './workflow-run-dashboard.js';
 
 /**
  * DUONG DOC cua mien workflow — "thuc the nay da kich nhung workflow nao, den dau roi".
@@ -94,7 +94,7 @@ export class WorkflowRunLookup {
     const rows = await this.outbox.findByEntityId(entityId);
     if (rows.length === 0) return { runs: [], notes: [] };
 
-    const dashboardBase = resolveDashboardBaseUrl();
+    const dashboard = resolveDashboardTarget();
     const notes: string[] = [];
     const runs: WorkflowRunFacts[] = [];
 
@@ -102,7 +102,7 @@ export class WorkflowRunLookup {
       // URL dung CONG THUC, khong dung mot lan di mang: mot cai link khong dang gia mot vong
       // gRPC, va no van dung ke ca khi engine dang khong tra loi.
       const dashboardUrl = row.engineRunId
-        ? workflowRunDashboardUrl(dashboardBase, row.engineRunId)
+        ? workflowRunDashboardUrl(dashboard, row.engineRunId)
         : undefined;
 
       const engine = row.engineRunId ? await this.describe(row.engineRunId, notes) : undefined;

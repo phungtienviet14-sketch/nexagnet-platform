@@ -24,13 +24,28 @@ import { INTEGRATION_HANDOFF_KEY, SALES_HANDOFF_FOLLOWUP_KEY } from './workflow-
  * dung hieu nghiep vu tu cai thu nhat; nguoi debug tra cuu engine bang cai thu hai.
  *
  * ---------------------------------------------------------------------------
- * GIOI HAN DA BIET CUA ENGINE (do duoc tren `@hatchet-dev/typescript-sdk` 1.28.2):
+ * DANH BA NAY CUNG CHAY SANG ENGINE, khong chi phuc vu console cua ta — nhung chi den DUNG cho
+ * ma engine cho phep. Do lai ngay 26/08/2026 tren `@hatchet-dev/typescript-sdk` 1.28.2 va ma
+ * nguon dashboard Hatchet `v0.101.27`:
  *
- *   workflow  `CreateBaseWorkflowOpts` co `name` + `description`.
- *   buoc      `CreateBaseTaskOpts` chi co `name`. KHONG co `description`, khong co `displayName`.
+ *   KHUON  `CreateBaseWorkflowOpts` co `name` + `description`.
+ *          `description` DUOC HIEN THAT: `pages/main/v1/workflows/$workflow/index.tsx` render no
+ *          ngay duoi ten khuon. => `engineWorkflowDescription()` day nhan tieng Viet sang do.
+ *          KHONG co `displayName`.
  *
- * Nghia la dashboard cua engine KHONG hien duoc nhan tieng Viet cho tung buoc — no chi co chuoi
- * may. Do chinh la ly do danh ba nay ton tai o phia Nexagnet thay vi duoc day sang engine.
+ *   BUOC   `CreateBaseTaskOpts` chi co `name` — KHONG `description`, KHONG `displayName`, khong
+ *          mot truong nhan nao. Va `name` chinh la DANH TINH (`actionId`) ma engine dinh tuyen
+ *          theo. => the buoc tren dashboard chi hien duoc chuoi may; nhan tieng Viet cua buoc
+ *          di duong khac: `announceStep()` in no ra LOG cua chinh buoc do
+ *          (`hatchet-workflow-worker.adapter.ts`), va tab Logs cua run hien lai.
+ *
+ *   RUN    `RunOpts` KHONG co `displayName`. Tieu de run tren dashboard la chuoi engine tu sinh
+ *          (`sales-handoff-followup.v1-1787705280928`) va khong dat duoc tu SDK.
+ *
+ * Nhan tieng Viet KHONG di vao `additionalMetadata` cua run, va do la mot lua chon: tui do di
+ * qua `buildWorkflowMetadata()` — mot DANH SACH TRANG chi nhan gia tri hinh dang danh tinh
+ * (`SLUG_LIKE`). Nhet van ban tu do vao do buoc phai noi long chinh cai cong dang chan PII roi
+ * ra engine, doi lay mot cai nhan da co o hai cho khac.
  */
 
 export interface WorkflowStepDescription {
@@ -154,6 +169,23 @@ export const WORKFLOW_CATALOG: Readonly<Record<string, CatalogEntry>> = {
   [INTEGRATION_HANDOFF_KEY]: INTEGRATION_HANDOFF,
   [SALES_HANDOFF_FOLLOWUP_KEY]: SALES_HANDOFF_FOLLOWUP,
 };
+
+/**
+ * MO TA gui SANG ENGINE cho mot khuon — nhan tieng Viet dinh lien voi khoa may.
+ *
+ * Dang `"<ten nguoi doc> — <mo ta>"`, vi tren trang khuon cua Hatchet hai thu nay nam canh nhau:
+ * `name` (khoa may) o tieu de, con day o ngay duoi. Nguoi doc hieu nghiep vu tu ve trai; nguoi
+ * debug van copy duoc khoa may o tieu de.
+ *
+ * `undefined` cho khuon danh ba chua biet — KHONG bia mot cau mo ta. Noi goi bo han truong
+ * `description` khi do, chu khong gui chuoi rong: mot mo ta rong tren dashboard doc nhu "da tra
+ * loi la khong co" trong khi su that la "chua ai viet".
+ */
+export function engineWorkflowDescription(key: string): string | undefined {
+  const entry = WORKFLOW_CATALOG[key];
+  if (!entry) return undefined;
+  return `${entry.displayName} — ${entry.description}`;
+}
 
 /**
  * Metadata nguoi-doc cua mot khuon. KHONG NEM voi khoa la — khac han `workflowTemplate()`.
