@@ -49,6 +49,7 @@ const GROUP_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const SAFE_IDENTIFIER = /^[a-z0-9][a-z0-9_-]*$/;
 const SAFE_GROUP_ID = /^[A-Za-z0-9_-]+$/;
 const SAFE_REMOTE_TOKEN = /^[a-z0-9][a-z0-9-]*$/;
+const STACK_STATE_SENTINEL = '__NETVIET_STACK_STATE__=';
 const DEFAULT_GCP_PROJECT_ID = 'netviet-host-968934832433';
 const DEFAULT_GCP_REGION = 'asia-southeast1';
 const DEFAULT_GCP_ZONE = 'asia-southeast1-b';
@@ -155,12 +156,22 @@ function remoteStackExistsCommand(appDir) {
     'set -euo pipefail',
     'sudo -n true',
     `if sudo -n test -f '${appDir}/.runtime/secrets.env'`,
-    'then echo present',
+    `then echo '${STACK_STATE_SENTINEL}present'`,
     `elif sudo -n test -e '${appDir}'`,
-    'then echo incomplete',
-    'else echo absent',
+    `then echo '${STACK_STATE_SENTINEL}incomplete'`,
+    `else echo '${STACK_STATE_SENTINEL}absent'`,
     'fi',
   ].join('; ');
+}
+
+function parseStackState(output) {
+  const states = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(STACK_STATE_SENTINEL))
+    .map((line) => line.slice(STACK_STATE_SENTINEL.length));
+  if (states.length !== 1 || !['present', 'absent', 'incomplete'].includes(states[0])) return;
+  return states[0];
 }
 
 function remoteRuntimeCommand(appDir) {
@@ -383,8 +394,8 @@ export async function collectGd1TestPreflight(options = {}) {
     } catch {
       throw new Error('runtime stack existence probe transport failed');
     }
-    const stackState = stackProbeOutput.trim();
-    if (!['present', 'absent'].includes(stackState)) {
+    const stackState = parseStackState(stackProbeOutput);
+    if (!stackState || stackState === 'incomplete') {
       throw new Error('runtime stack existence probe returned invalid metadata');
     }
     const firstRelease = stackState === 'absent';
