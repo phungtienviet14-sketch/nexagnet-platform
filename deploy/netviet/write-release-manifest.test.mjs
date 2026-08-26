@@ -1,7 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -151,6 +159,35 @@ test('SHA chu HOA bi tu choi — tang doc so sanh o dang chu thuong', () => {
     });
 
     assert.notEqual(result.status, 0);
+  });
+});
+
+// --------------------------------------------------------- XAC MOUNT CUA DOCKER KHONG CHAN DUONG
+
+test('thu muc rong do Docker tao tai duong dan manifest duoc don, khong lam hong lan deploy', () => {
+  withScratch((scratch) => {
+    const destination = join(scratch, 'release.json');
+    // Dung cai Docker tao ra khi mount mot tep nguon chua ton tai: mot THU MUC rong trung ten.
+    mkdirSync(destination);
+
+    const result = runWriter({ destination, env: { RELEASE_GIT_SHA: NEW_SHA } });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(readFileSync(destination, 'utf8')).gitSha, NEW_SHA);
+  });
+});
+
+test('thu muc KHONG rong o duong dan manifest -> dung lai, khong xoa bua', () => {
+  withScratch((scratch) => {
+    const destination = join(scratch, 'release.json');
+    mkdirSync(destination);
+    writeFileSync(join(destination, 'khong-ro-la-gi'), 'x');
+
+    const result = runWriter({ destination, env: { RELEASE_GIT_SHA: NEW_SHA } });
+
+    // Day khong phai tinh huong ta hieu. Dung lai on hon la `rm -rf` mot thu khong ro la gi.
+    assert.notEqual(result.status, 0);
+    assert.equal(readFileSync(join(destination, 'khong-ro-la-gi'), 'utf8'), 'x');
   });
 });
 

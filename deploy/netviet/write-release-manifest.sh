@@ -51,6 +51,23 @@ if [[ ! "$TENANT_SCHEMA_VERSION" =~ ^[0-9]+$ ]]; then
   exit 64
 fi
 
+# DON XAC MOUNT CUA DOCKER, neu co.
+#
+# Compose mount `./.runtime/release.json` vao container. Khi Docker gap mot duong dan nguon CHUA
+# TON TAI, no tao ra mot THU MUC rong trung ten. Cua so de dieu do xay ra rat hep nhung co that:
+# mot lan deploy hong SAU khi compose.yaml moi da len dia nhung TRUOC khi manifest duoc ghi, roi
+# VM khoi dong lai — systemd dua stack len bang compose moi, va thu muc ma xuat hien.
+#
+# Luc do `mv` ben duoi that bai voi "cannot overwrite directory" — mot thong bao khong noi duoc gi
+# ve nguyen nhan. Don no o day de lan deploy ke tiep tu chua lanh.
+#
+# `rmdir` chu KHONG PHAI `rm -rf`: xac mount cua Docker luon RONG. Neu thu muc do co gi ben trong
+# thi day khong phai tinh huong ta hieu, va dung lai on hon la xoa mot thu khong ro la gi.
+if [[ -d "$destination" ]]; then
+  echo "Don thu muc rong do Docker tao tai ${destination} (mount tro toi tep chua ton tai)." >&2
+  rmdir -- "$destination"
+fi
+
 # Tep tam nam CUNG THU MUC voi dich: `mv` chi nguyen khoi khi hai ben cung mot he tep.
 destination_dir="$(dirname -- "$destination")"
 temporary="$(mktemp "${destination_dir}/release.XXXXXX")"

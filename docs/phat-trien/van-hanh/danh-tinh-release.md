@@ -67,7 +67,7 @@ Bốn mã lý do phân biệt bốn hỏng hóc khác nhau, đừng gộp:
 Ba chân phải trùng nhau: **SHA kỳ vọng = manifest trong tiến trình = biến môi trường trong tiến trình**.
 
 ```bash
-gcloud compute ssh netviet --zone asia-southeast1-a --command "cd /srv/netviet/apps/<stack> && sudo docker compose --env-file .runtime/secrets.env -f compose.yaml exec -T api sh -c 'printenv RELEASE_GIT_SHA; printenv RELEASE_MANIFEST_PATH; cat \$RELEASE_MANIFEST_PATH'"
+gcloud compute ssh netviet --zone asia-southeast1-b --command "cd /srv/netviet/apps/<stack> && sudo docker compose --env-file .runtime/secrets.env -f compose.yaml exec -T api sh -c 'printenv RELEASE_GIT_SHA; printenv RELEASE_MANIFEST_PATH; cat \$RELEASE_MANIFEST_PATH'"
 ```
 
 Đọc **trong container**, không phải `sudo cat` trên host: file trên đĩa đúng không chứng minh được

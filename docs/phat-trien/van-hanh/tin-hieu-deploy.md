@@ -53,13 +53,9 @@ Nhìn danh sách bước:
   đạt là một **phụ thuộc ngoài**. Kết luận tổng của workflow vẫn đỏ theo policy hiện tại — cái
   khác là **nghĩa** của màu đỏ, không phải màu.
 
-## Hai giới hạn đã biết
+## Giới hạn đã biết
 
 1. **Provider smoke của preflight vẫn là cổng cứng.** `gd1-test-preflight.mjs` chạy
    `smoke-test.mjs` trên bản **đang chạy** trước khi build; một lần model đoán sai ở đó vẫn chặn
    deploy trước khi bốn tín hiệu này kịp tồn tại. Cố ý giữ: đó là bằng chứng "provider đang hoạt
    động", không phải bằng chứng về bản mới.
-2. **`RELEASE_MANIFEST_PATH` vẫn rỗng trên stack.** `.runtime/release.json` chưa được mount vào
-   container, nên runtime lấy danh tính bản phát hành từ biến `RELEASE_GIT_SHA` — và cổng ROLLOUT
-   **đối chiếu chính biến đó** với bản vừa build, nên tín hiệu không bị ảnh hưởng. Việc mount
-   manifest là nợ riêng (đổi `compose.yaml` + thứ tự ghi file, không cùng biên với milestone này).

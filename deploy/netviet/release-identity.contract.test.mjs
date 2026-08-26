@@ -1,8 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { evaluateDeploySignals, parseSignalJournal } from './deploy-signals.mjs';
 
 /**
  * DUONG DI CUA DANH TINH RELEASE, tu tang deploy toi TIEN TRINH.
@@ -39,6 +50,71 @@ const deployRemote = read('deploy-remote.sh');
 const deployStack = read('deploy-stack.sh');
 const smokeTest = read('smoke-test.mjs');
 const deterministicSmoke = read('deterministic-smoke.mjs');
+
+const EXPECTED_SHA = '1'.repeat(40);
+const MISMATCHED_SHA = '2'.repeat(40);
+
+function withReleaseMismatchHarness(body) {
+  const scratch = mkdtempSync(join(tmpdir(), 'release-mismatch-'));
+  try {
+    const runtime = join(scratch, '.runtime');
+    const postgres = join(scratch, 'postgres');
+    mkdirSync(runtime, { recursive: true });
+    mkdirSync(postgres, { recursive: true });
+    writeFileSync(
+      join(runtime, 'secrets.env'),
+      [
+        'DEMO_DOMAIN=demo.example.test',
+        'OPERATOR_DOMAIN=operator.example.test',
+        'FLOWISE_DOMAIN=flowise.example.test',
+        'APP_IMAGE=registry.example/app@sha256:aaaa',
+        'FLOWISE_IMAGE=registry.example/flowise@sha256:bbbb',
+        `RELEASE_GIT_SHA=${EXPECTED_SHA}`,
+        'WORKFLOW_ENGINE=off',
+      ].join('\n'),
+      'utf8',
+    );
+    writeFileSync(join(runtime, 'channel-mode.env'), 'CHANNEL_MODE=mock\n', 'utf8');
+    writeFileSync(join(postgres, 'sync-passwords.sh'), '#!/bin/bash\n', 'utf8');
+
+    const channelMode = join(scratch, 'channel-mode.sh');
+    writeFileSync(channelMode, '#!/bin/bash\nprintf "mock\\n"\n', 'utf8');
+    chmodSync(channelMode, 0o755);
+
+    const bashEnvironment = join(scratch, 'harness-env.sh');
+    writeFileSync(
+      bashEnvironment,
+      String.raw`flock() { return 0; }
+docker() {
+  local args="$*"
+  if [[ "$1" == "compose" ]]; then
+    case "$args" in
+      *" exec -T api printenv RELEASE_GIT_SHA"*) printf '%s\n' "$HARNESS_EXPECTED_SHA" ;;
+      *" exec -T api printenv RELEASE_MANIFEST_PATH"*) printf '%s\n' '/runtime/release.json' ;;
+      *" exec -T api node -e "*) printf '%s\n' "$HARNESS_MANIFEST_SHA" ;;
+      *" ps -q "*) printf '%s\n' 'harness-container' ;;
+    esac
+    return 0
+  fi
+  if [[ "$1" == "image" && "$2" == "inspect" ]]; then
+    printf '%s\n' 'sha256:harness-image'
+    return 0
+  fi
+  if [[ "$1" == "inspect" ]]; then
+    printf '%s\n' 'sha256:harness-image'
+    return 0
+  fi
+  return 0
+}
+`,
+      'utf8',
+    );
+
+    return body({ scratch, bashEnvironment });
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 
 /**
  * Duong dan manifest BEN TRONG container. Khong phai duong dan tren host — do la mot khac biet
@@ -223,6 +299,51 @@ test('lech danh tinh co MA LY DO RIENG, khong gop vao mot loi chung', () => {
   ]) {
     assert.match(deployStack, new RegExp(reason), `thieu ma ly do ${reason}`);
   }
+});
+
+test('NEGATIVE CONTRACT: manifest lech env phat RELEASE_IDENTITY_MISMATCH va hard-fail rollout', () => {
+  withReleaseMismatchHarness(({ scratch, bashEnvironment }) => {
+    const run = spawnSync('bash', [join(here, 'deploy-stack.sh')], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        APP_DIR: scratch,
+        EDGE_DIR: join(scratch, 'edge'),
+        STACK_SLUG: 'tenant-x-gd1-test',
+        TENANT_SLUG: 'tenant-x',
+        BASH_ENV: bashEnvironment,
+        HARNESS_EXPECTED_SHA: EXPECTED_SHA,
+        HARNESS_MANIFEST_SHA: MISMATCHED_SHA,
+      },
+    });
+
+    assert.notEqual(run.status, 0, 'mismatch phai lam deploy-stack thoat khac 0');
+    const journal = parseSignalJournal(run.stdout);
+    const result = evaluateDeploySignals({ entries: journal.entries, remoteExitCode: run.status });
+    assert.equal(result.hardFailure, true);
+    assert.equal(result.classification, 'ROLLOUT_FAILED');
+    assert.equal(result.signals.rollout.reason, 'RELEASE_IDENTITY_MISMATCH');
+    assert.match(run.stderr, new RegExp(MISMATCHED_SHA));
+  });
+});
+
+test('runbook khong giu no manifest cu va dung zone cua deployment registry', () => {
+  const repoRoot = join(here, '..', '..');
+  const deploySignalsDoc = readFileSync(
+    join(repoRoot, 'docs', 'phat-trien', 'van-hanh', 'tin-hieu-deploy.md'),
+    'utf8',
+  );
+  const releaseIdentityDoc = readFileSync(
+    join(repoRoot, 'docs', 'phat-trien', 'van-hanh', 'danh-tinh-release.md'),
+    'utf8',
+  );
+  const targets = JSON.parse(
+    readFileSync(join(repoRoot, '.github', 'deployment-targets.json'), 'utf8'),
+  );
+  const zone = targets.targets['current-shared-vm'].zone;
+
+  assert.doesNotMatch(deploySignalsDoc, /RELEASE_MANIFEST_PATH` vẫn rỗng trên stack/i);
+  assert.match(releaseIdentityDoc, new RegExp(`--zone ${zone}(?:\\s|$)`));
 });
 
 test('ROLLOUT doi manifest la CANONICAL tren stack, khong chap nhan du phong im lang', () => {
