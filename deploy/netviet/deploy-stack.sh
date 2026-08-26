@@ -13,6 +13,39 @@ if [[ ! -s .runtime/secrets.env ]]; then
   exit 1
 fi
 
+# --- TIN HIEU DEPLOY -----------------------------------------------------------------------------
+# Bon tang, bon cau tra loi khac nhau (`deploy-signals.mjs` la noi phan xu).
+#
+# Truoc 26/08/2026 ca tep nay la MOT khoi `set -euo pipefail`: mot lan model phan loai tin mau
+# thanh `khac` cho ra dung mot dau X do nhu khi image chua len. Nguoi truc doc mai thanh "chac lai
+# model thoi" — va do la cach mot lan do THAT bi bo qua.
+#
+# Bay gio: moi giai doan tu khai bao minh la tang nao, va cai bay `EXIT` phat ra tin hieu that bai
+# CHO CHINH GIAI DOAN DANG CHAY. Nho vay mot loi o cho CHUA duoc gan tin hieu van roi dung tang,
+# thay vi bien mat.
+DEPLOY_SIGNAL_STAGE='rollout'
+DEPLOY_SIGNAL_REASON='ROLLOUT_STAGE_FAILED'
+
+emit_signal() {
+  printf '##DEPLOY-SIGNAL## {"layer":"%s","status":"%s","reason":"%s","detail":%s}\n' \
+    "$1" "$2" "$3" "${4:-null}"
+}
+
+stage() {
+  DEPLOY_SIGNAL_STAGE="$1"
+  DEPLOY_SIGNAL_REASON="$2"
+}
+
+# `$?` trong bay EXIT la ma thoat that. Thoat 0 -> khong phat gi (moi tang da tu bao `pass`).
+on_deploy_exit() {
+  local code=$?
+  [[ "${code}" -eq 0 ]] && return 0
+  emit_signal "${DEPLOY_SIGNAL_STAGE}" fail "${DEPLOY_SIGNAL_REASON}" \
+    "{\"exitCode\":${code},\"stack\":\"${STACK_SLUG}\"}"
+  return 0
+}
+trap on_deploy_exit EXIT
+
 # KHOA CHUNG cho moi lenh `docker compose up`. Ngay 04/08/2026 deploy chet giua chung voi
 # "removal of container ... is already in progress": timer tu-chua (health-check.sh) goi
 # `up -d --no-recreate` dung luc deploy dang recreate container api. `--no-recreate` KHONG du
@@ -33,6 +66,10 @@ runtime_value() {
 DEMO_DOMAIN="$(runtime_value DEMO_DOMAIN)"
 OPERATOR_DOMAIN="$(runtime_value OPERATOR_DOMAIN)"
 FLOWISE_DOMAIN="$(runtime_value FLOWISE_DOMAIN)"
+# DANH TINH BAN PHAT HANH — nguon de doi chieu o cong ROLLOUT ben duoi.
+APP_IMAGE_VALUE="$(runtime_value APP_IMAGE)"
+FLOWISE_IMAGE_VALUE="$(runtime_value FLOWISE_IMAGE)"
+RELEASE_SHA_VALUE="$(runtime_value RELEASE_GIT_SHA)"
 for domain in "${DEMO_DOMAIN}" "${OPERATOR_DOMAIN}" "${FLOWISE_DOMAIN}"; do
   if [[ ! "${domain}" =~ ^[a-z0-9.-]+$ ]]; then
     echo "Runtime domain khong hop le; khong chay smoke." >&2
@@ -40,6 +77,11 @@ for domain in "${DEMO_DOMAIN}" "${OPERATOR_DOMAIN}" "${FLOWISE_DOMAIN}"; do
   fi
 done
 
+# ================================================================================================
+# TANG 1 — ROLLOUT: ban phat hanh nay da thuc su duoc dat len chua.
+# ================================================================================================
+
+stage rollout ROLLOUT_DB_NOT_READY
 "${COMPOSE[@]}" pull postgres flowise
 "${COMPOSE[@]}" up -d postgres
 for attempt in {1..60}; do
@@ -54,6 +96,8 @@ for attempt in {1..60}; do
   sleep 5
 done
 "${COMPOSE[@]}" exec -T postgres sh -s < postgres/sync-passwords.sh
+
+stage rollout ROLLOUT_FLOWISE_NOT_READY
 "${COMPOSE[@]}" up -d flowise
 
 for attempt in {1..60}; do
@@ -68,11 +112,14 @@ for attempt in {1..60}; do
   sleep 10
 done
 
+stage rollout ROLLOUT_BOOTSTRAP_FAILED
 "${COMPOSE[@]}" --profile tools run --rm bootstrap
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/flowise/contract-test.mjs
+stage rollout ROLLOUT_MIGRATION_FAILED
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
+stage rollout ROLLOUT_AUTH_BOOTSTRAP_FAILED
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/netviet/bootstrap-auth-user.mjs
 # GIEO NGUON SU THAT tu goi khach — CHI khi Postgres con rong.
@@ -80,6 +127,7 @@ done
 # stack MOI len voi danh muc rong: parser khong co san pham de doi chieu va tin dat hang mau cua
 # smoke bi phan loai 'khac'. Script tu bo qua khi DB da co du lieu, nen deploy lai khong bao gio
 # ghi de thu Sale da sua qua /admin.
+stage rollout ROLLOUT_SEED_FAILED
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/netviet/seed-tenant-knowledge.mjs
 # WORKFLOW ENGINE — dung TRUOC `api`, va CHI khi cong tac bat.
@@ -99,6 +147,7 @@ done
 # mot lan deploy.
 workflow_engine="$(runtime_value WORKFLOW_ENGINE)"
 if [[ "${workflow_engine}" == 'on' ]]; then
+  stage rollout ROLLOUT_WORKFLOW_ENGINE_FAILED
   if [[ -z "$(runtime_value WORKFLOW_ENGINE_TOKEN)" ]]; then
     echo "WORKFLOW_ENGINE=on nhung secrets.env chua co WORKFLOW_ENGINE_TOKEN." >&2
     echo "Chay bootstrap-workflow-engine.sh (duc token) roi render-secrets.sh, roi chay lai." >&2
@@ -120,8 +169,61 @@ fi
 # Always recreate the application processes before injecting a smoke message. Pilot GĐ1 khoi dong
 # lai voi AUTO_SEND=on; smoke-test.mjs nhan ra kenh Zalo that va TUYET DOI khong approve fixture,
 # nen khong co tin thu nao bi gui vao nhom that.
+stage rollout ROLLOUT_APP_RECREATE_FAILED
 "${COMPOSE[@]}" up -d --no-deps --force-recreate api web
 "${COMPOSE[@]}" ps
+
+# CONG ROLLOUT: container dang chay co DUNG image cua ban phat hanh nay khong.
+#
+# `docker inspect .Image` tra ID cua image ma container DANG chay, con `docker image inspect .Id`
+# tra ID cua image ma compose LE RA phai chay. Hai so nay lech nhau chinh la truong hop "deploy
+# bao thanh cong nhung ban cu van dang phuc vu" — thu ma khong mot phep kiem suc khoe nao bat duoc,
+# vi ban cu cung khoe.
+running_image_id() {
+  local service="$1" container
+  container="$("${COMPOSE[@]}" ps -q "${service}" 2>/dev/null | head -n 1)"
+  [[ -n "${container}" ]] || return 1
+  docker inspect --format '{{.Image}}' "${container}"
+}
+
+rollout_mismatch=''
+for pair in "api:${APP_IMAGE_VALUE}" "web:${APP_IMAGE_VALUE}" "flowise:${FLOWISE_IMAGE_VALUE}"; do
+  service="${pair%%:*}"
+  expected_ref="${pair#*:}"
+  expected_id="$(docker image inspect --format '{{.Id}}' "${expected_ref}" 2>/dev/null || true)"
+  observed_id="$(running_image_id "${service}" || true)"
+  if [[ -z "${expected_id}" || -z "${observed_id}" || "${expected_id}" != "${observed_id}" ]]; then
+    rollout_mismatch="${rollout_mismatch}${service} "
+  fi
+done
+if [[ -n "${rollout_mismatch}" ]]; then
+  emit_signal rollout fail RELEASE_DIGEST_MISMATCH \
+    "{\"services\":\"${rollout_mismatch% }\",\"expectedAppImage\":\"${APP_IMAGE_VALUE}\"}"
+  echo "ROLLOUT: container ${rollout_mismatch}khong chay image cua ban phat hanh nay." >&2
+  exit 1
+fi
+
+# DANH TINH RELEASE PHAI TOI DUOC TIEN TRINH, khong chi toi dia. `RELEASE_GIT_SHA` di qua
+# `render-secrets.sh` VA khoi `environment:` cua compose; thieu mot trong hai thi tien trinh khong
+# biet minh dang chay commit nao, va cau hoi "bug nay o commit nao" quay ve phai SSH doc file.
+# SHA toan so 0 la gia tri mac dinh cua duong goi tay (deploy-remote.sh) — khong doi chieu.
+if [[ "${RELEASE_SHA_VALUE}" =~ ^[a-f0-9]{40}$ && "${RELEASE_SHA_VALUE}" != 0000000000000000000000000000000000000000 ]]; then
+  observed_sha="$("${COMPOSE[@]}" exec -T api printenv RELEASE_GIT_SHA 2>/dev/null | tr -d '\r\n' || true)"
+  if [[ "${observed_sha}" != "${RELEASE_SHA_VALUE}" ]]; then
+    emit_signal rollout fail RELEASE_SHA_MISMATCH \
+      "{\"expectedGitSha\":\"${RELEASE_SHA_VALUE}\",\"observedGitSha\":\"${observed_sha:-rong}\"}"
+    echo "ROLLOUT: tien trinh api bao SHA '${observed_sha:-rong}', ban phat hanh la '${RELEASE_SHA_VALUE}'." >&2
+    exit 1
+  fi
+fi
+emit_signal rollout pass ROLLOUT_MATCHES_RELEASE \
+  "{\"stack\":\"${STACK_SLUG}\",\"releaseSha\":\"${RELEASE_SHA_VALUE}\"}"
+
+# ================================================================================================
+# TANG 2 — HEALTH: ban vua len co song khong.
+# ================================================================================================
+
+stage health EDGE_ROUTE_FAILED
 
 # NAP LAI EDGE, KHONG DUNG LAI. Manh cau hinh cua khach nay vua duoc ghi lai, ma Caddy khong tu
 # theo doi tep bind-mount. `caddy reload` doi cau hinh tai cho, nen cac khach KHAC dang duoc phuc vu
@@ -168,6 +270,7 @@ fi
 # edge va tra 200 ngay lap tuc, nen neu chi giu vong do thi khong con gi chan smoke test chay khi
 # api vua bi recreate va chua boot xong — smoke test da that bai dung kieu do (502 sau 6 giay,
 # 16/08/2026). api con phai chay `prisma migrate deploy` roi mo Nest nen mat vai chuc giay.
+stage health API_HEALTH_FAILED
 for attempt in {1..60}; do
   if curl -fsS --max-time 5 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
     "https://${OPERATOR_DOMAIN}/health" >/dev/null; then
@@ -181,6 +284,7 @@ for attempt in {1..60}; do
   sleep 5
 done
 
+stage health EDGE_HEALTH_FAILED
 for attempt in {1..60}; do
   if curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
     break
@@ -192,56 +296,25 @@ for attempt in {1..60}; do
   fi
   sleep 2
 done
-smoke_output="$("${COMPOSE[@]}" --profile tools run --rm --no-deps \
-  -T \
-  -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
-  -e "CHANNEL_MODE=${channel_mode}" \
-  bootstrap node --input-type=module - < smoke-test.mjs)"
-echo "${smoke_output}"
 
-# GOI KHACH CHUA CO TIN NHAN MAU -> smoke khong tao ra don nao, nen khong co gi de kiem lai sau
-# restart. Khong dung cho deploy chet o day: mot khach vua dung goi (chua co SKU/dai ly) van phai
-# len duoc ha tang thi nguoi ta moi bat dau nhap nguon su that vao duoc.
-#
-# Nhung phai NOI TO ra log rang cong kiem tra duong dat hang da bi bo qua: mot lan deploy xanh ma
-# im lang se bi doc nham la "da kiem het".
-if grep -q 'SMOKE_SKIPPED_ORDER_PATH=1' <<<"${smoke_output}"; then
-  echo "CANH BAO: khach ${STACK_SLUG} chua khai bao 'smoke' trong tenant.json — lan deploy nay" >&2
-  echo "KHONG chung minh duoc duong dat hang (parse -> tinh gia -> duyet -> gui) chay dung." >&2
-  echo "Stack zalo-${STACK_SLUG} da healthy sau edge (MOI kiem duoc phan ha tang)."
-else
-  smoke_order_id="$(sed -n 's/.*SMOKE_ORDER_ID=//p' <<<"${smoke_output}" | tail -n 1)"
-  smoke_order_id="${smoke_order_id%%;*}"
-  smoke_order_status="$(sed -n 's/.*SMOKE_ORDER_STATUS=//p' <<<"${smoke_output}" | tail -n 1)"
-  if [[ ! "${smoke_order_id}" =~ ^[0-9a-f-]{36}$ ]] || \
-    [[ ! "${smoke_order_status}" =~ ^(pending_review|needs_edit|sent)$ ]]; then
-    echo "Khong lay duoc order id tu pilot smoke test." >&2
-    exit 1
-  fi
-
-  "${COMPOSE[@]}" restart api
-  # Kiem qua chinh hostname cua khach nay, khong qua 127.0.0.1:8080 nhu truoc: :8080 gio la suc khoe
-  # cua RIENG edge, no xanh ke ca khi api cua khach nay chet.
-  for attempt in {1..60}; do
-    if curl -fsS --max-time 5 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
-      "https://${OPERATOR_DOMAIN}/health" >/dev/null; then
-      break
+# WORKER BAT BUOC. `--wait` o tren chi chung minh chung LEN duoc; buoc nay chung minh chung con
+# song sau khi api da khoi dong va bat dau gui viec. Mot worker chet lang le nghia la khuon cua no
+# khong co ai phuc vu — deploy van xanh, va viec ban giao nam trong hang doi khong ai biet.
+if [[ "${workflow_engine}" == 'on' ]]; then
+  stage health WORKFLOW_WORKER_UNHEALTHY
+  for worker in workflow-worker-v1 workflow-worker-sales-handoff-v1; do
+    worker_container="$("${COMPOSE[@]}" --profile workflow ps -q "${worker}" | head -n 1)"
+    worker_state=''
+    if [[ -n "${worker_container}" ]]; then
+      worker_state="$(docker inspect --format '{{.State.Status}}' "${worker_container}" 2>/dev/null || true)"
     fi
-    if [[ "${attempt}" -eq 60 ]]; then
-      echo "API khong healthy sau restart." >&2
-      "${COMPOSE[@]}" logs --tail=100 api >&2
+    if [[ "${worker_state}" != 'running' ]]; then
+      emit_signal health fail WORKFLOW_WORKER_UNHEALTHY \
+        "{\"service\":\"${worker}\",\"state\":\"${worker_state:-vang-mat}\"}"
+      echo "Worker ${worker} khong con chay (${worker_state:-vang mat})." >&2
       exit 1
     fi
-    sleep 2
   done
-  "${COMPOSE[@]}" --profile tools run --rm --no-deps \
-    -T \
-    -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
-    -e "CHANNEL_MODE=${channel_mode}" \
-    -e "VERIFY_ORDER_ID=${smoke_order_id}" \
-    -e "VERIFY_ORDER_STATUS=${smoke_order_status}" \
-    bootstrap node --input-type=module - < smoke-test.mjs
-  echo "Stack zalo-${STACK_SLUG} da healthy sau edge."
 fi
 
 # Public endpoints/UI shell phai reachable qua TLS, trong khi protected API phai tu choi anonymous.
@@ -275,6 +348,7 @@ public_gates_ok() {
   return 0
 }
 
+stage health PUBLIC_ROUTE_FAILED
 for attempt in {1..60}; do
   if public_gates_ok; then
     break
@@ -288,3 +362,92 @@ done
 operator_probe="/zalo"
 [[ "${has_messaging}" -eq 1 ]] || operator_probe="/"
 echo "Public HTTPS healthy: https://${DEMO_DOMAIN} | https://${OPERATOR_DOMAIN}${operator_probe} | https://${FLOWISE_DOMAIN}"
+emit_signal health pass RUNTIME_HEALTHY \
+  "{\"stack\":\"${STACK_SLUG}\",\"operatorProbe\":\"${operator_probe}\"}"
+
+# ================================================================================================
+# TANG 3 — DETERMINISTIC RUNTIME SMOKE: hop dong nen tang con dung khong (KHONG co LLM).
+# ================================================================================================
+
+stage deterministicSmoke DETERMINISTIC_HARNESS_ERROR
+deterministic_log="$(mktemp)"
+run_deterministic_smoke() {
+  local smoke_phase="$1" smoke_baseline="$2"
+  "${COMPOSE[@]}" --profile tools run --rm --no-deps \
+    -T \
+    -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
+    -e "DETERMINISTIC_PHASE=${smoke_phase}" \
+    -e "DETERMINISTIC_BASELINE=${smoke_baseline}" \
+    bootstrap node --input-type=module - < deterministic-smoke.mjs
+}
+
+# `tee` chu khong phai command substitution: khi bai kiem that bai no DA phat ra mot dong tin hieu
+# co ma ly do cu the, va mot `$(...)` chet giua chung se nuot mat dong do — de lai dung cai ly do
+# chung chung ma milestone nay sinh ra de xoa bo.
+if ! run_deterministic_smoke pre '' | tee "${deterministic_log}"; then
+  echo "Hop dong runtime tat dinh khong dat (truoc khi khoi dong lai)." >&2
+  exit 1
+fi
+deterministic_baseline="$(sed -n 's/^DETERMINISTIC_BASELINE=//p' "${deterministic_log}" | tail -n 1)"
+
+# KHOI DONG LAI ROI KIEM LAI. Day la phep do BEN VUNG: du lieu phai con nguyen sau khi tien trinh
+# chet va len lai. Truoc day phep do nay bam vao mot don do LLM tao ra (`VERIFY_ORDER_ID`), nen mot
+# lan model doan sai lam mat luon bang chung ve tinh ben vung.
+"${COMPOSE[@]}" restart api
+stage health API_HEALTH_FAILED
+for attempt in {1..60}; do
+  if curl -fsS --max-time 5 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" \
+    "https://${OPERATOR_DOMAIN}/health" >/dev/null; then
+    break
+  fi
+  if [[ "${attempt}" -eq 60 ]]; then
+    echo "API khong healthy sau restart." >&2
+    "${COMPOSE[@]}" logs --tail=100 api >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+stage deterministicSmoke DETERMINISTIC_HARNESS_ERROR
+if ! run_deterministic_smoke post-restart "${deterministic_baseline}" | tee "${deterministic_log}"; then
+  echo "Hop dong runtime tat dinh khong dat (sau khi khoi dong lai)." >&2
+  exit 1
+fi
+echo "Stack zalo-${STACK_SLUG} da healthy sau edge."
+
+# ================================================================================================
+# TANG 4 — LIVE AI SMOKE: model/provider co dat fixture khong.
+#
+# TIN HIEU MEM. Tang nay KHONG duoc lam do lan deploy: ba tang tren da chung minh ban phat hanh
+# len dung, song, va con dung hop dong. Mot lan model phan loai sai la mot su that ve MODEL, va no
+# duoc bao rieng — `deploy-signals.mjs` phan xu, GitHub Actions co mot buoc rieng mang dung ten do.
+# ================================================================================================
+
+stage liveAiSmoke LIVE_AI_HARNESS_ERROR
+smoke_output="$(mktemp)"
+# `|| true`: `DEPLOY_SIGNAL_SOFT=1` da lam smoke-test.mjs thoat 0 o moi ket qua cua model, nhung
+# mot loi harness (het bo nho, container khong dung duoc) van thoat khac 0 — va ke ca luc do, lan
+# deploy nay VAN da duoc chung minh boi ba tang tren.
+"${COMPOSE[@]}" --profile tools run --rm --no-deps \
+  -T \
+  -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
+  -e "CHANNEL_MODE=${channel_mode}" \
+  -e "DEPLOY_SIGNAL_SOFT=1" \
+  bootstrap node --input-type=module - < smoke-test.mjs 2>&1 | tee "${smoke_output}" || true
+
+# KHONG XANH GIA: smoke chet truoc khi kip phat tin hieu thi tang nay phai duoc ghi la FAIL, khong
+# duoc de trong — mot tang `pending` se lam `deploy-signals.mjs` ket luan DEPLOY_SIGNAL_INCOMPLETE.
+if ! grep -q '"layer":"liveAiSmoke"' "${smoke_output}"; then
+  emit_signal liveAiSmoke fail LIVE_AI_HARNESS_ERROR \
+    '{"message":"smoke ket thuc ma khong phat ra tin hieu nao"}'
+fi
+
+# GOI KHACH CHUA CO TIN NHAN MAU -> khong co gi de doi chieu voi model. Khong dung cho deploy chet
+# o day: mot khach vua dung goi (chua co SKU/dai ly) van phai len duoc ha tang thi nguoi ta moi bat
+# dau nhap nguon su that vao duoc. Nhung phai NOI TO ra log rang cong do da bi bo qua.
+if grep -q 'SMOKE_SKIPPED_ORDER_PATH=1' "${smoke_output}"; then
+  echo "CANH BAO: khach ${STACK_SLUG} chua khai bao 'smoke' trong tenant.json — lan deploy nay" >&2
+  echo "KHONG chung minh duoc duong dat hang (parse -> tinh gia -> duyet -> gui) chay dung." >&2
+fi
+
+rm -f -- "${deterministic_log}" "${smoke_output}"

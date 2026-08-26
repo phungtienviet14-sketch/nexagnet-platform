@@ -277,6 +277,13 @@ for backend_network in $(docker network ls --filter 'name=^zalo-.*_backend$' --f
   docker network connect "$backend_network" netviet-edge-gateway-1 2>/dev/null || true
 done
 
+# DANH TINH BAN PHAT HANH cho bao cao tin hieu deploy. Phat o DAY chu khong o `deploy-stack.sh`:
+# chi tang nay biet ca digest lan git SHA, va bao cao phai co danh tinh KE CA khi stack chet ngay
+# o buoc dau — mot bao cao khong noi duoc "ban nao" thi khong dung duoc de quyet dinh rollback.
+printf '##DEPLOY-SIGNAL## {"layer":"meta","tenant":"%s","environment":"%s","stack":"%s","gitSha":"%s","appDigest":"%s","flowiseDigest":"%s","workflowRunId":"%s"}\n' \
+  "$tenant_slug" "$deployment_environment" "$stack_slug" "$release_git_sha" \
+  "$app_image" "$flowise_image" "$release_workflow_run_id"
+
 env TENANT_SLUG="$tenant_slug" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" EDGE_DIR="$edge_dir" "$app_dir/deploy-stack.sh"
 env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" "$app_dir/backup.sh"
 write_release_json \

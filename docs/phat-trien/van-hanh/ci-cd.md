@@ -3,6 +3,11 @@
 Đối tượng đọc: **AI coding agent** làm việc trong repo này, và kỹ sư trực deploy. Đọc hết trước khi
 sửa bất cứ thứ gì trong `.github/workflows/` hoặc `deploy/`.
 
+> **Một lần deploy phát ra bốn tín hiệu, không phải một dấu ✓/✗** (từ 26/08/2026):
+> ROLLOUT · HEALTH · DETERMINISTIC RUNTIME SMOKE · LIVE AI SMOKE. Ý nghĩa từng màu và cách đọc
+> nhanh trên GitHub Actions: [tin-hieu-deploy.md](tin-hieu-deploy.md). Ba tín hiệu đầu **chặn**
+> deploy; live AI báo riêng để một lần model đoán sai không bị đọc nhầm thành "release chưa lên".
+
 ---
 
 ## 0. Ai là ai (hiểu sai chỗ này là đặt tên sai cả code lẫn tài liệu)
@@ -206,8 +211,8 @@ curl -s https://operator-$S.$IP.sslip.io/ | grep -o '<title>[^<]*</title>'
 gcloud compute ssh netviet --zone asia-southeast1-b --tunnel-through-iap --quiet \
   --command "docker exec \$(docker ps -q -f name=zalo-$S-api) getent hosts flowise"
 
-# 4. Smoke đã chạy thật hay đã bỏ qua
-gh run view <run-id> --log | grep -E 'SMOKE_ORDER_ID|SMOKE_SKIPPED_ORDER_PATH'
+# 4. Bốn tín hiệu của chính lần deploy đó — không phải grep log
+gh run download <run-id> -n deploy-signals-$TENANT-$ENV && cat deploy-signals.json
 ```
 
 Phép 3 phải trả về **đúng một** địa chỉ, và đó phải là Flowise của chính khách đó. Trả về hai địa

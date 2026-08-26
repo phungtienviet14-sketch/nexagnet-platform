@@ -55,3 +55,7 @@ playwright-report/
 # Thu muc nhap cuc bo. Da tung chua anh chup BANG GIA cua khach (tmp/pdfs/) va suyt bi commit bang
 # mot `git add -A` — dung de no co co hoi lan sau. .dockerignore da loai `tmp` tu truoc.
 tmp/
+
+# Bao cao tin hieu deploy — sinh ra o goc checkout luc chay CD (deploy-ci.sh), khong commit.
+deploy-signals.json
+deploy-signals.log

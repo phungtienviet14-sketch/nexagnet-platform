@@ -45,7 +45,10 @@ test('manual deploy workflow exposes gd1-test while reusable workflow validates 
 
 test('GD1-test verifies exact-SHA CI and passes fail-closed preflight inputs to deploy-ci', () => {
   const preflightIndex = reusableDeploy.indexOf('Verify exact main SHA passed CI');
-  const buildIndex = reusableDeploy.indexOf('Build, push neutral image and roll out tenant silo');
+  // Neo vao `id:` chu khong vao TEN HIEN THI cua buoc. Ten hien thi la van ban cho nguoi doc va
+  // no doi that (26/08/2026, khi buoc nay duoc dat ten theo cac tang tin hieu no phu trach);
+  // `id` la thu ma cac buoc khac tham chieu, nen doi no la mot thay doi co y thuc.
+  const buildIndex = reusableDeploy.indexOf('id: rollout');
 
   assert.notEqual(preflightIndex, -1, 'workflow must verify exact-SHA CI before GD1-test deploy');
   assert.notEqual(buildIndex, -1, 'workflow must still build and deploy through the existing step');
