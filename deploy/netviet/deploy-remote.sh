@@ -31,6 +31,10 @@ stack_slug="${STACK_SLUG:-${derived_stack_slug}}"
 deployment_target_id="${DEPLOYMENT_TARGET_ID:-legacy-default}"
 release_git_sha="${RELEASE_GIT_SHA:-0000000000000000000000000000000000000000}"
 release_workflow_run_id="${RELEASE_WORKFLOW_RUN_ID:-0}"
+# MOT MOC THOI GIAN CHO CA LAN DEPLOY. Truoc 26/08/2026 co hai loi goi `date` cach nhau ca lan
+# deploy — mot cho bien moi truong, mot cho manifest — nen hai nguon noi hai moc khac nhau, va moi
+# phep doi chieu giua chung deu vo nghia.
+release_deployed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 rollback_app_image="${ROLLBACK_APP_IMAGE:-}"
 # Lan release DAU TIEN cua mot stack khong co anh cu de quay ve, nen khong the doi rollback digest.
 # deploy-ci.sh suy ra tu preflight roi truyen xuong; mac dinh 0 = coi nhu da co ban truoc do, tuc
@@ -110,21 +114,6 @@ tenant_schema_version="$(sed -n 's/^[[:space:]]*"schemaVersion"[[:space:]]*:[[:s
 [[ "$tenant_schema_version" =~ ^[0-9]+$ ]] || {
   echo 'Khong doc duoc tenant schemaVersion de ghi release identity.' >&2
   exit 1
-}
-
-write_release_json() {
-  local destination="$1"
-  local release_app_image="$2"
-  local release_flowise_image="$3"
-  local deployed_at="$4"
-  local temporary
-  temporary="$(mktemp "${app_dir}/.runtime/release.XXXXXX")"
-  printf '{"tenant":"%s","environment":"%s","stack":"%s","target":"%s","gitSha":"%s","appDigest":"%s","flowiseDigest":"%s","tenantSchemaVersion":%s,"workflowRunId":"%s","deployedAt":"%s"}\n' \
-    "$tenant_slug" "$deployment_environment" "$stack_slug" "$deployment_target_id" "$release_git_sha" \
-    "$release_app_image" "$release_flowise_image" "$tenant_schema_version" \
-    "$release_workflow_run_id" "$deployed_at" >"$temporary"
-  chmod 0600 "$temporary"
-  mv -f -- "$temporary" "$destination"
 }
 
 if [[ "$deployment_environment" == 'gd1-test' ]]; then
@@ -235,7 +224,7 @@ env \
   DEPLOYMENT_ENVIRONMENT="$deployment_environment" \
   WORKFLOW_ENGINE="${WORKFLOW_ENGINE:-off}" \
   RELEASE_GIT_SHA="$release_git_sha" \
-  RELEASE_DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  RELEASE_DEPLOYED_AT="$release_deployed_at" \
   "$app_dir/render-secrets.sh"
 
 # Edge phai len TRUOC stack khach: deploy-stack.sh ket thuc bang smoke test qua HTTPS cong khai,
@@ -284,12 +273,30 @@ printf '##DEPLOY-SIGNAL## {"layer":"meta","tenant":"%s","environment":"%s","stac
   "$tenant_slug" "$deployment_environment" "$stack_slug" "$release_git_sha" \
   "$app_image" "$flowise_image" "$release_workflow_run_id"
 
+# DANH TINH RELEASE PHAI CO MAT TRUOC KHI CONTAINER KHOI DONG.
+#
+# `deploy-stack.sh` ngay duoi day chay `docker compose up`, va compose mount tep nay `:ro` vao
+# `api` cung cac worker. Hai he qua neu ghi SAU, nhu ban truoc 26/08/2026:
+#   · tep chua ton tai -> Docker tao mot THU MUC trung ten, hong ca mount lan lan ghi ke tiep;
+#   · tep con ban cu   -> tien trinh doc dung ban phat hanh TRUOC, va khong ai biet.
+#
+# Ghi them mot lan nua SAU khi container da len KHONG cuu duoc gi: bind-mount cua Docker neo vao
+# INODE, con `mv` tao inode moi — nen tien trinh se giu ban cu vinh vien. Do la ly do o day chi co
+# DUNG MOT loi goi, va `release-identity.contract.test.mjs` khoa ca so lan lan thu tu.
+env \
+  TENANT_SLUG="$tenant_slug" \
+  DEPLOYMENT_ENVIRONMENT="$deployment_environment" \
+  STACK_SLUG="$stack_slug" \
+  DEPLOYMENT_TARGET_ID="$deployment_target_id" \
+  APP_IMAGE="$app_image" \
+  FLOWISE_IMAGE="$flowise_image" \
+  TENANT_SCHEMA_VERSION="$tenant_schema_version" \
+  RELEASE_GIT_SHA="$release_git_sha" \
+  RELEASE_WORKFLOW_RUN_ID="$release_workflow_run_id" \
+  RELEASE_DEPLOYED_AT="$release_deployed_at" \
+  "$app_dir/write-release-manifest.sh" "$app_dir/.runtime/release.json"
+
 env TENANT_SLUG="$tenant_slug" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" EDGE_DIR="$edge_dir" "$app_dir/deploy-stack.sh"
 env VERIFY_RESTORE=1 BACKUP_BUCKET="$backup_bucket" STACK_SLUG="$stack_slug" APP_DIR="$app_dir" "$app_dir/backup.sh"
-write_release_json \
-  "$app_dir/.runtime/release.json" \
-  "$app_image" \
-  "$flowise_image" \
-  "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 systemctl start --no-block "netviet-soak@${stack_slug}.service"
 rm -rf -- "$remote_parent"

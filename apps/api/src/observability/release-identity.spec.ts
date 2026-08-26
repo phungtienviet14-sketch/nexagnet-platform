@@ -101,7 +101,14 @@ describe('resolveReleaseIdentity — tenant den tu GOI KHACH dang mount', () => 
     const manifestPath = join(scratch, 'release.json');
     writeFileSync(
       manifestPath,
-      JSON.stringify({ tenant: 'ghi-trong-manifest', environment: 'gd1-test', gitSha: 'abc1234' }),
+      JSON.stringify({
+        tenant: 'ghi-trong-manifest',
+        environment: 'gd1-test',
+        // SHA DAY DU 40 ky tu: tu 26/08/2026 mot chuoi cut khong con duoc coi la danh tinh
+        // (xem `release-identity-source.spec.ts`), nen mot ban cut o day se lam bai nay XANH GIA
+        // — no se "dung" chi vi ca hai ve deu roi ve `unknown`.
+        gitSha: 'c0ffee1122334455667788990011223344556677',
+      }),
     );
 
     const release = resolveReleaseIdentity({ manifestPath });
@@ -110,13 +117,19 @@ describe('resolveReleaseIdentity — tenant den tu GOI KHACH dang mount', () => 
     // CHONG XANH GIA: cac truong con lai VAN phai den tu manifest — bai nay khong duoc "dung"
     // chi vi manifest bi bo qua hoan toan.
     expect(release.environment).toBe('gd1-test');
-    expect(release.gitSha).toBe('abc1234');
+    expect(release.gitSha).toBe('c0ffee1122334455667788990011223344556677');
   });
 
   it('khong co goi khach -> manifest van la nguon tiep theo (khong pha duong hien tai)', () => {
     useTenantDir(undefined);
     const manifestPath = join(scratch, 'release.json');
-    writeFileSync(manifestPath, JSON.stringify({ tenant: 'tu-manifest', gitSha: 'def5678' }));
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        tenant: 'tu-manifest',
+        gitSha: 'dec0de1122334455667788990011223344556677',
+      }),
+    );
 
     expect(resolveReleaseIdentity({ manifestPath }).tenant).toBe('tu-manifest');
   });

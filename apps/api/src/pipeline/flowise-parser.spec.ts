@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ParserInput } from './order-parser.js';
 import { FlowiseParser } from './flowise-parser.js';
 import { currentTraceId, runInTrace } from '../observability/trace-context.js';
+import type { ReleaseIdentity } from '../observability/trace-context.js';
 
 const input: ParserInput = {
   text: 'HN_30.6_Meta HN, 2 x Ghe Felix',
@@ -47,7 +48,12 @@ describe('FlowiseParser — noi soi chi trace sang tien trinh khac', () => {
   it('dinh `traceparent` W3C mang DUNG traceId cua luot dang chay', async () => {
     const fetchMock = vi.fn().mockResolvedValue(response(200, { json: validResult }));
     vi.stubGlobal('fetch', fetchMock);
-    const release = { tenant: 'ultty', environment: 'gd1-test', gitSha: 'a'.repeat(40) };
+    const release: ReleaseIdentity = {
+      tenant: 'ultty',
+      environment: 'gd1-test',
+      gitSha: 'a'.repeat(40),
+      source: 'manifest',
+    };
 
     const traceId = await runInTrace(
       { release, anchors: { chatId: 'c1' } },

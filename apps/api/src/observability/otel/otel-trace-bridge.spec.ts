@@ -42,7 +42,7 @@ describe('OtelTraceBridge', () => {
     const records: TelemetryRecord[] = [];
     const telemetry = new TelemetryService();
     telemetry.configure({
-      release: { tenant: 'poc', environment: 'test', gitSha: 'abcdef1234567890' },
+      release: { tenant: 'poc', environment: 'test', gitSha: 'abcdef1234567890', source: 'manifest' },
       privacy: 'full',
       sinks: [{ record: (record) => records.push(record) }],
       bridge: new OtelTraceBridge(provider.getTracer('test')),
@@ -210,7 +210,7 @@ describe('OtelTraceBridge', () => {
       },
     } as never;
     telemetry.configure({
-      release: { tenant: 'poc', environment: 'test', gitSha: 'unknown' },
+      release: { tenant: 'poc', environment: 'test', gitSha: 'unknown', source: 'none' },
       privacy: 'full',
       sinks: [{ record: (record) => records.push(record) }],
       bridge: new OtelTraceBridge(brokenTracer),

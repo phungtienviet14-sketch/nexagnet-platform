@@ -469,10 +469,17 @@ test('du lieu khach den tu volume mount, khong nam trong image', async () => {
 // truong "stack" vao format ma quen them tham so, khien `capturedAt` rong va `appDigest` nhan
 // nham gia tri cua truong ben canh. Mot tep rollback sai la thu chi bi phat hien dung luc can
 // rollback, nen dem so o day.
-test('printf metadata release/rollback co so tham so khop so %s', () => {
+test('printf metadata release/rollback co so tham so khop so %s', async () => {
+  // Khoi printf cua `release.json` da chuyen sang mot script rieng (26/08/2026) de thu tu ghi
+  // manifest kiem duoc bang test. Quet CA HAI tep chu khong ha nguong dem xuong 2: cai bay o day
+  // la mot khoi printf lech tham so, va no khong bot nguy hiem di chi vi da doi cho o.
+  const writeManifest = await readFile(
+    new URL('./write-release-manifest.sh', import.meta.url),
+    'utf8',
+  );
   // Khong rang buoc kieu xuong dong: tep nay co the la CRLF tren may Windows.
   const blocks = [
-    ...deployRemote.matchAll(
+    ...`${deployRemote}\n${writeManifest}`.matchAll(
       /printf '(\{[^']*\})([\s\S]*?)>"\$(?:temporary|rollback_file)"/g,
     ),
   ];

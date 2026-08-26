@@ -136,6 +136,9 @@ function classifyTransportError(error) {
 async function main() {
   await expectOk('/health');
   if (authMode === 'session') await authenticate();
+  // SAU khi dang nhap: `/demo/config` nam sau guard nhu moi duong nghiep vu khac. Doc mot lan o
+  // day de MOI ma ly do phat ra ben duoi — ke ca cac duong that bai — deu kem duoc che do parser.
+  await loadRuntimeParserMode();
 
   if (verifyOrderId) {
     const persisted = await getJson(`/orders/${encodeURIComponent(verifyOrderId)}`);
@@ -170,6 +173,36 @@ async function main() {
   }
 
   await runOrderPath();
+}
+
+/**
+ * CHE DO PARSER CUA TIEN TRINH DANG CHAY — hoi API, khong doc moi truong cua chinh minh.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * VI SAO KHONG PHAI `process.env.PARSER_MODE` (sua 26/08/2026):
+ *
+ * Tep nay chay trong container `bootstrap`, va khoi `environment:` cua dich vu do KHONG liet ke
+ * `PARSER_MODE`. Bien do vi vay luon rong, va `parserMode` trong bang chung deploy luon la `null`
+ * — mot o trong khong ai doc ra duoc rang no dang bao "khong biet" chu khong phai "khong co".
+ *
+ * Cach sua HIEN NHIEN — them bien do vao service `bootstrap` — la cach sai: luc do co HAI nguon
+ * (`api` mot, `bootstrap` mot) co the lech nhau ma bang chung van bao "pass". Cai can bao cao la
+ * che do ma TIEN TRINH PARSER thuc su dang chay, va chi co chinh no tra loi duoc.
+ *
+ * `/demo/config` da ton tai va da tra dung gia tri do tu `loadEnv()` cua API. Khong them endpoint.
+ * ---------------------------------------------------------------------------------------------
+ */
+let runtimeParserMode = null;
+async function loadRuntimeParserMode() {
+  try {
+    const config = await getJson('/demo/config');
+    runtimeParserMode = config?.parserMode ?? null;
+  } catch {
+    // KHONG doan. Khong hoi duoc thi bang chung noi `null`, va do la mot cau tra loi trung thuc —
+    // te hon nhieu neu o day dien vao mot che do nghe co ly.
+    runtimeParserMode = null;
+  }
+  return runtimeParserMode;
 }
 
 async function runOrderPath() {
@@ -262,7 +295,7 @@ async function runOrderPath() {
     emitLiveAi('pass', 'LIVE_AI_MATCHES_FIXTURE', {
       expectedIntent: 'dat_don',
       actualIntent: 'dat_don',
-      parserMode: process.env.PARSER_MODE ?? null,
+      parserMode: runtimeParserMode,
       orderId: order.id,
       orderStatus: saved.status,
       fixture: smokeFixture.orderText,
@@ -309,7 +342,7 @@ function assertPilotOrder(order, expectedId) {
       expectedIntent: 'dat_don',
       actualIntent: order.intent ?? 'khong-ro',
       priced: Boolean(order.priced),
-      parserMode: process.env.PARSER_MODE ?? null,
+      parserMode: runtimeParserMode,
       orderId: order.id,
       fixture: smokeFixture?.orderText,
     });
@@ -330,7 +363,7 @@ function assertPilotOrder(order, expectedId) {
       expectedQuantity,
       actualLineCount: order.priced.lines?.length ?? 0,
       actualQuantity: order.priced.lines?.[0]?.quantity ?? null,
-      parserMode: process.env.PARSER_MODE ?? null,
+      parserMode: runtimeParserMode,
     });
   }
 }

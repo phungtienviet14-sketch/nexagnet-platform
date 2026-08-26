@@ -64,11 +64,27 @@ import { privacyModeFor } from './telemetry-redaction.js';
           `Telemetry: ${formatRelease(release)} · muc rieng tu=${privacy} · sink=ndjson-stdout` +
             (bridge ? ' + otlp' : ''),
         );
-        if (release.gitSha === 'unknown') {
+        if (release.source === 'conflict') {
+          // HAI NGUON, HAI CAU TRA LOI. Khong ben nao duoc chon (xem `resolveGitSha`), nen o day
+          // chi con viec noi to. Cong CUNG nam o `deploy-stack.sh`: mot lan deploy roi vao trang
+          // thai nay do voi ma `RELEASE_IDENTITY_MISMATCH`, khong phai mot loi suc khoe chung.
+          logger.error(
+            `Danh tinh release XUNG DOT: manifest=${release.mismatch?.manifestGitSha} ` +
+              `RELEASE_GIT_SHA=${release.mismatch?.envGitSha}. Trace se khong neo vao release nao ` +
+              'cho toi khi hai nguon thong nhat — mot permalink tro toi commit sai te hon khong co.',
+          );
+        } else if (release.gitSha === 'unknown') {
           // KHONG phai loi khi chay local. TREN STACK thi day la trieu chung that: `release.json`
           // chua duoc mount, nen moi trace se khong tra loi duoc "bug nay o commit nao".
           logger.warn(
             'Khong xac dinh duoc git SHA — trace se khong neo duoc vao release. ' +
+              'Tren stack: kiem tra mount `.runtime/release.json` + bien RELEASE_MANIFEST_PATH.',
+          );
+        } else if (release.source === 'env') {
+          // Du phong CHAY DUOC, nhung khong phai nguon canonical. Tren stack no co nghia la
+          // manifest chua toi duoc tien trinh — dung trieu chung ma milestone nay dong lai.
+          logger.warn(
+            'Danh tinh release den tu bien moi truong (du phong), khong tu `release.json`. ' +
               'Tren stack: kiem tra mount `.runtime/release.json` + bien RELEASE_MANIFEST_PATH.',
           );
         }

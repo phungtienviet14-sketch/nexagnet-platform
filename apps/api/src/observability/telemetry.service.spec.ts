@@ -27,7 +27,7 @@ function telemetryWith(
 ): TelemetryService {
   const telemetry = new TelemetryService();
   telemetry.configure({
-    release: { tenant, environment: 'gd1-test', gitSha: 'a'.repeat(40) },
+    release: { tenant, environment: 'gd1-test', gitSha: 'a'.repeat(40), source: 'manifest' },
     privacy,
     sinks,
   });

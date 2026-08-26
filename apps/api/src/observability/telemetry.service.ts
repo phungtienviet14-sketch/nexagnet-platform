@@ -47,10 +47,16 @@ import {
 @Injectable()
 export class TelemetryService {
   private sink: TelemetrySink = NOOP_SINK;
+  /**
+   * Danh tinh TRUOC khi `configure()` duoc goi. `source: 'none'` la su that: chua ai hoi nguon
+   * nao ca. Mot mac dinh noi `manifest` o day se bien mot tien trinh chua cau hinh thanh mot
+   * tien trinh "co danh tinh canonical" — dung kieu xanh gia ma milestone nay dong lai.
+   */
   private release: ReleaseIdentity = {
     tenant: 'unknown',
     environment: 'development',
     gitSha: 'unknown',
+    source: 'none',
   };
   private privacy: TelemetryPrivacyMode = 'redacted';
   /**

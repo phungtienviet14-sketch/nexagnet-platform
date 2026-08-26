@@ -25,7 +25,7 @@ const ORDER_ID = 'don-7';
 function telemetryWith(sink: RecentTracesSink): TelemetryService {
   const telemetry = new TelemetryService();
   telemetry.configure({
-    release: { tenant: TENANT, environment: ENVIRONMENT, gitSha: 'a'.repeat(40) },
+    release: { tenant: TENANT, environment: ENVIRONMENT, gitSha: 'a'.repeat(40), source: 'manifest' },
     privacy: 'full',
     sinks: [sink],
   });

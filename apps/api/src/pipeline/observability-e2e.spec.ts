@@ -92,7 +92,7 @@ async function build(options: {
   const sink = new RecordingSink();
   const telemetry = new TelemetryService();
   telemetry.configure({
-    release: { tenant: 'ultty', environment: 'gd1-test', gitSha: 'c37ee04'.padEnd(40, '0') },
+    release: { tenant: 'ultty', environment: 'gd1-test', gitSha: 'c37ee04'.padEnd(40, '0'), source: 'manifest' },
     privacy: 'full',
     sinks: [sink],
   });
@@ -400,7 +400,7 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
     };
     const telemetry = new TelemetryService();
     telemetry.configure({
-      release: { tenant: 'ultty', environment: 'gd1-test', gitSha: 'unknown' },
+      release: { tenant: 'ultty', environment: 'gd1-test', gitSha: 'unknown', source: 'none' },
       privacy: 'full',
       sinks: [exploding],
     });

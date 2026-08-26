@@ -27,7 +27,7 @@ const RELEASE_SHA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
 function telemetryWith(sink: RecentTracesSink, gitSha = RELEASE_SHA): TelemetryService {
   const telemetry = new TelemetryService();
   telemetry.configure({
-    release: { tenant: 'khach-test', environment: 'moi-truong-test', gitSha },
+    release: { tenant: 'khach-test', environment: 'moi-truong-test', gitSha, source: 'manifest' },
     privacy: 'full',
     sinks: [sink],
   });
@@ -76,6 +76,7 @@ describe('danh tinh ma nguon cua ban dang chay', () => {
       tenant: 'khach-test',
       environment: 'moi-truong-test',
       gitSha: RELEASE_SHA,
+      source: 'manifest',
     });
 
     expect(context.releaseSha).toBe(RELEASE_SHA);
@@ -87,6 +88,7 @@ describe('danh tinh ma nguon cua ban dang chay', () => {
       tenant: 'khach-test',
       environment: 'moi-truong-test',
       gitSha: 'unknown',
+      source: 'none',
     });
 
     // KHONG duoc de chuoi `unknown` di tiep nhu mot gia tri that: man hinh phai noi "chua xac

@@ -70,6 +70,15 @@ FLOWISE_DOMAIN="$(runtime_value FLOWISE_DOMAIN)"
 APP_IMAGE_VALUE="$(runtime_value APP_IMAGE)"
 FLOWISE_IMAGE_VALUE="$(runtime_value FLOWISE_IMAGE)"
 RELEASE_SHA_VALUE="$(runtime_value RELEASE_GIT_SHA)"
+# SHA MA HOP DONG TAT DINH DUOC PHEP DOI HOI. De TRONG khi khong biet — duong goi tay tren VM dat
+# SHA toan so 0, va bat mot bai kiem doi chieu voi gia tri do se cho ra mot mau do vo nghia. Bat
+# bien 7 (ci-cd.md) chi cam LAM YEU cong kiem; day khong phai lam yeu, day la khong dat ra mot
+# cau hoi ma tang goi khong tra loi duoc.
+if [[ "${RELEASE_SHA_VALUE}" =~ ^[a-f0-9]{40}$ && "${RELEASE_SHA_VALUE}" != 0000000000000000000000000000000000000000 ]]; then
+  EXPECTED_RELEASE_SHA_VALUE="${RELEASE_SHA_VALUE}"
+else
+  EXPECTED_RELEASE_SHA_VALUE=''
+fi
 for domain in "${DEMO_DOMAIN}" "${OPERATOR_DOMAIN}" "${FLOWISE_DOMAIN}"; do
   if [[ ! "${domain}" =~ ^[a-z0-9.-]+$ ]]; then
     echo "Runtime domain khong hop le; khong chay smoke." >&2
@@ -215,9 +224,46 @@ if [[ "${RELEASE_SHA_VALUE}" =~ ^[a-f0-9]{40}$ && "${RELEASE_SHA_VALUE}" != 0000
     echo "ROLLOUT: tien trinh api bao SHA '${observed_sha:-rong}', ban phat hanh la '${RELEASE_SHA_VALUE}'." >&2
     exit 1
   fi
+
+  # CHAN THU BA CUA DANH TINH: BAN GHI RELEASE, doc TU TRONG TIEN TRINH.
+  #
+  # Hai phep kiem tren tra loi "image nao" va "bien moi truong noi gi". Ca hai deu KHONG tra loi
+  # duoc cau ma man hinh chan doan dua vao: tep `release.json` ma tien trinh thuc su doc duoc dang
+  # noi commit nao. Do la mot duong RIENG — no di qua bind-mount, va mot bind-mount hong (tep chua
+  # ton tai luc container khoi dong, hoac `mv` da doi inode sau do) khong lam sai bien moi truong
+  # nao ca. Ban truoc 26/08/2026 khong co phep kiem nay, va cung khong co mount de kiem.
+  #
+  # Phep doc CHAY TRONG CONTAINER, khong phai `sudo cat` tren host: cau hoi la "tien trinh doc
+  # duoc gi", va mot phep doc tren host tra loi mot cau khac.
+  manifest_path="$("${COMPOSE[@]}" exec -T api printenv RELEASE_MANIFEST_PATH 2>/dev/null | tr -d '\r\n' || true)"
+  if [[ -z "${manifest_path}" ]]; then
+    emit_signal rollout fail RELEASE_MANIFEST_MISSING \
+      "{\"stack\":\"${STACK_SLUG}\",\"detail\":\"api khong co RELEASE_MANIFEST_PATH\"}"
+    echo 'ROLLOUT: tien trinh api khong duoc chi duong toi release.json.' >&2
+    exit 1
+  fi
+  # `node -e` chu khong phai `grep`: manifest la JSON, va mot phep boc tach bang bieu thuc chinh
+  # quy se im lang tra ve rac khi khuon doi. Image nao cung co `node` — chinh no chay ung dung.
+  manifest_sha="$("${COMPOSE[@]}" exec -T api node -e \
+    'try{process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.env.RELEASE_MANIFEST_PATH,"utf8")).gitSha??""))}catch{process.stdout.write("")}' \
+    2>/dev/null | tr -d '\r\n' || true)"
+  if [[ -z "${manifest_sha}" ]]; then
+    emit_signal rollout fail RELEASE_MANIFEST_MISSING \
+      "{\"stack\":\"${STACK_SLUG}\",\"manifestPath\":\"${manifest_path}\"}"
+    echo "ROLLOUT: api khong doc duoc '${manifest_path}' — mount hong, hoac manifest bi ghi sau khi container len." >&2
+    exit 1
+  fi
+  if [[ "${manifest_sha}" != "${RELEASE_SHA_VALUE}" ]]; then
+    # MA LY DO RIENG. Gop vao `RELEASE_SHA_MISMATCH` se day nguoi truc di sua bien moi truong —
+    # trong khi thu hong o day la BAN GHI, va cach sua hoan toan khac.
+    emit_signal rollout fail RELEASE_IDENTITY_MISMATCH \
+      "{\"expectedGitSha\":\"${RELEASE_SHA_VALUE}\",\"manifestGitSha\":\"${manifest_sha}\",\"manifestPath\":\"${manifest_path}\"}"
+    echo "ROLLOUT: manifest trong container noi '${manifest_sha}', ban phat hanh la '${RELEASE_SHA_VALUE}'." >&2
+    exit 1
+  fi
 fi
 emit_signal rollout pass ROLLOUT_MATCHES_RELEASE \
-  "{\"stack\":\"${STACK_SLUG}\",\"releaseSha\":\"${RELEASE_SHA_VALUE}\"}"
+  "{\"stack\":\"${STACK_SLUG}\",\"releaseSha\":\"${RELEASE_SHA_VALUE}\",\"identitySource\":\"manifest\"}"
 
 # ================================================================================================
 # TANG 2 — HEALTH: ban vua len co song khong.
@@ -378,6 +424,7 @@ run_deterministic_smoke() {
     -e "PILOT_BASE_URL=https://${OPERATOR_DOMAIN}" \
     -e "DETERMINISTIC_PHASE=${smoke_phase}" \
     -e "DETERMINISTIC_BASELINE=${smoke_baseline}" \
+    -e "EXPECTED_RELEASE_SHA=${EXPECTED_RELEASE_SHA_VALUE}" \
     bootstrap node --input-type=module - < deterministic-smoke.mjs
 }
 

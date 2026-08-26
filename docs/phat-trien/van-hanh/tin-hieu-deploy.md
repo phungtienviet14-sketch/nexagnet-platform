@@ -3,12 +3,13 @@
 > Một lần deploy phát ra **bốn tín hiệu độc lập**, không phải một dấu ✓/✗.
 > Bảng chi tiết nằm ở **Step Summary** của run GitHub Actions; bản máy đọc được là artifact
 > `deploy-signals-<khách>-<môi-trường>/deploy-signals.json`.
+> Danh tính bản phát hành mà các tín hiệu này đối chiếu: [danh-tinh-release.md](danh-tinh-release.md).
 
 ## Bốn tín hiệu
 
 | Tín hiệu                        | Trả lời câu hỏi                                                                                                                                                   | Cứng?          |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| **ROLLOUT**                     | Bản phát hành này đã thực sự được đặt lên chưa? (image đang chạy khớp digest, `RELEASE_GIT_SHA` tới được tiến trình, service bắt buộc đã start)                   | ✅ chặn deploy |
+| **ROLLOUT**                     | Bản phát hành này đã thực sự được đặt lên chưa? (image đang chạy khớp digest, `RELEASE_GIT_SHA` **và** `release.json` tới được tiến trình và khớp nhau, service bắt buộc đã start)                   | ✅ chặn deploy |
 | **HEALTH**                      | Bản vừa lên có sống không? (api/edge/worker/route công khai qua TLS)                                                                                              | ✅ chặn deploy |
 | **DETERMINISTIC RUNTIME SMOKE** | Hợp đồng nền tảng còn đúng không? (auth + guard 401, nguồn sự thật trong Postgres, `/settings/readiness`, SSE, dữ liệu còn nguyên sau restart) — **không có LLM** | ✅ chặn deploy |
 | **LIVE AI SMOKE**               | Model/provider có đọc đúng tin mẫu của khách không?                                                                                                               | ❌ báo riêng   |
@@ -16,7 +17,9 @@
 ## Mỗi màu nghĩa là gì
 
 **`ROLLOUT_FAILED`** — bản phát hành chưa lên đầy đủ. Container đang chạy **không** phải image
-vừa build, hoặc tiến trình `api` báo một git SHA khác. Đây là lỗi nặng nhất: mọi thứ phía sau
+vừa build, tiến trình `api` báo một git SHA khác, hoặc bản ghi `release.json` mà tiến trình
+đọc được nói một commit khác (`RELEASE_IDENTITY_MISMATCH` / `RELEASE_MANIFEST_MISSING` — xem
+[danh-tinh-release.md](danh-tinh-release.md)). Đây là lỗi nặng nhất: mọi thứ phía sau
 có thể vẫn "khỏe" vì **bản cũ** đang phục vụ. Xem `reasons.rollout`
 (`RELEASE_DIGEST_MISMATCH` / `RELEASE_SHA_MISMATCH` / `ROLLOUT_*_FAILED`).
 

@@ -219,6 +219,15 @@ services:
       RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}
       RELEASE_APP_DIGEST: ${RELEASE_APP_DIGEST:-}
       RELEASE_DEPLOYED_AT: ${RELEASE_DEPLOYED_AT:-}
+      # NGUON CANONICAL cua danh tinh ban phat hanh. Ba bien tren van la duong DU PHONG — chung
+      # song sot cho duong goi tay tren VM va cho stack chua kip mount — nhung tep nay moi la thu
+      # `resolveReleaseIdentity()` doc truoc, va tien trinh noi ro minh dang doc nguon nao.
+      #
+      # GIA TRI GHI CUNG, khong phai bien: day la duong dan BEN TRONG container, khong phai tren
+      # host. Mot host path cu the (`/srv/netviet/apps/<stack>/…`) cam vao day se khong len duoc
+      # khach thu hai, con mot bien thi co the bi quen o `render-secrets.sh` — dung cai bay da lam
+      # `ADVICE_COMPOSER` rong suot 19/08 -> 21/08.
+      RELEASE_MANIFEST_PATH: /runtime/release.json
       # WORKFLOW ENGINE — phia NEXAGNET (xep hang + dispatcher). Tien trinh worker la mot service
       # RIENG o cuoi file; day chi la ben GUI VIEC DI.
       #
@@ -252,6 +261,14 @@ services:
         exec node apps/api/dist/main.js
     volumes:
       - ./.runtime/zalo:/runtime/zalo
+      # DANH TINH BAN PHAT HANH. Mount theo TEP chu khong theo thu muc: `./.runtime` chua
+      # `secrets.env`, va dua ca thu muc do vao mot tien trinh nghiep vu la dua toan bo bi mat
+      # cua stack vao mot cho khong can chung.
+      #
+      # `deploy-remote.sh` ghi tep nay TRUOC khi stack duoc dua len. Thu tu do la dieu kien de
+      # mount nay ton tai: Docker gap mot duong dan nguon chua ton tai thi tao ra mot THU MUC
+      # trung ten, hong ca mount lan lan ghi ke tiep.
+      - ./.runtime/release.json:/runtime/release.json:ro
       # `:ro` — goi khach la hat giong seed, tien trinh khong duoc ghi nguoc vao no.
       - ./tenant-pack:/srv/tenant:ro
       # `:ro` — anh catalog do buoc dung ngoai sinh ra; tien trinh chi DOC de phuc vu Zalo.
@@ -549,9 +566,15 @@ services:
       RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}
       RELEASE_APP_DIGEST: ${RELEASE_APP_DIGEST:-}
       RELEASE_DEPLOYED_AT: ${RELEASE_DEPLOYED_AT:-}
+      # Worker doc danh tinh release qua CUNG MOT ham voi `api` (`resolveReleaseIdentity`), va
+      # `tenant` cua no la MOT CHIEU CUA KHOA THAO TAC (`buildOperationKey`). Bo mount o day thi
+      # hai tien trinh cua cung mot stack se tra loi khac nhau cho cung mot cau hoi.
+      RELEASE_MANIFEST_PATH: /runtime/release.json
     command: ["node", "apps/api/dist/workflow/worker-main.js"]
     volumes:
       - ./tenant-pack:/srv/tenant:ro
+      # Mount theo TEP: `./.runtime` chua `secrets.env`, con worker thi khong can gi trong do.
+      - ./.runtime/release.json:/runtime/release.json:ro
     # KHONG CO `ports:` — co y, va `worker-health.server.ts` ghi ro dieu do: may chu suc khoe nghe
     # 127.0.0.1 BEN TRONG container vi healthcheck cua Docker cung chay ben trong. Mot khoi
     # `ports:` o day se mo cho tu moi container khac tren stack vao.
@@ -650,9 +673,15 @@ services:
       RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}
       RELEASE_APP_DIGEST: ${RELEASE_APP_DIGEST:-}
       RELEASE_DEPLOYED_AT: ${RELEASE_DEPLOYED_AT:-}
+      # Worker doc danh tinh release qua CUNG MOT ham voi `api` (`resolveReleaseIdentity`), va
+      # `tenant` cua no la MOT CHIEU CUA KHOA THAO TAC (`buildOperationKey`). Bo mount o day thi
+      # hai tien trinh cua cung mot stack se tra loi khac nhau cho cung mot cau hoi.
+      RELEASE_MANIFEST_PATH: /runtime/release.json
     command: ["node", "apps/api/dist/workflow/worker-main.js"]
     volumes:
       - ./tenant-pack:/srv/tenant:ro
+      # Mount theo TEP: `./.runtime` chua `secrets.env`, con worker thi khong can gi trong do.
+      - ./.runtime/release.json:/runtime/release.json:ro
     # KHONG CO `ports:`, va KHONG CO `DATABASE_URL` — hai dieu nay la co y.
     #
     # `WorkflowWorkerModule` khong duoc cap Prisma: no boot mot module HEP chu khong phai

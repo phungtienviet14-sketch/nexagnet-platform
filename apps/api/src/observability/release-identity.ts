@@ -1,15 +1,24 @@
 import { readFileSync } from 'node:fs';
 import { loadTenantConfig } from '@netviet/tenant';
-import type { ReleaseIdentity } from './trace-context.js';
+import type {
+  ReleaseIdentity,
+  ReleaseIdentityMismatch,
+  ReleaseIdentitySource,
+} from './trace-context.js';
 
 /**
  * DOC danh tinh ban dang chay. KHONG sinh ra mot he metadata release thu hai (muc 23).
  *
- * Nguon su that da ton tai: `deploy-remote.sh:write_release_json()` ghi
+ * Nguon su that da ton tai: `write-release-manifest.sh` ghi
  * `/srv/netviet/apps/<stack>/.runtime/release.json`, va `verify-deployment.mjs` da validate du
- * chin truong cua no. Cai thieu duy nhat la file do CHUA BAO GIO toi duoc container — no khong
- * nam trong danh sach `volumes:` cua service `api`. File nay doc no khi co, va lui ve bien moi
- * truong khi khong.
+ * chin truong cua no. File nay doc no khi co, va lui ve bien moi truong khi khong — nhung LUON
+ * noi ro minh dang doc nguon nao (`source`).
+ *
+ * TU 26/08/2026 manifest THUC SU toi duoc container: no duoc ghi TRUOC `deploy-stack.sh` (tuc
+ * truoc `docker compose up`) roi mount `:ro` vao `api` va cac worker. Truoc do no duoc ghi SAU,
+ * nen mount la bat kha thi — Docker gap mot duong dan chua ton tai thi tao ra mot THU MUC trung
+ * ten, hong ca mount lan lan ghi ke tiep. Do la ly do that su khien `RELEASE_MANIFEST_PATH` rong
+ * suot tren `gd1-test`, va no la mot van de THU TU chu khong phai mot van de thieu cau hinh.
  *
  * VI SAO DIEU NAY QUAN TRONG: khong co no, cau hoi "bug nay xay ra tren commit nao" phai tra loi
  * bang cach SSH len VM, doc `release.json`, roi doi chieu thu cong theo moc thoi gian.
@@ -31,8 +40,24 @@ interface ReleaseManifest {
 
 const UNKNOWN = 'unknown';
 
+/**
+ * SHA DAY DU, 40 ky tu hex. Tang deploy da ep dieu nay o phia GHI (`deploy-remote.sh` va
+ * `verify-deployment.mjs` deu kiem), nhung phia DOC thi khong — nen truoc 26/08/2026 mot chuoi
+ * bat ky trong manifest di thang vao permalink cua man hinh chan doan.
+ *
+ * Chap nhan chu HOA roi chuan hoa ve chu thuong: cung mot commit viet hai kieu KHONG duoc bi doc
+ * thanh hai ban phat hanh khac nhau (do se bien thanh mot "xung dot" gia).
+ */
+const GIT_SHA_PATTERN = /^[a-f0-9]{40}$/i;
+
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+}
+
+/** SHA hop le -> dang chuan (chu thuong). Moi thu khac -> `undefined`, tuc "nguon nay khong biet". */
+function asGitSha(value: unknown): string | undefined {
+  const text = asString(value);
+  return text && GIT_SHA_PATTERN.test(text) ? text.toLowerCase() : undefined;
 }
 
 /**
@@ -112,7 +137,7 @@ export function resolveReleaseIdentity(input: ResolveReleaseInput = {}): Release
     asString(env.NODE_ENV) ??
     'development';
 
-  const gitSha = asString(manifest?.gitSha) ?? asString(env.RELEASE_GIT_SHA) ?? UNKNOWN;
+  const { gitSha, source, mismatch } = resolveGitSha(manifest, env);
   const appDigest = asString(manifest?.appDigest) ?? asString(env.RELEASE_APP_DIGEST);
   const deployedAt = asString(manifest?.deployedAt) ?? asString(env.RELEASE_DEPLOYED_AT);
 
@@ -120,13 +145,59 @@ export function resolveReleaseIdentity(input: ResolveReleaseInput = {}): Release
     tenant,
     environment,
     gitSha,
+    source,
+    ...(mismatch ? { mismatch } : {}),
     ...(appDigest ? { appDigest } : {}),
     ...(deployedAt ? { deployedAt } : {}),
   };
 }
 
-/** Dang ngan de in ra log/health: `ultty@gd1-test#c37ee04`. */
+interface ResolvedGitSha {
+  readonly gitSha: string;
+  readonly source: ReleaseIdentitySource;
+  readonly mismatch?: ReleaseIdentityMismatch;
+}
+
+/**
+ * "CODE NAO DANG CHAY TRONG TIEN TRINH NAY" — mot cau hoi, mot cau tra loi, va cau tra loi luon
+ * kem TEN NGUON.
+ *
+ * HAI NGUON LECH NHAU THI KHONG CHON BEN NAO. Day la diem khac ban truoc 26/08/2026: khi do
+ * manifest lang le thang, nen mot manifest cu (con lai tu lan deploy truoc) se lam man hinh chan
+ * doan tro permalink toi COMMIT SAI — te hon han mot dau "khong biet". Ba tinh huong that co the
+ * dan toi lech:
+ *   · manifest ghi hong, ban cu con lai tren dia;
+ *   · container KHONG duoc tao lai nen giu bien cu, trong khi manifest da la ban moi;
+ *   · co nguoi sua tep bang tay tren VM.
+ * Ba tinh huong, cung mot ket luan: KHONG BIET, va noi to ra rang co hai gia tri dang tranh nhau.
+ *
+ * CONG CUNG NAM O TANG DEPLOY (`ROLLOUT` trong `deploy-stack.sh`), khong o day. Mot tien trinh
+ * khong duoc chet vi chua biet minh chay commit nao — quan sat khong bao gio duoc tro thanh dieu
+ * kien de nghiep vu chay.
+ */
+function resolveGitSha(manifest: ReleaseManifest | null, env: NodeJS.ProcessEnv): ResolvedGitSha {
+  const fromManifest = asGitSha(manifest?.gitSha);
+  const fromEnv = asGitSha(env.RELEASE_GIT_SHA);
+
+  if (fromManifest && fromEnv && fromManifest !== fromEnv) {
+    return {
+      gitSha: UNKNOWN,
+      source: 'conflict',
+      mismatch: { manifestGitSha: fromManifest, envGitSha: fromEnv },
+    };
+  }
+  if (fromManifest) return { gitSha: fromManifest, source: 'manifest' };
+  if (fromEnv) return { gitSha: fromEnv, source: 'env' };
+  return { gitSha: UNKNOWN, source: 'none' };
+}
+
+/**
+ * Dang ngan de in ra log/health: `ultty@gd1-test#c37ee04 (manifest)`.
+ *
+ * NGUON DI KEM, khong phai mot chi tiet trang tri: mot dong log noi `#c37ee04` ma khong noi no
+ * doc tu dau la mot dong log khong dung duoc de quyet dinh rollback.
+ */
 export function formatRelease(release: ReleaseIdentity): string {
   const sha = release.gitSha === UNKNOWN ? UNKNOWN : release.gitSha.slice(0, 7);
-  return `${release.tenant}@${release.environment}#${sha}`;
+  return `${release.tenant}@${release.environment}#${sha} (${release.source})`;
 }
