@@ -1,0 +1,7 @@
+# TEP DUOC SINH RA — dinh dang cua no do trinh sinh quyet dinh, khong do prettier.
+#
+# `tools/source-manifest/manifest.test.mjs` sinh lai bang roi so TUNG KY TU voi ban da commit.
+# Neu prettier duoc phep dinh dang lai tep nay thi `pnpm format` se lam bai kiem do DO — mot cai
+# bay im lang: nguoi sua khong dong gi den ma nguon ma CI van hong, va cau bao loi lai bao ho di
+# chay trinh sinh, thu ma ho vua chay.
+apps/api/src/observability/source-manifest.generated.ts

@@ -77,7 +77,10 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    transform 0.1s;
   animation: rise 0.3s ease both;
 }
 @keyframes rise {
@@ -351,7 +354,11 @@
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 0.65rem 0.8rem;
-  transition: opacity 0.3s, border-color 0.3s, box-shadow 0.3s, background 0.3s;
+  transition:
+    opacity 0.3s,
+    border-color 0.3s,
+    box-shadow 0.3s,
+    background 0.3s;
 }
 .agent[data-state='idle'] {
   opacity: 0.5;
@@ -488,7 +495,9 @@
 
 /* ---------- Order detail ---------- */
 .reveal-block {
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
 }
 .reveal-block.hidden {
   opacity: 0;
@@ -1275,10 +1284,137 @@
 }
 
 /* Ket cuc to mau theo NGHIA, khong to cho dep: do = cong dong, cam = duong du phong. */
-.tv-node.tv-ok .tv-mark { color: var(--ok); }
-.tv-node.tv-degraded .tv-mark { color: var(--warn); }
-.tv-node.tv-denied .tv-mark { color: var(--danger); }
-.tv-node.tv-denied .tv-label { color: var(--danger); }
+.tv-node.tv-ok .tv-mark {
+  color: var(--ok);
+}
+.tv-node.tv-degraded .tv-mark {
+  color: var(--warn);
+}
+.tv-node.tv-denied .tv-mark {
+  color: var(--danger);
+}
+.tv-node.tv-denied .tv-label {
+  color: var(--danger);
+}
+
+/* ----------------------------------------------------------------------------
+   MA NGUON cua mot buoc (`.tv-source-*`)
+
+   Nam duoi nhan cua nut, thut vao, chu nho — de no la thu tra loi duoc khi CAN chu khong phai
+   thu chen giua nguoi doc va cay nghiep vu. Man hinh nay van la mot cay, khong phai mot bang
+   duong dan tep.
+   -------------------------------------------------------------------------- */
+.tv-source {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.tv-source-key {
+  font: 600 0.64rem/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+
+.tv-source-where {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+/* Duong dan dai hon khung thi cuon TRONG no, khong day ca trang ngang. */
+.tv-source-where .tv-code {
+  margin-left: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.tv-source-actions {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.tv-source-btn {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--accent);
+  font: 0.7rem/1.5 var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tv-source-btn:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+/*
+  TAT nhin phai RA TAT. Mot nut mo duoc va mot nut khong mo duoc ma trong giong het nhau se de
+  nguoi dung bam roi ngoi doi mot chuyen khong bao gio xay ra. `cursor: not-allowed` + `title`
+  noi ro thieu gi.
+*/
+.tv-source-btn-off {
+  color: var(--text-dim);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tv-source-missing {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* Cai dat IDE — dung o day, canh cho no duoc dung. */
+.tv-ide {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tv-ide-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.tv-ide-field-wide {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.tv-ide-field input,
+.tv-ide-field select {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: 0.76rem var(--font-mono);
+}
+
+.tv-ide-note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
 
 .tv-toggle {
   width: 100%;

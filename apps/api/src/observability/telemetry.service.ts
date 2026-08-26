@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { SourceLocation } from '@netviet/shared';
 import type {
   DecisionOutcome,
   DecisionPointOf,
@@ -13,6 +14,7 @@ import {
   type TelemetrySink,
 } from './telemetry-record.js';
 import { NOOP_TRACE_BRIDGE, type TraceBridge } from './trace-bridge.js';
+import { sourceForDecision } from './source-manifest.js';
 import {
   sanitizeAttributes,
   sanitizeTelemetry,
@@ -403,6 +405,7 @@ export class TelemetryService {
           'nexagnet.decision.point': record.point,
           'nexagnet.decision.outcome': record.outcome,
           'nexagnet.decision.reason': record.reason,
+          ...codeAttributes(sourceForDecision(record.point, record.reason)),
           ...(record.detail ?? {}),
         });
         return;
@@ -426,6 +429,35 @@ export class TelemetryService {
         return;
     }
   }
+}
+
+/**
+ * VI TRI MA NGUON -> thuoc tinh span, theo TEN CHUAN cua OpenTelemetry.
+ *
+ * `code.file.path` / `code.function.name` / `code.line.number` la ba khoa STABLE cua
+ * semantic-conventions 1.43.0 (ban dang cai). CO Y khong dat chung duoi `nexagnet.`: muc 20 noi
+ * ro chi nhung thuoc tinh RIENG cua ta moi phai co tien to, con thu da co ten chuan thi dung
+ * ten chuan — de mot backend bat ky (ClickStack, SigNoz) nhan ra ma khong phai cau hinh gi.
+ *
+ * Va cung vi vay ma KHONG duoc bia ra `code.filepath` hay `code.lineno`: do la ten CU cua chinh
+ * cac khoa nay, va tron hai the he ten lai se lam mot bo loc dung nua so du lieu.
+ *
+ * ---------------------------------------------------------------------------
+ * GIOI HAN DA BIET CUA v0: chi QUYET DINH co ba khoa nay, BUOC thi chua.
+ *
+ * `forward()` la noi duy nhat dung san mot bang thuoc tinh, nen quyet dinh di qua day khong ton
+ * them gi. Buoc thi nguoc lai — span cua no do `bridge.step(name, run)` mo, va giao dien do
+ * khong nhan thuoc tinh. Noi rong giao dien cau noi la mot thay doi cua NEN TANG quan sat, khong
+ * phai cua tinh nang nay; man hinh Debug View da co du vi tri ma nguon cua ca buoc lan quyet
+ * dinh, chinh xac hon va khong qua OTel.
+ */
+function codeAttributes(source: SourceLocation | null): Record<string, unknown> {
+  if (!source) return {};
+  return {
+    'code.file.path': source.filePath,
+    ...(source.functionName ? { 'code.function.name': source.functionName } : {}),
+    ...(source.line !== undefined ? { 'code.line.number': source.line } : {}),
+  };
 }
 
 /**

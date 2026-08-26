@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { TraceNode, TraceNodeKind, TraceView } from '@netviet/shared';
+import type { SourceContext, TraceNode, TraceNodeKind, TraceView } from '@netviet/shared';
+import { IdeSettingsPanel, SourceLink } from './SourceLink';
 
 /**
  * CAY NGHIEP VU cua mot luot xu ly.
@@ -46,12 +47,22 @@ function outcomeClass(node: TraceNode): string {
   }
 }
 
-function NodeRow({ node }: { node: TraceNode }) {
+/**
+ * Nut nao DANG duoc hoi "cho nay o dau trong ma nguon"?
+ *
+ * Chi BUOC va QUYET DINH. Chuyen trang thai va thay doi du lieu khong co mot cho viet ra duy
+ * nhat trong ma nguon — khoa cua chung la `Order`/`quantity`, nhung chuoi xuat hien khap noi —
+ * nen mot dong "chua co vi tri ma nguon" canh chung se la nhieu, khong phai thong tin.
+ *
+ * Voi hai loai NAY thi nguoc lai: thieu vi tri la mot dieu dang noi, vi le ra phai co.
+ */
+function expectsSource(node: TraceNode): boolean {
+  return node.kind === 'step' || node.kind === 'decision';
+}
+
+function NodeRow({ node, sourceContext }: { node: TraceNode; sourceContext?: SourceContext }) {
   return (
-    <li
-      className={`tv-node ${outcomeClass(node)}`}
-      style={{ paddingLeft: `${node.depth * 18}px` }}
-    >
+    <li className={`tv-node ${outcomeClass(node)}`} style={{ paddingLeft: `${node.depth * 18}px` }}>
       <span className="tv-mark" aria-hidden="true">
         {KIND_MARK[node.kind]}
       </span>
@@ -78,6 +89,7 @@ function NodeRow({ node }: { node: TraceNode }) {
           </span>
         )}
         {node.detail && <span className="tv-detail">{node.detail}</span>}
+        {expectsSource(node) && <SourceLink source={node.source} sourceContext={sourceContext} />}
       </span>
     </li>
   );
@@ -100,6 +112,7 @@ export function TraceViewer({
   label?: string;
 }) {
   const [showTechnical, setShowTechnical] = useState(false);
+  const [showIdeSettings, setShowIdeSettings] = useState(false);
   const technicalCount = trace.nodes.filter((node) => node.technical).length;
   const visible = showTechnical ? trace.nodes : trace.nodes.filter((node) => !node.technical);
 
@@ -124,6 +137,14 @@ export function TraceViewer({
           </span>
         </div>
         <div className="tv-head-actions">
+          <button
+            type="button"
+            className="reply-copy"
+            onClick={() => setShowIdeSettings((value) => !value)}
+            aria-expanded={showIdeSettings}
+          >
+            {showIdeSettings ? 'Đóng cài đặt IDE' : 'Cài đặt IDE'}
+          </button>
           <button type="button" className="reply-copy" onClick={copyTraceId} title={trace.traceId}>
             Copy trace ID
           </button>
@@ -135,9 +156,15 @@ export function TraceViewer({
         </div>
       </div>
 
+      {showIdeSettings && <IdeSettingsPanel releaseSha={trace.sourceContext?.releaseSha} />}
+
       <ol className="tv-list">
         {visible.map((node, index) => (
-          <NodeRow key={`${node.kind}-${node.label}-${index}`} node={node} />
+          <NodeRow
+            key={`${node.kind}-${node.label}-${index}`}
+            node={node}
+            {...(trace.sourceContext ? { sourceContext: trace.sourceContext } : {})}
+          />
         ))}
       </ol>
 

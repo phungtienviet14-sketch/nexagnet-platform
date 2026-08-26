@@ -3,13 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "description": "Nen tang AI Agent doanh nghiep da khach hang theo capability va experience",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/phungtienviet14-sketch/nexagnet-platform"
+  },
   "engines": {
     "node": ">=22"
   },
   "packageManager": "pnpm@10.34.4",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:deploy-routes && pnpm test:deploy-contracts",
+    "test": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:source-manifest && pnpm test:deploy-routes && pnpm test:deploy-contracts",
+    "gen:source-manifest": "node tools/source-manifest/generate.mjs",
+    "test:source-manifest": "node --test tools/source-manifest/manifest.test.mjs",
     "test:deploy-routes": "node --test deploy/netviet/caddy-route-contract.test.mjs",
     "test:deploy-preflight": "node --test deploy/netviet/gd1-test-preflight.test.mjs",
     "test:deploy-contracts": "pnpm test:deploy-preflight && node --test deploy/netviet/stack-identity.test.mjs deploy/netviet/deployment-targets.contract.test.mjs deploy/netviet/verify-deployment.test.mjs deploy/netviet/secrets-passthrough.contract.test.mjs deploy/netviet/workflow-isolation.contract.test.mjs",

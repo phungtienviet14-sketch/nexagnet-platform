@@ -115,6 +115,46 @@ Dòng thứ hai: `release=c37ee0440a1b`. Đó là 12 ký tự đầu của git S
 git show c37ee0440a1b --stat
 ```
 
+### Bước 4bis — nhảy thẳng vào mã nguồn
+
+Từ 26/08/2026, mỗi **bước** và mỗi **quyết định** trong Debug View mang thêm một dòng `Mã nguồn`:
+
+```
+QUYẾT ĐỊNH  message.intake              denied   GROUP_NOT_MAPPED
+Mã nguồn    PipelineService.intakeTurn   apps/api/src/pipeline/pipeline.service.ts:196
+            [Mở mã nguồn]  [Mở trong IDE]
+```
+
+- **[Mở mã nguồn]** → GitHub permalink ở **đúng git SHA đang chạy**. Không bao giờ trỏ `main`:
+  runtime có thể đang ở commit cũ, và `main` sẽ mở ra một đoạn mã khác với đoạn vừa chạy.
+  Thiếu repo hoặc thiếu release ⇒ nút tắt, không có đường lui.
+- **[Mở trong IDE]** → `vscode://file/<thư mục repo trên máy bạn>/<đường dẫn>:<dòng>`. URI được
+  ghép **ở trình duyệt**; máy chủ không biết và không được biết đường dẫn máy bạn. Khai báo thư
+  mục repo một lần ở nút **Cài đặt IDE** (lưu trong `localStorage`, không đồng bộ lên server).
+
+⚠️ **Hai nút, hai nguồn sự thật khác nhau.** GitHub mở đúng release đang chạy; IDE mở bản đang có
+trên máy bạn. Máy bạn ở commit khác ⇒ **số dòng có thể trỏ sai chỗ**. Đối chiếu `release=` ở
+bước 4 trước khi tin số dòng trong IDE.
+
+**Vị trí mã nguồn đến từ đâu:** bảng sinh tự động từ AST — `tools/source-manifest/generate.mjs`
+→ `apps/api/src/observability/source-manifest.generated.ts`. Không stack trace lúc chạy (bốn
+ranh giới nghiệp vụ đi qua hàm bọc mỏng, nên khung ngăn xếp gần nhất luôn là chính dòng bọc đó,
+không phải chỗ cần tới). Không đọc source map lúc chạy.
+
+Sửa mã rồi thấy dòng lệch? Chạy lại trình sinh và commit:
+
+```bash
+node tools/source-manifest/generate.mjs
+```
+
+`pnpm test:source-manifest` sinh lại rồi so từng ký tự với bản đã commit, nên bảng không thể
+trôi khỏi mã nguồn mà CI vẫn xanh.
+
+**Khi màn hình nói "Chưa có vị trí mã nguồn cho bước này"** — đó là câu trả lời thật, không phải
+lỗi: tên đó được viết ra ở nhiều dòng trong cùng một tệp (ví dụ `order.approve` xuất hiện 5 chỗ
+trong `orders.service.ts`, một chỗ là tên bước và bốn chỗ là tên hành động kiểm toán). Lúc đó
+bảng giữ **tệp**, bỏ **dòng** — chọn bừa một trong năm dòng mới là bịa.
+
 ### Bước 5 — xem log thô nếu cần
 
 ```bash

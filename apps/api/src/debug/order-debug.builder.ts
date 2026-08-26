@@ -1,4 +1,5 @@
 import type {
+  SourceContext,
   DebugDurations,
   DebugHandoffStatus,
   DebugTurn,
@@ -103,6 +104,13 @@ export interface OrderDebugInput {
   readonly workflowRuns: readonly WorkflowRunFacts[];
   /** Ghi chu cua noi goi (vi du: khong hoi duoc engine). Duoc giu nguyen, khong loc. */
   readonly notes?: readonly string[];
+  /**
+   * Repo + git SHA cua ban dang chay — de moi luot dung duoc lien ket toi DUNG ban do.
+   *
+   * Vang mat la hop le (chay local, khong mount `release.json`). Luc do console khong dung
+   * duoc permalink, va no phai NOI RA thay vi lui ve `main`.
+   */
+  readonly sourceContext?: SourceContext;
 }
 
 export function buildOrderDebugView(input: OrderDebugInput): OrderDebugView {
@@ -114,7 +122,7 @@ export function buildOrderDebugView(input: OrderDebugInput): OrderDebugView {
   const traces = [...input.traces].sort(
     (a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt),
   );
-  const turns = traces.map(toTurn);
+  const turns = traces.map((stored) => toTurn(stored, input.sourceContext));
 
   if (turns.length === 0) {
     notes.push(
@@ -160,8 +168,8 @@ export function buildOrderDebugView(input: OrderDebugInput): OrderDebugView {
   };
 }
 
-function toTurn(stored: StoredTrace): DebugTurn {
-  const view = buildTraceView(stored);
+function toTurn(stored: StoredTrace, sourceContext: SourceContext | undefined): DebugTurn {
+  const view = buildTraceView(stored, sourceContext);
   const channel = view.anchors.channel;
   return {
     view,
