@@ -1,7 +1,14 @@
-import type { TraceNode, TraceNodeOutcome, TraceView } from '@netviet/shared';
+import type {
+  SourceContext,
+  SourceLocation,
+  TraceNode,
+  TraceNodeOutcome,
+  TraceView,
+} from '@netviet/shared';
 import { decisionReasonLabel } from './decision-vocabulary.js';
 import type { TelemetryRecord } from './telemetry-record.js';
 import type { StoredTrace } from './recent-traces.sink.js';
+import { sourceForDecision, sourceForStep } from './source-manifest.js';
 
 /**
  * Dung CAY NGHIEP VU tu cac ban ghi tho, roi LAM PHANG thanh danh sach co `depth`.
@@ -68,7 +75,28 @@ function isTechnical(record: TelemetryRecord): boolean {
   return record.type === 'step' && /\.(persist|link|save)$/.test(record.name);
 }
 
-export function buildTraceView(stored: StoredTrace): TraceView {
+/**
+ * CHO TRONG MA NGUON da sinh ra ban ghi nay — tra tu bang duoc sinh o `source-manifest.ts`.
+ *
+ * CHI hai loai ban ghi co cho tra cuu, va do la mot gioi han THAT chu khong phai su luoi:
+ *
+ *   `step`     ten buoc duoc viet ra dung mot cho o ranh gioi nghiep vu;
+ *   `decision` cap (diem, ly do) chi ve dung nhanh da chay.
+ *
+ * `state_change`/`data_change` thi khong: khoa cua chung la `entity`/`field` — nhung chuoi nhu
+ * `Order` hay `quantity` xuat hien khap noi, nen mot phep tra cuu theo chung se tra ve mot cho
+ * bat ky. `ai_call` cung vay: `parse`/`compose` khong phai ten co vi tri.
+ *
+ * Thieu thi tra `undefined`, va console noi ro la thieu (muc 11). Khong doan.
+ */
+function sourceOf(record: TelemetryRecord): SourceLocation | undefined {
+  if (record.type === 'step') return sourceForStep(record.name) ?? undefined;
+  if (record.type === 'decision')
+    return sourceForDecision(record.point, record.reason) ?? undefined;
+  return undefined;
+}
+
+export function buildTraceView(stored: StoredTrace, sourceContext?: SourceContext): TraceView {
   const { records } = stored;
   const first = records[0]!;
   const steps = new Map<string, TelemetryRecord>();
@@ -102,6 +130,7 @@ export function buildTraceView(stored: StoredTrace): TraceView {
         : {}),
       ...(detailOf(record) ? { detail: detailOf(record)! } : {}),
       ...(isTechnical(record) ? { technical: true } : {}),
+      ...(sourceOf(record) ? { source: sourceOf(record)! } : {}),
     });
     if (record.type !== 'step') return;
     for (const child of childrenOf(record.spanId)) walk(child, depth + 1);
@@ -116,7 +145,9 @@ export function buildTraceView(stored: StoredTrace): TraceView {
   for (const record of records) walk(record, 0);
 
   const totalMs = records
-    .filter((record): record is Extract<TelemetryRecord, { type: 'step' }> => record.type === 'step')
+    .filter(
+      (record): record is Extract<TelemetryRecord, { type: 'step' }> => record.type === 'step',
+    )
     .reduce((max, record) => Math.max(max, record.durationMs), 0);
 
   return {
@@ -128,6 +159,7 @@ export function buildTraceView(stored: StoredTrace): TraceView {
     anchors: first.anchors,
     nodes,
     ...(totalMs > 0 ? { totalMs } : {}),
+    ...(sourceContext ? { sourceContext } : {}),
   };
 }
 

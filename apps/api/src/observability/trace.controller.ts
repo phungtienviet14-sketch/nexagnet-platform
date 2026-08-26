@@ -1,6 +1,8 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
-import type { TraceView } from '@netviet/shared';
+import type { SourceContext, TraceView } from '@netviet/shared';
 import { RecentTracesSink } from './recent-traces.sink.js';
+import { currentSourceContext } from './source-manifest.js';
+import { TelemetryService } from './telemetry.service.js';
 import { buildTraceView } from './trace-view.builder.js';
 
 /**
@@ -15,15 +17,31 @@ import { buildTraceView } from './trace-view.builder.js';
  */
 @Controller('observability/traces')
 export class TraceController {
-  constructor(private readonly traces: RecentTracesSink) {}
+  constructor(
+    private readonly traces: RecentTracesSink,
+    /**
+     * Chi de doc DANH TINH BAN PHAT HANH — `releaseIdentity()` giu git SHA DAY DU, con
+     * `TelemetryRecord.release` chi giu 12 ky tu dau. Permalink can ban day du.
+     */
+    private readonly telemetry: TelemetryService,
+  ) {}
+
+  /** Repo + release cua ban dang chay. Dung mot lan cho ca cau tra loi. */
+  private sourceContext(): SourceContext {
+    return currentSourceContext(this.telemetry.releaseIdentity());
+  }
 
   /** Danh sach luot gan day — moi nhat truoc. Cho man hinh chan doan. */
   @Get()
-  list(@Query('limit') limit?: string): { traces: TraceView[]; stats: ReturnType<RecentTracesSink['stats']> } {
+  list(@Query('limit') limit?: string): {
+    traces: TraceView[];
+    stats: ReturnType<RecentTracesSink['stats']>;
+  } {
     const parsed = Number(limit);
     const take = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 100) : 20;
+    const context = this.sourceContext();
     return {
-      traces: this.traces.list(take).map(buildTraceView),
+      traces: this.traces.list(take).map((stored) => buildTraceView(stored, context)),
       stats: this.traces.stats(),
     };
   }
@@ -41,13 +59,13 @@ export class TraceController {
           'luot cu hon van con trong `docker logs` (xem docs/phat-trien/van-hanh/debugging.md).',
       );
     }
-    return buildTraceView(stored);
+    return buildTraceView(stored, this.sourceContext());
   }
 
   @Get(':traceId')
   byTraceId(@Param('traceId') traceId: string): TraceView {
     const stored = this.traces.get(traceId);
     if (!stored) throw new NotFoundException('Khong tim thay luot xu ly nay trong vong dem.');
-    return buildTraceView(stored);
+    return buildTraceView(stored, this.sourceContext());
   }
 }

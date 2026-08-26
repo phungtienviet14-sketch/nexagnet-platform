@@ -1,4 +1,10 @@
 export * from './trace-view.js';
+export {
+  normalizeSourceLocation,
+  normalizeRepositoryUrl,
+  buildGithubSourceUrl,
+} from './source-location.js';
+export type { SourceLocation, SourceContext, SourceLocationInput } from './source-location.js';
 export type {
   DebugTurn,
   DebugHandoffStatus,
