@@ -2,13 +2,33 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 
 /**
- * TIN NHAN MAU den tu GOI KHACH, khong con cam cung trong file nay.
+ * TANG LIVE AI cua mot lan deploy — duong dat hang that, di qua model that.
  *
- * Parser lam viec trong tu dien DONG cua tung khach, nen mot cau don hop le voi khach nay la
- * `khac` voi khach kia. Truoc 17/08/2026 file nay cam cung cau don cua mot khach cu the: deploy
- * khach thu hai chet ngay o day du he thong hoan toan binh thuong, va ten dai ly + SKU cua mot
- * khach thi nam ngay trong base (CLAUDE.md muc 6 cam dieu do).
+ * TU 26/08/2026 TEP NAY CHI CON TRA LOI MOT CAU HOI: model/provider co hieu dung tin mau khong.
+ * Moi thu KHONG phu thuoc model (API song, guard bat, nguon su that trong Postgres, SSE mo duoc,
+ * du lieu con nguyen sau khi khoi dong lai) da chuyen sang `deterministic-smoke.mjs` va la mot
+ * cong CUNG chay TRUOC tep nay.
+ *
+ * Ly do tach: truoc do mot lan model phan loai `khac` thay vi `dat_don` cho ra DUNG mot dau X do
+ * nhu khi image chua len — nen "deploy do" mat het y nghia, va mot lan do that se bi bo qua.
+ *
+ * Ket qua duoc phat ra duoi dang mot dong tin hieu co MA LY DO (`##DEPLOY-SIGNAL##`), va
+ * `deploy-signals.mjs` la noi duy nhat quyet dinh mau nao ung voi nghia gi.
+ *
+ * TIN NHAN MAU den tu GOI KHACH, khong cam cung trong file nay: parser lam viec trong tu dien
+ * DONG cua tung khach, nen mot cau don hop le voi khach nay la `khac` voi khach kia.
  */
+const SIGNAL_PREFIX = '##DEPLOY-SIGNAL##';
+const LAYER = 'liveAiSmoke';
+
+/**
+ * `1` = tin hieu MEM: van phat ra ket qua nhung THOAT 0, de tang shell di tiep va de
+ * `deploy-signals.mjs` phan xu. Mac dinh (khong dat) giu nguyen hanh vi cu — thoat khac 0 — vi
+ * con mot noi goi khac: provider smoke cua `gd1-test-preflight.mjs`, o do day la mot cong CUNG
+ * chay tren ban dang chay TRUOC khi deploy.
+ */
+const softSignal = process.env.DEPLOY_SIGNAL_SOFT === '1';
+
 const tenantDir = (process.env.TENANT_DIR ?? '/srv/tenant').replace(/\/+$/, '');
 function loadSmokeFixture() {
   try {
@@ -27,6 +47,7 @@ function loadSmokeFixture() {
   }
 }
 const smokeFixture = loadSmokeFixture();
+
 /**
  * SSE `/events` thuoc nang luc `sales-order` (StreamController). Khach chi bat `knowledge` +
  * `operations` khong co endpoint do, nen doi mo duoc SSE la doi mot thu khong ton tai — deploy
@@ -52,50 +73,106 @@ const verifyOrderStatus = process.env.VERIFY_ORDER_STATUS?.trim();
 const channelMode = process.env.CHANNEL_MODE?.trim() ?? 'zca';
 const liveZaloTransport = ['bot', 'zca', 'hybrid'].includes(channelMode);
 const authMode = process.env.PILOT_AUTH_MODE?.trim() ?? 'none';
+const finalizeTimeoutMs = Number(process.env.LIVE_AI_TIMEOUT_MS ?? 45_000);
 let sessionCookie;
 let csrfToken;
 
-await expectOk('/health');
-if (authMode === 'session') await authenticate();
+/**
+ * Ket qua co PHAN LOAI. Mot cong nghiep vu co N duong khong dat thi phai phan biet duoc N ly do —
+ * gop "model doan sai" voi "provider chet" thanh mot chu `fail` la dung cai lam nguoi truc mat
+ * long tin vao mau do.
+ */
+class LiveAiOutcome extends Error {
+  constructor(status, reason, detail = {}) {
+    super(`${reason}: ${JSON.stringify(detail)}`);
+    this.status = status;
+    this.reason = reason;
+    this.detail = detail;
+  }
+}
 
-if (verifyOrderId) {
-  const persisted = await getJson(`/orders/${encodeURIComponent(verifyOrderId)}`);
-  assertPilotOrder(persisted, verifyOrderId);
-  const expectedStatus = verifyOrderStatus ?? (liveZaloTransport ? 'needs_edit' : 'sent');
-  if (persisted.status !== expectedStatus) {
-    throw new Error(`Don sau restart sai trang thai ${expectedStatus}: ${persisted.status}`);
+class HttpError extends Error {
+  constructor(path, status, body) {
+    super(`${path} tra HTTP ${status}: ${body.slice(0, 200)}`);
+    this.path = path;
+    this.status = status;
   }
-  process.stdout.write(`Persistence smoke OK: ${verifyOrderId}\n`);
-} else if (!smokeFixture) {
-  // GOI KHACH CHUA CO TIN NHAN MAU -> khong the kiem duong dat hang. Van kiem duoc phan ha tang:
-  // API song, dang nhap duoc, SSE mo duoc. BAO TO ra stdout: mot cong kiem tra bi thu hep ma im
-  // lang thi lan deploy xanh se bi doc nham la "da kiem het".
-  if (hasSalesOrder) {
-    const abort = new AbortController();
-    const stream = await fetch(`${baseUrl}/events`, {
-      headers: authenticatedHeaders({ Accept: 'text/event-stream' }),
-      signal: abort.signal,
+}
+
+function emitLiveAi(status, reason, detail) {
+  process.stdout.write(
+    `${SIGNAL_PREFIX} ${JSON.stringify({ layer: LAYER, status, reason, detail })}\n`,
+  );
+}
+
+/**
+ * Provider chet va model doan sai la HAI viec khac nhau, va chung phan biet duoc bang MA HTTP:
+ * parser nem loi -> `/demo/simulate` tra 5xx; parser tra loi binh thuong nhung phan loai khac ->
+ * HTTP 200 kem `intent: 'khac'`. Loi tang mang cung xep vao "phu thuoc ngoai khong san sang".
+ */
+function classifyTransportError(error) {
+  if (error instanceof LiveAiOutcome) return error;
+  if (error instanceof HttpError) {
+    return error.status >= 500
+      ? new LiveAiOutcome('unavailable', 'LIVE_AI_PROVIDER_UNAVAILABLE', {
+          path: error.path,
+          httpStatus: error.status,
+        })
+      : new LiveAiOutcome('fail', 'LIVE_AI_HARNESS_ERROR', {
+          path: error.path,
+          httpStatus: error.status,
+        });
+  }
+  if (error instanceof TypeError) {
+    return new LiveAiOutcome('unavailable', 'LIVE_AI_PROVIDER_UNAVAILABLE', {
+      message: String(error.message ?? error),
     });
-    if (!stream.ok || !stream.body) {
-      throw new Error(`Khong mo duoc SSE: HTTP ${stream.status}`);
-    }
-    abort.abort();
-    process.stdout.write(
-      'CANH BAO: goi khach khong khai bao `smoke` nen KHONG kiem duoc duong dat hang ' +
-        '(parse -> tinh gia -> duyet -> gui). Chi kiem: /health, dang nhap, SSE.\n' +
-        'Khach nao co nguon su that thi them `smoke` vao tenant.json de bat lai cong kiem tra nay.\n' +
-        'SMOKE_SKIPPED_ORDER_PATH=1\n',
-    );
-  } else {
-    process.stdout.write(
-      'CANH BAO: khach khong bat `sales-order` nen KHONG co duong dat hang lan SSE `/events`. ' +
-        `Nang luc khai bao: ${(tenantCapabilities ?? []).join(', ') || 'khong ro'}.\n` +
-        'Chi kiem: /health va dang nhap.\n' +
-        'SMOKE_SKIPPED_ORDER_PATH=1\n' +
-        'SMOKE_SKIPPED_SSE=1\n',
-    );
   }
-} else {
+  return new LiveAiOutcome('fail', 'LIVE_AI_HARNESS_ERROR', {
+    message: error instanceof Error ? error.message : String(error),
+  });
+}
+
+async function main() {
+  await expectOk('/health');
+  if (authMode === 'session') await authenticate();
+
+  if (verifyOrderId) {
+    const persisted = await getJson(`/orders/${encodeURIComponent(verifyOrderId)}`);
+    assertPilotOrder(persisted, verifyOrderId);
+    const expectedStatus = verifyOrderStatus ?? (liveZaloTransport ? 'needs_edit' : 'sent');
+    if (persisted.status !== expectedStatus) {
+      throw new LiveAiOutcome('fail', 'LIVE_AI_PERSISTED_STATUS_MISMATCH', {
+        expectedStatus,
+        actualStatus: persisted.status,
+      });
+    }
+    process.stdout.write(`Persistence smoke OK: ${verifyOrderId}\n`);
+    emitLiveAi('pass', 'LIVE_AI_MATCHES_FIXTURE', { mode: 'verify-persisted' });
+    return;
+  }
+
+  if (!smokeFixture) {
+    // GOI KHACH CHUA CO TIN NHAN MAU -> khong the kiem duong dat hang. BAO TO ra stdout: mot cong
+    // kiem tra bi thu hep ma im lang thi lan deploy xanh se bi doc nham la "da kiem het".
+    const skippedSse = hasSalesOrder ? '' : 'SMOKE_SKIPPED_SSE=1\n';
+    process.stdout.write(
+      'CANH BAO: khong co tin nhan mau `smoke` trong goi khach nen KHONG kiem duoc duong dat hang ' +
+        '(parse -> tinh gia -> duyet -> gui). Hop dong runtime tat dinh da duoc kiem rieng.\n' +
+        `Nang luc khai bao: ${(tenantCapabilities ?? []).join(', ') || 'khong ro'}.\n` +
+        'SMOKE_SKIPPED_ORDER_PATH=1\n' +
+        skippedSse,
+    );
+    emitLiveAi('skipped', 'LIVE_AI_SKIPPED_NO_FIXTURE', {
+      capabilities: tenantCapabilities ?? [],
+    });
+    return;
+  }
+
+  await runOrderPath();
+}
+
+async function runOrderPath() {
   const marker = `NETVIET-SMOKE-${Date.now()}`;
   const abort = new AbortController();
   const events = [];
@@ -104,7 +181,9 @@ if (verifyOrderId) {
     signal: abort.signal,
   });
   if (!stream.ok || !stream.body) {
-    throw new Error(`Khong mo duoc SSE: HTTP ${stream.status}`);
+    throw new LiveAiOutcome('fail', 'LIVE_AI_HARNESS_ERROR', {
+      message: `Khong mo duoc SSE: HTTP ${stream.status}`,
+    });
   }
   const readerTask = collectSse(stream.body, events, abort.signal);
 
@@ -116,7 +195,7 @@ if (verifyOrderId) {
 
     const finalized = await waitFor(
       () => events.find((event) => event.type === 'order.finalized' && event.order?.id === order.id),
-      45_000,
+      finalizeTimeoutMs,
       'SSE order.finalized',
     );
     assertPilotOrder(finalized.order, order.id);
@@ -135,37 +214,59 @@ if (verifyOrderId) {
       'supervisor:done',
     ]) {
       if (!rolePhases.has(expected)) {
-        throw new Error(`SSE thieu buoc ${expected} cho don ${order.id}`);
+        throw new LiveAiOutcome('fail', 'LIVE_AI_AGENT_TRACE_INCOMPLETE', {
+          missingPhase: expected,
+          orderId: order.id,
+        });
       }
     }
 
     // HOP DONG GD1: duyet -> GUI XAC NHAN vao nhom roi DUNG o `sent`, kem mot hang viec bao Sale
-    // tu nhap ERP. KHONG co buoc dong bo ERP nao trong GD1 (CLAUDE.md quyet dinh 4 va 7), nen
-    // `synced` + ma ERP la hop dong CU. Bai nay van doi hop dong cu va vi vay chan MOI lan deploy
-    // ke tu G1-12 — lan deploy dau tien sau do moi lo ra (13/08/2026).
+    // tu nhap ERP. KHONG co buoc dong bo ERP nao trong GD1 (CLAUDE.md quyet dinh 4 va 7).
     if (!liveZaloTransport) {
       const approved = await postJson(`/orders/${encodeURIComponent(order.id)}/approve`);
       if (approved.status !== 'sent') {
-        throw new Error(`Sale approve khong gui duoc xac nhan don ${order.id}: ${approved.status}`);
+        throw new LiveAiOutcome('fail', 'LIVE_AI_APPROVE_CONTRACT_FAILED', {
+          orderId: order.id,
+          actualStatus: approved.status,
+        });
       }
       if (approved.salesHandoff?.status !== 'pending') {
-        throw new Error(`Don ${order.id} da gui nhung khong tao hang viec nhap ERP cho Sale`);
+        throw new LiveAiOutcome('fail', 'LIVE_AI_APPROVE_CONTRACT_FAILED', {
+          orderId: order.id,
+          message: 'da gui nhung khong tao hang viec nhap ERP cho Sale',
+        });
       }
       if (approved.erpCode) {
-        throw new Error(`Don ${order.id} co ma ERP — GD1 khong duoc goi ERP`);
+        throw new LiveAiOutcome('fail', 'LIVE_AI_APPROVE_CONTRACT_FAILED', {
+          orderId: order.id,
+          message: 'don co ma ERP — GD1 khong duoc goi ERP',
+        });
       }
     }
 
     const saved = await getJson(`/orders/${encodeURIComponent(order.id)}`);
     const expectedStatuses = liveZaloTransport ? ['pending_review', 'needs_edit'] : ['sent'];
     if (!expectedStatuses.includes(saved.status)) {
-      throw new Error(`Don ${order.id} co trang thai ngoai du kien: ${saved.status}`);
+      throw new LiveAiOutcome('fail', 'LIVE_AI_ORDER_STATUS_UNEXPECTED', {
+        orderId: order.id,
+        expectedStatuses,
+        actualStatus: saved.status,
+      });
     }
 
     const scope = liveZaloTransport ? 'draft (API dang dung kenh Zalo that)' : 'approve mock';
     process.stdout.write(
       `Pilot smoke OK: SSE + 6-agent trace + ${scope}; SMOKE_ORDER_ID=${order.id}; SMOKE_ORDER_STATUS=${saved.status}\n`,
     );
+    emitLiveAi('pass', 'LIVE_AI_MATCHES_FIXTURE', {
+      expectedIntent: 'dat_don',
+      actualIntent: 'dat_don',
+      parserMode: process.env.PARSER_MODE ?? null,
+      orderId: order.id,
+      orderStatus: saved.status,
+      fixture: smokeFixture.orderText,
+    });
   } finally {
     abort.abort();
     await readerTask.catch((error) => {
@@ -198,25 +299,45 @@ async function collectSse(body, target, signal) {
 
 function assertPilotOrder(order, expectedId) {
   if (!order || order.id !== expectedId) {
-    throw new Error(`Order response sai id: ${order?.id ?? 'missing'}`);
+    throw new LiveAiOutcome('fail', 'LIVE_AI_HARNESS_ERROR', {
+      message: `Order response sai id: ${order?.id ?? 'missing'}`,
+    });
   }
+  // DAY LA CAU HOI CUA TANG NAY, va chi cua tang nay: model co doc ra `dat_don` khong.
   if (order.intent !== 'dat_don' || !order.priced) {
-    throw new Error(`Flowise khong tao duoc don dat_don: ${order.intent}`);
+    throw new LiveAiOutcome('fail', 'LIVE_AI_INTENT_MISMATCH', {
+      expectedIntent: 'dat_don',
+      actualIntent: order.intent ?? 'khong-ro',
+      priced: Boolean(order.priced),
+      parserMode: process.env.PARSER_MODE ?? null,
+      orderId: order.id,
+      fixture: smokeFixture?.orderText,
+    });
   }
   if (!order.trace || order.trace.steps?.length !== 6 || order.trace.llmCalls !== 1) {
-    throw new Error(`Trace khong dung 6 vai/1 LLM call cho don ${order.id}`);
+    throw new LiveAiOutcome('fail', 'LIVE_AI_AGENT_TRACE_INCOMPLETE', {
+      orderId: order.id,
+      steps: order.trace?.steps?.length ?? 0,
+      llmCalls: order.trace?.llmCalls ?? 0,
+    });
   }
   // So luong ky vong den tu goi khach: moi khach mot cau don mau khac nhau nen con so nay khong
-  // the la hang so trong base.
+  // the la hang so trong base. Trich xuat sai so luong VAN la loi cua tang AI, khong phai ha tang.
   const expectedQuantity = smokeFixture?.expectedQuantity;
   if (order.priced.lines?.length !== 1 || order.priced.lines[0]?.quantity !== expectedQuantity) {
-    throw new Error(`Rules engine khong giu dung ${expectedQuantity} san pham cho don ${order.id}`);
+    throw new LiveAiOutcome('fail', 'LIVE_AI_EXTRACTION_MISMATCH', {
+      orderId: order.id,
+      expectedQuantity,
+      actualLineCount: order.priced.lines?.length ?? 0,
+      actualQuantity: order.priced.lines?.[0]?.quantity ?? null,
+      parserMode: process.env.PARSER_MODE ?? null,
+    });
   }
 }
 
 async function expectOk(path) {
   const response = await fetch(`${baseUrl}${path}`);
-  if (!response.ok) throw new Error(`${path} tra HTTP ${response.status}`);
+  if (!response.ok) throw new HttpError(path, response.status, '');
 }
 
 async function getJson(path) {
@@ -268,9 +389,7 @@ function responseCookie(response) {
 
 async function parseJson(response, path) {
   const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`${path} tra HTTP ${response.status}: ${text.slice(0, 500)}`);
-  }
+  if (!response.ok) throw new HttpError(path, response.status, text);
   try {
     return JSON.parse(text);
   } catch {
@@ -285,5 +404,15 @@ async function waitFor(find, timeoutMs, label) {
     if (value) return value;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Qua thoi gian cho ${label}`);
+  // Qua han cho la mot KET QUA rieng, khong phai mot loi chung: no phan biet "provider cham/treo"
+  // voi "provider tra loi sai".
+  throw new LiveAiOutcome('timeout', 'LIVE_AI_TIMEOUT', { waitingFor: label, timeoutMs });
 }
+
+main().catch((error) => {
+  const outcome = classifyTransportError(error);
+  emitLiveAi(outcome.status, outcome.reason, outcome.detail);
+  process.stderr.write(`Live AI smoke ${outcome.status} (${outcome.reason}): ${error}\n`);
+  // MEM: van bao ket qua nhung khong lam do tang shell — `deploy-signals.mjs` moi la noi phan xu.
+  if (!softSignal) process.exitCode = 1;
+});

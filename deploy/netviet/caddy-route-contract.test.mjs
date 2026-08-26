@@ -337,7 +337,18 @@ test('pilot deploy defaults to zca and auto-send, while preserving a validated c
   assert.match(renderSecrets, /channel-mode\.sh" read/);
   assert.match(setChannelMode, /channel-mode\.sh" write/);
   assert.match(setChannelMode, /--force-recreate api/);
-  assert.equal(deployStack.match(/-e "CHANNEL_MODE=\$\{channel_mode\}"/g)?.length, 2);
+  // MOI lan chay `smoke-test.mjs` phai mang che do kenh DA XAC THUC — do la thu chan smoke gui
+  // that vao nhom khach. Truoc 26/08/2026 cho nay dem cung "2"; con so do la mot su that ve CAU
+  // TRUC chu khong phai ve bat bien, va no lac hau ngay khi lan chay thu hai duoc thay bang
+  // `deterministic-smoke.mjs` (phep do ben vung khong duoc bam vao mot don do LLM tao ra).
+  const smokeInvocations =
+    deployStack.match(/bootstrap node --input-type=module - < smoke-test\.mjs/g) ?? [];
+  assert.ok(smokeInvocations.length >= 1, 'deploy phai con chay smoke-test.mjs');
+  assert.equal(
+    deployStack.match(/-e "CHANNEL_MODE=\$\{channel_mode\}"/g)?.length,
+    smokeInvocations.length,
+    'moi lan chay smoke-test.mjs phai mang CHANNEL_MODE da xac thuc',
+  );
   assert.doesNotMatch(deployStack, /-e CHANNEL_MODE=mock/);
   assert.match(deployStack, /channel-mode\.sh" read/);
   assert.match(setChannelMode, /rollback_runtime/);

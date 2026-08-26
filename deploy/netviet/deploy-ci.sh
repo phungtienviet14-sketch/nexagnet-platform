@@ -186,7 +186,34 @@ ssh_vm "install -d -m 0700 '${remote_parent}'"
 scp_vm "${staging}/payload.tar.gz" "${remote_parent}/payload.tar.gz"
 ssh_vm "tar -xzf '${remote_parent}/payload.tar.gz' -C '${remote_parent}' && rm -f '${remote_parent}/payload.tar.gz'"
 
-ssh_vm "sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'"
+# SO NHAT KY TIN HIEU. Tang tren VM phat ra `##DEPLOY-SIGNAL##` khi di qua tung tang; o day ta
+# CHEP LAI dong chay do vao mot tep de phan xu, va van cho no in ra log job nhu cu.
+#
+# `set +e` + `PIPESTATUS` chu khong phai `set -e`: khi VM chet, ta VAN phai chay bao cao. Mot lan
+# deploy that bai la luc bao cao co gia tri nhat, nen do la cho cuoi cung duoc phep bo qua no.
+DEPLOY_SIGNAL_LOG="${DEPLOY_SIGNAL_LOG:-${REPOSITORY_ROOT}/deploy-signals.log}"
+DEPLOY_SIGNAL_JSON="${DEPLOY_SIGNAL_JSON:-${REPOSITORY_ROOT}/deploy-signals.json}"
+
+set +e
+ssh_vm "sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
+  tee "${DEPLOY_SIGNAL_LOG}"
+remote_status="${PIPESTATUS[0]}"
+set -e
+
+node "${REPOSITORY_ROOT}/deploy/netviet/report-deploy-signals.mjs" \
+  --journal "${DEPLOY_SIGNAL_LOG}" \
+  --remote-exit-code "${remote_status}" \
+  --json-out "${DEPLOY_SIGNAL_JSON}"
+
+# CONG CUNG. Bao cao chi TUONG THUAT; quyet dinh mau nam o day va o buoc GitHub Actions ke tiep.
+# Doc lai tu tep JSON thay vi tin vao `remote_status`: mot lan shell chet o cho chua duoc gan tin
+# hieu van phai la mau do, va evaluator la noi duy nhat biet dieu do (`DEPLOY_SIGNAL_INCOMPLETE`).
+hard_failure="$(node -e "const {readFileSync}=require('node:fs'); try { process.stdout.write(String(JSON.parse(readFileSync(process.argv[1],'utf8')).hardFailure)); } catch { process.stdout.write('true'); }" "${DEPLOY_SIGNAL_JSON}")"
+if [[ "${hard_failure}" != 'false' ]]; then
+  echo "Deploy KHONG duoc chung minh (ma thoat VM ${remote_status}) — doc bang tin hieu o tren." >&2
+  if [[ "${remote_status}" -ne 0 ]]; then exit "${remote_status}"; fi
+  exit 1
+fi
 
 echo "Deploy xong: tenant=${TENANT_SLUG} environment=${DEPLOYMENT_ENVIRONMENT} stack=${STACK_SLUG} target=${DEPLOYMENT_TARGET_ID} app=${app_digest} flowise=${flowise_digest}"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

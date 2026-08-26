@@ -150,7 +150,11 @@ jobs:
           }
           echo 'conclusion=success' >>"${GITHUB_OUTPUT}"
 
-      - name: Build, push neutral image and roll out tenant silo
+      # TANG 1-3 (ROLLOUT / HEALTH / DETERMINISTIC RUNTIME SMOKE) — ba tin hieu CUNG.
+      # Do o day nghia la ban phat hanh chua duoc chung minh; bang chi tiet nam o Step Summary.
+      # Tang 4 (LIVE AI) CO Y khong lam do buoc nay — xem buoc rieng ben duoi.
+      - name: Roll out release (ROLLOUT + HEALTH + DETERMINISTIC SMOKE)
+        id: rollout
         run: bash deploy/netviet/deploy-ci.sh
         env:
           GIT_SHA: ${{ github.sha }}
@@ -169,7 +173,51 @@ jobs:
           GD1_TEST_CI_CONCLUSION: ${{ steps.ci.outputs.conclusion }}
           GD1_TEST_APPROVED_GROUP_HASHES: ${{ vars.GD1_TEST_APPROVED_GROUP_HASHES }}
 
+      # Ket qua MAY DOC DUOC. Fleet View sau nay tieu thu tep nay thay vi parse log console; giu
+      # `if: always()` vi mot lan deploy that bai la luc ban ghi nay co gia tri nhat.
+      - name: Upload deploy signals
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-signals-${{ inputs.tenant }}-${{ inputs.environment }}
+          path: deploy-signals.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      # TANG 4 — LIVE AI SMOKE, MOT BUOC RIENG MANG DUNG TEN CUA NO.
+      #
+      # Day la ca diem cua milestone nay. Khi model phan loai sai, nguoi mo GitHub Actions thay:
+      # buoc "Roll out release" XANH, buoc "LIVE AI SMOKE" DO. Ho biet ngay ung dung da len va
+      # dang khoe, va thu khong dat la mot phu thuoc ngoai — thay vi mot dau X duy nhat trong nhu
+      # "release chua len".
+      #
+      # Ket luan tong cua workflow VAN do, dung nhu policy hien tai: khong cong nao phia sau bi
+      # noi long. Cai doi la NGHIA cua mau do, khong phai mau.
+      - name: LIVE AI SMOKE
+        if: steps.rollout.outcome == 'success'
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const fs = await import('node:fs');
+          const result = JSON.parse(fs.readFileSync('deploy-signals.json', 'utf8'));
+          const status = result.liveAiSmoke;
+          const reason = result.reasons?.liveAiSmoke ?? 'UNSPECIFIED';
+          const detail = result.details?.liveAiSmoke ?? {};
+          if (status === 'pass' || status === 'skipped') {
+            console.log(`LIVE AI SMOKE: ${status.toUpperCase()} (${reason})`);
+            process.exit(0);
+          }
+          console.error(`LIVE AI SMOKE: ${String(status).toUpperCase()} (${reason})`);
+          console.error(`expected: ${detail.expectedIntent ?? 'khong-ro'}`);
+          console.error(`actual:   ${detail.actualIntent ?? 'khong-ro'}`);
+          console.error('Ung dung DA rollout va DANG khoe — xem bang tin hieu o Step Summary.');
+          process.exit(1);
+          NODE
+
+      # Duong dan cua khach van phai duoc in ra KE CA khi live AI khong dat: ung dung da len va
+      # dang khoe, nen nguoi truc can link de vao xem — do chinh la luc ho can no.
       - name: Report tenant endpoints
+        if: ${{ !cancelled() && steps.rollout.outcome == 'success' }}
         env:
           # Phai KHOP mac dinh trong `deploy/netviet/deploy-ci.sh`. Khach chinh giu ten mien TRAN
           # (`operator.<ip>.sslip.io`) vi ten do di thang vao PUBLIC_BASE_URL — doi ten se lam chet
