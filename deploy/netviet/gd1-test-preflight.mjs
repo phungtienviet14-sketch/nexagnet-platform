@@ -185,10 +185,8 @@ function remoteRuntimeCommand(appDir) {
     'DATA_CLASSIFICATION',
   ];
   const program = [
-    'import("@netviet/shared").then(({ loadEnv }) => {',
-    'const env = loadEnv();',
-    `for (const key of ${JSON.stringify(keys)}) console.log(key + "=" + env[key]);`,
-    '})',
+    `for (const key of ${JSON.stringify(keys)})`,
+    'console.log(key + "=" + process.env[key])',
   ].join(' ');
   return remoteSudoCommand([
     'set -euo pipefail',

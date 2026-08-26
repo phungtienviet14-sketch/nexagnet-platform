@@ -150,7 +150,7 @@ test('collector builds a validated redacted snapshot from live read-only probes'
     if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
       return 'Generating public/private rsa key pair.\n__NETVIET_STACK_STATE__=present\n';
     }
-    if (commandText.includes('loadEnv')) {
+    if (commandText.includes('process.env')) {
       return [
         'PERSISTENCE=prisma',
         'CHANNEL_MODE=zca',
@@ -189,7 +189,7 @@ test('collector builds a validated redacted snapshot from live read-only probes'
   assert.match(commandLog, /__NETVIET_STACK_STATE__=/);
   const privilegedRuntimeProbes = commands.filter((command) =>
     [
-      'loadEnv',
+      'process.env',
       'zalo-allowed-groups.json',
       'zalo-cred.json',
       'runtime_value APP_IMAGE',
@@ -208,6 +208,50 @@ test('collector builds a validated redacted snapshot from live read-only probes'
     1,
     'the full secret inventory must use one IAP session, not one tunnel per secret',
   );
+});
+
+test('runtime probe reads the running container environment without workspace package resolution', async () => {
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = collectorEnv(rawGroups);
+  const commands = [];
+  const run = async (_program, args) => {
+    const commandText = args.join(' ');
+    commands.push(commandText);
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      return '__NETVIET_STACK_STATE__=present\n';
+    }
+    if (commandText.includes('docker compose') && commandText.includes('exec -T api node')) {
+      return [
+        'PERSISTENCE=prisma',
+        'CHANNEL_MODE=zca',
+        'PARSER_MODE=deepseek',
+        'MEDIA_STORE=gcs',
+        'AUTH_MODE=session',
+        'AUTO_SEND=off',
+        'DATA_CLASSIFICATION=test',
+      ].join('\n');
+    }
+    if (commandText.includes('zalo-allowed-groups.json')) {
+      return rawGroups.map(hashZaloGroupId).join('\n');
+    }
+    if (commandText.includes('zalo-cred.json')) return 'regular file|600|512\n';
+    if (commandText.includes('runtime_value APP_IMAGE')) return `${digest('d')}\n`;
+    if (commandText.includes('runtime_value FLOWISE_IMAGE')) return `${digest('e')}\n`;
+    if (commandText.includes('secrets versions access')) return secretInventoryOutput();
+    if (commandText.includes('smoke-test.mjs')) return 'Pilot smoke OK\n';
+    throw new Error(`unexpected command: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+  const runtimeProbe = commands.find(
+    (command) => command.includes('docker compose') && command.includes('exec -T api node'),
+  );
+
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.ok(runtimeProbe, 'collector must inspect the running API container');
+  assert.match(runtimeProbe, /process\.env/);
+  assert.doesNotMatch(runtimeProbe, /@netviet\/shared|loadEnv/);
 });
 
 test('collector reports IAP transport failure instead of inventing missing secrets', async () => {
