@@ -17,6 +17,7 @@ import {
   type SalesHandoffFollowupInput,
 } from '../workflows/sales-handoff-followup.steps.js';
 import { SALES_HANDOFF_FOLLOWUP_KEY } from '../workflow-registry.js';
+import { describeWorkflowStep, engineWorkflowDescription } from '../workflow-catalog.js';
 import { FOLLOWUP_STAGES } from '../workflows/sales-handoff-followup.steps.js';
 import { tenantSalesHandoffFollowup } from '@netviet/tenant';
 import { HatchetClient, type HatchetClientType } from './hatchet-sdk.js';
@@ -54,7 +55,7 @@ type WorkflowDefinition = ReturnType<HatchetClientType['workflow']>;
  */
 type TracedRunner = <T>(
   taskName: string,
-  ctx: TaskRunContext,
+  ctx: TaskRunContext & StepLogContext,
   run: (outboundTraceparent: string | undefined) => Promise<T> | T,
 ) => Promise<T>;
 
@@ -111,6 +112,47 @@ function runAnchors(ctx: TaskRunContext): Omit<WorkflowTaskTrace, 'workflowName'
   };
 }
 
+/**
+ * Phan cua `ctx` dung de IN NHAN BUOC ra log cua engine.
+ *
+ * TACH KHOI `TaskRunContext` co chu dich. `TaskRunContext` tra loi cau "cau noi trace duoc doc
+ * gi", va cau tra loi do phai giu nguyen do hep cua no. Cai duoi day tra loi mot cau khac —
+ * "buoc VIET duoc ra dau" — va no khong doc gi ca.
+ *
+ * `logger` la TUY CHON vi ban gia trong bai kiem co the khong co no, va mot cai nhan khong dang
+ * lam do mot buoc nghiep vu.
+ */
+interface StepLogContext {
+  readonly logger?: { info(message: string): void };
+}
+
+/**
+ * In NHAN TIENG VIET cua buoc ra log cua chinh buoc do.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO PHAI DI DUONG LOG, chu khong dat mot truong nhan tu te:
+ *
+ * `CreateBaseTaskOpts` cua SDK 1.28.2 chi co `name`, va `name` chinh la DANH TINH engine dinh
+ * tuyen theo (`actionId`). Doi no de the buoc doc de hon = lam mo coi moi run dang cho va moi
+ * worker dang dang ky. Khong co `description`, khong co `displayName` cho buoc.
+ *
+ * Nen nhan di duong con lai ma dashboard CO hien: tab Logs cua run. Mot dong cho moi buoc, dat
+ * NGAY DAU buoc — ke ca buoc `wait`, von truoc ban nay khong in gi ca va vi the la doan im lang
+ * dai nhat trong ca lan chay.
+ *
+ * FAIL-OPEN, va do la bat buoc: mot cai nhan khong duoc phep lam do mot buoc nghiep vu.
+ */
+function announceStep(ctx: StepLogContext, workflowKey: string, taskName: string): void {
+  const { label } = describeWorkflowStep(workflowKey, taskName);
+  // Danh ba chua biet buoc nay -> `label` chinh la khoa may. In lai no la nhieu, khong phai nhan.
+  if (label === taskName) return;
+  try {
+    ctx.logger?.info(`[Bước] ${label}`);
+  } catch {
+    /* fail-open */
+  }
+}
+
 /** Duong tiem cho BAI KIEM — khong dung o production. Nam trong thu muc `hatchet/` de kieu cua
  * SDK khong ro ri ra `workflow-worker.adapter.ts` (file do PHAI trung lap ve engine). */
 export interface HatchetWorkerOverrides {
@@ -151,6 +193,9 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
      */
     const bridge = this.overrides.traceBridge ?? (await resolveWorkerTraceBridge(env));
     const workflowName = this.registration.engineName;
+    // KHOA MAY KHONG KEM PHIEN BAN — danh ba nguoi-doc khoa theo `sales-handoff-followup`, con
+    // `engineName` mang duoi `.v1`. Lay nham thi moi buoc deu "chua co nhan" va im lang.
+    const workflowKey = this.registration.workflowKey;
 
     /**
      * BIEN THUC THI CUA WORKER — MOI buoc dang ky o lop nay deu phai di qua day.
@@ -168,12 +213,16 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
      */
     const traced = <T>(
       taskName: string,
-      ctx: TaskRunContext,
+      ctx: TaskRunContext & StepLogContext,
       run: (outboundTraceparent: string | undefined) => Promise<T> | T,
-    ): Promise<T> =>
-      bridge.task({ workflowName, taskName, ...runAnchors(ctx) }, async (outbound) =>
+    ): Promise<T> => {
+      // Dat o DAY chu khong o tung `fn`: bat bien "moi buoc di qua `traced`" da duoc bai kiem
+      // giu, nen mot buoc moi tu dong co nhan ma khong ai phai nho them mot dong.
+      announceStep(ctx, workflowKey, taskName);
+      return bridge.task({ workflowName, taskName, ...runAnchors(ctx) }, async (outbound) =>
         run(outbound),
       );
+    };
 
     // ------------------------------------------------------------ dinh nghia khuon
     //
@@ -222,7 +271,7 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
     const workflow = hatchet.workflow<IntegrationHandoffInput>({
       // TEN MANG PHIEN BAN. Day la co che ghim phien ban cua Gate A, khong phai quy uoc dat ten.
       name: this.registration.engineName,
-      description: 'Ban giao mot tham chieu thuc the toi mot dich den do khach cau hinh.',
+      ...this.engineDescription(),
     });
 
     // ① resolve — ten dich den LOGIC -> URL that. Khong thu lai: mot bien moi truong thieu se
@@ -379,7 +428,7 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
     const workflow = hatchet.workflow<SalesHandoffFollowupInput>({
       // TEN MANG PHIEN BAN — co che ghim phien ban cua Gate A.
       name: this.registration.engineName,
-      description: 'Theo doi mot viec ban giao cho Sale de no khong nam pending vo thoi han.',
+      ...this.engineDescription(),
     });
 
     // (1) load-state — doc lai tu DB nghiep vu. `retries: 2` vi mot lan doc that bai la loi mang,
@@ -485,7 +534,9 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
 
           const operationKey = recomputeFollowupKey(input, metadata, stage);
           const marked = await ensureFollowup({ ...common, stage, operationKey });
-          ctx.logger.info(`recheck ${input.entityId}: danh dau=${marked.applied} khoa=${operationKey}`);
+          ctx.logger.info(
+            `recheck ${input.entityId}: danh dau=${marked.applied} khoa=${operationKey}`,
+          );
           return {
             applied: marked.applied,
             outcome: marked.applied ? 'marked' : 'already-marked',
@@ -508,6 +559,22 @@ export class HatchetWorkflowWorker implements WorkflowWorkerHandle {
     await this.running;
     this.worker = undefined;
     this.running = undefined;
+  }
+
+  /**
+   * MO TA cua khuon, dang manh de rai vao `hatchet.workflow({...})`.
+   *
+   * NGUON LA DANH BA NGUOI-DOC (`workflow-catalog.ts`), khong phai mot chuoi go tay o day. Truoc
+   * ban nay moi khuon tu giu mot cau mo ta rieng, va hai ban do da bat dau troi khoi nhau: console
+   * cua ta noi "Nhac Sale sau ban giao", con dashboard cua engine noi mot cau khac han. Cung mot
+   * khuon thi phai doc len giong nhau o ca hai man hinh.
+   *
+   * Khuon danh ba chua biet -> mot object RONG, tuc bo han truong `description`. Xem
+   * `engineWorkflowDescription()`.
+   */
+  private engineDescription(): { description?: string } {
+    const description = engineWorkflowDescription(this.registration.workflowKey);
+    return description ? { description } : {};
   }
 
   /**

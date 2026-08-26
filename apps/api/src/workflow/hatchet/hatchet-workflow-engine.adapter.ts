@@ -6,7 +6,11 @@ import {
   type WorkflowRunReference,
   type WorkflowRunSummary,
 } from '../workflow-engine.port.js';
-import { workflowRunDashboardUrl } from '../workflow-run-dashboard.js';
+import {
+  engineDashboardTarget,
+  workflowRunDashboardUrl,
+  type EngineDashboardTarget,
+} from '../workflow-run-dashboard.js';
 import { HatchetClient, type HatchetClientType } from './hatchet-sdk.js';
 
 /**
@@ -42,7 +46,12 @@ export interface HatchetEngineConfig {
    * De o day duoi dang tuy chon co chu dich: gia tri mac dinh la CO TLS.
    */
   readonly tlsStrategy?: 'none' | 'tls' | 'mtls';
-  /** Goc URL dashboard, chi de dung duong dan "Mo trong Hatchet" cho nguoi van hanh. */
+  /**
+   * Goc URL dashboard, chi de dung duong dan "Mo trong Hatchet" cho nguoi van hanh.
+   *
+   * MOT MINH NO KHONG DU: route cua Hatchet la `/tenants/<tenantId>/runs/<runId>`, nen duong bam
+   * con can tenant cua engine — suy tu `token` o tren, khong phai mot bien cau hinh thu hai.
+   */
   readonly dashboardBaseUrl?: string;
   /** Tien to ten workflow cua engine — lop cach ly moi truong thu hai tren cung mot instance. */
   readonly namespace?: string;
@@ -55,8 +64,21 @@ export class HatchetWorkflowEngineAdapter extends WorkflowEnginePort {
   private readonly logger = new Logger(HatchetWorkflowEngineAdapter.name);
   private client?: HatchetClientType;
 
+  /**
+   * DICH BAM, phan giai MOT LAN luc dung adapter.
+   *
+   * Duong bam can CA goc dashboard LAN tenant cua engine, va tenant do suy tu chinh `token` —
+   * xem `workflow-run-dashboard.ts`. Phan giai o day chu khong trong `dashboardUrl()`: cau hinh
+   * khong doi trong vong doi adapter, con `describeRun` thi duoc goi mot lan cho MOI lan chay.
+   */
+  private readonly dashboard: EngineDashboardTarget | undefined;
+
   constructor(private readonly config: HatchetEngineConfig) {
     super();
+    // Doc tu tham so `config` chu khong tu `this.config`: thu tu gan cua thuoc tinh tham so va
+    // cua khoi khoi tao truong phu thuoc vao co bien dich, va mot cai `undefined` am tham o day
+    // se bieu hien thanh "nut Mo trong engine bien mat" chu khong thanh mot loi.
+    this.dashboard = engineDashboardTarget(config.dashboardBaseUrl, config.token);
   }
 
   /**
@@ -147,6 +169,6 @@ export class HatchetWorkflowEngineAdapter extends WorkflowEnginePort {
    * dung duong do va no khong duoc phep goi engine chi de xin mot cai link.
    */
   private dashboardUrl(engineRunId: string): string | undefined {
-    return workflowRunDashboardUrl(this.config.dashboardBaseUrl, engineRunId);
+    return workflowRunDashboardUrl(this.dashboard, engineRunId);
   }
 }

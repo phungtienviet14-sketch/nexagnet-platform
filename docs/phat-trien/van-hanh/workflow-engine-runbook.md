@@ -30,6 +30,51 @@ của một lần deploy.
 5. **Bí mật không nằm trong `tenant.json`.** Gói khách chỉ khai `credentialRef` = **tên biến môi trường**.
 6. **Idempotency là của Nexagnet.** Hatchet tự công bố *at-least-once*; đừng hứa exactly-once ở đâu.
 7. **Lịch sử run KHÔNG phải kho lưu trữ** — mặc định bị xoá sau 30 ngày (§6).
+8. **Nhãn người đọc là tiếng Việt; định danh máy giữ nguyên tiếng Anh.** Xem §1.1.
+
+### 1.1 Đặt tên: tiếng Việt trước, định danh giữ canonical
+
+Quy tắc chung của cả Debug Control Plane, không riêng workflow:
+
+> **Thứ con người nhìn** → tiếng Việt trước. **Thứ máy định tuyến** → giữ canonical technical
+> identity. Song ngữ khi cần đối chiếu — nhãn tiếng Việt đứng cạnh khoá máy, không thay nó.
+
+"Định danh" ở đây là thứ tham gia routing, đăng ký khuôn, `actionId`, retry, tra cứu run,
+`operationKey`, tương thích phiên bản, hoặc **run đang chờ**. Đổi một trong số đó phải là một
+**version migration** riêng, không phải một thay đổi hiển thị.
+
+Nhãn tiếng Việt là platform-level (`apps/api/src/workflow/workflow-catalog.ts`) — không `if
+tenant === '<khách>'`. Tên nghiệp vụ riêng của một khách, nếu sau này có, đến từ gói khách.
+
+**Bề mặt nào của Hatchet nhận được tiếng Việt** (đo trên SDK `1.28.2` + dashboard `v0.101.27`,
+26/08/2026 — không phải phỏng đoán):
+
+| Bề mặt | Trường | Kết quả |
+|---|---|---|
+| Khuôn | `name` | **định danh** — `sales-handoff-followup.v1`, không dịch |
+| Khuôn | `description` | ✅ tiếng Việt, dashboard render ở trang khuôn |
+| Khuôn | `displayName` | ❌ SDK không có trường này |
+| Bước | `name` | **định danh** (`actionId`) — `load-state`/`wait`/`recheck-mark`, không dịch |
+| Bước | nhãn/mô tả riêng | ❌ `CreateBaseTaskOpts` chỉ có `name` |
+| Run | `displayName` | ❌ `RunOpts` không có; tiêu đề run do engine tự sinh |
+| Run | `additionalMetadata` | ⛔ **cố ý không dùng** — túi đó là danh sách trắng hình dạng định danh (`SLUG_LIKE`) trong `buildWorkflowMetadata()`; nhét văn bản tự do vào buộc phải nới lỏng chính cổng đang chặn PII |
+| Log của bước | `ctx.logger` | ✅ mỗi bước tự in `[Bước] <nhãn tiếng Việt>`, hiện ở tab **Logs** của run |
+
+Hệ quả phải nói thẳng khi báo cáo: **thẻ bước trên dashboard vẫn chỉ hiện chuỗi máy.** Muốn khác
+đi thì phải nâng cấp hoặc fork frontend Hatchet — cả hai đều nằm ngoài phạm vi hiển thị.
+
+### 1.2 Đường bấm sang một lần chạy
+
+Route canonical của dashboard (đọc từ `frontend/app/src/router.tsx` tại thẻ `v0.101.27`):
+
+```
+<goc>/tenants/<tenantId cua Hatchet>/runs/<engineRunId>
+```
+
+`/runs/<id>` **không phải** một route — nó trả `404 Page not found` (đã xảy ra thật 26/08/2026).
+`tenantId` ở đây là tenant **của Hatchet**, không phải khách của Nexagnet; nó được suy từ claim
+`sub` của chính `WORKFLOW_ENGINE_TOKEN`, nên không stack nào phải khai thêm biến. Công thức nằm
+một chỗ: `apps/api/src/workflow/workflow-run-dashboard.ts`.
 
 ---
 
