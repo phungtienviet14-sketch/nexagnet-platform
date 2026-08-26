@@ -12,6 +12,26 @@ import {
 const digest = (character) =>
   `asia-southeast1-docker.pkg.dev/example/netviet/app@sha256:${character.repeat(64)}`;
 
+const secretInventoryOutput = (status = 'nonempty|0|0') =>
+  Array.from({ length: 13 }, (_, index) => `${index}|${status}`).join('\n') + '\n';
+
+function collectorEnv(rawGroups, overrides = {}) {
+  return {
+    TENANT: 'ultty',
+    ENVIRONMENT: 'gd1-test',
+    GCP_PROJECT_ID: 'example',
+    GCP_REGION: 'asia-southeast1',
+    GCP_ZONE: 'asia-southeast1-b',
+    VM_NAME: 'netviet',
+    GIT_SHA: 'a'.repeat(40),
+    GITHUB_REF: 'refs/heads/main',
+    GD1_TEST_TARGET_CONFIRMED: '1',
+    GD1_TEST_CI_CONCLUSION: 'success',
+    GD1_TEST_APPROVED_GROUP_HASHES: rawGroups.map(hashZaloGroupId).join(','),
+    ...overrides,
+  };
+}
+
 function validInput() {
   const secretSuffixes = [
     'postgres-admin-password',
@@ -122,19 +142,7 @@ test('collector builds a validated redacted snapshot from live read-only probes'
   const rawGroups = ['5418371951945064288', '6732452832330077759'];
   const appImage = digest('d');
   const flowiseImage = digest('e');
-  const env = {
-    TENANT: 'ultty',
-    ENVIRONMENT: 'gd1-test',
-    GCP_PROJECT_ID: 'example',
-    GCP_REGION: 'asia-southeast1',
-    GCP_ZONE: 'asia-southeast1-b',
-    VM_NAME: 'netviet',
-    GIT_SHA: 'a'.repeat(40),
-    GITHUB_REF: 'refs/heads/main',
-    GD1_TEST_TARGET_CONFIRMED: '1',
-    GD1_TEST_CI_CONCLUSION: 'success',
-    GD1_TEST_APPROVED_GROUP_HASHES: rawGroups.map(hashZaloGroupId).join(','),
-  };
+  const env = collectorEnv(rawGroups);
   const run = async (program, args) => {
     commands.push([program, ...args].join(' '));
     const commandText = args.join(' ');
@@ -160,7 +168,7 @@ test('collector builds a validated redacted snapshot from live read-only probes'
     if (commandText.includes('runtime_value APP_IMAGE')) return `${appImage}\n`;
     if (commandText.includes('runtime_value FLOWISE_IMAGE')) return `${flowiseImage}\n`;
     if (commandText.includes('secrets versions list')) return '1\n';
-    if (commandText.includes('secrets versions access')) return 'nonempty|0|0\n';
+    if (commandText.includes('secrets versions access')) return secretInventoryOutput();
     if (commandText.includes('smoke-test.mjs')) return 'Pilot smoke OK\n';
     throw new Error(`unexpected command: ${commandText}`);
   };
@@ -176,20 +184,157 @@ test('collector builds a validated redacted snapshot from live read-only probes'
   assert.deepEqual(result.input.deployment.observedAllowedGroups, rawGroups.map(hashZaloGroupId));
   const commandLog = commands.join('\n');
   assert.match(commandLog, /smoke-test\.mjs/);
+  assert.match(commandLog, /sudo -n true/);
+  assert.match(commandLog, /sudo -n test -f/);
+  const privilegedRuntimeProbes = commands.filter((command) =>
+    [
+      'loadEnv',
+      'zalo-allowed-groups.json',
+      'zalo-cred.json',
+      'runtime_value APP_IMAGE',
+      'runtime_value FLOWISE_IMAGE',
+      'smoke-test.mjs',
+    ].some((marker) => command.includes(marker)),
+  );
+  assert.equal(privilegedRuntimeProbes.length, 6);
+  for (const command of privilegedRuntimeProbes) assert.match(command, /sudo -n bash -c/);
   for (const rawGroup of rawGroups) assert.doesNotMatch(commandLog, new RegExp(rawGroup));
+  const secretInventoryProbes = commands.filter((command) =>
+    command.includes('secrets versions access'),
+  );
+  assert.equal(
+    secretInventoryProbes.length,
+    1,
+    'the full secret inventory must use one IAP session, not one tunnel per secret',
+  );
+});
+
+test('collector reports IAP transport failure instead of inventing missing secrets', async () => {
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = collectorEnv(rawGroups);
+  const run = async (_program, args) => {
+    const commandText = args.join(' ');
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      return 'absent\n';
+    }
+    if (commandText.includes('secrets versions access')) {
+      throw new Error("IAP tunnel failed: 4033 'not authorized'");
+    }
+    throw new Error(`unexpected command: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /preflight collection failed.*secret inventory.*transport/i);
+  assert.doesNotMatch(result.errors.join('\n'), /secret #\d+ does not exist/);
+});
+
+test('collector does not classify a stack-probe transport failure as first release', async () => {
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = collectorEnv(rawGroups);
+  const run = async (_program, args) => {
+    const commandText = args.join(' ');
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      throw new Error("IAP tunnel failed: 4033 'not authorized'");
+    }
+    throw new Error(`unexpected command: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.plan, undefined);
+  assert.match(result.errors.join('\n'), /preflight collection failed.*stack existence.*transport/i);
+});
+
+test('collector rejects an incomplete existing stack instead of treating it as first release', async () => {
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = collectorEnv(rawGroups);
+  const run = async (_program, args) => {
+    const commandText = args.join(' ');
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('sudo -n test -f')) {
+      return 'incomplete\n';
+    }
+    throw new Error(`unexpected command: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.plan, undefined);
+  assert.match(result.errors.join('\n'), /stack existence probe returned invalid metadata/i);
+});
+
+test('collector rejects shell metacharacters before starting any remote probe', async () => {
+  let probeCount = 0;
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const result = await collectGd1TestPreflight({
+    env: collectorEnv(rawGroups, {
+      GCP_PROJECT_ID: "example'; touch /tmp/injected; echo '",
+    }),
+    run: async () => {
+      probeCount += 1;
+      throw new Error('must not run');
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(probeCount, 0);
+  assert.match(result.errors.join('\n'), /GCP_PROJECT_ID contains unsafe characters/);
+});
+
+test('collector rejects incomplete batched secret evidence', async () => {
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = collectorEnv(rawGroups);
+  const run = async (_program, args) => {
+    const commandText = args.join(' ');
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      return 'absent\n';
+    }
+    if (commandText.includes('secrets versions access')) {
+      return secretInventoryOutput().split('\n').filter((line) => !line.startsWith('10|')).join('\n');
+    }
+    throw new Error(`unexpected command: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /preflight collection failed.*invalid metadata/i);
+  assert.doesNotMatch(result.errors.join('\n'), /secret #10 does not exist/);
+});
+
+test('collector keeps a real denied secret fail-closed after batching', async () => {
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = collectorEnv(rawGroups);
+  const run = async (_program, args) => {
+    const commandText = args.join(' ');
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      return 'absent\n';
+    }
+    if (commandText.includes('secrets versions access')) {
+      return secretInventoryOutput().replace('9|nonempty|0|0', '9|denied|0|0');
+    }
+    throw new Error(`unexpected command: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+  const errors = result.errors.join('\n');
+
+  assert.equal(result.ok, false);
+  assert.match(errors, /required secret #10 does not exist/);
+  assert.match(errors, /VM cannot read required secret #10/);
 });
 
 test('collector fails closed without approved TEST group hashes', async () => {
   const result = await collectGd1TestPreflight({
-    env: {
-      TENANT: 'ultty',
-      ENVIRONMENT: 'gd1-test',
-      GCP_PROJECT_ID: 'example',
-      GIT_SHA: 'a'.repeat(40),
-      GITHUB_REF: 'refs/heads/main',
-      GD1_TEST_TARGET_CONFIRMED: '1',
-      GD1_TEST_CI_CONCLUSION: 'success',
-    },
+    env: collectorEnv([]),
     run: async () => {
       throw new Error('collector should not probe remote state before static inputs are complete');
     },
@@ -209,6 +354,21 @@ test('deploy-ci runs Ultty GD1-test preflight before any image build or push', a
   assert.ok(preflightIndex < buildIndex, 'preflight must run before app image build');
   assert.ok(preflightIndex < pushIndex, 'preflight must run before image push');
   assert.match(deployCi, /\$\{DEPLOYMENT_ENVIRONMENT\}"\s*==\s*"gd1-test"/);
+  assert.ok(deployCi.indexOf('GCP_PROJECT_ID khong hop le') < buildIndex);
+  assert.ok(deployCi.indexOf('GIT_SHA phai la full SHA') < buildIndex);
+});
+
+test('deploy-ci uses one archive transfer and one post-transfer IAP session', async () => {
+  const deployCi = await readFile(new URL('./deploy-ci.sh', import.meta.url), 'utf8');
+  const afterArchive = deployCi.slice(deployCi.indexOf('tar -czf'));
+
+  assert.equal((afterArchive.match(/\bscp_vm\s+"/g) ?? []).length, 1);
+  assert.equal((afterArchive.match(/\bssh_vm\s+"/g) ?? []).length, 1);
+  assert.match(afterArchive, /scp_vm "\$\{staging\}\/payload\.tar\.gz" "\$\{remote_archive\}"/);
+  assert.match(
+    afterArchive,
+    /ssh_vm "install -d[^\n]+tar -xzf[^\n]+rm -f[^\n]+deploy-remote\.sh/,
+  );
 });
 
 // Cong "chi ultty moi co gd1-test" khong con nam trong deploy-ci.sh: deploy-ci gate theo MOI
@@ -227,19 +387,7 @@ test('the gd1-test runtime profile is refused for any tenant other than Ultty', 
 
 test('a first release is collectable and names what it has not proved yet', async () => {
   const rawGroups = ['5418371951945064288', '6732452832330077759'];
-  const env = {
-    TENANT: 'ultty',
-    ENVIRONMENT: 'gd1-test',
-    GCP_PROJECT_ID: 'example',
-    GCP_REGION: 'asia-southeast1',
-    GCP_ZONE: 'asia-southeast1-b',
-    VM_NAME: 'netviet',
-    GIT_SHA: 'a'.repeat(40),
-    GITHUB_REF: 'refs/heads/main',
-    GD1_TEST_TARGET_CONFIRMED: '1',
-    GD1_TEST_CI_CONCLUSION: 'success',
-    GD1_TEST_APPROVED_GROUP_HASHES: rawGroups.map(hashZaloGroupId).join(','),
-  };
+  const env = collectorEnv(rawGroups);
   const run = async (program, args) => {
     const commandText = args.join(' ');
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
@@ -248,7 +396,7 @@ test('a first release is collectable and names what it has not proved yet', asyn
       return 'absent\n';
     }
     if (commandText.includes('secrets versions list')) return '1\n';
-    if (commandText.includes('secrets versions access')) return 'nonempty|0|0\n';
+    if (commandText.includes('secrets versions access')) return secretInventoryOutput();
     throw new Error(`probe must not run against a stack that does not exist: ${commandText}`);
   };
 
@@ -268,16 +416,7 @@ test('a first release is collectable and names what it has not proved yet', asyn
 test('a first release still targets a stack of its own, never the live one', async () => {
   const identityProbes = [];
   const rawGroups = ['5418371951945064288', '6732452832330077759'];
-  const env = {
-    TENANT: 'ultty',
-    ENVIRONMENT: 'gd1-test',
-    GCP_PROJECT_ID: 'example',
-    GIT_SHA: 'a'.repeat(40),
-    GITHUB_REF: 'refs/heads/main',
-    GD1_TEST_TARGET_CONFIRMED: '1',
-    GD1_TEST_CI_CONCLUSION: 'success',
-    GD1_TEST_APPROVED_GROUP_HASHES: rawGroups.map(hashZaloGroupId).join(','),
-  };
+  const env = collectorEnv(rawGroups);
   const run = async (program, args) => {
     const commandText = args.join(' ');
     identityProbes.push(commandText);
@@ -286,7 +425,7 @@ test('a first release still targets a stack of its own, never the live one', asy
       return 'absent\n';
     }
     if (commandText.includes('secrets versions list')) return '1\n';
-    if (commandText.includes('secrets versions access')) return 'nonempty|0|0\n';
+    if (commandText.includes('secrets versions access')) return secretInventoryOutput();
     throw new Error(`unexpected: ${commandText}`);
   };
 

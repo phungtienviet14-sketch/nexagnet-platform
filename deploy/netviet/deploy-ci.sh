@@ -46,6 +46,34 @@ CATALOG_ASSETS_DIR="${REPOSITORY_ROOT}/catalog-assets"
   echo "DEPLOYMENT_TARGET_ID khong hop le: '${DEPLOYMENT_TARGET_ID}'." >&2
   exit 64
 }
+[[ "${PROJECT_ID}" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || {
+  echo 'GCP_PROJECT_ID khong hop le.' >&2
+  exit 64
+}
+[[ "${REGION}" =~ ^[a-z]+-[a-z0-9]+[0-9]$ ]] || {
+  echo 'GCP_REGION khong hop le.' >&2
+  exit 64
+}
+[[ "${ZONE}" =~ ^[a-z]+-[a-z0-9]+[0-9]-[a-z]$ ]] || {
+  echo 'GCP_ZONE khong hop le.' >&2
+  exit 64
+}
+[[ "${VM}" =~ ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || {
+  echo 'VM_NAME khong hop le.' >&2
+  exit 64
+}
+[[ "${PRIMARY_TENANT}" =~ ^[a-z0-9-]+$ ]] || {
+  echo 'PRIMARY_TENANT khong hop le.' >&2
+  exit 64
+}
+[[ "${WORKFLOW_ENGINE:-off}" =~ ^(on|off)$ ]] || {
+  echo 'WORKFLOW_ENGINE phai la on hoac off.' >&2
+  exit 64
+}
+[[ "${GIT_SHA_VALUE}" =~ ^[a-f0-9]{40}$ ]] || {
+  echo 'GIT_SHA phai la full SHA 40 ky tu chu thuong.' >&2
+  exit 64
+}
 # stack-identity.mjs la ESM, nen goi qua --input-type=module thay vi require().
 STACK_SLUG="$(printf '%s' "import { resolveStackSlug } from './deploy/netviet/stack-identity.mjs';
 process.stdout.write(resolveStackSlug(process.env.TENANT_SLUG, process.env.DEPLOYMENT_ENVIRONMENT));" \
@@ -131,8 +159,13 @@ public_ip="$(gcloud compute addresses describe netviet-public-ip \
   echo 'Chua co static IP netviet-public-ip — chay deploy.ps1 de bootstrap truoc.' >&2
   exit 1
 }
+[[ "${public_ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || {
+  echo 'Static IP tra ve khong hop le.' >&2
+  exit 1
+}
 
 remote_parent="/tmp/netviet-deploy-$(date +%s)"
+remote_archive="${remote_parent}.tar.gz"
 ssh_vm() {
   gcloud compute ssh "${VM}" \
     --zone "${ZONE}" \
@@ -182,9 +215,7 @@ fi
 tar -czf "${staging}/payload.tar.gz" --exclude='./netviet/.runtime' -C "${staging}/payload" .
 echo "Goi trien khai: $(du -h "${staging}/payload.tar.gz" | cut -f1), $(find "${staging}/payload" -type f | wc -l) tep." >&2
 
-ssh_vm "install -d -m 0700 '${remote_parent}'"
-scp_vm "${staging}/payload.tar.gz" "${remote_parent}/payload.tar.gz"
-ssh_vm "tar -xzf '${remote_parent}/payload.tar.gz' -C '${remote_parent}' && rm -f '${remote_parent}/payload.tar.gz'"
+scp_vm "${staging}/payload.tar.gz" "${remote_archive}"
 
 # SO NHAT KY TIN HIEU. Tang tren VM phat ra `##DEPLOY-SIGNAL##` khi di qua tung tang; o day ta
 # CHEP LAI dong chay do vao mot tep de phan xu, va van cho no in ra log job nhu cu.
@@ -195,7 +226,7 @@ DEPLOY_SIGNAL_LOG="${DEPLOY_SIGNAL_LOG:-${REPOSITORY_ROOT}/deploy-signals.log}"
 DEPLOY_SIGNAL_JSON="${DEPLOY_SIGNAL_JSON:-${REPOSITORY_ROOT}/deploy-signals.json}"
 
 set +e
-ssh_vm "sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
+ssh_vm "install -d -m 0700 '${remote_parent}' && tar -xzf '${remote_archive}' -C '${remote_parent}' && rm -f '${remote_archive}' && sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
   tee "${DEPLOY_SIGNAL_LOG}"
 remote_status="${PIPESTATUS[0]}"
 set -e
