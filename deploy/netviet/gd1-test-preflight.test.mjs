@@ -148,7 +148,7 @@ test('collector builds a validated redacted snapshot from live read-only probes'
     const commandText = args.join(' ');
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
     if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
-      return 'present\n';
+      return 'Generating public/private rsa key pair.\n__NETVIET_STACK_STATE__=present\n';
     }
     if (commandText.includes('loadEnv')) {
       return [
@@ -186,6 +186,7 @@ test('collector builds a validated redacted snapshot from live read-only probes'
   assert.match(commandLog, /smoke-test\.mjs/);
   assert.match(commandLog, /sudo -n true/);
   assert.match(commandLog, /sudo -n test -f/);
+  assert.match(commandLog, /__NETVIET_STACK_STATE__=/);
   const privilegedRuntimeProbes = commands.filter((command) =>
     [
       'loadEnv',
@@ -216,7 +217,7 @@ test('collector reports IAP transport failure instead of inventing missing secre
     const commandText = args.join(' ');
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
     if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
-      return 'absent\n';
+      return '__NETVIET_STACK_STATE__=absent\n';
     }
     if (commandText.includes('secrets versions access')) {
       throw new Error("IAP tunnel failed: 4033 'not authorized'");
@@ -257,7 +258,7 @@ test('collector rejects an incomplete existing stack instead of treating it as f
     const commandText = args.join(' ');
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
     if (commandText.includes('.runtime/secrets.env') && commandText.includes('sudo -n test -f')) {
-      return 'incomplete\n';
+      return '__NETVIET_STACK_STATE__=incomplete\n';
     }
     throw new Error(`unexpected command: ${commandText}`);
   };
@@ -294,7 +295,7 @@ test('collector rejects incomplete batched secret evidence', async () => {
     const commandText = args.join(' ');
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
     if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
-      return 'absent\n';
+      return '__NETVIET_STACK_STATE__=absent\n';
     }
     if (commandText.includes('secrets versions access')) {
       return secretInventoryOutput().split('\n').filter((line) => !line.startsWith('10|')).join('\n');
@@ -316,7 +317,7 @@ test('collector keeps a real denied secret fail-closed after batching', async ()
     const commandText = args.join(' ');
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
     if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
-      return 'absent\n';
+      return '__NETVIET_STACK_STATE__=absent\n';
     }
     if (commandText.includes('secrets versions access')) {
       return secretInventoryOutput().replace('9|nonempty|0|0', '9|denied|0|0');
@@ -393,7 +394,7 @@ test('a first release is collectable and names what it has not proved yet', asyn
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
     // The stack does not exist yet: this is what the probe really returns on a first release.
     if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
-      return 'absent\n';
+      return '__NETVIET_STACK_STATE__=absent\n';
     }
     if (commandText.includes('secrets versions list')) return '1\n';
     if (commandText.includes('secrets versions access')) return secretInventoryOutput();
@@ -422,7 +423,7 @@ test('a first release still targets a stack of its own, never the live one', asy
     identityProbes.push(commandText);
     if (commandText.includes('addresses describe')) return '203.0.113.10\n';
     if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
-      return 'absent\n';
+      return '__NETVIET_STACK_STATE__=absent\n';
     }
     if (commandText.includes('secrets versions list')) return '1\n';
     if (commandText.includes('secrets versions access')) return secretInventoryOutput();
