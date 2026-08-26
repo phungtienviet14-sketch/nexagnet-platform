@@ -4,6 +4,10 @@ import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { resolveStackIdentity } from './stack-identity.mjs';
+import {
+  parseSecretInventory,
+  remoteSecretInventoryCommand,
+} from './gd1-test-secret-inventory.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -44,6 +48,7 @@ const SHA_PATTERN = /^[a-f0-9]{40}$/;
 const GROUP_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const SAFE_IDENTIFIER = /^[a-z0-9][a-z0-9_-]*$/;
 const SAFE_GROUP_ID = /^[A-Za-z0-9_-]+$/;
+const SAFE_REMOTE_TOKEN = /^[a-z0-9][a-z0-9-]*$/;
 const DEFAULT_GCP_PROJECT_ID = 'netviet-host-968934832433';
 const DEFAULT_GCP_REGION = 'asia-southeast1';
 const DEFAULT_GCP_ZONE = 'asia-southeast1-b';
@@ -110,16 +115,6 @@ function parseZcaSession(output) {
   };
 }
 
-function parseSecretProbe(output) {
-  const [nonEmpty, carriageReturn, lineFeed] = output.trim().split('|');
-  return {
-    accessible: nonEmpty === 'nonempty' || nonEmpty === 'empty',
-    nonEmpty: nonEmpty === 'nonempty',
-    hasCarriageReturn: carriageReturn === '1',
-    hasLineFeed: lineFeed === '1',
-  };
-}
-
 function createDefaultRun() {
   return async (program, args) => {
     const { stdout } = await execFileAsync(program, args, {
@@ -147,8 +142,25 @@ function sshArgs(env, command) {
   ];
 }
 
+function singleQuoteShell(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
+function remoteSudoCommand(command) {
+  return `sudo -n bash -c ${singleQuoteShell(command)}`;
+}
+
 function remoteStackExistsCommand(appDir) {
-  return `test -f '${appDir}/.runtime/secrets.env' && echo present || echo absent`;
+  return [
+    'set -euo pipefail',
+    'sudo -n true',
+    `if sudo -n test -f '${appDir}/.runtime/secrets.env'`,
+    'then echo present',
+    `elif sudo -n test -e '${appDir}'`,
+    'then echo incomplete',
+    'else echo absent',
+    'fi',
+  ].join('; ');
 }
 
 function remoteRuntimeCommand(appDir) {
@@ -167,29 +179,29 @@ function remoteRuntimeCommand(appDir) {
     `for (const key of ${JSON.stringify(keys)}) console.log(key + "=" + env[key]);`,
     '})',
   ].join(' ');
-  return [
+  return remoteSudoCommand([
     'set -euo pipefail',
     `cd '${appDir}'`,
     `docker compose --env-file .runtime/secrets.env -f compose.yaml exec -T api node --input-type=module -e '${program}'`,
-  ].join('; ');
+  ].join('; '));
 }
 
 function remoteProviderSmokeCommand(appDir, hostname) {
-  return [
+  return remoteSudoCommand([
     'set -euo pipefail',
     `cd '${appDir}'`,
     'docker compose --env-file .runtime/secrets.env -f compose.yaml --profile tools run --rm --no-deps -T',
     `-e 'PILOT_BASE_URL=https://${hostname}'`,
     "-e 'CHANNEL_MODE=zca'",
     'bootstrap node --input-type=module - < smoke-test.mjs',
-  ].join(' ');
+  ].join(' '));
 }
 
 function remoteAllowedGroupsHashCommand(appDir) {
   // python3, khong phai node: VM host KHONG cai node (da xac minh 20/08/2026) — node chi co ben
   // trong container. Mot probe goi `node` tren host luon that bai va bi doc nham thanh "khong doc
   // duoc", tuc la preflight bao dong gia dung vao dung cho no phai chinh xac nhat.
-  return [
+  return remoteSudoCommand([
     'set -euo pipefail',
     `python3 - <<'PY'`,
     'import hashlib, json, sys',
@@ -205,39 +217,22 @@ function remoteAllowedGroupsHashCommand(appDir) {
     '        sys.exit(67)',
     "    print(hashlib.sha256(group.strip().encode('utf-8')).hexdigest())",
     'PY',
-  ].join('\n');
+  ].join('\n'));
 }
 
 function remoteZcaSessionCommand(appDir) {
-  return `stat -c '%F|%a|%s' '${appDir}/.runtime/zalo/zalo-cred.json'`;
+  return remoteSudoCommand(
+    `stat -c '%F|%a|%s' '${appDir}/.runtime/zalo/zalo-cred.json'`,
+  );
 }
 
 function remoteRuntimeValueCommand(appDir, key) {
-  return [
+  return remoteSudoCommand([
     'set -euo pipefail',
     `cd '${appDir}'`,
     'runtime_value() { sed -n "s/^$1=//p" .runtime/secrets.env | tail -n 1; }',
     `runtime_value ${key}`,
-  ].join('; ');
-}
-
-function remoteSecretProbeCommand(projectId, secretName) {
-  // Chi dung tien ich POSIX co san tren VM (`tr`, `wc`, `stat`) — xem chu thich o
-  // remoteAllowedGroupsHashCommand ve ly do khong dung node o day.
-  // Gia tri secret KHONG bao gio ra stdout: no di vao mot tep tam roi chi co ba con so duoc in.
-  return [
-    'set -euo pipefail',
-    "probe=$(mktemp)",
-    'trap \'rm -f -- "$probe"\' EXIT',
-    `gcloud secrets versions access latest --project '${projectId}' --secret '${secretName}' >"$probe" 2>/dev/null || { echo 'denied|0|0'; exit 0; }`,
-    'bytes=$(stat -c %s "$probe")',
-    "cr=$(tr -dc '\\r' <\"$probe\" | wc -c)",
-    "lf=$(tr -dc '\\n' <\"$probe\" | wc -c)",
-    'if [ "$bytes" -gt 0 ]; then non=nonempty; else non=empty; fi',
-    'if [ "$cr" -gt 0 ]; then crf=1; else crf=0; fi',
-    'if [ "$lf" -gt 0 ]; then lff=1; else lff=0; fi',
-    'echo "$non|$crf|$lff"',
-  ].join('; ');
+  ].join('; '));
 }
 
 async function safeRun(run, program, args) {
@@ -272,17 +267,26 @@ async function safeRun(run, program, args) {
  */
 async function collectSecretMetadata({ env, run, stackSlug }) {
   const projectId = env.GCP_PROJECT_ID ?? DEFAULT_GCP_PROJECT_ID;
-  const secrets = [];
-  for (const suffix of REQUIRED_SECRET_SUFFIXES) {
-    const name = `zalo-${stackSlug}-${suffix}`;
-    const probed = await safeRun(
-      run,
+  const names = REQUIRED_SECRET_SUFFIXES.map((suffix) => `zalo-${stackSlug}-${suffix}`);
+  let stdout;
+  try {
+    stdout = await run(
       'gcloud',
-      sshArgs(env, remoteSecretProbeCommand(projectId, name)),
+      sshArgs(env, remoteSecretInventoryCommand(projectId, names)),
     );
-    const probe = probed.ok ? parseSecretProbe(probed.stdout) : {};
-    const readable = probed.ok && probe.accessible === true;
-    secrets.push({
+  } catch {
+    throw new Error('required secret inventory probe transport failed');
+  }
+  let probes;
+  try {
+    probes = parseSecretInventory(stdout, names.length);
+  } catch {
+    throw new Error('required secret inventory probe returned invalid metadata');
+  }
+  return names.map((name, index) => {
+    const probe = probes[index];
+    const readable = probe.accessible === true;
+    return {
       name,
       exists: readable,
       enabledVersion: readable,
@@ -290,9 +294,8 @@ async function collectSecretMetadata({ env, run, stackSlug }) {
       nonEmpty: probe.nonEmpty === true,
       hasCarriageReturn: probe.hasCarriageReturn === true,
       hasLineFeed: probe.hasLineFeed === true,
-    });
-  }
-  return secrets;
+    };
+  });
 }
 
 function staticCollectionErrors(env, approvedAllowedGroups) {
@@ -307,6 +310,14 @@ function staticCollectionErrors(env, approvedAllowedGroups) {
   }
   for (const hash of approvedAllowedGroups) {
     if (!GROUP_HASH_PATTERN.test(hash)) errors.push('approved TEST group hashes must be sha256 hex');
+  }
+  for (const [name, value] of [
+    ['GCP_PROJECT_ID', env.GCP_PROJECT_ID ?? DEFAULT_GCP_PROJECT_ID],
+    ['GCP_REGION', env.GCP_REGION ?? DEFAULT_GCP_REGION],
+    ['GCP_ZONE', env.GCP_ZONE ?? DEFAULT_GCP_ZONE],
+    ['VM_NAME', env.VM_NAME ?? DEFAULT_VM_NAME],
+  ]) {
+    if (!SAFE_REMOTE_TOKEN.test(value)) errors.push(`${name} contains unsafe characters`);
   }
   return errors;
 }
@@ -363,12 +374,20 @@ export async function collectGd1TestPreflight(options = {}) {
     // FIRST RELEASE vs REDEPLOY. A brand new stack has no runtime, no session and no previous
     // image, so probing it would fail for the wrong reason. Detect it explicitly rather than
     // letting each probe fail and be read as a safety violation.
-    const stackProbe = await safeRun(
-      run,
-      'gcloud',
-      sshArgs(env, remoteStackExistsCommand(identity.appDir)),
-    );
-    const firstRelease = !(stackProbe.ok && stackProbe.stdout.trim() === 'present');
+    let stackProbeOutput;
+    try {
+      stackProbeOutput = await run(
+        'gcloud',
+        sshArgs(env, remoteStackExistsCommand(identity.appDir)),
+      );
+    } catch {
+      throw new Error('runtime stack existence probe transport failed');
+    }
+    const stackState = stackProbeOutput.trim();
+    if (!['present', 'absent'].includes(stackState)) {
+      throw new Error('runtime stack existence probe returned invalid metadata');
+    }
+    const firstRelease = stackState === 'absent';
 
     const runtime = firstRelease
       ? { ...PLANNED_GD1_TEST_RUNTIME }
