@@ -1,5 +1,12 @@
 # Observability — Audit hiện trạng & quyết định công nghệ
 
+> **STATUS: HISTORICAL SNAPSHOT**
+> **AS OF:** 2026-08-21 (`eafaa88`)
+> **SUPERSEDED BY:** [tech-radar.md](tech-radar.md) · [reference-platform-stack.md](reference-platform-stack.md)
+>
+> Giữ nguyên để tra cứu lịch sử nghiên cứu và quyết định. **Không dùng làm trạng thái hiện tại.**
+> Chỗ nào tài liệu này mâu thuẫn với bản canonical ở trên, bản canonical đúng.
+
 > **Phạm vi:** nền tảng Nexagnet (đa khách hàng), không phải riêng Ultty. Ultty GD1-test là tenant
 > đầu tiên dùng để kiểm chứng bằng luồng thật.
 >

@@ -1,5 +1,11 @@
 # KIẾN TRÚC TỔNG QUÁT — NỀN TẢNG NETVIET ĐA KHÁCH
 
+> **Bổ sung 27/08/2026 — bốn mặt phẳng nền tảng.** Kiến trúc core/tenant mô tả ở đây được đặt
+> vào bốn mặt phẳng (tenant data · shared control · AI engineering · agentic ops) tại
+> [reference-platform-stack.md §2](reference-platform-stack.md#2-bốn-mặt-phẳng-của-nền-tảng).
+> Điều kiện để một công nghệ được coi là **ADOPT** — và stack tham chiếu `ultty-gd1-test` hiện
+> đứng ở đâu — nằm ở cùng tài liệu đó. Phân loại công nghệ: [tech-radar.md](tech-radar.md).
+
 > **Vai trò:** tài liệu kiến trúc tổng quát cao nhất của hệ thống. File này mô tả mô hình sản phẩm dùng chung cho mọi khách hàng: cách chia layer/module, ranh giới core/tenant, runtime tenant, cách ly dữ liệu, port/adapter, source-of-truth và các bất biến bảo mật.
 >
 > **Không chứa trạng thái tiến độ.** Mọi trạng thái đã xong/chưa làm/blocked nằm duy nhất ở `tong-quan.md`. File này cũng không ghi lịch sử quyết định, không mô tả riêng khách nào và không dùng ví dụ dữ liệu thương mại của khách.

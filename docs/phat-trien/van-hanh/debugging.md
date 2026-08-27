@@ -1,5 +1,20 @@
 # Runbook: lần vết một nghiệp vụ chạy sai
 
+> **⚠️ GIỚI HẠN ĐANG CÓ THẬT (27/08/2026): bộ đệm trace KHÔNG BỀN.**
+> `RecentTracesSink` giữ trace trong một `Map` **trong tiến trình**. Khởi động lại API — kể cả
+> một lần deploy bình thường — là **mất toàn bộ lượt cũ**, và Debug View sẽ báo đúng điều đó
+> thay vì bịa ra dữ liệu. Vì vậy: **điều tra một sự cố trước khi deploy lại**, hoặc chấp nhận
+> phải lần theo log máy chủ.
+>
+> Đây là khoảng trống chính mà milestone **REFERENCE STACK PARITY v0** phải đóng — xem
+> [platform-roadmap-v2.md P2](../ke-hoach/platform-roadmap-v2.md#p2--reference-stack-parity-v0--milestone-triển-khai-kế-tiếp).
+>
+> **Đã đổi theo hướng tốt hơn:** danh tính release nay đọc từ **manifest** được mount readonly
+> (`RELEASE_MANIFEST_PATH=/runtime/release.json`), không còn lùi về `RELEASE_GIT_SHA`. Permalink
+> "Mở mã nguồn" dùng đúng SHA 40 ký tự của bản đang chạy. Lưu ý khi tra bằng API:
+> `sourceContext` nằm ở **từng lượt** (`turns[N].view.sourceContext`), không ở cấp cao nhất —
+> cấp cao nhất chỉ có `release` dạng ngắn 12 ký tự để hiển thị.
+
 > **Viết cho người mới vào dự án.** Không cần biết trước kiến trúc, không cần đọc source.
 > Nếu bạn phải mở source để biết một tin nhắn đã đi qua đâu, tài liệu này đã thất bại — hãy báo.
 >

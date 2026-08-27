@@ -1,5 +1,12 @@
 # Prompt phiên 11 — nối `RUN_WORKFLOW_IT` vào CI
 
+> **STATUS: HISTORICAL SNAPSHOT**
+> **AS OF:** 2026-08-24 (`8c2b0a0`)
+> **SUPERSEDED BY:** [platform-roadmap-v2.md](platform-roadmap-v2.md)
+>
+> Giữ nguyên để tra cứu lịch sử nghiên cứu và quyết định. **Không dùng làm trạng thái hiện tại.**
+> Chỗ nào tài liệu này mâu thuẫn với bản canonical ở trên, bản canonical đúng.
+
 > Dán toàn bộ phần dưới vào phiên Claude mới. Nguồn gốc: phiên 10 (24/08/2026).
 
 ---

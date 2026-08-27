@@ -8,6 +8,20 @@ Tài liệu tách theo **tuổi thọ và chủ sở hữu**, không theo địn
 | [`phat-trien/`](phat-trien/README.md) | **Công việc.** Đang làm gì, xong gì, kiểm thử ra sao | Liên tục | [`phat-trien/ke-hoach/tong-quan.md`](phat-trien/ke-hoach/tong-quan.md) |
 | [`khach-hang/`](khach-hang/README.md) | **Theo khách.** Hồ sơ nguồn, trao đổi, nghiệp vụ, bản bàn giao | Theo từng khách | [`khach-hang/ultty/README.md`](khach-hang/ultty/README.md) |
 
+### Bốn tài liệu NỀN TẢNG mới (27/08/2026)
+
+| File | Là gì |
+|---|---|
+| [`kien-truc/reference-platform-stack.md`](kien-truc/reference-platform-stack.md) | **Hợp đồng stack tham chiếu** — `ultty-gd1-test` phải chứng minh được gì, thang parity L0–L5, 4 mặt phẳng nền tảng, **CANONICAL CURRENT TRUTH**, known risks |
+| [`kien-truc/tech-radar.md`](kien-truc/tech-radar.md) | **ADOPT/TRIAL/ASSESS/HOLD/AVOID** kèm bằng chứng, và **FRAMEWORK DECISION** |
+| [`kien-truc/agentic-ops.md`](kien-truc/agentic-ops.md) | Bốn mức tự động hoá vận hành — **định hướng dài hạn, chưa triển khai gì** |
+| [`phat-trien/ke-hoach/platform-roadmap-v2.md`](phat-trien/ke-hoach/platform-roadmap-v2.md) | Lộ trình **nền tảng** P0→P15; mỗi phase có WHY/ENTRY/DELIVERABLES/RUNTIME PROOF/EXIT + **DO NOT DO** |
+
+> Trạng thái hiện tại của nền tảng: xem
+> [`reference-platform-stack.md §6`](kien-truc/reference-platform-stack.md#6-canonical-current-truth-27082026).
+> Trạng thái kế hoạch (✅/⬜) vẫn chỉ ở
+> [`tong-quan.md`](phat-trien/ke-hoach/tong-quan.md) — nay có thêm **§12** cho tầng nền tảng.
+
 ### Ba tài liệu trong `kien-truc/` khác vai nhau
 
 | File | Là gì | Không phải gì |

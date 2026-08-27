@@ -1,5 +1,12 @@
 # Bàn giao — Nexagnet × Hatchet, phiên 22/08/2026 (phiên 3)
 
+> **STATUS: HISTORICAL SNAPSHOT**
+> **AS OF:** 2026-08-24 (`2c9e006`)
+> **SUPERSEDED BY:** [tong-quan.md §12](tong-quan.md#12-trạng-thái-nền-tảng--documentation-truth-reset-27082026)
+>
+> Giữ nguyên để tra cứu lịch sử nghiên cứu và quyết định. **Không dùng làm trạng thái hiện tại.**
+> Chỗ nào tài liệu này mâu thuẫn với bản canonical ở trên, bản canonical đúng.
+
 > Nhánh `feat/hoi-thoai-chot-don-main` · HEAD đầu phiên `f4ed3ee` → cuối phiên `3e21443`
 > Kế hoạch: [.claude/plans/hatchet-foundation.plan.md](../../../.claude/plans/hatchet-foundation.plan.md)
 > Runbook: [workflow-engine-runbook.md](../van-hanh/workflow-engine-runbook.md)
