@@ -145,9 +145,6 @@ test('provider smoke mang dung ngu canh runtime: base URL cua tenant va kenh da 
  * Mot cong nghiep vu co N duong tu choi thi phai phan biet duoc N ly do (rule ECC code-review).
  */
 
-const LIVE_AI_SIGNAL =
-  '##DEPLOY-SIGNAL## {"layer":"liveAiSmoke","status":"fail","reason":"LIVE_AI_FIXTURE_MISMATCH"}';
-
 function collectorHarness({ smokeBehaviour }) {
   const rawGroups = ['5418371951945064288', '6732452832330077759'];
   const env = {
@@ -205,34 +202,95 @@ function smokeExitError(stdout) {
   return error;
 }
 
-test('probe khong chay duoc thi bao PROVIDER_SMOKE_HARNESS_ERROR, khong do loi cho provider', async () => {
+/**
+ * SMOKE DA TU PHAN LOAI RESULT CUA NO — PREFLIGHT KHONG DUOC DAT RA MOT PHAN LOAI THU HAI.
+ *
+ * `smoke-test.mjs` phat ra `status` gom `pass | fail | unavailable | timeout | skipped`:
+ *   - `unavailable` / `timeout` -> phu thuoc NGOAI chua san sang (provider chet, treo, 5xx).
+ *   - `fail`                    -> smoke DA hoi duoc provider va DA nhan cau tra loi co cau truc;
+ *                                  chi la ket qua khong khop fixture (model doan sai, hoac hop dong
+ *                                  nghiep vu cua BAN DANG CHAY lech).
+ *
+ * Cong preflight chi duoc chan o ve dau. Ve sau thuoc ve tang live-AI SAU deploy, va tang do CO Y
+ * la tin hieu MEM ("mot lan model phan loai sai la mot su that ve MODEL", deploy-stack.sh). Neu
+ * preflight chan ca ve sau thi mot sai lech cua ban CU se khoa luon duong day ban VA len — dung
+ * bang chung 27/08/2026: `LIVE_AI_ORDER_STATUS_UNEXPECTED` tren release `f392f07e` chan moi deploy.
+ */
+
+const signalLine = (status, reason) =>
+  `##DEPLOY-SIGNAL## ${JSON.stringify({ layer: 'liveAiSmoke', status, reason, detail: {} })}`;
+
+const BLOCKING_CASES = [
+  ['unavailable', 'LIVE_AI_PROVIDER_UNAVAILABLE', 'provider tra 5xx hoac khong noi duoc'],
+  ['timeout', 'LIVE_AI_TIMEOUT', 'provider treo qua han cho'],
+  ['fail', 'LIVE_AI_HARNESS_ERROR', 'harness hong — khong chung minh duoc gi ve provider'],
+];
+
+for (const [status, reason, why] of BLOCKING_CASES) {
+  test(`CHAN: ${reason} — ${why}`, async () => {
+    const { env, run } = collectorHarness({
+      smokeBehaviour: () => {
+        throw smokeExitError(`${signalLine(status, reason)}\n`);
+      },
+    });
+
+    const result = await collectGd1TestPreflight({ env, run });
+
+    assert.equal(result.ok, false, 'phu thuoc ngoai chua san sang thi phai chan deploy');
+    assert.match(result.errors.join('\n'), new RegExp(reason));
+  });
+}
+
+const NON_BLOCKING_CASES = [
+  ['fail', 'LIVE_AI_ORDER_STATUS_UNEXPECTED', 'hop dong nghiep vu cua ban DANG CHAY, khong phai provider'],
+  ['fail', 'LIVE_AI_INTENT_MISMATCH', 'chat luong model — tang live-AI sau deploy moi phan xu'],
+  ['fail', 'LIVE_AI_EXTRACTION_MISMATCH', 'chat luong model'],
+];
+
+for (const [status, reason, why] of NON_BLOCKING_CASES) {
+  test(`KHONG CHAN nhung PHAI BAO: ${reason} — ${why}`, async () => {
+    const { env, run } = collectorHarness({
+      smokeBehaviour: () => {
+        throw smokeExitError(`${signalLine(status, reason)}\n`);
+      },
+    });
+
+    const result = await collectGd1TestPreflight({ env, run });
+
+    assert.equal(
+      result.ok,
+      true,
+      `sai lech nghiep vu cua ban cu khong duoc khoa duong deploy: ${result.errors.join('\n')}`,
+    );
+    // Khong chan KHONG co nghia la im lang: no phai nam trong danh sach "chua chung minh".
+    assert.ok(
+      result.plan.deferredToPostDeploy.some((item) => item.includes(reason)),
+      `phai bao ${reason} o muc chua-chung-minh, thay: ${JSON.stringify(result.plan.deferredToPostDeploy)}`,
+    );
+  });
+}
+
+test('CHAN: smoke khong phat mot tin hieu nao — khong the ket luan gi ve provider', async () => {
   const { env, run } = collectorHarness({
     smokeBehaviour: () => {
-      // Khong mot tin hieu nao duoc phat ra: container chua kip chay, hoac lenh sai cu phap.
       throw smokeExitError('');
     },
   });
 
   const result = await collectGd1TestPreflight({ env, run });
-  const report = result.errors.join('\n');
 
   assert.equal(result.ok, false);
-  assert.match(report, /PROVIDER_SMOKE_HARNESS_ERROR/);
-  assert.doesNotMatch(report, /PROVIDER_FIXTURE_MISMATCH/);
+  assert.match(result.errors.join('\n'), /PROVIDER_SMOKE_HARNESS_ERROR/);
 });
 
-test('provider tra loi sai fixture thi bao PROVIDER_FIXTURE_MISMATCH — day moi la loi cua model', async () => {
+test('smoke dat fixture thi khong con gi bi hoan lai', async () => {
   const { env, run } = collectorHarness({
-    smokeBehaviour: () => {
-      // Smoke DA chay den noi den chon va DA phat tin hieu, roi thoat khac 0 vi model doan sai.
-      throw smokeExitError(`${LIVE_AI_SIGNAL}\n`);
-    },
+    smokeBehaviour: () => `${signalLine('pass', 'LIVE_AI_MATCHES_FIXTURE')}\nPilot smoke OK\n`,
   });
 
   const result = await collectGd1TestPreflight({ env, run });
-  const report = result.errors.join('\n');
 
-  assert.equal(result.ok, false);
-  assert.match(report, /PROVIDER_FIXTURE_MISMATCH/);
-  assert.doesNotMatch(report, /PROVIDER_SMOKE_HARNESS_ERROR/);
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.input.deployment.providerProof.healthPassed, true);
+  assert.deepEqual(result.plan.deferredToPostDeploy, []);
 });
