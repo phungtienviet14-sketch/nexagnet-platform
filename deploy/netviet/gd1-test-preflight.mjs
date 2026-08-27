@@ -195,15 +195,21 @@ function remoteRuntimeCommand(appDir) {
   ].join('; '));
 }
 
-function remoteProviderSmokeCommand(appDir, hostname) {
-  return remoteSudoCommand([
-    'set -euo pipefail',
-    `cd '${appDir}'`,
+export function remoteProviderSmokeCommand(appDir, hostname) {
+  // HAI MUC NOI KHAC NHAU, VA TRON CHUNG LAM CONG NAY RONG RUOT.
+  //
+  // Cac manh duoi day la THAM SO cua cung mot lenh `docker` nen noi bang dau cach; `set` va `cd`
+  // la nhung CAU LENH RIENG nen phai noi bang xuong dong. Truoc day ca sau manh cung di qua mot
+  // `join(' ')`, tao ra `set -euo pipefail cd '<appDir>' docker compose ...` — tuc la DUNG MOT lenh
+  // `set`, con `cd` va `docker` chi con la tham so vi tri. Khong gi duoc thuc thi, va ma thoat la
+  // ma thoat cua `set`: 0. Cong bao PASS ma provider chua he duoc hoi (xac minh 27/08/2026).
+  const composeRun = [
     'docker compose --env-file .runtime/secrets.env -f compose.yaml --profile tools run --rm --no-deps -T',
     `-e 'PILOT_BASE_URL=https://${hostname}'`,
     "-e 'CHANNEL_MODE=zca'",
     'bootstrap node --input-type=module - < smoke-test.mjs',
-  ].join(' '));
+  ].join(' ');
+  return remoteSudoCommand(['set -euo pipefail', `cd '${appDir}'`, composeRun].join('\n'));
 }
 
 function remoteAllowedGroupsHashCommand(appDir) {
@@ -244,6 +250,22 @@ function remoteRuntimeValueCommand(appDir, key) {
   ].join('; '));
 }
 
+/**
+ * `smoke-test.mjs` phat mot dong tin hieu co nhan `liveAiSmoke` NGAY CA KHI model doan sai. Vi vay
+ * su co mat cua nhan do chia doi hai the gioi:
+ *   - CO nhan  -> smoke da chay, da hoi provider, va provider tra loi khong khop fixture.
+ *   - KHONG co -> smoke chua bao gio chay den noi. Day la loi CUA CHUNG TA, khong phai cua provider.
+ * Gop hai thu nay lam mot se gui nguoi truc di sai huong.
+ */
+const LIVE_AI_SIGNAL_MARKER = '"layer":"liveAiSmoke"';
+
+function classifyProviderSmokeFailure(providerSmoke) {
+  if (providerSmoke?.ok === true || providerSmoke?.deferred === true) return undefined;
+  return String(providerSmoke?.stdout ?? '').includes(LIVE_AI_SIGNAL_MARKER)
+    ? 'PROVIDER_FIXTURE_MISMATCH'
+    : 'PROVIDER_SMOKE_HARNESS_ERROR';
+}
+
 async function safeRun(run, program, args) {
   try {
     return { ok: true, stdout: await run(program, args) };
@@ -251,7 +273,10 @@ async function safeRun(run, program, args) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
-      stdout: '',
+      // execFile gan stdout vao chinh doi tuong loi. Vut bo no la vut bo bang chung duy nhat
+      // cho biet smoke da chay den dau — va do la ly do mot lan hong bi doc nham thanh
+      // "provider khong khoe" suot hai vong deploy (26/08/2026).
+      stdout: typeof error?.stdout === 'string' ? error.stdout : '',
     };
   }
 }
@@ -448,6 +473,7 @@ export async function collectGd1TestPreflight(options = {}) {
       ),
       healthPassed: providerSmoke.ok,
       structuredOutputPassed: providerSmoke.ok,
+      smokeFailure: classifyProviderSmokeFailure(providerSmoke),
       // Exact-SHA CI runs the parser contract that fixes these release invariants. The live smoke
       // above proves the selected provider returns a valid structured result for TEST data.
       timeoutConfigured: true,
@@ -607,6 +633,10 @@ function providerErrorsForLiveStack(providerProof, runtime) {
     'fallbackDisabled',
   ]) {
     if (providerProof?.[field] !== true) errors.push(`parser provider proof ${field} must be true`);
+  }
+  // Mot dong ket luan co MA, de log deploy noi duoc HUONG dieu tra chu khong chi noi "false".
+  if (providerProof?.smokeFailure) {
+    errors.push(`parser provider smoke failed: ${providerProof.smokeFailure}`);
   }
   return errors;
 }
