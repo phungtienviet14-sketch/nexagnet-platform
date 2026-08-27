@@ -251,19 +251,62 @@ function remoteRuntimeValueCommand(appDir, key) {
 }
 
 /**
- * `smoke-test.mjs` phat mot dong tin hieu co nhan `liveAiSmoke` NGAY CA KHI model doan sai. Vi vay
- * su co mat cua nhan do chia doi hai the gioi:
- *   - CO nhan  -> smoke da chay, da hoi provider, va provider tra loi khong khop fixture.
- *   - KHONG co -> smoke chua bao gio chay den noi. Day la loi CUA CHUNG TA, khong phai cua provider.
- * Gop hai thu nay lam mot se gui nguoi truc di sai huong.
+ * SMOKE DA TU PHAN LOAI KET QUA CUA NO — PREFLIGHT KHONG DUOC DAT RA MOT PHAN LOAI THU HAI.
+ *
+ * `smoke-test.mjs` phat `status` gom `pass | fail | unavailable | timeout | skipped`:
+ *   - `unavailable` / `timeout` -> PHU THUOC NGOAI chua san sang (provider 5xx, khong noi duoc, treo).
+ *   - `fail`                    -> smoke DA hoi duoc provider va DA nhan cau tra loi CO CAU TRUC;
+ *                                  chi la ket qua khong khop fixture.
+ *
+ * Cong preflight nay ton tai de tra loi DUNG MOT cau: provider co san sang de an mot lan deploy
+ * khong. No chi duoc chan o ve dau.
+ *
+ * Ve sau thuoc tang live-AI SAU deploy, va tang do CO Y la tin hieu MEM ("mot lan model phan loai
+ * sai la mot su that ve MODEL" — deploy-stack.sh). Chan ca ve sau o preflight tao ra mot BE TAC:
+ * sai lech cua ban DANG CHAY khoa luon duong day ban VA len. Gap that 27/08/2026 —
+ * `LIVE_AI_ORDER_STATUS_UNEXPECTED` tren release `f392f07e` chan moi lan deploy ke tiep.
  */
 const LIVE_AI_SIGNAL_MARKER = '"layer":"liveAiSmoke"';
+const PROVIDER_UNREADY_STATUSES = new Set(['unavailable', 'timeout']);
+// Mang `status: fail` nhung khong chung minh duoc gi ve provider ca, nen van phai chan.
+const PROVIDER_UNREADY_REASONS = new Set(['LIVE_AI_HARNESS_ERROR']);
+const PROVIDER_SMOKE_PASSED = 'LIVE_AI_MATCHES_FIXTURE';
 
-function classifyProviderSmokeFailure(providerSmoke) {
-  if (providerSmoke?.ok === true || providerSmoke?.deferred === true) return undefined;
-  return String(providerSmoke?.stdout ?? '').includes(LIVE_AI_SIGNAL_MARKER)
-    ? 'PROVIDER_FIXTURE_MISMATCH'
-    : 'PROVIDER_SMOKE_HARNESS_ERROR';
+function readLiveAiSignal(stdout) {
+  // Lay dong tin hieu CUOI CUNG: smoke co the phat nhieu dong, dong sau la ket luan.
+  const line = String(stdout ?? '')
+    .split(/\r?\n/)
+    .filter((candidate) => candidate.includes(LIVE_AI_SIGNAL_MARKER))
+    .at(-1);
+  if (!line) return undefined;
+  const start = line.indexOf('{');
+  if (start < 0) return undefined;
+  try {
+    const signal = JSON.parse(line.slice(start));
+    return typeof signal?.reason === 'string' ? signal : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function evaluateProviderSmoke(providerSmoke) {
+  if (providerSmoke?.deferred === true) return { ready: false, outcome: undefined };
+  const signal = readLiveAiSignal(providerSmoke?.stdout);
+  if (providerSmoke?.ok === true) {
+    return { ready: true, outcome: signal?.reason ?? PROVIDER_SMOKE_PASSED };
+  }
+  // Khong mot tin hieu nao: smoke chua bao gio chay den noi, nen khong the ket luan gi.
+  if (!signal) return { ready: false, outcome: 'PROVIDER_SMOKE_HARNESS_ERROR' };
+  const unready =
+    PROVIDER_UNREADY_STATUSES.has(signal.status) || PROVIDER_UNREADY_REASONS.has(signal.reason);
+  return { ready: !unready, outcome: signal.reason };
+}
+
+function providerDeferrals(providerProof) {
+  const outcome = providerProof?.smokeOutcome;
+  if (!outcome || outcome === PROVIDER_SMOKE_PASSED) return [];
+  // Khong chan KHONG duoc phep bang im lang: sai lech van phai hien ra trong ke hoach deploy.
+  return [`live provider fixture deviation (reported, not blocking): ${outcome}`];
 }
 
 async function safeRun(run, program, args) {
@@ -461,6 +504,7 @@ export async function collectGd1TestPreflight(options = {}) {
           'gcloud',
           sshArgs(env, remoteProviderSmokeCommand(identity.appDir, identity.operatorDomain)),
         );
+    const providerSmokeOutcome = evaluateProviderSmoke(providerSmoke);
     const providerProof = {
       firstRelease,
       adapter: runtime.parser,
@@ -471,9 +515,9 @@ export async function collectGd1TestPreflight(options = {}) {
           secret.vmCanAccess &&
           secret.nonEmpty,
       ),
-      healthPassed: providerSmoke.ok,
-      structuredOutputPassed: providerSmoke.ok,
-      smokeFailure: classifyProviderSmokeFailure(providerSmoke),
+      healthPassed: providerSmokeOutcome.ready,
+      structuredOutputPassed: providerSmokeOutcome.ready,
+      smokeOutcome: providerSmokeOutcome.outcome,
       // Exact-SHA CI runs the parser contract that fixes these release invariants. The live smoke
       // above proves the selected provider returns a valid structured result for TEST data.
       timeoutConfigured: true,
@@ -635,8 +679,8 @@ function providerErrorsForLiveStack(providerProof, runtime) {
     if (providerProof?.[field] !== true) errors.push(`parser provider proof ${field} must be true`);
   }
   // Mot dong ket luan co MA, de log deploy noi duoc HUONG dieu tra chu khong chi noi "false".
-  if (providerProof?.smokeFailure) {
-    errors.push(`parser provider smoke failed: ${providerProof.smokeFailure}`);
+  if (providerProof?.healthPassed !== true && providerProof?.smokeOutcome) {
+    errors.push(`parser provider smoke blocked: ${providerProof.smokeOutcome}`);
   }
   return errors;
 }
@@ -749,7 +793,7 @@ function createPlan(tenant, deployment) {
             'live provider call',
             'rollback target (first release has none: rollback is stack teardown)',
           ]
-        : [],
+        : providerDeferrals(deployment.providerProof),
     ),
   });
 }
