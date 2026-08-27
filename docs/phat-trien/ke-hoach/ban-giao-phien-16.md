@@ -1,5 +1,12 @@
 # Bàn giao phiên 16 — `sales-handoff-followup.v1`: workflow nghiệp vụ **thật** đầu tiên trên Hatchet
 
+> **STATUS: HISTORICAL SNAPSHOT**
+> **AS OF:** 2026-08-25 (`9996a5b`)
+> **SUPERSEDED BY:** [tong-quan.md §12](tong-quan.md#12-trạng-thái-nền-tảng--documentation-truth-reset-27082026)
+>
+> Giữ nguyên để tra cứu lịch sử nghiên cứu và quyết định. **Không dùng làm trạng thái hiện tại.**
+> Chỗ nào tài liệu này mâu thuẫn với bản canonical ở trên, bản canonical đúng.
+
 > Ngày: **25/08/2026** · Nhánh: `feat/sales-handoff-workflow` (từ `main` = `cb86451`)
 > Phiên trước: [ban-giao-phien-15.md](ban-giao-phien-15.md) — `turn-processing` trung tính, đã merge (PR #38).
 > **PR [#41](https://github.com/phungtienviet14-sketch/nexagnet-platform/pull/41) — CHƯA MERGE, đang chờ review lần 2.**

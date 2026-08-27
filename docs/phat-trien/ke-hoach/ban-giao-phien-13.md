@@ -1,5 +1,12 @@
 # Bàn giao phiên 13 — Gate Hatchet trace correlation (DỪNG GIỮA CHỪNG có chủ đích)
 
+> **STATUS: HISTORICAL SNAPSHOT**
+> **AS OF:** 2026-08-24 (`67697a9`)
+> **SUPERSEDED BY:** [tong-quan.md §12](tong-quan.md#12-trạng-thái-nền-tảng--documentation-truth-reset-27082026)
+>
+> Giữ nguyên để tra cứu lịch sử nghiên cứu và quyết định. **Không dùng làm trạng thái hiện tại.**
+> Chỗ nào tài liệu này mâu thuẫn với bản canonical ở trên, bản canonical đúng.
+
 > Ngày: **24/08/2026** · Nhánh: `feat/hoi-thoai-chot-don-main` · HEAD `2a7d211`
 > Phiên trước: POC OpenTelemetry + ClickStack (24/08).
 > **Phiên này DỪNG theo yêu cầu chủ dự án**, không phải vì bị chặn kỹ thuật.

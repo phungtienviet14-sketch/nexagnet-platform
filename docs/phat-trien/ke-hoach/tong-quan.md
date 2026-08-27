@@ -1698,3 +1698,62 @@ sử, replay, chờ, phiên bản, hay giao diện vận hành.
 > ⚠️ **"D8" ở tài liệu này và "D8" của workflow engine là HAI thứ khác nhau.** Ở đây D8 =
 > **VAT-default** (§ bảng quyết định — vẫn ⬜). Trong `ban-giao-workflow-engine.md`, D8 = mốc đưa
 > engine lên VM (đã xong 24/08/2026). Đừng đọc lẫn hai hệ đánh số.
+
+---
+
+## 12. TRẠNG THÁI NỀN TẢNG — Documentation Truth Reset (27/08/2026)
+
+> **Đọc mục này trước §1–§11.** Các mục trên được viết tới **22/08/2026**; từ 24 đến 27/08 các PR
+> #37→#58 đã thay đổi kiến trúc và mục này là bản cập nhật. Chỗ nào §1–§11 mâu thuẫn với bảng dưới
+> đây, **bảng dưới đây đúng**.
+>
+> Nơi giữ ✅/⬜ của kế hoạch vẫn là tài liệu này. Nhưng **hợp đồng** và **bằng chứng runtime** của
+> nền tảng nay nằm ở `kien-truc/` — xem liên kết ở §12.4.
+
+### 12.1 CANONICAL CURRENT TRUTH
+
+| Hạng mục | Trạng thái |
+|---|---|
+| Release Identity Closure | **CLOSED / RUNTIME-PROVEN** |
+| Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
+| OTel code support | **PARTIAL** |
+| OTel export trên gd1-test | **NOT DEPLOYED** |
+| ClickStack | **POC / NOT DEPLOYED ON GD1** |
+| Historical Debug traces | **NOT PERSISTENT** |
+| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
+
+Bằng chứng: deploy run `33039065904` trên main `8b0f6ad603495fc90235d350b13550afd36a982d` —
+`rollout=pass (identitySource: manifest)` · `health=pass` · `deterministicSmoke=pass` (kể cả
+post-restart) · `liveAiSmoke=pass (parserMode: deepseek)` · `classification=APPLICATION_ROLLED_OUT_HEALTHY`.
+
+### 12.2 Những gì đã đổi từ 24/08 mà §1–§11 chưa phản ánh
+
+| PR | Đổi gì về kiến trúc |
+|---|---|
+| #37 | Nền OpenTelemetry — trace đi được qua Hatchet |
+| #38, #40 | Tách capability `turn-processing` khỏi `sales-order` |
+| #41–#43 | `sales-handoff-followup.v1` — workflow **nghiệp vụ** đầu tiên trên Hatchet *(dòng "⬜ chưa bắt đầu" ở §11 nay đã lỗi thời)* |
+| #45 | Nối trace qua internal callback của workflow |
+| #46, #49, #50, #51 | Debug View + tương quan mã nguồn + mở IDE |
+| #52 | Tách bốn tín hiệu deploy (rollout/health/deterministic/live-AI) |
+| #53–#58 | Đóng danh tính release; làm cứng preflight; sửa cổng provider smoke |
+
+### 12.3 Known risks — `UNRESOLVED`
+
+`zca_listener` im lặng ~19 giờ · preflight ghi đè giá trị `autoSend` quan sát được ·
+`bot-poller.spec.ts` flaky · **`main` chưa được bảo vệ** (0 ruleset, repo public).
+
+Bằng chứng đầy đủ và cổng đóng của từng mục:
+[kien-truc/reference-platform-stack.md §7](../../kien-truc/reference-platform-stack.md#7-known-risks--unresolved).
+
+### 12.4 Milestone triển khai kế tiếp
+
+**`REFERENCE STACK PARITY v0`** (P2) — **không phải** Fleet View. Phạm vi chính xác, cổng vào/ra và
+bốn khẳng định runtime phải đạt: [platform-roadmap-v2.md](platform-roadmap-v2.md#p2--reference-stack-parity-v0--milestone-triển-khai-kế-tiếp).
+
+### 12.5 Tài liệu canonical mới
+
+- [kien-truc/reference-platform-stack.md](../../kien-truc/reference-platform-stack.md) — hợp đồng stack tham chiếu, parity levels L0–L5, 4 mặt phẳng, ma trận hiện trạng, known risks
+- [kien-truc/tech-radar.md](../../kien-truc/tech-radar.md) — ADOPT/TRIAL/ASSESS/HOLD/AVOID kèm bằng chứng, và **FRAMEWORK DECISION**
+- [kien-truc/agentic-ops.md](../../kien-truc/agentic-ops.md) — bốn mức tự động hoá vận hành (định hướng dài hạn)
+- [platform-roadmap-v2.md](platform-roadmap-v2.md) — lộ trình nền tảng P0→P15

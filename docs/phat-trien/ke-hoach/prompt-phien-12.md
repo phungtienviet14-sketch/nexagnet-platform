@@ -1,5 +1,12 @@
 # Prompt phiên 12 — trả hai món nợ vận hành còn lại
 
+> **STATUS: HISTORICAL SNAPSHOT**
+> **AS OF:** 2026-08-24 (`2c9e006`)
+> **SUPERSEDED BY:** [platform-roadmap-v2.md](platform-roadmap-v2.md)
+>
+> Giữ nguyên để tra cứu lịch sử nghiên cứu và quyết định. **Không dùng làm trạng thái hiện tại.**
+> Chỗ nào tài liệu này mâu thuẫn với bản canonical ở trên, bản canonical đúng.
+
 > Viết cuối phiên 11 (24/08/2026). Phiên 11 đã đóng `RUN_WORKFLOW_IT` và §10/§11 của nguồn sự thật.
 > Hai món nợ còn lại là **code thật**, không phải tài liệu.
 

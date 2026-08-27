@@ -1,5 +1,37 @@
 # Dự án: Nền tảng AI Agent doanh nghiệp đa khách hàng
 
+## TRẠNG THÁI NỀN TẢNG — đọc trước (cập nhật 27/08/2026)
+
+Nexagnet là **nền tảng AI đa khách hàng**. **Ultty là tenant/stack tham chiếu, không phải lõi
+sản phẩm.** Ưu tiên hiện tại: hoàn thiện nền tảng trước hoàn thiện toàn bộ nghiệp vụ Ultty —
+không bỏ nghiệp vụ Ultty đã có.
+
+| Hạng mục | Trạng thái |
+|---|---|
+| Release Identity Closure | **CLOSED / RUNTIME-PROVEN** |
+| Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
+| OTel code support | **PARTIAL** |
+| OTel export trên gd1-test | **NOT DEPLOYED** |
+| ClickStack | **POC / NOT DEPLOYED ON GD1** |
+| Historical Debug traces | **NOT PERSISTENT** |
+| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
+
+**Milestone triển khai kế tiếp: `REFERENCE STACK PARITY v0`** — không phải Fleet View, không phải
+ClickStack production, không phải nghiệp vụ Ultty mới.
+
+Tài liệu canonical của tầng nền tảng:
+
+- [docs/kien-truc/reference-platform-stack.md](docs/kien-truc/reference-platform-stack.md) — hợp đồng stack tham chiếu, parity L0–L5, 4 mặt phẳng, **known risks `UNRESOLVED`**
+- [docs/kien-truc/tech-radar.md](docs/kien-truc/tech-radar.md) — ADOPT/TRIAL/ASSESS/HOLD/AVOID + FRAMEWORK DECISION
+- [docs/kien-truc/agentic-ops.md](docs/kien-truc/agentic-ops.md) — bốn mức tự động hoá vận hành (chưa triển khai)
+- [docs/phat-trien/ke-hoach/platform-roadmap-v2.md](docs/phat-trien/ke-hoach/platform-roadmap-v2.md) — lộ trình P0→P15
+
+> ⚠️ **`main` hiện KHÔNG được bảo vệ** (0 ruleset, repo public — đo 27/08/2026). Kỷ luật release
+> đang dựa vào thói quen người vận hành, không phải cơ chế cưỡng chế. Xem P3 trong roadmap.
+
+> ℹ️ `AGENTS.md` và `CLAUDE.md` đang mô tả sản phẩm bằng hai cách khác nhau ở dòng tiêu đề.
+> Bản đúng về định vị là bản platform-first: nền tảng AI Agent doanh nghiệp đa khách hàng.
+
 ## Quy tắc chung (bắt buộc)
 
 - Luôn áp dụng skill `search-first` trước khi viết bất kỳ function/module mới nào

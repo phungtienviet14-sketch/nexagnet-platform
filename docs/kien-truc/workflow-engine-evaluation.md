@@ -1,5 +1,12 @@
 # Đánh giá durable workflow engine — nghiên cứu, POC chạy thật, quyết định
 
+> **STATUS: HISTORICAL SNAPSHOT**
+> **AS OF:** 2026-08-22 (`f07e123`)
+> **SUPERSEDED BY:** [tech-radar.md](tech-radar.md) · [reference-platform-stack.md](reference-platform-stack.md)
+>
+> Giữ nguyên để tra cứu lịch sử nghiên cứu và quyết định. **Không dùng làm trạng thái hiện tại.**
+> Chỗ nào tài liệu này mâu thuẫn với bản canonical ở trên, bản canonical đúng.
+
 > Ngày: **22/08/2026** · HEAD khi bắt đầu: `f4ed3ee` · nhánh `feat/hoi-thoai-chot-don-main`
 > POC: [`tools/poc-workflow-engine/`](../../tools/poc-workflow-engine/README.md) · bằng chứng thô: [`evidence/poc-run-log.md`](../../tools/poc-workflow-engine/evidence/poc-run-log.md)
 > Liên quan: [automation-architecture.md](automation-architecture.md) · [observability-review.md](observability-review.md) · [nen-tang-da-khach.md](nen-tang-da-khach.md)

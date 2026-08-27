@@ -1,5 +1,11 @@
 # SƠ ĐỒ & THIẾT KẾ KỸ THUẬT — EXPERIENCE OPERATIONS/SALES-ORDER
 
+> **Bổ sung 27/08/2026.** Tài liệu này đối chiếu code/yêu cầu ở mốc **12/08/2026**. Từ 24 đến
+> 27/08 các PR #37→#58 đã thay đổi kiến trúc (nền OTel · tách capability `turn-processing` ·
+> workflow nghiệp vụ đầu tiên trên Hatchet · Debug View + tương quan mã nguồn · tách bốn tín
+> hiệu deploy · đóng danh tính release). Trạng thái hiện tại của những phần đó **không** ở đây
+> mà ở [reference-platform-stack.md §6](reference-platform-stack.md#6-canonical-current-truth-27082026).
+
 > **Vai trò tài liệu:** bản KỸ THUẬT hợp nhất — toàn bộ **sơ đồ hệ thống (12 sơ đồ Mermaid)** + **quyết định thiết kế đã chốt** + **phụ lục bằng chứng PoC**. Xem trên GitHub hoặc VS Code (extension Markdown Preview Mermaid).
 > **Hợp nhất 11/07/2026:** nuốt trọn `thiet-ke-ky-thuat-hop-nhat.md` (quyết định kỹ thuật — §2/§3/§15) và 2 tài liệu PoC `poc-zalo-bot.md`, `poc-parser.md` (→ Phụ lục A/B) — 3 file gốc đã xóa, git history còn.
 > **Phạm vi:** tài liệu này mô tả experience `operations-console`, capability `sales-order` và các

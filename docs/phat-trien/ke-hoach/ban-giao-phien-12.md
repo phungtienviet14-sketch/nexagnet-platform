@@ -1,5 +1,12 @@
 # Bàn giao phiên 12 — 24/08/2026
 
+> **STATUS: HISTORICAL SNAPSHOT**
+> **AS OF:** 2026-08-24 (`2c9e006`)
+> **SUPERSEDED BY:** [tong-quan.md §12](tong-quan.md#12-trạng-thái-nền-tảng--documentation-truth-reset-27082026)
+>
+> Giữ nguyên để tra cứu lịch sử nghiên cứu và quyết định. **Không dùng làm trạng thái hiện tại.**
+> Chỗ nào tài liệu này mâu thuẫn với bản canonical ở trên, bản canonical đúng.
+
 > Phạm vi phiên: 4 khoản nợ ở [`ban-giao-workflow-engine.md`](ban-giao-workflow-engine.md) §47.8.
 > Kế hoạch gốc của phiên: [`prompt-phien-12.md`](prompt-phien-12.md).
 > **Dừng giữa phiên theo yêu cầu người dùng.** Mục §5.2 là việc còn treo — đọc trước khi làm tiếp.
