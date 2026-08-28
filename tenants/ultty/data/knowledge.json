@@ -2,7 +2,7 @@
   "pricePeriod": {
     "validMonth": "2026-08",
     "status": "active",
-    "note": "Giu nguyen bieu gia theo van ban goc \"THONG BAO GIA THANG 07.2026\" cua Cong ty CP U ULTTY Viet Nam (ho-so-khao-sat/gd1/AI Zalo_/Thong bao gia thang 7.2026.pdf, 19 SP). Khach xac nhan 18/08/2026: thang 8 KHONG co thong bao gia moi, gia giu nguyen. Doi ky thi phai co van ban moi."
+    "note": "BAN SAO TAY bieu gia thang 07/2026 (19 SP) do NetViet tu dat de kiem thu gd1 -- KHONG phai quyet dinh cua khach. Ghi chu cu (\"khach xac nhan 18/08/2026: thang 8 khong co bang gia moi\") la SAI: Drive khach CO \"Thong bao gia thang 8.pdf\" (18/08/2026), lech 2 SKU o cot Don gia CTV. Chua doi so -- xem SUP-01 va CONFLICT-PRICE-SOURCE-001 trong docs/khach-hang/ultty/nghiep-vu/doi-chieu-nguon-su-that-2026-08.md"
   },
   "products": [
     {
