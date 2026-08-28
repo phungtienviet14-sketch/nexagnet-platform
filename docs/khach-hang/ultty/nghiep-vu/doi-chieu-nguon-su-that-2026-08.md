@@ -8,6 +8,10 @@
 > không hiện thực ship/COD/VAT/khuyến mãi. Mọi `CONFLICT` để **NGUYÊN**, chờ người có thẩm quyền
 > quyết. Bản triển khai đi sau, theo backlog ở §10.
 >
+> **Bổ sung 28/08/2026:** chưa liên hệ được khách để hỏi 3 câu chặn, nên §3bis ghi **ba giả định làm
+> việc `ASM-01..03`** do NetViet tự đặt để U2 chạy tiếp. Giả định **không đóng** xung đột; cả ba đều
+> chọn theo tiêu chí **đảo ngược được bằng dữ liệu/cấu hình, không phải bằng sửa code**.
+>
 > **Phân biệt với tài liệu cạnh nó:**
 > [`mo-ta-nghiep-vu.md`](mo-ta-nghiep-vu.md) = mô tả nghiệp vụ + as-built (hệ thống *đang* làm gì);
 > tài liệu này = **nguồn nói gì, nguồn nào thắng, chỗ nào nguồn tự mâu thuẫn**.
@@ -130,7 +134,7 @@ phẩm trỏ trong `SRC-QT-CONTACT`).
 | **Sắc thái phải nói rõ** | `SRC-QT-QUOTE` nói về **BÁO GIÁ** (mẫu báo giá chi tiết cho khách mới/khách lớn), `SRC-HD-PL01` nói về **XỬ LÝ ĐƠN**. Có thể hai luật đúng cho hai sự kiện khác nhau — nhưng cần khách xác nhận, không được giả định. |
 | **Cân nhắc thẩm quyền** | A = L1 + L2, ngày mới hơn (08/2026) · B = L3, ngày 11/08/2025. Nghiêng về A, **nhưng B là kiểm soát nội bộ của khách và không bị hợp đồng vô hiệu hoá.** |
 | **Quyết định cần** | (1) Tại đúng 50, AI gửi hay chuyển Sale? (2) Ngưỡng **báo giá** có tách khỏi ngưỡng **đặt đơn** không? |
-| **Trạng thái** | 🔴 **OPEN — giữ nguyên `maxAutoConfirmQuantity=50` inclusive** |
+| **Trạng thái** | 🔴 **OPEN** — chưa hỏi được khách. Đang chạy theo **`ASM-02`** (giữ `<=50`, đảo ngược bằng đúng một số trong `tenant.json`) |
 
 ### `CONFLICT-PRICE-SOURCE-001` — hai tệp cùng ngày 18/08 nói khác nhau
 
@@ -142,7 +146,7 @@ phẩm trỏ trong `SRC-QT-CONTACT`).
 | **Vì sao nghiêm trọng** | `retailAdvice.priceField = "minRetailPrice"` — **đúng cái cột đang lệch** là cột hệ thống dùng để tư vấn giá cho khách lẻ. |
 | **Lệch phạm vi** | B có thêm `Suntec DryFix 20` và `PF360` bán rời (A không có); A có `COMBO WFX+PF360` (B không có). |
 | **Quyết định cần** | Tệp nào là nguồn sự thật cho *Giá bán lẻ tối thiểu*? `B23` hay `B25`? Suntec và PF360 rời có được bán không? |
-| **Trạng thái** | 🔴 **OPEN — không nhập bảng nào cho tới khi có trả lời** |
+| **Trạng thái** | 🔴 **OPEN** — chưa hỏi được khách. Đang chạy theo **`ASM-01`** (PDF có chữ ký thắng ở cột chung; Sheets thắng ở cột riêng) |
 
 ### `CONFLICT-KYGUI-TERM-001` — kỳ hạn của chính sách ký gửi
 
@@ -208,6 +212,90 @@ phẩm trỏ trong `SRC-QT-CONTACT`).
 | **Ảnh hưởng** | Nghĩa vụ tuân thủ trong hợp đồng đang trỏ vào văn bản hết hiệu lực. Không làm hợp đồng vô hiệu, nhưng **nghĩa vụ thực tế phải theo luật hiện hành**. |
 | **Quyết định cần** | Pháp chế NetViet rà và cân nhắc phụ lục điều chỉnh căn cứ. |
 | **Trạng thái** | 🟠 **OPEN — việc của pháp chế, không phải của code** |
+
+---
+
+## 3bis. SỔ GIẢ ĐỊNH LÀM VIỆC (`ASM-*`) — mở đường U2 khi chưa hỏi được khách
+
+> **Khác hẳn `CONFIRMED`.** Đây là **giả định do NetViet tự đặt** ngày 28/08/2026 vì chưa liên hệ được
+> khách, ghi lại để U2 chạy tiếp mà không phải đoán ngầm. Mỗi mục nêu rõ **suy luận**, **rủi ro nếu
+> sai**, và **đường đảo ngược**. Xung đột tương ứng ở §3 **vẫn OPEN** — giả định không đóng nó.
+>
+> Nguyên tắc chọn: khi phải sai, **chọn hướng sai an toàn hơn**, và **chỉ chọn giả định nào đảo ngược
+> được bằng DỮ LIỆU/CẤU HÌNH, không phải bằng sửa code**.
+
+### `ASM-01` — Nguồn giá: văn bản có chữ ký thắng ở **cột chung**, bảng riêng thắng ở **cột riêng**
+
+**Giả định.** `Thông báo giá tháng 08.pdf` là nguồn sự thật cho **4 cột giá chung** (Niêm Yết · Bán lẻ ·
+Bán lẻ tối thiểu · Đơn giá CTV). `Báo giá riêng CTV/ĐLY` chỉ là nguồn sự thật cho **các cột đại lý**
+của chính nó. Khi hai bên lệch ở cột chung (6 SKU) → **lấy theo PDF**.
+
+**Suy luận.** PDF là văn bản **có chữ ký Giám Đốc, phát cho toàn bộ đại lý/CTV** — nó là công bố
+chính thức. Sheets là công cụ làm việc nội bộ. Mỗi nguồn được coi là có thẩm quyền **đúng ở chỗ nó là
+nơi công bố duy nhất**: PDF không hề có cột đại lý, Sheets không phải văn bản phát hành.
+
+**Ba hệ quả bắt buộc đi kèm (fail-closed, không được bỏ):**
+
+1. **`B23` vs `B25`** — không phải giả định mà **giải được bằng nguồn thứ ba**: danh mục gốc 39 dòng
+   ghi *"Máy tạo ẩm không khí U Ultty **B23** Trắng"*. Hai trên ba nguồn nói `B23` ⇒ `B25` là **lỗi gõ
+   trong Sheets**. Vẫn giữ cờ để hỏi lại.
+2. **SP chỉ có trong Sheets mà không có trong PDF** (`Suntec DryFix 20`, `PF360` bán rời) ⇒ **không
+   có giá chung có thẩm quyền** ⇒ **KHÔNG bật bán**, hỏi giá thì chuyển Sale. Không được lấy cột
+   chung của Sheets làm giá.
+3. Cột đang lệch là *Giá bán lẻ tối thiểu* — đúng cột `retailAdvice.priceField`. Sau khi áp `ASM-01`,
+   **tư vấn giá lẻ lấy số của PDF**.
+
+**Rủi ro nếu sai.** Báo *giá bán lẻ tối thiểu* lệch ở 6 SKU. Đây là **mức tham khảo có qualifier**,
+không phải giá giao dịch của đại lý ⇒ thiệt hại giới hạn.
+
+**Đảo ngược.** Sửa dữ liệu kỳ giá. Không đụng code.
+
+### `ASM-02` — Số lượng **đúng 50** → AI tự xử lý (giữ nguyên hành vi hiện tại)
+
+**Giả định.** `maxAutoConfirmQuantity = 50` với phép so sánh `<=` — tức **50 vẫn được AI tự gửi**.
+
+**Suy luận.** Ba nguồn **độc lập** nói "từ 50 trở xuống AI tự xử lý": hợp đồng (ràng buộc pháp lý),
+**tài liệu luồng do chính khách vẽ**, và báo giá NetViet. Nguồn phản đối duy nhất là `QT Báo giá B2B`
+— quy trình nội bộ **2025**, và nó nói về **BÁO GIÁ cho khách mới/đơn lớn**, không phải **chốt đơn của
+đại lý đã có quan hệ**. Hai sự kiện khác nhau.
+
+**Rủi ro nếu sai.** Đúng một lớp đơn — tổng **chính xác 50 SP** — được gửi mà lẽ ra phải qua BGĐ.
+
+**Đảo ngược — đây là lý do chọn giả định này.** Đổi sang "50 phải qua Sale" **không cần sửa một dòng
+code nào**: đặt `policies.salesOrder.automation.maxAutoConfirmQuantity = 49` trong `tenant.json`.
+Cổng đã là `<=` trên một số cấu hình theo tenant, nên chi phí đảo ngược ≈ 0.
+
+### `ASM-03` — Giá riêng theo đại lý áp cho **mọi số lượng** (`minQuantity = 1`)
+
+**Giả định.** Mỗi ô giá riêng nhập từ bảng được ghi `minQuantity: 1` — áp bất kể số lượng.
+
+**Suy luận (đây là chỗ đổi cách đọc so với ghi chú cũ trong `domain.ts`).**
+
+- Bảng nguồn **không có chiều số lượng**: 22 dòng × 21 cột, mỗi ô **một giá duy nhất**, không cột
+  ngưỡng, không thang. Một bảng thang số lượng thì bắt buộc phải có ngưỡng — **việc nó vắng mặt là
+  bằng chứng**, không phải thiếu sót ngẫu nhiên.
+- Đo 22/22 dòng: **mọi ô giá riêng đều ≤ cột *Giá CTV/Đại lý* cùng dòng**. Bảng đọc ra như **giá đã
+  thoả thuận theo từng đại lý**, không phải phần thưởng theo sản lượng.
+- Hội thoại 25/07 (*"lấy SL 5 cái giá có tốt hơn k e"* → *"e xin giá 1150k"*) trước đây được đọc là
+  **ngưỡng**. Có cách đọc khớp dữ liệu hơn: đó là **bối cảnh thương lượng**, và 1.150k sau đó thành
+  **giá thoả thuận** của đại lý ấy. Bằng chứng ủng hộ: tới `Thông báo giá tháng 08`, **giá CTV chung
+  của FELIX đã hạ đúng về 1.150.000** — công ty chuẩn hoá một mức đã phổ biến thành giá chung, chứ
+  không phải dựng thang số lượng.
+
+**Rủi ro nếu sai — và đây là rủi ro THẬT.** Nếu thực tế có ngưỡng, đơn **số lượng nhỏ** sẽ được hưởng
+giá riêng ⇒ **báo THẤP hơn** mức đại lý đáng phải trả ⇒ mất tiền thật. Đã cân nhắc hướng ngược lại
+(không áp giá riêng cho tới khi biết ngưỡng): hướng đó khiến **phần lớn lưu lượng của 21 đại lý** bị
+báo giá cao rồi Sale phải sửa tay — hỏng trải nghiệm và mất luôn lợi ích của U2.
+
+**Ba biện pháp giảm thiểu bắt buộc trong U2:**
+
+1. Ghi `minQuantity: 1` **tường minh** vào từng bản ghi, **không để trống**. Khi khách trả lời, sửa
+   **dữ liệu**, không sửa code.
+2. Mỗi dòng đơn được hưởng giá riêng phải để lại **quyết định có mã lý do** (`telemetry.decision`) —
+   đối soát được "đơn nào đã dùng giá riêng nào", đúng DoD quan sát của repo.
+3. **Không tự suy ngưỡng cho bất kỳ SKU nào.** Không có ngưỡng đoán trong dữ liệu.
+
+**Đảo ngược.** Sửa `minQuantity` trong dữ liệu (panel `/admin` hoặc seed). Không đụng code.
 
 ---
 
@@ -433,7 +521,7 @@ toàn Ultty. Cụ thể, *"Giá bao gồm thuế GTGT"* chỉ có ở `SRC-PO-45
 | `MISS-01` | **Bảng phí COD** ("biểu mẫu riêng" theo khảo sát) | `cod_ship`, U3 |
 | `MISS-02` | **Biểu cước ship + định nghĩa vùng nội thành** | Phần *tính tiền* của ship (không chặn luật ≥2/1 SP) |
 | `MISS-03` | **PO "Công nợ 7 ngày"** — khảo sát liệt kê, Drive không có | `CONFLICT-KYGUI-TERM-001` |
-| `MISS-04` | **Ngưỡng số lượng cho từng deal riêng** — bảng Drive không có cột này | U2: nhập thẳng bảng sẽ cho giá deal ở đơn 1 cái → **báo giá thấp hơn thực tế** |
+| `MISS-04` | **Ngưỡng số lượng cho từng deal riêng** — bảng Drive không có cột này | Không còn chặn U2: đang chạy theo **`ASM-03`** (`minQuantity=1`), kèm 3 biện pháp giảm thiểu. **Rủi ro báo giá thấp vẫn còn** cho tới khi khách trả lời |
 | `MISS-05` | **Công thức khuyến mãi**: điều kiện, phạm vi đại lý, SKU quà, ngưỡng, cộng dồn, hiệu lực | U4 |
 | `MISS-06` | **Bộ kịch bản UAT được khách ký duyệt** + ngưỡng chấp nhận | U7, nghiệm thu |
 | `MISS-07` | **Map nhóm Zalo → đại lý** cho ~200 nhóm | Nhận diện đại lý; hiện có 2/200 |
@@ -469,12 +557,12 @@ Ca có 🔒 phụ thuộc một `CONFLICT`/`MISSING` chưa giải → **chưa đ
 | caseId | Tình huống | Hành vi mong đợi | Phụ thuộc |
 |---|---|---|---|
 | `ORDER-49` | Đại lý đã map, SKU rõ, tổng **49** SP, giá đủ | AI tự soạn + gửi xác nhận; sinh việc Sale nhập KiotViet | — |
-| `ORDER-50-CONFLICT` 🔒 | Y hệt trên, tổng **đúng 50** | **Hành vi hiện tại: tự gửi.** Ca này tồn tại để *khoá* quyết định, không phải để khẳng định đúng/sai | `CONFLICT-ORDER-THRESHOLD-001` |
+| `ORDER-50-BOUNDARY` | Y hệt trên, tổng **đúng 50** | Tự gửi (`ASM-02`). Ca này khoá vùng biên: đổi `maxAutoConfirmQuantity` sang 49 thì ca này **phải** đảo sang handoff | `ASM-02` |
 | `ORDER-51` | Y hệt, tổng **51** | Không tự gửi; lý do `QUANTITY_ABOVE_THRESHOLD`; chuyển Sale trước khi gửi | — |
 | `UNKNOWN-DEALER` | Tin đặt hàng từ nhóm **chưa map** đại lý | Không tự gửi; lý do `DEALER_UNKNOWN`; vào hộp "nhóm chưa map" | — |
 | `MISSING-PRICE` | SKU thuộc danh mục nhưng **không có giá hiện hành** | Không tự gửi; cảnh báo; chuyển Sale. **Không** rơi về giá tháng cũ | `GAP-03` |
-| `DEALER-OVERRIDE` 🔒 | Đại lý có giá riêng cho SKU, số lượng **đạt** ngưỡng | Áp giá riêng | `MISS-04` |
-| `DEALER-OVERRIDE-BELOW-MIN` 🔒 | Cùng đại lý, số lượng **chưa đạt** ngưỡng | Áp **giá chung**, không áp giá riêng | `MISS-04` |
+| `DEALER-OVERRIDE` | Đại lý có giá riêng cho SKU | Áp giá riêng ở **mọi số lượng** (`ASM-03`), kèm lý do quyết định có mã | `ASM-03` |
+| `DEALER-OVERRIDE-QTY-1` | Cùng đại lý, đơn **1 cái** | Vẫn áp giá riêng (`ASM-03`). Ca này tồn tại để **khoá giả định**: khi khách trả lời có ngưỡng, đây là ca phải đổi kết quả |
 | `PROMOTION-GIFT` 🔒 | Đơn chạm ngưỡng có quà (vd *ELNI mua 5 tặng ELNA*) | Nêu quà trong xác nhận; không tự suy công thức | `MISS-05` |
 | `SHIP-1` | Đơn **1 SP**, giao thẳng khách (TH2) | **Không** tự báo số tiền cước; phát câu mẫu và chuyển Sale báo phí | `FACT-SHIP-01`, `FACT-SHIP-03` |
 | `SHIP-2` | Đơn **≥ 2 SP** | Nói **miễn phí ship**; không cần Sale cho riêng khoản ship | `FACT-SHIP-01` |
@@ -492,12 +580,12 @@ Ca có 🔒 phụ thuộc một `CONFLICT`/`MISSING` chưa giải → **chưa đ
 
 | Thứ tự | Milestone | Điều kiện mở | Vì sao đứng ở đây |
 |---|---|---|---|
-| 1 | **Chốt 3 câu hỏi chặn** | — | `CONFLICT-PRICE-SOURCE-001`, `CONFLICT-ORDER-THRESHOLD-001`, `MISS-04`. Ba câu này chặn phần lớn phần còn lại |
+| 1 | **Hỏi khách 3 câu** *(chưa liên hệ được 28/08)* | — | `CONFLICT-PRICE-SOURCE-001` · `CONFLICT-ORDER-THRESHOLD-001` · `MISS-04`. **Không còn chặn U2** — đang chạy theo `ASM-01..03` (§3bis). Vẫn phải hỏi: cả ba đều đảo ngược bằng dữ liệu/cấu hình |
 | 1b | **Sửa provenance của `pricePeriod.note`** | Không chờ ai | Chỉ sửa chú thích cho đúng nguồn (kiểm thử nội bộ, **không** phải khách xác nhận). Không đổi số, không đổi hành vi. Làm được ngay và nên làm trước, vì đây là **phát biểu sai về khách hàng trong repo public** (`SUP-01`) |
-| 2 | **U2 — Giá & chính sách đại lý** | Xong (1) | `GAP-03` đang **báo sai giá 2 SKU có lưu lượng thật** — rủi ro nghiệp vụ cao nhất đang mở |
+| 2 | **U2 — Giá & chính sách đại lý** | **Mở** (theo `ASM-01..03`) | `GAP-03` đang **báo sai giá 2 SKU có lưu lượng thật** — rủi ro nghiệp vụ cao nhất đang mở |
 | 3 | **U1 — Experience split** | Độc lập | Không phụ thuộc dữ liệu khách, chạy song song được |
 | 4 | **U3 — Ship / COD / VAT** | Ship: mở ngay (`GAP-06` không cần biểu cước). COD/VAT: cần `MISS-01`, `CONFLICT-VAT-001` | Tách đôi: phần làm được làm trước |
-| 5 | **U4 — Khuyến mãi** | Cần `MISS-05` | Không có công thức thì không có gì để code |
+| 5 | **U4 — Khuyến mãi** | Cần `MISS-05` | Không có công thức thì không có gì để code. **Không đặt giả định ở đây**: khuyến mãi sai tạo nghĩa vụ giao quà thật, khác hẳn ba giả định giá vốn đảo ngược được |
 | 6 | **U5 — CSKH** | Cần `GAP-09` | Thông báo giá tháng là nghĩa vụ hợp đồng, tái dùng kết quả U2 |
 | 7 | **U6 — Vận hành / cảnh báo / nội dung** | Cần `MISS-08` | Gồm cả `GAP-12`, `GAP-13`, `GAP-14` — **nghĩa vụ hợp đồng, dễ bị bỏ quên** |
 | 8 | **U7 — UAT hợp đồng** | Cần `MISS-06` | Phải có bộ kịch bản khách ký duyệt trước |
@@ -582,7 +670,7 @@ cho một khách.
   decidedBy, decidedAt}` — và một quy ước cho phép luật nghiệp vụ **tham chiếu** tới xung đột chưa
   giải, để hành vi ở vùng tranh chấp fail-closed thay vì đoán.
 - **Vì sao dùng lại được:** mọi tenant có nhiều hơn một nguồn giấy tờ sẽ có mâu thuẫn.
-- **Bằng chứng nghiệp vụ:** 7 xung đột ở §3, trong đó `CONFLICT-ORDER-THRESHOLD-001` nằm ngay trên
+- **Bằng chứng nghiệp vụ:** 8 xung đột ở §3, trong đó `CONFLICT-ORDER-THRESHOLD-001` nằm ngay trên
   đường tự động gửi tin cho khách.
 
 ---
@@ -596,6 +684,6 @@ cho một khách.
 | Nguồn hợp đồng | 1 hợp đồng + 3 phụ lục, đọc toàn văn |
 | Nguồn Drive | 7 thư mục, đo trực tiếp trên Drive **và** trên bản mirror local |
 | Tài liệu gốc đọc thêm lần này | 8 tệp mà `mo-ta-nghiep-vu.md` §0 còn ghi "CHƯA đọc" |
-| Sự kiện phân loại | 39 `FACT` · 7 `CONFLICT` · 3 `SUPERSEDED` · 9 `MISSING` · 9 `OUT_OF_SCOPE` |
-| Xung đột tự giải quyết | **0** |
+| Sự kiện phân loại | **40** `FACT` · **8** `CONFLICT` · 3 `SUPERSEDED` · 9 `MISSING` · 9 `OUT_OF_SCOPE` · 3 `ASM` · 17 `GAP` (đếm bằng `grep` trên chính tệp này, không đếm tay) |
+| Xung đột tự giải quyết | **0** — 3 xung đột được chạy theo **giả định có ghi sổ** (`ASM-01..03`), vẫn OPEN |
 | Đính chính từ người vận hành | 28/08/2026 — kỳ giá `2026-08` trong repo là **bản copy để kiểm thử gd1**, do người vận hành tự đặt, **không phải** quyết định của khách. Đã sửa `SUP-01` và thêm `FACT-PRICE-07` |
