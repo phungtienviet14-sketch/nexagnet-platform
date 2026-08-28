@@ -114,30 +114,36 @@ gd1-test**, **ClickStack chưa rời POC**.
 **EXIT GATE** — bốn khẳng định trên đạt; OTel và ClickStack đạt **L5**; ba known risk chuyển khỏi
 `UNRESOLVED`; `ultty-gd1-test` được ghi là **PARITY-CLOSED**.
 
-**TIẾN ĐỘ (28/08/2026)** — trạng thái viết theo bộ từ vựng ở
+**TIẾN ĐỘ (28/08/2026, sau deploy run `33172218761`, release `98013f8`)** — trạng thái viết theo
+bộ từ vựng ở
 [reference-platform-stack §5](../../kien-truc/reference-platform-stack.md#5-bộ-từ-vựng-trạng-thái-bắt-buộc),
-không viết bằng phần trăm:
+không theo phần trăm:
 
 | Hạng mục của cổng ra | Trạng thái |
 |---|---|
-| preload OTel trong compose (api + 2 worker) | **RUNTIME-PROVEN** — cả ba tiến trình phát span (§8.9) |
+| preload OTel trong compose (api + 2 worker) | **RUNTIME-PROVEN** |
 | đường xuất OTLP | **RUNTIME-PROVEN** |
-| ClickStack lưu trữ bền + xác thực | **RUNTIME-PROVEN** — 4953 span sống qua deploy release mới |
+| ClickStack lưu trữ bền + xác thực | **RUNTIME-PROVEN** |
 | cách ly theo tenant | **RUNTIME-PROVEN** ở mức ghi (listener + credential, fail-closed) |
-| retention + backup/recovery kho trace | **CODE-ONLY** — backup `Native` + `restore-check.sh observability` |
-| retention + backup/recovery `hatchet-postgres` | **CODE-ONLY** — có từ 23/08 (kèm `hatchet-config`), chưa chạy verify gần đây |
-| health check + có mặt trong deploy signal | **CODE-ONLY** — hai tầng mềm `observability` + `channelListener` |
-| danh tính release của trace bền = canonical | **RUNTIME-PROVEN** (§8.8) |
-| Debug View có đường lùi lịch sử | **CODE-ONLY** (§8.11) |
-| known risk `zca_listener` | **FIXED — chờ chứng minh**; ba mục đầu của cổng đóng đã có mã |
-| known risk preflight `autoSend` | **FIXED — chờ chứng minh** |
+| retention + backup/recovery kho trace | **RUNTIME-PROVEN** — 36993 span phục hồi, tra cứu được theo `TraceId` |
+| retention + backup/recovery `hatchet-postgres` | **RUNTIME-PROVEN** — `Restore check thanh cong (hatchet)` |
+| health check + có mặt trong deploy signal | **RUNTIME-PROVEN** — 6/6 tín hiệu `pass` |
+| danh tính release của trace bền = canonical | **RUNTIME-PROVEN** |
+| Debug View có đường lùi lịch sử | **RUNTIME-PROVEN** (§8.13) |
 | known risk `bot-poller` flaky | **RESOLVED** |
-| PROOF 1 (tạo trace → Debug View thấy) | **RUNTIME-PROVEN** (đường vòng đệm) |
-| PROOF 2 (restart → vẫn thấy) | **kho: RUNTIME-PROVEN · Debug View: chưa đo** |
-| PROOF 3 (deploy release mới → vẫn thấy) | **kho: RUNTIME-PROVEN · Debug View: chưa đo** |
-| PROOF 4 (trace cũ giữ release cũ + permalink cũ) | **kho: RUNTIME-PROVEN · Debug View: chưa đo** |
+| known risk preflight `autoSend` | **RESOLVED** — preflight thật chạy qua |
+| known risk `zca_listener` | **`FIXED` — chờ chứng minh** ⬅ **mục duy nhất còn vướng** |
+| PROOF 1 (tạo trace → Debug View thấy) | **RUNTIME-PROVEN** — `origin=buffer` |
+| PROOF 2 (restart → vẫn thấy) | **RUNTIME-PROVEN** — vòng đệm rỗng + `origin=historical` |
+| PROOF 3 (deploy release mới → vẫn thấy) | **RUNTIME-PROVEN** — `origin=historical` |
+| PROOF 4 (trace cũ giữ release cũ + permalink cũ) | **RUNTIME-PROVEN** — `1ad92be…` ≠ release đang chạy |
 
-Khoảng cách còn lại là **một lần deploy + bốn phép đo ở mức màn hình**, không phải mã chưa viết.
+**Khoảng cách còn lại là MỘT việc, và nó không phải việc viết mã:** §7.1 đòi *"một tin
+`zca_listener` mới đi hết đường"* — cần **một người nhắn một tin trong nhóm Zalo thật**. Kèm theo:
+đường tự nối lại chưa từng chạy trong đời thật (mọi lần socket đóng quan sát được đều xảy ra lúc
+tiến trình đang tắt, nên cổng `destroyed` chặn — đúng thiết kế).
+
+Vì thế **P2 chưa CLOSED**, và `ultty-gd1-test` **chưa** được ghi là PARITY-CLOSED.
 
 **DO NOT DO** — không thêm tính năng nghiệp vụ Ultty · không bắt đầu Fleet View · không dựng hệ
 durability thứ hai · không cài công nghệ ở vòng ASSESS/HOLD.

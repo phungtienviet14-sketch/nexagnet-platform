@@ -19,8 +19,9 @@
 > **Bản triển khai KHÔNG bật cụm quan sát** (`OTEL_TRACING=off`) giữ nguyên hành vi cũ: vòng đệm
 > mất là mất, và câu trả lời là `404` kèm ghi chú nói rõ **không có** kho để lùi về.
 >
-> Trạng thái: **đường đọc `CODE-ONLY`** cho tới khi bốn proof của P2 chạy ở mức Debug View —
-> [reference-platform-stack §8.11](../../kien-truc/reference-platform-stack.md#811-đường-lùi-lịch-sử-của-debug-view--code-only-28082026-pr-65).
+> Trạng thái: **RUNTIME-PROVEN** trên `ultty-gd1-test` (28/08/2026, release `98013f8`) — bốn proof
+> đo ở mức Debug View, xem
+> [reference-platform-stack §8.13](../../kien-truc/reference-platform-stack.md#813-bốn-proof-đo-ở-mức-debug-view-28082026-release-98013f8).
 >
 > **Đã đổi theo hướng tốt hơn:** danh tính release nay đọc từ **manifest** được mount readonly
 > (`RELEASE_MANIFEST_PATH=/runtime/release.json`), không còn lùi về `RELEASE_GIT_SHA`. Permalink

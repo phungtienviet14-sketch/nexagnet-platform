@@ -12,9 +12,9 @@ không bỏ nghiệp vụ Ultty đã có.
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
 | OTel code support | **RUNTIME-PROVEN** |
 | OTel export trên gd1-test | **RUNTIME-PROVEN** — api + 2 worker đều phát span |
-| ClickStack | **DEPLOYED / HEALTH-CHECKED** — bền, retention 30 ngày |
-| Historical Debug traces | **KHO BỀN**; đường đọc `api`→ClickHouse **CODE-ONLY** |
-| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
+| ClickStack | **RUNTIME-PROVEN** — bền, retention 30 ngày, backup→restore→query đạt |
+| Historical Debug traces | **CLOSED / RUNTIME-PROVEN** — 4/4 proof ở mức Debug View |
+| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** — vướng đúng một mục: một tin `zca_listener` thật |
 
 **Milestone triển khai kế tiếp: `REFERENCE STACK PARITY v0`** — không phải Fleet View, không phải
 ClickStack production, không phải nghiệp vụ Ultty mới.
