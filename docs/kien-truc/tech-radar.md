@@ -36,7 +36,7 @@
 | **Next.js** | **ADOPT** | Console vận hành chạy thật, `verify` + `e2e` xanh mỗi lần CI |
 | **Postgres + Prisma 6** | **ADOPT** (ghim v6, **không** lên v7 — `@adminjs/prisma` chưa hỗ trợ) | Nguồn sự thật runtime; `PERSISTENCE=prisma` chạy trên gd1-test |
 | **Hatchet** | **ADOPT** | Engine + 2 worker chạy trên gd1-test; 24 bài integration trên engine thật xanh mỗi lần CI; `durableTask` + `sleepFor` đã chứng minh sống qua SIGKILL |
-| **OpenTelemetry** | **ADOPT** (quy ước **và** runtime) | Bộ preload đầy đủ trong `apps/api/src/observability/otel/`. ⚠️ **Chưa bật trên gd1-test** — xem §2 |
+| **OpenTelemetry** | **ADOPT** (quy ước **và** runtime) | Bộ preload đầy đủ trong `apps/api/src/observability/otel/`, đường triển khai đã nối 28/08. ⚠️ **Chưa bật trên gd1-test** — xem §2 |
 | **Docker Compose + Caddy** | **ADOPT cho quy mô hiện tại** | 13 service, TLS tự động, rollout theo digest, health + smoke sau rollout |
 | **GitHub Actions** | **ADOPT** | 7 job CI; CD keyless qua Workload Identity Federation; deploy signal machine-readable |
 
@@ -55,8 +55,8 @@
 | Docker Compose | 1 | **L5** | — |
 | Caddy | 1 | **L5** | — |
 | GitHub Actions | 2 | **L5** | — |
-| **OpenTelemetry** | 1 | **L1 CODE-SUPPORTED** | Mã có đủ: `otel-preload.ts`, `otel-config.ts`, bridge cho worker, `privacy-span-processor`, `span-noise-filter`. **Khoá sau `OTEL_TRACING=on`, mặc định tắt**, và compose/Dockerfile **không** có `NODE_OPTIONS --import` nào ⇒ **NOT DEPLOYED**. Đây là ADOPT **chưa đạt parity** |
-| **ClickStack / HyperDX** | 1 hoặc 2 | **L0 POC** | Chỉ tồn tại ở `tools/poc-observability/compose/clickstack.compose.yml`. POC 24/08 chấm **GO 8/10**. **Chưa deploy trên gd1**. Mô hình triển khai **đã chọn 27/08/2026** (shared OTLP collector + kho quan sát cách ly theo tenant, cách ly bằng listener+credential) — xem [reference-platform-stack §8](reference-platform-stack.md#8-mô-hình-triển-khai-clickstack--đã-chọn) |
+| **OpenTelemetry** | 1 | **L1 CODE-SUPPORTED** | Mã có đủ: `otel-preload.ts`, `otel-config.ts`, bridge cho worker, `privacy-span-processor`, `span-noise-filter`. Từ 28/08 compose gắn `--import` **có điều kiện** cho **api + 2 worker** và danh tính release dùng chung `release-sha.ts` (§7.6). **Khoá sau `OTEL_TRACING=on`, mặc định tắt** ⇒ vẫn **NOT DEPLOYED** cho tới lần deploy `observability_stack: on` đầu tiên. ADOPT **chưa đạt parity** |
+| **ClickStack / HyperDX** | 1 hoặc 2 | **L1 CODE-SUPPORTED** (ClickHouse) · **L0** (HyperDX) | POC 24/08 chấm **GO 8/10**. Từ 28/08 kho ClickHouse + collector nằm ở `deploy/netviet/observability/` sau `profiles: ["observability"]`, cách ly có test khoá — nhưng **chưa container nào chạy trên gd1**. HyperDX **hoãn có chủ ý** (kéo theo MongoDB cho mỗi stack; đường đọc của P2 là `api` → ClickHouse). Hai sai khác so với thiết kế: [reference-platform-stack §8.6](reference-platform-stack.md#86-hai-sai-khác-có-chủ-ý-khi-hiện-thực-28082026) |
 
 > **Hai dòng cuối là lý do `REFERENCE PARITY` chưa CLOSED.** Chúng ở vòng ADOPT vì quyết định đã
 > chốt, không phải vì đã chạy.

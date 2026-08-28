@@ -83,9 +83,9 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 |---|---|
 | Release Identity Closure | **CLOSED / RUNTIME-PROVEN** |
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
-| OTel code support | **PARTIAL** |
-| OTel export trên gd1-test | **NOT DEPLOYED** |
-| ClickStack | **POC / NOT DEPLOYED ON GD1** |
+| OTel code support | **CODE-SUPPORTED** (đường triển khai đã nối, §8.6) |
+| OTel export trên gd1-test | **NOT DEPLOYED** — chưa container nào chạy |
+| ClickStack | **CODE-SUPPORTED / NOT DEPLOYED** (rời `tools/poc-observability/` 28/08) |
 | Historical Debug traces | **NOT PERSISTENT** |
 | `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
 
@@ -105,8 +105,9 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 | GitHub deploy signals | 2 | đầy đủ | có | **có** | artifact 30 ngày | **CLOSED / RUNTIME-PROVEN** | — |
 | Source correlation | 1 | đầy đủ | có | có | theo trace (không bền) | **RUNTIME-PROVEN** | phụ thuộc Debug View bền |
 | Debug View | 1 | đầy đủ | có | có | **KHÔNG** | **PARTIAL** | trace bền (P2) |
-| OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`**; release identity dùng chung `release-sha.ts` (§7.6) | **KHÔNG** | không | n/a | **PARTIAL / NOT-DEPLOYED** | preload vào compose (P2) |
-| ClickStack / HyperDX | 1 hoặc 2 | chỉ trong `tools/poc-observability/` | **KHÔNG** | không | không | **POC** | mô hình đã chọn (§8) → dựng collector + kho theo tenant (P2) |
+| OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`**; preload nối vào compose cho **api + 2 worker**; release identity dùng chung `release-sha.ts` (§7.6) | **KHÔNG** | không | n/a | **CODE-SUPPORTED / NOT-DEPLOYED** | một lần deploy `observability_stack: on` |
+| ClickHouse (kho quan sát) | 1 | `deploy/netviet/observability/` + `profiles: ["observability"]`, cách ly có test khoá | **KHÔNG** | không | `ttl: 720h` đã khai, **backup chưa có** | **CODE-SUPPORTED / NOT-DEPLOYED** | một lần deploy, rồi backup/restore |
+| HyperDX (UI quan sát) | 1 hoặc 2 | không có — **cố ý hoãn** (§8.6 B) | **KHÔNG** | không | n/a | **PLANNED** | sau P2; đường đọc của P2 là `api` → ClickHouse |
 | Flowise | 1 | là **1 trong 3** adapter parser | có (container luôn chạy) | không dùng ở đường parser gd1 | volume riêng | **DEPLOYED-NOT-PROVEN** | quyết định `ModelRuntimePort` (P7) |
 | Portainer | 2 | không có | không | không | n/a | **PLANNED** | POC (P4) |
 | OpenTofu / Ansible | 2 | không có | không | không | n/a | **PLANNED** | P6 |
@@ -388,7 +389,38 @@ trả cho lựa chọn này là **RAM/đĩa nhân theo số tenant**, và đó l
 | Retention bao lâu? | `ttl` cấu hình **theo từng exporter**, tức theo tenant. Mặc định stack tham chiếu: **30 ngày** |
 | Ai trả tiền cho đĩa? | Tenant, cùng chỗ với Postgres nghiệp vụ của họ |
 
-### 8.6 Điều kiện dừng
+### 8.6 Hai sai khác có chủ ý khi hiện thực (28/08/2026)
+
+> Ghi ở đây chứ không giấu trong commit message: một người đọc §8.3 rồi mở `compose.yaml` sẽ thấy
+> hai thứ **không khớp**. Cả hai đều là lựa chọn, không phải cắt xén.
+
+**A. Collector nằm trong compose của TỪNG stack, không phải một collector dùng chung.**
+
+§8.3 vẽ một collector phục vụ N tenant. Cái đó cần một **mặt phẳng điều khiển dùng chung** — có
+vòng đời triển khai riêng, không thuộc compose của khách nào. Mặt phẳng đó **chưa tồn tại**, và
+dựng nó là P4/P6 mà P2 bị **cấm** bắt đầu ("DO NOT DO — không bắt đầu Fleet View").
+
+Chọn cách này **không làm cách ly yếu đi** — ngược lại: không còn cả một tiến trình dùng chung để
+mà rò. Cái mất là tính gọn khi vận hành nhiều khách, và **RAM nhân theo số tenant** (cùng loại giá
+đã chấp nhận ở §8.4 cho kho).
+
+Đường quay lại rẻ: khuôn `otel-collector.template.yaml` giữ **nguyên hình dạng §8.3** — mỗi khối
+mang tên riêng theo stack (`otlp/<slug>`, `bearertokenauth/<slug>`, `clickhouse/<slug>`,
+`traces/<slug>`) — nên gộp N tệp lại là một phép **nối chuỗi**, không phải viết lại.
+`observability-isolation.contract.test.mjs` **dùng đúng phép nối đó** để kiểm: nó render hai stack,
+ghép, rồi hỏi "có đường nào từ A sang B không".
+
+**B. Không có HyperDX trong đợt này.**
+
+HyperDX v2 kéo theo **MongoDB** cho *mỗi* stack khách. Và đường **ĐỌC** mà bốn runtime proof của
+P2 cần là `api` → ClickHouse bằng **user readonly riêng**, không phải một giao diện. Một UI cho
+người vận hành là thứ đáng có, nhưng nó không nằm trên đường tới cổng ra của P2 — thêm nó bây giờ
+là ba container nữa cho một thứ chưa ai cần tới.
+
+Hệ quả phải nói rõ: **§8.3 dòng "HyperDX chạy được ở chế độ HyperDX only" vẫn chỉ là khảo sát**,
+chưa được chứng minh trên stack nào.
+
+### 8.7 Điều kiện dừng
 
 Nếu ClickStack **không** chứng minh được cách ly cứng theo mô hình này thì **DỪNG và báo** — tuyệt
 đối không tự hạ xuống một kho dùng chung. Tính tới 27/08/2026, ba bằng chứng ở §8.3 cho thấy
