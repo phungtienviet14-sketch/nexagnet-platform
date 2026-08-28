@@ -95,6 +95,25 @@ export function shouldResetBackoff(connectedForMs: number): boolean {
 }
 
 /**
+ * SAU KHI MOT LAN NOI LAI CHAY, cho bao lau roi moi hoi "the da nghe duoc chua?".
+ *
+ * ==============================================================================================
+ * VI SAO CAN — mot lo hong that trong chinh ban sua truoc:
+ *
+ * `performConnect()` TU NUOT loi dang nhap: no bat `catch`, dat `connectionState = 'error'`, roi
+ * tra ve BINH THUONG. Nen `connect().catch(...)` khong bao gio chay, va mot lan noi lai that bai
+ * (mang con dut, Zalo dang tu choi) se KHONG hen lan thu ke tiep.
+ *
+ * Ket qua: mot kenh "tu chua" chi chua duoc DUNG MOT LAN roi bo cuoc im lang — tuc van la su co
+ * §7.1, chi lui lai mot nhip. Mot co che tu phuc hoi that bai im lang con te hon khong co, vi no
+ * lam nguoi ta thoi kiem tra.
+ *
+ * Nen sau moi lan thu, ta HOI LAI trang thai thay vi tin vao gia tri tra ve. `connected` la mot
+ * su kien den sau, nen phai cho — 15 giay du cho mot lan dang nhap + bat tay WebSocket.
+ */
+export const RECONNECT_VERIFY_MS = 15_000;
+
+/**
  * Ma dong nao dang duoc noi lai?
  *
  * TAT CA. Ham nay ton tai de cau tra loi do duoc VIET RA thay vi nam an trong mot nhanh `if` —

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ChannelHealthService, deriveListenerPhase } from './channel-health.js';
 import {
   nextReconnectDelayMs,
+  RECONNECT_VERIFY_MS,
   shouldReconnectAfterClose,
   shouldResetBackoff,
   STABLE_CONNECTION_MS,
@@ -209,6 +210,15 @@ describe('chinh sach noi lai', () => {
     expect(shouldResetBackoff(STABLE_CONNECTION_MS - 1)).toBe(false);
     expect(shouldResetBackoff(STABLE_CONNECTION_MS)).toBe(true);
     expect(shouldResetBackoff(10 * 60_000)).toBe(true);
+  });
+
+  it('cua so kiem lai phai DAI hon khoang cho dau tien, va NGAN hon nguong on dinh', () => {
+    // `performConnect()` tu nuot loi dang nhap, nen `connect().catch()` khong bao gio chay: mot
+    // lan noi lai that bai se khong hen duoc lan ke tiep neu khong co buoc HOI LAI TRANG THAI.
+    // Cua so do phai du dai cho mot lan dang nhap + bat tay WebSocket...
+    expect(RECONNECT_VERIFY_MS).toBeGreaterThan(nextReconnectDelayMs({ attempt: 1, random: () => 1 }));
+    // ...nhung ngan hon nguong "on dinh", neu khong mot ket noi vua du song se bi hoi khi da tre.
+    expect(RECONNECT_VERIFY_MS).toBeLessThan(STABLE_CONNECTION_MS);
   });
 
   it('co nhieu ngau nhien, va khong bao gio ngan hon khoang co so', () => {

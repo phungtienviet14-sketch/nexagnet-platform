@@ -24,6 +24,7 @@ import type { OutboundReceipt } from '../messages/outbound-recorder.js';
 import { ChannelHealthService } from './channel-health.js';
 import {
   nextReconnectDelayMs,
+  RECONNECT_VERIFY_MS,
   shouldReconnectAfterClose,
   STABLE_CONNECTION_MS,
 } from './listener-reconnect.js';
@@ -699,11 +700,29 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       // `connect(false)` = dung phien DA LUU, khong mo QR. Mot lan dut socket khong phai ly do
       // de doi nguoi ngoi quet ma; con neu phien that su hong thi `performConnect` se dua trang
       // thai sang `error` va duong QR van con do.
-      void this.connect(false).catch((error: unknown) => {
-        this.logger.warn(`zca-js listener: noi lai that bai: ${errMsg(error)}`);
-        // That bai thi hen tiep — voi khoang cho dai hon, vi `reconnectAttempt` da tang.
-        this.scheduleReconnect(code);
-      });
+      //
+      // ⚠️ `.catch()` MOT MINH LA KHONG DU, va day la mot lo hong that cua ban truoc:
+      // `performConnect()` TU NUOT loi dang nhap — no bat `catch`, dat `connectionState='error'`,
+      // roi tra ve BINH THUONG. Nen mot lan noi lai that bai se khong hen duoc lan ke tiep, va
+      // kenh "tu chua" chi chua duoc DUNG MOT LAN roi bo cuoc im lang.
+      //
+      // Nen sau moi lan thu ta HOI LAI TRANG THAI thay vi tin vao gia tri tra ve.
+      void this.connect(false)
+        .catch((error: unknown) => {
+          this.logger.warn(`zca-js listener: noi lai nem loi: ${errMsg(error)}`);
+        })
+        .finally(() => {
+          if (this.destroyed) return;
+          const verify = setTimeout(() => {
+            if (this.destroyed || this.connectionState === 'ready') return;
+            this.logger.warn(
+              `zca-js listener: sau lan noi lai ${attempt}, trang thai van la ` +
+                `'${this.connectionState}' — hen tiep.`,
+            );
+            this.scheduleReconnect(code);
+          }, RECONNECT_VERIFY_MS);
+          verify.unref?.();
+        });
     }, delayMs);
     // `unref` de mot lan hen dang cho khong giu tien trinh song khi moi thu khac da xong.
     this.reconnectTimer.unref?.();
