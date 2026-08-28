@@ -48,10 +48,25 @@ export interface TraceNode {
   readonly source?: SourceLocation;
 }
 
+/**
+ * KHO NAO DA TRA LOI cau hoi nay.
+ *
+ *   `buffer`      vong dem trong tien trinh — luot vua chay, ban ghi nguyen ven;
+ *   `historical`  kho quan sat ben ngoai — luot da song qua mot lan khoi dong lai hoac mot lan
+ *                 phat hanh moi.
+ *
+ * KHONG PHAI TRANG TRI. Khong co truong nay thi "Debug View van mo duoc luot cu" va "luot cu
+ * tinh co con trong bo nho" nhin y het nhau tu ben ngoai, va cau dau tro thanh mot loi khang
+ * dinh khong ai kiem duoc.
+ */
+export type TraceOrigin = 'buffer' | 'historical';
+
 export interface TraceView {
   readonly traceId: string;
   readonly tenant: string;
   readonly environment: string;
+  /** Vang mat = ban trien khai cu, truoc khi duong lui lich su ton tai. */
+  readonly origin?: TraceOrigin;
   /** 12 ky tu dau cua git SHA. Vang mat = chay local/khong biet release. */
   readonly release?: string;
   readonly startedAt: string;

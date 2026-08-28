@@ -367,6 +367,15 @@ OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
 CLICKHOUSE_WRITER_USER=${CLICKHOUSE_WRITER_USER}
 CLICKHOUSE_WRITER_PASSWORD=${CLICKHOUSE_WRITER_PASSWORD}
 CLICKHOUSE_DATABASE=${CLICKHOUSE_DATABASE}
+# CREDENTIAL DOC — cua \`api\`, cho duong lui ve lich su cua Debug View. KHAC credential ghi o
+# tren, va khac CO CHU Y (§8.1 dieu 3): user nay chi co \`GRANT SELECT\` (xem
+# \`init-observability.sql\` ngay duoi), nen mot loi o tang doc khong the tro thanh mot phep ghi.
+#
+# Hai gia tri nay DA duoc tinh o dau tep tu 28/08, nhung chua bao gio di ra khoi script — tuc user
+# doc ton tai trong ClickHouse ma khong tien trinh nao biet mat khau cua no. Do dung la hinh dang
+# loi ma \`secrets-passthrough.contract.test.mjs\` ton tai de bat, chi khac chieu.
+CLICKHOUSE_READER_USER=${CLICKHOUSE_READER_USER}
+CLICKHOUSE_READER_PASSWORD=${CLICKHOUSE_READER_PASSWORD}
 EOF
 
 # --- Tang edge dung chung ----------------------------------------------------------------------

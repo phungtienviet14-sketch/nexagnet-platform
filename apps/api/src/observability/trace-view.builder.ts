@@ -82,8 +82,20 @@ function isTechnical(record: TelemetryRecord): boolean {
  * bat ky. `ai_call` cung vay: `parse`/`compose` khong phai ten co vi tri.
  *
  * Thieu thi tra `undefined`, va console noi ro la thieu (muc 11). Khong doan.
+ *
+ * ---------------------------------------------------------------------------
+ * BAN GHI TU MANG SAN VI TRI THI DUNG CUA NO, KHONG TRA BANG.
+ *
+ * `sourceForStep`/`sourceForDecision` doc `source-manifest.generated.ts` — bang duoc sinh luc
+ * BUILD cua ban phat hanh DANG CHAY. Voi mot luot cua chinh ban phat hanh do (duong trong bo
+ * nho) day la cau tra loi dung. Voi mot luot doc lai tu KHO, ban phat hanh co the la mot cai
+ * khac: cung mot diem quyet dinh da co the doi dong, doi ham, doi tep. Tra bang o do se ghep so
+ * dong MOI voi commit CU — mot permalink bam duoc, mo ra mot tep, va sai.
+ *
+ * Nen thu tu la: vi tri DI KEM ban ghi truoc, bang tra cuu sau.
  */
 function sourceOf(record: TelemetryRecord): SourceLocation | undefined {
+  if (record.source) return record.source;
   if (record.type === 'step') return sourceForStep(record.name) ?? undefined;
   if (record.type === 'decision')
     return sourceForDecision(record.point, record.reason) ?? undefined;
