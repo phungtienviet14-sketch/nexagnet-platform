@@ -5,7 +5,8 @@
 > [`phat-trien/ke-hoach/tong-quan.md`](../phat-trien/ke-hoach/tong-quan.md); tài liệu này mô tả
 > **hợp đồng** và **bằng chứng runtime**, không chứa ✅/⬜ của kế hoạch.
 >
-> **Cập nhật:** 27/08/2026 · **Đối chiếu mã nguồn tại:** `8b0f6ad603495fc90235d350b13550afd36a982d`
+> **Cập nhật:** 27/08/2026 · **Đối chiếu mã nguồn tại:** `7a6cc63904d18be49c653ee1315e65046607bda5`
+> (+ nhánh `feat/reference-stack-parity-v0` cho §7.2, §7.3 và §8)
 
 ---
 
@@ -105,7 +106,7 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 | Source correlation | 1 | đầy đủ | có | có | theo trace (không bền) | **RUNTIME-PROVEN** | phụ thuộc Debug View bền |
 | Debug View | 1 | đầy đủ | có | có | **KHÔNG** | **PARTIAL** | trace bền (P2) |
 | OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`** | **KHÔNG** | không | n/a | **PARTIAL / NOT-DEPLOYED** | preload vào compose (P2) |
-| ClickStack / HyperDX | 1 hoặc 2 | chỉ trong `tools/poc-observability/` | **KHÔNG** | không | không | **POC** | chọn mô hình triển khai (§8) |
+| ClickStack / HyperDX | 1 hoặc 2 | chỉ trong `tools/poc-observability/` | **KHÔNG** | không | không | **POC** | mô hình đã chọn (§8) → dựng collector + kho theo tenant (P2) |
 | Flowise | 1 | là **1 trong 3** adapter parser | có (container luôn chạy) | không dùng ở đường parser gd1 | volume riêng | **DEPLOYED-NOT-PROVEN** | quyết định `ModelRuntimePort` (P7) |
 | Portainer | 2 | không có | không | không | n/a | **PLANNED** | POC (P4) |
 | OpenTofu / Ansible | 2 | không có | không | không | n/a | **PLANNED** | P6 |
@@ -138,11 +139,16 @@ classification      APPLICATION_ROLLED_OUT_HEALTHY    hardFailure: false
 
 ---
 
-## 7. KNOWN RISKS — `UNRESOLVED`
+## 7. KNOWN RISKS
 
-> Ba mục 7.1–7.3 là **quan sát runtime thật**, không phải suy đoán. Chúng **không** được sửa trong
-> đợt tài liệu này (đợt này là docs-only) và giữ trạng thái `UNRESOLVED` cho tới khi có bằng chứng
-> ngược lại.
+> Ba mục 7.1–7.3 là **quan sát runtime thật**, không phải suy đoán. Trạng thái được cập nhật khi có
+> **bằng chứng ngược lại**, không phải khi có ý định sửa.
+>
+> | Mục | Trạng thái | Cần gì để đóng hẳn |
+> |---|---|---|
+> | 7.1 `zca_listener` im lặng | `UNRESOLVED` | tin mới qua kênh thật + health check trong deploy signal |
+> | 7.2 preflight ghi đè `autoSend` | **`FIXED` — chờ chứng minh** | một lần preflight thật chạy qua |
+> | 7.3 `bot-poller` flaky | **`RESOLVED`** | — (đóng bằng cấu trúc, xem dưới) |
 
 ### 7.1 `zca_listener` im lặng — `UNRESOLVED`
 
@@ -163,7 +169,7 @@ vọng là đọc nhóm thật thì năng lực đó **đang không được ch�
 **Cổng đóng:** một lần chạy có tin `zca_listener` mới sau thời điểm này, kèm health check của
 listener nằm trong deploy signal. Thuộc **P2**.
 
-### 7.2 Preflight ghi đè giá trị runtime quan sát được — `UNRESOLVED`
+### 7.2 Preflight ghi đè giá trị runtime quan sát được — `FIXED`, chờ chứng minh
 
 **Bằng chứng:** `deploy/netviet/gd1-test-preflight.mjs`
 
@@ -171,15 +177,29 @@ listener nằm trong deploy signal. Thuộc **P2**.
 if (providerSmoke.ok) runtime.autoSend = 'off';
 ```
 
-`runtime.autoSend` được **đọc từ container đang chạy**, rồi bị ghi đè bằng hằng số. Hiện **chưa gây
-hại** vì trường này không lọt vào `machineProof` (chỉ `plan`, `rollback`, `firstRelease` được ghi
-ra), nhưng đây đúng là loại lỗi mà Release Identity Closure tồn tại để diệt: **bằng chứng bị sửa
-thay vì được quan sát**.
+`runtime.autoSend` được **đọc từ container đang chạy**, rồi bị ghi đè bằng hằng số.
 
-**Cổng đóng:** hoặc xoá dòng này, hoặc biến "AUTO_SEND phải off" thành một **cổng có kiểm tra** với
-mã lý do riêng. Thuộc **P2**.
+**⚠️ Đánh giá cũ ở đây NHẸ HƠN thực tế.** Bản trước ghi "chưa gây hại vì trường này không lọt vào
+`machineProof`". Lần theo chính đối tượng đó thì không phải vậy:
 
-### 7.3 `bot-poller.spec.ts` flaky — `UNRESOLVED`
+```
+527  runtime.autoSend = 'off'            ← ghi đè
+553  runtime,                            ← CHÍNH đối tượng đó vào `input.deployment`
+807  ...runtimeErrors(deployment?.runtime)
+```
+
+`runtimeErrors()` **đã có sẵn** cổng "autoSend phải là `off`" (`REQUIRED_RUNTIME`). Phép ghi đè chạy
+**trước** khi `runtime` đi vào `input`, nên cổng đó **không bao giờ có thể đỏ**. Đây không chỉ là
+bằng chứng bị làm đẹp — đó là **một cổng an toàn bị vô hiệu hoá trong im lặng**: một stack thật sự
+đang chạy `AUTO_SEND=on` sẽ đi qua preflight sạch sẽ.
+
+**Đã sửa** (`da60f73`): xoá dòng ghi đè; cổng ở nguyên chỗ cũ và nay nhìn thấy sự thật. Kèm bài test
+đỏ-trước-khi-sửa: stack báo `AUTO_SEND=on` + smoke provider xanh ⇒ `ok === false` và bằng chứng giữ
+đúng `'on'`.
+
+**Cổng đóng hẳn:** một lần preflight thật chạy qua trên gd1-test. Thuộc **P2**.
+
+### 7.3 `bot-poller.spec.ts` flaky — `RESOLVED`
 
 **Bằng chứng:** `apps/api/src/ingest/bot-poller.spec.ts` → *"tiep tuc long-poll khi batch truoc con
 cho burst"* đỏ **2 lần** trong `pnpm test` toàn monorepo (27/08), nhưng **22/22 xanh** khi chạy
@@ -188,8 +208,16 @@ riêng file đó, và xanh ở CI.
 **Vì sao đáng lo:** một bài test đỏ ngẫu nhiên dạy người ta bỏ qua màu đỏ. Đó là chi phí thật, kể cả
 khi mã nguồn đúng.
 
-**Cổng đóng:** khử phụ thuộc thời gian trong bài test (không dùng đồng hồ thật để khẳng định thứ
-tự). Thuộc **P2**.
+**Nguyên nhân:** `await vi.waitFor(..., { timeout: 100 })` — một **hạn chót cho THÀNH CÔNG**. Chạy
+cả monorepo thì máy bận, vòng lặp chưa kịp poll lần hai trong 100 ms, và bài đỏ dù mã đúng.
+
+**Đã sửa** (`24c48d4`): chờ **một sự kiện** thay vì chờ **một khoảng thời gian** — `fetchUpdates`
+lần hai tự báo là nó đã được gọi. Khác biệt có cấu trúc, không phải nới rộng hạn chót: máy chậm nay
+chỉ làm bài **chạy lâu hơn**, không làm nó đỏ. Nếu vòng lặp thật sự bị tuần tự hoá thì sự kiện không
+bao giờ đến và bài đỏ bằng hạn chót của chính vitest — một hạn chót cho **THẤT BẠI**.
+
+Bài cũng khẳng định mạnh hơn trước: chốt thêm rằng batch đầu **vẫn đang chờ** lúc lần poll thứ hai
+chạy, tức hai việc thật sự gối lên nhau.
 
 ### 7.4 Hai rủi ro tuân thủ đã biết, vẫn mở
 
@@ -217,23 +245,114 @@ ai cũng ghi thẳng vào được. Thuộc **P3**, và **P3 phải xong trướ
 
 ---
 
-## 8. Mô hình triển khai ClickStack — chưa chọn
+## 8. Mô hình triển khai ClickStack — **ĐÃ CHỌN**
 
-**Không mặc định một kho dùng chung khổng lồ.** Trace có thể chứa dữ liệu cá nhân, và nguyên tắc
-hiện hành của nền tảng là **silo theo tenant**.
+> **Quyết định (27/08/2026):** **Shared OTLP Collector + kho quan sát cách ly theo từng tenant.**
+> Collector dùng chung **chỉ là mặt phẳng thu nhận/định tuyến, không giữ trạng thái**.
+> **Không** dùng bảng trace dùng chung với cách ly bằng bộ lọc `tenantId`.
 
-| Mô hình | Được gì | Mất gì |
-|---|---|---|
-| **ClickStack theo từng tenant** | cách ly bằng **kiến trúc**, đúng nguyên tắc silo; xoá tenant là xoá kho | tốn RAM/đĩa nhân theo số tenant; vận hành N cụm |
-| **ClickStack dùng chung + cách ly cứng** | một cụm, rẻ, dễ nâng cấp | cách ly thành **lời hứa cấu hình**; một lỗi phân quyền là rò dữ liệu chéo khách |
-| **Collector dùng chung + kho tách riêng** | một đường thu, nhiều kho; cân bằng chi phí và cách ly | collector trở thành điểm chết chung và là nơi phải lọc PII chuẩn xác |
+### 8.1 Điều kiện cứng của quyết định
 
-**Điều kiện chọn (phải trả lời trước khi cài):** trace của tenant có được coi là dữ liệu của tenant
-đó không · ai được xem · xoá một tenant thì trace đi đâu · retention bao lâu · ai trả tiền cho đĩa.
+1. **Định tuyến phải dựa trên danh tính/credential do bản triển khai cấp**, không dựa trên bất kỳ
+   giá trị nào nằm trong tải trọng hoặc do bên gửi tự khai.
+2. **Fail-closed.** Không có credential hợp lệ thì dữ liệu bị từ chối — không có đường mặc định
+   để rơi vào.
+3. **Credential ghi, credential đọc, retention, backup và lệnh xoá đều tách theo tenant.**
 
-Reference stack **phải chọn một mô hình rõ ràng** trước khi ClickStack rời trạng thái POC.
+### 8.2 Cách KHÔNG đạt — và đây là cách mặc định người ta hay chọn
 
----
+`routingconnector` định tuyến theo `otelcol.client.metadata["X-Tenant"]`. Ba lỗi, mỗi lỗi đủ để
+loại:
+
+| Lỗi | Vì sao chí mạng |
+|---|---|
+| Header là thứ **bên gửi tự khai** | Tenant A đặt `X-Tenant: B` là ghi thẳng vào kho của B |
+| Connector **chỉ đọc được header/metadata thô** | Không có đường nào đọc danh tính **đã xác thực** (`client.Info.Auth`) — tài liệu không hỗ trợ |
+| `default_pipelines` | Không khớp route nào thì **vẫn đi tiếp** — fail-**open** |
+
+Đây chính là "cách ly thành lời hứa cấu hình" mà bảng §8 cũ cảnh báo.
+
+### 8.3 Cách đạt — buộc danh tính vào **listener + credential**
+
+```yaml
+extensions:
+  # `filename` chu khong phai `token`: khoa doc tu TEP DUOC MOUNT, khong nam trong bien moi
+  # truong cua tien trinh. Cung duong ma `.runtime/secrets.env` va `release.json` da di, va
+  # khoa khong lo ra trong `docker inspect`.
+  bearertokenauth/ultty: { filename: /run/otlp-keys/ultty }
+  bearertokenauth/amico: { filename: /run/otlp-keys/amico }
+
+receivers:
+  otlp/ultty:
+    protocols: { http: { endpoint: ":4318", auth: { authenticator: bearertokenauth/ultty } } }
+  otlp/amico:
+    protocols: { http: { endpoint: ":4328", auth: { authenticator: bearertokenauth/amico } } }
+
+exporters:
+  clickhouse/ultty:
+    endpoint: tcp://obs-ultty:9000
+    username: ultty_writer
+    password: ${env:ULTTY_CH_PASSWORD}
+    database: obs_ultty
+    ttl: 720h
+  clickhouse/amico:
+    endpoint: tcp://obs-amico:9000
+    username: amico_writer
+    password: ${env:AMICO_CH_PASSWORD}
+    database: obs_amico
+    ttl: 2160h
+
+service:
+  pipelines:
+    traces/ultty: { receivers: [otlp/ultty], exporters: [clickhouse/ultty] }
+    traces/amico: { receivers: [otlp/amico], exporters: [clickhouse/amico] }
+```
+
+**Vì sao đây là cách ly bằng KIẾN TRÚC chứ không phải bằng cấu hình:** pipeline được chọn bởi
+**listener nào đã nhận kết nối**, mà listener đó đòi đúng credential của tenant đó. **Không tồn
+tại đường** nào từ receiver của A sang exporter của B — không phải "có đường nhưng đã lọc". Sai
+credential thì receiver từ chối, và không có `default_pipelines` để rơi vào.
+
+Bằng chứng thành phần gốc:
+
+- `bearertokenauthextension` hiện thực **`configauth.ServerAuthenticator`**, và **nhiều instance
+  đặt tên** gắn được vào nhiều receiver khác nhau (`auth: { authenticator: bearertokenauth/<tên> }`).
+  Nhận khoá qua `token`, `tokens` hoặc **`filename`** (tệp chứa token theo dòng) — ta dùng
+  `filename`.
+- `clickhouseexporter` nhận `endpoint`/`username`/`password`/`database`/`ttl` **theo từng
+  instance** ⇒ credential ghi và retention tách theo tenant. `password` là `configopaque.String`
+  và Collector khai triển `${env:…}`, nên giá trị thật đến từ `render-secrets.sh` lúc triển khai,
+  **không bao giờ nằm trong repo**. Exporter **không** có khoá `password_file` — đừng viết ra một
+  khoá không tồn tại rồi tưởng là đã an toàn.
+- HyperDX v2 có **Connections** (host/username/password) + **Sources** (database/table) và chạy
+  được ở chế độ **"HyperDX only"** trỏ vào ClickHouse tự quản, với user **readonly** ⇒ credential
+  **đọc** cũng tách theo tenant.
+
+### 8.4 Kho đặt ở đâu
+
+**Một ClickHouse trong compose của từng tenant** (mặt phẳng 1 — TENANT DATA PLANE), đúng nguyên
+tắc silo: xoá tenant là xoá kho.
+
+**Không** chọn "N database trên một cụm chung". Cách đó thoả mãn từng chữ của §8.1, nhưng nó đưa
+cách ly về lại thành **cấu hình phân quyền** — một lỗi `GRANT` là rò dữ liệu chéo khách. Giá phải
+trả cho lựa chọn này là **RAM/đĩa nhân theo số tenant**, và đó là giá được chấp nhận có ý thức.
+
+### 8.5 Trả lời các câu hỏi mà §8 cũ yêu cầu trả lời trước khi cài
+
+| Câu hỏi | Trả lời |
+|---|---|
+| Trace của tenant có phải dữ liệu của tenant đó không? | **Có.** Trace mang nội dung nghiệp vụ và có thể mang dữ liệu cá nhân |
+| Ai được xem? | Người vận hành Nexagnet qua credential **readonly theo tenant**; không có credential nào nhìn được nhiều tenant |
+| Xoá một tenant thì trace đi đâu? | Đi cùng stack của tenant — kho nằm trong chính compose đó |
+| Retention bao lâu? | `ttl` cấu hình **theo từng exporter**, tức theo tenant. Mặc định stack tham chiếu: **30 ngày** |
+| Ai trả tiền cho đĩa? | Tenant, cùng chỗ với Postgres nghiệp vụ của họ |
+
+### 8.6 Điều kiện dừng
+
+Nếu ClickStack **không** chứng minh được cách ly cứng theo mô hình này thì **DỪNG và báo** — tuyệt
+đối không tự hạ xuống một kho dùng chung. Tính tới 27/08/2026, ba bằng chứng ở §8.3 cho thấy
+**chứng minh được**, nên P2 đi tiếp.
+
 
 ## 9. Liên quan
 
