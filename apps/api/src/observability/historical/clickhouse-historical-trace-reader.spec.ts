@@ -53,13 +53,20 @@ function spanLine(overrides: Record<string, unknown> = {}): string {
   });
 }
 
+/**
+ * Kieu cua `fetch` ma reader nhan. Khai bao TUONG MINH vi `vi.fn(async () => …)` suy ra tuple
+ * tham so RONG, nen moi phep doc `mock.calls[0][1]` sau do deu la loi kieu — trong khi chinh hai
+ * tham so do (URL va `init`) la thu cac bai duoi day di hoi.
+ */
+type FetchStub = (url: string, init?: RequestInit) => Promise<Response>;
+
 function ok(body: string): Response {
   return new Response(body, { status: 200 });
 }
 
 describe('ClickHouseHistoricalTraceReader', () => {
   it('doc mot luot theo traceId va dich no ve mo hinh bang chung chung', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = vi.fn<FetchStub>(async () =>
       ok(
         [
           spanLine(),
@@ -86,7 +93,7 @@ describe('ClickHouseHistoricalTraceReader', () => {
   });
 
   it('KHONG BAO GIO cho ben goi doi khach — tenant duoc ghim luc dung', async () => {
-    const fetchImpl = vi.fn(async () => ok(''));
+    const fetchImpl = vi.fn<FetchStub>(async () => ok(''));
     const reader = new ClickHouseHistoricalTraceReader(config(), fetchImpl);
 
     await reader.byTraceId(TRACE);
@@ -98,7 +105,7 @@ describe('ClickHouseHistoricalTraceReader', () => {
   });
 
   it('tenant khong xac dinh -> TU CHOI DOC, khong hoi kho', async () => {
-    const fetchImpl = vi.fn(async () => ok(spanLine()));
+    const fetchImpl = vi.fn<FetchStub>(async () => ok(spanLine()));
     const reader = new ClickHouseHistoricalTraceReader(config({ tenant: 'unknown' }), fetchImpl);
 
     const result = await reader.byTraceId(TRACE);
@@ -141,7 +148,7 @@ describe('ClickHouseHistoricalTraceReader', () => {
   });
 
   it('traceId khong dung dang -> not_found, va KHONG mot lan hoi nao roi vao kho', async () => {
-    const fetchImpl = vi.fn(async () => ok(spanLine()));
+    const fetchImpl = vi.fn<FetchStub>(async () => ok(spanLine()));
     const reader = new ClickHouseHistoricalTraceReader(config(), fetchImpl);
 
     expect(await reader.byTraceId("' OR 1=1 --")).toEqual({ status: 'not_found' });
@@ -149,7 +156,7 @@ describe('ClickHouseHistoricalTraceReader', () => {
   });
 
   it('gia tri do nguoi dung dua di bang THAM SO, khong ghep vao cau lenh', async () => {
-    const fetchImpl = vi.fn(async () => ok(''));
+    const fetchImpl = vi.fn<FetchStub>(async () => ok(''));
     const reader = new ClickHouseHistoricalTraceReader(config(), fetchImpl);
 
     await reader.byOrderId("ORD-1'; DROP TABLE otel_traces; --");
@@ -160,7 +167,7 @@ describe('ClickHouseHistoricalTraceReader', () => {
   });
 
   it('truy van bi CHAN TREN: co gioi han dong va co han gio', async () => {
-    const fetchImpl = vi.fn(async () => ok(''));
+    const fetchImpl = vi.fn<FetchStub>(async () => ok(''));
     const reader = new ClickHouseHistoricalTraceReader(config(), fetchImpl);
 
     await reader.byTraceId(TRACE);
@@ -172,7 +179,7 @@ describe('ClickHouseHistoricalTraceReader', () => {
   });
 
   it('khoa doc di o HEADER, khong o URL — de no khong lot vao log truy cap', async () => {
-    const fetchImpl = vi.fn(async () => ok(''));
+    const fetchImpl = vi.fn<FetchStub>(async () => ok(''));
     const reader = new ClickHouseHistoricalTraceReader(config(), fetchImpl);
 
     await reader.byTraceId(TRACE);
@@ -186,7 +193,7 @@ describe('ClickHouseHistoricalTraceReader', () => {
 
   it('doc theo don: tim cac luot truoc, roi lay span cua dung nhung luot do', async () => {
     const fetchImpl = vi
-      .fn<(url: string, init?: RequestInit) => Promise<Response>>()
+      .fn<FetchStub>()
       .mockResolvedValueOnce(
         ok([JSON.stringify({ TraceId: TRACE }), JSON.stringify({ TraceId: OTHER_TRACE })].join('\n')),
       )
@@ -202,7 +209,7 @@ describe('ClickHouseHistoricalTraceReader', () => {
   });
 
   it('don khong co luot nao -> not_found, va khong hoi lan thu hai', async () => {
-    const fetchImpl = vi.fn(async () => ok(''));
+    const fetchImpl = vi.fn<FetchStub>(async () => ok(''));
     const reader = new ClickHouseHistoricalTraceReader(config(), fetchImpl);
 
     expect(await reader.byOrderId('ORD-KHONG-CO')).toEqual({ status: 'not_found' });

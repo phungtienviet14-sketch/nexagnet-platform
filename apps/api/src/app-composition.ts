@@ -24,6 +24,7 @@ import { BotIdentityService } from './channels/bot-identity.service.js';
 import { channelProvider, namedChannelProviders } from './channels/channel.provider.js';
 import { OutboundChannelRouter } from './channels/outbound-channel.router.js';
 import { ZaloController } from './channels/zalo.controller.js';
+import { ChannelHealthService } from './channels/channel-health.js';
 import { ZaloUserClient } from './channels/zalo-user.client.js';
 import { PrismaModule } from './config/prisma.module.js';
 import { PrismaService } from './config/prisma.service.js';
@@ -243,6 +244,10 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('knowledge', catalogStoreProvider),
   owned('turn-processing', mediaFetcherProvider),
   owned('turn-processing', parserProvider),
+  // `foundation`, KHONG phai `messaging`: mot khach khong dung kenh Zalo van phai co `/health`
+  // tra loi duoc — va cau tra loi dung cua no la `phase: 'disabled'`, chu khong phai mot khoi
+  // vang mat. Mot cong suc khoe chi noi duoc su that khi no ton tai o moi ban trien khai.
+  owned('foundation', ChannelHealthService),
   owned('messaging', ZaloUserClient),
   owned('messaging', BotIdentityService),
   ...namedChannelProviders.map((provider) => owned('messaging' as const, provider)),

@@ -7,6 +7,7 @@ import {
   type SenderType,
 } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
+import { ChannelHealthService } from '../channels/channel-health.js';
 import { GroupDiscoveryService } from '../groups/group-discovery.service.js';
 import { GroupParticipantsRepository } from '../groups/group-participants.repository.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
@@ -96,6 +97,11 @@ export class PipelineService implements OnModuleDestroy {
      * don hang. Dat CUOI danh sach co chu y — cac bo test dang truyen tham so theo vi tri.
      */
     @Optional() private readonly turnReply?: TurnReplyService,
+    /**
+     * Do "tin cuoi cung ve luc nao, tren kenh nao". Dat o CUOI danh sach vi cac bo test dang
+     * truyen tham so theo vi tri — cung ly do voi `turnReply` ngay tren.
+     */
+    @Optional() private readonly channelHealth?: ChannelHealthService,
   ) {
     const env = loadEnv();
     this.burstWindowMs =
@@ -129,6 +135,17 @@ export class PipelineService implements OnModuleDestroy {
     botName?: string,
     options: { retryPersisted?: boolean } = {},
   ): Promise<IntakeResult> {
+    /*
+     * DAU VET "CO TIN VE" — dat o day, TRUOC moi cong loc.
+     *
+     * Cau hoi ma no phuc vu la "kenh nay con nghe duoc khong", khong phai "tin nay co tao don
+     * khong". Mot tin bi bo vi nhom chua map, vi trung, vi nguoi gui bi ignore — deu la BANG
+     * CHUNG rang socket con song. Dat sau mot cong loc nao do se lam mot kenh khoe nhung dang bi
+     * loc het nhin y het mot kenh chet, va do chinh la kieu nham lan ma §7.1 sinh ra.
+     *
+     * `message.source` la dung cot kenh ma truy van chan doan cua §7.1 da nhom theo.
+     */
+    this.channelHealth?.recordInbound(message.source);
     const run = (): Promise<IntakeResult> => this.intakeTurn(message, botName, options);
     if (!this.telemetry) return run();
     /*

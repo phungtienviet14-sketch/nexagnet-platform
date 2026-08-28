@@ -537,3 +537,127 @@ if grep -q 'SMOKE_SKIPPED_ORDER_PATH=1' "${smoke_output}"; then
 fi
 
 rm -f -- "${deterministic_log}" "${smoke_output}"
+
+# ================================================================================================
+# TANG 5 — OBSERVABILITY: kho quan sat co NHAN va TRA LOI duoc khong.
+#
+# TIN HIEU MEM, cung ly le voi live AI: quan sat khong duoc la dieu kien de mot ban va loi len.
+#
+# NHUNG NO KHONG DUOC LA MOT DAU TICK XANH RE TIEN. "Container clickhouse dang Up" la mot cau tra
+# loi vo nghia: no van Up khi collector khong gui duoc gi, khi user doc khong ton tai, khi span
+# mang sai tenant. Ca ba deu da suyt xay ra that (§7.7, §8.8).
+#
+# Nen cau hoi o day la mot cau ma CHI mot duong ong con nguyen ven moi tra loi duoc:
+#
+#   "co bao nhieu span, cua DUNG ban phat hanh vua len, mang DUNG khach nay,
+#    doc bang credential CHI DOC ma Debug View se dung?"
+#
+# Mot cau tra loi khac 0 chung minh mot luc: preload chay, collector nhan, exporter ghi, schema
+# dung, user doc ton tai va co quyen, va danh tinh release/tenant di toi noi khong bi sai lech.
+# ================================================================================================
+
+stage observability OBSERVABILITY_PROBE_ERROR
+observability_enabled="$(runtime_value OTEL_TRACING)"
+if [[ "${observability_enabled}" != 'on' ]]; then
+  emit_signal observability skipped OBSERVABILITY_DISABLED \
+    "{\"stack\":\"${STACK_SLUG}\",\"note\":\"OTEL_TRACING khong bat tren ban trien khai nay\"}"
+else
+  ch_reader_user="$(runtime_value CLICKHOUSE_READER_USER)"
+  ch_reader_password="$(runtime_value CLICKHOUSE_READER_PASSWORD)"
+  ch_database="$(runtime_value CLICKHOUSE_DATABASE)"
+  # KHACH NAO — doc TU CHINH MANIFEST trong container, khong doan tu ten stack.
+  #
+  # Do la dung nguon ma `resolveTenant()` cua preload doc de dat `nexagnet.tenant` len span. Neu
+  # o day ta doan tu `STACK_SLUG` thi phep so sanh se tra loi mot cau hoi khac: no se hoi "span co
+  # mang cai ten ta doan khong" thay vi "span co mang dung khach ma tien trinh nghi no dang phuc
+  # vu khong". Va chinh cau thu hai moi la cai da do do o lan deploy 28/08 (`tenant = unknown`).
+  tenant_expected="$("${COMPOSE[@]}" exec -T api node -e     'try{process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.env.RELEASE_MANIFEST_PATH,"utf8")).tenant??""))}catch{process.stdout.write("")}'     2>/dev/null | tr -d '\r\n' || true)"
+
+  # Suc khoe COLLECTOR doc TU MOT CONTAINER KHAC tren cung mang: anh collector dung tu `scratch`,
+  # khong co shell/wget/curl, nen mot `healthcheck` trong chinh no se do vinh vien (§7.7 muc 1).
+  collector_health='unknown'
+  if "${COMPOSE[@]}" --profile observability exec -T clickhouse \
+      wget -q -O - --timeout=5 http://otel-collector:13133/ >/dev/null 2>&1; then
+    collector_health='ok'
+  else
+    collector_health='unreachable'
+  fi
+
+  # Span cua BAN PHAT HANH VUA LEN, doc bang USER CHI DOC. Cho toi 60 giay: hang doi cua SDK
+  # (2s) cong hang doi cua collector (5s) nghia la span cua smoke o tang tren chua chac da toi
+  # kho ngay luc nay.
+  span_count=''
+  for attempt in {1..12}; do
+    span_count="$("${COMPOSE[@]}" --profile observability exec -T \
+      -e "CLICKHOUSE_PASSWORD=${ch_reader_password}" clickhouse \
+      clickhouse-client --user "${ch_reader_user}" --database "${ch_database}" --query \
+      "SELECT count() FROM otel_traces WHERE ResourceAttributes['nexagnet.release'] = '${RELEASE_SHA_VALUE}' AND ResourceAttributes['nexagnet.tenant'] = '${tenant_expected}'" \
+      2>/dev/null | tr -d '\r\n ' || true)"
+    [[ "${span_count}" =~ ^[0-9]+$ && "${span_count}" -gt 0 ]] && break
+    sleep 5
+  done
+
+  observability_detail="{\"stack\":\"${STACK_SLUG}\",\"collector\":\"${collector_health}\",\"readerUser\":\"${ch_reader_user}\",\"database\":\"${ch_database}\",\"tenant\":\"${tenant_expected}\",\"release\":\"${RELEASE_SHA_VALUE}\",\"spansForRelease\":\"${span_count:-none}\"}"
+
+  if [[ -z "${tenant_expected}" ]]; then
+    # Fail-closed, cung luat voi duong doc trong ung dung: mot tien trinh khong khai duoc khach
+    # thi moi so sanh "span co dung khach khong" deu vo nghia.
+    emit_signal observability fail OBSERVABILITY_TENANT_UNRESOLVED       "{\"stack\":\"${STACK_SLUG}\",\"collector\":\"${collector_health}\"}"
+  elif [[ "${collector_health}" != 'ok' ]]; then
+    emit_signal observability fail OBSERVABILITY_INGESTION_UNREACHABLE "${observability_detail}"
+  elif [[ ! "${span_count}" =~ ^[0-9]+$ ]]; then
+    # Truy van KHONG TRA LOI DUOC — khac han "tra loi la 0". Mot ben la duong doc hong (user doc
+    # chua duoc tao, sai mat khau, bang chua ton tai), ben kia la duong GHI hong.
+    emit_signal observability fail OBSERVABILITY_QUERY_FAILED "${observability_detail}"
+  elif [[ "${span_count}" -eq 0 ]]; then
+    emit_signal observability fail OBSERVABILITY_NO_SPANS_FOR_RELEASE "${observability_detail}"
+  else
+    emit_signal observability pass OBSERVABILITY_STORE_ANSWERS "${observability_detail}"
+  fi
+fi
+
+# ================================================================================================
+# TANG 6 — CHANNEL LISTENER: kenh doc dang o pha nao.
+#
+# TIN HIEU MEM. Mot socket Zalo dut la su co VAN HANH, khong phai bang chung rang ban phat hanh
+# nay hong — chan lan deploy o day se lam ta khong va duoc ban SUA chinh cai socket do.
+#
+# Nhung no phai CO MAT: suot 44 gio cua §7.1, ba tin hieu deploy deu xanh trong khi kenh doc
+# chinh cua GD1 khong mang ve mot tin nao. Mot tin hieu khong ai nhin thi khong ton tai.
+# ================================================================================================
+
+stage channelListener LISTENER_PROBE_ERROR
+listener_probe="$("${COMPOSE[@]}" exec -T api node -e '
+fetch("http://127.0.0.1:3001/health")
+  .then((r) => r.json())
+  .then((body) => {
+    const listener = body?.channels?.listener;
+    const inbound = body?.channels?.inbound ?? [];
+    const primary = inbound.find((entry) => entry.channel === "zca_listener") ?? null;
+    process.stdout.write(
+      JSON.stringify({
+        phase: listener?.phase ?? "unknown",
+        reconnectCount: listener?.reconnectCount ?? null,
+        lastCloseCode: listener?.lastCloseCode ?? null,
+        lastInboundAgeSeconds: primary?.lastInboundAgeSeconds ?? null,
+      }),
+    );
+  })
+  .catch(() => process.stdout.write("{}"));
+' 2>/dev/null | tr -d '\r' || true)"
+
+listener_phase="$(printf '%s' "${listener_probe}" | sed -n 's/.*"phase":"\([a-z_]*\)".*/\1/p')"
+listener_detail="{\"stack\":\"${STACK_SLUG}\",\"probe\":${listener_probe:-null}}"
+
+case "${listener_phase}" in
+  # Kenh khong duoc bat tren ban trien khai nay -> khong co gi de canh, va do la cau tra loi that.
+  disabled) emit_signal channelListener skipped LISTENER_DISABLED "${listener_detail}" ;;
+  # `connected_but_idle` LA MOT KET QUA DAT: socket mo, chi la chua ai nhan. Ca diem cua §7.1 la
+  # phan biet duoc no voi `disconnected`, chu khong phai coi im lang la that bai.
+  connected|connected_but_idle) emit_signal channelListener pass "LISTENER_${listener_phase^^}" "${listener_detail}" ;;
+  # Socket DONG va khong lan thu nao dang cho. Day dung la trang thai 44 gio.
+  disconnected) emit_signal channelListener fail LISTENER_DISCONNECTED "${listener_detail}" ;;
+  # Chua ket luan duoc: ngay sau rollout, listener co the con dang dang nhap hoac dang noi lai.
+  reconnecting|authenticated|configured) emit_signal channelListener unavailable "LISTENER_${listener_phase^^}" "${listener_detail}" ;;
+  *) emit_signal channelListener unavailable LISTENER_STATE_UNREADABLE "${listener_detail}" ;;
+esac

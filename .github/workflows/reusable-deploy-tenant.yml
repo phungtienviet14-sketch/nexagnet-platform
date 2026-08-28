@@ -223,6 +223,39 @@ jobs:
           process.exit(1);
           NODE
 
+      # TANG QUAN SAT — MOT BUOC RIENG, VA NO KHONG BAO GIO LAM DO WORKFLOW.
+      #
+      # Vi sao mot buoc rieng: suot ~44 gio (reference-platform-stack §7.1), ba tin hieu deploy
+      # deu xanh trong khi kenh doc chinh cua GD1 khong mang ve mot tin nao. Cai thieu khong phai
+      # mot cong CHAN — cai thieu la mot cho de NHIN. Buoc nay la cho do.
+      #
+      # Vi sao `exit 0` o moi nhanh: quan sat khong duoc la dependency cua thanh cong nghiep vu
+      # (.claude/rules/ecc/common/code-review.md), va mot socket Zalo dut khong phai bang chung
+      # rang ban phat hanh nay hong. Ket qua di ra log + Step Summary, khong di ra ket luan.
+      - name: OBSERVABILITY & CHANNEL LISTENER
+        if: '!cancelled() && steps.rollout.outcome == ''success'''
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const fs = await import('node:fs');
+          const result = JSON.parse(fs.readFileSync('deploy-signals.json', 'utf8'));
+          for (const layer of ['observability', 'channelListener']) {
+            const status = String(result[layer] ?? 'pending').toUpperCase();
+            const reason = result.reasons?.[layer] ?? 'UNSPECIFIED';
+            const detail = JSON.stringify(result.details?.[layer] ?? {});
+            const line = `${layer}: ${status} (${reason}) ${detail}`;
+            if (status === 'PASS' || status === 'SKIPPED') console.log(line);
+            else console.warn(`::warning::${line}`);
+          }
+          const soft = result.softFailures ?? [];
+          if (soft.length > 0) {
+            console.warn(
+              `::warning::Tang quan sat chua dat: ${soft.join(', ')}. Khong chan lan deploy, ` +
+                'nhung phai co nguoi doc — xem bang tin hieu o Step Summary.',
+            );
+          }
+          NODE
+
       # Duong dan cua khach van phai duoc in ra KE CA khi live AI khong dat: ung dung da len va
       # dang khoe, nen nguoi truc can link de vao xem — do chinh la luc ho can no.
       - name: Report tenant endpoints

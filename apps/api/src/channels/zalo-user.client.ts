@@ -1,4 +1,10 @@
-import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Optional,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { loadEnv } from '@netviet/shared';
@@ -15,6 +21,8 @@ import {
 } from 'zca-js';
 import type { ZaloQuoteTarget } from '@netviet/shared';
 import type { OutboundReceipt } from '../messages/outbound-recorder.js';
+import { ChannelHealthService } from './channel-health.js';
+import { nextReconnectDelayMs, shouldReconnectAfterClose } from './listener-reconnect.js';
 import type { SendOptions } from './channel-adapter.js';
 
 export type ZcaMessageHandler = (message: Message) => void | Promise<void>;
@@ -101,9 +109,23 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   private allowedGroupIds = new Set<string>();
   private readonly threadTypes = new Map<string, ThreadType>();
   private connectionGeneration = 0;
+  /** Lich noi lai. `null` = khong co lan thu nao dang cho — xem `scheduleReconnect`. */
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempt = 0;
+
+  /**
+   * `@Optional()` KEM MAC DINH, khong phai bat buoc: `ZaloUserClient` duoc dung truc tiep
+   * (`new ZaloUserClient()`) o mot so duong test va script. Khi chay that thi `ChannelsModule`
+   * cung cap dung MOT the hien, va do la the hien ma `/health` doc — nen so lieu tren man hinh
+   * la so lieu cua chinh socket nay, khong phai cua mot ban sao khong ai ghi vao.
+   */
+  constructor(
+    @Optional() private readonly health: ChannelHealthService = new ChannelHealthService(),
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.loadAllowedGroups();
+    this.health.setEnabled(this.channelMode === 'zca' || this.channelMode === 'hybrid');
     if (this.channelMode !== 'zca' && this.channelMode !== 'hybrid') {
       this.connectionState = 'disabled';
       this.logger.log(`CHANNEL_MODE=${this.channelMode} -> khong khoi tao zca-js.`);
@@ -115,6 +137,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.destroyed = true;
+    this.cancelReconnect();
     this.stopListener();
     this.api = null;
   }
@@ -167,6 +190,10 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   /** Ngat listener, xoa credential cuc bo va xoa allowlist de tai khoan sau khong ke thua pham vi cu. */
   async logout(): Promise<void> {
     this.connectionGeneration += 1;
+    // Nguoi CHU DONG dang xuat thi khong duoc tu noi lai — neu khong, mot lan dang xuat se bi
+    // mot lan hen truoc do dap lai sau vai phut.
+    this.cancelReconnect();
+    this.reconnectAttempt = 0;
     this.stopListener();
     this.api = null;
     this.connectionState = 'logged_out';
@@ -557,14 +584,27 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.connectionState = 'ready';
       this.lastError = undefined;
       this.errorKind = undefined;
-      this.logger.log('zca-js listener: connected');
+      // Socket da mo LAI thanh cong -> bo dem ve 0, de lan dut ke tiep duoc chua nhanh nhu lan
+      // dau. Khong reset thi mot kenh song ca thang van phai cho 5 phut cho lan dut dau tien.
+      const wasReconnect = this.reconnectAttempt > 0;
+      this.reconnectAttempt = 0;
+      this.cancelReconnect();
+      this.health.markConnected();
+      this.logger.log(
+        wasReconnect ? 'zca-js listener: da NOI LAI thanh cong' : 'zca-js listener: connected',
+      );
     });
     listener.on('closed', (code, reason) => {
       this.connectionState = 'connecting';
       this.lastError = 'Listener Zalo mat ket noi; he thong dang thu ket noi lai.';
+      this.health.markClosed(code ?? null, reason ?? null);
       this.logger.warn(`zca-js listener closed (${code}): ${reason}`);
+      this.scheduleReconnect(code ?? null);
     });
     listener.on('error', (error) => {
+      // LOI DANG NHAP DI DUONG KHAC voi socket dong: mot credential da hong thi thu lai bao nhieu
+      // lan cung khong thanh cong, nen o day dung han va doi nguoi quet QR moi.
+      this.cancelReconnect();
       this.stopListener();
       this.api = null;
       this.connectionState = 'error';
@@ -575,6 +615,64 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     if (this.messageHandler) listener.on('message', this.messageHandler);
     listener.start({ retryOnClose: true });
     this.started = true;
+    this.health.markAuthenticated();
+  }
+
+  /**
+   * HEN MOT LAN NOI LAI. Day la ban va cho su co §7.1.
+   *
+   * `listener.start({ retryOnClose: true })` o tren DA duoc bat, va no VAN khong cuu duoc lan
+   * `closed (1000): NORMAL_CLOSURE` ngay 27/08/2026: thu vien coi ma `1000` la "ben kia dong tu
+   * te, khong co gi de thu lai". Voi mot kenh DOC thi khong co khac biet nao giua mot socket dong
+   * tu te va mot socket chet — ca hai deu la khong nghe duoc.
+   *
+   * NOI LAI BANG CACH DUNG HAN ROI KET NOI TU DAU, khong phai goi `listener.start()` lan hai tren
+   * cung mot doi tuong: `attachListener()` dang ky `on('message', …)`, nen mot lan gan lai tren
+   * listener cu se lam MOI TIN duoc xu ly hai lan. `MessageGuard` se chan ban sao do, nhung dua
+   * mot loi tinh dung dan cho mot luoi an toan o tang duoi la cach de sau nay no im lang hong.
+   */
+  private scheduleReconnect(code: number | null): void {
+    if (this.destroyed) return;
+    if (this.channelMode !== 'zca' && this.channelMode !== 'hybrid') return;
+    if (!shouldReconnectAfterClose(code)) return;
+    // Mot lan hen dang cho la du. `listener.stop()` co the tu phat `closed`, nen khong co cong
+    // nay thi mot lan dut se sinh ra mot chum hen chong len nhau.
+    if (this.reconnectTimer) return;
+
+    this.reconnectAttempt += 1;
+    const attempt = this.reconnectAttempt;
+    const delayMs = nextReconnectDelayMs({ attempt });
+    this.health.markReconnectScheduled();
+    this.logger.warn(
+      `zca-js listener: hen noi lai lan ${attempt} sau ${Math.round(delayMs / 1000)}s ` +
+        `(ma dong ${code ?? 'khong ro'}).`,
+    );
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.destroyed) return;
+      this.logger.warn(`zca-js listener: dang noi lai (lan ${attempt})...`);
+      this.stopListener();
+      this.api = null;
+      // `connect(false)` = dung phien DA LUU, khong mo QR. Mot lan dut socket khong phai ly do
+      // de doi nguoi ngoi quet ma; con neu phien that su hong thi `performConnect` se dua trang
+      // thai sang `error` va duong QR van con do.
+      void this.connect(false).catch((error: unknown) => {
+        this.logger.warn(`zca-js listener: noi lai that bai: ${errMsg(error)}`);
+        // That bai thi hen tiep — voi khoang cho dai hon, vi `reconnectAttempt` da tang.
+        this.scheduleReconnect(code);
+      });
+    }, delayMs);
+    // `unref` de mot lan hen dang cho khong giu tien trinh song khi moi thu khac da xong.
+    this.reconnectTimer.unref?.();
+  }
+
+  private cancelReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.health.markReconnectAbandoned();
   }
 
   private stopListener(): void {
