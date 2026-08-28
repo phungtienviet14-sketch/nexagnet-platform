@@ -1,4 +1,4 @@
-import { resolveReleaseShaFromEnv } from '../release-sha.js';
+import { readReleaseManifest, resolveReleaseSha, resolveTenant } from '../release-sha.js';
 import { privacyModeFor, type TelemetryPrivacyMode } from '../telemetry-redaction.js';
 import type { ReleaseIdentitySource } from '../trace-context.js';
 
@@ -95,13 +95,17 @@ export function readOtelConfig(env: NodeJS.ProcessEnv = process.env): OtelRuntim
    * `release-sha.ts` chi phu thuoc `node:fs`, nen goi no o day khong keo do thi module nghiep vu
    * vao preload.
    */
-  const release = resolveReleaseShaFromEnv(env);
+  const manifest = readReleaseManifest(env.RELEASE_MANIFEST_PATH);
+  const release = resolveReleaseSha(manifest, env);
   return {
     enabled,
     serviceName: env.OTEL_SERVICE_NAME ?? 'nexagnet-api',
     endpoint: (env.OTEL_EXPORTER_OTLP_ENDPOINT ?? DEFAULT_ENDPOINT).replace(/\/+$/, ''),
     headers: parseHeaders(env.OTEL_EXPORTER_OTLP_HEADERS),
-    tenant: env.TENANT ?? 'unknown',
+    // KHONG doc `env.TENANT` mot minh: `compose.yaml` dat `TENANT_DIR` chu khong dat `TENANT`,
+    // nen dong cu cho ra `unknown` tren MOI span (do that tren gd1-test 28/08). Manifest da mount
+    // va da co truong `tenant` — xem `resolveTenant()`.
+    tenant: resolveTenant(manifest, env),
     environment: env.DEPLOYMENT_ENVIRONMENT ?? env.NODE_ENV ?? 'development',
     release: release.gitSha,
     releaseSource: release.source,

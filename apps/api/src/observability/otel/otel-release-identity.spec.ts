@@ -54,9 +54,9 @@ describe('OTel va telemetry noi bo phan giai CUNG mot release', () => {
     rmSync(scratch, { recursive: true, force: true });
   });
 
-  function manifestAt(gitSha: string | undefined): string {
+  function manifestAt(gitSha: string | undefined, tenant: string | undefined = 'acme'): string {
     const path = join(scratch, 'release.json');
-    writeFileSync(path, JSON.stringify({ tenant: 'acme', environment: 'gd1-test', gitSha }));
+    writeFileSync(path, JSON.stringify({ tenant, environment: 'gd1-test', gitSha }));
     return path;
   }
 
@@ -119,5 +119,48 @@ describe('OTel va telemetry noi bo phan giai CUNG mot release', () => {
     const env = { RELEASE_MANIFEST_PATH: join(scratch, 'khong-co.json'), RELEASE_GIT_SHA: SHA_ENV };
 
     expect(expectParity(env)).toBe(SHA_ENV);
+  });
+
+  // ------------------------------------------------------- span phai noi duoc no cua KHACH NAO
+
+  /**
+   * DO TREN gd1-test 28/08/2026, sau lan deploy dau tien co OTel: MOI span mang
+   * `nexagnet.tenant = unknown`.
+   *
+   * Cung mot lop loi voi release SHA, va cung mot nguyen nhan: `otel-config.ts` doc THANG
+   * `env.TENANT`, trong khi `compose.yaml` chi dat `TENANT_DIR=/srv/tenant` — chua bao gio dat
+   * `TENANT`. Chinh cai bay ma chu thich cua `release-identity.ts` da canh bao, va la ly do phep
+   * doc goi khach duoc chuyen vao trong ham do tu 25/08.
+   *
+   * Span khong noi duoc no thuoc khach nao thi ca cau chuyen "kho quan sat cach ly theo tenant"
+   * mat nghia: du lieu nam dung kho, nhung chinh no khong khai duoc chu.
+   *
+   * `release.json` DA MOUNT va DA co truong `tenant` — nen loi giai khong can them mot nguon nao.
+   */
+  it('TENANT khong duoc dat (dung nhu compose) -> lay tenant tu manifest, khong phai `unknown`', () => {
+    const env = { RELEASE_MANIFEST_PATH: manifestAt(SHA_MANIFEST, 'acme') };
+
+    expect(readOtelConfig(env).tenant).toBe('acme');
+  });
+
+  it('khong manifest, chi co bien moi truong -> lay tu bien moi truong', () => {
+    expect(readOtelConfig({ TENANT: 'globex' }).tenant).toBe('globex');
+  });
+
+  it('manifest thang bien moi truong — manifest la thu tang deploy vua ghi ra', () => {
+    const env = { RELEASE_MANIFEST_PATH: manifestAt(SHA_MANIFEST, 'acme'), TENANT: 'globex' };
+
+    expect(readOtelConfig(env).tenant).toBe('acme');
+  });
+
+  it('khong nguon nao -> `unknown` (chay local/CI la trang thai BINH THUONG)', () => {
+    expect(readOtelConfig({}).tenant).toBe('unknown');
+  });
+
+  it('chuoi rong khong duoc coi la mot cau tra loi', () => {
+    // Cung cai bay da lam `nexagnet.release` di ra ngoai la `''`: `??` khong bat chuoi rong.
+    const env = { RELEASE_MANIFEST_PATH: manifestAt(SHA_MANIFEST, ''), TENANT: '' };
+
+    expect(readOtelConfig(env).tenant).toBe('unknown');
   });
 });

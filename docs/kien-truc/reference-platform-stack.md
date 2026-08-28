@@ -83,12 +83,12 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 |---|---|
 | Release Identity Closure | **CLOSED / RUNTIME-PROVEN** |
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
-| OTel code support | **CODE-SUPPORTED** (đường triển khai đã nối, §8.6) |
-| OTel export trên gd1-test | **NOT DEPLOYED** — chưa container nào chạy |
-| ClickStack | **CODE-SUPPORTED / NOT DEPLOYED** (rời `tools/poc-observability/` 28/08) |
+| OTel code support | **RUNTIME-PROVEN trên gd1-test** (§8.8) |
+| OTel export trên gd1-test | **DEPLOYED + span chảy thật** — 513 span / 213 trace |
+| ClickStack (ClickHouse) | **DEPLOYED / HEALTH-CHECKED** — bền, retention 30 ngày; **backup/restore chưa có** |
 | Historical Debug traces | **NOT PERSISTENT** |
-| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** · release đang chạy `8b0f6ad` |
-| Đường AI trên gd1-test | **BROKEN** — cả DeepSeek lẫn Anthropic đều từ chối (§7.8), **chặn mọi deploy** |
+| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** · release đang chạy `270ef27` |
+| Đường AI trên gd1-test | **KHÔI PHỤC 28/08** — DeepSeek đã nạp lại; `liveAiSmoke: pass`. Khoá Anthropic **vẫn hỏng** (§7.8) |
 
 ### 6.1 CURRENT STATE MATRIX
 
@@ -575,7 +575,64 @@ nhanh theo `TraceId` qua bảng `otel_traces_trace_id_ts`.
 phát span, rằng span sống qua restart/deploy, hay bất cứ điều gì về backup. Bốn runtime proof của
 P2 vẫn còn nguyên.
 
-### 8.8 Điều kiện dừng
+### 8.8 **CHẠY THẬT trên stack tham chiếu** (28/08/2026, deploy run `33148283115`)
+
+Release `270ef27ade9a67f3a586acc3682287eb1a8c0010`. **Bốn tín hiệu deploy đều `pass`**,
+`classification: APPLICATION_ROLLED_OUT_HEALTHY`, `hardFailure: false`.
+
+**Cụm quan sát lên thật:**
+
+```
+zalo-ultty-gd1-test-clickhouse-1        Up (healthy)
+zalo-ultty-gd1-test-otel-collector-1    Up
+```
+
+**Span chảy thật** — đọc từ `obs_ultty_gd1_test.otel_traces` vài phút sau khi khởi động:
+
+```
+ServiceName    spans  traces
+nexagnet-api     513     213
+```
+
+Tên bước cho thấy đúng cả hai lớp: `turn`, `conversation.resolve`, `agent.run`,
+`parse deepseek-v4-flash` (nghiệp vụ) cùng `prisma:client:operation`, `GET`, `POST` (hạ tầng).
+
+**§7.6 nay được chứng minh ở mức STACK, không còn ở mức tiến trình đơn lẻ:**
+
+```
+nexagnet.release         270ef27ade9a67f3a586acc3682287eb1a8c0010
+nexagnet.release_source  manifest
+```
+
+Đúng SHA của bản phát hành, và **đọc từ manifest** — không phải từ biến môi trường. Trước bản sửa,
+trường này sẽ mang giá trị của `RELEASE_GIT_SHA` (hoặc chuỗi rỗng), tức có thể lệch khỏi danh tính
+canonical mà Debug View dùng.
+
+#### Điều lần chạy này phát hiện ra: `nexagnet.tenant = unknown`
+
+**Mọi span** của lần deploy đầu tiên mang `tenant = unknown`. Cùng một lớp lỗi với §7.6, và cùng
+một nguyên nhân: `otel-config.ts` đọc thẳng `env.TENANT`, trong khi `compose.yaml` chỉ đặt
+`TENANT_DIR=/srv/tenant` — **chưa bao giờ đặt `TENANT`** (trong image không có thư mục `tenants/`
+để tra slug).
+
+Đây đúng cái bẫy mà chú thích của `release-identity.ts` đã cảnh báo, và là lý do phép đọc gói khách
+được chuyển **vào trong** hàm đó từ 25/08. Bản sửa release SHA đóng một nửa; nửa còn lại lộ ra ngay
+lần chạy thật đầu tiên.
+
+**Vì sao nó đắt hơn một nhãn sai:** một span không nói được nó thuộc khách nào làm cả câu chuyện
+"kho quan sát cách ly theo tenant" mất nghĩa — dữ liệu nằm đúng kho, nhưng **chính nó không khai
+được chủ**. Mọi truy vấn cắt theo khách, mọi báo cáo, mọi lần đối chiếu chéo đều mất neo.
+
+**Đã sửa:** `resolveTenant()` trong `release-sha.ts` — `manifest → env → unknown`. `release.json`
+đã mount và đã có trường `tenant`, nên lời giải không cần thêm nguồn nào.
+
+**Một sai khác có chủ ý phải nói rõ:** hàm canonical **đảo ngược** thứ tự cho `tenant` — gói khách
+trước, vì gói khách quyết định app đang phục vụ ai *lúc chạy*, còn manifest chỉ ghi lại ý định của
+lần deploy. Preload **không đọc được** gói khách (`@netviet/tenant` chính là đồ thị nghiệp vụ mà
+preload phải vào trước). Nên preload dùng `manifest → env`, và hai nguồn lệch nhau là một sự cố cấu
+hình mà **đường canonical** sẽ báo — không phải việc của đoạn code chạy sớm nhất trong tiến trình.
+
+### 8.9 Điều kiện dừng
 
 Nếu ClickStack **không** chứng minh được cách ly cứng theo mô hình này thì **DỪNG và báo** — tuyệt
 đối không tự hạ xuống một kho dùng chung. Tính tới 27/08/2026, ba bằng chứng ở §8.3 cho thấy
