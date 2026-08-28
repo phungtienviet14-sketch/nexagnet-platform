@@ -26,8 +26,11 @@ Tài liệu canonical của tầng nền tảng:
 - [docs/kien-truc/agentic-ops.md](docs/kien-truc/agentic-ops.md) — bốn mức tự động hoá vận hành (chưa triển khai)
 - [docs/phat-trien/ke-hoach/platform-roadmap-v2.md](docs/phat-trien/ke-hoach/platform-roadmap-v2.md) — lộ trình P0→P15
 
-> ⚠️ **`main` hiện KHÔNG được bảo vệ** (0 ruleset, repo public — đo 27/08/2026). Kỷ luật release
-> đang dựa vào thói quen người vận hành, không phải cơ chế cưỡng chế. Xem P3 trong roadmap.
+> ✅ **`main` ĐÃ được bảo vệ** (ruleset `main-protection`, `bypass_actors: []` — đo 28/08/2026):
+> bắt buộc PR · 7 status check bắt buộc · chặn force-push · chặn xoá nhánh. Push thẳng và force-push
+> đã được thử bằng token admin và **đều bị từ chối**. Repo vẫn **public**, và vẫn **chưa cưỡng chế
+> được review bởi người thứ hai** (repo một chủ — GitHub cấm tự duyệt PR của mình).
+> Xem [docs/phat-trien/van-hanh/github-governance.md](docs/phat-trien/van-hanh/github-governance.md).
 
 > ℹ️ `AGENTS.md` và `CLAUDE.md` đang mô tả sản phẩm bằng hai cách khác nhau ở dòng tiêu đề.
 > Bản đúng về định vị là bản platform-first: nền tảng AI Agent doanh nghiệp đa khách hàng.

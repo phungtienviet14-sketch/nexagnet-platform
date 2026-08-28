@@ -406,22 +406,32 @@ phải làm, và nó là việc **tuân thủ**, không phải việc sửa lỗ
   liệu. gd1-test hiện chạy `PARSER_MODE=deepseek` với `DATA_CLASSIFICATION=test`.
 - **Kênh zca** cần tài khoản phụ + văn bản chấp nhận rủi ro ToS của khách.
 
-### 7.5 Quản trị GitHub — `UNRESOLVED`, mức HIGH
+### 7.5 Quản trị GitHub — `RESOLVED` (28/08/2026), còn một khoảng trống
 
-**Bằng chứng** (GitHub API, 27/08/2026):
+**Bằng chứng** (GitHub API, 28/08/2026):
 
 ```
-GET /repos/…/rulesets                    → 0 ruleset
-GET /repos/…/branches/main/protection    → 404 "Branch not protected"
-GET /repos/…                             → private=false
+GET /repos/…/rules/branches/main   → deletion, non_fast_forward, pull_request, required_status_checks
+GET /repos/…/rulesets/21740233     → enforcement=active, bypass_actors=[]
+PATCH /repos/…/git/refs/heads/main → 422 "Changes must be made through a pull request."
+                                          "7 of 7 required status checks are expected."
+PATCH … force=true                 → 422 "Cannot force-push to this branch"
+GET /repos/…                       → private=false   ← KHÔNG đổi, repo vẫn public
 ```
 
-`main` **không được bảo vệ**: không bắt buộc PR, không bắt buộc CI xanh, không chặn force-push — và
-repo đang **public**. Toàn bộ kỷ luật release hiện nay dựa vào **thói quen của người vận hành**, chứ
-không phải vào một cơ chế cưỡng chế nào.
+`main` nay **bắt buộc PR + 7 status check**, **chặn force-push**, **chặn xoá nhánh**, và
+`bypass_actors: []` nghĩa là **chủ repo cũng không miễn trừ** — hai phép thử trên chạy bằng chính
+token admin của chủ repo và đều bị từ chối. Deploy `gd1-test` và `production` bị giới hạn về `main`
+ở tầng GitHub (trước đó `gd1-test` chỉ được chặn bằng mã shell trong workflow).
 
-**Vì sao nó chặn đường dài:** không thể mở bất kỳ mức tự động hoá coding agent nào lên một nhánh mà
-ai cũng ghi thẳng vào được. Thuộc **P3**, và **P3 phải xong trước P12–P15**.
+**Khoảng trống còn lại — `UNRESOLVED`, mức TRUNG BÌNH:** repo chỉ có **một collaborator**, nên
+**không cưỡng chế được review bởi người thứ hai** (GitHub cấm tự duyệt PR của chính mình; đặt
+`required_approving_review_count: 1` sẽ khoá cứng mọi PR). Và chủ repo luôn có quyền sửa/xoá chính
+ruleset — không cấu hình nào của repo cá nhân chặn được điều đó; chỉ còn lại **dấu vết** trong lịch
+sử ruleset. Siết thêm được nếu chuyển repo về một **Organization**.
+
+Chi tiết, cách kiểm chứng và cách dựng lại:
+[docs/phat-trien/van-hanh/github-governance.md](../phat-trien/van-hanh/github-governance.md).
 
 ---
 

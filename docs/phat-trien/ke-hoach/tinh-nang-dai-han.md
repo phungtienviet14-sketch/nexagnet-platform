@@ -86,7 +86,16 @@
 **Luồng:** tin có `imageUrl` → **tải ảnh về lưu ngay** (URL Zalo có hạn, mất là mất đơn) → **Claude vision** trích xuất theo ĐÚNG JSON schema như tin text → validation + confidence (ảnh mặc định tin cậy thấp hơn → thiên về `needs_edit`, Sale soát kỹ) → duyệt như đơn thường.
 
 **Cổng vào (cứng — D12):**
-- **Claude API credit** — DeepSeek KHÔNG đọc được ảnh (xác nhận chính thức, mọi biến thể); ảnh chứa SĐT/địa chỉ nên càng không được gửi processor chưa duyệt.
+- **Claude API credit** — ảnh chứa SĐT/địa chỉ nên không được gửi processor chưa duyệt.
+  > ⚠️ **LỖI THỜI (cập nhật 28/08/2026):** câu cũ ở đây ghi *"DeepSeek KHÔNG đọc được ảnh (xác nhận
+  > chính thức, mọi biến thể)"*. **DeepSeek nay đã công bố có năng lực đọc ảnh** — mệnh đề "không đọc
+  > được ảnh" **không còn là ràng buộc kiến trúc**. Nhưng **cổng vào của F4 KHÔNG đổi**, vì nó chưa
+  > bao giờ nằm ở năng lực model: DeepSeek **vẫn chưa nằm trong danh sách bên thứ ba được duyệt**
+  > (chỉ KiotViet + Claude), và ảnh đơn hàng mang PII. Muốn đi đường DeepSeek thì phải **bổ sung
+  > DeepSeek vào thoả thuận xử lý dữ liệu trước**, không phải chờ năng lực model.
+  > **Chưa đo, chưa kết luận:** Nexagnet **chưa có runtime đa phương thức** — không adapter nào trong
+  > repo gửi ảnh cho bất kỳ provider nào; đây là ghi chú năng lực **của nhà cung cấp**, không phải
+  > tuyên bố về hệ thống. Độ chính xác chữ viết tay tiếng Việt của DeepSeek vision cũng **chưa đo**.
 - **Bộ ảnh thật 20-30 tấm + đáp án** từ khách (mở rộng B1-B2) → **PoC eval trước** (đo field-level accuracy như PoC parser), có số mới cam kết phạm vi.
 
 **Độ phức tạp: LỚN** (độ chính xác chữ viết tay tiếng Việt là ẩn số — giá trị thật quyết định bởi con số eval, không phải bởi code).
@@ -227,4 +236,7 @@ flowchart LR
 
 - ⚠️ **DeepSeek khai tử `deepseek-chat`/`deepseek-reasoner` ngày 24/07/2026** (✅ verify 11/07: cắt hẳn 15:59 UTC, không grace period), thay bằng `deepseek-v4-flash`/`deepseek-v4-pro` (context 1M, vẫn text-only). Code hiện đã dùng `deepseek-v4-flash` **kèm tắt thinking** (v4 mặc định BẬT — bẫy latency/token khi migrate).
 - Docs Anthropic đã chuyển nhà: `docs.claude.com` → 302 → `platform.claude.com/docs` — link mới trỏ thẳng bản mới. OCR thay thế cho F4 (tham khảo — processor CHƯA duyệt): Azure Read không hỗ trợ handwriting tiếng Việt; Tesseract kém viết tay; VietOCR phải tự train → củng cố đường Claude vision.
-- DeepSeek API xác nhận chính thức **không nhận ảnh** ở mọi biến thể → F4 bắt buộc đi đường Claude, đúng thiết kế hiện tại.
+- ~~DeepSeek API xác nhận chính thức **không nhận ảnh** ở mọi biến thể → F4 bắt buộc đi đường Claude, đúng thiết kế hiện tại.~~
+  **LỖI THỜI 28/08/2026** — DeepSeek đã công bố năng lực đọc ảnh. F4 vẫn đi đường Claude, nhưng vì
+  **lý do tuân thủ** (DeepSeek chưa được duyệt làm bên thứ ba xử lý PII), **không phải** vì giới hạn
+  năng lực. Xem cổng vào F4 ở §5.
