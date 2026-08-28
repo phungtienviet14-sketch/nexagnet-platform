@@ -150,7 +150,18 @@ if [[ -d "$catalog_src" ]] && [[ -n "$(ls -A "$catalog_src" 2>/dev/null)" ]]; th
 else
   echo "Khong co anh catalog — tu van se gui khong kem anh." >&2
 fi
-chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/"*.sh
+# QUYEN CHAY CHO MOI SCRIPT DA CHUYEN LEN.
+#
+# `core.filemode=false` tren may Windows nen git luu MOI tep `.sh` cua repo o `100644` — khong
+# tep nao mang bit thuc thi qua duong truyen. Dong nay la cho DUY NHAT cap lai no.
+#
+# DANH SACH THU MUC LIET KE TUONG MINH, va moi thu muc script MOI phai duoc them vao day. Bo sot
+# thi script do van ton tai tren VM nhung khong chay duoc, va bash tra `126 Permission denied` —
+# mot ma loi khong ai doc ra thanh "thieu mot duong dan trong deploy-remote.sh".
+#
+# Da xay ra that (28/08/2026, run 33146330839): them `observability/` ma quen dong nay, va ca lan
+# deploy chet trong `render-secrets.sh` TRUOC khi phat mot tin hieu nao — `DEPLOY_SIGNAL_INCOMPLETE`.
+chmod 0750 "$app_dir/"*.sh "$app_dir/postgres/"*.sh "$app_dir/observability/"*.sh
 
 # --- CHUYEN TIEP TU BO CUC MOT-KHACH -------------------------------------------------------------
 # Ban cu chay Caddy BEN TRONG compose project cua khach, va container do dang giu :80/:443. Compose
