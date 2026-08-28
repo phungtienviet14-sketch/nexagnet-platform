@@ -1,8 +1,6 @@
 import { Controller, Get, Optional, Param } from '@nestjs/common';
 import type { OrderDebugView } from '@netviet/shared';
 import { RecentTracesSink } from '../observability/recent-traces.sink.js';
-import { currentSourceContext } from '../observability/source-manifest.js';
-import { TelemetryService } from '../observability/telemetry.service.js';
 import {
   WorkflowRunLookup,
   type WorkflowRunFacts,
@@ -41,12 +39,6 @@ export class OrderDebugController {
      * ghi chu noi ro la KHONG DOC DUOC chu khong phai KHONG CO.
      */
     @Optional() private readonly workflows?: WorkflowRunLookup,
-    /**
-     * `@Optional()` cung ly le voi `workflows`: mot man hinh chan doan khong duoc chet vi
-     * khong biet minh dang chay commit nao. Vang mat -> khong co lien ket ma nguon, kem mot
-     * cau noi ro — chu khong phai mot man hinh trang.
-     */
-    @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
   @Get(':orderId')
@@ -54,16 +46,11 @@ export class OrderDebugController {
     const traces = this.traces.findAllByOrderId(orderId);
     const found = await this.lookupWorkflows(orderId);
 
-    const sourceContext = this.telemetry
-      ? currentSourceContext(this.telemetry.releaseIdentity())
-      : undefined;
-
     return buildOrderDebugView({
       orderId,
       traces,
       workflowRuns: found.runs,
       notes: found.notes,
-      ...(sourceContext ? { sourceContext } : {}),
     });
   }
 

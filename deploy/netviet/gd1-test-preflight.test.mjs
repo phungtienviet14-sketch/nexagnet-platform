@@ -507,6 +507,65 @@ test('rejects an unconfirmed or ambiguous deployment target', () => {
   assert.match(result.errors.join('\n'), /target must be explicitly confirmed/);
 });
 
+/**
+ * KNOWN RISK 7.2 — BANG CHUNG PHAI DUOC QUAN SAT, KHONG DUOC SUA.
+ *
+ * `collectGd1TestPreflight` doc `AUTO_SEND` tu container DANG CHAY, roi ghi de no bang hang so
+ * `'off'` moi khi smoke provider xanh. Hai hau qua, va cai thu hai nang hon han cai da duoc ghi
+ * trong tai lieu:
+ *
+ *   1. bang chung bao cao ra khong con la thu quan sat duoc;
+ *   2. `runtimeErrors()` DA CO san mot cong "autoSend phai la off" — va phep ghi de chay TRUOC
+ *      khi `runtime` di vao `input`, nen cong do khong bao gio co the do. Mot stack that su dang
+ *      bat auto-send se di qua preflight ma khong ai duoc bao.
+ *
+ * Bai nay san dung hau qua thu hai, vi do la cai lam hong quyet dinh cua nguoi van hanh.
+ */
+test('khong ghi de AUTO_SEND quan sat duoc — stack dang bat auto-send phai bi chan', async () => {
+  const rawGroups = ['5418371951945064288', '6732452832330077759'];
+  const env = collectorEnv(rawGroups);
+  const appImage = digest('d');
+  const flowiseImage = digest('e');
+  const run = async (program, args) => {
+    const commandText = args.join(' ');
+    if (commandText.includes('addresses describe')) return '203.0.113.10\n';
+    if (commandText.includes('.runtime/secrets.env') && commandText.includes('test -f')) {
+      return '__NETVIET_STACK_STATE__=present\n';
+    }
+    if (commandText.includes('process.env')) {
+      return [
+        'PERSISTENCE=prisma',
+        'CHANNEL_MODE=zca',
+        'PARSER_MODE=deepseek',
+        'MEDIA_STORE=gcs',
+        'AUTH_MODE=session',
+        // Stack DANG BAT auto-send. Day la tinh huong ma cong phai bat duoc.
+        'AUTO_SEND=on',
+        'DATA_CLASSIFICATION=test',
+      ].join('\n');
+    }
+    if (commandText.includes('zalo-allowed-groups.json')) {
+      return rawGroups.map(hashZaloGroupId).join('\n');
+    }
+    if (commandText.includes('zalo-cred.json')) return 'regular file|600|512\n';
+    if (commandText.includes('runtime_value APP_IMAGE')) return `${appImage}\n`;
+    if (commandText.includes('runtime_value FLOWISE_IMAGE')) return `${flowiseImage}\n`;
+    if (commandText.includes('secrets versions list')) return '1\n';
+    if (commandText.includes('secrets versions access')) return secretInventoryOutput();
+    // Smoke provider XANH — dung dieu kien tung kich hoat phep ghi de.
+    if (commandText.includes('smoke-test.mjs')) return 'Pilot smoke OK\n';
+    throw new Error(`unexpected command: ${commandText}`);
+  };
+
+  const result = await collectGd1TestPreflight({ env, run });
+
+  // Gia tri di vao bang chung phai la gia tri DOC DUOC tu stack.
+  assert.equal(result.input.deployment.runtime.autoSend, 'on');
+  // Va cong phai do, kem ly do chi dung truong do.
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /runtime autoSend must be off/);
+});
+
 test('rejects every mock, in-memory, none or unsafe runtime mode', () => {
   const rejected = [
     ['persistence', 'memory'],

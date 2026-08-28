@@ -175,6 +175,45 @@ if [[ "${workflow_engine}" == 'on' ]]; then
   "${COMPOSE[@]}" --profile workflow ps
 fi
 
+# CUM QUAN SAT — dung TRUOC `api`, va CHI khi cong tac bat.
+#
+# VI SAO TRUOC `api`: `api` la ben GUI telemetry di. Collector chua len thi moi lo span dau tien
+# roi vao hang doi cua exporter roi bi bo khi het han — tuc dung nhung lo span cua LAN KHOI DONG,
+# von la luc de hong nhat va cung la luc nguoi ta muon nhin nhat.
+#
+# `--wait` doi HEALTHY: ClickHouse phai san sang truoc khi collector thu ghi, khong thi collector
+# quay vong retry va lo dau tien van mat.
+#
+# QUAN SAT KHONG DUOC LA DIEU KIEN DE NGHIEP VU CHAY. Neu cum nay khong len, `api` van phai len —
+# nen doan nay KHONG dung `stage rollout` (tuc khong bien mot su co quan sat thanh mot lan deploy
+# do). No bao that bai ra log va di tiep; cong ROLLOUT/HEALTH ben duoi van do neu ung dung hong.
+observability_stack="$(runtime_value OTEL_TRACING)"
+if [[ "${observability_stack}" == 'on' ]]; then
+  if "${COMPOSE[@]}" --profile observability up -d --wait --wait-timeout 180 \
+    clickhouse otel-collector; then
+    "${COMPOSE[@]}" --profile observability ps
+    # SUC KHOE CUA COLLECTOR DOC TU MOT CONTAINER KHAC.
+    #
+    # `otel-collector` KHONG co `healthcheck:` cua Docker vi anh cua no dung tu `scratch`: chi co
+    # mot tep nhi phan, khong shell, khong `wget`. Nen `up --wait` o tren chi chung minh container
+    # DANG CHAY, khong chung minh no da nap duoc cau hinh — mot cau hinh hong hay mot tep khoa
+    # khong doc duoc deu cho ra dung mot container "dang chay" trong vai giay roi restart.
+    #
+    # `clickhouse` la anh alpine (co busybox `wget`) va nam CUNG mang `data`, nen no la cho doc
+    # tu nhien. Hong o day KHONG lam do lan deploy — xem chu thich ngay tren.
+    if "${COMPOSE[@]}" --profile observability exec -T clickhouse \
+      wget --no-verbose --tries=1 --spider http://otel-collector:13133/ >/dev/null 2>&1; then
+      echo "cum quan sat: collector tra loi tren cong suc khoe 13133." >&2
+    else
+      echo "CANH BAO: collector dang chay nhung cong suc khoe 13133 khong tra loi." >&2
+      echo "Xem: docker compose --profile observability logs otel-collector" >&2
+    fi
+  else
+    echo "CANH BAO: cum quan sat khong len duoc — ung dung van duoc trien khai." >&2
+    echo "Span se bi bo tai exporter; xem 'docker compose --profile observability logs'." >&2
+  fi
+fi
+
 # Always recreate the application processes before injecting a smoke message. Pilot GĐ1 khoi dong
 # lai voi AUTO_SEND=on; smoke-test.mjs nhan ra kenh Zalo that va TUYET DOI khong approve fixture,
 # nen khong co tin thu nao bi gui vao nhom that.

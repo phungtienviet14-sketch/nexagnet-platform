@@ -66,6 +66,10 @@ CATALOG_ASSETS_DIR="${REPOSITORY_ROOT}/catalog-assets"
   echo 'PRIMARY_TENANT khong hop le.' >&2
   exit 64
 }
+[[ "${OBSERVABILITY_STACK:-off}" =~ ^(on|off)$ ]] || {
+  echo 'OBSERVABILITY_STACK phai la on hoac off.' >&2
+  exit 64
+}
 [[ "${WORKFLOW_ENGINE:-off}" =~ ^(on|off)$ ]] || {
   echo 'WORKFLOW_ENGINE phai la on hoac off.' >&2
   exit 64
@@ -226,7 +230,7 @@ DEPLOY_SIGNAL_LOG="${DEPLOY_SIGNAL_LOG:-${REPOSITORY_ROOT}/deploy-signals.log}"
 DEPLOY_SIGNAL_JSON="${DEPLOY_SIGNAL_JSON:-${REPOSITORY_ROOT}/deploy-signals.json}"
 
 set +e
-ssh_vm "install -d -m 0700 '${remote_parent}' && tar -xzf '${remote_archive}' -C '${remote_parent}' && rm -f '${remote_archive}' && sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
+ssh_vm "install -d -m 0700 '${remote_parent}' && tar -xzf '${remote_archive}' -C '${remote_parent}' && rm -f '${remote_archive}' && sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' OBSERVABILITY_STACK='${OBSERVABILITY_STACK:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
   tee "${DEPLOY_SIGNAL_LOG}"
 remote_status="${PIPESTATUS[0]}"
 set -e

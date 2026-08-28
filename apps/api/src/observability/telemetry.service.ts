@@ -325,6 +325,7 @@ export class TelemetryService {
     tenant: string;
     environment: string;
     release?: string;
+    releaseSha?: string;
     anchors: Record<string, string>;
   } {
     const scope = currentTrace();
@@ -348,7 +349,12 @@ export class TelemetryService {
       at: new Date().toISOString(),
       tenant: this.release.tenant,
       environment: this.release.environment,
-      ...(this.release.gitSha !== 'unknown' ? { release: this.release.gitSha.slice(0, 12) } : {}),
+      // HAI BAN CUA CUNG MOT SU THAT, cho hai doc gia khac nhau: `release` 12 ky tu cho nguoi
+      // doc log, `releaseSha` day du cho permalink. Ca hai cung VANG MAT khi khong biet — mot
+      // chuoi `unknown` di tiep nhu mot gia tri that la cach de sinh ra lien ket sai tu tin.
+      ...(this.release.gitSha !== 'unknown'
+        ? { release: this.release.gitSha.slice(0, 12), releaseSha: this.release.gitSha }
+        : {}),
       anchors,
     };
   }

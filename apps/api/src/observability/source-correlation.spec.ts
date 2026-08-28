@@ -113,8 +113,7 @@ describe('man hinh chan doan', () => {
     });
 
     const stored = sink.list(1)[0]!;
-    const context = currentSourceContext(telemetry.releaseIdentity());
-    const view = buildTraceView(stored, context);
+    const view = buildTraceView(stored);
     const node = view.nodes.find((candidate) => candidate.reason === 'GROUP_NOT_MAPPED');
 
     expect(node?.source?.filePath).toBe('apps/api/src/pipeline/pipeline.service.ts');
@@ -142,19 +141,25 @@ describe('man hinh chan doan', () => {
       telemetry.stateChange({ entity: 'Order', entityId: 'don-1', from: 'draft', to: 'sent' });
     });
 
-    const view = buildTraceView(
-      sink.list(1)[0]!,
-      currentSourceContext(telemetry.releaseIdentity()),
-    );
+    const view = buildTraceView(sink.list(1)[0]!);
     const node = view.nodes.find((candidate) => candidate.kind === 'state');
 
     expect(node).toBeDefined();
     expect(node?.source).toBeUndefined();
   });
 
-  it('khong gan bat ky vi tri nao khi khong co danh tinh ma nguon', async () => {
+  /**
+   * KHONG BIET RELEASE THI MAT LIEN KET, KHONG MAT VI TRI.
+   *
+   * Hai thu nay thuoc hai tang khac nhau va bai kiem nay giu chung tach nhau: `filePath`/`line`
+   * thuoc MA NGUON (bang tra cuu duoc sinh luc build, luon biet), con permalink thuoc BAN PHAT
+   * HANH (chi biet khi doc duoc `release.json`). Gop chung lam mot se lam man hinh chan doan
+   * mat luon ca dong ma chi vi khong mount duoc manifest — dung luc nguoi ta can no nhat.
+   */
+  it('mat lien ket khi khong biet release, nhung van giu vi tri ma nguon', async () => {
     const sink = new RecentTracesSink();
-    const telemetry = telemetryWith(sink);
+    // `gitSha: 'unknown'` = tien trinh nay khong doc duoc `release.json` (vd chay local).
+    const telemetry = telemetryWith(sink, 'unknown');
 
     await telemetry.runTurn({ chatId: 'nhom-1' }, async () => {
       telemetry.decision({
@@ -165,21 +170,24 @@ describe('man hinh chan doan', () => {
       });
     });
 
-    // Khong truyen `sourceContext` -> khong co permalink. Vi tri van con (no thuoc ma nguon,
-    // khong thuoc ban phat hanh), nhung khong duong nao dan ra ngoai.
     const view = buildTraceView(sink.list(1)[0]!);
-    expect(view.sourceContext).toBeUndefined();
-    expect(buildGithubSourceUrl({}, view.nodes[0]!.source!)).toBeNull();
+    const node = view.nodes[0]!;
+
+    // Vi tri VAN CON — no thuoc ma nguon, khong thuoc ban phat hanh.
+    expect(node.source?.filePath).toBe('apps/api/src/pipeline/pipeline.service.ts');
+    expect(node.source?.line).toBeGreaterThan(0);
+    // Nhung khong duong nao dan ra ngoai: khong co SHA thi khong co blob de tro toi.
+    expect(view.sourceContext?.releaseSha).toBeUndefined();
+    expect(buildGithubSourceUrl(view.sourceContext!, node.source!)).toBeNull();
   });
 });
 
 /**
- * DI: CAI GIU CHO `sourceContext` KHONG AM THAM BIEN MAT.
+ * DI: CAI GIU CHO DANH TINH RELEASE KHONG AM THAM BIEN MAT.
  *
- * `OrderDebugController` tiem `TelemetryService` bang `@Optional()` — vang mat thi man hinh van
- * chay, chi mat lien ket ma nguon. Do la hanh vi DUNG (quan sat khong duoc lam hong thu no quan
- * sat), nhung no cung co nghia la mot lan go nham `exports` se lam nut "Mo ma nguon" bien mat
- * MA KHONG CO GI DO O DAU.
+ * `TraceController` tiem `TelemetryService` de tra loi "ban nao dang chay" o VO BOC cua danh
+ * sach trace — cau hoi do van thuoc ve tien trinh, khong thuoc ve tung luot. Mot lan go nham
+ * `exports` se lam cau tra loi do bien mat MA KHONG CO GI DO O DAU.
  *
  * Repo nay khong cai `@nestjs/testing` va khong dung `createTestingModule` o dau (xem
  * `di-reachability.contract.spec.ts`: hop dong DI duoc kiem qua chinh day noi cua san pham).

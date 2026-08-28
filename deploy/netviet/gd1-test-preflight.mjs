@@ -524,7 +524,17 @@ export async function collectGd1TestPreflight(options = {}) {
       retryConfigured: true,
       fallbackDisabled: true,
     };
-    if (providerSmoke.ok) runtime.autoSend = 'off';
+    // `runtime` di thang tu quan sat vao bang chung, KHONG DUOC SUA o day.
+    //
+    // Cho nay tung co `if (providerSmoke.ok) runtime.autoSend = 'off';` — mot dong con lai tu
+    // giai doan dung khung (4e5a2bb). No lam hai viec, va viec thu hai nang hon nhieu:
+    //   1. bien mot gia tri QUAN SAT DUOC thanh mot gia tri DUOC KHANG DINH;
+    //   2. vo hieu hoa mot cong DA CO SAN — `runtimeErrors()` kiem `autoSend` phai la `off`,
+    //      nhung phep ghi de chay TRUOC khi `runtime` di vao `input`, nen cong do khong bao gio
+    //      co the do. Mot stack that su dang bat auto-send se di qua preflight ma khong ai biet.
+    //
+    // Cong van o nguyen cho cu trong `runtimeErrors()`. Cai duy nhat thay doi la no duoc nhin
+    // thay su that. Xem `reference-platform-stack.md` §7.2.
     const input = {
       tenant,
       deployment: {

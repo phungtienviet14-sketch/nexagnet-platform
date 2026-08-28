@@ -53,6 +53,18 @@ on:
           - 'off'
           - 'on'
         default: 'off'
+      observability_stack:
+        # Mac dinh `off`, cung khuon `workflow_engine` va vi mot ly do NANG HON: telemetry mang
+        # noi dung nghiep vu cua khach, nen bat kho quan sat tren mot stack chay du lieu that ma
+        # chua co thoa thuan xu ly du lieu la mot van de tuan thu, khong phai vai container thua.
+        # `render-secrets.sh` DUNG HAN (exit 64) neu bat o moi truong khac `gd1-test`.
+        description: 'Bat cum quan sat (OTel + ClickHouse)? CHI co tac dung voi environment=gd1-test'
+        required: false
+        type: choice
+        options:
+          - 'off'
+          - 'on'
+        default: 'off'
 
 permissions:
   actions: read
@@ -74,4 +86,5 @@ jobs:
       tenant: ${{ inputs.tenant }}
       environment: ${{ inputs.environment }}
       workflow_engine: ${{ inputs.workflow_engine }}
+      observability_stack: ${{ inputs.observability_stack }}
     secrets: inherit

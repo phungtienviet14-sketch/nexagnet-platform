@@ -5,7 +5,8 @@
 > [`phat-trien/ke-hoach/tong-quan.md`](../phat-trien/ke-hoach/tong-quan.md); tài liệu này mô tả
 > **hợp đồng** và **bằng chứng runtime**, không chứa ✅/⬜ của kế hoạch.
 >
-> **Cập nhật:** 27/08/2026 · **Đối chiếu mã nguồn tại:** `8b0f6ad603495fc90235d350b13550afd36a982d`
+> **Cập nhật:** 28/08/2026 · **Đối chiếu mã nguồn tại:** `7a6cc63904d18be49c653ee1315e65046607bda5`
+> (+ nhánh `feat/reference-stack-parity-v0` cho §7.2, §7.3, §7.6 và §8)
 
 ---
 
@@ -82,9 +83,9 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 |---|---|
 | Release Identity Closure | **CLOSED / RUNTIME-PROVEN** |
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
-| OTel code support | **PARTIAL** |
-| OTel export trên gd1-test | **NOT DEPLOYED** |
-| ClickStack | **POC / NOT DEPLOYED ON GD1** |
+| OTel code support | **CODE-SUPPORTED** (đường triển khai đã nối, §8.6) |
+| OTel export trên gd1-test | **NOT DEPLOYED** — chưa container nào chạy |
+| ClickStack | **CODE-SUPPORTED / NOT DEPLOYED** (rời `tools/poc-observability/` 28/08) |
 | Historical Debug traces | **NOT PERSISTENT** |
 | `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
 
@@ -104,8 +105,9 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 | GitHub deploy signals | 2 | đầy đủ | có | **có** | artifact 30 ngày | **CLOSED / RUNTIME-PROVEN** | — |
 | Source correlation | 1 | đầy đủ | có | có | theo trace (không bền) | **RUNTIME-PROVEN** | phụ thuộc Debug View bền |
 | Debug View | 1 | đầy đủ | có | có | **KHÔNG** | **PARTIAL** | trace bền (P2) |
-| OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`** | **KHÔNG** | không | n/a | **PARTIAL / NOT-DEPLOYED** | preload vào compose (P2) |
-| ClickStack / HyperDX | 1 hoặc 2 | chỉ trong `tools/poc-observability/` | **KHÔNG** | không | không | **POC** | chọn mô hình triển khai (§8) |
+| OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`**; preload nối vào compose cho **api + 2 worker**; release identity dùng chung `release-sha.ts` (§7.6) | **KHÔNG** | không | n/a | **CODE-SUPPORTED / NOT-DEPLOYED** | một lần deploy `observability_stack: on` |
+| ClickHouse (kho quan sát) | 1 | `deploy/netviet/observability/` + `profiles: ["observability"]`, cách ly có test khoá | **KHÔNG** | không | `ttl: 720h` đã khai, **backup chưa có** | **CODE-SUPPORTED / NOT-DEPLOYED** | một lần deploy, rồi backup/restore |
+| HyperDX (UI quan sát) | 1 hoặc 2 | không có — **cố ý hoãn** (§8.6 B) | **KHÔNG** | không | n/a | **PLANNED** | sau P2; đường đọc của P2 là `api` → ClickHouse |
 | Flowise | 1 | là **1 trong 3** adapter parser | có (container luôn chạy) | không dùng ở đường parser gd1 | volume riêng | **DEPLOYED-NOT-PROVEN** | quyết định `ModelRuntimePort` (P7) |
 | Portainer | 2 | không có | không | không | n/a | **PLANNED** | POC (P4) |
 | OpenTofu / Ansible | 2 | không có | không | không | n/a | **PLANNED** | P6 |
@@ -138,32 +140,71 @@ classification      APPLICATION_ROLLED_OUT_HEALTHY    hardFailure: false
 
 ---
 
-## 7. KNOWN RISKS — `UNRESOLVED`
+## 7. KNOWN RISKS
 
-> Ba mục 7.1–7.3 là **quan sát runtime thật**, không phải suy đoán. Chúng **không** được sửa trong
-> đợt tài liệu này (đợt này là docs-only) và giữ trạng thái `UNRESOLVED` cho tới khi có bằng chứng
-> ngược lại.
+> Ba mục 7.1–7.3 là **quan sát runtime thật**, không phải suy đoán. Trạng thái được cập nhật khi có
+> **bằng chứng ngược lại**, không phải khi có ý định sửa.
+>
+> | Mục | Trạng thái | Cần gì để đóng hẳn |
+> |---|---|---|
+> | 7.1 `zca_listener` im lặng | `UNRESOLVED` — **~44h tính tới 28/08**, và log/`/health` đều xanh | `/health` phải phân biệt được "không ai nhắn" với "socket đã chết" + listener tự nối lại + tin mới đi hết đường |
+> | 7.2 preflight ghi đè `autoSend` | **`FIXED` — chờ chứng minh** | một lần preflight thật chạy qua |
+> | 7.3 `bot-poller` flaky | **`RESOLVED`** | — (đóng bằng cấu trúc, xem dưới) |
+> | 7.6 OTel mang release identity **thứ hai** | **`FIXED` — chờ chứng minh** | một trace bền mang đúng SHA canonical (PROOF 4) |
 
-### 7.1 `zca_listener` im lặng — `UNRESOLVED`
+### 7.1 `zca_listener` im lặng — `UNRESOLVED`, và **sắc nét hơn bản trước**
 
-**Bằng chứng** (truy vấn Postgres của stack, 27/08/2026):
+**Đo lại 28/08/2026 05:10 UTC**, trực tiếp trên `zalo-ultty-gd1-test-postgres-1`:
 
 ```
-inbound | zca_listener  | 98 tin | tin cuối: 2026-08-26 08:52:41
-inbound | copilot_paste | 42 tin | tin cuối: 2026-08-27 03:15:49
+inbound  | copilot_paste     | 44 tin | tin cuối: 2026-08-27 04:36:22   (~24 giờ trước)
+inbound  | zca_listener      | 98 tin | tin cuối: 2026-08-26 08:52:41   (~44 giờ trước)
+outbound | system_outbound   | 57 tin | tin cuối: 2026-08-27 04:21:34
 ```
 
-Kênh Zalo thật **không nhận tin nào trong ~19 giờ**, trong khi đường demo/copilot vẫn chạy. Nhất
-quán với ràng buộc đã biết: **một tài khoản Zalo chỉ chịu được MỘT listener**, và mở Zalo Web bằng
-cùng tài khoản sẽ làm listener tự dừng.
+Khoảng lặng **giãn ra từ ~19 giờ lên ~44 giờ**. Nhưng phần đáng chú ý không nằm ở con số.
 
-**Vì sao đáng lo:** mọi bằng chứng "AI đọc được nhóm" hiện dựa vào đường `copilot_paste`. Nếu kỳ
-vọng là đọc nhóm thật thì năng lực đó **đang không được chứng minh**.
+**Log của chính tiến trình nói rằng nó đang khoẻ:**
 
-**Cổng đóng:** một lần chạy có tin `zca_listener` mới sau thời điểm này, kèm health check của
-listener nằm trong deploy signal. Thuộc **P2**.
+```
+2026-08-27T04:36:17  ZcaListener     CHANNEL_MODE=zca -> nghe tin nhom qua zca-js
+2026-08-27T04:36:18  ZaloUserClient  zca-js dang nhap thanh cong
+2026-08-27T04:36:18  ZaloUserClient  zca-js listener: connected
+                     (không còn dòng nào nữa — 25 giờ)
+```
 
-### 7.2 Preflight ghi đè giá trị runtime quan sát được — `UNRESOLVED`
+`/health` của cùng container: `{"status":"ok","uptimeSeconds":88501}`.
+
+**Đây mới là rủi ro thật, và nó lớn hơn "kênh im".** Ba tín hiệu — log, `/health`, deploy signal —
+đều xanh, trong khi **kênh đọc chính của GĐ1 không mang về một tin nào**. Hai trạng thái dưới đây
+hiện **không phân biệt được** từ bên ngoài:
+
+| Trạng thái | Quan sát thấy gì |
+|---|---|
+| Không ai nhắn trong nhóm 44 giờ | log im, `/health` `ok`, 0 tin mới |
+| Socket đã chết, listener không biết | log im, `/health` `ok`, 0 tin mới |
+
+Và socket **có thể** chết lặng lẽ — chính log chứng minh: `zca-js listener closed (1000):
+NORMAL_CLOSURE` lúc `04:36:01`. Mã `1000` là đóng **bình thường**, không phải lỗi; không có
+ngoại lệ, không có retry. Lần "hồi phục" ngay sau đó (`04:36:16`) là do **container được tạo lại
+khi deploy**, không phải do listener tự nối lại.
+
+**Vì sao nó chặn P2:** `/health` hiện chỉ có `status` và `uptimeSeconds` — **không một chiều nào
+về kênh**. Nên năng lực "AI đọc được nhóm Zalo thật" không có bất kỳ cổng nào canh, và mọi bằng
+chứng "AI đọc được nhóm" hiện đứng trên đường `copilot_paste` (dán tay), tức **không chứng minh
+inbound Zalo thật**.
+
+**Cổng đóng — nay nêu được cụ thể, không còn là "một lần chạy có tin mới":**
+
+1. `/health` (hoặc một cổng riêng) phải có **độ tuổi của tin cuối cùng theo từng kênh** và
+   **trạng thái socket của listener** — để "im vì không ai nhắn" khác được với "im vì đã chết";
+2. listener phải **tự nối lại** sau `NORMAL_CLOSURE`, và ghi log mỗi lần nối lại;
+3. tín hiệu đó phải có mặt trong deploy signal;
+4. sau đó mới tới: một tin `zca_listener` mới đi hết đường.
+
+Thuộc **P2**. Ba mục đầu là **việc chưa làm**, không phải việc đã làm mà chưa đo.
+
+### 7.2 Preflight ghi đè giá trị runtime quan sát được — `FIXED`, chờ chứng minh
 
 **Bằng chứng:** `deploy/netviet/gd1-test-preflight.mjs`
 
@@ -171,15 +212,29 @@ listener nằm trong deploy signal. Thuộc **P2**.
 if (providerSmoke.ok) runtime.autoSend = 'off';
 ```
 
-`runtime.autoSend` được **đọc từ container đang chạy**, rồi bị ghi đè bằng hằng số. Hiện **chưa gây
-hại** vì trường này không lọt vào `machineProof` (chỉ `plan`, `rollback`, `firstRelease` được ghi
-ra), nhưng đây đúng là loại lỗi mà Release Identity Closure tồn tại để diệt: **bằng chứng bị sửa
-thay vì được quan sát**.
+`runtime.autoSend` được **đọc từ container đang chạy**, rồi bị ghi đè bằng hằng số.
 
-**Cổng đóng:** hoặc xoá dòng này, hoặc biến "AUTO_SEND phải off" thành một **cổng có kiểm tra** với
-mã lý do riêng. Thuộc **P2**.
+**⚠️ Đánh giá cũ ở đây NHẸ HƠN thực tế.** Bản trước ghi "chưa gây hại vì trường này không lọt vào
+`machineProof`". Lần theo chính đối tượng đó thì không phải vậy:
 
-### 7.3 `bot-poller.spec.ts` flaky — `UNRESOLVED`
+```
+527  runtime.autoSend = 'off'            ← ghi đè
+553  runtime,                            ← CHÍNH đối tượng đó vào `input.deployment`
+807  ...runtimeErrors(deployment?.runtime)
+```
+
+`runtimeErrors()` **đã có sẵn** cổng "autoSend phải là `off`" (`REQUIRED_RUNTIME`). Phép ghi đè chạy
+**trước** khi `runtime` đi vào `input`, nên cổng đó **không bao giờ có thể đỏ**. Đây không chỉ là
+bằng chứng bị làm đẹp — đó là **một cổng an toàn bị vô hiệu hoá trong im lặng**: một stack thật sự
+đang chạy `AUTO_SEND=on` sẽ đi qua preflight sạch sẽ.
+
+**Đã sửa** (`da60f73`): xoá dòng ghi đè; cổng ở nguyên chỗ cũ và nay nhìn thấy sự thật. Kèm bài test
+đỏ-trước-khi-sửa: stack báo `AUTO_SEND=on` + smoke provider xanh ⇒ `ok === false` và bằng chứng giữ
+đúng `'on'`.
+
+**Cổng đóng hẳn:** một lần preflight thật chạy qua trên gd1-test. Thuộc **P2**.
+
+### 7.3 `bot-poller.spec.ts` flaky — `RESOLVED`
 
 **Bằng chứng:** `apps/api/src/ingest/bot-poller.spec.ts` → *"tiep tuc long-poll khi batch truoc con
 cho burst"* đỏ **2 lần** trong `pnpm test` toàn monorepo (27/08), nhưng **22/22 xanh** khi chạy
@@ -188,8 +243,56 @@ riêng file đó, và xanh ở CI.
 **Vì sao đáng lo:** một bài test đỏ ngẫu nhiên dạy người ta bỏ qua màu đỏ. Đó là chi phí thật, kể cả
 khi mã nguồn đúng.
 
-**Cổng đóng:** khử phụ thuộc thời gian trong bài test (không dùng đồng hồ thật để khẳng định thứ
-tự). Thuộc **P2**.
+**Nguyên nhân:** `await vi.waitFor(..., { timeout: 100 })` — một **hạn chót cho THÀNH CÔNG**. Chạy
+cả monorepo thì máy bận, vòng lặp chưa kịp poll lần hai trong 100 ms, và bài đỏ dù mã đúng.
+
+**Đã sửa** (`24c48d4`): chờ **một sự kiện** thay vì chờ **một khoảng thời gian** — `fetchUpdates`
+lần hai tự báo là nó đã được gọi. Khác biệt có cấu trúc, không phải nới rộng hạn chót: máy chậm nay
+chỉ làm bài **chạy lâu hơn**, không làm nó đỏ. Nếu vòng lặp thật sự bị tuần tự hoá thì sự kiện không
+bao giờ đến và bài đỏ bằng hạn chót của chính vitest — một hạn chót cho **THẤT BẠI**.
+
+Bài cũng khẳng định mạnh hơn trước: chốt thêm rằng batch đầu **vẫn đang chờ** lúc lần poll thứ hai
+chạy, tức hai việc thật sự gối lên nhau.
+
+### 7.6 OTel phân giải một danh tính release **thứ hai** — `FIXED`, chờ chứng minh
+
+> Phát hiện 28/08/2026, trong lúc chuẩn bị bật OTel trên gd1-test. Chưa gây hại **vì OTel chưa
+> từng chạy** — nhưng nó sẽ hỏng đúng vào lần đầu tiên P2 bật nó lên, tức lúc không ai đang nhìn.
+
+**Bằng chứng:** `apps/api/src/observability/otel/otel-config.ts`
+
+```ts
+release: env.RELEASE_GIT_SHA ?? 'unknown'
+```
+
+Telemetry **nội bộ** (Debug View) phân giải release bằng `resolveReleaseIdentity()`: `release.json`
+trước, biến môi trường sau, và **hai nguồn lệch nhau thì trả `unknown`** kèm `source: 'conflict'`.
+Telemetry **bền** (OTel → ClickStack) thì không. Ba hệ quả, không phải một:
+
+| # | Lỗi | Vì sao chí mạng |
+|---|---|---|
+| 1 | `compose.yaml` truyền `RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}` | thiếu ở host ⇒ container nhận **chuỗi rỗng**, mà `??` không bắt chuỗi rỗng ⇒ `nexagnet.release` đi ra ngoài là `''` |
+| 2 | manifest **không được đọc** | manifest là nguồn CHÍNH trên gd1-test (`identitySource: "manifest"`, §6.2) ⇒ hai kho telemetry của **cùng một tiến trình** mang hai SHA khác nhau |
+| 3 | xung đột bị **im lặng chọn `env`** | canonical trả `unknown` *có chủ ý*: một SHA sai dẫn permalink tới **commit sai**, tệ hơn hẳn một dấu "không biết" |
+
+**Vì sao đây là vấn đề của P2 chứ không phải của sau này:** PROOF 4 của P2 — *"mở một trace cũ →
+giữ đúng release SHA cũ → permalink cũ vẫn đúng"* — **chạy trên chính trace bền**. Nếu trace bền
+mang một danh tính release khác, PROOF 4 đo một thứ không phải cái nó tưởng đang đo.
+
+**Đã sửa** (`release-sha.ts`): luật phân giải được tách thành **một module lá phụ thuộc duy nhất
+`node:fs`**, và **cả hai** đường đọc gọi chung nó — nên chúng không thể trả lời khác nhau. Không
+chọn cách "viết lại luật lần thứ hai trong `otel-config.ts`": bản sao thứ hai đã từng tồn tại, và
+nó sai theo cả ba cách ở trên cùng lúc.
+
+Ràng buộc kèm theo: preload chạy `node --import`, **trước** mọi import nghiệp vụ, nên lời giải
+không được kéo đồ thị module nghiệp vụ vào (`release-identity.ts` import `@netviet/tenant`). Ràng
+buộc đó nay là **màu đỏ** chứ không còn là chú thích: `otel-preload-isolation.spec.ts` đi bộ đồ thị
+import tĩnh từ preload và đã được **kiểm chứng ngược** — cho preload import `release-identity.ts`
+thì bài đỏ đúng với `['@netviet/tenant']`.
+
+Span nay mang thêm `nexagnet.release_source`, và `source: 'conflict'` kêu to một lần lúc khởi động.
+
+**Cổng đóng hẳn:** PROOF 4 chạy trên trace bền. Thuộc **P2**.
 
 ### 7.4 Hai rủi ro tuân thủ đã biết, vẫn mở
 
@@ -217,23 +320,145 @@ ai cũng ghi thẳng vào được. Thuộc **P3**, và **P3 phải xong trướ
 
 ---
 
-## 8. Mô hình triển khai ClickStack — chưa chọn
+## 8. Mô hình triển khai ClickStack — **ĐÃ CHỌN**
 
-**Không mặc định một kho dùng chung khổng lồ.** Trace có thể chứa dữ liệu cá nhân, và nguyên tắc
-hiện hành của nền tảng là **silo theo tenant**.
+> **Quyết định (27/08/2026):** **Shared OTLP Collector + kho quan sát cách ly theo từng tenant.**
+> Collector dùng chung **chỉ là mặt phẳng thu nhận/định tuyến, không giữ trạng thái**.
+> **Không** dùng bảng trace dùng chung với cách ly bằng bộ lọc `tenantId`.
 
-| Mô hình | Được gì | Mất gì |
-|---|---|---|
-| **ClickStack theo từng tenant** | cách ly bằng **kiến trúc**, đúng nguyên tắc silo; xoá tenant là xoá kho | tốn RAM/đĩa nhân theo số tenant; vận hành N cụm |
-| **ClickStack dùng chung + cách ly cứng** | một cụm, rẻ, dễ nâng cấp | cách ly thành **lời hứa cấu hình**; một lỗi phân quyền là rò dữ liệu chéo khách |
-| **Collector dùng chung + kho tách riêng** | một đường thu, nhiều kho; cân bằng chi phí và cách ly | collector trở thành điểm chết chung và là nơi phải lọc PII chuẩn xác |
+### 8.1 Điều kiện cứng của quyết định
 
-**Điều kiện chọn (phải trả lời trước khi cài):** trace của tenant có được coi là dữ liệu của tenant
-đó không · ai được xem · xoá một tenant thì trace đi đâu · retention bao lâu · ai trả tiền cho đĩa.
+1. **Định tuyến phải dựa trên danh tính/credential do bản triển khai cấp**, không dựa trên bất kỳ
+   giá trị nào nằm trong tải trọng hoặc do bên gửi tự khai.
+2. **Fail-closed.** Không có credential hợp lệ thì dữ liệu bị từ chối — không có đường mặc định
+   để rơi vào.
+3. **Credential ghi, credential đọc, retention, backup và lệnh xoá đều tách theo tenant.**
 
-Reference stack **phải chọn một mô hình rõ ràng** trước khi ClickStack rời trạng thái POC.
+### 8.2 Cách KHÔNG đạt — và đây là cách mặc định người ta hay chọn
 
----
+`routingconnector` định tuyến theo `otelcol.client.metadata["X-Tenant"]`. Ba lỗi, mỗi lỗi đủ để
+loại:
+
+| Lỗi | Vì sao chí mạng |
+|---|---|
+| Header là thứ **bên gửi tự khai** | Tenant A đặt `X-Tenant: B` là ghi thẳng vào kho của B |
+| Connector **chỉ đọc được header/metadata thô** | Không có đường nào đọc danh tính **đã xác thực** (`client.Info.Auth`) — tài liệu không hỗ trợ |
+| `default_pipelines` | Không khớp route nào thì **vẫn đi tiếp** — fail-**open** |
+
+Đây chính là "cách ly thành lời hứa cấu hình" mà bảng §8 cũ cảnh báo.
+
+### 8.3 Cách đạt — buộc danh tính vào **listener + credential**
+
+```yaml
+extensions:
+  # `filename` chu khong phai `token`: khoa doc tu TEP DUOC MOUNT, khong nam trong bien moi
+  # truong cua tien trinh. Cung duong ma `.runtime/secrets.env` va `release.json` da di, va
+  # khoa khong lo ra trong `docker inspect`.
+  bearertokenauth/ultty: { filename: /run/otlp-keys/ultty }
+  bearertokenauth/amico: { filename: /run/otlp-keys/amico }
+
+receivers:
+  otlp/ultty:
+    protocols: { http: { endpoint: ":4318", auth: { authenticator: bearertokenauth/ultty } } }
+  otlp/amico:
+    protocols: { http: { endpoint: ":4328", auth: { authenticator: bearertokenauth/amico } } }
+
+exporters:
+  clickhouse/ultty:
+    endpoint: tcp://obs-ultty:9000
+    username: ultty_writer
+    password: ${env:ULTTY_CH_PASSWORD}
+    database: obs_ultty
+    ttl: 720h
+  clickhouse/amico:
+    endpoint: tcp://obs-amico:9000
+    username: amico_writer
+    password: ${env:AMICO_CH_PASSWORD}
+    database: obs_amico
+    ttl: 2160h
+
+service:
+  pipelines:
+    traces/ultty: { receivers: [otlp/ultty], exporters: [clickhouse/ultty] }
+    traces/amico: { receivers: [otlp/amico], exporters: [clickhouse/amico] }
+```
+
+**Vì sao đây là cách ly bằng KIẾN TRÚC chứ không phải bằng cấu hình:** pipeline được chọn bởi
+**listener nào đã nhận kết nối**, mà listener đó đòi đúng credential của tenant đó. **Không tồn
+tại đường** nào từ receiver của A sang exporter của B — không phải "có đường nhưng đã lọc". Sai
+credential thì receiver từ chối, và không có `default_pipelines` để rơi vào.
+
+Bằng chứng thành phần gốc:
+
+- `bearertokenauthextension` hiện thực **`configauth.ServerAuthenticator`**, và **nhiều instance
+  đặt tên** gắn được vào nhiều receiver khác nhau (`auth: { authenticator: bearertokenauth/<tên> }`).
+  Nhận khoá qua `token`, `tokens` hoặc **`filename`** (tệp chứa token theo dòng) — ta dùng
+  `filename`.
+- `clickhouseexporter` nhận `endpoint`/`username`/`password`/`database`/`ttl` **theo từng
+  instance** ⇒ credential ghi và retention tách theo tenant. `password` là `configopaque.String`
+  và Collector khai triển `${env:…}`, nên giá trị thật đến từ `render-secrets.sh` lúc triển khai,
+  **không bao giờ nằm trong repo**. Exporter **không** có khoá `password_file` — đừng viết ra một
+  khoá không tồn tại rồi tưởng là đã an toàn.
+- HyperDX v2 có **Connections** (host/username/password) + **Sources** (database/table) và chạy
+  được ở chế độ **"HyperDX only"** trỏ vào ClickHouse tự quản, với user **readonly** ⇒ credential
+  **đọc** cũng tách theo tenant.
+
+### 8.4 Kho đặt ở đâu
+
+**Một ClickHouse trong compose của từng tenant** (mặt phẳng 1 — TENANT DATA PLANE), đúng nguyên
+tắc silo: xoá tenant là xoá kho.
+
+**Không** chọn "N database trên một cụm chung". Cách đó thoả mãn từng chữ của §8.1, nhưng nó đưa
+cách ly về lại thành **cấu hình phân quyền** — một lỗi `GRANT` là rò dữ liệu chéo khách. Giá phải
+trả cho lựa chọn này là **RAM/đĩa nhân theo số tenant**, và đó là giá được chấp nhận có ý thức.
+
+### 8.5 Trả lời các câu hỏi mà §8 cũ yêu cầu trả lời trước khi cài
+
+| Câu hỏi | Trả lời |
+|---|---|
+| Trace của tenant có phải dữ liệu của tenant đó không? | **Có.** Trace mang nội dung nghiệp vụ và có thể mang dữ liệu cá nhân |
+| Ai được xem? | Người vận hành Nexagnet qua credential **readonly theo tenant**; không có credential nào nhìn được nhiều tenant |
+| Xoá một tenant thì trace đi đâu? | Đi cùng stack của tenant — kho nằm trong chính compose đó |
+| Retention bao lâu? | `ttl` cấu hình **theo từng exporter**, tức theo tenant. Mặc định stack tham chiếu: **30 ngày** |
+| Ai trả tiền cho đĩa? | Tenant, cùng chỗ với Postgres nghiệp vụ của họ |
+
+### 8.6 Hai sai khác có chủ ý khi hiện thực (28/08/2026)
+
+> Ghi ở đây chứ không giấu trong commit message: một người đọc §8.3 rồi mở `compose.yaml` sẽ thấy
+> hai thứ **không khớp**. Cả hai đều là lựa chọn, không phải cắt xén.
+
+**A. Collector nằm trong compose của TỪNG stack, không phải một collector dùng chung.**
+
+§8.3 vẽ một collector phục vụ N tenant. Cái đó cần một **mặt phẳng điều khiển dùng chung** — có
+vòng đời triển khai riêng, không thuộc compose của khách nào. Mặt phẳng đó **chưa tồn tại**, và
+dựng nó là P4/P6 mà P2 bị **cấm** bắt đầu ("DO NOT DO — không bắt đầu Fleet View").
+
+Chọn cách này **không làm cách ly yếu đi** — ngược lại: không còn cả một tiến trình dùng chung để
+mà rò. Cái mất là tính gọn khi vận hành nhiều khách, và **RAM nhân theo số tenant** (cùng loại giá
+đã chấp nhận ở §8.4 cho kho).
+
+Đường quay lại rẻ: khuôn `otel-collector.template.yaml` giữ **nguyên hình dạng §8.3** — mỗi khối
+mang tên riêng theo stack (`otlp/<slug>`, `bearertokenauth/<slug>`, `clickhouse/<slug>`,
+`traces/<slug>`) — nên gộp N tệp lại là một phép **nối chuỗi**, không phải viết lại.
+`observability-isolation.contract.test.mjs` **dùng đúng phép nối đó** để kiểm: nó render hai stack,
+ghép, rồi hỏi "có đường nào từ A sang B không".
+
+**B. Không có HyperDX trong đợt này.**
+
+HyperDX v2 kéo theo **MongoDB** cho *mỗi* stack khách. Và đường **ĐỌC** mà bốn runtime proof của
+P2 cần là `api` → ClickHouse bằng **user readonly riêng**, không phải một giao diện. Một UI cho
+người vận hành là thứ đáng có, nhưng nó không nằm trên đường tới cổng ra của P2 — thêm nó bây giờ
+là ba container nữa cho một thứ chưa ai cần tới.
+
+Hệ quả phải nói rõ: **§8.3 dòng "HyperDX chạy được ở chế độ HyperDX only" vẫn chỉ là khảo sát**,
+chưa được chứng minh trên stack nào.
+
+### 8.7 Điều kiện dừng
+
+Nếu ClickStack **không** chứng minh được cách ly cứng theo mô hình này thì **DỪNG và báo** — tuyệt
+đối không tự hạ xuống một kho dùng chung. Tính tới 27/08/2026, ba bằng chứng ở §8.3 cho thấy
+**chứng minh được**, nên P2 đi tiếp.
+
 
 ## 9. Liên quan
 

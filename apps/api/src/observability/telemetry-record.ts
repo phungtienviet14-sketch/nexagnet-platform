@@ -20,7 +20,20 @@ interface TelemetryBase {
   readonly at: string;
   readonly tenant: string;
   readonly environment: string;
+  /** Git SHA cat con 12 ky tu — ban cho NGUOI doc tren mot dong chat hep. */
   readonly release?: string;
+  /**
+   * Git SHA DAY DU (40 ky tu) — ban cho MAY doc.
+   *
+   * VI SAO PHAI DI CUNG BAN GHI thay vi hoi tien trinh luc hien thi: release la thuoc tinh cua
+   * LUOT DA CHAY, khong phai cua nguoi dang xem. Chung nao vong dem con chet cung tien trinh
+   * thi hai thu do trung nhau va khong ai thay khac biet. Ngay trace song qua mot lan deploy,
+   * hoi tien trinh se tra ve release MOI cho mot luot CU — va permalink dung do van bam duoc,
+   * van mo ra mot tep, chi la tep o commit khac. Do la kieu sai nguy hiem nhat: sai tu tin.
+   *
+   * Cat ngan khong dung duoc o day: `/blob/<sha12>/…` la mot duong dan 404.
+   */
+  readonly releaseSha?: string;
   /** Neo nghiep vu da biet tai thoi diem ghi (chatId, orderId, …). */
   readonly anchors: Readonly<Record<string, string>>;
 }

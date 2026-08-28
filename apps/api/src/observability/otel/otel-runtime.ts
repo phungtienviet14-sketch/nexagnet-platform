@@ -69,7 +69,24 @@ export function startOtel(config: OtelRuntimeConfig = readOtelConfig()): boolean
     'deployment.environment.name': config.environment,
     'nexagnet.tenant': config.tenant,
     'nexagnet.release': config.release,
+    // NGUON DI KEM RELEASE. Mot span noi `#c37ee04` ma khong noi doc tu dau la mot span khong
+    // dung duoc de quyet dinh rollback — dung ly do da lam `formatRelease()` mang `(manifest)`.
+    'nexagnet.release_source': config.releaseSource,
   });
+
+  /*
+   * `conflict` = manifest va bien moi truong khong dong y nhau ve commit dang chay. Loi giai da
+   * tra `unknown` (fail-safe, khong doan), nhung im lang thi khong du: day la mot SU CO TRIEN
+   * KHAI that — manifest cu con lai, container khong duoc tao lai, hoac co nguoi sua tep tren VM.
+   * Keu to mot lan luc khoi dong; KHONG nem, vi quan sat khong duoc tro thanh dieu kien de nghiep
+   * vu chay.
+   */
+  if (config.releaseSource === 'conflict') {
+    console.warn(
+      '[otel] release.json va RELEASE_GIT_SHA LECH NHAU — span se mang release=unknown. ' +
+        'Kiem lai lan deploy gan nhat truoc khi tin vao bat ky permalink nao.',
+    );
+  }
 
   const exporter = new OTLPTraceExporter({
     url: `${config.endpoint}/v1/traces`,

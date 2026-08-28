@@ -1,14 +1,8 @@
-import type {
-  SourceContext,
-  SourceLocation,
-  TraceNode,
-  TraceNodeOutcome,
-  TraceView,
-} from '@netviet/shared';
+import type { SourceLocation, TraceNode, TraceNodeOutcome, TraceView } from '@netviet/shared';
 import { decisionReasonLabel } from './decision-vocabulary.js';
 import type { TelemetryRecord } from './telemetry-record.js';
 import type { StoredTrace } from './recent-traces.sink.js';
-import { sourceForDecision, sourceForStep } from './source-manifest.js';
+import { sourceContextForRelease, sourceForDecision, sourceForStep } from './source-manifest.js';
 
 /**
  * Dung CAY NGHIEP VU tu cac ban ghi tho, roi LAM PHANG thanh danh sach co `depth`.
@@ -96,7 +90,18 @@ function sourceOf(record: TelemetryRecord): SourceLocation | undefined {
   return undefined;
 }
 
-export function buildTraceView(stored: StoredTrace, sourceContext?: SourceContext): TraceView {
+/**
+ * `sourceContext` KHONG con la tham so.
+ *
+ * Truoc P2 no duoc truyen tu ngoai vao, va moi noi goi deu truyen release DANG CHAY. Dieu do
+ * dung chung nao vong dem chet cung tien trinh — moi trace trong do that su thuoc release do.
+ * Ngay trace song qua mot lan deploy, cung mot doan ma tro thanh mot cai bay: no gan release
+ * MOI cho mot luot CU, va permalink van bam duoc, van mo ra mot tep, chi la tep sai commit.
+ *
+ * Nen cong duoc DONG LAI o day thay vi duoc canh gac o tung noi goi: ben goi khong the truyen
+ * sai mot thu ma no khong con duoc phep truyen. Release doc tu chinh ban ghi cua luot.
+ */
+export function buildTraceView(stored: StoredTrace): TraceView {
   const { records } = stored;
   const first = records[0]!;
   const steps = new Map<string, TelemetryRecord>();
@@ -159,7 +164,7 @@ export function buildTraceView(stored: StoredTrace, sourceContext?: SourceContex
     anchors: first.anchors,
     nodes,
     ...(totalMs > 0 ? { totalMs } : {}),
-    ...(sourceContext ? { sourceContext } : {}),
+    sourceContext: sourceContextForRelease(first.releaseSha),
   };
 }
 

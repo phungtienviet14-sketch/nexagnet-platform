@@ -223,6 +223,7 @@ env \
   PRIMARY_TENANT="${PRIMARY_TENANT:-ultty}" \
   DEPLOYMENT_ENVIRONMENT="$deployment_environment" \
   WORKFLOW_ENGINE="${WORKFLOW_ENGINE:-off}" \
+  OBSERVABILITY_STACK="${OBSERVABILITY_STACK:-off}" \
   RELEASE_GIT_SHA="$release_git_sha" \
   RELEASE_DEPLOYED_AT="$release_deployed_at" \
   "$app_dir/render-secrets.sh"
