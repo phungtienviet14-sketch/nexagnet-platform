@@ -52,10 +52,29 @@ if [[ "${DATABASE}" == 'observability' ]]; then
   ch_write --query "DROP DATABASE IF EXISTS ${CHECK_DB}"
   ch_write --query "CREATE DATABASE ${CHECK_DB}"
 
-  # Schema den tu `SHOW CREATE TABLE`, nen no mang ten database GOC. Doi ten sang database kiem
-  # tra thay vi de no ghi de len bang that — mot bai kiem tra phuc hoi khong bao gio duoc phep
-  # cham vao du lieu dang chay.
-  sed "s/\`${ch_database}\`/\`${CHECK_DB}\`/g" "${work}/schema.sql" >"${work}/schema-check.sql"
+  # ⚠️ BO HAN TEN DATABASE khoi cau lenh, khong doi ten no.
+  #
+  # Ban truoc doi `\`<db>\`` -> `\`<db>_restore_check\`` bang sed. Tren ClickHouse 25.3,
+  # `SHOW CREATE TABLE` tra ve ten database **KHONG CO backtick**:
+  #
+  #     CREATE TABLE obs_ultty_gd1_test.otel_traces
+  #
+  # nen phep sed la mot no-op IM LANG, va cau `CREATE` nham thang vao database THAT. Lan chay
+  # 28/08/2026 chi thoat vi `TABLE_ALREADY_EXISTS` — tuc bai kiem tra phuc hoi duoc cuu boi mot
+  # tinh co, khong boi thiet ke.
+  #
+  # Nay ten database bi BO HAN o dong dau, va `--database "${CHECK_DB}"` la thu duy nhat quyet
+  # dinh bang di vao dau. Khong con mot ten nao de doi sai.
+  sed -E "1s/^CREATE TABLE [^(]*/CREATE TABLE otel_traces /" "${work}/schema.sql"     >"${work}/schema-check.sql"
+
+  # CONG FAIL-CLOSED. Neu vi mot ly do nao do ten database that VAN con trong cau lenh thi dung
+  # han — mot bai kiem tra phuc hoi khong bao gio duoc phep cham vao du lieu dang chay, va "co le
+  # khong sao" khong phai mot muc rui ro chap nhan duoc o day.
+  if grep -q "${ch_database}" "${work}/schema-check.sql"; then
+    echo "TU CHOI: cau lenh khoi phuc van nhac database that '${ch_database}'." >&2
+    echo "Bai kiem tra nay se dung han thay vi chay vao kho dang phuc vu." >&2
+    exit 1
+  fi
   ch_write --database "${CHECK_DB}" --multiquery <"${work}/schema-check.sql"
 
   ch_write --database "${CHECK_DB}"     --query 'INSERT INTO otel_traces FORMAT Native' <"${work}/otel_traces.native"
