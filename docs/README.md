@@ -34,6 +34,20 @@ Tài liệu tách theo **tuổi thọ và chủ sở hữu**, không theo địn
 > [`phat-trien/ke-hoach/dot-0-nen-tang.md`](phat-trien/ke-hoach/dot-0-nen-tang.md) (kế hoạch Đợt 0).
 > Tên từng gần giống nhau nên đã đổi tên file kế hoạch cho khỏi lẫn.
 
+### Hợp đồng vertical (28/08/2026)
+
+Ba file trên mô tả **nền tảng**. Bên cạnh chúng bắt đầu có **hợp đồng theo vertical** — mô tả một
+miền nghiệp vụ dùng lại được cho nhiều khách cùng ngành:
+
+| File | Là gì | Không phải gì |
+|---|---|---|
+| [`transport-domain-contract.md`](kien-truc/transport-domain-contract.md) | **Transport Domain v0** — bounded context, aggregate, bất biến tài chính, capability, phân quyền, guardrail, case nghiệm thu, giả định demo | Không nhắc tên khách; không phải kế hoạch; **chưa có code** |
+
+Nguồn nghiệp vụ của nó nằm bên khách:
+[`khach-hang/van-tai-viet/nghiep-vu/nguon-su-that-van-tai.md`](khach-hang/van-tai-viet/nghiep-vu/nguon-su-that-van-tai.md).
+Ranh giới giữ nguyên như mọi chỗ khác trong `docs/`: **sự kiện của khách ở `khach-hang/`, thiết kế
+của chúng ta ở `kien-truc/`**.
+
 ## Quy ước đặt tên
 
 - Tên thư mục/file dùng chữ thường, không dấu và `kebab-case`.

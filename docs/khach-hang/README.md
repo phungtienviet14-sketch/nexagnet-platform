@@ -32,6 +32,14 @@ docs/khach-hang/<slug>/
 | | `ultty/nguon-goc/ho-so-khao-sat/` | Quy trình + 3 PO + bảng giá + spec GĐ1. *Tên gốc: `HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG/`* | **gitignored — PII** |
 | | [`ultty/README.md`](ultty/README.md) | Mục lục nghiệp vụ, trao đổi, thiết kế và bộ bàn giao của Ultty | theo dõi |
 | **Amico** | [`amico/README.md`](amico/README.md) | Báo giá nguồn 08/2026; task GĐ1 hiện tại không triển khai nghiệp vụ riêng Amico | theo dõi |
+| **Vận tải Việt** | [`van-tai-viet/README.md`](van-tai-viet/README.md) | Khách **vận tải** đầu tiên — reference tenant của vertical Transport. Mục lục + lý do hồ sơ gốc nằm ngoài repo | theo dõi |
+| | [`van-tai-viet/nghiep-vu/nguon-su-that-van-tai.md`](van-tai-viet/nghiep-vu/nguon-su-that-van-tai.md) | **T0** — nguồn sự thật nghiệp vụ vận tải, truy vết tới từng trang tài liệu khách | theo dõi |
+| | `Phan_tich_nghiep_vu_App_Van_Tai.pdf` | Hồ sơ gốc do khách viết (14 trang). **Không nằm trong repo** — repo public; truy vết bằng SHA-256 ghi trong T0 §1.1 | **ngoài repo** |
+
+> **Vận tải Việt là khách đầu tiên KHÔNG dùng nghiệp vụ hội thoại/Zalo.** Nghiệp vụ của họ được
+> tổng quát hóa thành một vertical dùng lại — hợp đồng miền trung tính nằm ở
+> [`../kien-truc/transport-domain-contract.md`](../kien-truc/transport-domain-contract.md), không nằm
+> trong thư mục khách.
 
 ## Thêm khách mới
 
