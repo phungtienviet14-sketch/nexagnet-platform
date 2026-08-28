@@ -1,13 +1,26 @@
 # Runbook: lần vết một nghiệp vụ chạy sai
 
-> **⚠️ GIỚI HẠN ĐANG CÓ THẬT (27/08/2026): bộ đệm trace KHÔNG BỀN.**
-> `RecentTracesSink` giữ trace trong một `Map` **trong tiến trình**. Khởi động lại API — kể cả
-> một lần deploy bình thường — là **mất toàn bộ lượt cũ**, và Debug View sẽ báo đúng điều đó
-> thay vì bịa ra dữ liệu. Vì vậy: **điều tra một sự cố trước khi deploy lại**, hoặc chấp nhận
-> phải lần theo log máy chủ.
+> **HAI KHO, MỘT CÂU HỎI (cập nhật 28/08/2026).**
 >
-> Đây là khoảng trống chính mà milestone **REFERENCE STACK PARITY v0** phải đóng — xem
-> [platform-roadmap-v2.md P2](../ke-hoach/platform-roadmap-v2.md#p2--reference-stack-parity-v0--milestone-triển-khai-kế-tiếp).
+> `RecentTracesSink` — vòng đệm **trong tiến trình** — vẫn là nơi trả lời đầu tiên, và nó vẫn mất
+> khi API khởi động lại. Cái đã đổi là **điều xảy ra sau đó**: khi vòng đệm không còn giữ, API lùi
+> về kho quan sát (ClickHouse) và dựng lại đúng lượt đó. Bạn không cần biết mình đang đọc kho nào —
+> câu trả lời mang trường `origin`:
+>
+> | `origin` | Nghĩa |
+> |---|---|
+> | `buffer` | vòng đệm trong tiến trình — lượt vừa chạy, bản ghi nguyên vẹn |
+> | `historical` | kho quan sát — lượt đã sống qua một lần khởi động lại hoặc một lần phát hành mới |
+>
+> **Ba câu trả lời, không phải hai.** `404` = đã hỏi được và thực sự không có. `503` = **chưa** hỏi
+> được (kho quá giờ, sai khoá, không xác định được khách). Đọc nhầm `503` thành "không có" là đi
+> tìm một con bọ ở chỗ không có bọ.
+>
+> **Bản triển khai KHÔNG bật cụm quan sát** (`OTEL_TRACING=off`) giữ nguyên hành vi cũ: vòng đệm
+> mất là mất, và câu trả lời là `404` kèm ghi chú nói rõ **không có** kho để lùi về.
+>
+> Trạng thái: **đường đọc `CODE-ONLY`** cho tới khi bốn proof của P2 chạy ở mức Debug View —
+> [reference-platform-stack §8.11](../../kien-truc/reference-platform-stack.md#811-đường-lùi-lịch-sử-của-debug-view--code-only-28082026-pr-65).
 >
 > **Đã đổi theo hướng tốt hơn:** danh tính release nay đọc từ **manifest** được mount readonly
 > (`RELEASE_MANIFEST_PATH=/runtime/release.json`), không còn lùi về `RELEASE_GIT_SHA`. Permalink
@@ -319,6 +332,49 @@ cho phép nhưng Zalo trả lỗi" cần hai hành động sửa khác hẳn nha
 Lượt người bấm nút còn mang thêm hai neo mà lượt tự động không có — `actor` (ai bấm) và
 `causationTraceId` (lượt nào đã gây ra nó). Thiếu hai mảnh này thì một lượt "Duyệt & gửi" trông y
 hệt một lượt tự động không rõ từ đâu ra. `tools/trace-view.mjs` in cả hai.
+
+---
+
+## 6quater. CASE: "Kênh Zalo im — nó chết hay chỉ là không ai nhắn?"
+
+> Đây là câu hỏi đã tốn **44 giờ** ngày 26–28/08/2026, và trong suốt 44 giờ đó cả ba tín hiệu đều
+> xanh. Từ 28/08 nó trả lời được bằng một lệnh.
+
+```bash
+curl -s https://<operator-domain>/health | jq .channels
+```
+
+Đọc **hai** trường, không phải một:
+
+| `listener.phase` | Nghĩa | Làm gì |
+|---|---|---|
+| `connected` | socket mở, **và** có tin về trong ngưỡng | không có việc gì |
+| `connected_but_idle` | socket mở, **chưa** có tin trong ngưỡng | **bình thường** nếu đại lý đang không nhắn. Đây KHÔNG phải sự cố |
+| `disconnected` | socket **đã đóng**, không có lần thử nào đang chờ | sự cố thật — xem `lastCloseCode` |
+| `reconnecting` | socket đóng, **đã hẹn** một lần nối lại | hệ thống đang tự chữa; chờ |
+| `authenticated` | đã đăng nhập, socket **chưa từng** mở | `login()` xong không có nghĩa là nghe được — chờ hoặc xem log |
+| `configured` | cấu hình có kênh, chưa đăng nhập được lần nào | cần quét QR |
+| `disabled` | bản triển khai này không dùng kênh đọc | không có gì để canh |
+
+**Phân biệt cốt lõi:** `connected_but_idle` và `disconnected` có thể có **cùng một**
+`lastInboundAgeSeconds`. Trước 28/08 chúng nhìn y hệt nhau từ bên ngoài. Nay chúng là hai câu trả
+lời khác nhau, và chỉ câu thứ hai mới cần ai đó động tay.
+
+**`lastCloseCode: 1000` không phải tin tốt.** `1000` là `NORMAL_CLOSURE` — đóng "bình thường". Với
+một kênh **đọc**, một socket đóng tử tế và một socket chết là một thứ: đều không nghe được. Đó
+đúng là mã đã xuất hiện trong sự cố 44 giờ, và là lý do listener nay **tự nối lại sau mọi mã
+đóng**, kể cả mã này.
+
+**`reconnectCount` tăng đều** = socket đứt rồi tự chữa liên tục. Kênh vẫn chạy, nhưng có gì đó ở
+tầng mạng/tài khoản đáng xem — ví dụ ai đó đang mở Zalo Web bằng **cùng tài khoản** (một tài khoản
+chỉ chịu được **một** listener).
+
+**`inbound[]` tách theo từng kênh.** Một hàng `copilot_paste` mới tinh cạnh một `zca_listener` cũ
+44 giờ chính là hình dạng của sự cố: đường dán tay vẫn sống, đường đọc thật thì không.
+
+**Giới hạn phải nói rõ:** mọi con số ở đây là quan sát **trong tiến trình**, tính từ
+`observedSince`. Sau một lần khởi động lại, `lastInboundAt` là `null` — đó là sự thật ("chưa thấy
+tin nào kể từ khi khởi động"), không phải một chỗ trống. Muốn biết lịch sử dài hơn thì hỏi DB.
 
 ---
 

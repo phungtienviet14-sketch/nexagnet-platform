@@ -1712,19 +1712,24 @@ sử, replay, chờ, phiên bản, hay giao diện vận hành.
 
 ### 12.1 CANONICAL CURRENT TRUTH
 
+> ⚠️ Bảng này là **bản sao rút gọn**. Bản được viện dẫn nằm ở
+> [kien-truc/reference-platform-stack.md §6](../../kien-truc/reference-platform-stack.md#6-canonical-current-truth-28082026);
+> hai bản mâu thuẫn thì bản kia đúng.
+
 | Hạng mục | Trạng thái |
 |---|---|
 | Release Identity Closure | **CLOSED / RUNTIME-PROVEN** |
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
-| OTel code support | **PARTIAL** |
-| OTel export trên gd1-test | **NOT DEPLOYED** |
-| ClickStack | **POC / NOT DEPLOYED ON GD1** |
-| Historical Debug traces | **NOT PERSISTENT** |
+| OTel code support | **RUNTIME-PROVEN** trên gd1-test |
+| OTel export trên gd1-test | **RUNTIME-PROVEN** — cả 3 tiến trình (api + 2 worker) phát span |
+| ClickStack | **DEPLOYED / HEALTH-CHECKED** — bền, retention 30 ngày |
+| Historical Debug traces | **KHO BỀN** (span sống qua restart và qua deploy); **đường đọc `CODE-ONLY`** |
 | `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
 
-Bằng chứng: deploy run `33039065904` trên main `8b0f6ad603495fc90235d350b13550afd36a982d` —
-`rollout=pass (identitySource: manifest)` · `health=pass` · `deterministicSmoke=pass` (kể cả
-post-restart) · `liveAiSmoke=pass (parserMode: deepseek)` · `classification=APPLICATION_ROLLED_OUT_HEALTHY`.
+Bằng chứng gần nhất: deploy run `33151175039`, release `1ad92bec1093f2752bf25d69ba8c2c88a02c94b9` —
+bốn tín hiệu `pass`, `classification=APPLICATION_ROLLED_OUT_HEALTHY`, `hardFailure=false`. Trong
+kho quan sát: 4953 span của release `270ef27` **vẫn còn** sau khi stack đã chuyển sang `1ad92be`
+(PROOF 3 ở mức kho), và span cũ giữ **đúng** release SHA cũ (PROOF 4 ở mức kho).
 
 ### 12.2 Những gì đã đổi từ 24/08 mà §1–§11 chưa phản ánh
 
@@ -1737,11 +1742,20 @@ post-restart) · `liveAiSmoke=pass (parserMode: deepseek)` · `classification=AP
 | #46, #49, #50, #51 | Debug View + tương quan mã nguồn + mở IDE |
 | #52 | Tách bốn tín hiệu deploy (rollout/health/deterministic/live-AI) |
 | #53–#58 | Đóng danh tính release; làm cứng preflight; sửa cổng provider smoke |
+| #61–#64 | Bật cụm quan sát trên gd1-test; sửa `nexagnet.tenant`; bằng chứng runtime P2 |
+| #65 | Đường lùi lịch sử của Debug View; sức khoẻ kênh đọc + tự nối lại; backup kho quan sát; hai tầng tín hiệu deploy mềm |
 
-### 12.3 Known risks — `UNRESOLVED`
+### 12.3 Known risks
 
-`zca_listener` im lặng ~19 giờ · preflight ghi đè giá trị `autoSend` quan sát được ·
-`bot-poller.spec.ts` flaky · **`main` chưa được bảo vệ** (0 ruleset, repo public).
+| Mục | Trạng thái (28/08) |
+|---|---|
+| `zca_listener` im lặng | **`FIXED` — chờ chứng minh**: bảy mức sức khoẻ + tự nối lại + tầng deploy signal đã có mã; còn một tin thật đi hết đường |
+| preflight ghi đè `autoSend` | **`FIXED` — chờ chứng minh** |
+| `bot-poller.spec.ts` flaky | **`RESOLVED`** |
+| OTel mang release identity thứ hai | **`RESOLVED`** |
+| Hai nhà cung cấp AI của gd1-test chết | **`RESOLVED`** — DeepSeek đã nạp lại |
+| Đường đọc lịch sử chưa chạy thật | **`OPEN`** — mã đã có, bốn proof phải đo ở mức Debug View |
+| **`main` chưa được bảo vệ** | **`UNRESOLVED`, mức HIGH** — 0 ruleset, repo public (thuộc P3) |
 
 Bằng chứng đầy đủ và cổng đóng của từng mục:
 [kien-truc/reference-platform-stack.md §7](../../kien-truc/reference-platform-stack.md#7-known-risks--unresolved).

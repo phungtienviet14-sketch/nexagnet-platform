@@ -114,6 +114,31 @@ gd1-test**, **ClickStack chưa rời POC**.
 **EXIT GATE** — bốn khẳng định trên đạt; OTel và ClickStack đạt **L5**; ba known risk chuyển khỏi
 `UNRESOLVED`; `ultty-gd1-test` được ghi là **PARITY-CLOSED**.
 
+**TIẾN ĐỘ (28/08/2026)** — trạng thái viết theo bộ từ vựng ở
+[reference-platform-stack §5](../../kien-truc/reference-platform-stack.md#5-bộ-từ-vựng-trạng-thái-bắt-buộc),
+không viết bằng phần trăm:
+
+| Hạng mục của cổng ra | Trạng thái |
+|---|---|
+| preload OTel trong compose (api + 2 worker) | **RUNTIME-PROVEN** — cả ba tiến trình phát span (§8.9) |
+| đường xuất OTLP | **RUNTIME-PROVEN** |
+| ClickStack lưu trữ bền + xác thực | **RUNTIME-PROVEN** — 4953 span sống qua deploy release mới |
+| cách ly theo tenant | **RUNTIME-PROVEN** ở mức ghi (listener + credential, fail-closed) |
+| retention + backup/recovery kho trace | **CODE-ONLY** — backup `Native` + `restore-check.sh observability` |
+| retention + backup/recovery `hatchet-postgres` | **CODE-ONLY** — có từ 23/08 (kèm `hatchet-config`), chưa chạy verify gần đây |
+| health check + có mặt trong deploy signal | **CODE-ONLY** — hai tầng mềm `observability` + `channelListener` |
+| danh tính release của trace bền = canonical | **RUNTIME-PROVEN** (§8.8) |
+| Debug View có đường lùi lịch sử | **CODE-ONLY** (§8.11) |
+| known risk `zca_listener` | **FIXED — chờ chứng minh**; ba mục đầu của cổng đóng đã có mã |
+| known risk preflight `autoSend` | **FIXED — chờ chứng minh** |
+| known risk `bot-poller` flaky | **RESOLVED** |
+| PROOF 1 (tạo trace → Debug View thấy) | **RUNTIME-PROVEN** (đường vòng đệm) |
+| PROOF 2 (restart → vẫn thấy) | **kho: RUNTIME-PROVEN · Debug View: chưa đo** |
+| PROOF 3 (deploy release mới → vẫn thấy) | **kho: RUNTIME-PROVEN · Debug View: chưa đo** |
+| PROOF 4 (trace cũ giữ release cũ + permalink cũ) | **kho: RUNTIME-PROVEN · Debug View: chưa đo** |
+
+Khoảng cách còn lại là **một lần deploy + bốn phép đo ở mức màn hình**, không phải mã chưa viết.
+
 **DO NOT DO** — không thêm tính năng nghiệp vụ Ultty · không bắt đầu Fleet View · không dựng hệ
 durability thứ hai · không cài công nghệ ở vòng ASSESS/HOLD.
 
