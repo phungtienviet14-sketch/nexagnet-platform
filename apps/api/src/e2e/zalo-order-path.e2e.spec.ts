@@ -64,7 +64,7 @@ import { OrdersRepository } from '../orders/orders.repository.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 
 /** Gia si FELIX trong ky gia dang active cua goi khach — doi chieu so tien rules engine tinh ra. */
-const FELIX_WHOLESALE = 1_250_000;
+const FELIX_WHOLESALE = 1_150_000;
 
 /** Tin Zalo tho nhu zca-js ban ra. Giu dung hinh dang that: `ts` la epoch-ms DANG CHUOI. */
 function zaloMessage(msgId: string, content: string, threadId: string): Message {

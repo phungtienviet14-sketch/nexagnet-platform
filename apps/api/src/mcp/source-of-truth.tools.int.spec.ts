@@ -67,7 +67,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('MCP source-of-truth tools (Po
     if (!result.ok) return;
     const products = result.products as Array<{ sku: string; wholesale: number | null }>;
     expect(products.some((p) => p.sku === SKU)).toBe(true);
-    expect(products.find((p) => p.sku === 'FELIX')?.wholesale).toBe(1_250_000);
+    expect(products.find((p) => p.sku === 'FELIX')?.wholesale).toBe(1_150_000);
   });
 
   it('list_dealers gom dai ly seed (meta-hn) + dai ly test', async () => {

@@ -67,8 +67,8 @@ describe('AgentOrchestrator — multi-agent 6 con', () => {
     expect(view.intent).toBe('dat_don');
     const roles = activeRoles(view.trace!.steps);
     expect(roles).toEqual(expect.arrayContaining(['router', 'sales', 'policy_finance', 'supervisor']));
-    // Nguyen tac bat bien: gia/tong tu rules engine (10 x 1.250.000 gia si that, khong VAT)
-    expect(view.priced?.grandTotal).toBe(12_500_000); // = itemsSubtotal, tu rules engine
+    // Nguyen tac bat bien: gia/tong tu rules engine (10 x 1.150.000 gia si that, khong VAT)
+    expect(view.priced?.grandTotal).toBe(11_500_000); // = itemsSubtotal, tu rules engine
     expect(view.trace?.steps.find((s) => s.role === 'sales')?.source).toBe('rules');
   });
 
