@@ -84,7 +84,7 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 | Release Identity Closure | **CLOSED / RUNTIME-PROVEN** |
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
 | OTel code support | **RUNTIME-PROVEN trên gd1-test** (§8.8) |
-| OTel export trên gd1-test | **DEPLOYED + span chảy thật** — 513 span / 213 trace |
+| OTel export trên gd1-test | **RUNTIME-PROVEN** — cả 3 tiến trình (api + 2 worker) phát span; trace sống qua restart **và** qua deploy release mới (§8.9) |
 | ClickStack (ClickHouse) | **DEPLOYED / HEALTH-CHECKED** — bền, retention 30 ngày; **backup/restore chưa có** |
 | Historical Debug traces | **NOT PERSISTENT** |
 | `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** · release đang chạy `270ef27` |
@@ -632,7 +632,71 @@ lần deploy. Preload **không đọc được** gói khách (`@netviet/tenant` 
 preload phải vào trước). Nên preload dùng `manifest → env`, và hai nguồn lệch nhau là một sự cố cấu
 hình mà **đường canonical** sẽ báo — không phải việc của đoạn code chạy sớm nhất trong tiến trình.
 
-### 8.9 Điều kiện dừng
+### 8.9 Lần deploy thứ hai (`1ad92be`) — ba tiến trình, và **ba trong bốn proof đo được ở mức kho**
+
+Deploy run `33151175039`, release `1ad92bec1093f2752bf25d69ba8c2c88a02c94b9`. Bảng dưới là **một
+truy vấn duy nhất** trên `obs_ultty_gd1_test.otel_traces` ngay sau khi rollout xong:
+
+```
+tenant    release    source    service                                        spans
+ultty     1ad92be    manifest  nexagnet-api                                     453
+unknown   270ef27    manifest  nexagnet-api                                    4953
+ultty     1ad92be    manifest  nexagnet-workflow-worker-sales-handoff-v1          1
+ultty     1ad92be    manifest  nexagnet-workflow-worker-v1                        1
+```
+
+**Bốn điều đọc ra được từ đúng bốn dòng này:**
+
+**1. Bản sửa `tenant` chạy đúng.** Span của release mới mang `tenant = ultty`; span của release cũ
+vẫn `unknown`. Hai hàng cạnh nhau chính là bằng chứng trước/sau, không phải hai lần đo rời rạc.
+
+**2. Cả BA tiến trình đều phát span.** `nexagnet-api`, `nexagnet-workflow-worker-v1` và
+`nexagnet-workflow-worker-sales-handoff-v1` — tức yêu cầu "preload chạy trên API **và** cả hai
+worker" của cổng ra P2 đã đạt **ở mức runtime**, không phải ở mức cấu hình. (Hai worker mới có 1
+span mỗi cái vì chúng đang rỗi; điều cần chứng minh là *chúng có phát*, và chúng có.)
+
+**3. PROOF 3 — trace sống qua một lần deploy release mới.** 4953 span của `270ef27` **vẫn còn**
+sau khi stack đã chuyển sang `1ad92be`. Trước đây câu này không thể đúng: vòng đệm nằm trong tiến
+trình, và deploy tạo lại container.
+
+**4. PROOF 4 — trace cũ giữ ĐÚNG release CŨ.** Span của lượt cũ mang `270ef27`, **không** bị viết
+lại thành release đang chạy. Ghép với `code.file.path` + `code.line.number` đã lưu kèm mỗi quyết
+định, đó là một permalink tới đúng dòng mã ở đúng bản phát hành đã sinh ra nó.
+
+**PROOF 2 đo riêng:** `docker restart` container `api`, rồi đếm lại đúng `TraceId` đó —
+**17 span trước, 17 span sau**, API `healthy`.
+
+#### Nội dung một lượt, đọc từ kho
+
+```
+trace e2807496…  17 span
+turn · conversation.resolve · agent.run · parse deepseek-v4-flash · prisma:client:operation
+```
+
+Quyết định đi kèm **mã lý do có kiểu** và **vị trí mã nguồn**:
+
+| Điểm quyết định | Kết quả | Lý do | Nguồn |
+|---|---|---|---|
+| `rules.price` | allowed | `PRICED_CLEAN` | `agent-orchestrator.service.ts:669` |
+| `order.auto_confirm` | denied | `KILL_SWITCH_OFF` | `sales-order-outcome.service.ts:42` |
+| `advisor.compose` | denied | `DETERMINISTIC_PATH_SUFFICIENT` | `agent-orchestrator.service.ts:176` |
+| `supervisor.risk` | allowed | `ALLOWED` | `agent-orchestrator.service.ts:573` |
+| `conversation.resolve` | allowed | `NO_THREAD_KEY` | `pipeline.service.ts:448` |
+
+(`order.auto_confirm / KILL_SWITCH_OFF` là `AUTO_SEND=off` hiện ra trong chính trace — quan sát
+được, không phải khẳng định.)
+
+#### Khoảng cách còn lại — nói cho đúng
+
+Ba proof ở trên đo được **ở mức KHO**. Cổng ra P2 viết chúng ở mức **Debug View**, mà Debug View
+hiện đọc `RecentTracesSink` — vòng đệm **trong tiến trình**. Nên còn **đúng một mảnh**: đường đọc
+`api → ClickHouse` để Debug View lùi về lịch sử khi vòng đệm không còn giữ.
+
+Mọi nguyên liệu cho mảnh đó đã có và đã được đo: schema, chỉ mục `TraceId`, credential đọc riêng,
+release identity đúng, mã lý do và vị trí mã nguồn. Đây là **việc còn lại**, không phải một câu
+hỏi mở.
+
+### 8.10 Điều kiện dừng
 
 Nếu ClickStack **không** chứng minh được cách ly cứng theo mô hình này thì **DỪNG và báo** — tuyệt
 đối không tự hạ xuống một kho dùng chung. Tính tới 27/08/2026, ba bằng chứng ở §8.3 cho thấy
