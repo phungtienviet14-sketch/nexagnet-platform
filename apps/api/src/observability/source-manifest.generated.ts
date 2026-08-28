@@ -15,7 +15,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "agent.run": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 470
+      "line": 487
     },
     "audit.persist": {
       "functionName": "OrdersService.recordManualAction",
@@ -88,7 +88,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conversation.resolve": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 432
+      "line": 449
     },
     "dealers.configured": {
       "functionName": "evaluateOperationalReadiness",
@@ -113,7 +113,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "message.persist": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 172
+      "line": 189
     },
     "nexagnet.failure.reason": {
       "functionName": "OtelWorkerTraceBridge.finish",
@@ -150,7 +150,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "outbound.send_advice": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 514
+      "line": 531
     },
     "outbound.send_confirmation": {
       "functionName": "SalesOrderOutcomeService.settle",
@@ -218,12 +218,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "advice.auto_reply|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 505
+      "line": 522
     },
     "advice.auto_reply|ALLOWED": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 521
+      "line": 538
     },
     "advisor.compose|COMPOSED": {
       "functionName": "AgentOrchestrator.composeReply",
@@ -258,27 +258,27 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 448
+      "line": 465
     },
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 205
+      "line": 222
     },
     "message.intake|DUPLICATE_MESSAGE": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 177
+      "line": 194
     },
     "message.intake|GROUP_NOT_MAPPED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 196
+      "line": 213
     },
     "message.intake|PARTICIPANT_IGNORED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 163
+      "line": 180
     },
     "order.auto_confirm|*": {
       "functionName": "SalesOrderOutcomeService.settle",
