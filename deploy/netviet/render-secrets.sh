@@ -450,12 +450,29 @@ install -d -m 0700 "${RUNTIME_DIR}/zalo"
 # chua ton tai thi tao ra mot THU MUC trung ten — hong ca mount lan lan ghi ke tiep. Dung cai bay
 # da lam `RELEASE_MANIFEST_PATH` rong suot tren gd1-test. Tat thi ba tep nay rong/vo hai; cum
 # `profiles: ["observability"]` khong duoc dung toi thi khong ai doc chung.
+# QUYEN TEP O DAY LA MOT HOP DONG VOI ANH DOCKER, khong phai mot thoi quen.
+#
+# `otel/opentelemetry-collector-contrib` khai `USER 10001:10001`, va `clickhouse-server` dung
+# `DEFAULT_UID=101` (ca hai doc tu config cua chinh anh truoc khi ghim digest). Bind mount GIU
+# NGUYEN chu so huu cua HOST, nen mot tep `600` thuoc root la mot tep tien trinh trong container
+# KHONG DOC DUOC. Trieu chung o phia nguoi dung khong phai mot loi ro rang — chi la "khong co
+# span nao", hoac "user doc khong ton tai".
+#
+# `.runtime/` da la `0700` cua root tren VM, nen noi long quyen o day khong mo them gi ra ngoai.
+OTEL_COLLECTOR_UID=10001
+CLICKHOUSE_UID=101
+
 install -d -m 0700 "${RUNTIME_DIR}/otlp-keys"
 printf '%s\n' "${OTLP_INGEST_TOKEN}" >"${RUNTIME_DIR}/otlp-keys/${STACK_SLUG}"
-chmod 600 "${RUNTIME_DIR}/otlp-keys/${STACK_SLUG}"
+chmod 0400 "${RUNTIME_DIR}/otlp-keys/${STACK_SLUG}"
+chown "${OTEL_COLLECTOR_UID}:${OTEL_COLLECTOR_UID}" \
+  "${RUNTIME_DIR}/otlp-keys/${STACK_SLUG}" "${RUNTIME_DIR}/otlp-keys"
 
 "${SCRIPT_DIR}/observability/render-otel-collector.sh" \
   "${STACK_SLUG}" "${RUNTIME_DIR}/otel-collector.yaml"
+# Cau hinh KHONG chua bi mat (mat khau di qua `${env:...}` luc chay), nen `0444` la du va khong
+# phai phu thuoc vao chu so huu — collector chi can DOC duoc no.
+chmod 0444 "${RUNTIME_DIR}/otel-collector.yaml"
 
 # USER DOC — quyen SELECT, khong hon. Tach khoi user GHI la dieu kien 3 cua §8.1: mot credential
 # doc bi lo khong duoc tro thanh mot duong ghi vao telemetry cua khach.
@@ -468,6 +485,9 @@ CREATE DATABASE IF NOT EXISTS ${CLICKHOUSE_DATABASE};
 CREATE USER IF NOT EXISTS ${CLICKHOUSE_READER_USER} IDENTIFIED BY '${CLICKHOUSE_READER_PASSWORD}';
 GRANT SELECT ON ${CLICKHOUSE_DATABASE}.* TO ${CLICKHOUSE_READER_USER};
 EOF
-chmod 600 "${RUNTIME_DIR}/init-observability.sql"
+# Tep NAY co chua mat khau cua user doc, nen `0400` — va phai chuyen so huu, cung ly do voi tep
+# khoa OTLP o tren: entrypoint cua ClickHouse chay cac tep initdb duoi uid trong container.
+chmod 0400 "${RUNTIME_DIR}/init-observability.sql"
+chown "${CLICKHOUSE_UID}:${CLICKHOUSE_UID}" "${RUNTIME_DIR}/init-observability.sql"
 
 chmod 600 "${RUNTIME_DIR}/secrets.env" "${RUNTIME_DIR}/flowise.env"

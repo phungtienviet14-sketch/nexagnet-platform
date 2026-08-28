@@ -191,6 +191,21 @@ observability_stack="$(runtime_value OTEL_TRACING)"
 if [[ "${observability_stack}" == 'on' ]]; then
   if "${COMPOSE[@]}" --profile observability up -d --wait --wait-timeout 180     clickhouse otel-collector; then
     "${COMPOSE[@]}" --profile observability ps
+    # SUC KHOE CUA COLLECTOR DOC TU MOT CONTAINER KHAC.
+    #
+    # `otel-collector` KHONG co `healthcheck:` cua Docker vi anh cua no dung tu `scratch`: chi co
+    # mot tep nhi phan, khong shell, khong `wget`. Nen `up --wait` o tren chi chung minh container
+    # DANG CHAY, khong chung minh no da nap duoc cau hinh — mot cau hinh hong hay mot tep khoa
+    # khong doc duoc deu cho ra dung mot container "dang chay" trong vai giay roi restart.
+    #
+    # `clickhouse` la anh alpine (co busybox `wget`) va nam CUNG mang `data`, nen no la cho doc
+    # tu nhien. Hong o day KHONG lam do lan deploy — xem chu thich ngay tren.
+    if "${COMPOSE[@]}" --profile observability exec -T clickhouse       wget --no-verbose --tries=1 --spider http://otel-collector:13133/ >/dev/null 2>&1; then
+      echo "cum quan sat: collector tra loi tren cong suc khoe 13133." >&2
+    else
+      echo "CANH BAO: collector dang chay nhung cong suc khoe 13133 khong tra loi." >&2
+      echo "Xem: docker compose --profile observability logs otel-collector" >&2
+    fi
   else
     echo "CANH BAO: cum quan sat khong len duoc — ung dung van duoc trien khai." >&2
     echo "Span se bi bo tai exporter; xem 'docker compose --profile observability logs'." >&2

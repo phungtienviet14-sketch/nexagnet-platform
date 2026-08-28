@@ -813,9 +813,16 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_WRITER_USER:-observability_writer}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_WRITER_PASSWORD:-}
       CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-observability}
-      # TAT user `default` KHONG MAT KHAU. Mac dinh cua anh la cho phep no dang nhap tu bat ky
-      # dau — tren mot mang co container khac, do la mot cua mo vao toan bo telemetry.
+      # Dat mot trong ba bien tren khien entrypoint ghi `users.d/default-user.xml`, va tep do
+      # XOA user `default` (`<default remove="remove">`). Do la thu ta muon: user `default` khong
+      # mat khau tren mot mang co container khac la mot cua mo vao toan bo telemetry.
+      #
+      # HAI TEN BIEN, CO Y: entrypoint doi ten bien nay giua cac doi anh (`CLICKHOUSE_ACCESS_
+      # MANAGEMENT` -> `CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT`). Dat ca hai la re; dat sai ten thi
+      # user ghi khong co quyen `CREATE USER`, va `init-observability.sql` that bai — tuc user DOC
+      # khong bao gio ton tai, va duong doc cua Debug View chet ma khong ai biet vi sao.
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      CLICKHOUSE_ACCESS_MANAGEMENT: "1"
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       # Chay MOT LAN, luc thu muc du lieu con rong. `render-secrets.sh` dung tep nay (no chua mat
@@ -856,12 +863,14 @@ services:
       - ./.runtime/otlp-keys:/run/otlp-keys:ro
     # KHONG CO `ports:` — chi cac container tren `data` moi gui duoc telemetry vao. Cong OTLP mo
     # ra host la mot duong ghi vao kho quan sat cua khach cho bat ky ai cham toi VM.
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:13133/"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 15s
+    #
+    # KHONG CO `healthcheck:` — va day KHONG phai thieu sot. Anh nay dung tu `scratch`: ba lop,
+    # chi co `/otelcol-contrib`, chung chi CA va tep cau hinh. Khong shell, khong `wget`, khong
+    # `curl`. Mot `healthcheck` goi bat ky thu nao trong so do se do VINH VIEN, va voi
+    # `up --wait` thi do la mot lan deploy that bai vi mot cong khong the xanh.
+    #
+    # Suc khoe VAN duoc kiem — tu mot container KHAC tren cung mang `data`, trong
+    # `deploy-stack.sh`. Doc tu ben ngoai la dung ban chat cua mot cong suc khoe hon.
     networks:
       - data
 
