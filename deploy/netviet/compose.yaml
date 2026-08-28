@@ -802,7 +802,9 @@ services:
   # ============================================================================================
   clickhouse:
     profiles: ["observability"]
-    image: clickhouse/clickhouse-server:25.3-alpine
+    # GHIM THEO DIGEST, cung quy uoc voi cum Hatchet: mot tag co the bi day sang anh khac, va
+    # luc do khong lan lai duoc "ban nao dang chay". 25.3 la ban LTS.
+    image: clickhouse/clickhouse-server:25.3-alpine@sha256:a4e8cf46e526a06f4f52d22f7fa8d07472b55d3c896d7ca3f159e249be38ae62
     restart: always
     environment:
       # User GHI. `clickhouseexporter` dung dung user nay; user DOC duoc tao rieng trong
@@ -833,7 +835,9 @@ services:
 
   otel-collector:
     profiles: ["observability"]
-    image: otel/opentelemetry-collector-contrib:0.130.1
+    # `-contrib` chu khong phai anh `core`: `bearertokenauthextension` va `clickhouseexporter`
+    # deu chi co trong ban contrib. Ghim theo digest.
+    image: otel/opentelemetry-collector-contrib:0.130.1@sha256:9c247564e65ca19f97d891cca19a1a8d291ce631b890885b44e3503c5fdb3895
     restart: always
     depends_on:
       clickhouse:
