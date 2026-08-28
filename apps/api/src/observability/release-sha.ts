@@ -106,9 +106,29 @@ export function resolveReleaseSha(
 }
 
 /**
- * Duong tat cho noi goi chi co `process.env` — doc manifest tai `RELEASE_MANIFEST_PATH` roi phan
- * giai. Dung o preload, noi khong co gi de tiem vao.
+ * KHACH NAO DANG DUOC PHUC VU — phien ban cho PRELOAD.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO NO KHAC `resolveReleaseIdentity()`, va khac CO Y:
+ *
+ * Ham canonical DAO NGUOC thu tu cho `tenant`: no doc GOI KHACH truoc, vi goi khach la thu quyet
+ * dinh app dang phuc vu ai LUC CHAY, con manifest chi ghi lai y dinh cua lan deploy.
+ *
+ * Preload KHONG doc duoc goi khach: `loadTenantConfig()` den tu `@netviet/tenant`, tuc chinh do
+ * thi nghiep vu ma preload phai vao truoc. Nen o day thu tu la manifest -> bien moi truong, va
+ * hai nguon lech nhau la mot SU CO CAU HINH ma duong canonical se bao — khong phai viec cua doan
+ * code chay som nhat trong tien trinh.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO KHONG DUNG `env.TENANT` MOT MINH (do that tren gd1-test 28/08/2026):
+ *
+ * `compose.yaml` dat `TENANT_DIR=/srv/tenant` va KHONG dat `TENANT` — trong image khong co thu
+ * muc `tenants/` de tra slug. Nen `env.TENANT ?? 'unknown'` cho ra `unknown` tren MOI span cua
+ * lan deploy dau tien co OTel. Mot span khong noi duoc no thuoc khach nao lam ca cau chuyen "kho
+ * quan sat cach ly theo tenant" mat nghia: du lieu nam dung kho, nhung chinh no khong khai duoc.
+ *
+ * `release.json` da duoc mount va DA co truong `tenant`, nen loi giai khong can them nguon nao.
  */
-export function resolveReleaseShaFromEnv(env: NodeJS.ProcessEnv): ResolvedReleaseSha {
-  return resolveReleaseSha(readReleaseManifest(env.RELEASE_MANIFEST_PATH), env);
+export function resolveTenant(manifest: ReleaseManifest | null, env: NodeJS.ProcessEnv): string {
+  return asString(manifest?.tenant) ?? asString(env.TENANT) ?? UNKNOWN_RELEASE;
 }
