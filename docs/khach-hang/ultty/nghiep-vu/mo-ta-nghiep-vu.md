@@ -77,8 +77,8 @@ Nguồn: `QT đặt hàng.pdf`.
 
 - **Giá tính đơn = "Đơn giá CTV"** (giá đại lý/CTV TRẢ) → trong code là `wholesale`. **Đã đối chiếu khớp từng dòng** với `seed.ts`.
 - **Tư vấn giá lẻ** dùng trường cấu hình theo tenant; Ultty trỏ tới **"Giá bán lẻ tối thiểu"** (`minRetailPrice`) và câu trả lời phải có qualifier cấu hình nói đây là mức tham khảo/tối thiểu, không cam kết giá giao dịch thực tế luôn bằng mức này.
-- Drive không có bảng tháng 08/2026. `validMonth=2026-07` phải được giữ xuyên suốt; thiếu tháng hiện hành thì handoff/báo thiếu, **không fallback T7 thành T8**.
-- **Bảng giá chung** cho mọi đại lý; **một số đại lý lấy SL lớn có deal riêng** → mô hình `DealerPriceOverride` (dealer + sku → giá). Hiện **rỗng**, chờ dữ liệu (A2).
+- ~~Drive không có bảng tháng 08/2026.~~ ❌ **SAI — đo lại 28/08/2026: Drive CÓ `Thông báo giá tháng 8.pdf` (18/08) và một bảng giá riêng theo đại lý.** Xem [`doi-chieu-nguon-su-that-2026-08.md`](doi-chieu-nguon-su-that-2026-08.md) `SUP-01`. Nguyên tắc *thiếu tháng hiện hành thì handoff/báo thiếu, **không fallback T7 thành T8*** vẫn đúng — nhưng repo **đang vi phạm chính nó**: kỳ `2026-08` hiện là bản copy tay từ T7 để kiểm thử gd1.
+- **Bảng giá chung** cho mọi đại lý; **một số đại lý lấy SL lớn có deal riêng** → mô hình `DealerPriceOverride` (dealer + sku → giá). Hiện **rỗng** — nhưng ~~chờ dữ liệu (A2)~~ ❌ **dữ liệu ĐÃ CÓ trên Drive từ 18/08/2026** (21 đại lý/CTV, ≈120 ô giá riêng). Xem `SUP-02`. Cái còn thiếu thật là **ngưỡng số lượng** của từng deal (`MISS-04`).
 - **Mã hàng nội bộ dạng số** (PGH ghi mã kiểu `8716` cho ELNI 16) ≠ SKU chữ trong code → **cần bảng map SKU ↔ mã KiotViet** khi tích hợp (Phase 4).
 
 ---
@@ -229,9 +229,9 @@ Chi tiết + trạng thái duy nhất: [tổng quan kế hoạch](../../../phat-
 
 - 🔴 **A4** — danh sách đại lý/CTV + **map nhóm Zalo → đại lý** đầy đủ. *(Cơ chế đã có: panel `/admin` + MCP tool + hộp thư "nhóm chưa map" → nhập dần được, không còn chặn việc build.)*
 - 🔴 **A3** — **bảng phí COD** + **biểu cước ship** + xác nhận ngưỡng công nợ.
-- 🔴 **A2** — deal riêng theo đại lý.
+- 🟠 **A2** — ~~deal riêng theo đại lý~~ → **dữ liệu đã có** (`SUP-02`); còn thiếu **ngưỡng số lượng** của từng deal (`MISS-04`) — nhập thiếu ngưỡng sẽ báo giá **thấp hơn** mức đại lý thật sự được hưởng.
 - 🟠 **B1–B2** — 20–30 tin thật + đơn đúng (golden) → **cổng đo độ chính xác trước go-live** (không thay thế được bằng "nguồn sự thật động").
 - 🟡 Đọc nốt: `QT Preoder` · `QT_Báo giá B2B` · `QT_Hoàn trả hàng B2B` · `QT_Tiếp xúc khách hàng` · `QT đưa sp vào TT` · `Biên bản bàn giao` → bổ sung vào tài liệu này.
-- 🔴 **A6** — bảng giá tháng 08/2026; Drive hiện chỉ có T7.
-- 🔴 **A7** — nguồn xác nhận công thức khuyến mãi; hiện không có trong cây Drive đã kiểm kê.
+- ✅ **A6 — ĐÃ TÌM THẤY 28/08/2026** (không còn thiếu): bảng giá tháng 08/2026 nằm ở Drive `AI Zalo B2B / Báo giá sản phẩm /`. Chênh với T7 đúng **2 SKU** (`ELNI`, `FELIX` — cột Đơn giá CTV). **Chưa nhập** vì còn `CONFLICT-PRICE-SOURCE-001`. Chi tiết: [`doi-chieu-nguon-su-that-2026-08.md`](doi-chieu-nguon-su-that-2026-08.md).
+- 🟠 **A7** — ~~không có trong cây Drive~~ → tìm thấy **dạng** khuyến mãi (ô "tặng SKU" trong bảng giá riêng; ví dụ *ELNI mua 5 tặng ELNA* trong tài liệu luồng của khách). Vẫn thiếu **công thức**: điều kiện, phạm vi đại lý, ngưỡng, cộng dồn, hiệu lực (`MISS-05`).
 - 🟡 **A5/P4** — inventory Drive đã xong (122 folder/825 file), còn schema/import/provenance/readiness và `/settings`.
