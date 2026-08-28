@@ -1,10 +1,12 @@
-import { readFileSync } from 'node:fs';
 import { loadTenantConfig } from '@netviet/tenant';
-import type {
-  ReleaseIdentity,
-  ReleaseIdentityMismatch,
-  ReleaseIdentitySource,
-} from './trace-context.js';
+import {
+  UNKNOWN_RELEASE,
+  asString,
+  readReleaseManifest,
+  resolveReleaseSha,
+  type ReleaseManifest,
+} from './release-sha.js';
+import type { ReleaseIdentity } from './trace-context.js';
 
 /**
  * DOC danh tinh ban dang chay. KHONG sinh ra mot he metadata release thu hai (muc 23).
@@ -28,51 +30,6 @@ import type {
  * thu hai thi bien khong bao gio toi container — dung loi da lam `ADVICE_COMPOSER` rong suot
  * 19/08 -> 21/08/2026.
  */
-
-/** Khuon `release.json` do tang deploy ghi ra. Moi truong deu co the vang o ban cu. */
-interface ReleaseManifest {
-  readonly tenant?: unknown;
-  readonly environment?: unknown;
-  readonly gitSha?: unknown;
-  readonly appDigest?: unknown;
-  readonly deployedAt?: unknown;
-}
-
-const UNKNOWN = 'unknown';
-
-/**
- * SHA DAY DU, 40 ky tu hex. Tang deploy da ep dieu nay o phia GHI (`deploy-remote.sh` va
- * `verify-deployment.mjs` deu kiem), nhung phia DOC thi khong — nen truoc 26/08/2026 mot chuoi
- * bat ky trong manifest di thang vao permalink cua man hinh chan doan.
- *
- * Chap nhan chu HOA roi chuan hoa ve chu thuong: cung mot commit viet hai kieu KHONG duoc bi doc
- * thanh hai ban phat hanh khac nhau (do se bien thanh mot "xung dot" gia).
- */
-const GIT_SHA_PATTERN = /^[a-f0-9]{40}$/i;
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
-}
-
-/** SHA hop le -> dang chuan (chu thuong). Moi thu khac -> `undefined`, tuc "nguon nay khong biet". */
-function asGitSha(value: unknown): string | undefined {
-  const text = asString(value);
-  return text && GIT_SHA_PATTERN.test(text) ? text.toLowerCase() : undefined;
-}
-
-/**
- * Doc manifest. Moi that bai deu tra `null` — thieu file la trang thai BINH THUONG (chay local,
- * chay test, chay CI), khong phai loi. Mot API khong duoc chet vi khong biet git SHA cua chinh no.
- */
-function readManifest(path: string | undefined): ReleaseManifest | null {
-  if (!path) return null;
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
-    return typeof parsed === 'object' && parsed !== null ? (parsed as ReleaseManifest) : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Doc slug tu GOI KHACH dang mount (`TENANT_DIR`/`TENANT`).
@@ -121,7 +78,9 @@ export interface ResolveReleaseInput {
  */
 export function resolveReleaseIdentity(input: ResolveReleaseInput = {}): ReleaseIdentity {
   const env = input.env ?? process.env;
-  const manifest = readManifest(input.manifestPath ?? env.RELEASE_MANIFEST_PATH);
+  const manifest: ReleaseManifest | null = readReleaseManifest(
+    input.manifestPath ?? env.RELEASE_MANIFEST_PATH,
+  );
   const readTenantSlug = input.readTenantSlug ?? tenantSlugFromPack;
 
   const tenant =
@@ -129,7 +88,7 @@ export function resolveReleaseIdentity(input: ResolveReleaseInput = {}): Release
     readTenantSlug() ??
     asString(manifest?.tenant) ??
     asString(env.TENANT) ??
-    UNKNOWN;
+    UNKNOWN_RELEASE;
 
   const environment =
     asString(manifest?.environment) ??
@@ -137,7 +96,7 @@ export function resolveReleaseIdentity(input: ResolveReleaseInput = {}): Release
     asString(env.NODE_ENV) ??
     'development';
 
-  const { gitSha, source, mismatch } = resolveGitSha(manifest, env);
+  const { gitSha, source, mismatch } = resolveReleaseSha(manifest, env);
   const appDigest = asString(manifest?.appDigest) ?? asString(env.RELEASE_APP_DIGEST);
   const deployedAt = asString(manifest?.deployedAt) ?? asString(env.RELEASE_DEPLOYED_AT);
 
@@ -152,45 +111,6 @@ export function resolveReleaseIdentity(input: ResolveReleaseInput = {}): Release
   };
 }
 
-interface ResolvedGitSha {
-  readonly gitSha: string;
-  readonly source: ReleaseIdentitySource;
-  readonly mismatch?: ReleaseIdentityMismatch;
-}
-
-/**
- * "CODE NAO DANG CHAY TRONG TIEN TRINH NAY" — mot cau hoi, mot cau tra loi, va cau tra loi luon
- * kem TEN NGUON.
- *
- * HAI NGUON LECH NHAU THI KHONG CHON BEN NAO. Day la diem khac ban truoc 26/08/2026: khi do
- * manifest lang le thang, nen mot manifest cu (con lai tu lan deploy truoc) se lam man hinh chan
- * doan tro permalink toi COMMIT SAI — te hon han mot dau "khong biet". Ba tinh huong that co the
- * dan toi lech:
- *   · manifest ghi hong, ban cu con lai tren dia;
- *   · container KHONG duoc tao lai nen giu bien cu, trong khi manifest da la ban moi;
- *   · co nguoi sua tep bang tay tren VM.
- * Ba tinh huong, cung mot ket luan: KHONG BIET, va noi to ra rang co hai gia tri dang tranh nhau.
- *
- * CONG CUNG NAM O TANG DEPLOY (`ROLLOUT` trong `deploy-stack.sh`), khong o day. Mot tien trinh
- * khong duoc chet vi chua biet minh chay commit nao — quan sat khong bao gio duoc tro thanh dieu
- * kien de nghiep vu chay.
- */
-function resolveGitSha(manifest: ReleaseManifest | null, env: NodeJS.ProcessEnv): ResolvedGitSha {
-  const fromManifest = asGitSha(manifest?.gitSha);
-  const fromEnv = asGitSha(env.RELEASE_GIT_SHA);
-
-  if (fromManifest && fromEnv && fromManifest !== fromEnv) {
-    return {
-      gitSha: UNKNOWN,
-      source: 'conflict',
-      mismatch: { manifestGitSha: fromManifest, envGitSha: fromEnv },
-    };
-  }
-  if (fromManifest) return { gitSha: fromManifest, source: 'manifest' };
-  if (fromEnv) return { gitSha: fromEnv, source: 'env' };
-  return { gitSha: UNKNOWN, source: 'none' };
-}
-
 /**
  * Dang ngan de in ra log/health: `ultty@gd1-test#c37ee04 (manifest)`.
  *
@@ -198,6 +118,6 @@ function resolveGitSha(manifest: ReleaseManifest | null, env: NodeJS.ProcessEnv)
  * doc tu dau la mot dong log khong dung duoc de quyet dinh rollback.
  */
 export function formatRelease(release: ReleaseIdentity): string {
-  const sha = release.gitSha === UNKNOWN ? UNKNOWN : release.gitSha.slice(0, 7);
+  const sha = release.gitSha === UNKNOWN_RELEASE ? UNKNOWN_RELEASE : release.gitSha.slice(0, 7);
   return `${release.tenant}@${release.environment}#${sha} (${release.source})`;
 }
