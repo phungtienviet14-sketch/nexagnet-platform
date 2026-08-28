@@ -72,11 +72,32 @@ export function currentSourceContext(
   release: ReleaseIdentity,
   manifest: SourceManifest = SOURCE_MANIFEST,
 ): SourceContext {
+  return sourceContextForRelease(
+    release.gitSha !== UNKNOWN_SHA ? release.gitSha : undefined,
+    manifest,
+  );
+}
+
+/**
+ * DANH TINH MA NGUON cua MOT BAN PHAT HANH CU THE — khong nhat thiet la ban dang chay.
+ *
+ * Day la duong ma man hinh chan doan phai di khi trace SONG LAU HON tien trinh (P2). Cau hoi
+ * dung khong phai "ta dang chay commit nao", ma "luot NAY da chay o commit nao" — va sau mot
+ * lan deploy thi hai cau do cho hai cau tra loi khac nhau.
+ *
+ * `undefined` vao -> `releaseSha` VANG MAT o dau ra. Co y, va day la diem quan trong nhat cua
+ * ham nay: khong co duong nao muon tam release dang chay de lap vao cho trong. Mot permalink
+ * tro toi commit sai te hon khong co permalink, vi nguoi doc khong co cach nao biet no sai.
+ */
+export function sourceContextForRelease(
+  releaseSha: string | undefined,
+  manifest: SourceManifest = SOURCE_MANIFEST,
+): SourceContext {
   const repositoryUrl = manifestRepositoryUrl(manifest);
-  const releaseSha = release.gitSha !== UNKNOWN_SHA ? release.gitSha : undefined;
+  const known = releaseSha && releaseSha !== UNKNOWN_SHA ? releaseSha : undefined;
   return {
     ...(repositoryUrl ? { repositoryUrl } : {}),
-    ...(releaseSha ? { releaseSha } : {}),
+    ...(known ? { releaseSha: known } : {}),
   };
 }
 
