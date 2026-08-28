@@ -92,9 +92,12 @@ gd1-test**, **ClickStack chưa rời POC**.
 - đường xuất OTLP;
 - ClickStack có **lưu trữ bền**, kèm xác thực;
 - **cách ly theo tenant** theo mô hình đã chọn ở
-  [reference-platform-stack §8](../../kien-truc/reference-platform-stack.md#8-mô-hình-triển-khai-clickstack--chưa-chọn);
+  [reference-platform-stack §8](../../kien-truc/reference-platform-stack.md#8-mô-hình-triển-khai-clickstack--đã-chọn);
 - retention + backup/recovery cho kho trace **và** cho `hatchet-postgres`;
 - health check + có mặt trong deploy signal;
+- **danh tính release của trace bền phải là danh tính release canonical** — preload OTel phân giải
+  release bằng đúng luật `manifest → env → conflict` của telemetry nội bộ, không đọc riêng
+  `RELEASE_GIT_SHA`; lệch hai nguồn thì **fail-safe** (`unknown`), không im lặng chọn một SHA;
 - Debug View có đường lùi về lịch sử khi vòng đệm trong tiến trình không còn;
 - **đóng 3 known risk `UNRESOLVED`**: `zca_listener` im lặng · preflight ghi đè `autoSend` · test
   `bot-poller` flaky.

@@ -56,7 +56,7 @@
 | Caddy | 1 | **L5** | — |
 | GitHub Actions | 2 | **L5** | — |
 | **OpenTelemetry** | 1 | **L1 CODE-SUPPORTED** | Mã có đủ: `otel-preload.ts`, `otel-config.ts`, bridge cho worker, `privacy-span-processor`, `span-noise-filter`. **Khoá sau `OTEL_TRACING=on`, mặc định tắt**, và compose/Dockerfile **không** có `NODE_OPTIONS --import` nào ⇒ **NOT DEPLOYED**. Đây là ADOPT **chưa đạt parity** |
-| **ClickStack / HyperDX** | 1 hoặc 2 | **L0 POC** | Chỉ tồn tại ở `tools/poc-observability/compose/clickstack.compose.yml`. POC 24/08 chấm **GO 8/10**. **Chưa deploy trên gd1**. Mô hình triển khai chưa chọn — xem [reference-platform-stack §8](reference-platform-stack.md#8-mô-hình-triển-khai-clickstack--chưa-chọn) |
+| **ClickStack / HyperDX** | 1 hoặc 2 | **L0 POC** | Chỉ tồn tại ở `tools/poc-observability/compose/clickstack.compose.yml`. POC 24/08 chấm **GO 8/10**. **Chưa deploy trên gd1**. Mô hình triển khai **đã chọn 27/08/2026** (shared OTLP collector + kho quan sát cách ly theo tenant, cách ly bằng listener+credential) — xem [reference-platform-stack §8](reference-platform-stack.md#8-mô-hình-triển-khai-clickstack--đã-chọn) |
 
 > **Hai dòng cuối là lý do `REFERENCE PARITY` chưa CLOSED.** Chúng ở vòng ADOPT vì quyết định đã
 > chốt, không phải vì đã chạy.

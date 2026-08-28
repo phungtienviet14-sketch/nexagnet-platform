@@ -5,8 +5,8 @@
 > [`phat-trien/ke-hoach/tong-quan.md`](../phat-trien/ke-hoach/tong-quan.md); tài liệu này mô tả
 > **hợp đồng** và **bằng chứng runtime**, không chứa ✅/⬜ của kế hoạch.
 >
-> **Cập nhật:** 27/08/2026 · **Đối chiếu mã nguồn tại:** `7a6cc63904d18be49c653ee1315e65046607bda5`
-> (+ nhánh `feat/reference-stack-parity-v0` cho §7.2, §7.3 và §8)
+> **Cập nhật:** 28/08/2026 · **Đối chiếu mã nguồn tại:** `7a6cc63904d18be49c653ee1315e65046607bda5`
+> (+ nhánh `feat/reference-stack-parity-v0` cho §7.2, §7.3, §7.6 và §8)
 
 ---
 
@@ -105,7 +105,7 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 | GitHub deploy signals | 2 | đầy đủ | có | **có** | artifact 30 ngày | **CLOSED / RUNTIME-PROVEN** | — |
 | Source correlation | 1 | đầy đủ | có | có | theo trace (không bền) | **RUNTIME-PROVEN** | phụ thuộc Debug View bền |
 | Debug View | 1 | đầy đủ | có | có | **KHÔNG** | **PARTIAL** | trace bền (P2) |
-| OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`** | **KHÔNG** | không | n/a | **PARTIAL / NOT-DEPLOYED** | preload vào compose (P2) |
+| OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`**; release identity dùng chung `release-sha.ts` (§7.6) | **KHÔNG** | không | n/a | **PARTIAL / NOT-DEPLOYED** | preload vào compose (P2) |
 | ClickStack / HyperDX | 1 hoặc 2 | chỉ trong `tools/poc-observability/` | **KHÔNG** | không | không | **POC** | mô hình đã chọn (§8) → dựng collector + kho theo tenant (P2) |
 | Flowise | 1 | là **1 trong 3** adapter parser | có (container luôn chạy) | không dùng ở đường parser gd1 | volume riêng | **DEPLOYED-NOT-PROVEN** | quyết định `ModelRuntimePort` (P7) |
 | Portainer | 2 | không có | không | không | n/a | **PLANNED** | POC (P4) |
@@ -149,6 +149,7 @@ classification      APPLICATION_ROLLED_OUT_HEALTHY    hardFailure: false
 > | 7.1 `zca_listener` im lặng | `UNRESOLVED` | tin mới qua kênh thật + health check trong deploy signal |
 > | 7.2 preflight ghi đè `autoSend` | **`FIXED` — chờ chứng minh** | một lần preflight thật chạy qua |
 > | 7.3 `bot-poller` flaky | **`RESOLVED`** | — (đóng bằng cấu trúc, xem dưới) |
+> | 7.6 OTel mang release identity **thứ hai** | **`FIXED` — chờ chứng minh** | một trace bền mang đúng SHA canonical (PROOF 4) |
 
 ### 7.1 `zca_listener` im lặng — `UNRESOLVED`
 
@@ -218,6 +219,46 @@ bao giờ đến và bài đỏ bằng hạn chót của chính vitest — một
 
 Bài cũng khẳng định mạnh hơn trước: chốt thêm rằng batch đầu **vẫn đang chờ** lúc lần poll thứ hai
 chạy, tức hai việc thật sự gối lên nhau.
+
+### 7.6 OTel phân giải một danh tính release **thứ hai** — `FIXED`, chờ chứng minh
+
+> Phát hiện 28/08/2026, trong lúc chuẩn bị bật OTel trên gd1-test. Chưa gây hại **vì OTel chưa
+> từng chạy** — nhưng nó sẽ hỏng đúng vào lần đầu tiên P2 bật nó lên, tức lúc không ai đang nhìn.
+
+**Bằng chứng:** `apps/api/src/observability/otel/otel-config.ts`
+
+```ts
+release: env.RELEASE_GIT_SHA ?? 'unknown'
+```
+
+Telemetry **nội bộ** (Debug View) phân giải release bằng `resolveReleaseIdentity()`: `release.json`
+trước, biến môi trường sau, và **hai nguồn lệch nhau thì trả `unknown`** kèm `source: 'conflict'`.
+Telemetry **bền** (OTel → ClickStack) thì không. Ba hệ quả, không phải một:
+
+| # | Lỗi | Vì sao chí mạng |
+|---|---|---|
+| 1 | `compose.yaml` truyền `RELEASE_GIT_SHA: ${RELEASE_GIT_SHA:-}` | thiếu ở host ⇒ container nhận **chuỗi rỗng**, mà `??` không bắt chuỗi rỗng ⇒ `nexagnet.release` đi ra ngoài là `''` |
+| 2 | manifest **không được đọc** | manifest là nguồn CHÍNH trên gd1-test (`identitySource: "manifest"`, §6.2) ⇒ hai kho telemetry của **cùng một tiến trình** mang hai SHA khác nhau |
+| 3 | xung đột bị **im lặng chọn `env`** | canonical trả `unknown` *có chủ ý*: một SHA sai dẫn permalink tới **commit sai**, tệ hơn hẳn một dấu "không biết" |
+
+**Vì sao đây là vấn đề của P2 chứ không phải của sau này:** PROOF 4 của P2 — *"mở một trace cũ →
+giữ đúng release SHA cũ → permalink cũ vẫn đúng"* — **chạy trên chính trace bền**. Nếu trace bền
+mang một danh tính release khác, PROOF 4 đo một thứ không phải cái nó tưởng đang đo.
+
+**Đã sửa** (`release-sha.ts`): luật phân giải được tách thành **một module lá phụ thuộc duy nhất
+`node:fs`**, và **cả hai** đường đọc gọi chung nó — nên chúng không thể trả lời khác nhau. Không
+chọn cách "viết lại luật lần thứ hai trong `otel-config.ts`": bản sao thứ hai đã từng tồn tại, và
+nó sai theo cả ba cách ở trên cùng lúc.
+
+Ràng buộc kèm theo: preload chạy `node --import`, **trước** mọi import nghiệp vụ, nên lời giải
+không được kéo đồ thị module nghiệp vụ vào (`release-identity.ts` import `@netviet/tenant`). Ràng
+buộc đó nay là **màu đỏ** chứ không còn là chú thích: `otel-preload-isolation.spec.ts` đi bộ đồ thị
+import tĩnh từ preload và đã được **kiểm chứng ngược** — cho preload import `release-identity.ts`
+thì bài đỏ đúng với `['@netviet/tenant']`.
+
+Span nay mang thêm `nexagnet.release_source`, và `source: 'conflict'` kêu to một lần lúc khởi động.
+
+**Cổng đóng hẳn:** PROOF 4 chạy trên trace bền. Thuộc **P2**.
 
 ### 7.4 Hai rủi ro tuân thủ đã biết, vẫn mở
 
