@@ -29,8 +29,6 @@ if [[ "${DATABASE}" == 'observability' ]]; then
   cd "${APP_DIR}"
   COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml --profile observability)
 
-  ch_reader_user="$(sed -n 's/^CLICKHOUSE_READER_USER=//p' .runtime/secrets.env | tail -n 1)"
-  ch_reader_password="$(sed -n 's/^CLICKHOUSE_READER_PASSWORD=//p' .runtime/secrets.env | tail -n 1)"
   ch_writer_user="$(sed -n 's/^CLICKHOUSE_WRITER_USER=//p' .runtime/secrets.env | tail -n 1)"
   ch_writer_password="$(sed -n 's/^CLICKHOUSE_WRITER_PASSWORD=//p' .runtime/secrets.env | tail -n 1)"
   ch_database="$(sed -n 's/^CLICKHOUSE_DATABASE=//p' .runtime/secrets.env | tail -n 1)"
@@ -45,8 +43,20 @@ if [[ "${DATABASE}" == 'observability' ]]; then
   ch_write() {
     "${COMPOSE[@]}" exec -T -e "CLICKHOUSE_PASSWORD=${ch_writer_password}" clickhouse       clickhouse-client --user "${ch_writer_user}" "$@"
   }
+  # XAC MINH BANG USER QUAN TRI, KHONG BANG USER CHI DOC — va day khong phai buoc lui.
+  #
+  # User chi doc co dung `GRANT SELECT ON <db_that>.*`. No KHONG co quyen tren database kiem tra
+  # tam, nen dung no o day cho ra `ACCESS_DENIED` (da xay ra that, deploy run 33167708904).
+  #
+  # Hai cach sua, va cach kia bi loai co ly do: cap quyen tam cho user doc roi thu hoi la mot phep
+  # DOI QUYEN tren mot he thong dang chay, de sinh ra mot lan "quen thu hoi". Cai duoc doi lai chi
+  # la mot bang chung ta DA CO o cho khac — chinh buoc sao luu doc kho bang user chi doc, va tang
+  # `observability` cua tin hieu deploy cung truy van bang user do.
+  #
+  # Cau hoi cua bai nay la "ban sao luu co phuc hoi va tra cuu duoc khong", khong phai "user nao
+  # doc duoc database tam".
   ch_read() {
-    "${COMPOSE[@]}" exec -T -e "CLICKHOUSE_PASSWORD=${ch_reader_password}" clickhouse       clickhouse-client --user "${ch_reader_user}" "$@"
+    "${COMPOSE[@]}" exec -T -e "CLICKHOUSE_PASSWORD=${ch_writer_password}" clickhouse       clickhouse-client --user "${ch_writer_user}" "$@"
   }
 
   ch_write --query "DROP DATABASE IF EXISTS ${CHECK_DB}"
