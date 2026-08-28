@@ -78,14 +78,33 @@ describe('BotPoller observability', () => {
     expect(intake).toHaveBeenCalledTimes(2);
   });
 
+  /**
+   * KHONG DUNG DONG HO THAT DE KHANG DINH THU TU.
+   *
+   * Ban truoc cua bai nay cho lan poll thu hai bang `vi.waitFor(..., { timeout: 100 })`. Do la
+   * mot HAN CHOT CHO THANH CONG: may ban (chay ca monorepo) thi 100 ms troi qua truoc khi vong
+   * lap kip poll lan hai, va bai do — trong khi ma nguon hoan toan dung. Da quan sat that:
+   * do 2 lan trong `pnpm test` toan monorepo (27/08), nhung 22/22 xanh khi chay rieng tep nay.
+   *
+   * Mot bai do ngau nhien day nguoi ta bo qua mau do. Do la chi phi that, ke ca khi ma dung.
+   *
+   * Ban nay cho MOT SU KIEN thay vi cho MOT KHOANG THOI GIAN: `fetchUpdates` lan hai tu bao la
+   * no da duoc goi. May cham thi bai chay lau hon, khong phai do hon. Neu vong lap that su bi
+   * tuan tu hoa (loi that ma bai nay san), su kien do khong bao gio den va bai do bang han
+   * chot cua chinh vitest — mot han chot cho THAT BAI, khac han mot han chot cho THANH CONG.
+   */
   it('tiep tuc long-poll khi batch truoc con cho burst, de gom duoc tin o poll ke tiep', async () => {
     let releaseFirst: (() => void) | undefined;
     const firstPending = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
     const stopPolling = vi.fn();
+    let firstIntakeDone = false;
     const intake = vi.fn(async (message: { externalMessageId: string }) => {
-      if (message.externalMessageId === 'poll-1') await firstPending;
+      if (message.externalMessageId === 'poll-1') {
+        await firstPending;
+        firstIntakeDone = true;
+      }
       if (message.externalMessageId === 'poll-2') {
         stopPolling();
       }
@@ -117,25 +136,37 @@ describe('BotPoller observability', () => {
         chat: { id: 'group-1', chat_type: 'GROUP' },
       },
     });
+    let announceSecondPoll: (() => void) | undefined;
+    const secondPollStarted = new Promise<void>((resolve) => {
+      announceSecondPoll = resolve;
+    });
+    // CHUP LAI TRANG THAI tai dung khoanh khac poll lan hai bat dau, thay vi do xem no bat dau
+    // trong bao lau. Day la thu bai nay thuc su khang dinh: lan poll ke tiep KHONG cho batch
+    // truoc xong.
+    let firstIntakeDoneAtSecondPoll: boolean | undefined;
     const fetchUpdates = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, result: [update('poll-1', 'gui 4 quat')] })
-      .mockResolvedValueOnce({ ok: true, result: [update('poll-2', 'lay vat')] });
+      .mockImplementationOnce(async () => ({ ok: true, result: [update('poll-1', 'gui 4 quat')] }))
+      .mockImplementationOnce(async () => {
+        firstIntakeDoneAtSecondPoll = firstIntakeDone;
+        announceSecondPoll?.();
+        return { ok: true, result: [update('poll-2', 'lay vat')] };
+      });
     internals.fetchUpdates = fetchUpdates;
     internals.running = true;
 
     const loop = internals.loop('token', 'Orders', 'off', 'bot');
-    let polledAgainBeforeRelease = false;
     try {
-      await vi.waitFor(() => expect(fetchUpdates).toHaveBeenCalledTimes(2), { timeout: 100 });
-      polledAgainBeforeRelease = true;
+      await secondPollStarted;
     } finally {
       internals.running = false;
       releaseFirst?.();
     }
     await loop;
 
-    expect(polledAgainBeforeRelease).toBe(true);
+    expect(fetchUpdates).toHaveBeenCalledTimes(2);
+    // Batch dau VAN CON DANG CHO luc poll thu hai chay -> hai viec that su goi len nhau.
+    expect(firstIntakeDoneAtSecondPoll).toBe(false);
     expect(intake).toHaveBeenCalledTimes(2);
   });
 });
