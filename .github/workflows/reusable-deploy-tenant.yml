@@ -19,6 +19,14 @@ on:
         required: false
         default: 'off'
         type: string
+      observability_stack:
+        # Cung khuon `workflow_engine`: `render-secrets.sh` tu choi `on` khi
+        # DEPLOYMENT_ENVIRONMENT khac `gd1-test` (exit 64), nen input nay khong the bat mot duong
+        # ghi noi dung nghiep vu vao kho quan sat tren stack that cua khach du co go nham o day.
+        description: 'Bat cum quan sat (OTel + ClickHouse) cho stack nay - CHI gd1-test'
+        required: false
+        default: 'off'
+        type: string
     secrets:
       GCP_WORKLOAD_IDENTITY_PROVIDER:
         required: false
@@ -160,6 +168,7 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           TENANT: ${{ inputs.tenant }}
           WORKFLOW_ENGINE: ${{ inputs.workflow_engine }}
+          OBSERVABILITY_STACK: ${{ inputs.observability_stack }}
           ENVIRONMENT: ${{ steps.target.outputs.runtime_environment }}
           STACK_SLUG: ${{ steps.target.outputs.stack_slug }}
           GCP_PROJECT_ID: ${{ steps.target.outputs.gcp_project_id }}
