@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "slug": "transport-core",
+  "identity": {
+    "displayName": "Transport Core Fixture",
+    "shortName": "Transport"
+  },
+  "branding": {
+    "productName": "Transport Operations",
+    "installName": "Transport Operations",
+    "pageTitle": "Transport Operations",
+    "pageDescription": "Generic transport tenant fixture: fleet and trip operations only.",
+    "themeColor": "#123a5f",
+    "backgroundColor": "#f4f6f9",
+    "monogram": "T",
+    "composerPlaceholder": "Search trips"
+  },
+  "experience": "transport-operations",
+  "capabilities": ["transport-core"],
+  "policies": {
+    "transportCore": { "timeZone": "Asia/Ho_Chi_Minh" },
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {},
+  "bootstrap": {}
+}

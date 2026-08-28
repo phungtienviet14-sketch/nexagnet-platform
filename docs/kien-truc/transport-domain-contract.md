@@ -723,7 +723,7 @@ Thì: ngày nghiệp vụ = **01/08**, và phiếu thuộc kỳ tháng 8.
 |---|---|---|
 | **T0** | Transport Source Truth | ✅ **XONG** |
 | **T1** | Transport Domain Contract | ✅ **XONG (file này)** |
-| **T2** | **Transport Core** — Vehicle, Driver, Trip, Customer/Partner; capability `transport-core`; primitive tiền + ngày nghiệp vụ | T1 + chốt `GD-22` (phân quyền) và `GD-23` (experience) |
+| **T2** | **Transport Core** — Vehicle, Driver, Trip, Customer/Partner; capability `transport-core`; primitive tiền + ngày nghiệp vụ | ✅ **CODE-ONLY / PARTIAL** — xem §18.1 |
 | **T3** | Costing + Driver Fund — hai lớp, sổ append-only, kỳ quỹ | T2 |
 | **T4** | Fuel + đối soát bảng kê | T3 + có **một file bảng kê mẫu** (thật hoặc tổng hợp) để chốt mapping cột |
 | **T5** | Settlement — AR/AP/hoa hồng/kỳ | T3 |
@@ -734,6 +734,39 @@ Thì: ngày nghiệp vụ = **01/08**, và phiếu thuộc kỳ tháng 8.
 không phải sửa code: `GD-01` (nghĩa của `RECONCILED`) · `GD-02` (huỷ vs xoá) · `GD-03` (tiền) ·
 `GD-04` (ngày nghiệp vụ) · `GD-05` (một hay nhiều điểm dừng) · `GD-06` (phân công là một dòng hay
 một lịch sử). Chúng đã có giả định ở §21 — T2 **xác nhận hoặc đổi**, không bỏ qua.
+
+### 18.1. T2 as-built — `TRANSPORT CORE v0 = CODE-ONLY / PARTIAL`
+
+> Mục này ghi **cái đã chạy**, không phải thiết kế. Nó là chỗ duy nhất trong file được sửa sau khi
+> T1 đóng; mọi mục khác vẫn là hợp đồng nguyên bản.
+
+**Sáu quyết định đổi hình dạng bảng đã được XÁC NHẬN, không mục nào đổi:**
+
+| Mã | Xác nhận ở T2 bằng |
+|---|---|
+| `GD-01` | `RECONCILED` chỉ đến từ `DELIVERED` qua một lần chuyển tay có quyền; lái xe **không** đặt được trạng thái này |
+| `GD-02` | Không tầng nào có đường xoá cứng — `TripRepository` không có `delete()`, không có route `DELETE`; huỷ giữ lại bản ghi + lý do |
+| `GD-03` | Cột tiền là `Int` (số nguyên đồng) kèm cột `currencyCode` cố định `VND`; số thực bị chặn ở cả biên HTTP lẫn hàm dựng `money()` |
+| `GD-04` | `businessDate` là cột riêng `VarChar(10)` dạng `YYYY-MM-DD`, tính một lần lúc ghi theo múi giờ tenant — **không** có timestamp nào để suy ngược |
+| `GD-05` | Một `originLabel` + một `destinationLabel` trên `Trip`; chưa có bảng điểm dừng |
+| `GD-06` | Phân công là bảng `TransportTripAssignment` có `effectiveFrom`/`effectiveTo`; đổi người **đóng** bản cũ trong cùng một giao dịch, không ghi đè |
+
+**Có trong T2:** `TX-01 Fleet` (xe, lái xe, gán lái xe phụ trách xe) · `TX-02 Trip Operations`
+(chuyến 3 loại, vòng đời 5 trạng thái, phân công có lịch sử) · khách hàng vận tải · đối tác nhiều
+vai · capability `transport-core` · experience `transport-operations` · hằng số hành động có kiểu
+(§11.1) + cầu bridge `GD-22` · bề mặt lái xe qua kiểu khung nhìn riêng (`GD-23`, `INV-09`).
+
+**Chưa có trong T2, và không giả vờ là có:** T3–T7 · gói khách `tenants/van-tai-viet/` · dữ liệu
+mẫu · màn hình vận hành thật · bằng chứng runtime trên môi trường triển khai.
+
+**Hai khoảng cách nền tảng phát hiện thêm khi code** — cả hai đã được ghi ở §19:
+
+- `PG-13` — hạt giống của `knowledge` chạy ngay lúc **nạp module**, nên một khách không bật
+  `knowledge` không boot được. Đã vá tại chỗ nhỏ nhất (`knowledge/seed.ts` xét capability trước
+  khi nạp gói); hành vi của khách **có** `knowledge` không đổi.
+- `PG-14` — `AuthModule` (owner `foundation`) import `OperationalSettingsModule` (owner
+  `operations`), mà module đó `@Global`, nên đồ thị module của hai capability nạp cho **mọi**
+  khách. Chưa vá: sửa nó là đổi quyền sở hữu composition, ảnh hưởng mọi khách.
 
 ---
 
@@ -753,6 +786,8 @@ một lịch sử). Chúng đã có giả định ở §21 — T2 **xác nhận 
 | `PG-10` | Một `schema.prisma` dùng chung, mang model bán hàng cho **mọi** khách | Tenant `wata` (knowledge-only) vẫn có bảng `Dealer`/`Price` | Nợ kỹ thuật; chưa chặn |
 | `PG-11` | Không có vỏ ứng dụng mobile/offline | `apps/web` là Next.js, không có bản mobile | Chặn T7; demo: `GD-19` |
 | `PG-12` | Không có năng lực xuất bản/in chứng từ (PDF phiếu quyết toán để ký) | Không có generator nào | VT-038; ảnh hưởng T3 |
+| `PG-13` | Hạt giống của một capability chạy ngay lúc **nạp module**, không phải lúc composition | `knowledge/seed.ts` gọi `loadTenantKnowledge()` ở tầng khởi tạo module; `app-composition.ts` import tĩnh `KnowledgeService`/`ContentModule` nên đồ thị đó nạp cho mọi khách | **Đã chặn T2** — khách đầu tiên không bật `knowledge` chết ngay lúc boot. Đã vá tại chỗ nhỏ nhất ở T2 |
+| `PG-14` | Module của một capability nạp cho **mọi** khách qua một module `foundation` | `AuthModule` (foundation) → `OperationalSettingsModule` (owner `operations`, `@Global`) → `KnowledgeModule` (`@Global`). Đo bằng `app.module.transport-core.boot.spec.ts` | Chưa chặn ai, nhưng làm quyền sở hữu capability **không còn nói thật**. Sửa là đổi composition, ảnh hưởng mọi khách → Platform Track |
 
 > `PG-03`, `PG-04`, `PG-06`, `PG-07`, `PG-08` là **năng lực chung cho mọi vertical tài chính**, không
 > riêng vận tải. Đặt chúng trong `transport-*` là chôn primitive nền tảng vào một vertical — lần

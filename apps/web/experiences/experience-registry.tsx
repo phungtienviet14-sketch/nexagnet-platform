@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import { AgentWorkforce } from './agent-workforce/AgentWorkforce';
 import { KnowledgeWorkspace } from './knowledge-workspace/KnowledgeWorkspace';
 import { OperationsConsole } from './operations-console/OperationsConsole';
+import { TransportOperations } from './transport-operations/TransportOperations';
 
 export interface ExperienceDefinition {
   readonly id: ExperienceId;
@@ -25,6 +26,11 @@ export const EXPERIENCE_REGISTRY = {
     id: 'agent-workforce',
     requiredCapabilities: EXPERIENCE_REQUIREMENTS['agent-workforce'],
     Component: AgentWorkforce,
+  },
+  'transport-operations': {
+    id: 'transport-operations',
+    requiredCapabilities: EXPERIENCE_REQUIREMENTS['transport-operations'],
+    Component: TransportOperations,
   },
 } as const satisfies Record<ExperienceId, ExperienceDefinition>;
 

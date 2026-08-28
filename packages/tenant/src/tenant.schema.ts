@@ -126,11 +126,31 @@ export const CAPABILITY_IDS = [
   'campaign',
   'operations',
   'notifications',
+  /**
+   * VAN TAI — LOI: doi xe (xe, lai xe, gan lai xe phu trach) va van hanh chuyen (chuyen, vong doi,
+   * phan cong). Mien BAN GHI VA SO SACH, khong phai mien hoi thoai: mot khach van tai KHONG can
+   * `messaging`, KHONG can `turn-processing`, va khong khai mot integration `parser` nao — nen no
+   * cung khong bao gio dua mot quyet dinh tien nao cho LLM.
+   *
+   * `dependencies: []` co y: T1 §10.1 dat `transport-core` o goc cua cay van tai; cac capability
+   * van tai sau (`transport-costing`, `transport-fuel`, ...) se phu thuoc NO, khong nguoc lai.
+   */
+  'transport-core',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
   'knowledge-workspace',
   'agent-workforce',
+  /**
+   * Be mat VAN HANH VAN TAI (Giam doc / Ke toan) — `GD-23`.
+   *
+   * T1 §12 mo ta HAI be mat cho mot khach van tai: van hanh va lai xe. Nen tang hom nay chi khai
+   * duoc MOT experience cho mot khach (`PG-01`), nen `GD-23` chon: dang ky be mat van hanh, con
+   * be mat lai xe chay nhu route rieng co guard trong cung experience, va moi payload cua no di
+   * qua `DriverTripView` — mot KIEU khong co truong doanh thu. Nho vay `INV-09` duoc giu bang
+   * CAU TRUC DU LIEU ngay ca khi tang experience chua tach duoc.
+   */
+  'transport-operations',
 ] as const;
 
 export const capabilityIdSchema = z.enum(CAPABILITY_IDS);
@@ -236,10 +256,29 @@ const salesOrderPolicySchema = z
   })
   .strict();
 
+/**
+ * Chinh sach cua `transport-core`.
+ *
+ * `timeZone` nam o day chu khong o tang danh tinh tenant vi nen tang CHUA co mui gio tenant
+ * (`PG-08`, do tren main: mui gio chi ton tai trong cau hinh lap lich campaign). Day la cho tay
+ * lai co gioi han CO Y — khi `PG-08` dong thi doi cho DOC, khong doi hinh dang du lieu, vi ngay
+ * nghiep vu da la mot cot rieng tren tung ban ghi ngay tu T2 (`INV-25`).
+ *
+ * Khong khai = dung mac dinh `Asia/Ho_Chi_Minh` (`GD-04`) thay vi hong luc boot: mot khach van tai
+ * Viet Nam khong nen phai go lai mot hang so ai cung biet.
+ */
+const transportCorePolicySchema = z
+  .object({
+    /** Ten mui gio IANA. Vd `Asia/Ho_Chi_Minh`. */
+    timeZone: nonEmpty.optional(),
+  })
+  .strict();
+
 const tenantPoliciesSchema = z
   .object({
     salesOrder: salesOrderPolicySchema.optional(),
     campaign: campaignConfigSchema.optional(),
+    transportCore: transportCorePolicySchema.optional(),
     readiness: tenantReadinessSchema,
   })
   .strict();
@@ -289,6 +328,12 @@ const capabilityRequirements = {
   campaign: { dependencies: ['messaging'], policy: 'campaign' },
   operations: { dependencies: [] },
   notifications: { dependencies: ['messaging'] },
+  /**
+   * KHONG khai `policy: 'transportCore'`: khai nhu vay se bien mot khoi cau hinh HOAN TOAN TUY
+   * CHON thanh dieu kien boot, va moi khach van tai phai go mot khoi rong chi de he thong khoi
+   * chet. Mui gio co mac dinh dung cho khach Viet Nam; khong co gi de bat buoc.
+   */
+  'transport-core': { dependencies: [] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {
@@ -303,6 +348,7 @@ export const EXPERIENCE_REQUIREMENTS = {
   'operations-console': ['knowledge', 'messaging', 'turn-processing', 'sales-order', 'operations'],
   'knowledge-workspace': ['knowledge'],
   'agent-workforce': ['knowledge', 'operations'],
+  'transport-operations': ['transport-core'],
 } as const satisfies Record<
   z.infer<typeof experienceIdSchema>,
   readonly z.infer<typeof capabilityIdSchema>[]

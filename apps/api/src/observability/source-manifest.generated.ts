@@ -212,6 +212,66 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 42
+    },
+    "transport.customer.manage": {
+      "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.customer.read": {
+      "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.driver.manage": {
+      "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.driver.read": {
+      "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.driver.self.trip.read": {
+      "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts"
+    },
+    "transport.driver.self.trip.update": {
+      "functionName": "DriverTripsController.updateStatus",
+      "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts",
+      "line": 61
+    },
+    "transport.partner.manage": {
+      "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.partner.read": {
+      "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.trip.assign": {
+      "functionName": "TripsController.assign",
+      "filePath": "apps/api/src/transport/trips/trips.controller.ts",
+      "line": 80
+    },
+    "transport.trip.cancel": {
+      "functionName": "TripsController.cancel",
+      "filePath": "apps/api/src/transport/trips/trips.controller.ts",
+      "line": 105
+    },
+    "transport.trip.create": {
+      "functionName": "TripsController.plan",
+      "filePath": "apps/api/src/transport/trips/trips.controller.ts",
+      "line": 63
+    },
+    "transport.trip.read": {
+      "filePath": "apps/api/src/transport/trips/trips.controller.ts"
+    },
+    "transport.trip.transition": {
+      "functionName": "TripsController.transition",
+      "filePath": "apps/api/src/transport/trips/trips.controller.ts",
+      "line": 88
+    },
+    "transport.trip.update": {
+      "functionName": "TripsController.update",
+      "filePath": "apps/api/src/transport/trips/trips.controller.ts",
+      "line": 72
+    },
+    "transport.vehicle.manage": {
+      "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.vehicle.read": {
+      "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     }
   },
   "decisions": {
@@ -259,6 +319,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
       "line": 465
+    },
+    "driver.self_scope|SELF_SCOPE_GRANTED": {
+      "functionName": "TripService.listDriverTrips",
+      "filePath": "apps/api/src/transport/trips/trip.service.ts",
+      "line": 338
+    },
+    "driver.self_scope|SELF_SCOPE_NOT_ASSIGNED": {
+      "filePath": "apps/api/src/transport/trips/trip.service.ts"
+    },
+    "driver.self_scope|SELF_SCOPE_NO_DRIVER_BINDING": {
+      "functionName": "TripService.requireDriverBinding",
+      "filePath": "apps/api/src/transport/trips/trip.service.ts",
+      "line": 474
     },
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
@@ -309,6 +382,36 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
       "line": 573
+    },
+    "trip.assignment_change|*": {
+      "functionName": "TripService.assign",
+      "filePath": "apps/api/src/transport/trips/trip.service.ts",
+      "line": 198
+    },
+    "trip.assignment_change|ASSIGNMENT_TRIP_TERMINAL": {
+      "functionName": "TripService.assign",
+      "filePath": "apps/api/src/transport/trips/trip.service.ts",
+      "line": 163
+    },
+    "trip.assignment_change|ASSIGNMENT_UNCHANGED": {
+      "functionName": "TripService.assign",
+      "filePath": "apps/api/src/transport/trips/trip.service.ts",
+      "line": 186
+    },
+    "trip.cancel|*": {
+      "functionName": "TripService.cancel",
+      "filePath": "apps/api/src/transport/trips/trip.service.ts",
+      "line": 286
+    },
+    "trip.cancel|CANCEL_RECORDED": {
+      "functionName": "TripService.cancel",
+      "filePath": "apps/api/src/transport/trips/trip.service.ts",
+      "line": 302
+    },
+    "trip.lifecycle_transition|*": {
+      "functionName": "TripService.transition",
+      "filePath": "apps/api/src/transport/trips/trip.service.ts",
+      "line": 233
     }
   }
 };

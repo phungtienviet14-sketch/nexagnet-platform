@@ -766,3 +766,213 @@ model WorkflowOutbox {
   @@index([claimExpiresAt])
   @@index([entityType, entityId])
 }
+
+// ----- Transport domain: TX-01 Fleet + TX-02 Trip Operations (capability `transport-core`) -----
+//
+// Nguon mo hinh: docs/kien-truc/transport-domain-contract.md §5 (aggregate), §6 (bat bien),
+// §7.1 (may trang thai chuyen). Day la schema CUA MIEN VAN TAI, dung chung cho MOI khach van tai —
+// khong co gi rieng cua mot khach o day (guardrail NO_TRANSPORT_TENANT_SLUG_IN_DOMAIN_CODE).
+//
+// Tien: `Int` = SO NGUYEN DONG, kem mot cot `currencyCode`. `GD-03` — VND khong co don vi phu, va
+// them cot tien te ve sau la mot migration doc du lieu; them bay gio gan nhu mien phi.
+//
+// Ngay nghiep vu: `VarChar(10)` chua `YYYY-MM-DD` theo mui gio tenant (`INV-25`, `GD-04`). CO Y
+// khong dung `DateTime`: mot cot timestamp la thu duy nhat ma nguoi doc co the "suy nguoc ra ngay"
+// — va suy nguoc bang UTC chinh la loi ma `INV-25` sinh ra de chan. Khong co timestamp thi khong
+// co gi de suy nguoc. So sanh khoang va sap xep van dung vi ISO-8601 sap xep theo tu dien.
+
+enum TransportVehicleStatus {
+  IDLE
+  ON_TRIP
+  UNDER_MAINTENANCE
+}
+
+enum TransportDriverStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TransportPartyStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// VT-054: mot doi tac mang NHIEU vai. Day la enum cua tung DONG vai, khong phai cot loai doi tac.
+enum TransportPartnerRoleKind {
+  CARRIER
+  ORDER_REFERRER
+}
+
+enum TransportTripKind {
+  OWN_DIRECT
+  EXTERNAL_CARRIER
+  PARTNER_REFERRED_INTERNAL_RUN
+}
+
+enum TransportTripStatus {
+  PLANNED
+  IN_TRANSIT
+  DELIVERED
+  RECONCILED
+  CANCELLED
+}
+
+model TransportVehicle {
+  id                String                 @id @default(cuid())
+  registrationPlate String                 @unique
+  vehicleClass      String
+  /// VT-010. NULL = chua nhap.
+  allowedPayloadKg  Int?
+  /// VT-012. T2 chi GIU so; cap nhat tu dong moi lan do dau la viec cua T4.
+  currentOdoKm      Int                    @default(0)
+  status            TransportVehicleStatus @default(IDLE)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  driverAssignments TransportVehicleAssignment[]
+  tripAssignments   TransportTripAssignment[]
+
+  @@index([status])
+}
+
+model TransportDriver {
+  id            String                @id @default(cuid())
+  fullName      String
+  phone         String
+  licenceClass  String
+  /// Han GPLX — NGAY nghiep vu, khong phai khoanh khac.
+  licenceExpiry String                @db.VarChar(10)
+  status        TransportDriverStatus @default(ACTIVE)
+  /// Cau noi user dang nhap -> ho so lai xe. CHI aggregate nay giu no.
+  authUserId    String?               @unique
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  vehicleAssignments TransportVehicleAssignment[]
+  tripAssignments    TransportTripAssignment[]
+
+  @@index([status])
+  @@index([licenceExpiry])
+}
+
+/// Gan lai xe phu trach mot xe — tang DOI XE. `effectiveTo = NULL` la ban dang hieu luc.
+model TransportVehicleAssignment {
+  id            String    @id @default(cuid())
+  vehicleId     String
+  vehicle       TransportVehicle @relation(fields: [vehicleId], references: [id])
+  driverId      String
+  driver        TransportDriver  @relation(fields: [driverId], references: [id])
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([vehicleId, effectiveTo])
+  @@index([driverId])
+}
+
+/// KHACH HANG VAN TAI — ben thue van chuyen. KHONG dung chung bang voi `Dealer` cua mien ban hang.
+model TransportCustomer {
+  id        String               @id @default(cuid())
+  name      String
+  phone     String?
+  address   String?
+  taxCode   String?
+  status    TransportPartyStatus @default(ACTIVE)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  trips TransportTrip[]
+
+  @@index([status])
+}
+
+model TransportPartner {
+  id        String               @id @default(cuid())
+  name      String
+  phone     String?
+  status    TransportPartyStatus @default(ACTIVE)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  roles         TransportPartnerRole[]
+  carriedTrips  TransportTrip[]        @relation("TransportTripCarrier")
+  referredTrips TransportTrip[]        @relation("TransportTripReferrer")
+
+  @@index([status])
+}
+
+/// VAI cua doi tac — mot BANG rieng, khong phai mot cot tren `TransportPartner`.
+///
+/// Khoa chinh kep `(partnerId, role)` lam hai viec cung luc: mot vai khong lap lai duoc, va khong
+/// co cho nao de dat mot cot `partnerType` loai tru. Mo hinh XOR ma VT-054 dan tranh khong bieu
+/// dien duoc o day — do la ly do bang nay ton tai thay vi mot cot enum.
+model TransportPartnerRole {
+  partnerId String
+  partner   TransportPartner         @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  role      TransportPartnerRoleKind
+  createdAt DateTime                 @default(now())
+
+  @@id([partnerId, role])
+  @@index([role])
+}
+
+model TransportTrip {
+  id                String              @id @default(cuid())
+  code              String              @unique
+  kind              TransportTripKind
+  status            TransportTripStatus @default(PLANNED)
+  /// `YYYY-MM-DD` theo mui gio tenant — tinh MOT LAN luc ghi (`INV-25`).
+  businessDate      String              @db.VarChar(10)
+  /// `GD-05`: v1 mot diem di, mot diem den. Da diem se la bang `TransportTripStop` khi co nguon.
+  originLabel       String
+  destinationLabel  String
+  cargoDescription  String?
+  customerId        String?
+  customer          TransportCustomer?  @relation(fields: [customerId], references: [id])
+  /// Nha xe cho chuyen `EXTERNAL_CARRIER`.
+  carrierPartnerId  String?
+  carrierPartner    TransportPartner?   @relation("TransportTripCarrier", fields: [carrierPartnerId], references: [id])
+  /// Doi tac mang don cho chuyen `PARTNER_REFERRED_INTERNAL_RUN`.
+  referrerPartnerId String?
+  referrerPartner   TransportPartner?   @relation("TransportTripReferrer", fields: [referrerPartnerId], references: [id])
+  /// DOANH THU — gia cuoc thu khach (VT-021), SO NGUYEN DONG. Be mat lai xe khong bao gio thay
+  /// cot nay (`INV-09`): `DriverTripView` khong co truong tuong ung de nhan no.
+  freightAmount     Int?
+  currencyCode      String              @default("VND") @db.VarChar(3)
+  /// `GD-14` — nhap tay, nullable.
+  distanceKm        Int?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  /// `GD-02` — huy THAY CHO xoa. Khong co duong xoa cung nao cho mot chuyen.
+  cancelledAt       DateTime?
+  cancellationReason String?
+
+  assignments TransportTripAssignment[]
+
+  @@index([status])
+  @@index([businessDate])
+  @@index([kind])
+}
+
+/// PHAN CONG CHUYEN — `GD-06`: LICH SU, khong ghi de.
+///
+/// `effectiveTo = NULL` la ban dang hieu luc; doi xe/lai xe giua chuyen DONG ban cu lai va mo ban
+/// moi. Neu day la hai cot tren `TransportTrip` thi lan doi lai xe se xoa mat dau ai cam vo lang
+/// luc mot khoan chi phat sinh — va quy trach nhiem so quy theo lai xe (T3) mat co so.
+model TransportTripAssignment {
+  id            String            @id @default(cuid())
+  tripId        String
+  trip          TransportTrip     @relation(fields: [tripId], references: [id])
+  vehicleId     String?
+  vehicle       TransportVehicle? @relation(fields: [vehicleId], references: [id])
+  driverId      String?
+  driver        TransportDriver?  @relation(fields: [driverId], references: [id])
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  assignedBy    String
+  createdAt     DateTime          @default(now())
+
+  @@index([tripId, effectiveTo])
+  @@index([driverId])
+  @@index([vehicleId])
+}
