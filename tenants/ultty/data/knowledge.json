@@ -2,7 +2,7 @@
   "pricePeriod": {
     "validMonth": "2026-08",
     "status": "active",
-    "note": "BAN SAO TAY bieu gia thang 07/2026 (19 SP) do NetViet tu dat de kiem thu gd1 -- KHONG phai quyet dinh cua khach. Ghi chu cu (\"khach xac nhan 18/08/2026: thang 8 khong co bang gia moi\") la SAI: Drive khach CO \"Thong bao gia thang 8.pdf\" (18/08/2026), lech 2 SKU o cot Don gia CTV. Chua doi so -- xem SUP-01 va CONFLICT-PRICE-SOURCE-001 trong docs/khach-hang/ultty/nghiep-vu/doi-chieu-nguon-su-that-2026-08.md"
+    "note": "Bieu gia theo van ban goc \"THONG BAO GIA THANG 08.2026\" cua Cong ty CP U ULTTY Viet Nam (Drive khach: AI Zalo B2B / Bao gia san pham / Thong bao gia thang 8.pdf, sua 18/08/2026, 19 SP, co chu ky Giam Doc). Doi chieu voi T7 bang may: 74/76 o giu nguyen, lech 2 o -- ELNI va FELIX cot Don gia CTV, moi ma -100.000d. Cot Gia ban le toi thieu lay theo PDF nay (ASM-01). Doi ky phai co van ban moi."
   },
   "products": [
     {
@@ -238,7 +238,7 @@
   "prices": [
     {
       "sku": "ELNI",
-      "wholesale": 2150000,
+      "wholesale": 2050000,
       "minRetailPrice": 3100000,
       "retailPrice": 3850000,
       "listPrice": 4150000
@@ -364,7 +364,7 @@
     },
     {
       "sku": "FELIX",
-      "wholesale": 1250000,
+      "wholesale": 1150000,
       "minRetailPrice": 1750000,
       "retailPrice": 2000000,
       "listPrice": 2500000

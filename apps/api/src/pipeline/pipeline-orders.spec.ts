@@ -50,8 +50,8 @@ describe('Pipeline + Orders (end-to-end backend)', () => {
 
     expect(view.intent).toBe('dat_don');
     expect(view.priced?.lines?.[0]?.sku).toBe('FELIX');
-    expect(view.priced?.lines?.[0]?.unitPrice).toBe(1_250_000); // gia si (Don gia CTV) that
-    expect(view.priced?.grandTotal).toBe(12_500_000);
+    expect(view.priced?.lines?.[0]?.unitPrice).toBe(1_150_000); // gia si (Don gia CTV) that
+    expect(view.priced?.grandTotal).toBe(11_500_000);
     expect(view.status).toBe('pending_review');
   });
 

@@ -11,12 +11,12 @@ describe('KnowledgeController (nguon su that)', () => {
     new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z')),
   );
 
-  it('lo gia si (Don gia CTV) that theo bang gia thang 7', () => {
+  it('lo gia si (Don gia CTV) that theo bang gia thang 8', () => {
     const products = controller.products();
     expect(products.length).toBeGreaterThanOrEqual(18);
     const felix = products.find((p) => p.sku === 'FELIX');
     expect(felix).toBeDefined();
-    expect(felix?.wholesale).toBe(1_250_000);
+    expect(felix?.wholesale).toBe(1_150_000);
     expect(felix?.name).toContain('Felix');
   });
 
