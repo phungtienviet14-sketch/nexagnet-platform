@@ -147,29 +147,62 @@ classification      APPLICATION_ROLLED_OUT_HEALTHY    hardFailure: false
 >
 > | Mục | Trạng thái | Cần gì để đóng hẳn |
 > |---|---|---|
-> | 7.1 `zca_listener` im lặng | `UNRESOLVED` | tin mới qua kênh thật + health check trong deploy signal |
+> | 7.1 `zca_listener` im lặng | `UNRESOLVED` — **~44h tính tới 28/08**, và log/`/health` đều xanh | `/health` phải phân biệt được "không ai nhắn" với "socket đã chết" + listener tự nối lại + tin mới đi hết đường |
 > | 7.2 preflight ghi đè `autoSend` | **`FIXED` — chờ chứng minh** | một lần preflight thật chạy qua |
 > | 7.3 `bot-poller` flaky | **`RESOLVED`** | — (đóng bằng cấu trúc, xem dưới) |
 > | 7.6 OTel mang release identity **thứ hai** | **`FIXED` — chờ chứng minh** | một trace bền mang đúng SHA canonical (PROOF 4) |
 
-### 7.1 `zca_listener` im lặng — `UNRESOLVED`
+### 7.1 `zca_listener` im lặng — `UNRESOLVED`, và **sắc nét hơn bản trước**
 
-**Bằng chứng** (truy vấn Postgres của stack, 27/08/2026):
+**Đo lại 28/08/2026 05:10 UTC**, trực tiếp trên `zalo-ultty-gd1-test-postgres-1`:
 
 ```
-inbound | zca_listener  | 98 tin | tin cuối: 2026-08-26 08:52:41
-inbound | copilot_paste | 42 tin | tin cuối: 2026-08-27 03:15:49
+inbound  | copilot_paste     | 44 tin | tin cuối: 2026-08-27 04:36:22   (~24 giờ trước)
+inbound  | zca_listener      | 98 tin | tin cuối: 2026-08-26 08:52:41   (~44 giờ trước)
+outbound | system_outbound   | 57 tin | tin cuối: 2026-08-27 04:21:34
 ```
 
-Kênh Zalo thật **không nhận tin nào trong ~19 giờ**, trong khi đường demo/copilot vẫn chạy. Nhất
-quán với ràng buộc đã biết: **một tài khoản Zalo chỉ chịu được MỘT listener**, và mở Zalo Web bằng
-cùng tài khoản sẽ làm listener tự dừng.
+Khoảng lặng **giãn ra từ ~19 giờ lên ~44 giờ**. Nhưng phần đáng chú ý không nằm ở con số.
 
-**Vì sao đáng lo:** mọi bằng chứng "AI đọc được nhóm" hiện dựa vào đường `copilot_paste`. Nếu kỳ
-vọng là đọc nhóm thật thì năng lực đó **đang không được chứng minh**.
+**Log của chính tiến trình nói rằng nó đang khoẻ:**
 
-**Cổng đóng:** một lần chạy có tin `zca_listener` mới sau thời điểm này, kèm health check của
-listener nằm trong deploy signal. Thuộc **P2**.
+```
+2026-08-27T04:36:17  ZcaListener     CHANNEL_MODE=zca -> nghe tin nhom qua zca-js
+2026-08-27T04:36:18  ZaloUserClient  zca-js dang nhap thanh cong
+2026-08-27T04:36:18  ZaloUserClient  zca-js listener: connected
+                     (không còn dòng nào nữa — 25 giờ)
+```
+
+`/health` của cùng container: `{"status":"ok","uptimeSeconds":88501}`.
+
+**Đây mới là rủi ro thật, và nó lớn hơn "kênh im".** Ba tín hiệu — log, `/health`, deploy signal —
+đều xanh, trong khi **kênh đọc chính của GĐ1 không mang về một tin nào**. Hai trạng thái dưới đây
+hiện **không phân biệt được** từ bên ngoài:
+
+| Trạng thái | Quan sát thấy gì |
+|---|---|
+| Không ai nhắn trong nhóm 44 giờ | log im, `/health` `ok`, 0 tin mới |
+| Socket đã chết, listener không biết | log im, `/health` `ok`, 0 tin mới |
+
+Và socket **có thể** chết lặng lẽ — chính log chứng minh: `zca-js listener closed (1000):
+NORMAL_CLOSURE` lúc `04:36:01`. Mã `1000` là đóng **bình thường**, không phải lỗi; không có
+ngoại lệ, không có retry. Lần "hồi phục" ngay sau đó (`04:36:16`) là do **container được tạo lại
+khi deploy**, không phải do listener tự nối lại.
+
+**Vì sao nó chặn P2:** `/health` hiện chỉ có `status` và `uptimeSeconds` — **không một chiều nào
+về kênh**. Nên năng lực "AI đọc được nhóm Zalo thật" không có bất kỳ cổng nào canh, và mọi bằng
+chứng "AI đọc được nhóm" hiện đứng trên đường `copilot_paste` (dán tay), tức **không chứng minh
+inbound Zalo thật**.
+
+**Cổng đóng — nay nêu được cụ thể, không còn là "một lần chạy có tin mới":**
+
+1. `/health` (hoặc một cổng riêng) phải có **độ tuổi của tin cuối cùng theo từng kênh** và
+   **trạng thái socket của listener** — để "im vì không ai nhắn" khác được với "im vì đã chết";
+2. listener phải **tự nối lại** sau `NORMAL_CLOSURE`, và ghi log mỗi lần nối lại;
+3. tín hiệu đó phải có mặt trong deploy signal;
+4. sau đó mới tới: một tin `zca_listener` mới đi hết đường.
+
+Thuộc **P2**. Ba mục đầu là **việc chưa làm**, không phải việc đã làm mà chưa đo.
 
 ### 7.2 Preflight ghi đè giá trị runtime quan sát được — `FIXED`, chờ chứng minh
 
