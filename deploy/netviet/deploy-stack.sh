@@ -189,7 +189,8 @@ fi
 # do). No bao that bai ra log va di tiep; cong ROLLOUT/HEALTH ben duoi van do neu ung dung hong.
 observability_stack="$(runtime_value OTEL_TRACING)"
 if [[ "${observability_stack}" == 'on' ]]; then
-  if "${COMPOSE[@]}" --profile observability up -d --wait --wait-timeout 180     clickhouse otel-collector; then
+  if "${COMPOSE[@]}" --profile observability up -d --wait --wait-timeout 180 \
+    clickhouse otel-collector; then
     "${COMPOSE[@]}" --profile observability ps
     # SUC KHOE CUA COLLECTOR DOC TU MOT CONTAINER KHAC.
     #
@@ -200,7 +201,8 @@ if [[ "${observability_stack}" == 'on' ]]; then
     #
     # `clickhouse` la anh alpine (co busybox `wget`) va nam CUNG mang `data`, nen no la cho doc
     # tu nhien. Hong o day KHONG lam do lan deploy — xem chu thich ngay tren.
-    if "${COMPOSE[@]}" --profile observability exec -T clickhouse       wget --no-verbose --tries=1 --spider http://otel-collector:13133/ >/dev/null 2>&1; then
+    if "${COMPOSE[@]}" --profile observability exec -T clickhouse \
+      wget --no-verbose --tries=1 --spider http://otel-collector:13133/ >/dev/null 2>&1; then
       echo "cum quan sat: collector tra loi tren cong suc khoe 13133." >&2
     else
       echo "CANH BAO: collector dang chay nhung cong suc khoe 13133 khong tra loi." >&2
