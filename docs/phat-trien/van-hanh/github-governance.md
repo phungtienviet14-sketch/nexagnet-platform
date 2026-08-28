@@ -77,7 +77,7 @@ Cả ba phép thử chạy qua GitHub REST API bằng token của chủ repo (va
 |---|---|---|---|
 | A | `PATCH refs/heads/main` → commit mới (fast-forward, không PR) | **BỊ TỪ CHỐI** 422 | `Changes must be made through a pull request.` + `7 of 7 required status checks are expected.` |
 | B | `PATCH refs/heads/main` → commit cũ, `force: true` | **BỊ TỪ CHỐI** 422 | `Cannot force-push to this branch` + `Changes must be made through a pull request.` |
-| C | PR chưa đủ CI → gọi merge | **BỊ TỪ CHỐI** 405 | `Required status check "..." is expected.` |
+| C | PR chưa đủ CI → gọi merge (PR #69) | **BỊ TỪ CHỐI** 405 | `7 of 7 required status checks have not succeeded.` — `mergeStateStatus: BLOCKED` |
 
 > **Phép thử xoá nhánh — không kết luận được, và nói rõ ở đây.** `DELETE refs/heads/main` bị từ chối
 > với `Cannot delete the default branch` — đó là **hàng rào mặc định của GitHub cho nhánh mặc định**,
@@ -85,6 +85,10 @@ Cả ba phép thử chạy qua GitHub REST API bằng token của chủ repo (va
 > API) nhưng **chưa được chứng minh độc lập**: muốn chứng minh phải hạ `main` khỏi vai trò nhánh mặc
 > định, và việc đó gây hại thật. Kết luận trung thực: **xoá `main` bị chặn bởi hai lớp, một lớp đã
 > quan sát được, một lớp mới chỉ ở mức cấu hình.**
+
+**Bằng chứng khẳng định (cùng PR #69, đóng chính P3 này):** sau khi đủ 7 check,
+`mergeStateStatus` chuyển `BLOCKED` → `CLEAN`, và **đúng lời gọi API đã trả `405` ở phép thử C**
+lần này trả `merged: true`. Cùng một lệnh, hai kết quả — khác nhau đúng ở chỗ CI đã xanh.
 
 ## 5. Giới hạn CHƯA giải quyết
 
@@ -124,6 +128,19 @@ Cưỡng chế nằm ở GitHub, không nằm trong repo. Muốn kiểm chứng:
 ```bash
 gh api repos/phungtienviet14-sketch/nexagnet-platform/rules/branches/main --jq '.[].type'
 ```
+
+Phải ra đủ bốn dòng: `deletion` · `non_fast_forward` · `pull_request` · `required_status_checks`.
+
+> 🚨 **ĐỪNG dùng `branches/main/protection` để kết luận.** Endpoint đó vẫn trả
+> **404 `"Branch not protected"`** — và sẽ trả như thế mãi mãi, kể cả bây giờ khi `main` **đang được
+> bảo vệ**. Nó báo cáo **branch protection CỔ ĐIỂN**, một cơ chế **khác** với **ruleset**; repo này
+> dùng ruleset nên endpoint cũ đương nhiên rỗng.
+>
+> Đây là một cái bẫy có thật, không phải giả định: chuỗi bằng chứng cũ của P3 (trong `agentic-ops.md`,
+> `reference-platform-stack.md §7.5`, `platform-roadmap-v2.md`) **chính là** `0 ruleset` +
+> `branches/main/protection → 404`. Ai chạy lại đúng lệnh cũ sau khi P3 đã đóng sẽ thấy **cùng một
+> con số 404** và kết luận nhầm rằng **chưa có gì thay đổi**. Dùng `rules/branches/main`, hoặc
+> `rulesets`.
 
 Dựng lại ruleset từ bản ghi (khi đã bị xoá):
 
