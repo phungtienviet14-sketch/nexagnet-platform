@@ -1722,12 +1722,12 @@ sử, replay, chờ, phiên bản, hay giao diện vận hành.
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
 | OTel code support | **RUNTIME-PROVEN** trên gd1-test |
 | OTel export trên gd1-test | **RUNTIME-PROVEN** — cả 3 tiến trình (api + 2 worker) phát span |
-| ClickStack | **DEPLOYED / HEALTH-CHECKED** — bền, retention 30 ngày |
-| Historical Debug traces | **KHO BỀN** (span sống qua restart và qua deploy); **đường đọc `CODE-ONLY`** |
-| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
+| ClickStack | **RUNTIME-PROVEN** — bền, retention 30 ngày, backup→restore→query đạt |
+| Historical Debug traces | **CLOSED / RUNTIME-PROVEN** — 4/4 proof ở mức Debug View |
+| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** — vướng đúng một mục: một tin `zca_listener` thật |
 
-Bằng chứng gần nhất: deploy run `33151175039`, release `1ad92bec1093f2752bf25d69ba8c2c88a02c94b9` —
-bốn tín hiệu `pass`, `classification=APPLICATION_ROLLED_OUT_HEALTHY`, `hardFailure=false`. Trong
+Bằng chứng gần nhất: deploy run `33172218761`, release `98013f87b5b3932414ca46f10d5ff688e9108b0e` —
+**sáu** tín hiệu `pass`, `classification=APPLICATION_ROLLED_OUT_HEALTHY`, `hardFailure=false`. Trong
 kho quan sát: 4953 span của release `270ef27` **vẫn còn** sau khi stack đã chuyển sang `1ad92be`
 (PROOF 3 ở mức kho), và span cũ giữ **đúng** release SHA cũ (PROOF 4 ở mức kho).
 
@@ -1749,12 +1749,12 @@ kho quan sát: 4953 span của release `270ef27` **vẫn còn** sau khi stack đ
 
 | Mục | Trạng thái (28/08) |
 |---|---|
-| `zca_listener` im lặng | **`FIXED` — chờ chứng minh**: bảy mức sức khoẻ + tự nối lại + tầng deploy signal đã có mã; còn một tin thật đi hết đường |
-| preflight ghi đè `autoSend` | **`FIXED` — chờ chứng minh** |
+| `zca_listener` im lặng | **`FIXED` — chờ chứng minh**: bảy mức sức khoẻ và tầng deploy signal **đã runtime-proven**; còn (a) một lần nối lại chạy thật, (b) **một tin thật đi hết đường — cần người nhắn** |
+| preflight ghi đè `autoSend` | **`RESOLVED`** — preflight thật chạy qua |
 | `bot-poller.spec.ts` flaky | **`RESOLVED`** |
 | OTel mang release identity thứ hai | **`RESOLVED`** |
 | Hai nhà cung cấp AI của gd1-test chết | **`RESOLVED`** — DeepSeek đã nạp lại |
-| Đường đọc lịch sử chưa chạy thật | **`OPEN`** — mã đã có, bốn proof phải đo ở mức Debug View |
+| Đường đọc lịch sử chưa chạy thật | **`RESOLVED`** — 4/4 proof đo ở mức Debug View (release `98013f8`) |
 | **`main` chưa được bảo vệ** | **`UNRESOLVED`, mức HIGH** — 0 ruleset, repo public (thuộc P3) |
 
 Bằng chứng đầy đủ và cổng đóng của từng mục:
