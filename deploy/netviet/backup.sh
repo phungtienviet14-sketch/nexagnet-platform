@@ -129,7 +129,7 @@ backup_observability_store() {
   # CREDENTIAL CHI DOC, khong phai credential ghi: mot ban sao luu khong co ly do gi de ghi duoc
   # vao kho no dang doc. Cung user ma Debug View dung, nen mot backup chay duoc cung la mot lan
   # xac nhan rang duong doc do con song.
-  "${COMPOSE[@]}" --profile observability exec -T     -e "CLICKHOUSE_PASSWORD=${reader_password}" clickhouse     clickhouse-client --user "${reader_user}" --database "${database}"     --query 'SHOW CREATE TABLE otel_traces' >"${work}/schema.sql"
+  "${COMPOSE[@]}" --profile observability exec -T     -e "CLICKHOUSE_PASSWORD=${reader_password}" clickhouse     clickhouse-client --user "${reader_user}" --database "${database}"     --query 'SHOW CREATE TABLE otel_traces FORMAT TabSeparatedRaw' >"${work}/schema.sql"
   test -s "${work}/schema.sql"
 
   "${COMPOSE[@]}" --profile observability exec -T     -e "CLICKHOUSE_PASSWORD=${reader_password}" clickhouse     clickhouse-client --user "${reader_user}" --database "${database}"     --query 'SELECT * FROM otel_traces FORMAT Native' >"${work}/otel_traces.native"
@@ -142,7 +142,19 @@ backup_observability_store() {
   test -s "${TMP_DIR}/observability-${STAMP}.tar.gz"
   rm -rf -- "${work}"
 }
-backup_observability_store
+# ⚠️ KHONG `set -e` CHO NHANH NAY, va day la mot quyet dinh chu khong phai su lo la.
+#
+# `.claude/rules/ecc/common/code-review.md` dat mot bat bien: quan sat khong duoc la dependency
+# cua thanh cong nghiep vu. Mot ClickHouse hic lan luc sao luu KHONG duoc bien thanh mot lan
+# deploy do — va cang khong duoc chan `postgres`/`hatchet` (hai kho THAT SU khong mat duoc) tai
+# len bucket.
+#
+# Doi lai: no phai KEU TO. Mot canh bao khong ai doc thi cung bang khong co, nen dong duoi day
+# viet ro rang chuyen gi da khong xay ra.
+if ! backup_observability_store; then
+  echo "CANH BAO: khong sao luu duoc kho quan sat cua ${STACK_SLUG}." >&2
+  echo "Trace lich su cua stack nay dang KHONG co ban sao. Xem docs/kien-truc/reference-platform-stack.md §8.12." >&2
+fi
 
 if [[ "${VERIFY_RESTORE:-0}" == "1" ]]; then
   "${APP_DIR}/restore-check.sh" zalo "${TMP_DIR}/zalo-${STAMP}.dump"
@@ -151,9 +163,12 @@ if [[ "${VERIFY_RESTORE:-0}" == "1" ]]; then
   if [[ -s "${TMP_DIR}/hatchet-${STAMP}.dump" ]]; then
     "${APP_DIR}/restore-check.sh" hatchet "${TMP_DIR}/hatchet-${STAMP}.dump"
   fi
-  # Cung luat: chi kiem khi stack that su co cum quan sat.
+  # Cung luat: chi kiem khi stack that su co cum quan sat, va cung KHONG lam do lan deploy.
   if [[ -s "${TMP_DIR}/observability-${STAMP}.tar.gz" ]]; then
-    "${APP_DIR}/restore-check.sh" observability "${TMP_DIR}/observability-${STAMP}.tar.gz"
+    if ! "${APP_DIR}/restore-check.sh" observability "${TMP_DIR}/observability-${STAMP}.tar.gz"; then
+      echo "CANH BAO: ban sao luu kho quan sat KHONG phuc hoi lai duoc." >&2
+      echo "Day la mot ban sao luu chua duoc chung minh — dung tin vao no." >&2
+    fi
   fi
 fi
 
