@@ -10,7 +10,8 @@ Khu vực này chứa tài liệu do đội phát triển hoặc AI coding tạo
 4. [`../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md`](../khach-hang/ultty/nghiep-vu/mo-ta-nghiep-vu.md) — nghiệp vụ đã đối chiếu nguồn gốc trước khi sửa rules.
 5. [`van-hanh/checklist-go-live.md`](van-hanh/checklist-go-live.md) — **đọc trước khi bật pilot dữ liệu thật**: 9 cổng máy tự chấm, 2 công tắc đang khóa có chủ ý, chặn pháp lý, trình tự bật và rollback.
 6. [`van-hanh/ci-cd.md`](van-hanh/ci-cd.md) — **đọc trước khi sửa `.github/workflows/` hoặc `deploy/`**: ai là ai (Nexagnet · NetViet · khách), bản đồ pipeline, 7 bất biến, thứ tự lên khách mới, 4 phép kiểm sau deploy, 6 sự cố đã xảy ra thật.
-7. [`van-hanh/chay-kiem-workflow-engine.md`](van-hanh/chay-kiem-workflow-engine.md) — **hướng dẫn dùng cổng CI `workflow-integration`**: nó chứng minh gì, chạy lại 24 bài trên máy mình thế nào, và bốn kiểu đỏ đã đo được.
+7. [`van-hanh/github-governance.md`](van-hanh/github-governance.md) — **đọc trước khi đổi tên job CI hoặc sửa cổng deploy**: `main` được bảo vệ bằng gì, 7 status check bắt buộc và bẫy đổi tên job, cổng environment, bằng chứng phủ định, và giới hạn chưa gỡ được.
+8. [`van-hanh/chay-kiem-workflow-engine.md`](van-hanh/chay-kiem-workflow-engine.md) — **hướng dẫn dùng cổng CI `workflow-integration`**: nó chứng minh gì, chạy lại 24 bài trên máy mình thế nào, và bốn kiểu đỏ đã đo được.
 
 ## Cấu trúc
 

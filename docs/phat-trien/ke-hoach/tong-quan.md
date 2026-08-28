@@ -1755,7 +1755,7 @@ kho quan sát: 4953 span của release `270ef27` **vẫn còn** sau khi stack đ
 | OTel mang release identity thứ hai | **`RESOLVED`** |
 | Hai nhà cung cấp AI của gd1-test chết | **`RESOLVED`** — DeepSeek đã nạp lại |
 | Đường đọc lịch sử chưa chạy thật | **`RESOLVED`** — 4/4 proof đo ở mức Debug View (release `98013f8`) |
-| **`main` chưa được bảo vệ** | **`UNRESOLVED`, mức HIGH** — 0 ruleset, repo public (thuộc P3) |
+| **`main` chưa được bảo vệ** | **`RESOLVED` 28/08/2026** — ruleset `main-protection`, bắt buộc PR + 7 check, chặn force-push, `bypass_actors: []`; push thẳng/force-push đã thử bằng token admin và bị từ chối. Còn `UNRESOLVED` mức TRUNG BÌNH: repo một chủ nên **không cưỡng chế được review người thứ hai**; repo vẫn public. Xem [github-governance.md](../van-hanh/github-governance.md) |
 
 Bằng chứng đầy đủ và cổng đóng của từng mục:
 [kien-truc/reference-platform-stack.md §7](../../kien-truc/reference-platform-stack.md#7-known-risks--unresolved).

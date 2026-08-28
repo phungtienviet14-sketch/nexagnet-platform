@@ -8,6 +8,14 @@ sửa bất cứ thứ gì trong `.github/workflows/` hoặc `deploy/`.
 > nhanh trên GitHub Actions: [tin-hieu-deploy.md](tin-hieu-deploy.md). Ba tín hiệu đầu **chặn**
 > deploy; live AI báo riêng để một lần model đoán sai không bị đọc nhầm thành "release chưa lên".
 
+> 🔒 **`main` được bảo vệ bằng ruleset kể từ 28/08/2026** — và **bảy job trong `ci.yml` nay là
+> status check BẮT BUỘC**: `verify` · `integration` · `workflow-integration` · `tenant-packs` ·
+> `e2e` · `audit` · `images`. Required check khớp theo **TÊN JOB**. **Đổi tên một job ở đây mà
+> không sửa ruleset ⇒ check bắt buộc không bao giờ được báo cáo ⇒ mọi PR kẹt vĩnh viễn** ở trạng
+> thái "Expected", kể cả khi CI thực tế xanh. Đổi tên là thao tác hai bước, làm trong cùng một PR.
+> Thêm job mới thì nó **không** tự thành bắt buộc. Chi tiết + lệnh sửa ruleset:
+> [github-governance.md](github-governance.md).
+
 ---
 
 ## 0. Ai là ai (hiểu sai chỗ này là đặt tên sai cả code lẫn tài liệu)
