@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ChannelHealthService, deriveListenerPhase } from './channel-health.js';
-import { nextReconnectDelayMs, shouldReconnectAfterClose } from './listener-reconnect.js';
+import {
+  nextReconnectDelayMs,
+  shouldReconnectAfterClose,
+  shouldResetBackoff,
+  STABLE_CONNECTION_MS,
+} from './listener-reconnect.js';
 
 const T0 = new Date('2026-08-28T00:00:00.000Z');
 const at = (seconds: number): Date => new Date(T0.getTime() + seconds * 1000);
@@ -194,6 +199,16 @@ describe('chinh sach noi lai', () => {
       expect(delay).toBeGreaterThan(0);
       expect(delay).toBeLessThanOrEqual(360_000);
     }
+  });
+
+  it('KET NOI CHAP CHON khong duoc tha bo dem — day la cai bao ve tai khoan Zalo', () => {
+    // Do that tren stack 28/08: socket dong `1000` chi 8 GIAY sau khi connect. Tha bo dem ngay
+    // luc `connected` se bien thanh vong dang nhap ~10 giay/lan vao tai khoan zca — va tai khoan
+    // do CO THE BI KHOA vi dieu do. Ban sua cho su co 44 gio se tu tao ra mot su co nang hon.
+    expect(shouldResetBackoff(8_000)).toBe(false);
+    expect(shouldResetBackoff(STABLE_CONNECTION_MS - 1)).toBe(false);
+    expect(shouldResetBackoff(STABLE_CONNECTION_MS)).toBe(true);
+    expect(shouldResetBackoff(10 * 60_000)).toBe(true);
   });
 
   it('co nhieu ngau nhien, va khong bao gio ngan hon khoang co so', () => {

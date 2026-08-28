@@ -22,7 +22,11 @@ import {
 import type { ZaloQuoteTarget } from '@netviet/shared';
 import type { OutboundReceipt } from '../messages/outbound-recorder.js';
 import { ChannelHealthService } from './channel-health.js';
-import { nextReconnectDelayMs, shouldReconnectAfterClose } from './listener-reconnect.js';
+import {
+  nextReconnectDelayMs,
+  shouldReconnectAfterClose,
+  STABLE_CONNECTION_MS,
+} from './listener-reconnect.js';
 import type { SendOptions } from './channel-adapter.js';
 
 export type ZcaMessageHandler = (message: Message) => void | Promise<void>;
@@ -112,6 +116,11 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   /** Lich noi lai. `null` = khong co lan thu nao dang cho — xem `scheduleReconnect`. */
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
+  /**
+   * Hen gio THA BO DEM. Chi chay khi ket noi da song du lau — xem `STABLE_CONNECTION_MS`.
+   * Socket dut truoc khi no no thi bo dem GIU NGUYEN, va khoang cho tiep tuc tang.
+   */
+  private stabilityTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * `@Optional()` KEM MAC DINH, khong phai bat buoc: `ZaloUserClient` duoc dung truc tiep
@@ -138,6 +147,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     this.destroyed = true;
     this.cancelReconnect();
+    this.clearStabilityTimer();
     this.stopListener();
     this.api = null;
   }
@@ -584,11 +594,26 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.connectionState = 'ready';
       this.lastError = undefined;
       this.errorKind = undefined;
-      // Socket da mo LAI thanh cong -> bo dem ve 0, de lan dut ke tiep duoc chua nhanh nhu lan
-      // dau. Khong reset thi mot kenh song ca thang van phai cho 5 phut cho lan dut dau tien.
+      /*
+       * BO DEM KHONG DUOC THA NGAY O DAY.
+       *
+       * Tha ngay nghe hop ly — "da noi lai duoc thi coi nhu chua co gi xay ra". Nhung do do tren
+       * stack that: socket dong `1000` chi 8 GIAY sau khi connect. Voi mot socket chap chon nhu
+       * vay, tha ngay bien thanh vong lap dang nhap ~10 giay/lan vao tai khoan Zalo — va tai
+       * khoan zca CO THE BI KHOA vi dieu do (CLAUDE.md, muc rui ro cua kenh zca).
+       *
+       * Nen bo dem chi duoc tha sau khi ket noi DUNG VUNG duoc `STABLE_CONNECTION_MS`. Dut som
+       * hon thi bo dem giu nguyen va khoang cho tiep tuc tang — dung hanh vi ta muon voi mot kenh
+       * dang chap chon.
+       */
       const wasReconnect = this.reconnectAttempt > 0;
-      this.reconnectAttempt = 0;
       this.cancelReconnect();
+      this.clearStabilityTimer();
+      this.stabilityTimer = setTimeout(() => {
+        this.stabilityTimer = null;
+        this.reconnectAttempt = 0;
+      }, STABLE_CONNECTION_MS);
+      this.stabilityTimer.unref?.();
       this.health.markConnected();
       this.logger.log(
         wasReconnect ? 'zca-js listener: da NOI LAI thanh cong' : 'zca-js listener: connected',
@@ -597,6 +622,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
     listener.on('closed', (code, reason) => {
       this.connectionState = 'connecting';
       this.lastError = 'Listener Zalo mat ket noi; he thong dang thu ket noi lai.';
+      this.clearStabilityTimer();
       this.health.markClosed(code ?? null, reason ?? null);
       this.logger.warn(`zca-js listener closed (${code}): ${reason}`);
       this.scheduleReconnect(code ?? null);
@@ -623,6 +649,7 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.connectionState = 'error';
       this.errorKind = 'listener';
       this.lastError = 'Listener Zalo dang loi; he thong dang thu ket noi lai.';
+      this.clearStabilityTimer();
       this.health.markClosed(null, `listener error: ${errMsg(error)}`);
       this.logger.warn(`zca-js listener error: ${errMsg(error)}`);
       this.scheduleReconnect(null);
@@ -688,6 +715,13 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.reconnectTimer = null;
     }
     this.health.markReconnectAbandoned();
+  }
+
+  private clearStabilityTimer(): void {
+    if (this.stabilityTimer) {
+      clearTimeout(this.stabilityTimer);
+      this.stabilityTimer = null;
+    }
   }
 
   private stopListener(): void {

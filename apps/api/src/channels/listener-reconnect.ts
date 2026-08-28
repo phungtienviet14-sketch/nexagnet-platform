@@ -63,6 +63,38 @@ export function nextReconnectDelayMs(input: ReconnectDelayInput): number {
 }
 
 /**
+ * MOT KET NOI PHAI SONG BAO LAU thi moi duoc coi la "on dinh" va cho phep dat lai bo dem.
+ *
+ * ==============================================================================================
+ * VI SAO CAN NGUONG NAY — do tren stack that, 28/08/2026:
+ *
+ *     07:38:46  zca-js listener: connected
+ *     07:38:54  zca-js listener closed (1000): NORMAL_CLOSURE     <- 8 GIAY sau
+ *
+ * Neu bo dem duoc dat lai ngay khi `connected`, mot socket chap chon nhu tren se cho ra vong
+ * lap: ket noi -> dat lai ve 0 -> dut sau 8s -> cho 2s -> ket noi... tuc **dang nhap vao tai
+ * khoan Zalo moi ~10 giay, mai mai**.
+ *
+ * Voi mot userbot, do khong phai mot van de hieu nang. CLAUDE.md ghi ro rui ro: dung zca la vi
+ * pham ToS va tai khoan CO THE BI KHOA. Mot vong dang nhap 10 giay/lan la cach nhanh nhat de
+ * dieu do xay ra — tuc ban sua cho su co 44 gio se tu tao ra mot su co nang hon.
+ *
+ * Nen bo dem chi duoc dat lai khi ket noi da DUNG VUNG. Mot socket dut lien tuc se thay khoang
+ * cho tang dan toi tran, dung nhu mot socket khong bao gio noi lai duoc.
+ */
+export const STABLE_CONNECTION_MS = 60_000;
+
+/**
+ * Ket noi vua roi co du "on dinh" de tha bo dem ve 0 khong?
+ *
+ * Tach thanh ham rieng de cai nguong tren duoc kiem bang mot bai test, thay vi nam an trong mot
+ * phep so sanh giua hai `setTimeout`.
+ */
+export function shouldResetBackoff(connectedForMs: number): boolean {
+  return connectedForMs >= STABLE_CONNECTION_MS;
+}
+
+/**
  * Ma dong nao dang duoc noi lai?
  *
  * TAT CA. Ham nay ton tai de cau tra loi do duoc VIET RA thay vi nam an trong mot nhanh `if` —
