@@ -87,7 +87,8 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 | OTel export trên gd1-test | **NOT DEPLOYED** — chưa container nào chạy |
 | ClickStack | **CODE-SUPPORTED / NOT DEPLOYED** (rời `tools/poc-observability/` 28/08) |
 | Historical Debug traces | **NOT PERSISTENT** |
-| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
+| `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** · release đang chạy `8b0f6ad` |
+| Đường AI trên gd1-test | **BROKEN** — cả DeepSeek lẫn Anthropic đều từ chối (§7.8), **chặn mọi deploy** |
 
 ### 6.1 CURRENT STATE MATRIX
 
@@ -152,6 +153,7 @@ classification      APPLICATION_ROLLED_OUT_HEALTHY    hardFailure: false
 > | 7.3 `bot-poller` flaky | **`RESOLVED`** | — (đóng bằng cấu trúc, xem dưới) |
 > | 7.6 OTel mang release identity **thứ hai** | **`FIXED` — chờ chứng minh** | một trace bền mang đúng SHA canonical (PROOF 4) |
 > | 7.7 Ba giả định sai về ảnh Docker | **`FIXED`** | — (đóng trước khi deploy, xem dưới) |
+> | 7.8 **Cả hai** nhà cung cấp AI của gd1-test đã chết | `UNRESOLVED` — **CHẶN P2** | một khoá còn hiệu lực (số dư DeepSeek, hoặc khoá Anthropic + đổi hồ sơ) |
 
 ### 7.1 `zca_listener` im lặng — `UNRESOLVED`, và **sắc nét hơn bản trước**
 
@@ -315,6 +317,54 @@ tên biến.
 **Điều đáng rút ra không phải ba lỗi này.** Là chi phí: một vòng deploy ~17 phút, một vòng đọc
 config ảnh ~1 phút. Trước khi thêm bất kỳ ảnh mới nào vào compose, đọc `config.User`,
 `config.Entrypoint` và lịch sử lớp của nó.
+
+### 7.8 **CẢ HAI** nhà cung cấp AI của gd1-test đã chết — `UNRESOLVED`, **CHẶN P2**
+
+> Phát hiện 28/08/2026 khi deploy run `33145000232` dừng ở preflight. **Không phải lỗi mã nguồn**,
+> và không phải hệ quả của thay đổi nào trong lần phát hành này.
+
+**Preflight từ chối, đúng như nó phải làm:**
+
+```
+Ultty GD1-test no-mock preflight FAILED before build/deploy:
+ - parser provider proof healthPassed must be true
+ - parser provider proof structuredOutputPassed must be true
+ - parser provider smoke blocked: LIVE_AI_PROVIDER_UNAVAILABLE
+```
+
+**Hỏi thẳng hai nhà cung cấp, từ bên trong `zalo-ultty-gd1-test-api-1`:**
+
+| Nhà cung cấp | Khoá có mặt | Kết quả |
+|---|---|---|
+| DeepSeek (`PARSER_MODE`, `ADVICE_COMPOSER`) | có, 35 ký tự | **HTTP 402** — `Insufficient Balance` |
+| Anthropic (đường lui theo CLAUDE.md) | có, 108 ký tự | **HTTP 401** — `API key is invalid` |
+
+**Vì sao nó chặn P2, chứ không chỉ là phiền:** `ultty-gd1-test` là **stack tham chiếu**. Điều kiện
+ADOPT loại A ở §3 đòi công nghệ phải *thực sự chạy* trên chính stack này. Hôm nay stack đó **không
+chạy được đường AI nào**, nên:
+
+- không deploy được bản phát hành mới (cổng preflight cứng — và **cổng này đúng**);
+- ⇒ OTel/ClickHouse không lên được **L2**;
+- ⇒ bốn runtime proof của P2 không chạy được;
+- ⇒ **P2 không thể CLOSED** cho tới khi có một khoá còn hiệu lực.
+
+**Đây là chặn HÀNH CHÍNH, không phải chặn kỹ thuật** — cùng họ với org policy chặn khoá HMAC. Không
+có cách nào trong repo sửa được nó, và **không được** sửa bằng cách hạ cổng: một stack tham chiếu
+deploy "thành công" trong khi AI đã chết là đúng cái trạng thái mà bốn tín hiệu deploy tồn tại để
+ngăn.
+
+**Ba đường đi, theo thứ tự nên chọn:**
+
+1. **Nạp lại số dư DeepSeek** — nhanh nhất, giữ nguyên cấu hình gd1-test hiện tại.
+2. **Thay khoá Anthropic** rồi đổi hồ sơ gd1-test sang `PARSER_MODE=claude` — *đúng hướng dài hạn*:
+   CLAUDE.md yêu cầu bản chạy dữ liệu khách thật phải dùng Claude, hoặc bổ sung DeepSeek vào thoả
+   thuận xử lý dữ liệu (§7.4). Nhưng `render-secrets.sh` hiện **ép cứng** `PARSER_MODE='deepseek'`
+   cho `gd1-test`, nên đường này cần sửa mã.
+3. **Hoãn P2**, làm P3 (quản trị GitHub) trước — P3 không đụng tới stack và cũng đang `UNRESOLVED`
+   ở mức HIGH.
+
+**Mốc trước đó:** deploy run `33039065904` (27/08, ~25 giờ trước) có `liveAiSmoke: pass` với
+DeepSeek. Nên số dư cạn **trong khoảng 25 giờ đó**, không phải một trạng thái đã tồn tại lâu.
 
 ### 7.4 Hai rủi ro tuân thủ đã biết, vẫn mở
 
