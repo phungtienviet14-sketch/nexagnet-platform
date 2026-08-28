@@ -1,0 +1,100 @@
+# OTEL COLLECTOR — mot MAT PHANG THU NHAN, khong phai mot kho du lieu.
+#
+# ==============================================================================================
+# TEP NAY LA MOT KHUON. `render-otel-collector.sh` thay hai o roi ghi ra
+# `.runtime/otel-collector.yaml`. Hai o do — viet lien tiep hai dau gach duoi quanh `STACK SLUG`
+# va quanh `DB SLUG` — mang:
+#
+#   ten stack, vd `ultty-gd1-test`   -> ten thanh phan + duong dan khoa
+#   cung the nhung dau `-` -> `_`    -> ten database/user cua ClickHouse
+#
+# (Chinh hai o do khong duoc viet ra trong khoi chu thich nay: sed thay CA trong chu thich, va mot
+# doan giai thich tu bien thanh gia tri la mot doan giai thich sai.)
+#
+# Khong dat ten khach nao vao day. Base la nen tang trung tinh (CLAUDE.md QD#6).
+#
+# ==============================================================================================
+# CACH LY BANG KIEN TRUC, KHONG BANG BO LOC — xem `docs/kien-truc/reference-platform-stack.md` §8.
+#
+# Cach MAC DINH ma nguoi ta hay chon la `routingconnector` dinh tuyen theo header `X-Tenant`. No
+# hong theo ba cach, moi cach du de loai:
+#   · header la thu BEN GUI TU KHAI — tenant A dat `X-Tenant: B` la ghi thang vao kho cua B;
+#   · connector chi doc duoc metadata THO, khong co duong nao doc danh tinh DA XAC THUC;
+#   · `default_pipelines` — khong khop route nao thi VAN DI TIEP, tuc fail-OPEN.
+#
+# O day pipeline duoc chon boi LISTENER NAO DA NHAN KET NOI, ma listener do doi dung credential
+# cua tenant do. KHONG TON TAI duong nao tu receiver cua A sang exporter cua B — khong phai "co
+# duong nhung da loc". Sai credential thi receiver tu choi, va khong co `default_pipelines` de roi
+# vao.
+#
+# Khi mat phang dieu khien dung chung ton tai (P4/P6), gop N tep nay lai la mot phep NOI CHUOI:
+# moi khoi deu da mang ten rieng theo stack. Do la ly do khuon nay giu nguyen hinh dang cua §8.3
+# ke ca khi hien tai moi collector chi phuc vu dung mot tenant.
+
+extensions:
+  # `filename` CHU KHONG PHAI `token`: khoa doc tu TEP DUOC MOUNT, khong nam trong bien moi truong
+  # cua tien trinh. Cung duong ma `.runtime/secrets.env` va `release.json` da di, va khoa khong lo
+  # ra trong `docker inspect`.
+  bearertokenauth/__STACK_SLUG__:
+    filename: /run/otlp-keys/__STACK_SLUG__
+
+  # Cong suc khoe — `deploy-stack.sh` va healthcheck cua compose doc cho nay.
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp/__STACK_SLUG__:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        # DANH TINH BUOC VAO O DAY, khong o trong tai trong. Day la ca diem cua §8.
+        auth:
+          authenticator: bearertokenauth/__STACK_SLUG__
+
+processors:
+  # Tran bo nho TRUOC batch: mot dot span do (vong lap tool cua agent) khong duoc giet collector,
+  # va collector chet la mat ca telemetry lan tien trinh nghiep vu neu ai do lo them `depends_on`.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+    send_batch_max_size: 1024
+
+exporters:
+  clickhouse/__STACK_SLUG__:
+    endpoint: tcp://clickhouse:9000
+    # User GHI rieng cua stack. User DOC (HyperDX) la mot user khac, chi co quyen SELECT.
+    username: __DB_SLUG___writer
+    # Gia tri that den tu bien moi truong do `render-secrets.sh` dat luc trien khai — KHONG BAO
+    # GIO nam trong repo. Exporter nay KHONG co khoa `password_file`; dung viet ra mot khoa khong
+    # ton tai roi tuong la da an toan.
+    password: ${env:CLICKHOUSE_WRITER_PASSWORD}
+    database: obs___DB_SLUG__
+    # RETENTION THEO TUNG EXPORTER, tuc theo tung tenant. 30 ngay la mac dinh cua stack tham chieu.
+    ttl: 720h
+    create_schema: true
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      queue_size: 5000
+
+service:
+  extensions: [bearertokenauth/__STACK_SLUG__, health_check]
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    # MOT pipeline cho MOT tenant. Khong co `default_pipelines` — do la co y va co bai test khoa.
+    traces/__STACK_SLUG__:
+      receivers: [otlp/__STACK_SLUG__]
+      processors: [memory_limiter, batch]
+      exporters: [clickhouse/__STACK_SLUG__]

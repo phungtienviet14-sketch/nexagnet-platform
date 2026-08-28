@@ -253,11 +253,39 @@ services:
       WORKFLOW_ENGINE_API_URL: http://hatchet-dashboard
       WORKFLOW_ENGINE_DASHBOARD_URL: https://${WORKFLOW_DOMAIN}
       WORKFLOW_ENGINE_NAMESPACE: ${WORKFLOW_ENGINE_NAMESPACE:-}
+      # QUAN SAT BEN (OTel -> Collector -> ClickHouse). Cong tac DUY NHAT la `OTEL_TRACING`, va
+      # mac dinh cua no la `off` o `otel-config.ts` — tat = khong SDK nao duoc nap, khong mot byte
+      # nao roi khoi tien trinh. Xem `docs/kien-truc/reference-platform-stack.md` §8.
+      #
+      # `OTEL_SERVICE_NAME` DAT RIENG cho tung service o day chu khong o `secrets.env`: mot
+      # `service.name` cho MOI tien trinh la dieu kien de doc duoc "buoc nay chay o dau".
+      OTEL_TRACING: ${OTEL_TRACING:-off}
+      OTEL_SERVICE_NAME: nexagnet-api
+      # GHI CUNG, khong phai bien — cung ly do voi `WORKFLOW_ENGINE_HOST_PORT`: dia chi collector
+      # la mot su that ve TOPO cua chinh tep nay. Mot gia tri sai o `secrets.env` se tro telemetry
+      # cua stack nay vao collector cua stack khac.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # KHOA INGESTION. Day la thu quyet dinh tai trong nay duoc ghi vao KHO NAO — receiver cua
+      # collector tu choi neu sai. Khong co gia tri mac dinh: thieu khoa thi collector tra 401 va
+      # telemetry bi bo, chu KHONG roi vao mot pipeline mac dinh nao (fail-closed, §8.1 dieu 2).
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1}
+      OTEL_PRISMA_DETAIL: ${OTEL_PRISMA_DETAIL:-operation}
     command:
       - sh
       - -ec
       - |
         apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
+        # PRELOAD CHI DUOC GAN KHI BAT, va gan bang `--import` tren DONG LENH chu khong bang
+        # `NODE_OPTIONS`. Hai ly do, ca hai deu tu mot cho:
+        #   · `NODE_OPTIONS` ap cho MOI tien trinh node trong container — ke ca `prisma migrate`
+        #     ngay tren, tuc mot tien trinh dan cung mo mot ket noi OTLP roi chet;
+        #   · `--import` co dieu kien giu dung loi hua cua `otel-config.ts`: tat = tuyet doi khong
+        #     nap SDK. `otel-preload.js` import ca do thi SDK o cap module, nen chi can no duoc nap
+        #     la cai gia da phai tra, du `OTEL_TRACING=off`.
+        if [ "${OTEL_TRACING:-off}" = 'on' ]; then
+          exec node --import ./apps/api/dist/observability/otel/otel-preload.js apps/api/dist/main.js
+        fi
         exec node apps/api/dist/main.js
     volumes:
       - ./.runtime/zalo:/runtime/zalo
@@ -570,7 +598,33 @@ services:
       # `tenant` cua no la MOT CHIEU CUA KHOA THAO TAC (`buildOperationKey`). Bo mount o day thi
       # hai tien trinh cua cung mot stack se tra loi khac nhau cho cung mot cau hoi.
       RELEASE_MANIFEST_PATH: /runtime/release.json
-    command: ["node", "apps/api/dist/workflow/worker-main.js"]
+      # QUAN SAT BEN (OTel -> Collector -> ClickHouse). Cong tac DUY NHAT la `OTEL_TRACING`, va
+      # mac dinh cua no la `off` o `otel-config.ts` — tat = khong SDK nao duoc nap, khong mot byte
+      # nao roi khoi tien trinh. Xem `docs/kien-truc/reference-platform-stack.md` §8.
+      #
+      # `OTEL_SERVICE_NAME` DAT RIENG cho tung service o day chu khong o `secrets.env`: mot
+      # `service.name` cho MOI tien trinh la dieu kien de doc duoc "buoc nay chay o dau".
+      OTEL_TRACING: ${OTEL_TRACING:-off}
+      OTEL_SERVICE_NAME: nexagnet-workflow-worker-v1
+      # GHI CUNG, khong phai bien — cung ly do voi `WORKFLOW_ENGINE_HOST_PORT`: dia chi collector
+      # la mot su that ve TOPO cua chinh tep nay. Mot gia tri sai o `secrets.env` se tro telemetry
+      # cua stack nay vao collector cua stack khac.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # KHOA INGESTION. Day la thu quyet dinh tai trong nay duoc ghi vao KHO NAO — receiver cua
+      # collector tu choi neu sai. Khong co gia tri mac dinh: thieu khoa thi collector tra 401 va
+      # telemetry bi bo, chu KHONG roi vao mot pipeline mac dinh nao (fail-closed, §8.1 dieu 2).
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1}
+      OTEL_PRISMA_DETAIL: ${OTEL_PRISMA_DETAIL:-operation}
+    # Cung ly do voi `api`: `--import` CO DIEU KIEN, khong phai `NODE_OPTIONS`.
+    command:
+      - sh
+      - -ec
+      - |
+        if [ "${OTEL_TRACING:-off}" = 'on' ]; then
+          exec node --import ./apps/api/dist/observability/otel/otel-preload.js apps/api/dist/workflow/worker-main.js
+        fi
+        exec node apps/api/dist/workflow/worker-main.js
     volumes:
       - ./tenant-pack:/srv/tenant:ro
       # Mount theo TEP: `./.runtime` chua `secrets.env`, con worker thi khong can gi trong do.
@@ -677,7 +731,33 @@ services:
       # `tenant` cua no la MOT CHIEU CUA KHOA THAO TAC (`buildOperationKey`). Bo mount o day thi
       # hai tien trinh cua cung mot stack se tra loi khac nhau cho cung mot cau hoi.
       RELEASE_MANIFEST_PATH: /runtime/release.json
-    command: ["node", "apps/api/dist/workflow/worker-main.js"]
+      # QUAN SAT BEN (OTel -> Collector -> ClickHouse). Cong tac DUY NHAT la `OTEL_TRACING`, va
+      # mac dinh cua no la `off` o `otel-config.ts` — tat = khong SDK nao duoc nap, khong mot byte
+      # nao roi khoi tien trinh. Xem `docs/kien-truc/reference-platform-stack.md` §8.
+      #
+      # `OTEL_SERVICE_NAME` DAT RIENG cho tung service o day chu khong o `secrets.env`: mot
+      # `service.name` cho MOI tien trinh la dieu kien de doc duoc "buoc nay chay o dau".
+      OTEL_TRACING: ${OTEL_TRACING:-off}
+      OTEL_SERVICE_NAME: nexagnet-workflow-worker-sales-handoff-v1
+      # GHI CUNG, khong phai bien — cung ly do voi `WORKFLOW_ENGINE_HOST_PORT`: dia chi collector
+      # la mot su that ve TOPO cua chinh tep nay. Mot gia tri sai o `secrets.env` se tro telemetry
+      # cua stack nay vao collector cua stack khac.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # KHOA INGESTION. Day la thu quyet dinh tai trong nay duoc ghi vao KHO NAO — receiver cua
+      # collector tu choi neu sai. Khong co gia tri mac dinh: thieu khoa thi collector tra 401 va
+      # telemetry bi bo, chu KHONG roi vao mot pipeline mac dinh nao (fail-closed, §8.1 dieu 2).
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1}
+      OTEL_PRISMA_DETAIL: ${OTEL_PRISMA_DETAIL:-operation}
+    # Cung ly do voi `api`: `--import` CO DIEU KIEN, khong phai `NODE_OPTIONS`.
+    command:
+      - sh
+      - -ec
+      - |
+        if [ "${OTEL_TRACING:-off}" = 'on' ]; then
+          exec node --import ./apps/api/dist/observability/otel/otel-preload.js apps/api/dist/workflow/worker-main.js
+        fi
+        exec node apps/api/dist/workflow/worker-main.js
     volumes:
       - ./tenant-pack:/srv/tenant:ro
       # Mount theo TEP: `./.runtime` chua `secrets.env`, con worker thi khong can gi trong do.
@@ -707,6 +787,80 @@ services:
       - backend
       - data
 
+  # ============================================================================================
+  # CUM QUAN SAT (OTel Collector + ClickHouse) — TOAN BO NAM SAU `profiles: ["observability"]`.
+  #
+  # Cung ly do voi cum Hatchet: `zalo-ultty` (production) KHONG duoc moc them container vi mot
+  # nang luc chua ai bat. Compose chi dung toi nhom nay khi co `--profile observability`.
+  #
+  # VI SAO KHO NAM TRONG COMPOSE CUA TUNG KHACH (reference-platform-stack §8.4): trace mang noi
+  # dung nghiep vu va co the mang du lieu ca nhan, nen no la DU LIEU CUA TENANT. Dat chung mot cum
+  # roi phan quyen se dua cach ly ve lai thanh cau hinh phan quyen — mot lenh `GRANT` sai la ro ri
+  # cheo khach. Gia phai tra la RAM/dia nhan theo so tenant, va do la gia duoc chap nhan co y thuc.
+  #
+  # XOA TENANT LA XOA KHO: volume nam trong chinh compose project cua stack do.
+  # ============================================================================================
+  clickhouse:
+    profiles: ["observability"]
+    image: clickhouse/clickhouse-server:25.3-alpine
+    restart: always
+    environment:
+      # User GHI. `clickhouseexporter` dung dung user nay; user DOC duoc tao rieng trong
+      # `init-observability.sql` voi quyen SELECT, va do la hai credential khac nhau CO CHU Y
+      # (§8.1 dieu 3: credential ghi va credential doc tach nhau).
+      CLICKHOUSE_USER: ${CLICKHOUSE_WRITER_USER:-observability_writer}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_WRITER_PASSWORD:-}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-observability}
+      # TAT user `default` KHONG MAT KHAU. Mac dinh cua anh la cho phep no dang nhap tu bat ky
+      # dau — tren mot mang co container khac, do la mot cua mo vao toan bo telemetry.
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      # Chay MOT LAN, luc thu muc du lieu con rong. `render-secrets.sh` dung tep nay (no chua mat
+      # khau cua user doc), nen no di duong `.runtime/` giong `secrets.env` — khong bao gio vao repo.
+      - ./.runtime/init-observability.sql:/docker-entrypoint-initdb.d/10-observability.sql:ro
+    # KHONG CO `ports:` — kho quan sat khong duoc mo ra host. Ai can nhin thi di qua `api`
+    # (duong doc da xac thuc) hoac `docker exec`.
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      # CHI `data` (`internal: true`). Kho quan sat khong can — va khong duoc — co duong ra Internet.
+      - data
+
+  otel-collector:
+    profiles: ["observability"]
+    image: otel/opentelemetry-collector-contrib:0.130.1
+    restart: always
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      # Collector khai trien `${env:...}` trong cau hinh, nen mat khau ghi den tu day chu khong
+      # bao gio nam trong tep YAML.
+      CLICKHOUSE_WRITER_PASSWORD: ${CLICKHOUSE_WRITER_PASSWORD:-}
+    volumes:
+      # Cau hinh DUOC DUNG THEO STACK tu khuon (`observability/render-otel-collector.sh`). Ten
+      # receiver/exporter/pipeline deu mang slug cua stack, nen khong ton tai duong tu tenant nay
+      # sang kho cua tenant kia — xem `observability-isolation.contract.test.mjs`.
+      - ./.runtime/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      # KHOA INGESTION doc tu TEP, khong tu bien moi truong: bien moi truong lo ra trong
+      # `docker inspect`, con tep thi khong.
+      - ./.runtime/otlp-keys:/run/otlp-keys:ro
+    # KHONG CO `ports:` — chi cac container tren `data` moi gui duoc telemetry vao. Cong OTLP mo
+    # ra host la mot duong ghi vao kho quan sat cua khach cho bat ky ai cham toi VM.
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:13133/"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - data
+
 volumes:
   postgres-data:
   flowise-data:
@@ -715,6 +869,9 @@ volumes:
   hatchet-postgres-data:
   hatchet-config:
   hatchet-certs:
+  # Kho quan sat cua CHINH stack nay. Xoa stack (`down -v`) la xoa luon trace cua khach do —
+  # dung dieu §8.5 hua: "xoa mot tenant thi trace di cung stack cua tenant".
+  clickhouse-data:
 
 networks:
   # KHONG khach nao dung chung mang voi khach nao.

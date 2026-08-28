@@ -168,6 +168,58 @@ if [[ "${WORKFLOW_ENGINE}" == 'on' ]]; then
   echo "render-secrets: WORKFLOW_ENGINE=on cho stack ${STACK_SLUG}." >&2
 fi
 
+# --- CUM QUAN SAT (OTel -> ClickHouse) ---------------------------------------------------------
+#
+# Cung khuon cong tac voi `WORKFLOW_ENGINE`, va vi cung mot ly do: `deploy-remote.sh` rsync CUNG
+# MOT `tenant-pack` cho `zalo-ultty` (production) lan `zalo-ultty-gd1-test`, nen goi khach mot
+# minh no khong tach duoc hai moi truong.
+#
+# Mac dinh `off` la ca diem — mot cong tac mac dinh `on` khong bao ve duoc gi. Va o day cai gia
+# cua "bat nham" khong phai vai container thua: telemetry mang noi dung nghiep vu, nen bat kho
+# quan sat tren mot stack chay du lieu khach that ma chua co thoa thuan la mot van de tuan thu.
+OBSERVABILITY_STACK="${OBSERVABILITY_STACK:-off}"
+# TEN SECRET MANG STACK SLUG — cach ly o TANG BI MAT, cung mot lop voi ten volume va alias mang.
+OTLP_INGEST_TOKEN="$(optional_secret zalo-${STACK_SLUG}-otlp-ingest-token)"
+CLICKHOUSE_WRITER_PASSWORD="$(optional_secret zalo-${STACK_SLUG}-clickhouse-writer-password)"
+CLICKHOUSE_READER_PASSWORD="$(optional_secret zalo-${STACK_SLUG}-clickhouse-reader-password)"
+# ClickHouse khong nhan dau `-` trong ten database/user.
+CLICKHOUSE_DB_SLUG="${STACK_SLUG//-/_}"
+CLICKHOUSE_WRITER_USER="${CLICKHOUSE_DB_SLUG}_writer"
+CLICKHOUSE_READER_USER="${CLICKHOUSE_DB_SLUG}_reader"
+CLICKHOUSE_DATABASE="obs_${CLICKHOUSE_DB_SLUG}"
+OTEL_TRACING='off'
+OTEL_EXPORTER_OTLP_HEADERS=''
+
+if [[ "${OBSERVABILITY_STACK}" == 'on' ]]; then
+  # CHI `gd1-test` DUOC PHEP BAT — cung cai chan cuoi cung ma `WORKFLOW_ENGINE` co, va o day no
+  # con quan trong hon: mot lan chay nham vao `production` se bat mot duong GHI NOI DUNG NGHIEP VU
+  # cua khach that vao mot kho moi, truoc khi ai kip hoi ve retention hay ve thoa thuan xu ly.
+  if [[ "${DEPLOYMENT_ENVIRONMENT}" != 'gd1-test' ]]; then
+    echo "OBSERVABILITY_STACK=on chi duoc phep cho DEPLOYMENT_ENVIRONMENT=gd1-test" >&2
+    echo "(dang la '${DEPLOYMENT_ENVIRONMENT}', stack ${STACK_SLUG})." >&2
+    exit 64
+  fi
+  # FAIL-CLOSED, ba lan. "Bat quan sat nhung thieu khoa" khong duoc bien thanh "collector nhan
+  # moi thu" hay "ClickHouse mo cua" — do la dung che do hong ma §8.1 dieu 2 cam.
+  for pair in \
+    "OTLP_INGEST_TOKEN:otlp-ingest-token" \
+    "CLICKHOUSE_WRITER_PASSWORD:clickhouse-writer-password" \
+    "CLICKHOUSE_READER_PASSWORD:clickhouse-reader-password"; do
+    var="${pair%%:*}"
+    name="${pair#*:}"
+    if [[ -z "${!var}" ]]; then
+      echo "OBSERVABILITY_STACK=on nhung thieu secret zalo-${STACK_SLUG}-${name}." >&2
+      echo "Sinh bang: openssl rand -hex 32" >&2
+      exit 78
+    fi
+  done
+  OTEL_TRACING='on'
+  # KHOA INGESTION di trong header. `bearertokenauthextension` so sanh nguyen van chuoi sau
+  # `Bearer `, nen dinh dang nay la mot phan cua hop dong voi collector.
+  OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer ${OTLP_INGEST_TOKEN}"
+  echo "render-secrets: OBSERVABILITY_STACK=on cho stack ${STACK_SLUG}." >&2
+fi
+
 AUTO_SEND="${AUTO_SEND:-on}"
 PARSER_MODE="${PARSER_MODE:-deepseek}"
 DATA_CLASSIFICATION="${DATA_CLASSIFICATION:-test}"
@@ -304,6 +356,17 @@ FLOWISE_JWT_SECRET=${FLOWISE_JWT_SECRET}
 FLOWISE_REFRESH_SECRET=${FLOWISE_REFRESH_SECRET}
 FLOWISE_SESSION_SECRET=${FLOWISE_SESSION_SECRET}
 FLOWISE_TOKEN_HASH_SECRET=${FLOWISE_TOKEN_HASH_SECRET}
+# QUAN SAT BEN. Ca nam bien deu di DU BA TANG (render -> block \`environment:\` cua dung service ->
+# secrets-passthrough.contract.test.mjs), giong nam bien cua workflow engine va vi cung mot ly do.
+#
+# \`OTEL_EXPORTER_OTLP_HEADERS\` MANG KHOA INGESTION, nen no o day chu khong o compose. Khoa ma
+# collector doc thi di duong khac han — mot TEP duoc mount (\`.runtime/otlp-keys/\`), khong phai
+# bien moi truong, de no khong lo ra trong \`docker inspect\` cua container collector.
+OTEL_TRACING=${OTEL_TRACING}
+OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+CLICKHOUSE_WRITER_USER=${CLICKHOUSE_WRITER_USER}
+CLICKHOUSE_WRITER_PASSWORD=${CLICKHOUSE_WRITER_PASSWORD}
+CLICKHOUSE_DATABASE=${CLICKHOUSE_DATABASE}
 EOF
 
 # --- Tang edge dung chung ----------------------------------------------------------------------
@@ -381,4 +444,30 @@ chmod 600 "${tenant_site}"
 touch "${RUNTIME_DIR}/flowise.env"
 install -d -m 0700 "${RUNTIME_DIR}/zalo"
 # `caddy.env` khong con nam o day: no thuoc tang edge dung chung va da duoc chmod ngay sau khi ghi.
+# --- Ba tep cua cum quan sat -------------------------------------------------------------------
+#
+# Dung CA KHI TAT. Ly do: `compose.yaml` mount ba duong dan nay, va Docker gap mot duong dan nguon
+# chua ton tai thi tao ra mot THU MUC trung ten — hong ca mount lan lan ghi ke tiep. Dung cai bay
+# da lam `RELEASE_MANIFEST_PATH` rong suot tren gd1-test. Tat thi ba tep nay rong/vo hai; cum
+# `profiles: ["observability"]` khong duoc dung toi thi khong ai doc chung.
+install -d -m 0700 "${RUNTIME_DIR}/otlp-keys"
+printf '%s\n' "${OTLP_INGEST_TOKEN}" >"${RUNTIME_DIR}/otlp-keys/${STACK_SLUG}"
+chmod 600 "${RUNTIME_DIR}/otlp-keys/${STACK_SLUG}"
+
+"${SCRIPT_DIR}/observability/render-otel-collector.sh" \
+  "${STACK_SLUG}" "${RUNTIME_DIR}/otel-collector.yaml"
+
+# USER DOC — quyen SELECT, khong hon. Tach khoi user GHI la dieu kien 3 cua §8.1: mot credential
+# doc bi lo khong duoc tro thanh mot duong ghi vao telemetry cua khach.
+#
+# GIOI HAN DA BIET: `docker-entrypoint-initdb.d` chi chay khi thu muc du lieu con RONG. Doi mat
+# khau sau do KHONG tu ap dung — phai `ALTER USER` bang tay. Ghi ra day chu khong de nguoi sau
+# phat hien bang cach go dang nhap sai ba lan.
+cat >"${RUNTIME_DIR}/init-observability.sql" <<EOF
+CREATE DATABASE IF NOT EXISTS ${CLICKHOUSE_DATABASE};
+CREATE USER IF NOT EXISTS ${CLICKHOUSE_READER_USER} IDENTIFIED BY '${CLICKHOUSE_READER_PASSWORD}';
+GRANT SELECT ON ${CLICKHOUSE_DATABASE}.* TO ${CLICKHOUSE_READER_USER};
+EOF
+chmod 600 "${RUNTIME_DIR}/init-observability.sql"
+
 chmod 600 "${RUNTIME_DIR}/secrets.env" "${RUNTIME_DIR}/flowise.env"

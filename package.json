@@ -18,7 +18,7 @@
     "test:source-manifest": "node --test tools/source-manifest/manifest.test.mjs",
     "test:deploy-routes": "node --test deploy/netviet/caddy-route-contract.test.mjs",
     "test:deploy-preflight": "node --test deploy/netviet/gd1-test-preflight.test.mjs deploy/netviet/gd1-test-provider-smoke.test.mjs",
-    "test:deploy-contracts": "pnpm test:deploy-preflight && node --test deploy/netviet/stack-identity.test.mjs deploy/netviet/deployment-targets.contract.test.mjs deploy/netviet/verify-deployment.test.mjs deploy/netviet/deploy-signals.test.mjs deploy/netviet/secrets-passthrough.contract.test.mjs deploy/netviet/workflow-isolation.contract.test.mjs deploy/netviet/release-identity.contract.test.mjs deploy/netviet/write-release-manifest.test.mjs",
+    "test:deploy-contracts": "pnpm test:deploy-preflight && node --test deploy/netviet/stack-identity.test.mjs deploy/netviet/deployment-targets.contract.test.mjs deploy/netviet/verify-deployment.test.mjs deploy/netviet/deploy-signals.test.mjs deploy/netviet/secrets-passthrough.contract.test.mjs deploy/netviet/workflow-isolation.contract.test.mjs deploy/netviet/release-identity.contract.test.mjs deploy/netviet/write-release-manifest.test.mjs deploy/netviet/observability-isolation.contract.test.mjs",
     "test:tenant-runtime": "node --test apps/web/tenant-runtime.contract.mjs",
     "test:image-isolation": "node --test deploy/netviet/image-isolation.contract.mjs",
     "typecheck": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r typecheck",

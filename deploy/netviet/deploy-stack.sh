@@ -175,6 +175,28 @@ if [[ "${workflow_engine}" == 'on' ]]; then
   "${COMPOSE[@]}" --profile workflow ps
 fi
 
+# CUM QUAN SAT — dung TRUOC `api`, va CHI khi cong tac bat.
+#
+# VI SAO TRUOC `api`: `api` la ben GUI telemetry di. Collector chua len thi moi lo span dau tien
+# roi vao hang doi cua exporter roi bi bo khi het han — tuc dung nhung lo span cua LAN KHOI DONG,
+# von la luc de hong nhat va cung la luc nguoi ta muon nhin nhat.
+#
+# `--wait` doi HEALTHY: ClickHouse phai san sang truoc khi collector thu ghi, khong thi collector
+# quay vong retry va lo dau tien van mat.
+#
+# QUAN SAT KHONG DUOC LA DIEU KIEN DE NGHIEP VU CHAY. Neu cum nay khong len, `api` van phai len —
+# nen doan nay KHONG dung `stage rollout` (tuc khong bien mot su co quan sat thanh mot lan deploy
+# do). No bao that bai ra log va di tiep; cong ROLLOUT/HEALTH ben duoi van do neu ung dung hong.
+observability_stack="$(runtime_value OTEL_TRACING)"
+if [[ "${observability_stack}" == 'on' ]]; then
+  if "${COMPOSE[@]}" --profile observability up -d --wait --wait-timeout 180     clickhouse otel-collector; then
+    "${COMPOSE[@]}" --profile observability ps
+  else
+    echo "CANH BAO: cum quan sat khong len duoc — ung dung van duoc trien khai." >&2
+    echo "Span se bi bo tai exporter; xem 'docker compose --profile observability logs'." >&2
+  fi
+fi
+
 # Always recreate the application processes before injecting a smoke message. Pilot GĐ1 khoi dong
 # lai voi AUTO_SEND=on; smoke-test.mjs nhan ra kenh Zalo that va TUYET DOI khong approve fixture,
 # nen khong co tin thu nao bi gui vao nhom that.
