@@ -644,7 +644,7 @@ fetch("http://127.0.0.1:3001/health")
     );
   })
   .catch(() => process.stdout.write("{}"));
-' 2>/dev/null | tr -d '\r' || true)"
+' 2>/dev/null | tr -d '\r\n' || true)"
 
 listener_phase="$(printf '%s' "${listener_probe}" | sed -n 's/.*"phase":"\([a-z_]*\)".*/\1/p')"
 listener_detail="{\"stack\":\"${STACK_SLUG}\",\"probe\":${listener_probe:-null}}"
