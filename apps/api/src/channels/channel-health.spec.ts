@@ -161,6 +161,19 @@ describe('ChannelHealthService', () => {
 });
 
 describe('chinh sach noi lai', () => {
+  it('loi cua listener cung phai dan toi mot lan noi lai, khong dung han', () => {
+    // Mot lan dut MANG roi vao nhanh `error` chu khong phai nhanh `closed`. Ban truoc dung han o
+    // do, tuc kenh doc chet im lang — dung hinh dang §7.1, chi khac cua vao.
+    const health = new ChannelHealthService();
+    health.setEnabled(true);
+    health.markConnected(at(0));
+    health.markClosed(null, 'listener error: socket hang up', at(5));
+    expect(health.snapshot(at(6)).listener.phase).toBe('disconnected');
+
+    health.markReconnectScheduled();
+    expect(health.snapshot(at(7)).listener.phase).toBe('reconnecting');
+  });
+
   it('NORMAL_CLOSURE (1000) VAN phai noi lai — day la ca su co', () => {
     expect(shouldReconnectAfterClose(1000)).toBe(true);
     expect(shouldReconnectAfterClose(1006)).toBe(true);

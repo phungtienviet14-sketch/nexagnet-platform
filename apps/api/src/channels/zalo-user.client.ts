@@ -602,15 +602,30 @@ export class ZaloUserClient implements OnModuleInit, OnModuleDestroy {
       this.scheduleReconnect(code ?? null);
     });
     listener.on('error', (error) => {
-      // LOI DANG NHAP DI DUONG KHAC voi socket dong: mot credential da hong thi thu lai bao nhieu
-      // lan cung khong thanh cong, nen o day dung han va doi nguoi quet QR moi.
-      this.cancelReconnect();
+      /*
+       * `error` CUNG PHAI NOI LAI — va day la mot ban sua, khong phai mot noi long.
+       *
+       * Ban truoc dung han o day: coi moi loi cua listener la "credential hong, doi nguoi quet QR
+       * moi". Nhung mot lan dut MANG cung roi vao dung nhanh nay, va luc do ket qua la mot kenh
+       * doc chet im lang — dung hinh dang cua su co §7.1, chi khac cua vao.
+       *
+       * Tu bang chung: khong the phan biet hai nguyen nhan do TU CHINH su kien nay. Nen thay vi
+       * doan, ta thu lai — va de phep thu TU tra loi:
+       *   · dut mang    -> lan `connect()` ke tiep thanh cong, kenh song lai;
+       *   · khoa hong   -> `performConnect()` that bai o buoc dang nhap, dat `errorKind` va giu
+       *                    nguyen trang thai `error`, va duong QR van con do cho nguoi van hanh.
+       *
+       * Thu mai mai mot credential da hong khong ton gi dang ke: khoang cho tang gap doi toi tran
+       * 5 phut, tuc 12 lan mot gio — re hon nhieu so voi mot kenh doc chet ma khong ai biet.
+       */
       this.stopListener();
       this.api = null;
       this.connectionState = 'error';
       this.errorKind = 'listener';
-      this.lastError = 'Listener Zalo dang loi; hay kiem tra ket noi hoac tao QR moi.';
+      this.lastError = 'Listener Zalo dang loi; he thong dang thu ket noi lai.';
+      this.health.markClosed(null, `listener error: ${errMsg(error)}`);
       this.logger.warn(`zca-js listener error: ${errMsg(error)}`);
+      this.scheduleReconnect(null);
     });
     if (this.messageHandler) listener.on('message', this.messageHandler);
     listener.start({ retryOnClose: true });
