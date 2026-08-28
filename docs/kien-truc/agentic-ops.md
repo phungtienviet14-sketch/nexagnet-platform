@@ -24,15 +24,21 @@ Mọi thứ khác nên mua hoặc mượn.
 
 ---
 
-## 2. Điều kiện tiên quyết — chưa đạt
+## 2. Điều kiện tiên quyết — **P3 đã đạt**, phần còn lại chưa
 
-> **`main` hiện KHÔNG được bảo vệ** (0 ruleset, `branches/main/protection` trả 404, repo public —
-> đo ngày 27/08/2026). Không được mở bất kỳ mức nào dưới đây lên một nhánh mà ai cũng ghi thẳng
-> vào được.
+> **`main` ĐÃ được bảo vệ** kể từ 28/08/2026: ruleset `main-protection` (id `21740233`), bắt buộc PR
+> + 7 status check, chặn force-push, `bypass_actors: []`. Push thẳng và force-push đã thử bằng token
+> admin và đều bị từ chối. Chi tiết + giới hạn:
+> [docs/phat-trien/van-hanh/github-governance.md](../phat-trien/van-hanh/github-governance.md).
 
-**P3 (GitHub Governance) phải CLOSED trước P12.** Đây không phải khuyến nghị mềm: một agent mở PR
-vào một repo không bắt buộc review và không bắt buộc CI thì "mở PR" và "ghi thẳng vào production"
-là cùng một hành động.
+**P3 (GitHub Governance) là điều kiện cứng của P12 — nay đã CLOSED.** Lý do nó là điều kiện cứng:
+một agent mở PR vào một repo không bắt buộc review và không bắt buộc CI thì "mở PR" và "ghi thẳng
+vào production" là cùng một hành động.
+
+> ⚠️ **Còn một khoảng trống phải biết trước khi mở tự động hoá mức cao:** repo chỉ có **một
+> collaborator**, nên **không cưỡng chế được review bởi người thứ hai** (GitHub cấm tự duyệt PR của
+> chính mình). "PR bắt buộc" hiện có nghĩa là *bắt buộc qua PR + CI xanh*, **không** có nghĩa là có
+> người thứ hai đọc mã. Cổng người thật duy nhất là cổng duyệt environment `production`.
 
 ---
 

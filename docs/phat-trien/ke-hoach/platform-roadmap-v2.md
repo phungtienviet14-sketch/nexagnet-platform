@@ -150,22 +150,35 @@ durability thứ hai · không cài công nghệ ở vòng ASSESS/HOLD.
 
 ---
 
-## P3 — GITHUB GOVERNANCE
+## P3 — GITHUB GOVERNANCE — ✅ **CLOSED** (28/08/2026)
 
 **WHY** — Đo ngày 27/08: **0 ruleset**, `branches/main/protection` trả **404**, repo **public**. Không
-bắt buộc PR, không bắt buộc CI xanh, không chặn force-push. Kỷ luật release hiện dựa vào thói quen
+bắt buộc PR, không bắt buộc CI xanh, không chặn force-push. Kỷ luật release khi đó dựa vào thói quen
 người vận hành. Đây là **HIGH PRIORITY** và là điều kiện cứng của P12+.
 
 **ENTRY GATE** — không có; có thể chạy song song P2.
 
-**DELIVERABLES** — dùng **GitHub Rulesets gốc**: bắt buộc PR · bắt buộc status check · chặn
-force-push · (tuỳ chọn) code owner/approval · phê duyệt cho environment `production`.
+**DELIVERABLES** — ✅ dùng **GitHub Rulesets gốc**, không viết cơ chế riêng. Ruleset
+`main-protection` (id `21740233`, `enforcement: active`, `bypass_actors: []`): bắt buộc PR · **7**
+status check bắt buộc (`verify` `integration` `workflow-integration` `tenant-packs` `e2e` `audit`
+`images`, `strict`) · chặn force-push · chặn xoá nhánh · buộc giải quyết review thread. Cổng
+environment: `production` giữ người duyệt và **bỏ quyền admin bỏ qua**; `gd1-test` **giới hạn về
+`main` ở tầng GitHub** (trước đó chỉ chặn bằng mã shell trong workflow).
 
-**RUNTIME PROOF** — một lần push thẳng vào `main` **bị từ chối**; một PR thiếu CI **không merge được**.
+**RUNTIME PROOF** — ✅ push thẳng vào `main` → `422 "Changes must be made through a pull request."`;
+force-push → `422 "Cannot force-push to this branch"`; PR thiếu CI → merge trả `405`. Cả ba đều chạy
+bằng **token admin của chủ repo**, và `main` không hề thay đổi.
 
-**EXIT GATE** — cả hai phép thử trên cho kết quả đúng.
+**EXIT GATE** — ✅ đạt.
+
+**CÒN LẠI — `UNRESOLVED`, mức TRUNG BÌNH:** repo **một collaborator** nên **không cưỡng chế được
+review bởi người thứ hai** (GitHub cấm tự duyệt PR của mình ⇒ `required_approving_review_count: 1`
+sẽ khoá cứng mọi PR). Chủ repo vẫn sửa/xoá được chính ruleset; chỉ còn lại dấu vết audit. Gỡ bằng
+cách thêm collaborator thứ hai, hoặc chuyển repo về một Organization.
 
 **DO NOT DO** — **không tự code cơ chế governance cho git.** Dùng tính năng gốc của GitHub.
+
+📄 [docs/phat-trien/van-hanh/github-governance.md](../van-hanh/github-governance.md)
 
 ---
 
@@ -394,9 +407,27 @@ P8 Identity ─ P9 Entitlements
 ## 3. Known risks — `UNRESOLVED`
 
 Ba phát hiện runtime ngày 27/08 (`zca_listener` im lặng · preflight ghi đè `autoSend` ·
-`bot-poller.spec.ts` flaky) cùng quản trị GitHub, giữ nguyên bằng chứng và trạng thái tại
+`bot-poller.spec.ts` flaky) giữ nguyên bằng chứng và trạng thái tại
 [reference-platform-stack §7](../../kien-truc/reference-platform-stack.md#7-known-risks--unresolved).
-Chúng thuộc **P2** (ba cái đầu) và **P3** (cái cuối).
+Chúng thuộc **P2**.
+
+Rủi ro thứ tư — **quản trị GitHub (P3)** — đã chuyển `RESOLVED` ngày 28/08/2026, còn lại một khoảng
+trống mức TRUNG BÌNH: repo một chủ nên **không cưỡng chế được review bởi người thứ hai**. Xem
+[github-governance.md](../van-hanh/github-governance.md).
+
+---
+
+## 3bis. Ghi chú năng lực nhà cung cấp AI — **FUTURE, chưa triển khai**
+
+DeepSeek đã công bố **năng lực đọc ảnh** (28/08/2026). Điều này **không** thay đổi hệ thống hiện tại:
+Nexagnet **chưa có runtime đa phương thức**, và cổng chặn của F4 là **tuân thủ** (DeepSeek chưa được
+duyệt làm bên thứ ba xử lý PII), không phải năng lực model.
+
+Bài học rút ra cho **AI Runtime / Quality** sau này — **chưa làm, không thuộc P3**: chỗ khai báo
+provider hiện **không mô tả nổi năng lực**, nên một thay đổi phía nhà cung cấp phải đi sửa văn bản
+rải rác thay vì sửa một hợp đồng. Khi mở hạng mục đó, hợp đồng năng lực model/provider nên nói được:
+`text` · `vision` · `tool_use` · `structured_output` · `context_window` · `cost` · `latency` ·
+`availability` — và **không** ghim cứng một phiên bản model trong mã.
 
 ---
 
