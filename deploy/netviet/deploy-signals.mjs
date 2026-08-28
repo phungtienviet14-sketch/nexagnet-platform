@@ -32,10 +32,27 @@ export const DEPLOY_SIGNAL_LAYERS = Object.freeze([
   'health',
   'deterministicSmoke',
   'liveAiSmoke',
+  'observability',
+  'channelListener',
 ]);
 
 /** Ba tang dau la HA TANG/HOP DONG — do o day la do that va phai chan lan deploy. */
 const HARD_LAYERS = Object.freeze(['rollout', 'health', 'deterministicSmoke']);
+
+/**
+ * TANG QUAN SAT — bao cao, KHONG chan.
+ *
+ * Vi sao khong chan: `.claude/rules/ecc/common/code-review.md` dat mot bat bien — quan sat khong
+ * duoc la dependency cua thanh cong nghiep vu. Mot ClickHouse hic lan khong duoc phep chan mot
+ * ban va loi. Cung ly le cho kenh doc: mot socket Zalo dut la su co VAN HANH, khong phai bang
+ * chung rang ban phat hanh nay hong.
+ *
+ * Vi sao van phai nam TRONG bang tin hieu: neu chung khong o day thi khong ai nhin, va do dung
+ * la trang thai 44 gio cua §7.1 — ba tin hieu xanh trong khi kenh doc chinh khong mang ve mot
+ * tin nao. Chung xuat hien voi trang thai THAT cua minh, va mot ket qua khong `pass` di ra
+ * `softFailures` de may doc duoc.
+ */
+const SOFT_LAYERS = Object.freeze(['observability', 'channelListener']);
 
 /**
  * Muc do NANG dan. Mot tang bao lai nhieu lan thi ban NANG NHAT thang — neu de ban sau de len
@@ -58,6 +75,8 @@ const LAYER_LABELS = Object.freeze({
   health: 'HEALTH',
   deterministicSmoke: 'DETERMINISTIC RUNTIME SMOKE',
   liveAiSmoke: 'LIVE AI SMOKE',
+  observability: 'OBSERVABILITY',
+  channelListener: 'CHANNEL LISTENER',
 });
 
 const LAYER_MEANING = Object.freeze({
@@ -65,6 +84,9 @@ const LAYER_MEANING = Object.freeze({
   health: 'Ban da len co song khong',
   deterministicSmoke: 'Hop dong runtime tat dinh con dung khong',
   liveAiSmoke: 'Model/provider co dat fixture khong (phu thuoc ngoai)',
+  observability:
+    'Kho quan sat co NHAN va TRA LOI duoc khong, va span co dung khach/ban phat hanh khong',
+  channelListener: 'Kenh doc dang o pha nao, va lan cuoi co tin la bao gio',
 });
 
 /** Ma phan loai cuoi cung. Co KIEU de loc duoc, khong phai mot cau van xuoi. */
@@ -201,6 +223,17 @@ export function evaluateDeploySignals({ entries = [], remoteExitCode = 0 } = {})
   const failedHardLayer = HARD_LAYERS.find((layer) => signals[layer].status === 'fail');
   const pendingHardLayer = HARD_LAYERS.find((layer) => signals[layer].status === 'pending');
   const liveAi = signals.liveAiSmoke;
+  /*
+   * TANG QUAN SAT khong `pass` va khong `skipped` thi di ra day.
+   *
+   * `pending` DUOC TINH LA MOT THAT BAI MEM, khong duoc bo qua: mot tang quan sat khong bao gi
+   * nghia la buoc do khong chay — va mot bao cao im lang ve chinh cho no khong nhin la dung hinh
+   * dang cua su co §7.1. `skipped` thi khac: do la mot cau tra loi that ("ban trien khai nay
+   * khong bat cum quan sat"), nen no khong phai that bai.
+   */
+  const softFailures = SOFT_LAYERS.filter(
+    (layer) => signals[layer].status !== 'pass' && signals[layer].status !== 'skipped',
+  );
 
   // Mot tang cung bi do -> do la cau tra loi, va cac tang duoi giu nguyen `pending`.
   if (failedHardLayer) {
@@ -210,6 +243,7 @@ export function evaluateDeploySignals({ entries = [], remoteExitCode = 0 } = {})
       liveAiFailure: false,
       classification: HARD_CLASSIFICATION[failedHardLayer],
       failedLayer: failedHardLayer,
+      softFailures,
       signals,
       release,
     };
@@ -224,6 +258,7 @@ export function evaluateDeploySignals({ entries = [], remoteExitCode = 0 } = {})
       liveAiFailure: false,
       classification: CLASSIFICATION.incomplete,
       failedLayer: pendingHardLayer ?? (liveAi.status === 'pending' ? 'liveAiSmoke' : null),
+      softFailures,
       signals,
       release,
     };
@@ -239,6 +274,7 @@ export function evaluateDeploySignals({ entries = [], remoteExitCode = 0 } = {})
     liveAiFailure,
     classification,
     failedLayer: liveAiFailure ? 'liveAiSmoke' : null,
+    softFailures,
     signals,
     release,
   };
@@ -284,11 +320,24 @@ export function formatDeploySummary(result) {
         ]
       : [];
 
+  const soft = result.softFailures ?? [];
+  // Cau nay TUNG la "Bon tin hieu deu dat.", va cau do se lai dung khi kenh doc da chet — dung
+  // cai da xay ra suot 44 gio. Tang quan sat khong chan lan deploy, nhung no khong duoc phep bi
+  // mot cau tong ket noi de len.
+  const softNote =
+    soft.length > 0
+      ? `> Tang quan sat CHUA DAT: ${soft
+          .map((layer) => `**${LAYER_LABELS[layer]}** (\`${result.signals[layer].reason}\`)`)
+          .join(', ')}. Khong chan lan deploy, nhung phai co nguoi doc.`
+      : null;
+
   const verdict = result.hardFailure
     ? '> Lan deploy nay **chua duoc chung minh**. Doc hang FAIL dau tien trong bang tren.'
     : result.liveAiFailure
       ? '> Ung dung **da len va dang khoe**. Tin hieu khong dat la **live AI** — mot phu thuoc ngoai, khong phai ha tang.'
-      : '> Bon tin hieu deu dat.';
+      : soft.length > 0
+        ? '> Ung dung **da len va dang khoe**. Con tang quan sat chua dat — xem dong ngay duoi.'
+        : '> Moi tin hieu deu dat.';
 
   return [
     '## Deployment Signals',
@@ -311,6 +360,7 @@ export function formatDeploySummary(result) {
     `\`${result.classification}\``,
     '',
     verdict,
+    ...(softNote ? ['', softNote] : []),
     '',
     '> Cach doc tung mau: `docs/phat-trien/van-hanh/tin-hieu-deploy.md`',
   ].join('\n');
@@ -337,6 +387,8 @@ export function toMachineResult(result) {
     failedLayer: result.failedLayer ?? null,
     hardFailure: result.hardFailure,
     liveAiFailure: result.liveAiFailure,
+    // Tang quan sat khong dat. Danh sach RONG la mot khang dinh, khong phai mot cho trong.
+    softFailures: result.softFailures ?? [],
     ok: result.ok,
   };
 }

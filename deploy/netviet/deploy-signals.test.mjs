@@ -546,3 +546,100 @@ test('workflow tach buoc LIVE AI ra khoi buoc rollout, va khong nuot ket qua cua
   // Duong dan cua khach phai in ra KE CA khi live AI do: ung dung da len va dang khoe.
   assert.match(reusableWorkflow, /!cancelled\(\) && steps\.rollout\.outcome == 'success'/);
 });
+
+/**
+ * ==============================================================================================
+ * TANG QUAN SAT — bao cao, KHONG chan.
+ *
+ * Hai tang nay ton tai vi mot su co da thuc su xay ra: suot ~44 gio, ba tin hieu deploy deu xanh
+ * trong khi kenh doc chinh cua GD1 khong mang ve mot tin nao (reference-platform-stack §7.1).
+ * Cai thieu khong phai mot cong CHAN — cai thieu la mot cho de NHIN.
+ */
+const healthyBase = [
+  { layer: 'rollout', status: 'pass', reason: 'ROLLOUT_MATCHES_RELEASE' },
+  { layer: 'health', status: 'pass', reason: 'RUNTIME_HEALTHY' },
+  { layer: 'deterministicSmoke', status: 'pass', reason: 'DETERMINISTIC_CONTRACT_OK' },
+  { layer: 'liveAiSmoke', status: 'pass', reason: 'LIVE_AI_MATCHES_FIXTURE' },
+];
+
+test('quan sat — kho quan sat hong KHONG lam do lan deploy', () => {
+  const result = evaluateDeploySignals({
+    entries: [
+      ...healthyBase,
+      { layer: 'observability', status: 'fail', reason: 'OBSERVABILITY_NO_SPANS_FOR_RELEASE' },
+      { layer: 'channelListener', status: 'pass', reason: 'LISTENER_CONNECTED' },
+    ],
+  });
+
+  assert.strictEqual(result.hardFailure, false);
+  assert.strictEqual(result.classification, 'APPLICATION_ROLLED_OUT_HEALTHY');
+  assert.deepStrictEqual(result.softFailures, ['observability']);
+});
+
+test('quan sat — kenh doc DA DUT hien ra, khong bi cau tong ket noi de len', () => {
+  const result = evaluateDeploySignals({
+    entries: [
+      ...healthyBase,
+      { layer: 'observability', status: 'pass', reason: 'OBSERVABILITY_STORE_ANSWERS' },
+      { layer: 'channelListener', status: 'fail', reason: 'LISTENER_DISCONNECTED' },
+    ],
+  });
+
+  assert.deepStrictEqual(result.softFailures, ['channelListener']);
+  const summary = formatDeploySummary(result);
+  assert.ok(summary.includes('CHANNEL LISTENER'), 'bang phai co hang cua kenh doc');
+  assert.ok(summary.includes('LISTENER_DISCONNECTED'), 'ma ly do phai doc duoc tren bao cao');
+  assert.ok(!summary.includes('Bon tin hieu deu dat'), 'khong duoc tuyen bo moi thu deu dat');
+});
+
+test('quan sat — `connected_but_idle` LA MOT KET QUA DAT, im lang khong phai that bai', () => {
+  const result = evaluateDeploySignals({
+    entries: [
+      ...healthyBase,
+      { layer: 'observability', status: 'pass', reason: 'OBSERVABILITY_STORE_ANSWERS' },
+      { layer: 'channelListener', status: 'pass', reason: 'LISTENER_CONNECTED_BUT_IDLE' },
+    ],
+  });
+
+  assert.deepStrictEqual(result.softFailures, []);
+});
+
+test('quan sat — cum quan sat TAT thi `skipped`, va do khong phai that bai', () => {
+  const result = evaluateDeploySignals({
+    entries: [
+      ...healthyBase,
+      { layer: 'observability', status: 'skipped', reason: 'OBSERVABILITY_DISABLED' },
+      { layer: 'channelListener', status: 'skipped', reason: 'LISTENER_DISABLED' },
+    ],
+  });
+
+  assert.deepStrictEqual(result.softFailures, []);
+  assert.strictEqual(result.ok, true);
+});
+
+test('quan sat — KHONG BAO GI cung la that bai mem, khong duoc im lang bo qua', () => {
+  const result = evaluateDeploySignals({ entries: healthyBase });
+
+  // Ba tang cung + live AI van xanh, nen lan deploy VAN duoc chung minh...
+  assert.strictEqual(result.hardFailure, false);
+  assert.strictEqual(result.ok, true);
+  // ...nhung hai tang quan sat khong bao gi phai hien ra.
+  assert.deepStrictEqual(result.softFailures, ['observability', 'channelListener']);
+});
+
+test('quan sat — ket qua cho MAY doc mang theo danh sach that bai mem', () => {
+  const machine = toMachineResult(
+    evaluateDeploySignals({
+      entries: [
+        ...healthyBase,
+        { layer: 'observability', status: 'fail', reason: 'OBSERVABILITY_QUERY_FAILED' },
+        { layer: 'channelListener', status: 'pass', reason: 'LISTENER_CONNECTED' },
+      ],
+    }),
+  );
+
+  assert.strictEqual(machine.observability, 'fail');
+  assert.strictEqual(machine.channelListener, 'pass');
+  assert.strictEqual(machine.reasons.observability, 'OBSERVABILITY_QUERY_FAILED');
+  assert.deepStrictEqual(machine.softFailures, ['observability']);
+});

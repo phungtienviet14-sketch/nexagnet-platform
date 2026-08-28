@@ -10,10 +10,10 @@ không bỏ nghiệp vụ Ultty đã có.
 |---|---|
 | Release Identity Closure | **CLOSED / RUNTIME-PROVEN** |
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
-| OTel code support | **PARTIAL** |
-| OTel export trên gd1-test | **NOT DEPLOYED** |
-| ClickStack | **POC / NOT DEPLOYED ON GD1** |
-| Historical Debug traces | **NOT PERSISTENT** |
+| OTel code support | **RUNTIME-PROVEN** |
+| OTel export trên gd1-test | **RUNTIME-PROVEN** — api + 2 worker đều phát span |
+| ClickStack | **DEPLOYED / HEALTH-CHECKED** — bền, retention 30 ngày |
+| Historical Debug traces | **KHO BỀN**; đường đọc `api`→ClickHouse **CODE-ONLY** |
 | `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** |
 
 **Milestone triển khai kế tiếp: `REFERENCE STACK PARITY v0`** — không phải Fleet View, không phải

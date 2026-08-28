@@ -5,8 +5,8 @@
 > [`phat-trien/ke-hoach/tong-quan.md`](../phat-trien/ke-hoach/tong-quan.md); tài liệu này mô tả
 > **hợp đồng** và **bằng chứng runtime**, không chứa ✅/⬜ của kế hoạch.
 >
-> **Cập nhật:** 28/08/2026 · **Đối chiếu mã nguồn tại:** `7a6cc63904d18be49c653ee1315e65046607bda5`
-> (+ nhánh `feat/reference-stack-parity-v0` cho §7.2, §7.3, §7.6 và §8)
+> **Cập nhật:** 28/08/2026 · **Đối chiếu mã nguồn tại:** `a41cfc166a2b704e56ede8983d52e407eb536db2`
+> (+ nhánh `feat/historical-debug-fallback` cho §7.1, §8.11 và §8.12)
 
 ---
 
@@ -75,7 +75,7 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 
 ---
 
-## 6. CANONICAL CURRENT TRUTH (27/08/2026)
+## 6. CANONICAL CURRENT TRUTH (28/08/2026)
 
 Đây là bảng **được viện dẫn**; mọi tài liệu khác mâu thuẫn với bảng này thì tài liệu kia sai.
 
@@ -85,8 +85,8 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 | Deploy Signal Reliability | **CLOSED / RUNTIME-PROVEN** |
 | OTel code support | **RUNTIME-PROVEN trên gd1-test** (§8.8) |
 | OTel export trên gd1-test | **RUNTIME-PROVEN** — cả 3 tiến trình (api + 2 worker) phát span; trace sống qua restart **và** qua deploy release mới (§8.9) |
-| ClickStack (ClickHouse) | **DEPLOYED / HEALTH-CHECKED** — bền, retention 30 ngày; **backup/restore chưa có** |
-| Historical Debug traces | **NOT PERSISTENT** |
+| ClickStack (ClickHouse) | **DEPLOYED / HEALTH-CHECKED** — bền, retention 30 ngày; backup + restore-check **đã có mã**, chưa chạy thật (§8.11) |
+| Historical Debug traces | **KHO BỀN / ĐƯỜNG ĐỌC CODE-ONLY** — span sống qua restart và qua deploy (§8.9); đường đọc `api`→ClickHouse đã có mã, **chưa chạy thật** (§8.11) |
 | `ultty-gd1-test` | **REFERENCE STACK, NOT YET PARITY-CLOSED** · release đang chạy `270ef27` |
 | Đường AI trên gd1-test | **KHÔI PHỤC 28/08** — DeepSeek đã nạp lại; `liveAiSmoke: pass`. Khoá Anthropic **vẫn hỏng** (§7.8) |
 
@@ -104,10 +104,10 @@ Ranh giới này quyết định **điều kiện ADOPT** ở §3, nên nó ph�
 | AI provider runtime (DeepSeek) | 1 | đầy đủ | có | có | n/a | **RUNTIME-PROVEN** | thoả thuận xử lý dữ liệu (§7.4) |
 | Release identity | 1 | đầy đủ | có | **có** | manifest readonly | **CLOSED / RUNTIME-PROVEN** | — |
 | GitHub deploy signals | 2 | đầy đủ | có | **có** | artifact 30 ngày | **CLOSED / RUNTIME-PROVEN** | — |
-| Source correlation | 1 | đầy đủ | có | có | theo trace (không bền) | **RUNTIME-PROVEN** | phụ thuộc Debug View bền |
-| Debug View | 1 | đầy đủ | có | có | **KHÔNG** | **PARTIAL** | trace bền (P2) |
-| OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`**; preload nối vào compose cho **api + 2 worker**; release identity dùng chung `release-sha.ts` (§7.6) | **KHÔNG** | không | n/a | **CODE-SUPPORTED / NOT-DEPLOYED** | một lần deploy `observability_stack: on` |
-| ClickHouse (kho quan sát) | 1 | `deploy/netviet/observability/` + `profiles: ["observability"]`, cách ly có test khoá | **KHÔNG** | không | `ttl: 720h` đã khai, **backup chưa có** | **CODE-SUPPORTED / NOT-DEPLOYED** | một lần deploy, rồi backup/restore |
+| Source correlation | 1 | đầy đủ; vị trí mã nguồn **đi theo bản ghi** ở đường lịch sử (§8.11) | có | có | bền cùng span (`code.*`) | **RUNTIME-PROVEN** | PROOF 4 ở mức màn hình |
+| Debug View | 1 | đầy đủ + **đường lùi lịch sử** `api`→ClickHouse (§8.11) | có | **đường lùi chưa chạy thật** | qua kho quan sát | **PARTIAL** | bốn proof ở mức MÀN HÌNH |
+| OpenTelemetry | 1 | có, **khoá sau `OTEL_TRACING=on`**; preload nối vào compose cho **api + 2 worker**; release identity dùng chung `release-sha.ts` (§7.6) | **có** (28/08, run `33148283115`) | **có** — cả 3 tiến trình phát span (§8.8, §8.9) | n/a | **RUNTIME-PROVEN** | — |
+| ClickHouse (kho quan sát) | 1 | `deploy/netviet/observability/` + `profiles: ["observability"]`, cách ly có test khoá | **có** (28/08) | **có** — 4953 span sống qua deploy `1ad92be` (§8.9) | `ttl: 720h`; **backup + restore-check có mã** (§8.11) | **DEPLOYED / HEALTH-CHECKED** | một lần backup→restore chạy thật |
 | HyperDX (UI quan sát) | 1 hoặc 2 | không có — **cố ý hoãn** (§8.6 B) | **KHÔNG** | không | n/a | **PLANNED** | sau P2; đường đọc của P2 là `api` → ClickHouse |
 | Flowise | 1 | là **1 trong 3** adapter parser | có (container luôn chạy) | không dùng ở đường parser gd1 | volume riêng | **DEPLOYED-NOT-PROVEN** | quyết định `ModelRuntimePort` (P7) |
 | Portainer | 2 | không có | không | không | n/a | **PLANNED** | POC (P4) |
@@ -148,14 +148,15 @@ classification      APPLICATION_ROLLED_OUT_HEALTHY    hardFailure: false
 >
 > | Mục | Trạng thái | Cần gì để đóng hẳn |
 > |---|---|---|
-> | 7.1 `zca_listener` im lặng | `UNRESOLVED` — **~44h tính tới 28/08**, và log/`/health` đều xanh | `/health` phải phân biệt được "không ai nhắn" với "socket đã chết" + listener tự nối lại + tin mới đi hết đường |
+> | 7.1 `zca_listener` im lặng | **`FIXED` — chờ chứng minh** (28/08) | ba mục đầu **đã có mã**: bảy mức sức khoẻ, tự nối lại có backoff, tầng `channelListener` trong tín hiệu deploy. Còn: một tin `zca_listener` mới đi hết đường |
 > | 7.2 preflight ghi đè `autoSend` | **`FIXED` — chờ chứng minh** | một lần preflight thật chạy qua |
 > | 7.3 `bot-poller` flaky | **`RESOLVED`** | — (đóng bằng cấu trúc, xem dưới) |
-> | 7.6 OTel mang release identity **thứ hai** | **`FIXED` — chờ chứng minh** | một trace bền mang đúng SHA canonical (PROOF 4) |
+> | 7.6 OTel mang release identity **thứ hai** | **`RESOLVED`** (§8.8) | — span thật mang `nexagnet.release_source=manifest` và đúng SHA |
 > | 7.7 Ba giả định sai về ảnh Docker | **`FIXED`** | — (đóng trước khi deploy, xem dưới) |
-> | 7.8 **Cả hai** nhà cung cấp AI của gd1-test đã chết | `UNRESOLVED` — **CHẶN P2** | một khoá còn hiệu lực (số dư DeepSeek, hoặc khoá Anthropic + đổi hồ sơ) |
+> | 7.8 **Cả hai** nhà cung cấp AI của gd1-test đã chết | **`RESOLVED`** (28/08) | — DeepSeek đã nạp lại; `liveAiSmoke: pass` ở run `33151175039` |
+> | 7.9 Đường đọc lịch sử chưa chạy thật | **`OPEN`** — mã đã có (§8.11) | bốn proof đo **ở mức Debug View**, không phải ở mức kho |
 
-### 7.1 `zca_listener` im lặng — `UNRESOLVED`, và **sắc nét hơn bản trước**
+### 7.1 `zca_listener` im lặng — `FIXED`, chờ chứng minh
 
 **Đo lại 28/08/2026 05:10 UTC**, trực tiếp trên `zalo-ultty-gd1-test-postgres-1`:
 
@@ -205,7 +206,34 @@ inbound Zalo thật**.
 3. tín hiệu đó phải có mặt trong deploy signal;
 4. sau đó mới tới: một tin `zca_listener` mới đi hết đường.
 
-Thuộc **P2**. Ba mục đầu là **việc chưa làm**, không phải việc đã làm mà chưa đo.
+Thuộc **P2**.
+
+**Đã làm (28/08, PR #65) — ba mục đầu, không còn là "việc chưa làm":**
+
+Nguyên nhân được đọc ra từ chính log, và nó không phải "listener quên retry":
+`listener.start({ retryOnClose: true })` **đã** được bật. Thư viện coi mã `1000` là *"bên kia đóng
+tử tế, không có gì để thử lại"* nên không kích hoạt. Với một kênh **đọc**, một socket đóng tử tế
+và một socket chết là một thứ: đều không nghe được. Nên bất biến nay đảo lại — **mọi lần socket
+đóng đều là một lần phải nối lại**, kể cả đóng "bình thường".
+
+1. **Bảy mức thay cho một** (`apps/api/src/channels/channel-health.ts`): `disabled` ·
+   `configured` · `authenticated` · `connected` · `connected_but_idle` · `reconnecting` ·
+   `disconnected`. Hai mức quan trọng nhất là đúng hai trạng thái mà bảng trên nói không phân
+   biệt được: cùng một tuổi tin cuối, hai câu trả lời khác hẳn. `authenticated` cũng là một mức
+   riêng — `login()` thành công **không** có nghĩa là phía nhận đã nghe được, và đó là khe hở làm
+   log cũ đọc lên nghe như đã ổn.
+2. **Tự nối lại có backoff** (`listener-reconnect.ts`): chặn **khoảng chờ** (trần 5 phút, nhiễu
+   ngẫu nhiên ±20%), **không** chặn số lần — một listener bỏ cuộc sau N lần chính là trạng thái 44
+   giờ, chỉ đến nhanh hơn. Nối lại bằng cách dừng hẳn rồi kết nối từ đầu, không gọi
+   `listener.start()` lần hai trên cùng đối tượng (sẽ làm mọi tin được xử lý hai lần).
+3. **`/health` phơi bày** pha socket, `connectedAt`, `lastDisconnectedAt`, `lastReconnectAt`,
+   `reconnectCount`, `lastCloseCode`, và tuổi tin cuối **theo từng kênh**. `status` vẫn là `'ok'`
+   khi kênh đứt — biến nó thành `error` sẽ làm Docker giết và tạo lại container theo vòng lặp,
+   tức một sự cố **kênh** thành một sự cố **toàn stack**.
+4. **Tín hiệu deploy** có tầng `channelListener` (mềm) — xem §8.12.
+
+**Còn lại đúng một việc:** một tin `zca_listener` mới đi hết đường. Đó là việc phải đo trên stack,
+không phải việc phải viết.
 
 ### 7.2 Preflight ghi đè giá trị runtime quan sát được — `FIXED`, chờ chứng minh
 
@@ -318,7 +346,7 @@ tên biến.
 config ảnh ~1 phút. Trước khi thêm bất kỳ ảnh mới nào vào compose, đọc `config.User`,
 `config.Entrypoint` và lịch sử lớp của nó.
 
-### 7.8 **CẢ HAI** nhà cung cấp AI của gd1-test đã chết — `UNRESOLVED`, **CHẶN P2**
+### 7.8 **CẢ HAI** nhà cung cấp AI của gd1-test đã chết — `RESOLVED` (28/08)
 
 > Phát hiện 28/08/2026 khi deploy run `33145000232` dừng ở preflight. **Không phải lỗi mã nguồn**,
 > và không phải hệ quả của thay đổi nào trong lần phát hành này.
@@ -365,6 +393,11 @@ ngăn.
 
 **Mốc trước đó:** deploy run `33039065904` (27/08, ~25 giờ trước) có `liveAiSmoke: pass` với
 DeepSeek. Nên số dư cạn **trong khoảng 25 giờ đó**, không phải một trạng thái đã tồn tại lâu.
+
+**Đã khôi phục cùng ngày** theo đường 1 (nạp lại số dư DeepSeek): deploy run `33151175039` chạy
+qua preflight và có `liveAiSmoke: pass`. Khoá Anthropic **vẫn hỏng** (`401`), nên đường 2 —
+chuyển `PARSER_MODE=claude` cho bản chạy dữ liệu khách thật theo §7.4 — vẫn còn nguyên là việc
+phải làm, và nó là việc **tuân thủ**, không phải việc sửa lỗi.
 
 ### 7.4 Hai rủi ro tuân thủ đã biết, vẫn mở
 
@@ -702,6 +735,105 @@ Nếu ClickStack **không** chứng minh được cách ly cứng theo mô hình
 đối không tự hạ xuống một kho dùng chung. Tính tới 27/08/2026, ba bằng chứng ở §8.3 cho thấy
 **chứng minh được**, nên P2 đi tiếp.
 
+
+### 8.11 Đường lùi lịch sử của Debug View — `CODE-ONLY` (28/08/2026, PR #65)
+
+Mảnh ở §8.9 nay **đã có mã**. Trạng thái là `CODE-ONLY` cho tới khi bốn proof chạy **ở mức màn
+hình** — không phải ở mức kho.
+
+```
+Debug query → RecentTracesSink → HIT  → hành vi hiện tại
+                               → MISS → HistoricalTraceReaderPort
+                                      → ClickHouseHistoricalTraceReader
+                                      → dịch về cùng mô hình bằng chứng
+                                      → đúng `buildTraceView()` cũ
+```
+
+**Không có Debug View thứ hai**, và console **không** biết ClickHouse tồn tại. Để console hỏi
+thẳng kho là để một khoá quan sát đi ra tận trình duyệt người dùng, và bỏ qua toàn bộ lớp xác thực
+mà mọi đường nghiệp vụ khác phải đi qua.
+
+**Ba kết cục, không phải hai.** Đây là quyết định thiết kế quan trọng nhất của mảnh này:
+
+| Kết cục | Nghĩa | HTTP |
+|---|---|---|
+| `found` | hỏi được, có dữ liệu — kèm `origin: buffer\|historical` | `200` |
+| `not_found` | hỏi được, và kho **thực sự** không có | `404` |
+| `unavailable` | **không** hỏi được (`TIMEOUT`, `STORE_ERROR`, `TENANT_UNRESOLVED`, `NOT_CONFIGURED`) | `503` |
+
+Gộp `unavailable` vào `not_found` là một lỗi im lặng có thật: nó biến *"kho quan sát đang hỏng"*
+thành *"lượt này không tồn tại"*, và người debug sẽ đi tìm một con bọ ở chỗ không có bọ.
+(`NOT_CONFIGURED` là ngoại lệ trả `404`: bản triển khai đó **không có** kho lịch sử nào, nên
+"không còn giữ" thật sự là câu trả lời cuối cùng — một `503` sẽ hứa hẹn một lần thử lại không bao
+giờ có ích.)
+
+**`origin` là BẰNG CHỨNG, không phải trang trí.** Cổng ra P2 đòi chứng minh rằng đường lùi *thực
+sự* được dùng, chứ không phải lượt đó tình cờ còn trong RAM. Không có trường này thì hai trường
+hợp đó nhìn y hệt nhau từ bên ngoài, và PROOF 2 trở thành một lời khẳng định không kiểm được.
+
+**Vị trí mã nguồn đi theo bản ghi, không tra bảng của bản ĐANG chạy.** `sourceForDecision()` đọc
+`source-manifest.generated.ts` — bảng sinh lúc **build** của bản phát hành đang chạy. Với một lượt
+của bản phát hành **cũ**, bảng đó mô tả mã nguồn khác: cùng một điểm quyết định có thể đã đổi
+dòng, đổi hàm, đổi tệp. Ghép số dòng **mới** với commit **cũ** cho ra một permalink bấm được, mở
+ra một tệp, và sai — đúng loại sai *tự tin* mà cả tầng danh tính release tồn tại để ngăn. Ba khoá
+`code.*` đã được ghi kèm sự kiện **lúc nó xảy ra**, nên chúng mô tả đúng mã nguồn đã chạy.
+
+**Cách ly, theo đúng §8.1:**
+
+- tenant được **ghim lúc dựng** từ danh tính đã phân giải của tiến trình — không phương thức nào
+  nhận tham số `tenant`;
+- `param_tenant` được đặt **sau** vòng lặp tham số, nên một tham số cùng tên do bên ngoài đưa vào
+  **không thể** đè lên nó;
+- không xác định được tenant thì **từ chối đọc** (`TENANT_UNRESOLVED`) — fail-closed;
+- credential đọc chỉ có `GRANT SELECT`, **khác** credential ghi của collector, và đi ở **header**
+  chứ không ở URL (URL đi vào log truy cập, header thì không);
+- truy vấn **tham số hoá** (`{traceId:String}`…), có trần dòng, có hạn giờ hai đầu, `readonly=2`.
+
+**Một lỗi thật bị test bắt trước khi nó chạm ClickHouse:** câu lệnh tham chiếu `{tenant:String}`
+nhưng `param_tenant` chưa bao giờ được đặt — trên kho thật, **mọi** truy vấn sẽ đổ.
+
+### 8.12 Backup kho quan sát và tín hiệu deploy — `CODE-ONLY` (28/08/2026, PR #65)
+
+**Backup.** Từ P2, `otel_traces` không còn chỉ là telemetry: một trace cũ chỉ tồn tại ở đúng một
+nơi đó. `ttl: 720h` nói dữ liệu sống **bao lâu**, nó không nói dữ liệu sống **qua một sự cố ở
+đĩa** hay không.
+
+- Định dạng `Native`, **không** phải CSV/JSON: nó giữ nguyên kiểu, kể cả `Map(String,String)` của
+  `SpanAttributes`/`ResourceAttributes` và cột lồng `Events.*`. Một bản CSV sẽ làm phẳng chúng rồi
+  đọc lại thành chuỗi — tức mất đúng phần mà đường lùi lịch sử cần.
+- **Schema đi cùng dữ liệu** trong một tệp: bảng do `clickhouseexporter` tự dựng, nên nó là hợp
+  đồng của **một phiên bản** collector.
+- `restore-check.sh observability` **mạnh hơn** bài của Postgres, có chủ ý: nó không dừng ở "dump
+  đọc lại được" mà phục hồi xong rồi **lấy một `TraceId` thật và hỏi lại chính nó** — đúng câu hỏi
+  Debug View sẽ hỏi. Một bảng nạp thành công nhưng không tra cứu được theo `TraceId` là một bảng
+  vô dụng với mục đích nó tồn tại.
+
+Backup của `hatchet-postgres` **đã có từ 23/08** (kèm volume `hatchet-config` mang khoá giải mã) và
+không đổi. `SHA256SUMS` nay phủ cả `*.tar.gz`: một bản ghi toàn vẹn bỏ sót khoá giải mã và kho
+quan sát là một bản ghi toàn vẹn nói dối.
+
+**Tín hiệu deploy** có thêm **hai tầng MỀM**: `observability` và `channelListener`.
+
+Mềm vì quan sát không được là dependency của thành công nghiệp vụ, và một socket Zalo đứt là sự cố
+**vận hành**, không phải bằng chứng rằng bản phát hành này hỏng. Nhưng mềm **không** được phép
+thành một dấu tick xanh rẻ tiền — `"container clickhouse đang Up"` là một câu trả lời vô nghĩa: nó
+vẫn Up khi collector không gửi được gì, khi user đọc không tồn tại, khi span mang sai tenant. Cả ba
+đều đã suýt xảy ra thật (§7.7, §8.8).
+
+Nên câu hỏi của tầng `observability` là một câu mà **chỉ** một đường ống còn nguyên vẹn mới trả lời
+được:
+
+> *có bao nhiêu span, của **đúng** bản phát hành vừa lên, mang **đúng** khách này, đọc bằng
+> credential **chỉ đọc** mà Debug View sẽ dùng?*
+
+Một câu trả lời khác 0 chứng minh cùng lúc: preload chạy, collector nhận, exporter ghi, schema
+đúng, user đọc tồn tại và có quyền, và danh tính release/tenant đi tới nơi không bị sai lệch. Khách
+được đọc **từ chính manifest** trong container — đúng nguồn mà `resolveTenant()` của preload đọc —
+chứ không đoán từ tên stack.
+
+`pending` ở tầng mềm **cũng là** thất bại mềm: một bước quan sát không báo gì nghĩa là nó không
+chạy, và một báo cáo im lặng về chính chỗ nó không nhìn là đúng hình dạng của sự cố §7.1. Câu tổng
+kết *"Bốn tín hiệu đều đạt"* đã bị bỏ — nó sẽ lại đúng vào ngày kênh đọc chết.
 
 ## 9. Liên quan
 

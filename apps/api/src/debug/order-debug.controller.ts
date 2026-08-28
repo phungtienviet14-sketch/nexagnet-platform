@@ -1,6 +1,7 @@
 import { Controller, Get, Optional, Param } from '@nestjs/common';
 import type { OrderDebugView } from '@netviet/shared';
-import { RecentTracesSink } from '../observability/recent-traces.sink.js';
+import type { StoredTrace } from '../observability/recent-traces.sink.js';
+import { TraceLookupService } from '../observability/historical/trace-lookup.service.js';
 import {
   WorkflowRunLookup,
   type WorkflowRunFacts,
@@ -32,7 +33,11 @@ import { buildOrderDebugView } from './order-debug.builder.js';
 @Controller('observability/debug/orders')
 export class OrderDebugController {
   constructor(
-    private readonly traces: RecentTracesSink,
+    /**
+     * Vong dem TRUOC, kho quan sat SAU — thu tu do nam trong `TraceLookupService`, khong o day,
+     * de ba duong doc luot khong co ba ban sao cua cung mot quy tac.
+     */
+    private readonly lookup: TraceLookupService,
     /**
      * `@Optional()`: mien workflow la nen tang nen no gan nhu luon co mat, nhung man hinh chan
      * doan khong duoc phep phu thuoc vao dieu do. Vang mat -> khong co phan workflow, kem mot
@@ -43,15 +48,55 @@ export class OrderDebugController {
 
   @Get(':orderId')
   async byOrder(@Param('orderId') orderId: string): Promise<OrderDebugView> {
-    const traces = this.traces.findAllByOrderId(orderId);
-    const found = await this.lookupWorkflows(orderId);
+    const [turns, found] = await Promise.all([
+      this.lookupTraces(orderId),
+      this.lookupWorkflows(orderId),
+    ]);
 
     return buildOrderDebugView({
       orderId,
-      traces,
+      traces: turns.traces,
       workflowRuns: found.runs,
-      notes: found.notes,
+      notes: [...found.notes, ...turns.notes],
     });
+  }
+
+  /**
+   * Doc cac luot. KHONG NEM, cung ly le voi `lookupWorkflows` ngay duoi.
+   *
+   * Ghi chu tra ve la phan quan trong nhat cua ham nay, khong phai phan phu: mot man hinh chan
+   * doan im lang ve cho no khong biet se bi doc thanh "cho do khong co gi". Ba trang thai duoi
+   * day doc len khac han nhau, va chung PHAI khac nhau tren man hinh:
+   *
+   *   luot den tu kho lich su   -> "day la du lieu con luu lai", co the thieu chi tiet;
+   *   kho co nhung chua hoi duoc -> "CHUA BIET", khong phai "khong co";
+   *   khong co kho nao          -> "khong con", va do la cau tra loi cuoi cung.
+   */
+  private async lookupTraces(
+    orderId: string,
+  ): Promise<{ traces: readonly StoredTrace[]; notes: string[] }> {
+    const result = await this.lookup.allByOrderId(orderId);
+    if (result.status === 'found') {
+      return {
+        traces: result.traces,
+        notes:
+          result.origin === 'historical'
+            ? [
+                'Các lượt bên dưới đọc lại từ kho quan sát (bộ đệm trong tiến trình không còn ' +
+                  'giữ) — chúng đã sống qua một lần khởi động lại hoặc một lần phát hành mới.',
+              ]
+            : [],
+      };
+    }
+    if (result.status === 'not_found') return { traces: [], notes: [] };
+    if (result.reason === 'NOT_CONFIGURED') return { traces: [], notes: [] };
+    return {
+      traces: [],
+      notes: [
+        `Chưa đọc được kho quan sát (${result.reason}) — đơn này CÓ THỂ vẫn còn lượt xử lý. ` +
+          'Đây không phải câu trả lời "không có".',
+      ],
+    };
   }
 
   /**

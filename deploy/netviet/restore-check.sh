@@ -3,12 +3,88 @@ set -euo pipefail
 
 STACK_SLUG="${STACK_SLUG:-${TENANT_SLUG:-ultty}}"
 APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${STACK_SLUG}}"
-DATABASE="${1:?Usage: restore-check.sh zalo|flowise|hatchet /absolute/path/to/database.dump}"
-DUMP_PATH="${2:?Usage: restore-check.sh zalo|flowise|hatchet /absolute/path/to/database.dump}"
+USAGE='Usage: restore-check.sh zalo|flowise|hatchet|observability /absolute/path/to/dump'
+DATABASE="${1:?${USAGE}}"
+DUMP_PATH="${2:?${USAGE}}"
 
 if [[ "${DUMP_PATH}" != /* ]] || [[ ! -s "${DUMP_PATH}" ]]; then
   echo "Dump phai la file tuyet doi, ton tai va khong rong." >&2
   exit 1
+fi
+
+# ================================================================================================
+# KHO QUAN SAT — MOT DUONG RIENG, khong di qua `case` cua Postgres ben duoi.
+#
+# Khong phai vi tien: `dropdb`/`createdb`/`pg_restore` khong ton tai o ClickHouse, va ep no vao
+# cung mot khuon se sinh ra mot ham co bon nhanh `if` chi de tranh viet ra rang day la hai viec
+# khac nhau.
+#
+# BAI NAY MANH HON bai cua Postgres, va co chu y. Bai Postgres chi chung minh "dump doc lai duoc".
+# O day cong ra cua P2 doi hoi nhieu hon: **phuc hoi roi TRUY VAN DUOC MOT TRACE DA SAO LUU**. Nen
+# sau khi nap xong, script lay mot `TraceId` co that trong ban phuc hoi roi hoi lai chinh no —
+# dung cau hoi ma Debug View se hoi. Mot bang nap thanh cong nhung khong tra loi duoc theo
+# `TraceId` la mot bang vo dung voi muc dich no ton tai.
+# ================================================================================================
+if [[ "${DATABASE}" == 'observability' ]]; then
+  cd "${APP_DIR}"
+  COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml --profile observability)
+
+  ch_reader_user="$(sed -n 's/^CLICKHOUSE_READER_USER=//p' .runtime/secrets.env | tail -n 1)"
+  ch_reader_password="$(sed -n 's/^CLICKHOUSE_READER_PASSWORD=//p' .runtime/secrets.env | tail -n 1)"
+  ch_writer_user="$(sed -n 's/^CLICKHOUSE_WRITER_USER=//p' .runtime/secrets.env | tail -n 1)"
+  ch_writer_password="$(sed -n 's/^CLICKHOUSE_WRITER_PASSWORD=//p' .runtime/secrets.env | tail -n 1)"
+  ch_database="$(sed -n 's/^CLICKHOUSE_DATABASE=//p' .runtime/secrets.env | tail -n 1)"
+  CHECK_DB="${ch_database}_restore_check"
+
+  work="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf -- '${work}'" EXIT
+  tar xzf "${DUMP_PATH}" -C "${work}"
+  test -s "${work}/schema.sql"
+
+  ch_write() {
+    "${COMPOSE[@]}" exec -T -e "CLICKHOUSE_PASSWORD=${ch_writer_password}" clickhouse       clickhouse-client --user "${ch_writer_user}" "$@"
+  }
+  ch_read() {
+    "${COMPOSE[@]}" exec -T -e "CLICKHOUSE_PASSWORD=${ch_reader_password}" clickhouse       clickhouse-client --user "${ch_reader_user}" "$@"
+  }
+
+  ch_write --query "DROP DATABASE IF EXISTS ${CHECK_DB}"
+  ch_write --query "CREATE DATABASE ${CHECK_DB}"
+
+  # Schema den tu `SHOW CREATE TABLE`, nen no mang ten database GOC. Doi ten sang database kiem
+  # tra thay vi de no ghi de len bang that — mot bai kiem tra phuc hoi khong bao gio duoc phep
+  # cham vao du lieu dang chay.
+  sed "s/\`${ch_database}\`/\`${CHECK_DB}\`/g" "${work}/schema.sql" >"${work}/schema-check.sql"
+  ch_write --database "${CHECK_DB}" --multiquery <"${work}/schema-check.sql"
+
+  ch_write --database "${CHECK_DB}"     --query 'INSERT INTO otel_traces FORMAT Native' <"${work}/otel_traces.native"
+
+  restored_spans="$(ch_read --database "${CHECK_DB}" --query 'SELECT count() FROM otel_traces' | tr -d '\r\n ')"
+  echo "Kho quan sat: da phuc hoi ${restored_spans} span vao ${CHECK_DB}."
+
+  if [[ "${restored_spans}" =~ ^[0-9]+$ ]] && [[ "${restored_spans}" -gt 0 ]]; then
+    # LAY MOT TRACE THAT ROI HOI LAI CHINH NO. Day la khac biet giua "bang co du lieu" va "trace
+    # tra cuu duoc" — cai thu hai moi la thu Debug View can.
+    sample_trace="$(ch_read --database "${CHECK_DB}" --query 'SELECT TraceId FROM otel_traces LIMIT 1' | tr -d '\r\n ')"
+    spans_for_trace="$(ch_read --database "${CHECK_DB}" --query "SELECT count() FROM otel_traces WHERE TraceId = '${sample_trace}'" | tr -d '\r\n ')"
+    if [[ ! "${spans_for_trace}" =~ ^[0-9]+$ ]] || [[ "${spans_for_trace}" -eq 0 ]]; then
+      echo "Phuc hoi xong nhung KHONG tra cuu duoc theo TraceId — ban phuc hoi nay vo dung." >&2
+      ch_write --query "DROP DATABASE IF EXISTS ${CHECK_DB}"
+      exit 1
+    fi
+    echo "Truy van theo TraceId ${sample_trace} tren ban PHUC HOI: ${spans_for_trace} span."
+  else
+    # Kho rong la trang thai hop le, nhung phai NOI RA: mot bai xanh tren mot ban sao luu rong
+    # khong chung minh duoc gi ca.
+    echo "CANH BAO: ban sao luu kho quan sat KHONG CO span nao — bai nay khong chung minh duoc gi." >&2
+  fi
+
+  ch_write --query "DROP DATABASE IF EXISTS ${CHECK_DB}"
+  trap - EXIT
+  rm -rf -- "${work}"
+  echo "Restore check thanh cong (observability tren service clickhouse)."
+  exit 0
 fi
 
 # DANH SACH TRANG, va moi muc keo theo SERVICE + NGUOI DUNG cua rieng no.
@@ -31,7 +107,7 @@ case "${DATABASE}" in
     COMPOSE_PROFILE=(--profile workflow)
     ;;
   *)
-    echo "Database chi duoc la zalo, flowise hoac hatchet." >&2
+    echo "Database chi duoc la zalo, flowise, hatchet hoac observability." >&2
     exit 1
     ;;
 esac

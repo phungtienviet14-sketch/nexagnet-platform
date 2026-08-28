@@ -271,6 +271,24 @@ services:
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1}
       OTEL_PRISMA_DETAIL: ${OTEL_PRISMA_DETAIL:-operation}
+      # DUONG DOC LICH SU cua Debug View — `api` -> ClickHouse, bang credential CHI DOC.
+      #
+      # CHIEU NGUOC voi bon bien tren: chung day telemetry RA, bon bien nay doc telemetry VE. Va
+      # day la ly do duong doc nam o `api` chu khong o console: de console hoi thang ClickHouse la
+      # de mot khoa kho quan sat di ra tan trinh duyet cua nguoi dung, va bo qua toan bo lop xac
+      # thuc ma moi duong nghiep vu khac phai di qua.
+      #
+      # Endpoint GHI CUNG — cung ly do voi `OTEL_EXPORTER_OTLP_ENDPOINT`: dia chi kho la mot su
+      # that ve TOPO cua chinh tep nay, va mot gia tri sai trong `secrets.env` se tro duong doc
+      # cua stack nay vao kho cua stack khac. Cong 8123 = giao dien HTTP (9000 la giao thuc goc).
+      CLICKHOUSE_READER_ENDPOINT: http://clickhouse:8123
+      # User DOC, KHAC user ghi cua collector (§8.1 dieu 3). No chi co `GRANT SELECT` — xem
+      # `init-observability.sql` trong `render-secrets.sh`. Thieu bat ky manh nao thi
+      # `readClickHouseReaderConfig()` tra `null`, va Debug View noi ro la KHONG CO duong lui —
+      # khong im lang bao "khong tim thay".
+      CLICKHOUSE_READER_USER: ${CLICKHOUSE_READER_USER:-}
+      CLICKHOUSE_READER_PASSWORD: ${CLICKHOUSE_READER_PASSWORD:-}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-}
     command:
       - sh
       - -ec

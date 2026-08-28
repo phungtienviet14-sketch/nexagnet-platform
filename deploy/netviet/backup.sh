@@ -93,6 +93,69 @@ backup_workflow_engine() {
 }
 backup_workflow_engine
 
+# --- KHO QUAN SAT (ClickHouse) ------------------------------------------------------------------
+# HAM RIENG, cung ly le voi Hatchet o tren: mot engine khac, mot giao thuc khac, mot bo dang nhap
+# khac. Va o day co them mot ly do: du lieu nay KHONG phai quan he — `pg_dump` khong biet gi ve no.
+#
+# ⚠️ VI SAO KHO QUAN SAT PHAI VAO BACKUP, trong khi no "chi la telemetry":
+#
+# Tu P2, no khong con chi la telemetry. Debug View lui ve day khi vong dem trong tien trinh khong
+# con giu, nen mot trace cu chi ton tai o DUNG MOT NOI: bang `otel_traces`. Mat kho la mat toan bo
+# lich su chan doan — ke ca cua nhung su co dang duoc dieu tra. `ttl: 720h` chi noi du lieu song
+# BAO LAU, no khong noi du lieu song QUA MOT SU CO O DIA hay khong.
+#
+# ĐINH DANG `Native` chu khong phai CSV/JSON: no giu NGUYEN KIEU, ke ca `Map(String,String)` cua
+# `SpanAttributes`/`ResourceAttributes` va cot long `Events.*`. Mot ban CSV se lam phang chung roi
+# doc lai thanh chuoi — tuc mat dung phan ma `historical-span.ts` doc de dung lai mot luot.
+#
+# SCHEMA DI CUNG DU LIEU trong cung mot tep: bang do `clickhouseexporter` tu dung (`create_schema:
+# true`), nen no la hop dong cua MOT PHIEN BAN collector. Phuc hoi du lieu cua thang truoc vao mot
+# schema cua thang sau la cach de mot backup "thanh cong" roi khong doc duoc.
+backup_observability_store() {
+  local container
+  container="$("${COMPOSE[@]}" --profile observability ps -q clickhouse 2>/dev/null | head -n 1)"
+  # Stack khong bat cum quan sat thi khong co gi de sao luu — duong BINH THUONG, khong phai loi.
+  [[ -n "${container}" ]] || return 0
+
+  local reader_user reader_password database work
+  reader_user="$(sed -n 's/^CLICKHOUSE_READER_USER=//p' .runtime/secrets.env | tail -n 1)"
+  reader_password="$(sed -n 's/^CLICKHOUSE_READER_PASSWORD=//p' .runtime/secrets.env | tail -n 1)"
+  database="$(sed -n 's/^CLICKHOUSE_DATABASE=//p' .runtime/secrets.env | tail -n 1)"
+  [[ -n "${reader_user}" && -n "${database}" ]] || return 0
+
+  work="${TMP_DIR}/observability"
+  mkdir -p "${work}"
+
+  # CREDENTIAL CHI DOC, khong phai credential ghi: mot ban sao luu khong co ly do gi de ghi duoc
+  # vao kho no dang doc. Cung user ma Debug View dung, nen mot backup chay duoc cung la mot lan
+  # xac nhan rang duong doc do con song.
+  "${COMPOSE[@]}" --profile observability exec -T     -e "CLICKHOUSE_PASSWORD=${reader_password}" clickhouse     clickhouse-client --user "${reader_user}" --database "${database}"     --query 'SHOW CREATE TABLE otel_traces FORMAT TabSeparatedRaw' >"${work}/schema.sql"
+  test -s "${work}/schema.sql"
+
+  "${COMPOSE[@]}" --profile observability exec -T     -e "CLICKHOUSE_PASSWORD=${reader_password}" clickhouse     clickhouse-client --user "${reader_user}" --database "${database}"     --query 'SELECT * FROM otel_traces FORMAT Native' >"${work}/otel_traces.native"
+
+  # Kho RONG la mot trang thai hop le (stack vua bat quan sat, chua co luot nao). Nhung mot tep
+  # rong thi khong phan biet duoc voi mot lenh da hong, nen ghi ra so dong de nguoi doc biet.
+  "${COMPOSE[@]}" --profile observability exec -T     -e "CLICKHOUSE_PASSWORD=${reader_password}" clickhouse     clickhouse-client --user "${reader_user}" --database "${database}"     --query 'SELECT count(), countDistinct(TraceId), min(Timestamp), max(Timestamp) FROM otel_traces'     >"${work}/MANIFEST.txt"
+
+  tar czf "${TMP_DIR}/observability-${STAMP}.tar.gz" -C "${work}" .
+  test -s "${TMP_DIR}/observability-${STAMP}.tar.gz"
+  rm -rf -- "${work}"
+}
+# ⚠️ KHONG `set -e` CHO NHANH NAY, va day la mot quyet dinh chu khong phai su lo la.
+#
+# `.claude/rules/ecc/common/code-review.md` dat mot bat bien: quan sat khong duoc la dependency
+# cua thanh cong nghiep vu. Mot ClickHouse hic lan luc sao luu KHONG duoc bien thanh mot lan
+# deploy do — va cang khong duoc chan `postgres`/`hatchet` (hai kho THAT SU khong mat duoc) tai
+# len bucket.
+#
+# Doi lai: no phai KEU TO. Mot canh bao khong ai doc thi cung bang khong co, nen dong duoi day
+# viet ro rang chuyen gi da khong xay ra.
+if ! backup_observability_store; then
+  echo "CANH BAO: khong sao luu duoc kho quan sat cua ${STACK_SLUG}." >&2
+  echo "Trace lich su cua stack nay dang KHONG co ban sao. Xem docs/kien-truc/reference-platform-stack.md §8.12." >&2
+fi
+
 if [[ "${VERIFY_RESTORE:-0}" == "1" ]]; then
   "${APP_DIR}/restore-check.sh" zalo "${TMP_DIR}/zalo-${STAMP}.dump"
   "${APP_DIR}/restore-check.sh" flowise "${TMP_DIR}/flowise-${STAMP}.dump"
@@ -100,9 +163,19 @@ if [[ "${VERIFY_RESTORE:-0}" == "1" ]]; then
   if [[ -s "${TMP_DIR}/hatchet-${STAMP}.dump" ]]; then
     "${APP_DIR}/restore-check.sh" hatchet "${TMP_DIR}/hatchet-${STAMP}.dump"
   fi
+  # Cung luat: chi kiem khi stack that su co cum quan sat, va cung KHONG lam do lan deploy.
+  if [[ -s "${TMP_DIR}/observability-${STAMP}.tar.gz" ]]; then
+    if ! "${APP_DIR}/restore-check.sh" observability "${TMP_DIR}/observability-${STAMP}.tar.gz"; then
+      echo "CANH BAO: ban sao luu kho quan sat KHONG phuc hoi lai duoc." >&2
+      echo "Day la mot ban sao luu chua duoc chung minh — dung tin vao no." >&2
+    fi
+  fi
 fi
 
-sha256sum "${TMP_DIR}"/*.dump >"${TMP_DIR}/SHA256SUMS"
+# `*.dump` MOT MINH KHONG DU: tu 28/08 thu muc nay con co `hatchet-config-*.tar.gz` (mang khoa
+# giai ma) va `observability-*.tar.gz` (kho quan sat). Mot ban ghi toan ven bo sot dung hai tep
+# quan trong nhat la mot ban ghi toan ven noi doi.
+sha256sum "${TMP_DIR}"/*.dump "${TMP_DIR}"/*.tar.gz 2>/dev/null >"${TMP_DIR}/SHA256SUMS" ||   sha256sum "${TMP_DIR}"/*.dump >"${TMP_DIR}/SHA256SUMS"
 gcloud storage cp "${TMP_DIR}"/* "${BACKUP_ROOT}/daily/${STAMP}/"
 prune_prefix daily 7
 if [[ "$(date -u +%u)" == "7" ]]; then

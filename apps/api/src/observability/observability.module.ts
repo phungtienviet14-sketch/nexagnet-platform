@@ -1,4 +1,10 @@
 import { Global, Logger, Module } from '@nestjs/common';
+import {
+  ClickHouseHistoricalTraceReader,
+  readClickHouseReaderConfig,
+} from './historical/clickhouse-historical-trace-reader.js';
+import { HistoricalTraceReaderPort } from './historical/historical-trace-reader.port.js';
+import { TraceLookupService } from './historical/trace-lookup.service.js';
 import { OtelTraceBridge } from './otel/otel-trace-bridge.js';
 import { isOtelRunning } from './otel/otel-runtime.js';
 import { resolveReleaseIdentity, formatRelease } from './release-identity.js';
@@ -25,6 +31,37 @@ import { privacyModeFor } from './telemetry-redaction.js';
   controllers: [TraceController],
   providers: [
     RecentTracesSink,
+    TraceLookupService,
+    /**
+     * DUONG LUI VE LICH SU — co mat KHI VA CHI KHI ban trien khai co mot kho de lui ve.
+     *
+     * `useValue: null` khi chua cau hinh, chu khong phai mot hien thuc rong tra `not_found`: hai
+     * cau tra loi do khac nhau ve BAN CHAT. Mot hien thuc rong noi "da hoi va khong co"; `null`
+     * lam `TraceLookupService` noi `NOT_CONFIGURED` — "khong co cho nao de hoi". Man hinh chan
+     * doan phan biet hai cau do, va do la ca diem cua ba ket cuc trong `HistoricalLookup`.
+     *
+     * Tenant lay TU CHINH DANH TINH DA PHAN GIAI o tren, khong doc lai `env.TENANT`: hai phep
+     * doc doc lap la hai cau tra loi co the lech nhau, va lech o day nghia la doc nham kho cua
+     * khach khac. Mot nguon, mot cau tra loi.
+     */
+    {
+      provide: HistoricalTraceReaderPort,
+      useFactory: (): HistoricalTraceReaderPort | null => {
+        const logger = new Logger('Observability');
+        const config = readClickHouseReaderConfig(process.env, resolveReleaseIdentity().tenant);
+        if (!config) return null;
+        if (config.tenant === 'unknown') {
+          // Fail-closed, va NOI TO. Mot tien trinh khong biet no phuc vu ai ma van doc mot kho
+          // theo tenant la dung lop lo hong ma mo hinh cach ly duoc chon de tranh (§8.1).
+          logger.error(
+            'Kho quan sat da cau hinh nhung tien trinh khong xac dinh duoc khach — duong doc ' +
+              'lich su se TU CHOI moi truy van. Kiem mount `.runtime/release.json`.',
+          );
+        }
+        logger.log(`Duong doc lich su: ClickHouse/${config.database} (chi doc)`);
+        return new ClickHouseHistoricalTraceReader(config);
+      },
+    },
     {
       provide: TelemetryService,
       inject: [RecentTracesSink],
@@ -101,6 +138,6 @@ import { privacyModeFor } from './telemetry-redaction.js';
    * `TelemetryService` goi — nghiep vu khong bao gio ghi thang vao sink, va dieu do khong duoc
    * noi long o day.
    */
-  exports: [TelemetryService, RecentTracesSink],
+  exports: [TelemetryService, RecentTracesSink, TraceLookupService],
 })
 export class ObservabilityModule {}

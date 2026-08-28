@@ -1,3 +1,4 @@
+import type { SourceLocation } from '@netviet/shared';
 import type { DecisionOutcome } from './decision-vocabulary.js';
 import type { SanitizedValue } from './telemetry-redaction.js';
 
@@ -36,6 +37,20 @@ interface TelemetryBase {
   readonly releaseSha?: string;
   /** Neo nghiep vu da biet tai thoi diem ghi (chatId, orderId, …). */
   readonly anchors: Readonly<Record<string, string>>;
+  /**
+   * CHO TRONG MA NGUON DA SINH RA BAN GHI NAY — chi co o ban ghi doc lai tu KHO LICH SU.
+   *
+   * Ban ghi phat ra TRONG tien trinh KHONG dat truong nay, va do la dung: chung duoc hien thi
+   * boi chinh ban phat hanh da sinh ra chung, nen `source-manifest.generated.ts` cua tien trinh
+   * do la cau tra loi chinh xac — va re hon, vi khong ton mot truong tren moi ban ghi.
+   *
+   * Ban ghi doc tu kho thi nguoc lai: chung co the thuoc mot ban phat hanh CU, va bang manifest
+   * cua tien trinh dang chay mo ta ma nguon KHAC — cung mot diem quyet dinh co the da doi dong,
+   * doi ham, doi tep. Mot permalink dung so dong MOI tro vao commit CU van bam duoc, van mo ra
+   * mot tep, chi la sai — dung loai sai TU TIN ma tang danh tinh release ton tai de ngan. Nen
+   * chung mang theo vi tri DA DUOC GHI KEM luc su kien xay ra.
+   */
+  readonly source?: SourceLocation;
 }
 
 /**

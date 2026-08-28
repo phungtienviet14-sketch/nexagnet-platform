@@ -177,3 +177,76 @@ describe('renderer tu choi dau vao xau', () => {
     }
   });
 });
+
+/**
+ * ==============================================================================================
+ * DUONG DOC — chieu nguoc lai cua ca tep tren.
+ *
+ * Cac bai o tren khoa duong GHI: telemetry cua khach nay khong the roi vao kho cua khach kia.
+ * Bai duoi day khoa duong DOC: `api` phai co du manh de lui ve kho lich su, va no phai lui bang
+ * mot credential CHI DOC.
+ *
+ * Vi sao dang mot hop dong chu khong phai mot bai unit: ca ba tang deu co the dung rieng le ma
+ * van hong chung — bien duoc render nhung khong vao compose, hoac vao compose cua SAI service.
+ * Ca hai hinh dang do da xay ra that (`ADVICE_COMPOSER`, 19-21/08), va ca hai deu hong IM LANG:
+ * khong loi, khong canh bao, chi la mot Debug View mai mai bao "khong con luu".
+ */
+describe('duong doc lich su cua Debug View', () => {
+  const compose = readFileSync(join(HERE, 'compose.yaml'), 'utf8');
+  const renderSecrets = readFileSync(join(HERE, 'render-secrets.sh'), 'utf8');
+  // Cat dung khoi cua service `api`: mot bien nam trong compose nhung o service KHAC thi khong
+  // bao gio toi tien trinh can no.
+  const apiService = compose.slice(compose.indexOf('\n  api:'), compose.indexOf('\n  web:'));
+
+  it('service `api` nhan du bon manh de mo duoc duong doc', () => {
+    for (const key of [
+      'CLICKHOUSE_READER_ENDPOINT',
+      'CLICKHOUSE_READER_USER',
+      'CLICKHOUSE_READER_PASSWORD',
+      'CLICKHOUSE_DATABASE',
+    ]) {
+      ok(
+        new RegExp(`^[ \t]+${key}:`, 'm').test(apiService),
+        `service api thieu ${key} — Debug View se mai mai bao "khong con luu" du kho van con`,
+      );
+    }
+  });
+
+  it('credential DOC di toi `api`, credential GHI thi khong', () => {
+    ok(
+      !/^[ \t]+CLICKHOUSE_WRITER_PASSWORD:/m.test(apiService),
+      'api KHONG duoc nhan mat khau GHI: mot loi o tang doc khi do co the thanh mot phep ghi',
+    );
+  });
+
+  it('user doc chi duoc cap SELECT, va khac user ghi', () => {
+    ok(
+      /GRANT SELECT ON \$\{CLICKHOUSE_DATABASE\}\.\* TO \$\{CLICKHOUSE_READER_USER\}/.test(
+        renderSecrets,
+      ),
+      'user doc phai duoc cap dung SELECT — day la lop cach ly khong go duoc tu phia ung dung',
+    );
+    ok(
+      /CLICKHOUSE_READER_USER="\$\{CLICKHOUSE_DB_SLUG\}_reader"/.test(renderSecrets) &&
+        /CLICKHOUSE_WRITER_USER="\$\{CLICKHOUSE_DB_SLUG\}_writer"/.test(renderSecrets),
+      'user doc va user ghi phai la hai user khac nhau (§8.1 dieu 3)',
+    );
+  });
+
+  it('hai khoa den tu hai secret KHAC NHAU, deu mang slug cua stack', () => {
+    ok(
+      /CLICKHOUSE_READER_PASSWORD="\$\(optional_secret zalo-\$\{STACK_SLUG\}-clickhouse-reader-password\)"/.test(
+        renderSecrets,
+      ),
+      'khoa doc phai den tu secret rieng cua stack, khong dung chung voi khoa ghi',
+    );
+  });
+
+  it('dia chi kho GHI CUNG trong compose, khong doc tu secrets.env', () => {
+    ok(
+      /CLICKHOUSE_READER_ENDPOINT:[ \t]+http:\/\/clickhouse:8123/.test(apiService),
+      'dia chi kho la su that ve TOPO cua compose — mot gia tri sai o secrets.env se tro duong ' +
+        'doc cua stack nay vao kho cua stack khac',
+    );
+  });
+});

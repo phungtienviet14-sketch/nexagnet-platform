@@ -5,6 +5,7 @@ import { TURN_DECISIONS } from '../turns/turn-decisions.js';
 import { RecentTracesSink } from './recent-traces.sink.js';
 import { TelemetryService } from './telemetry.service.js';
 import { TraceController } from './trace.controller.js';
+import { TraceLookupService } from './historical/trace-lookup.service.js';
 import { buildTraceView } from './trace-view.builder.js';
 
 /**
@@ -90,9 +91,12 @@ describe('trace giu release cua CHINH NO', () => {
 
     // Tien trinh MOI: release khac, vong dem rieng cua no thi rong. Kho la cai duoc trao lai.
     const running = processAt(RELEASE_NEW, new RecentTracesSink());
-    const controller = new TraceController(store, running);
+    // `TraceLookupService(store)` KHONG co duong lui lich su, va do la co y o bai nay: cai dang
+    // duoc chung minh la ban ghi GIU DUOC danh tinh release cua chinh luot, khong phai kho nao
+    // da tra loi. Duong lui co bai rieng o `historical/`.
+    const controller = new TraceController(new TraceLookupService(store), store, running);
 
-    const view = controller.byTraceId(traceId);
+    const view = await controller.byTraceId(traceId);
     const node = view.nodes.find((candidate) => candidate.reason === 'GROUP_NOT_MAPPED')!;
     const url = buildGithubSourceUrl(view.sourceContext!, node.source!);
 
@@ -109,7 +113,11 @@ describe('trace giu release cua CHINH NO', () => {
     const traceId = store.list(1)[0]!.traceId;
 
     const running = processAt(RELEASE_NEW, new RecentTracesSink());
-    const view = new TraceController(store, running).byTraceId(traceId);
+    const view = await new TraceController(
+      new TraceLookupService(store),
+      store,
+      running,
+    ).byTraceId(traceId);
 
     // KHONG BIET THI IM. Mot permalink tu tin ma sai te hon mot o trong co ghi chu.
     expect(view.sourceContext?.releaseSha).toBeUndefined();
