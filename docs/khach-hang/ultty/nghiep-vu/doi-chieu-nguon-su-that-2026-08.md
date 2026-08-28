@@ -31,10 +31,10 @@
 
 | sourceId | Tài liệu | Loại | Ngày / phiên bản | authority | Mật | Locator |
 |---|---|---|---|---|---|---|
-| `SRC-HD-00` | Hợp đồng triển khai phần mềm `HĐAI/NETVIET-ULTTY/260826` | Hợp đồng khung | 08/2026 (ngày ký để trống) | **L1** | MẬT | Ngoài repo — máy vận hành |
-| `SRC-HD-PL01` | Phụ lục 01 — triển khai hệ thống AI Agent trên nhóm Zalo | Phụ lục hợp đồng | 08/2026 | **L1** | MẬT | như trên |
-| `SRC-HD-PL02` | Phụ lục 02 — nơi lưu trữ dữ liệu | Phụ lục hợp đồng | 08/2026 | **L1** | MẬT | như trên |
-| `SRC-HD-PL03` | Phụ lục 03 — dịch vụ AI đi kèm | Phụ lục hợp đồng | 08/2026 | **L1** | MẬT | như trên |
+| `SRC-HD-00` | Hợp đồng triển khai phần mềm `HĐAI/NETVIET-ULTTY/260826` | Hợp đồng khung | **ký 26/08/2026** | **L1** | MẬT | Ngoài repo — máy vận hành |
+| `SRC-HD-PL01` | Phụ lục 01 — triển khai hệ thống AI Agent trên nhóm Zalo | Phụ lục hợp đồng | **26/08/2026** | **L1** | MẬT | như trên |
+| `SRC-HD-PL02` | Phụ lục 02 — nơi lưu trữ dữ liệu | Phụ lục hợp đồng | **26/08/2026** | **L1** | MẬT | như trên |
+| `SRC-HD-PL03` | Phụ lục 03 — dịch vụ AI đi kèm | Phụ lục hợp đồng | **26/08/2026** | **L1** | MẬT | như trên |
 | `SRC-FLOW` | *Luồng AI Agent ULTTY (tài liệu của khách yêu cầu)* | Sơ đồ tư duy do **khách** soạn | 10/08/2026 | **L2** | MẬT | Drive `gd1/`; PDF **chỉ có ảnh**, không có font |
 | `SRC-PRICE-08` | **THÔNG BÁO GIÁ THÁNG 08.2026** | Bảng giá tháng, 4 trang, 19 SKU | 18/08/2026 | **L2** | Gửi mọi ĐL/CTV | Drive `AI Zalo B2B / Báo giá sản phẩm /` |
 | `SRC-PRICE-DEALER` | **Báo giá riêng CTV/ĐLY** | Google Sheets, 22 dòng × 21 cột đại lý | 18/08/2026 | **L2** | **MẬT CAO** | cùng thư mục trên |
@@ -55,6 +55,14 @@
 | `SRC-QUOTE-NV` | Báo giá dịch vụ NetViet (Aug 2026) | Chào giá tiền hợp đồng | 08/2026 | L4 | MẬT | `ho-so-khao-sat/gd1/` |
 | `SRC-GOLDEN` | golden-orders.json | 15 ca tin nhắn thật + kỳ vọng | 12/08/2026 | L2 (bằng chứng) | MẬT | `ho-so-khao-sat/gd1/` |
 | `SRC-REPO` | `tenants/ultty/**` + `apps/api/src/{rules,orders,knowledge}` | Repo/runtime | `ae04b2b` | — | Public repo | worktree |
+
+> ⚠️ **Cảnh báo về bản sao hợp đồng dùng để soạn tài liệu này.** Bản `.md` nằm trong `Downloads`
+> (`HĐ PM AI ULTTY_NETVIET_150826.docx.md`) là **BẢN EXPORT CŨ**, không phải bản ký 26/08/2026:
+> nó để trống ngày ký, còn viện dẫn NĐ 13/2023, và Phụ lục 01 ghi *"UAT trên 1–2 nhóm đại lý"*
+> mà không có ngưỡng phần trăm nào. Các mục `FACT-UAT-*`, `FACT-LEGAL-01` và ngày ký ở bảng trên
+> đã được sửa theo **bản ký hiện hành do chủ dự án cung cấp nội dung (28/08/2026)**; phần còn lại
+> của tài liệu vẫn dựa trên bản export cũ. **Việc cần làm:** đọc trực tiếp bản ký 26/08/2026 và
+> rà lại toàn bộ mục dẫn `SRC-HD-*` — xem `MISS-10`.
 
 **Cây Drive `AI Zalo B2B` đo lại 28/08/2026 — 7 thư mục:**
 `Báo giá sản phẩm` (18/08 — **MỚI, chưa từng có trong bản mirror local**) · `Các quy trình` (30/06) ·
@@ -108,13 +116,15 @@ phẩm trỏ trong `SRC-QT-CONTACT`).
 | `FACT-ORG-02` | Quy trình | Mỗi nhóm chính sách có **pháp nhân bán khác nhau** (ký gửi: bên bán là EUS Việt Nam, không phải U ULTTY) | `SRC-PO-KG` vs `SRC-PO-30/45` | 06/2026 | **CONFIRMED** | 1 pháp nhân bán duy nhất | `GAP-10` |
 | `FACT-SKU-01` | Sản phẩm | Danh mục gốc **39 dòng** gồm SP chính, biến thể màu, phụ kiện, vật tư tiêu hao | `SRC-SKU-MASTER` | 30/06/2026 | **CONFIRMED** | repo bán 19 | §5 |
 | `FACT-SKU-02` | Sản phẩm | `FELIX` (ghế EUS) **không nằm trong danh mục gốc 39 dòng** vì là hàng thương hiệu EUS, không phải U ULTTY | `SRC-SKU-MASTER` vs `SRC-PRICE-08` | — | **CONFIRMED** | bán bình thường | Ghi nhận; ảnh hưởng pháp nhân xuất hoá đơn |
-| `FACT-LEGAL-01` | Pháp lý | Hợp đồng viện dẫn **NĐ 13/2023/NĐ-CP** (căn cứ + Điều 4.2e, 5.2e, 7.7) | `SRC-HD-00` | 08/2026 | **CONFIRMED (nội dung hợp đồng)** | `CLAUDE.md` ghi NĐ 13 **đã bị thay** bởi Luật BVDLCN 91/2025/QH15 + NĐ 356/2025 (hiệu lực 01/01/2026) | `CONFLICT-LEGAL-001` |
+| `FACT-LEGAL-01` | Pháp lý | Bản ký 26/08/2026 **đã viện dẫn đúng** căn cứ bảo vệ dữ liệu cá nhân hiện hành (không còn NĐ 13/2023) | `SRC-HD-00` | 26/08/2026 | **CONFIRMED** | `CLAUDE.md` đã ghi đúng: NĐ 13/2023 bị thay bởi Luật BVDLCN 91/2025/QH15 + NĐ 356/2025 từ 01/01/2026 | Không còn việc phải làm. *(Bản export cũ trong `Downloads` còn NĐ 13 — đó là lỗi của bản cũ, không phải của hợp đồng.)* |
 | `FACT-SLA-01` | Vận hành | Lưu trữ: sao lưu **90 GB/tháng**, 440.000đ/tháng, kỳ 12 tháng | `SRC-HD-PL02` | 08/2026 | **CONFIRMED** | — | Theo dõi nghĩa vụ |
 | `FACT-SLA-02` | Vận hành | Token AI: **đối soát ngày 05 hàng tháng** cho tháng liền trước; hết số dư → **hệ thống tự ngừng AI Agent** | `SRC-HD-PL03` §2.4, §3.3 | 08/2026 | **CONFIRMED** | không có đo lường/đối soát token | `GAP-12` |
 | `FACT-SLA-03` | Vận hành | Chấm dứt: xoá dữ liệu Bên B khỏi hệ thống **và bản sao lưu trong 15 ngày** + xác nhận bằng văn bản | `SRC-HD-00` §6.3 | 08/2026 | **CONFIRMED** | không có thủ tục offboarding | `GAP-13` |
 | `FACT-ROLE-01` | Phân quyền | Phân quyền **Sale / Kế toán / Quản lý** | `SRC-HD-PL01` §2.1 | 08/2026 | **CONFIRMED** | `USER_ROLES` hiện có `ADMIN`/`SALE` | `GAP-14` — thiếu vai Kế toán |
-| `FACT-UAT-01` | Nghiệm thu | UAT trên **1–2 nhóm đại lý**; tiêu chí = đúng chức năng §2 + AI phản hồi đúng **dữ liệu và kịch bản Bên B đã phê duyệt** + Dashboard đúng | `SRC-HD-PL01` §5.1 | 08/2026 | **CONFIRMED** | chưa có bộ kịch bản được khách phê duyệt | `MISS-06` |
-| `FACT-UAT-02` | Nghiệm thu | Hợp đồng **loại trừ** yêu cầu "chính xác 100%"; **không có con số phần trăm nào** trong PL01 | `SRC-HD-PL01` §5.1, §4.2h | 08/2026 | **CONFIRMED** | — | Xem `SUP-03` |
+| `FACT-UAT-01` | Nghiệm thu | UAT chạy trên **02 nhóm đại lý**, trong **02 ngày** | `SRC-HD-PL01` | 26/08/2026 | **CONFIRMED** | chưa lên lịch, chưa chọn nhóm | `GAP-17` |
+| `FACT-UAT-02` | Nghiệm thu | Ngưỡng đạt: **≥ 90%** trên **bộ dữ liệu kiểm thử đã được Bên B phê duyệt** | `SRC-HD-PL01` | 26/08/2026 | **CONFIRMED** | `SRC-GOLDEN` có 15 ca nhưng **chưa được khách phê duyệt**, và chưa có cỗ máy đo tỷ lệ | `GAP-17`, `MISS-06` |
+| `FACT-UAT-03` | Nghiệm thu | **Không được báo giá sai** trong các ca thuộc bộ đã duyệt | `SRC-HD-PL01` | 26/08/2026 | **CONFIRMED** | 🔴 **đang vi phạm được**: `ELNI`/`FELIX` vẫn giữ giá tháng 07 (`GAP-03`) | U2 trước UAT |
+| `FACT-UAT-04` | Nghiệm thu | **Không được tự động xử lý ngoài thẩm quyền** | `SRC-HD-PL01` | 26/08/2026 | **CONFIRMED** | `evaluateAutoConfirm` fail-closed 10 lý do có mã | Ràng buộc trực tiếp lên `ASM-02` — xem §3bis |
 
 ---
 
@@ -203,16 +213,6 @@ phẩm trỏ trong `SRC-QT-CONTACT`).
 | **Quyết định cần** | Giữ tự host (và ghi nhận bằng biên bản/phụ lục), hay chuyển sang link Drive? |
 | **Trạng thái** | 🟠 **OPEN** |
 
-### `CONFLICT-LEGAL-001` — căn cứ bảo vệ dữ liệu cá nhân đã lỗi thời
-
-| | |
-|---|---|
-| **Nguồn A** | `SRC-HD-00` viện dẫn **NĐ 13/2023/NĐ-CP** ở phần căn cứ và tại Điều 4.2(e), 5.2(e), 7.7. |
-| **Thực tế** | Theo `CLAUDE.md`, NĐ 13/2023 **đã bị thay thế** bởi **Luật BVDLCN 91/2025/QH15 + NĐ 356/2025**, hiệu lực 01/01/2026 — tức **trước** ngày ký hợp đồng (08/2026). |
-| **Ảnh hưởng** | Nghĩa vụ tuân thủ trong hợp đồng đang trỏ vào văn bản hết hiệu lực. Không làm hợp đồng vô hiệu, nhưng **nghĩa vụ thực tế phải theo luật hiện hành**. |
-| **Quyết định cần** | Pháp chế NetViet rà và cân nhắc phụ lục điều chỉnh căn cứ. |
-| **Trạng thái** | 🟠 **OPEN — việc của pháp chế, không phải của code** |
-
 ---
 
 ## 3bis. SỔ GIẢ ĐỊNH LÀM VIỆC (`ASM-*`) — mở đường U2 khi chưa hỏi được khách
@@ -299,6 +299,8 @@ báo giá cao rồi Sale phải sửa tay — hỏng trải nghiệm và mất l
 
 ---
 
+---
+
 ## 4. SUPERSEDED ASSUMPTIONS
 
 ### `SUP-01` — "Tháng 8 không có thông báo giá mới" ❌ **SAI**
@@ -372,24 +374,11 @@ là dữ liệu còn thiếu.
 **Đo lại:** `SRC-PRICE-DEALER` tồn tại từ 18/08/2026 — **22 dòng sản phẩm × 21 cột đại lý/CTV**, với
 **≈120 ô giá riêng** đã điền. Xem §6.
 
-**Phân loại:** `SUPERSEDED` — dữ liệu **đã có**, chỉ là chưa ai nhập. Nhưng xem `MISS-04`: bảng
-**không có cột ngưỡng số lượng**, mà `FACT-DLR-02` chứng minh ngưỡng là có thật.
+**Phân loại:** `SUPERSEDED` — dữ liệu **đã có**, chỉ là chưa ai nhập.
 
-### `SUP-03` — "Hợp đồng yêu cầu ≥ 90% trên bộ test đã duyệt" ⚠️ **KHÔNG TÌM THẤY**
-
-Con số **90%** và mốc **"UAT 2 nhóm × 2 ngày"** **không xuất hiện ở bất kỳ đâu** trong
-`SRC-HD-00`, `SRC-HD-PL01`, `SRC-HD-PL02`, `SRC-HD-PL03`.
-
-Hợp đồng thực tế nói: *"Kiểm thử chức năng, **UAT trên 1–2 nhóm đại lý**"* (§2.1) và tiêu chí nghiệm
-thu §5.1 gồm ba mục định tính, kèm loại trừ minh thị *"Nghiệm thu KHÔNG bao gồm: độ chính xác 100%
-của AI trong mọi tình huống"*. Điều 4.2(h) nói thêm AI là mô hình xác suất, chỉ cam kết *"tối ưu trong
-phạm vi kỹ thuật hợp lý"*.
-
-**Phân loại:** giả định `SUPERSEDED` / không có cơ sở hợp đồng.
-**Hệ quả hai chiều:** (a) không được viện dẫn "hợp đồng đòi 90%" như một cổng bắt buộc; (b) **nguy
-hiểm hơn** — vì hợp đồng **không** có ngưỡng số, nghiệm thu sẽ tranh cãi định tính. Nên **tự đặt** một
-ngưỡng nội bộ và **xin khách phê duyệt bộ kịch bản** (`MISS-06`), đúng theo chữ *"kịch bản đã được
-Bên B phê duyệt"* ở §5.1(b).
+Còn lại một câu hỏi thật: bảng **không có cột ngưỡng số lượng** (`MISS-04`). `FACT-DLR-02` từng được
+đọc là bằng chứng "ngưỡng có thật"; `ASM-03` (§3bis) trình bày một cách đọc khác khớp dữ liệu hơn và
+nêu rõ rủi ro của nó. Chưa hỏi được khách nên **cả hai cách đọc đều chưa bị loại**.
 
 ---
 
@@ -512,7 +501,8 @@ toàn Ultty. Cụ thể, *"Giá bao gồm thuế GTGT"* chỉ có ở `SRC-PO-45
 | `GAP-14` | Phân quyền Sale / **Kế toán** / Quản lý | `USER_ROLES` chỉ có `ADMIN`, `SALE` | 🔴 **CHƯA ĐẠT** | U6 — khảo sát nói kế toán kiểm bước cuối |
 | `GAP-15` | Dashboard: hội thoại real-time, cảnh báo **tin nhắn trôi**, đơn chờ duyệt, thông báo cho quản lý Sale | Console vận hành có feed + hàng việc; chưa có cảnh báo tin trôi và thông báo quản lý | 🟠 **ĐẠT MỘT PHẦN** | U6 |
 | `GAP-16` | Khuyến mãi tháng/quý/năm, gồm *mua N tặng 1* và *tặng SKU khác* | Không có mô hình | 🔴 **CHƯA ĐẠT** | U4 — sau `MISS-05` |
-| `GAP-17` | Bộ kịch bản UAT **được Bên B phê duyệt** (tiêu chí nghiệm thu §5.1b) | `SRC-GOLDEN` có 15 ca nhưng **chưa được khách phê duyệt** | 🔴 **CHƯA ĐẠT** | U7 — chặn nghiệm thu |
+| `GAP-17` | UAT **2 nhóm × 2 ngày**, đạt **≥90%** trên bộ dữ liệu Bên B phê duyệt | `SRC-GOLDEN` có 15 ca **chưa được duyệt**; **chưa có cỗ máy đo tỷ lệ đạt**; chưa chọn nhóm/lịch | 🔴 **CHƯA ĐẠT** | U7 — chặn nghiệm thu |
+| `GAP-18` | **Không báo giá sai** trong bộ ca đã duyệt | `ELNI`/`FELIX` đang dùng giá tháng 07 | 🔴 **ĐANG VI PHẠM ĐƯỢC** | U2 **phải xong trước** UAT — nếu không, một ca giá sai đủ để trượt ngưỡng |
 
 **Còn thiếu (`MISSING`) — không suy đoán được từ bất kỳ nguồn nào đã đọc:**
 
@@ -523,7 +513,8 @@ toàn Ultty. Cụ thể, *"Giá bao gồm thuế GTGT"* chỉ có ở `SRC-PO-45
 | `MISS-03` | **PO "Công nợ 7 ngày"** — khảo sát liệt kê, Drive không có | `CONFLICT-KYGUI-TERM-001` |
 | `MISS-04` | **Ngưỡng số lượng cho từng deal riêng** — bảng Drive không có cột này | Không còn chặn U2: đang chạy theo **`ASM-03`** (`minQuantity=1`), kèm 3 biện pháp giảm thiểu. **Rủi ro báo giá thấp vẫn còn** cho tới khi khách trả lời |
 | `MISS-05` | **Công thức khuyến mãi**: điều kiện, phạm vi đại lý, SKU quà, ngưỡng, cộng dồn, hiệu lực | U4 |
-| `MISS-06` | **Bộ kịch bản UAT được khách ký duyệt** + ngưỡng chấp nhận | U7, nghiệm thu |
+| `MISS-06` | **Bộ dữ liệu kiểm thử được Bên B phê duyệt** (ngưỡng ≥90% đã có trong hợp đồng, cái thiếu là **bộ ca được duyệt** và **cách đo**) | U7, nghiệm thu |
+| `MISS-10` | **Bản ký 26/08/2026 của hợp đồng + 3 phụ lục** để đọc trực tiếp — bản trong `Downloads` là export cũ | Rà lại mọi mục dẫn `SRC-HD-*` trong tài liệu này |
 | `MISS-07` | **Map nhóm Zalo → đại lý** cho ~200 nhóm | Nhận diện đại lý; hiện có 2/200 |
 | `MISS-08` | **Catalog + profile ULTTY** dạng dùng được | `GAP-07` |
 | `MISS-09` | **Map SKU ↔ mã KiotViet** (mã nội bộ dạng số) | Sau GĐ1 |
@@ -588,7 +579,7 @@ Ca có 🔒 phụ thuộc một `CONFLICT`/`MISSING` chưa giải → **chưa đ
 | 5 | **U4 — Khuyến mãi** | Cần `MISS-05` | Không có công thức thì không có gì để code. **Không đặt giả định ở đây**: khuyến mãi sai tạo nghĩa vụ giao quà thật, khác hẳn ba giả định giá vốn đảo ngược được |
 | 6 | **U5 — CSKH** | Cần `GAP-09` | Thông báo giá tháng là nghĩa vụ hợp đồng, tái dùng kết quả U2 |
 | 7 | **U6 — Vận hành / cảnh báo / nội dung** | Cần `MISS-08` | Gồm cả `GAP-12`, `GAP-13`, `GAP-14` — **nghĩa vụ hợp đồng, dễ bị bỏ quên** |
-| 8 | **U7 — UAT hợp đồng** | Cần `MISS-06` | Phải có bộ kịch bản khách ký duyệt trước |
+| 8 | **U7 — UAT hợp đồng** | Cần `MISS-06` **và U2 xong** | Hợp đồng đã có ngưỡng cứng **≥90% / 2 nhóm / 2 ngày**, nên UAT không còn là bài định tính. `GAP-18` nói rõ: vào UAT khi giá còn sai là **tự nộp điểm trừ** |
 
 ---
 
@@ -670,7 +661,7 @@ cho một khách.
   decidedBy, decidedAt}` — và một quy ước cho phép luật nghiệp vụ **tham chiếu** tới xung đột chưa
   giải, để hành vi ở vùng tranh chấp fail-closed thay vì đoán.
 - **Vì sao dùng lại được:** mọi tenant có nhiều hơn một nguồn giấy tờ sẽ có mâu thuẫn.
-- **Bằng chứng nghiệp vụ:** 8 xung đột ở §3, trong đó `CONFLICT-ORDER-THRESHOLD-001` nằm ngay trên
+- **Bằng chứng nghiệp vụ:** 7 xung đột ở §3, trong đó `CONFLICT-ORDER-THRESHOLD-001` nằm ngay trên
   đường tự động gửi tin cho khách.
 
 ---
@@ -681,9 +672,10 @@ cho một khách.
 |---|---|
 | Ngày đối chiếu | 28/08/2026 |
 | `origin/main` | `ae04b2b645a81e7b9893dbb258ccccb998099c1e` (CI xanh, 0 PR mở) |
-| Nguồn hợp đồng | 1 hợp đồng + 3 phụ lục, đọc toàn văn |
+| Nguồn hợp đồng | 1 hợp đồng + 3 phụ lục. ⚠️ **Bản đọc được là export CŨ**; ngày ký, căn cứ pháp lý và điều khoản UAT đã sửa theo bản ký 26/08/2026 do chủ dự án cung cấp — còn nợ một lần đọc trực tiếp (`MISS-10`) |
 | Nguồn Drive | 7 thư mục, đo trực tiếp trên Drive **và** trên bản mirror local |
 | Tài liệu gốc đọc thêm lần này | 8 tệp mà `mo-ta-nghiep-vu.md` §0 còn ghi "CHƯA đọc" |
-| Sự kiện phân loại | **40** `FACT` · **8** `CONFLICT` · 3 `SUPERSEDED` · 9 `MISSING` · 9 `OUT_OF_SCOPE` · 3 `ASM` · 17 `GAP` (đếm bằng `grep` trên chính tệp này, không đếm tay) |
+| Sự kiện phân loại | **42** `FACT` · **7** `CONFLICT` · **2** `SUPERSEDED` · **10** `MISSING` · 9 `OUT_OF_SCOPE` · 3 `ASM` · **18** `GAP` (đếm bằng `grep` trên chính tệp này, không đếm tay) |
 | Xung đột tự giải quyết | **0** — 3 xung đột được chạy theo **giả định có ghi sổ** (`ASM-01..03`), vẫn OPEN |
-| Đính chính từ người vận hành | 28/08/2026 — kỳ giá `2026-08` trong repo là **bản copy để kiểm thử gd1**, do người vận hành tự đặt, **không phải** quyết định của khách. Đã sửa `SUP-01` và thêm `FACT-PRICE-07` |
+| Đính chính từ người vận hành | 28/08/2026 — (1) kỳ giá `2026-08` trong repo là **bản copy để kiểm thử gd1**, không phải quyết định của khách → `SUP-01` + `FACT-PRICE-07`; (2) bản hợp đồng dùng lúc soạn là **export cũ** → đã sửa ngày ký (26/08/2026), căn cứ pháp lý, và bốn `FACT-UAT-*`; gỡ `SUP-03` và `CONFLICT-LEGAL-001` vì cả hai dựng trên bản cũ |
+| Giả định tự đặt | 3 (`ASM-01..03`, §3bis) — vì chưa liên hệ được khách. Không mục nào đóng xung đột tương ứng |
