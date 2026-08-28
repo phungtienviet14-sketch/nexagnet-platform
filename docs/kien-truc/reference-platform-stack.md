@@ -151,6 +151,7 @@ classification      APPLICATION_ROLLED_OUT_HEALTHY    hardFailure: false
 > | 7.2 preflight ghi đè `autoSend` | **`FIXED` — chờ chứng minh** | một lần preflight thật chạy qua |
 > | 7.3 `bot-poller` flaky | **`RESOLVED`** | — (đóng bằng cấu trúc, xem dưới) |
 > | 7.6 OTel mang release identity **thứ hai** | **`FIXED` — chờ chứng minh** | một trace bền mang đúng SHA canonical (PROOF 4) |
+> | 7.7 Ba giả định sai về ảnh Docker | **`FIXED`** | — (đóng trước khi deploy, xem dưới) |
 
 ### 7.1 `zca_listener` im lặng — `UNRESOLVED`, và **sắc nét hơn bản trước**
 
@@ -293,6 +294,27 @@ thì bài đỏ đúng với `['@netviet/tenant']`.
 Span nay mang thêm `nexagnet.release_source`, và `source: 'conflict'` kêu to một lần lúc khởi động.
 
 **Cổng đóng hẳn:** PROOF 4 chạy trên trace bền. Thuộc **P2**.
+
+### 7.7 Ba giả định sai về ảnh Docker — `FIXED` trước khi chạy một lần deploy nào
+
+> Không phải sự cố runtime: đây là ba thứ **sẽ** hỏng ở lần deploy đầu tiên, bắt được bằng cách
+> đọc **config của chính hai ảnh** từ registry thay vì tin vào thói quen. Ghi lại vì cả ba đều
+> thuộc cùng một họ — *"ảnh này cư xử như mọi ảnh khác"* — và họ đó sẽ quay lại.
+
+| # | Giả định | Sự thật | Hậu quả nếu không sửa |
+|---|---|---|---|
+| 1 | Container nào cũng chạy được `wget` trong `healthcheck` | `otel/opentelemetry-collector-contrib` dựng từ **`scratch`**: ba lớp, chỉ có `/otelcol-contrib`, chứng chỉ CA và tệp cấu hình. **Không shell, không `wget`, không `curl`** | `healthcheck` đỏ **vĩnh viễn** ⇒ `up --wait` thất bại ⇒ deploy hỏng vì một cổng **không thể xanh** |
+| 2 | `chmod 600` là cách an toàn để đặt một tệp bí mật cạnh container | Ảnh khai `USER 10001:10001`; ClickHouse dùng `DEFAULT_UID=101`. Bind mount **giữ nguyên** chủ sở hữu của host | Tiến trình không đọc được tệp khoá. Triệu chứng **không phải một lỗi rõ ràng** — chỉ là *"không có span nào"* |
+| 3 | Biến môi trường của ảnh có tên ổn định | Tên đổi giữa các đời: `CLICKHOUSE_ACCESS_MANAGEMENT` → `CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT` | User ghi không có `CREATE USER` ⇒ `init-observability.sql` thất bại ⇒ **user đọc không bao giờ tồn tại** ⇒ đường đọc của Debug View chết |
+
+**Đã sửa:** bỏ `healthcheck` của collector và đọc sức khoẻ **từ container khác** trên cùng mạng
+(`clickhouse` là ảnh alpine, có busybox `wget` — đã kiểm); `chown` theo đúng uid của từng ảnh với
+`0400` cho hai tệp có bí mật và `0444` cho cấu hình collector (không chứa bí mật); đặt **cả hai**
+tên biến.
+
+**Điều đáng rút ra không phải ba lỗi này.** Là chi phí: một vòng deploy ~17 phút, một vòng đọc
+config ảnh ~1 phút. Trước khi thêm bất kỳ ảnh mới nào vào compose, đọc `config.User`,
+`config.Entrypoint` và lịch sử lớp của nó.
 
 ### 7.4 Hai rủi ro tuân thủ đã biết, vẫn mở
 
@@ -453,7 +475,57 @@ là ba container nữa cho một thứ chưa ai cần tới.
 Hệ quả phải nói rõ: **§8.3 dòng "HyperDX chạy được ở chế độ HyperDX only" vẫn chỉ là khảo sát**,
 chưa được chứng minh trên stack nào.
 
-### 8.7 Điều kiện dừng
+### 8.7 Bằng chứng THÀNH PHẦN (28/08/2026) — chưa phải bằng chứng trên stack tham chiếu
+
+> **Đọc kỹ nhãn.** Dưới đây là chuỗi OTLP → ClickHouse chạy thật, bằng **đúng hai ảnh đã ghim
+> digest**, nhưng trên **máy lập trình viên**, không phải trên `ultty-gd1-test`. Theo §4 đây là
+> bằng chứng cho **L1**, không phải L2 và càng không phải L5. Nó trả lời "thiết kế này có chạy
+> không", không trả lời "nó có chạy trên stack tham chiếu không".
+>
+> Nó tồn tại vì một lý do rẻ tiền và thực dụng: mỗi vòng deploy mất ~17 phút, còn vòng này mất
+> ~3 phút. Ba lỗi ở §7.7 được bắt bằng cách đọc config của ảnh; bốn điều dưới đây được bắt bằng
+> cách chạy chúng.
+
+| Phép thử | Kết quả |
+|---|---|
+| `otelcol-contrib validate` trên chính binary 0.130.1 | **RC=0** |
+| Collector khởi động với cấu hình đã render | sạch, không một dòng cảnh báo |
+| OTLP/HTTP + **khoá đúng** | **HTTP 200** |
+| OTLP/HTTP + **khoá của tenant khác** | **HTTP 401** |
+| OTLP/HTTP + **không khoá** | **HTTP 401** |
+| `init-observability.sql` chạy, user **đọc** được tạo | `system.users` có cả `*_writer` lẫn `*_reader` |
+| Exporter tự dựng schema | `otel_traces` + `otel_traces_trace_id_ts` (+ materialized view) |
+| **User readonly SELECT được** | ✅ — đúng đường mà Debug View sẽ đi |
+| `ttl: 720h` biến thành gì trên bảng | `TTL toDateTime(Timestamp) + toIntervalDay(30)` |
+
+**Hai điều đáng giá nhất, và cả hai đều không suy ra được từ tài liệu:**
+
+**1. Cách ly fail-closed là thật.** Hai dòng `401` ở trên là §8.1 điều 2 được đo chứ không được
+hứa. Không có `default_pipelines` để rơi vào, nên một tải trọng không mang đúng credential
+**không đi đâu cả** — nó bị từ chối ở cửa.
+
+**2. Quyết định có kiểu SỐNG SÓT qua OTel vào kho.** Đây là câu hỏi mở lớn nhất của Debug View
+bền, vì `TelemetryRecord` và span OTel là hai hình dạng khác nhau. Đọc lại bằng user readonly:
+
+```
+SpanName:          order.persist
+rel:               7a6cc63904d18be49c653ee1315e65046607bda5
+src:               manifest
+Events.Name:       ['order.auto_confirm']
+Events.Attributes: [{'outcome':'denied','reason':'QUANTITY_ABOVE_THRESHOLD'}]
+```
+
+Điểm quyết định, kết quả, **mã lý do**, và **danh tính bản phát hành kèm nguồn** — tất cả tới nơi
+nguyên vẹn. Nên đường lùi lịch sử của Debug View là một việc **khả thi**, không phải một hy vọng.
+Schema để dựng nó: `TraceId · SpanId · ParentSpanId · SpanName · ServiceName · Duration ·
+ResourceAttributes · SpanAttributes · Events.{Timestamp,Name,Attributes} · StatusCode`, tra cứu
+nhanh theo `TraceId` qua bảng `otel_traces_trace_id_ts`.
+
+**Cái này KHÔNG chứng minh:** rằng collector lên được trên VM, rằng `api` và hai worker thật sự
+phát span, rằng span sống qua restart/deploy, hay bất cứ điều gì về backup. Bốn runtime proof của
+P2 vẫn còn nguyên.
+
+### 8.8 Điều kiện dừng
 
 Nếu ClickStack **không** chứng minh được cách ly cứng theo mô hình này thì **DỪNG và báo** — tuyệt
 đối không tự hạ xuống một kho dùng chung. Tính tới 27/08/2026, ba bằng chứng ở §8.3 cho thấy
