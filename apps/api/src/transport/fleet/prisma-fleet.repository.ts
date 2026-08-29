@@ -1,9 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { PrismaService } from '../../config/prisma.service.js';
-import {
-  ACTIVE_VEHICLE_ASSIGNMENT_INDEX,
-  isActiveAssignmentConflict,
-} from '../storage-conflict.js';
+import { ACTIVE_VEHICLE_ASSIGNMENT, isActiveAssignmentConflict } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import type {
   Driver,
@@ -267,7 +264,7 @@ export class PrismaFleetRepository extends FleetRepository {
         return toVehicleAssignment(row);
       });
     } catch (error) {
-      if (isActiveAssignmentConflict(error, ACTIVE_VEHICLE_ASSIGNMENT_INDEX)) {
+      if (isActiveAssignmentConflict(error, ACTIVE_VEHICLE_ASSIGNMENT)) {
         throw TransportDomainError.conflict(
           'VEHICLE_ACTIVE_ASSIGNMENT_CONFLICT',
           `Xe ${vehicleId} vua duoc nguoi khac gan lai xe phu trach — tai lai roi thu lai`,

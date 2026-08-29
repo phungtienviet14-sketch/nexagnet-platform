@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../config/prisma.service.js';
 import { PrismaFleetRepository } from './fleet/prisma-fleet.repository.js';
 import { MONEY_MAX_AMOUNT, MoneyError } from './money.js';
+import { describeStorageError } from './storage-conflict.js';
 import { TransportDomainError } from './transport.errors.js';
 import { PrismaTripRepository } from './trips/prisma-trip.repository.js';
 
@@ -270,7 +271,12 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         await holder;
 
         const outcome = await contender;
-        expect(outcome).toBeInstanceOf(TransportDomainError);
+        // Thong diep khang dinh mang HINH DANG THAT cua loi: lan hong dau cua bai nay chi noi duoc
+        // "expected PrismaClientKnownRequestError to be an instance of TransportDomainError", va
+        // phai mat them mot vong CI chi de nhin xem Prisma dat ten rang buoc o dau.
+        expect(outcome, `Loi chua duoc dich: ${describeStorageError(outcome)}`).toBeInstanceOf(
+          TransportDomainError,
+        );
         const error = outcome as TransportDomainError;
         expect(error.kind).toBe('CONFLICT');
         expect(error.reason).toBe('TRIP_ACTIVE_ASSIGNMENT_CONFLICT');
@@ -369,7 +375,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         await holder;
 
         const outcome = await contender;
-        expect(outcome).toBeInstanceOf(TransportDomainError);
+        expect(outcome, `Loi chua duoc dich: ${describeStorageError(outcome)}`).toBeInstanceOf(
+          TransportDomainError,
+        );
         const error = outcome as TransportDomainError;
         expect(error.kind).toBe('CONFLICT');
         expect(error.reason).toBe('VEHICLE_ACTIVE_ASSIGNMENT_CONFLICT');

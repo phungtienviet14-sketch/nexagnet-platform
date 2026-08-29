@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { PrismaService } from '../../config/prisma.service.js';
 import { TRANSPORT_CURRENCY, fromStoredAmount, toStoredAmount } from '../money.js';
-import { ACTIVE_TRIP_ASSIGNMENT_INDEX, isActiveAssignmentConflict } from '../storage-conflict.js';
+import { ACTIVE_TRIP_ASSIGNMENT, isActiveAssignmentConflict } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import type { Trip, TripAssignment } from '../transport.types.js';
 import type { TripStatus } from './trip-lifecycle.js';
@@ -226,7 +226,7 @@ export class PrismaTripRepository extends TripRepository {
         };
       });
     } catch (error) {
-      if (isActiveAssignmentConflict(error, ACTIVE_TRIP_ASSIGNMENT_INDEX)) {
+      if (isActiveAssignmentConflict(error, ACTIVE_TRIP_ASSIGNMENT)) {
         throw TransportDomainError.conflict(
           'TRIP_ACTIVE_ASSIGNMENT_CONFLICT',
           `Chuyen ${tripId} vua duoc nguoi khac phan cong — tai lai roi thu lai`,

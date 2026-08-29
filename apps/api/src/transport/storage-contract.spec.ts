@@ -10,8 +10,8 @@ import {
   toStoredAmount,
 } from './money.js';
 import {
-  ACTIVE_TRIP_ASSIGNMENT_INDEX,
-  ACTIVE_VEHICLE_ASSIGNMENT_INDEX,
+  ACTIVE_TRIP_ASSIGNMENT,
+  ACTIVE_VEHICLE_ASSIGNMENT,
   isActiveAssignmentConflict,
 } from './storage-conflict.js';
 import { createVehicleSchema, planTripSchema } from './transport.schemas.js';
@@ -144,8 +144,13 @@ describe('Bat bien MOT ban phan cong dang hieu luc song o DB (T2.1/F2)', () => {
     // Ten index la mot HOP DONG giua SQL va TypeScript: `storage-conflict.ts` doi chieu ten nay de
     // biet mot `P2002` la va cham phan cong hay la trung ma chuyen. Lech ten thi loi bi dich sai,
     // va nguoi dung nhan mot cau tra loi khong lien quan.
-    expect(migrationSql).toContain(`CREATE UNIQUE INDEX "${ACTIVE_TRIP_ASSIGNMENT_INDEX}"`);
-    expect(migrationSql).toContain(`CREATE UNIQUE INDEX "${ACTIVE_VEHICLE_ASSIGNMENT_INDEX}"`);
+    expect(migrationSql).toContain(`CREATE UNIQUE INDEX "${ACTIVE_TRIP_ASSIGNMENT.indexName}"`);
+    expect(migrationSql).toContain(`CREATE UNIQUE INDEX "${ACTIVE_VEHICLE_ASSIGNMENT.indexName}"`);
+
+    // Cot khoa cung la mot phan cua hop dong: no la thu `isActiveAssignmentConflict()` doi chieu
+    // khi Prisma bao ten TRUONG thay vi ten index — duong that su xay ra tren Postgres.
+    expect(migrationSql).toContain(`("${ACTIVE_TRIP_ASSIGNMENT.column}")`);
+    expect(migrationSql).toContain(`("${ACTIVE_VEHICLE_ASSIGNMENT.column}")`);
 
     // Menh de mot phan la thu bien "dang hieu luc" thanh khoa duy nhat — thieu no thi unique nay
     // cam luon ca lich su, tuc cam dung cai `GD-06` bat phai giu.
@@ -168,42 +173,81 @@ describe('Ngay-chi-co-ngay: giu chuoi, siet bang CHECK (T2.1/F3)', () => {
   });
 });
 
-describe('Nhan dien va cham ghi: dung ma VA dung ten index (T2.1/F2)', () => {
+describe('Nhan dien va cham ghi (T2.1/F2)', () => {
   /** Dung hinh dang loi cua Prisma, khong dung lop that: tang nay CO Y khong phu thuoc ban sinh. */
   const prismaError = (code: string, meta: unknown, message = 'Unique constraint failed'): unknown =>
     Object.assign(new Error(message), { code, meta });
 
-  it('nhan ra du ten index nam o meta.target, meta.constraint hay trong thong diep', () => {
-    // Ba hinh dang nay khong phai gia dinh cho vui: Prisma doi cho dat ten rang buoc tuy phien ban
-    // va tuy driver, va voi index MOT PHAN thi hai dang sau la kha nang cao nhat.
-    const shapes: unknown[] = [
-      prismaError('P2002', { target: [ACTIVE_TRIP_ASSIGNMENT_INDEX] }),
-      prismaError('P2002', { target: ACTIVE_TRIP_ASSIGNMENT_INDEX }),
-      prismaError('P2002', { constraint: ACTIVE_TRIP_ASSIGNMENT_INDEX }),
-      prismaError('P2002', {}, `duplicate key value violates unique constraint "${ACTIVE_TRIP_ASSIGNMENT_INDEX}"`),
-    ];
+  it('nhan ra dang THAT SU xay ra tren Postgres: Prisma doi ten index thanh ten TRUONG', () => {
+    // Do duoc o CI 29/08/2026: Postgres bao `..._activeTrip_key`, Prisma mo ra thanh
+    // `{ modelName: 'TransportTripAssignment', target: ['tripId'] }`. Ten index BIEN MAT.
+    const real = prismaError(
+      'P2002',
+      { modelName: 'TransportTripAssignment', target: ['tripId'] },
+      'Unique constraint failed on the fields: (`tripId`)',
+    );
+    expect(isActiveAssignmentConflict(real, ACTIVE_TRIP_ASSIGNMENT)).toBe(true);
 
+    const realVehicle = prismaError(
+      'P2002',
+      { modelName: 'TransportVehicleAssignment', target: ['vehicleId'] },
+      'Unique constraint failed on the fields: (`vehicleId`)',
+    );
+    expect(isActiveAssignmentConflict(realVehicle, ACTIVE_VEHICLE_ASSIGNMENT)).toBe(true);
+  });
+
+  it('van nhan ra dang co TEN INDEX, cho ban/driver nao bao kieu do', () => {
+    const shapes: unknown[] = [
+      prismaError('P2002', { target: [ACTIVE_TRIP_ASSIGNMENT.indexName] }),
+      prismaError('P2002', { target: ACTIVE_TRIP_ASSIGNMENT.indexName }),
+      prismaError('P2002', { constraint: ACTIVE_TRIP_ASSIGNMENT.indexName }),
+      prismaError(
+        'P2002',
+        {},
+        `duplicate key value violates unique constraint "${ACTIVE_TRIP_ASSIGNMENT.indexName}"`,
+      ),
+    ];
     for (const shape of shapes) {
-      expect(isActiveAssignmentConflict(shape, ACTIVE_TRIP_ASSIGNMENT_INDEX)).toBe(true);
+      expect(isActiveAssignmentConflict(shape, ACTIVE_TRIP_ASSIGNMENT)).toBe(true);
     }
   });
 
-  it('KHONG nhan nham mot unique khac cua cung bang', () => {
-    // Day la ly do phep kiem doi ca TEN chu khong chi ma `P2002`. Trung ma chuyen ma bi bao thanh
-    // "co nguoi vua phan cong truoc ban" se lam nguoi dung thu lai mai ma khong bao gio qua.
-    const codeClash = prismaError('P2002', { target: ['TransportTrip_code_key'] });
-    expect(isActiveAssignmentConflict(codeClash, ACTIVE_TRIP_ASSIGNMENT_INDEX)).toBe(false);
+  it('KHONG nham va cham KHOA CHINH thanh va cham phan cong', () => {
+    // `'id'` la chuoi con cua `'tripId'`. Neu phep doi chieu chay tren mot chuoi hoa thay vi tren
+    // tung phan tu, dong nay se xanh sai — va mot va cham `id` se duoc bao cho nguoi dung thanh
+    // "co nguoi vua phan cong truoc ban".
+    const pkClash = prismaError(
+      'P2002',
+      { modelName: 'TransportTripAssignment', target: ['id'] },
+      'Unique constraint failed on the fields: (`id`)',
+    );
+    expect(isActiveAssignmentConflict(pkClash, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
+  });
 
-    // Hai index cua hai bang khac nhau cung khong duoc lan sang nhau.
-    const vehicleClash = prismaError('P2002', { target: [ACTIVE_VEHICLE_ASSIGNMENT_INDEX] });
-    expect(isActiveAssignmentConflict(vehicleClash, ACTIVE_TRIP_ASSIGNMENT_INDEX)).toBe(false);
-    expect(isActiveAssignmentConflict(vehicleClash, ACTIVE_VEHICLE_ASSIGNMENT_INDEX)).toBe(true);
+  it('KHONG nhan nham unique cua bang khac, du trung ten cot', () => {
+    const otherModel = prismaError('P2002', {
+      modelName: 'TransportTrip',
+      target: ['code'],
+    });
+    expect(isActiveAssignmentConflict(otherModel, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
+
+    // Hai index cua hai bang khong duoc lan sang nhau.
+    const vehicleClash = prismaError('P2002', {
+      modelName: 'TransportVehicleAssignment',
+      target: ['vehicleId'],
+    });
+    expect(isActiveAssignmentConflict(vehicleClash, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
+    expect(isActiveAssignmentConflict(vehicleClash, ACTIVE_VEHICLE_ASSIGNMENT)).toBe(true);
   });
 
   it('bo qua moi loi khong phai vi pham unique', () => {
-    expect(isActiveAssignmentConflict(prismaError('P2025', { target: [ACTIVE_TRIP_ASSIGNMENT_INDEX] }), ACTIVE_TRIP_ASSIGNMENT_INDEX)).toBe(false);
-    expect(isActiveAssignmentConflict(new Error('mat ket noi'), ACTIVE_TRIP_ASSIGNMENT_INDEX)).toBe(false);
-    expect(isActiveAssignmentConflict(null, ACTIVE_TRIP_ASSIGNMENT_INDEX)).toBe(false);
-    expect(isActiveAssignmentConflict(undefined, ACTIVE_TRIP_ASSIGNMENT_INDEX)).toBe(false);
+    const notUnique = prismaError('P2025', {
+      modelName: 'TransportTripAssignment',
+      target: ['tripId'],
+    });
+    expect(isActiveAssignmentConflict(notUnique, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
+    expect(isActiveAssignmentConflict(new Error('mat ket noi'), ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
+    expect(isActiveAssignmentConflict(null, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
+    expect(isActiveAssignmentConflict(undefined, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
   });
 });
