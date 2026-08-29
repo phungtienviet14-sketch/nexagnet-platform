@@ -194,19 +194,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 129
+      "line": 222
     },
     "source_truth.glossary.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 182
+      "line": 275
     },
     "source_truth.group.map": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 147
+      "line": 240
     },
     "source_truth.price.update": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 165
+      "line": 258
     },
     "tenant.loaded": {
       "functionName": "evaluateOperationalReadiness",

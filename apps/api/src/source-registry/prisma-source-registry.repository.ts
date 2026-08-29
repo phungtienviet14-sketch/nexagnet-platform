@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { PrismaService } from '../config/prisma.service.js';
+import type { PrismaClient } from '@prisma/client';
 import { SourceRegistryRepository } from './source-registry.repository.js';
 import { assertWithinScope, type TenantScope } from './tenant-scope.js';
 import type {
@@ -26,7 +26,12 @@ import type { SourceStatus } from './source-lifecycle.js';
  */
 @Injectable()
 export class PrismaSourceRegistryRepository extends SourceRegistryRepository {
-  constructor(private readonly prisma: PrismaService) {
+  /**
+   * Nhan `PrismaClient` chu khong `PrismaService`: kho nay duoc dung o CA HAI noi — trong tien
+   * trinh NestJS (nhan `PrismaService`, von extends `PrismaClient`) va trong tien trinh MCP dung
+   * rieng (tu tao mot `PrismaClient` tran). Buoc kieu hep hon se lam noi thu hai phai ep kieu.
+   */
+  constructor(private readonly prisma: PrismaClient) {
     super();
   }
 
@@ -373,10 +378,10 @@ export class PrismaSourceRegistryRepository extends SourceRegistryRepository {
  * doi mot ben, TypeScript keu o dung bon ham nay chu khong keu rai rac ba muoi cho.
  * ------------------------------------------------------------------ */
 
-type SourceRow = Awaited<ReturnType<PrismaService['businessSource']['create']>>;
-type FactRow = Awaited<ReturnType<PrismaService['businessFact']['create']>>;
-type ApprovalRow = Awaited<ReturnType<PrismaService['businessApproval']['create']>>;
-type ConflictRow = Awaited<ReturnType<PrismaService['businessConflict']['create']>> & {
+type SourceRow = Awaited<ReturnType<PrismaClient['businessSource']['create']>>;
+type FactRow = Awaited<ReturnType<PrismaClient['businessFact']['create']>>;
+type ApprovalRow = Awaited<ReturnType<PrismaClient['businessApproval']['create']>>;
+type ConflictRow = Awaited<ReturnType<PrismaClient['businessConflict']['create']>> & {
   facts?: { factId: string }[];
 };
 
