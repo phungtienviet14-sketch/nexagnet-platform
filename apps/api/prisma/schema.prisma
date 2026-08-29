@@ -784,19 +784,24 @@ model WorkflowOutbox {
 // co gi de suy nguoc. So sanh khoang va sap xep van dung vi ISO-8601 sap xep theo tu dien.
 // T2.1/F3 GIU nguyen quyet dinh nay va them `CHECK` o DB cho dang chuoi (xem duoi).
 //
-// ┌─ BON DOI TUONG DB CUA MIEN NAY KHONG BIEU DIEN DUOC BANG PRISMA SCHEMA ─────────────────────┐
-// │ Chung song trong SQL tho cua migration `20260830090000_transport_storage_invariants`:       │
-// │   · `TransportTripAssignment_activeTrip_key`    — UNIQUE MOT PHAN, `WHERE effectiveTo IS NULL`│
-// │   · `TransportVehicleAssignment_activeVehicle_key` — nhu tren, theo xe                       │
-// │   · `TransportTrip_freightAmount_money_range`   — CHECK khoang tien                          │
-// │   · `TransportTrip_businessDate_iso` / `TransportDriver_licenceExpiry_iso` — CHECK ngay      │
-// │                                                                                             │
-// │ Prisma khong co cu phap cho `WHERE` tren index lan cho `CHECK`. `migrate deploy` (duong CI   │
-// │ va duong trien khai cua repo nay) giu chung nguyen ven. NHUNG `prisma migrate dev` sinh      │
-// │ migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA ca bon — dung nhu su co  │
-// │ cot `direction` da ghi o ke-hoach/tong-quan.md §Pha 0. Ai chay `migrate dev` PHAI doc lai    │
-// │ migration sinh ra va bo cac dong `DROP INDEX`/`DROP CONSTRAINT` do truoc khi commit.         │
-// └─────────────────────────────────────────────────────────────────────────────────────────────┘
+// NAM DOI TUONG DB CUA MIEN NAY KHONG BIEU DIEN DUOC BANG PRISMA SCHEMA
+// -----------------------------------------------------------------------------------------------
+// Chung song trong SQL tho cua migration `20260830090000_transport_storage_invariants`.
+//
+//   HAI unique MOT PHAN
+//     1. `TransportTripAssignment_activeTrip_key`        — `WHERE "effectiveTo" IS NULL`, theo chuyen
+//     2. `TransportVehicleAssignment_activeVehicle_key`  — nhu tren, theo xe
+//   BA rang buoc CHECK
+//     3. `TransportTrip_freightAmount_money_range`       — khoang tien +-(2^53-1)
+//     4. `TransportTrip_businessDate_iso`                — ngay nghiep vu dang YYYY-MM-DD
+//     5. `TransportDriver_licenceExpiry_iso`             — han GPLX, cung rang buoc
+//
+// Prisma khong co cu phap cho `WHERE` tren index lan cho `CHECK`. `migrate deploy` — duong cua CI
+// va cua trien khai trong repo nay — giu ca NAM nguyen ven. Nhung `prisma migrate dev` sinh
+// migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA ca NAM: dung nhu su co cot
+// `direction` da ghi o ke-hoach/tong-quan.md §Pha 0. Ai chay `migrate dev` PHAI doc lai migration
+// sinh ra va bo cac dong `DROP INDEX`/`DROP CONSTRAINT` do truoc khi commit.
+// -----------------------------------------------------------------------------------------------
 
 enum TransportVehicleStatus {
   IDLE
@@ -877,6 +882,12 @@ model TransportDriver {
 /// MOT ban hieu luc cho moi xe duoc CUONG CHE O DB bang unique mot phan
 /// `TransportVehicleAssignment_activeVehicle_key` (`WHERE "effectiveTo" IS NULL`), khai trong SQL
 /// tho vi Prisma khong co cu phap cho no. Xem khoi canh bao dau muc Transport.
+///
+/// Unique do cuong che DUNG MOT DIEU: toi da mot ban DANG hieu luc. NHIEU ban DA DONG cua cung mot
+/// xe van ghi duoc — `GD-06` doi hoi giu lich su. Dieu do KHONG noi bat bien T1 §5 `TX-01`
+/// (*khong chong lap thoi gian cho cung mot xe*): duong ghi dong ban cu DUNG TAI moc mo ban moi,
+/// nen ghi binh thuong khong sinh chong lap. Chan chong lap TUY Y can EXCLUSION CONSTRAINT
+/// (`btree_gist` + `tstzrange`) — ghi nhan la lua chon siet them ve sau, khong lam o T2.1.
 model TransportVehicleAssignment {
   id            String    @id @default(cuid())
   vehicleId     String
@@ -989,6 +1000,10 @@ model TransportTrip {
 /// `TransportTripAssignment_activeTrip_key` (`WHERE "effectiveTo" IS NULL`). Giao dich dong-roi-mo
 /// trong `PrismaTripRepository.assign()` la dung voi MOT nguoi ghi; unique nay la thu duy nhat
 /// dung voi HAI nguoi ghi cung luc.
+///
+/// Nhu tren: unique chi cam ban thu hai DANG hieu luc, khong cam nhieu ban DA DONG. `assign()`
+/// dat `previous.effectiveTo = current.effectiveFrom`, nen chuoi lich su noi lien nhau, khong ho
+/// va khong chong lap.
 model TransportTripAssignment {
   id            String            @id @default(cuid())
   tripId        String

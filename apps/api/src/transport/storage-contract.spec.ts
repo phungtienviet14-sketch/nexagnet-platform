@@ -34,15 +34,22 @@ import { createVehicleSchema, planTripSchema } from './transport.schemas.js';
  * nam o `transport-repository.int.spec.ts`; hai bo bo tro nhau, khong thay the nhau.
  */
 
-const migrationSql = readFileSync(
+const migrationDir = (file: string): string =>
   fileURLToPath(
     new URL(
-      '../../prisma/migrations/20260830090000_transport_storage_invariants/migration.sql',
+      `../../prisma/migrations/20260830090000_transport_storage_invariants/${file}`,
       import.meta.url,
     ),
-  ),
-  'utf8',
-);
+  );
+
+const migrationSql = readFileSync(migrationDir('migration.sql'), 'utf8');
+const rollbackSql = readFileSync(migrationDir('README-rollback.sql'), 'utf8');
+
+/**
+ * Khoang cua `INTEGER` PostgreSQL — CO DAU. Duong lui `BIGINT -> INTEGER` bi bo boi khoang nay.
+ */
+const PG_INT32_MIN = -2_147_483_648;
+const PG_INT32_MAX = 2_147_483_647;
 
 describe('Hop dong khoang tien — bon tang cung MOT khoang (T2.1/F1)', () => {
   it('bien cua mien DUNG BANG khoang nguyen an toan cua JavaScript', () => {
@@ -115,7 +122,6 @@ describe('Hop dong khoang tien — bon tang cung MOT khoang (T2.1/F1)', () => {
 
 describe('So DEM van la INTEGER, va bien gioi HTTP biet dieu do (T2.1/F1)', () => {
   it('tu choi so vuot INTEGER cho km/kg/odo — 400 chu khong phai 500 o INSERT', () => {
-    const PG_INT32_MAX = 2_147_483_647;
     const base = {
       code: 'CH-2',
       kind: 'OWN_DIRECT' as const,
@@ -249,5 +255,57 @@ describe('Nhan dien va cham ghi (T2.1/F2)', () => {
     expect(isActiveAssignmentConflict(new Error('mat ket noi'), ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
     expect(isActiveAssignmentConflict(null, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
     expect(isActiveAssignmentConflict(undefined, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
+  });
+});
+
+describe('Duong lui phai kiem CA HAI phia cua khoang INTEGER (T2.1R/R2)', () => {
+  /*
+   * Vi sao bai nay ton tai: precheck dau tien cua `README-rollback.sql` chi hoi
+   * `WHERE "freightAmount" > 2147483647`. Nhung khoang tien cua mien la +-(2^53-1) — CO PHIA AM —
+   * nen mot hang `-3.000.000.000` di lot qua precheck do roi lam chinh buoc `ALTER` phia sau chet.
+   * Precheck bo sot dung nua so hang chan duong lui, va chi lo ra giua luc su co.
+   *
+   * Do tren PostgreSQL 16.15 (30/08/2026) voi bang co ca hang duong lan hang am vuot `INTEGER`:
+   *   precheck cu  -> dem duoc 1 hang   (bo sot hang am)
+   *   precheck moi -> dem duoc 2 hang   (dung)
+   *   `ALTER ... TYPE INTEGER` -> `ERROR: integer out of range`, bang GIU NGUYEN ca 4 hang
+   * Tuc Postgres KHONG im lang cat bot; precheck la de NHIN THAY rui ro truoc, khong phai de chan
+   * mot phep cat bot lang le.
+   */
+  it('precheck bo CA khoang `INTEGER` co dau, khong chi bien duong', () => {
+    expect(rollbackSql).toContain(`NOT BETWEEN ${PG_INT32_MIN} AND ${PG_INT32_MAX}`);
+  });
+
+  it('KHONG con phep so sanh mot phia — do dung la loi da bi review bat', () => {
+    // `> 2147483647` don doc la hinh dang cu. Neu no quay lai, dong nay do.
+    expect(rollbackSql).not.toMatch(/"freightAmount"\s*>\s*2147483647/);
+  });
+
+  it('duong lui van dao nguoc DU ca nam doi tuong DB', () => {
+    for (const name of [
+      ACTIVE_TRIP_ASSIGNMENT.indexName,
+      ACTIVE_VEHICLE_ASSIGNMENT.indexName,
+      'TransportTrip_freightAmount_money_range',
+      'TransportTrip_businessDate_iso',
+      'TransportDriver_licenceExpiry_iso',
+    ]) {
+      expect(rollbackSql).toContain(`"${name}"`);
+    }
+    expect(rollbackSql).toContain('ALTER COLUMN "freightAmount" TYPE INTEGER');
+  });
+});
+
+describe('NAM doi tuong DB, khong phai bon (T2.1R/R3)', () => {
+  /*
+   * Con so nay tung bi dem sai thanh "bon" trong bao cao, schema va hop dong mien — vi hai `CHECK`
+   * ngay bi gop lam mot dong. Dem tu chinh tep SQL thi khong ai dem nham duoc nua.
+   */
+  it('migration khai dung 2 unique MOT PHAN va 3 rang buoc CHECK', () => {
+    const partialUniques = migrationSql.match(/CREATE UNIQUE INDEX/g) ?? [];
+    const checks = migrationSql.match(/ADD CONSTRAINT "[^"]+"\s+CHECK/g) ?? [];
+
+    expect(partialUniques).toHaveLength(2);
+    expect(checks).toHaveLength(3);
+    expect(partialUniques.length + checks.length).toBe(5);
   });
 });
