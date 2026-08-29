@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MONEY_MAX_AMOUNT } from './money.js';
 import {
   DRIVER_STATUSES,
   PARTNER_ROLE_KINDS,
@@ -18,8 +19,25 @@ import { TRIP_KINDS, TRIP_STATUSES } from './trips/trip-lifecycle.js';
 const nonEmpty = z.string().trim().min(1);
 const optionalText = z.string().trim().min(1).nullable().optional();
 
-/** Tien: SO NGUYEN DONG (`GD-03`). `z.number().int()` chan luon so thuc ngay tai bien gioi. */
-const vndAmount = z.number().int().nonnegative();
+/**
+ * Tien: SO NGUYEN DONG (`GD-03`). `z.number().int()` chan luon so thuc ngay tai bien gioi.
+ *
+ * `.max(MONEY_MAX_AMOUNT)` la du thua ve HANH VI — zod 4 da bo `.int()` ve dung khoang nguyen an
+ * toan — nhung KHONG du thua ve HOP DONG: no lam bien gioi HTTP dan ve cung mot hang so ma `money()`
+ * va `CHECK` cua cot dung, nen ba tang khong the troi ra khoi nhau ma khong ai thay (T2.1/F1).
+ */
+const vndAmount = z.number().int().nonnegative().max(MONEY_MAX_AMOUNT);
+
+/**
+ * SO DEM van la `INTEGER` o DB — km, kg, so cong-to-met deu khong co ly do gi de la `BIGINT`.
+ *
+ * Nhung khoang cua `z.number().int()` la `+-(2^53-1)`, rong hon `INTEGER` gap ~4 trieu lan, nen
+ * mot `distanceKm = 9e15` qua duoc kiem HTTP roi chet o `INSERT` bang loi tran kieu cua Postgres —
+ * y HET lech ma F1 vá cho cot tien, chi khac la cot nay khong dang doi sang `BIGINT`. Vay thi
+ * siet o bien gioi: sai dau vao phai ra 400, khong ra 500.
+ */
+const PG_INT32_MAX = 2_147_483_647;
+const countedInt = z.number().int().nonnegative().max(PG_INT32_MAX);
 
 const businessDate = z
   .string()
@@ -29,8 +47,8 @@ export const createVehicleSchema = z
   .object({
     registrationPlate: nonEmpty.max(20),
     vehicleClass: nonEmpty.max(120),
-    allowedPayloadKg: z.number().int().positive().nullable().optional(),
-    currentOdoKm: z.number().int().nonnegative().optional(),
+    allowedPayloadKg: countedInt.positive().nullable().optional(),
+    currentOdoKm: countedInt.optional(),
     status: z.enum(VEHICLE_STATUSES).optional(),
   })
   .strict();
@@ -92,7 +110,7 @@ export const planTripSchema = z
     carrierPartnerId: z.string().min(1).nullable().optional(),
     referrerPartnerId: z.string().min(1).nullable().optional(),
     freightAmount: vndAmount.nullable().optional(),
-    distanceKm: z.number().int().nonnegative().nullable().optional(),
+    distanceKm: countedInt.nullable().optional(),
   })
   .strict();
 

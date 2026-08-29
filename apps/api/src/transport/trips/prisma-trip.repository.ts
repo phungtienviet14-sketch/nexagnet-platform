@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { PrismaService } from '../../config/prisma.service.js';
-import { TRANSPORT_CURRENCY } from '../money.js';
+import { TRANSPORT_CURRENCY, fromStoredAmount, toStoredAmount } from '../money.js';
+import { ACTIVE_TRIP_ASSIGNMENT_INDEX, isActiveAssignmentConflict } from '../storage-conflict.js';
+import { TransportDomainError } from '../transport.errors.js';
 import type { Trip, TripAssignment } from '../transport.types.js';
 import type { TripStatus } from './trip-lifecycle.js';
 import {
@@ -24,7 +26,8 @@ interface TripRow {
   customerId: string | null;
   carrierPartnerId: string | null;
   referrerPartnerId: string | null;
-  freightAmount: number | null;
+  /** `BIGINT` ve tay Prisma la `bigint`, khong phai `number` — xem `fromStoredAmount()`. */
+  freightAmount: bigint | null;
   currencyCode: string;
   distanceKm: number | null;
   createdAt: Date;
@@ -58,7 +61,7 @@ const toTrip = (row: TripRow): Trip => ({
   customerId: row.customerId,
   carrierPartnerId: row.carrierPartnerId,
   referrerPartnerId: row.referrerPartnerId,
-  freightAmount: row.freightAmount,
+  freightAmount: fromStoredAmount(row.freightAmount),
   currencyCode: row.currencyCode,
   distanceKm: row.distanceKm,
   createdAt: iso(row.createdAt),
@@ -112,7 +115,7 @@ export class PrismaTripRepository extends TripRepository {
           customerId: input.customerId ?? null,
           carrierPartnerId: input.carrierPartnerId ?? null,
           referrerPartnerId: input.referrerPartnerId ?? null,
-          freightAmount: input.freightAmount ?? null,
+          freightAmount: toStoredAmount(input.freightAmount ?? null),
           currencyCode: TRANSPORT_CURRENCY,
           distanceKm: input.distanceKm ?? null,
         },
@@ -143,7 +146,14 @@ export class PrismaTripRepository extends TripRepository {
   async update(id: string, patch: UpdateTripInput): Promise<Trip | null> {
     const row = await model(this.prisma, 'transportTrip').update({
       where: { id },
-      data: prune(patch),
+      // `freightAmount` phai doi sang `bigint` TRUOC khi den Prisma. Neu de nguyen `number`, Prisma
+      // nem mot loi kieu tho khong mang ten mien nao va no ra HTTP thanh 500 thay vi 400.
+      data: {
+        ...prune(patch),
+        ...(patch.freightAmount === undefined
+          ? {}
+          : { freightAmount: toStoredAmount(patch.freightAmount) }),
+      },
     });
     return row ? toTrip(row) : null;
   }
@@ -175,34 +185,55 @@ export class PrismaTripRepository extends TripRepository {
    * Tach lam hai lan ghi thi mot lan hong o giua se de lai hai ban cung `effectiveTo = NULL`, va
    * ke tu do "ai dang lai chuyen nay" co hai cau tra loi. Khong bao loi nao, khong test nao do —
    * chi la mot chuyen co hai lai xe trong bao cao cuoi thang.
+   *
+   * GIAO DICH LA DIEU KIEN CAN, KHONG PHAI DU (T2.1/F2). No giu hai lan ghi cua MOT nguoi di cung
+   * nhau; no khong noi gi ve nguoi thu hai. Hai giao dich cung luc tren mot chuyen CHUA co ban
+   * phan cong nao deu `updateMany` trung 0 dong roi deu `INSERT` — va khong tang nao trong ung
+   * dung nhin thay duoc dieu do. Thu chan that su la unique MOT PHAN
+   * `TransportTripAssignment_activeTrip_key` o DB; doan `catch` duoi day chi la phan DICH loi cua
+   * no sang ngon ngu cua mien, khong phai phan cuong che.
+   *
+   * Va cham duoc dich thanh 409 chu KHONG tu thu lai: lan ghi thu hai duoc quyet dinh tren mot
+   * trang thai da cu, nen thu lai lang le se ghi de len quyet dinh cua nguoi vua thang — dung cai
+   * ma `GD-06` khong cho phep. Nguoi goi phai doc lai roi quyet lai.
    */
   async assign(tripId: string, input: AssignTripInput): Promise<TripAssignmentChange> {
-    return this.prisma.$transaction(async (tx) => {
-      const scoped = tx as unknown as PrismaService;
-      const previousRow = await model(scoped, 'transportTripAssignment').findFirst({
-        where: { tripId, effectiveTo: null },
-      });
-      if (previousRow) {
-        await model(scoped, 'transportTripAssignment').updateMany({
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const scoped = tx as unknown as PrismaService;
+        const previousRow = await model(scoped, 'transportTripAssignment').findFirst({
           where: { tripId, effectiveTo: null },
-          data: { effectiveTo: input.at },
         });
-      }
-      const currentRow = await model(scoped, 'transportTripAssignment').create({
-        data: {
-          tripId,
-          vehicleId: input.vehicleId,
-          driverId: input.driverId,
-          effectiveFrom: input.at,
-          effectiveTo: null,
-          assignedBy: input.assignedBy,
-        },
+        if (previousRow) {
+          await model(scoped, 'transportTripAssignment').updateMany({
+            where: { tripId, effectiveTo: null },
+            data: { effectiveTo: input.at },
+          });
+        }
+        const currentRow = await model(scoped, 'transportTripAssignment').create({
+          data: {
+            tripId,
+            vehicleId: input.vehicleId,
+            driverId: input.driverId,
+            effectiveFrom: input.at,
+            effectiveTo: null,
+            assignedBy: input.assignedBy,
+          },
+        });
+        return {
+          previous: previousRow ? toAssignment(previousRow) : null,
+          current: toAssignment(currentRow),
+        };
       });
-      return {
-        previous: previousRow ? toAssignment(previousRow) : null,
-        current: toAssignment(currentRow),
-      };
-    });
+    } catch (error) {
+      if (isActiveAssignmentConflict(error, ACTIVE_TRIP_ASSIGNMENT_INDEX)) {
+        throw TransportDomainError.conflict(
+          'TRIP_ACTIVE_ASSIGNMENT_CONFLICT',
+          `Chuyen ${tripId} vua duoc nguoi khac phan cong — tai lai roi thu lai`,
+        );
+      }
+      throw error;
+    }
   }
 
   async listAssignments(tripId: string): Promise<TripAssignment[]> {

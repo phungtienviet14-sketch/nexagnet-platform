@@ -773,13 +773,30 @@ model WorkflowOutbox {
 // §7.1 (may trang thai chuyen). Day la schema CUA MIEN VAN TAI, dung chung cho MOI khach van tai —
 // khong co gi rieng cua mot khach o day (guardrail NO_TRANSPORT_TENANT_SLUG_IN_DOMAIN_CODE).
 //
-// Tien: `Int` = SO NGUYEN DONG, kem mot cot `currencyCode`. `GD-03` — VND khong co don vi phu, va
-// them cot tien te ve sau la mot migration doc du lieu; them bay gio gan nhu mien phi.
+// Tien: `BigInt` = SO NGUYEN DONG, kem mot cot `currencyCode`. `GD-03` — VND khong co don vi phu,
+// va them cot tien te ve sau la mot migration doc du lieu; them bay gio gan nhu mien phi.
+// T2.1/F1 doi `Int` -> `BigInt`: `INTEGER` tran o ~2,1 ty dong, thap hon bien ma HTTP va `money()`
+// deu chap nhan, nen ton tai mot khoang gia tri "hop le voi mien, chet o DB".
 //
 // Ngay nghiep vu: `VarChar(10)` chua `YYYY-MM-DD` theo mui gio tenant (`INV-25`, `GD-04`). CO Y
 // khong dung `DateTime`: mot cot timestamp la thu duy nhat ma nguoi doc co the "suy nguoc ra ngay"
 // — va suy nguoc bang UTC chinh la loi ma `INV-25` sinh ra de chan. Khong co timestamp thi khong
 // co gi de suy nguoc. So sanh khoang va sap xep van dung vi ISO-8601 sap xep theo tu dien.
+// T2.1/F3 GIU nguyen quyet dinh nay va them `CHECK` o DB cho dang chuoi (xem duoi).
+//
+// ┌─ BON DOI TUONG DB CUA MIEN NAY KHONG BIEU DIEN DUOC BANG PRISMA SCHEMA ─────────────────────┐
+// │ Chung song trong SQL tho cua migration `20260830090000_transport_storage_invariants`:       │
+// │   · `TransportTripAssignment_activeTrip_key`    — UNIQUE MOT PHAN, `WHERE effectiveTo IS NULL`│
+// │   · `TransportVehicleAssignment_activeVehicle_key` — nhu tren, theo xe                       │
+// │   · `TransportTrip_freightAmount_money_range`   — CHECK khoang tien                          │
+// │   · `TransportTrip_businessDate_iso` / `TransportDriver_licenceExpiry_iso` — CHECK ngay      │
+// │                                                                                             │
+// │ Prisma khong co cu phap cho `WHERE` tren index lan cho `CHECK`. `migrate deploy` (duong CI   │
+// │ va duong trien khai cua repo nay) giu chung nguyen ven. NHUNG `prisma migrate dev` sinh      │
+// │ migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA ca bon — dung nhu su co  │
+// │ cot `direction` da ghi o ke-hoach/tong-quan.md §Pha 0. Ai chay `migrate dev` PHAI doc lai    │
+// │ migration sinh ra va bo cac dong `DROP INDEX`/`DROP CONSTRAINT` do truoc khi commit.         │
+// └─────────────────────────────────────────────────────────────────────────────────────────────┘
 
 enum TransportVehicleStatus {
   IDLE
@@ -856,6 +873,10 @@ model TransportDriver {
 }
 
 /// Gan lai xe phu trach mot xe — tang DOI XE. `effectiveTo = NULL` la ban dang hieu luc.
+///
+/// MOT ban hieu luc cho moi xe duoc CUONG CHE O DB bang unique mot phan
+/// `TransportVehicleAssignment_activeVehicle_key` (`WHERE "effectiveTo" IS NULL`), khai trong SQL
+/// tho vi Prisma khong co cu phap cho no. Xem khoi canh bao dau muc Transport.
 model TransportVehicleAssignment {
   id            String    @id @default(cuid())
   vehicleId     String
@@ -937,7 +958,11 @@ model TransportTrip {
   referrerPartner   TransportPartner?   @relation("TransportTripReferrer", fields: [referrerPartnerId], references: [id])
   /// DOANH THU — gia cuoc thu khach (VT-021), SO NGUYEN DONG. Be mat lai xe khong bao gio thay
   /// cot nay (`INV-09`): `DriverTripView` khong co truong tuong ung de nhan no.
-  freightAmount     Int?
+  ///
+  /// `BigInt` = `BIGINT` chu khong `INTEGER`: T2.1/F1 — `INTEGER` tran o 2.147.483.647 dong, tuc
+  /// mot cuoc 3 ty qua duoc kiem HTTP va kiem mien roi chet o `INSERT`. Khoang thuc te bi `CHECK`
+  /// `TransportTrip_freightAmount_money_range` bo hep ve `+-(2^53-1)` cho khop `money()`.
+  freightAmount     BigInt?
   currencyCode      String              @default("VND") @db.VarChar(3)
   /// `GD-14` — nhap tay, nullable.
   distanceKm        Int?
@@ -959,6 +984,11 @@ model TransportTrip {
 /// `effectiveTo = NULL` la ban dang hieu luc; doi xe/lai xe giua chuyen DONG ban cu lai va mo ban
 /// moi. Neu day la hai cot tren `TransportTrip` thi lan doi lai xe se xoa mat dau ai cam vo lang
 /// luc mot khoan chi phat sinh — va quy trach nhiem so quy theo lai xe (T3) mat co so.
+///
+/// MOT ban hieu luc cho moi chuyen duoc CUONG CHE O DB bang unique mot phan
+/// `TransportTripAssignment_activeTrip_key` (`WHERE "effectiveTo" IS NULL`). Giao dich dong-roi-mo
+/// trong `PrismaTripRepository.assign()` la dung voi MOT nguoi ghi; unique nay la thu duy nhat
+/// dung voi HAI nguoi ghi cung luc.
 model TransportTripAssignment {
   id            String            @id @default(cuid())
   tripId        String

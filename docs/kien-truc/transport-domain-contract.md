@@ -723,7 +723,7 @@ Thì: ngày nghiệp vụ = **01/08**, và phiếu thuộc kỳ tháng 8.
 |---|---|---|
 | **T0** | Transport Source Truth | ✅ **XONG** |
 | **T1** | Transport Domain Contract | ✅ **XONG (file này)** |
-| **T2** | **Transport Core** — Vehicle, Driver, Trip, Customer/Partner; capability `transport-core`; primitive tiền + ngày nghiệp vụ | ✅ **CODE-ONLY / PARTIAL** — xem §18.1 |
+| **T2** | **Transport Core** — Vehicle, Driver, Trip, Customer/Partner; capability `transport-core`; primitive tiền + ngày nghiệp vụ | ✅ **CODE-ONLY / PARTIAL** — xem §18.1; bất biến tầng lưu trữ siết ở T2.1, xem §18.2 |
 | **T3** | Costing + Driver Fund — hai lớp, sổ append-only, kỳ quỹ | T2 |
 | **T4** | Fuel + đối soát bảng kê | T3 + có **một file bảng kê mẫu** (thật hoặc tổng hợp) để chốt mapping cột |
 | **T5** | Settlement — AR/AP/hoa hồng/kỳ | T3 |
@@ -767,6 +767,70 @@ mẫu · màn hình vận hành thật · bằng chứng runtime trên môi trư
 - `PG-14` — `AuthModule` (owner `foundation`) import `OperationalSettingsModule` (owner
   `operations`), mà module đó `@Global`, nên đồ thị module của hai capability nạp cho **mọi**
   khách. Chưa vá: sửa nó là đổi quyền sở hữu composition, ảnh hưởng mọi khách.
+
+### 18.2. T2.1 as-built — siết bất biến tầng lưu trữ (Issue #79)
+
+> Vẫn `TRANSPORT CORE v0 = CODE/INTEGRATION CLOSED`, **không** phải `RUNTIME-PROVEN`. Chưa có
+> runtime khách vận tải nào chạy; bằng chứng dưới đây là bằng chứng **CI trên Postgres 16 thật**.
+
+Ba lệch tầng lưu trữ được vá trước khi T3 đưa lịch sử tài chính vào. Cả ba đều thuộc loại
+"sửa bây giờ gần như miễn phí, sửa sau là migration đọc dữ liệu".
+
+| Mã | Vấn đề | Quyết định |
+|---|---|---|
+| **F1** | `money()` và zod nhận tới `2^53-1`, cột là `INTEGER` (`2^31-1`) → tồn tại khoảng giá trị **hợp lệ với miền, chết ở `INSERT`** | Cột tiền đổi sang **`BIGINT`**, kèm `CHECK` bó về `±(2^53-1)`. Bốn tầng HTTP → miền → kho → Postgres dùng **một** khoảng, đọc chung hai hằng số `MONEY_MIN_AMOUNT`/`MONEY_MAX_AMOUNT` |
+| **F2** | "Đóng bản cũ rồi mở bản mới" trong một giao dịch **chỉ đúng với một người ghi**; DB không cấm hai bản cùng hiệu lực | **Unique MỘT PHẦN** `WHERE "effectiveTo" IS NULL` cho cả `TransportTripAssignment` (theo chuyến) lẫn `TransportVehicleAssignment` (theo xe) |
+| **F3** | `businessDate`/`licenceExpiry` là `VARCHAR(10)` chỉ được ứng dụng kiểm | **GIỮ chuỗi** `YYYY-MM-DD`, thêm `CHECK` ở DB (dạng + ngày có thật) |
+
+**Khoảng tiền được chấp nhận, chính xác:**
+
+```text
+-9.007.199.254.740.991  ..  9.007.199.254.740.991  đồng
+```
+
+Biên là `2^53-1` **chứ không phải** biên của `BIGINT`: tiền đi ra ngoài bằng JSON và `number` của
+JavaScript chỉ đếm chính xác tới đó. Để DB rộng hơn miền thì chính cái lệch vừa vá quay lại theo
+**chiều ngược** — một hàng đọc lên không biểu diễn được, và lần này hỏng lúc **đọc**, chỗ không ai
+đang nhìn. Biểu diễn API **không đổi**: `freightAmount` vẫn là một số JSON, không phải chuỗi,
+không phải BigInt.
+
+**Vì sao F3 giữ chuỗi chứ không đổi sang `DATE`:** Prisma không có kiểu chỉ-ngày — `@db.Date` vẫn
+trả về một `Date` của JavaScript, tức một **khoảnh khắc**. Đưa khoảnh khắc trở lại tầng ứng dụng
+làm phép "định dạng lại ra ngày" **khả thi trở lại**, mà đó đúng là phép tính `INV-25` sinh ra để
+xoá bỏ. Cái thật sự thiếu không phải kiểu cột mà là ràng buộc ở DB, và `CHECK` lấp đúng chỗ đó:
+regex chặn sai dạng, vòng `to_date`/`to_char` chặn ngày không có thật (`2026-02-30` bị `to_date`
+cuộn thành `2026-03-02` nên chuỗi quay về không còn bằng chuỗi ban đầu → `CHECK` trả FALSE).
+
+**Bốn đối tượng DB dưới đây không biểu diễn được bằng `schema.prisma`** (Prisma không có cú pháp
+cho `WHERE` trên index lẫn cho `CHECK`) nên sống trong SQL thô của migration
+`20260830090000_transport_storage_invariants`:
+
+- `TransportTripAssignment_activeTrip_key`
+- `TransportVehicleAssignment_activeVehicle_key`
+- `TransportTrip_freightAmount_money_range`
+- `TransportTrip_businessDate_iso` / `TransportDriver_licenceExpiry_iso`
+
+`prisma migrate deploy` — đường của CI và của deploy — giữ chúng nguyên vẹn. Nhưng
+**`prisma migrate dev` sẽ sinh lệnh XOÁ cả bốn**, vì với Prisma thì `schema.prisma` mới là nguồn sự
+thật; đây đúng sự cố cột `direction` đã ghi ở
+[kế hoạch/tổng quan §Pha 0](../phat-trien/ke-hoach/tong-quan.md). Ai chạy `migrate dev` phải đọc lại
+migration sinh ra và bỏ các dòng `DROP INDEX`/`DROP CONSTRAINT` đó trước khi commit.
+
+**Rủi ro được GHI NHẬN, có chủ ý KHÔNG vá ở T2.1 — `TransportVehicle.status` trôi khỏi vòng đời
+chuyến.** Hôm nay `status` của xe sửa được độc lập với trạng thái chuyến, nên tồn tại được trạng
+thái "xe `IDLE` trong khi chuyến đã phân công cho nó đang `IN_TRANSIT`".
+
+Đây là một **quyết định nghiệp vụ được hoãn lại**, không phải một giả định mới:
+
+- nguồn T0 **không** mô tả ai đổi trạng thái xe, đổi lúc nào, và đổi theo sự kiện nào;
+- suy ra một luật ("chuyển `IN_TRANSIT` thì tự đặt xe `ON_TRIP`") là **bịa một quy trình điều độ**,
+  và `UNDER_MAINTENANCE` lập tức phá luật đó — một xe đang sửa mà bị chuyến kéo về `ON_TRIP` là sai
+  nặng hơn hẳn cái trôi đang có;
+- T2.1 là một task về **tầng lưu trữ**; điều độ/bảo dưỡng thuộc T6, và Issue #79 §9 để chúng ngoài
+  phạm vi.
+
+Phải hỏi khách trước khi làm: **ai là chủ của `TransportVehicle.status`** — vòng đời chuyến, lịch
+bảo dưỡng, hay người điều độ đặt tay? Trước khi có câu trả lời đó, mọi cách vá đều là đoán.
 
 ---
 
