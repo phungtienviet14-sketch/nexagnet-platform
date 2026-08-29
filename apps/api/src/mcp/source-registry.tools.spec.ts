@@ -79,8 +79,8 @@ describe('tool doc — hinh dang tra ve', () => {
     await seed('INTERNAL');
     const effective = await listSources(registry, ALPHA, { status: 'EFFECTIVE' });
     const received = await listSources(registry, ALPHA, { status: 'RECEIVED' });
-    expect((effective as { count: number }).count).toBe(1);
-    expect((received as { count: number }).count).toBe(0);
+    expect((effective as unknown as { count: number }).count).toBe(1);
+    expect((received as unknown as { count: number }).count).toBe(0);
   });
 
   it('dau vao sai tra loi CO CAU TRUC, khong nem', async () => {
@@ -101,7 +101,10 @@ describe('phan loai chan gia tri ra khoi cau tra loi cua agent', () => {
 
   it('PII thi GIU LAI gia tri, nhung van noi duoc co su that va o trang thai nao', async () => {
     await seed('PII');
-    const result = (await getEffectiveFact(readiness, ALPHA, { domain: 'd', key: 'k' })) as {
+    const result = (await getEffectiveFact(readiness, ALPHA, {
+      domain: 'd',
+      key: 'k',
+    })) as unknown as {
       fact: { value: unknown; valueWithheld?: string; status: string; classification: string };
     };
     expect(result.fact.value).toBeNull();
@@ -182,7 +185,7 @@ describe('can_use_fact — tra ma ly do de agent giai thich duoc', () => {
       recommendationReason: 'ban dau co chu ky',
     });
 
-    const result = (await listConflicts(registry, ALPHA)) as {
+    const result = (await listConflicts(registry, ALPHA)) as unknown as {
       openCount: number;
       conflicts: { status: string; recommendedFactId: string | null }[];
     };
