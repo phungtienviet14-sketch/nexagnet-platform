@@ -168,7 +168,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Deal rieng theo dai ly (Postg
     }
   });
 
-  it('deal BI TAT / HET HAN khong ap — chan o CA hai lop', async () => {
+  it('deal BI TAT / HET HAN duoc NAP RA nhung KHONG duoc ap', async () => {
     const base = await baseWholesale();
 
     await prisma.dealerPriceOverride.update({
@@ -176,75 +176,93 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Deal rieng theo dai ly (Postg
       data: { enabled: false },
     });
     const tat = await repo.loadSnapshot();
-    // Lop 1 — cau truy van khong tra deal da tat ra nua.
-    expect(tat.priceOverrides.some((o) => o.dealerId === DEALER_A && o.sku === SKU)).toBe(false);
-    expect(
-      resolveDealerPrice({
-        sku: SKU,
-        dealerId: DEALER_A,
-        quantity: 10,
-        prices: tat.prices,
-        overrides: tat.priceOverrides,
-        now,
-      }).unitPrice,
-    ).toBe(base);
-
-    // Lop 2 — ngay ca khi mot snapshot CU (nap truoc luc tat) con giu ban ghi, cong van tu choi.
-    // Day chinh la ke ho ma U2 Step 2 va: snapshot song suot vong doi tien trinh.
-    const snapshotCu = [
-      {
-        id: 'stale',
-        dealerId: DEALER_A,
-        sku: SKU,
-        price: SYNTHETIC_OVERRIDE_PRICE,
-        minQuantity: 1,
-        enabled: false,
-      },
-    ];
-    const quyetDinh = resolveDealerPrice({
+    // Ban ghi VAN co mat trong snapshot — cau truy van co y khong loc gium cong quyet dinh nua.
+    const banGhiTat = tat.priceOverrides.find((o) => o.dealerId === DEALER_A && o.sku === SKU);
+    expect(banGhiTat).toBeDefined();
+    expect(banGhiTat!.enabled).toBe(false);
+    // …va cong tu choi no, kem ly do doc duoc.
+    const quyetDinhTat = resolveDealerPrice({
       sku: SKU,
       dealerId: DEALER_A,
       quantity: 10,
       prices: tat.prices,
-      overrides: snapshotCu,
+      overrides: tat.priceOverrides,
       now,
     });
-    expect(quyetDinh.source).toBe('base_wholesale');
-    expect(quyetDinh.reason).toBe('DEALER_PRICE_OVERRIDE_DISABLED');
+    expect(quyetDinhTat.reason).toBe('DEALER_PRICE_OVERRIDE_DISABLED');
+    expect(quyetDinhTat.unitPrice).toBe(base);
 
     await prisma.dealerPriceOverride.update({
       where: { dealerId_sku: { dealerId: DEALER_A, sku: SKU } },
       data: { enabled: true, effectiveTo: new Date('2026-01-01T00:00:00Z') },
     });
     const hetHan = await repo.loadSnapshot();
-    expect(hetHan.priceOverrides.some((o) => o.dealerId === DEALER_A && o.sku === SKU)).toBe(false);
-
-    // Va lai lop 2: snapshot cu con giu ban ghi het han -> cong van quay ve gia si chung.
-    const snapshotCuHetHan = [
-      {
-        id: 'stale-expired',
-        dealerId: DEALER_A,
-        sku: SKU,
-        price: SYNTHETIC_OVERRIDE_PRICE,
-        minQuantity: 1,
-        enabled: true,
-        effectiveTo: new Date('2026-01-01T00:00:00Z'),
-      },
-    ];
-    expect(
-      resolveDealerPrice({
-        sku: SKU,
-        dealerId: DEALER_A,
-        quantity: 10,
-        prices: hetHan.prices,
-        overrides: snapshotCuHetHan,
-        now,
-      }).reason,
-    ).toBe('DEALER_PRICE_OVERRIDE_EXPIRED');
+    const quyetDinhHetHan = resolveDealerPrice({
+      sku: SKU,
+      dealerId: DEALER_A,
+      quantity: 10,
+      prices: hetHan.prices,
+      overrides: hetHan.priceOverrides,
+      now,
+    });
+    expect(quyetDinhHetHan.reason).toBe('DEALER_PRICE_OVERRIDE_EXPIRED');
+    expect(quyetDinhHetHan.unitPrice).toBe(base);
 
     await prisma.dealerPriceOverride.update({
       where: { dealerId_sku: { dealerId: DEALER_A, sku: SKU } },
       data: { effectiveTo: null },
+    });
+  });
+
+  /**
+   * CHIEU MA MOT CAI CONG KHONG THE VA DUOC neu cau truy van loc gium no.
+   *
+   * Deal dat truoc cho thang sau: neu snapshot chi nap deal DANG hieu luc thi ban ghi nay khong
+   * bao gio duoc nap, va den ngay hieu luc no van khong duoc ap — cho toi khi tinh co ai do sua
+   * mot thu khac va keo theo mot lan reload. Khong ai bam nut nao ca, va gia thi sai.
+   *
+   * MOT snapshot, hai thoi diem, hai ket qua — do moi la "tat dinh theo cua so hieu luc".
+   */
+  it('deal dat truoc: CUNG mot snapshot, truoc ngay -> gia si, sau ngay -> deal rieng', async () => {
+    const base = await baseWholesale();
+    const hieuLucTu = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    await prisma.dealerPriceOverride.update({
+      where: { dealerId_sku: { dealerId: DEALER_A, sku: SKU } },
+      data: { effectiveFrom: hieuLucTu },
+    });
+
+    // Nap MOT lan — dung snapshot nay cho ca hai moc thoi gian ben duoi.
+    const snapshot = await repo.loadSnapshot();
+    expect(
+      snapshot.priceOverrides.some((o) => o.dealerId === DEALER_A && o.sku === SKU),
+      'deal dat truoc phai duoc nap ra, khong bi cau truy van loc mat',
+    ).toBe(true);
+
+    const truocNgay = resolveDealerPrice({
+      sku: SKU,
+      dealerId: DEALER_A,
+      quantity: 10,
+      prices: snapshot.prices,
+      overrides: snapshot.priceOverrides,
+      now,
+    });
+    expect(truocNgay.reason).toBe('DEALER_PRICE_OVERRIDE_NOT_YET_EFFECTIVE');
+    expect(truocNgay.unitPrice).toBe(base);
+
+    const sauNgay = resolveDealerPrice({
+      sku: SKU,
+      dealerId: DEALER_A,
+      quantity: 10,
+      prices: snapshot.prices,
+      overrides: snapshot.priceOverrides,
+      now: new Date(hieuLucTu.getTime() + 60_000),
+    });
+    expect(sauNgay.reason).toBe('DEALER_PRICE_OVERRIDE_APPLIED');
+    expect(sauNgay.unitPrice).toBe(SYNTHETIC_OVERRIDE_PRICE);
+
+    await prisma.dealerPriceOverride.update({
+      where: { dealerId_sku: { dealerId: DEALER_A, sku: SKU } },
+      data: { effectiveFrom: null },
     });
   });
 });

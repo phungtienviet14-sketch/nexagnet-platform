@@ -17,22 +17,29 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
 
   async loadSnapshot(): Promise<KnowledgeSnapshot> {
     const currentMonth = currentPriceMonth();
-    const now = new Date();
     const [products, pricePeriod, overrides, dealers, groups, glossary] = await Promise.all([
       this.prisma.product.findMany(),
       this.prisma.pricePeriod.findFirst({
         where: { validMonth: currentMonth, status: 'active' },
         include: { prices: true },
       }),
+      /*
+       * CO Y KHONG loc `enabled` va cua so hieu luc o day nua — `resolveDealerPrice()` moi la cong
+       * quyet dinh (Issue #77 §6).
+       *
+       * Cau truy van cu co ca hai bo loc, va no SAI THEO CA HAI CHIEU vi snapshot song suot vong
+       * doi tien trinh (nap o `onModuleInit`, chi nap lai khi co nguoi sua nguon su that):
+       *   · deal HET HAN luc nua dem van con trong snapshot -> van duoc ap;
+       *   · deal vua TOI NGAY hieu luc thi khong bao gio duoc nap -> khong bao gio ap, cho toi khi
+       *     tinh co ai do sua mot thu khac va keo theo mot lan reload.
+       * Chieu thu hai la chieu ma mot cai cong khong the va duoc: khong nhin thay thi khong xet
+       * duoc. Nen phai nap DU, roi de cong quyet dinh tren `now` cua tung luot.
+       *
+       * `dealer: { status: 'active' }` thi GIU: dai ly ngung hoat dong la mot su that ve DANH TINH,
+       * khong phai mot cua so thoi gian — va `dealers` o duoi cung loc y het the.
+       */
       this.prisma.dealerPriceOverride.findMany({
-        where: {
-          enabled: true,
-          AND: [
-            { OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: now } }] },
-            { OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }] },
-          ],
-          dealer: { status: 'active' },
-        },
+        where: { dealer: { status: 'active' } },
       }),
       this.prisma.dealer.findMany({ where: { status: 'active' } }),
       this.prisma.group.findMany({
@@ -64,13 +71,8 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
         periodStatus: pricePeriod?.status,
       })),
       /*
-       * Cau truy van o tren da loc `enabled` + cua so hieu luc, nhung van PHAI mang bon truong do
-       * ra tang runtime.
-       *
-       * Loc bang SQL chi dung tai THOI DIEM NAP. Snapshot nay song suot vong doi tien trinh (nap
-       * o `onModuleInit`, chi nap lai khi co nguoi sua nguon su that), nen mot deal het han luc
-       * 12h dem van tiep tuc duoc ap cho toi lan reload sau. `resolveDealerPrice()` xet lai tren
-       * `now` cua tung luot — nhung no chi xet duoc thu ma no NHIN THAY.
+       * Mang DU `enabled` + cua so hieu luc ra tang runtime: cong quyet dinh chi xet duoc thu ma
+       * no NHIN THAY, va cau truy van o tren co y khong loc gium no nua.
        */
       priceOverrides: overrides.map((o) => ({
         id: o.id,
