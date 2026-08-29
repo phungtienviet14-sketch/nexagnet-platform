@@ -73,7 +73,7 @@ describe('SourceTruthWriteService', () => {
         findFirst: vi.fn(async () => ({ id: 'period-2026-08' })),
         create: method(),
       },
-      dealerPriceOverride: { upsert: method() },
+      dealerPriceOverride: { findUnique: method(), upsert: method() },
       glossaryEntry: { findUnique: method(), upsert: method() },
     } as unknown as PrismaService;
     const fullKnowledge = {
@@ -122,6 +122,11 @@ describe('SourceTruthWriteService', () => {
     expect(fullPrisma.product.upsert).toHaveBeenCalled();
     expect(fullPrisma.price.upsert).not.toHaveBeenCalled();
     expect(fullPrisma.dealerPriceOverride.upsert).toHaveBeenCalled();
+    // Sua mot deal phai DOC trang thai truoc do de audit ghi lai duoc "gia cu la bao nhieu".
+    // Truoc Issue #77, nhanh nay tra thang `null` — moi lan sua deu duoc ghi lai nhu mot lan tao.
+    expect(fullPrisma.dealerPriceOverride.findUnique).toHaveBeenCalledWith({
+      where: { dealerId_sku: { dealerId: 'dealer-1', sku: 'FELIX' } },
+    });
     expect(fullPrisma.glossaryEntry.upsert).toHaveBeenCalled();
     expect(append).toHaveBeenCalledTimes(5);
     expect(reload).toHaveBeenCalledTimes(5);

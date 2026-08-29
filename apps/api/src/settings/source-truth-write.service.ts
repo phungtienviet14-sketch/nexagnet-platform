@@ -71,13 +71,27 @@ const overrideSchema = z
   .object({
     dealerId: idSchema,
     sku: idSchema,
-    price: moneySchema,
-    minQuantity: z.coerce.number().int().positive().nullish(),
+    /**
+     * `positive()` chu khong phai `nonnegative()` nhu `moneySchema` chung: mot deal gia 0d khong
+     * phai mot deal, do la mot o de trong bi nhan nham — va no se gui cho khach mot xac nhan
+     * "0d/SP". Bang gia chung van dung `moneySchema` nhu cu; chi cong nay siet lai (Issue #77 §5).
+     */
+    price: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    /** ASM-03 (Issue #77): bo trong -> GHI SO 1, khong de NULL lam mot gia dinh khong ai ky ten. */
+    minQuantity: z.coerce.number().int().positive().default(1),
     effectiveFrom: z.coerce.date().nullish(),
     effectiveTo: z.coerce.date().nullish(),
     enabled: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  // Cua so dai 0 giay khong phai mot deal — no la mot deal khong bao gio ap duoc.
+  .refine(
+    (value) =>
+      !value.effectiveFrom ||
+      !value.effectiveTo ||
+      value.effectiveTo.getTime() > value.effectiveFrom.getTime(),
+    { message: 'effectiveTo phải sau effectiveFrom', path: ['effectiveTo'] },
+  );
 const glossarySchema = z.object({ meaning: z.string().trim().min(1).max(1_000) }).strict();
 
 @Injectable()
@@ -235,12 +249,35 @@ export class SourceTruthWriteService {
           where: { sku: id, period: { validMonth: currentPriceMonth(), status: 'active' } },
           include: { period: true },
         });
-      case 'overrides':
-        return null;
+      case 'overrides': {
+        /*
+         * Truoc day tra thang `null`: moi lan Sale sua mot deal, audit ghi lai "truoc = khong co
+         * gi". Tuc la lich su khong tra loi duoc cau hoi duy nhat ma nguoi ta se hoi khi gia sai —
+         * "gia truoc do la bao nhieu, ai doi, doi luc nao". Issue #77 §5 doi ban cap nhat phai
+         * duoc audit THAT.
+         *
+         * `id` o cong nay la `dealerId:sku` (xem `persist`), khong phai khoa chinh cua ban ghi.
+         */
+        const [dealerId, sku] = splitOverrideId(id);
+        if (!dealerId || !sku) return null;
+        return this.prisma.dealerPriceOverride.findUnique({
+          where: { dealerId_sku: { dealerId, sku } },
+        });
+      }
       case 'glossary':
         return this.prisma.glossaryEntry.findUnique({ where: { term: id } });
     }
   }
+}
+
+/**
+ * ID cua mot deal o cong nay la `dealerId:sku` (xem bo test cua service). Tach o dau HAI CHAM DAU
+ * TIEN: ma dai ly khong chua dau hai cham, con SKU thi khong duoc gia dinh la khong chua.
+ */
+function splitOverrideId(id: string): readonly [string | null, string | null] {
+  const separator = id.indexOf(':');
+  if (separator <= 0 || separator === id.length - 1) return [null, null];
+  return [id.slice(0, separator), id.slice(separator + 1)];
 }
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {

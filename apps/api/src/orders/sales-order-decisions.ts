@@ -109,6 +109,43 @@ export const PRICING_REASONS = [
 export type PricingReason = (typeof PRICING_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
+ * rules.dealer_price — resolveDealerPrice() trong `rules/dealer-price.ts`
+ *
+ * Gia RIENG cua mot dai ly la thu de gay tranh cai nhat voi khach: bao thap hon muc ho duoc huong
+ * la mat tien, bao cao hon la mat uy tin. Truoc U2 Step 2, mot dong xac nhan chi noi duoc "don gia
+ * 1.000.000d" — khong noi duoc do la deal rieng hay bang gia chung, cang khong noi duoc vi sao mot
+ * deal DANG CO trong DB lai khong duoc ap.
+ *
+ * SAU ma chu khong phai mot `boolean`: bon duong tu choi duoi day doi bon hanh dong sua khac han
+ * nhau (bat lai deal / sua ngay hieu luc / gia han / giai thich nguong cho khach), va gop lai thi
+ * nguoi loc phai mo source doc lai ca bon dieu kien roi doan. Cung ly do da tach
+ * `evaluateAutoConfirm()` ra khoi mot ham `boolean`.
+ *
+ * KHONG BAO GIO dat SO TIEN vao `detail` cua diem nay. Repo la PUBLIC va gia rieng theo dai ly la
+ * du lieu kinh doanh mat cua khach (Issue #77 §4/§6): bang chung phai du de doi chieu (ID ban ghi,
+ * SKU, so luong, nguong) ma khong mang gia tri tien nao ra ngoai.
+ * ------------------------------------------------------------------ */
+export const DEALER_PRICE_REASONS = [
+  /** Da ap deal rieng cua dai ly. */
+  'DEALER_PRICE_OVERRIDE_APPLIED',
+  /** Dai ly nay khong co deal cho SKU nay -> bang gia si chung. Duong BINH THUONG. */
+  'DEALER_PRICE_BASE_NO_OVERRIDE',
+  /** Co deal nhung dang tat (`enabled=false`). */
+  'DEALER_PRICE_OVERRIDE_DISABLED',
+  /** Co deal nhung CHUA toi `effectiveFrom`. */
+  'DEALER_PRICE_OVERRIDE_NOT_YET_EFFECTIVE',
+  /** Co deal nhung DA qua `effectiveTo`. */
+  'DEALER_PRICE_OVERRIDE_EXPIRED',
+  /** Co deal con hieu luc nhung don chua dat `minQuantity`. */
+  'DEALER_PRICE_OVERRIDE_BELOW_MIN_QUANTITY',
+  /** Nhom chua map dai ly -> khong duoc doi chieu deal cua bat ky ai. */
+  'DEALER_PRICE_DEALER_UNKNOWN',
+  /** Khong co deal lan dong gia si chung -> khong bia ra so. */
+  'DEALER_PRICE_SKU_UNPRICED',
+] as const;
+export type DealerPriceDecisionReason = (typeof DEALER_PRICE_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
  * order.amend_window — canAmendOrder(), tai `cancelOrder()` va `replaceItems()`
  *
  * Day la cong DUY NHAT tu choi mot yeu cau HUY/SUA cua chinh khach hang, va loi tu choi di toi
@@ -168,6 +205,7 @@ export type FollowupMarkReason = (typeof FOLLOWUP_MARK_REASONS)[number];
 
 export type SalesOrderDecisionReason =
   | AutoConfirmReason
+  | DealerPriceDecisionReason
   | ManualApproveReason
   | ManualRejectReason
   | SalesHandoffReason
@@ -187,6 +225,7 @@ export const SALES_ORDER_DECISIONS = defineDecisionVocabulary({
     'order.manual_reject',
     'order.sales_handoff',
     'rules.price',
+    'rules.dealer_price',
   ],
   labels: {
     POLICY_DISABLED: 'Policy tenant tắt tự xác nhận',
@@ -220,6 +259,15 @@ export const SALES_ORDER_DECISIONS = defineDecisionVocabulary({
     SHIPPING_TABLE_MISSING: 'TH2 nhưng chưa có bảng vùng/cước/COD chính thức',
     VAT_POLICY_MISSING: 'Khách xin VAT nhưng chính sách VAT chưa được duyệt',
     TOTAL_MISMATCH: 'Tổng khách ghi lệch tổng hệ thống quá ngưỡng',
+
+    DEALER_PRICE_OVERRIDE_APPLIED: 'Đã áp giá riêng của đại lý',
+    DEALER_PRICE_BASE_NO_OVERRIDE: 'Đại lý không có giá riêng cho SKU này — dùng bảng giá sỉ chung',
+    DEALER_PRICE_OVERRIDE_DISABLED: 'Giá riêng đang tắt — dùng bảng giá sỉ chung',
+    DEALER_PRICE_OVERRIDE_NOT_YET_EFFECTIVE: 'Giá riêng chưa tới ngày hiệu lực',
+    DEALER_PRICE_OVERRIDE_EXPIRED: 'Giá riêng đã hết hiệu lực',
+    DEALER_PRICE_OVERRIDE_BELOW_MIN_QUANTITY: 'Đơn chưa đạt ngưỡng số lượng của giá riêng',
+    DEALER_PRICE_DEALER_UNKNOWN: 'Chưa xác định đại lý nên không đối chiếu giá riêng',
+    DEALER_PRICE_SKU_UNPRICED: 'SKU không có dòng giá nào để áp',
 
     AMEND_ALLOWED: 'Còn trong cửa sổ sửa đơn',
     AMEND_NOT_AN_ORDER: 'Tin này không phải một đơn hàng',

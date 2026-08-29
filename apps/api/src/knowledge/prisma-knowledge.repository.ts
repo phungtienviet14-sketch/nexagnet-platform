@@ -63,12 +63,25 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
         validMonth: pricePeriod?.validMonth,
         periodStatus: pricePeriod?.status,
       })),
+      /*
+       * Cau truy van o tren da loc `enabled` + cua so hieu luc, nhung van PHAI mang bon truong do
+       * ra tang runtime.
+       *
+       * Loc bang SQL chi dung tai THOI DIEM NAP. Snapshot nay song suot vong doi tien trinh (nap
+       * o `onModuleInit`, chi nap lai khi co nguoi sua nguon su that), nen mot deal het han luc
+       * 12h dem van tiep tuc duoc ap cho toi lan reload sau. `resolveDealerPrice()` xet lai tren
+       * `now` cua tung luot — nhung no chi xet duoc thu ma no NHIN THAY.
+       */
       priceOverrides: overrides.map((o) => ({
+        id: o.id,
         dealerId: o.dealerId,
         sku: o.sku,
         price: o.price,
-        // NULL trong DB = ap moi so luong; giu `undefined` de rules dung mac dinh 1.
+        enabled: o.enabled,
+        // NULL trong DB = ap moi so luong; giu `undefined` de rules dung mac dinh 1 (ASM-03).
         ...(o.minQuantity === null ? {} : { minQuantity: o.minQuantity }),
+        ...(o.effectiveFrom === null ? {} : { effectiveFrom: o.effectiveFrom }),
+        ...(o.effectiveTo === null ? {} : { effectiveTo: o.effectiveTo }),
       })),
       dealers: dealers.map((d) => ({
         id: d.id,
