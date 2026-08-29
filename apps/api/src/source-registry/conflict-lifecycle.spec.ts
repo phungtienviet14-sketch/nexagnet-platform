@@ -91,11 +91,14 @@ describe('khong co ke thang im lang — khoa bang cau truc', () => {
   const body = source.slice(source.indexOf('export function evaluateConflictResolution'));
 
   it.each([
-    ['ngay thang', /\b(date|Date|receivedAt|effectiveFrom|newer|latest)\b/],
-    ['tham quyen', /\b(authority|Authority|L1_|L2_|L3_)\b/],
-    ['goi y cua he thong', /\b(recommend|Recommend|suggested)\w*/],
-    ['phan xu bang LLM', /\b(llm|LLM|model|prompt)\b/],
-  ])('than ham khong he nhac toi %s', (_label, pattern) => {
+    ['ngay thang', /\b(date|Date|receivedAt|effectiveFrom|newer|latest)\b/, 'const newer = a.receivedAt;'],
+    ['tham quyen', /\b(authority|Authority|L1_|L2_)\b/, 'if (a.authority === "L1_CONTRACTUAL") return a;'],
+    ['goi y cua he thong', /\b(recommend|Recommend|suggested)\w*/, 'return conflict.recommendedFactId;'],
+    ['phan xu bang LLM', /\b(llm|LLM|model|prompt)\b/, 'await llm.judge(prompt);'],
+  ])('than ham khong he nhac toi %s', (_label, pattern, wouldMatch) => {
+    // Doi chung TRUOC: mot bai "khong khop" se xanh vinh vien neu bieu thuc bi viet hong. Dong
+    // nay chung minh bieu thuc CON BAT DUOC thu no di tim, roi moi khang dinh than ham khong co.
+    expect(wouldMatch).toMatch(pattern);
     expect(body).not.toMatch(pattern);
   });
 

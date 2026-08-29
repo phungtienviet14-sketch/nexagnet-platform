@@ -16,6 +16,20 @@ secrets/
 # Ho so khao sat khach hang — PII THAT (dia chi, SDT, PO, STK, bang gia) — KHONG commit len GitHub.
 # Dung cuc bo de nap nguon su that; da trich vao apps/api/src/knowledge/seed.ts.
 docs/khach-hang/*/nguon-goc/ho-so-khao-sat/
+# TAI LIEU GOC CUA KHACH — moi dinh dang nhi phan trong vung `nguon-goc/`.
+#
+# Dong tren chi chan mot THU MUC CON, va do la du de mot ho so khao sat that (co ten nguoi lien he
+# va so dien thoai) nam ngay canh no trong suot mot thoi gian — repo nay PUBLIC. Byte goc cua khach
+# thuoc ve kho rieng; repo giu SHA-256 va metadata. Xem:
+#   docs/phat-trien/van-hanh/nguon-khach-hang.md
+#   tools/customer-source-guardrail/  (cong thi hanh o CI)
+docs/khach-hang/*/nguon-goc/**/*.docx
+docs/khach-hang/*/nguon-goc/**/*.doc
+docs/khach-hang/*/nguon-goc/**/*.pdf
+docs/khach-hang/*/nguon-goc/**/*.xlsx
+docs/khach-hang/*/nguon-goc/**/*.xls
+# Vung lam viec rieng trong repo — chi duoc ton tai neu duoc gitignore (uu tien de NGOAI repo).
+.customer-sources/
 
 # Logs
 *.log

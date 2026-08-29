@@ -27,7 +27,7 @@ docs/khach-hang/<slug>/
 
 | Khách | Đường dẫn | Nội dung | Git |
 |---|---|---|---|
-| **U Ultty** | `ultty/nguon-goc/khao-sat-khach-hang-2026-07.docx` | Hồ sơ khảo sát gốc (mẫu PO, SKU, bảng giá, link Drive mục 7). *Tên gốc: `APP AI_Công ty Cổ Phần U Ultty Việt Nam_ Phuong Jul 2026.docx`* | theo dõi |
+| **U Ultty** | `ultty/nguon-goc/khao-sat-khach-hang-2026-07.docx` | Hồ sơ khảo sát gốc (mẫu PO, SKU, bảng giá, link Drive mục 7). **Chứa PII thật** (tên + SĐT người liên hệ) → sống trong **kho riêng ngoài repo**. SHA-256 `61d410b2f8032d5dcd255d12fd8a25f483ca2522a5cbe5a27e3861492393aff1`, 322.790 bytes | **gitignored — PII** |
 | | `ultty/nguon-goc/de-xuat-giai-phap-netviet.md` | Đề xuất giải pháp NetViet: kiến trúc nghiệp vụ, 6 vai agent (§5.1), lộ trình 3 GĐ, KPI. **GIỮ NGUYÊN.** *Tên gốc: `Thiet_ke_AI_Agent_U_Ultty.md`* | theo dõi |
 | | `ultty/nguon-goc/ho-so-khao-sat/` | Quy trình + 3 PO + bảng giá + spec GĐ1. *Tên gốc: `HỒ SƠ THÔNG TIN KHẢO SÁT KHÁCH HÀNG/`* | **gitignored — PII** |
 | | [`ultty/README.md`](ultty/README.md) | Mục lục nghiệp vụ, trao đổi, thiết kế và bộ bàn giao của Ultty | theo dõi |
