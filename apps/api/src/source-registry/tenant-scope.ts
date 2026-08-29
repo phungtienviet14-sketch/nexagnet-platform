@@ -78,8 +78,8 @@ export function trustedTenantScope(): TenantScope {
 /**
  * Pham vi dung TRONG TEST — de dung duoc hai khach trong cung mot tien trinh.
  *
- * Ton tai vi bai test cach ly bat buoc phai dung duoc hai pham vi cung luc (`ultty` va
- * `van-tai-viet`), va khong the lam viec do neu chi co mot ham doc bien moi truong toan cuc.
+ * Ton tai vi bai test cach ly bat buoc phai dung duoc HAI pham vi cung luc, va khong the lam
+ * viec do neu chi co mot ham doc bien moi truong toan cuc.
  * Ten ham noi ro no la cua test; production goi `trustedTenantScope()`.
  */
 export function testTenantScope(tenantId: string): TenantScope {

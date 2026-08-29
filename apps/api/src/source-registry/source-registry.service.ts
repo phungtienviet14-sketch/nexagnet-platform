@@ -203,12 +203,21 @@ export class SourceRegistryService {
     },
   ): Promise<{ readonly previous: BusinessSourceRecord; readonly next: BusinessSourceRecord }> {
     const previous = await this.requireSource(scope, input.previousSourceId);
-    await this.requireSource(scope, input.nextSourceId);
+    const incoming = await this.requireSource(scope, input.nextSourceId);
 
     await this.repository.updateSource(scope, input.nextSourceId, {
       supersedesId: previous.id,
     });
-    const next = await this.makeSourceEffective(scope, input.nextSourceId, input.effectiveFrom);
+    // Ban thay the co the DA duoc kich hoat truoc do — mot thu tu hoan toan hop le: kich hoat ban
+    // moi roi moi dong ban cu. Goi `makeSourceEffective` lan nua trong truong hop do se do voi
+    // `SOURCE_ALREADY_IN_STATE`, tuc mot thao tac dung bi tu choi vi ly do ky thuat. Bo test tren
+    // Postgres that bat duoc ca nay; bo in-memory thi khong, vi no tinh co luon kich hoat sau.
+    const next =
+      incoming.status === 'EFFECTIVE'
+        ? await this.repository.updateSource(scope, input.nextSourceId, {
+            effectiveFrom: incoming.effectiveFrom ?? input.effectiveFrom,
+          })
+        : await this.makeSourceEffective(scope, input.nextSourceId, input.effectiveFrom);
     await this.repository.updateSource(scope, previous.id, { effectiveTo: input.effectiveFrom });
     const closed = await this.transitionSource(scope, previous.id, 'SUPERSEDED');
 

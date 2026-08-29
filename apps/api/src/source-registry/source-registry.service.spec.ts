@@ -191,6 +191,29 @@ describe('vong doi nguon qua dich vu', () => {
     // Lich su van doc duoc — day la dinh nghia van hanh cua "khong ghi de".
     expect(await registry.findSourceById(ALPHA, v1.id)).not.toBeNull();
   });
+
+  // HOI QUY. Kich hoat ban moi TRUOC roi moi dong ban cu la mot thu tu hoan toan hop le, va truoc
+  // ban sua nay no do voi `SOURCE_ALREADY_IN_STATE` — mot thao tac dung bi tu choi vi ly do ky
+  // thuat. Bo test tren Postgres that bat duoc; bo nay truoc do khong, vi no tinh co luon kich
+  // hoat sau. Giu bai o day de lan sau khong can DB moi thay.
+  it('thay the duoc ca khi ban moi DA duoc kich hoat truoc do', async () => {
+    const v1 = await effectiveSource(ALPHA, { version: 'v1', contentHash: 'a'.repeat(64) });
+    const v2 = await effectiveSource(ALPHA, {
+      version: 'v2',
+      contentHash: 'b'.repeat(64),
+    }, new Date('2026-02-01T00:00:00Z'));
+    expect(v2.status).toBe('EFFECTIVE');
+
+    const result = await registry.supersedeSource(ALPHA, {
+      previousSourceId: v1.id,
+      nextSourceId: v2.id,
+      effectiveFrom: new Date('2026-02-01T00:00:00Z'),
+    });
+
+    expect(result.previous.status).toBe('SUPERSEDED');
+    expect(result.next.status).toBe('EFFECTIVE');
+    expect(result.next.supersedesId).toBe(v1.id);
+  });
 });
 
 describe('su that — de xuat, gia dinh, xac nhan, lich su', () => {

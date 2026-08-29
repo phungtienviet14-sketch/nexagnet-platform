@@ -315,6 +315,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/channels/outbound-channel.router.ts",
       "line": 122
     },
+    "conflict.resolution|*": {
+      "functionName": "SourceRegistryService.resolveConflict",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 557
+    },
+    "conflict.resolution|CONFLICT_OPENED": {
+      "functionName": "SourceRegistryService.openConflict",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 522
+    },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
@@ -332,6 +342,21 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "TripService.requireDriverBinding",
       "filePath": "apps/api/src/transport/trips/trip.service.ts",
       "line": 474
+    },
+    "fact.transition|*": {
+      "functionName": "SourceRegistryService.transitionFact",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 451
+    },
+    "fact.usability|*": {
+      "functionName": "SourceReadinessService.canUseFact",
+      "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
+      "line": 104
+    },
+    "fact.usability|FACT_NOT_APPROVED": {
+      "functionName": "SourceReadinessService.canUseFact",
+      "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
+      "line": 82
     },
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
@@ -382,6 +407,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
       "line": 719
+    },
+    "source.approval|*": {
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts"
+    },
+    "source.transition|*": {
+      "functionName": "SourceRegistryService.transitionSource",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 247
     },
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",
