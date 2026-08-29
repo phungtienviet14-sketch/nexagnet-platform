@@ -96,6 +96,10 @@ import { SettingsController } from './settings/settings.controller.js';
 import { SettingsQueryService } from './settings/settings-query.service.js';
 import { SourceTruthWriteService } from './settings/source-truth-write.service.js';
 import { StreamController } from './stream/stream.controller.js';
+import { FleetController } from './transport/fleet/fleet.controller.js';
+import { TransportModule } from './transport/transport.module.js';
+import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
+import { TripsController } from './transport/trips/trips.controller.js';
 import { WorkflowModule } from './workflow/workflow.module.js';
 import { tenantCampaignConfig } from '@netviet/tenant';
 
@@ -126,6 +130,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // DOC (vong dem trace + bang outbox) va khong phu thuoc capability nao — khach khong ban hang
   // van mo duoc luong xu ly cua mot luot.
   owned('foundation', DebugModule),
+  // VAN TAI — LOI. Mang theo `AuditLogService` cua chinh no vi `transport-core` khong bat buoc
+  // keo theo `operations`; xem chu thich trong `transport.module.ts`.
+  owned('transport-core', TransportModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -160,6 +167,11 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('operations', ReadinessController),
   owned('notifications', NotificationsController),
   owned('notifications', SettingsNotificationsController),
+  owned('transport-core', FleetController),
+  owned('transport-core', TripsController),
+  // BE MAT LAI XE — route rieng, khong phai mot nhanh `if` trong `TripsController` (`GD-23`).
+  // Den cung `transport-core` va bien mat cung no.
+  owned('transport-core', DriverTripsController),
 ];
 
 const guardProviders: readonly Provider[] = [

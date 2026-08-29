@@ -61,7 +61,7 @@
 	# no roi xuong Next.js va tra 404 — dung kieu hong da gap 04/08/2026 ("giao dien co du, chi la
 	# khong co duong di toi"). caddy-route-contract.test.mjs doc nguoc tu apps/api/src va bat CI do
 	# neu thieu, nen dung sua tay danh sach nay ma khong chay test.
-	@api path /events /orders* /messages* /notifications* /demo* /erp* /kiotviet* /knowledge* /broadcast* /campaigns* /auth* /health /health/media /media/catalog/* /zalo/* /groups/* /observability/traces* /observability/debug* /settings/summary /settings/source-truth* /settings/groups/* /settings/rules* /settings/automation* /settings/notifications* /settings/audit* /settings/readiness /settings/price-periods* /settings/dealers/* /settings/deals/* /settings/content* /settings/master-data* /settings/users* /admin*
+	@api path /events /orders* /messages* /notifications* /demo* /erp* /kiotviet* /knowledge* /broadcast* /campaigns* /auth* /health /health/media /media/catalog/* /zalo/* /groups/* /observability/traces* /observability/debug* /settings/summary /settings/source-truth* /settings/groups/* /settings/rules* /settings/automation* /settings/notifications* /settings/audit* /settings/readiness /settings/price-periods* /settings/dealers/* /settings/deals/* /settings/content* /settings/master-data* /settings/users* /transport* /admin*
 	handle @api {
 		reverse_proxy {args[0]}:3001 {
 			header_up x-api-key "{args[2]}"

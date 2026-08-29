@@ -8,7 +8,10 @@ riêng cho họ.
 - Quy mô: ~10 xe đầu kéo.
 - Giai đoạn hiện tại: **demo cho khách xem**. Nghiệp vụ chưa chốt hết; phần chưa chốt chạy trên
   giả định `GD-xx` được ghi tường minh ở [T1 §21](../../kien-truc/transport-domain-contract.md#21-giả-định-giai-đoạn-demo-gd-xx).
-- Chưa có gói `tenants/van-tai-viet/` — sẽ tạo ở mốc T2.
+- Chưa có gói `tenants/van-tai-viet/`. Mốc T2 (`TRANSPORT CORE v0`) **hoãn có chủ ý** việc tạo
+  gói này: T2 là mốc CODE-ONLY, chưa có màn hình vận hành để demo và chưa có dữ liệu khách được
+  duyệt về mặt riêng tư. Capability `transport-core` được chứng minh boot bằng một gói **fixture**
+  tổng hợp (`packages/tenant/src/__tests__/fixtures/transport-core/`). Gói khách thật thuộc T7.
 
 ## Tài liệu
 

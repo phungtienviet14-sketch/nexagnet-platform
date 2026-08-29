@@ -12,6 +12,9 @@ import { BroadcastController } from '../broadcast/broadcast.controller.js';
 import { MasterDataController } from '../settings/master-data.controller.js';
 import { SettingsController } from '../settings/settings.controller.js';
 import { ZaloController } from '../channels/zalo.controller.js';
+import { FleetController } from '../transport/fleet/fleet.controller.js';
+import { DriverTripsController } from '../transport/trips/driver-trips.controller.js';
+import { TripsController } from '../transport/trips/trips.controller.js';
 import { UsersController } from './users.controller.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { ROLES_KEY } from './roles.decorator.js';
@@ -36,6 +39,10 @@ const CONTROLLERS = [
   SettingsController,
   UsersController,
   ZaloController,
+  // Van tai: moi mutation cham doi xe / chuyen / phan cong deu la thao tac van hanh.
+  FleetController,
+  TripsController,
+  DriverTripsController,
 ];
 
 /**
