@@ -657,6 +657,13 @@ export class AgentOrchestrator {
     if (intent === 'dat_don' && parseResult.order) {
       // MOT ngu canh gia duy nhat cho ca lan tinh tien lan lan sinh bang chung: dung hai ngu canh
       // dung hai snapshot khac nhau thi bang chung se noi ve mot phep tinh chua bao gio xay ra.
+      //
+      // `now` phai duoc GHIM O DAY, khong de moi ben tu doc dong ho. Ca `priceOrder` lan
+      // `explainDealerPricing` deu lam `ctx.now ?? new Date()`, nen bo trong truong nay tuc la
+      // LAY HAI THOI DIEM khac nhau cho cung mot luot — va cua so hieu luc cua deal rieng duoc xet
+      // tren chinh thoi diem do. Mot deal het han dung giua hai loi goi se cho ra "da ap deal
+      // rieng" o SO TIEN va "het han" o BANG CHUNG: trace giai thich mot con so ma khach chua bao
+      // gio nhan. Ghim mot lan thi ca hai duong noi ve cung mot phep tinh.
       const priceContext = {
         dealer: resolved.dealer,
         branch: resolved.branch,
@@ -664,6 +671,7 @@ export class AgentOrchestrator {
         prices: this.knowledge.prices(),
         priceOverrides: this.knowledge.priceOverrides(),
         cfg: rulesConfig,
+        now: new Date(),
       };
       const priced = priceOrder(parseResult.order, priceContext);
       /*

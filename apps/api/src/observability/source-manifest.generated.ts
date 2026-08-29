@@ -376,12 +376,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 687
+      "line": 695
     },
     "rules.price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 711
+      "line": 719
     },
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",

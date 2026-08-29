@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { DealerPriceOverride, PriceRow } from '../knowledge/domain.js';
+import type { ParsedOrder } from '@netviet/shared';
+import type { Dealer, DealerPriceOverride, PriceRow, Product } from '../knowledge/domain.js';
+import { DEFAULT_RULES_CONFIG } from './config.js';
 import { resolveDealerPrice } from './dealer-price.js';
+import { explainDealerPricing, priceOrder, type PriceContext } from './rules.js';
 
 /**
  * CONG GIA RIENG THEO DAI LY — bo test nay la HOP DONG cua U2 Step 2.
@@ -253,5 +256,138 @@ describe('resolveDealerPrice — cong quyet dinh gia rieng', () => {
     });
     expect(result.source).toBe('base_wholesale');
     expect(result.unitPrice).toBe(1_150_000);
+  });
+});
+
+/**
+ * BANG CHUNG PHAI NOI VE PHEP TINH DA THAT SU XAY RA.
+ *
+ * `priceOrder()` tinh tien, `explainDealerPricing()` sinh bang chung — HAI duong doc lap di qua
+ * cung mot cong. Neu chung lech nhau thi trace se giai thich mot con so ma khach chua bao gio
+ * nhan duoc, va do la kieu sai TE HON im lang: no lam nguoi doc tin vao mot lich su khong that.
+ *
+ * Truoc bo test nay `explainDealerPricing()` khong co MOT khang dinh nao o tang rules — no chi
+ * duoc cham gian tiep qua orchestrator, tuc khong ai khoa cai bat bien "bang chung == so tien".
+ */
+describe('explainDealerPricing — bang chung khop voi so tien da tinh', () => {
+  const products: Product[] = [
+    { sku: 'GHE-FELIX', name: 'Ghế Felix', aliases: ['felix', 'ghe felix'], unit: 'cai' },
+    { sku: 'NOI-CHIEN', name: 'Nồi chiên không dầu', aliases: ['noi chien', 'ncked'], unit: 'cai' },
+  ];
+  const dealer: Dealer = {
+    id: 'd1',
+    name: 'Meta HN',
+    aliases: ['meta hn', 'meta'],
+    tier: 'dai_ly',
+    defaultPolicy: 'cong_no_30',
+  };
+
+  function ctx(patch: Partial<PriceContext> = {}): PriceContext {
+    return {
+      dealer,
+      branch: 'HN',
+      products,
+      prices,
+      priceOverrides: [override()],
+      cfg: DEFAULT_RULES_CONFIG,
+      now,
+      ...patch,
+    };
+  }
+
+  function order(items: ParsedOrder['items']): ParsedOrder {
+    return { orderType: 'TH1', items, noVat: false };
+  }
+
+  it('deal duoc ap: bang chung mang DUNG don gia da vao don', () => {
+    const parsed = order([{ skuRaw: 'felix', quantity: 3 }]);
+    const context = ctx();
+
+    const priced = priceOrder(parsed, context);
+    const [evidence] = explainDealerPricing(parsed, context);
+
+    expect(evidence).toBeDefined();
+    expect(evidence!.reason).toBe('DEALER_PRICE_OVERRIDE_APPLIED');
+    // Khang dinh QUAN TRONG NHAT cua tep nay: bang chung va so tien khong duoc lech.
+    expect(evidence!.unitPrice).toBe(priced.lines[0]!.unitPrice);
+    expect(priced.lines[0]!.unitPrice).toBe(1_000_000);
+    expect(evidence!.overrideId).toBe('ovr-1');
+  });
+
+  it('khong co deal: bang chung noi gia si chung, va van khop so tien', () => {
+    const parsed = order([{ skuRaw: 'felix', quantity: 3 }]);
+    const context = ctx({ priceOverrides: [] });
+
+    const priced = priceOrder(parsed, context);
+    const [evidence] = explainDealerPricing(parsed, context);
+
+    expect(evidence!.reason).toBe('DEALER_PRICE_BASE_NO_OVERRIDE');
+    expect(evidence!.unitPrice).toBe(priced.lines[0]!.unitPrice);
+    expect(priced.lines[0]!.unitPrice).toBe(1_150_000);
+  });
+
+  /**
+   * CUNG MOT NGU CANH => CUNG MOT THOI DIEM cho ca hai duong.
+   *
+   * Day la hop dong ma orchestrator dua vao khi no ghim `now` MOT lan roi dung chung cho ca
+   * `priceOrder` lan `explainDealerPricing`: neu hai ham tu doc dong ho rieng, mot deal het han
+   * dung giua hai loi goi se cho ra "da ap deal" o so tien va "het han" o bang chung.
+   */
+  it('cung mot ngu canh, hai moc thoi gian: so tien va bang chung doi CUNG luc', () => {
+    const hetHanLuc = new Date('2026-08-20T00:00:00Z');
+    const parsed = order([{ skuRaw: 'felix', quantity: 3 }]);
+    const overrides = [override({ effectiveTo: hetHanLuc })];
+
+    const dungHan = ctx({ priceOverrides: overrides, now: hetHanLuc });
+    expect(explainDealerPricing(parsed, dungHan)[0]!.reason).toBe('DEALER_PRICE_OVERRIDE_APPLIED');
+    expect(priceOrder(parsed, dungHan).lines[0]!.unitPrice).toBe(1_000_000);
+
+    const quaHan = ctx({
+      priceOverrides: overrides,
+      now: new Date(hetHanLuc.getTime() + 1),
+    });
+    expect(explainDealerPricing(parsed, quaHan)[0]!.reason).toBe('DEALER_PRICE_OVERRIDE_EXPIRED');
+    expect(priceOrder(parsed, quaHan).lines[0]!.unitPrice).toBe(1_150_000);
+  });
+
+  /**
+   * MOT quyet dinh cho MOT DONG HANG, khong mot quyet dinh gop cho ca don: hai dong cung don co
+   * the ra hai ket cuc khac nhau, va gop lai thi mat dung cho khach se hoi.
+   */
+  it('don nhieu dong: moi dong mot bang chung rieng, ly do co the khac nhau', () => {
+    const parsed = order([
+      { skuRaw: 'felix', quantity: 2 },
+      { skuRaw: 'noi chien', quantity: 2 },
+    ]);
+    const context = ctx({
+      priceOverrides: [
+        override({ minQuantity: 5 }),
+        override({ id: 'ovr-2', sku: 'NOI-CHIEN', price: 800_000, minQuantity: 1 }),
+      ],
+    });
+
+    const evidence = explainDealerPricing(parsed, context);
+    expect(evidence).toHaveLength(2);
+    expect(evidence[0]!.sku).toBe('GHE-FELIX');
+    expect(evidence[0]!.reason).toBe('DEALER_PRICE_OVERRIDE_BELOW_MIN_QUANTITY');
+    expect(evidence[0]!.minQuantity).toBe(5);
+    expect(evidence[1]!.sku).toBe('NOI-CHIEN');
+    expect(evidence[1]!.reason).toBe('DEALER_PRICE_OVERRIDE_APPLIED');
+  });
+
+  /**
+   * Dong khong map duoc SKU KHONG sinh bang chung gia rieng: chua biet la hang gi thi khong co
+   * "gia rieng cho hang do" de noi. Dong do da co duong canh bao rieng (`matched: false`) va se
+   * chan auto-confirm o tang tren — them mot ban ghi `SKU_UNPRICED` o day chi lam nhieu trace.
+   */
+  it('dong khong map duoc SKU -> khong sinh bang chung gia rieng', () => {
+    const parsed = order([
+      { skuRaw: 'ban an go', quantity: 1 },
+      { skuRaw: 'felix', quantity: 3 },
+    ]);
+
+    const evidence = explainDealerPricing(parsed, ctx());
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]!.sku).toBe('GHE-FELIX');
   });
 });
