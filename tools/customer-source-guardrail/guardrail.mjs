@@ -35,6 +35,21 @@
  *
  * Va cong FAIL CLOSED: khong do duoc bang chung thi ngoai le KHONG duoc tinh. Mot ngoai le khong
  * kiem chung duoc va mot ngoai le sai la cung mot thu doi voi mot repo public.
+ *
+ * ## VA GHIM HASH CUNG KHONG DU (sua tiep 30/08/2026)
+ *
+ * Ban ngay truoc do giu lai `a4-dai-ly-map-nhom-ultty.xlsx` bang mot ngoai le `digest`. Nhung
+ * SHA-256 tra loi cau hoi "co dung van la tep do khong", chu KHONG tra loi "tep do co duoc phep
+ * cong khai khong". Ghim hash mot tep chua chat ID nhom cua khach chi lam cho ro ri do ON DINH.
+ *
+ * Do lai lan nua thi hai chat ID trong tep do **khong xuat hien o bat ky tep van ban nao khac
+ * trong repo** — tuc chinh tep nhi phan do la noi duy nhat cong bo chung. Va chinh sheet huong
+ * dan cua no ghi: "3 dong dai ly + 2 nhom da dien san la du lieu that tu khao sat".
+ *
+ * Ket cuc: tep bi go khoi HEAD, generator doi sang du lieu VI DU tong hop, ban build vao
+ * `.gitignore`, va bo test cua importer dung fixture rieng. Ngoai le `digest` van con nhu mot CO
+ * CHE (co bai test rieng), nhung khong con dong nao dung no — va do la trang thai dung: mot vung
+ * nguon goc cua khach khong nen co ngoai le nhi phan nao ca.
  */
 
 /**
@@ -108,15 +123,6 @@ export const ALLOWLIST = [
     evidence: {
       kind: 'sourceFile',
       resolve: (match) => `docs/khach-hang/${match[1]}/ban-giao/nguon-html/${match[2]}.html`,
-    },
-  },
-  {
-    pattern: /^docs\/khach-hang\/ultty\/trao-doi\/a4-dai-ly-map-nhom-ultty\.xlsx$/,
-    reason:
-      'Bieu mau A4 gui khach dien, sinh tu tools/excel-template/generate_a4_template.py. KHONG rong: mang san ba dai ly va hai nhom lam du lieu khoi tao, ghi duoi dang inlineStr. Ngoai le nay ghim SHA-256 nen byte doi mot bit la cong dong lai.',
-    evidence: {
-      kind: 'digest',
-      sha256: '58cb8cd1d35aa9edde67b3fa875966db84d823903732d7d77b9778efdeab8461',
     },
   },
 ];

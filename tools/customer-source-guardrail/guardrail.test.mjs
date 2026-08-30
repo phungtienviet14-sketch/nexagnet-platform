@@ -6,6 +6,8 @@ import { test } from 'node:test';
 import {
   ALLOWLIST,
   VIOLATION_CODES,
+  allowlistEntryFor,
+  checkAllowlistEvidence,
   findStaleAllowlistEntries,
   findViolations,
   isInCustomerSourceArea,
@@ -184,29 +186,52 @@ test('PDF trong thu muc ban-giao ma KHONG co nguon HTML thi van bi chan', () => 
   assert.equal(violations[0].code, VIOLATION_CODES.SOURCE_FILE_MISSING);
 });
 
+// CO CHE `digest` van duoc khoa lai, du hom nay KHONG con dong ALLOWLIST nao dung no — xem
+// header cua guardrail.mjs: ngoai le xlsx da bi go vi ghim hash chi chung minh "van la tep do",
+// khong chung minh "tep do duoc phep cong khai". Bai test dung mot dong ngoai le TU DUNG de co
+// che khong chet theo, va de dong ngoai le that tiep theo (neu co) khong phai lam lai tu dau.
+const DIGEST_FIXTURE = {
+  pattern: /^docs\/khach-hang\/x\/trao-doi\/bieu-mau\.xlsx$/,
+  reason: 'Dong ngoai le gia, chi de kiem chung co che digest.',
+  evidence: { kind: 'digest', sha256: 'a'.repeat(64) },
+};
+const DIGEST_TARGET = 'docs/khach-hang/x/trao-doi/bieu-mau.xlsx';
+
 test('ngoai le ghim hash: byte dung thi qua, byte khac thi chan', () => {
-  const pinned = ALLOWLIST.find((entry) => entry.evidence?.kind === 'digest');
-  const target = 'docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx';
+  assert.equal(
+    checkAllowlistEvidence(DIGEST_TARGET, DIGEST_FIXTURE, {
+      digestOf: () => DIGEST_FIXTURE.evidence.sha256,
+    }),
+    null,
+  );
 
-  assert.deepEqual(findViolations([target], { digestOf: () => pinned.evidence.sha256 }), []);
-
-  const drifted = findViolations([target], { digestOf: () => 'f'.repeat(64) });
-  assert.equal(drifted.length, 1);
-  assert.equal(drifted[0].code, VIOLATION_CODES.DIGEST_MISMATCH);
+  assert.equal(
+    checkAllowlistEvidence(DIGEST_TARGET, DIGEST_FIXTURE, { digestOf: () => 'f'.repeat(64) }),
+    VIOLATION_CODES.DIGEST_MISMATCH,
+  );
 });
 
 // FAIL CLOSED. Mot ngoai le khong kiem chung duoc va mot ngoai le sai la cung mot thu doi voi mot
 // repo public — nen khong do duoc byte thi khong duoc cho qua.
 test('ngoai le ghim hash ma khong do duoc byte thi KHONG duoc cho qua', () => {
+  assert.equal(
+    checkAllowlistEvidence(DIGEST_TARGET, DIGEST_FIXTURE, {}),
+    VIOLATION_CODES.EVIDENCE_UNVERIFIABLE,
+  );
+  assert.equal(
+    checkAllowlistEvidence(DIGEST_TARGET, DIGEST_FIXTURE, { digestOf: () => null }),
+    VIOLATION_CODES.EVIDENCE_UNVERIFIABLE,
+  );
+});
+
+// Va cai quan trong hon: cai tep that su KHONG con duoc mo cua nua.
+test('a4-dai-ly-map-nhom-ultty.xlsx khong con ngoai le nao — no la ban build, khong vao git', () => {
   const target = 'docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx';
+  assert.equal(allowlistEntryFor(target), null);
 
-  const noResolver = findViolations([target]);
-  assert.equal(noResolver.length, 1);
-  assert.equal(noResolver[0].code, VIOLATION_CODES.EVIDENCE_UNVERIFIABLE);
-
-  const resolverFails = findViolations([target], { digestOf: () => null });
-  assert.equal(resolverFails.length, 1);
-  assert.equal(resolverFails[0].code, VIOLATION_CODES.EVIDENCE_UNVERIFIABLE);
+  const violations = findViolations([target], { digestOf: () => 'a'.repeat(64) });
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].code, VIOLATION_CODES.NOT_ALLOWLISTED);
 });
 
 test('phan loai duong dan va duoi tep tach bach nhau', () => {

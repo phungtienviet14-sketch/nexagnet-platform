@@ -31,6 +31,20 @@ docs/khach-hang/*/nguon-goc/**/*.xls
 # Vung lam viec rieng trong repo — chi duoc ton tai neu duoc gitignore (uu tien de NGOAI repo).
 .customer-sources/
 
+# BAN BUILD cua mau A4 gui khach — sinh tu tools/excel-template/generate_a4_template.py.
+#
+# Ban truoc duoc COMMIT, va do la mot ro ri that: no chua ba ten dai ly va HAI CHAT ID NHOM ZALO
+# lay tu khao sat (chinh sheet huong dan cua no ghi "du lieu that tu khao sat"), trong mot repo
+# PUBLIC. Ghim SHA-256 chi chung minh "van la dung tep do" — no khong chung minh tep do an toan.
+# Mot ro ri on dinh van la mot ro ri.
+#
+# Gio: generator sinh du lieu VI DU tong hop, ban build khong vao git, va bai test cua importer
+# dung fixture rieng tai apps/api/src/settings/__fixtures__/.
+docs/khach-hang/*/trao-doi/*.xlsx
+docs/khach-hang/*/trao-doi/*.xls
+docs/khach-hang/*/trao-doi/*.docx
+docs/khach-hang/*/trao-doi/*.doc
+
 # Logs
 *.log
 logs/

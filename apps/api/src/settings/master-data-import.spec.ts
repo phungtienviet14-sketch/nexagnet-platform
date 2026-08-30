@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseMasterDataImport } from './master-data-import.js';
 
@@ -74,9 +74,19 @@ describe('parseMasterDataImport', () => {
     ]);
   });
 
-  it('round-trips the existing A4 workbook and keeps missing chat IDs for safe preview resolution', async () => {
+  /**
+   * Bai nay doc mot FIXTURE TONG HOP, khong phai ban .xlsx gui khach.
+   *
+   * Truoc 30/08/2026 no doc thang `docs/khach-hang/ultty/trao-doi/a4-...xlsx` — mot tep chua ba
+   * ten dai ly va hai chat ID nhom Zalo that, nam trong mot repo public. Ban .xlsx do gio la mot
+   * ban BUILD khong commit; fixture o `__fixtures__/` la ban sao dau ra cua generator, sinh lai
+   * duoc, va khong mang danh tinh nao cua khach. Xem `__fixtures__/README.md`.
+   *
+   * Cai bai test can khang dinh van khong doi: importer doc dung BO CUC COT cua mau A4.
+   */
+  it('round-trips the A4 workbook and keeps missing chat IDs for safe preview resolution', async () => {
     const workbook = await readFile(
-      resolve(process.cwd(), '../../docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx'),
+      fileURLToPath(new URL('./__fixtures__/a4-mau-dai-ly-nhom.xlsx', import.meta.url)),
     );
     const parsed = await parseMasterDataImport({
       format: 'xlsx',
@@ -92,7 +102,7 @@ describe('parseMasterDataImport', () => {
       expect.objectContaining({
         resource: 'dealer',
         sheet: '1. Đại lý & CTV',
-        value: expect.objectContaining({ name: 'Meta HN', tier: 'dai_ly' }),
+        value: expect.objectContaining({ name: 'Đại lý mẫu A', tier: 'dai_ly' }),
       }),
     );
   });
