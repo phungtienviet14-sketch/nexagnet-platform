@@ -350,6 +350,71 @@ describe('hai ban cung song tai mot dia chi thi runtime DUNG, khong tu chon', ()
     await expect(readiness.getAmbiguousFactAddresses(SCOPE)).resolves.toEqual([]);
   });
 
+  /**
+   * LICH SU PHAN XU TU MAU THUAN THI KHONG AI THANG.
+   *
+   * `resolveConflict()` chi doi ben thang phai nam trong so cac ben cua CHINH phieu do, con duong
+   * doc thi gom MOI phieu da dong cua khach — nen khong gi chan hai phieu cung mot cap ket thuc
+   * nguoc nhau. Hai tab, hai nguoi chot, hai bien ban khac ngay la du.
+   *
+   * ```text
+   * A, B, C cung song tai pricing/ELNI.price
+   * A thang B      ┐ hai phieu nay MAU THUAN nhau
+   * B thang A      ┘
+   * A thang C
+   * ```
+   *
+   * Ban truoc hoi "co thang MOI ben con lai khong": A dat (thang B ✓, thang C ✓), B truot (khong
+   * thang C) ⇒ chon A. Tuc chien thang o cuoc A-C duoc dung de pha the hoa cua cuoc A-B, trong
+   * khi chinh so ghi dang noi B thang A. C khong phai trong tai cua cuoc A-B.
+   *
+   * Bai nay do tren code cu va xanh tren code moi.
+   */
+  it('hai phieu nguoc nhau tren cung mot cap thi mot phieu o cap khac khong pha the hoa duoc', async () => {
+    const alpha = await effectiveSource('bang-gia-a', 'a'.repeat(64));
+    const bravo = await effectiveSource('bang-gia-b', 'b'.repeat(64));
+    const charlie = await effectiveSource('bang-gia-c', 'c'.repeat(64));
+    const factA = await confirmedFact(alpha.id, 'pricing', 'ELNI.price', { amount: 1_150_000 });
+    const factB = await confirmedFact(bravo.id, 'pricing', 'ELNI.price', { amount: 1_250_000 });
+    const factC = await confirmedFact(charlie.id, 'pricing', 'ELNI.price', { amount: 1_350_000 });
+
+    // Ba phieu, deu dong dung luat: co nguoi chot, co dan chung, ben thang deu la ben du cuoc.
+    // Khong phieu nao sai; cai sai la doc CA BA roi van tra ve mot cau tra loi tu tin.
+    const settlements = [
+      { key: 'CONFLICT-ELNI-A-THANG-B', factIds: [factA.id, factB.id], winner: factA.id },
+      { key: 'CONFLICT-ELNI-B-THANG-A', factIds: [factA.id, factB.id], winner: factB.id },
+      { key: 'CONFLICT-ELNI-A-THANG-C', factIds: [factA.id, factC.id], winner: factA.id },
+    ];
+    for (const [index, item] of settlements.entries()) {
+      const conflict = await registry.openConflict(SCOPE, {
+        conflictKey: item.key,
+        domain: 'pricing',
+        subjectKey: 'ELNI.price',
+        summary: 'Hai bang gia noi hai muc khac nhau cho cung mot ma',
+        impact: 'BLOCKING',
+        factIds: item.factIds,
+      });
+      await registry.resolveConflict(SCOPE, conflict.id, {
+        winningFactId: item.winner,
+        actor: 'nguoi-chot',
+        evidenceRef: `bien-ban-2026-02-1${index}`,
+      });
+    }
+
+    // Khong con phieu nao dang MO ⇒ ly do phai la "hai ban cung song ma chua phan xu duoc",
+    // KHONG duoc la "dang co xung dot chan" (do la mot cau tra loi khac, va no se sai).
+    await expect(readiness.getEffectiveFact(SCOPE, 'pricing', 'ELNI.price')).resolves.toBeNull();
+    const verdict = await readiness.canUseFact(SCOPE, 'pricing', 'ELNI.price', 'CONFIRMED_ONLY');
+    expect(verdict).toMatchObject({ allowed: false, reason: 'FACT_AMBIGUOUS_LIVE_VERSIONS' });
+    expect(verdict.fact).toBeNull();
+
+    // Va ca ba ben phai duoc neu ten de nguoi di doc lai hai bien ban nguoc nhau kia.
+    const ambiguous = await readiness.getAmbiguousFactAddresses(SCOPE);
+    const elni = ambiguous.find((row) => `${row.domain}/${row.key}` === 'pricing/ELNI.price');
+    expect(elni).toBeDefined();
+    expect([...(elni?.factIds ?? [])].sort()).toEqual([factA.id, factB.id, factC.id].sort());
+  });
+
   // KHONG BAO DONG GIA: duong thay the binh thuong (thang 07 sang thang 08) khong duoc dinh vao
   // cong nay. Mot cong keu oan la mot cong se bi tat.
   it('thay the tuong minh van cho ra dung mot cau tra loi', async () => {

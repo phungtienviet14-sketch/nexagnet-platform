@@ -4,8 +4,10 @@ import {
   evaluateFactTransition,
   FACT_STATUSES,
   isUsableFactStatus,
+  resolveLiveFact,
   type FactTransitionContext,
   type FactUsageContext,
+  type SettledConflict,
 } from './fact-lifecycle.js';
 
 const ready: FactTransitionContext = {
@@ -139,5 +141,109 @@ describe('canUseFact — cong runtime, tra ve ma chu khong phai boolean', () => 
     expect(
       canUseFact({ ...usable, status: 'REJECTED', hasOpenBlockingConflict: true }).reason,
     ).toBe('FACT_NO_LONGER_EFFECTIVE');
+  });
+});
+
+/* ================================================================== *
+ * resolveLiveFact — phan xu NHIEU BAN CUNG SONG tai mot dia chi
+ * ================================================================== */
+
+/** Mot lan phan xu da dong: `winner` thang, va ca hai ben deu co ten trong chinh phieu do. */
+const settle = (winner: string, ...others: readonly string[]): SettledConflict => ({
+  winnerFactId: winner,
+  participantFactIds: [winner, ...others],
+});
+
+describe('resolveLiveFact — khong co ke thang im lang', () => {
+  it('khong co ban nao song thi khong co cau tra loi', () => {
+    expect(resolveLiveFact([])).toEqual({ kind: 'none' });
+  });
+
+  it('mot ban song thi do la cau tra loi, khong can phieu nao', () => {
+    expect(resolveLiveFact(['A'])).toEqual({ kind: 'single', factId: 'A' });
+  });
+
+  it('hai ban song ma CHUA ai phan xu thi nhap nhang', () => {
+    expect(resolveLiveFact(['A', 'B'])).toEqual({ kind: 'ambiguous', factIds: ['A', 'B'] });
+  });
+
+  it('mot phieu da dong dung tren hai ben dang song thi ra dung mot cau tra loi', () => {
+    expect(resolveLiveFact(['A', 'B'], [settle('A', 'B')])).toEqual({
+      kind: 'single',
+      factId: 'A',
+    });
+  });
+
+  it('nhieu phieu doi mot, cung mot ben thang, van ra dung mot cau tra loi', () => {
+    const settled = [settle('A', 'B'), settle('A', 'C')];
+    expect(resolveLiveFact(['A', 'B', 'C'], settled)).toEqual({ kind: 'single', factId: 'A' });
+  });
+
+  // CHIEN THANG KHONG CHUYEN NHUONG DUOC — A thang X o mot dia chi khac thi khong noi duoc gi ve
+  // cuoc A voi B.
+  it('thang mot cuoc ma ben kia khong du thi khong tinh la thang ben kia', () => {
+    expect(resolveLiveFact(['A', 'B'], [settle('A', 'X')])).toEqual({
+      kind: 'ambiguous',
+      factIds: ['A', 'B'],
+    });
+  });
+
+  /* ---------------------------------------------------------------- *
+   * LICH SU PHAN XU TU MAU THUAN — cong nay phai FAIL CLOSED
+   * ---------------------------------------------------------------- */
+
+  // Hai phieu doi nghich nhau tren dung mot cap. Khong ben nao duoc coi la da thang ben kia:
+  // ban thu tu lieu quyet dinh dang tu cai nhau, va mot cong fail-closed thi DUNG LAI.
+  it('A thang B VA B thang A thi khong ben nao thang', () => {
+    const settled = [settle('A', 'B'), settle('B', 'A')];
+    expect(resolveLiveFact(['A', 'B'], settled)).toEqual({
+      kind: 'ambiguous',
+      factIds: ['A', 'B'],
+    });
+  });
+
+  /**
+   * BAI CHINH CUA VONG REVIEW NAY.
+   *
+   * ```text
+   * A, B, C cung song tai mot dia chi
+   * A thang B      ┐ hai phieu nay MAU THUAN nhau
+   * B thang A      ┘
+   * A thang C
+   * ```
+   *
+   * Ban truoc hoi "A co thang MOI ben con lai khong": A thang B ✓, A thang C ✓ ⇒ chon A. Tuc mot
+   * chien thang o cuoc A-C duoc dung de PHA THE HOA cua cuoc A-B — trong khi chinh so ghi dang
+   * noi B thang A. C khong phai trong tai cua cuoc A-B, va khong duoc bau cho ai ca.
+   *
+   * Dung ra: `beat(A,B)` chi tinh khi KHONG co `beat(B,A)`. Lich su tu mau thuan thi khong ai
+   * thang, va cau tra loi la `ambiguous`.
+   */
+  it('A thang B, B thang A, A thang C — mau thuan thi khong duoc chon A', () => {
+    const settled = [settle('A', 'B'), settle('B', 'A'), settle('A', 'C')];
+    expect(resolveLiveFact(['A', 'B', 'C'], settled)).toEqual({
+      kind: 'ambiguous',
+      factIds: ['A', 'B', 'C'],
+    });
+  });
+
+  // Cung mot bat bien, nhin tu phia ben thua: doi cho hai phieu mau thuan thi ket qua khong doi.
+  it('thu tu ghi hai phieu mau thuan khong doi ket qua', () => {
+    const settled = [settle('B', 'A'), settle('A', 'B'), settle('A', 'C')];
+    expect(resolveLiveFact(['A', 'B', 'C'], settled).kind).toBe('ambiguous');
+  });
+
+  // Vong tron ba ben: khong ai thang moi ben con lai. Da dung truoc do, khoa lai de khong vo khi
+  // sua cong tren.
+  it('vong tron A>B>C>A thi khong ai thang', () => {
+    const settled = [settle('A', 'B'), settle('B', 'C'), settle('C', 'A')];
+    expect(resolveLiveFact(['A', 'B', 'C'], settled).kind).toBe('ambiguous');
+  });
+
+  // KHONG BAO DONG GIA: mau thuan o mot CAP KHAC khong duoc lam hong mot phan xu that su sach.
+  // A thang ca B lan C mot chieu; cai cai nhau la B voi C, va no khong lam A het thang.
+  it('mau thuan giua hai BEN THUA khong xoa phan xu sach cua ben thang', () => {
+    const settled = [settle('A', 'B'), settle('A', 'C'), settle('B', 'C'), settle('C', 'B')];
+    expect(resolveLiveFact(['A', 'B', 'C'], settled)).toEqual({ kind: 'single', factId: 'A' });
   });
 });

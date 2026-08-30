@@ -337,8 +337,31 @@ export interface SettledConflict {
  * phan xu cho cuoc nay. Chien thang khong chuyen nhuong duoc.
  *
  * Gio mot ban chi thang khi MOI ban con song con lai deu da bi phan xu THUA CHINH NO — moi cap
- * (thang, thua) phai nam chung trong mot xung dot da dong. Hai ban cung "thang moi ben con lai"
- * (du lieu mau thuan: A thang B va B thang A) thi van la `ambiguous`: cong nay fail closed.
+ * (thang, thua) phai nam chung trong mot xung dot da dong.
+ *
+ * ## VI SAO MOT LICH SU TU MAU THUAN KHONG DUOC CHON AI (sua 30/08/2026)
+ *
+ * Khong gi chan hai xung dot cung mot cap ket thuc nguoc nhau: `resolveConflict()` chi doi ben
+ * thang phai nam trong so cac ben cua CHINH phieu do, va duong doc thi gom MOI phieu da dong cua
+ * khach. Nen so ghi co the noi ca hai chieu:
+ *
+ * ```text
+ * A, B, C cung song tai mot dia chi
+ * A thang B      ┐ hai phieu nay MAU THUAN nhau
+ * B thang A      ┘
+ * A thang C
+ * ```
+ *
+ * Neu chi hoi "co thang MOI ben con lai khong" thi A dat (thang B ✓, thang C ✓) con B truot (khong
+ * thang C) ⇒ chon A. Tuc chien thang o cuoc A-C duoc dung de PHA THE HOA cua cuoc A-B, trong khi
+ * chinh so ghi dang noi B thang A. C khong phai trong tai cua cuoc A-B. Cai o day khong con la
+ * "ke thang im lang" nua ma la mot buoc te hon: ta doc mot bang chung DANG TU CAI NHAU roi van
+ * tra ve mot cau tra loi tu tin.
+ *
+ * Vi the phep so sanh la TUNG CAP va hai chieu: `A thang B` chi tinh khi A da thang B VA B CHUA
+ * TUNG thang A. Lich su tu mau thuan thi khong ben nao thang, va cong nay fail closed —
+ * `ambiguous`, de nguoi di doc lai hai phieu do. Mot mau thuan o cap KHAC (vd B voi C) khong dinh
+ * vao phan xu sach cua A: cong nay chan cai no phai chan, khong keu oan.
  *
  * Neu hai ban con song va CHUA ai mo xung dot, ket qua van la `ambiguous`: khong mo xung dot
  * khong lam cho su nhap nhang bien mat, no chi lam cho khong ai nhin thay.
@@ -351,6 +374,7 @@ export function resolveLiveFact(
   if (only === undefined) return { kind: 'none' };
   if (liveFactIds.length === 1) return { kind: 'single', factId: only };
 
+  /** Co MOT phieu da dong nao trong do `winner` thang va `loser` co ten khong. */
   const beat = (winner: string, loser: string): boolean =>
     settled.some(
       (conflict) =>
@@ -359,9 +383,15 @@ export function resolveLiveFact(
         conflict.participantFactIds.includes(loser),
     );
 
+  /** Da thang, VA khong bi thang nguoc. Mot cap tu cai nhau thi khong ben nao thang ben nao. */
+  const dominates = (candidate: string, other: string): boolean =>
+    beat(candidate, other) && !beat(other, candidate);
+
   const winners = liveFactIds.filter((candidate) =>
-    liveFactIds.every((other) => other === candidate || beat(candidate, other)),
+    liveFactIds.every((other) => other === candidate || dominates(candidate, other)),
   );
+  // `dominates` la mot chieu nen khong the co hai ben cung thang; van giu phep dem lam chot chan
+  // — cong nay chi duoc phep tra ve mot cau tra loi khi chi co DUNG mot ung vien.
   const [winner] = winners;
   if (winner !== undefined && winners.length === 1) return { kind: 'single', factId: winner };
 
