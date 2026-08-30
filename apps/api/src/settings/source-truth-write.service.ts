@@ -122,9 +122,15 @@ export class SourceTruthWriteService {
 
     // Validate truoc moi query de input xau khong cham database.
     this.validate(resource, body);
-    const before = await this.findBefore(resource, entityId.data);
+
+    // MOT danh tinh cho ca ba buoc. Xem `canonicalIdentity`: truoc ban nay, `findBefore` doc theo
+    // ID tren URL, `persist` ghi theo `dealerId`/`sku` trong THAN, con audit ghi lai ID tren URL —
+    // ba noi, ba nguon danh tinh. Gio chi con mot gia tri, va no di qua ca ba.
+    const identity = this.canonicalIdentity(resource, entityId.data, body);
+
+    const before = await this.findBefore(resource, identity);
     try {
-      await this.persist(resource, entityId.data, body);
+      await this.persist(resource, identity, body);
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
       throw new BadRequestException(`Khong the ghi ${resource}: ${safeError(error)}`);
@@ -133,13 +139,53 @@ export class SourceTruthWriteService {
       actor: normalizeActor(actor),
       action: 'source_truth.update',
       entityType: resource,
-      entityId: entityId.data,
+      entityId: identity,
       before,
       after: body,
       requestId,
     });
     await this.knowledge.reload();
     return this.list(resource);
+  }
+
+  /**
+   * DANH TINH CHINH TAC cua ban ghi sap bi ghi — mot gia tri duy nhat cho `findBefore`,
+   * `persist` va audit.
+   *
+   * Voi nam tai nguyen dau, danh tinh nam TRON VEN tren URL: than tin khong mang khoa nao. Rieng
+   * `overrides` thi than mang CA `dealerId` lan `sku` — tuc co HAI nguon danh tinh cho cung mot
+   * thao tac, va truoc ban nay ba buoc doc ba nguon khac nhau:
+   *
+   * ```text
+   * PUT /settings/source-truth/overrides/dealer-A:ELNI   { dealerId: "dealer-B", sku: "FELIX" }
+   *   findBefore()  doc   dealer-A / ELNI      <- URL
+   *   persist()     ghi   dealer-B / FELIX     <- THAN
+   *   audit()       ghi   dealer-A / ELNI      <- URL
+   * ```
+   *
+   * Nhat ky noi mot ban ghi da doi, trong khi ban ghi that su doi la mot ban ghi KHAC. Do khong
+   * phai mot loi hien thi: nhat ky la thu duy nhat tra loi duoc "gia nay ai doi, doi luc nao" khi
+   * mot don sai di ra toi khach, va o day no tra loi SAI mot cach tu tin.
+   *
+   * Cong nay FAIL CLOSED chu khong tu chon ben nao: URL noi mot dang, than noi mot dang, thi
+   * khong dang nao dung — do la mot loi cua noi goi, va doan y no se lam mot trong hai cau tren
+   * thanh loi noi doi.
+   */
+  private canonicalIdentity(
+    resource: SourceTruthResource,
+    routeId: string,
+    body: unknown,
+  ): string {
+    if (resource !== 'overrides') return routeId;
+
+    const value = parse(overrideSchema, body);
+    const fromBody = overrideId(value.dealerId, value.sku);
+    if (fromBody !== routeId) {
+      throw new BadRequestException(
+        `ID tren duong dan (${routeId}) khong khop dealerId/sku trong than tin (${fromBody})`,
+      );
+    }
+    return fromBody;
   }
 
   private validate(resource: SourceTruthResource, body: unknown): void {
@@ -217,7 +263,14 @@ export class SourceTruthWriteService {
         // Sua deal phai ghi CA nguong so luong lan thoi gian hieu luc. Truoc day `update` chi ghi
         // `price`, nen Sale sua "tu 5 cai" thanh "tu 10 cai" xong bam luu ma so cu van nguyen —
         // hong am tham, khong bao loi.
-        const { dealerId, sku, ...rest } = value;
+        //
+        // Khoa lay TU `id` (danh tinh chinh tac) chu KHONG tu `value`, du hai cai da duoc
+        // `canonicalIdentity` khang dinh la bang nhau. Doc tu `value` o day nghia la con mot
+        // duong thu hai di toi khoa, va mot duong thu hai la tat ca nhung gi can de hai buoc lech
+        // nhau lan sau.
+        const [dealerId, sku] = splitOverrideId(id);
+        if (!dealerId || !sku) throw new BadRequestException('ID deal phai co dang dealerId:sku');
+        const { dealerId: _dealerId, sku: _sku, ...rest } = value;
         await this.prisma.dealerPriceOverride.upsert({
           where: { dealerId_sku: { dealerId, sku } },
           update: rest,
@@ -278,6 +331,14 @@ function splitOverrideId(id: string): readonly [string | null, string | null] {
   const separator = id.indexOf(':');
   if (separator <= 0 || separator === id.length - 1) return [null, null];
   return [id.slice(0, separator), id.slice(separator + 1)];
+}
+
+/**
+ * Dung nguoc lai `splitOverrideId`. Hai ham nam canh nhau co chu y: dinh dang cua danh tinh nay
+ * chi duoc biet o DUNG mot cho, nen khong the co hai noi ghep chuoi lech nhau.
+ */
+function overrideId(dealerId: string, sku: string): string {
+  return `${dealerId}:${sku}`;
 }
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
