@@ -723,7 +723,7 @@ Thì: ngày nghiệp vụ = **01/08**, và phiếu thuộc kỳ tháng 8.
 |---|---|---|
 | **T0** | Transport Source Truth | ✅ **XONG** |
 | **T1** | Transport Domain Contract | ✅ **XONG (file này)** |
-| **T2** | **Transport Core** — Vehicle, Driver, Trip, Customer/Partner; capability `transport-core`; primitive tiền + ngày nghiệp vụ | ✅ **CODE-ONLY / PARTIAL** — xem §18.1 |
+| **T2** | **Transport Core** — Vehicle, Driver, Trip, Customer/Partner; capability `transport-core`; primitive tiền + ngày nghiệp vụ | ✅ **CODE-ONLY / PARTIAL** — xem §18.1; bất biến tầng lưu trữ siết ở T2.1, xem §18.2 |
 | **T3** | Costing + Driver Fund — hai lớp, sổ append-only, kỳ quỹ | T2 |
 | **T4** | Fuel + đối soát bảng kê | T3 + có **một file bảng kê mẫu** (thật hoặc tổng hợp) để chốt mapping cột |
 | **T5** | Settlement — AR/AP/hoa hồng/kỳ | T3 |
@@ -767,6 +767,159 @@ mẫu · màn hình vận hành thật · bằng chứng runtime trên môi trư
 - `PG-14` — `AuthModule` (owner `foundation`) import `OperationalSettingsModule` (owner
   `operations`), mà module đó `@Global`, nên đồ thị module của hai capability nạp cho **mọi**
   khách. Chưa vá: sửa nó là đổi quyền sở hữu composition, ảnh hưởng mọi khách.
+
+### 18.2. T2.1 as-built — siết bất biến tầng lưu trữ (Issue #79, review khép ở #83)
+
+> Vẫn `TRANSPORT CORE v0 = CODE/INTEGRATION CLOSED`, **không** phải `RUNTIME-PROVEN`. Chưa có
+> runtime khách vận tải nào chạy; bằng chứng dưới đây là bằng chứng **CI + đo tay trên PostgreSQL
+> 16 thật**, không phải bằng chứng vận hành.
+
+Ba lệch tầng lưu trữ được vá trước khi T3 đưa lịch sử tài chính vào. Cả ba đều thuộc loại
+"sửa bây giờ gần như miễn phí, sửa sau là migration đọc dữ liệu".
+
+| Mã | Vấn đề | Quyết định |
+|---|---|---|
+| **F1** | `money()` và zod nhận tới `2^53-1`, cột là `INTEGER` (`2^31-1`) → tồn tại khoảng giá trị **hợp lệ với miền, chết ở `INSERT`** | Cột tiền đổi sang **`BIGINT`**, kèm `CHECK` bó về `±(2^53-1)`. Bốn tầng HTTP → miền → kho → Postgres dùng **một** khoảng, đọc chung hai hằng số `MONEY_MIN_AMOUNT`/`MONEY_MAX_AMOUNT` |
+| **F2** | "Đóng bản cũ rồi mở bản mới" trong một giao dịch **chỉ đúng với một người ghi**; DB không cấm hai bản cùng hiệu lực | **Unique MỘT PHẦN** `WHERE "effectiveTo" IS NULL` cho cả `TransportTripAssignment` (theo chuyến) lẫn `TransportVehicleAssignment` (theo xe) |
+| **F3** | `businessDate`/`licenceExpiry` là `VARCHAR(10)` chỉ được ứng dụng kiểm | **GIỮ chuỗi** `YYYY-MM-DD`, thêm `CHECK` ở DB (dạng + ngày có thật) |
+
+**Khoảng tiền được chấp nhận, chính xác:**
+
+```text
+-9.007.199.254.740.991  ..  9.007.199.254.740.991  đồng
+```
+
+Biên là `2^53-1` **chứ không phải** biên của `BIGINT`: tiền đi ra ngoài bằng JSON và `number` của
+JavaScript chỉ đếm chính xác tới đó. Để DB rộng hơn miền thì chính cái lệch vừa vá quay lại theo
+**chiều ngược** — một hàng đọc lên không biểu diễn được, và lần này hỏng lúc **đọc**, chỗ không ai
+đang nhìn. Biểu diễn API **không đổi**: `freightAmount` vẫn là một số JSON, không phải chuỗi,
+không phải BigInt.
+
+#### F2 — hai index này cưỡng chế đúng **một** điều
+
+Chúng cưỡng chế **"tối đa MỘT bản đang hiệu lực"**, và chỉ thế. Vì mệnh đề `WHERE "effectiveTo" IS
+NULL` không chạm tới hàng đã đóng, **nhiều bản ĐÃ ĐÓNG** (`effectiveTo IS NOT NULL`) của cùng một
+chuyến/một xe vẫn ghi được — đó chính là điều `GD-06` đòi hỏi: đổi lái xe phải để lại vết, không
+ghi đè.
+
+> **"Nhiều bản đã đóng được phép" ≠ "khoảng thời gian lịch sử được phép chồng lấp".** Bất biến §5
+> `TX-01` — *Không chồng lấp thời gian cho cùng một xe* — **giữ nguyên**, T2.1 không nới nó và
+> không được đọc thành đã nới.
+
+Đường ghi được hỗ trợ giữ bất biến đó bằng cách đóng bản cũ **đúng tại mốc mở bản mới**:
+
+```text
+previous.effectiveTo === current.effectiveFrom      ← không hở, không chồng lấp
+active count        === 1                           ← unique một phần lo
+history count        tăng, không ghi đè             ← GD-06
+```
+
+`PrismaTripRepository.assign()` và `PrismaFleetRepository.assignDriverToVehicle()` đều đặt cùng một
+mốc `at` cho `effectiveTo` của bản cũ và `effectiveFrom` của bản mới, trong **một giao dịch**. Hai
+bài integration đọc lại **hàng đã lưu** (không đọc giá trị trả về của `assign()`, vì
+`change.previous` là ảnh chụp *trước* khi đóng) và kiểm chuỗi ba bản liên tiếp cho cả chuyến lẫn xe.
+
+Chặn chồng lấp lịch sử **tuỳ ý** — ví dụ một `UPDATE` tay lùi `effectiveTo` về quá khứ — cần một
+**EXCLUSION CONSTRAINT** trên `tstzrange` kèm extension `btree_gist`. Ghi lại đây như một **lựa chọn
+siết thêm về sau**, không làm ở T2.1: nó đòi một extension và một quyết định về nửa-mở/nửa-đóng của
+khoảng, trong khi chưa đường ghi nào phá được bất biến hiện tại.
+
+#### F3 — vì sao giữ chuỗi, và DB **thực sự** từ chối ngày sai bằng cách nào
+
+Prisma không có kiểu chỉ-ngày — `@db.Date` vẫn trả về một `Date` của JavaScript, tức một **khoảnh
+khắc**. Đưa khoảnh khắc trở lại tầng ứng dụng làm phép "định dạng lại ra ngày" **khả thi trở lại**,
+mà đó đúng là phép tính `INV-25` sinh ra để xoá bỏ. Cái thật sự thiếu không phải kiểu cột mà là
+ràng buộc ở DB.
+
+**Cơ chế từ chối — đo được, không suy ra.** Bản báo cáo đầu của T2.1 viết rằng `to_date` *"cuộn
+`2026-02-30` thành `2026-03-02` nên chuỗi quay về không còn bằng chuỗi ban đầu → `CHECK` trả FALSE,
+một lần từ chối sạch không ném lỗi"*. **Runtime bác bỏ câu đó.** Từ PostgreSQL 10, `to_date` không
+còn cuộn ngày tràn; nó **ném lỗi**. Đo lại 30/08/2026 trên PostgreSQL 16.15, qua đúng đường ghi của
+ứng dụng:
+
+| Đầu vào | SQLSTATE | Thông điệp | Chặn bởi |
+|---|---|---|---|
+| `2026-08-01T00:00:00Z` | `22001` | `value too long for type character varying(10)` | **kiểu cột** — chưa tới lượt `CHECK` |
+| `hom qua` · `2026-8-1` · `01/08/2026` · chuỗi rỗng | `23514` | `violates check constraint "TransportTrip_businessDate_iso"` | **regex** trong `CHECK` |
+| `2026-02-30` · `2026-13-01` · `2025-02-29` | `22008` | `date/time field value out of range` | **`to_date` ném lỗi** từ trong `CHECK` |
+| `2028-02-29` (năm nhuận thật) | — | ghi được | không chặn — đúng |
+
+Nói đúng phạm vi: **ngày sai dạng hoặc không có thật đều bị PostgreSQL từ chối**, nhưng tuỳ đầu vào
+mà chỗ từ chối là độ dài `varchar`, regex, hay phép phân tích ngày. Thứ tự đánh giá hai vế của `AND`
+**không được SQL bảo đảm**, nên một đầu vào sai dạng về lý thuyết có thể ra lỗi của `to_date` thay vì
+vi phạm `CHECK` — cả hai đều là từ chối, không đường nào cho hàng xấu đi qua. Đó là tất cả những gì
+ràng buộc này hứa. Ba mã SQLSTATE trên **được một bài integration khoá lại**: nếu mã đổi, bài đó đỏ,
+và việc phải làm là **đo lại rồi sửa tài liệu**, không phải nới lỏng khẳng định.
+
+**Không có timezone regression** vì không có phép đổi timezone nào: chuỗi vào, chuỗi ra; so sánh
+khoảng và sắp xếp vẫn đúng do ISO-8601 sắp theo từ điển.
+
+#### Năm đối tượng DB không biểu diễn được bằng `schema.prisma`
+
+Prisma không có cú pháp cho `WHERE` trên index lẫn cho `CHECK`, nên **5** đối tượng dưới đây sống
+trong SQL thô của migration `20260830090000_transport_storage_invariants`:
+
+| # | Tên | Loại |
+|---|---|---|
+| 1 | `TransportTripAssignment_activeTrip_key` | UNIQUE một phần |
+| 2 | `TransportVehicleAssignment_activeVehicle_key` | UNIQUE một phần |
+| 3 | `TransportTrip_freightAmount_money_range` | CHECK |
+| 4 | `TransportTrip_businessDate_iso` | CHECK |
+| 5 | `TransportDriver_licenceExpiry_iso` | CHECK |
+
+= **2 partial unique index + 3 CHECK constraint = 5 đối tượng.** (Bản báo cáo đầu đếm nhầm thành
+"bốn" vì gộp hai `CHECK` ngày làm một dòng; con số này nay được một bài test đếm thẳng từ tệp SQL.)
+
+`prisma migrate deploy` — đường của CI và của deploy — giữ cả năm nguyên vẹn. Nhưng
+**`prisma migrate dev` sẽ sinh lệnh XOÁ cả năm**, vì với Prisma thì `schema.prisma` mới là nguồn sự
+thật; đây đúng sự cố cột `direction` đã ghi ở
+[kế hoạch/tổng quan §Pha 0](../phat-trien/ke-hoach/tong-quan.md). Ai chạy `migrate dev` phải đọc lại
+migration sinh ra và bỏ các dòng `DROP INDEX`/`DROP CONSTRAINT` đó trước khi commit.
+
+#### Đường lùi — precheck phải kiểm **cả hai** phía
+
+`README-rollback.sql` chạy tay. Bước duy nhất đáng cảnh báo là `BIGINT → INTEGER`, và precheck của
+nó phải bó **khoảng `INTEGER` có dấu**, vì khoảng tiền của miền có **phía âm**:
+
+```sql
+SELECT count(*) FROM "TransportTrip"
+ WHERE "freightAmount" IS NOT NULL
+   AND "freightAmount" NOT BETWEEN -2147483648 AND 2147483647;
+```
+
+Precheck cũ chỉ hỏi `> 2147483647` nên **bỏ sót đúng nửa** số hàng chặn đường lùi. Đo trên PostgreSQL
+16.15 với một bảng có cả hàng `+3.000.000.000` lẫn `-3.000.000.000`: precheck cũ đếm được **1**,
+precheck mới đếm được **2**.
+
+Nói cho đúng về hậu quả: PostgreSQL **không** im lặng cắt bớt ở đây — `ALTER … TYPE INTEGER` trên dữ
+liệu ngoài khoảng dừng lại với `ERROR: integer out of range` và bảng giữ nguyên. Precheck tồn tại để
+**nhìn thấy rủi ro trước** khi gõ `ALTER` — báo một con số đếm được, thay vì một lệnh đỏ giữa lúc sự
+cố — chứ không phải để chặn một phép cắt bớt lặng lẽ.
+
+#### Trạng thái xe — làm rõ, **không** hiện thực ở đây
+
+§7.2 đã nói rõ: `Vehicle` có ba giá trị `IDLE ⇄ ON_TRIP ⇅ UNDER_MAINTENANCE`, và **`ON_TRIP` là dẫn
+xuất từ Trip đang chạy, không phải cờ chỉnh tay**. Quyền sở hữu `ON_TRIP` **không** phải điều chưa
+biết, và bản T2.1 đầu tiên mô tả nó như vậy là mô tả sai.
+
+Cái còn thiếu hẹp hơn nhiều: **chưa có phép hợp thành** nào tính trạng thái hiệu lực của xe, nên
+hôm nay `TransportVehicle.status` vẫn sửa được độc lập với vòng đời chuyến — tồn tại được "xe `IDLE`
+trong khi chuyến đã phân công cho nó đang `IN_TRANSIT`".
+
+`DEMO_ASSUMPTION` cho lần hiện thực sau — an toàn, đảo được, **chưa** viết ở T2.1:
+
+```text
+bảo dưỡng đang mở                                    => UNDER_MAINTENANCE
+ngược lại, có chuyến IN_TRANSIT đang được phân công  => ON_TRIP
+ngược lại                                            => IDLE
+```
+
+Bảo dưỡng đứng **trước** chuyến trong thứ tự trên có lý do: một xe đang sửa mà bị chuyến kéo về
+`ON_TRIP` sai nặng hơn hẳn cái trôi đang có.
+
+Không hiện thực trong PR review-followup này: phép hợp thành cần dữ liệu bảo dưỡng, tức thuộc
+**T6 Asset/Compliance + T7 Operations** (Issue #79 §9 để chúng ngoài phạm vi). Ghi lại đây để lần
+sau không phải suy lại từ đầu.
 
 ---
 

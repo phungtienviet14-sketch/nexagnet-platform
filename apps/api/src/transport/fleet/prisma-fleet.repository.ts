@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { PrismaService } from '../../config/prisma.service.js';
+import { ACTIVE_VEHICLE_ASSIGNMENT, isActiveAssignmentConflict } from '../storage-conflict.js';
+import { TransportDomainError } from '../transport.errors.js';
 import type {
   Driver,
   PartnerRoleKind,
@@ -240,23 +242,36 @@ export class PrismaFleetRepository extends FleetRepository {
    * Neu tach lam hai lan ghi, mot lan hong giua chung se de lai hoac hai ban cung hieu luc (khong
    * biet ai dang phu trach xe), hoac khong ban nao (xe bong nhien khong co ai). Ca hai deu la
    * trang thai ma bat bien "khong chong lap thoi gian cho cung mot xe" cam.
+   *
+   * Giao dich chi lo duoc cho MOT nguoi ghi (T2.1/F2). Bat bien "mot ban hieu luc moi xe" do unique
+   * MOT PHAN `TransportVehicleAssignment_activeVehicle_key` giu; doan `catch` chi dich loi cua no.
    */
   async assignDriverToVehicle(
     vehicleId: string,
     driverId: string,
     at: Date,
   ): Promise<VehicleDriverAssignment> {
-    return this.prisma.$transaction(async (tx) => {
-      const scoped = tx as unknown as PrismaService;
-      await model(scoped, 'transportVehicleAssignment').updateMany({
-        where: { vehicleId, effectiveTo: null },
-        data: { effectiveTo: at },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const scoped = tx as unknown as PrismaService;
+        await model(scoped, 'transportVehicleAssignment').updateMany({
+          where: { vehicleId, effectiveTo: null },
+          data: { effectiveTo: at },
+        });
+        const row = await model(scoped, 'transportVehicleAssignment').create({
+          data: { vehicleId, driverId, effectiveFrom: at, effectiveTo: null },
+        });
+        return toVehicleAssignment(row);
       });
-      const row = await model(scoped, 'transportVehicleAssignment').create({
-        data: { vehicleId, driverId, effectiveFrom: at, effectiveTo: null },
-      });
-      return toVehicleAssignment(row);
-    });
+    } catch (error) {
+      if (isActiveAssignmentConflict(error, ACTIVE_VEHICLE_ASSIGNMENT)) {
+        throw TransportDomainError.conflict(
+          'VEHICLE_ACTIVE_ASSIGNMENT_CONFLICT',
+          `Xe ${vehicleId} vua duoc nguoi khac gan lai xe phu trach — tai lai roi thu lai`,
+        );
+      }
+      throw error;
+    }
   }
 
   async listVehicleDriverAssignments(vehicleId?: string): Promise<VehicleDriverAssignment[]> {

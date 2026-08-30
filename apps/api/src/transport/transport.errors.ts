@@ -29,7 +29,29 @@ export const TRANSPORT_VALIDATION_REASONS = [
 ] as const;
 export type TransportValidationReason = (typeof TRANSPORT_VALIDATION_REASONS)[number];
 
-export type TransportErrorReason = TransportDecisionReason | TransportValidationReason;
+/**
+ * Ly do VA CHAM LUC GHI — nhom thu ba, khong phai kiem dau vao lan quyet dinh nghiep vu.
+ *
+ * Mot ma o day khong noi "nguoi goi dua vao cai gi sai" (dau vao hoan toan hop le) va cung khong
+ * noi "he thong da quyet dinh gi" (khong cong nghiep vu nao dong). No noi: co NGUOI KHAC vua ghi
+ * xong truoc ban mot phan nghin giay, va DB da tu choi ban ghi thu hai.
+ *
+ * Tach ra thanh nhom rieng vi cach xu ly khac han hai nhom kia: nguoi dung khong sua duoc dau vao
+ * de qua duoc, ho phai TAI LAI roi quyet lai tren trang thai moi. Tron vao `VALIDATION` se dat mot
+ * ma khong-the-sua vao dung cai bang ma giao dien dung de chi cho nguoi dung "sua o day".
+ */
+export const TRANSPORT_CONFLICT_REASONS = [
+  /** Mot chuyen chi co MOT ban phan cong dang hieu luc; hai lan ghi cung luc thi mot lan thua. */
+  'TRIP_ACTIVE_ASSIGNMENT_CONFLICT',
+  /** Nhu tren, cho ban ghi lai xe phu trach mot XE. */
+  'VEHICLE_ACTIVE_ASSIGNMENT_CONFLICT',
+] as const;
+export type TransportConflictReason = (typeof TRANSPORT_CONFLICT_REASONS)[number];
+
+export type TransportErrorReason =
+  | TransportDecisionReason
+  | TransportValidationReason
+  | TransportConflictReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh
