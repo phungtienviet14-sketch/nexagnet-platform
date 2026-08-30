@@ -3,7 +3,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Post,
   Req,
@@ -49,15 +48,9 @@ export class TripExpensesController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.expense.record')
   @Throttle({ default: { limit: 120, ttl: 60_000 } })
-  record(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  record(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(recordTripExpenseSchema, body);
-    return this.guard(() =>
-      this.costing.recordTripExpense(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.costing.recordTripExpense(input, transportActorOf(request)));
   }
 
   /**
@@ -69,16 +62,9 @@ export class TripExpensesController {
   @Post('expenses/:id/reversal')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.reversal.post')
-  reverse(
-    @Param('id') id: string,
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  reverse(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const { reason } = this.parse(reversalSchema, body);
-    return this.guard(() =>
-      this.costing.reverseExpense(id, reason, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.costing.reverseExpense(id, reason, transportActorOf(request)));
   }
 
   private parse<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {

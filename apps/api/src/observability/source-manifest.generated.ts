@@ -226,32 +226,32 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.costing.driver_fund.adjust": {
       "functionName": "DriverFundController.adjust",
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
-      "line": 96
+      "line": 83
     },
     "transport.costing.driver_fund.advance": {
       "functionName": "DriverFundController.advance",
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
-      "line": 67
+      "line": 66
     },
     "transport.costing.driver_fund.read": {
       "functionName": "DriverFundController.statement",
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
-      "line": 54
+      "line": 53
     },
     "transport.costing.driver_fund.return": {
       "functionName": "DriverFundController.returnCash",
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
-      "line": 82
+      "line": 75
     },
     "transport.costing.expense.read": {
       "functionName": "TripExpensesController.breakdown",
       "filePath": "apps/api/src/transport/costing/trip-expenses.controller.ts",
-      "line": 43
+      "line": 42
     },
     "transport.costing.expense.record": {
       "functionName": "TripExpensesController.record",
       "filePath": "apps/api/src/transport/costing/trip-expenses.controller.ts",
-      "line": 50
+      "line": 49
     },
     "transport.costing.period.manage": {
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts"
@@ -262,7 +262,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.costing.period.reopen": {
       "functionName": "DriverFundController.reopenPeriod",
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
-      "line": 156
+      "line": 124
     },
     "transport.customer.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
@@ -298,17 +298,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.trip.assign": {
       "functionName": "TripsController.assign",
       "filePath": "apps/api/src/transport/trips/trips.controller.ts",
-      "line": 92
+      "line": 80
     },
     "transport.trip.cancel": {
       "functionName": "TripsController.cancel",
       "filePath": "apps/api/src/transport/trips/trips.controller.ts",
-      "line": 123
+      "line": 101
     },
     "transport.trip.create": {
       "functionName": "TripsController.plan",
       "filePath": "apps/api/src/transport/trips/trips.controller.ts",
-      "line": 64
+      "line": 63
     },
     "transport.trip.read": {
       "filePath": "apps/api/src/transport/trips/trips.controller.ts"
@@ -316,12 +316,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.trip.transition": {
       "functionName": "TripsController.transition",
       "filePath": "apps/api/src/transport/trips/trips.controller.ts",
-      "line": 105
+      "line": 88
     },
     "transport.trip.update": {
       "functionName": "TripsController.update",
       "filePath": "apps/api/src/transport/trips/trips.controller.ts",
-      "line": 77
+      "line": 72
     },
     "transport.vehicle.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"

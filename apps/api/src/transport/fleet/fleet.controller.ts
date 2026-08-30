@@ -3,7 +3,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
@@ -64,15 +63,9 @@ export class FleetController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.vehicle.manage')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  createVehicle(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  createVehicle(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(createVehicleSchema, body);
-    return this.guard(() =>
-      this.fleet.registerVehicle(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.fleet.registerVehicle(input, transportActorOf(request)));
   }
 
   @Patch('vehicles/:id')
@@ -82,12 +75,9 @@ export class FleetController {
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
   ) {
     const patch = this.parse(updateVehicleSchema, body);
-    return this.guard(() =>
-      this.fleet.updateVehicle(id, patch, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.fleet.updateVehicle(id, patch, transportActorOf(request)));
   }
 
   @Post('vehicles/:id/driver')
@@ -97,11 +87,10 @@ export class FleetController {
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
   ) {
     const { driverId } = this.parse(assignVehicleDriverSchema, body);
     return this.guard(() =>
-      this.fleet.assignDriverToVehicle(id, driverId, transportActorOf(request, claimedActor)),
+      this.fleet.assignDriverToVehicle(id, driverId, transportActorOf(request)),
     );
   }
 
@@ -129,15 +118,9 @@ export class FleetController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.driver.manage')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  createDriver(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  createDriver(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(createDriverSchema, body);
-    return this.guard(() =>
-      this.fleet.registerDriver(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.fleet.registerDriver(input, transportActorOf(request)));
   }
 
   @Patch('drivers/:id')
@@ -147,12 +130,9 @@ export class FleetController {
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
   ) {
     const patch = this.parse(updateDriverSchema, body);
-    return this.guard(() =>
-      this.fleet.updateDriver(id, patch, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.fleet.updateDriver(id, patch, transportActorOf(request)));
   }
 
   /* ------------------------ Khach hang -------------------------- */
@@ -173,15 +153,9 @@ export class FleetController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.customer.manage')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  createCustomer(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  createCustomer(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(createCustomerSchema, body);
-    return this.guard(() =>
-      this.fleet.createCustomer(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.fleet.createCustomer(input, transportActorOf(request)));
   }
 
   @Patch('customers/:id')
@@ -191,12 +165,9 @@ export class FleetController {
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
   ) {
     const patch = this.parse(updateCustomerSchema, body);
-    return this.guard(() =>
-      this.fleet.updateCustomer(id, patch, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.fleet.updateCustomer(id, patch, transportActorOf(request)));
   }
 
   /* -------------------------- Doi tac --------------------------- */
@@ -217,15 +188,9 @@ export class FleetController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.partner.manage')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  createPartner(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  createPartner(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(createPartnerSchema, body);
-    return this.guard(() =>
-      this.fleet.createPartner(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.fleet.createPartner(input, transportActorOf(request)));
   }
 
   @Patch('partners/:id')
@@ -235,12 +200,9 @@ export class FleetController {
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
   ) {
     const patch = this.parse(updatePartnerSchema, body);
-    return this.guard(() =>
-      this.fleet.updatePartner(id, patch, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.fleet.updatePartner(id, patch, transportActorOf(request)));
   }
 
   /* --------------------------- Noi bo --------------------------- */

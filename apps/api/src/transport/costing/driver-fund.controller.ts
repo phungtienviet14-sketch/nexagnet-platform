@@ -3,7 +3,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Post,
   Req,
@@ -66,43 +65,25 @@ export class DriverFundController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.driver_fund.advance')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  advance(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  advance(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(postFundMovementSchema, body);
-    return this.guard(() =>
-      this.costing.postAdvance(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.costing.postAdvance(input, transportActorOf(request)));
   }
 
   @Post('returns')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.driver_fund.return')
-  returnCash(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  returnCash(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(postFundMovementSchema, body);
-    return this.guard(() =>
-      this.costing.postReturn(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.costing.postReturn(input, transportActorOf(request)));
   }
 
   @Post('adjustments')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.driver_fund.adjust')
-  adjust(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  adjust(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(adjustFundSchema, body);
-    return this.guard(() =>
-      this.costing.postAdjustment(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.costing.postAdjustment(input, transportActorOf(request)));
   }
 
   @Post('entries/:id/reversal')
@@ -112,37 +93,24 @@ export class DriverFundController {
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
   ) {
     const { reason } = this.parse(reversalSchema, body);
-    return this.guard(() =>
-      this.costing.reverseFundEntry(id, reason, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.costing.reverseFundEntry(id, reason, transportActorOf(request)));
   }
 
   @Post('periods')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.period.manage')
-  openPeriod(
-    @Body() body: unknown,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
+  openPeriod(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(openFundPeriodSchema, body);
-    return this.guard(() =>
-      this.periods.openPeriod(input, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.periods.openPeriod(input, transportActorOf(request)));
   }
 
   @Post('periods/:id/close')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.period.manage')
-  closePeriod(
-    @Param('id') id: string,
-    @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
-  ) {
-    return this.guard(() => this.periods.closePeriod(id, transportActorOf(request, claimedActor)));
+  closePeriod(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.guard(() => this.periods.closePeriod(id, transportActorOf(request)));
   }
 
   /**
@@ -158,12 +126,9 @@ export class DriverFundController {
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-    @Headers('x-actor') claimedActor?: string,
   ) {
     const { reason } = this.parse(reopenFundPeriodSchema, body);
-    return this.guard(() =>
-      this.periods.reopenPeriod(id, reason, transportActorOf(request, claimedActor)),
-    );
+    return this.guard(() => this.periods.reopenPeriod(id, reason, transportActorOf(request)));
   }
 
   @Get('periods/:id/snapshots')

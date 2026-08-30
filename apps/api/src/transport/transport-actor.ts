@@ -3,46 +3,67 @@ import { isInternalServiceRequest } from '../auth/internal-service.guard.js';
 import type { AuthenticatedRequest } from '../auth/session.types.js';
 import { loadFoundationEnv } from '../config/foundation-env.js';
 
-/** Du cho moi ten dang nhap that; du ngan de mot header bia khong phinh duoc ban ghi nao. */
-const MAX_ACTOR_LENGTH = 64;
-const SAFE_ACTOR = /^[\w.@-]+$/;
-
-/** Danh tinh cua mot TIEN TRINH noi bo, khong phai cua mot nguoi. Khong bao gio den tu header. */
+/** Danh tinh cua mot TIEN TRINH noi bo, khong phai cua mot nguoi. Dau do may chu tu dat. */
 export const INTERNAL_SERVICE_ACTOR = 'internal-service';
 
-/** Duong lui cua che do khong-phien khi ben goi khong khai gi ca. */
-export const ANONYMOUS_TRANSPORT_ACTOR = 'operator';
+/**
+ * Ten CO DINH cua che do khong-phien (`api-key` / `none`: demo, CI, dev offline).
+ *
+ * Khong co phien thi khong co ai de goi ten. Cai ten nay noi dung mot dieu ma he thong BIET:
+ * "mot thao tac vien qua mot ban chay khong bat xac thuc". No khong gia vo biet nhieu hon the.
+ */
+export const SYSTEM_TRANSPORT_ACTOR = 'operator';
 
 /**
  * AI da ky vao mot dong lich su tai chinh van tai.
  *
  * ---------------------------------------------------------------------------
- * VI SAO KHONG DUNG THANG `@Headers('x-actor')` NHU T2 DA LAM:
+ * CHI CO BA NGUON DANH TINH, VA CA BA DEU DO MAY CHU DUNG LEN:
+ *
+ * ```text
+ * yeu cau da qua `InternalServiceGuard`  -> 'internal-service'  (dau la mot `Symbol` cuc bo)
+ * AUTH_MODE=session + `request.authUser` -> username da xac thuc (do `SessionAuthGuard` dat)
+ * AUTH_MODE=session, khong co phien      -> 401, THAT BAI DONG
+ * AUTH_MODE=api-key | none               -> 'operator' (co dinh)
+ * ```
+ *
+ * KHONG co nhanh thu tu nao doc mot header. Ham nay khong nhan tham so nao ngoai `request`, nen
+ * viec "truyen `x-actor` vao danh tinh kiem toan" khong phai la mot lua chon bi cam — no la mot
+ * loi bien dich.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO `x-actor` KHONG DUOC PHEP DEN DAY, KE CA DA LOC:
  *
  * Gia tri nay di vao `DriverFundEntry.recordedBy`, `TripExpense.recordedBy`,
  * `DriverFundPeriod.closedBy/reopenedBy`, `FundPeriodSnapshot.takenBy` va `AuditLog.actor` — tuc
- * vao nhung hang KHONG SUA DUOC (`INV-20`). O che do `AUTH_MODE=session`, mot nguoi dung vai
- * `ACCOUNTING` chi can them mot dong header:
+ * vao nhung hang KHONG SUA DUOC (`INV-20`).
  *
- * ```text
- * POST /transport/costing/driver-fund/advances
- * x-actor: giam-doc
- * ```
+ * Ban T3R dau tien da bit duong nay o che do `session`, nhung o `AUTH_MODE=api-key`/`none` van
+ * lay `x-actor` DA LOC lam danh tinh. Do van la mot lo hong, va ly do rat gon:
  *
- * va so sach se noi vinh vien rang Giam doc da ky lenh ung tien do. Khong loi, khong canh bao —
- * chi mot dong lich su tai chinh mang ten sai nguoi, va `INV-20` bao dam khong ai sua lai duoc.
+ *   LOC mot chuoi chi chung minh chuoi do VO HAI VE HINH THUC.
+ *   No khong chung minh nguoi gui dung LA cai ten do.
  *
- * Nen o che do co phien, danh tinh CHI den tu `request.authUser` do may chu tu dung len; header
- * `x-actor` bi BO QUA hoan toan, khong phai "uu tien thap hon".
+ * `giam-doc` qua duoc moi bo loc — no dung charset, dung do dai, khong ky tu la. Roi so sach ghi
+ * vinh vien rang Giam doc da ky lenh ung tien, va `INV-20` bao dam khong ai sua lai duoc. Mot dong
+ * lich su tai chinh mang ten sai nguoi con te hon mot dong khong biet ten ai: cai thu hai noi that
+ * rang he thong khong biet; cai thu nhat noi doi mot cach tu tin.
+ *
+ * Vay nen o che do khong-phien, cau tra loi la mot cai ten CO DINH. Ban demo mat kha nang phan
+ * biet hai thao tac vien — dung, va do la dieu phai chap nhan: mot ban chay khong bat xac thuc thi
+ * KHONG CO du lieu de phan biet ho. Muon phan biet thi bat `AUTH_MODE=session`, do la cho duy nhat
+ * cau hoi "ai" co mot cau tra loi kiem chung duoc.
  *
  * ---------------------------------------------------------------------------
- * BA CHE DO, BA CAU TRA LOI RO RANG — khong che do nao roi ve mot mac dinh im lang:
+ * VI SAO KHONG CON BO LOC CHUOI o day nua:
  *
- * ```text
- * AUTH_MODE=session            -> request.authUser.username      | khong co -> 401 (that bai DONG)
- * AUTH_MODE=session + noi bo   -> 'internal-service' (co dinh)   |
- * AUTH_MODE=api-key | none     -> x-actor DA LOC                 | khong dat -> 'operator'
- * ```
+ * Ban truoc phai loc vi `x-actor` la du lieu nguoi ngoai gui. Gio ca ba nguon deu do may chu dung
+ * len: hai hang so, va mot `username` da qua `usernameSchema` (`auth/auth.schemas.ts` —
+ * `^[a-z0-9][a-z0-9._-]*$/i`, 3..64) o duong TAO NGUOI DUNG DUY NHAT (`AuthService.createUser()`).
+ * Giu lai mot bo loc khong con gi de loc se ngu y sai rang o day van co du lieu khong tin duoc.
+ *
+ * Rang buoc do con quan trong cho mot ly do thu hai: gia tri nay chay vao `TraceAnchors.actor`, ma
+ * `TelemetryService.envelope()` dung `traceSnapshot()` THO — neo KHONG di qua `sanitizeAttributes`.
  *
  * ---------------------------------------------------------------------------
  * VI SAO LA `username` CHU KHONG PHAI `authUser.id`:
@@ -54,37 +75,22 @@ export const ANONYMOUS_TRANSPORT_ACTOR = 'operator';
  * tien. Danh tinh ben vung truoc viec doi ten dang nhap doi mot mo hinh actor o TANG NEN TANG
  * (`AuditLog.actorUserId`), khong phai mot ngoai le rieng cua van tai — xem #94 §8: khong don dep
  * Platform trong PR nay.
- *
- * ---------------------------------------------------------------------------
- * VI SAO VAN PHAI LOC `x-actor` o che do khong-phien: gia tri nay cung chay vao
- * `TraceAnchors.actor`, ma `TelemetryService.envelope()` dung `traceSnapshot()` THO — neo KHONG di
- * qua `sanitizeAttributes`. Cung ly le da viet o `orders.controller.ts`.
  */
-export function transportActorOf(request: AuthenticatedRequest, claimedHeader?: string): string {
-  const authMode = loadFoundationEnv().AUTH_MODE;
+export function transportActorOf(request: AuthenticatedRequest): string {
+  // Tien trinh noi bo. Dau nay do CHINH `InternalServiceGuard` dat sau khi doi khoa dich vu, va no
+  // la mot `Symbol` cuc bo cua module do — mot ben goi ngoai khong tu gan vao than yeu cau duoc.
+  if (isInternalServiceRequest(request)) return INTERNAL_SERVICE_ACTOR;
 
-  if (authMode === 'session') {
-    const verified = request.authUser?.username;
-    if (verified) return verified;
-    // Duong dich vu-dich vu da qua `InternalServiceGuard` — mot tien trinh, khong mot nguoi. Ten
-    // co dinh chu khong lay tu header: mot worker khong duoc tu khai minh la ai.
-    if (isInternalServiceRequest(request)) return INTERNAL_SERVICE_ACTOR;
-    // THAT BAI DONG. Mot lenh ghi tai chinh khong co nguoi chiu trach nhiem thi khong duoc ghi,
-    // chu khong duoc roi ve `operator` — mot cai ten khong truy nguoc duoc ve ai.
+  // Nguoi that. `SessionAuthGuard` la cho DUY NHAT dat `authUser`, va no tu rut lui hoan toan khi
+  // `AUTH_MODE !== 'session'` — nen truong nay khong bao gio den tu mot ban chay khong xac thuc.
+  const verified = request.authUser?.username;
+  if (verified) return verified;
+
+  // THAT BAI DONG. Mot lenh ghi tai chinh khong co nguoi chiu trach nhiem thi khong duoc ghi, chu
+  // khong duoc roi ve mot cai ten chung — o che do co phien, "khong biet ai" la mot loi.
+  if (loadFoundationEnv().AUTH_MODE === 'session') {
     throw new UnauthorizedException('Thao tac van tai doi mot phien dang nhap da xac thuc');
   }
 
-  return sanitizedFallbackActor(claimedHeader);
-}
-
-/**
- * Duong `AUTH_MODE=api-key`/`none` (demo, CI, dev offline): khong co phien nao de doi chieu, nen
- * `x-actor` la thu duy nhat con lai. Loc chat va roi ve `operator` khi khong dat — KHONG BAO GIO
- * de trong: mot thao tac khong co nguoi chiu trach nhiem la mot thao tac khong kiem toan duoc.
- */
-function sanitizedFallbackActor(claimedHeader?: string): string {
-  const claimed = (claimedHeader ?? '').trim();
-  return claimed.length > 0 && claimed.length <= MAX_ACTOR_LENGTH && SAFE_ACTOR.test(claimed)
-    ? claimed
-    : ANONYMOUS_TRANSPORT_ACTOR;
+  return SYSTEM_TRANSPORT_ACTOR;
 }

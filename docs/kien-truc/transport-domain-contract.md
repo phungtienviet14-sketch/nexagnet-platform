@@ -971,6 +971,35 @@ bao giờ** vào cùng một tổng — cộng chúng lại là đếm một kho
 | Đóng kỳ | **Không tạo bút toán** (§7.3) — chỉ ghi một `FundPeriodSnapshot` append-only |
 | Mở lại | Hành động riêng `transport.costing.period.reopen`, **Giám đốc**; Kế toán không có |
 | Bằng chứng | Hai cột tham chiếu trên `TripExpense`, **không** dựng hệ tài liệu song song (`PG-05` vẫn hở) |
+| **Ai ký** | `transportActorOf(request)` — **ba nguồn, cả ba do máy chủ dựng lên**. Header `x-actor` **không** là một trong ba, ở **mọi** `AUTH_MODE` |
+
+##### Danh tính trên một dòng lịch sử tài chính (`INV-20` áp cho cả cột `actor`)
+
+```text
+yeu cau da qua InternalServiceGuard   -> 'internal-service'   (dau la mot Symbol cuc bo)
+AUTH_MODE=session + request.authUser  -> username da xac thuc (SessionAuthGuard dat)
+AUTH_MODE=session, khong co phien     -> 401, THAT BAI DONG
+AUTH_MODE=api-key | none              -> 'operator' (co dinh)
+```
+
+`recordedBy` / `closedBy` / `reopenedBy` / `takenBy` / `AuditLog.actor` nằm trong các bảng **không
+có `UPDATE` và không có `DELETE`**. Ghi sai tên người là **vĩnh viễn**: một dòng đảo sửa được con
+số, nhưng không xoá được cái tên đã ghi.
+
+Vì thế **lọc chuỗi không đủ**. Lọc chỉ chứng minh chuỗi vô hại **về hình thức**; `giam-doc` qua được
+mọi bộ lọc — đúng charset, đúng độ dài. Nó không chứng minh người gửi **là** người đó. Một cái tên
+hợp lệ mà không ai kiểm chứng được là **bằng chứng giả**, và đó là thứ duy nhất tệ hơn không có
+bằng chứng.
+
+Ở chế độ không-phiên, câu trả lời vì thế là một cái tên **cố định**. Bản demo mất khả năng phân biệt
+hai thao tác viên — đúng, và đó là điều phải chấp nhận: một bản chạy không bật xác thực thì **không
+có dữ liệu** để phân biệt họ. Muốn phân biệt thì bật `AUTH_MODE=session`.
+
+`username` chứ không phải `authUser.id`: `AuditLog.actor` là cột chuỗi **dùng chung cho cả nền
+tảng**, và mọi bề mặt khác đã ghi tên đăng nhập vào đó. Ghi UUID riêng cho vận tải sẽ tạo **hai từ
+vựng actor** trong cùng một bảng, khiến bộ lọc `@@index([actor])` trả về một nửa sự thật. Danh tính
+bền vững trước việc đổi tên đăng nhập đòi `AuditLog.actorUserId` ở **tầng nền tảng** — việc riêng,
+chưa làm.
 
 #### Bốn **nhóm bất biến** mà Prisma không khai được
 
