@@ -34,6 +34,13 @@ export const TRIP_EXPENSE_RECORD_REASONS = [
   'EXPENSE_TRIP_OUTSOURCED',
   /** `INV-22` — ngay nghiep vu roi vao mot ky da dong hoac dang chot. */
   'EXPENSE_PERIOD_FROZEN',
+  /**
+   * `DA-T3-04` — khoan chi tu quy chi gan duoc cho lai xe DA TUNG duoc phan cong vao chuyen do.
+   *
+   * Khong co cong nay thi mot lan go nham `driverId` se tru tien quy cua mot lai xe khong lien
+   * quan gi den chuyen — va vi so cai la append-only, duong sua duy nhat la mot but toan dao.
+   */
+  'EXPENSE_DRIVER_NOT_ASSIGNED',
 ] as const;
 export type TripExpenseRecordReason = (typeof TRIP_EXPENSE_RECORD_REASONS)[number];
 
@@ -105,6 +112,7 @@ export const TRANSPORT_COSTING_DECISIONS = defineDecisionVocabulary({
     EXPENSE_TRIP_CANCELLED: 'Chuyến đã huỷ — đường đúng là đảo khoản đã ghi',
     EXPENSE_TRIP_OUTSOURCED: 'Chuyến thuê xe ngoài không nhận chi phí từ quỹ lái xe',
     EXPENSE_PERIOD_FROZEN: 'Ngày nghiệp vụ rơi vào kỳ quỹ đã đóng hoặc đang chốt',
+    EXPENSE_DRIVER_NOT_ASSIGNED: 'Lái xe chưa từng được phân công vào chuyến này',
 
     FUND_ENTRY_POSTED: 'Đã ghi bút toán sổ quỹ lái xe',
     FUND_ENTRY_IDEMPOTENT_REPLAY: 'Ghi lặp cùng khoá chống trùng — trả lại bút toán đã ghi',

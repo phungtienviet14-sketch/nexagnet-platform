@@ -33,6 +33,17 @@ export abstract class TransportCoreFacts {
   abstract findDriver(driverId: string): Promise<DriverFacts | null>;
   /** Cau noi user dang nhap -> ho so lai xe, cho be mat "so quy cua chinh toi". */
   abstract findDriverByAuthUserId(authUserId: string): Promise<DriverFacts | null>;
+  /**
+   * Lai xe nay CO TUNG duoc phan cong vao chuyen do khong — ke ca ban phan cong DA DONG LAI.
+   *
+   * "Tung", khong phai "dang": `GD-06` giu lich su phan cong dung de mot nguoi bi thay ca van
+   * chiu trach nhiem cho phan chuyen ho da chay. Doc "dang" se lam moi khoan chi cua nguoi lai
+   * dau tien bien thanh khong ghi duoc ngay khi nguoi thu hai nhan xe.
+   *
+   * Tra `boolean` chu khong tra ca lich su: costing chi can DUNG cau tra loi nay, va mot ban
+   * lich su day du keo theo `assignedBy`/`vehicleId` vao pham vi cua no ma khong ai can den.
+   */
+  abstract wasDriverEverAssignedToTrip(tripId: string, driverId: string): Promise<boolean>;
 }
 
 /**
@@ -64,5 +75,10 @@ export class TransportCoreFactsAdapter extends TransportCoreFacts {
   async findDriverByAuthUserId(authUserId: string): Promise<DriverFacts | null> {
     const driver = await this.fleet.findDriverByAuthUserId(authUserId);
     return driver ? { id: driver.id, fullName: driver.fullName } : null;
+  }
+
+  async wasDriverEverAssignedToTrip(tripId: string, driverId: string): Promise<boolean> {
+    const history = await this.trips.listAssignments(tripId);
+    return history.some((assignment) => assignment.driverId === driverId);
   }
 }

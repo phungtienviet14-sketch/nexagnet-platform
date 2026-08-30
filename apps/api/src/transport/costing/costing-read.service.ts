@@ -6,6 +6,7 @@ import { TRANSPORT_COSTING_DECISIONS } from './costing-decisions.js';
 import { requireDriverFacts, requireTripFacts } from './costing-guards.js';
 import { CostingRepository } from './costing.repository.js';
 import type { DriverFundStatement, TripCostBreakdown } from './costing.types.js';
+import { describeFundBalance } from './driver-fund-ledger.js';
 import { TransportCoreFacts } from './transport-core-facts.port.js';
 
 /**
@@ -42,7 +43,14 @@ export class CostingReadService {
     // giao dich nao thi chua co so quy, va mot lan `GET` khong duoc tao ra no.
     const account = await this.ledger.findAccountByDriver(driverId);
     if (!account) {
-      return { account: null, driverId, balance: 0, currencyCode: TRANSPORT_CURRENCY, entries: [] };
+      return {
+        account: null,
+        driverId,
+        balance: 0,
+        balanceStance: describeFundBalance(0),
+        currencyCode: TRANSPORT_CURRENCY,
+        entries: [],
+      };
     }
 
     const [entries, sum] = await Promise.all([
@@ -53,6 +61,7 @@ export class CostingReadService {
       account,
       driverId,
       balance: sum.total,
+      balanceStance: describeFundBalance(sum.total),
       currencyCode: account.currencyCode,
       entries,
     };

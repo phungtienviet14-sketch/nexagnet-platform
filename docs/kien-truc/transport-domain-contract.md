@@ -408,13 +408,36 @@ Chi 150.000đ cho chuyến A, công ty trả thẳng nhà cung cấp
 | Phiếu lương đã trả | Phiếu bổ sung / hoàn | Tính lại đè lên |
 | Đối soát đã đóng | Mở lại có quyền + audit, hoặc kỳ sau điều chỉnh | Sửa ngầm |
 
-### 9.4. Số tiền lái xe đang nợ nằm ở **đúng một** nơi (`INV-23`)
+### 9.4. Khoản tiền chưa quyết toán nằm ở **đúng một** nơi (`INV-23`)
 
-Số dư quỹ **được phép âm** — đó là cách biểu diễn "lái xe đang nợ". Nó **không** tự trở thành khoản
-trừ lương (`GD-12`). Nếu sau này có nghĩa vụ thu hồi qua lương, thứ tự **bắt buộc** là: tạo nghĩa vụ
-**trước**, chuyển khoản ra khỏi quỹ **sau**. Đảo thứ tự thì một lần lỗi giữa chừng để lại đúng trạng
-thái bị cấm: exposure đã rời sổ quỹ mà chưa nơi nào nhận — tức khoản phải thu **biến mất**. Làm đúng
-thứ tự thì trạng thái xấu nhất là đếm hai lần: bảo thủ, phát hiện được, sửa được.
+**Chiều đọc của dấu — `DEMO_ASSUMPTION` `DA-T3-01`, chốt 30/08/2026 (T3R):**
+
+```text
+số dư = tạm ứng + điều chỉnh − hoàn trả − khoản chi lấy từ quỹ
+
+> 0   lái xe ĐANG GIỮ tiền công ty, chưa quyết toán hết
+= 0   cân
+< 0   lái xe đã chi VƯỢT số được ứng — đang bỏ tiền túi, chờ công ty hoàn lại sau khi đối soát
+```
+
+Số dư quỹ **được phép âm**, và số âm **KHÔNG** có nghĩa là "lái xe đang nợ công ty". Bản trước của
+mục này viết ngược chiều với chính ví dụ tính ra số ở §9.2 (ứng 10.000.000, chi 150.000, còn
+9.850.000); T3R chốt theo §9.2 vì đó là chỗ duy nhất trong T1 có phép tính và có hạt giống nghiệm
+thu (`FUND-001`/`FUND-003`). Đọc ngược chiều này không làm sai một phép tính nào — nó làm sai
+**người**: một lái xe đã ứng tiền túi cho chuyến hàng sẽ hiện ra trong báo cáo như một người đang nợ.
+
+Chiều đọc đó được khoá bằng **kiểu dữ liệu**, không bằng câu chữ: `describeFundBalance()` trong
+`driver-fund-ledger.ts` trả về `DRIVER_HOLDS_COMPANY_CASH` / `SETTLED` / `COMPANY_OWES_DRIVER`, và
+`DriverFundStatement.balanceStance` mang sẵn nhãn đó ra tầng đọc để T6/T7 không phải tự suy từ dấu.
+Không nhãn nào nói "lái xe nợ công ty".
+
+Số dư âm **không** tự trở thành khoản trừ lương (`GD-12`). Nếu sau này có nghĩa vụ thu hồi qua
+lương, thứ tự **bắt buộc** là: tạo nghĩa vụ **trước**, chuyển khoản ra khỏi quỹ **sau**. Đảo thứ tự
+thì một lần lỗi giữa chừng để lại đúng trạng thái bị cấm: exposure đã rời sổ quỹ mà chưa nơi nào
+nhận — tức khoản phải thu **biến mất**. Làm đúng thứ tự thì trạng thái xấu nhất là đếm hai lần: bảo
+thủ, phát hiện được, sửa được.
+
+Phần **cốt lõi** của `INV-23` không đổi trong cả hai cách đọc: khoản tiền đó nằm ở **đúng một** nơi.
 
 ---
 
@@ -949,11 +972,16 @@ bao giờ** vào cùng một tổng — cộng chúng lại là đếm một kho
 | Mở lại | Hành động riêng `transport.costing.period.reopen`, **Giám đốc**; Kế toán không có |
 | Bằng chứng | Hai cột tham chiếu trên `TripExpense`, **không** dựng hệ tài liệu song song (`PG-05` vẫn hở) |
 
-#### Bốn ràng buộc DB mà Prisma không khai được
+#### Bốn **nhóm bất biến** mà Prisma không khai được
+
+Bốn mục dưới đây là **nhóm khái niệm**, không phải số lượng đối tượng `CONSTRAINT` trong migration —
+tệp SQL thô có nhiều `CHECK` riêng lẻ hơn bốn (mỗi nhóm dấu và mỗi nhóm ngày trải trên hai bảng, và
+còn các `CHECK` khoảng tiền). Đếm nhóm chứ không đếm đối tượng là chủ ý; **danh sách tên đối tượng
+chính xác** nằm ở `costing-storage-conflict.ts` và được `transport-costing-storage.spec.ts` đối chiếu
+với chính tệp SQL — bài đó đỏ nếu một tên biến mất.
 
 Chúng sống trong SQL thô của `20260830140000_transport_costing`. **Sinh lại migration từ schema sẽ
-làm cả bốn biến mất — và hệ thống vẫn chạy bình thường, chỉ không còn chặn gì.**
-`transport-costing-storage.spec.ts` đọc chính tệp SQL và đỏ nếu một tên biến mất.
+làm cả bốn nhóm biến mất — và hệ thống vẫn chạy bình thường, chỉ không còn chặn gì.**
 
 1. `TransportDriverFundEntry_sign_by_kind` / `TransportTripExpense_sign_by_kind` — bản sao ở DB của
    luật dấu. Hàm TypeScript chỉ đúng với các hàng đi **qua** ứng dụng; một `INSERT` tay hay một bản
@@ -989,20 +1017,20 @@ IMMUTABLE). Có một bài test khoá lại để không ai "dọn dẹp" nó v�
 Khoảng ngày dùng `'[]'` — **đóng cả hai đầu**. Với `'[)'`, kỳ 01/08..31/08 và kỳ 31/08..30/09 sẽ
 **không** bị coi là chồng lấp, trong khi một bút toán ngày 31/08 rơi vào cả hai.
 
-#### Ba giả định demo mới, ghi tên thay vì để ngầm
+#### Bốn giả định demo, ghi tên thay vì để ngầm
 
 | Mã | Giả định | Vì sao | Chi phí đảo ngược |
 |---|---|---|---|
-| `DA-T3-01` | **Số dư quỹ = tiền công ty lái xe đang giữ.** Ứng `+`, chi/hoàn `−`, nên **số dư âm = lái xe đã tiêu quá số đã ứng** | §9.2 và hạt giống `FUND-001`/`FUND-003` là chỗ **duy nhất** trong T1 có ví dụ tính ra số. Câu chữ ở §9.4 ("số dư âm = *lái xe đang nợ*") đọc **ngược** với chính quy ước đó — xem mục ⚠ bên dưới | **Thấp** — đổi dấu là đổi hai hằng số + migration đọc dữ liệu nếu đã có số thật |
+| `DA-T3-01` | **Số dư quỹ = tiền công ty lái xe đang giữ.** Ứng `+`, chi/hoàn `−`, nên **số dư âm = lái xe đã chi vượt số được ứng, đang chờ công ty hoàn lại** — **không** phải "lái xe đang nợ", và **không** tự sinh khấu trừ lương (`GD-12`) | §9.2 và hạt giống `FUND-001`/`FUND-003` là chỗ **duy nhất** trong T1 có ví dụ tính ra số. Câu chữ cũ ở §9.4 đọc **ngược** với chính quy ước đó; T3R đã sửa §9.4 theo §9.2 và khoá chiều đọc bằng `describeFundBalance()` + `DriverFundStatement.balanceStance` | **Thấp** — đổi dấu là đổi hai hằng số + migration đọc dữ liệu nếu đã có số thật |
 | `DA-T3-02` | **Bút toán đảo mang ngày nghiệp vụ của bản gốc.** Kỳ đó đã đóng thì lệnh đảo **bị từ chối**, không bị đẩy sang kỳ hiện tại | `INV-22` cấm "ghi lặng lẽ vào kỳ đã chốt". Đường hợp lệ là mở lại kỳ (quyền riêng + dấu vết) | **Thấp** — là quy tắc guard |
 | `DA-T3-03` | Chuyến **thuê xe ngoài** vẫn nhận được khoản `COMPANY_DIRECT`; chỉ khoản từ **quỹ lái xe** bị chặn | Bất biến Issue #85 khai đúng về Driver Fund (`INV-04`); tiền trả nhà xe đi đường `PayableDocument` của T5 | **Thấp** — thêm một điều kiện ở `guardTripAcceptsExpense`, không đổi cấu trúc |
+| `DA-T3-04` | **Khoản chi `DRIVER_FUND` chỉ gán được cho lái xe ĐÃ TỪNG được phân công vào chuyến đó.** "Từng", không phải "đang": một lái xe bị thay ca vẫn ghi được khoản chi của đoạn họ đã chạy. `COMPANY_DIRECT` không cần lái xe nào | Không có cổng này thì một lần gõ nhầm `driverId` trừ tiền quỹ của một lái xe **không liên quan gì** đến chuyến — và vì sổ cái là append-only, đường sửa duy nhất là một bút toán đảo. `GD-06` giữ sẵn lịch sử phân công để truy trách nhiệm; đây là chỗ nó được dùng đến. Khoản chi hiện chỉ có **ngày**, nên **không** đối chiếu tới từng phút — không bịa ra độ chính xác không tồn tại | **Thấp** — một điều kiện ở `recordTripExpense`, đọc qua `TransportCoreFacts` (cổng chỉ-đọc), không đổi cấu trúc |
 
-> ⚠ **Một lệch trong chính T1, chưa giải quyết — cần khách xác nhận.** §9.2 (có ví dụ tính ra số:
-> ứng 10.000.000, chi 150.000, còn 9.850.000) và §9.4 (câu chữ "số dư âm = lái xe đang nợ") mô tả
-> **hai chiều đọc ngược nhau** của cùng một cột. T3 theo §9.2 vì nó có ví dụ và có hạt giống nghiệm
-> thu; §9.4 chỉ có câu chữ. Phần **cốt lõi** của `INV-23` không đổi trong cả hai cách đọc: số tiền
-> đó nằm ở **đúng một** nơi và **không** tự sinh khoản khấu trừ lương nào (`GD-12`). Phải chốt chiều
-> đọc **trước khi** T6/T7 dựng báo cáo lên trên nó.
+> ✅ **Lệch trong chính T1 đã đóng (T3R, 30/08/2026).** §9.2 (có ví dụ tính ra số: ứng 10.000.000,
+> chi 150.000, còn 9.850.000) và §9.4 (câu chữ cũ "số dư âm = lái xe đang nợ") từng mô tả **hai
+> chiều đọc ngược nhau** của cùng một cột. §9.4 đã được viết lại theo §9.2, và chiều đọc được khoá
+> bằng `describeFundBalance()` + `DriverFundStatement.balanceStance` để T6/T7 không hiển thị ngược
+> được. Đây vẫn là **`DEMO_ASSUMPTION`**, **không** phải một điều khách đã xác nhận.
 
 #### Còn hở sau T3
 
@@ -1015,8 +1043,18 @@ Khoảng ngày dùng `'[]'` — **đóng cả hai đầu**. Với `'[)'`, kỳ 0
 - **`PG-12` vẫn hở**: chưa in được phiếu quyết toán quỹ để ký (VT-038).
 - **Duyệt tạm ứng hai bước (`INV-10`) chưa hiện thực.** Hình dạng cấu hình đã có; một gói khách bật
   nó lên sẽ làm hệ thống **chết lúc boot** thay vì lặng lẽ bỏ qua cái khoá vừa được yêu cầu.
-- **Trạng thái `CLOSING` không nguyên tử với việc chụp ảnh** — cố ý (xem bảng trên). Một lần chết
-  giữa chừng để kỳ ở `CLOSING`: đóng băng, không mất dữ liệu, gọi lại `closePeriod` đi tiếp.
+- **Pha một của việc đóng kỳ (`-> CLOSING`) cố ý commit riêng**, và đó vẫn là lựa chọn đúng: nó phải
+  có hiệu lực với người ghi khác **trước khi** một con số nào được cộng. **Pha hai (chụp ảnh +
+  `CLOSING -> CLOSED`) là NGUYÊN TỬ từ T3R** — trước đó nó là hai lần commit, và một lần chết giữa
+  chừng để lại một ảnh chụp đã commit trên một kỳ vẫn `CLOSING`, nên gọi lại sẽ chụp **ảnh thứ hai**
+  cho cùng một lần đóng (Issue #94 §2). Nay một lần chết giữa pha hai cuộn lại sạch: kỳ về đúng
+  `CLOSING`, không ảnh chụp nào, gọi lại `closePeriod` chụp đúng một ảnh. Đo trên PostgreSQL 16 thật
+  — `transport-costing.int.spec.ts` R3.
+- **Cổng `INV-22` nằm TRONG giao dịch ghi từ T3R.** Bản đầu kiểm kỳ ở service **trước** khi gọi
+  `post()`, nên một bút toán vẫn commit được **sau** khi kỳ đã đóng băng (Issue #94 §1). Nay mọi
+  đường ghi chạm sổ quỹ lấy `SELECT ... FOR UPDATE` trên hàng `TransportDriverFundAccount` rồi mới
+  đọc lại kỳ, **trong cùng giao dịch**; việc chuyển `-> CLOSING` lấy cùng khoá đó. Hai kết cục, và
+  chỉ hai — đo ở R1/R2.
 
 
 ---

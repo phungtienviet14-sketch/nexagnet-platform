@@ -12,6 +12,8 @@ import type { TransportCostingPolicy } from './costing-policy.js';
 import { CostingService } from './costing.service.js';
 import { FundPeriodService } from './fund-period.service.js';
 import { PrismaCostingRepository } from './prisma-costing.repository.js';
+import type { AppendSnapshotInput } from './costing.repository.js';
+import type { FundPeriodSnapshot } from './costing.types.js';
 import { TransportCoreFactsAdapter } from './transport-core-facts.port.js';
 
 /**
@@ -55,6 +57,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       tripOwn: '',
       tripOutsourced: '',
       tripReconciled: '',
+      driverUnassigned: '',
     };
 
     /**
@@ -145,6 +148,35 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       });
       await trips.setStatus(reconciled.id, 'RECONCILED', new Date());
       state.tripReconciled = reconciled.id;
+
+      // `DA-T3-04`: mot khoan chi tu quy chi gan duoc cho lai xe DA TUNG chay chuyen do.
+      //
+      // Lai xe A nhan ca ba chuyen; sau do B THAY CA tren chuyen noi bo. Ca hai deu con trong lich
+      // su phan cong (`GD-06`), nen ca hai deu ghi duoc khoan chi cua doan minh da chay — do la
+      // dieu B5 dua vao. Lai xe thu ba chua tung nhan chuyen nao, va la doi tuong cua R6.
+      for (const tripId of [state.tripOwn, state.tripOutsourced, state.tripReconciled]) {
+        await trips.assign(tripId, {
+          vehicleId: null,
+          driverId: driverA.id,
+          assignedBy: 'it-dieu-do',
+          at: new Date(),
+        });
+      }
+      await trips.assign(state.tripOwn, {
+        vehicleId: null,
+        driverId: driverB.id,
+        assignedBy: 'it-dieu-do',
+        at: new Date(),
+      });
+
+      state.driverUnassigned = (
+        await fleet.createDriver({
+          fullName: 'IT T3 Driver chua nhan chuyen',
+          phone: `${PHONE_PREFIX}X`,
+          licenceClass: 'C',
+          licenceExpiry: '2029-01-01',
+        })
+      ).id;
     });
 
     afterAll(async () => {
@@ -496,6 +528,311 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(await reasonOf(() => read.selfFundStatement(`${PHONE_PREFIX}-user-B`))).toBe(
         'SELF_FUND_SCOPE_NO_DRIVER_BINDING',
       );
+    });
+
+    /* ================================================================== *
+     * T3R — BANG CHUNG CANH TRANH THAT (Issue #94 §1, §2)
+     *
+     * Sau bai duoi day la ly do bo IT nay ton tai o dang hien tai: chung do mot thu ma KHONG bai
+     * don vi nao do duoc — hai lenh cham vao cung mot so quy CUNG LUC.
+     * ================================================================== */
+
+    describe('T3R — dua ky va lan ghi vao dung mot hang doi (#94 §1, §2)', () => {
+      /**
+       * Doi den khi DU `expected` phien dang CHO MOT KHOA.
+       *
+       * Khong dung `setTimeout` mot con so doan mo: mot bai test canh tranh dua tren "ngu 200ms
+       * chac la du" se xanh tren may nay va do tren runner cham hon, roi bi ai do danh dau flaky va
+       * tat di. `pg_stat_activity` noi CHINH XAC khi mot phien da vao hang doi, nen thu tu xep
+       * hang tro thanh mot su that do duoc chu khong phai mot hy vong.
+       */
+      async function waitForLockWaiters(expected: number): Promise<void> {
+        if (expected === 0) return;
+        for (let attempt = 0; attempt < 400; attempt += 1) {
+          const rows = await prisma.$queryRaw<{ n: bigint }[]>`
+            SELECT count(*) AS n FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+          if (Number(rows[0]?.n ?? 0) >= expected) return;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        throw new Error(`Khong thay du ${expected} phien vao hang doi khoa`);
+      }
+
+      /** Giu khoa ghi cua mot so quy cho den khi bai test tha ra. */
+      function holdAccountLock(accountId: string): { release: () => void; done: Promise<unknown> } {
+        let release = (): void => {};
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const done = prisma.$transaction(
+          async (tx) => {
+            await tx.$executeRaw`SELECT "id" FROM "TransportDriverFundAccount" WHERE "id" = ${accountId} FOR UPDATE`;
+            await gate;
+          },
+          { timeout: 60_000, maxWait: 30_000 },
+        );
+        return { release, done };
+      }
+
+      let serial = 0;
+
+      async function freshDriverPeriod(): Promise<{
+        driverId: string;
+        accountId: string;
+        periodId: string;
+      }> {
+        serial += 1;
+        const driver = await fleet.createDriver({
+          fullName: `IT T3R Driver ${serial}`,
+          phone: `${PHONE_PREFIX}R${serial}`,
+          licenceClass: 'C',
+          licenceExpiry: '2029-01-01',
+        });
+        await costing.postAdvance(
+          { driverId: driver.id, amount: 1_000_000, businessDate: '2026-10-05' },
+          'it-ke-toan',
+        );
+        const period = await periods.openPeriod(
+          { driverId: driver.id, startDate: '2026-10-01', endDate: '2026-10-31' },
+          'it-ke-toan',
+        );
+        const account = await prisma.transportDriverFundAccount.findUniqueOrThrow({
+          where: { driverId: driver.id },
+        });
+        return { driverId: driver.id, accountId: account.id, periodId: period.id };
+      }
+
+      /** Anh chup phai bang DUNG so cai cua ky, doc lai tu DB bang mot duong doc lap. */
+      async function assertSnapshotMatchesLedger(
+        periodId: string,
+        accountId: string,
+      ): Promise<void> {
+        const snapshots = await prisma.transportDriverFundPeriodSnapshot.findMany({
+          where: { periodId },
+          orderBy: { sequence: 'asc' },
+        });
+        expect(snapshots).toHaveLength(1);
+        const period = await prisma.transportDriverFundPeriod.findUniqueOrThrow({
+          where: { id: periodId },
+        });
+        const ledger = await prisma.transportDriverFundEntry.aggregate({
+          where: { accountId, businessDate: { gte: period.startDate, lte: period.endDate } },
+          _sum: { signedAmount: true },
+          _count: { _all: true },
+        });
+        expect(Number(snapshots[0]!.periodNet)).toBe(Number(ledger._sum.signedAmount ?? 0n));
+        expect(snapshots[0]!.entryCount).toBe(ledger._count._all);
+      }
+
+      /**
+       * BANG CHUNG §1 — HAI ket cuc, va CHI hai.
+       *
+       * Ca hai ben deu di duong that: `costing.postAdvance()` va `periods.closePeriod()`. Thu tu
+       * xep hang do bai test dat, roi tha khoa mot lan. Khang dinh khong phu thuoc ai thang:
+       *
+       *   · lan ghi thang -> commit, VA anh chup chua no;
+       *   · lan chot thang -> lan ghi bi tu choi `FUND_ENTRY_PERIOD_FROZEN`, khong hang nao them.
+       *
+       * Ket cuc thu ba — "ky CLOSED, anh chup N, so cai N+1" — la thu bai nay ton tai de phu dinh,
+       * va `assertSnapshotMatchesLedger()` la cho no bi bat.
+       */
+      it('R1 — lan ghi xep hang TRUOC: no commit, va anh chup CHUA no', async () => {
+        const { driverId, accountId, periodId } = await freshDriverPeriod();
+        const lock = holdAccountLock(accountId);
+
+        const writing = costing.postAdvance(
+          { driverId, amount: 250_000, businessDate: '2026-10-20' },
+          'it-nguoi-ghi',
+        );
+        await waitForLockWaiters(1);
+        const closing = periods.closePeriod(periodId, 'it-nguoi-chot');
+        await waitForLockWaiters(2);
+
+        lock.release();
+        await lock.done;
+
+        const entry = await writing;
+        const closed = await closing;
+
+        expect(entry.signedAmount).toBe(250_000);
+        expect(closed.period.status).toBe('CLOSED');
+        // 1.000.000 (ung dau ky) + 250.000 (lan ghi vua thang) — anh chup KHONG duoc bo qua no.
+        expect(closed.snapshot.periodNet).toBe(1_250_000);
+        expect(closed.snapshot.entryCount).toBe(2);
+        await assertSnapshotMatchesLedger(periodId, accountId);
+      });
+
+      it('R2 — lan chot xep hang TRUOC: lan ghi bi TU CHOI, khong hang nao lot vao ky da chot', async () => {
+        const { driverId, accountId, periodId } = await freshDriverPeriod();
+        const lock = holdAccountLock(accountId);
+
+        const closing = periods.closePeriod(periodId, 'it-nguoi-chot');
+        await waitForLockWaiters(1);
+        // `.catch()` gan NGAY luc tao: neu doi den sau `await closing` thi co mot khoanh khac
+        // rejection nay chua ai bat, va Node bao "unhandled rejection" lam do ca lan chay.
+        const writing = costing
+          .postAdvance({ driverId, amount: 250_000, businessDate: '2026-10-20' }, 'it-nguoi-ghi')
+          .then(
+            () => null,
+            (error: unknown) => error,
+          );
+        await waitForLockWaiters(2);
+
+        lock.release();
+        await lock.done;
+
+        const closed = await closing;
+        const rejection = await writing;
+
+        expect(rejection).toBeInstanceOf(TransportDomainError);
+        expect((rejection as TransportDomainError).reason).toBe('FUND_ENTRY_PERIOD_FROZEN');
+        expect(closed.snapshot.periodNet).toBe(1_000_000);
+        expect(closed.snapshot.entryCount).toBe(1);
+        await assertSnapshotMatchesLedger(periodId, accountId);
+
+        // Doc lai THO: khong mot but toan nao mang ngay cua ky bi ghi them sau khi ky da CLOSED.
+        const after = await prisma.transportDriverFundEntry.count({
+          where: { accountId, businessDate: { gte: '2026-10-01', lte: '2026-10-31' } },
+        });
+        expect(after).toBe(1);
+      });
+
+      /**
+       * BANG CHUNG §2 — chet DUNG giua pha hai, sau khi anh chup da duoc tao.
+       *
+       * Lop con duoi day nem NGAY SAU khi hang anh chup da `INSERT` xong, ben trong giao dich cua
+       * `finalizeClose()`. Neu pha hai van la hai lan commit nhu ban T3 dau, hang do da COMMIT va
+       * lan goi lai se chup them mot anh thu hai cho CUNG MOT lan dong.
+       */
+      it('R3 — chet sau khi chup anh: cuon lai sach, ky ve CLOSING, goi lai chup DUNG mot anh', async () => {
+        const { accountId, periodId } = await freshDriverPeriod();
+
+        class CrashingRepository extends PrismaCostingRepository {
+          protected override async appendSnapshotWithin(
+            scoped: Parameters<PrismaCostingRepository['appendSnapshotWithin']>[0],
+            input: AppendSnapshotInput,
+          ): Promise<FundPeriodSnapshot> {
+            const created = await super.appendSnapshotWithin(scoped, input);
+            throw new Error(`IT-T3R: chet sau khi tao anh chup ${created.id}`);
+          }
+        }
+        const crashing = new FundPeriodService(
+          new CrashingRepository(prisma),
+          core,
+          audit,
+          CORE_POLICY,
+        );
+
+        await expect(crashing.closePeriod(periodId, 'it-chet-giua-chung')).rejects.toThrow(
+          /chet sau khi tao anh chup/,
+        );
+
+        // Pha MOT da commit (ky dong bang); pha HAI cuon lai hoan toan.
+        const frozen = await prisma.transportDriverFundPeriod.findUniqueOrThrow({
+          where: { id: periodId },
+        });
+        expect(frozen.status).toBe('CLOSING');
+        expect(await prisma.transportDriverFundPeriodSnapshot.count({ where: { periodId } })).toBe(
+          0,
+        );
+
+        // Goi lai bang duong that: DUNG mot anh chup, va ky sang CLOSED.
+        const closed = await periods.closePeriod(periodId, 'it-ke-toan');
+        expect(closed.period.status).toBe('CLOSED');
+        expect(closed.snapshot.sequence).toBe(1);
+        await assertSnapshotMatchesLedger(periodId, accountId);
+      });
+
+      it('R4 — hai lenh chot CUNG MOT ky: mot anh chup, ben thua nhan ma va cham', async () => {
+        const { periodId } = await freshDriverPeriod();
+
+        const results = await Promise.allSettled([
+          periods.closePeriod(periodId, 'it-ke-toan-1'),
+          periods.closePeriod(periodId, 'it-ke-toan-2'),
+        ]);
+        const won = results.filter((row) => row.status === 'fulfilled');
+        const lost = results.filter((row) => row.status === 'rejected');
+
+        expect(won).toHaveLength(1);
+        expect(lost).toHaveLength(1);
+        // Ben thua nhan mot ma cua MIEN, khong phai mot 500 tho.
+        const failure = (lost[0] as PromiseRejectedResult).reason;
+        expect(failure).toBeInstanceOf(TransportDomainError);
+        // Hai duong thua deu tat dinh: mat luot o pha MOT (`setPeriodStatus` co rang buoc `from`)
+        // hay o pha HAI (`finalizeClose` tra `null`). Ca hai deu la ma cua MIEN, khong phai 500.
+        expect(['FUND_PERIOD_STATUS_RACE', 'PERIOD_TRANSITION_NOT_PERMITTED']).toContain(
+          (failure as TransportDomainError).reason,
+        );
+        expect(await prisma.transportDriverFundPeriodSnapshot.count({ where: { periodId } })).toBe(
+          1,
+        );
+      });
+
+      /* ---- §3 va §5 tren DB that, khong chi tren kho trong bo nho ---- */
+
+      it('R5 — cung khoa chong trung nhung KHAC LAI XE: va cham, khong tra ve but toan cua nguoi kia', async () => {
+        const key = 'it-t3r-khoa-cheo-0001';
+        const first = await costing.postAdvance(
+          {
+            driverId: state.driverA,
+            amount: 100_000,
+            businessDate: '2026-11-05',
+            correlationKey: key,
+          },
+          'it-ke-toan',
+        );
+
+        expect(
+          await reasonOf(() =>
+            costing.postAdvance(
+              {
+                driverId: state.driverB,
+                amount: 100_000,
+                businessDate: '2026-11-05',
+                correlationKey: key,
+              },
+              'it-ke-toan',
+            ),
+          ),
+        ).toBe('CORRELATION_KEY_REUSED');
+
+        // Lai xe B khong co mot but toan nao mang khoa do — doc THO tu DB.
+        const rows = await prisma.transportDriverFundEntry.findMany({
+          where: { correlationKey: key },
+        });
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.id).toBe(first.id);
+      });
+
+      it('R6 — DA-T3-04: lai xe chua tung chay chuyen do khong bi tru quy (do tren DB that)', async () => {
+        expect(
+          await reasonOf(() =>
+            costing.recordTripExpense(
+              {
+                tripId: state.tripOwn,
+                categoryCode: 'BOT',
+                amount: 120_000,
+                fundedBy: 'DRIVER_FUND',
+                driverId: state.driverUnassigned,
+                businessDate: '2026-11-06',
+              },
+              'it-ke-toan',
+            ),
+          ),
+        ).toBe('EXPENSE_DRIVER_NOT_ASSIGNED');
+
+        // Khong dong gia thanh, VA khong ca mot so quy moi tinh cho lai xe do.
+        expect(
+          await prisma.transportTripExpense.count({
+            where: { tripId: state.tripOwn, driverId: state.driverUnassigned },
+          }),
+        ).toBe(0);
+        expect(
+          await prisma.transportDriverFundAccount.count({
+            where: { driverId: state.driverUnassigned },
+          }),
+        ).toBe(0);
+      });
     });
 
     /* ================================================================== *

@@ -53,6 +53,66 @@ export interface CorrelatedPostingInput {
   readonly at: Date;
   readonly entry?: PostFundEntryInput;
   readonly expense?: RecordTripExpenseInput;
+  /**
+   * CONG `INV-22` — kiem BEN TRONG giao dich ghi, khong phai truoc no.
+   *
+   * Xem `FundPeriodFrozenError` ngay duoi ve vi sao cho kiem phai nam o day.
+   */
+  readonly periodGuard?: FundPeriodWriteGuard;
+}
+
+/**
+ * "Ngay nghiep vu nay, tren so quy nay, co roi vao mot ky dang dong bang khong?"
+ *
+ * Mot cau hoi, mot cho hoi: ben trong giao dich cua chinh lan ghi do.
+ */
+export interface FundPeriodWriteGuard {
+  readonly accountId: string;
+  readonly businessDate: BusinessDate;
+}
+
+/**
+ * KY DA DONG BANG — phat hien BEN TRONG giao dich, sau khi da giu khoa so quy.
+ *
+ * ---------------------------------------------------------------------------
+ * KHE HO DA CO O BAN T3 DAU (Issue #94 §1), va vi sao no chi lo ra o so lieu:
+ *
+ * Ban truoc kiem ky o `CostingService` TRUOC khi goi `post()`. Hai lan cham DB do khong nam
+ * trong cung mot pham vi tuan tu hoa, nen thu tu nay hoan toan hop le voi Postgres:
+ *
+ * ```text
+ * Nguoi ghi A : doc ky -> OPEN, di tiep
+ * Nguoi chot B: OPEN -> CLOSING
+ * Nguoi chot B: cong so cai, ghi anh chup
+ * Nguoi chot B: CLOSING -> CLOSED
+ * Nguoi ghi A : INSERT ... commit  <-- lot vao mot ky DA CHOT
+ * ```
+ *
+ * Ket qua: mot ky `CLOSED` chua mot but toan KHONG co trong anh chup cua chinh no. Khong loi,
+ * khong canh bao. `INV-22` va ban than anh chup mat het y nghia — con so da bao cao ra ngoai
+ * khong con la con so cua so cai, va khong co gi trong he thong noi len dieu do.
+ *
+ * Sua bang cach chuyen cho kiem VAO TRONG giao dich, sau mot `SELECT ... FOR UPDATE` tren hang so
+ * quy. Tu do hai lenh tren cung mot so quy phai xep hang, va chi con DUNG hai ket cuc:
+ *
+ *   A. lan ghi thang truoc -> commit -> anh chup CHUA no;
+ *   B. lan chot thang truoc -> ky thanh `CLOSING` -> lan ghi bi TU CHOI.
+ *
+ * Khong con ket cuc thu ba.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO KHO NEM MOT LOI RIENG chu khong tu dung `TransportDomainError`:
+ *
+ * Ba cong goi `post()` (`driver_fund.post_entry`, `trip_expense.record`, `costing.reversal`)
+ * va MOI cong mang mot ma tu choi rieng — do la yeu cau cua `.claude/rules`: N duong tu choi thi
+ * N ma, khong gop. Kho khong biet minh dang phuc vu cong nao va khong duoc doan. Nen kho nem su
+ * THAT ("ky nay dang dong bang"), con service dich no sang NGON NGU CUA CONG dang mo.
+ */
+export class FundPeriodFrozenError extends Error {
+  constructor(readonly period: DriverFundPeriod) {
+    super(`Ky quy ${period.id} dang ${period.status} — khong nhan them but toan`);
+    this.name = 'FundPeriodFrozenError';
+  }
 }
 
 export interface CorrelatedPosting {
@@ -71,6 +131,32 @@ export interface FundPeriodStatusPatch {
   readonly at: Date;
   readonly actor: string;
   readonly reopenReason?: string | null;
+}
+
+/**
+ * PHA HAI CUA MOT LAN DONG KY: chup anh + `CLOSING -> CLOSED`, MOT giao dich.
+ *
+ * Hai viec nay o ban T3 dau la hai lan commit roi nhau. Mot lan chet dung giua chung de lai mot
+ * anh chup DA COMMIT tren mot ky VAN o `CLOSING` — va lenh dong goi lai se chup THEM mot anh nua
+ * cho cung mot lan dong (Issue #94 §2). Hai anh chup cho mot lan dong nghia la cau hoi "ky nay da
+ * bao cao con so nao?" co hai cau tra loi, va khong cach nao biet cau nao da gui cho ke toan.
+ *
+ * Gop lam mot giao dich thi ket cuc chi con hai: hoac ca hai cung co, hoac khong cai nao. Mot lan
+ * chet giua chung tra ky ve dung `CLOSING` — DONG BANG, khong mat du lieu, va lan goi sau chup
+ * DUNG mot anh.
+ *
+ * Pha MOT (`OPEN|REOPENED -> CLOSING`) VAN commit rieng, va do van la co y: no phai co hieu luc
+ * voi nguoi ghi khac TRUOC khi mot con so nao duoc cong.
+ */
+export interface FinalizeClosePeriodInput {
+  readonly periodId: string;
+  readonly takenBy: string;
+  readonly at: Date;
+}
+
+export interface FinalizedClosePeriod {
+  readonly period: DriverFundPeriod;
+  readonly snapshot: FundPeriodSnapshot;
 }
 
 export interface AppendSnapshotInput {
@@ -149,5 +235,14 @@ export abstract class CostingRepository {
   ): Promise<DriverFundPeriod | null>;
 
   abstract appendSnapshot(input: AppendSnapshotInput): Promise<FundPeriodSnapshot>;
+
+  /**
+   * Chot pha hai cua mot lan dong ky, NGUYEN TU.
+   *
+   * Tra `null` khi ky khong con o `CLOSING` — tuc mot phien khac da chot xong truoc. Do la mot
+   * VA CHAM, khong phai mot loi dau vao: nguoi goi tai lai roi quyet lai. Tra `null` thay vi nem
+   * de nguoi goi con phan biet duoc no voi mot su co that.
+   */
+  abstract finalizeClose(input: FinalizeClosePeriodInput): Promise<FinalizedClosePeriod | null>;
   abstract listSnapshots(periodId: string): Promise<FundPeriodSnapshot[]>;
 }

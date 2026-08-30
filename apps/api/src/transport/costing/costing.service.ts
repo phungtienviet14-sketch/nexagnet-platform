@@ -19,8 +19,28 @@ import {
   TRANSPORT_COSTING_POLICY,
   type TransportCostingPolicy,
 } from './costing-policy.js';
-import { CostingRepository, type CorrelatedPosting } from './costing.repository.js';
-import type { DriverFundEntry, TripExpense } from './costing.types.js';
+import {
+  CostingRepository,
+  FundPeriodFrozenError,
+  type CorrelatedPosting,
+  type CorrelatedPostingInput,
+} from './costing.repository.js';
+import {
+  fundEntryIdentity,
+  fundEntryIdentityOf,
+  isSameFundEntry,
+  isSameTripExpense,
+  tripExpenseIdentity,
+  tripExpenseIdentityOf,
+  type FundEntryIdentity,
+  type TripExpenseIdentity,
+} from './costing-replay.js';
+import type {
+  DriverFundAccount,
+  DriverFundEntry,
+  DriverFundPeriod,
+  TripExpense,
+} from './costing.types.js';
 import {
   assertExpenseSign,
   assertLedgerSign,
@@ -29,8 +49,21 @@ import {
   type ExpenseFundingSource,
   type PostableFundEntryKind,
 } from './driver-fund-ledger.js';
-import { isFrozenFundPeriod } from './fund-period.js';
 import { TransportCoreFacts, type TripFacts } from './transport-core-facts.port.js';
+
+/**
+ * BA CONG co the cham vao mot ky dong bang, va MOI cong mang mot ma tu choi rieng (`INV-22`).
+ *
+ * Bang nay la cho DUY NHAT anh xa cong -> ma. Rai `if` o ba noi se lam mot cong nao do, sau vai
+ * lan sua, tra ve ma cua cong ben canh — va bang loc trace se dem sai ma khong ai biet.
+ */
+type FrozenPeriodGate = 'driver_fund.post_entry' | 'trip_expense.record' | 'costing.reversal';
+
+const FROZEN_PERIOD_REASONS = {
+  'driver_fund.post_entry': 'FUND_ENTRY_PERIOD_FROZEN',
+  'trip_expense.record': 'EXPENSE_PERIOD_FROZEN',
+  'costing.reversal': 'REVERSAL_PERIOD_FROZEN',
+} as const satisfies Record<FrozenPeriodGate, string>;
 
 export interface PostFundMovementInput {
   readonly driverId: string;
@@ -128,9 +161,18 @@ export class CostingService {
     const account = await this.ledger.ensureAccount(input.driverId, this.now());
     const correlationKey = input.correlationKey ?? this.newCorrelationKey();
 
+    const incoming = fundEntryIdentity({
+      accountId: account.id,
+      kind,
+      signedAmount: input.signedAmount,
+      businessDate,
+      tripId: input.tripId ?? null,
+      note: input.note ?? null,
+    });
+
     const replay = await this.ledger.findEntryByCorrelation(correlationKey);
     if (replay) {
-      this.assertSameEntry(replay, { kind, signedAmount: input.signedAmount, businessDate });
+      this.assertSameEntry(replay, incoming);
       this.telemetry?.decision({
         vocabulary: TRANSPORT_COSTING_DECISIONS,
         point: 'driver_fund.post_entry',
@@ -141,11 +183,10 @@ export class CostingService {
       return replay;
     }
 
-    await this.requireWritablePeriod(account.id, businessDate, 'driver_fund.post_entry');
-
-    const posted = await this.ledger.post({
+    const posted = await this.postGuarded('driver_fund.post_entry', {
       correlationKey,
       at: this.now(),
+      periodGuard: { accountId: account.id, businessDate },
       entry: {
         accountId: account.id,
         kind,
@@ -200,19 +241,30 @@ export class CostingService {
 
     const fromFund = command.fundedBy === 'DRIVER_FUND';
     const driverId = fromFund ? this.requireDriverIdForFund(command.driverId) : null;
-    if (driverId) await requireDriverFacts(this.core, driverId);
+    if (driverId) {
+      await requireDriverFacts(this.core, driverId);
+      // TRUOC `ensureAccount()`: mot lenh se bi tu choi khong duoc phep de lai mot so quy moi tinh
+      // cho mot lai xe khong lien quan gi den chuyen nay.
+      await this.requireDriverAssignedToTrip(trip, driverId, command.fundedBy);
+    }
     const account = driverId ? await this.ledger.ensureAccount(driverId, this.now()) : null;
 
     const correlationKey = command.correlationKey ?? this.newCorrelationKey();
+    const incoming = tripExpenseIdentity({
+      tripId: command.tripId,
+      signedAmount: assertExpenseSign('EXPENSE', magnitude).amount,
+      businessDate,
+      fundedBy: command.fundedBy,
+      categoryCode: command.categoryCode,
+      driverId,
+      evidenceLocator: command.evidenceLocator ?? null,
+      note: command.note ?? null,
+    });
+
     const replay = await this.ledger.findExpenseByCorrelation(correlationKey);
     if (replay) {
-      this.assertSameExpense(replay, {
-        tripId: command.tripId,
-        signedAmount: magnitude,
-        businessDate,
-        fundedBy: command.fundedBy,
-        categoryCode: command.categoryCode,
-      });
+      const replayLeg = await this.ledger.findEntryByCorrelation(correlationKey);
+      this.assertSameExpense(replay, incoming, replayLeg, account);
       this.telemetry?.decision({
         vocabulary: TRANSPORT_COSTING_DECISIONS,
         point: 'trip_expense.record',
@@ -220,16 +272,13 @@ export class CostingService {
         reason: 'EXPENSE_IDEMPOTENT_REPLAY',
         detail: { correlationKey, expenseId: replay.id },
       });
-      return { entry: await this.ledger.findEntryByCorrelation(correlationKey), expense: replay };
+      return { entry: replayLeg, expense: replay };
     }
 
-    if (account) {
-      await this.requireWritablePeriod(account.id, businessDate, 'trip_expense.record');
-    }
-
-    const posted = await this.ledger.post({
+    const posted = await this.postGuarded('trip_expense.record', {
       correlationKey,
       at: this.now(),
+      ...(account ? { periodGuard: { accountId: account.id, businessDate } } : {}),
       ...(account
         ? {
             entry: {
@@ -340,16 +389,14 @@ export class CostingService {
       (expense ? await this.ledger.findReversalOfExpense(expense.id) : null);
     if (already) this.denyReversal('REVERSAL_ALREADY_REVERSED', correlationKey);
 
-    const businessDate = (entry ?? expense)!.businessDate;
-    if (entry) {
-      await this.requireWritablePeriod(entry.accountId, businessDate, 'costing.reversal');
-    }
-
     // Khoa TAT DINH: dao lai lan hai gap dung unique cua khoa nay va thanh mot lan phat lai vo hai,
     // thay vi ghi them mot but toan dao thu hai.
-    const posted = await this.ledger.post({
+    const posted = await this.postGuarded('costing.reversal', {
       correlationKey: `${correlationKey}:reversal`,
       at: this.now(),
+      ...(entry
+        ? { periodGuard: { accountId: entry.accountId, businessDate: entry.businessDate } }
+        : {}),
       ...(entry
         ? {
             entry: {
@@ -503,39 +550,88 @@ export class CostingService {
   }
 
   /**
-   * `INV-22` — mot ngay nghiep vu roi vao ky DA DONG hoac DANG CHOT thi khong ghi duoc.
+   * MOT CUA GHI cho ca ba cong, va la noi `INV-22` duoc dich sang ngon ngu cua tung cong.
    *
-   * Kiem tren MOI ky co khoang chua ngay do, khong chi ky dau tien tim thay: neu du lieu co hai ky
-   * chong lap (mot `UPDATE` tay, mot ban khoi phuc cu), "chi nhin ky dau tien" se cho mot but toan
-   * lot vao ky da chot chi vi thu tu doc thuan loi. Doc "co BAT KY ky nao dong bang khong" thi ket
-   * qua khong phu thuoc thu tu — va do la thu duy nhat an toan de dua vao o mot cong tai chinh.
+   * Kho nem `FundPeriodFrozenError` — mot su that tho: "ky nay dang dong bang". Kho khong biet
+   * ai dang goi no. Cong nao dang mo thi cong do dat ten cho viec bi tu choi, vi `.claude/rules`
+   * doi N duong tu choi thi N ma: nguoi truc doc trace phai thay ngay "khoan chi bi chan" khac
+   * "but toan dao bi chan", chu khong phai mot ma chung roi phai mo source doan tiep.
    */
-  private async requireWritablePeriod(
-    accountId: string,
-    businessDate: string,
-    point: 'driver_fund.post_entry' | 'trip_expense.record' | 'costing.reversal',
-  ): Promise<void> {
-    const covering = await this.ledger.periodsCovering(accountId, businessDate);
-    const frozen = covering.find((period) => isFrozenFundPeriod(period.status));
-    if (!frozen) return;
+  private async postGuarded(
+    point: FrozenPeriodGate,
+    input: CorrelatedPostingInput,
+  ): Promise<CorrelatedPosting> {
+    try {
+      return await this.ledger.post(input);
+    } catch (error) {
+      if (error instanceof FundPeriodFrozenError) this.denyFrozenPeriod(point, error.period);
+      throw error;
+    }
+  }
 
-    const reason =
-      point === 'driver_fund.post_entry'
-        ? ('FUND_ENTRY_PERIOD_FROZEN' as const)
-        : point === 'trip_expense.record'
-          ? ('EXPENSE_PERIOD_FROZEN' as const)
-          : ('REVERSAL_PERIOD_FROZEN' as const);
-
+  private denyFrozenPeriod(point: FrozenPeriodGate, period: DriverFundPeriod): never {
+    const reason = FROZEN_PERIOD_REASONS[point];
     this.telemetry?.decision({
       vocabulary: TRANSPORT_COSTING_DECISIONS,
       point,
       outcome: 'denied',
       reason,
-      detail: { accountId, businessDate, periodId: frozen.id, periodStatus: frozen.status },
+      detail: {
+        accountId: period.accountId,
+        periodId: period.id,
+        periodStatus: period.status,
+        startDate: period.startDate,
+        endDate: period.endDate,
+      },
     });
     throw TransportDomainError.denied(
       reason,
-      `Ngay ${businessDate} thuoc ky quy ${frozen.id} dang ${frozen.status} — khong ghi vao ky da chot`,
+      `Ngay nghiep vu thuoc ky quy ${period.id} dang ${period.status} — khong ghi vao ky da chot`,
+    );
+  }
+
+  /**
+   * `DA-T3-04` — mot khoan chi TU QUY chi gan duoc cho lai xe DA TUNG chay chuyen do.
+   *
+   * ---------------------------------------------------------------------------
+   * KHE HO DA CO O BAN T3 DAU (Issue #94 §5):
+   *
+   * `recordTripExpense()` chi kiem "chuyen co that" va "lai xe co that", khong kiem hai thu do co
+   * lien quan gi den nhau khong. Nen mot lan go nham `driverId` se TRU TIEN quy cua mot lai xe
+   * chua bao gio thay chuyen do — va vi so cai la append-only, khong co duong sua nao ngoai mot
+   * but toan dao. Doi voi lai xe bi tru, do la tien that trong so cua ho.
+   *
+   * T1/`GD-06` da giu san lich su phan cong de truy trach nhiem; day la cho no duoc dung den.
+   *
+   * ---------------------------------------------------------------------------
+   * "DA TUNG", KHONG PHAI "DANG": mot lai xe bi thay ca van chiu phan chuyen ho da chay, nen ho
+   * van phai ghi duoc khoan chi cua doan do. Doc "dang" se khoa het khoan chi cua nguoi lai dau
+   * tien ngay khi nguoi thu hai nhan xe.
+   *
+   * VA KHONG DOI CHIEU TOI TUNG PHUT: khoan chi hien chi co NGAY (`businessDate`), con ban phan
+   * cong co dau thoi gian. So "khoan chi luc 14:30 co roi vao ca cua ai" tu mot du lieu chi co
+   * ngay la bia ra mot do chinh xac khong ton tai. Khi nao khoan chi mang duoc gio thi cong nay
+   * siet them duoc — luc do la mot dieu kien phai them, khong phai mot cau truc phai doi.
+   *
+   * `COMPANY_DIRECT` khong di qua day: no khong co lai xe nao de doi chieu.
+   */
+  private async requireDriverAssignedToTrip(
+    trip: TripFacts,
+    driverId: string,
+    fundedBy: ExpenseFundingSource,
+  ): Promise<void> {
+    if (await this.core.wasDriverEverAssignedToTrip(trip.id, driverId)) return;
+
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_COSTING_DECISIONS,
+      point: 'trip_expense.record',
+      outcome: 'denied',
+      reason: 'EXPENSE_DRIVER_NOT_ASSIGNED',
+      detail: { tripId: trip.id, driverId, fundedBy },
+    });
+    throw TransportDomainError.denied(
+      'EXPENSE_DRIVER_NOT_ASSIGNED',
+      `Lai xe ${driverId} chua tung duoc phan cong vao chuyen ${trip.code} — khong tru quy cua ho`,
     );
   }
 
@@ -546,35 +642,38 @@ export class CostingService {
    * cu, khong ghi them. Cung khoa + KHAC noi dung = client dung lai mot khoa cho mot su kien moi ->
    * neu tra lai ban cu thi khoan chi moi bien mat khong dau vet, va so sach thieu di dung so tien
    * do. Nen truong hop thu hai phai la mot va cham on ao.
+   *
+   * "Cung noi dung" duoc do bang VAN TAY DAY DU cua lenh (`costing-replay.ts`), khong bang vai
+   * truong de nho. Ban T3 dau so ba truong va bo mat `accountId` — xem khoi chu thich dau tep do.
    */
-  private assertSameEntry(
-    existing: DriverFundEntry,
-    incoming: { kind: DriverFundEntryKind; signedAmount: number; businessDate: string },
-  ): void {
-    const same =
-      existing.kind === incoming.kind &&
-      existing.signedAmount === incoming.signedAmount &&
-      existing.businessDate === incoming.businessDate;
-    if (!same) this.denyCorrelationReuse(existing.correlationKey);
+  private assertSameEntry(existing: DriverFundEntry, incoming: FundEntryIdentity): void {
+    if (!isSameFundEntry(fundEntryIdentityOf(existing), incoming)) {
+      this.denyCorrelationReuse(existing.correlationKey);
+    }
   }
 
+  /**
+   * Khoan chi phat lai phai khop CA HAI CHAN, khong chi chan gia thanh.
+   *
+   * Van tay cua `TripExpense` da mang `driverId` va `fundedBy`, nhung no khong noi gi ve BUT
+   * TOAN QUY sinh doi that su dang nam o dau. Mot hang gia thanh co the ton tai voi chan quy tro
+   * sang so quy khac (mot ban khoi phuc cu, mot `UPDATE` tay). Kiem them chan quy la kiem `INV-03`
+   * o dung cho ma no co the da gay: tra ve mot cap khong con doi soat duoc voi nhau.
+   */
   private assertSameExpense(
     existing: TripExpense,
-    incoming: {
-      tripId: string;
-      signedAmount: number;
-      businessDate: string;
-      fundedBy: ExpenseFundingSource;
-      categoryCode: string;
-    },
+    incoming: TripExpenseIdentity,
+    existingLeg: DriverFundEntry | null,
+    account: DriverFundAccount | null,
   ): void {
-    const same =
-      existing.tripId === incoming.tripId &&
-      existing.signedAmount === incoming.signedAmount &&
-      existing.businessDate === incoming.businessDate &&
-      existing.fundedBy === incoming.fundedBy &&
-      existing.categoryCode === incoming.categoryCode;
-    if (!same) this.denyCorrelationReuse(existing.correlationKey);
+    if (!isSameTripExpense(tripExpenseIdentityOf(existing), incoming)) {
+      this.denyCorrelationReuse(existing.correlationKey);
+    }
+    // `null` o ca hai ve = `COMPANY_DIRECT` phat lai dung. Mot ve `null` con ve kia co gia tri =
+    // hai lenh khac nguon tien dung chung mot khoa.
+    if ((account?.id ?? null) !== (existingLeg?.accountId ?? null)) {
+      this.denyCorrelationReuse(existing.correlationKey);
+    }
   }
 
   private denyCorrelationReuse(correlationKey: string): never {

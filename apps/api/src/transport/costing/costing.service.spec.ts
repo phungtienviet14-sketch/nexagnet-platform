@@ -33,6 +33,14 @@ class FakeCoreFacts extends TransportCoreFacts {
   readonly trips = new Map<string, TripFacts>();
   readonly drivers = new Map<string, DriverFacts>();
   readonly bindings = new Map<string, string>();
+  /** Lich su phan cong: `tripId` -> moi lai xe DA TUNG duoc gan, ke ca ban da dong lai. */
+  readonly assignments = new Map<string, Set<string>>();
+
+  assign(tripId: string, driverId: string): void {
+    const seen = this.assignments.get(tripId) ?? new Set<string>();
+    seen.add(driverId);
+    this.assignments.set(tripId, seen);
+  }
 
   async findTrip(tripId: string): Promise<TripFacts | null> {
     return this.trips.get(tripId) ?? null;
@@ -45,6 +53,10 @@ class FakeCoreFacts extends TransportCoreFacts {
   async findDriverByAuthUserId(authUserId: string): Promise<DriverFacts | null> {
     const driverId = this.bindings.get(authUserId);
     return driverId ? (this.drivers.get(driverId) ?? null) : null;
+  }
+
+  async wasDriverEverAssignedToTrip(tripId: string, driverId: string): Promise<boolean> {
+    return this.assignments.get(tripId)?.has(driverId) ?? false;
   }
 }
 
@@ -85,6 +97,12 @@ function harness(): Harness {
     kind: 'EXTERNAL_CARRIER',
     status: 'IN_TRANSIT',
   });
+
+  // Lai xe A da chay ba chuyen noi bo; lai xe B CHUA duoc phan cong vao chuyen nao — `DA-T3-04`
+  // se chan moi khoan chi tu quy gan cho B tren cac chuyen nay.
+  for (const tripId of ['trip-a', 'trip-done', 'trip-cancelled', 'trip-outsourced']) {
+    core.assign(tripId, 'drv-1');
+  }
 
   return {
     ledger,

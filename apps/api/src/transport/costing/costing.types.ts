@@ -2,6 +2,7 @@ import type { BusinessDate } from '../business-date.js';
 import type {
   DriverFundEntryKind,
   ExpenseFundingSource,
+  FundBalanceStance,
   TripExpenseKind,
 } from './driver-fund-ledger.js';
 import type { FundPeriodStatus } from './fund-period.js';
@@ -147,6 +148,13 @@ export interface DriverFundStatement {
   readonly account: DriverFundAccount | null;
   readonly driverId: string;
   readonly balance: number;
+  /**
+   * CACH DOC dau cua `balance`, tinh o tang mien — `DA-T3-01`.
+   *
+   * Di kem con so chu khong de giao dien tu suy: mot `balance < 0` doc nguoc se hien mot lai xe
+   * dang bo tien tui ra thanh mot nguoi dang no cong ty. Xem `describeFundBalance()`.
+   */
+  readonly balanceStance: FundBalanceStance;
   readonly currencyCode: string;
   readonly entries: readonly DriverFundEntry[];
 }

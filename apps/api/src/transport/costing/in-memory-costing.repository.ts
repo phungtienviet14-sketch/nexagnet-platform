@@ -3,10 +3,13 @@ import type { BusinessDate } from '../business-date.js';
 import { TRANSPORT_CURRENCY } from '../money.js';
 import {
   CostingRepository,
+  FundPeriodFrozenError,
   type AppendSnapshotInput,
   type CorrelatedPosting,
   type CorrelatedPostingInput,
   type CreateFundPeriodInput,
+  type FinalizeClosePeriodInput,
+  type FinalizedClosePeriod,
   type FundPeriodStatusPatch,
   type LedgerRange,
   type LedgerTotal,
@@ -20,6 +23,7 @@ import type {
 } from './costing.types.js';
 import {
   INITIAL_FUND_PERIOD_STATUS,
+  isFrozenFundPeriod,
   periodCovers,
   periodsOverlap,
   type FundPeriodStatus,
@@ -82,7 +86,23 @@ export class InMemoryCostingRepository extends CostingRepository {
     return [...this.accounts.values()].find((entry) => entry.driverId === driverId) ?? null;
   }
 
+  /**
+   * Cong ky nam TRONG ham ghi, dung cho ma kho that dat no.
+   *
+   * O day khong can khoa: JavaScript chay mot luong, nen tu luc kiem den luc `push` khong ai chen
+   * vao duoc. Nhung cho DAT cai kiem phai giong kho that — neu o day kiem truoc khi goi `post()`
+   * con kho that kiem ben trong, thi hai kho se tu choi o hai thoi diem khac nhau va bo test dung
+   * kho trong bo nho se khong con noi duoc gi ve hanh vi that.
+   */
   async post(input: CorrelatedPostingInput): Promise<CorrelatedPosting> {
+    if (input.periodGuard) {
+      const covering = await this.periodsCovering(
+        input.periodGuard.accountId,
+        input.periodGuard.businessDate,
+      );
+      const frozen = covering.find((period) => isFrozenFundPeriod(period.status));
+      if (frozen) throw new FundPeriodFrozenError(frozen);
+    }
     const stamp = iso(input.at);
     let entry: DriverFundEntry | null = null;
     let expense: TripExpense | null = null;
@@ -260,6 +280,40 @@ export class InMemoryCostingRepository extends CostingRepository {
     };
     this.snapshots.push(snapshot);
     return snapshot;
+  }
+
+  /**
+   * Chup anh + `CLOSING -> CLOSED` nhu MOT viec khong chia duoc, giong kho that.
+   *
+   * Kho nay khong co giao dich, nen "nguyen tu" o day chi la mot cau noi cua mot luong. Gia tri
+   * that cua no la HINH DANG: cung mot ham, cung mot dieu kien vao (`CLOSING`), cung mot ket qua
+   * `null` khi mat luot. Nho vay `FundPeriodService` chi co MOT duong chay, va bo test don vi
+   * kiem dung duong ma Postgres se chay.
+   */
+  async finalizeClose(input: FinalizeClosePeriodInput): Promise<FinalizedClosePeriod | null> {
+    const period = this.periods.get(input.periodId);
+    if (!period || period.status !== 'CLOSING') return null;
+
+    const opening = await this.sumSignedAmounts(period.accountId, { before: period.startDate });
+    const inPeriod = await this.sumSignedAmounts(period.accountId, {
+      from: period.startDate,
+      to: period.endDate,
+    });
+    const snapshot = await this.appendSnapshot({
+      periodId: period.id,
+      openingBalance: opening.total,
+      periodNet: inPeriod.total,
+      closingBalance: opening.total + inPeriod.total,
+      entryCount: inPeriod.count,
+      takenBy: input.takenBy,
+      at: input.at,
+    });
+    const closed = await this.setPeriodStatus(period.id, 'CLOSING', 'CLOSED', {
+      at: input.at,
+      actor: input.takenBy,
+    });
+    if (!closed) throw new Error(`Ky quy ${period.id} doi trang thai giua chung — khong the xay ra`);
+    return { period: closed, snapshot };
   }
 
   async listSnapshots(periodId: string): Promise<FundPeriodSnapshot[]> {

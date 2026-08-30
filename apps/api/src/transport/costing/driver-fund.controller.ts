@@ -6,16 +6,19 @@ import {
   Headers,
   Param,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { z } from 'zod';
 import { Roles } from '../../auth/roles.decorator.js';
+import type { AuthenticatedRequest } from '../../auth/session.types.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
   transportErrorToHttp,
 } from '../transport-action.guard.js';
+import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
 import { CostingReadService } from './costing-read.service.js';
 import { CostingService } from './costing.service.js';
@@ -27,8 +30,6 @@ import {
   reversalSchema,
 } from './costing.schemas.js';
 import { FundPeriodService } from './fund-period.service.js';
-
-const actorName = (actor: string): string => actor.trim() || 'operator';
 
 /**
  * SO QUY LAI XE + KY QUYET TOAN qua HTTP — be mat VAN HANH.
@@ -65,25 +66,43 @@ export class DriverFundController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.driver_fund.advance')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  advance(@Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  advance(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
+  ) {
     const input = this.parse(postFundMovementSchema, body);
-    return this.guard(() => this.costing.postAdvance(input, actorName(actor)));
+    return this.guard(() =>
+      this.costing.postAdvance(input, transportActorOf(request, claimedActor)),
+    );
   }
 
   @Post('returns')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.driver_fund.return')
-  returnCash(@Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  returnCash(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
+  ) {
     const input = this.parse(postFundMovementSchema, body);
-    return this.guard(() => this.costing.postReturn(input, actorName(actor)));
+    return this.guard(() =>
+      this.costing.postReturn(input, transportActorOf(request, claimedActor)),
+    );
   }
 
   @Post('adjustments')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.driver_fund.adjust')
-  adjust(@Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  adjust(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
+  ) {
     const input = this.parse(adjustFundSchema, body);
-    return this.guard(() => this.costing.postAdjustment(input, actorName(actor)));
+    return this.guard(() =>
+      this.costing.postAdjustment(input, transportActorOf(request, claimedActor)),
+    );
   }
 
   @Post('entries/:id/reversal')
@@ -92,25 +111,38 @@ export class DriverFundController {
   reverseEntry(
     @Param('id') id: string,
     @Body() body: unknown,
-    @Headers('x-actor') actor = 'operator',
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
   ) {
     const { reason } = this.parse(reversalSchema, body);
-    return this.guard(() => this.costing.reverseFundEntry(id, reason, actorName(actor)));
+    return this.guard(() =>
+      this.costing.reverseFundEntry(id, reason, transportActorOf(request, claimedActor)),
+    );
   }
 
   @Post('periods')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.period.manage')
-  openPeriod(@Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  openPeriod(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
+  ) {
     const input = this.parse(openFundPeriodSchema, body);
-    return this.guard(() => this.periods.openPeriod(input, actorName(actor)));
+    return this.guard(() =>
+      this.periods.openPeriod(input, transportActorOf(request, claimedActor)),
+    );
   }
 
   @Post('periods/:id/close')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.period.manage')
-  closePeriod(@Param('id') id: string, @Headers('x-actor') actor = 'operator') {
-    return this.guard(() => this.periods.closePeriod(id, actorName(actor)));
+  closePeriod(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
+  ) {
+    return this.guard(() => this.periods.closePeriod(id, transportActorOf(request, claimedActor)));
   }
 
   /**
@@ -125,10 +157,13 @@ export class DriverFundController {
   reopenPeriod(
     @Param('id') id: string,
     @Body() body: unknown,
-    @Headers('x-actor') actor = 'operator',
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
   ) {
     const { reason } = this.parse(reopenFundPeriodSchema, body);
-    return this.guard(() => this.periods.reopenPeriod(id, reason, actorName(actor)));
+    return this.guard(() =>
+      this.periods.reopenPeriod(id, reason, transportActorOf(request, claimedActor)),
+    );
   }
 
   @Get('periods/:id/snapshots')

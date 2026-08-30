@@ -105,16 +105,29 @@ export class FundPeriodService {
   }
 
   /**
-   * DONG KY — hai buoc ghi, CO Y khong nam trong mot giao dich.
+   * DONG KY — HAI PHA, va ranh gioi giua chung la mot lua chon da can nhac.
    *
-   *   1. `OPEN|REOPENED -> CLOSING` : cam ghi vao ky, commit NGAY;
-   *   2. chup anh roi `CLOSING -> CLOSED`.
+   * ```text
+   * pha 1: OPEN|REOPENED -> CLOSING   commit NGAY        (dong bang)
+   * pha 2: chup anh + CLOSING -> CLOSED   MOT giao dich  (chot con so)
+   * ```
    *
-   * Neu gop lam mot giao dich thi trong suot luc tinh anh chup, ky VAN nhan them but toan tu mot
-   * phien khac, va con so tren anh se khong con la con so cua so cai. Tach ra thi truong hop xau
-   * nhat cua mot lan chet giua chung la mot ky ket o `CLOSING`: DONG BANG, khong mat du lieu, va
-   * goi lai `closePeriod` se di tiep tu dung do — do la ly do ham nay chap nhan ca dau vao dang
-   * `CLOSING`.
+   * PHA 1 PHAI COMMIT RIENG: no la khoanh khac ky ngung nhan but toan. Neu no nam chung giao dich
+   * voi phep cong, thi trong suot luc cong, mot phien khac VAN ghi duoc — va anh chup se noi mot
+   * con so ma so cai khong con dong y.
+   *
+   * PHA 2 PHAI NGUYEN TU. Ban T3 dau tach no lam hai lan commit (chup anh, roi doi trang thai) va
+   * do la lo hong `#94 §2`: mot lan chet dung giua chung de lai mot anh chup DA COMMIT tren mot ky
+   * VAN o `CLOSING`, nen lenh dong goi lai se chup THEM mot anh nua cho CUNG MOT lan dong. Hai anh
+   * cho mot lan dong nghia la cau hoi "ky nay da bao cao con so nao?" co hai cau tra loi, va khong
+   * cach nao biet cau nao da gui cho ke toan.
+   *
+   * Gop lai thi mot lan chet giua pha 2 cuon lai sach: khong anh chup nao, ky ve dung `CLOSING` —
+   * DONG BANG, khong mat du lieu — va lan goi sau chup DUNG mot anh. Do la ly do ham nay van chap
+   * nhan dau vao dang `CLOSING`.
+   *
+   * MOT LAN MO LAI ROI DONG LAI la mot LAN DONG MOI, va no PHAI de lai mot anh chup moi: "con so
+   * da bao cao lan truoc" la thu nguoi doi soat can khi ho hoi vi sao bao cao thang truoc khac.
    *
    * Dong ky KHONG tao but toan (T1 §7.3). So du am khi dong ky la KET QUA HOP LE, khong phai loi
    * (`FUND-003`) — anh chup ghi dung so am va khong sinh mot khoan khau tru nao (`GD-12`).
@@ -127,25 +140,44 @@ export class FundPeriodService {
       closing = await this.transition(period, 'CLOSING', actor);
     }
 
-    const [opening, inPeriod] = await Promise.all([
-      this.ledger.sumSignedAmounts(closing.accountId, { before: closing.startDate }),
-      this.ledger.sumSignedAmounts(closing.accountId, {
-        from: closing.startDate,
-        to: closing.endDate,
-      }),
-    ]);
+    // May trang thai van la nguoi quyet dinh canh nay co ton tai khong, du kho moi la noi ghi no.
+    // Bo kiem nay di thi `fund-period.ts` chi con la mot loi khuyen trong tai lieu.
+    this.requireTransitionAllowed(closing, 'CLOSED');
 
-    const snapshot = await this.ledger.appendSnapshot({
+    const finalized = await this.ledger.finalizeClose({
       periodId: closing.id,
-      openingBalance: opening.total,
-      periodNet: inPeriod.total,
-      closingBalance: opening.total + inPeriod.total,
-      entryCount: inPeriod.count,
       takenBy: actor,
       at: this.now(),
     });
+    // `null` = ky khong con o `CLOSING` khi kho giu duoc khoa: mot phien khac da chot xong. KHONG
+    // chup them mot anh nua va KHONG tra ve ket qua cua nguoi khac nhu the la cua minh.
+    if (!finalized) {
+      throw TransportDomainError.conflict(
+        'FUND_PERIOD_STATUS_RACE',
+        `Ky quy ${closing.id} vua duoc mot phien khac chot xong — tai lai de doc anh chup da co`,
+      );
+    }
 
-    const closed = await this.transition(closing, 'CLOSED', actor);
+    const { period: closed, snapshot } = finalized;
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_COSTING_DECISIONS,
+      point: 'fund_period.transition',
+      outcome: 'allowed',
+      reason: 'PERIOD_CLOSED',
+      detail: {
+        periodId: closed.id,
+        snapshotId: snapshot.id,
+        sequence: snapshot.sequence,
+        closingBalance: snapshot.closingBalance,
+        entryCount: snapshot.entryCount,
+      },
+    });
+    this.telemetry?.stateChange({
+      entity: 'TransportDriverFundPeriod',
+      entityId: closed.id,
+      from: 'CLOSING',
+      to: closed.status,
+    });
     await this.audit.append({
       actor,
       action: 'transport.costing.period.close',
@@ -220,26 +252,31 @@ export class FundPeriodService {
    * doi no truoc. Do la mot va cham, khong phai mot loi dau vao: nguoi goi phai tai lai roi quyet
    * lai, chu khong sua duoc gi de qua duoc.
    */
+  /** May trang thai quyet dinh; ham nay chi bien mot cau tra loi "khong" thanh mot loi co ma. */
+  private requireTransitionAllowed(period: DriverFundPeriod, to: FundPeriodStatus): void {
+    const decision = evaluateFundPeriodTransition(period.status, to);
+    if (decision.allowed) return;
+
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_COSTING_DECISIONS,
+      point: 'fund_period.transition',
+      outcome: 'denied',
+      reason: decision.reason,
+      detail: { periodId: period.id, from: period.status, to },
+    });
+    throw TransportDomainError.denied(
+      decision.reason,
+      `Ky quy ${period.id}: khong chuyen duoc ${period.status} -> ${to} (${decision.reason})`,
+    );
+  }
+
   private async transition(
     period: DriverFundPeriod,
     to: FundPeriodStatus,
     actor: string,
     reopenReason?: string,
   ): Promise<DriverFundPeriod> {
-    const decision = evaluateFundPeriodTransition(period.status, to);
-    if (!decision.allowed) {
-      this.telemetry?.decision({
-        vocabulary: TRANSPORT_COSTING_DECISIONS,
-        point: 'fund_period.transition',
-        outcome: 'denied',
-        reason: decision.reason,
-        detail: { periodId: period.id, from: period.status, to },
-      });
-      throw TransportDomainError.denied(
-        decision.reason,
-        `Ky quy ${period.id}: khong chuyen duoc ${period.status} -> ${to} (${decision.reason})`,
-      );
-    }
+    this.requireTransitionAllowed(period, to);
 
     const next = await this.ledger.setPeriodStatus(period.id, period.status, to, {
       at: this.now(),
@@ -248,7 +285,7 @@ export class FundPeriodService {
     });
     if (!next) {
       throw TransportDomainError.conflict(
-        'FUND_PERIOD_OVERLAP',
+        'FUND_PERIOD_STATUS_RACE',
         `Ky quy ${period.id} vua duoc nguoi khac chuyen trang thai — tai lai roi thu lai`,
       );
     }
@@ -257,8 +294,9 @@ export class FundPeriodService {
       vocabulary: TRANSPORT_COSTING_DECISIONS,
       point: 'fund_period.transition',
       outcome: 'allowed',
-      reason:
-        to === 'CLOSING' ? 'PERIOD_CLOSING_STARTED' : to === 'CLOSED' ? 'PERIOD_CLOSED' : 'PERIOD_REOPENED',
+      // `CLOSED` khong di duong nay: no duoc ghi trong giao dich cua `finalizeClose()`, va
+      // `closePeriod()` phat ma `PERIOD_CLOSED` ngay sau do.
+      reason: to === 'CLOSING' ? 'PERIOD_CLOSING_STARTED' : 'PERIOD_REOPENED',
       detail: { periodId: period.id, from: period.status, to },
     });
     this.telemetry?.stateChange({

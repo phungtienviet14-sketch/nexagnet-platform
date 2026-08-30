@@ -49,6 +49,15 @@ export const TRANSPORT_COSTING_CONFLICT_REASONS = [
   'ENTRY_ALREADY_REVERSED',
   /** Hai nguoi cung mo mot ky chong lap khoang thoi gian cho cung mot so quy. */
   'FUND_PERIOD_OVERLAP',
+  /**
+   * MOT PHIEN KHAC vua doi trang thai ky truoc ban.
+   *
+   * Tach khoi `FUND_PERIOD_OVERLAP` du ca hai deu la va cham tren ky. Ban T3 dau tra
+   * `FUND_PERIOD_OVERLAP` cho ca truong hop nay, va do la mot cau tra loi SAI HUONG: no bao nguoi
+   * dung di sua KHOANG NGAY, trong khi khoang ngay khong co van de gi — chi la ho da mat luot.
+   * Viec dung phai lam la tai lai roi doc trang thai/anh chup da co.
+   */
+  'FUND_PERIOD_STATUS_RACE',
 ] as const;
 export type TransportCostingConflictReason = (typeof TRANSPORT_COSTING_CONFLICT_REASONS)[number];
 

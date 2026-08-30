@@ -171,6 +171,48 @@ export function foldFundBalance(signedAmounts: readonly number[]): Money {
 }
 
 /**
+ * DOC MOT SO DU RA THANH MOT CAU — `DA-T3-01`, va cong chan cach doc nguoc.
+ *
+ * ---------------------------------------------------------------------------
+ * QUY UOC CANH (`DEMO_ASSUMPTION` DA-T3-01, chot 30/08/2026):
+ *
+ * ```text
+ * so du = tam ung + dieu chinh - hoan tra - khoan chi lay tu quy
+ * ```
+ *
+ *   `> 0`  lai xe DANG GIU tien cua cong ty, chua quyet toan het;
+ *   `= 0`  can;
+ *   `< 0`  lai xe da chi VUOT so duoc ung — tuc dang bo tien tui, cho cong ty hoan lai.
+ *
+ * SO AM KHONG PHAI "LAI XE DANG NO CONG TY". Doc nguoc chieu nay khong lam sai mot phep tinh nao —
+ * no lam sai NGUOI: mot lai xe da ung tien tui cho chuyen hang se hien ra trong bao cao nhu mot
+ * nguoi dang no. Va no khong TU SINH mot khoan khau tru luong nao (`GD-12`): muon thu hoi qua
+ * luong thi phai tao nghia vu truoc, chuyen tien ra khoi quy sau.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO LA MOT HAM CHU KHONG PHAI MOT DONG TRONG TAI LIEU:
+ *
+ * T6/T7 se dung so du nay len giao dien va bao cao. Mot cau chu trong tai lieu khong ngan duoc ai
+ * go nham `balance < 0 ? 'Lai xe no' : ...` o mot component — va lan do se khong ai review lai T1
+ * §9.4. Mot kieu CO TEN thi bat ho phai chon mot trong ba nhan da duoc dat ten, va bo test o
+ * `driver-fund-ledger.spec.ts` khoa lai chinh cac nhan do.
+ */
+export const FUND_BALANCE_STANCES = [
+  /** `> 0` — tien cong ty dang nam trong tay lai xe. */
+  'DRIVER_HOLDS_COMPANY_CASH',
+  'SETTLED',
+  /** `< 0` — lai xe da bo tien tui, cong ty con phai hoan lai sau khi doi soat. */
+  'COMPANY_OWES_DRIVER',
+] as const;
+export type FundBalanceStance = (typeof FUND_BALANCE_STANCES)[number];
+
+export function describeFundBalance(balance: number): FundBalanceStance {
+  if (balance > 0) return 'DRIVER_HOLDS_COMPANY_CASH';
+  if (balance < 0) return 'COMPANY_OWES_DRIVER';
+  return 'SETTLED';
+}
+
+/**
  * GIA THANH TRUC TIEP cua mot chuyen = tong cac dong `TripExpense` CO DAU.
  *
  * KHONG duoc cong voi so du quy. T1 §9.2 goi day la "phep thu doc hieu": hai con so doi soat duoc

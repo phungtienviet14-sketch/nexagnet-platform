@@ -6,22 +6,23 @@ import {
   Headers,
   Param,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { z } from 'zod';
 import { Roles } from '../../auth/roles.decorator.js';
+import type { AuthenticatedRequest } from '../../auth/session.types.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
   transportErrorToHttp,
 } from '../transport-action.guard.js';
+import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
 import { CostingReadService } from './costing-read.service.js';
 import { CostingService } from './costing.service.js';
 import { recordTripExpenseSchema, reversalSchema } from './costing.schemas.js';
-
-const actorName = (actor: string): string => actor.trim() || 'operator';
 
 /**
  * GIA THANH CHUYEN qua HTTP — be mat VAN HANH (Giam doc / Ke toan).
@@ -48,9 +49,15 @@ export class TripExpensesController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.expense.record')
   @Throttle({ default: { limit: 120, ttl: 60_000 } })
-  record(@Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  record(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
+  ) {
     const input = this.parse(recordTripExpenseSchema, body);
-    return this.guard(() => this.costing.recordTripExpense(input, actorName(actor)));
+    return this.guard(() =>
+      this.costing.recordTripExpense(input, transportActorOf(request, claimedActor)),
+    );
   }
 
   /**
@@ -62,9 +69,16 @@ export class TripExpensesController {
   @Post('expenses/:id/reversal')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.reversal.post')
-  reverse(@Param('id') id: string, @Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  reverse(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Headers('x-actor') claimedActor?: string,
+  ) {
     const { reason } = this.parse(reversalSchema, body);
-    return this.guard(() => this.costing.reverseExpense(id, reason, actorName(actor)));
+    return this.guard(() =>
+      this.costing.reverseExpense(id, reason, transportActorOf(request, claimedActor)),
+    );
   }
 
   private parse<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {

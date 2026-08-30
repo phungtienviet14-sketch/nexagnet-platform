@@ -10,11 +10,15 @@ import {
 } from './costing-storage-conflict.js';
 import {
   CostingRepository,
+  FundPeriodFrozenError,
   type AppendSnapshotInput,
   type CorrelatedPosting,
   type CorrelatedPostingInput,
   type CreateFundPeriodInput,
+  type FinalizeClosePeriodInput,
+  type FinalizedClosePeriod,
   type FundPeriodStatusPatch,
+  type FundPeriodWriteGuard,
   type LedgerRange,
   type LedgerTotal,
 } from './costing.repository.js';
@@ -25,7 +29,7 @@ import type {
   FundPeriodSnapshot,
   TripExpense,
 } from './costing.types.js';
-import type { FundPeriodStatus } from './fund-period.js';
+import { isFrozenFundPeriod, type FundPeriodStatus } from './fund-period.js';
 
 interface AccountRow {
   id: string;
@@ -242,6 +246,8 @@ export class PrismaCostingRepository extends CostingRepository {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const scoped = tx as unknown as PrismaService;
+        // TRUOC MOI INSERT: giu khoa so quy roi doc lai ky. Xem `assertWritablePeriod()`.
+        if (input.periodGuard) await this.assertWritablePeriod(scoped, input.periodGuard);
         let entry: DriverFundEntry | null = null;
 
         if (input.entry) {
@@ -297,6 +303,48 @@ export class PrismaCostingRepository extends CostingRepository {
   }
 
   /**
+   * KHOA GHI CUA MOT SO QUY — `SELECT ... FOR UPDATE` tren dung mot hang.
+   *
+   * Hang `TransportDriverFundAccount` duoc chon lam diem tuan tu hoa vi no la thu DUY NHAT ma
+   * ca ba ben deu phai di qua: nguoi ung tien, nguoi ghi khoan chi tu quy, va nguoi dong ky. Khoa
+   * tren hang `...Period` thi khong du — mot but toan co the roi vao mot ky ma nguoi ghi chua
+   * doc, va hai lenh se khong bao gio gap nhau.
+   *
+   * MOI duong ghi cham so quy PHAI lay khoa nay TRUOC, va lay theo dung mot thu tu (so quy truoc,
+   * ky sau). Hai thu tu khac nhau giua hai duong ghi la cong thuc cua deadlock.
+   *
+   * Tham so noi bang `${}` trong `$executeRaw` cua Prisma la truy van CO THAM SO
+   * (`$1`), khong phai noi chuoi — khong co duong tiem SQL nao o day.
+   */
+  private async lockAccount(scoped: PrismaService, accountId: string): Promise<void> {
+    await scoped.$executeRaw`SELECT "id" FROM "TransportDriverFundAccount" WHERE "id" = ${accountId} FOR UPDATE`;
+  }
+
+  /**
+   * `INV-22` do BEN TRONG giao dich, sau khi da giu khoa.
+   *
+   * Doc "co BAT KY ky nao dang dong bang khong", khong phai "ky dau tien tim thay": hai ky chong
+   * lap (mot `UPDATE` tay, mot ban khoi phuc cu) se lam cau tra loi phu thuoc thu tu doc, va
+   * mot but toan lot vao ky da chot chi vi thu tu doc thuan loi.
+   */
+  private async assertWritablePeriod(
+    scoped: PrismaService,
+    guard: FundPeriodWriteGuard,
+  ): Promise<void> {
+    await this.lockAccount(scoped, guard.accountId);
+    const rows: PeriodRow[] = await model(scoped, 'transportDriverFundPeriod').findMany({
+      where: {
+        accountId: guard.accountId,
+        startDate: { lte: guard.businessDate },
+        endDate: { gte: guard.businessDate },
+      },
+      orderBy: [{ startDate: 'asc' }, { id: 'asc' }],
+    });
+    const frozen = rows.map(toPeriod).find((period) => isFrozenFundPeriod(period.status));
+    if (frozen) throw new FundPeriodFrozenError(frozen);
+  }
+
+  /**
    * Ba va cham co the xay ra o `post()`, va chung phai ra BA cau tra loi khac nhau.
    *
    * Gop lai thanh mot 409 chung se dan nguoi dung di sai duong: "khoa da dung roi" bao ho doi khoa,
@@ -304,6 +352,9 @@ export class PrismaCostingRepository extends CostingRepository {
    * lai mai mot viec khong bao gio thanh cong.
    */
   private translatePostingError(error: unknown, correlationKey: string): unknown {
+    // Ky dong bang KHONG phai mot va cham luu tru — no la mot cong nghiep vu da dong, va service
+    // moi biet cong nao dang mo de dat ten cho no. Tra nguyen ven.
+    if (error instanceof FundPeriodFrozenError) return error;
     for (const index of REVERSAL_ONCE_INDEXES) {
       if (isUniqueViolationOn(error, index)) {
         return TransportDomainError.conflict(
@@ -361,8 +412,23 @@ export class PrismaCostingRepository extends CostingRepository {
    * di tiep vao mot bao cao.
    */
   async sumSignedAmounts(accountId: string, range?: LedgerRange): Promise<LedgerTotal> {
+    return this.sumWithin(this.prisma, accountId, range);
+  }
+
+  /**
+   * CUNG mot phep cong, chay duoc ca ngoai lan trong mot giao dich.
+   *
+   * `finalizeClose()` phai cong so cai BEN TRONG giao dich cua chinh no — cong o mot ket noi khac
+   * la cong mot ban chup khac cua the gioi, va anh chup se noi mot con so khong ai xac nhan duoc.
+   * Mot ham, hai noi goi: khong co hai ban phep cong de troi khoi nhau.
+   */
+  private async sumWithin(
+    scoped: PrismaService,
+    accountId: string,
+    range?: LedgerRange,
+  ): Promise<LedgerTotal> {
     const businessDate = dateFilter(range);
-    const result = await model(this.prisma, 'transportDriverFundEntry').aggregate({
+    const result = await model(scoped, 'transportDriverFundEntry').aggregate({
       where: { accountId, ...(businessDate ? { businessDate } : {}) },
       _sum: { signedAmount: true },
       _count: { _all: true },
@@ -466,23 +532,105 @@ export class PrismaCostingRepository extends CostingRepository {
     to: FundPeriodStatus,
     patch: FundPeriodStatusPatch,
   ): Promise<DriverFundPeriod | null> {
-    const result = await model(this.prisma, 'transportDriverFundPeriod').updateMany({
-      where: { id, status: from },
-      data: {
-        status: to,
-        updatedAt: patch.at,
-        ...(to === 'CLOSED' ? { closedAt: patch.at, closedBy: patch.actor } : {}),
-        ...(to === 'REOPENED'
-          ? {
-              reopenedAt: patch.at,
-              reopenedBy: patch.actor,
-              reopenReason: patch.reopenReason ?? null,
-            }
-          : {}),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const scoped = tx as unknown as PrismaService;
+      const current: PeriodRow | null = await model(scoped, 'transportDriverFundPeriod').findUnique({
+        where: { id },
+      });
+      if (!current) return null;
+
+      // CUNG mot khoa ma duong ghi so cai phai lay. `OPEN -> CLOSING` la khoanh khac ky dong
+      // bang; neu no khong xep hang voi cac lan INSERT thi mot but toan van lot vao SAU luc dong
+      // bang, va anh chup se thieu dung so tien do (Issue #94 §1).
+      await this.lockAccount(scoped, current.accountId);
+
+      const result = await model(scoped, 'transportDriverFundPeriod').updateMany({
+        where: { id, status: from },
+        data: {
+          status: to,
+          updatedAt: patch.at,
+          ...(to === 'CLOSED' ? { closedAt: patch.at, closedBy: patch.actor } : {}),
+          ...(to === 'REOPENED'
+            ? {
+                reopenedAt: patch.at,
+                reopenedBy: patch.actor,
+                reopenReason: patch.reopenReason ?? null,
+              }
+            : {}),
+        },
+      });
+      if (Number(result?.count ?? 0) === 0) return null;
+
+      const next: PeriodRow | null = await model(scoped, 'transportDriverFundPeriod').findUnique({
+        where: { id },
+      });
+      return next ? toPeriod(next) : null;
     });
-    if (Number(result?.count ?? 0) === 0) return null;
-    return this.findPeriod(id);
+  }
+
+  /**
+   * PHA HAI CUA MOT LAN DONG KY, trong MOT giao dich: cong so cai -> ghi anh chup -> `CLOSED`.
+   *
+   * Thu tu ben trong khong tuy y:
+   *
+   *   1. doc ky de biet no thuoc so quy nao;
+   *   2. GIU KHOA so quy — tu day khong lan ghi nao chen vao duoc nua;
+   *   3. doc LAI trang thai ky. Buoc nay bat buoc: giua (1) va (2) mot phien khac co the da chot
+   *      xong. Doc truoc khoa la doc mot su that da cu;
+   *   4. cong so cai, ghi anh chup, doi trang thai — tat ca sau khi so cai da dung yen.
+   *
+   * Mot lan chet o BAT KY diem nao trong bon buoc deu cuon lai sach: khong anh chup, ky van
+   * `CLOSING`, va lan goi sau lam lai tu dau va chup DUNG mot anh.
+   */
+  async finalizeClose(input: FinalizeClosePeriodInput): Promise<FinalizedClosePeriod | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const scoped = tx as unknown as PrismaService;
+      const found: PeriodRow | null = await model(scoped, 'transportDriverFundPeriod').findUnique({
+        where: { id: input.periodId },
+      });
+      if (!found) return null;
+
+      await this.lockAccount(scoped, found.accountId);
+
+      const locked: PeriodRow | null = await model(scoped, 'transportDriverFundPeriod').findUnique({
+        where: { id: input.periodId },
+      });
+      if (!locked || locked.status !== 'CLOSING') return null;
+      const period = toPeriod(locked);
+
+      const opening = await this.sumWithin(scoped, period.accountId, { before: period.startDate });
+      const inPeriod = await this.sumWithin(scoped, period.accountId, {
+        from: period.startDate,
+        to: period.endDate,
+      });
+
+      const snapshot = await this.appendSnapshotWithin(scoped, {
+        periodId: period.id,
+        openingBalance: opening.total,
+        periodNet: inPeriod.total,
+        closingBalance: opening.total + inPeriod.total,
+        entryCount: inPeriod.count,
+        takenBy: input.takenBy,
+        at: input.at,
+      });
+
+      const moved = await model(scoped, 'transportDriverFundPeriod').updateMany({
+        where: { id: period.id, status: 'CLOSING' },
+        data: { status: 'CLOSED', updatedAt: input.at, closedAt: input.at, closedBy: input.takenBy },
+      });
+      // Khong the xay ra: buoc (3) da kiem duoi khoa. NEM thay vi tra `null` — tra `null` o day
+      // se COMMIT anh chup vua ghi len mot ky chua `CLOSED`, dung cai trang thai nua voi ma ca
+      // ham nay sinh ra de xoa bo.
+      if (Number(moved?.count ?? 0) === 0) {
+        throw new Error(`Ky quy ${period.id} doi trang thai duoi khoa — khong the xay ra`);
+      }
+
+      const closed: PeriodRow | null = await model(scoped, 'transportDriverFundPeriod').findUnique({
+        where: { id: period.id },
+      });
+      if (!closed) throw new Error(`Ky quy ${period.id} bien mat trong giao dich dong ky`);
+      return { period: toPeriod(closed), snapshot };
+    });
   }
 
   /**
@@ -492,9 +640,24 @@ export class PrismaCostingRepository extends CostingRepository {
    * lan dong gan cung mot `sequence`, va lich su "da bao cao gi, luc nao" mat thu tu.
    */
   async appendSnapshot(input: AppendSnapshotInput): Promise<FundPeriodSnapshot> {
-    return this.prisma.$transaction(async (tx) => {
-      const scoped = tx as unknown as PrismaService;
-      const taken = await model(scoped, 'transportDriverFundPeriodSnapshot').count({
+    return this.prisma.$transaction(async (tx) =>
+      this.appendSnapshotWithin(tx as unknown as PrismaService, input),
+    );
+  }
+
+  /**
+   * Ghi MOT anh chup trong giao dich DANG MO.
+   *
+   * `protected` co chu dich: bai kiem tren Postgres that ke thua lop nay va nem NGAY SAU khi hang
+   * anh chup da duoc tao, de do rang giao dich cua `finalizeClose()` that su cuon lai ca hang do
+   * (#94 §2). Mot co `simulateCrash` trong ma san xuat thi re hon, nhung do la mot duong chay chi
+   * ton tai cho bai test — va som muon se co nguoi bat nham no tren mot ban that.
+   */
+  protected async appendSnapshotWithin(
+    scoped: PrismaService,
+    input: AppendSnapshotInput,
+  ): Promise<FundPeriodSnapshot> {
+    const taken = await model(scoped, 'transportDriverFundPeriodSnapshot').count({
         where: { periodId: input.periodId },
       });
       return toSnapshot(
@@ -511,8 +674,7 @@ export class PrismaCostingRepository extends CostingRepository {
             takenBy: input.takenBy,
           },
         }),
-      );
-    });
+    );
   }
 
   async listSnapshots(periodId: string): Promise<FundPeriodSnapshot[]> {
