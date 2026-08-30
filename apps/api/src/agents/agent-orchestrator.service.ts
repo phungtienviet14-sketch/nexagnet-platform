@@ -46,7 +46,13 @@ import { AgentEventsService } from './agent-events.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { createUsageMeter, type LlmUsage } from '../observability/llm-usage.js';
 import { DEFAULT_RULES_CONFIG, type RulesConfig } from '../rules/config.js';
-import { classifyPricing, matchProduct, priceOrder, routeStatus } from '../rules/rules.js';
+import {
+  classifyPricing,
+  explainDealerPricing,
+  matchProduct,
+  priceOrder,
+  routeStatus,
+} from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
 import { DEFAULT_AGENTS_CONFIG, type AgentsConfig } from './agents.config.js';
 import { RuleConfigService } from '../rule-config/rule-config.service.js';
@@ -649,14 +655,25 @@ export class AgentOrchestrator {
     const intent = parseResult.intent;
 
     if (intent === 'dat_don' && parseResult.order) {
-      const priced = priceOrder(parseResult.order, {
+      // MOT ngu canh gia duy nhat cho ca lan tinh tien lan lan sinh bang chung: dung hai ngu canh
+      // dung hai snapshot khac nhau thi bang chung se noi ve mot phep tinh chua bao gio xay ra.
+      //
+      // `now` phai duoc GHIM O DAY, khong de moi ben tu doc dong ho. Ca `priceOrder` lan
+      // `explainDealerPricing` deu lam `ctx.now ?? new Date()`, nen bo trong truong nay tuc la
+      // LAY HAI THOI DIEM khac nhau cho cung mot luot — va cua so hieu luc cua deal rieng duoc xet
+      // tren chinh thoi diem do. Mot deal het han dung giua hai loi goi se cho ra "da ap deal
+      // rieng" o SO TIEN va "het han" o BANG CHUNG: trace giai thich mot con so ma khach chua bao
+      // gio nhan. Ghim mot lan thi ca hai duong noi ve cung mot phep tinh.
+      const priceContext = {
         dealer: resolved.dealer,
         branch: resolved.branch,
         products: this.knowledge.products(),
         prices: this.knowledge.prices(),
         priceOverrides: this.knowledge.priceOverrides(),
         cfg: rulesConfig,
-      });
+        now: new Date(),
+      };
+      const priced = priceOrder(parseResult.order, priceContext);
       /*
        * TANG TAT DINH TU KE LAI MINH (24/08/2026). Truoc do `rules/` co dung 0 loi goi telemetry,
        * nen cau hoi "vi sao ra con so do" chi tra loi duoc bang cach mo source — o dung tang ma
@@ -665,6 +682,39 @@ export class AgentOrchestrator {
        * `detail` chi mang SO, khong mang doi tuong don: ten khach/SDT/dia chi nam trong `priced`
        * va chung khong co viec gi o day. Muc 18 — ghi delta ngu nghia, khong chup thuc the.
        */
+      /*
+       * BANG CHUNG GIA RIENG THEO DAI LY (U2 Step 2, Issue #77) — MOT quyet dinh cho MOT dong
+       * hang, chu khong mot quyet dinh gop cho ca don: hai dong cung don co the ra hai ket cuc
+       * khac nhau (mot dong dat nguong so luong, mot dong chua), va gop lai thi mat dung cho
+       * khach se hoi.
+       *
+       * `detail` KHONG mang gia tri tien. Repo public + gia rieng la du lieu kinh doanh mat cua
+       * khach; ID ban ghi + SKU + so luong + nguong da du de doi chieu nguoc ve Postgres.
+       */
+      for (const evidence of explainDealerPricing(parseResult.order, priceContext)) {
+        this.telemetry?.decision({
+          vocabulary: SALES_ORDER_DECISIONS,
+          point: 'rules.dealer_price',
+          // `BASE_NO_OVERRIDE` la duong BINH THUONG cua phan lon dai ly — danh no la `degraded`
+          // se lam nhieu ty le suy giam den muc khong con doc duoc. Chi cac duong co mot deal
+          // THAT SU ton tai ma khong ap duoc moi dang de y.
+          outcome:
+            evidence.reason === 'DEALER_PRICE_OVERRIDE_APPLIED' ||
+            evidence.reason === 'DEALER_PRICE_BASE_NO_OVERRIDE'
+              ? 'allowed'
+              : 'degraded',
+          reason: evidence.reason,
+          detail: {
+            dealerId: resolved.dealer?.id ?? null,
+            sku: evidence.sku,
+            quantity: evidence.quantity,
+            overrideId: evidence.overrideId,
+            minQuantity: evidence.minQuantity,
+            priceSource: evidence.source,
+          },
+        });
+      }
+
       const pricingReasons = classifyPricing(parseResult.order, priced, rulesConfig);
       this.telemetry?.decision({
         vocabulary: SALES_ORDER_DECISIONS,

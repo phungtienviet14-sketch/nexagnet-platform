@@ -31,6 +31,7 @@ import { PricePeriodsService } from './price-periods.service.js';
 import {
   SOURCE_TRUTH_RESOURCES,
   SourceTruthWriteService,
+  overrideId,
   type SourceTruthResource,
 } from './source-truth-write.service.js';
 import { Roles } from '../auth/roles.decorator.js';
@@ -226,9 +227,11 @@ export class SettingsController {
     ) {
       throw new BadRequestException('Override can co dealerId va sku hop le');
     }
+    // Duong TAO MOI phai ghep danh tinh y het duong SUA, nen no goi chung overrideId() cua
+    // service thay vi tu ghep chuoi. Hai cho ghep bang hai doan code la hai cho lech duoc nhau.
     const inferredId =
       parsedResource === 'overrides'
-        ? `${String(record.dealerId ?? '')}:${String(record.sku ?? '')}`
+        ? overrideId(String(record.dealerId ?? ''), String(record.sku ?? ''))
         : (record.id ?? record.sku ?? record.term ?? record.chatId);
     const parsedId = idSchema.safeParse(inferredId);
     if (!parsedId.success) throw new BadRequestException('Can co id, sku, term hoac chatId de tao moi');

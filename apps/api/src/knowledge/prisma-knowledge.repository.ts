@@ -17,22 +17,29 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
 
   async loadSnapshot(): Promise<KnowledgeSnapshot> {
     const currentMonth = currentPriceMonth();
-    const now = new Date();
     const [products, pricePeriod, overrides, dealers, groups, glossary] = await Promise.all([
       this.prisma.product.findMany(),
       this.prisma.pricePeriod.findFirst({
         where: { validMonth: currentMonth, status: 'active' },
         include: { prices: true },
       }),
+      /*
+       * CO Y KHONG loc `enabled` va cua so hieu luc o day nua — `resolveDealerPrice()` moi la cong
+       * quyet dinh (Issue #77 §6).
+       *
+       * Cau truy van cu co ca hai bo loc, va no SAI THEO CA HAI CHIEU vi snapshot song suot vong
+       * doi tien trinh (nap o `onModuleInit`, chi nap lai khi co nguoi sua nguon su that):
+       *   · deal HET HAN luc nua dem van con trong snapshot -> van duoc ap;
+       *   · deal vua TOI NGAY hieu luc thi khong bao gio duoc nap -> khong bao gio ap, cho toi khi
+       *     tinh co ai do sua mot thu khac va keo theo mot lan reload.
+       * Chieu thu hai la chieu ma mot cai cong khong the va duoc: khong nhin thay thi khong xet
+       * duoc. Nen phai nap DU, roi de cong quyet dinh tren `now` cua tung luot.
+       *
+       * `dealer: { status: 'active' }` thi GIU: dai ly ngung hoat dong la mot su that ve DANH TINH,
+       * khong phai mot cua so thoi gian — va `dealers` o duoi cung loc y het the.
+       */
       this.prisma.dealerPriceOverride.findMany({
-        where: {
-          enabled: true,
-          AND: [
-            { OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: now } }] },
-            { OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }] },
-          ],
-          dealer: { status: 'active' },
-        },
+        where: { dealer: { status: 'active' } },
       }),
       this.prisma.dealer.findMany({ where: { status: 'active' } }),
       this.prisma.group.findMany({
@@ -63,12 +70,20 @@ export class PrismaKnowledgeRepository extends KnowledgeRepository {
         validMonth: pricePeriod?.validMonth,
         periodStatus: pricePeriod?.status,
       })),
+      /*
+       * Mang DU `enabled` + cua so hieu luc ra tang runtime: cong quyet dinh chi xet duoc thu ma
+       * no NHIN THAY, va cau truy van o tren co y khong loc gium no nua.
+       */
       priceOverrides: overrides.map((o) => ({
+        id: o.id,
         dealerId: o.dealerId,
         sku: o.sku,
         price: o.price,
-        // NULL trong DB = ap moi so luong; giu `undefined` de rules dung mac dinh 1.
+        enabled: o.enabled,
+        // NULL trong DB = ap moi so luong; giu `undefined` de rules dung mac dinh 1 (ASM-03).
         ...(o.minQuantity === null ? {} : { minQuantity: o.minQuantity }),
+        ...(o.effectiveFrom === null ? {} : { effectiveFrom: o.effectiveFrom }),
+        ...(o.effectiveTo === null ? {} : { effectiveTo: o.effectiveTo }),
       })),
       dealers: dealers.map((d) => ({
         id: d.id,

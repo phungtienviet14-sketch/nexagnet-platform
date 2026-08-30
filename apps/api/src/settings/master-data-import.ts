@@ -42,8 +42,14 @@ export const importedDealSchema = z
     dealerId: idSchema,
     sku: idSchema,
     price: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-    // Nguong so luong de deal co hieu luc; bo trong = ap moi so luong.
-    minQuantity: z.number().int().positive().nullish(),
+    /**
+     * ASM-03 (Issue #77): deal ap tu SL 1 cho toi khi khach noi khac.
+     *
+     * `.default(1)` chu khong phai `.nullish()`: import de trong phai GHI SO 1 vao Postgres, khong
+     * duoc de NULL. NULL la mot gia dinh khong ai ky ten — doc lai sau ba thang thi khong phan
+     * biet duoc "khach chua noi nen ta gia dinh 1" voi "khach da chot la khong co nguong".
+     */
+    minQuantity: z.coerce.number().int().positive().default(1),
     enabled: z.boolean().default(true),
     effectiveFrom: instantSchema,
     effectiveTo: instantSchema,
@@ -265,10 +271,15 @@ function workbookRecord(
       enabled: true,
     };
   }
+  // `Số lượng tối thiểu` TUNG BI BO QUA o day: schema co truong, nhung ca duong xlsx lan csv deu
+  // khong doc no, nen Sale nhap "tu 5 cai" vao file roi import xong van ra deal ap tu 1 cai —
+  // hong am tham, khong mot dong loi nao. Bo trong -> `.default(1)` cua schema (ASM-03).
+  const minQuantity = nullableCell(record['Số lượng tối thiểu'] ?? record['SL tối thiểu']);
   return {
     dealerId: cellText(record['ID đại lý'] ?? record['Mã đại lý']),
     sku: cellText(record.SKU),
     price: cellNumber(record['Giá override'] ?? record['Đơn giá riêng']),
+    ...(minQuantity === null ? {} : { minQuantity: cellNumber(minQuantity) }),
     effectiveFrom: nullableCell(record['Hiệu lực từ']),
     effectiveTo: nullableCell(record['Hiệu lực đến']),
     enabled: booleanCell(record['Bật'], true),
@@ -303,6 +314,10 @@ function csvRecord(
       dealerId: record.dealerId,
       sku: record.sku,
       price: Number(record.price),
+      // Bo trong -> `.default(1)` cua schema (ASM-03). Xem chu thich o `workbookRecord`.
+      ...(nullableCell(record.minQuantity) === null
+        ? {}
+        : { minQuantity: Number(record.minQuantity) }),
       enabled: booleanCell(record.enabled, true),
       effectiveFrom: nullableCell(record.effectiveFrom),
       effectiveTo: nullableCell(record.effectiveTo),

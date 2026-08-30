@@ -288,27 +288,27 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "advisor.compose|COMPOSED": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 266
+      "line": 272
     },
     "advisor.compose|COMPOSER_DISABLED": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 167
+      "line": 173
     },
     "advisor.compose|DETERMINISTIC_PATH_SUFFICIENT": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 176
+      "line": 182
     },
     "advisor.compose|LLM_RETURNED_NOTHING": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 258
+      "line": 264
     },
     "agent.tool_authorization|*": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 189
+      "line": 195
     },
     "channel.send|*": {
       "functionName": "OutboundChannelRouter.record",
@@ -373,15 +373,20 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/orders/orders.service.ts",
       "line": 221
     },
+    "rules.dealer_price|*": {
+      "functionName": "AgentOrchestrator.dispatch",
+      "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
+      "line": 695
+    },
     "rules.price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 669
+      "line": 719
     },
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 573
+      "line": 579
     },
     "trip.assignment_change|*": {
       "functionName": "TripService.assign",

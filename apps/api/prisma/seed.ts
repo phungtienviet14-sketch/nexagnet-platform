@@ -61,10 +61,25 @@ async function main(): Promise<void> {
     });
   }
   for (const o of SEED.priceOverrides) {
+    /*
+     * ASM-03 (Issue #77) — GHI DU CA NGUONG lan cua so hieu luc.
+     *
+     * Truoc day seed chi ghi `price`. Hai hau qua, ca hai deu im lang:
+     *   · mot deal khai "tu 5 cai" trong goi khach vao Postgres thanh deal ap tu 1 cai;
+     *   · `update` chi ghi de `price`, nen sua nguong trong goi khach roi seed lai van ra so cu.
+     * Bo trong -> 1, khong de NULL: NULL la mot gia dinh khong ai ky ten.
+     */
+    const data = {
+      price: o.price,
+      minQuantity: o.minQuantity ?? 1,
+      enabled: o.enabled ?? true,
+      effectiveFrom: o.effectiveFrom ?? null,
+      effectiveTo: o.effectiveTo ?? null,
+    };
     await prisma.dealerPriceOverride.upsert({
       where: { dealerId_sku: { dealerId: o.dealerId, sku: o.sku } },
-      create: { dealerId: o.dealerId, sku: o.sku, price: o.price },
-      update: { price: o.price },
+      create: { dealerId: o.dealerId, sku: o.sku, ...data },
+      update: data,
     });
   }
   // KHONG seed Group vao Postgres: `SEED.groups[].chatId` chi la routing ID cua tai khoan Zalo
