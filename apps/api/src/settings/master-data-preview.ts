@@ -15,6 +15,14 @@ export interface MasterDataDealRecord {
   dealerId: string;
   sku: string;
   price: number;
+  /**
+   * ASM-03 (Issue #77) — LUON co mat, khong bao gio NULL tren duong import.
+   *
+   * Truong nay tung vang mat khoi ban ghi, nen `applyImport` upsert mot deal KHONG kem nguong:
+   * ban ghi moi vao Postgres voi `minQuantity = NULL`, va mot ban cap nhat khong bao gio ghi de
+   * duoc nguong cu. Ca hai deu la sai gia im lang.
+   */
+  minQuantity: number;
   enabled: boolean;
   effectiveFrom: string | null;
   effectiveTo: string | null;
@@ -164,12 +172,15 @@ function planDeal(
     errors.push(`SKU không tồn tại: ${row.value.sku}`);
   }
   if (!dealer) errors.push(`Không tìm thấy đại lý: ${row.value.dealerId}`);
+  // Issue #77 §5 doi `effectiveTo > effectiveFrom`: BANG NHAU cung phai bi tu choi. Mot cua so
+  // dai 0 giay khong phai mot deal — no la mot deal khong bao gio ap duoc, va nhan no vao im
+  // lang thi Sale se ngoi doi mot muc gia khong bao gio toi.
   if (
     row.value.effectiveFrom &&
     row.value.effectiveTo &&
-    new Date(row.value.effectiveFrom).getTime() > new Date(row.value.effectiveTo).getTime()
+    new Date(row.value.effectiveFrom).getTime() >= new Date(row.value.effectiveTo).getTime()
   ) {
-    errors.push('effectiveFrom phải trước hoặc bằng effectiveTo');
+    errors.push('effectiveTo phải sau effectiveFrom');
   }
   const dealerId = dealer?.id ?? row.value.dealerId;
   const key = `${dealerId}:${row.value.sku}`;
@@ -181,6 +192,7 @@ function planDeal(
     dealerId,
     sku: row.value.sku,
     price: row.value.price,
+    minQuantity: row.value.minQuantity,
     enabled: row.value.enabled,
     effectiveFrom: row.value.effectiveFrom,
     effectiveTo: row.value.effectiveTo,

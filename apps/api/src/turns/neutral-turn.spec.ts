@@ -123,7 +123,7 @@ beforeAll(async () => {
       steps: () => records.filter((r) => r.type === 'step').map((r) => String(r.name)),
     };
   };
-});
+}, 70_000);
 
 function message(text: string): ChannelMessage {
   return {

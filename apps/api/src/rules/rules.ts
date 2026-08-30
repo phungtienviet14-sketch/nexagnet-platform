@@ -1,5 +1,6 @@
 import type { OrderStatus, ParsedOrder, PricedLine, PricedOrder } from '@netviet/shared';
 import type { Dealer, DealerPriceOverride, PriceRow, Product } from '../knowledge/domain.js';
+import { type DealerPriceResolution, resolveDealerPrice } from './dealer-price.js';
 // CHI import KIEU: `rules/` van khong phu thuoc runtime vao tang quan sat. Dung chung mot bo ma
 // thay vi khai lai o day, vi hai danh sach roi se lech nhau va cho lech la cho mat tin hieu.
 import type { PricingReason } from '../orders/sales-order-decisions.js';
@@ -57,16 +58,49 @@ function priceFor(
   quantity: number,
   prices: PriceRow[],
   overrides: DealerPriceOverride[],
+  now: Date,
 ): number | null {
-  if (dealerId) {
-    // Deal rieng co the kem NGUONG SO LUONG ("lay 5 cai moi duoc 1.150k" — anh chup 25/07/2026).
-    // Chua dat nguong thi KHONG duoc huong deal: quay ve bang gia chung, khong bao gia thap hon
-    // muc dai ly that su duoc huong.
-    const override = overrides.find((o) => o.dealerId === dealerId && o.sku === sku);
-    if (override && quantity >= (override.minQuantity ?? 1)) return override.price;
-  }
-  const row = prices.find((p) => p.sku === sku);
-  return row ? row.wholesale : null;
+  // MOT cong duy nhat, dung chung voi duong sinh bang chung o duoi. Truoc day cho nay tu xet lay
+  // "co deal + du so luong" va BO QUA `enabled`/`effectiveFrom`/`effectiveTo` — bon dieu kien do
+  // chi song trong cau truy van luc nap snapshot, tuc mot deal het han van duoc ap cho toi lan
+  // reload tiep theo. Xem `dealer-price.ts`.
+  return resolveDealerPrice({ sku, dealerId, quantity, prices, overrides, now }).unitPrice;
+}
+
+/**
+ * BANG CHUNG cho tung dong hang: vi sao dong nay an gia rieng hay gia si chung.
+ *
+ * Tach khoi `priceOrder` de KHONG doi hinh dang `PricedOrder` — `OrderView` duoc luu nguyen ca
+ * cuc JSON vao cot `Order.view`, nen them truong o do la doi hinh dang du lieu da ben vung.
+ * Ben goi co `TelemetryService` (agent orchestrator) goi ham nay de phat `rules.dealer_price`.
+ *
+ * Dung CHUNG `resolveDealerPrice` voi `priceFor`, nen bang chung khong the lech voi so tien that
+ * su da tinh — hai duong doc lap se lech nhau, va cho lech la cho mat tin hieu.
+ */
+export interface DealerPriceEvidence extends DealerPriceResolution {
+  readonly skuRaw: string;
+  readonly sku: string | null;
+  readonly quantity: number;
+}
+
+export function explainDealerPricing(
+  parsed: ParsedOrder,
+  ctx: PriceContext,
+): DealerPriceEvidence[] {
+  const now = ctx.now ?? new Date();
+  return parsed.items.flatMap((item) => {
+    const product = matchProduct(item.skuRaw, ctx.products);
+    if (!product) return [];
+    const resolution = resolveDealerPrice({
+      sku: product.sku,
+      dealerId: ctx.dealer?.id ?? null,
+      quantity: item.quantity,
+      prices: ctx.prices,
+      overrides: ctx.priceOverrides,
+      now,
+    });
+    return [{ ...resolution, skuRaw: item.skuRaw, sku: product.sku, quantity: item.quantity }];
+  });
 }
 
 /**
@@ -125,6 +159,7 @@ export function priceOrder(parsed: ParsedOrder, ctx: PriceContext): PricedOrder 
           item.quantity,
           ctx.prices,
           ctx.priceOverrides,
+          now,
         ) ?? 0)
       : 0;
     return {

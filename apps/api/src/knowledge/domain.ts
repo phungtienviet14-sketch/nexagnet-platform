@@ -51,17 +51,35 @@ export interface PriceRow {
  * (khao sat: "mot so dai ly lay SL nhieu se co deal rieng"). Rong neu chua co so lieu.
  */
 export interface DealerPriceOverride {
+  /**
+   * ID ban ghi trong Postgres. Rong o goi khach in-memory (SEED khong co ID ben vung).
+   *
+   * Mang ra toi tang rules de mot quyet dinh "da ap deal rieng" chi thang duoc ve MOT HANG cu
+   * the trong DB — khong co no thi bang chung chi noi duoc "co mot deal nao do" (Issue #77 §6).
+   */
+  id?: string;
   dealerId: string;
   sku: string;
   price: number;
   /**
-   * So luong TOI THIEU de deal co hieu luc. Rong = ap cho moi so luong.
+   * So luong TOI THIEU de deal co hieu luc. Rong = hieu la 1 (ASM-03, Issue #77).
    *
    * Co that trong hoi thoai khach (anh chup 25/07/2026): "Lay SL 5 cai gia co tot hon k e" ->
    * "Da c lay sl 5c. E xin gia 1150k a". Bo qua nguong nay thi don 1 cai cung duoc gia 1.150k,
    * tuc bao sai tien theo chieu nguoc lai.
    */
   minQuantity?: number;
+  /**
+   * BA TRUONG DUOI DAY phai co mat o tang runtime, khong duoc de lai trong cau truy van.
+   *
+   * `prisma-knowledge.repository.ts` da loc `enabled`/`effectiveFrom`/`effectiveTo` bang SQL —
+   * nhung loc do chay MOT LAN luc nap snapshot, con snapshot thi song suot vong doi tien trinh.
+   * Mot deal het han luc 12h dem van tiep tuc duoc ap cho toi khi co nguoi bam Sua nguon su that.
+   * Mang du lieu ra day de `resolveDealerPrice()` xet lai tren `now` cua tung luot.
+   */
+  enabled?: boolean;
+  effectiveFrom?: Date;
+  effectiveTo?: Date;
 }
 
 export interface Dealer {
