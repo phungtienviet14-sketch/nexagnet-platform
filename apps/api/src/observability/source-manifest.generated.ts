@@ -394,12 +394,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver.self_fund_scope|SELF_FUND_SCOPE_GRANTED": {
       "functionName": "CostingReadService.selfFundStatement",
       "filePath": "apps/api/src/transport/costing/costing-read.service.ts",
-      "line": 76
+      "line": 86
     },
     "driver.self_fund_scope|SELF_FUND_SCOPE_NO_DRIVER_BINDING": {
       "functionName": "CostingReadService.selfFundStatement",
       "filePath": "apps/api/src/transport/costing/costing-read.service.ts",
-      "line": 62
+      "line": 72
     },
     "driver.self_scope|SELF_SCOPE_GRANTED": {
       "functionName": "TripService.listDriverTrips",
