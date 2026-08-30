@@ -472,7 +472,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(statement.balance).toBe(folded);
 
       const raw = await prisma.transportDriverFundEntry.aggregate({
-        where: { accountId: statement.account.id },
+        where: { accountId: statement.account!.id },
         _sum: { signedAmount: true },
       });
       expect(Number(raw._sum.signedAmount ?? 0n)).toBe(statement.balance);
@@ -483,8 +483,8 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(mine.driverId).toBe(state.driverA);
 
       const other = await read.driverFundStatement(state.driverB);
-      expect(mine.account.id).not.toBe(other.account.id);
-      expect(mine.entries.every((entry) => entry.accountId === mine.account.id)).toBe(true);
+      expect(mine.account?.id).not.toBe(other.account?.id);
+      expect(mine.entries.every((entry) => entry.accountId === mine.account?.id)).toBe(true);
 
       // `INV-09` bang KIEU DU LIEU: payload that khong mang mot truong doanh thu nao.
       const payload = JSON.stringify(mine);

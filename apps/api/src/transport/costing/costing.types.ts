@@ -132,9 +132,19 @@ export interface FundPeriodSnapshot {
   readonly takenBy: string;
 }
 
-/** KHUNG NHIN so quy: so du TINH RA + lich su. Khong phai mot bang. */
+/**
+ * KHUNG NHIN so quy: so du TINH RA + lich su. Khong phai mot bang.
+ *
+ * `account` NULLABLE co chu dich. Mot lai xe chua co giao dich nao thi chua co hang so quy nao — va
+ * duong DOC khong duoc tao no ra. Neu `driverFundStatement()` goi `ensureAccount()` cho tien thi
+ * mot lan `GET` se ghi mot hang vao DB: mot tac dung phu khong ai doc ten ham ma doan ra, va no lam
+ * cau "tang doc khong ghi gi" thanh mot cau khong dung.
+ *
+ * Nen o day: khong co so quy => `account = null`, `balance = 0`, `entries = []`. Hang so quy duoc
+ * tao o duong GHI dau tien (tam ung, khoan chi tu quy, mo ky) — dung noi no thuoc ve.
+ */
 export interface DriverFundStatement {
-  readonly account: DriverFundAccount;
+  readonly account: DriverFundAccount | null;
   readonly driverId: string;
   readonly balance: number;
   readonly currencyCode: string;

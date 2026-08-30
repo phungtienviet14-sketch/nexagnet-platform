@@ -17,6 +17,9 @@ import { TransportCoreFacts } from './transport-core-facts.port.js';
  *
  * HAI CON SO KHONG BAO GIO GAP NHAU trong tep nay: so du quy va gia thanh chuyen la hai khung nhin
  * rieng, khong co mot ham nao tra ca hai trong mot tong (`INV-23`, T1 §9.2).
+ *
+ * VA KHONG MOT LOI GOI GHI NAO — ke ca `ensureAccount()`, von rat de lot vao day cho tien. Mot lan
+ * `GET` ma tao ra mot hang la mot tac dung phu khong ai doc ten ham ma doan duoc.
  */
 @Injectable()
 export class CostingReadService {
@@ -34,7 +37,14 @@ export class CostingReadService {
    */
   async driverFundStatement(driverId: string): Promise<DriverFundStatement> {
     await requireDriverFacts(this.core, driverId);
-    const account = await this.ledger.ensureAccount(driverId, new Date());
+
+    // KHONG `ensureAccount()` o day: xem chu thich cua `DriverFundStatement`. Mot lai xe chua co
+    // giao dich nao thi chua co so quy, va mot lan `GET` khong duoc tao ra no.
+    const account = await this.ledger.findAccountByDriver(driverId);
+    if (!account) {
+      return { account: null, driverId, balance: 0, currencyCode: TRANSPORT_CURRENCY, entries: [] };
+    }
+
     const [entries, sum] = await Promise.all([
       this.ledger.listEntries(account.id),
       this.ledger.sumSignedAmounts(account.id),

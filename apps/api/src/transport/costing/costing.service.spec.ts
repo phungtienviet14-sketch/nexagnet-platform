@@ -606,7 +606,24 @@ describe('be mat lai xe: so quy CUA CHINH MINH', () => {
     const mine = await h.read.selfFundStatement('user-1');
     expect(mine.driverId).toBe('drv-1');
     expect(mine.balance).toBe(3_000_000);
-    expect(mine.entries.every((entry) => entry.accountId === mine.account.id)).toBe(true);
+    expect(mine.entries.every((entry) => entry.accountId === mine.account?.id)).toBe(true);
+  });
+
+  /**
+   * DUONG DOC KHONG DUOC GHI.
+   *
+   * Mot lai xe chua co giao dich nao van doc duoc so quy cua minh — va lan doc do KHONG duoc tao ra
+   * mot hang so quy. Truoc ban nay `driverFundStatement()` goi `ensureAccount()` cho tien, tuc mot
+   * lan `GET` ghi mot hang vao DB.
+   */
+  it('lai xe chua co giao dich nao: so du 0, va KHONG hang so quy nao duoc tao', async () => {
+    const empty = await h.read.driverFundStatement('drv-2');
+
+    expect(empty.account).toBeNull();
+    expect(empty.balance).toBe(0);
+    expect(empty.entries).toEqual([]);
+    // Doc lai bang mot duong KHAC: kho van khong co so quy nao cho lai xe do.
+    expect(await h.ledger.findAccountByDriver('drv-2')).toBeNull();
   });
 
   it('tai khoan chua noi ho so lai xe bi tu choi voi mot ma noi ro phai sua o dau', async () => {
