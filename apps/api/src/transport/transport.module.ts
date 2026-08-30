@@ -65,6 +65,21 @@ import { TripService } from './trips/trip.service.js';
     TripService,
     TransportActionGuard,
   ],
-  exports: [FleetService, TripService, TransportActionGuard, FleetRepository, TripRepository],
+  /*
+   * `AuditLogService` va `TRANSPORT_CORE_POLICY` duoc export tu T3 tro di cho `transport-costing`.
+   *
+   * Chia se thay vi cho costing tu dung lay: mot lan chi tien va lan doi trang thai chuyen di cung
+   * no phai nam trong CUNG MOT dong dau vet, va mui gio tenant phai la MOT gia tri — hai ban doc
+   * doc lap se lech nhau dung vao ngay ai do doi cau hinh, va lech do roi vao ngay nghiep vu.
+   */
+  exports: [
+    FleetService,
+    TripService,
+    TransportActionGuard,
+    FleetRepository,
+    TripRepository,
+    AuditLogService,
+    TRANSPORT_CORE_POLICY,
+  ],
 })
 export class TransportModule {}

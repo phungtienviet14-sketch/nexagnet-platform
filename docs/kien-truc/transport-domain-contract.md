@@ -11,8 +11,12 @@
 > hiện ở đây **chỉ** dưới vai *reference tenant*, và mọi tham số riêng của họ nằm ở T0 hoặc ở gói
 > `tenants/<slug>/`, không nằm trong file này.
 
-> **Trạng thái triển khai: CHƯA CÓ DÒNG CODE NÀO.** T1 là hợp đồng để T2 bắt đầu an toàn. Mọi thứ
-> ở đây là *thiết kế đề xuất* trừ những chỗ ghi rõ "as-built" (tức đã đo trên `main`).
+> **Trạng thái triển khai (cập nhật 30/08/2026): T2 · T2.1 · T3 đã có code trên `main`/nhánh T3.**
+> Dòng cũ ở đây ghi "chưa có dòng code nào" — đúng lúc lập T1 (28/08), sai kể từ T2. Mọi thứ trong
+> file này là *thiết kế đề xuất* **trừ** ba mục as-built [§18.1](#181-t2-as-built--transport-core-v0--code-only--partial)
+> (T2), [§18.2](#182-t21-as-built--siết-bất-biến-tầng-lưu-trữ-issue-79-review-khép-ở-83) (T2.1) và
+> [§18.3](#183-t3-as-built--costing--driver-fund-issue-85) (T3) — ba mục đó ghi **cái đã chạy**, và
+> là chỗ duy nhất trong file được sửa sau khi T1 khép. T4–T7 vẫn chưa có dòng code nào.
 
 > **🟡 GIAI ĐOẠN DEMO.** Nghiệp vụ còn 23 điểm chưa có câu trả lời từ khách. Thay vì chặn, mỗi điểm
 > chặn được cấp **một giả định mặc định** ở [§21](#21-giả-định-giai-đoạn-demo-gd-xx) mang mã
@@ -724,7 +728,7 @@ Thì: ngày nghiệp vụ = **01/08**, và phiếu thuộc kỳ tháng 8.
 | **T0** | Transport Source Truth | ✅ **XONG** |
 | **T1** | Transport Domain Contract | ✅ **XONG (file này)** |
 | **T2** | **Transport Core** — Vehicle, Driver, Trip, Customer/Partner; capability `transport-core`; primitive tiền + ngày nghiệp vụ | ✅ **CODE-ONLY / PARTIAL** — xem §18.1; bất biến tầng lưu trữ siết ở T2.1, xem §18.2 |
-| **T3** | Costing + Driver Fund — hai lớp, sổ append-only, kỳ quỹ | T2 |
+| **T3** | Costing + Driver Fund — hai lớp, sổ append-only, kỳ quỹ | ✅ **CODE/INTEGRATION CLOSED** — xem §18.3 |
 | **T4** | Fuel + đối soát bảng kê | T3 + có **một file bảng kê mẫu** (thật hoặc tổng hợp) để chốt mapping cột |
 | **T5** | Settlement — AR/AP/hoa hồng/kỳ | T3 |
 | **T6** | Asset & Compliance + Workforce | T2, T5 |
@@ -920,6 +924,100 @@ Bảo dưỡng đứng **trước** chuyến trong thứ tự trên có lý do: 
 Không hiện thực trong PR review-followup này: phép hợp thành cần dữ liệu bảo dưỡng, tức thuộc
 **T6 Asset/Compliance + T7 Operations** (Issue #79 §9 để chúng ngoài phạm vi). Ghi lại đây để lần
 sau không phải suy lại từ đầu.
+
+### 18.3. T3 as-built — Costing + Driver Fund (Issue #85)
+
+> `TRANSPORT COSTING v0 = CODE/INTEGRATION CLOSED`, **không** phải `RUNTIME-PROVEN`. Chưa có runtime
+> khách vận tải nào chạy; bằng chứng dưới đây là bằng chứng **CI + đo tay trên PostgreSQL 16.15
+> thật**, không phải bằng chứng vận hành.
+
+Capability mới `transport-costing`, phụ thuộc `transport-core`, **không** có chiều ngược lại. Năm
+bảng mới, không sửa bảng nào đang có.
+
+**Hai lớp của một khoản chi (`INV-03`) là bất biến trung tâm.** Tiền lấy từ quỹ sinh **một**
+`DriverFundEntry` âm **và một** `TripExpense` dương mang **cùng** `correlationKey`, ghi trong **một**
+giao dịch. Công ty trả thẳng thì chỉ có `TripExpense`. Hai con số đối soát được với nhau và **không
+bao giờ** vào cùng một tổng — cộng chúng lại là đếm một khoản tiền hai lần (`INV-23`).
+
+| Quyết định | Nội dung |
+|---|---|
+| Số dư | **Không có cột `balance`**. `DriverFundAccount.balance = SUM(entry.signedAmount)`, tính lúc đọc (`INV-01`) |
+| Sửa lịch sử | Kho **không có** `update`/`delete` cho bút toán và khoản chi. Sửa = **đảo + ghi mới** (`INV-20`) |
+| Đảo | Đảo theo **khoá sự kiện**, không theo dòng: một lệnh đảo cả hai chân, trong một giao dịch |
+| Kỳ quỹ | `OPEN → CLOSING → CLOSED → REOPENED → CLOSING`. `CLOSING` **đóng băng** kỳ và **commit ngay**, trước khi chụp ảnh |
+| Đóng kỳ | **Không tạo bút toán** (§7.3) — chỉ ghi một `FundPeriodSnapshot` append-only |
+| Mở lại | Hành động riêng `transport.costing.period.reopen`, **Giám đốc**; Kế toán không có |
+| Bằng chứng | Hai cột tham chiếu trên `TripExpense`, **không** dựng hệ tài liệu song song (`PG-05` vẫn hở) |
+
+#### Bốn ràng buộc DB mà Prisma không khai được
+
+Chúng sống trong SQL thô của `20260830140000_transport_costing`. **Sinh lại migration từ schema sẽ
+làm cả bốn biến mất — và hệ thống vẫn chạy bình thường, chỉ không còn chặn gì.**
+`transport-costing-storage.spec.ts` đọc chính tệp SQL và đỏ nếu một tên biến mất.
+
+1. `TransportDriverFundEntry_sign_by_kind` / `TransportTripExpense_sign_by_kind` — bản sao ở DB của
+   luật dấu. Hàm TypeScript chỉ đúng với các hàng đi **qua** ứng dụng; một `INSERT` tay hay một bản
+   khôi phục cũ không gọi nó.
+2. `TransportTripExpense_fund_leg` — `DRIVER_FUND` **bắt buộc** có chân quỹ; `COMPANY_DIRECT` **bắt
+   buộc** không có. Thiếu vế đầu: lái xe "vẫn còn" tiền họ đã tiêu.
+3. `TransportDriverFundPeriodSnapshot_balance_sum` — `closing = opening + net`, nên không tồn tại
+   một ảnh chụp "gần đúng".
+4. `TransportDriverFundPeriod_no_overlap` — **EXCLUSION CONSTRAINT** (`btree_gist`) chặn hai kỳ chồng
+   lấp cho cùng một sổ quỹ. Đây đúng là thứ §18.2/F2 đã **ghi tên như một lựa chọn siết thêm về
+   sau**; T3 dùng nó ở chỗ nó cần đến.
+
+#### `btree_gist` — một phụ thuộc vận hành mới, đo chứ không suy
+
+`EXCLUDE ... USING gist` đòi extension này. Từ PostgreSQL 13 nó là **trusted**, nên không cần
+superuser. Đo trên **đúng hình dạng của stack deploy** — role `zalo` LOGIN, `rolsuper = f`, chủ
+database `zalo` (PostgreSQL 16.15, 30/08/2026):
+
+```text
+zalo@zalo=> CREATE EXTENSION IF NOT EXISTS btree_gist;
+CREATE EXTENSION
+```
+
+Nếu một mục tiêu tương lai từ chối lệnh này thì migration **dừng ở dòng đầu tiên và deploy đỏ to** —
+chứ không lặng lẽ bỏ qua ràng buộc rồi chạy tiếp.
+
+**Một giả định đã sai và đã được sửa bằng phép đo:** bản đầu dùng
+`to_date("startDate", 'YYYY-MM-DD')` trong biểu thức EXCLUDE. Postgres từ chối cả migration —
+`ERROR: functions in index expression must be marked IMMUTABLE` (42P17) — vì `to_date` là **STABLE**
+(`pg_proc.provolatile = 's'`), không phải IMMUTABLE. Thay bằng `make_date` + `substr` (đều
+IMMUTABLE). Có một bài test khoá lại để không ai "dọn dẹp" nó về `to_date`.
+
+Khoảng ngày dùng `'[]'` — **đóng cả hai đầu**. Với `'[)'`, kỳ 01/08..31/08 và kỳ 31/08..30/09 sẽ
+**không** bị coi là chồng lấp, trong khi một bút toán ngày 31/08 rơi vào cả hai.
+
+#### Ba giả định demo mới, ghi tên thay vì để ngầm
+
+| Mã | Giả định | Vì sao | Chi phí đảo ngược |
+|---|---|---|---|
+| `DA-T3-01` | **Số dư quỹ = tiền công ty lái xe đang giữ.** Ứng `+`, chi/hoàn `−`, nên **số dư âm = lái xe đã tiêu quá số đã ứng** | §9.2 và hạt giống `FUND-001`/`FUND-003` là chỗ **duy nhất** trong T1 có ví dụ tính ra số. Câu chữ ở §9.4 ("số dư âm = *lái xe đang nợ*") đọc **ngược** với chính quy ước đó — xem mục ⚠ bên dưới | **Thấp** — đổi dấu là đổi hai hằng số + migration đọc dữ liệu nếu đã có số thật |
+| `DA-T3-02` | **Bút toán đảo mang ngày nghiệp vụ của bản gốc.** Kỳ đó đã đóng thì lệnh đảo **bị từ chối**, không bị đẩy sang kỳ hiện tại | `INV-22` cấm "ghi lặng lẽ vào kỳ đã chốt". Đường hợp lệ là mở lại kỳ (quyền riêng + dấu vết) | **Thấp** — là quy tắc guard |
+| `DA-T3-03` | Chuyến **thuê xe ngoài** vẫn nhận được khoản `COMPANY_DIRECT`; chỉ khoản từ **quỹ lái xe** bị chặn | Bất biến Issue #85 khai đúng về Driver Fund (`INV-04`); tiền trả nhà xe đi đường `PayableDocument` của T5 | **Thấp** — thêm một điều kiện ở `guardTripAcceptsExpense`, không đổi cấu trúc |
+
+> ⚠ **Một lệch trong chính T1, chưa giải quyết — cần khách xác nhận.** §9.2 (có ví dụ tính ra số:
+> ứng 10.000.000, chi 150.000, còn 9.850.000) và §9.4 (câu chữ "số dư âm = lái xe đang nợ") mô tả
+> **hai chiều đọc ngược nhau** của cùng một cột. T3 theo §9.2 vì nó có ví dụ và có hạt giống nghiệm
+> thu; §9.4 chỉ có câu chữ. Phần **cốt lõi** của `INV-23` không đổi trong cả hai cách đọc: số tiền
+> đó nằm ở **đúng một** nơi và **không** tự sinh khoản khấu trừ lương nào (`GD-12`). Phải chốt chiều
+> đọc **trước khi** T6/T7 dựng báo cáo lên trên nó.
+
+#### Còn hở sau T3
+
+- **`PG-04`/`PG-07` vẫn hở.** Bất biến append-only và khoá kỳ được hiện thực **bên trong**
+  `transport-costing` theo đúng chỉ dẫn của Issue #85, **không** dựng khung sổ cái chung. Đường tách
+  ra Platform sau này: `driver-fund-ledger.ts` (luật dấu + phép cộng dồn) và `fund-period.ts` (máy
+  trạng thái kỳ + phép phủ/chồng lấp) đều là **hàm thuần, không biết Nest, không biết Prisma** —
+  chúng là ứng viên trích xuất, phần còn lại thì không.
+- **`PG-05` vẫn hở**: bằng chứng chi phí là hai cột tham chiếu, không có vòng đời chứng từ.
+- **`PG-12` vẫn hở**: chưa in được phiếu quyết toán quỹ để ký (VT-038).
+- **Duyệt tạm ứng hai bước (`INV-10`) chưa hiện thực.** Hình dạng cấu hình đã có; một gói khách bật
+  nó lên sẽ làm hệ thống **chết lúc boot** thay vì lặng lẽ bỏ qua cái khoá vừa được yêu cầu.
+- **Trạng thái `CLOSING` không nguyên tử với việc chụp ảnh** — cố ý (xem bảng trên). Một lần chết
+  giữa chừng để kỳ ở `CLOSING`: đóng băng, không mất dữ liệu, gọi lại `closePeriod` đi tiếp.
+
 
 ---
 

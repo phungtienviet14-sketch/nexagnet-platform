@@ -872,6 +872,9 @@ model TransportDriver {
 
   vehicleAssignments TransportVehicleAssignment[]
   tripAssignments    TransportTripAssignment[]
+  /// `TX-03` — mot lai xe MOT so quy. Chi co mat khi khach bat `transport-costing`.
+  fundAccount        TransportDriverFundAccount?
+  tripExpenses       TransportTripExpense[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -984,6 +987,9 @@ model TransportTrip {
   cancellationReason String?
 
   assignments TransportTripAssignment[]
+  /// `TX-03` — hai lop cua mot khoan chi (`INV-03`). Chuyen la NGUON SU THAT cua ca hai.
+  fundEntries TransportDriverFundEntry[]
+  expenses    TransportTripExpense[]
 
   @@index([status])
   @@index([businessDate])
@@ -1020,4 +1026,204 @@ model TransportTripAssignment {
   @@index([tripId, effectiveTo])
   @@index([driverId])
   @@index([vehicleId])
+}
+
+// ----- Transport domain: TX-03 Costing + Driver Fund (capability `transport-costing`) -----
+//
+// CANH BAO — BON DOI TUONG DB CUA T3 KHONG CO O DAY. Chung song trong SQL tho cua migration
+// `20260830140000_transport_costing` vi Prisma khong co cu phap cho chung:
+//
+//     1. `TransportDriverFundPeriod_no_overlap`  — EXCLUDE ... USING gist, chan hai ky chong lap
+//     2. `TransportDriverFundEntry_sign_by_kind` — CHECK dau theo loai but toan
+//     3. `TransportTripExpense_sign_by_kind`     — CHECK dau: khoan chi duong, dong dao am
+//     4. `TransportTripExpense_fund_leg`         — CHECK: chi khoan tu quy moi co dong quy sinh doi
+//
+// (cong hai `CHECK` khoang tien va hai `CHECK` dang ngay — dem day du o `transport-costing-storage.spec.ts`)
+//
+// `prisma db push` va `prisma migrate dev --create-only` deu KHONG biet nhung thu nay. Sinh lai
+// migration tu schema roi ap thang len mot DB dang chay se lam chung BIEN MAT — va he thong van
+// chay binh thuong, chi khong con chan gi ca. Do la kieu hong im lang nhat co the co o mot so cai.
+//
+// `EXCLUDE` doi extension `btree_gist`. DO DUOC tren PostgreSQL 16.15 (30/08/2026): day la mot
+// TRUSTED extension, nen role `zalo` cua stack deploy — KHONG superuser, chi la CHU database — tao
+// duoc no. Da chay thu bang dung hinh dang do truoc khi viet migration.
+
+enum TransportDriverFundEntryKind {
+  ADVANCE
+  RETURN
+  TRIP_EXPENSE
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum TransportTripExpenseKind {
+  EXPENSE
+  REVERSAL
+}
+
+enum TransportExpenseFundingSource {
+  DRIVER_FUND
+  COMPANY_DIRECT
+}
+
+enum TransportFundPeriodStatus {
+  OPEN
+  CLOSING
+  CLOSED
+  REOPENED
+}
+
+/// SO QUY cua mot lai xe. MOT tai khoan cho MOT lai xe (`driverId` unique).
+///
+/// KHONG CO COT `balance`, va do la ca noi dung cua `INV-01`: so du la KET QUA cong don but toan.
+/// Mot cot so du ghi de duoc se lech voi so cai ngay lan dau co mot loi giua hai lan ghi, va tu do
+/// khong con cach nao biet ben nao dung. Doc so du = `SUM("signedAmount")`.
+model TransportDriverFundAccount {
+  id           String          @id @default(cuid())
+  driverId     String          @unique
+  driver       TransportDriver @relation(fields: [driverId], references: [id])
+  currencyCode String          @default("VND") @db.VarChar(3)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  entries TransportDriverFundEntry[]
+  periods TransportDriverFundPeriod[]
+}
+
+/// BUT TOAN SO QUY — BAT BIEN (`INV-20`). Khong co duong `UPDATE`/`DELETE` nao o tang kho.
+///
+/// `signedAmount` la `BigInt` = `BIGINT`, cung ly le voi `TransportTrip.freightAmount` sau T2.1/F1:
+/// `INTEGER` tran o 2.147.483.647 dong, va T3 con CONG DON nhieu but toan lai nen tran som hon nua.
+/// Khoang thuc te bi `CHECK` bo hep ve +-(2^53-1) cho khop `money()`.
+///
+/// `tripId` NULLABLE — `INV-02`, hat giong `FUND-002`: mot lan tam ung khong gan chuyen la duong
+/// chay thuong ngay, khong phai ngoai le.
+///
+/// `correlationKey` UNIQUE lam HAI viec cung luc: chong ghi trung (gui lai cung khoa khong sinh
+/// them dong), va noi hai lop cua mot su kien (`INV-03`) — but toan quy va dong gia thanh mang cung
+/// mot gia tri.
+///
+/// `reversalOfId` UNIQUE: mot but toan chi duoc dao DUNG MOT LAN.
+model TransportDriverFundEntry {
+  id             String                       @id @default(cuid())
+  accountId      String
+  account        TransportDriverFundAccount   @relation(fields: [accountId], references: [id])
+  kind           TransportDriverFundEntryKind
+  signedAmount   BigInt
+  currencyCode   String                       @default("VND") @db.VarChar(3)
+  /// `YYYY-MM-DD` theo mui gio tenant — tinh MOT LAN luc ghi (`INV-25`).
+  businessDate   String                       @db.VarChar(10)
+  tripId         String?
+  trip           TransportTrip?               @relation(fields: [tripId], references: [id])
+  correlationKey String                       @unique
+  reversalOfId   String?                      @unique
+  reversalOf     TransportDriverFundEntry?    @relation("FundEntryReversal", fields: [reversalOfId], references: [id])
+  reversedBy     TransportDriverFundEntry?    @relation("FundEntryReversal")
+  note           String?
+  recordedBy     String
+  createdAt      DateTime                     @default(now())
+
+  fundedExpense TransportTripExpense?
+
+  @@index([accountId, businessDate])
+  @@index([tripId])
+  @@index([kind])
+}
+
+/// MOT DONG GIA THANH cua mot chuyen. `tripId` BAT BUOC — `INV-02`.
+///
+/// `signedAmount` CO DAU: khoan chi duong, dong dao am. Gia thanh truc tiep cua chuyen = tong cot
+/// nay. Neu dong dao la mot co `boolean` thay vi mot so am, moi truy van tong se phai nho loai tru
+/// no — va lan quen dau tien cho ra mot chuyen dat gap doi thuc te ma khong bao loi.
+///
+/// `fundedBy` la mot THUOC TINH, khong phai mot bang khac (T1 §5). Hai bang se buoc moi bao cao gia
+/// thanh phai UNION hai nguon, va lan quen mot ve dau tien cho ra mot chuyen re hon thuc te.
+///
+/// `driverFundEntryId` UNIQUE: mot but toan quy khong the la chan cua hai khoan chi.
+model TransportTripExpense {
+  id                String                        @id @default(cuid())
+  tripId            String
+  trip              TransportTrip                 @relation(fields: [tripId], references: [id])
+  kind              TransportTripExpenseKind
+  categoryCode      String                        @db.VarChar(60)
+  signedAmount      BigInt
+  currencyCode      String                        @default("VND") @db.VarChar(3)
+  businessDate      String                        @db.VarChar(10)
+  fundedBy          TransportExpenseFundingSource
+  driverFundEntryId String?                       @unique
+  driverFundEntry   TransportDriverFundEntry?     @relation(fields: [driverFundEntryId], references: [id])
+  driverId          String?
+  driver            TransportDriver?              @relation(fields: [driverId], references: [id])
+  correlationKey    String                        @unique
+  reversalOfId      String?                       @unique
+  reversalOf        TransportTripExpense?         @relation("TripExpenseReversal", fields: [reversalOfId], references: [id])
+  reversedBy        TransportTripExpense?         @relation("TripExpenseReversal")
+  /// Tham chieu BANG CHUNG. `PG-05` (chung tu co vong doi) thuoc Platform Track va chua co; Issue
+  /// #85 cho phep giu mot tham chieu nho thuoc mien thay vi chan T3, va CAM dung mot he tai lieu
+  /// song song. Khi `PG-05` dong, cot nay tro thanh khoa ngoai tro toi chung tu that.
+  evidenceLocator   String?
+  note              String?
+  recordedBy        String
+  createdAt         DateTime                      @default(now())
+
+  @@index([tripId, businessDate])
+  @@index([driverId])
+  @@index([categoryCode])
+}
+
+/// KY QUYET TOAN QUY cua MOT so quy — T1 §7.3.
+///
+/// KHONG chong lap voi ky khac cua cung so quy: cuong che boi EXCLUDE constraint
+/// `TransportDriverFundPeriod_no_overlap` (`btree_gist` + `daterange`), khai trong SQL tho vi Prisma
+/// khong co cu phap cho EXCLUDE. Kiem o service dung voi MOT nguoi ghi; constraint kia moi dung voi
+/// hai nguoi ghi cung luc — dung bai hoc T2.1/F2.
+///
+/// `CLOSING` va `CLOSED` deu DONG BANG ky. `REOPENED` khong quay ve `OPEN` vi hai trang thai do noi
+/// hai dieu khac nhau: mot ky `REOPENED` la ky DA TUNG duoc bao cao ra ngoai.
+model TransportDriverFundPeriod {
+  id           String                     @id @default(cuid())
+  accountId    String
+  account      TransportDriverFundAccount @relation(fields: [accountId], references: [id])
+  /// Khoang NGAY NGHIEP VU, hai dau DEU TINH.
+  startDate    String                     @db.VarChar(10)
+  endDate      String                     @db.VarChar(10)
+  status       TransportFundPeriodStatus  @default(OPEN)
+  closedAt     DateTime?
+  closedBy     String?
+  reopenedAt   DateTime?
+  reopenedBy   String?
+  reopenReason String?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+
+  snapshots TransportDriverFundPeriodSnapshot[]
+
+  @@index([accountId, status])
+  @@index([accountId, startDate])
+}
+
+/// ANH CHUP luc dong ky — APPEND-ONLY, mot hang moi lan dong.
+///
+/// Mot ky co the dong, mo lai, roi dong lai. Ghi de anh cu se xoa mat "con so da bao cao lan truoc"
+/// — dung thu nguoi doi soat can khi ho hoi "vi sao bao cao thang truoc khac?".
+///
+/// Dong ky KHONG tao but toan (T1 §7.3): bang nay khong nam trong so cai, va tong cua no khong bao
+/// gio duoc cong vao so du.
+model TransportDriverFundPeriodSnapshot {
+  id             String                    @id @default(cuid())
+  periodId       String
+  period         TransportDriverFundPeriod @relation(fields: [periodId], references: [id])
+  /// Lan chup thu may cua ky nay, tu 1.
+  sequence       Int
+  openingBalance BigInt
+  periodNet      BigInt
+  /// `openingBalance + periodNet`. Duoc phep AM — hat giong `FUND-003`.
+  closingBalance BigInt
+  entryCount     Int
+  currencyCode   String                    @default("VND") @db.VarChar(3)
+  takenAt        DateTime                  @default(now())
+  takenBy        String
+
+  @@unique([periodId, sequence])
+  @@index([periodId])
 }

@@ -16,7 +16,7 @@ import {
  * that, phai di tim tung dong mot trong ca mien de doi.
  */
 describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
-  it('bo hanh dong phu du cac nhom nghiep vu cua T2', () => {
+  it('bo hanh dong phu du cac nhom nghiep vu cua T2 va T3', () => {
     expect([...TRANSPORT_ACTIONS]).toEqual([
       'transport.vehicle.read',
       'transport.vehicle.manage',
@@ -32,8 +32,19 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.trip.assign',
       'transport.trip.transition',
       'transport.trip.cancel',
+      'transport.costing.expense.read',
+      'transport.costing.expense.record',
+      'transport.costing.driver_fund.read',
+      'transport.costing.driver_fund.advance',
+      'transport.costing.driver_fund.return',
+      'transport.costing.driver_fund.adjust',
+      'transport.costing.reversal.post',
+      'transport.costing.period.read',
+      'transport.costing.period.manage',
+      'transport.costing.period.reopen',
       'transport.driver.self.trip.read',
       'transport.driver.self.trip.update',
+      'transport.driver.self.fund.read',
     ]);
   });
 
@@ -63,6 +74,24 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('ACCOUNTING', 'transport.trip.cancel')).toBe(false);
     });
 
+    /**
+     * T3: Ke toan CO quyen ung tien va dong ky — Issue #85 ghi ro "Director and Accountant can
+     * create advances", va dong ky cuoi thang la viec cua chinh ho.
+     *
+     * Nhung MO LAI mot ky da dong thi khong: `GD-11` doi mot quyen RIENG cho viec do, vi ky da dong
+     * la ky da bao cao ra ngoai. Hai dong duoi day la cho DUY NHAT trong ma the hien su khac biet
+     * giua "dong so" va "viet lai so da chot".
+     */
+    it('ung tien va dong ky duoc, nhung KHONG mo lai ky da dong (GD-11)', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.costing.driver_fund.advance')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.costing.expense.record')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.costing.reversal.post')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.costing.period.manage')).toBe(true);
+
+      expect(roleCanPerform('ACCOUNTING', 'transport.costing.period.reopen')).toBe(false);
+      expect(roleCanPerform('ADMIN', 'transport.costing.period.reopen')).toBe(true);
+    });
+
     it('la tap con cua Giam doc, khong phai mot nhanh loai tru', () => {
       for (const action of actionsForRole('ACCOUNTING')) {
         expect(roleCanPerform('ADMIN', action), action).toBe(true);
@@ -71,10 +100,11 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
   });
 
   describe('SALE — CHO GIU TAM cho vai Lai xe (GD-22)', () => {
-    it('CHI co hai hanh dong tren pham vi cua chinh minh', () => {
+    it('CHI co ba hanh dong tren pham vi cua chinh minh', () => {
       expect([...actionsForRole('SALE')]).toEqual([
         'transport.driver.self.trip.read',
         'transport.driver.self.trip.update',
+        'transport.driver.self.fund.read',
       ]);
     });
 
@@ -82,6 +112,21 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('SALE', 'transport.trip.read')).toBe(false);
       expect(roleCanPerform('SALE', 'transport.trip.create')).toBe(false);
       expect(roleCanPerform('SALE', 'transport.vehicle.read')).toBe(false);
+    });
+
+    /**
+     * T3 mo them mot be mat cho lai xe — va do la cho ro ri de nhat TIEP THEO.
+     *
+     * Lai xe DOC duoc so quy cua chinh minh, nhung khong doc duoc so quy nguoi khac (cong that nam o
+     * `Driver.authUserId`, khong o vai), va khong GHI duoc mot dong nao: ai chi bao nhieu la mot su
+     * that ke toan, khong phai mot lua chon cua nguoi tieu tien.
+     */
+    it('doc duoc so quy cua chinh minh, nhung khong ghi va khong doc so quy chung', () => {
+      expect(roleCanPerform('SALE', 'transport.driver.self.fund.read')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.costing.driver_fund.read')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.costing.driver_fund.advance')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.costing.expense.record')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.costing.expense.read')).toBe(false);
     });
   });
 

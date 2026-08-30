@@ -12,6 +12,9 @@ import { BroadcastController } from '../broadcast/broadcast.controller.js';
 import { MasterDataController } from '../settings/master-data.controller.js';
 import { SettingsController } from '../settings/settings.controller.js';
 import { ZaloController } from '../channels/zalo.controller.js';
+import { DriverFundController } from '../transport/costing/driver-fund.controller.js';
+import { DriverFundSelfController } from '../transport/costing/driver-fund-self.controller.js';
+import { TripExpensesController } from '../transport/costing/trip-expenses.controller.js';
 import { FleetController } from '../transport/fleet/fleet.controller.js';
 import { DriverTripsController } from '../transport/trips/driver-trips.controller.js';
 import { TripsController } from '../transport/trips/trips.controller.js';
@@ -43,6 +46,10 @@ const CONTROLLERS = [
   FleetController,
   TripsController,
   DriverTripsController,
+  // Van tai T3: moi mutation o day cham TIEN. Neu co dieu gi phai co vai thi la nhung route nay.
+  TripExpensesController,
+  DriverFundController,
+  DriverFundSelfController,
 ];
 
 /**
