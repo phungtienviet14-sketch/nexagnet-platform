@@ -213,6 +213,87 @@ describe('SourceTruthWriteService', () => {
     );
   });
 
+  /**
+   * Ma dai ly co san dau hai cham lam CHUOI danh tinh khong con doc nguoc ra duoc mot cap:
+   *
+   * ```text
+   * dealerId "region:a" + sku "ELNI"    ->  "region:a:ELNI"
+   * dealerId "region"   + sku "a:ELNI"  ->  "region:a:ELNI"
+   * ```
+   *
+   * Ban truoc so sanh URL voi than tin bang CHUOI nen ca hai deu qua cong, roi buoc ghi TACH chuoi
+   * do o dau hai cham DAU TIEN va ghi vao `region / a:ELNI`. Tuc cong danh tinh xac nhan mot ban
+   * ghi, database nhan mot ban ghi khac, nhat ky ten mot ban ghi thu ba — dung lai ca hong ma
+   * chinh cong nay sinh ra de chan, chi la di vong.
+   *
+   * Gio hai truong `dealerId`/`sku` di thang xuong database (khong con ai tach chuoi), nen ca hong
+   * do da het. Bai nay khoa not phan CON LAI: nhat ky van luu mot chuoi, va mot chuoi tro toi hai
+   * ban ghi thi khong tra loi duoc "gia nay ai doi". Cong tu choi thang.
+   */
+  it('tu choi dealerId chua dau ngan cach thay vi ghi vao mot ban ghi khac', async () => {
+    const method = () => vi.fn(async () => null);
+    const overridePrisma = {
+      dealerPriceOverride: { findUnique: method(), upsert: method() },
+    } as unknown as PrismaService;
+    const overrideKnowledge = {
+      reload,
+      priceOverrides: () => [],
+    } as unknown as KnowledgeService;
+    const service = new SourceTruthWriteService(overridePrisma, overrideKnowledge, audit, 'prisma');
+
+    await expect(
+      service.write(
+        'overrides',
+        'region:a:ELNI',
+        { dealerId: 'region:a', sku: 'ELNI', price: 900_000 },
+        'operator',
+        'req-colon',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(overridePrisma.dealerPriceOverride.findUnique).not.toHaveBeenCalled();
+    expect(overridePrisma.dealerPriceOverride.upsert).not.toHaveBeenCalled();
+    expect(append).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Mat con lai cua cung mot bat bien: khoa di xuong database la HAI TRUONG lay tu than tin, khong
+   * phai ket qua tach mot chuoi. Bai nay chon SKU co dau hai cham — neu co bat ky ai tach lai
+   * `entityId` o dau hai cham dau tien, `dealerId_sku` se thanh `{ dealer-A, ELNI:2026-08 }` hay
+   * `{ dealer-A, ELNI }` tuy cach tach, va bai test do ngay.
+   */
+  it('mang khoa di nguyen dang: SKU chua dau hai cham van ghi dung ban ghi', async () => {
+    const method = () => vi.fn(async () => null);
+    const overridePrisma = {
+      dealerPriceOverride: { findUnique: method(), upsert: method() },
+    } as unknown as PrismaService;
+    const overrideKnowledge = {
+      reload,
+      priceOverrides: () => [],
+    } as unknown as KnowledgeService;
+    const service = new SourceTruthWriteService(overridePrisma, overrideKnowledge, audit, 'prisma');
+
+    await service.write(
+      'overrides',
+      'dealer-A:ELNI:2026-08',
+      { dealerId: 'dealer-A', sku: 'ELNI:2026-08', price: 900_000 },
+      'operator',
+      'req-sku-colon',
+    );
+
+    const key = { dealerId: 'dealer-A', sku: 'ELNI:2026-08' };
+    expect(overridePrisma.dealerPriceOverride.findUnique).toHaveBeenCalledWith({
+      where: { dealerId_sku: key },
+    });
+    expect(overridePrisma.dealerPriceOverride.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { dealerId_sku: key } }),
+    );
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({ entityType: 'overrides', entityId: 'dealer-A:ELNI:2026-08' }),
+    );
+  });
+
   it('returns safe errors for a missing SKU and database constraint failures', async () => {
     const missingPrisma = {
       price: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null), upsert: vi.fn() },

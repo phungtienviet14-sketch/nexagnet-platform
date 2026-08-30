@@ -63,13 +63,41 @@ const priceSchema = z
   })
   .strict();
 /**
+ * Ky tu ngan cach cua danh tinh ghep mot deal rieng tren URL: `PUT .../overrides/dealer-A:ELNI`.
+ * Khai o DUNG mot cho, va chi `overrideId()` duoc dung no.
+ */
+const OVERRIDE_ID_SEPARATOR = ':';
+
+/**
+ * `dealerId` cua mot deal rieng khong duoc chua dau ngan cach.
+ *
+ * Khong phai vi database cam, ma vi chuoi danh tinh ghep bang dau hai cham thi phai doc nguoc ra
+ * duoc DUNG mot cap:
+ *
+ * ```text
+ * dealerId "region:a" + sku "ELNI"    ->  "region:a:ELNI"
+ * dealerId "region"   + sku "a:ELNI"  ->  "region:a:ELNI"   <- cung chuoi, HAI ban ghi khac nhau
+ * ```
+ *
+ * Duong GHI da het nhap nhang tu khi `CanonicalIdentity` mang khoa di thang tu than tin. Nhung
+ * NHAT KY thi van luu mot chuoi, va nhat ky la thu duy nhat tra loi duoc "gia nay ai doi, doi luc
+ * nao" khi mot don sai da ra toi khach — no khong duoc phep tro toi hai ban ghi. Nen cong nay tu
+ * choi thang: ma dai ly co dau hai cham thi khong sua deal qua duong nay duoc, va nguoi van hanh
+ * biet ngay, thay vi phat hien sau nay rang mot dong nhat ky khong xac dinh duoc ban ghi nao.
+ */
+const overrideDealerIdSchema = idSchema.refine(
+  (value) => !value.includes(OVERRIDE_ID_SEPARATOR),
+  { message: `dealerId khong duoc chua "${OVERRIDE_ID_SEPARATOR}"` },
+);
+
+/**
  * Deal rieng day du: ngoai gia con co NGUONG SO LUONG va THOI GIAN HIEU LUC — ba thu Sale phai
  * nhap duoc, neu khong thi deal chi dung duoc mot nua (vd "lay 5 cai moi duoc gia nay, ap tu
  * 01/08 den 31/08"). Bo trong = khong gioi han.
  */
 const overrideSchema = z
   .object({
-    dealerId: idSchema,
+    dealerId: overrideDealerIdSchema,
     sku: idSchema,
     /**
      * `positive()` chu khong phai `nonnegative()` nhu `moneySchema` chung: mot deal gia 0d khong
@@ -93,6 +121,27 @@ const overrideSchema = z
     { message: 'effectiveTo phải sau effectiveFrom', path: ['effectiveTo'] },
   );
 const glossarySchema = z.object({ meaning: z.string().trim().min(1).max(1_000) }).strict();
+
+type SimpleSourceTruthResource = Exclude<SourceTruthResource, 'overrides'>;
+
+/**
+ * DANH TINH CHINH TAC cua ban ghi sap bi ghi — mot gia tri duy nhat cho `findBefore`, `persist`
+ * va audit.
+ *
+ * Diem quan trong: day la mot CAU TRUC, khong phai mot chuoi. Voi `overrides`, khoa tu nhien
+ * (`dealerId`, `sku`) di THANG tu than tin da validate xuong database. Ban truoc tra ve chuoi
+ * `dealerId:sku` roi buoc ghi TACH chuoi do ra lai — tuc danh tinh duoc ma hoa mot lan roi giai
+ * ma mot lan nua, va hai lan do co the ra hai ket qua khac nhau (xem `overrideDealerIdSchema`).
+ * Gio khong con buoc giai ma nao: `entityId` chi de NGUOI doc trong nhat ky.
+ */
+type CanonicalIdentity =
+  | { readonly resource: SimpleSourceTruthResource; readonly entityId: string }
+  | {
+      readonly resource: 'overrides';
+      readonly entityId: string;
+      readonly dealerId: string;
+      readonly sku: string;
+    };
 
 @Injectable()
 export class SourceTruthWriteService {
@@ -128,9 +177,9 @@ export class SourceTruthWriteService {
     // ba noi, ba nguon danh tinh. Gio chi con mot gia tri, va no di qua ca ba.
     const identity = this.canonicalIdentity(resource, entityId.data, body);
 
-    const before = await this.findBefore(resource, identity);
+    const before = await this.findBefore(identity);
     try {
-      await this.persist(resource, identity, body);
+      await this.persist(identity, body);
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
       throw new BadRequestException(`Khong the ghi ${resource}: ${safeError(error)}`);
@@ -139,7 +188,7 @@ export class SourceTruthWriteService {
       actor: normalizeActor(actor),
       action: 'source_truth.update',
       entityType: resource,
-      entityId: identity,
+      entityId: identity.entityId,
       before,
       after: body,
       requestId,
@@ -175,17 +224,18 @@ export class SourceTruthWriteService {
     resource: SourceTruthResource,
     routeId: string,
     body: unknown,
-  ): string {
-    if (resource !== 'overrides') return routeId;
+  ): CanonicalIdentity {
+    if (resource !== 'overrides') return { resource, entityId: routeId };
 
     const value = parse(overrideSchema, body);
-    const fromBody = overrideId(value.dealerId, value.sku);
-    if (fromBody !== routeId) {
+    const entityId = overrideId(value.dealerId, value.sku);
+    if (entityId !== routeId) {
       throw new BadRequestException(
-        `ID tren duong dan (${routeId}) khong khop dealerId/sku trong than tin (${fromBody})`,
+        `ID tren duong dan (${routeId}) khong khop dealerId/sku trong than tin (${entityId})`,
       );
     }
-    return fromBody;
+    // Khoa di tiep duoi dang HAI TRUONG. Khong noi nao duoi day tach lai `entityId` ra nua.
+    return { resource, entityId, dealerId: value.dealerId, sku: value.sku };
   }
 
   private validate(resource: SourceTruthResource, body: unknown): void {
@@ -227,15 +277,17 @@ export class SourceTruthWriteService {
     }
   }
 
-  private async persist(resource: SourceTruthResource, id: string, body: unknown): Promise<void> {
-    switch (resource) {
+  private async persist(identity: CanonicalIdentity, body: unknown): Promise<void> {
+    switch (identity.resource) {
       case 'dealers': {
         const value = parse(dealerSchema, body);
+        const id = identity.entityId;
         await this.prisma.dealer.upsert({ where: { id }, update: value, create: { id, ...value } });
         return;
       }
       case 'groups': {
         const value = parse(groupSchema, body);
+        const id = identity.entityId;
         await this.prisma.group.upsert({
           where: { id },
           update: value,
@@ -246,9 +298,9 @@ export class SourceTruthWriteService {
       case 'products': {
         const value = parse(productSchema, body);
         await this.prisma.product.upsert({
-          where: { sku: id },
+          where: { sku: identity.entityId },
           update: value,
-          create: { sku: id, ...value },
+          create: { sku: identity.entityId, ...value },
         });
         return;
       }
@@ -264,12 +316,9 @@ export class SourceTruthWriteService {
         // `price`, nen Sale sua "tu 5 cai" thanh "tu 10 cai" xong bam luu ma so cu van nguyen —
         // hong am tham, khong bao loi.
         //
-        // Khoa lay TU `id` (danh tinh chinh tac) chu KHONG tu `value`, du hai cai da duoc
-        // `canonicalIdentity` khang dinh la bang nhau. Doc tu `value` o day nghia la con mot
-        // duong thu hai di toi khoa, va mot duong thu hai la tat ca nhung gi can de hai buoc lech
-        // nhau lan sau.
-        const [dealerId, sku] = splitOverrideId(id);
-        if (!dealerId || !sku) throw new BadRequestException('ID deal phai co dang dealerId:sku');
+        // Khoa lay TU danh tinh chinh tac, va no den day duoi dang hai truong chu khong phai mot
+        // chuoi phai tach ra — nen khong con buoc nao co the tach lech.
+        const { dealerId, sku } = identity;
         const { dealerId: _dealerId, sku: _sku, ...rest } = value;
         await this.prisma.dealerPriceOverride.upsert({
           where: { dealerId_sku: { dealerId, sku } },
@@ -281,25 +330,28 @@ export class SourceTruthWriteService {
       case 'glossary': {
         const value = parse(glossarySchema, body);
         await this.prisma.glossaryEntry.upsert({
-          where: { term: id },
+          where: { term: identity.entityId },
           update: value,
-          create: { term: id, ...value },
+          create: { term: identity.entityId, ...value },
         });
       }
     }
   }
 
-  private async findBefore(resource: SourceTruthResource, id: string): Promise<unknown> {
-    switch (resource) {
+  private async findBefore(identity: CanonicalIdentity): Promise<unknown> {
+    switch (identity.resource) {
       case 'dealers':
-        return this.prisma.dealer.findUnique({ where: { id } });
+        return this.prisma.dealer.findUnique({ where: { id: identity.entityId } });
       case 'groups':
-        return this.prisma.group.findUnique({ where: { id } });
+        return this.prisma.group.findUnique({ where: { id: identity.entityId } });
       case 'products':
-        return this.prisma.product.findUnique({ where: { sku: id } });
+        return this.prisma.product.findUnique({ where: { sku: identity.entityId } });
       case 'prices':
         return this.prisma.price.findFirst({
-          where: { sku: id, period: { validMonth: currentPriceMonth(), status: 'active' } },
+          where: {
+            sku: identity.entityId,
+            period: { validMonth: currentPriceMonth(), status: 'active' },
+          },
           include: { period: true },
         });
       case 'overrides': {
@@ -309,36 +361,27 @@ export class SourceTruthWriteService {
          * "gia truoc do la bao nhieu, ai doi, doi luc nao". Issue #77 §5 doi ban cap nhat phai
          * duoc audit THAT.
          *
-         * `id` o cong nay la `dealerId:sku` (xem `persist`), khong phai khoa chinh cua ban ghi.
+         * Khoa lay tu danh tinh chinh tac — CUNG hai truong ma `persist` sap ghi. Doc mot ban ghi
+         * roi ghi len mot ban ghi khac chinh la ca hong ma cong danh tinh nay sinh ra de chan.
          */
-        const [dealerId, sku] = splitOverrideId(id);
-        if (!dealerId || !sku) return null;
         return this.prisma.dealerPriceOverride.findUnique({
-          where: { dealerId_sku: { dealerId, sku } },
+          where: { dealerId_sku: { dealerId: identity.dealerId, sku: identity.sku } },
         });
       }
       case 'glossary':
-        return this.prisma.glossaryEntry.findUnique({ where: { term: id } });
+        return this.prisma.glossaryEntry.findUnique({ where: { term: identity.entityId } });
     }
   }
 }
 
 /**
- * ID cua mot deal o cong nay la `dealerId:sku` (xem bo test cua service). Tach o dau HAI CHAM DAU
- * TIEN: ma dai ly khong chua dau hai cham, con SKU thi khong duoc gia dinh la khong chua.
+ * Ghep danh tinh mot deal rieng thanh chuoi cho URL va nhat ky. KHONG co ham nguoc lai — do la
+ * chu y: he thong chi ghep MOT chieu, con khoa that su di xuong database luon o dang hai truong
+ * (`CanonicalIdentity`). Controller cung goi dung ham nay, de duong tao moi va duong sua khong
+ * the ghep lech nhau.
  */
-function splitOverrideId(id: string): readonly [string | null, string | null] {
-  const separator = id.indexOf(':');
-  if (separator <= 0 || separator === id.length - 1) return [null, null];
-  return [id.slice(0, separator), id.slice(separator + 1)];
-}
-
-/**
- * Dung nguoc lai `splitOverrideId`. Hai ham nam canh nhau co chu y: dinh dang cua danh tinh nay
- * chi duoc biet o DUNG mot cho, nen khong the co hai noi ghep chuoi lech nhau.
- */
-function overrideId(dealerId: string, sku: string): string {
-  return `${dealerId}:${sku}`;
+export function overrideId(dealerId: string, sku: string): string {
+  return `${dealerId}${OVERRIDE_ID_SEPARATOR}${sku}`;
 }
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
