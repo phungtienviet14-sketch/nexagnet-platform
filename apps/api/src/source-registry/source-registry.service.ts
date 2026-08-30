@@ -1,6 +1,11 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { TelemetryService } from '../observability/telemetry.service.js';
+import {
+  CommittedStateChanges,
+  type StateChangeEvent,
+} from './committed-state-changes.js';
+import { SourceRegistryError } from './source-registry.error.js';
 import { SOURCE_REGISTRY_DECISIONS } from './source-registry-decisions.js';
 import {
   evaluateApproval,
@@ -49,6 +54,8 @@ export class SourceRegistryService {
   constructor(
     private readonly repository: SourceRegistryRepository,
     @Optional() private readonly telemetry?: TelemetryService,
+    /** Co mat = dang chay TRONG mot giao dich. Chi `atomic()` dat no, Nest khong tiem. */
+    @Optional() private readonly pendingStateChanges?: CommittedStateChanges,
   ) {}
 
   /**
@@ -61,10 +68,32 @@ export class SourceRegistryService {
    * thi nhung cong do van chay tren kho NGOAI giao dich, va ta co mot giao dich chi bao ve duoc
    * mot nua so ghi — te hon la khong co giao dich, vi no trong nhu da an toan.
    */
-  private atomic<T>(operation: (tx: SourceRegistryService) => Promise<T>): Promise<T> {
-    return this.repository.runInTransaction((repository) =>
-      operation(new SourceRegistryService(repository, this.telemetry)),
+  private async atomic<T>(operation: (tx: SourceRegistryService) => Promise<T>): Promise<T> {
+    // TAI NHAP: da o trong mot giao dich thi dung CHINH bo dem cua no va de lop ngoai cung day
+    // ra. Lop trong tu day = mot thao tac long nhau ghi nhat ky truoc khi giao dich dong lai.
+    if (this.pendingStateChanges) {
+      return this.repository.runInTransaction((repository) =>
+        operation(new SourceRegistryService(repository, this.telemetry, this.pendingStateChanges)),
+      );
+    }
+
+    const committed = new CommittedStateChanges();
+    const result = await this.repository.runInTransaction((repository) =>
+      operation(new SourceRegistryService(repository, this.telemetry, committed)),
     );
+    // Chi toi day. `runInTransaction` nem ra thi dong nay khong chay va bo dem di theo rac —
+    // khong bat loi de "don dep", vi khong day ra chinh la hanh vi dung.
+    committed.flush(this.telemetry);
+    return result;
+  }
+
+  /** Chuyen trang thai: phat ngay neu ngoai giao dich, cho commit neu dang trong. */
+  private emitStateChange(event: StateChangeEvent): void {
+    if (this.pendingStateChanges) {
+      this.pendingStateChanges.record(event);
+      return;
+    }
+    this.telemetry?.stateChange(event);
   }
 
   /**
@@ -131,7 +160,7 @@ export class SourceRegistryService {
       note: input.note ?? null,
     });
 
-    this.telemetry?.stateChange({
+    this.emitStateChange({
       entity: 'business_source',
       entityId: created.id,
       from: null,
@@ -312,7 +341,7 @@ export class SourceRegistryService {
     }
 
     const updated = await this.repository.updateSource(scope, sourceId, { status: to });
-    this.telemetry?.stateChange({
+    this.emitStateChange({
       entity: 'business_source',
       entityId: sourceId,
       from: source.status,
@@ -362,7 +391,7 @@ export class SourceRegistryService {
       assumptionOwner: null,
       supersedesId: null,
     });
-    this.telemetry?.stateChange({
+    this.emitStateChange({
       entity: 'business_fact',
       entityId: fact.id,
       from: null,
@@ -556,7 +585,7 @@ export class SourceRegistryService {
     }
 
     const updated = await this.repository.updateFact(scope, factId, { status: to });
-    this.telemetry?.stateChange({
+    this.emitStateChange({
       entity: 'business_fact',
       entityId: factId,
       from: fact.status,
@@ -669,7 +698,7 @@ export class SourceRegistryService {
       resolutionNote: input.note ?? null,
       resolvedAt: input.at ?? new Date(),
     });
-    this.telemetry?.stateChange({
+    this.emitStateChange({
       entity: 'business_conflict',
       entityId: conflictId,
       from: conflict.status,
@@ -764,19 +793,5 @@ export class SourceRegistryService {
     }
     assertWithinScope(scope, found, `Xung dot ${id}`);
     return found;
-  }
-}
-
-/**
- * Loi cua tang nguon su that. Mang `reason` CO KIEU chu khong chi mot cau tieng Viet — de bai test
- * khang dinh dung duong tu choi nao da dong, thay vi chi biet "co nem".
- */
-export class SourceRegistryError extends Error {
-  constructor(
-    readonly reason: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'SourceRegistryError';
   }
 }

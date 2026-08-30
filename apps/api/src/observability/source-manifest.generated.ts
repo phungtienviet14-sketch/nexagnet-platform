@@ -318,12 +318,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conflict.resolution|*": {
       "functionName": "SourceRegistryService.resolveConflict",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
-      "line": 650
+      "line": 679
     },
     "conflict.resolution|CONFLICT_OPENED": {
       "functionName": "SourceRegistryService.openConflict",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
-      "line": 615
+      "line": 644
     },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
@@ -346,12 +346,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fact.supersession|*": {
       "functionName": "SourceRegistryService.supersedeFact",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
-      "line": 485
+      "line": 514
     },
     "fact.transition|*": {
       "functionName": "SourceRegistryService.transitionFact",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
-      "line": 544
+      "line": 573
     },
     "fact.usability|*": {
       "functionName": "SourceReadinessService.canUseFact",
@@ -360,12 +360,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fact.usability|FACT_AMBIGUOUS_LIVE_VERSIONS": {
       "functionName": "SourceReadinessService.getEffectiveFact",
       "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
-      "line": 64
+      "line": 65
     },
     "fact.usability|FACT_NOT_APPROVED": {
       "functionName": "SourceReadinessService.canUseFact",
       "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
-      "line": 130
+      "line": 131
     },
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
@@ -423,12 +423,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "source.supersession|*": {
       "functionName": "SourceRegistryService.supersedeSource",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
-      "line": 241
+      "line": 270
     },
     "source.transition|*": {
       "functionName": "SourceRegistryService.transitionSource",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
-      "line": 300
+      "line": 329
     },
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",

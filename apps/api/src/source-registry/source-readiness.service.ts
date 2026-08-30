@@ -8,6 +8,7 @@ import {
   resolveLiveFact,
   type FactAssuranceLevel,
   type LiveFactResolution,
+  type SettledConflict,
 } from './fact-lifecycle.js';
 import { isBlockingConflictStatus } from './conflict-lifecycle.js';
 import { SourceRegistryRepository } from './source-registry.repository.js';
@@ -280,11 +281,19 @@ export class SourceReadinessService {
 
     // Loi thoat DUY NHAT khoi nhap nhang: mot xung dot da duoc NGUOI dong bang dan chung tuong
     // minh. Khong phai goi y (`recommendedFactId`), khong phai tham quyen, khong phai ngay thang.
-    const settledWinnerIds =
+    //
+    // Mang theo CA danh sach ben tham gia, khong chi ben thang. Truy van nay lay xung dot da dong
+    // cua CA KHACH, va `openConflict()` khong bat cac ben cua mot xung dot phai cung mot dia chi
+    // — nen mot ID "tung thang o dau do" khong noi duoc gi ve dia chi dang xet. Chi cap
+    // (thang, thua) nam chung mot xung dot moi la mot lan phan xu. Xem `resolveLiveFact`.
+    const settled: readonly SettledConflict[] =
       live.length > 1
         ? (await this.repository.listConflicts(scope, { status: 'RESOLVED' }))
-            .map((row) => row.resolvedFactId)
-            .filter((id): id is string => id !== null)
+            .filter((row) => row.resolvedFactId !== null)
+            .map((row) => ({
+              winnerFactId: row.resolvedFactId as string,
+              participantFactIds: row.factIds,
+            }))
         : [];
 
     return {
@@ -292,7 +301,7 @@ export class SourceReadinessService {
       live,
       resolution: resolveLiveFact(
         live.map((row) => row.id),
-        settledWinnerIds,
+        settled,
       ),
     };
   }

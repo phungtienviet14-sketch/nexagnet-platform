@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemorySourceRegistryRepository } from './in-memory-source-registry.repository.js';
 import { SourceReadinessService } from './source-readiness.service.js';
-import { SourceRegistryError, SourceRegistryService } from './source-registry.service.js';
+import { SourceRegistryError } from './source-registry.error.js';
+import { SourceRegistryService } from './source-registry.service.js';
 import { TenantScopeError, testTenantScope } from './tenant-scope.js';
 
 /**

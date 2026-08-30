@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TelemetryService } from '../observability/telemetry.service.js';
 import { InMemorySourceRegistryRepository } from './in-memory-source-registry.repository.js';
 import { SourceReadinessService } from './source-readiness.service.js';
-import { SourceRegistryError, SourceRegistryService } from './source-registry.service.js';
+import { SourceRegistryError } from './source-registry.error.js';
+import { SourceRegistryService } from './source-registry.service.js';
 import { testTenantScope } from './tenant-scope.js';
 
 /**
@@ -261,6 +263,89 @@ describe('hai ban cung song tai mot dia chi thi runtime DUNG, khong tu chon', ()
     await expect(readiness.getAmbiguousFactAddresses(SCOPE)).resolves.toEqual([]);
   });
 
+  /**
+   * CHIEN THANG KHONG CHUYEN NHUONG DUOC.
+   *
+   * `openConflict()` khong bat cac ben cua mot xung dot phai cung mot dia chi, con duong doc thi
+   * lay xung dot da dong cua CA KHACH. Ban truoc chi giu lai danh sach ID TUNG THANG, nen:
+   *
+   * ```text
+   * A va B cung song tai pricing/ELNI.price   — chua ai phan xu A voi B
+   * A tung thang mot xung dot voi X           — X o dia chi order_policy/max_quantity
+   *   -> A nam trong danh sach "tung thang"
+   *   -> A duoc chon lam ban hieu luc cua pricing/ELNI.price
+   * ```
+   *
+   * Ke thang im lang quay lai bang duong vong: mot chien thang o CUOC KHAC duoc tinh thanh phan
+   * xu cho cuoc nay. Bai nay do tren code cu va xanh tren code moi.
+   */
+  it('thang mot xung dot O DIA CHI KHAC khong lam mot dia chi khac het nhap nhang', async () => {
+    const alpha = await effectiveSource('bang-gia-a', 'a'.repeat(64));
+    const bravo = await effectiveSource('bang-gia-b', 'b'.repeat(64));
+    const factA = await confirmedFact(alpha.id, 'pricing', 'ELNI.price', { amount: 1_150_000 });
+    const factB = await confirmedFact(bravo.id, 'pricing', 'ELNI.price', { amount: 1_250_000 });
+    // Ben thu ba, o mot dia chi KHONG lien quan.
+    const factX = await confirmedFact(alpha.id, 'order_policy', 'max_quantity', { max: 50 });
+
+    const unrelated = await registry.openConflict(SCOPE, {
+      conflictKey: 'CONFLICT-KHONG-LIEN-QUAN',
+      domain: 'order_policy',
+      subjectKey: 'max_quantity',
+      summary: 'Hai noi noi hai nguong khac nhau',
+      impact: 'BLOCKING',
+      factIds: [factA.id, factX.id],
+    });
+    await registry.resolveConflict(SCOPE, unrelated.id, {
+      winningFactId: factA.id,
+      actor: 'nguoi-chot',
+      evidenceRef: 'bien-ban-2026-01-10',
+    });
+
+    // A va B van CHUA ai phan xu voi nhau ⇒ van khong co cau tra loi.
+    await expect(readiness.getEffectiveFact(SCOPE, 'pricing', 'ELNI.price')).resolves.toBeNull();
+    const verdict = await readiness.canUseFact(SCOPE, 'pricing', 'ELNI.price', 'CONFIRMED_ONLY');
+    expect(verdict).toMatchObject({ allowed: false, reason: 'FACT_AMBIGUOUS_LIVE_VERSIONS' });
+    expect(verdict.fact).toBeNull();
+
+    const ambiguous = await readiness.getAmbiguousFactAddresses(SCOPE);
+    expect(ambiguous.map((row) => `${row.domain}/${row.key}`)).toContain('pricing/ELNI.price');
+  });
+
+  /**
+   * Mat con lai: phan xu THAT cua mot dia chi van phai duoc chap nhan, ke ca khi no den tu NHIEU
+   * xung dot doi mot. Ba ban cung song, hai phieu da dong, cung mot ben thang ⇒ co cau tra loi.
+   * Neu ham chi chap nhan "mot xung dot phu het cac ben", ca nay se ket luan nham la nhap nhang.
+   */
+  it('nhieu phieu doi mot, cung mot ben thang, thi van ra dung mot cau tra loi', async () => {
+    const alpha = await effectiveSource('bang-gia-a', 'a'.repeat(64));
+    const bravo = await effectiveSource('bang-gia-b', 'b'.repeat(64));
+    const charlie = await effectiveSource('bang-gia-c', 'c'.repeat(64));
+    const factA = await confirmedFact(alpha.id, 'pricing', 'ELNI.price', { amount: 1_150_000 });
+    const factB = await confirmedFact(bravo.id, 'pricing', 'ELNI.price', { amount: 1_250_000 });
+    const factC = await confirmedFact(charlie.id, 'pricing', 'ELNI.price', { amount: 1_350_000 });
+
+    for (const [index, loser] of [factB, factC].entries()) {
+      const conflict = await registry.openConflict(SCOPE, {
+        conflictKey: `CONFLICT-ELNI-DOI-1-${index}`,
+        domain: 'pricing',
+        subjectKey: 'ELNI.price',
+        summary: 'Hai bang gia noi hai muc khac nhau cho cung mot ma',
+        impact: 'BLOCKING',
+        factIds: [factA.id, loser.id],
+      });
+      await registry.resolveConflict(SCOPE, conflict.id, {
+        winningFactId: factA.id,
+        actor: 'nguoi-chot',
+        evidenceRef: `bien-ban-2026-01-2${index}`,
+      });
+    }
+
+    await expect(
+      readiness.getEffectiveFact(SCOPE, 'pricing', 'ELNI.price'),
+    ).resolves.toMatchObject({ id: factA.id });
+    await expect(readiness.getAmbiguousFactAddresses(SCOPE)).resolves.toEqual([]);
+  });
+
   // KHONG BAO DONG GIA: duong thay the binh thuong (thang 07 sang thang 08) khong duoc dinh vao
   // cong nay. Mot cong keu oan la mot cong se bi tat.
   it('thay the tuong minh van cho ra dung mot cau tra loi', async () => {
@@ -443,6 +528,110 @@ describe('mot thao tac nghiep vu that bai khong de lai mot nua', () => {
 
     expect(await repository.listApprovals(SCOPE, { sourceId: source.id })).toEqual([]);
     expect((await registry.findSourceById(SCOPE, source.id))?.status).toBe('REVIEWED');
+  });
+
+  /**
+   * BANG CHUNG khong duoc noi ve mot thu chua commit.
+   *
+   * `atomic()` da buoc moi cau ghi vao mot giao dich, nen Postgres thi dung. Nhung telemetry
+   * khong nam trong giao dich do — no bay ra OTel ngay tai cho goi. Voi mot thao tac nhieu buoc:
+   *
+   * ```text
+   * supersedeSource()
+   *   makeSourceEffective(next)  -> ghi DB, VA phat "APPROVED -> EFFECTIVE"
+   *   transitionSource(previous) -> HONG
+   *   roll back                  -> `next` van dang APPROVED
+   *   ClickStack                 -> van dang noi `next` da EFFECTIVE
+   * ```
+   *
+   * Su that nghiep vu dung, su that BANG CHUNG noi sai. Ba tuan sau, khi phai lan vet mot su co,
+   * bang chung la thu duy nhat con lai — va mot Debug View noi ve mot lan chuyen trang thai KHONG
+   * HE COMMIT thi te hon la khong co Debug View, vi nguoi doc tin no.
+   */
+  it('mot thao tac bi roll back KHONG de lai lan chuyen trang thai nao trong nhat ky', async () => {
+    const stateChange = vi.fn();
+    const decision = vi.fn();
+    const telemetry = { stateChange, decision } as unknown as TelemetryService;
+
+    const previous = await effectiveSource('bang-gia', 'a'.repeat(64));
+    const next = await registry.registerSource(SCOPE, {
+      sourceKey: 'bang-gia',
+      title: 'Ban cong bo thang sau',
+      kind: 'announcement',
+      version: 'v2',
+      origin: 'CUSTOMER_SIGNED',
+      authority: 'L2_CUSTOMER_PUBLISHED',
+      classification: 'INTERNAL',
+      locator: 'vault://kiem-chung/bang-gia-v2.pdf',
+      contentHash: 'b'.repeat(64),
+    });
+    await registry.transitionSource(SCOPE, next.id, 'REVIEWED');
+    await registry.approveSource(SCOPE, next.id, {
+      level: 'CUSTOMER_CONFIRMED',
+      actor: 'nguoi-co-tham-quyen',
+      evidenceRef: 'HD/2026/PL02',
+    });
+
+    stateChange.mockClear();
+
+    // `supersedeSource` ghi nhieu lan: gan `supersedesId`, kich hoat ban moi (mot lan CHUYEN
+    // TRANG THAI that), roi dong ban cu. Cho mot cau ghi VE SAU hong.
+    const faulty = new FaultyRepository(repository, 4);
+    const faultyRegistry = new SourceRegistryService(faulty, telemetry);
+
+    await expect(
+      faultyRegistry.supersedeSource(SCOPE, {
+        previousSourceId: previous.id,
+        nextSourceId: next.id,
+        effectiveFrom: new Date('2026-09-01T00:00:00Z'),
+      }),
+    ).rejects.toThrow(/kho hong/i);
+
+    // DB da tra ve nguyen trang...
+    expect((await registry.findSourceById(SCOPE, next.id))?.status).toBe('APPROVED');
+    expect((await registry.findSourceById(SCOPE, previous.id))?.status).toBe('EFFECTIVE');
+    // ...va nhat ky KHONG duoc noi nguoc lai.
+    expect(stateChange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * KHONG BAO DONG GIA cho huong nguoc lai: thao tac THANH CONG thi lan chuyen trang thai van
+   * phai ra toi nhat ky. Mot bo dem quen day ra thi im lang chu khong keu — nen phai co bai khoa.
+   */
+  it('thao tac thanh cong van day du lan chuyen trang thai ra nhat ky sau khi commit', async () => {
+    const stateChange = vi.fn();
+    const telemetry = { stateChange, decision: vi.fn() } as unknown as TelemetryService;
+    const loud = new SourceRegistryService(repository, telemetry);
+
+    const source = await loud.registerSource(SCOPE, {
+      sourceKey: 'bang-gia-commit',
+      title: 'Ban cong bo',
+      kind: 'announcement',
+      version: 'v1',
+      origin: 'CUSTOMER_SIGNED',
+      authority: 'L2_CUSTOMER_PUBLISHED',
+      classification: 'INTERNAL',
+      locator: 'vault://kiem-chung/bang-gia-commit.pdf',
+      contentHash: 'd'.repeat(64),
+    });
+    await loud.transitionSource(SCOPE, source.id, 'REVIEWED');
+    stateChange.mockClear();
+
+    // `approveSource` chay TRONG mot giao dich: bo dem giu lai roi day ra khi commit xong.
+    await loud.approveSource(SCOPE, source.id, {
+      level: 'CUSTOMER_CONFIRMED',
+      actor: 'nguoi-co-tham-quyen',
+      evidenceRef: 'HD/2026/PL03',
+    });
+
+    expect(stateChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: 'business_source',
+        entityId: source.id,
+        from: 'REVIEWED',
+        to: 'APPROVED',
+      }),
+    );
   });
 
   it('thay the hong khong de lai con tro supersedesId tro vo vong', async () => {

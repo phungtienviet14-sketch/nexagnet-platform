@@ -297,6 +297,18 @@ export type LiveFactResolution =
   | { readonly kind: 'ambiguous'; readonly factIds: readonly string[] };
 
 /**
+ * MOT XUNG DOT DA DUOC NGUOI DONG — ben thang, VA toan bo cac ben da tham gia.
+ *
+ * Danh sach ben tham gia la phan bat buoc, khong phai phan trang tri. Xem `resolveLiveFact`: mot
+ * ban thang o CUOC NAY khong duoc phep thang CUOC KHAC ma no chua tung du.
+ */
+export interface SettledConflict {
+  readonly winnerFactId: string;
+  /** Moi su that duoc neu ten trong chinh xung dot do — ke ca ben thang. */
+  readonly participantFactIds: readonly string[];
+}
+
+/**
  * Chon ban dang hieu luc trong so cac ban CON SONG tai mot dia chi — hoac tu choi chon.
  *
  * KHONG CO KE THANG IM LANG. Duong ghi cho phep hai su that canh tranh cung ton tai o trang thai
@@ -305,22 +317,51 @@ export type LiveFactResolution =
  * `getEffectiveFact()` lay `live.at(-1)` — tuc ban nao tao sau thi thang, va khong ai duoc bao.
  *
  * Chi CO MOT cach thoat khoi trang thai nhap nhang: mot xung dot da duoc NGUOI dong bang dan
- * chung tuong minh, va ben thang cua no nam trong so cac ban con song. `settledWinnerIds` la ket
- * qua do — khong phai goi y (`recommendedFactId`), khong phai tham quyen (`L1 > L2`), khong phai
- * ngay thang. Ba thu do deu la cach chon ngam ma `evaluateConflictResolution` da tu choi nhan.
+ * chung tuong minh — khong phai goi y (`recommendedFactId`), khong phai tham quyen (`L1 > L2`),
+ * khong phai ngay thang. Ba thu do deu la cach chon ngam ma `evaluateConflictResolution` da tu
+ * choi nhan.
+ *
+ * ## VI SAO PHAI DOI TOAN BO BEN THUA DA BI PHAN XU (sua 30/08/2026)
+ *
+ * Ban truoc chi nhan mot danh sach `settledWinnerIds` — nhung ID tung thang MOT xung dot nao do
+ * cua khach. Ma `openConflict()` khong bat cac ben cua mot xung dot phai cung mot dia chi. Nen:
+ *
+ * ```text
+ * A va B cung song tai pricing/ELNI.price   — chua ai phan xu A voi B
+ * truoc do: A thang mot xung dot voi X      — X o mot dia chi HOAN TOAN KHAC
+ *   -> A co mat trong settledWinnerIds
+ *   -> A duoc chon lam ban hieu luc cua pricing/ELNI.price
+ * ```
+ *
+ * Tuc ke thang im lang quay lai bang duong vong: mot chien thang o cuoc khac duoc tinh thanh
+ * phan xu cho cuoc nay. Chien thang khong chuyen nhuong duoc.
+ *
+ * Gio mot ban chi thang khi MOI ban con song con lai deu da bi phan xu THUA CHINH NO — moi cap
+ * (thang, thua) phai nam chung trong mot xung dot da dong. Hai ban cung "thang moi ben con lai"
+ * (du lieu mau thuan: A thang B va B thang A) thi van la `ambiguous`: cong nay fail closed.
  *
  * Neu hai ban con song va CHUA ai mo xung dot, ket qua van la `ambiguous`: khong mo xung dot
  * khong lam cho su nhap nhang bien mat, no chi lam cho khong ai nhin thay.
  */
 export function resolveLiveFact(
   liveFactIds: readonly string[],
-  settledWinnerIds: readonly string[] = [],
+  settled: readonly SettledConflict[] = [],
 ): LiveFactResolution {
   const [only] = liveFactIds;
   if (only === undefined) return { kind: 'none' };
   if (liveFactIds.length === 1) return { kind: 'single', factId: only };
 
-  const winners = liveFactIds.filter((id) => settledWinnerIds.includes(id));
+  const beat = (winner: string, loser: string): boolean =>
+    settled.some(
+      (conflict) =>
+        conflict.winnerFactId === winner &&
+        conflict.participantFactIds.includes(winner) &&
+        conflict.participantFactIds.includes(loser),
+    );
+
+  const winners = liveFactIds.filter((candidate) =>
+    liveFactIds.every((other) => other === candidate || beat(candidate, other)),
+  );
   const [winner] = winners;
   if (winner !== undefined && winners.length === 1) return { kind: 'single', factId: winner };
 
