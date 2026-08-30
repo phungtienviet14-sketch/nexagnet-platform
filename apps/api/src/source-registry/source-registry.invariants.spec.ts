@@ -307,8 +307,12 @@ describe('hai ban cung song tai mot dia chi thi runtime DUNG, khong tu chon', ()
     expect(verdict).toMatchObject({ allowed: false, reason: 'FACT_AMBIGUOUS_LIVE_VERSIONS' });
     expect(verdict.fact).toBeNull();
 
+    // Dia chi nhap nhang phai neu ten DUNG hai ben dang canh tranh — factX o dia chi khac
+    // khong duoc keo vao, va khong ben nao trong hai bi loai ra vi "da tung thang o dau do".
     const ambiguous = await readiness.getAmbiguousFactAddresses(SCOPE);
-    expect(ambiguous.map((row) => `${row.domain}/${row.key}`)).toContain('pricing/ELNI.price');
+    const elni = ambiguous.find((row) => `${row.domain}/${row.key}` === 'pricing/ELNI.price');
+    expect(elni).toBeDefined();
+    expect([...(elni?.factIds ?? [])].sort()).toEqual([factA.id, factB.id].sort());
   });
 
   /**
