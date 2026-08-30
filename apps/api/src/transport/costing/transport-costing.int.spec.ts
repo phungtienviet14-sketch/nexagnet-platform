@@ -539,39 +539,46 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
     describe('T3R — dua ky va lan ghi vao dung mot hang doi (#94 §1, §2)', () => {
       /**
-       * Doi den khi DU `expected` phien dang CHO MOT KHOA.
+       * MOT KET NOI RIENG, DUNG MOT BACKEND — de bai test hoi duoc "phien NAY co dang cho khoa
+       * khong", chu khong phai "co ai do trong CSDL dang cho khoa khong".
        *
-       * Khong dung `setTimeout` mot con so doan mo: mot bai test canh tranh dua tren "ngu 200ms
-       * chac la du" se xanh tren may nay va do tren runner cham hon, roi bi ai do danh dau flaky va
-       * tat di. `pg_stat_activity` noi CHINH XAC khi mot phien da vao hang doi, nen thu tu xep
-       * hang tro thanh mot su that do duoc chu khong phai mot hy vong.
+       * Cau hoi thu hai la cai bay ma ban dau tien cua bo nay dinh phai: CI chay nhieu tep test
+       * SONG SONG tren CUNG mot database, nen `pg_stat_activity` gan nhu luc nao cung co mot phien
+       * khac dang cho mot khoa khong lien quan gi. Bo dem "co it nhat N phien dang cho" vi the tra
+       * ve NGAY, truoc khi phien cua bai test kip xep hang — va thu tu xep hang, thu duy nhat bai
+       * nay can, tro thanh ngau nhien. Do dung la kieu bai test xanh o may nay, do o runner kia, roi
+       * bi danh dau flaky va tat di.
+       *
+       * `connection_limit=1` ep pool ve DUNG mot backend, nen `pg_backend_pid()` doc mot lan la
+       * dung mai — va cau hoi tro thanh cau hoi ve DUNG phien do.
        */
-      async function waitForLockWaiters(expected: number): Promise<void> {
-        if (expected === 0) return;
+      const soloUrl = (() => {
+        const base = process.env.DATABASE_URL ?? '';
+        return `${base}${base.includes('?') ? '&' : '?'}connection_limit=1`;
+      })();
+      const soloPrisma = new PrismaService({ datasourceUrl: soloUrl });
+      let soloPid = 0;
+
+      beforeAll(async () => {
+        const rows = await soloPrisma.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+        soloPid = Number(rows[0]?.pid ?? 0);
+        expect(soloPid).toBeGreaterThan(0);
+      });
+
+      afterAll(async () => {
+        await soloPrisma.$disconnect();
+      });
+
+      /** Doi den khi DUNG phien `pid` dang cho mot khoa. */
+      async function waitUntilBlocked(pid: number): Promise<void> {
         for (let attempt = 0; attempt < 400; attempt += 1) {
           const rows = await prisma.$queryRaw<{ n: bigint }[]>`
             SELECT count(*) AS n FROM pg_stat_activity
-            WHERE datname = current_database() AND wait_event_type = 'Lock'`;
-          if (Number(rows[0]?.n ?? 0) >= expected) return;
+            WHERE pid = ${pid} AND wait_event_type = 'Lock'`;
+          if (Number(rows[0]?.n ?? 0) > 0) return;
           await new Promise((resolve) => setTimeout(resolve, 25));
         }
-        throw new Error(`Khong thay du ${expected} phien vao hang doi khoa`);
-      }
-
-      /** Giu khoa ghi cua mot so quy cho den khi bai test tha ra. */
-      function holdAccountLock(accountId: string): { release: () => void; done: Promise<unknown> } {
-        let release = (): void => {};
-        const gate = new Promise<void>((resolve) => {
-          release = resolve;
-        });
-        const done = prisma.$transaction(
-          async (tx) => {
-            await tx.$executeRaw`SELECT "id" FROM "TransportDriverFundAccount" WHERE "id" = ${accountId} FOR UPDATE`;
-            await gate;
-          },
-          { timeout: 60_000, maxWait: 30_000 },
-        );
-        return { release, done };
+        throw new Error(`Phien ${pid} khong vao hang doi khoa`);
       }
 
       let serial = 0;
@@ -625,63 +632,115 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       }
 
       /**
-       * BANG CHUNG §1 — HAI ket cuc, va CHI hai.
+       * BANG CHUNG §1-A — lan ghi giu khoa TRUOC: lan chot phai DOI, va anh chup CHUA no.
        *
-       * Ca hai ben deu di duong that: `costing.postAdvance()` va `periods.closePeriod()`. Thu tu
-       * xep hang do bai test dat, roi tha khoa mot lan. Khang dinh khong phu thuoc ai thang:
+       * Ben ghi o day la SQL THO co chu dich, va no mo phong dung buoc ma `post()` that lam:
+       * `SELECT ... FOR UPDATE` tren hang so quy roi `INSERT`. Dung SQL tho vi bai test can giu
+       * giao dich do MO trong luc lan chot xep hang phia sau — mot loi goi service khong dung yen
+       * giua chung duoc.
        *
-       *   · lan ghi thang -> commit, VA anh chup chua no;
-       *   · lan chot thang -> lan ghi bi tu choi `FUND_ENTRY_PERIOD_FROZEN`, khong hang nao them.
-       *
-       * Ket cuc thu ba — "ky CLOSED, anh chup N, so cai N+1" — la thu bai nay ton tai de phu dinh,
-       * va `assertSnapshotMatchesLedger()` la cho no bi bat.
+       * Ben chot la MA THAT (`FundPeriodService.closePeriod`), va do la ben dang duoc kiem: no phai
+       * doi khoa, roi doc DUOC hang vua commit.
        */
-      it('R1 — lan ghi xep hang TRUOC: no commit, va anh chup CHUA no', async () => {
-        const { driverId, accountId, periodId } = await freshDriverPeriod();
-        const lock = holdAccountLock(accountId);
+      it('R1 — lan ghi giu khoa truoc: lan chot DOI, va anh chup CHUA hang do', async () => {
+        const { accountId, periodId } = await freshDriverPeriod();
 
-        const writing = costing.postAdvance(
-          { driverId, amount: 250_000, businessDate: '2026-10-20' },
-          'it-nguoi-ghi',
+        let releaseWriter = (): void => {};
+        const writerGate = new Promise<void>((resolve) => {
+          releaseWriter = resolve;
+        });
+        const writer = prisma.$transaction(
+          async (tx) => {
+            await tx.$executeRaw`SELECT "id" FROM "TransportDriverFundAccount" WHERE "id" = ${accountId} FOR UPDATE`;
+            await tx.transportDriverFundEntry.create({
+              data: {
+                accountId,
+                kind: 'ADVANCE',
+                signedAmount: 250_000n,
+                businessDate: '2026-10-20',
+                correlationKey: `it-t3r-r1-${accountId}`,
+                recordedBy: 'it-nguoi-ghi',
+              },
+            });
+            await writerGate;
+          },
+          { timeout: 60_000, maxWait: 30_000 },
         );
-        await waitForLockWaiters(1);
-        const closing = periods.closePeriod(periodId, 'it-nguoi-chot');
-        await waitForLockWaiters(2);
 
-        lock.release();
-        await lock.done;
+        // Lan chot chay tren ket noi RIENG de bai test hoi duoc dung phien do co dang cho khong.
+        const soloPeriods = new FundPeriodService(
+          new PrismaCostingRepository(soloPrisma),
+          core,
+          audit,
+          CORE_POLICY,
+        );
+        const closing = soloPeriods.closePeriod(periodId, 'it-nguoi-chot');
+        await waitUntilBlocked(soloPid);
 
-        const entry = await writing;
+        releaseWriter();
+        await writer;
         const closed = await closing;
 
-        expect(entry.signedAmount).toBe(250_000);
         expect(closed.period.status).toBe('CLOSED');
-        // 1.000.000 (ung dau ky) + 250.000 (lan ghi vua thang) — anh chup KHONG duoc bo qua no.
+        // 1.000.000 (ung dau ky) + 250.000 (lan ghi vua commit) — anh chup KHONG duoc bo qua no.
         expect(closed.snapshot.periodNet).toBe(1_250_000);
         expect(closed.snapshot.entryCount).toBe(2);
         await assertSnapshotMatchesLedger(periodId, accountId);
       });
 
-      it('R2 — lan chot xep hang TRUOC: lan ghi bi TU CHOI, khong hang nao lot vao ky da chot', async () => {
+      /**
+       * BANG CHUNG §1-B — lan chot xong TRUOC: lan ghi bi TU CHOI, khong hang nao lot vao ky.
+       *
+       * Day la bai bat DUNG lo hong `#94 §1`, va no khong dua vao thoi diem nao ca. Cong tam dung
+       * dat NGAY TRUOC `ledger.post()`: tuc lan ghi da qua het moi buoc kiem cua service (ke ca
+       * cai tien kiem ky cu, neu no con) tren mot ky luc do VAN `OPEN`.
+       *
+       *   · ma TRUOC T3R: tien kiem doc `OPEN` -> cho qua -> `INSERT` commit vao ky da CLOSED;
+       *   · ma SAU T3R:  `post()` giu khoa roi doc LAI ky trong cung giao dich -> TU CHOI.
+       *
+       * Ca hai ben deu la ma that; khong SQL tho nao o bai nay.
+       */
+      it('R2 — lan chot xong truoc: lan ghi bi TU CHOI, khong hang nao lot vao ky da chot', async () => {
         const { driverId, accountId, periodId } = await freshDriverPeriod();
-        const lock = holdAccountLock(accountId);
 
-        const closing = periods.closePeriod(periodId, 'it-nguoi-chot');
-        await waitForLockWaiters(1);
-        // `.catch()` gan NGAY luc tao: neu doi den sau `await closing` thi co mot khoanh khac
-        // rejection nay chua ai bat, va Node bao "unhandled rejection" lam do ca lan chay.
-        const writing = costing
+        let releaseWriter = (): void => {};
+        const writerGate = new Promise<void>((resolve) => {
+          releaseWriter = resolve;
+        });
+        let writerAtGate = false;
+
+        class GatedCostingRepository extends PrismaCostingRepository {
+          override async post(
+            input: Parameters<PrismaCostingRepository['post']>[0],
+          ): ReturnType<PrismaCostingRepository['post']> {
+            writerAtGate = true;
+            await writerGate;
+            return super.post(input);
+          }
+        }
+        const gatedCosting = new CostingService(
+          new GatedCostingRepository(prisma),
+          core,
+          audit,
+          CORE_POLICY,
+          COSTING_POLICY,
+        );
+
+        // `.then()` gan NGAY luc tao: doi den sau `await closing` thi co mot khoanh khac rejection
+        // chua ai bat, va Node bao "unhandled rejection" lam do ca lan chay.
+        const writing = gatedCosting
           .postAdvance({ driverId, amount: 250_000, businessDate: '2026-10-20' }, 'it-nguoi-ghi')
           .then(
             () => null,
             (error: unknown) => error,
           );
-        await waitForLockWaiters(2);
+        while (!writerAtGate) await new Promise((resolve) => setTimeout(resolve, 10));
 
-        lock.release();
-        await lock.done;
+        // Lan chot chay TRON VEN trong luc lan ghi dang dung o cong.
+        const closed = await periods.closePeriod(periodId, 'it-nguoi-chot');
+        expect(closed.period.status).toBe('CLOSED');
 
-        const closed = await closing;
+        releaseWriter();
         const rejection = await writing;
 
         expect(rejection).toBeInstanceOf(TransportDomainError);
