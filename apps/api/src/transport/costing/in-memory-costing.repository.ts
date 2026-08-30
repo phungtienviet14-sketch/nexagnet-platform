@@ -18,7 +18,12 @@ import type {
   FundPeriodSnapshot,
   TripExpense,
 } from './costing.types.js';
-import { INITIAL_FUND_PERIOD_STATUS, periodsOverlap, type FundPeriodStatus } from './fund-period.js';
+import {
+  INITIAL_FUND_PERIOD_STATUS,
+  periodCovers,
+  periodsOverlap,
+  type FundPeriodStatus,
+} from './fund-period.js';
 
 const iso = (at: Date): string => at.toISOString();
 
@@ -204,12 +209,16 @@ export class InMemoryCostingRepository extends CostingRepository {
       .sort((left, right) => left.startDate.localeCompare(right.startDate));
   }
 
+  /**
+   * Goi `periodCovers()` thay vi so lai hai dau tai cho.
+   *
+   * Phep so "ngay nay co thuoc ky khong" co MOT quy uoc de sai (hai dau DEU tinh) va no da duoc
+   * quyet o `fund-period.ts`. Viet lai o day nghia la co hai ban cua cung mot luat, va lan troi dau
+   * tien se lam kho trong bo nho va kho that tra loi khac nhau cho dung mot cau hoi.
+   */
   async periodsCovering(accountId: string, businessDate: BusinessDate): Promise<DriverFundPeriod[]> {
     return [...this.periods.values()].filter(
-      (period) =>
-        period.accountId === accountId &&
-        period.startDate <= businessDate &&
-        businessDate <= period.endDate,
+      (period) => period.accountId === accountId && periodCovers(period, businessDate),
     );
   }
 
