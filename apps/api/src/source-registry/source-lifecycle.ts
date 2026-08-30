@@ -292,3 +292,48 @@ export function evaluateApproval(context: ApprovalContext): ApprovalDecision {
   }
   return { allowed: true, reason: 'APPROVAL_RECORDED' };
 }
+
+/* ------------------------------------------------------------------ *
+ * Thay the — DONG HO cua mot nguon
+ * ------------------------------------------------------------------ */
+
+/**
+ * Dinh danh DONG HO cua mot ban nguon: ban thay the phai la mot PHIEN BAN KHAC cua cung mot ban
+ * nguon, tuc cung `sourceKey`.
+ *
+ * `sourceKey` chinh la thu tra loi "hai tep nay co phai hai ban cua cung mot tai lieu khong" —
+ * do la ly do no nam trong khoa duy nhat cung `contentHash`. Neu `supersedeSource()` khong kiem
+ * truong nay, thi mot "phu luc hop dong" co the dong mot "bang gia thang" lai: bang gia bi dong
+ * `effectiveTo` va chuyen `SUPERSEDED` du khong co ban nao thay no, con phu luc thi tro toi mot
+ * to tien khong lien quan. Ca hai dong ho deu hong, va khong loi nao noi ra thanh tieng.
+ */
+export interface SourceLineage {
+  readonly id: string;
+  readonly sourceKey: string;
+}
+
+export const SOURCE_SUPERSESSION_DENIED_REASONS = [
+  /** Ban thay the va ban bi thay the la MOT. */
+  'SOURCE_SUPERSEDE_SELF_REFERENCE',
+  /** Hai ban khong cung `sourceKey` — khong phai hai phien ban cua cung mot tai lieu. */
+  'SOURCE_SUPERSEDE_LINEAGE_MISMATCH',
+] as const;
+export type SourceSupersessionDeniedReason =
+  (typeof SOURCE_SUPERSESSION_DENIED_REASONS)[number];
+
+export type SourceSupersessionDecision =
+  | { readonly allowed: true; readonly reason: 'SOURCE_SUPERSESSION_ALLOWED' }
+  | { readonly allowed: false; readonly reason: SourceSupersessionDeniedReason };
+
+export function evaluateSourceSupersession(
+  previous: SourceLineage,
+  next: SourceLineage,
+): SourceSupersessionDecision {
+  if (previous.id === next.id) {
+    return { allowed: false, reason: 'SOURCE_SUPERSEDE_SELF_REFERENCE' };
+  }
+  if (previous.sourceKey !== next.sourceKey) {
+    return { allowed: false, reason: 'SOURCE_SUPERSEDE_LINEAGE_MISMATCH' };
+  }
+  return { allowed: true, reason: 'SOURCE_SUPERSESSION_ALLOWED' };
+}

@@ -193,6 +193,15 @@ export const FACT_USAGE_DENIED_REASONS = [
   'FACT_BLOCKED_BY_OPEN_CONFLICT',
   /** Noi goi doi su that da xac nhan, ban ghi nay moi la gia dinh cua chung ta. */
   'FACT_IS_WORKING_ASSUMPTION',
+  /**
+   * HAI BAN TRO LEN cung song tai mot dia chi, va chua ai phan xu.
+   *
+   * Khac `FACT_BLOCKED_BY_OPEN_CONFLICT` o dung mot cho, va cho do la ca van de: kia la "co nguoi
+   * da NHIN THAY hai nguon noi khac nhau va da mo phieu"; day la "hai nguon noi khac nhau va
+   * KHONG AI NHIN THAY". Truong hop thu hai nguy hiem hon han — no la truong hop mac dinh, vi mo
+   * xung dot la mot hanh dong co nguoi lam, con hai ban cung song thi tu no xay ra.
+   */
+  'FACT_AMBIGUOUS_LIVE_VERSIONS',
 ] as const;
 export type FactUsageDeniedReason = (typeof FACT_USAGE_DENIED_REASONS)[number];
 
@@ -222,4 +231,98 @@ export function canUseFact(context: FactUsageContext): FactUsageDecision {
     return { allowed: false, reason: 'FACT_IS_WORKING_ASSUMPTION' };
   }
   return { allowed: true, reason: 'FACT_USABLE' };
+}
+
+/* ------------------------------------------------------------------ *
+ * Thay the — DONG HO cua mot dia chi su that
+ * ------------------------------------------------------------------ */
+
+/**
+ * Dinh danh DONG HO cua mot ban su that: ban thay the phai dung o CUNG mot dia chi voi ban bi
+ * thay the.
+ *
+ * Vi sao phai la mot cong chu khong phai mot cau chu thich: "ban moi thay ban cu tai cung
+ * `(domain, key)`" truoc day chi duoc ghi trong tai lieu cua `supersedeFact()`. Neu goi nham id —
+ * hai tab, mot bien dat sai, mot vong lap lech mot buoc — thi mot su that cua `pricing/ELNI` co
+ * the dong mot su that cua `order_policy/max_quantity` lai. Luc do lich su cua CA HAI dia chi deu
+ * sai: mot ben mat ban dang hieu luc ma khong ai bam nut, mot ben tro toi mot to tien khong lien
+ * quan. Khong loi nao trong hai cai do noi ra thanh tieng.
+ */
+export interface FactLineage {
+  readonly id: string;
+  readonly domain: string;
+  readonly key: string;
+}
+
+export const FACT_SUPERSESSION_DENIED_REASONS = [
+  /** Ban thay the va ban bi thay the la MOT. Mot ban ghi khong tu thay chinh no. */
+  'FACT_SUPERSEDE_SELF_REFERENCE',
+  /** Hai ban ghi khong cung `(domain, key)` — khong phai hai phien ban cua cung mot su that. */
+  'FACT_SUPERSEDE_LINEAGE_MISMATCH',
+] as const;
+export type FactSupersessionDeniedReason = (typeof FACT_SUPERSESSION_DENIED_REASONS)[number];
+
+export type FactSupersessionDecision =
+  | { readonly allowed: true; readonly reason: 'FACT_SUPERSESSION_ALLOWED' }
+  | { readonly allowed: false; readonly reason: FactSupersessionDeniedReason };
+
+export function evaluateFactSupersession(
+  previous: FactLineage,
+  next: FactLineage,
+): FactSupersessionDecision {
+  if (previous.id === next.id) {
+    return { allowed: false, reason: 'FACT_SUPERSEDE_SELF_REFERENCE' };
+  }
+  if (previous.domain !== next.domain || previous.key !== next.key) {
+    return { allowed: false, reason: 'FACT_SUPERSEDE_LINEAGE_MISMATCH' };
+  }
+  return { allowed: true, reason: 'FACT_SUPERSESSION_ALLOWED' };
+}
+
+/* ------------------------------------------------------------------ *
+ * Phan xu KHI CO NHIEU BAN CUNG SONG tai mot dia chi
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ket qua phan xu mot dia chi su that tai mot thoi diem.
+ *
+ * `ambiguous` la trang thai QUAN TRONG NHAT o day, va no phai TON TAI RIENG — y het ly do
+ * `WORKING_ASSUMPTION` phai ton tai rieng. Neu chi co `none`/`single`, thi hai ban cung song se
+ * bi ep thanh mot `single` nao do, va cai "nao do" chinh la KE THANG IM LANG ma ca tang nay sinh
+ * ra de cam.
+ */
+export type LiveFactResolution =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'single'; readonly factId: string }
+  | { readonly kind: 'ambiguous'; readonly factIds: readonly string[] };
+
+/**
+ * Chon ban dang hieu luc trong so cac ban CON SONG tai mot dia chi — hoac tu choi chon.
+ *
+ * KHONG CO KE THANG IM LANG. Duong ghi cho phep hai su that canh tranh cung ton tai o trang thai
+ * song: do la dung, vi lich su la mot so ghi va hai nguon noi khac nhau la mot su kien co that
+ * can ghi lai. Nhung duong DOC thi khong duoc phep tu chon mot trong hai. Truoc ban nay,
+ * `getEffectiveFact()` lay `live.at(-1)` — tuc ban nao tao sau thi thang, va khong ai duoc bao.
+ *
+ * Chi CO MOT cach thoat khoi trang thai nhap nhang: mot xung dot da duoc NGUOI dong bang dan
+ * chung tuong minh, va ben thang cua no nam trong so cac ban con song. `settledWinnerIds` la ket
+ * qua do — khong phai goi y (`recommendedFactId`), khong phai tham quyen (`L1 > L2`), khong phai
+ * ngay thang. Ba thu do deu la cach chon ngam ma `evaluateConflictResolution` da tu choi nhan.
+ *
+ * Neu hai ban con song va CHUA ai mo xung dot, ket qua van la `ambiguous`: khong mo xung dot
+ * khong lam cho su nhap nhang bien mat, no chi lam cho khong ai nhin thay.
+ */
+export function resolveLiveFact(
+  liveFactIds: readonly string[],
+  settledWinnerIds: readonly string[] = [],
+): LiveFactResolution {
+  const [only] = liveFactIds;
+  if (only === undefined) return { kind: 'none' };
+  if (liveFactIds.length === 1) return { kind: 'single', factId: only };
+
+  const winners = liveFactIds.filter((id) => settledWinnerIds.includes(id));
+  const [winner] = winners;
+  if (winner !== undefined && winners.length === 1) return { kind: 'single', factId: winner };
+
+  return { kind: 'ambiguous', factIds: [...liveFactIds] };
 }

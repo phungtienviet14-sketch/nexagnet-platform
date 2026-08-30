@@ -2,7 +2,13 @@ import { Injectable, Optional } from '@nestjs/common';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { SOURCE_REGISTRY_DECISIONS } from './source-registry-decisions.js';
 import { isTelemetrySafeClassification } from './source-lifecycle.js';
-import { canUseFact, type FactAssuranceLevel } from './fact-lifecycle.js';
+import {
+  canUseFact,
+  isUsableFactStatus,
+  resolveLiveFact,
+  type FactAssuranceLevel,
+  type LiveFactResolution,
+} from './fact-lifecycle.js';
 import { isBlockingConflictStatus } from './conflict-lifecycle.js';
 import { SourceRegistryRepository } from './source-registry.repository.js';
 import type { TenantScope } from './tenant-scope.js';
@@ -18,6 +24,7 @@ import type { BusinessConflictRecord, BusinessFactRecord } from './source-regist
  * canUseFact()              — dung duoc khong, va NEU KHONG thi vi sao (ma co kieu)
  * getBlockingConflicts()    — cai gi dang chan
  * getMissingRequiredFacts() — su that bat buoc nao con thieu
+ * getAmbiguousFactAddresses() — dia chi nao dang co hai ban song ma chua ai phan xu
  * ```
  *
  * TACH KHOI `SourceRegistryService` co chu y, khong phai vi do dai: ben kia GHI (dang ky, duyet,
@@ -34,20 +41,35 @@ export class SourceReadinessService {
     @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
-  /** Ban DANG HIEU LUC tai mot dia chi, hoac `null`. Khong bao gio roi ve ban da bi thay the. */
+  /**
+   * Ban DANG HIEU LUC tai mot dia chi, hoac `null`. Khong bao gio roi ve ban da bi thay the, va
+   * khong bao gio TU CHON khi co hai ban cung song.
+   *
+   * Ban truoc lam `live.at(-1)` — tuc ban nao tao sau thi thang. Dieu do vi pham dung cai bat bien
+   * ma ca tang nay sinh ra de giu: KHONG CO KE THANG IM LANG. Hai su that `CONFIRMED` tai cung mot
+   * dia chi ma chua ai thay the, chua ai phan xu, thi cau tra loi dung la KHONG CO cau tra loi —
+   * khong phai "cai moi hon".
+   */
   async getEffectiveFact(
     scope: TenantScope,
     domain: string,
     key: string,
     at: Date = new Date(),
   ): Promise<BusinessFactRecord | null> {
-    const history = await this.repository.listFactHistory(scope, domain, key);
-    const live = history.filter(
-      (row) =>
-        (row.status === 'CONFIRMED' || row.status === 'WORKING_ASSUMPTION') &&
-        withinWindow(row, at),
-    );
-    return live.at(-1) ?? null;
+    const { live, resolution } = await this.adjudicate(scope, domain, key, at);
+    if (resolution.kind === 'single') {
+      return live.find((row) => row.id === resolution.factId) ?? null;
+    }
+    if (resolution.kind === 'ambiguous') {
+      this.telemetry?.decision({
+        vocabulary: SOURCE_REGISTRY_DECISIONS,
+        point: 'fact.usability',
+        outcome: 'denied',
+        reason: 'FACT_AMBIGUOUS_LIVE_VERSIONS',
+        detail: { domain, key, competing: resolution.factIds.length, factIds: resolution.factIds },
+      });
+    }
+    return null;
   }
 
   /** LICH SU day du — ke ca cac ban da `SUPERSEDED`/`REJECTED`. */
@@ -73,10 +95,36 @@ export class SourceReadinessService {
     required: FactAssuranceLevel,
     at: Date = new Date(),
   ): Promise<FactUsageVerdict> {
-    const history = await this.repository.listFactHistory(scope, domain, key);
-    // Uu tien ban da qua duyet; neu chua co ban nao thoat khoi `PROPOSED` thi lay ban cuoi de
-    // nguoi doc biet CO de xuat nhung chua ai duyet — khac han "khong co gi ca".
-    const candidate = history.filter((row) => row.status !== 'PROPOSED').at(-1) ?? history.at(-1);
+    const { history, live, resolution } = await this.adjudicate(scope, domain, key, at);
+
+    // NHAP NHANG CHAN TRUOC MOI THU KHAC. Neu hai ban cung song ma chua ai phan xu thi khong co
+    // cau hoi nao ve "ban nay dung duoc khong" tra loi duoc — vi chua biet "ban nay" la ban nao.
+    // Mot xung dot dang mo van duoc uu tien bao cao vi no noi duoc nhieu hon: da co nguoi nhin
+    // thay, da co phieu, va co cho de di doc.
+    if (resolution.kind === 'ambiguous') {
+      const openBlocking = await this.hasOpenBlockingConflictOver(scope, resolution.factIds);
+      const reason = openBlocking
+        ? 'FACT_BLOCKED_BY_OPEN_CONFLICT'
+        : 'FACT_AMBIGUOUS_LIVE_VERSIONS';
+      this.telemetry?.decision({
+        vocabulary: SOURCE_REGISTRY_DECISIONS,
+        point: 'fact.usability',
+        outcome: 'denied',
+        reason,
+        detail: { domain, key, competing: resolution.factIds.length, factIds: resolution.factIds },
+      });
+      return { allowed: false, reason, fact: null };
+    }
+
+    // Uu tien ban da phan xu duoc; roi den ban da qua duyet; neu chua co ban nao thoat khoi
+    // `PROPOSED` thi lay ban cuoi de nguoi doc biet CO de xuat nhung chua ai duyet — khac han
+    // "khong co gi ca".
+    const candidate =
+      (resolution.kind === 'single'
+        ? live.find((row) => row.id === resolution.factId)
+        : undefined) ??
+      history.filter((row) => row.status !== 'PROPOSED').at(-1) ??
+      history.at(-1);
 
     if (!candidate) {
       this.telemetry?.decision({
@@ -125,6 +173,46 @@ export class SourceReadinessService {
       : { allowed: false, reason: decision.reason, fact: candidate };
   }
 
+  /**
+   * Moi dia chi su that dang co HAI BAN TRO LEN cung song ma chua ai phan xu.
+   *
+   * `getBlockingConflicts()` tra loi "cai gi dang chan" — nhung no chi thay duoc nhung xung dot
+   * DA CO NGUOI MO. Ham nay tra loi cau hoi kho hon va quan trong hon: cai gi dang mau thuan ma
+   * CHUA AI NHIN THAY. Do la trang thai mac dinh, vi mo mot xung dot la viec co nguoi lam, con
+   * hai ban cung song thi tu no xay ra.
+   */
+  async getAmbiguousFactAddresses(
+    scope: TenantScope,
+    at: Date = new Date(),
+  ): Promise<readonly AmbiguousFactAddress[]> {
+    const facts = await this.repository.listFacts(scope);
+    const addresses = new Map<string, { domain: string; key: string }>();
+    for (const fact of facts) {
+      if (isUsableFactStatus(fact.status)) {
+        // Khoa JSON thay vi noi chuoi bang dau phan cach: `domain`/`key` la chuoi TU DO, nen
+        // moi ky tu phan cach deu co the xuat hien trong chinh chung.
+        addresses.set(JSON.stringify([fact.domain, fact.key]), {
+          domain: fact.domain,
+          key: fact.key,
+        });
+      }
+    }
+
+    const ambiguous: AmbiguousFactAddress[] = [];
+    for (const { domain, key } of addresses.values()) {
+      const { resolution } = await this.adjudicate(scope, domain, key, at);
+      if (resolution.kind === 'ambiguous') {
+        ambiguous.push({
+          domain,
+          key,
+          factIds: resolution.factIds,
+          hasOpenBlockingConflict: await this.hasOpenBlockingConflictOver(scope, resolution.factIds),
+        });
+      }
+    }
+    return ambiguous;
+  }
+
   /** Moi xung dot dang CHAN — nguyen lieu cua man hinh "vi sao khach nay chua chay duoc". */
   async getBlockingConflicts(scope: TenantScope): Promise<readonly BusinessConflictRecord[]> {
     const open = await this.repository.listConflicts(scope, { status: 'OPEN' });
@@ -164,6 +252,73 @@ export class SourceReadinessService {
     }
     return missing;
   }
+
+  /* ---------------------------------------------------------------- *
+   * Noi bo
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Phan xu MOT dia chi su that tai MOT thoi diem — cho duy nhat quyet dinh "ban nao dang hieu
+   * luc", va vi the la cho duy nhat co the sinh ra mot ke thang im lang neu viet sai.
+   *
+   * Ba duong doc (`getEffectiveFact`, `canUseFact`, `getAmbiguousFactAddresses`) deu di qua day.
+   * Do la co y: neu moi duong tu loc lay `live` roi tu chon, thi som muon se co mot duong chon
+   * khac hai duong kia, va khong ai phat hien ra cho toi luc mot con so sai di ra mieng khach.
+   */
+  private async adjudicate(
+    scope: TenantScope,
+    domain: string,
+    key: string,
+    at: Date,
+  ): Promise<{
+    readonly history: readonly BusinessFactRecord[];
+    readonly live: readonly BusinessFactRecord[];
+    readonly resolution: LiveFactResolution;
+  }> {
+    const history = await this.repository.listFactHistory(scope, domain, key);
+    const live = history.filter((row) => isUsableFactStatus(row.status) && withinWindow(row, at));
+
+    // Loi thoat DUY NHAT khoi nhap nhang: mot xung dot da duoc NGUOI dong bang dan chung tuong
+    // minh. Khong phai goi y (`recommendedFactId`), khong phai tham quyen, khong phai ngay thang.
+    const settledWinnerIds =
+      live.length > 1
+        ? (await this.repository.listConflicts(scope, { status: 'RESOLVED' }))
+            .map((row) => row.resolvedFactId)
+            .filter((id): id is string => id !== null)
+        : [];
+
+    return {
+      history,
+      live,
+      resolution: resolveLiveFact(
+        live.map((row) => row.id),
+        settledWinnerIds,
+      ),
+    };
+  }
+
+  /** Co xung dot dang mo muc `BLOCKING` cham vao BAT KY ban nao trong danh sach khong. */
+  private async hasOpenBlockingConflictOver(
+    scope: TenantScope,
+    factIds: readonly string[],
+  ): Promise<boolean> {
+    for (const factId of factIds) {
+      const touching = await this.repository.listConflicts(scope, { factId });
+      if (touching.some((row) => isBlockingConflictStatus(row.status) && row.impact === 'BLOCKING')) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+/** Mot dia chi su that dang co nhieu hon mot ban song. */
+export interface AmbiguousFactAddress {
+  readonly domain: string;
+  readonly key: string;
+  readonly factIds: readonly string[];
+  /** Da co nguoi mo phieu chua. `false` = mau thuan dang ton tai ma khong ai nhin thay. */
+  readonly hasOpenBlockingConflict: boolean;
 }
 
 export type FactUsageVerdict =

@@ -4,6 +4,7 @@ import { TelemetryService } from '../observability/telemetry.service.js';
 import { SOURCE_REGISTRY_DECISIONS } from './source-registry-decisions.js';
 import {
   evaluateApproval,
+  evaluateSourceSupersession,
   evaluateSourceTransition,
   INITIAL_SOURCE_STATUS,
   type ApprovalLevel,
@@ -13,6 +14,7 @@ import {
   type SourceStatus,
 } from './source-lifecycle.js';
 import {
+  evaluateFactSupersession,
   evaluateFactTransition,
   type FactStatus,
   type WorkingAssumptionEvidence,
@@ -48,6 +50,22 @@ export class SourceRegistryService {
     private readonly repository: SourceRegistryRepository,
     @Optional() private readonly telemetry?: TelemetryService,
   ) {}
+
+  /**
+   * Chay mot THAO TAC NGHIEP VU nhu mot don vi: mo giao dich o kho, roi dung mot ban sao cua
+   * chinh dich vu nay noi vao kho giao dich do.
+   *
+   * Vi sao phai tao mot `SourceRegistryService` moi thay vi truyen kho xuong tung loi goi: mot
+   * thao tac nghiep vu o day khong phai vai cau ghi roi rac, no goi lai chinh cac cong cua tang
+   * nay (`transitionSource`, `makeSourceEffective`). Neu chi doi rieng cac loi goi `repository.*`
+   * thi nhung cong do van chay tren kho NGOAI giao dich, va ta co mot giao dich chi bao ve duoc
+   * mot nua so ghi — te hon la khong co giao dich, vi no trong nhu da an toan.
+   */
+  private atomic<T>(operation: (tx: SourceRegistryService) => Promise<T>): Promise<T> {
+    return this.repository.runInTransaction((repository) =>
+      operation(new SourceRegistryService(repository, this.telemetry)),
+    );
+  }
 
   /**
    * SHA-256 cua noi dung. La cach duy nhat chung minh "van la ban do" ma KHONG giu ban sao trong
@@ -140,36 +158,41 @@ export class SourceRegistryService {
       readonly note?: string | null;
     },
   ): Promise<{ readonly source: BusinessSourceRecord; readonly approvalId: string }> {
-    const source = await this.requireSource(scope, sourceId);
+    // MOT DON VI: ban ghi phe duyet va lan chuyen trang thai cung song hoac cung khong. Neu tach
+    // hai, mot lan duyet THAT BAI van de lai ban ghi phe duyet, va lan sau `transitionSource` doc
+    // `listApprovals()` khong rong nen ket luan da co nguoi duyet.
+    return this.atomic(async (tx) => {
+      const source = await tx.requireSource(scope, sourceId);
 
-    const approval = evaluateApproval({
-      level: input.level,
-      origin: source.origin,
-      actor: input.actor,
-      evidenceRef: input.evidenceRef,
-    });
-    this.telemetry?.decision({
-      vocabulary: SOURCE_REGISTRY_DECISIONS,
-      point: 'source.approval',
-      outcome: approval.allowed ? 'allowed' : 'denied',
-      reason: approval.reason,
-      detail: { sourceId, level: input.level, origin: source.origin },
-    });
-    if (!approval.allowed) {
-      throw new SourceRegistryError(approval.reason, `Khong ghi duoc phe duyet cho ${sourceId}.`);
-    }
+      const approval = evaluateApproval({
+        level: input.level,
+        origin: source.origin,
+        actor: input.actor,
+        evidenceRef: input.evidenceRef,
+      });
+      tx.telemetry?.decision({
+        vocabulary: SOURCE_REGISTRY_DECISIONS,
+        point: 'source.approval',
+        outcome: approval.allowed ? 'allowed' : 'denied',
+        reason: approval.reason,
+        detail: { sourceId, level: input.level, origin: source.origin },
+      });
+      if (!approval.allowed) {
+        throw new SourceRegistryError(approval.reason, `Khong ghi duoc phe duyet cho ${sourceId}.`);
+      }
 
-    const record = await this.repository.createApproval(scope, {
-      level: input.level,
-      actor: input.actor,
-      evidenceRef: input.evidenceRef,
-      note: input.note ?? null,
-      sourceId,
-      factId: null,
-    });
+      const record = await tx.repository.createApproval(scope, {
+        level: input.level,
+        actor: input.actor,
+        evidenceRef: input.evidenceRef,
+        note: input.note ?? null,
+        sourceId,
+        factId: null,
+      });
 
-    const moved = await this.transitionSource(scope, sourceId, 'APPROVED');
-    return { source: moved, approvalId: record.id };
+      const moved = await tx.transitionSource(scope, sourceId, 'APPROVED');
+      return { source: moved, approvalId: record.id };
+    });
   }
 
   /**
@@ -183,8 +206,13 @@ export class SourceRegistryService {
     sourceId: string,
     effectiveFrom: Date,
   ): Promise<BusinessSourceRecord> {
-    await this.repository.updateSource(scope, sourceId, { effectiveFrom });
-    return this.transitionSource(scope, sourceId, 'EFFECTIVE');
+    // Moc hieu luc duoc ghi TRUOC vi chinh `evaluateSourceTransition` doi doc no. Neu lan chuyen
+    // bi tu choi thi moc do khong duoc phep o lai: mot nguon `APPROVED` mang `effectiveFrom` la
+    // mot nguon trong nhu da kich hoat ma chua.
+    return this.atomic(async (tx) => {
+      await tx.repository.updateSource(scope, sourceId, { effectiveFrom });
+      return tx.transitionSource(scope, sourceId, 'EFFECTIVE');
+    });
   }
 
   /**
@@ -202,26 +230,51 @@ export class SourceRegistryService {
       readonly effectiveFrom: Date;
     },
   ): Promise<{ readonly previous: BusinessSourceRecord; readonly next: BusinessSourceRecord }> {
-    const previous = await this.requireSource(scope, input.previousSourceId);
-    const incoming = await this.requireSource(scope, input.nextSourceId);
+    return this.atomic(async (tx) => {
+      const previous = await tx.requireSource(scope, input.previousSourceId);
+      const incoming = await tx.requireSource(scope, input.nextSourceId);
 
-    await this.repository.updateSource(scope, input.nextSourceId, {
-      supersedesId: previous.id,
-    });
+      // DONG HO TRUOC MOI GHI. Khong co cong nay thi mot "phu luc hop dong" dong duoc mot "bang
+      // gia thang" lai: bang gia chuyen `SUPERSEDED` va bi dong `effectiveTo` du khong ban nao
+      // thay no, con phu luc thi tro toi mot to tien khong lien quan.
+      const lineage = evaluateSourceSupersession(previous, incoming);
+      tx.telemetry?.decision({
+        vocabulary: SOURCE_REGISTRY_DECISIONS,
+        point: 'source.supersession',
+        outcome: lineage.allowed ? 'allowed' : 'denied',
+        reason: lineage.reason,
+        detail: {
+          previousSourceId: previous.id,
+          nextSourceId: incoming.id,
+          previousSourceKey: previous.sourceKey,
+          nextSourceKey: incoming.sourceKey,
+        },
+      });
+      if (!lineage.allowed) {
+        throw new SourceRegistryError(
+          lineage.reason,
+          `Nguon ${incoming.id} khong thay the duoc nguon ${previous.id}.`,
+        );
+      }
+
+      await tx.repository.updateSource(scope, input.nextSourceId, {
+        supersedesId: previous.id,
+      });
     // Ban thay the co the DA duoc kich hoat truoc do — mot thu tu hoan toan hop le: kich hoat ban
     // moi roi moi dong ban cu. Goi `makeSourceEffective` lan nua trong truong hop do se do voi
     // `SOURCE_ALREADY_IN_STATE`, tuc mot thao tac dung bi tu choi vi ly do ky thuat. Bo test tren
     // Postgres that bat duoc ca nay; bo in-memory thi khong, vi no tinh co luon kich hoat sau.
-    const next =
-      incoming.status === 'EFFECTIVE'
-        ? await this.repository.updateSource(scope, input.nextSourceId, {
-            effectiveFrom: incoming.effectiveFrom ?? input.effectiveFrom,
-          })
-        : await this.makeSourceEffective(scope, input.nextSourceId, input.effectiveFrom);
-    await this.repository.updateSource(scope, previous.id, { effectiveTo: input.effectiveFrom });
-    const closed = await this.transitionSource(scope, previous.id, 'SUPERSEDED');
+      const next =
+        incoming.status === 'EFFECTIVE'
+          ? await tx.repository.updateSource(scope, input.nextSourceId, {
+              effectiveFrom: incoming.effectiveFrom ?? input.effectiveFrom,
+            })
+          : await tx.makeSourceEffective(scope, input.nextSourceId, input.effectiveFrom);
+      await tx.repository.updateSource(scope, previous.id, { effectiveTo: input.effectiveFrom });
+      const closed = await tx.transitionSource(scope, previous.id, 'SUPERSEDED');
 
-    return { previous: closed, next };
+      return { previous: closed, next };
+    });
   }
 
   /** Chuyen trang thai nguon — cong DUY NHAT ghi `BusinessSource.status`. */
@@ -336,14 +389,24 @@ export class SourceRegistryService {
         evidence.reversibility?.trim() &&
         evidence.owner?.trim(),
     );
-    const fact = await this.transitionFact(scope, factId, 'WORKING_ASSUMPTION', {
-      hasAssumptionEvidence: complete,
-    });
-    return this.repository.updateFact(scope, fact.id, {
-      assumptionRationale: evidence.rationale,
-      assumptionRisk: evidence.risk,
-      assumptionReversibility: evidence.reversibility,
-      assumptionOwner: evidence.owner,
+
+    // Bon truong duoc ghi TRUOC lan chuyen, va ca hai nam trong mot don vi. Thu tu nay quan trong
+    // hon no trong: mot ban ghi o `WORKING_ASSUMPTION` ma chua co ly do/rui ro/cach dao nguoc la
+    // dung cai thu tang nay sinh ra de cam, va no khong duoc phep ton tai KE CA trong mot khoanh
+    // khac giua hai cau ghi.
+    return this.atomic(async (tx) => {
+      await tx.requireFact(scope, factId);
+      if (complete) {
+        await tx.repository.updateFact(scope, factId, {
+          assumptionRationale: evidence.rationale,
+          assumptionRisk: evidence.risk,
+          assumptionReversibility: evidence.reversibility,
+          assumptionOwner: evidence.owner,
+        });
+      }
+      return tx.transitionFact(scope, factId, 'WORKING_ASSUMPTION', {
+        hasAssumptionEvidence: complete,
+      });
     });
   }
 
@@ -363,36 +426,41 @@ export class SourceRegistryService {
       readonly note?: string | null;
     },
   ): Promise<BusinessFactRecord> {
-    const fact = await this.requireFact(scope, factId);
-    const source = await this.requireSource(scope, fact.sourceId);
+    // Cung ly do voi `approveSource`: mot lan xac nhan THAT BAI khong duoc de lai ban ghi phe
+    // duyet, vi lan sau `transitionFact` chi hoi "co phe duyet nao khong" chu khong hoi "lan
+    // duyet do co di den noi khong".
+    return this.atomic(async (tx) => {
+      const fact = await tx.requireFact(scope, factId);
+      const source = await tx.requireSource(scope, fact.sourceId);
 
-    const approval = evaluateApproval({
-      level: input.level,
-      origin: source.origin,
-      actor: input.actor,
-      evidenceRef: input.evidenceRef,
-    });
-    this.telemetry?.decision({
-      vocabulary: SOURCE_REGISTRY_DECISIONS,
-      point: 'source.approval',
-      outcome: approval.allowed ? 'allowed' : 'denied',
-      reason: approval.reason,
-      detail: { factId, level: input.level, origin: source.origin },
-    });
-    if (!approval.allowed) {
-      throw new SourceRegistryError(approval.reason, `Khong ghi duoc phe duyet cho ${factId}.`);
-    }
+      const approval = evaluateApproval({
+        level: input.level,
+        origin: source.origin,
+        actor: input.actor,
+        evidenceRef: input.evidenceRef,
+      });
+      tx.telemetry?.decision({
+        vocabulary: SOURCE_REGISTRY_DECISIONS,
+        point: 'source.approval',
+        outcome: approval.allowed ? 'allowed' : 'denied',
+        reason: approval.reason,
+        detail: { factId, level: input.level, origin: source.origin },
+      });
+      if (!approval.allowed) {
+        throw new SourceRegistryError(approval.reason, `Khong ghi duoc phe duyet cho ${factId}.`);
+      }
 
-    await this.repository.createApproval(scope, {
-      level: input.level,
-      actor: input.actor,
-      evidenceRef: input.evidenceRef,
-      note: input.note ?? null,
-      sourceId: null,
-      factId,
-    });
-    return this.transitionFact(scope, factId, 'CONFIRMED', {
-      approvalIsCustomerConfirmed: input.level === 'CUSTOMER_CONFIRMED',
+      await tx.repository.createApproval(scope, {
+        level: input.level,
+        actor: input.actor,
+        evidenceRef: input.evidenceRef,
+        note: input.note ?? null,
+        sourceId: null,
+        factId,
+      });
+      return tx.transitionFact(scope, factId, 'CONFIRMED', {
+        approvalIsCustomerConfirmed: input.level === 'CUSTOMER_CONFIRMED',
+      });
     });
   }
 
@@ -406,15 +474,40 @@ export class SourceRegistryService {
     scope: TenantScope,
     input: { readonly previousFactId: string; readonly nextFactId: string; readonly at: Date },
   ): Promise<{ readonly previous: BusinessFactRecord; readonly next: BusinessFactRecord }> {
-    const previous = await this.requireFact(scope, input.previousFactId);
-    const next = await this.requireFact(scope, input.nextFactId);
+    return this.atomic(async (tx) => {
+      const previous = await tx.requireFact(scope, input.previousFactId);
+      const next = await tx.requireFact(scope, input.nextFactId);
 
-    await this.repository.updateFact(scope, next.id, { supersedesId: previous.id });
-    await this.repository.updateFact(scope, previous.id, { effectiveTo: input.at });
-    const closed = await this.transitionFact(scope, previous.id, 'SUPERSEDED', {
-      hasSupersedingFact: true,
+      // "Cung dia chi `(domain, key)`" tung chi la mot cau trong chu thich cua ham nay. Gio no la
+      // mot cong: goi nham id se lam hong lich su cua CA HAI dia chi — mot ben mat ban dang hieu
+      // luc ma khong ai bam nut, mot ben tro toi mot to tien khong lien quan.
+      const lineage = evaluateFactSupersession(previous, next);
+      tx.telemetry?.decision({
+        vocabulary: SOURCE_REGISTRY_DECISIONS,
+        point: 'fact.supersession',
+        outcome: lineage.allowed ? 'allowed' : 'denied',
+        reason: lineage.reason,
+        detail: {
+          previousFactId: previous.id,
+          nextFactId: next.id,
+          previousAddress: `${previous.domain}/${previous.key}`,
+          nextAddress: `${next.domain}/${next.key}`,
+        },
+      });
+      if (!lineage.allowed) {
+        throw new SourceRegistryError(
+          lineage.reason,
+          `Su that ${next.id} khong thay the duoc su that ${previous.id}.`,
+        );
+      }
+
+      await tx.repository.updateFact(scope, next.id, { supersedesId: previous.id });
+      await tx.repository.updateFact(scope, previous.id, { effectiveTo: input.at });
+      const closed = await tx.transitionFact(scope, previous.id, 'SUPERSEDED', {
+        hasSupersedingFact: true,
+      });
+      return { previous: closed, next: (await tx.findFactById(scope, next.id)) ?? next };
     });
-    return { previous: closed, next: (await this.findFactById(scope, next.id)) ?? next };
   }
 
   /** Chuyen trang thai su that — cong DUY NHAT ghi `BusinessFact.status`. */

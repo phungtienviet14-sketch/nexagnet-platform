@@ -22,6 +22,25 @@ import type { SourceStatus } from './source-lifecycle.js';
  * dinh bao ve duong doc moi ma ai do quen dieu kien.
  */
 export abstract class SourceRegistryRepository {
+  /**
+   * Chay mot thao tac nghiep vu NHIEU BUOC nhu MOT don vi: hoac tat ca cac ghi cung song, hoac
+   * khong ghi nao con lai.
+   *
+   * VI SAO PHAI NAM O KHO chu khong o dich vu. Mot "lan duyet" khong phai mot cau ghi — no la
+   * `createApproval` roi `updateSource(status)`. Neu buoc hai bi tu choi (hoac DB rot giua chung),
+   * ban ghi phe duyet o buoc mot VAN CON. Lan sau `transitionSource(..., 'APPROVED')` doc
+   * `listApprovals()` thay khong rong nen ket luan `hasExplicitApproval = true` — va mot lan duyet
+   * DA THAT BAI tro thanh bang chung cho mot lan duyet KHAC thanh cong. Do khong phai gia thuyet:
+   * do dung la hinh dang cua "ban sao noi bo bi mo ta nhu khach da xac nhan", chi khac la lan nay
+   * he thong tu tao ra bang chung gia cho chinh no.
+   *
+   * TAI NHAP DUOC: goi long nhau tra ve chinh don vi dang mo chu khong mo them mot don vi moi —
+   * `supersedeSource()` goi `makeSourceEffective()` va ca hai deu la thao tac nghiep vu.
+   */
+  abstract runInTransaction<T>(
+    fn: (repository: SourceRegistryRepository) => Promise<T>,
+  ): Promise<T>;
+
   // ----- Nguon -----
   abstract createSource(
     scope: TenantScope,

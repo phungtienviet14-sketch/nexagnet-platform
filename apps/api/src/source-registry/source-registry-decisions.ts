@@ -1,9 +1,14 @@
 import { defineDecisionVocabulary } from '../observability/decision-vocabulary.js';
 import {
   APPROVAL_DENIED_REASONS,
+  SOURCE_SUPERSESSION_DENIED_REASONS,
   SOURCE_TRANSITION_DENIED_REASONS,
 } from './source-lifecycle.js';
-import { FACT_TRANSITION_DENIED_REASONS, FACT_USAGE_DENIED_REASONS } from './fact-lifecycle.js';
+import {
+  FACT_SUPERSESSION_DENIED_REASONS,
+  FACT_TRANSITION_DENIED_REASONS,
+  FACT_USAGE_DENIED_REASONS,
+} from './fact-lifecycle.js';
 import { CONFLICT_RESOLUTION_DENIED_REASONS } from './conflict-lifecycle.js';
 import { TENANT_SCOPE_DENIED_REASONS } from './tenant-scope.js';
 
@@ -26,6 +31,18 @@ export type SourceTransitionReason = (typeof SOURCE_TRANSITION_REASONS)[number];
 
 export const SOURCE_APPROVAL_REASONS = ['APPROVAL_RECORDED', ...APPROVAL_DENIED_REASONS] as const;
 export type SourceApprovalReason = (typeof SOURCE_APPROVAL_REASONS)[number];
+
+export const SOURCE_SUPERSESSION_REASONS = [
+  'SOURCE_SUPERSESSION_ALLOWED',
+  ...SOURCE_SUPERSESSION_DENIED_REASONS,
+] as const;
+export type SourceSupersessionReason = (typeof SOURCE_SUPERSESSION_REASONS)[number];
+
+export const FACT_SUPERSESSION_REASONS = [
+  'FACT_SUPERSESSION_ALLOWED',
+  ...FACT_SUPERSESSION_DENIED_REASONS,
+] as const;
+export type FactSupersessionReason = (typeof FACT_SUPERSESSION_REASONS)[number];
 
 export const FACT_TRANSITION_REASONS = [
   'FACT_TRANSITION_ALLOWED',
@@ -52,6 +69,8 @@ export type TenantScopeReason = (typeof TENANT_SCOPE_REASONS)[number];
 export type SourceRegistryDecisionReason =
   | SourceTransitionReason
   | SourceApprovalReason
+  | SourceSupersessionReason
+  | FactSupersessionReason
   | FactTransitionReason
   | FactUsageReason
   | ConflictReason
@@ -62,6 +81,8 @@ export const SOURCE_REGISTRY_DECISIONS = defineDecisionVocabulary({
   points: [
     'source.transition',
     'source.approval',
+    'source.supersession',
+    'fact.supersession',
     'fact.transition',
     'fact.usability',
     'conflict.resolution',
@@ -83,6 +104,16 @@ export const SOURCE_REGISTRY_DECISIONS = defineDecisionVocabulary({
     APPROVAL_ACTOR_MISSING: 'Phê duyệt vô danh — không biết ai duyệt',
     APPROVAL_EVIDENCE_MISSING: 'Phê duyệt không kèm dẫn chứng',
 
+    SOURCE_SUPERSESSION_ALLOWED: 'Cho phép bản mới thay bản cũ của cùng một tài liệu',
+    SOURCE_SUPERSEDE_SELF_REFERENCE: 'Một bản nguồn không tự thay chính nó',
+    SOURCE_SUPERSEDE_LINEAGE_MISMATCH:
+      'Hai bản không cùng sourceKey — không phải hai phiên bản của cùng một tài liệu',
+
+    FACT_SUPERSESSION_ALLOWED: 'Cho phép bản mới thay bản cũ tại cùng một địa chỉ sự thật',
+    FACT_SUPERSEDE_SELF_REFERENCE: 'Một sự thật không tự thay chính nó',
+    FACT_SUPERSEDE_LINEAGE_MISMATCH:
+      'Hai sự thật không cùng (domain, key) — thay thế sẽ làm hỏng lịch sử của cả hai địa chỉ',
+
     FACT_TRANSITION_ALLOWED: 'Cho phép chuyển trạng thái sự thật',
     FACT_ALREADY_TERMINAL: 'Sự thật đã ở điểm cuối',
     FACT_ALREADY_IN_STATE: 'Sự thật đã ở đúng trạng thái đó rồi',
@@ -100,6 +131,8 @@ export const SOURCE_REGISTRY_DECISIONS = defineDecisionVocabulary({
     FACT_OUTSIDE_EFFECTIVE_WINDOW: 'Ngoài cửa sổ hiệu lực tại thời điểm hỏi',
     FACT_BLOCKED_BY_OPEN_CONFLICT: 'Có xung đột đang mở chạm vào sự thật này — dừng an toàn',
     FACT_IS_WORKING_ASSUMPTION: 'Đây là giả định của chúng ta, việc này đòi sự thật đã xác nhận',
+    FACT_AMBIGUOUS_LIVE_VERSIONS:
+      'Hai bản trở lên cùng sống tại một địa chỉ mà chưa ai phân xử — dừng an toàn, không có kẻ thắng im lặng',
 
     CONFLICT_OPENED: 'Đã mở xung đột giữa các sự thật cạnh tranh',
     CONFLICT_RESOLUTION_RECORDED: 'Đã ghi nhận quyết định đóng xung đột',

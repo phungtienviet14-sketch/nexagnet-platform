@@ -12,12 +12,34 @@
  * VI SAO KHONG CAM MU MOT LOAT DUOI FILE. Mot lenh cam `*.pdf` toan repo se do ngay o ba tep ban
  * giao do CHINH CHUNG TA sinh ra tu `ban-giao/nguon-html/` — va cach duy nhat di tiep se la tat
  * cong di. Mot cong bi tat thi khong bao ve gi ca. Nen quy tac o day di theo DUONG DAN, va moi
- * ngoai le deu phai mang mot LY DO doc duoc.
+ * ngoai le deu phai mang BANG CHUNG KIEM CHUNG DUOC.
+ *
+ * ## VI SAO "LY DO DOC DUOC" LA KHONG DU (sua 30/08/2026)
+ *
+ * Ban truoc cho phep mot ngoai le chi bang mot cau van xuoi. Cau van do khong ai do lai, va mot
+ * trong hai ngoai le hoa ra **noi sai**: `a4-dai-ly-map-nhom-ultty.xlsx` duoc mo voi ly do "bieu
+ * mau RONG — khong co sharedStrings, tuc khong chua mot o du lieu nao". Do lai thi:
+ *
+ *   · dung la tep khong co `sharedStrings.xml`;
+ *   · nhung no chua **31 o chuoi** duoi dang `inlineStr` ngay trong `xl/worksheets/*.xml` —
+ *     ba ten dai ly va **hai chat ID nhom Zalo**.
+ *
+ * "Khong co sharedStrings" khong phai bat bien cua XLSX: openpyxl ghi chuoi noi tuyen. Tuc la mot
+ * ngoai le duoc mo bang mot khang dinh ky thuat SAI, va no da o do tu 13/07/2026.
+ *
+ * Nen tu ban nay, moi ngoai le phai mang mot trong hai loai BANG CHUNG DO DUOC:
+ *
+ *   · `digest` — SHA-256 ghim san. Byte doi mot bit thi ngoai le dong lai.
+ *   · `sourceFile` — mot tep NGUON trong repo tai sinh ra no. Do la thu chung minh "cai nay do
+ *     chung ta soan ra" ma khong phai tin vao mot cau van.
+ *
+ * Va cong FAIL CLOSED: khong do duoc bang chung thi ngoai le KHONG duoc tinh. Mot ngoai le khong
+ * kiem chung duoc va mot ngoai le sai la cung mot thu doi voi mot repo public.
  */
 
 /**
  * Vung chua NGUON GOC cua khach. Trong nhung thu muc nay, mot tep nhi phan mac dinh la tai lieu
- * cua khach cho den khi co nguoi noi nguoc lai.
+ * cua khach cho den khi co nguoi noi nguoc lai — VA chung minh duoc.
  */
 export const CUSTOMER_SOURCE_AREAS = [
   /^docs\/khach-hang\/[^/]+\//,
@@ -26,9 +48,19 @@ export const CUSTOMER_SOURCE_AREAS = [
 ];
 
 /**
- * Duoi tep cua tai lieu goc. Danh sach nay co y NGAN va chi gom thu ma khach that su gui sang —
- * khong gom `.md`/`.json`/`.csv` vi do la dinh dang chung ta trich xuat RA, va chan chung se chan
- * chinh cai viec ma tang nguon su that sinh ra de lam.
+ * Duoi tep cua tai lieu goc.
+ *
+ * `.md`/`.json` KHONG nam trong danh sach: do la dinh dang chung ta trich xuat RA, va chan chung
+ * se chan chinh cai viec ma tang nguon su that sinh ra de lam.
+ *
+ * `.csv`/`.tsv` thi CO, tu ban nay. Ly do doi: trong mot vung nguon goc cua khach, mot tep CSV
+ * gan nhu chac chan la ban xuat khach gui sang chu khong phai thu ta soan ra — ta soan ra `.md`
+ * va `.json`. Do lai repo hom nay: **khong co mot tep `.csv` nao** trong ba vung do, nen quy tac
+ * nay khong pha viec gi dang chay.
+ *
+ * ANH cung CO, va day la lo hong dang ke nhat cua ban truoc. Theo chinh `CLAUDE.md`, duoi 20% don
+ * hang cua Ultty vao he thong duoi dang **anh chup bang** — tuc anh la mot trong nhung dinh dang
+ * tai lieu goc PHO BIEN NHAT cua khach nay, va no di thang qua cong cu.
  */
 export const RAW_ARTIFACT_EXTENSIONS = [
   'pdf',
@@ -39,6 +71,16 @@ export const RAW_ARTIFACT_EXTENSIONS = [
   'xlsm',
   'ppt',
   'pptx',
+  'csv',
+  'tsv',
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'gif',
+  'bmp',
+  'tif',
+  'tiff',
   'heic',
   'mov',
   'mp4',
@@ -50,21 +92,46 @@ export const RAW_ARTIFACT_EXTENSIONS = [
 ];
 
 /**
- * NGOAI LE — moi dong phai co LY DO, va ly do phai noi duoc vi sao tep nay KHONG phai tai lieu
- * goc cua khach. "Da co tu truoc" khong phai mot ly do.
+ * NGOAI LE — moi dong phai co LY DO doc duoc VA bang chung do duoc.
+ *
+ * "Da co tu truoc" khong phai mot ly do. Va tu ban nay, mot ly do dung cung khong du: phai co
+ * `evidence`.
  */
 export const ALLOWLIST = [
   {
-    pattern: /^docs\/khach-hang\/[^/]+\/ban-giao\/[^/]+\.pdf$/,
+    pattern: /^docs\/khach-hang\/([^/]+)\/ban-giao\/(.+)\.pdf$/,
     reason:
-      'Ban giao do CHINH CHUNG TA soan va sinh ra tu ban-giao/nguon-html/ — dau ra gui cho khach, khong phai tai lieu goc khach gui sang. Tai sinh duoc tu HTML trong repo.',
+      'Ban giao do CHINH CHUNG TA soan va sinh ra tu ban-giao/nguon-html/ — dau ra gui cho khach, khong phai tai lieu goc khach gui sang.',
+    // Bang chung CAU TRUC: phai co dung tep HTML tai sinh ra no nam trong repo. Ghim SHA-256 o
+    // day se sai kieu — ba tep nay duoc sinh lai moi lan sua noi dung, con cai bat bien that su
+    // la "co nguon de sinh lai". Mot PDF khach ky nem vao cung thu muc se khong co nguon do.
+    evidence: {
+      kind: 'sourceFile',
+      resolve: (match) => `docs/khach-hang/${match[1]}/ban-giao/nguon-html/${match[2]}.html`,
+    },
   },
   {
     pattern: /^docs\/khach-hang\/ultty\/trao-doi\/a4-dai-ly-map-nhom-ultty\.xlsx$/,
     reason:
-      'Bieu mau A4 RONG do tools/excel-template/generate_a4_template.py sinh ra de khach dien — do duoc: khong co sharedStrings, tuc khong chua mot o du lieu nao.',
+      'Bieu mau A4 gui khach dien, sinh tu tools/excel-template/generate_a4_template.py. KHONG rong: mang san ba dai ly va hai nhom lam du lieu khoi tao, ghi duoi dang inlineStr. Ngoai le nay ghim SHA-256 nen byte doi mot bit la cong dong lai.',
+    evidence: {
+      kind: 'digest',
+      sha256: '58cb8cd1d35aa9edde67b3fa875966db84d823903732d7d77b9778efdeab8461',
+    },
   },
 ];
+
+/** Ma cua tung duong tu choi. Mot cong co N duong tu choi phai phan biet duoc N ly do. */
+export const VIOLATION_CODES = {
+  /** Tai lieu goc trong vung khach, khong co ngoai le nao. */
+  NOT_ALLOWLISTED: 'RAW_ARTIFACT_NOT_ALLOWLISTED',
+  /** Co ngoai le, nhung nguoi goi khong cung cap duoc cach do byte ⇒ FAIL CLOSED. */
+  EVIDENCE_UNVERIFIABLE: 'ALLOWLIST_EVIDENCE_UNVERIFIABLE',
+  /** Co ngoai le ghim hash, nhung byte hien tai khong khop. */
+  DIGEST_MISMATCH: 'ALLOWLIST_DIGEST_MISMATCH',
+  /** Co ngoai le dua tren tep nguon, nhung tep nguon do khong con trong repo. */
+  SOURCE_FILE_MISSING: 'ALLOWLIST_SOURCE_FILE_MISSING',
+};
 
 const extensionOf = (path) => {
   const base = path.slice(path.lastIndexOf('/') + 1);
@@ -81,16 +148,52 @@ export const allowlistEntryFor = (path) =>
   ALLOWLIST.find((entry) => entry.pattern.test(path)) ?? null;
 
 /**
- * Ham THUAN: nhan danh sach duong dan (da chuan hoa dau `/`), tra ve cac vi pham.
+ * Ngoai le nay CO DUNG cho tep nay khong — va chung minh duoc chua.
+ *
+ * Tra ve `null` khi dat, hoac mot ma tu choi. FAIL CLOSED la mac dinh: neu khong do duoc thi
+ * khong dat, chu khong phai "cho qua vi khong biet".
+ */
+export function checkAllowlistEvidence(path, entry, { paths = [], digestOf } = {}) {
+  const match = entry.pattern.exec(path);
+  if (!match) return VIOLATION_CODES.NOT_ALLOWLISTED;
+
+  if (entry.evidence?.kind === 'sourceFile') {
+    const required = entry.evidence.resolve(match);
+    return paths.includes(required) ? null : VIOLATION_CODES.SOURCE_FILE_MISSING;
+  }
+
+  if (entry.evidence?.kind === 'digest') {
+    if (typeof digestOf !== 'function') return VIOLATION_CODES.EVIDENCE_UNVERIFIABLE;
+    const actual = digestOf(path);
+    if (!actual) return VIOLATION_CODES.EVIDENCE_UNVERIFIABLE;
+    return actual.toLowerCase() === entry.evidence.sha256.toLowerCase()
+      ? null
+      : VIOLATION_CODES.DIGEST_MISMATCH;
+  }
+
+  return VIOLATION_CODES.EVIDENCE_UNVERIFIABLE;
+}
+
+/**
+ * Ham THUAN: nhan danh sach duong dan (da chuan hoa dau `/`), tra ve cac vi pham kem MA.
  *
  * Tach khoi git de bai test dua vao duoc duong dan TONG HOP — khong bai test nao duoc phep tao
  * mot tep khach that de chung minh rang tep khach that bi chan.
+ *
+ * `digestOf` la tuy chon vi ham nay phai chay duoc tren duong dan khong ton tai tren dia. Nhung
+ * thieu no thi ngoai le loai `digest` KHONG duoc tinh — do la cho fail-closed nam.
  */
-export function findViolations(paths) {
+export function findViolations(paths, { digestOf } = {}) {
   return paths
     .filter((path) => isInCustomerSourceArea(path) && isRawArtifact(path))
-    .filter((path) => allowlistEntryFor(path) === null)
-    .sort();
+    .map((path) => {
+      const entry = allowlistEntryFor(path);
+      if (!entry) return { path, code: VIOLATION_CODES.NOT_ALLOWLISTED };
+      const failure = checkAllowlistEvidence(path, entry, { paths, digestOf });
+      return failure ? { path, code: failure } : null;
+    })
+    .filter((row) => row !== null)
+    .sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /**
@@ -101,6 +204,13 @@ export function findStaleAllowlistEntries(paths) {
   return ALLOWLIST.filter((entry) => !paths.some((path) => entry.pattern.test(path)));
 }
 
+const CODE_HINTS = {
+  [VIOLATION_CODES.NOT_ALLOWLISTED]: 'tai lieu goc cua khach, khong co ngoai le nao',
+  [VIOLATION_CODES.EVIDENCE_UNVERIFIABLE]: 'co ngoai le nhung khong do duoc byte de kiem chung',
+  [VIOLATION_CODES.DIGEST_MISMATCH]: 'byte KHAC ban da ghim — noi dung tep da doi',
+  [VIOLATION_CODES.SOURCE_FILE_MISSING]: 'khong con tep nguon trong repo de tai sinh ra no',
+};
+
 export function formatReport(violations) {
   if (violations.length === 0) return 'NO_RAW_CUSTOMER_ARTIFACT_IN_GIT: dat.';
   const lines = [
@@ -108,13 +218,14 @@ export function formatReport(violations) {
     '',
     'Repo nay PUBLIC. Git khong quen: xoa o ban sau khong go duoc ban da day len.',
     '',
-    ...violations.map((path) => `  · ${path}`),
+    ...violations.map((row) => `  · ${row.path}\n      ${row.code} — ${CODE_HINTS[row.code] ?? ''}`),
     '',
     'Cach xu ly (docs/phat-trien/van-hanh/nguon-khach-hang.md):',
     '  1. chuyen tep sang kho rieng NGOAI repo;',
     '  2. do SHA-256 va dang ky mot BusinessSource tro toi do;',
     '  3. git rm --cached tep, them dong .gitignore TRUOC khi commit lai;',
-    '  4. neu tep that su la dau ra cua chung ta, them mot dong ALLOWLIST kem LY DO.',
+    '  4. neu tep that su la dau ra cua chung ta, them mot dong ALLOWLIST kem LY DO va BANG CHUNG',
+    '     (ghim sha256, hoac chi ra tep nguon trong repo tai sinh duoc no).',
   ];
   return lines.join('\n');
 }
@@ -127,13 +238,42 @@ import { pathToFileURL } from 'node:url';
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const { execFileSync } = await import('node:child_process');
+  const { createHash } = await import('node:crypto');
+  const { readFileSync } = await import('node:fs');
+
   // `git ls-files` luon in dau `/`, ke ca tren Windows — nen khong phai chuan hoa gi them.
   const tracked = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const violations = findViolations(tracked);
+  /**
+   * Do byte NHU GIT DANG GIU no.
+   *
+   * `git show :<path>` doc thang tu INDEX — do la ban se duoc day len, va la ban duy nhat dang
+   * do. Doc tu dia se sai o bat ky repo nao co `.gitattributes` doi dau dong hoac co tep dang
+   * sua do.
+   */
+  const digestOf = (path) => {
+    for (const ref of [`:${path}`, `HEAD:${path}`]) {
+      try {
+        const blob = execFileSync('git', ['show', ref], {
+          encoding: 'buffer',
+          maxBuffer: 256 * 1024 * 1024,
+        });
+        return createHash('sha256').update(blob).digest('hex');
+      } catch {
+        // Thu ref ke tiep.
+      }
+    }
+    try {
+      return createHash('sha256').update(readFileSync(path)).digest('hex');
+    } catch {
+      return null;
+    }
+  };
+
+  const violations = findViolations(tracked, { digestOf });
   const stale = findStaleAllowlistEntries(tracked);
 
   console.log(formatReport(violations));

@@ -26,6 +26,54 @@ export class InMemorySourceRegistryRepository extends SourceRegistryRepository {
   private readonly approvals = new Map<string, BusinessApprovalRecord>();
   private readonly requiredFacts = new Map<string, BusinessRequiredFactRecord>();
 
+  /** Do sau long nhau cua don vi cong viec dang mo. `0` = dang khong o trong don vi nao. */
+  private transactionDepth = 0;
+
+  /**
+   * Don vi cong viec trong bo nho: chup lai cac Map truoc khi chay, khoi phuc neu nem.
+   *
+   * Chup NONG la du va la dung: moi ban ghi o day BAT BIEN — `updateFact`/`updateSource` deu tao
+   * doi tuong moi bang spread roi `set` de len, khong bao gio sua tai cho. Nen chup lai chinh cac
+   * con tro la khoi phuc duoc nguyen trang.
+   *
+   * Ban nay CO Y hanh xu y het ban Postgres, du mot Map trong mot tien trinh chang can giao dich
+   * gi. Neu no khong roll back thi bai test "that bai khong de lai trang thai" se xanh o day va do
+   * o production — tuc bai test do se do dung cai no khong duoc phep do.
+   */
+  async runInTransaction<T>(
+    fn: (repository: SourceRegistryRepository) => Promise<T>,
+  ): Promise<T> {
+    if (this.transactionDepth > 0) return fn(this);
+
+    const restore = this.snapshot();
+    this.transactionDepth += 1;
+    try {
+      return await fn(this);
+    } catch (error) {
+      restore();
+      throw error;
+    } finally {
+      this.transactionDepth -= 1;
+    }
+  }
+
+  private snapshot(): () => void {
+    const stores: Map<string, unknown>[] = [
+      this.sources as Map<string, unknown>,
+      this.facts as Map<string, unknown>,
+      this.conflicts as Map<string, unknown>,
+      this.approvals as Map<string, unknown>,
+      this.requiredFacts as Map<string, unknown>,
+    ];
+    const copies = stores.map((store) => new Map(store));
+    return () => {
+      stores.forEach((store, index) => {
+        store.clear();
+        for (const [key, value] of copies[index] ?? []) store.set(key, value);
+      });
+    };
+  }
+
   private mine<T extends { readonly tenantId: string }>(
     scope: TenantScope,
     store: Map<string, T>,

@@ -31,8 +31,31 @@ export class PrismaSourceRegistryRepository extends SourceRegistryRepository {
    * trinh NestJS (nhan `PrismaService`, von extends `PrismaClient`) va trong tien trinh MCP dung
    * rieng (tu tao mot `PrismaClient` tran). Buoc kieu hep hon se lam noi thu hai phai ep kieu.
    */
-  constructor(private readonly prisma: PrismaClient) {
+  constructor(
+    private readonly prisma: PrismaClient,
+    /**
+     * `true` khi `prisma` la client CUA MOT GIAO DICH dang mo, khong phai client goc.
+     *
+     * Prisma khong cho long `$transaction` ben trong mot giao dich tuong tac — `TransactionClient`
+     * khong co phuong thuc do. Nen co nay la thu bien `runInTransaction` thanh TAI NHAP DUOC:
+     * lop trong nhan ra minh dang o trong mot don vi roi va chi chay tiep tren chinh no.
+     */
+    private readonly insideTransaction = false,
+  ) {
     super();
+  }
+
+  async runInTransaction<T>(
+    fn: (repository: SourceRegistryRepository) => Promise<T>,
+  ): Promise<T> {
+    if (this.insideTransaction) return fn(this);
+
+    return this.prisma.$transaction(async (tx) =>
+      // `tx` la `Prisma.TransactionClient`: dung cac model delegate ma kho nay dung, thieu
+      // `$connect`/`$transaction` ma kho nay khong dung. Ep kieu o DUNG mot cho nay thay vi noi
+      // long kieu cua `prisma` ca lop.
+      fn(new PrismaSourceRegistryRepository(tx as unknown as PrismaClient, true)),
+    );
   }
 
   // ----- Nguon -----
