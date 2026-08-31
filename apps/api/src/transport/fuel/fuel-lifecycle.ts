@@ -90,10 +90,24 @@ const RECONCILIATION_EDGES: Readonly<
  * va mot cap da khop la mot khang dinh rang phieu nay ung voi dung dong bang ke kia. Doi so tren
  * phieu sau do lam cap khop noi doi ma khong ai doc lai duoc.
  */
-const LOCKED_RECONCILIATION: readonly FuelReconciliationStatus[] = ['MATCHED', 'SETTLED'];
+export const LOCKED_FUEL_RECONCILIATION_STATUSES: readonly FuelReconciliationStatus[] = [
+  'MATCHED',
+  'SETTLED',
+];
 
 export const isLockedFuelReconciliationStatus = (status: FuelReconciliationStatus): boolean =>
-  LOCKED_RECONCILIATION.includes(status);
+  LOCKED_FUEL_RECONCILIATION_STATUSES.includes(status);
+
+/**
+ * Trang thai DONG BANG BANG CHUNG cua mot phieu — hep hon nhom khoa o tren, va co chu dich.
+ *
+ * Mot phieu DA KHOP van nhan them duoc mot tam anh: `GD-10` khoa nhung CON SO, con mot tam anh
+ * khong doi con so nao. Mot phieu da nam trong ky DA DONG thi khong — sau khi ky duoc bao cao ra
+ * ngoai, bo chung tu cua no la mot su that da cong bo (`GD-11`).
+ */
+export const EVIDENCE_FROZEN_FUEL_RECONCILIATION_STATUSES: readonly FuelReconciliationStatus[] = [
+  'SETTLED',
+];
 
 /* ------------------------------------------------------------------ *
  * VI SAO MOT PHIEU CAN NGUOI KIEM
@@ -204,8 +218,7 @@ export const FUEL_AMEND_DENIED_REASONS = [
 export type FuelAmendDeniedReason = (typeof FUEL_AMEND_DENIED_REASONS)[number];
 
 export type FuelAmendDecision =
-  | { readonly allowed: true }
-  | { readonly allowed: false; readonly reason: FuelAmendDeniedReason };
+  { readonly allowed: true } | { readonly allowed: false; readonly reason: FuelAmendDeniedReason };
 
 /**
  * `GD-10` — "chung tu sua duoc khi con `DECLARED`/`UNMATCHED`; sau `VERIFIED` hoac `MATCHED`: chi
@@ -227,4 +240,54 @@ export function evaluateFuelEntryAmendment(
     return { allowed: false, reason: 'ENTRY_RECONCILIATION_LOCKED' };
   }
   return { allowed: true };
+}
+
+/* ------------------------------------------------------------------ *
+ * DUONG DI TU DONG giua hai trang thai ky doi soat — T4R §1
+ * ------------------------------------------------------------------ */
+
+/**
+ * Cac trang thai duoc phep NAM GIUA tren mot duong di tu dong.
+ *
+ * `CLOSED` va `REOPENED` CO Y khong nam o day. Dong mot ky la mot khang dinh ra ngoai (mot ban giao
+ * cong no cho T5) va mo lai la mot thao tac co quyen rieng kem dau vet (`GD-11`) — ca hai deu phai
+ * do NGUOI bam, khong bao gio duoc la mot buoc trung gian ma may di qua de toi mot dich khac.
+ */
+const AUTOMATIC_INTERMEDIATE_STATES: readonly FuelReconciliationState[] = ['MATCHING', 'RESOLVED'];
+
+/**
+ * CHUOI BUOC CHUYEN hop le tu `from` toi `to`, hoac `null` khi khong co duong nao.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO HAM NAY TON TAI (T4R §1).
+ *
+ * Truoc T4R, mot lan chay so khop ghi ket qua o MOT giao dich roi doi trang thai ky o mot giao dich
+ * KHAC. Giua hai lan ghi do co mot khe: mot lenh dong ky chen vao giua se lam ky thanh `CLOSED`
+ * trong khi cap khop cua no vua bi viet lai — tuc mot ban giao cong no da phat cho mot bo ket qua
+ * khong con ton tai.
+ *
+ * Cach vay duy nhat la ghi CA HAI trong mot giao dich, va giao dich do chi biet trang thai THAT cua
+ * hang sau khi da khoa no. Nhung tang kho KHONG duoc quyen tu nghi ra buoc chuyen — do la dieu khoi
+ * chu thich dau tep nay cam. Nen tang mien tinh san duong di o day, va tang kho chi AP no.
+ *
+ * Toi da HAI BUOC, va buoc giua phai nam trong `AUTOMATIC_INTERMEDIATE_STATES`. Mot phep tim duong
+ * tong quat se tim ra `RESOLVED -> CLOSED -> REOPENED` va lang le dong mot ky de di toi dich —
+ * gioi han hai buoc cong danh sach trang thai trung gian la thu chan dieu do bang cau truc.
+ *
+ * `[]` (mang rong) nghia la DA O DICH: khong phai loi, khong phai mot buoc chuyen.
+ */
+export function planFuelReconciliationPath(
+  from: FuelReconciliationState,
+  to: FuelReconciliationState,
+): readonly FuelReconciliationState[] | null {
+  if (from === to) return [];
+  if (STATE_EDGES[from].includes(to)) return [to];
+
+  for (const middle of AUTOMATIC_INTERMEDIATE_STATES) {
+    if (middle === from || middle === to) continue;
+    if (STATE_EDGES[from].includes(middle) && STATE_EDGES[middle].includes(to)) {
+      return [middle, to];
+    }
+  }
+  return null;
 }

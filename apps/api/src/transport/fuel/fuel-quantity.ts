@@ -88,7 +88,9 @@ export function litersToUnits(value: number | string): number {
     throw new FuelQuantityError(`So lit vuot khoang bieu dien duoc: ${text}`);
   }
   if (units <= 0) {
-    throw new FuelQuantityError('So lit phai lon hon 0 — mot phieu 0 lit khong phai mot lan do dau');
+    throw new FuelQuantityError(
+      'So lit phai lon hon 0 — mot phieu 0 lit khong phai mot lan do dau',
+    );
   }
   return units;
 }

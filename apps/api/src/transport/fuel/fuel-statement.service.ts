@@ -119,7 +119,17 @@ export class FuelStatementService {
     const preview = await this.buildPreview(command);
     const at = this.now();
 
-    const created = await this.repository.createStatement({
+    /*
+     * MOT LAN GHI cho ca bang ke, cac dong VA ky doi soat (T4R §3).
+     *
+     * Truoc T4R day la hai lan goi noi tiep. Mot lan hong o giua de lai mot bang ke da nhap ma
+     * KHONG co ky doi soat: khong so khop duoc, khong dong duoc, khong hien o dau — va nhap lai thi
+     * bi unique `(cay xang, ky)` chan. Nguoi dung ket o mot cho khong co duong ra bang giao dien.
+     *
+     * Ky doi soat duoc mo NGAY cung mot thao tac nghiep vu voi lan nhap; do la ly do duy nhat mot
+     * bang ke duoc nhap vao.
+     */
+    const created = await this.repository.createStatementWithReconciliation({
       supplierId: supplier.id,
       periodStart: period.start,
       periodEnd: period.end,
@@ -143,20 +153,7 @@ export class FuelStatementService {
       at,
     });
 
-    /*
-     * KY DOI SOAT DUOC MO NGAY, cung mot thao tac nghiep vu voi lan nhap.
-     *
-     * Khong bat nguoi dung bam mot nut thu hai: mot bang ke da nhap ma chua co ky doi soat la mot
-     * trang thai khong lam gi duoc — no khong so khop duoc, khong dong duoc, va khong hien o dau
-     * ca. Mot bang ke ton tai la de duoc doi soat; do la ly do duy nhat no duoc nhap vao.
-     */
-    const reconciliation = await this.repository.createReconciliation({
-      supplierId: supplier.id,
-      statementId: created.statement.id,
-      periodStart: period.start,
-      periodEnd: period.end,
-      at,
-    });
+    const reconciliation = created.reconciliation;
 
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
@@ -191,7 +188,7 @@ export class FuelStatementService {
       after: { statement: created.statement, reconciliationId: reconciliation.id },
     });
 
-    return { ...created, reconciliation, preview };
+    return { ...created, preview };
   }
 
   /* ---------------------------- Noi bo ---------------------------- */

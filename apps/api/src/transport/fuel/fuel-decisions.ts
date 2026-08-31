@@ -22,6 +22,14 @@ export const FUEL_ENTRY_SUBMIT_REASONS = [
   /** Khoa chong ghi trung khop DUNG mot phieu da ghi — tra lai ban cu, KHONG ghi them. */
   'FUEL_ENTRY_IDEMPOTENT_REPLAY',
   /**
+   * Khoa chong ghi trung DA DUOC DUNG cho mot phieu KHAC — T4R §5.
+   *
+   * Danh tinh so sanh gom ca `supplierId`, `paymentMethod`, `occurredAt`, so hoa don va ghi chu.
+   * `paymentMethod` doi CHINH DUONG TIEN o `TX-03`, nen mot lenh doi no khong phai lan gui lai cua
+   * lenh cu — tra ve phieu cu se lang le nuot mat mot phieu that.
+   */
+  'FUEL_CORRELATION_KEY_REUSED',
+  /**
    * `INV-04` — chuyen thue xe ngoai KHONG duoc co mot phieu dau nao.
    *
    * Manh hon cong tuong ung cua T3 (`DA-T3-03` van cho khoan `COMPANY_DIRECT` tren chuyen thue
@@ -59,6 +67,14 @@ export const FUEL_ENTRY_AMEND_REASONS = [
   'FUEL_ENTRY_AMENDED',
   'FUEL_ENTRY_AMEND_ALREADY_TRUSTED',
   'FUEL_ENTRY_AMEND_RECONCILIATION_LOCKED',
+  /**
+   * Trang thai DOI GIUA luc doc va luc ghi — T4R §4.
+   *
+   * Khac hai ma tren: o do phieu DA o trang thai khoa luc nguoi dung bam. O day no con sua duoc,
+   * va mot lenh duyet/khop cua nguoi khac vua ve dich truoc. Nguoi dung phai tai lai roi doc lai —
+   * khong phai di dao mot phieu.
+   */
+  'FUEL_ENTRY_AMEND_STATE_RACE',
 ] as const;
 export type FuelEntryAmendReason = (typeof FUEL_ENTRY_AMEND_REASONS)[number];
 
@@ -140,6 +156,8 @@ export const FUEL_RECONCILIATION_TRANSITION_REASONS = [
   'RECONCILIATION_ALREADY_IN_STATE',
   /** Ky da dong — moi duong ghi vao no bi chan (`GD-11`). */
   'RECONCILIATION_FROZEN',
+  /** Hang doi soat bien mat giua luc doc va luc khoa — hiem, nhung phan biet duoc voi `FROZEN`. */
+  'RECONCILIATION_NOT_FOUND',
 ] as const;
 export type FuelReconciliationTransitionReason =
   (typeof FUEL_RECONCILIATION_TRANSITION_REASONS)[number];
@@ -161,7 +179,20 @@ export type FuelDiscrepancyResolveReason = (typeof FUEL_DISCREPANCY_RESOLVE_REAS
  * ------------------------------------------------------------------ */
 export const FUEL_SETTLEMENT_HANDOFF_REASONS = [
   'HANDOFF_EMITTED',
-  /** Dong lai mot ky da tung dong (mo lai roi dong lai) KHONG tao ban giao thu hai. */
+  /**
+   * Ban giao MOI trong chuoi ban sua doi cua ky — T4R §2.
+   *
+   * Phat khi ket qua kinh te (tong + so dong + BO DONG) da doi so voi ban gan nhat: lan dau (ban 1)
+   * va moi lan mo lai - sua - dong lai ma so lieu that su khac. Ban moi tro nguoc ve ban truoc qua
+   * `supersedesId`, nen T5 doc duoc ca lich su chinh sua.
+   */
+  'HANDOFF_REVISION_EMITTED',
+  /**
+   * Dong lai ma ket qua kinh te KHONG doi — phat lai ban gan nhat, KHONG them ban moi.
+   *
+   * Day la nghia dung cua "idempotent" o day. Truoc T4R ma nay duoc phat CA KHI so lieu da doi, va
+   * do la khe ho khien mot lan sua khong bao gio den duoc T5.
+   */
   'HANDOFF_IDEMPOTENT_REPLAY',
 ] as const;
 export type FuelSettlementHandoffReason = (typeof FUEL_SETTLEMENT_HANDOFF_REASONS)[number];
@@ -208,6 +239,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
   labels: {
     FUEL_ENTRY_RECORDED: 'Đã ghi phiếu đổ dầu',
     FUEL_ENTRY_IDEMPOTENT_REPLAY: 'Nộp lặp cùng khoá chống trùng — trả lại phiếu đã ghi',
+    FUEL_CORRELATION_KEY_REUSED: 'Khoá chống trùng đã dùng cho một phiếu có nội dung khác',
     FUEL_ENTRY_TRIP_OUTSOURCED: 'Chuyến thuê xe ngoài không nhận phiếu đổ dầu nội bộ',
     FUEL_ENTRY_TRIP_RECONCILED: 'Chuyến đã đối soát nên khoá khỏi chứng từ chi phí mới',
     FUEL_ENTRY_TRIP_CANCELLED: 'Chuyến đã huỷ — đường đúng là đảo phiếu đã ghi',
@@ -223,6 +255,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_ENTRY_AMENDED: 'Đã sửa phiếu khi còn ở trạng thái sửa được',
     FUEL_ENTRY_AMEND_ALREADY_TRUSTED: 'Phiếu đã được duyệt — đường đúng là đảo phiếu',
     FUEL_ENTRY_AMEND_RECONCILIATION_LOCKED: 'Phiếu đã khớp hoặc kỳ đối soát đã đóng',
+    FUEL_ENTRY_AMEND_STATE_RACE: 'Phiếu vừa được người khác duyệt hoặc khớp — tải lại rồi đọc lại',
 
     FUEL_COST_POSTED: 'Chi phí dầu đã vào giá thành chuyến',
     FUEL_COST_ALREADY_POSTED: 'Phiếu này đã có chân giá thành — không ghi thêm lần hai',
@@ -257,6 +290,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     RECONCILIATION_TRANSITION_NOT_PERMITTED: 'Máy trạng thái đối soát không có cạnh này',
     RECONCILIATION_ALREADY_IN_STATE: 'Kỳ đối soát đã ở đúng trạng thái đó rồi',
     RECONCILIATION_FROZEN: 'Kỳ đối soát đã đóng — không nhận thay đổi',
+    RECONCILIATION_NOT_FOUND: 'Không tìm thấy kỳ đối soát',
 
     DISCREPANCY_RESOLVED: 'Đã ghi quyết định cho chênh lệch',
     DISCREPANCY_ALREADY_RESOLVED: 'Chênh lệch này đã có người quyết trước đó',
@@ -264,7 +298,9 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     DISCREPANCY_MATCH_TARGET_REQUIRED: 'Xác nhận khớp phải chỉ rõ cặp nào',
 
     HANDOFF_EMITTED: 'Đã phát bàn giao công nợ nhà cung cấp cho T5',
-    HANDOFF_IDEMPOTENT_REPLAY: 'Kỳ này đã có bàn giao — không phát lần hai',
+    HANDOFF_REVISION_EMITTED: 'Kết quả kinh tế đã đổi — phát một bản sửa đổi mới của bàn giao',
+    HANDOFF_IDEMPOTENT_REPLAY:
+      'Kết quả kinh tế không đổi — phát lại bản gần nhất, không thêm bản mới',
 
     SELF_FUEL_SCOPE_GRANTED: 'Lái xe thao tác đúng phiếu của chính mình',
     SELF_FUEL_SCOPE_NO_DRIVER_BINDING: 'Tài khoản đăng nhập chưa nối với hồ sơ lái xe nào',

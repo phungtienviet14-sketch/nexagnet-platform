@@ -1134,8 +1134,8 @@ model BusinessSource {
   title     String
   /// Loai nguon, tu do co chu y: moi vertical goi ten tai lieu cua no mot kieu. Ep enum o day se
   /// bat mot khach van tai phai muon thuat ngu cua mot khach ban hang.
-  kind    String
-  version String
+  kind      String
+  version   String
 
   origin         SourceOrigin
   authority      SourceAuthority
@@ -1143,11 +1143,11 @@ model BusinessSource {
   status         SourceStatus       @default(RECEIVED)
 
   /// Duong den byte trong kho RIENG. NULL khi moi ghi nhan su ton tai ma chua co duong.
-  locator String?
+  locator     String?
   /// SHA-256 cua byte. La thu duy nhat chung minh "van dung ban do" ma khong can giu ban sao.
   contentHash String?
   /// Kich thuoc byte — de doi chieu nhanh cung hash khi kiem chung lai.
-  byteSize Int?
+  byteSize    Int?
 
   receivedAt    DateTime  @default(now())
   effectiveFrom DateTime?
@@ -1188,15 +1188,15 @@ model BusinessFact {
   key    String
   /// Gia tri co cau truc. `Json` chu khong phai `String`: mot nguong so, mot bang anh xa va mot
   /// cau chinh sach deu la su that, va ep het ve chuoi se lam moi noi doc phai tu parse lai.
-  value Json
+  value  Json
 
-  status BusinessFactStatus @default(PROPOSED)
+  status         BusinessFactStatus @default(PROPOSED)
   /// Ke thua tu nguon, nhung ghi lai o day: mot trich xuat co the nhay cam hon ca tai lieu goc
   /// (vd mot dong PII rut ra tu mot bang phan lon vo hai).
   classification DataClassification
 
-  sourceId String
-  source   BusinessSource @relation(fields: [sourceId], references: [id])
+  sourceId    String
+  source      BusinessSource @relation(fields: [sourceId], references: [id])
   /// Tro chinh xac vao cho trong nguon (trang/muc/o) — de nguoi kiem chung khong phai doc lai ca tep.
   sourceLocus String?
 
@@ -1217,8 +1217,8 @@ model BusinessFact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  approvals BusinessApproval[]
-  conflicts BusinessConflictFact[]
+  approvals    BusinessApproval[]
+  conflicts    BusinessConflictFact[]
   /// Cac QUYET DINH da dung ban su that nay. Quan he nguoc bat buoc cua Prisma; cung la thu tra
   /// loi nguoc lai cau "ban so lieu sai nay da lam lech nhung ca nao".
   decisionRefs BusinessDecisionFactRef[]
@@ -1249,11 +1249,11 @@ model BusinessConflict {
   recommendationReason String?
 
   /// Bang chung dong xung dot. Thieu = khong dong duoc, khong co duong tat.
-  resolvedFactId   String?
-  resolutionActor  String?
-  resolutionRef    String?
-  resolutionNote   String?
-  resolvedAt       DateTime?
+  resolvedFactId  String?
+  resolutionActor String?
+  resolutionRef   String?
+  resolutionNote  String?
+  resolvedAt      DateTime?
 
   openedAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1285,8 +1285,8 @@ model BusinessApproval {
   id       String @id @default(cuid())
   tenantId String
 
-  level ApprovalLevel
-  actor String
+  level       ApprovalLevel
+  actor       String
   /// Dan chung: so hop dong, link mail khach tra loi, bien ban hop. Bat buoc — xem `evaluateApproval`.
   evidenceRef String
   note        String?
@@ -1314,9 +1314,9 @@ model BusinessRequiredFact {
   tenantId String
 
   /// Nang luc bi anh huong khi thieu (khop `CapabilityId` cua goi khach).
-  capability String
-  domain     String
-  key        String
+  capability        String
+  domain            String
+  key               String
   /// Muc dam bao ma nang luc nay doi: co chap nhan chay tren gia dinh hay khong.
   requiresConfirmed Boolean @default(false)
   note              String?
@@ -1901,7 +1901,7 @@ model TransportFuelReconciliation {
 
   matches       TransportFuelMatch[]
   discrepancies TransportFuelDiscrepancy[]
-  handoff       TransportFuelSettlementHandoff?
+  handoffs      TransportFuelSettlementHandoff[]
 
   @@index([supplierId, state])
 }
@@ -1954,28 +1954,56 @@ model TransportFuelDiscrepancy {
   @@index([fuelEntryId])
 }
 
-/// BAN GIAO SANG T5 — mot payload CO KIEU, IDEMPOTENT theo doi soat.
+/// BAN GIAO SANG T5 — mot CHUOI BAN SUA DOI chi them, khong phai mot hang cho mot ky (T4R §2).
 ///
-/// `reconciliationId` UNIQUE la toan bo tinh idempotent: dong doi soat hai lan (mo lai roi dong
-/// lai) khong tao ban giao thu hai, va T5 doc dung mot hang cho mot ky.
+/// ---------------------------------------------------------------------------
+/// VI SAO KHONG CON `reconciliationId @unique`.
+///
+/// Ban dau moi ky co dung mot ban giao, va dong lai lan hai chi tra ve hang cu. Dieu do idempotent
+/// DUNG khi ket qua kinh te khong doi, va SAI hoan toan khi no doi:
+///
+/// ```text
+/// dong lan 1                 -> ban giao 10.000.000d
+/// mo lai, sua mot dong bang ke
+/// dong lan 2                 -> van tra ve 10.000.000d cu
+/// ```
+///
+/// T5 khong bao gio hoc duoc ve lan sua, va cay xang duoc tra sai so tien. Nen tu T4R:
+///
+///   · ket qua KHONG doi  -> phat lai ban gan nhat, khong them hang nao;
+///   · ket qua DOI        -> them mot ban moi, `supersedesId` tro nguoc ve ban truoc.
+///
+/// `@@unique([reconciliationId, revision])` la thu giu cho hai lan dong dong thoi khong the cung
+/// sinh ra ban thu N. Khoa hang doi soat (`SELECT ... FOR UPDATE`) da noi tiep hoa chung tu truoc,
+/// nen day la luoi thu hai — va la luoi DUY NHAT con dung neu mot duong ghi tuong lai quen lay khoa.
 ///
 /// T4 KHONG ghi bang cua T5 — bang nay thuoc `transport-fuel` va la mot HOP THU DI: T5 se doc no
 /// de tao `PayableDocument`. Ghi thang sang bang cua T5 se lam hai capability dinh chat vao nhau
 /// truoc khi T5 co mot dong code nao.
 model TransportFuelSettlementHandoff {
-  id                String                      @id @default(cuid())
-  reconciliationId  String                      @unique
-  reconciliation    TransportFuelReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  id                String                          @id @default(cuid())
+  reconciliationId  String
+  reconciliation    TransportFuelReconciliation     @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  /// Dem tu 1. Ban N+1 thay the ban N; khong ban nao bi sua sau khi da phat.
+  revision          Int                             @default(1)
+  /// Ban giao ma ban nay THAY THE. `null` o ban dau tien. UNIQUE: mot ban chi bi thay the mot lan.
+  supersedesId      String?                         @unique
+  supersedes        TransportFuelSettlementHandoff? @relation("TransportFuelHandoffRevision", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy      TransportFuelSettlementHandoff? @relation("TransportFuelHandoffRevision")
   supplierId        String
-  periodStart       String                      @db.VarChar(10)
-  periodEnd         String                      @db.VarChar(10)
+  periodStart       String                          @db.VarChar(10)
+  periodEnd         String                          @db.VarChar(10)
   /// Tong so tien DA DUOC CHAP NHAN, so nguyen dong. Khong gom dong bi tu choi hay bo qua.
   acceptedAmount    BigInt
-  currencyCode      String                      @default("VND") @db.VarChar(3)
+  currencyCode      String                          @default("VND") @db.VarChar(3)
   acceptedLineCount Int
-  emittedAt         DateTime                    @default(now())
+  /// DUNG nhung dong bang ke nao lam nen so tien tren. T5 tra tien theo BO DONG, khong theo mot so.
+  acceptedLineIds   String[]
+  emittedAt         DateTime                        @default(now())
   emittedBy         String
 
+  @@unique([reconciliationId, revision])
+  @@index([reconciliationId])
   @@index([supplierId])
 }
 
@@ -2158,8 +2186,8 @@ model BusinessDecisionFactRef {
   fact   BusinessFact @relation(fields: [factId], references: [id], onDelete: Restrict)
 
   /// Anh chup DIA CHI su that. Doc duoc ma khong phai join, va con dung neu mo hinh doi ve sau.
-  factDomain String
-  factKey    String
+  factDomain      String
+  factKey         String
   /// Trang thai su that LUC DUOC DUNG (`CONFIRMED`, `WORKING_ASSUMPTION`…). Chuoi, khong enum:
   /// mot hang lich su khong duoc phep hong vi hom nay ta them mot trang thai moi.
   factStatusAtUse String
@@ -2182,7 +2210,7 @@ model BusinessDecisionRelation {
   decisionId String
   decision   BusinessDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
 
-  kind BusinessDecisionRelationKind
+  kind       BusinessDecisionRelationKind
   /// Loai dich (`decision`, `approval`, `order`, `trip`…) — chuoi tu do co chu y: moi vertical
   /// goi ten thuc the cua no mot kieu.
   targetType String

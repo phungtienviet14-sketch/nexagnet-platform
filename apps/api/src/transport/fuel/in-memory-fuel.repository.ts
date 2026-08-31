@@ -4,27 +4,29 @@ import {
   INITIAL_FUEL_RECONCILIATION_STATE,
   INITIAL_FUEL_RECONCILIATION_STATUS,
   INITIAL_FUEL_VERIFICATION_STATUS,
+  isFrozenFuelReconciliation,
+  planFuelReconciliationPath,
   type FuelReconciliationState,
   type FuelReconciliationStatus,
   type FuelVerificationStatus,
 } from './fuel-lifecycle.js';
+import { settlementResultFingerprint, sumAcceptedSettlement } from './fuel-settlement.js';
 import {
   FuelRepository,
+  type AmendFuelEntryGuard,
   type AmendFuelEntryInput,
   type ApplyMatchingRunInput,
+  type ApplyMatchingRunOutcome,
   type CloseReconciliationInput,
-  type ClosedReconciliation,
+  type CloseReconciliationOutcome,
   type CreateFuelEntryInput,
   type CreateFuelSupplierInput,
-  type CreateReconciliationInput,
   type CreateStatementInput,
   type CreatedStatement,
-  type MatchingRunResult,
   type ReopenReconciliationInput,
   type ResolveDiscrepancyInput,
-  type ResolvedDiscrepancy,
+  type ResolveDiscrepancyOutcome,
   type SetFuelVerificationInput,
-  type SetReconciliationStateInput,
 } from './fuel.repository.js';
 import type {
   FuelDiscrepancy,
@@ -68,7 +70,13 @@ export class InMemoryFuelRepository extends FuelRepository {
   private readonly reconciliations = new Map<string, FuelReconciliation>();
   private readonly matches = new Map<string, FuelMatch>();
   private readonly discrepancies = new Map<string, FuelDiscrepancy>();
-  private readonly handoffs = new Map<string, FuelSettlementHandoff>();
+  /**
+   * BAN GIAO la mot CHUOI ban sua doi, khong con mot hang cho mot ky (T4R §2).
+   *
+   * Khoa la `reconciliationId`, gia tri la danh sach theo `revision` TANG DAN. Kho Prisma giu dung
+   * hinh dang do bang `@@unique([reconciliationId, revision])`; day chi la ban sao trong bo nho.
+   */
+  private readonly handoffs = new Map<string, FuelSettlementHandoff[]>();
 
   /* --------------------------- Cay xang --------------------------- */
 
@@ -194,9 +202,18 @@ export class InMemoryFuelRepository extends FuelRepository {
     return earlier.at(-1)?.odometerKm ?? null;
   }
 
-  async amendEntry(id: string, patch: AmendFuelEntryInput): Promise<FuelEntry | null> {
+  async amendEntry(
+    id: string,
+    guard: AmendFuelEntryGuard,
+    patch: AmendFuelEntryInput,
+  ): Promise<FuelEntry | null> {
     const current = this.entries.get(id);
     if (!current) return null;
+    // Cung dieu kien ma kho Prisma dat trong `WHERE` (T4R §4). Kho nay khong chung minh duoc tinh
+    // nguyen tu, nhung no PHAI tu choi cung nhung dau vao — neu khong, bo test cua service se xanh
+    // tren mot hanh vi ma Postgres khong co.
+    if (current.verificationStatus !== guard.verification) return null;
+    if (guard.lockedReconciliation.includes(current.reconciliationStatus)) return null;
     const updated: FuelEntry = {
       ...current,
       litersUnits: patch.litersUnits,
@@ -261,7 +278,12 @@ export class InMemoryFuelRepository extends FuelRepository {
     capturedAt: Date | null;
     uploadedBy: string;
     at: Date;
-  }): Promise<FuelReceiptEvidence> {
+    forbiddenReconciliationStatuses: readonly FuelReconciliationStatus[];
+  }): Promise<FuelReceiptEvidence | null> {
+    const entry = this.entries.get(input.fuelEntryId);
+    if (!entry) return null;
+    if (input.forbiddenReconciliationStatuses.includes(entry.reconciliationStatus)) return null;
+
     const record: FuelReceiptEvidence = {
       id: randomUUID(),
       fuelEntryId: input.fuelEntryId,
@@ -277,12 +299,14 @@ export class InMemoryFuelRepository extends FuelRepository {
   }
 
   async listEvidence(fuelEntryId: string): Promise<FuelReceiptEvidence[]> {
-    return sortedById([...this.evidence.values()].filter((item) => item.fuelEntryId === fuelEntryId));
+    return sortedById(
+      [...this.evidence.values()].filter((item) => item.fuelEntryId === fuelEntryId),
+    );
   }
 
   /* --------------------------- Bang ke ---------------------------- */
 
-  async createStatement(input: CreateStatementInput): Promise<CreatedStatement> {
+  async createStatementWithReconciliation(input: CreateStatementInput): Promise<CreatedStatement> {
     const accepted = input.lines.filter((line) => line.status === 'ACCEPTED').length;
     const statement: FuelSupplierStatement = {
       id: randomUUID(),
@@ -323,7 +347,25 @@ export class InMemoryFuelRepository extends FuelRepository {
       return clone(stored);
     });
 
-    return { statement: clone(statement), lines };
+    const reconciliation: FuelReconciliation = {
+      id: randomUUID(),
+      supplierId: input.supplierId,
+      statementId: statement.id,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      state: INITIAL_FUEL_RECONCILIATION_STATE,
+      lastMatchedAt: null,
+      closedAt: null,
+      closedBy: null,
+      reopenedAt: null,
+      reopenedBy: null,
+      reopenReason: null,
+      createdAt: input.at.toISOString(),
+      updatedAt: input.at.toISOString(),
+    };
+    this.reconciliations.set(reconciliation.id, reconciliation);
+
+    return { statement: clone(statement), lines, reconciliation: clone(reconciliation) };
   }
 
   async findStatement(id: string): Promise<FuelSupplierStatement | null> {
@@ -354,27 +396,6 @@ export class InMemoryFuelRepository extends FuelRepository {
 
   /* -------------------------- Doi soat ---------------------------- */
 
-  async createReconciliation(input: CreateReconciliationInput): Promise<FuelReconciliation> {
-    const reconciliation: FuelReconciliation = {
-      id: randomUUID(),
-      supplierId: input.supplierId,
-      statementId: input.statementId,
-      periodStart: input.periodStart,
-      periodEnd: input.periodEnd,
-      state: INITIAL_FUEL_RECONCILIATION_STATE,
-      lastMatchedAt: null,
-      closedAt: null,
-      closedBy: null,
-      reopenedAt: null,
-      reopenedBy: null,
-      reopenReason: null,
-      createdAt: input.at.toISOString(),
-      updatedAt: input.at.toISOString(),
-    };
-    this.reconciliations.set(reconciliation.id, reconciliation);
-    return clone(reconciliation);
-  }
-
   async findReconciliation(id: string): Promise<FuelReconciliation | null> {
     return cloneOrNull(this.reconciliations.get(id));
   }
@@ -389,25 +410,11 @@ export class InMemoryFuelRepository extends FuelRepository {
     return sortedById([...this.reconciliations.values()]);
   }
 
-  async setReconciliationState(
-    id: string,
-    from: FuelReconciliationState,
-    to: FuelReconciliationState,
-    input: SetReconciliationStateInput,
-  ): Promise<FuelReconciliation | null> {
-    const current = this.reconciliations.get(id);
-    if (!current || current.state !== from) return null;
-    const updated: FuelReconciliation = {
-      ...current,
-      state: to,
-      lastMatchedAt: input.markMatched ? input.at.toISOString() : current.lastMatchedAt,
-      updatedAt: input.at.toISOString(),
-    };
-    this.reconciliations.set(id, updated);
-    return clone(updated);
-  }
+  async applyMatchingRun(input: ApplyMatchingRunInput): Promise<ApplyMatchingRunOutcome> {
+    const locked = this.reconciliations.get(input.reconciliationId);
+    if (!locked) return { kind: 'REJECTED', state: null };
+    if (isFrozenFuelReconciliation(locked.state)) return { kind: 'REJECTED', state: locked.state };
 
-  async applyMatchingRun(input: ApplyMatchingRunInput): Promise<MatchingRunResult> {
     // Chi xoa cai MAY vua lam. Xem chu thich cua `ApplyMatchingRunInput` — cap `MANUAL` va chenh
     // lech da co nguoi quyet la cong cua nguoi doi soat, khong phai ket qua cua mot lan chay.
     for (const [id, match] of [...this.matches]) {
@@ -463,7 +470,12 @@ export class InMemoryFuelRepository extends FuelRepository {
     for (const [lineId, status] of input.lineStatuses) this.setLineStatus(lineId, status);
     for (const [entryId, status] of input.entryStatuses) this.setEntryStatus(entryId, status);
 
-    return { matches, discrepancies };
+    const pending = this.countPending(input.reconciliationId);
+    const target = pending > 0 ? input.stateAfterRun.whenPending : input.stateAfterRun.whenSettled;
+    const state = this.walkToState(locked, target, { at: input.at, markMatched: true });
+    if (state === null) return { kind: 'REJECTED', state: locked.state };
+
+    return { kind: 'APPLIED', state, result: { matches, discrepancies } };
   }
 
   async listMatches(reconciliationId: string): Promise<FuelMatch[]> {
@@ -482,15 +494,24 @@ export class InMemoryFuelRepository extends FuelRepository {
     return cloneOrNull(this.discrepancies.get(id));
   }
 
-  async countPendingDiscrepancies(reconciliationId: string): Promise<number> {
+  private countPending(reconciliationId: string): number {
     return [...this.discrepancies.values()].filter(
       (item) => item.reconciliationId === reconciliationId && item.status === 'PENDING',
     ).length;
   }
 
-  async resolveDiscrepancy(input: ResolveDiscrepancyInput): Promise<ResolvedDiscrepancy | null> {
+  async resolveDiscrepancy(input: ResolveDiscrepancyInput): Promise<ResolveDiscrepancyOutcome> {
+    const locked = this.reconciliations.get(input.reconciliationId);
+    if (!locked) return { kind: 'RECONCILIATION_REJECTED', state: null };
+    if (isFrozenFuelReconciliation(locked.state)) {
+      return { kind: 'RECONCILIATION_REJECTED', state: locked.state };
+    }
+
     const current = this.discrepancies.get(input.discrepancyId);
-    if (!current || current.status !== 'PENDING') return null;
+    if (!current || current.reconciliationId !== input.reconciliationId) {
+      return { kind: 'DISCREPANCY_RACE' };
+    }
+    if (current.status !== 'PENDING') return { kind: 'DISCREPANCY_RACE' };
 
     const updated: FuelDiscrepancy = {
       ...current,
@@ -522,12 +543,27 @@ export class InMemoryFuelRepository extends FuelRepository {
     if (input.lineStatus) this.setLineStatus(input.lineStatus.id, input.lineStatus.status);
     if (input.entryStatus) this.setEntryStatus(input.entryStatus.id, input.entryStatus.status);
 
-    return { discrepancy: clone(updated), match };
+    const pending = this.countPending(input.reconciliationId);
+    const state =
+      pending > 0
+        ? locked.state
+        : (this.walkToState(locked, input.stateWhenSettled, {
+            at: input.at,
+            markMatched: false,
+          }) ?? locked.state);
+
+    return { kind: 'RESOLVED', state, resolved: { discrepancy: clone(updated), match } };
   }
 
-  async closeReconciliation(input: CloseReconciliationInput): Promise<ClosedReconciliation | null> {
+  async closeReconciliation(input: CloseReconciliationInput): Promise<CloseReconciliationOutcome> {
     const current = this.reconciliations.get(input.reconciliationId);
-    if (!current || current.state !== 'RESOLVED') return null;
+    if (!current) return { kind: 'REJECTED', state: null };
+
+    const pending = this.countPending(input.reconciliationId);
+    if (pending > 0) return { kind: 'PENDING_DISCREPANCIES', pending };
+
+    const path = planFuelReconciliationPath(current.state, 'CLOSED');
+    if (path === null || path.length === 0) return { kind: 'REJECTED', state: current.state };
 
     const closed: FuelReconciliation = {
       ...current,
@@ -548,25 +584,44 @@ export class InMemoryFuelRepository extends FuelRepository {
       this.setEntryStatus(match.fuelEntryId, 'SETTLED');
     }
 
-    const existing = this.handoffs.get(current.id);
-    if (existing) {
-      return { reconciliation: clone(closed), handoff: clone(existing), handoffReplayed: true };
+    const accepted = sumAcceptedSettlement({
+      lines: [...this.lines.values()].filter((line) => line.statementId === current.statementId),
+      matches: [...this.matches.values()].filter((match) => match.reconciliationId === current.id),
+      discrepancies: [...this.discrepancies.values()].filter(
+        (item) => item.reconciliationId === current.id,
+      ),
+    });
+    const fingerprint = settlementResultFingerprint(accepted);
+
+    const revisions = this.handoffs.get(current.id) ?? [];
+    const latest = revisions.at(-1) ?? null;
+    if (latest && handoffFingerprint(latest) === fingerprint) {
+      return {
+        kind: 'CLOSED',
+        closed: { reconciliation: clone(closed), handoff: clone(latest), handoffReplayed: true },
+      };
     }
 
     const handoff: FuelSettlementHandoff = {
       id: randomUUID(),
       reconciliationId: current.id,
+      revision: (latest?.revision ?? 0) + 1,
+      supersedesId: latest?.id ?? null,
       supplierId: current.supplierId,
       periodStart: current.periodStart,
       periodEnd: current.periodEnd,
-      acceptedAmount: input.acceptedAmount,
+      acceptedAmount: accepted.amount,
       currencyCode: TRANSPORT_CURRENCY,
-      acceptedLineCount: input.acceptedLineCount,
+      acceptedLineCount: accepted.lineCount,
+      acceptedLineIds: [...accepted.lineIds],
       emittedAt: input.at.toISOString(),
       emittedBy: input.actor,
     };
-    this.handoffs.set(current.id, handoff);
-    return { reconciliation: clone(closed), handoff: clone(handoff), handoffReplayed: false };
+    this.handoffs.set(current.id, [...revisions, handoff]);
+    return {
+      kind: 'CLOSED',
+      closed: { reconciliation: clone(closed), handoff: clone(handoff), handoffReplayed: false },
+    };
   }
 
   async reopenReconciliation(input: ReopenReconciliationInput): Promise<FuelReconciliation | null> {
@@ -606,10 +661,35 @@ export class InMemoryFuelRepository extends FuelRepository {
   }
 
   async findHandoff(reconciliationId: string): Promise<FuelSettlementHandoff | null> {
-    return cloneOrNull(this.handoffs.get(reconciliationId));
+    return cloneOrNull((this.handoffs.get(reconciliationId) ?? []).at(-1));
+  }
+
+  async listHandoffRevisions(reconciliationId: string): Promise<FuelSettlementHandoff[]> {
+    return (this.handoffs.get(reconciliationId) ?? []).map(clone);
   }
 
   /* --------------------------- Noi bo ----------------------------- */
+
+  /** Doi tuong doi cua `walkToState` o kho Prisma — cung may trang thai, cung mot ham thuan. */
+  private walkToState(
+    from: FuelReconciliation,
+    to: FuelReconciliationState,
+    options: { readonly at: Date; readonly markMatched: boolean },
+  ): FuelReconciliationState | null {
+    const path = planFuelReconciliationPath(from.state, to);
+    if (path === null) return null;
+
+    const destination = path.length === 0 ? from.state : path[path.length - 1]!;
+    const current = this.reconciliations.get(from.id);
+    if (!current) return null;
+    this.reconciliations.set(from.id, {
+      ...current,
+      state: destination,
+      ...(options.markMatched ? { lastMatchedAt: options.at.toISOString() } : {}),
+      updatedAt: options.at.toISOString(),
+    });
+    return destination;
+  }
 
   private setLineStatus(id: string, status: FuelReconciliationStatus): void {
     const current = this.lines.get(id);
@@ -625,6 +705,14 @@ export class InMemoryFuelRepository extends FuelRepository {
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
+
+/** Doi tuong doi cua ham cung ten o kho Prisma — cung phep so, cung mot ham thuan (T4R §2). */
+const handoffFingerprint = (handoff: FuelSettlementHandoff): string =>
+  settlementResultFingerprint({
+    amount: handoff.acceptedAmount,
+    lineCount: handoff.acceptedLineCount,
+    lineIds: handoff.acceptedLineIds,
+  });
 const cloneOrNull = <T>(value: T | undefined): T | null => (value ? clone(value) : null);
 
 const sortedById = <T extends { id: string }>(items: T[]): T[] =>

@@ -224,12 +224,31 @@ export interface FuelDiscrepancy {
 export interface FuelSettlementHandoff {
   readonly id: string;
   readonly reconciliationId: string;
+  /**
+   * SO BAN SUA DOI, dem tu 1 — T4R §2.
+   *
+   * Truoc T4R mot ky co DUNG MOT ban giao, unique theo `reconciliationId`. Mo lai roi sua so lieu
+   * roi dong lai van tra ve ban cu, nen T5 khong bao gio hoc duoc ve lan sua. Tu T4R day la mot
+   * chuoi CHI THEM: dong lai ma ket qua kinh te KHONG doi thi phat lai ban gan nhat; ket qua DOI
+   * thi them mot ban moi tro nguoc ve ban truoc.
+   */
+  readonly revision: number;
+  /** Ban giao ma ban nay THAY THE. `null` o ban dau tien. */
+  readonly supersedesId: string | null;
   readonly supplierId: string;
   readonly periodStart: BusinessDate;
   readonly periodEnd: BusinessDate;
   readonly acceptedAmount: number;
   readonly currencyCode: string;
   readonly acceptedLineCount: number;
+  /**
+   * Dung nhung dong bang ke nao lam nen so tien tren — DA SAP XEP.
+   *
+   * T5 tra tien theo BO DONG chu khong theo mot con so, va hai ky cung tong nhung khac bo dong la
+   * hai ket qua kinh te khac nhau. Day cung la thu cho phep so sanh "co doi khong" ma khong phai
+   * doc lai toan bo ky.
+   */
+  readonly acceptedLineIds: readonly string[];
   readonly emittedAt: string;
   readonly emittedBy: string;
 }
