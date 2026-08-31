@@ -113,6 +113,33 @@ Chạy trong `pnpm test` (job `verify`). Quy tắc **theo đường dẫn**, kh�
 
 Ngoài `docs/khach-hang/` thì không có luật nào — `apps/web/public/*.png` không bị đụng tới.
 
+### 7bis. Cổng thứ hai — `NO_RAW_CUSTOMER_ARTIFACT_IN_HISTORY` (thêm 31/08/2026)
+
+```bash
+pnpm check:customer-sources:range <base>..<head>
+```
+
+Cổng ở mục 7 chạy trên `git ls-files` — tức trên **cây cuối cùng** của một PR. Một tài liệu gốc
+thêm ở commit A rồi xoá ở commit B **trong cùng PR đó** lọt qua: cây cuối cùng sạch, còn byte thì
+đã nằm vĩnh viễn trong lịch sử của một repo public.
+
+Đây không phải giả định. Commit `d05e1e4` (11/08/2026) đưa **mười** tài liệu gốc của khách vào
+repo — bản khảo sát có số điện thoại liên hệ của một nhân sự, tám ảnh thiết kế khách gửi, và bản
+`.xlsx` mang hai chat ID nhóm Zalo — rồi tất cả đều bị xoá ở các commit sau. Không cổng nào kêu,
+vì không cổng nào nhìn vào **khoảng commit**.
+
+Cổng này nhìn. Cùng bộ quy tắc, cùng allowlist, cùng fail-closed — chỉ khác tập đường dẫn đầu vào:
+`git log --no-merges --diff-filter=AMR --name-only base..head`. Chạy ở job `verify`, chỉ trên
+`pull_request`, và đòi `actions/checkout` đặt `fetch-depth: 0` (clone nông thì cổng **thoát mã 2**
+chứ không im lặng báo đạt).
+
+Mã từ chối riêng: `RAW_ARTIFACT_INTRODUCED_THEN_REMOVED` — "đã đẩy lên rồi xoá lại". Nó tách khỏi
+`RAW_ARTIFACT_NOT_ALLOWLISTED` vì cách sửa khác nhau: cái sau `git rm` là xong, cái này phải viết
+lại lịch sử **của nhánh** trước khi merge.
+
+**Cổng này KHÔNG quét lịch sử toàn repo.** Lịch sử cũ đã công bố rồi; quét lại chỉ sinh ra một danh
+sách không ai đóng được, và một cổng luôn đỏ là một cổng sẽ bị tắt. Nó chặn ở **đường vào**.
+
 Khi cổng đỏ:
 
 ```bash
@@ -135,6 +162,20 @@ Vì vậy khi phát hiện một tệp đã lỡ vào:
 3. dọn lịch sử (`git filter-repo` / BFG + force-push) là **quyết định của chủ repo**: nó viết lại
    nhánh được bảo vệ và làm hỏng mọi bản clone đang có. Không tự làm.
 
-> **Trạng thái 29/08/2026.** `docs/khach-hang/ultty/nguon-goc/khao-sat-khach-hang-2026-07.docx`
-> đã được gỡ khỏi HEAD ở nhánh này (chứa tên + số điện thoại người liên hệ, repo public). **Lịch sử
-> vẫn còn tệp đó** — mục 2 và 3 ở trên đang chờ chủ repo quyết.
+> **Trạng thái 31/08/2026 — đo trên `origin/main` = `905860e`.** Đếm đầy đủ, ở mức **blob**, mọi
+> tài liệu gốc của khách từng nằm trong vùng canh (kể cả đường dẫn cũ trước khi sắp xếp lại):
+> **13 blob**, trong đó **3 là bản bàn giao do chính chúng ta sinh ra** (còn ở HEAD, có ngoại lệ
+> kèm nguồn HTML) và **10 là tài liệu gốc của khách đã gỡ khỏi HEAD nhưng còn vĩnh viễn trong lịch
+> sử công khai**:
+>
+> | Hạng mục | Số blob | Phân loại |
+> |---|---|---|
+> | `khao-sat-khach-hang-2026-07.docx` | 1 | **PII** — tên + chức vụ + một số di động VN gắn nhãn "số điện thoại liên hệ" |
+> | `thiet-ke-giao-dien/01–08.jpg` | 8 | BUSINESS_SENSITIVE — ảnh thiết kế khách gửi |
+> | `a4-dai-ly-map-nhom-ultty.xlsx` | 1 | BUSINESS_SENSITIVE — hai chat ID nhóm Zalo (đã **bị thay thế** ở `040922f`) |
+>
+> Cả ba đều **reachable từ `origin/main`**, và blob lấy được qua API công khai theo SHA. Bản khảo
+> sát vào repo từ **commit đầu tiên** (`b6e1b39`).
+>
+> Mục 2 và 3 ở trên **vẫn đang chờ chủ repo quyết** — xem Issue #96 để có bảng so sánh phương án,
+> bán kính ảnh hưởng đo được của việc viết lại lịch sử, và rủi ro tồn dư đã được ghi nhận.

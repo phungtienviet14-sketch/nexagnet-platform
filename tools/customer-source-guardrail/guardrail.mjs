@@ -137,6 +137,8 @@ export const VIOLATION_CODES = {
   DIGEST_MISMATCH: 'ALLOWLIST_DIGEST_MISMATCH',
   /** Co ngoai le dua tren tep nguon, nhung tep nguon do khong con trong repo. */
   SOURCE_FILE_MISSING: 'ALLOWLIST_SOURCE_FILE_MISSING',
+  /** Da vao lich su roi bi xoa lai trong cung mot khoang commit — cay cuoi cung sach, git thi khong. */
+  INTRODUCED_THEN_REMOVED: 'RAW_ARTIFACT_INTRODUCED_THEN_REMOVED',
 };
 
 const extensionOf = (path) => {
@@ -202,6 +204,66 @@ export function findViolations(paths, { digestOf } = {}) {
     .sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/* ------------------------------------------------------------------ *
+ * HEAD SACH ≠ LICH SU SACH
+ * ------------------------------------------------------------------ */
+
+/**
+ * `findViolations` chay tren `git ls-files` — tuc no chi nhin thay CAY CUOI CUNG cua mot PR.
+ *
+ * Mot tai lieu goc them o commit A roi xoa o commit B trong cung PR do se cho ra mot cay cuoi cung
+ * SACH, va cong bao dat. Nhung byte cua no thi da nam vinh vien trong lich su cua mot repo PUBLIC:
+ * GitHub phuc vu blob theo SHA, va `refs/pull/N/head` giu lai commit cu sau ca khi nhanh bi xoa.
+ *
+ * Do dung la duong ma `a4-dai-ly-map-nhom-ultty.xlsx` da di. Go no khoi HEAD ngay 30/08/2026
+ * khong go duoc hai chat ID nhom Zalo ra khoi cac commit truoc do — va chinh commit go do da
+ * viet ra dieu nay: "hai chat ID do van nam trong LICH SU git".
+ *
+ * Nen cong nay them mot lat cat thu hai: khong hoi "cay cuoi cung co gi", ma hoi **"khoang commit
+ * nay da DUA them nhung gi vao git"**. Cung mot bo quy tac, cung mot allowlist, cung fail-closed —
+ * chi khac tap duong dan dau vao.
+ *
+ * KHONG quet lich su TOAN REPO. Lich su cu da cong bo roi, quet lai chi sinh ra mot danh sach
+ * khong ai dong duoc; va mot cong luon do la mot cong se bi tat. Cong nay chan o DUONG VAO.
+ */
+
+/** Tach dau ra `git log --name-only` thanh danh sach duong dan khong lap. */
+export function parseChangedPaths(gitLogOutput) {
+  const seen = new Set();
+  for (const line of gitLogOutput.split(/\r?\n/)) {
+    const path = line.trim();
+    if (path) seen.add(path);
+  }
+  return [...seen];
+}
+
+/**
+ * Vi pham theo KHOANG COMMIT: nhung tai lieu goc ma khoang nay dua them vao git.
+ *
+ * `treePaths` la cay cuoi cung — chi dung de DO BANG CHUNG cua allowlist (tep nguon co con khong),
+ * chu khong dung de mien tru. Mot tep bi xoa lai truoc khi PR khep lai van la mot tep da cong bo.
+ */
+export function findHistoryViolations(changedPaths, { treePaths = [], digestOf } = {}) {
+  const inTree = new Set(treePaths);
+  return parseChangedPaths(changedPaths.join('\n'))
+    .filter((path) => isInCustomerSourceArea(path) && isRawArtifact(path))
+    .map((path) => {
+      const entry = allowlistEntryFor(path);
+      if (entry) {
+        const failure = checkAllowlistEvidence(path, entry, { paths: treePaths, digestOf });
+        return failure ? { path, code: failure } : null;
+      }
+      return {
+        path,
+        code: inTree.has(path)
+          ? VIOLATION_CODES.NOT_ALLOWLISTED
+          : VIOLATION_CODES.INTRODUCED_THEN_REMOVED,
+      };
+    })
+    .filter((row) => row !== null)
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
 /**
  * Ngoai le da het tac dung (tep khong con) — mot dang ro ri nguoc: danh sach ngoai le no ra theo
  * thoi gian cho toi luc khong ai dam sua no nua.
@@ -215,6 +277,8 @@ const CODE_HINTS = {
   [VIOLATION_CODES.EVIDENCE_UNVERIFIABLE]: 'co ngoai le nhung khong do duoc byte de kiem chung',
   [VIOLATION_CODES.DIGEST_MISMATCH]: 'byte KHAC ban da ghim — noi dung tep da doi',
   [VIOLATION_CODES.SOURCE_FILE_MISSING]: 'khong con tep nguon trong repo de tai sinh ra no',
+  [VIOLATION_CODES.INTRODUCED_THEN_REMOVED]:
+    'da day len roi xoa lai trong cung khoang commit — xoa KHONG go duoc ban da cong bo',
 };
 
 export function formatReport(violations) {
@@ -224,7 +288,9 @@ export function formatReport(violations) {
     '',
     'Repo nay PUBLIC. Git khong quen: xoa o ban sau khong go duoc ban da day len.',
     '',
-    ...violations.map((row) => `  · ${row.path}\n      ${row.code} — ${CODE_HINTS[row.code] ?? ''}`),
+    ...violations.map(
+      (row) => `  · ${row.path}\n      ${row.code} — ${CODE_HINTS[row.code] ?? ''}`,
+    ),
     '',
     'Cach xu ly (docs/phat-trien/van-hanh/nguon-khach-hang.md):',
     '  1. chuyen tep sang kho rieng NGOAI repo;',
@@ -234,6 +300,31 @@ export function formatReport(violations) {
     '     (ghim sha256, hoac chi ra tep nguon trong repo tai sinh duoc no).',
   ];
   return lines.join('\n');
+}
+
+export function formatHistoryReport(violations, range) {
+  if (violations.length === 0) return `NO_RAW_CUSTOMER_ARTIFACT_IN_HISTORY (${range}): dat.`;
+  return [
+    `NO_RAW_CUSTOMER_ARTIFACT_IN_HISTORY (${range}): ${violations.length} tai lieu goc cua khach`,
+    'da duoc DUA VAO git trong khoang commit nay.',
+    '',
+    'Xoa o mot commit sau KHONG go duoc ban da day len: GitHub phuc vu blob theo SHA, va',
+    '`refs/pull/N/head` giu lai commit cu ke ca sau khi nhanh bi xoa. Sua o DAY, truoc khi merge,',
+    'la lan cuoi cung con sua duoc ma khong phai viet lai lich su cong khai.',
+    '',
+    ...violations.map(
+      (row) => `  · ${row.path}\n      ${row.code} — ${CODE_HINTS[row.code] ?? ''}`,
+    ),
+    '',
+    'Cach xu ly (docs/phat-trien/van-hanh/nguon-khach-hang.md):',
+    '  1. viet lai LICH SU CUA NHANH nay (rebase/amend) de byte do khong bao gio len main;',
+    '  2. chuyen tep sang kho rieng NGOAI repo, do SHA-256 va dang ky mot BusinessSource;',
+    '  3. them dong .gitignore TRUOC khi commit lai;',
+    '  4. neu tep that su la dau ra cua chung ta, them mot dong ALLOWLIST kem LY DO va BANG CHUNG.',
+    '',
+    'Neu nhanh nay DA len main roi thi day khong con la viec cua cong nay — xem muc "lich su" o',
+    'nguon-khach-hang.md: go lich su cong khai la mot quyet dinh rieng, co chu so huu rieng.',
+  ].join('\n');
 }
 
 /* ------------------------------------------------------------------ *
@@ -278,6 +369,46 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
       return null;
     }
   };
+
+  /**
+   * `--range <base>..<head>` — quet KHOANG COMMIT thay vi cay cuoi cung.
+   *
+   * `--no-merges`: commit merge khong tu no dua byte moi vao, va tinh ca no thi mot PR se bao lai
+   * moi thu nhanh nen da mang san. `AMR` chu khong chi `A`: sua noi dung mot tai lieu goc cung la
+   * day byte moi len, va mot lan doi ten VAO vung khach cung phai bi hoi — dung nhu commit
+   * `d05e1e4` da lam.
+   */
+  const rangeFlag = process.argv.indexOf('--range');
+  if (rangeFlag !== -1) {
+    const range = process.argv[rangeFlag + 1];
+    if (!range) {
+      console.error('Thieu doi so: --range <base>..<head>');
+      process.exit(2);
+    }
+
+    let log;
+    try {
+      log = execFileSync(
+        'git',
+        ['log', '--no-merges', '--diff-filter=AMR', '--name-only', '--pretty=format:', range],
+        { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
+      );
+    } catch {
+      // FAIL CLOSED: khong doc duoc khoang thi khong duoc phep bao dat. Gap nhat la clone NONG —
+      // `actions/checkout` mac dinh `fetch-depth: 1`, va mot cong im lang vi thieu du lieu la
+      // dung cai bay `RUN_WORKFLOW_IT` da roi vao.
+      console.error(`Khong doc duoc khoang commit "${range}".`);
+      console.error('Neu chay o CI: `actions/checkout` phai dat `fetch-depth: 0`.');
+      process.exit(2);
+    }
+
+    const rangeViolations = findHistoryViolations(parseChangedPaths(log), {
+      treePaths: tracked,
+      digestOf,
+    });
+    console.log(formatHistoryReport(rangeViolations, range));
+    process.exit(rangeViolations.length === 0 ? 0 : 1);
+  }
 
   const violations = findViolations(tracked, { digestOf });
   const stale = findStaleAllowlistEntries(tracked);

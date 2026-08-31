@@ -8,10 +8,12 @@ import {
   VIOLATION_CODES,
   allowlistEntryFor,
   checkAllowlistEvidence,
+  findHistoryViolations,
   findStaleAllowlistEntries,
   findViolations,
   isInCustomerSourceArea,
   isRawArtifact,
+  parseChangedPaths,
 } from './guardrail.mjs';
 
 /**
@@ -291,6 +293,151 @@ test('cong that su con chan — doi chung chong bai test rong', () => {
 test('khong con ngoai le nao da het tac dung', () => {
   assert.deepEqual(
     findStaleAllowlistEntries(tracked).map((entry) => String(entry.pattern)),
+    [],
+  );
+});
+
+/* ------------------------------------------------------------------ *
+ * HEAD SACH ≠ LICH SU SACH — cong quet theo KHOANG COMMIT
+ * ------------------------------------------------------------------ */
+
+/**
+ * Lo hong ma cac bai o tren KHONG bat duoc.
+ *
+ * `findViolations` chi nhin thay CAY CUOI CUNG cua mot PR. Mot tai lieu goc them o commit A roi
+ * xoa o commit B trong cung PR do se cho ra mot cay cuoi cung sach — va cong bao dat. Nhung byte
+ * cua no da nam vinh vien trong lich su cua mot repo PUBLIC.
+ *
+ * Day dung la duong ma `a4-dai-ly-map-nhom-ultty.xlsx` da di: go khoi HEAD ngay 30/08/2026 khong
+ * go duoc hai chat ID nhom Zalo ra khoi cac commit truoc do.
+ */
+test('LO HONG: cay cuoi cung sach van co the che mot tai lieu goc da vao lich su', () => {
+  const finalTree = ['docs/khach-hang/khach-tong-hop/nghiep-vu/mo-ta.md'];
+  const addedInRange = [
+    'docs/khach-hang/khach-tong-hop/nguon-goc/khao-sat.xlsx',
+    'docs/khach-hang/khach-tong-hop/nghiep-vu/mo-ta.md',
+  ];
+
+  // Cong cu: khong thay gi. Day la lo hong, khong phai bug cua ham nay.
+  assert.deepEqual(findViolations(finalTree), []);
+
+  // Cong moi: thay.
+  assert.deepEqual(findHistoryViolations(addedInRange, { treePaths: finalTree }), [
+    {
+      path: 'docs/khach-hang/khach-tong-hop/nguon-goc/khao-sat.xlsx',
+      code: VIOLATION_CODES.INTRODUCED_THEN_REMOVED,
+    },
+  ]);
+});
+
+test('tai lieu goc them roi GIU LAI trong khoang van bi chan — nhung bang ma cu', () => {
+  const path = 'docs/khach-hang/khach-tong-hop/nguon-goc/khao-sat.xlsx';
+  assert.deepEqual(findHistoryViolations([path], { treePaths: [path] }), [
+    { path, code: VIOLATION_CODES.NOT_ALLOWLISTED },
+  ]);
+});
+
+test('ngoai le van co gia tri trong che do khoang — ban giao co nguon HTML thi qua', () => {
+  const pdf = 'docs/khach-hang/khach-tong-hop/ban-giao/tom-tat.pdf';
+  const html = 'docs/khach-hang/khach-tong-hop/ban-giao/nguon-html/tom-tat.html';
+  assert.deepEqual(findHistoryViolations([pdf], { treePaths: [pdf, html] }), []);
+});
+
+// FAIL CLOSED van la mac dinh: mot PDF mang dung ten ngoai le nhung khong con nguon de tai sinh
+// thi KHONG duoc cho qua chi vi no da bi xoa lai.
+test('che do khoang khong duoc noi tay hon che do cay', () => {
+  const pdf = 'docs/khach-hang/khach-tong-hop/ban-giao/tom-tat.pdf';
+  assert.deepEqual(findHistoryViolations([pdf], { treePaths: [] }), [
+    { path: pdf, code: VIOLATION_CODES.SOURCE_FILE_MISSING },
+  ]);
+});
+
+test('mot duong dan cham vao nhieu commit chi bao MOT lan', () => {
+  const path = 'docs/khach-hang/khach-tong-hop/nguon-goc/khao-sat.xlsx';
+  assert.equal(findHistoryViolations([path, path, path], { treePaths: [] }).length, 1);
+});
+
+// KHONG BAO DONG GIA — bai doi chung cua che do khoang.
+test('che do khoang khong bao nham tai san hop le', () => {
+  assert.deepEqual(
+    findHistoryViolations(
+      [
+        'docs/khach-hang/khach-tong-hop/nghiep-vu/mo-ta.md',
+        'tenants/khach-tong-hop/data/knowledge.json',
+        'apps/marketing/public/anh-san-pham.png',
+        'apps/api/src/settings/__fixtures__/mau-tong-hop.xlsx',
+      ],
+      { treePaths: [] },
+    ),
+    [],
+  );
+});
+
+test('parseChangedPaths: bo dong rong, cat khoang trang, va khong lap', () => {
+  assert.deepEqual(parseChangedPaths('a/b.xlsx\n\n a/b.xlsx \nc/d.pdf\n'), ['a/b.xlsx', 'c/d.pdf']);
+  assert.deepEqual(parseChangedPaths(''), []);
+});
+
+/* ------------------------------------------------------------------ *
+ * Doi chieu voi LICH SU THAT cua chinh su co nay
+ * ------------------------------------------------------------------ */
+
+/** Chay `git log` y het CLI che do `--range`. */
+const changedPathsIn = (range) =>
+  parseChangedPaths(
+    execFileSync(
+      'git',
+      ['log', '--no-merges', '--diff-filter=AMR', '--name-only', '--pretty=format:', range],
+      { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
+    ),
+  );
+
+/**
+ * Commit THAT `d05e1e4` (11/08/2026) — "gom tai lieu khach hang theo tung khach".
+ *
+ * No khong chi chuyen mot tep. No dua MUOI tai lieu goc cua khach vao dung vung nguon goc, trong
+ * mot repo PUBLIC: mot ban khao sat `.docx` (ben trong co ten mot nhan su va SO DIEN THOAI LIEN HE
+ * cua nguoi do), tam anh thiet ke khach gui, va ban `.xlsx` mang hai chat ID nhom Zalo.
+ *
+ * Cong CU khong bao mot dong nao ve commit nay — ca muoi tep deu bi xoa o cac commit sau, nen cay
+ * cuoi cung sach. Bai nay ghim lai rang cong MOI thi bao du muoi. Do chinh la ly do no ton tai, va
+ * day la con so that chu khong phai mot vi du dung.
+ *
+ * Ghim theo SHA co dinh nen khong the troi theo thoi gian.
+ */
+test('LICH SU THAT: commit d05e1e4 dua 10 tai lieu goc vao vung khach va cong moi phai bao du', () => {
+  const range =
+    'd05e1e482face8b34c28564f820b48a743b1ea98^..d05e1e482face8b34c28564f820b48a743b1ea98';
+  const violations = findHistoryViolations(changedPathsIn(range), { treePaths: tracked, digestOf });
+  assert.deepEqual(paths(violations), [
+    'docs/khach-hang/ultty/design-app/01.jpg',
+    'docs/khach-hang/ultty/design-app/02.jpg',
+    'docs/khach-hang/ultty/design-app/03.jpg',
+    'docs/khach-hang/ultty/design-app/04.jpg',
+    'docs/khach-hang/ultty/design-app/05.jpg',
+    'docs/khach-hang/ultty/design-app/06.jpg',
+    'docs/khach-hang/ultty/design-app/07.jpg',
+    'docs/khach-hang/ultty/design-app/08.jpg',
+    'docs/khach-hang/ultty/nguon-goc/khao-sat-khach-hang-2026-07.docx',
+    'docs/khach-hang/ultty/trao-doi/A4_dai-ly_map-nhom_U-Ultty.xlsx',
+  ]);
+  // Va tat ca deu mang dung mot ma: da day len roi xoa lai.
+  assert.deepEqual(
+    [...new Set(violations.map((row) => row.code))],
+    [VIOLATION_CODES.INTRODUCED_THEN_REMOVED],
+  );
+});
+
+// Nhanh hien tai khong duoc tu no dua them tai lieu goc nao vao lich su.
+test('khoang commit cua chinh nhanh nay so voi origin/main la sach', () => {
+  let range;
+  try {
+    range = `${execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], { encoding: 'utf8' }).trim()}..HEAD`;
+  } catch {
+    return; // Khong co origin/main (clone nong) thi bo qua — bai tren da giu phan quy tac.
+  }
+  assert.deepEqual(
+    findHistoryViolations(changedPathsIn(range), { treePaths: tracked, digestOf }),
     [],
   );
 });
