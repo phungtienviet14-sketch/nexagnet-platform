@@ -30,6 +30,15 @@ import {
   listSources,
   listSourcesInput,
 } from './source-registry.tools.js';
+import {
+  explainDecisionRefs,
+  getDecision,
+  getDecisionInput,
+  listDecisionsForSubject,
+  listForSubjectInput,
+} from './decision-ledger.tools.js';
+import { DecisionLedgerService } from '../decision-ledger/decision-ledger.service.js';
+import { PrismaDecisionLedgerRepository } from '../decision-ledger/prisma-decision-ledger.repository.js';
 import { PrismaSourceRegistryRepository } from '../source-registry/prisma-source-registry.repository.js';
 import { SourceReadinessService } from '../source-registry/source-readiness.service.js';
 import { SourceRegistryService } from '../source-registry/source-registry.service.js';
@@ -145,6 +154,19 @@ const sourceReadiness = new SourceReadinessService(registryRepository);
 // Pham vi khach doc tu CAU HINH TRIEN KHAI, khong tu doi so cua tool.
 const registryScope = trustedTenantScope();
 
+/**
+ * So cai quyet dinh — dung CUNG `PrismaClient` va CUNG pham vi khach voi tang nguon su that.
+ *
+ * Truyen `registryRepository` vao lam tham so thu ba: mot `factId` gan vao quyet dinh phai kiem
+ * duoc, va tien trinh MCP nay chi doc nen phep kiem do chi phuc vu duong doc — nhung de mot ban
+ * ghi dung nua doi thi te hon la khong co.
+ */
+const decisionLedger = new DecisionLedgerService(
+  new PrismaDecisionLedgerRepository(prisma),
+  undefined,
+  registryRepository,
+);
+
 server.registerTool(
   'list_sources',
   {
@@ -206,6 +228,41 @@ server.registerTool(
     annotations: READ_ONLY,
   },
   async (args) => toToolContent(await canUseFact(sourceReadiness, registryScope, args)),
+);
+
+/* ----- So cai quyet dinh: BA tool CHI DOC (muc 15 hop dong Issue #98) ----- */
+
+server.registerTool(
+  'get_decision',
+  {
+    description:
+      'Một quyết định nghiệp vụ đã ghi: cổng nào, mã lý do gì, ai quyết, dựa trên sự thật/chính sách nào, ở bản phát hành nào.',
+    inputSchema: getDecisionInput.shape,
+    annotations: READ_ONLY,
+  },
+  async (args) => toToolContent(await getDecision(decisionLedger, registryScope, args)),
+);
+
+server.registerTool(
+  'list_decisions_for_subject',
+  {
+    description:
+      'DÒNG THỜI GIAN của một ca nghiệp vụ (đơn/chuyến/tin…): hệ thống đã làm gì, theo thứ tự nào, và vì sao — thay cho một buổi đọc log.',
+    inputSchema: listForSubjectInput.shape,
+    annotations: READ_ONLY,
+  },
+  async (args) => toToolContent(await listDecisionsForSubject(decisionLedger, registryScope, args)),
+);
+
+server.registerTool(
+  'explain_decision_refs',
+  {
+    description:
+      'Một quyết định dựa trên NHỮNG GÌ: sự thật/nguồn đã dùng (kèm trạng thái lúc dùng), chính sách, người/quy tắc quyết, và neo tương quan trace/workflow/release.',
+    inputSchema: getDecisionInput.shape,
+    annotations: READ_ONLY,
+  },
+  async (args) => toToolContent(await explainDecisionRefs(decisionLedger, registryScope, args)),
 );
 
 // ----- WRITE tools -----
@@ -299,4 +356,7 @@ const transport = new StdioServerTransport();
 transport.onclose = () => void shutdown(0); // client dong stdin -> tat sach.
 
 await server.connect(transport);
-log('MCP stdio server sẵn sàng (netviet-source-of-truth): 8 tool nguồn sự thật + 6 tool CHỈ ĐỌC quản trị nguồn.');
+log(
+  'MCP stdio server sẵn sàng (netviet-source-of-truth): 8 tool nguồn sự thật + 6 tool CHỈ ĐỌC ' +
+    'quản trị nguồn + 3 tool CHỈ ĐỌC sổ cái quyết định.',
+);

@@ -30,6 +30,7 @@ import { PrismaModule } from './config/prisma.module.js';
 import { PrismaService } from './config/prisma.service.js';
 import { loadFoundationEnv } from './config/foundation-env.js';
 import { DebugModule } from './debug/debug.module.js';
+import { DecisionLedgerModule } from './decision-ledger/decision-ledger.module.js';
 import { ContentModule } from './content/content.module.js';
 import {
   ConversationThreadsRepository,
@@ -139,6 +140,11 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // nguoc nhau. Cai khac nhau giua cac khach la NOI DUNG cua nguon, khong phai co tang nay hay
   // khong — nen no khong phai mot capability de bat/tat.
   owned('foundation', SourceRegistryModule),
+  // `foundation`: moi khach deu can tra loi duoc "vi sao he thong da xu su nhu vay voi ca nay".
+  // Nam SAU `SourceRegistryModule` vi no phu thuoc kho nguon su that de kiem mot `factId` gan vao
+  // quyet dinh la co that va dung pham vi khach (muc 9 hop dong Issue #98). Chieu phu thuoc chi
+  // MOT huong: nguon su that khong biet gi ve so cai — su that ton tai truoc quyet dinh dung no.
+  owned('foundation', DecisionLedgerModule),
   // VAN TAI — LOI. Mang theo `AuditLogService` cua chinh no vi `transport-core` khong bat buoc
   // keo theo `operations`; xem chu thich trong `transport.module.ts`.
   owned('transport-core', TransportModule),
