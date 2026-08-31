@@ -63,10 +63,42 @@ export const FUEL_MATCH_NO_SELF_SOURCE = 'TransportFuelMatch_no_self_source';
 export const isSelfSourcedMatchViolation = (error: unknown): boolean =>
   error instanceof Error && error.message.includes(FUEL_MATCH_NO_SELF_SOURCE);
 
+/** Mot ky doi soat co DUNG mot ban giao cho moi so `revision` — Issue #103 §2. */
+export const FUEL_HANDOFF_REVISION_ONCE: UniqueIndexRef = {
+  indexName: 'TransportFuelSettlementHandoff_reconciliationId_revision_key',
+  model: 'TransportFuelSettlementHandoff',
+  column: 'reconciliationId',
+};
+
+/** Mot ban giao chi duoc thay the DUNG MOT LAN — chuoi `revision` la mot day, khong phai mot cay. */
+export const FUEL_HANDOFF_SUPERSEDES_ONCE: UniqueIndexRef = {
+  indexName: 'TransportFuelSettlementHandoff_supersedesHandoffId_key',
+  model: 'TransportFuelSettlementHandoff',
+  column: 'supersedesHandoffId',
+};
+
 export const FUEL_UNIQUE_INDEXES: readonly UniqueIndexRef[] = [
   FUEL_ENTRY_CORRELATION,
   FUEL_ENTRY_COST_ONCE,
   FUEL_STATEMENT_PERIOD,
   FUEL_MATCH_LINE_ONCE,
   FUEL_MATCH_ENTRY_ONCE,
+  FUEL_HANDOFF_REVISION_ONCE,
+  FUEL_HANDOFF_SUPERSEDES_ONCE,
 ];
+
+/* ------------------------------------------------------------------ *
+ * TEN VAT LY CUA BANG — chi cho cac lenh KHONG di qua delegate cua Prisma
+ * ------------------------------------------------------------------ */
+
+/**
+ * `SELECT ... FOR UPDATE` khong co trong API cua Prisma Client, nen giao thuc tuan tu hoa cua
+ * Issue #103 §1 phai di bang SQL tho — va SQL tho thi go ten bang bang tay.
+ *
+ * Hai hang so nay ton tai de ten do duoc go DUNG MOT LAN. `transport-fuel-storage.spec.ts` doc
+ * chinh tep migration va doi thay `CREATE TABLE` voi dung ten nay: neu mot lan doi ten bang di qua
+ * ma khong ai sua o day, bo test do — thay vi mot lenh khoa lang le nem loi luc chay, tren dung
+ * duong ma no dang bao ve.
+ */
+export const FUEL_RECONCILIATION_TABLE = 'TransportFuelReconciliation';
+export const FUEL_ENTRY_TABLE = 'TransportFuelEntry';

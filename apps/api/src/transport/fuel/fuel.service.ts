@@ -132,10 +132,15 @@ export class FuelService {
         tripId: command.tripId,
         vehicleId: command.vehicleId,
         driverId: command.driverId,
+        supplierId: command.supplierId,
         businessDate,
+        occurredAt,
         litersUnits,
         amount,
         odometerKm,
+        paymentMethod: command.paymentMethod,
+        invoiceNo: command.invoiceNo ?? null,
+        note: command.note ?? null,
       });
       this.telemetry?.decision({
         vocabulary: TRANSPORT_FUEL_DECISIONS,
@@ -230,6 +235,10 @@ export class FuelService {
       uploadedBy: actor,
       at: this.now(),
     });
+    // `null` = ky vua duoc dong giua phep kiem o tren va lan chen vua roi (Issue #103 §4). Phep
+    // kiem o tren van can: no tra loi SOM va bang mot ma nghiep vu, cho duong di thuong ngay.
+    if (!evidence) this.denyAmend(entry, 'FUEL_ENTRY_AMEND_RECONCILIATION_LOCKED');
+
     await this.audit.append({
       actor,
       action: 'transport.fuel.evidence.attach',
@@ -296,10 +305,27 @@ export class FuelService {
       note: command.note ?? null,
       at: this.now(),
     });
+    /*
+     * `null` KHONG con nghia la "khong tim thay" (Issue #103 §4).
+     *
+     * Phieu chac chan ton tai — `requireEntry` o dau ham da doc no. Nen 0 hang bi doi chi co MOT
+     * nghia: giua luc do va luc ghi, mot phien khac da duyet phieu hoac da khop no, va menh de
+     * `WHERE` cua lenh ghi da lam dung viec cua no.
+     *
+     * Doc lai trang thai HIEN TAI de tra ve dung ma trong hai ma cua `GD-10`: nguoi dung can biet
+     * ho phai dao phieu hay phai go cap khop, va hai viec do khac han nhau.
+     */
     if (!updated) {
-      throw TransportDomainError.notFound(
-        'FUEL_ENTRY_NOT_FOUND',
-        `Khong tim thay phieu ${entryId}`,
+      const current = await this.requireEntry(entryId);
+      const raced = evaluateFuelEntryAmendment(
+        current.verificationStatus,
+        current.reconciliationStatus,
+      );
+      this.denyAmend(
+        current,
+        !raced.allowed && raced.reason === 'ENTRY_RECONCILIATION_LOCKED'
+          ? 'FUEL_ENTRY_AMEND_RECONCILIATION_LOCKED'
+          : 'FUEL_ENTRY_AMEND_ALREADY_TRUSTED',
       );
     }
 
@@ -668,6 +694,28 @@ export class FuelService {
    * Cung khoa + cung noi dung = mang chap chon, lan gui thu hai cua cung mot phieu. Cung khoa +
    * KHAC noi dung = client dung lai mot khoa cho mot phieu moi, va tra lai ban cu se lam phieu moi
    * bien mat khong dau vet.
+   *
+   * ===========================================================================
+   * DAU VAN TAY PHAI PHU MOI TRUONG CO SUC NANG NGHIEP VU (Issue #103 §5).
+   *
+   * Ban dau phep so sanh bo qua `supplierId`, `paymentMethod`, `occurredAt`, `invoiceNo` va `note`.
+   * Bo qua nghia la: hai lenh KHAC NHAU o nhung truong do, gui cung mot khoa, duoc coi la mot — va
+   * lenh thu hai bi nuot lang le, tra ve phieu cua lenh thu nhat.
+   *
+   * `paymentMethod` la truong nang nhat trong so do, vi no khong chi mo ta phieu — no QUYET DINH
+   * tien di duong nao o `TX-03`:
+   *
+   * ```text
+   * DRIVER_CASH       -> DRIVER_FUND      (tru vao quy lai xe)
+   * SUPPLIER_ACCOUNT  -> COMPANY_DIRECT   (cong ty tra cuoi thang)
+   * ```
+   *
+   * Nuot mot lenh doi tu `SUPPLIER_ACCOUNT` sang `DRIVER_CASH` nghia la lai xe KHONG bi tru mot
+   * khoan dang le bi tru, hoac nguoc lai — bi tru cho mot khoan cong ty da tra. Ca hai deu la tien
+   * that cua mot nguoi that, va khong co gi trong he thong bao rang da co mot lenh bi bo.
+   *
+   * `occurredAt` va `supplierId` doi mat cua phieu; `invoiceNo`/`note` la thu ke toan doc khi doi
+   * chieu. Khong truong nao trong so do duoc phep im lang.
    */
   private assertSameEntry(
     existing: FuelEntry,
@@ -675,20 +723,33 @@ export class FuelService {
       tripId: string;
       vehicleId: string;
       driverId: string;
+      supplierId: string;
       businessDate: string;
+      occurredAt: Date;
       litersUnits: number;
       amount: number;
       odometerKm: number;
+      paymentMethod: FuelPaymentMethod;
+      invoiceNo: string | null;
+      note: string | null;
     },
   ): void {
     const same =
       existing.tripId === incoming.tripId &&
       existing.vehicleId === incoming.vehicleId &&
       existing.driverId === incoming.driverId &&
+      existing.supplierId === incoming.supplierId &&
       existing.businessDate === incoming.businessDate &&
+      // CHUAN HOA truoc khi so: `occurredAt` duoc luu dang ISO chuoi, con lenh mang mot `Date`.
+      // So hai chuoi se lam `+07:00` va `Z` cua CUNG mot khoanh khac trong nhu hai lenh khac nhau,
+      // tuc mot lan gui lai that bai voi mot loi khong ai giai thich duoc.
+      Date.parse(existing.occurredAt) === incoming.occurredAt.getTime() &&
       existing.litersUnits === incoming.litersUnits &&
       existing.amount === incoming.amount &&
-      existing.odometerKm === incoming.odometerKm;
+      existing.odometerKm === incoming.odometerKm &&
+      existing.paymentMethod === incoming.paymentMethod &&
+      sameOptionalText(existing.invoiceNo, incoming.invoiceNo) &&
+      sameOptionalText(existing.note, incoming.note);
     if (same) return;
 
     throw TransportDomainError.conflict(
@@ -777,3 +838,14 @@ export class FuelService {
  */
 const fundingSourceFor = (method: FuelPaymentMethod): ExpenseFundingSource =>
   method === 'DRIVER_CASH' ? 'DRIVER_FUND' : 'COMPANY_DIRECT';
+
+/**
+ * Hai o van ban tuy chon co CUNG NOI DUNG khong.
+ *
+ * `null`, chuoi rong va mot chuoi toan khoang trang deu la "khong ghi gi" — ba cach go cua ba
+ * client cho cung mot y. So thang thi mot lan gui lai tu mot form khac (gui `''` thay vi bo trong)
+ * se bi tu choi nhu mot phieu KHAC, va nguoi dung nhan mot loi trung khoa cho dung phieu ho vua
+ * gui. Khoang trang thua o hai dau cung vay.
+ */
+const sameOptionalText = (left: string | null, right: string | null): boolean =>
+  (left ?? '').trim() === (right ?? '').trim();

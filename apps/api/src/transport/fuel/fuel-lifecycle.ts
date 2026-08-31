@@ -222,9 +222,63 @@ export function evaluateFuelEntryAmendment(
   verification: FuelVerificationStatus,
   reconciliation: FuelReconciliationStatus,
 ): FuelAmendDecision {
-  if (verification !== 'DECLARED') return { allowed: false, reason: 'ENTRY_ALREADY_TRUSTED' };
+  if (verification !== AMENDABLE_FUEL_VERIFICATION) {
+    return { allowed: false, reason: 'ENTRY_ALREADY_TRUSTED' };
+  }
   if (isLockedFuelReconciliationStatus(reconciliation)) {
     return { allowed: false, reason: 'ENTRY_RECONCILIATION_LOCKED' };
   }
   return { allowed: true };
 }
+
+/* ------------------------------------------------------------------ *
+ * CUNG MOT DIEU KIEN, VIET LAI DUOI DANG MOT MENH DE `WHERE`
+ * ------------------------------------------------------------------ */
+
+/**
+ * Hai hang so duoi day la `evaluateFuelEntryAmendment` doc nguoc — de tang kho dat DUNG dieu kien
+ * do vao chinh lenh `UPDATE` (Issue #103 §4).
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO KHONG THE DE TANG MIEN KIEM ROI GHI:
+ *
+ * ```text
+ * A doc phieu, thay `DECLARED`, `evaluateFuelEntryAmendment` cho phep
+ * B duyet phieu: `VERIFIED`, va day chi phi sang TX-03
+ * A ghi `UPDATE ... WHERE id = ?` — THANH CONG
+ * ```
+ *
+ * Ket qua: mot phieu `VERIFIED` — thu ma `GD-10` goi la bat bien — mang con so KHAC HAN con so da
+ * vao gia thanh chuyen. Khong loi, khong canh bao, va hai capability lech nhau vinh vien.
+ *
+ * Khoang cach giua luc DOC va luc GHI la toan bo van de, nen phep kiem phai di CUNG lenh ghi. Tang
+ * mien VAN kiem truoc — no la thu tra ve mot ma nghiep vu doc duoc thay vi mot lan ghi 0 hang.
+ *
+ * ---------------------------------------------------------------------------
+ * VA VI SAO CHUNG DUOC SINH RA chu khong go tay:
+ *
+ * Go tay `['UNMATCHED', 'MISMATCHED', 'IGNORED']` thi mot lan them trang thai moi vao truc 2 se im
+ * lang bo sot no khoi menh de `WHERE`, va lenh ghi se tu choi mot phieu dang le sua duoc. Sinh tu
+ * `FUEL_RECONCILIATION_STATUSES` bang chinh `isLockedFuelReconciliationStatus` thi hai ben khong
+ * troi khoi nhau duoc.
+ */
+export const AMENDABLE_FUEL_VERIFICATION: FuelVerificationStatus = 'DECLARED';
+
+export const AMENDABLE_FUEL_RECONCILIATION_STATUSES: readonly FuelReconciliationStatus[] =
+  FUEL_RECONCILIATION_STATUSES.filter((status) => !isLockedFuelReconciliationStatus(status));
+
+/**
+ * Trang thai doi soat KHOA BANG CHUNG cua mot phieu.
+ *
+ * HEP HON `LOCKED_RECONCILIATION` mot cach co y: them mot tam anh khong doi mot con so nao, nen mot
+ * phieu DA KHOP van nhan anh duoc (`GD-10` chi noi ve so lieu). Chi mot ky DA DONG moi khoa han —
+ * sau do bo sung chung tu cua ky la sua thu da bao cao ra ngoai (`GD-11`).
+ */
+export const EVIDENCE_FROZEN_RECONCILIATION_STATUSES: readonly FuelReconciliationStatus[] = [
+  'SETTLED',
+];
+
+export const ATTACHABLE_EVIDENCE_RECONCILIATION_STATUSES: readonly FuelReconciliationStatus[] =
+  FUEL_RECONCILIATION_STATUSES.filter(
+    (status) => !EVIDENCE_FROZEN_RECONCILIATION_STATUSES.includes(status),
+  );

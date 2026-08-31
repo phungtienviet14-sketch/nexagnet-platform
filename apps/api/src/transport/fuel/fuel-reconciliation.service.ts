@@ -5,7 +5,6 @@ import { TRANSPORT_CLOCK } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
 import {
-  evaluateFuelReconciliationStateTransition,
   isFrozenFuelReconciliation,
   type FuelReconciliationState,
   type FuelReconciliationStatus,
@@ -197,7 +196,14 @@ export class FuelReconciliationService {
       });
     }
 
-    const applied = await this.repository.applyMatchingRun({
+    /*
+     * GHI KET QUA + DOI TRANG THAI KY: MOT loi goi, mot giao dich da khoa (Issue #103 §1).
+     *
+     * Truoc day day la hai buoc — `applyMatchingRun` roi `moveTo(..., 'MATCHING')`. Khi ai do dong
+     * ky xen vao giua, buoc mot DA GHI XONG va buoc hai moi bao loi: nguoi bam nut nhan mot loi,
+     * con ky da dong thi da bi sua, va ban giao no phat cho T5 mo ta mot bo cap khop khong con.
+     */
+    const outcome = await this.repository.applyMatchingRun({
       reconciliationId: reconciliation.id,
       matches: result.matches.map(
         (match): MatchToApply => ({
@@ -221,8 +227,14 @@ export class FuelReconciliationService {
       at: this.now(),
     });
 
-    await this.moveTo(reconciliation, 'MATCHING', actor, { markMatched: true });
-    await this.settleStateIfResolved(reconciliation.id, actor);
+    // Ky vua bi dong giua luc ta doc va luc ta ghi. KHONG mot hang nao bi doi — do la toan bo diem
+    // cua khoa hang — nen o day chi con viec noi that.
+    if (outcome.status === 'RECONCILIATION_FROZEN') {
+      this.denyFrozen(reconciliation.id, outcome.state);
+    }
+
+    const applied = outcome.result;
+    this.reportSettled(applied.reconciliation);
 
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
@@ -282,8 +294,9 @@ export class FuelReconciliationService {
 
     const confirmed = await this.buildConfirmedMatch(discrepancy, command);
 
-    const resolved = await this.repository.resolveDiscrepancy({
+    const outcome = await this.repository.resolveDiscrepancy({
       discrepancyId,
+      reconciliationId: reconciliation.id,
       resolution: command.resolution,
       resolutionNote: command.note ?? null,
       actor,
@@ -299,12 +312,18 @@ export class FuelReconciliationService {
         ? { lineStatus: { id: discrepancy.statementLineId, status: 'IGNORED' as const } }
         : {}),
     });
-    if (!resolved) {
+    // Hai nhanh tu choi, hai cau tra loi khac nhau — xem `ResolveDiscrepancyOutcome`. Ca hai chi
+    // mo khi mot phien KHAC xen vao giua luc doc o tren va luc ghi vua roi.
+    if (outcome.status === 'RECONCILIATION_FROZEN') {
+      this.denyFrozen(reconciliation.id, outcome.state);
+    }
+    if (outcome.status === 'DISCREPANCY_NOT_PENDING') {
       throw TransportDomainError.conflict(
         'FUEL_RECONCILIATION_STATE_RACE',
         `Chenh lech ${discrepancyId} vua duoc nguoi khac quyet — tai lai roi doc lai`,
       );
     }
+    const resolved = outcome.resolved;
 
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
@@ -326,7 +345,7 @@ export class FuelReconciliationService {
       after: resolved.discrepancy,
     });
 
-    await this.settleStateIfResolved(reconciliation.id, actor);
+    this.reportSettled(resolved.reconciliation);
     return resolved.discrepancy;
   }
 
@@ -344,55 +363,62 @@ export class FuelReconciliationService {
   ): Promise<ClosedReconciliationResult> {
     const reconciliation = await this.requireOpen(reconciliationId);
 
-    const pending = await this.repository.countPendingDiscrepancies(reconciliationId);
-    if (pending > 0) {
+    /*
+     * MOT loi goi kho, khong bon (Issue #103 §1).
+     *
+     * Truoc day o day co bon buoc rieng: dem chenh lech, dua ky ve `RESOLVED`, cong tong duoc chap
+     * nhan, roi moi dong. Bon lan cham CSDL, ba khoang trong giua chung, va moi khoang la mot cho
+     * cho mot lan chay so khop xen vao. Nay ca bon nam trong mot giao dich da khoa hang doi soat —
+     * xem `CloseReconciliationInput`.
+     */
+    const outcome = await this.repository.closeReconciliation({
+      reconciliationId,
+      actor,
+      at: this.now(),
+    });
+
+    if (outcome.status === 'PENDING_DISCREPANCIES') {
       this.telemetry?.decision({
         vocabulary: TRANSPORT_FUEL_DECISIONS,
         point: 'fuel_reconciliation.transition',
         outcome: 'denied',
         reason: 'RECONCILIATION_HAS_PENDING_DISCREPANCY',
-        detail: { reconciliationId, pending },
+        detail: { reconciliationId, pending: outcome.pending },
       });
       throw TransportDomainError.denied(
         'RECONCILIATION_HAS_PENDING_DISCREPANCY',
-        `Con ${pending} chenh lech chua ai quyet — chua dong duoc ky doi soat`,
+        `Con ${outcome.pending} chenh lech chua ai quyet — chua dong duoc ky doi soat`,
       );
     }
-
-    if (reconciliation.state !== 'RESOLVED') {
-      await this.moveTo(reconciliation, 'RESOLVED', actor);
-    }
-
-    const accepted = await this.sumAcceptedAmount(reconciliationId);
-    const closed = await this.repository.closeReconciliation({
-      reconciliationId,
-      acceptedAmount: accepted.amount,
-      acceptedLineCount: accepted.lineCount,
-      actor,
-      at: this.now(),
-    });
-    if (!closed) {
+    if (outcome.status === 'STATE_RACE') {
       throw TransportDomainError.conflict(
         'FUEL_RECONCILIATION_STATE_RACE',
-        `Ky doi soat ${reconciliationId} vua duoc nguoi khac doi trang thai — tai lai roi doc lai`,
+        `Ky doi soat ${reconciliationId} dang ${outcome.state} — tai lai roi doc lai`,
       );
     }
+    const closed = outcome.closed;
 
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
       point: 'fuel_reconciliation.transition',
       outcome: 'allowed',
       reason: 'RECONCILIATION_CLOSED',
-      detail: { reconciliationId, acceptedAmount: accepted.amount },
+      detail: { reconciliationId, acceptedAmount: closed.handoff.acceptedAmount },
     });
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
       point: 'fuel.settlement_handoff',
       outcome: 'allowed',
-      reason: closed.handoffReplayed ? 'HANDOFF_IDEMPOTENT_REPLAY' : 'HANDOFF_EMITTED',
+      reason: closed.handoffReplayed
+        ? 'HANDOFF_IDEMPOTENT_REPLAY'
+        : closed.handoff.revision > 1
+          ? 'HANDOFF_REVISED'
+          : 'HANDOFF_EMITTED',
       detail: {
         reconciliationId,
         handoffId: closed.handoff.id,
+        revision: closed.handoff.revision,
+        supersedesHandoffId: closed.handoff.supersedesHandoffId,
         acceptedAmount: closed.handoff.acceptedAmount,
         acceptedLineCount: closed.handoff.acceptedLineCount,
       },
@@ -445,89 +471,24 @@ export class FuelReconciliationService {
   /* ---------------------------- Noi bo ---------------------------- */
 
   /**
-   * TONG DUOC CHAP NHAN — con so DUY NHAT di sang T5.
+   * PHAT TRACE cho buoc "het chenh lech treo -> ky da xong". CHI phat trace, khong ghi gi.
    *
-   * Hai nguon, va chi hai:
-   *   · dong DA KHOP (may hoac nguoi) — so cua cay xang trung so cua ta trong dung sai;
-   *   · dong co chenh lech duoc quyet `ACCEPT_SUPPLIER_AMOUNT` — ta chap nhan so cua ho.
+   * Ham nay tung ten `settleStateIfResolved` va tung tu GHI: dem chenh lech, doc trang thai, roi
+   * doi trang thai — ba lan cham CSDL nam ngoai moi giao dich. Do la duong ghi THU NAM vao hang doi
+   * soat, va no lam thung dung giao thuc tuan tu hoa ma Issue #103 §1 doi.
    *
-   * MOI THU KHAC BI LOAI, ke ca `IGNORE_WITH_REASON` va `ENTRY_CORRECTION_REQUIRED`. Do la `INV-07`
-   * duoc viet thanh mot phep cong: mot dong khong khop KHONG tu vao cong no phai tra.
+   * Nay buoc do nam trong chinh giao dich da khoa cua `applyMatchingRun`/`resolveDiscrepancy`
+   * (`settleIfNothingPending` o tang kho), va o day chi con viec KE LAI dieu da xay ra.
    */
-  private async sumAcceptedAmount(
-    reconciliationId: string,
-  ): Promise<{ amount: number; lineCount: number }> {
-    const reconciliation = await this.requireReconciliation(reconciliationId);
-    const [lines, matches, discrepancies] = await Promise.all([
-      this.repository.listStatementLines(reconciliation.statementId),
-      this.repository.listMatches(reconciliationId),
-      this.repository.listDiscrepancies(reconciliationId),
-    ]);
-
-    const acceptedLineIds = new Set(matches.map((match) => match.statementLineId));
-    for (const discrepancy of discrepancies) {
-      if (discrepancy.resolution !== 'ACCEPT_SUPPLIER_AMOUNT') continue;
-      if (discrepancy.statementLineId) acceptedLineIds.add(discrepancy.statementLineId);
-    }
-
-    const accepted = lines.filter((line) => acceptedLineIds.has(line.id));
-    return {
-      amount: accepted.reduce((total, line) => total + (line.amount ?? 0), 0),
-      lineCount: accepted.length,
-    };
-  }
-
-  private async settleStateIfResolved(reconciliationId: string, actor: string): Promise<void> {
-    const pending = await this.repository.countPendingDiscrepancies(reconciliationId);
-    if (pending > 0) return;
-    const current = await this.requireReconciliation(reconciliationId);
-    if (current.state !== 'MATCHING') return;
-
-    await this.moveTo(current, 'RESOLVED', actor);
+  private reportSettled(reconciliation: FuelReconciliation): void {
+    if (reconciliation.state !== 'RESOLVED') return;
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
       point: 'fuel_reconciliation.transition',
       outcome: 'allowed',
       reason: 'RECONCILIATION_RESOLVED',
-      detail: { reconciliationId },
+      detail: { reconciliationId: reconciliation.id },
     });
-  }
-
-  /**
-   * Mot buoc chuyen trang thai, qua may trang thai THUAN roi moi cham kho.
-   *
-   * `ALREADY_IN_STATE` khong phai loi o day: chay lai so khop khi ky da o `MATCHING` la duong chay
-   * thuong ngay. Chi canh KHONG TON TAI moi la mot lan tu choi that.
-   */
-  private async moveTo(
-    reconciliation: FuelReconciliation,
-    to: FuelReconciliationState,
-    actor: string,
-    options?: { markMatched?: boolean },
-  ): Promise<FuelReconciliation> {
-    const decision = evaluateFuelReconciliationStateTransition(reconciliation.state, to);
-    if (!decision.allowed) {
-      if (decision.reason === 'ALREADY_IN_STATE') return reconciliation;
-      this.denyTransition(reconciliation, to);
-    }
-
-    const moved = await this.repository.setReconciliationState(
-      reconciliation.id,
-      reconciliation.state,
-      to,
-      {
-        at: this.now(),
-        actor,
-        ...(options?.markMatched ? { markMatched: true } : {}),
-      },
-    );
-    if (!moved) {
-      throw TransportDomainError.conflict(
-        'FUEL_RECONCILIATION_STATE_RACE',
-        `Ky doi soat ${reconciliation.id} vua duoc nguoi khac doi trang thai — tai lai roi quyet lai`,
-      );
-    }
-    return moved;
   }
 
   private denyTransition(reconciliation: FuelReconciliation, to: FuelReconciliationState): never {
@@ -559,17 +520,28 @@ export class FuelReconciliationService {
   private async requireOpen(id: string): Promise<FuelReconciliation> {
     const reconciliation = await this.requireReconciliation(id);
     if (!isFrozenFuelReconciliation(reconciliation.state)) return reconciliation;
+    this.denyFrozen(id, reconciliation.state);
+  }
 
+  /**
+   * MOT cau tra loi cho "ky da dong", phat tu HAI cho — va do la co y.
+   *
+   * `requireOpen` chan som, trong phan lon truong hop, bang mot phep doc re. Tang kho chan lai lan
+   * nua BEN TRONG giao dich da khoa, cho dung khoang thoi gian giua hai buoc do (Issue #103 §1).
+   * Hai cho phat hien, mot ma va mot cau chu: nguoi dung khong the biet minh vua thua o vong nao,
+   * va ho cung khong can biet — viec phai lam la nhu nhau.
+   */
+  private denyFrozen(reconciliationId: string, state: FuelReconciliationState): never {
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
       point: 'fuel_reconciliation.transition',
       outcome: 'denied',
       reason: 'RECONCILIATION_FROZEN',
-      detail: { reconciliationId: id, state: reconciliation.state },
+      detail: { reconciliationId, state },
     });
     throw TransportDomainError.denied(
       'RECONCILIATION_FROZEN',
-      `Ky doi soat ${id} da dong — mo lai (co quyen rieng) truoc khi sua bat cu thu gi`,
+      `Ky doi soat ${reconciliationId} da dong — mo lai (co quyen rieng) truoc khi sua bat cu thu gi`,
     );
   }
 

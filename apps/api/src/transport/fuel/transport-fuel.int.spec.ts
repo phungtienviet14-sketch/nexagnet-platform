@@ -768,5 +768,644 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         }
       });
     });
+
+    /* ================================================================= *
+     * Issue #103 — BON BANG CHUNG MOI, TAT CA TREN POSTGRES THAT
+     * ================================================================= */
+
+    /**
+     * MOT KY DOI SOAT DOC LAP cho moi bai duoi day.
+     *
+     * Cac bai o tren dung chung mot ky va chay theo thu tu; cac bai duoi thi KHONG duoc, vi chung
+     * do nhung thu xay ra khi hai lenh DAM VAO NHAU. Dung chung mot ky se lam ket qua bai nay phu
+     * thuoc bai kia, va mot lan do se khong chi ra duoc cho hong.
+     *
+     * Moi ky co cay xang RIENG: `listEntriesForMatching` loc theo cay xang, nen do la ranh gioi
+     * tach bach nhat co the ve giua cac bai.
+     */
+    let isolationCounter = 0;
+
+    async function isolatedReconciliation(csvRows: readonly string[]): Promise<{
+      supplierId: string;
+      statementId: string;
+      reconciliationId: string;
+    }> {
+      isolationCounter += 1;
+      const supplier = await fuelRepo.createSupplier({
+        name: `Cay xang doc lap ${isolationCounter}`,
+        code: `${SUPPLIER_CODE}-${isolationCounter}`,
+        phone: null,
+        address: null,
+        taxCode: null,
+        at: new Date('2026-10-01T00:00:00Z'),
+      });
+
+      const csv = ['Bien so,Ngay,So lit,Thanh tien,So hoa don,Ghi chu', ...csvRows].join('\n');
+      const imported = await statements.commitImport(
+        {
+          supplierId: supplier.id,
+          periodStart: '2026-10-01',
+          periodEnd: '2026-10-31',
+          filename: `it-t4-doc-lap-${isolationCounter}.csv`,
+          format: 'CSV',
+          contentBase64: Buffer.from(csv, 'utf8').toString('base64'),
+        },
+        'it-t4-ke-toan',
+      );
+
+      return {
+        supplierId: supplier.id,
+        statementId: imported.statement.id,
+        reconciliationId: imported.reconciliation.id,
+      };
+    }
+
+    /** Quyet MOI chenh lech con treo cua mot ky, theo mot bang chon do bai test dua ra. */
+    async function resolveAllPending(
+      reconciliationId: string,
+      choose: (lineId: string | null) => 'ACCEPT_SUPPLIER_AMOUNT' | 'IGNORE_WITH_REASON',
+    ): Promise<void> {
+      for (const discrepancy of await fuelRepo.listDiscrepancies(reconciliationId)) {
+        if (discrepancy.status !== 'PENDING') continue;
+        await reconciliation.resolveDiscrepancy(
+          discrepancy.id,
+          { resolution: choose(discrepancy.statementLineId), note: 'Quyet trong bai kiem thu T4R' },
+          'it-t4-ke-toan',
+        );
+      }
+    }
+
+    /** Anh chup MOI thu mot lan chay so khop co the doi — de doi chieu "khong hang nao bi doi". */
+    async function snapshotOf(reconciliationId: string, statementId: string): Promise<string> {
+      const [matches, discrepancies, lines] = await Promise.all([
+        fuelRepo.listMatches(reconciliationId),
+        fuelRepo.listDiscrepancies(reconciliationId),
+        fuelRepo.listStatementLines(statementId),
+      ]);
+      return JSON.stringify({ matches, discrepancies, lines });
+    }
+
+    /**
+     * TINH LAI tong duoc chap nhan TU TRANG THAI CUOI CUNG cua CSDL.
+     *
+     * Co y KHONG goi lai `sumAcceptedSettlement`: neu bai test dung chinh ham ma no dang kiem, thi
+     * mot loi trong ham do se lam ca hai ben cung sai mot kieu va bai test van xanh. Doc thang bang
+     * delegate cua Prisma o day la mot NHAN CHUNG DOC LAP.
+     */
+    async function recomputeAcceptedFromDb(
+      reconciliationId: string,
+      statementId: string,
+    ): Promise<{ amount: number; lineCount: number }> {
+      const [matches, discrepancies, lines] = await Promise.all([
+        prisma.transportFuelMatch.findMany({ where: { reconciliationId } }),
+        prisma.transportFuelDiscrepancy.findMany({ where: { reconciliationId } }),
+        prisma.transportFuelStatementLine.findMany({ where: { statementId } }),
+      ]);
+
+      const acceptedIds = new Set(matches.map((match) => match.statementLineId));
+      for (const discrepancy of discrepancies) {
+        if (discrepancy.resolution !== 'ACCEPT_SUPPLIER_AMOUNT') continue;
+        if (discrepancy.statementLineId) acceptedIds.add(discrepancy.statementLineId);
+      }
+
+      const accepted = lines.filter((line) => acceptedIds.has(line.id));
+      return {
+        amount: accepted.reduce((total, line) => total + Number(line.amount ?? 0n), 0),
+        lineCount: accepted.length,
+      };
+    }
+
+    /* ============================ #103 §2 ============================ */
+
+    /**
+     * BAN GIAO CONG NO LA MOT CHUOI BAN SUA DOI, khong mot hang bat bien.
+     *
+     * ---------------------------------------------------------------------------
+     * BAI TEST CU KHOA LAI DUNG HANH VI HONG.
+     *
+     * No mo lai roi dong lai ma KHONG doi con so nao, roi khang dinh "van dung mot hang". Dieu do
+     * xanh ca truoc lan sau — va no bo lot dung truong hop nguoi ta mo lai ky de LAM GI DO:
+     *
+     * ```text
+     * dong lan 1 -> ban giao 2.000.000d
+     * mo lai vi cay xang gui chung tu bo sung cho dong thu hai
+     * dong lan 2 -> ket qua that la 5.000.000d
+     * ```
+     *
+     * Voi hang UNIQUE cu, lan dong thu hai tra ve dung hang 2.000.000d. T5 tao mot cong no thieu
+     * 3.000.000d, va khong co gi trong he thong noi rang da co mot lan sua.
+     */
+    describe('#103 §2 — ban giao cong no la mot chuoi ban sua doi chi-them', () => {
+      const ids = { statementId: '', reconciliationId: '', lineA: '', lineB: '' };
+
+      beforeAll(async () => {
+        // Hai dong bang ke KHONG co phieu lai xe tuong ung -> hai chenh lech `STATEMENT_LINE_ONLY`.
+        // Do la duong duy nhat mot NGUOI dua tien vao ban giao (`ACCEPT_SUPPLIER_AMOUNT`), tuc dung
+        // duong ma mot lan mo lai de sua se di qua.
+        const created = await isolatedReconciliation([
+          `${PLATE_PREFIX}-A,2026-10-05,100,2.000.000,HD-REV-A,`,
+          `${PLATE_PREFIX}-A,2026-10-06,150,3.000.000,HD-REV-B,`,
+        ]);
+        ids.statementId = created.statementId;
+        ids.reconciliationId = created.reconciliationId;
+
+        const lines = await fuelRepo.listStatementLines(created.statementId);
+        ids.lineA = lines.find((line) => line.invoiceNo === 'HD-REV-A')?.id ?? '';
+        ids.lineB = lines.find((line) => line.invoiceNo === 'HD-REV-B')?.id ?? '';
+        expect(ids.lineA).not.toBe('');
+        expect(ids.lineB).not.toBe('');
+      });
+
+      it('lan dong dau tien phat revision 1, khong thay the ban nao', async () => {
+        await reconciliation.runMatching(ids.reconciliationId, 'it-t4-ke-toan');
+        // Chi chap nhan dong A. Dong B bi bo qua co ly do — chua co chung tu.
+        await resolveAllPending(ids.reconciliationId, (lineId) =>
+          lineId === ids.lineA ? 'ACCEPT_SUPPLIER_AMOUNT' : 'IGNORE_WITH_REASON',
+        );
+
+        const closed = await reconciliation.closeReconciliation(
+          ids.reconciliationId,
+          'it-t4-ke-toan',
+        );
+
+        expect(closed.handoff).toMatchObject({
+          revision: 1,
+          supersedesHandoffId: null,
+          acceptedAmount: 2_000_000,
+          acceptedLineCount: 1,
+        });
+      });
+
+      it('mo lai + doi ket qua + dong lai => revision 2, TRO NGUOC ve revision 1', async () => {
+        const first = await fuelRepo.findHandoff(ids.reconciliationId);
+
+        await reconciliation.reopenReconciliation(
+          ids.reconciliationId,
+          'Cay xang gui chung tu bo sung cho dong thu hai',
+          'it-t4-giam-doc',
+        );
+        await reconciliation.runMatching(ids.reconciliationId, 'it-t4-ke-toan');
+        // Lan nay chap nhan CA HAI dong — ket qua kinh te doi that.
+        await resolveAllPending(ids.reconciliationId, () => 'ACCEPT_SUPPLIER_AMOUNT');
+
+        const reclosed = await reconciliation.closeReconciliation(
+          ids.reconciliationId,
+          'it-t4-ke-toan',
+        );
+
+        expect(reclosed.handoff).toMatchObject({
+          revision: 2,
+          supersedesHandoffId: first?.id,
+          acceptedAmount: 5_000_000,
+          acceptedLineCount: 2,
+        });
+        expect(reclosed.handoff.id).not.toBe(first?.id);
+
+        // BAN CU VAN CON NGUYEN — ban giao la thu da phat ra ngoai, khong ghi de duoc.
+        const revisions = await fuelRepo.listHandoffRevisions(ids.reconciliationId);
+        expect(revisions.map((row) => row.revision)).toEqual([1, 2]);
+        expect(revisions[0]).toMatchObject({ id: first?.id, acceptedAmount: 2_000_000 });
+
+        // Va duong doc mac dinh cho ra ban GAN NHAT, khong phai ban dau tien.
+        expect((await fuelRepo.findHandoff(ids.reconciliationId))?.revision).toBe(2);
+      });
+
+      it('dong lai ma KHONG doi gi => phat lai revision 2, khong sinh revision 3', async () => {
+        await reconciliation.reopenReconciliation(
+          ids.reconciliationId,
+          'Kiem tra lai, khong sua gi',
+          'it-t4-giam-doc',
+        );
+        await reconciliation.runMatching(ids.reconciliationId, 'it-t4-ke-toan');
+        // Ca hai dong DA duoc chap nhan o cac quyet dinh cu (van con `RESOLVED`), nen quyet the nao
+        // cho cac chenh lech MOI thi tong van the — va do dung la dinh nghia cua "khong doi gi".
+        await resolveAllPending(ids.reconciliationId, () => 'IGNORE_WITH_REASON');
+
+        const replayed = await reconciliation.closeReconciliation(
+          ids.reconciliationId,
+          'it-t4-ke-toan',
+        );
+
+        expect(replayed.handoff).toMatchObject({ revision: 2, acceptedAmount: 5_000_000 });
+        expect(
+          await prisma.transportFuelSettlementHandoff.count({
+            where: { reconciliationId: ids.reconciliationId },
+          }),
+        ).toBe(2);
+      });
+
+      /**
+       * `CHECK TransportFuelSettlementHandoff_revision_chain` — luoi cuoi cua chuoi.
+       *
+       * Tang mien khong bao gio ghi mot hang nhu duoi day. Bai test do rang mot duong ghi KHAC —
+       * mot script don du lieu, mot lan sua tay — cung khong ghi duoc.
+       */
+      it('DB tu choi mot revision > 1 khong noi duoc no thay the ban nao', async () => {
+        const existing = await fuelRepo.findHandoff(ids.reconciliationId);
+        let blocked = '';
+        try {
+          await prisma.transportFuelSettlementHandoff.create({
+            data: {
+              reconciliationId: ids.reconciliationId,
+              revision: 99,
+              supersedesHandoffId: null,
+              supplierId: existing?.supplierId ?? '',
+              periodStart: '2026-10-01',
+              periodEnd: '2026-10-31',
+              acceptedAmount: 1n,
+              acceptedLineCount: 1,
+              emittedAt: new Date(),
+              emittedBy: 'it-t4-ke-toan',
+            },
+          });
+        } catch (error) {
+          blocked = describeStorageError(error);
+        }
+        expect(blocked).toContain('TransportFuelSettlementHandoff_revision_chain');
+      });
+    });
+
+    /* ============================ #103 §1 ============================ */
+
+    /**
+     * SO KHOP VA DONG KY KHONG DUOC PHEP DAM VAO NHAU.
+     *
+     * ---------------------------------------------------------------------------
+     * BON BAI, VA CHUNG DO BON THU KHAC NHAU:
+     *
+     *   1. dong TRUOC    -> lan so khop sau do doi DUNG 0 hang (khong chi la "co bao loi");
+     *   2. so khop TRUOC -> lenh dong tinh tren ket qua CUOI CUNG;
+     *   3. DAM VAO NHAU THAT — mot lan so khop dang chay bi mot lan dong chen ngang GIUA luc no doc
+     *      va luc no ghi. Day la bai duy nhat chung minh KHOA HANG ton tai: hai bai tren van xanh
+     *      voi mot phep kiem thuan tuy o tang mien, con bai nay thi khong;
+     *   4. chay dong thoi nhieu lan, khong gia dinh thu tu nao — chi doi hai bat bien.
+     */
+    describe('#103 §1 — so khop va dong ky duoc tuan tu hoa boi mot khoa hang', () => {
+      /** Mot ky dung ngay truoc luc dong: da so khop, khong con chenh lech nao treo. */
+      async function reconciliationReadyToClose(): Promise<{
+        reconciliationId: string;
+        statementId: string;
+      }> {
+        const created = await isolatedReconciliation([
+          `${PLATE_PREFIX}-A,2026-10-10,100,2.500.000,HD-RACE,`,
+        ]);
+        await reconciliation.runMatching(created.reconciliationId, 'it-t4-ke-toan');
+        await resolveAllPending(created.reconciliationId, () => 'ACCEPT_SUPPLIER_AMOUNT');
+        return created;
+      }
+
+      it('dong TRUOC => lan so khop sau do doi DUNG 0 hang', async () => {
+        const { reconciliationId, statementId } = await reconciliationReadyToClose();
+        await reconciliation.closeReconciliation(reconciliationId, 'it-t4-ke-toan');
+
+        const before = await snapshotOf(reconciliationId, statementId);
+        await expect(
+          reconciliation.runMatching(reconciliationId, 'it-t4-ke-toan'),
+        ).rejects.toMatchObject({ reason: 'RECONCILIATION_FROZEN' });
+
+        // KHONG chi la "co bao loi": khong mot cap khop, mot chenh lech hay mot trang thai dong nao
+        // bi cham toi. Day la khac biet giua mot lan TU CHOI va mot lan ghi da lo tay.
+        expect(await snapshotOf(reconciliationId, statementId)).toBe(before);
+      });
+
+      it('so khop TRUOC => lenh dong tinh tren ket qua CUOI CUNG', async () => {
+        const { reconciliationId, statementId } = await reconciliationReadyToClose();
+
+        const closed = await reconciliation.closeReconciliation(reconciliationId, 'it-t4-ke-toan');
+        const truth = await recomputeAcceptedFromDb(reconciliationId, statementId);
+
+        expect(closed.handoff.acceptedAmount).toBe(truth.amount);
+        expect(closed.handoff.acceptedLineCount).toBe(truth.lineCount);
+      });
+
+      /**
+       * DAM VAO NHAU THAT — va bai nay DO tren ma nguon truoc Issue #103.
+       *
+       * Cach dung: mot giao dich thu ba giu khoa hang doi soat, tha `runMatching` chay vao trong
+       * luc do (no se DOI o `SELECT ... FOR UPDATE`), roi dong ky NGAY TRONG giao dich dang giu
+       * khoa. Khi khoa duoc nha, `runMatching` doc lai hang va phai thay `CLOSED`.
+       *
+       * Truoc khi co khoa, `runMatching` da tinh xong ket qua tu mot ban chup CU roi GHI DE len mot
+       * ky vua dong — va chi bao loi o buoc doi trang thai, khi moi thu da ghi xong.
+       */
+      it('so khop dang chay bi dong ky chen ngang => doc duoc trang thai MOI, khong ghi gi', async () => {
+        const { reconciliationId, statementId } = await reconciliationReadyToClose();
+        const before = await snapshotOf(reconciliationId, statementId);
+
+        let matching: Promise<unknown> = Promise.resolve();
+
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.$queryRawUnsafe(
+              'SELECT "state" FROM "TransportFuelReconciliation" WHERE "id" = $1 FOR UPDATE',
+              reconciliationId,
+            );
+
+            // Tha so khop chay VAO trong luc khoa dang bi giu. No doc duoc trang thai `RESOLVED`
+            // (phep doc dau ham khong can khoa), tinh xong ket qua, roi DUNG lai o cua khoa.
+            matching = reconciliation.runMatching(reconciliationId, 'it-t4-ke-toan');
+            matching.catch(() => undefined);
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            // Dong ky NGAY TRONG giao dich dang giu khoa — day la "nguoi khac" cua kich ban.
+            await tx.$executeRawUnsafe(
+              `UPDATE "TransportFuelReconciliation"
+                 SET "state" = 'CLOSED', "closedAt" = NOW(), "closedBy" = $2, "updatedAt" = NOW()
+               WHERE "id" = $1`,
+              reconciliationId,
+              'it-t4-nguoi-khac',
+            );
+          },
+          { timeout: 20_000, maxWait: 20_000 },
+        );
+
+        await expect(matching).rejects.toMatchObject({ reason: 'RECONCILIATION_FROZEN' });
+        expect(await snapshotOf(reconciliationId, statementId)).toBe(before);
+      });
+
+      /**
+       * BAT BIEN TONG QUAT, do tren nhieu lan chay dong thoi that.
+       *
+       * Hai bai dau do hai thu tu CU THE. Bai nay khong gia dinh thu tu nao ca — no chay hai lenh
+       * cung luc va chi doi hai dieu, dung hai dieu Issue #103 doi:
+       *
+       *   · khong bao gio co mot ky `CLOSED` con mang chenh lech `PENDING`;
+       *   · con so tren ban giao LUON ung voi bo cap khop cuoi cung trong CSDL.
+       */
+      it('chay dong thoi nhieu lan: khong lan nao de lai CLOSED + PENDING hay mot ban giao lech', async () => {
+        for (let round = 0; round < 3; round += 1) {
+          const { reconciliationId, statementId } = await reconciliationReadyToClose();
+
+          const [closing] = await Promise.allSettled([
+            reconciliation.closeReconciliation(reconciliationId, 'it-t4-ke-toan'),
+            reconciliation.runMatching(reconciliationId, 'it-t4-ke-toan'),
+          ]);
+
+          const final = await fuelRepo.findReconciliation(reconciliationId);
+          if (final?.state !== 'CLOSED') {
+            // Lenh dong thua cuoc — hop le, mien la no khong de lai mot ban giao nao.
+            expect(closing.status).toBe('rejected');
+            expect(await fuelRepo.findHandoff(reconciliationId)).toBeNull();
+            continue;
+          }
+
+          expect(await fuelRepo.countPendingDiscrepancies(reconciliationId)).toBe(0);
+          const handoff = await fuelRepo.findHandoff(reconciliationId);
+          const truth = await recomputeAcceptedFromDb(reconciliationId, statementId);
+          expect(handoff?.acceptedAmount).toBe(truth.amount);
+          expect(handoff?.acceptedLineCount).toBe(truth.lineCount);
+        }
+      });
+    });
+
+    /* ============================ #103 §4 ============================ */
+
+    /**
+     * DUYET VA SUA PHIEU KHONG DUOC PHEP DAM VAO NHAU.
+     *
+     * `GD-10` goi mot phieu `VERIFIED` la bat bien, va luc duyet chi phi cua no DA di sang `TX-03`.
+     * Neu mot lenh sua ghi duoc sau do, con so tren phieu va con so trong gia thanh chuyen tach
+     * nhau — hai capability lech nhau vinh vien, khong loi, khong canh bao, va khong ai biet cho
+     * toi khi doi soat ca thang.
+     */
+    describe('#103 §4 — sua phieu va duyet phieu duoc tuan tu hoa boi menh de WHERE', () => {
+      it('DUYET THANG => lenh sua dang chay bi tu choi, va so tren phieu khong doi', async () => {
+        const entry = await submitOwn({
+          amount: 3_300_000,
+          odometerKm: 500_000,
+          occurredAt: '2026-10-20T06:00:00+07:00',
+          businessDate: '2026-10-20',
+          correlationKey: 'it-t4-103-4-duyet-thang',
+        });
+
+        let amending: Promise<unknown> = Promise.resolve();
+
+        await prisma.$transaction(
+          async (tx) => {
+            // Khoa hang phieu, roi tha lenh sua chay vao. No doc duoc `DECLARED`, di qua cong
+            // `GD-10` cua tang mien, roi DUNG lai o cua khoa cua chinh lenh `UPDATE`.
+            await tx.$queryRawUnsafe(
+              'SELECT "verificationStatus" FROM "TransportFuelEntry" WHERE "id" = $1 FOR UPDATE',
+              entry.id,
+            );
+
+            amending = fuel.amendFuelEntry(
+              entry.id,
+              {
+                supplierId: entry.supplierId,
+                liters: '250',
+                amount: 9_900_000,
+                odometerKm: 500_400,
+                occurredAt: '2026-10-20T06:00:00+07:00',
+                businessDate: '2026-10-20',
+                paymentMethod: 'SUPPLIER_ACCOUNT',
+              },
+              'it-t4-lai-xe',
+            );
+            amending.catch(() => undefined);
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            await tx.$executeRawUnsafe(
+              `UPDATE "TransportFuelEntry"
+                 SET "verificationStatus" = 'VERIFIED', "verifiedAt" = NOW(), "verifiedBy" = $2
+               WHERE "id" = $1`,
+              entry.id,
+              'it-t4-ke-toan',
+            );
+          },
+          { timeout: 20_000, maxWait: 20_000 },
+        );
+
+        // Lenh sua tinh day duoc khoa, doc lai hang, thay `VERIFIED` — va doi DUNG 0 hang.
+        await expect(amending).rejects.toMatchObject({
+          reason: 'FUEL_ENTRY_AMEND_ALREADY_TRUSTED',
+        });
+
+        const after = await fuelRepo.findEntry(entry.id);
+        expect(after?.amount).toBe(3_300_000);
+        expect(after?.litersUnits).toBe(200_000);
+      });
+
+      it('SUA THANG => lan duyet sau do day DUNG con so da sua sang TX-03', async () => {
+        const entry = await submitOwn({
+          amount: 3_300_000,
+          odometerKm: 600_000,
+          occurredAt: '2026-10-21T06:00:00+07:00',
+          businessDate: '2026-10-21',
+          correlationKey: 'it-t4-103-4-sua-thang',
+        });
+
+        await fuel.amendFuelEntry(
+          entry.id,
+          {
+            supplierId: entry.supplierId,
+            liters: '250',
+            amount: 5_500_000,
+            odometerKm: 600_400,
+            occurredAt: '2026-10-21T06:00:00+07:00',
+            businessDate: '2026-10-21',
+            paymentMethod: 'SUPPLIER_ACCOUNT',
+          },
+          'it-t4-lai-xe',
+        );
+
+        const verified = await fuel.verifyFuelEntry(entry.id, 'it-t4-ke-toan');
+        expect(verified.amount).toBe(5_500_000);
+
+        // Va con so DA VAO gia thanh chuyen dung bang con so tren phieu — do la toan bo van de.
+        const expense = await prisma.transportTripExpense.findUnique({
+          where: { id: verified.costExpenseId ?? '' },
+        });
+        expect(Number(expense?.signedAmount)).toBe(5_500_000);
+
+        // Cung chan gia thanh do, doc bang KHOA TAT DINH thay vi bang id — hai duong phai chi ve
+        // cung mot hang, va DUNG mot hang.
+        expect(expense?.correlationKey).toBe(`fuel:${entry.id}`);
+        expect(
+          await prisma.transportTripExpense.count({
+            where: { correlationKey: `fuel:${entry.id}` },
+          }),
+        ).toBe(1);
+      });
+
+      /**
+       * Cung nguyen tac cho BANG CHUNG: mot ky dang dong khong duoc nhan them anh chung tu.
+       *
+       * Mot lan `INSERT` khong co menh de "chi khi hang kia dang o trang thai X", nen o day phai la
+       * khoa hang that chu khong phai mot `WHERE`. Bai nay do rang khoa do ton tai.
+       */
+      it('anh chung tu dang gan bi lenh dong ky chen ngang => khong hang mo coi nao o lai', async () => {
+        const created = await isolatedReconciliation([
+          `${PLATE_PREFIX}-A,2026-10-25,100,2.100.000,HD-EVIDENCE,`,
+        ]);
+        const entry = await submitOwn({
+          supplierId: created.supplierId,
+          amount: 2_100_000,
+          odometerKm: 700_000,
+          occurredAt: '2026-10-25T06:00:00+07:00',
+          businessDate: '2026-10-25',
+          correlationKey: 'it-t4-103-4-anh-chung-tu',
+        });
+        await fuel.verifyFuelEntry(entry.id, 'it-t4-ke-toan');
+        await reconciliation.runMatching(created.reconciliationId, 'it-t4-ke-toan');
+
+        let attaching: Promise<unknown> = Promise.resolve();
+
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.$queryRawUnsafe(
+              'SELECT "reconciliationStatus" FROM "TransportFuelEntry" WHERE "id" = $1 FOR UPDATE',
+              entry.id,
+            );
+
+            attaching = fuel.attachEvidence(
+              entry.id,
+              { locator: 'media://it-t4/anh-gan-luc-dang-dong.jpg' },
+              'it-t4-ke-toan',
+            );
+            attaching.catch(() => undefined);
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            await tx.$executeRawUnsafe(
+              `UPDATE "TransportFuelEntry" SET "reconciliationStatus" = 'SETTLED' WHERE "id" = $1`,
+              entry.id,
+            );
+          },
+          { timeout: 20_000, maxWait: 20_000 },
+        );
+
+        await expect(attaching).rejects.toMatchObject({
+          reason: 'FUEL_ENTRY_AMEND_RECONCILIATION_LOCKED',
+        });
+        expect(await fuelRepo.listEvidence(entry.id)).toHaveLength(0);
+      });
+    });
+
+    /* ============================ #103 §3 ============================ */
+
+    /**
+     * NHAP BANG KE: mot lan hong o giua phai CUON LAI TOAN BO.
+     *
+     * ---------------------------------------------------------------------------
+     * CACH GAY RA MOT LAN HONG THAT.
+     *
+     * Bai nay khong gia lap mot kho va khong tiem mot mam nao vao ma nguon. No cai mot TRIGGER len
+     * chinh bang ky doi soat de lan `INSERT` do that bai — DUNG diem ma Issue #103 §3 mo ta: sau
+     * khi dau bang ke va cac dong da duoc ghi, truoc khi ky doi soat duoc mo.
+     *
+     * Truoc khi sua, buoc do la mot giao dich RIENG, nen bang ke + cac dong da COMMIT va o lai mai
+     * mai — mot bang ke khong ky doi soat, ma lan nhap lai bi unique `(cay xang, ky)` chan. Nguoi
+     * dung khong con nut nao di tiep.
+     */
+    describe('#103 §3 — bang ke, cac dong va ky doi soat cung mot giao dich', () => {
+      it('hong o buoc mo ky => khong manh nao o lai; va nhap lai thi THANH CONG', async () => {
+        const supplier = await fuelRepo.createSupplier({
+          name: 'Cay xang kiem thu cuon lai',
+          code: `${SUPPLIER_CODE}-ROLLBACK`,
+          phone: null,
+          address: null,
+          taxCode: null,
+          at: new Date('2026-11-01T00:00:00Z'),
+        });
+
+        const csv = [
+          'Bien so,Ngay,So lit,Thanh tien,So hoa don,Ghi chu',
+          `${PLATE_PREFIX}-A,2026-11-05,100,2.000.000,HD-RB-1,`,
+          `${PLATE_PREFIX}-A,2026-11-06,120,2.400.000,HD-RB-2,`,
+        ].join('\n');
+        const command = {
+          supplierId: supplier.id,
+          periodStart: '2026-11-01',
+          periodEnd: '2026-11-30',
+          filename: 'it-t4-cuon-lai.csv',
+          format: 'CSV' as const,
+          contentBase64: Buffer.from(csv, 'utf8').toString('base64'),
+        };
+
+        await prisma.$executeRawUnsafe(
+          `CREATE OR REPLACE FUNCTION it_t4_fail_reconciliation() RETURNS trigger AS $fn$
+             BEGIN RAISE EXCEPTION 'it_t4_rollback_probe'; END;
+           $fn$ LANGUAGE plpgsql;`,
+        );
+        await prisma.$executeRawUnsafe(
+          `CREATE TRIGGER "it_t4_fail_reconciliation"
+           BEFORE INSERT ON "TransportFuelReconciliation"
+           FOR EACH ROW EXECUTE FUNCTION it_t4_fail_reconciliation();`,
+        );
+
+        try {
+          await expect(statements.commitImport(command, 'it-t4-ke-toan')).rejects.toThrow(
+            /it_t4_rollback_probe/,
+          );
+
+          // KHONG mot manh nao o lai: khong dau bang ke, khong dong, khong ky doi soat.
+          expect(
+            await prisma.transportFuelSupplierStatement.count({
+              where: { supplierId: supplier.id },
+            }),
+          ).toBe(0);
+          expect(
+            await prisma.transportFuelStatementLine.count({
+              where: { statement: { supplierId: supplier.id } },
+            }),
+          ).toBe(0);
+          expect(
+            await prisma.transportFuelReconciliation.count({ where: { supplierId: supplier.id } }),
+          ).toBe(0);
+        } finally {
+          await prisma.$executeRawUnsafe(
+            'DROP TRIGGER IF EXISTS "it_t4_fail_reconciliation" ON "TransportFuelReconciliation";',
+          );
+          await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS it_t4_fail_reconciliation();');
+        }
+
+        // VA NHAP LAI THI THANH CONG — do la nua thu hai cua bang chung, va la nua quan trong hon.
+        // Neu cac dong cua lan truoc con lai, unique `(cay xang, ky)` se chan chinh lan nay.
+        const retried = await statements.commitImport(command, 'it-t4-ke-toan');
+        expect(retried.statement.acceptedCount).toBe(2);
+        expect(retried.reconciliation.state).toBe('DRAFT');
+        expect(retried.reconciliation.statementId).toBe(retried.statement.id);
+      });
+    });
   },
 );

@@ -216,14 +216,35 @@ export interface FuelDiscrepancy {
 }
 
 /**
- * BAN GIAO SANG T5 — payload CO KIEU, idempotent theo ky doi soat.
+ * BAN GIAO SANG T5 — payload CO KIEU, mot CHUOI BAN chi-them theo ky doi soat.
  *
  * T4 khong ghi bang cua T5. Day la mot HOP THU DI: `acceptedAmount` la tong cua nhung dong bang ke
  * DA CO NGUOI CHAP NHAN, va T5 se doc no de tao mot `PayableDocument` nguon `FUEL` (T1 §9.1).
+ *
+ * ===========================================================================
+ * VI SAO LA MOT CHUOI chu khong MOT HANG (Issue #103 §2).
+ *
+ * Ban dau `reconciliationId` la UNIQUE, va lan dong thu hai tra lai dung hang cu. Dieu do chi
+ * idempotent khi KET QUA KINH TE khong doi — va no thoi dung ngay khi mot nguoi mo lai ky de SUA:
+ *
+ * ```text
+ * dong lan 1  -> ban giao 10.000.000d
+ * mo lai, sua mot quyet dinh
+ * dong lan 2  -> ket qua that la 12.000.000d, nhung hang cu van ghi 10.000.000d
+ * ```
+ *
+ * T5 doc mot con so DA CHET, va khong co gi bao cho no biet. Ghi de hang cu cung khong phai duong
+ * ra: ban giao la thu DA PHAT RA NGOAI, va sua lang le mot con so da phat di la dung dieu `GD-11`
+ * cam. Nen: CHI THEM. Dong lai ma ket qua GIONG HET -> phat lai ban cu (`revision` khong tang);
+ * ket qua KHAC -> mot `revision` moi, tro nguoc ve ban truoc bang `supersedesHandoffId`.
  */
 export interface FuelSettlementHandoff {
   readonly id: string;
   readonly reconciliationId: string;
+  /** Dem tu 1, tang DUY NHAT khi mot lan dong lai cho ra ket qua kinh te KHAC ban gan nhat. */
+  readonly revision: number;
+  /** Ban ma `revision` nay thay the. `null` o ban dau tien. */
+  readonly supersedesHandoffId: string | null;
   readonly supplierId: string;
   readonly periodStart: BusinessDate;
   readonly periodEnd: BusinessDate;

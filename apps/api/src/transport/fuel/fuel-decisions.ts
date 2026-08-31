@@ -161,8 +161,23 @@ export type FuelDiscrepancyResolveReason = (typeof FUEL_DISCREPANCY_RESOLVE_REAS
  * ------------------------------------------------------------------ */
 export const FUEL_SETTLEMENT_HANDOFF_REASONS = [
   'HANDOFF_EMITTED',
-  /** Dong lai mot ky da tung dong (mo lai roi dong lai) KHONG tao ban giao thu hai. */
+  /**
+   * Dong lai mot ky da tung dong, va KET QUA KINH TE KHONG DOI — phat lai chinh ban cu.
+   *
+   * "Khong doi" o day co nghia hep va do duoc: cung `acceptedAmount`, cung `acceptedLineCount`. Ai
+   * bam nut va bam luc nao thi khong tinh — neu tinh, moi lan bam se de ra mot ban moi va tinh
+   * idempotent bien thanh mot bo dem so lan bam.
+   */
   'HANDOFF_IDEMPOTENT_REPLAY',
+  /**
+   * Dong lai sau khi ai do MO LAI VA SUA, va con so da khac — mot ban sua doi moi (Issue #103 §2).
+   *
+   * Ma RIENG chu khong dung lai `HANDOFF_EMITTED`: hai su kien nay doi hai viec khac nhau o phia
+   * T5. Mot ban dau tien la mot cong no moi; mot ban sua doi la mot cong no DA TON TAI can duoc
+   * dieu chinh. Gop chung lai thi nguoi truc doc trace khong phan biet duoc, va T5 se hoac tao hai
+   * cong no hoac bo qua lan sua.
+   */
+  'HANDOFF_REVISED',
 ] as const;
 export type FuelSettlementHandoffReason = (typeof FUEL_SETTLEMENT_HANDOFF_REASONS)[number];
 
@@ -264,7 +279,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     DISCREPANCY_MATCH_TARGET_REQUIRED: 'Xác nhận khớp phải chỉ rõ cặp nào',
 
     HANDOFF_EMITTED: 'Đã phát bàn giao công nợ nhà cung cấp cho T5',
-    HANDOFF_IDEMPOTENT_REPLAY: 'Kỳ này đã có bàn giao — không phát lần hai',
+    HANDOFF_IDEMPOTENT_REPLAY: 'Kết quả không đổi — phát lại đúng bản bàn giao cũ',
+    HANDOFF_REVISED: 'Mở lại rồi sửa nên kết quả khác — phát một bản sửa đổi mới',
 
     SELF_FUEL_SCOPE_GRANTED: 'Lái xe thao tác đúng phiếu của chính mình',
     SELF_FUEL_SCOPE_NO_DRIVER_BINDING: 'Tài khoản đăng nhập chưa nối với hồ sơ lái xe nào',

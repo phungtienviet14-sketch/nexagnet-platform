@@ -1,30 +1,32 @@
 import { randomUUID } from 'node:crypto';
 import { TRANSPORT_CURRENCY } from '../money.js';
 import {
+  AMENDABLE_FUEL_RECONCILIATION_STATUSES,
+  AMENDABLE_FUEL_VERIFICATION,
+  ATTACHABLE_EVIDENCE_RECONCILIATION_STATUSES,
   INITIAL_FUEL_RECONCILIATION_STATE,
   INITIAL_FUEL_RECONCILIATION_STATUS,
   INITIAL_FUEL_VERIFICATION_STATUS,
-  type FuelReconciliationState,
+  isFrozenFuelReconciliation,
   type FuelReconciliationStatus,
   type FuelVerificationStatus,
 } from './fuel-lifecycle.js';
+import { sameSettlementResult, sumAcceptedSettlement } from './fuel-settlement.js';
 import {
   FuelRepository,
   type AmendFuelEntryInput,
   type ApplyMatchingRunInput,
   type CloseReconciliationInput,
-  type ClosedReconciliation,
+  type CloseReconciliationOutcome,
   type CreateFuelEntryInput,
   type CreateFuelSupplierInput,
-  type CreateReconciliationInput,
   type CreateStatementInput,
   type CreatedStatement,
-  type MatchingRunResult,
+  type MatchingRunOutcome,
   type ReopenReconciliationInput,
   type ResolveDiscrepancyInput,
-  type ResolvedDiscrepancy,
+  type ResolveDiscrepancyOutcome,
   type SetFuelVerificationInput,
-  type SetReconciliationStateInput,
 } from './fuel.repository.js';
 import type {
   FuelDiscrepancy,
@@ -194,9 +196,12 @@ export class InMemoryFuelRepository extends FuelRepository {
     return earlier.at(-1)?.odometerKm ?? null;
   }
 
+  /** Cung dieu kien voi menh de `WHERE` cua kho Prisma — xem `amendEntry` o hop dong. */
   async amendEntry(id: string, patch: AmendFuelEntryInput): Promise<FuelEntry | null> {
     const current = this.entries.get(id);
     if (!current) return null;
+    if (current.verificationStatus !== AMENDABLE_FUEL_VERIFICATION) return null;
+    if (!AMENDABLE_FUEL_RECONCILIATION_STATUSES.includes(current.reconciliationStatus)) return null;
     const updated: FuelEntry = {
       ...current,
       litersUnits: patch.litersUnits,
@@ -261,7 +266,13 @@ export class InMemoryFuelRepository extends FuelRepository {
     capturedAt: Date | null;
     uploadedBy: string;
     at: Date;
-  }): Promise<FuelReceiptEvidence> {
+  }): Promise<FuelReceiptEvidence | null> {
+    const entry = this.entries.get(input.fuelEntryId);
+    if (!entry) return null;
+    if (!ATTACHABLE_EVIDENCE_RECONCILIATION_STATUSES.includes(entry.reconciliationStatus)) {
+      return null;
+    }
+
     const record: FuelReceiptEvidence = {
       id: randomUUID(),
       fuelEntryId: input.fuelEntryId,
@@ -282,7 +293,7 @@ export class InMemoryFuelRepository extends FuelRepository {
 
   /* --------------------------- Bang ke ---------------------------- */
 
-  async createStatement(input: CreateStatementInput): Promise<CreatedStatement> {
+  async createStatementWithReconciliation(input: CreateStatementInput): Promise<CreatedStatement> {
     const accepted = input.lines.filter((line) => line.status === 'ACCEPTED').length;
     const statement: FuelSupplierStatement = {
       id: randomUUID(),
@@ -323,7 +334,28 @@ export class InMemoryFuelRepository extends FuelRepository {
       return clone(stored);
     });
 
-    return { statement: clone(statement), lines };
+    // Ky doi soat mo cung mot luc voi bang ke — cung hop dong voi kho Prisma (Issue #103 SS3).
+    // Kho nay khong co giao dich, nen no khong CHUNG MINH tinh nguyen tu; no chi giu cho hai kho
+    // co CUNG mot be mat, de bo test cua service khong xanh nho mot hinh dang khong ton tai that.
+    const reconciliation: FuelReconciliation = {
+      id: randomUUID(),
+      supplierId: input.supplierId,
+      statementId: statement.id,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      state: INITIAL_FUEL_RECONCILIATION_STATE,
+      lastMatchedAt: null,
+      closedAt: null,
+      closedBy: null,
+      reopenedAt: null,
+      reopenedBy: null,
+      reopenReason: null,
+      createdAt: input.at.toISOString(),
+      updatedAt: input.at.toISOString(),
+    };
+    this.reconciliations.set(reconciliation.id, reconciliation);
+
+    return { statement: clone(statement), lines, reconciliation: clone(reconciliation) };
   }
 
   async findStatement(id: string): Promise<FuelSupplierStatement | null> {
@@ -354,27 +386,6 @@ export class InMemoryFuelRepository extends FuelRepository {
 
   /* -------------------------- Doi soat ---------------------------- */
 
-  async createReconciliation(input: CreateReconciliationInput): Promise<FuelReconciliation> {
-    const reconciliation: FuelReconciliation = {
-      id: randomUUID(),
-      supplierId: input.supplierId,
-      statementId: input.statementId,
-      periodStart: input.periodStart,
-      periodEnd: input.periodEnd,
-      state: INITIAL_FUEL_RECONCILIATION_STATE,
-      lastMatchedAt: null,
-      closedAt: null,
-      closedBy: null,
-      reopenedAt: null,
-      reopenedBy: null,
-      reopenReason: null,
-      createdAt: input.at.toISOString(),
-      updatedAt: input.at.toISOString(),
-    };
-    this.reconciliations.set(reconciliation.id, reconciliation);
-    return clone(reconciliation);
-  }
-
   async findReconciliation(id: string): Promise<FuelReconciliation | null> {
     return cloneOrNull(this.reconciliations.get(id));
   }
@@ -389,25 +400,15 @@ export class InMemoryFuelRepository extends FuelRepository {
     return sortedById([...this.reconciliations.values()]);
   }
 
-  async setReconciliationState(
-    id: string,
-    from: FuelReconciliationState,
-    to: FuelReconciliationState,
-    input: SetReconciliationStateInput,
-  ): Promise<FuelReconciliation | null> {
-    const current = this.reconciliations.get(id);
-    if (!current || current.state !== from) return null;
-    const updated: FuelReconciliation = {
-      ...current,
-      state: to,
-      lastMatchedAt: input.markMatched ? input.at.toISOString() : current.lastMatchedAt,
-      updatedAt: input.at.toISOString(),
-    };
-    this.reconciliations.set(id, updated);
-    return clone(updated);
-  }
+  async applyMatchingRun(input: ApplyMatchingRunInput): Promise<MatchingRunOutcome> {
+    const reconciliation = this.reconciliations.get(input.reconciliationId);
+    if (!reconciliation) {
+      throw new Error(`Khong tim thay ky doi soat ${input.reconciliationId}`);
+    }
+    if (isFrozenFuelReconciliation(reconciliation.state)) {
+      return { status: 'RECONCILIATION_FROZEN', state: reconciliation.state };
+    }
 
-  async applyMatchingRun(input: ApplyMatchingRunInput): Promise<MatchingRunResult> {
     // Chi xoa cai MAY vua lam. Xem chu thich cua `ApplyMatchingRunInput` — cap `MANUAL` va chenh
     // lech da co nguoi quyet la cong cua nguoi doi soat, khong phai ket qua cua mot lan chay.
     for (const [id, match] of [...this.matches]) {
@@ -463,7 +464,16 @@ export class InMemoryFuelRepository extends FuelRepository {
     for (const [lineId, status] of input.lineStatuses) this.setLineStatus(lineId, status);
     for (const [entryId, status] of input.entryStatuses) this.setEntryStatus(entryId, status);
 
-    return { matches, discrepancies };
+    // Trang thai ky doi cung luc voi ket qua — cung hop dong voi kho Prisma.
+    this.reconciliations.set(reconciliation.id, {
+      ...reconciliation,
+      state: 'MATCHING',
+      lastMatchedAt: input.at.toISOString(),
+      updatedAt: input.at.toISOString(),
+    });
+    const moved = this.settleIfNothingPending(reconciliation.id, input.at);
+
+    return { status: 'APPLIED', result: { matches, discrepancies, reconciliation: moved } };
   }
 
   async listMatches(reconciliationId: string): Promise<FuelMatch[]> {
@@ -488,9 +498,17 @@ export class InMemoryFuelRepository extends FuelRepository {
     ).length;
   }
 
-  async resolveDiscrepancy(input: ResolveDiscrepancyInput): Promise<ResolvedDiscrepancy | null> {
+  async resolveDiscrepancy(input: ResolveDiscrepancyInput): Promise<ResolveDiscrepancyOutcome> {
+    const reconciliation = this.reconciliations.get(input.reconciliationId);
+    if (!reconciliation) {
+      throw new Error(`Khong tim thay ky doi soat ${input.reconciliationId}`);
+    }
+    if (isFrozenFuelReconciliation(reconciliation.state)) {
+      return { status: 'RECONCILIATION_FROZEN', state: reconciliation.state };
+    }
+
     const current = this.discrepancies.get(input.discrepancyId);
-    if (!current || current.status !== 'PENDING') return null;
+    if (!current || current.status !== 'PENDING') return { status: 'DISCREPANCY_NOT_PENDING' };
 
     const updated: FuelDiscrepancy = {
       ...current,
@@ -522,12 +540,29 @@ export class InMemoryFuelRepository extends FuelRepository {
     if (input.lineStatus) this.setLineStatus(input.lineStatus.id, input.lineStatus.status);
     if (input.entryStatus) this.setEntryStatus(input.entryStatus.id, input.entryStatus.status);
 
-    return { discrepancy: clone(updated), match };
+    return {
+      status: 'RESOLVED',
+      resolved: {
+        discrepancy: clone(updated),
+        match,
+        reconciliation: this.settleIfNothingPending(input.reconciliationId, input.at),
+      },
+    };
   }
 
-  async closeReconciliation(input: CloseReconciliationInput): Promise<ClosedReconciliation | null> {
+  /** Cung TRINH TU voi kho Prisma: dem lai -> tinh lai -> dong -> phat ban sua doi. */
+  async closeReconciliation(input: CloseReconciliationInput): Promise<CloseReconciliationOutcome> {
     const current = this.reconciliations.get(input.reconciliationId);
-    if (!current || current.state !== 'RESOLVED') return null;
+    if (!current) {
+      throw new Error(`Khong tim thay ky doi soat ${input.reconciliationId}`);
+    }
+
+    const pending = await this.countPendingDiscrepancies(input.reconciliationId);
+    if (pending > 0) return { status: 'PENDING_DISCREPANCIES', pending };
+
+    if (current.state !== 'RESOLVED' && current.state !== 'MATCHING' && current.state !== 'REOPENED') {
+      return { status: 'STATE_RACE', state: current.state };
+    }
 
     const closed: FuelReconciliation = {
       ...current,
@@ -538,35 +573,58 @@ export class InMemoryFuelRepository extends FuelRepository {
     };
     this.reconciliations.set(closed.id, closed);
 
+    const matches = [...this.matches.values()].filter(
+      (match) => match.reconciliationId === current.id,
+    );
+    const totals = sumAcceptedSettlement({
+      lines: [...this.lines.values()].filter((line) => line.statementId === current.statementId),
+      matches,
+      discrepancies: [...this.discrepancies.values()].filter(
+        (item) => item.reconciliationId === current.id,
+      ),
+    });
+
     // `GD-11` — moi chung tu trong ky chuyen `SETTLED` va khoa lai.
     for (const line of [...this.lines.values()]) {
       if (line.statementId !== current.statementId || line.status !== 'ACCEPTED') continue;
       this.setLineStatus(line.id, 'SETTLED');
     }
-    for (const match of [...this.matches.values()]) {
-      if (match.reconciliationId !== current.id) continue;
-      this.setEntryStatus(match.fuelEntryId, 'SETTLED');
-    }
+    for (const match of matches) this.setEntryStatus(match.fuelEntryId, 'SETTLED');
 
-    const existing = this.handoffs.get(current.id);
-    if (existing) {
-      return { reconciliation: clone(closed), handoff: clone(existing), handoffReplayed: true };
+    const revisions = this.handoffRevisionsOf(current.id);
+    const latest = revisions.at(-1) ?? null;
+    if (
+      latest &&
+      sameSettlementResult(
+        { amount: latest.acceptedAmount, lineCount: latest.acceptedLineCount },
+        totals,
+      )
+    ) {
+      return {
+        status: 'CLOSED',
+        closed: { reconciliation: clone(closed), handoff: clone(latest), handoffReplayed: true },
+      };
     }
 
     const handoff: FuelSettlementHandoff = {
       id: randomUUID(),
       reconciliationId: current.id,
+      revision: (latest?.revision ?? 0) + 1,
+      supersedesHandoffId: latest?.id ?? null,
       supplierId: current.supplierId,
       periodStart: current.periodStart,
       periodEnd: current.periodEnd,
-      acceptedAmount: input.acceptedAmount,
+      acceptedAmount: totals.amount,
       currencyCode: TRANSPORT_CURRENCY,
-      acceptedLineCount: input.acceptedLineCount,
+      acceptedLineCount: totals.lineCount,
       emittedAt: input.at.toISOString(),
       emittedBy: input.actor,
     };
-    this.handoffs.set(current.id, handoff);
-    return { reconciliation: clone(closed), handoff: clone(handoff), handoffReplayed: false };
+    this.handoffs.set(handoff.id, handoff);
+    return {
+      status: 'CLOSED',
+      closed: { reconciliation: clone(closed), handoff: clone(handoff), handoffReplayed: false },
+    };
   }
 
   async reopenReconciliation(input: ReopenReconciliationInput): Promise<FuelReconciliation | null> {
@@ -606,10 +664,40 @@ export class InMemoryFuelRepository extends FuelRepository {
   }
 
   async findHandoff(reconciliationId: string): Promise<FuelSettlementHandoff | null> {
-    return cloneOrNull(this.handoffs.get(reconciliationId));
+    return cloneOrNull(this.handoffRevisionsOf(reconciliationId).at(-1));
+  }
+
+  async listHandoffRevisions(reconciliationId: string): Promise<FuelSettlementHandoff[]> {
+    return this.handoffRevisionsOf(reconciliationId).map(clone);
   }
 
   /* --------------------------- Noi bo ----------------------------- */
+
+  /** Cung buoc voi `settleIfNothingPending` cua kho Prisma — xem chu thich o do. */
+  private settleIfNothingPending(reconciliationId: string, at: Date): FuelReconciliation {
+    const current = this.reconciliations.get(reconciliationId);
+    if (!current) throw new Error(`Khong tim thay ky doi soat ${reconciliationId}`);
+
+    const pending = [...this.discrepancies.values()].filter(
+      (item) => item.reconciliationId === reconciliationId && item.status === 'PENDING',
+    ).length;
+    if (pending > 0 || current.state !== 'MATCHING') return clone(current);
+
+    const settled: FuelReconciliation = {
+      ...current,
+      state: 'RESOLVED',
+      updatedAt: at.toISOString(),
+    };
+    this.reconciliations.set(settled.id, settled);
+    return clone(settled);
+  }
+
+  /** Chuoi ban giao cua mot ky, `revision` TANG DAN — ban gan nhat o cuoi. */
+  private handoffRevisionsOf(reconciliationId: string): FuelSettlementHandoff[] {
+    return [...this.handoffs.values()]
+      .filter((handoff) => handoff.reconciliationId === reconciliationId)
+      .sort((left, right) => left.revision - right.revision);
+  }
 
   private setLineStatus(id: string, status: FuelReconciliationStatus): void {
     const current = this.lines.get(id);

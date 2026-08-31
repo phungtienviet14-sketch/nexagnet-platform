@@ -231,6 +231,8 @@ CREATE TABLE "TransportFuelSettlementHandoff" (
     "acceptedAmount" BIGINT NOT NULL,
     "currencyCode" VARCHAR(3) NOT NULL DEFAULT 'VND',
     "acceptedLineCount" INTEGER NOT NULL,
+    "revision" INTEGER NOT NULL DEFAULT 1,
+    "supersedesHandoffId" TEXT,
     "emittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "emittedBy" TEXT NOT NULL,
 
@@ -313,7 +315,10 @@ CREATE INDEX "TransportFuelDiscrepancy_statementLineId_idx" ON "TransportFuelDis
 CREATE INDEX "TransportFuelDiscrepancy_fuelEntryId_idx" ON "TransportFuelDiscrepancy"("fuelEntryId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "TransportFuelSettlementHandoff_reconciliationId_key" ON "TransportFuelSettlementHandoff"("reconciliationId");
+CREATE UNIQUE INDEX "TransportFuelSettlementHandoff_reconciliationId_revision_key" ON "TransportFuelSettlementHandoff"("reconciliationId", "revision");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TransportFuelSettlementHandoff_supersedesHandoffId_key" ON "TransportFuelSettlementHandoff"("supersedesHandoffId");
 
 -- CreateIndex
 CREATE INDEX "TransportFuelSettlementHandoff_supplierId_idx" ON "TransportFuelSettlementHandoff"("supplierId");
@@ -372,6 +377,12 @@ ALTER TABLE "TransportFuelDiscrepancy" ADD CONSTRAINT "TransportFuelDiscrepancy_
 -- AddForeignKey
 ALTER TABLE "TransportFuelSettlementHandoff" ADD CONSTRAINT "TransportFuelSettlementHandoff_reconciliationId_fkey" FOREIGN KEY ("reconciliationId") REFERENCES "TransportFuelReconciliation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- AddForeignKey
+--
+-- Chuoi ban sua doi cua mot ky tro NGUOC ve ban truoc no. `ON DELETE RESTRICT`: xoa mot ban giao
+-- da bi thay the se lam dut day va bo lai mot ban moi khong giai thich duoc no sua cai gi.
+ALTER TABLE "TransportFuelSettlementHandoff" ADD CONSTRAINT "TransportFuelSettlementHandoff_supersedesHandoffId_fkey" FOREIGN KEY ("supersedesHandoffId") REFERENCES "TransportFuelSettlementHandoff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
 
 -- ===========================================================================
 -- PHAN 2 — RANG BUOC PRISMA KHONG KHAI DUOC
@@ -400,6 +411,24 @@ ALTER TABLE "TransportFuelStatementLine"
 ALTER TABLE "TransportFuelSettlementHandoff"
   ADD CONSTRAINT "TransportFuelSettlementHandoff_amount_money_range"
   CHECK ("acceptedAmount" >= 0 AND "acceptedAmount" <= 9007199254740991);
+
+-- ---------------------------------------------------------------------------
+-- CHUOI BAN SUA DOI BAN GIAO — Issue #103 SS2.
+--
+-- `revision` dem tu 1, va ban DAU TIEN khong thay the ban nao. Hai dieu do di cung nhau: mot hang
+-- `revision = 1` co `supersedesHandoffId` la mot day bat dau tu giua chung, va mot hang
+-- `revision > 1` khong co no la mot ban sua doi khong noi duoc no sua cai gi.
+--
+-- `CHECK` doc duoc ca hai vi ca hai cot deu nam tren CHINH hang do — khac `INV-26`, thu phai la
+-- trigger vi no so hai cot o hai bang.
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE "TransportFuelSettlementHandoff"
+  ADD CONSTRAINT "TransportFuelSettlementHandoff_revision_chain"
+  CHECK (
+    "revision" >= 1
+    AND (("revision" = 1) = ("supersedesHandoffId" IS NULL))
+  );
 
 -- ---------------------------------------------------------------------------
 -- SO LIT — `NUMERIC(12,3)` da chan so thuc nhi phan, `CHECK` chan so 0 va so am.

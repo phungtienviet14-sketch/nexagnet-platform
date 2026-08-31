@@ -3,7 +3,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  FUEL_ENTRY_TABLE,
   FUEL_MATCH_NO_SELF_SOURCE,
+  FUEL_RECONCILIATION_TABLE,
   FUEL_UNIQUE_INDEXES,
   isSelfSourcedMatchViolation,
 } from './fuel-storage-conflict.js';
@@ -45,6 +47,10 @@ const CHECK_CONSTRAINTS: ReadonlyArray<readonly [string, string]> = [
   ['TransportFuelReconciliation_period_order', 'nhu tren, cho ky doi soat'],
   ['TransportFuelSettlementHandoff_period_order', 'nhu tren, cho ban giao T5'],
   ['TransportFuelSettlementHandoff_amount_money_range', 'tong ban giao >= 0 va trong khoang'],
+  [
+    'TransportFuelSettlementHandoff_revision_chain',
+    'revision >= 1, va CHI ban dau tien khong thay the ban nao',
+  ],
   ['TransportFuelDiscrepancy_resolved_fields', 'da quyet thi phai co nguoi quyet va luc quyet'],
   ['TransportFuelDiscrepancy_has_subject', 'chenh lech phai gan vao it nhat mot ve'],
 ];
@@ -63,6 +69,25 @@ describe('Rang buoc T4 phai con nguyen trong migration', () => {
     'unique %s duoc tao',
     (indexName) => {
       expect(migration).toContain(`CREATE UNIQUE INDEX "${indexName}"`);
+    },
+  );
+});
+
+/**
+ * TEN BANG MA `SELECT ... FOR UPDATE` GO BANG TAY (Issue #103 §1).
+ *
+ * Giao thuc tuan tu hoa cua T4 khoa hang bang SQL tho, vi Prisma Client khong mo ra khoa hang. Do
+ * la cho DUY NHAT trong tang kho ma mot ten bang duoc go thanh chuoi thay vi di qua delegate — nen
+ * cung la cho duy nhat mot lan doi ten bang co the di qua bo bien dich ma khong ai thay.
+ *
+ * Hai bai duoi noi tep migration voi hai hang so do. Neu chung troi khoi nhau, bo test do o day —
+ * chu khong phai luc chay, tren dung duong ma khoa hang dang bao ve.
+ */
+describe('Ten bang cua giao thuc khoa hang khop voi migration', () => {
+  it.each([[FUEL_RECONCILIATION_TABLE], [FUEL_ENTRY_TABLE]])(
+    'migration tao bang "%s"',
+    (table) => {
+      expect(migration).toContain(`CREATE TABLE "${table}"`);
     },
   );
 });

@@ -3,10 +3,14 @@ import type { PrismaService } from '../../config/prisma.service.js';
 import { TRANSPORT_CURRENCY, fromStoredAmount, toStoredAmount } from '../money.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
-import type {
-  FuelReconciliationState,
-  FuelReconciliationStatus,
-  FuelVerificationStatus,
+import {
+  AMENDABLE_FUEL_RECONCILIATION_STATUSES,
+  AMENDABLE_FUEL_VERIFICATION,
+  ATTACHABLE_EVIDENCE_RECONCILIATION_STATUSES,
+  isFrozenFuelReconciliation,
+  type FuelReconciliationState,
+  type FuelReconciliationStatus,
+  type FuelVerificationStatus,
 } from './fuel-lifecycle.js';
 import {
   consumptionFromStored,
@@ -14,10 +18,13 @@ import {
   formatLiters,
   litersFromStored,
 } from './fuel-quantity.js';
+import { sameSettlementResult, sumAcceptedSettlement } from './fuel-settlement.js';
 import {
   FUEL_ENTRY_CORRELATION,
+  FUEL_ENTRY_TABLE,
   FUEL_MATCH_ENTRY_ONCE,
   FUEL_MATCH_LINE_ONCE,
+  FUEL_RECONCILIATION_TABLE,
   FUEL_STATEMENT_PERIOD,
   isSelfSourcedMatchViolation,
 } from './fuel-storage-conflict.js';
@@ -26,18 +33,16 @@ import {
   type AmendFuelEntryInput,
   type ApplyMatchingRunInput,
   type CloseReconciliationInput,
-  type ClosedReconciliation,
+  type CloseReconciliationOutcome,
   type CreateFuelEntryInput,
   type CreateFuelSupplierInput,
-  type CreateReconciliationInput,
   type CreateStatementInput,
   type CreatedStatement,
-  type MatchingRunResult,
+  type MatchingRunOutcome,
   type ReopenReconciliationInput,
   type ResolveDiscrepancyInput,
-  type ResolvedDiscrepancy,
+  type ResolveDiscrepancyOutcome,
   type SetFuelVerificationInput,
-  type SetReconciliationStateInput,
 } from './fuel.repository.js';
 import type {
   FuelDiscrepancy,
@@ -204,6 +209,8 @@ const toDiscrepancy = (row: any): FuelDiscrepancy => ({
 const toHandoff = (row: any): FuelSettlementHandoff => ({
   id: row.id,
   reconciliationId: row.reconciliationId,
+  revision: row.revision,
+  supersedesHandoffId: row.supersedesHandoffId,
   supplierId: row.supplierId,
   periodStart: row.periodStart,
   periodEnd: row.periodEnd,
@@ -216,22 +223,87 @@ const toHandoff = (row: any): FuelSettlementHandoff => ({
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
+ * KHOA MOT HANG BANG SQL THO — `SELECT ... FOR UPDATE`.
+ *
+ * Prisma Client khong mo ra khoa hang o muc API, nen day la duong duy nhat. Doi lai, day cung la
+ * cho DUY NHAT trong tep viet SQL tay: hai ham duoi chi lay ve mot cot, va moi phep doc/ghi khac
+ * van di qua delegate.
+ *
+ * Tham so di bang `$1` chu khong noi chuoi — mot `id` den tu HTTP, va noi chuoi o day la mot lo
+ * tiem SQL trong dung mot ham co nhiem vu bao ve tinh toan ven.
+ *
+ * `FOR UPDATE` o muc co lap READ COMMITTED (mac dinh cua Postgres) lam dung viec can lam: neu mot
+ * giao dich khac dang giu hang, lenh nay CHO, roi khi ben kia commit no doc lai PHIEN BAN MOI. Nho
+ * vay phep kiem trang thai ngay sau do nhin thay su that sau cung, khong phai ban chup luc bat dau.
+ */
+const lockRowState = async <T>(
+  scoped: PrismaService,
+  table: string,
+  column: string,
+  id: string,
+): Promise<T | null> => {
+  const rows = (await (
+    scoped as unknown as {
+      $queryRawUnsafe: (query: string, ...values: unknown[]) => Promise<unknown[]>;
+    }
+  ).$queryRawUnsafe(
+    `SELECT "${column}" FROM "${table}" WHERE "id" = $1 FOR UPDATE`,
+    id,
+  )) as Array<Record<string, T>>;
+  return rows.length === 0 ? null : (rows[0]?.[column] ?? null);
+};
+
+const lockReconciliationState = (
+  scoped: PrismaService,
+  reconciliationId: string,
+): Promise<FuelReconciliationState | null> =>
+  lockRowState<FuelReconciliationState>(
+    scoped,
+    FUEL_RECONCILIATION_TABLE,
+    'state',
+    reconciliationId,
+  );
+
+const lockEntryReconciliationStatus = (
+  scoped: PrismaService,
+  entryId: string,
+): Promise<FuelReconciliationStatus | null> =>
+  lockRowState<FuelReconciliationStatus>(
+    scoped,
+    FUEL_ENTRY_TABLE,
+    'reconciliationStatus',
+    entryId,
+  );
+
+/**
  * Kho `TX-04` tren PostgreSQL.
  *
  * ===========================================================================
- * BON THAO TAC O DAY LA NGUYEN TU, va moi cai vi mot ly do da tra gia o T3R (Issue #94):
+ * SAU THAO TAC O DAY LA NGUYEN TU, va moi cai vi mot ly do da tra gia o T3R (Issue #94) hoac o
+ * ra soat T4 (Issue #103):
  *
- *   `createStatement`      dau bang ke + moi dong — mot dau bang ke khong dong nao la mot ky khong
- *                          lam gi duoc, va lan nhap lai bi unique `(cay xang, ky)` chan;
- *   `applyMatchingRun`     xoa ket qua tu dong cu + ghi ket qua moi + doi trang thai — nua chung
- *                          la mot bang doi soat mau thuan voi chinh no;
- *   `resolveDiscrepancy`   quyet dinh + cap khop tay + trang thai hai ve;
- *   `closeReconciliation`  dong ky + khoa chung tu + phat ban giao T5 — nua chung la mot ban giao
- *                          da phat cho mot ky chua dong, hoac mot ky dong ma chung tu chua khoa.
+ *   `createStatementWithReconciliation`
+ *                          dau bang ke + moi dong + KY DOI SOAT — nua chung la mot bang ke khong
+ *                          ky nao, ma lan nhap lai bi unique `(cay xang, ky)` chan (#103 §3);
+ *   `applyMatchingRun`     khoa ky + xoa ket qua tu dong cu + ghi ket qua moi + doi trang thai —
+ *                          nua chung la mot bang doi soat mau thuan voi chinh no (#103 §1);
+ *   `resolveDiscrepancy`   khoa ky + quyet dinh + cap khop tay + trang thai hai ve;
+ *   `closeReconciliation`  khoa ky + dem lai chenh lech + tinh lai tong + dong ky + khoa chung tu
+ *                          + phat mot ban sua doi ban giao T5 (#103 §1, §2);
+ *   `reopenReconciliation` khoa ky + mo lai + go khoa chung tu;
+ *   `addEvidence`          khoa phieu + kiem ky da dong chua + chen anh (#103 §4).
  *
  * MOI thao tac doi trang thai deu doi `from`: `updateMany` co dieu kien roi doc lai, chu khong
  * `update` theo `id`. Do la cong chong HAI NGUOI cung bam, va Prisma khong cho `update` theo mot
  * dieu kien khong-unique — nen hinh dang nay la co y, khong phai mot cach viet vong.
+ *
+ * ===========================================================================
+ * HAI TANG CHONG VA CHAM, va chung khong thay the nhau:
+ *
+ *   · `WHERE` CO DIEU KIEN (`updateMany`) — du cho mot lan ghi DON LE. Lan ghi thang hay thua duoc
+ *     quyet ngay trong cau lenh, nen khong co khe ho giua doc va ghi;
+ *   · `SELECT ... FOR UPDATE` — bat buoc khi mot thao tac ghi NHIEU BANG va phai thay ca nhom o
+ *     mot trang thai dong nhat. Menh de `WHERE` cua tung lenh khong noi gi ve cac lenh con lai.
  */
 @Injectable()
 export class PrismaFuelRepository extends FuelRepository {
@@ -383,9 +455,22 @@ export class PrismaFuelRepository extends FuelRepository {
     return row ? row.odometerKm : null;
   }
 
+  /**
+   * SUA PHIEU — dieu kien sua duoc nam TRONG menh de `WHERE` (Issue #103 §4).
+   *
+   * Truoc day la `where: { id }`, va phep kiem `GD-10` chi song o service. Giua luc service doc va
+   * luc lenh nay chay, mot lan duyet co the da bien phieu thanh `VERIFIED` va da day chi phi sang
+   * `TX-03` — lenh ghi van thanh cong, va con so tren phieu tach khoi con so trong gia thanh
+   * chuyen. Hai truc deu phai co mat: chi kiem truc duyet thi mot phieu `DECLARED` DA KHOP van bi
+   * sua, va cap khop lap tuc noi doi ve chenh lech no da do.
+   */
   async amendEntry(id: string, patch: AmendFuelEntryInput): Promise<FuelEntry | null> {
     const updated = await model(this.prisma, 'transportFuelEntry').updateMany({
-      where: { id },
+      where: {
+        id,
+        verificationStatus: AMENDABLE_FUEL_VERIFICATION,
+        reconciliationStatus: { in: [...AMENDABLE_FUEL_RECONCILIATION_STATUSES] },
+      },
       data: {
         liters: formatLiters(patch.litersUnits),
         amount: toStoredAmount(patch.amount),
@@ -440,6 +525,14 @@ export class PrismaFuelRepository extends FuelRepository {
 
   /* -------------------------- Bang chung -------------------------- */
 
+  /**
+   * GAN ANH — mot lan CHEN, nen dieu kien khong nhet vao `WHERE` duoc (Issue #103 §4).
+   *
+   * `INSERT` khong co menh de "chi khi hang kia dang o trang thai X", nen o day phai la khoa hang
+   * that: khoa phieu, doc `reconciliationStatus` da khoa, roi moi chen. Khong co buoc khoa thi mot
+   * lenh dong ky chay xen giua doc va chen se de lai mot tam anh gan vao mot ky DA BAO CAO RA
+   * NGOAI — dung dieu `GD-11` cam.
+   */
   async addEvidence(input: {
     fuelEntryId: string;
     locator: string;
@@ -448,20 +541,27 @@ export class PrismaFuelRepository extends FuelRepository {
     capturedAt: Date | null;
     uploadedBy: string;
     at: Date;
-  }): Promise<FuelReceiptEvidence> {
-    return toEvidence(
-      await model(this.prisma, 'transportFuelReceiptEvidence').create({
-        data: {
-          fuelEntryId: input.fuelEntryId,
-          locator: input.locator,
-          contentType: input.contentType,
-          byteSize: input.byteSize,
-          capturedAt: input.capturedAt,
-          uploadedBy: input.uploadedBy,
-          createdAt: input.at,
-        },
-      }),
-    );
+  }): Promise<FuelReceiptEvidence | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const scoped = tx as unknown as PrismaService;
+      const status = await lockEntryReconciliationStatus(scoped, input.fuelEntryId);
+      if (status === null) return null;
+      if (!ATTACHABLE_EVIDENCE_RECONCILIATION_STATUSES.includes(status)) return null;
+
+      return toEvidence(
+        await model(scoped, 'transportFuelReceiptEvidence').create({
+          data: {
+            fuelEntryId: input.fuelEntryId,
+            locator: input.locator,
+            contentType: input.contentType,
+            byteSize: input.byteSize,
+            capturedAt: input.capturedAt,
+            uploadedBy: input.uploadedBy,
+            createdAt: input.at,
+          },
+        }),
+      );
+    });
   }
 
   async listEvidence(fuelEntryId: string): Promise<FuelReceiptEvidence[]> {
@@ -474,7 +574,7 @@ export class PrismaFuelRepository extends FuelRepository {
 
   /* --------------------------- Bang ke ---------------------------- */
 
-  async createStatement(input: CreateStatementInput): Promise<CreatedStatement> {
+  async createStatementWithReconciliation(input: CreateStatementInput): Promise<CreatedStatement> {
     const accepted = input.lines.filter((line) => line.status === 'ACCEPTED').length;
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -520,7 +620,23 @@ export class PrismaFuelRepository extends FuelRepository {
           where: { statementId: statement.id },
           orderBy: { rowNumber: 'asc' },
         });
-        return { statement, lines: rows.map(toLine) };
+
+        // Ky doi soat mo TRONG CHINH giao dich nay — xem `CreateStatementInput`. Mot lan hong o
+        // bat cu diem nao tu day tro len cuon lai ca ba, va lan nhap lai thanh cong.
+        const reconciliation = toReconciliation(
+          await model(scoped, 'transportFuelReconciliation').create({
+            data: {
+              supplierId: input.supplierId,
+              statementId: statement.id,
+              periodStart: input.periodStart,
+              periodEnd: input.periodEnd,
+              createdAt: input.at,
+              updatedAt: input.at,
+            },
+          }),
+        );
+
+        return { statement, lines: rows.map(toLine), reconciliation };
       });
     } catch (error) {
       if (isUniqueViolationOn(error, FUEL_STATEMENT_PERIOD)) {
@@ -561,21 +677,6 @@ export class PrismaFuelRepository extends FuelRepository {
 
   /* -------------------------- Doi soat ---------------------------- */
 
-  async createReconciliation(input: CreateReconciliationInput): Promise<FuelReconciliation> {
-    return toReconciliation(
-      await model(this.prisma, 'transportFuelReconciliation').create({
-        data: {
-          supplierId: input.supplierId,
-          statementId: input.statementId,
-          periodStart: input.periodStart,
-          periodEnd: input.periodEnd,
-          createdAt: input.at,
-          updatedAt: input.at,
-        },
-      }),
-    );
-  }
-
   async findReconciliation(id: string): Promise<FuelReconciliation | null> {
     const row = await model(this.prisma, 'transportFuelReconciliation').findUnique({
       where: { id },
@@ -597,27 +698,31 @@ export class PrismaFuelRepository extends FuelRepository {
     return rows.map(toReconciliation);
   }
 
-  async setReconciliationState(
-    id: string,
-    from: FuelReconciliationState,
-    to: FuelReconciliationState,
-    input: SetReconciliationStateInput,
-  ): Promise<FuelReconciliation | null> {
-    const updated = await model(this.prisma, 'transportFuelReconciliation').updateMany({
-      where: { id, state: from },
-      data: {
-        state: to,
-        ...(input.markMatched ? { lastMatchedAt: input.at } : {}),
-        updatedAt: input.at,
-      },
-    });
-    return updated.count === 0 ? null : this.findReconciliation(id);
-  }
-
-  async applyMatchingRun(input: ApplyMatchingRunInput): Promise<MatchingRunResult> {
+  async applyMatchingRun(input: ApplyMatchingRunInput): Promise<MatchingRunOutcome> {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const scoped = tx as unknown as PrismaService;
+
+        /*
+         * KHOA KY TRUOC KHI CHAM VAO BAT CU THU GI (Issue #103 §1).
+         *
+         * Ket qua so khop duoc tinh NGOAI giao dich nay — do la co y, phep so khop la mot ham thuan
+         * va no khong nen giu khoa trong luc chay. Nhung ket qua do duoc tinh tren mot ban chup, va
+         * ban chup co the da cu: giua luc doc va luc ghi, mot nguoi khac co the da dong ky.
+         *
+         * Khoa hang roi doc lai trang thai la cho DUY NHAT nhan ra dieu do kip thoi. Sau dong nay,
+         * khong mot lenh dong/mo lai nao chen vao duoc nua cho toi khi giao dich ket thuc.
+         */
+        const state = await lockReconciliationState(scoped, input.reconciliationId);
+        if (state === null) {
+          throw TransportDomainError.notFound(
+            'FUEL_RECONCILIATION_NOT_FOUND',
+            `Khong tim thay ky doi soat ${input.reconciliationId}`,
+          );
+        }
+        if (isFrozenFuelReconciliation(state)) {
+          return { status: 'RECONCILIATION_FROZEN' as const, state };
+        }
 
         // Chi xoa cai MAY vua lam — xem chu thich cua `ApplyMatchingRunInput`.
         await model(scoped, 'transportFuelMatch').deleteMany({
@@ -658,9 +763,27 @@ export class PrismaFuelRepository extends FuelRepository {
 
         await this.applyStatuses(scoped, input.lineStatuses, input.entryStatuses);
 
+        /*
+         * DOI TRANG THAI KY TRONG CUNG GIAO DICH — khong phai mot lenh thu hai sau do.
+         *
+         * `MATCHING` la dich hop le tu MOI trang thai khong dong bang (`DRAFT`, `RESOLVED`,
+         * `REOPENED`, va chinh no). Canh duy nhat bi cam la tu `CLOSED`, ma nhanh o tren da loai.
+         * `fuel-lifecycle.spec.ts` khoa lai dung menh de do, nen mot trang thai moi them vao sau nay
+         * khong the lang le lam cau nay sai.
+         */
+        await model(scoped, 'transportFuelReconciliation').update({
+          where: { id: input.reconciliationId },
+          data: { state: 'MATCHING', lastMatchedAt: input.at, updatedAt: input.at },
+        });
+        const moved = await this.settleIfNothingPending(scoped, input.reconciliationId, input.at);
+
         return {
-          matches: await this.readMatches(scoped, input.reconciliationId),
-          discrepancies: await this.readDiscrepancies(scoped, input.reconciliationId),
+          status: 'APPLIED' as const,
+          result: {
+            matches: await this.readMatches(scoped, input.reconciliationId),
+            discrepancies: await this.readDiscrepancies(scoped, input.reconciliationId),
+            reconciliation: moved,
+          },
         };
       });
     } catch (error) {
@@ -687,10 +810,24 @@ export class PrismaFuelRepository extends FuelRepository {
     });
   }
 
-  async resolveDiscrepancy(input: ResolveDiscrepancyInput): Promise<ResolvedDiscrepancy | null> {
+  async resolveDiscrepancy(input: ResolveDiscrepancyInput): Promise<ResolveDiscrepancyOutcome> {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const scoped = tx as unknown as PrismaService;
+
+        // Cung khoa, cung ly do voi `applyMatchingRun`: mot quyet dinh ghi vao BA bang, va ca ba
+        // phai thuoc ve mot ky con dang mo tai DUNG thoi diem ghi.
+        const state = await lockReconciliationState(scoped, input.reconciliationId);
+        if (state === null) {
+          throw TransportDomainError.notFound(
+            'FUEL_RECONCILIATION_NOT_FOUND',
+            `Khong tim thay ky doi soat ${input.reconciliationId}`,
+          );
+        }
+        if (isFrozenFuelReconciliation(state)) {
+          return { status: 'RECONCILIATION_FROZEN' as const, state };
+        }
+
         const updated = await model(scoped, 'transportFuelDiscrepancy').updateMany({
           where: { id: input.discrepancyId, status: 'PENDING' },
           data: {
@@ -701,7 +838,7 @@ export class PrismaFuelRepository extends FuelRepository {
             resolvedBy: input.actor,
           },
         });
-        if (updated.count === 0) return null;
+        if (updated.count === 0) return { status: 'DISCREPANCY_NOT_PENDING' as const };
 
         const discrepancy = toDiscrepancy(
           await model(scoped, 'transportFuelDiscrepancy').findUnique({
@@ -735,69 +872,182 @@ export class PrismaFuelRepository extends FuelRepository {
             : new Map(),
         );
 
-        return { discrepancy, match };
+        return {
+          status: 'RESOLVED' as const,
+          resolved: {
+            discrepancy,
+            match,
+            reconciliation: await this.settleIfNothingPending(
+              scoped,
+              input.reconciliationId,
+              input.at,
+            ),
+          },
+        };
       });
     } catch (error) {
       throw this.translateMatchError(error);
     }
   }
 
-  async closeReconciliation(input: CloseReconciliationInput): Promise<ClosedReconciliation | null> {
+  async closeReconciliation(input: CloseReconciliationInput): Promise<CloseReconciliationOutcome> {
     return this.prisma.$transaction(async (tx) => {
       const scoped = tx as unknown as PrismaService;
 
-      const moved = await model(scoped, 'transportFuelReconciliation').updateMany({
-        where: { id: input.reconciliationId, state: 'RESOLVED' },
-        data: { state: 'CLOSED', closedAt: input.at, closedBy: input.actor, updatedAt: input.at },
+      const locked = await lockReconciliationState(scoped, input.reconciliationId);
+      if (locked === null) {
+        throw TransportDomainError.notFound(
+          'FUEL_RECONCILIATION_NOT_FOUND',
+          `Khong tim thay ky doi soat ${input.reconciliationId}`,
+        );
+      }
+
+      /*
+       * DEM LAI CHENH LECH — sau khi khoa, khong phai truoc (Issue #103 §1).
+       *
+       * Phep dem cu nam o service, tach khoi lenh dong bang mot khoang thoi gian. Trong khoang do
+       * mot lan chay so khop co the de ra mot chenh lech `PENDING` moi, va ky van dong — mang theo
+       * mot cau hoi chua ai tra loi, dung dieu `FUEL-RECON-004` cam.
+       */
+      const pending = await model(scoped, 'transportFuelDiscrepancy').count({
+        where: { reconciliationId: input.reconciliationId, status: 'PENDING' },
       });
-      if (moved.count === 0) return null;
+      if (pending > 0) return { status: 'PENDING_DISCREPANCIES' as const, pending };
+
+      /*
+       * DUA KY VE `RESOLVED` TRONG CUNG GIAO DICH.
+       *
+       * Buoc nay tung o service (`moveTo(..., 'RESOLVED')`) ngay truoc loi goi nay — mot lan ghi
+       * KHONG duoc khoa bao ve. `MATCHING` va `REOPENED` deu co canh sang `RESOLVED`; `DRAFT` thi
+       * khong, va mot ky chua tung so khop lan nao khong co gi de dong.
+       */
+      if (locked !== 'RESOLVED') {
+        if (locked !== 'MATCHING' && locked !== 'REOPENED') {
+          return { status: 'STATE_RACE' as const, state: locked };
+        }
+        await model(scoped, 'transportFuelReconciliation').update({
+          where: { id: input.reconciliationId },
+          data: { state: 'RESOLVED', updatedAt: input.at },
+        });
+      }
 
       const reconciliation = toReconciliation(
-        await model(scoped, 'transportFuelReconciliation').findUnique({
+        await model(scoped, 'transportFuelReconciliation').update({
           where: { id: input.reconciliationId },
+          data: { state: 'CLOSED', closedAt: input.at, closedBy: input.actor, updatedAt: input.at },
         }),
       );
+
+      /*
+       * TINH LAI TONG DUOC CHAP NHAN — tu du lieu VUA BI KHOA, khong tu con so nguoi goi mang toi.
+       *
+       * Luat cong nam o `fuel-settlement.ts` (ham thuan, `INV-07`); o day chi la phep DOC. Doc ba
+       * bang o day thay vi o service la toan bo khac biet: con so di sang T5 ung voi dung mot trang
+       * thai da ton tai, chu khong phai mot ban chup ghep tu ba thoi diem khac nhau.
+       */
+      const [lines, matches, discrepancies] = await Promise.all([
+        model(scoped, 'transportFuelStatementLine').findMany({
+          where: { statementId: reconciliation.statementId },
+          orderBy: { rowNumber: 'asc' },
+        }),
+        this.readMatches(scoped, reconciliation.id),
+        this.readDiscrepancies(scoped, reconciliation.id),
+      ]);
+      const totals = sumAcceptedSettlement({
+        lines: lines.map(toLine),
+        matches,
+        discrepancies,
+      });
 
       // `GD-11` — moi chung tu trong ky chuyen `SETTLED` va khoa lai.
       await model(scoped, 'transportFuelStatementLine').updateMany({
         where: { statementId: reconciliation.statementId, status: 'ACCEPTED' },
         data: { reconciliationStatus: 'SETTLED' },
       });
-      const matches = await this.readMatches(scoped, reconciliation.id);
       await model(scoped, 'transportFuelEntry').updateMany({
         where: { id: { in: matches.map((match) => match.fuelEntryId) } },
         data: { reconciliationStatus: 'SETTLED' },
       });
 
-      const existing = await model(scoped, 'transportFuelSettlementHandoff').findUnique({
-        where: { reconciliationId: reconciliation.id },
-      });
-      if (existing) {
-        return { reconciliation, handoff: toHandoff(existing), handoffReplayed: true };
-      }
-
-      const handoff = toHandoff(
-        await model(scoped, 'transportFuelSettlementHandoff').create({
-          data: {
-            reconciliationId: reconciliation.id,
-            supplierId: reconciliation.supplierId,
-            periodStart: reconciliation.periodStart,
-            periodEnd: reconciliation.periodEnd,
-            acceptedAmount: toStoredAmount(input.acceptedAmount),
-            currencyCode: TRANSPORT_CURRENCY,
-            acceptedLineCount: input.acceptedLineCount,
-            emittedAt: input.at,
-            emittedBy: input.actor,
-          },
-        }),
-      );
-      return { reconciliation, handoff, handoffReplayed: false };
+      return {
+        status: 'CLOSED' as const,
+        closed: {
+          reconciliation,
+          ...(await this.emitHandoffRevision(scoped, reconciliation, totals, input)),
+        },
+      };
     });
+  }
+
+  /**
+   * PHAT MOT BAN SUA DOI BAN GIAO — hoac phat lai ban gan nhat (Issue #103 §2).
+   *
+   * ===========================================================================
+   * BA DUONG, VA CHUNG PHAI KHAC NHAU:
+   *
+   * ```text
+   * chua co ban nao          -> revision 1
+   * ket qua GIONG ban cuoi   -> phat lai chinh no, khong hang moi
+   * ket qua KHAC ban cuoi    -> revision N+1, tro nguoc ve ban cuoi
+   * ```
+   *
+   * Duong thu hai la thu giu cho "dong lai hai lan khong tao hai cong no" van dung. Duong thu ba la
+   * thu ma ban cu — mot hang UNIQUE theo `reconciliationId` — KHONG the lam: no tra lai con so
+   * 10.000.000d cho mot ky da duoc sua thanh 12.000.000d, va T5 khong co cach nao biet.
+   *
+   * KHONG ghi de ban cu o duong thu ba: ban giao la thu DA PHAT RA NGOAI. Sua lang le mot con so da
+   * di ra ngoai la dung dieu `GD-11` cam, va no cung xoa mat bang chung ve viec da tung bao cao
+   * nham. Chi them, va noi ro ban moi thay the ban nao.
+   */
+  private async emitHandoffRevision(
+    scoped: PrismaService,
+    reconciliation: FuelReconciliation,
+    totals: { amount: number; lineCount: number },
+    input: CloseReconciliationInput,
+  ): Promise<{ handoff: FuelSettlementHandoff; handoffReplayed: boolean }> {
+    const latestRow = await model(scoped, 'transportFuelSettlementHandoff').findFirst({
+      where: { reconciliationId: reconciliation.id },
+      orderBy: { revision: 'desc' },
+    });
+    const latest = latestRow ? toHandoff(latestRow) : null;
+
+    if (
+      latest &&
+      sameSettlementResult(
+        { amount: latest.acceptedAmount, lineCount: latest.acceptedLineCount },
+        totals,
+      )
+    ) {
+      return { handoff: latest, handoffReplayed: true };
+    }
+
+    const handoff = toHandoff(
+      await model(scoped, 'transportFuelSettlementHandoff').create({
+        data: {
+          reconciliationId: reconciliation.id,
+          revision: (latest?.revision ?? 0) + 1,
+          supersedesHandoffId: latest?.id ?? null,
+          supplierId: reconciliation.supplierId,
+          periodStart: reconciliation.periodStart,
+          periodEnd: reconciliation.periodEnd,
+          acceptedAmount: toStoredAmount(totals.amount),
+          currencyCode: TRANSPORT_CURRENCY,
+          acceptedLineCount: totals.lineCount,
+          emittedAt: input.at,
+          emittedBy: input.actor,
+        },
+      }),
+    );
+    return { handoff, handoffReplayed: false };
   }
 
   async reopenReconciliation(input: ReopenReconciliationInput): Promise<FuelReconciliation | null> {
     return this.prisma.$transaction(async (tx) => {
       const scoped = tx as unknown as PrismaService;
+
+      // Cung mot hang khoa voi ba lenh kia — mo lai la lenh DUY NHAT go duoc trang thai dong bang,
+      // nen no phai xep hang cung cho voi chung chu khong chay song song.
+      await lockReconciliationState(scoped, input.reconciliationId);
 
       const moved = await model(scoped, 'transportFuelReconciliation').updateMany({
         where: { id: input.reconciliationId, state: 'CLOSED' },
@@ -848,14 +1098,59 @@ export class PrismaFuelRepository extends FuelRepository {
     });
   }
 
+  /** Ban GAN NHAT — `revision` cao nhat, tuc con so dang co hieu luc voi T5. */
   async findHandoff(reconciliationId: string): Promise<FuelSettlementHandoff | null> {
-    const row = await model(this.prisma, 'transportFuelSettlementHandoff').findUnique({
+    const row = await model(this.prisma, 'transportFuelSettlementHandoff').findFirst({
       where: { reconciliationId },
+      orderBy: { revision: 'desc' },
     });
     return row ? toHandoff(row) : null;
   }
 
+  async listHandoffRevisions(reconciliationId: string): Promise<FuelSettlementHandoff[]> {
+    const rows = await model(this.prisma, 'transportFuelSettlementHandoff').findMany({
+      where: { reconciliationId },
+      orderBy: { revision: 'asc' },
+    });
+    return rows.map(toHandoff);
+  }
+
   /* --------------------------- Noi bo ----------------------------- */
+
+  /**
+   * "HET CHENH LECH TREO THI KY DA XONG" — mot buoc, TRONG giao dich da khoa (Issue #103 §1).
+   *
+   * Buoc nay tung song o service duoi ten `settleStateIfResolved`: dem chenh lech, doc trang thai,
+   * roi ghi — ba lan cham CSDL, khong lan nao duoc khoa bao ve. No la duong ghi THU NAM vao hang
+   * doi soat, va la duong duy nhat con nam ngoai giao thuc tuan tu hoa.
+   *
+   * Khoang trong do nho nhung that: mot lenh dong ky xen vao giua se lam lenh CAS o cuoi truot, va
+   * nguoi vua chay so khop nhan mot loi va cham cho mot lan chay DA THANH CONG.
+   *
+   * O day thi khong con khoang trong nao: khoa da nam trong tay tu dau giao dich.
+   */
+  private async settleIfNothingPending(
+    scoped: PrismaService,
+    reconciliationId: string,
+    at: Date,
+  ): Promise<FuelReconciliation> {
+    const pending = await model(scoped, 'transportFuelDiscrepancy').count({
+      where: { reconciliationId, status: 'PENDING' },
+    });
+
+    // `updateMany` co dieu kien `state: 'MATCHING'` chu khong `update` theo `id`: canh duy nhat
+    // dan sang `RESOLVED` o buoc nay la tu `MATCHING`, va may trang thai van la ben giu luat.
+    if (pending === 0) {
+      await model(scoped, 'transportFuelReconciliation').updateMany({
+        where: { id: reconciliationId, state: 'MATCHING' },
+        data: { state: 'RESOLVED', updatedAt: at },
+      });
+    }
+
+    return toReconciliation(
+      await model(scoped, 'transportFuelReconciliation').findUnique({ where: { id: reconciliationId } }),
+    );
+  }
 
   private async applyStatuses(
     scoped: PrismaService,

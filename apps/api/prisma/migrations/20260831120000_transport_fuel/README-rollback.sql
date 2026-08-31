@@ -71,7 +71,8 @@ ALTER TABLE "TransportFuelReconciliation"
 
 ALTER TABLE "TransportFuelSettlementHandoff"
   DROP CONSTRAINT IF EXISTS "TransportFuelSettlementHandoff_amount_money_range",
-  DROP CONSTRAINT IF EXISTS "TransportFuelSettlementHandoff_period_order";
+  DROP CONSTRAINT IF EXISTS "TransportFuelSettlementHandoff_period_order",
+  DROP CONSTRAINT IF EXISTS "TransportFuelSettlementHandoff_revision_chain";
 
 ALTER TABLE "TransportFuelDiscrepancy"
   DROP CONSTRAINT IF EXISTS "TransportFuelDiscrepancy_resolved_fields",

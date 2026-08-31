@@ -119,7 +119,18 @@ export class FuelStatementService {
     const preview = await this.buildPreview(command);
     const at = this.now();
 
-    const created = await this.repository.createStatement({
+    /*
+     * KY DOI SOAT MO CUNG MOT GIAO DICH VOI BANG KE (Issue #103 §3).
+     *
+     * Truoc day day la hai loi goi kho: ghi bang ke, roi ghi ky doi soat. Mot lan hong o giua de
+     * lai mot bang ke CO THAT khong ky doi soat nao — no khong so khop duoc, khong dong duoc, khong
+     * hien o dau, va lan nhap lai bi unique `(cay xang, ky)` chan. Nguoi dung ket o mot trang thai
+     * khong co nut nao di tiep.
+     *
+     * Nen ca ba di cung nhau, va tinh nguyen tu do la viec cua TANG KHO — khong phai cua mot thu tu
+     * goi ham o day.
+     */
+    const created = await this.repository.createStatementWithReconciliation({
       supplierId: supplier.id,
       periodStart: period.start,
       periodEnd: period.end,
@@ -143,20 +154,7 @@ export class FuelStatementService {
       at,
     });
 
-    /*
-     * KY DOI SOAT DUOC MO NGAY, cung mot thao tac nghiep vu voi lan nhap.
-     *
-     * Khong bat nguoi dung bam mot nut thu hai: mot bang ke da nhap ma chua co ky doi soat la mot
-     * trang thai khong lam gi duoc — no khong so khop duoc, khong dong duoc, va khong hien o dau
-     * ca. Mot bang ke ton tai la de duoc doi soat; do la ly do duy nhat no duoc nhap vao.
-     */
-    const reconciliation = await this.repository.createReconciliation({
-      supplierId: supplier.id,
-      statementId: created.statement.id,
-      periodStart: period.start,
-      periodEnd: period.end,
-      at,
-    });
+    const reconciliation = created.reconciliation;
 
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,

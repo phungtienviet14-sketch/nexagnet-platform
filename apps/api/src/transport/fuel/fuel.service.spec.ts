@@ -204,6 +204,99 @@ describe('Nop phieu — cong vao', () => {
     ).rejects.toMatchObject({ reason: 'FUEL_CORRELATION_KEY_REUSED' });
   });
 
+  /**
+   * DAU VAN TAY CHONG GHI TRUNG — Issue #103 §5.
+   *
+   * ===========================================================================
+   * MOI BAI DUOI DAY TUNG LA MOT LAN GHI BI NUOT.
+   *
+   * Phep so sanh ban dau chi doc bay truong (chuyen/xe/lai xe/ngay/lit/tien/odo). Nam truong con
+   * lai — cay xang, cach tra tien, khoanh khac, so hoa don, ghi chu — KHONG duoc doc. Nghia la: hai
+   * lenh khac nhau o nhung truong do, gui cung mot khoa, duoc coi la MOT. Lenh thu hai bi bo im
+   * lang, va nguoi gui nhan ve phieu cua lenh thu nhat nhu the moi thu deu on.
+   *
+   * `paymentMethod` la truong nguy hiem nhat, vi no khong mo ta phieu ma DIEU HUONG TIEN o `TX-03`:
+   * `DRIVER_CASH` tru vao quy lai xe, `SUPPLIER_ACCOUNT` de cong ty tra cuoi thang. Nuot mot lan
+   * doi giua hai gia tri do la tien that cua mot nguoi that, di sai cho, khong mot dau vet nao.
+   */
+  it('cung khoa + KHAC cay xang = va cham, khong phai phat lai', async () => {
+    const other = await repository.createSupplier({
+      name: 'Cay xang khac',
+      code: 'CX-02',
+      phone: null,
+      address: null,
+      taxCode: null,
+      at: new Date('2026-08-01T00:00:00Z'),
+    });
+    await submit({ correlationKey: 'khoa-cay-xang' });
+
+    await expect(
+      submit({ correlationKey: 'khoa-cay-xang', supplierId: other.id }),
+    ).rejects.toMatchObject({ reason: 'FUEL_CORRELATION_KEY_REUSED' });
+  });
+
+  it('cung khoa + KHAC cach tra tien = va cham (tien se di sai nguon o TX-03)', async () => {
+    await submit({ correlationKey: 'khoa-tra-tien', paymentMethod: 'SUPPLIER_ACCOUNT' });
+
+    await expect(
+      submit({ correlationKey: 'khoa-tra-tien', paymentMethod: 'DRIVER_CASH' }),
+    ).rejects.toMatchObject({ reason: 'FUEL_CORRELATION_KEY_REUSED' });
+  });
+
+  it('cung khoa + KHAC khoanh khac = va cham, du cung ngay nghiep vu', async () => {
+    await submit({ correlationKey: 'khoa-gio', occurredAt: '2026-08-05T06:30:00+07:00' });
+
+    await expect(
+      submit({ correlationKey: 'khoa-gio', occurredAt: '2026-08-05T18:45:00+07:00' }),
+    ).rejects.toMatchObject({ reason: 'FUEL_CORRELATION_KEY_REUSED' });
+  });
+
+  it('cung khoa + KHAC so hoa don hoac ghi chu = va cham', async () => {
+    await submit({ correlationKey: 'khoa-hoa-don', invoiceNo: 'HD-001', note: 'ghi chu goc' });
+
+    await expect(
+      submit({ correlationKey: 'khoa-hoa-don', invoiceNo: 'HD-002', note: 'ghi chu goc' }),
+    ).rejects.toMatchObject({ reason: 'FUEL_CORRELATION_KEY_REUSED' });
+    await expect(
+      submit({ correlationKey: 'khoa-hoa-don', invoiceNo: 'HD-001', note: 'ghi chu khac' }),
+    ).rejects.toMatchObject({ reason: 'FUEL_CORRELATION_KEY_REUSED' });
+  });
+
+  /**
+   * Chieu NGUOC LAI phai van de: mot lan gui lai DUNG NGUYEN VEN khong duoc bien thanh loi.
+   *
+   * Neu chi siet phep so sanh ma khong chuan hoa, mot mang chap chon gui lai cung mot phieu se
+   * that bai — va bo test nay se do truoc khi mot nguoi that gap no.
+   */
+  it('gui lai DUNG y nguyen — ke ca khoanh khac ghi bang mui gio khac — van la phat lai', async () => {
+    const first = await submit({
+      correlationKey: 'khoa-phat-lai',
+      occurredAt: '2026-08-05T06:30:00+07:00',
+      invoiceNo: 'HD-001',
+      note: null,
+    });
+
+    // `+07:00` va `Z` cua CUNG mot khoanh khac. So hai chuoi ISO se coi day la hai phieu khac nhau.
+    const replay = await submit({
+      correlationKey: 'khoa-phat-lai',
+      occurredAt: '2026-08-04T23:30:00Z',
+      invoiceNo: 'HD-001',
+      note: null,
+    });
+
+    expect(replay.id).toBe(first.id);
+    expect(await repository.listEntriesByTrip(TRIP)).toHaveLength(1);
+  });
+
+  /** `null`, `''` va `'  '` la ba cach go cua ba client cho cung mot y: khong ghi gi. */
+  it('o van ban de trong duoi ba dang van la CUNG mot phieu', async () => {
+    const first = await submit({ correlationKey: 'khoa-o-trong', note: null });
+    const replay = await submit({ correlationKey: 'khoa-o-trong', note: '   ' });
+
+    expect(replay.id).toBe(first.id);
+    expect(await repository.listEntriesByTrip(TRIP)).toHaveLength(1);
+  });
+
   it('tu choi so lit va odo khong hop le voi ma rieng cho tung truong', async () => {
     await expect(submit({ liters: '0' })).rejects.toMatchObject({ reason: 'FUEL_LITERS_INVALID' });
     await expect(submit({ odometerKm: -1 })).rejects.toMatchObject({
@@ -350,8 +443,23 @@ describe('GD-10 — sua duoc khi con DECLARED, sau do chi dao', () => {
    */
   it('phieu DA KHOP khong sua duoc du van con DECLARED', async () => {
     const entry = await submit();
+
+    // Ky doi soat THAT chu khong mot id bia ra: `applyMatchingRun` khoa hang doi soat truoc khi
+    // ghi (Issue #103 §1), nen mot ky khong ton tai gio la mot loi — dung nhu no phai the.
+    const { reconciliation } = await repository.createStatementWithReconciliation({
+      supplierId,
+      periodStart: '2026-09-01',
+      periodEnd: '2026-09-30',
+      format: 'CSV',
+      sourceRef: 'bang-ke.csv',
+      sourceDigest: 'digest-ky-1',
+      lines: [],
+      importedBy: 'ke-toan',
+      at: new Date('2026-09-01T00:00:00Z'),
+    });
+
     await repository.applyMatchingRun({
-      reconciliationId: 'ky-1',
+      reconciliationId: reconciliation.id,
       matches: [],
       discrepancies: [],
       lineStatuses: new Map(),
