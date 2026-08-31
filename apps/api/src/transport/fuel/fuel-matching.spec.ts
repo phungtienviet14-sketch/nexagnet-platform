@@ -266,17 +266,37 @@ describe('TAT DINH — cung dau vao, cung dau ra', () => {
     expect(forward.matches).toHaveLength(2);
   });
 
-  it('dong/phieu DA khop hoac DA co nguoi quyet khong vao lai vong so khop', () => {
+  it('dong/phieu DA CO NGUOI QUYET khong vao lai vong so khop', () => {
     const result = run(
       [
         line('l1', { reconciliationStatus: 'SETTLED' }),
         line('l2', { reconciliationStatus: 'IGNORED' }),
       ],
-      [entry('e1', { reconciliationStatus: 'MATCHED' })],
+      [entry('e1', { reconciliationStatus: 'SETTLED' })],
     );
 
     expect(result.matches).toEqual([]);
     expect(result.discrepancies).toEqual([]);
+  });
+
+  /**
+   * CHAY LAI PHAI CHO RA CUNG KET QUA — va do la ly do `MATCHED` VAO LAI vong so khop.
+   *
+   * `applyMatchingRun` xoa cac cap tu dong cu roi ghi bo moi. Neu mot cap `MATCHED` khong duoc de
+   * nghi lai, lan chay thu hai se xoa ma khong tao lai — ky doi soat mat het cap khop, va con so
+   * ban giao cho T5 tut ve 0. Do la mot loi THAT, do duoc tren Postgres o `P10` truoc khi sua.
+   */
+  it('cap DA KHOP BOI MAY duoc de nghi lai y nguyen o lan chay thu hai', () => {
+    const first = run([line('l1')], [entry('e1')]);
+    expect(first.matches).toHaveLength(1);
+
+    // Trang thai sau lan chay dau: ca hai dau deu `MATCHED`.
+    const second = run(
+      [line('l1', { reconciliationStatus: 'MATCHED' })],
+      [entry('e1', { reconciliationStatus: 'MATCHED' })],
+    );
+
+    expect(second).toEqual(first);
   });
 });
 

@@ -113,13 +113,30 @@ export interface FuelMatchingInput {
 }
 
 /**
- * Trang thai CON MO CHO SO KHOP.
+ * Trang thai CON MO CHO SO KHOP — va `MATCHED` NAM TRONG day.
  *
- * `MATCHED` khong nam trong day: mot cap da khop chi go ra bang duong go cap khop tuong minh, con
- * `SETTLED`/`IGNORED` thi da co nguoi quyet. Neu chay lai so khop tu dong go duoc mot cap ai do vua
- * xac nhan bang tay, thi moi lan bam "chay lai" se xoa cong cua nguoi doi soat.
+ * ---------------------------------------------------------------------------
+ * VI SAO `MATCHED` VAO LAI VONG SO KHOP:
+ *
+ * `applyMatchingRun` XOA cac cap khop tu dong cu roi ghi lai bo moi (xem chu thich cua no). Neu
+ * `MATCHED` bi loai o day, thi lan chay thu hai se xoa cac cap cu ma khong tao lai duoc — vi hai
+ * dau cua chung deu dang mang trang thai `MATCHED`. Ket qua la mot ky doi soat MAT HET cap khop
+ * sau lan bam "chay lai" thu hai, va con so ban giao cho T5 tut ve 0.
+ *
+ * Do la mot loi that, do duoc o `transport-fuel.int.spec.ts` P10 tren Postgres.
+ *
+ * ---------------------------------------------------------------------------
+ * `SETTLED` va `IGNORED` thi KHONG: ca hai deu la ket qua cua mot QUYET DINH CUA NGUOI (dong ky,
+ * hoac bo qua co ly do). Va cac cap khop do NGUOI xac nhan (`origin = MANUAL`) duoc loai ra o
+ * TANG SERVICE truoc khi goi ham nay — o day khong con thong tin ve nguon goc cua mot cap.
+ *
+ * Ranh gioi la: MAY duoc lam lai cai MAY da lam; cai NGUOI da quyet thi khong ai dong toi.
  */
-const OPEN_FOR_MATCHING: readonly FuelReconciliationStatus[] = ['UNMATCHED', 'MISMATCHED'];
+const OPEN_FOR_MATCHING: readonly FuelReconciliationStatus[] = [
+  'UNMATCHED',
+  'MISMATCHED',
+  'MATCHED',
+];
 
 const MS_PER_DAY = 86_400_000;
 

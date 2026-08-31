@@ -91,8 +91,28 @@ export class FuelReconciliationService {
       }),
     ]);
 
+    /*
+     * CAP KHOP DO NGUOI XAC NHAN duoc loai ra khoi vong so khop tu dong.
+     *
+     * `applyMatchingRun` chi xoa cac cap `AUTO`, nen mot cap `MANUAL` van con sau lan chay lai. Neu
+     * hai dau cua no cung duoc dua vao vong so khop, may co the de nghi mot cap khac cho chinh
+     * chung — va lan ghi do se dam vao unique hai chieu cua bang cap khop, tuc mot lan bam "chay
+     * lai" bien thanh mot loi va cham khong ai giai thich duoc.
+     *
+     * Sau khi loai, trang thai cua chung KHONG nam trong `lineStatuses`/`entryStatuses`, nen chung
+     * giu nguyen `MATCHED`. Do la dieu dung: nguoi da quyet roi.
+     */
+    const existingMatches = await this.repository.listMatches(reconciliation.id);
+    const manualLineIds = new Set(
+      existingMatches.filter((match) => match.origin === 'MANUAL').map((m) => m.statementLineId),
+    );
+    const manualEntryIds = new Set(
+      existingMatches.filter((match) => match.origin === 'MANUAL').map((m) => m.fuelEntryId),
+    );
+
     const matchableLines: MatchableStatementLine[] = lines
       .filter(isMatchableLine)
+      .filter((line) => !manualLineIds.has(line.id))
       .map((line) => ({
         id: line.id,
         statementId: line.statementId,
@@ -109,6 +129,7 @@ export class FuelReconciliationService {
       // so lieu that; khop no voi bang ke se lam mot con so chua ai kiem tro thanh mot khang dinh
       // ve cong no voi cay xang.
       .filter((entry) => entry.verificationStatus === 'VERIFIED')
+      .filter((entry) => !manualEntryIds.has(entry.id))
       .map((entry) => ({
         id: entry.id,
         vehicleId: entry.vehicleId,
