@@ -15,7 +15,7 @@
 **Đã đọc & đối chiếu trực tiếp:**
 | Nguồn gốc | Dùng để xác định |
 |---|---|
-| `docs/khach-hang/ultty/nguon-goc/khao-sat-khach-hang-2026-07.docx` (bản `.md` trong hồ sơ khảo sát) | Bối cảnh, chính sách, checklist chốt đơn, bảo hành, ngôn ngữ viết tắt |
+| `khao-sat-khach-hang-2026-07.docx` — **kho riêng ngoài repo**, SHA-256 `61d410b2…aff1` (bản `.md` trong hồ sơ khảo sát) | Bối cảnh, chính sách, checklist chốt đơn, bảo hành, ngôn ngữ viết tắt |
 | `Các quy trình_/QT đặt hàng.pdf` | **Quy trình đặt hàng thật 9 bước + vai KSNB/BPKD/BPVH** |
 | `PO - Biên bản bàn giao_/PO _ Công nợ 30 ngày.pdf` | Điều khoản công nợ 30, miễn phí giao hàng, vai trò PGH |
 | `PO - Biên bản bàn giao_/PO_công nợ 45 ngày .pdf` | Điều khoản công nợ 45, phạt chậm, ngưỡng ngừng cấp, **VAT theo từng lần giao** |

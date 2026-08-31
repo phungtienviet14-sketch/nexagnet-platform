@@ -21,11 +21,34 @@ jobs:
     env:
       TENANT: ultty
     steps:
+      # `fetch-depth: 0` cho buoc "nguon goc khach khong duoc chui vao lich su" ben duoi: mac dinh
+      # cua actions/checkout la clone NONG (depth 1), va `git log base..head` tren mot clone nong
+      # thi khong doc duoc — cong se do voi ma 2 thay vi im lang bao dat. Repo ~10MB nen clone day
+      # du re; danh doi nay re hon mot cong khong chay.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-workspace
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # HEAD SACH != LICH SU SACH.
+      #
+      # `pnpm test` da chay cong tren `git ls-files` — tuc tren CAY CUOI CUNG cua PR. Mot tai lieu
+      # goc them o commit A roi xoa o commit B trong cung PR do se lot qua: cay cuoi cung sach,
+      # nhung byte thi da nam vinh vien trong lich su cua mot repo PUBLIC.
+      #
+      # Do khong phai gia dinh. Commit `d05e1e4` (11/08/2026) da dua MUOI tai lieu goc cua khach
+      # vao repo — ban khao sat co so dien thoai lien he cua mot nhan su, anh thiet ke khach gui,
+      # va ban .xlsx mang hai chat ID nhom Zalo — roi tat ca deu bi xoa o cac commit sau. Khong
+      # mot cong nao keu, vi khong cong nao nhin vao KHOANG COMMIT.
+      #
+      # Buoc nay nhin. No la lan cuoi cung con sua duoc ma khong phai viet lai lich su cong khai.
+      - name: Nguon goc khach khong duoc chui vao LICH SU roi xoa lai
+        if: github.event_name == 'pull_request'
+        run: >-
+          node tools/customer-source-guardrail/guardrail.mjs
+          --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
       # LUOI AN TOAN "mot image — moi khach": build phai chay duoc ma KHONG biet khach nao. Neu ai do
       # them mot trang tinh doc goi khach, loader se nem va CI do NGAY TAI DAY — thay vi lang le
       # nuong ten khach vao artifact roi den luc doi khach moi phat hien.

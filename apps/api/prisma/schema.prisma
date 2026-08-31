@@ -1035,6 +1035,295 @@ model TransportTripAssignment {
   @@index([vehicleId])
 }
 
+// ----- Nguon su that doanh nghiep (Source Management Foundation v0) -----
+//
+// TANG NAY TRUNG TINH VE KHACH VA VE MIEN. Khong mot ten khach, khong mot thuat ngu ban hang hay
+// van tai nao duoc xuat hien trong khoi duoi day: cung bo bang nay phuc vu ca khach ban hang lan
+// khach van tai, va do la dieu kien de no o `apps/` chu khong o `tenants/`.
+//
+// QUAN HE VOI `SourceProvenance` (da co, phia tren). Hai thu KHAC NHAU va co y khong gop:
+//   · `SourceProvenance` = ban ghi NHAP LIEU cua duong dong bo noi dung (Drive -> Asset/FAQ):
+//     "byte nay tu tep Drive nao ra". Khong co trang thai, khong co phe duyet, khong co khach.
+//   · `BusinessSource`    = ban ghi QUAN TRI cua mot nguon su that nghiep vu: no da duoc ai duyet
+//     chua, co hieu luc tu bao gio, ban nao thay ban nao, va duoc phep luu o dau.
+// Gop lam mot se bat duong dong bo noi dung phai mang mot vong doi phe duyet ma no khong can, va
+// bat tang quan tri phai chay theo nhip cua mot job dong bo. Duong di ve sau la `SourceProvenance`
+// tro toi mot `BusinessSource` khi can, khong phai doi ten no.
+
+enum SourceStatus {
+  RECEIVED
+  NORMALIZED
+  REVIEWED
+  APPROVED
+  EFFECTIVE
+  SUPERSEDED
+  REJECTED
+  QUARANTINED
+}
+
+enum SourceOrigin {
+  CUSTOMER_PROVIDED
+  CUSTOMER_SIGNED
+  INTERNAL_DERIVED
+  INTERNAL_TEST
+  THIRD_PARTY
+}
+
+enum SourceAuthority {
+  L1_CONTRACTUAL
+  L2_CUSTOMER_PUBLISHED
+  L3_CUSTOMER_INTERNAL
+  L4_PRE_CONTRACT
+  L5_DERIVED
+}
+
+enum DataClassification {
+  PUBLIC
+  INTERNAL
+  BUSINESS_SENSITIVE
+  PII
+  SECRET
+}
+
+enum ApprovalLevel {
+  INTERNAL_ACCEPTED
+  CUSTOMER_CONFIRMED
+}
+
+enum BusinessFactStatus {
+  PROPOSED
+  WORKING_ASSUMPTION
+  CONFIRMED
+  SUPERSEDED
+  REJECTED
+}
+
+enum BusinessConflictStatus {
+  OPEN
+  RESOLVED
+  SUPERSEDED
+  WITHDRAWN
+}
+
+enum BusinessConflictImpact {
+  BLOCKING
+  DEGRADING
+  ADVISORY
+}
+
+/// MOT NGUON SU THAT — mot BAN (version) cu the cua mot tai lieu/bang/thoa thuan.
+///
+/// TEN TEP KHONG PHAI DANH TINH. Danh tinh la `(tenantId, sourceKey, contentHash)`: cung mot ten
+/// tep voi hash khac nhau la HAI ban khac nhau, va phai cung ton tai duoc. Do la cai ma troi
+/// phien ban thang 07/thang 08 cua Ultty da chung minh — khi danh tinh la ten tep, ban moi ghi de
+/// ban cu va lich su bien mat ma khong ai bam nut xoa.
+///
+/// `locator` KHONG chua byte. No la duong den kho rieng (Drive/object storage/may van hanh) —
+/// `docs/phat-trien/van-hanh/nguon-khach-hang.md` mo ta giao thuc. Repo nay PUBLIC; byte cua khach
+/// khong duoc o day, va `tools/customer-source-guardrail` la thu thi hanh dieu do o tang git.
+model BusinessSource {
+  id String @id @default(cuid())
+
+  /// Danh tinh khach. Hom nay moi khach mot DB nen cot nay du thua ve ha tang — nhung no la thu
+  /// duy nhat con dung khi dieu do thoi dung. Xem `source-registry/tenant-scope.ts`.
+  tenantId String
+
+  /// Khoa on dinh do nguoi dat, KHONG doi giua cac ban (vd bang gia thang cua mot khach).
+  /// Hai ban cua cung mot tai lieu dung chung `sourceKey` va khac `version`.
+  sourceKey String
+  title     String
+  /// Loai nguon, tu do co chu y: moi vertical goi ten tai lieu cua no mot kieu. Ep enum o day se
+  /// bat mot khach van tai phai muon thuat ngu cua mot khach ban hang.
+  kind    String
+  version String
+
+  origin         SourceOrigin
+  authority      SourceAuthority
+  classification DataClassification
+  status         SourceStatus       @default(RECEIVED)
+
+  /// Duong den byte trong kho RIENG. NULL khi moi ghi nhan su ton tai ma chua co duong.
+  locator String?
+  /// SHA-256 cua byte. La thu duy nhat chung minh "van dung ban do" ma khong can giu ban sao.
+  contentHash String?
+  /// Kich thuoc byte — de doi chieu nhanh cung hash khi kiem chung lai.
+  byteSize Int?
+
+  receivedAt    DateTime  @default(now())
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+
+  /// Ban ma ban NAY thay the. Lich su di theo canh nay va khong bao gio bi ghi de.
+  supersedesId String?         @unique
+  supersedes   BusinessSource? @relation("SourceSupersession", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy BusinessSource? @relation("SourceSupersession")
+
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  facts     BusinessFact[]
+  approvals BusinessApproval[]
+
+  /// Cung ten tep + hash khac = ban khac. Rang buoc nay la cho bat bien do duoc thi hanh.
+  @@unique([tenantId, sourceKey, contentHash])
+  @@index([tenantId, status])
+  @@index([tenantId, sourceKey, receivedAt])
+  @@index([tenantId, classification])
+}
+
+/// MOT SU THAT NGHIEP VU suy ra tu mot nguon.
+///
+/// `(tenantId, domain, key)` la DIA CHI cua su that; nhieu ban ghi cung dia chi la LICH SU, khong
+/// phai trung lap. Khong bao gio UPDATE gia tri tai cho: ban cu chuyen `SUPERSEDED` va ban moi
+/// tro nguoc ve no. Doc "hien tai" = ban `CONFIRMED`/`WORKING_ASSUMPTION` con trong cua so hieu
+/// luc; doc "lich su" = tat ca, theo thoi gian.
+model BusinessFact {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// Mien nghiep vu, tu do: mot khach ban hang dung "pricing", mot khach van tai dung
+  /// "reconciliation". Nen tang khong duoc biet truoc danh sach nay.
+  domain String
+  key    String
+  /// Gia tri co cau truc. `Json` chu khong phai `String`: mot nguong so, mot bang anh xa va mot
+  /// cau chinh sach deu la su that, va ep het ve chuoi se lam moi noi doc phai tu parse lai.
+  value Json
+
+  status BusinessFactStatus @default(PROPOSED)
+  /// Ke thua tu nguon, nhung ghi lai o day: mot trich xuat co the nhay cam hon ca tai lieu goc
+  /// (vd mot dong PII rut ra tu mot bang phan lon vo hai).
+  classification DataClassification
+
+  sourceId String
+  source   BusinessSource @relation(fields: [sourceId], references: [id])
+  /// Tro chinh xac vao cho trong nguon (trang/muc/o) — de nguoi kiem chung khong phai doc lai ca tep.
+  sourceLocus String?
+
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+
+  /// Bon truong cua mot GIA DINH LAM VIEC — bat buoc khi `status = WORKING_ASSUMPTION`, va dieu
+  /// do duoc thi hanh o `evaluateFactTransition`, khong phai o dinh nghia cot.
+  assumptionRationale     String?
+  assumptionRisk          String?
+  assumptionReversibility String?
+  assumptionOwner         String?
+
+  supersedesId String?       @unique
+  supersedes   BusinessFact? @relation("FactSupersession", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy BusinessFact? @relation("FactSupersession")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approvals BusinessApproval[]
+  conflicts BusinessConflictFact[]
+
+  @@index([tenantId, domain, key, status])
+  @@index([tenantId, status])
+  @@index([sourceId])
+}
+
+/// MOT XUNG DOT giua nhung su that canh tranh nhau. Thuc the HANG NHAT, khong phai mot co boolean.
+model BusinessConflict {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// Khoa on dinh do nguoi dat, de tai lieu va runtime goi cung mot ten cho cung mot xung dot.
+  conflictKey String
+  domain      String
+  /// Dia chi su that dang tranh chap (`BusinessFact.key`). Cho phep NULL: co xung dot ve pham vi
+  /// chu khong ve mot o cu the.
+  subjectKey  String?
+  summary     String
+  impact      BusinessConflictImpact @default(BLOCKING)
+  status      BusinessConflictStatus @default(OPEN)
+
+  /// TIN HIEU GOI Y — co ghi so, khong bao gio tu dong. `evaluateConflictResolution` khong doc
+  /// hai cot nay, va `conflict-lifecycle.spec.ts` khoa dieu do lai.
+  recommendedFactId    String?
+  recommendationReason String?
+
+  /// Bang chung dong xung dot. Thieu = khong dong duoc, khong co duong tat.
+  resolvedFactId   String?
+  resolutionActor  String?
+  resolutionRef    String?
+  resolutionNote   String?
+  resolvedAt       DateTime?
+
+  openedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  facts BusinessConflictFact[]
+
+  @@unique([tenantId, conflictKey])
+  @@index([tenantId, status, impact])
+  @@index([tenantId, domain, subjectKey])
+}
+
+/// Cac BEN cua mot xung dot. Bang noi vi mot xung dot co the co hon hai ben (van tai C-02 co ba).
+model BusinessConflictFact {
+  conflictId String
+  conflict   BusinessConflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  factId     String
+  fact       BusinessFact     @relation(fields: [factId], references: [id], onDelete: Cascade)
+
+  @@id([conflictId, factId])
+  @@index([factId])
+}
+
+/// MOT LAN PHE DUYET — bang chung roi rac, khong phai mot cot `approved: Boolean`.
+///
+/// Vi sao mot BANG rieng: mot co boolean tra loi duoc "da duyet chua" va khong tra loi duoc "ai
+/// duyet, luc nao, dua vao dau, va o muc nao". Bon cau sau moi la thu can den luc doi chieu — va
+/// `level` la thu duy nhat phan biet duoc "chung toi chap nhan ban nay" voi "khach da xac nhan".
+model BusinessApproval {
+  id       String @id @default(cuid())
+  tenantId String
+
+  level ApprovalLevel
+  actor String
+  /// Dan chung: so hop dong, link mail khach tra loi, bien ban hop. Bat buoc — xem `evaluateApproval`.
+  evidenceRef String
+  note        String?
+
+  /// Dung mot trong hai duoc dat; ca hai NULL la mot ban ghi vo nghia.
+  sourceId String?
+  source   BusinessSource? @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  factId   String?
+  fact     BusinessFact?   @relation(fields: [factId], references: [id], onDelete: Cascade)
+
+  decidedAt DateTime @default(now())
+
+  @@index([tenantId, decidedAt])
+  @@index([sourceId])
+  @@index([factId])
+}
+
+/// MOT SU THAT BAT BUOC PHAI CO de mot nang luc duoc coi la san sang.
+///
+/// Nguyen ban cho Tenant Doctor tuong lai: `getMissingRequiredFacts()` doc chinh bang nay. Giu
+/// duoi dang DU LIEU chu khong phai mot mang hang so trong code, vi cai gi bat buoc voi khach nay
+/// thi khong bat buoc voi khach kia — va do dung la thu khong duoc hard-code theo ten khach.
+model BusinessRequiredFact {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// Nang luc bi anh huong khi thieu (khop `CapabilityId` cua goi khach).
+  capability String
+  domain     String
+  key        String
+  /// Muc dam bao ma nang luc nay doi: co chap nhan chay tren gia dinh hay khong.
+  requiresConfirmed Boolean @default(false)
+  note              String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, capability, domain, key])
+  @@index([tenantId, capability])
+}
+
 // ----- Transport domain: TX-03 Costing + Driver Fund (capability `transport-costing`) -----
 //
 // CANH BAO — BON DOI TUONG DB CUA T3 KHONG CO O DAY. Chung song trong SQL tho cua migration

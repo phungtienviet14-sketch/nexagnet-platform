@@ -204,19 +204,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 129
+      "line": 222
     },
     "source_truth.glossary.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 182
+      "line": 275
     },
     "source_truth.group.map": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 147
+      "line": 240
     },
     "source_truth.price.update": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 165
+      "line": 258
     },
     "tenant.loaded": {
       "functionName": "evaluateOperationalReadiness",
@@ -417,6 +417,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/channels/outbound-channel.router.ts",
       "line": 122
     },
+    "conflict.resolution|*": {
+      "functionName": "SourceRegistryService.resolveConflict",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 679
+    },
+    "conflict.resolution|CONFLICT_OPENED": {
+      "functionName": "SourceRegistryService.openConflict",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 644
+    },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
@@ -477,6 +487,30 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "CostingService.postEntryOnly",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 203
+    },
+    "fact.supersession|*": {
+      "functionName": "SourceRegistryService.supersedeFact",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 514
+    },
+    "fact.transition|*": {
+      "functionName": "SourceRegistryService.transitionFact",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 573
+    },
+    "fact.usability|*": {
+      "functionName": "SourceReadinessService.canUseFact",
+      "filePath": "apps/api/src/source-registry/source-readiness.service.ts"
+    },
+    "fact.usability|FACT_AMBIGUOUS_LIVE_VERSIONS": {
+      "functionName": "SourceReadinessService.getEffectiveFact",
+      "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
+      "line": 65
+    },
+    "fact.usability|FACT_NOT_APPROVED": {
+      "functionName": "SourceReadinessService.canUseFact",
+      "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
+      "line": 131
     },
     "fuel.cost_posting|*": {
       "functionName": "FuelService.postFuelCost",
@@ -694,6 +728,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
       "line": 719
+    },
+    "source.approval|*": {
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts"
+    },
+    "source.supersession|*": {
+      "functionName": "SourceRegistryService.supersedeSource",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 270
+    },
+    "source.transition|*": {
+      "functionName": "SourceRegistryService.transitionSource",
+      "filePath": "apps/api/src/source-registry/source-registry.service.ts",
+      "line": 329
     },
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",

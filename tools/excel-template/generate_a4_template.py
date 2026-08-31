@@ -118,11 +118,15 @@ DEALER_COLS = [
     ("Tên gọi tắt / viết tắt\n(cách nhau dấu phẩy)", 30),
     ("Mã đại lý\n(để trống nếu chưa có)", 20),
 ]
-# Dữ liệu khởi tạo THẬT từ khảo sát (apps/api/src/knowledge/seed.ts) — kiểm tra & bổ sung.
+# DÒNG VÍ DỤ — TỔNG HỢP, KHÔNG phải dữ liệu của khách.
+#
+# Trước 30/08/2026 ba dòng này là đại lý THẬT lấy từ khảo sát, và bản .xlsx sinh ra được commit
+# vào một repo PUBLIC. Mẫu gửi khách chỉ cần cho thấy ĐỊNH DẠNG của một dòng hợp lệ; nó không
+# cần biết khách có những đại lý nào. Xem docs/phat-trien/van-hanh/nguon-khach-hang.md.
 DEALER_ROWS = [
-    ["Meta HN", "Đại lý", "Công nợ 30 ngày", "", "meta hn, meta", ""],
-    ["Đại lý Thái Nguyên", "Đại lý", "Công nợ 45 ngày", "", "dai ly tn, tn", ""],
-    ["CTV Ocean Park", "CTV (Cộng tác viên)", "Thanh toán ngay", "", "ocean park, ocp", ""],
+    ["Đại lý mẫu A", "Đại lý", "Công nợ 30 ngày", "", "dai ly mau a, dlma", ""],
+    ["Đại lý mẫu B", "Đại lý", "Công nợ 45 ngày", "", "dai ly mau b, dlmb", ""],
+    ["CTV mẫu C", "CTV (Cộng tác viên)", "Thanh toán ngay", "", "ctv mau c, ctvmc", ""],
 ]
 DEALER_SHEET = "1. Đại lý & CTV"
 DEALER_LAST_ROW = 500  # phạm vi áp dropdown + named range cho dropdown ở sheet 2
@@ -160,9 +164,12 @@ GROUP_COLS = [
     ("Chi nhánh", 14),
     ("Chat ID nhóm\n(kỹ thuật — để trống, hệ thống điền)", 34),
 ]
+# Cột Chat ID để TRỐNG — đúng như hướng dẫn ở sheet 1 dặn khách. Bản trước tự điền sẵn hai chat
+# ID nhóm Zalo THẬT vào đây, tức mẫu vừa mâu thuẫn với chính hướng dẫn của nó, vừa mang định danh
+# nhóm của khách vào file đem đi phát tán.
 GROUP_ROWS = [
-    ["Nhóm đại lý Meta HN", "Meta HN", "HN", "2508572440887686813"],
-    ["Nhóm đại lý Thái Nguyên", "Đại lý Thái Nguyên", "TN", "3787434804745256898"],
+    ["Nhóm đại lý mẫu A", "Đại lý mẫu A", "HN", ""],
+    ["Nhóm đại lý mẫu B", "Đại lý mẫu B", "TN", ""],
 ]
 GROUP_SHEET = "2. Map nhóm Zalo"
 DEALER_NAME_RANGE = "DanhSachDaiLy"
@@ -257,7 +264,7 @@ def build_guide_sheet(ws: Worksheet) -> None:
         "2) Cột “Cấp” và “Chính sách mặc định”: bấm vào ô sẽ hiện danh sách để chọn (không gõ tay).",
         "3) Mở sheet “2. Map nhóm Zalo”: mỗi dòng 1 nhóm Zalo, chọn nhóm đó thuộc đại lý nào.",
         "4) Cột “Chat ID” để TRỐNG — bộ phận kỹ thuật điền sau, chị không cần biết ID.",
-        "5) 3 dòng đại lý + 2 nhóm đã điền sẵn là dữ liệu thật từ khảo sát — kiểm tra, sửa và thêm bên dưới.",
+        "5) 3 dòng đại lý + 2 nhóm điền sẵn chỉ là VÍ DỤ về cách ghi — xoá đi rồi điền dữ liệu thật của mình.",
         "6) Đừng xóa dòng tiêu đề (dòng 1) ở 2 sheet dữ liệu.",
     ]:
         _write(ws, r, line); ws.row_dimensions[r].height = 30; r += 1
@@ -313,7 +320,13 @@ def main() -> None:
     group_ws = wb.create_sheet(GROUP_SHEET)
     build_group_sheet(group_ws, wb)
 
-    out_dir = Path(__file__).resolve().parents[2] / "docs" / "mau"
+    # `docs/mau/` khong con ton tai sau khi sap xep lai tai lieu theo khach — script van ghi vao
+    # do nen chay lai KHONG tai sinh duoc tep dang duoc tham chieu. Do la ly do ban .xlsx trong
+    # repo trot lech khoi generator ma khong ai thay.
+    #
+    # Dau ra KHONG duoc commit (.gitignore): day la mot ban build de gui khach, con byte goc va
+    # ban khach tra ve deu thuoc ve kho rieng.
+    out_dir = Path(__file__).resolve().parents[2] / "docs" / "khach-hang" / "ultty" / "trao-doi"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "a4-dai-ly-map-nhom-ultty.xlsx"
     wb.save(out_path)
