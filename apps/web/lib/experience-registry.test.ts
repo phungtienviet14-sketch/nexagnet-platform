@@ -124,6 +124,7 @@ describe('ExperienceRegistry', () => {
     expect(resolveExperience('operations-console').id).toBe('operations-console');
     expect(resolveExperience('knowledge-workspace').id).toBe('knowledge-workspace');
     expect(resolveExperience('agent-workforce').id).toBe('agent-workforce');
+    expect(resolveExperience('b2b-sales-operations').id).toBe('b2b-sales-operations');
     expect(() => resolveExperience('missing' as never)).toThrow(/experience/i);
   });
 
@@ -148,6 +149,7 @@ describe('public tenant runtime descriptor', () => {
         erp: 'none',
         contentSource: 'local_manifest',
       },
+      readiness: { blockedCapabilities: [] },
     });
     expect(JSON.stringify(descriptor)).not.toMatch(/credential|secret|token/i);
   });
@@ -205,5 +207,54 @@ describe('settings composition', () => {
     expect(tabs).not.toContain('zalo');
     expect(resolveActiveSettingsTab(tabs, 'zalo')).toBe('members');
     expect(resolveActiveSettingsTab(tabs, 'campaigns')).toBe('members');
+  });
+});
+
+describe('ranh gioi be mat khach / be mat noi bo (Issue #107 §9.1, §9.2)', () => {
+  const b2bTenant = {
+    ...operationsTenant,
+    slug: 'fixture-b2b',
+    identity: { displayName: 'Fixture B2B', shortName: 'B2B' },
+    experience: 'b2b-sales-operations',
+    policies: {
+      ...operationsTenant.policies,
+      readiness: {
+        blockedCapabilities: [
+          { key: 'cod_ship', label: 'COD va cuoc van chuyen', reason: 'Chua co bang phi.' },
+        ],
+      },
+    },
+  } as const satisfies TenantConfig;
+
+  it('hai experience la HAI component khac nhau, khong phai mot ban doi ten', () => {
+    expect(resolveExperience('b2b-sales-operations').Component).not.toBe(
+      resolveExperience('operations-console').Component,
+    );
+  });
+
+  it('be mat khach doi dung bo nang luc toi thieu cua mot khach ban hang B2B', () => {
+    expect(EXPERIENCE_REQUIREMENTS['b2b-sales-operations']).toEqual([
+      'knowledge',
+      'messaging',
+      'turn-processing',
+      'sales-order',
+      'operations',
+    ]);
+  });
+
+  it('nang luc bi chan qua duoc ranh gioi server -> trinh duyet ma khong keo theo bi mat', () => {
+    const descriptor = toPublicTenantDescriptor(b2bTenant);
+
+    expect(descriptor.experience).toBe('b2b-sales-operations');
+    expect(descriptor.readiness.blockedCapabilities).toEqual([
+      { key: 'cod_ship', label: 'COD va cuoc van chuyen', reason: 'Chua co bang phi.' },
+    ]);
+    expect(JSON.stringify(descriptor)).not.toMatch(/credential|secret|token/i);
+  });
+
+  it('be mat khach van dung duoc man hinh quan tri theo dung nang luc da bat', () => {
+    expect(selectSettingsTabIds(toPublicTenantDescriptor(b2bTenant))).toEqual(
+      selectSettingsTabIds(toPublicTenantDescriptor(operationsTenant)),
+    );
   });
 });

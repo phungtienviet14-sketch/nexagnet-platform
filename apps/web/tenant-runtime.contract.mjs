@@ -59,9 +59,34 @@ const PACK_C = {
   experience: 'agent-workforce',
 };
 
+/** Goi khach thu tu — BE MAT KHACH huong khach hang (Issue #107). */
+const PACK_D = {
+  slug: 'khach-bon',
+  productName: 'Khach Bon AI',
+  installName: 'Khach Bon — Van hanh ban hang B2B',
+  pageTitle: 'Khach Bon AI — Van hanh ban hang',
+  themeColor: '#0b6b53',
+  backgroundColor: '#f4f7f5',
+  monogram: 'BO',
+  experience: 'b2b-sales-operations',
+  /**
+   * Goi nay khai mot nang luc BI CHAN. Bai kiem tra o day khong doc duoc noi dung do (xem
+   * `assertCustomerDocumentHasNoEngineeringPayload`), nhung goi van phai khai no: nho vay hop dong
+   * chung minh duoc mot goi khach CO nang luc bi chan van boot va van doi thuong hieu binh thuong.
+   * Con phan noi dung duoc doc o `e2e/b2b-sales-operations.spec.ts`.
+   */
+  blockedCapabilities: [
+    { key: 'cod_ship', label: 'COD va cuoc van chuyen', reason: 'Chua co bang phi chinh thuc.' },
+  ],
+};
+
 const tmpDirs = [];
 
 function writePack(spec) {
+  // Hai be mat ban hang doi CUNG mot nen du lieu (xem EXPERIENCE_REQUIREMENTS), nen goi gia cua
+  // chung cung phai giong nhau. Khac nhau chi o chuoi thuong hieu va nang luc bi chan.
+  const salesPack =
+    spec.experience === 'operations-console' || spec.experience === 'b2b-sales-operations';
   const dir = mkdtempSync(join(tmpdir(), `tenant-${spec.slug}-`));
   mkdirSync(join(dir, 'data'), { recursive: true });
   writeFileSync(
@@ -85,7 +110,7 @@ function writePack(spec) {
       },
       experience: spec.experience,
       capabilities:
-        spec.experience === 'operations-console'
+        salesPack
           ? [
               'knowledge',
               'messaging',
@@ -99,7 +124,7 @@ function writePack(spec) {
             ? ['knowledge', 'operations']
             : ['knowledge'],
       policies:
-        spec.experience === 'operations-console'
+        salesPack
           ? {
               salesOrder: {
                 supportedDealerPolicies: ['thanh_toan_ngay'],
@@ -116,11 +141,11 @@ function writePack(spec) {
                 retry: { maxAttempts: 3, baseBackoffSeconds: 60 },
                 features: { lunarCalendarEnabled: false },
               },
-              readiness: { blockedCapabilities: [] },
+              readiness: { blockedCapabilities: spec.blockedCapabilities ?? [] },
             }
           : { readiness: { blockedCapabilities: [] } },
       integrations:
-        spec.experience === 'operations-console'
+        salesPack
           ? {
               channel: { allowedAdapters: ['mock'] },
               parser: { allowedAdapters: ['claude'] },
@@ -129,7 +154,7 @@ function writePack(spec) {
             }
           : { contentSource: { adapter: 'local_manifest' } },
       persona:
-        spec.experience === 'operations-console'
+        salesPack
           ? {
               messaging: { botName: spec.productName, mentionName: `Bot ${spec.slug}` },
               turnProcessing: { parserIntro: `Parser fixture cho ${spec.productName}.` },
@@ -137,7 +162,7 @@ function writePack(spec) {
             }
           : {},
       bootstrap:
-        spec.experience === 'operations-console'
+        salesPack
           ? {
               knowledge: { path: 'data/knowledge.json' },
               salesOrder: { path: 'data/knowledge.json' },
@@ -254,6 +279,33 @@ function assertKnowledgeWorkspaceHasNoOperationsSurface(seen) {
   }
 }
 
+/**
+ * KHONG mot khai niem ky thuat nao duoc di kem TAI LIEU may chu tra ve cho be mat khach.
+ *
+ * PHAM VI CO GIOI HAN, va gioi han do phai noi ro. `AuthGate` hoi `/auth/config` trong mot effect
+ * o trinh duyet, nen tai lieu `next start` tra ve cho `/` chi chua man hinh cho — vo khach chua
+ * ton tai trong do. Vay nen bai nay KHONG chung minh duoc "man hinh sach"; thu no chung minh la
+ * TAI LIEU sach, ke ca phan payload RSC nhung trong <script>. Do van la mot bao dam that: mot
+ * `traceId` di lac vao prop cua server component se hien ra o day du khong ai nhin thay no tren
+ * man hinh.
+ *
+ * Con "man hinh sach" duoc chung minh o `apps/web/e2e/b2b-sales-operations.spec.ts`, tren trinh
+ * duyet that, quet qua bon muc.
+ */
+function assertCustomerDocumentHasNoEngineeringPayload(seen) {
+  for (const marker of [
+    'data-experience="operations-console"',
+    'Luồng xử lý 6 agent',
+    'traceId',
+    'spanId',
+    'workflowRunId',
+    'ruleConfigVersion',
+    'AUTO_SEND',
+  ]) {
+    assert.ok(!seen.html.includes(marker), `tai lieu be mat khach khong duoc co marker: ${marker}`);
+  }
+}
+
 function assertMatchesPack(seen, spec, label) {
   assert.match(seen.html, new RegExp(`<title>${spec.pageTitle}</title>`), `${label}: <title>`);
   assert.equal(seen.manifest.name, spec.installName, `${label}: manifest.name`);
@@ -293,6 +345,7 @@ test('cung MOT artifact, doi tenant luc chay -> branding va experience deu doi',
   const dirA = writePack(PACK_A);
   const dirB = writePack(PACK_B);
   const dirC = writePack(PACK_C);
+  const dirD = writePack(PACK_D);
 
   t.after(() => {
     for (const dir of tmpDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -342,10 +395,27 @@ test('cung MOT artifact, doi tenant luc chay -> branding va experience deu doi',
   assertNoTraceOf(seenC, PACK_A, 'goi C');
   assertNoTraceOf(seenC, PACK_B, 'goi C');
 
+  // Goi D — be mat khach. Lan chay nay tra loi ba cau cua Issue #107 cung mot luc: experience moi
+  // render duoc that, no khong phoi khai niem ky thuat nao, va nang luc bi chan doc ra dung ly do
+  // khach viet. Ca ba deu duoc do tren HTML that, tren dung ban build da phuc vu ba goi tren.
+  const serverD = await startServer(dirD);
+  let seenD;
+  try {
+    seenD = await readBranding();
+  } finally {
+    await stopServer(serverD);
+  }
+  assertMatchesPack(seenD, PACK_D, 'goi D');
+  assertExperience(seenD, PACK_D, 'goi D');
+  assertCustomerDocumentHasNoEngineeringPayload(seenD);
+  assertNoTraceOf(seenD, PACK_A, 'goi D');
+  assertNoTraceOf(seenD, PACK_B, 'goi D');
+  assertNoTraceOf(seenD, PACK_C, 'goi D');
+
   assert.equal(
     readFileSync(buildIdPath, 'utf8'),
     buildIdBefore,
     'BUILD_ID doi -> da build lai giua cac lan chay, phep chung minh khong con gia tri',
   );
-  t.diagnostic(`BUILD_ID khong doi (${buildIdBefore.trim()}) — mot artifact cho ca ba khach`);
+  t.diagnostic(`BUILD_ID khong doi (${buildIdBefore.trim()}) — mot artifact cho ca bon khach`);
 });

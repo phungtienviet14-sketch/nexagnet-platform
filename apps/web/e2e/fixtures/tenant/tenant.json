@@ -15,7 +15,7 @@
     "monogram": "E2E",
     "composerPlaceholder": "Nhập tin nhắn kiểm thử"
   },
-  "experience": "operations-console",
+  "experience": "b2b-sales-operations",
   "capabilities": [
     "knowledge",
     "messaging",
@@ -44,7 +44,20 @@
       "retry": { "maxAttempts": 2, "baseBackoffSeconds": 30 },
       "features": { "lunarCalendarEnabled": false }
     },
-    "readiness": { "blockedCapabilities": [] }
+    "readiness": {
+      "blockedCapabilities": [
+        {
+          "key": "cod_ship",
+          "label": "COD và cước vận chuyển",
+          "reason": "Chưa có bảng phí COD chính thức."
+        },
+        {
+          "key": "vat",
+          "label": "VAT",
+          "reason": "Chưa chốt cách xuất hoá đơn."
+        }
+      ]
+    }
   },
   "integrations": {
     "channel": { "allowedAdapters": ["mock", "bot", "zca", "hybrid"] },

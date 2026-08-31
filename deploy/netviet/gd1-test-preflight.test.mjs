@@ -52,7 +52,7 @@ function validInput() {
     tenant: {
       schemaVersion: 2,
       slug: 'ultty',
-      experience: 'operations-console',
+      experience: 'b2b-sales-operations',
       capabilities: [
         'knowledge',
         'messaging',
