@@ -752,7 +752,7 @@ Thì: ngày nghiệp vụ = **01/08**, và phiếu thuộc kỳ tháng 8.
 | **T1** | Transport Domain Contract | ✅ **XONG (file này)** |
 | **T2** | **Transport Core** — Vehicle, Driver, Trip, Customer/Partner; capability `transport-core`; primitive tiền + ngày nghiệp vụ | ✅ **CODE-ONLY / PARTIAL** — xem §18.1; bất biến tầng lưu trữ siết ở T2.1, xem §18.2 |
 | **T3** | Costing + Driver Fund — hai lớp, sổ append-only, kỳ quỹ | ✅ **CODE/INTEGRATION CLOSED** — xem §18.3 |
-| **T4** | Fuel + đối soát bảng kê | T3 + có **một file bảng kê mẫu** (thật hoặc tổng hợp) để chốt mapping cột |
+| **T4** | Fuel + đối soát bảng kê | ✅ **CODE/INTEGRATION CLOSED** — xem §18.4 |
 | **T5** | Settlement — AR/AP/hoa hồng/kỳ | T3 |
 | **T6** | Asset & Compliance + Workforce | T2, T5 |
 | **T7** | Experience vận hành + experience lái xe + UAT | T2–T6, `PG-01` đã xử lý |
@@ -1085,6 +1085,92 @@ Khoảng ngày dùng `'[]'` — **đóng cả hai đầu**. Với `'[)'`, kỳ 0
   đọc lại kỳ, **trong cùng giao dịch**; việc chuyển `-> CLOSING` lấy cùng khoá đó. Hai kết cục, và
   chỉ hai — đo ở R1/R2.
 
+
+---
+
+### 18.4. T4 as-built — Fuel + đối soát bảng kê (Issue #86)
+
+Capability **`transport-fuel`**, phụ thuộc `transport-core` **và** `transport-costing` — đúng chiều
+T1 §10.1. Một gói khách bật fuel mà quên costing bị `tenant.schema.ts` chặn **từ lúc đọc gói**, chứ
+không phải ở lần duyệt phiếu đầu tiên.
+
+Đường đi đầy đủ, không mảnh nào giả lập ở tầng lưu trữ:
+
+```text
+lái xe nộp phiếu → ảnh chứng từ → kế toán duyệt → chi phí vào giá thành chuyến (TX-03)
+  → nhập bảng kê cây xăng (CSV/XLSX) → so khớp tất định → quyết chênh lệch → đóng kỳ
+  → bàn giao công nợ cho T5
+```
+
+#### Hai trục trạng thái, đúng như §7.4 dự kiến
+
+`verificationStatus` (kế toán đã tin số liệu chưa) và `reconciliationStatus` (phiếu có trên bảng kê
+chưa) là **hai cột độc lập**. `VERIFIED` không có cạnh đi ra — `GD-10` viết thành kiểu dữ liệu.
+
+#### `INV-26` là bất biến duy nhất của T4 **không** biểu diễn được bằng `CHECK`
+
+Nó so hai cột ở **hai bảng khác nhau** (`TransportFuelEntry.sourceStatementId` và
+`TransportFuelStatementLine.statementId`), còn `CHECK` của PostgreSQL chỉ đọc được hàng của chính
+nó. Đường "khóa ngoại ghép" cũng không dùng được: `sourceStatementId` NULL được — phiếu do lái xe
+khai là trường hợp **thường gặp** — và một khóa ngoại ghép có cột NULL thì `MATCH SIMPLE` bỏ qua
+không kiểm, tức đúng ở chỗ nó cần chặn nhất.
+
+Nên nó là một **trigger** `transport_fuel_match_no_self_source()`. Tầng miền cũng chặn
+(`fuel-matching.ts` không bao giờ đề nghị một cặp tự-nguồn); hai lớp là có ý, và thứ tự quan trọng:
+tầng miền trả về một **chênh lệch có tên** cho người đối soát, trigger là lưới cuối cho mọi đường
+ghi **không** đi qua tầng đó. Cả hai đều được đo ở `P9`.
+
+#### Mười bảy `CHECK` + trigger + năm unique mà `schema.prisma` không khai được
+
+Chúng sống trong SQL thô của `20260831120000_transport_fuel`.
+`transport-fuel-storage.spec.ts` đọc chính tệp migration và đỏ nếu một tên biến mất — cùng cơ chế
+`transport-costing-storage.spec.ts` đã dựng ở T3.
+
+**Khác T3 ở một điểm vận hành:** T4 **không** thêm phụ thuộc nào. Không `CREATE EXTENSION`, chỉ
+`CHECK` và một trigger PL/pgSQL — đều là năng lực lõi. Một mục tiêu triển khai đã chạy được T3 thì
+chạy được T4 mà không phải cấp thêm quyền gì.
+
+#### Bốn giả định demo, ghi tên thay vì để ngầm
+
+| Mã | Giả định | Vì sao | Chi phí đảo ngược |
+|---|---|---|---|
+| `DA-T4-01` | **Cây xăng là một bảng riêng (`TransportFuelSupplier`), không phải một vai của `TransportPartner`.** | Phản xạ đầu là dùng lại partner theo VT-054. Nhưng §9.1 xếp `FUEL` là một **nguồn riêng**, tách khỏi `PARTNER_CARRIER`/`PARTNER_COMMISSION` — tức chính T1 không coi cây xăng là một vai của đối tác vận tải. Và nó đúng: cây xăng không cho thuê xe, không mang đơn về, và chiều công nợ của nó đóng bằng **một bảng kê** thay vì một kỳ đối tác | **Trung bình** — gộp lại là một migration dữ liệu, nhưng không mất dòng nào |
+| `DA-T4-02` | **`INV-04` mạnh hơn ở T4 so với T3:** chuyến thuê xe ngoài không nhận **một phiếu dầu nào**, kể cả `DECLARED` | T3 (`DA-T3-03`) vẫn cho khoản `COMPANY_DIRECT` vì tiền trả nhà xe đi đường `PayableDocument` của T5. Dầu thì khác: T1 `INV-04` viết rõ *"không được có `FuelEntry` hay `DriverFundEntry` nào"*, và dầu của xe nhà xe đã nằm trong giá thuê | **Thấp** — một điều kiện ở `guardTripAcceptsFuel` |
+| `DA-T4-03` | **Duyệt phiếu TRƯỚC, đẩy chi phí sang `TX-03` SAU** — và lệnh duyệt chạy lại được | Hai bước ở hai capability nên không nằm chung một giao dịch được. Phải chọn xem một lần chết ở giữa để lại trạng thái nào: *phiếu `VERIFIED` chưa có chi phí* đọc ra được bằng một câu truy vấn và **sửa được bằng cách gọi lại lệnh**; *khoản chi của phiếu chưa ai duyệt* thì tiền đã vào giá thành cho một chứng từ kế toán chưa tin, và đường sửa duy nhất là một bút toán đảo | **Thấp** — đổi thứ tự hai lời gọi |
+| `DA-T4-04` | **Số lít: một dấu phân cách, và nó LUÔN là thập phân.** `1.500` bị từ chối chứ không đoán | `1.500` có thể là 1.500 lít hay 1,5 lít, và không cách nào biết chắc từ chính chuỗi đó. Đoán một trong hai là sai **1000 lần** ở một nửa số lần đoán, và con số sai đó đi vào phép tính tiêu hao rồi ra một định mức vô lý không ai truy ngược được. (Số **tiền** thì ngược lại: VND không có đơn vị phụ (`GD-03`), nên `4.200.000` không thể là thập phân — đọc dấu chấm là phân cách hàng nghìn ở đó là **tất định**, không phải đoán) | **Thấp** — thêm một lựa chọn vào gói khách khi biết quy ước của cây xăng |
+
+#### Một lỗi thật, tìm được bằng Postgres chứ không bằng suy luận
+
+Chạy lại so khớp **xóa** các cặp tự động cũ rồi ghi bộ mới. Bản đầu loại `MATCHED` khỏi vòng so
+khớp — nghe hợp lý — nên lần chạy thứ hai xóa các cặp cũ mà **không tạo lại được**: hai đầu của
+chúng đều đang mang `MATCHED`. Kết quả: kỳ đối soát mất hết cặp khớp sau lần bấm "chạy lại" thứ
+hai, và con số bàn giao cho T5 tụt về 0 — **không lỗi, không cảnh báo**.
+
+Kho in-memory xanh cả hai lần; `P10` trên Postgres thật đỏ. Nay `MATCHED` vào lại vòng so khớp, còn
+các cặp do **người** xác nhận (`origin = MANUAL`) được loại ra ở tầng service. Ranh giới: *máy được
+làm lại cái máy đã làm; cái người đã quyết thì không ai động tới*.
+
+#### Còn hở sau T4
+
+- **`PG-05` vẫn hở, nhưng hẹp hơn.** Ảnh chứng từ nay là một **bảng con** có vòng đời tối thiểu
+  (`TransportFuelReceiptEvidence`) thay vì một cột tham chiếu như `TripExpense`. Vẫn chưa có trạng
+  thái quét, chưa có retention (`GD-20` chọn giữ vô thời hạn), và `locator` vẫn là một chuỗi chứ
+  chưa phải khóa ngoại tới chứng từ thật.
+- **Bàn giao sang T5 là một BẢNG, chưa phải một sự kiện.** `TransportFuelSettlementHandoff`
+  idempotent theo kỳ (`reconciliationId` UNIQUE) và T4 **không** ghi bảng nào của T5. Khi T5 có mặt,
+  nó đọc bảng này; nếu sau đó muốn đổi sang `WorkflowOutbox`, chỗ đổi là một tệp.
+- **`FuelConsumptionThresholdExceeded` chưa phát ra ngoài.** Vượt định mức hiện là một
+  `reviewReason` trên phiếu (`CONSUMPTION_ABOVE_NORM`), không phải một sự kiện gửi sang
+  `Notifications` — capability đó không nằm trong phụ thuộc của `transport-fuel`, và kéo nó vào chỉ
+  để phát một cảnh báo là mở rộng ranh giới không ai yêu cầu.
+- **`VehicleOdometerObserved` chưa cập nhật `Vehicle.currentOdoKm`.** T2 ghi cột đó là "T2 chỉ GIỮ
+  số; cập nhật tự động mỗi lần đổ dầu là việc của T4". T4 **chưa** làm: nó cần một đường ghi ngược
+  vào `transport-core`, mà `TransportFuelCoreFacts` cố ý không có hàm ghi nào (§4.1 luật 4). Đường
+  đúng là một sự kiện hoặc một cổng ứng dụng của `transport-core` — cả hai đều là việc phải thiết
+  kế, không phải một dòng thêm vào.
+- **Chưa có bề mặt giao diện.** Hợp đồng API đã đủ cho T7 (danh sách/chi tiết phiếu, duyệt, nhập
+  bảng kê preview/commit, bàn làm việc đối soát, quyết chênh lệch, đóng/mở lại), nhưng chưa màn hình
+  nào tiêu thụ chúng.
 
 ---
 

@@ -276,6 +276,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
+    "transport.driver.self.fuel.read": {
+      "filePath": "apps/api/src/transport/fuel/driver-fuel.controller.ts"
+    },
+    "transport.driver.self.fuel.submit": {
+      "filePath": "apps/api/src/transport/fuel/driver-fuel.controller.ts"
+    },
     "transport.driver.self.fund.read": {
       "functionName": "DriverFundSelfController.statement",
       "filePath": "apps/api/src/transport/costing/driver-fund-self.controller.ts",
@@ -288,6 +294,41 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "DriverTripsController.updateStatus",
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts",
       "line": 61
+    },
+    "transport.fuel.entry.read": {
+      "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
+    },
+    "transport.fuel.entry.submit_for_driver": {
+      "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
+    },
+    "transport.fuel.entry.verify": {
+      "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
+    },
+    "transport.fuel.reconciliation.close": {
+      "functionName": "FuelReconciliationController.close",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts",
+      "line": 106
+    },
+    "transport.fuel.reconciliation.match": {
+      "functionName": "FuelReconciliationController.runMatching",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts",
+      "line": 89
+    },
+    "transport.fuel.reconciliation.read": {
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts"
+    },
+    "transport.fuel.reconciliation.reopen": {
+      "functionName": "FuelReconciliationController.reopen",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts",
+      "line": 114
+    },
+    "transport.fuel.reconciliation.resolve": {
+      "functionName": "FuelReconciliationController.resolve",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts",
+      "line": 96
+    },
+    "transport.fuel.statement.import": {
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts"
     },
     "transport.partner.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
@@ -401,6 +442,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 432
     },
+    "driver.self_fuel_scope|SELF_FUEL_SCOPE_GRANTED": {
+      "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts"
+    },
+    "driver.self_fuel_scope|SELF_FUEL_SCOPE_NOT_OWNED": {
+      "functionName": "FuelReadService.getMyFuelSlip",
+      "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
+      "line": 139
+    },
+    "driver.self_fuel_scope|SELF_FUEL_SCOPE_NO_DRIVER_BINDING": {
+      "functionName": "FuelReadService.requireDriverBinding",
+      "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
+      "line": 172
+    },
     "driver.self_fund_scope|SELF_FUND_SCOPE_GRANTED": {
       "functionName": "CostingReadService.selfFundStatement",
       "filePath": "apps/api/src/transport/costing/costing-read.service.ts",
@@ -457,6 +511,160 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceReadinessService.canUseFact",
       "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
       "line": 131
+    },
+    "fuel.cost_posting|*": {
+      "functionName": "FuelService.postFuelCost",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 475
+    },
+    "fuel.cost_posting|FUEL_COST_ALREADY_POSTED": {
+      "functionName": "FuelService.postFuelCost",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 449
+    },
+    "fuel.match|*": {
+      "functionName": "FuelReconciliationService.runMatching",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts"
+    },
+    "fuel.match|MATCH_SELF_SOURCED_BLOCKED": {
+      "functionName": "FuelReconciliationService.buildConfirmedMatch",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 633
+    },
+    "fuel.settlement_handoff|*": {
+      "functionName": "FuelReconciliationService.closeReconciliation",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 388
+    },
+    "fuel_discrepancy.resolve|DISCREPANCY_ALREADY_RESOLVED": {
+      "functionName": "FuelReconciliationService.resolveDiscrepancy",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 270
+    },
+    "fuel_discrepancy.resolve|DISCREPANCY_MATCH_TARGET_REQUIRED": {
+      "functionName": "FuelReconciliationService.buildConfirmedMatch",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 592
+    },
+    "fuel_discrepancy.resolve|DISCREPANCY_RESOLVED": {
+      "functionName": "FuelReconciliationService.resolveDiscrepancy",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 309
+    },
+    "fuel_entry.amend|*": {
+      "functionName": "FuelService.denyAmend",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 632
+    },
+    "fuel_entry.amend|FUEL_ENTRY_AMENDED": {
+      "functionName": "FuelService.amendFuelEntry",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 306
+    },
+    "fuel_entry.review|*": {
+      "functionName": "FuelService.denyReview",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 652
+    },
+    "fuel_entry.review|FUEL_ENTRY_REJECTED": {
+      "functionName": "FuelService.rejectFuelEntry",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 399
+    },
+    "fuel_entry.review|FUEL_ENTRY_REVIEW_REOPENED": {
+      "functionName": "FuelService.resubmitFuelEntry",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 428
+    },
+    "fuel_entry.review|FUEL_ENTRY_VERIFIED": {
+      "functionName": "FuelService.verifyFuelEntry",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 369
+    },
+    "fuel_entry.submit|*": {
+      "functionName": "FuelService.guardTripAcceptsFuel",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 544
+    },
+    "fuel_entry.submit|FUEL_ENTRY_DRIVER_NOT_ASSIGNED": {
+      "functionName": "FuelService.requireAssignedToTrip",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 570
+    },
+    "fuel_entry.submit|FUEL_ENTRY_IDEMPOTENT_REPLAY": {
+      "functionName": "FuelService.submitFuelEntry",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 140
+    },
+    "fuel_entry.submit|FUEL_ENTRY_RECORDED": {
+      "functionName": "FuelService.submitFuelEntry",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 183
+    },
+    "fuel_entry.submit|FUEL_ENTRY_VEHICLE_NOT_ASSIGNED": {
+      "functionName": "FuelService.requireAssignedToTrip",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 584
+    },
+    "fuel_reconciliation.transition|RECONCILIATION_CLOSED": {
+      "functionName": "FuelReconciliationService.closeReconciliation",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 381
+    },
+    "fuel_reconciliation.transition|RECONCILIATION_FROZEN": {
+      "functionName": "FuelReconciliationService.requireOpen",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 563
+    },
+    "fuel_reconciliation.transition|RECONCILIATION_HAS_PENDING_DISCREPANCY": {
+      "functionName": "FuelReconciliationService.closeReconciliation",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 349
+    },
+    "fuel_reconciliation.transition|RECONCILIATION_MATCHING_RUN": {
+      "functionName": "FuelReconciliationService.runMatching",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 227
+    },
+    "fuel_reconciliation.transition|RECONCILIATION_REOPENED": {
+      "functionName": "FuelReconciliationService.reopenReconciliation",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 427
+    },
+    "fuel_reconciliation.transition|RECONCILIATION_RESOLVED": {
+      "functionName": "FuelReconciliationService.settleStateIfResolved",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 487
+    },
+    "fuel_reconciliation.transition|RECONCILIATION_TRANSITION_NOT_PERMITTED": {
+      "functionName": "FuelReconciliationService.denyTransition",
+      "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.service.ts",
+      "line": 534
+    },
+    "fuel_statement.import_row|*": {
+      "functionName": "FuelStatementService.commitImport",
+      "filePath": "apps/api/src/transport/fuel/fuel-statement.service.ts",
+      "line": 177
+    },
+    "fuel_statement.import|STATEMENT_EMPTY": {
+      "functionName": "FuelStatementService.buildPreview",
+      "filePath": "apps/api/src/transport/fuel/fuel-statement.service.ts",
+      "line": 224
+    },
+    "fuel_statement.import|STATEMENT_IMPORTED": {
+      "functionName": "FuelStatementService.commitImport",
+      "filePath": "apps/api/src/transport/fuel/fuel-statement.service.ts",
+      "line": 161
+    },
+    "fuel_statement.import|STATEMENT_MAPPING_INVALID": {
+      "functionName": "FuelStatementService.buildPreview",
+      "filePath": "apps/api/src/transport/fuel/fuel-statement.service.ts",
+      "line": 208
+    },
+    "fuel_statement.import|STATEMENT_PERIOD_TAKEN": {
+      "functionName": "FuelStatementService.commitImport",
+      "filePath": "apps/api/src/transport/fuel/fuel-statement.service.ts",
+      "line": 106
     },
     "fund_period.transition|*": {
       "filePath": "apps/api/src/transport/costing/fund-period.service.ts"
