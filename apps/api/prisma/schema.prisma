@@ -1901,7 +1901,7 @@ model TransportFuelReconciliation {
 
   matches       TransportFuelMatch[]
   discrepancies TransportFuelDiscrepancy[]
-  handoff       TransportFuelSettlementHandoff?
+  handoffs      TransportFuelSettlementHandoff[]
 
   @@index([supplierId, state])
 }
@@ -1954,28 +1954,56 @@ model TransportFuelDiscrepancy {
   @@index([fuelEntryId])
 }
 
-/// BAN GIAO SANG T5 — mot payload CO KIEU, IDEMPOTENT theo doi soat.
+/// BAN GIAO SANG T5 — mot CHUOI BAN SUA DOI chi them, khong phai mot hang cho mot ky (T4R §2).
 ///
-/// `reconciliationId` UNIQUE la toan bo tinh idempotent: dong doi soat hai lan (mo lai roi dong
-/// lai) khong tao ban giao thu hai, va T5 doc dung mot hang cho mot ky.
+/// ---------------------------------------------------------------------------
+/// VI SAO KHONG CON `reconciliationId @unique`.
+///
+/// Ban dau moi ky co dung mot ban giao, va dong lai lan hai chi tra ve hang cu. Dieu do idempotent
+/// DUNG khi ket qua kinh te khong doi, va SAI hoan toan khi no doi:
+///
+/// ```text
+/// dong lan 1                 -> ban giao 10.000.000d
+/// mo lai, sua mot dong bang ke
+/// dong lan 2                 -> van tra ve 10.000.000d cu
+/// ```
+///
+/// T5 khong bao gio hoc duoc ve lan sua, va cay xang duoc tra sai so tien. Nen tu T4R:
+///
+///   · ket qua KHONG doi  -> phat lai ban gan nhat, khong them hang nao;
+///   · ket qua DOI        -> them mot ban moi, `supersedesId` tro nguoc ve ban truoc.
+///
+/// `@@unique([reconciliationId, revision])` la thu giu cho hai lan dong dong thoi khong the cung
+/// sinh ra ban thu N. Khoa hang doi soat (`SELECT ... FOR UPDATE`) da noi tiep hoa chung tu truoc,
+/// nen day la luoi thu hai — va la luoi DUY NHAT con dung neu mot duong ghi tuong lai quen lay khoa.
 ///
 /// T4 KHONG ghi bang cua T5 — bang nay thuoc `transport-fuel` va la mot HOP THU DI: T5 se doc no
 /// de tao `PayableDocument`. Ghi thang sang bang cua T5 se lam hai capability dinh chat vao nhau
 /// truoc khi T5 co mot dong code nao.
 model TransportFuelSettlementHandoff {
-  id                String                      @id @default(cuid())
-  reconciliationId  String                      @unique
-  reconciliation    TransportFuelReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  id                String                          @id @default(cuid())
+  reconciliationId  String
+  reconciliation    TransportFuelReconciliation     @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  /// Dem tu 1. Ban N+1 thay the ban N; khong ban nao bi sua sau khi da phat.
+  revision          Int                             @default(1)
+  /// Ban giao ma ban nay THAY THE. `null` o ban dau tien. UNIQUE: mot ban chi bi thay the mot lan.
+  supersedesId      String?                         @unique
+  supersedes        TransportFuelSettlementHandoff? @relation("TransportFuelHandoffRevision", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy      TransportFuelSettlementHandoff? @relation("TransportFuelHandoffRevision")
   supplierId        String
-  periodStart       String                      @db.VarChar(10)
-  periodEnd         String                      @db.VarChar(10)
+  periodStart       String                          @db.VarChar(10)
+  periodEnd         String                          @db.VarChar(10)
   /// Tong so tien DA DUOC CHAP NHAN, so nguyen dong. Khong gom dong bi tu choi hay bo qua.
   acceptedAmount    BigInt
-  currencyCode      String                      @default("VND") @db.VarChar(3)
+  currencyCode      String                          @default("VND") @db.VarChar(3)
   acceptedLineCount Int
-  emittedAt         DateTime                    @default(now())
+  /// DUNG nhung dong bang ke nao lam nen so tien tren. T5 tra tien theo BO DONG, khong theo mot so.
+  acceptedLineIds   String[]
+  emittedAt         DateTime                        @default(now())
   emittedBy         String
 
+  @@unique([reconciliationId, revision])
+  @@index([reconciliationId])
   @@index([supplierId])
 }
 

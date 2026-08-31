@@ -11,7 +11,17 @@ import {
 } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
-import { evaluateFuelEntryAmendment, type FuelReviewReason } from './fuel-lifecycle.js';
+import {
+  EVIDENCE_FROZEN_FUEL_RECONCILIATION_STATUSES,
+  LOCKED_FUEL_RECONCILIATION_STATUSES,
+  evaluateFuelEntryAmendment,
+  type FuelReviewReason,
+} from './fuel-lifecycle.js';
+import {
+  fuelEntityIdentityDifferences,
+  fuelEntryIdentityOf,
+  type FuelEntryIdentity,
+} from './fuel-entry-identity.js';
 import {
   TRANSPORT_FUEL_POLICY,
   consumptionNormFor,
@@ -30,7 +40,12 @@ import {
   type FuelTripFacts,
 } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
-import type { FuelEntry, FuelPaymentMethod, FuelReceiptEvidence, FuelSupplier } from './fuel.types.js';
+import type {
+  FuelEntry,
+  FuelPaymentMethod,
+  FuelReceiptEvidence,
+  FuelSupplier,
+} from './fuel.types.js';
 
 export interface SubmitFuelEntryCommand {
   readonly tripId: string;
@@ -128,15 +143,23 @@ export class FuelService {
     const correlationKey = command.correlationKey ?? this.newCorrelationKey();
     const replay = await this.repository.findEntryByCorrelation(correlationKey);
     if (replay) {
-      this.assertSameEntry(replay, {
-        tripId: command.tripId,
-        vehicleId: command.vehicleId,
-        driverId: command.driverId,
-        businessDate,
-        litersUnits,
-        amount,
-        odometerKm,
-      });
+      this.assertSameEntry(
+        replay,
+        fuelEntryIdentityOf({
+          tripId: command.tripId,
+          vehicleId: command.vehicleId,
+          driverId: command.driverId,
+          supplierId: command.supplierId,
+          businessDate,
+          occurredAt,
+          litersUnits,
+          amount,
+          odometerKm,
+          paymentMethod: command.paymentMethod,
+          invoiceNo: command.invoiceNo,
+          note: command.note,
+        }),
+      );
       this.telemetry?.decision({
         vocabulary: TRANSPORT_FUEL_DECISIONS,
         point: 'fuel_entry.submit',
@@ -229,7 +252,23 @@ export class FuelService {
       capturedAt: command.capturedAt ? this.parseInstant(command.capturedAt) : null,
       uploadedBy: actor,
       at: this.now(),
+      // Cong o tren doc trang thai roi buong; cong nay di THEO lenh ghi (T4R §4). Mot lenh dong ky
+      // chen vao giua hai buoc se lam tam anh nay rot vao mot ky DA BAO CAO RA NGOAI.
+      forbiddenReconciliationStatuses: EVIDENCE_FROZEN_FUEL_RECONCILIATION_STATUSES,
     });
+    if (!evidence) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel_entry.amend',
+        outcome: 'denied',
+        reason: 'FUEL_ENTRY_AMEND_STATE_RACE',
+        detail: { fuelEntryId: entry.id, evidence: true },
+      });
+      throw TransportDomainError.conflict(
+        'FUEL_ENTRY_AMEND_STATE_RACE',
+        `Ky doi soat cua phieu ${entryId} vua duoc dong — tai lai roi doc lai`,
+      );
+    }
     await this.audit.append({
       actor,
       action: 'transport.fuel.evidence.attach',
@@ -281,25 +320,42 @@ export class FuelService {
       excludeEntryId: entry.id,
     });
 
-    const updated = await this.repository.amendEntry(entry.id, {
-      litersUnits,
-      amount,
-      odometerKm,
-      previousOdometerKm: consumption.previousOdometerKm,
-      consumptionUnits: consumption.consumptionUnits,
-      reviewReasons: consumption.reviewReasons,
-      businessDate,
-      occurredAt,
-      supplierId: supplier.id,
-      paymentMethod: command.paymentMethod,
-      invoiceNo: command.invoiceNo ?? null,
-      note: command.note ?? null,
-      at: this.now(),
-    });
+    const updated = await this.repository.amendEntry(
+      entry.id,
+      // Cong ma tang mien vua mo o tren duoc GAN VAO LENH GHI (T4R §4). Kiem hai lan nghe thua,
+      // nhung lan kiem o tren tra ve mot ly do tu choi CO MA cho nguoi dung, con lan kiem duoi day
+      // la thu duy nhat con dung khi mot lenh duyet chen vao giua hai buoc.
+      {
+        verification: 'DECLARED',
+        lockedReconciliation: LOCKED_FUEL_RECONCILIATION_STATUSES,
+      },
+      {
+        litersUnits,
+        amount,
+        odometerKm,
+        previousOdometerKm: consumption.previousOdometerKm,
+        consumptionUnits: consumption.consumptionUnits,
+        reviewReasons: consumption.reviewReasons,
+        businessDate,
+        occurredAt,
+        supplierId: supplier.id,
+        paymentMethod: command.paymentMethod,
+        invoiceNo: command.invoiceNo ?? null,
+        note: command.note ?? null,
+        at: this.now(),
+      },
+    );
     if (!updated) {
-      throw TransportDomainError.notFound(
-        'FUEL_ENTRY_NOT_FOUND',
-        `Khong tim thay phieu ${entryId}`,
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel_entry.amend',
+        outcome: 'denied',
+        reason: 'FUEL_ENTRY_AMEND_STATE_RACE',
+        detail: { fuelEntryId: entry.id },
+      });
+      throw TransportDomainError.conflict(
+        'FUEL_ENTRY_AMEND_STATE_RACE',
+        `Phieu ${entryId} vua duoc nguoi khac duyet hoac khop — tai lai roi doc lai`,
       );
     }
 
@@ -648,7 +704,10 @@ export class FuelService {
     );
   }
 
-  private denyReview(entry: FuelEntry, reason: 'FUEL_ENTRY_REVIEW_TRANSITION_NOT_PERMITTED'): never {
+  private denyReview(
+    entry: FuelEntry,
+    reason: 'FUEL_ENTRY_REVIEW_TRANSITION_NOT_PERMITTED',
+  ): never {
     this.telemetry?.decision({
       vocabulary: TRANSPORT_FUEL_DECISIONS,
       point: 'fuel_entry.review',
@@ -669,31 +728,20 @@ export class FuelService {
    * KHAC noi dung = client dung lai mot khoa cho mot phieu moi, va tra lai ban cu se lam phieu moi
    * bien mat khong dau vet.
    */
-  private assertSameEntry(
-    existing: FuelEntry,
-    incoming: {
-      tripId: string;
-      vehicleId: string;
-      driverId: string;
-      businessDate: string;
-      litersUnits: number;
-      amount: number;
-      odometerKm: number;
-    },
-  ): void {
-    const same =
-      existing.tripId === incoming.tripId &&
-      existing.vehicleId === incoming.vehicleId &&
-      existing.driverId === incoming.driverId &&
-      existing.businessDate === incoming.businessDate &&
-      existing.litersUnits === incoming.litersUnits &&
-      existing.amount === incoming.amount &&
-      existing.odometerKm === incoming.odometerKm;
-    if (same) return;
+  private assertSameEntry(existing: FuelEntry, incoming: FuelEntryIdentity): void {
+    const differences = fuelEntityIdentityDifferences(fuelEntryIdentityOf(existing), incoming);
+    if (differences.length === 0) return;
 
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel_entry.submit',
+      outcome: 'denied',
+      reason: 'FUEL_CORRELATION_KEY_REUSED',
+      detail: { correlationKey: existing.correlationKey, fields: differences },
+    });
     throw TransportDomainError.conflict(
       'FUEL_CORRELATION_KEY_REUSED',
-      `Khoa chong ghi trung ${existing.correlationKey} da duoc dung cho mot phieu khac`,
+      `Khoa chong ghi trung ${existing.correlationKey} da duoc dung cho mot phieu khac — lech: ${differences.join(', ')}`,
     );
   }
 

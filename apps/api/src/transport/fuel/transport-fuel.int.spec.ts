@@ -687,14 +687,24 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       });
 
       /**
-       * BAN GIAO SANG T5 — idempotent theo ky, va T4 KHONG ghi mot bang nao cua T5.
+       * BAN GIAO SANG T5 — PHAT LAI khi ket qua khong doi, va T4 KHONG ghi mot bang nao cua T5.
        *
-       * Dong lai lan hai (sau khi mo lai) khong duoc phat ban giao thu hai: neu co, T5 se tao hai
-       * cong no cho cung mot ky bang ke.
+       * ---------------------------------------------------------------------------
+       * BAI NAY DA DUOC SUA LAI O T4R (Issue #103 §2), va cau chu cu la ly do.
+       *
+       * Ban truoc doi "DUNG MOT LAN, ke ca khi mo lai roi dong lai" va do bang `count === 1`. Cau
+       * do dung o day — vi bai nay KHONG sua so lieu giua hai lan dong — nhung no doc len nhu mot
+       * loi hua rang mot ky KHONG BAO GIO co ban giao thu hai. Loi hua do sai, va no khoa dung cai
+       * hanh vi phai sua: mo lai, sua so tien, dong lai va van tra ve ban giao CU.
+       *
+       * Nen bai nay gio khang dinh dung cai no do duoc: KHONG DOI SO LIEU thi phat lai ban SO 1.
+       * Truong hop CO doi so lieu — va phai sinh ban so 2 — nam o `transport-fuel-recovery.int.spec`.
        */
-      it('ban giao cong no phat DUNG MOT LAN, ke ca khi mo lai roi dong lai', async () => {
+      it('ket qua khong doi: dong lai phat lai ban giao so 1, khong them ban moi', async () => {
         const first = await fuelRepo.findHandoff(ids.reconciliationId);
         expect(first).not.toBeNull();
+        expect(first?.revision).toBe(1);
+        expect(first?.supersedesId).toBeNull();
 
         await reconciliation.reopenReconciliation(
           ids.reconciliationId,
@@ -721,6 +731,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         );
 
         expect(closedAgain.handoff.id).toBe(first?.id);
+        expect(closedAgain.handoff.revision).toBe(1);
         expect(
           await prisma.transportFuelSettlementHandoff.count({
             where: { reconciliationId: ids.reconciliationId },

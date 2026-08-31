@@ -1157,8 +1157,9 @@ làm lại cái máy đã làm; cái người đã quyết thì không ai độn
   thái quét, chưa có retention (`GD-20` chọn giữ vô thời hạn), và `locator` vẫn là một chuỗi chứ
   chưa phải khóa ngoại tới chứng từ thật.
 - **Bàn giao sang T5 là một BẢNG, chưa phải một sự kiện.** `TransportFuelSettlementHandoff`
-  idempotent theo kỳ (`reconciliationId` UNIQUE) và T4 **không** ghi bảng nào của T5. Khi T5 có mặt,
-  nó đọc bảng này; nếu sau đó muốn đổi sang `WorkflowOutbox`, chỗ đổi là một tệp.
+  là một **chuỗi bản sửa đổi chỉ thêm** theo kỳ (`@@unique([reconciliationId, revision])` — xem §18.5)
+  và T4 **không** ghi bảng nào của T5. Khi T5 có mặt, nó đọc bản `revision` lớn nhất; nếu sau đó
+  muốn đổi sang `WorkflowOutbox`, chỗ đổi là một tệp.
 - **`FuelConsumptionThresholdExceeded` chưa phát ra ngoài.** Vượt định mức hiện là một
   `reviewReason` trên phiếu (`CONSUMPTION_ABOVE_NORM`), không phải một sự kiện gửi sang
   `Notifications` — capability đó không nằm trong phụ thuộc của `transport-fuel`, và kéo nó vào chỉ
@@ -1171,6 +1172,138 @@ làm lại cái máy đã làm; cái người đã quyết thì không ai độn
 - **Chưa có bề mặt giao diện.** Hợp đồng API đã đủ cho T7 (danh sách/chi tiết phiếu, duyệt, nhập
   bảng kê preview/commit, bàn làm việc đối soát, quyết chênh lệch, đóng/mở lại), nhưng chưa màn hình
   nào tiêu thụ chúng.
+
+---
+
+### 18.5. T4R as-built — nối tiếp hoá, nguyên tử, và bàn giao có bản sửa đổi (Issue #103)
+
+PR #101 merge **trước khi** năm phát hiện của bản rà soát được xử lý. Không phát hiện nào là lỗi
+logic — mọi dòng đều đúng khi đọc một mình — cả năm đều là lỗi **thứ tự** hoặc lỗi **phạm vi so
+sánh**, tức loại chỉ hiện ra khi có hai lệnh, hoặc khi một trường bị bỏ ra khỏi phép so.
+
+#### §1 — Một giao thức nối tiếp hoá, bốn lệnh
+
+Trước T4R, `runMatching()` đọc trạng thái kỳ **ngoài** giao dịch, tính toán, rồi `applyMatchingRun()`
+ghi mà **không** khoá và **không** kiểm lại. Bước chuyển trạng thái là một lần ghi **thứ hai** sau
+đó. Khe giữa hai lần ghi là chỗ một lệnh đóng kỳ chen vào được:
+
+```text
+A so khớp đọc kỳ đang RESOLVED
+B đóng kỳ  -> CLOSED, phát bàn giao công nợ cho T5
+A ghi đè bộ cặp khớp  => bàn giao vừa phát mô tả một kết quả không còn tồn tại
+A đổi trạng thái -> thất bại, nhưng dữ liệu đã đổi rồi
+```
+
+Nay **bốn** lệnh chạm kết quả một kỳ — chạy so khớp, quyết chênh lệch, đóng, mở lại — đều mở một
+giao dịch, lấy `SELECT ... FOR UPDATE` trên hàng `TransportFuelReconciliation`, **đọc lại trạng thái
+từ hàng đã khoá**, rồi mới ghi *mọi thứ, kể cả bước chuyển trạng thái*. Hàng đối soát được chọn làm
+điểm nối tiếp hoá vì nó là thứ **duy nhất** cả bốn đều thuộc về; các bảng chúng ghi vào thì khác
+nhau, nên khoá ở bất kỳ bảng nào trong số đó cũng để hai lệnh đi qua nhau.
+
+Hai phép đếm/cộng của lệnh đóng — *còn chênh lệch treo không* và *tổng được chấp nhận là bao nhiêu*
+— chuyển **vào trong** giao dịch đó. Luật `INV-07` vẫn sống một bản duy nhất ở tầng miền
+(`fuel-settlement.ts`, hàm thuần); cái chuyển vào trong là **phép đọc**.
+
+Tầng kho **không** được tự nghĩ ra bước chuyển: nó gọi `planFuelReconciliationPath()`
+(`fuel-lifecycle.ts`) với trạng thái đọc từ hàng đã khoá. Hàm đó giới hạn **hai bước** và cấm đi qua
+`CLOSED`/`REOPENED` — một phép tìm đường tổng quát sẽ tìm ra `RESOLVED → CLOSED → REOPENED` và lặng
+lẽ **đóng một kỳ** để tới đích khác, tức phát một bàn giao công nợ mà không ai bấm nút nào.
+
+`setReconciliationState()` bị **xoá khỏi hợp đồng kho**. Nó là một lỗ thủng của chính giao thức trên:
+một đường đổi trạng thái không lấy khoá. Không có hàm thì không ai gọi.
+
+#### §2 — Bàn giao sang T5 là một chuỗi bản sửa đổi, chỉ thêm
+
+`reconciliationId` không còn UNIQUE. Ràng buộc mới là `@@unique([reconciliationId, revision])`, cộng
+một khoá ngoại tự tham chiếu `supersedesId` (UNIQUE — một bản chỉ bị thay thế một lần).
+
+| Đóng lại khi | Hành vi |
+|---|---|
+| Kết quả kinh tế **không** đổi | Phát lại bản gần nhất, **không** thêm hàng nào |
+| Kết quả kinh tế **đổi** | Thêm bản `N+1`, `supersedesId` trỏ ngược về bản `N` |
+
+"Kết quả kinh tế" bám vào **cả ba**: tổng tiền, số dòng, **và bộ dòng** (`acceptedLineIds`). Chỉ so
+tổng thì một lần sửa đổi dòng này lấy dòng kia — đúng bằng tiền — sẽ được coi là "không đổi gì", và
+T5 trả tiền theo một bộ dòng không còn đúng.
+
+Bài test cũ đòi "phát **đúng một lần**, kể cả khi mở lại rồi đóng lại" và đo bằng `count === 1`. Câu
+đó đúng cho *trường hợp nó đo* (không sửa số liệu) nhưng đọc lên như một lời hứa rằng một kỳ **không
+bao giờ** có bản giao thứ hai — và lời hứa đó khoá đúng cái hành vi phải sửa. Nay bài đó khẳng định
+đúng cái nó đo được, còn trường hợp **có** sửa nằm ở `transport-fuel-recovery.int.spec.ts` R5.
+
+#### §3 — Bảng kê + các dòng + kỳ đối soát là **một** lần ghi
+
+`commitImport()` từng gọi `createStatement()` rồi `createReconciliation()` — hai commit. Một lần
+hỏng ở giữa để lại bảng kê + các dòng **không có kỳ đối soát**: không so khớp được, không đóng được,
+không hiện ở đâu, và lần nhập lại bị unique `(cây xăng, kỳ)` chặn. Người dùng kẹt ở một chỗ không có
+đường ra bằng giao diện.
+
+Nay là `createStatementWithReconciliation()`, một giao dịch. `createReconciliation()` bị **xoá khỏi
+hợp đồng kho** — cách rẻ nhất để tuân thủ là kỷ luật, và kỷ luật không sống sót qua sáu lần sửa của
+sáu người.
+
+#### §4 — Điều kiện nằm trong lệnh ghi, không ở một lần đọc trước đó
+
+`amendFuelEntry()` kiểm `DECLARED` ở tầng miền rồi ghi bằng `UPDATE ... WHERE id`. Giữa hai việc đó,
+một lệnh duyệt chen vào được — và phiếu `VERIFIED` (bất biến theo `GD-10`, đã đẩy chi phí thật vào
+`TX-03`) bị ghi đè số tiền.
+
+Nay điều kiện đi **theo** lệnh ghi: `WHERE id AND verificationStatus = 'DECLARED' AND
+reconciliationStatus NOT IN ('MATCHED','SETTLED')`. Không hàng nào khớp = có người đã đổi trạng thái
+trước — một **va chạm**, trả về mã riêng `FUEL_ENTRY_AMEND_STATE_RACE` (khác hẳn hai mã cũ, vốn nói
+"phiếu đã ở trạng thái khoá lúc bạn bấm").
+
+Gắn bằng chứng theo cùng nguyên tắc: `create` của một bảng con không có chỗ đặt điều kiện, nên nó
+lấy `SELECT ... FOR UPDATE` trên hàng phiếu rồi kiểm trong chính giao dịch ghi.
+
+#### §5 — Danh tính chống ghi trùng gồm cả năm trường từng bị bỏ
+
+Phép so cũ đọc bảy trường và bỏ qua `supplierId`, `paymentMethod`, `occurredAt`, `invoiceNo`, `note`.
+Hai trường đầu không phải chi tiết trang trí: đổi cây xăng là đổi đối tượng đối soát, còn
+`paymentMethod` đổi **chính đường tiền** ở `TX-03` (`DRIVER_CASH → DRIVER_FUND`, `SUPPLIER_ACCOUNT →
+COMPANY_DIRECT`). Cùng một số tiền, hai sổ sách khác nhau — trả về phiếu cũ là lặng lẽ nuốt mất một
+phiếu thật.
+
+Chuẩn hoá đúng **hai** phép trước khi so (`fuel-entry-identity.ts`): `occurredAt` đọc về mốc thời
+gian, và `invoiceNo`/`note` cắt khoảng trắng hai đầu với chuỗi rỗng đọc về `null`. Mọi phép chuẩn hoá
+là một phép **làm mờ**, và làm mờ quá tay đưa ta về đúng chỗ cũ.
+
+#### Bằng chứng — 13 bài mới, 6 trong số đó cần hai phiên Postgres
+
+| Bài | Ở đâu | Chứng minh |
+|---|---|---|
+| `C1` | `transport-fuel-concurrency.int.spec.ts` | So khớp giữ khoá trước ⇒ lệnh đóng **đợi**, rồi tính trên kết quả cuối cùng |
+| `C2` | 〃 | Đóng kỳ trước ⇒ lần so khớp đổi **đúng không hàng nào**, báo `RECONCILIATION_FROZEN` |
+| `C3` | 〃 | Chênh lệch treo sinh ra giữa chừng ⇒ lệnh đóng **từ chối**, không phát bàn giao |
+| `C4` | 〃 | Duyệt thắng ⇒ sửa bị từ chối; phiếu `VERIFIED` khớp khoản chi đã vào `TX-03` |
+| `C5` | 〃 | Sửa thắng ⇒ lệnh duyệt đẩy **đúng con số đã sửa** vào `TX-03` |
+| `C6` | 〃 | Gắn ảnh trong lúc kỳ đang đóng ⇒ từ chối, không hàng nào được ghi |
+| `R1` | `transport-fuel-recovery.int.spec.ts` | Hỏng sau khi ghi các dòng ⇒ **quay lui tất cả**; lần nhập lại thành công |
+| `R2` | 〃 | Hợp đồng kho **không còn** đường tạo kỳ đối soát riêng lẻ |
+| `R3`–`R6` | 〃 | Bản 1 → phát lại bản 1 (không sửa) → bản 2 `supersedes` bản 1 (có sửa) → vẫn hai bản |
+| `R7` | 〃 | Câu điền dữ liệu **trong tệp migration** dựng lại đúng bộ dòng mà mã nguồn tính |
+
+Bốn bài `C2`–`C6` dừng một lệnh giữa chừng bằng `GatedFuelRepository` — một **lớp con** của kho thật
+gọi `super` cho mọi thứ, chỉ cho một phép đọc được chọn trước đi qua một cổng. Không phải mock: giao
+dịch, khoá và thứ tự ghi đều là thật; cổng chỉ quyết định *khi nào* lệnh đi tiếp. `C1` thì ngược lại
+— bên giữ khoá là SQL thô lặp đúng hai câu đầu mà `applyMatchingRun()` chạy, vì một lời gọi service
+không dừng yên giữa chừng được.
+
+`R1` làm giao dịch hỏng đúng chỗ cần bằng `$extends` của Prisma: một bản sao client giống hệt, khác
+đúng một điều. **Không** mở cửa sau trong mã sản xuất — một điểm ngắt chỉ tồn tại để test sẽ sống
+mãi, và lần sau sẽ có người dùng nó cho việc khác.
+
+#### Di trú `20260831180000_transport_fuel_handoff_revisions`
+
+Một chiều, không xoá hàng nào: bỏ một unique index và đặt lại bằng một unique hẹp hơn, thêm ba cột
+đều có mặc định hợp lệ cho mọi hàng đang có, rồi **điền** `acceptedLineIds` cho các bàn giao đã phát
+từ chính dữ liệu đối soát của chúng. Bản ứng dụng **cũ** vẫn chạy được trên lược đồ mới. Đường lui ở
+`README-rollback.sql` cùng thư mục, và nó **cố ý đỏ** nếu một kỳ đã có bản sửa đổi thứ hai — gộp hai
+bàn giao lại làm một là vứt đi một con số T5 có thể đã trả tiền theo.
+
+Phần điền dữ liệu là chỗ một lần `migrate deploy` chạy không lỗi **không** nói được gì: DDL áp được
+không có nghĩa dữ liệu điền vào là đúng. `R7` chạy chính câu `UPDATE` đó — đọc từ đĩa, không gõ lại —
+và đỏ nếu ai sửa nó lệch khỏi `sumAcceptedSettlement()`.
 
 ---
 

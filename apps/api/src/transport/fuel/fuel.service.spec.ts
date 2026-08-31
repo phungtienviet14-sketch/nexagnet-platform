@@ -296,7 +296,11 @@ describe('Duyet phieu va chi phi vao gia thanh chuyen', () => {
 
   it('tra lai phieu thi KHONG co khoan chi nao, va phieu nop lai duoc', async () => {
     const entry = await submit();
-    const rejected = await service.rejectFuelEntry(entry.id, 'Anh mo, khong doc duoc so', 'ke-toan');
+    const rejected = await service.rejectFuelEntry(
+      entry.id,
+      'Anh mo, khong doc duoc so',
+      'ke-toan',
+    );
 
     expect(rejected.verificationStatus).toBe('REJECTED');
     expect(rejected.reviewNote).toBe('Anh mo, khong doc duoc so');
@@ -350,12 +354,26 @@ describe('GD-10 — sua duoc khi con DECLARED, sau do chi dao', () => {
    */
   it('phieu DA KHOP khong sua duoc du van con DECLARED', async () => {
     const entry = await submit();
+    // Tu T4R, mot lan chay so khop chi ghi duoc vao mot KY DOI SOAT THAT va con mo: no khoa hang do
+    // roi doc lai trang thai truoc khi ghi (T4R §1). Mot `reconciliationId` bia ra se bi tu choi.
+    const created = await repository.createStatementWithReconciliation({
+      supplierId,
+      periodStart: '2026-09-01',
+      periodEnd: '2026-09-30',
+      format: 'CSV',
+      sourceRef: 'ky-1.csv',
+      sourceDigest: 'digest-ky-1',
+      lines: [],
+      importedBy: 'ke-toan',
+      at: new Date('2026-09-01T00:00:00Z'),
+    });
     await repository.applyMatchingRun({
-      reconciliationId: 'ky-1',
+      reconciliationId: created.reconciliation.id,
       matches: [],
       discrepancies: [],
       lineStatuses: new Map(),
       entryStatuses: new Map([[entry.id, 'MATCHED']]),
+      stateAfterRun: { whenPending: 'MATCHING', whenSettled: 'RESOLVED' },
       actor: 'ke-toan',
       at: new Date('2026-09-01T00:00:00Z'),
     });
