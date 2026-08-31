@@ -1,5 +1,7 @@
 import type { TransportCostingErrorReason } from './costing/costing-errors.js';
 import type { TransportCostingDecisionReason } from './costing/costing-decisions.js';
+import type { TransportFuelDecisionReason } from './fuel/fuel-decisions.js';
+import type { TransportFuelErrorReason } from './fuel/fuel-errors.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
 
 /**
@@ -62,15 +64,21 @@ export type TransportConflictReason = (typeof TRANSPORT_CONFLICT_REASONS)[number
  *     dung cai bao dam ma tep nay sinh ra de giu.
  *
  * Tu vung van thuoc ve capability so huu no (`costing/costing-errors.ts`,
- * `costing/costing-decisions.ts`); day chi la cho GOP LAI de mot lop loi dung chung con noi duoc
- * kieu. Neu mot capability van tai thu ba xuat hien, no them mot dong o day.
+ * `costing/costing-decisions.ts`, `fuel/fuel-errors.ts`, `fuel/fuel-decisions.ts`); day chi la cho
+ * GOP LAI de mot lop loi dung chung con noi duoc kieu.
+ *
+ * `transport-fuel` (T4) them hai dong theo dung khuon do — va chinh viec no chi ton hai dong la
+ * bang chung rang khuon nay dung: mot capability van tai thu tu se lam y het, va khong tep nao
+ * khac phai doi.
  */
 export type TransportErrorReason =
   | TransportDecisionReason
   | TransportValidationReason
   | TransportConflictReason
   | TransportCostingDecisionReason
-  | TransportCostingErrorReason;
+  | TransportCostingErrorReason
+  | TransportFuelDecisionReason
+  | TransportFuelErrorReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh
