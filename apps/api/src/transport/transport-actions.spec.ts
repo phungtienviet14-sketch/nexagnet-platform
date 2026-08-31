@@ -16,7 +16,7 @@ import {
  * that, phai di tim tung dong mot trong ca mien de doi.
  */
 describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
-  it('bo hanh dong phu du cac nhom nghiep vu cua T2 va T3', () => {
+  it('bo hanh dong phu du cac nhom nghiep vu cua T2, T3 va T4', () => {
     expect([...TRANSPORT_ACTIONS]).toEqual([
       'transport.vehicle.read',
       'transport.vehicle.manage',
@@ -42,9 +42,20 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.costing.period.read',
       'transport.costing.period.manage',
       'transport.costing.period.reopen',
+      'transport.fuel.entry.read',
+      'transport.fuel.entry.submit_for_driver',
+      'transport.fuel.entry.verify',
+      'transport.fuel.statement.import',
+      'transport.fuel.reconciliation.read',
+      'transport.fuel.reconciliation.match',
+      'transport.fuel.reconciliation.resolve',
+      'transport.fuel.reconciliation.close',
+      'transport.fuel.reconciliation.reopen',
       'transport.driver.self.trip.read',
       'transport.driver.self.trip.update',
       'transport.driver.self.fund.read',
+      'transport.driver.self.fuel.read',
+      'transport.driver.self.fuel.submit',
     ]);
   });
 
@@ -92,6 +103,24 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('ADMIN', 'transport.costing.period.reopen')).toBe(true);
     });
 
+    /**
+     * T4 lap lai DUNG khuon do cho ky doi soat bang ke — va do la diem cua bai test nay.
+     *
+     * Ke toan nhap bang ke, chay so khop, quyet chenh lech va DONG ky: bon viec cuoi thang cua ho.
+     * Nhung mot ky da dong da PHAT BAN GIAO CONG NO ra ngoai (`FuelSettlementHandoff`), nen mo lai
+     * no la mot quyet dinh khac han ve muc do — `GD-11` doi mot quyen rieng, giong het T3.
+     */
+    it('doi soat bang ke: dong duoc ky, nhung KHONG mo lai ky da dong (GD-11)', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.statement.import')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.reconciliation.match')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.reconciliation.resolve')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.reconciliation.close')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.entry.verify')).toBe(true);
+
+      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.reconciliation.reopen')).toBe(false);
+      expect(roleCanPerform('ADMIN', 'transport.fuel.reconciliation.reopen')).toBe(true);
+    });
+
     it('la tap con cua Giam doc, khong phai mot nhanh loai tru', () => {
       for (const action of actionsForRole('ACCOUNTING')) {
         expect(roleCanPerform('ADMIN', action), action).toBe(true);
@@ -100,11 +129,13 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
   });
 
   describe('SALE — CHO GIU TAM cho vai Lai xe (GD-22)', () => {
-    it('CHI co ba hanh dong tren pham vi cua chinh minh', () => {
+    it('CHI co hanh dong tren pham vi cua chinh minh', () => {
       expect([...actionsForRole('SALE')]).toEqual([
         'transport.driver.self.trip.read',
         'transport.driver.self.trip.update',
         'transport.driver.self.fund.read',
+        'transport.driver.self.fuel.read',
+        'transport.driver.self.fuel.submit',
       ]);
     });
 
@@ -127,6 +158,26 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('SALE', 'transport.costing.driver_fund.advance')).toBe(false);
       expect(roleCanPerform('SALE', 'transport.costing.expense.record')).toBe(false);
       expect(roleCanPerform('SALE', 'transport.costing.expense.read')).toBe(false);
+    });
+
+    /**
+     * T4 mo be mat thu ba cho lai xe: NOP PHIEU DO DAU. Day la lan dau mot lai xe duoc GHI mot thu
+     * co gia tri tien te — nen ranh gioi phai chat hon hai lan truoc.
+     *
+     * Ho nop duoc phieu CUA CHINH MINH, nhung khong duyet duoc phieu nao (ke ca cua chinh ho: mot
+     * nguoi tu duyet chung tu cua minh la mot cong khong ton tai), khong doc duoc danh sach phieu
+     * chung, va khong cham duoc mot buoc nao cua doi soat bang ke.
+     */
+    it('nop duoc phieu dau cua chinh minh, nhung khong duyet va khong doi soat', () => {
+      expect(roleCanPerform('SALE', 'transport.driver.self.fuel.submit')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.driver.self.fuel.read')).toBe(true);
+
+      expect(roleCanPerform('SALE', 'transport.fuel.entry.verify')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.fuel.entry.read')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.fuel.entry.submit_for_driver')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.fuel.statement.import')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.fuel.reconciliation.read')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.fuel.reconciliation.close')).toBe(false);
     });
   });
 

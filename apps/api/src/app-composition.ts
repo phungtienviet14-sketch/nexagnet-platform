@@ -99,6 +99,10 @@ import { StreamController } from './stream/stream.controller.js';
 import { DriverFundController } from './transport/costing/driver-fund.controller.js';
 import { DriverFundSelfController } from './transport/costing/driver-fund-self.controller.js';
 import { TransportCostingModule } from './transport/costing/transport-costing.module.js';
+import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js';
+import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
+import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
+import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { TransportModule } from './transport/transport.module.js';
@@ -140,6 +144,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // GIA THANH + SO QUY. Den cung `transport-costing` va bien mat cung no: mot khach van tai chi
   // theo doi doi xe va chuyen khong co mot bang so cai nao duoc nap.
   owned('transport-costing', TransportCostingModule),
+  // NHIEN LIEU + DOI SOAT BANG KE. Den cung `transport-fuel` va bien mat cung no: mot khach van
+  // tai chua doi soat bang ke cay xang khong duoc nap tam bang nao cua `TX-04`.
+  owned('transport-fuel', TransportFuelModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -183,6 +190,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-costing', DriverFundController),
   // SO QUY CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
   owned('transport-costing', DriverFundSelfController),
+  owned('transport-fuel', FuelEntriesController),
+  owned('transport-fuel', FuelReconciliationController),
+  // PHIEU DAU CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
+  owned('transport-fuel', DriverFuelController),
 ];
 
 const guardProviders: readonly Provider[] = [

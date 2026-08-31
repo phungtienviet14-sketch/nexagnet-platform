@@ -58,11 +58,39 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.costing.period.reopen',
 
+  /* --- `transport-fuel` (`TX-04`) --- */
+  'transport.fuel.entry.read',
+  /**
+   * Nop/sua HO mot phieu — duong cua Ke toan khi lai xe dua phieu giay.
+   *
+   * Tach khoi `transport.driver.self.fuel.submit` co chu dich: hai hanh dong nay khac nhau ve CHAT.
+   * Cai kia la "nop phieu cua chinh toi" (danh tinh tu phien); cai nay la "nop phieu THAY MOT NGUOI
+   * KHAC", va no phai la mot quyen ma khong lai xe nao co.
+   */
+  'transport.fuel.entry.submit_for_driver',
+  'transport.fuel.entry.verify',
+  'transport.fuel.statement.import',
+  'transport.fuel.reconciliation.read',
+  'transport.fuel.reconciliation.match',
+  'transport.fuel.reconciliation.resolve',
+  'transport.fuel.reconciliation.close',
+  /**
+   * MO LAI mot ky doi soat da dong — `GD-11` doi mot quyen RIENG, giong het
+   * `transport.costing.period.reopen` cua T3.
+   *
+   * Dong ky la viec cuoi thang cua Ke toan; mo lai mot ky DA BAO CAO RA NGOAI la quyet dinh cua
+   * Giam doc. Gop hai quyen se lam bang phan quyen khong con noi len dieu do.
+   */
+  'transport.fuel.reconciliation.reopen',
+
   /** Pham vi CUA CHINH MINH — lai xe. Cuong che bang quyen so huu phan cong, xem `TripService`. */
   'transport.driver.self.trip.read',
   'transport.driver.self.trip.update',
   /** So quy CUA CHINH MINH. Danh tinh den tu phien, khong tu mot `:driverId` tren duong dan. */
   'transport.driver.self.fund.read',
+  /** PHIEU DO DAU CUA CHINH MINH — nop va xem. Danh tinh den tu phien, khong tu than yeu cau. */
+  'transport.driver.self.fuel.read',
+  'transport.driver.self.fuel.submit',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -71,6 +99,8 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.trip.read',
   'transport.driver.self.trip.update',
   'transport.driver.self.fund.read',
+  'transport.driver.self.fuel.read',
+  'transport.driver.self.fuel.submit',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
@@ -102,10 +132,15 @@ const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
  *
  * Ke toan VAN duoc tao tam ung va dong ky: Issue #85 ghi ro "Director and Accountant can create
  * advances", va dong ky cuoi thang la viec cua chinh ho.
+ *
+ * T4 them MOT dong theo dung khuon do: `transport.fuel.reconciliation.reopen`. Ke toan DONG duoc
+ * mot ky doi soat bang ke — do la viec cuoi thang cua ho — nhung MO LAI mot ky da phat ban giao
+ * cong no ra ngoai la mot quyet dinh khac han ve muc do (`GD-11`).
  */
 const ACCOUNTING_DENIED: readonly TransportAction[] = [
   'transport.trip.cancel',
   'transport.costing.period.reopen',
+  'transport.fuel.reconciliation.reopen',
 ];
 
 const ROLE_ACTIONS: Readonly<Record<UserRole, readonly TransportAction[]>> = {
