@@ -27,14 +27,20 @@ const UNIQUE_VIOLATION = 'P2002';
  * `column` du de phan biet vi tren hai bang phan cong chi co dung hai unique: khoa chinh `id`, va
  * index mot phan nay. Mot `P2002` tren `tripId` khong the la thu gi khac.
  */
-export interface ActiveAssignmentIndex {
+export interface UniqueIndexRef {
   /** Ten trong SQL cua migration. */
   readonly indexName: string;
   /** `meta.modelName` cua Prisma. */
   readonly model: string;
-  /** Cot khoa cua unique mot phan. */
+  /** Cot khoa cua unique. */
   readonly column: string;
 }
+
+/**
+ * Ten cu, giu lai de cac loi goi cua `transport-core` va bo `storage-contract.spec.ts` khong phai
+ * doi. Hinh dang y het `UniqueIndexRef` — cai ten chi hep hon cai co che.
+ */
+export type ActiveAssignmentIndex = UniqueIndexRef;
 
 export const ACTIVE_TRIP_ASSIGNMENT: ActiveAssignmentIndex = {
   indexName: 'TransportTripAssignment_activeTrip_key',
@@ -76,7 +82,15 @@ function constraintNames(error: unknown): string[] {
   return [];
 }
 
-export function isActiveAssignmentConflict(error: unknown, index: ActiveAssignmentIndex): boolean {
+/**
+ * `P2002` NAY co phai la va cham cua DUNG unique kia khong.
+ *
+ * Doi ten tu `isActiveAssignmentConflict` sang mot ten trung tinh khi `transport-costing` can dung
+ * lai co che nay cho cac unique cua so cai (khoa chong ghi trung, khoa mot-lan-dao). CO CHE la thu
+ * dung chung; DANH SACH INDEX thi thuoc ve capability so huu bang do — nen hang so cua costing nam
+ * o `costing/costing-storage-conflict.ts`, khong nam o day.
+ */
+export function isUniqueViolationOn(error: unknown, index: UniqueIndexRef): boolean {
   if (typeof error !== 'object' || error === null) return false;
   if ((error as { code?: unknown }).code !== UNIQUE_VIOLATION) return false;
 
@@ -90,6 +104,9 @@ export function isActiveAssignmentConflict(error: unknown, index: ActiveAssignme
   const model = metaOf(error).modelName;
   return typeof model === 'string' && model === index.model && named.includes(index.column);
 }
+
+/** Ten cu cua `isUniqueViolationOn`, giu cho cac loi goi cua `transport-core`. */
+export const isActiveAssignmentConflict = isUniqueViolationOn;
 
 /**
  * Mo ta mot loi CHUA duoc dich, du de nguoi doc bao loi test biet phai sua gi.

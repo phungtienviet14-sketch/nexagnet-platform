@@ -4,6 +4,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHANNEL_DECISIONS } from '../channels/channel-decisions.js';
 import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
+import { TRANSPORT_COSTING_DECISIONS } from '../transport/costing/costing-decisions.js';
+import { TRANSPORT_DECISIONS } from '../transport/transport-decisions.js';
 import { TURN_DECISIONS } from '../turns/turn-decisions.js';
 import { decisionReasonLabel, defineDecisionVocabulary } from './decision-vocabulary.js';
 
@@ -32,6 +34,22 @@ describe('tu vung quyet dinh: nen tang giu KHUON, capability giu TU NGU', () => 
     expect(TURN_DECISIONS.owner).toBe('turn-processing');
     expect(SALES_ORDER_DECISIONS.owner).toBe('sales-order');
     expect(CHANNEL_DECISIONS.owner).toBe('messaging');
+    expect(TRANSPORT_DECISIONS.owner).toBe('transport-core');
+    expect(TRANSPORT_COSTING_DECISIONS.owner).toBe('transport-costing');
+  });
+
+  /**
+   * Hai capability van tai KHONG duoc dung chung mot bo tu vung.
+   *
+   * Mot khach co the bat `transport-core` ma khong bat `transport-costing`. Neu tron chung, bang loc
+   * trace cua khach do se hua co mot diem "so quy lai xe" khong bao gio phat — va nguoi truc se ket
+   * luan "nhanh nay khong chay" trong khi that ra no khong ton tai o khach do.
+   */
+  it('diem cua so quy nam trong bo cua costing, khong o bo cua transport-core', () => {
+    expect(TRANSPORT_COSTING_DECISIONS.points).toContain('driver_fund.post_entry');
+    expect(TRANSPORT_DECISIONS.points).not.toContain('driver_fund.post_entry');
+    expect(TRANSPORT_DECISIONS.points).toContain('trip.lifecycle_transition');
+    expect(TRANSPORT_COSTING_DECISIONS.points).not.toContain('trip.lifecycle_transition');
   });
 
   it('diem quyet dinh cua ban hang nam trong bo cua ban hang, khong o bo cua luot', () => {
@@ -98,6 +116,16 @@ describe('moi diem quyet dinh deu co nguoi phat that', () => {
     ...TURN_DECISIONS.points.map((point) => [TURN_DECISIONS.owner, point] as const),
     ...SALES_ORDER_DECISIONS.points.map((point) => [SALES_ORDER_DECISIONS.owner, point] as const),
     ...CHANNEL_DECISIONS.points.map((point) => [CHANNEL_DECISIONS.owner, point] as const),
+    /*
+     * Hai bo cua van tai duoc them o T3. `TRANSPORT_DECISIONS` (T2) BI BO SOT khoi danh sach nay
+     * suot tu luc no ra doi — tuc bon diem quyet dinh cua `transport-core` chua bao gio duoc bai
+     * nay soi. Them ca hai cung luc thay vi chi them bo moi: mot bai kiem chi soi mot nua so bo tu
+     * vung la mot bai kiem noi doi ve pham vi cua chinh no.
+     */
+    ...TRANSPORT_DECISIONS.points.map((point) => [TRANSPORT_DECISIONS.owner, point] as const),
+    ...TRANSPORT_COSTING_DECISIONS.points.map(
+      (point) => [TRANSPORT_COSTING_DECISIONS.owner, point] as const,
+    ),
   ];
 
   it.each(ALL_POINTS)('%s / %s co it nhat mot diem phat trong source', (_owner, point) => {

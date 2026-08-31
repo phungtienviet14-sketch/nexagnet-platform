@@ -1,3 +1,5 @@
+import type { TransportCostingErrorReason } from './costing/costing-errors.js';
+import type { TransportCostingDecisionReason } from './costing/costing-decisions.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
 
 /**
@@ -48,10 +50,27 @@ export const TRANSPORT_CONFLICT_REASONS = [
 ] as const;
 export type TransportConflictReason = (typeof TRANSPORT_CONFLICT_REASONS)[number];
 
+/**
+ * MOI ly do tu choi cua mien van tai — gop tu CA HAI capability.
+ *
+ * Hai dong `costing/*` la `import type`, tuc bien mat hoan toan khi sinh JavaScript. Do la chu y:
+ *
+ *   · luc CHAY, lo trinh import van di dung mot chieu `costing -> core`, khong co vong, va mot
+ *     khach chi bat `transport-core` khong nap mot byte nao cua costing;
+ *   · luc BIEN DICH, ma cua costing van nam trong union nay, nen `TransportDomainError.denied(...)`
+ *     go sai mot chu la khong build duoc — thay vi phai noi long `reason` thanh `string` va mat
+ *     dung cai bao dam ma tep nay sinh ra de giu.
+ *
+ * Tu vung van thuoc ve capability so huu no (`costing/costing-errors.ts`,
+ * `costing/costing-decisions.ts`); day chi la cho GOP LAI de mot lop loi dung chung con noi duoc
+ * kieu. Neu mot capability van tai thu ba xuat hien, no them mot dong o day.
+ */
 export type TransportErrorReason =
   | TransportDecisionReason
   | TransportValidationReason
-  | TransportConflictReason;
+  | TransportConflictReason
+  | TransportCostingDecisionReason
+  | TransportCostingErrorReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh

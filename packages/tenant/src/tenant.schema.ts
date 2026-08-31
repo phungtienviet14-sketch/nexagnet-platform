@@ -136,6 +136,18 @@ export const CAPABILITY_IDS = [
    * van tai sau (`transport-costing`, `transport-fuel`, ...) se phu thuoc NO, khong nguoc lai.
    */
   'transport-core',
+  /**
+   * VAN TAI — GIA THANH CHUYEN + SO QUY LAI XE (`TX-03`).
+   *
+   * `dependencies: ['transport-core']` di dung chieu ma T1 §10.1 dat ra: costing can chuyen va lai
+   * xe de gan mot khoan chi vao; core khong can biet gi ve tien. Mot khach bat costing ma quen bat
+   * core se bi chan NGAY LUC DOC GOI, truoc khi Nest kip dung do thi module — thay vi boot xong roi
+   * chet o lan ghi khoan chi dau tien.
+   *
+   * KHONG co chieu nguoc lai: mot khach van tai chi muon theo doi doi xe va chuyen van chay duoc ma
+   * khong co mot bang so cai nao.
+   */
+  'transport-costing',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -274,11 +286,32 @@ const transportCorePolicySchema = z
   })
   .strict();
 
+/**
+ * Chinh sach cua `transport-costing`.
+ *
+ * Ca hai truong deu TUY CHON, cung ly le voi `transportCore`: bat mot khach van tai phai go mot
+ * khoi rong chi de he thong khoi chet la mot yeu cau khong phuc vu ai.
+ *
+ * `expenseCategories` mac dinh RONG = khong gioi han. Mot danh muc do CHUNG TA nghi ra se bi doc
+ * nhu la danh muc CUA KHACH ngay lan dau ai do mo giao dien ra xem — nen khong bia san.
+ *
+ * `advanceApprovalRequired` giu hinh dang cho `INV-10`/VT-085 (duyet tam ung hai buoc), nhung ban
+ * demo T3 CHUA hien thuc trang thai cho duyet. Bat len se lam `tenantTransportCostingPolicy()` nem
+ * ngay luc boot — im lang bo qua mot co duyet TIEN la kieu hong te nhat co the co o cho nay.
+ */
+const transportCostingPolicySchema = z
+  .object({
+    expenseCategories: z.array(nonEmpty).optional(),
+    advanceApprovalRequired: z.boolean().optional(),
+  })
+  .strict();
+
 const tenantPoliciesSchema = z
   .object({
     salesOrder: salesOrderPolicySchema.optional(),
     campaign: campaignConfigSchema.optional(),
     transportCore: transportCorePolicySchema.optional(),
+    transportCosting: transportCostingPolicySchema.optional(),
     readiness: tenantReadinessSchema,
   })
   .strict();
@@ -334,6 +367,11 @@ const capabilityRequirements = {
    * chet. Mui gio co mac dinh dung cho khach Viet Nam; khong co gi de bat buoc.
    */
   'transport-core': { dependencies: [] },
+  /**
+   * KHONG khai `policy: 'transportCosting'`, cung ly le voi `transport-core`: khoi cau hinh do hoan
+   * toan tuy chon, va khai o day se bien no thanh dieu kien boot.
+   */
+  'transport-costing': { dependencies: ['transport-core'] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {
