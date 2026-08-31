@@ -204,19 +204,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 222
+      "line": 279
     },
     "source_truth.glossary.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 275
+      "line": 332
     },
     "source_truth.group.map": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 240
+      "line": 297
     },
     "source_truth.price.update": {
       "filePath": "apps/api/src/mcp/server.ts",
-      "line": 258
+      "line": 315
     },
     "tenant.loaded": {
       "functionName": "evaluateOperationalReadiness",
@@ -470,6 +470,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "FundPeriodService.openPeriod",
       "filePath": "apps/api/src/transport/costing/fund-period.service.ts",
       "line": 84
+    },
+    "ledger.record|*": {
+      "filePath": "apps/api/src/decision-ledger/decision-ledger.service.ts"
     },
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",

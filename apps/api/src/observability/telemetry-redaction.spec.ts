@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   REDACTED,
@@ -185,5 +186,86 @@ describe('privacyModeFor — gan voi DATA_CLASSIFICATION da co', () => {
 
   it('ghi de rac bi bo qua, khong lam sap cau hinh', () => {
     expect(privacyModeFor('customer', 'khong-phai-mot-muc')).toBe('redacted');
+  });
+});
+
+/**
+ * HOI QUY 31/08/2026 — dinh danh KHONG duoc quet noi dung.
+ *
+ * Do that tren CI: mot `ledgerId` cua so cai quyet dinh bi cat thanh
+ * `9654fa2[REDACTED_PII]-ae49-332192d5b726`, lam dut soi day tuong quan giua mat phang quan sat
+ * va mat phang su that nghiep vu. Nguyen nhan la mau SDT Viet Nam khong neo hai dau, nen khuc
+ * `0-1644-4786` ben trong UUID khop.
+ *
+ * Day la CUNG MOT bug voi ban sua `workflow-input.ts` ngay 25/08/2026, o mot bien gioi khac.
+ */
+describe('dinh danh noi bo di qua nguyen ven', () => {
+  /** UUID THAT tu lan CI do — khong phai mot gia tri bia cho vua bai test. */
+  const CI_UUID = '9654fa20-1644-4786-ae49-332192d5b726';
+
+  it('UUID trong `ledgerId` khong bi cat, o CA HAI muc rieng tu', () => {
+    expect(sanitizeAttributes({ ledgerId: CI_UUID }, 'redacted')).toEqual({ ledgerId: CI_UUID });
+    expect(sanitizeAttributes({ ledgerId: CI_UUID }, 'metadata-only')).toEqual({
+      ledgerId: CI_UUID,
+    });
+  });
+
+  it.each(['orderId', 'messageId', 'traceId', 'decisionId', 'factId', 'id'])(
+    'khoa dinh danh "%s" giu nguyen gia tri',
+    (key) => {
+      expect(sanitizeAttributes({ [key]: CI_UUID }, 'redacted')).toEqual({ [key]: CI_UUID });
+    },
+  );
+
+  it('KHONG mot UUID nao trong mot mau lon bi cat — bay cu dinh 3,1%', () => {
+    // Bai nay chay tren nhieu UUID that de mot ban lui ve quet noi dung se do NGAY, thay vi do
+    // ngau nhien mot lan trong ba muoi lan chay.
+    const ids = Array.from({ length: 500 }, () => randomUUID());
+    for (const id of ids) {
+      expect(sanitizeAttributes({ orderId: id }, 'redacted')).toEqual({ orderId: id });
+    }
+  });
+
+  it('cuid cung di qua nguyen ven', () => {
+    const cuid = 'clxyz1234567890abcdef';
+    expect(sanitizeAttributes({ orderId: cuid }, 'redacted')).toEqual({ orderId: cuid });
+  });
+
+  /* --- Loi hua KHONG bi noi long --- */
+
+  it('SDT nhet vao mot khoa dinh danh VAN bi che', () => {
+    // Khuon doi CHU CAI hoac dang UUID; mot day toan chu so khong thoa ca hai.
+    expect(sanitizeAttributes({ customerId: '0912345678' }, 'redacted')).toEqual({
+      customerId: REDACTED_PII,
+    });
+  });
+
+  it('email nhet vao mot khoa dinh danh VAN bi che', () => {
+    expect(sanitizeAttributes({ userId: 'nguoi@vidu.vn' }, 'redacted')).toEqual({
+      userId: REDACTED_PII,
+    });
+  });
+
+  it('khoa PII co duoi "id" VAN bi che — thu tu kiem la mot phan hop dong', () => {
+    // `senderExternalId`/`externalUserId` nam trong `PII_KEYS`, va `isPiiKey` chay TRUOC.
+    expect(sanitizeAttributes({ senderExternalId: 'u_123abc' }, 'redacted')).toEqual({
+      senderExternalId: REDACTED_PII,
+    });
+    expect(sanitizeAttributes({ externalUserId: 'u_123abc' }, 'redacted')).toEqual({
+      externalUserId: REDACTED_PII,
+    });
+  });
+
+  it('gia tri trong nhu BI MAT duoi khoa dinh danh VAN bi xoa', () => {
+    const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxIn0', 'abcdefgh'].join('.');
+    expect(sanitizeAttributes({ tokenId: jwt }, 'redacted')).toEqual({
+      tokenId: REDACTED_SECRET,
+    });
+  });
+
+  it('khoa KHONG mang nghia dinh danh van bi quet nhu truoc', () => {
+    expect(sanitizeAttributes({ note: '0912345678' }, 'redacted')).toEqual({
+      note: REDACTED_PII,
+    });
   });
 });
