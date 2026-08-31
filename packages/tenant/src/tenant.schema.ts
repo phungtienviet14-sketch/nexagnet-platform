@@ -148,6 +148,19 @@ export const CAPABILITY_IDS = [
    * khong co mot bang so cai nao.
    */
   'transport-costing',
+  /**
+   * VAN TAI — NHIEN LIEU + DOI SOAT BANG KE CAY XANG (`TX-04`).
+   *
+   * `dependencies: ['transport-core', 'transport-costing']` la mot QUAN HE THAT, khong phai mot
+   * thu tu cho dep: T1 §10.1 ghi ro chi phi dau phai vao gia thanh chuyen (VT-034, VT-040), nen
+   * mot khach bat `transport-fuel` ma tat `transport-costing` se co phieu dau KHONG DI DAU CA —
+   * lai xe nhap moi ngay, ke toan duyet moi tuan, va khong con so nao doi ra tien.
+   *
+   * Chan o day, luc DOC GOI KHACH, chu khong o lan duyet phieu dau dau tien: mot cau hinh tu mau
+   * thuan ma boot duoc se de lai mot he thong "chay binh thuong" cho toi luc co nguoi hoi vi sao
+   * chuyen nao cung re hon thuc te 35-45% — dung ty trong ma nguon khach ghi cho nhien lieu.
+   */
+  'transport-fuel',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -306,12 +319,79 @@ const transportCostingPolicySchema = z
   })
   .strict();
 
+/**
+ * Chinh sach cua `transport-fuel` — `GD-07`, `GD-08`, va dinh muc tieu hao cua VT-046.
+ *
+ * BA NHOM, va ca ba deu la LUA CHON CUA KHACH chu khong phai luat cua mien:
+ *
+ *   · `matching`  — dung sai so khop (`GD-08`: tien +-1.000d, ngay +-1, xe khop tuyet doi);
+ *   · `statement` — anh xa COT cua file bang ke (`GD-07`: moi cay xang mot mau file);
+ *   · `consumption` — dinh muc L/100km theo HANG XE, khong theo tung xe va khong theo tung khach.
+ *
+ * TAT CA TUY CHON, cung ly le voi `transportCore`/`transportCosting`: bat mot khach van tai phai
+ * go mot khoi rong chi de he thong khoi chet la mot yeu cau khong phuc vu ai. Mac dinh cua ca ba
+ * nam trong `fuel-policy.ts` cua mien, khong nam o day — schema nay chi noi cai gi HOP LE.
+ *
+ * VI SAO `vehicleMatch` KHONG CO O DAY du `GD-08` goi ca ba la config: dung sai xe duy nhat ma ban
+ * demo hien thuc la KHOP TUYET DOI (bien so). Khai mot cho de noi long no ma khong hien thuc gi
+ * ben duoi la hua mot cai khoa khong ton tai — dung kieu hong ma `advanceApprovalRequired` cua T3
+ * da chon fail-fast de tranh. Khi co duong khop mo (bien so viet tat, xe thue), day la mot truong
+ * duoc THEM, khong phai mot cau truc phai doi.
+ */
+const transportFuelPolicySchema = z
+  .object({
+    matching: z
+      .object({
+        /** `GD-08` — chenh lech tien toi da van coi la khop. So nguyen DONG, khong am. */
+        amountToleranceVnd: z.number().int().min(0).max(100_000_000).optional(),
+        /** `GD-08` — lech ngay nghiep vu toi da (ca dem qua nua dem). */
+        businessDateToleranceDays: z.number().int().min(0).max(31).optional(),
+      })
+      .strict()
+      .optional(),
+    /**
+     * `GD-07` — TEN COT trong file bang ke cua cay xang. Khai o goi khach vi moi cay xang mot mau.
+     *
+     * Gia tri la ten cot DOC DUOC TRONG FILE (hang tieu de), khong phai ten truong cua mien: nguoi
+     * cau hinh nhin vao file Excel cua ho, khong nhin vao schema cua chung ta.
+     */
+    statement: z
+      .object({
+        columns: z
+          .object({
+            vehiclePlate: nonEmpty.optional(),
+            businessDate: nonEmpty.optional(),
+            liters: nonEmpty.optional(),
+            amount: nonEmpty.optional(),
+            invoiceNo: nonEmpty.optional(),
+            note: nonEmpty.optional(),
+          })
+          .strict()
+          .optional(),
+        /** Dang ngay trong file. `iso` = `YYYY-MM-DD`, `dmy` = `DD/MM/YYYY` (mau Viet Nam). */
+        dateFormat: z.enum(['iso', 'dmy']).optional(),
+      })
+      .strict()
+      .optional(),
+    consumption: z
+      .object({
+        /** Dinh muc L/100km theo `vehicleClass`. Hang xe khong khai = khong co dinh muc de so. */
+        normsByVehicleClass: z.record(nonEmpty, z.number().positive().max(1000)).optional(),
+        /** Vuot dinh muc bao nhieu phan tram thi danh dau can kiem tra (VT-046). */
+        tolerancePercent: z.number().min(0).max(500).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
 const tenantPoliciesSchema = z
   .object({
     salesOrder: salesOrderPolicySchema.optional(),
     campaign: campaignConfigSchema.optional(),
     transportCore: transportCorePolicySchema.optional(),
     transportCosting: transportCostingPolicySchema.optional(),
+    transportFuel: transportFuelPolicySchema.optional(),
     readiness: tenantReadinessSchema,
   })
   .strict();
@@ -372,6 +452,17 @@ const capabilityRequirements = {
    * toan tuy chon, va khai o day se bien no thanh dieu kien boot.
    */
   'transport-costing': { dependencies: ['transport-core'] },
+  /**
+   * KHONG khai `policy: 'transportFuel'`, cung ly le voi hai capability van tai truoc no: khoi
+   * cau hinh do hoan toan tuy chon (dung sai, anh xa cot va dinh muc deu co mac dinh dung duoc),
+   * va khai o day se bien no thanh dieu kien boot cho moi khach van tai co phieu dau.
+   *
+   * `dependencies` co HAI phan tu, va do la khac biet dau tien trong cay van tai. Khai ca
+   * `transport-core` du `transport-costing` da keo no theo: danh sach nay la mot HOP DONG doc
+   * duoc, khong phai mot phep tinh toi gian. Ngay ai do doi chieu phu thuoc cua costing, phu thuoc
+   * that cua fuel van con nguyen o day thay vi bien mat cung mot dong bi xoa.
+   */
+  'transport-fuel': { dependencies: ['transport-core', 'transport-costing'] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {

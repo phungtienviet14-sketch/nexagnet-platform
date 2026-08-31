@@ -851,8 +851,11 @@ model TransportVehicle {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
-  driverAssignments TransportVehicleAssignment[]
-  tripAssignments   TransportTripAssignment[]
+  driverAssignments  TransportVehicleAssignment[]
+  tripAssignments    TransportTripAssignment[]
+  /// `TX-04` — phieu do dau va cac dong bang ke da nhan dien duoc ra xe nay.
+  fuelEntries        TransportFuelEntry[]
+  fuelStatementLines TransportFuelStatementLine[]
 
   @@index([status])
 }
@@ -875,6 +878,8 @@ model TransportDriver {
   /// `TX-03` — mot lai xe MOT so quy. Chi co mat khi khach bat `transport-costing`.
   fundAccount        TransportDriverFundAccount?
   tripExpenses       TransportTripExpense[]
+  /// `TX-04` — phieu do dau lai xe nay da khai.
+  fuelEntries        TransportFuelEntry[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -892,14 +897,14 @@ model TransportDriver {
 /// nen ghi binh thuong khong sinh chong lap. Chan chong lap TUY Y can EXCLUSION CONSTRAINT
 /// (`btree_gist` + `tstzrange`) — ghi nhan la lua chon siet them ve sau, khong lam o T2.1.
 model TransportVehicleAssignment {
-  id            String    @id @default(cuid())
+  id            String           @id @default(cuid())
   vehicleId     String
   vehicle       TransportVehicle @relation(fields: [vehicleId], references: [id])
   driverId      String
   driver        TransportDriver  @relation(fields: [driverId], references: [id])
   effectiveFrom DateTime
   effectiveTo   DateTime?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime         @default(now())
 
   @@index([vehicleId, effectiveTo])
   @@index([driverId])
@@ -952,44 +957,46 @@ model TransportPartnerRole {
 }
 
 model TransportTrip {
-  id                String              @id @default(cuid())
-  code              String              @unique
-  kind              TransportTripKind
-  status            TransportTripStatus @default(PLANNED)
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  kind               TransportTripKind
+  status             TransportTripStatus @default(PLANNED)
   /// `YYYY-MM-DD` theo mui gio tenant — tinh MOT LAN luc ghi (`INV-25`).
-  businessDate      String              @db.VarChar(10)
+  businessDate       String              @db.VarChar(10)
   /// `GD-05`: v1 mot diem di, mot diem den. Da diem se la bang `TransportTripStop` khi co nguon.
-  originLabel       String
-  destinationLabel  String
-  cargoDescription  String?
-  customerId        String?
-  customer          TransportCustomer?  @relation(fields: [customerId], references: [id])
+  originLabel        String
+  destinationLabel   String
+  cargoDescription   String?
+  customerId         String?
+  customer           TransportCustomer?  @relation(fields: [customerId], references: [id])
   /// Nha xe cho chuyen `EXTERNAL_CARRIER`.
-  carrierPartnerId  String?
-  carrierPartner    TransportPartner?   @relation("TransportTripCarrier", fields: [carrierPartnerId], references: [id])
+  carrierPartnerId   String?
+  carrierPartner     TransportPartner?   @relation("TransportTripCarrier", fields: [carrierPartnerId], references: [id])
   /// Doi tac mang don cho chuyen `PARTNER_REFERRED_INTERNAL_RUN`.
-  referrerPartnerId String?
-  referrerPartner   TransportPartner?   @relation("TransportTripReferrer", fields: [referrerPartnerId], references: [id])
+  referrerPartnerId  String?
+  referrerPartner    TransportPartner?   @relation("TransportTripReferrer", fields: [referrerPartnerId], references: [id])
   /// DOANH THU — gia cuoc thu khach (VT-021), SO NGUYEN DONG. Be mat lai xe khong bao gio thay
   /// cot nay (`INV-09`): `DriverTripView` khong co truong tuong ung de nhan no.
   ///
   /// `BigInt` = `BIGINT` chu khong `INTEGER`: T2.1/F1 — `INTEGER` tran o 2.147.483.647 dong, tuc
   /// mot cuoc 3 ty qua duoc kiem HTTP va kiem mien roi chet o `INSERT`. Khoang thuc te bi `CHECK`
   /// `TransportTrip_freightAmount_money_range` bo hep ve `+-(2^53-1)` cho khop `money()`.
-  freightAmount     BigInt?
-  currencyCode      String              @default("VND") @db.VarChar(3)
+  freightAmount      BigInt?
+  currencyCode       String              @default("VND") @db.VarChar(3)
   /// `GD-14` — nhap tay, nullable.
-  distanceKm        Int?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  distanceKm         Int?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   /// `GD-02` — huy THAY CHO xoa. Khong co duong xoa cung nao cho mot chuyen.
-  cancelledAt       DateTime?
+  cancelledAt        DateTime?
   cancellationReason String?
 
   assignments TransportTripAssignment[]
   /// `TX-03` — hai lop cua mot khoan chi (`INV-03`). Chuyen la NGUON SU THAT cua ca hai.
   fundEntries TransportDriverFundEntry[]
   expenses    TransportTripExpense[]
+  /// `TX-04` — phieu do dau cua chuyen. `INV-04`: chuyen thue xe ngoai khong duoc co dong nao o day.
+  fuelEntries TransportFuelEntry[]
 
   @@index([status])
   @@index([businessDate])
@@ -1226,4 +1233,456 @@ model TransportDriverFundPeriodSnapshot {
 
   @@unique([periodId, sequence])
   @@index([periodId])
+}
+
+// ----- Transport domain: TX-04 Fuel + doi soat bang ke (capability `transport-fuel`) -----
+//
+// CANH BAO — CAC RANG BUOC CUA T4 KHONG CO O DAY. Chung song trong SQL tho cua migration
+// `20260831120000_transport_fuel`, vi Prisma khong co cu phap cho `CHECK`:
+//
+//     1. `TransportFuelEntry_amount_money_range`        — khoang tien +-(2^53-1)
+//     2. `TransportFuelEntry_liters_positive`           — so lit phai duong
+//     3. `TransportFuelEntry_odometer_non_negative`     — odo khong am
+//     4. `TransportFuelEntry_businessDate_iso`          — ngay nghiep vu dang YYYY-MM-DD
+//     5. `TransportFuelEntry_consumption_needs_odo`     — co tieu hao thi phai co odo truoc
+//     6. `TransportFuelEntry_review_lifecycle`          — da duyet/tu choi thi phai co nguoi va luc
+//     7. `TransportFuelStatementLine_accepted_fields`   — dong nhan phai du ngay/lit/tien
+//     8. `TransportFuelStatementLine_rejected_reason`   — dong tu choi phai co ly do co ten
+//     9. `TransportFuelSupplierStatement_period_order`  — ngay dau ky <= ngay cuoi ky
+//    10. `TransportFuelReconciliation_period_order`     — nhu tren
+//    11. `TransportFuelDiscrepancy_resolved_fields`     — da quyet thi phai co nguoi quyet + luc quyet
+//    12. `TransportFuelMatch_no_self_source`            — `INV-26` o TANG DB, xem duoi
+//
+// `prisma migrate dev` sinh migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA ca
+// muoi hai. Ai chay lenh do PHAI doc lai migration sinh ra va bo cac dong `DROP CONSTRAINT` truoc
+// khi commit — dung nhu canh bao da co o dau muc `transport-core` va `transport-costing`.
+// `transport-fuel-storage.spec.ts` doc chinh tep migration va do neu mot ten bien mat.
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO CO `TransportFuelSupplier` RIENG chu khong them mot vai vao `TransportPartnerRole`:
+//
+// VT-054 dan tranh viec tach MOT doi tac thanh hai ban ghi, nen phan xa dau tien la dung lai
+// `TransportPartner` voi mot vai `FUEL_SUPPLIER`. T1 §9.1 lai xep nam luong cong no thanh nam so,
+// va nguon cua chung KHONG dong nhat: `PARTNER_CARRIER`/`PARTNER_COMMISSION` la hai VAI cua mot
+// doi tac, con `FUEL` la mot nguon RIENG. Tuc chinh T1 khong coi cay xang la mot vai cua doi tac
+// van tai — va no dung: mot cay xang khong cho thue xe, khong mang don ve, va chieu cong no cua no
+// dong bang MOT BANG KE thay vi mot ky doi tac.
+//
+// Nen o day la mot bang rieng, THUOC `transport-fuel`. Cai gia phai tra la mot khach vua ban dau
+// vua chay xe se co hai ban ghi; cai duoc la enum vai cua `transport-core` khong mang mot gia tri
+// chi co nghia khi mot capability KHAC duoc bat.
+//
+// -----------------------------------------------------------------------------------------------
+// HAI TRUC TRANG THAI DOC LAP (T1 §7.4) — `verificationStatus` va `reconciliationStatus`:
+//
+// Gop lam mot truc se buoc phai cho toi cuoi thang (luc co bang ke) moi duyet duoc mot phieu — mat
+// dung gia tri "doi chieu noi bo theo thoi gian thuc" ma VT-042 doi. Hai cot, hai cau hoi, hai
+// thoi diem dong.
+
+/// Truc MOT: ke toan da tin so lieu tren phieu nay chua (VT-042).
+enum TransportFuelVerificationStatus {
+  DECLARED
+  VERIFIED
+  REJECTED
+}
+
+/// Truc HAI: phieu/dong bang ke nay da doi chieu duoc chua (VT-045).
+///
+/// MOT enum dung cho CA phieu lai xe LAN dong bang ke. Hai enum song song se troi khoi nhau ngay
+/// lan dau ai do them mot gia tri cho mot ve — va bang doi soat doc hai cot bang hai tu vung khac
+/// nhau la thu khong ai doc duoc.
+enum TransportFuelReconciliationStatus {
+  UNMATCHED
+  MATCHED
+  MISMATCHED
+  /// Da nam trong mot ky doi soat DA DONG — khoa (`GD-11`).
+  SETTLED
+  /// Co nguoi quyet bo qua, kem ly do. Khong bao gio la mac dinh.
+  IGNORED
+}
+
+/// AI TRA TIEN cho lan do dau nay — quyet dinh khoan chi di vao gia thanh chuyen bang nguon nao.
+///
+/// Khong suy duoc tu thu gi khac: cung mot cay xang, cung mot xe, lai xe co the tra tien mat tu
+/// quy HOAC ky so no de cuoi thang cong ty tra theo bang ke. Doan sai chieu nay lam so quy lai xe
+/// lech dung bang so tien do, va `INV-23` (mot khoan tien o dung mot cho) bi pha ngay tu lan ghi.
+enum TransportFuelPaymentMethod {
+  /// Lai xe tra tien mat -> `TripExpense(fundedBy = DRIVER_FUND)` + mot but toan quy am.
+  DRIVER_CASH
+  /// Ky so no cay xang -> `TripExpense(fundedBy = COMPANY_DIRECT)`. Cong no di duong bang ke.
+  SUPPLIER_ACCOUNT
+}
+
+/// VI SAO mot phieu bi danh dau CAN KIEM TRA. Nhieu ly do cung luc la binh thuong.
+///
+/// Mot MANG enum chu khong mot co `boolean`: `INV-06` doi "danh dau can kiem tra" khi khong tinh
+/// duoc tieu hao, va VT-046 doi canh bao khi vuot dinh muc. Hai viec khac han nhau, va mot co
+/// chung se lam nguoi truc phai mo tung phieu ra doan xem cai nao.
+enum TransportFuelReviewReason {
+  /// `INV-06` — odo hien tai <= odo lan truoc. KHONG chia, khong bia ra mot con so.
+  ODOMETER_NOT_ADVANCED
+  /// Xe chua co lan do dau nao truoc do — khong co mau so, khong phai mot loi.
+  NO_PREVIOUS_ODOMETER
+  /// VT-046 — tieu hao vuot dinh muc cua hang xe cong dung sai cua goi khach.
+  CONSUMPTION_ABOVE_NORM
+}
+
+enum TransportFuelStatementFormat {
+  CSV
+  XLSX
+}
+
+/// Ket qua KIEM TUNG DONG luc nhap bang ke. Khong co gia tri thu ba: hoac nhan, hoac tu choi.
+enum TransportFuelStatementLineStatus {
+  ACCEPTED
+  REJECTED
+}
+
+/// VI SAO mot dong bang ke bi tu choi. "Khong doan ngam" nghia la moi duong tu choi co mot ten.
+enum TransportFuelStatementRejectReason {
+  MISSING_REQUIRED_FIELD
+  MALFORMED_DATE
+  MALFORMED_AMOUNT
+  MALFORMED_LITERS
+  /// Bien so khong khop xe nao dang co — KHONG tu tao xe moi tu mot file nhap.
+  UNKNOWN_VEHICLE
+  /// Trung nguyen ven mot dong khac trong cung file.
+  DUPLICATE_ROW
+}
+
+/// Nguon cua mot cap khop: may tu khop theo dung sai, hay nguoi quyet.
+enum TransportFuelMatchOrigin {
+  AUTO
+  MANUAL
+}
+
+/// LOAI chenh lech. Moi loai mot duong xu ly khac nhau, nen khong gop.
+enum TransportFuelDiscrepancyKind {
+  /// `GD-09` — mot dong khop duoc voi NHIEU phieu (hoac nguoc lai). KHONG tu chon cap nao.
+  AMBIGUOUS_CANDIDATES
+  /// `FUEL-RECON-002` — dong bang ke khong co phieu lai xe tuong ung.
+  STATEMENT_LINE_ONLY
+  /// Phieu lai xe khong thay tren bang ke ky nay.
+  FUEL_ENTRY_ONLY
+  /// Co ung vien duy nhat nhung lech tien/ngay vuot dung sai.
+  OUT_OF_TOLERANCE
+  /// `INV-26` — ung vien duy nhat lai chinh la phieu duoc nhap ra tu bang ke nay.
+  SELF_SOURCED_BLOCKED
+}
+
+enum TransportFuelDiscrepancyStatus {
+  PENDING
+  RESOLVED
+}
+
+/// NGUOI quyet gi ve mot chenh lech. Danh sach dong — khong co duong "quyet tu do".
+///
+/// `INV-07`/`INV-27`: KHONG gia tri nao o day sinh ra mot khoan no cua lai xe hay mot khoan tru
+/// luong. Duy nhat `ACCEPT_SUPPLIER_AMOUNT` cho phep so tien di tiep sang ban giao cong no T5.
+enum TransportFuelDiscrepancyResolution {
+  /// Cong ty chap nhan so cua cay xang — so tien nay VAO ban giao T5.
+  ACCEPT_SUPPLIER_AMOUNT
+  /// Khong chap nhan dong bang ke; se lam viec lai voi cay xang. KHONG vao ban giao.
+  REJECT_SUPPLIER_LINE
+  /// Nguoi xac nhan mot cap trong so cac ung vien nhap nhang (`GD-09`).
+  MATCH_CONFIRMED
+  /// Bo qua co ly do — dong/phieu khong thuoc ky nay.
+  IGNORE_WITH_REASON
+  /// Phieu lai xe sai; duong dung la dao/sua phieu roi chay lai so khop.
+  ENTRY_CORRECTION_REQUIRED
+}
+
+/// May trang thai doi soat — T1 §7.5 + duong mo lai cua `GD-11`.
+enum TransportFuelReconciliationState {
+  DRAFT
+  MATCHING
+  RESOLVED
+  CLOSED
+  /// Da mo lai boi nguoi co quyen rieng. Khong quay ve `DRAFT`: ky nay DA TUNG duoc bao cao.
+  REOPENED
+}
+
+/// CAY XANG / nha cung cap nhien lieu. Xem khoi canh bao dau muc ve vi sao khong dung vai doi tac.
+model TransportFuelSupplier {
+  id        String               @id @default(cuid())
+  name      String
+  /// Ma noi bo cua khach (so hop dong, ma cay xang tren bang ke). Duy nhat khi co.
+  code      String?              @unique
+  phone     String?
+  address   String?
+  taxCode   String?
+  status    TransportPartyStatus @default(ACTIVE)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  entries         TransportFuelEntry[]
+  statements      TransportFuelSupplierStatement[]
+  reconciliations TransportFuelReconciliation[]
+
+  @@index([status])
+}
+
+/// PHIEU DO DAU — aggregate root cua `TX-04`, giu hai truc trang thai doc lap (T1 §7.4).
+///
+/// `tripId` BAT BUOC: mot lan do dau khong gan chuyen thi khong vao duoc gia thanh chuyen nao, va
+/// ca `TX-04` ton tai de lam dung viec do (VT-034, VT-040). Day la cho khac `DriverFundEntry`, noi
+/// `tripId` nullable vi mot lan tam ung khong gan chuyen la chuyen thuong ngay (`INV-02`).
+///
+/// `sourceStatementId` la SOI DAY CUA `INV-26`. Mot phieu co the duoc SINH RA tu chinh bang ke
+/// (duong "cay xang ban gi thi ta ghi nay", dung khi lai xe quen nhap). Neu doi soat cho phep dong
+/// bang ke khop voi phieu duoc de ra tu chinh no, he thong LUON bao khop 100% va toan bo gia tri
+/// chong that thoat bien mat. Cot nay + `CHECK TransportFuelMatch_no_self_source` chan dieu do o
+/// TANG DB, khong chi o tang mien.
+///
+/// `costExpenseId` UNIQUE la cach "chi phi dau vao gia thanh chuyen DUNG MOT LAN" duoc giu bang
+/// CAU TRUC: mot khoan chi cua `TX-03` khong the la chan gia thanh cua hai phieu dau.
+model TransportFuelEntry {
+  id                   String                            @id @default(cuid())
+  tripId               String
+  trip                 TransportTrip                     @relation(fields: [tripId], references: [id])
+  vehicleId            String
+  vehicle              TransportVehicle                  @relation(fields: [vehicleId], references: [id])
+  driverId             String
+  driver               TransportDriver                   @relation(fields: [driverId], references: [id])
+  supplierId           String
+  supplier             TransportFuelSupplier             @relation(fields: [supplierId], references: [id])
+  /// `YYYY-MM-DD` theo mui gio tenant — tinh MOT LAN luc ghi (`INV-25`).
+  businessDate         String                            @db.VarChar(10)
+  /// KHOANH KHAC tren phieu (bang chung gio do dau). Ngay nghiep vu KHONG suy tu cot nay.
+  occurredAt           DateTime
+  /// SO LIT — `Decimal(12,3)`, KHONG bao gio `Float`. Mien doc/ghi qua chuoi, xem `fuel-quantity.ts`.
+  liters               Decimal                           @db.Decimal(12, 3)
+  /// SO NGUYEN DONG. `BigInt` cung ly le voi `TransportTrip.freightAmount` (T2.1/F1).
+  amount               BigInt
+  currencyCode         String                            @default("VND") @db.VarChar(3)
+  odometerKm           Int
+  /// Odo cua lan do dau TRUOC cua chinh xe nay, CHUP LAI luc ghi. NULL = chua co lan nao truoc.
+  previousOdometerKm   Int?
+  /// L/100km, `Decimal(10,3)`. NULL khi mau so <= 0 — `INV-06` cam bia mot con so ra.
+  consumptionL100km    Decimal?                          @db.Decimal(10, 3)
+  reviewReasons        TransportFuelReviewReason[]
+  paymentMethod        TransportFuelPaymentMethod
+  verificationStatus   TransportFuelVerificationStatus   @default(DECLARED)
+  reconciliationStatus TransportFuelReconciliationStatus @default(UNMATCHED)
+  /// `INV-26` — bang ke da de ra phieu nay. NULL o moi phieu do lai xe khai.
+  sourceStatementId    String?
+  sourceStatement      TransportFuelSupplierStatement?   @relation(fields: [sourceStatementId], references: [id])
+  /// Chan gia thanh o `TX-03`. UNIQUE: mot khoan chi khong the thuoc hai phieu dau.
+  costExpenseId        String?                           @unique
+  /// Khoa chong ghi trung cua duong nop phieu.
+  correlationKey       String                            @unique
+  invoiceNo            String?
+  note                 String?
+  /// AI khai phieu nay — danh tinh do may chu dung len, xem `transport-actor.ts`.
+  declaredBy           String
+  verifiedAt           DateTime?
+  verifiedBy           String?
+  rejectedAt           DateTime?
+  rejectedBy           String?
+  reviewNote           String?
+  createdAt            DateTime                          @default(now())
+  updatedAt            DateTime                          @updatedAt
+
+  evidence      TransportFuelReceiptEvidence[]
+  match         TransportFuelMatch?
+  discrepancies TransportFuelDiscrepancy[]
+
+  @@index([tripId])
+  @@index([vehicleId, businessDate])
+  @@index([driverId])
+  @@index([supplierId, businessDate])
+  @@index([verificationStatus])
+  @@index([reconciliationStatus])
+  @@index([sourceStatementId])
+}
+
+/// ANH CHUNG TU cua mot phieu dau — `PG-05` chua co, nen day la THAM CHIEU co vong doi TOI THIEU.
+///
+/// Mot BANG CON chu khong mot cot `evidenceLocator` nhu `TripExpense`: nguon (VT-042) noi ve "anh
+/// phieu" so nhieu — mot lan do dau co the co anh phieu, anh dong ho odo va anh hoa don. Nhet
+/// chung vao mot cot se dan toi mot chuoi phan cach bang dau phay, va cai do khong phai mot mo
+/// hinh du lieu.
+///
+/// `GD-20` — demo GIU VO THOI HAN: khong cot retention, khong job don. Xoa nham bang chung dat hon
+/// giu thua, va chua co chinh sach nao de ma hien thuc.
+model TransportFuelReceiptEvidence {
+  id          String             @id @default(cuid())
+  fuelEntryId String
+  fuelEntry   TransportFuelEntry @relation(fields: [fuelEntryId], references: [id], onDelete: Cascade)
+  /// Dinh vi trong kho anh (`MediaStore`). Khi `PG-05` dong, cot nay thanh khoa ngoai tro chung tu.
+  locator     String
+  contentType String?
+  byteSize    Int?
+  capturedAt  DateTime?
+  uploadedBy  String
+  createdAt   DateTime           @default(now())
+
+  @@index([fuelEntryId])
+}
+
+/// BANG KE CAY XANG — MOT bang ke duy nhat cho mot `(cay xang, ky)` (T1 §5).
+///
+/// Unique `(supplierId, periodStart, periodEnd)`: nhap lai cung mot ky la mot VA CHAM on ao, khong
+/// phai mot lan ghi de. Ghi de se lam bien mat cac dong da khop va cac chenh lech da co nguoi quyet.
+model TransportFuelSupplierStatement {
+  id            String                       @id @default(cuid())
+  supplierId    String
+  supplier      TransportFuelSupplier        @relation(fields: [supplierId], references: [id])
+  /// Khoang NGAY NGHIEP VU, hai dau DEU TINH.
+  periodStart   String                       @db.VarChar(10)
+  periodEnd     String                       @db.VarChar(10)
+  format        TransportFuelStatementFormat
+  /// Ten file nguon — de nguoi doi soat tim lai ban giay. Khong phai mot duong dan he thong tep.
+  sourceRef     String
+  /// Bam noi dung file. Hai lan nhap cung mot file vao hai ky khac nhau van doc ra duoc.
+  sourceDigest  String                       @db.VarChar(64)
+  rowCount      Int
+  acceptedCount Int
+  rejectedCount Int
+  importedAt    DateTime                     @default(now())
+  importedBy    String
+
+  lines          TransportFuelStatementLine[]
+  reconciliation TransportFuelReconciliation?
+  /// `INV-26` — cac phieu duoc de ra TU bang ke nay.
+  derivedEntries TransportFuelEntry[]
+
+  @@unique([supplierId, periodStart, periodEnd])
+  @@index([supplierId])
+}
+
+/// MOT DONG cua bang ke. Dong bi TU CHOI van duoc LUU — do la ca noi dung cua "khong doan ngam".
+///
+/// Neu dong hong bi bo di luc nhap thi nguoi doi soat nhin thay mot bang ke thieu dong ma khong
+/// biet thieu bao nhieu, va so tong cua ho se khong bao gio khop voi ban giay.
+model TransportFuelStatementLine {
+  id                   String                              @id @default(cuid())
+  statementId          String
+  statement            TransportFuelSupplierStatement      @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  /// So dong TRONG FILE, tu 1 — de nguoi doi soat mo file ra tim dung dong.
+  rowNumber            Int
+  status               TransportFuelStatementLineStatus
+  rejectReason         TransportFuelStatementRejectReason?
+  /// Bien so DOC DUOC TU FILE, giu nguyen ke ca khi khong khop xe nao.
+  vehiclePlateRaw      String
+  vehicleId            String?
+  vehicle              TransportVehicle?                   @relation(fields: [vehicleId], references: [id])
+  /// NULL o dong bi tu choi vi ngay hong — khong dat mot ngay bia vao cho do.
+  businessDate         String?                             @db.VarChar(10)
+  liters               Decimal?                            @db.Decimal(12, 3)
+  amount               BigInt?
+  currencyCode         String                              @default("VND") @db.VarChar(3)
+  invoiceNo            String?
+  note                 String?
+  /// Dong nguyen ban, de doi chieu khi ai do nghi bo anh xa cot dang doc sai file.
+  rawValues            Json
+  reconciliationStatus TransportFuelReconciliationStatus   @default(UNMATCHED)
+  createdAt            DateTime                            @default(now())
+
+  match         TransportFuelMatch?
+  discrepancies TransportFuelDiscrepancy[]
+
+  @@unique([statementId, rowNumber])
+  @@index([statementId, status])
+  @@index([vehicleId, businessDate])
+}
+
+/// KY DOI SOAT mot bang ke — T1 §7.5. MOT doi soat cho MOT bang ke.
+model TransportFuelReconciliation {
+  id            String                           @id @default(cuid())
+  supplierId    String
+  supplier      TransportFuelSupplier            @relation(fields: [supplierId], references: [id])
+  statementId   String                           @unique
+  statement     TransportFuelSupplierStatement   @relation(fields: [statementId], references: [id])
+  periodStart   String                           @db.VarChar(10)
+  periodEnd     String                           @db.VarChar(10)
+  state         TransportFuelReconciliationState @default(DRAFT)
+  /// Lan chay so khop gan nhat — de biet bang doi soat dang cu hay moi.
+  lastMatchedAt DateTime?
+  closedAt      DateTime?
+  closedBy      String?
+  reopenedAt    DateTime?
+  reopenedBy    String?
+  reopenReason  String?
+  createdAt     DateTime                         @default(now())
+  updatedAt     DateTime                         @updatedAt
+
+  matches       TransportFuelMatch[]
+  discrepancies TransportFuelDiscrepancy[]
+  handoff       TransportFuelSettlementHandoff?
+
+  @@index([supplierId, state])
+}
+
+/// MOT CAP DA KHOP — mot dong bang ke voi mot phieu lai xe.
+///
+/// UNIQUE o CA HAI VE: mot dong khong khop duoc voi hai phieu, va mot phieu khong khop duoc voi
+/// hai dong. Do la quan he 1-1 ma `GD-09` gia dinh, va no phai duoc DB giu — kiem o tang mien chi
+/// dung khi co MOT nguoi ghi.
+model TransportFuelMatch {
+  id                    String                      @id @default(cuid())
+  reconciliationId      String
+  reconciliation        TransportFuelReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  statementLineId       String                      @unique
+  statementLine         TransportFuelStatementLine  @relation(fields: [statementLineId], references: [id])
+  fuelEntryId           String                      @unique
+  fuelEntry             TransportFuelEntry          @relation(fields: [fuelEntryId], references: [id])
+  /// Chenh lech DA DO, giu lai de nguoi doi soat thay vi sao cap nay duoc coi la khop.
+  amountDeltaVnd        BigInt
+  businessDateDeltaDays Int
+  origin                TransportFuelMatchOrigin
+  matchedAt             DateTime                    @default(now())
+  matchedBy             String
+
+  @@index([reconciliationId])
+}
+
+/// MOT CHENH LECH CHO NGUOI QUYET. `PENDING` la trang thai chan cua `FUEL-RECON-004`.
+model TransportFuelDiscrepancy {
+  id                String                              @id @default(cuid())
+  reconciliationId  String
+  reconciliation    TransportFuelReconciliation         @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  kind              TransportFuelDiscrepancyKind
+  status            TransportFuelDiscrepancyStatus      @default(PENDING)
+  statementLineId   String?
+  statementLine     TransportFuelStatementLine?         @relation(fields: [statementLineId], references: [id])
+  fuelEntryId       String?
+  fuelEntry         TransportFuelEntry?                 @relation(fields: [fuelEntryId], references: [id])
+  /// Cac ung vien cua mot chenh lech `AMBIGUOUS_CANDIDATES` — id, khong phai ban sao du lieu.
+  candidateEntryIds String[]
+  candidateLineIds  String[]
+  resolution        TransportFuelDiscrepancyResolution?
+  resolutionNote    String?
+  resolvedAt        DateTime?
+  resolvedBy        String?
+  createdAt         DateTime                            @default(now())
+
+  @@index([reconciliationId, status])
+  @@index([statementLineId])
+  @@index([fuelEntryId])
+}
+
+/// BAN GIAO SANG T5 — mot payload CO KIEU, IDEMPOTENT theo doi soat.
+///
+/// `reconciliationId` UNIQUE la toan bo tinh idempotent: dong doi soat hai lan (mo lai roi dong
+/// lai) khong tao ban giao thu hai, va T5 doc dung mot hang cho mot ky.
+///
+/// T4 KHONG ghi bang cua T5 — bang nay thuoc `transport-fuel` va la mot HOP THU DI: T5 se doc no
+/// de tao `PayableDocument`. Ghi thang sang bang cua T5 se lam hai capability dinh chat vao nhau
+/// truoc khi T5 co mot dong code nao.
+model TransportFuelSettlementHandoff {
+  id                String                      @id @default(cuid())
+  reconciliationId  String                      @unique
+  reconciliation    TransportFuelReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  supplierId        String
+  periodStart       String                      @db.VarChar(10)
+  periodEnd         String                      @db.VarChar(10)
+  /// Tong so tien DA DUOC CHAP NHAN, so nguyen dong. Khong gom dong bi tu choi hay bo qua.
+  acceptedAmount    BigInt
+  currencyCode      String                      @default("VND") @db.VarChar(3)
+  acceptedLineCount Int
+  emittedAt         DateTime                    @default(now())
+  emittedBy         String
+
+  @@index([supplierId])
 }
