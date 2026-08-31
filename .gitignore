@@ -16,6 +16,34 @@ secrets/
 # Ho so khao sat khach hang — PII THAT (dia chi, SDT, PO, STK, bang gia) — KHONG commit len GitHub.
 # Dung cuc bo de nap nguon su that; da trich vao apps/api/src/knowledge/seed.ts.
 docs/khach-hang/*/nguon-goc/ho-so-khao-sat/
+# TAI LIEU GOC CUA KHACH — moi dinh dang nhi phan trong vung `nguon-goc/`.
+#
+# Dong tren chi chan mot THU MUC CON, va do la du de mot ho so khao sat that (co ten nguoi lien he
+# va so dien thoai) nam ngay canh no trong suot mot thoi gian — repo nay PUBLIC. Byte goc cua khach
+# thuoc ve kho rieng; repo giu SHA-256 va metadata. Xem:
+#   docs/phat-trien/van-hanh/nguon-khach-hang.md
+#   tools/customer-source-guardrail/  (cong thi hanh o CI)
+docs/khach-hang/*/nguon-goc/**/*.docx
+docs/khach-hang/*/nguon-goc/**/*.doc
+docs/khach-hang/*/nguon-goc/**/*.pdf
+docs/khach-hang/*/nguon-goc/**/*.xlsx
+docs/khach-hang/*/nguon-goc/**/*.xls
+# Vung lam viec rieng trong repo — chi duoc ton tai neu duoc gitignore (uu tien de NGOAI repo).
+.customer-sources/
+
+# BAN BUILD cua mau A4 gui khach — sinh tu tools/excel-template/generate_a4_template.py.
+#
+# Ban truoc duoc COMMIT, va do la mot ro ri that: no chua ba ten dai ly va HAI CHAT ID NHOM ZALO
+# lay tu khao sat (chinh sheet huong dan cua no ghi "du lieu that tu khao sat"), trong mot repo
+# PUBLIC. Ghim SHA-256 chi chung minh "van la dung tep do" — no khong chung minh tep do an toan.
+# Mot ro ri on dinh van la mot ro ri.
+#
+# Gio: generator sinh du lieu VI DU tong hop, ban build khong vao git, va bai test cua importer
+# dung fixture rieng tai apps/api/src/settings/__fixtures__/.
+docs/khach-hang/*/trao-doi/*.xlsx
+docs/khach-hang/*/trao-doi/*.xls
+docs/khach-hang/*/trao-doi/*.docx
+docs/khach-hang/*/trao-doi/*.doc
 
 # Logs
 *.log

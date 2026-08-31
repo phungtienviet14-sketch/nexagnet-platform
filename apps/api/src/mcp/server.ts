@@ -18,6 +18,22 @@ import {
   upsertDealerInput,
 } from './source-of-truth.tools.js';
 import { recordSourceTruthAudit } from '../audit/source-truth-audit.js';
+import {
+  canUseFact,
+  canUseFactInput,
+  factAddressInput,
+  getEffectiveFact,
+  getFactHistory,
+  getSource,
+  getSourceInput,
+  listConflicts,
+  listSources,
+  listSourcesInput,
+} from './source-registry.tools.js';
+import { PrismaSourceRegistryRepository } from '../source-registry/prisma-source-registry.repository.js';
+import { SourceReadinessService } from '../source-registry/source-readiness.service.js';
+import { SourceRegistryService } from '../source-registry/source-registry.service.js';
+import { trustedTenantScope } from '../source-registry/tenant-scope.js';
 
 /**
  * MCP stdio server: phoi "Nguon su that" (Postgres) ra thanh tool cho Claude/agent sua bang
@@ -115,6 +131,83 @@ server.registerTool(
   async () => toToolContent(await listUnmappedGroups(prisma)),
 );
 
+// ----- READ tools: QUAN TRI NGUON SU THAT -----
+//
+// Tam tool tren tra loi "hang nguon su that dang co gi". Nam tool duoi tra loi cau KHAC HAN:
+// "so lieu do tu dau ra, ai duyet, va con gi dang tranh chap".
+//
+// CHI DOC — co y. Cong ghi cua tang nay (duyet nguon, dong xung dot) doi mot NGUOI CO THAM QUYEN
+// va mot DAN CHUNG; mot phien agent khong cung cap duoc hai thu do mot cach trung thuc, va mo
+// chung ra o day la tao dung con duong ma ca tang do sinh ra de chan.
+const registryRepository = new PrismaSourceRegistryRepository(prisma);
+const sourceRegistry = new SourceRegistryService(registryRepository);
+const sourceReadiness = new SourceReadinessService(registryRepository);
+// Pham vi khach doc tu CAU HINH TRIEN KHAI, khong tu doi so cua tool.
+const registryScope = trustedTenantScope();
+
+server.registerTool(
+  'list_sources',
+  {
+    description:
+      'Liệt kê nguồn sự thật đã đăng ký (tuỳ chọn lọc theo status: RECEIVED | NORMALIZED | REVIEWED | APPROVED | EFFECTIVE | SUPERSEDED | REJECTED | QUARANTINED).',
+    inputSchema: listSourcesInput.shape,
+    annotations: READ_ONLY,
+  },
+  async (args) => toToolContent(await listSources(sourceRegistry, registryScope, args)),
+);
+
+server.registerTool(
+  'get_source',
+  {
+    description: 'Chi tiết một nguồn: phiên bản, nguồn gốc, thẩm quyền, phân loại, hash, hiệu lực.',
+    inputSchema: getSourceInput.shape,
+    annotations: READ_ONLY,
+  },
+  async (args) => toToolContent(await getSource(sourceRegistry, registryScope, args)),
+);
+
+server.registerTool(
+  'list_conflicts',
+  {
+    description:
+      'Liệt kê xung đột giữa các sự thật cạnh tranh. Xung đột OPEN là thứ đang chặn — không được tự chọn bên thắng.',
+    annotations: READ_ONLY,
+  },
+  async () => toToolContent(await listConflicts(sourceRegistry, registryScope)),
+);
+
+server.registerTool(
+  'get_effective_fact',
+  {
+    description:
+      'Bản đang hiệu lực tại một địa chỉ (domain + key). Không bao giờ rơi về bản đã bị thay thế.',
+    inputSchema: factAddressInput.shape,
+    annotations: READ_ONLY,
+  },
+  async (args) => toToolContent(await getEffectiveFact(sourceReadiness, registryScope, args)),
+);
+
+server.registerTool(
+  'get_fact_history',
+  {
+    description: 'Toàn bộ các bản tại một địa chỉ, kể cả bản đã SUPERSEDED/REJECTED.',
+    inputSchema: factAddressInput.shape,
+    annotations: READ_ONLY,
+  },
+  async (args) => toToolContent(await getFactHistory(sourceReadiness, registryScope, args)),
+);
+
+server.registerTool(
+  'can_use_fact',
+  {
+    description:
+      'Hỏi TRƯỚC khi trả lời: số liệu này dùng được cho việc này không? Trả về mã lý do khi không — "đang có xung đột chưa chốt" khác hẳn "chưa ai duyệt" và khác "đây mới là giả định".',
+    inputSchema: canUseFactInput.shape,
+    annotations: READ_ONLY,
+  },
+  async (args) => toToolContent(await canUseFact(sourceReadiness, registryScope, args)),
+);
+
 // ----- WRITE tools -----
 server.registerTool(
   'upsert_dealer',
@@ -206,4 +299,4 @@ const transport = new StdioServerTransport();
 transport.onclose = () => void shutdown(0); // client dong stdin -> tat sach.
 
 await server.connect(transport);
-log('MCP stdio server sẵn sàng (netviet-source-of-truth): 8 tool nguồn sự thật.');
+log('MCP stdio server sẵn sàng (netviet-source-of-truth): 8 tool nguồn sự thật + 6 tool CHỈ ĐỌC quản trị nguồn.');

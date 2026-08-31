@@ -11,12 +11,24 @@ python tools/excel-template/generate_a4_template.py
 # cần: pip install openpyxl   (chỉ là công cụ soạn mẫu — KHÔNG phải dependency runtime)
 ```
 
-Đầu ra: [`docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx`](../../docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx)
-(3 sheet: **Hướng dẫn** · **1. Đại lý & CTV** · **2. Map nhóm Zalo**). Đã kèm sẵn 3 đại lý + 2 nhóm
-thật từ khảo sát (`apps/api/src/knowledge/seed.ts`) làm dữ liệu khởi tạo → file round-trip đúng seed hiện tại.
+Đầu ra: `docs/khach-hang/ultty/trao-doi/a4-dai-ly-map-nhom-ultty.xlsx`
+(3 sheet: **Hướng dẫn** · **1. Đại lý & CTV** · **2. Map nhóm Zalo**), kèm 3 đại lý + 2 nhóm
+**ví dụ tổng hợp** để khách thấy định dạng một dòng hợp lệ. Cột Chat ID để trống, đúng như hướng
+dẫn ở sheet 1 dặn.
+
+> **Bản `.xlsx` KHÔNG được commit** (`.gitignore`). Nó là một **bản build** — chạy lại script là
+> có. Bản trước từng nằm trong git và mang **3 tên đại lý + 2 chat ID nhóm Zalo thật** lấy từ khảo
+> sát, trong một repo public; hai chat ID đó không xuất hiện ở bất kỳ tệp văn bản nào khác, tức
+> chính tệp nhị phân đó là nơi duy nhất công bố chúng. Ghim SHA-256 chỉ chứng minh "vẫn là tệp
+> đó", không chứng minh tệp đó an toàn — nên tệp bị gỡ khỏi HEAD và dữ liệu khởi tạo đổi sang ví
+> dụ tổng hợp. Xem [nguon-khach-hang.md](../../docs/phat-trien/van-hanh/nguon-khach-hang.md).
 
 `generate_a4_template.py` là **nguồn sự thật** cho cấu trúc mẫu; `.xlsx` là bản build đem gửi khách.
 Sửa mẫu → sửa script rồi chạy lại, đừng sửa tay file .xlsx.
+
+Bài test của importer dùng một bản sao đầu ra ở
+[`apps/api/src/settings/__fixtures__/`](../../apps/api/src/settings/__fixtures__/README.md) — nó
+cần một tệp cố định để khẳng định importer đọc đúng bố cục cột.
 
 ## Ánh xạ cột → field (dành cho importer sau này)
 

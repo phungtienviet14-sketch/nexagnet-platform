@@ -95,6 +95,7 @@ import { OperationalSettingsModule } from './settings/operational-settings.modul
 import { SettingsController } from './settings/settings.controller.js';
 import { SettingsQueryService } from './settings/settings-query.service.js';
 import { SourceTruthWriteService } from './settings/source-truth-write.service.js';
+import { SourceRegistryModule } from './source-registry/source-registry.module.js';
 import { StreamController } from './stream/stream.controller.js';
 import { DriverFundController } from './transport/costing/driver-fund.controller.js';
 import { DriverFundSelfController } from './transport/costing/driver-fund-self.controller.js';
@@ -134,6 +135,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // DOC (vong dem trace + bang outbox) va khong phu thuoc capability nao — khach khong ban hang
   // van mo duoc luong xu ly cua mot luot.
   owned('foundation', DebugModule),
+  // `foundation`: moi khach deu co nguon, deu co ban thay ban, va deu co luc hai tai lieu noi
+  // nguoc nhau. Cai khac nhau giua cac khach la NOI DUNG cua nguon, khong phai co tang nay hay
+  // khong — nen no khong phai mot capability de bat/tat.
+  owned('foundation', SourceRegistryModule),
   // VAN TAI — LOI. Mang theo `AuditLogService` cua chinh no vi `transport-core` khong bat buoc
   // keo theo `operations`; xem chu thich trong `transport.module.ts`.
   owned('transport-core', TransportModule),
