@@ -187,6 +187,50 @@ export function isContentKey(key: string): boolean {
 }
 
 /**
+ * KHOA MANG MOT DINH DANH NOI BO (`orderId`, `messageId`, `ledgerId`, `traceId`…).
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO PHAI CO — DO DUOC, KHONG PHAI LO LANG GIA DINH.
+ *
+ * Mau SDT Viet Nam `(?:\+84|0)(?:[\s.-]?\d){8,10}` KHONG neo hai dau, nen no khop bat ky khuc
+ * nao trong mot chuoi. Mot UUID v4 chua khuc kieu `0-1644-4786` la khop — do bang phep thu:
+ * **3,1% UUID v4** dinh bay. Ket qua: cu khoang 1 trong 32 lan, mot `orderId`/`ledgerId` di qua
+ * `sanitizeAttributes` bi cat thanh `9654fa2[REDACTED_PII]-ae49-...`, va SOI DAY TUONG QUAN dut —
+ * im lang, khong tai lap duoc, va dung o lop dang co nhiem vu bao ve.
+ *
+ * DAY LA CUNG MOT BUG voi cai da sua o `workflow/workflow-input.ts` ngay 25/08/2026 (khi do no do
+ * that tren `ultty-gd1-test`: 1,2% don bi tu choi ngau nhien), chi khac cho no dap vao bien gioi
+ * TELEMETRY thay vi bien gioi WORKFLOW. Ban sua o day la ban sua do, ap dung nhat quan.
+ *
+ * ---------------------------------------------------------------------------
+ * KHUON, KHONG PHAI QUET NOI DUNG — va loi hua khong bi noi long:
+ *   · phai dung `SLUG_LIKE` -> loai email (`@`), SDT co `+84`, va moi chuoi co khoang trang;
+ *   · phai co CHU CAI, HOAC dung khuon UUID -> loai mot day TOAN CHU SO nhu `0912345678`.
+ * Mot so dien thoai khong the thoa ca hai; `cuid()`/`randomUUID()` thi luon thoa.
+ *
+ * THU TU KIEM LA MOT PHAN CUA HOP DONG: vi tu nay chi duoc hoi SAU `isSecretKey`/`isPiiKey`, nen
+ * `senderExternalId` va `externalUserId` — von nam trong `PII_KEYS` — VAN bi che nhu truoc. Cai
+ * duoc noi long chi la dinh danh NOI BO duoi mot khoa mang nghia dinh danh.
+ */
+export function isIdentifierKey(key: string): boolean {
+  const k = normalizeKey(key);
+  return k === 'id' || k.endsWith('id');
+}
+
+/** Khuon dinh danh noi bo. Dung nguyen luat cua `workflow-input.ts` — mot noi, mot luat. */
+export function looksLikeInternalIdentifier(value: string): boolean {
+  if (!value || value.length > 128) return false;
+  // Mot gia tri trong nhu bi mat KHONG BAO GIO duoc di duong tat nay: bat bien "bi mat bi xoa o
+  // moi muc" dung tren moi thu khac trong tep nay.
+  if (scrubSecrets(value) !== value) return false;
+  return IDENTIFIER_SHAPE.test(value) && (HAS_LETTER.test(value) || UUID_SHAPE.test(value));
+}
+
+const IDENTIFIER_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HAS_LETTER = /[A-Za-z]/;
+
+/**
  * Quet BI MAT trong mot chuoi. Chay o MOI muc — ke ca `full`.
  * Tach rieng va export de test duoc truc tiep, va de cho goi duoc tren thong bao loi.
  */
@@ -221,12 +265,7 @@ function scrubString(value: string, mode: TelemetryPrivacyMode): string {
 }
 
 export type SanitizedValue =
-  | string
-  | number
-  | boolean
-  | null
-  | SanitizedValue[]
-  | { [key: string]: SanitizedValue };
+  string | number | boolean | null | SanitizedValue[] | { [key: string]: SanitizedValue };
 
 function sanitizeValue(
   value: unknown,
@@ -276,6 +315,14 @@ function sanitizeValue(
         // Giu DAU VET rang co noi dung va no dai bao nhieu — thuong du de debug ca
         // "vi sao cau tra loi bi cat" ma khong luu mot chu noi dung nao.
         out[key] = typeof item === 'string' ? `${REDACTED} (${item.length} ky tu)` : REDACTED;
+        continue;
+      }
+      // DINH DANH NOI BO: kiem bang KHUON roi cho di NGUYEN VEN — xem `isIdentifierKey`.
+      // Da qua ba cong tren, nen mot khoa PII nhu `senderExternalId` khong toi duoc day.
+      // Gia tri KHONG dung khuon van roi xuong duong quet binh thuong, nen mot ai do nhet SDT vao
+      // `customerId` thi no van bi che.
+      if (typeof item === 'string' && isIdentifierKey(key) && looksLikeInternalIdentifier(item)) {
+        out[key] = item;
         continue;
       }
       out[key] = sanitizeValue(item, mode, seen, depth + 1);

@@ -1219,6 +1219,9 @@ model BusinessFact {
 
   approvals BusinessApproval[]
   conflicts BusinessConflictFact[]
+  /// Cac QUYET DINH da dung ban su that nay. Quan he nguoc bat buoc cua Prisma; cung la thu tra
+  /// loi nguoc lai cau "ban so lieu sai nay da lam lech nhung ca nao".
+  decisionRefs BusinessDecisionFactRef[]
 
   @@index([tenantId, domain, key, status])
   @@index([tenantId, status])
@@ -1974,4 +1977,218 @@ model TransportFuelSettlementHandoff {
   emittedBy         String
 
   @@index([supplierId])
+}
+
+// ----- So cai quyet dinh nghiep vu (Business Decision Ledger v0) -----
+//
+// TANG NAY TRUNG TINH VE KHACH VA VE MIEN, cung dieu kien voi khoi nguon su that phia tren: khong
+// mot ten khach, khong mot thuat ngu ban hang hay van tai nao duoc xuat hien duoi day.
+//
+// BON MAT PHANG SU THAT — day la mat phang thu nhat, va no KHONG thay the ba mat phang kia:
+//   · Postgres (khoi nay)  = SU THAT NGHIEP VU ben vung: "vi sao he thong da quyet dinh nhu vay";
+//   · Hatchet              = su that THUC THI ben vung: buoc nao chay, chay lai bao nhieu lan;
+//   · OTel/ClickHouse      = su that QUAN SAT: do dai, cay span, log — het han sau 30 ngay;
+//   · Git/release          = trang thai PHAN MEM mong muon.
+// So cai TUONG QUAN bon mat phang bang cac cot `traceId`/`spanId`/`workflowRunId`/`releaseSha`.
+// No KHONG chua payload OTel, khong chua cay span, va khong tro thanh mot he event-sourcing.
+//
+// QUAN HE VOI `AuditLog` (da co, phia tren). Hai thu KHAC NHAU va co y khong gop:
+//   · `AuditLog`         = AI DA SUA GI: mot con nguoi/tien trinh doi mot ban ghi, kem before/after.
+//     Chu the la NGUOI THAO TAC va doi tuong la MOT HANG DU LIEU.
+//   · `BusinessDecision` = VI SAO HE THONG XU SU NHU VAY: mot cong nghiep vu da mo hay dong, bang
+//     ma ly do nao, dua tren su that/chinh sach nao, o ban phat hanh nao.
+//     Chu the la MOT QUYET DINH va doi tuong la MOT CA NGHIEP VU.
+// Mot lan nguoi van hanh bam nut duyet sinh ra CA HAI: audit ghi "truong status doi", so cai ghi
+// "cong da mo voi ma ly do X". Gop lai thi mot trong hai cau hoi se khong con tra loi duoc.
+//
+// KHONG CHUA PAYLOAD. Xem `decision-ledger/decision-evidence.ts`: `detail` di qua mot DANH SACH
+// TRANG (khong phai bo loc) truoc khi duoc ghi, va cong do NEM chu khong che. Repo nay PUBLIC.
+
+enum BusinessDecisionStatus {
+  RECORDED
+  /// Bi mot quyet dinh SAU thay the tai cung mot cong, cung mot ca. Hang cu GIU NGUYEN.
+  SUPERSEDED
+  /// Da duoc sua bang mot quyet dinh dao/dieu chinh. Hang cu GIU NGUYEN.
+  CORRECTED
+}
+
+/// AI QUYET DINH — va day la cot chan "mot de xuat cua LLM bi ghi nhu mot quyet dinh da duyet".
+enum BusinessDecisionActorKind {
+  /// Rules engine tat dinh. Chay lai voi cung dau vao ra cung ket qua.
+  DETERMINISTIC_RULE
+  /// Mot con nguoi co tham quyen da bam nut.
+  HUMAN
+  /// LLM phan loai/trich xuat/de xuat/soan thao. KHONG BAO GIO la tham quyen ben vung.
+  LLM_RECOMMENDATION
+  /// He qua do workflow/he thong sinh ra tu mot quyet dinh truoc do.
+  SYSTEM_CONSEQUENCE
+}
+
+/// MUC NGHIEM TRONG — chinh sach that bai o `decision-ledger/decision-criticality.ts`.
+enum BusinessDecisionCriticality {
+  /// Tien hoac tham quyen. Ghi that bai -> NGHIEP VU DUNG (fail closed).
+  FINANCIAL_OR_AUTHORIZATION
+  /// Quyet dinh nghiep vu thuong. Ghi that bai -> di tiep, nhung phat yeu cau doi soat ben vung.
+  BUSINESS_STANDARD
+  /// Quan sat/goi y. Ghi that bai -> di tiep, chi con dau vet o telemetry.
+  ADVISORY
+}
+
+enum BusinessDecisionRelationKind {
+  /// Quyet dinh CHA da dan toi quyet dinh nay (vd de xuat cua LLM -> quyet dinh cua nguoi).
+  PARENT_DECISION
+  /// Ban ghi phe duyet / ban giao da cho phep quyet dinh nay.
+  APPROVAL
+  /// Thuc the hoac su kien nghiep vu do quyet dinh nay sinh ra.
+  RESULTING_ENTITY
+}
+
+/// MOT QUYET DINH NGHIEP VU — APPEND-ONLY.
+///
+/// KHONG CO DUONG UPDATE NAO cho decisionPoint/outcome/reasonCode/occurredAt/detail.
+/// Sua = ghi mot hang MOI tro nguoc ve hang cu (`supersedesId`), roi doi `status` cua hang cu.
+/// Do la cot duy nhat cua hang cu duoc phep doi, va no khong xoa mot thong tin nao.
+///
+/// DANH TINH CHONG TRUNG la `(tenantId, idempotencyKey)`. Hatchet chay lai, HTTP thu lai va giao
+/// hang at-least-once deu di qua duong nay: cung khoa -> tra lai hang da ghi, KHONG ghi hang thu
+/// hai. Xem `decision-ledger/decision-idempotency.ts` de biet vi sao khoa nay BAT BUOC va vi sao
+/// no khong duoc phep tu sinh ra tu ban than quyet dinh.
+model BusinessDecision {
+  id String @id @default(cuid())
+
+  /// Danh tinh khach. Cung ly do voi `BusinessSource.tenantId`: hom nay moi khach mot DB nen cot
+  /// nay du thua ve ha tang, nhung no la thu duy nhat con dung khi dieu do thoi dung.
+  tenantId String
+
+  /// `<mien>.<viec>` — DUNG BO TU VUNG cua capability so huu (`*-decisions.ts`), khong phai chuoi
+  /// tu do o tang goi. Kieu duoc rang buoc o `DecisionLedgerService.record()`.
+  decisionPoint String
+  /// `allowed` | `denied` | `degraded` — dung lai `DecisionOutcome` cua nen tang quan sat.
+  outcome       String
+  /// Ma ly do CO KIEU, thuoc dung bo tu vung cua `decisionPoint`. Khong bao gio la mot cau tieng Viet.
+  reasonCode    String
+
+  /// CA NGHIEP VU ma quyet dinh nay noi ve. `subjectType` la loai (`order`, `trip`, `message`…),
+  /// `subjectId` la dinh danh NOI BO — khong bao gio la SDT/email/ma khach.
+  subjectType String
+  subjectId   String
+
+  /// Luc quyet dinh XAY RA trong nghiep vu. Tach khoi `recordedAt`: hai thu lech nhau khi ghi
+  /// muon (chay lai, doi soat), va gop lam mot se lam dong thoi gian nghiep vu bi keo theo su co
+  /// ha tang.
+  occurredAt DateTime
+  /// Luc hang nay duoc ghi vao DB. Do ta dat, khong do ben goi.
+  recordedAt DateTime @default(now())
+
+  actorKind   BusinessDecisionActorKind
+  /// Ai/cai gi — username phien, ten dich vu, ten khuon workflow. KHONG phai ten nguoi dung cuoi.
+  actorRef    String?
+  criticality BusinessDecisionCriticality @default(BUSINESS_STANDARD)
+
+  /// CHINH SACH/QUY TAC da duoc ap. `policyRef` la dia chi, `policyVersion` la ban.
+  /// Khong chua GIA TRI cua chinh sach — gia tri o `BusinessFact`.
+  policyRef     String?
+  policyVersion String?
+
+  /// LLM co gop phan hay khong, va bang gi. Chi metadata: nha cung cap + ten model.
+  /// KHONG BAO GIO chua prompt hay cau tra loi.
+  modelProvider String?
+  modelRef      String?
+
+  /// TUONG QUAN sang ba mat phang kia. Tat ca deu tuy chon: mot quyet dinh chay ngoai request
+  /// scope khong co `traceId`, va do la mot cau tra loi HOP LE chu khong phai mot cho trong.
+  releaseSha    String?
+  traceId       String?
+  spanId        String?
+  workflowRunId String?
+
+  /// Tham chieu toi ban ghi CHO PHEP (phe duyet/ban giao) khi cong nay doi mot cai.
+  approvalRef String?
+
+  status BusinessDecisionStatus @default(RECORDED)
+
+  /// Khoa chong trung. BAT BUOC — xem `decision-idempotency.ts`.
+  idempotencyKey String
+  /// Dau tay noi dung cua quyet dinh. Cung khoa + khac dau tay = LOI CUA BEN GOI, khong phai mot
+  /// lan chay lai — va cong se tu choi thay vi tra ve mot hang khac.
+  fingerprint    String
+
+  /// Quyet dinh nay THAY THE / SUA quyet dinh nao. Cot tuong minh chu khong nam trong bang quan
+  /// he chung: may trang thai `status` phu thuoc vao no, va mot bat bien phu thuoc mot bang phu
+  /// la mot bat bien khong kiem duoc trong mot cau truy van.
+  supersedesId String?           @unique
+  supersedes   BusinessDecision? @relation("DecisionSupersession", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy BusinessDecision? @relation("DecisionSupersession")
+
+  /// Bang chung BO SUNG, da qua danh sach trang cua `decision-evidence.ts`. Rong la binh thuong.
+  detail Json?
+
+  factRefs  BusinessDecisionFactRef[]
+  relations BusinessDecisionRelation[]
+
+  /// Chong trung TRONG PHAM VI KHACH. Hai khach dung cung mot khoa la hai quyet dinh khac nhau.
+  @@unique([tenantId, idempotencyKey])
+  /// "Ke lai mot ca nghiep vu theo thu tu" — duong doc so mot cua so cai.
+  @@index([tenantId, subjectType, subjectId, occurredAt])
+  /// "Cong nay da dong bao nhieu lan trong thang" — duong doc thu hai.
+  @@index([tenantId, decisionPoint, occurredAt])
+  /// Tu mot trace/mot run quan sat duoc, tim ve bang chung ben vung.
+  @@index([tenantId, traceId])
+  @@index([tenantId, workflowRunId])
+}
+
+/// SU THAT DA DUOC DUNG de ra quyet dinh nay — `DecisionFactReference` cua hop dong nhiem vu.
+///
+/// CO CA KHOA NGOAI LAN ANH CHUP, va hai thu tra loi hai cau khac nhau:
+///   · khoa ngoai (`factId`) chung minh ban ghi su that do THUC SU TON TAI, va chan xoa no;
+///   · anh chup (`factStatusAtUse`, `sourceVersion`…) giu lai trang thai LUC DUNG.
+/// Thieu anh chup thi khi ban su that bi thay the, `status` cua chinh hang do doi thanh
+/// `SUPERSEDED` — va mot quyet dinh dung dan hom qua se doc lai nhu "da dung mot su that het
+/// hieu luc". Do la dung kieu viet lai lich su ma muc 9 hop dong cam.
+///
+/// KHONG CHUA `value` cua su that. Gia tri co the la so tien mat cua khach; so cai chi can biet
+/// DIA CHI va BAN.
+model BusinessDecisionFactRef {
+  id         String           @id @default(cuid())
+  decisionId String
+  decision   BusinessDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  /// `onDelete: Restrict` — mot su that da tung dung de quyet dinh thi khong con xoa duoc.
+  factId String
+  fact   BusinessFact @relation(fields: [factId], references: [id], onDelete: Restrict)
+
+  /// Anh chup DIA CHI su that. Doc duoc ma khong phai join, va con dung neu mo hinh doi ve sau.
+  factDomain String
+  factKey    String
+  /// Trang thai su that LUC DUOC DUNG (`CONFIRMED`, `WORKING_ASSUMPTION`…). Chuoi, khong enum:
+  /// mot hang lich su khong duoc phep hong vi hom nay ta them mot trang thai moi.
+  factStatusAtUse String
+
+  /// Ban nguon dang sau su that do, luc duoc dung.
+  sourceId      String?
+  sourceKey     String?
+  sourceVersion String?
+
+  @@unique([decisionId, factId])
+  @@index([factId])
+}
+
+/// QUAN HE toi thieu quanh mot quyet dinh — `DecisionRelation` cua hop dong nhiem vu.
+///
+/// BANG CHUNG, khong phai do thi. Ba loai quan he o `BusinessDecisionRelationKind` va het; day
+/// KHONG phai Evidence Graph (ngoai pham vi, muc 16), va khong co duong duyet de quy nao doc no.
+model BusinessDecisionRelation {
+  id         String           @id @default(cuid())
+  decisionId String
+  decision   BusinessDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  kind BusinessDecisionRelationKind
+  /// Loai dich (`decision`, `approval`, `order`, `trip`…) — chuoi tu do co chu y: moi vertical
+  /// goi ten thuc the cua no mot kieu.
+  targetType String
+  targetId   String
+  note       String?
+
+  @@unique([decisionId, kind, targetType, targetId])
+  @@index([targetType, targetId])
 }
