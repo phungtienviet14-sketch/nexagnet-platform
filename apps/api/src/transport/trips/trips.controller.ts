@@ -3,20 +3,22 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { z } from 'zod';
 import { Roles } from '../../auth/roles.decorator.js';
+import type { AuthenticatedRequest } from '../../auth/session.types.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
   transportErrorToHttp,
 } from '../transport-action.guard.js';
+import { transportActorOf } from '../transport-actor.js';
 import {
   assignTripSchema,
   cancelTripSchema,
@@ -26,8 +28,6 @@ import {
   updateTripSchema,
 } from '../transport.schemas.js';
 import { TripService } from './trip.service.js';
-
-const actorName = (actor: string): string => actor.trim() || 'operator';
 
 /**
  * `TX-02 Trip Operations` qua HTTP — be mat VAN HANH (Giam doc / Ke toan).
@@ -62,37 +62,33 @@ export class TripsController {
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.trip.create')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  plan(@Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  plan(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(planTripSchema, body);
-    return this.guard(() => this.trips.planTrip(input, actorName(actor)));
+    return this.guard(() => this.trips.planTrip(input, transportActorOf(request)));
   }
 
   @Patch(':id')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.trip.update')
-  update(@Param('id') id: string, @Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  update(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const patch = this.parse(updateTripSchema, body);
-    return this.guard(() => this.trips.updateTrip(id, patch, actorName(actor)));
+    return this.guard(() => this.trips.updateTrip(id, patch, transportActorOf(request)));
   }
 
   @Post(':id/assignment')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.trip.assign')
-  assign(@Param('id') id: string, @Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  assign(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(assignTripSchema, body);
-    return this.guard(() => this.trips.assign(id, input, actorName(actor)));
+    return this.guard(() => this.trips.assign(id, input, transportActorOf(request)));
   }
 
   @Post(':id/transition')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.trip.transition')
-  transition(
-    @Param('id') id: string,
-    @Body() body: unknown,
-    @Headers('x-actor') actor = 'operator',
-  ) {
+  transition(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const { to } = this.parse(transitionTripSchema, body);
-    return this.guard(() => this.trips.transition(id, to, actorName(actor)));
+    return this.guard(() => this.trips.transition(id, to, transportActorOf(request)));
   }
 
   /**
@@ -103,9 +99,9 @@ export class TripsController {
   @Post(':id/cancel')
   @Roles('ADMIN')
   @RequiresTransportAction('transport.trip.cancel')
-  cancel(@Param('id') id: string, @Body() body: unknown, @Headers('x-actor') actor = 'operator') {
+  cancel(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const { reason } = this.parse(cancelTripSchema, body);
-    return this.guard(() => this.trips.cancel(id, reason, actorName(actor)));
+    return this.guard(() => this.trips.cancel(id, reason, transportActorOf(request)));
   }
 
   private parse<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {

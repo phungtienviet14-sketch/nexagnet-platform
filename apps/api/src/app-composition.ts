@@ -97,6 +97,10 @@ import { SettingsQueryService } from './settings/settings-query.service.js';
 import { SourceTruthWriteService } from './settings/source-truth-write.service.js';
 import { SourceRegistryModule } from './source-registry/source-registry.module.js';
 import { StreamController } from './stream/stream.controller.js';
+import { DriverFundController } from './transport/costing/driver-fund.controller.js';
+import { DriverFundSelfController } from './transport/costing/driver-fund-self.controller.js';
+import { TransportCostingModule } from './transport/costing/transport-costing.module.js';
+import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
@@ -138,6 +142,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // VAN TAI — LOI. Mang theo `AuditLogService` cua chinh no vi `transport-core` khong bat buoc
   // keo theo `operations`; xem chu thich trong `transport.module.ts`.
   owned('transport-core', TransportModule),
+  // GIA THANH + SO QUY. Den cung `transport-costing` va bien mat cung no: mot khach van tai chi
+  // theo doi doi xe va chuyen khong co mot bang so cai nao duoc nap.
+  owned('transport-costing', TransportCostingModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -177,6 +184,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // BE MAT LAI XE — route rieng, khong phai mot nhanh `if` trong `TripsController` (`GD-23`).
   // Den cung `transport-core` va bien mat cung no.
   owned('transport-core', DriverTripsController),
+  owned('transport-costing', TripExpensesController),
+  owned('transport-costing', DriverFundController),
+  // SO QUY CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
+  owned('transport-costing', DriverFundSelfController),
 ];
 
 const guardProviders: readonly Provider[] = [

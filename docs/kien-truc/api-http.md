@@ -27,10 +27,23 @@
 | Header | Bắt buộc | Ý nghĩa |
 |---|---|---|
 | `x-api-key` | khi `AUTH_MODE=api-key` | Khoá tĩnh, so sánh theo thời gian hằng số |
-| `x-actor` | không | Người thao tác, ghi vào nhật ký thay đổi. Thiếu → `operator` |
+| `x-actor` | không | Người thao tác, ghi vào nhật ký thay đổi. Thiếu → `operator`. **Miền vận tải KHÔNG đọc header này** — xem ghi chú dưới bảng |
 | `x-request-id` | không | Nối một thao tác với dòng nhật ký của nó |
 | `Origin` | với mutation, khi `NODE_ENV=production` và `AUTH_MODE≠none` | Chống CSRF cho nhóm `/zalo` và `/settings`; sai origin → **403** |
 | `x-csrf-token` | với mutation, khi `AUTH_MODE=session` | Lấy từ `GET /auth/csrf` hoặc `POST /auth/login` |
+
+> ⚠️ **`x-actor` không phải danh tính đã xác thực — nó là một dòng chữ do bên gọi tự khai.** Sáu bề
+> mặt nền tảng (`orders`, `settings`, `campaigns`, `content`, `notifications`, `channels`) vẫn nhận
+> nó vì lịch sử, và ở đó nó chỉ ghi vào nhật ký thay đổi.
+>
+> **Miền vận tải (`/transport/*`) đã bỏ hẳn header này** kể từ T3R: `recordedBy`, `closedBy`,
+> `takenBy` và `AuditLog.actor` của vận tải đi vào các bảng **không sửa, không xoá** (`INV-20`), nên
+> một cái tên tự khai ở đó là bằng chứng giả **vĩnh viễn**. Danh tính vận tải chỉ đến từ
+> `transportActorOf()` (`apps/api/src/transport/transport-actor.ts`) với ba nguồn do **máy chủ**
+> dựng lên. Xem [transport-domain-contract.md](transport-domain-contract.md).
+>
+> Danh tính bền vững cho **toàn nền tảng** (`AuditLog.actorUserId` thay cho tên đăng nhập) là việc
+> riêng ở tầng nền tảng, chưa làm.
 
 ### Hình dạng lỗi
 
