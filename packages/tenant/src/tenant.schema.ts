@@ -161,6 +161,24 @@ export const CAPABILITY_IDS = [
    * chuyen nao cung re hon thuc te 35-45% — dung ty trong ma nguon khach ghi cho nhien lieu.
    */
   'transport-fuel',
+  /**
+   * VAN TAI — QUYET TOAN AR/AP, DOI TAC, HOA HONG, BIEN TRUC TIEP (`TX-05`).
+   *
+   * `dependencies` co BA phan tu, va ca ba la quan he THAT chu khong phai thu tu cho dep:
+   *
+   *   · `transport-fuel` — dong thu nhat trong nam dong tien ma Issue #87 bat buoc giu rieng la
+   *     "cong ty va cay xang", va no chi ton tai neu co ban giao cua `TX-04` de doc. Bat
+   *     `transport-settlement` ma tat fuel se cho ra mot he thong co BON dong thay vi nam, va dong
+   *     thieu la dong mang so tien lon nhat.
+   *   · `transport-costing` — bien truc tiep cua chuyen XE NHA la
+   *     `doanh thu - chi phi truc tiep - hoa hong`; so hang thu hai den tu `TX-03`.
+   *   · `transport-core` — nguon cua chuyen, khach hang va doi tac.
+   *
+   * Chan o day, LUC DOC GOI KHACH, chu khong o lan ghi cong no dau tien: mot cau hinh tu mau thuan
+   * ma boot duoc se de lai mot he thong bao cao cong no thieu han mot dong tien, va khong ai phat
+   * hien ra cho toi luc doi chieu voi cay xang cuoi thang.
+   */
+  'transport-settlement',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -481,6 +499,18 @@ const capabilityRequirements = {
    * that cua fuel van con nguyen o day thay vi bien mat cung mot dong bi xoa.
    */
   'transport-fuel': { dependencies: ['transport-core', 'transport-costing'] },
+  /**
+   * KHONG khai `policy`, cung ly le voi ba capability van tai truoc no: dieu khoan thanh toan va
+   * han muc tin dung la du lieu CUA TUNG KHACH HANG (bang `TransportCustomerTerms`), khong phai
+   * mot khoi cau hinh cua goi khach — khai o day se bien no thanh dieu kien boot.
+   *
+   * BA phu thuoc, khai TUONG MINH du `transport-fuel` da keo hai cai kia theo: danh sach nay la
+   * mot HOP DONG doc duoc, khong phai mot phep tinh toi gian. Ngay ai do doi phu thuoc cua fuel,
+   * phu thuoc that cua settlement van con nguyen o day thay vi bien mat cung mot dong bi xoa.
+   */
+  'transport-settlement': {
+    dependencies: ['transport-core', 'transport-costing', 'transport-fuel'],
+  },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {
