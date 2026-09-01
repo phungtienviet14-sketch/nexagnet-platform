@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuditLogService } from '../audit/audit-log.service.js';
 import type { PrismaService } from '../config/prisma.service.js';
@@ -44,6 +44,114 @@ describe('price period import preview', () => {
   });
 });
 
+/**
+ * Xoa dong gia khoi ky NHAP (Issue #116).
+ *
+ * Truoc day khong co duong nao: `applyImport()` chi upsert dong gui len, nen mot ban nhap copy 19
+ * mat hang khong the rut ve 1. Nguoi van hanh chi con cach nho nguoi co quyen goi API.
+ */
+describe('PricePeriodsService.removeDraftPrice', () => {
+  function makeWith(period: { id: string; status: string; prices: Array<{ sku: string }> }) {
+    const prisma = {
+      pricePeriod: {
+        findUnique: vi.fn(async () => ({ validMonth: '2026-09', ...period })),
+      },
+      price: { deleteMany: vi.fn(async () => ({ count: 1 })) },
+    } as unknown as PrismaService;
+    const audit = { append: vi.fn(async () => undefined) } as unknown as AuditLogService;
+    const knowledge = { reload: vi.fn(async () => undefined) } as unknown as KnowledgeService;
+    return {
+      service: new PricePeriodsService(prisma, audit, knowledge, 'prisma'),
+      prisma,
+      audit,
+      knowledge,
+    };
+  }
+
+  const draft = {
+    id: 'p1',
+    status: 'draft',
+    prices: [
+      { sku: 'A', wholesale: 100 },
+      { sku: 'B', wholesale: 200 },
+    ],
+  };
+
+  it('xoa dung mot dong cua dung ky do, va ghi audit kem trang thai truoc', async () => {
+    const { service, prisma, audit } = makeWith(draft);
+
+    const result = await service.removeDraftPrice('p1', 'A', 'operator', 'req-1');
+
+    expect(prisma.price.deleteMany).toHaveBeenCalledWith({ where: { periodId: 'p1', sku: 'A' } });
+    expect(result).toEqual({ periodId: 'p1', sku: 'A', removed: true, remaining: 1 });
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'price_period.price.remove',
+        entityType: 'PricePeriod',
+        entityId: 'p1',
+        before: { sku: 'A', wholesale: 100 },
+        after: null,
+        requestId: 'req-1',
+      }),
+    );
+  });
+
+  it('tu choi xoa dong cua ky DANG AP DUNG', async () => {
+    const { service, prisma } = makeWith({ ...draft, status: 'active' });
+
+    await expect(service.removeDraftPrice('p1', 'A', 'operator', null)).rejects.toThrow(
+      ConflictException,
+    );
+    expect(prisma.price.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('tu choi xoa dong cua ky DA LUU TRU', async () => {
+    const { service, prisma } = makeWith({ ...draft, status: 'archived' });
+
+    await expect(service.removeDraftPrice('p1', 'A', 'operator', null)).rejects.toThrow(
+      ConflictException,
+    );
+    expect(prisma.price.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('SKU khong thuoc ky nay thi tra 404 that tha, khong dung 500', async () => {
+    const { service, prisma } = makeWith(draft);
+
+    await expect(service.removeDraftPrice('p1', 'KHONG-CO', 'operator', null)).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.price.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('bam Xoa hai lan cung luc: lan sau dem duoc 0 dong -> 404, khong phai loi may chu', async () => {
+    const { service, prisma } = makeWith(draft);
+    (prisma.price.deleteMany as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      count: 0,
+    });
+
+    await expect(service.removeDraftPrice('p1', 'A', 'operator', null)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('SKU rong khong duoc bien thanh mot lenh xoa khong dieu kien', async () => {
+    const { service, prisma } = makeWith(draft);
+
+    await expect(service.removeDraftPrice('p1', '   ', 'operator', null)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(prisma.price.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('khong nap lai kien thuc: ban nhap chua bao gio nam trong bang gia dang chay', async () => {
+    const { service, knowledge } = makeWith(draft);
+
+    await service.removeDraftPrice('p1', 'A', 'operator', null);
+
+    expect(knowledge.reload).not.toHaveBeenCalled();
+  });
+});
+
 describe('PricePeriodsService lifecycle', () => {
   function make() {
     const prisma = {
@@ -51,21 +159,37 @@ describe('PricePeriodsService lifecycle', () => {
         findMany: vi.fn(async () => []),
         findFirst: vi.fn(async () => null),
         findUnique: vi.fn(async () => ({
-          id: 'p1', validMonth: '2026-08', status: 'draft', prices: rows,
+          id: 'p1',
+          validMonth: '2026-08',
+          status: 'draft',
+          prices: rows,
         })),
-        create: vi.fn(async ({ data }: { data: object }) => ({ id: 'p1', status: 'draft', ...data })),
+        create: vi.fn(async ({ data }: { data: object }) => ({
+          id: 'p1',
+          status: 'draft',
+          ...data,
+        })),
         updateMany: vi.fn(async () => ({ count: 0 })),
         update: vi.fn(async () => ({ id: 'p1', validMonth: '2026-08', status: 'active' })),
       },
       product: { findMany: vi.fn(async () => [{ sku: 'A' }, { sku: 'B' }]) },
-      price: { createMany: vi.fn(async () => ({ count: 2 })), upsert: vi.fn(async () => ({})) },
+      price: {
+        createMany: vi.fn(async () => ({ count: 2 })),
+        upsert: vi.fn(async () => ({})),
+        deleteMany: vi.fn(async () => ({ count: 1 })),
+      },
       $transaction: vi.fn(async (input: ((tx: unknown) => unknown) | unknown[]) =>
         typeof input === 'function' ? input(prisma) : Promise.all(input),
       ),
     } as unknown as PrismaService;
     const audit = { append: vi.fn(async () => undefined) } as unknown as AuditLogService;
     const knowledge = { reload: vi.fn(async () => undefined) } as unknown as KnowledgeService;
-    return { service: new PricePeriodsService(prisma, audit, knowledge, 'prisma'), prisma, audit, knowledge };
+    return {
+      service: new PricePeriodsService(prisma, audit, knowledge, 'prisma'),
+      prisma,
+      audit,
+      knowledge,
+    };
   }
 
   it('creates draft only; creation can never activate implicitly', async () => {
@@ -112,7 +236,10 @@ describe('PricePeriodsService lifecycle', () => {
   it('rejects activation until every catalog SKU has a valid price', async () => {
     const { service, prisma } = make();
     vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
-      id: 'p1', validMonth: '2026-08', status: 'draft', prices: [rows[0]],
+      id: 'p1',
+      validMonth: '2026-08',
+      status: 'draft',
+      prices: [rows[0]],
     } as never);
     await expect(service.activate('p1', 'sale', null)).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -127,7 +254,9 @@ describe('PricePeriodsService lifecycle', () => {
       prices: [rows[0]],
     } as never);
 
-    await expect(service.activate('p1', 'sale', 'req')).resolves.toMatchObject({ status: 'active' });
+    await expect(service.activate('p1', 'sale', 'req')).resolves.toMatchObject({
+      status: 'active',
+    });
 
     expect(prisma.pricePeriod.update).toHaveBeenCalledWith({
       where: { id: 'p1' },
@@ -154,7 +283,9 @@ describe('PricePeriodsService lifecycle', () => {
       source: 'test_only',
       prices: [rows[0]],
     } as never);
-    vi.mocked(prisma.pricePeriod.findFirst).mockResolvedValue({ id: 'production-current' } as never);
+    vi.mocked(prisma.pricePeriod.findFirst).mockResolvedValue({
+      id: 'production-current',
+    } as never);
 
     await expect(service.activate('p1', 'sale', null)).rejects.toThrow(
       'đã có kỳ production active cùng tháng',
@@ -201,14 +332,20 @@ describe('PricePeriodsService lifecycle', () => {
       source: 'test_only',
       prices: [...rows, { sku: 'C', wholesale: 300 }],
     } as never);
-    vi.mocked(prisma.product.findMany).mockResolvedValue([{ sku: 'A' }, { sku: 'B' }, { sku: 'C' }] as never);
+    vi.mocked(prisma.product.findMany).mockResolvedValue([
+      { sku: 'A' },
+      { sku: 'B' },
+      { sku: 'C' },
+    ] as never);
 
     await expect(service.activate('p1', 'sale', null)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('archives old same-month active period and activates atomically', async () => {
     const { service, prisma, knowledge } = make();
-    await expect(service.activate('p1', 'sale', 'req')).resolves.toMatchObject({ status: 'active' });
+    await expect(service.activate('p1', 'sale', 'req')).resolves.toMatchObject({
+      status: 'active',
+    });
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(prisma.pricePeriod.updateMany).toHaveBeenCalledWith({
       where: { validMonth: '2026-08', status: 'active', NOT: { id: 'p1' } },
@@ -217,41 +354,44 @@ describe('PricePeriodsService lifecycle', () => {
     expect(knowledge.reload).toHaveBeenCalled();
   });
 
-  it.each(['active', 'draft'] as const)('archives an exact %s period with audit and reload', async (status) => {
-    const { service, prisma, audit, knowledge } = make();
-    vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
-      id: 'p1',
-      validMonth: '2026-08',
-      status,
-      source: 'test_only',
-      prices: [rows[0]],
-    } as never);
-    vi.mocked(prisma.pricePeriod.update).mockResolvedValue({
-      id: 'p1',
-      validMonth: '2026-08',
-      status: 'archived',
-      source: 'test_only',
-    } as never);
+  it.each(['active', 'draft'] as const)(
+    'archives an exact %s period with audit and reload',
+    async (status) => {
+      const { service, prisma, audit, knowledge } = make();
+      vi.mocked(prisma.pricePeriod.findUnique).mockResolvedValue({
+        id: 'p1',
+        validMonth: '2026-08',
+        status,
+        source: 'test_only',
+        prices: [rows[0]],
+      } as never);
+      vi.mocked(prisma.pricePeriod.update).mockResolvedValue({
+        id: 'p1',
+        validMonth: '2026-08',
+        status: 'archived',
+        source: 'test_only',
+      } as never);
 
-    await expect(service.archive('p1', 'sale', 'req-archive')).resolves.toMatchObject({
-      id: 'p1',
-      status: 'archived',
-    });
+      await expect(service.archive('p1', 'sale', 'req-archive')).resolves.toMatchObject({
+        id: 'p1',
+        status: 'archived',
+      });
 
-    expect(prisma.pricePeriod.update).toHaveBeenCalledWith({
-      where: { id: 'p1' },
-      data: { status: 'archived' },
-    });
-    expect(audit.append).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'price_period.archive',
-        entityType: 'PricePeriod',
-        entityId: 'p1',
-        requestId: 'req-archive',
-      }),
-    );
-    expect(knowledge.reload).toHaveBeenCalled();
-  });
+      expect(prisma.pricePeriod.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { status: 'archived' },
+      });
+      expect(audit.append).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'price_period.archive',
+          entityType: 'PricePeriod',
+          entityId: 'p1',
+          requestId: 'req-archive',
+        }),
+      );
+      expect(knowledge.reload).toHaveBeenCalled();
+    },
+  );
 
   it('refuses to archive an already archived period', async () => {
     const { service, prisma, knowledge } = make();
@@ -281,7 +421,9 @@ describe('PricePeriodsService lifecycle', () => {
   it('allows a draft revision for a month that already has history', async () => {
     const { service, prisma } = make();
     vi.mocked(prisma.pricePeriod.findMany).mockResolvedValueOnce([{ id: 'exists' }] as never);
-    await expect(service.copyDraft('p1', { validMonth: '2026-09' }, 'sale', null)).resolves.toMatchObject({
+    await expect(
+      service.copyDraft('p1', { validMonth: '2026-09' }, 'sale', null),
+    ).resolves.toMatchObject({
       status: 'draft',
       validMonth: '2026-09',
     });

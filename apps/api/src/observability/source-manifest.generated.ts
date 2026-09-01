@@ -180,12 +180,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "price_period.activate": {
       "functionName": "PricePeriodsService.activate",
       "filePath": "apps/api/src/settings/price-periods.service.ts",
-      "line": 296
+      "line": 350
     },
     "price_period.archive": {
       "functionName": "PricePeriodsService.archive",
       "filePath": "apps/api/src/settings/price-periods.service.ts",
-      "line": 311
+      "line": 365
     },
     "price_period.copy": {
       "functionName": "PricePeriodsService.copyDraft",
@@ -200,7 +200,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "price_period.import.apply": {
       "functionName": "PricePeriodsService.applyImport",
       "filePath": "apps/api/src/settings/price-periods.service.ts",
-      "line": 229
+      "line": 237
+    },
+    "price_period.price.remove": {
+      "functionName": "PricePeriodsService.removeDraftPrice",
+      "filePath": "apps/api/src/settings/price-periods.service.ts",
+      "line": 270
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",

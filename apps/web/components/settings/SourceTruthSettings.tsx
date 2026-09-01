@@ -9,7 +9,6 @@ import {
   type SourceTruthRow,
 } from '../../lib/settings';
 import { SettingsPanelState } from './SettingsPanelState';
-import { PricePeriodsSettings } from './PricePeriodsSettings';
 
 type FieldDefinition = {
   key: string;
@@ -273,14 +272,31 @@ function SourceTruthEditor({ definition, row, isPending, onCancel, onSave }: Edi
 type SourceTruthProps = {
   /** ADMIN_UI=off thi /admin tra 404 — khong duoc chia loi dan sang do. */
   adminUiEnabled: boolean;
+  /**
+   * Loai du lieu duoc hien — de mot bang du lieu chung phuc vu duoc HAI viec khac nhau.
+   *
+   * "Sản phẩm & bảng giá" can danh muc hang; "Đại lý & nhóm Zalo" can dai ly va deal rieng. Truoc
+   * day ca nam loai nam chung mot the ten `Nguồn sự thật`, nen muon sua mot dai ly thi phai doan
+   * xem no thuoc "nguồn sự thật" hay "nhóm & thành viên" (#117 §2).
+   */
+  resources?: readonly SourceTruthResource[];
+  heading?: { eyebrow: string; title: string; description: string };
 };
 
-export function SourceTruthSettings({ adminUiEnabled }: SourceTruthProps) {
+export function SourceTruthSettings({ adminUiEnabled, resources, heading }: SourceTruthProps) {
+  const visibleResources = resources
+    ? RESOURCES.filter((item) => resources.includes(item.resource))
+    : RESOURCES;
   const queryClient = useQueryClient();
-  const [activeResource, setActiveResource] = useState<SourceTruthResource>('dealers');
+  const [activeResource, setActiveResource] = useState<SourceTruthResource>(
+    () => visibleResources[0]?.resource ?? 'dealers',
+  );
   const [editorRow, setEditorRow] = useState<SourceTruthRow | null>();
   const query = useQuery({ queryKey: ['settings-source-truth'], queryFn: settingsApi.sourceTruth });
-  const definition = RESOURCES.find((item) => item.resource === activeResource) ?? RESOURCES[0]!;
+  const definition =
+    visibleResources.find((item) => item.resource === activeResource) ??
+    visibleResources[0] ??
+    RESOURCES[0]!;
   const section = query.data?.find((item) => item.resource === activeResource);
   const [savedLabel, setSavedLabel] = useState<string>();
   const saveMutation = useMutation({
@@ -305,9 +321,12 @@ export function SourceTruthSettings({ adminUiEnabled }: SourceTruthProps) {
     <div className="settings-section-stack">
       <header className="settings-section-heading">
         <div>
-          <p className="settings-eyebrow">Nguồn sự thật có kiểm soát</p>
-          <h2>Đại lý, sản phẩm & giá</h2>
-          <p>Dữ liệu ở đây áp dụng ngay cho đơn mới; đơn cũ giữ nguyên giá đã chốt.</p>
+          <p className="settings-eyebrow">{heading?.eyebrow ?? 'Dữ liệu doanh nghiệp'}</p>
+          <h2>{heading?.title ?? 'Đại lý, sản phẩm & giá'}</h2>
+          <p>
+            {heading?.description ??
+              'Dữ liệu ở đây áp dụng ngay cho đơn mới; đơn cũ giữ nguyên giá đã chốt.'}
+          </p>
         </div>
         {adminUiEnabled && (
           <a className="settings-button settings-button--quiet" href="/admin">
@@ -324,19 +343,19 @@ export function SourceTruthSettings({ adminUiEnabled }: SourceTruthProps) {
         />
       )}
 
-      <div className="settings-priority-rule" aria-label="Thứ tự ưu tiên giá">
-        <span>Deal riêng đại lý + SKU</span>
-        <b>ưu tiên hơn</b>
-        <span>Đơn giá CTV trong bảng chung</span>
-        <b>nếu thiếu</b>
-        <span className="settings-danger">Cần Sale nhập tay</span>
-      </div>
-
-      <PricePeriodsSettings />
+      {visibleResources.some((item) => item.resource === 'overrides') && (
+        <div className="settings-priority-rule" aria-label="Thứ tự ưu tiên giá">
+          <span>Deal riêng của đại lý cho một mặt hàng</span>
+          <b>ưu tiên hơn</b>
+          <span>Đơn giá CTV trong bảng giá chung</span>
+          <b>nếu thiếu cả hai</b>
+          <span className="settings-danger">Sale nhập tay</span>
+        </div>
+      )}
 
       <div className="settings-resource-layout">
-        <nav className="settings-resource-nav" aria-label="Loại dữ liệu nguồn sự thật">
-          {RESOURCES.map((item) => {
+        <nav className="settings-resource-nav" aria-label="Loại dữ liệu doanh nghiệp">
+          {visibleResources.map((item) => {
             const resourceSection = query.data?.find(
               (candidate) => candidate.resource === item.resource,
             );

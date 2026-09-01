@@ -64,6 +64,8 @@ export interface SettingsSummary {
   channelMode: ChannelMode;
   /** `off` => /admin tra 404; UI phai an moi loi dan sang AdminJS. */
   adminUi: 'on' | 'off';
+  /** Moi truong dang chay du lieu THU hay du lieu KHACH — quyet dinh co cho tao bang gia chay thu. */
+  dataClassification: 'test' | 'customer';
   zcaState: string;
   zcaDisplayName?: string;
   botIdentity: BotIdentitySummary;
@@ -424,6 +426,12 @@ export function parseSettingsSummary(value: unknown): SettingsSummary {
     channelMode: enumValue(record.channelMode ?? zca.channelMode, CHANNEL_MODES, 'mock'),
     // Mac dinh 'off': tha an nut con hon hien nut dan toi /admin dang tra 404.
     adminUi: enumValue(record.adminUi, ['on', 'off'] as const, 'off'),
+    // Mac dinh 'customer': khong chac chan thi KHONG mo duong tao bang gia chay thu.
+    dataClassification: enumValue(
+      record.dataClassification,
+      ['test', 'customer'] as const,
+      'customer',
+    ),
     zcaState: stringValue(zca.state ?? record.zcaState ?? record.state) ?? 'unknown',
     ...(stringValue(zca.displayName ?? record.zcaDisplayName ?? record.displayName)
       ? {
@@ -1076,7 +1084,6 @@ async function campaignMutation(path: string, body: unknown): Promise<CampaignVi
   return campaign;
 }
 
-
 /** Man "San sang van hanh" (§12 gd1-ultty). Chi doc; khong bia du lieu khach. */
 export type ReadinessStatus = 'ready' | 'missing' | 'warning' | 'blocked';
 
@@ -1169,6 +1176,31 @@ export const settingsApi = {
       ),
     );
     return parsePricePreview(isRecord(value) ? value.preview : value);
+  },
+  /**
+   * Xoa han mot mat hang khoi ky NHAP.
+   *
+   * Bo dong khoi bang roi bam Luu KHONG xoa duoc no: `applyImport()` chi upsert dong gui len va
+   * khong bao gio prune dong bi bo ra, nen dong cu se quay lai sau khi tai lai trang (Issue #116).
+   * Day la duong duy nhat that su xoa.
+   */
+  removeDraftPriceRow: async (
+    periodId: string,
+    sku: string,
+  ): Promise<{ periodId: string; sku: string; removed: boolean; remaining: number }> => {
+    const value = unwrapEnvelope(
+      await requestJson(
+        `/settings/price-periods/${encodeURIComponent(periodId)}/prices/${encodeURIComponent(sku)}/remove`,
+        jsonInit('POST', { confirmed: true }),
+      ),
+    );
+    const record = isRecord(value) ? value : {};
+    return {
+      periodId: typeof record.periodId === 'string' ? record.periodId : periodId,
+      sku: typeof record.sku === 'string' ? record.sku : sku,
+      removed: record.removed === true,
+      remaining: typeof record.remaining === 'number' ? record.remaining : 0,
+    };
   },
   validatePricePeriod: async (periodId: string): Promise<PricePeriodValidation> =>
     parsePriceValidation(
@@ -1517,11 +1549,17 @@ export const notificationsApi = {
   updateEmail: async (
     config: Partial<NotificationSettingsView['email']>,
   ): Promise<NotificationSettingsView> =>
-    (await requestJson('/settings/notifications/email', jsonInit('PUT', config))) as NotificationSettingsView,
+    (await requestJson(
+      '/settings/notifications/email',
+      jsonInit('PUT', config),
+    )) as NotificationSettingsView,
   updateZalo: async (
     config: Partial<NotificationSettingsView['zalo']>,
   ): Promise<NotificationSettingsView> =>
-    (await requestJson('/settings/notifications/zalo', jsonInit('PUT', config))) as NotificationSettingsView,
+    (await requestJson(
+      '/settings/notifications/zalo',
+      jsonInit('PUT', config),
+    )) as NotificationSettingsView,
   testEmail: async (payload: {
     to?: string;
     config?: Partial<NotificationSettingsView['email']>;

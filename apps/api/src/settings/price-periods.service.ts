@@ -193,7 +193,10 @@ export class PricePeriodsService {
 
   async previewImport(periodId: string, input: unknown): Promise<PriceImportPreview> {
     this.assertWritable();
-    const parsed = z.object({ rows: importRowsSchema, overwrite: z.boolean().default(false) }).strict().safeParse(input);
+    const parsed = z
+      .object({ rows: importRowsSchema, overwrite: z.boolean().default(false) })
+      .strict()
+      .safeParse(input);
     if (!parsed.success) throw new BadRequestException('Dữ liệu import bảng giá không hợp lệ');
     const period = await this.period(periodId);
     if (period.status !== 'draft') throw new ConflictException('Chỉ được import vào kỳ draft');
@@ -208,10 +211,15 @@ export class PricePeriodsService {
 
   async applyImport(periodId: string, input: unknown, actor: string, requestId: string | null) {
     const parsed = z
-      .object({ rows: importRowsSchema, overwrite: z.boolean().default(false), confirmed: z.literal(true) })
+      .object({
+        rows: importRowsSchema,
+        overwrite: z.boolean().default(false),
+        confirmed: z.literal(true),
+      })
       .strict()
       .safeParse(input);
-    if (!parsed.success) throw new BadRequestException('Import apply cần dữ liệu hợp lệ và confirmed=true');
+    if (!parsed.success)
+      throw new BadRequestException('Import apply cần dữ liệu hợp lệ và confirmed=true');
     const preview = await this.previewImport(periodId, {
       rows: parsed.data.rows,
       overwrite: parsed.data.overwrite,
@@ -230,6 +238,42 @@ export class PricePeriodsService {
     return { periodId, preview };
   }
 
+  /**
+   * Xoa MOT dong gia khoi ky NHAP — duong duy nhat de bo mot SKU da tro vao ban nhap.
+   *
+   * `applyImport()` chi upsert dong gui len, khong bao gio prune dong bi bo ra, nen truoc day mot
+   * ban nhap copy 19 SKU khong the rut ve 1 SKU bang bat ky thao tac nao tren UI (Issue #116).
+   *
+   * Fail closed theo dung thu tu: ky phai ton tai -> phai la `draft` -> dong phai thuoc chinh ky
+   * do. Ky `active`/`archived` la su that nghiep vu da chot: khong xoa dong cua chung, va cung
+   * khong co duong hard-delete ca ky.
+   */
+  async removeDraftPrice(periodId: string, sku: string, actor: string, requestId: string | null) {
+    this.assertWritable();
+    const parsedSku = z.string().trim().min(1).max(128).safeParse(sku);
+    if (!parsedSku.success) throw new BadRequestException('SKU cần xóa không hợp lệ');
+    const period = await this.period(periodId);
+    if (period.status !== 'draft') {
+      throw new ConflictException('Chỉ được xóa dòng giá khỏi kỳ nháp');
+    }
+    const row = period.prices.find((price) => price.sku === parsedSku.data);
+    if (!row) {
+      throw new NotFoundException(`Kỳ nháp này không có dòng giá cho SKU ${parsedSku.data}`);
+    }
+    // `deleteMany` chu khong phai `delete`: hai lan bam Xoa cung luc thi lan sau chi dem duoc 0
+    // dong roi tra 404 that tha — thay vi de Prisma P2025 noi len thanh 500 cho mot lan thu lai
+    // binh thuong (Issue #116 yeu cau ro dieu nay).
+    const deleted = await this.prisma.price.deleteMany({ where: { periodId, sku: row.sku } });
+    if (deleted.count === 0) {
+      throw new NotFoundException(`Kỳ nháp này không có dòng giá cho SKU ${parsedSku.data}`);
+    }
+    await this.record('price_period.price.remove', periodId, actor, row, null, requestId);
+    // KHONG goi `knowledge.reload()`: ban nhap chua bao gio nam trong snapshot nghiep vu
+    // (`loadSnapshot()` chi doc ky active dung thang hien hanh), nen xoa dong nhap khong doi gia
+    // dang chay. Reload o day chi lam cham va tao mot lan doc DB khong co ly do.
+    return { periodId, sku: row.sku, removed: true, remaining: period.prices.length - 1 };
+  }
+
   async validate(periodId: string) {
     this.assertWritable();
     const period = await this.period(periodId);
@@ -239,7 +283,9 @@ export class PricePeriodsService {
     if (!period.validMonth || !monthSchema.safeParse(period.validMonth).success) {
       errors.push('Kỳ giá thiếu validMonth YYYY-MM hợp lệ');
     }
-    const missing = products.filter((product) => !bySku.has(product.sku)).map((product) => product.sku);
+    const missing = products
+      .filter((product) => !bySku.has(product.sku))
+      .map((product) => product.sku);
     if (isTestOnlyPeriod(period.source)) {
       if (period.prices.length < 1 || period.prices.length > 2) {
         errors.push('Kỳ giá test-only chỉ được có 1-2 SKU để smoke pre-pilot');
@@ -249,7 +295,13 @@ export class PricePeriodsService {
     }
     const invalid = period.prices.filter((price) => price.wholesale <= 0).map((price) => price.sku);
     if (invalid.length > 0) errors.push(`Wholesale phải lớn hơn 0: ${invalid.join(', ')}`);
-    return { valid: errors.length === 0, errors, warnings: [], productCount: products.length, priceCount: period.prices.length };
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings: [],
+      productCount: products.length,
+      priceCount: period.prices.length,
+    };
   }
 
   async activate(periodId: string, actor: string, requestId: string | null) {
@@ -258,7 +310,9 @@ export class PricePeriodsService {
     if (period.status !== 'draft') throw new ConflictException('Chỉ kỳ draft mới được activate');
     const testOnly = isTestOnlyPeriod(period.source);
     if (testOnly && loadFoundationEnv().DATA_CLASSIFICATION !== 'test') {
-      throw new ConflictException('Kỳ giá test-only chỉ được activate trong môi trường dữ liệu TEST');
+      throw new ConflictException(
+        'Kỳ giá test-only chỉ được activate trong môi trường dữ liệu TEST',
+      );
     }
     const result = await this.validate(periodId);
     if (!result.valid || !period.validMonth) throw new BadRequestException(result.errors);
@@ -328,9 +382,22 @@ export class PricePeriodsService {
     }
   }
 
-  private async record(action: string, id: string, actor: string, before: unknown, after: unknown, requestId: string | null) {
+  private async record(
+    action: string,
+    id: string,
+    actor: string,
+    before: unknown,
+    after: unknown,
+    requestId: string | null,
+  ) {
     await this.audit.append({
-      actor: actorName(actor), action, entityType: 'PricePeriod', entityId: id, before, after, requestId,
+      actor: actorName(actor),
+      action,
+      entityType: 'PricePeriod',
+      entityId: id,
+      before,
+      after,
+      requestId,
     });
   }
 }
