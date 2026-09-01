@@ -417,6 +417,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/channels/outbound-channel.router.ts",
       "line": 122
     },
+    "commission.select|*": {
+      "functionName": "SettlementService.recogniseCommission",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 427
+    },
+    "commission.select|COMMISSION_RULE_AMBIGUOUS": {
+      "functionName": "SettlementService.recogniseCommission",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 380
+    },
+    "commission.select|COMMISSION_RULE_NONE_APPLICABLE": {
+      "functionName": "SettlementService.recogniseCommission",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 366
+    },
+    "commission.select|COMMISSION_TRIP_NOT_PARTNER_REFERRED": {
+      "functionName": "SettlementService.recogniseCommission",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 324
+    },
     "conflict.resolution|*": {
       "functionName": "SourceRegistryService.resolveConflict",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
@@ -740,6 +760,61 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
       "line": 719
+    },
+    "settlement.allocate|*": {
+      "functionName": "SettlementService.allocate",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 712
+    },
+    "settlement.correct|*": {
+      "functionName": "SettlementService.ingestFuelHandoff",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 543
+    },
+    "settlement.correct|ADJUSTMENT_POSTED": {
+      "functionName": "SettlementService.adjustDocument",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 617
+    },
+    "settlement.correct|CORRECTION_NO_CHANGE": {
+      "functionName": "SettlementService.adjustDocument",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 578
+    },
+    "settlement.correct|REVERSAL_POSTED": {
+      "functionName": "SettlementService.reverseDocument",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 670
+    },
+    "settlement.credit_check|*": {
+      "functionName": "SettlementService.creditExposure",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 753
+    },
+    "settlement.recognise|*": {
+      "functionName": "SettlementService.reportRecognition",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 136
+    },
+    "settlement.recognise|SETTLEMENT_TRIP_NOT_RECONCILED": {
+      "functionName": "SettlementService.recogniseCustomerReceivable",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 181
+    },
+    "settlement.recognise|SETTLEMENT_TRIP_REVENUE_MISSING": {
+      "functionName": "SettlementService.recogniseCustomerReceivable",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 195
+    },
+    "settlement_period.transition|*": {
+      "functionName": "SettlementService.transitionPeriod",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 835
+    },
+    "settlement_period.transition|PERIOD_OPENED": {
+      "functionName": "SettlementService.openPeriod",
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
+      "line": 818
     },
     "source.approval|*": {
       "filePath": "apps/api/src/source-registry/source-registry.service.ts"

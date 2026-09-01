@@ -922,6 +922,8 @@ model TransportCustomer {
   updatedAt DateTime             @updatedAt
 
   trips TransportTrip[]
+  /// `TX-05` — dieu khoan thanh toan + han muc tin dung. Tuy chon: khach chua khai thi khong co hang.
+  terms TransportCustomerTerms?
 
   @@index([status])
 }
@@ -937,6 +939,9 @@ model TransportPartner {
   roles         TransportPartnerRole[]
   carriedTrips  TransportTrip[]        @relation("TransportTripCarrier")
   referredTrips TransportTrip[]        @relation("TransportTripReferrer")
+  /// `TX-05` — luat hoa hong dat rieng cho doi tac nay. KHONG phai cong no: cong no cua doi tac
+  /// nam o `TransportSettlementDocument` va tach theo `flow`, vi mot doi tac mang hai vai (VT-054).
+  commissionRules TransportCommissionRule[]
 
   @@index([status])
 }
@@ -997,6 +1002,11 @@ model TransportTrip {
   expenses    TransportTripExpense[]
   /// `TX-04` — phieu do dau cua chuyen. `INV-04`: chuyen thue xe ngoai khong duoc co dong nao o day.
   fuelEntries TransportFuelEntry[]
+  /// `TX-05` — chung tu AR/AP sinh ra tu chuyen nay. NHIEU hang la binh thuong: mot chuyen thue xe
+  /// ngoai vua co doanh thu khach (`CUSTOMER_FREIGHT`) vua co cong no nha xe (`CARRIER_SERVICE`).
+  settlementDocuments TransportSettlementDocument[]
+  /// `TX-05` — lan tinh hoa hong cua chuyen. Nhieu nhat MOT.
+  commission          TransportCommissionCalculation?
 
   @@index([status])
   @@index([businessDate])
@@ -2219,4 +2229,266 @@ model BusinessDecisionRelation {
 
   @@unique([decisionId, kind, targetType, targetId])
   @@index([targetType, targetId])
+}
+
+// ===================================================================
+// TX-05 SETTLEMENT — AR/AP, doi tac, hoa hong, bien truc tiep (Issue #87)
+// ===================================================================
+
+enum TransportSettlementDirection {
+  RECEIVABLE
+  PAYABLE
+}
+
+enum TransportSettlementFlow {
+  CUSTOMER_FREIGHT
+  FUEL_SUPPLIER
+  CARRIER_SERVICE
+  PARTNER_COMMISSION
+}
+
+enum TransportSettlementCounterpartyKind {
+  CUSTOMER
+  PARTNER
+  FUEL_SUPPLIER
+}
+
+enum TransportSettlementDocumentKind {
+  ORIGINAL
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum TransportSettlementDocumentStatus {
+  POSTED
+  REVERSED
+}
+
+enum TransportCommissionCalcKind {
+  PERCENTAGE
+  FIXED
+}
+
+enum TransportCommissionRuleStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TransportSettlementPeriodStatus {
+  OPEN
+  CLOSING
+  CLOSED
+  REOPENED
+}
+
+/// CHUNG TU quyet toan — mot hang cho MOT nghia vu tien, o MOT dong, theo MOT chieu.
+///
+/// `direction` + `flow` + `counterpartyKind` deu BAT BUOC: mot chung tu khong thuoc dong nao la
+/// thu khong bieu dien duoc. Do la cach "nam dong giu rieng" duoc giu bang CAU TRUC thay vi bang
+/// ky luat truy van.
+///
+/// BAT BIEN: mot hang `ORIGINAL` khong bao gio bi sua noi dung (`INV-20`). Sua = ghi them mot hang
+/// `ADJUSTMENT` (chenh lech co dau) hoac `REVERSAL` (dao toan bo), ca hai tro nguoc ve ban goc qua
+/// `adjustsId`. Ban goc giu nguyen MOI truong; chi `status` doi sang `REVERSED` khi bi dao.
+///
+/// `@@unique([sourceContext, sourceId])` la khoa chong ghi trung ma Issue #87 yeu cau. Mot su kien
+/// kinh te chi sinh ra DUNG mot chung tu goc du duong goi chay lai bao nhieu lan.
+/// `sourceFingerprint` la nua thu hai: cung khoa ma khac noi dung la LOI BEN GOI, va tra ve ban cu
+/// se lam ho tin rang con so MOI cua ho da duoc ghi.
+///
+/// `signedAmount` CO DAU vi `ADJUSTMENT` mang chenh lech, va chenh lech co the am. Doc mot chuoi
+/// chung tu = cong `signedAmount` cua ban goc va moi ban sua cua no.
+model TransportSettlementDocument {
+  id                String                              @id @default(cuid())
+  direction         TransportSettlementDirection
+  flow              TransportSettlementFlow
+  counterpartyKind  TransportSettlementCounterpartyKind
+  counterpartyId    String
+  kind              TransportSettlementDocumentKind     @default(ORIGINAL)
+  status            TransportSettlementDocumentStatus   @default(POSTED)
+  /// So nguyen dong CO DAU. Khoang bi `CHECK` bo hep cho khop `money()` — xem migration.
+  signedAmount      BigInt
+  currencyCode      String                              @default("VND") @db.VarChar(3)
+  /// `INV-25` — ngay GHI NHAN, tinh mot lan luc ghi theo mui gio tenant.
+  businessDate      String                              @db.VarChar(10)
+  /// `businessDate` cong dieu khoan thanh toan cua khach. NULL o chung tu khong co han rieng.
+  dueDate           String?                             @db.VarChar(10)
+  tripId            String?
+  trip              TransportTrip?                      @relation(fields: [tripId], references: [id])
+  sourceContext     String                              @db.VarChar(60)
+  sourceId          String                              @db.VarChar(160)
+  sourceFingerprint String
+  /// Ban goc ma hang nay sua. NULL o `ORIGINAL`.
+  adjustsId         String?
+  adjusts           TransportSettlementDocument?        @relation("TransportSettlementAdjustment", fields: [adjustsId], references: [id], onDelete: Restrict)
+  adjustedBy        TransportSettlementDocument[]       @relation("TransportSettlementAdjustment")
+  /// `GD-16` — CHI la so tham chieu. Khong co hoa don dien tu nao duoc phat o day.
+  invoiceRef        String?
+  note              String?
+  recordedBy        String
+  createdAt         DateTime                            @default(now())
+
+  allocations TransportSettlementAllocation[]
+  commission  TransportCommissionCalculation?
+
+  @@unique([sourceContext, sourceId])
+  @@index([direction, flow, counterpartyId])
+  @@index([direction, dueDate])
+  @@index([tripId])
+  @@index([adjustsId])
+}
+
+/// PHAN BO thanh toan vao mot chung tu. Cong don cua no la "da tra/da thu duoc bao nhieu".
+///
+/// KHONG co cot `paidAmount` tren `TransportSettlementDocument`, cung ly le voi `INV-01` cua
+/// `TX-03`: so da tra la KET QUA cong don, khong phai mot o nho. Mot o nho se lech vinh vien ngay
+/// lan dau mot loi xay ra giua "ghi phan bo" va "cap nhat so da tra".
+model TransportSettlementAllocation {
+  id            String                      @id @default(cuid())
+  documentId    String
+  document      TransportSettlementDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  /// DUONG. Mot lan tra lai tien la mot `ADJUSTMENT` tren chung tu, khong phai mot phan bo am.
+  amount        BigInt
+  businessDate  String                      @db.VarChar(10)
+  method        String                      @db.VarChar(40)
+  sourceContext String                      @db.VarChar(60)
+  sourceId      String                      @db.VarChar(160)
+  note          String?
+  recordedBy    String
+  createdAt     DateTime                    @default(now())
+
+  @@unique([sourceContext, sourceId])
+  @@index([documentId])
+}
+
+/// KY QUYET TOAN theo DONG TIEN. `CLOSED`/`CLOSING` deu dong bang ky: mot chung tu co ngay nghiep
+/// vu roi vao khoang do se bi tu choi (Issue #87 — "closed period rejects silent backdated
+/// mutation"). Khong chong lap trong cung mot dong — cuong che bang EXCLUDE constraint trong
+/// migration, cung khuon voi `TransportDriverFundPeriod` cua `TX-03`.
+model TransportSettlementPeriod {
+  id           String                          @id @default(cuid())
+  flow         TransportSettlementFlow
+  startDate    String                          @db.VarChar(10)
+  endDate      String                          @db.VarChar(10)
+  status       TransportSettlementPeriodStatus @default(OPEN)
+  closedAt     DateTime?
+  closedBy     String?
+  reopenedAt   DateTime?
+  reopenedBy   String?
+  reopenReason String?
+  createdAt    DateTime                        @default(now())
+  updatedAt    DateTime                        @updatedAt
+
+  @@index([flow, status])
+  @@index([flow, startDate, endDate])
+}
+
+/// DIEU KHOAN THUONG MAI cua mot khach — han thanh toan va han muc tin dung.
+///
+/// `paymentTermDays` la CAU HINH (15/30/45 theo Issue #87), khong phai hang so trong code: hai
+/// khach cua cung mot tenant co the co han khac nhau, va do la thu thay doi trong doi hop dong.
+///
+/// `creditLimit` NULLABLE = khong dat han muc. `null` KHAC `0`: `0` nghia la khach nay khong duoc
+/// no dong nao, va gop hai thu do lai se bien mot khach chua khai han muc thanh mot khach bi chan.
+/// Ca hai deu chi sinh ra CANH BAO, khong bao gio chan chuyen (Issue #87 — "warning, not block").
+model TransportCustomerTerms {
+  customerId      String            @id
+  customer        TransportCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  paymentTermDays Int
+  creditLimit     BigInt?
+  currencyCode    String            @default("VND") @db.VarChar(3)
+  updatedBy       String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+/// LUAT HOA HONG — PHAM VI, khong phai con so. Con so nam o `TransportCommissionRuleVersion`.
+///
+/// Tach hai bang vi chung co VONG DOI khac nhau: pham vi ("doi tac X tren tuyen Y") ben vung, con
+/// ty le thi doi theo dot dam phan. Gop lai thi moi lan doi ty le se hoac ghi de mat ty le cu —
+/// tuc mot chuyen da quyet toan doc lai ra con so khac — hoac sinh mot hang pham vi trung lap thu
+/// hai, va tu do phep chon luat khong con tat dinh.
+///
+/// `@@unique([partnerId, routeKey])` giu cho mot pham vi chi co MOT luat. Khong co no thi hai luat
+/// cung pham vi se lam phep chon nhap nhang, va Issue #87 doi nhap nhang phai FAIL CLOSED — de bat
+/// duoc thi truoc het khong duoc phep tao ra no mot cach im lang.
+model TransportCommissionRule {
+  id        String                        @id @default(cuid())
+  /// NULL = moi doi tac.
+  partnerId String?
+  partner   TransportPartner?             @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  /// NULL = moi tuyen. Khoa tuyen chuan hoa, xem `commissionRouteKey()`.
+  routeKey  String?                       @db.VarChar(160)
+  status    TransportCommissionRuleStatus @default(ACTIVE)
+  createdBy String
+  createdAt DateTime                      @default(now())
+  updatedAt DateTime                      @updatedAt
+
+  versions TransportCommissionRuleVersion[]
+
+  @@unique([partnerId, routeKey])
+  @@index([status])
+  @@index([partnerId])
+}
+
+/// MOT BAN cua mot luat hoa hong — CHI THEM, khong bao gio sua.
+///
+/// `rateBasisPoints` la DIEM CO BAN (1% = 100), so NGUYEN. Khong dung so thuc cho ty le vi cung
+/// mot ly do `GD-03` cam so thuc cho tien: `0.1 + 0.2` khong bang `0.3`, va mot ty le hoa hong sai
+/// o chu so thu muoi lam se thanh mot khoan tien sai sau khi nhan voi gia cuoc.
+model TransportCommissionRuleVersion {
+  id              String                      @id @default(cuid())
+  ruleId          String
+  rule            TransportCommissionRule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  version         Int
+  calcKind        TransportCommissionCalcKind
+  /// BAT BUOC khi `calcKind = PERCENTAGE`, NULL khi `FIXED`. Cuong che bang `CHECK` o migration.
+  rateBasisPoints Int?
+  /// BAT BUOC khi `calcKind = FIXED`, NULL khi `PERCENTAGE`.
+  fixedAmount     BigInt?
+  effectiveFrom   String                      @db.VarChar(10)
+  /// NULL = con hieu luc.
+  effectiveTo     String?                     @db.VarChar(10)
+  publishedAt     DateTime                    @default(now())
+  publishedBy     String
+
+  calculations TransportCommissionCalculation[]
+
+  @@unique([ruleId, version])
+  @@index([ruleId, effectiveFrom])
+}
+
+/// ANH CHUP mot lan tinh hoa hong — dau vao, ban luat da chon, ket qua tho va ket qua cuoi.
+///
+/// VI SAO CHUP LAI THAY VI TRO KHOA NGOAI KHONG: mot chuyen da quyet toan phai doc ra CUNG mot con
+/// so mai mai (Issue #87 acceptance 8). Chi giu `ruleVersionId` thi cau tra loi "vi sao la con so
+/// nay" phu thuoc vao mot hang khac con song va con nguyen — va bang luat la thu nguoi dung sua.
+///
+/// `rawAmount` la chuoi thap phan TRUOC lam tron, giu de doi soat duoc phep lam tron. Mot con so
+/// `resultAmount` don doc khong tra loi duoc "lam tron len hay xuong, tu bao nhieu".
+///
+/// `@@unique([tripId])` — mot chuyen sinh DUNG mot lan tinh hoa hong.
+model TransportCommissionCalculation {
+  id                      String                         @id @default(cuid())
+  tripId                  String                         @unique
+  trip                    TransportTrip                  @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  ruleVersionId           String
+  ruleVersion             TransportCommissionRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Restrict)
+  /// `PARTNER_ROUTE` / `PARTNER` / `ROUTE` / `GLOBAL` — bac uu tien da thang, chup lai.
+  ruleScopeSnapshot       String                         @db.VarChar(20)
+  calcKindSnapshot        TransportCommissionCalcKind
+  rateBasisPointsSnapshot Int?
+  fixedAmountSnapshot     BigInt?
+  /// Gia cuoc lam CAN CU tinh. Chup lai vi gia cuoc chuyen co the bi sua sau do.
+  basisAmount             BigInt
+  rawAmount               String                         @db.VarChar(40)
+  resultAmount            BigInt
+  documentId              String?                        @unique
+  document                TransportSettlementDocument?   @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  partnerId               String
+  businessDate            String                         @db.VarChar(10)
+  createdAt               DateTime                       @default(now())
+
+  @@index([partnerId])
+  @@index([ruleVersionId])
 }

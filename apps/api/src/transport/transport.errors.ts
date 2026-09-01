@@ -2,6 +2,8 @@ import type { TransportCostingErrorReason } from './costing/costing-errors.js';
 import type { TransportCostingDecisionReason } from './costing/costing-decisions.js';
 import type { TransportFuelDecisionReason } from './fuel/fuel-decisions.js';
 import type { TransportFuelErrorReason } from './fuel/fuel-errors.js';
+import type { TransportSettlementDecisionReason } from './settlement/settlement-decisions.js';
+import type { TransportSettlementErrorReason } from './settlement/settlement-errors.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
 
 /**
@@ -78,7 +80,9 @@ export type TransportErrorReason =
   | TransportCostingDecisionReason
   | TransportCostingErrorReason
   | TransportFuelDecisionReason
-  | TransportFuelErrorReason;
+  | TransportFuelErrorReason
+  | TransportSettlementDecisionReason
+  | TransportSettlementErrorReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh

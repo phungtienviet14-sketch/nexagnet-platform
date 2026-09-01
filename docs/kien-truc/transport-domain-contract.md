@@ -450,7 +450,7 @@ Phần **cốt lõi** của `INV-23` không đổi trong cả hai cách đọc: 
 | `transport-core` | `TX-01` Fleet + `TX-02` Trip Operations | — | `transportCore` (loại chuyến bật, quy tắc phân công) |
 | `transport-costing` | `TX-03` Costing + Driver Fund | `transport-core` | `transportCosting` (danh mục chi phí, kỳ quỹ, **có duyệt tạm ứng hay không**) |
 | `transport-fuel` | `TX-04` Fuel | `transport-core`, `transport-costing` | `transportFuel` (định mức, dung sai, khóa so khớp) |
-| `transport-settlement` | `TX-05` Settlement | `transport-core` | `transportSettlement` (kỳ, hoa hồng, hạn mức công nợ) |
+| `transport-settlement` | `TX-05` Settlement | `transport-core`, `transport-costing`, `transport-fuel` | — (xem §10.3) |
 | `transport-asset-compliance` | `TX-06` | `transport-core` | `transportCompliance` (ngưỡng cảnh báo hết hạn) |
 | `transport-workforce` | `TX-07` | `transport-core`, `transport-costing` | `transportPayroll` (tham số lương) |
 
@@ -461,6 +461,31 @@ khác.
 
 **Không** tạo capability cho: `Reporting` (là read model của các capability đã bật),
 `ComplianceDocument` riêng lẻ, hay bất cứ thứ gì chỉ là một bảng.
+
+### 10.3. `transport-settlement` — as-built, ba phụ thuộc chứ không phải một
+
+Bản đề xuất ở §10.1 ban đầu ghi `transport-settlement → transport-core`. **Bản đã build (Issue #87,
+01/09/2026) khai ba phụ thuộc**, và bản làm rõ của kiến trúc sư trên chính Issue #87 đã chốt chuỗi
+`transport-settlement → transport-core → transport-costing → transport-fuel`.
+
+Hai phụ thuộc thêm là **quan hệ thật**, không phải thứ tự cho đẹp:
+
+- **`transport-fuel`** — dòng thứ nhất trong năm dòng tiền mà Issue #87 bắt buộc giữ riêng là
+  "công ty ↔ cây xăng", và nó chỉ tồn tại nếu có bàn giao của `TX-04` để đọc. Bật
+  `transport-settlement` mà tắt fuel sẽ cho ra hệ thống có **bốn** dòng thay vì năm, và dòng thiếu
+  là dòng mang số tiền lớn nhất (nhiên liệu chiếm 35–45% giá thành chuyến theo nguồn khách).
+- **`transport-costing`** — biên trực tiếp của chuyến **xe nhà** là
+  `doanh thu − chi phí trực tiếp − hoa hồng`; số hạng thứ hai đến từ `TX-03`. Không có nó thì
+  `direct-margin.ts` chỉ tính được chuyến thuê ngoài, tức một nửa báo cáo biên.
+
+Chiều đọc là **một chiều và chỉ đọc**: `TX-05` đọc bàn giao của `TX-04` qua `FuelSettlementSource`,
+đọc chi phí của `TX-03` qua `CostingReadService`. Không một dòng nào của T3/T4 đổi vì T5, và
+`schema.prisma` đã mô tả sẵn `TransportFuelSettlementHandoff` là **hộp thư đi** cho T5 đọc.
+
+**Không khai `policy: 'transportSettlement'`** — khác với dự kiến ở §10.1. Điều khoản thanh toán và
+hạn mức tín dụng là dữ liệu **của từng khách hàng** (bảng `TransportCustomerTerms`), không phải một
+khối cấu hình của gói khách; khai nó thành policy sẽ biến một thứ thay đổi trong đời hợp đồng thành
+một điều kiện boot.
 
 ### 10.2. Đối chiếu với capability hiện có — **đây là chỗ khác biệt lớn nhất**
 

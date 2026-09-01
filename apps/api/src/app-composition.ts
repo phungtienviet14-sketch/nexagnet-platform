@@ -105,6 +105,7 @@ import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js
 import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
+import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { TransportModule } from './transport/transport.module.js';
@@ -158,6 +159,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // NHIEN LIEU + DOI SOAT BANG KE. Den cung `transport-fuel` va bien mat cung no: mot khach van
   // tai chua doi soat bang ke cay xang khong duoc nap tam bang nao cua `TX-04`.
   owned('transport-fuel', TransportFuelModule),
+  // QUYET TOAN AR/AP + HOA HONG + BIEN TRUC TIEP. Den cung `transport-settlement` va bien mat cung
+  // no: mot khach van tai chua theo doi cong no khong duoc nap bang chung tu nao cua `TX-05`.
+  owned('transport-settlement', TransportSettlementModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
