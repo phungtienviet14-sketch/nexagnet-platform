@@ -129,11 +129,21 @@ export const B2B_SECTIONS = [
   },
   {
     id: 'alerts',
+    /*
+     * VAI TRO MO RONG TU `OVERSIGHT` SANG `READ_HEAVY` (U-UI1).
+     *
+     * O U-UI0 muc nay con la mot ranh gioi trang, nen de no cho quan ly la du. Tu U-UI1 no doc
+     * ra HANG VIEC THAT: "cần duyệt" va "cần nhập đơn" chinh la viec cua nhan vien Sale, con
+     * "dữ liệu/chính sách chưa sẵn sàng" va "kênh cần chú ý" la thu ho phai biet TRUOC khi hua
+     * voi dai ly. Giau no khoi Sale khong bao ve duoc gi — ba nguon o day (`/messages`,
+     * `/settings/readiness`, `/settings/summary`) deu da cho ca bon vai tro DOC, va ban than
+     * thanh dieu huong khong phai mot o khoa (xem `NAVIGATION_ENFORCEMENT_NOTE`).
+     */
     label: 'Cảnh báo',
     group: 'ai-operations',
-    summary: 'Việc cần người xử lý: đơn vượt ngưỡng, dữ liệu thiếu, kênh gián đoạn.',
+    summary: 'Việc cần người xử lý: đơn chờ duyệt, đơn chờ nhập, dữ liệu thiếu, kênh gián đoạn.',
     requiredCapabilities: ['notifications'],
-    roles: OVERSIGHT,
+    roles: READ_HEAVY,
   },
   {
     id: 'knowledge',
@@ -243,12 +253,40 @@ export function resolveSection(requested: string | null, input: NavigationInput)
 
 export const SECTION_QUERY_PARAM = 'section';
 
+/**
+ * Thu DANG DUOC MO trong muc hien tai — mot cuoc hoi thoai, mot don hang.
+ *
+ * Nam tren THANH DIA CHI chu khong chi trong bo nho cua trang, vi ba viec cua mot ngay lam viec
+ * that deu can no: gui duong dan cua dung don do cho ke toan, mo lai dung cuoc hoi thoai sau khi
+ * tai lai trang, va bam Back de quay ve danh sach thay vi ra khoi man hinh.
+ *
+ * Gia tri la DINH DANH NGHIEP VU (ma don, ten nhom) — khong phai `chatId` hay dinh danh luot xu
+ * ly. Xem `customer-view.ts` ve vi sao hai thu do khong duoc phep di qua day.
+ */
+export const SELECTION_QUERY_PARAM = 'selected';
+
 export function parseSectionFromSearch(search: string, input: NavigationInput): B2bSectionId {
   return resolveSection(new URLSearchParams(search).get(SECTION_QUERY_PARAM), input);
 }
 
+/**
+ * Thu dang duoc mo, hoac `null` khi dang o danh sach.
+ *
+ * Chuoi rong duoc doc thanh `null` chu khong thanh mot lua chon rong: `?selected=` la thu sinh ra
+ * khi mot form hay mot lan sua duong dan bang tay de lo tham so, va no phai co nghia giong het
+ * "chua chon gi" — khong phai "da chon mot thu khong ton tai".
+ */
+export function parseSelectionFromSearch(search: string): string | null {
+  const raw = new URLSearchParams(search).get(SELECTION_QUERY_PARAM);
+  const trimmed = raw?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 /** Muc mac dinh khong deo tham so: `/` phai la mot duong dan sach, luu lai duoc. */
-export function buildSectionUrl(section: B2bSectionId): string {
-  if (section === DEFAULT_SECTION) return '/';
-  return `/?${SECTION_QUERY_PARAM}=${encodeURIComponent(section)}`;
+export function buildSectionUrl(section: B2bSectionId, selection?: string | null): string {
+  const params = new URLSearchParams();
+  if (section !== DEFAULT_SECTION) params.set(SECTION_QUERY_PARAM, section);
+  if (selection) params.set(SELECTION_QUERY_PARAM, selection);
+  const query = params.toString();
+  return query.length > 0 ? `/?${query}` : '/';
 }

@@ -5,6 +5,7 @@ import {
   buildSectionUrl,
   navigationGroups,
   parseSectionFromSearch,
+  parseSelectionFromSearch,
   resolveSection,
   visibleSections,
   type NavigationInput,
@@ -100,12 +101,25 @@ describe('loc theo nang luc goi khach', () => {
 });
 
 describe('hop dong vai tro -> dieu huong (Issue #107 §8)', () => {
-  it('Sale khong duoc dan vao quan tri nguoi dung, canh bao hay nhat ky', () => {
+  it('Sale khong duoc dan vao quan tri nguoi dung hay nhat ky', () => {
     const labels = labelsOf(asInput(FULL, 'SALE'));
     expect(labels).toContain('Duyệt & gửi');
     expect(labels).not.toContain('Người dùng & phân quyền');
-    expect(labels).not.toContain('Cảnh báo');
     expect(labels).not.toContain('Nhật ký hoạt động');
+  });
+
+  /*
+   * DOI TU U-UI0 SANG U-UI1, CO CHU DICH.
+   *
+   * O U-UI0, "Cảnh báo" con la mot ranh gioi trang nen de cho quan ly la du. Tu U-UI1 no doc ra
+   * HANG VIEC THAT — "cần duyệt" va "cần nhập đơn" chinh la viec cua Sale. Giau no khoi Sale
+   * khong bao ve duoc gi: ba nguon phia sau (`/messages`, `/settings/readiness`,
+   * `/settings/summary`) deu da cho ca bon vai tro DOC, va thanh dieu huong khong phai mot o
+   * khoa (xem `NAVIGATION_ENFORCEMENT_NOTE`). Xem lai `alerts` trong `navigation.ts`.
+   */
+  it('Sale VA Ke toan deu duoc dan toi Canh bao — do la hang viec cua ho', () => {
+    expect(labelsOf(asInput(FULL, 'SALE'))).toContain('Cảnh báo');
+    expect(labelsOf(asInput(FULL, 'ACCOUNTING'))).toContain('Cảnh báo');
   });
 
   it('Ke toan thay so sach va tham chieu, khong thay hang viec hoi thoai', () => {
@@ -113,10 +127,14 @@ describe('hop dong vai tro -> dieu huong (Issue #107 §8)', () => {
       'Tổng quan',
       'Đơn hàng',
       'Đại lý & khách hàng',
+      'Cảnh báo',
       'Dữ liệu & kiến thức',
       'Chính sách & bảng giá',
       'Cài đặt',
     ]);
+    // Van KHONG dan ke toan vao hang viec dieu hanh hoi thoai.
+    expect(labelsOf(asInput(FULL, 'ACCOUNTING'))).not.toContain('Duyệt & gửi');
+    expect(labelsOf(asInput(FULL, 'ACCOUNTING'))).not.toContain('Hội thoại');
   });
 
   it('Quan ly thay moi thu tru quan tri nguoi dung — dung nhu @Roles cua API', () => {
@@ -151,5 +169,37 @@ describe('duong dan luu lai duoc', () => {
     expect(resolveSection('campaigns', asInput(MINIMUM, null))).toBe('overview');
     // Muc that, nhung nguoi mo link la Sale.
     expect(resolveSection('users', asInput(FULL, 'SALE'))).toBe('overview');
+  });
+});
+
+describe('duong dan toi MOT THU dang mo (Issue #110 §deep-link)', () => {
+  it('deo them lua chon vao duong dan cua muc', () => {
+    expect(buildSectionUrl('orders', 'ord-123')).toBe('/?section=orders&selected=ord-123');
+  });
+
+  it('muc mac dinh van deo duoc lua chon ma khong deo tham so muc', () => {
+    expect(buildSectionUrl('overview', 'ord-123')).toBe('/?selected=ord-123');
+  });
+
+  it('khong chon gi thi duong dan sach y nhu truoc — hop dong cu khong doi', () => {
+    expect(buildSectionUrl('overview')).toBe('/');
+    expect(buildSectionUrl('overview', null)).toBe('/');
+    expect(buildSectionUrl('approvals', null)).toBe('/?section=approvals');
+  });
+
+  it('ma hoa an toan cho ten nhom co dau va khoang trang', () => {
+    const url = buildSectionUrl('conversations', 'Nhóm đại lý Hà Nội');
+    expect(parseSelectionFromSearch(url.slice(url.indexOf('?')))).toBe('Nhóm đại lý Hà Nội');
+  });
+
+  it('doc lai dung lua chon tu thanh dia chi', () => {
+    expect(parseSelectionFromSearch('?section=orders&selected=ord-9')).toBe('ord-9');
+  });
+
+  it('khong co hoac RONG deu doc thanh "chua chon gi"', () => {
+    expect(parseSelectionFromSearch('?section=orders')).toBeNull();
+    expect(parseSelectionFromSearch('?selected=')).toBeNull();
+    expect(parseSelectionFromSearch('?selected=%20%20')).toBeNull();
+    expect(parseSelectionFromSearch('')).toBeNull();
   });
 });
