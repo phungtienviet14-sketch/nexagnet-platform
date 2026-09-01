@@ -9,13 +9,18 @@ import {
   findSection,
   navigationGroups,
   parseSectionFromSearch,
+  parseSelectionFromSearch,
+  resolveNavigation,
   resolveSection,
   NAVIGATION_ENFORCEMENT_NOTE,
   type B2bSectionId,
   type NavigationInput,
 } from './navigation';
 import { SettingsView, UsersView } from './views/AdminViews';
-import { ApprovalsView, ConversationsView, OrdersView } from './views/MessageStreamViews';
+import { AlertsView } from './views/AlertsView';
+import { ApprovalsView } from './views/ApprovalsView';
+import { ConversationsView } from './views/ConversationsView';
+import { OrdersView } from './views/OrdersView';
 import { OverviewView } from './views/OverviewView';
 import { PlannedView } from './views/PlannedView';
 import { KnowledgeView, PoliciesView } from './views/ReferenceViews';
@@ -53,6 +58,9 @@ export function B2bSalesOperations() {
       ? 'overview'
       : parseSectionFromSearch(window.location.search, navigation),
   );
+  const [selection, setSelection] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : parseSelectionFromSearch(window.location.search),
+  );
   const [navOpen, setNavOpen] = useState(false);
 
   // Vai tro co the den SAU lan render dau (AuthGate con dang hoi `/auth/me`). Muc dang xem phai
@@ -63,22 +71,75 @@ export function B2bSalesOperations() {
   }, [navigation]);
 
   useEffect(() => {
-    const onPopState = () => setSection(parseSectionFromSearch(window.location.search, navigation));
+    const onPopState = () => {
+      setSection(parseSectionFromSearch(window.location.search, navigation));
+      setSelection(parseSelectionFromSearch(window.location.search));
+    };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, [navigation]);
 
-  const goToSection = useCallback((next: B2bSectionId) => {
-    setSection(next);
-    setNavOpen(false);
-    const url = buildSectionUrl(next);
-    if (
-      typeof window !== 'undefined' &&
-      `${window.location.pathname}${window.location.search}` !== url
-    ) {
-      window.history.pushState(null, '', url);
-    }
-  }, []);
+  /**
+   * MOT duong ghi duy nhat len thanh dia chi.
+   *
+   * Ca "doi muc" lan "chon mot don" deu di qua day. Hai duong ghi song song (mot cho muc, mot cho
+   * lua chon) se dua nhau ghi de: bam mot canh bao o Tong quan phai mo DUNG don do o muc Đơn hàng,
+   * chu khong duoc mo muc Đơn hàng roi lua chon bi mot lan ghi sau xoa mat.
+   *
+   * Doi muc ma khong noi ro chon gi thi XOA lua chon cu: mot ma don cua muc Đơn hàng khong co
+   * nghia gi o muc Hội thoại, va giu no lai chi tao mot duong dan khong mo duoc.
+   */
+  const goTo = useCallback(
+    (next: B2bSectionId, nextSelection: string | null = null) => {
+      /*
+       * MOI duong vao di qua CUNG mot phep giai — day la ban sua cho khiem khuyet chan PR #111.
+       *
+       * Truoc day dong nay la `setSection(next)`: mot lan bam TRONG ung dung ghi thang muc duoc
+       * yeu cau, trong khi mot duong dan luu san thi phai qua `parseSectionFromSearch` ->
+       * `resolveSection`. Hai duong vao, hai cau tra loi khac nhau cho cung mot cau hoi — nen mot
+       * ke toan bam mot duong dan trong ung dung mo duoc dung cai muc ma chinh ho khong mo duoc
+       * bang bookmark, roi dung o mot man hinh ket thuc bang 403.
+       *
+       * Chan o day la lop cuoi cung, va no chan MOI ben goi — ke ca mot duong dan sinh ra o cho
+       * ma hom nay chua ai viet.
+       */
+      const { section: allowed, selection: selectionForSection } = resolveNavigation(
+        next,
+        nextSelection,
+        navigation,
+      );
+
+      setSection(allowed);
+      setSelection(selectionForSection);
+      setNavOpen(false);
+      const url = buildSectionUrl(allowed, selectionForSection);
+      if (
+        typeof window !== 'undefined' &&
+        `${window.location.pathname}${window.location.search}` !== url
+      ) {
+        window.history.pushState(null, '', url);
+      }
+    },
+    [navigation],
+  );
+
+  /**
+   * Chon mot thu TRONG muc dang xem — thay the (`replaceState`), khong day them mot muc lich su.
+   *
+   * Xem qua ba cuoc hoi thoai roi bam Back phai quay ve cho nguoi dung TU DAU di toi, chu khong
+   * phai lui tung cuoc mot. Nut Back la duong ra khoi mot man hinh, khong phai nut hoan tac.
+   */
+  const selectWithin = useCallback(
+    (nextSelection: string | null) => {
+      setSelection(nextSelection);
+      if (typeof window === 'undefined') return;
+      const url = buildSectionUrl(section, nextSelection);
+      if (`${window.location.pathname}${window.location.search}` !== url) {
+        window.history.replaceState(null, '', url);
+      }
+    },
+    [section],
+  );
 
   const groups = navigationGroups(navigation);
   const active = findSection(section)!;
@@ -133,7 +194,7 @@ export function B2bSalesOperations() {
                       onClick={(event) => {
                         if (event.metaKey || event.ctrlKey || event.shiftKey) return;
                         event.preventDefault();
-                        goToSection(item.id);
+                        goTo(item.id);
                       }}
                     >
                       {item.label}
@@ -178,7 +239,7 @@ export function B2bSalesOperations() {
               href={buildSectionUrl('overview')}
               onClick={(event) => {
                 event.preventDefault();
-                goToSection('overview');
+                goTo('overview');
               }}
             >
               {blockedCount} nghiệp vụ chưa sẵn sàng
@@ -187,7 +248,13 @@ export function B2bSalesOperations() {
         </header>
 
         <main className="b2b-main" id="b2b-main">
-          <SectionBody section={section} canUpdateSources={canUpdateSources} />
+          <SectionBody
+            section={section}
+            selection={selection}
+            canUpdateSources={canUpdateSources}
+            onNavigate={goTo}
+            onSelect={selectWithin}
+          />
         </main>
       </div>
     </div>
@@ -196,21 +263,35 @@ export function B2bSalesOperations() {
 
 function SectionBody({
   section,
+  selection,
   canUpdateSources,
+  onNavigate,
+  onSelect,
 }: {
   section: B2bSectionId;
+  selection: string | null;
   canUpdateSources: boolean;
+  onNavigate: (section: B2bSectionId, selection?: string | null) => void;
+  onSelect: (selection: string | null) => void;
 }) {
   const tenant = useTenantRuntime();
   switch (section) {
     case 'overview':
-      return <OverviewView tenant={tenant} canUpdateSources={canUpdateSources} />;
+      return (
+        <OverviewView
+          tenant={tenant}
+          canUpdateSources={canUpdateSources}
+          onNavigate={onNavigate}
+        />
+      );
     case 'conversations':
-      return <ConversationsView />;
+      return <ConversationsView selection={selection} onSelect={onSelect} />;
     case 'approvals':
-      return <ApprovalsView />;
+      return <ApprovalsView selection={selection} onSelect={onSelect} />;
     case 'orders':
-      return <OrdersView />;
+      return <OrdersView selection={selection} onSelect={onSelect} />;
+    case 'alerts':
+      return <AlertsView onNavigate={onNavigate} />;
     case 'knowledge':
       return <KnowledgeView />;
     case 'policies':

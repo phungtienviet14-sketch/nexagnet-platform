@@ -1,0 +1,707 @@
+/*
+ * KHONG GIAN LAM VIEC CUA SALE — Issue #110 (U-UI1).
+ *
+ * Tep RIENG chu khong noi them vao `b2b-sales-operations.css`: tep kia la VO (dieu huong, thanh
+ * tren, trang thai trang) va no da gan 800 dong. Tach ra thi mot lan sua o o chi tiet khong bat
+ * ai doc lai ca thanh dieu huong, va nguoc lai.
+ *
+ * Bien mau/khoang cach van la cua `.b2b-shell` — tep nay KHONG dinh nghia lai bien nao va cung
+ * khong viet mot ma mau cua khach nao. Thuong hieu chi vao qua `--b2b-accent`/`--b2b-canvas`.
+ */
+
+/* ---------- bo cuc danh sach — chi tiet ---------- */
+
+.b2b-split {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.b2b-split__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  max-height: 68vh;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.b2b-split__listhead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 0.5rem;
+  background: var(--b2b-paper);
+}
+
+.b2b-split__detail {
+  min-width: 0;
+}
+
+.b2b-picklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.b2b-pick {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.7rem 0.85rem 0.7rem 1rem;
+  border: 1px solid var(--b2b-line);
+  border-left: 4px solid transparent;
+  border-radius: var(--b2b-radius-sm);
+  background: var(--b2b-paper);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.b2b-pick:hover {
+  border-color: var(--b2b-line-strong);
+}
+
+.b2b-pick:focus-visible {
+  outline: 2px solid var(--b2b-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Dong dang chon duoc danh dau bang BA dau hieu doc lap — dai ben trai, nen dam hon va chu dam.
+ * Issue #110 cam mang nghia bang mau don doc: mot nguoi khong phan biet duoc mau van phai chi ra
+ * duoc dong nao dang mo.
+ */
+.b2b-pick[data-selected] {
+  border-left-color: var(--b2b-accent);
+  background: color-mix(in oklab, var(--b2b-accent) 7%, var(--b2b-paper));
+}
+
+.b2b-pick__title {
+  font-weight: 620;
+  font-size: 0.92rem;
+  letter-spacing: -0.01em;
+}
+
+.b2b-pick[data-selected] .b2b-pick__title {
+  font-weight: 700;
+}
+
+.b2b-pick__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--b2b-ink-soft);
+}
+
+.b2b-pick__excerpt {
+  font-size: 0.82rem;
+  color: var(--b2b-ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.b2b-pick__foot {
+  font-size: 0.74rem;
+  color: var(--b2b-ink-faint);
+}
+
+/* ---------- o chi tiet mot don ---------- */
+
+.b2b-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--b2b-line);
+  border-radius: var(--b2b-radius);
+  background: var(--b2b-paper);
+}
+
+.b2b-detail__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--b2b-line);
+}
+
+.b2b-detail__lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.b2b-detail__intent {
+  font-size: 0.78rem;
+  color: var(--b2b-ink-soft);
+}
+
+.b2b-detail__time {
+  margin-left: auto;
+  font-size: 0.76rem;
+  color: var(--b2b-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.b2b-detail__title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.b2b-detail__sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--b2b-ink-soft);
+}
+
+.b2b-detail__block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.b2b-detail__blocktitle {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 640;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--b2b-ink-faint);
+}
+
+.b2b-detail__quote {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-left: 3px solid var(--b2b-line-strong);
+  border-radius: 0 var(--b2b-radius-sm) var(--b2b-radius-sm) 0;
+  background: var(--b2b-canvas);
+  font-size: 0.9rem;
+}
+
+.b2b-detail__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  border: 1px solid var(--b2b-line-strong);
+  border-radius: var(--b2b-radius-sm);
+  background: var(--b2b-canvas);
+}
+
+.b2b-detail__total {
+  font-size: 1rem;
+}
+
+.b2b-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.6rem 0.8rem 0.6rem 1.7rem;
+  border-radius: var(--b2b-radius-sm);
+  background: var(--b2b-flag-wash);
+  color: var(--b2b-flag);
+  font-size: 0.84rem;
+}
+
+/* ---------- bang hang trong don ---------- */
+
+.b2b-lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.b2b-lines th,
+.b2b-lines td {
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--b2b-line);
+}
+
+.b2b-lines thead th {
+  font-size: 0.7rem;
+  font-weight: 640;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--b2b-ink-faint);
+}
+
+.b2b-lines tbody th {
+  font-weight: 560;
+}
+
+.b2b-lines__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.b2b-flag-note {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--b2b-flag);
+}
+
+/* ---------- cap nhan / gia tri ---------- */
+
+.b2b-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0;
+}
+
+.b2b-field dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--b2b-ink-faint);
+}
+
+.b2b-field dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.88rem;
+}
+
+/* ---------- dien bien ---------- */
+
+.b2b-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--b2b-line);
+  list-style: none;
+}
+
+.b2b-timeline__row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.84rem;
+}
+
+.b2b-timeline__row::before {
+  content: '';
+  position: absolute;
+  left: -1.34rem;
+  top: 0.45rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--b2b-line-strong);
+}
+
+.b2b-timeline__label {
+  font-weight: 560;
+}
+
+.b2b-timeline__at {
+  color: var(--b2b-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.b2b-timeline__detail {
+  flex-basis: 100%;
+  color: var(--b2b-ink-soft);
+  font-size: 0.8rem;
+}
+
+/* ---------- de xuat cua he thong + ly do can nguoi ---------- */
+
+.b2b-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.95rem 1.1rem;
+  margin-bottom: 0.85rem;
+  border: 1px solid var(--b2b-line-strong);
+  border-radius: var(--b2b-radius);
+  background: var(--b2b-paper);
+}
+
+.b2b-proposal__title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 640;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--b2b-ink-faint);
+}
+
+.b2b-proposal__text {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--b2b-radius-sm);
+  background: var(--b2b-canvas);
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+}
+
+.b2b-proposal__empty {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--b2b-flag);
+}
+
+.b2b-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 0.85rem;
+  border-left: 4px solid var(--b2b-flag);
+  border-radius: 0 var(--b2b-radius-sm) var(--b2b-radius-sm) 0;
+  background: var(--b2b-flag-wash);
+}
+
+.b2b-reasons__title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 640;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--b2b-flag);
+}
+
+.b2b-reasons__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.87rem;
+}
+
+/* ---------- nut thao tac ---------- */
+
+.b2b-actionrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.b2b-btn {
+  padding: 0.55rem 1.1rem;
+  border: 1px solid transparent;
+  border-radius: var(--b2b-radius-sm);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition:
+    filter 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.b2b-btn:focus-visible {
+  outline: 2px solid var(--b2b-ink);
+  outline-offset: 2px;
+}
+
+.b2b-btn:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+/*
+ * Nut bi khoa phai TRONG NHU bi khoa, khong chi khong bam duoc: `cursor: not-allowed` + do mo
+ * giam. Trong luc mot lan gui dang chay, day la thu duy nhat noi cho nguoi dung biet vi sao cu
+ * bam ma khong co gi xay ra.
+ */
+.b2b-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.b2b-btn--go {
+  background: var(--b2b-good);
+  color: #fff;
+}
+
+.b2b-btn--stop {
+  background: var(--b2b-paper);
+  border-color: var(--b2b-stop);
+  color: var(--b2b-stop);
+}
+
+.b2b-actionnote {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--b2b-ink-soft);
+}
+
+.b2b-actionerror {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  border-left: 4px solid var(--b2b-stop);
+  border-radius: 0 var(--b2b-radius-sm) var(--b2b-radius-sm) 0;
+  background: var(--b2b-stop-wash);
+  color: var(--b2b-stop);
+  font-size: 0.86rem;
+}
+
+.b2b-actionerror__close {
+  margin-left: auto;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: var(--b2b-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+/* ---------- bo loc so don ---------- */
+
+.b2b-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.b2b-search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.b2b-search__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--b2b-ink-faint);
+}
+
+.b2b-search__input {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--b2b-line-strong);
+  border-radius: var(--b2b-radius-sm);
+  background: var(--b2b-paper);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.b2b-search__input:focus-visible {
+  outline: 2px solid var(--b2b-accent);
+  outline-offset: 1px;
+}
+
+.b2b-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.b2b-chip {
+  padding: 0.28rem 0.65rem;
+  border: 1px solid var(--b2b-line-strong);
+  border-radius: 999px;
+  background: var(--b2b-paper);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+/* Chip dang bat: nen dam + chu dam, khong chi doi mau — xem chu thich o `.b2b-pick[data-selected]`. */
+.b2b-chip[aria-pressed='true'] {
+  border-color: var(--b2b-ink);
+  background: var(--b2b-ink);
+  color: var(--b2b-paper);
+  font-weight: 620;
+}
+
+.b2b-chip:focus-visible {
+  outline: 2px solid var(--b2b-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- mach tin trong mot cuoc hoi thoai ---------- */
+
+.b2b-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.b2b-thread__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.b2b-thread__action {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 620;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--b2b-ink-faint);
+}
+
+/* ---------- canh bao ---------- */
+
+.b2b-alertgroup {
+  margin-top: 1.1rem;
+}
+
+.b2b-alertgroup__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.74rem;
+  font-weight: 640;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--b2b-ink-faint);
+}
+
+.b2b-alertgroup__count {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--b2b-canvas);
+  border: 1px solid var(--b2b-line-strong);
+  color: var(--b2b-ink);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.b2b-alerts,
+.b2b-worklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.b2b-alert,
+.b2b-work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--b2b-line);
+  border-radius: var(--b2b-radius-sm);
+  background: var(--b2b-paper);
+}
+
+.b2b-alert__body,
+.b2b-work__body {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.b2b-alert__title,
+.b2b-work__title {
+  margin: 0;
+  font-weight: 620;
+  font-size: 0.9rem;
+}
+
+.b2b-alert__detail,
+.b2b-work__detail {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: var(--b2b-ink-soft);
+}
+
+.b2b-alert__link,
+.b2b-work__link {
+  flex: 0 0 auto;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--b2b-accent);
+  border-radius: var(--b2b-radius-sm);
+  color: var(--b2b-accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.b2b-alert__link:hover,
+.b2b-work__link:hover {
+  background: color-mix(in oklab, var(--b2b-accent) 10%, var(--b2b-paper));
+}
+
+.b2b-alert__link:focus-visible,
+.b2b-work__link:focus-visible {
+  outline: 2px solid var(--b2b-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- con so bam duoc tren Tong quan ---------- */
+
+.b2b-stat__link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--b2b-radius-sm);
+}
+
+.b2b-stat__link:hover .b2b-stat {
+  border-color: var(--b2b-accent);
+}
+
+.b2b-stat__link:focus-visible {
+  outline: 2px solid var(--b2b-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- man hinh hep ---------- */
+
+/*
+ * Duoi 900px hai cot xep chong. Danh sach BO gioi han chieu cao va bo cuon rieng: mot khung cuon
+ * long trong mot trang cuon la thu khong the dung duoc bang ngon tay. Hang viec van con nguyen —
+ * Issue #110 doi tablet/mobile giu duoc thao tac, khong phai giu duoc bo cuc.
+ */
+@media (max-width: 900px) {
+  .b2b-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .b2b-split__list {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .b2b-split__listhead {
+    position: static;
+  }
+
+  .b2b-detail__time {
+    margin-left: 0;
+  }
+
+  .b2b-actionrow .b2b-btn {
+    flex: 1 1 auto;
+  }
+}
