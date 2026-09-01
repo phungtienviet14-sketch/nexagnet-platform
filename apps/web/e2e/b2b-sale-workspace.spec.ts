@@ -117,7 +117,15 @@ async function json(route: Route, body: unknown, status = 200): Promise<void> {
  * ke tiep doc ket qua moi — dung nhu `OrdersService` that lam. Nho vay bai kiem tra hoi duoc cau
  * "man hinh co cap nhat sau khi bam khong", chu khong chi "nut co bam duoc khong".
  */
-async function mockWorkspace(page: Page): Promise<void> {
+type Role = 'SALE' | 'ACCOUNTING' | 'MANAGER' | 'ADMIN';
+
+/**
+ * `role` = chay o CHE DO PHIEN voi dung vai tro do; bo trong = che do khong dang nhap (nhu cu).
+ *
+ * Can che do phien that vi thanh dieu huong chi loc theo vai tro KHI biet vai tro — o che do
+ * khong phien `role` la `null` va he thong co y khong giau muc nao (xem `NavigationInput`).
+ */
+async function mockWorkspace(page: Page, role?: Role): Promise<void> {
   const orders = new Map<string, MockOrder>([
     ['ord-1', pricedOrder()],
     [
@@ -165,8 +173,18 @@ async function mockWorkspace(page: Page): Promise<void> {
     ],
   ]);
 
-  await page.route('**/auth/config', (route) => json(route, { mode: 'none' }));
-  await page.route('**/auth/csrf', (route) => json(route, { csrfToken: null }));
+  await page.route('**/auth/config', (route) =>
+    json(route, { mode: role ? 'session' : 'none' }),
+  );
+  await page.route('**/auth/csrf', (route) => json(route, { csrfToken: 'e2e-csrf' }));
+  await page.route('**/auth/me', (route) =>
+    role
+      ? json(route, {
+          user: { id: 'u-1', username: 'e2e', name: `Người dùng ${role}`, role },
+          roles: [role],
+        })
+      : json(route, { message: 'Chua dang nhap' }, 401),
+  );
   await page.route('**/settings/readiness', (route) => json(route, READINESS));
   await page.route('**/settings/summary', (route) => json(route, SUMMARY));
   await page.route('**/messages', (route) => json(route, [...orders.values()]));
@@ -468,4 +486,137 @@ test('ban phim di het duoc hang cho, va o dang chon doc ra duoc', async ({ page 
 
   await expect(list.getByRole('link').nth(1)).toHaveAttribute('aria-current', 'true');
   await expect(page.getByRole('button', { name: 'Duyệt & gửi' })).toBeVisible();
+});
+
+/**
+ * BAT BIEN DIEU HUONG THEO VAI TRO — bo chan hoi quy cua review chan PR #111.
+ *
+ * Khiem khuyet goc: `Cảnh báo` mo cho `ACCOUNTING`, nhung canh bao "Cần duyệt" van deo mot duong
+ * dan toi `approvals`, va `goTo()` ghi thang muc duoc yeu cau ma khong qua phep giai theo vai
+ * tro. Ke toan bam vao la vao thang mot luong viec khong phai cua ho — trong khi cung nguoi do
+ * mo bang bookmark thi bi chan. Hai duong vao, hai cau tra loi.
+ *
+ * Bo nay do CA HAI duong vao, cho CA hai phia cua ranh gioi.
+ */
+
+test('KE TOAN mo duoc muc Cảnh báo', async ({ page }) => {
+  await mockWorkspace(page, 'ACCOUNTING');
+  await page.goto('/?section=alerts');
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Cảnh báo' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Cần duyệt' })).toBeVisible();
+  // Thanh dieu huong xac nhan dung vai tro dang duoc ap.
+  const nav = page.getByRole('navigation', { name: 'Điều hướng chính' });
+  await expect(nav.getByRole('link', { name: 'Cảnh báo', exact: true })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Duyệt & gửi', exact: true })).toBeHidden();
+});
+
+test('KE TOAN khong the di tu canh bao "Cần duyệt" vao Duyệt & gửi', async ({ page }) => {
+  await mockWorkspace(page, 'ACCOUNTING');
+  await page.goto('/?section=alerts');
+
+  // Dong canh bao VAN hien — do la boi canh doi soat cua ke toan.
+  const approvals = page.getByRole('region', { name: 'Cần duyệt' });
+  await expect(approvals.getByText('Chị Hạnh')).toBeVisible();
+  // Nhung khong co cai nut nao dua ho vao do.
+  await expect(approvals.getByRole('link', { name: 'Mở để duyệt' })).toHaveCount(0);
+
+  // Va viec cua chinh ho thi VAN co duong di.
+  await expect(
+    page.getByRole('region', { name: 'Cần nhập đơn' }).getByRole('link', { name: 'Mở đơn' }),
+  ).toBeVisible();
+});
+
+test('KE TOAN mo deep-link thang toi Duyệt & gửi van bi chan', async ({ page }) => {
+  await mockWorkspace(page, 'ACCOUNTING');
+  await page.goto('/?section=approvals&selected=ord-1');
+
+  // Roi ve Tong quan, khong render mot trang trong va khong lo mot cai nut nao.
+  await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Duyệt & gửi' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Từ chối' })).toHaveCount(0);
+});
+
+test('KE TOAN: con so "Chờ duyệt & gửi" tren Tong quan doc duoc nhung khong bam duoc', async ({
+  page,
+}) => {
+  await mockWorkspace(page, 'ACCOUNTING');
+  await page.goto('/');
+
+  const workload = page.getByRole('region', { name: 'Việc hôm nay' });
+  await expect(workload.getByText('Chờ duyệt & gửi')).toBeVisible();
+  await expect(workload.getByRole('link', { name: /Chờ duyệt & gửi/ })).toHaveCount(0);
+  // Con so cua chinh ho thi van bam duoc.
+  await expect(workload.getByRole('link', { name: /Chờ nhập đơn/ })).toBeVisible();
+
+  // Va hang viec khong giao viec duyet cho ho.
+  const urgent = page.getByRole('region', { name: 'Cần xử lý ngay' });
+  await expect(urgent.getByRole('link', { name: 'Mở để duyệt' })).toHaveCount(0);
+  await expect(urgent.getByRole('link', { name: 'Mở đơn' })).toBeVisible();
+});
+
+for (const role of ['SALE', 'MANAGER', 'ADMIN'] as const) {
+  test(`${role} van di tu canh bao vao Duyệt & gửi va thao tac binh thuong`, async ({ page }) => {
+    await mockWorkspace(page, role);
+    await page.goto('/?section=alerts');
+
+    await page
+      .getByRole('region', { name: 'Cần duyệt' })
+      .getByRole('link', { name: 'Mở để duyệt' })
+      .first()
+      .click();
+
+    await expect(page).toHaveURL(/section=approvals&selected=ord-1/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Duyệt & gửi' })).toBeVisible();
+
+    // Va luong viec chay tron ven, khong chi mo duoc man hinh.
+    await page.getByRole('button', { name: 'Duyệt & gửi' }).click();
+    await expect(page.getByText('1 phản hồi đang chờ người kiểm tra.')).toBeVisible();
+  });
+}
+
+/**
+ * BAT BIEN TONG QUAT: khong mot duong dan NAO tren man hinh tro toi muc ma vai tro dang xem khong
+ * mo duoc.
+ *
+ * Bai o tren do dung mot duong dan cu the (nut "Mở để duyệt"). Bai nay quet TOAN BO cac thẻ liên
+ * kết dieu huong dang render, nen no con do duoc mot be mat duong dan CHUA TON TAI hom nay: ai
+ * them mot nut moi ma quen di qua phep kiem theo vai tro se lam bai nay do, khong can ai nho ra
+ * de viet them mot bai rieng.
+ *
+ * Day la thu duy nhat ngan khiem khuyet cua PR #111 quay lai duoi mot cai ten khac.
+ */
+test('KHONG duong dan nao tren man hinh tro toi muc ke toan khong mo duoc', async ({ page }) => {
+  await mockWorkspace(page, 'ACCOUNTING');
+
+  // `approvals` + `conversations` la hai muc `ACCOUNTING` khong co trong luong viec.
+  const forbidden = ['approvals', 'conversations'];
+
+  for (const step of ['', '?section=alerts', '?section=orders', '?section=policies']) {
+    await page.goto(`/${step}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+    const targets = await page.locator('a[href*="section="]').evaluateAll((nodes) =>
+      nodes.map((node) => new URL((node as HTMLAnchorElement).href).searchParams.get('section')),
+    );
+    for (const target of targets) {
+      expect(
+        forbidden,
+        `buoc "${step || 'overview'}" de lot mot duong dan toi "${target}"`,
+      ).not.toContain(target);
+    }
+  }
+});
+
+test('SALE thi chinh nhung duong dan do PHAI co — bai tren khong xanh nho man hinh trong', async ({
+  page,
+}) => {
+  await mockWorkspace(page, 'SALE');
+  await page.goto('/?section=alerts');
+
+  const targets = await page.locator('a[href*="section="]').evaluateAll((nodes) =>
+    nodes.map((node) => new URL((node as HTMLAnchorElement).href).searchParams.get('section')),
+  );
+  expect(targets).toContain('approvals');
+  expect(targets).toContain('conversations');
 });

@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { ReadinessCheckView } from '../../../../lib/settings';
 import { alertsHeadline, deriveAlerts, groupAlerts, type AlertSources } from '../alerts';
-import { collectKeys, dirtyOrder, ENGINEERING_ONLY_KEYS } from './fixtures';
+import {
+  ACCOUNTING,
+  ADMIN,
+  ANONYMOUS,
+  collectKeys,
+  dirtyOrder,
+  ENGINEERING_ONLY_KEYS,
+  MANAGER,
+  SALE,
+} from './fixtures';
 
 const BLOCKED = [
   { key: 'cod_ship', label: 'COD và cước vận chuyển', reason: 'Chưa có bảng phí COD chính thức.' },
@@ -36,6 +45,7 @@ const EMPTY: AlertSources = {
   blockedCapabilities: [],
   readinessChecks: null,
   channel: null,
+  navigation: SALE,
 };
 
 describe('canh bao chi den tu tin hieu DA CO (Issue #110 §Cảnh báo)', () => {
@@ -184,6 +194,7 @@ describe('thu tu TAT DINH va cach trinh bay', () => {
     blockedCapabilities: BLOCKED,
     readinessChecks: CHECKS,
     channel: { availability: 'available', channelMode: 'zca', zcaState: 'logged_out' },
+    navigation: SALE,
   };
 
   it('cung mot bo nguon cho ra cung mot danh sach, cung thu tu — moi lan goi', () => {
@@ -222,5 +233,84 @@ describe('thu tu TAT DINH va cach trinh bay', () => {
     for (const forbidden of ENGINEERING_ONLY_KEYS) {
       expect(keys.has(forbidden), `truong "${forbidden}" khong duoc co mat`).toBe(false);
     }
+  });
+});
+
+/**
+ * BAT BIEN DIEU HUONG THEO VAI TRO — bai kiem tra chan hoi quy cho PR #111.
+ *
+ * Khiem khuyet goc: `Cảnh báo` mo cho `ACCOUNTING`, nhung canh bao "Cần duyệt" van deo mot duong
+ * dan toi `approvals` — muc ma chinh vai tro do khong mo duoc bang thanh dieu huong lan bang
+ * bookmark. Ke toan bam vao la di thang vao mot luong viec khong phai cua ho.
+ */
+describe('duong dan cua canh bao phai TRUNG THUC voi vai tro dang xem (PR #111)', () => {
+  const orders = [
+    dirtyOrder({ id: 'cho-duyet' }),
+    dirtyOrder({
+      id: 'cho-nhap',
+      status: 'sent',
+      salesHandoff: {
+        action: 'manual_erp_entry',
+        status: 'pending',
+        createdAt: '2026-09-01T03:00:00.000Z',
+      },
+    }),
+  ];
+
+  function alertsFor(navigation: AlertSources['navigation']) {
+    return deriveAlerts({ ...EMPTY, orders, navigation });
+  }
+
+  it('KE TOAN van THAY canh bao "Cần duyệt" — do la boi canh doi soat cua ho', () => {
+    const approval = alertsFor(ACCOUNTING).find((alert) => alert.category === 'can_duyet');
+    expect(approval).toBeDefined();
+    expect(approval!.title).toBe('Đại lý Thái Nguyên');
+  });
+
+  it('nhung KHONG duoc moi di vao Duyệt & gửi — duong dan bi bo han', () => {
+    const approval = alertsFor(ACCOUNTING).find((alert) => alert.category === 'can_duyet')!;
+    expect(approval.link).toBeNull();
+  });
+
+  it('ke toan VAN giu duong dan toi Đơn hàng — do la viec cua ho', () => {
+    const entry = alertsFor(ACCOUNTING).find((alert) => alert.category === 'can_nhap_don')!;
+    expect(entry.link).toEqual({ section: 'orders', selection: 'cho-nhap', label: 'Mở đơn' });
+  });
+
+  it('SALE / MANAGER / ADMIN van co duong dan vao Duyệt & gửi', () => {
+    for (const navigation of [SALE, MANAGER, ADMIN]) {
+      const approval = deriveAlerts({ ...EMPTY, orders, navigation }).find(
+        (alert) => alert.category === 'can_duyet',
+      )!;
+      expect(approval.link).toEqual({
+        section: 'approvals',
+        selection: 'cho-duyet',
+        label: 'Mở để duyệt',
+      });
+    }
+  });
+
+  it('che do khong phien (chua biet vai tro) khong giau duong dan nao', () => {
+    const approval = alertsFor(ANONYMOUS).find((alert) => alert.category === 'can_duyet')!;
+    expect(approval.link?.section).toBe('approvals');
+  });
+
+  it('khach TAT nang luc ban hang thi khong ai co duong dan do — ke ca Admin', () => {
+    const withoutSales = deriveAlerts({
+      ...EMPTY,
+      orders,
+      navigation: { capabilities: ['messaging', 'notifications', 'operations'], role: 'ADMIN' },
+    });
+    for (const alert of withoutSales) {
+      expect(alert.link?.section).not.toBe('approvals');
+      expect(alert.link?.section).not.toBe('orders');
+    }
+  });
+
+  it('bo duong dan KHONG lam doi noi dung hay thu tu — chi doi mot truong', () => {
+    const asSale = alertsFor(SALE);
+    const asAccounting = alertsFor(ACCOUNTING);
+    expect(asAccounting.map((alert) => alert.id)).toEqual(asSale.map((alert) => alert.id));
+    expect(asAccounting.map((alert) => alert.title)).toEqual(asSale.map((alert) => alert.title));
   });
 });

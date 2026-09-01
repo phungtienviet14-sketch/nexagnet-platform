@@ -217,6 +217,24 @@ export function isSectionEnabled(section: B2bSection, input: NavigationInput): b
   return input.role === null || section.roles.includes(input.role);
 }
 
+/**
+ * VAI TRO NAY CO DUONG TOI MUC DO KHONG — mot cau hoi, mot cau tra loi, dung cho MOI duong vao.
+ *
+ * Truoc ban sua nay chi co duong dan luu san di qua phep kiem
+ * (`parseSectionFromSearch` -> `resolveSection`); `goTo()` cua vo thi ghi THANG muc duoc yeu cau.
+ * Nghia la mot duong dan BEN TRONG ung dung mo duoc dung cai muc ma cung nguoi do KHONG mo duoc
+ * bang bookmark — hai cau tra loi khac nhau cho cung mot cau hoi. Mot dai ly khong bi lo du lieu
+ * (may chu van chan lenh ghi duoi `AUTH_MODE=session`), nhung nguoi dung bi dan vao mot man hinh
+ * khong phai viec cua ho va ket thuc bang 403.
+ *
+ * Ke tu day MOI noi hoi "co di duoc khong" deu hoi qua ham nay: vo khi doi muc, be mat canh bao
+ * khi ve mot duong dan, va trang Tong quan khi ve mot con so bam duoc.
+ */
+export function canNavigateTo(section: string, input: NavigationInput): boolean {
+  const found = findSection(section);
+  return found !== undefined && isSectionEnabled(found, input);
+}
+
 export function visibleSections(input: NavigationInput): readonly B2bSection[] {
   return B2B_SECTIONS.filter((section) => isSectionEnabled(section, input));
 }
@@ -249,6 +267,31 @@ export function resolveSection(requested: string | null, input: NavigationInput)
   const section = requested ? findSection(requested) : undefined;
   if (section && isSectionEnabled(section, input)) return section.id;
   return DEFAULT_SECTION;
+}
+
+/**
+ * MOT YEU CAU DIEU HUONG, sau khi da doi chieu voi nang luc va vai tro.
+ *
+ * Ton tai de LUAT nay la mot ham thuan, kiem tra duoc, thay vi vai dong nam trong mot `useCallback`
+ * o vo. Truoc PR #111 no khong ton tai, va do la ly do vo tung ghi thang muc duoc yeu cau: khong
+ * co cho nao de dat luat, nen luat khong duoc dat.
+ *
+ * Hai viec, khong hon: cham muc qua `resolveSection`, va BO lua chon di kem khi muc bi doi — mot
+ * ma don cua muc Đơn hàng khong co nghia gi o Tong quan, giu lai chi de ra mot duong dan khong mo
+ * duoc.
+ */
+export interface ResolvedNavigation {
+  readonly section: B2bSectionId;
+  readonly selection: string | null;
+}
+
+export function resolveNavigation(
+  requested: string,
+  selection: string | null,
+  input: NavigationInput,
+): ResolvedNavigation {
+  const section = resolveSection(requested, input);
+  return { section, selection: section === requested ? selection : null };
 }
 
 export const SECTION_QUERY_PARAM = 'section';

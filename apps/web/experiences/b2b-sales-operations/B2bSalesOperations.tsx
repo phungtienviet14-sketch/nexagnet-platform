@@ -10,6 +10,7 @@ import {
   navigationGroups,
   parseSectionFromSearch,
   parseSelectionFromSearch,
+  resolveNavigation,
   resolveSection,
   NAVIGATION_ENFORCEMENT_NOTE,
   type B2bSectionId,
@@ -88,18 +89,39 @@ export function B2bSalesOperations() {
    * Doi muc ma khong noi ro chon gi thi XOA lua chon cu: mot ma don cua muc Đơn hàng khong co
    * nghia gi o muc Hội thoại, va giu no lai chi tao mot duong dan khong mo duoc.
    */
-  const goTo = useCallback((next: B2bSectionId, nextSelection: string | null = null) => {
-    setSection(next);
-    setSelection(nextSelection);
-    setNavOpen(false);
-    const url = buildSectionUrl(next, nextSelection);
-    if (
-      typeof window !== 'undefined' &&
-      `${window.location.pathname}${window.location.search}` !== url
-    ) {
-      window.history.pushState(null, '', url);
-    }
-  }, []);
+  const goTo = useCallback(
+    (next: B2bSectionId, nextSelection: string | null = null) => {
+      /*
+       * MOI duong vao di qua CUNG mot phep giai — day la ban sua cho khiem khuyet chan PR #111.
+       *
+       * Truoc day dong nay la `setSection(next)`: mot lan bam TRONG ung dung ghi thang muc duoc
+       * yeu cau, trong khi mot duong dan luu san thi phai qua `parseSectionFromSearch` ->
+       * `resolveSection`. Hai duong vao, hai cau tra loi khac nhau cho cung mot cau hoi — nen mot
+       * ke toan bam mot duong dan trong ung dung mo duoc dung cai muc ma chinh ho khong mo duoc
+       * bang bookmark, roi dung o mot man hinh ket thuc bang 403.
+       *
+       * Chan o day la lop cuoi cung, va no chan MOI ben goi — ke ca mot duong dan sinh ra o cho
+       * ma hom nay chua ai viet.
+       */
+      const { section: allowed, selection: selectionForSection } = resolveNavigation(
+        next,
+        nextSelection,
+        navigation,
+      );
+
+      setSection(allowed);
+      setSelection(selectionForSection);
+      setNavOpen(false);
+      const url = buildSectionUrl(allowed, selectionForSection);
+      if (
+        typeof window !== 'undefined' &&
+        `${window.location.pathname}${window.location.search}` !== url
+      ) {
+        window.history.pushState(null, '', url);
+      }
+    },
+    [navigation],
+  );
 
   /**
    * Chon mot thu TRONG muc dang xem — thay the (`replaceState`), khong day them mot muc lich su.

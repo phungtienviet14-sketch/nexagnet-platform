@@ -8,6 +8,7 @@ import {
   useOperationalSummary,
   useReadiness,
 } from '../hooks/useWorkspaceData';
+import { useNavigationInput } from '../hooks/useNavigationInput';
 import { buildSectionUrl, type B2bSectionId } from '../navigation';
 import { readinessHeadline, toCustomerReadiness } from '../readiness';
 import type { CustomerAlert } from '../workspace/alerts';
@@ -36,6 +37,7 @@ export function OverviewView({ tenant, canUpdateSources, onNavigate }: OverviewV
   const ordersQuery = useMessageStream();
   const readinessQuery = useReadiness();
   const summaryQuery = useOperationalSummary();
+  const navigation = useNavigationInput();
 
   const blocked = toCustomerReadiness(tenant.readiness.blockedCapabilities, { canUpdateSources });
   const dashboard = toDashboard({
@@ -43,6 +45,7 @@ export function OverviewView({ tenant, canUpdateSources, onNavigate }: OverviewV
     blockedCapabilities: tenant.readiness.blockedCapabilities,
     readinessChecks: readinessQuery.data?.checks ?? null,
     channel: toChannelSignal(summaryQuery.data),
+    navigation,
   });
 
   return (

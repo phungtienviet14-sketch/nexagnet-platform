@@ -1,4 +1,7 @@
 import type { OrderView } from '@netviet/shared';
+import type { CapabilityId } from '@netviet/tenant';
+import type { AuthRole } from '../../../../lib/auth';
+import type { NavigationInput } from '../../navigation';
 
 /**
  * MOT `OrderView` "BAN" — mang DU moi truong chi ky su moi duoc nhin.
@@ -109,3 +112,31 @@ export function collectKeys(value: unknown, into: string[] = []): string[] {
     }
   return into;
 }
+
+/**
+ * NGUOI DANG XEM — bo nang luc day du cua goi khach, kem mot vai tro.
+ *
+ * Dung nguyen bo nang luc ma `tenants/ultty/tenant.json` khai, de bai kiem tra hoi dung mot cau:
+ * *voi cung mot goi khach, VAI TRO doi thi duong dan doi the nao*. Tron them mot phep loc nang
+ * luc vao day se lam mot bai do vi ly do khac han cai no dinh hoi.
+ */
+export const ALL_CAPABILITIES: readonly CapabilityId[] = [
+  'knowledge',
+  'messaging',
+  'turn-processing',
+  'sales-order',
+  'campaign',
+  'operations',
+  'notifications',
+];
+
+export function viewer(role: AuthRole | null): NavigationInput {
+  return { capabilities: ALL_CAPABILITIES, role };
+}
+
+export const SALE = viewer('SALE');
+export const ACCOUNTING = viewer('ACCOUNTING');
+export const MANAGER = viewer('MANAGER');
+export const ADMIN = viewer('ADMIN');
+/** Che do khong phien: trinh duyet khong mang danh tinh nao. */
+export const ANONYMOUS = viewer(null);

@@ -1,5 +1,5 @@
 import type { OrderView } from '@netviet/shared';
-import type { B2bSectionId } from '../navigation';
+import { canNavigateTo, type B2bSectionId, type NavigationInput } from '../navigation';
 import { summarizeWorkload, toCustomerOrders } from '../customer-view';
 import { deriveAlerts, type AlertSources, type CustomerAlert } from './alerts';
 
@@ -20,7 +20,13 @@ export interface DashboardStat {
   readonly value: number;
   /** Cau phu noi ro con so nay DEM CAI GI, de khong ai phai doan. */
   readonly hint: string;
-  /** Cho de lam viec do; `null` khi con so chi de biet, khong co viec kem theo. */
+  /**
+   * Cho de lam viec do; `null` khi con so chi de BIET.
+   *
+   * `null` cung xay ra khi nguoi dang xem khong co duong toi muc do — cung mot luat voi duong dan
+   * cua canh bao (`withNavigableLink`). Mot ke toan van doc duoc con so "Chờ duyệt & gửi" nhu mot
+   * chi so cua ngay lam viec, nhung khong duoc moi bam vao mot man hinh khong phai viec cua ho.
+   */
   readonly link: { readonly section: B2bSectionId; readonly label: string } | null;
 }
 
@@ -40,36 +46,43 @@ export interface DashboardModel {
 /** Nhieu hon the nay thi "ngay" khong con nghia la ngay nua — phan con lai o muc Cảnh báo. */
 export const URGENT_LIMIT = 6;
 
-export function toDashboardStats(orders: readonly OrderView[]): readonly DashboardStat[] {
+export function toDashboardStats(
+  orders: readonly OrderView[],
+  navigation: NavigationInput,
+): readonly DashboardStat[] {
   const summary = summarizeWorkload(toCustomerOrders(orders));
+  const linkTo = (
+    section: B2bSectionId,
+    label: string,
+  ): DashboardStat['link'] => (canNavigateTo(section, navigation) ? { section, label } : null);
   return [
     {
       key: 'awaiting-approval',
       label: 'Chờ duyệt & gửi',
       value: summary.awaitingApproval,
       hint: 'Phản hồi đã soạn xong, chờ người xác nhận.',
-      link: { section: 'approvals', label: 'Mở hàng chờ duyệt' },
+      link: linkTo('approvals', 'Mở hàng chờ duyệt'),
     },
     {
       key: 'awaiting-entry',
       label: 'Chờ nhập đơn',
       value: summary.awaitingOrderEntry,
       hint: 'Đã gửi cho nhóm, còn phải nhập vào phần mềm bán hàng.',
-      link: { section: 'orders', label: 'Mở đơn hàng' },
+      link: linkTo('orders', 'Mở đơn hàng'),
     },
     {
       key: 'sent-today',
       label: 'Đã gửi hôm nay',
       value: summary.sentToday,
       hint: 'Tính theo ngày làm việc tại Việt Nam.',
-      link: { section: 'orders', label: 'Mở đơn hàng' },
+      link: linkTo('orders', 'Mở đơn hàng'),
     },
     {
       key: 'active-groups',
       label: 'Nhóm đang hoạt động',
       value: summary.groups,
       hint: 'Nhóm đại lý đã có tin nhắn được ghi nhận.',
-      link: { section: 'conversations', label: 'Mở hội thoại' },
+      link: linkTo('conversations', 'Mở hội thoại'),
     },
   ];
 }
@@ -84,7 +97,7 @@ export function toDashboardStats(orders: readonly OrderView[]): readonly Dashboa
 export function toDashboard(sources: AlertSources): DashboardModel {
   const alerts = deriveAlerts(sources);
   const urgent = alerts.filter((alert) => alert.link !== null).slice(0, URGENT_LIMIT);
-  const stats = toDashboardStats(sources.orders);
+  const stats = toDashboardStats(sources.orders, sources.navigation);
   return {
     stats,
     urgent,

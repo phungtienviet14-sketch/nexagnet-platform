@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   B2B_SECTIONS,
   buildSectionUrl,
+  canNavigateTo,
+  isSectionEnabled,
   navigationGroups,
   parseSectionFromSearch,
   parseSelectionFromSearch,
+  resolveNavigation,
   resolveSection,
   visibleSections,
   type NavigationInput,
@@ -201,5 +204,98 @@ describe('duong dan toi MOT THU dang mo (Issue #110 §deep-link)', () => {
     expect(parseSelectionFromSearch('?selected=')).toBeNull();
     expect(parseSelectionFromSearch('?selected=%20%20')).toBeNull();
     expect(parseSelectionFromSearch('')).toBeNull();
+  });
+});
+
+/**
+ * MOT PHEP GIAI CHO MOI DUONG VAO — bat bien bi vi pham trong PR #111.
+ *
+ * Khiem khuyet goc khong nam o bang vai tro: bang do van dung. No nam o cho CO HAI duong vao mot
+ * muc (duong dan luu san, va mot lan bam trong ung dung) ma chi MOT duong di qua phep kiem. Bo
+ * duoi day khoa lai dieu ngan gon nhat co the noi ve chuyen do: chi co MOT cau tra loi, va moi
+ * ben goi phai lay no tu cung mot cho.
+ */
+describe('mot phep giai duy nhat cho ca deep-link lan dieu huong trong ung dung (PR #111)', () => {
+  it('`canNavigateTo` va `visibleSections` KHONG BAO GIO noi hai dieu khac nhau', () => {
+    for (const role of [null, 'SALE', 'ACCOUNTING', 'MANAGER', 'ADMIN'] as const) {
+      const input = asInput(FULL, role);
+      const visible = new Set(visibleSections(input).map((section) => section.id));
+      for (const section of B2B_SECTIONS) {
+        expect(
+          canNavigateTo(section.id, input),
+          `${role ?? 'khong-phien'} / ${section.id}`,
+        ).toBe(visible.has(section.id));
+        expect(canNavigateTo(section.id, input)).toBe(isSectionEnabled(section, input));
+      }
+    }
+  });
+
+  it('`resolveSection` roi ve Tong quan dung o nhung muc `canNavigateTo` tu choi', () => {
+    for (const role of [null, 'SALE', 'ACCOUNTING', 'MANAGER', 'ADMIN'] as const) {
+      const input = asInput(FULL, role);
+      for (const section of B2B_SECTIONS) {
+        const resolved = resolveSection(section.id, input);
+        expect(resolved).toBe(canNavigateTo(section.id, input) ? section.id : 'overview');
+      }
+    }
+  });
+
+  /*
+   * Truong hop CU THE ma review chan lai. `goTo()` cua vo goi dung ham nay, nen mot lan bam trong
+   * ung dung toi `approvals` duoi vai tro ke toan roi ve Tong quan y het mot bookmark.
+   */
+  it('KE TOAN bi cham lai o Duyệt & gửi du di bang duong nao', () => {
+    const accounting = asInput(FULL, 'ACCOUNTING');
+    expect(canNavigateTo('approvals', accounting)).toBe(false);
+    expect(resolveSection('approvals', accounting)).toBe('overview');
+    expect(parseSectionFromSearch('?section=approvals', accounting)).toBe('overview');
+    // Nhung Canh bao va Don hang thi mo — do la luong viec that cua ho.
+    expect(canNavigateTo('alerts', accounting)).toBe(true);
+    expect(canNavigateTo('orders', accounting)).toBe(true);
+  });
+
+  it('muc khong ton tai khong bao gio di duoc, voi moi vai tro', () => {
+    for (const role of [null, 'SALE', 'ACCOUNTING', 'MANAGER', 'ADMIN'] as const) {
+      expect(canNavigateTo('khong-ton-tai', asInput(FULL, role))).toBe(false);
+    }
+  });
+});
+
+/**
+ * LUAT ma `goTo()` cua vo chay — de o day chu khong nam trong mot `useCallback`, de kiem duoc.
+ */
+describe('mot yeu cau dieu huong duoc cham nhu the nao (PR #111)', () => {
+  it('muc mo duoc thi giu nguyen ca muc lan lua chon', () => {
+    expect(resolveNavigation('approvals', 'ord-1', asInput(FULL, 'SALE'))).toEqual({
+      section: 'approvals',
+      selection: 'ord-1',
+    });
+  });
+
+  it('KE TOAN bi cham lai o Duyệt & gửi, VA lua chon di kem bi bo', () => {
+    expect(resolveNavigation('approvals', 'ord-1', asInput(FULL, 'ACCOUNTING'))).toEqual({
+      section: 'overview',
+      selection: null,
+    });
+  });
+
+  it('muc bi tat theo nang luc cung roi ve Tong quan, lua chon cung bo', () => {
+    expect(resolveNavigation('campaigns', 'bat-ky', asInput(MINIMUM, 'ADMIN'))).toEqual({
+      section: 'overview',
+      selection: null,
+    });
+  });
+
+  it('muc khong ton tai roi ve Tong quan chu khong nem', () => {
+    expect(resolveNavigation('khong-ton-tai', 'x', asInput(FULL, null))).toEqual({
+      section: 'overview',
+      selection: null,
+    });
+  });
+
+  it('cham lai mot yeu cau da hop le thi khong doi gi — tat dinh, lap lai duoc', () => {
+    const input = asInput(FULL, 'SALE');
+    const once = resolveNavigation('orders', 'ord-9', input);
+    expect(resolveNavigation(once.section, once.selection, input)).toEqual(once);
   });
 });

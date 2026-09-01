@@ -1,7 +1,7 @@
 import type { OrderView } from '@netviet/shared';
 import type { Availability, ChannelMode, ReadinessCheckView } from '../../../lib/settings';
 import type { BlockedCapabilityDescriptor } from '../../../lib/tenant-runtime';
-import type { B2bSectionId } from '../navigation';
+import { canNavigateTo, type B2bSectionId, type NavigationInput } from '../navigation';
 import { toCustomerOrderDetail, type CustomerOrderDetail } from './order-detail';
 
 /**
@@ -41,7 +41,13 @@ export const ALERT_CATEGORY_LABEL: Readonly<Record<AlertCategory, string>> = {
   ket_noi_kenh: 'Kết nối / kênh cần chú ý',
 };
 
-/** Duong di toi cho lam viec do. `null` khi nen tang CHUA co man hinh nao de lam viec do. */
+/**
+ * Duong di toi cho lam viec do.
+ *
+ * `null` co HAI nghia, va ca hai deu that: nen tang chua co man hinh nao de lam viec do, HOAC
+ * nguoi dang xem khong co duong toi man hinh do. Ca hai truong hop deu dan den cung mot ket luan
+ * tren giao dien — khong ve mot cai nut, vi mot cai nut khong dua ai toi dau la mot loi hua sai.
+ */
 export interface AlertLink {
   readonly section: B2bSectionId;
   readonly selection: string | null;
@@ -73,6 +79,14 @@ export interface AlertSources {
   /** `null` khi CHUA DOC DUOC cong go-live — khac han voi "da doc va khong con gi". */
   readonly readinessChecks: readonly ReadinessCheckView[] | null;
   readonly channel: ChannelSignal | null;
+  /**
+   * NGUOI DANG XEM la ai — BAT BUOC, khong phai tuy chon.
+   *
+   * Bat buoc vi day la cach DUY NHAT chac chan de mot duong dan sai khong ra duoc khoi tep nay:
+   * ai goi `deriveAlerts` cung phai tra loi cau "ai dang nhin", va he thong kieu khong cho quen.
+   * Neu de tuy chon, chi can mot cho quen truyen la be mat lai ve dung loi ma PR #111 bi chan.
+   */
+  readonly navigation: NavigationInput;
 }
 
 const CATEGORY_ORDER: Readonly<Record<AlertCategory, number>> = {
@@ -223,6 +237,26 @@ function fromChannel(channel: ChannelSignal | null): readonly CustomerAlert[] {
 }
 
 /**
+ * MOT DUONG DAN CHI DUOC O LAI NEU NGUOI DANG XEM DI DUOC TOI DO.
+ *
+ * Day la nua thu nhat cua ban sua cho khiem khuyet chan PR #111. Mot ke toan van THAY duoc dong
+ * "Cần duyệt" — do la boi canh doi soat that cua ho — nhung khong nhan mot cai nut dua ho vao
+ * hang cho duyet, vi duyet & gui khong nam trong luong viec cua vai tro do.
+ *
+ * Suy ra hai he qua co ich, mien phi:
+ *   · muc Cảnh báo bo cai nut, giu lai thong tin;
+ *   · trang Tong quan bo han dong do khoi "Cần xử lý ngay" — hop dong cua no von la "chi lay canh
+ *     bao CO duong di toi cho lam" (xem `toDashboard`), nen khong phai viet them luat thu hai.
+ *
+ * Nua thu hai nam o `goTo()` trong vo: mot duong dan lot qua day van bi cham lai o do.
+ */
+function withNavigableLink(alert: CustomerAlert, navigation: NavigationInput): CustomerAlert {
+  if (!alert.link) return alert;
+  if (canNavigateTo(alert.link.section, navigation)) return alert;
+  return { ...alert, link: null };
+}
+
+/**
  * TAT DINH: cung mot bo nguon cho ra cung mot danh sach, cung mot thu tu.
  *
  * Xep theo nhom truoc (viec gap cua nguoi len tren, tinh trang he thong xuong duoi), roi theo
@@ -236,14 +270,16 @@ export function deriveAlerts(sources: AlertSources): readonly CustomerAlert[] {
     ...fromBlockedCapabilities(sources.blockedCapabilities),
     ...fromReadinessChecks(sources.readinessChecks),
     ...fromChannel(sources.channel),
-  ].sort((left, right) => {
-    const byCategory = CATEGORY_ORDER[left.category] - CATEGORY_ORDER[right.category];
-    if (byCategory !== 0) return byCategory;
-    const leftAt = left.at ? Date.parse(left.at) : Number.POSITIVE_INFINITY;
-    const rightAt = right.at ? Date.parse(right.at) : Number.POSITIVE_INFINITY;
-    if (leftAt !== rightAt) return leftAt - rightAt;
-    return left.id.localeCompare(right.id);
-  });
+  ]
+    .map((alert) => withNavigableLink(alert, sources.navigation))
+    .sort((left, right) => {
+      const byCategory = CATEGORY_ORDER[left.category] - CATEGORY_ORDER[right.category];
+      if (byCategory !== 0) return byCategory;
+      const leftAt = left.at ? Date.parse(left.at) : Number.POSITIVE_INFINITY;
+      const rightAt = right.at ? Date.parse(right.at) : Number.POSITIVE_INFINITY;
+      if (leftAt !== rightAt) return leftAt - rightAt;
+      return left.id.localeCompare(right.id);
+    });
 }
 
 export interface AlertGroup {

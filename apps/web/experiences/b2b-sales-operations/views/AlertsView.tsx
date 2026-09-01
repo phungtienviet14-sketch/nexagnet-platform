@@ -7,6 +7,7 @@ import {
   useOperationalSummary,
   useReadiness,
 } from '../hooks/useWorkspaceData';
+import { useNavigationInput } from '../hooks/useNavigationInput';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import { buildSectionUrl, type B2bSectionId } from '../navigation';
 import {
@@ -37,6 +38,7 @@ export interface AlertsViewProps {
 
 export function AlertsView({ onNavigate }: AlertsViewProps) {
   const tenant = useTenantRuntime();
+  const navigation = useNavigationInput();
   const messages = useMessageStream();
   const readiness = useReadiness();
   const summary = useOperationalSummary();
@@ -46,6 +48,7 @@ export function AlertsView({ onNavigate }: AlertsViewProps) {
     blockedCapabilities: tenant.readiness.blockedCapabilities,
     readinessChecks: readiness.data?.checks ?? null,
     channel: toChannelSignal(summary.data),
+    navigation,
   });
   const groups = groupAlerts(alerts);
 
