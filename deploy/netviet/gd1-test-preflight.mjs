@@ -11,6 +11,14 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Be mat khach cua Ultty tren stack GD1-test.
+ *
+ * Doi tu `operations-console` sang `b2b-sales-operations` ngay U-UI0 (Issue #107 §9.1). Cong nay
+ * van khoa DUNG MOT gia tri chu khong noi thanh "experience nao cung duoc": deploy nham mot be mat
+ * khac cho khach dang chay that la mot su co nhin thay ngay tren man hinh cua ho.
+ */
+const EXPECTED_EXPERIENCE = 'b2b-sales-operations';
 const REQUIRED_CAPABILITIES = [
   'knowledge',
   'messaging',
@@ -621,8 +629,8 @@ function tenantErrors(tenant, runtime) {
   const errors = [];
   if (tenant?.schemaVersion !== 2) errors.push('tenant schemaVersion must be 2');
   if (tenant?.slug !== 'ultty') errors.push('tenant slug must be ultty for this deployment gate');
-  if (tenant?.experience !== 'operations-console') {
-    errors.push('tenant experience must be operations-console for Ultty GD1-test');
+  if (tenant?.experience !== EXPECTED_EXPERIENCE) {
+    errors.push(`tenant experience must be ${EXPECTED_EXPERIENCE} for Ultty GD1-test`);
   }
 
   const capabilities = new Set(Array.isArray(tenant?.capabilities) ? tenant.capabilities : []);
