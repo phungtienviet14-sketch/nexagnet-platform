@@ -252,8 +252,37 @@ export class PrismaSettlementRepository extends SettlementRepository {
     });
   }
 
-  async correctDocument(command: CorrectDocumentCommand): Promise<SettlementDocument> {
+  async correctDocument(
+    command: CorrectDocumentCommand,
+  ): Promise<{ readonly document: SettlementDocument; readonly replayed: boolean }> {
     return this.prisma.$transaction(async (tx) => {
+      /*
+       * CHONG GHI TRUNG cho ca duong SUA, khong chi duong ghi nhan.
+       *
+       * Bo qua doan nay se lam mot lan nap lai ban giao cua `TX-04` do o `@@unique` thay vi phat
+       * lai — tuc mot duong tich hop chay lai binh thuong bien thanh mot loi 500. Chinh bai `P5`
+       * cua bo IT tim ra dieu nay: `recogniseDocument()` co kiem khoa, con `correctDocument()`
+       * thi khong, va su khong doi xung do khong co ly do nao bien ho duoc.
+       */
+      const replay = await model(tx, 'transportSettlementDocument').findUnique({
+        where: {
+          sourceContext_sourceId: {
+            sourceContext: command.sourceContext,
+            sourceId: command.sourceId,
+          },
+        },
+      });
+      if (replay) {
+        if (replay.sourceFingerprint !== command.sourceFingerprint) {
+          throw TransportDomainError.denied(
+            'SETTLEMENT_SOURCE_FINGERPRINT_CONFLICT',
+            `Khoa ${command.sourceContext}/${command.sourceId} da ghi voi noi dung khac. ` +
+              `Da ghi: ${replay.sourceFingerprint}; dua vao: ${command.sourceFingerprint}`,
+          );
+        }
+        return { document: toDocument(replay), replayed: true };
+      }
+
       /*
        * KHOA HANG BAN GOC truoc khi doc trang thai cua no. Day la thu giu cho hai lenh sua dong
        * thoi khong the cung thay `POSTED` roi cung ghi.
@@ -329,7 +358,7 @@ export class PrismaSettlementRepository extends SettlementRepository {
         });
       }
 
-      return toDocument(correction);
+      return { document: toDocument(correction), replayed: false };
     });
   }
 

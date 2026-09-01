@@ -525,7 +525,7 @@ export class SettlementService {
         adjustsId: originalId,
       });
 
-      const correction = await this.repository.correctDocument({
+      const applied = await this.repository.correctDocument({
         targetId: originalId,
         kind: 'ADJUSTMENT',
         signedAmount: delta,
@@ -536,15 +536,16 @@ export class SettlementService {
         note: `Ban sua doi ${handoff.revision} cua ky ${handoff.periodStart}..${handoff.periodEnd}`,
         recordedBy: actor,
       });
-      documents.push(correction);
-      created += 1;
+      documents.push(applied.document);
+      if (applied.replayed) replayed += 1;
+      else created += 1;
 
       this.telemetry?.decision({
         vocabulary: TRANSPORT_SETTLEMENT_DECISIONS,
         point: 'settlement.correct',
         outcome: 'allowed',
-        reason: 'ADJUSTMENT_POSTED',
-        detail: { documentId: correction.id, adjustsId: originalId, delta },
+        reason: applied.replayed ? 'SETTLEMENT_IDEMPOTENT_REPLAY' : 'ADJUSTMENT_POSTED',
+        detail: { documentId: applied.document.id, adjustsId: originalId, delta },
       });
     }
 
@@ -601,7 +602,7 @@ export class SettlementService {
       adjustsId: target.id,
     });
 
-    const correction = await this.repository.correctDocument({
+    const { document: correction } = await this.repository.correctDocument({
       targetId: target.id,
       kind: 'ADJUSTMENT',
       signedAmount: delta,
@@ -654,7 +655,7 @@ export class SettlementService {
       adjustsId: target.id,
     });
 
-    const reversal = await this.repository.correctDocument({
+    const { document: reversal } = await this.repository.correctDocument({
       targetId: target.id,
       kind: 'REVERSAL',
       signedAmount,

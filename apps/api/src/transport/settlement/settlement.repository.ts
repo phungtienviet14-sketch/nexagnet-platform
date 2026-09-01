@@ -148,8 +148,16 @@ export abstract class SettlementRepository {
    *
    * Doc lai trang thai TU HANG DA KHOA chu khong tin vao lan doc truoc do la diem mau chot: giua
    * lan doc cua service va lan ghi nay, mot lenh dao khac co the da chay xong.
+   *
+   * CHONG GHI TRUNG giong het duong ghi nhan: cung `(sourceContext, sourceId)` va cung van tay thi
+   * PHAT LAI ban da ghi; van tay lech thi NEM. Su doi xung nay khong phai cho dep — mot lan nap
+   * lai ban giao cua `TX-04` di qua duong nay, va neu no khong phat lai duoc thi mot duong tich
+   * hop chay lai binh thuong se do o `@@unique` thay vi tra ve ket qua cu.
    */
-  abstract correctDocument(command: CorrectDocumentCommand): Promise<SettlementDocument>;
+  abstract correctDocument(command: CorrectDocumentCommand): Promise<{
+    readonly document: SettlementDocument;
+    readonly replayed: boolean;
+  }>;
 
   /** PHAN BO mot lan thu/tra. Nguyen tu: khoa chuoi, cong lai so du, roi moi ghi. */
   abstract allocate(command: AllocateCommand): Promise<{

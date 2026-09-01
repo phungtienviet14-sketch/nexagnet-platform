@@ -123,7 +123,27 @@ export class InMemorySettlementRepository extends SettlementRepository {
     return { document, replayed: false };
   }
 
-  async correctDocument(command: CorrectDocumentCommand): Promise<SettlementDocument> {
+  async correctDocument(
+    command: CorrectDocumentCommand,
+  ): Promise<{ readonly document: SettlementDocument; readonly replayed: boolean }> {
+    /*
+     * CHONG GHI TRUNG cho ca duong SUA — xem chu thich cung cho o ban Prisma. Hai ban phai tra loi
+     * giong nhau, ke ca o duong phat lai.
+     */
+    const replay = [...this.documents.values()].find(
+      (doc) => doc.sourceContext === command.sourceContext && doc.sourceId === command.sourceId,
+    );
+    if (replay) {
+      if (replay.sourceFingerprint !== command.sourceFingerprint) {
+        throw TransportDomainError.denied(
+          'SETTLEMENT_SOURCE_FINGERPRINT_CONFLICT',
+          `Khoa ${command.sourceContext}/${command.sourceId} da ghi voi noi dung khac. ` +
+            `Da ghi: ${replay.sourceFingerprint}; dua vao: ${command.sourceFingerprint}`,
+        );
+      }
+      return { document: replay, replayed: true };
+    }
+
     const target = this.documents.get(command.targetId);
     if (!target) {
       throw TransportDomainError.notFound(
@@ -181,7 +201,7 @@ export class InMemorySettlementRepository extends SettlementRepository {
       this.documents.set(target.id, { ...target, status: 'REVERSED' });
     }
 
-    return correction;
+    return { document: correction, replayed: false };
   }
 
   async allocate(
