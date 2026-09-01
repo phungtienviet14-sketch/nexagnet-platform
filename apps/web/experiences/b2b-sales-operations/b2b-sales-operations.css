@@ -1,0 +1,709 @@
+/*
+ * BE MAT BAN HANG B2B — Issue #107.
+ *
+ * Moi bo chon deu bat dau bang `.b2b-`: tep CSS toan cuc nay dung chung mot bundle voi
+ * `console.css` cua be mat noi bo, nen thieu tien to la doi mot lan sua o day lam lech mot man
+ * hinh khac. Thuong hieu vao qua DUNG HAI bien (`--b2b-accent`, `--b2b-canvas`) do vo dat inline
+ * tu goi khach — khong mau nao cua mot khach cu the duoc viet trong tep nay.
+ */
+
+.b2b-shell {
+  --b2b-accent: #315b7d;
+  --b2b-canvas: #f6f5f2;
+
+  --b2b-ink: #1c1a17;
+  --b2b-ink-soft: #5b564e;
+  --b2b-ink-faint: #8a8378;
+  --b2b-paper: #ffffff;
+  --b2b-line: #e2ded6;
+  --b2b-line-strong: #cfc9bd;
+  --b2b-flag: #9a5b12;
+  --b2b-flag-wash: #fdf3e3;
+  --b2b-good: #1f6b45;
+  --b2b-good-wash: #e9f4ee;
+  --b2b-stop: #97281f;
+  --b2b-stop-wash: #fbecea;
+
+  --b2b-rail: 268px;
+  --b2b-gutter: clamp(1rem, 0.4rem + 2vw, 2.5rem);
+  --b2b-radius: 12px;
+  --b2b-radius-sm: 7px;
+
+  display: grid;
+  grid-template-columns: var(--b2b-rail) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--b2b-canvas);
+  color: var(--b2b-ink);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.b2b-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.b2b-skip {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  z-index: 20;
+  padding: 0.6rem 1rem;
+  background: var(--b2b-ink);
+  color: #fff;
+  border-radius: 0 0 var(--b2b-radius-sm) 0;
+}
+.b2b-skip:focus-visible {
+  left: 0;
+}
+
+/* ---------- thanh dieu huong ---------- */
+
+.b2b-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem 1rem 1.25rem;
+  background: var(--b2b-paper);
+  border-right: 1px solid var(--b2b-line);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.b2b-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0 0.5rem 1.25rem;
+  border-bottom: 1px solid var(--b2b-line);
+}
+.b2b-brand__monogram {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--b2b-accent);
+  color: #fff;
+  font-weight: 650;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+.b2b-brand__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.b2b-brand__name {
+  font-weight: 620;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+.b2b-brand__product {
+  font-size: 0.76rem;
+  color: var(--b2b-ink-faint);
+}
+
+.b2b-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  flex: 1;
+}
+.b2b-nav__group-label {
+  margin: 0 0 0.4rem 0.65rem;
+  font-size: 0.66rem;
+  font-weight: 660;
+  letter-spacing: 0.13em;
+  color: var(--b2b-ink-faint);
+}
+.b2b-nav__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.b2b-nav__item {
+  display: block;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--b2b-radius-sm);
+  color: var(--b2b-ink-soft);
+  text-decoration: none;
+  font-size: 0.9rem;
+  border-left: 2px solid transparent;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+.b2b-nav__item:hover {
+  background: color-mix(in srgb, var(--b2b-accent) 7%, transparent);
+  color: var(--b2b-ink);
+}
+.b2b-nav__item:focus-visible {
+  outline: 2px solid var(--b2b-accent);
+  outline-offset: 1px;
+}
+.b2b-nav__item[aria-current='page'] {
+  background: color-mix(in srgb, var(--b2b-accent) 11%, transparent);
+  border-left-color: var(--b2b-accent);
+  color: var(--b2b-ink);
+  font-weight: 590;
+}
+
+.b2b-sidebar__foot {
+  border-top: 1px solid var(--b2b-line);
+  padding: 0.9rem 0.65rem 0;
+}
+.b2b-sidebar__role {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 560;
+  color: var(--b2b-ink-soft);
+}
+.b2b-sidebar__note {
+  margin: 0;
+  font-size: 0.71rem;
+  line-height: 1.45;
+  color: var(--b2b-ink-faint);
+}
+
+/* ---------- than trang ---------- */
+
+.b2b-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.b2b-topbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.3rem var(--b2b-gutter) 1.1rem;
+  background: color-mix(in srgb, var(--b2b-paper) 72%, var(--b2b-canvas));
+  border-bottom: 1px solid var(--b2b-line);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: blur(6px);
+}
+.b2b-topbar__heading {
+  min-width: 0;
+  flex: 1;
+}
+.b2b-topbar__title {
+  margin: 0;
+  font-size: clamp(1.3rem, 1.05rem + 0.9vw, 1.75rem);
+  font-weight: 640;
+  letter-spacing: -0.022em;
+  line-height: 1.2;
+}
+.b2b-topbar__summary {
+  margin: 0.15rem 0 0;
+  font-size: 0.86rem;
+  color: var(--b2b-ink-soft);
+}
+.b2b-topbar__flag {
+  flex-shrink: 0;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: var(--b2b-flag-wash);
+  border: 1px solid color-mix(in srgb, var(--b2b-flag) 30%, transparent);
+  color: var(--b2b-flag);
+  font-size: 0.78rem;
+  font-weight: 580;
+  text-decoration: none;
+}
+.b2b-topbar__flag:hover {
+  background: color-mix(in srgb, var(--b2b-flag) 16%, var(--b2b-flag-wash));
+}
+.b2b-topbar__flag:focus-visible {
+  outline: 2px solid var(--b2b-flag);
+  outline-offset: 2px;
+}
+
+.b2b-navtoggle {
+  display: none;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--b2b-radius-sm);
+  border: 1px solid var(--b2b-line-strong);
+  background: var(--b2b-paper);
+  color: var(--b2b-ink);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.b2b-navtoggle:focus-visible {
+  outline: 2px solid var(--b2b-accent);
+  outline-offset: 1px;
+}
+
+.b2b-main {
+  padding: var(--b2b-gutter);
+  max-width: 1180px;
+  width: 100%;
+}
+
+.b2b-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+/* ---------- khoi noi dung ---------- */
+
+.b2b-panel {
+  background: var(--b2b-paper);
+  border: 1px solid var(--b2b-line);
+  border-radius: var(--b2b-radius);
+  padding: 1.25rem 1.35rem 1.4rem;
+  box-shadow: 0 1px 2px rgb(28 26 23 / 4%);
+}
+.b2b-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.b2b-panel__title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+}
+.b2b-panel__description {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--b2b-ink-faint);
+}
+
+.b2b-headline {
+  margin: 0 0 0.9rem;
+  font-size: 0.98rem;
+  color: var(--b2b-ink);
+}
+.b2b-note {
+  margin: 0.85rem 0 0;
+  font-size: 0.79rem;
+  color: var(--b2b-ink-faint);
+}
+.b2b-link {
+  display: inline-block;
+  margin-top: 0.9rem;
+  color: var(--b2b-accent);
+  font-size: 0.86rem;
+  font-weight: 560;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--b2b-accent) 35%, transparent);
+}
+.b2b-link:hover {
+  border-bottom-color: var(--b2b-accent);
+}
+.b2b-link:focus-visible {
+  outline: 2px solid var(--b2b-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- trang thai tai / rong / loi / chua mo ---------- */
+
+.b2b-state {
+  border-radius: var(--b2b-radius-sm);
+  border: 1px dashed var(--b2b-line-strong);
+  padding: 1rem 1.1rem;
+  background: color-mix(in srgb, var(--b2b-canvas) 55%, var(--b2b-paper));
+}
+.b2b-state__title {
+  margin: 0;
+  font-weight: 590;
+  font-size: 0.92rem;
+}
+.b2b-state__detail {
+  margin: 0.25rem 0 0;
+  font-size: 0.84rem;
+  color: var(--b2b-ink-soft);
+}
+.b2b-state__action {
+  margin-top: 0.7rem;
+}
+.b2b-state--error {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--b2b-stop) 34%, transparent);
+  background: var(--b2b-stop-wash);
+}
+.b2b-state--error .b2b-state__title {
+  color: var(--b2b-stop);
+}
+.b2b-state--planned {
+  border-color: color-mix(in srgb, var(--b2b-accent) 28%, transparent);
+}
+
+/* ---------- so lieu ---------- */
+
+.b2b-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 0.75rem;
+}
+.b2b-stat {
+  border: 1px solid var(--b2b-line);
+  border-radius: var(--b2b-radius-sm);
+  padding: 0.8rem 0.9rem;
+  background: color-mix(in srgb, var(--b2b-canvas) 40%, var(--b2b-paper));
+}
+.b2b-stat__label {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--b2b-ink-faint);
+  letter-spacing: 0.01em;
+}
+.b2b-stat__value {
+  margin: 0.15rem 0 0;
+  font-size: 1.7rem;
+  font-weight: 640;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.b2b-stat__hint {
+  margin: 0.1rem 0 0;
+  font-size: 0.73rem;
+  color: var(--b2b-ink-faint);
+}
+
+/* ---------- nghiep vu chua san sang ---------- */
+
+.b2b-readiness {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.b2b-readiness__row {
+  border: 1px solid var(--b2b-line);
+  border-left: 3px solid var(--b2b-flag);
+  border-radius: var(--b2b-radius-sm);
+  padding: 0.75rem 0.9rem;
+  background: color-mix(in srgb, var(--b2b-flag-wash) 45%, var(--b2b-paper));
+}
+.b2b-readiness__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.b2b-readiness__label {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.b2b-readiness__reason {
+  margin: 0.3rem 0 0;
+  font-size: 0.84rem;
+  color: var(--b2b-ink-soft);
+}
+.b2b-readiness__action {
+  margin: 0.4rem 0 0;
+  font-size: 0.79rem;
+  font-weight: 550;
+  color: var(--b2b-flag);
+}
+
+/* ---------- nhan trang thai ---------- */
+
+.b2b-pill {
+  display: inline-block;
+  padding: 0.16rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 580;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.b2b-pill--blocked,
+.b2b-pill--cho_duyet {
+  background: var(--b2b-flag-wash);
+  border-color: color-mix(in srgb, var(--b2b-flag) 28%, transparent);
+  color: var(--b2b-flag);
+}
+.b2b-pill--da_gui,
+.b2b-pill--cho_nhap_don {
+  background: var(--b2b-good-wash);
+  border-color: color-mix(in srgb, var(--b2b-good) 26%, transparent);
+  color: var(--b2b-good);
+}
+.b2b-pill--da_huy {
+  background: var(--b2b-stop-wash);
+  border-color: color-mix(in srgb, var(--b2b-stop) 26%, transparent);
+  color: var(--b2b-stop);
+}
+.b2b-pill--dang_xu_ly,
+.b2b-pill--role {
+  background: color-mix(in srgb, var(--b2b-accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--b2b-accent) 26%, transparent);
+  color: color-mix(in srgb, var(--b2b-accent) 78%, var(--b2b-ink));
+}
+
+/* ---------- danh sach tin / don ---------- */
+
+.b2b-orders,
+.b2b-conversations,
+.b2b-periods,
+.b2b-users,
+.b2b-capabilities {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.b2b-order,
+.b2b-conversation {
+  border: 1px solid var(--b2b-line);
+  border-radius: var(--b2b-radius-sm);
+  padding: 0.8rem 0.95rem;
+  background: var(--b2b-paper);
+}
+.b2b-order--cho_duyet {
+  border-left: 3px solid var(--b2b-flag);
+}
+.b2b-order--da_huy {
+  border-left: 3px solid var(--b2b-stop);
+}
+
+.b2b-order__lead {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+.b2b-order__intent {
+  font-size: 0.78rem;
+  font-weight: 560;
+  color: var(--b2b-ink-soft);
+}
+.b2b-order__time {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--b2b-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.b2b-order__excerpt {
+  margin: 0.5rem 0 0.6rem;
+  font-size: 0.9rem;
+  color: var(--b2b-ink);
+}
+.b2b-order__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.4rem;
+  margin: 0;
+}
+.b2b-order__meta > div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+.b2b-order__meta dt {
+  font-size: 0.73rem;
+  color: var(--b2b-ink-faint);
+}
+.b2b-order__meta dd {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 540;
+}
+.b2b-order__total {
+  font-variant-numeric: tabular-nums;
+}
+.b2b-order__notes {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--b2b-radius-sm);
+  background: var(--b2b-flag-wash);
+  color: var(--b2b-flag);
+  font-size: 0.79rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.b2b-conversation__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.b2b-conversation__name {
+  font-weight: 600;
+  font-size: 0.93rem;
+}
+.b2b-conversation__dealer {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: var(--b2b-ink-faint);
+}
+.b2b-conversation__excerpt {
+  margin: 0.45rem 0 0;
+  font-size: 0.86rem;
+  color: var(--b2b-ink-soft);
+}
+.b2b-conversation__foot {
+  margin: 0.45rem 0 0;
+  font-size: 0.75rem;
+  color: var(--b2b-ink-faint);
+}
+
+/* ---------- bang gia, nguoi dung, nghiep vu ---------- */
+
+.b2b-period,
+.b2b-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--b2b-line);
+  border-radius: var(--b2b-radius-sm);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.87rem;
+}
+.b2b-period--active {
+  border-color: color-mix(in srgb, var(--b2b-good) 36%, transparent);
+  background: color-mix(in srgb, var(--b2b-good-wash) 55%, var(--b2b-paper));
+}
+.b2b-period__month {
+  font-weight: 580;
+}
+.b2b-period__count,
+.b2b-user__account {
+  color: var(--b2b-ink-faint);
+  font-size: 0.79rem;
+}
+.b2b-user__name {
+  font-weight: 570;
+}
+.b2b-user__account {
+  margin-right: auto;
+}
+
+.b2b-capabilities {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.b2b-capability {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--b2b-line-strong);
+  font-size: 0.8rem;
+  background: color-mix(in srgb, var(--b2b-canvas) 45%, var(--b2b-paper));
+}
+
+/* ---------- bang vai tro ---------- */
+
+.b2b-table-scroll {
+  overflow-x: auto;
+}
+.b2b-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+  min-width: 480px;
+}
+.b2b-matrix__caption {
+  caption-side: bottom;
+  padding-top: 0.6rem;
+  font-size: 0.74rem;
+  color: var(--b2b-ink-faint);
+  text-align: left;
+}
+.b2b-matrix th,
+.b2b-matrix td {
+  border-bottom: 1px solid var(--b2b-line);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+.b2b-matrix thead th {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--b2b-ink-faint);
+  font-weight: 600;
+}
+.b2b-matrix tbody th {
+  font-weight: 540;
+}
+.b2b-matrix td {
+  text-align: center;
+  color: var(--b2b-ink-faint);
+}
+.b2b-matrix td[data-allowed='true'] {
+  color: var(--b2b-good);
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 1180px) {
+  .b2b-shell {
+    --b2b-rail: 224px;
+  }
+}
+
+@media (max-width: 860px) {
+  .b2b-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .b2b-sidebar {
+    position: static;
+    height: auto;
+    display: none;
+    border-right: none;
+    border-bottom: 1px solid var(--b2b-line);
+  }
+  .b2b-shell[data-nav-open] .b2b-sidebar {
+    display: flex;
+    order: -1;
+  }
+  .b2b-navtoggle {
+    display: grid;
+    place-items: center;
+  }
+  .b2b-topbar {
+    position: static;
+  }
+  .b2b-main {
+    padding-top: 1.1rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .b2b-topbar__flag {
+    display: none;
+  }
+  .b2b-order__time {
+    margin-left: 0;
+    width: 100%;
+  }
+  .b2b-user {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .b2b-nav__item {
+    transition: none;
+  }
+}

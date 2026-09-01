@@ -1,6 +1,22 @@
 import { defineConfig, devices } from '@playwright/test';
 import { resolve } from 'node:path';
 
+/**
+ * MOT may chu, MOT goi khach — va do la mot rang buoc, khong phai mot lua chon.
+ *
+ * Hai `next dev` trong cung mot thu muc du an cung bien dich vao `apps/web/.next` va ghi de len
+ * nhau; ep chung ra hai `distDir` rieng thi Next lai VIET LAI `tsconfig.json` va `next-env.d.ts`
+ * (hai tep duoc theo doi trong git) va do them thu muc sinh ra vao tam quet cua ESLint. Ca hai gia
+ * do deu dat hon thu thu duoc.
+ *
+ * Nen goi khach o day khai `b2b-sales-operations`: do la be mat U-UI0 phai chung minh. Bo
+ * `settings.spec.ts` van chay dung nhu cu tren cung goi nay — man hinh `/settings` dung theo NANG
+ * LUC chu khong theo experience, va `lib/experience-registry.test.ts` khoa dieu do lai bang mot
+ * bai kiem tra rieng.
+ *
+ * Con `operations-console` VAN duoc chung minh la render doc lap: goi A trong
+ * `tenant-runtime.contract.mjs` boot no bang `next start` that va doc `data-experience` tra ve.
+ */
 const TEST_TENANT_DIR = resolve(__dirname, 'e2e/fixtures/tenant');
 
 export default defineConfig({

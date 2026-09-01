@@ -1,6 +1,7 @@
 import { EXPERIENCE_REQUIREMENTS, type CapabilityId, type ExperienceId } from '@netviet/tenant';
 import type { ComponentType } from 'react';
 import { AgentWorkforce } from './agent-workforce/AgentWorkforce';
+import { B2bSalesOperations } from './b2b-sales-operations/B2bSalesOperations';
 import { KnowledgeWorkspace } from './knowledge-workspace/KnowledgeWorkspace';
 import { OperationsConsole } from './operations-console/OperationsConsole';
 import { TransportOperations } from './transport-operations/TransportOperations';
@@ -31,6 +32,11 @@ export const EXPERIENCE_REGISTRY = {
     id: 'transport-operations',
     requiredCapabilities: EXPERIENCE_REQUIREMENTS['transport-operations'],
     Component: TransportOperations,
+  },
+  'b2b-sales-operations': {
+    id: 'b2b-sales-operations',
+    requiredCapabilities: EXPERIENCE_REQUIREMENTS['b2b-sales-operations'],
+    Component: B2bSalesOperations,
   },
 } as const satisfies Record<ExperienceId, ExperienceDefinition>;
 

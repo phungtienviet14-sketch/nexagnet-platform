@@ -176,6 +176,24 @@ export const EXPERIENCE_IDS = [
    * CAU TRUC DU LIEU ngay ca khi tang experience chua tach duoc.
    */
   'transport-operations',
+  /**
+   * Be mat BAN HANG B2B huong KHACH HANG — `U-UI0`.
+   *
+   * Ranh gioi voi `operations-console` la ranh gioi NGUOI DUNG, khong phai mot ban lam dep cua
+   * cung mot man hinh. `operations-console` la be mat NOI BO cua Nexagent: hoat canh 6 agent,
+   * trace, doc lai rule, chay lai mot luot — nhung thu mot ky su can va mot nhan vien Sale khong
+   * bao gio nen phai nhin. Be mat nay la thu khach dung hang ngay: hoi thoai, duyet & gui, don
+   * hang, dai ly, cham soc, canh bao, quan tri.
+   *
+   * HAI experience CUNG TON TAI co chu y, khong phai mot buoc chuyen tiep. Hop nhat chung se cho
+   * ra mot man hinh vua bao "don vuot nguong tu xac nhan" vua phoi `traceId` — khong ai doc duoc.
+   * Xoa be mat noi bo di thi mat luon duong lan vet khi mot don chay sai
+   * (docs/phat-trien/van-hanh/debugging.md).
+   *
+   * TRUNG TINH VE KHACH: khong mot dong nao trong experience nay duoc biet ten mot khach cu the.
+   * Thuong hieu, chinh sach va cac nang luc bi chan deu den tu goi khach (`tenants/<slug>/`).
+   */
+  'b2b-sales-operations',
 ] as const;
 
 export const capabilityIdSchema = z.enum(CAPABILITY_IDS);
@@ -478,6 +496,23 @@ export const EXPERIENCE_REQUIREMENTS = {
   'knowledge-workspace': ['knowledge'],
   'agent-workforce': ['knowledge', 'operations'],
   'transport-operations': ['transport-core'],
+  /**
+   * CUNG bo yeu cau voi `operations-console`, va do la mot khang dinh chu khong phai mot phep sao
+   * chep: hai be mat nhin cung MOT mien nghiep vu bang hai con mat khac nhau, nen chung phai doi
+   * cung mot nen du lieu. Mot khach bat be mat ban hang ma tat `sales-order` se co mot thanh dieu
+   * huong day muc khong bao gio co gi ben trong.
+   *
+   * `campaign` va `notifications` CO Y khong nam o day: cham soc/chien dich va canh bao la phan MO
+   * RONG. Mot khach B2B chi chot don qua chat van dung duoc be mat nay — thanh dieu huong tu an
+   * hai muc do di (`navigation.ts`), thay vi dan khach vao mot trang trong.
+   */
+  'b2b-sales-operations': [
+    'knowledge',
+    'messaging',
+    'turn-processing',
+    'sales-order',
+    'operations',
+  ],
 } as const satisfies Record<
   z.infer<typeof experienceIdSchema>,
   readonly z.infer<typeof capabilityIdSchema>[]
