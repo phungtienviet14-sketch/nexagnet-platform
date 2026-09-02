@@ -234,27 +234,33 @@ jobs:
           git diff "${HEAD_A}..${b}" -- "${FIXTURE}"
           echo "----END FIX DIFF----"
 
-      # MEASUREMENT, not an assertion. GitHub does not start new workflow runs for pushes
-      # made with GITHUB_TOKEN. Whether that holds decides how the real autopilot has to
-      # be built, so this step reports what actually happened instead of assuming it.
-      - name: Did pushing B start a new check run?
+      # MEASUREMENT, not an assertion. POC-1 (PR #136) found that a GITHUB_TOKEN push
+      # DOES create runs for the new SHA, but GitHub parks them at conclusion
+      # action_required with zero jobs, waiting for a human. "No run" and "a run that
+      # never started" look nothing alike when you are debugging, so report both.
+      - name: Did pushing B start a check run, and did it actually execute?
         if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
         run: |
           set -euo pipefail
           b="${{ steps.push.outputs.b }}"
-          found=""
+          rows="[]"
           for _ in $(seq 1 12); do
-            found="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${b}&per_page=100" \
-              --jq "[.workflow_runs[] | select(.name==\"${CHECK_WORKFLOW}\")] | length")"
-            [ "${found}" != "0" ] && break
+            rows="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${b}&per_page=100"               --jq "[.workflow_runs[] | select(.name==\"${CHECK_WORKFLOW}\") | {id, status, conclusion, actor: .triggering_actor.login}]")"
+            [ "$(printf '%s' "${rows}" | jq 'length')" != "0" ] && break
             sleep 10
           done
-          echo "MEASURE_NEW_CHECK_RUNS_FOR_B=${found}"
-          if [ "${found}" = "0" ]; then
-            echo "MEASURE_RESULT=GITHUB_TOKEN push did NOT start a new ${CHECK_WORKFLOW} run."
-            echo "MEASURE_CONSEQUENCE=Post-fix validation must be dispatched deliberately, or the push must carry a GitHub App / PAT credential."
+          created="$(printf '%s' "${rows}" | jq 'length')"
+          gated="$(printf '%s' "${rows}" | jq '[.[] | select(.conclusion == "action_required")] | length')"
+          echo "MEASURE_RUNS_CREATED_FOR_B=${created}"
+          echo "MEASURE_RUNS_AWAITING_APPROVAL=${gated}"
+          printf '%s\n' "${rows}" | jq -c '.[]'
+          if [ "${created}" = "0" ]; then
+            echo "MEASURE_RESULT=NO_RUN_CREATED - post-fix validation must be dispatched deliberately."
+          elif [ "${gated}" != "0" ]; then
+            echo "MEASURE_RESULT=RUN_CREATED_BUT_PARKED - GitHub is waiting for a human to approve it."
+            echo "MEASURE_CONSEQUENCE=Unattended autopilot needs a GitHub App installation token so the triggering actor is trusted."
           else
-            echo "MEASURE_RESULT=GITHUB_TOKEN push DID start ${found} new ${CHECK_WORKFLOW} run(s); the loop guard is load-bearing."
+            echo "MEASURE_RESULT=RUN_STARTED_ON_ITS_OWN - the loop guard is load-bearing, not a backstop."
           fi
 
       - name: Nothing to fix
