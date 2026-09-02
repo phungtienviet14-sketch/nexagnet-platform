@@ -477,11 +477,11 @@ describe('PricePeriod lifecycle — mot giao thuc khoa duy nhat', () => {
   }
 
   /** `$executeRaw` nhan (TemplateStringsArray, ...values) — ghep lai de doc duoc cau SQL. */
-  function lockedIds(prisma: PrismaService): Array<{ sql: string; id: unknown }> {
+  function rawLocks(prisma: PrismaService): Array<{ sql: string; values: unknown[] }> {
     const calls = (prisma.$executeRaw as unknown as ReturnType<typeof vi.fn>).mock.calls as Array<
       [TemplateStringsArray, ...unknown[]]
     >;
-    return calls.map(([parts, ...values]) => ({ sql: parts.join('?'), id: values[0] }));
+    return calls.map(([parts, ...values]) => ({ sql: parts.join('?'), values }));
   }
 
   /** Thu tu goi cua lan dau; nem neu ham chua he duoc goi, de bai do noi ro ly do. */
@@ -500,15 +500,55 @@ describe('PricePeriod lifecycle — mot giao thuc khoa duy nhat', () => {
 
     await run(service);
 
-    const locks = lockedIds(prisma);
-    expect(locks).toHaveLength(1);
-    const [lock] = locks;
-    expect(lock?.sql).toContain('FOR UPDATE');
+    const rowLocks = rawLocks(prisma).filter((lock) => lock.sql.includes('FOR UPDATE'));
+    expect(rowLocks).toHaveLength(1);
+    const [lock] = rowLocks;
     expect(lock?.sql).toContain('"PricePeriod"');
     // Khoa dung MOT hang, khong phai ca bang: id phai di vao truy van co tham so.
-    expect(lock?.id).toBe('p1');
+    expect(lock?.values[0]).toBe('p1');
     expect(prisma.$transaction).toHaveBeenCalled();
   });
+
+  /**
+   * THU TU la toan bo phan chung minh khong-deadlock cua Issue #122 — nen no duoc khoa bang bai
+   * test, khong phai bang mot cau ghi chu.
+   *
+   * Dao lai thanh `khoa hang muc tieu -> roi moi khoa thang` thi hai `activate()` cua hai ban
+   * nhap cung thang se giu hai hang KHAC NHAU roi doi khoa cua nhau. Bai duoi day do ngay khi ai
+   * do doi thu tu, ke ca khi tren Postgres that cuoc dua chua kip xay ra.
+   */
+  it('activate xep hang CA THANG truoc, roi moi khoa hang ky (Issue #122)', async () => {
+    const { service, prisma } = make();
+
+    await service.activate('p1', 'sale', null);
+
+    const locks = rawLocks(prisma);
+    expect(locks).toHaveLength(2);
+    expect(locks[0]?.sql).toContain('pg_advisory_xact_lock');
+    // Khoa theo TEN THANG, khong phai theo id ky: hai ky khac nhau cung thang phai gap nhau.
+    expect(locks[0]?.sql).toContain('hashtext');
+    expect(locks[0]?.values).toContain('2026-08');
+    expect(locks[1]?.sql).toContain('FOR UPDATE');
+  });
+
+  it.each([
+    ['removeDraftPrice', (s: PricePeriodsService) => s.removeDraftPrice('p1', 'A', 'sale', null)],
+    ['archive', (s: PricePeriodsService) => s.archive('p1', 'sale', null)],
+  ])(
+    '%s KHONG xep hang theo thang — no khong tao ra duoc ky ACTIVE thu hai',
+    async (_name, run) => {
+      // Bat ca ba nguoi ghi xep hang theo thang thi van dung, nhung se lam mot thao tac chi cham
+      // vao MOT hang phai cho ca thang. Chi `activate()` quyet dinh dua tren trang thai ca thang.
+      const { service, prisma } = make();
+
+      await run(service);
+
+      const sql = rawLocks(prisma)
+        .map((lock) => lock.sql)
+        .join(' ');
+      expect(sql).not.toContain('pg_advisory_xact_lock');
+    },
+  );
 
   it('trang thai duoc doc SAU khi khoa, khong phai truoc', async () => {
     const { service, prisma } = make();

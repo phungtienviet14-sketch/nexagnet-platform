@@ -99,6 +99,15 @@ export function buildPriceImportPreview(
   return { valid: errors.length === 0, created, updated, unchanged, errors, warnings, diff };
 }
 
+/**
+ * Khong gian khoa advisory cua "mot thang gia" (Issue #122).
+ *
+ * Dung DANG HAI THAM SO `pg_advisory_xact_lock(int4, int4)` chu khong phai dang mot `bigint`:
+ * Postgres coi hai dang la HAI khong gian khoa RIENG BIET, nen khoa o day khong the dam vao
+ * `2071164281` (chien dich) hay `2071164282` (outbox) du con so co gan nhau den may.
+ */
+const PRICE_PERIOD_MONTH_LOCK_NAMESPACE = 2_071_164_283;
+
 /** Ky gia da doc SAU khi khoa hang — xem `withLockedPeriod`. */
 type LockedPricePeriod = Prisma.PricePeriodGetPayload<{ include: { prices: true } }>;
 
@@ -358,7 +367,13 @@ export class PricePeriodsService {
     // Diem then chot: `evaluatePricePeriod` chay tren `period.prices` doc SAU khoa, khong phai
     // tren mot anh chup doc truoc do. Neu mot `removeDraftPrice` vua thang, ta thay so dong DA
     // GIAM va tu choi activate neu thieu SKU — thay vi activate mot ky theo du lieu cu.
-    const { before, after } = await this.withLockedPeriod(periodId, async (tx, period) => {
+    //
+    // Va sau khoa cua CA THANG (Issue #122). Day la nguoi ghi DUY NHAT can no, vi day la nguoi
+    // ghi duy nhat quyet dinh dua tren "thang nay dang co ky nao": phep kiem test-only ngay ben
+    // duoi, va buoc `updateMany` luu tru cac ky cu. Thieu khoa thang thi hai phep do doc mot anh
+    // chup cu — ket qua that lai do `PricePeriod_one_active_per_month` cua database quyet dinh,
+    // va ben thua nhan mot P2002 tran trui thay vi mot cau tu choi doc duoc.
+    const { before, after } = await this.withLockedMonth(periodId, async (tx, period) => {
       if (period.status !== 'draft') throw new ConflictException('Chỉ kỳ draft mới được activate');
       const testOnly = isTestOnlyPeriod(period.source);
       if (testOnly && loadFoundationEnv().DATA_CLASSIFICATION !== 'test') {
@@ -398,6 +413,19 @@ export class PricePeriodsService {
         data: { status: 'active', activatedAt, activatedBy: actorName(actor) },
       });
       return { before: period, after: activated };
+    }).catch((error: unknown) => {
+      // LUOI CUOI o tang database: `PricePeriod_one_active_per_month` (unique mot phan, tao boi
+      // migration `20260812123000_price_periods`, KHONG khai trong `schema.prisma`).
+      //
+      // Sau khoa thang, hai `activate()` khong con dam nhau duoc nua, nen neu index van keu thi
+      // nguoi ghi kia KHONG di qua duong nay — panel `/admin` sua thang truong `status` chang
+      // han. Van phai tra ve mot cau nghiep vu doc duoc, khong phai P2002 noi len thanh 500.
+      if (isMonthUniquenessViolation(error)) {
+        throw new ConflictException(
+          'Tháng này vừa có kỳ giá khác được áp dụng — tải lại rồi thử lại',
+        );
+      }
+      throw error;
     });
     await this.record('price_period.activate', periodId, actor, before, after, requestId);
     await this.knowledge.reload();
@@ -434,41 +462,110 @@ export class PricePeriodsService {
   }
 
   /**
-   * GIAO THUC DUY NHAT cho moi nguoi ghi vong doi cua mot ky gia (Issue #121).
+   * GIAO THUC KHOA — MOT THU TU DUY NHAT CHO CA HAI TANG (Issue #121 + #122).
    *
-   * Ba nguoi ghi — `removeDraftPrice`, `activate`, `archive` — deu la `check-then-act`: doc trang
-   * thai, quyet dinh theo trang thai do, roi ghi. Truoc ban va ca ba doc NGOAI giao dich, nen ho
-   * xen duoc vao nhau:
+   *     1. khoa THANG   `pg_advisory_xact_lock(<khong gian>, hashtext(validMonth))`
+   *     2. khoa HANG ky `SELECT ... FROM "PricePeriod" WHERE "id" = ? FOR UPDATE`
    *
-   *     T1 removeDraftPrice doc  status=draft
-   *     T2 activate         commit status=active
-   *     T1 deleteMany            -> xoa mot dong khoi ky DA ACTIVE
+   * KHONG BAO GIO DAO NGUOC. Do la toan bo phan chung minh khong-deadlock, nen no duoc viet o
+   * mot cho duy nhat (ham nay) thay vi de moi nguoi ghi tu dat khoa lay.
    *
-   * MOT `$transaction` THUONG KHONG DU. Muc co lap mac dinh cua Postgres la `READ COMMITTED`:
-   * hai giao dich van doc duoc CUNG mot anh chup cu roi ca hai cung ghi de. Boc hai lan di DB vao
-   * mot giao dich chi thu hep cua so, khong dong duoc no.
+   * ---------------------------------------------------------------------------------------
+   * VI SAO KHOA HANG CUA #121 KHONG DU
    *
-   * `SELECT ... FOR UPDATE` tren dung hang `PricePeriod` bat nguoi thu hai CHO cho toi khi nguoi
-   * thu nhat commit, roi no doc LAI hang moi. Nho vay `period` tra ve duoi day luon la trang thai
-   * DA CHOT cua ben thang — khong bao gio la anh chup truoc do. Ca ba nguoi ghi khoa CUNG MOT
-   * hang nen ho xep hang voi nhau; do la ly do ca ba bat buoc phai di qua ham nay.
+   * `activate()` giu mot bat bien rong hon mot hang — no noi ve CA THANG: moi thang chi mot ky
+   * chinh thuc ACTIVE, va khong bao gio co ky test-only ACTIVE cung luc voi ky chinh thuc. Hai
+   * `activate()` cua HAI ban nhap khac nhau khoa HAI hang khac nhau, nen khoa cua #121 khong he
+   * lam ho gap nhau: ca hai cung kiem "thang nay dang co gi" tren anh chup cu roi cung ghi.
    *
-   * Cung mau voi `PrismaOrdersRepository.compareAndSet` va cac kho transport (fuel/settlement).
+   * ---------------------------------------------------------------------------------------
+   * VI SAO KHOA ADVISORY CHU KHONG PHAI KHOA HANG CUA CA THANG
+   *
+   * Cach hien nhien la `SELECT ... WHERE "validMonth" = ? ORDER BY "id" FOR UPDATE`. No chay
+   * duoc, nhung yeu o hai cho:
+   *
+   *   · KHONG khoa duoc hang CHUA TON TAI. Mot ban nhap moi cua cung thang duoc tao sau khi ta
+   *     chup xong tap hang thi khong nam trong tap do. Khoa advisory khoa CAI TEN cua thang, nen
+   *     no phu ca nhung ky chua sinh ra.
+   *   · Thu tu dat khoa tro thanh mot dieu phai chung minh (phai xep theo `id`, va phai chac
+   *     rang khong nguoi ghi nao dat nguoc). Voi advisory chi co DUNG MOT khoa cho moi thang,
+   *     nen giua hai `activate()` khong ton tai chu trinh nao de ma chung minh.
+   *
+   * ---------------------------------------------------------------------------------------
+   * VI SAO KHONG DEADLOCK — day la dieu Issue #122 doi noi ro
+   *
+   * Goi `M` la khoa thang, `R(x)` la khoa hang cua ky `x`. Trong toan bo dich vu nay:
+   *
+   *   · `activate`                                lay `M` -> roi `R(muc tieu)` -> roi cac
+   *                                               `R(ky khac cung thang)` qua `updateMany`
+   *   · `removeDraftPrice` / `archive` / `applyImport`
+   *                                               chi lay `R(muc tieu)`, va khong bao gio doi
+   *                                               them mot khoa `PricePeriod` nao nua
+   *
+   * Suy ra: nguoi ghi khong-activate GIU mot khoa va KHONG DOI khoa nao khac, nen ho khong the
+   * nam trong mot chu trinh cho. Con hai `activate()` cung thang thi khong bao gio cung luc giu
+   * khoa hang: nguoi thu hai con dang doi `M`, tay trang. Hai `activate()` KHAC thang co hai `M`
+   * khac nhau va hai tap hang roi nhau (`validMonth` nam tren chinh hang do). Khong co chu trinh
+   * nao => khong co deadlock.
+   *
+   * Neu ai do doi thu tu thanh `R(muc tieu)` truoc roi moi `M`, chung minh tren SAP: hai giao
+   * dich se giu hai hang khac nhau roi doi khoa cua nhau. Do la ly do thu tu nam o day, mot cho.
    */
   private async withLockedPeriod<T>(
     periodId: string,
     work: (tx: Prisma.TransactionClient, period: LockedPricePeriod) => Promise<T>,
   ): Promise<T> {
-    return this.prisma.$transaction(async (tx) => {
-      // Khoa TRUOC khi doc. Doc roi moi khoa thi van la check-then-act, chi hep cua so hon.
-      await tx.$executeRaw`SELECT "id" FROM "PricePeriod" WHERE "id" = ${periodId} FOR UPDATE`;
-      const period = await tx.pricePeriod.findUnique({
+    return this.prisma.$transaction((tx) => this.lockThenWork(tx, periodId, 'period', work));
+  }
+
+  /**
+   * Nhu tren, nhung xep hang CA THANG truoc — chi `activate()` can, vi chi no giu bat bien theo
+   * thang. `removeDraftPrice`/`archive`/`applyImport` khong the tao ra ky ACTIVE thu hai nen
+   * bat chung xep hang theo thang la lam cham vo ich.
+   */
+  private async withLockedMonth<T>(
+    periodId: string,
+    work: (tx: Prisma.TransactionClient, period: LockedPricePeriod) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction((tx) => this.lockThenWork(tx, periodId, 'month', work));
+  }
+
+  private async lockThenWork<T>(
+    tx: Prisma.TransactionClient,
+    periodId: string,
+    scope: 'period' | 'month',
+    work: (tx: Prisma.TransactionClient, period: LockedPricePeriod) => Promise<T>,
+  ): Promise<T> {
+    let lockedMonth: string | null = null;
+    if (scope === 'month') {
+      // Phai biet thang thi moi khoa duoc thang, nen lan doc nay BUOC PHAI di truoc khoa. No
+      // khong khoa gi ca va co the cu — vi vay ben duoi con kiem lai sau khi da khoa hang.
+      const peek = await tx.pricePeriod.findUnique({
         where: { id: periodId },
-        include: { prices: { orderBy: { sku: 'asc' } } },
+        select: { validMonth: true },
       });
-      if (!period) throw new NotFoundException('Không tìm thấy kỳ giá');
-      return work(tx, period);
+      if (!peek) throw new NotFoundException('Không tìm thấy kỳ giá');
+      lockedMonth = peek.validMonth;
+      // Ky thieu `validMonth` khong co thang de tranh chap, va `activate()` tu choi no o buoc
+      // cham diem ngay sau day. Khoa mot cai ten rong chi lam moi ky hong xep chung mot hang.
+      if (lockedMonth) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PRICE_PERIOD_MONTH_LOCK_NAMESPACE}::int4, hashtext(${lockedMonth}))`;
+      }
+    }
+    // Khoa TRUOC khi doc. Doc roi moi khoa thi van la check-then-act, chi hep cua so hon.
+    await tx.$executeRaw`SELECT "id" FROM "PricePeriod" WHERE "id" = ${periodId} FOR UPDATE`;
+    const period = await tx.pricePeriod.findUnique({
+      where: { id: periodId },
+      include: { prices: { orderBy: { sku: 'asc' } } },
     });
+    if (!period) throw new NotFoundException('Không tìm thấy kỳ giá');
+    // Hom nay khong co duong nao sua `validMonth` cua mot ky da tao, nen nhanh nay khong bao gio
+    // chay. No o day de neu mai co duong do, cai hong se la mot 409 that tha chu khong phai mot
+    // ky duoc chot duoi khoa cua THANG KHAC.
+    if (scope === 'month' && period.validMonth !== lockedMonth) {
+      throw new ConflictException('Kỳ giá vừa đổi tháng — tải lại rồi thử lại');
+    }
+    return work(tx, period);
   }
 
   private assertWritable(): void {
@@ -500,6 +597,20 @@ export class PricePeriodsService {
 function actorName(actor: string): string {
   const parsed = z.string().trim().min(1).max(200).safeParse(actor);
   return parsed.success ? parsed.data : 'operator';
+}
+
+/**
+ * Co phai database vua tu choi vi "mot thang chi mot ky ACTIVE" khong?
+ *
+ * Prisma bao P2002 kem `meta.target` la cot cua index bi vi pham. Index o day la unique mot
+ * phan tren `("validMonth") WHERE status = 'active'`, nen `target` chinh la `validMonth`.
+ */
+function isMonthUniquenessViolation(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false;
+  }
+  const target = (error.meta as { target?: unknown } | undefined)?.target;
+  return Array.isArray(target) ? target.includes('validMonth') : target === 'validMonth';
 }
 
 function isTestOnlyPeriod(source: string | null | undefined): boolean {
