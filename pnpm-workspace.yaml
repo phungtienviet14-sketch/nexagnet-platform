@@ -17,7 +17,19 @@ overrides:
   '@hono/node-server': 2.0.12
   '@remix-run/router': 1.23.2
   'brace-expansion@>=2.0.0 <3.0.0': 2.1.4
-  fast-uri: 3.1.5
+  # GHSA-5jgf-p345-68v8 · GHSA-f65p-4m7j-42xc · GHSA-fph4-wmhf-6fwf · GHSA-jqff-g426-hqxp —
+  # bon advisory HIGH cua fast-uri, ca bon vao repo qua DUY NHAT mot duong bac cau:
+  # apps/api -> @modelcontextprotocol/sdk -> ajv@8 -> fast-uri. Khong goi nao trong workspace
+  # khai fast-uri truc tiep, nen override la cho DUY NHAT dat duoc san.
+  #
+  # Ghim CHINH XAC `3.1.5` chinh la cai da lam cong `audit` do: ban vao dung dai dinh loi cua ca
+  # bon advisory, va vi la ghim cung nen mot `pnpm install` binh thuong khong the tu bo len ban
+  # da va. Doi sang SAN, dung nhu cach `sharp` va `browserslist` ben duoi da lam.
+  #
+  # `<4` khong thua: ajv@8.20.0 khai `fast-uri: ^3.0.1`, nen mot `>=3.1.6` tran se keo major moi vao
+  # ngay khi fast-uri 4.0.0 len npm — va lam vo duong kiem JSON Schema cua MCP tool mot cach im
+  # lang, dung kieu ma cong `audit` khong bat duoc.
+  fast-uri: '>=3.1.6 <4'
   postcss: 8.5.18
   i18next-http-backend: 3.0.5
   react-router-dom: 6.30.1
