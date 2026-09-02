@@ -113,6 +113,39 @@ const readiness = {
   ],
 };
 
+/**
+ * Ban sao trung thanh cua `evaluatePricePeriod()` phia may chu.
+ *
+ * Diem quan trong: no doc DONG DA LUU cua ky, khong doc thu dang hien tren man hinh. Mot mock tra
+ * ve `valid: true` vo dieu kien se cho qua dung cai loi ma #127 phai sua — kiem tra chay tren mot
+ * ban nhap 0 dong trong khi nguoi dung da go du 19 dong.
+ */
+function evaluate(period: MockPeriod | undefined) {
+  const rows = period?.prices ?? [];
+  const errors: string[] = [];
+  if (!period) {
+    errors.push('Khong tim thay ky gia');
+  } else if (period.source === 'test_only') {
+    if (rows.length < 1 || rows.length > 2) {
+      errors.push('Ky gia test-only chi duoc co 1-2 SKU de smoke pre-pilot');
+    }
+  } else {
+    const missing = nineteenSkus
+      .filter((product) => !rows.some((row) => row.sku === product.sku))
+      .map((product) => product.sku);
+    if (missing.length > 0) errors.push(`Thieu gia cho SKU: ${missing.join(', ')}`);
+  }
+  const zero = rows.filter((row) => !(row.wholesale > 0)).map((row) => row.sku);
+  if (zero.length > 0) errors.push(`Wholesale phai lon hon 0: ${zero.join(', ')}`);
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings: [] as string[],
+    productCount: nineteenSkus.length,
+    priceCount: rows.length,
+  };
+}
+
 async function json(route: Route, body: unknown, status = 200): Promise<void> {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }
@@ -201,6 +234,10 @@ async function mockSettings(page: Page): Promise<void> {
 
   await page.route('**/settings/price-periods/*/activate', async (route) => {
     const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
+    // Nhu may chu that: `activate()` CHAM DIEM LAI duoi khoa hang, tren dong da luu o thoi diem
+    // do — khong tin vao lan `validate` truoc do (Issue #121).
+    const verdict = evaluate(periods.find((period) => period.id === id));
+    if (!verdict.valid) return json(route, { message: verdict.errors.join('; ') }, 400);
     periods = periods.map((period) =>
       period.id === id ? { ...period, status: 'active' as const } : period,
     );
@@ -210,9 +247,10 @@ async function mockSettings(page: Page): Promise<void> {
     );
   });
 
-  await page.route('**/settings/price-periods/*/validate', (route) =>
-    json(route, { valid: true, errors: [], warnings: [], productCount: 19, priceCount: 1 }),
-  );
+  await page.route('**/settings/price-periods/*/validate', (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
+    return json(route, evaluate(periods.find((period) => period.id === id)));
+  });
 
   await page.route('**/settings/price-periods/*/import/apply', async (route) => {
     const id = new URL(route.request().url()).pathname.split('/').at(-3)!;
@@ -426,7 +464,7 @@ test.describe('Điều hướng theo việc, không theo hệ thống con', () =
   });
 });
 
-test.describe('Bảng giá — ba khái niệm tách rời', () => {
+test.describe('Bảng giá — trạng thái tháng hiện tại nói thật', () => {
   test('thiếu bảng giá chính thức được nói thẳng, không giấu trong một danh sách', async ({
     page,
   }) => {
@@ -457,6 +495,233 @@ test.describe('Bảng giá — ba khái niệm tách rời', () => {
     await expect(page.getByText(/không.*phải bảng giá chính thức/i).first()).toBeVisible();
     // Van bao thieu bang gia chinh thuc — dung y #114/#116.
     await expect(page.getByText('Chưa có', { exact: true })).toBeVisible();
+  });
+});
+
+test.describe('Luồng có dẫn đường: sửa → kiểm → xem lại → kích hoạt (#127)', () => {
+  function workDraft(prices: MockPrice[], source = 'operator'): MockPeriod {
+    return { id: 'work', validMonth: CURRENT_MONTH, status: 'draft', source, prices };
+  }
+
+  /** Ghi lai THU TU cac lenh POST tren mot ky gia — thu tu chinh la thu duoc kiem tra o day. */
+  function recordPriceCalls(page: Page): string[] {
+    const calls: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'POST') return;
+      const [, tail] = new URL(request.url()).pathname.split('/price-periods/');
+      if (tail) calls.push(tail);
+    });
+    return calls;
+  }
+
+  test('A. bản nháp trống không đi tiếp được, và màn hình nói rõ phải làm gì', async ({ page }) => {
+    resetPricePeriods([workDraft([])]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await expect(page.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toBeDisabled();
+    await expect(page.getByText('Thêm ít nhất một sản phẩm để tiếp tục.')).toBeVisible();
+    // Luu de lam sau van duoc — chi co duong DI TIEP la bi khoa.
+    await expect(page.getByRole('button', { name: 'Lưu và làm sau' })).toBeEnabled();
+    // Kich hoat khong bi "mo di", no KHONG TON TAI.
+    await expect(page.getByRole('button', { name: /^Kích hoạt/ })).toHaveCount(0);
+  });
+
+  test('B. thiếu đơn giá: nút tiếp tục vẫn khóa, và ô sai được đánh dấu ngay tại chỗ', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft(nineteenSkus.slice(0, 18))]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByLabel('Thêm mặt hàng vào bảng giá').fill('SP19');
+    await page.getByRole('button', { name: 'Thêm vào bảng' }).click();
+
+    // Bao ngay, khong doi mot vong goi may chu.
+    await expect(page.getByText(/Chưa nhập Đơn giá CTV cho: SP19/)).toBeVisible();
+    await expect(page.getByLabel('Đơn giá CTV của SP19')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /^Kích hoạt/ })).toHaveCount(0);
+
+    await page.getByLabel('Đơn giá CTV của SP19').fill('1250000');
+    await expect(page.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toBeEnabled();
+  });
+
+  test('C. một cú bấm LƯU trước rồi mới KIỂM — không còn kiểm trên bản nháp 0 dòng', async ({
+    page,
+  }) => {
+    // Day la bai chan LOI GOC cua #126 muc 3: may chu chi doc DONG DA LUU. Ban nhap tren may chu
+    // dang 0 dong; man hinh co 19 dong chua luu. Kiem truoc khi luu = tu choi mot bang gia du.
+    resetPricePeriods([workDraft([])]);
+    await mockSettings(page);
+    const calls = recordPriceCalls(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByText('Nâng cao · Nhập hàng loạt').click();
+    await page
+      .getByRole('textbox', { name: /Dán dữ liệu bảng giá/ })
+      .fill(JSON.stringify(nineteenSkus));
+    await page.getByRole('button', { name: 'Nạp vào bảng' }).click();
+    await expect(page.getByText('Hiển thị 19 / 19 mặt hàng')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+
+    // LUU truoc, KIEM sau — dung mot lan bam, va thu tu khong do nguoi dung quyet dinh.
+    await expect
+      .poll(() => calls.filter((call) => /import\/apply$|validate$/.test(call)))
+      .toEqual(['work/import/apply', 'work/validate']);
+
+    // Va vi da luu truoc, may chu khong con nhin thay mot ban nhap rong.
+    await expect(page.getByText(/Thieu gia cho SKU/)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Kích hoạt bảng giá/ })).toBeVisible();
+  });
+
+  test('D. máy chủ từ chối: ở lại luồng sửa, và nút Kích hoạt không bao giờ hiện', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft([{ sku: 'SP01', wholesale: 1_250_000 }])]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+
+    await expect(page.getByText('Chưa kích hoạt được — bảng giá còn thiếu')).toBeVisible();
+    await expect(page.getByText(/Thieu gia cho SKU/)).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Kích hoạt/ })).toHaveCount(0);
+    // Van sua duoc ngay tai cho, khong bi day sang mot man khac.
+    await expect(page.getByLabel('Đơn giá CTV của SP01')).toBeVisible();
+  });
+
+  test('E. kiểm đạt: vào màn Xem lại chỉ đọc, và chỉ ở đó mới có nút Kích hoạt', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft(nineteenSkus)]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await expect(page.getByRole('button', { name: /^Kích hoạt/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+
+    await expect(page.getByText('Đã kiểm tra xong')).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Bảng giá sẽ được kích hoạt' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Kích hoạt bảng giá tháng 09/2026' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Quay lại sửa' })).toBeVisible();
+
+    // Xem lai la CHI DOC: khong con o nhap, khong con hai nut cua buoc sua.
+    await expect(page.getByLabel('Đơn giá CTV của SP01')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Lưu và làm sau' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toHaveCount(0);
+  });
+
+  test('E-UAT. màn Xem lại của kỳ chạy thử nói thẳng là không phải bảng giá chính thức', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft([{ sku: 'SP01', wholesale: 1_250_000 }], 'test_only')]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+
+    await expect(page.getByText(/KHÔNG phải bảng giá chính thức/)).toBeVisible();
+    await expect(page.getByText(/đủ điều kiện chạy thật” vẫn đỏ/)).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Kích hoạt bảng giá chạy thử/ })).toBeVisible();
+  });
+
+  test('F. quay lại sửa: kết quả kiểm cũ hết hiệu lực, nút Kích hoạt biến mất', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft(nineteenSkus)]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+    await expect(page.getByRole('button', { name: /^Kích hoạt/ })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Quay lại sửa' }).click();
+
+    await expect(page.getByRole('button', { name: /^Kích hoạt/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toBeEnabled();
+    await expect(page.getByLabel('Đơn giá CTV của SP01')).toBeVisible();
+  });
+
+  test('F. sửa một chữ số sau khi kiểm: kết quả cũ bị đánh dấu là cũ, không mở đường kích hoạt', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft([{ sku: 'SP01', wholesale: 1_250_000 }])]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+    await expect(page.getByText('Chưa kích hoạt được — bảng giá còn thiếu')).toBeVisible();
+
+    await page.getByLabel('Đơn giá CTV của SP01').fill('1300000');
+
+    await expect(page.getByText(/Kết quả kiểm tra trước đó/)).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Kích hoạt/ })).toHaveCount(0);
+  });
+
+  test('lịch sử và bản nháp khác gấp lại, nhưng vẫn mở ra xem được', async ({ page }) => {
+    resetPricePeriods([
+      workDraft(nineteenSkus),
+      { id: 'other', validMonth: CURRENT_MONTH, status: 'draft', source: 'operator', prices: [] },
+      {
+        id: 'old',
+        validMonth: '2026-07',
+        status: 'archived',
+        source: 'operator',
+        prices: nineteenSkus,
+      },
+    ]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    // Man hinh mo ra la MOT viec dang lam, khong phai ba danh sach ngang hang.
+    await expect(page.getByRole('heading', { name: /Bảng giá tháng 09\/2026/ })).toBeVisible();
+    const disclosure = page.getByText(/Lịch sử & bản nháp khác/);
+    await expect(disclosure).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mở để sửa' })).toBeHidden();
+
+    await disclosure.click();
+    await expect(page.getByRole('button', { name: 'Mở để sửa' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /tháng 07\/2026/ })).toBeVisible();
+  });
+
+  test('nút bị khóa tự nói vì sao, đọc được bằng trình đọc màn hình', async ({ page }) => {
+    resetPricePeriods([workDraft([])]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    // Ly do khoa phai gan vao chinh cai nut qua `aria-describedby`, khong phai mot dong chu troi
+    // noi o dau do ma trinh doc man hinh khong bao gio doc len cung cai nut.
+    const cont = page.getByRole('button', { name: 'Kiểm tra & tiếp tục' });
+    await expect(cont).toBeDisabled();
+    await expect(cont).toHaveAttribute('aria-describedby', 'settings-price-continue-hint');
+    await expect(page.locator('#settings-price-continue-hint')).toHaveText(
+      'Thêm ít nhất một sản phẩm để tiếp tục.',
+    );
+  });
+
+  test('đi hết luồng bằng bàn phím, và bước đang làm được đánh dấu cho trình đọc màn hình', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft(nineteenSkus.slice(0, 18))]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByLabel('Thêm mặt hàng vào bảng giá').fill('SP19');
+    await page.getByRole('button', { name: 'Thêm vào bảng' }).press('Enter');
+    await expect(page.locator('li[aria-current="step"]')).toHaveText('Chọn sản phẩm & nhập giá');
+
+    await page.getByLabel('Đơn giá CTV của SP19').fill('1250000');
+    await expect(page.locator('li[aria-current="step"]')).toHaveText('Kiểm tra');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).press('Enter');
+    await expect(page.locator('li[aria-current="step"]')).toHaveText('Kích hoạt');
+
+    await page.getByRole('button', { name: 'Quay lại sửa' }).press('Enter');
+    await expect(page.locator('li[aria-current="step"]')).toHaveText('Kiểm tra');
   });
 });
 
@@ -529,9 +794,10 @@ test.describe('#116 — phục hồi khi làm sai', () => {
     await page.goto('/settings?section=products-pricing');
 
     await expect(page.getByText('Đang áp dụng')).toBeVisible();
+    await expect(page.getByText(/đang áp dụng — chỉ xem/i)).toBeVisible();
     await page
-      .locator('.settings-price-card--official')
-      .getByRole('button', { name: 'Lưu trữ' })
+      .locator('.settings-price-work')
+      .getByRole('button', { name: 'Lưu trữ bảng giá' })
       .click();
 
     const dialog = page.getByRole('alertdialog');
@@ -564,7 +830,8 @@ test.describe('#116 — phục hồi khi làm sai', () => {
     await dialog.getByRole('button', { name: 'Lưu trữ bản nháp' }).click();
 
     await expect(page.getByText(/Đã lưu trữ bản nháp tháng 09\/2026/)).toBeVisible();
-    await expect(page.getByText('Không có bản nháp')).toBeVisible();
+    await expect(page.getByText(/đã lưu trữ — chỉ xem/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toHaveCount(0);
   });
 
   test('xóa mặt hàng khỏi bản nháp và tải lại — nó KHÔNG quay về', async ({ page }) => {
@@ -611,7 +878,7 @@ test.describe('#116 — phục hồi khi làm sai', () => {
     await mockSettings(page);
     await page.goto('/settings?section=products-pricing');
 
-    await expect(page.getByText(/Kỳ đang áp dụng — chỉ xem/)).toBeVisible();
+    await expect(page.getByText(/Bảng giá tháng 09\/2026 đang áp dụng — chỉ xem/)).toBeVisible();
     await expect(page.getByRole('button', { name: /khỏi bản nháp/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Thêm vào bảng' })).toHaveCount(0);
   });
@@ -621,20 +888,23 @@ test.describe('Khách bình thường không phải chạm vào JSON (#117 §4.4
   test('thêm mặt hàng và nhập giá bằng bảng, kích hoạt xong không cần dán gì', async ({ page }) => {
     resetPricePeriods([
       {
-        id: 'empty-draft',
+        id: 'almost-done',
         validMonth: CURRENT_MONTH,
         status: 'draft',
         source: 'operator',
-        prices: [],
+        prices: nineteenSkus.slice(0, 18),
       },
     ]);
     await mockSettings(page);
     await page.goto('/settings?section=products-pricing');
 
-    await page.getByLabel('Thêm mặt hàng vào bảng giá').fill('SP01');
+    await page.getByLabel('Thêm mặt hàng vào bảng giá').fill('SP19');
     await page.getByRole('button', { name: 'Thêm vào bảng' }).click();
-    await page.getByLabel('Đơn giá CTV của SP01').fill('1250000');
+    await page.getByLabel('Đơn giá CTV của SP19').fill('1250000');
 
+    // Mot nut, khong phai hai. Khong co luc nao nguoi dung phai biet "lưu trước, kiểm sau".
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+    await expect(page.getByRole('button', { name: /^Kích hoạt bảng giá/ })).toBeVisible();
     await page.getByRole('button', { name: /^Kích hoạt bảng giá/ }).click();
 
     const dialog = page.getByRole('alertdialog');
