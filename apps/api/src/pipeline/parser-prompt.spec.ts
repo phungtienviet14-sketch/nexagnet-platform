@@ -58,6 +58,43 @@ describe('buildSystemPrompt', () => {
     expect(p).toContain('[KHACH Meta HN] (5 phut truoc): giao ve TN');
     expect(p).toContain('Context mo ho');
   });
+
+  /*
+   * SU CO 02/09/2026 (deploy ultty/gd1-test #33625765042): mot don viet dang BANG KE
+   * "<Chi nhanh>_<Ngay>_<Dai ly>, <so luong> x <SP>" bi phan loai `khac` voi confidence 0.30.
+   *
+   * Cai thieu la o HOP DONG PHAN LOAI, khong o mot khach cu the: moi vi du few-shot cua `dat_don`
+   * deu la cau MENH LENH co dong tu ("gui 10 ...", "... dat 5 ..."), trong khi dang bang ke —
+   * dang ma dai ly go nhieu nhat — khong co vi du nao. Mot cau nam ngay ranh gioi quyet dinh thi
+   * chi can them mot token la la lat sang `khac`, va do dung la thu da xay ra.
+   *
+   * Hai quy tac duoi day la HINH DANG CAU, khong phai ten khach: khong SKU, khong ten dai ly,
+   * khong `if tenant === ...`. Dung cho moi goi khach.
+   */
+  it('day dang BANG KE "<so luong> x <SP>" ve dat_don, khong doi phai co dong tu', () => {
+    const p = buildSystemPrompt(input);
+    expect(p).toContain('<so luong> x <ten SP>');
+    expect(p).toContain('intent=dat_don');
+    expect(p).toMatch(/KHONG doi phai co dong tu/);
+    // Tieu de chi nhanh_ngay_dai ly la SIEU DU LIEU, khong phai co de goi tin la "mo ho".
+    expect(p).toContain('<Chi nhanh>_<Ngay>_<Ten dai ly>');
+  });
+
+  it('mot token la khong duoc lam doi phan loai', () => {
+    const p = buildSystemPrompt(input);
+    expect(p).toMatch(/MOT TOKEN LA KHONG DOI DUOC PHAN LOAI/);
+    expect(p).toMatch(/BO QUA phan khong hieu duoc/);
+  });
+
+  /**
+   * DOI CHUNG AM — quy tac tren KHONG duoc bien thanh "cu co so la dat_don". Tin mo ho that su
+   * van phai co duong ve `khac`, va mot y dinh khac da ro rang van phai thang.
+   */
+  it('VAN giu duong ve khac cho tin mo ho — khong noi long chong over-classify', () => {
+    const p = buildSystemPrompt(input);
+    expect(p).toContain('intent=khac va confidence.intent thap');
+    expect(p).toMatch(/TRU KHI trong tin co dau hieu ro rang cua mot y dinh khac/);
+  });
 });
 
 describe('ensureIntentConfidence', () => {

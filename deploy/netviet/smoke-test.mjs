@@ -206,7 +206,6 @@ async function loadRuntimeParserMode() {
 }
 
 async function runOrderPath() {
-  const marker = `NETVIET-SMOKE-${Date.now()}`;
   const abort = new AbortController();
   const events = [];
   const stream = await fetch(`${baseUrl}/events`, {
@@ -221,9 +220,17 @@ async function runOrderPath() {
   const readerTask = collectSse(stream.body, events, abort.signal);
 
   try {
-    const order = await postJson('/demo/simulate', {
-      text: `${smokeFixture.orderText} ${marker}`,
-    });
+    // TIN GUI DI PHAI LA DUNG TIN MAU CUA GOI KHACH — khong them mot ky tu nao.
+    //
+    // Truoc 02/09/2026 cho nay noi them `NETVIET-SMOKE-<epoch>` vao chinh VAN BAN NGHIEP VU. Cai
+    // nhan do khong he duoc doc lai o dau: viec doi chieu tin -> don da di bang `order.id` ma
+    // `/demo/simulate` tra ve, con tinh duy nhat cua tin thi do CHINH API sinh ra
+    // (`externalMessageId = sim-<epoch>-<rand>`, demo.controller.ts) — khong phu thuoc noi dung.
+    // Nen cai nhan chi con mot tac dung: bo them mot token la vao dung cai cau ma model phai
+    // phan loai. Do 02/09/2026 tren gd1-test, 20 mau moi nhanh: tin mau nguyen ban ra `dat_don`
+    // 20/20; cung tin mau kem nhan ra `dat_don` 10/20. Kiem tra mot duong nghiep vu bang mot cau
+    // KHONG PHAI cau nghiep vu la tu minh dung ra mot lan do khong ai giai thich duoc.
+    const order = await postJson('/demo/simulate', { text: smokeFixture.orderText });
     assertPilotOrder(order, order.id);
 
     const finalized = await waitFor(
@@ -337,14 +344,35 @@ function assertPilotOrder(order, expectedId) {
     });
   }
   // DAY LA CAU HOI CUA TANG NAY, va chi cua tang nay: model co doc ra `dat_don` khong.
-  if (order.intent !== 'dat_don' || !order.priced) {
+  if (order.intent !== 'dat_don') {
     throw new LiveAiOutcome('fail', 'LIVE_AI_INTENT_MISMATCH', {
       expectedIntent: 'dat_don',
       actualIntent: order.intent ?? 'khong-ro',
-      priced: Boolean(order.priced),
       parserMode: runtimeParserMode,
       orderId: order.id,
       fixture: smokeFixture?.orderText,
+    });
+  }
+  /*
+   * HAI CAU HOI KHAC NHAU, HAI MA LY DO KHAC NHAU (tach 02/09/2026).
+   *
+   * Truoc do mot dieu kien `intent !== 'dat_don' || !order.priced` duy nhat phat ra
+   * `LIVE_AI_INTENT_MISMATCH` cho CA HAI. Nhung "model doc sai y dinh" va "doc dung y dinh roi
+   * nhung khong tinh duoc gia" hong o hai tang khac han nhau: cai dau la phu thuoc ngoai (model/
+   * provider), cai sau la NGUON SU THAT trong Postgres — vd khong con ky gia hieu luc cho thang
+   * hien tai, hoac SKU khong khop danh muc. Gop lai thi mot bang gia het han se hien ra duoi ten
+   * "model doan sai", va nguoi truc se di tune prompt cho mot loi du lieu.
+   *
+   * KHONG lam yeu cong: ca hai van la `status: 'fail'`, nen `deploy-signals.mjs` van xep vao
+   * `APPLICATION_ROLLED_OUT_HEALTHY__LIVE_AI_SMOKE_FAILED` y het truoc. Cai doi la CHAN DOAN.
+   */
+  if (!order.priced) {
+    throw new LiveAiOutcome('fail', 'LIVE_AI_PRICING_UNAVAILABLE', {
+      intent: order.intent,
+      parserMode: runtimeParserMode,
+      orderId: order.id,
+      fixture: smokeFixture?.orderText,
+      message: 'y dinh dung nhung khong co ket qua tinh gia — kiem nguon su that, khong phai model',
     });
   }
   if (!order.trace || order.trace.steps?.length !== 6 || order.trace.llmCalls !== 1) {
