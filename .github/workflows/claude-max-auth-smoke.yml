@@ -1,0 +1,42 @@
+name: Claude Max OAuth Smoke
+
+on:
+  push:
+    branches:
+      - chore/autopilot-claude-max-smoke
+    paths:
+      - .github/workflows/claude-max-auth-smoke.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: claude-max-auth-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Max authentication smoke test
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            This is an authentication smoke test only.
+
+            Do not create, edit, delete, commit, or push any files.
+            Do not open or modify GitHub issues or pull requests.
+
+            Read package.json from this repository.
+
+            Then finish your response with exactly this marker on its own line:
+
+            CLAUDE_MAX_AUTOMATION_OK
+
+          claude_args: |
+            --max-turns 3
