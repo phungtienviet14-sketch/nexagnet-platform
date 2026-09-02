@@ -1,9 +1,10 @@
 name: Claude Max OAuth Smoke
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
     branches:
-      - chore/autopilot-claude-max-smoke
+      - main
     paths:
       - .github/workflows/claude-max-auth-smoke.yml
 
