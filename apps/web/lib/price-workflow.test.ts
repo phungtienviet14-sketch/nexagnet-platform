@@ -28,7 +28,16 @@ function rows(...entries: readonly (readonly [string, number])[]): PricePeriodPr
 }
 
 function validation(overrides: Partial<PricePeriodValidation> = {}): PricePeriodValidation {
-  return { valid: true, errors: [], warnings: [], productCount: 19, priceCount: 19, ...overrides };
+  return {
+    valid: true,
+    errors: [],
+    warnings: [],
+    productCount: 19,
+    priceCount: 19,
+    fingerprint: 'server-fp',
+    rows: [],
+    ...overrides,
+  };
 }
 
 function snapshot(
@@ -36,7 +45,8 @@ function snapshot(
   overrides: Partial<PricePeriodValidation> = {},
 ): PriceCheckSnapshot {
   return {
-    fingerprint: fingerprintRows(content),
+    localFingerprint: fingerprintRows(content),
+    serverFingerprint: 'server-fp',
     rows: content.map((row) => ({ ...row })),
     validation: validation(overrides),
   };
@@ -208,7 +218,12 @@ describe('E. kiem tra dat — vao trang thai Xem lai', () => {
     const persisted: PricePeriodPrice[] = [{ id: 'row-1', sku: 'FELIX', wholesale: 1_150_000 }];
     const state = workflow({
       rows: content,
-      check: { fingerprint: fingerprintRows(content), rows: persisted, validation: validation() },
+      check: {
+        localFingerprint: fingerprintRows(content),
+        serverFingerprint: 'server-fp',
+        rows: persisted,
+        validation: validation(),
+      },
     });
 
     expect(state.reviewRows).toBe(persisted);
@@ -331,5 +346,58 @@ describe('muc dich ky doc tu nguon, khong tu nhan tren man hinh', () => {
     expect(periodPurpose({ source: 'test_only' })).toBe('test-only');
     expect(periodPurpose({ source: 'copy:abc' })).toBe('official');
     expect(periodPurpose({})).toBe('official');
+  });
+});
+
+describe('#132. rang buoc voi the do MAY CHU cap', () => {
+  it('khong co the cua may chu thi KHONG vao man Xem lai, du may chu noi la hop le', () => {
+    // Mot lan kiem khong kem the la mot lan kiem khong xuat trinh lai duoc o buoc kich hoat.
+    // Cho vao Xem lai luc do la hua mot dieu ma buoc sau khong giu duoc.
+    const content = rows(['FELIX', 1_150_000]);
+    const state = workflow({
+      rows: content,
+      check: {
+        localFingerprint: fingerprintRows(content),
+        serverFingerprint: '',
+        rows: content,
+        validation: validation(),
+      },
+    });
+
+    expect(state.mode).toBe('edit');
+    expect(state.activate.visible).toBe(false);
+  });
+
+  it('dau CUC BO va the CUA MAY CHU la hai thu khac nhau, khong duoc nhap lam mot', () => {
+    // Dau cuc bo tra loi "nguoi dung co sua gi sau khi kiem khong" — viec giao dien.
+    // The cua may chu tra loi "noi dung nao dang nam trong co so du lieu" — viec dung dan.
+    const content = rows(['FELIX', 1_150_000]);
+    const snapshot = {
+      localFingerprint: fingerprintRows(content),
+      serverFingerprint: 'server-fp',
+      rows: content,
+      validation: validation(),
+    };
+
+    expect(snapshot.localFingerprint).not.toBe(snapshot.serverFingerprint);
+    expect(workflow({ rows: content, check: snapshot }).mode).toBe('review');
+  });
+
+  it('man Xem lai hien dong DA LUU cua may chu, ke ca khi no NHIEU HON ban dang soan', () => {
+    // Ca A cua #132: `applyImport()` chi upsert, khong prune. Nap hang loat chi co A vao mot ky
+    // dang co A+B thi may chu van giu B. Xem lai phai hien A+B — cai that su sap duoc kich hoat.
+    const persisted = rows(['A', 100], ['B', 200]);
+    const state = workflow({
+      rows: persisted,
+      check: {
+        localFingerprint: fingerprintRows(persisted),
+        serverFingerprint: 'server-fp',
+        rows: persisted,
+        validation: validation({ priceCount: 2 }),
+      },
+    });
+
+    expect(state.mode).toBe('review');
+    expect(state.reviewRows.map((row) => row.sku)).toEqual(['A', 'B']);
   });
 });

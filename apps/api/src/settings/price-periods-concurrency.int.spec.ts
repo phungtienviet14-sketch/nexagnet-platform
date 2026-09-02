@@ -285,7 +285,7 @@ describe.skipIf(!RUN_IT)(
       // Neu activate con doc anh chup truoc khi xoa, no se thay du gia va activate NHAM mot ky
       // thieu hang. Doc dung dong hien tai thi no phai tu choi.
       await expect(
-        service.activate(period.id, 'operator', 'req-activate-after'),
+        activateReviewed(service, period.id, 'operator', 'req-activate-after'),
       ).rejects.toBeInstanceOf(BadRequestException);
 
       const after = await prisma.pricePeriod.findUniqueOrThrow({
@@ -342,8 +342,7 @@ describe.skipIf(!RUN_IT)(
             .removeDraftPrice(period.id, SKU_A, 'operator', null)
             .then(() => 'removed')
             .catch(() => 'rejected'),
-          service
-            .activate(period.id, 'operator', null)
+          activateReviewed(service, period.id, 'operator', null)
             .then(() => 'activated')
             .catch(() => 'rejected'),
         ]);
@@ -415,6 +414,23 @@ describe.skipIf(!RUN_IT)(
      *   4. tha `gate` ra: tren ma cu ca hai cung di tiep va cung ghi `active`; index bat mot ben,
      *      va ben do vo mat voi mot loi ha tang.
      */
+    /**
+     * Kich hoat theo DUNG giao thuc cua nguoi dung ke tu #132: KIEM truoc de lay the cua ban vua
+     * xem, roi moi kich hoat bang chinh the do.
+     *
+     * Bo test nay noi ve khoa va bat bien vong doi, khong noi ve rang buoc "da xem". Boc lai o day
+     * de moi bai giu nguyen y nghia cu, thay vi rai dau van tay tay vao tung cho goi.
+     */
+    async function activateReviewed(
+      service: PricePeriodsService,
+      id: string,
+      actor: string,
+      requestId: string | null,
+    ) {
+      const { fingerprint } = await service.validate(id);
+      return service.activate(id, fingerprint, actor, requestId);
+    }
+
     describe('BAT BIEN CUA CA THANG khi activate (Issue #122)', () => {
       /**
        * Giu khoa hang mot ky BAT KY ma KHONG doi trang thai no.
@@ -531,9 +547,9 @@ describe.skipIf(!RUN_IT)(
 
         // Ca hai vao khe giua "kiem" va "ghi" roi dung lai o `gate`. Cach nhau mot nhip de thu tu
         // xep hang cua Postgres la xac dinh, khong phai de mot ben kip chay xong truoc ben kia.
-        const first = attempt(() => service.activate(draftA.id, 'operator', 'req-122-a'));
+        const first = attempt(() => activateReviewed(service, draftA.id, 'operator', 'req-122-a'));
         await sleep(300);
-        const second = attempt(() => service.activate(draftB.id, 'operator', 'req-122-b'));
+        const second = attempt(() => activateReviewed(service, draftB.id, 'operator', 'req-122-b'));
         await sleep(300);
 
         lock.release();
@@ -571,10 +587,12 @@ describe.skipIf(!RUN_IT)(
         // Ban CHINH THUC vao hang truoc: Postgres danh thuc nguoi doi khoa hang theo thu tu den.
         // Nho vay tren ma cu, ban test-only kiem "co ky chinh thuc active khong" -> CHUA co, roi
         // moi ghi SAU khi ban chinh thuc da commit. Do dung la Race B cua Issue #122.
-        const officialRun = attempt(() => service.activate(official.id, 'operator', 'req-122-off'));
+        const officialRun = attempt(() =>
+          activateReviewed(service, official.id, 'operator', 'req-122-off'),
+        );
         await sleep(300);
         const testOnlyRun = attempt(() =>
-          service.activate(testOnly.id, 'operator', 'req-122-test'),
+          activateReviewed(service, testOnly.id, 'operator', 'req-122-test'),
         );
         await sleep(300);
 
@@ -611,9 +629,11 @@ describe.skipIf(!RUN_IT)(
         const lock = holdRowLock(gate.id);
         await lock.locked;
 
-        const first = attempt(() => service.activate(draftA.id, 'operator', 'req-122-t1'));
+        const first = attempt(() => activateReviewed(service, draftA.id, 'operator', 'req-122-t1'));
         await sleep(300);
-        const second = attempt(() => service.activate(draftB.id, 'operator', 'req-122-t2'));
+        const second = attempt(() =>
+          activateReviewed(service, draftB.id, 'operator', 'req-122-t2'),
+        );
         await sleep(300);
 
         lock.release();
@@ -657,7 +677,9 @@ describe.skipIf(!RUN_IT)(
         );
         await flipped.promise;
 
-        const outcome = attempt(() => service.activate(draft.id, 'operator', 'req-122-admin'));
+        const outcome = attempt(() =>
+          activateReviewed(service, draft.id, 'operator', 'req-122-admin'),
+        );
         await sleep(300);
         release.resolve();
         await done;
@@ -728,8 +750,8 @@ describe.skipIf(!RUN_IT)(
 
           const outcomes = await Promise.all(
             months.flatMap((fixture) => [
-              attempt(() => service.activate(fixture.draftA.id, 'operator', null)),
-              attempt(() => service.activate(fixture.draftB.id, 'operator', null)),
+              attempt(() => activateReviewed(service, fixture.draftA.id, 'operator', null)),
+              attempt(() => activateReviewed(service, fixture.draftB.id, 'operator', null)),
               // `archive` giu hang ky dang chay — dung hang ma ca hai `activate` deu can.
               attempt(() => service.archive(fixture.gate.id, 'operator', null)),
               attempt(() => service.removeDraftPrice(fixture.spare.id, SKU_A, 'operator', null)),
@@ -765,8 +787,8 @@ describe.skipIf(!RUN_IT)(
 
         const outcomes = await Promise.all([
           attempt(() => service.removeDraftPrice(draft.id, SKU_A, 'operator', 'req-122-mixed')),
-          attempt(() => service.activate(draft.id, 'operator', 'req-122-mixed-a')),
-          attempt(() => service.activate(rival.id, 'operator', 'req-122-mixed-b')),
+          attempt(() => activateReviewed(service, draft.id, 'operator', 'req-122-mixed-a')),
+          attempt(() => activateReviewed(service, rival.id, 'operator', 'req-122-mixed-b')),
         ]);
 
         expect(outcomes.map(fatalConcurrencySymptom).filter(Boolean)).toEqual([]);

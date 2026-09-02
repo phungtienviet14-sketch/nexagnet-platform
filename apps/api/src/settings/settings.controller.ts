@@ -52,6 +52,16 @@ const previewSchema = z
   })
   .strict();
 const activateSchema = z.object({ confirmed: z.literal(true) }).strict();
+/**
+ * Kich hoat ky gia doi THEM the cua ban da xem (Issue #132).
+ *
+ * Tach khoi `activateSchema` dung chung: `archive` va `remove` khong co khai niem "ban da xem"
+ * nen ep chung mang the la sai. Rieng `activate` thi bat buoc — do la thao tac duy nhat bien mot
+ * ban nhap thanh gia that cho moi don moi.
+ */
+const activatePricePeriodSchema = z
+  .object({ confirmed: z.literal(true), expectedFingerprint: z.string().min(1).max(128) })
+  .strict();
 const auditQuerySchema = z
   .object({
     actor: z.string().trim().min(1).max(200).optional(),
@@ -177,10 +187,18 @@ export class SettingsController {
     @Headers('x-request-id') requestId?: string,
   ) {
     this.assertMutationOrigin(origin);
-    if (!activateSchema.safeParse(body).success) {
-      throw new BadRequestException('Phải xác nhận trước khi kích hoạt kỳ giá');
+    const parsed = activatePricePeriodSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(
+        'Phải xác nhận và gửi kèm bản đã kiểm tra trước khi kích hoạt kỳ giá',
+      );
     }
-    return this.pricePeriods.activate(id, actorName(actor), requestId ?? null);
+    return this.pricePeriods.activate(
+      id,
+      parsed.data.expectedFingerprint,
+      actorName(actor),
+      requestId ?? null,
+    );
   }
 
   @Roles('MANAGER', 'ADMIN')

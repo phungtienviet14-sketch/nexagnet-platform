@@ -120,6 +120,19 @@ const readiness = {
  * ve `valid: true` vo dieu kien se cho qua dung cai loi ma #127 phai sua — kiem tra chay tren mot
  * ban nhap 0 dong trong khi nguoi dung da go du 19 dong.
  */
+/**
+ * Ban gia lap cua dau van tay may chu (#132). Trinh duyet khong bao gio tu tinh so nay — no chi
+ * nhan lai tu `validate` roi tra lai o `activate`, nen mot chuoi chuan hoa la du de kiem tra
+ * dung hanh vi can chung minh: sua ban nhap sau khi kiem thi the cu khong con khop.
+ */
+function fingerprintOf(period: MockPeriod | undefined): string {
+  return JSON.stringify(
+    (period?.prices ?? [])
+      .map((row) => [row.sku, row.wholesale])
+      .sort((left, right) => String(left[0]).localeCompare(String(right[0]), 'en')),
+  );
+}
+
 function evaluate(period: MockPeriod | undefined) {
   const rows = period?.prices ?? [];
   const errors: string[] = [];
@@ -236,7 +249,21 @@ async function mockSettings(page: Page): Promise<void> {
     const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
     // Nhu may chu that: `activate()` CHAM DIEM LAI duoi khoa hang, tren dong da luu o thoi diem
     // do — khong tin vao lan `validate` truoc do (Issue #121).
-    const verdict = evaluate(periods.find((period) => period.id === id));
+    const period = periods.find((entry) => entry.id === id);
+    // #132: the cua ban da xem phai khop dong dang co, kiem TRUOC moi phep kiem khac.
+    const expected = (route.request().postDataJSON() as { expectedFingerprint?: string })
+      .expectedFingerprint;
+    if (expected !== fingerprintOf(period)) {
+      return json(
+        route,
+        {
+          message:
+            'Bảng giá đã thay đổi sau lần kiểm tra vừa rồi, nên chưa kích hoạt. Kiểm tra lại để xem nội dung mới nhất rồi kích hoạt.',
+        },
+        409,
+      );
+    }
+    const verdict = evaluate(period);
     if (!verdict.valid) return json(route, { message: verdict.errors.join('; ') }, 400);
     periods = periods.map((period) =>
       period.id === id ? { ...period, status: 'active' as const } : period,
@@ -249,15 +276,30 @@ async function mockSettings(page: Page): Promise<void> {
 
   await page.route('**/settings/price-periods/*/validate', (route) => {
     const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
-    return json(route, evaluate(periods.find((period) => period.id === id)));
+    const period = periods.find((entry) => entry.id === id);
+    return json(route, {
+      ...evaluate(period),
+      fingerprint: fingerprintOf(period),
+      // Dong DA LUU, khong phai thu trinh duyet vua gui len — day la cho ca A cua #132 lo ra.
+      rows: (period?.prices ?? []).map((row) => ({ ...row })),
+    });
   });
 
   await page.route('**/settings/price-periods/*/import/apply', async (route) => {
     const id = new URL(route.request().url()).pathname.split('/').at(-3)!;
     const body = route.request().postDataJSON() as { rows: MockPrice[] };
-    periods = periods.map((period) =>
-      period.id === id ? { ...period, prices: body.rows.map((row) => ({ ...row })) } : period,
-    );
+    // UPSERT, KHONG PRUNE — dung nhu `applyImport()` that. Mot ban gia lap thay the ca mang se
+    // giau mat ca A cua #132: gui len mot tap con roi tuong may chu chi con tap con do.
+    periods = periods.map((period) => {
+      if (period.id !== id) return period;
+      const merged = period.prices.map((row) => ({ ...row }));
+      for (const incoming of body.rows) {
+        const existing = merged.find((row) => row.sku === incoming.sku);
+        if (existing) existing.wholesale = incoming.wholesale;
+        else merged.push({ ...incoming });
+      }
+      return { ...period, prices: merged };
+    });
     return json(route, {
       periodId: id,
       preview: { valid: true, created: 0, updated: 0, unchanged: 0, errors: [], warnings: [] },
@@ -722,6 +764,108 @@ test.describe('Luồng có dẫn đường: sửa → kiểm → xem lại → k
 
     await page.getByRole('button', { name: 'Quay lại sửa' }).press('Enter');
     await expect(page.locator('li[aria-current="step"]')).toHaveText('Kiểm tra');
+  });
+});
+
+test.describe('Xem lại buộc phải là đúng thứ sắp kích hoạt (#132)', () => {
+  test('A. nạp hàng loạt một tập CON: Xem lại hiện đúng thứ máy chủ đang giữ, không hiện tập con', async ({
+    page,
+  }) => {
+    // `applyImport()` chỉ upsert, KHÔNG prune. Nạp mình SP01 vào một kỳ đang có SP01+SP02 thì
+    // máy chủ vẫn giữ SP02 — nếu Xem lại vẽ lại bằng mảng đang soạn, người dùng duyệt một tập
+    // rồi kích hoạt một tập khác.
+    resetPricePeriods([
+      {
+        id: 'work',
+        validMonth: CURRENT_MONTH,
+        status: 'draft',
+        source: 'test_only',
+        prices: [nineteenSkus[0]!, nineteenSkus[1]!],
+      },
+    ]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByText('Nâng cao · Nhập hàng loạt').click();
+    await page
+      .getByRole('textbox', { name: /Dán dữ liệu bảng giá/ })
+      .fill(JSON.stringify([nineteenSkus[0]]));
+    await page.getByRole('button', { name: 'Nạp vào bảng' }).click();
+    await expect(page.getByText('Hiển thị 1 / 1 mặt hàng')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+
+    // Xem lại phải nói SỰ THẬT của máy chủ: hai mặt hàng, không phải một.
+    const review = page.getByRole('table', { name: 'Bảng giá sẽ được kích hoạt' });
+    await expect(review).toBeVisible();
+    await expect(review.getByRole('row')).toHaveCount(3); // 1 hàng tiêu đề + 2 mặt hàng
+    await expect(review.getByText('SP02', { exact: true })).toBeVisible();
+    await expect(page.getByText('Số mặt hàng')).toBeVisible();
+  });
+
+  test('B. người khác sửa bản nháp sau khi mình kiểm: kích hoạt bị từ chối, kỳ vẫn là nháp', async ({
+    page,
+  }) => {
+    resetPricePeriods([
+      {
+        id: 'work',
+        validMonth: CURRENT_MONTH,
+        status: 'draft',
+        source: 'operator',
+        prices: nineteenSkus,
+      },
+    ]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+    await expect(page.getByRole('button', { name: /^Kích hoạt bảng giá/ })).toBeVisible();
+
+    // Người vận hành thứ HAI sửa cùng bản nháp sang một bộ giá KHÁC MÀ VẪN HỢP LỆ. Mọi phép
+    // kiểm còn lại của máy chủ đều xanh — chỉ ràng buộc "bản đã xem" mới bắt được chuyện này.
+    periods = periods.map((period) =>
+      period.id === 'work'
+        ? {
+            ...period,
+            prices: period.prices.map((row) => ({ ...row, wholesale: row.wholesale + 1 })),
+          }
+        : period,
+    );
+
+    await page.getByRole('button', { name: /^Kích hoạt bảng giá/ }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: /^Kích hoạt bảng giá/ })
+      .click();
+
+    await expect(page.getByText(/đã thay đổi sau lần kiểm tra/i)).toBeVisible();
+    await expect(page.getByText(/Đã kích hoạt bảng giá/)).toHaveCount(0);
+    // Kỳ vẫn là nháp, và người dùng bị đưa về đúng chỗ phải kiểm lại.
+    await expect(page.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Kích hoạt bảng giá/ })).toHaveCount(0);
+  });
+
+  test('C. không ai sửa gì: kích hoạt vẫn đi qua bình thường', async ({ page }) => {
+    resetPricePeriods([
+      {
+        id: 'work',
+        validMonth: CURRENT_MONTH,
+        status: 'draft',
+        source: 'operator',
+        prices: nineteenSkus,
+      },
+    ]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+    await page.getByRole('button', { name: /^Kích hoạt bảng giá/ }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: /^Kích hoạt bảng giá/ })
+      .click();
+
+    await expect(page.getByText(/Đã kích hoạt bảng giá tháng 09\/2026/)).toBeVisible();
   });
 });
 

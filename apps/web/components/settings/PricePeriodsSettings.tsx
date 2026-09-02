@@ -150,7 +150,10 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
       settingsApi.applyPriceImport(draftId, payload, true),
   });
   const validate = useMutation({ mutationFn: () => settingsApi.validatePricePeriod(draftId) });
-  const activate = useMutation({ mutationFn: () => settingsApi.activatePricePeriod(draftId) });
+  const activate = useMutation({
+    mutationFn: (expectedFingerprint: string) =>
+      settingsApi.activatePricePeriod(draftId, expectedFingerprint),
+  });
   const archive = useMutation({ mutationFn: (id: string) => settingsApi.archivePricePeriod(id) });
   const removeDraftRow = useMutation({
     mutationFn: (sku: string) => settingsApi.removeDraftPriceRow(draftId, sku),
@@ -246,7 +249,18 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
     try {
       if (workflow.persistRequired) await apply.mutateAsync(snapshot);
       const validation = await validate.mutateAsync();
-      setCheck({ fingerprint: fingerprintRows(snapshot), rows: snapshot, validation });
+      // Man Xem lai phai dung tu DONG DA LUU do may chu tra ve, khong phai tu `snapshot` vua gui
+      // len. Hai thu do co the LECH: `applyImport()` chi upsert va khong bao gio prune, nen mot
+      // lan nap hang loat chi co A vao ky dang co A+B se de lai B tren may chu (Issue #132 ca A).
+      // Doc lai `rows` theo may chu de cai nguoi dung doc dung la cai sap duoc kich hoat.
+      const persisted = validation.rows;
+      setRows(persisted.map((row) => ({ ...row })));
+      setCheck({
+        localFingerprint: fingerprintRows(persisted),
+        serverFingerprint: validation.fingerprint,
+        rows: persisted,
+        validation,
+      });
       await refresh();
     } catch (error) {
       setCheck(null);
@@ -263,7 +277,10 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
       tone: 'primary',
       run: async () => {
         try {
-          const activated = await activate.mutateAsync();
+          // Xuat trinh lai dung the may chu cap luc kiem. May chu doi chieu duoi khoa hang, nen
+          // mot nguoi khac vua sua ban nhap thanh bo gia khac se lam buoc nay tra 409 thay vi
+          // kich hoat im lang mot noi dung chua ai duyet (Issue #132 ca B).
+          const activated = await activate.mutateAsync(check?.serverFingerprint ?? '');
           setNotice(
             `Đã kích hoạt bảng giá ${formatMonth(activated.validMonth ?? '')}${
               isTestOnlyPeriod(activated) ? ' (chỉ để chạy thử)' : ''

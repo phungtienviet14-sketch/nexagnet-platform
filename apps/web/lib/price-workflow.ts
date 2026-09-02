@@ -34,6 +34,13 @@ import type { PricePeriod, PricePeriodPrice, PricePeriodValidation } from './set
  *    may chu cho dung noi dung do; may chu van cham diem lai lan nua trong `activate()` duoi khoa
  *    hang va van co quyen tu choi (Issue #121/#122). Phan tinh cuc bo o day chi lam MOT viec: mo
  *    hay khoa cai nut, cho nhung loi hien nhien khong can hoi may chu.
+ *
+ * 4. Dau van tay CUC BO o day tra loi mot cau hoi giao dien — "nguoi dung co sua gi sau khi kiem
+ *    khong" — va chi the. No KHONG chan duoc mot nguoi thu hai sua ban nhap trong luc minh dang
+ *    doc man Xem lai, vi no khong biet gi ve co so du lieu. Cho do do THE CUA MAY CHU lo:
+ *    `validate()` cap mot dau van tay tinh tren dong DA LUU, `activate()` doi lai chinh dau do
+ *    duoi khoa hang va tu choi neu lech (Issue #132). Hai dau nay phuc vu hai viec khac nhau va
+ *    khong duoc nhap lam mot — xem `PriceCheckSnapshot`.
  */
 
 /* ------------------------------------------------------------------ *
@@ -112,10 +119,24 @@ export function draftBlockingIssues(
  * Ket qua mot lan kiem tra
  * ------------------------------------------------------------------ */
 
-/** Cau tra loi cua may chu, dong dau bang dau van tay cua chinh noi dung da duoc kiem. */
+/**
+ * Cau tra loi cua may chu cho MOT noi dung cu the, kem hai cai dau khac nhau cho hai viec khac
+ * nhau — dung nhap chung chung lam mot (Issue #132).
+ */
 export interface PriceCheckSnapshot {
-  readonly fingerprint: string;
-  /** Dong gia DA LUU va DA KIEM — man Xem lai phai hien dung chung, khong hien `rows` hien tai. */
+  /**
+   * Dau CUC BO, tinh tren trinh duyet, chi de biet nguoi dung co sua gi sau khi kiem khong.
+   * Day THUAN TUY la viec giao dien: no quyet dinh nut Kich hoat con hien hay khong.
+   * No KHONG phai bien gioi dung dan — mot dau do client tu tinh khong chung minh duoc gi ve
+   * noi dung dang nam trong co so du lieu.
+   */
+  readonly localFingerprint: string;
+  /**
+   * The do MAY CHU cap khi kiem. Buoc kich hoat xuat trinh lai chinh the nay, va may chu doi
+   * chieu duoi khoa hang. Day moi la bien gioi dung dan.
+   */
+  readonly serverFingerprint: string;
+  /** Dong gia DA LUU va DA KIEM, doc tu may chu — khong phai mang dang soan tren man hinh. */
   readonly rows: readonly PricePeriodPrice[];
   readonly validation: PricePeriodValidation;
 }
@@ -137,7 +158,7 @@ export function checkOutcome(
   rows: readonly PricePeriodPrice[],
 ): PriceCheckOutcome | null {
   if (!check) return null;
-  return { validation: check.validation, stale: check.fingerprint !== fingerprintRows(rows) };
+  return { validation: check.validation, stale: check.localFingerprint !== fingerprintRows(rows) };
 }
 
 /* ------------------------------------------------------------------ *
@@ -237,7 +258,13 @@ export function resolvePriceWorkflow(input: PriceWorkflowInput): PriceWorkflowSt
 
   const outcome = checkOutcome(input.check, rows);
   const issues = draftBlockingIssues(purpose, rows);
-  const reviewing = outcome !== null && !outcome.stale && outcome.validation.valid;
+  // Thieu the cua may chu thi KHONG vao duoc man Xem lai: khong co gi de xuat trinh lai o buoc
+  // kich hoat, nen "da kiem" luc do chi la loi noi cua trinh duyet.
+  const reviewing =
+    outcome !== null &&
+    !outcome.stale &&
+    outcome.validation.valid &&
+    Boolean(input.check?.serverFingerprint);
   const month = formatMonth(period.validMonth ?? currentMonth);
 
   if (reviewing) {
