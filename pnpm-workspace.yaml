@@ -31,3 +31,14 @@ overrides:
   js-yaml: 4.3.1
   nanoid: 3.3.18
   deepmerge-ts: '>=8.0.0'
+  # GHSA-c83g-rgw3-j3cx (OOM do cache khong bi thu hoi) + GHSA-73wf-gq98-2v4g (ghi prototype qua
+  # browserslist-stats.json) — ca hai HIGH, va ca hai vao repo qua DUY NHAT mot duong bac cau:
+  # apps/api -> adminjs -> @babel/preset-env -> @babel/helper-compilation-targets -> browserslist.
+  # Khong goi nao trong workspace khai browserslist truc tiep, nen khong the sua bang cach nang
+  # mot dependency cap mot; override la cho DUY NHAT dat duoc san.
+  #
+  # `<5` khong thua. Override CUONG CHE version bat ke consumer khai gi, ma ca ba consumer deu
+  # khai theo ho ^4 (`^4.24.0` cua helper-compilation-targets, `^4.28.1` cua core-js-compat,
+  # `>= 4.21.0` cua update-browserslist-db). Neu chi viet `>=4.28.7` thi ngay khi browserslist
+  # 5.0.0 len npm, mot lan re-resolve se keo major moi vao va lam vo Babel — dung kieu do im lang.
+  browserslist: '>=4.28.7 <5'
