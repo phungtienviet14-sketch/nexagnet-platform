@@ -33,8 +33,27 @@ liệu thật sự sai. `AUTH_CONTRACT_FAILED` = guard rơi (nghiêm trọng: d�
 `KNOWLEDGE_CONTRACT_FAILED` = nguồn sự thật chưa vào Postgres → rules engine không có gì để đối chiếu.
 
 **`APPLICATION_ROLLED_OUT_HEALTHY__LIVE_AI_SMOKE_FAILED`** — **ứng dụng đã lên và đang khỏe.**
-Chỉ có model không phân loại đúng tin mẫu. Đọc `details.liveAiSmoke.expectedIntent` vs
-`actualIntent`. Đây **không** phải lý do rollback.
+Tầng live-AI không đạt. Đây **không** phải lý do rollback. Đọc **`reason`** để biết hỏng ở đâu —
+từ 02/09/2026 có hai mã tách bạch, vì chúng hỏng ở hai tầng khác nhau:
+
+| `reason` | Nghĩa | Nhìn vào đâu |
+|---|---|---|
+| `LIVE_AI_INTENT_MISMATCH` | Model phân loại sai tin mẫu | `details.liveAiSmoke.expectedIntent` vs `actualIntent`, `parserMode` — phụ thuộc ngoài (model/provider) |
+| `LIVE_AI_PRICING_UNAVAILABLE` | Ý định **đúng** rồi nhưng không tính được giá | **Nguồn sự thật trong Postgres**, không phải model: kỳ giá còn hiệu lực cho tháng hiện tại chưa, SKU có khớp danh mục không |
+| `LIVE_AI_EXTRACTION_MISMATCH` | Đúng ý định, đúng giá, nhưng số lượng/số dòng sai | `expectedQuantity` (từ gói khách) vs `actualQuantity` |
+
+Trước 02/09/2026 hai mã đầu **gộp làm một** (`intent !== 'dat_don' || !priced` → cùng
+`LIVE_AI_INTENT_MISMATCH`), nên một bảng giá hết hạn sẽ hiện ra dưới tên "model đoán sai" và người
+trực đi tune prompt cho một lỗi dữ liệu. Tách mã **không** làm yếu cổng: cả ba vẫn là
+`status: 'fail'` và vẫn ra đúng phân loại này.
+
+> **Bẫy đã xảy ra thật (deploy `#33625765042`, ultty/gd1-test, 02/09/2026).** Tầng live-AI đỏ với
+> `actualIntent=khac`, nhưng lỗi **không** ở model: chính `smoke-test.mjs` nối thêm
+> `NETVIET-SMOKE-<epoch>` vào **văn bản nghiệp vụ** trước khi gửi. Đo trên bản đang chạy, 20 mẫu
+> mỗi nhánh: tin mẫu nguyên bản `dat_don` **20/20**, tin mẫu kèm nhãn `dat_don` **10/20**. Nhãn đó
+> chưa từng được đọc lại (đối chiếu đi bằng `order.id`, tính duy nhất do API tự sinh
+> `externalMessageId`). **Một cổng kiểm tra không được tự chế ra phép thử của riêng nó** — gửi
+> đúng tin mẫu của gói khách, không thêm một ký tự nào.
 
 **`…__LIVE_AI_SMOKE_TIMEOUT`** / **`…__LIVE_AI_PROVIDER_UNAVAILABLE`** — provider chậm hoặc chết.
 Phân biệt bằng mã HTTP: parser ném lỗi → `/demo/simulate` trả 5xx → `UNAVAILABLE`; parser trả lời

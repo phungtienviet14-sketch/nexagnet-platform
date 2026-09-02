@@ -508,6 +508,89 @@ test('smoke-test.mjs MAC DINH van la cong cung — duong preflight khong bi noi 
   assert.match(smokeTest, /LIVE_AI_INTENT_MISMATCH/);
   assert.match(smokeTest, /LIVE_AI_PROVIDER_UNAVAILABLE/);
   assert.match(smokeTest, /LIVE_AI_TIMEOUT/);
+  // ...va tu 02/09/2026 them: "khong tinh duoc gia" khong duoc doi lot thanh "model doan sai".
+  assert.match(smokeTest, /LIVE_AI_PRICING_UNAVAILABLE/);
+});
+
+/*
+ * -----------------------------------------------------------------------------------------------
+ * SU CO 02/09/2026 — deploy-tenant #33625765042, ultty/gd1-test, release b1e0344.
+ *
+ * Rollout/health/tat dinh/quan sat/kenh doc DEU XANH; chi LIVE AI SMOKE do voi
+ * `LIVE_AI_INTENT_MISMATCH` (actualIntent=khac, confidence 0.30). Nguyen nhan KHONG phai model, ma
+ * la chinh cong kiem tra: no noi `NETVIET-SMOKE-<epoch>` vao VAN BAN NGHIEP VU truoc khi gui cho
+ * model. Do tren ban dang chay, 20 mau moi nhanh, xoay vong thu tu:
+ *
+ *   tin mau nguyen ban                       -> dat_don 20/20
+ *   tin mau + `NETVIET-SMOKE-<epoch>`        -> dat_don 10/20   <-- 10/10 lan do nam o day
+ *   cau menh lenh tuong duong                -> dat_don 20/20
+ *   tin mo ho (doi chung am)                 -> khac    20/20
+ *
+ * Cai nhan do khong he duoc doc lai o dau: doi chieu di bang `order.id` API tra ve, con tinh duy
+ * nhat cua tin do API tu sinh (`externalMessageId`). Nen no chi lam DUNG mot viec: bo them mot
+ * token la vao cau ma model phai phan loai.
+ * -----------------------------------------------------------------------------------------------
+ */
+/**
+ * Bo chu thich truoc khi kiem — cung ly do nhu bai "hop dong tat dinh" ben duoi: chinh doan chu
+ * thich la noi GIAI THICH vi sao cai nhan bi bo, nen no phai duoc phep goi ten cai nhan do. Kiem
+ * tren van ban tho se bien mot loi giai thich tot thanh mot bai kiem do.
+ */
+const stripComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+const smokeTestCode = stripComments(smokeTest);
+
+test('LIVE AI SMOKE gui DUNG tin mau cua goi khach — khong nhan tong hop trong van ban nghiep vu', () => {
+  assert.match(
+    smokeTestCode,
+    /postJson\('\/demo\/simulate', \{ text: smokeFixture\.orderText \}\)/,
+    'phai gui nguyen `smokeFixture.orderText`',
+  );
+  assert.doesNotMatch(
+    smokeTestCode,
+    /NETVIET-SMOKE/,
+    'nhan smoke khong duoc quay lai van ban nghiep vu',
+  );
+  assert.doesNotMatch(
+    smokeTestCode,
+    /text: `\$\{smokeFixture\.orderText\}/,
+    'khong duoc noi them BAT KY thu gi vao tin mau khi gui di',
+  );
+});
+
+test('doi chieu tin -> don di bang DANH TINH DON, khong bang noi dung tin', () => {
+  // Day la ly do vi sao bo duoc cai nhan ma khong mat gi: moi buoc sau POST deu bam `order.id`.
+  assert.match(smokeTestCode, /assertPilotOrder\(order, order\.id\)/);
+  assert.match(smokeTestCode, /event\.order\?\.id === order\.id/);
+});
+
+test('y dinh sai va khong tinh duoc gia la HAI ma ly do PHAN BIET DUOC', () => {
+  assert.match(smokeTestCode, /if \(order\.intent !== 'dat_don'\) \{/);
+  assert.match(smokeTestCode, /if \(!order\.priced\) \{/);
+  // Gop hai duong lai thanh mot dieu kien chinh la loi da lam chan doan sai o #33625765042.
+  assert.doesNotMatch(smokeTestCode, /order\.intent !== 'dat_don' \|\| !order\.priced/);
+});
+
+test('TACH MA LY DO KHONG LAM YEU CONG: thieu gia van lam do tang live-AI y het y dinh sai', () => {
+  const pricing = evaluate([
+    rolloutPass,
+    healthPass,
+    deterministicPass,
+    {
+      layer: 'liveAiSmoke',
+      status: 'fail',
+      reason: 'LIVE_AI_PRICING_UNAVAILABLE',
+      detail: { intent: 'dat_don', orderId: 'o-1' },
+    },
+  ]);
+  assert.equal(pricing.ok, false);
+  assert.equal(pricing.liveAiFailure, true);
+  assert.equal(pricing.hardFailure, false, 'thieu gia van KHONG duoc lam rollout do');
+  assert.equal(pricing.classification, 'APPLICATION_ROLLED_OUT_HEALTHY__LIVE_AI_SMOKE_FAILED');
+
+  // ...va ma ly do phai di duoc toi bao cao, neu khong thi viec tach chang de lam gi.
+  assert.match(formatDeploySummary(pricing), /LIVE_AI_PRICING_UNAVAILABLE/);
+  assert.match(JSON.stringify(toMachineResult(pricing)), /LIVE_AI_PRICING_UNAVAILABLE/);
 });
 
 test('hop dong tat dinh khong goi mot duong nao cua model', () => {
