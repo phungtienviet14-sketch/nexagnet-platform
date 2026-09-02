@@ -34,6 +34,11 @@ export class SettingsQueryService {
       // UI phai biet AdminJS co bat khong: khi ADMIN_UI=off thi /admin tra 404, ma trang
       // Nguon su that lai dang chia nut "Mo Admin nang cao" -> bam ra trang loi giua buoi demo.
       adminUi: env.ADMIN_UI,
+      // UI phai biet day co phai moi truong DU LIEU THU khong: `PricePeriodsService.activate()` tu
+      // choi ky `test_only` ngoai moi truong do, nen hien lua chon "tạo bảng giá chỉ để chạy thử"
+      // o moi noi la day nguoi dung vao mot ngo cut (#117 §4.2). Day la nhan phan loai moi truong,
+      // khong phai bi mat.
+      dataClassification: env.DATA_CLASSIFICATION,
       zca: zcaStatus,
       zcaState: zcaStatus?.state ?? 'unavailable',
       botIdentity: this.botIdentity?.status() ?? { state: 'disabled' as const },

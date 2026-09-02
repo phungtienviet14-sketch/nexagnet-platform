@@ -16,10 +16,7 @@ import { Throttle } from '@nestjs/throttler';
 import { loadEnv } from '@netviet/shared';
 import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
-import {
-  RuleConfigLifecycleError,
-  RuleConfigService,
-} from '../rule-config/rule-config.service.js';
+import { RuleConfigLifecycleError, RuleConfigService } from '../rule-config/rule-config.service.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import {
   GroupMappingService,
@@ -140,6 +137,29 @@ export class SettingsController {
     return this.pricePeriods.applyImport(id, body, actorName(actor), requestId ?? null);
   }
 
+  /**
+   * Xoa mot SKU khoi ky NHAP. Dat theo kieu hanh dong giong `activate`/`archive` o duoi thay vi
+   * `DELETE`: cung phai qua `assertMutationOrigin` + than xac nhan, ma `DELETE` co than la duong
+   * di lech chuan cua chinh controller nay.
+   */
+  @Roles('MANAGER', 'ADMIN')
+  @Post('price-periods/:id/prices/:sku/remove')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  removeDraftPrice(
+    @Param('id') id: string,
+    @Param('sku') sku: string,
+    @Body() body: unknown,
+    @Headers('origin') origin?: string,
+    @Headers('x-actor') actor = 'operator',
+    @Headers('x-request-id') requestId?: string,
+  ) {
+    this.assertMutationOrigin(origin);
+    if (!activateSchema.safeParse(body).success) {
+      throw new BadRequestException('Phải xác nhận trước khi xóa dòng giá khỏi kỳ nháp');
+    }
+    return this.pricePeriods.removeDraftPrice(id, sku, actorName(actor), requestId ?? null);
+  }
+
   @Roles('MANAGER', 'ADMIN')
   @Post('price-periods/:id/validate')
   validatePricePeriod(@Param('id') id: string) {
@@ -220,7 +240,8 @@ export class SettingsController {
   ) {
     this.assertMutationOrigin(origin);
     const parsedResource = parseResource(resource);
-    const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+    const record =
+      typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
     if (
       parsedResource === 'overrides' &&
       (!idSchema.safeParse(record.dealerId).success || !idSchema.safeParse(record.sku).success)
@@ -234,7 +255,8 @@ export class SettingsController {
         ? overrideId(String(record.dealerId ?? ''), String(record.sku ?? ''))
         : (record.id ?? record.sku ?? record.term ?? record.chatId);
     const parsedId = idSchema.safeParse(inferredId);
-    if (!parsedId.success) throw new BadRequestException('Can co id, sku, term hoac chatId de tao moi');
+    if (!parsedId.success)
+      throw new BadRequestException('Can co id, sku, term hoac chatId de tao moi');
     const changes = createChangesWithoutRouteIdentifier(parsedResource, record);
     return this.sourceTruthWrites.write(
       parsedResource,
@@ -474,12 +496,7 @@ function createChangesWithoutRouteIdentifier(
   record: Record<string, unknown>,
 ): Record<string, unknown> {
   if (resource === 'overrides' || resource === 'groups') return { ...record };
-  const identifier =
-    resource === 'dealers'
-      ? 'id'
-      : resource === 'glossary'
-        ? 'term'
-        : 'sku';
+  const identifier = resource === 'dealers' ? 'id' : resource === 'glossary' ? 'term' : 'sku';
   return Object.fromEntries(Object.entries(record).filter(([key]) => key !== identifier));
 }
 

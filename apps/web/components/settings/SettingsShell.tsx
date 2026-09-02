@@ -1,34 +1,37 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useBranding } from '../../lib/branding';
 import { parseSettingsSummary, settingsApi } from '../../lib/settings';
 import { AuditSettings } from './AuditSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { CampaignSettings } from './CampaignSettings';
 import { ContentSettings } from './ContentSettings';
+import { NotificationSettings } from './NotificationSettings';
+import { OverviewSettings } from './OverviewSettings';
 import { ParticipantsSettings } from './ParticipantsSettings';
+import { PricePeriodsSettings } from './PricePeriodsSettings';
 import { ReadinessSettings } from './ReadinessSettings';
 import { RulesSettings } from './RulesSettings';
+import { SettingsNav } from './SettingsNav';
 import { SettingsPanelState } from './SettingsPanelState';
-import { SettingsTabs, type SettingsTab, type SettingsTabId } from './SettingsTabs';
+import { SettingsTabs, type SettingsTab } from './SettingsTabs';
 import { SourceTruthSettings } from './SourceTruthSettings';
-import { ZaloSettings } from './ZaloSettings';
 import { UsersSettings } from './UsersSettings';
-import { NotificationSettings } from './NotificationSettings';
+import { ZaloSettings } from './ZaloSettings';
 import { useAuth } from '../auth/AuthGate';
 import { useTenantRuntime } from '../../lib/tenant-runtime-context';
-import { resolveActiveSettingsTab, selectSettingsTabIds } from './settings-composition';
+import {
+  resolveActiveSettingsSection,
+  resolveSettingsAccess,
+  selectSettingsSectionIds,
+  settingsSectionHref,
+  type SettingsRole,
+  type SettingsSectionId,
+} from './settings-composition';
 
 const EMPTY_SUMMARY = parseSettingsSummary({});
-
-const CHANNEL_LABELS = {
-  mock: 'Mock · offline',
-  bot: 'Bot Platform',
-  zca: 'Zalo cá nhân',
-  hybrid: 'Hybrid hai kênh',
-} as const;
 
 export function SettingsShell() {
   const tenant = useTenantRuntime();
@@ -41,8 +44,8 @@ export function SettingsShell() {
 function KnowledgeSettingsShell() {
   const branding = useBranding();
   const tenant = useTenantRuntime();
-  const tabIds = selectSettingsTabIds(tenant);
-  const tabs: readonly SettingsTab[] = tabIds.includes('content')
+  const sectionIds = selectSettingsSectionIds(tenant);
+  const tabs: readonly SettingsTab[] = sectionIds.includes('content')
     ? [
         {
           id: 'content',
@@ -79,185 +82,157 @@ function KnowledgeSettingsShell() {
   );
 }
 
+/**
+ * Trung tam thiet lap & van hanh cho khach.
+ *
+ * Muc dang mo nam o `?section=…` chu khong chi trong state: khach phai gui duoc duong dan
+ * "vào đây mà sửa bảng giá" cho dong nghiep, va F5 giua chung phai quay lai dung cho (#117 §2).
+ */
 function OperationsSettingsShell() {
   const branding = useBranding();
   const tenant = useTenantRuntime();
   const auth = useAuth();
-  const visibleTabIds = selectSettingsTabIds(tenant);
-  const [activeTab, setActiveTab] = useState<SettingsTabId>(() =>
-    resolveActiveSettingsTab(visibleTabIds, 'zalo'),
-  );
+  const access = resolveSettingsAccess(auth.user?.role as SettingsRole | undefined);
+  const visibleSections = selectSettingsSectionIds(tenant, access);
+  // Muc dang mo duoc TINH RA moi lan render chu khong luu san. Vai tro nap ve khong dong bo, nen
+  // `visibleSections` co the HEP LAI giua chung (vd MANAGER mat muc quan ly tai khoan). Neu giu
+  // muc dang mo trong state thi mot deep-link `?section=users` se ket lai o mot man dang le khong
+  // duoc thay; tinh lai thi no tu roi ve Tong quan dung luc danh sach doi.
+  const [chosenSection, setChosenSection] = useState<string | null>(null);
+  const [linkedSection, setLinkedSection] = useState<string | null>(null);
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('tab') ?? undefined;
-    setActiveTab(resolveActiveSettingsTab(visibleTabIds, requested ?? activeTab));
+    const params = new URLSearchParams(window.location.search);
+    setLinkedSection(params.get('section') ?? params.get('tab'));
   }, []);
+  const activeSection = resolveActiveSettingsSection(
+    visibleSections,
+    chosenSection ?? linkedSection,
+  );
+
+  const navigate = (section: SettingsSectionId) => {
+    setChosenSection(section);
+    window.history.replaceState({}, '', settingsSectionHref(section));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const summaryQuery = useQuery({
     queryKey: ['settings-summary'],
     queryFn: settingsApi.summary,
     refetchInterval: 15_000,
   });
   const summary = summaryQuery.data ?? EMPTY_SUMMARY;
-  const allTabs: readonly SettingsTab[] = [
-    {
-      id: 'zalo',
-      code: 'ZA',
-      label: 'Kênh Zalo',
-      description: 'Kết nối, allowlist, đồng bộ',
-      panel: (
+  const dataClassificationTest = summary.dataClassification === 'test';
+
+  const panels: Readonly<Record<SettingsSectionId, ReactNode>> = {
+    overview: (
+      <OverviewSettings
+        summary={summary}
+        access={access}
+        blockedCapabilities={tenant.readiness.blockedCapabilities}
+        showPricing={visibleSections.includes('products-pricing')}
+        onNavigate={navigate}
+      />
+    ),
+    'products-pricing': (
+      <div className="settings-section-stack">
+        <PricePeriodsSettings
+          dataClassificationTest={dataClassificationTest}
+          canConfigure={access.canConfigure}
+        />
+        <SourceTruthSettings
+          adminUiEnabled={summary.adminUi === 'on'}
+          resources={['products', 'glossary']}
+          heading={{
+            eyebrow: 'Danh mục hàng',
+            title: 'Sản phẩm',
+            description:
+              'Mặt hàng bán ra và các cách viết tắt mà đại lý hay dùng khi nhắn tin đặt hàng.',
+          }}
+        />
+      </div>
+    ),
+    'dealers-groups': (
+      <div className="settings-section-stack">
+        <SourceTruthSettings
+          adminUiEnabled={summary.adminUi === 'on'}
+          resources={['dealers', 'overrides']}
+          heading={{
+            eyebrow: 'Ai mua hàng của mình',
+            title: 'Đại lý & giá riêng',
+            description:
+              'Đại lý, chính sách thanh toán, và giá riêng đã thỏa thuận cho từng mặt hàng.',
+          }}
+        />
         <ZaloSettings
           summary={summary}
           onRefresh={() => summaryQuery.refetch()}
-          onOpenMembers={() => setActiveTab('members')}
+          onOpenMembers={() => navigate('dealers-groups')}
+          view="groups"
         />
-      ),
-    },
-    {
-      id: 'members',
-      code: 'TV',
-      label: 'Nhóm & thành viên',
-      description: 'Rank, vai trò, cách xử lý',
-      panel: <ParticipantsSettings groups={summary.groups} />,
-    },
-    {
-      id: 'source-truth',
-      code: 'GI',
-      label: 'Đại lý & giá',
-      description: 'SKU, bốn cột giá, deal riêng',
-      panel: <SourceTruthSettings adminUiEnabled={summary.adminUi === 'on'} />,
-    },
-    {
-      id: 'rules',
-      code: 'RL',
-      label: 'Rules & công thức',
-      description: 'Nháp, xem trước, kích hoạt',
-      panel: <RulesSettings />,
-    },
-    {
-      id: 'campaigns',
-      code: 'CS',
-      label: 'Chiến dịch CSKH',
-      description: 'Duyệt, lên lịch, theo dõi gửi',
-      panel: <CampaignSettings groups={summary.groups} />,
-    },
-    {
-      id: 'content',
-      code: 'ND',
-      label: 'Nội dung sản phẩm',
-      description: 'FAQ, media, catalog, provenance',
-      panel: <ContentSettings />,
-    },
-    {
-      id: 'automation',
-      code: 'AT',
-      label: 'Tự động hóa',
-      description: 'Policy tenant và kill switch',
-      panel: <AutomationSettings summary={summary} />,
-    },
-    {
-      id: 'notifications',
-      code: 'TB',
-      label: 'Thông báo & Leads',
-      description: 'Gửi Zalo và SMTP',
-      panel: <NotificationSettings summary={summary} onRefreshSummary={() => summaryQuery.refetch()} />,
-    },
-    {
-      id: 'readiness',
-      code: 'SS',
-      label: 'Sẵn sàng vận hành',
-      description: 'Cổng go-live: thiếu gì, chặn gì',
-      panel: <ReadinessSettings />,
-    },
-    {
-      id: 'users',
-      code: 'PQ',
-      label: 'Người dùng & vai trò',
-      description: 'Tài khoản, quyền, mật khẩu',
-      panel: <UsersSettings />,
-    },
-    {
-      id: 'audit',
-      code: 'LS',
-      label: 'Lịch sử thay đổi',
-      description: 'Audit chỉ đọc, diff rõ ràng',
-      panel: <AuditSettings />,
-    },
-  ];
-  const visibleIds = new Set(visibleTabIds);
-  const tabs = allTabs.filter((tab) => visibleIds.has(tab.id));
+        <details className="settings-secondary-detail">
+          <summary>Thành viên trong nhóm và vai trò của từng người</summary>
+          <ParticipantsSettings groups={summary.groups} />
+        </details>
+      </div>
+    ),
+    'sales-policy': <RulesSettings />,
+    content: <ContentSettings />,
+    campaigns: <CampaignSettings groups={summary.groups} />,
+    notifications: (
+      <NotificationSettings summary={summary} onRefreshSummary={() => summaryQuery.refetch()} />
+    ),
+    zalo: (
+      <ZaloSettings
+        summary={summary}
+        onRefresh={() => summaryQuery.refetch()}
+        onOpenMembers={() => navigate('dealers-groups')}
+        view="connection"
+      />
+    ),
+    automation: <AutomationSettings summary={summary} />,
+    'system-status': <ReadinessSettings />,
+    users: <UsersSettings />,
+    audit: <AuditSettings />,
+  };
 
   return (
     <main className="settings-shell">
       <header className="settings-hero">
         <div className="settings-hero__nav">
           <a href="/" className="settings-back-link">
-            <span aria-hidden="true">←</span> Trung tâm điều hành
+            <span aria-hidden="true">←</span> Quay lại màn hình làm việc
           </a>
-          <span className="settings-environment">OPERATOR · PILOT</span>
           {auth.user && (
-            <span className="settings-environment">{auth.user.name} · {auth.user.role}</span>
+            <span className="settings-environment">
+              {auth.user.name} · {roleLabel(auth.user.role as SettingsRole)}
+            </span>
           )}
         </div>
         <div className="settings-hero__title">
           <div>
-            <p className="settings-eyebrow">{branding.shortName} · Bàn điều khiển nguồn sự thật</p>
-            <h1>Cấu hình vận hành</h1>
+            <p className="settings-eyebrow">{branding.shortName}</p>
+            <h1>Thiết lập &amp; vận hành</h1>
           </div>
           <p>
-            Một nơi để kiểm soát kênh nhận tin, người gửi, giá và các cổng tự động hóa — dành cho
-            người vận hành, không cần đọc cấu hình kỹ thuật.
+            Mọi thứ cần để hệ thống bán hàng đúng: hàng hóa và giá, đại lý và nhóm, chính sách, và
+            các công tắc an toàn.
           </p>
         </div>
-
-        <section className="settings-control-rail" aria-label="Ba trạng thái vận hành chính">
-          <article>
-            <span className={`settings-rail-light settings-rail-light--${summary.availability}`} />
-            <small>Kênh nhận tin</small>
-            <strong>{CHANNEL_LABELS[summary.channelMode]}</strong>
-            <p>
-              {summary.zcaState === 'ready' ? 'Tài khoản phụ đang nghe' : 'Kiểm tra kết nối Zalo'}
-            </p>
-          </article>
-          <i aria-hidden="true" />
-          <article>
-            <span
-              className={`settings-rail-light settings-rail-light--${summary.sourceTruth.status}`}
-            />
-            <small>Nguồn sự thật</small>
-            <strong>
-              {summary.sourceTruth.productCount || '—'} SKU ·{' '}
-              {summary.sourceTruth.dealerCount || '—'} đại lý
-            </strong>
-            <p>
-              {summary.sourceTruth.status === 'available'
-                ? 'Đang đọc dữ liệu động'
-                : 'Chưa có số liệu tổng quan'}
-            </p>
-          </article>
-          <i aria-hidden="true" />
-          <article>
-            <span
-              className={`settings-rail-light ${summary.autoSend ? 'is-warning' : 'is-safe'}`}
-            />
-            <small>Cổng an toàn</small>
-            <strong>AUTO_SEND {summary.autoSend ? 'ON' : 'OFF'}</strong>
-            <p>
-              {summary.orderAutomation
-                ? !summary.orderAutomation.enabled
-                  ? 'Policy tự gửi của tenant đang tắt'
-                  : summary.autoSend
-                    ? `Tự gửi đơn đủ dữ liệu ≤ ${summary.orderAutomation.maxAutoConfirmQuantity} SP`
-                    : `Policy ≤ ${summary.orderAutomation.maxAutoConfirmQuantity} SP · kill switch tắt`
-                : 'Chưa cấu hình policy · hệ thống không tự gửi'}
-            </p>
-          </article>
-        </section>
       </header>
 
+      {!access.canConfigure && (
+        <div className="settings-shell__notice">
+          <SettingsPanelState
+            title="Bạn đang xem ở chế độ chỉ đọc"
+            detail="Tài khoản của bạn xem được cấu hình nhưng không sửa được. Cần thay đổi thì nhờ Quản lý hoặc Quản trị viên."
+          />
+        </div>
+      )}
       {summaryQuery.isLoading && (
         <div className="settings-shell__notice">
           <SettingsPanelState
             title="Đang kiểm tra hệ thống"
-            detail="Các phần cấu hình sẽ sẵn sàng trong giây lát…"
+            detail="Các phần cài đặt sẽ sẵn sàng trong giây lát…"
           />
         </div>
       )}
@@ -266,7 +241,7 @@ function OperationsSettingsShell() {
           <SettingsPanelState
             tone="error"
             title="Không tải được tổng quan"
-            detail="Bạn vẫn có thể mở từng phần. Các thao tác chưa kết nối sẽ hiển thị lỗi riêng."
+            detail="Bạn vẫn mở được từng phần. Thao tác nào chưa kết nối được sẽ báo lỗi ngay tại chỗ."
             action={
               <button
                 type="button"
@@ -286,7 +261,20 @@ function OperationsSettingsShell() {
         </div>
       ))}
 
-      <SettingsTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+      <SettingsNav sections={visibleSections} activeSection={activeSection} onChange={navigate}>
+        {panels[activeSection]}
+      </SettingsNav>
     </main>
   );
+}
+
+const ROLE_LABELS: Readonly<Record<SettingsRole, string>> = {
+  SALE: 'Sale',
+  ACCOUNTING: 'Kế toán',
+  MANAGER: 'Quản lý',
+  ADMIN: 'Quản trị viên',
+};
+
+function roleLabel(role: SettingsRole | undefined): string {
+  return role ? (ROLE_LABELS[role] ?? role) : '';
 }

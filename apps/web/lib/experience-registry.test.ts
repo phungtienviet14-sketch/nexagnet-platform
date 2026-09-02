@@ -7,8 +7,8 @@ import {
 import { describe, expect, it } from 'vitest';
 import { EXPERIENCE_REGISTRY, resolveExperience } from '../experiences/experience-registry';
 import {
-  resolveActiveSettingsTab,
-  selectSettingsTabIds,
+  resolveActiveSettingsSection,
+  selectSettingsSectionIds,
 } from '../components/settings/settings-composition';
 import { hasZaloIntegration, toPublicTenantDescriptor } from './tenant-runtime';
 
@@ -161,39 +161,40 @@ describe('public tenant runtime descriptor', () => {
 });
 
 describe('settings composition', () => {
-  it('preserves the complete operations-console tab order', () => {
-    expect(selectSettingsTabIds(toPublicTenantDescriptor(operationsTenant))).toEqual([
-      'zalo',
-      'members',
-      'source-truth',
-      'rules',
-      'campaigns',
+  it('groups the complete operations-console surface by business task', () => {
+    expect(selectSettingsSectionIds(toPublicTenantDescriptor(operationsTenant))).toEqual([
+      'overview',
+      'products-pricing',
+      'dealers-groups',
+      'sales-policy',
       'content',
-      'automation',
+      'campaigns',
       'notifications',
-      'readiness',
+      'zalo',
+      'automation',
+      'system-status',
       'users',
       'audit',
     ]);
   });
 
   it('keeps a knowledge-only experience free of Zalo, order, price and campaign panels', () => {
-    const tabs = selectSettingsTabIds(toPublicTenantDescriptor(knowledgeTenant));
+    const sections = selectSettingsSectionIds(toPublicTenantDescriptor(knowledgeTenant));
 
-    expect(tabs).toEqual(['content']);
-    expect(tabs).not.toEqual(expect.arrayContaining(['zalo', 'source-truth', 'campaigns']));
+    expect(sections).toEqual(['content']);
+    expect(sections).not.toEqual(expect.arrayContaining(['zalo', 'products-pricing', 'campaigns']));
   });
 
-  it('keeps an agent-workforce experience focused on content, readiness, users, and audit without Zalo or sales-order panels', () => {
-    const tabs = selectSettingsTabIds(toPublicTenantDescriptor(workforceTenant));
+  it('keeps an agent-workforce experience focused on content, status, users, and audit without Zalo or sales-order panels', () => {
+    const sections = selectSettingsSectionIds(toPublicTenantDescriptor(workforceTenant));
 
-    expect(tabs).toEqual(['content', 'readiness', 'users', 'audit']);
-    expect(tabs).not.toEqual(
+    expect(sections).toEqual(['overview', 'content', 'system-status', 'users', 'audit']);
+    expect(sections).not.toEqual(
       expect.arrayContaining([
         'zalo',
-        'members',
-        'source-truth',
-        'rules',
+        'products-pricing',
+        'dealers-groups',
+        'sales-policy',
         'campaigns',
         'automation',
         'notifications',
@@ -201,12 +202,12 @@ describe('settings composition', () => {
     );
   });
 
-  it('chooses the first visible panel when Zalo or a requested tab is unavailable', () => {
-    const tabs = selectSettingsTabIds(toPublicTenantDescriptor(leanOperationsTenant));
+  it('lands on the overview when Zalo or a requested section is unavailable', () => {
+    const sections = selectSettingsSectionIds(toPublicTenantDescriptor(leanOperationsTenant));
 
-    expect(tabs).not.toContain('zalo');
-    expect(resolveActiveSettingsTab(tabs, 'zalo')).toBe('members');
-    expect(resolveActiveSettingsTab(tabs, 'campaigns')).toBe('members');
+    expect(sections).not.toContain('zalo');
+    expect(resolveActiveSettingsSection(sections, 'zalo')).toBe('overview');
+    expect(resolveActiveSettingsSection(sections, 'campaigns')).toBe('overview');
   });
 });
 
@@ -253,8 +254,8 @@ describe('ranh gioi be mat khach / be mat noi bo (Issue #107 §9.1, §9.2)', () 
   });
 
   it('be mat khach van dung duoc man hinh quan tri theo dung nang luc da bat', () => {
-    expect(selectSettingsTabIds(toPublicTenantDescriptor(b2bTenant))).toEqual(
-      selectSettingsTabIds(toPublicTenantDescriptor(operationsTenant)),
+    expect(selectSettingsSectionIds(toPublicTenantDescriptor(b2bTenant))).toEqual(
+      selectSettingsSectionIds(toPublicTenantDescriptor(operationsTenant)),
     );
   });
 });

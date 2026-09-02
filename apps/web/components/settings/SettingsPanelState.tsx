@@ -5,7 +5,9 @@ type Props = {
   detail: string;
   // `success` bo sung 04/08/2026: truoc do chi co neutral/error nen MOI thao tac ghi thanh cong
   // deu im lang — nguoi van hanh khong biet he thong da ghi nhan cau hinh hay chua.
-  tone?: 'neutral' | 'error' | 'success';
+  // `warning` bo sung 02/09/2026: ky gia CHI DE CHAY THU khong phai loi, cung khong phai thanh
+  // cong — no la mot trang thai phai nhin ra ngay la khac thuong (#117 §4.1).
+  tone?: 'neutral' | 'error' | 'success' | 'warning';
   action?: ReactNode;
 };
 
