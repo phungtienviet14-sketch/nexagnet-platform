@@ -6,6 +6,7 @@ import {
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { loadFoundationEnv } from '../config/foundation-env.js';
@@ -96,6 +97,54 @@ export function buildPriceImportPreview(
     diff.push({ sku: row.sku, action: 'update', before, after: row });
   }
   return { valid: errors.length === 0, created, updated, unchanged, errors, warnings, diff };
+}
+
+/** Ky gia da doc SAU khi khoa hang — xem `withLockedPeriod`. */
+type LockedPricePeriod = Prisma.PricePeriodGetPayload<{ include: { prices: true } }>;
+
+interface EvaluablePricePeriod {
+  validMonth: string | null;
+  source: string | null;
+  prices: ReadonlyArray<{ sku: string; wholesale: number }>;
+}
+
+/**
+ * Luat hop le cua mot ky gia — THUAN, khong cham DB.
+ *
+ * Truoc day than ham nay nam thang trong `validate()`, va `activate()` goi `validate()` de cham
+ * diem. Dieu do buoc `activate()` phai doc DB them mot lan NGOAI giao dich dang giu khoa, nen no
+ * cham diem tren mot anh chup CU: mot `removeDraftPrice` vua commit xong khong duoc nhin thay, va
+ * ky van activate voi so dong da khong con dung (Issue #121, muc 6).
+ *
+ * Tach ra thanh ham thuan de CA HAI duong dung chung mot luat, nhung moi ben tu chon doc dong o
+ * dau: `validate()` doc ngoai giao dich (chi de xem truoc), `activate()` doc SAU khoa hang.
+ */
+function evaluatePricePeriod(
+  period: EvaluablePricePeriod,
+  products: ReadonlyArray<{ sku: string }>,
+) {
+  const bySku = new Map(period.prices.map((price) => [price.sku, price]));
+  const errors: string[] = [];
+  if (!period.validMonth || !monthSchema.safeParse(period.validMonth).success) {
+    errors.push('Kỳ giá thiếu validMonth YYYY-MM hợp lệ');
+  }
+  const missing = products.filter((product) => !bySku.has(product.sku)).map((product) => product.sku);
+  if (isTestOnlyPeriod(period.source)) {
+    if (period.prices.length < 1 || period.prices.length > 2) {
+      errors.push('Kỳ giá test-only chỉ được có 1-2 SKU để smoke pre-pilot');
+    }
+  } else if (missing.length > 0) {
+    errors.push(`Thiếu giá cho SKU: ${missing.join(', ')}`);
+  }
+  const invalid = period.prices.filter((price) => price.wholesale <= 0).map((price) => price.sku);
+  if (invalid.length > 0) errors.push(`Wholesale phải lớn hơn 0: ${invalid.join(', ')}`);
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings: [] as string[],
+    productCount: products.length,
+    priceCount: period.prices.length,
+  };
 }
 
 @Injectable()
@@ -220,20 +269,35 @@ export class PricePeriodsService {
       .safeParse(input);
     if (!parsed.success)
       throw new BadRequestException('Import apply cần dữ liệu hợp lệ và confirmed=true');
-    const preview = await this.previewImport(periodId, {
-      rows: parsed.data.rows,
-      overwrite: parsed.data.overwrite,
-    });
-    if (!preview.valid) throw new BadRequestException(preview.errors);
-    await this.prisma.$transaction(
-      parsed.data.rows.map((row) =>
-        this.prisma.price.upsert({
+    this.assertWritable();
+    // CUNG mot khoa hang voi ba nguoi ghi vong doi (Issue #121).
+    //
+    // Truoc day day la DUNG cai bay ma `removeDraftPrice` mac phai, chi o mot cua khac: doc ky va
+    // kiem `status === 'draft'` nam trong `previewImport()`, con cac lenh `upsert` nam trong MOT
+    // giao dich khac. Giua hai buoc do, `activate()` kip commit — va ban import ghi de gia vao
+    // mot ky DA ACTIVE. Cung mot bat bien bi pha ("dong gia cua ky active/archived la su that da
+    // chot"), nen phai dong bang cung mot giao thuc, khong phai bang mot co che thu hai.
+    //
+    // `previewImport()` van la duong CHI DOC (xem truoc, khong ghi) nen no khong can khoa.
+    const preview = await this.withLockedPeriod(periodId, async (tx, period) => {
+      if (period.status !== 'draft') throw new ConflictException('Chỉ được import vào kỳ draft');
+      const products = await tx.product.findMany({ select: { sku: true } });
+      const computed = buildPriceImportPreview(
+        parsed.data.rows,
+        period.prices,
+        new Set(products.map((product) => product.sku)),
+        parsed.data.overwrite,
+      );
+      if (!computed.valid) throw new BadRequestException(computed.errors);
+      for (const row of parsed.data.rows) {
+        await tx.price.upsert({
           where: { periodId_sku: { periodId, sku: row.sku } },
           create: { periodId, ...row },
           update: parsed.data.overwrite ? row : {},
-        }),
-      ),
-    );
+        });
+      }
+      return computed;
+    });
     await this.record('price_period.import.apply', periodId, actor, null, preview, requestId);
     return { periodId, preview };
   }
@@ -252,72 +316,59 @@ export class PricePeriodsService {
     this.assertWritable();
     const parsedSku = z.string().trim().min(1).max(128).safeParse(sku);
     if (!parsedSku.success) throw new BadRequestException('SKU cần xóa không hợp lệ');
-    const period = await this.period(periodId);
-    if (period.status !== 'draft') {
-      throw new ConflictException('Chỉ được xóa dòng giá khỏi kỳ nháp');
-    }
-    const row = period.prices.find((price) => price.sku === parsedSku.data);
-    if (!row) {
-      throw new NotFoundException(`Kỳ nháp này không có dòng giá cho SKU ${parsedSku.data}`);
-    }
-    // `deleteMany` chu khong phai `delete`: hai lan bam Xoa cung luc thi lan sau chi dem duoc 0
-    // dong roi tra 404 that tha — thay vi de Prisma P2025 noi len thanh 500 cho mot lan thu lai
-    // binh thuong (Issue #116 yeu cau ro dieu nay).
-    const deleted = await this.prisma.price.deleteMany({ where: { periodId, sku: row.sku } });
-    if (deleted.count === 0) {
-      throw new NotFoundException(`Kỳ nháp này không có dòng giá cho SKU ${parsedSku.data}`);
-    }
+    // Kiem trang thai VA xoa nam trong CUNG mot giao dich da khoa hang ky (Issue #121): neu mot
+    // `activate`/`archive` dang chay, ta cho no commit roi doc lai — va luc do `status` khong con
+    // la `draft` nua, nen khong bao gio xoa duoc dong khoi mot ky da ACTIVE/ARCHIVED.
+    const { row, remaining } = await this.withLockedPeriod(periodId, async (tx, period) => {
+      if (period.status !== 'draft') {
+        throw new ConflictException('Chỉ được xóa dòng giá khỏi kỳ nháp');
+      }
+      const found = period.prices.find((price) => price.sku === parsedSku.data);
+      if (!found) {
+        throw new NotFoundException(`Kỳ nháp này không có dòng giá cho SKU ${parsedSku.data}`);
+      }
+      // `deleteMany` chu khong phai `delete`: hai lan bam Xoa cung luc thi lan sau chi dem duoc 0
+      // dong roi tra 404 that tha — thay vi de Prisma P2025 noi len thanh 500 cho mot lan thu lai
+      // binh thuong (Issue #116 yeu cau ro dieu nay). Duoi khoa hang, lan thu hai thuc te da thay
+      // dong bien mat o `find` ben tren; nhanh nay giu lai lam luoi thu hai.
+      const deleted = await tx.price.deleteMany({ where: { periodId, sku: found.sku } });
+      if (deleted.count === 0) {
+        throw new NotFoundException(`Kỳ nháp này không có dòng giá cho SKU ${parsedSku.data}`);
+      }
+      return { row: found, remaining: period.prices.length - 1 };
+    });
     await this.record('price_period.price.remove', periodId, actor, row, null, requestId);
     // KHONG goi `knowledge.reload()`: ban nhap chua bao gio nam trong snapshot nghiep vu
     // (`loadSnapshot()` chi doc ky active dung thang hien hanh), nen xoa dong nhap khong doi gia
     // dang chay. Reload o day chi lam cham va tao mot lan doc DB khong co ly do.
-    return { periodId, sku: row.sku, removed: true, remaining: period.prices.length - 1 };
+    return { periodId, sku: row.sku, removed: true, remaining };
   }
 
   async validate(periodId: string) {
     this.assertWritable();
     const period = await this.period(periodId);
     const products = await this.prisma.product.findMany({ select: { sku: true } });
-    const bySku = new Map(period.prices.map((price) => [price.sku, price]));
-    const errors: string[] = [];
-    if (!period.validMonth || !monthSchema.safeParse(period.validMonth).success) {
-      errors.push('Kỳ giá thiếu validMonth YYYY-MM hợp lệ');
-    }
-    const missing = products
-      .filter((product) => !bySku.has(product.sku))
-      .map((product) => product.sku);
-    if (isTestOnlyPeriod(period.source)) {
-      if (period.prices.length < 1 || period.prices.length > 2) {
-        errors.push('Kỳ giá test-only chỉ được có 1-2 SKU để smoke pre-pilot');
-      }
-    } else if (missing.length > 0) {
-      errors.push(`Thiếu giá cho SKU: ${missing.join(', ')}`);
-    }
-    const invalid = period.prices.filter((price) => price.wholesale <= 0).map((price) => price.sku);
-    if (invalid.length > 0) errors.push(`Wholesale phải lớn hơn 0: ${invalid.join(', ')}`);
-    return {
-      valid: errors.length === 0,
-      errors,
-      warnings: [],
-      productCount: products.length,
-      priceCount: period.prices.length,
-    };
+    return evaluatePricePeriod(period, products);
   }
 
   async activate(periodId: string, actor: string, requestId: string | null) {
     this.assertWritable();
-    const period = await this.period(periodId);
-    if (period.status !== 'draft') throw new ConflictException('Chỉ kỳ draft mới được activate');
-    const testOnly = isTestOnlyPeriod(period.source);
-    if (testOnly && loadFoundationEnv().DATA_CLASSIFICATION !== 'test') {
-      throw new ConflictException(
-        'Kỳ giá test-only chỉ được activate trong môi trường dữ liệu TEST',
-      );
-    }
-    const result = await this.validate(periodId);
-    if (!result.valid || !period.validMonth) throw new BadRequestException(result.errors);
     const activatedAt = new Date();
-    const activated = await this.prisma.$transaction(async (tx) => {
+    // Kiem trang thai, CHAM DIEM HOP LE va ghi — tat ca sau CUNG mot khoa hang (Issue #121).
+    // Diem then chot: `evaluatePricePeriod` chay tren `period.prices` doc SAU khoa, khong phai
+    // tren mot anh chup doc truoc do. Neu mot `removeDraftPrice` vua thang, ta thay so dong DA
+    // GIAM va tu choi activate neu thieu SKU — thay vi activate mot ky theo du lieu cu.
+    const { before, after } = await this.withLockedPeriod(periodId, async (tx, period) => {
+      if (period.status !== 'draft') throw new ConflictException('Chỉ kỳ draft mới được activate');
+      const testOnly = isTestOnlyPeriod(period.source);
+      if (testOnly && loadFoundationEnv().DATA_CLASSIFICATION !== 'test') {
+        throw new ConflictException(
+          'Kỳ giá test-only chỉ được activate trong môi trường dữ liệu TEST',
+        );
+      }
+      const products = await tx.product.findMany({ select: { sku: true } });
+      const result = evaluatePricePeriod(period, products);
+      if (!result.valid || !period.validMonth) throw new BadRequestException(result.errors);
       if (testOnly) {
         const productionPeriod = await tx.pricePeriod.findFirst({
           where: {
@@ -342,29 +393,35 @@ export class PricePeriodsService {
         },
         data: { status: 'archived' },
       });
-      return tx.pricePeriod.update({
+      const activated = await tx.pricePeriod.update({
         where: { id: periodId },
         data: { status: 'active', activatedAt, activatedBy: actorName(actor) },
       });
+      return { before: period, after: activated };
     });
-    await this.record('price_period.activate', periodId, actor, period, activated, requestId);
+    await this.record('price_period.activate', periodId, actor, before, after, requestId);
     await this.knowledge.reload();
-    return activated;
+    return after;
   }
 
   async archive(periodId: string, actor: string, requestId: string | null) {
     this.assertWritable();
-    const period = await this.period(periodId);
-    if (period.status !== 'active' && period.status !== 'draft') {
-      throw new ConflictException('Chỉ kỳ active hoặc draft mới được archive');
-    }
-    const archived = await this.prisma.pricePeriod.update({
-      where: { id: periodId },
-      data: { status: 'archived' },
+    // Cung mot khoa hang voi `removeDraftPrice`/`activate` (Issue #121): mot `remove` dang cho se
+    // doc lai trang thai `archived` sau khi ta commit, va bi tu choi — khong xoa duoc dong khoi
+    // mot ky DA LUU TRU.
+    const { before, after } = await this.withLockedPeriod(periodId, async (tx, period) => {
+      if (period.status !== 'active' && period.status !== 'draft') {
+        throw new ConflictException('Chỉ kỳ active hoặc draft mới được archive');
+      }
+      const archived = await tx.pricePeriod.update({
+        where: { id: periodId },
+        data: { status: 'archived' },
+      });
+      return { before: period, after: archived };
     });
-    await this.record('price_period.archive', periodId, actor, period, archived, requestId);
+    await this.record('price_period.archive', periodId, actor, before, after, requestId);
     await this.knowledge.reload();
-    return archived;
+    return after;
   }
 
   private async period(id: string) {
@@ -374,6 +431,44 @@ export class PricePeriodsService {
     });
     if (!period) throw new NotFoundException('Không tìm thấy kỳ giá');
     return period;
+  }
+
+  /**
+   * GIAO THUC DUY NHAT cho moi nguoi ghi vong doi cua mot ky gia (Issue #121).
+   *
+   * Ba nguoi ghi — `removeDraftPrice`, `activate`, `archive` — deu la `check-then-act`: doc trang
+   * thai, quyet dinh theo trang thai do, roi ghi. Truoc ban va ca ba doc NGOAI giao dich, nen ho
+   * xen duoc vao nhau:
+   *
+   *     T1 removeDraftPrice doc  status=draft
+   *     T2 activate         commit status=active
+   *     T1 deleteMany            -> xoa mot dong khoi ky DA ACTIVE
+   *
+   * MOT `$transaction` THUONG KHONG DU. Muc co lap mac dinh cua Postgres la `READ COMMITTED`:
+   * hai giao dich van doc duoc CUNG mot anh chup cu roi ca hai cung ghi de. Boc hai lan di DB vao
+   * mot giao dich chi thu hep cua so, khong dong duoc no.
+   *
+   * `SELECT ... FOR UPDATE` tren dung hang `PricePeriod` bat nguoi thu hai CHO cho toi khi nguoi
+   * thu nhat commit, roi no doc LAI hang moi. Nho vay `period` tra ve duoi day luon la trang thai
+   * DA CHOT cua ben thang — khong bao gio la anh chup truoc do. Ca ba nguoi ghi khoa CUNG MOT
+   * hang nen ho xep hang voi nhau; do la ly do ca ba bat buoc phai di qua ham nay.
+   *
+   * Cung mau voi `PrismaOrdersRepository.compareAndSet` va cac kho transport (fuel/settlement).
+   */
+  private async withLockedPeriod<T>(
+    periodId: string,
+    work: (tx: Prisma.TransactionClient, period: LockedPricePeriod) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      // Khoa TRUOC khi doc. Doc roi moi khoa thi van la check-then-act, chi hep cua so hon.
+      await tx.$executeRaw`SELECT "id" FROM "PricePeriod" WHERE "id" = ${periodId} FOR UPDATE`;
+      const period = await tx.pricePeriod.findUnique({
+        where: { id: periodId },
+        include: { prices: { orderBy: { sku: 'asc' } } },
+      });
+      if (!period) throw new NotFoundException('Không tìm thấy kỳ giá');
+      return work(tx, period);
+    });
   }
 
   private assertWritable(): void {

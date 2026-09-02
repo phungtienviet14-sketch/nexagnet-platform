@@ -52,11 +52,19 @@ describe('price period import preview', () => {
  */
 describe('PricePeriodsService.removeDraftPrice', () => {
   function makeWith(period: { id: string; status: string; prices: Array<{ sku: string }> }) {
+    // `$transaction` + `$executeRaw` la BAT BUOC ke tu #121: ca ba nguoi ghi vong doi deu chay
+    // trong mot giao dich da `SELECT ... FOR UPDATE` hang ky. Ban gia lap chuyen thang chinh no
+    // lam `tx` — du de khang dinh hanh vi tuan tu, con viec khoa co THAT SU chan duoc dua hay
+    // khong thi phai do tren Postgres that (`price-periods-concurrency.int.spec.ts`).
     const prisma = {
       pricePeriod: {
         findUnique: vi.fn(async () => ({ validMonth: '2026-09', ...period })),
       },
       price: { deleteMany: vi.fn(async () => ({ count: 1 })) },
+      $executeRaw: vi.fn(async () => 1),
+      $transaction: vi.fn(async (input: ((tx: unknown) => unknown) | unknown[]) =>
+        typeof input === 'function' ? input(prisma) : Promise.all(input),
+      ),
     } as unknown as PrismaService;
     const audit = { append: vi.fn(async () => undefined) } as unknown as AuditLogService;
     const knowledge = { reload: vi.fn(async () => undefined) } as unknown as KnowledgeService;
@@ -178,6 +186,7 @@ describe('PricePeriodsService lifecycle', () => {
         upsert: vi.fn(async () => ({})),
         deleteMany: vi.fn(async () => ({ count: 1 })),
       },
+      $executeRaw: vi.fn(async () => 1),
       $transaction: vi.fn(async (input: ((tx: unknown) => unknown) | unknown[]) =>
         typeof input === 'function' ? input(prisma) : Promise.all(input),
       ),
@@ -427,5 +436,101 @@ describe('PricePeriodsService lifecycle', () => {
       status: 'draft',
       validMonth: '2026-09',
     });
+  });
+});
+
+/**
+ * MOT GIAO THUC KHOA CHO CA BA NGUOI GHI VONG DOI (Issue #121).
+ *
+ * Bai o day chi chung minh mot dieu, nhung la dieu de vo nhat khi ai do them nguoi ghi thu tu:
+ * ca ba deu di qua `SELECT ... FOR UPDATE` tren DUNG hang `PricePeriod` do, tuc la khong ai con
+ * mot duong rieng ne duoc hang doi.
+ *
+ * No KHONG chung minh duoc rang khoa that su chan duoc dua — mot ban gia lap khong tra loi duoc
+ * cau hoi do. Phan ay thuoc ve `price-periods-concurrency.int.spec.ts`, chay tren Postgres that.
+ */
+describe('PricePeriod lifecycle — mot giao thuc khoa duy nhat', () => {
+  function make(status: 'draft' | 'active' = 'draft') {
+    const prisma = {
+      pricePeriod: {
+        findUnique: vi.fn(async () => ({
+          id: 'p1',
+          validMonth: '2026-08',
+          status,
+          source: null,
+          prices: rows,
+        })),
+        findFirst: vi.fn(async () => null),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        update: vi.fn(async () => ({ id: 'p1', validMonth: '2026-08', status: 'active' })),
+      },
+      product: { findMany: vi.fn(async () => [{ sku: 'A' }, { sku: 'B' }]) },
+      price: { deleteMany: vi.fn(async () => ({ count: 1 })) },
+      $executeRaw: vi.fn(async () => 1),
+      $transaction: vi.fn(async (input: ((tx: unknown) => unknown) | unknown[]) =>
+        typeof input === 'function' ? input(prisma) : Promise.all(input),
+      ),
+    } as unknown as PrismaService;
+    const audit = { append: vi.fn(async () => undefined) } as unknown as AuditLogService;
+    const knowledge = { reload: vi.fn(async () => undefined) } as unknown as KnowledgeService;
+    return { service: new PricePeriodsService(prisma, audit, knowledge, 'prisma'), prisma };
+  }
+
+  /** `$executeRaw` nhan (TemplateStringsArray, ...values) — ghep lai de doc duoc cau SQL. */
+  function lockedIds(prisma: PrismaService): Array<{ sql: string; id: unknown }> {
+    const calls = (prisma.$executeRaw as unknown as ReturnType<typeof vi.fn>).mock.calls as Array<
+      [TemplateStringsArray, ...unknown[]]
+    >;
+    return calls.map(([parts, ...values]) => ({ sql: parts.join('?'), id: values[0] }));
+  }
+
+  /** Thu tu goi cua lan dau; nem neu ham chua he duoc goi, de bai do noi ro ly do. */
+  function firstCallOrder(fn: unknown, label: string): number {
+    const order = (fn as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0];
+    if (order === undefined) throw new Error(`${label} chua he duoc goi`);
+    return order;
+  }
+
+  it.each([
+    ['removeDraftPrice', (s: PricePeriodsService) => s.removeDraftPrice('p1', 'A', 'sale', null)],
+    ['activate', (s: PricePeriodsService) => s.activate('p1', 'sale', null)],
+    ['archive', (s: PricePeriodsService) => s.archive('p1', 'sale', null)],
+  ])('%s khoa dung hang PricePeriod truoc khi quyet dinh', async (_name, run) => {
+    const { service, prisma } = make();
+
+    await run(service);
+
+    const locks = lockedIds(prisma);
+    expect(locks).toHaveLength(1);
+    const [lock] = locks;
+    expect(lock?.sql).toContain('FOR UPDATE');
+    expect(lock?.sql).toContain('"PricePeriod"');
+    // Khoa dung MOT hang, khong phai ca bang: id phai di vao truy van co tham so.
+    expect(lock?.id).toBe('p1');
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it('trang thai duoc doc SAU khi khoa, khong phai truoc', async () => {
+    const { service, prisma } = make();
+
+    await service.archive('p1', 'sale', null);
+
+    // Doc truoc roi moi khoa thi van la check-then-act — chi hep cua so lai, khong dong duoc no.
+    expect(firstCallOrder(prisma.$executeRaw, 'khoa hang')).toBeLessThan(
+      firstCallOrder(prisma.pricePeriod.findUnique, 'doc ky'),
+    );
+  });
+
+  it('activate cham diem tren dong doc SAU khoa, khong dung anh chup cu', async () => {
+    const { service, prisma } = make();
+
+    await service.activate('p1', 'sale', null);
+
+    // Danh muc phai duoc doc bang chinh `tx` dang giu khoa. Neu ai do doi ve `this.prisma`
+    // ngoai giao dich, mot `removeDraftPrice` vua commit se khong duoc nhin thay.
+    expect(prisma.product.findMany).toHaveBeenCalledTimes(1);
+    expect(firstCallOrder(prisma.$executeRaw, 'khoa hang')).toBeLessThan(
+      firstCallOrder(prisma.product.findMany, 'doc danh muc'),
+    );
   });
 });
