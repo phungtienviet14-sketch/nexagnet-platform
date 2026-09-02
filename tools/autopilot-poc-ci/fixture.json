@@ -1,0 +1,9 @@
+{
+  "_comment": "POC-2 fixture. Deliberately violates the invariants in check.mjs so CI fails on purpose. The autopilot fixer is allowed to edit THIS FILE ONLY.",
+  "declaredCount": 4,
+  "rows": [
+    { "id": "poc-001" },
+    { "id": "poc-002" },
+    { "id": "POC-3" }
+  ]
+}

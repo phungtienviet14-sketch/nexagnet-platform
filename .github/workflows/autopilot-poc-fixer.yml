@@ -1,0 +1,270 @@
+name: autopilot-poc-fixer
+
+# POC-2, half two: the orchestrator + fixer.
+#
+#   PR event
+#     -> wait for the autopilot-poc-ci run FOR THIS EXACT HEAD SHA
+#     -> if it concluded failure, pull that run's real log
+#     -> hand Claude the exact violation lines
+#     -> Claude edits the fixture, and only the fixture
+#     -> re-run the check locally; it must go green
+#     -> commit and push
+#
+# The fixer never guesses what broke. It binds to one run id, one head SHA, and the
+# violation text that run actually printed. It is also scoped to fixture.json, so it
+# cannot "fix" a red check by editing check.mjs - the failure mode that would make an
+# auto-fixing pipeline worse than no pipeline.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - tools/autopilot-poc-ci/**
+      - .github/workflows/autopilot-poc-ci.yml
+      - .github/workflows/autopilot-poc-fixer.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: autopilot-poc-fixer-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  FIXTURE: tools/autopilot-poc-ci/fixture.json
+  CHECK_WORKFLOW: autopilot-poc-ci
+  BOT_NAME: autopilot-poc[bot]
+  BOT_EMAIL: autopilot-poc@users.noreply.github.com
+  MAX_FIX_ATTEMPTS: '2'
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  fixer:
+    name: autopilot-poc-fixer
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Retry cap and loop guard
+        id: guard
+        run: |
+          set -euo pipefail
+          attempts="$(git log --author="${BOT_EMAIL}" --format='%H' -n 20 | wc -l | tr -d ' ')"
+          head_email="$(git log -1 --format='%ae')"
+          echo "FIXER_BOT_COMMITS_ON_BRANCH=${attempts}"
+          echo "FIXER_HEAD_AUTHOR=${head_email}"
+          if [ "${attempts}" -ge "${MAX_FIX_ATTEMPTS}" ]; then
+            echo "FIXER_VERDICT=BLOCKED_CI"
+            echo "Refusing a further attempt: ${attempts} automated fix commits already on this branch (cap ${MAX_FIX_ATTEMPTS})."
+            exit 1
+          fi
+          if [ "${head_email}" = "${BOT_EMAIL}" ]; then
+            echo "FIXER_VERDICT=SKIPPED_HEAD_IS_MINE"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for the check run bound to this exact HEAD SHA
+        id: failed
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          echo "ORCHESTRATOR_BOUND_HEAD_SHA=${HEAD_SHA}"
+          run_id=""
+          conclusion=""
+          for _ in $(seq 1 60); do
+            row="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100" \
+              --jq "[.workflow_runs[] | select(.name==\"${CHECK_WORKFLOW}\")] | sort_by(.id) | last // empty")"
+            if [ -n "${row}" ]; then
+              status="$(printf '%s' "${row}" | jq -r '.status')"
+              run_id="$(printf '%s' "${row}" | jq -r '.id')"
+              if [ "${status}" = "completed" ]; then
+                conclusion="$(printf '%s' "${row}" | jq -r '.conclusion')"
+                break
+              fi
+            fi
+            sleep 10
+          done
+          if [ -z "${run_id}" ] || [ -z "${conclusion}" ]; then
+            echo "FIXER_VERDICT=BLOCKED_NO_CHECK_RUN"
+            echo "No completed ${CHECK_WORKFLOW} run found for ${HEAD_SHA} within the wait window."
+            exit 1
+          fi
+          echo "ORCHESTRATOR_FAILED_RUN_ID=${run_id}"
+          echo "ORCHESTRATOR_CHECK_CONCLUSION=${conclusion}"
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+          echo "conclusion=${conclusion}" >> "$GITHUB_OUTPUT"
+          if [ "${conclusion}" = "success" ]; then
+            echo "act=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "act=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract the exact failure text from that run
+        id: failure
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
+        run: |
+          set -euo pipefail
+          gh run view "${{ steps.failed.outputs.run_id }}" --log-failed > "$RUNNER_TEMP/failed.log" 2>&1 || true
+          grep -oE 'AUTOPILOT_POC_CI_(VIOLATION|RESULT).*' "$RUNNER_TEMP/failed.log" \
+            | sed 's/[[:space:]]*$//' | sort -u > "$RUNNER_TEMP/violations.txt" || true
+          if [ ! -s "$RUNNER_TEMP/violations.txt" ]; then
+            echo "FIXER_VERDICT=BLOCKED_NO_FAILURE_TEXT"
+            echo "Could not extract violation lines from run ${{ steps.failed.outputs.run_id }}."
+            exit 1
+          fi
+          echo "----BEGIN EXACT FAILURE FROM RUN ${{ steps.failed.outputs.run_id }}----"
+          cat "$RUNNER_TEMP/violations.txt"
+          echo "----END EXACT FAILURE----"
+
+      - name: Set up Node
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code CLI
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          claude --version
+
+      - name: Claude fixes the fixture from the exact failure
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          FAILED_RUN_ID: ${{ steps.failed.outputs.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          violations="$(cat "$RUNNER_TEMP/violations.txt")"
+          prompt="A continuous integration check failed in this repository and you are
+          fixing it. Here is the exact output of the failing job, taken from workflow run
+          ${FAILED_RUN_ID} at commit ${HEAD_SHA}:
+
+          ${violations}
+
+          The check that produced this output is tools/autopilot-poc-ci/check.mjs. Read
+          it to understand the invariants it enforces. Do not modify it - it is the
+          specification, not the defect.
+
+          Fix the data in ${FIXTURE} so that every violation above is resolved. Make the
+          smallest change that satisfies the invariants. Do not add, remove or reorder
+          rows beyond what the violations require.
+
+          Edit ${FIXTURE} only. Do not touch any other file, do not stage, commit or
+          push - the workflow does that after checking your work. When you are done,
+          state which violation each edit resolves."
+
+          claude -p "$prompt" \
+            --max-turns 15 \
+            --output-format text \
+            --allowedTools Read Edit \
+            > "$RUNNER_TEMP/fixer-stdout.txt" || { echo "claude exited non-zero"; cat "$RUNNER_TEMP/fixer-stdout.txt"; exit 1; }
+          echo "----BEGIN FIXER STDOUT----"
+          cat "$RUNNER_TEMP/fixer-stdout.txt"
+          echo "----END FIXER STDOUT----"
+
+      - name: Gate - only the fixture may have changed
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
+        run: |
+          set -euo pipefail
+          echo "----BEGIN WORKING TREE----"
+          git status --porcelain
+          echo "----END WORKING TREE----"
+          changed="$(git status --porcelain | cut -c4-)"
+          if [ -z "${changed}" ]; then
+            echo "FAIL: the fixer changed nothing while the check is still red"
+            exit 1
+          fi
+          unexpected="$(printf '%s\n' "${changed}" | grep -vFx "${FIXTURE}" || true)"
+          if [ -n "${unexpected}" ]; then
+            echo "FAIL: the fixer touched paths outside ${FIXTURE}:"
+            printf '%s\n' "${unexpected}"
+            exit 1
+          fi
+          echo "GATE_SCOPE=OK"
+
+      - name: Gate - the check must actually go green now
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
+        run: |
+          set -euo pipefail
+          node tools/autopilot-poc-ci/check.mjs
+          echo "GATE_CHECK=OK"
+
+      - name: Commit and push the fix
+        id: push
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
+        env:
+          HEAD_A: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "${BOT_NAME}"
+          git config user.email "${BOT_EMAIL}"
+          git add -- "${FIXTURE}"
+          git commit -m "fix(poc): resolve autopilot-poc-ci violations from run ${{ steps.failed.outputs.run_id }} [autopilot-poc]"
+          git push origin "HEAD:${{ github.head_ref }}"
+          b="$(git rev-parse HEAD)"
+          echo "EVIDENCE_HEAD_A=${HEAD_A}"
+          echo "EVIDENCE_HEAD_B=${b}"
+          echo "EVIDENCE_FAILED_RUN_ID=${{ steps.failed.outputs.run_id }}"
+          echo "EVIDENCE_FIXER_RUN_ID=${{ github.run_id }}"
+          echo "b=${b}" >> "$GITHUB_OUTPUT"
+          echo "----BEGIN DIFF A..B----"
+          git diff --name-only "${HEAD_A}..${b}"
+          echo "----END DIFF A..B----"
+          names="$(git diff --name-only "${HEAD_A}..${b}")"
+          if [ "${names}" != "${FIXTURE}" ]; then
+            echo "FAIL: A..B touched more than ${FIXTURE}"
+            exit 1
+          fi
+          echo "----BEGIN FIX DIFF----"
+          git diff "${HEAD_A}..${b}" -- "${FIXTURE}"
+          echo "----END FIX DIFF----"
+
+      # MEASUREMENT, not an assertion. GitHub does not start new workflow runs for pushes
+      # made with GITHUB_TOKEN. Whether that holds decides how the real autopilot has to
+      # be built, so this step reports what actually happened instead of assuming it.
+      - name: Did pushing B start a new check run?
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'true'
+        run: |
+          set -euo pipefail
+          b="${{ steps.push.outputs.b }}"
+          found=""
+          for _ in $(seq 1 12); do
+            found="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${b}&per_page=100" \
+              --jq "[.workflow_runs[] | select(.name==\"${CHECK_WORKFLOW}\")] | length")"
+            [ "${found}" != "0" ] && break
+            sleep 10
+          done
+          echo "MEASURE_NEW_CHECK_RUNS_FOR_B=${found}"
+          if [ "${found}" = "0" ]; then
+            echo "MEASURE_RESULT=GITHUB_TOKEN push did NOT start a new ${CHECK_WORKFLOW} run."
+            echo "MEASURE_CONSEQUENCE=Post-fix validation must be dispatched deliberately, or the push must carry a GitHub App / PAT credential."
+          else
+            echo "MEASURE_RESULT=GITHUB_TOKEN push DID start ${found} new ${CHECK_WORKFLOW} run(s); the loop guard is load-bearing."
+          fi
+
+      - name: Nothing to fix
+        if: steps.guard.outputs.skip != 'true' && steps.failed.outputs.act == 'false'
+        run: |
+          echo "FIXER_VERDICT=NO_ACTION_CHECK_ALREADY_GREEN"
+          echo "run ${{ steps.failed.outputs.run_id }} concluded ${{ steps.failed.outputs.conclusion }}"
+
+      - name: Loop guard stopped this run
+        if: steps.guard.outputs.skip == 'true'
+        run: |
+          echo "FIXER_VERDICT=SKIPPED_HEAD_IS_MINE"
+          echo "HEAD was authored by ${BOT_EMAIL}; refusing to fix on top of my own commit."
