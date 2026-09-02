@@ -1,36 +1,47 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   PRICE_PERIOD_KIND_LABELS,
   activateConfirmation,
-  addRow,
   archiveConfirmation,
   buildPricePeriodBoard,
   canArchivePeriod,
   classifyPricePeriod,
-  isPeriodInEffect,
   isTestOnlyPeriod,
   pricePeriodOrigin,
   removeRow,
   removeRowConfirmation,
-  validatePricePeriodRows,
   type HighImpactConfirmation,
   type PricePeriodPlan,
 } from '../../lib/price-period-view';
+import {
+  fingerprintRows,
+  resolvePriceWorkflow,
+  type PriceCheckSnapshot,
+} from '../../lib/price-workflow';
 import { formatMonth } from '../../lib/settings-overview';
 import { settingsApi, type PricePeriod, type PricePeriodPrice } from '../../lib/settings';
 import { ConfirmDialog } from './ConfirmDialog';
+import { PriceDraftWorkspace } from './PriceDraftWorkspace';
 import { PriceRowsEditor } from './PriceRowsEditor';
 import { PricePeriodWizard } from './PricePeriodWizard';
 import { SettingsPanelState } from './SettingsPanelState';
 
 /**
- * Man BANG GIA — ba khai niem tach roi han nhau, va mot duong tao co dan duong.
+ * Man BANG GIA — bon khoi theo dung thu tu nguoi van hanh can doc (#126, #127).
  *
- * Xem `lib/price-period-view.ts` de biet vi sao: mot cai `<select>` gop ca ba loai ky da tung dan
- * den viec kich hoat nham bang gia thang 7 thanh bang gia chinh thuc thang 9 (Issue #114).
+ *  1. Trang thai thang hien tai — chinh thuc / chay thu, chi doc.
+ *  2. Cong viec dang lam — MOT ban nhap la khong gian lam viec chinh.
+ *  3. Workflow — sua -> kiem -> kich hoat, do `resolvePriceWorkflow` quyet dinh.
+ *  4. Lich su & ban nhap khac — gap lai, van mo ra xem duoc.
+ *
+ * Ban truoc de ba khoi "chinh thuc / chay thu / ban nhap" ngang hang nhau va bay het lich su ra
+ * man hinh, nen no trong nhu mot trinh duyet co so du lieu chu khong phai mot viec phai lam.
+ *
+ * Thu tu thao tac khong con la viec cua nguoi dung nua: khong con nut `Kiểm tra bảng giá` rieng
+ * de bam truoc khi luu, va nut Kich hoat khong ton tai cho toi khi may chu da xac nhan dat.
  */
 
 type Props = {
@@ -57,17 +68,21 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
 
   const view = query.data;
   const board = useMemo(() => (view ? buildPricePeriodBoard(view) : null), [view]);
-  const catalogue = useMemo(
+  const products = useMemo(
     () =>
-      (catalogueQuery.data ?? [])
-        .find((section) => section.resource === 'products')
-        ?.rows.map((row) => row.code ?? row.id) ?? [],
+      (catalogueQuery.data ?? []).find((section) => section.resource === 'products')?.rows ?? [],
     [catalogueQuery.data],
+  );
+  const catalogue = useMemo(() => products.map((row) => row.code ?? row.id), [products]);
+  const productNames = useMemo(
+    () => new Map(products.map((row) => [row.code ?? row.id, row.label])),
+    [products],
   );
 
   const [selectedId, setSelectedId] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [rows, setRows] = useState<PricePeriodPrice[]>([]);
+  const [check, setCheck] = useState<PriceCheckSnapshot | null>(null);
   const [notice, setNotice] = useState<string>();
   const [localError, setLocalError] = useState<string>();
   const [pending, setPending] = useState<PendingConfirmation | null>(null);
@@ -82,18 +97,27 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
     return board?.drafts[0] ?? board?.official ?? view.periods[0];
   }, [board, selectedId, view]);
 
-  const isDraft = selected?.status === 'draft';
-  const draftId = isDraft ? (selected?.id ?? '') : '';
+  const draftId = selected?.status === 'draft' ? selected.id : '';
 
+  /**
+   * Nap lai khong gian lam viec khi DOI KY — va CHI khi doi ky.
+   *
+   * Cai bay o day: moi lan `refresh()` chay xong, React Query tra ve mot doi tuong ky MOI, nen mot
+   * `useEffect([selected])` tran se coi mot lan tai lai du lieu la mot lan doi ky. No xoa mat ket
+   * qua kiem tra vua lay ve (nut Kich hoat bien mat ngay sau khi hien ra), va te hon — no ghi de
+   * len nhung dong nguoi dung dang go do. Chot lai bang chinh ID cua ky.
+   */
+  const loadedPeriodRef = useRef('');
   useEffect(() => {
-    if (!selected) {
-      setRows([]);
-      return;
-    }
-    const current = selected.prices.map(({ id: _id, ...row }) => row);
+    const id = selected?.id ?? '';
+    if (id === loadedPeriodRef.current) return;
+    loadedPeriodRef.current = id;
+    const current = selected ? selected.prices.map(({ id: _id, ...row }) => row) : [];
     setRows(current);
     setImportText(JSON.stringify(current, null, 2));
     setLocalError(undefined);
+    // Ky khac la noi dung khac: mot lan kiem cua ky truoc khong duoc phep mo nut Kich hoat o day.
+    setCheck(null);
   }, [selected]);
 
   const refresh = async () => {
@@ -119,15 +143,17 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
     },
   });
 
+  // `rows` di vao ham nhu THAM SO, khong doc tu closure: cai duoc LUU va cai duoc dong dau van
+  // tay phai la CUNG mot mang, khong phai hai lan doc state cach nhau mot vong render.
   const apply = useMutation({
-    mutationFn: () => settingsApi.applyPriceImport(draftId, rows, true),
-    onSuccess: () => {
-      setNotice('Đã lưu bản nháp. Bảng giá đang áp dụng chưa thay đổi.');
-      void refresh();
-    },
+    mutationFn: (payload: readonly PricePeriodPrice[]) =>
+      settingsApi.applyPriceImport(draftId, payload, true),
   });
   const validate = useMutation({ mutationFn: () => settingsApi.validatePricePeriod(draftId) });
-  const activate = useMutation({ mutationFn: () => settingsApi.activatePricePeriod(draftId) });
+  const activate = useMutation({
+    mutationFn: (expectedFingerprint: string) =>
+      settingsApi.activatePricePeriod(draftId, expectedFingerprint),
+  });
   const archive = useMutation({ mutationFn: (id: string) => settingsApi.archivePricePeriod(id) });
   const removeDraftRow = useMutation({
     mutationFn: (sku: string) => settingsApi.removeDraftPriceRow(draftId, sku),
@@ -140,6 +166,20 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
     activate.error ??
     archive.error ??
     removeDraftRow.error;
+  const busy =
+    create.isPending ||
+    apply.isPending ||
+    validate.isPending ||
+    activate.isPending ||
+    archive.isPending;
+
+  const workflow = resolvePriceWorkflow({
+    period: selected ?? null,
+    currentMonth: board?.currentMonth ?? view?.currentMonth ?? '',
+    canConfigure,
+    rows,
+    check,
+  });
 
   const askArchive = (period: PricePeriod) => {
     if (!board) return;
@@ -179,37 +219,79 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
     });
   };
 
-  const askActivate = async () => {
-    if (!selected || !board) return;
-    const purpose = isTestOnlyPeriod(selected) ? 'test-only' : 'official';
-    const errors = validatePricePeriodRows(purpose, rows);
-    if (errors.length > 0) {
-      setLocalError(errors.join(' '));
-      return;
-    }
+  const saveForLater = async () => {
     setLocalError(undefined);
+    const persist = workflow.persistRequired;
     try {
-      await apply.mutateAsync();
-      const result = await validate.mutateAsync();
-      if (!result.valid) {
-        setLocalError(`Chưa kích hoạt được: ${result.errors.join('; ')}`);
-        return;
-      }
+      if (persist) await apply.mutateAsync(rows);
+      setNotice(
+        persist
+          ? 'Đã lưu bản nháp. Bảng giá đang áp dụng chưa thay đổi.'
+          : 'Bản nháp đang trống nên chưa có gì để lưu. Thêm mặt hàng rồi lưu lại.',
+      );
+      await refresh();
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : 'Không lưu được bản nháp.');
-      return;
     }
+  };
+
+  /**
+   * MOT nut lam ca hai viec, dung thu tu: LUU truoc, KIEM sau.
+   *
+   * Day la cho sua loi goc cua #126 muc 3. `validate()` phia may chu doc dong DA LUU, nen kiem
+   * truoc khi luu la kiem mot ban nhap 0 dong — va tra ve "Thiếu giá cho SKU: …" cho mot bang
+   * gia dang hien day du tren man hinh. Gop hai buoc lai thi khong con thu tu nao de bam sai.
+   */
+  const checkAndContinue = async () => {
+    setLocalError(undefined);
+    setNotice(undefined);
+    const snapshot = rows.map((row) => ({ ...row }));
+    try {
+      if (workflow.persistRequired) await apply.mutateAsync(snapshot);
+      const validation = await validate.mutateAsync();
+      // Man Xem lai phai dung tu DONG DA LUU do may chu tra ve, khong phai tu `snapshot` vua gui
+      // len. Hai thu do co the LECH: `applyImport()` chi upsert va khong bao gio prune, nen mot
+      // lan nap hang loat chi co A vao ky dang co A+B se de lai B tren may chu (Issue #132 ca A).
+      // Doc lai `rows` theo may chu de cai nguoi dung doc dung la cai sap duoc kich hoat.
+      const persisted = validation.rows;
+      setRows(persisted.map((row) => ({ ...row })));
+      setCheck({
+        localFingerprint: fingerprintRows(persisted),
+        serverFingerprint: validation.fingerprint,
+        rows: persisted,
+        validation,
+      });
+      await refresh();
+    } catch (error) {
+      setCheck(null);
+      setLocalError(
+        error instanceof Error ? error.message : 'Không lưu và kiểm tra được bản nháp.',
+      );
+    }
+  };
+
+  const askActivate = () => {
+    if (!selected || !board) return;
     setPending({
-      confirmation: activateConfirmation(selected, rows, board),
+      confirmation: activateConfirmation(selected, workflow.reviewRows, board),
       tone: 'primary',
       run: async () => {
-        const activated = await activate.mutateAsync();
-        setNotice(
-          `Đã kích hoạt bảng giá ${formatMonth(activated.validMonth ?? '')}${
-            isTestOnlyPeriod(activated) ? ' (chỉ để chạy thử)' : ''
-          }.`,
-        );
-        await refresh();
+        try {
+          // Xuat trinh lai dung the may chu cap luc kiem. May chu doi chieu duoi khoa hang, nen
+          // mot nguoi khac vua sua ban nhap thanh bo gia khac se lam buoc nay tra 409 thay vi
+          // kich hoat im lang mot noi dung chua ai duyet (Issue #132 ca B).
+          const activated = await activate.mutateAsync(check?.serverFingerprint ?? '');
+          setNotice(
+            `Đã kích hoạt bảng giá ${formatMonth(activated.validMonth ?? '')}${
+              isTestOnlyPeriod(activated) ? ' (chỉ để chạy thử)' : ''
+            }.`,
+          );
+        } finally {
+          // May chu cham diem lai lan nua duoi khoa hang. No tu choi nghia la anh chup vua xem
+          // khong con dung — bo ket qua kiem cu di de nguoi dung phai kiem lai tren du lieu moi.
+          setCheck(null);
+          await refresh();
+        }
       },
     });
   };
@@ -222,6 +304,18 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
     } catch (error) {
       setPending(null);
       setLocalError(error instanceof Error ? error.message : 'Không thực hiện được thao tác.');
+    }
+  };
+
+  const loadImportText = () => {
+    try {
+      const parsed: unknown = JSON.parse(importText);
+      if (!Array.isArray(parsed)) throw new Error('Dữ liệu phải là một danh sách.');
+      setRows(parsed as PricePeriodPrice[]);
+      setLocalError(undefined);
+      setNotice('Đã nạp dữ liệu vào bảng. Kiểm tra lại rồi bấm Kiểm tra & tiếp tục.');
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : 'Dữ liệu không hợp lệ.');
     }
   };
 
@@ -238,7 +332,8 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
     );
   }
 
-  const busy = create.isPending || apply.isPending || activate.isPending || archive.isPending;
+  const otherDrafts = board.drafts.filter((draft) => draft.id !== selected?.id);
+  const history = [...board.pastActive, ...board.archived];
 
   return (
     <section className="settings-section-stack" aria-label="Bảng giá">
@@ -279,7 +374,7 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
         />
       )}
 
-      {/* ---- Ba khai niem, ba khoi rieng. Khong bao gio gop vao mot danh sach mo ho. ---- */}
+      {/* ---- 1. Trang thai thang hien tai — chi doc, khong phai cho lam viec ---- */}
       <div className="settings-price-board">
         <article
           className={`settings-price-card settings-price-card--${board.official ? 'official' : 'missing'}`}
@@ -301,16 +396,6 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
                 >
                   Xem chi tiết
                 </button>
-                {canConfigure && (
-                  <button
-                    type="button"
-                    className="settings-button settings-button--danger-quiet"
-                    disabled={busy}
-                    onClick={() => askArchive(board.official!)}
-                  >
-                    Lưu trữ
-                  </button>
-                )}
               </div>
             </>
           ) : (
@@ -351,35 +436,107 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
               >
                 Xem chi tiết
               </button>
-              {canConfigure && (
+            </div>
+          </article>
+        )}
+      </div>
+
+      {/* ---- 2 + 3. Cong viec dang lam, va ba buoc de xong no ---- */}
+      {selected && workflow.mode !== 'read-only' && (
+        <PriceDraftWorkspace
+          period={selected}
+          state={workflow}
+          rows={rows}
+          onRowsChange={setRows}
+          catalogue={catalogue}
+          productNames={productNames}
+          busy={busy}
+          saving={apply.isPending && !validate.isPending}
+          checking={validate.isPending}
+          removingSku={removingSku}
+          importText={importText}
+          onImportTextChange={setImportText}
+          onImportLoad={loadImportText}
+          onRemoveRow={askRemoveRow}
+          onArchiveDraft={() => askArchive(selected)}
+          onSaveForLater={() => void saveForLater()}
+          onCheckAndContinue={() => void checkAndContinue()}
+          onBackToEdit={() => setCheck(null)}
+          onActivate={askActivate}
+        />
+      )}
+
+      {selected && workflow.readOnly && (
+        <section className="settings-price-work" aria-labelledby="settings-price-readonly-title">
+          <header className="settings-price-work__head">
+            <p className="settings-eyebrow">
+              {PRICE_PERIOD_KIND_LABELS[classifyPricePeriod(selected, board.currentMonth)]} ·{' '}
+              {pricePeriodOrigin(selected)}
+            </p>
+            <h3 id="settings-price-readonly-title">{workflow.readOnly.title}</h3>
+            <p className="settings-muted">{workflow.readOnly.detail}</p>
+          </header>
+
+          <PriceRowsEditor
+            rows={rows}
+            onChange={setRows}
+            productNames={productNames}
+            readOnly
+            disabled={busy}
+          />
+
+          <div className="settings-price-actions">
+            <button
+              type="button"
+              className="settings-button settings-button--quiet"
+              onClick={() => setSelectedId('')}
+            >
+              Đóng
+            </button>
+            <div className="settings-price-actions__primary">
+              {workflow.readOnly.canStartNewDraft && !wizardOpen && (
+                <button
+                  type="button"
+                  className="settings-button settings-button--primary"
+                  onClick={() => setWizardOpen(true)}
+                >
+                  Tạo bản nháp mới
+                </button>
+              )}
+              {workflow.readOnly.canArchive && canArchivePeriod(selected) && (
                 <button
                   type="button"
                   className="settings-button settings-button--danger-quiet"
                   disabled={busy}
-                  onClick={() => askArchive(board.testOnly!)}
+                  onClick={() => askArchive(selected)}
                 >
-                  Lưu trữ
+                  Lưu trữ bảng giá
                 </button>
               )}
             </div>
-          </article>
-        )}
+          </div>
+        </section>
+      )}
 
-        <article className="settings-price-card settings-price-card--draft">
-          <p className="settings-eyebrow">Bản nháp</p>
-          {board.drafts.length === 0 ? (
-            <>
-              <strong>Không có bản nháp</strong>
-              <p>Bản nháp là nơi sửa giá an toàn — chưa ảnh hưởng đơn nào cho tới khi kích hoạt.</p>
-            </>
-          ) : (
+      {!selected && (
+        <SettingsPanelState
+          title="Chưa có việc nào đang làm"
+          detail="Bản nháp là nơi sửa giá an toàn — chưa ảnh hưởng đơn nào cho tới khi kích hoạt."
+        />
+      )}
+
+      {/* ---- 4. Lich su & ban nhap khac — gap lai, khong mat duong vao ---- */}
+      {(otherDrafts.length > 0 || history.length > 0) && (
+        <details className="settings-archive-list">
+          <summary>Lịch sử &amp; bản nháp khác ({otherDrafts.length + history.length})</summary>
+          {otherDrafts.length > 0 && (
             <ul className="settings-price-draft-list">
-              {board.drafts.map((draft) => (
+              {otherDrafts.map((draft) => (
                 <li key={draft.id}>
                   <span>
                     <strong>{formatMonth(draft.validMonth ?? '')}</strong>
                     <small>
-                      {draft.prices.length} mặt hàng · {pricePeriodOrigin(draft)}
+                      Bản nháp · {draft.prices.length} mặt hàng · {pricePeriodOrigin(draft)}
                       {isTestOnlyPeriod(draft) ? ' · chỉ để chạy thử' : ''}
                     </small>
                   </span>
@@ -391,7 +548,7 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
                     >
                       Mở để sửa
                     </button>
-                    {canConfigure && canArchivePeriod(draft) && (
+                    {canConfigure && (
                       <button
                         type="button"
                         className="settings-button settings-button--danger-quiet"
@@ -407,180 +564,23 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
               ))}
             </ul>
           )}
-        </article>
-      </div>
-
-      {/* ---- Ky dang mo ---- */}
-      {selected && (
-        <section className="settings-table-section" aria-labelledby="settings-price-detail-title">
-          <div className="settings-subheading">
-            <div>
-              <p className="settings-eyebrow">
-                {PRICE_PERIOD_KIND_LABELS[classifyPricePeriod(selected, board.currentMonth)]} ·{' '}
-                {pricePeriodOrigin(selected)}
-              </p>
-              <h3 id="settings-price-detail-title">
-                {formatMonth(selected.validMonth ?? '')}
-                {isTestOnlyPeriod(selected) && (
-                  <span className="settings-badge settings-badge--test">CHỈ ĐỂ CHẠY THỬ</span>
-                )}
-              </h3>
-            </div>
-            {view.periods.length > 1 && (
-              <label className="settings-field settings-price-picker">
-                <span>Xem kỳ khác</span>
-                <select value={selected.id} onChange={(event) => setSelectedId(event.target.value)}>
-                  {view.periods.map((period) => (
-                    <option key={period.id} value={period.id}>
-                      {formatMonth(period.validMonth ?? '')} ·{' '}
-                      {PRICE_PERIOD_KIND_LABELS[classifyPricePeriod(period, board.currentMonth)]} ·{' '}
-                      {period.prices.length} mặt hàng
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
-
-          {/* Mot ky thang truoc van con `active` KHONG ap dung cho don thang nay — may chu chi doc
-              ky dung thang hien hanh. Goi no la "đang áp dụng" la noi sai voi khach. */}
-          {!isDraft && (
-            <SettingsPanelState
-              tone={isPeriodInEffect(selected, board.currentMonth) ? 'success' : 'neutral'}
-              title={
-                selected.status === 'archived'
-                  ? 'Kỳ đã lưu trữ — chỉ xem'
-                  : isPeriodInEffect(selected, board.currentMonth)
-                    ? 'Kỳ đang áp dụng — chỉ xem'
-                    : `Kỳ đã hết hiệu lực — chỉ xem`
-              }
-              detail={
-                isPeriodInEffect(selected, board.currentMonth) || selected.status === 'archived'
-                  ? 'Muốn đổi giá thì tạo một bản nháp mới rồi kích hoạt. Kỳ đã áp dụng không sửa trực tiếp được, để giá đã chốt của đơn cũ không bị đổi ngược.'
-                  : `Kỳ này của tháng khác nên không còn quyết định giá cho đơn mới. Hệ thống chỉ dùng bảng giá của ${formatMonth(board.currentMonth)}.`
-              }
-            />
-          )}
-
-          {isDraft && canConfigure && (
-            <ol className="settings-steps" aria-label="Các bước hoàn thiện bảng giá">
-              <li>Chọn mặt hàng và nhập giá</li>
-              <li>Kiểm tra bảng giá</li>
-              <li>Kích hoạt</li>
-            </ol>
-          )}
-
-          <PriceRowsEditor
-            rows={rows}
-            onChange={setRows}
-            catalogue={catalogue}
-            readOnly={!isDraft || !canConfigure}
-            disabled={busy}
-            {...(isDraft && canConfigure
-              ? {
-                  onRemove: askRemoveRow,
-                  removingSku,
-                  onAdd: (sku: string) => setRows((current) => addRow(current, sku)),
-                }
-              : {})}
-          />
-
-          {isDraft && canConfigure && (
-            <>
-              <div className="settings-drawer__actions settings-price-actions">
-                <div className="settings-price-actions__group">
+          {history.length > 0 && (
+            <ul>
+              {history.map((period) => (
+                <li key={period.id}>
                   <button
                     type="button"
-                    className="settings-button settings-button--quiet"
-                    disabled={busy}
-                    onClick={() => apply.mutate()}
+                    className="settings-text-action"
+                    onClick={() => setSelectedId(period.id)}
                   >
-                    {apply.isPending ? 'Đang lưu…' : 'Lưu bản nháp'}
+                    {formatMonth(period.validMonth ?? '')} ·{' '}
+                    {PRICE_PERIOD_KIND_LABELS[classifyPricePeriod(period, board.currentMonth)]} ·{' '}
+                    {period.prices.length} mặt hàng
                   </button>
-                  <button
-                    type="button"
-                    className="settings-button settings-button--quiet"
-                    disabled={validate.isPending || busy}
-                    onClick={() => validate.mutate()}
-                  >
-                    {validate.isPending ? 'Đang kiểm tra…' : 'Kiểm tra bảng giá'}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="settings-button settings-button--primary"
-                  disabled={busy}
-                  onClick={askActivate}
-                >
-                  Kích hoạt bảng giá {formatMonth(selected.validMonth ?? '')}
-                </button>
-              </div>
-
-              {validate.data && (
-                <SettingsPanelState
-                  tone={validate.data.valid ? 'success' : 'error'}
-                  title={validate.data.valid ? 'Bảng giá hợp lệ' : 'Bảng giá chưa hợp lệ'}
-                  detail={
-                    validate.data.valid
-                      ? `${validate.data.priceCount} mặt hàng đã có giá đầy đủ.`
-                      : validate.data.errors.join('; ')
-                  }
-                />
-              )}
-
-              {/* Nhap hang loat lui ve day: khach binh thuong khong bao gio phai cham vao (#117 §4.4). */}
-              <details className="settings-bulk-import">
-                <summary>Nâng cao · Nhập hàng loạt</summary>
-                <label className="settings-field">
-                  <span>Dán dữ liệu bảng giá đã xuất từ hệ thống khác</span>
-                  <textarea
-                    rows={6}
-                    value={importText}
-                    onChange={(event) => setImportText(event.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="settings-button settings-button--quiet"
-                  onClick={() => {
-                    try {
-                      const parsed: unknown = JSON.parse(importText);
-                      if (!Array.isArray(parsed)) throw new Error('Dữ liệu phải là một danh sách.');
-                      setRows(parsed as PricePeriodPrice[]);
-                      setLocalError(undefined);
-                      setNotice('Đã nạp dữ liệu vào bảng. Kiểm tra lại rồi bấm Lưu bản nháp.');
-                    } catch (error) {
-                      setLocalError(
-                        error instanceof Error ? error.message : 'Dữ liệu không hợp lệ.',
-                      );
-                    }
-                  }}
-                >
-                  Nạp vào bảng
-                </button>
-              </details>
-            </>
+                </li>
+              ))}
+            </ul>
           )}
-        </section>
-      )}
-
-      {board.archived.length > 0 && (
-        <details className="settings-archive-list">
-          <summary>Bảng giá đã lưu trữ ({board.archived.length})</summary>
-          <ul>
-            {board.archived.map((period) => (
-              <li key={period.id}>
-                <button
-                  type="button"
-                  className="settings-text-action"
-                  onClick={() => setSelectedId(period.id)}
-                >
-                  {formatMonth(period.validMonth ?? '')} · {period.prices.length} mặt hàng ·{' '}
-                  {pricePeriodOrigin(period)}
-                </button>
-              </li>
-            ))}
-          </ul>
         </details>
       )}
 

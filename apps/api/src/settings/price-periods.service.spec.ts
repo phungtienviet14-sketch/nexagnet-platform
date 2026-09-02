@@ -4,12 +4,27 @@ import type { AuditLogService } from '../audit/audit-log.service.js';
 import type { PrismaService } from '../config/prisma.service.js';
 import type { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { currentPriceMonth } from '../knowledge/price-periods.js';
-import { PricePeriodsService, buildPriceImportPreview } from './price-periods.service.js';
+import {
+  PricePeriodsService,
+  buildPriceImportPreview,
+  pricePeriodRowsFingerprint,
+} from './price-periods.service.js';
 
 const rows = [
   { sku: 'A', wholesale: 100, minRetailPrice: 120 },
   { sku: 'B', wholesale: 200 },
 ];
+
+/**
+ * Dau van tay cua dung bo dong ma ban gia lap dang giu — tuc "ban nguoi dung vua xem xong".
+ *
+ * Ke tu #132 `activate()` doi the nay. Vi vay moi bai duoi day phai truyen dau van tay khop VOI
+ * CHINH bo dong cua no; truyen bua mot dau khac se dung o cong xung dot va khong bao gio cham
+ * toi phep kiem ma bai do dinh do. Ba hang so nay chinh la ba bo dong dang duoc gia lap.
+ */
+const SEEN = pricePeriodRowsFingerprint(rows);
+const SEEN_ONE = pricePeriodRowsFingerprint([rows[0]!]);
+const SEEN_THREE = pricePeriodRowsFingerprint([...rows, { sku: 'C', wholesale: 300 }]);
 
 describe('price period import preview', () => {
   it('is deterministic/idempotent and reports unchanged rows', () => {
@@ -250,7 +265,9 @@ describe('PricePeriodsService lifecycle', () => {
       status: 'draft',
       prices: [rows[0]],
     } as never);
-    await expect(service.activate('p1', 'sale', null)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.activate('p1', SEEN_ONE, 'sale', null)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('allows explicit test-only periods to activate with one or two priced SKUs', async () => {
@@ -263,7 +280,7 @@ describe('PricePeriodsService lifecycle', () => {
       prices: [rows[0]],
     } as never);
 
-    await expect(service.activate('p1', 'sale', 'req')).resolves.toMatchObject({
+    await expect(service.activate('p1', SEEN_ONE, 'sale', 'req')).resolves.toMatchObject({
       status: 'active',
     });
 
@@ -296,7 +313,7 @@ describe('PricePeriodsService lifecycle', () => {
       id: 'production-current',
     } as never);
 
-    await expect(service.activate('p1', 'sale', null)).rejects.toThrow(
+    await expect(service.activate('p1', SEEN_ONE, 'sale', null)).rejects.toThrow(
       'đã có kỳ production active cùng tháng',
     );
     expect(prisma.pricePeriod.updateMany).not.toHaveBeenCalled();
@@ -321,7 +338,7 @@ describe('PricePeriodsService lifecycle', () => {
     vi.stubEnv('CHANNEL_MODE', 'mock');
 
     try {
-      await expect(service.activate('p1', 'sale', null)).rejects.toThrow(
+      await expect(service.activate('p1', SEEN_ONE, 'sale', null)).rejects.toThrow(
         'chỉ được activate trong môi trường dữ liệu TEST',
       );
     } finally {
@@ -347,12 +364,65 @@ describe('PricePeriodsService lifecycle', () => {
       { sku: 'C' },
     ] as never);
 
-    await expect(service.activate('p1', 'sale', null)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.activate('p1', SEEN_THREE, 'sale', null)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('tu choi kich hoat khi dong gia da doi sau lan kiem tra (#132)', async () => {
+    // Nguoi A kiem tra roi doc man Xem lai. Nguoi B sua ban nhap thanh mot bo gia KHAC MA VAN
+    // HOP LE. Neu khong rang buoc, moi phep kiem con lai deu xanh va nguoi A kich hoat nham
+    // noi dung chua ai duyet.
+    const { service, prisma, knowledge } = make();
+    const staleFingerprint = pricePeriodRowsFingerprint([{ sku: 'A', wholesale: 999 }]);
+
+    await expect(service.activate('p1', staleFingerprint, 'sale', null)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+
+    // Tu choi thi khong duoc de lai dau vet nao: ky van la nhap, va gia dang chay khong reload.
+    expect(prisma.pricePeriod.update).not.toHaveBeenCalled();
+    expect(prisma.pricePeriod.updateMany).not.toHaveBeenCalled();
+    expect(knowledge.reload).not.toHaveBeenCalled();
+  });
+
+  it('cau tu choi noi bang loi nghiep vu, khong phai ma loi ky thuat (#132)', async () => {
+    const { service } = make();
+
+    await expect(service.activate('p1', 'khong-khop', 'sale', null)).rejects.toThrow(
+      /Bảng giá đã thay đổi sau lần kiểm tra/,
+    );
+  });
+
+  it('validate tra ve dong DA LUU kem dau van tay, khong bat nguoi goi tu doan (#132)', async () => {
+    // Man Xem lai phai dung tu SU THAT DA LUU. `applyImport()` chi upsert va khong prune, nen
+    // mang dang soan tren trinh duyet co the la TAP CON cua thu may chu dang giu.
+    const { service } = make();
+
+    const result = await service.validate('p1');
+
+    expect(result.rows).toEqual([
+      {
+        sku: 'A',
+        wholesale: 100,
+        minRetailPrice: 120,
+        retailPrice: undefined,
+        listPrice: undefined,
+      },
+      {
+        sku: 'B',
+        wholesale: 200,
+        minRetailPrice: undefined,
+        retailPrice: undefined,
+        listPrice: undefined,
+      },
+    ]);
+    expect(result.fingerprint).toBe(SEEN);
   });
 
   it('archives old same-month active period and activates atomically', async () => {
     const { service, prisma, knowledge } = make();
-    await expect(service.activate('p1', 'sale', 'req')).resolves.toMatchObject({
+    await expect(service.activate('p1', SEEN, 'sale', 'req')).resolves.toMatchObject({
       status: 'active',
     });
     expect(prisma.$transaction).toHaveBeenCalled();
@@ -493,7 +563,7 @@ describe('PricePeriod lifecycle — mot giao thuc khoa duy nhat', () => {
 
   it.each([
     ['removeDraftPrice', (s: PricePeriodsService) => s.removeDraftPrice('p1', 'A', 'sale', null)],
-    ['activate', (s: PricePeriodsService) => s.activate('p1', 'sale', null)],
+    ['activate', (s: PricePeriodsService) => s.activate('p1', SEEN, 'sale', null)],
     ['archive', (s: PricePeriodsService) => s.archive('p1', 'sale', null)],
   ])('%s khoa dung hang PricePeriod truoc khi quyet dinh', async (_name, run) => {
     const { service, prisma } = make();
@@ -520,7 +590,7 @@ describe('PricePeriod lifecycle — mot giao thuc khoa duy nhat', () => {
   it('activate xep hang CA THANG truoc, roi moi khoa hang ky (Issue #122)', async () => {
     const { service, prisma } = make();
 
-    await service.activate('p1', 'sale', null);
+    await service.activate('p1', SEEN, 'sale', null);
 
     const locks = rawLocks(prisma);
     expect(locks).toHaveLength(2);
@@ -564,7 +634,7 @@ describe('PricePeriod lifecycle — mot giao thuc khoa duy nhat', () => {
   it('activate cham diem tren dong doc SAU khoa, khong dung anh chup cu', async () => {
     const { service, prisma } = make();
 
-    await service.activate('p1', 'sale', null);
+    await service.activate('p1', SEEN, 'sale', null);
 
     // Danh muc phai duoc doc bang chinh `tx` dang giu khoa. Neu ai do doi ve `this.prisma`
     // ngoai giao dich, mot `removeDraftPrice` vua commit se khong duoc nhin thay.
@@ -572,5 +642,63 @@ describe('PricePeriod lifecycle — mot giao thuc khoa duy nhat', () => {
     expect(firstCallOrder(prisma.$executeRaw, 'khoa hang')).toBeLessThan(
       firstCallOrder(prisma.product.findMany, 'doc danh muc'),
     );
+  });
+});
+
+/**
+ * Issue #132 — RANG BUOC "ban da xem" voi "ban sap kich hoat".
+ *
+ * Khoa hang/thang cua #121/#122 giu cho vong doi khong hong, nhung khong tra loi duoc cau hoi
+ * cua con nguoi: cai vua doc co dung la cai sap ap dung khong. Bo bai nay khoa cau tra loi do.
+ */
+describe('dau van tay ky gia (#132)', () => {
+  it('khong doi khi chi doi thu tu dong — thu tu tra ve cua DB khong duoc lam doi dau', () => {
+    const forward = pricePeriodRowsFingerprint([
+      { sku: 'A', wholesale: 100 },
+      { sku: 'B', wholesale: 200 },
+    ]);
+    const reversed = pricePeriodRowsFingerprint([
+      { sku: 'B', wholesale: 200 },
+      { sku: 'A', wholesale: 100 },
+    ]);
+
+    expect(forward).toBe(reversed);
+  });
+
+  it('phan biet O TRONG voi so 0 — "chua co gia" khac "gia bang 0"', () => {
+    const empty = pricePeriodRowsFingerprint([{ sku: 'A', wholesale: 100, retailPrice: null }]);
+    const zero = pricePeriodRowsFingerprint([{ sku: 'A', wholesale: 100, retailPrice: 0 }]);
+
+    expect(empty).not.toBe(zero);
+  });
+
+  it('doi khi BAT KY cot gia nao doi — ca ba cot khong bat buoc deu vao dau', () => {
+    const base = { sku: 'A', wholesale: 100 };
+    const seen = new Set([
+      pricePeriodRowsFingerprint([base]),
+      pricePeriodRowsFingerprint([{ ...base, minRetailPrice: 1 }]),
+      pricePeriodRowsFingerprint([{ ...base, retailPrice: 1 }]),
+      pricePeriodRowsFingerprint([{ ...base, listPrice: 1 }]),
+      pricePeriodRowsFingerprint([{ ...base, wholesale: 101 }]),
+    ]);
+
+    expect(seen.size).toBe(5);
+  });
+
+  it('ma hang chua dau phan cach khong the gia mao mot bo dong khac', () => {
+    // Neu chuan hoa noi chuoi bang mot dau phan cach tu chon, `sku` la chuoi tu do nen co the
+    // chua chinh dau do va lam hai noi dung khac nhau ra cung mot dau. JSON thoat ky tu nen
+    // khong lam gia duoc.
+    const forged = pricePeriodRowsFingerprint([{ sku: 'A","B', wholesale: 100 }]);
+    const real = pricePeriodRowsFingerprint([
+      { sku: 'A', wholesale: 100 },
+      { sku: 'B', wholesale: 100 },
+    ]);
+
+    expect(forged).not.toBe(real);
+  });
+
+  it('bo dong RONG van ra mot dau on dinh, khong phai chuoi rong', () => {
+    expect(pricePeriodRowsFingerprint([])).toMatch(/^[0-9a-f]{32}$/);
   });
 });

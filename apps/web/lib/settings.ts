@@ -198,6 +198,13 @@ export interface PricePeriodValidation {
   warnings: string[];
   productCount: number;
   priceCount: number;
+  /**
+   * The cua ban vua kiem — may chu tinh, may chu doi lai o buoc kich hoat (Issue #132).
+   * Rong = may chu ban cu chua tra ve; man hinh phai coi nhu chua kiem duoc.
+   */
+  fingerprint: string;
+  /** Dong gia DA LUU tren may chu tai thoi diem kiem — KHONG phai mang dang soan. */
+  rows: PricePeriodPrice[];
 }
 
 export interface RuleConfigVersion {
@@ -834,6 +841,10 @@ function parsePriceValidation(value: unknown): PricePeriodValidation {
     ),
     productCount: numberValue(record.productCount),
     priceCount: numberValue(record.priceCount),
+    fingerprint: stringValue(record.fingerprint) ?? '',
+    rows: arrayValue(record.rows)
+      .map(parsePrice)
+      .filter((row): row is PricePeriodPrice => row !== undefined),
   };
 }
 
@@ -1209,12 +1220,20 @@ export const settingsApi = {
         jsonInit('POST', {}),
       ),
     ),
-  activatePricePeriod: async (periodId: string): Promise<PricePeriod> => {
+  /**
+   * @param expectedFingerprint The cua ban nguoi dung VUA XEM o buoc Xem lai (Issue #132).
+   *   May chu doi lai the nay duoi khoa hang; lech thi tra 409 chu khong kich hoat im lang mot
+   *   noi dung khac.
+   */
+  activatePricePeriod: async (
+    periodId: string,
+    expectedFingerprint: string,
+  ): Promise<PricePeriod> => {
     const period = parsePricePeriod(
       unwrapEnvelope(
         await requestJson(
           `/settings/price-periods/${encodeURIComponent(periodId)}/activate`,
-          jsonInit('POST', { confirmed: true }),
+          jsonInit('POST', { confirmed: true, expectedFingerprint }),
         ),
       ),
     );

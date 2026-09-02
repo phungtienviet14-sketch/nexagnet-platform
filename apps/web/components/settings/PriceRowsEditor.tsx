@@ -30,6 +30,10 @@ type Props = {
   onAdd?: (sku: string) => void;
   /** Ma hang trong danh muc de goi y — khach chon tu danh sach thay vi go tay. */
   catalogue?: readonly string[];
+  /** Ten nghiep vu theo ma hang. Bang chi co `FELIX` thi khong ai doc ra "ghe Felix". */
+  productNames?: ReadonlyMap<string, string>;
+  /** Ma hang dang thieu du lieu — danh dau ngay tren o, khong doi may chu tra loi. */
+  invalidSkus?: readonly string[];
   readOnly?: boolean;
   disabled?: boolean;
 };
@@ -41,6 +45,8 @@ export function PriceRowsEditor({
   removingSku = null,
   onAdd,
   catalogue = [],
+  productNames,
+  invalidSkus = [],
   readOnly = false,
   disabled = false,
 }: Props) {
@@ -171,10 +177,16 @@ export function PriceRowsEditor({
             {filteredRows.map(({ row, originalIndex }) => (
               <tr key={row.id ?? row.sku}>
                 <th scope="row">
+                  {(() => {
+                    const name = productNames?.get(row.sku);
+                    return name && name !== row.sku ? <span>{name}</span> : null;
+                  })()}
                   <code>{row.sku}</code>
                 </th>
                 {PRICE_COLUMNS.map((column) => {
                   const value = row[column.key];
+                  // Chi cot BAT BUOC moi danh dau duoc la thieu — ba cot con lai de trong la hop le.
+                  const invalid = column.required && invalidSkus.includes(row.sku);
                   return (
                     <td key={column.key}>
                       {readOnly ? (
@@ -188,6 +200,9 @@ export function PriceRowsEditor({
                             inputMode="numeric"
                             disabled={disabled}
                             aria-label={`${column.label} của ${row.sku}`}
+                            aria-invalid={invalid || undefined}
+                            data-price-sku={column.required ? row.sku : undefined}
+                            className={invalid ? 'settings-input--invalid' : undefined}
                             value={value === null || value === undefined ? '' : value}
                             onChange={(event) =>
                               updateCell(originalIndex, column.key, event.target.value)

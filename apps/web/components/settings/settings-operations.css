@@ -533,3 +533,116 @@ a.settings-index__tab {
     scroll-behavior: auto;
   }
 }
+
+/* ---------- Cong viec dang lam: mot ban nhap, ba buoc (#127) ---------- */
+
+/*
+ * Khoi nay phai THANG ve mat thi giac so voi cac the trang thai ben tren: no la CHO LAM VIEC,
+ * con cac the kia chi la tin tuc. Vien accent + nen dac + do bong = mat tim den no truoc.
+ */
+.settings-price-work {
+  display: grid;
+  gap: 1.1rem;
+  padding: 1.35rem 1.4rem;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--line));
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.settings-price-work__head {
+  display: grid;
+  gap: 0.3rem;
+}
+.settings-price-work__head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+}
+.settings-price-work__head p {
+  margin: 0;
+}
+
+/* Ba buoc: buoc dang lam noi han, buoc da qua mo di, buoc chua toi chi la duong vien. */
+.settings-steps li[data-state='current'] {
+  color: var(--text);
+  font-weight: 650;
+}
+.settings-steps li[data-state='current']::before {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+}
+.settings-steps li[data-state='done']::before {
+  border-color: color-mix(in oklch, var(--ok) 55%, var(--line));
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.settings-steps li[data-state='todo'] {
+  opacity: 0.5;
+}
+
+.settings-price-actions__primary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Bo ban nhap la thao tac VONG DOI — mot dong chu ngan ben trai, khong phai mot nut ngang hang. */
+.settings-price-work__head .settings-text-action {
+  justify-self: start;
+  text-align: left;
+  font-size: 0.8125rem;
+}
+
+/* Viec con phai lam — danh sach ngan, moi dong co duong di thang toi o can sua. */
+.settings-price-issues {
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in oklch, var(--warn) 45%, var(--line));
+  border-radius: var(--r-md);
+  background: var(--warn-soft);
+}
+.settings-price-issues ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.settings-price-issues li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--warn-ink);
+}
+
+/* O thieu du lieu — thay bang MAU va VIEN ngay tai o, khong chi bang mot cau o cuoi trang. */
+.settings-table td input.settings-input--invalid {
+  border-color: var(--danger);
+  background: color-mix(in oklch, var(--danger-soft) 55%, transparent);
+}
+
+.settings-price-review {
+  margin: 0;
+}
+
+/* Ten nghiep vu tren, ma may duoi — doc ra "Ghe Felix" truoc, `FELIX` sau. */
+.settings-table th[scope='row'] > span {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+@media (max-width: 900px) {
+  .settings-price-actions__primary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

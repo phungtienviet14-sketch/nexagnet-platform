@@ -6,6 +6,7 @@ import {
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuditLogService } from '../audit/audit-log.service.js';
@@ -99,6 +100,51 @@ export function buildPriceImportPreview(
   return { valid: errors.length === 0, created, updated, unchanged, errors, warnings, diff };
 }
 
+/** Bon cot gia + ma hang: dung nhung truong quyet dinh gia cua mot don, khong hon. */
+export interface FingerprintablePriceRow {
+  readonly sku: string;
+  readonly wholesale: number;
+  readonly minRetailPrice?: number | null;
+  readonly retailPrice?: number | null;
+  readonly listPrice?: number | null;
+}
+
+/**
+ * DAU VAN TAY CHUAN HOA cua toan bo dong gia trong mot ky — nguon su that de doi chieu
+ * "cai da xem" voi "cai sap kich hoat" (Issue #132).
+ *
+ * Vi sao phai tinh o MAY CHU chu khong nhan dau do trinh duyet gui len: dau van tay o day la
+ * BIEN GIOI DUNG DAN, khong phai mot tien ich giao dien. Mot dau do client tu bia thi khong
+ * chan duoc gi ca — no chi noi "trinh duyet nghi rang" chu khong noi "trong co so du lieu co gi".
+ *
+ * Chuan hoa phai TUONG MINH va ON DINH, vi hai lan doc cung mot ky phai ra cung mot dau:
+ *  - sap theo `sku` — thu tu tra ve cua co so du lieu khong duoc lam doi dau;
+ *  - o TRONG (`null`/`undefined`) ghi thanh `null` cua JSON, phan biet han voi so `0` — "chua
+ *    co gia" va "gia bang 0" la hai su that khac nhau;
+ *  - bam SHA-256 de token ngan va khong lo noi dung gia ra ngoai qua URL/log.
+ *
+ * KHONG gom `id` cua dong (may chu cap, doi sau moi lan ghi lai ma khong doi nghia nghiep vu)
+ * va KHONG gom `periodId` (dau van tay noi ve NOI DUNG, khong noi ve cho chua no).
+ */
+export function pricePeriodRowsFingerprint(rows: readonly FingerprintablePriceRow[]): string {
+  // JSON hoa chu khong noi chuoi bang dau phan cach tu chon: `sku` la chuoi tu do toi 128 ky tu,
+  // nen bat ky dau phan cach nao cung co the nam TRONG mot ma hang va lam hai ky khac noi dung
+  // ra cung mot dau. JSON tu thoat ky tu nen phep ma hoa la mot-doi-mot.
+  const canonical = JSON.stringify(
+    rows
+      .map((row) => [
+        row.sku,
+        row.wholesale,
+        // `null` va `0` phai khac nhau: "chua co gia" va "gia bang 0" la hai su that khac han.
+        row.minRetailPrice ?? null,
+        row.retailPrice ?? null,
+        row.listPrice ?? null,
+      ])
+      .sort((left, right) => String(left[0]).localeCompare(String(right[0]), 'en')),
+  );
+  return createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 32);
+}
+
 /**
  * Khong gian khoa advisory cua "mot thang gia" (Issue #122).
  *
@@ -137,7 +183,9 @@ function evaluatePricePeriod(
   if (!period.validMonth || !monthSchema.safeParse(period.validMonth).success) {
     errors.push('Kỳ giá thiếu validMonth YYYY-MM hợp lệ');
   }
-  const missing = products.filter((product) => !bySku.has(product.sku)).map((product) => product.sku);
+  const missing = products
+    .filter((product) => !bySku.has(product.sku))
+    .map((product) => product.sku);
   if (isTestOnlyPeriod(period.source)) {
     if (period.prices.length < 1 || period.prices.length > 2) {
       errors.push('Kỳ giá test-only chỉ được có 1-2 SKU để smoke pre-pilot');
@@ -353,14 +401,44 @@ export class PricePeriodsService {
     return { periodId, sku: row.sku, removed: true, remaining };
   }
 
+  /**
+   * Cham diem mot ky, VA tra ve chinh dong da luu cung dau van tay cua chung (Issue #132).
+   *
+   * Truoc day ham nay chi tra ve `valid/errors`, nen man Xem lai phia trinh duyet phai ve lai
+   * bang mang dang soan cua chinh no. Hai thu do co the LECH: `applyImport()` chi upsert va
+   * khong bao gio prune, nen mot lan nap hang loat chi co A vao mot ky dang co A+B se de lai B
+   * tren may chu — nguoi dung xem A roi kich hoat A+B.
+   *
+   * Tra ve `rows` o day de man Xem lai duoc dung tu SU THAT DA LUU, con `fingerprint` la the
+   * ma buoc kich hoat phai xuat trinh lai.
+   */
   async validate(periodId: string) {
     this.assertWritable();
     const period = await this.period(periodId);
     const products = await this.prisma.product.findMany({ select: { sku: true } });
-    return evaluatePricePeriod(period, products);
+    return {
+      ...evaluatePricePeriod(period, products),
+      fingerprint: pricePeriodRowsFingerprint(period.prices),
+      rows: period.prices.map((row) => ({
+        sku: row.sku,
+        wholesale: row.wholesale,
+        minRetailPrice: row.minRetailPrice,
+        retailPrice: row.retailPrice,
+        listPrice: row.listPrice,
+      })),
+    };
   }
 
-  async activate(periodId: string, actor: string, requestId: string | null) {
+  /**
+   * @param expectedFingerprint Dau van tay cua dong gia ma NGUOI DUNG DA XEM o buoc Xem lai.
+   *   Bat buoc: khong ai duoc kich hoat mot ky ma khong noi duoc minh da doc noi dung nao.
+   */
+  async activate(
+    periodId: string,
+    expectedFingerprint: string,
+    actor: string,
+    requestId: string | null,
+  ) {
     this.assertWritable();
     const activatedAt = new Date();
     // Kiem trang thai, CHAM DIEM HOP LE va ghi — tat ca sau CUNG mot khoa hang (Issue #121).
@@ -375,6 +453,22 @@ export class PricePeriodsService {
     // va ben thua nhan mot P2002 tran trui thay vi mot cau tu choi doc duoc.
     const { before, after } = await this.withLockedMonth(periodId, async (tx, period) => {
       if (period.status !== 'draft') throw new ConflictException('Chỉ kỳ draft mới được activate');
+      // BUOC RANG BUOC cua Issue #132 — dat TRUOC moi phep kiem khac, va o day chu khong o cho
+      // nao khac, vi day la cho duy nhat `period.prices` duoc doc SAU khi da giu khoa hang.
+      //
+      // Khoa hang cua #121/#122 giu cho vong doi khong hong, nhung no khong tra loi duoc cau hoi
+      // cua con nguoi: "cai toi vua doc co dung la cai sap ap dung khong?". Mot nguoi khac sua
+      // ban nhap thanh mot bo gia KHAC MA VAN HOP LE trong luc minh dang doc man Xem lai thi moi
+      // phep kiem con lai deu xanh — va ky duoc kich hoat theo noi dung chua ai duyet.
+      //
+      // So sanh dau van tay o day bien chuyen do thanh mot cau tu choi doc duoc, thay vi mot lan
+      // kich hoat im lang sai noi dung.
+      const actualFingerprint = pricePeriodRowsFingerprint(period.prices);
+      if (actualFingerprint !== expectedFingerprint) {
+        throw new ConflictException(
+          'Bảng giá đã thay đổi sau lần kiểm tra vừa rồi, nên chưa kích hoạt. Kiểm tra lại để xem nội dung mới nhất rồi kích hoạt.',
+        );
+      }
       const testOnly = isTestOnlyPeriod(period.source);
       if (testOnly && loadFoundationEnv().DATA_CLASSIFICATION !== 'test') {
         throw new ConflictException(
