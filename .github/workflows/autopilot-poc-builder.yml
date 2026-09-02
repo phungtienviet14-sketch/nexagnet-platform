@@ -123,13 +123,16 @@ jobs:
           Do not modify, create or delete any other file. Do not stage, commit or push
           anything - the workflow does that after checking your work."
 
+          # stdout goes to RUNNER_TEMP, never into the checkout. The scope gate below
+          # allows exactly one path and nothing else, so a scratch file written into the
+          # working tree would fail the job - it did, on run 33675077730.
           claude -p "$prompt" \
             --max-turns 12 \
             --output-format text \
             --allowedTools Read Edit \
-            > claude-stdout.txt || { echo "claude exited non-zero"; cat claude-stdout.txt; exit 1; }
+            > "$RUNNER_TEMP/claude-stdout.txt" || { echo "claude exited non-zero"; cat "$RUNNER_TEMP/claude-stdout.txt"; exit 1; }
           echo "----BEGIN CLAUDE STDOUT----"
-          cat claude-stdout.txt
+          cat "$RUNNER_TEMP/claude-stdout.txt"
           echo "----END CLAUDE STDOUT----"
 
       - name: Gate - only the sandbox file may have changed
