@@ -1,0 +1,215 @@
+name: autopilot-poc-builder
+
+# POC-1: prove a GitHub-hosted Claude Code run can read the repo, write ONLY an allowed
+# sandbox file, and commit+push that change back onto the PR head branch - without
+# touching anything else and without triggering itself forever.
+#
+# Two independent safety mechanisms, on purpose:
+#   1. Capability   - Claude runs with only Read and Edit. It has no Write and no Bash,
+#                     so it cannot create a file or run git even if the prompt were
+#                     subverted.
+#   2. Verification - a deterministic git gate compares the working tree against exactly
+#                     one allowed path. Anything else and the job fails before pushing.
+#
+# Loop control, also two mechanisms:
+#   1. GitHub does not start new workflow runs for pushes made with GITHUB_TOKEN.
+#   2. The guard step below stops the job outright when HEAD was authored by this
+#      automation. The paths filter deliberately INCLUDES the sandbox directory, so if
+#      mechanism 1 ever stopped holding, a loop would really be attempted - and
+#      mechanism 2 is what stops it. That makes "no loop" an observed result rather than
+#      an assumption.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - .github/workflows/autopilot-poc-builder.yml
+      - docs/poc/autopilot/**
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autopilot-poc-builder-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  SANDBOX_FILE: docs/poc/autopilot/builder-write-proof.md
+  BOT_NAME: autopilot-poc[bot]
+  BOT_EMAIL: autopilot-poc@users.noreply.github.com
+
+jobs:
+  builder:
+    name: autopilot-poc-builder
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 2
+
+      - name: Loop guard
+        id: guard
+        run: |
+          set -euo pipefail
+          head_email="$(git log -1 --format='%ae')"
+          echo "head_commit_author=${head_email}"
+          echo "head_commit_subject=$(git log -1 --format='%s')"
+          if [ "${head_email}" = "${BOT_EMAIL}" ]; then
+            echo "LOOP_GUARD=stop (HEAD was authored by this automation)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "LOOP_GUARD=proceed"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Record HEAD before automation
+        id: before
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          echo "HEAD_SHA_BEFORE=${sha}"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code CLI
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          claude --version
+
+      - name: Claude writes the sandbox file
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+          HEAD_SHA_BEFORE: ${{ steps.before.outputs.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          prompt="You are running non-interactively inside a GitHub Actions job, in a
+          checkout of this repository. The working directory is the repository root.
+
+          Do exactly this, and nothing else.
+
+          Step 1. Read package.json at the repository root. Note the exact value of its
+          top-level packageManager field.
+
+          Step 2. Edit the file ${SANDBOX_FILE} in two ways.
+          First, change the line that starts with STATUS: so the whole line reads exactly:
+          STATUS: written by automation
+          Second, append this block to the very end of the file, substituting values:
+
+          ## Automation run ${RUN_ID}
+
+          - pr: ${PR_NUMBER}
+          - run_id: ${RUN_ID}
+          - head_sha_before: ${HEAD_SHA_BEFORE}
+          - package_manager_read_from_repo: THE VALUE YOU READ IN STEP 1
+
+          CLAUDE_BUILDER_WRITE_OK
+
+          Do not modify, create or delete any other file. Do not stage, commit or push
+          anything - the workflow does that after checking your work."
+
+          claude -p "$prompt" \
+            --max-turns 12 \
+            --output-format text \
+            --allowedTools Read Edit \
+            > claude-stdout.txt || { echo "claude exited non-zero"; cat claude-stdout.txt; exit 1; }
+          echo "----BEGIN CLAUDE STDOUT----"
+          cat claude-stdout.txt
+          echo "----END CLAUDE STDOUT----"
+
+      - name: Gate - only the sandbox file may have changed
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          echo "----BEGIN WORKING TREE----"
+          git status --porcelain
+          echo "----END WORKING TREE----"
+          changed="$(git status --porcelain | cut -c4-)"
+          if [ -z "${changed}" ]; then
+            echo "FAIL: Claude changed nothing; there is no write to prove"
+            exit 1
+          fi
+          unexpected="$(printf '%s\n' "${changed}" | grep -vFx "${SANDBOX_FILE}" || true)"
+          if [ -n "${unexpected}" ]; then
+            echo "FAIL: paths outside the sandbox were touched:"
+            printf '%s\n' "${unexpected}"
+            exit 1
+          fi
+          echo "GATE_SCOPE=OK (only ${SANDBOX_FILE} changed)"
+
+      - name: Gate - the sandbox file carries real evidence
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          HEAD_SHA_BEFORE: ${{ steps.before.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # packageManager is NOT stated in the prompt, so finding the true value in the
+          # file proves Claude read package.json rather than pattern-filling the block.
+          expected_manager="$(node -p 'require("./package.json").packageManager')"
+          fail=0
+          grep -qx "CLAUDE_BUILDER_WRITE_OK" "${SANDBOX_FILE}" \
+            || { echo "FAIL: marker CLAUDE_BUILDER_WRITE_OK missing"; fail=1; }
+          grep -qx "STATUS: written by automation" "${SANDBOX_FILE}" \
+            || { echo "FAIL: STATUS line was not updated"; fail=1; }
+          grep -qF "package_manager_read_from_repo: ${expected_manager}" "${SANDBOX_FILE}" \
+            || { echo "FAIL: expected packageManager ${expected_manager} not found"; fail=1; }
+          grep -qF "head_sha_before: ${HEAD_SHA_BEFORE}" "${SANDBOX_FILE}" \
+            || { echo "FAIL: head_sha_before not bound to this run"; fail=1; }
+          [ "$fail" -eq 0 ] || { echo "GATE_CONTENT=FAIL"; exit 1; }
+          echo "GATE_CONTENT=OK"
+
+      - name: Commit and push to the PR head branch
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "${BOT_NAME}"
+          git config user.email "${BOT_EMAIL}"
+          git add -- "${SANDBOX_FILE}"
+          git commit -m "chore(poc): autopilot builder write proof [autopilot-poc]"
+          git push origin "HEAD:${{ github.head_ref }}"
+
+      - name: Evidence - A, B and the diff between them
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          HEAD_A: ${{ steps.before.outputs.sha }}
+        run: |
+          set -euo pipefail
+          b="$(git rev-parse HEAD)"
+          echo "EVIDENCE_HEAD_A=${HEAD_A}"
+          echo "EVIDENCE_HEAD_B=${b}"
+          echo "EVIDENCE_RUN_ID=${{ github.run_id }}"
+          echo "EVIDENCE_COMMIT_AUTHOR=$(git log -1 --format='%an <%ae>')"
+          if [ "${HEAD_A}" = "${b}" ]; then
+            echo "FAIL: HEAD did not advance"
+            exit 1
+          fi
+          echo "----BEGIN DIFF A..B (names only)----"
+          git diff --name-only "${HEAD_A}..${b}"
+          echo "----END DIFF A..B (names only)----"
+          names="$(git diff --name-only "${HEAD_A}..${b}")"
+          if [ "${names}" != "${SANDBOX_FILE}" ]; then
+            echo "FAIL: A..B touched more than the sandbox file"
+            exit 1
+          fi
+          echo "BUILDER_VERDICT=PASS"
+
+      - name: Loop guard stopped this run
+        if: steps.guard.outputs.skip == 'true'
+        run: |
+          echo "BUILDER_VERDICT=SKIPPED_BY_LOOP_GUARD"
+          echo "HEAD was authored by ${BOT_EMAIL}; refusing to build on top of my own commit."
