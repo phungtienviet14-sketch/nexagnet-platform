@@ -7,7 +7,7 @@
  * Thu tu kiem cho MOI thong diep, co chu dich:
  *   1. schema            (hinh dang)
  *   2. dung issue        (thong diep cua task khac thi khong dung o day)
- *   3. dung nguoi phat   (neu orchestrator biet actor)
+ *   3. dung nguoi phat   (actor BAT BUOC; khong biet ai phat => tu choi)
  *   4. idempotency       (da thay khoa nay => khong lam gi, ke ca khi trang thai cho phep)
  *   5. may trang thai    (co trong bang chuyen khong)
  *   6. cong nghiep vu    (SHA/CI/rui ro/retry/runtime)
@@ -48,7 +48,10 @@ import { NO_STATE, nextState } from './state-machine.mjs';
  * @property {ReadonlyArray<Record<string, unknown>>} history
  * @property {Record<string, unknown> | null} blockedBy
  *
- * @typedef {{ checkRuns?: import('./gates.mjs').CheckRun[], requiredChecks?: string[], humanApproval?: { head_sha: string } | null, actor?: string }} Context
+ * @typedef {{ checkRuns?: import('./gates.mjs').CheckRun[], requiredChecks?: string[], humanApproval?: { head_sha: string } | null, actor: string }} Context
+ * @typedef {{ humanApproval?: { head_sha: string } | null }} MergeContext
+ *   `MERGED` la su kien cua GitHub, khong phai thong diep ai do phat, nen no khong co `actor`:
+ *   bang chung cua no la nguoi da duyet (`humanApproval`), khong phai `MESSAGE_PRODUCERS`.
  * @typedef {{ ok: true, task: Task, from: string | null, to: string, event: string, note?: Record<string, unknown> }} Accepted
  * @typedef {{ ok: false, reason: string, detail?: Record<string, unknown>, task: Task }} Rejected
  * @typedef {{ ok: true, patch: Partial<Task>, blocked?: Record<string, unknown> } | import('./reasons.mjs').Denied} GateOutcome
@@ -155,19 +158,29 @@ function conflictingEvidence(task, m) {
 
 /**
  * Ap mot thong diep giao thuc (9 loai) len task.
+ *
+ * `context.actor` la BAT BUOC. Ban truoc chi kiem `MESSAGE_PRODUCERS` khi actor duoc dua vao, nen
+ * mot orchestrator quen dua danh tinh nguoi phat se lam CA TANG phan quyen bien mat MA KHONG KEU:
+ * "khong biet ai phat" thanh "ai phat cung duoc" — fail-open ngay tai bien cua he thong. Khong biet
+ * ai phat la mot LY DO TU CHOI (`PRODUCER_UNKNOWN`), khong phai mot truong hop duoc mien kiem.
+ * Muon go thong diep tu GitHub thi lay danh tinh cung luc: `comment.user.login`/`app.slug` la thu
+ * di kem thong diep, khong phai thu tuy chon.
  * @param {Task} task
  * @param {Record<string, unknown>} message
- * @param {Context} [context]
+ * @param {Context} context
  * @returns {Accepted | Rejected}
  */
-export function applyMessage(task, message, context = {}) {
+export function applyMessage(task, message, context = /** @type {Context} */ ({})) {
   const type = /** @type {string} */ (message.type);
   const shape = validateMessagePayload(type, message);
   if (!shape.ok) return reject(task, shape.reason, shape.detail);
   if (message.issue !== task.issue) {
     return reject(task, REASONS.ISSUE_MISMATCH, { claimed: message.issue, task: task.issue });
   }
-  if (context.actor !== undefined && !MESSAGE_PRODUCERS[type]?.includes(context.actor)) {
+  if (typeof context.actor !== 'string' || context.actor.length === 0) {
+    return reject(task, REASONS.PRODUCER_UNKNOWN, { type, allowed: MESSAGE_PRODUCERS[type] });
+  }
+  if (!MESSAGE_PRODUCERS[type]?.includes(context.actor)) {
     return reject(task, REASONS.WRONG_PRODUCER, {
       type,
       actor: context.actor,
@@ -360,7 +373,7 @@ function gateTaskDone(task, m) {
  * Su kien MERGED (tu GitHub, khong phai comment). Cong merge: rui ro + REVIEW_PASS hien hanh.
  * @param {Task} task
  * @param {{ headSha: string, mergeSha: string }} merge
- * @param {Context} [context]
+ * @param {MergeContext} [context]
  * @returns {Accepted | Rejected}
  */
 export function applyMerge(task, { headSha, mergeSha }, context = {}) {

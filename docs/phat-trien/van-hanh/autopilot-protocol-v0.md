@@ -7,8 +7,13 @@
 >
 > **Trạng thái: FOUNDATION ONLY** (03/09/2026, hợp đồng #153). Đã có: hợp đồng task, 9 loại thông
 > điệp, máy trạng thái, cổng nghiệp vụ, khoá idempotency, validator CLI, test hồi quy. **Chưa có:**
-> nối ChatGPT Work, tạo Issue tự động, dispatcher Claude trên Actions, auto-merge, thay đổi CD,
-> deploy. Không workflow nào trong `.github/workflows/` được thêm hay sửa bởi task này.
+> Conversation Bridge nối ChatGPT Web Conversation, tạo Issue tự động, dispatcher Claude trên
+> Actions, auto-merge, thay đổi CD, deploy. Không workflow nào trong `.github/workflows/` được thêm
+> hay sửa bởi task này.
+>
+> **Architect/Reviewer là tab hội thoại ChatGPT thường** (ChatGPT Web Conversation), **không phải
+> ChatGPT Work** (chốt 04/09/2026). Đường đánh thức phiên hội thoại đó ở giai đoạn sau là
+> **Conversation Bridge**, chưa có trong V0.
 >
 > PoC #151 chứng minh mint token GitHub App, bot push tin cậy, CI tự chạy, loop guard, autofix —
 > **không** tái dùng workflow PoC làm hiện thực production mà không thiết kế lại.
@@ -35,6 +40,10 @@ chống lặp, đi qua một máy trạng thái đóng**. Nguyên tắc xuyên s
 
 ## 2. Tác nhân và trách nhiệm
 
+Architect và Reviewer chạy trong **tab hội thoại ChatGPT thường** (ChatGPT Web Conversation) —
+**không phải ChatGPT Work**. V0 không có đường đánh thức phiên hội thoại đó; **Conversation Bridge**
+là việc của giai đoạn sau (§17).
+
 | Tác nhân          | Mã (`ACTORS`)       | Làm gì                                                                        | Được phát thông điệp nào                 |
 | ----------------- | ------------------- | ----------------------------------------------------------------------------- | ---------------------------------------- |
 | ChatGPT Architect | `CHATGPT_ARCHITECT` | BA + kiến trúc + chọn task, soạn Task Contract                                | `TASK_READY`                             |
@@ -45,7 +54,11 @@ chống lặp, đi qua một máy trạng thái đóng**. Nguyên tắc xuyên s
 | Runtime Verifier  | `RUNTIME_VERIFIER`  | Bằng chứng trên môi trường thật cho **đúng một release**                      | `RUNTIME_PROOF`                          |
 | Human             | `HUMAN`             | Chỉ quyết định rủi ro cao / ngoại lệ; duyệt merge HIGH; gỡ BLOCKED            | _(sự kiện ngoài giao thức V0)_           |
 
-Orchestrator từ chối thông điệp phát sai vai (`WRONG_PRODUCER`) khi nó biết danh tính người phát.
+**Danh tính người phát là bắt buộc.** Orchestrator phải đưa `actor` vào cùng mỗi thông điệp
+(`comment.user.login` / `app.slug` đi kèm comment, không phải thứ tuỳ chọn). Hai đường từ chối, hai
+mã riêng: không biết ai phát ⇒ `PRODUCER_UNKNOWN`; biết nhưng sai vai ⇒ `WRONG_PRODUCER`. Không có
+đường thứ ba — "không biết ai phát" **không** được hiểu là "ai phát cũng được", vì như thế cả tầng
+phân quyền này biến mất mà không cổng nào kêu.
 
 ## 3. GitHub là bus điều phối
 
@@ -240,8 +253,15 @@ Bảng này mô tả **hợp đồng** cho orchestrator của task sau; V0 chưa
 ruleset, và validator sẽ theo.
 
 Mã từ chối: `NO_REQUIRED_CHECKS` (không có danh sách ⇒ cổng không bao giờ mở), `CI_EVIDENCE_MISSING`
-(không đưa check-run), `CI_CHECK_MISSING` (thiếu check trên HEAD), `CI_CHECK_NOT_GREEN` (đỏ hoặc
-đang chạy). Check xanh của HEAD khác **không tính**. Một check chạy hai lần mà lần sau đỏ ⇒ không xanh.
+(không đưa check-run), `CI_EVIDENCE_UNBOUND` (check-run **không nói nó thuộc HEAD nào**),
+`CI_CHECK_MISSING` (thiếu check trên HEAD), `CI_CHECK_NOT_GREEN` (đỏ hoặc đang chạy). Check xanh của
+HEAD khác **không tính**. Một check chạy hai lần mà lần sau đỏ ⇒ không xanh.
+
+**Bằng chứng phải tự nói nó thuộc HEAD nào.** Mỗi check-run bắt buộc có `head_sha`; thiếu, rỗng hay
+không phải chuỗi ⇒ **từ chối cả lô** (`CI_EVIDENCE_UNBOUND`), không phải bỏ qua riêng cái đó. Buộc
+bằng chứng vào HEAD là việc của orchestrator lúc lấy từ API — không buộc được thì phải báo, không
+được đoán. Đo được 04/09/2026: bản trước coi `head_sha` thiếu là "thuộc HEAD đang xét", nên một mảng
+check không có `head_sha` mở được `REVIEW_REQUEST` cho **mọi** HEAD, kể cả HEAD chưa chạy CI lần nào.
 
 ## 9. Quy tắc rủi ro
 
@@ -336,8 +356,18 @@ PASS tương ứng ⇒ `RUNTIME_VERIFIED_CLAIM_WITHOUT_PROOF`.
 ## 14. Task Contract
 
 Một Issue = một hợp đồng. Bản người đọc là phần văn xuôi; **bản máy đọc** là một khối ` ```json `
-đặt **sau** marker `<!-- AUTOPILOT_TASK_V0 -->` (khối json đầu tiên sau marker; khối trước marker
-hay khối `yaml` không được tính). Schema: `schemas/task-contract.schema.json`.
+buộc vào marker `<!-- AUTOPILOT_TASK_V0 -->`. Schema: `schemas/task-contract.schema.json`.
+
+**Kích hoạt hợp đồng phải có chủ đích** — đúng ràng buộc đã áp cho thông điệp (§5.1), vì đúng một lý
+do:
+
+- marker phải là **dòng có nội dung đầu tiên** của thân Issue (`CONTRACT_MARKER_NOT_FIRST_LINE`);
+- khối ` ```json ` phải là **khối nội dung ngay sau** marker, chỉ được cách bằng dòng trống
+  (`CONTRACT_BLOCK_NOT_ADJACENT`); khối `yaml` hay khối không nhãn không được tính.
+
+Đo được 04/09/2026: bản trước tìm marker ở **bất kỳ đâu** rồi lấy khối `json` đầu tiên sau nó, nên
+một Issue văn xuôi — "hợp đồng sẽ trông như thế này:" rồi dán một ví dụ — cho ra một hợp đồng
+**thật**, kích hoạt thật. Văn bản tự do không được phép kích hoạt gì.
 
 | Trường                          | Kiểu                                                                        | Bắt buộc | Ràng buộc                                       |
 | ------------------------------- | --------------------------------------------------------------------------- | -------- | ----------------------------------------------- |
@@ -370,7 +400,7 @@ hay khối `yaml` không được tính). Schema: `schemas/task-contract.schema.
     "validator",
     "test"
   ],
-  "out_of_scope": ["nối ChatGPT Work", "dispatcher Claude", "auto-merge", "CD", "deploy"],
+  "out_of_scope": ["Conversation Bridge", "dispatcher Claude", "auto-merge", "CD", "deploy"],
   "acceptance": ["đủ 9 loại thông điệp có validation", "chuyển trạng thái bất hợp pháp bị từ chối"],
   "risk": "MEDIUM",
   "human_gate": false,
@@ -422,12 +452,15 @@ Mọi lời từ chối mang **mã lý do** trong `REASONS` (`validator/reasons.
 | `humanApproval` là `{ head_sha }`, không phải boolean                                                       | duyệt ở HEAD A từng mở được merge của HEAD B (§9)                                         |
 | Trùng khoá runtime mà khác phán xét ⇒ `BLOCKED`, không phải `DUPLICATE`                                     | khoá của #153 không mang phán xét; bỏ qua là vứt bằng chứng âm (§11)                      |
 | Thêm trần `MAX_HEAD_REVISIONS`                                                                              | hai trần của #153 không chặn được vòng đẩy `BUILD_READY` (§10)                            |
+| Check-run không có `head_sha` ⇒ từ chối, không "coi như đúng HEAD"                                          | bằng chứng không buộc HEAD từng mở `REVIEW_REQUEST` cho mọi HEAD (§8)                     |
+| `actor` bắt buộc; không biết ai phát ⇒ `PRODUCER_UNKNOWN`                                                   | actor tuỳ chọn: quên đưa là mất cả tầng phân quyền, im lặng (§2)                          |
+| Marker hợp đồng phải là dòng đầu, khối `json` phải ngay dưới nó                                             | Issue dán ví dụ từng cho ra hợp đồng thật (§14) — cùng lý do với §5.1                     |
 
 ## 17. Ngoài phạm vi V0 và việc kế tiếp
 
-**Không làm trong task này:** tích hợp sự kiện ChatGPT Work · tạo Issue tự động từ ChatGPT ·
-dispatcher Claude trên Actions · auto-merge · thay đổi CD/deploy · đổi quyền GitHub App · merge PoC
-#151 · thay đổi nghiệp vụ hay dữ liệu khách.
+**Không làm trong task này:** Conversation Bridge (đường đánh thức tab hội thoại ChatGPT thường) ·
+tạo Issue tự động từ ChatGPT · dispatcher Claude trên Actions · auto-merge · thay đổi CD/deploy ·
+đổi quyền GitHub App · merge PoC #151 · thay đổi nghiệp vụ hay dữ liệu khách.
 
 **Việc kế tiếp đề xuất (một task, một nhánh, một PR riêng):** _Orchestrator V0 — read-only_: một
 workflow Actions lắng `issue_comment`/`pull_request`/`check_suite`, gọi validator này với bằng chứng
@@ -448,7 +481,7 @@ dispatch.
 | 7. HIGH-risk merge gate                      | `tests/gates-merge-done.test.mjs`, `tests/protocol-review-gates.test.mjs` |
 | 8. Idempotency                               | `tests/idempotency.test.mjs`, `tests/protocol-lifecycle.test.mjs`         |
 | 9. Retry ceilings                            | `tests/gates-ci-review.test.mjs`, `tests/protocol-done-retry.test.mjs`    |
-| Bốn đường fail-open đã đo và đã đóng         | `tests/fail-closed.test.mjs`                                              |
+| Bảy đường fail-open đã đo và đã đóng         | `tests/fail-closed.test.mjs`                                              |
 | DONE trước runtime proof bị từ chối          | `tests/gates-merge-done.test.mjs`, `tests/protocol-done-retry.test.mjs`   |
 | CLI tất định                                 | `tests/cli.test.mjs`                                                      |
 | 10. Không workflow/dispatcher mới            | `git diff --stat main -- .github/` rỗng (bằng chứng trong PR)             |

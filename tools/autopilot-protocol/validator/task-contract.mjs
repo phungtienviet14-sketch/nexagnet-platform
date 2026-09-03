@@ -57,8 +57,15 @@ const FENCE_OPEN = /^```json\s*$/;
 const FENCE_CLOSE = /^```\s*$/;
 
 /**
- * Lay hop dong may doc ra khoi than mot Issue: marker `<!-- AUTOPILOT_TASK_V0 -->` roi khoi
- * ```json dau tien SAU marker. Phan van xuoi con lai la ban nguoi doc, khong bi dong den.
+ * Lay hop dong may doc ra khoi than mot Issue: marker `<!-- AUTOPILOT_TASK_V0 -->` la DONG CO NOI
+ * DUNG DAU TIEN, va khoi ```json phai la KHOI NOI DUNG NGAY SAU no (chi duoc cach bang dong
+ * trong). Phan van xuoi con lai la ban nguoi doc, khong bi dong den.
+ *
+ * Hai rang buoc nay la cung mot rang buoc da ap cho thong diep (`MARKER_NOT_FIRST_LINE` trong
+ * messages.mjs), va vi cung mot ly do. Ban truoc tim marker o BAT KY dau roi lay khoi ```json dau
+ * tien SAU no, nen mot Issue van xuoi — "hop dong se trong nhu the nay:" roi dan mot vi du — cho
+ * ra mot hop dong THAT, kich hoat that. Kich hoat agent phai la mot hanh vi CO CHU DINH: dat
+ * marker len dau roi dat dung khoi JSON ngay duoi. Van ban tu do khong duoc phep kich hoat gi.
  * @param {string} issueBody
  * @returns {{ ok: true, contract: TaskContract, raw: Record<string, unknown> } | import('./reasons.mjs').Denied}
  */
@@ -70,8 +77,22 @@ export function extractTaskContract(issueBody) {
   const markerIndex = lines.findIndex((line) => CONTRACT_MARKER_LINE.test(line));
   if (markerIndex < 0)
     return deny(REASONS.CONTRACT_MARKER_MISSING, { marker: MARKERS.TASK_CONTRACT });
-  const openIndex = lines.findIndex((line, i) => i > markerIndex && FENCE_OPEN.test(line));
+  const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
+  if (markerIndex !== firstContentIndex) {
+    return deny(REASONS.CONTRACT_MARKER_NOT_FIRST_LINE, {
+      markerLine: markerIndex + 1,
+      firstContentLine: firstContentIndex + 1,
+    });
+  }
+  const openIndex = lines.findIndex((line, i) => i > markerIndex && line.trim() !== '');
   if (openIndex < 0) return deny(REASONS.CONTRACT_BLOCK_MISSING);
+  if (!FENCE_OPEN.test(lines[openIndex])) {
+    // Co mot khoi ```json o dau do phia duoi khong doi: no khong duoc buoc vao marker nay.
+    return deny(REASONS.CONTRACT_BLOCK_NOT_ADJACENT, {
+      markerLine: markerIndex + 1,
+      nextContentLine: openIndex + 1,
+    });
+  }
   const closeIndex = lines.findIndex((line, i) => i > openIndex && FENCE_CLOSE.test(line));
   if (closeIndex < 0) return deny(REASONS.CONTRACT_BLOCK_MISSING, { unterminated: true });
   const jsonText = lines.slice(openIndex + 1, closeIndex).join('\n');

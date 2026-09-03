@@ -6,23 +6,22 @@ import { REASONS } from '../validator/reasons.mjs';
 import { extractTaskContract, validateTaskContract } from '../validator/task-contract.mjs';
 import { contract } from './helpers.mjs';
 
+/**
+ * Than Issue dung dang V0: marker la dong co noi dung DAU TIEN, khoi ```json ngay duoi no (chi
+ * duoc cach bang dong trong), van xuoi cho nguoi nam SAU khoi.
+ */
 const body = (json, { marker = MARKERS.TASK_CONTRACT, fence = 'json' } = {}) =>
   [
-    '# Task Contract — mau',
-    '',
     `<!-- ${marker} -->`,
-    '',
-    'TASK_ID: T-SAMPLE',
-    '',
-    '## Goal',
-    'van xuoi',
     '',
     `\`\`\`${fence}`,
     json,
     '```',
     '',
-    '## Ghi chu',
-    'them van xuoi',
+    '# Task Contract — ban nguoi doc',
+    '',
+    '## Goal',
+    'van xuoi, khong bi dong den',
   ].join('\n');
 
 test('hop dong hop le: MEDIUM khong can nguoi, doi runtime proof o mot env', () => {
@@ -107,27 +106,78 @@ test('scope/acceptance khong duoc rong; out_of_scope/dependencies duoc rong nhun
   assert.equal(validateTaskContract(null).ok, false);
 });
 
-test('trich hop dong tu than Issue: marker + khoi json dau tien SAU marker', () => {
+test('trich hop dong tu than Issue: marker o dong dau + khoi json ngay duoi', () => {
   const result = extractTaskContract(body(JSON.stringify(contract({ issue: 153 }))));
   assert.equal(result.ok, true);
   assert.equal(result.contract.issue, 153);
   assert.equal(result.raw.task_id, 'T-SAMPLE');
 });
 
-test('khoi json TRUOC marker khong duoc tinh; khoi json thu hai sau marker bi bo qua', () => {
+test('dong trong dan dau va giua marker/khoi van hop le — trinh soan hay them dong trong', () => {
+  const padded = [
+    '',
+    '',
+    `<!-- ${MARKERS.TASK_CONTRACT} -->`,
+    '',
+    '',
+    '```json',
+    JSON.stringify(contract()),
+    '```',
+  ].join('\n');
+  assert.equal(extractTaskContract(padded).ok, true);
+});
+
+test('khoi json thu hai sau khoi hop dong bi bo qua — chi khoi ngay duoi marker duoc tinh', () => {
+  const two = [body(JSON.stringify(contract())), '```json', '{"garbage":true}', '```'].join('\n');
+  assert.equal(extractTaskContract(two).ok, true);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Kich hoat hop dong phai CO CHU DINH — cung mot rang buoc da ap cho thong diep (§5.1)
+// ---------------------------------------------------------------------------------------------
+
+test('marker khong o dong noi dung dau tien => CONTRACT_MARKER_NOT_FIRST_LINE', () => {
+  // Do duoc: mot Issue van xuoi dan vi du hop dong tung cho ra mot hop dong THAT.
+  const quoted = ['Hop dong se trong nhu the nay:', '', body(JSON.stringify(contract()))].join(
+    '\n',
+  );
+  const result = extractTaskContract(quoted);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, REASONS.CONTRACT_MARKER_NOT_FIRST_LINE);
+  assert.deepEqual(result.detail, { markerLine: 3, firstContentLine: 1 });
+  // Khoi ```json dat TRUOC marker cung khien marker khong con la dong dau tien.
   const before = ['```json', '{"protocol":"V0"}', '```', body(JSON.stringify(contract()))].join(
     '\n',
   );
-  assert.equal(extractTaskContract(before).ok, true);
-  const two = [body(JSON.stringify(contract())), '```json', '{"garbage":true}', '```'].join('\n');
-  assert.equal(extractTaskContract(two).ok, true);
+  assert.equal(extractTaskContract(before).reason, REASONS.CONTRACT_MARKER_NOT_FIRST_LINE);
+});
+
+test('khoi json khong nam NGAY SAU marker => CONTRACT_BLOCK_NOT_ADJACENT', () => {
+  const proseBetween = [
+    `<!-- ${MARKERS.TASK_CONTRACT} -->`,
+    '',
+    '## Goal',
+    'van xuoi chen vao giua',
+    '',
+    '```json',
+    JSON.stringify(contract()),
+    '```',
+  ].join('\n');
+  const result = extractTaskContract(proseBetween);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, REASONS.CONTRACT_BLOCK_NOT_ADJACENT);
+  assert.deepEqual(result.detail, { markerLine: 1, nextContentLine: 3 });
 });
 
 test('thieu marker, thieu khoi, khoi khong dong, khong phai JSON, JSON sai hop dong', () => {
   assert.equal(extractTaskContract('# chi co van xuoi').reason, REASONS.CONTRACT_MARKER_MISSING);
   assert.equal(
-    extractTaskContract(`<!-- ${MARKERS.TASK_CONTRACT} -->\nvan xuoi`).reason,
+    extractTaskContract(`<!-- ${MARKERS.TASK_CONTRACT} -->`).reason,
     REASONS.CONTRACT_BLOCK_MISSING,
+  );
+  assert.equal(
+    extractTaskContract(`<!-- ${MARKERS.TASK_CONTRACT} -->\nvan xuoi`).reason,
+    REASONS.CONTRACT_BLOCK_NOT_ADJACENT,
   );
   assert.equal(
     extractTaskContract(`<!-- ${MARKERS.TASK_CONTRACT} -->\n\`\`\`json\n{}`).reason,
@@ -144,11 +194,11 @@ test('thieu marker, thieu khoi, khoi khong dong, khong phai JSON, JSON sai hop d
 test('khoi ```yaml hay ``` khong nhan — chi ```json la dang may doc cua V0', () => {
   assert.equal(
     extractTaskContract(body(JSON.stringify(contract()), { fence: 'yaml' })).reason,
-    REASONS.CONTRACT_BLOCK_MISSING,
+    REASONS.CONTRACT_BLOCK_NOT_ADJACENT,
   );
   assert.equal(
     extractTaskContract(body(JSON.stringify(contract()), { fence: '' })).reason,
-    REASONS.CONTRACT_BLOCK_MISSING,
+    REASONS.CONTRACT_BLOCK_NOT_ADJACENT,
   );
 });
 

@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { RETRY_CEILINGS, STATES } from '../validator/constants.mjs';
-import { evaluateMergeGate } from '../validator/gates.mjs';
+import { ACTORS, RETRY_CEILINGS, STATES } from '../validator/constants.mjs';
+import { evaluateCiGreen, evaluateMergeGate } from '../validator/gates.mjs';
 import { readMessage } from '../validator/messages.mjs';
 import { applyMerge, applyMessage, createTask } from '../validator/protocol.mjs';
 import { REASONS } from '../validator/reasons.mjs';
+import { extractTaskContract } from '../validator/task-contract.mjs';
 import {
   ISSUE,
   PR,
@@ -13,6 +14,7 @@ import {
   SHA_A,
   SHA_B,
   SHA_MERGE,
+  apply,
   contract,
   drive,
   greenChecks,
@@ -21,11 +23,14 @@ import {
 } from './helpers.mjs';
 
 /**
- * BON DUONG FAIL-OPEN da do duoc tren chinh ban nay (03/09/2026), moi duong mot bai.
+ * BAY DUONG FAIL-OPEN da do duoc tren chinh ban nay, moi duong mot bai.
  *
- * Ca bon deu KHONG phai loi go nham: chung deu la "code chay dung nhu da viet", va deu mo mot
+ * Bon duong dau do duoc 03/09/2026 luc viet giao thuc; ba duong sau (§5-§7) do duoc 04/09/2026 qua
+ * review doc lap cua ChatGPT tren PR #155 (B1, B2, B3).
+ *
+ * Ca bay deu KHONG phai loi go nham: chung deu la "code chay dung nhu da viet", va deu mo mot
  * duong cho mot khang dinh SAI di qua ma khong cong nao keu. Do la ly do chung nam rieng mot
- * tep — ai sua giao thuc sau nay phai thay ngay bon thu nay da tung xay ra.
+ * tep — ai sua giao thuc sau nay phai thay ngay bay thu nay da tung xay ra.
  */
 
 const ctxGreen = (sha) => ({ checkRuns: greenChecks(sha), requiredChecks: REQUIRED_CHECKS });
@@ -95,10 +100,7 @@ const mergedTask = (over) =>
 test('RUNTIME_PROOF FAIL den sau mot PASS cua cung release+env => BLOCKED, khong phai DUPLICATE', () => {
   // Do duoc: FAIL bi tu choi DUPLICATE_MESSAGE roi task van dong DONE tren bang chung cu.
   const proven = drive(mergedTask(), [[message('RUNTIME_PROOF', { deploy_run: 2001 })]]);
-  const conflict = applyMessage(
-    proven,
-    message('RUNTIME_PROOF', { deploy_run: 2002, verdict: 'FAIL' }),
-  );
+  const conflict = apply(proven, message('RUNTIME_PROOF', { deploy_run: 2002, verdict: 'FAIL' }));
   assert.equal(conflict.ok, true, 'bang chung mau thuan la mot su kien, khong phai mot ban sao');
   assert.equal(conflict.task.state, STATES.BLOCKED);
   assert.equal(conflict.task.blockedBy.reason, REASONS.CONFLICTING_RUNTIME_EVIDENCE);
@@ -108,19 +110,19 @@ test('RUNTIME_PROOF FAIL den sau mot PASS cua cung release+env => BLOCKED, khong
     recorded: 'PASS',
     claimed: 'FAIL',
   });
-  assert.equal(applyMessage(conflict.task, message('TASK_DONE')).reason, REASONS.TERMINAL_STATE);
+  assert.equal(apply(conflict.task, message('TASK_DONE')).reason, REASONS.TERMINAL_STATE);
 });
 
 test('PASS den sau mot FAIL cung khong "sua diem" duoc — FAIL da dua task vao BLOCKED', () => {
-  const failed = applyMessage(mergedTask(), message('RUNTIME_PROOF', { verdict: 'FAIL' })).task;
+  const failed = apply(mergedTask(), message('RUNTIME_PROOF', { verdict: 'FAIL' })).task;
   assert.equal(failed.state, STATES.BLOCKED);
   assert.equal(failed.blockedBy.reason, REASONS.RUNTIME_PROOF_FAILED);
-  assert.equal(applyMessage(failed, message('RUNTIME_PROOF')).reason, REASONS.TERMINAL_STATE);
+  assert.equal(apply(failed, message('RUNTIME_PROOF')).reason, REASONS.TERMINAL_STATE);
 });
 
 test('phat lai THAT (cung release+env+phan xet) van la DUPLICATE_MESSAGE', () => {
   const proven = drive(mergedTask(), [[message('RUNTIME_PROOF', { deploy_run: 2001 })]]);
-  const replay = applyMessage(proven, message('RUNTIME_PROOF', { deploy_run: 2001 }));
+  const replay = apply(proven, message('RUNTIME_PROOF', { deploy_run: 2001 }));
   assert.equal(replay.reason, REASONS.DUPLICATE_MESSAGE);
   assert.equal(replay.task, proven, 'phat lai khong tao task moi');
 });
@@ -181,7 +183,7 @@ test('day BUILD_READY lien tuc (khong qua FIXING) van dung o tran MAX_HEAD_REVIS
   let cycles = 0;
   for (let i = 0; i < RETRY_CEILINGS.MAX_HEAD_REVISIONS + 5; i += 1) {
     const head = String(i).padStart(40, 'f');
-    const pushed = applyMessage(task, message('BUILD_READY', { head_sha: head }));
+    const pushed = apply(task, message('BUILD_READY', { head_sha: head }));
     assert.equal(pushed.ok, true, `lan day ${i + 1}`);
     task = pushed.task;
     if (task.state === STATES.BLOCKED) break;
@@ -209,5 +211,100 @@ test('tran HEAD phai rong hon tong hai tran sua, neu khong duong sua hop le se b
   assert.ok(
     RETRY_CEILINGS.MAX_HEAD_REVISIONS >= longestLegalPath,
     `tran HEAD (${RETRY_CEILINGS.MAX_HEAD_REVISIONS}) phai >= duong hop le dai nhat (${longestLegalPath})`,
+  );
+});
+
+// ---------------------------------------------------------------------------------------------
+// 5. (B1) Bang chung CI khong buoc vao HEAD khong duoc tinh la bang chung cua HEAD dang xet
+// ---------------------------------------------------------------------------------------------
+
+test('check-run thieu head_sha => CI_EVIDENCE_UNBOUND, khong mo REVIEW_REQUEST cho HEAD nao', () => {
+  // Do duoc: `run.head_sha === undefined || run.head_sha === headSha` nhan mot mang check KHONG
+  // co head_sha lam bang chung xanh cua MOI HEAD — ke ca HEAD chua chay CI lan nao.
+  const unbound = REQUIRED_CHECKS.map((name) => ({ name, conclusion: 'success' }));
+  const result = evaluateCiGreen({
+    headSha: SHA_A,
+    checkRuns: unbound,
+    requiredChecks: REQUIRED_CHECKS,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, REASONS.CI_EVIDENCE_UNBOUND);
+  assert.deepEqual(result.detail, { headSha: SHA_A, unbound: [...REQUIRED_CHECKS] });
+  // Va duong that: REVIEW_REQUEST khong duoc mo bang bang chung khong buoc.
+  const task = drive(createTask({ issue: ISSUE, contract: contract() }), [
+    [message('TASK_READY')],
+    [message('BUILD_STARTED')],
+    [message('BUILD_READY')],
+  ]);
+  const opened = apply(task, message('REVIEW_REQUEST'), {
+    checkRuns: unbound,
+    requiredChecks: REQUIRED_CHECKS,
+  });
+  assert.equal(opened.ok, false);
+  assert.equal(opened.reason, REASONS.CI_EVIDENCE_UNBOUND);
+  // Mot check duy nhat khong buoc cung du de tu choi ca lo — bang chung tron lan la bang chung hong.
+  const mixed = [...greenChecks(SHA_A).slice(1), { name: 'verify', conclusion: 'success' }];
+  assert.equal(
+    evaluateCiGreen({ headSha: SHA_A, checkRuns: mixed, requiredChecks: REQUIRED_CHECKS }).reason,
+    REASONS.CI_EVIDENCE_UNBOUND,
+  );
+});
+
+// ---------------------------------------------------------------------------------------------
+// 6. (B2) Khong biet ai phat la LY DO TU CHOI, khong phai truong hop duoc mien kiem
+// ---------------------------------------------------------------------------------------------
+
+test('thieu context.actor => PRODUCER_UNKNOWN; ca tang phan quyen khong duoc im lang bien mat', () => {
+  // Do duoc: `context.actor !== undefined && ...` — orchestrator quen dua danh tinh nguoi phat thi
+  // MESSAGE_PRODUCERS khong con duoc kiem, va bat ky ai cung phat duoc bat ky loai thong diep nao.
+  const task = taskInReviewing();
+  for (const missing of [undefined, {}, { actor: '' }, { actor: null }, { actor: 42 }]) {
+    const result = applyMessage(task, message('REVIEW_PASS'), missing);
+    assert.equal(result.ok, false, JSON.stringify(missing ?? null));
+    assert.equal(result.reason, REASONS.PRODUCER_UNKNOWN, JSON.stringify(missing ?? null));
+  }
+  // Sai vai van la WRONG_PRODUCER (hai duong tu choi khac nhau, hai ma khac nhau).
+  assert.equal(
+    applyMessage(task, message('REVIEW_PASS'), { actor: ACTORS.BUILDER }).reason,
+    REASONS.WRONG_PRODUCER,
+  );
+  assert.equal(applyMessage(task, message('REVIEW_PASS'), { actor: ACTORS.REVIEWER }).ok, true);
+});
+
+// ---------------------------------------------------------------------------------------------
+// 7. (B3) Than Issue van xuoi khong duoc bien thanh mot hop dong dang chay
+// ---------------------------------------------------------------------------------------------
+
+test('hop dong chi kich hoat khi marker o dong dau va khoi json ngay duoi — nhu thong diep (§1)', () => {
+  // Do duoc: `extractTaskContract` tim marker o BAT KY dau roi lay khoi ```json dau tien sau no,
+  // nen mot Issue dan vi du hop dong cho ra mot hop dong THAT.
+  const json = JSON.stringify({
+    protocol: 'V0',
+    task_id: 'T-VI-DU',
+    goal: 'chi la vi du dan trong van xuoi',
+    context: 'khong phai hop dong that',
+    scope: ['x'],
+    out_of_scope: [],
+    acceptance: ['y'],
+    risk: 'LOW',
+    human_gate: false,
+    dependencies: [],
+    runtime_proof: { required: false },
+  });
+  const prose = [
+    'Anh xem thu hop dong se trong nhu the nay:',
+    '',
+    '<!-- AUTOPILOT_TASK_V0 -->',
+    '```json',
+    json,
+    '```',
+  ].join('\n');
+  assert.equal(extractTaskContract(prose).reason, REASONS.CONTRACT_MARKER_NOT_FIRST_LINE);
+  const spaced = ['<!-- AUTOPILOT_TASK_V0 -->', '', 'Muc tieu:', '```json', json, '```'].join('\n');
+  assert.equal(extractTaskContract(spaced).reason, REASONS.CONTRACT_BLOCK_NOT_ADJACENT);
+  // Dat dung cho thi van chay — rang buoc nay khong lam hop dong that kho viet hon.
+  assert.equal(
+    extractTaskContract(['<!-- AUTOPILOT_TASK_V0 -->', '```json', json, '```'].join('\n')).ok,
+    true,
   );
 });

@@ -85,6 +85,25 @@ test('CI xanh khi va chi khi MOI required check success tren DUNG HEAD', () => {
   );
 });
 
+test('check-run khong buoc vao HEAD (thieu/rong head_sha) => CI_EVIDENCE_UNBOUND, khong duoc tinh', () => {
+  const unbound = REQUIRED_CHECKS.map((name) => ({ name, conclusion: 'success' }));
+  assert.equal(
+    evaluateCiGreen({ headSha: SHA_A, checkRuns: unbound, requiredChecks: REQUIRED_CHECKS }).reason,
+    REASONS.CI_EVIDENCE_UNBOUND,
+  );
+  for (const bad of [null, '', 42]) {
+    const runs = [
+      ...greenChecks(SHA_A).slice(1),
+      { name: 'verify', conclusion: 'success', head_sha: bad },
+    ];
+    assert.equal(
+      evaluateCiGreen({ headSha: SHA_A, checkRuns: runs, requiredChecks: REQUIRED_CHECKS }).reason,
+      REASONS.CI_EVIDENCE_UNBOUND,
+      JSON.stringify(bad),
+    );
+  }
+});
+
 test('mot check chay hai lan, lan sau do => khong xanh (khong lay lan xanh cu lam bang chung)', () => {
   const runs = [...greenChecks(SHA_A), { name: 'verify', conclusion: 'failure', head_sha: SHA_A }];
   assert.equal(

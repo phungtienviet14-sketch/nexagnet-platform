@@ -15,7 +15,9 @@ import { MESSAGE_TYPES, RETRY_CEILINGS, RISK_LEVELS } from './constants.mjs';
 import { REASONS, deny, ok } from './reasons.mjs';
 
 /**
- * @typedef {{ name: string, conclusion: string | null, head_sha?: string }} CheckRun
+ * `head_sha` la BAT BUOC tren moi check-run: mot bang chung khong noi no thuoc HEAD nao thi
+ * khong phai bang chung cua HEAD nao ca. Xem `evaluateCiGreen`.
+ * @typedef {{ name: string, conclusion: string | null, head_sha: string }} CheckRun
  * @typedef {{ type: string, head_sha: string, pr: number }} Verdict
  * @typedef {{ release_sha: string, env: string, verdict: 'PASS' | 'FAIL' }} RuntimeProof
  */
@@ -45,13 +47,29 @@ export function requiredChecksFromRuleset(ruleset) {
 /**
  * MOI required check phai co mot check-run tren dung HEAD voi conclusion=success.
  * Thieu mot check = chua xanh. Check cua HEAD khac = khong tinh.
+ *
+ * Bang chung KHONG BUOC VAO HEAD (`head_sha` thieu, rong, hay khong phai chuoi) bi TU CHOI, khong
+ * phai bo qua: nhan no la nhan mot check-run bat ky — ke ca cua HEAD cu — lam bang chung cua HEAD
+ * dang xet, dung kieu fail-open ma muc "Claim != Proof" cam. Ban truoc lay
+ * `run.head_sha === undefined || run.head_sha === headSha`, tuc la mot mang check khong co truong
+ * `head_sha` mo duoc `REVIEW_REQUEST` cho MOI HEAD. Buoc bang chung vao HEAD la viec cua
+ * orchestrator luc lay tu API; khong buoc duoc thi phai bao, khong duoc doan.
  * @param {{ headSha: string, checkRuns: CheckRun[] | undefined, requiredChecks: string[] | undefined }} input
  */
 export function evaluateCiGreen({ headSha, checkRuns, requiredChecks }) {
   if (!Array.isArray(requiredChecks) || requiredChecks.length === 0)
     return deny(REASONS.NO_REQUIRED_CHECKS);
   if (!Array.isArray(checkRuns)) return deny(REASONS.CI_EVIDENCE_MISSING, { headSha });
-  const onHead = checkRuns.filter((run) => run.head_sha === undefined || run.head_sha === headSha);
+  const unbound = checkRuns.filter(
+    (run) => typeof run?.head_sha !== 'string' || run.head_sha.length === 0,
+  );
+  if (unbound.length > 0) {
+    return deny(REASONS.CI_EVIDENCE_UNBOUND, {
+      headSha,
+      unbound: unbound.map((run) => run?.name ?? null),
+    });
+  }
+  const onHead = checkRuns.filter((run) => run.head_sha === headSha);
   const missing = requiredChecks.filter((name) => !onHead.some((run) => run.name === name));
   if (missing.length > 0) return deny(REASONS.CI_CHECK_MISSING, { headSha, missing });
   const notGreen = requiredChecks.filter((name) =>

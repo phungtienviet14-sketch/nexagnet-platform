@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { ACTORS, STATES } from '../validator/constants.mjs';
-import { applyException, applyMerge, applyMessage, createTask } from '../validator/protocol.mjs';
+import { applyException, applyMerge, createTask } from '../validator/protocol.mjs';
 import { REASONS } from '../validator/reasons.mjs';
 import {
   ISSUE,
@@ -11,6 +11,7 @@ import {
   SHA_A,
   SHA_B,
   SHA_MERGE,
+  apply,
   contract,
   drive,
   greenChecks,
@@ -57,7 +58,7 @@ test('vong doi day du: 9 thong diep + MERGED, ket thuc DONE, lich su ghi tung bu
 
 test('task la bat bien: ap thong diep tra ve task MOI, task cu khong doi', () => {
   const before = createTask({ issue: ISSUE, contract: contract() });
-  const after = applyMessage(before, message('TASK_READY'));
+  const after = apply(before, message('TASK_READY'));
   assert.equal(after.ok, true);
   assert.equal(before.state, null);
   assert.equal(after.task.state, STATES.READY);
@@ -69,13 +70,13 @@ test('task la bat bien: ap thong diep tra ve task MOI, task cu khong doi', () =>
 
 test('thong diep lap (cung khoa) => DUPLICATE_MESSAGE, khong doi trang thai, khong doi bo dem', () => {
   const task = taskInReviewing();
-  const first = applyMessage(task, message('REVIEW_BLOCK'));
+  const first = apply(task, message('REVIEW_BLOCK'));
   assert.equal(first.ok, true);
   assert.equal(first.task.reviewFixAttempts, 1);
-  const again = applyMessage(first.task, message('REVIEW_BLOCK'));
+  const again = apply(first.task, message('REVIEW_BLOCK'));
   assert.equal(again.reason, REASONS.DUPLICATE_MESSAGE);
   assert.equal(again.task, first.task);
-  const dupReady = applyMessage(taskInReviewing(), message('TASK_READY'));
+  const dupReady = apply(taskInReviewing(), message('TASK_READY'));
   assert.equal(
     dupReady.reason,
     REASONS.DUPLICATE_MESSAGE,
@@ -85,43 +86,36 @@ test('thong diep lap (cung khoa) => DUPLICATE_MESSAGE, khong doi trang thai, kho
 
 test('thong diep cua issue khac, PR khac, hay nguoi phat sai vai => tu choi truoc moi cong khac', () => {
   const task = taskInReviewing();
+  assert.equal(apply(task, message('REVIEW_PASS', { issue: 999 })).reason, REASONS.ISSUE_MISMATCH);
+  assert.equal(apply(task, message('REVIEW_PASS', { pr: 777 })).reason, REASONS.PR_MISMATCH);
   assert.equal(
-    applyMessage(task, message('REVIEW_PASS', { issue: 999 })).reason,
-    REASONS.ISSUE_MISMATCH,
-  );
-  assert.equal(applyMessage(task, message('REVIEW_PASS', { pr: 777 })).reason, REASONS.PR_MISMATCH);
-  assert.equal(
-    applyMessage(task, message('REVIEW_PASS'), { actor: ACTORS.BUILDER }).reason,
+    apply(task, message('REVIEW_PASS'), { actor: ACTORS.BUILDER }).reason,
     REASONS.WRONG_PRODUCER,
   );
-  assert.equal(applyMessage(task, message('REVIEW_PASS'), { actor: ACTORS.REVIEWER }).ok, true);
+  assert.equal(apply(task, message('REVIEW_PASS'), { actor: ACTORS.REVIEWER }).ok, true);
   assert.equal(
-    applyMessage(task, message('BUILD_READY', { head_sha: SHA_B }), { actor: ACTORS.FIXER }).ok,
+    apply(task, message('BUILD_READY', { head_sha: SHA_B }), { actor: ACTORS.FIXER }).ok,
     true,
   );
   assert.equal(
-    applyMessage(task, message('BUILD_READY', { head_sha: SHA_B }), { actor: ACTORS.REVIEWER })
-      .reason,
+    apply(task, message('BUILD_READY', { head_sha: SHA_B }), { actor: ACTORS.REVIEWER }).reason,
     REASONS.WRONG_PRODUCER,
   );
 });
 
 test('TASK_READY khai rui ro khac hop dong => RISK_MISMATCH; thong diep hong schema => SCHEMA_VIOLATION', () => {
   const task = createTask({ issue: ISSUE, contract: contract() });
+  assert.equal(apply(task, message('TASK_READY', { risk: 'LOW' })).reason, REASONS.RISK_MISMATCH);
   assert.equal(
-    applyMessage(task, message('TASK_READY', { risk: 'LOW' })).reason,
-    REASONS.RISK_MISMATCH,
-  );
-  assert.equal(
-    applyMessage(task, message('TASK_READY', { task_id: 'OTHER' })).reason,
+    apply(task, message('TASK_READY', { task_id: 'OTHER' })).reason,
     REASONS.TASK_ID_MISMATCH,
   );
   assert.equal(
-    applyMessage(task, message('TASK_READY', { risk: 'ULTRA' })).reason,
+    apply(task, message('TASK_READY', { risk: 'ULTRA' })).reason,
     REASONS.SCHEMA_VIOLATION,
   );
   assert.equal(
-    applyMessage(task, message('BUILD_STARTED')).reason,
+    apply(task, message('BUILD_STARTED')).reason,
     REASONS.ILLEGAL_TRANSITION,
     'chua READY thi khong BUILD_STARTED',
   );
@@ -132,13 +126,10 @@ test('CI_FAIL phai tro dung HEAD hien tai; truoc khi co PR thi khong co gi de FA
     [message('TASK_READY')],
     [message('BUILD_STARTED')],
   ]);
-  assert.equal(applyMessage(noPr, message('CI_FAIL')).reason, REASONS.ILLEGAL_TRANSITION);
+  assert.equal(apply(noPr, message('CI_FAIL')).reason, REASONS.ILLEGAL_TRANSITION);
   const inCi = drive(noPr, [[message('BUILD_READY')]]);
-  assert.equal(
-    applyMessage(inCi, message('CI_FAIL', { head_sha: SHA_B })).reason,
-    REASONS.HEAD_MISMATCH,
-  );
-  assert.equal(applyMessage(inCi, message('CI_FAIL')).task.state, STATES.FIXING);
+  assert.equal(apply(inCi, message('CI_FAIL', { head_sha: SHA_B })).reason, REASONS.HEAD_MISMATCH);
+  assert.equal(apply(inCi, message('CI_FAIL')).task.state, STATES.FIXING);
 });
 
 test('EXCEPTION vao BLOCKED tu trang thai song, phai co ly do; tu DONE/BLOCKED thi TERMINAL_STATE', () => {
@@ -154,7 +145,7 @@ test('EXCEPTION vao BLOCKED tu trang thai song, phai co ly do; tu DONE/BLOCKED t
     detail: { by: 'human' },
   });
   assert.equal(applyException(blocked.task, { reason: 'AGAIN' }).reason, REASONS.TERMINAL_STATE);
-  assert.equal(applyMessage(blocked.task, message('REVIEW_PASS')).reason, REASONS.TERMINAL_STATE);
+  assert.equal(apply(blocked.task, message('REVIEW_PASS')).reason, REASONS.TERMINAL_STATE);
   assert.equal(
     applyMerge(blocked.task, { headSha: SHA_A, mergeSha: SHA_MERGE }).reason,
     REASONS.TERMINAL_STATE,

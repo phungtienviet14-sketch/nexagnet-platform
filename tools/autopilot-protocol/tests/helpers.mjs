@@ -2,7 +2,7 @@
  * Du lieu TONG HOP dung chung cho bo test. Khong co SHA/issue/PR that nao o day — moi gia tri
  * la mau, va co y de de nhin (40 chu 'a', 40 chu 'b', ...).
  */
-import { MARKERS } from '../validator/constants.mjs';
+import { MARKERS, MESSAGE_PRODUCERS } from '../validator/constants.mjs';
 import { applyMessage, createTask } from '../validator/protocol.mjs';
 
 export const SHA_A = 'a'.repeat(40);
@@ -71,10 +71,23 @@ export function message(type, fields = {}) {
   return { ...base, ...defaults[type], ...fields };
 }
 
+/**
+ * Nguoi phat HOP LE dau tien cua mot loai thong diep, theo `MESSAGE_PRODUCERS`.
+ *
+ * `applyMessage` doi `context.actor` — khong biet ai phat la mot ly do tu choi (`PRODUCER_UNKNOWN`),
+ * khong phai truong hop duoc mien kiem. Test nao khong noi ve phan quyen thi dung dung nguoi phat
+ * that qua helper nay; test nao NOI ve phan quyen thi truyen `actor` tay de de.
+ */
+export const producerOf = (type) => MESSAGE_PRODUCERS[type]?.[0];
+
+/** `applyMessage` voi nguoi phat mac dinh dung vai; `context.actor` truyen tay van thang. */
+export const apply = (task, msg, context = {}) =>
+  applyMessage(task, msg, { actor: producerOf(msg.type), ...context });
+
 /** Ap lien tiep nhieu thong diep; nem neu mot buoc bi tu choi (test happy-path dung). */
 export function drive(task, steps) {
   return steps.reduce((current, [msg, context]) => {
-    const result = applyMessage(current, msg, context);
+    const result = apply(current, msg, context);
     if (!result.ok)
       throw new Error(
         `buoc ${msg.type} bi tu choi: ${result.reason} ${JSON.stringify(result.detail)}`,

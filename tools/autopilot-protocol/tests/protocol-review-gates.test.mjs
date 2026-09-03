@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { STATES } from '../validator/constants.mjs';
-import { applyMerge, applyMessage, createTask } from '../validator/protocol.mjs';
+import { applyMerge, createTask } from '../validator/protocol.mjs';
 import { REASONS } from '../validator/reasons.mjs';
 import {
   ISSUE,
@@ -10,6 +10,7 @@ import {
   SHA_A,
   SHA_B,
   SHA_MERGE,
+  apply,
   contract,
   drive,
   greenChecks,
@@ -30,13 +31,13 @@ const readyToCi = () =>
 
 test('REVIEW_PASS neu ten HEAD cu bi tu choi sau khi HEAD doi (stale), merge chi mo bang PASS cua HEAD moi', () => {
   let task = taskInReviewing();
-  const pushed = applyMessage(task, message('BUILD_READY', { head_sha: SHA_B }));
+  const pushed = apply(task, message('BUILD_READY', { head_sha: SHA_B }));
   assert.equal(pushed.ok, true);
   assert.equal(pushed.task.state, STATES.CI, 'commit moi luc dang review => quay ve CI');
   task = drive(pushed.task, [
     [message('REVIEW_REQUEST', { head_sha: SHA_B, ci_run: 3 }), ctxGreen(SHA_B)],
   ]);
-  const stale = applyMessage(task, message('REVIEW_PASS', { head_sha: SHA_A }));
+  const stale = apply(task, message('REVIEW_PASS', { head_sha: SHA_A }));
   assert.equal(stale.reason, REASONS.STALE_VERDICT);
   assert.deepEqual(stale.detail, { verdictHead: SHA_A, currentHead: SHA_B });
   assert.equal(stale.task.verdicts.length, 0, 'phan xet stale KHONG duoc ghi');
@@ -60,7 +61,7 @@ test('REVIEW_PASS DA GHI cho HEAD A khong mo merge cho HEAD B; phat lai PASS(A) 
     REASONS.NO_CURRENT_REVIEW_PASS,
   );
   assert.equal(
-    applyMessage(task, message('REVIEW_PASS', { head_sha: SHA_A })).reason,
+    apply(task, message('REVIEW_PASS', { head_sha: SHA_A })).reason,
     REASONS.DUPLICATE_MESSAGE,
     'khoa review-verdict:<pr>:<A>:REVIEW_PASS da ghi',
   );
@@ -71,36 +72,36 @@ test('REVIEW_REQUEST bi tu choi khi required CI chua xanh, thieu check, hay thie
   const task = readyToCi();
   const req = message('REVIEW_REQUEST');
   assert.equal(
-    applyMessage(task, req).reason,
+    apply(task, req).reason,
     REASONS.NO_REQUIRED_CHECKS,
     'khong dua required checks => khong mo',
   );
   assert.equal(
-    applyMessage(task, req, { requiredChecks: REQUIRED_CHECKS }).reason,
+    apply(task, req, { requiredChecks: REQUIRED_CHECKS }).reason,
     REASONS.CI_EVIDENCE_MISSING,
   );
   assert.equal(
-    applyMessage(task, req, ctxGreen(SHA_A, { verify: 'failure' })).reason,
+    apply(task, req, ctxGreen(SHA_A, { verify: 'failure' })).reason,
     REASONS.CI_CHECK_NOT_GREEN,
   );
   assert.equal(
-    applyMessage(task, req, ctxGreen(SHA_A, { images: null })).reason,
+    apply(task, req, ctxGreen(SHA_A, { images: null })).reason,
     REASONS.CI_CHECK_NOT_GREEN,
   );
   assert.equal(
-    applyMessage(task, req, ctxGreen(SHA_B)).reason,
+    apply(task, req, ctxGreen(SHA_B)).reason,
     REASONS.CI_CHECK_MISSING,
     'CI xanh cua HEAD khac khong tinh',
   );
   assert.equal(
-    applyMessage(task, message('REVIEW_REQUEST', { head_sha: SHA_B }), ctxGreen(SHA_B)).reason,
+    apply(task, message('REVIEW_REQUEST', { head_sha: SHA_B }), ctxGreen(SHA_B)).reason,
     REASONS.HEAD_MISMATCH,
   );
   assert.equal(
-    applyMessage(task, message('REVIEW_REQUEST', { risk: 'LOW' }), ctxGreen(SHA_A)).reason,
+    apply(task, message('REVIEW_REQUEST', { risk: 'LOW' }), ctxGreen(SHA_A)).reason,
     REASONS.RISK_MISMATCH,
   );
-  assert.equal(applyMessage(task, req, ctxGreen(SHA_A)).task.state, STATES.REVIEWING);
+  assert.equal(apply(task, req, ctxGreen(SHA_A)).task.state, STATES.REVIEWING);
 });
 
 test('HIGH: REVIEW_PASS hien hanh van KHONG merge duoc neu khong co nguoi duyet', () => {
@@ -133,7 +134,7 @@ test('HIGH: REVIEW_PASS hien hanh van KHONG merge duoc neu khong co nguoi duyet'
 });
 
 test('REVIEW_BLOCK roi REVIEW_PASS tren cung HEAD: phan xet moi nhat thang, merge mo', () => {
-  const blocked = applyMessage(taskInReviewing(), message('REVIEW_BLOCK'));
+  const blocked = apply(taskInReviewing(), message('REVIEW_BLOCK'));
   assert.equal(blocked.task.state, STATES.FIXING);
   const back = drive(blocked.task, [
     [message('BUILD_READY', { head_sha: SHA_B })],

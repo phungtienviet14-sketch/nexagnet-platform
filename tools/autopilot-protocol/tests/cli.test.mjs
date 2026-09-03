@@ -59,15 +59,19 @@ test('contract: nhan JSON thuan hoac than Issue Markdown; hop dong hong => exit 
   assert.equal(okJson.code, 0);
   assert.equal(okJson.out.contract.task_id, 'T-SAMPLE');
   const body = [
-    '# Issue',
     '<!-- AUTOPILOT_TASK_V0 -->',
     '```json',
     JSON.stringify(contract({ issue: 42 })),
     '```',
+    '',
+    '# Issue — ban nguoi doc',
   ].join('\n');
   const okMd = run(['contract', file('issue.md', body)]);
   assert.equal(okMd.code, 0);
   assert.equal(okMd.out.contract.issue, 42);
+  const proseFirst = run(['contract', '-'], `# Issue\n${body}`);
+  assert.equal(proseFirst.code, 1);
+  assert.equal(proseFirst.out.reason, 'CONTRACT_MARKER_NOT_FIRST_LINE');
   const high = run(
     ['contract', '-'],
     JSON.stringify(contract({ risk: 'HIGH', human_gate: false })),

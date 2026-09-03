@@ -59,14 +59,24 @@ const contract = validateTaskContract(payload); // { ok, contract } | { ok: fals
 let task = createTask({ issue: 200, contract: contract.contract });
 const msg = readMessage(commentBody); // { ok, message } | { ok: false, reason }
 const next = applyMessage(task, msg.message, {
-  // bang chung do orchestrator lay tu GitHub
-  checkRuns,
-  requiredChecks,
-  humanApproved,
+  // BAT BUOC: ai phat thong diep nay (comment.user.login / app.slug). Thieu => PRODUCER_UNKNOWN.
   actor,
+  // bang chung do orchestrator lay tu GitHub
+  checkRuns, // moi check-run PHAI co head_sha; thieu => CI_EVIDENCE_UNBOUND
+  requiredChecks,
+  humanApproval,
 });
 if (next.ok) task = next.task; // task cu KHONG bi sua
 ```
+
+Ba dieu de sai nhat khi noi goi nay vao mot orchestrator that:
+
+1. **`actor` khong phai tuy chon.** Khong biet ai phat la mot ly do tu choi (`PRODUCER_UNKNOWN`),
+   khong phai mot truong hop duoc mien kiem `MESSAGE_PRODUCERS`.
+2. **Check-run phai tu noi no thuoc HEAD nao.** `head_sha` thieu/rong => `CI_EVIDENCE_UNBOUND` cho
+   ca lo; buoc bang chung vao HEAD la viec cua orchestrator luc lay tu API.
+3. **Hop dong chi kich hoat co chu dinh.** `extractTaskContract` doi marker `AUTOPILOT_TASK_V0` o
+   dong co noi dung DAU TIEN va khoi `json` NGAY SAU no — van xuoi dan vi du khong tao ra hop dong.
 
 Moi tu choi mang ma trong `REASONS`. Doi mot ten trong `constants.mjs` la doi giao thuc — phai len
 phien ban (`V1`), khong sua tai cho.
