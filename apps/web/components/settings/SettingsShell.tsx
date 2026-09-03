@@ -133,8 +133,10 @@ function OperationsSettingsShell() {
         onNavigate={navigate}
       />
     ),
+    // Danh muc san pham nam duoi bang gia. Khi dang co mot viec dang lam, no lui ve nen bang
+    // KHOANG CACH + duong phan cach + co chu — khong bang cach lam mo di (#144 cam cach do).
     'products-pricing': (
-      <div className="settings-section-stack">
+      <div className="settings-section-stack settings-pricing-panel">
         <PricePeriodsSettings
           dataClassificationTest={dataClassificationTest}
           canConfigure={access.canConfigure}

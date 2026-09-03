@@ -646,3 +646,200 @@ a.settings-index__tab {
     align-items: stretch;
   }
 }
+
+/* ---------- #144 · Tap trung tien do theo buoc dang lam ----------------------------------- *
+ *
+ * Nguyen tac: MOT viec -> MOT khoi chiem uu the -> MOT nut chinh.
+ *
+ * Cong cu dung o day dung theo thu tu #144 yeu cau — BO CUC, KHOANG CACH, VIEN/TUONG PHAN, CO CHU
+ * va an/hien dan — truoc khi nghi den hoat anh. Cu the la KHONG dung: lam mo ca nen, nhap nhay,
+ * to cam khap noi, hay phu mot lop modal len mot buoc sua binh thuong.
+ */
+
+/* Khoi dang chiem uu the: dam hon, noi cao hon, va co mot vien accent mong de mat tim ra ngay.
+   Chi mot phan tu mang `data-price-dominant` tai mot thoi diem — co bai kiem tra dem dieu do. */
+.settings-price [data-price-dominant='true'] {
+  border-color: color-mix(in oklch, var(--accent) 42%, var(--line));
+  box-shadow: var(--shadow-md);
+}
+
+/* Tieu de duoc dua con tro toi khong duoc phep "nhay" ma khong nhin thay gi. */
+.settings-price [data-price-focus-target='true']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--r-sm);
+}
+
+/* ---- Trang thai thang hien tai o che do NGU CANH ----
+   Van doc duoc su that ("Chưa có" / "Chỉ để chạy thử"), nhung thu nho lai va bo phan dien giai
+   dai — no la ngu canh cua viec dang lam, khong phai viec dang lam. */
+.settings-price-board[data-density='compact'] {
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+.settings-price-board[data-density='compact'] .settings-price-card {
+  gap: 0.15rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--r-md);
+  box-shadow: none;
+}
+.settings-price-board[data-density='compact'] .settings-price-card strong {
+  font-size: 0.9375rem;
+}
+.settings-price-board[data-density='compact'] .settings-price-card p:not(.settings-eyebrow) {
+  font-size: 0.8125rem;
+}
+/* Cau dien giai dai chi can o che do day; o che do ngu canh, nhan + trang thai la du. */
+.settings-price-board[data-density='compact'] .settings-price-card--missing p:not(.settings-eyebrow),
+.settings-price-board[data-density='compact'] .settings-price-card--test p:not(.settings-eyebrow) {
+  display: none;
+}
+/* Ky chay thu VAN phai nhin ra ngay ca o che do ngu canh — do la su that de gay hieu nham nhat. */
+.settings-price-board[data-density='compact'] .settings-price-card--test {
+  border-width: 2px;
+}
+
+/* ---- Chua co viec nao: mot loi moi bat dau, khong phai mot khong gian lam viec rong ---- */
+.settings-price-start {
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
+  padding: 1.6rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+.settings-price-start h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+.settings-price-start p {
+  margin: 0;
+  max-width: 52ch;
+}
+.settings-price-start__cta {
+  margin-top: 0.7rem;
+  padding: 0.7rem 1.35rem;
+  font-size: 1rem;
+}
+
+/* ---- Dai hanh dong: LY DO va CAI NUT trong cung mot khung ---- */
+.settings-price-actionbar {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+/* Buoc 2 = da du dieu kien di tiep. Nut chinh to len va dai hanh dong duoc neo bang mot nen nhat
+   — de thay ma khong che mat noi dung nao (nen o day KHONG dung `position: sticky`). */
+.settings-price-work[data-price-step='2'] .settings-price-actionbar,
+.settings-price-work[data-price-mode='review'] .settings-price-actionbar {
+  padding: 1rem 1.1rem;
+  border: 1px solid color-mix(in oklch, var(--accent) 30%, var(--line));
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--accent-soft) 32%, var(--surface));
+}
+.settings-price-work[data-price-step='2'] .settings-price-actions__primary .settings-button--primary,
+.settings-price-work[data-price-mode='review']
+  .settings-price-actions__primary
+  .settings-button--primary {
+  padding: 0.7rem 1.35rem;
+  font-size: 1rem;
+}
+
+/* Buoc 1 = van con cho phai sua. Bang gia la thu phai nhin, nen no giu do tuong phan day du con
+   dai hanh dong chi la mot duong ke mo o duoi. */
+.settings-price-work[data-price-step='1'] .settings-price-actionbar {
+  border-top-color: color-mix(in oklch, var(--line) 80%, transparent);
+}
+
+/* ---- Man Xem lai: mot quyet dinh, khong phai them mot bang du lieu ---- */
+.settings-price-review-body {
+  display: grid;
+  gap: 1rem;
+}
+.settings-price-review__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+/* ---- Trinh tao: tieu de cua BUOC lon hon nhan tren thanh tien do ---- */
+.settings-wizard__step-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+/* ---- Noi dung nen: van mo ra duoc, nhung khong tranh cho voi viec dang lam ---- */
+.settings-archive-list[data-price-background='true'] {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+}
+.settings-archive-list[data-price-background='true'] summary {
+  color: color-mix(in oklch, var(--text) 48%, transparent);
+}
+
+/*
+ * Danh muc san pham nam duoi man bang gia (`SettingsShell` ghep hai khoi vao mot panel). Khi bang
+ * gia dang o mot buoc lam viec, danh muc lui ve nen bang KHOANG CACH + mot duong phan cach + co
+ * tieu de nho lai. Khong ha opacity: #144 cam giai phap "lam ca nen mo di cho kho doc".
+ */
+.settings-pricing-panel:has(.settings-price[data-price-context='compact'])
+  > .settings-section-stack:not(.settings-price) {
+  margin-top: 1.75rem;
+  padding-top: 1.35rem;
+  border-top: 1px dashed var(--line);
+}
+.settings-pricing-panel:has(.settings-price[data-price-context='compact'])
+  > .settings-section-stack:not(.settings-price)
+  .settings-section-heading h2 {
+  font-size: 1.05rem;
+}
+
+/*
+ * ...va nut chinh cua danh muc thoi la nut chinh trong luc do.
+ *
+ * Do la loi bat duoc khi XEM anh chup, khong phai khi doc code: nut "Thêm sản phẩm" cua danh muc
+ * la mot nut accent dac, nen tren cung mot man hinh no nang ngang voi "Kiểm tra & tiếp tục". Man
+ * hinh khi do co HAI nut trong nhu nut chinh, dung dieu #144 phai bo.
+ */
+.settings-pricing-panel:has(.settings-price[data-price-context='compact'])
+  > .settings-section-stack:not(.settings-price)
+  .settings-button--primary {
+  color: var(--text);
+  background: transparent;
+  border-color: var(--line);
+}
+
+/* ---- Man hep: khong the de dai hanh dong tran ngang ---- */
+@media (max-width: 900px) {
+  .settings-price-work[data-price-step='2'] .settings-price-actionbar,
+  .settings-price-work[data-price-mode='review'] .settings-price-actionbar {
+    padding: 0.9rem;
+  }
+  .settings-price-start {
+    padding: 1.2rem 1.1rem;
+  }
+  .settings-price-start__cta {
+    width: 100%;
+  }
+}
+
+/*
+ * Nut dang CHO MAY CHU: trong nhu bi khoa, nhung van giu duoc tieu diem.
+ *
+ * Dat `disabled` len mot nut dang duoc tieu diem thi trinh duyet nem tieu diem ve `<body>` —
+ * nguoi dung ban phim mat cho dang dung ngay giua mot lan luu. Nen o day trang thai "dang cho"
+ * duoc noi bang `aria-disabled` (chan trong handler), con `disabled` that chi danh cho truong
+ * hop thao tac THUC SU khong lam duoc (#144, muc kha nang tiep can).
+ */
+.settings-button[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.settings-button[aria-disabled='true']:hover {
+  background: inherit;
+}
