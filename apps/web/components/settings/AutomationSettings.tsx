@@ -9,8 +9,8 @@ import {
   SettingsFocusModal,
   SettingsStatusBar,
   SettingsWorkCard,
+  useFocusIntent,
   useFocusOnKey,
-  useRestoreFocus,
 } from './SettingsFocus';
 import { SettingsPanelState } from './SettingsPanelState';
 
@@ -29,7 +29,10 @@ export function AutomationSettings({ summary }: Props) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const workHeading = useRef<HTMLHeadingElement>(null);
-  const { rememberTrigger } = useRestoreFocus(confirming);
+  // Nut mo hop thoai. Hop thoai tu tra tieu diem ve day khi dong (#154), nen o day khong con mot
+  // co trang thai rong hon vong doi hop nao phai giu dung bo nua.
+  const toggleTrigger = useRef<HTMLButtonElement>(null);
+  const intent = useFocusIntent();
 
   const mutation = useMutation({
     mutationFn: settingsApi.setAutoSend,
@@ -47,7 +50,7 @@ export function AutomationSettings({ summary }: Props) {
   const live = summary.autoSend && Boolean(policy?.enabled);
   // Khoa tieu diem doi theo TRANG THAI, khong theo tung lan nap lai: sau khi doi cong tac thanh
   // cong thi su chu y quay ve dung khoi trang thai vua doi.
-  useFocusOnKey(workHeading, `automation:${summary.autoSend ? 'on' : 'off'}`);
+  useFocusOnKey(workHeading, `automation:${summary.autoSend ? 'on' : 'off'}`, intent);
 
   const statusTitle = live
     ? 'Hệ thống đang được phép tự gửi xác nhận'
@@ -98,7 +101,7 @@ export function AutomationSettings({ summary }: Props) {
             primary={
               <button
                 type="button"
-                ref={rememberTrigger}
+                ref={toggleTrigger}
                 className={`settings-button ${
                   summary.autoSend ? 'settings-button--danger' : 'settings-button--primary'
                 }`}
@@ -165,8 +168,14 @@ export function AutomationSettings({ summary }: Props) {
           confirmLabel={summary.autoSend ? 'Tắt tự gửi' : 'Bật tự gửi'}
           tone={summary.autoSend ? 'danger' : 'primary'}
           pending={mutation.isPending}
+          returnFocus={() => toggleTrigger.current}
           onCancel={() => setConfirming(false)}
-          onConfirm={() => mutation.mutate(!summary.autoSend)}
+          onConfirm={() => {
+            // Doi cong tac la mot lan CHUYEN VIEC do nguoi van hanh gay ra: xong thi su chu y phai
+            // ve dung khoi trang thai vua doi. Mo hop thoai thi khong — mo hop khong doi viec gi.
+            intent.requestFocus();
+            mutation.mutate(!summary.autoSend);
+          }}
         >
           <ul className="settings-confirmation">
             <li>

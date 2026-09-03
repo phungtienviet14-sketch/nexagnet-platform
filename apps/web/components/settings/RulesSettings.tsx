@@ -10,8 +10,8 @@ import {
   SettingsFocusModal,
   SettingsStatusBar,
   SettingsWorkCard,
+  useFocusIntent,
   useFocusOnKey,
-  useRestoreFocus,
 } from './SettingsFocus';
 import { formatSettingsDate } from './settings-format';
 import { SettingsPanelState } from './SettingsPanelState';
@@ -179,11 +179,16 @@ export function RulesSettings() {
 
   const workHeading = useRef<HTMLHeadingElement>(null);
   const firstField = useRef<HTMLInputElement>(null);
-  useFocusOnKey(workHeading, `policy:${focus.step}:${selectedRule?.id ?? 'none'}`);
-  const { rememberTrigger } = useRestoreFocus(Boolean(confirming));
+  // Nut mo hop `Áp dụng bản …`; hop tu tra tieu diem ve day khi dong (#154).
+  const activateTrigger = useRef<HTMLButtonElement>(null);
+  const intent = useFocusIntent();
+  // `focus.step` phu thuoc ca `selectedRule.status` — mot gia tri tu may chu. Khong co bang chung
+  // nhan qua thi mot lan nap lai lam bang khac di se keo tieu diem khoi o dang go.
+  useFocusOnKey(workHeading, `policy:${focus.step}:${selectedRule?.id ?? 'none'}`, intent);
 
   const handleCreate = () => {
     const invalid = firstInvalidField(values);
+    intent.requestFocus();
     setInvalidKey(invalid?.key);
     setFormError(invalid ? `${invalid.label} nằm ngoài khoảng cho phép.` : undefined);
     if (invalid) {
@@ -259,7 +264,7 @@ export function RulesSettings() {
               ) : focus.step === 'review' && selectedRule ? (
                 <button
                   type="button"
-                  ref={rememberTrigger}
+                  ref={activateTrigger}
                   className="settings-button settings-button--primary"
                   disabled={Boolean(focus.blockedReason) || activateMutation.isPending}
                   onClick={() => setConfirming(selectedRule)}
@@ -271,7 +276,10 @@ export function RulesSettings() {
                   type="button"
                   className="settings-button settings-button--primary"
                   disabled={previewMutation.isPending}
-                  onClick={() => previewMutation.mutate(selectedRule.id)}
+                  onClick={() => {
+                    intent.requestFocus();
+                    previewMutation.mutate(selectedRule.id);
+                  }}
                 >
                   {previewMutation.isPending ? 'Đang chạy đơn mẫu…' : focus.primaryLabel}
                 </button>
@@ -279,7 +287,10 @@ export function RulesSettings() {
                 <button
                   type="button"
                   className="settings-button settings-button--primary"
-                  onClick={() => setEditing(true)}
+                  onClick={() => {
+                    intent.requestFocus();
+                    setEditing(true);
+                  }}
                 >
                   {focus.primaryLabel}
                 </button>
@@ -291,6 +302,7 @@ export function RulesSettings() {
                   type="button"
                   className="settings-button settings-button--quiet"
                   onClick={() => {
+                    intent.requestFocus();
                     setEditing(false);
                     setFormError(undefined);
                     setInvalidKey(undefined);
@@ -302,7 +314,10 @@ export function RulesSettings() {
                 <button
                   type="button"
                   className="settings-button settings-button--quiet"
-                  onClick={() => setPreviewedId(undefined)}
+                  onClick={() => {
+                    intent.requestFocus();
+                    setPreviewedId(undefined);
+                  }}
                 >
                   Quay lại chạy thử
                 </button>
@@ -435,6 +450,7 @@ export function RulesSettings() {
               type="button"
               className="settings-version-row"
               onClick={() => {
+                intent.requestFocus();
                 setSelectedId(rule.id);
                 setPreviewedId(undefined);
                 setEditing(false);
@@ -459,8 +475,12 @@ export function RulesSettings() {
           confirmLabel={`Áp dụng bản ${confirming.version}`}
           tone="primary"
           pending={activateMutation.isPending}
+          returnFocus={() => activateTrigger.current}
           onCancel={() => setConfirming(null)}
-          onConfirm={() => activateMutation.mutate(confirming.id)}
+          onConfirm={() => {
+            intent.requestFocus();
+            activateMutation.mutate(confirming.id);
+          }}
         >
           <ul className="settings-confirmation">
             <li>Đơn đã chốt giữ nguyên chính sách tại thời điểm chốt.</li>
