@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nexagnet:autopilot:v0:task-contract",
+  "title": "Autopilot Protocol V0 — Task Contract",
+  "description": "Hop dong task: mot Issue = mot hop dong. Day la dang may doc; dang nguoi doc la phan van xuoi cua Issue. Marker trong Issue: <!-- AUTOPILOT_TASK_V0 -->, theo sau la mot khoi ```json chua dung doi tuong nay.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "task_id",
+    "goal",
+    "context",
+    "scope",
+    "out_of_scope",
+    "acceptance",
+    "risk",
+    "human_gate",
+    "dependencies",
+    "runtime_proof"
+  ],
+  "properties": {
+    "protocol": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/protocolVersion"
+    },
+    "task_id": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/taskId"
+    },
+    "issue": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/issueNumber",
+      "description": "So Issue mang hop dong nay. Tuy chon vi hop dong duoc soan TRUOC khi Issue ton tai; orchestrator dien vao khi doc."
+    },
+    "title": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/nonEmptyText"
+    },
+    "goal": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/nonEmptyText"
+    },
+    "context": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/nonEmptyText"
+    },
+    "scope": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/nonEmptyTextList"
+    },
+    "out_of_scope": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/textList"
+    },
+    "acceptance": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/nonEmptyTextList"
+    },
+    "risk": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/risk"
+    },
+    "risk_areas": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/highRiskArea"
+      },
+      "description": "Vung HIGH ma task cham vao. Khong rong => risk bat buoc HIGH (validator kiem, khong chi schema)."
+    },
+    "human_gate": {
+      "type": "boolean",
+      "description": "true = nguoi phai duyet truoc merge. risk=HIGH bat buoc human_gate=true (validator kiem)."
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "number"],
+            "properties": {
+              "kind": {
+                "const": "issue"
+              },
+              "number": {
+                "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/issueNumber"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "number"],
+            "properties": {
+              "kind": {
+                "const": "pr"
+              },
+              "number": {
+                "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/prNumber"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "ref"],
+            "properties": {
+              "kind": {
+                "const": "external"
+              },
+              "ref": {
+                "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/nonEmptyText"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "runtime_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "env": {
+          "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/environment"
+        },
+        "checks": {
+          "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/nonEmptyTextList"
+        }
+      },
+      "if": {
+        "properties": {
+          "required": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "env": {
+            "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/environment"
+          }
+        },
+        "required": ["env"]
+      }
+    }
+  }
+}

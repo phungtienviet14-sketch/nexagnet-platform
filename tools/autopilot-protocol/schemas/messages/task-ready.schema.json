@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nexagnet:autopilot:v0:message:task-ready",
+  "title": "TASK_READY",
+  "description": "ChatGPT Architect tuyen bo hop dong task da san sang de build. Dua task vao trang thai READY.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "marker", "type", "issue", "risk"],
+  "properties": {
+    "protocol": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/protocolVersion" },
+    "marker": { "const": "AUTOPILOT_TASK_READY_V0" },
+    "type": { "const": "TASK_READY" },
+    "issue": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/issueNumber" },
+    "risk": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/risk" },
+    "task_id": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/taskId" },
+    "human_gate": { "type": "boolean" }
+  }
+}
