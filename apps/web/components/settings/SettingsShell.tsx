@@ -14,6 +14,7 @@ import { ParticipantsSettings } from './ParticipantsSettings';
 import { PricePeriodsSettings } from './PricePeriodsSettings';
 import { ReadinessSettings } from './ReadinessSettings';
 import { RulesSettings } from './RulesSettings';
+import { SettingsAdvanced } from './SettingsFocus';
 import { SettingsNav } from './SettingsNav';
 import { SettingsPanelState } from './SettingsPanelState';
 import { SettingsTabs, type SettingsTab } from './SettingsTabs';
@@ -153,28 +154,32 @@ function OperationsSettingsShell() {
         />
       </div>
     ),
+    // Thu tu o day CHINH LA thu tu viec cua #146 §2: nhom chua gan dai ly la viec dang chan nen no
+    // dung dau; ho so dai ly la DU LIEU TRA CUU nen tut xuong duoi va gap lai. Ban truoc dat bang
+    // dai ly len truoc kem mot nut chinh "Thêm đại lý", lam viec dang chan tut xuong giua trang.
     'dealers-groups': (
       <div className="settings-section-stack">
-        <SourceTruthSettings
-          adminUiEnabled={summary.adminUi === 'on'}
-          resources={['dealers', 'overrides']}
-          heading={{
-            eyebrow: 'Ai mua hàng của mình',
-            title: 'Đại lý & giá riêng',
-            description:
-              'Đại lý, chính sách thanh toán, và giá riêng đã thỏa thuận cho từng mặt hàng.',
-          }}
-        />
         <ZaloSettings
           summary={summary}
           onRefresh={() => summaryQuery.refetch()}
           onOpenMembers={() => navigate('dealers-groups')}
           view="groups"
         />
-        <details className="settings-secondary-detail">
-          <summary>Thành viên trong nhóm và vai trò của từng người</summary>
+        <SettingsAdvanced title="Hồ sơ đại lý & giá riêng" hint="Dữ liệu tra cứu">
+          <SourceTruthSettings
+            adminUiEnabled={summary.adminUi === 'on'}
+            resources={['dealers', 'overrides']}
+            heading={{
+              eyebrow: 'Ai mua hàng của mình',
+              title: 'Đại lý & giá riêng',
+              description:
+                'Đại lý, chính sách thanh toán, và giá riêng đã thỏa thuận cho từng mặt hàng.',
+            }}
+          />
+        </SettingsAdvanced>
+        <SettingsAdvanced title="Thành viên trong nhóm và vai trò của từng người">
           <ParticipantsSettings groups={summary.groups} />
-        </details>
+        </SettingsAdvanced>
       </div>
     ),
     'sales-policy': <RulesSettings />,
@@ -192,7 +197,7 @@ function OperationsSettingsShell() {
       />
     ),
     automation: <AutomationSettings summary={summary} />,
-    'system-status': <ReadinessSettings />,
+    'system-status': <ReadinessSettings onNavigate={navigate} />,
     users: <UsersSettings />,
     audit: <AuditSettings />,
   };

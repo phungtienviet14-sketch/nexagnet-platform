@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   normalizeSourceTruthChanges,
   settingsApi,
@@ -153,6 +153,14 @@ function SourceTruthEditor({ definition, row, isPending, onCancel, onSave }: Edi
       ) as Record<string, string | number | boolean>,
   );
   const [validationError, setValidationError] = useState<string>();
+  const [invalidKey, setInvalidKey] = useState<string>();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  // Mo o soan = chuyen su chu y vao chinh o soan (#146 §Focus). `key` cua component nay doi theo
+  // ban ghi, nen mot lan chay khi mount la du — khong can theo doi them trang thai nao.
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   const handleSave = () => {
     const normalized = normalizeSourceTruthChanges(
@@ -166,8 +174,12 @@ function SourceTruthEditor({ definition, row, isPending, onCancel, onSave }: Edi
       setValidationError(
         field ? normalized.error.replace(field.key, field.label) : normalized.error,
       );
+      setInvalidKey(field?.key);
+      // Loi kiem tra => tieu diem ve DUNG o sai, khong bat nguoi dung tu do lai ca bieu mau.
+      if (field) document.getElementById(`settings-truth-${definition.resource}-${field.key}`)?.focus();
       return;
     }
+    setInvalidKey(undefined);
     const isPricing = definition.resource === 'prices' || definition.resource === 'overrides';
     if (
       isPricing &&
@@ -189,7 +201,10 @@ function SourceTruthEditor({ definition, row, isPending, onCancel, onSave }: Edi
       <div className="settings-drawer__head">
         <div>
           <p className="settings-eyebrow">{row ? 'Chỉnh sửa bản ghi' : 'Bản ghi mới'}</p>
-          <h3>{definition.label}</h3>
+          {/* Tieu de nhan tieu diem khi o soan mo ra, de nguoi dung ban phim biet minh dang o dau. */}
+          <h3 ref={headingRef} tabIndex={-1}>
+            {definition.label}
+          </h3>
         </div>
         <button type="button" className="settings-text-action" onClick={onCancel}>
           Đóng
@@ -213,10 +228,16 @@ function SourceTruthEditor({ definition, row, isPending, onCancel, onSave }: Edi
             );
           }
           return (
-            <label key={field.key} className="settings-field">
+            <label
+              key={field.key}
+              className={`settings-field ${
+                invalidKey === field.key ? 'settings-focus-choice--invalid' : ''
+              }`}
+            >
               <span>{field.label}</span>
               {field.type === 'select' ? (
                 <select
+                  id={`settings-truth-${definition.resource}-${field.key}`}
                   value={String(value)}
                   onChange={(event) =>
                     setValues((current) => ({ ...current, [field.key]: event.target.value }))
@@ -230,7 +251,9 @@ function SourceTruthEditor({ definition, row, isPending, onCancel, onSave }: Edi
                 </select>
               ) : (
                 <input
+                  id={`settings-truth-${definition.resource}-${field.key}`}
                   type={field.type ?? 'text'}
+                  aria-invalid={invalidKey === field.key || undefined}
                   readOnly={Boolean(row && field.identifier)}
                   min={field.type === 'number' ? 0 : undefined}
                   step={field.type === 'number' ? 1 : undefined}

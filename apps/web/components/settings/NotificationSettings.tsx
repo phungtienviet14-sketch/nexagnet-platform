@@ -1,20 +1,43 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
+import { resolveChannelFocus, type NotificationChannel } from '../../lib/settings-focus';
 import {
   notificationsApi,
   type LeadHistoryItem,
   type NotificationSettingsView,
   type SettingsSummary,
 } from '../../lib/settings';
+import {
+  SettingsActionRow,
+  SettingsAdvanced,
+  SettingsStatusBar,
+  SettingsWorkCard,
+  useFocusOnKey,
+} from './SettingsFocus';
 import { formatSettingsDate } from './settings-format';
+import { SettingsPanelState } from './SettingsPanelState';
 
 type Props = {
   summary: SettingsSummary;
   onRefreshSummary?: () => void;
 };
 
+type EmailDraft = Partial<NotificationSettingsView['email']>;
+
+/**
+ * Thong bao — MOT KENH mot luc, va `Gửi thử` chi mo sau khi da luu (#146 §6).
+ *
+ * Ban cu dat hai the cau hinh canh nhau, moi the co `Lưu` va `Gửi test` ngang hang; nguoi van hanh
+ * phai TU BIET rang gui thu chay tren cau hinh DA LUU o may chu chu khong phai tren nhung gi dang
+ * go tren man hinh. O day trang thai `dirty` khoa nut gui thu lai va noi ro ly do.
+ *
+ * Toan bo `style={{…}}` cua ban cu da duoc go: man nay gio dung dung bo lop cua `/settings`, nen no
+ * doi mau theo chu de sang/toi nhu moi man khac.
+ *
+ * O mat khau KHONG BAO GIO nhan lai bi mat dang co: `placeholder` chi noi rang da co mat khau.
+ */
 export function NotificationSettings({ summary, onRefreshSummary }: Props) {
   const queryClient = useQueryClient();
 
@@ -22,91 +45,104 @@ export function NotificationSettings({ summary, onRefreshSummary }: Props) {
     queryKey: ['settings-notifications'],
     queryFn: notificationsApi.getSettings,
   });
-
   const leadsQuery = useQuery({
     queryKey: ['settings-notifications-leads'],
     queryFn: notificationsApi.getLeads,
     refetchInterval: 10_000,
   });
 
-  const [emailForm, setEmailForm] = useState<Partial<NotificationSettingsView['email']>>({});
-  const [zaloNamesInput, setZaloNamesInput] = useState<string>('');
-  const [testResult, setTestResult] = useState<{ channel: 'zalo' | 'email'; success: boolean; message: string } | null>(null);
+  const [channel, setChannel] = useState<NotificationChannel>('zalo');
+  const [emailDraft, setEmailDraft] = useState<EmailDraft>({});
+  const [zaloNames, setZaloNames] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ ok: boolean; message: string } | null>(null);
 
-  // Sync loaded settings into local form state
   const settings = settingsQuery.data;
+  const zaloConnected = summary.zcaState === 'ready';
+  // `dirty` doc tu chinh o nhap, khong tu mot co rieng: mot co rieng se lech khoi thuc te ngay lan
+  // dau nguoi dung go roi xoa di.
+  const dirty = channel === 'zalo' ? zaloNames !== null : Object.keys(emailDraft).length > 0;
+  const focus = resolveChannelFocus({ channel, dirty, connected: zaloConnected });
 
-  const updateEmailMutation = useMutation({
-    mutationFn: (updated: Partial<NotificationSettingsView['email']>) =>
-      notificationsApi.updateEmail(updated),
+  const workHeading = useRef<HTMLHeadingElement>(null);
+  useFocusOnKey(workHeading, `notify:${channel}`);
+
+  const afterWrite = (message: string) => {
+    setNotice({ ok: true, message });
+    onRefreshSummary?.();
+  };
+
+  const updateEmail = useMutation({
+    mutationFn: (updated: EmailDraft) => notificationsApi.updateEmail(updated),
     onSuccess: (data) => {
       queryClient.setQueryData(['settings-notifications'], data);
-      setTestResult({ channel: 'email', success: true, message: 'Đã lưu cấu hình Email thành công!' });
+      setEmailDraft({});
+      afterWrite('Đã lưu cấu hình Email.');
     },
-    onError: (err: Error) => {
-      setTestResult({ channel: 'email', success: false, message: `Lỗi lưu email: ${err.message}` });
-    },
+    onError: (err: Error) => setNotice({ ok: false, message: `Chưa lưu được Email: ${err.message}` }),
   });
-
-  const updateZaloMutation = useMutation({
+  const updateZalo = useMutation({
     mutationFn: (updated: Partial<NotificationSettingsView['zalo']>) =>
       notificationsApi.updateZalo(updated),
     onSuccess: (data) => {
       queryClient.setQueryData(['settings-notifications'], data);
-      onRefreshSummary?.();
-      setTestResult({ channel: 'zalo', success: true, message: 'Đã lưu cấu hình Zalo thành công!' });
+      setZaloNames(null);
+      afterWrite('Đã lưu cấu hình Zalo.');
     },
-    onError: (err: Error) => {
-      setTestResult({ channel: 'zalo', success: false, message: `Lỗi lưu Zalo: ${err.message}` });
-    },
+    onError: (err: Error) => setNotice({ ok: false, message: `Chưa lưu được Zalo: ${err.message}` }),
   });
-
-  const testEmailMutation = useMutation({
+  const testEmail = useMutation({
     mutationFn: () => notificationsApi.testEmail({}),
-    onSuccess: (res) => {
-      setTestResult({
-        channel: 'email',
-        success: res.success,
-        message: res.message || (res.success ? 'Email test gửi thành công!' : 'Email test thất bại.'),
-      });
-    },
-    onError: (err: Error) => {
-      setTestResult({ channel: 'email', success: false, message: `Lỗi gửi test: ${err.message}` });
-    },
+    onSuccess: (res) =>
+      setNotice({
+        ok: res.success,
+        message: res.message || (res.success ? 'Đã gửi thư thử.' : 'Gửi thư thử thất bại.'),
+      }),
+    onError: (err: Error) => setNotice({ ok: false, message: `Không gửi được: ${err.message}` }),
   });
-
-  const testZaloMutation = useMutation({
+  const testZalo = useMutation({
     mutationFn: () => notificationsApi.testZalo({}),
-    onSuccess: (res) => {
-      setTestResult({
-        channel: 'zalo',
-        success: res.success,
+    onSuccess: (res) =>
+      setNotice({
+        ok: res.success,
         message:
           res.message ||
           (res.success
-            ? `Zalo test gửi thành công tới: ${(res.recipientsSent || []).join(', ')}`
-            : 'Gửi Zalo test thất bại.'),
-      });
-    },
-    onError: (err: Error) => {
-      setTestResult({ channel: 'zalo', success: false, message: `Lỗi gửi test: ${err.message}` });
-    },
+            ? `Đã gửi tin thử tới: ${(res.recipientsSent || []).join(', ')}`
+            : 'Gửi tin thử qua Zalo thất bại.'),
+      }),
+    onError: (err: Error) => setNotice({ ok: false, message: `Không gửi được: ${err.message}` }),
   });
-
-  const retryLeadMutation = useMutation({
+  const retryLead = useMutation({
     mutationFn: (leadId: string) => notificationsApi.retryLead(leadId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['settings-notifications-leads'] });
-      setTestResult({ channel: 'zalo', success: true, message: 'Đã thực hiện gửi lại lead thành công!' });
+      setNotice({ ok: true, message: 'Đã gửi lại thông tin khách hàng này.' });
     },
-    onError: (err: Error) => {
-      setTestResult({ channel: 'zalo', success: false, message: `Lỗi gửi lại lead: ${err.message}` });
-    },
+    onError: (err: Error) =>
+      setNotice({ ok: false, message: `Chưa gửi lại được: ${err.message}` }),
   });
 
-  const handleSaveEmail = (e: React.FormEvent) => {
-    e.preventDefault();
-    const current = settings?.email || {
+  const handleSaveZalo = (event: FormEvent) => {
+    event.preventDefault();
+    const current = settings?.zalo ?? {
+      enabled: true,
+      targetMemberNames: [],
+      targetMemberIds: [],
+      targetGroupIds: [],
+    };
+    const names =
+      zaloNames === null
+        ? current.targetMemberNames
+        : zaloNames
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean);
+    updateZalo.mutate({ ...current, targetMemberNames: names });
+  };
+
+  const handleSaveEmail = (event: FormEvent) => {
+    event.preventDefault();
+    const current = settings?.email ?? {
       enabled: true,
       host: '',
       port: 587,
@@ -116,334 +152,301 @@ export function NotificationSettings({ summary, onRefreshSummary }: Props) {
       from: '',
       recipients: [],
     };
-    updateEmailMutation.mutate({
-      ...current,
-      ...emailForm,
-    });
+    updateEmail.mutate({ ...current, ...emailDraft });
   };
 
-  const handleSaveZalo = (e: React.FormEvent) => {
-    e.preventDefault();
-    const current = settings?.zalo || {
-      enabled: true,
-      targetMemberNames: [],
-      targetMemberIds: [],
-      targetGroupIds: [],
-    };
-    const names = zaloNamesInput
-      ? zaloNamesInput.split(',').map((n) => n.trim()).filter(Boolean)
-      : current.targetMemberNames;
-
-    updateZaloMutation.mutate({
-      ...current,
-      targetMemberNames: names,
-    });
-  };
-
-  const zaloConnected = summary.zcaState === 'ready';
+  // API co the tra ve mot doi tuong loi thay vi mang; man hinh khong duoc vo vi chuyen do.
+  const leads: readonly LeadHistoryItem[] = Array.isArray(leadsQuery.data) ? leadsQuery.data : [];
+  const failedLeads = leads.filter(
+    (item) => !item.dispatchResult.zalo.success || !item.dispatchResult.email.success,
+  );
+  const savePending = channel === 'zalo' ? updateZalo.isPending : updateEmail.isPending;
+  const testPending = channel === 'zalo' ? testZalo.isPending : testEmail.isPending;
 
   return (
-    <div className="settings-panel__content">
-      <header className="settings-panel__header">
+    <div className="settings-section-stack">
+      <header className="settings-section-heading">
         <div>
-          <h2>Thông báo & Điều phối Leads (Zalo & Email)</h2>
+          <p className="settings-eyebrow">Ai được báo khi có việc</p>
+          <h2>Thông báo</h2>
           <p>
-            Tự động gửi thông tin khách hàng từ form <strong>“Đăng ký trao đổi giải pháp 1-1”</strong> (trên website marketing) về tin nhắn Zalo của thành viên phụ trách và hòm thư Email quản trị.
+            Thông tin khách để lại trên website được gửi về Zalo của người phụ trách và hòm thư quản
+            trị.
           </p>
         </div>
       </header>
 
-      {testResult && (
-        <div
-          className={`settings-banner ${testResult.success ? 'settings-banner--ok' : 'settings-banner--warn'}`}
-          role="alert"
-          style={{ marginBottom: '20px' }}
-        >
-          <strong>{testResult.success ? '✓ Thành công: ' : '⚠ Cảnh báo: '}</strong>
-          {testResult.message}
-        </div>
+      <SettingsStatusBar
+        tone={zaloConnected && settings?.email.enabled ? 'ok' : 'attention'}
+        title={
+          zaloConnected && settings?.email.enabled
+            ? 'Cả hai kênh báo việc đều đang bật'
+            : 'Còn kênh báo việc chưa sẵn sàng'
+        }
+        detail="Nếu cả hai kênh cùng hỏng, việc mới sẽ không có ai được báo."
+        facts={[
+          { label: 'Zalo', value: zaloConnected ? 'Đang kết nối' : 'Chưa kết nối' },
+          { label: 'Email', value: settings?.email.enabled ? 'Đang bật' : 'Đang tắt' },
+          { label: 'Việc gửi lỗi', value: `${failedLeads.length}` },
+        ]}
+      />
+
+      {notice && (
+        <SettingsPanelState
+          tone={notice.ok ? 'success' : 'error'}
+          title={notice.ok ? 'Đã xong' : 'Chưa hoàn tất'}
+          detail={notice.message}
+        />
       )}
 
-      {/* Grid 2 cột: Cấu hình Zalo & Cấu hình Email */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px', marginBottom: '32px' }}>
-        {/* Khối Cấu hình Zalo */}
-        <div className="settings-card" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>💬</span> Kênh gửi Zalo
-            </h3>
-            <span
-              style={{
-                fontSize: '12px',
-                padding: '4px 8px',
-                borderRadius: '9999px',
-                backgroundColor: zaloConnected ? '#dcfce7' : '#fee2e2',
-                color: zaloConnected ? '#166534' : '#991b1b',
-                fontWeight: 500,
-              }}
-            >
-              {zaloConnected ? '✓ Đang kết nối' : '● Chưa kết nối'}
-            </span>
-          </div>
+      <div className="settings-subheading">
+        <h3 id="settings-notify-picker">Chọn kênh cần chỉnh</h3>
+      </div>
+      <div className="settings-focus-actions__main" role="group" aria-labelledby="settings-notify-picker">
+        {(['zalo', 'email'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            // CO Y khong dung `--primary`: nut chinh la loi hua "bam cai nay truoc", va tren man
+            // nay loi hua do thuoc ve `Lưu`/`Gửi thử` trong khoi viec. Chon kenh chi la chuyen
+            // ngu canh, nen no dung kieu "dang chon" rieng.
+            className="settings-button settings-button--quiet settings-focus-switch"
+            aria-pressed={channel === value}
+            onClick={() => {
+              setChannel(value);
+              setNotice(null);
+            }}
+          >
+            {value === 'zalo' ? 'Kênh Zalo' : 'Kênh Email'}
+          </button>
+        ))}
+      </div>
 
-          <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
-            Tài khoản gửi hiện tại: <strong>{summary.zcaDisplayName || 'Chưa đăng nhập'}</strong> (Chế độ: <code>{summary.channelMode}</code>).
-          </p>
-
-          <form onSubmit={handleSaveZalo}>
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: '#334155' }}>
-                Thành viên Zalo nhận tin (cách nhau bởi dấu phẩy):
-              </label>
+      <SettingsWorkCard
+        eyebrow={channel === 'zalo' ? 'Đang chỉnh kênh Zalo' : 'Đang chỉnh kênh Email'}
+        title={focus.title}
+        problem={focus.detail}
+        tone={focus.tone}
+        headingId="settings-notify-work"
+        headingRef={workHeading}
+        actions={
+          <SettingsActionRow
+            primary={
+              dirty || !focus.canTest ? (
+                <button
+                  type="submit"
+                  form={channel === 'zalo' ? 'settings-notify-zalo' : 'settings-notify-email'}
+                  className="settings-button settings-button--primary"
+                  disabled={savePending}
+                >
+                  {savePending ? 'Đang lưu…' : focus.primaryLabel}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="settings-button settings-button--primary"
+                  disabled={testPending}
+                  onClick={() => (channel === 'zalo' ? testZalo.mutate() : testEmail.mutate())}
+                >
+                  {testPending ? 'Đang gửi…' : focus.primaryLabel}
+                </button>
+              )
+            }
+            secondary={
+              dirty || !focus.canTest ? undefined : (
+                <button
+                  type="submit"
+                  form={channel === 'zalo' ? 'settings-notify-zalo' : 'settings-notify-email'}
+                  className="settings-button settings-button--quiet"
+                  disabled={savePending}
+                >
+                  Lưu lại
+                </button>
+              )
+            }
+            blockedReason={focus.testBlockedReason}
+          />
+        }
+      >
+        {channel === 'zalo' ? (
+          <form id="settings-notify-zalo" onSubmit={handleSaveZalo}>
+            <p className="settings-muted">
+              Tài khoản đang gửi: <strong>{summary.zcaDisplayName || 'chưa đăng nhập'}</strong>.
+            </p>
+            <label className="settings-focus-choice">
+              <span>Người nhận trên Zalo (cách nhau bởi dấu phẩy)</span>
               <input
                 type="text"
-                className="settings-input"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                placeholder="Tên thành viên 1, Tên thành viên 2"
-                defaultValue={(settings?.zalo.targetMemberNames ?? []).join(', ')}
-                onChange={(e) => setZaloNamesInput(e.target.value)}
+                placeholder="Tên người phụ trách 1, Tên người phụ trách 2"
+                value={zaloNames ?? (settings?.zalo.targetMemberNames ?? []).join(', ')}
+                onChange={(event) => setZaloNames(event.target.value)}
               />
-              <small style={{ color: '#64748b', fontSize: '12px', display: 'block', marginTop: '4px' }}>
-                Hệ thống tự tra cứu theo tên trong các nhóm Zalo test đã đồng bộ trên server.
+              <small className="settings-muted">
+                Hệ thống tra theo tên trong các nhóm Zalo đã đồng bộ.
               </small>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-              <button
-                type="submit"
-                className="btn btn--primary"
-                disabled={updateZaloMutation.isPending}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
-              >
-                {updateZaloMutation.isPending ? 'Đang lưu...' : 'Lưu cấu hình Zalo'}
-              </button>
-
-              <button
-                type="button"
-                className="btn btn--secondary"
-                disabled={testZaloMutation.isPending || !zaloConnected}
-                onClick={() => testZaloMutation.mutate()}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
-              >
-                {testZaloMutation.isPending ? 'Đang gửi...' : 'Gửi Test Zalo'}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Khối Cấu hình Email SMTP */}
-        <div className="settings-card" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>✉️</span> Cấu hình Email SMTP
-            </h3>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                defaultChecked={settings?.email.enabled ?? false}
-                onChange={(e) => setEmailForm({ ...emailForm, enabled: e.target.checked })}
-              />
-              <span>Bật gửi Email</span>
             </label>
-          </div>
-
-          <form onSubmit={handleSaveEmail}>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#334155' }}>
-                  SMTP Host:
-                </label>
+          </form>
+        ) : (
+          <form id="settings-notify-email" onSubmit={handleSaveEmail}>
+            <div className="settings-focus-grid">
+              <label className="settings-focus-choice">
+                <span>Máy chủ gửi thư</span>
                 <input
                   type="text"
-                  placeholder="smtp.gmail.com"
-                  defaultValue={settings?.email.host || ''}
-                  onChange={(e) => setEmailForm({ ...emailForm, host: e.target.value })}
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  placeholder="smtp.example.com"
+                  defaultValue={settings?.email.host ?? ''}
+                  onChange={(event) =>
+                    setEmailDraft((current) => ({ ...current, host: event.target.value }))
+                  }
                 />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#334155' }}>
-                  Cổng (Port):
-                </label>
+              </label>
+              <label className="settings-focus-choice">
+                <span>Cổng</span>
                 <input
                   type="number"
                   placeholder="587"
-                  defaultValue={settings?.email.port || 587}
-                  onChange={(e) => setEmailForm({ ...emailForm, port: parseInt(e.target.value, 10) || 587 })}
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  defaultValue={settings?.email.port ?? 587}
+                  onChange={(event) =>
+                    setEmailDraft((current) => ({
+                      ...current,
+                      port: Number.parseInt(event.target.value, 10) || 587,
+                    }))
+                  }
                 />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#334155' }}>
-                  Tài khoản (Username / Email):
-                </label>
+              </label>
+              <label className="settings-focus-choice">
+                <span>Tài khoản gửi</span>
                 <input
                   type="text"
-                  placeholder="user@example.com"
-                  defaultValue={settings?.email.user || ''}
-                  onChange={(e) => setEmailForm({ ...emailForm, user: e.target.value })}
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  placeholder="thongbao@example.com"
+                  defaultValue={settings?.email.user ?? ''}
+                  onChange={(event) =>
+                    setEmailDraft((current) => ({ ...current, user: event.target.value }))
+                  }
                 />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#334155' }}>
-                  Mật khẩu / App Password:
-                </label>
+              </label>
+              <label className="settings-focus-choice">
+                <span>Mật khẩu ứng dụng</span>
                 <input
                   type="password"
-                  placeholder={settings?.email.pass ? '********' : 'Nhập mật khẩu'}
-                  onChange={(e) => setEmailForm({ ...emailForm, pass: e.target.value })}
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  autoComplete="new-password"
+                  // Khong bao gio do lai bi mat dang luu — chi noi la da co.
+                  placeholder={settings?.email.pass ? 'Đã có mật khẩu — để trống nếu giữ nguyên' : 'Nhập mật khẩu'}
+                  onChange={(event) =>
+                    setEmailDraft((current) => ({ ...current, pass: event.target.value }))
+                  }
                 />
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#334155' }}>
-                Danh sách Email nhận thông báo (cách nhau bởi dấu phẩy):
               </label>
+            </div>
+            <label className="settings-focus-choice">
+              <span>Hòm thư nhận báo việc (cách nhau bởi dấu phẩy)</span>
               <input
                 type="text"
-                placeholder="viet@nexagnet.com, hieu@nexagnet.com"
-                defaultValue={(settings?.email.recipients || []).join(', ')}
-                onChange={(e) =>
-                  setEmailForm({
-                    ...emailForm,
-                    recipients: e.target.value
+                placeholder="sale@example.com, quanly@example.com"
+                defaultValue={(settings?.email.recipients ?? []).join(', ')}
+                onChange={(event) =>
+                  setEmailDraft((current) => ({
+                    ...current,
+                    recipients: event.target.value
                       .split(',')
-                      .map((s) => s.trim())
+                      .map((value) => value.trim())
                       .filter(Boolean),
-                  })
+                  }))
                 }
-                style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
               />
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-              <button
-                type="submit"
-                className="btn btn--primary"
-                disabled={updateEmailMutation.isPending}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
-              >
-                {updateEmailMutation.isPending ? 'Đang lưu...' : 'Lưu cấu hình Email'}
-              </button>
-
-              <button
-                type="button"
-                className="btn btn--secondary"
-                disabled={testEmailMutation.isPending}
-                onClick={() => testEmailMutation.mutate()}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
-              >
-                {testEmailMutation.isPending ? 'Đang gửi...' : 'Gửi Test Email'}
-              </button>
-            </div>
+            </label>
+            <label className="settings-checkbox-field">
+              <input
+                type="checkbox"
+                defaultChecked={settings?.email.enabled ?? false}
+                onChange={(event) =>
+                  setEmailDraft((current) => ({ ...current, enabled: event.target.checked }))
+                }
+              />
+              <span>Bật gửi thông báo qua Email</span>
+            </label>
           </form>
-        </div>
-      </div>
+        )}
+      </SettingsWorkCard>
 
-      {/* Bảng Lịch sử & Nhật ký Leads */}
-      <section className="settings-card" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>📋 Nhật ký Lead "Đăng ký trao đổi 1-1" gần đây</h3>
-            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
-              Theo dõi kết quả phát tin nhắn Zalo và gửi Email tự động đến đội ngũ tư vấn.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => leadsQuery.refetch()}
-            style={{ fontSize: '12px' }}
-          >
-            Làm mới ↻
-          </button>
-        </div>
-
+      <SettingsAdvanced
+        title="Khách đã để lại thông tin gần đây"
+        hint={`${leads.length} lượt · ${failedLeads.length} lượt gửi lỗi`}
+        defaultOpen={failedLeads.length > 0}
+      >
         {leadsQuery.isLoading ? (
-          <p style={{ color: '#64748b', fontSize: '13px' }}>Đang tải nhật ký lead...</p>
-        ) : (leadsQuery.data || []).length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-            Chưa có yêu cầu đăng ký tư vấn nào được ghi nhận.
-          </div>
+          <p className="settings-muted">Đang tải nhật ký…</p>
+        ) : leads.length === 0 ? (
+          <p className="settings-muted">Chưa có khách nào để lại thông tin.</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="settings-table" style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+          <div className="settings-table-wrap">
+            <table className="settings-table">
               <thead>
-                <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
-                  <th style={{ padding: '8px 12px' }}>Thời gian</th>
-                  <th style={{ padding: '8px 12px' }}>Khách hàng / Công ty</th>
-                  <th style={{ padding: '8px 12px' }}>Liên hệ</th>
-                  <th style={{ padding: '8px 12px' }}>Quy trình</th>
-                  <th style={{ padding: '8px 12px' }}>Gửi Zalo</th>
-                  <th style={{ padding: '8px 12px' }}>Gửi Email</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right' }}>Thao tác</th>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Khách hàng</th>
+                  <th>Liên hệ</th>
+                  <th>Gửi Zalo</th>
+                  <th>Gửi Email</th>
+                  <th aria-label="Thao tác" />
                 </tr>
               </thead>
               <tbody>
-                {(leadsQuery.data || []).map((item: LeadHistoryItem) => (
-                  <tr key={item.leadId} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 12px', color: '#64748b' }}>
-                      {formatSettingsDate(item.createdAt || item.dispatchResult.dispatchedAt)}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <strong>{item.payload.fullName}</strong>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>{item.payload.company}</div>
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <div>📞 {item.payload.phone}</div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>✉️ {item.payload.email}</div>
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span style={{ display: 'inline-block', backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
-                        {item.payload.workflow}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      {item.dispatchResult.zalo.success ? (
-                        <span style={{ color: '#16a34a', fontWeight: 500 }}>
-                          ✓ Đã gửi ({item.dispatchResult.zalo.recipientsSent?.length || 0})
-                        </span>
-                      ) : (
-                        <span style={{ color: '#dc2626', fontSize: '12px' }} title={item.dispatchResult.zalo.message}>
-                          ✕ Lỗi ({item.dispatchResult.zalo.message || 'Không gửi được'})
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      {item.dispatchResult.email.success ? (
-                        <span style={{ color: '#16a34a', fontWeight: 500 }}>
-                          ✓ Đã gửi ({item.dispatchResult.email.recipientsSent?.length || 0})
-                        </span>
-                      ) : (
-                        <span style={{ color: '#dc2626', fontSize: '12px' }} title={item.dispatchResult.email.message}>
-                          ✕ Lỗi ({item.dispatchResult.email.message || 'Không gửi được'})
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        className="btn btn--secondary"
-                        onClick={() => retryLeadMutation.mutate(item.leadId)}
-                        disabled={retryLeadMutation.isPending}
-                        style={{ padding: '4px 10px', fontSize: '12px' }}
-                      >
-                        Gửi lại
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {leads.map((item) => {
+                  const failed =
+                    !item.dispatchResult.zalo.success || !item.dispatchResult.email.success;
+                  return (
+                    <tr key={item.leadId}>
+                      <td>
+                        {formatSettingsDate(item.createdAt || item.dispatchResult.dispatchedAt)}
+                      </td>
+                      <td>
+                        <strong>{item.payload.fullName}</strong>
+                        <small className="settings-cell-meta">{item.payload.company}</small>
+                      </td>
+                      <td>
+                        {item.payload.phone}
+                        <small className="settings-cell-meta">{item.payload.email}</small>
+                      </td>
+                      <td>
+                        {item.dispatchResult.zalo.success ? (
+                          `Đã gửi (${item.dispatchResult.zalo.recipientsSent?.length ?? 0})`
+                        ) : (
+                          <span className="settings-warning-text">
+                            Lỗi: {item.dispatchResult.zalo.message || 'không gửi được'}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {item.dispatchResult.email.success ? (
+                          `Đã gửi (${item.dispatchResult.email.recipientsSent?.length ?? 0})`
+                        ) : (
+                          <span className="settings-warning-text">
+                            Lỗi: {item.dispatchResult.email.message || 'không gửi được'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="settings-table__action">
+                        {/* Gui lai chi co nghia voi dong DA LOI — dong thanh cong khong can nut. */}
+                        {failed && (
+                          <button
+                            type="button"
+                            className="settings-button settings-button--quiet"
+                            disabled={retryLead.isPending}
+                            onClick={() => retryLead.mutate(item.leadId)}
+                          >
+                            Gửi lại
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-      </section>
+      </SettingsAdvanced>
     </div>
   );
 }

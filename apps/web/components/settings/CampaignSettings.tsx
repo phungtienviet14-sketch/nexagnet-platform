@@ -1,7 +1,12 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import {
+  canCancelCampaign,
+  resolveCampaignAction,
+  resolveComposeStep,
+} from '../../lib/settings-focus';
 import {
   settingsApi,
   type CampaignKind,
@@ -9,8 +14,17 @@ import {
   type JsonObject,
   type SettingsGroupSummary,
 } from '../../lib/settings';
-import { SettingsPanelState } from './SettingsPanelState';
+import {
+  SettingsActionRow,
+  SettingsAdvanced,
+  SettingsFocusModal,
+  SettingsStatusBar,
+  SettingsWorkCard,
+  useFocusOnKey,
+  useRestoreFocus,
+} from './SettingsFocus';
 import { formatSettingsDate } from './settings-format';
+import { SettingsPanelState } from './SettingsPanelState';
 
 const KIND_LABELS: Readonly<Record<CampaignKind, string>> = {
   one_off: 'Một lần',
@@ -34,18 +48,35 @@ interface Props {
   groups: readonly SettingsGroupSummary[];
 }
 
+type Mode = { kind: 'idle' } | { kind: 'compose' } | { kind: 'manage'; campaignId: string };
+
+/**
+ * Chien dich cham soc — soan theo BUOC, quan ly theo TRANG THAI (#146 §5).
+ *
+ * Hai thay doi lon so voi ban cu:
+ *  1. bieu mau soan khong con mo thuong truc; khi da mo thi no la khoi noi bat va danh sach chien
+ *     dich tut xuong thanh boi canh;
+ *  2. moi chien dich chi lo ra DUNG MOT hanh dong hop le voi trang thai cua no
+ *     (`resolveCampaignAction`), thay vi bay ca `Duyệt`, hai o lich, `Lên lịch` va `Hủy` cung luc.
+ *
+ * Quy tac lich gui / gian cach / gioi han cua may chu KHONG doi.
+ */
 export function CampaignSettings({ groups }: Props) {
   const queryClient = useQueryClient();
+  const [mode, setMode] = useState<Mode>({ kind: 'idle' });
   const [name, setName] = useState('');
   const [content, setContent] = useState('');
   const [kind, setKind] = useState<CampaignKind>('one_off');
   const [templateKey, setTemplateKey] = useState('');
   const [recurrenceJson, setRecurrenceJson] = useState('{}');
   const [selectedGroups, setSelectedGroups] = useState<readonly string[]>([]);
-  const [preview, setPreview] = useState(false);
+  const [reviewed, setReviewed] = useState(false);
   const [formError, setFormError] = useState<string>();
   const [windowStart, setWindowStart] = useState('');
   const [windowEnd, setWindowEnd] = useState('');
+  const [cancelling, setCancelling] = useState<CampaignView | null>(null);
+  const [approving, setApproving] = useState<CampaignView | null>(null);
+
   const campaigns = useQuery({ queryKey: ['campaigns'], queryFn: settingsApi.campaigns });
   const policy = useQuery({ queryKey: ['campaign-policy'], queryFn: settingsApi.campaignPolicy });
   const selectableGroups = useMemo(
@@ -60,11 +91,18 @@ export function CampaignSettings({ groups }: Props) {
       setName('');
       setContent('');
       setSelectedGroups([]);
-      setPreview(false);
+      setReviewed(false);
+      setMode({ kind: 'idle' });
       void refresh();
     },
   });
-  const approve = useMutation({ mutationFn: settingsApi.approveCampaign, onSuccess: refresh });
+  const approve = useMutation({
+    mutationFn: settingsApi.approveCampaign,
+    onSuccess: () => {
+      setApproving(null);
+      void refresh();
+    },
+  });
   const schedule = useMutation({
     mutationFn: (id: string) =>
       settingsApi.scheduleCampaign(id, {
@@ -74,7 +112,30 @@ export function CampaignSettings({ groups }: Props) {
     onSuccess: refresh,
   });
   const retry = useMutation({ mutationFn: settingsApi.retryFailedCampaign, onSuccess: refresh });
-  const cancel = useMutation({ mutationFn: settingsApi.cancelCampaign, onSuccess: refresh });
+  const cancel = useMutation({
+    mutationFn: settingsApi.cancelCampaign,
+    onSuccess: () => {
+      setCancelling(null);
+      void refresh();
+    },
+  });
+
+  const list = campaigns.data ?? [];
+  const selected =
+    mode.kind === 'manage' ? list.find((row) => row.id === mode.campaignId) : undefined;
+  const step = resolveComposeStep({
+    name,
+    content,
+    targetCount: selectedGroups.length,
+    reviewed,
+  });
+
+  const workHeading = useRef<HTMLHeadingElement>(null);
+  const { rememberTrigger } = useRestoreFocus(mode.kind !== 'idle');
+  useFocusOnKey(
+    workHeading,
+    mode.kind === 'compose' ? `campaign-compose:${step}` : `campaign:${mode.kind}:${selected?.id ?? ''}`,
+  );
 
   const parseRecurrence = (): JsonObject | undefined => {
     if (kind === 'one_off') return undefined;
@@ -83,7 +144,7 @@ export function CampaignSettings({ groups }: Props) {
       if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error();
       return parsed as JsonObject;
     } catch {
-      setFormError('Metadata lịch phải là một JSON object hợp lệ.');
+      setFormError('Cấu hình lịch nâng cao chưa đúng định dạng.');
       return undefined;
     }
   };
@@ -94,7 +155,7 @@ export function CampaignSettings({ groups }: Props) {
       return undefined;
     }
     if (selectedGroups.length === 0) {
-      setFormError('Cần chọn ít nhất một nhóm đã map và được phép gửi.');
+      setFormError('Cần chọn ít nhất một nhóm đã gán đại lý và được phép gửi.');
       return undefined;
     }
     const recurrence = parseRecurrence();
@@ -119,84 +180,471 @@ export function CampaignSettings({ groups }: Props) {
     };
   };
 
-  const handlePreview = () => {
-    if (prepareDraft()) setPreview(true);
-  };
-
   const actionError = create.error ?? approve.error ?? schedule.error ?? retry.error ?? cancel.error;
+  const drafts = list.filter((row) => row.status === 'draft' || row.status === 'approved');
 
   return (
     <div className="settings-section-stack">
       <header className="settings-section-heading">
         <div>
-          <p className="settings-eyebrow">Duyệt trước · delivery bền vững</p>
-          <h2>Chiến dịch CSKH</h2>
-          <p>Tạo nội dung, chọn nhóm, xem trước, duyệt và phân phối trong cửa sổ gửi.</p>
+          <p className="settings-eyebrow">Soạn · duyệt · lên lịch</p>
+          <h2>Chiến dịch chăm sóc</h2>
+          <p>Nội dung gửi hàng loạt cho nhóm đại lý, luôn qua một bước duyệt của người.</p>
         </div>
       </header>
 
-      <div className="settings-provisional" role="note">
-        <strong>Lịch sinh nhật/định kỳ/âm lịch được lưu dưới dạng metadata</strong>
-        <p>
-          GĐ1 chạy từng occurrence đã được Sale lên lịch. Việc tự sinh occurrence định kỳ chỉ được
-          bật khi khách đã nhập nguồn ngày sinh/lịch và duyệt quy tắc; hệ thống không tự đoán.
-        </p>
-      </div>
+      <SettingsStatusBar
+        tone={drafts.length > 0 ? 'attention' : 'ok'}
+        title={
+          drafts.length > 0
+            ? `${drafts.length} chiến dịch đang chờ bước tiếp theo`
+            : 'Không có chiến dịch nào đang chờ xử lý'
+        }
+        detail="Hệ thống không tự gửi: mỗi chiến dịch phải được duyệt rồi lên lịch mới chạy."
+        facts={[
+          { label: 'Tổng số', value: `${list.length}` },
+          { label: 'Nhóm gửi được', value: `${selectableGroups.length}` },
+          ...(policy.data
+            ? [{ label: 'Tối đa mỗi lần', value: `${policy.data.maxTargets} nhóm` }]
+            : []),
+        ]}
+      />
 
-      <section className="settings-drawer" aria-labelledby="campaign-create-title">
-        <div className="settings-subheading">
-          <div><p className="settings-eyebrow">Bản nháp mới</p><h3 id="campaign-create-title">Nội dung và đối tượng</h3></div>
-          {policy.data && (
-            <small>Tối đa {policy.data.maxTargets} nhóm · {policy.data.rateLimitPerMinute} lần/phút · spacing ≥ {policy.data.minSpacingSeconds}s</small>
+      {actionError && (
+        <SettingsPanelState
+          tone="error"
+          title="Thao tác chiến dịch chưa hoàn tất"
+          detail={actionError.message}
+        />
+      )}
+
+      {mode.kind === 'compose' ? (
+        <SettingsWorkCard
+          eyebrow={
+            step === 'compose'
+              ? 'Bước 1 · nội dung'
+              : step === 'targets'
+                ? 'Bước 2 · nhóm nhận'
+                : 'Bước 3 · xem lại'
+          }
+          title="Soạn chiến dịch mới"
+          problem={
+            step === 'compose'
+              ? 'Nhập tên và nội dung sẽ gửi cho khách.'
+              : step === 'targets'
+                ? 'Chọn các nhóm sẽ nhận nội dung này.'
+                : 'Đọc lại đúng nội dung khách sẽ nhận, rồi lưu thành bản nháp.'
+          }
+          headingId="settings-campaign-work"
+          headingRef={workHeading}
+          actions={
+            <SettingsActionRow
+              primary={
+                step === 'review' ? (
+                  <button
+                    type="button"
+                    className="settings-button settings-button--primary"
+                    disabled={create.isPending}
+                    onClick={() => {
+                      const draft = prepareDraft();
+                      if (draft) create.mutate(draft);
+                    }}
+                  >
+                    {create.isPending ? 'Đang lưu…' : 'Lưu bản nháp'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="settings-button settings-button--primary"
+                    disabled={step === 'compose'}
+                    onClick={() => {
+                      if (prepareDraft()) setReviewed(true);
+                    }}
+                  >
+                    Xem lại trước khi lưu
+                  </button>
+                )
+              }
+              secondary={
+                <button
+                  type="button"
+                  className="settings-button settings-button--quiet"
+                  onClick={() => {
+                    setMode({ kind: 'idle' });
+                    setReviewed(false);
+                  }}
+                >
+                  Hủy
+                </button>
+              }
+              blockedReason={
+                step === 'compose'
+                  ? 'Nhập tên và nội dung trước.'
+                  : step === 'targets'
+                    ? 'Chọn ít nhất một nhóm nhận.'
+                    : undefined
+              }
+            />
+          }
+        >
+          <ol className="settings-focus-steps">
+            <li data-state={step === 'compose' ? 'current' : 'done'}>Nội dung</li>
+            <li
+              data-state={step === 'targets' ? 'current' : step === 'review' ? 'done' : 'todo'}
+            >
+              Nhóm nhận
+            </li>
+            <li data-state={step === 'review' ? 'current' : 'todo'}>Xem lại</li>
+          </ol>
+
+          {step === 'review' ? (
+            <section className="settings-preview-result" aria-label="Nội dung khách sẽ nhận">
+              <div>
+                <p className="settings-eyebrow">Khách sẽ nhận đúng nội dung này</p>
+                <h4>{name}</h4>
+              </div>
+              <div>
+                <span>
+                  <small>Số nhóm</small>
+                  <strong>{selectedGroups.length}</strong>
+                </span>
+                <span>
+                  <small>Loại lịch</small>
+                  <strong>{KIND_LABELS[kind]}</strong>
+                </span>
+                <p>{content}</p>
+              </div>
+            </section>
+          ) : (
+            <>
+              <div className="settings-focus-grid">
+                <label className="settings-focus-choice">
+                  <span>Tên chiến dịch</span>
+                  <input
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value);
+                      setReviewed(false);
+                    }}
+                  />
+                </label>
+                <label className="settings-focus-choice">
+                  <span>Loại lịch</span>
+                  <select
+                    value={kind}
+                    onChange={(event) => setKind(event.target.value as CampaignKind)}
+                  >
+                    {Object.entries(KIND_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label className="settings-focus-choice">
+                <span>Nội dung gửi</span>
+                <textarea
+                  rows={4}
+                  value={content}
+                  onChange={(event) => {
+                    setContent(event.target.value);
+                    setReviewed(false);
+                  }}
+                />
+              </label>
+              <fieldset className="settings-campaign-targets">
+                <legend>Nhóm nhận ({selectedGroups.length})</legend>
+                {selectableGroups.length === 0 && (
+                  <p className="settings-muted">
+                    Chưa có nhóm nào vừa được phép vừa đã gán đại lý.
+                  </p>
+                )}
+                {selectableGroups.map((group) => (
+                  <label key={group.id} className="settings-checkbox-field">
+                    <input
+                      type="checkbox"
+                      checked={selectedGroups.includes(group.id)}
+                      onChange={(event) => {
+                        setReviewed(false);
+                        setSelectedGroups((current) =>
+                          event.target.checked
+                            ? [...current, group.id]
+                            : current.filter((id) => id !== group.id),
+                        );
+                      }}
+                    />
+                    <span>{group.name}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <SettingsAdvanced title="Cấu hình nâng cao" hint="Mã mẫu · lịch định kỳ">
+                <label className="settings-focus-choice">
+                  <span>Mã mẫu nội dung (không bắt buộc)</span>
+                  <input
+                    value={templateKey}
+                    onChange={(event) => setTemplateKey(event.target.value)}
+                  />
+                </label>
+                {kind !== 'one_off' && (
+                  <label className="settings-focus-choice">
+                    <span>Cấu hình lịch định kỳ</span>
+                    <textarea
+                      rows={3}
+                      value={recurrenceJson}
+                      onChange={(event) => setRecurrenceJson(event.target.value)}
+                    />
+                    <small className="settings-muted">
+                      Hệ thống chỉ lưu lại cấu hình này; giai đoạn 1 vẫn chạy từng lần do người lên
+                      lịch.
+                    </small>
+                  </label>
+                )}
+              </SettingsAdvanced>
+            </>
           )}
-        </div>
-        <div className="settings-form-grid">
-          <label><span>Tên chiến dịch</span><input value={name} onChange={(event) => setName(event.target.value)} /></label>
-          <label><span>Loại lịch</span><select value={kind} onChange={(event) => setKind(event.target.value as CampaignKind)}>{Object.entries(KIND_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label><span>Template key (không bắt buộc)</span><input value={templateKey} onChange={(event) => setTemplateKey(event.target.value)} /></label>
-        </div>
-        <label><span>Nội dung gửi</span><textarea rows={4} value={content} onChange={(event) => setContent(event.target.value)} /></label>
-        {kind !== 'one_off' && (
-          <label><span>Metadata lịch (JSON)</span><textarea rows={3} value={recurrenceJson} onChange={(event) => setRecurrenceJson(event.target.value)} /><small>Ví dụ: {`{"timezone":"Asia/Ho_Chi_Minh","rule":"nguồn do Sale nhập"}`}</small></label>
-        )}
-        <fieldset className="settings-campaign-targets">
-          <legend>Nhóm nhận ({selectedGroups.length})</legend>
-          {selectableGroups.length === 0 && <p>Chưa có nhóm vừa được allowlist vừa map đại lý.</p>}
-          {selectableGroups.map((group) => (
-            <label key={group.id} className="settings-checkbox-field">
-              <input type="checkbox" checked={selectedGroups.includes(group.id)} onChange={(event) => setSelectedGroups((current) => event.target.checked ? [...current, group.id] : current.filter((id) => id !== group.id))} />
-              <span>{group.name}</span>
-            </label>
-          ))}
-        </fieldset>
-        {formError && <p className="settings-form-error" role="alert">{formError}</p>}
-        {preview && <div className="settings-preview-result" role="status"><div><p className="settings-eyebrow">Preview</p><h3>{name}</h3></div><div><span><small>Số nhóm</small><strong>{selectedGroups.length}</strong></span><span><small>Loại</small><strong>{KIND_LABELS[kind]}</strong></span><p>{content}</p></div></div>}
-        <div className="settings-inline-actions">
-          <button type="button" className="settings-button settings-button--quiet" onClick={handlePreview}>Xem trước</button>
-          <button type="button" className="settings-button settings-button--primary" disabled={!preview || create.isPending} onClick={() => { const draft = prepareDraft(); if (draft) create.mutate(draft); }}>{create.isPending ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
-        </div>
-      </section>
+          {formError && (
+            <p className="settings-focus-choice__error" role="alert">
+              {formError}
+            </p>
+          )}
+        </SettingsWorkCard>
+      ) : selected ? (
+        <ManageCampaignCard
+          campaign={selected}
+          headingRef={workHeading}
+          windowStart={windowStart}
+          windowEnd={windowEnd}
+          setWindowStart={setWindowStart}
+          setWindowEnd={setWindowEnd}
+          pending={approve.isPending || schedule.isPending || retry.isPending}
+          onApprove={() => setApproving(selected)}
+          onSchedule={() => schedule.mutate(selected.id)}
+          onRetry={() => retry.mutate(selected.id)}
+          onCancel={() => setCancelling(selected)}
+          onClose={() => setMode({ kind: 'idle' })}
+        />
+      ) : (
+        <SettingsWorkCard
+          eyebrow="Việc có thể làm ở đây"
+          title="Soạn một chiến dịch mới"
+          problem="Hoặc chọn một chiến dịch bên dưới để làm tiếp bước của nó."
+          tone="ok"
+          headingId="settings-campaign-work"
+          headingRef={workHeading}
+          actions={
+            <SettingsActionRow
+              primary={
+                <button
+                  type="button"
+                  ref={rememberTrigger}
+                  className="settings-button settings-button--primary"
+                  onClick={() => {
+                    setReviewed(false);
+                    setFormError(undefined);
+                    setMode({ kind: 'compose' });
+                  }}
+                >
+                  Soạn chiến dịch
+                </button>
+              }
+            />
+          }
+        />
+      )}
 
-      <section className="settings-table-section" aria-labelledby="campaign-list-title">
-        <div className="settings-subheading"><div><p className="settings-eyebrow">Queue và kết quả</p><h3 id="campaign-list-title">Các chiến dịch</h3></div></div>
-        {campaigns.isLoading && <SettingsPanelState title="Đang tải chiến dịch" detail="Đọc delivery ledger…" />}
-        {campaigns.isSuccess && campaigns.data.length === 0 && <SettingsPanelState title="Chưa có chiến dịch" detail="Tạo bản nháp đầu tiên ở phía trên." />}
-        {campaigns.data?.map((campaign) => {
-          const counts = Object.fromEntries(['pending', 'claimed', 'sent', 'failed', 'cancelled'].map((status) => [status, campaign.deliveries.filter((row) => row.status === status).length]));
-          return (
-            <article key={campaign.id} className="settings-campaign-row">
-              <div><strong>{campaign.name}</strong><small>{KIND_LABELS[campaign.kind]} · {formatSettingsDate(campaign.createdAt)}</small><p>{campaign.content}</p></div>
-              <div><span className={`settings-version-chip settings-version-chip--${campaign.status}`}>{STATUS_LABELS[campaign.status]}</span><small>{campaign.targets.length} nhóm · sent {counts.sent} · pending {counts.pending} · failed {counts.failed}</small></div>
-              {campaign.status === 'draft' && <button type="button" className="settings-button settings-button--primary" onClick={() => window.confirm('Duyệt nội dung chiến dịch này?') && approve.mutate(campaign.id)}>Duyệt nội dung</button>}
-              {campaign.status === 'approved' && <div className="settings-campaign-schedule"><input aria-label="Bắt đầu cửa sổ gửi" type="datetime-local" value={windowStart} onChange={(event) => setWindowStart(event.target.value)} /><input aria-label="Kết thúc cửa sổ gửi" type="datetime-local" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} /><button type="button" className="settings-button settings-button--primary" disabled={!windowStart || !windowEnd} onClick={() => schedule.mutate(campaign.id)}>Lên lịch</button></div>}
-              {campaign.status === 'partially_failed' && <button type="button" className="settings-button settings-button--quiet" onClick={() => retry.mutate(campaign.id)}>Retry phần lỗi</button>}
-              {['draft', 'approved', 'scheduled', 'running'].includes(campaign.status) && <button type="button" className="settings-button settings-button--danger" onClick={() => window.confirm('Hủy các delivery chưa gửi?') && cancel.mutate(campaign.id)}>Hủy</button>}
-            </article>
-          );
-        })}
-      </section>
-      {actionError && <SettingsPanelState tone="error" title="Thao tác campaign chưa hoàn tất" detail={actionError.message} />}
+      <SettingsAdvanced
+        title="Các chiến dịch đã có"
+        hint={`${list.length} chiến dịch`}
+        defaultOpen={mode.kind === 'idle'}
+      >
+        {campaigns.isLoading && (
+          <SettingsPanelState title="Đang tải chiến dịch" detail="Đọc kết quả gửi…" />
+        )}
+        {campaigns.isSuccess && list.length === 0 && (
+          <p className="settings-muted">Chưa có chiến dịch nào. Soạn bản nháp đầu tiên ở trên.</p>
+        )}
+        <ul className="settings-focus-queue">
+          {list.map((campaign) => {
+            const sent = campaign.deliveries.filter((row) => row.status === 'sent').length;
+            const failed = campaign.deliveries.filter((row) => row.status === 'failed').length;
+            return (
+              <li key={campaign.id}>
+                <div>
+                  <span
+                    className={`settings-version-chip settings-version-chip--${campaign.status}`}
+                  >
+                    {STATUS_LABELS[campaign.status]}
+                  </span>{' '}
+                  <strong>{campaign.name}</strong>
+                </div>
+                <button
+                  type="button"
+                  className="settings-button settings-button--quiet"
+                  aria-current={selected?.id === campaign.id || undefined}
+                  onClick={(event) => {
+                    rememberTrigger(event.currentTarget);
+                    setMode({ kind: 'manage', campaignId: campaign.id });
+                  }}
+                >
+                  {resolveCampaignAction(campaign.status)?.label ?? 'Xem'}
+                </button>
+                <small>
+                  {KIND_LABELS[campaign.kind]} · {formatSettingsDate(campaign.createdAt)} ·{' '}
+                  {campaign.targets.length} nhóm · đã gửi {sent} · lỗi {failed}
+                </small>
+              </li>
+            );
+          })}
+        </ul>
+      </SettingsAdvanced>
+
+      {approving && (
+        <SettingsFocusModal
+          title={`Duyệt nội dung “${approving.name}”?`}
+          description="Duyệt xong mới lên lịch gửi được. Nội dung sẽ không đổi sau khi duyệt."
+          confirmLabel="Duyệt nội dung"
+          tone="primary"
+          pending={approve.isPending}
+          onCancel={() => setApproving(null)}
+          onConfirm={() => approve.mutate(approving.id)}
+        >
+          <p className="settings-muted">{approving.content}</p>
+        </SettingsFocusModal>
+      )}
+
+      {cancelling && (
+        <SettingsFocusModal
+          title={`Hủy chiến dịch “${cancelling.name}”?`}
+          description="Các lần gửi chưa thực hiện sẽ bị hủy."
+          confirmLabel="Hủy chiến dịch"
+          pending={cancel.isPending}
+          onCancel={() => setCancelling(null)}
+          onConfirm={() => cancel.mutate(cancelling.id)}
+        >
+          <ul className="settings-confirmation">
+            <li>Tin đã gửi cho khách không thu hồi được.</li>
+            <li>Hoàn tác: soạn một chiến dịch mới; chiến dịch đã hủy không chạy lại được.</li>
+          </ul>
+        </SettingsFocusModal>
+      )}
     </div>
   );
 }
 
+function ManageCampaignCard({
+  campaign,
+  headingRef,
+  windowStart,
+  windowEnd,
+  setWindowStart,
+  setWindowEnd,
+  pending,
+  onApprove,
+  onSchedule,
+  onRetry,
+  onCancel,
+  onClose,
+}: {
+  campaign: CampaignView;
+  headingRef: React.RefObject<HTMLHeadingElement | null>;
+  windowStart: string;
+  windowEnd: string;
+  setWindowStart: (value: string) => void;
+  setWindowEnd: (value: string) => void;
+  pending: boolean;
+  onApprove: () => void;
+  onSchedule: () => void;
+  onRetry: () => void;
+  onCancel: () => void;
+  onClose: () => void;
+}) {
+  const action = resolveCampaignAction(campaign.status);
+  const needsWindow = action?.kind === 'schedule';
+  const primary =
+    action && action.kind !== 'watch' ? (
+      <button
+        type="button"
+        className="settings-button settings-button--primary"
+        disabled={pending || (needsWindow && (!windowStart || !windowEnd))}
+        onClick={() => {
+          if (action.kind === 'approve') onApprove();
+          else if (action.kind === 'schedule') onSchedule();
+          else if (action.kind === 'retry') onRetry();
+        }}
+      >
+        {action.label}
+      </button>
+    ) : undefined;
+
+  return (
+    <SettingsWorkCard
+      eyebrow="Đang xử lý một chiến dịch"
+      title={campaign.name}
+      problem={`Trạng thái hiện tại: ${STATUS_LABELS[campaign.status]}.`}
+      tone={campaign.status === 'partially_failed' ? 'blocked' : 'attention'}
+      headingId="settings-campaign-work"
+      headingRef={headingRef}
+      actions={
+        <SettingsActionRow
+          primary={primary}
+          secondary={
+            <button type="button" className="settings-button settings-button--quiet" onClick={onClose}>
+              Đóng
+            </button>
+          }
+          blockedReason={
+            needsWindow && (!windowStart || !windowEnd)
+              ? 'Nhập cả giờ bắt đầu và giờ kết thúc của cửa sổ gửi trước.'
+              : undefined
+          }
+          tertiary={
+            canCancelCampaign(campaign.status) ? (
+              <button
+                type="button"
+                className="settings-text-action settings-text-action--danger"
+                onClick={onCancel}
+              >
+                Hủy chiến dịch
+              </button>
+            ) : undefined
+          }
+        />
+      }
+    >
+      <p>{campaign.content}</p>
+      {needsWindow && (
+        <div className="settings-focus-grid">
+          <label className="settings-focus-choice">
+            <span>Bắt đầu cửa sổ gửi</span>
+            <input
+              aria-label="Bắt đầu cửa sổ gửi"
+              type="datetime-local"
+              value={windowStart}
+              onChange={(event) => setWindowStart(event.target.value)}
+            />
+          </label>
+          <label className="settings-focus-choice">
+            <span>Kết thúc cửa sổ gửi</span>
+            <input
+              aria-label="Kết thúc cửa sổ gửi"
+              type="datetime-local"
+              value={windowEnd}
+              onChange={(event) => setWindowEnd(event.target.value)}
+            />
+          </label>
+        </div>
+      )}
+      <SettingsAdvanced title="Nhóm nhận và kết quả gửi" hint={`${campaign.targets.length} nhóm`}>
+        <ul className="settings-focus-readonly">
+          {campaign.targets.map((target) => (
+            <li key={target.id}>
+              <span>{target.displayName ?? target.chatId}</span>
+              <code>{target.chatId}</code>
+            </li>
+          ))}
+        </ul>
+      </SettingsAdvanced>
+    </SettingsWorkCard>
+  );
+}

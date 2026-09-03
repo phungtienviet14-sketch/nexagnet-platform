@@ -1,8 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { buildPricePeriodBoard } from '../../lib/price-period-view';
+import { leadingOverviewWork, rankOverviewWork } from '../../lib/settings-focus';
 import {
   buildOverviewCards,
   outstandingWork,
@@ -11,15 +12,24 @@ import {
 } from '../../lib/settings-overview';
 import { settingsApi, type SettingsSummary } from '../../lib/settings';
 import type { BlockedCapabilityDescriptor } from '../../lib/tenant-runtime';
+import {
+  SettingsActionRow,
+  SettingsAdvanced,
+  SettingsStatusBar,
+  SettingsWorkCard,
+  useFocusOnKey,
+} from './SettingsFocus';
 import type { SettingsAccess, SettingsSectionId } from './settings-composition';
-import { SettingsPanelState } from './SettingsPanelState';
 
 /**
- * Man dau — tra loi ba cau trong muoi giay (#117 §3).
+ * Man dau — noi VIEC TIEP THEO, khong bay mot bang dieu khien cac the ngang hang (#146 §1).
  *
- * Ban cu mo thang vao `Kênh Zalo`, tuc la bat khach doan xem viec minh can lam nam o the nao. O
- * day viec dang chan ban hang duoc dua len truoc, moi viec mot cau tieng Viet va dung mot nut dan
- * thang toi man sua duoc no.
+ * Ban #117 da dua viec dang chan len truoc, nhung moi viec van la mot the cung co lon, cung mot
+ * kieu nut: nguoi van hanh doc het nam the roi tu quyet dinh bat dau tu dau. O day chi MOT viec la
+ * khoi noi bat; nhung viec con lai tut xuong thanh mot hang cho gon, va "Đang ổn" gap lai.
+ *
+ * Thu tu uu tien LAY TU `status` da co (`blocked` > `attention` > `off` > `ok`) chu khong phai mot
+ * bang xep hang nghiep vu moi — xem `rankOverviewWork()`.
  */
 
 type Props = {
@@ -64,6 +74,12 @@ export function OverviewSettings({
   const headline = overviewHeadline(cards);
   const settled = cards.filter((card) => !outstanding.includes(card));
 
+  const leading = leadingOverviewWork(outstanding);
+  const queued = rankOverviewWork(outstanding).filter((card) => card !== leading);
+
+  const workHeading = useRef<HTMLHeadingElement>(null);
+  useFocusOnKey(workHeading, leading ? `overview-work:${leading.key}` : null);
+
   return (
     <section className="settings-section-stack" aria-label="Tổng quan">
       <header className="settings-section-heading">
@@ -74,73 +90,87 @@ export function OverviewSettings({
         </div>
       </header>
 
-      <SettingsPanelState
-        tone={
-          headline.tone === 'ok' ? 'success' : headline.tone === 'blocked' ? 'error' : 'warning'
-        }
+      <SettingsStatusBar
+        tone={headline.tone === 'ok' ? 'ok' : headline.tone === 'blocked' ? 'blocked' : 'attention'}
         title={headline.title}
         detail={headline.detail}
+        facts={[
+          { label: 'Việc cần hoàn thiện', value: `${outstanding.length}` },
+          { label: 'Đang ổn', value: `${settled.length}` },
+        ]}
       />
 
-      {outstanding.length > 0 && (
-        <section aria-labelledby="settings-overview-todo">
+      {leading ? (
+        <SettingsWorkCard
+          eyebrow="Việc nên làm trước"
+          title={leading.title}
+          problem={leading.detail}
+          tone={leading.status === 'blocked' ? 'blocked' : 'attention'}
+          headingId="settings-overview-work"
+          headingRef={workHeading}
+          actions={
+            leading.action ? (
+              <SettingsActionRow
+                primary={
+                  <button
+                    type="button"
+                    className="settings-button settings-button--primary"
+                    onClick={() => onNavigate(leading.action!.section)}
+                  >
+                    {leading.action.label}
+                  </button>
+                }
+              />
+            ) : undefined
+          }
+        >
+          {leading.technicalDetail && (
+            <details className="settings-technical-details">
+              <summary>Chi tiết kỹ thuật</summary>
+              <code>{leading.technicalDetail}</code>
+            </details>
+          )}
+        </SettingsWorkCard>
+      ) : (
+        <SettingsWorkCard
+          eyebrow="Không còn việc nào chặn"
+          title="Hệ thống đủ dữ liệu để chạy"
+          problem="Không có việc nào đang chặn bán hàng. Các mục bên dưới để tra cứu và chỉnh khi cần."
+          tone="ok"
+          headingId="settings-overview-work"
+          headingRef={workHeading}
+        />
+      )}
+
+      {queued.length > 0 && (
+        <section aria-labelledby="settings-overview-queue">
           <div className="settings-subheading">
-            <h3 id="settings-overview-todo">Việc cần hoàn thiện</h3>
-            <span className="settings-count">{outstanding.length} việc</span>
+            <h3 id="settings-overview-queue">Làm tiếp sau đó</h3>
+            <span className="settings-count">{queued.length} việc</span>
           </div>
-          <ul className="settings-overview-grid">
-            {outstanding.map((card) => (
-              <OverviewCardView key={card.key} card={card} onNavigate={onNavigate} />
+          <ul className="settings-focus-queue">
+            {queued.map((card) => (
+              <QueuedWork key={card.key} card={card} onNavigate={onNavigate} />
             ))}
           </ul>
         </section>
       )}
 
       {settled.length > 0 && (
-        <section aria-labelledby="settings-overview-ok">
-          <div className="settings-subheading">
-            <h3 id="settings-overview-ok">Đang ổn</h3>
-          </div>
-          <ul className="settings-overview-grid">
+        <SettingsAdvanced
+          title="Những phần đang ổn"
+          hint={`${settled.length} mục`}
+          // Khong con viec nao dang cho thi phan "dang on" chinh la noi dung dang gia tri nhat.
+          defaultOpen={outstanding.length === 0}
+        >
+          <ul className="settings-focus-queue">
             {settled.map((card) => (
-              <OverviewCardView key={card.key} card={card} onNavigate={onNavigate} />
+              <QueuedWork key={card.key} card={card} onNavigate={onNavigate} />
             ))}
           </ul>
-        </section>
+        </SettingsAdvanced>
       )}
     </section>
-  );
-}
-
-function OverviewCardView({
-  card,
-  onNavigate,
-}: {
-  card: OverviewCard;
-  onNavigate: (section: SettingsSectionId) => void;
-}) {
-  return (
-    <li className={`settings-overview-card settings-overview-card--${card.status}`}>
-      {/* Khong chi dua vao mau: moi the co mot nhan trang thai doc duoc (#117 §9). */}
-      <span className="settings-overview-card__status">{STATUS_LABELS[card.status]}</span>
-      <strong>{card.title}</strong>
-      <p>{card.detail}</p>
-      {card.action && (
-        <button
-          type="button"
-          className="settings-button settings-button--quiet"
-          onClick={() => onNavigate(card.action!.section)}
-        >
-          {card.action.label}
-        </button>
-      )}
-      {card.technicalDetail && (
-        <details className="settings-technical-details">
-          <summary>Chi tiết kỹ thuật</summary>
-          <code>{card.technicalDetail}</code>
-        </details>
-      )}
-    </li>
   );
 }
 
@@ -150,3 +180,39 @@ const STATUS_LABELS: Readonly<Record<OverviewCard['status'], string>> = {
   blocked: 'Đang chặn',
   off: 'Đang tắt',
 };
+
+function QueuedWork({
+  card,
+  onNavigate,
+}: {
+  card: OverviewCard;
+  onNavigate: (section: SettingsSectionId) => void;
+}) {
+  return (
+    <li>
+      <div>
+        {/* Khong chi dua vao mau: moi dong co mot nhan trang thai doc duoc (#117 §9). */}
+        <span className={`settings-overview-card__status settings-overview-card--${card.status}`}>
+          {STATUS_LABELS[card.status]}
+        </span>{' '}
+        <strong>{card.title}</strong>
+      </div>
+      {card.action && (
+        <button
+          type="button"
+          className="settings-button settings-button--quiet"
+          onClick={() => onNavigate(card.action!.section)}
+        >
+          {card.action.label}
+        </button>
+      )}
+      <small>{card.detail}</small>
+      {card.technicalDetail && (
+        <details className="settings-technical-details">
+          <summary>Chi tiết kỹ thuật</summary>
+          <code>{card.technicalDetail}</code>
+        </details>
+      )}
+    </li>
+  );
+}

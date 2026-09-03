@@ -1,0 +1,395 @@
+/*
+ * Tiêu điểm hướng dẫn cho `/settings` (#146).
+ *
+ * Tệp này CHỈ định nghĩa lớp mới có tiền tố `settings-focus-*` / `settings-work-*`. Không sửa và
+ * không ghi đè bất kỳ lớp nào của `settings-layout/panels/operations.css`, để thay đổi ở đây không
+ * thể kéo theo màn bảng giá (#127/#144).
+ *
+ * Thứ bậc thị giác được tạo bằng BỐN đòn bẩy, không phải bằng màu:
+ *   1. nền — `--surface` đặc cho việc đang làm, trong suốt cho bối cảnh;
+ *   2. viền — 1px cho bối cảnh, 2px + dải màu bên trái cho việc đang làm;
+ *   3. khoảng thở — việc đang làm rộng gấp đôi;
+ *   4. cỡ chữ — tiêu đề việc lớn hơn hẳn mọi tiêu đề phụ quanh nó.
+ */
+
+/* ------------------------------------------------------------ A. Trạng thái */
+
+.settings-focus-status {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem 0.85rem;
+  align-items: start;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklch, var(--surface-2) 45%, transparent);
+}
+.settings-focus-status__tag {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text-dim);
+  background: color-mix(in oklch, var(--text) 7%, transparent);
+}
+.settings-focus-status__body strong {
+  display: block;
+  font-size: 0.86rem;
+}
+.settings-focus-status__body p {
+  margin: 0.2rem 0 0;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+.settings-focus-status--ok .settings-focus-status__tag {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+.settings-focus-status--attention .settings-focus-status__tag {
+  color: var(--warn-ink);
+  background: var(--warn-soft);
+}
+.settings-focus-status--blocked .settings-focus-status__tag {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.settings-focus-status__facts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.4rem;
+  margin: 0;
+}
+.settings-focus-status__facts div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+.settings-focus-status__facts dt {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+.settings-focus-status__facts dd {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------- B. Việc đang làm */
+
+.settings-work {
+  position: relative;
+  padding: clamp(1rem, 1.8vw, 1.6rem);
+  border: 2px solid color-mix(in oklch, var(--accent) 34%, var(--line));
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+/* Dải màu bên trái: dấu hiệu "đây là khối phải nhìn" đọc được cả khi không phân biệt màu, vì nó
+   là khối DUY NHẤT trên trang có dải này. */
+.settings-work::before {
+  content: '';
+  position: absolute;
+  inset: -2px auto -2px -2px;
+  width: 5px;
+  border-radius: var(--r-md) 0 0 var(--r-md);
+  background: var(--accent);
+}
+.settings-work--ok {
+  border-color: color-mix(in oklch, var(--ok) 30%, var(--line));
+}
+.settings-work--ok::before {
+  background: var(--ok);
+}
+.settings-work--blocked {
+  border-color: color-mix(in oklch, var(--danger) 34%, var(--line));
+}
+.settings-work--blocked::before {
+  background: var(--danger);
+}
+.settings-work__head h3 {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 1.7vw, 1.5rem);
+  line-height: 1.2;
+  font-weight: 600;
+}
+.settings-work__head h3:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+.settings-work__problem {
+  margin: 0.45rem 0 0;
+  max-width: 68ch;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+.settings-work__body {
+  margin-top: 1.1rem;
+  display: grid;
+  gap: 0.85rem;
+}
+.settings-work__actions {
+  margin-top: 1.2rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------------------------------------------------------- Cụm hành động */
+
+.settings-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.1rem;
+}
+.settings-focus-actions__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+/* Hành động phá huỷ bị đẩy sang đầu kia của hàng — không bao giờ nằm sát nút chính. */
+.settings-focus-actions__aside {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.settings-focus-actions__reason {
+  flex-basis: 100%;
+  order: 1;
+  margin: 0;
+  font-size: 0.73rem;
+  color: var(--text-dim);
+}
+
+/* Nút chuyển ngữ cảnh (chọn kênh, chọn chế độ) — KHÔNG được trông như nút chính. */
+.settings-focus-switch[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent-soft) 55%, var(--surface));
+}
+.settings-focus-switch[aria-pressed='true']::before {
+  content: '✓ ';
+}
+
+/* --------------------------------------------------- C/D. Nội dung phụ gấp */
+
+.settings-focus-advanced {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklch, var(--surface-2) 30%, transparent);
+}
+.settings-focus-advanced > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.62rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  list-style: none;
+}
+.settings-focus-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+.settings-focus-advanced > summary::before {
+  content: '▸';
+  font-size: 0.7rem;
+  transition: transform 140ms ease;
+}
+.settings-focus-advanced[open] > summary::before {
+  transform: rotate(90deg);
+}
+.settings-focus-advanced > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--r-sm);
+}
+.settings-focus-advanced > summary small {
+  font-weight: 600;
+  color: var(--text-dim);
+  opacity: 0.85;
+}
+.settings-focus-advanced__body {
+  padding: 0 0.85rem 0.9rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+/* --------------------------------------------------------- Hàng chờ xử lý */
+
+.settings-focus-queue {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-focus-queue > li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem 0.9rem;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklch, var(--surface) 60%, transparent);
+}
+.settings-focus-queue strong {
+  font-size: 0.82rem;
+}
+.settings-focus-queue small {
+  grid-column: 1 / -1;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------- Bảng chọn */
+
+.settings-focus-choice {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+}
+.settings-focus-choice > span {
+  font-weight: 700;
+}
+.settings-focus-choice select,
+.settings-focus-choice input,
+.settings-focus-choice textarea {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+.settings-focus-choice textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+}
+.settings-focus-choice input:focus-visible,
+.settings-focus-choice select:focus-visible,
+.settings-focus-choice textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.settings-focus-choice--invalid input,
+.settings-focus-choice--invalid select,
+.settings-focus-choice--invalid textarea {
+  border-color: var(--danger);
+  background: color-mix(in oklch, var(--danger-soft) 55%, var(--surface));
+}
+.settings-focus-choice__error {
+  font-size: 0.72rem;
+  color: var(--danger);
+}
+.settings-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.8rem;
+}
+
+/* ------------------------------------------------------------- Các bước */
+
+.settings-focus-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  margin: 0 0 0.2rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+.settings-focus-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.settings-focus-steps li + li::before {
+  content: '→';
+  opacity: 0.5;
+}
+.settings-focus-steps li[data-state='current'] {
+  color: var(--text);
+  font-weight: 800;
+}
+.settings-focus-steps li[data-state='done'] {
+  color: var(--ok);
+}
+
+/* -------------------------------------------------------------- Hộp thoại */
+
+.settings-focus-dialog__lead {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------ Bảng chỉ đọc gọn */
+
+.settings-focus-readonly {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-focus-readonly > li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.8rem;
+  align-items: baseline;
+  padding-block: 0.4rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.78rem;
+}
+.settings-focus-readonly > li:last-child {
+  border-bottom: 0;
+}
+.settings-focus-readonly small {
+  grid-column: 1 / -1;
+  font-size: 0.71rem;
+  color: var(--text-dim);
+}
+.settings-focus-readonly code {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+/* ------------------------------------------------------------ Khung hẹp */
+
+@media (max-width: 720px) {
+  .settings-focus-status {
+    grid-template-columns: 1fr;
+  }
+  .settings-focus-actions__aside {
+    margin-inline-start: 0;
+    flex-basis: 100%;
+    order: 2;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--line);
+  }
+  .settings-focus-actions__main > .settings-button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .settings-focus-queue > li {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-focus-advanced > summary::before {
+    transition: none;
+  }
+}
