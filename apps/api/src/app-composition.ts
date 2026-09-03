@@ -106,6 +106,20 @@ import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
+import { TransportAssetComplianceModule } from './transport/asset-compliance/transport-asset-compliance.module.js';
+import { TransportWorkforceModule } from './transport/workforce/transport-workforce.module.js';
+import { OperationalAlertsService } from './transport/asset-compliance/operational-alerts.service.js';
+import {
+  AlertDriverFundSource,
+  AlertFuelConsumptionSource,
+  CostingFundAlertAdapter,
+  FuelReviewAlertAdapter,
+} from './transport/asset-compliance/alert-sources.js';
+import { MaintenanceController } from './transport/asset-compliance/maintenance.controller.js';
+import { ComplianceController } from './transport/asset-compliance/compliance.controller.js';
+import { FleetStatusController } from './transport/asset-compliance/fleet-status.controller.js';
+import { OperationalAlertsController } from './transport/asset-compliance/operational-alerts.controller.js';
+import { PayrollController } from './transport/workforce/payroll.controller.js';
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { TransportModule } from './transport/transport.module.js';
@@ -162,6 +176,11 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // QUYET TOAN AR/AP + HOA HONG + BIEN TRUC TIEP. Den cung `transport-settlement` va bien mat cung
   // no: mot khach van tai chua theo doi cong no khong duoc nap bang chung tu nao cua `TX-05`.
   owned('transport-settlement', TransportSettlementModule),
+  // BAO DUONG + GIAY TO + TRANG THAI HIEU LUC CUA XE. Den cung `transport-asset-compliance` va
+  // bien mat cung no: mot khach chua theo doi han dang kiem khong duoc nap bang nao cua `TX-06`.
+  owned('transport-asset-compliance', TransportAssetComplianceModule),
+  // LUONG LAI XE. Den cung `transport-workforce` va bien mat cung no.
+  owned('transport-workforce', TransportWorkforceModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -209,6 +228,15 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-fuel', FuelReconciliationController),
   // PHIEU DAU CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
   owned('transport-fuel', DriverFuelController),
+  // `TX-06` — bao duong, giay to, trang thai hieu luc cua doi xe.
+  owned('transport-asset-compliance', MaintenanceController),
+  owned('transport-asset-compliance', ComplianceController),
+  owned('transport-asset-compliance', FleetStatusController),
+  // BANG CANH BAO GOM CHUNG — thuoc `TX-06`, nhung service dung sau no doc them hai nguon TUY
+  // CHON o `transport-costing`/`transport-fuel`. Xem khoi PROVIDERS ben duoi.
+  owned('transport-asset-compliance', OperationalAlertsController),
+  // `TX-07` — ky luong, phieu luong.
+  owned('transport-workforce', PayrollController),
 ];
 
 const guardProviders: readonly Provider[] = [
@@ -226,6 +254,26 @@ const guardProviders: readonly Provider[] = [
 ].map((useClass) => ({ provide: APP_GUARD, useClass }));
 
 const PROVIDERS: readonly Owned<Provider>[] = [
+  /**
+   * BANG CANH BAO VAN HANH GOM CHUNG — dang ky o TANG UNG DUNG, khong trong
+   * `TransportAssetComplianceModule`.
+   *
+   * Ly do la cau truc chu khong so thich. Bang nay doc ba nguon nam o BA capability khac nhau:
+   * giay to va bao duong cua `transport-asset-compliance`, tieu hao dau cua `transport-fuel`, so
+   * du quy cua `transport-costing`. Neu module cua `TX-06` `imports` hai capability sau thi no
+   * khong con bat duoc mot minh — tuc pha dung cai `dependencies: ['transport-core']` ma T1 §10.1
+   * hua, va mot khach chi muon theo doi han dang kiem se bi bat khai ca doi soat bang ke.
+   *
+   * O tang nay, hai adapter chi TON TAI khi capability so huu chung duoc bat. Khi vang mat,
+   * `OperationalAlertsService` nhan `undefined` qua `@Optional()` va phat ra `unavailableSources`
+   * — bang canh bao noi thang rang mot muc dang thieu, thay vi doc giong nhu moi thu deu on.
+   */
+  owned('transport-asset-compliance', OperationalAlertsService),
+  owned('transport-fuel', {
+    provide: AlertFuelConsumptionSource,
+    useClass: FuelReviewAlertAdapter,
+  }),
+  owned('transport-costing', { provide: AlertDriverFundSource, useClass: CostingFundAlertAdapter }),
   ...guardProviders.map((provider) => owned('foundation' as const, provider)),
   owned('operations', RuntimeSettingsService),
   owned('turn-processing', AgentEventsService),

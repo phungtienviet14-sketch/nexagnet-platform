@@ -179,6 +179,22 @@ export const CAPABILITY_IDS = [
    * hien ra cho toi luc doi chieu voi cay xang cuoi thang.
    */
   'transport-settlement',
+  /**
+   * TAI SAN + TUAN THU (`TX-06`) — bao duong, giay to phap ly va TRANG THAI HIEU LUC cua xe.
+   *
+   * Phu thuoc DUY NHAT `transport-core`, khac ba capability van tai truoc no. Do la mot khang
+   * dinh: mot khach chi muon theo doi han dang kiem va lich bao duong khong phai bat so quy lai
+   * xe, khong phai bat phieu dau, va khong phai khai mot dong cong no nao.
+   */
+  'transport-asset-compliance',
+  /**
+   * NHAN SU (`TX-07`) — ky luong, phieu luong, thanh phan luong.
+   *
+   * Phu thuoc `transport-costing` vi phieu luong HIEN THI so du quy lai xe (VT-062 muon nguoi
+   * duyet nhin thay no truoc khi quyet). HIEN THI, khong tru: `GD-12` tat khau tru tu dong, va
+   * rang buoc `TransportPayslipComponent_deduction_manual_only` giu dieu do o tang luu tru.
+   */
+  'transport-workforce',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -421,6 +437,53 @@ const transportFuelPolicySchema = z
   })
   .strict();
 
+/**
+ * Chinh sach cua `transport-asset-compliance` — `GD-18` (nguong canh bao het han).
+ *
+ * TUY CHON toan bo, cung ly le voi ba capability van tai truoc no. Mac dinh nam trong
+ * `asset-compliance-policy.ts` cua mien, khong o day; schema nay chi noi cai gi HOP LE.
+ *
+ * `expiryWarningDaysByType` cho phep dat rieng theo loai giay to — `GD-18` ghi ro dieu do. Bao
+ * hiem thuong can bao som hon dang kiem vi phai lam viec voi mot ben thu ba.
+ */
+const transportCompliancePolicySchema = z
+  .object({
+    expiryWarningDays: z.number().int().min(0).max(365).optional(),
+    expiryWarningDaysByType: z.record(nonEmpty, z.number().int().min(0).max(365)).optional(),
+    maintenance: z
+      .object({
+        dueSoonKm: z.number().int().min(0).max(1_000_000).optional(),
+        dueSoonDays: z.number().int().min(0).max(365).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+/**
+ * Chinh sach cua `transport-workforce` — tham so luong (VT-060).
+ *
+ * NGUON KHACH CHI CHO CAU TRUC, KHONG CHO THAM SO: VT-060 mo ta "luong co ban + khoan theo
+ * chuyen/km + thuong tiet kiem dau", va muc "Quy che luong lai xe hien hanh" nam trong danh sach
+ * DU LIEU CON THIEU cua T0. Nen moi con so o day la MOT LUA CHON CUA KHACH phai duoc nhap, va
+ * mac dinh cua mien la `0` — khong bia mot muc luong nao.
+ *
+ * DEMO: tham so ap CHUNG cho moi lai xe. Luong rieng tung nguoi la mot cot tren ho so lai xe, va
+ * do la du lieu nhan su that — khong phai mot khoi cau hinh cua goi khach. Khi khach dua quy che
+ * luong that, day la cho de DOI, khong phai cho de mo rong.
+ *
+ * KHONG CO truong nao cho khau tru tu dong. `GD-12` tat duong do, va mot o cau hinh de san se la
+ * loi moi bat no len ma khong ai doc lai C-02.
+ */
+const transportPayrollPolicySchema = z
+  .object({
+    baseSalaryVnd: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    perTripVnd: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    perKmVnd: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    /** Thuong tiet kiem dau, dong tren moi lit duoi dinh muc. `0`/khong khai = tat. */
+    fuelSavingBonusVndPerLiter: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  })
+  .strict();
 const tenantPoliciesSchema = z
   .object({
     salesOrder: salesOrderPolicySchema.optional(),
@@ -428,6 +491,8 @@ const tenantPoliciesSchema = z
     transportCore: transportCorePolicySchema.optional(),
     transportCosting: transportCostingPolicySchema.optional(),
     transportFuel: transportFuelPolicySchema.optional(),
+    transportCompliance: transportCompliancePolicySchema.optional(),
+    transportPayroll: transportPayrollPolicySchema.optional(),
     readiness: tenantReadinessSchema,
   })
   .strict();
@@ -511,6 +576,35 @@ const capabilityRequirements = {
   'transport-settlement': {
     dependencies: ['transport-core', 'transport-costing', 'transport-fuel'],
   },
+  /**
+   * MOT phu thuoc, va do la khac biet lon nhat trong cay van tai.
+   *
+   * T1 §10.1 dat `transport-asset-compliance` canh `transport-core` chu khong noi tiep chuoi
+   * costing -> fuel -> settlement: bao duong va giay to khong dinh gi den tien. Mot khach chi
+   * muon theo doi han dang kiem se bat DUNG hai capability, va do la mot cau hinh phai chay duoc.
+   *
+   * KHONG khai `policy: 'transportCompliance'`, cung ly le voi bon capability van tai truoc no:
+   * nguong canh bao co mac dinh dung duoc (`GD-18` = 30 ngay), nen khai o day se bien mot khoi
+   * cau hinh hoan toan tuy chon thanh mot dieu kien boot.
+   */
+  'transport-asset-compliance': { dependencies: ['transport-core'] },
+  /**
+   * HAI phu thuoc, ca hai deu la quan he THAT:
+   *
+   *   · `transport-core`     — so chuyen va so km cua ky luong den tu `TX-02`;
+   *   · `transport-costing`  — phieu luong HIEN THI so du quy lai xe (VT-062).
+   *
+   * Phu thuoc thu hai la cho de nham lan nhat trong ca cay nay, nen noi cho ro: no o day de
+   * nguoi duyet NHIN THAY so du truoc khi quyet, KHONG phai de he thong tru vao luong. `GD-12`
+   * tat duong do, va rang buoc `TransportPayslipComponent_deduction_manual_only` duoi Postgres
+   * lam cho mot khoan tru tu dong KHONG GHI DUOC vao bang.
+   *
+   * `transport-fuel` CO Y khong nam trong danh sach du thuong tiet kiem dau can du lieu cua no.
+   * Nguon do la TUY CHON: khong bat fuel thi khong co thanh phan thuong, va lan chay luong ghi
+   * `FUEL_SAVING_UNAVAILABLE` vao `missingInputs` thay vi lang le tinh ra so khong. Bat fuel
+   * thanh phu thuoc cung se bat mot khach chi tra luong co ban phai dung ca doi soat bang ke.
+   */
+  'transport-workforce': { dependencies: ['transport-core', 'transport-costing'] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {
