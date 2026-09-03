@@ -16,6 +16,7 @@ import {
   type HighImpactConfirmation,
   type PricePeriodPlan,
 } from '../../lib/price-period-view';
+import { createButtonInHeader, resolvePriceFocus } from '../../lib/price-focus';
 import {
   fingerprintRows,
   resolvePriceWorkflow,
@@ -42,6 +43,15 @@ import { SettingsPanelState } from './SettingsPanelState';
  *
  * Thu tu thao tac khong con la viec cua nguoi dung nua: khong con nut `Kiểm tra bảng giá` rieng
  * de bam truoc khi luu, va nut Kich hoat khong ton tai cho toi khi may chu da xac nhan dat.
+ *
+ * TAP TRUNG THEO BUOC (#144). Bon khoi tren van con day du, nhung KHONG con cung trong luong: o
+ * moi trang thai chi mot khoi duoc chiem uu the thi giac (`data-price-dominant`) va chi mot nut la
+ * nut chinh (`data-price-primary`). Ai quyet dinh dieu do la `resolvePriceFocus` — mot ham thuan —
+ * chu khong phai vai cai class rai trong JSX. Nho vay hai bat bien do DEM DUOC trong bai kiem tra.
+ *
+ * Tieu diem/cuon la THEO CHUYEN TIEP, khong theo lan render: chi cac thao tac that su doi buoc moi
+ * goi `requestFocus()`. Mot lan `refetch` cua React Query khong goi, nen no khong the giat con tro
+ * ra khoi o nguoi dung dang go.
  */
 
 type Props = {
@@ -89,6 +99,32 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
   const [removingSku, setRemovingSku] = useState<string | null>(null);
   const [importText, setImportText] = useState('[]');
 
+  /**
+   * Tieu diem THEO CHUYEN TIEP.
+   *
+   * `focusTick` chi tang khi nguoi dung that su doi buoc — mo trinh tao, sang buoc khac, kiem xong,
+   * quay lai sua, kich hoat xong. Khoi dang chiem uu the tu danh dau tieu de cua no bang
+   * `data-price-focus-target`, va o day chi co dung MOT lan `querySelector`. Vi khong co
+   * `useEffect` nao phu thuoc vao du lieu tra ve, mot lan `refetch` khong bao gio cuop tieu diem
+   * (#144 "focus/scroll phai theo chuyen tiep, khong theo render").
+   */
+  const sectionRef = useRef<HTMLElement>(null);
+  const [focusTick, setFocusTick] = useState(0);
+  const requestFocus = () => setFocusTick((tick) => tick + 1);
+
+  useEffect(() => {
+    // 0 = lan dung o day vi trang vua tai xong, khong phai vi nguoi dung vua lam gi.
+    if (focusTick === 0) return;
+    const target = sectionRef.current?.querySelector<HTMLElement>(
+      '[data-price-focus-target="true"]',
+    );
+    if (!target) return;
+    target.focus();
+    // Khong dat `behavior: 'smooth'`: dung dan khong duoc phu thuoc vao hoat anh, va nguoi bat
+    // `prefers-reduced-motion` van phai thay dung khoi do (CSS da khoa `scroll-behavior`).
+    target.scrollIntoView({ block: 'start' });
+  }, [focusTick]);
+
   // Ky dang mo: uu tien ky nguoi dung chon, roi den ban nhap dau tien — ban nhap la thu duy nhat
   // con sua duoc, nen mo san mot ky chi doc chi lam nguoi ta tuong minh khong sua duoc gi.
   const selected: PricePeriod | undefined = useMemo(() => {
@@ -131,7 +167,7 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
       plan.api === 'copy'
         ? settingsApi.copyPricePeriod(plan.sourcePeriodId!, plan.validMonth)
         : settingsApi.createPricePeriod(plan.validMonth, plan.note, plan.testOnly),
-    onSuccess: (period) => {
+    onSuccess: async (period) => {
       setSelectedId(period.id);
       setWizardOpen(false);
       setNotice(
@@ -139,7 +175,10 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
           ? `Đã tạo bản nháp CHỈ ĐỂ CHẠY THỬ cho ${formatMonth(period.validMonth ?? '')}. Bản nháp chưa áp dụng cho đơn nào.`
           : `Đã tạo bản nháp cho ${formatMonth(period.validMonth ?? '')} với ${period.prices.length} mặt hàng. Bản nháp chưa áp dụng cho đơn nào.`,
       );
-      void refresh();
+      // Dua con tro SAU khi tai lai xong. Ky vua tao chua co trong danh sach da cache, nen goi
+      // `requestFocus()` som hon se nham vao man hinh cua trang thai CU.
+      await refresh();
+      requestFocus();
     },
   });
 
@@ -181,6 +220,31 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
     check,
   });
 
+  const focus = resolvePriceFocus({
+    wizardOpen,
+    workflowMode: workflow.mode,
+    hasSelection: Boolean(selected),
+    canConfigure,
+  });
+
+  const openWizard = () => {
+    setWizardOpen(true);
+    setNotice(undefined);
+    requestFocus();
+  };
+
+  const selectPeriod = (id: string) => {
+    setSelectedId(id);
+    requestFocus();
+  };
+
+  /**
+   * Cac the ngu canh chi mang nut khi KHONG co viec nao dang lam. Dang giua mot buoc thi mot nut
+   * "Xem chi tiết" o do chi la mot ngo re khoi viec — bo han khoi DOM chu khong an bang CSS, de
+   * no cung khong con nam trong duong Tab.
+   */
+  const showContextActions = focus.contextActions;
+
   const askArchive = (period: PricePeriod) => {
     if (!board) return;
     setPending({
@@ -195,6 +259,7 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
             : `Đã lưu trữ bảng giá ${formatMonth(period.validMonth ?? '')}. Kỳ này thôi áp dụng từ bây giờ.`,
         );
         await refresh();
+        requestFocus();
       },
     });
   };
@@ -261,6 +326,9 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
         rows: persisted,
         validation,
       });
+      // Dat thi sang man Xem lai, khong dat thi o lai buoc sua — ca hai deu la MOT chuyen tiep, va
+      // ca hai deu co mot tieu de dung dan de dua con tro toi.
+      requestFocus();
       await refresh();
     } catch (error) {
       setCheck(null);
@@ -290,7 +358,11 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
           // May chu cham diem lai lan nua duoi khoa hang. No tu choi nghia la anh chup vua xem
           // khong con dung — bo ket qua kiem cu di de nguoi dung phai kiem lai tren du lieu moi.
           setCheck(null);
+          // Kich hoat xong, thu chinh tren man hinh la TRANG THAI, khong phai o nhap nao ca.
+          // Phai doi `refresh()` xong: truoc do ky VAN con la ban nhap trong cache, nen man hinh
+          // chua chuyen sang che do chi doc va con tro se dap vao tieu de cua buoc sua.
           await refresh();
+          requestFocus();
         }
       },
     });
@@ -336,7 +408,13 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
   const history = [...board.pastActive, ...board.archived];
 
   return (
-    <section className="settings-section-stack" aria-label="Bảng giá">
+    <section
+      ref={sectionRef}
+      className="settings-section-stack settings-price"
+      aria-label="Bảng giá"
+      data-price-stage={focus.stage}
+      data-price-context={focus.contextDensity}
+    >
       <header className="settings-section-heading">
         <div>
           <p className="settings-eyebrow">Giá áp dụng cho đơn mới</p>
@@ -346,14 +424,14 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
             đó thì mọi câu hỏi giá và đơn hàng được chuyển về cho Sale.
           </p>
         </div>
-        {canConfigure && !wizardOpen && (
+        {createButtonInHeader(focus) && (
           <button
             type="button"
-            className="settings-button settings-button--primary"
-            onClick={() => {
-              setWizardOpen(true);
-              setNotice(undefined);
-            }}
+            className={`settings-button settings-button--${
+              focus.createButton === 'header-primary' ? 'primary' : 'quiet'
+            }`}
+            data-price-primary={focus.createButton === 'header-primary' ? 'true' : undefined}
+            onClick={openWizard}
           >
             Tạo bảng giá
           </button>
@@ -370,12 +448,17 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
           pending={create.isPending}
           {...(create.error ? { error: create.error.message } : {})}
           onCancel={() => setWizardOpen(false)}
+          onStepChange={requestFocus}
           onSubmit={(plan) => create.mutate(plan)}
         />
       )}
 
-      {/* ---- 1. Trang thai thang hien tai — chi doc, khong phai cho lam viec ---- */}
-      <div className="settings-price-board">
+      {/* ---- 1. Trang thai thang hien tai ----------------------------------------------------
+          Khi dang co mot viec (`compact`), khoi nay lui ve mot dai NGU CANH: chu nho hon, khong
+          co nut, khong tranh cho voi khoi dang lam viec. Nhung SU THAT thi khong bi giau — "Chưa
+          có bảng giá chính thức" va "đang có kỳ chạy thử" van doc duoc o moi trang thai (#144
+          "Never hide: current official pricing truth; current UAT truth when active"). */}
+      <div className="settings-price-board" data-density={focus.contextDensity}>
         <article
           className={`settings-price-card settings-price-card--${board.official ? 'official' : 'missing'}`}
         >
@@ -388,15 +471,17 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
               <p>
                 {board.official.prices.length} mặt hàng · {pricePeriodOrigin(board.official)}
               </p>
-              <div className="settings-price-card__actions">
-                <button
-                  type="button"
-                  className="settings-button settings-button--quiet"
-                  onClick={() => setSelectedId(board.official!.id)}
-                >
-                  Xem chi tiết
-                </button>
-              </div>
+              {showContextActions && (
+                <div className="settings-price-card__actions">
+                  <button
+                    type="button"
+                    className="settings-button settings-button--quiet"
+                    onClick={() => selectPeriod(board.official!.id)}
+                  >
+                    Xem chi tiết
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -405,17 +490,6 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
                 Tháng này chưa có bảng giá chính thức, nên hệ thống chưa tự báo giá hay chốt đơn
                 được.
               </p>
-              {canConfigure && (
-                <div className="settings-price-card__actions">
-                  <button
-                    type="button"
-                    className="settings-button settings-button--primary"
-                    onClick={() => setWizardOpen(true)}
-                  >
-                    Thiết lập bảng giá
-                  </button>
-                </div>
-              )}
             </>
           )}
         </article>
@@ -428,21 +502,25 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
               {board.testOnly.prices.length} mặt hàng có giá để chạy thử. Đây <b>không</b> phải bảng
               giá chính thức và không làm hệ thống được coi là đủ điều kiện chạy thật.
             </p>
-            <div className="settings-price-card__actions">
-              <button
-                type="button"
-                className="settings-button settings-button--quiet"
-                onClick={() => setSelectedId(board.testOnly!.id)}
-              >
-                Xem chi tiết
-              </button>
-            </div>
+            {showContextActions && (
+              <div className="settings-price-card__actions">
+                <button
+                  type="button"
+                  className="settings-button settings-button--quiet"
+                  onClick={() => selectPeriod(board.testOnly!.id)}
+                >
+                  Xem chi tiết
+                </button>
+              </div>
+            )}
           </article>
         )}
       </div>
 
-      {/* ---- 2 + 3. Cong viec dang lam, va ba buoc de xong no ---- */}
-      {selected && workflow.mode !== 'read-only' && (
+      {/* ---- 2 + 3. Cong viec dang lam, va ba buoc de xong no --------------------------------
+          Trinh tao dang mo thi khoi nay KHONG ve. Hai khong gian lam viec cung luc, moi cai mot
+          nut chinh, la dung thu #144 bat bo: nguoi van hanh phai tu chon dang lam viec nao. */}
+      {focus.dominantRegion === 'work' && selected && workflow.mode !== 'read-only' && (
         <PriceDraftWorkspace
           period={selected}
           state={workflow}
@@ -461,19 +539,28 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
           onArchiveDraft={() => askArchive(selected)}
           onSaveForLater={() => void saveForLater()}
           onCheckAndContinue={() => void checkAndContinue()}
-          onBackToEdit={() => setCheck(null)}
+          onBackToEdit={() => {
+            setCheck(null);
+            requestFocus();
+          }}
           onActivate={askActivate}
         />
       )}
 
-      {selected && workflow.readOnly && (
-        <section className="settings-price-work" aria-labelledby="settings-price-readonly-title">
+      {focus.dominantRegion === 'status' && selected && workflow.readOnly && (
+        <section
+          className="settings-price-work"
+          aria-labelledby="settings-price-readonly-title"
+          data-price-dominant="true"
+        >
           <header className="settings-price-work__head">
             <p className="settings-eyebrow">
               {PRICE_PERIOD_KIND_LABELS[classifyPricePeriod(selected, board.currentMonth)]} ·{' '}
               {pricePeriodOrigin(selected)}
             </p>
-            <h3 id="settings-price-readonly-title">{workflow.readOnly.title}</h3>
+            <h3 id="settings-price-readonly-title" tabIndex={-1} data-price-focus-target="true">
+              {workflow.readOnly.title}
+            </h3>
             <p className="settings-muted">{workflow.readOnly.detail}</p>
           </header>
 
@@ -485,24 +572,18 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
             disabled={busy}
           />
 
+          {/* Thao tac VONG DOI, khong phai buoc cua luong — nen o day khong co nut chinh nao.
+              Duong tao ky moi da nam o dai tieu de roi; ve them mot nut "Tạo bản nháp mới" o day
+              la dung hai nut chinh cho cung mot viec (#144 §7 "lifecycle actions are secondary"). */}
           <div className="settings-price-actions">
             <button
               type="button"
               className="settings-button settings-button--quiet"
-              onClick={() => setSelectedId('')}
+              onClick={() => selectPeriod('')}
             >
               Đóng
             </button>
             <div className="settings-price-actions__primary">
-              {workflow.readOnly.canStartNewDraft && !wizardOpen && (
-                <button
-                  type="button"
-                  className="settings-button settings-button--primary"
-                  onClick={() => setWizardOpen(true)}
-                >
-                  Tạo bản nháp mới
-                </button>
-              )}
               {workflow.readOnly.canArchive && canArchivePeriod(selected) && (
                 <button
                   type="button"
@@ -518,16 +599,43 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
         </section>
       )}
 
-      {!selected && (
-        <SettingsPanelState
-          title="Chưa có việc nào đang làm"
-          detail="Bản nháp là nơi sửa giá an toàn — chưa ảnh hưởng đơn nào cho tới khi kích hoạt."
-        />
+      {/* ---- Chua co viec nao: viec can lam la BAT DAU -------------------------------------
+          Khong ve mot "khong gian lam viec" rong trong nhu bam duoc. Chi mot cau noi ro dang o
+          dau, va mot nut duy nhat de bat dau (#144 §1). */}
+      {focus.dominantRegion === 'start' && (
+        <section
+          className="settings-price-start"
+          aria-labelledby="settings-price-start-title"
+          data-price-dominant="true"
+        >
+          <p className="settings-eyebrow">Việc cần làm</p>
+          <h3 id="settings-price-start-title" tabIndex={-1} data-price-focus-target="true">
+            {board.official ? 'Chưa có việc nào đang làm' : 'Chưa có bảng giá cho tháng này'}
+          </h3>
+          <p className="settings-muted">
+            {board.official
+              ? 'Bản nháp là nơi sửa giá an toàn — chưa ảnh hưởng đơn nào cho tới khi kích hoạt.'
+              : 'Tạo một bản nháp, nhập giá, kiểm tra rồi kích hoạt. Trước bước kích hoạt cuối cùng, không đơn nào bị ảnh hưởng.'}
+          </p>
+          {focus.createButton === 'start-primary' && (
+            <button
+              type="button"
+              className="settings-button settings-button--primary settings-price-start__cta"
+              data-price-primary="true"
+              onClick={openWizard}
+            >
+              Tạo bảng giá
+            </button>
+          )}
+        </section>
       )}
 
       {/* ---- 4. Lich su & ban nhap khac — gap lai, khong mat duong vao ---- */}
       {(otherDrafts.length > 0 || history.length > 0) && (
-        <details className="settings-archive-list">
+        <details
+          className="settings-archive-list"
+          data-price-background={focus.backgroundContent ? 'true' : undefined}
+        >
           <summary>Lịch sử &amp; bản nháp khác ({otherDrafts.length + history.length})</summary>
           {otherDrafts.length > 0 && (
             <ul className="settings-price-draft-list">
@@ -544,7 +652,7 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
                     <button
                       type="button"
                       className="settings-button settings-button--quiet"
-                      onClick={() => setSelectedId(draft.id)}
+                      onClick={() => selectPeriod(draft.id)}
                     >
                       Mở để sửa
                     </button>
@@ -571,7 +679,7 @@ export function PricePeriodsSettings({ dataClassificationTest, canConfigure }: P
                   <button
                     type="button"
                     className="settings-text-action"
-                    onClick={() => setSelectedId(period.id)}
+                    onClick={() => selectPeriod(period.id)}
                   >
                     {formatMonth(period.validMonth ?? '')} ·{' '}
                     {PRICE_PERIOD_KIND_LABELS[classifyPricePeriod(period, board.currentMonth)]} ·{' '}
