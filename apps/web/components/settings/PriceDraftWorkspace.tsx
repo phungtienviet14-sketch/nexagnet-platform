@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { addRow } from '../../lib/price-period-view';
-import { formatVnd } from '../../lib/price-rows';
+import { PRICE_COLUMNS, formatVnd } from '../../lib/price-rows';
 import { PRICE_WORKFLOW_STEPS, type PriceWorkflowState } from '../../lib/price-workflow';
 import { formatMonth } from '../../lib/settings-overview';
 import type { PricePeriod, PricePeriodPrice } from '../../lib/settings';
@@ -19,6 +19,11 @@ import { SettingsPanelState } from './SettingsPanelState';
  * O day chi con MOT duong: `Kiểm tra & tiếp tục` tu luu roi tu kiem, va nut Kich hoat KHONG TON
  * TAI cho toi khi may chu da noi la dat. Toan bo phan quyet dinh nam trong `resolvePriceWorkflow`
  * — component nay chi ve ra, khong tu suy dien them trang thai nao.
+ *
+ * #144 them mot tang nua: khoi nay la khoi CHIEM UU THE (`data-price-dominant`) trong ca hai che
+ * do sua va xem lai, va no mang `data-price-step` de CSS lam noi buoc dang lam. Ly do khoa nut
+ * nam TRONG cung mot dai hanh dong voi cai nut — khong con la mot danh sach troi noi cach do vai
+ * khoi, de nguoi doc phai tu noi hai thu lai voi nhau.
  */
 
 type Props = {
@@ -84,11 +89,25 @@ export function PriceDraftWorkspace({
     target.scrollIntoView({ block: 'center' });
   };
 
+  const reviewing = state.mode === 'review';
+
   return (
-    <section className="settings-price-work" aria-labelledby="settings-price-work-title">
+    <section
+      className="settings-price-work"
+      aria-labelledby="settings-price-work-title"
+      data-price-dominant="true"
+      data-price-step={state.step}
+      data-price-mode={state.mode}
+    >
       <header className="settings-price-work__head">
         <p className="settings-eyebrow">Công việc đang làm</p>
-        <h3 id="settings-price-work-title">
+        {/* O che do Xem lai, tieu de duoc dua con tro toi la tieu de cua chinh man quyet dinh —
+            khong phai tieu de chung nay. Dung MOT phan tu mang `data-price-focus-target`. */}
+        <h3
+          id="settings-price-work-title"
+          tabIndex={-1}
+          data-price-focus-target={reviewing ? undefined : 'true'}
+        >
           Bảng giá {month}
           {testOnly && <span className="settings-badge settings-badge--test">CHỈ ĐỂ CHẠY THỬ</span>}
         </h3>
@@ -173,56 +192,76 @@ export function PriceDraftWorkspace({
               />
             )}
 
-            {state.issues.length > 0 && (
-              // MOT cho duy nhat noi vi sao chua di tiep duoc. Nhac lai cung mot cau o duoi nut
-              // nua thi nguoi doc phai tu hoi hai cho co noi cung mot chuyen khong.
-              <div
-                className="settings-price-issues"
-                id="settings-price-continue-hint"
-                role="group"
-                aria-label="Việc còn phải làm"
-              >
-                <ul>
-                  {state.issues.map((issue) => (
-                    <li key={issue.code}>
-                      <span>{issue.message}</span>
-                      {issue.skus[0] && (
-                        <button
-                          type="button"
-                          className="settings-text-action"
-                          onClick={() => focusSku(issue.skus[0]!)}
-                        >
-                          Sửa lại
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                {focusNote && <small className="settings-muted">{focusNote}</small>}
-              </div>
-            )}
+            {/* DAI HANH DONG — ly do khoa va cai nut bi khoa nam trong cung mot khung.
+                Truoc #144, danh sach "việc còn phải làm" o mot cho va cai nut mo/khoa o cho khac;
+                nguoi van hanh phai tu doan hai thu do co lien quan den nhau khong. */}
+            <div className="settings-price-actionbar">
+              {state.issues.length > 0 && (
+                // MOT cho duy nhat noi vi sao chua di tiep duoc. Nhac lai cung mot cau o duoi nut
+                // nua thi nguoi doc phai tu hoi hai cho co noi cung mot chuyen khong.
+                <div
+                  className="settings-price-issues"
+                  id="settings-price-continue-hint"
+                  role="group"
+                  aria-label="Việc còn phải làm"
+                >
+                  <ul>
+                    {state.issues.map((issue) => (
+                      <li key={issue.code}>
+                        <span>{issue.message}</span>
+                        {issue.skus[0] && (
+                          <button
+                            type="button"
+                            className="settings-text-action"
+                            onClick={() => focusSku(issue.skus[0]!)}
+                          >
+                            Sửa lại
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  {focusNote && <small className="settings-muted">{focusNote}</small>}
+                </div>
+              )}
 
-            <div className="settings-price-actions">
-              <button
-                type="button"
-                className="settings-button settings-button--quiet"
-                disabled={busy || !state.saveForLater.enabled}
-                onClick={onSaveForLater}
-              >
-                {saving ? 'Đang lưu…' : state.saveForLater.label}
-              </button>
-              <div className="settings-price-actions__primary">
+              {/* KHOA vi trang thai -> thuoc tinh `disabled` that (khong bam duoc, va dung nhu
+                  vay). KHOA vi dang cho may chu -> `aria-disabled` + chan trong handler.
+                  Ly do: mot nut dang duoc tieu diem ma bi dat `disabled` thi trinh duyet NEM
+                  tieu diem ve `<body>`. Nguoi dung ban phim bam "Lưu và làm sau" se mat cho
+                  dang dung va phai Tab lai tu dau — dung dieu #144 cam ("no focus loss after
+                  async save/validate"). */}
+              <div className="settings-price-actions">
                 <button
                   type="button"
-                  className="settings-button settings-button--primary"
-                  disabled={busy || !state.checkAndContinue.enabled}
-                  aria-describedby={
-                    state.checkAndContinue.hint ? 'settings-price-continue-hint' : undefined
-                  }
-                  onClick={onCheckAndContinue}
+                  className="settings-button settings-button--quiet"
+                  disabled={!state.saveForLater.enabled}
+                  aria-disabled={busy || undefined}
+                  aria-busy={saving || undefined}
+                  onClick={() => {
+                    if (!busy) onSaveForLater();
+                  }}
                 >
-                  {checking ? 'Đang lưu và kiểm tra…' : state.checkAndContinue.label}
+                  {saving ? 'Đang lưu…' : state.saveForLater.label}
                 </button>
+                <div className="settings-price-actions__primary">
+                  <button
+                    type="button"
+                    className="settings-button settings-button--primary"
+                    data-price-primary="true"
+                    disabled={!state.checkAndContinue.enabled}
+                    aria-disabled={busy || undefined}
+                    aria-busy={checking || undefined}
+                    aria-describedby={
+                      state.checkAndContinue.hint ? 'settings-price-continue-hint' : undefined
+                    }
+                    onClick={() => {
+                      if (!busy) onCheckAndContinue();
+                    }}
+                  >
+                    {checking ? 'Đang lưu và kiểm tra…' : state.checkAndContinue.label}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -276,7 +315,16 @@ function ReviewBody({
   onActivate: () => void;
 }) {
   return (
-    <div className="settings-section-stack">
+    <div className="settings-price-review-body">
+      {/* Man Xem lai la mot QUYET DINH, nen no co tieu de rieng va con tro di thang toi day khi
+          vao buoc nay — khong phai mot bang du lieu nua nam giua trang (#144 §5). */}
+      <h4
+        className="settings-price-review__title"
+        tabIndex={-1}
+        data-price-focus-target="true"
+      >
+        Xem lại trước khi kích hoạt
+      </h4>
       <SettingsPanelState
         tone={testOnly ? 'warning' : 'success'}
         title={testOnly ? 'Bảng giá chạy thử — đã kiểm tra xong' : 'Đã kiểm tra xong'}
@@ -296,12 +344,18 @@ function ReviewBody({
         <dd>{state.reviewRows.length}</dd>
       </dl>
 
+      {/* Duyet cai gi thi phai DOC duoc cai do: moi cot gia cua hop dong san pham hien tai deu co
+          mat, khong chi rieng Don gia CTV. O nao chua co gia thi noi thang la "—", khong ve 0. */}
       <div className="settings-table-wrap">
         <table className="settings-table" aria-label="Bảng giá sẽ được kích hoạt">
           <thead>
             <tr>
               <th scope="col">Mặt hàng</th>
-              <th scope="col">Đơn giá CTV</th>
+              {PRICE_COLUMNS.map((column) => (
+                <th key={column.key} scope="col">
+                  {column.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -313,9 +367,16 @@ function ReviewBody({
                     {name && name !== row.sku && <span>{name}</span>}
                     <code>{row.sku}</code>
                   </th>
-                  <td>
-                    <span className="settings-price-readonly">{formatVnd(row.wholesale)}</span>
-                  </td>
+                  {PRICE_COLUMNS.map((column) => {
+                    const value = row[column.key];
+                    return (
+                      <td key={column.key}>
+                        <span className="settings-price-readonly">
+                          {typeof value === 'number' ? formatVnd(value) : '—'}
+                        </span>
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -323,23 +384,28 @@ function ReviewBody({
         </table>
       </div>
 
-      <div className="settings-price-actions">
-        <button
-          type="button"
-          className="settings-button settings-button--quiet"
-          disabled={busy}
-          onClick={onBackToEdit}
-        >
-          {state.backToEdit.label}
-        </button>
-        <button
-          type="button"
-          className="settings-button settings-button--primary"
-          disabled={busy || !state.activate.enabled}
-          onClick={onActivate}
-        >
-          {state.activate.label}
-        </button>
+      <div className="settings-price-actionbar">
+        <div className="settings-price-actions">
+          <button
+            type="button"
+            className="settings-button settings-button--quiet"
+            disabled={busy}
+            onClick={onBackToEdit}
+          >
+            {state.backToEdit.label}
+          </button>
+          <div className="settings-price-actions__primary">
+            <button
+              type="button"
+              className="settings-button settings-button--primary"
+              data-price-primary="true"
+              disabled={busy || !state.activate.enabled}
+              onClick={onActivate}
+            >
+              {state.activate.label}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

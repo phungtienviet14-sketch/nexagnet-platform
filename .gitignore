@@ -76,6 +76,8 @@ coverage/
 # Playwright E2E output (trace/screenshot cua lan chay gan nhat)
 test-results/
 playwright-report/
+# Anh chup deterministic cua man bang gia (#144) — sinh lai tu bo test, khong commit
+apps/web/e2e/__focus__/
 
 # File khoa tam cua Microsoft Word (sinh ra khi mo .docx trong docs/khach-hang/)
 ~$*

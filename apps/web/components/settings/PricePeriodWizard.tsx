@@ -33,6 +33,8 @@ type Props = {
   pending: boolean;
   error?: string;
   onCancel: () => void;
+  /** Doi buoc la mot CHUYEN TIEP — man cha dua con tro toi tieu de cua buoc moi. */
+  onStepChange?: () => void;
   onSubmit: (plan: PricePeriodPlan) => void;
 };
 
@@ -44,6 +46,13 @@ const STEP_LABELS: readonly { step: Step; label: string }[] = [
   { step: 'review', label: 'Xem lại' },
 ];
 
+/** Tieu de cua tung buoc — cai nguoi dung doc, khong phai nhan ngan tren thanh tien do. */
+const STEP_TITLES: Readonly<Record<Step, string>> = {
+  purpose: 'Bảng giá này dùng để làm gì?',
+  details: 'Áp dụng cho tháng nào?',
+  review: 'Xem lại trước khi tạo bản nháp',
+};
+
 export function PricePeriodWizard({
   currentMonth,
   periods,
@@ -51,6 +60,7 @@ export function PricePeriodWizard({
   pending,
   error,
   onCancel,
+  onStepChange,
   onSubmit,
 }: Props) {
   const [step, setStep] = useState<Step>('purpose');
@@ -70,6 +80,12 @@ export function PricePeriodWizard({
   const needsSource = purpose === 'copy-previous';
   const detailsComplete = Boolean(validMonth) && (!needsSource || Boolean(sourcePeriodId));
 
+  /** Mot cho duy nhat doi buoc, nen khong co duong nao doi buoc ma quen bao cho man cha. */
+  const goToStep = (next: Step) => {
+    setStep(next);
+    onStepChange?.();
+  };
+
   const submit = () => {
     if (!detailsComplete) return;
     onSubmit(
@@ -82,7 +98,12 @@ export function PricePeriodWizard({
   };
 
   return (
-    <section className="settings-wizard" aria-labelledby="settings-wizard-title">
+    <section
+      className="settings-wizard"
+      aria-labelledby="settings-wizard-title"
+      data-price-dominant="true"
+      data-wizard-step={step}
+    >
       <div className="settings-wizard__head">
         <h3 id="settings-wizard-title">Tạo bảng giá</h3>
         <ol className="settings-wizard__steps">
@@ -106,9 +127,23 @@ export function PricePeriodWizard({
         </ol>
       </div>
 
+      {/* Tieu de cua BUOC — day la thu con tro nhay toi khi mo trinh tao va khi doi buoc, va cung
+          la thu tra loi "tôi đang ở bước nào" ma khong phai doc thanh tien do (#144 §2). */}
+      <h4
+        className="settings-wizard__step-title"
+        id="settings-wizard-step-title"
+        tabIndex={-1}
+        data-price-focus-target="true"
+      >
+        {STEP_TITLES[step]}
+      </h4>
+
       {step === 'purpose' && (
-        <fieldset className="settings-wizard__body">
-          <legend>Bảng giá này dùng để làm gì?</legend>
+        <div
+          className="settings-wizard__body"
+          role="radiogroup"
+          aria-labelledby="settings-wizard-step-title"
+        >
           {options.map((option) => (
             <label
               key={option.purpose}
@@ -133,13 +168,13 @@ export function PricePeriodWizard({
               </span>
             </label>
           ))}
-        </fieldset>
+        </div>
       )}
 
       {step === 'details' && (
         <div className="settings-wizard__body">
           <label className="settings-field">
-            <span>Bảng giá này áp dụng cho tháng nào?</span>
+            <span>Tháng áp dụng</span>
             <input
               type="month"
               value={validMonth}
@@ -215,7 +250,7 @@ export function PricePeriodWizard({
           type="button"
           className="settings-button settings-button--quiet"
           disabled={pending}
-          onClick={() => (step === 'purpose' ? onCancel() : setStep(previousStep(step)))}
+          onClick={() => (step === 'purpose' ? onCancel() : goToStep(previousStep(step)))}
         >
           {step === 'purpose' ? 'Hủy' : 'Quay lại'}
         </button>
@@ -223,6 +258,7 @@ export function PricePeriodWizard({
           <button
             type="button"
             className="settings-button settings-button--primary"
+            data-price-primary="true"
             disabled={pending || !detailsComplete}
             onClick={submit}
           >
@@ -232,12 +268,13 @@ export function PricePeriodWizard({
           <button
             type="button"
             className="settings-button settings-button--primary"
+            data-price-primary="true"
             disabled={
               pending ||
               (step === 'purpose' && !selectedOption?.available) ||
               (step === 'details' && !detailsComplete)
             }
-            onClick={() => setStep(nextStep(step))}
+            onClick={() => goToStep(nextStep(step))}
           >
             Tiếp tục
           </button>

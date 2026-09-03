@@ -1289,3 +1289,321 @@ test.describe('Dùng được trên máy tính bảng và điện thoại', () =
     }
   });
 });
+
+/**
+ * #144 — TAP TRUNG THEO BUOC.
+ *
+ * Bo bai nay kiem hai bat bien ma truoc do chi la mot loi hua trong CSS:
+ *
+ *   1. moi trang thai chi co DUNG MOT khoi chiem uu the (`data-price-dominant`);
+ *   2. moi trang thai chi co DUNG MOT nut chinh (`data-price-primary`).
+ *
+ * Va mot dieu thu ba khong kiem duoc bang so: man hinh trong the nao. Cho do co anh chup tat dinh
+ * cho muoi trang thai, sinh vao `e2e/__focus__/` de nguoi (hoac agent) MO RA XEM — khong so sanh
+ * pixel, vi mot bai so pixel qua font he dieu hanh chi tao ra tieng on chu khong tao ra su that.
+ */
+test.describe('Tập trung theo bước (#144)', () => {
+  const SHOTS = 'e2e/__focus__';
+
+  function workDraft(prices: MockPrice[], source = 'operator'): MockPeriod {
+    return { id: 'work', validMonth: CURRENT_MONTH, status: 'draft', source, prices };
+  }
+
+  /** Anh chup toan trang — de doc duoc ca thu tu cac khoi, khong chi mot khung nhin. */
+  async function capture(page: Page, name: string): Promise<void> {
+    await page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
+  }
+
+  /** Hai bat bien "dung MOT", cong voi dung mot dich den cho con tro. */
+  async function expectSingleFocusContract(page: Page, options: { primary?: number } = {}) {
+    await expect(page.locator('[data-price-dominant="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-price-focus-target="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-price-primary="true"]')).toHaveCount(options.primary ?? 1);
+  }
+
+  /** Trang khong duoc tran ngang o bat ky trang thai nao — do o chinh trang thai do. */
+  async function expectNoHorizontalOverflow(page: Page) {
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+  }
+
+  async function activeElement(page: Page) {
+    return page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return {
+        id: el?.id ?? '',
+        text: (el?.textContent ?? '').trim().slice(0, 80),
+        isFocusTarget: el?.dataset?.priceFocusTarget === 'true',
+      };
+    });
+  }
+
+  test('1. chưa có việc nào: một lời mời bắt đầu, một nút chính', async ({ page }) => {
+    resetPricePeriods([]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await expect(page.getByRole('heading', { name: 'Chưa có bảng giá cho tháng này' })).toBeVisible();
+    // Su that thang hien tai van doc duoc, khong bi giau di.
+    await expect(page.getByText('Chưa có', { exact: true })).toBeVisible();
+    await expectSingleFocusContract(page);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '01-idle-start');
+  });
+
+  test('2. trình tạo mở: nó sở hữu cả trang, và con trỏ đi thẳng vào bước đang mở', async ({
+    page,
+  }) => {
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    // Truoc khi mo: dang xem mot ky chi doc, nen khoi trang thai la khoi chiem uu the.
+    await expect(page.locator('.settings-price-work[data-price-dominant="true"]')).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Tạo bảng giá' }).click();
+
+    await expect(page.locator('.settings-wizard[data-price-dominant="true"]')).toHaveCount(1);
+    // Khong con khoi chi doc nao canh tranh, va cung khong con nut "Tạo bảng giá" thu hai.
+    await expect(page.locator('.settings-price-work')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Tạo bảng giá' })).toHaveCount(0);
+    await expectSingleFocusContract(page);
+
+    expect(await activeElement(page)).toMatchObject({
+      id: 'settings-wizard-step-title',
+      isFocusTarget: true,
+    });
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '02-wizard-step-1');
+
+    // Doi buoc thi con tro di theo buoc moi, khong o lai cho cu.
+    await page.getByRole('button', { name: 'Tiếp tục' }).click();
+    expect(await activeElement(page)).toMatchObject({
+      id: 'settings-wizard-step-title',
+      text: 'Áp dụng cho tháng nào?',
+    });
+    await expectSingleFocusContract(page);
+    await capture(page, '02b-wizard-step-2');
+  });
+
+  test('3. bản nháp còn thiếu: bước 1 đang làm, lý do khóa nằm ngay cạnh nút bị khóa', async ({
+    page,
+  }) => {
+    resetPricePeriods([
+      workDraft([...nineteenSkus.slice(0, 18), { sku: 'SP19', wholesale: 0 }]),
+    ]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await expect(page.locator('li[aria-current="step"]')).toHaveText('Chọn sản phẩm & nhập giá');
+    await expect(page.locator('.settings-price-work[data-price-step="1"]')).toHaveCount(1);
+    // Ly do va cai nut o TRONG cung mot khung — khong con cach nhau vai khoi.
+    const bar = page.locator('.settings-price-actionbar');
+    await expect(bar.locator('#settings-price-continue-hint')).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toBeDisabled();
+    // Lich su gap lai trong luc dang co viec.
+    await expect(page.getByRole('button', { name: 'Mở để sửa' })).toHaveCount(0);
+    await expectSingleFocusContract(page);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '03-edit-incomplete');
+
+    // `Sửa lại` phai dat con tro vao DUNG o dang thieu.
+    await page.getByRole('button', { name: 'Sửa lại' }).click();
+    await expect(page.getByLabel('Đơn giá CTV của SP19')).toBeFocused();
+    await capture(page, '03b-edit-incomplete-focus-field');
+  });
+
+  test('4. bản nháp đủ điều kiện: bước 2, và nút đi tiếp là nút chính duy nhất', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft(nineteenSkus)]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await expect(page.locator('li[aria-current="step"]')).toHaveText('Kiểm tra');
+    await expect(page.locator('.settings-price-work[data-price-step="2"]')).toHaveCount(1);
+    await expect(page.locator('[data-price-primary="true"]')).toHaveText('Kiểm tra & tiếp tục');
+    await expectSingleFocusContract(page);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '04-edit-ready');
+  });
+
+  test('5. Xem lại (chính thức): một quyết định, con trỏ vào tiêu đề quyết định đó', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft(nineteenSkus)]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Xem lại trước khi kích hoạt' })).toBeVisible();
+    expect(await activeElement(page)).toMatchObject({
+      text: 'Xem lại trước khi kích hoạt',
+      isFocusTarget: true,
+    });
+    // Man quyet dinh: khong con o nhap nao, va nut chinh la Kich hoat.
+    await expect(page.getByLabel('Đơn giá CTV của SP01')).toHaveCount(0);
+    await expect(page.locator('[data-price-primary="true"]')).toHaveText(/^Kích hoạt bảng giá/);
+    await expectSingleFocusContract(page);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '05-review-official');
+
+    // Quay lai sua: con tro ve tieu de cong viec, khong nhay vao mot o nhap bat ky.
+    await page.getByRole('button', { name: 'Quay lại sửa' }).click();
+    expect(await activeElement(page)).toMatchObject({ id: 'settings-price-work-title' });
+    await expectSingleFocusContract(page);
+  });
+
+  test('6. Xem lại (chạy thử): sự thật UAT vẫn không thể nhầm lẫn', async ({ page }) => {
+    resetPricePeriods([workDraft([{ sku: 'SP01', wholesale: 1_250_000 }], 'test_only')]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+
+    await expect(page.getByText(/KHÔNG phải bảng giá chính thức/)).toBeVisible();
+    await expect(page.locator('.settings-badge--test')).toBeVisible();
+    await expect(page.locator('[data-price-primary="true"]')).toHaveText(
+      /^Kích hoạt bảng giá chạy thử/,
+    );
+    await expectSingleFocusContract(page);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '06-review-uat');
+  });
+
+  test('7. hộp xác nhận: khóa tiêu điểm, mở vào nút an toàn, Escape đóng được', async ({
+    page,
+  }) => {
+    resetPricePeriods([workDraft(nineteenSkus)]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+    await page.getByRole('button', { name: /^Kích hoạt bảng giá/ }).click();
+
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Để sau' })).toBeFocused();
+    await capture(page, '07-confirm-dialog');
+
+    // Tab tu nut cuoi phai quay ve nut dau — khong roi ra trang phia sau.
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: /^Kích hoạt/ })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: 'Để sau' })).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test('8. kích hoạt xong: trạng thái là thứ chính, và con trỏ dừng ở đó', async ({ page }) => {
+    resetPricePeriods([workDraft(nineteenSkus)]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+    await page.getByRole('button', { name: /^Kích hoạt bảng giá/ }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Kích hoạt bảng giá chính thức' })
+      .click();
+
+    await expect(page.getByText(/Đã kích hoạt bảng giá tháng 09\/2026/)).toBeVisible();
+    expect(await activeElement(page)).toMatchObject({
+      id: 'settings-price-readonly-title',
+      isFocusTarget: true,
+    });
+    // Khong con stepper, khong con o nhap — chi doc.
+    await expect(page.locator('.settings-steps')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Kiểm tra & tiếp tục' })).toHaveCount(0);
+    await expectSingleFocusContract(page);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '08-active-readonly');
+  });
+
+  test('9. kỳ đã lưu trữ: rõ ràng là lịch sử, không tranh chỗ với việc hiện tại', async ({
+    page,
+  }) => {
+    resetPricePeriods([
+      {
+        id: 'old',
+        validMonth: '2026-07',
+        status: 'archived',
+        source: 'operator',
+        prices: nineteenSkus,
+      },
+    ]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    await expect(page.getByText(/đã lưu trữ — chỉ xem/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Thêm vào bảng' })).toHaveCount(0);
+    await expectSingleFocusContract(page);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '09-archived-readonly');
+  });
+
+  test('10. màn hẹp: trình tạo, sửa và Xem lại đều không tràn ngang', async ({ page }) => {
+    for (const width of [900, 375]) {
+      resetPricePeriods([workDraft(nineteenSkus)]);
+      await page.setViewportSize({ width, height: 1000 });
+      await mockSettings(page);
+      await page.goto('/settings?section=products-pricing');
+
+      await expectSingleFocusContract(page);
+      await expectNoHorizontalOverflow(page);
+      await capture(page, `10-narrow-${width}-edit`);
+
+      await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
+      await expect(page.getByRole('heading', { name: 'Xem lại trước khi kích hoạt' })).toBeVisible();
+      await expectSingleFocusContract(page);
+      await expectNoHorizontalOverflow(page);
+      await capture(page, `10-narrow-${width}-review`);
+
+      await page.getByRole('button', { name: 'Quay lại sửa' }).click();
+      await page.getByRole('button', { name: 'Tạo bảng giá' }).click();
+      await expect(page.locator('.settings-wizard')).toBeVisible();
+      await expectSingleFocusContract(page);
+      await expectNoHorizontalOverflow(page);
+      await capture(page, `10-narrow-${width}-wizard`);
+    }
+  });
+
+  test('một lần tải lại dữ liệu KHÔNG cướp tiêu điểm của người đang làm', async ({ page }) => {
+    // Day la cho de hong nhat khi them tieu diem tu dong: mot `useEffect` phu thuoc vao du lieu
+    // se coi moi lan `refetch` cua React Query la mot lan doi buoc, va giat con tro ra khoi o
+    // nguoi dung dang go. `Lưu và làm sau` goi dung `refresh()` do ma KHONG doi buoc.
+    resetPricePeriods([workDraft(nineteenSkus)]);
+    await mockSettings(page);
+    await page.goto('/settings?section=products-pricing');
+
+    const save = page.getByRole('button', { name: 'Lưu và làm sau' });
+    await save.press('Enter');
+
+    await expect(page.getByText('Đã lưu bản nháp. Bảng giá đang áp dụng chưa thay đổi.')).toBeVisible();
+    // Van o nguyen cho vua bam, khong bi keo ve tieu de.
+    await expect(save).toBeFocused();
+    expect((await activeElement(page)).isFocusTarget).toBe(false);
+  });
+
+  test('vai trò chỉ đọc: không có nút chính nào, và cũng không có khối làm việc nào', async ({
+    page,
+  }) => {
+    await mockSettings(page);
+    await page.route('**/auth/config', (route) => json(route, { mode: 'session' }));
+    await page.route('**/auth/me', (route) =>
+      json(route, {
+        user: { id: 'u1', username: 'sale1', name: 'Sale Một', role: 'SALE' },
+        roles: ['SALE'],
+      }),
+    );
+    await page.goto('/settings?section=products-pricing');
+
+    await expect(page.getByRole('heading', { name: 'Bảng giá', level: 2 })).toBeVisible();
+    await expectSingleFocusContract(page, { primary: 0 });
+    await expectNoHorizontalOverflow(page);
+    await capture(page, '11-readonly-role');
+  });
+});
