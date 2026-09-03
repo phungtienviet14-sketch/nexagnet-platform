@@ -67,6 +67,16 @@ jobs:
           echo "head_a=$head_a" >> "$GITHUB_OUTPUT"
           echo "HEAD_A=$head_a"
 
+          # Luoi 0 — BAT BIEN: bang chung da co roi thi khong lam lai. Neu thieu luoi nay thi moi
+          # commit nguoi day len sau do deu de ra them mot commit bang chung nua, va no se tranh
+          # cung autopilot-autofix khi hai ben cung day len mot nhanh.
+          if [ -f "$SANDBOX_DIR/trusted-push-proof.md" ]; then
+            echo "should_push=false" >> "$GITHUB_OUTPUT"
+            echo "LOOP_GUARD_VERDICT=BLOCKED_ALREADY_PROVEN"
+            echo "Guard: bang chung da ton tai — khong lam lai."
+            exit 0
+          fi
+
           # Luoi 1 — dieu kien dung: HEAD da la commit cua automation roi thi KHONG lam nua.
           # Day la thu ket thuc chuoi A -> B va chan han commit C.
           if git log -1 --format='%B' HEAD | grep -qF "$MARKER"; then
