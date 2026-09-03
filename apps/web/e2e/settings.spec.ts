@@ -1370,6 +1370,10 @@ test.describe('Tập trung theo bước (#144)', () => {
     await expect(page.getByRole('button', { name: 'Tạo bảng giá' })).toHaveCount(0);
     await expectSingleFocusContract(page);
 
+    // `activeElement()` doc `document.activeElement` bang MOT lan `page.evaluate` — no khong tu
+    // thu lai. Tieu diem thi duoc dat trong mot effect chay SAU render, nen doc ngay sau mot
+    // khang dinh ve NOI DUNG la dua voi khoang trong do. Ghim bang `toBeFocused()` truoc da.
+    await expect(page.locator('#settings-wizard-step-title')).toBeFocused();
     expect(await activeElement(page)).toMatchObject({
       id: 'settings-wizard-step-title',
       isFocusTarget: true,
@@ -1379,6 +1383,7 @@ test.describe('Tập trung theo bước (#144)', () => {
 
     // Doi buoc thi con tro di theo buoc moi, khong o lai cho cu.
     await page.getByRole('button', { name: 'Tiếp tục' }).click();
+    await expect(page.locator('#settings-wizard-step-title')).toBeFocused();
     expect(await activeElement(page)).toMatchObject({
       id: 'settings-wizard-step-title',
       text: 'Áp dụng cho tháng nào?',
@@ -1438,7 +1443,7 @@ test.describe('Tập trung theo bước (#144)', () => {
 
     await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Xem lại trước khi kích hoạt' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Xem lại trước khi kích hoạt' })).toBeFocused();
     expect(await activeElement(page)).toMatchObject({
       text: 'Xem lại trước khi kích hoạt',
       isFocusTarget: true,
@@ -1452,6 +1457,7 @@ test.describe('Tập trung theo bước (#144)', () => {
 
     // Quay lai sua: con tro ve tieu de cong viec, khong nhay vao mot o nhap bat ky.
     await page.getByRole('button', { name: 'Quay lại sửa' }).click();
+    await expect(page.locator('#settings-price-work-title')).toBeFocused();
     expect(await activeElement(page)).toMatchObject({ id: 'settings-price-work-title' });
     await expectSingleFocusContract(page);
   });
@@ -1511,6 +1517,7 @@ test.describe('Tập trung theo bước (#144)', () => {
       .click();
 
     await expect(page.getByText(/Đã kích hoạt bảng giá tháng 09\/2026/)).toBeVisible();
+    await expect(page.locator('#settings-price-readonly-title')).toBeFocused();
     expect(await activeElement(page)).toMatchObject({
       id: 'settings-price-readonly-title',
       isFocusTarget: true,
