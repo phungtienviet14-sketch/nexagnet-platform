@@ -426,8 +426,11 @@ test.describe('Tổng quan — trả lời ba câu trong mười giây', () => {
 
     // Cau 1 + 2: he thong the nao, cai gi dang chan.
     await expect(page.getByText(/việc đang chặn bán hàng/i)).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Việc cần hoàn thiện' })).toBeVisible();
-    await expect(page.getByText(`Bảng giá tháng 09/2026`)).toBeVisible();
+    // #146 §1: viec nang nhat la MOT khoi noi bat co tieu de rieng, khong phai mot the trong luoi.
+    await expect(
+      page.getByRole('heading', { name: 'Bảng giá tháng 09/2026', level: 3 }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Làm tiếp sau đó' })).toBeVisible();
 
     // Cau 3: phai lam gi tiep — mot nut, khong phai mot ma loi.
     await expect(page.getByRole('button', { name: 'Thiết lập bảng giá' })).toBeVisible();
@@ -1131,15 +1134,17 @@ test.describe('Các màn cũ vẫn chạy trong kiến trúc mới', () => {
     page.on('request', (request) =>
       requests.push(`${request.method()} ${new URL(request.url()).pathname}`),
     );
-    page.on('dialog', (dialog) => dialog.accept());
-
     await page.goto('/settings?section=dealers-groups');
+    // #146 §2: con nhom chua gan dai ly thi bang day du la BOI CANH, nen no gap lai.
+    await page.getByText('Tất cả nhóm đang nghe').click();
     await page.getByRole('button', { name: /Đồng bộ thành viên nhóm Nhom pilot/i }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Đồng bộ thành viên' }).click();
     await expect.poll(() => requests).toContain('POST /zalo/groups/zca-group-1/members/sync');
 
     await openSection(page, /Kết nối Zalo/);
     await expect(page.getByRole('heading', { name: 'Kết nối Zalo', level: 2 })).toBeVisible();
     await page.getByRole('button', { name: 'Đăng xuất an toàn' }).click();
+    await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
     await expect.poll(() => requests).toContain('POST /zalo/logout');
   });
 
@@ -1154,13 +1159,19 @@ test.describe('Các màn cũ vẫn chạy trong kiến trúc mới', () => {
 
     await page.goto('/settings?section=dealers-groups');
 
+    // #146 §2: nhom chua gan dai ly la KHOI NOI BAT, va viec chon dai ly nam ngay trong khoi do.
+    await expect(
+      page.getByRole('heading', { name: /Chọn đại lý cho nhóm .*Nhom chua map/, level: 3 }),
+    ).toBeVisible();
+    await expect(page.getByText(/1 nhóm đang nghe nhưng chưa chọn đại lý/)).toBeVisible();
+
+    await page.getByText('Tất cả nhóm đang nghe').click();
     await expect(
       page.getByRole('button', { name: /Đồng bộ thành viên nhóm Nhom chua map/i }),
     ).toBeDisabled();
-    await expect(page.getByText(/1 nhóm đang nghe nhưng chưa chọn đại lý/)).toBeVisible();
 
     await page
-      .getByRole('combobox', { name: /Đại lý cho nhóm Nhom chua map/i })
+      .getByRole('combobox', { name: /Đại lý phụ trách nhóm .*Nhom chua map/ })
       .selectOption('dealer-1');
 
     await expect.poll(() => requests).toContain('PUT /settings/groups/zca-group-2/mapping');
@@ -1173,15 +1184,15 @@ test.describe('Các màn cũ vẫn chạy trong kiến trúc mới', () => {
     page.on('request', (request) =>
       requests.push(`${request.method()} ${new URL(request.url()).pathname}`),
     );
-    page.on('dialog', (dialog) => dialog.accept());
-
     await page.goto('/settings?section=dealers-groups');
 
-    await expect(page.getByRole('heading', { name: 'Nhóm đã gỡ' })).toBeVisible();
+    await expect(page.getByText('Nhóm đã gỡ khỏi danh sách')).toBeVisible();
+    await page.getByText('Tất cả nhóm đang nghe').click();
     await page.getByRole('button', { name: /Gỡ nhóm Nhom pilot khỏi danh sách/i }).click();
+    await page.getByRole('button', { name: 'Gỡ khỏi danh sách' }).click();
 
     await expect.poll(() => requests).toContain('PUT /settings/groups/zca-group-1/hidden');
-    await expect(page.getByText('Đã gỡ nhóm khỏi danh sách')).toBeVisible();
+    await expect(page.getByText('Đã gỡ nhóm khỏi danh sách').first()).toBeVisible();
   });
 
   test('công tắc tự động gửi vẫn bật/tắt được từ mục Tự động hóa', async ({ page }) => {
@@ -1193,8 +1204,11 @@ test.describe('Các màn cũ vẫn chạy trong kiến trúc mới', () => {
     });
 
     await page.goto('/settings?section=automation');
-    await expect(page.getByText(/ngưỡng ≤ 50 sản phẩm/i)).toBeVisible();
-    await page.getByRole('switch', { name: /Bật Tự gửi/ }).click();
+    await expect(page.getByText(/tổng số lượng ≤ 50 sản phẩm/i)).toBeVisible();
+    // #146 §8: doi cong tac an toan phai di qua mot buoc xac nhan giu tieu diem.
+    await page.getByRole('button', { name: 'Bật tự gửi', exact: true }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Bật tự gửi' }).click();
 
     await expect.poll(() => requestBody).toEqual({ enabled: true });
   });
@@ -1221,10 +1235,12 @@ test.describe('Các màn cũ vẫn chạy trong kiến trúc mới', () => {
     });
 
     await page.goto('/settings?section=campaigns');
+    // #146 §5: bieu mau soan khong con mo thuong truc — phai chon viec truoc.
+    await page.getByRole('button', { name: 'Soạn chiến dịch' }).click();
     await page.getByLabel('Tên chiến dịch').fill('Chăm sóc tháng 9');
     await page.getByLabel('Nội dung gửi').fill('Chúc quý đại lý một ngày tốt lành');
     await page.getByRole('checkbox', { name: 'Nhom pilot' }).check();
-    await page.getByRole('button', { name: 'Xem trước' }).click();
+    await page.getByRole('button', { name: 'Xem lại trước khi lưu' }).click();
     await expect(page.getByText('Số nhóm')).toBeVisible();
     await page.getByRole('button', { name: 'Lưu bản nháp' }).click();
 
@@ -1241,11 +1257,20 @@ test.describe('Các màn cũ vẫn chạy trong kiến trúc mới', () => {
     await mockSettings(page);
     await page.goto('/settings?section=content');
 
-    await expect(page.getByRole('heading', { name: 'Kho nội dung sản phẩm' })).toBeVisible();
-    await expect(page.getByText(/Thiếu: active_image/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Nội dung & kiến thức' })).toBeVisible();
+    // #146 §4: cho con thieu la khoi noi bat, khong phai mot the trong luoi muc san sang.
+    await expect(
+      page.getByRole('heading', { name: /ELNI còn thiếu active_image/, level: 3 }),
+    ).toBeVisible();
 
-    await page.getByRole('button', { name: 'Preview' }).click();
+    // Nhap hang loat lui ve "Nâng cao", va chi xem truoc xong moi ghi duoc.
+    await page.getByText('Nhập hàng loạt (nâng cao)').click();
+    await expect(
+      page.getByRole('button', { name: 'Ghi thay đổi vào hệ thống' }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'Xem trước thay đổi' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'không đổi 1' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ghi thay đổi vào hệ thống' })).toBeVisible();
   });
 });
 

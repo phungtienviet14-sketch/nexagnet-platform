@@ -1,9 +1,18 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
-import { authApi, type AuthRole } from '../../lib/auth';
+import { useRef, useState, type FormEvent } from 'react';
+import { authApi, type AuthRole, type AuthUser } from '../../lib/auth';
 import { useAuth } from '../auth/AuthGate';
+import {
+  SettingsActionRow,
+  SettingsAdvanced,
+  SettingsFocusModal,
+  SettingsStatusBar,
+  SettingsWorkCard,
+  useFocusOnKey,
+  useRestoreFocus,
+} from './SettingsFocus';
 import { SettingsPanelState } from './SettingsPanelState';
 
 const ROLE_LABELS: Record<AuthRole, string> = {
@@ -13,10 +22,34 @@ const ROLE_LABELS: Record<AuthRole, string> = {
   ADMIN: 'Quản trị',
 };
 
+type Mode =
+  | { kind: 'list' }
+  | { kind: 'create' }
+  | { kind: 'manage'; userId: string }
+  | { kind: 'reset'; userId: string }
+  | { kind: 'disable'; userId: string };
+
+/**
+ * Quan ly tai khoan — danh sach truoc, mot viec mot luc (#146 §10).
+ *
+ * Ba thay doi so voi ban cu:
+ *  1. bieu mau tao tai khoan KHONG con mo san — no chi xuat hien khi nguoi dung chon "Thêm";
+ *  2. ba nut `doi vai tro` / `dat lai mat khau` / `vo hieu hoa` khong con ngang hang tren moi dong:
+ *     chon mot tai khoan moi mo ra mot be mat quan ly, va ba thao tac do duoc xep theo RUI RO;
+ *  3. `window.prompt` cho mat khau tam bi thay bang mot hop thoai trong ung dung — `prompt` khong
+ *     che duoc ky tu, khong kiem duoc do dai, va khong giu duoc tieu diem.
+ *
+ * KHONG noi long quyen: may chu van doi ADMIN cho ca `GET`, va man nay van tu tra ve trang thai
+ * "chi quan tri vien" khi vai tro khong du.
+ */
 export function UsersSettings() {
   const auth = useAuth();
   const queryClient = useQueryClient();
+  const [mode, setMode] = useState<Mode>({ kind: 'list' });
   const [message, setMessage] = useState('');
+  const [password, setPassword] = useState('');
+  const [formError, setFormError] = useState<string>();
+
   const users = useQuery({
     queryKey: ['auth-users'],
     queryFn: authApi.users,
@@ -30,10 +63,17 @@ export function UsersSettings() {
   });
   const disable = useMutation({ mutationFn: authApi.disableUser, onSuccess: invalidate });
   const reset = useMutation({
-    mutationFn: ({ id, password }: { id: string; password: string }) =>
-      authApi.resetPassword(id, password),
+    mutationFn: ({ id, password: next }: { id: string; password: string }) =>
+      authApi.resetPassword(id, next),
     onSuccess: invalidate,
   });
+
+  const workHeading = useRef<HTMLHeadingElement>(null);
+  const nameField = useRef<HTMLInputElement>(null);
+  const { rememberTrigger } = useRestoreFocus(mode.kind !== 'list');
+  // `null` khi ve danh sach: luc do tieu diem thuoc ve `useRestoreFocus` (tra ve nut da mo),
+  // hai co che cung gianh mot tieu diem thi khong cai nao dung.
+  useFocusOnKey(workHeading, mode.kind === 'list' ? null : modeKey(mode));
 
   if (auth.user?.role !== 'ADMIN') {
     return (
@@ -44,89 +84,376 @@ export function UsersSettings() {
     );
   }
 
+  const list = users.data ?? [];
+  const selected =
+    mode.kind === 'manage' || mode.kind === 'reset' || mode.kind === 'disable'
+      ? list.find((user) => user.id === mode.userId)
+      : undefined;
+  const active = list.filter((user) => !user.disabledAt);
+  const error = create.error ?? assign.error ?? disable.error ?? reset.error ?? users.error;
+
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setFormError(undefined);
     setMessage('');
-    const form = new FormData(event.currentTarget);
-    await create.mutateAsync({
-      username: String(form.get('username') ?? ''),
-      name: String(form.get('name') ?? ''),
-      password: String(form.get('password') ?? ''),
-      role: String(form.get('role') ?? 'SALE') as AuthRole,
-    });
-    event.currentTarget.reset();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    try {
+      await create.mutateAsync({
+        username: String(data.get('username') ?? ''),
+        name: String(data.get('name') ?? ''),
+        password: String(data.get('password') ?? ''),
+        role: String(data.get('role') ?? 'SALE') as AuthRole,
+      });
+    } catch {
+      // Loi that duoc hien o khoi loi ben duoi; o day chi giu nguoi dung o lai bieu mau.
+      return;
+    }
+    form.reset();
+    setMode({ kind: 'list' });
     setMessage('Đã tạo tài khoản. Hãy chuyển mật khẩu ban đầu qua kênh an toàn.');
   };
 
-  const handleReset = (id: string) => {
-    const password = window.prompt('Nhập mật khẩu tạm mới (ít nhất 12 ký tự)');
-    if (password) reset.mutate({ id, password });
-  };
-
-  const error = create.error ?? assign.error ?? disable.error ?? reset.error ?? users.error;
-
   return (
-    <div className="settings-panel-body users-settings">
-      <header className="settings-panel-heading">
+    <div className="settings-section-stack">
+      <header className="settings-section-heading">
         <div>
-          <p className="settings-eyebrow">DANH TÍNH & QUYỀN</p>
-          <h2>Tài khoản vận hành</h2>
+          <p className="settings-eyebrow">Danh tính &amp; quyền</p>
+          <h2>Người dùng &amp; phân quyền</h2>
+          <p>Ai đăng nhập được vào hệ thống, và mỗi người được làm gì.</p>
         </div>
-        <button
-          type="button"
-          className="settings-button settings-button--quiet"
-          onClick={() => auth.logout()}
-        >
-          Đăng xuất
-        </button>
       </header>
 
-      <form className="users-create" onSubmit={handleCreate}>
-        <label>Họ tên<input name="name" required maxLength={120} /></label>
-        <label>Tên đăng nhập<input name="username" required minLength={3} maxLength={64} /></label>
-        <label>
-          Mật khẩu ban đầu
-          <input name="password" type="password" required minLength={12} maxLength={128} autoComplete="new-password" />
-        </label>
-        <label>
-          Vai trò
-          <select name="role" defaultValue="SALE">
-            {Object.entries(ROLE_LABELS).map(([role, label]) => <option key={role} value={role}>{label}</option>)}
-          </select>
-        </label>
-        <button type="submit" className="settings-button" disabled={create.isPending}>Tạo tài khoản</button>
-      </form>
+      <SettingsStatusBar
+        tone="ok"
+        title={`${active.length} tài khoản đang hoạt động`}
+        detail="Chỉ quản trị viên mới cấp được tài khoản và đổi được quyền."
+        facts={[
+          { label: 'Tổng số', value: `${list.length}` },
+          { label: 'Đã vô hiệu hóa', value: `${list.length - active.length}` },
+        ]}
+      />
 
-      {message && <p className="users-notice" role="status">{message}</p>}
-      {error && <p className="login-error" role="alert">{error.message}</p>}
-      {users.isLoading ? (
-        <SettingsPanelState title="Đang tải tài khoản" detail="Đối chiếu quyền đang được cấp…" />
+      {message && (
+        <SettingsPanelState tone="success" title="Đã cập nhật tài khoản" detail={message} />
+      )}
+      {error && (
+        <SettingsPanelState
+          tone="error"
+          title="Thao tác tài khoản chưa hoàn tất"
+          detail={error.message}
+        />
+      )}
+
+      {mode.kind === 'create' ? (
+        <SettingsWorkCard
+          eyebrow="Đang làm"
+          title="Thêm người dùng mới"
+          problem="Mật khẩu ban đầu do bạn đặt và phải được chuyển cho người dùng qua kênh an toàn."
+          headingId="settings-users-work"
+          headingRef={workHeading}
+        >
+          <form id="settings-users-create" onSubmit={handleCreate}>
+            <div className="settings-focus-grid">
+              <label className="settings-focus-choice">
+                <span>Họ tên</span>
+                <input ref={nameField} name="name" required maxLength={120} />
+              </label>
+              <label className="settings-focus-choice">
+                <span>Tên đăng nhập</span>
+                <input name="username" required minLength={3} maxLength={64} />
+              </label>
+              <label className="settings-focus-choice">
+                <span>Mật khẩu ban đầu (ít nhất 12 ký tự)</span>
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  minLength={12}
+                  maxLength={128}
+                  autoComplete="new-password"
+                />
+              </label>
+              <label className="settings-focus-choice">
+                <span>Vai trò</span>
+                <select name="role" defaultValue="SALE">
+                  {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                    <option key={role} value={role}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {formError && <p className="settings-focus-choice__error">{formError}</p>}
+            <SettingsActionRow
+              primary={
+                <button
+                  type="submit"
+                  className="settings-button settings-button--primary"
+                  disabled={create.isPending}
+                >
+                  {create.isPending ? 'Đang tạo…' : 'Tạo tài khoản'}
+                </button>
+              }
+              secondary={
+                <button
+                  type="button"
+                  className="settings-button settings-button--quiet"
+                  onClick={() => setMode({ kind: 'list' })}
+                >
+                  Hủy
+                </button>
+              }
+            />
+          </form>
+        </SettingsWorkCard>
+      ) : selected && mode.kind === 'manage' ? (
+        <SettingsWorkCard
+          eyebrow="Đang quản lý tài khoản"
+          title={selected.name}
+          problem={`@${selected.username}${selected.disabledAt ? ' · tài khoản đã bị vô hiệu hóa' : ''}`}
+          headingId="settings-users-work"
+          headingRef={workHeading}
+          tone={selected.disabledAt ? 'blocked' : 'attention'}
+          actions={
+            <SettingsActionRow
+              primary={
+                <button
+                  type="button"
+                  className="settings-button settings-button--primary"
+                  onClick={() => setMode({ kind: 'list' })}
+                >
+                  Xong
+                </button>
+              }
+              secondary={
+                <button
+                  type="button"
+                  className="settings-button settings-button--quiet"
+                  onClick={() => {
+                    setPassword('');
+                    setFormError(undefined);
+                    setMode({ kind: 'reset', userId: selected.id });
+                  }}
+                >
+                  Đặt lại mật khẩu
+                </button>
+              }
+              tertiary={
+                selected.id === auth.user?.id || selected.disabledAt ? undefined : (
+                  <button
+                    type="button"
+                    className="settings-text-action settings-text-action--danger"
+                    onClick={() => setMode({ kind: 'disable', userId: selected.id })}
+                  >
+                    Vô hiệu hóa tài khoản
+                  </button>
+                )
+              }
+            />
+          }
+        >
+          <label className="settings-focus-choice">
+            <span>Vai trò</span>
+            <select
+              aria-label={`Vai trò của ${selected.name}`}
+              value={selected.role}
+              disabled={selected.id === auth.user?.id || Boolean(selected.disabledAt)}
+              onChange={(event) =>
+                assign.mutate({ id: selected.id, role: event.target.value as AuthRole })
+              }
+            >
+              {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                <option key={role} value={role}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selected.id === auth.user?.id && (
+            <p className="settings-muted">
+              Đây là tài khoản bạn đang dùng, nên không tự đổi quyền hay tự vô hiệu hóa được.
+            </p>
+          )}
+        </SettingsWorkCard>
       ) : (
-        <div className="users-list">
-          {users.data?.map((user) => (
-            <article key={user.id} className={user.disabledAt ? 'is-disabled' : ''}>
-              <div><strong>{user.name}</strong><small>@{user.username}{user.disabledAt ? ' · Đã vô hiệu hóa' : ''}</small></div>
-              <select
-                aria-label={`Vai trò của ${user.name}`}
-                value={user.role}
-                disabled={user.id === auth.user?.id || Boolean(user.disabledAt)}
-                onChange={(event) => assign.mutate({ id: user.id, role: event.target.value as AuthRole })}
-              >
-                {Object.entries(ROLE_LABELS).map(([role, label]) => <option key={role} value={role}>{label}</option>)}
-              </select>
-              <button type="button" className="settings-button settings-button--quiet" onClick={() => handleReset(user.id)}>Đặt lại mật khẩu</button>
-              <button
-                type="button"
-                className="settings-button settings-button--danger"
-                disabled={user.id === auth.user?.id || Boolean(user.disabledAt)}
-                onClick={() => window.confirm(`Vô hiệu hóa ${user.name}? Mọi phiên hiện tại sẽ hết hiệu lực.`) && disable.mutate(user.id)}
-              >
-                Vô hiệu hóa
-              </button>
-            </article>
-          ))}
+        <SettingsWorkCard
+          eyebrow="Việc có thể làm ở đây"
+          title="Cấp tài khoản cho người mới"
+          problem="Chọn một tài khoản trong danh sách bên dưới để đổi quyền hoặc đặt lại mật khẩu."
+          tone="ok"
+          headingId="settings-users-work"
+          headingRef={workHeading}
+          actions={
+            <SettingsActionRow
+              primary={
+                <button
+                  type="button"
+                  ref={rememberTrigger}
+                  className="settings-button settings-button--primary"
+                  onClick={() => {
+                    setMessage('');
+                    setMode({ kind: 'create' });
+                  }}
+                >
+                  Thêm người dùng
+                </button>
+              }
+            />
+          }
+        />
+      )}
+
+      <section aria-labelledby="settings-users-list">
+        <div className="settings-subheading">
+          <h3 id="settings-users-list">Tài khoản đang hoạt động</h3>
+          <span className="settings-count">{active.length} tài khoản</span>
         </div>
+        {users.isLoading ? (
+          <SettingsPanelState title="Đang tải tài khoản" detail="Đối chiếu quyền đang được cấp…" />
+        ) : (
+          <ul className="settings-focus-queue">
+            {active.map((user) => (
+              <UserRow
+                key={user.id}
+                user={user}
+                selected={selected?.id === user.id}
+                onOpen={(node) => {
+                  rememberTrigger(node);
+                  setMessage('');
+                  setMode({ kind: 'manage', userId: user.id });
+                }}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {list.length > active.length && (
+        <SettingsAdvanced
+          title="Tài khoản đã vô hiệu hóa"
+          hint={`${list.length - active.length} tài khoản`}
+        >
+          <ul className="settings-focus-queue">
+            {list
+              .filter((user) => user.disabledAt)
+              .map((user) => (
+                <li key={user.id}>
+                  <div>
+                    <strong>{user.name}</strong>
+                  </div>
+                  <span className="settings-muted">Đã vô hiệu hóa</span>
+                  <small>
+                    @{user.username} · {ROLE_LABELS[user.role] ?? user.role}
+                  </small>
+                </li>
+              ))}
+          </ul>
+        </SettingsAdvanced>
+      )}
+
+      {mode.kind === 'reset' && selected && (
+        <SettingsFocusModal
+          title={`Đặt lại mật khẩu cho ${selected.name}`}
+          description="Mật khẩu tạm phải dài ít nhất 12 ký tự và cần được chuyển cho người dùng qua kênh an toàn."
+          confirmLabel="Đặt lại mật khẩu"
+          tone="primary"
+          pending={reset.isPending}
+          confirmDisabled={password.length < 12}
+          onCancel={() => setMode({ kind: 'manage', userId: selected.id })}
+          onConfirm={() => {
+            if (password.length < 12) {
+              setFormError('Mật khẩu tạm phải có ít nhất 12 ký tự.');
+              return;
+            }
+            reset.mutate(
+              { id: selected.id, password },
+              {
+                onSuccess: () => {
+                  setPassword('');
+                  setMessage(`Đã đặt lại mật khẩu cho ${selected.name}.`);
+                  setMode({ kind: 'manage', userId: selected.id });
+                },
+              },
+            );
+          }}
+        >
+          <label
+            className={`settings-focus-choice ${formError ? 'settings-focus-choice--invalid' : ''}`}
+          >
+            <span>Mật khẩu tạm mới</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setFormError(undefined);
+              }}
+            />
+            {formError && <span className="settings-focus-choice__error">{formError}</span>}
+          </label>
+        </SettingsFocusModal>
+      )}
+
+      {mode.kind === 'disable' && selected && (
+        <SettingsFocusModal
+          title={`Vô hiệu hóa ${selected.name}?`}
+          description="Mọi phiên đăng nhập hiện tại của tài khoản này sẽ hết hiệu lực ngay."
+          confirmLabel="Vô hiệu hóa"
+          tone="danger"
+          pending={disable.isPending}
+          onCancel={() => setMode({ kind: 'manage', userId: selected.id })}
+          onConfirm={() =>
+            disable.mutate(selected.id, {
+              onSuccess: () => {
+                setMessage(`Đã vô hiệu hóa ${selected.name}.`);
+                setMode({ kind: 'list' });
+              },
+            })
+          }
+        >
+          <ul className="settings-confirmation">
+            <li>Lịch sử thao tác của tài khoản này vẫn được giữ nguyên.</li>
+            <li>Hoàn tác: cấp lại tài khoản mới; hệ thống không bật lại tài khoản đã vô hiệu hóa.</li>
+          </ul>
+        </SettingsFocusModal>
       )}
     </div>
+  );
+}
+
+function modeKey(mode: Mode): string {
+  return mode.kind === 'list' ? 'users:list' : `users:${mode.kind}:${'userId' in mode ? mode.userId : ''}`;
+}
+
+function UserRow({
+  user,
+  selected,
+  onOpen,
+}: {
+  user: AuthUser;
+  selected: boolean;
+  onOpen: (node: HTMLButtonElement) => void;
+}) {
+  return (
+    <li>
+      <div>
+        <strong>{user.name}</strong>
+      </div>
+      <button
+        type="button"
+        className="settings-button settings-button--quiet"
+        aria-current={selected ? 'true' : undefined}
+        onClick={(event) => onOpen(event.currentTarget)}
+      >
+        {selected ? 'Đang mở' : 'Quản lý'}
+      </button>
+      <small>
+        @{user.username} · {ROLE_LABELS[user.role] ?? user.role}
+      </small>
+    </li>
   );
 }

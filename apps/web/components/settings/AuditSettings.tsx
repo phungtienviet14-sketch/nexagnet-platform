@@ -1,13 +1,22 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
+import { summarizeAuditFilters } from '../../lib/settings-focus';
 import { settingsApi, type AuditFilters } from '../../lib/settings';
+import { SettingsAdvanced, SettingsStatusBar, useFocusOnKey } from './SettingsFocus';
 import { formatSettingsDate } from './settings-format';
 import { SettingsPanelState } from './SettingsPanelState';
 
 const EMPTY_FILTERS: AuditFilters = { page: 1, limit: 25 };
 
+/**
+ * Lich su thay doi — CHI DOC, nen "viec dang lam" o day la MOT CAU TRUY VAN (#146 §11).
+ *
+ * Ban cu de bo loc, trang thai rong va ket qua thanh ba khoi cung co. O day bo loc la mot cum duy
+ * nhat, tom tat bo loc dang ap dung luon hien, va ket qua la phan chiem cho nhieu nhat sau khi loc.
+ * Ngu nghia payload/redaction cua audit khong doi.
+ */
 export function AuditSettings() {
   const [draftActor, setDraftActor] = useState('');
   const [draftEntity, setDraftEntity] = useState('');
@@ -17,6 +26,11 @@ export function AuditSettings() {
     queryKey: ['settings-audit', filters],
     queryFn: () => settingsApi.audit(filters),
   });
+
+  const resultsHeading = useRef<HTMLHeadingElement>(null);
+  const filterKey = `${filters.actor ?? ''}|${filters.entityType ?? ''}|${filters.action ?? ''}|${filters.page ?? 1}`;
+  // Chi chuyen tieu diem khi CAU TRUY VAN doi. Nap lai nen khong duoc keo con tro ra khoi o dang go.
+  useFocusOnKey(resultsHeading, filterKey);
 
   const handleFilter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -29,19 +43,36 @@ export function AuditSettings() {
     });
   };
 
+  const clearFilters = () => {
+    setDraftActor('');
+    setDraftEntity('');
+    setDraftAction('');
+    setFilters(EMPTY_FILTERS);
+  };
+
   const page = query.data?.page ?? filters.page ?? 1;
   const totalPages = Math.max(1, Math.ceil((query.data?.total ?? 0) / (query.data?.limit ?? 25)));
+  const summary = summarizeAuditFilters(filters);
 
   return (
     <div className="settings-section-stack">
       <header className="settings-section-heading">
         <div>
-          <p className="settings-eyebrow">Chỉ đọc · không thể sửa</p>
+          <p className="settings-eyebrow">Chỉ đọc · không sửa được</p>
           <h2>Lịch sử thay đổi</h2>
-          <p>Theo dõi ai đã đổi giá, rules, phân loại thành viên và các cổng vận hành.</p>
+          <p>Ai đã đổi giá, chính sách, phân loại thành viên và các công tắc vận hành — lúc nào.</p>
         </div>
-        <span className="settings-count">{query.data?.total ?? 0} sự kiện</span>
       </header>
+
+      <SettingsStatusBar
+        tone="ok"
+        title={summary.label}
+        detail="Mọi thay đổi cấu hình đều được ghi lại và đã loại bỏ dữ liệu nhạy cảm."
+        facts={[
+          { label: 'Kết quả', value: `${query.data?.total ?? 0} sự kiện` },
+          { label: 'Trang', value: `${page} / ${totalPages}` },
+        ]}
+      />
 
       <form className="settings-filterbar settings-filterbar--audit" onSubmit={handleFilter}>
         <label className="settings-field settings-field--search">
@@ -58,8 +89,8 @@ export function AuditSettings() {
             <option value="">Tất cả</option>
             <option value="participant">Thành viên</option>
             <option value="price">Bảng giá</option>
-            <option value="price_override">Deal riêng</option>
-            <option value="rule_config">Rules</option>
+            <option value="price_override">Giá riêng</option>
+            <option value="rule_config">Chính sách bán hàng</option>
             <option value="automation">Tự động hóa</option>
             <option value="zalo">Kênh Zalo</option>
           </select>
@@ -78,70 +109,91 @@ export function AuditSettings() {
         <button type="submit" className="settings-button settings-button--primary">
           Lọc lịch sử
         </button>
+        {summary.active && (
+          <button
+            type="button"
+            className="settings-button settings-button--quiet"
+            onClick={clearFilters}
+          >
+            Bỏ lọc
+          </button>
+        )}
       </form>
 
-      {query.isLoading && (
-        <SettingsPanelState
-          title="Đang tải lịch sử"
-          detail="Đọc audit log đã được loại dữ liệu nhạy cảm…"
-        />
-      )}
-      {query.error && (
-        <SettingsPanelState
-          tone="error"
-          title="Không tải được lịch sử"
-          detail={`${query.error.message}. Không có dữ liệu nào được thay đổi.`}
-          action={
-            <button
-              type="button"
-              className="settings-button settings-button--quiet"
-              onClick={() => query.refetch()}
-            >
-              Thử lại
-            </button>
-          }
-        />
-      )}
-      {query.isSuccess && query.data.entries.length === 0 && (
-        <SettingsPanelState
-          title="Chưa có thay đổi phù hợp"
-          detail="Audit mới sẽ xuất hiện ở đây sau khi cập nhật giá, rules, thành viên hoặc trạng thái vận hành."
-        />
-      )}
-
-      {query.data && query.data.entries.length > 0 && (
-        <div className="settings-audit-list" aria-label="Các thay đổi đã ghi nhận">
-          {query.data.entries.map((entry) => (
-            <article key={entry.id} className="settings-audit-row">
-              <time dateTime={entry.createdAt}>{formatSettingsDate(entry.createdAt)}</time>
-              <span className="settings-audit-row__mark" aria-hidden="true" />
-              <div className="settings-audit-row__body">
-                <div>
-                  <strong>{entry.actor}</strong>
-                  <span>{entry.action}</span>
-                  <b>{entry.entityType}</b>
-                  {entry.entityId && <code>{entry.entityId}</code>}
-                </div>
-                {(entry.before || entry.after) && (
-                  <details>
-                    <summary>Xem thay đổi</summary>
-                    <div className="settings-diff">
-                      <div>
-                        <small>Trước</small>
-                        <pre>{entry.before ? JSON.stringify(entry.before, null, 2) : '—'}</pre>
-                      </div>
-                      <div>
-                        <small>Sau</small>
-                        <pre>{entry.after ? JSON.stringify(entry.after, null, 2) : '—'}</pre>
-                      </div>
-                    </div>
-                  </details>
-                )}
-              </div>
-            </article>
-          ))}
+      <section aria-labelledby="settings-audit-results">
+        <div className="settings-subheading">
+          <h3 id="settings-audit-results" ref={resultsHeading} tabIndex={-1}>
+            Kết quả
+          </h3>
+          <span className="settings-count">{query.data?.total ?? 0} sự kiện</span>
         </div>
-      )}
+
+        {query.isLoading && (
+          <SettingsPanelState
+            title="Đang tải lịch sử"
+            detail="Đọc nhật ký thay đổi đã được loại dữ liệu nhạy cảm…"
+          />
+        )}
+        {query.error && (
+          <SettingsPanelState
+            tone="error"
+            title="Không tải được lịch sử"
+            detail={`${query.error.message}. Không có dữ liệu nào bị thay đổi.`}
+            action={
+              <button
+                type="button"
+                className="settings-button settings-button--quiet"
+                onClick={() => query.refetch()}
+              >
+                Thử lại
+              </button>
+            }
+          />
+        )}
+        {query.isSuccess && query.data.entries.length === 0 && (
+          <SettingsPanelState
+            title={summary.active ? 'Không có thay đổi nào khớp bộ lọc' : 'Chưa có thay đổi nào'}
+            detail={
+              summary.active
+                ? `${summary.label}. Bỏ lọc để xem lại toàn bộ lịch sử.`
+                : 'Mục này sẽ có nội dung sau khi ai đó cập nhật giá, chính sách, thành viên hoặc công tắc vận hành.'
+            }
+          />
+        )}
+
+        {query.data && query.data.entries.length > 0 && (
+          <div className="settings-audit-list" aria-label="Các thay đổi đã ghi nhận">
+            {query.data.entries.map((entry) => (
+              <article key={entry.id} className="settings-audit-row">
+                <time dateTime={entry.createdAt}>{formatSettingsDate(entry.createdAt)}</time>
+                <span className="settings-audit-row__mark" aria-hidden="true" />
+                <div className="settings-audit-row__body">
+                  <div>
+                    <strong>{entry.actor}</strong>
+                    <span>{entry.action}</span>
+                    <b>{entry.entityType}</b>
+                    {entry.entityId && <code>{entry.entityId}</code>}
+                  </div>
+                  {(entry.before || entry.after) && (
+                    <SettingsAdvanced title="Xem thay đổi">
+                      <div className="settings-diff">
+                        <div>
+                          <small>Trước</small>
+                          <pre>{entry.before ? JSON.stringify(entry.before, null, 2) : '—'}</pre>
+                        </div>
+                        <div>
+                          <small>Sau</small>
+                          <pre>{entry.after ? JSON.stringify(entry.after, null, 2) : '—'}</pre>
+                        </div>
+                      </div>
+                    </SettingsAdvanced>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       {query.data && query.data.total > query.data.limit && (
         <nav className="settings-pagination" aria-label="Phân trang lịch sử">
