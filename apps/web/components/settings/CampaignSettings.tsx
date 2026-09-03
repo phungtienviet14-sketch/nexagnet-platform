@@ -20,6 +20,7 @@ import {
   SettingsFocusModal,
   SettingsStatusBar,
   SettingsWorkCard,
+  useFocusIntent,
   useFocusOnKey,
   useRestoreFocus,
 } from './SettingsFocus';
@@ -131,10 +132,18 @@ export function CampaignSettings({ groups }: Props) {
   });
 
   const workHeading = useRef<HTMLHeadingElement>(null);
+  // Hai nut mo hop xac nhan. Chung nam trong `ManageCampaignCard` — the do KHONG bi thao khi hop
+  // mo (mode van la `manage`), nen mot ref song la du de tra tieu diem ve dung nut (#154).
+  const approveTrigger = useRef<HTMLButtonElement>(null);
+  const cancelTrigger = useRef<HTMLButtonElement>(null);
+  const intent = useFocusIntent();
   const { rememberTrigger } = useRestoreFocus(mode.kind !== 'idle');
+  // KHONG bao gio arm khi nguoi dung dang GO: `step` doi tu `compose` sang `targets` ngay khi o
+  // noi dung co ky tu dau tien, va giat tieu diem ra khoi o dang go la dung dieu #146 cam.
   useFocusOnKey(
     workHeading,
     mode.kind === 'compose' ? `campaign-compose:${step}` : `campaign:${mode.kind}:${selected?.id ?? ''}`,
+    intent,
   );
 
   const parseRecurrence = (): JsonObject | undefined => {
@@ -258,7 +267,9 @@ export function CampaignSettings({ groups }: Props) {
                     className="settings-button settings-button--primary"
                     disabled={step === 'compose'}
                     onClick={() => {
-                      if (prepareDraft()) setReviewed(true);
+                      if (!prepareDraft()) return;
+                      intent.requestFocus();
+                      setReviewed(true);
                     }}
                   >
                     Xem lại trước khi lưu
@@ -418,6 +429,8 @@ export function CampaignSettings({ groups }: Props) {
           setWindowStart={setWindowStart}
           setWindowEnd={setWindowEnd}
           pending={approve.isPending || schedule.isPending || retry.isPending}
+          approveRef={approveTrigger}
+          cancelRef={cancelTrigger}
           onApprove={() => setApproving(selected)}
           onSchedule={() => schedule.mutate(selected.id)}
           onRetry={() => retry.mutate(selected.id)}
@@ -440,6 +453,7 @@ export function CampaignSettings({ groups }: Props) {
                   ref={rememberTrigger}
                   className="settings-button settings-button--primary"
                   onClick={() => {
+                    intent.requestFocus();
                     setReviewed(false);
                     setFormError(undefined);
                     setMode({ kind: 'compose' });
@@ -483,6 +497,7 @@ export function CampaignSettings({ groups }: Props) {
                   className="settings-button settings-button--quiet"
                   aria-current={selected?.id === campaign.id || undefined}
                   onClick={(event) => {
+                    intent.requestFocus();
                     rememberTrigger(event.currentTarget);
                     setMode({ kind: 'manage', campaignId: campaign.id });
                   }}
@@ -506,6 +521,7 @@ export function CampaignSettings({ groups }: Props) {
           confirmLabel="Duyệt nội dung"
           tone="primary"
           pending={approve.isPending}
+          returnFocus={() => approveTrigger.current}
           onCancel={() => setApproving(null)}
           onConfirm={() => approve.mutate(approving.id)}
         >
@@ -519,6 +535,7 @@ export function CampaignSettings({ groups }: Props) {
           description="Các lần gửi chưa thực hiện sẽ bị hủy."
           confirmLabel="Hủy chiến dịch"
           pending={cancel.isPending}
+          returnFocus={() => cancelTrigger.current}
           onCancel={() => setCancelling(null)}
           onConfirm={() => cancel.mutate(cancelling.id)}
         >
@@ -540,6 +557,8 @@ function ManageCampaignCard({
   setWindowStart,
   setWindowEnd,
   pending,
+  approveRef,
+  cancelRef,
   onApprove,
   onSchedule,
   onRetry,
@@ -553,6 +572,8 @@ function ManageCampaignCard({
   setWindowStart: (value: string) => void;
   setWindowEnd: (value: string) => void;
   pending: boolean;
+  approveRef: React.RefObject<HTMLButtonElement | null>;
+  cancelRef: React.RefObject<HTMLButtonElement | null>;
   onApprove: () => void;
   onSchedule: () => void;
   onRetry: () => void;
@@ -565,6 +586,8 @@ function ManageCampaignCard({
     action && action.kind !== 'watch' ? (
       <button
         type="button"
+        // Chi nut `Duyệt nội dung` mo mot hop xac nhan, nen chi no can duong tra tieu diem.
+        ref={action.kind === 'approve' ? approveRef : undefined}
         className="settings-button settings-button--primary"
         disabled={pending || (needsWindow && (!windowStart || !windowEnd))}
         onClick={() => {
@@ -602,6 +625,7 @@ function ManageCampaignCard({
             canCancelCampaign(campaign.status) ? (
               <button
                 type="button"
+                ref={cancelRef}
                 className="settings-text-action settings-text-action--danger"
                 onClick={onCancel}
               >
