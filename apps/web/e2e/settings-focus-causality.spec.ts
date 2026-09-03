@@ -140,11 +140,15 @@ test.describe('C · Hộp xác nhận giữ tiêu điểm suốt vòng đời c�
     await expect(busy).toBeFocused();
     expect(await activeElement(page), 'tiêu điểm rơi ra khỏi hộp trong lúc chờ').not.toBe('BODY');
 
+    // Thu tu o day quan trong: khi phan tu dang giu tieu diem bi go khoi DOM, trinh duyet dat
+    // `activeElement` ve `<body>` NGAY, con lenh khoi phuc cua hop chay o passive effect sau do.
+    // Doc `activeElement` mot lan ngay sau `toHaveCount(0)` la dua voi khoang trong ay — nen phai
+    // ghim trang thai bang mot khang dinh CO auto-retry truoc da.
     await expect(dialog).toHaveCount(0);
-    expect(await activeElement(page), 'xong việc mà tiêu điểm rơi về BODY').not.toBe('BODY');
     await expect(
       page.getByRole('heading', { name: 'Tắt tự gửi xác nhận', level: 3 }),
     ).toBeFocused();
+    expect(await activeElement(page), 'xong việc mà tiêu điểm rơi về BODY').not.toBe('BODY');
   });
 
   test('automation: Escape trả tiêu điểm về đúng công tắc đã mở hộp', async ({ page }) => {
