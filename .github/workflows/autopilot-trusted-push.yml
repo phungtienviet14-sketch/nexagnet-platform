@@ -1,0 +1,253 @@
+name: Nexagent Autopilot Trusted Push
+
+# PoC: chung minh GitHub App "Nexagent Autopilot" tu commit + push duoc len nhanh PR,
+# va GitHub TU tao CI run cho HEAD moi ma KHONG can nguoi bam Approve.
+#
+# VI SAO KHONG DUNG `paths` LAM LUOI CHONG LAP:
+# voi su kien `pull_request`, bo loc `paths` duoc do tren TOAN BO diff base...head cua PR,
+# khong phai tren rieng lan push vua roi. Mot khi tep workflow nay nam trong PR thi MOI
+# `synchronize` deu khop `paths` — ke ca lan push do chinh automation tao ra.
+# => Luoi chong lap THAT SU la dau van (marker) trong commit message, o buoc "Loop guard".
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - .github/workflows/autopilot-trusted-push.yml
+
+# GITHUB_TOKEN khong duoc dung de push (App token lo viec do), nen giu o muc toi thieu.
+permissions:
+  contents: read
+
+# Khong `cancel-in-progress`: lan chay thu hai chinh la BANG CHUNG loop guard chan lai,
+# huy no di la mat bang chung.
+concurrency:
+  group: autopilot-trusted-push-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  trusted-push:
+    name: autopilot-trusted-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      MARKER: 'Autopilot-Proof: nexagent-autopilot'
+      SANDBOX_DIR: docs/poc/autopilot
+      MAX_CONSECUTIVE_BOT_COMMITS: '3'
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+
+    steps:
+      - name: Mint Nexagent Autopilot installation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.NEXAGENT_AUTOPILOT_CLIENT_ID }}
+          private-key: ${{ secrets.NEXAGENT_AUTOPILOT_PRIVATE_KEY }}
+
+      # `ref` = nhanh PR (khong phai merge commit): ta phai push LEN DUNG nhanh do.
+      # `fetch-depth: 0` de loop guard doc duoc lich su commit.
+      - name: Checkout PR head branch with App token
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Loop guard
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          head_a="$(git rev-parse HEAD)"
+          echo "head_a=$head_a" >> "$GITHUB_OUTPUT"
+          echo "HEAD_A=$head_a"
+
+          # Luoi 1 — dieu kien dung: HEAD da la commit cua automation roi thi KHONG lam nua.
+          # Day la thu ket thuc chuoi A -> B va chan han commit C.
+          if git log -1 --format='%B' HEAD | grep -qF "$MARKER"; then
+            echo "should_push=false" >> "$GITHUB_OUTPUT"
+            echo "LOOP_GUARD_VERDICT=BLOCKED_ALREADY_AUTOMATED"
+            echo "Guard: HEAD $head_a da mang dau van automation — dung lai, khong push."
+            exit 0
+          fi
+
+          # Luoi 2 — tran cung, phong khi ai do noi long luoi 1 ve sau.
+          consecutive=0
+          for sha in $(git rev-list -n "$MAX_CONSECUTIVE_BOT_COMMITS" HEAD); do
+            if git log -1 --format='%B' "$sha" | grep -qF "$MARKER"; then
+              consecutive=$((consecutive + 1))
+            else
+              break
+            fi
+          done
+
+          if [ "$consecutive" -ge "$MAX_CONSECUTIVE_BOT_COMMITS" ]; then
+            echo "should_push=false" >> "$GITHUB_OUTPUT"
+            echo "LOOP_GUARD_VERDICT=BLOCKED_RUNAWAY"
+            echo "Guard: $consecutive commit automation lien tiep — cham tran, dung lai."
+            exit 0
+          fi
+
+          echo "should_push=true" >> "$GITHUB_OUTPUT"
+          echo "LOOP_GUARD_VERDICT=ALLOWED"
+
+      - name: Resolve App bot commit identity
+        id: bot
+        if: steps.guard.outputs.should_push == 'true'
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+
+          bot_login="${APP_SLUG}[bot]"
+
+          # Email PHAI la dang <user-id>+<login>@users.noreply.github.com thi GitHub moi gan
+          # commit vao dung tai khoan bot; sai dinh dang thi commit thanh tac gia "vo danh".
+          bot_id="$(
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${APP_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/users/${APP_SLUG}%5Bbot%5D" | jq -r '.id'
+          )"
+
+          if [ -z "$bot_id" ] || [ "$bot_id" = "null" ]; then
+            echo "FAIL: khong doc duoc user id cua $bot_login"
+            exit 1
+          fi
+
+          echo "login=$bot_login" >> "$GITHUB_OUTPUT"
+          echo "email=${bot_id}+${bot_login}@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+          echo "BOT_LOGIN=$bot_login"
+          echo "BOT_USER_ID=$bot_id"
+
+      - name: Write sandbox proof file
+        if: steps.guard.outputs.should_push == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$SANDBOX_DIR"
+          {
+            echo "# Nexagent Autopilot — bang chung trusted push"
+            echo
+            echo "Tep nay do GitHub App tu ghi trong mot lan chay Actions. Khong phai ma nghiep vu."
+            echo
+            echo "- head_a: ${{ steps.guard.outputs.head_a }}"
+            echo "- pr: ${{ github.event.pull_request.number }}"
+            echo "- app_run_id: ${{ github.run_id }}"
+            echo "- app_slug: ${{ steps.app-token.outputs.app-slug }}"
+            echo "- committed_by: ${{ steps.bot.outputs.login }}"
+          } > "$SANDBOX_DIR/trusted-push-proof.md"
+
+      - name: Commit as App bot
+        id: commit
+        if: steps.guard.outputs.should_push == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name  '${{ steps.bot.outputs.login }}'
+          git config user.email '${{ steps.bot.outputs.email }}'
+
+          # `git add <duong dan cu the>` — khong bao gio `git add .` / `-A` trong automation.
+          git add "$SANDBOX_DIR/trusted-push-proof.md"
+
+          git commit \
+            -m "chore(poc): autopilot ghi bang chung trusted push" \
+            -m "$MARKER" \
+            -m "App-Run-Id: ${{ github.run_id }}"
+
+          head_b="$(git rev-parse HEAD)"
+          echo "head_b=$head_b" >> "$GITHUB_OUTPUT"
+          echo "HEAD_B=$head_b"
+
+      # Chan truoc khi day len: neu commit cham vao bat ky thu gi ngoai sandbox thi dung.
+      - name: Assert commit touches ONLY the sandbox
+        if: steps.guard.outputs.should_push == 'true'
+        shell: bash
+        env:
+          HEAD_A: ${{ steps.guard.outputs.head_a }}
+          HEAD_B: ${{ steps.commit.outputs.head_b }}
+        run: |
+          set -euo pipefail
+
+          if [ "$HEAD_A" = "$HEAD_B" ]; then
+            echo "FAIL: HEAD khong doi — khong co commit nao duoc tao."
+            exit 1
+          fi
+
+          changed="$(git diff --name-only "$HEAD_A" "$HEAD_B")"
+
+          out_of_scope="$(printf '%s\n' "$changed" | grep -v "^${SANDBOX_DIR}/" || true)"
+          if [ -n "$out_of_scope" ]; then
+            echo "FAIL: commit cham vao ngoai sandbox:"
+            printf '%s\n' "$out_of_scope"
+            exit 1
+          fi
+
+          echo "SANDBOX_SCOPE_VERDICT=PASS"
+          printf '%s\n' "$changed"
+
+      - name: Push to PR branch with App token
+        if: steps.guard.outputs.should_push == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Khong force. Neu nhanh da chay len truoc thi push PHAI do, khong duoc de len.
+          git push origin "HEAD:refs/heads/${HEAD_REF}"
+          echo "APP_PUSH_VERDICT=PASS"
+
+      - name: Verify pushed commit identity via API
+        if: steps.guard.outputs.should_push == 'true'
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_B: ${{ steps.commit.outputs.head_b }}
+          EXPECTED_LOGIN: ${{ steps.bot.outputs.login }}
+        run: |
+          set -euo pipefail
+
+          commit_json="$(
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${APP_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${HEAD_B}"
+          )"
+
+          author_login="$(printf '%s' "$commit_json" | jq -r '.author.login // "null"')"
+          committer_login="$(printf '%s' "$commit_json" | jq -r '.committer.login // "null"')"
+
+          echo "COMMIT_AUTHOR_LOGIN=$author_login"
+          echo "COMMIT_COMMITTER_LOGIN=$committer_login"
+
+          if [ "$author_login" != "$EXPECTED_LOGIN" ]; then
+            echo "FAIL: commit khong gan vao App bot (thay '$author_login', doi '$EXPECTED_LOGIN')"
+            exit 1
+          fi
+
+          echo "APP_IDENTITY_ON_COMMIT_VERDICT=PASS"
+
+      - name: Evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Nexagent Autopilot — trusted push"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| PR | #${{ github.event.pull_request.number }} |"
+            echo "| HEAD_A | \`${{ steps.guard.outputs.head_a }}\` |"
+            echo "| HEAD_B | \`${{ steps.commit.outputs.head_b || 'not pushed' }}\` |"
+            echo "| App run id | ${{ github.run_id }} |"
+            echo "| Loop guard | should_push=${{ steps.guard.outputs.should_push }} |"
+            echo "| Commit identity | ${{ steps.bot.outputs.login || 'n/a' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
