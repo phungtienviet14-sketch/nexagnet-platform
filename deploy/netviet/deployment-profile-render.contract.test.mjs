@@ -394,3 +394,54 @@ test('POSTGRES: vai flowise chi duoc tao khi co mat khau, va `zalo` khong phu th
     assert.match(source, /ZALO_DB_PASSWORD:\?/, name);
   }
 });
+
+// --- 7. GIEO NGUON SU THAT: mot goi khai `bootstrap: {}` khong duoc danh do lan deploy ---------
+
+test('SEED: khong bia ra duong dan knowledge cho goi khach da noi la khong co', () => {
+  const seed = readScript('seed-tenant-knowledge.mjs');
+
+  // Duong dan mac dinh doan ho cho MOI goi khach, nen mot goi co y khong mang nguon su that
+  // thuong mai nao se chet ENOENT — va `deploy-stack.sh` bien no thanh ROLLOUT_SEED_FAILED.
+  assert.doesNotMatch(
+    seed,
+    /bootstrap\?\.knowledge\?\.path \?\?/,
+    'khong duoc dat mot duong dan mac dinh cho goi khach khong khai bootstrap.knowledge',
+  );
+  assert.match(seed, /if \(!knowledgePath\)/);
+  assert.match(seed, /process\.exit\(0\)/);
+});
+
+test('SEED: moi goi khach khai bootstrap.knowledge deu co tep do, va nguoc lai', async () => {
+  const { readdirSync, existsSync } = await import('node:fs');
+  const tenantsDir = join(here, '..', '..', 'tenants');
+  const slugs = readdirSync(tenantsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  assert.ok(slugs.length >= 2, `chi thay ${slugs.length} goi khach — phep quet da hong`);
+
+  for (const slug of slugs) {
+    const manifest = join(tenantsDir, slug, 'tenant.json');
+    if (!existsSync(manifest)) continue;
+    const pack = JSON.parse(readFileSync(manifest, 'utf8'));
+    const declared = pack.bootstrap?.knowledge?.path;
+    const capabilities = new Set(pack.capabilities ?? []);
+
+    if (declared) {
+      assert.ok(
+        existsSync(join(tenantsDir, slug, declared)),
+        `${slug} khai bootstrap.knowledge.path=${declared} nhung tep do khong ton tai`,
+      );
+    } else {
+      // Khong khai thi goi do KHONG duoc bat nang luc can nguon su that thuong mai — neu khong,
+      // stack se len voi mot danh muc rong va khong ai biet cho toi luc co nguoi mo man hinh.
+      for (const capability of ['knowledge', 'sales-order']) {
+        assert.equal(
+          capabilities.has(capability),
+          false,
+          `${slug} bat ${capability} nhung khong khai bootstrap.knowledge`,
+        );
+      }
+    }
+  }
+});
