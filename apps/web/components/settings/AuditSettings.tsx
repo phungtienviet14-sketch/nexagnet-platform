@@ -4,7 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
 import { summarizeAuditFilters } from '../../lib/settings-focus';
 import { settingsApi, type AuditFilters } from '../../lib/settings';
-import { SettingsAdvanced, SettingsStatusBar, useFocusOnKey } from './SettingsFocus';
+import {
+  SettingsAdvanced,
+  SettingsStatusBar,
+  useFocusIntent,
+  useFocusOnKey,
+} from './SettingsFocus';
 import { formatSettingsDate } from './settings-format';
 import { SettingsPanelState } from './SettingsPanelState';
 
@@ -28,12 +33,15 @@ export function AuditSettings() {
   });
 
   const resultsHeading = useRef<HTMLHeadingElement>(null);
+  const intent = useFocusIntent();
   const filterKey = `${filters.actor ?? ''}|${filters.entityType ?? ''}|${filters.action ?? ''}|${filters.page ?? 1}`;
-  // Chi chuyen tieu diem khi CAU TRUY VAN doi. Nap lai nen khong duoc keo con tro ra khoi o dang go.
-  useFocusOnKey(resultsHeading, filterKey);
+  // Chi chuyen tieu diem khi NGUOI VAN HANH doi cau truy van. Nap lai nen khong duoc keo con tro ra
+  // khoi o dang go — ke ca khi so ban ghi tra ve doi.
+  useFocusOnKey(resultsHeading, filterKey, intent);
 
   const handleFilter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    intent.requestFocus();
     setFilters({
       page: 1,
       limit: 25,
@@ -44,6 +52,7 @@ export function AuditSettings() {
   };
 
   const clearFilters = () => {
+    intent.requestFocus();
     setDraftActor('');
     setDraftEntity('');
     setDraftAction('');
@@ -201,7 +210,10 @@ export function AuditSettings() {
             type="button"
             className="settings-button settings-button--quiet"
             disabled={page <= 1}
-            onClick={() => setFilters((current) => ({ ...current, page: Math.max(1, page - 1) }))}
+            onClick={() => {
+              intent.requestFocus();
+              setFilters((current) => ({ ...current, page: Math.max(1, page - 1) }));
+            }}
           >
             Trang trước
           </button>
@@ -212,9 +224,10 @@ export function AuditSettings() {
             type="button"
             className="settings-button settings-button--quiet"
             disabled={page >= totalPages}
-            onClick={() =>
-              setFilters((current) => ({ ...current, page: Math.min(totalPages, page + 1) }))
-            }
+            onClick={() => {
+              intent.requestFocus();
+              setFilters((current) => ({ ...current, page: Math.min(totalPages, page + 1) }));
+            }}
           >
             Trang sau
           </button>

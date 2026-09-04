@@ -15,8 +15,8 @@ import {
   SettingsFocusModal,
   SettingsStatusBar,
   SettingsWorkCard,
+  useFocusIntent,
   useFocusOnKey,
-  useRestoreFocus,
 } from './SettingsFocus';
 import { formatSettingsDate } from './settings-format';
 import { SettingsPanelState } from './SettingsPanelState';
@@ -136,12 +136,18 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
   const jobKind = groupJobKind(groupJob);
   const groupHeading = useRef<HTMLHeadingElement>(null);
   const connectionHeading = useRef<HTMLHeadingElement>(null);
-  useFocusOnKey(groupHeading, showGroups ? groupJob.key : null);
+  // Hai bang chung nhan qua TACH ROI: mot lan gan dai ly khong duoc phep cho tieu de "ket noi"
+  // gianh tieu diem, va nguoc lai. Ca hai khoa deu suy ra tu `summary` — thu tu nap lai moi 15
+  // giay va co the doi vi mot NGUOI KHAC vua sua, nen chung phai co bang chung moi duoc di chuyen.
+  const groupIntent = useFocusIntent();
+  const connectionIntent = useFocusIntent();
+  useFocusOnKey(groupHeading, showGroups ? groupJob.key : null, groupIntent);
 
   const zaloJob = resolveZaloJob(summary.zcaState);
-  useFocusOnKey(connectionHeading, showConnection && !showGroups ? zaloJob.key : null);
-  const { rememberTrigger } = useRestoreFocus(
-    Boolean(pendingSync) || Boolean(pendingHide) || loggingOut,
+  useFocusOnKey(
+    connectionHeading,
+    showConnection && !showGroups ? zaloJob.key : null,
+    connectionIntent,
   );
 
   return (
@@ -258,8 +264,10 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
             dealersPending={dealersQuery.isPending}
             mappingPending={mappingMutation.isPending}
             syncPending={syncMutation.isPending}
-            rememberTrigger={rememberTrigger}
-            onMap={(group, dealerId) => mappingMutation.mutate({ group, dealerId })}
+            onMap={(group, dealerId) => {
+              groupIntent.requestFocus();
+              mappingMutation.mutate({ group, dealerId });
+            }}
             onSync={setPendingSync}
           />
 
@@ -304,12 +312,13 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
                             value={group.dealerId ?? ''}
                             disabled={mappingMutation.isPending || dealersQuery.isPending}
                             aria-label={`Đại lý cho nhóm ${group.name}`}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              groupIntent.requestFocus();
                               mappingMutation.mutate({
                                 group,
                                 dealerId: event.target.value === '' ? null : event.target.value,
-                              })
-                            }
+                              });
+                            }}
                           >
                             <option value="">— Chưa map —</option>
                             {dealers.map((dealer) => (
@@ -354,10 +363,7 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
                                 : 'Chọn đại lý cho nhóm này trước'
                             }
                             aria-label={`Đồng bộ thành viên nhóm ${group.name}`}
-                            onClick={(event) => {
-                              rememberTrigger(event.currentTarget);
-                              setPendingSync(group);
-                            }}
+                            onClick={() => setPendingSync(group)}
                           >
                             Đồng bộ
                           </button>
@@ -366,10 +372,7 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
                             className="settings-text-action settings-text-action--danger"
                             disabled={hideMutation.isPending}
                             aria-label={`Gỡ nhóm ${group.name} khỏi danh sách`}
-                            onClick={(event) => {
-                              rememberTrigger(event.currentTarget);
-                              setPendingHide(group);
-                            }}
+                            onClick={() => setPendingHide(group)}
                           >
                             Gỡ khỏi danh sách
                           </button>
@@ -468,10 +471,7 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
                     type="button"
                     className="settings-text-action settings-text-action--danger"
                     disabled={logoutMutation.isPending || summary.zcaState === 'logged_out'}
-                    onClick={(event) => {
-                      rememberTrigger(event.currentTarget);
-                      setLoggingOut(true);
-                    }}
+                    onClick={() => setLoggingOut(true)}
                   >
                     Đăng xuất an toàn
                   </button>
@@ -529,7 +529,10 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
           tone="primary"
           pending={syncMutation.isPending}
           onCancel={() => setPendingSync(null)}
-          onConfirm={() => syncMutation.mutate(pendingSync.zcaChatId)}
+          onConfirm={() => {
+            groupIntent.requestFocus();
+            syncMutation.mutate(pendingSync.zcaChatId);
+          }}
         >
           <ul className="settings-confirmation">
             <li>Thành viên vắng mặt chỉ được đánh dấu không hoạt động, không ai bị xóa.</li>
@@ -545,7 +548,10 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
           confirmLabel="Gỡ khỏi danh sách"
           pending={hideMutation.isPending}
           onCancel={() => setPendingHide(null)}
-          onConfirm={() => hideMutation.mutate({ group: pendingHide, hidden: true })}
+          onConfirm={() => {
+            groupIntent.requestFocus();
+            hideMutation.mutate({ group: pendingHide, hidden: true });
+          }}
         >
           <ul className="settings-confirmation">
             <li>Tin nhắn và đơn đã nhận vẫn được giữ nguyên.</li>
@@ -561,7 +567,10 @@ export function ZaloSettings({ summary, onRefresh, onOpenMembers, view = 'all' }
           confirmLabel="Đăng xuất"
           pending={logoutMutation.isPending}
           onCancel={() => setLoggingOut(false)}
-          onConfirm={() => logoutMutation.mutate()}
+          onConfirm={() => {
+            connectionIntent.requestFocus();
+            logoutMutation.mutate();
+          }}
         >
           <ul className="settings-confirmation">
             <li>Phiên đăng nhập và danh sách nhóm được phép cục bộ sẽ bị xóa.</li>
@@ -583,7 +592,6 @@ function GroupWorkCard({
   dealersPending,
   mappingPending,
   syncPending,
-  rememberTrigger,
   onMap,
   onSync,
 }: {
@@ -594,7 +602,6 @@ function GroupWorkCard({
   dealersPending: boolean;
   mappingPending: boolean;
   syncPending: boolean;
-  rememberTrigger: (node: HTMLElement | null) => void;
   onMap: (group: SettingsGroupSummary, dealerId: string | null) => void;
   onSync: (group: SettingsGroupSummary) => void;
 }) {
@@ -616,10 +623,7 @@ function GroupWorkCard({
                   type="button"
                   className="settings-button settings-button--primary"
                   disabled={syncPending}
-                  onClick={(event) => {
-                    rememberTrigger(event.currentTarget);
-                    onSync(group);
-                  }}
+                  onClick={() => onSync(group)}
                 >
                   Đồng bộ thành viên
                 </button>

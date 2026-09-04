@@ -1,7 +1,6 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useRef } from 'react';
 import { readinessCheckSection, resolveReadinessFocus } from '../../lib/settings-focus';
 import { settingsApi, type ReadinessCheckView, type ReadinessStatus } from '../../lib/settings';
 import {
@@ -9,7 +8,6 @@ import {
   SettingsAdvanced,
   SettingsStatusBar,
   SettingsWorkCard,
-  useFocusOnKey,
 } from './SettingsFocus';
 import type { SettingsSectionId } from './settings-composition';
 import { formatSettingsDate } from './settings-format';
@@ -38,11 +36,9 @@ export function ReadinessSettings({
     queryKey: ['settings', 'readiness'],
     queryFn: settingsApi.readiness,
   });
-  const workHeading = useRef<HTMLHeadingElement>(null);
-  const firstOpen = data
-    ? resolveReadinessFocus({ checks: data.checks, goLiveReady: data.goLiveReady }).open[0]
-    : undefined;
-  useFocusOnKey(workHeading, firstOpen ? `readiness:${firstOpen.key}` : null);
+  // KHONG chuyen tieu diem o day (#154 Finding A): kiem tra san sang la KET LUAN CUA MAY CHU,
+  // khong thao tac nao trong man nay doi duoc no. Mot lan nap lai lam mot kiem tra chuyen tu
+  // `missing` sang `ready` khong phai la "nguoi van hanh vua chuyen viec".
 
   if (isPending) {
     return (
@@ -100,7 +96,6 @@ export function ReadinessSettings({
           problem={readinessProblem(next)}
           tone="blocked"
           headingId="settings-readiness-work"
-          headingRef={workHeading}
           actions={
             <SettingsActionRow
               primary={
@@ -134,7 +129,6 @@ export function ReadinessSettings({
           problem="Mọi điều kiện bắt buộc đã đạt. Việc bật chạy thật vẫn là quyết định của người vận hành."
           tone="ok"
           headingId="settings-readiness-work"
-          headingRef={workHeading}
         />
       )}
 
