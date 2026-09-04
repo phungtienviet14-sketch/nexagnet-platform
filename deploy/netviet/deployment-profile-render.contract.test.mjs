@@ -144,6 +144,15 @@ function renderWithProfile({
   }
 }
 
+/**
+ * `core.autocrlf=true` tren ban lam viec Windows ket thuc dong bang CRLF, trong khi CI
+ * (ubuntu-24.04) va kho git deu la LF. Chuan hoa khi DOC de mot bai do khong con nghia la "may
+ * khac" — cung phep chuan hoa ma `release-identity.contract.test.mjs` dung.
+ */
+const CRLF = new RegExp(`${String.fromCharCode(13)}${String.fromCharCode(10)}`, 'g');
+const readScript = (name) =>
+  readFileSync(join(here, name), 'utf8').replace(CRLF, String.fromCharCode(10));
+
 /** Doc mot khoa tu noi dung `secrets.env` — cung phep doc ma `deploy-stack.sh` dung. */
 function runtimeValue(content, key) {
   const matches = [...content.matchAll(new RegExp(`^${key}=(.*)$`, 'gm'))];
@@ -309,8 +318,8 @@ test('RENDER THAT: gd1-test khong co ho so thi khong render gi ca', () => {
 // --- 5. LOP PHU COMPOSE: RANG BUOC BIEN MAT CUNG SERVICE --------------------------------------
 
 test('COMPOSE: ban goc khong con service flowise, va `api` khong con phu thuoc no', () => {
-  const base = readFileSync(join(here, 'compose.yaml'), 'utf8');
-  const overlay = readFileSync(join(here, 'compose.flowise.yaml'), 'utf8');
+  const base = readScript('compose.yaml');
+  const overlay = readScript('compose.flowise.yaml');
 
   // Trong ban goc khong co AI ten `flowise` de ma phu thuoc.
   assert.doesNotMatch(base, /^ {2}flowise:$/m);
@@ -341,8 +350,8 @@ test('COMPOSE: ban goc khong con service flowise, va `api` khong con phu thuoc n
 });
 
 test('DEPLOY-STACK: lop phu chi duoc keo vao khi ho so bat Flowise, va MAC DINH la on', () => {
-  const stackCompose = readFileSync(join(here, 'stack-compose.sh'), 'utf8');
-  const deployStack = readFileSync(join(here, 'deploy-stack.sh'), 'utf8');
+  const stackCompose = readScript('stack-compose.sh');
+  const deployStack = readScript('deploy-stack.sh');
 
   assert.match(stackCompose, /NETVIET_COMPOSE_FILES\+=\(-f compose\.flowise\.yaml\)/);
   // Mat dong `FLOWISE_ENABLED` (secrets.env render truoc ban nay) => `on` => hanh vi cu. Doan
@@ -350,7 +359,7 @@ test('DEPLOY-STACK: lop phu chi duoc keo vao khi ho so bat Flowise, va MAC DINH 
   assert.match(stackCompose, /NETVIET_FLOWISE_ENABLED='on'/);
   // Va ba tang tren VM deu doc CUNG mot phep suy ra, khong ai tu viet lai.
   for (const script of ['deploy-stack.sh', 'backup.sh', 'health-check.sh']) {
-    const source = readFileSync(join(here, script), 'utf8');
+    const source = readScript(script);
     assert.match(
       source,
       /source "\$\{APP_DIR\}\/stack-compose\.sh"/,
@@ -367,8 +376,8 @@ test('DEPLOY-STACK: lop phu chi duoc keo vao khi ho so bat Flowise, va MAC DINH 
 // --- 6. CSDL: MOT HE THONG CON KHONG DUOC CHAN LOP LUU TRU NEN TANG ---------------------------
 
 test('POSTGRES: vai flowise chi duoc tao khi co mat khau, va `zalo` khong phu thuoc no', () => {
-  const initDatabases = readFileSync(join(here, 'postgres', 'init-databases.sh'), 'utf8');
-  const syncPasswords = readFileSync(join(here, 'postgres', 'sync-passwords.sh'), 'utf8');
+  const initDatabases = readScript(join('postgres', 'init-databases.sh'));
+  const syncPasswords = readScript(join('postgres', 'sync-passwords.sh'));
 
   for (const [name, source] of [
     ['init-databases.sh', initDatabases],
@@ -383,5 +392,56 @@ test('POSTGRES: vai flowise chi duoc tao khi co mat khau, va `zalo` khong phu th
     assert.match(source, /if \[ -n "\$\{FLOWISE_DB_PASSWORD:-\}" \]; then/, name);
     // Vai `zalo` — lop luu tru nen tang — van bat buoc.
     assert.match(source, /ZALO_DB_PASSWORD:\?/, name);
+  }
+});
+
+// --- 7. GIEO NGUON SU THAT: mot goi khai `bootstrap: {}` khong duoc danh do lan deploy ---------
+
+test('SEED: khong bia ra duong dan knowledge cho goi khach da noi la khong co', () => {
+  const seed = readScript('seed-tenant-knowledge.mjs');
+
+  // Duong dan mac dinh doan ho cho MOI goi khach, nen mot goi co y khong mang nguon su that
+  // thuong mai nao se chet ENOENT — va `deploy-stack.sh` bien no thanh ROLLOUT_SEED_FAILED.
+  assert.doesNotMatch(
+    seed,
+    /bootstrap\?\.knowledge\?\.path \?\?/,
+    'khong duoc dat mot duong dan mac dinh cho goi khach khong khai bootstrap.knowledge',
+  );
+  assert.match(seed, /if \(!knowledgePath\)/);
+  assert.match(seed, /process\.exit\(0\)/);
+});
+
+test('SEED: moi goi khach khai bootstrap.knowledge deu co tep do, va nguoc lai', async () => {
+  const { readdirSync, existsSync } = await import('node:fs');
+  const tenantsDir = join(here, '..', '..', 'tenants');
+  const slugs = readdirSync(tenantsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  assert.ok(slugs.length >= 2, `chi thay ${slugs.length} goi khach — phep quet da hong`);
+
+  for (const slug of slugs) {
+    const manifest = join(tenantsDir, slug, 'tenant.json');
+    if (!existsSync(manifest)) continue;
+    const pack = JSON.parse(readFileSync(manifest, 'utf8'));
+    const declared = pack.bootstrap?.knowledge?.path;
+    const capabilities = new Set(pack.capabilities ?? []);
+
+    if (declared) {
+      assert.ok(
+        existsSync(join(tenantsDir, slug, declared)),
+        `${slug} khai bootstrap.knowledge.path=${declared} nhung tep do khong ton tai`,
+      );
+    } else {
+      // Khong khai thi goi do KHONG duoc bat nang luc can nguon su that thuong mai — neu khong,
+      // stack se len voi mot danh muc rong va khong ai biet cho toi luc co nguoi mo man hinh.
+      for (const capability of ['knowledge', 'sales-order']) {
+        assert.equal(
+          capabilities.has(capability),
+          false,
+          `${slug} bat ${capability} nhung khong khai bootstrap.knowledge`,
+        );
+      }
+    }
   }
 });

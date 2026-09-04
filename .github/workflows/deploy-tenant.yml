@@ -31,6 +31,15 @@ on:
           - ultty
           - amico
           - wata
+          # KHACH XEM TRUOC CUA NEN TANG, khong phai mot khach hang. `tenants/transport-preview/`
+          # la mot goi tong hop: khong Zalo, khong LLM, khong ERP, du lieu tong hop. No ton tai de
+          # xem TRUOC be mat van hanh van tai, va ho so `transport-preview-gd1-test` chi cho phep
+          # dung mot moi truong duy nhat (`gd1-test`) voi dung bon bi mat nen tang.
+          #
+          # Danh sach nay van DONG: them mot lua chon o day chua du de deploy: registry phai co
+          # dong tuong ung, ho so phai phuc vu tenant do, va moi truong bi khoa cong van doi main
+          # + CI xanh tren dung SHA.
+          - transport-preview
         default: 'ultty'
       environment:
         description: 'Moi truong dich'

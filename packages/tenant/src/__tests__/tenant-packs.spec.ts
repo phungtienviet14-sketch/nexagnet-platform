@@ -51,8 +51,22 @@ describe('goi khach co that trong tenants/', () => {
       // Slug trong file phai trung TEN THU MUC. Lech nhau thi `TENANT=<thu muc>` van nap duoc nhung
       // moi thu bao cao theo slug kia — sai lam rat kho lan ra.
       expect(cfg.slug).toBe(slug);
-      // Nem neu sai schema, hoac neu mot dai ly dung chinh sach khong khai bao trong policies (D28).
-      expect(() => loadTenantKnowledge()).not.toThrow();
+
+      // TRI THUC LA MOT CAPABILITY, KHONG PHAI MOT DIEU HIEN NHIEN.
+      //
+      // `loadTenantKnowledge()` nem CO CHU Y khi tenant khong bat `knowledge`
+      // (`tenant.config.ts:130-133`), va schema chua bao gio doi moi khach phai bat no. Truoc day
+      // bai nay goi thang loader cho MOI goi, nen no vo tinh khang dinh mot dieu manh hon schema:
+      // "moi khach that deu ban hang hoac it nhat co tri thuc". Mot khach van tai thuan tuy lam
+      // cau do sai — va lam do mot bai test le ra phai noi ve viec NAP GOI.
+      //
+      // Nay kiem dung ca hai chieu, nen ranh gioi capability van duoc khoa chat nhu cu.
+      if (cfg.capabilities.includes('knowledge')) {
+        // Nem neu sai schema, hoac neu mot dai ly dung chinh sach khong khai trong policies (D28).
+        expect(() => loadTenantKnowledge()).not.toThrow();
+      } else {
+        expect(() => loadTenantKnowledge()).toThrow(/knowledge/i);
+      }
       expect(() => loadDemoMessages()).not.toThrow();
     });
   }

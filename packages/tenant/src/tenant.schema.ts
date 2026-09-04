@@ -43,10 +43,32 @@ export const blockedCapabilitySchema = z
   })
   .strict();
 
+/**
+ * MOT BAN TRIEN KHAI XEM TRUOC TU KHAI RA MINH LA XEM TRUOC.
+ *
+ * Truong nay KHONG doi hanh vi gi — no chi lam be mat noi that mot cau ma nguoi dung khong the
+ * suy ra tu man hinh: "day khong phai ban cho khach dung". Mot ban dung de lay y kien som trong
+ * rat giong mot ban that, va do dung la cho nguy hiem: nguoi xem de tuong nghiep vu da chay du.
+ *
+ * De o `readiness` vi no cung ho voi `blockedCapabilities` — ca hai deu la LOI TU THU cua goi
+ * khach ve gioi han cua chinh no, khong phai trang thai ky thuat luc chay.
+ *
+ * TUY CHON. Vang mat ⇒ khong hien gi, nen moi goi khach dang co khong doi mot pixel nao.
+ */
+export const previewNoticeSchema = z
+  .object({
+    /** Nhan ngan hien tren dai bang — vd "BAN XEM TRUOC". */
+    label: nonEmpty.max(40),
+    /** Mot cau noi ro day la gi va KHONG phai gi. */
+    note: nonEmpty.max(300),
+  })
+  .strict();
+
 export const tenantReadinessSchema = z
   .object({
     /** Cac blocker nghiep vu do tenant khai bao; core chi hien thi, khong suy dien hanh vi. */
     blockedCapabilities: z.array(blockedCapabilitySchema).max(100),
+    previewNotice: previewNoticeSchema.optional(),
   })
   .strict();
 
