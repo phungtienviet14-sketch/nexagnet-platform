@@ -94,6 +94,27 @@ export const probesFor = ({ repo, pr, headSha }) =>
   ]);
 
 /**
+ * BANG DOC O TREN VAN GAN NHAN THEO DUONG DAN — va do la mot KHOANG CHUA DO DUOC, noi ra o day.
+ *
+ * Probe `issue-comments` goi `/repos/{o}/{r}/issues/{PR}/comments`: mot duong dan `/issues/...`
+ * nhung `{n}` la SO PR. Theo dung cach doc ma bang GHI ben duoi vua chuyen sang — quyen di theo
+ * LOAI TAI NGUYEN — nhan dung cua probe do CO THE la `pull-requests: read`, khong phai `issues: read`.
+ *
+ * KHONG DOI NHAN, va ly do la KHONG CO BANG CHUNG: moi lan chay that deu cam CA HAI quyen doc do,
+ * nen khong lan nao phan biet duoc cai nao thuc su cho phep loi goi ay. Doi nhan bay gio la thay
+ * mot gia dinh chua do bang mot gia dinh chua do khac — dung viec da lam blocker B7 sai.
+ *
+ * Va khong co gi phai lo, vi CA HAI quyen deu duoc giu VI MOT LY DO DOC LAP:
+ *
+ *   issues: read         -> GET /issues/{n}   (than hop dong task — mot ISSUE that, khong phai PR)
+ *   pull-requests: read  -> GET /pulls/{n}    (HEAD that)
+ *
+ * Nen du nhan dung la cai nao, `/issues/{PR}/comments` van co quyen no can. Muon dong khoang nay
+ * thi phai DO: bo mot trong hai quyen o mot lan chay THAT roi xem loi goi nao 403 — mot task rieng,
+ * khong lam lang le o day.
+ */
+
+/**
  * Quyen DOC ma moi job cua workflow phai co du. Dan xuat tu chinh bang tren, nen khong the lech:
  * mot probe moi la mot quyen moi.
  * @type {ReadonlyArray<string>}
