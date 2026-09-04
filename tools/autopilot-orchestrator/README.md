@@ -40,7 +40,7 @@ Vì ba đường có thể cùng đủ điều kiện trên **một** HEAD, mọ
 (`findPostedClaim`), so bằng **khoá idempotency của giao thức**. V0 read-only không có sổ ledger bên
 ngoài, nên **luồng comment chính là sổ ledger**.
 
-## Mười tệp, hai tệp bẩn
+## Mười ba tệp, hai tệp bẩn
 
 | Tệp                   | Thuần? | Việc                                                                                                          |
 | --------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
@@ -51,6 +51,9 @@ ngoài, nên **luồng comment chính là sổ ledger**.
 | `src/registry.mjs`    | ✅     | Sơ đồ `principal → vai`. Đọc từ biến môi trường, **không ghi cứng login nào**.                                |
 | `src/permissions.mjs` | ✅     | Bảng "lời gọi API ↔ quyền". Một nguồn cho cả preflight lẫn bài kiểm hợp đồng workflow.                        |
 | `src/decide.mjs`      | ✅     | Sự kiện + bằng chứng → mô tả việc phải làm.                                                                   |
+| `src/ledger.mjs`      | ✅     | Đọc **trọn vẹn** luồng comment bằng phân trang. Đọc thiếu ⇒ fail-closed, không quyết định trên một phần sổ. |
+| `src/labels.mjs`      | ✅     | Hoà giải nhãn, **đọc kết quả từng lời gọi**. Chỉ `404` khi gỡ nhãn vắng mới là thành công.                  |
+| `src/mutations.mjs`   | ✅     | Job này có được ghi không. Mặc định `forbidden`.                                                              |
 | `src/github.mjs`      | ❌     | Client REST. Nơi **duy nhất** gọi mạng.                                                                        |
 | `src/main.mjs`        | ❌     | Nơi **duy nhất** ghi (đăng comment, đổi nhãn).                                                                 |
 | `src/preflight.mjs`   | ❌     | Đo quyền của token bằng cách **gọi thật**. Chỉ đọc, không ghi.                                                 |
@@ -58,7 +61,7 @@ ngoài, nên **luồng comment chính là sổ ledger**.
 Tách như vậy để "read-only" là thứ kiểm được: mọi quyết định nằm trong hàm thuần, và chỉ một tệp
 có quyền ghi.
 
-## Bốn cạm bẫy đã đo được, không phải suy đoán
+## Bảy cạm bẫy đã đo được, không phải suy đoán
 
 **1. API và tệp ruleset có hình dạng KHÁC NHAU.** `/rules/branches/main` trả về **mảng phẳng**;
 `requiredChecksFromRuleset` lại đợi `{ rules: [...] }`. Đưa thẳng mảng API vào nó thì **không lỗi,
@@ -89,6 +92,37 @@ có nghĩa là orchestrator đã chạy thật.
 **4. Mặc định là DRY-RUN.** Nó quyết định và ghi log đầy đủ nhưng không đăng comment, không đổi
 nhãn. Bật thật bằng biến repo `AUTOPILOT_DRY_RUN=false`.
 
+**5. `pull_request` chạy MÃ NGUỒN CỦA PR — kể cả chính tệp YAML.** Đây là blocker B4 của PR #167.
+Trên trigger đó, một PR chưa duyệt quyết định cả `main.mjs`, các tệp giao thức nó import, **và**
+khối `permissions:` của workflow. Nên workflow tách làm hai đường, và ranh giới là **quyền** chứ
+không phải lời hứa:
+
+| Đường            | Job                                    | Trigger                        | Quyền     |
+| ---------------- | -------------------------------------- | ------------------------------ | --------- |
+| không tin cậy    | `preflight`, `orchestrate-readonly`    | `pull_request`                 | toàn đọc  |
+| tin cậy          | `orchestrate`                          | `issue_comment`, `check_suite` | có ghi    |
+
+Đường tin cậy **ghim checkout vào nhánh mặc định** thay vì tin `github.sha` — nếu `github.sha` của
+`check_suite` có lúc trả về `head_sha` của một PR thì checkout mặc định sẽ kéo mã nguồn PR vào
+đúng job đang cầm quyền ghi. Và **không** được "sửa" bằng `pull_request_target` rồi checkout mã
+nguồn PR: làm vậy là lấy lại đúng bộ quyền ấy và trao cho đúng đoạn mã ấy, chỉ khác tên trigger.
+
+Cái giá phải trả, nói thẳng: đường `pull_request` **không còn đăng được comment kết quả**. Một bộ
+điều kiện trở nên đầy đủ ở đó sẽ chờ `issue_comment`/`check_suite` kế tiếp mới được phát.
+
+**6. Comment đăng xong rồi nhãn hỏng là một trạng thái KHÔNG SỬA ĐƯỢC** — blocker B5. Bản trước
+đăng comment trước, đổi nhãn sau, và **bỏ qua** mọi kết quả của lời gọi nhãn. Lần chạy kế tiếp thấy
+comment cũ rồi dừng ngay ở cổng chống trùng, nên không bao giờ về tới phần nhãn: nhãn kẹt ở trạng
+thái cũ vĩnh viễn, và chính cổng chống trùng là cái chặn đường sửa. Nay comment đăng **một lần**,
+nhãn hoà giải **mọi lần** — và chỉ `404` khi gỡ một nhãn vốn không có mới được tính là thành công.
+
+**7. Luồng comment là sổ ledger, nên phải đọc HẾT** — blocker B6. Bản trước đọc đúng
+`?per_page=100`, tức **trang đầu**. Dưới 100 comment thì "trang đầu" và "cả luồng" trùng nhau nên
+bug nằm im; quá 100 thì chúng tách ra, và hỏng theo **hai** hướng khác hẳn nhau: một `BUILD_READY`
+hợp lệ ở trang sau biến mất (`NO_BUILD_READY_AT_HEAD` sai), và một comment đã đăng ở trang sau lọt
+cổng chống trùng (đăng trùng). Chạm trần trang thì báo `PR_COMMENTS_TRUNCATED` — một cái trần im
+lặng chính là bug này được dời chỗ, từ 100 lên 2000.
+
 ## Cấu hình
 
 | Biến                          | Bắt buộc | Mặc định           |
@@ -97,6 +131,7 @@ nhãn. Bật thật bằng biến repo `AUTOPILOT_DRY_RUN=false`.
 | `AUTOPILOT_REVIEWER_APP_SLUG` | ✅       | — (thiếu ⇒ job đỏ) |
 | `AUTOPILOT_ACTIONS_APP_SLUG`  | —        | `github-actions`   |
 | `AUTOPILOT_DRY_RUN`           | —        | `true`             |
+| `AUTOPILOT_MUTATIONS`         | —        | `forbidden`        |
 
 `AUTOPILOT_REVIEWER_APP_SLUG` **không có giá trị dự phòng, và đó là một quyết định** (blocker B3 của
 PR #167). Workflow từng viết `${{ vars.AUTOPILOT_REVIEWER_APP_SLUG || 'chatgpt-codex-connector' }}`,
@@ -138,9 +173,17 @@ duyệt" được thoả — điều mà nếu chỉ nhìn `user.login` thì kh�
    đổi cơ chế là **sửa phạm vi hợp đồng**, nên phải là task riêng, không lặng lẽ đổi ở đây.
 2. **`issue_comment` cũng chưa chạy thật**, và không thể chạy thật cho tới khi bản này lên `main`
    (cạm bẫy 3).
-3. **`pull_request` mới chỉ chứng minh được `preflight`**, tức phần quyền. Đường quyết định đầy đủ
-   trên trigger đó vẫn chưa có bằng chứng chạy thật.
-4. **Vẫn chưa có người thứ hai đọc mã** (repo một chủ).
+3. **`pull_request` chỉ chứng minh được phần ĐỌC.** Từ blocker B4, job chạy trên trigger đó không
+   còn được cầm `issues: write`/`pull-requests: write` — nên `preflight` **không thể** đo hai quyền
+   ghi bằng một lời gọi thật nữa, và sẽ không bao giờ đo được: không thể vừa cho mã nguồn PR chạy
+   vừa cho nó cầm quyền ghi để đo chúng. Hai quyền ấy nay được canh bằng một hợp đồng **tĩnh**
+   (`tests/workflow-contract.test.mjs` đọc thẳng khối `permissions:` của job `orchestrate`). Đó là
+   một bằng chứng yếu hơn hẳn một lời gọi 200, và nói ra ở đây chứ không giấu.
+4. **Đường ghi chưa từng chạy thật.** Nó chỉ chạy trên `issue_comment`/`check_suite`, tức chỉ sau
+   khi bản này lên `main` (cạm bẫy 3). Trong PR, đường ghi được đo bằng `tests/recovery.test.mjs` —
+   chạy thật `node src/main.mjs` hai lần với mạng được dựng lại, không phải bằng một lần chạy
+   GitHub thật.
+5. **Vẫn chưa có người thứ hai đọc mã** (repo một chủ).
 
 ## Chạy test
 

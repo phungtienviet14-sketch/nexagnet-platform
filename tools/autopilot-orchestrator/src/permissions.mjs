@@ -6,13 +6,26 @@
  * Bang nay co HAI nguoi doc, va do la ca y do:
  *
  *   1. `preflight.mjs` GOI THAT tung duong de do quyen cua `GITHUB_TOKEN`;
- *   2. `tests/workflow-contract.test.mjs` doi chieu cot `grant` voi khoi `permissions:` cua
+ *   2. `tests/workflow-contract.test.mjs` doi chieu cot `grant` voi cac khoi `permissions:` cua
  *      `.github/workflows/autopilot-orchestrator.yml`.
  *
  * Nho vay them mot loi goi API moi ma quen them quyen se lam DO CI NGAY TRONG PR — thay vi do o
  * lan chay that dau tien sau khi merge. Do dung la cach blocker B1 cua PR #167 phat sinh:
  * `main.mjs` goi `/check-runs` va `/actions/runs` trong khi khoi `permissions:` khong ke
  * `checks: read` va `actions: read`, va khong cong nao keu.
+ *
+ * HAI HANG QUYEN, KHONG PHAI MOT (blocker B4 cua PR #167)
+ *
+ * Ban truoc gop lam mot danh sach: probe `pull` doi `pull-requests: write`, probe `issue-comments`
+ * doi `issues: write`. Sai o cho GOP: nam probe deu la `GET`, chung KHONG can quyen ghi. Quyen ghi
+ * chi can cho hai viec cuoi cung cua `main.mjs` — dang comment va doi nhan.
+ *
+ * Gop chung lai co mot hau qua that: `preflight` chay o trigger `pull_request`, tuc chay MA NGUON
+ * CUA CHINH PR. Doi hoi no phai cam `issues: write` la doi hoi ma nguon chua duyet cam quyen ghi
+ * vao mat phang trang thai cua repo. Nen bang nay tach lam hai:
+ *
+ *   READ_GRANTS     — du cho ca nam `GET`. Job chay ma nguon PR chi duoc cam dung bay nhieu.
+ *   MUTATION_GRANTS — chi cho job chay ma nguon nhanh mac dinh, noi thuc su co ghi.
  *
  * Tep nay THUAN. Viec goi mang nam o `github.mjs`, viec chay nam o `preflight.mjs`.
  */
@@ -27,10 +40,13 @@
  */
 
 /**
- * Nam loi goi cua `main.mjs`, kem quyen ma moi cai doi hoi.
+ * Nam loi goi DOC cua `main.mjs`, kem quyen ma moi cai doi hoi.
  *
  * `grant` duoc chep NGUYEN VAN dang `key: value` de bai kiem hop dong so thang voi YAML — mot
  * chuoi gan giong ("checks:read") se lam bai kiem do, va do la y muon.
+ *
+ * Moi dong o day la `: read`. Do khong phai su tinh luoc: ca nam deu la `GET`, va mot job chi doc
+ * thi khong duoc xin quyen ghi "cho chac".
  *
  * @param {{ repo: string, pr: number, headSha: string }} at
  * @returns {ReadonlyArray<Probe>}
@@ -46,14 +62,14 @@ export const probesFor = ({ repo, pr, headSha }) =>
     },
     {
       name: 'pull',
-      grant: 'pull-requests: write',
+      grant: 'pull-requests: read',
       path: `/repos/${repo}/pulls/${pr}`,
       shapeOk: (body) => typeof body?.head?.sha === 'string',
       shape: 'object co head.sha',
     },
     {
       name: 'issue-comments',
-      grant: 'issues: write',
+      grant: 'issues: read',
       path: `/repos/${repo}/issues/${pr}/comments?per_page=1`,
       shapeOk: (body) => Array.isArray(body),
       shape: 'mang comment',
@@ -78,19 +94,33 @@ export const probesFor = ({ repo, pr, headSha }) =>
   ]);
 
 /**
- * Cac dong `permissions:` ma workflow BAT BUOC phai khai. Dan xuat tu chinh bang tren, nen khong
- * the lech: mot probe moi la mot quyen moi.
+ * Quyen DOC ma moi job cua workflow phai co du. Dan xuat tu chinh bang tren, nen khong the lech:
+ * mot probe moi la mot quyen moi.
  * @type {ReadonlyArray<string>}
  */
-export const REQUIRED_GRANTS = Object.freeze([
+export const READ_GRANTS = Object.freeze([
   ...new Set(
     probesFor({ repo: 'o/r', pr: 1, headSha: '0'.repeat(40) }).map((probe) => probe.grant),
   ),
 ]);
 
 /**
- * Quyen orchestrator KHONG DUOC co. Read-only la mot ranh gioi GitHub cuong che, khong phai mot
- * loi hua trong tai lieu — nen no phai duoc kiem nhu mot bat bien.
+ * Quyen GHI, va dung hai viec can den chung — day la TOAN BO phan ghi cua Orchestrator V0:
+ *
+ *   `issues: write`        -> POST /issues/{n}/comments   (dang ket qua)
+ *                             POST|DELETE /issues/{n}/labels (doi nhan)
+ *   `pull-requests: write` -> mot PR la mot Issue o REST, nhung hai quyen nay khong thay the nhau
+ *                             tren moi duong; giu ca hai la giu dung bo ma lan chay that da do.
+ *
+ * CHI job chay ma nguon NHANH MAC DINH duoc cam bo nay (blocker B4). Job chay ma nguon cua PR thi
+ * khong — ma nguon chua duyet khong duoc ghi vao mat phang trang thai ma chinh no dang xin duyet.
+ * @type {ReadonlyArray<string>}
+ */
+export const MUTATION_GRANTS = Object.freeze(['issues: write', 'pull-requests: write']);
+
+/**
+ * Quyen orchestrator KHONG DUOC co o BAT KY job nao. Read-only la mot ranh gioi GitHub cuong che,
+ * khong phai mot loi hua trong tai lieu — nen no phai duoc kiem nhu mot bat bien.
  * @type {ReadonlyArray<string>}
  */
 export const FORBIDDEN_GRANTS = Object.freeze(['contents: write']);

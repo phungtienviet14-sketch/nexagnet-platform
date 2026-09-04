@@ -5,6 +5,18 @@
  * nguon, khong dispatch agent nao. Workflow cung khong xin `contents: write`, nen ngay ca khi tep
  * nay co loi thi quyen cua no van khong du de sua repo.
  *
+ * HAI LAN CHAY, MOT TEP (blocker B4 cua PR #167)
+ *
+ * Tep nay chay o HAI job khac nhau, va chung khac nhau o dung mot dieu: co duoc ghi hay khong.
+ *
+ *   `orchestrate-readonly` — chay tren `pull_request`, tuc chay MA NGUON CUA PR chua duyet. Quyen
+ *                            toan doc. Di het duong quyet dinh roi dung o `orchestrator: no-write`.
+ *   `orchestrate`          — chay tren `issue_comment`/`check_suite`, hai trigger GitHub bat buoc
+ *                            chay ban workflow tren nhanh mac dinh. Day la noi duy nhat co quyen ghi.
+ *
+ * Ranh gioi that nam o khoi `permissions:` cua tung job, khong o tep nay: `mutationRole` chi de lan
+ * chay read-only DUNG LAI dung cho thay vi dam vao buc tuong quyen.
+ *
  * BA TRIGGER, MOT LOI QUYET DINH (hop dong #165)
  *
  * `issue_comment`, `pull_request`, `check_suite` khong phai ba nhanh xu ly — chung la BA CACH mot
@@ -34,6 +46,9 @@ import {
 } from './evidence.mjs';
 import { api } from './github.mjs';
 import { findPostedClaim, selectBuildReadyAtHead } from './inbox.mjs';
+import { reconcileLabels } from './labels.mjs';
+import { fetchAllComments } from './ledger.mjs';
+import { MUTATION_ROLES, mutationRoleFromEnv } from './mutations.mjs';
 import { ORCHESTRATOR_REASONS } from './reasons.mjs';
 import { buildPrincipalRegistry, registryInputFromEnv } from './registry.mjs';
 
@@ -67,6 +82,18 @@ async function run() {
   const repoFull = env.GITHUB_REPOSITORY;
   const eventPath = env.GITHUB_EVENT_PATH;
   const dryRun = env.AUTOPILOT_DRY_RUN === 'true';
+
+  // HAI LY DO KHAC NHAU DE KHONG GHI, va chung khong thay the nhau.
+  //
+  //   `dryRun`       — CONG TAC VAN HANH. "He thong chay dung roi, nhung dung dang gi ca."
+  //   `mutationRole` — RANH GIOI TIN CAY (blocker B4). "Lan chay NAY dang thuc thi ma nguon cua mot
+  //                    PR chua duyet, nen no khong duoc cham vao mat phang trang thai."
+  //
+  // Ranh gioi that nam o `permissions:` cua workflow — job read-only KHONG duoc cap `issues: write`
+  // nen no khong ghi duoc du ma nguon co bao no ghi. Bien nay chi de no DUNG LAI dung cho, thay vi
+  // dam vao buc tuong quyen va lam do CI tren moi PR ngay khi `AUTOPILOT_DRY_RUN` duoc tat.
+  const mutationRole = mutationRoleFromEnv(env);
+  const writesEnabled = mutationRole === MUTATION_ROLES.ALLOWED && !dryRun;
 
   if (!token || !repoFull || !eventPath) {
     return abort(ORCHESTRATOR_REASONS.EVENT_SHAPE_UNKNOWN, {
@@ -139,15 +166,17 @@ async function run() {
   }
 
   // Luong comment cua PR: vua la NOI TRA CUU thong diep cho hai trigger khong mang thong diep, vua
-  // la SO LEDGER de khong dang trung. Doc mot lan, dung cho ca hai viec.
-  const commentsResponse = await api(
-    token,
-    `/repos/${repoFull}/issues/${prNumber}/comments?per_page=100`,
+  // la SO LEDGER de khong dang trung. Doc mot lan, dung cho ca hai viec — nhung doc TRON VEN.
+  //
+  // "Tron ven" la yeu cau, khong phai su xa xi (blocker B6): ban truoc doc dung `?per_page=100`,
+  // tuc TRANG DAU. Qua 100 comment thi mot `BUILD_READY` hop le hoac mot comment DA DANG co the
+  // nam ngoai trang do — va hai hong hoc khac han nhau cung xuat hien: `NO_BUILD_READY_AT_HEAD`
+  // sai, va dang trung. Chi tiet o `ledger.mjs`.
+  const ledger = await fetchAllComments((query) =>
+    api(token, `/repos/${repoFull}/issues/${prNumber}/comments${query}`),
   );
-  if (!commentsResponse.ok) {
-    return abort(ORCHESTRATOR_REASONS.PR_COMMENTS_UNAVAILABLE, { status: commentsResponse.status });
-  }
-  const comments = commentsResponse.body;
+  if (!ledger.ok) return abort(ledger.reason, ledger.detail);
+  const comments = ledger.value;
 
   let comment = eventTarget.inbandComment;
   if (comment === null) {
@@ -254,45 +283,67 @@ async function run() {
     ciRunId,
     idempotencyKey: decision.idempotencyKey,
     dryRun,
+    mutationRole,
   });
 
   if (decision.action === ACTIONS.IGNORE || decision.body === null) return;
 
   // CONG CHONG TRUNG. So bang KHOA IDEMPOTENCY CUA GIAO THUC tren chinh luong comment: V0
   // read-only khong co so ledger ben ngoai, nen luong comment CHINH LA so ledger.
+  //
+  // CONG NAY CHAN DANG TRUNG COMMENT — VA CHI THE (blocker B5). Ban truoc dung han lan chay ngay
+  // tai day, nen mot lan hong GIUA "da dang comment" va "da doi xong nhan" de lai nhan sai VINH
+  // VIEN: lan chay ke tiep thay comment cu roi dung, khong bao gio ve toi phan nhan, va chinh cong
+  // chong trung tro thanh cai chan duong sua. Sua bang cach tach hai viec: comment dang MOT LAN,
+  // nhan hoa giai MOI LAN.
   const claimed = findPostedClaim(comments, decision.idempotencyKey);
   if (!claimed.ok) return abort(claimed.reason, claimed.detail);
-  if (claimed.value.duplicate) {
+  const alreadyPosted = claimed.value.duplicate;
+
+  if (!writesEnabled) {
+    log({
+      orchestrator: 'no-write',
+      reason: dryRun ? 'DRY_RUN' : 'MUTATIONS_FORBIDDEN',
+      mutationRole,
+      alreadyPosted,
+      labels: decision.labels,
+      body: decision.body,
+    });
+    return;
+  }
+
+  if (!alreadyPosted) {
+    const created = await api(token, `/repos/${repoFull}/issues/${prNumber}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body: decision.body }),
+    });
+    if (!created.ok) {
+      return abort(ORCHESTRATOR_REASONS.COMMENT_POST_FAILED, { status: created.status });
+    }
+    log({
+      orchestrator: 'posted',
+      commentId: created.body?.id ?? null,
+      idempotencyKey: decision.idempotencyKey,
+    });
+  }
+
+  // HOA GIAI NHAN, KE CA KHI COMMENT DA CO SAN. Day la duong SUA CHUA cua B5: mot lan chay truoc
+  // dang duoc comment roi hong o phan nhan van con duoc lan chay sau don dep. Moi loi goi nhan
+  // idempotent theo huong KET QUA (go mot nhan von khong co = `404` = ket qua da dat), nen chay
+  // lai khong sinh them tac dong nao — va lan nay ket qua cua chung DUOC DOC, khong bi nuot.
+  const reconciled = await reconcileLabels(
+    (path, init) => api(token, `/repos/${repoFull}/issues/${prNumber}${path}`, init),
+    decision.labels,
+  );
+  if (!reconciled.ok) return abort(reconciled.reason, reconciled.detail);
+  log({ orchestrator: 'labels', applied: reconciled.value });
+
+  if (alreadyPosted) {
     return stop(ORCHESTRATOR_REASONS.ALREADY_POSTED_AT_HEAD, {
       trigger: eventTarget.trigger,
       idempotencyKey: decision.idempotencyKey,
       commentId: claimed.value.matchedCommentId,
-    });
-  }
-
-  if (dryRun) {
-    log({ orchestrator: 'dry-run', body: decision.body });
-    return;
-  }
-
-  const created = await api(token, `/repos/${repoFull}/issues/${prNumber}/comments`, {
-    method: 'POST',
-    body: JSON.stringify({ body: decision.body }),
-  });
-  if (!created.ok) {
-    return abort(ORCHESTRATOR_REASONS.COMMENT_POST_FAILED, { status: created.status });
-  }
-
-  for (const label of decision.labels.remove) {
-    if (decision.labels.add.includes(label)) continue;
-    await api(token, `/repos/${repoFull}/issues/${prNumber}/labels/${encodeURIComponent(label)}`, {
-      method: 'DELETE',
-    });
-  }
-  if (decision.labels.add.length > 0) {
-    await api(token, `/repos/${repoFull}/issues/${prNumber}/labels`, {
-      method: 'POST',
-      body: JSON.stringify({ labels: decision.labels.add }),
+      labelsReconciled: reconciled.value.length,
     });
   }
 }

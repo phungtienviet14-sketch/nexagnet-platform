@@ -5,7 +5,7 @@
 # khong dispatch agent nao. Xem hop dong task o Issue #165 va §17 cua
 # docs/phat-trien/van-hanh/autopilot-protocol-v0.md.
 #
-# BA DIEU CAN BIET TRUOC KHI SUA TEP NAY
+# BON DIEU CAN BIET TRUOC KHI SUA TEP NAY
 #
 # 1. HAI TRONG BA TRIGGER CHAY BAN TREN NHANH MAC DINH, khong phai ban trong PR. Tai lieu GitHub
 #    liet ke `issue_comment` va `check_suite` trong nhom "chi kich hoat neu tep workflow co tren
@@ -18,13 +18,33 @@
 #    nam o dung trigger do — day la cho DUY NHAT trong repo nay do duoc mot thay doi quyen TRUOC
 #    khi thay doi ay len `main`.
 #
-# 2. Mac dinh la DRY-RUN. No quyet dinh va ghi ra log day du, nhung KHONG dang comment va KHONG
+# 2. VA CHINH VI THE, `pull_request` KHONG DUOC CAM QUYEN GHI (blocker B4 cua PR #167). Tren trigger
+#    do, ma nguon cua PR chua duyet quyet dinh CA BA thu: `main.mjs`, cac tep giao thuc no import,
+#    VA CHINH TEP YAML NAY. Mot job `pull_request` cam `issues: write` la mot job cho phep ma nguon
+#    chua duyet ghi vao dung mat phang trang thai ma no dang xin duyet. Nen workflow nay tach lam
+#    HAI duong thuc thi, va ranh gioi giua chung la quyen chu khong phai loi hua:
+#
+#      duong KHONG TIN CAY  `preflight` + `orchestrate-readonly`
+#                           chay ma nguon PR · quyen TOAN DOC · khong mot loi goi ghi nao
+#      duong TIN CAY        `orchestrate`
+#                           chi `issue_comment`/`check_suite` (GitHub bat buoc ban nhanh mac dinh)
+#                           · checkout GHIM vao nhanh mac dinh · day la noi DUY NHAT co quyen ghi
+#
+#    KHONG duoc "sua" dieu nay bang `pull_request_target` roi checkout ma nguon PR: lam vay la lay
+#    lai dung bo quyen ay va trao cho dung doan ma nguon ay, chi khac ten trigger.
+#
+#    Cai gia phai tra, noi thang: duong `pull_request` khong con dang duoc comment ket qua. Mot bo
+#    dieu kien tro nen day du o do se cho den `issue_comment`/`check_suite` ke tiep moi duoc phat.
+#    Do la he qua cua chinh B4 — khong the vua cho ma nguon PR chay vua cho no ghi.
+#
+# 3. Mac dinh la DRY-RUN. No quyet dinh va ghi ra log day du, nhung KHONG dang comment va KHONG
 #    doi nhan. De bat that: dat bien repo `AUTOPILOT_DRY_RUN` = `false`. Mac dinh nay la co y —
 #    mot workflow tu dang comment vao moi PR ma bat ngay luc merge la thu khong ai kip xem lai.
 #
-# 3. Khoi `permissions:` la mot DANH SACH DONG. Khai no tuong minh thi moi quyen KHONG duoc ke ra
+# 4. Khoi `permissions:` la mot DANH SACH DONG. Khai no tuong minh thi moi quyen KHONG duoc ke ra
 #    deu bang `none`. Them mot loi goi API moi vao `main.mjs` ma quen them quyen tuong ung o day
-#    thi job se do o SAN XUAT, khong do trong PR (xem dieu 1). Do la ly do `preflight` ton tai.
+#    thi job se do o SAN XUAT, khong do trong PR (xem dieu 1). Do la ly do `preflight` ton tai, va
+#    la ly do `tests/workflow-contract.test.mjs` doc thang tep nay.
 name: autopilot-orchestrator
 
 # BA TRIGGER CUA HOP DONG #165. Chung khong phai ba nhanh xu ly — chung la BA CACH mot bo dieu
@@ -51,13 +71,15 @@ on:
   check_suite:
     types: [completed]
 
-# Quyen TOI THIEU cho dung nhung loi goi `main.mjs` thuc su thuc hien. Khong co `contents: write`:
-# ngay ca khi ma nguon co loi thi no van khong du quyen de sua repo. Do la ranh gioi "read-only"
-# duoc GitHub cuong che, khong phai mot loi hua trong tai lieu.
+# SAN MAC DINH CUA CA WORKFLOW LA TOAN DOC.
+#
+# Khong mot quyen ghi nao o day, va do la ranh gioi B4: mot job quen khai `permissions:` cua rieng
+# no se thua bo nay — tuc thua mot bo KHONG GHI DUOC. Quyen ghi chi duoc cap TUONG MINH, tai dung
+# mot job, va job do khong chay ma nguon cua PR.
 #
 #   contents: read       -> GET /rules/branches/main         (danh sach check bat buoc)
-#   pull-requests: write -> GET /pulls/{n}                   (HEAD that) + doi nhan
-#   issues: write        -> GET|POST /issues/{n}/comments    (tra cuu + dang ket qua) + doi nhan
+#   pull-requests: read  -> GET /pulls/{n}                   (HEAD that)
+#   issues: read         -> GET /issues/{n}/comments         (tra cuu thong diep + so ledger)
 #   checks: read         -> GET /commits/{sha}/check-runs    (bang chung CI buoc vao HEAD)
 #   actions: read        -> GET /actions/runs?head_sha=...   (so hieu lan chay CI)
 #
@@ -65,8 +87,8 @@ on:
 # hong TRUOC khi sinh ra duoc bang chung CI. Job `preflight` do lai ca nam duong nay.
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
+  issues: read
+  pull-requests: read
   checks: read
   actions: read
 
@@ -81,54 +103,117 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ===============================================================================================
+  # DUONG KHONG TIN CAY — chay ma nguon cua PR. Hai job duoi day deu TOAN DOC.
+  # ===============================================================================================
+
   # DO QUYEN CUA TOKEN BANG CACH GOI THAT.
   #
   # Chi chay o `pull_request`, va do la CO Y: day la trigger duy nhat chay ban workflow cua chinh
   # PR. Nho vay mot thay doi o khoi `permissions:` duoc do TRUOC khi len `main`, thay vi lo ra o
   # lan chay that dau tien sau merge.
   #
-  # No khong khang dinh "co lan chay CI o HEAD nay" hay "co BUILD_READY" — nhung thu do phu thuoc
-  # thoi diem va se lam bai kiem mong manh. No khang dinh dung mot thu: NAM loi goi cua `main.mjs`
-  # GOI DUOC va tra ve DUNG HINH DANG voi bo quyen khai o tren.
+  # No do NAM loi goi DOC cua `main.mjs`: goi duoc, va tra ve dung hinh dang. No KHONG con do hai
+  # quyen ghi — va khong the do duoc nua, vi chinh B4 cam job nay cam chung. Phan quyen ghi duoc
+  # canh bang hop dong TINH trong `tests/workflow-contract.test.mjs` (khoi `permissions:` cua job
+  # `orchestrate`), khong bang mot loi goi that. Su danh doi do la co that va duoc ghi o muc
+  # NOT PROVEN cua README — khong the vua chay ma nguon PR vua cam quyen ghi de do chung.
   preflight:
     if: >-
       github.event_name == 'pull_request'
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      checks: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-workspace
-      - name: Quyen cua GITHUB_TOKEN du cho moi loi goi cua orchestrator
+      - name: Quyen cua GITHUB_TOKEN du cho moi loi goi DOC cua orchestrator
         run: node tools/autopilot-orchestrator/src/preflight.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AUTOPILOT_PREFLIGHT_PR: ${{ github.event.pull_request.number }}
           AUTOPILOT_PREFLIGHT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
+  # LOI QUYET DINH DAY DU, KHONG MOT LOI GOI GHI NAO.
+  #
+  # Cung mot `main.mjs`, cung mot loi quyet dinh, cung mot bang chung — khac dung mot thu: job nay
+  # khong co quyen ghi, va `AUTOPILOT_MUTATIONS` bao ma nguon dung lai truoc loi goi ghi thay vi
+  # dam vao buc tuong quyen roi lam do CI tren moi PR.
+  #
+  # Gia tri cua no la QUAN SAT: mot thay doi lam loi quyet dinh hong se lo ra ngay trong PR, o dang
+  # mot dong log `orchestrator: "no-write"` khac di — thay vi lo ra o lan chay ghi that dau tien.
+  orchestrate-readonly:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      checks: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-workspace
+      - name: Chay orchestrator (khong ghi)
+        run: node tools/autopilot-orchestrator/src/main.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTOPILOT_MUTATIONS: forbidden
+          AUTOPILOT_REPO_OWNER_LOGIN: ${{ github.repository_owner }}
+          AUTOPILOT_REVIEWER_APP_SLUG: ${{ vars.AUTOPILOT_REVIEWER_APP_SLUG }}
+          AUTOPILOT_DRY_RUN: ${{ vars.AUTOPILOT_DRY_RUN || 'true' }}
+
+  # ===============================================================================================
+  # DUONG TIN CAY — noi DUY NHAT co quyen ghi.
+  # ===============================================================================================
+
+  # `issue_comment` va `check_suite` nam trong nhom su kien GitHub CHI chay ban workflow tren nhanh
+  # mac dinh. Nen tren hai trigger nay, tep YAML dang chay la ban DA DUOC MERGE — mot PR mo khong
+  # sua duoc no. Do la dieu kien du de job nay cam quyen ghi.
+  #
+  # `pull_request` KHONG co trong dieu kien duoi day, va do la chinh blocker B4.
+  #
+  # CHECKOUT GHIM VAO NHANH MAC DINH, khong dua vao `github.sha`. Ly do la fail-closed: neu
+  # `github.sha` cua `check_suite` co luc tro ve `head_sha` cua chinh check-suite do (mot HEAD co
+  # the thuoc mot PR), thi checkout mac dinh se keo MA NGUON PR vao mot job dang cam quyen ghi. Ghim
+  # ten nhanh mac dinh lam cau hoi do bien mat: khong co duong nao cho ra ma nguon PR.
   orchestrate:
-    # Loc tho o day; `events.mjs` loc lai lan nua trong ma. Mot lan noi long bo loc YAML khong duoc
-    # lang le mo them duong xu ly.
-    #
-    #   issue_comment — chi comment tren PR. Comment tren Issue thuong khong co HEAD de buoc bang
-    #                   chung vao.
-    #   pull_request  — chi PR cua chinh repo nay. HEAD tu fork khong duoc chay giao thuc.
-    #   check_suite   — chi check-suite co buoc vao PR. Check-suite cua push len `main` thi khong.
     if: >-
       (github.event_name == 'issue_comment' && github.event.issue.pull_request != null)
-      || (github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name == github.repository)
       || (github.event_name == 'check_suite'
           && github.event.check_suite.pull_requests[0] != null)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      checks: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - uses: ./.github/actions/setup-workspace
       - name: Chay orchestrator
         run: node tools/autopilot-orchestrator/src/main.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTOPILOT_MUTATIONS: allowed
           # So do principal la CAU HINH, khong ghi cung trong ma nguon (§2.1). Doi app cua nguoi
           # duyet = doi bien o day, khong phai sua ma roi merge lai.
           #

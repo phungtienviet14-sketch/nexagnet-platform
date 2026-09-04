@@ -44,8 +44,21 @@ export const ORCHESTRATOR_REASONS = Object.freeze({
   TASK_CONTRACT_INVALID: 'TASK_CONTRACT_INVALID',
   /** Khong doc duoc danh sach comment cua PR — duong tra cuu thong diep khong duoc fail-open. */
   PR_COMMENTS_UNAVAILABLE: 'PR_COMMENTS_UNAVAILABLE',
+  /**
+   * Doc het tran trang ma van con comment — so ledger DAI HON thu doc duoc (blocker B6).
+   *
+   * Tach khoi `PR_COMMENTS_UNAVAILABLE` vi hai cai doi hai hanh dong khac han: cai kia la goi API
+   * hong (thu lai, hoac xem quyen); cai nay la GIA DINH VE KICH THUOC da sai, va phai nang tran
+   * hoac doi cach doc. Quyet dinh tren mot phan so la dieu duy nhat khong duoc phep.
+   */
+  PR_COMMENTS_TRUNCATED: 'PR_COMMENTS_TRUNCATED',
   /** Dang comment ket qua that bai. */
   COMMENT_POST_FAILED: 'COMMENT_POST_FAILED',
+  /**
+   * Mot loi goi doi nhan that bai (blocker B5). Ban truoc NUOT ket qua cua cac loi goi nay, nen
+   * mot lan hong de lai nhan sai vinh vien ma khong dong log nao noi ra.
+   */
+  LABEL_WRITE_FAILED: 'LABEL_WRITE_FAILED',
 
   // ---------------------------------------------------------------------------------------------
   // BA TRIGGER (hop dong #165). `issue_comment` mang thong diep TRONG payload; `pull_request` va
