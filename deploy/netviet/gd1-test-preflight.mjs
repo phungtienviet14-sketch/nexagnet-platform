@@ -8,6 +8,10 @@ import {
   parseSecretInventory,
   remoteSecretInventoryCommand,
 } from './gd1-test-secret-inventory.mjs';
+import {
+  DEPLOYMENT_PROFILES,
+  requiredSecretSuffixesFor,
+} from './deployment-profiles.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -27,21 +31,10 @@ const REQUIRED_CAPABILITIES = [
   'operations',
   'notifications',
 ];
-const REQUIRED_SECRET_SUFFIXES = [
-  'postgres-admin-password',
-  'zalo-db-password',
-  'flowise-db-password',
-  'deepseek-api-key',
-  'api-key',
-  'operator-password',
-  'flowise-secretkey',
-  'flowise-admin-email',
-  'flowise-admin-password',
-  'flowise-jwt-secret',
-  'flowise-refresh-secret',
-  'flowise-session-secret',
-  'flowise-token-hash-secret',
-];
+// DERIVED, NOT LISTED. The set this gate demands is exactly the set the `ultty-gd1-test` profile
+// enables (base + Flowise + DeepSeek = 13). Keeping a second hand-written copy here is how the
+// deploy-time contract and the render-time contract drift apart without either side going red.
+const REQUIRED_SECRET_SUFFIXES = requiredSecretSuffixesFor(DEPLOYMENT_PROFILES['ultty-gd1-test']);
 const REQUIRED_RUNTIME = Object.freeze({
   persistence: 'prisma',
   channel: 'zca',

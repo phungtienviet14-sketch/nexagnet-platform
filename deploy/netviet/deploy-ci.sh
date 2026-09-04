@@ -78,16 +78,73 @@ CATALOG_ASSETS_DIR="${REPOSITORY_ROOT}/catalog-assets"
   echo 'GIT_SHA phai la full SHA 40 ky tu chu thuong.' >&2
   exit 64
 }
-# stack-identity.mjs la ESM, nen goi qua --input-type=module thay vi require().
-STACK_SLUG="$(printf '%s' "import { resolveStackSlug } from './deploy/netviet/stack-identity.mjs';
-process.stdout.write(resolveStackSlug(process.env.TENANT_SLUG, process.env.DEPLOYMENT_ENVIRONMENT));" \
-  | TENANT_SLUG="${TENANT_SLUG}" DEPLOYMENT_ENVIRONMENT="${DEPLOYMENT_ENVIRONMENT}" \
-    node --input-type=module)"
-[[ "${STACK_SLUG}" =~ ^[a-z0-9-]+$ ]] || {
+# stack-identity.mjs + deployment-profiles.mjs la ESM, nen goi qua --input-type=module.
+#
+# HAI TEN MOI TRUONG, KHONG PHAI MOT.
+#   · DEPLOYMENT_ENVIRONMENT = NHAN LUC CHAY (`dev`, `prod`, `gd1-test`) — cai ma render-secrets
+#     va compose doc.
+#   · DEPLOYMENT_ENVIRONMENT_ID = MOI TRUONG THAT ma registry/dispatch da chon (`dev`,
+#     `production`, `gd1-test`) — cai quyet dinh stack slug va cai quyet dinh CO KHOA CONG hay
+#     khong.
+# Chung KHAC nhau o production (`production` -> `prod`), va viec tron chung lam mot chinh la cho
+# #180 roi qua: mot dong registry khai `environment: gd1-test` voi `runtimeEnvironment: dev` thi
+# moi phep kiem cua gd1-test deu bien mat. Cong duoi day suy tu ID, nen no khong bien mat nua.
+DEPLOYMENT_ENVIRONMENT_ID="${DEPLOYMENT_ENVIRONMENT_ID:-${DEPLOYMENT_ENVIRONMENT}}"
+[[ "${DEPLOYMENT_ENVIRONMENT_ID}" =~ ^[a-z0-9-]+$ ]] || {
+  echo "DEPLOYMENT_ENVIRONMENT_ID khong hop le: '${DEPLOYMENT_ENVIRONMENT_ID}'." >&2
+  exit 64
+}
+CONTROL_PLANE_PROBE="import { resolveStackSlug } from './deploy/netviet/stack-identity.mjs';
+import { isGatedEnvironment } from './deploy/netviet/deployment-profiles.mjs';
+const runtimeSlug = resolveStackSlug(process.env.TENANT_SLUG, process.env.DEPLOYMENT_ENVIRONMENT);
+const idSlug = resolveStackSlug(process.env.TENANT_SLUG, process.env.DEPLOYMENT_ENVIRONMENT_ID);
+const gated = isGatedEnvironment(process.env.DEPLOYMENT_ENVIRONMENT_ID) ? 'gated' : 'ungated';
+process.stdout.write([runtimeSlug, idSlug, gated].join(' '));"
+control_plane="$(printf '%s' "${CONTROL_PLANE_PROBE}" | TENANT_SLUG="${TENANT_SLUG}" DEPLOYMENT_ENVIRONMENT="${DEPLOYMENT_ENVIRONMENT}" DEPLOYMENT_ENVIRONMENT_ID="${DEPLOYMENT_ENVIRONMENT_ID}" node --input-type=module)"
+read -r runtime_stack_slug id_stack_slug environment_gate <<<"${control_plane}"
+[[ "${runtime_stack_slug}" =~ ^[a-z0-9-]+$ ]] || {
   echo "Khong suy ra duoc STACK_SLUG cho ${TENANT_SLUG}/${DEPLOYMENT_ENVIRONMENT}." >&2
   exit 64
 }
-echo "Stack: ${STACK_SLUG} (tenant=${TENANT_SLUG}, environment=${DEPLOYMENT_ENVIRONMENT})" >&2
+
+# MOI TRUONG BI KHOA CONG: BA PHEP KIEM, KHONG PHEP NAO TAT DUOC TU BEN NGOAI.
+#
+# Chi ap cho moi truong bi khoa cong. `dev`/`production`/`legacy` giu NGUYEN duong cu tung ky tu
+# — day khong phai cho de siet production (Issue #186 §3 de production ngoai pham vi), va mot lan
+# deploy production doi cho ha canh la thu phai co nguoi quyet dinh, khong phai he qua phu cua
+# mot ban va control-plane.
+if [[ "${environment_gate}" == 'gated' ]]; then
+  # 1. Nhan luc chay phai LA chinh moi truong do. Day la cho bit duong alias: mot dong registry
+  #    khai `gd1-test` roi chay duoi nhan `dev` se ha canh xuong stack dang chay cua khach.
+  [[ "${DEPLOYMENT_ENVIRONMENT}" == "${DEPLOYMENT_ENVIRONMENT_ID}" ]] || {
+    echo "Moi truong '${DEPLOYMENT_ENVIRONMENT_ID}' bi khoa cong nen phai chay duoi dung nhan do (dang la '${DEPLOYMENT_ENVIRONMENT}')." >&2
+    exit 64
+  }
+  # 2. Stack duoc mat phang dieu khien phan giai phai TRUNG cai suy ra tai day. Hai duong suy ra
+  #    slug ma khong ai so sanh chinh la su co 17/08 (ci-cd.md §6.1, bat bien #3).
+  if [[ -n "${STACK_SLUG}" && "${STACK_SLUG}" != "${id_stack_slug}" ]]; then
+    echo "STACK_SLUG duoc truyen ('${STACK_SLUG}') khac cai suy ra tu ${TENANT_SLUG}/${DEPLOYMENT_ENVIRONMENT_ID} ('${id_stack_slug}')." >&2
+    exit 64
+  fi
+  # 3. Ban phat hanh phai la main, va phai co CI xanh o DUNG SHA do. Kiem lai NGAY TAI TANG
+  #    TRIEN KHAI chu khong chi o mot buoc `if:` cua workflow — tren 213af13, mot dong registry
+  #    khai `preflight: standard` lam dung buoc do bien mat va khong con gi phia sau hoi lai.
+  [[ "${GITHUB_REF:-}" == 'refs/heads/main' ]] || {
+    echo "Moi truong '${DEPLOYMENT_ENVIRONMENT_ID}' chi duoc deploy tu refs/heads/main (dang la '${GITHUB_REF:-khong-co}')." >&2
+    exit 64
+  }
+  [[ "${GD1_TEST_CI_CONCLUSION:-}" == 'success' ]] || {
+    echo "Moi truong '${DEPLOYMENT_ENVIRONMENT_ID}' doi CI cua dung SHA nay ket luan 'success' (dang la '${GD1_TEST_CI_CONCLUSION:-khong-co}')." >&2
+    exit 64
+  }
+  [[ "${GD1_TEST_TARGET_CONFIRMED:-}" == '1' || "${GD1_TEST_TARGET_CONFIRMED:-}" == 'true' ]] || {
+    echo "Moi truong '${DEPLOYMENT_ENVIRONMENT_ID}' doi GD1_TEST_TARGET_CONFIRMED=1." >&2
+    exit 64
+  }
+fi
+
+STACK_SLUG="${runtime_stack_slug}"
+echo "Stack: ${STACK_SLUG} (tenant=${TENANT_SLUG}, environment=${DEPLOYMENT_ENVIRONMENT_ID}, runtime=${DEPLOYMENT_ENVIRONMENT}, gate=${environment_gate})" >&2
 
 # Fail-fast NGAY BAY GIO chu khong doi toi luc deploy-remote.sh: thieu goi khach thi api/web khong
 # boot duoc, ma phat hien o day thi chua ton cong build va push image.
