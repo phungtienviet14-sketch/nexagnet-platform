@@ -144,6 +144,15 @@ function renderWithProfile({
   }
 }
 
+/**
+ * `core.autocrlf=true` tren ban lam viec Windows ket thuc dong bang CRLF, trong khi CI
+ * (ubuntu-24.04) va kho git deu la LF. Chuan hoa khi DOC de mot bai do khong con nghia la "may
+ * khac" — cung phep chuan hoa ma `release-identity.contract.test.mjs` dung.
+ */
+const CRLF = new RegExp(`${String.fromCharCode(13)}${String.fromCharCode(10)}`, 'g');
+const readScript = (name) =>
+  readFileSync(join(here, name), 'utf8').replace(CRLF, String.fromCharCode(10));
+
 /** Doc mot khoa tu noi dung `secrets.env` — cung phep doc ma `deploy-stack.sh` dung. */
 function runtimeValue(content, key) {
   const matches = [...content.matchAll(new RegExp(`^${key}=(.*)$`, 'gm'))];
@@ -309,8 +318,8 @@ test('RENDER THAT: gd1-test khong co ho so thi khong render gi ca', () => {
 // --- 5. LOP PHU COMPOSE: RANG BUOC BIEN MAT CUNG SERVICE --------------------------------------
 
 test('COMPOSE: ban goc khong con service flowise, va `api` khong con phu thuoc no', () => {
-  const base = readFileSync(join(here, 'compose.yaml'), 'utf8');
-  const overlay = readFileSync(join(here, 'compose.flowise.yaml'), 'utf8');
+  const base = readScript('compose.yaml');
+  const overlay = readScript('compose.flowise.yaml');
 
   // Trong ban goc khong co AI ten `flowise` de ma phu thuoc.
   assert.doesNotMatch(base, /^ {2}flowise:$/m);
@@ -341,8 +350,8 @@ test('COMPOSE: ban goc khong con service flowise, va `api` khong con phu thuoc n
 });
 
 test('DEPLOY-STACK: lop phu chi duoc keo vao khi ho so bat Flowise, va MAC DINH la on', () => {
-  const stackCompose = readFileSync(join(here, 'stack-compose.sh'), 'utf8');
-  const deployStack = readFileSync(join(here, 'deploy-stack.sh'), 'utf8');
+  const stackCompose = readScript('stack-compose.sh');
+  const deployStack = readScript('deploy-stack.sh');
 
   assert.match(stackCompose, /NETVIET_COMPOSE_FILES\+=\(-f compose\.flowise\.yaml\)/);
   // Mat dong `FLOWISE_ENABLED` (secrets.env render truoc ban nay) => `on` => hanh vi cu. Doan
@@ -350,7 +359,7 @@ test('DEPLOY-STACK: lop phu chi duoc keo vao khi ho so bat Flowise, va MAC DINH 
   assert.match(stackCompose, /NETVIET_FLOWISE_ENABLED='on'/);
   // Va ba tang tren VM deu doc CUNG mot phep suy ra, khong ai tu viet lai.
   for (const script of ['deploy-stack.sh', 'backup.sh', 'health-check.sh']) {
-    const source = readFileSync(join(here, script), 'utf8');
+    const source = readScript(script);
     assert.match(
       source,
       /source "\$\{APP_DIR\}\/stack-compose\.sh"/,
@@ -367,8 +376,8 @@ test('DEPLOY-STACK: lop phu chi duoc keo vao khi ho so bat Flowise, va MAC DINH 
 // --- 6. CSDL: MOT HE THONG CON KHONG DUOC CHAN LOP LUU TRU NEN TANG ---------------------------
 
 test('POSTGRES: vai flowise chi duoc tao khi co mat khau, va `zalo` khong phu thuoc no', () => {
-  const initDatabases = readFileSync(join(here, 'postgres', 'init-databases.sh'), 'utf8');
-  const syncPasswords = readFileSync(join(here, 'postgres', 'sync-passwords.sh'), 'utf8');
+  const initDatabases = readScript(join('postgres', 'init-databases.sh'));
+  const syncPasswords = readScript(join('postgres', 'sync-passwords.sh'));
 
   for (const [name, source] of [
     ['init-databases.sh', initDatabases],

@@ -19,7 +19,9 @@ const resolverModule = readFileSync('deploy/netviet/resolve-deployment-target.mj
 const deployCi = readFileSync('deploy/netviet/deploy-ci.sh', 'utf8');
 
 function deploymentFor(tenant, environment) {
-  return registry.deployments.find((entry) => entry.tenant === tenant && entry.environment === environment);
+  return registry.deployments.find(
+    (entry) => entry.tenant === tenant && entry.environment === environment,
+  );
 }
 
 test('registry maps Ultty GD1-test to the current shared VM target only', () => {
@@ -301,4 +303,74 @@ test('the rollout gate is derived from the environment name, not from a workflow
   assert.match(deployCi, /if \[\[ "\$\{environment_gate\}" == 'gated' \]\]/);
   // The workflow must hand down the true environment, not only the runtime label.
   assert.match(reusableDeploy, /DEPLOYMENT_ENVIRONMENT_ID: \$\{\{ inputs\.environment \}\}/);
+});
+
+// --- KHACH XEM TRUOC CUA NEN TANG: dong registry SONG dau tien di qua co che ho so -------------
+
+test('transport-preview/gd1-test phan giai duoc, va mang DUNG cong cua Ultty', () => {
+  const plan = resolveDeploymentTarget(registry, {
+    tenant: 'transport-preview',
+    environment: 'gd1-test',
+  });
+
+  assert.equal(plan.stackSlug, 'transport-preview-gd1-test');
+  assert.equal(plan.profileId, 'transport-preview-gd1-test');
+  assert.equal(plan.gate, 'gd1-test');
+  assert.equal(plan.runtimeEnvironment, 'gd1-test');
+  // CONG KHONG DUOC NHE HON. Day la ca diem: mot khach xem truoc di qua DUNG cong ma Ultty di
+  // qua — main-only + CI xanh tren dung SHA — chu khong phai mot duong vong nhe hon.
+  assert.equal(plan.requiresExactMainCi, true);
+  assert.equal(toStepOutputs(plan).requires_exact_main_ci, 'true');
+});
+
+test('hop dong bi mat cua ban xem truoc la DUNG bon ten, va roi khoi Ultty hoan toan', () => {
+  const plan = resolveDeploymentTarget(registry, {
+    tenant: 'transport-preview',
+    environment: 'gd1-test',
+  });
+  const names = plan.secretContract.secretNames;
+
+  assert.equal(names.length, 4);
+  for (const name of names) {
+    assert.ok(
+      name.startsWith('zalo-transport-preview-gd1-test-'),
+      `ten ${name} khong thuoc stack xem truoc`,
+    );
+  }
+  // KHONG mot ten Flowise/DeepSeek nao: ho so khong bat he thong con nao can chung, nen khong ai
+  // phai tao ra chung.
+  assert.equal(
+    names.some((name) => /flowise|deepseek/.test(name)),
+    false,
+  );
+  // Va giao voi Ultty la RONG — cach ly o tang bi mat.
+  const ultty = resolveDeploymentTarget(registry, { tenant: 'ultty', environment: 'gd1-test' });
+  const overlap = names.filter((name) => ultty.secretContract.secretNames.includes(name));
+  assert.deepEqual(overlap, []);
+});
+
+test('workflow cho phep chon khach xem truoc, va danh sach van DONG', () => {
+  const options = deployTenant.slice(
+    deployTenant.indexOf('        options:'),
+    deployTenant.indexOf("        default: 'ultty'"),
+  );
+  assert.match(options, /^ {10}- transport-preview$/m);
+  assert.match(options, /^ {10}- ultty$/m);
+  // `choice` chu khong phai `string`: mot slug tu do o day se cho phep go bat ky ten nao roi de
+  // registry tu choi sau — mot cong nua khong ton gi de giu.
+  assert.match(
+    deployTenant,
+    /tenant:\n {8}description:[^\n]*\n {8}required: true\n {8}type: choice/,
+  );
+});
+
+test('nhom Zalo duoc duyet KHONG di theo mot ho so khong chay kenh nao', () => {
+  // `GD1_TEST_APPROVED_GROUP_HASHES` la bien cua MOI TRUONG gd1-test, nen no den voi MOI lan
+  // deploy vao moi truong do — ke ca cua mot tenant khac. Voi ho so khong kenh, do la mot ro ri
+  // pham vi: dinh danh nhom da bam cua khach nay di vao bang chung preflight cua stack khac.
+  assert.match(
+    deployCi,
+    /if \[\[ "\$\{PROFILE_CHANNEL\}" == 'none' \]\]; then\n {4}approved_group_hashes=''/,
+  );
+  assert.match(deployCi, /GD1_TEST_APPROVED_GROUP_HASHES="\$\{approved_group_hashes\}"/);
 });
