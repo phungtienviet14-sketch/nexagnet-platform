@@ -38,6 +38,16 @@ type MovementKind = 'advance' | 'return' | 'adjust';
 
 interface MovementDraft {
   readonly kind: MovementKind;
+  /**
+   * Lai xe duoc GHIM vao ban nhap luc mo phieu, KHONG doc lai luc gui.
+   *
+   * Doc lai luc gui la mot loi an tien: o chon lai xe van bam duoc khi phieu dang mo, nen doi nguoi
+   * xem roi bam ghi se dat khoan tam ung sang MOT NGUOI KHAC — thanh cong, im lang, va khong co 409
+   * nao chan lai vi khoa tuong quan la khoa moi. Ghim tai day, va in ten len dau phieu de neu o
+   * chon co doi thi phieu van noi ro nó thuoc ve ai.
+   */
+  readonly driverId: string;
+  readonly driverName: string;
   readonly amount: string;
   readonly note: string;
   /** Sinh MOT lan cho mot lan bam, giu qua cac lan thu lai — co che chan trung duy nhat cua API. */
@@ -57,6 +67,9 @@ export function DriverFundView() {
   const [driverId, setDriverId] = useState<string | null>(null);
 
   const activeDriverId = driverId ?? drivers.data?.[0]?.id ?? null;
+  const activeDriverName =
+    (drivers.data ?? []).find((driver) => driver.id === activeDriverId)?.fullName ??
+    'lái xe chưa đọc được tên';
   const statement = toSectionQuery(useFundStatement(navigation, activeDriverId));
   const periods = toSectionQuery(useFundPeriods(navigation, activeDriverId));
 
@@ -75,11 +88,11 @@ export function DriverFundView() {
 
   const postMovement = useMutation({
     mutationFn: async (draft: MovementDraft) => {
-      if (activeDriverId === null) throw new Error('Chưa chọn lái xe.');
       const amount = Number(draft.amount.replace(/[\s.]/g, ''));
       if (!Number.isInteger(amount)) throw new Error('Số tiền phải là số nguyên đồng.');
       const base = {
-        driverId: activeDriverId,
+        // Lai xe cua CHINH BAN NHAP nay — xem ghi chu o `MovementDraft`.
+        driverId: draft.driverId,
         note: draft.note.trim().length === 0 ? null : draft.note.trim(),
         correlationKey: draft.correlationKey,
       };
@@ -155,8 +168,14 @@ export function DriverFundView() {
                 className={offer.id === 'advance' ? 'tx-btn tx-btn--go' : 'tx-btn'}
                 onClick={() => {
                   setFailure(null);
+                  if (activeDriverId === null) {
+                    setFailure('Chưa chọn lái xe.');
+                    return;
+                  }
                   setMovement({
                     kind: offer.id as MovementKind,
+                    driverId: activeDriverId,
+                    driverName: activeDriverName,
                     amount: '',
                     note: '',
                     correlationKey: newCorrelationKey(),
@@ -172,10 +191,12 @@ export function DriverFundView() {
 
       <label className="tx-field tx-field--inline">
         <span>Lái xe</span>
+        {/* Khoa khi dang mo mot phieu: ban nhap da ghim lai xe cua chinh no, va de o nay bam duoc
+            chi tao ra mot man hinh noi hai dieu khac nhau cung mot luc. */}
         <select
           value={activeDriverId ?? ''}
           onChange={(event) => setDriverId(event.target.value)}
-          disabled={drivers.data === undefined || drivers.data.length === 0}
+          disabled={movement !== null || drivers.data === undefined || drivers.data.length === 0}
         >
           {(drivers.data ?? []).map((driver) => (
             <option key={driver.id} value={driver.id}>
@@ -197,13 +218,15 @@ export function DriverFundView() {
       {movement === null ? null : (
         <form
           className="tx-panel tx-panel--form"
-          aria-label={MOVEMENT_TITLE[movement.kind]}
+          aria-label={`${MOVEMENT_TITLE[movement.kind]} — ${movement.driverName}`}
           onSubmit={(event) => {
             event.preventDefault();
             postMovement.mutate(movement);
           }}
         >
-          <h2>{MOVEMENT_TITLE[movement.kind]}</h2>
+          <h2>
+            {MOVEMENT_TITLE[movement.kind]} — {movement.driverName}
+          </h2>
           <p className="tx-panel__lead">
             {movement.kind === 'adjust'
               ? 'Ô này nhận số CÓ DẤU, và không nhận 0.'

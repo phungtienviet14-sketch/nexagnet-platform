@@ -44,7 +44,16 @@ export interface UnavailableCard {
 
 export interface DashboardModel {
   readonly stats: readonly DashboardStat[];
+  /** Da CAT xuong `WORK_LIMIT` de bay len bang. */
   readonly work: readonly DashboardWorkItem[];
+  /**
+   * TONG so viec dang cho — dem tren TOAN BO du lieu, khong phai `work.length`.
+   *
+   * Hai con so nay khac nhau ngay khi co hon `WORK_LIMIT` viec, va lay con so da bi cat lam tieu de
+   * se BAO THIEU: 9 viec dang cho ma tieu de doc "6 viec". Mot bang dieu khien bao thieu viec con
+   * te hon mot bang khong co con so nao.
+   */
+  readonly pendingTotal: number;
   readonly hasWork: boolean;
   readonly headline: string;
   readonly unavailable: readonly UnavailableCard[];
@@ -186,37 +195,42 @@ export const toDashboard = (input: DashboardInput): DashboardModel => {
     });
   }
 
-  const work: DashboardWorkItem[] = [];
-  for (const trip of input.trips) {
-    if (work.length >= WORK_LIMIT) break;
-    if (trip.status === 'PLANNED') {
-      work.push({
-        key: `plan-${trip.id}`,
-        title: `Chuyến ${trip.code} chưa cho chạy`,
-        detail: `${trip.originLabel} → ${trip.destinationLabel}`,
-        section: 'trips',
-        selection: trip.code,
-      });
-    } else if (trip.status === 'DELIVERED') {
-      work.push({
-        key: `reconcile-${trip.id}`,
-        title: `Chuyến ${trip.code} đã giao, chờ chốt đối soát`,
-        detail: `${trip.originLabel} → ${trip.destinationLabel}`,
-        section: 'trips',
-        selection: trip.code,
-      });
-    }
-  }
+  // Dem TRUOC tren toan bo du lieu, roi moi cat danh sach bay len bang. Lam nguoc lai (cat roi dem)
+  // la cach con so tieu de bi bao thieu.
+  const pending = input.trips.filter(
+    (trip) => trip.status === 'PLANNED' || trip.status === 'DELIVERED',
+  );
+  const work: DashboardWorkItem[] = pending.slice(0, WORK_LIMIT).map((trip) =>
+    trip.status === 'PLANNED'
+      ? {
+          key: `plan-${trip.id}`,
+          title: `Chuyến ${trip.code} chưa cho chạy`,
+          detail: `${trip.originLabel} → ${trip.destinationLabel}`,
+          section: 'trips',
+          selection: trip.code,
+        }
+      : {
+          key: `reconcile-${trip.id}`,
+          title: `Chuyến ${trip.code} đã giao, chờ chốt đối soát`,
+          detail: `${trip.originLabel} → ${trip.destinationLabel}`,
+          section: 'trips',
+          selection: trip.code,
+        },
+  );
 
   return {
     stats,
     work,
-    hasWork: work.length > 0,
+    pendingTotal: pending.length,
+    hasWork: pending.length > 0,
     // KHONG noi "moi thu deu on" khi khong co viec — chi noi la khong co viec CAN NGUOI.
+    // Va khi bang chi bay duoc mot phan, noi ro la dang bay mot phan.
     headline:
-      work.length > 0
-        ? `${formatCount(work.length)} việc đang chờ người xử lý.`
-        : 'Không có chuyến nào đang chờ người xử lý.',
+      pending.length === 0
+        ? 'Không có chuyến nào đang chờ người xử lý.'
+        : pending.length > work.length
+          ? `${formatCount(pending.length)} việc đang chờ người xử lý — bảng đang hiện ${formatCount(work.length)} việc đầu.`
+          : `${formatCount(pending.length)} việc đang chờ người xử lý.`,
     unavailable: unavailableCards(input.capabilities),
   };
 };

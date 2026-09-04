@@ -114,6 +114,19 @@ const DRIVERS = [
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
+  // Lai xe THU HAI ton tai de bat duoc mot loai loi ma mot fixture mot nguoi khong bao gio bat duoc:
+  // phieu quy bi gui sang NGUOI KHAC vi o chon doi giua luc dang nhap.
+  {
+    id: 'drv-2',
+    fullName: 'Trần Thị Mai',
+    phone: '0900000002',
+    licenceClass: 'FC',
+    licenceExpiry: '2028-01-31',
+    status: 'ACTIVE',
+    authUserId: 'u-2',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
 ];
 
 const CUSTOMERS = [
@@ -380,6 +393,37 @@ test.describe('chuyen xe', () => {
     const detail = page.getByRole('region', { name: /Chi tiết chuyến VT-2026-0912/ });
     await expect(detail.getByRole('button', { name: 'Huỷ chuyến' })).toHaveCount(0);
     await expect(detail.getByRole('button', { name: 'Cho chạy' })).toBeVisible();
+  });
+});
+
+test.describe('quy lai xe — phieu phai giu dung nguoi', () => {
+  test('phieu tam ung ghim lai xe cua chinh no va noi ten nguoi do', async ({ page }) => {
+    await mockTransport(page, 'ACCOUNTING');
+    await page.goto('/?section=driver-fund');
+
+    const picker = page.getByRole('combobox', { name: /^Lái xe/ });
+    await expect(picker).toBeEnabled();
+    await picker.selectOption('drv-1');
+
+    await page.getByRole('button', { name: 'Tạm ứng' }).click();
+
+    // Dau phieu phai NEU TEN — de neu o chon co doi thi phieu van noi ro no thuoc ve ai.
+    await expect(
+      page.getByRole('heading', { name: /Tạm ứng cho lái xe — Nguyễn Văn Bình/ }),
+    ).toBeVisible();
+
+    // Va o chon bi KHOA khi phieu dang mo: bo hoan toan duong gui tien sang nguoi khac.
+    await expect(picker).toBeDisabled();
+  });
+
+  test('dong phieu thi o chon lai xe mo lai', async ({ page }) => {
+    await mockTransport(page, 'ACCOUNTING');
+    await page.goto('/?section=driver-fund');
+
+    await page.getByRole('button', { name: 'Tạm ứng' }).click();
+    await expect(page.getByRole('combobox', { name: /^Lái xe/ })).toBeDisabled();
+    await page.getByRole('button', { name: 'Quay lại' }).click();
+    await expect(page.getByRole('combobox', { name: /^Lái xe/ })).toBeEnabled();
   });
 });
 
