@@ -1332,6 +1332,123 @@ và đỏ nếu ai sửa nó lệch khỏi `sumAcceptedSettlement()`.
 
 ---
 
+### 18.6. T6 as-built — Tài sản/Tuân thủ + Nhân sự (Issue #88)
+
+> `TRANSPORT ASSET/WORKFORCE v0 = CODE/INTEGRATION CLOSED`, **không** phải `RUNTIME-PROVEN`. Chưa có
+> runtime khách vận tải nào chạy; bằng chứng dưới đây là bằng chứng **CI + đo tay trên PostgreSQL 16
+> thật**, không phải bằng chứng vận hành.
+
+Hai capability, và **hình dạng phụ thuộc của chúng khác hẳn ba capability vận tải trước**:
+
+| Capability | Phụ thuộc | Vì sao đúng bằng đó |
+|---|---|---|
+| `transport-asset-compliance` | `transport-core` | Bảo dưỡng và giấy tờ không dính gì đến tiền. Một khách chỉ muốn theo dõi hạn đăng kiểm **không** phải bật sổ quỹ, phiếu dầu hay công nợ |
+| `transport-workforce` | `transport-core`, `transport-costing` | Phiếu lương **hiển thị** số dư quỹ lái xe (VT-062). Hiển thị, **không** trừ — xem `GD-12` bên dưới |
+
+`transport-fuel` **cố ý không** là phụ thuộc của `transport-workforce`, dù thưởng tiết kiệm dầu cần
+dữ liệu của nó. Bắt fuel thành phụ thuộc sẽ buộc một khách chỉ trả lương cơ bản phải dùng cả đối soát
+bảng kê cây xăng. Nguồn đó đến qua `WorkforceFuelFacts` **tuỳ chọn**; khi vắng mặt, lần chạy ghi
+`FUEL_SAVING_UNAVAILABLE` vào `PayrollRun.missingInputs` thay vì lặng lẽ tính ra số không.
+
+#### Phép hợp thành trạng thái xe — khoảng hở của §18.2 đã đóng
+
+§18.2 ghi lại `DEMO_ASSUMPTION` và nói rõ *"không hiện thực trong PR review-followup này… thuộc T6"*.
+Nay nó là `resolveEffectiveVehicleState()` — **thuần tuý**, không đọc DB, không đọc đồng hồ, không GPS
+(`GD-17`):
+
+```text
+bảo dưỡng đang mở                                   => UNDER_MAINTENANCE
+ngược lại, có chuyến IN_TRANSIT đang được phân công  => ON_TRIP
+ngược lại                                            => IDLE
+```
+
+Hai điều bổ sung so với bản ghi ở §18.2, và cả hai đều cần:
+
+- **Cột `TransportVehicle.status` không bị ghi đè.** T6 không có một đường ghi nào sang bảng của
+  `TX-01`; cổng `AssetComplianceCoreFacts` không có hàm ghi nào để lỡ tay gọi. Trạng thái hiệu lực
+  là một **phép đọc**, và cột cũ được **đối chiếu** chứ không được tin.
+- **Mâu thuẫn được phát ra, không bị nuốt.** Bảo dưỡng thắng chuyến, nhưng khi cả hai cùng đúng thì
+  `MAINTENANCE_WHILE_IN_TRANSIT` được phát — đúng yêu cầu *"do not silently pretend both are fine"*.
+  Độ lệch của cột cũ là một mã **riêng** (`RECORDED_STATUS_STALE`): hai việc phải làm khác nhau, cho
+  hai người khác nhau.
+
+#### `GD-12` được giữ bằng **ba** lớp, lớp cuối là lớp duy nhất luôn đúng
+
+`GD-12` tắt khấu trừ lương tự động, và C-02 là xung đột nguồn khách chưa ai giải. Ba lớp, từ ngoài vào:
+
+1. **Bộ từ vựng** — `PayslipComponentSource` không có mã nào cho khấu trừ tự động;
+2. **Bộ tính** — `payroll-calculator.ts` không có một nhánh `if (balance < 0)` nào; số dư quỹ đi vào
+   đúng một chỗ là `driverFundBalanceSnapshot`, một trường để **nhìn**;
+3. **Ràng buộc `TransportPayslipComponent_deduction_manual_only`** — `("kind" = 'DEDUCTION') =
+   ("source" = 'MANUAL_DEDUCTION')`, cộng `..._manual_needs_signer` đòi một người ký tên.
+
+Lớp 3 là lớp duy nhất còn đúng khi ai đó ghi **thẳng** vào DB — và đó là đường mà một script di trú
+hay một bug tương lai sẽ đi. Nếu sau này khách quyết định bật khấu trừ tự động, **chỗ phải sửa là ràng
+buộc đó**: một lần sửa có chủ đích, không phải một dòng code lọt qua review.
+
+#### Sáu đối tượng DB không biểu diễn được bằng `schema.prisma`
+
+`20260903090000_transport_asset_workforce` khai tay 23 `CHECK`, 3 unique một phần, 1 `EXCLUDE` và 2
+trigger. Hai trigger đáng nói riêng, vì chúng làm điều mà `CHECK` **không** làm được — một `CHECK`
+chỉ nhìn được hàng MỚI, còn câu hỏi ở đây là *"hàng CŨ đang ở trạng thái nào"*:
+
+- `TransportPayslip_posted_immutable` — phiếu rời `DRAFT` thì mọi con số đóng băng; trạng thái chỉ đi
+  tiếp `APPROVED → PAID → REVERSED`, không lùi;
+- `TransportPayslip_component_frozen` — các dòng của một phiếu đã chốt cũng đóng băng. Khoá tổng mà
+  để các dòng mở là khoá cửa trước và để cửa sau.
+
+`TransportPayrollPeriod_no_overlap` là `EXCLUDE USING gist` với `daterange(..., '[]')`, cùng khuôn
+`TransportSettlementPeriod` của T5 và cùng ba lý do kỹ thuật (`make_date` IMMUTABLE thay cho `::date`;
+khoảng đóng hai đầu; `..._dates_iso` bảo đảm ba lát cắt luôn là số). Hai kỳ lương chồng nhau làm **cùng
+một chuyến được trả công hai lần**.
+
+#### Hai phần mở rộng **chỉ đọc** trên biên giới của capability khác
+
+T6 tiêu thụ T2/T4 qua biên công khai của chúng, và điều đó cần thêm đúng hai hàm đọc:
+
+- `TripRepository.listActiveAssignments()` — phép hợp thành cần biết xe nào đang gắn vào chuyến
+  `IN_TRANSIT`. Không có nó, người gọi phải liệt kê MỌI chuyến rồi hỏi `activeAssignment()` từng cái.
+- `FuelRepository.listEntriesNeedingReview()` — bảng cảnh báo gộp chung cần dòng "tiêu hao dầu bất
+  thường", và nguồn của dòng đó là `TX-04`. T6 **không** tính lại định mức; nó đọc kết luận đã có.
+
+Cả hai đều **chỉ đọc**, và cả hai đều là biên công khai được mở rộng — không phải T6 thò tay vào bảng
+của người khác, điều mà `NO_CROSS_CONTEXT_REPOSITORY_WRITE` (§4.1 luật 4) cấm.
+
+#### Bảng cảnh báo gộp chung **không** là một capability
+
+§10.1 viết rõ: không tạo capability cho `Reporting`. Nên `OperationalAlertsService` đăng ký ở **tầng
+ứng dụng** (`app-composition.ts`) chứ không trong module của `TX-06`: nó đọc ba nguồn nằm ở ba
+capability, và nếu module của T6 `imports` hai capability kia thì T6 không còn bật được một mình.
+Hai nguồn ngoài đến qua `@Optional()`; khi vắng mặt, `unavailableSources` **nói ra điều đó** thay vì
+để bảng đọc giống như mọi thứ đều ổn.
+
+#### Bốn giả định demo, ghi tên thay vì để ngầm
+
+| ID | Giả định | Vì sao | Chi phí đảo ngược |
+|---|---|---|---|
+| `DA-T6-01` | **Ngưỡng "sắp đến hạn" bảo dưỡng: 500km / 7 ngày.** VT-063 nói "cảnh báo dựa trên odo" nhưng **không** cho ngưỡng nào | Đặt 0 thì cảnh báo chỉ phát đúng hôm đã quá hạn — tức đúng hôm đã muộn | **Thấp** — là config tenant |
+| `DA-T6-02` | **Tham số lương mặc định `0`.** Khác `transport-fuel` (ở đó `GD-08` đã ghi tên con số), quy chế lương thật nằm trong danh sách **dữ liệu còn thiếu** của T0 | Bịa một mức lương sẽ làm một con số **do chúng ta nghĩ ra** hiện trên phiếu lương của một người thật. `0` thì không nhầm lẫn được | **Thấp** |
+| `DA-T6-03` | **Tham số lương áp chung cho mọi lái xe.** Lương riêng từng người là một cột trên hồ sơ lái xe, tức dữ liệu nhân sự thật | Chưa có quy chế lương thì chưa có cơ sở cho lương riêng | **Trung bình** — thêm cột, không đổi cấu trúc phiếu |
+| `DA-T6-04` | **Bảng cảnh báo hết hạn lấy bản có `validTo` XA NHẤT** trong các bản `ACTIVE` của mỗi (chủ thể, loại giấy tờ) | Gia hạn sinh bản mới **trước** khi bản cũ hết hạn; một danh sách phẳng sẽ hiện "đã hết hạn" ngay cạnh bản còn hiệu lực, và người đọc đi làm một việc đã xong | **Thấp** — là phép chiếu lúc đọc |
+
+#### Còn hở sau T6
+
+- **`WorkforceFuelFacts` chưa có hiện thực.** `TX-04` chưa công bố phép tổng hợp "lít tiết kiệm theo
+  lái xe theo kỳ" tất định, và bịa một phép tính ở `TX-07` sẽ là để nó **tự định nghĩa lại định mức**
+  — đúng điều quyền sở hữu capability cấm. Cho đến khi có, `missingInputs` nói thật rằng con số đó
+  chưa có.
+- **Bề mặt lái xe xem phiếu lương của chính mình** chưa có. `driver.self.*` (§11.3) đòi một khung nhìn
+  riêng, và bề mặt đó thuộc **T7**.
+- **`Trip.distanceKm` vẫn nhập tay, nullable** (`GD-14`). Chuyến không nhập km đóng góp `0` vào lương
+  khoán theo km; T6 **không** suy từ hiệu odo, vì `GD-14` nói rõ đó chỉ là **gợi ý** để người xác nhận.
+- **Một độ lệch có sẵn của repo bị phát hiện, không bị sửa ở đây:** `prisma migrate diff` cho ra hai
+  câu `ALTER COLUMN … DROP DEFAULT` trên `DealerPriceOverride` và `User` — độ lệch giữa DB và
+  `schema.prisma` **có trước T6**. Chúng đã bị gỡ khỏi migration này, và
+  `transport-asset-workforce-storage.spec.ts` khoá điều đó lại. Sửa độ lệch gốc là việc của một task
+  khác.
+
+---
+
 ## 19. Platform gap — việc của Platform Track, **không** vá trong Transport PR
 
 | ID | Khoảng cách | Bằng chứng đo được | Ảnh hưởng |

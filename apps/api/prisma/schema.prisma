@@ -856,6 +856,10 @@ model TransportVehicle {
   /// `TX-04` — phieu do dau va cac dong bang ke da nhan dien duoc ra xe nay.
   fuelEntries        TransportFuelEntry[]
   fuelStatementLines TransportFuelStatementLine[]
+  /// `TX-06` — lich bao duong va lenh sua cua xe nay. Chi co mat khi khach bat
+  /// `transport-asset-compliance`.
+  maintenancePlans   TransportMaintenancePlan[]
+  workOrders         TransportMaintenanceWorkOrder[]
 
   @@index([status])
 }
@@ -880,6 +884,8 @@ model TransportDriver {
   tripExpenses       TransportTripExpense[]
   /// `TX-04` — phieu do dau lai xe nay da khai.
   fuelEntries        TransportFuelEntry[]
+  /// `TX-07` — phieu luong cua lai xe nay. Chi co mat khi khach bat `transport-workforce`.
+  payslips           TransportPayslip[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -2491,4 +2497,342 @@ model TransportCommissionCalculation {
 
   @@index([partnerId])
   @@index([ruleVersionId])
+}
+
+// ===================================================================
+// TX-06 ASSET & COMPLIANCE — bao duong, giay to va han (Issue #88)
+// ===================================================================
+
+/// CAN CU tinh han bao duong. VT-063: lich dinh ky theo km HOAC thoi gian, cai nao toi truoc. Ca
+/// hai cung bat la truong hop thuong gap nhat, khong phai ngoai le.
+enum TransportMaintenanceTriggerKind {
+  ODOMETER
+  CALENDAR
+  ODOMETER_OR_CALENDAR
+}
+
+enum TransportMaintenancePlanStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// VONG DOI mot lenh sua. `OPEN` la trang thai KHOA XE — xem phep hop thanh o
+/// `effective-vehicle-state.ts`.
+///
+/// `CANCELLED` ton tai vi mot lenh mo nham phai go duoc ma KHONG duoc xoa (cung tinh than `GD-02`):
+/// mot lenh sua da tung khoa xe la mot su kien van hanh, khong phai mot dong nhap sai.
+enum TransportMaintenanceWorkOrderStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+/// LOAI GIAY TO — VT-011 (dang kiem, bao hiem, phu hieu) + VT-014 (GPLX) + VT-065 (giay phep kinh
+/// doanh van tai cua CONG TY, giay phep van chuyen hang co dieu kien).
+///
+/// Enum chu khong bang danh muc: sau loai nay la LUAT, khong phai lua chon cua khach — mot doanh
+/// nghiep van tai Viet Nam khong the khong co dang kiem. Khach them loai rieng la mot yeu cau chua
+/// ai neu; khi co, day thanh mot bang danh muc, va do la mot thay doi CO CHU DICH chu khong phai
+/// mot o trong de san.
+enum TransportComplianceDocumentType {
+  VEHICLE_INSPECTION
+  VEHICLE_INSURANCE
+  VEHICLE_TRANSPORT_BADGE
+  DRIVER_LICENCE
+  COMPANY_TRANSPORT_LICENSE
+  CONDITIONAL_CARGO_PERMIT
+}
+
+/// CHU THE mot giay to gan vao. `COMPANY` khong co `subjectId` — giay phep kinh doanh van tai la
+/// cua phap nhan, khong cua mot xe hay mot nguoi.
+enum TransportComplianceSubjectKind {
+  VEHICLE
+  DRIVER
+  COMPANY
+}
+
+/// TRANG THAI QUAN TRI cua mot ban giay to — KHONG phai tinh trang het han.
+///
+/// Hai thu nay CO Y tach doi. Het han hay chua la mot HAM cua (`validTo`, hom nay, nguong cua
+/// khach): no doi moi ngay va doi khi khach doi nguong, nen luu no thanh cot se sai ngay hom sau va
+/// sai lang le. Cot nay chi noi ban ghi con hieu luc quan tri hay da bi thay the/thu hoi.
+enum TransportComplianceDocumentStatus {
+  ACTIVE
+  SUPERSEDED
+  REVOKED
+}
+
+/// LICH BAO DUONG DINH KY cua mot xe.
+///
+/// `intervalKm` + `intervalDays` la CHU KY, khong phai moc. Moc duoc tinh tu lan bao duong gan nhat
+/// da hoan thanh cua cung ke hoach, hoac tu `baselineOdoKm`/`baselineDate` khi chua co lan nao. Luu
+/// moc thanh cot se lam moi lan doi chu ky phai viet lai lich su — dung cai ma acceptance 3 cua
+/// Issue #88 cam o phia giay to.
+model TransportMaintenancePlan {
+  id            String                         @id @default(cuid())
+  vehicleId     String
+  vehicle       TransportVehicle               @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  /// Ten hang muc — "Thay dau may", "Bao duong 20.000km". Van ban tu do: danh muc hang muc bao
+  /// duong la thu tung khach tung doi xe mot khac, khong phai mot enum cua mien.
+  name          String
+  triggerKind   TransportMaintenanceTriggerKind
+  /// Chu ky theo km. NULL khi `triggerKind = CALENDAR`.
+  intervalKm    Int?
+  /// Chu ky theo ngay. NULL khi `triggerKind = ODOMETER`.
+  intervalDays  Int?
+  /// Moc goc khi chua co lan bao duong nao. `INV-25` — NGAY nghiep vu, khong phai khoanh khac.
+  baselineOdoKm Int
+  baselineDate  String                         @db.VarChar(10)
+  status        TransportMaintenancePlanStatus @default(ACTIVE)
+  createdBy     String
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  workOrders TransportMaintenanceWorkOrder[]
+
+  @@index([vehicleId, status])
+}
+
+/// LENH SUA — bao duong theo lich HOAC sua dot xuat tai xuong.
+///
+/// TACH KHOI `TransportTripExpense` loai sua chua dung yeu cau VT-063 ("tach biet voi chi phi sua
+/// chua phat sinh tren duong"). Hai thu khac nhau ve BAN CHAT: mot khoan chi doc duong la tien lai
+/// xe ung ra giua chuyen; mot lenh sua la mot lan xe RA KHOI doi hinh. Gop lai se lam moi lan va
+/// quet cho mot cai guong bien thanh mot lan xe bi khoa.
+///
+/// `costingExpenseRef` la SO THAM CHIEU sang chung tu chi phi cua `transport-costing`, KHONG phai
+/// khoa ngoai: T6 khong duoc so vao bang cua T3, va mot lenh sua ton tai duoc ca khi khach tat
+/// `transport-costing`. Chi duoc dat khi nguoi dung DAY chi phi sang costing mot cach tuong minh.
+model TransportMaintenanceWorkOrder {
+  id                 String                              @id @default(cuid())
+  vehicleId          String
+  vehicle            TransportVehicle                    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  /// Ke hoach sinh ra lenh nay. NULL = sua dot xuat, khong theo lich nao.
+  planId             String?
+  plan               TransportMaintenancePlan?           @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status             TransportMaintenanceWorkOrderStatus @default(OPEN)
+  description        String
+  /// `INV-25` — ngay nghiep vu mo lenh.
+  openedDate         String                              @db.VarChar(10)
+  openedOdoKm        Int
+  openedBy           String
+  openedAt           DateTime                            @default(now())
+  completedDate      String?                             @db.VarChar(10)
+  completedOdoKm     Int?
+  completedBy        String?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancelledBy        String?
+  cancellationReason String?
+  /// Chi phi cua lenh sua, so nguyen dong. NULL = chua ghi nhan chi phi.
+  costAmount         BigInt?
+  currencyCode       String                              @default("VND") @db.VarChar(3)
+  /// Tham chieu chung tu chi phi ben `transport-costing`. Xem ghi chu dau model.
+  costingExpenseRef  String?
+  note               String?
+  updatedAt          DateTime                            @updatedAt
+
+  @@index([vehicleId, status])
+  @@index([planId])
+  @@index([status])
+}
+
+/// GIAY TO PHAP LY — mot loai, mot chu the, mot ky hieu luc (T1 §5 `TX-06`).
+///
+/// TINH TRANG HET HAN KHONG NAM O DAY. `expired`/`due soon`/`healthy` duoc tinh luc DOC tu
+/// (`validTo`, hom nay, nguong cua khach) — xem `compliance-alerts.ts`. Do la dieu kien de
+/// acceptance 3 cua Issue #88 dung duoc: doi nguong canh bao thi hinh chieu doi, con BANG CHUNG
+/// lich su khong mot byte nao bi ghi lai.
+model TransportComplianceDocument {
+  id           String                            @id @default(cuid())
+  subjectKind  TransportComplianceSubjectKind
+  /// `NULL` khi va chi khi `subjectKind = COMPANY`. Cuong che bang CHECK trong migration.
+  subjectId    String?
+  documentType TransportComplianceDocumentType
+  /// So hieu giay to — so dang kiem, so don bao hiem, so GPLX.
+  documentNo   String?
+  /// `INV-25` — NGAY nghiep vu, khong phai khoanh khac.
+  validFrom    String                            @db.VarChar(10)
+  validTo      String                            @db.VarChar(10)
+  status       TransportComplianceDocumentStatus @default(ACTIVE)
+  /// Tro toi anh/ban scan da luu. Van ban tu do: T6 khong so huu tang luu tru tep.
+  evidenceRef  String?
+  note         String?
+  recordedBy   String
+  createdAt    DateTime                          @default(now())
+  updatedAt    DateTime                          @updatedAt
+
+  @@index([subjectKind, subjectId])
+  @@index([documentType, validTo])
+  @@index([status, validTo])
+}
+
+// ===================================================================
+// TX-07 WORKFORCE — ky luong, phieu luong, thanh phan (Issue #88)
+// ===================================================================
+
+enum TransportPayrollPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+/// VONG DOI mot phieu luong.
+///
+/// `DRAFT` sua duoc; tu `APPROVED` tro di BAT BIEN — sua = phieu bo sung (`SUPPLEMENTAL`) hoac dao
+/// (`REVERSAL`). Cung khuon `INV-20` cua T3/T5, va la dieu kien cua acceptance 12.
+enum TransportPayslipStatus {
+  DRAFT
+  APPROVED
+  PAID
+  REVERSED
+}
+
+/// LOAI PHIEU. `ORIGINAL` la ket qua cua mot lan chay luong; hai loai con lai luon tro nguoc ve mot
+/// ban goc qua `correctsId`.
+enum TransportPayslipKind {
+  ORIGINAL
+  SUPPLEMENTAL
+  REVERSAL
+}
+
+/// LOAI THANH PHAN luong. `EARNING` cong, `DEDUCTION` tru.
+///
+/// `GD-12`: KHONG co loai nao mang nghia "tru vi lai xe con no ung / thieu chung tu". So du quy
+/// hien thi tren phieu la THONG TIN (`TransportPayslip.driverFundBalanceSnapshot`), khong bao gio di
+/// vao mot `DEDUCTION`. Xem `payroll-calculator.ts` va bai test cua acceptance 11.
+enum TransportPayslipComponentKind {
+  EARNING
+  DEDUCTION
+}
+
+/// NGUON mot thanh phan luong — tra loi "con so nay o dau ra".
+///
+/// `MANUAL_BONUS`/`MANUAL_DEDUCTION` la duong DUY NHAT de mot khoan tru xuat hien, va no doi mot
+/// nguoi ky ten (`recordedBy`). Khong mot ma nao trong bo nay sinh tu dong tu ket qua doi soat hay
+/// tu so du quy — do la `INV-27` + `GD-12` duoc giu bang CHINH BO TU VUNG NAY.
+enum TransportPayslipComponentSource {
+  BASE_SALARY
+  PER_TRIP
+  PER_KM
+  FUEL_SAVING_BONUS
+  MANUAL_BONUS
+  MANUAL_DEDUCTION
+}
+
+/// KY LUONG — khong chong lap, cuong che bang EXCLUDE trong migration (cung khuon
+/// `TransportDriverFundPeriod` cua T3 va `TransportSettlementPeriod` cua T5).
+model TransportPayrollPeriod {
+  id        String                       @id @default(cuid())
+  /// Nhan doc duoc cua ky — "Thang 8/2026". Khong phai khoa.
+  label     String
+  startDate String                       @db.VarChar(10)
+  endDate   String                       @db.VarChar(10)
+  status    TransportPayrollPeriodStatus @default(OPEN)
+  closedAt  DateTime?
+  closedBy  String?
+  createdBy String
+  createdAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
+
+  runs TransportPayrollRun[]
+
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+/// MOT LAN CHAY LUONG cho mot ky — mang ANH CHUP chinh sach da dung.
+///
+/// `policySnapshot` la JSON, khong phai khoa ngoai sang cau hinh: cau hinh la thu nguoi dung sua, va
+/// mot ky luong da tra phai doc ra CUNG mot con so mai mai. Cung ly le voi
+/// `TransportCommissionCalculation` cua T5 — chup thay vi tro.
+///
+/// `policyVersion` la ma bam noi dung cua anh chup do, de hai lan chay cung chinh sach nhan ra nhau
+/// ma khong phai so tung truong.
+model TransportPayrollRun {
+  id             String                 @id @default(cuid())
+  periodId       String
+  period         TransportPayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  /// Lan chay thu may trong ky. Mot ky chay lai duoc; moi lan la mot ban ghi rieng.
+  sequence       Int
+  policySnapshot Json
+  policyVersion  String                 @db.VarChar(64)
+  /// Nguon du lieu KHONG san co luc chay, ghi ten thay vi de ngam. Vi du `FUEL_SAVING_UNAVAILABLE`
+  /// khi khach tat `transport-fuel`. Doc duoc tren phieu, nen mot con so thieu khong bi doc nham
+  /// thanh so khong.
+  missingInputs  String[]
+  runBy          String
+  runAt          DateTime               @default(now())
+
+  payslips TransportPayslip[]
+
+  @@unique([periodId, sequence])
+  @@index([periodId])
+}
+
+/// PHIEU LUONG cua mot lai xe trong mot lan chay.
+///
+/// `driverFundBalanceSnapshot` la THONG TIN, khong phai mot khoan tru (`GD-12`). No nam tren phieu
+/// vi VT-062 muon nguoi duyet NHIN THAY so du truoc khi quyet dinh — nhung quyet dinh do la cua
+/// NGUOI, va neu ho quyet tru thi khoan do di qua `MANUAL_DEDUCTION` co ten nguoi ky.
+///
+/// `netAmount` la KET QUA cong don cua `components`, chup lai luc chot de phieu da duyet doc ra cung
+/// mot so mai mai — khong phai mot o nho song song voi cac dong.
+model TransportPayslip {
+  id                        String                 @id @default(cuid())
+  runId                     String
+  run                       TransportPayrollRun    @relation(fields: [runId], references: [id], onDelete: Restrict)
+  driverId                  String
+  driver                    TransportDriver        @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  kind                      TransportPayslipKind   @default(ORIGINAL)
+  status                    TransportPayslipStatus @default(DRAFT)
+  grossEarnings             BigInt
+  totalDeductions           BigInt
+  netAmount                 BigInt
+  currencyCode              String                 @default("VND") @db.VarChar(3)
+  /// `GD-12` — THONG TIN. NULL khi khach tat `transport-costing`, va `null` KHAC `0`.
+  driverFundBalanceSnapshot BigInt?
+  /// Dau vao tat dinh da dung, chup lai: so chuyen va tong km trong ky.
+  tripCount                 Int
+  distanceKm                Int
+  /// Ban goc ma phieu nay sua. NULL o `ORIGINAL`.
+  correctsId                String?
+  corrects                  TransportPayslip?      @relation("TransportPayslipCorrection", fields: [correctsId], references: [id], onDelete: Restrict)
+  correctedBy               TransportPayslip[]     @relation("TransportPayslipCorrection")
+  correctionReason          String?
+  approvedAt                DateTime?
+  approvedBy                String?
+  paidAt                    DateTime?
+  paidBy                    String?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+
+  components TransportPayslipComponent[]
+
+  @@index([runId])
+  @@index([driverId, status])
+  @@index([correctsId])
+}
+
+/// MOT DONG tren phieu luong. T1 §5: component CHI TRINH BAY, khong phai nguon su that cua so du
+/// nao — no khong bao gio ghi vao so quy lai xe.
+model TransportPayslipComponent {
+  id         String                          @id @default(cuid())
+  payslipId  String
+  payslip    TransportPayslip                @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  kind       TransportPayslipComponentKind
+  source     TransportPayslipComponentSource
+  label      String
+  /// DUONG, luon. Chieu nam o `kind`. Mot so am o day se lam mot `DEDUCTION` am thanh mot khoan cong
+  /// tra hinh — dung kieu nham lan ma bang phan quyen khong bao gio noi len duoc.
+  amount     BigInt
+  /// Can cu tinh, de truy nguoc: so chuyen, so km, so lit tiet kiem. NULL o khoan thu cong.
+  quantity   Int?
+  /// Don gia da dung, so nguyen dong. NULL o khoan thu cong.
+  unitAmount BigInt?
+  /// Nguoi ky cho `MANUAL_*`. NULL o thanh phan tinh tu dong.
+  recordedBy String?
+  note       String?
+  createdAt  DateTime                        @default(now())
+
+  @@index([payslipId])
 }

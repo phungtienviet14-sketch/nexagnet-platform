@@ -353,6 +353,13 @@ export class PrismaFuelRepository extends FuelRepository {
     return rows.map(toEntry);
   }
 
+  async listEntriesNeedingReview(): Promise<FuelEntry[]> {
+    const rows = await model(this.prisma, 'transportFuelEntry').findMany({
+      where: { NOT: { reviewReasons: { isEmpty: true } } },
+      orderBy: [{ businessDate: 'desc' }, { occurredAt: 'desc' }, { id: 'asc' }],
+    });
+    return rows.map(toEntry);
+  }
   async listEntriesForMatching(input: {
     supplierId: string;
     from: string;

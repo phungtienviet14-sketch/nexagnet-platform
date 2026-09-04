@@ -67,6 +67,16 @@ export abstract class TripRepository {
   abstract assign(tripId: string, input: AssignTripInput): Promise<TripAssignmentChange>;
   abstract listAssignments(tripId: string): Promise<TripAssignment[]>;
   abstract activeAssignment(tripId: string): Promise<TripAssignment | null>;
+  /**
+   * MOI ban phan cong DANG hieu luc, moi chuyen mot ban.
+   *
+   * Them cho `TX-06`: phep hop thanh trang thai xe (T1 §18.2) can biet xe nao dang gan vao mot
+   * chuyen `IN_TRANSIT`. Khong co ham nay thi nguoi goi phai liet ke MOI chuyen roi hoi
+   * `activeAssignment()` tung cai — N+1 lan doc cho mot cau hoi tra loi duoc bang mot.
+   *
+   * CHI DOC, va van thuoc `TX-02`: chuyen la cua no, khong ai khac duoc quyet dinh ai dang lai.
+   */
+  abstract listActiveAssignments(): Promise<TripAssignment[]>;
   /** Moi chuyen ma lai xe nay TUNG duoc phan cong — ke ca cac ban da dong lai. */
   abstract listTripIdsEverAssignedTo(driverId: string): Promise<string[]>;
 }
@@ -186,14 +196,21 @@ export class InMemoryTripRepository extends TripRepository {
 
   async activeAssignment(tripId: string): Promise<TripAssignment | null> {
     return (
-      this.assignments.find((entry) => entry.tripId === tripId && entry.effectiveTo === null) ?? null
+      this.assignments.find((entry) => entry.tripId === tripId && entry.effectiveTo === null) ??
+      null
     );
+  }
+
+  async listActiveAssignments(): Promise<TripAssignment[]> {
+    return this.assignments.filter((entry) => entry.effectiveTo === null);
   }
 
   async listTripIdsEverAssignedTo(driverId: string): Promise<string[]> {
     return [
       ...new Set(
-        this.assignments.filter((entry) => entry.driverId === driverId).map((entry) => entry.tripId),
+        this.assignments
+          .filter((entry) => entry.driverId === driverId)
+          .map((entry) => entry.tripId),
       ),
     ];
   }

@@ -74,3 +74,29 @@ export function assertBusinessDate(value: string): BusinessDate {
   }
   return value;
 }
+
+/**
+ * SO NGAY tu `from` den `to`, duong khi `to` o sau.
+ *
+ * Tinh bang UTC midnight CO CHU DICH — ca hai dau vao da la NGAY nghiep vu, tuc mui gio da duoc
+ * ap MOT LAN luc ghi (`INV-25`). Ap mui gio lan thu hai o day se lam mot ngay bien gioi lech mot
+ * don vi vao dung nhung hom co chuyen giao gio — va do la kieu sai chi lo ra o vai phieu quanh
+ * nua dem, dung cai ma toan bo tep nay ton tai de tranh.
+ *
+ * UTC midnight khong co gio mua he nen mot ngay luon dung 86.400.000ms; phep tru la chinh xac,
+ * khong phai xap xi.
+ */
+export function businessDateDifferenceInDays(from: BusinessDate, to: BusinessDate): number {
+  const start = Date.parse(`${assertBusinessDate(from)}T00:00:00Z`);
+  const end = Date.parse(`${assertBusinessDate(to)}T00:00:00Z`);
+  return Math.round((end - start) / 86_400_000);
+}
+
+/** Cong them `days` ngay vao mot ngay nghiep vu. `days` am thi lui lai. */
+export function addBusinessDays(date: BusinessDate, days: number): BusinessDate {
+  if (!Number.isInteger(days)) {
+    throw new BusinessDateError(`So ngay cong them phai la so nguyen, nhan duoc: ${days}`);
+  }
+  const base = Date.parse(`${assertBusinessDate(date)}T00:00:00Z`);
+  return new Date(base + days * 86_400_000).toISOString().slice(0, 10);
+}

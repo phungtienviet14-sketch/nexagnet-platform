@@ -16,7 +16,7 @@ import {
  * that, phai di tim tung dong mot trong ca mien de doi.
  */
 describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
-  it('bo hanh dong phu du cac nhom nghiep vu cua T2, T3 va T4', () => {
+  it('bo hanh dong phu du cac nhom nghiep vu cua T2, T3, T4, T5 va T6', () => {
     expect([...TRANSPORT_ACTIONS]).toEqual([
       'transport.vehicle.read',
       'transport.vehicle.manage',
@@ -51,6 +51,20 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.fuel.reconciliation.resolve',
       'transport.fuel.reconciliation.close',
       'transport.fuel.reconciliation.reopen',
+      'transport.maintenance.plan.read',
+      'transport.maintenance.plan.manage',
+      'transport.maintenance.work_order.open',
+      'transport.maintenance.work_order.close',
+      'transport.compliance.document.read',
+      'transport.compliance.document.manage',
+      'transport.fleet_status.read',
+      'transport.alerts.read',
+      'transport.payroll.period.read',
+      'transport.payroll.period.manage',
+      'transport.payroll.run',
+      'transport.payslip.approve',
+      'transport.payslip.pay',
+      'transport.payslip.correct',
       'transport.driver.self.trip.read',
       'transport.driver.self.trip.update',
       'transport.driver.self.fund.read',

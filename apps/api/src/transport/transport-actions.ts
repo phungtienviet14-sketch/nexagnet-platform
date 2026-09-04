@@ -83,6 +83,44 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.fuel.reconciliation.reopen',
 
+  /* --- `transport-asset-compliance` (`TX-06`) --- */
+  'transport.maintenance.plan.read',
+  'transport.maintenance.plan.manage',
+  /**
+   * MO mot lenh sua — tach khoi `.close` co chu dich.
+   *
+   * Mo mot lenh la KHOA MOT XE khoi doi hinh: tu luc do phep hop thanh tra ve
+   * `UNDER_MAINTENANCE` va dieu do vien khong dieu chuyen len no nua. Dong lai thi nguoc lai.
+   * Hai quyen do khac nhau ve hau qua van hanh, nen bang phan quyen phai noi duoc dieu do.
+   */
+  'transport.maintenance.work_order.open',
+  'transport.maintenance.work_order.close',
+  'transport.compliance.document.read',
+  'transport.compliance.document.manage',
+  /** Trang thai HIEU LUC cua doi xe — phep hop thanh cua T1 §18.2, chi doc. */
+  'transport.fleet_status.read',
+  /** Bang canh bao van hanh gom chung (VT-015, VT-065). */
+  'transport.alerts.read',
+
+  /* --- `transport-workforce` (`TX-07`) --- */
+  'transport.payroll.period.read',
+  'transport.payroll.period.manage',
+  /**
+   * CHAY luong cho mot ky — tach khoi `.period.manage`.
+   *
+   * Mo mot ky la mot thao tac lich; chay luong SINH RA cac phieu mang so tien. Gop chung se lam
+   * moi nguoi mo duoc ky cung tinh duoc tien cho ca doi xe.
+   */
+  'transport.payroll.run',
+  'transport.payslip.approve',
+  'transport.payslip.pay',
+  /**
+   * Sua mot phieu DA CHOT bang phieu bo sung / phieu dao (`INV-20`).
+   *
+   * Quyen RIENG, cung ly le voi `transport.costing.reversal.post` cua T3: ghi mot phieu luong la
+   * viec cuoi thang, con sua mot phieu DA TRA la viet lai mot con so da bao ra ngoai.
+   */
+  'transport.payslip.correct',
   /** Pham vi CUA CHINH MINH — lai xe. Cuong che bang quyen so huu phan cong, xem `TripService`. */
   'transport.driver.self.trip.read',
   'transport.driver.self.trip.update',
