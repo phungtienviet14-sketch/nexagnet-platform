@@ -106,6 +106,18 @@ async function run() {
     claimedHeadSha: eventTarget.claimedHeadSha,
   });
 
+  // CONG RE, DAT TRUOC MOI LOI GOI MANG.
+  //
+  // `issue_comment: created` ban tren MOI comment cua MOI PR — phan lon la nguoi that noi chuyen
+  // voi nhau. Mot comment nhu vay khong duoc ton mot lan goi API nao. Chi duong co thong diep DI
+  // KEM moi kiem duoc o day; duong tra cuu thi dinh nghia la phai doc luong comment truoc da.
+  if (
+    eventTarget.inbandComment !== null &&
+    !ISSUE_LINE.test(String(eventTarget.inbandComment.body ?? ''))
+  ) {
+    return stop(ORCHESTRATOR_REASONS.NOT_A_PROTOCOL_MESSAGE, { pr: prNumber });
+  }
+
   const pull = await api(token, `/repos/${repoFull}/pulls/${prNumber}`);
   if (!pull.ok) {
     return abort(ORCHESTRATOR_REASONS.PR_HEAD_UNAVAILABLE, { status: pull.status, pr: prNumber });

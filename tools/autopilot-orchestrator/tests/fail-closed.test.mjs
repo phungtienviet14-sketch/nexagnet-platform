@@ -99,6 +99,27 @@ test('B3: thieu ca hai bien thi bao ca hai, khong bao mot roi dung', () => {
   assert.deepEqual(abort?.missing, ['AUTOPILOT_REPO_OWNER_LOGIN', 'AUTOPILOT_REVIEWER_APP_SLUG']);
 });
 
+test('comment NGUOI THUONG dung truoc moi loi goi mang — khong ton mot lan goi API nao', () => {
+  // `issue_comment: created` ban tren MOI comment cua MOI PR. Neu cong "co phai thong diep khong"
+  // nam SAU cac loi goi API thi moi cau chuyen phiem giua hai nguoi deu ton quota — va bai nay se
+  // do neu ai do doi lai thu tu do.
+  //
+  // Token o day la rac: neu no CO goi mang thi se an 401 va di tiep sang mot ma ly do khac.
+  const { status, logs } = runMain({ AUTOPILOT_REVIEWER_APP_SLUG: 'mot-app-nao-do' });
+  assert.equal(status, 0, 'comment nguoi thuong khong phai loi');
+  const stop = logs.find((entry) => entry.orchestrator === 'stop');
+  assert.equal(stop?.reason, 'NOT_A_PROTOCOL_MESSAGE');
+  assert.equal(stop?.pr, 155);
+  // Dong `event` VAN phai co (su kien da duoc phan giai), nhung khong duoc co abort nao — mot loi
+  // goi mang voi token rac se ra PR_HEAD_UNAVAILABLE.
+  assert.ok(logs.find((entry) => entry.orchestrator === 'event'));
+  assert.equal(
+    logs.find((entry) => entry.orchestrator === 'abort'),
+    undefined,
+    'da cham vao mang roi: cong re bi dat sau loi goi API',
+  );
+});
+
 test('DOI CHUNG: co du cau hinh thi di qua duoc cong so do — bai tren do vi cau hinh, khong vi hong', () => {
   // Su kien `push` khong thuoc ba trigger, nen `main.mjs` dung ngay sau khi phan giai su kien —
   // van truoc loi goi mang dau tien. Nho vay doi chung nay cung chay offline.
