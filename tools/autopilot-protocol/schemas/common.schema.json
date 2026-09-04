@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nexagnet:autopilot:v0:common",
+  "title": "Autopilot Protocol V0 — dinh nghia dung chung",
+  "description": "Kieu nguyen thuy cua giao thuc. Moi schema thong diep va hop dong task deu $ref vao day; doi mot kieu o day la doi cho toan bo giao thuc.",
+  "$defs": {
+    "protocolVersion": {
+      "type": "string",
+      "const": "V0",
+      "description": "Phien ban giao thuc. Thong diep V1 se khong bao gio validate qua schema V0."
+    },
+    "sha40": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "SHA-1 git day du 40 ky tu hex chu thuong. SHA rut gon bi tu choi: 'chinh xac' nghia la khong co hai commit nao cung khop."
+    },
+    "issueNumber": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "So GitHub Issue — hop dong task."
+    },
+    "prNumber": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "So GitHub Pull Request — ban giao hien thuc."
+    },
+    "runId": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "ID mot lan chay GitHub Actions (workflow run id)."
+    },
+    "risk": {
+      "type": "string",
+      "enum": ["LOW", "MEDIUM", "HIGH"],
+      "description": "Lop rui ro. HIGH luon can nguoi duyet truoc khi merge."
+    },
+    "reviewVerdict": {
+      "type": "string",
+      "enum": ["REVIEW_PASS", "REVIEW_BLOCK"]
+    },
+    "runtimeVerdict": {
+      "type": "string",
+      "enum": ["PASS", "FAIL"],
+      "description": "Ket luan cua Runtime Verifier. FAIL => BLOCKED, khong co duong tu dong nao di tiep."
+    },
+    "environment": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "Ten moi truong deploy (vi du gd1-test). Chu thuong, kebab-case, khop voi deployment-targets."
+    },
+    "branchName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._/-]*[A-Za-z0-9])?$",
+      "description": "Ten nhanh git: chu, so, dau cham, gach duoi, gach ngang, dau /. Khong bat dau/ket thuc bang ky tu dac biet. Kiem day du theo git check-ref-format la viec cua orchestrator."
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9_-]{0,63}$",
+      "description": "Dinh danh task do Architect dat, chu hoa, on dinh trong suot vong doi."
+    },
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "textList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyText"
+      }
+    },
+    "nonEmptyTextList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/nonEmptyText"
+      }
+    },
+    "highRiskArea": {
+      "type": "string",
+      "enum": [
+        "PRICE_MONEY_FINANCE",
+        "AUTH_AUTHORIZATION",
+        "SECURITY",
+        "TENANT_ISOLATION",
+        "DESTRUCTIVE_MIGRATION",
+        "SECRETS_PRODUCTION_INFRA",
+        "CUSTOMER_SOURCE_AUTHORITY"
+      ],
+      "description": "Vung nghiep vu ma giao thuc coi la HIGH toi thieu. Cham vao bat ky vung nao => risk phai la HIGH."
+    }
+  }
+}
