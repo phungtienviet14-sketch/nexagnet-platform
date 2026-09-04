@@ -168,6 +168,22 @@ export const TRANSPORT_ACTIONS = [
    * van hanh.
    */
   'transport.driver.self.expense.record',
+  /**
+   * PHIEU LUONG CUA CHINH MINH — lai xe doc lich su luong da cong bo cua chinh ho (`#168 B8`).
+   *
+   * TACH HAN khoi `transport.payroll.period.read`, va do la ca diem. Ma kia la quyen VAN HANH: no
+   * doc duoc ky luong, lan chay, va phieu cua BAT KY lai xe nao — tuc bang luong ca doi xe. Cap no
+   * cho lai xe de "tien cho nhanh" se cho moi nguoi doc luong cua dong nghiep.
+   *
+   * Ma nay cung KHONG mo mot duong ghi nao. Duyet (`transport.payslip.approve`), chi tra
+   * (`.pay`) va phat phieu bu (`.correct`) deu nam ben van hanh, va khong ma nao trong so do co
+   * mot bien the "cua chinh minh": mot nguoi tu duyet phieu luong cua chinh minh la dung cai ma
+   * kiem soat noi bo sinh ra de chan.
+   *
+   * Cong THAT nam o `WorkforceReadService` (`Driver.authUserId` + quy tac cong bo `DRAFT`); ma nay
+   * chi bao dam be mat lai xe khong bao gio cham toi duong van hanh.
+   */
+  'transport.driver.self.payslip.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -179,6 +195,7 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fuel.read',
   'transport.driver.self.fuel.submit',
   'transport.driver.self.expense.record',
+  'transport.driver.self.payslip.read',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */

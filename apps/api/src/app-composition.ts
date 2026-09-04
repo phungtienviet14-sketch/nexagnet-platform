@@ -122,6 +122,7 @@ import { ComplianceController } from './transport/asset-compliance/compliance.co
 import { FleetStatusController } from './transport/asset-compliance/fleet-status.controller.js';
 import { OperationalAlertsController } from './transport/asset-compliance/operational-alerts.controller.js';
 import { PayrollController } from './transport/workforce/payroll.controller.js';
+import { DriverPayslipsController } from './transport/workforce/driver-payslips.controller.js';
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { TransportModule } from './transport/transport.module.js';
@@ -242,6 +243,9 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-asset-compliance', OperationalAlertsController),
   // `TX-07` — ky luong, phieu luong.
   owned('transport-workforce', PayrollController),
+  // PHIEU LUONG CUA CHINH TOI (`#168 B8`) — route rieng, cung ly le voi `DriverFuelController`.
+  // Den cung `transport-workforce` va bien mat cung no: khong tinh luong thi khong co phieu de doc.
+  owned('transport-workforce', DriverPayslipsController),
   // `TX-05` — BAO CAO quyet toan, CHI DOC (`#168 B1`). Capability nay chay tu T5 nhung chua tung co
   // mot duong HTTP nao; xem khoi chu thich cua controller ve vi sao khong co route ghi.
   owned('transport-settlement', SettlementReportsController),

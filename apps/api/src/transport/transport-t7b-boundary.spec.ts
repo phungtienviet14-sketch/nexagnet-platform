@@ -4,6 +4,8 @@ import { transportErrorBody, transportErrorToHttp } from './transport-action.gua
 import { roleCanPerform } from './transport-actions.js';
 import { TransportDomainError } from './transport.errors.js';
 import { transitionTripSchema } from './transport.schemas.js';
+import { isPublishableToDriver } from './workforce/payslip-lifecycle.js';
+import { PAYSLIP_STATUSES } from './workforce/workforce.types.js';
 
 /**
  * BIEN GIOI HTTP cua `#168` — B6 (duong huy di vong) va B7 (ly do co kieu tren day).
@@ -68,10 +70,7 @@ describe('#168 B5 — nop lai mot phieu dau bi tu choi', () => {
 
   const controllerOf = async (harness: ReturnType<typeof driverHarness>) => {
     const { DriverFuelController } = await import('./fuel/driver-fuel.controller.js');
-    return new DriverFuelController(
-      harness.fuel as never,
-      harness.read as never,
-    ) as unknown as {
+    return new DriverFuelController(harness.fuel as never, harness.read as never) as unknown as {
       resubmit(request: unknown, id: string): Promise<unknown>;
     };
   };
@@ -187,9 +186,9 @@ describe('#168 B7 — ly do nghiep vu CO KIEU song sot qua bien gioi HTTP', () =
     expect(() =>
       transportErrorToHttp(TransportDomainError.notFound('TRIP_NOT_FOUND', 'x')),
     ).toThrow(NotFoundException);
-    expect(() =>
-      transportErrorToHttp(TransportDomainError.invalid('MONEY_INVALID', 'x')),
-    ).toThrow(BadRequestException);
+    expect(() => transportErrorToHttp(TransportDomainError.invalid('MONEY_INVALID', 'x'))).toThrow(
+      BadRequestException,
+    );
   });
 
   /**
@@ -205,7 +204,14 @@ describe('#168 B7 — ly do nghiep vu CO KIEU song sot qua bien gioi HTTP', () =
 
     expect(Object.keys(body).sort()).toEqual(['error', 'message', 'reason', 'statusCode']);
     const serialised = JSON.stringify(body);
-    for (const leak of ['stack', 'TransportDomainError', 'prisma', 'Prisma', 'SELECT', 'at Object']) {
+    for (const leak of [
+      'stack',
+      'TransportDomainError',
+      'prisma',
+      'Prisma',
+      'SELECT',
+      'at Object',
+    ]) {
       expect(serialised, leak).not.toContain(leak);
     }
   });
@@ -213,5 +219,87 @@ describe('#168 B7 — ly do nghiep vu CO KIEU song sot qua bien gioi HTTP', () =
   it('loi KHONG phai cua mien duoc nem nguyen ven, khong bi boc thanh 4xx', () => {
     const boom = new TypeError('mot loi lap trinh that');
     expect(() => transportErrorToHttp(boom)).toThrow(boom);
+  });
+});
+
+describe('#168 B8 — quy tac cong bo phieu luong ra be mat lai xe', () => {
+  /**
+   * QUY TAC CONG BO la mot HAM THUAN, va do la ly do no duoc do o day.
+   *
+   * Nguon cua khach khong cho phep cong bo luong TAM TINH cho lai xe. Duyet CA BON trang thai chu
+   * khong chi `DRAFT`: mot bai chi kiem `DRAFT` se van xanh sau ngay ai do vo tinh doi ham thanh
+   * "chi hien phieu DA TRA" — va luc do mot phieu da duyet chua tra se bien mat khoi dien thoai lai
+   * xe ma khong ai bao cao duoc.
+   */
+  it('DUNG mot trang thai bi giu lai, va do la `DRAFT`', () => {
+    expect(isPublishableToDriver('DRAFT')).toBe(false);
+    expect(isPublishableToDriver('APPROVED')).toBe(true);
+    expect(isPublishableToDriver('PAID')).toBe(true);
+    // `REVERSED` VAN hien: giau no di se lam phieu dao thanh mot dong am khong co doi ung.
+    expect(isPublishableToDriver('REVERSED')).toBe(true);
+    expect(PAYSLIP_STATUSES.filter((status) => !isPublishableToDriver(status))).toEqual(['DRAFT']);
+  });
+
+  /**
+   * MOT ma phieu khong nhin thay duoc ra 404, khong ra 403.
+   *
+   * `403` noi "cai nay ton tai, ban khong duoc xem"; `404` noi "khong co gi o day cho ban". Ba
+   * duong (ma bia ra, phieu cua nguoi khac, phieu nhap cua chinh minh) cung ra cau thu hai, nen
+   * khong lan go ma nao do duoc ma nao CO THAT. Phep thu rang ba duong THAT SU giong nhau nam o
+   * `workforce/driver-payslips.controller.spec.ts`; o day do HINH DANG cua cau tra loi do.
+   */
+  it('`SELF_PAYSLIP_NOT_VISIBLE` ra 404 va khong mang mot manh du lieu nghiep vu nao', () => {
+    const body = transportErrorBody(
+      TransportDomainError.notFound(
+        'SELF_PAYSLIP_NOT_VISIBLE',
+        'Khong tim thay phieu luong nao mang ma nay trong pham vi cua ban',
+      ),
+    );
+
+    expect(body.statusCode).toBe(404);
+    expect(body.error).toBe('Not Found');
+    expect(body.reason).toBe('SELF_PAYSLIP_NOT_VISIBLE');
+    expect(Object.keys(body).sort()).toEqual(['error', 'message', 'reason', 'statusCode']);
+    // Cau chu KHONG duoc nhac lai ma duoc hoi: nhac lai la mot duong phan chieu de do ma.
+    expect(body.message).not.toContain('phieu-');
+  });
+
+  /**
+   * Tai khoan chua noi ho so lai xe ra 403 — mot LOAI KHAC han, co chu dich.
+   *
+   * Cau nay noi ve chinh nguoi dang goi, khong noi gi ve phieu luong, nen no khong the bi dung lam
+   * mot phep do su ton tai cua ban ghi nao.
+   */
+  it('chua noi ho so lai xe ra 403, khong tron voi 404 cua ma khong nhin thay duoc', () => {
+    const khongNoi = transportErrorBody(
+      TransportDomainError.denied(
+        'SELF_PAYSLIP_SCOPE_NO_DRIVER_BINDING',
+        'Tai khoan nay chua duoc noi voi ho so lai xe nao',
+      ),
+    );
+    expect(khongNoi.statusCode).toBe(403);
+    expect(khongNoi.reason).not.toBe('SELF_PAYSLIP_NOT_VISIBLE');
+  });
+
+  /**
+   * `#168 B8` cam cap quyen VAN HANH cho lai xe — do o tang bang phan quyen, khong o route.
+   *
+   * `transport.payroll.period.read` doc duoc ky luong, lan chay VA phieu cua bat ky lai xe nao.
+   * Bon ma con lai la duong ghi tai chinh.
+   */
+  it('lai xe khong nhan duoc mot ma luong van hanh nao', () => {
+    expect(roleCanPerform('SALE', 'transport.driver.self.payslip.read')).toBe(true);
+    for (const action of [
+      'transport.payroll.period.read',
+      'transport.payroll.period.manage',
+      'transport.payroll.run',
+      'transport.payslip.approve',
+      'transport.payslip.pay',
+      'transport.payslip.correct',
+    ] as const) {
+      expect(roleCanPerform('SALE', action), action).toBe(false);
+      expect(roleCanPerform('MANAGER', action), action).toBe(false);
+    }
+    expect(roleCanPerform('MANAGER', 'transport.driver.self.payslip.read')).toBe(false);
   });
 });

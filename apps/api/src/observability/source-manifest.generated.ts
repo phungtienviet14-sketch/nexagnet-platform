@@ -304,6 +304,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/driver-fund-self.controller.ts",
       "line": 34
     },
+    "transport.driver.self.payslip.read": {
+      "filePath": "apps/api/src/transport/workforce/driver-payslips.controller.ts"
+    },
     "transport.driver.self.trip.read": {
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts"
     },
@@ -591,6 +594,24 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "CostingReadService.selfFundStatement",
       "filePath": "apps/api/src/transport/costing/costing-read.service.ts",
       "line": 81
+    },
+    "driver.self_payslip_scope|*": {
+      "functionName": "WorkforceReadService.notVisible",
+      "filePath": "apps/api/src/transport/workforce/workforce-read.service.ts",
+      "line": 179
+    },
+    "driver.self_payslip_scope|SELF_PAYSLIP_DRAFT_WITHHELD": {
+      "functionName": "WorkforceReadService.listMyPayslips",
+      "filePath": "apps/api/src/transport/workforce/workforce-read.service.ts",
+      "line": 98
+    },
+    "driver.self_payslip_scope|SELF_PAYSLIP_SCOPE_GRANTED": {
+      "filePath": "apps/api/src/transport/workforce/workforce-read.service.ts"
+    },
+    "driver.self_payslip_scope|SELF_PAYSLIP_SCOPE_NO_DRIVER_BINDING": {
+      "functionName": "WorkforceReadService.requireDriverBinding",
+      "filePath": "apps/api/src/transport/workforce/workforce-read.service.ts",
+      "line": 201
     },
     "driver.self_scope|SELF_SCOPE_GRANTED": {
       "functionName": "TripService.listDriverTrips",
