@@ -49,6 +49,12 @@ Nguồn nghiệp vụ của nó nằm bên khách:
 Ranh giới giữ nguyên như mọi chỗ khác trong `docs/`: **sự kiện của khách ở `khach-hang/`, thiết kế
 của chúng ta ở `kien-truc/`**.
 
+### Giao thức Autopilot V0 (03/09/2026)
+
+| File | Là gì | Không phải gì |
+|---|---|---|
+| [`phat-trien/van-hanh/autopilot-protocol-v0.md`](phat-trien/van-hanh/autopilot-protocol-v0.md) | **Giao thức ChatGPT ↔ GitHub ↔ Claude V0** — tác nhân, 9 thông điệp có marker, máy trạng thái, quy tắc SHA/CI/rủi ro/retry/idempotency, Task Contract; bản máy đọc + validator ở `tools/autopilot-protocol/` | Chưa có orchestrator, dispatcher Claude, auto-merge hay CD — **nền tảng giao thức**, không phải tự động hoá đang chạy |
+
 ## Quy ước đặt tên
 
 - Tên thư mục/file dùng chữ thường, không dấu và `kebab-case`.

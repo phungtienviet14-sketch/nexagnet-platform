@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nexagnet:autopilot:v0:message:build-ready",
+  "title": "BUILD_READY",
+  "description": "Builder/Fixer bao PR co HEAD moi san sang cho CI. RUNNING|FIXING|CI|REVIEWING -> CI. Moi HEAD moi lam moi phan xet review cu het hieu luc.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "marker", "type", "issue", "pr", "head_sha"],
+  "properties": {
+    "protocol": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/protocolVersion" },
+    "marker": { "const": "AUTOPILOT_BUILD_READY_V0" },
+    "type": { "const": "BUILD_READY" },
+    "issue": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/issueNumber" },
+    "pr": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/prNumber" },
+    "head_sha": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/sha40" },
+    "base_sha": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/sha40" }
+  }
+}

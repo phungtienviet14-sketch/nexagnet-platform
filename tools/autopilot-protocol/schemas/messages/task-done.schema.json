@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nexagnet:autopilot:v0:message:task-done",
+  "title": "TASK_DONE",
+  "description": "Dong task. RUNTIME_PROOF -> DONE. Neu hop dong doi runtime proof thi phai co RUNTIME_PROOF PASS cho dung MERGE_SHA; RUNTIME_VERIFIED=true ma khong co proof la loi khai. Khoa done:<issue>:<merge_sha>.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "marker", "type", "issue", "merge_sha", "runtime_verified"],
+  "properties": {
+    "protocol": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/protocolVersion" },
+    "marker": { "const": "AUTOPILOT_TASK_DONE_V0" },
+    "type": { "const": "TASK_DONE" },
+    "issue": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/issueNumber" },
+    "pr": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/prNumber" },
+    "merge_sha": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/sha40" },
+    "runtime_verified": { "type": "boolean" }
+  }
+}
