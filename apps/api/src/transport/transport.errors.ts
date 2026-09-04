@@ -3,6 +3,10 @@ import type { TransportCostingDecisionReason } from './costing/costing-decisions
 import type { TransportFuelDecisionReason } from './fuel/fuel-decisions.js';
 import type { TransportFuelErrorReason } from './fuel/fuel-errors.js';
 import type { TransportSettlementDecisionReason } from './settlement/settlement-decisions.js';
+import type { TransportAssetComplianceDecisionReason } from './asset-compliance/asset-compliance-decisions.js';
+import type { TransportAssetComplianceErrorReason } from './asset-compliance/asset-compliance-errors.js';
+import type { TransportWorkforceDecisionReason } from './workforce/workforce-decisions.js';
+import type { TransportWorkforceErrorReason } from './workforce/workforce-errors.js';
 import type { TransportSettlementErrorReason } from './settlement/settlement-errors.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
 
@@ -82,7 +86,11 @@ export type TransportErrorReason =
   | TransportFuelDecisionReason
   | TransportFuelErrorReason
   | TransportSettlementDecisionReason
-  | TransportSettlementErrorReason;
+  | TransportSettlementErrorReason
+  | TransportAssetComplianceDecisionReason
+  | TransportAssetComplianceErrorReason
+  | TransportWorkforceDecisionReason
+  | TransportWorkforceErrorReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh

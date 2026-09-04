@@ -252,13 +252,23 @@ export class PrismaTripRepository extends TripRepository {
     return row ? toAssignment(row) : null;
   }
 
-  async listTripIdsEverAssignedTo(driverId: string): Promise<string[]> {
-    const rows: { tripId: string }[] = await model(this.prisma, 'transportTripAssignment').findMany({
-      where: { driverId },
-      select: { tripId: true },
-      distinct: ['tripId'],
-      orderBy: { tripId: 'asc' },
+  async listActiveAssignments(): Promise<TripAssignment[]> {
+    const rows = await model(this.prisma, 'transportTripAssignment').findMany({
+      where: { effectiveTo: null },
+      orderBy: [{ effectiveFrom: 'desc' }, { id: 'desc' }],
     });
+    return rows.map(toAssignment);
+  }
+
+  async listTripIdsEverAssignedTo(driverId: string): Promise<string[]> {
+    const rows: { tripId: string }[] = await model(this.prisma, 'transportTripAssignment').findMany(
+      {
+        where: { driverId },
+        select: { tripId: true },
+        distinct: ['tripId'],
+        orderBy: { tripId: 'asc' },
+      },
+    );
     return rows.map((row) => row.tripId);
   }
 }

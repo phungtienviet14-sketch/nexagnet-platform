@@ -161,6 +161,9 @@ export class InMemoryFuelRepository extends FuelRepository {
     return sortedById([...this.entries.values()].filter((entry) => entry.driverId === driverId));
   }
 
+  async listEntriesNeedingReview(): Promise<FuelEntry[]> {
+    return [...this.entries.values()].filter((entry) => entry.reviewReasons.length > 0);
+  }
   async listEntriesForMatching(input: {
     supplierId: string;
     from: string;

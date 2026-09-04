@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "slug": "transport-asset-compliance",
+  "identity": {
+    "displayName": "Transport Asset Compliance Fixture",
+    "shortName": "Assets"
+  },
+  "branding": {
+    "productName": "Transport Operations",
+    "installName": "Transport Operations",
+    "pageTitle": "Transport Operations",
+    "pageDescription": "Generic transport tenant fixture: fleet, trips, maintenance and legal documents. No costing, no fuel.",
+    "themeColor": "#123a5f",
+    "backgroundColor": "#f4f6f9",
+    "monogram": "T",
+    "composerPlaceholder": "Search vehicles"
+  },
+  "experience": "transport-operations",
+  "capabilities": ["transport-core", "transport-asset-compliance"],
+  "policies": {
+    "transportCore": { "timeZone": "Asia/Ho_Chi_Minh" },
+    "transportCompliance": {
+      "expiryWarningDays": 30,
+      "expiryWarningDaysByType": { "VEHICLE_INSURANCE": 45 },
+      "maintenance": { "dueSoonKm": 500, "dueSoonDays": 7 }
+    },
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {},
+  "bootstrap": {}
+}

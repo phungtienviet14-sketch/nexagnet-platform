@@ -448,6 +448,18 @@ export abstract class FuelRepository {
   abstract listEntriesByTrip(tripId: string): Promise<FuelEntry[]>;
   abstract listEntriesByDriver(driverId: string): Promise<FuelEntry[]>;
   /**
+   * Moi phieu dang mang it nhat MOT ly do can kiem tra (`INV-06`, VT-046 vuot dinh muc).
+   *
+   * Them cho `TX-06`: bang canh bao van hanh gom chung cua Issue #88 phai co dong "tieu hao dau
+   * bat thuong", va nguon cua dong do la `TX-04`. Cong nay la duong DUY NHAT T6 doc duoc no —
+   * thay cho viec T6 tu truy van `TransportFuelEntry`, dieu ma guardrail
+   * `NO_CROSS_CONTEXT_REPOSITORY_WRITE` cua T1 §4.1 cam.
+   *
+   * CHI DOC. Danh gia "bat thuong" van thuoc `TX-04`: T6 khong tinh lai dinh muc, no chi doc ket
+   * luan da co va gan nhan nguon vao bang gom chung.
+   */
+  abstract listEntriesNeedingReview(): Promise<FuelEntry[]>;
+  /**
    * Cac phieu CO THE khop voi mot bang ke: cung cay xang, ngay nghiep vu trong khoang DA NOI RONG
    * theo dung sai ngay.
    *

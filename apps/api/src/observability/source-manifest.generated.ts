@@ -228,6 +228,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 42
     },
+    "transport.alerts.read": {
+      "functionName": "OperationalAlertsController.feed",
+      "filePath": "apps/api/src/transport/asset-compliance/operational-alerts.controller.ts",
+      "line": 24
+    },
+    "transport.compliance.document.manage": {
+      "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
+    },
+    "transport.compliance.document.read": {
+      "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
+    },
     "transport.costing.driver_fund.adjust": {
       "functionName": "DriverFundController.adjust",
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
@@ -300,6 +311,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts",
       "line": 61
     },
+    "transport.fleet_status.read": {
+      "filePath": "apps/api/src/transport/asset-compliance/fleet-status.controller.ts"
+    },
     "transport.fuel.entry.read": {
       "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
     },
@@ -335,11 +349,51 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.fuel.statement.import": {
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts"
     },
+    "transport.maintenance.plan.manage": {
+      "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts"
+    },
+    "transport.maintenance.plan.read": {
+      "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts"
+    },
+    "transport.maintenance.work_order.close": {
+      "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts"
+    },
+    "transport.maintenance.work_order.open": {
+      "functionName": "MaintenanceController.openWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts",
+      "line": 117
+    },
     "transport.partner.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
     "transport.partner.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.payroll.period.manage": {
+      "filePath": "apps/api/src/transport/workforce/payroll.controller.ts"
+    },
+    "transport.payroll.period.read": {
+      "filePath": "apps/api/src/transport/workforce/payroll.controller.ts"
+    },
+    "transport.payroll.run": {
+      "functionName": "PayrollController.runPayroll",
+      "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
+      "line": 97
+    },
+    "transport.payslip.approve": {
+      "functionName": "PayrollController.approve",
+      "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
+      "line": 135
+    },
+    "transport.payslip.correct": {
+      "functionName": "PayrollController.correct",
+      "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
+      "line": 153
+    },
+    "transport.payslip.pay": {
+      "functionName": "PayrollController.pay",
+      "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
+      "line": 145
     },
     "transport.trip.assign": {
       "functionName": "TripsController.assign",
@@ -417,6 +471,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
       "line": 195
     },
+    "alerts.operational_feed|OPERATIONAL_ALERTS_COMPILED": {
+      "functionName": "OperationalAlertsService.feed",
+      "filePath": "apps/api/src/transport/asset-compliance/operational-alerts.service.ts",
+      "line": 147
+    },
+    "alerts.operational_feed|OPERATIONAL_ALERTS_SOURCE_UNAVAILABLE": {
+      "functionName": "OperationalAlertsService.feed",
+      "filePath": "apps/api/src/transport/asset-compliance/operational-alerts.service.ts",
+      "line": 138
+    },
     "channel.send|*": {
       "functionName": "OutboundChannelRouter.record",
       "filePath": "apps/api/src/channels/outbound-channel.router.ts",
@@ -441,6 +505,25 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
       "line": 324
+    },
+    "compliance.document_register|COMPLIANCE_DOCUMENT_REGISTERED": {
+      "functionName": "AssetComplianceService.registerDocument",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 361
+    },
+    "compliance.document_register|COMPLIANCE_SUBJECT_SHAPE_INVALID": {
+      "functionName": "AssetComplianceService.assertSubject",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts"
+    },
+    "compliance.document_register|COMPLIANCE_SUBJECT_UNKNOWN": {
+      "functionName": "AssetComplianceService.assertSubject",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 328
+    },
+    "compliance.document_register|COMPLIANCE_VALIDITY_RANGE_INVALID": {
+      "functionName": "AssetComplianceService.registerDocument",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 346
     },
     "conflict.resolution|*": {
       "functionName": "SourceRegistryService.resolveConflict",
@@ -536,6 +619,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceReadinessService.canUseFact",
       "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
       "line": 131
+    },
+    "fleet.effective_vehicle_state|*": {
+      "functionName": "AssetComplianceReadService.emitStateDecision",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance-read.service.ts",
+      "line": 210
+    },
+    "fleet.effective_vehicle_state|VEHICLE_MAINTENANCE_TRIP_CONFLICT": {
+      "functionName": "AssetComplianceReadService.emitStateDecision",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance-read.service.ts",
+      "line": 219
     },
     "fuel.cost_posting|*": {
       "functionName": "FuelService.postFuelCost",
@@ -716,6 +809,49 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "ledger.record|*": {
       "filePath": "apps/api/src/decision-ledger/decision-ledger.service.ts"
     },
+    "maintenance.work_order_close|MAINTENANCE_ODO_REGRESSION": {
+      "functionName": "AssetComplianceService.completeWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 202
+    },
+    "maintenance.work_order_close|MAINTENANCE_WORK_ORDER_CANCELLED": {
+      "functionName": "AssetComplianceService.cancelWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 271
+    },
+    "maintenance.work_order_close|MAINTENANCE_WORK_ORDER_COMPLETED": {
+      "functionName": "AssetComplianceService.completeWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 240
+    },
+    "maintenance.work_order_close|MAINTENANCE_WORK_ORDER_NOT_OPEN": {
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts"
+    },
+    "maintenance.work_order_open|MAINTENANCE_PLAN_UNKNOWN": {
+      "functionName": "AssetComplianceService.openWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 124
+    },
+    "maintenance.work_order_open|MAINTENANCE_PLAN_VEHICLE_MISMATCH": {
+      "functionName": "AssetComplianceService.openWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 150
+    },
+    "maintenance.work_order_open|MAINTENANCE_VEHICLE_UNKNOWN": {
+      "functionName": "AssetComplianceService.openWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 108
+    },
+    "maintenance.work_order_open|MAINTENANCE_WORK_ORDER_ALREADY_OPEN": {
+      "functionName": "AssetComplianceService.openWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 166
+    },
+    "maintenance.work_order_open|MAINTENANCE_WORK_ORDER_OPENED": {
+      "functionName": "AssetComplianceService.openWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 179
+    },
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
@@ -755,6 +891,60 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "OrdersService.decideSchedule",
       "filePath": "apps/api/src/orders/orders.service.ts",
       "line": 221
+    },
+    "payroll.driver_fund_disclosure|DRIVER_FUND_NOT_AVAILABLE": {
+      "functionName": "WorkforceService.emitFundDisclosure",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 238
+    },
+    "payroll.driver_fund_disclosure|DRIVER_FUND_SHOWN_WITHOUT_DEDUCTION": {
+      "functionName": "WorkforceService.emitFundDisclosure",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 247
+    },
+    "payroll.run|PAYROLL_INPUT_UNAVAILABLE": {
+      "functionName": "WorkforceService.runPayroll",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 177
+    },
+    "payroll.run|PAYROLL_PERIOD_CLOSED": {
+      "functionName": "WorkforceService.runPayroll",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 202
+    },
+    "payroll.run|PAYROLL_PERIOD_UNKNOWN": {
+      "functionName": "WorkforceService.runPayroll",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 128
+    },
+    "payroll.run|PAYROLL_RUN_COMPLETED": {
+      "functionName": "WorkforceService.runPayroll",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 215
+    },
+    "payslip.correction|*": {
+      "functionName": "WorkforceService.issueCorrection",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 433
+    },
+    "payslip.correction|PAYSLIP_ALREADY_REVERSED": {
+      "functionName": "WorkforceService.issueCorrection",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 420
+    },
+    "payslip.correction|PAYSLIP_NOT_CORRECTABLE": {
+      "functionName": "WorkforceService.issueCorrection",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 344
+    },
+    "payslip.transition|*": {
+      "functionName": "WorkforceService.movePayslip",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts"
+    },
+    "payslip.transition|PAYSLIP_TRANSITION_NOT_PERMITTED": {
+      "functionName": "WorkforceService.movePayslip",
+      "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
+      "line": 291
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",

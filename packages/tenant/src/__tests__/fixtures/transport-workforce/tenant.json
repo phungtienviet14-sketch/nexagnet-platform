@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 2,
+  "slug": "transport-workforce",
+  "identity": {
+    "displayName": "Transport Workforce Fixture",
+    "shortName": "Payroll"
+  },
+  "branding": {
+    "productName": "Transport Operations",
+    "installName": "Transport Operations",
+    "pageTitle": "Transport Operations",
+    "pageDescription": "Generic transport tenant fixture: fleet, trips, costing and driver payroll. No fuel reconciliation.",
+    "themeColor": "#123a5f",
+    "backgroundColor": "#f4f6f9",
+    "monogram": "T",
+    "composerPlaceholder": "Search payslips"
+  },
+  "experience": "transport-operations",
+  "capabilities": ["transport-core", "transport-costing", "transport-workforce"],
+  "policies": {
+    "transportCore": { "timeZone": "Asia/Ho_Chi_Minh" },
+    "transportPayroll": {
+      "baseSalaryVnd": 6000000,
+      "perTripVnd": 250000,
+      "perKmVnd": 1200,
+      "fuelSavingBonusVndPerLiter": 8000
+    },
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {},
+  "bootstrap": {}
+}
