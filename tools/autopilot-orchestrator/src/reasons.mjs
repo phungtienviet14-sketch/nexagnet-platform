@@ -25,6 +25,43 @@ export const ORCHESTRATOR_REASONS = Object.freeze({
   PR_HEAD_UNAVAILABLE: 'PR_HEAD_UNAVAILABLE',
   /** So do principal chua duoc cau hinh cho repo nay. */
   REGISTRY_NOT_CONFIGURED: 'REGISTRY_NOT_CONFIGURED',
+
+  // ---------------------------------------------------------------------------------------------
+  // THIEU QUYEN != THIEU DU LIEU.
+  //
+  // Ca hai deu lam job do, nhung chung doi hai hanh dong khac han: mot cai sua o khoi
+  // `permissions:` cua workflow, cai kia thi cho CI chay xong. Gop chung lai mot ma la bat nguoi
+  // truc phai doan — va do dung la cho blocker B1 cua PR #167 chi ra.
+  // ---------------------------------------------------------------------------------------------
+
+  /** `GET /actions/runs` khong tra ve `workflow_runs`. Nghi truoc tien: thieu `actions: read`. */
+  ACTIONS_RUNS_UNAVAILABLE: 'ACTIONS_RUNS_UNAVAILABLE',
+  /** `GET /actions/runs` TRA VE binh thuong, nhung khong co lan chay `ci` nao o HEAD do. */
+  CI_RUN_NOT_FOUND: 'CI_RUN_NOT_FOUND',
+  /** Khong doc duoc Issue mang hop dong task. */
+  TASK_ISSUE_UNAVAILABLE: 'TASK_ISSUE_UNAVAILABLE',
+  /** Issue co that nhung than no khong mang mot hop dong task hop le. */
+  TASK_CONTRACT_INVALID: 'TASK_CONTRACT_INVALID',
+  /** Khong doc duoc danh sach comment cua PR — duong tra cuu thong diep khong duoc fail-open. */
+  PR_COMMENTS_UNAVAILABLE: 'PR_COMMENTS_UNAVAILABLE',
+  /** Dang comment ket qua that bai. */
+  COMMENT_POST_FAILED: 'COMMENT_POST_FAILED',
+
+  // ---------------------------------------------------------------------------------------------
+  // BA TRIGGER (hop dong #165). `issue_comment` mang thong diep TRONG payload; `pull_request` va
+  // `check_suite` thi khong — chung chi noi "dieu kien vua doi", con thong diep phai TRA CUU.
+  // ---------------------------------------------------------------------------------------------
+
+  /** Su kien khong chi ra duoc mot PR de lam viec tren do. */
+  EVENT_TARGET_UNRESOLVED: 'EVENT_TARGET_UNRESOLVED',
+  /** Tra cuu xong: khong co `BUILD_READY` nao buoc vao HEAD hien tai. Khong doan, khong ghi gi. */
+  NO_BUILD_READY_AT_HEAD: 'NO_BUILD_READY_AT_HEAD',
+  /** `check_suite` noi ve mot HEAD khong con la HEAD cua PR — bang chung da cu. */
+  CHECK_SUITE_HEAD_STALE: 'CHECK_SUITE_HEAD_STALE',
+  /** HEAD den tu mot fork. Khong chay giao thuc tren cay ma repo nay khong so huu. */
+  FORK_HEAD_NOT_TRUSTED: 'FORK_HEAD_NOT_TRUSTED',
+  /** Da co san mot comment cung loai buoc vao dung HEAD nay — ba trigger khong duoc dang ba lan. */
+  ALREADY_POSTED_AT_HEAD: 'ALREADY_POSTED_AT_HEAD',
 });
 
 /** @typedef {{ ok: false, reason: string, detail?: Record<string, unknown> }} Failed */

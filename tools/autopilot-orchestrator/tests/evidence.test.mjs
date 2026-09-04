@@ -17,6 +17,7 @@ import {
 
 import {
   checkRunsFromApi,
+  headRepoIsSelf,
   headShaFromPull,
   requiredChecksFromBranchRules,
 } from '../src/evidence.mjs';
@@ -135,6 +136,27 @@ test('HEAD cua PR lay tu API, va phai la SHA 40 hex', () => {
     assert.equal(
       denied.ok === false ? denied.reason : null,
       ORCHESTRATOR_REASONS.PR_HEAD_UNAVAILABLE,
+    );
+  }
+});
+
+test('HEAD phai thuoc CHINH repo nay — mot cho kiem cho ca ba trigger', () => {
+  const own = headRepoIsSelf(PULL_155, 'phungtienviet14-sketch/nexagnet-platform');
+  assert.equal(own.ok, true);
+
+  // `pull_request` chay ca tren PR den tu fork. Voi mot task HIGH / AUTH_AUTHORIZATION, huong dong
+  // la TU CHOI: khong chay giao thuc tren mot cay ma repo nay khong so huu.
+  const fork = headRepoIsSelf(PULL_155, 'nguoi-khac/nexagnet-platform');
+  assert.equal(fork.ok, false);
+  assert.equal(fork.ok === false ? fork.reason : null, ORCHESTRATOR_REASONS.FORK_HEAD_NOT_TRUSTED);
+
+  // Doc khong ra nguon goc cung bi tu choi — "khong biet" khong duoc doc thanh "cua minh".
+  for (const bad of [null, {}, { head: {} }, { head: { repo: {} } }, { head: { repo: null } }]) {
+    const denied = headRepoIsSelf(bad, 'phungtienviet14-sketch/nexagnet-platform');
+    assert.equal(denied.ok, false, JSON.stringify(bad));
+    assert.equal(
+      denied.ok === false ? denied.reason : null,
+      ORCHESTRATOR_REASONS.FORK_HEAD_NOT_TRUSTED,
     );
   }
 });

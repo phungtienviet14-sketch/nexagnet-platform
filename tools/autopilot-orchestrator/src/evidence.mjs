@@ -104,3 +104,31 @@ export function headShaFromPull(pull) {
   }
   return succeed(sha);
 }
+
+/**
+ * HEAD nay co thuoc CHINH repo nay khong?
+ *
+ * Kiem MOT cho cho CA BA trigger, tren doi tuong PR lay tu API — khong kiem trong payload cua tung
+ * loai su kien, vi ba loai su kien mo ta fork o ba cho khac nhau va bo sot mot cho la du.
+ *
+ * Vi sao can: `pull_request` chay tren PR den tu fork, va o do `GITHUB_TOKEN` chi con quyen doc —
+ * nhung dieu quan trong hon quyen la orchestrator khong nen chay giao thuc tren mot cay ma repo nay
+ * khong so huu. Voi mot task HIGH / AUTH_AUTHORIZATION, huong dong la TU CHOI.
+ *
+ * @param {unknown} pull Than tra ve cua `/pulls/{number}`.
+ * @param {string} repoFullName `GITHUB_REPOSITORY`, dang `owner/repo`.
+ * @returns {{ ok: true, value: string } | { ok: false, reason: string, detail?: Record<string, unknown> }}
+ */
+export function headRepoIsSelf(pull, repoFullName) {
+  const head = /** @type {{ head?: unknown }} */ (pull ?? {}).head;
+  const repo = /** @type {{ repo?: unknown }} */ (head ?? {}).repo;
+  const fullName = /** @type {{ full_name?: unknown }} */ (repo ?? {}).full_name;
+  // Thieu `full_name` cung bi tu choi: khong doc duoc nguon goc thi khong duoc coi la cua minh.
+  if (typeof fullName !== 'string' || fullName !== repoFullName) {
+    return fail(ORCHESTRATOR_REASONS.FORK_HEAD_NOT_TRUSTED, {
+      headRepo: typeof fullName === 'string' ? fullName : null,
+      repo: repoFullName,
+    });
+  }
+  return succeed(fullName);
+}

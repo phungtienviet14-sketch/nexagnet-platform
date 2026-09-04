@@ -526,15 +526,35 @@ dispatch.
 
 > **Đang làm** — hợp đồng task ở Issue #165, mã ở
 > [`tools/autopilot-orchestrator/`](../../../tools/autopilot-orchestrator/README.md).
-> Bản đầu chỉ lắng `issue_comment` và chỉ đi một đường: `BUILD_READY` → cổng CI →
-> `CI_FAIL` | `REVIEW_REQUEST`. Ba điều người đọc tài liệu này cần biết:
+> Nó lắng **cả ba** trigger hợp đồng khai và đi một đường: `BUILD_READY` → cổng CI →
+> `CI_FAIL` | `REVIEW_REQUEST`. Năm điều người đọc tài liệu này cần biết:
 >
 > 1. **`/rules/branches/main` trả về mảng phẳng**, còn `requiredChecksFromRuleset` đợi
 >    `{ rules: [...] }`. Đưa thẳng dữ liệu API vào nó thì nó trả **mảng rỗng** — không ném, không
 >    báo — tức "không có check bắt buộc nào". Phải đi qua adapter `requiredChecksFromBranchRules`.
-> 2. **`issue_comment` luôn chạy bản workflow trên nhánh mặc định**, nên đường này không chứng minh
->    được từ chính PR thêm nó; bằng chứng chạy thật chỉ có sau khi merge.
-> 3. Orchestrator **mặc định dry-run**; bật bằng biến repo `AUTOPILOT_DRY_RUN=false`.
+> 2. **Ba trigger không phải ba nhánh xử lý** — chúng là ba cách một bộ điều kiện trở nên đầy đủ
+>    (thông điệp đến sau cùng / CI xong sau cùng / HEAD đứng yên sau cùng), và cả ba đi chung một
+>    lối quyết định. Khác biệt duy nhất: `issue_comment` mang thông điệp **trong** payload, hai cái
+>    kia phải **tra cứu** trong luồng comment. Thông điệp *vừa đến* thì được **phán xét**; thông
+>    điệp *tra cứu được* thì chỉ được **dùng** nếu buộc vào đúng HEAD hiện tại — nếu không, mỗi lần
+>    push sẽ sinh một `HEAD_MISMATCH` cho thông điệp mà không ai vừa phát. Vì ba đường có thể cùng
+>    đủ điều kiện trên một HEAD, mọi lần đăng đều so **khoá idempotency** với luồng comment: V0
+>    read-only không có sổ ledger bên ngoài, nên luồng comment **chính là** sổ ledger.
+> 3. **`permissions:` là danh sách ĐÓNG** — khai tường minh thì mọi quyền không kể ra đều là `none`.
+>    Thêm một lời gọi API mà quên thêm quyền thì job đỏ ở **sản xuất**, không đỏ trong PR (xem điều
+>    4). Bảng "lời gọi ↔ quyền" nằm ở `src/permissions.mjs` và có hai cái chặn: một bài kiểm hợp
+>    đồng đối chiếu nó với YAML, và job `preflight` **gọi thật** từng đường bằng chính
+>    `GITHUB_TOKEN`.
+> 4. **`issue_comment` và `check_suite` chạy bản workflow trên nhánh mặc định**, nên hai đường này
+>    không chứng minh được từ chính PR thêm chúng; bằng chứng chạy thật chỉ có sau khi merge.
+>    `pull_request` là **ngoại lệ** — nó chạy bản của chính PR, và đó là chỗ duy nhất đo được một
+>    thay đổi quyền trước khi nó lên `main`. Riêng `check_suite` còn một giới hạn cứng: GitHub
+>    **không** kích hoạt nó cho check-suite do chính GitHub Actions tạo, nên trong repo này đường đó
+>    nằm im (xem NOT PROVEN của README package).
+> 5. Orchestrator **mặc định dry-run**; bật bằng biến repo `AUTOPILOT_DRY_RUN=false`. Sơ đồ
+>    principal là **cấu hình bắt buộc**, không có mặc định: thiếu `AUTOPILOT_REVIEWER_APP_SLUG` thì
+>    job đỏ. Một giá trị dự phòng ở đó sẽ lặng lẽ trao vai `CHATGPT_REVIEWER` — vai quyết định
+>    `REVIEW_PASS` **của ai** được tính — cho một app ghi cứng trong mã nguồn.
 
 ## 18. Kiểm chứng — ma trận acceptance ↔ test
 
