@@ -20,7 +20,11 @@ import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { TurnOutcomePort } from '../turns/turn-outcome.port.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
-import { TURN_DECISIONS, type AutoReplyReason, type ConversationReason } from '../turns/turn-decisions.js';
+import {
+  TURN_DECISIONS,
+  type AutoReplyReason,
+  type ConversationReason,
+} from '../turns/turn-decisions.js';
 import { pinnedOutboundVerdict } from '../outbound/outbound-authority.js';
 import { detectAmend } from './amend-detect.js';
 
@@ -577,7 +581,7 @@ export class PipelineService implements OnModuleDestroy {
     // theo mot cam ket. Khong dat -> lui ve ban mau tat dinh (`buildClarifyQuestion`), khong phai
     // im lang.
     const composedQuestion =
-      view.trace?.composed && pinnedOutboundVerdict(view.trace).sendable
+      view.trace?.composed && pinnedOutboundVerdict(view.trace, view.trace.reply ?? '').sendable
         ? view.trace.reply
         : undefined;
     const conversation = await this.conversations.settle({
@@ -753,7 +757,7 @@ export class PipelineService implements OnModuleDestroy {
      * cong no + "da ghi nhan don" cua mot luot `intent=khac`, `priced=null` la mot heuristic do
      * tin cay — no dung mot lan, va no khong phai mot ranh gioi.
      */
-    if (!pinnedOutboundVerdict(trace).sendable) {
+    if (!pinnedOutboundVerdict(trace, trace.outbound.text).sendable) {
       return { allowed: false, reason: 'OUTBOUND_AUTHORITY_NOT_GRANTED' };
     }
     if (trace.supervisor.riskLevel !== 'none') {

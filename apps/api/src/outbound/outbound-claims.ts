@@ -1,3 +1,4 @@
+import type { OutboundCommitmentLevel } from '@netviet/shared';
 import { normalize } from '../rules/text.js';
 
 /**
@@ -6,156 +7,188 @@ import { normalize } from '../rules/text.js';
  * ---------------------------------------------------------------------------------------------
  * DOC KY DOAN NAY TRUOC KHI SUA TEP.
  *
- * Tep nay KHONG quyet dinh cai gi duoc gui. No chi tra loi mot cau duy nhat: "doan van nay CO
- * DANG dua ra mot khang dinh co he qua khong, va neu co thi la khang dinh gi?".
+ * Tep nay KHONG cap phep cho cai gi. No tra loi mot cau duy nhat: "doan van nay mang nhung VAT
+ * MANG KHANG DINH nao?". Mo hinh tham quyen o `outbound-authority.ts` chi so khop chung voi cac
+ * grant tat dinh; khong mot ham nao o day tra ve "duoc gui".
  *
- * Mo hinh tham quyen nam o `outbound-authority.ts`, va no van hanh theo chieu NGUOC LAI voi mot
- * bo loc van ban:
+ * ---------------------------------------------------------------------------------------------
+ * VAT MANG (CARRIER) — KHAC HAN "TU DIEN CUM TU". Doc doan nay de hieu ban sua 04/09/2026.
  *
- *   · CAP PHEP chi den tu nguon TAT DINH (rules engine gia, bang gia hien hanh, cap dai ly da
- *     map, trang thai don da ben vung). Khong mot ham nao trong tep nay cap phep duoc gi.
- *   · Tep nay chi co the LAM GIAM kha nang gui. Mot ma bi bo sot o day KHONG bien mot khang dinh
- *     thanh hop le — no chi lam ta mat mot lop phong thu; con mot lop khang dinh khong co grant
- *     thi mac dinh la KHONG GUI DUOC.
+ * Ban dau tep nay la mot bo tu dien: liet ke cach nguoi ta viet tien, viet chinh sach, viet cam
+ * ket don. Cong tham quyen hoi "co thay cum nao trong tu dien khong?" — khong thay thi CHO GUI.
+ * Review doc lap goi ten do la B1: bo trich van ban nam trong ranh gioi CHO PHEP, nen mot cach
+ * dien dat ngoai tu dien la mot duong di vong. Ba cau tieng Viet binh thuong — "Tổng đơn là
+ * 1.150.000.", "thanh toán sau 30 ngày", "Đơn của anh đã vào hệ thống rồi." — deu lot.
  *
- * Do la ly do vi sao "them mot tu vao tu dien" o day khong bao gio la mot thay doi ve tham quyen.
- * Neu mot ngay nao do ai do viet `if (text.includes('...')) return ALLOWED` trong tep nay, do la
- * luc hop dong bi dao nguoc — va `outbound-authority.spec.ts` khoa dieu do lai.
+ * Nay tep nay tim VAT MANG, tuc dac diem HINH DANG cua van ban, khong phai cach dien dat:
+ *
+ *   · CHU SO      — moi con so trong bai. Khong mot cach viet tieng Viet nao noi duoc "1.150.000"
+ *                   ma khong dung chu so. Day la thu vet can KHONG THE tranh, khac han mot cum tu.
+ *   · SO NGAY     — `N ngày` bat ky. Mot cam ket ve thoi han luon phai viet ra con ngay.
+ *   · THE HOAN THANH + DANH TU DON — tieng Viet danh dau viec "da xay ra" bang mot tap tu RAT NHO
+ *                   va DONG: `đã`, `rồi`, `xong`. Ghep voi danh tu don, do la mot cam ket trang
+ *                   thai, BAT KE dong tu o giua la gi ("vào hệ thống", "lên sàn", ...).
+ *
+ * Khac biet mau chot: bo sot mot CUM TU thi cong mo ra; bo sot mot VAT MANG thi... khong xay ra,
+ * vi vat mang la dieu kien can cua chinh viec noi ra khang dinh do. Cac tu dien ben duoi van con,
+ * nhung chung chi con lam MOT viec: noi ro khang dinh thuoc loai/muc nao. Chung khong con quyet
+ * dinh CO khang dinh hay khong.
  *
  * ---------------------------------------------------------------------------------------------
  * TU DIEN O DAY LA TU VUNG NEN TANG, KHONG PHAI CUA MOT KHACH.
  *
  * "cong no", "VAT", "COD", "cuoc van chuyen", "chot don" la tu vung thuong mai tieng Viet ma CA
- * san pham dung (xem `POLICY_LABELS`, `INTENT_LABELS`, `confirmationText`). Khong mot muc nao o
- * day duoc phep la ten khach, ma SKU, hay mot con so cua mot khach cu the.
+ * san pham dung. Khong mot muc nao duoc phep la ten khach, ma SKU, hay mot con so cua mot khach.
  */
 
 /* ------------------------------------------------------------------ *
- * LOP TIEN
+ * LOP TIEN — MOT CACH VIET -> DUNG MOT GIA TRI VND
  * ------------------------------------------------------------------ */
 
 /**
- * Bat "1.150k", "2tr5", "1.150.000d", "2 trieu" — cach viet tien pho bien trong nhom Zalo.
+ * Tu day tro len, mot con so KHONG CO don vi van bi coi la tien.
  *
- * DUNG CHUNG voi `advisor/money-guard.ts`: hai mau khac nhau cho cung mot khai niem se lech nhau,
- * va cho lech chinh la cho lot.
+ * Ly do la DO LON, khong phai tu dien: gia trong nganh nay khong bao gio duoi bon chu so, con
+ * thong so san pham ("220V", "12 tháng", "50 cái") thi gan nhu luon duoi. Nho the "Tổng đơn là
+ * 1.150.000." bi chan ma "máy dùng điện 220V" van gui duoc — khong can mot danh sach don vi nao.
  */
-export const MONEY_PATTERN = /(\d[\d.,]*)\s*(k|tr\d*|tri[eệ]u|vnd|ngh[iì]n|[dđ])(?![\p{L}\d])/giu;
+export const MONEY_MAGNITUDE_FLOOR = 1_000;
 
-/** So tran: duoi nguong nay thi khong phai gia ma la so luong, thang, kich thuoc… */
-export const MIN_MONEY_DIGITS = 3;
-
-/** Mot lan so tien xuat hien: cach VIET cua no, va cac gia tri no CO THE dang noi toi. */
-export interface MonetaryClaim {
-  /** Nguyen van nhu trong ban nhap — de nguoi truc doi chieu duoc. */
+/** Mot con so nhu no XUAT HIEN trong van ban, da quy ve dung mot gia tri. */
+export interface NumeralLiteral {
+  /** Nguyen van — de nguoi truc doi chieu duoc. */
   readonly written: string;
-  /** Cac dang chu so co the, da chuan hoa. */
-  readonly forms: readonly string[];
+  /** Gia tri da quy doi. `null` = cach viet KHONG quy duoc ve mot gia tri duy nhat. */
+  readonly value: number | null;
+  /** Co don vi tien di kem (`k`, `tr`, `đ`, `vnd`, ...). */
+  readonly money: boolean;
+  /** Ngay sau con so la chu "ngày" — mot cam ket ve thoi han. */
+  readonly days: boolean;
+}
+
+/** Nhom chu so ke ca dau phan cach; dau cuoi bi cat de "1.150.000." khong nuot dau cham cau. */
+const NUMERAL_TOKEN = /\d[\d.,]*/gu;
+/** Don vi tien ngay sau con so, kem phan le viet dinh ("2tr5" = 2.500.000, "1k5" = 1.500). */
+const MONEY_UNIT = /^\s*(k|tr|tri[eệ]u|ngh[iì]n|ng[aà]n|vnd|[dđ])(\d*)(?![\p{L}])/iu;
+/** Chu "ngày" ngay sau con so — co dau hoac khong. */
+const DAY_WORD = /^\s*ng[aà]y(?![\p{L}])/iu;
+
+function scaleOf(unit: string): number {
+  const lower = normalize(unit);
+  if (lower.startsWith('tr')) return 1_000_000;
+  if (lower.startsWith('k') || lower.startsWith('ng')) return 1_000;
+  return 1;
 }
 
 /**
- * Mot cach viet ra NHIEU con so co the: "1.150k" co the la 1150 (chu so nhu viet) hoac 1150000
- * (da nhan 1000). Giu ca hai — de khong chan mot cach VIET, chi chan mot con so BIA.
+ * MOT CACH VIET -> DUNG MOT GIA TRI, hoac `null`.
+ *
+ * Quy uoc Viet Nam: `.` phan cach hang nghin, `,` phan cach thap phan. Phan biet bang DO DAI nhom
+ * chu so chu khong bang ky tu: nhom 3 chu so = hang nghin ("1.150" = 1150), nhom 1-2 chu so = phan
+ * thap phan ("1,15" = 1.15; "30.6" = 30.6, mot ngay thang chu khong phai 306).
+ *
+ * Khong quy duoc ve mot gia tri thi tra `null` — va `null` o cong tham quyen la KHONG GUI. Mot
+ * cach viet nhap nhang khong duoc phep tu chon nghia co loi cho no.
  */
-export function canonicalMoneyForms(digits: string, unit: string): string[] {
-  const bare = digits.replace(/[.,\s]/g, '');
-  if (!bare) return [];
-  const scaled = scaleFor(unit);
-  const forms = [bare];
-  if (scaled) forms.push(String(Number(bare) * scaled));
-  return forms.filter((form) => /^\d+$/.test(form));
-}
+export function numeralValue(token: string): number | null {
+  const groups = token.split(/[.,]/u);
+  if (groups.some((group) => group === '')) return null;
+  if (groups.length === 1) return Number(groups[0]);
 
-function scaleFor(unit: string): number | null {
-  const lower = unit.toLowerCase();
-  if (lower.startsWith('k') || lower.startsWith('ngh')) return 1_000;
-  if (lower.startsWith('tr')) return 1_000_000;
+  const tail = groups.slice(1);
+  if (tail.every((group) => group.length === 3)) return Number(groups.join(''));
+  if (tail.length === 1 && tail[0]!.length <= 2) return Number(`${groups[0]}.${tail[0]}`);
   return null;
 }
 
 /**
- * Moi lan so tien xuat hien trong van ban, da loai cac con so qua ngan (so luong, thang, kich
- * thuoc). Rong = van ban khong dua ra khang dinh tien nao.
+ * MOI con so trong doan van, kem don vi va ngu canh ngay thang di lien.
+ *
+ * Day la phep quet VET CAN: `\d` khong the vang mat khoi mot cau co so. Moi lop kiem ben tren
+ * deu dua tren ket qua nay chu khong dua tren mot mau rieng cho tung cach viet tien.
  */
-export function monetaryClaims(text: string): MonetaryClaim[] {
-  const claims: MonetaryClaim[] = [];
-  for (const match of text.matchAll(MONEY_PATTERN)) {
-    const forms = canonicalMoneyForms(match[1] ?? '', match[2] ?? '').filter(
-      (form) => form.length >= MIN_MONEY_DIGITS,
-    );
-    if (forms.length) claims.push({ written: match[0].trim(), forms });
+export function numeralLiterals(text: string): NumeralLiteral[] {
+  const literals: NumeralLiteral[] = [];
+  for (const match of text.matchAll(NUMERAL_TOKEN)) {
+    const token = match[0].replace(/[.,]+$/u, '');
+    if (!token) continue;
+    const rest = text.slice((match.index ?? 0) + token.length);
+    const unit = MONEY_UNIT.exec(rest);
+    const base = numeralValue(token);
+    literals.push({
+      written: token + (unit?.[0]?.trim() ?? ''),
+      value: unit ? scaledValue(base, unit[1] ?? '', unit[2] ?? '') : base,
+      money: Boolean(unit),
+      days: DAY_WORD.test(rest),
+    });
   }
-  return claims;
+  return literals;
+}
+
+/** "2tr5" = 2 trieu + 5 tram nghin. Phan le viet dinh nhan theo do dai cua chinh no. */
+function scaledValue(base: number | null, unit: string, fraction: string): number | null {
+  if (base === null) return null;
+  const scale = scaleOf(unit);
+  if (!fraction) return exactInteger(base * scale);
+  // Vua co phan thap phan ("1,15tr") vua co phan le viet dinh ("1,15tr5") = nhap nhang.
+  if (!Number.isInteger(base)) return null;
+  return exactInteger(base * scale + Number(fraction) * (scale / 10 ** fraction.length));
+}
+
+function exactInteger(value: number): number | null {
+  return Number.isInteger(value) ? value : null;
 }
 
 /**
- * Tap dang chu so DUOC UY QUYEN cho mot bo gia tri tat dinh.
+ * Cac con so mang NGHIA TIEN trong doan van.
  *
- * Kem cac dang rut gon ma nguoi Viet that su viet: 1.150.000 -> "1.150k" (1150), "1,15tr" (115).
- * Uy quyen mot CON SO thi uy quyen luon moi cach viet cua chinh no — thu bi chan la con so KHAC,
- * khong phai cach viet khac.
+ * Mot con so la tien khi co don vi tien di kem, HOAC khi do lon cua no vuot nguong, HOAC khi no
+ * khong quy duoc ve mot gia tri (nhap nhang thi phai xet, khong duoc bo qua). Khong co lop thu
+ * tu: khong tu dien don vi, khong tu dien cum tu tien te.
  */
-export function authorizedMoneyForms(values: readonly number[]): string[] {
-  const authorized = new Set<string>();
-  for (const value of values) {
-    if (!Number.isFinite(value)) continue;
-    const bare = String(Math.round(Math.abs(value)));
-    authorized.add(bare);
-    for (const zeros of [3, 6]) {
-      if (bare.length > zeros && /^0+$/.test(bare.slice(-zeros))) {
-        authorized.add(bare.slice(0, -zeros));
-      }
-    }
-  }
-  return [...authorized];
+export function monetaryLiterals(text: string): NumeralLiteral[] {
+  return numeralLiterals(text).filter(
+    (literal) => literal.money || literal.value === null || literal.value >= MONEY_MAGNITUDE_FLOOR,
+  );
+}
+
+/** Gia tri VND ma mot bo ket qua tat dinh uy quyen — so nguyen, dang chuoi thap phan. */
+export function authorizedAmounts(values: readonly number[]): string[] {
+  return [
+    ...new Set(
+      values
+        .filter((value) => Number.isFinite(value))
+        .map((value) => String(Math.round(Math.abs(value)))),
+    ),
+  ];
 }
 
 /* ------------------------------------------------------------------ *
- * LOP CHINH SACH
+ * LOP CHINH SACH — MA CHINH XAC TUNG LOAI
  * ------------------------------------------------------------------ */
 
 /**
- * Sau loai khang dinh chinh sach theo muc 2 hop dong nhiem vu.
+ * Be mat cua tung LOAI chinh sach, tren van ban da chuan hoa (bo dau, thuong hoa, `đ` -> `d`).
  *
- * Dong lai co y: mot loai moi la mot quyet dinh nghiep vu (phai co nguon tat dinh cap phep cho no),
- * khong phai mot lan them chuoi.
- */
-export const POLICY_CLAIM_CODES = [
-  /** Dieu khoan cong no/thanh toan: cong no N ngay, ky gui, tra cham, thanh toan ngay. */
-  'payment_terms',
-  /** VAT / hoa don do. */
-  'vat',
-  /** COD / thu ho. */
-  'cod',
-  /** Cuoc van chuyen / phi ship. */
-  'shipping',
-  /** Quyen huong khuyen mai, chiet khau, qua tang. */
-  'promotion',
-  /** Cau noi ham y da co mot lan phe duyet. */
-  'authorization',
-] as const;
-export type PolicyClaimCode = (typeof POLICY_CLAIM_CODES)[number];
-
-/**
- * Tu dien be mat, tren van ban DA CHUAN HOA (bo dau, thuong hoa, `đ` -> `d`).
+ * Ma sinh ra la ma CHINH XAC (`payment_policy:ky_gui`), khong phai mot ma chung. Review doc lap
+ * (B3) chi ra rang khi ca "ký gửi" lan "thanh toán ngay" cung quy ve `payment_terms`, thi mot dai
+ * ly thanh-toan-ngay lai cap phep cho ban nhap noi ve ky gui — hai chinh sach TRAI NGUOC nhau.
  *
- * Moi muc phai la mot cum DU DAC TRUNG. Mot tu don le nhu "gia" hay "phi" se bat ca nhung cau
- * KHONG dua ra khang dinh chinh sach ("gia nay em kiem tra lai roi bao anh"), va mot bo trich
- * bang chung ket qua sai la mot bo trich khong ai tin nua.
+ * `cong_no` la HO, khong phai mot ky han: "bên mình cho công nợ" khong noi 30 hay 45. Ky han cu
+ * the di theo `terms_days:<N>` ben duoi, va do la thu chan viec doi con so.
  */
-const POLICY_SURFACES: Readonly<Record<PolicyClaimCode, readonly string[]>> = {
-  payment_terms: [
-    'cong no',
-    'tra cham',
-    'goi dau',
-    'ky gui',
+const POLICY_SURFACES: Readonly<Record<string, readonly string[]>> = {
+  'payment_policy:cong_no': ['cong no', 'tra cham', 'goi dau', 'han thanh toan'],
+  'payment_policy:ky_gui': ['ky gui'],
+  'payment_policy:thanh_toan_ngay': [
     'thanh toan ngay',
     'thanh toan truoc',
-    'han thanh toan',
     'chuyen khoan truoc',
+    'tra tien ngay',
   ],
-  vat: ['vat', 'hoa don do', 'xuat hoa don', 'thue gtgt'],
+  'payment_policy:cod': ['cod', 'thu ho', 'nhan tien khi giao'],
   cod: ['cod', 'thu ho', 'nhan tien khi giao'],
+  vat: ['vat', 'hoa don do', 'xuat hoa don', 'thue gtgt'],
   shipping: [
     'phi ship',
     'phi van chuyen',
@@ -178,71 +211,82 @@ const POLICY_SURFACES: Readonly<Record<PolicyClaimCode, readonly string[]>> = {
 };
 
 /**
- * SO NGAY CONG NO ma doan van neu ra, neu co.
+ * MA KHANG DINH CHINH SACH ma doan van dang dua ra.
  *
- * VI SAO PHAI TACH RIENG: uy quyen o muc LOAI ("dai ly nay co dieu khoan cong no") van de lot mot
- * ban nhap doi CON SO ("cong no 30 ngay" cho mot dai ly dang o ky han 45). Muc 6 hop dong goi dung
- * ten dieu do: LLM duoc dien dat lai mot su that da duyet, khong duoc THAY GIA TRI cua no.
+ * Hai nguon, va nguon thu hai moi la thu quan trong:
+ *   1. tu dien be mat tren — noi ro LOAI chinh sach (phong thu chieu sau);
+ *   2. MOI cum `N ngày` trong bai -> `terms_days:N` — VAT MANG, khong phu thuoc tu dien.
  *
- * `d{1,3}` va cua so hai chieu: nguoi Viet viet ca "cong no 30 ngay" lan "30 ngay cong no".
- */
-const PAYMENT_TERM_DAYS =
-  /(?:cong no|tra cham|goi dau|han thanh toan)\D{0,12}?(\d{1,3})\s*ngay|(\d{1,3})\s*ngay\s*(?:cong no|tra cham|goi dau)/u;
-
-export function paymentTermDays(text: string): number | null {
-  const match = PAYMENT_TERM_DAYS.exec(normalize(text));
-  if (!match) return null;
-  const days = Number(match[1] ?? match[2]);
-  return Number.isInteger(days) && days > 0 ? days : null;
-}
-
-/**
- * MA KHANG DINH CHINH SACH ma doan van CO DANG dang dua ra.
- *
- * Ngoai sau ma goc, con co the co mot ma TINH THEO GIA TRI: `payment_terms:30`. Mot grant chi uy
- * quyen `payment_terms` (vd `ky_gui`) se KHONG phu duoc `payment_terms:30` — dung y.
+ * Nho (2) ma "Anh được thanh toán sau 30 ngày." bi chan du "thanh toan sau" KHONG nam trong tu
+ * dien nao: con so ngay la thu khong the giau di khi da hua mot thoi han.
  */
 export function policyClaimTokens(text: string): string[] {
   const normalized = normalize(text);
-  const tokens: string[] = POLICY_CLAIM_CODES.filter((code) =>
-    POLICY_SURFACES[code].some((surface) => normalized.includes(surface)),
-  );
-  const days = paymentTermDays(text);
-  if (days !== null && !tokens.includes('payment_terms')) tokens.push('payment_terms');
-  if (days !== null) tokens.push(`payment_terms:${days}`);
-  return tokens;
+  const tokens = new Set<string>();
+  for (const [code, surfaces] of Object.entries(POLICY_SURFACES)) {
+    if (surfaces.some((surface) => normalized.includes(surface))) tokens.add(code);
+  }
+  for (const literal of numeralLiterals(text)) {
+    if (literal.days) tokens.add(`terms_days:${literal.value ?? 'khong_ro'}`);
+  }
+  return [...tokens];
 }
 
 /* ------------------------------------------------------------------ *
- * LOP CAM KET DON
+ * LOP CAM KET DON — CO MUC, KHONG PHAI MOT CAI GAT DAU
  * ------------------------------------------------------------------ */
 
-/** Gia tri uy quyen duy nhat cua lop `order_commitment`. */
-export const ORDER_COMMITMENT_CLAIM = 'order_recorded';
+/** Danh tu don. Khong co no thi khong co cam ket don, du cau co bao nhieu the hoan thanh. */
+const ORDER_NOUN = /\b(don hang|don|order)\b/u;
 
 /**
- * Dong tu cam ket DI KEM danh tu don — khong bat mot loi cam on chung chung.
+ * THE HOAN THANH cua tieng Viet — tap DONG va rat nho.
  *
- * VI SAO PHAI DI KEM: "em da ghi nhan y kien cua anh" trong mot cau ho tro KHONG phai mot cam ket
- * nghiep vu, con "em da ghi nhan don cua anh" thi la. Bat rieng dong tu se lam moi cau xac nhan
- * lich su tro thanh mot khang dinh he qua — va mot bo trich bao dong gia lien tuc se bi tat.
+ * Day la ly do ca "Đơn của anh đã vào hệ thống rồi." bi chan ma khong ai phai them cum "vào hệ
+ * thống" vao dau ca: muon noi mot viec DA xay ra voi cai don, tieng Viet phai dung mot trong ba
+ * tu nay. Dong tu o giua thi vo han; the hoan thanh thi khong.
+ *
+ * CO DAU, va KHONG chay tren van ban da chuan hoa — day la mot phan biet BAT BUOC: bo dau thi
+ * `đã` (the hoan thanh) va `dạ` (tieng da thua le phep) deu thanh "da". Gan nhu moi cau tra loi
+ * lich su deu mo dau bang "Dạ", nen chay tren ban bo dau se bien MOI cau co chu "đơn" thanh mot
+ * cam ket don — vua chan oan, vua sai ve nghia.
+ *
+ * DANH DOI da biet: mot ban nhap viet HOAN TOAN khong dau mat tin hieu nay. Chap nhan duoc vi ban
+ * nhap gui khach do persona viet tieng Viet co dau; con duong DONG TU ben duoi van chay tren ban
+ * da chuan hoa, nen "da ghi nhan don" viet khong dau van bi bat.
  */
-const COMMITMENT_VERB = '(?:ghi nhan|chot|tao|len|dat|nhan)';
-const ORDER_NOUN = '(?:don hang|don|order)';
-const COMMITMENT_PATTERNS: readonly RegExp[] = [
-  // "da ghi nhan don", "chot don cho anh", "da len don"
-  new RegExp(`${COMMITMENT_VERB}\\s+(?:xong\\s+)?${ORDER_NOUN}\\b`, 'u'),
-  // "don da duoc ghi nhan", "don cua anh da chot"
-  new RegExp(`${ORDER_NOUN}\\s+(?:\\S+\\s+){0,3}?da\\s+(?:duoc\\s+)?${COMMITMENT_VERB}\\b`, 'u'),
+const PERFECTIVE = /đã|rồi|xong/u;
+
+/**
+ * DONG TU CAM KET -> MUC ma no tuyen bo. Chi de PHAN MUC, khong de phat hien.
+ *
+ * Viec phat hien do `ORDER_NOUN` + `PERFECTIVE` lo. Bang nay chi tra loi cau hoi thu hai: "cau do
+ * tuyen bo den muc nao?". Khong khop dong tu nao => lay MUC CAO NHAT, vi mot cach noi khong nhan
+ * ra duoc thi khong duoc phep tu nhan cho minh muc nhe nhat.
+ */
+const COMMITMENT_LEVEL_VERBS: readonly (readonly [OutboundCommitmentLevel, RegExp])[] = [
+  ['fulfilled', /\b(da gui|da chuyen|dang giao|da giao|da dong bo)\b/u],
+  ['confirmed', /\b(chot|xac nhan|duyet)\b/u],
+  ['recorded', /\b(ghi nhan|len|tao|nhan|dat)\b/u],
 ];
 
 /**
- * Doan van co dang khang dinh mot don DA duoc ghi nhan/chot/tao khong?
+ * MUC cam ket ma doan van dang tuyen bo, hoac `null` neu no khong tuyen bo gi ve trang thai don.
  *
- * Ket qua `true` khong noi don do co that — no noi rang neu KHONG co trang thai don nao uy quyen
- * cho cau nay thi tin nay khong duoc ra khoi he thong.
+ * `null` KHONG co nghia "an toan" — no chi co nghia lop nay khong co y kien; cac lop khac (tien,
+ * chinh sach) van xet doc lap.
  */
-export function claimsOrderCommitment(text: string): boolean {
+export function claimedCommitmentLevel(text: string): OutboundCommitmentLevel | null {
   const normalized = normalize(text);
-  return COMMITMENT_PATTERNS.some((pattern) => pattern.test(normalized));
+  if (!ORDER_NOUN.test(normalized)) return null;
+  const perfective = PERFECTIVE.test(text.toLowerCase());
+  const matched = COMMITMENT_LEVEL_VERBS.find(([, pattern]) => pattern.test(normalized));
+  if (!matched && !perfective) return null;
+  // Co the hoan thanh nhung khong nhan ra dong tu => muc cao nhat (fail-closed).
+  return matched ? matched[0] : 'fulfilled';
+}
+
+/** Ma uy quyen cua mot muc cam ket. Grant CONG DON: `confirmed` keo theo `recorded`. */
+export function commitmentToken(level: OutboundCommitmentLevel): string {
+  return `order:${level}`;
 }

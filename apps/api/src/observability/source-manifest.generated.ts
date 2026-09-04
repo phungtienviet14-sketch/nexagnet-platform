@@ -20,7 +20,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "audit.persist": {
       "functionName": "OrdersService.recordManualAction",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 573
+      "line": 574
     },
     "auth.credentials.change": {
       "functionName": "AuthService.changePassword",
@@ -214,7 +214,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.policy": {
       "functionName": "grantsFromDealerPolicy",
       "filePath": "apps/api/src/outbound/outbound-authority.ts",
-      "line": 138
+      "line": 176
     },
     "rules.pricing": {
       "functionName": "grantsFromPricedOrder",
@@ -223,7 +223,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.quote": {
       "functionName": "grantsFromQuote",
       "filePath": "apps/api/src/outbound/outbound-authority.ts",
-      "line": 133
+      "line": 171
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
