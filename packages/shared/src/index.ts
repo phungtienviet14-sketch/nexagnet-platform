@@ -185,6 +185,25 @@ export type {
   SupervisorSummary,
 } from './agents.js';
 export {
+  OUTBOUND_CLAIM_CLASSES,
+  OUTBOUND_CLAIM_CLASS_LABELS,
+  OUTBOUND_AUTHORITY_SOURCES,
+  OUTBOUND_PROVENANCES,
+  OUTBOUND_AUTHORITY_REASONS,
+  OUTBOUND_AUTHORITY_REASON_LABELS,
+} from './outbound-authority.js';
+export type {
+  OutboundAuthority,
+  OutboundAuthorityAllowReason,
+  OutboundAuthorityDenyReason,
+  OutboundAuthorityGrant,
+  OutboundAuthorityReason,
+  OutboundAuthoritySource,
+  OutboundAuthorityVerdict,
+  OutboundClaimClass,
+  OutboundProvenance,
+} from './outbound-authority.js';
+export {
   CONTENT_LIFECYCLE_STATUSES,
   ASSET_KINDS,
   CONTENT_LINK_KINDS,
