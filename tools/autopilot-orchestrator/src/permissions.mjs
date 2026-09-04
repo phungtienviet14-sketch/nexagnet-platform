@@ -193,7 +193,8 @@ export const WRITE_GRANT_BY_RESOURCE = Object.freeze({
  * khong cong nao doi chieu duoc. Nay quyen di theo loai tai nguyen, va loai tai nguyen la thu mot
  * nguoi doc code KIEM duoc: `{n}` la so PR hay so Issue.
  *
- * Mot `resource` la nem NGAY LUC NAP MODULE — fail-closed, va no do trong PR chu khong o san xuat.
+ * Mot `resource` KHONG BIET thi NEM NGAY LUC NAP MODULE — fail-closed, va no do trong PR chu khong
+ * o san xuat.
  *
  * @param {{ name: string, resource: string, verb: 'POST' | 'PUT' | 'PATCH' | 'DELETE', endpoint: string, site: string }} call
  * @returns {WriteCall}
