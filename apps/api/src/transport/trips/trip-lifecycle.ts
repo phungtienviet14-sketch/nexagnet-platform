@@ -79,6 +79,21 @@ export const TRIP_TRANSITION_DENIED_REASONS = [
   'TRIP_RESOURCES_MISSING',
   /** Chuyen thue xe ngoai ma chua chi dinh nha xe. */
   'TRIP_CARRIER_MISSING',
+  /**
+   * HUY phai di qua duong RIENG — `#168 B6`, `GD-02`.
+   *
+   * `CANCELLED` van la mot dinh CO THAT trong do thi (`ALLOWED_EDGES` giu nguyen): mot chuyen dang
+   * `PLANNED` THUC SU co the ket thuc o trang thai huy. Cai bi dong o day la MOT DUONG DI toi no.
+   *
+   * Duong chung `POST /trips/:id/transition` chi doi `transport.trip.transition` — quyen ma Ke toan
+   * CO — trong khi `transport.trip.cancel` co y KHONG duoc cap cho ho (VT-082/`GD-02`). Va
+   * `TripRepository.setStatus()` khong ghi `cancelledAt` lan `cancellationReason`. Hai dieu do cong
+   * lai cho ra mot chuyen DA HUY MA KHONG CO LY DO, do mot nguoi khong duoc phep huy tao ra.
+   *
+   * Chan o ham THUAN nay chu khong o controller la co chu y: mot cong dat o controller chi bao ve
+   * dung mot route, va route thu hai se ra doi ma khong ai nho.
+   */
+  'TRIP_CANCEL_REQUIRES_DEDICATED_PATH',
 ] as const;
 export type TripTransitionDeniedReason = (typeof TRIP_TRANSITION_DENIED_REASONS)[number];
 
@@ -106,6 +121,10 @@ export function evaluateTripTransition(
 ): TripTransitionDecision {
   if (isTerminalTripStatus(from)) return deny('TRIP_ALREADY_TERMINAL');
   if (from === to) return deny('TRIP_ALREADY_IN_STATE');
+  // TRUOC phep kiem canh, khong sau: `PLANNED -> CANCELLED` LA mot canh hop le cua do thi, nen dat
+  // sau se cho no di lot. Cau tra loi dung o day khong phai "canh nay khong ton tai" ma la "canh
+  // nay ton tai, nhung khong di qua duong nay".
+  if (to === 'CANCELLED') return deny('TRIP_CANCEL_REQUIRES_DEDICATED_PATH');
   if (!ALLOWED_EDGES[from].includes(to)) return deny('TRANSITION_NOT_PERMITTED');
 
   if (to === 'IN_TRANSIT') {

@@ -99,12 +99,14 @@ import { SourceTruthWriteService } from './settings/source-truth-write.service.j
 import { SourceRegistryModule } from './source-registry/source-registry.module.js';
 import { StreamController } from './stream/stream.controller.js';
 import { DriverFundController } from './transport/costing/driver-fund.controller.js';
+import { DriverExpensesSelfController } from './transport/costing/driver-expenses-self.controller.js';
 import { DriverFundSelfController } from './transport/costing/driver-fund-self.controller.js';
 import { TransportCostingModule } from './transport/costing/transport-costing.module.js';
 import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js';
 import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
+import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
 import { TransportAssetComplianceModule } from './transport/asset-compliance/transport-asset-compliance.module.js';
 import { TransportWorkforceModule } from './transport/workforce/transport-workforce.module.js';
@@ -224,6 +226,9 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-costing', DriverFundController),
   // SO QUY CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
   owned('transport-costing', DriverFundSelfController),
+  // KHOAN CHI CUA CHINH TOI (`#168 B3`/`B4`) — route rieng, cung ly le. Den cung `transport-costing`
+  // va bien mat cung no: mot khach khong bat gia thanh thi khong co "khoan chi" de lai xe tu ghi.
+  owned('transport-costing', DriverExpensesSelfController),
   owned('transport-fuel', FuelEntriesController),
   owned('transport-fuel', FuelReconciliationController),
   // PHIEU DAU CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
@@ -237,6 +242,9 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-asset-compliance', OperationalAlertsController),
   // `TX-07` — ky luong, phieu luong.
   owned('transport-workforce', PayrollController),
+  // `TX-05` — BAO CAO quyet toan, CHI DOC (`#168 B1`). Capability nay chay tu T5 nhung chua tung co
+  // mot duong HTTP nao; xem khoi chu thich cua controller ve vi sao khong co route ghi.
+  owned('transport-settlement', SettlementReportsController),
 ];
 
 const guardProviders: readonly Provider[] = [

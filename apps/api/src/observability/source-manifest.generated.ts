@@ -93,7 +93,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "costing.reversal": {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 394
+      "line": 472
     },
     "dealers.configured": {
       "functionName": "evaluateOperationalReadiness",
@@ -260,14 +260,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "line": 75
     },
     "transport.costing.expense.read": {
-      "functionName": "TripExpensesController.breakdown",
-      "filePath": "apps/api/src/transport/costing/trip-expenses.controller.ts",
-      "line": 42
+      "filePath": "apps/api/src/transport/costing/trip-expenses.controller.ts"
     },
     "transport.costing.expense.record": {
       "functionName": "TripExpensesController.record",
       "filePath": "apps/api/src/transport/costing/trip-expenses.controller.ts",
-      "line": 49
+      "line": 66
     },
     "transport.costing.period.manage": {
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts"
@@ -291,6 +289,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.driver.self.expense.record": {
+      "filePath": "apps/api/src/transport/costing/driver-expenses-self.controller.ts"
     },
     "transport.driver.self.fuel.read": {
       "filePath": "apps/api/src/transport/fuel/driver-fuel.controller.ts"
@@ -394,6 +395,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PayrollController.pay",
       "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
       "line": 145
+    },
+    "transport.settlement.document.read": {
+      "functionName": "SettlementReportsController.documentChain",
+      "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts",
+      "line": 121
+    },
+    "transport.settlement.report.read": {
+      "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts"
     },
     "transport.trip.assign": {
       "functionName": "TripsController.assign",
@@ -543,12 +552,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "costing.reversal|*": {
       "functionName": "CostingService.denyReversal",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 458
+      "line": 536
     },
     "costing.reversal|REVERSAL_POSTED": {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 432
+      "line": 510
+    },
+    "driver.self_expense_scope|SELF_EXPENSE_SCOPE_GRANTED": {
+      "functionName": "CostingService.recordSelfTripExpense",
+      "filePath": "apps/api/src/transport/costing/costing.service.ts",
+      "line": 375
+    },
+    "driver.self_expense_scope|SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING": {
+      "functionName": "CostingService.recordSelfTripExpense",
+      "filePath": "apps/api/src/transport/costing/costing.service.ts",
+      "line": 357
     },
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_GRANTED": {
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts"
@@ -1062,12 +1081,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "trip_expense.record|*": {
       "functionName": "CostingService.guardTripAcceptsExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 539
+      "line": 617
     },
     "trip_expense.record|EXPENSE_DRIVER_NOT_ASSIGNED": {
       "functionName": "CostingService.requireDriverAssignedToTrip",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 625
+      "line": 703
     },
     "trip_expense.record|EXPENSE_IDEMPOTENT_REPLAY": {
       "functionName": "CostingService.recordTripExpense",

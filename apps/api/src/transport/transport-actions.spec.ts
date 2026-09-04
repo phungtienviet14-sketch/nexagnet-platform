@@ -51,6 +51,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.fuel.reconciliation.resolve',
       'transport.fuel.reconciliation.close',
       'transport.fuel.reconciliation.reopen',
+      // `TX-05` di vao HTTP o `#168 B1` — CHI DOC. Khong ma ghi nao, xem `transport-actions.ts`.
+      'transport.settlement.report.read',
+      'transport.settlement.document.read',
       'transport.maintenance.plan.read',
       'transport.maintenance.plan.manage',
       'transport.maintenance.work_order.open',
@@ -70,6 +73,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.driver.self.fund.read',
       'transport.driver.self.fuel.read',
       'transport.driver.self.fuel.submit',
+      // `#168 B3` — lai xe tu ghi mot khoan chi lay tu quy CUA CHINH MINH. Tach han khoi
+      // `transport.costing.expense.record`, la ma van hanh ghi duoc cho bat ky ai.
+      'transport.driver.self.expense.record',
     ]);
   });
 
@@ -93,6 +99,21 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('ACCOUNTING', 'transport.trip.assign')).toBe(true);
       expect(roleCanPerform('ACCOUNTING', 'transport.trip.transition')).toBe(true);
       expect(roleCanPerform('ACCOUNTING', 'transport.vehicle.manage')).toBe(true);
+    });
+
+    /**
+     * `#168 B1`/`B3` — hai ma moi cua T7B roi dung ben cua bang phan hoach.
+     *
+     * Ke toan la nguoi doc cong no hang ngay, nen ho PHAI co ca hai ma bao cao. Nguoc lai, ma tu
+     * phuc vu cua lai xe khong duoc chay nguoc len be mat van hanh: no lay danh tinh tu phien, va
+     * mot nguoi van hanh dung no se ghi duoc khoan chi duoi ten ho so lai xe cua chinh ho.
+     */
+    it('#168: doc duoc bao cao quyet toan, va khong mang pham vi tu phuc vu cua lai xe', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.settlement.report.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.settlement.document.read')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.settlement.report.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.driver.self.expense.record')).toBe(false);
+      expect(roleCanPerform('ADMIN', 'transport.driver.self.expense.record')).toBe(false);
     });
 
     it('KHONG huy duoc chuyen — nguon noi ro "khong xoa du lieu"', () => {
@@ -150,7 +171,27 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.fund.read',
         'transport.driver.self.fuel.read',
         'transport.driver.self.fuel.submit',
+        'transport.driver.self.expense.record',
       ]);
+    });
+
+    /**
+     * `#168 B3` — pham vi tu phuc vu KHONG duoc keo theo quyen van hanh tuong ung.
+     *
+     * Day la phep thu quan trong nhat cua B3: ma moi phai la mot QUYEN HEP, khong phai mot loi tat
+     * toi `transport.costing.expense.record` — ma van hanh ghi duoc cho bat ky chuyen nao va bat ky
+     * lai xe nao, ke ca bang tien cua nguoi khac.
+     */
+    it('#168 B3: ghi duoc khoan chi cua CHINH MINH, nhung khong cham duong van hanh', () => {
+      expect(roleCanPerform('SALE', 'transport.driver.self.expense.record')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.costing.expense.record')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.costing.expense.read')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.costing.reversal.post')).toBe(false);
+    });
+
+    it('#168 B1: lai xe KHONG doc duoc mot bao cao quyet toan nao', () => {
+      expect(roleCanPerform('SALE', 'transport.settlement.report.read')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.settlement.document.read')).toBe(false);
     });
 
     it('KHONG doc duoc danh sach chuyen chung — day la cho ro ri de nhat', () => {
