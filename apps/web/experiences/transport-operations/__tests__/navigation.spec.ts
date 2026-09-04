@@ -30,6 +30,26 @@ const FULL: readonly CapabilityId[] = [
   'transport-settlement',
 ];
 
+/**
+ * Hai ma cua T6 — CO THAT trong `CapabilityId` tu khi PR #152 vao `main`. Truoc day bo test nay
+ * phai `as unknown as` de dien lai mot tinh huong tuong lai; nay khong con phai, va do chinh la
+ * y nghia cua §4.2 trong #180: cho tam bang chuoi da duoc thay bang kieu that.
+ */
+const T6_CAPABILITIES: readonly CapabilityId[] = [
+  'transport-asset-compliance',
+  'transport-workforce',
+];
+
+/**
+ * Hai ma cua T6 — CO THAT trong `CapabilityId` tu khi PR #152 vao `main`. Truoc do bo test nay
+ * phai `as unknown as` de dien lai tinh huong tuong lai; nay khong con phai, va do la ca y nghia
+ * cua §4.2 trong #180: cho tam bang chuoi da duoc thay bang kieu that.
+ */
+const T6_CAPABILITIES: readonly CapabilityId[] = [
+  'transport-asset-compliance',
+  'transport-workforce',
+];
+
 const director = (capabilities: readonly CapabilityId[] = FULL): NavigationInput => ({
   capabilities,
   role: 'ADMIN',
@@ -76,10 +96,10 @@ describe('nang luc toi thieu — chi bat transport-core', () => {
   });
 });
 
-describe('TX-06 / TX-07 — an han, khong phai mot cho trong chet', () => {
-  it('hai muc bao duong va luong khong bao gio hien voi bo nang luc hop le hom nay', () => {
-    // `CapabilityId` la union DONG, nen khong tenant nao khai duoc hai ma nay. Muc bi an — dung
-    // yeu cau cua §2: khong hien mot cho trong chet cho khach.
+describe('TX-06 / TX-07 — theo dung nang luc khach da bat, khong phai mot cho trong chet', () => {
+  it('hai muc bao duong va luong an khi khach KHONG bat hai nang luc do', () => {
+    // `FULL` co du bon nang luc van tai cu nhung KHONG co hai ma cua T6. Muc bi an — dung yeu cau
+    // cua #161 §2: khong hien mot cho trong chet cho khach.
     for (const input of [director(), accountant(), unknownRole()]) {
       expect(idsOf(input)).not.toContain('maintenance');
       expect(idsOf(input)).not.toContain('payroll');
@@ -88,20 +108,29 @@ describe('TX-06 / TX-07 — an han, khong phai mot cho trong chet', () => {
     expect(canNavigateTo('payroll', director())).toBe(false);
   });
 
-  it('hai muc do TU HIEN khi ma nang luc xuat hien — khong phai sua dieu huong', () => {
-    // Mo phong ngay T6 dong: ma duoc them vao `CAPABILITY_IDS`. Cast la co y va CHI o test —
-    // no dien lai dung tinh huong tuong lai ma trong code that se den tu `packages/tenant`.
-    const afterT6 = [...FULL, ...PENDING_CAPABILITIES] as unknown as readonly CapabilityId[];
-    const visible = idsOf({ capabilities: afterT6, role: 'ADMIN' });
+  it('hai muc do hien khi khach bat ma nang luc T6 — khong phai sua dieu huong', () => {
+    const visible = idsOf(director([...FULL, ...T6_CAPABILITIES]));
     expect(visible).toContain('maintenance');
     expect(visible).toContain('payroll');
   });
 
+  it('moi muc doi DU bo nang luc cua no, khong chi mot ma', () => {
+    // Bao duong doi `transport-core` + `transport-asset-compliance`. Bat mot minh ma T6 ma thieu
+    // loi thi van phai an — neu khong, mot goi khach khai thieu se ra mot man hinh goi API 403.
+    const onlyCompliance = idsOf(director(['transport-asset-compliance']));
+    expect(onlyCompliance).not.toContain('maintenance');
+    // Luong doi `transport-costing` + `transport-workforce`.
+    const workforceWithoutCosting = idsOf(director(['transport-core', 'transport-workforce']));
+    expect(workforceWithoutCosting).not.toContain('payroll');
+  });
+
   it('man phieu luong cua lai xe cung theo dung mot cong do', () => {
     expect(visibleDriverScreens(driver()).map((screen) => screen.id)).not.toContain('payslip');
-    const afterT6 = [...FULL, ...PENDING_CAPABILITIES] as unknown as readonly CapabilityId[];
     expect(
-      visibleDriverScreens({ capabilities: afterT6, role: 'SALE' }).map((screen) => screen.id),
+      visibleDriverScreens({
+        capabilities: [...FULL, ...T6_CAPABILITIES],
+        role: 'SALE',
+      }).map((screen) => screen.id),
     ).toContain('payslip');
   });
 });

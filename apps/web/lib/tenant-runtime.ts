@@ -14,6 +14,17 @@ export interface BlockedCapabilityDescriptor {
   readonly reason: string;
 }
 
+/**
+ * LOI TU THU cua goi khach rang ban trien khai nay la mot BAN XEM TRUOC.
+ *
+ * Hai truong deu la cau chu do khach viet ra, khong phai bi mat, nen chung duoc phep qua ranh gioi
+ * server -> trinh duyet. Vang mat ⇒ khong hien gi.
+ */
+export interface PreviewNoticeDescriptor {
+  readonly label: string;
+  readonly note: string;
+}
+
 export interface PublicTenantDescriptor {
   readonly branding: Branding;
   readonly experience: ExperienceId;
@@ -37,6 +48,8 @@ export interface PublicTenantDescriptor {
    */
   readonly readiness: {
     readonly blockedCapabilities: readonly BlockedCapabilityDescriptor[];
+    /** Chi co o goi khach TU KHAI la ban xem truoc. `undefined` cho moi khach that. */
+    readonly previewNotice?: PreviewNoticeDescriptor;
   };
 }
 
@@ -61,6 +74,16 @@ export function toPublicTenantDescriptor(config: TenantConfig): PublicTenantDesc
       blockedCapabilities: config.policies.readiness.blockedCapabilities.map(
         ({ key, label, reason }) => ({ key, label, reason }),
       ),
+      // Chon tung truong mot, khong spread: mot truong moi trong schema khong duoc lang le di ra
+      // trinh duyet chi vi no duoc them vao `readiness`.
+      ...(config.policies.readiness.previewNotice
+        ? {
+            previewNotice: {
+              label: config.policies.readiness.previewNotice.label,
+              note: config.policies.readiness.previewNotice.note,
+            },
+          }
+        : {}),
     },
   };
 }

@@ -51,7 +51,8 @@
 .tx-shell {
   display: grid;
   grid-template-columns: var(--tx-rail) minmax(0, 1fr);
-  min-height: 100vh;
+  /* Tru dai bang xem truoc khi co; `0px` cho moi khach that. */
+  min-height: calc(100vh - var(--preview-strip-h, 0px));
   background: var(--tx-canvas);
 }
 
@@ -926,7 +927,8 @@
 .tx-driver {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  /* Tru dai bang xem truoc khi co; `0px` cho moi khach that. */
+  min-height: calc(100vh - var(--preview-strip-h, 0px));
   background: var(--tx-canvas);
 }
 

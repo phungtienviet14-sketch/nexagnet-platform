@@ -50,12 +50,31 @@ export function generateViewport(): Viewport {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   const tenant = toPublicTenantDescriptor(loadTenantConfig());
+  const preview = tenant.readiness.previewNotice;
   return (
     // suppressHydrationWarning: bo qua lech thuoc tinh do extension trinh duyet chen
     // vao <html>/<body> truoc khi React hydrate (vd mdl-js, bis_register). Khong giau
     // bug that ben trong — chi tac dung o dung 2 the goc nay.
     <html lang="vi" suppressHydrationWarning>
-      <body data-experience={tenant.experience} suppressHydrationWarning>
+      <body
+        data-experience={tenant.experience}
+        data-preview={preview ? 'on' : undefined}
+        suppressHydrationWarning
+      >
+        {/*
+          DAI BANG XEM TRUOC — chi hien khi GOI KHACH tu khai `readiness.previewNotice`.
+          Khong goi khach that nao khai truong nay, nen khong be mat khach nao doi mot pixel.
+
+          Nam TRONG DONG CHAY (khong `fixed`) vi mot dai bang che mat noi dung la mot dai bang
+          nguoi ta hoc cach lo di. Chieu cao duoc bao ra bang `--preview-strip-h` de cac vo dung
+          `100vh` tru dung phan do, thay vi de ca trang thua ra mot thanh cuon.
+        */}
+        {preview ? (
+          <div className="preview-ribbon" role="status">
+            <strong className="preview-ribbon__label">{preview.label}</strong>
+            <span className="preview-ribbon__note">{preview.note}</span>
+          </div>
+        ) : null}
         <Providers tenant={tenant}>
           <AuthGate>{children}</AuthGate>
         </Providers>

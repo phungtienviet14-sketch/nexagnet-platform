@@ -205,8 +205,9 @@ function SectionBody({
       return <ArApView />;
     case 'exports':
       return <ExportsView />;
-    // Hai muc duoi bi dieu huong AN han hom nay (ma nang luc `TX-06`/`TX-07` chua ton tai). Giu
-    // nhanh o day de khi ma do xuat hien thi khong con gi phai sua o tang dinh tuyen.
+    // Hai muc duoi hien theo dung nang luc khach bat (`transport-asset-compliance` /
+    // `transport-workforce` — co that trong `CapabilityId` tu khi T6 vao `main`). Man hinh cua
+    // chung chua noi vao read model cua may chu; do la viec cua T7D (#170).
     case 'maintenance':
       return <MaintenanceComplianceView />;
     case 'payroll':

@@ -198,30 +198,21 @@ export const TRANSPORT_API_GAPS = [
     severity: 'degrading',
   },
   {
-    id: 'tx06-tx07-capability-ids-absent',
+    id: 'tx06-tx07-views-not-wired',
     sections: ['maintenance', 'payroll'],
-    title: 'Chưa có mã capability cho TX-06 / TX-07',
-    needs: 'Che hai mục Bảo dưỡng & giấy tờ và Lương theo capability, đúng như §2 của #161 yêu cầu.',
-    actual:
-      'CapabilityId là z.enum ĐÓNG với 11 mã, không có transport-asset-compliance hay ' +
-      'transport-workforce. Viết thẳng vào requiredCapabilities sẽ làm tsc đỏ. Nên hai mục dùng ' +
-      'trục pendingCapability so bằng chuỗi với danh sách lúc chạy: hôm nay luôn ẩn, và tự hiện ' +
-      'khi T6 thêm mã vào CAPABILITY_IDS mà không phải sửa dòng điều hướng nào.',
-    serverSide: null,
-    severity: 'degrading',
-  },
-  {
-    id: 'no-transport-tenant-pack',
-    sections: ['overview'],
-    title: 'Chưa có gói khách nào bật nghiệp vụ vận tải',
+    title: 'TX-06 / TX-07 đã có đường HTTP, nhưng màn hình chưa nối vào',
     needs:
-      'Một tenant khai experience "transport-operations" để chạy thử và để dựng E2E cho bề mặt này.',
+      'Bảo dưỡng & giấy tờ và Lương đọc read model thật của máy chủ thay vì hiển thị bản thiết kế.',
     actual:
-      'Ba gói trong tenants/ khai operations-console, b2b-sales-operations, agent-workforce. Không ' +
-      'gói nào bật transport-core, và tenant cố định của Playwright cũng là b2b. Gói khách nằm ' +
-      'ngoài phạm vi apps/web/** của việc này.',
-    serverSide: null,
-    severity: 'blocking',
+      'T6 đã vào main (PR #152): mã capability transport-asset-compliance và transport-workforce ' +
+      'nay có thật, nên hai mục hiện theo đúng năng lực khách bật — không còn trục chuỗi tạm. ' +
+      'Nhưng hai màn này CHƯA gọi một endpoint nào: chúng vẫn là bản thiết kế. Việc nối vào ' +
+      '/transport/compliance/alerts, /transport/maintenance/due và /transport/payroll/* thuộc ' +
+      'T7D (#170), không nằm trong bản xem trước này.',
+    serverSide:
+      'Đã có 15 route TX-06 (compliance, maintenance, fleet-status, alerts) và 10 route TX-07 ' +
+      '(payroll periods/runs/payslips), tất cả @Roles(ACCOUNTING, ADMIN).',
+    severity: 'degrading',
   },
 ] as const satisfies readonly TransportApiGap[];
 

@@ -13,11 +13,13 @@ import { findSection, type TransportSectionId } from '../navigation';
  *   1. **Quyet toan / AR-AP / Bien truc tiep / Xuat du lieu** — `TX-05` DA CHAY o may chu nhung
  *      `transport-settlement.module.ts` khong khai mot controller nao. Khach da bat nghiep vu thi
  *      muc VAN hien, va noi that la chua lay ra duoc — an di se lam khach tuong ho chua mua.
- *   2. **Bao duong & giay to / Luong** — `TX-06`/`TX-07` chua dong (#88). Ma nang luc chua ton tai
- *      nen dieu huong da AN han hai muc nay; component o day la HOP DONG GIAO DIEN cho lan noi day
- *      sau khi T6 vao `main`, dung nhu #161 §5 yeu cau: thiet ke truoc, KHONG goi API chua merge.
+ *   2. **Bao duong & giay to / Luong** — `TX-06`/`TX-07` DA vao `main` (PR #152) va DA co 25 route
+ *      HTTP. Dieu huong khong con an hai muc nay: chung hien theo dung nang luc khach bat
+ *      (`transport-asset-compliance` / `transport-workforce`). Nhung hai component o day VAN chua
+ *      goi endpoint nao — noi chung vao read model that la viec cua T7D (#170). Cho den luc do
+ *      chung noi that rang chua noi, thay vi bay mot bang rong hay mot con so bia.
  *
- * Khong tep nao trong day goi mot endpoint nao. Do la co y.
+ * Khong tep nao trong day goi mot endpoint nao. Do la co y, va man hinh NOI RA dieu do.
  */
 
 function AwaitingSection({
@@ -102,8 +104,9 @@ export function ExportsView() {
 }
 
 /**
- * `TX-06`. Dieu huong da an muc nay (ma nang luc chua ton tai), nen component chi den duoc khi ma
- * do xuat hien. Giu no lai lam hop dong: khi T6 vao `main`, noi day vao read model CUA MAY CHU —
+ * `TX-06`. Muc nay hien khi khach bat `transport-asset-compliance`. May chu DA co read model va
+ * route (`GET /transport/compliance/alerts`, `/transport/maintenance/due`, `/transport/alerts`);
+ * viec con lai la NOI vao do o T7D (#170) — va khi noi thi doc thang read model CUA MAY CHU,
  * KHONG dung lai quyet dinh tuan thu trong TypeScript.
  */
 export function MaintenanceComplianceView() {

@@ -372,8 +372,9 @@ function DriverHistory() {
 }
 
 /**
- * `TX-07` chua dong, nen dieu huong da AN man nay — component giu lai lam hop dong cho lan noi day
- * sau khi T6 vao `main`. Neu co ai den duoc day, cau duoi noi that thay vi bay mot phieu luong rong.
+ * `TX-07`. Man nay chi hien khi khach bat `transport-workforce`; may chu da co route phieu luong
+ * nhung be mat lai xe chua noi vao (T7D — #170). Nen cau duoi NOI THAT thay vi bay mot phieu luong
+ * rong hay mot con so bia.
  */
 function DriverPayslip() {
   return (

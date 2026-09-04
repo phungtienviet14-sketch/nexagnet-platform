@@ -10,34 +10,20 @@ import { canPerform, type TransportAction } from './transport-actions';
  * khong phai chi tiet trinh bay rai trong component. Nho vay mot thay doi IA lam do test TRUOC khi
  * no kip lam do man hinh cua khach.
  *
- * BA truc long nhau, va chung KHONG the gop lam mot:
+ * HAI truc long nhau, va chung KHONG the gop lam mot:
  *
  *   1. `requiredCapabilities` — khach co MUA nghiep vu nay khong (`CapabilityId`, dong kin).
- *   2. `pendingCapability`    — nang luc CHUA TON TAI trong code (`TX-06`/`TX-07`). Xem duoi.
- *   3. `requiredAction`       — vai nay co lam duoc viec do khong (`GD-22`, theo hanh dong).
+ *   2. `requiredAction`       — vai nay co lam duoc viec do khong (`GD-22`, theo hanh dong).
  *
- * Va mot truc thu tu chi de NOI THAT, khong de loc: `dataSource`.
+ * Va mot truc thu ba chi de NOI THAT, khong de loc: `dataSource`.
+ *
+ * TRUOC DAY co mot truc thu tu — `pendingCapability` — so bang CHUOI voi danh sach nang luc luc
+ * chay, vi `TX-06`/`TX-07` chua co ma trong `CapabilityId` khi T7A duoc viet. T6 da vao `main`
+ * (PR #152, #88 dong), va `CAPABILITY_IDS` nay da co `transport-asset-compliance` +
+ * `transport-workforce` (`packages/tenant/src/tenant.schema.ts:189,197`). Nen cho tam do da duoc
+ * GO HAN: hai muc do gio dung `requiredCapabilities` co kieu nhu moi muc khac, va `tsc` kiem duoc
+ * chung — dung §4.2 cua #180.
  */
-
-/* ------------------------------------------------------------------ *
- * Nang luc CHUA CO TRONG CODE — `TX-06` / `TX-07`
- * ------------------------------------------------------------------ */
-
-/**
- * `CapabilityId` la mot `z.enum` DONG (`packages/tenant/src/tenant.schema.ts:113-182`), va hai ma
- * duoi day CHUA nam trong do — T6 chua dong (#88 / PR #152 dang mo). Nen khong the viet
- * `requiredCapabilities: ['transport-asset-compliance']`: `tsc` se do.
- *
- * Cach lam o day khong phai mot cho tam: muc co `pendingCapability` duoc so voi danh sach nang luc
- * LUC CHAY bang chuoi. Hom nay khong tenant nao khai duoc ma nay (union dong chan lai), nen muc bi
- * AN HAN — dung yeu cau cua #161 §2 "khong hien mot cho trong chet". Ngay khi T6 them ma vao
- * `CAPABILITY_IDS` va mot khach bat no, muc tu hien ra ma KHONG can sua mot dong dieu huong nao.
- *
- * Ten lay tu hop dong mien (`docs/kien-truc/transport-domain-contract.md:454-455`) — la
- * `transport-workforce`, KHONG phai `transport-payroll`.
- */
-export const PENDING_CAPABILITIES = ['transport-asset-compliance', 'transport-workforce'] as const;
-export type PendingCapabilityId = (typeof PENDING_CAPABILITIES)[number];
 
 /* ------------------------------------------------------------------ *
  * Muc va nhom
@@ -90,8 +76,6 @@ export interface TransportSection {
   readonly group: TransportSectionGroupId;
   readonly summary: string;
   readonly requiredCapabilities: readonly CapabilityId[];
-  /** Nang luc chua ton tai trong `CapabilityId`. Co gia tri ⇒ hom nay muc luon bi an. */
-  readonly pendingCapability?: PendingCapabilityId;
   readonly requiredAction: TransportAction;
   readonly dataSource: TransportDataSource;
 }
@@ -156,8 +140,7 @@ export const TRANSPORT_SECTIONS = [
     label: 'Bảo dưỡng & giấy tờ',
     group: 'assets',
     summary: 'Lịch bảo dưỡng đến hạn, lệnh sửa chữa, giấy tờ sắp hết hạn.',
-    requiredCapabilities: ['transport-core'],
-    pendingCapability: 'transport-asset-compliance',
+    requiredCapabilities: ['transport-core', 'transport-asset-compliance'],
     requiredAction: 'transport.vehicle.read',
     dataSource: 'awaiting-api',
   },
@@ -166,8 +149,7 @@ export const TRANSPORT_SECTIONS = [
     label: 'Lương',
     group: 'assets',
     summary: 'Kỳ lương, bảng tính thử, phiếu lương và các khoản cấu thành.',
-    requiredCapabilities: ['transport-costing'],
-    pendingCapability: 'transport-workforce',
+    requiredCapabilities: ['transport-costing', 'transport-workforce'],
     requiredAction: 'transport.costing.period.read',
     dataSource: 'awaiting-api',
   },
@@ -222,7 +204,6 @@ export interface DriverScreen {
   readonly id: DriverScreenId;
   readonly label: string;
   readonly requiredCapabilities: readonly CapabilityId[];
-  readonly pendingCapability?: PendingCapabilityId;
   readonly requiredAction: TransportAction;
 }
 
@@ -260,8 +241,7 @@ export const DRIVER_SCREENS = [
   {
     id: 'payslip',
     label: 'Phiếu lương',
-    requiredCapabilities: ['transport-costing'],
-    pendingCapability: 'transport-workforce',
+    requiredCapabilities: ['transport-costing', 'transport-workforce'],
     requiredAction: 'transport.driver.self.fund.read',
   },
 ] as const satisfies readonly DriverScreen[];
@@ -283,20 +263,15 @@ export interface NavigationInput {
 
 const capabilitiesSatisfied = (
   required: readonly CapabilityId[],
-  pending: PendingCapabilityId | undefined,
   capabilities: readonly CapabilityId[],
 ): boolean => {
-  const enabled = new Set<string>(capabilities);
-  if (!required.every((capability) => enabled.has(capability))) return false;
-  return pending === undefined || enabled.has(pending);
+  const enabled = new Set<CapabilityId>(capabilities);
+  return required.every((capability) => enabled.has(capability));
 };
 
 export const isSectionEnabled = (section: TransportSection, input: NavigationInput): boolean =>
-  capabilitiesSatisfied(
-    section.requiredCapabilities,
-    section.pendingCapability,
-    input.capabilities,
-  ) && canPerform(input.role, section.requiredAction);
+  capabilitiesSatisfied(section.requiredCapabilities, input.capabilities) &&
+  canPerform(input.role, section.requiredAction);
 
 export const findSection = (id: string): TransportSection | undefined =>
   TRANSPORT_SECTIONS.find((section) => section.id === id);
@@ -324,7 +299,7 @@ export const navigationGroups = (input: NavigationInput): readonly TransportNavi
 };
 
 export const isDriverScreenEnabled = (screen: DriverScreen, input: NavigationInput): boolean =>
-  capabilitiesSatisfied(screen.requiredCapabilities, screen.pendingCapability, input.capabilities) &&
+  capabilitiesSatisfied(screen.requiredCapabilities, input.capabilities) &&
   canPerform(input.role, screen.requiredAction);
 
 export const findDriverScreen = (id: string): DriverScreen | undefined =>
