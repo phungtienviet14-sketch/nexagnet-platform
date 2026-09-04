@@ -7,6 +7,7 @@ import './auth.css';
 import '../experiences/agent-workforce/agent-workforce.css';
 import '../experiences/b2b-sales-operations/b2b-sales-operations.css';
 import '../experiences/b2b-sales-operations/b2b-workspace.css';
+import '../experiences/transport-operations/transport-operations.css';
 import { Providers } from './providers';
 import { AuthGate } from '../components/auth/AuthGate';
 import { toPublicTenantDescriptor } from '../lib/tenant-runtime';
