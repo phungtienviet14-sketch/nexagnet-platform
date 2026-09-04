@@ -1,4 +1,11 @@
-import type { OrderView, OutboundAuthorityGrant, SenderType } from '@netviet/shared';
+import type {
+  OrderView,
+  OutboundAuthorityGrant,
+  OutboundBlockKind,
+  OutboundPlan,
+  OutboundPlanKind,
+  SenderType,
+} from '@netviet/shared';
 import { tenantRetailAdviceOrNull } from '@netviet/tenant';
 import {
   grantsFromDealerPolicy,
@@ -6,6 +13,7 @@ import {
   grantsFromPricedOrder,
   grantsFromQuote,
 } from '../outbound/outbound-authority.js';
+import { orderStateFacts, type BusinessFactsPatch } from '../outbound/outbound-facts.js';
 import { POLICY_LABELS, quotePriceField, quoteQualifier } from '../agents/risk-rules.js';
 import type { ContentService } from '../content/content.service.js';
 import type { KnowledgeService, ResolvedGroup } from '../knowledge/knowledge.service.js';
@@ -13,12 +21,7 @@ import { rankFaqs } from '../content/faq-ranking.js';
 import { DEFAULT_RULES_CONFIG } from '../rules/config.js';
 import { matchProduct, priceOrder } from '../rules/rules.js';
 import { formatVnd, normalize } from '../rules/text.js';
-import {
-  ORDER_TOOL_SPECS,
-  isOrderTool,
-  runOrderTool,
-  type OrderToolDeps,
-} from './order-tools.js';
+import { ORDER_TOOL_SPECS, isOrderTool, runOrderTool, type OrderToolDeps } from './order-tools.js';
 
 /**
  * CONG CU cua agent tu van: cua duy nhat de LLM cham vao nguon su that.
@@ -74,6 +77,23 @@ export type AdvisorToolResult = Record<string, unknown>;
 export interface AdvisorToolOutcome {
   readonly output: AdvisorToolResult;
   readonly grants: readonly OutboundAuthorityGrant[];
+  /**
+   * DU KIEN CO KIEU ma lan tra cuu nay sinh ra — thu DUY NHAT bo soan render duoc (Issue #189).
+   *
+   * `grants` va `facts` di doi nhung khong thay nhau duoc: grant tra loi "co duoc phep noi
+   * 1.150.000 khong", facts tra loi "1.150.000 la don gia cua cai gi". Truoc #189 chi can ve dau;
+   * tu khi bo soan tu viet cau chu thi can ca hai.
+   */
+  readonly facts?: BusinessFactsPatch;
+  /**
+   * CHUOI HE THONG SO HUU ma lan tra cuu nay lay tu DB/rules — de neo nguon cho loi nhan.
+   *
+   * KHONG duoc dat `output` da serialize vao day. `output` co echo tham so model tu gui, nen neo
+   * vao no la de model tu tao bang chung cho con so no sap viet. Xem `outbound-narrative.ts`.
+   */
+  readonly sources?: readonly string[];
+  /** Chi cong cu `soan_tra_loi` dat truong nay — ke hoach tra loi, KHONG mang tham quyen. */
+  readonly plan?: OutboundPlan;
 }
 
 /** Cong cu chi tra du kien mo ta, khong sinh tham quyen he qua nao. */
@@ -85,14 +105,22 @@ const MAX_DOCS = 8;
 const object = (
   properties: Record<string, unknown>,
   required: string[] = [],
-): Record<string, unknown> => ({ type: 'object', properties, required, additionalProperties: false });
+): Record<string, unknown> => ({
+  type: 'object',
+  properties,
+  required,
+  additionalProperties: false,
+});
 
 export const ADVISOR_TOOLS: readonly AdvisorToolSpec[] = [
   {
     name: 'tra_cuu_san_pham',
     description:
       'Tim san pham trong danh muc theo tu khoa khach viet (ke ca viet tat, khong dau). Tra ve ma SKU, ten day du, don vi va mo ta. GOI TRUOC khi noi ve bat ky san pham nao.',
-    inputSchema: object({ tu_khoa: { type: 'string', description: 'Tu khoa khach viet, vd "v08", "ghe felix"' } }, ['tu_khoa']),
+    inputSchema: object(
+      { tu_khoa: { type: 'string', description: 'Tu khoa khach viet, vd "v08", "ghe felix"' } },
+      ['tu_khoa'],
+    ),
   },
   {
     name: 'tra_cuu_tai_lieu',
@@ -101,7 +129,10 @@ export const ADVISOR_TOOLS: readonly AdvisorToolSpec[] = [
     inputSchema: object(
       {
         sku: { type: 'string', description: 'Ma SKU lay tu tra_cuu_san_pham' },
-        cau_hoi: { type: 'string', description: 'Cau hoi cua khach, de xep hang tai lieu lien quan' },
+        cau_hoi: {
+          type: 'string',
+          description: 'Cau hoi cua khach, de xep hang tai lieu lien quan',
+        },
       },
       ['sku', 'cau_hoi'],
     ),
@@ -110,7 +141,10 @@ export const ADVISOR_TOOLS: readonly AdvisorToolSpec[] = [
     name: 'bao_gia',
     description:
       'Lay don gia hien hanh theo dung cap cua nguoi dang hoi (dai ly/CTV lay gia si). Day la NGUON DUY NHAT duoc phep noi con so tien. Khong co dong gia thi tra ve thieu du lieu.',
-    inputSchema: object({ skus: { type: 'array', items: { type: 'string' }, description: 'Danh sach SKU' } }, ['skus']),
+    inputSchema: object(
+      { skus: { type: 'array', items: { type: 'string' }, description: 'Danh sach SKU' } },
+      ['skus'],
+    ),
   },
   {
     name: 'tinh_don',
@@ -120,7 +154,10 @@ export const ADVISOR_TOOLS: readonly AdvisorToolSpec[] = [
       {
         items: {
           type: 'array',
-          items: object({ sku: { type: 'string' }, so_luong: { type: 'integer' } }, ['sku', 'so_luong']),
+          items: object({ sku: { type: 'string' }, so_luong: { type: 'integer' } }, [
+            'sku',
+            'so_luong',
+          ]),
         },
       },
       ['items'],
@@ -140,6 +177,97 @@ export const ADVISOR_TOOLS: readonly AdvisorToolSpec[] = [
   },
 ];
 
+/* ------------------------------------------------------------------ *
+ * CONG CU KET THUC LUOT — KE HOACH TRA LOI (Issue #189)
+ * ------------------------------------------------------------------ */
+
+export const PLAN_TOOL = 'soan_tra_loi';
+
+/**
+ * TU VUNG KHOI ma model duoc dung, va anh xa sang kieu noi bo.
+ *
+ * Ten tieng Viet vi ca be mat cong cu con lai deu tieng Viet, va prompt cua khach nay viet bang
+ * tieng Viet — tron hai thu tieng trong mot lan goi lam mo hinh chon nham nhieu hon. Anh xa
+ * TUONG MINH chu khong lay thang ten kieu: doi ten mot kieu noi bo khong duoc phep am tham doi
+ * be mat ma model da hoc.
+ */
+const BLOCK_BY_NAME: Readonly<Record<string, OutboundBlockKind>> = {
+  bao_gia: 'price_quote',
+  tinh_tien_don: 'order_pricing',
+  chinh_sach_thanh_toan: 'payment_policy',
+  vat_cod_van_chuyen: 'vat_cod_shipping',
+  khuyen_mai: 'promotion',
+  trang_thai_don: 'order_commitment',
+  phe_duyet: 'approval',
+};
+
+const PLAN_KIND_BY_NAME: Readonly<Record<string, OutboundPlanKind>> = {
+  faq: 'faq',
+  tu_van_san_pham: 'product_advice',
+  tinh_trang_don: 'order_status',
+  chuyen_sale: 'handoff',
+};
+
+/**
+ * CONG CU CUOI CUNG cua mot luot — model khai bao no MUON GUI GI, khong phai no gui gi.
+ *
+ * Doc ky `khoi_nghiep_vu`: day la danh sach LOAI khoi. Khong co cho nao trong lien ket nay de
+ * model dat mot con so, mot loai chinh sach hay mot muc cam ket. `loi_nhan` la van xuoi, va no
+ * phai qua hop dong neo nguon truoc khi den tay khach.
+ *
+ * VI SAO LA MOT CONG CU chu khong phai mot dinh dang van ban model tu tuan thu: cong cu di qua
+ * `advisorToolsFor()`, tuc CA HAI nha cung cap (Claude, DeepSeek) nhan duoc no bang cung mot
+ * duong, va dau vao la JSON co schema chu khong phai mot chuoi phai parse bang regex.
+ */
+export const PLAN_TOOL_SPEC: AdvisorToolSpec = {
+  name: PLAN_TOOL,
+  description:
+    'BAT BUOC goi cuoi cung de gui cau tra loi cho khach. Ban KHONG duoc tu viet con so tien, dieu khoan cong no/thanh toan, cau VAT/COD/cuoc, hay cau noi don da duoc ghi nhan/chot vao `loi_nhan`. Muon khach thay nhung thu do thi XIN KHOI trong `khoi_nghiep_vu`; he thong se tu dung chung tu du lieu goc va ghep vao sau loi nhan cua ban.',
+  inputSchema: object(
+    {
+      y_dinh: {
+        type: 'string',
+        enum: Object.keys(PLAN_KIND_BY_NAME),
+        description: 'Luot nay dang lam gi.',
+      },
+      khoi_nghiep_vu: {
+        type: 'array',
+        items: { type: 'string', enum: Object.keys(BLOCK_BY_NAME) },
+        description:
+          'Cac khoi du lieu goc muon he thong ghep vao. Khong co du lieu goc thi khoi se khong xuat hien — dung viet bu bang loi.',
+      },
+      loi_nhan: {
+        type: 'string',
+        description:
+          'Cau tra loi cho khach: giai thich, tra loi cong nang/cach dung/bao hanh tu tai lieu da duyet, hoi lai thong tin con thieu. Khong chua con so tien, dieu khoan thanh toan hay cau xac nhan don.',
+      },
+    },
+    ['y_dinh', 'loi_nhan'],
+  ),
+};
+
+/**
+ * JSON model sinh -> ke hoach co kieu. Coi nhu du lieu ngoai: moi truong tu ep kieu.
+ *
+ * FAIL CLOSED theo huong IT DAC QUYEN NHAT: ten khoi la -> BO KHOI DO (khong phai bo ca ke
+ * hoach, va cung khong phai doan xem model dinh noi khoi nao). `y_dinh` la -> `faq`, la y dinh
+ * khong cap gi.
+ */
+export function parseOutboundPlan(input: Record<string, unknown>): OutboundPlan {
+  const requested = Array.isArray(input.khoi_nghiep_vu) ? input.khoi_nghiep_vu : [];
+  return {
+    kind: PLAN_KIND_BY_NAME[String(input.y_dinh ?? '')] ?? 'faq',
+    requestedBlocks: [
+      ...new Set(
+        requested.flatMap((name) =>
+          typeof name === 'string' && BLOCK_BY_NAME[name] ? [BLOCK_BY_NAME[name]] : [],
+        ),
+      ),
+    ],
+    narrative: typeof input.loi_nhan === 'string' ? input.loi_nhan : '',
+  };
+}
+
 /**
  * Bo cong cu chao ra cho MOT luot, theo dung quyen cua ngu canh do.
  *
@@ -150,10 +278,13 @@ export const ADVISOR_TOOLS: readonly AdvisorToolSpec[] = [
  * chi lam LLM chon nham, va `tra_cuu_don` moi la cai tra ve ma don dung de huy/sua.
  */
 export function advisorToolsFor(ctx: AdvisorToolContext): readonly AdvisorToolSpec[] {
-  if (!ctx.orderCommands) return ADVISOR_TOOLS;
+  // `soan_tra_loi` chao ra o MOI ngu canh, ke ca khi khong co cong ghi: no la duong ket thuc luot,
+  // khong phai mot quyen.
+  if (!ctx.orderCommands) return [...ADVISOR_TOOLS, PLAN_TOOL_SPEC];
   return [
     ...ADVISOR_TOOLS.filter((spec) => spec.name !== 'lich_su_don'),
     ...ORDER_TOOL_SPECS.map((spec) => ({ ...spec, inputSchema: { ...spec.inputSchema } })),
+    PLAN_TOOL_SPEC,
   ];
 }
 
@@ -162,6 +293,11 @@ export async function runAdvisorTool(
   input: Record<string, unknown>,
   ctx: AdvisorToolContext,
 ): Promise<AdvisorToolOutcome> {
+  if (name === PLAN_TOOL) {
+    // Ke hoach KHONG cap tham quyen va KHONG la nguon neo nguon: `grants`/`sources` deu rong.
+    // Tra ve mot xac nhan gon de vong goi cong cu ket thuc sach se o ca hai nha cung cap.
+    return { output: { da_nhan: true }, grants: [], plan: parseOutboundPlan(input) };
+  }
   if (isOrderTool(name)) {
     return ctx.orderCommands
       ? runOrderTool(name, input, ctx.orderCommands)
@@ -169,9 +305,9 @@ export async function runAdvisorTool(
   }
   switch (name) {
     case 'tra_cuu_san_pham':
-      return descriptive(findProducts(String(input.tu_khoa ?? ''), ctx));
+      return findProducts(String(input.tu_khoa ?? ''), ctx);
     case 'tra_cuu_tai_lieu':
-      return descriptive(findDocs(String(input.sku ?? ''), String(input.cau_hoi ?? ''), ctx));
+      return findDocs(String(input.sku ?? ''), String(input.cau_hoi ?? ''), ctx);
     case 'bao_gia':
       return quote(toStringArray(input.skus), ctx);
     case 'tinh_don':
@@ -185,33 +321,49 @@ export async function runAdvisorTool(
   }
 }
 
-function findProducts(keyword: string, ctx: AdvisorToolContext): AdvisorToolResult {
+function findProducts(keyword: string, ctx: AdvisorToolContext): AdvisorToolOutcome {
   const products = ctx.knowledge.products();
   const direct = matchProduct(keyword, products);
   const norm = normalize(keyword);
   // `matchProduct` doi tu khoa CHUA ten SP; khach go "v08" thi no khop, go "hut bui" thi khong.
   // Nen bo sung mot vong quet nguoc: ten/alias chua tu khoa.
-  const loose = norm.length >= 2
-    ? products.filter((product) =>
-        [product.name, ...product.aliases].some((candidate) => normalize(candidate).includes(norm)),
-      )
-    : [];
+  const loose =
+    norm.length >= 2
+      ? products.filter((product) =>
+          [product.name, ...product.aliases].some((candidate) =>
+            normalize(candidate).includes(norm),
+          ),
+        )
+      : [];
   const found = [...new Set([...(direct ? [direct] : []), ...loose])].slice(0, 5);
   return {
-    tim_thay: found.length,
-    san_pham: found.map((product) => ({
-      sku: product.sku,
-      ten: product.name,
-      don_vi: product.unit,
-      viet_tat: product.aliases,
-      ...(product.description ? { mo_ta: product.description } : {}),
-    })),
+    output: {
+      tim_thay: found.length,
+      san_pham: found.map((product) => ({
+        sku: product.sku,
+        ten: product.name,
+        don_vi: product.unit,
+        viet_tat: product.aliases,
+        ...(product.description ? { mo_ta: product.description } : {}),
+      })),
+    },
+    grants: [],
+    // Danh muc la NGUON HE THONG: ten/don vi/mo ta deu tu DB cua khach. `tu_khoa` model go KHONG
+    // co trong day — no la dau vao cua model, va neo nguon vao dau vao cua model la khong neo gi.
+    sources: found.flatMap((product) => [
+      product.name,
+      product.unit,
+      ...(product.description ? [product.description] : []),
+      ...product.aliases,
+    ]),
   };
 }
 
-function findDocs(sku: string, question: string, ctx: AdvisorToolContext): AdvisorToolResult {
+function findDocs(sku: string, question: string, ctx: AdvisorToolContext): AdvisorToolOutcome {
   const snapshot = ctx.content?.snapshot();
-  if (!snapshot) return { tai_lieu: [], ghi_chu: 'He thong noi dung chua san sang.' };
+  if (!snapshot) {
+    return descriptive({ tai_lieu: [], ghi_chu: 'He thong noi dung chua san sang.' });
+  }
   const active = <T extends { status: string }>(rows: readonly T[]): T[] =>
     rows.filter((row) => row.status === 'active');
   const faqs = active(snapshot.faqs).filter((faq) => !faq.productSku || faq.productSku === sku);
@@ -230,21 +382,36 @@ function findDocs(sku: string, question: string, ctx: AdvisorToolContext): Advis
     ...advice.map((row) => ({ tieu_de: row.title, noi_dung: row.body })),
   ].slice(0, MAX_DOCS);
   if (!docs.length) {
-    return {
+    /*
+     * KHONG CO TAI LIEU DUYET => KHONG CO NGUON => hop dong neo nguon se tu choi loi nhan (G1).
+     *
+     * Truoc #189, cau ghi chu nay la tat ca nhung gi ngan model tu tra loi bang kien thuc chung —
+     * tuc mot loi de nghi. Nay no van o day de model hieu ngu canh, nhung thu THUC SU chan la
+     * `sources` rong: khong co nguon thi van xuoi khong duoc nhan, du model viet gi.
+     */
+    return descriptive({
       tai_lieu: [],
-      // Cau nay di THANG vao prompt cua LLM, nen phai noi ro phai lam gi — khong de no tu suy.
       ghi_chu:
         'Chua co tai lieu DA DUYET cho san pham nay. KHONG duoc tu tra loi tu kien thuc chung: hay noi that la se nho Sale xac minh.',
-    };
+    });
   }
   return {
-    tai_lieu: docs,
-    ...(fellBack
-      ? {
-          ghi_chu:
-            'Khong co muc nao khop that sat cau hoi. Day la tai lieu da duyet cua san pham — hay tu chon phan tra loi dung cau hoi; khong phan nao tra loi duoc thi noi that la se nho Sale xac minh.',
-        }
-      : {}),
+    output: {
+      tai_lieu: docs,
+      ...(fellBack
+        ? {
+            ghi_chu:
+              'Khong co muc nao khop that sat cau hoi. Day la tai lieu da duyet cua san pham — hay tu chon phan tra loi dung cau hoi; khong phan nao tra loi duoc thi noi that la se nho Sale xac minh.',
+          }
+        : {}),
+    },
+    grants: [],
+    // Tai lieu DA DUYET la nguon he thong manh nhat co trong luot: mot nguoi that da doc va bam
+    // duyet tung dong. Do luong 04/09/2026 cho thay ~26% so tai lieu nay lam bo trich vat mang
+    // bao dong (9700 lít/phút, bảo hành 7 ngày) — neo nguon o day chinh la thu hap thu chung.
+    sources: selected
+      .flatMap((faq) => [faq.question, faq.answer])
+      .concat(advice.flatMap((row) => [row.title, row.body])),
   };
 }
 
@@ -267,17 +434,31 @@ function quote(skus: readonly string[], ctx: AdvisorToolContext): AdvisorToolOut
     }
     return { sku, ten: product.name, don_gia: price, don_gia_chu: formatVnd(price) };
   });
+  const period = ctx.knowledge.pricePeriod()?.validMonth ?? null;
+  const qualifier = quoteQualifier(strategy, ctx.senderType);
+  // CHI nhung dong DA tra ra mot muc gia moi thanh du kien. Dong bao "chua co dong gia hien hanh"
+  // khong dong gop gi — do dung la truong hop phai chuyen Sale, khong phai truong hop de LLM doan.
+  const priced = rows.flatMap((row) =>
+    typeof row.don_gia === 'number' && row.ten
+      ? [
+          {
+            sku: row.sku,
+            name: row.ten,
+            unit: products.find((product) => product.sku === row.sku)?.unit ?? '',
+            unitPrice: row.don_gia,
+          },
+        ]
+      : [],
+  );
   return {
-    output: {
-      ky_gia: ctx.knowledge.pricePeriod()?.validMonth ?? null,
-      bao_gia: rows,
-      cau_kem_theo: quoteQualifier(strategy, ctx.senderType),
-    },
-    // CHI nhung dong DA tra ra mot muc gia moi uy quyen. Dong bao "chua co dong gia hien hanh"
-    // khong cap gi — do dung la truong hop phai chuyen Sale, khong phai truong hop de LLM doan.
-    grants: grantsFromQuote(
-      rows.flatMap((row) => (typeof row.don_gia === 'number' ? [row.don_gia] : [])),
-    ),
+    output: { ky_gia: period, bao_gia: rows, cau_kem_theo: qualifier },
+    grants: grantsFromQuote(priced.map((line) => line.unitPrice)),
+    facts: priced.length ? { quote: { period, qualifier, lines: priced } } : {},
+    sources: [
+      ...priced.flatMap((line) => [line.name, line.unit, formatVnd(line.unitPrice)]),
+      ...(period ? [period] : []),
+      qualifier,
+    ],
   };
 }
 
@@ -313,6 +494,20 @@ function computeOrder(rawItems: unknown, ctx: AdvisorToolContext): AdvisorToolOu
     // `priceOrder()` la nguon tat dinh duy nhat cho tien trong ca he thong (CLAUDE.md #5), nen
     // chinh ket qua cua no — khong phai van ban LLM viet lai — la thu cap tham quyen.
     grants: grantsFromPricedOrder(priced),
+    // CA KET QUA di thang vao du kien: bo soan render tung dong tu day, nen no can ca so luong,
+    // ten SP va tung khoan (tam tinh/cuoc/COD/VAT/tong), khong chi tap gia tri nhu `grants`.
+    facts: { pricedOrder: priced },
+    sources: [
+      ...priced.lines.flatMap((line) => [
+        line.productName ?? line.skuRaw,
+        String(line.quantity),
+        formatVnd(line.unitPrice),
+        formatVnd(line.lineTotal),
+      ]),
+      formatVnd(priced.itemsSubtotal),
+      formatVnd(priced.grandTotal),
+      ...(priced.policy ? [POLICY_LABELS[priced.policy]] : []),
+    ],
   };
 }
 
@@ -332,6 +527,18 @@ function policy(ctx: AdvisorToolContext): AdvisorToolOutcome {
     // Chua map dai ly -> khong grant. Do chinh la ca "policy_finance skipped" ma muc 7 doi phai
     // fail closed: khong co cap dai ly thi khong co dieu khoan nao de noi.
     grants: grantsFromDealerPolicy(dealer.defaultPolicy),
+    facts: {
+      paymentPolicy: {
+        dealerName: dealer.name,
+        tier: dealer.tier ?? null,
+        policy: dealer.defaultPolicy,
+      },
+    },
+    sources: [
+      dealer.name,
+      POLICY_LABELS[dealer.defaultPolicy],
+      ...(dealer.tier ? [dealer.tier] : []),
+    ],
   };
 }
 
@@ -350,13 +557,26 @@ function recentOrders(ctx: AdvisorToolContext): AdvisorToolOutcome {
     })),
     ...(orders.length
       ? {}
-      : { ghi_chu: 'Khong tim thay don nao cua nguoi nay trong nhom — dung doan, hay hoi lai khach.' }),
+      : {
+          ghi_chu:
+            'Khong tim thay don nao cua nguoi nay trong nhom — dung doan, hay hoi lai khach.',
+        }),
   };
-  return { output, grants: orders.flatMap((order) => grantsFromPersistedOrder(order)) };
+  return {
+    output,
+    grants: orders.flatMap((order) => grantsFromPersistedOrder(order)),
+    facts: orderStateFacts(orders),
+    sources: orders.flatMap((order) => [
+      ...(order.priced?.lines ?? []).map((line) => line.productName ?? line.skuRaw),
+      ...(order.priced ? [formatVnd(order.priced.grandTotal)] : []),
+    ]),
+  };
 }
 
 function toStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 
 function toOrderItems(value: unknown): { skuRaw: string; quantity: number }[] {
@@ -366,8 +586,6 @@ function toOrderItems(value: unknown): { skuRaw: string; quantity: number }[] {
     const item = raw as Record<string, unknown>;
     const sku = typeof item.sku === 'string' ? item.sku.trim() : '';
     const quantity = Number(item.so_luong);
-    return sku && Number.isInteger(quantity) && quantity > 0
-      ? [{ skuRaw: sku, quantity }]
-      : [];
+    return sku && Number.isInteger(quantity) && quantity > 0 ? [{ skuRaw: sku, quantity }] : [];
   });
 }

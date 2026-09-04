@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { ChannelMessage, Intent, OutboundAuthority, ParseResult } from '@netviet/shared';
+import type {
+  ChannelMessage,
+  Intent,
+  OutboundAuthority,
+  ParseResult,
+  PolicyType,
+} from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { AdvisorAgent, type AdvisorReply } from '../advisor/advisor-agent.js';
+import { fakeAdvisorReply } from '../advisor/__tests__/advisor-reply.fixture.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryContentRepository } from '../content/content.repository.js';
@@ -15,6 +22,7 @@ import type { OrderParser } from '../pipeline/order-parser.js';
 import { PipelineService } from '../pipeline/pipeline.service.js';
 import type { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
+import { NO_BUSINESS_FACTS, type TurnBusinessFacts } from './outbound-facts.js';
 import {
   NO_AUTHORITY,
   grantsFromDealerPolicy,
@@ -23,12 +31,12 @@ import {
 } from './outbound-authority.js';
 
 /**
- * MA TRAN HOI QUY muc 7, DO TREN DUONG THAT — khong phai tren ham thuan.
+ * MA TRAN HOI QUY DO TREN DUONG THAT — khong phai tren ham thuan.
  *
- * `outbound-authority.spec.ts` chung minh hop dong. Bo nay chung minh hop dong DA DUOC CAM VAO
- * duong chay: mot ban nhap LLM di tu `AgentOrchestrator.composeReply()` -> `trace` -> cong tu dong
- * -> `MockAdapter`. Khang dinh cuoi cung luon la tren KENH: `channel.sent` la thu that su den tay
- * khach, con moi co trong ban ghi chi la mot y dinh.
+ * `outbound-composer.spec.ts` chung minh hop dong. Bo nay chung minh hop dong DA DUOC CAM VAO
+ * duong chay: mot ban soan cua agent di tu `AgentOrchestrator.composeReply()` -> `trace` -> cong
+ * tu dong -> `MockAdapter`. Khang dinh cuoi cung luon la tren KENH: `channel.sent` la thu that su
+ * den tay khach, con moi co trong ban ghi chi la mot y dinh.
  *
  * CA GOC (quan sat duoc tren gd1-test): `intent=khac`, `priced=null`, `sales=skipped`,
  * `policy_finance=skipped`, ma ban nhap van chua don gia + tong tien + cong no + "da ghi nhan don",
@@ -112,11 +120,33 @@ async function build(advisor: AdvisorAgent, intent: Intent = 'khac') {
   return { pipeline, channel, orders };
 }
 
-const draft = (text: string, authority: OutboundAuthority = NO_AUTHORITY): AdvisorReply => ({
-  text,
-  usedTools: [],
-  handoff: false,
-  authority,
+const draft = (
+  text: string,
+  authority: OutboundAuthority = NO_AUTHORITY,
+  overrides: Partial<AdvisorReply> = {},
+): AdvisorReply =>
+  fakeAdvisorReply({
+    text,
+    authority,
+    // Luot co loi nhan la luot da tra cuu duoc mot nguon he thong (G1). Test nao muon chung minh
+    // dieu nguoc lai phai TU truyen `sources: []`.
+    sources: ['Tai lieu da duyet cua san pham (gia lap cho test).'],
+    ...overrides,
+  });
+
+/** Du kien bao gia — di DOI voi `grantsFromQuote`, khong thay the no. */
+const quoteFactsFor = (unitPrice: number): TurnBusinessFacts => ({
+  ...NO_BUSINESS_FACTS,
+  quote: {
+    period: '2026-08',
+    qualifier: 'Đây là đơn giá CTV (giá sỉ) áp dụng cho đại lý/CTV theo bảng giá hiện hành.',
+    lines: [{ sku: 'FELIX', name: 'Ghế Felix', unit: 'cái', unitPrice }],
+  },
+});
+
+const policyFactsFor = (policy: PolicyType): TurnBusinessFacts => ({
+  ...NO_BUSINESS_FACTS,
+  paymentPolicy: { dealerName: 'Meta HN', tier: 'dai_ly', policy },
 });
 
 describe('am tinh — ban nhap LLM khong tham quyen khong ra khoi he thong', () => {
@@ -129,13 +159,26 @@ describe('am tinh — ban nhap LLM khong tham quyen khong ra khoi he thong', () 
     expect(channel.sent).toHaveLength(0);
     expect(view.trace?.outboundAuthority).toMatchObject({
       sendable: false,
-      reason: 'FINANCIAL_AUTHORITY_MISSING',
-      missing: ['financial', 'policy', 'order_commitment'],
+      reason: 'COMPOSITION_EMPTY',
     });
-    // Co `ready` khong con lay tu loi tu khai cua LLM nua.
+    /*
+     * BAN SOAN GHI RO VI SAO, va do la thu doi khac han ban truoc #189.
+     *
+     * Truoc: cong DOC doan van, thay mot con so, tra ve `FINANCIAL_AUTHORITY_MISSING`. Neu bo trich
+     * bo sot con so do thi cau tra loi la CHO GUI.
+     * Nay: khong khoi nao dung duoc (luot khong co du kien nao), va loi nhan bi hop dong neo nguon
+     * bo — nen khong con gi de gui. Ket qua khong phu thuoc vao viec bo trich nhan ra duoc gi.
+     */
+    expect(view.trace?.outboundComposition).toMatchObject({
+      mode: 'empty',
+      blocks: [],
+      narrative: { admitted: false, reason: 'NUMERAL_NOT_GROUNDED' },
+    });
     expect(view.trace?.outbound).toMatchObject({ ready: false });
-    // Ban nhap van duoc GIU cho nguoi truc doc — muc 5 doi bang chung, khong doi xoa dau vet.
-    expect(view.trace?.outbound?.text).toContain('990.000đ');
+    // BAN NHAP GOC van duoc GIU cho nguoi truc doc (muc 5 doi bang chung) — nhung o `trace.reply`,
+    // KHONG o `trace.outbound.text`. Do la ca ranh gioi: mot cho de doc, mot cho de gui.
+    expect(view.trace?.reply).toContain('990.000đ');
+    expect(view.trace?.outbound?.text ?? '').not.toContain('990.000đ');
     expect(view.status).toBe('needs_edit');
   });
 
@@ -147,26 +190,22 @@ describe('am tinh — ban nhap LLM khong tham quyen khong ra khoi he thong', () 
     const view = await pipeline.process(message('cai nay bao nhieu'));
 
     expect(channel.sent).toHaveLength(0);
-    expect(view.trace?.outboundAuthority).toMatchObject({
-      sendable: false,
-      reason: 'FINANCIAL_AUTHORITY_MISSING',
+    expect(view.trace?.outboundComposition?.narrative).toEqual({
+      admitted: false,
+      reason: 'NUMERAL_NOT_GROUNDED',
     });
+    expect(view.trace?.outboundAuthority).toMatchObject({ sendable: false });
   });
 
-  // `policy_finance` SKIPPED nghia la vai do khong chay trong luot nay — nen intent phai la `khac`,
-  // dung nhu ca da quan sat duoc. Mot luot `chinh_sach_cong_no` thi vai do CO chay va CO tra cuu
-  // duoc cap dai ly, tuc luot do that su co tham quyen — xem bai duong duong ben duoi.
   it('3. chi khang dinh chinh sach, khong tra cuu chinh sach -> van chan', async () => {
-    const { pipeline, channel } = await build(
-      new StubAdvisor(draft('Dạ bên mình cho công nợ 30 ngày ạ.')),
-    );
+    const { pipeline, channel } = await build(new StubAdvisor(draft('Dạ bên mình cho công nợ ạ.')));
 
     const view = await pipeline.process(message('cong no may ngay'));
 
     expect(channel.sent).toHaveLength(0);
-    expect(view.trace?.outboundAuthority).toMatchObject({
-      sendable: false,
-      reason: 'POLICY_AUTHORITY_MISSING',
+    expect(view.trace?.outboundComposition?.narrative).toEqual({
+      admitted: false,
+      reason: 'POLICY_CARRIER_NOT_GROUNDED',
     });
   });
 
@@ -178,33 +217,49 @@ describe('am tinh — ban nhap LLM khong tham quyen khong ra khoi he thong', () 
     const view = await pipeline.process(message('chot cho a nhe'));
 
     expect(channel.sent).toHaveLength(0);
-    expect(view.trace?.outboundAuthority).toMatchObject({
-      sendable: false,
-      reason: 'ORDER_COMMITMENT_NOT_AUTHORIZED',
+    expect(view.trace?.outboundComposition?.narrative).toEqual({
+      admitted: false,
+      reason: 'COMMITMENT_CARRIER_NOT_GROUNDED',
     });
   });
 
-  it('5. co tham quyen tien + thanh toan nhung bia VAT -> chan dung lop chinh sach', async () => {
+  it('4b. XIN khoi xac nhan don ma khong co don ben vung -> khoi bien mat, khong render', async () => {
     const { pipeline, channel } = await build(
       new StubAdvisor(
-        draft(
-          'Dạ 990.000đ, công nợ 30 ngày, đơn này xuất hoá đơn VAT đầy đủ ạ.',
-          mergeAuthority(grantsFromQuote([990_000]), grantsFromDealerPolicy('cong_no_30')),
-        ),
+        draft('Dạ em kiểm tra giúp mình ngay ạ.', NO_AUTHORITY, {
+          plan: { kind: 'order_status', requestedBlocks: ['order_commitment'], narrative: '' },
+        }),
       ),
     );
 
-    const view = await pipeline.process(message('gia bao nhieu co vat khong'));
+    const view = await pipeline.process(message('don cua a den dau roi'));
+
+    expect(view.trace?.outboundComposition).toMatchObject({
+      blocks: [],
+      omitted: [{ kind: 'order_commitment', reason: 'FACT_MISSING' }],
+    });
+    expect(channel.sent[0]?.text ?? '').not.toContain('ghi nhận');
+  });
+
+  it('5. co tham quyen tien nhung van xuoi NHAC LAI con so -> phai di qua khoi (G4)', async () => {
+    const { pipeline, channel } = await build(
+      new StubAdvisor(
+        draft('Dạ đơn giá 990.000đ ạ.', mergeAuthority(grantsFromQuote([990_000])), {
+          facts: quoteFactsFor(990_000),
+        }),
+      ),
+    );
+
+    const view = await pipeline.process(message('gia bao nhieu'));
 
     expect(channel.sent).toHaveLength(0);
-    expect(view.trace?.outboundAuthority).toMatchObject({
-      sendable: false,
-      reason: 'POLICY_STATEMENT_NOT_AUTHORIZED',
-      missing: ['policy'],
+    expect(view.trace?.outboundComposition?.narrative).toEqual({
+      admitted: false,
+      reason: 'FINANCIAL_VALUE_IN_NARRATIVE',
     });
   });
 
-  it('5b. co tham quyen cong no 45 ngay nhung viet 30 ngay -> chan vi DOI GIA TRI', async () => {
+  it('5b. co tham quyen chinh sach nhung van xuoi tu viet dieu khoan -> phai di qua khoi (G4)', async () => {
     const { pipeline, channel } = await build(
       new StubAdvisor(
         draft(
@@ -217,9 +272,11 @@ describe('am tinh — ban nhap LLM khong tham quyen khong ra khoi he thong', () 
     const view = await pipeline.process(message('cong no may ngay'));
 
     expect(channel.sent).toHaveLength(0);
-    expect(view.trace?.outboundAuthority).toMatchObject({
-      sendable: false,
-      reason: 'POLICY_STATEMENT_NOT_AUTHORIZED',
+    // `payment_policy:cong_no` DA duoc cap -> G4 bat truoc: cau chinh sach phai di qua khoi, va
+    // khoi do se noi "45 ngày" chu khong phai "30 ngày" ma model vua go.
+    expect(view.trace?.outboundComposition?.narrative).toEqual({
+      admitted: false,
+      reason: 'POLICY_STATEMENT_IN_NARRATIVE',
     });
   });
 
@@ -234,9 +291,14 @@ describe('am tinh — ban nhap LLM khong tham quyen khong ra khoi he thong', () 
 });
 
 describe('duong duong — cong nay khong lam hong nhung luot hop le', () => {
-  it('8. con so DA duoc rules uy quyen van di toi khach nguyen ven', async () => {
+  it('8. XIN khoi bao gia + co du kien -> con so tat dinh di toi khach nguyen ven', async () => {
     const { pipeline, channel } = await build(
-      new StubAdvisor(draft('Dạ đơn giá 990.000đ ạ.', mergeAuthority(grantsFromQuote([990_000])))),
+      new StubAdvisor(
+        draft('Dạ em gửi giá cho mình ạ.', mergeAuthority(grantsFromQuote([990_000])), {
+          plan: { kind: 'product_advice', requestedBlocks: ['price_quote'], narrative: '' },
+          facts: quoteFactsFor(990_000),
+        }),
+      ),
     );
 
     const view = await pipeline.process(message('gia bao nhieu'));
@@ -245,18 +307,20 @@ describe('duong duong — cong nay khong lam hong nhung luot hop le', () => {
       sendable: true,
       reason: 'AUTHORITY_SATISFIED',
     });
+    expect(view.trace?.outboundComposition?.mode).toBe('deterministic_business');
     expect(channel.sent).toHaveLength(1);
+    // Con so den tay khach do BO SOAN viet ra tu bang gia, khong phai do model go lai.
     expect(channel.sent[0]?.text).toContain('990.000đ');
     expect(view.status).toBe('sent');
   });
 
-  it('9. dung ky han cong no ma cap dai ly uy quyen -> gui duoc', async () => {
+  it('9. XIN khoi chinh sach + co cap dai ly -> dung dieu khoan cua chinh ho', async () => {
     const { pipeline, channel } = await build(
       new StubAdvisor(
-        draft(
-          'Dạ bên mình cho anh công nợ 45 ngày ạ.',
-          mergeAuthority(grantsFromDealerPolicy('cong_no_45')),
-        ),
+        draft('', mergeAuthority(grantsFromDealerPolicy('cong_no_45')), {
+          plan: { kind: 'faq', requestedBlocks: ['payment_policy'], narrative: '' },
+          facts: policyFactsFor('cong_no_45'),
+        }),
       ),
     );
 
@@ -267,18 +331,24 @@ describe('duong duong — cong nay khong lam hong nhung luot hop le', () => {
       reason: 'AUTHORITY_SATISFIED',
     });
     expect(channel.sent).toHaveLength(1);
+    expect(channel.sent[0]?.text).toContain('Công nợ 45 ngày');
+    expect(channel.sent[0]?.text).not.toContain('30 ngày');
   });
 
   it('11. cau tu van thuong khong mang khang dinh he qua van gui binh thuong', async () => {
     const { pipeline, channel } = await build(
-      new StubAdvisor(draft('Dạ máy dùng điện 220V và có chế độ ngủ im ạ.')),
+      new StubAdvisor(
+        draft('Dạ máy dùng điện 220V và có chế độ ngủ im ạ.', NO_AUTHORITY, {
+          sources: ['Máy dùng điện 220V, có chế độ ngủ im.'],
+        }),
+      ),
     );
 
     const view = await pipeline.process(message('may nay dung dien bao nhieu'));
 
     expect(view.trace?.outboundAuthority).toMatchObject({
       sendable: true,
-      reason: 'NO_CONSEQUENTIAL_CLAIM',
+      reason: 'NARRATIVE_ONLY_COMPOSITION',
     });
     expect(channel.sent).toHaveLength(1);
     expect(view.status).toBe('sent');

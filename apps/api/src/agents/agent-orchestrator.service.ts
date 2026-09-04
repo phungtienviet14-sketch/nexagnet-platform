@@ -23,6 +23,7 @@ import {
   type OrderView,
   type OutboundAuthority,
   type OutboundAuthorityVerdict,
+  type OutboundComposition,
   type OutboundContent,
   type ParseResult,
   type ProductAdviceResult,
@@ -68,6 +69,8 @@ import {
   grantsFromQuote,
   mergeAuthority,
 } from '../outbound/outbound-authority.js';
+import { composeOutbound, deterministicComposition } from '../outbound/outbound-composer.js';
+import { mergeBusinessFacts, NO_BUSINESS_FACTS } from '../outbound/outbound-facts.js';
 import { OUTBOUND_DECISIONS } from '../outbound/outbound-decisions.js';
 import {
   POLICY_LABELS,
@@ -173,6 +176,8 @@ export class AgentOrchestrator {
     composed: boolean;
     handoff: boolean;
     verdict: OutboundAuthorityVerdict;
+    /** BAN SOAN da duoc cap phan quyet — ghim vao trace, xem `AgentTrace.outboundComposition`. */
+    composition: OutboundComposition;
   }> {
     // `dat_don` DA DU du kien di duong tat dinh: van ban xac nhan la mot chung tu, khong phai mot
     // cau tro chuyen — de LLM viet lai no la mo mot cho khong can thiet cho con so di lac.
@@ -201,7 +206,7 @@ export class AgentOrchestrator {
         outcome: 'denied',
         reason: 'COMPOSER_DISABLED',
       });
-      return { dispatch, composed: false, handoff: false, verdict: this.deterministic(dispatch) };
+      return { dispatch, composed: false, handoff: false, ...this.deterministic(dispatch) };
     }
     if (orderIsComplete && !input.amendRequest) {
       this.telemetry?.decision({
@@ -210,7 +215,7 @@ export class AgentOrchestrator {
         outcome: 'denied',
         reason: 'DETERMINISTIC_PATH_SUFFICIENT',
       });
-      return { dispatch, composed: false, handoff: false, verdict: this.deterministic(dispatch) };
+      return { dispatch, composed: false, handoff: false, ...this.deterministic(dispatch) };
     }
 
     // Quyen GHI cua agent la thu duoc CAP, khong phai thu no tu co — nen viec cap/khong cap phai
@@ -292,7 +297,7 @@ export class AgentOrchestrator {
         outcome: 'degraded',
         reason: 'LLM_RETURNED_NOTHING',
       });
-      return { dispatch, composed: false, handoff: false, verdict: this.deterministic(dispatch) };
+      return { dispatch, composed: false, handoff: false, ...this.deterministic(dispatch) };
     }
     this.telemetry?.decision({
       vocabulary: TURN_DECISIONS,
@@ -323,11 +328,36 @@ export class AgentOrchestrator {
      * `handoff` van duoc ton trong — LLM tu xin chuyen nguoi that la mot chot chan RIENG, khong
      * phai mot cach cap tham quyen.
      */
+    /*
+     * BO SOAN CO KIEU (Issue #189) — day la cho van ban gui cho khach duoc DUNG.
+     *
+     * Truoc ban nay, dong duoi day la `decideOutboundAuthority({ text: reply.text }, ...)`: van ban
+     * model viet la payload, va cong tham quyen DOC no. Nay `reply.text` chi con la mot ung vien
+     * cho phan van xuoi; tien/chinh sach/cam ket don do `composeOutbound` render tu du kien tat
+     * dinh, va thieu du kien thi khoi bien mat chu khong duoc model viet bu.
+     *
+     * DU KIEN gom ca hai nguon cua luot, dung nhu `authority`: nhanh dispatch tat dinh
+     * (`priceOrder()` cua chinh tin nay) va cac lan agent tra cuu. Hai ben phai khop nhau — mot
+     * grant khong co du kien di kem se thanh mot khoi khong render duoc, va nguoc lai mot du kien
+     * khong co grant se bi cong tham quyen tu choi ngay sau day.
+     */
     const authority = mergeAuthority(dispatch.authority.grants, reply.authority.grants);
-    const verdict = decideOutboundAuthority(
-      { text: reply.text, provenance: 'llm_draft' },
-      authority,
+    const facts = mergeBusinessFacts(
+      NO_BUSINESS_FACTS,
+      dispatch.priced ? { pricedOrder: dispatch.priced } : {},
+      reply.facts,
     );
+    const composition = composeOutbound(reply.plan, facts, {
+      // Van ban tat dinh cua nhanh dispatch (manh FAQ da duyet, mau chuyen Sale) cung la nguon he
+      // thong so huu — no den tu `ContentService`, khong tu model.
+      systemSources: [
+        ...reply.sources,
+        ...(dispatch.outbound?.text ? [dispatch.outbound.text] : []),
+      ],
+      customerText: input.customerText,
+      authority,
+    });
+    const verdict = decideOutboundAuthority(composition, authority);
     this.telemetry?.decision({
       vocabulary: OUTBOUND_DECISIONS,
       point: 'outbound.authority',
@@ -338,6 +368,14 @@ export class AgentOrchestrator {
       detail: {
         grants: authority.grants.length,
         sources: authority.grants.map((entry) => entry.source).join(','),
+        // HINH DANG BAN SOAN, khong phai noi dung: che do, khoi da dung, khoi bi bo kem ly do, va
+        // ly do loi nhan bi tu choi. Do la thu nguoi truc can de tra loi "vi sao khach khong thay
+        // bang gia" ma khong phai mo lai noi dung tin cua khach.
+        mode: composition.mode,
+        blocks: composition.blocks.map((block) => block.kind).join(',') || 'khong',
+        omitted:
+          composition.omitted.map((entry) => `${entry.kind}:${entry.reason}`).join(',') || 'khong',
+        narrative: composition.narrative.admitted ? 'admitted' : composition.narrative.reason,
         ...(verdict.sendable
           ? { claims: verdict.claims.join(',') }
           : { missing: verdict.missing.join(',') }),
@@ -359,10 +397,13 @@ export class AgentOrchestrator {
           : // Ly do CO MA di kem ban nhap, de Sale doc duoc "thieu tham quyen gi" ngay tren hang
             // cho — khong phai mo log moi biet vi sao nut duyet khong gui duoc.
             [...(advice?.missing ?? []), `outbound_authority:${verdict.reason}`],
-      text: reply.text,
+      // VAN BAN DEN TAY KHACH LA BAN SOAN, khong phai `reply.text`. Day la mot dong, va no la ca
+      // ranh gioi cua #189: model khong con viet duoc mot ky tu nao vao phan nghiep vu cua tin.
+      text: composition.text,
     };
     return {
       verdict,
+      composition,
       dispatch: {
         ...dispatch,
         authority,
@@ -399,11 +440,12 @@ export class AgentOrchestrator {
    * true`: mot duong tat khong di qua cong se la cho dau tien mot ban van ban khong ai xet lot ra
    * ngoai, va no se khong bao gio hien len trong bat ky bo loc nao.
    */
-  private deterministic(dispatch: DispatchResult): OutboundAuthorityVerdict {
-    return decideOutboundAuthority(
-      { text: dispatch.outbound?.text ?? dispatch.reply ?? '', provenance: 'deterministic' },
-      dispatch.authority,
-    );
+  private deterministic(dispatch: DispatchResult): {
+    verdict: OutboundAuthorityVerdict;
+    composition: OutboundComposition;
+  } {
+    const composition = deterministicComposition(dispatch.outbound?.text ?? dispatch.reply ?? '');
+    return { composition, verdict: decideOutboundAuthority(composition, dispatch.authority) };
   }
 
   /**
@@ -575,20 +617,23 @@ export class AgentOrchestrator {
 
     // DISPATCH worker theo intent (dong bo), roi phat tung vai theo thu tu.
     const dispatched = this.dispatch(parseResult, resolved, normText, rulesConfig, agentsConfig);
-    const { dispatch, composed, handoff, verdict } = await this.composeReply(dispatched, {
-      intent,
-      customerText: message.text,
-      resolved,
-      chatId: message.externalChatId,
-      now: message.sentAt,
-      ...(opts?.conversationContext ? { context: opts.conversationContext } : {}),
-      ...(message.senderDisplayName ? { senderDisplayName: message.senderDisplayName } : {}),
-      ...(message.senderExternalId ? { senderExternalId: message.senderExternalId } : {}),
-      ...(turn.draft ? { draft: turn.draft } : {}),
-      ...(turn.gaps ? { missingSlots: turn.gaps.askable } : {}),
-      ...(opts?.closedOrder ? { closedOrder: opts.closedOrder } : {}),
-      ...(opts?.amendRequest ? { amendRequest: opts.amendRequest } : {}),
-    });
+    const { dispatch, composed, handoff, verdict, composition } = await this.composeReply(
+      dispatched,
+      {
+        intent,
+        customerText: message.text,
+        resolved,
+        chatId: message.externalChatId,
+        now: message.sentAt,
+        ...(opts?.conversationContext ? { context: opts.conversationContext } : {}),
+        ...(message.senderDisplayName ? { senderDisplayName: message.senderDisplayName } : {}),
+        ...(message.senderExternalId ? { senderExternalId: message.senderExternalId } : {}),
+        ...(turn.draft ? { draft: turn.draft } : {}),
+        ...(turn.gaps ? { missingSlots: turn.gaps.askable } : {}),
+        ...(opts?.closedOrder ? { closedOrder: opts.closedOrder } : {}),
+        ...(opts?.amendRequest ? { amendRequest: opts.amendRequest } : {}),
+      },
+    );
     if (composed) {
       markComposedRole(dispatch, primaryRole, handoff);
     }
@@ -689,6 +734,7 @@ export class AgentOrchestrator {
       dispatch.outbound,
       composed,
       verdict,
+      composition,
     );
     this.logStep(intent, resolved, supervisor);
 
@@ -1024,6 +1070,7 @@ export class AgentOrchestrator {
     outbound?: OutboundContent,
     composed = false,
     outboundAuthority?: OutboundAuthorityVerdict,
+    outboundComposition?: OutboundComposition,
   ): AgentTrace {
     const steps: AgentStep[] = AGENT_ROLES.map((role) =>
       this.buildStep(role, roles.get(role), supervisor),
@@ -1042,6 +1089,9 @@ export class AgentOrchestrator {
       // da luu, khong doc lai ngu canh luc soan — khong ghim thi nua sau cua hop dong khong co gi
       // de cuong che.
       ...(outboundAuthority ? { outboundAuthority } : {}),
+      // BANG CHUNG di kem phan quyet. Diem nghen gui doi CA HAI: thieu ban soan = `COMPOSITION_ABSENT`,
+      // tuc mot ban ghi khong chung minh duoc no da qua bo soan thi khong ra khoi he thong.
+      ...(outboundComposition ? { outboundComposition } : {}),
     };
   }
 

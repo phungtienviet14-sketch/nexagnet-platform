@@ -6,6 +6,7 @@ import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryOrdersRepository } from './orders.repository.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { outboundFingerprint } from '../outbound/outbound-authority.js';
+import { deterministicComposition } from '../outbound/outbound-composer.js';
 import { OrdersService } from './orders.service.js';
 
 /**
@@ -34,13 +35,24 @@ const TRACE: AgentTrace = {
  * nao ca, nen no gui duoc. Mot ban ghi KHONG co truong nay la mot ban ghi chua qua cong, va cong
  * gui se tu choi no — xem bo test ngay duoi.
  */
-const cleared = (text: string): AgentTrace['outboundAuthority'] => ({
-  sendable: true,
-  reason: 'NO_CONSEQUENTIAL_CLAIM',
-  claims: [],
-  // Phan quyet di kem dau cua DUNG doan van no duoc cap cho. Mot phan quyet khong mang dau — hoac
-  // mang dau cua doan van khac — bi diem nghen tu choi, y nhu ban ghi khong co phan quyet nao.
-  fingerprint: outboundFingerprint(text),
+const cleared = (text: string): Pick<AgentTrace, 'outboundAuthority' | 'outboundComposition'> => ({
+  outboundAuthority: {
+    sendable: true,
+    reason: 'NARRATIVE_ONLY_COMPOSITION',
+    claims: [],
+    // Phan quyet di kem dau cua DUNG doan van no duoc cap cho. Mot phan quyet khong mang dau —
+    // hoac mang dau cua doan van khac — bi diem nghen tu choi, y nhu ban ghi khong co phan quyet.
+    fingerprint: outboundFingerprint(text),
+  },
+  /*
+   * BAN SOAN cung phai co mat (Issue #189).
+   *
+   * Tu #189, mot phan quyet don doc khong con du: khong co `outboundComposition` nghia la noi dung
+   * chua di qua bo soan co kieu, va diem nghen tra ve `COMPOSITION_ABSENT`. Fixture nay dung
+   * `deterministicComposition` vi cau tu van o day den tu tang noi dung da duyet, khong tu mot
+   * ban soan theo khoi.
+   */
+  outboundComposition: deterministicComposition(text),
 });
 
 function build() {
@@ -118,7 +130,7 @@ describe('Sale bam duyet — dinh tuyen theo noi dung', () => {
         trace: {
           ...TRACE,
           outbound: { text: 'Dạ máy có đèn ngủ ạ.' },
-          outboundAuthority: cleared('Dạ máy có đèn ngủ ạ.'),
+          ...cleared('Dạ máy có đèn ngủ ạ.'),
         },
       }),
     );
@@ -141,7 +153,7 @@ describe('Sale bam duyet — dinh tuyen theo noi dung', () => {
           ...TRACE,
           primaryRole: 'after_sales',
           outbound: { text: 'Dạ sản phẩm bảo hành 12 tháng ạ.' },
-          outboundAuthority: cleared('Dạ sản phẩm bảo hành 12 tháng ạ.'),
+          ...cleared('Dạ sản phẩm bảo hành 12 tháng ạ.'),
         },
       }),
     );

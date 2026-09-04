@@ -5,7 +5,14 @@ import type {
   ConversationContext,
   OrderDraft,
   OutboundAuthority,
+  OutboundPlan,
 } from '@netviet/shared';
+import { narrativeOnlyPlan } from '@netviet/shared';
+import {
+  mergeBusinessFacts,
+  NO_BUSINESS_FACTS,
+  type TurnBusinessFacts,
+} from '../outbound/outbound-facts.js';
 import type { ClosedOrderContext } from '../conversations/conversation-thread.js';
 import type { AmendSignal } from '../pipeline/amend-detect.js';
 import { reportAnthropicUsage, type LlmUsageReporter } from '../observability/llm-usage.js';
@@ -31,8 +38,14 @@ import {
  * lan goi LLM nao.
  *
  * BAT BIEN GIU NGUYEN (CLAUDE.md #5): LLM khong tinh tien. Con so den tu `bao_gia`/`tinh_don` —
- * hai cong cu chay rules engine tat dinh — va `unverifiedAmounts()` kiem lai sau khi LLM viet xong.
- * Lo mot con so khong co trong ket qua cong cu -> BO ban soan, ben goi dung duong tat dinh.
+ * hai cong cu chay rules engine tat dinh.
+ *
+ * DOI O #189: agent nay khong con tra ve VAN BAN GUI CHO KHACH. No tra ve mot KE HOACH co kieu
+ * (`plan`), du kien tat dinh da tra cuu (`facts`) va chuoi he thong so huu (`sources`); van ban
+ * that su den tay khach do `outbound-composer.ts` dung. `unverifiedAmounts()` van chay nhung chi
+ * con la mot dong canh bao — phep chan con so bia nay nam o hop dong neo nguon cua bo soan, noi
+ * phep neo dua tren `sources` chu khong dua tren ket qua cong cu da serialize (ket qua do co echo
+ * lai tham so model tu gui).
  */
 
 export interface AdvisorRequest {
@@ -59,6 +72,13 @@ export interface AdvisorRequest {
 }
 
 export interface AdvisorReply {
+  /**
+   * LOI NHAN model viet — KHONG con la van ban gui cho khach (Issue #189).
+   *
+   * Truoc #189, chuoi nay CHINH LA tin nhan. Nay no la mot UNG VIEN cho phan van xuoi cua tin, va
+   * no chi den duoc tay khach neu qua hop dong neo nguon o `outbound-narrative.ts`. Phan nghiep vu
+   * cua tin (tien, chinh sach, cam ket don) khong bao gio den tu day.
+   */
   readonly text: string;
   /** Cong cu da goi, theo thu tu — di vao AgentTrace de Sale nhin duoc LLM da tra cuu gi. */
   readonly usedTools: string[];
@@ -73,6 +93,18 @@ export interface AdvisorReply {
    * dinh gi co he qua.
    */
   readonly authority: OutboundAuthority;
+  /**
+   * KE HOACH co kieu model de xuat — loai khoi no muon, khong phai noi dung khoi.
+   *
+   * Model khong goi `soan_tra_loi` -> ben goi nhan ke hoach IT DAC QUYEN NHAT (`requestedBlocks`
+   * rong). Do la mot MAC DINH CUA HE THONG, khong phai mot phep doc van ban model viet ra thanh
+   * khang dinh co kieu — muc 3 hop dong cam dung viec sau.
+   */
+  readonly plan: OutboundPlan;
+  /** Du kien tat dinh luot nay tra cuu duoc — thu duy nhat bo soan render duoc. */
+  readonly facts: TurnBusinessFacts;
+  /** Chuoi he thong so huu da tra cuu — bang chung neo nguon cho loi nhan. */
+  readonly sources: readonly string[];
 }
 
 export abstract class AdvisorAgent {
@@ -127,33 +159,65 @@ export function finalizeAdvisorReply(
   usedTools: string[],
   logger: Logger,
 ): AdvisorReply | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
+  /*
+   * KE HOACH THANG VAN BAN TU DO (Issue #189).
+   *
+   * Model goi `soan_tra_loi` -> dung ke hoach do. Khong goi -> KHONG doc van ban tu do thanh mot
+   * ke hoach co khoi; ta lay ke hoach IT DAC QUYEN NHAT (`requestedBlocks` rong) va coi van ban do
+   * la loi nhan. Su khac nhau la quan trong: mot mac dinh khong cap gi thi khong the bi loi dung,
+   * con mot phep "doc van ban roi gan nhan" thi chinh la thu muc 3 hop dong cam.
+   */
+  const planned = outcomes.flatMap((outcome) => (outcome.plan ? [outcome.plan] : [])).at(-1);
+  const rawText = raw.trim();
+  const narrative = stripMarker(planned ? planned.narrative : rawText);
+  // `handoff` co HAI nguon va chung duoc HOP: nhan trong van ban (ban cu, ca hai nha cung cap deu
+  // dung) va y dinh trong ke hoach. Bo mot trong hai la mo lai duong ma LLM da tu xin chuyen
+  // nguoi that nhung he thong van gui.
+  const handoff =
+    planned?.kind === 'handoff' ||
+    rawText.includes(HANDOFF_MARKER) ||
+    (planned?.narrative ?? '').includes(HANDOFF_MARKER);
+  const plan: OutboundPlan = planned ? { ...planned, narrative } : narrativeOnlyPlan(narrative);
 
-  const handoff = trimmed.includes(HANDOFF_MARKER);
-  const text = trimmed.replaceAll(HANDOFF_MARKER, '').trim();
-  if (!text) return null;
+  // Khong co loi nhan VA khong xin khoi nao = khong co gi de soan. Ben goi dung duong tat dinh.
+  if (!narrative && !plan.requestedBlocks.length) return null;
 
-  // HAU KIEM TIEN giu nguyen vai tro PHONG THU CHIEU SAU. No khong phai mo hinh tham quyen (cong
-  // do o `outbound/outbound-authority.ts`) — no chi bat som mot ban soan da lo con so, de ben goi
-  // lui ve duong tat dinh thay vi di tiep voi mot ban se bi tu choi o cuoi.
+  /*
+   * HAU KIEM TIEN cua ban truoc — nay la TELEMETRY, khong con la mot cong (muc 7 hop dong).
+   *
+   * Hai ly do no khong con duoc quyen bo ban soan. (a) No neo vao `JSON.stringify(output)`, ma
+   * `output` co ECHO tham so model tu gui — tuc model tu tao duoc bang chung cho chinh con so no
+   * sap viet. (b) Hop dong neo nguon o `outbound-narrative.ts` (G2) chat hon han: no quet MOI con
+   * so chu khong chi con so mang hinh dang tien, va no neo vao chuoi HE THONG SO HUU. Giu lai o
+   * day nhu mot dau hieu bat thuong thi van co ich; de no bo ca luot thi chi lam mat mot cau tra
+   * loi ma G2 se xu ly dung hon o buoc sau.
+   */
   const invented = unverifiedAmounts(
-    text,
+    narrative,
     outcomes.map((outcome) => outcome.output),
   );
   if (invented.length) {
-    logger.warn(
-      `Ban soan chua con so khong co trong ket qua cong cu (${invented.join(', ')}) — bo ban soan.`,
-    );
-    return null;
+    logger.warn(`[advisor] loi nhan co con so ngoai ket qua cong cu (${invented.join(', ')}).`);
   }
-  logger.log(`[advisor] cong cu=${usedTools.join(',') || 'khong'} handoff=${handoff}`);
+  logger.log(
+    `[advisor] cong cu=${usedTools.join(',') || 'khong'} handoff=${handoff} khoi=${plan.requestedBlocks.join(',') || 'khong'}`,
+  );
   return {
-    text,
+    text: narrative,
     usedTools,
     handoff,
     authority: mergeAuthority(...outcomes.map((outcome) => outcome.grants)),
+    plan,
+    facts: mergeBusinessFacts(
+      NO_BUSINESS_FACTS,
+      ...outcomes.flatMap((outcome) => (outcome.facts ? [outcome.facts] : [])),
+    ),
+    sources: outcomes.flatMap((outcome) => [...(outcome.sources ?? [])]),
   };
+}
+
+function stripMarker(text: string): string {
+  return text.replaceAll(HANDOFF_MARKER, '').trim();
 }
 
 export class ClaudeAdvisorAgent extends AdvisorAgent {
@@ -223,6 +287,11 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
             };
           }),
         );
+        // `soan_tra_loi` la cong cu KET THUC LUOT: co ke hoach roi thi khong con gi de hoi model
+        // nua, va mot vong nua chi ton them mot lan goi API ma ket qua da co.
+        if (outcomes.some((outcome) => outcome.plan)) {
+          return finalizeAdvisorReply('', outcomes, usedTools, this.logger);
+        }
         messages.push({ role: 'assistant', content: response.content });
         // MOT tin nguoi dung chua TAT CA tool_result: tach ra nhieu tin se day LLM ve phia goi
         // cong cu tuan tu, cham hon han ma khong duoc gi.
@@ -282,11 +351,17 @@ export const ADVISOR_STATIC_PROMPT = [
   'CACH LAM VIEC — bat buoc theo dung thu tu:',
   '1. Doc lich su hoi thoai de hieu khach dang noi ve cai gi. "cai do", "no", "the con..." deu tro ve thu vua noi.',
   '2. GOI CONG CU de lay du kien. Tuyet doi khong tra loi ve san pham, gia, chinh sach hay don hang bang tri nho cua ban.',
-  '3. Viet cau tra loi tu ket qua cong cu. BAT BUOC: cong cu da tra ve du kien (gia, thong so, chinh sach) thi cau tra loi PHAI NEU RA du kien do. Mot cau chao suong hay mot cau "em da tra cuu xong" la cau tra loi HONG — khach khong nhan duoc thong tin nao.',
+  '3. Ket thuc luot bang cong cu `soan_tra_loi`. Do la CACH DUY NHAT de tra loi khach.',
   '4. Chua du du kien thi goi THEM cong cu; dung ket thuc luot bang mot cau chung chung.',
   '',
+  'CACH `soan_tra_loi` LAM VIEC — doc ky, no khac cach ban quen:',
+  '- `loi_nhan` la phan BAN viet: giai thich, tra loi cong nang/cach dung/bao hanh tu tai lieu da duyet, hoi lai thu con thieu.',
+  '- Con so tien, dieu khoan cong no/thanh toan, cau VAT/COD/cuoc, cau noi don da duoc ghi nhan/chot: KHONG viet vao `loi_nhan`. Hay XIN KHOI trong `khoi_nghiep_vu`, he thong tu dung tung dong tu du lieu goc va ghep vao sau loi nhan cua ban.',
+  '- Xin khoi ma he thong khong co du lieu goc thi khoi do se KHONG xuat hien. Do la dung — luc do hay noi that la se nho Sale kiem tra. Tuyet doi khong viet bu con so vao `loi_nhan`.',
+  '- Vi du: khach hoi gia -> goi `bao_gia` roi `soan_tra_loi` voi `khoi_nghiep_vu: ["bao_gia"]` va `loi_nhan` chi la mot cau dan ngan. Ban KHONG go lai con so.',
+  '',
   'RANG BUOC KHONG DUOC PHA:',
-  '- Moi CON SO TIEN ban viet ra phai la con so mot cong cu vua tra ve. Khong duoc uoc luong, khong duoc cong tru nham, khong duoc suy ra gia tu san pham khac. He thong kiem lai va se BO cau tra loi cua ban neu co con so la.',
+  '- Moi CON SO ban viet trong `loi_nhan` phai co trong tai lieu/danh muc cong cu vua tra ve, hoac trong chinh tin khach vua gui. He thong doi chieu tung con so va se BO loi nhan cua ban neu co con so khong truy nguyen duoc.',
   '- Thong so, cong dung, cam ket bao hanh: chi noi nhung gi co trong ket qua `tra_cuu_tai_lieu`. Tai lieu tra ve rong nghia la CHUA DUOC DUYET — khong duoc lay tu kien thuc chung cua ban.',
   '- Khong bia ten san pham. Chi noi ve san pham `tra_cuu_san_pham` tra ve.',
   `- Khi khong du du kien de tra loi dung, viet mot cau ngan noi se nho Sale kiem tra roi them ${HANDOFF_MARKER} o cuoi. Doan bua te hon nhieu so voi noi that.`,
@@ -299,7 +374,7 @@ export const ADVISOR_STATIC_PROMPT = [
   '',
   'KHI KHACH MUON DAT HANG:',
   '- Thieu thong tin (chua ro san pham nao, chua co so luong, don giao thang khach le ma thieu nguoi nhan) thi HOI LAI khach dung thu con thieu, moi luot hoi toi da 2 y.',
-  '- Da du thong tin thi goi `tinh_don` roi xac nhan lai voi khach. He thong se gui ban xac nhan chinh thuc sau, nen ban khong can ke lai tung dong.',
+  '- Da du thong tin thi goi `tinh_don` roi `soan_tra_loi` voi `khoi_nghiep_vu: ["tinh_tien_don"]`. Ban khong ke lai tung dong — he thong dung bang tien.',
   '- Da hoi mot lan roi thi khong hoi lai y do bang cau khac.',
   '',
   'CACH VIET:',
@@ -316,7 +391,9 @@ export function buildAdvisorTurnContext(request: AdvisorRequest): string {
     request.senderDisplayName
       ? `NGUOI DANG HOI: ${request.senderDisplayName}. Tra loi RIENG nguoi nay; trong nhom con nhieu nguoi khac dang nhan tin.`
       : 'NGUOI DANG HOI: chua ro ten.',
-    resolved.dealer ? `Nhom nay thuoc dai ly: ${resolved.dealer.name}.` : 'Nhom nay CHUA map dai ly.',
+    resolved.dealer
+      ? `Nhom nay thuoc dai ly: ${resolved.dealer.name}.`
+      : 'Nhom nay CHUA map dai ly.',
     formatDraft(request.pendingDraft, request.missingSlots),
     formatClosedOrder(request),
     formatHistory(request.context, now),
@@ -331,7 +408,9 @@ export function buildAdvisorTurnContext(request: AdvisorRequest): string {
 function formatDraft(draft: OrderDraft | undefined, missing: readonly ClarifySlot[] = []): string {
   if (!draft?.items.length && !missing.length) return '';
   const items = (draft?.items ?? [])
-    .map((item) => `${item.skuRaw ?? '(chua ro san pham)'} x ${item.quantity ?? '(chua ro so luong)'}`)
+    .map(
+      (item) => `${item.skuRaw ?? '(chua ro san pham)'} x ${item.quantity ?? '(chua ro so luong)'}`,
+    )
     .join('; ');
   return [
     'DON DANG THU THAP CUA NGUOI NAY (do he thong giu, khong phai ban tu nho):',
@@ -379,5 +458,7 @@ function formatHistory(context: ConversationContext | undefined, now: Date): str
     context.quotedMessage ? `Khach dang reply tin: ${context.quotedMessage.text}` : '',
     ...formatTranscript(context, now),
   ].filter(Boolean);
-  return lines.length ? `\nLICH SU HOI THOAI TRONG NHOM (moi dong ghi ro ai noi):\n${lines.join('\n')}` : '';
+  return lines.length
+    ? `\nLICH SU HOI THOAI TRONG NHOM (moi dong ghi ro ai noi):\n${lines.join('\n')}`
+    : '';
 }
