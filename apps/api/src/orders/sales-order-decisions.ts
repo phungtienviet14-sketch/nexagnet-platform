@@ -58,6 +58,14 @@ export const MANUAL_APPROVE_REASONS = [
   'ROUTED_TO_ADVICE',
   /** Khong co ca hai -> 422. Nut hien ra ma khong co gi de gui la mot loi cau hinh console. */
   'NOTHING_TO_SEND',
+  /**
+   * Co ban tu van, nhung cong tham quyen outbound tu choi no.
+   *
+   * Tach khoi `SEND_FAILED` co chu y: mot lan gui hong la su co ha tang (thu lai duoc), con day
+   * la mot lan TU CHOI CO CHU Y — Sale phai soan lai hoac bo sung du kien co tham quyen. Gop hai
+   * thu lam mot se sinh ra thoi quen bam lai nut cho mot cong se khong bao gio mo.
+   */
+  'OUTBOUND_AUTHORITY_NOT_GRANTED',
   /** Cong da mo, nhung lan gui THAT BAI. Tach khoi `denied`: hai thu can hai hanh dong sua khac. */
   'SEND_FAILED',
 ] as const;
@@ -244,6 +252,7 @@ export const SALES_ORDER_DECISIONS = defineDecisionVocabulary({
     ROUTED_TO_CONFIRMATION: 'Định tuyến sang bản xác nhận (đơn đã có giá)',
     ROUTED_TO_ADVICE: 'Định tuyến sang bản tư vấn đã soạn',
     NOTHING_TO_SEND: 'Không có bản xác nhận hay bản tư vấn nào để gửi',
+    OUTBOUND_AUTHORITY_NOT_GRANTED: 'Bản tư vấn chưa đủ thẩm quyền để gửi cho khách',
     SEND_FAILED: 'Người duyệt đã cho phép nhưng lần gửi thất bại',
 
     ALREADY_REJECTED: 'Đơn đã bị từ chối trước đó',
