@@ -71,8 +71,16 @@ const LABELS_PATH = `^/repos/[^/]+/[^/]+/issues/${PR}/labels`;
  * @param {Array<Record<string, unknown>>} at.ledger Luong comment ma lan chay nay se doc duoc.
  * @param {number} [at.labelAddStatus]
  * @param {number} [at.labelRemoveStatus]
+ * @param {number} [at.commentPostStatus]
+ * @param {unknown} [at.commentPostBody] Than GitHub tra ve cho `POST /comments` — ke ca khi non-2xx.
  */
-const routesFor = ({ ledger, labelAddStatus = 200, labelRemoveStatus = 200 }) => [
+const routesFor = ({
+  ledger,
+  labelAddStatus = 200,
+  labelRemoveStatus = 200,
+  commentPostStatus = 201,
+  commentPostBody = { id: POSTED_COMMENT_ID },
+}) => [
   {
     method: 'GET',
     path: `^/repos/[^/]+/[^/]+/pulls/${PR}$`,
@@ -104,7 +112,12 @@ const routesFor = ({ ledger, labelAddStatus = 200, labelRemoveStatus = 200 }) =>
     status: 200,
     body: { workflow_runs: [{ id: CI_RUN, name: 'ci' }] },
   },
-  { method: 'POST', path: `${COMMENTS_PATH}$`, status: 201, body: { id: POSTED_COMMENT_ID } },
+  {
+    method: 'POST',
+    path: `${COMMENTS_PATH}$`,
+    status: commentPostStatus,
+    body: commentPostBody,
+  },
   { method: 'DELETE', path: `${LABELS_PATH}/`, status: labelRemoveStatus },
   { method: 'POST', path: `${LABELS_PATH}$`, status: labelAddStatus },
 ];
@@ -199,6 +212,53 @@ test('DOI CHUNG: duong day du chay tron — dang comment MOT lan, roi doi du nha
   );
 });
 
+test('#188: `POST /comments` bi 403 => abort mang status + CAU cua GitHub, khong lo token', () => {
+  // ---------------------------------------------------------------------------------------------
+  // DUNG LAN CHAY THAT 33889198070, DUNG LAI DUOC. Ban truoc dung o `COMMENT_POST_FAILED
+  // status=403` va khong mot chu giai thich — nen viec phan biet "thieu quyen" voi "PR bi khoa"
+  // phai lam bang cac phep do rieng ben ngoai. Bai nay chot rang lan sau khong phai lam vay nua.
+  //
+  // Va no chot ca huong nguoc lai: log cua Actions la CONG KHAI tren mot repo public, nen mot than
+  // loi mang token khong duoc di thang ra do.
+  // ---------------------------------------------------------------------------------------------
+  const fakeToken = 'ghs_KhongPhaiTokenThat0123456789abcdefGH';
+  const run = runMain({
+    routes: routesFor({
+      ledger: [BUILD_READY_COMMENT],
+      commentPostStatus: 403,
+      commentPostBody: {
+        message: `Resource not accessible by integration (token ${fakeToken})`,
+        documentation_url: 'https://docs.github.com/rest/issues/comments#create-an-issue-comment',
+      },
+    }),
+  });
+
+  assert.equal(run.status, 1, `dang comment hong phai lam DO job; stderr: ${run.stderr}`);
+
+  const abort = run.logs.find((entry) => entry.orchestrator === 'abort');
+  assert.equal(abort?.reason, 'COMMENT_POST_FAILED', 'ma ly do co kieu phai giu nguyen');
+  assert.equal(abort?.status, 403, 'status van la bang chung — khong duoc thay the bang cau van');
+  assert.match(
+    String(abort?.error?.message),
+    /^Resource not accessible by integration/,
+    'cau cua GitHub phai ve toi log — do la thu lan chay 33889198070 khong co',
+  );
+  assert.match(String(abort?.error?.documentationUrl), /^https:\/\/docs\.github\.com\//);
+
+  // KHONG mot dong log nao — khong chi dong abort — duoc mang token.
+  const everything = run.logs.map((entry) => JSON.stringify(entry)).join('\n');
+  assert.ok(!everything.includes(fakeToken), 'token khong duoc xuat hien o BAT KY dong log nao');
+  assert.match(String(abort?.error?.message), /\[REDACTED\]/, 'cho bi cat phai duoc danh dau');
+
+  // Nhan KHONG duoc doi khi comment chua dang duoc: mot PR mang nhan "da yeu cau review" trong khi
+  // khong co comment nao la mot trang thai noi doi.
+  assert.equal(
+    run.logs.find((entry) => entry.orchestrator === 'labels'),
+    undefined,
+    'hong o buoc dang comment thi phai dung lai TRUOC khi doi nhan',
+  );
+});
+
 test('B5: hong GIUA comment va nhan => lan sau HOA GIAI nhan, khong dang comment lan hai', () => {
   // ---------------------------------------------------------------------------------------------
   // LAN 1 — comment dang duoc, nhan hong. Day dung la khoang thoi gian ma ban truoc khong ra khoi.
@@ -279,9 +339,8 @@ test('B5: go mot nhan da vang (`404`) khong lam do lan sua chua', () => {
   assert.equal(run.status, 0, `stderr: ${run.stderr}`);
   const labels = run.logs.find((entry) => entry.orchestrator === 'labels');
   assert.equal(
-    labels?.applied.filter(
-      (/** @type {{ outcome: string }} */ e) => e.outcome === 'ALREADY_ABSENT',
-    ).length,
+    labels?.applied.filter((/** @type {{ outcome: string }} */ e) => e.outcome === 'ALREADY_ABSENT')
+      .length,
     7,
   );
 });

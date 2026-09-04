@@ -44,7 +44,7 @@ export const LABEL_OUTCOMES = Object.freeze({
  * @callback LabelRequest
  * @param {string} path Duong dan TUONG DOI so voi `/repos/{repo}/issues/{pr}`, vi du `/labels`.
  * @param {RequestInit} [init]
- * @returns {Promise<{ ok: boolean, status: number, body: any }>}
+ * @returns {Promise<{ ok: boolean, status: number, body: any, error?: Record<string, unknown> | null }>}
  */
 
 /**
@@ -76,6 +76,9 @@ export async function reconcileLabels(request, labels) {
       op: 'remove',
       label,
       status: response.status,
+      // Cau tra loi cua GitHub, DA LAM SACH (`api-error.mjs`). Mot con so `403` khong phan biet
+      // duoc thieu quyen voi PR bi khoa — cau di kem thi phan biet duoc.
+      error: response.error ?? null,
       applied,
     });
   }
@@ -90,6 +93,7 @@ export async function reconcileLabels(request, labels) {
         op: 'add',
         labels: labels.add,
         status: response.status,
+        error: response.error ?? null,
         applied,
       });
     }

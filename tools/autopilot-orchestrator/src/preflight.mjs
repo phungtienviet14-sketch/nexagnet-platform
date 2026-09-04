@@ -73,6 +73,9 @@ async function run() {
       status: result.status,
       shapeOk,
       expectedShape: probe.shape,
+      // Cau cua GitHub khi hong, DA LAM SACH (`api-error.mjs`). Mot probe do voi mot con so `403`
+      // khong noi duoc thieu quyen hay bi chan vi ly do khac — va day dung la cho can noi duoc.
+      error: result.error,
     });
     if (!shapeOk) denied.push(`${probe.name} (${probe.grant}) -> HTTP ${result.status}`);
   }
