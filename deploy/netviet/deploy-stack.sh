@@ -57,12 +57,26 @@ if ! flock -w 300 9; then
   exit 1
 fi
 
-COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml)
-channel_mode="$("${APP_DIR}/channel-mode.sh" read "${APP_DIR}/.runtime/channel-mode.env")"
 runtime_value() {
   local key="$1"
   sed -n "s/^${key}=//p" .runtime/secrets.env | tail -n 1
 }
+
+# --- LOP PHU FLOWISE ---------------------------------------------------------------------------
+#
+# `render-secrets.sh` ghi `FLOWISE_ENABLED` tu ho so trien khai. `on` -> keo `compose.flowise.yaml`
+# vao, va ban dung hop nhat ra DUNG cai compose cu tung ky tu (da doi chieu bang
+# `docker compose config`). `off` -> trong ban dung khong ton tai service nao ten `flowise`, nen
+# khong co gi de pull, doi healthy, bootstrap hay doi chieu digest.
+#
+# Phep suy ra nam trong `stack-compose.sh` chu khong o day: `backup.sh` va `health-check.sh` can
+# DUNG cau tra loi nay, va hai cai do chay o nhung luc khong ai dang nhin.
+source "${APP_DIR}/stack-compose.sh"
+netviet_load_stack_composition
+flowise_enabled="${NETVIET_FLOWISE_ENABLED}"
+COMPOSE=(docker compose --env-file .runtime/secrets.env "${NETVIET_COMPOSE_FILES[@]}")
+echo "deploy-stack: FLOWISE_ENABLED=${flowise_enabled}." >&2
+channel_mode="$("${APP_DIR}/channel-mode.sh" read "${APP_DIR}/.runtime/channel-mode.env")"
 DEMO_DOMAIN="$(runtime_value DEMO_DOMAIN)"
 OPERATOR_DOMAIN="$(runtime_value OPERATOR_DOMAIN)"
 FLOWISE_DOMAIN="$(runtime_value FLOWISE_DOMAIN)"
@@ -79,7 +93,14 @@ if [[ "${RELEASE_SHA_VALUE}" =~ ^[a-f0-9]{40}$ && "${RELEASE_SHA_VALUE}" != 0000
 else
   EXPECTED_RELEASE_SHA_VALUE=''
 fi
-for domain in "${DEMO_DOMAIN}" "${OPERATOR_DOMAIN}" "${FLOWISE_DOMAIN}"; do
+checked_domains=("${DEMO_DOMAIN}" "${OPERATOR_DOMAIN}")
+# `FLOWISE_DOMAIN` van duoc render (mot ten mien la mot chuoi, khong phai mot phu thuoc), nhung no
+# chi la mot ten CO THAT khi ho so chay Flowise — `render-secrets.sh` khong phat route cho no khi
+# tat. Kiem mot ten khong duoc phuc vu la dat mot cau hoi khong ai tra loi.
+if [[ "${flowise_enabled}" == 'on' ]]; then
+  checked_domains+=("${FLOWISE_DOMAIN}")
+fi
+for domain in "${checked_domains[@]}"; do
   if [[ ! "${domain}" =~ ^[a-z0-9.-]+$ ]]; then
     echo "Runtime domain khong hop le; khong chay smoke." >&2
     exit 65
@@ -91,7 +112,11 @@ done
 # ================================================================================================
 
 stage rollout ROLLOUT_DB_NOT_READY
-"${COMPOSE[@]}" pull postgres flowise
+if [[ "${flowise_enabled}" == 'on' ]]; then
+  "${COMPOSE[@]}" pull postgres flowise
+else
+  "${COMPOSE[@]}" pull postgres
+fi
 "${COMPOSE[@]}" up -d postgres
 for attempt in {1..60}; do
   if "${COMPOSE[@]}" exec -T postgres pg_isready -U netviet_admin -d postgres >/dev/null; then
@@ -106,25 +131,35 @@ for attempt in {1..60}; do
 done
 "${COMPOSE[@]}" exec -T postgres sh -s < postgres/sync-passwords.sh
 
-stage rollout ROLLOUT_FLOWISE_NOT_READY
-"${COMPOSE[@]}" up -d flowise
+# FLOWISE — CA BA BUOC NAY THUOC VE MOT HE THONG CON, KHONG PHAI VE NEN TANG.
+#
+# Dung len, doi healthy, roi bootstrap flow + kiem hop dong cua no. Voi mot ho so `flowise=false`
+# khong mot viec nao trong ba viec do co nghia: khong service, khong flow, khong hop dong. Truoc
+# ban nay chung chay VO DIEU KIEN, va do la ly do thu hai — sau `api.depends_on` — khien mot ban
+# xem truoc khong the ton tai neu khong tao du 8 bi mat Flowise cho mot thu no khong chay.
+if [[ "${flowise_enabled}" == 'on' ]]; then
+  stage rollout ROLLOUT_FLOWISE_NOT_READY
+  "${COMPOSE[@]}" up -d flowise
 
-for attempt in {1..60}; do
-  if "${COMPOSE[@]}" exec -T flowise curl -fsS http://127.0.0.1:3000/api/v1/ping >/dev/null; then
-    break
-  fi
-  if [[ "${attempt}" -eq 60 ]]; then
-    echo "Flowise khong healthy sau 10 phut." >&2
-    "${COMPOSE[@]}" logs --tail=100 flowise >&2
-    exit 1
-  fi
-  sleep 10
-done
+  for attempt in {1..60}; do
+    if "${COMPOSE[@]}" exec -T flowise curl -fsS http://127.0.0.1:3000/api/v1/ping >/dev/null; then
+      break
+    fi
+    if [[ "${attempt}" -eq 60 ]]; then
+      echo "Flowise khong healthy sau 10 phut." >&2
+      "${COMPOSE[@]}" logs --tail=100 flowise >&2
+      exit 1
+    fi
+    sleep 10
+  done
 
-stage rollout ROLLOUT_BOOTSTRAP_FAILED
-"${COMPOSE[@]}" --profile tools run --rm bootstrap
-"${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
-  node deploy/flowise/contract-test.mjs
+  stage rollout ROLLOUT_BOOTSTRAP_FAILED
+  "${COMPOSE[@]}" --profile tools run --rm bootstrap
+  "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
+    node deploy/flowise/contract-test.mjs
+else
+  echo "deploy-stack: bo qua Flowise (rollout + bootstrap + hop dong) — ho so nay khong bat no." >&2
+fi
 stage rollout ROLLOUT_MIGRATION_FAILED
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
@@ -235,7 +270,14 @@ running_image_id() {
 }
 
 rollout_mismatch=''
-for pair in "api:${APP_IMAGE_VALUE}" "web:${APP_IMAGE_VALUE}" "flowise:${FLOWISE_IMAGE_VALUE}"; do
+rollout_pairs=("api:${APP_IMAGE_VALUE}" "web:${APP_IMAGE_VALUE}")
+# Khong doi chieu digest cua mot container KHONG duoc phep ton tai: `running_image_id` se khong tim
+# thay container nao, va cong nay se bao "khong chay image cua ban phat hanh" — mot mau do noi sai
+# ban chat su viec. Voi ho so co Flowise, dong duoi day dua no tro lai y nguyen.
+if [[ "${flowise_enabled}" == 'on' ]]; then
+  rollout_pairs+=("flowise:${FLOWISE_IMAGE_VALUE}")
+fi
+for pair in "${rollout_pairs[@]}"; do
   service="${pair%%:*}"
   expected_ref="${pair#*:}"
   expected_id="$(docker image inspect --format '{{.Id}}' "${expected_ref}" 2>/dev/null || true)"
@@ -419,7 +461,11 @@ fi
 
 public_gates_ok() {
   curl -fsS --max-time 10 --resolve "${DEMO_DOMAIN}:443:127.0.0.1" "https://${DEMO_DOMAIN}/health" >/dev/null || return 1
-  curl -fsS --max-time 10 --resolve "${FLOWISE_DOMAIN}:443:127.0.0.1" "https://${FLOWISE_DOMAIN}/api/v1/ping" >/dev/null || return 1
+  # Cong Flowise chi ton tai khi ho so bat Flowise: `render-secrets.sh` khong phat route cho ten
+  # mien do khi tat, nen mot phep goi o day se doi Caddy tra loi cho mot host no khong phuc vu.
+  if [[ "${flowise_enabled}" == 'on' ]]; then
+    curl -fsS --max-time 10 --resolve "${FLOWISE_DOMAIN}:443:127.0.0.1" "https://${FLOWISE_DOMAIN}/api/v1/ping" >/dev/null || return 1
+  fi
   if [[ "${has_messaging}" -eq 1 ]]; then
     curl -fsS --max-time 10 --resolve "${OPERATOR_DOMAIN}:443:127.0.0.1" "https://${OPERATOR_DOMAIN}/zalo" >/dev/null || return 1
     local status
@@ -446,7 +492,12 @@ for attempt in {1..60}; do
 done
 operator_probe="/zalo"
 [[ "${has_messaging}" -eq 1 ]] || operator_probe="/"
-echo "Public HTTPS healthy: https://${DEMO_DOMAIN} | https://${OPERATOR_DOMAIN}${operator_probe} | https://${FLOWISE_DOMAIN}"
+public_endpoints="https://${DEMO_DOMAIN} | https://${OPERATOR_DOMAIN}${operator_probe}"
+# Chi in ten mien Flowise khi no THAT SU duoc phuc vu. In mot URL tra 502 vao dong bao "healthy"
+# la day nguoi truc di dieu tra mot su co khong co that — cung hinh dang loi voi lan 17/08/2026
+# khi buoc bao cao in ten mien tran cho moi khach.
+[[ "${flowise_enabled}" == 'on' ]] && public_endpoints="${public_endpoints} | https://${FLOWISE_DOMAIN}"
+echo "Public HTTPS healthy: ${public_endpoints}"
 emit_signal health pass RUNTIME_HEALTHY \
   "{\"stack\":\"${STACK_SLUG}\",\"operatorProbe\":\"${operator_probe}\"}"
 
