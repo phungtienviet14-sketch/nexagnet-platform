@@ -16,7 +16,19 @@ if ! flock -n 9; then
   exit 0
 fi
 
-COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml)
+# DANH SACH SERVICE PHAI THEO HO SO CUA STACK, KHONG PHAI MOT DANH SACH CO DINH.
+#
+# `flowise` chi ton tai khi ho so bat no. Giu no trong mot danh sach co dinh se lam timer nay bao
+# `flowise=missing` moi nhip tren mot stack khong chay Flowise — mot bao dong gia lap lai mai mai.
+# Va te hon: khoi TU KHOI PHUC ben duoi se goi `compose up -d` moi nhip de co dung len mot service
+# khong ton tai trong ban dung.
+source "${APP_DIR}/stack-compose.sh"
+netviet_load_stack_composition
+COMPOSE=(docker compose --env-file .runtime/secrets.env "${NETVIET_COMPOSE_FILES[@]}")
+WATCHED_SERVICES=(postgres api web)
+if [[ "${NETVIET_FLOWISE_ENABLED}" == 'on' ]]; then
+  WATCHED_SERVICES+=(flowise)
+fi
 failure=""
 STATE_FILE="${APP_DIR}/.runtime/health-restarts"
 declare -A previous_restarts=()
@@ -36,7 +48,7 @@ trap 'rm -f -- "${next_state}"' EXIT
 # An toan vi da giu khoa compose o tren (khong con chay chong len deploy).
 # Van GHI LOG moi lan phai chua de khong che giau su co lap di lap lai.
 healed=""
-for service in postgres flowise api web; do
+for service in "${WATCHED_SERVICES[@]}"; do
   container_id="$("${COMPOSE[@]}" ps -q "${service}")"
   if [[ -z "${container_id}" ]] || \
     [[ "$(docker inspect --format '{{.State.Status}}' "${container_id}")" != "running" ]]; then
@@ -61,7 +73,7 @@ elif ! curl -fsS --max-time 10 --resolve "${operator_domain}:443:127.0.0.1" \
   failure="health endpoint cua khach ${STACK_SLUG} that bai"
 fi
 
-for service in postgres flowise api web; do
+for service in "${WATCHED_SERVICES[@]}"; do
   container_id="$("${COMPOSE[@]}" ps -q "${service}")"
   if [[ -z "${container_id}" ]]; then
     failure="${failure} ${service}=missing"

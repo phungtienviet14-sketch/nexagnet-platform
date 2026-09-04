@@ -1,10 +1,22 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+
+import { DEPLOYMENT_PROFILES } from './deployment-profiles.mjs';
+import {
+  DeploymentResolutionError,
+  RESOLVE_EXIT_CODES,
+  resolveDeploymentTarget,
+  toStepOutputs,
+} from './resolve-deployment-target.mjs';
 
 const registry = JSON.parse(readFileSync('.github/deployment-targets.json', 'utf8'));
 const deployTenant = readFileSync('.github/workflows/deploy-tenant.yml', 'utf8');
 const reusableDeploy = readFileSync('.github/workflows/reusable-deploy-tenant.yml', 'utf8');
+const resolverCli = readFileSync('deploy/netviet/run-resolve-deployment-target.mjs', 'utf8');
+const resolverModule = readFileSync('deploy/netviet/resolve-deployment-target.mjs', 'utf8');
+const deployCi = readFileSync('deploy/netviet/deploy-ci.sh', 'utf8');
 
 function deploymentFor(tenant, environment) {
   return registry.deployments.find((entry) => entry.tenant === tenant && entry.environment === environment);
@@ -16,7 +28,8 @@ test('registry maps Ultty GD1-test to the current shared VM target only', () => 
   assert.ok(deployment, 'ultty/gd1-test must be explicitly registered');
   assert.equal(deployment.target, 'current-shared-vm');
   assert.equal(deployment.githubEnvironment, 'gd1-test');
-  assert.equal(deployment.preflight, 'gd1-test');
+  assert.equal(deployment.profile, 'ultty-gd1-test');
+  assert.equal(deployment.runtimeEnvironment, 'gd1-test');
   assert.equal(registry.targets['current-shared-vm'].vmName, 'netviet');
   assert.equal(registry.targets['current-shared-vm'].gcpProjectId, 'netviet-host-968934832433');
   assert.equal(registry.targets['current-shared-vm'].zone, 'asia-southeast1-b');
@@ -39,11 +52,14 @@ test('production keeps the GitHub environment approval boundary', () => {
 
 test('manual deploy workflow exposes gd1-test while reusable workflow validates the registry', () => {
   assert.match(deployTenant, /-\s+gd1-test/);
-  assert.match(reusableDeploy, /\.github\/deployment-targets\.json/);
-  assert.match(reusableDeploy, /Unsupported deployment target/);
+  // The registry read moved out of the workflow heredoc into a module that tests can call. The
+  // wiring is asserted at both ends so neither half can be removed on its own.
+  assert.match(reusableDeploy, /node deploy\/netviet\/run-resolve-deployment-target\.mjs/);
+  assert.match(resolverCli, /\.github\/deployment-targets\.json/);
+  assert.match(resolverModule, /Unsupported deployment target/);
 });
 
-test('GD1-test verifies exact-SHA CI and passes fail-closed preflight inputs to deploy-ci', () => {
+test('GD1-test verifies exact-SHA CI and passes fail-closed gate inputs to deploy-ci', () => {
   const preflightIndex = reusableDeploy.indexOf('Verify exact main SHA passed CI');
   // Neo vao `id:` chu khong vao TEN HIEN THI cua buoc. Ten hien thi la van ban cho nguoi doc va
   // no doi that (26/08/2026, khi buoc nay duoc dat ten theo cac tang tin hieu no phu trach);
@@ -56,4 +72,233 @@ test('GD1-test verifies exact-SHA CI and passes fail-closed preflight inputs to 
   assert.match(reusableDeploy, /GD1_TEST_TARGET_CONFIRMED:/);
   assert.match(reusableDeploy, /GD1_TEST_CI_CONCLUSION:/);
   assert.match(reusableDeploy, /vars\.GD1_TEST_APPROVED_GROUP_HASHES/);
+  // The step no longer keys off a registry column. `preflight` was free-form text whose only
+  // validation was this `if:`, so a row could switch the whole proof off by naming another value.
+  assert.match(reusableDeploy, /if: steps\.target\.outputs\.requires_exact_main_ci == 'true'/);
+  assert.equal(reusableDeploy.includes('outputs.preflight'), false);
+});
+
+// --- The #180 bypass, as a regression test ----------------------------------------------------
+
+function syntheticRegistry(entry) {
+  return {
+    schemaVersion: 1,
+    targets: {
+      'current-shared-vm': {
+        vmName: 'netviet',
+        gcpProjectId: 'netviet-host-968934832433',
+        region: 'asia-southeast1',
+        zone: 'asia-southeast1-b',
+        primaryTenant: 'ultty',
+      },
+    },
+    deployments: [entry],
+  };
+}
+
+function refusal(entry, request) {
+  try {
+    resolveDeploymentTarget(syntheticRegistry(entry), request);
+  } catch (error) {
+    assert.ok(error instanceof DeploymentResolutionError, 'must refuse with a typed error');
+    return error;
+  }
+  return assert.fail('deployment target must be refused');
+}
+
+test('every live registry row resolves, and only gd1-test demands exact-main CI', () => {
+  for (const entry of registry.deployments) {
+    const plan = resolveDeploymentTarget(registry, {
+      tenant: entry.tenant,
+      environment: entry.environment,
+    });
+    assert.equal(plan.stackSlug, entry.stackSlug);
+    assert.equal(plan.runtimeEnvironment, entry.runtimeEnvironment);
+    assert.equal(plan.requiresExactMainCi, entry.environment === 'gd1-test');
+    assert.equal(plan.gate, entry.environment === 'gd1-test' ? 'gd1-test' : 'standard');
+    assert.ok(DEPLOYMENT_PROFILES[plan.profileId], 'profile must exist in the closed catalog');
+  }
+});
+
+test('a gd1-test row naming the standard profile is refused (the #180 bypass)', () => {
+  // This exact row resolved with exit 0 on 213af13 and emitted `preflight=standard`, which turned
+  // the `Verify exact main SHA passed CI` step off through its `if:`.
+  const error = refusal(
+    {
+      tenant: 'wata',
+      environment: 'gd1-test',
+      stackSlug: 'wata-gd1-test',
+      githubEnvironment: 'gd1-test',
+      runtimeEnvironment: 'dev',
+      target: 'current-shared-vm',
+      profile: 'standard',
+    },
+    { tenant: 'wata', environment: 'gd1-test' },
+  );
+  assert.equal(error.exitCode, RESOLVE_EXIT_CODES.profileRejected);
+  assert.match(error.message, /gd1-test is gated and profile standard is not/);
+});
+
+test('an unknown profile id in the registry is refused before anything is built', () => {
+  const error = refusal(
+    {
+      tenant: 'wata',
+      environment: 'dev',
+      stackSlug: 'wata',
+      githubEnvironment: 'dev',
+      runtimeEnvironment: 'dev',
+      target: 'current-shared-vm',
+      profile: 'transport-preview',
+    },
+    { tenant: 'wata', environment: 'dev' },
+  );
+  assert.equal(error.exitCode, RESOLVE_EXIT_CODES.unknownProfile);
+  assert.match(error.message, /Unknown deployment profile/);
+});
+
+test('a row cannot claim the isolated stack slug while running another environment', () => {
+  const error = refusal(
+    {
+      tenant: 'ultty',
+      environment: 'gd1-test',
+      stackSlug: 'ultty-gd1-test',
+      githubEnvironment: 'gd1-test',
+      runtimeEnvironment: 'dev',
+      target: 'current-shared-vm',
+      profile: 'ultty-gd1-test',
+    },
+    { tenant: 'ultty', environment: 'gd1-test' },
+  );
+  assert.equal(error.exitCode, RESOLVE_EXIT_CODES.profileRejected);
+  assert.match(error.message, /maps gd1-test to runtime gd1-test, not dev/);
+});
+
+test('a stack slug that disagrees with the derivation rule is refused', () => {
+  const error = refusal(
+    {
+      tenant: 'ultty',
+      environment: 'gd1-test',
+      stackSlug: 'ultty',
+      githubEnvironment: 'gd1-test',
+      runtimeEnvironment: 'gd1-test',
+      target: 'current-shared-vm',
+      profile: 'ultty-gd1-test',
+    },
+    { tenant: 'ultty', environment: 'gd1-test' },
+  );
+  assert.equal(error.exitCode, RESOLVE_EXIT_CODES.stackSlugMismatch);
+});
+
+test('step outputs expose the derived gate and never a registry-authored one', () => {
+  const outputs = toStepOutputs(
+    resolveDeploymentTarget(registry, { tenant: 'ultty', environment: 'gd1-test' }),
+  );
+  assert.equal(outputs.requires_exact_main_ci, 'true');
+  assert.equal(outputs.deployment_profile, 'ultty-gd1-test');
+  assert.equal(outputs.deployment_gate, 'gd1-test');
+  assert.equal(Object.prototype.hasOwnProperty.call(outputs, 'preflight'), false);
+  assert.equal(
+    toStepOutputs(resolveDeploymentTarget(registry, { tenant: 'ultty', environment: 'dev' }))
+      .requires_exact_main_ci,
+    'false',
+  );
+});
+
+// --- The rollout layer refuses on its own, not on the workflow's word -------------------------
+
+/**
+ * Run `deploy-ci.sh` far enough to reach the gate. Every case here is a REFUSAL, so nothing ever
+ * reaches `gcloud`, `docker` or the VM: the script exits before the first of them.
+ */
+function runDeployCi(env) {
+  return spawnSync('bash', ['deploy/netviet/deploy-ci.sh'], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GCP_PROJECT_ID: 'netviet-host-968934832433',
+      GCP_REGION: 'asia-southeast1',
+      GCP_ZONE: 'asia-southeast1-b',
+      VM_NAME: 'netviet',
+      TENANT: 'ultty',
+      GIT_SHA: 'a'.repeat(40),
+      ...env,
+    },
+  });
+}
+
+test('rollout refuses a gated environment deployed from a branch, not only from the workflow', () => {
+  const result = runDeployCi({ ENVIRONMENT: 'gd1-test', GITHUB_REF: 'refs/heads/feature-x' });
+  assert.equal(result.status, 64);
+  assert.match(result.stderr, /chi duoc deploy tu refs\/heads\/main/);
+});
+
+test('rollout refuses a gated environment whose exact-SHA CI is missing or not successful', () => {
+  const missing = runDeployCi({ ENVIRONMENT: 'gd1-test', GITHUB_REF: 'refs/heads/main' });
+  assert.equal(missing.status, 64);
+  assert.match(missing.stderr, /ket luan 'success'/);
+
+  const failed = runDeployCi({
+    ENVIRONMENT: 'gd1-test',
+    GITHUB_REF: 'refs/heads/main',
+    GD1_TEST_CI_CONCLUSION: 'failure',
+  });
+  assert.equal(failed.status, 64);
+  assert.match(failed.stderr, /ket luan 'success'/);
+});
+
+test('rollout refuses a gated environment aliased onto another runtime label', () => {
+  // The aliasing shape: the control plane resolved `gd1-test`, but the runtime label says `dev` —
+  // which is where deploy-ci.sh derives the REAL compose project, and therefore the volumes.
+  const result = runDeployCi({
+    ENVIRONMENT: 'dev',
+    DEPLOYMENT_ENVIRONMENT_ID: 'gd1-test',
+    STACK_SLUG: 'ultty-gd1-test',
+    GITHUB_REF: 'refs/heads/main',
+    GD1_TEST_CI_CONCLUSION: 'success',
+  });
+  assert.equal(result.status, 64);
+  assert.match(result.stderr, /phai chay duoi dung nhan do/);
+});
+
+test('rollout refuses a stack slug that disagrees with the resolved environment', () => {
+  const result = runDeployCi({
+    ENVIRONMENT: 'gd1-test',
+    DEPLOYMENT_ENVIRONMENT_ID: 'gd1-test',
+    STACK_SLUG: 'ultty',
+    GITHUB_REF: 'refs/heads/main',
+    GD1_TEST_CI_CONCLUSION: 'success',
+  });
+  assert.equal(result.status, 64);
+  assert.match(result.stderr, /khac cai suy ra tu ultty\/gd1-test/);
+});
+
+test('rollout leaves ungated environments byte-identical: the gate does not fire', () => {
+  // `khong-ton-tai` has no tenant pack, so the run stops at the check immediately AFTER the gate.
+  // Reaching that check is the proof the gate let it through; the derived slug is the pre-existing
+  // one, including production's `-prod` suffix, which this change deliberately does not touch.
+  for (const [environmentId, runtimeLabel, expectedSlug] of [
+    ['dev', 'dev', 'khong-ton-tai'],
+    ['production', 'prod', 'khong-ton-tai-prod'],
+  ]) {
+    const result = runDeployCi({
+      TENANT: 'khong-ton-tai',
+      ENVIRONMENT: runtimeLabel,
+      DEPLOYMENT_ENVIRONMENT_ID: environmentId,
+      STACK_SLUG: 'khong-ton-tai',
+      GITHUB_REF: 'refs/heads/main',
+    });
+    assert.equal(result.status, 1, `${environmentId} must reach the tenant-pack check`);
+    assert.match(result.stderr, new RegExp(`gate=ungated`));
+    assert.match(result.stderr, new RegExp(`Stack: ${expectedSlug} `));
+    assert.match(result.stderr, /Khong tim thay goi khach/);
+  }
+});
+
+test('the rollout gate is derived from the environment name, not from a workflow flag', () => {
+  // A semantic anchor, not a line number: the gate must come from `isGatedEnvironment`, so no
+  // input passed down from the workflow can switch it off.
+  assert.match(deployCi, /isGatedEnvironment\(process\.env\.DEPLOYMENT_ENVIRONMENT_ID\)/);
+  assert.match(deployCi, /if \[\[ "\$\{environment_gate\}" == 'gated' \]\]/);
+  // The workflow must hand down the true environment, not only the runtime label.
+  assert.match(reusableDeploy, /DEPLOYMENT_ENVIRONMENT_ID: \$\{\{ inputs\.environment \}\}/);
 });
