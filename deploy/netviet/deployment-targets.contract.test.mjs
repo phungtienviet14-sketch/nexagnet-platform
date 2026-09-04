@@ -11,12 +11,26 @@ import {
   toStepOutputs,
 } from './resolve-deployment-target.mjs';
 
-const registry = JSON.parse(readFileSync('.github/deployment-targets.json', 'utf8'));
-const deployTenant = readFileSync('.github/workflows/deploy-tenant.yml', 'utf8');
-const reusableDeploy = readFileSync('.github/workflows/reusable-deploy-tenant.yml', 'utf8');
-const resolverCli = readFileSync('deploy/netviet/run-resolve-deployment-target.mjs', 'utf8');
-const resolverModule = readFileSync('deploy/netviet/resolve-deployment-target.mjs', 'utf8');
-const deployCi = readFileSync('deploy/netviet/deploy-ci.sh', 'utf8');
+/**
+ * `core.autocrlf=true` tren ban lam viec Windows ket thuc dong bang CRLF, trong khi CI
+ * (ubuntu-24.04) va kho git deu la LF. Chuan hoa khi DOC de mot bai do khong con nghia la "may
+ * khac" — cung phep chuan hoa ma `deployment-profile-render.contract.test.mjs` va
+ * `release-identity.contract.test.mjs` dung.
+ *
+ * `.gitattributes` chi ghim `*.sh` va `Dockerfile` ve `eol=lf`, nen `.yml`/`.json`/`.mjs` deu ve
+ * CRLF tren checkout Windows. Cac mau o duoi viet thang ky tu `\n`, nen thieu buoc nay thi bai do
+ * XANH tren CI va DO tren may lap trinh vien — kieu do te hon mot bai do han, vi no day nguoi ta
+ * ve phia bo qua cong.
+ */
+const CRLF = new RegExp(`${String.fromCharCode(13)}${String.fromCharCode(10)}`, 'g');
+const read = (path) => readFileSync(path, 'utf8').replace(CRLF, String.fromCharCode(10));
+
+const registry = JSON.parse(read('.github/deployment-targets.json'));
+const deployTenant = read('.github/workflows/deploy-tenant.yml');
+const reusableDeploy = read('.github/workflows/reusable-deploy-tenant.yml');
+const resolverCli = read('deploy/netviet/run-resolve-deployment-target.mjs');
+const resolverModule = read('deploy/netviet/resolve-deployment-target.mjs');
+const deployCi = read('deploy/netviet/deploy-ci.sh');
 
 function deploymentFor(tenant, environment) {
   return registry.deployments.find(

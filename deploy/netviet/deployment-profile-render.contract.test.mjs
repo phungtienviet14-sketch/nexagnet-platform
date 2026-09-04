@@ -336,20 +336,13 @@ test('COMPOSE: ban goc khong con service flowise, va `api` khong con phu thuoc n
   // Va lop phu dat lai DUNG rang buoc do — hop nhat theo anh xa nen dong `postgres` con nguyen.
   assert.match(overlay, /^ {2}flowise:$/m);
   assert.match(overlay, /^ {2}flowise-volume-init:$/m);
-  /*
-   * `\r?\n` chu khong phai `\n`: `.gitattributes` chi ghim `*.sh` va `Dockerfile` ve `eol=lf`, nen
-   * mot ban checkout tren Windows (`core.autocrlf=true`) nhan `compose.flowise.yaml` duoi dang
-   * CRLF — mot trang thai HOP LE ma bo test phai chiu duoc. Chi ky tu xuong dong VIET THANG trong
-   * mau moi hong; `$` cua JS regex von da nhan ca `\r`. Phep khang dinh khong doi mot chut nao:
-   * van la dung bon dong do, dung thu tu do, dung muc thut le do.
-   */
   assert.match(
     overlay,
-    /^ {2}api:\r?\n {4}depends_on:\r?\n {6}flowise:\r?\n {8}condition: service_healthy$/m,
+    /^ {2}api:\n {4}depends_on:\n {6}flowise:\n {8}condition: service_healthy$/m,
   );
   assert.match(
     overlay,
-    /^ {2}bootstrap:\r?\n {4}depends_on:\r?\n {6}flowise:\r?\n {8}condition: service_healthy$/m,
+    /^ {2}bootstrap:\n {4}depends_on:\n {6}flowise:\n {8}condition: service_healthy$/m,
   );
   // Volume cua Flowise di cung service cua no; ban goc khong duoc khai mot volume mo coi.
   assert.match(overlay, /^ {2}flowise-data:$/m);
