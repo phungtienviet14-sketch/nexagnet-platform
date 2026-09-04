@@ -38,6 +38,15 @@
       "profile": "standard"
     },
     {
+      "tenant": "transport-preview",
+      "environment": "gd1-test",
+      "stackSlug": "transport-preview-gd1-test",
+      "githubEnvironment": "gd1-test",
+      "runtimeEnvironment": "gd1-test",
+      "target": "current-shared-vm",
+      "profile": "transport-preview-gd1-test"
+    },
+    {
       "tenant": "amico",
       "environment": "dev",
       "stackSlug": "amico",

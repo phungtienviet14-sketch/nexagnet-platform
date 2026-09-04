@@ -713,3 +713,56 @@ textarea:focus-visible {
     border-bottom: 1px solid var(--line);
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * DAI BANG XEM TRUOC
+ *
+ * Chi hien khi goi khach tu khai `policies.readiness.previewNotice`. Khong goi khach that nao
+ * khai truong do, nen khoi nay khong cham vao mot be mat khach nao.
+ *
+ * Nam trong dong chay chu khong `fixed`: mot dai bang de len noi dung la mot dai bang nguoi ta
+ * hoc cach lo di sau ba phut. `--preview-strip-h` bao chieu cao ra ngoai de cac vo dung `100vh`
+ * tru dung phan bi chiem, thay vi de ca trang thua ra mot thanh cuon.
+ * ------------------------------------------------------------------ */
+body[data-preview='on'] {
+  --preview-strip-h: 30px;
+}
+
+.preview-ribbon {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  height: var(--preview-strip-h, 30px);
+  padding: 0 0.9rem;
+  overflow: hidden;
+  background: repeating-linear-gradient(
+    135deg,
+    #4a3a10,
+    #4a3a10 10px,
+    #5c4913 10px,
+    #5c4913 20px
+  );
+  color: #fdf3e2;
+  font-size: 0.72rem;
+  line-height: var(--preview-strip-h, 30px);
+  letter-spacing: 0.02em;
+}
+
+.preview-ribbon__label {
+  flex: none;
+  padding: 0 0.45rem;
+  border-radius: 3px;
+  background: #fdf3e2;
+  color: #4a3a10;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.preview-ribbon__note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.92;
+}

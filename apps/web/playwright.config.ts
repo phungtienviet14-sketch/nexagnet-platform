@@ -21,6 +21,13 @@ const TEST_TENANT_DIR = resolve(__dirname, 'e2e/fixtures/tenant');
 
 export default defineConfig({
   testDir: './e2e',
+  /**
+   * Be mat van tai doi mot GOI KHACH KHAC, nen no khong chay duoc duoi may chu nay — mot khach chi
+   * khai mot experience. Bo bai do nam o `e2e/transport/` va chay bang
+   * `playwright.transport.config.ts`, TUAN TU sau bo nay (xem script `test:e2e`): chay song song
+   * hai `next dev` trong cung thu muc se dung vao nhau o `.next`, dung nhu ghi chu tren.
+   */
+  testIgnore: 'transport/**',
   fullyParallel: false,
   retries: 0,
   reporter: 'line',

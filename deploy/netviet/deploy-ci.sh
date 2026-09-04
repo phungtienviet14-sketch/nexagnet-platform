@@ -241,8 +241,24 @@ if [[ "${DEPLOYMENT_ENVIRONMENT}" == "gd1-test" ]]; then
   #
   # `run-gd1-test-preflight.mjs` nay dieu phoi theo `profile.preflightModule`. Nua CHUNG (danh
   # tinh stack, kiem ke bi mat suy tu ho so, digest rollback, hop dong runtime) chay cho MOI ho so.
+  # DANH SACH NHOM ZALO DUOC DUYET LA CUA MOT KHACH, KHONG PHAI CUA MOI TRUONG.
+  #
+  # `GD1_TEST_APPROVED_GROUP_HASHES` la bien cua MOI TRUONG `gd1-test` tren GitHub, nen no duoc
+  # truyen cho MOI lan deploy vao moi truong do — ke ca lan deploy cua mot tenant khac. Voi mot ho
+  # so khong chay kenh nao, do la mot ro ri pham vi: dinh danh nhom (da bam) cua khach nay di vao
+  # bang chung preflight cua stack khac.
+  #
+  # Ho so khong chay kenh thi danh sach do PHAI rong, va preflight tu choi neu no khong rong —
+  # nen cho no rong o day khong phai lam yeu mot cong, ma la ngung dua mot du kien khong thuoc ve
+  # lan deploy nay.
+  approved_group_hashes="${GD1_TEST_APPROVED_GROUP_HASHES:-}"
+  if [[ "${PROFILE_CHANNEL}" == 'none' ]]; then
+    approved_group_hashes=''
+    echo "Ho so '${DEPLOYMENT_PROFILE}' khong chay kenh nao — khong truyen nhom Zalo duoc duyet." >&2
+  fi
   GD1_TEST_PREFLIGHT_OUTPUT="${preflight_output}" \
     DEPLOYMENT_PROFILE="${DEPLOYMENT_PROFILE:-}" \
+    GD1_TEST_APPROVED_GROUP_HASHES="${approved_group_hashes}" \
     node deploy/netviet/run-gd1-test-preflight.mjs
   rollback_app_image="$(node -e "const {readFileSync}=require('node:fs'); const p=JSON.parse(readFileSync(process.argv[1],'utf8')); process.stdout.write(p.rollback?.appImage ?? '')" "${preflight_output}")"
   rollback_flowise_image="$(node -e "const {readFileSync}=require('node:fs'); const p=JSON.parse(readFileSync(process.argv[1],'utf8')); process.stdout.write(p.rollback?.flowiseImage ?? '')" "${preflight_output}")"
