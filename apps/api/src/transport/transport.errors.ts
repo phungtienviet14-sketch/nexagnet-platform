@@ -8,6 +8,7 @@ import type { TransportAssetComplianceErrorReason } from './asset-compliance/ass
 import type { TransportWorkforceDecisionReason } from './workforce/workforce-decisions.js';
 import type { TransportWorkforceErrorReason } from './workforce/workforce-errors.js';
 import type { TransportSettlementErrorReason } from './settlement/settlement-errors.js';
+import type { TransportEvidenceDecisionReason } from './evidence/evidence-decisions.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
 
 /**
@@ -90,7 +91,8 @@ export type TransportErrorReason =
   | TransportAssetComplianceDecisionReason
   | TransportAssetComplianceErrorReason
   | TransportWorkforceDecisionReason
-  | TransportWorkforceErrorReason;
+  | TransportWorkforceErrorReason
+  | TransportEvidenceDecisionReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh

@@ -101,6 +101,13 @@ import { StreamController } from './stream/stream.controller.js';
 import { DriverFundController } from './transport/costing/driver-fund.controller.js';
 import { DriverFundSelfController } from './transport/costing/driver-fund-self.controller.js';
 import { TransportCostingModule } from './transport/costing/transport-costing.module.js';
+import { DriverFuelEvidenceController } from './transport/evidence/driver-fuel-evidence.controller.js';
+import {
+  transportEvidenceMaxBytesProvider,
+  transportEvidenceServiceProvider,
+  transportEvidenceStoreProvider,
+} from './transport/evidence/evidence.provider.js';
+import { FuelEvidenceController } from './transport/evidence/fuel-evidence.controller.js';
 import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js';
 import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
@@ -228,6 +235,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-fuel', FuelReconciliationController),
   // PHIEU DAU CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
   owned('transport-fuel', DriverFuelController),
+  // BANG CHUNG (`#169`) — hai be mat rieng, dung khuon `GD-23`. Den cung `transport-fuel` va bien
+  // mat cung no: khong co phieu dau thi khong co anh phieu dau de xem.
+  owned('transport-fuel', DriverFuelEvidenceController),
+  owned('transport-fuel', FuelEvidenceController),
   // `TX-06` — bao duong, giay to, trang thai hieu luc cua doi xe.
   owned('transport-asset-compliance', MaintenanceController),
   owned('transport-asset-compliance', ComplianceController),
@@ -338,6 +349,11 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('messaging', OutboundRecorder),
   owned('sales-order', erpProvider),
   owned('turn-processing', mediaStoreProvider),
+  // Kho anh CUA MIEN VAN TAI — token rieng, vi `mediaStoreProvider` thuoc `turn-processing` va
+  // mot khach van tai khong bat capability do. Xem `transport/evidence/evidence.provider.ts`.
+  owned('transport-fuel', transportEvidenceStoreProvider),
+  owned('transport-fuel', transportEvidenceMaxBytesProvider),
+  owned('transport-fuel', transportEvidenceServiceProvider),
   owned('knowledge', catalogStoreProvider),
   owned('turn-processing', mediaFetcherProvider),
   owned('turn-processing', parserProvider),

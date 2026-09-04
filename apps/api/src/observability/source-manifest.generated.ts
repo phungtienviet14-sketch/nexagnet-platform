@@ -292,12 +292,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
-    "transport.driver.self.fuel.read": {
-      "filePath": "apps/api/src/transport/fuel/driver-fuel.controller.ts"
-    },
-    "transport.driver.self.fuel.submit": {
-      "filePath": "apps/api/src/transport/fuel/driver-fuel.controller.ts"
-    },
     "transport.driver.self.fund.read": {
       "functionName": "DriverFundSelfController.statement",
       "filePath": "apps/api/src/transport/costing/driver-fund-self.controller.ts",
@@ -313,12 +307,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.fleet_status.read": {
       "filePath": "apps/api/src/transport/asset-compliance/fleet-status.controller.ts"
-    },
-    "transport.fuel.entry.read": {
-      "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
-    },
-    "transport.fuel.entry.submit_for_driver": {
-      "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
     },
     "transport.fuel.entry.verify": {
       "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
@@ -556,12 +544,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NOT_OWNED": {
       "functionName": "FuelReadService.getMyFuelSlip",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 139
+      "line": 140
     },
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NO_DRIVER_BINDING": {
       "functionName": "FuelReadService.requireDriverBinding",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 172
+      "line": 173
     },
     "driver.self_fund_scope|SELF_FUND_SCOPE_GRANTED": {
       "functionName": "CostingReadService.selfFundStatement",
@@ -595,6 +583,36 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "CostingService.postEntryOnly",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 203
+    },
+    "evidence.read|EVIDENCE_LOCATOR_OUT_OF_SCOPE": {
+      "functionName": "TransportEvidenceService.read",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 119
+    },
+    "evidence.read|EVIDENCE_OBJECT_MISSING": {
+      "functionName": "TransportEvidenceService.read",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 136
+    },
+    "evidence.read|EVIDENCE_SERVED": {
+      "functionName": "TransportEvidenceService.read",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 146
+    },
+    "evidence.upload|*": {
+      "functionName": "TransportEvidenceService.put",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 72
+    },
+    "evidence.upload|EVIDENCE_STORED": {
+      "functionName": "TransportEvidenceService.put",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 100
+    },
+    "evidence.upload|EVIDENCE_STORE_DISABLED": {
+      "functionName": "TransportEvidenceService.put",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 84
     },
     "fact.supersession|*": {
       "functionName": "SourceRegistryService.supersedeFact",
