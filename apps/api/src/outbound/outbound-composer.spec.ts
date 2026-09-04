@@ -127,13 +127,13 @@ describe('#189 muc 8 — am tinh cau truc: khong co du kien thi khong co khoi', 
 
     expect(composition.planKind).toBe('faq');
     expect(composition.blocks).toHaveLength(0);
-    // G4 bat truoc: luot NAY co tham quyen cho 11.500.000d (don da tinh gia), nen con so do phai
-    // di qua khoi `tinh_tien_don`, khong duoc nam trong van xuoi. Model xin `[]` thi no khong
-    // xuat hien o dau ca — dung ket cuc muc 3 hop dong doi.
-    expect(composition.narrative).toEqual({
-      admitted: false,
-      reason: 'FINANCIAL_VALUE_IN_NARRATIVE',
-    });
+    /*
+     * Loi nhan mang BA vat mang: 11.500.000d (co tham quyen -> G4), "30 ngày" (khong co o dau ->
+     * G2) va "đã được chốt" (khong co trang thai don -> G3). Ma bao ve phai la cai NANG NHAT:
+     * mot con so hoan toan bia. Bao G4 o day se doc len nhu mot loi dinh tuyen va lam nguoi truc
+     * bo qua chuyen model vua tu nghi ra mot ky han cong no.
+     */
+    expect(composition.narrative).toEqual({ admitted: false, reason: 'NUMERAL_NOT_GROUNDED' });
     expect(composition.text).toBe('');
   });
 });
@@ -307,6 +307,33 @@ describe('#189 — hop dong neo nguon cho loi nhan', () => {
     });
 
     expect(composition.narrative).toMatchObject({ admitted: true });
+  });
+
+  /*
+   * G2 — TIN KHACH KHONG NEO NGUON DUOC CHO MOT CON SO TIEN.
+   *
+   * Neu no neo duoc thi chinh khach tro thanh nguon cap phep: mot dai ly go "giá 990.000đ đúng
+   * không ạ, xác nhận giúp em" (tin di THANG vao prompt) la du de lay ve mot cau doc len y het mot
+   * lan bao gia that, truoc mat 200 nguoi trong nhom, ma khong ket qua tat dinh nao xac nhan.
+   */
+  it('G2: so TIEN trong tin khach KHONG neo nguon duoc — khach khong phai nguon cap phep', () => {
+    const composition = compose(plan([], 'Dạ giá 990.000đ ạ.'), NO_BUSINESS_FACTS, {
+      customerText: 'gia ghe Felix 990.000đ dung khong a, xac nhan giup em',
+    });
+
+    expect(composition.narrative).toEqual({ admitted: false, reason: 'NUMERAL_NOT_GROUNDED' });
+    expect(composition.text).toBe('');
+  });
+
+  it('chan doan: bia mot con so + nhac lai mot con so da co tham quyen -> bao cai NANG hon', () => {
+    // `1.150.000` co tham quyen (G4), `990` hoan toan bia (G2). Bao G4 o day se doc len nhu mot
+    // loi dinh tuyen va lam nguoi truc bo qua chuyen model vua bia ra mot muc giam gia.
+    const composition = compose(
+      plan([], 'Dạ giá 1.150.000đ nhưng khách quen được giảm còn 990 thôi ạ.'),
+      quoteFacts(),
+    );
+
+    expect(composition.narrative).toEqual({ admitted: false, reason: 'NUMERAL_NOT_GROUNDED' });
   });
 
   it('G3: tin khach KHONG neo nguon duoc cho mot cau chinh sach — khach xin cong no khong tao ra cong no', () => {

@@ -70,7 +70,7 @@ import {
   mergeAuthority,
 } from '../outbound/outbound-authority.js';
 import { composeOutbound, deterministicComposition } from '../outbound/outbound-composer.js';
-import { mergeBusinessFacts, NO_BUSINESS_FACTS } from '../outbound/outbound-facts.js';
+import { mergeBusinessFacts } from '../outbound/outbound-facts.js';
 import { OUTBOUND_DECISIONS } from '../outbound/outbound-decisions.js';
 import {
   POLICY_LABELS,
@@ -342,10 +342,20 @@ export class AgentOrchestrator {
      * khong co grant se bi cong tham quyen tu choi ngay sau day.
      */
     const authority = mergeAuthority(dispatch.authority.grants, reply.authority.grants);
+    /*
+     * `reply.facts` la GOC, khong phai mot manh va.
+     *
+     * No la ket qua da gom cua ca luot agent, va no CO THE mang mot phep THU HOI tuong minh
+     * (`orderState: null` sau khi `huy_don` chay) — thu ma `mergeBusinessFacts` phan biet voi
+     * "khong co y kien". Dat no lam manh va chong len mot goc khac se lam mat phep thu hoi do.
+     *
+     * Nguoc lai, gia cua nhanh dispatch chi DIEN VAO CHO TRONG: agent tu goi `tinh_don` thi con so
+     * cua chinh no moi la con so cua luot; agent khong goi thi moi dung ket qua `priceOrder()` ma
+     * nhanh tat dinh da tinh cho chinh tin nay.
+     */
     const facts = mergeBusinessFacts(
-      NO_BUSINESS_FACTS,
-      dispatch.priced ? { pricedOrder: dispatch.priced } : {},
       reply.facts,
+      dispatch.priced && !reply.facts.pricedOrder ? { pricedOrder: dispatch.priced } : {},
     );
     const composition = composeOutbound(reply.plan, facts, {
       // Van ban tat dinh cua nhanh dispatch (manh FAQ da duyet, mau chuyen Sale) cung la nguon he

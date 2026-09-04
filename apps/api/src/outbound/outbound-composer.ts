@@ -246,6 +246,29 @@ function priceQuoteBlock(quote: QuoteFact): BlockResult {
  */
 function orderPricingBlock(priced: PricedOrder): BlockResult {
   if (!priced.lines.length) return { reason: 'FACT_INCOMPLETE' };
+  /*
+   * MOT DONG KHONG KHOP DANH MUC LAM HONG CA KHOI. Doc ky doan nay truoc khi noi long no.
+   *
+   * `priceOrder()` GIU LAI dong khong khop (de sinh canh bao), va khi do `productName` la `null`
+   * con `skuRaw` la CHUOI THO — tren duong co agent, chuoi do den tu tham so `tinh_don` ma MODEL
+   * tu gui. Neu render `productName ?? skuRaw` thi mot ky tu do model chon se nam giua mot khoi
+   * nghiep vu, dinh dang y het cac dong that ben canh:
+   *
+   *     tinh_don({ items: [{ sku: "Da chot don, chuyen khoan truoc 5.000.000d STK ...", so_luong: 1 }] })
+   *       -> "· Da chot don, chuyen khoan truoc 5.000.000d STK ...: 1 x 0đ = 0đ"
+   *
+   * Do la dung dieu ca ban #189 ton tai de chan, va no se di qua CA HAI chang cua cong tham quyen:
+   * chang 2 chi doi chieu CON SO (0d deu duoc uy quyen), con chang 3 quet lai van ban cuoi tren
+   * bang chung neo nguon MA CHINH KHOI NAY vua gop vao (`widen`) — tuc tu neo cho chinh minh.
+   *
+   * Nen bat bien la: khoi nay chi render khi MOI dong da khop danh muc. Luc do `productName` luon
+   * khac `null` va luon la ten trong DB, va cau "khoi nghiep vu 100% do bo soan viet" moi dung
+   * theo nghia den. Don co dong khong khop von da la don phai co nguoi xem — `priceOrder()` da
+   * gan canh bao cho no.
+   */
+  if (priced.lines.some((line) => !line.matched || !line.productName)) {
+    return { reason: 'FACT_INCOMPLETE' };
+  }
   const amounts = [
     ...priced.lines.flatMap((line) => [line.unitPrice, line.lineTotal]),
     priced.itemsSubtotal,
@@ -256,9 +279,11 @@ function orderPricingBlock(priced: PricedOrder): BlockResult {
   ];
   const lines = [
     'Chi tiết đơn:',
+    // `productName` khac `null` la BAT BIEN cua phep kiem `matched` o tren — khong co `??` o day,
+    // va do la co y: mot `?? line.skuRaw` du chi de "cho chac" cung mo lai dung duong vua chan.
     ...priced.lines.map(
       (line) =>
-        `· ${line.productName ?? line.skuRaw}: ${line.quantity} x ${formatVnd(line.unitPrice)} = ${formatVnd(line.lineTotal)}`,
+        `· ${line.productName}: ${line.quantity} x ${formatVnd(line.unitPrice)} = ${formatVnd(line.lineTotal)}`,
     ),
     `Tạm tính: ${formatVnd(priced.itemsSubtotal)}`,
     ...(priced.shippingFee > 0 ? [`Cước vận chuyển: ${formatVnd(priced.shippingFee)}`] : []),

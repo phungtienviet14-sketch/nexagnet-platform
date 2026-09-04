@@ -272,8 +272,30 @@ describe('am tinh — ban nhap LLM khong tham quyen khong ra khoi he thong', () 
     const view = await pipeline.process(message('cong no may ngay'));
 
     expect(channel.sent).toHaveLength(0);
-    // `payment_policy:cong_no` DA duoc cap -> G4 bat truoc: cau chinh sach phai di qua khoi, va
-    // khoi do se noi "45 ngày" chu khong phai "30 ngày" ma model vua go.
+    // Ky han "30 ngày" khong co o dau — khong trong nguon, khong trong grant (dai ly nay la 45),
+    // khong trong tin khach. Do la mot con so model TU NGHI RA, va G2 bao dung cai do.
+    expect(view.trace?.outboundComposition?.narrative).toEqual({
+      admitted: false,
+      reason: 'NUMERAL_NOT_GROUNDED',
+    });
+  });
+
+  it('5c. cau chinh sach DUNG nhung do model viet -> van phai di qua khoi (G4)', async () => {
+    const { pipeline, channel } = await build(
+      new StubAdvisor(
+        draft(
+          // Khong con so nao, va `payment_policy:cong_no` thi DA duoc cap — tuc cau nay khong sai.
+          // No van bi tu choi, vi cau chu ve dieu khoan thuoc bo soan: khoi se noi "Công nợ 45
+          // ngày (từ ngày nhận hàng)", con model thi dang noi mot cau khong ky han.
+          'Dạ bên mình có cho công nợ ạ.',
+          mergeAuthority(grantsFromDealerPolicy('cong_no_45')),
+        ),
+      ),
+    );
+
+    const view = await pipeline.process(message('co cong no khong'));
+
+    expect(channel.sent).toHaveLength(0);
     expect(view.trace?.outboundComposition?.narrative).toEqual({
       admitted: false,
       reason: 'POLICY_STATEMENT_IN_NARRATIVE',

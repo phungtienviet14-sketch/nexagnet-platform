@@ -180,8 +180,23 @@ async function cancelOrder(
   if (outOfScope(found)) return readOnly(found);
   try {
     const cancelled = await deps.port.cancel(found.order.id, reason || 'khach yeu cau huy');
-    // HUY KHONG cap tham quyen cam ket: mot don vua bi huy la don KHONG duoc phep noi la da chot.
-    return readOnly({ da_huy: true, ma_don: cancelled.id, trang_thai: cancelled.status });
+    /*
+     * HUY KHONG cap tham quyen cam ket — VA no phai THU HOI cai da cap truoc do trong cung luot.
+     *
+     * `readOnly()` (grants rong, khong khai bao `facts`) chi lam duoc ve dau. Ve sau moi la cho
+     * nguy hiem: quy trinh chuan cua chinh prompt la `tra_cuu_don` roi moi `huy_don`, va vong
+     * `tra_cuu_don` da nap mot anh chup `orderState` cua don luc no con `approved`. Khong thu hoi
+     * thi bo soan van render duoc "Đơn của mình đã được chốt." cho don vua bi huy — mot cau sai
+     * di ra tu duong tat dinh, tuc khong mot phep neo nguon nao cham toi.
+     *
+     * `orderState: null` la KHAI BAO TUONG MINH "du kien cu khong con dung", khac han voi viec bo
+     * trong truong (= khong co y kien). Xem `mergeBusinessFacts`.
+     */
+    return {
+      output: { da_huy: true, ma_don: cancelled.id, trang_thai: cancelled.status },
+      grants: [],
+      facts: { orderState: null },
+    };
   } catch (error: unknown) {
     return readOnly({ da_huy: false, loi: errorText(error) });
   }

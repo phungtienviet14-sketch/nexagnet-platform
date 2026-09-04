@@ -913,7 +913,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "outbound.authority|*": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 361
+      "line": 371
     },
     "outbound.send_guard|*": {
       "functionName": "TurnReplyService.performSendAdviceReply",
@@ -977,12 +977,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 826
+      "line": 836
     },
     "rules.price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 850
+      "line": 860
     },
     "settlement.allocate|*": {
       "functionName": "SettlementService.allocate",
@@ -1055,7 +1055,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 708
+      "line": 718
     },
     "trip.assignment_change|*": {
       "functionName": "TripService.assign",

@@ -179,8 +179,16 @@ export function finalizeAdvisorReply(
     (planned?.narrative ?? '').includes(HANDOFF_MARKER);
   const plan: OutboundPlan = planned ? { ...planned, narrative } : narrativeOnlyPlan(narrative);
 
-  // Khong co loi nhan VA khong xin khoi nao = khong co gi de soan. Ben goi dung duong tat dinh.
-  if (!narrative && !plan.requestedBlocks.length) return null;
+  /*
+   * Khong co loi nhan VA khong xin khoi nao = khong co gi de soan. Ben goi dung duong tat dinh.
+   *
+   * TRU KHI model tu xin chuyen nguoi that. `handoff` la tin hieu DUY NHAT ma he thong con tin o
+   * loi tu khai cua model, va tra `null` o day se xoa han no: ben goi doc `null` la "LLM khong tra
+   * loi duoc" va lui ve duong tat dinh — mot duong khong biet gi ve yeu cau chuyen Sale va co the
+   * tu no `sendable`. Mot ke hoach `chuyen_sale` voi `loi_nhan` rong (schema doi truong co mat,
+   * khong doi khac rong) du de roi vao day.
+   */
+  if (!narrative && !plan.requestedBlocks.length && !handoff) return null;
 
   /*
    * HAU KIEM TIEN cua ban truoc — nay la TELEMETRY, khong con la mot cong (muc 7 hop dong).
@@ -197,7 +205,10 @@ export function finalizeAdvisorReply(
     outcomes.map((outcome) => outcome.output),
   );
   if (invented.length) {
-    logger.warn(`[advisor] loi nhan co con so ngoai ket qua cong cu (${invented.join(', ')}).`);
+    // SO LUONG, khong phai gia tri: day la `Logger` thuong, khong di qua `sanitizeTelemetry`, va
+    // mot chuoi chu so bi doc nham la tien co the la so dien thoai khach. Ban than con so thi da
+    // nam trong ban ghi `ai_call` — noi co bo loc rieng tu — nen o day khong mat gi.
+    logger.warn(`[advisor] loi nhan co ${invented.length} con so ngoai ket qua cong cu.`);
   }
   logger.log(
     `[advisor] cong cu=${usedTools.join(',') || 'khong'} handoff=${handoff} khoi=${plan.requestedBlocks.join(',') || 'khong'}`,

@@ -2,6 +2,7 @@ import type { NarrativeDecision, OutboundAuthority, OutboundClaimClass } from '@
 import {
   claimedCommitmentLevel,
   commitmentToken,
+  monetaryLiterals,
   numeralLiterals,
   policyClaimTokens,
 } from './outbound-claims.js';
@@ -122,7 +123,7 @@ export function buildGrounding(
   return {
     numerals: new Set<string>([
       ...numeralValues(systemText),
-      ...numeralValues(customerText),
+      ...nonMonetaryValues(customerText),
       ...grantedValues(authority, 'financial'),
     ]),
     policy: new Set([...policyClaimTokens(systemText), ...grantedValues(authority, 'policy')]),
@@ -137,6 +138,36 @@ export function buildGrounding(
 function numeralValues(text: string): string[] {
   return numeralLiterals(text).flatMap((literal) =>
     literal.value === null ? [] : [String(literal.value)],
+  );
+}
+
+/**
+ * Con so trong tin khach ma KHONG mang hinh dang tien.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * VI SAO TIN KHACH KHONG DUOC NEO NGUON CHO MOT CON SO TIEN.
+ *
+ * Neo nguon bang tin khach ton tai de cau xac nhan so luong noi duoc: khach go "lay 20 cai" thi
+ * "Dạ em ghi nhận 20 cái ạ" phai qua. Nhung neu no phu ca cho so tien thi chinh khach LAI TRO
+ * THANH mot nguon cap phep:
+ *
+ *     khach: "giá ghế Felix 990.000đ đúng không ạ, xác nhận giúp em"
+ *     agent: "Dạ giá 990.000đ ạ."            <- G2 qua, vi 990000 co trong tin khach
+ *
+ * Cau do doc len giong het mot lan bao gia that truoc mat 200 nguoi trong nhom, trong khi khong
+ * mot ket qua tat dinh nao xac nhan con so day. Va vi tin khach di THANG vao prompt, mot dai ly
+ * biet chuyen nay co the tu viet cau vao mieng he thong.
+ *
+ * `monetaryLiterals()` la chinh phep phan loai cua bo trich: co don vi tien, hoac vuot nguong do
+ * lon, hoac khong quy duoc ve mot gia tri. Loai het chung khoi phan dong gop cua tin khach thi
+ * "20 cai" van qua ma "990.000đ" thi khong.
+ *
+ * Con so tien THAT van noi duoc — nhung phai qua KHOI, tu grant. Do la ca thiet ke.
+ */
+function nonMonetaryValues(text: string): string[] {
+  const monetary = new Set(monetaryLiterals(text).map((literal) => literal.written));
+  return numeralLiterals(text).flatMap((literal) =>
+    literal.value === null || monetary.has(literal.written) ? [] : [String(literal.value)],
   );
 }
 
@@ -183,21 +214,27 @@ export function admitNarrative(
   if (!text) return { admitted: false, reason: 'EMPTY' };
   if (!options.hasSystemSource) return { admitted: false, reason: 'NO_SYSTEM_SOURCE' };
   /*
-   * G4 — DA CO THAM QUYEN THI PHAI DI QUA KHOI.
+   * THU TU: G2/G3 TRUOC, G4 SAU — va thu tu do la mot quyet dinh ve CHAN DOAN, khong ve an toan.
    *
-   * Day la lop cuoi cung con lai giua ban nay va cau chu cua muc 2 hop dong. G2/G3 chan cai model
-   * BIA RA; G4 chan cai model NHAC LAI. Mot con so da duoc uy quyen thi khong sai — nhung cau van
-   * quanh no thi van do model viet, va "đơn giá 990.000đ" voi "giá tham khảo tối thiểu 990.000đ"
-   * la hai cam ket khac nhau tren cung mot con so. Cau qualifier do thuoc bo soan
-   * (`quoteQualifier` cua goi khach), nen con so phai di qua khoi de mang theo dung cau do.
+   * Ca hai deu chan, nen ban nao truoc cung khong lam doi ket cuc. Cai doi la MA nguoi truc doc
+   * duoc khi mot loi nhan mang CA HAI loai vat mang:
    *
-   * XET TRUOC G2/G3 co y: mot con so vua nam trong grant vua nam trong nguon van phai bao ma nay,
-   * neu khong nguoi truc se sua nham cho (di tim tai lieu thay vi doi model xin khoi).
+   *     "Giá 1.150.000đ nhưng khách quen được giảm còn 990 thôi ạ."
+   *      ^ da co tham quyen (G4)              ^ hoan toan bia (G2)
+   *
+   * Bao `FINANCIAL_VALUE_IN_NARRATIVE` o day doc len nhu mot loi dinh tuyen ("dang le xin khoi"),
+   * va nguoi truc se bo qua dieu nghiem trong hon: model vua bia ra mot muc giam gia. Bao
+   * `NUMERAL_NOT_GROUNDED` truoc thi lo dung cai nang hon. G4 la lop tinh vi hon nhung nhe hon.
+   *
+   * G4 — DA CO THAM QUYEN THI PHAI DI QUA KHOI: G2/G3 chan cai model BIA RA, G4 chan cai model
+   * NHAC LAI. Mot con so da duoc uy quyen thi khong sai, nhung cau van dat quanh no van do model
+   * viet, va "đơn giá 990.000đ" voi "giá tham khảo tối thiểu 990.000đ" la hai cam ket khac nhau
+   * tren cung mot con so. Cau qualifier do thuoc bo soan, nen con so phai di qua khoi.
    */
-  const claimed = claimedCarrier(text, options.granted);
-  if (claimed) return { admitted: false, reason: claimed };
   const ungrounded = ungroundedCarrier(text, options.grounding);
-  return ungrounded ? { admitted: false, reason: ungrounded } : { admitted: true, text };
+  if (ungrounded) return { admitted: false, reason: ungrounded };
+  const claimed = claimedCarrier(text, options.granted);
+  return claimed ? { admitted: false, reason: claimed } : { admitted: true, text };
 }
 
 /** Vat mang trong loi nhan ma luot NAY co tham quyen — phai di qua khoi. `null` = sach. */

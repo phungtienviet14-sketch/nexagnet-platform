@@ -76,9 +76,17 @@ export function pricedOrder(patch: Partial<PricedOrder> = {}): PricedOrder {
   };
 }
 
-export function quoteFacts(unitPrice = UNIT_PRICE): TurnBusinessFacts {
+/*
+ * MOI HAM `*Facts` DUOI DAY TRA VE MOT MANH VA (`BusinessFactsPatch`), KHONG PHAI MOT GOC DAY DU.
+ *
+ * Phan biet nay khong con la mot chi tiet ke tu khi `mergeBusinessFacts` co ba trang thai: mot goc
+ * day du mang `pricedOrder: null` se THU HOI don da tinh gia cua manh truoc do, chu khong con la
+ * "khong co y kien". Fixture tra ve goc day du tung lam dung dieu do — `facts(pricedFacts(...),
+ * policyFacts(...))` mat sach don — va bo test do voi mot ly do khong lien quan gi den thu no dinh
+ * chung minh.
+ */
+export function quoteFacts(unitPrice = UNIT_PRICE): BusinessFactsPatch {
   return {
-    ...NO_BUSINESS_FACTS,
     quote: {
       period: '2026-09',
       qualifier: 'Đây là đơn giá CTV (giá sỉ) áp dụng cho đại lý/CTV theo bảng giá hiện hành.',
@@ -87,25 +95,21 @@ export function quoteFacts(unitPrice = UNIT_PRICE): TurnBusinessFacts {
   };
 }
 
-export function policyFacts(policy: PolicyType): TurnBusinessFacts {
-  return {
-    ...NO_BUSINESS_FACTS,
-    paymentPolicy: { dealerName: 'Meta HN', tier: 'dai_ly', policy },
-  };
+export function policyFacts(policy: PolicyType): BusinessFactsPatch {
+  return { paymentPolicy: { dealerName: 'Meta HN', tier: 'dai_ly', policy } };
 }
 
 export function orderStateFactsFor(
   status: OrderStatus,
   priced: PricedOrder | null = null,
-): TurnBusinessFacts {
+): BusinessFactsPatch {
   return {
-    ...NO_BUSINESS_FACTS,
     orderState: { orderId: 'ORD-1', status, levels: commitmentLevelsFor(status), priced },
   };
 }
 
-export function pricedFacts(priced: PricedOrder = pricedOrder()): TurnBusinessFacts {
-  return { ...NO_BUSINESS_FACTS, pricedOrder: priced };
+export function pricedFacts(priced: PricedOrder = pricedOrder()): BusinessFactsPatch {
+  return { pricedOrder: priced };
 }
 
 /**
@@ -115,7 +119,8 @@ export function pricedFacts(priced: PricedOrder = pricedOrder()): TurnBusinessFa
  * bang gia / cap dai ly / trang thai don, nen test cung phai lam vay. Mot test tu che grant se
  * chung minh duoc ca nhung thu he thong that khong bao gio cap.
  */
-export function authorityFor(facts: TurnBusinessFacts): OutboundAuthority {
+export function authorityFor(patch: BusinessFactsPatch): OutboundAuthority {
+  const facts = mergeBusinessFacts(NO_BUSINESS_FACTS, patch);
   return mergeAuthority(
     facts.quote ? grantsFromQuote(facts.quote.lines.map((row) => row.unitPrice)) : [],
     facts.pricedOrder ? grantsFromPricedOrder(facts.pricedOrder) : [],
@@ -159,13 +164,14 @@ export const APPROVED_DOC = 'Ghế Felix có tựa lưng lưới, khung thép s�
  */
 export function compose(
   outboundPlan: OutboundPlan,
-  facts: TurnBusinessFacts = NO_BUSINESS_FACTS,
+  patch: BusinessFactsPatch = {},
   context: Partial<ComposeContext> = {},
 ): OutboundComposition {
-  return composeOutbound(outboundPlan, facts, {
+  const turn = mergeBusinessFacts(NO_BUSINESS_FACTS, patch);
+  return composeOutbound(outboundPlan, turn, {
     systemSources: [APPROVED_DOC],
     customerText: '',
-    authority: authorityFor(facts),
+    authority: authorityFor(turn),
     ...context,
   });
 }

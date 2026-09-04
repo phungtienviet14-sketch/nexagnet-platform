@@ -81,26 +81,59 @@ export const NO_BUSINESS_FACTS: TurnBusinessFacts = {
   orderState: null,
 };
 
-/** Mot lan tra cuu dong gop duoc gi vao du kien cua luot. Moi truong deu tuy chon. */
+/**
+ * Mot lan tra cuu dong gop duoc gi vao du kien cua luot.
+ *
+ * BA TRANG THAI, khong phai hai — va su khac nhau giua hai trang thai cuoi la mot bat bien an toan:
+ *
+ *   · KHONG CO KHOA        -> "toi khong co y kien ve truong nay"; du kien cu duoc giu.
+ *   · CO KHOA, co gia tri  -> "day la du kien moi"; de len du kien cu.
+ *   · CO KHOA, gia tri null -> "du kien cu KHONG CON DUNG NUA"; xoa han.
+ *
+ * Nhanh thu ba ton tai vi mot ly do cu the: xem `mergeBusinessFacts` ben duoi.
+ */
 export type BusinessFactsPatch = Partial<TurnBusinessFacts>;
 
 /**
  * Gom cac lan tra cuu thanh du kien cua LUOT.
  *
- * LAN SAU DE LEN LAN TRUOC khi lan sau co gia tri: model goi `tinh_don` hai lan (sua so luong roi
- * tinh lai) thi con so dung la con so lan cuoi. Mot `undefined`/`null` KHONG xoa du kien da co —
- * mot cong cu tra ve rong khong duoc phep lam mat ket qua cua cong cu truoc do trong cung luot.
+ * LAN SAU DE LEN LAN TRUOC: model goi `tinh_don` hai lan (sua so luong roi tinh lai) thi con so
+ * dung la con so lan cuoi. Mot cong cu KHONG khai bao truong nao thi khong lam mat ket qua cua
+ * cong cu truoc do trong cung luot.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * VI SAO `null` PHAI XOA DUOC, chu khong duoc coi la "khong co y kien".
+ *
+ * Du kien co hai loai. Mot lan BAO GIA dung mai mai: gia hom nay van la gia hom nay. Nhung TRANG
+ * THAI DON la anh chup cua mot thuc the DOI DUOC, va no het han ngay trong luot:
+ *
+ *   vong 1  tra_cuu_don  -> don `approved` -> orderState.levels = [recorded, confirmed]
+ *   vong 2  huy_don      -> don thanh `rejected`
+ *   vong 3  soan_tra_loi -> xin khoi `trang_thai_don`
+ *
+ * Neu vong 2 khong xoa duoc anh chup cua vong 1, bo soan se render "Đơn của mình đã được chốt."
+ * cho mot don VUA BI HUY — va no di qua ca cong tham quyen, vi grant cua vong 1 van con trong bao.
+ * Khach nhan mot tin vua bao huy vua bao da chot. Do la dung lop khang dinh sai ma ca ban #189
+ * ton tai de chan, va lan nay no den tu duong "an toan" (khoi tat dinh), khong tu van xuoi — nen
+ * khong mot phep G1–G4 nao cham toi.
+ *
+ * Vi the `cancelOrder()` khai bao `{ orderState: null }`, va vong lap nay ton trong dieu do.
  */
 export function mergeBusinessFacts(
   base: TurnBusinessFacts,
   ...patches: readonly BusinessFactsPatch[]
 ): TurnBusinessFacts {
+  const pick = <K extends keyof TurnBusinessFacts>(
+    patch: BusinessFactsPatch,
+    facts: TurnBusinessFacts,
+    key: K,
+  ): TurnBusinessFacts[K] => (key in patch ? (patch[key] as TurnBusinessFacts[K]) : facts[key]);
   return patches.reduce<TurnBusinessFacts>(
     (facts, patch) => ({
-      quote: patch.quote ?? facts.quote,
-      pricedOrder: patch.pricedOrder ?? facts.pricedOrder,
-      paymentPolicy: patch.paymentPolicy ?? facts.paymentPolicy,
-      orderState: patch.orderState ?? facts.orderState,
+      quote: pick(patch, facts, 'quote'),
+      pricedOrder: pick(patch, facts, 'pricedOrder'),
+      paymentPolicy: pick(patch, facts, 'paymentPolicy'),
+      orderState: pick(patch, facts, 'orderState'),
     }),
     base,
   );
