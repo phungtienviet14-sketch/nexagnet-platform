@@ -136,6 +136,38 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      # DANG KY KHOA SSH VAO OS LOGIN MOT CACH TUONG MINH.
+      #
+      # SU CO 04/09/2026 — ba lan deploy lien tiep chet o DUONG TRUYEN, khong phai o mot phep kiem:
+      #   · hai lan dau: `gcloud compute scp` -> `sa_<id>@...: Permission denied (publickey)` (255)
+      #   · lan thu ba: preflight -> `required secret inventory probe transport failed`
+      #
+      # Da do va loai tru tung dieu kien: service account deploy co `compute.osAdminLogin` +
+      # `iap.tunnelResourceAccessor` o muc project VA `iam.serviceAccountUser` tren service account
+      # cua chinh VM; VM bat `enable-oslogin`, guest agent `active`, sshd tro dung
+      # `google_authorized_keys`, `oslogin.googleapis.com` bat; tai khoan POSIX cua SA phan giai
+      # duoc tren VM. Va chinh SA do SSH/scp duoc khi thu tay bang impersonation.
+      #
+      # Cai KHONG co: ho so OS Login cua SA co tai khoan POSIX nhung KHONG co MOT KHOA NAO. Tuc
+      # lan import NGAM ma `gcloud compute ssh/scp` van tu lam da khong xay ra voi credential
+      # Workload Identity Federation. `setup-gcloud` cai ban `latest` (khong pin), nen hanh vi
+      # ngam do co the doi bat cu ngay nao — va no da doi giua 04:58Z va 11:24Z cung mot ngay.
+      #
+      # Buoc nay bo su phu thuoc vao hanh vi ngam do: tu sinh khoa DUNG duong dan ma gcloud se
+      # dung (`~/.ssh/google_compute_engine`) roi dang ky tuong minh, co han dung.
+      #
+      # KHONG NOI MOT CONG NAO. Day la duong TRUYEN cua lan deploy, khong phai mot phep kiem:
+      # preflight, `Verify exact main SHA passed CI`, rollout/health/smoke va live-AI giu nguyen.
+      - name: Register deploy SSH key with OS Login
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          # Cung LOAI khoa ma gcloud tu sinh, de no dung lai thay vi sinh khoa khac.
+          ssh-keygen -t rsa -b 4096 -N '' -q -C 'github-actions-deploy'             -f "$HOME/.ssh/google_compute_engine"
+          chmod 600 "$HOME/.ssh/google_compute_engine"
+          # `--ttl` co chu y: mot khoa deploy khong duoc song vinh vien trong ho so OS Login.
+          gcloud compute os-login ssh-keys add             --project "${{ steps.target.outputs.gcp_project_id }}"             --key-file "$HOME/.ssh/google_compute_engine.pub"             --ttl 2h
+
       - name: Verify exact main SHA passed CI
         id: ci
         if: steps.target.outputs.preflight == 'gd1-test'
