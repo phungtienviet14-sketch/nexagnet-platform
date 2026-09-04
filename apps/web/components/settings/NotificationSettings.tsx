@@ -14,6 +14,7 @@ import {
   SettingsAdvanced,
   SettingsStatusBar,
   SettingsWorkCard,
+  useFocusIntent,
   useFocusOnKey,
 } from './SettingsFocus';
 import { formatSettingsDate } from './settings-format';
@@ -64,7 +65,8 @@ export function NotificationSettings({ summary, onRefreshSummary }: Props) {
   const focus = resolveChannelFocus({ channel, dirty, connected: zaloConnected });
 
   const workHeading = useRef<HTMLHeadingElement>(null);
-  useFocusOnKey(workHeading, `notify:${channel}`);
+  const intent = useFocusIntent();
+  useFocusOnKey(workHeading, `notify:${channel}`, intent);
 
   const afterWrite = (message: string) => {
     setNotice({ ok: true, message });
@@ -213,6 +215,7 @@ export function NotificationSettings({ summary, onRefreshSummary }: Props) {
             className="settings-button settings-button--quiet settings-focus-switch"
             aria-pressed={channel === value}
             onClick={() => {
+              intent.requestFocus();
               setChannel(value);
               setNotice(null);
             }}

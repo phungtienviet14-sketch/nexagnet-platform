@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { buildPricePeriodBoard } from '../../lib/price-period-view';
 import { leadingOverviewWork, rankOverviewWork } from '../../lib/settings-focus';
 import {
@@ -17,7 +17,6 @@ import {
   SettingsAdvanced,
   SettingsStatusBar,
   SettingsWorkCard,
-  useFocusOnKey,
 } from './SettingsFocus';
 import type { SettingsAccess, SettingsSectionId } from './settings-composition';
 
@@ -77,8 +76,10 @@ export function OverviewSettings({
   const leading = leadingOverviewWork(outstanding);
   const queued = rankOverviewWork(outstanding).filter((card) => card !== leading);
 
-  const workHeading = useRef<HTMLHeadingElement>(null);
-  useFocusOnKey(workHeading, leading ? `overview-work:${leading.key}` : null);
+  // KHONG chuyen tieu diem o day (#154 Finding A): `leading` duoc suy ra 100% tu du lieu may chu
+  // (summary + readiness + ky gia), va khong thao tac nao TRONG man nay doi duoc no — nut duy nhat
+  // o day dieu huong sang muc khac. Mot khoa nhu the ma keo tieu diem thi moi lan nap lai nen deu
+  // giat con tro cua nguoi van hanh, va do dung la cuop tieu diem chu khong phai dan duong.
 
   return (
     <section className="settings-section-stack" aria-label="Tổng quan">
@@ -107,7 +108,6 @@ export function OverviewSettings({
           problem={leading.detail}
           tone={leading.status === 'blocked' ? 'blocked' : 'attention'}
           headingId="settings-overview-work"
-          headingRef={workHeading}
           actions={
             leading.action ? (
               <SettingsActionRow
@@ -138,7 +138,6 @@ export function OverviewSettings({
           problem="Không có việc nào đang chặn bán hàng. Các mục bên dưới để tra cứu và chỉnh khi cần."
           tone="ok"
           headingId="settings-overview-work"
-          headingRef={workHeading}
         />
       )}
 

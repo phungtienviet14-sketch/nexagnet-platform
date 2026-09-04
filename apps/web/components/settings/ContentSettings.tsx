@@ -13,6 +13,7 @@ import {
   SettingsAdvanced,
   SettingsStatusBar,
   SettingsWorkCard,
+  useFocusIntent,
   useFocusOnKey,
   useRestoreFocus,
 } from './SettingsFocus';
@@ -121,10 +122,12 @@ export function ContentSettings() {
   const selectedRecord = records.find((record) => `${record.kind}:${record.id}` === selectedRecordId);
 
   const workHeading = useRef<HTMLHeadingElement>(null);
+  const intent = useFocusIntent();
   const { rememberTrigger } = useRestoreFocus(Boolean(editor) || Boolean(selectedRecord));
   useFocusOnKey(
     workHeading,
     editor ? `content-edit:${editor.kind}:${editor.sku}` : (selectedRecordId ?? 'content-gap'),
+    intent,
   );
 
   const error =
@@ -418,6 +421,7 @@ export function ContentSettings() {
                   ref={rememberTrigger}
                   className="settings-button settings-button--primary"
                   onClick={() => {
+                    intent.requestFocus();
                     const sku = nextGap?.productSku ?? '';
                     setForm({ ...EMPTY_FORM, productSku: sku });
                     setSelectedRecordId(undefined);
@@ -450,6 +454,7 @@ export function ContentSettings() {
                   type="button"
                   className="settings-button settings-button--quiet"
                   onClick={(event) => {
+                    intent.requestFocus();
                     rememberTrigger(event.currentTarget);
                     const sku = item.productSku ?? '';
                     setForm({ ...EMPTY_FORM, productSku: sku });
@@ -487,6 +492,7 @@ export function ContentSettings() {
                   className="settings-button settings-button--quiet"
                   aria-current={selectedRecordId === `${record.kind}:${record.id}` || undefined}
                   onClick={(event) => {
+                    intent.requestFocus();
                     rememberTrigger(event.currentTarget);
                     setEditor(null);
                     setSelectedRecordId(`${record.kind}:${record.id}`);

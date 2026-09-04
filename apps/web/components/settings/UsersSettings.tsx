@@ -10,6 +10,7 @@ import {
   SettingsFocusModal,
   SettingsStatusBar,
   SettingsWorkCard,
+  useFocusIntent,
   useFocusOnKey,
   useRestoreFocus,
 } from './SettingsFocus';
@@ -70,10 +71,15 @@ export function UsersSettings() {
 
   const workHeading = useRef<HTMLHeadingElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
+  // Hai nut mo hop thoai. Hop thoai doc lai chung LUC DONG (`returnFocus`), nen chung phai la ref
+  // song chu khong phai mot nut duoc chup lai luc mo.
+  const resetTrigger = useRef<HTMLButtonElement>(null);
+  const disableTrigger = useRef<HTMLButtonElement>(null);
+  const intent = useFocusIntent();
   const { rememberTrigger } = useRestoreFocus(mode.kind !== 'list');
   // `null` khi ve danh sach: luc do tieu diem thuoc ve `useRestoreFocus` (tra ve nut da mo),
   // hai co che cung gianh mot tieu diem thi khong cai nao dung.
-  useFocusOnKey(workHeading, mode.kind === 'list' ? null : modeKey(mode));
+  useFocusOnKey(workHeading, mode.kind === 'list' ? null : modeKey(mode), intent);
 
   if (auth.user?.role !== 'ADMIN') {
     return (
@@ -208,7 +214,10 @@ export function UsersSettings() {
             />
           </form>
         </SettingsWorkCard>
-      ) : selected && mode.kind === 'manage' ? (
+      ) : selected && managing(mode) ? (
+        // Van render trong luc hop xac nhan dang mo: hop thoai la mot BUOC CON cua viec quan ly tai
+        // khoan nay. Thao the nay di thi nut da mo hop bien mat khoi DOM, va khong con gi de tra
+        // tieu diem ve khi hop dong (#154 Finding B).
         <SettingsWorkCard
           eyebrow="Đang quản lý tài khoản"
           title={selected.name}
@@ -230,6 +239,7 @@ export function UsersSettings() {
               secondary={
                 <button
                   type="button"
+                  ref={resetTrigger}
                   className="settings-button settings-button--quiet"
                   onClick={() => {
                     setPassword('');
@@ -244,6 +254,7 @@ export function UsersSettings() {
                 selected.id === auth.user?.id || selected.disabledAt ? undefined : (
                   <button
                     type="button"
+                    ref={disableTrigger}
                     className="settings-text-action settings-text-action--danger"
                     onClick={() => setMode({ kind: 'disable', userId: selected.id })}
                   >
@@ -293,6 +304,7 @@ export function UsersSettings() {
                   ref={rememberTrigger}
                   className="settings-button settings-button--primary"
                   onClick={() => {
+                    intent.requestFocus();
                     setMessage('');
                     setMode({ kind: 'create' });
                   }}
@@ -320,6 +332,7 @@ export function UsersSettings() {
                 user={user}
                 selected={selected?.id === user.id}
                 onOpen={(node) => {
+                  intent.requestFocus();
                   rememberTrigger(node);
                   setMessage('');
                   setMode({ kind: 'manage', userId: user.id });
@@ -361,6 +374,7 @@ export function UsersSettings() {
           tone="primary"
           pending={reset.isPending}
           confirmDisabled={password.length < 12}
+          returnFocus={() => resetTrigger.current}
           onCancel={() => setMode({ kind: 'manage', userId: selected.id })}
           onConfirm={() => {
             if (password.length < 12) {
@@ -405,6 +419,7 @@ export function UsersSettings() {
           confirmLabel="Vô hiệu hóa"
           tone="danger"
           pending={disable.isPending}
+          returnFocus={() => disableTrigger.current}
           onCancel={() => setMode({ kind: 'manage', userId: selected.id })}
           onConfirm={() =>
             disable.mutate(selected.id, {
@@ -425,8 +440,18 @@ export function UsersSettings() {
   );
 }
 
+/** Dang o tren be mat quan ly mot tai khoan — ke ca khi mot hop xac nhan dang phu len tren no. */
+function managing(mode: Mode): mode is Extract<Mode, { userId: string }> {
+  return mode.kind === 'manage' || mode.kind === 'reset' || mode.kind === 'disable';
+}
+
 function modeKey(mode: Mode): string {
-  return mode.kind === 'list' ? 'users:list' : `users:${mode.kind}:${'userId' in mode ? mode.userId : ''}`;
+  if (mode.kind === 'list') return 'users:list';
+  // `reset`/`disable` KHONG phai mot viec khac: chung la buoc con cua viec dang quan ly tai khoan
+  // do. Cho chung mot khoa rieng thi mo hop thoai bi doc thanh mot lan chuyen viec, va tieu diem
+  // se bi giat sang tieu de khoi viec ngay khi hop vua hien ra.
+  if (managing(mode)) return `users:manage:${mode.userId}`;
+  return `users:${mode.kind}`;
 }
 
 function UserRow({
