@@ -110,21 +110,40 @@ describe('bang canh bao gom chung — nguon TUY CHON theo capability dang bat', 
    * Do la ly do `OperationalAlertsService` duoc dang ky o tang ung dung: no nhan chung qua
    * `@Optional()`, va khi vang mat thi bang canh bao noi ra bang `unavailableSources` thay vi im
    * lang bo mot muc.
+   *
+   * ---------------------------------------------------------------------------
+   * Do CHINH NGUON CANH BAO, khong do TONG SO PROVIDER.
+   *
+   * Ban dau bai nay so `providerCount(withFuel) === providerCount(withoutFuel) + 1`. Phep do do la
+   * mot BIEN THAY: no do dung dieu can do chi khi `transport-fuel` khong bao gio them mot provider
+   * nao khac. Lan do vo dung vao `#169`, khi capability do nhan them ba provider cua kho bang chung
+   * — bai do voi mot con so lech, va thong bao khong he nhac gi den canh bao.
+   *
+   * Nay bai khang dinh dung dieu ten no noi: bat `transport-fuel` them DUNG MOT nguon canh bao, va
+   * do la `AlertFuelConsumptionSource`. Them mot provider khac vao `transport-fuel` khong con lam
+   * do bai nay; them mot NGUON CANH BAO thu hai thi co.
    */
   it('bat them `transport-fuel` thi co them dung mot nguon canh bao', () => {
-    const withoutFuel = providerCount([
+    const alertSources = (capabilities: readonly CapabilityId[]) =>
+      composition(capabilities)
+        .names.filter((name) => /^Alert.*Source$/.test(name))
+        .sort();
+
+    const withoutFuel = alertSources([
       'transport-core',
       'transport-costing',
       'transport-asset-compliance',
     ]);
-    const withFuel = providerCount([
+    const withFuel = alertSources([
       'transport-core',
       'transport-costing',
       'transport-fuel',
       'transport-asset-compliance',
     ]);
 
-    expect(withFuel).toBe(withoutFuel + 1);
+    expect(withFuel).toEqual([...withoutFuel, 'AlertFuelConsumptionSource']);
+    // ...va phep do thuc su phan biet duoc hai truong hop, khong phai hai bang rong bang nhau.
+    expect(withoutFuel).toContain('AlertDriverFundSource');
   });
 
   it('T6 mot minh khong keo theo mot adapter nguon nao', () => {
