@@ -524,6 +524,18 @@ lấy từ API, và **chỉ đổi nhãn + đăng comment kết quả** (`CI_FAI
 Claude, chưa merge. Nó chứng minh giao thức chạy trên GitHub thật trước khi bất kỳ agent nào được
 dispatch.
 
+> **Đang làm** — hợp đồng task ở Issue #165, mã ở
+> [`tools/autopilot-orchestrator/`](../../../tools/autopilot-orchestrator/README.md).
+> Bản đầu chỉ lắng `issue_comment` và chỉ đi một đường: `BUILD_READY` → cổng CI →
+> `CI_FAIL` | `REVIEW_REQUEST`. Ba điều người đọc tài liệu này cần biết:
+>
+> 1. **`/rules/branches/main` trả về mảng phẳng**, còn `requiredChecksFromRuleset` đợi
+>    `{ rules: [...] }`. Đưa thẳng dữ liệu API vào nó thì nó trả **mảng rỗng** — không ném, không
+>    báo — tức "không có check bắt buộc nào". Phải đi qua adapter `requiredChecksFromBranchRules`.
+> 2. **`issue_comment` luôn chạy bản workflow trên nhánh mặc định**, nên đường này không chứng minh
+>    được từ chính PR thêm nó; bằng chứng chạy thật chỉ có sau khi merge.
+> 3. Orchestrator **mặc định dry-run**; bật bằng biến repo `AUTOPILOT_DRY_RUN=false`.
+
 ## 18. Kiểm chứng — ma trận acceptance ↔ test
 
 | Acceptance #153                              | Test                                                                      |

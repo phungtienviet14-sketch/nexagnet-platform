@@ -1,0 +1,10 @@
+{
+  "base": { "ref": "main", "sha": "b9ead7e0c238bea417763857ee85ae3714963be8" },
+  "head": {
+    "ref": "claude/protocol-v0-foundation-8db1d8",
+    "sha": "c86219b22be19ce3db7a9753bd9866316b654cbe"
+  },
+  "merged_at": "2026-09-04T04:05:03Z",
+  "number": 155,
+  "state": "closed"
+}

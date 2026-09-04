@@ -1,0 +1,51 @@
+# Orchestrator V0 — READ-ONLY.
+#
+# Chay Giao thuc Autopilot V0 (`tools/autopilot-protocol/`) tren su kien GitHub THAT, va chi lam
+# hai viec: dang mot comment ket qua, va doi nhan trang thai. Khong merge, khong ghi ma nguon,
+# khong dispatch agent nao. Xem hop dong task o Issue #165 va §17 cua
+# docs/phat-trien/van-hanh/autopilot-protocol-v0.md.
+#
+# HAI DIEU CAN BIET TRUOC KHI SUA TEP NAY
+#
+# 1. `issue_comment` LUON chay ban workflow tren NHANH MAC DINH, khong phai ban trong PR. Nen mot
+#    thay doi o day chi co hieu luc SAU KHI merge — va vi the khong the chung minh duong nay tu
+#    chinh PR them no. Dung doc CI xanh cua PR thanh "orchestrator da chay that".
+# 2. Mac dinh la DRY-RUN. No quyet dinh va ghi ra log day du, nhung KHONG dang comment va KHONG
+#    doi nhan. De bat that: dat bien repo `AUTOPILOT_DRY_RUN` = `false`. Mac dinh nay la co y —
+#    mot workflow tu dang comment vao moi PR ma bat ngay luc merge la thu khong ai kip xem lai.
+name: autopilot-orchestrator
+
+on:
+  issue_comment:
+    types: [created]
+
+# Quyen TOI THIEU. Khong co `contents: write`: ngay ca khi ma nguon co loi thi no van khong du
+# quyen de sua repo. Do la ranh gioi "read-only" duoc GitHub cuong che, khong phai mot loi hua
+# trong tai lieu.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: autopilot-orchestrator-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    # Comment tren Issue thuong khong co HEAD de buoc bang chung vao, nen khong xu ly.
+    if: github.event.issue.pull_request != null
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - name: Chay orchestrator
+        run: node tools/autopilot-orchestrator/src/main.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # So do principal la CAU HINH, khong ghi cung trong ma nguon (§2.1). Doi app cua nguoi
+          # duyet = doi bien o day, khong phai sua ma roi merge lai.
+          AUTOPILOT_REPO_OWNER_LOGIN: ${{ github.repository_owner }}
+          AUTOPILOT_REVIEWER_APP_SLUG: ${{ vars.AUTOPILOT_REVIEWER_APP_SLUG || 'chatgpt-codex-connector' }}
+          AUTOPILOT_DRY_RUN: ${{ vars.AUTOPILOT_DRY_RUN || 'true' }}
