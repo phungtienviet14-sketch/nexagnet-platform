@@ -1382,12 +1382,15 @@ test.describe('Tập trung theo bước (#144)', () => {
     await capture(page, '02-wizard-step-1');
 
     // Doi buoc thi con tro di theo buoc moi, khong o lai cho cu.
+    //
+    // O DAY `toBeFocused()` MOT MINH KHONG DU: `#settings-wizard-step-title` la CUNG MOT the `h4`
+    // qua ca hai buoc (khong co `key`, chi doi chu ben trong), va no da duoc lay tieu diem tu buoc
+    // truoc. Nen `toBeFocused()` dung ngay lap tuc va khong cho gi ca. Thu that su phai cho la
+    // NOI DUNG cua buoc moi — khang dinh no bang `toHaveText()` (co thu lai), roi moi ghim tieu diem.
     await page.getByRole('button', { name: 'Tiếp tục' }).click();
-    await expect(page.locator('#settings-wizard-step-title')).toBeFocused();
-    expect(await activeElement(page)).toMatchObject({
-      id: 'settings-wizard-step-title',
-      text: 'Áp dụng cho tháng nào?',
-    });
+    const stepTitle = page.locator('#settings-wizard-step-title');
+    await expect(stepTitle).toHaveText('Áp dụng cho tháng nào?');
+    await expect(stepTitle).toBeFocused();
     await expectSingleFocusContract(page);
     await capture(page, '02b-wizard-step-2');
   });
@@ -1443,6 +1446,10 @@ test.describe('Tập trung theo bước (#144)', () => {
 
     await page.getByRole('button', { name: 'Kiểm tra & tiếp tục' }).click();
 
+    // Hien ra la mot viec, duoc lay tieu diem la mot viec khac — giu ca hai, khong doi cai nay
+    // lay cai kia. `activeElement()` o lai vi no con chung mot thu ma `toBeFocused()` khong chung:
+    // the dang giu tieu diem CHINH la dich den da duoc danh dau (`data-price-focus-target`).
+    await expect(page.getByRole('heading', { name: 'Xem lại trước khi kích hoạt' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Xem lại trước khi kích hoạt' })).toBeFocused();
     expect(await activeElement(page)).toMatchObject({
       text: 'Xem lại trước khi kích hoạt',
@@ -1457,8 +1464,9 @@ test.describe('Tập trung theo bước (#144)', () => {
 
     // Quay lai sua: con tro ve tieu de cong viec, khong nhay vao mot o nhap bat ky.
     await page.getByRole('button', { name: 'Quay lại sửa' }).click();
+    // `toBeFocused()` tren dung mot dinh danh da chung tron ven dieu ma lan doc mot-phat kia
+    // chung — giu lai chi con la tieng on, va la mot cho nua de flake quay ve.
     await expect(page.locator('#settings-price-work-title')).toBeFocused();
-    expect(await activeElement(page)).toMatchObject({ id: 'settings-price-work-title' });
     await expectSingleFocusContract(page);
   });
 
