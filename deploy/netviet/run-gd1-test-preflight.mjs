@@ -7,20 +7,25 @@ import {
 } from './gd1-test-preflight.mjs';
 
 const inputPath = process.argv[2];
+// HO SO CHON CONG. Mac dinh (bien vang mat) la `ultty-gd1-test` — ho so NHIEU DOI HOI NHAT — nen
+// mot bien bi mat tren duong truyen khong bao gio lam nhe cong nao; no chi lam mot ho so khac bi
+// tu choi vi khong dat duoc cac phep kiem cua Ultty. Xem `gateSpecFor` trong gd1-test-preflight.mjs.
+const profileId = process.env.DEPLOYMENT_PROFILE || undefined;
+const gateLabel = profileId ?? 'ultty-gd1-test';
 
 try {
   const result = inputPath
-    ? validateGd1TestPreflight(JSON.parse(await readFile(inputPath, 'utf8')))
-    : await collectGd1TestPreflight();
+    ? validateGd1TestPreflight(JSON.parse(await readFile(inputPath, 'utf8')), { profileId })
+    : await collectGd1TestPreflight({ profileId });
   if (!result.ok) {
-    console.error('Ultty GD1-test no-mock preflight FAILED before build/deploy:');
+    console.error(`GD1-test no-mock preflight FAILED before build/deploy (${gateLabel}):`);
     for (const error of result.errors) console.error(`- ${error}`);
     process.exitCode = 1;
   } else {
     console.log(
       inputPath
-        ? 'Ultty GD1-test contract validation PASSED for supplied redacted evidence.'
-        : 'Ultty GD1-test live no-mock preflight PASSED.',
+        ? `GD1-test contract validation PASSED for supplied redacted evidence (${gateLabel}).`
+        : `GD1-test live no-mock preflight PASSED (${gateLabel}).`,
     );
     console.log('Deployment plan:');
     console.log(formatDeploymentPlan(result.plan));
@@ -33,16 +38,15 @@ try {
         // khong the co digest nao.
         firstRelease: result.plan?.firstRelease === true,
       };
-      await writeFile(
-        process.env.GD1_TEST_PREFLIGHT_OUTPUT,
-        `${JSON.stringify(machineProof)}\n`,
-        { encoding: 'utf8', mode: 0o600 },
-      );
+      await writeFile(process.env.GD1_TEST_PREFLIGHT_OUTPUT, `${JSON.stringify(machineProof)}\n`, {
+        encoding: 'utf8',
+        mode: 0o600,
+      });
     }
   }
 } catch (error) {
   console.error(
-    `Ultty GD1-test preflight input is invalid: ${error instanceof Error ? error.message : String(error)}`,
+    `GD1-test preflight input is invalid: ${error instanceof Error ? error.message : String(error)}`,
   );
   process.exitCode = 1;
 }

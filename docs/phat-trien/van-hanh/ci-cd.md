@@ -317,6 +317,8 @@ trình đụng compose đều lấy chung một khoá (`.runtime/compose.lock`) 
 ## 9. Liên quan
 
 - [`../ke-hoach/tong-quan.md`](../ke-hoach/tong-quan.md) — nguồn trạng thái duy nhất.
+- [`deployment-profiles.md`](deployment-profiles.md) — **hồ sơ triển khai**: danh mục đóng, cổng
+  exact-main không bỏ qua được, ma trận bí mật theo hệ thống con, ma trận cách ly.
 - [`chay-kiem-workflow-engine.md`](chay-kiem-workflow-engine.md) — **hướng dẫn dùng cổng `workflow-integration`**: đọc kết quả CI, chạy lại 24 bài trên máy mình, 4 kiểu đỏ đã đo.
 - [`checklist-go-live.md`](checklist-go-live.md) — điều kiện bật pilot dữ liệu thật.
 - [`ultty-gd1-test-runbook.md`](ultty-gd1-test-runbook.md) — môi trường kỹ thuật GD1-test.

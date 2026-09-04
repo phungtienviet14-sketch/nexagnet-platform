@@ -1,0 +1,103 @@
+# LOP PHU FLOWISE — CHI duoc keo vao khi ho so trien khai bat `subsystems.flowise`.
+#
+# VI SAO TACH RA (#186 §C1, #192 §3).
+# `compose.yaml` truoc day khai `flowise` KHONG mang `profiles:`, va `api.depends_on` doi no
+# `service_healthy`. Hai dong do cong lai co nghia: MOI stack — ke ca mot ban xem truoc khong dung
+# LLM nao — phai dung duoc mot container Flowise len va khoe truoc khi `api` duoc phep khoi dong.
+# Do la ly do 8 bi mat Flowise la bat buoc cho moi ho so, va la ly do "hop dong 4 bi mat" cua ho so
+# xem truoc chi ton tai tren giay.
+#
+# VI SAO KHONG DUNG `profiles:` CHO CHINH SERVICE NAY.
+# Mot service mang `profiles:` van la muc tieu hop le cua `depends_on`, va compose se hoac keo ca
+# profile do len hoac tu choi — nen `profiles:` mot minh no khong go duoc rang buoc, chi doi cho
+# no bung ra. Tach thanh MOT TEP RIENG thi rang buoc bien mat cung voi service: khong co
+# `-f compose.flowise.yaml` thi trong ban dung khong co ai ten `flowise` de ma phu thuoc.
+#
+# VOI HO SO CO FLOWISE (Ultty) KHONG DOI MOT KY TU. Lop phu dat lai dung `depends_on` cu cho ca
+# `api` lan `bootstrap`, cung service, cung image, cung volume, cung alias mang. `deploy-stack.sh`
+# them `-f` nay khi `FLOWISE_ENABLED=on`, va do la mac dinh khi thieu thong tin.
+#
+# HOP NHAT THEO ANH XA, khong phai theo tep de len tep: compose gop `depends_on` dang dai bang
+# HOP CUA CAC KHOA, nen dong `postgres: service_healthy` o tep goc van con nguyen.
+
+services:
+  flowise-volume-init:
+    image: ${FLOWISE_IMAGE:-flowiseai/flowise:3.1.4@sha256:3922767afb52a5777759fd8b28a3c9eee864daea96018a791f2429eae2a76571}
+    user: "0:0"
+    entrypoint: ["sh", "-c"]
+    command: ["chown -R node:node /home/node/.flowise"]
+    volumes:
+      - flowise-data:/home/node/.flowise
+    network_mode: none
+
+  flowise:
+    image: ${FLOWISE_IMAGE:-flowiseai/flowise:3.1.4@sha256:3922767afb52a5777759fd8b28a3c9eee864daea96018a791f2429eae2a76571}
+    # `always` (khong phai `unless-stopped`): stack phai tu quay lai ke ca sau khi ai do
+    # `docker stop` thu cong roi VM reboot — yeu cau "he thong tren VM luon chay".
+    restart: always
+    user: "1000:1000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      flowise-volume-init:
+        condition: service_completed_successfully
+    environment:
+      PORT: 3000
+      DATABASE_TYPE: postgres
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: flowise
+      DATABASE_USER: flowise
+      DATABASE_PASSWORD: ${FLOWISE_DB_PASSWORD}
+      DATABASE_SSL: "false"
+      FLOWISE_SECRETKEY_OVERWRITE: ${FLOWISE_SECRETKEY}
+      APP_URL: https://${FLOWISE_DOMAIN}
+      JWT_AUTH_TOKEN_SECRET: ${FLOWISE_JWT_SECRET}
+      JWT_REFRESH_TOKEN_SECRET: ${FLOWISE_REFRESH_SECRET}
+      EXPRESS_SESSION_SECRET: ${FLOWISE_SESSION_SECRET}
+      TOKEN_HASH_SECRET: ${FLOWISE_TOKEN_HASH_SECRET}
+      # TLS ket thuc tai Caddy. Flowise can phat session cookie qua mang Docker HTTP
+      # cho bootstrap; Caddy bat buoc gan Secure truoc khi cookie ra Internet.
+      SECURE_COOKIES: "false"
+      DISABLE_FLOWISE_TELEMETRY: "true"
+      SHOW_COMMUNITY_NODES: "false"
+      ALLOW_BUILTIN_DEP: "false"
+      TOOL_FUNCTION_BUILTIN_DEP: ""
+      TOOL_FUNCTION_EXTERNAL_DEP: ""
+      HTTP_SECURITY_CHECK: "true"
+      PATH_TRAVERSAL_SAFETY: "true"
+      CUSTOM_MCP_SECURITY_CHECK: "true"
+      LOG_LEVEL: info
+      LOG_SANITIZE_BODY_FIELDS: password,credential,apiKey,token,secret
+      LOG_SANITIZE_HEADER_FIELDS: authorization,cookie,x-api-key
+      FLOWISE_FILE_SIZE_LIMIT: 1mb
+    # KHONG con mo cong tren host: voi nhieu khach thi 127.0.0.1:3002 chi phuc vu duoc mot nguoi.
+    # Duong vao Flowise nay di qua edge theo hostname rieng cua tung khach.
+    volumes:
+      - flowise-data:/home/node/.flowise
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/v1/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      backend:
+        aliases:
+          - flowise-${STACK_SLUG:-${TENANT_SLUG}}
+      data:
+
+  # DAT LAI RANG BUOC KHOI DONG. Day la nua con lai cua hop dong: `compose.yaml` chi con
+  # `postgres`, va dong duoi day dua Flowise tro lai DUNG cho no dung voi ho so co Flowise.
+  api:
+    depends_on:
+      flowise:
+        condition: service_healthy
+
+  bootstrap:
+    depends_on:
+      flowise:
+        condition: service_healthy
+
+volumes:
+  flowise-data:
