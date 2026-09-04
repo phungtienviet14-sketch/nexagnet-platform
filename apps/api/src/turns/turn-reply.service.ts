@@ -77,7 +77,7 @@ export class TurnReplyService {
      * VANG MAT PHAN QUYET = KHONG GUI. Ban ghi soan truoc ban nay, hay bat ky duong soan nao quen
      * goi cong, deu dung lai o day thay vi di ra ngoai.
      */
-    const verdict = pinnedOutboundVerdict(view.trace);
+    const verdict = pinnedOutboundVerdict(view.trace, content.text);
     this.telemetry?.decision({
       vocabulary: OUTBOUND_DECISIONS,
       point: 'outbound.send_guard',
