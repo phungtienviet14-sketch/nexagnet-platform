@@ -21,6 +21,7 @@ validator/
   messages.mjs                  comment <-> JSON canonical
   task-contract.mjs             kiem hop dong + trich tu than Issue
   state-machine.mjs             bang chuyen, nextState (fail closed)
+  principal.mjs                 principal GitHub -> vai giao thuc (so do cai dat, fail closed)
   gates.mjs                     exact-SHA, CI, rui ro, retry, runtime proof
   idempotency.mjs               khoa + so khoa bat bien
   protocol.mjs                  bo giam: (task, thong diep, bang chung) -> task moi

@@ -1,16 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { ACTORS, RETRY_CEILINGS, STATES } from '../validator/constants.mjs';
+import { RETRY_CEILINGS, STATES } from '../validator/constants.mjs';
 import { evaluateCiGreen, evaluateMergeGate } from '../validator/gates.mjs';
 import { readMessage } from '../validator/messages.mjs';
 import { applyMerge, applyMessage, createTask } from '../validator/protocol.mjs';
 import { REASONS } from '../validator/reasons.mjs';
 import { extractTaskContract } from '../validator/task-contract.mjs';
 import {
+  APP_PRINCIPAL,
   ISSUE,
   PR,
+  REGISTRY,
   REQUIRED_CHECKS,
+  REVIEWER_PRINCIPAL,
   SHA_A,
   SHA_B,
   SHA_MERGE,
@@ -254,21 +257,31 @@ test('check-run thieu head_sha => CI_EVIDENCE_UNBOUND, khong mo REVIEW_REQUEST c
 // 6. (B2) Khong biet ai phat la LY DO TU CHOI, khong phai truong hop duoc mien kiem
 // ---------------------------------------------------------------------------------------------
 
-test('thieu context.actor => PRODUCER_UNKNOWN; ca tang phan quyen khong duoc im lang bien mat', () => {
+test('khong xac dinh duoc nguoi phat => tu choi; ca tang phan quyen khong duoc im lang bien mat', () => {
   // Do duoc: `context.actor !== undefined && ...` — orchestrator quen dua danh tinh nguoi phat thi
   // MESSAGE_PRODUCERS khong con duoc kiem, va bat ky ai cung phat duoc bat ky loai thong diep nao.
   const task = taskInReviewing();
-  for (const missing of [undefined, {}, { actor: '' }, { actor: null }, { actor: 42 }]) {
+  for (const missing of [undefined, {}, { principal: null }, { principal: 42 }]) {
     const result = applyMessage(task, message('REVIEW_PASS'), missing);
     assert.equal(result.ok, false, JSON.stringify(missing ?? null));
-    assert.equal(result.reason, REASONS.PRODUCER_UNKNOWN, JSON.stringify(missing ?? null));
+    assert.equal(result.reason, REASONS.PRINCIPAL_UNKNOWN, JSON.stringify(missing ?? null));
   }
-  // Sai vai van la WRONG_PRODUCER (hai duong tu choi khac nhau, hai ma khac nhau).
+  // Sai vai van la WRONG_PRODUCER (hai duong tu choi khac nhau, hai ma khac nhau) — nhung "vai"
+  // bay gio duoc suy tu MOT PRINCIPAL DA XAC THUC, khong phai tu mot chuoi ai cung go duoc.
   assert.equal(
-    applyMessage(task, message('REVIEW_PASS'), { actor: ACTORS.BUILDER }).reason,
+    applyMessage(task, message('REVIEW_PASS'), {
+      principal: APP_PRINCIPAL,
+      principalRegistry: REGISTRY,
+    }).reason,
     REASONS.WRONG_PRODUCER,
   );
-  assert.equal(applyMessage(task, message('REVIEW_PASS'), { actor: ACTORS.REVIEWER }).ok, true);
+  assert.equal(
+    applyMessage(task, message('REVIEW_PASS'), {
+      principal: REVIEWER_PRINCIPAL,
+      principalRegistry: REGISTRY,
+    }).ok,
+    true,
+  );
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -63,6 +63,16 @@ export const REASONS = Object.freeze({
   CI_EVIDENCE_MISSING: 'CI_EVIDENCE_MISSING',
   WRONG_PRODUCER: 'WRONG_PRODUCER',
   PRODUCER_UNKNOWN: 'PRODUCER_UNKNOWN',
+  // --- principal (GitHub xac thuc) vs vai giao thuc ----------------------------------------
+  // Bay duong tu choi cua cong phan quyen, bay ma. Gop lai la lam nguoi hien thuc orchestrator
+  // khong phan biet duoc "thieu cau hinh" voi "sai vai" — hai loi rat khac nhau.
+  PRINCIPAL_UNKNOWN: 'PRINCIPAL_UNKNOWN',
+  ACTOR_WITHOUT_PRINCIPAL: 'ACTOR_WITHOUT_PRINCIPAL',
+  PRINCIPAL_REGISTRY_MISSING: 'PRINCIPAL_REGISTRY_MISSING',
+  PRINCIPAL_REGISTRY_INVALID: 'PRINCIPAL_REGISTRY_INVALID',
+  PRINCIPAL_ROLE_CONFLICT: 'PRINCIPAL_ROLE_CONFLICT',
+  ROLE_NOT_AUTHORIZED_FOR_PRINCIPAL: 'ROLE_NOT_AUTHORIZED_FOR_PRINCIPAL',
+  UNKNOWN_ROLE: 'UNKNOWN_ROLE',
 });
 
 /**

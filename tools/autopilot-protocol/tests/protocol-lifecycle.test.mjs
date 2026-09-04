@@ -5,9 +5,11 @@ import { ACTORS, STATES } from '../validator/constants.mjs';
 import { applyException, applyMerge, createTask } from '../validator/protocol.mjs';
 import { REASONS } from '../validator/reasons.mjs';
 import {
+  APP_PRINCIPAL,
   ISSUE,
   PR,
   REQUIRED_CHECKS,
+  REVIEWER_PRINCIPAL,
   SHA_A,
   SHA_B,
   SHA_MERGE,
@@ -88,17 +90,29 @@ test('thong diep cua issue khac, PR khac, hay nguoi phat sai vai => tu choi truo
   const task = taskInReviewing();
   assert.equal(apply(task, message('REVIEW_PASS', { issue: 999 })).reason, REASONS.ISSUE_MISMATCH);
   assert.equal(apply(task, message('REVIEW_PASS', { pr: 777 })).reason, REASONS.PR_MISMATCH);
+  // "Sai vai" duoc do bang PRINCIPAL THAT, khong bang mot chuoi vai: principal cua App giu
+  // builder/fixer/orchestrator nen no khong dong duoc cong review cua chinh no.
   assert.equal(
-    apply(task, message('REVIEW_PASS'), { actor: ACTORS.BUILDER }).reason,
+    apply(task, message('REVIEW_PASS'), { principal: APP_PRINCIPAL }).reason,
     REASONS.WRONG_PRODUCER,
   );
-  assert.equal(apply(task, message('REVIEW_PASS'), { actor: ACTORS.REVIEWER }).ok, true);
+  assert.equal(apply(task, message('REVIEW_PASS'), { principal: REVIEWER_PRINCIPAL }).ok, true);
+  // Cung principal App do phat duoc BUILD_READY — mot principal, nhieu vai.
   assert.equal(
-    apply(task, message('BUILD_READY', { head_sha: SHA_B }), { actor: ACTORS.FIXER }).ok,
+    apply(task, message('BUILD_READY', { head_sha: SHA_B }), { principal: APP_PRINCIPAL }).ok,
+    true,
+  );
+  // Va no van phat duoc khi noi ro dang dong vai FIXER (khang dinh chi THU HEP, khong mo rong).
+  assert.equal(
+    apply(task, message('BUILD_READY', { head_sha: SHA_B }), {
+      principal: APP_PRINCIPAL,
+      assertedRole: ACTORS.FIXER,
+    }).ok,
     true,
   );
   assert.equal(
-    apply(task, message('BUILD_READY', { head_sha: SHA_B }), { actor: ACTORS.REVIEWER }).reason,
+    apply(task, message('BUILD_READY', { head_sha: SHA_B }), { principal: REVIEWER_PRINCIPAL })
+      .reason,
     REASONS.WRONG_PRODUCER,
   );
 });

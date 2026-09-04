@@ -7,13 +7,14 @@
  * Thu tu kiem cho MOI thong diep, co chu dich:
  *   1. schema            (hinh dang)
  *   2. dung issue        (thong diep cua task khac thi khong dung o day)
- *   3. dung nguoi phat   (actor BAT BUOC; khong biet ai phat => tu choi)
+ *   3. dung nguoi phat   (principal DA XAC THUC -> vai -> loai; khong lan nao duoc bo qua)
  *   4. idempotency       (da thay khoa nay => khong lam gi, ke ca khi trang thai cho phep)
  *   5. may trang thai    (co trong bang chuyen khong)
  *   6. cong nghiep vu    (SHA/CI/rui ro/retry/runtime)
  * Chi khi qua ca 6 thi khoa moi duoc ghi va trang thai moi doi. Task cu KHONG bao gio bi sua.
  */
-import { EVENTS, MESSAGE_PRODUCERS, MESSAGE_TYPES, RETRY_CEILINGS, STATES } from './constants.mjs';
+import { EVENTS, MESSAGE_TYPES, RETRY_CEILINGS, STATES } from './constants.mjs';
+import { authorizeProducer } from './principal.mjs';
 import {
   evaluateMergeGate,
   evaluateRetry,
@@ -48,10 +49,17 @@ import { NO_STATE, nextState } from './state-machine.mjs';
  * @property {ReadonlyArray<Record<string, unknown>>} history
  * @property {Record<string, unknown> | null} blockedBy
  *
- * @typedef {{ checkRuns?: import('./gates.mjs').CheckRun[], requiredChecks?: string[], humanApproval?: { head_sha: string } | null, actor: string }} Context
+ * @typedef {{ checkRuns?: import('./gates.mjs').CheckRun[], requiredChecks?: string[], humanApproval?: { head_sha: string } | null, principal: import('./principal.mjs').Principal, principalRegistry: import('./principal.mjs').PrincipalRegistry, assertedRole?: string }} Context
+ *   `principal` la danh tinh GitHub DA XAC THUC (`{ kind, id }`), KHONG phai mot gia tri `ACTORS.*`;
+ *   `principalRegistry` la so do cai dat principal -> vai. Ca hai la BANG CHUNG, dung nghia §13:
+ *   validator khong tu di lay, orchestrator dua vao. `assertedRole` chi de THU HEP khi mot principal
+ *   giu nhieu vai — no khong bao gio mo rong quyen.
  * @typedef {{ humanApproval?: { head_sha: string } | null }} MergeContext
  *   `MERGED` la su kien cua GitHub, khong phai thong diep ai do phat, nen no khong co `actor`:
  *   bang chung cua no la nguoi da duyet (`humanApproval`), khong phai `MESSAGE_PRODUCERS`.
+ * @typedef {{ principal: import('./principal.mjs').Principal, role: string | null }} Provenance
+ *   Ai da phat buoc nay. `role` la `null` khi principal giu NHIEU vai deu phat duoc loai do — hop
+ *   le, chi la khong quy duoc ve mot vai; bia ra mot vai o day la bia ra provenance.
  * @typedef {{ ok: true, task: Task, from: string | null, to: string, event: string, note?: Record<string, unknown> }} Accepted
  * @typedef {{ ok: false, reason: string, detail?: Record<string, unknown>, task: Task }} Rejected
  * @typedef {{ ok: true, patch: Partial<Task>, blocked?: Record<string, unknown> } | import('./reasons.mjs').Denied} GateOutcome
@@ -97,14 +105,19 @@ const reject = (task, reason, detail) => ({ ...deny(reason, detail), task });
 /**
  * @param {Task} task
  * @param {Partial<Task>} patch
- * @param {{ from: string | null, to: string, event: string, note?: Record<string, unknown> }} step
+ * @param {{ from: string | null, to: string, event: string, note?: Record<string, unknown>, by?: Provenance }} step
  * @returns {Accepted}
+ *
+ * `by` ghi lai PROVENANCE cua buoc: principal nao da xac thuc, va vai nao co hieu luc. Chi thong
+ * diep moi co — `MERGED`/`EXCEPTION` khong do ai phat. Ghi vao lich su de mot task DONE tra loi
+ * duoc "principal nao da dong no", thay vi chi "no da dong".
  */
 function accept(task, patch, step) {
   const entry = Object.freeze({
     from: step.from,
     to: step.to,
     event: step.event,
+    ...(step.by ? { by: step.by } : {}),
     ...(step.note ? { note: step.note } : {}),
   });
   const next = Object.freeze({
@@ -159,12 +172,19 @@ function conflictingEvidence(task, m) {
 /**
  * Ap mot thong diep giao thuc (9 loai) len task.
  *
- * `context.actor` la BAT BUOC. Ban truoc chi kiem `MESSAGE_PRODUCERS` khi actor duoc dua vao, nen
- * mot orchestrator quen dua danh tinh nguoi phat se lam CA TANG phan quyen bien mat MA KHONG KEU:
- * "khong biet ai phat" thanh "ai phat cung duoc" — fail-open ngay tai bien cua he thong. Khong biet
- * ai phat la mot LY DO TU CHOI (`PRODUCER_UNKNOWN`), khong phai mot truong hop duoc mien kiem.
- * Muon go thong diep tu GitHub thi lay danh tinh cung luc: `comment.user.login`/`app.slug` la thu
- * di kem thong diep, khong phai thu tuy chon.
+ * Phan quyen di qua BA tang, va tang giua khong duoc phep bien mat:
+ *
+ *     principal (GitHub xac thuc)  ->  vai duoc phep (so do cai dat)  ->  loai thong diep
+ *
+ * Ban truoc so sanh `context.actor` THANG voi `MESSAGE_PRODUCERS`, tuc coi mot danh tinh GitHub la
+ * mot vai giao thuc. Nhung GitHub chi xac thuc duoc `comment.user.login` / `app.slug` — nhung gia
+ * tri khong bao gio bang `CLAUDE_BUILDER`. Nen orchestrator chi con hai duong, ca hai deu hong:
+ * dua principal that vao thi moi thong diep hop le bi tu choi; suy vai tu LOAI thong diep thi phan
+ * quyen thanh vong tron va khong chung minh gi. Cho nen vai phai den TU SO DO, va so do phai den
+ * tu ben ngoai — giong moi bang chung khac (§13).
+ *
+ * Fail closed o ca ba tang: khong principal, khong so do, hay principal khong giu vai nao — deu la
+ * TU CHOI, moi truong hop mot ma rieng. Khong truong hop nao la "mien kiem".
  * @param {Task} task
  * @param {Record<string, unknown>} message
  * @param {Context} context
@@ -177,16 +197,15 @@ export function applyMessage(task, message, context = /** @type {Context} */ ({}
   if (message.issue !== task.issue) {
     return reject(task, REASONS.ISSUE_MISMATCH, { claimed: message.issue, task: task.issue });
   }
-  if (typeof context.actor !== 'string' || context.actor.length === 0) {
-    return reject(task, REASONS.PRODUCER_UNKNOWN, { type, allowed: MESSAGE_PRODUCERS[type] });
-  }
-  if (!MESSAGE_PRODUCERS[type]?.includes(context.actor)) {
-    return reject(task, REASONS.WRONG_PRODUCER, {
-      type,
-      actor: context.actor,
-      allowed: MESSAGE_PRODUCERS[type],
-    });
-  }
+  const authorized = authorizeProducer({
+    principal: context.principal,
+    registry: context.principalRegistry,
+    type,
+    assertedRole: context.assertedRole,
+    actor: /** @type {{ actor?: unknown }} */ (context).actor,
+  });
+  if (!authorized.ok) return reject(task, authorized.reason, authorized.detail);
+  const by = Object.freeze({ principal: authorized.principal, role: authorized.role });
   const key = idempotencyKeyFor(message);
   const claimed = claimKey(task.ledger, key);
   if (claimed.duplicate) {
@@ -204,7 +223,7 @@ export function applyMessage(task, message, context = /** @type {Context} */ ({}
     return accept(
       task,
       { blockedBy: conflict },
-      { from: task.state, to: STATES.BLOCKED, event: type, note: conflict },
+      { from: task.state, to: STATES.BLOCKED, event: type, by, note: conflict },
     );
   }
   const step = nextState(task.state, type);
@@ -218,7 +237,7 @@ export function applyMessage(task, message, context = /** @type {Context} */ ({}
     ...(outcome.blocked ? { blockedBy: outcome.blocked } : {}),
   };
   const note = outcome.blocked ? { note: outcome.blocked } : {};
-  return accept(task, patch, { from: task.state, to, event: type, ...note });
+  return accept(task, patch, { from: task.state, to, event: type, by, ...note });
 }
 
 /**

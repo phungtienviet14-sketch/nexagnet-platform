@@ -54,11 +54,64 @@ là việc của giai đoạn sau (§17).
 | Runtime Verifier  | `RUNTIME_VERIFIER`  | Bằng chứng trên môi trường thật cho **đúng một release**                      | `RUNTIME_PROOF`                          |
 | Human             | `HUMAN`             | Chỉ quyết định rủi ro cao / ngoại lệ; duyệt merge HIGH; gỡ BLOCKED            | _(sự kiện ngoài giao thức V0)_           |
 
-**Danh tính người phát là bắt buộc.** Orchestrator phải đưa `actor` vào cùng mỗi thông điệp
-(`comment.user.login` / `app.slug` đi kèm comment, không phải thứ tuỳ chọn). Hai đường từ chối, hai
-mã riêng: không biết ai phát ⇒ `PRODUCER_UNKNOWN`; biết nhưng sai vai ⇒ `WRONG_PRODUCER`. Không có
-đường thứ ba — "không biết ai phát" **không** được hiểu là "ai phát cũng được", vì như thế cả tầng
-phân quyền này biến mất mà không cổng nào kêu.
+### 2.1 Principal (GitHub xác thực) ⟂ vai giao thức
+
+**Bảng `ACTORS` ở trên là VAI LOGIC, không phải danh tính GitHub.** GitHub chỉ xác thực được
+`comment.user.login` và `performed_via_github_app.slug` — những giá trị như `nexagent-autopilot` hay
+tên đăng nhập của một người. Chúng **không bao giờ** bằng `CLAUDE_BUILDER` hay `CHATGPT_REVIEWER`.
+Coi hai thứ là một chỉ còn hai đường, cả hai đều hỏng:
+
+1. đưa principal thật vào chỗ vai ⇒ **mọi thông điệp hợp lệ bị từ chối**;
+2. suy vai từ **loại** thông điệp ⇒ `BUILD_READY` do Builder phát _vì nó là_ `BUILD_READY` — vòng
+   tròn, và cổng phân quyền thành một cái gạt luôn luôn mở.
+
+Nên phân quyền đi qua **ba tầng**, và tầng giữa là thứ duy nhất mang quyền:
+
+```text
+principal (GitHub xác thực)  --[sơ đồ cài đặt]-->  vai được phép  --[MESSAGE_PRODUCERS]-->  loại
+```
+
+**Dẫn xuất principal** (`principalFromGithubEvent`, hàm thuần, không gọi mạng) — ba đường, theo độ
+tin cậy giảm dần: `performed_via_github_app.slug` ⇒ `{kind: APP, id: slug}` · login kết thúc bằng
+`[bot]` ⇒ **cắt hậu tố** rồi cũng ra `{kind: APP, ...}` (nếu không thì `nexagent-autopilot[bot]` và
+`nexagent-autopilot` thành hai principal khác nhau và một sơ đồ đúng vẫn trượt) · còn lại là
+`{kind: USER, id: login}`. Không dẫn xuất được ⇒ `null` ⇒ cổng đóng. Login/slug **không phân biệt
+hoa thường**, đúng như GitHub.
+
+**Sơ đồ cài đặt** (`PrincipalRegistry`) là **cấu hình của từng bản triển khai**, orchestrator đưa
+vào qua `context` giống mọi bằng chứng khác (§13) — V0 **không** ghi cứng principal nào. Quan hệ là
+**nhiều-nhiều**: một principal giữ nhiều vai (App: builder + fixer + orchestrator + runtime
+verifier), một vai do nhiều principal giữ. Vai hiệu lực = **giao** của (vai của principal) và
+(người phát hợp lệ của loại) — một phép giao thật, không phải suy từ loại thông điệp. `assertedRole`
+chỉ để **thu hẹp** khi một principal giữ nhiều vai; nó không bao giờ mở rộng quyền.
+
+**Bất biến V0 cưỡng chế, không để cài đặt tự chọn:** một principal **không được vừa làm vừa duyệt**
+— `CHATGPT_REVIEWER` xung khắc với `{CLAUDE_BUILDER, CLAUDE_FIXER, GITHUB_ACTIONS}`. Sơ đồ vi phạm
+bị từ chối **lúc định nghĩa**, không đợi đến khi có thông điệp thật. Các tổ hợp dự kiến vẫn hợp lệ:
+App giữ builder + fixer + orchestrator + runtime verifier; tài khoản chủ repo giữ architect +
+reviewer + human.
+
+**Fail closed ở cả ba tầng**, mỗi đường một mã riêng:
+
+| Đường từ chối                                            | Mã                                  |
+| -------------------------------------------------------- | ----------------------------------- |
+| không có / hỏng hình dạng danh tính đã xác thực          | `PRINCIPAL_UNKNOWN`                 |
+| chỉ có tên vai trần, không có provenance sau nó          | `ACTOR_WITHOUT_PRINCIPAL`           |
+| không có sơ đồ cài đặt                                   | `PRINCIPAL_REGISTRY_MISSING`        |
+| sơ đồ hỏng hình dạng                                     | `PRINCIPAL_REGISTRY_INVALID`        |
+| sơ đồ vi phạm phân lập nhiệm vụ                          | `PRINCIPAL_ROLE_CONFLICT`           |
+| biết **ai**, nhưng principal không giữ vai nào           | `PRODUCER_UNKNOWN`                  |
+| vai được khẳng định không tồn tại                        | `UNKNOWN_ROLE`                      |
+| vai có thật nhưng principal không được giữ               | `ROLE_NOT_AUTHORIZED_FOR_PRINCIPAL` |
+| principal có vai, nhưng không vai nào phát được loại này | `WRONG_PRODUCER`                    |
+
+Thiếu sơ đồ **không** được hiểu là "ai cũng được", đúng cùng lý do "không biết ai phát" không được
+hiểu là "ai phát cũng được": như thế cả tầng phân quyền biến mất mà không cổng nào kêu.
+
+**Provenance được ghi lại.** Mỗi bước được chấp nhận mang `by = { principal, role }` trong lịch sử
+task — `role` là `null` khi principal giữ nhiều vai đều phát được loại đó (hợp lệ, chỉ là không quy
+được về một vai; bịa ra một vai ở đây là bịa ra provenance). Nhờ vậy một task `DONE` trả lời được
+"**principal nào** đã đóng nó", không chỉ "nó đã đóng".
 
 ## 3. GitHub là bus điều phối
 
@@ -429,32 +482,35 @@ node tools/autopilot-protocol/validator/cli.mjs required-checks [ruleset.json]
 Mã thoát: `0` hợp lệ · `1` không hợp lệ (JSON có `reason`) · `2` dùng sai. Thư viện (`validator/index.mjs`):
 `readMessage`/`parseMessage`/`formatMessage` · `validateTaskContract`/`extractTaskContract` ·
 `nextState`/`TRANSITIONS` · `idempotencyKeyFor`/`createLedger`/`claimKey` · các `evaluate*` (§7–§10) ·
+`principalFromGithubEvent`/`definePrincipalRegistry`/`rolesOf`/`authorizeProducer` (§2.1) ·
 bộ giảm `createTask`/`applyMessage`/`applyMerge`/`applyException` (bất biến — trả task mới, không sửa task cũ).
 
 Mọi lời từ chối mang **mã lý do** trong `REASONS` (`validator/reasons.mjs`) — không câu văn tự do.
 
 ## 16. Quyết định thiết kế của V0 (giả định đã chốt trong task này)
 
-| Quyết định                                                                                                  | Vì sao                                                                                    |
-| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| SHA bắt buộc 40 hex                                                                                         | "chính xác" phải là duy nhất; ví dụ rút gọn trong #153 là minh hoạ                        |
-| Marker cho 3 loại #153 không nêu (`BUILD_STARTED`, `BUILD_READY`, `CI_FAIL`) theo mẫu `AUTOPILOT_<LOẠI>_V0` | nhất quán với 6 marker đã cho                                                             |
-| Hợp đồng máy đọc = khối ` ```json ` sau marker                                                              | JSON không cần thêm phụ thuộc; YAML/khối không nhãn không nhận                            |
-| `BUILD_READY` từ `REVIEWING` về `CI`                                                                        | commit mới phải qua CI lại; đây là cách hiện thực "phán xét cũ hết hiệu lực"              |
-| `REVIEW_PASS` giữ ở `REVIEWING`, `MERGED` là sự kiện GitHub                                                 | đúng #153: MERGED không phải nhãn thô                                                     |
-| `MERGED` luôn tới `RUNTIME_PROOF` kể cả khi không đòi proof                                                 | một trạng thái "sau merge, chưa đóng"; `TASK_DONE` với `RUNTIME_VERIFIED=false` đóng ngay |
-| `RUNTIME_VERIFIED=true` mà không có proof ⇒ từ chối                                                         | Claim ≠ Proof                                                                             |
-| `BLOCKED` là cuối với tự động hoá                                                                           | V0 không định nghĩa đường gỡ; người xử lý ngoài giao thức                                 |
-| Người duyệt không thay thế review                                                                           | hai cổng độc lập ở task HIGH                                                              |
-| Required checks đọc từ ruleset, không hard-code                                                             | đổi tên job là đổi ruleset; validator theo nguồn                                          |
-| Khoá chỉ ghi khi thông điệp được chấp nhận                                                                  | thông điệp bị từ chối sớm (CI chưa xanh) phát lại được                                    |
-| Marker phải là dòng có nội dung đầu tiên                                                                    | văn xuôi đứng trước marker từng cho ra một `REVIEW_PASS` thật (§5.1)                      |
-| `humanApproval` là `{ head_sha }`, không phải boolean                                                       | duyệt ở HEAD A từng mở được merge của HEAD B (§9)                                         |
-| Trùng khoá runtime mà khác phán xét ⇒ `BLOCKED`, không phải `DUPLICATE`                                     | khoá của #153 không mang phán xét; bỏ qua là vứt bằng chứng âm (§11)                      |
-| Thêm trần `MAX_HEAD_REVISIONS`                                                                              | hai trần của #153 không chặn được vòng đẩy `BUILD_READY` (§10)                            |
-| Check-run không có `head_sha` ⇒ từ chối, không "coi như đúng HEAD"                                          | bằng chứng không buộc HEAD từng mở `REVIEW_REQUEST` cho mọi HEAD (§8)                     |
-| `actor` bắt buộc; không biết ai phát ⇒ `PRODUCER_UNKNOWN`                                                   | actor tuỳ chọn: quên đưa là mất cả tầng phân quyền, im lặng (§2)                          |
-| Marker hợp đồng phải là dòng đầu, khối `json` phải ngay dưới nó                                             | Issue dán ví dụ từng cho ra hợp đồng thật (§14) — cùng lý do với §5.1                     |
+| Quyết định                                                                                                  | Vì sao                                                                                       |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| SHA bắt buộc 40 hex                                                                                         | "chính xác" phải là duy nhất; ví dụ rút gọn trong #153 là minh hoạ                           |
+| Marker cho 3 loại #153 không nêu (`BUILD_STARTED`, `BUILD_READY`, `CI_FAIL`) theo mẫu `AUTOPILOT_<LOẠI>_V0` | nhất quán với 6 marker đã cho                                                                |
+| Hợp đồng máy đọc = khối ` ```json ` sau marker                                                              | JSON không cần thêm phụ thuộc; YAML/khối không nhãn không nhận                               |
+| `BUILD_READY` từ `REVIEWING` về `CI`                                                                        | commit mới phải qua CI lại; đây là cách hiện thực "phán xét cũ hết hiệu lực"                 |
+| `REVIEW_PASS` giữ ở `REVIEWING`, `MERGED` là sự kiện GitHub                                                 | đúng #153: MERGED không phải nhãn thô                                                        |
+| `MERGED` luôn tới `RUNTIME_PROOF` kể cả khi không đòi proof                                                 | một trạng thái "sau merge, chưa đóng"; `TASK_DONE` với `RUNTIME_VERIFIED=false` đóng ngay    |
+| `RUNTIME_VERIFIED=true` mà không có proof ⇒ từ chối                                                         | Claim ≠ Proof                                                                                |
+| `BLOCKED` là cuối với tự động hoá                                                                           | V0 không định nghĩa đường gỡ; người xử lý ngoài giao thức                                    |
+| Người duyệt không thay thế review                                                                           | hai cổng độc lập ở task HIGH                                                                 |
+| Required checks đọc từ ruleset, không hard-code                                                             | đổi tên job là đổi ruleset; validator theo nguồn                                             |
+| Khoá chỉ ghi khi thông điệp được chấp nhận                                                                  | thông điệp bị từ chối sớm (CI chưa xanh) phát lại được                                       |
+| Marker phải là dòng có nội dung đầu tiên                                                                    | văn xuôi đứng trước marker từng cho ra một `REVIEW_PASS` thật (§5.1)                         |
+| `humanApproval` là `{ head_sha }`, không phải boolean                                                       | duyệt ở HEAD A từng mở được merge của HEAD B (§9)                                            |
+| Trùng khoá runtime mà khác phán xét ⇒ `BLOCKED`, không phải `DUPLICATE`                                     | khoá của #153 không mang phán xét; bỏ qua là vứt bằng chứng âm (§11)                         |
+| Thêm trần `MAX_HEAD_REVISIONS`                                                                              | hai trần của #153 không chặn được vòng đẩy `BUILD_READY` (§10)                               |
+| Check-run không có `head_sha` ⇒ từ chối, không "coi như đúng HEAD"                                          | bằng chứng không buộc HEAD từng mở `REVIEW_REQUEST` cho mọi HEAD (§8)                        |
+| Danh tính người phát là bắt buộc; không biết ai phát ⇒ từ chối                                              | actor tuỳ chọn: quên đưa là mất cả tầng phân quyền, im lặng (§2.1)                           |
+| Principal đã xác thực ⟂ vai giao thức, nối bằng sơ đồ cài đặt                                               | login/app slug không bao giờ bằng `ACTORS.*`; suy vai từ loại thông điệp là vòng tròn (§2.1) |
+| Sơ đồ không được để một principal vừa làm vừa duyệt                                                         | hai cổng độc lập chỉ có nghĩa khi người duyệt không phải người xây (§2.1)                    |
+| Marker hợp đồng phải là dòng đầu, khối `json` phải ngay dưới nó                                             | Issue dán ví dụ từng cho ra hợp đồng thật (§14) — cùng lý do với §5.1                        |
 
 ## 17. Ngoài phạm vi V0 và việc kế tiếp
 
@@ -482,6 +538,7 @@ dispatch.
 | 8. Idempotency                               | `tests/idempotency.test.mjs`, `tests/protocol-lifecycle.test.mjs`         |
 | 9. Retry ceilings                            | `tests/gates-ci-review.test.mjs`, `tests/protocol-done-retry.test.mjs`    |
 | Bảy đường fail-open đã đo và đã đóng         | `tests/fail-closed.test.mjs`                                              |
+| Principal ⟂ vai; phân quyền fail-closed      | `tests/principal-authorization.test.mjs`                                  |
 | DONE trước runtime proof bị từ chối          | `tests/gates-merge-done.test.mjs`, `tests/protocol-done-retry.test.mjs`   |
 | CLI tất định                                 | `tests/cli.test.mjs`                                                      |
 | 10. Không workflow/dispatcher mới            | `git diff --stat main -- .github/` rỗng (bằng chứng trong PR)             |

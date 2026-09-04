@@ -66,7 +66,17 @@ export const MARKERS = Object.freeze({
   [MESSAGE_TYPES.TASK_DONE]: 'AUTOPILOT_TASK_DONE_V0',
 });
 
-/** Ai duoc phep phat loai thong diep nao. Orchestrator dung bang nay de tu choi nguoi phat sai vai. */
+/**
+ * VAI LOGIC cua giao thuc — KHONG PHAI danh tinh GitHub.
+ *
+ * Khong mot gia tri nao o day la mot `comment.user.login` hay mot app slug, va khong bao gio duoc
+ * so sanh truc tiep voi chung. GitHub xac thuc `nexagent-autopilot` / ten dang nhap; giao thuc noi
+ * `CLAUDE_BUILDER` / `CHATGPT_REVIEWER`. Cau noi giua hai the gioi la `PrincipalRegistry`
+ * (`validator/principal.mjs`) — so do cua tung ban cai dat, do orchestrator dua vao qua `context`.
+ *
+ * Mot principal co the giu NHIEU vai (App: builder + fixer + orchestrator), va mot vai co the do
+ * nhieu principal giu. Nen day la quan he nhieu-nhieu, khong phai mot phep doi ten.
+ */
 export const ACTORS = Object.freeze({
   ARCHITECT: 'CHATGPT_ARCHITECT',
   BUILDER: 'CLAUDE_BUILDER',
@@ -75,6 +85,26 @@ export const ACTORS = Object.freeze({
   REVIEWER: 'CHATGPT_REVIEWER',
   RUNTIME_VERIFIER: 'RUNTIME_VERIFIER',
   HUMAN: 'HUMAN',
+});
+
+/** Hai dang danh tinh ma GitHub xac thuc duoc: mot GitHub App (slug), hoac mot tai khoan (login). */
+export const PRINCIPAL_KINDS = Object.freeze({ APP: 'APP', USER: 'USER' });
+
+/**
+ * PHAN LAP NHIEM VU — mot principal khong duoc giu dong thoi cac vai nay. Bat bien cua GIAO THUC,
+ * khong phai cau hinh: neu ai lam cung la nguoi duyet thi `REVIEW_PASS` khong chung minh gi, va ca
+ * thiet ke hai cong doc lap (§9) sup. So do vi pham bi tu choi ngay luc dinh nghia.
+ *
+ * `RUNTIME_VERIFIER` KHONG nam trong xung dot: bang chung runtime la cua CI/deploy that, va App
+ * (giu ORCHESTRATOR) chinh la thu chay no. `ARCHITECT` + `REVIEWER` cung duoc phep chung — soan
+ * hop dong roi review code khong phai tu duyet cong viec cua chinh minh.
+ * @type {Readonly<Record<string, ReadonlyArray<string>>>}
+ */
+export const ROLE_CONFLICTS = Object.freeze({
+  [ACTORS.REVIEWER]: Object.freeze([ACTORS.BUILDER, ACTORS.FIXER, ACTORS.ORCHESTRATOR]),
+  [ACTORS.BUILDER]: Object.freeze([ACTORS.REVIEWER]),
+  [ACTORS.FIXER]: Object.freeze([ACTORS.REVIEWER]),
+  [ACTORS.ORCHESTRATOR]: Object.freeze([ACTORS.REVIEWER]),
 });
 
 /** @type {Readonly<Record<string, ReadonlyArray<string>>>} */

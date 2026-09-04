@@ -2,7 +2,8 @@
  * Du lieu TONG HOP dung chung cho bo test. Khong co SHA/issue/PR that nao o day — moi gia tri
  * la mau, va co y de de nhin (40 chu 'a', 40 chu 'b', ...).
  */
-import { MARKERS, MESSAGE_PRODUCERS } from '../validator/constants.mjs';
+import { ACTORS, MARKERS, MESSAGE_PRODUCERS } from '../validator/constants.mjs';
+import { definePrincipalRegistry } from '../validator/principal.mjs';
 import { applyMessage, createTask } from '../validator/protocol.mjs';
 
 export const SHA_A = 'a'.repeat(40);
@@ -72,17 +73,44 @@ export function message(type, fields = {}) {
 }
 
 /**
- * Nguoi phat HOP LE dau tien cua mot loai thong diep, theo `MESSAGE_PRODUCERS`.
- *
- * `applyMessage` doi `context.actor` — khong biet ai phat la mot ly do tu choi (`PRODUCER_UNKNOWN`),
- * khong phai truong hop duoc mien kiem. Test nao khong noi ve phan quyen thi dung dung nguoi phat
- * that qua helper nay; test nao NOI ve phan quyen thi truyen `actor` tay de de.
+ * Ba principal TONG HOP, dung hinh dang cai dat that: mot GitHub App lam builder/fixer/orchestrator
+ * + runtime verifier, mot tai khoan nguoi cho ChatGPT (architect + reviewer), va mot tai khoan
+ * nguoi that. `id` la slug/login — KHONG BAO GIO la mot gia tri `ACTORS.*`.
  */
+export const APP_PRINCIPAL = Object.freeze({ kind: 'APP', id: 'nexagent-autopilot' });
+export const REVIEWER_PRINCIPAL = Object.freeze({ kind: 'USER', id: 'chatgpt-reviewer-account' });
+export const HUMAN_PRINCIPAL = Object.freeze({ kind: 'USER', id: 'repo-owner-account' });
+
+/** So do cai dat mau. Phan lap nhiem vu: principal cua App KHONG duoc giu `CHATGPT_REVIEWER`. */
+export const REGISTRY = definePrincipalRegistry([
+  {
+    principal: APP_PRINCIPAL,
+    roles: [ACTORS.BUILDER, ACTORS.FIXER, ACTORS.ORCHESTRATOR, ACTORS.RUNTIME_VERIFIER],
+  },
+  { principal: REVIEWER_PRINCIPAL, roles: [ACTORS.ARCHITECT, ACTORS.REVIEWER] },
+  { principal: HUMAN_PRINCIPAL, roles: [ACTORS.HUMAN] },
+]).registry;
+
+/** Nguoi phat HOP LE dau tien cua mot loai thong diep, theo `MESSAGE_PRODUCERS`. */
 export const producerOf = (type) => MESSAGE_PRODUCERS[type]?.[0];
 
-/** `applyMessage` voi nguoi phat mac dinh dung vai; `context.actor` truyen tay van thang. */
+/** Principal DUY NHAT trong `REGISTRY` giu mot vai. Dung de dung context cho tung loai thong diep. */
+export const principalHolding = (role) =>
+  REGISTRY.entries.find((entry) => entry.roles.includes(role))?.principal;
+
+/**
+ * `applyMessage` voi provenance mac dinh DUNG: principal that giu vai hop le cua loai thong diep.
+ *
+ * Khong test nao duoc mac dinh "bo qua phan quyen" — `applyMessage` doi mot principal DA XAC THUC
+ * cong mot so do (§2.1), va thieu bat ky cai nao la mot ly do tu choi rieng. Test nao NOI ve phan
+ * quyen thi truyen `principal` / `principalRegistry` / `assertedRole` tay de de.
+ */
 export const apply = (task, msg, context = {}) =>
-  applyMessage(task, msg, { actor: producerOf(msg.type), ...context });
+  applyMessage(task, msg, {
+    principal: principalHolding(producerOf(msg.type)),
+    principalRegistry: REGISTRY,
+    ...context,
+  });
 
 /** Ap lien tiep nhieu thong diep; nem neu mot buoc bi tu choi (test happy-path dung). */
 export function drive(task, steps) {
