@@ -105,18 +105,69 @@ export const READ_GRANTS = Object.freeze([
 ]);
 
 /**
- * Quyen GHI, va dung hai viec can den chung — day la TOAN BO phan ghi cua Orchestrator V0:
+ * MOI LOI GOI GHI CUA ORCHESTRATOR, VA QUYEN MA GITHUB DOI HOI CHO DUNG LOI GOI DO.
  *
- *   `issues: write`        -> POST /issues/{n}/comments   (dang ket qua)
- *                             POST|DELETE /issues/{n}/labels (doi nhan)
- *   `pull-requests: write` -> mot PR la mot Issue o REST, nhung hai quyen nay khong thay the nhau
- *                             tren moi duong; giu ca hai la giu dung bo ma lan chay that da do.
+ * Bang nay song song voi `probesFor` o tren, va vi cung mot le: quyen phai DAN XUAT tu loi goi co
+ * that, khong phai nguoc lai. `MUTATION_GRANTS` duoc TINH ra tu day, nen khong con duong nao them
+ * mot quyen ghi vao workflow ma khong co mot dong o day tro toi mot endpoint cu the.
+ *
+ * BA LOI GOI, VA CA BA DEU LA `/issues/...` (blocker B7 cua PR #167)
+ *
+ * Tai lieu REST cua GitHub ghi cho ca ba endpoint duoi day cung mot cau: token can "Issues" write
+ * HOAC "Pull requests" write — MOT trong hai, khong phai ca hai. Ban truoc cam ca hai, va ly do
+ * ghi ngay tai cho nay la "giu dung bo ma lan chay that da do". Do la mot ly do VAN HANH, khong
+ * phai mot doi hoi cua API — va no khong du de cam mot quyen ghi.
+ *
+ * Cai gia cua no la that: `pull-requests: write` uy quyen cho MOI thao tac ghi khac tren mot PR —
+ * doi base, doi title, dong PR, day review — trong dung mot job cam quyen ghi cua ca mat phang
+ * dieu khien. Khong mot dong nao trong package nay goi den chung. Mot quyen khong loi goi nao can
+ * la mot quyen chi con tac dung khi co ai do dung sai no.
+ *
+ * Nen bo cua Orchestrator V0 la `issues: write` + `pull-requests: read`. `pull-requests` van CAN,
+ * nhung chi de DOC: `GET /pulls/{n}` lay HEAD that (probe `pull` o bang tren).
+ *
+ * @typedef {object} WriteCall
+ * @property {string} name Ten ngan, hien trong thong bao loi cua bai kiem hop dong.
+ * @property {string} grant Dong PHAI CO trong khoi `permissions:` cua job ghi, nguyen van.
+ * @property {'POST' | 'PUT' | 'PATCH' | 'DELETE'} verb Dung dong `method:` ma ma nguon truyen di.
+ * @property {string} endpoint Duong dan REST, dang tai lieu.
+ * @property {string} site Tep trong `src/` thuc su phat loi goi nay.
+ */
+
+/** @type {ReadonlyArray<WriteCall>} */
+export const WRITE_CALLS = Object.freeze([
+  {
+    name: 'post-comment',
+    grant: 'issues: write',
+    verb: 'POST',
+    endpoint: '/issues/{n}/comments',
+    site: 'main.mjs',
+  },
+  {
+    name: 'add-labels',
+    grant: 'issues: write',
+    verb: 'POST',
+    endpoint: '/issues/{n}/labels',
+    site: 'labels.mjs',
+  },
+  {
+    name: 'remove-label',
+    grant: 'issues: write',
+    verb: 'DELETE',
+    endpoint: '/issues/{n}/labels/{ten}',
+    site: 'labels.mjs',
+  },
+]);
+
+/**
+ * Quyen GHI — DAN XUAT tu bang tren, khong viet tay. Bo mot loi goi ghi la bo quyen tuong ung;
+ * them mot quyen ma khong them loi goi la viec KHONG LAM DUOC tu day.
  *
  * CHI job chay ma nguon NHANH MAC DINH duoc cam bo nay (blocker B4). Job chay ma nguon cua PR thi
  * khong — ma nguon chua duyet khong duoc ghi vao mat phang trang thai ma chinh no dang xin duyet.
  * @type {ReadonlyArray<string>}
  */
-export const MUTATION_GRANTS = Object.freeze(['issues: write', 'pull-requests: write']);
+export const MUTATION_GRANTS = Object.freeze([...new Set(WRITE_CALLS.map((call) => call.grant))]);
 
 /**
  * Quyen orchestrator KHONG DUOC co o BAT KY job nao. Read-only la mot ranh gioi GitHub cuong che,

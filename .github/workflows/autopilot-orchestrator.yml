@@ -197,10 +197,22 @@ jobs:
           && github.event.check_suite.pull_requests[0] != null)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # DUNG MOT QUYEN GHI, VA NO LA `issues: write` (blocker B7 cua PR #167).
+    #
+    # Ca ba loi goi ghi cua orchestrator deu la `/issues/...`: dang comment, gan nhan, go nhan. Tai
+    # lieu REST cua GitHub ghi cho ca ba cung mot cau — can "Issues" write HOAC "Pull requests"
+    # write, MOT trong hai. Nen `pull-requests` o day chi can `: read`, cho dung mot viec con lai:
+    # `GET /pulls/{n}` lay HEAD that.
+    #
+    # Ban truoc cam ca `pull-requests: write`. Khong mot loi goi nao doi no, va no uy quyen cho MOI
+    # thao tac ghi khac tren PR — doi base, doi title, dong PR — trong dung mot job cam quyen ghi
+    # cua ca mat phang dieu khien. Bang `WRITE_CALLS` trong `src/permissions.mjs` khoa dieu do lai:
+    # quyen ghi o day DAN XUAT tu loi goi co that, va `tests/workflow-contract.test.mjs` so khop
+    # CHINH XAC — them mot dong `: write` khong co endpoint doi no thi bai kiem do.
     permissions:
       contents: read
       issues: write
-      pull-requests: write
+      pull-requests: read
       checks: read
       actions: read
     steps:

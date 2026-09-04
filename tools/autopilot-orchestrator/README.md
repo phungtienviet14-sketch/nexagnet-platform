@@ -174,11 +174,12 @@ duyệt" được thoả — điều mà nếu chỉ nhìn `user.login` thì kh�
 2. **`issue_comment` cũng chưa chạy thật**, và không thể chạy thật cho tới khi bản này lên `main`
    (cạm bẫy 3).
 3. **`pull_request` chỉ chứng minh được phần ĐỌC.** Từ blocker B4, job chạy trên trigger đó không
-   còn được cầm `issues: write`/`pull-requests: write` — nên `preflight` **không thể** đo hai quyền
-   ghi bằng một lời gọi thật nữa, và sẽ không bao giờ đo được: không thể vừa cho mã nguồn PR chạy
-   vừa cho nó cầm quyền ghi để đo chúng. Hai quyền ấy nay được canh bằng một hợp đồng **tĩnh**
-   (`tests/workflow-contract.test.mjs` đọc thẳng khối `permissions:` của job `orchestrate`). Đó là
-   một bằng chứng yếu hơn hẳn một lời gọi 200, và nói ra ở đây chứ không giấu.
+   còn được cầm `issues: write` — nên `preflight` **không thể** đo quyền ghi bằng một lời gọi thật
+   nữa, và sẽ không bao giờ đo được: không thể vừa cho mã nguồn PR chạy vừa cho nó cầm quyền ghi để
+   đo. Quyền ấy nay được canh bằng một hợp đồng **tĩnh** (`tests/workflow-contract.test.mjs` đọc
+   thẳng khối `permissions:` của job `orchestrate`; từ blocker B7 thì so khớp **chính xác** với bảng
+   `WRITE_CALLS` — thừa một dòng `: write` là đỏ). Đó là một bằng chứng yếu hơn hẳn một lời gọi 200,
+   và nói ra ở đây chứ không giấu.
 4. **Đường ghi chưa từng chạy thật.** Nó chỉ chạy trên `issue_comment`/`check_suite`, tức chỉ sau
    khi bản này lên `main` (cạm bẫy 3). Trong PR, đường ghi được đo bằng `tests/recovery.test.mjs` —
    chạy thật `node src/main.mjs` hai lần với mạng được dựng lại, không phải bằng một lần chạy

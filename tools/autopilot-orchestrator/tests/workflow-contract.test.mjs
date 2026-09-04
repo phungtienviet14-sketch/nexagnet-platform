@@ -1,7 +1,7 @@
 /**
- * HOP DONG GIUA MA NGUON VA WORKFLOW — bon blocker cua PR #167, moi cai mot cai chan.
+ * HOP DONG GIUA MA NGUON VA WORKFLOW — nam blocker cua PR #167, moi cai mot cai chan.
  *
- * Bon dieu duoi day khong the kiem bang bo test binh thuong, vi chung khong nam trong ma nguon —
+ * Nam dieu duoi day khong the kiem bang bo test binh thuong, vi chung khong nam trong ma nguon —
  * chung nam trong YAML, va hau qua cua chung chi lo ra o LAN CHAY THAT SAU KHI MERGE
  * (`issue_comment` va `check_suite` chi chay ban workflow tren nhanh mac dinh). Tep nay keo chung
  * ve thanh thu do duoc trong PR.
@@ -10,8 +10,9 @@
  *   B2 — `on:` phai lang du CA BA trigger hop dong #165 khai.
  *   B3 — `AUTOPILOT_REVIEWER_APP_SLUG` khong duoc co gia tri du phong ghi cung.
  *   B4 — job nao chay MA NGUON CUA PR thi khong duoc cam mot quyen ghi nao.
+ *   B7 — quyen ghi cam duoc phai la quyen mot loi goi ghi CO THAT doi den.
  *
- * B4 la cai duy nhat trong bon cai KHONG THE do bang mot lan chay: mot lan chay chi chung minh
+ * B4 la cai duy nhat trong nam cai KHONG THE do bang mot lan chay: mot lan chay chi chung minh
  * duoc bo quyen NO nhan, chu khong chung minh duoc bo quyen mot job KHAC se nhan. Nen hop dong o
  * day la hop dong TINH — no doc so do job va so do quyen truc tiep tu YAML.
  *
@@ -20,13 +21,18 @@
  * mot lan doi dependency va luc do cai chan nay se im lang bien mat cung.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { EVENT_NAMES } from '../src/events.mjs';
 import { MUTATION_ENV, MUTATION_ROLES } from '../src/mutations.mjs';
-import { FORBIDDEN_GRANTS, MUTATION_GRANTS, READ_GRANTS } from '../src/permissions.mjs';
+import {
+  FORBIDDEN_GRANTS,
+  MUTATION_GRANTS,
+  READ_GRANTS,
+  WRITE_CALLS,
+} from '../src/permissions.mjs';
 
 /**
  * Bo ky tu CR: tren Windows tep duoc checkout dang CRLF, va moi phep khang dinh duoi day cat theo
@@ -151,7 +157,7 @@ test('B1: job chay that khai DU quyen cho moi loi goi API orchestrator thuc su t
   // Hai dong nay la dung blocker B1. Ghi ten ro rang de mot lan xoa nham khong doc thanh loi chung.
   assert.ok(declared.includes('checks: read'), 'B1: thieu `checks: read` cho /check-runs');
   assert.ok(declared.includes('actions: read'), 'B1: thieu `actions: read` cho /actions/runs');
-  // Va hai quyen GHI — hai viec duy nhat orchestrator lam: dang comment, doi nhan.
+  // Va quyen GHI. Bai nay hoi "co DU khong"; bai B7 ben duoi hoi "co THUA khong".
   for (const grant of MUTATION_GRANTS) {
     assert.ok(declared.includes(grant), `job \`${MUTATING_JOB}\` thieu \`${grant}\``);
   }
@@ -279,6 +285,96 @@ test('B4: khong duoc dung `pull_request_target`', () => {
   assert.ok(
     !content.join('\n').includes('pull_request_target'),
     '`pull_request_target` roi checkout ma nguon PR la dung lo hong B4 doi ten trigger',
+  );
+});
+
+// ------------------------------------------------------------------------------------------------
+// B7 — QUYEN GHI PHAI DAN XUAT TU MOT LOI GOI GHI CO THAT.
+//
+// B4 tra loi "job NAO duoc ghi". B7 tra loi cau con lai: "duoc ghi CAI GI". Mot job ghi cam thua
+// mot quyen ma khong loi goi nao doi den van qua sach cac bai B4 o tren — no van la DUNG MOT job,
+// va van khong chay tren `pull_request`. Ba bai duoi day dong not cho ho do, va chung phai dung
+// DONG THOI:
+//
+//   (a) job ghi cam DUNG bo `MUTATION_GRANTS`, so khop CHINH XAC — thua mot dong la do;
+//   (b) `MUTATION_GRANTS` DAN XUAT tu `WRITE_CALLS`, nen (a) chi qua duoc khi moi quyen ghi co mot
+//       endpoint cu the doi den no;
+//   (c) `WRITE_CALLS` khop voi ma nguon `src/` — khong khai duoc mot endpoint khong ton tai, va
+//       khong them duoc mot loi goi ghi ma khong khai.
+//
+// Ba lop lam dung mot dieu: `pull-requests: write` chi quay lai duoc workflow khi co ai do them
+// mot loi goi ghi THAT SU doi den no. Sua moi YAML thi (a) do; khai them vao bang cho khop thi (c)
+// do. Duong duy nhat con lai la duong dung: viet loi goi truoc, roi quyen moi theo sau.
+// ------------------------------------------------------------------------------------------------
+
+/** Dong `method:` ma ma nguon chuyen thang cho `fetch` — tuc mot loi goi GHI that. */
+const WRITE_VERB_LINE = /\bmethod:\s*'(POST|PUT|PATCH|DELETE)'/g;
+
+const SRC_DIR = new URL('../src/', import.meta.url);
+
+/** Moi loi goi ghi TIM DUOC trong `src/`, dang `<tep> <VERB>`. */
+const writeCallsInSource = readdirSync(fileURLToPath(SRC_DIR))
+  .filter((file) => file.endsWith('.mjs'))
+  .flatMap((file) => {
+    const source = readFileSync(fileURLToPath(new URL(file, SRC_DIR)), 'utf8');
+    return [...source.matchAll(WRITE_VERB_LINE)].map((match) => `${file} ${match[1]}`);
+  });
+
+const PR_WRITE = 'pull-requests: write';
+
+test('B7: job ghi cam DUNG bo quyen ghi dan xuat tu WRITE_CALLS — khong mot dong thua', () => {
+  assert.deepEqual(
+    writeGrantsIn(jobPermissions(MUTATING_JOB) ?? []).sort(),
+    [...MUTATION_GRANTS].sort(),
+    `job \`${MUTATING_JOB}\` phai cam DUNG bo quyen ma \`WRITE_CALLS\` doi hoi, khong hon. Mot ` +
+      `dong \`: write\` ma khong loi goi nao doi den chi con tac dung vao ngay co ai do dung sai no`,
+  );
+});
+
+test('B7: `pull-requests: write` bi cam khi khong mot endpoint nao doi den no', () => {
+  const needing = WRITE_CALLS.filter((call) => call.grant === PR_WRITE);
+  if (needing.length > 0) {
+    // Duong MO, co chu dich: neu mai nay orchestrator that su goi mot endpoint doi quyen nay (vi du
+    // `PATCH /pulls/{n}`), quyen ay hop le — nhung phai co mat o CA HAI cho, khong duoc chi o YAML.
+    assert.ok(
+      MUTATION_GRANTS.includes(PR_WRITE),
+      `\`${PR_WRITE}\` thieu trong \`MUTATION_GRANTS\``,
+    );
+    assert.ok(
+      (jobPermissions(MUTATING_JOB) ?? []).includes(PR_WRITE),
+      `\`${needing[0].name}\` doi \`${PR_WRITE}\` nhung job \`${MUTATING_JOB}\` khong cam quyen do`,
+    );
+    return;
+  }
+  assert.ok(
+    !MUTATION_GRANTS.includes(PR_WRITE),
+    `khong dong nao cua \`WRITE_CALLS\` doi \`${PR_WRITE}\` — no khong duoc nam trong bo quyen ghi`,
+  );
+  for (const name of JOB_NAMES) {
+    assert.ok(
+      !(jobPermissions(name) ?? []).includes(PR_WRITE),
+      `job \`${name}\` cam \`${PR_WRITE}\` trong khi ca ba loi goi ghi cua orchestrator deu la ` +
+        `\`/issues/...\`. Tai lieu REST doi "Issues" write HOAC "Pull requests" write — MOT trong ` +
+        `hai. Muon quyen nay thi them mot endpoint that vao \`WRITE_CALLS\` truoc da`,
+    );
+  }
+});
+
+test('B7: job ghi VAN giu `pull-requests: read` — `GET /pulls/{n}` lay HEAD that', () => {
+  // Ha `write` xuong `read` khong duoc bien thanh bo han: `main.mjs` doc HEAD that tu `/pulls/{n}`.
+  // Bai B1 o tren dung `satisfies()` nen no chap nhan ca `: write`; bai nay chot dung dong `: read`.
+  assert.ok(
+    (jobPermissions(MUTATING_JOB) ?? []).includes('pull-requests: read'),
+    `job \`${MUTATING_JOB}\` van goi \`GET /pulls/{n}\` — bo han \`pull-requests\` la 403 o san xuat`,
+  );
+});
+
+test('B7: WRITE_CALLS la bang DAY DU cua moi loi goi ghi trong `src/`', () => {
+  assert.deepEqual(
+    writeCallsInSource.sort(),
+    WRITE_CALLS.map((call) => `${call.site} ${call.verb}`).sort(),
+    'lech giua bang `WRITE_CALLS` va ma nguon: mot loi goi ghi khong khai thi quyen cua no khong ' +
+      'ai canh, mot dong khai ma khong co loi goi thi quyen cua no khong ai can',
   );
 });
 
