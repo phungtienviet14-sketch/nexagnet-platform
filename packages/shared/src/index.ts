@@ -191,6 +191,8 @@ export {
   OUTBOUND_PROVENANCES,
   OUTBOUND_AUTHORITY_REASONS,
   OUTBOUND_AUTHORITY_REASON_LABELS,
+  OUTBOUND_COMMITMENT_LEVELS,
+  OUTBOUND_COMMITMENT_LEVEL_LABELS,
 } from './outbound-authority.js';
 export type {
   OutboundAuthority,
@@ -201,6 +203,7 @@ export type {
   OutboundAuthoritySource,
   OutboundAuthorityVerdict,
   OutboundClaimClass,
+  OutboundCommitmentLevel,
   OutboundProvenance,
 } from './outbound-authority.js';
 export {

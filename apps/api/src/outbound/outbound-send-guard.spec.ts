@@ -4,6 +4,7 @@ import type { AgentTrace, OrderView } from '@netviet/shared';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
+import { outboundFingerprint } from './outbound-authority.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
 
@@ -43,6 +44,21 @@ function build() {
   };
 }
 
+/**
+ * Ghim phan quyet vao DUNG doan van cua chinh ban ghi — y het duong soan that lam.
+ *
+ * Khong co buoc nay thi moi fixture o day se bi diem nghen tu choi voi `AUTHORITY_PAYLOAD_MISMATCH`,
+ * va bo test se do vi mot ly do KHAC voi ly do no muon do — tuc no khong con kiem tra dieu no noi.
+ */
+function pin(trace: AgentTrace): AgentTrace {
+  const verdict = trace.outboundAuthority;
+  if (!verdict) return trace;
+  return {
+    ...trace,
+    outboundAuthority: { ...verdict, fingerprint: outboundFingerprint(trace.outbound?.text ?? '') },
+  };
+}
+
 function view(trace: AgentTrace, patch: Partial<OrderView> = {}): OrderView {
   return {
     id: `o-${Math.random()}`,
@@ -56,7 +72,7 @@ function view(trace: AgentTrace, patch: Partial<OrderView> = {}): OrderView {
     priced: null,
     confidence: {},
     senderType: 'dai_ly',
-    trace,
+    trace: pin(trace),
     ...patch,
   };
 }

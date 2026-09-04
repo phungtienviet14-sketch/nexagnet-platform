@@ -5,6 +5,7 @@ import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryOrdersRepository } from './orders.repository.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
+import { outboundFingerprint } from '../outbound/outbound-authority.js';
 import { OrdersService } from './orders.service.js';
 
 /**
@@ -33,11 +34,14 @@ const TRACE: AgentTrace = {
  * nao ca, nen no gui duoc. Mot ban ghi KHONG co truong nay la mot ban ghi chua qua cong, va cong
  * gui se tu choi no — xem bo test ngay duoi.
  */
-const CLEARED: AgentTrace['outboundAuthority'] = {
+const cleared = (text: string): AgentTrace['outboundAuthority'] => ({
   sendable: true,
   reason: 'NO_CONSEQUENTIAL_CLAIM',
   claims: [],
-};
+  // Phan quyet di kem dau cua DUNG doan van no duoc cap cho. Mot phan quyet khong mang dau — hoac
+  // mang dau cua doan van khac — bi diem nghen tu choi, y nhu ban ghi khong co phan quyet nao.
+  fingerprint: outboundFingerprint(text),
+});
 
 function build() {
   const repo = new InMemoryOrdersRepository();
@@ -114,7 +118,7 @@ describe('Sale bam duyet — dinh tuyen theo noi dung', () => {
         trace: {
           ...TRACE,
           outbound: { text: 'Dạ máy có đèn ngủ ạ.' },
-          outboundAuthority: CLEARED,
+          outboundAuthority: cleared('Dạ máy có đèn ngủ ạ.'),
         },
       }),
     );
@@ -137,7 +141,7 @@ describe('Sale bam duyet — dinh tuyen theo noi dung', () => {
           ...TRACE,
           primaryRole: 'after_sales',
           outbound: { text: 'Dạ sản phẩm bảo hành 12 tháng ạ.' },
-          outboundAuthority: CLEARED,
+          outboundAuthority: cleared('Dạ sản phẩm bảo hành 12 tháng ạ.'),
         },
       }),
     );

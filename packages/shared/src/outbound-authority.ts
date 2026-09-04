@@ -53,12 +53,36 @@ export const OUTBOUND_AUTHORITY_SOURCES = [
 export type OutboundAuthoritySource = (typeof OUTBOUND_AUTHORITY_SOURCES)[number];
 
 /**
+ * MUC CAM KET DON — thang bac, khong phai mot cai gat dau duy nhat.
+ *
+ * REVIEW DOC LAP 04/09/2026 (B3) chi ra: khi moi cau "da ghi nhan / da chot / da gui" cung quy ve
+ * MOT the, thi mot don moi o `needs_edit` van cap phep cho cau "da chot don" — tuc uy quyen mot
+ * trang thai chua xay ra. Ba muc duoi day tang dan, va grant la CONG DON: `approved` cap ca
+ * `recorded` lan `confirmed`, nhung khong cap `fulfilled`.
+ */
+export const OUTBOUND_COMMITMENT_LEVELS = ['recorded', 'confirmed', 'fulfilled'] as const;
+export type OutboundCommitmentLevel = (typeof OUTBOUND_COMMITMENT_LEVELS)[number];
+
+export const OUTBOUND_COMMITMENT_LEVEL_LABELS: Record<OutboundCommitmentLevel, string> = {
+  recorded: 'Đã ghi nhận đơn (chưa duyệt)',
+  confirmed: 'Đã chốt/duyệt đơn',
+  fulfilled: 'Đã gửi xác nhận / đã đồng bộ',
+};
+
+/**
  * MOT LAN CAP THAM QUYEN.
  *
- * `authorized` la tap gia tri DUOC PHEP noi ra, da chuan hoa:
- *   · `financial`        -> chuoi chu so cua so tien (xem `outbound-claims.ts`);
- *   · `policy`           -> ma loai chinh sach (`payment_terms`, `vat`, ...);
- *   · `order_commitment` -> `order_recorded`.
+ * `authorized` la tap gia tri DUOC PHEP noi ra, da chuan hoa. TUNG LOP CO MOT TU VUNG RIENG, va
+ * chung khong duoc phep tron:
+ *   · `financial`        -> GIA TRI VND NGUYEN dang chuoi thap phan, vd `"1150000"`. KHONG phai
+ *                           "cac cach viet" cua no: mot cach viet ("1.150k", "1,15tr") duoc quy
+ *                           ve dung mot gia tri roi moi so khop. Truoc ban nay o day tung chua ca
+ *                           dang rut gon `"1150"`, va the la tham quyen cho 1.150.000d lam cho
+ *                           "1150d" lot — review doc lap goi ten do la B2.
+ *   · `policy`           -> ma CHINH XAC TUNG LOAI: `payment_policy:ky_gui`,
+ *                           `payment_policy:cong_no_45`, `terms_days:45`, `vat`, `cod`, ...
+ *                           Khong con mot ma chung `payment_terms` phu cho moi loai.
+ *   · `order_commitment` -> `order:<muc>` theo `OUTBOUND_COMMITMENT_LEVELS`.
  *
  * Mot grant KHONG BAO GIO rong: cap mot lop ma khong cap gia tri nao la mot cai gat dau trong,
  * va no se lam cong kiem tro thanh mot phep so sanh voi tap rong — tuc luon dat.
@@ -105,6 +129,14 @@ export const OUTBOUND_AUTHORITY_REASONS = [
   /** Cau noi ham y don da duoc ghi nhan/chot, nhung khong co trang thai don nao cho phep noi vay. */
   'ORDER_COMMITMENT_NOT_AUTHORIZED',
   /**
+   * Co tham quyen cam ket don, nhung ban nhap noi o MUC CAO HON trang thai that.
+   *
+   * Tach khoi ma tren vi hai su co khac han nhau: ma tren = "khong co don nao"; ma nay = "co don,
+   * nhung no moi duoc ghi nhan chu chua duoc chot". Gop lai thi mot don `needs_edit` bi noi thanh
+   * "da chot don" se hien ra y het mot luot khong co don — va nguoi truc se di tim sai cho.
+   */
+  'ORDER_COMMITMENT_LEVEL_NOT_AUTHORIZED',
+  /**
    * KHONG CO QUYET DINH THAM QUYEN NAO di kem noi dung nay.
    *
    * Ma quan trong nhat trong bo: no la thu bien "quen quyet dinh" thanh "khong gui duoc", thay vi
@@ -112,6 +144,15 @@ export const OUTBOUND_AUTHORITY_REASONS = [
    * vao day.
    */
   'AUTHORITY_DECISION_ABSENT',
+  /**
+   * CO phan quyet, nhung no duoc cap cho MOT DOAN VAN KHAC.
+   *
+   * Phan quyet duoc ghim vao trace luc soan; van ban thi nam o `trace.outbound.text` va co the bi
+   * sua sau do (Sale sua tay, mot buoc hau xu ly, mot ban ghi duoc dung bang tay). Neu phan quyet
+   * khong gan voi CHINH doan van no da xet thi "soan mot cau vo hai -> duoc duyet -> doi noi
+   * dung -> bam gui" la mot duong di vong hoan chinh. Dau van ban khoa dieu do lai.
+   */
+  'AUTHORITY_PAYLOAD_MISMATCH',
 ] as const;
 export type OutboundAuthorityReason = (typeof OUTBOUND_AUTHORITY_REASONS)[number];
 
@@ -137,12 +178,15 @@ export type OutboundAuthorityVerdict =
       readonly reason: OutboundAuthorityAllowReason;
       /** Lop khang dinh he qua da duoc uy quyen trong van ban nay (co the rong). */
       readonly claims: readonly OutboundClaimClass[];
+      /** Dau cua DUNG doan van da duoc xet — xem `fingerprint` ben duoi. */
+      readonly fingerprint?: string;
     }
   | {
       readonly sendable: false;
       readonly reason: OutboundAuthorityDenyReason;
       /** Lop bi tu choi — de Sale/nguoi truc biet phai bo sung tham quyen nao. */
       readonly missing: readonly OutboundClaimClass[];
+      readonly fingerprint?: string;
     };
 
 export const OUTBOUND_AUTHORITY_REASON_LABELS: Record<OutboundAuthorityReason, string> = {
@@ -154,5 +198,7 @@ export const OUTBOUND_AUTHORITY_REASON_LABELS: Record<OutboundAuthorityReason, s
   POLICY_AUTHORITY_MISSING: 'Thiếu thẩm quyền chính sách',
   POLICY_STATEMENT_NOT_AUTHORIZED: 'Loại chính sách viết ra chưa được uỷ quyền',
   ORDER_COMMITMENT_NOT_AUTHORIZED: 'Chưa có trạng thái đơn cho phép nói đã ghi nhận/chốt',
+  ORDER_COMMITMENT_LEVEL_NOT_AUTHORIZED: 'Bản nháp nói ở mức cao hơn trạng thái thật của đơn',
   AUTHORITY_DECISION_ABSENT: 'Nội dung này chưa qua cổng thẩm quyền outbound',
+  AUTHORITY_PAYLOAD_MISMATCH: 'Phán quyết được cấp cho một đoạn văn khác với đoạn sắp gửi',
 };
