@@ -9,6 +9,9 @@ import { AgentEventsService } from '../agents/agent-events.service.js';
 import { autoLabel } from '../channels/auto-label.js';
 import { legacyReplyChannel } from '../channels/legacy-reply-channel.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
+import { TelemetryService } from '../observability/telemetry.service.js';
+import { pinnedOutboundVerdict } from '../outbound/outbound-authority.js';
+import { OUTBOUND_DECISIONS } from '../outbound/outbound-decisions.js';
 import { TurnRecordsRepository } from './turn-records.repository.js';
 
 /**
@@ -27,6 +30,8 @@ export class TurnReplyService {
     private readonly repo: TurnRecordsRepository,
     private readonly outbound: OutboundChannelRouter,
     @Optional() private readonly events?: AgentEventsService,
+    /** Vang mat -> khong quan sat; cong tham quyen ben duoi van chan y het (bat bien muc 20). */
+    @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
   /**
@@ -57,6 +62,35 @@ export class TurnReplyService {
     if (view.status !== 'pending_review' && view.status !== 'needs_edit') {
       throw new UnprocessableEntityException(
         `Đơn ở trạng thái ${view.status}, không thể gửi tư vấn`,
+      );
+    }
+    /*
+     * DIEM NGHEN THAM QUYEN — cong DUY NHAT ma ca hai duong dua mot ban tu van toi khach deu di qua:
+     * cong tu dong (`PipelineService.evaluateAutoReplyAdvice`) VA nut "Duyệt & gửi" cua Sale
+     * (`OrdersService.approve` -> `sendProductAdvice`).
+     *
+     * VI SAO PHAI O DAY chu khong chi o luc soan: mot ban nhap thieu tham quyen van nam trong hang
+     * cho cua Sale (co y — muc 5 doi giu bang chung). Neu chi chan o luc soan thi mot cu bam nut
+     * van dua no ra nhom. Muc 7 ca 7 hop dong goi dung ten dieu do: "human approval action cannot
+     * bypass missing authority merely because an LLM draft exists".
+     *
+     * VANG MAT PHAN QUYET = KHONG GUI. Ban ghi soan truoc ban nay, hay bat ky duong soan nao quen
+     * goi cong, deu dung lai o day thay vi di ra ngoai.
+     */
+    const verdict = pinnedOutboundVerdict(view.trace);
+    this.telemetry?.decision({
+      vocabulary: OUTBOUND_DECISIONS,
+      point: 'outbound.send_guard',
+      outcome: verdict.sendable ? 'allowed' : 'denied',
+      reason: verdict.reason,
+      detail: verdict.sendable
+        ? { claims: verdict.claims.join(',') }
+        : { missing: verdict.missing.join(',') },
+    });
+    if (!verdict.sendable) {
+      throw new UnprocessableEntityException(
+        `Nội dung này chưa đủ thẩm quyền để gửi cho khách (${verdict.reason}). ` +
+          'Sale cần soạn lại hoặc bổ sung dữ kiện có thẩm quyền trước khi gửi.',
       );
     }
     const replyChannel = view.replyChannel ?? legacyReplyChannel();

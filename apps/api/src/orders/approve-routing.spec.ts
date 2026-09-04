@@ -28,6 +28,17 @@ const TRACE: AgentTrace = {
   supervisor: { riskLevel: 'none', escalate: false, reasons: [] },
 };
 
+/**
+ * PHAN QUYET THAM QUYEN cua mot cau tu van thuong: khong khang dinh tien/chinh sach/cam ket don
+ * nao ca, nen no gui duoc. Mot ban ghi KHONG co truong nay la mot ban ghi chua qua cong, va cong
+ * gui se tu choi no — xem bo test ngay duoi.
+ */
+const CLEARED: AgentTrace['outboundAuthority'] = {
+  sendable: true,
+  reason: 'NO_CONSEQUENTIAL_CLAIM',
+  claims: [],
+};
+
 function build() {
   const repo = new InMemoryOrdersRepository();
   const outbound = new MockAdapter();
@@ -100,7 +111,11 @@ describe('Sale bam duyet — dinh tuyen theo noi dung', () => {
       baseView({
         // Dung trang thai ma cong handoff tat dinh day tin tu van ve.
         status: 'needs_edit',
-        trace: { ...TRACE, outbound: { text: 'Dạ máy có đèn ngủ ạ.' } },
+        trace: {
+          ...TRACE,
+          outbound: { text: 'Dạ máy có đèn ngủ ạ.' },
+          outboundAuthority: CLEARED,
+        },
       }),
     );
 
@@ -122,6 +137,7 @@ describe('Sale bam duyet — dinh tuyen theo noi dung', () => {
           ...TRACE,
           primaryRole: 'after_sales',
           outbound: { text: 'Dạ sản phẩm bảo hành 12 tháng ạ.' },
+          outboundAuthority: CLEARED,
         },
       }),
     );
