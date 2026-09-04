@@ -1,0 +1,119 @@
+name: Claude Max OAuth Smoke
+
+# POC-0: prove a GitHub-hosted runner can authenticate to Claude with a Claude Max
+# subscription OAuth token (CLAUDE_CODE_OAUTH_TOKEN) and actually execute a prompt,
+# without any Anthropic API key and without incurring API billing.
+#
+# This calls the Claude Code CLI directly instead of anthropics/claude-code-action,
+# because that action refuses to run when the workflow file differs from the copy on
+# the default branch ("Workflow validation failed") and then exits green, which would
+# produce a false PASS on a PR that has not been merged yet.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - .github/workflows/claude-max-auth-smoke.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: claude-max-auth-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Record evidence binding
+        run: |
+          echo "EVIDENCE_HEAD_SHA=${{ github.event.pull_request.head.sha }}"
+          echo "EVIDENCE_PR=${{ github.event.pull_request.number }}"
+          echo "EVIDENCE_RUN_ID=${{ github.run_id }}"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          claude --version
+
+      - name: Assert Max OAuth only (no API key, no cloud provider)
+        env:
+          OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "FAIL: ANTHROPIC_API_KEY is set; this smoke test must use Max OAuth only"
+            exit 1
+          fi
+          for v in CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY; do
+            if [ -n "$(printenv "$v" || true)" ]; then
+              echo "FAIL: $v is set; this smoke test must use Max OAuth only"
+              exit 1
+            fi
+          done
+          if [ -z "${OAUTH_TOKEN}" ]; then
+            echo "FAIL: secret CLAUDE_CODE_OAUTH_TOKEN is empty or not readable"
+            exit 1
+          fi
+          echo "OK: ANTHROPIC_API_KEY empty, no Bedrock/Vertex/Foundry, OAuth token present"
+
+      - name: Run Claude Max authentication smoke test
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          SMOKE_PROMPT: |
+            This is an authentication smoke test.
+
+            Do not create, edit, delete, commit, or push any files.
+            Do not open or modify any GitHub issue or pull request.
+
+            Read the file package.json at the root of this repository.
+
+            Then reply with exactly three lines and nothing else:
+
+            PKG_NAME=<exact value of the top-level "name" field>
+            PKG_MANAGER=<exact value of the top-level "packageManager" field>
+            CLAUDE_MAX_AUTOMATION_OK
+        run: |
+          set -euo pipefail
+          claude -p "$SMOKE_PROMPT" \
+            --max-turns 3 \
+            --allowedTools Read \
+            --output-format text \
+            > claude-stdout.txt
+          echo "----BEGIN CLAUDE STDOUT----"
+          cat claude-stdout.txt
+          echo "----END CLAUDE STDOUT----"
+
+      - name: Verify execution evidence
+        run: |
+          set -euo pipefail
+          # These two values are NOT present anywhere in the prompt, so finding them in
+          # Claude's stdout proves Claude really read package.json from the checkout.
+          expected_name="$(node -p 'require("./package.json").name')"
+          expected_manager="$(node -p 'require("./package.json").packageManager')"
+
+          fail=0
+          grep -qx "PKG_NAME=${expected_name}" claude-stdout.txt \
+            || { echo "FAIL: PKG_NAME=${expected_name} not found in Claude stdout"; fail=1; }
+          grep -qx "PKG_MANAGER=${expected_manager}" claude-stdout.txt \
+            || { echo "FAIL: PKG_MANAGER=${expected_manager} not found in Claude stdout"; fail=1; }
+          grep -qx "CLAUDE_MAX_AUTOMATION_OK" claude-stdout.txt \
+            || { echo "FAIL: marker CLAUDE_MAX_AUTOMATION_OK not found in Claude stdout"; fail=1; }
+
+          if [ "$fail" -ne 0 ]; then
+            echo "SMOKE_VERDICT=FAIL"
+            exit 1
+          fi
+          echo "SMOKE_VERDICT=PASS"
