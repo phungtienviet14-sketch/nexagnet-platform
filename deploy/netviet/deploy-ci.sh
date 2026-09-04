@@ -100,6 +100,70 @@ const runtimeSlug = resolveStackSlug(process.env.TENANT_SLUG, process.env.DEPLOY
 const idSlug = resolveStackSlug(process.env.TENANT_SLUG, process.env.DEPLOYMENT_ENVIRONMENT_ID);
 const gated = isGatedEnvironment(process.env.DEPLOYMENT_ENVIRONMENT_ID) ? 'gated' : 'ungated';
 process.stdout.write([runtimeSlug, idSlug, gated].join(' '));"
+
+# --- HOP DONG RUNTIME CUA HO SO -----------------------------------------------------------------
+#
+# VM KHONG cai node (xac minh 20/08/2026 — node chi co ben trong container), nen `render-secrets.sh`
+# va `deploy-stack.sh` khong the tu doc `deployment-profiles.mjs`. Suy ra o DAY, tren runner, roi
+# truyen xuong duoi dang mot danh sach bien LIET KE TUONG MINH — cung ky luat ma khoi `environment:`
+# cua compose dung, va vi cung mot ly do: mot bien khong ai liet ke thi khong bao gio toi noi.
+#
+# MOI MAC DINH DEU LA HUONG SIET (xem khoi ho so o dau `render-secrets.sh`): mat mot bien tren
+# duong truyen doi hoi NHIEU bi mat hon va mot danh sach tenant HEP hon, khong bao gio nguoc lai.
+PROFILE_CONTRACT_PROBE="import { describeRuntimeContract, resolveDeploymentProfile } from './deploy/netviet/deployment-profiles.mjs';
+const contract = describeRuntimeContract(resolveDeploymentProfile(process.env.DEPLOYMENT_PROFILE));
+process.stdout.write(Object.entries(contract).map(([key, value]) => key + '=' + value).join('\n'));"
+PROFILE_ID=''
+PROFILE_TENANTS=''
+PROFILE_FLOWISE='on'
+PROFILE_PARSER='deepseek'
+PROFILE_CHANNEL='zca'
+PROFILE_PARSER_MODE=''
+PROFILE_CHANNEL_MODE=''
+PROFILE_ADVICE_COMPOSER=''
+PROFILE_AUTO_SEND=''
+PROFILE_DATA_CLASSIFICATION=''
+if [[ -n "${DEPLOYMENT_PROFILE:-}" ]]; then
+  # `resolveDeploymentProfile` nem khi id khong nam trong danh muc DONG, nen mot ten bia ra dung
+  # han o day — truoc khi mot bi mat nao duoc doc, mot image nao duoc build hay mot host nao bi cham.
+  profile_contract="$(DEPLOYMENT_PROFILE="${DEPLOYMENT_PROFILE}" node --input-type=module -e "${PROFILE_CONTRACT_PROBE}")"
+  while IFS='=' read -r profile_key profile_value; do
+    [[ -n "${profile_key}" ]] || continue
+    case "${profile_key}" in
+      PROFILE_ID) PROFILE_ID="${profile_value}" ;;
+      PROFILE_TENANTS) PROFILE_TENANTS="${profile_value}" ;;
+      PROFILE_FLOWISE) PROFILE_FLOWISE="${profile_value}" ;;
+      PROFILE_PARSER) PROFILE_PARSER="${profile_value}" ;;
+      PROFILE_CHANNEL) PROFILE_CHANNEL="${profile_value}" ;;
+      PROFILE_PARSER_MODE) PROFILE_PARSER_MODE="${profile_value}" ;;
+      PROFILE_CHANNEL_MODE) PROFILE_CHANNEL_MODE="${profile_value}" ;;
+      PROFILE_ADVICE_COMPOSER) PROFILE_ADVICE_COMPOSER="${profile_value}" ;;
+      PROFILE_AUTO_SEND) PROFILE_AUTO_SEND="${profile_value}" ;;
+      PROFILE_DATA_CLASSIFICATION) PROFILE_DATA_CLASSIFICATION="${profile_value}" ;;
+      *)
+        echo "Hop dong ho so tra ve khoa la: '${profile_key}'." >&2
+        exit 65
+        ;;
+    esac
+  done <<<"${profile_contract}"
+  [[ "${PROFILE_ID}" == "${DEPLOYMENT_PROFILE}" ]] || {
+    echo "Hop dong tra ve ho so '${PROFILE_ID}' trong khi dang trien khai '${DEPLOYMENT_PROFILE}'." >&2
+    exit 65
+  }
+  # `*` = ho so phuc vu moi tenant (duong `standard` khong khoa cong). Danh sach co ten thi tenant
+  # phai nam trong do — lop kiem thu ba, sau resolver va truoc `render-secrets.sh`.
+  if [[ "${PROFILE_TENANTS}" != '*' ]]; then
+    profile_serves_tenant=0
+    for allowed_tenant in ${PROFILE_TENANTS}; do
+      [[ "${allowed_tenant}" == "${TENANT_SLUG}" ]] && profile_serves_tenant=1
+    done
+    [[ "${profile_serves_tenant}" -eq 1 ]] || {
+      echo "Ho so '${DEPLOYMENT_PROFILE}' khong duoc dang ky cho tenant '${TENANT_SLUG}' (phuc vu: ${PROFILE_TENANTS})." >&2
+      exit 64
+    }
+  fi
+  echo "Ho so: ${PROFILE_ID} (flowise=${PROFILE_FLOWISE}, parser=${PROFILE_PARSER}, channel=${PROFILE_CHANNEL})" >&2
+fi
 control_plane="$(printf '%s' "${CONTROL_PLANE_PROBE}" | TENANT_SLUG="${TENANT_SLUG}" DEPLOYMENT_ENVIRONMENT="${DEPLOYMENT_ENVIRONMENT}" DEPLOYMENT_ENVIRONMENT_ID="${DEPLOYMENT_ENVIRONMENT_ID}" node --input-type=module)"
 read -r runtime_stack_slug id_stack_slug environment_gate <<<"${control_plane}"
 [[ "${runtime_stack_slug}" =~ ^[a-z0-9-]+$ ]] || {
@@ -167,7 +231,19 @@ if [[ "${DEPLOYMENT_ENVIRONMENT}" == "gd1-test" ]]; then
   }
   preflight_output="$(mktemp --suffix=.json)"
   chmod 600 "${preflight_output}"
-  GD1_TEST_PREFLIGHT_OUTPUT="${preflight_output}" node deploy/netviet/run-gd1-test-preflight.mjs
+  # HO SO CHON MODULE PREFLIGHT, khong phai moi truong.
+  #
+  # Truoc ban nay `gd1-test` luon chay dung mot module, va module do hoi nhung cau chi Ultty tra
+  # loi duoc: tenant phai la `ultty`, experience phai la `b2b-sales-operations`, phai co tep phien
+  # ZCA, phai co dung hai nhom TEST duoc duyet, provider phai dat smoke. Voi mot stack khong chay
+  # kenh nao va khong chay LLM nao, ca bon cau do KHONG CO CAU TRA LOI — va mot phep kiem that bai
+  # vi khong the tra loi thi doc len giong het mot vi pham an toan.
+  #
+  # `run-gd1-test-preflight.mjs` nay dieu phoi theo `profile.preflightModule`. Nua CHUNG (danh
+  # tinh stack, kiem ke bi mat suy tu ho so, digest rollback, hop dong runtime) chay cho MOI ho so.
+  GD1_TEST_PREFLIGHT_OUTPUT="${preflight_output}" \
+    DEPLOYMENT_PROFILE="${DEPLOYMENT_PROFILE:-}" \
+    node deploy/netviet/run-gd1-test-preflight.mjs
   rollback_app_image="$(node -e "const {readFileSync}=require('node:fs'); const p=JSON.parse(readFileSync(process.argv[1],'utf8')); process.stdout.write(p.rollback?.appImage ?? '')" "${preflight_output}")"
   rollback_flowise_image="$(node -e "const {readFileSync}=require('node:fs'); const p=JSON.parse(readFileSync(process.argv[1],'utf8')); process.stdout.write(p.rollback?.flowiseImage ?? '')" "${preflight_output}")"
   first_release="$(node -e "const {readFileSync}=require('node:fs'); const p=JSON.parse(readFileSync(process.argv[1],'utf8')); process.stdout.write(p.firstRelease === true ? '1' : '0')" "${preflight_output}")"
@@ -287,7 +363,7 @@ DEPLOY_SIGNAL_LOG="${DEPLOY_SIGNAL_LOG:-${REPOSITORY_ROOT}/deploy-signals.log}"
 DEPLOY_SIGNAL_JSON="${DEPLOY_SIGNAL_JSON:-${REPOSITORY_ROOT}/deploy-signals.json}"
 
 set +e
-ssh_vm "install -d -m 0700 '${remote_parent}' && tar -xzf '${remote_archive}' -C '${remote_parent}' && rm -f '${remote_archive}' && sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' OBSERVABILITY_STACK='${OBSERVABILITY_STACK:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
+ssh_vm "install -d -m 0700 '${remote_parent}' && tar -xzf '${remote_archive}' -C '${remote_parent}' && rm -f '${remote_archive}' && sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' OBSERVABILITY_STACK='${OBSERVABILITY_STACK:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' DEPLOYMENT_PROFILE='${DEPLOYMENT_PROFILE:-}' PROFILE_TENANTS='${PROFILE_TENANTS}' PROFILE_FLOWISE='${PROFILE_FLOWISE}' PROFILE_PARSER='${PROFILE_PARSER}' PROFILE_CHANNEL='${PROFILE_CHANNEL}' PROFILE_PARSER_MODE='${PROFILE_PARSER_MODE}' PROFILE_CHANNEL_MODE='${PROFILE_CHANNEL_MODE}' PROFILE_ADVICE_COMPOSER='${PROFILE_ADVICE_COMPOSER}' PROFILE_AUTO_SEND='${PROFILE_AUTO_SEND}' PROFILE_DATA_CLASSIFICATION='${PROFILE_DATA_CLASSIFICATION}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
   tee "${DEPLOY_SIGNAL_LOG}"
 remote_status="${PIPESTATUS[0]}"
 set -e

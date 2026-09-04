@@ -108,25 +108,46 @@ thứ hai — kể cả của chính Ultty — không bao giờ cướp được
 
 ## 6. Thêm một hồ sơ xem trước — cần đúng hai thay đổi
 
-1. Một mục trong `DEPLOYMENT_PROFILES` (`deploy/netviet/deployment-profiles.mjs`).
+1. Một mục trong `DEPLOYMENT_PROFILES` (`deploy/netviet/deployment-profiles.mjs`) — mục
+   `transport-preview-gd1-test` đã có: `flowise=false`, `parser=none`, `channel=none`, hợp đồng
+   runtime ghim `mock`/`off`/`test`, và `preflightModule: 'gd1-test-baseline'`.
 2. Một dòng trong `deployments` của `.github/deployment-targets.json` trỏ vào mục đó, cộng một
    lựa chọn `tenant` mới trong `.github/workflows/deploy-tenant.yml` (input đang là danh sách đóng).
 
 Cả hai đều bị kiểm chặt: `environment: gd1-test` bắt buộc `gate: 'gd1-test'`, `runtimeEnvironment`
 phải khớp bảng của hồ sơ, và `stackSlug` phải khớp quy tắc suy ra.
 
-### Chặn còn lại trước khi một hồ sơ 4-bí-mật deploy được thật
+### Bốn chặn của tầng triển khai — C1–C3 đã gỡ, C4 còn lại
 
-Cơ chế **biểu diễn** được một hồ sơ không Flowise / không LLM; tầng triển khai thì **chưa**:
+Bản đầu của tài liệu này ghi rằng cơ chế **biểu diễn** được một hồ sơ không Flowise / không LLM
+nhưng tầng triển khai thì **chưa**. Ba trong bốn chặn đó đã được gỡ (#192 §3); chúng được ghi lại
+ở đây vì mỗi cái là một *hình dạng lỗi* sẽ quay lại nếu ai đó "dọn dẹp" theo hướng ngược.
 
-| Chặn | Vị trí | Vì sao chặn |
+| Chặn | Trước | Nay |
 |---|---|---|
-| C1 | `deploy/netviet/compose.yaml` — `api.depends_on.flowise: service_healthy`, và service `flowise` **không** mang `profiles:` | Flowise luôn khởi động và `api` chờ nó khoẻ ⇒ 8 bí mật Flowise vẫn bắt buộc |
-| C2 | `deploy/netviet/render-secrets.sh` — 13 lời gọi `secret` **vô điều kiện**, gồm `deepseek-api-key` | Trình render còn nguyên khối: nó không hỏi hồ sơ |
-| C3 | `deploy/netviet/render-secrets.sh` — khối `gd1-test` ghim `TENANT_SLUG == 'ultty'` (exit 64) | Đúng kiểu **fail-closed** hiện tại; phải chuyển sang hỏi hồ sơ khi có khách xem trước |
-| C4 | `.github/workflows/deploy-tenant.yml` — input `tenant` là `choice` đóng | Khách mới cần thêm một lựa chọn |
+| **C1** | `compose.yaml`: `api.depends_on.flowise: service_healthy`, service `flowise` **không** mang `profiles:` ⇒ Flowise luôn phải lên trước `api` | Flowise chuyển sang **`compose.flowise.yaml`**, một lớp phủ chỉ được `-f` vào khi `FLOWISE_ENABLED=on`. Không có lớp phủ thì **không ai tên `flowise`** để mà phụ thuộc. Với Ultty, bản hợp nhất ra **đúng** compose cũ (đối chiếu bằng `docker compose config`). |
+| **C2** | `render-secrets.sh`: 13 lời gọi `secret` **vô điều kiện**, gồm `deepseek-api-key` | Hợp đồng bí mật **suy ra từ hệ thống con được bật**: `PROFILE_FLOWISE`/`PROFILE_PARSER`. Một hồ sơ xem trước đọc **đúng 4** tên; Ultty vẫn đọc đủ 13. |
+| **C3** | `render-secrets.sh`: khối `gd1-test` ghim `TENANT_SLUG == 'ultty'` (exit 64) | Cổng **giữ nguyên sức**, chỉ đổi neo: tenant phải nằm trong `PROFILE_TENANTS`, và bốn giá trị runtime (`CHANNEL_MODE`/`PARSER_MODE`/`AUTO_SEND`/`DATA_CLASSIFICATION`) được ghim **từ hồ sơ**. Thiếu hồ sơ ⇒ **không render** (chặt hơn bản cũ). |
+| **C4** | `.github/workflows/deploy-tenant.yml`: input `tenant` là `choice` đóng | **Còn lại** — thuộc về việc đăng ký một khách xem trước *sống*, cùng với dòng registry và gói khách. |
 
-Không cái nào trong bốn cái trên nằm ở **tầng ứng dụng** — xem mục 7.
+Vì sao **tách tệp** chứ không gắn `profiles:` cho chính service `flowise`: một service mang
+`profiles:` vẫn là mục tiêu hợp lệ của `depends_on`, nên Compose sẽ hoặc kéo cả profile đó lên hoặc
+từ chối — `profiles:` một mình nó không gỡ được ràng buộc, chỉ dời chỗ nó bung ra.
+
+Ba tầng trên VM đọc **cùng một** phép suy ra (`deploy/netviet/stack-compose.sh`): `deploy-stack.sh`
+(rollout), `backup.sh` (dump + restore-check chạy ngay sau mỗi lần deploy) và `health-check.sh`
+(timer chạy mãi). Hai trong ba cái đó chạy lúc **không ai đang nhìn**, nên ba bản suy ra riêng sẽ
+lệch nhau trong im lặng.
+
+Kèm theo, hai script khởi tạo PostgreSQL không còn đòi `FLOWISE_DB_PASSWORD` bằng `:?`. Trước đây
+một hệ thống con **không được bật** vẫn chặn được lớp lưu trữ nền tảng: `sync-passwords.sh` chạy ở
+**mọi** lần deploy, nên một hồ sơ `flowise=false` sẽ chết ngay sau khi PostgreSQL vừa lên.
+
+Đo bằng `deploy/netviet/deployment-profile-render.contract.test.mjs`: bài test **chạy thật**
+`render-secrets.sh` với `gcloud` được thay bằng một bản ghi nhật ký tên secret, rồi đọc lại
+`secrets.env` và mảnh cấu hình Caddy. Nó phát hiện được một lỗi thật ngay lần chạy đầu — hai tên tệp
+đặt trong dấu huyền bên trong heredoc **không** được trích dẫn của `secrets.env`, tức bash đã *chạy*
+chúng.
 
 ## 7. Ứng dụng có cần ZCA / DeepSeek không? — KHÔNG
 

@@ -25,6 +25,17 @@ function previewProfile(overrides = {}) {
     environments: { 'gd1-test': 'gd1-test' },
     tenants: ['transport-preview'],
     subsystems: { flowise: false, parser: 'none', channel: 'none' },
+    // Mot ho so BI KHOA CONG phai ghim runtime cua no: thieu hop dong nay thi `AUTO_SEND` roi ve
+    // mac dinh `on` cua `render-secrets.sh` — dung cai bay #180 mo ra. `defineDeploymentProfile`
+    // tu choi mot ho so gated khong khai `runtime`, va co bai test khoa dieu do.
+    runtime: {
+      parserMode: 'deepseek',
+      channelMode: 'mock',
+      adviceComposer: 'off',
+      autoSend: 'off',
+      dataClassification: 'test',
+      mediaStore: 'gcs',
+    },
     ...overrides,
   });
 }
@@ -49,24 +60,21 @@ test('the Ultty secret contract is still exactly the 13 names it always was', ()
   // 1 DeepSeek. Change a subsystem and this number moves — that is the point.
   const suffixes = requiredSecretSuffixesFor(ULTTY);
   assert.equal(suffixes.length, 13);
-  assert.deepEqual(
-    [...suffixes].sort(),
-    [
-      'api-key',
-      'deepseek-api-key',
-      'flowise-admin-email',
-      'flowise-admin-password',
-      'flowise-db-password',
-      'flowise-jwt-secret',
-      'flowise-refresh-secret',
-      'flowise-secretkey',
-      'flowise-session-secret',
-      'flowise-token-hash-secret',
-      'operator-password',
-      'postgres-admin-password',
-      'zalo-db-password',
-    ],
-  );
+  assert.deepEqual([...suffixes].sort(), [
+    'api-key',
+    'deepseek-api-key',
+    'flowise-admin-email',
+    'flowise-admin-password',
+    'flowise-db-password',
+    'flowise-jwt-secret',
+    'flowise-refresh-secret',
+    'flowise-secretkey',
+    'flowise-session-secret',
+    'flowise-token-hash-secret',
+    'operator-password',
+    'postgres-admin-password',
+    'zalo-db-password',
+  ]);
 });
 
 // --- 2/3. Unknown profiles and wrong tenants fail closed ---------------------------------------
@@ -151,11 +159,16 @@ test('a profile cannot alias a gated environment onto another runtime environmen
 
 test('a profile that enables no Flowise and no LLM parser is charged neither', () => {
   const suffixes = requiredSecretSuffixesFor(previewProfile());
-  assert.deepEqual(
-    [...suffixes].sort(),
-    ['api-key', 'operator-password', 'postgres-admin-password', 'zalo-db-password'],
+  assert.deepEqual([...suffixes].sort(), [
+    'api-key',
+    'operator-password',
+    'postgres-admin-password',
+    'zalo-db-password',
+  ]);
+  assert.equal(
+    suffixes.some((suffix) => suffix.startsWith('flowise-')),
+    false,
   );
-  assert.equal(suffixes.some((suffix) => suffix.startsWith('flowise-')), false);
   assert.equal(suffixes.includes('deepseek-api-key'), false);
 });
 

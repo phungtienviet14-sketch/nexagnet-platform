@@ -37,6 +37,19 @@ export const PARSER_ADAPTERS = Object.freeze(['deepseek', 'flowise', 'none']);
 /** Channel adapters a profile may select. `none` = this profile talks to no chat channel. */
 export const CHANNEL_ADAPTERS = Object.freeze(['zca', 'bot', 'mock', 'none']);
 
+/**
+ * Runtime knobs a gd1-test profile PINS. They are not free settings: `render-secrets.sh` used to
+ * pin them inside an `if [[ TENANT_SLUG == 'ultty' ]]` branch, which is why a second gd1-test
+ * stack had no way in that did not either loosen Ultty's pins or skip the gate entirely.
+ *
+ * Declaring them per profile moves the pin from a tenant comparison to a NAMED contract, and the
+ * renderer refuses to run a gated environment without one.
+ */
+export const PARSER_RUNTIME_MODES = Object.freeze(['claude', 'deepseek', 'flowise']);
+export const CHANNEL_RUNTIME_MODES = Object.freeze(['mock', 'bot', 'zca', 'hybrid']);
+export const ADVICE_COMPOSERS = Object.freeze(['off', 'claude', 'deepseek']);
+export const ON_OFF = Object.freeze(['on', 'off']);
+
 const SAFE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
@@ -178,6 +191,74 @@ export function defineDeploymentProfile(input) {
     }
   }
 
+  // RUNTIME CONTRACT. Mandatory for a gated profile: `render-secrets.sh` pins these values on a
+  // gated environment, and the whole point of this change is that it pins them from the PROFILE
+  // rather than from `TENANT_SLUG == 'ultty'`. An ungated profile declares none, which keeps
+  // `dev`/`production` behaving exactly as they do today.
+  const runtime = input?.runtime ?? null;
+  if (input?.gate === 'gd1-test' && runtime === null) {
+    errors.push('a gated profile must declare its runtime contract');
+  }
+  if (runtime !== null) {
+    if (typeof runtime !== 'object') {
+      errors.push('profile runtime must be an object');
+    } else {
+      if (!PARSER_RUNTIME_MODES.includes(runtime.parserMode)) {
+        errors.push(`runtime.parserMode must be one of ${PARSER_RUNTIME_MODES.join(', ')}`);
+      }
+      if (!CHANNEL_RUNTIME_MODES.includes(runtime.channelMode)) {
+        errors.push(`runtime.channelMode must be one of ${CHANNEL_RUNTIME_MODES.join(', ')}`);
+      }
+      if (!ADVICE_COMPOSERS.includes(runtime.adviceComposer)) {
+        errors.push(`runtime.adviceComposer must be one of ${ADVICE_COMPOSERS.join(', ')}`);
+      }
+      if (!ON_OFF.includes(runtime.autoSend)) errors.push('runtime.autoSend must be on or off');
+      if (!isNonEmptyString(runtime.dataClassification)) {
+        errors.push('runtime.dataClassification is required');
+      }
+      // A profile that runs NO channel cannot pin a real one, and a profile that runs NO parser
+      // cannot pin a credential-consuming adapter as its live mode. Catching the disagreement
+      // here is what stops `subsystems` and `runtime` from drifting into two different truths.
+      if (subsystems?.channel === 'none' && runtime.channelMode !== 'mock') {
+        errors.push('a profile with channel=none must pin runtime.channelMode=mock');
+      }
+      if (subsystems?.channel !== 'none' && subsystems?.channel !== runtime.channelMode) {
+        errors.push(
+          `runtime.channelMode ${runtime.channelMode} disagrees with subsystems.channel ${subsystems?.channel}`,
+        );
+      }
+      if (subsystems?.parser !== 'none' && subsystems?.parser !== runtime.parserMode) {
+        errors.push(
+          `runtime.parserMode ${runtime.parserMode} disagrees with subsystems.parser ${subsystems?.parser}`,
+        );
+      }
+      // An advisor is a SECOND data-processing decision, not a shadow of the parser — but it can
+      // only name a provider whose credential this profile actually provisions.
+      if (runtime.adviceComposer === 'deepseek' && subsystems?.parser !== 'deepseek') {
+        errors.push('runtime.adviceComposer=deepseek requires subsystems.parser=deepseek');
+      }
+    }
+  }
+
+  // BUSINESS EXPECTATIONS — the genuinely tenant-specific half of the gd1-test preflight. Ultty
+  // declares an experience and a capability set; a platform preview declares neither, and saying
+  // so explicitly is more honest than a stub that reports PASS having checked nothing.
+  const business = input?.business ?? null;
+  if (business !== null) {
+    if (typeof business !== 'object') {
+      errors.push('profile business must be an object');
+    } else {
+      if (!isNonEmptyString(business.experience)) errors.push('business.experience is required');
+      if (
+        !Array.isArray(business.requiredCapabilities) ||
+        business.requiredCapabilities.length === 0 ||
+        !business.requiredCapabilities.every(isNonEmptyString)
+      ) {
+        errors.push('business.requiredCapabilities must be a non-empty list of strings');
+      }
+    }
+  }
+
   if (errors.length > 0) {
     throw new Error(`Invalid deployment profile: ${errors.join('; ')}`);
   }
@@ -191,6 +272,14 @@ export function defineDeploymentProfile(input) {
     // Which preflight module owns this profile's business/readiness checks. `null` = none beyond
     // the common gate, which is honest rather than a stub that reports PASS having checked nothing.
     preflightModule: input.preflightModule ?? null,
+    runtime: runtime === null ? null : Object.freeze({ ...runtime }),
+    business:
+      business === null
+        ? null
+        : Object.freeze({
+            experience: business.experience,
+            requiredCapabilities: Object.freeze([...business.requiredCapabilities]),
+          }),
   });
 }
 
@@ -214,7 +303,70 @@ export const DEPLOYMENT_PROFILES = Object.freeze({
     environments: { 'gd1-test': 'gd1-test' },
     tenants: ['ultty'],
     subsystems: { flowise: true, parser: 'deepseek', channel: 'zca' },
+    // The exact values `render-secrets.sh` used to pin inside `if TENANT_SLUG == 'ultty'`. Moving
+    // them here relocates the pin; it does not relax it, and `gd1-test-preflight.mjs` still
+    // asserts the deployed runtime matches.
+    runtime: {
+      parserMode: 'deepseek',
+      channelMode: 'zca',
+      adviceComposer: 'deepseek',
+      autoSend: 'off',
+      dataClassification: 'test',
+      mediaStore: 'gcs',
+    },
+    business: {
+      experience: 'b2b-sales-operations',
+      requiredCapabilities: [
+        'knowledge',
+        'messaging',
+        'sales-order',
+        'campaign',
+        'operations',
+        'notifications',
+      ],
+    },
     preflightModule: 'gd1-test-preflight',
+  }),
+
+  /**
+   * TRANSPORT PREVIEW GD1-TEST — the minimal truthful profile (#192 §4).
+   *
+   * It exists to answer one question the control plane could only answer on paper before: can a
+   * gd1-test stack be stood up that runs NO Flowise, NO LLM parser and NO chat channel? Every
+   * `false`/`none` below removes a credential from the derived contract rather than supplying a
+   * fabricated one — the base four secrets are all this profile can name.
+   *
+   * It carries the SAME gate as Ultty. Nothing here weakens exact-main CI, main-only, stack
+   * isolation or the secret prefix; the only thing that shrinks is the subsystem set.
+   *
+   * `preflightModule: 'gd1-test-baseline'` is deliberate: this stack has no ZCA session to check,
+   * no approved TEST groups and no provider to smoke, so the Ultty business preflight would be
+   * asking questions this profile cannot answer. The COMMON half (stack identity, secret
+   * inventory, rollback digests, runtime contract) still runs.
+   */
+  'transport-preview-gd1-test': defineDeploymentProfile({
+    id: 'transport-preview-gd1-test',
+    gate: 'gd1-test',
+    environments: { 'gd1-test': 'gd1-test' },
+    tenants: ['transport-preview'],
+    subsystems: { flowise: false, parser: 'none', channel: 'none' },
+    runtime: {
+      // PLACEHOLDER, NOT A DEPENDENCY. `PARSER_MODE` is a closed enum in `packages/shared/env.ts`
+      // with no `none` member, and the tenant pack declares no `sales-order` capability, so
+      // `parserRequired` is false and NO parser credential is demanded at boot. Pinning the
+      // schema default keeps the value inside the enum without provisioning a key for it; if a
+      // future pack ever turns `sales-order` on, boot fails closed for the missing key rather
+      // than silently running a fake parser.
+      parserMode: 'deepseek',
+      // `mock` is the offline deterministic channel: no account, no session file, no ToS risk.
+      channelMode: 'mock',
+      adviceComposer: 'off',
+      autoSend: 'off',
+      dataClassification: 'test',
+      mediaStore: 'gcs',
+    },
+    business: null,
+    preflightModule: 'gd1-test-baseline',
   }),
 
   /**
@@ -233,6 +385,11 @@ export const DEPLOYMENT_PROFILES = Object.freeze({
     environments: { dev: 'dev', production: 'prod' },
     tenants: null,
     subsystems: { flowise: true, parser: 'deepseek', channel: 'zca' },
+    // NO runtime contract, and that is the statement of the world as it is: `dev`/`production`
+    // have never had their runtime pinned by the renderer, and `render-secrets.sh` keeps its
+    // pre-existing defaults for them byte for byte.
+    runtime: null,
+    business: null,
     preflightModule: null,
   }),
 });
@@ -295,5 +452,62 @@ export function describeSecretContract(profile, stackSlug, switches = {}) {
       observability: switches.observability === true,
     }),
     secretNames: requiredSecretNamesFor(profile, stackSlug, switches),
+  });
+}
+
+/**
+ * THE PROFILE CONTRACT AS SHELL SEES IT.
+ *
+ * `render-secrets.sh` and `deploy-stack.sh` run on the VM, where there is no Node (verified
+ * 20/08/2026 — Node only exists inside the containers). So the contract is derived HERE, on the
+ * runner, and handed down as a fixed list of named variables — the same discipline `compose.yaml`
+ * already uses for its `environment:` blocks, and for the same reason: a variable that is derived
+ * in two places drifts, and a variable nobody enumerates never arrives.
+ *
+ * Every value is fail-CLOSED when lost: `PROFILE_FLOWISE` defaults to `on` and `PROFILE_TENANTS`
+ * defaults to Ultty's list downstream, so a dropped variable asks for MORE credentials and a
+ * NARROWER tenant set, never fewer and never wider.
+ */
+export function describeRuntimeContract(profile) {
+  if (!profile || typeof profile !== 'object') {
+    throw new Error('a deployment profile is required to derive its runtime contract');
+  }
+  const runtime = profile.runtime;
+  return Object.freeze({
+    PROFILE_ID: profile.id,
+    // Space-separated, because that is what `bash` can iterate without a parser. `*` means the
+    // profile is registered for any tenant (the ungated `standard` path).
+    PROFILE_TENANTS: profile.tenants === null ? '*' : profile.tenants.join(' '),
+    PROFILE_FLOWISE: profile.subsystems.flowise === true ? 'on' : 'off',
+    PROFILE_PARSER: profile.subsystems.parser,
+    PROFILE_CHANNEL: profile.subsystems.channel,
+    // Empty when the profile pins nothing — `render-secrets.sh` then keeps its own defaults, so
+    // `dev`/`production` are untouched.
+    PROFILE_PARSER_MODE: runtime?.parserMode ?? '',
+    PROFILE_CHANNEL_MODE: runtime?.channelMode ?? '',
+    PROFILE_ADVICE_COMPOSER: runtime?.adviceComposer ?? '',
+    PROFILE_AUTO_SEND: runtime?.autoSend ?? '',
+    PROFILE_DATA_CLASSIFICATION: runtime?.dataClassification ?? '',
+  });
+}
+
+/**
+ * Which gd1-test preflight probes this profile can actually answer.
+ *
+ * DERIVED from the subsystems wherever derivable. A profile that runs no ZCA channel has no
+ * session file to stat and no approved TEST group list to hash; a profile that runs no parser has
+ * no provider to smoke; a profile without Flowise has no Flowise image to roll back to. Asking
+ * anyway would fail for the wrong reason and read as a safety violation.
+ */
+export function preflightExpectationsFor(profile) {
+  const subsystems = profile?.subsystems ?? {};
+  return Object.freeze({
+    module: profile?.preflightModule ?? null,
+    requiresZcaSession: subsystems.channel === 'zca',
+    requiresApprovedTestGroups: subsystems.channel === 'zca',
+    requiresProviderSmoke: subsystems.parser !== 'none',
+    requiresFlowiseRollbackDigest: subsystems.flowise === true,
+    business: profile?.business ?? null,
+    runtime: profile?.runtime ?? null,
   });
 }
