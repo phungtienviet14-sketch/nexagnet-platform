@@ -49,6 +49,22 @@ export const TRANSPORT_ACTIONS = [
   'transport.fuel.reconciliation.resolve',
   'transport.fuel.reconciliation.close',
   'transport.fuel.reconciliation.reopen',
+  /* --- `transport-asset-compliance` (`TX-06`) --- */
+  'transport.maintenance.plan.read',
+  'transport.maintenance.plan.manage',
+  'transport.maintenance.work_order.open',
+  'transport.maintenance.work_order.close',
+  'transport.compliance.document.read',
+  'transport.compliance.document.manage',
+  'transport.fleet_status.read',
+  'transport.alerts.read',
+  /* --- `transport-workforce` (`TX-07`) --- */
+  'transport.payroll.period.read',
+  'transport.payroll.period.manage',
+  'transport.payroll.run',
+  'transport.payslip.approve',
+  'transport.payslip.pay',
+  'transport.payslip.correct',
   /* --- pham vi CUA CHINH MINH — lai xe --- */
   'transport.driver.self.trip.read',
   'transport.driver.self.trip.update',

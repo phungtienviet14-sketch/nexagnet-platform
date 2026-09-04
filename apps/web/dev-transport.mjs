@@ -17,7 +17,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const tenantDir = resolve(here, 'e2e/fixtures/tenant-transport');
+const tenantDir = resolve(here, '../../tenants/transport-preview');
 
 const child = spawn(
   process.execPath,

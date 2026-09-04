@@ -7,7 +7,6 @@ import {
   DRIVER_SCREENS,
   navigationGroups,
   parseNavigationFromSearch,
-  PENDING_CAPABILITIES,
   resolveNavigation,
   resolveSection,
   TRANSPORT_SECTIONS,
@@ -34,16 +33,6 @@ const FULL: readonly CapabilityId[] = [
  * Hai ma cua T6 — CO THAT trong `CapabilityId` tu khi PR #152 vao `main`. Truoc day bo test nay
  * phai `as unknown as` de dien lai mot tinh huong tuong lai; nay khong con phai, va do chinh la
  * y nghia cua §4.2 trong #180: cho tam bang chuoi da duoc thay bang kieu that.
- */
-const T6_CAPABILITIES: readonly CapabilityId[] = [
-  'transport-asset-compliance',
-  'transport-workforce',
-];
-
-/**
- * Hai ma cua T6 — CO THAT trong `CapabilityId` tu khi PR #152 vao `main`. Truoc do bo test nay
- * phai `as unknown as` de dien lai tinh huong tuong lai; nay khong con phai, va do la ca y nghia
- * cua §4.2 trong #180: cho tam bang chuoi da duoc thay bang kieu that.
  */
 const T6_CAPABILITIES: readonly CapabilityId[] = [
   'transport-asset-compliance',

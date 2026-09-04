@@ -87,8 +87,82 @@ const seedTrips = (): Map<string, MockTrip> =>
         cancellationReason: null,
       },
     ],
+    // Dang thu BA — chuyen do NGUON DON gioi thieu nhung xe nha chay. Ba dang deu phai co mat,
+    // vi cach doc tien cua ba dang khac nhau (hop dong mien §9).
+    [
+      'trip-3',
+      {
+        id: 'trip-3',
+        code: 'VT-2026-0914',
+        kind: 'PARTNER_REFERRED_INTERNAL_RUN',
+        status: 'IN_TRANSIT',
+        businessDate: '2026-09-04',
+        originLabel: 'Hà Nội',
+        destinationLabel: 'Hải Phòng',
+        cargoDescription: 'Hàng điện máy',
+        customerId: 'cus-1',
+        carrierPartnerId: null,
+        referrerPartnerId: 'par-2',
+        freightAmount: 6_800_000,
+        currencyCode: 'VND',
+        distanceKm: 120,
+        createdAt: '2026-09-04T00:30:00.000Z',
+        updatedAt: '2026-09-04T04:00:00.000Z',
+        cancelledAt: null,
+        cancellationReason: null,
+      },
+    ],
+    [
+      'trip-4',
+      {
+        id: 'trip-4',
+        code: 'VT-2026-0915',
+        kind: 'OWN_DIRECT',
+        status: 'RECONCILED',
+        businessDate: '2026-09-02',
+        originLabel: 'Hà Nội',
+        destinationLabel: 'Nam Định',
+        cargoDescription: 'Hàng gia dụng',
+        customerId: 'cus-1',
+        carrierPartnerId: null,
+        referrerPartnerId: null,
+        freightAmount: 4_200_000,
+        currencyCode: 'VND',
+        distanceKm: 90,
+        createdAt: '2026-09-02T01:00:00.000Z',
+        updatedAt: '2026-09-03T09:00:00.000Z',
+        cancelledAt: null,
+        cancellationReason: null,
+      },
+    ],
+    // Mot chuyen DA HUY co ly do — man hinh khong bao gio tao ra trang thai nay, nhung phai chiu
+    // duoc no khi noi khac tao ra (khoang cach `G-14`).
+    [
+      'trip-5',
+      {
+        id: 'trip-5',
+        code: 'VT-2026-0916',
+        kind: 'EXTERNAL_CARRIER',
+        status: 'CANCELLED',
+        businessDate: '2026-09-01',
+        originLabel: 'Hà Nội',
+        destinationLabel: 'Vinh',
+        cargoDescription: null,
+        customerId: 'cus-1',
+        carrierPartnerId: 'par-1',
+        referrerPartnerId: null,
+        freightAmount: 15_000_000,
+        currencyCode: 'VND',
+        distanceKm: 300,
+        createdAt: '2026-09-01T01:00:00.000Z',
+        updatedAt: '2026-09-01T06:00:00.000Z',
+        cancelledAt: '2026-09-01T06:00:00.000Z',
+        cancellationReason: 'Khách hoãn giao',
+      },
+    ],
   ]);
 
+/** Ba xe o BA trang thai khac nhau — mot doi xe mot dong khong cho thay phu hieu nao khac nhau. */
 const VEHICLES = [
   {
     id: 'veh-1',
@@ -99,6 +173,26 @@ const VEHICLES = [
     status: 'IDLE',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
+  },
+  {
+    id: 'veh-2',
+    registrationPlate: '29H-678.90',
+    vehicleClass: 'Xe tải 8 tấn',
+    allowedPayloadKg: 8000,
+    currentOdoKm: 87_300,
+    status: 'ON_TRIP',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-09-03T00:00:00.000Z',
+  },
+  {
+    id: 'veh-3',
+    registrationPlate: '29H-246.80',
+    vehicleClass: 'Xe tải 2 tấn',
+    allowedPayloadKg: 2000,
+    currentOdoKm: 45_120,
+    status: 'UNDER_MAINTENANCE',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-09-02T00:00:00.000Z',
   },
 ];
 
@@ -127,6 +221,18 @@ const DRIVERS = [
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
+  // Lai xe NGHI VIEC — de danh sach co it nhat mot dong khong o trang thai ACTIVE.
+  {
+    id: 'drv-3',
+    fullName: 'Lê Quốc Hùng',
+    phone: '0900000003',
+    licenceClass: 'C',
+    licenceExpiry: '2026-11-15',
+    status: 'INACTIVE',
+    authUserId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-08-20T00:00:00.000Z',
+  },
 ];
 
 const CUSTOMERS = [
@@ -151,6 +257,70 @@ const PARTNERS = [
     status: 'ACTIVE',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  // Doi tac HAI VAI — hop dong mien §9 noi ro khoa phan biet hai dong tien la VAI, khong phai
+  // doi tac. Mot doi tac vua la nha xe vua la nguon don la truong hop that, khong phai ngoai le.
+  {
+    id: 'par-2',
+    name: 'Logistics Bắc Hà',
+    phone: null,
+    roles: ['CARRIER', 'ORDER_REFERRER'],
+    status: 'ACTIVE',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+const FUEL_SUPPLIERS = [
+  {
+    id: 'sup-1',
+    code: 'PVO-DA',
+    name: 'Cây xăng Đông Anh',
+    status: 'ACTIVE',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'sup-2',
+    code: null,
+    name: 'Cây xăng Gia Lâm',
+    status: 'ACTIVE',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+/** Hai ky doi soat o hai trang thai — mot ky dang khop, mot ky da chot. */
+const FUEL_RECONCILIATIONS = [
+  {
+    id: 'rec-1',
+    supplierId: 'sup-1',
+    statementId: 'stm-1',
+    periodStart: '2026-09-01',
+    periodEnd: '2026-09-15',
+    state: 'MATCHING',
+    closedAt: null,
+    closedBy: null,
+    reopenedAt: null,
+    reopenedBy: null,
+    reopenReason: null,
+    createdAt: '2026-09-03T02:00:00.000Z',
+    updatedAt: '2026-09-04T02:00:00.000Z',
+  },
+  {
+    id: 'rec-2',
+    supplierId: 'sup-2',
+    statementId: 'stm-2',
+    periodStart: '2026-08-01',
+    periodEnd: '2026-08-31',
+    state: 'CLOSED',
+    closedAt: '2026-09-01T03:00:00.000Z',
+    closedBy: 'accounting',
+    reopenedAt: null,
+    reopenedBy: null,
+    reopenReason: null,
+    createdAt: '2026-08-31T02:00:00.000Z',
+    updatedAt: '2026-09-01T03:00:00.000Z',
   },
 ];
 
@@ -193,7 +363,8 @@ const DRIVER_FUND = {
     updatedAt: '2026-09-04T03:00:00.000Z',
   },
   driverId: 'drv-1',
-  balance: 9_850_000,
+  // 10.000.000 tam ung − 1.850.000 chi chuyen − 300.000 nop lai = 7.850.000.
+  balance: 7_850_000,
   balanceStance: 'DRIVER_HOLDS_COMPANY_CASH',
   currencyCode: 'VND',
   entries: [
@@ -210,6 +381,36 @@ const DRIVER_FUND = {
       note: 'Tạm ứng đầu tháng',
       recordedBy: 'accounting',
       createdAt: '2026-09-04T03:00:00.000Z',
+    },
+    // Mot khoan chi cua chuyen, va mot lan hoan quy — de so du khong phai mot dong duy nhat, va
+    // de thay ca hai chieu dau cua `signedAmount`.
+    {
+      id: 'fe-2',
+      accountId: 'acc-1',
+      kind: 'TRIP_EXPENSE',
+      signedAmount: -1_850_000,
+      currencyCode: 'VND',
+      businessDate: '2026-09-04',
+      tripId: 'trip-1',
+      correlationKey: 'corr-00000002',
+      reversalOfId: null,
+      note: 'Phí cầu đường + bốc xếp',
+      recordedBy: 'accounting',
+      createdAt: '2026-09-04T05:00:00.000Z',
+    },
+    {
+      id: 'fe-3',
+      accountId: 'acc-1',
+      kind: 'RETURN',
+      signedAmount: -300_000,
+      currencyCode: 'VND',
+      businessDate: '2026-09-03',
+      tripId: null,
+      correlationKey: 'corr-00000003',
+      reversalOfId: null,
+      note: 'Nộp lại tiền thừa',
+      recordedBy: 'accounting',
+      createdAt: '2026-09-03T10:00:00.000Z',
     },
   ],
 };
@@ -232,8 +433,10 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
   await page.route('**/transport/drivers', (route) => json(route, DRIVERS));
   await page.route('**/transport/customers', (route) => json(route, CUSTOMERS));
   await page.route('**/transport/partners', (route) => json(route, PARTNERS));
-  await page.route('**/transport/fuel/suppliers', (route) => json(route, []));
-  await page.route('**/transport/fuel/reconciliations', (route) => json(route, []));
+  await page.route('**/transport/fuel/suppliers', (route) => json(route, FUEL_SUPPLIERS));
+  await page.route('**/transport/fuel/reconciliations', (route) =>
+    json(route, FUEL_RECONCILIATIONS),
+  );
   await page.route('**/transport/me/trips', (route) => json(route, DRIVER_TRIPS));
   await page.route('**/transport/me/fund', (route) => json(route, DRIVER_FUND));
   await page.route('**/transport/me/fuel/slips', (route) => json(route, []));
@@ -270,7 +473,7 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
 }
 
 test.describe('vo va kien truc thong tin', () => {
-  test('danh muc dung nhom, va HAI muc cua T6 khong hien ra', async ({ page }) => {
+  test('danh muc dung nhom, va HAI muc cua T6 hien theo nang luc goi khach', async ({ page }) => {
     await mockTransport(page);
     await page.goto('/');
 
@@ -280,11 +483,40 @@ test.describe('vo va kien truc thong tin', () => {
     await expect(nav.getByRole('link', { name: /Quỹ lái xe/ })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Nhiên liệu' })).toBeVisible();
 
-    // `TX-06`/`TX-07` chua co ma nang luc, nen hai muc nay bi AN — khong phai hien ra roi bao rong.
-    await expect(nav.getByRole('link', { name: /Bảo dưỡng/ })).toHaveCount(0);
-    await expect(nav.getByRole('link', { name: 'Lương' })).toHaveCount(0);
-    // Va nhom rong bi bo han: khong con tieu de mo coi nao.
-    await expect(page.getByText('TÀI SẢN & NHÂN SỰ')).toHaveCount(0);
+    // Goi `transport-preview` bat ca `transport-asset-compliance` lan `transport-workforce`, nen
+    // hai muc cua T6 HIEN — va nhom cua chung khong con mo coi. Chieu nguoc lai (khach khong bat
+    // thi an) duoc khoa o `__tests__/navigation.spec.ts`, cho ca hai chieu.
+    await expect(nav.getByRole('link', { name: /Bảo dưỡng/ })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Lương' })).toBeVisible();
+    await expect(page.getByText('TÀI SẢN & NHÂN SỰ')).toBeVisible();
+  });
+
+  /**
+   * DAI BANG XEM TRUOC PHAI CO MAT, va phai la mot cau NGUOI DOC HIEU.
+   *
+   * Day la cau duy nhat tren man hinh noi rang ban nay khong phai ban cho khach dung. Neu no bien
+   * mat trong mot lan doi layout, khong con gi ngan mot nguoi xem tuong nghiep vu da chay du.
+   */
+  test('dai bang xem truoc hien ra va noi ro day khong phai ban chay that', async ({ page }) => {
+    await mockTransport(page);
+    await page.goto('/');
+
+    const ribbon = page.getByRole('status').filter({ hasText: 'BẢN XEM TRƯỚC' });
+    await expect(ribbon).toBeVisible();
+    await expect(ribbon).toContainText('Dữ liệu tổng hợp');
+    await expect(ribbon).toContainText('không có dữ liệu khách hàng');
+  });
+
+  /**
+   * Hai muc cua T6 hien ra thi phai NOI THAT rang chung chua noi vao may chu — khong duoc bay mot
+   * bang rong trong nhu da tai xong, va tuyet doi khong duoc bia mot con so nao.
+   */
+  test('muc Bao duong noi that rang chua noi vao may chu, khong bia so', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=maintenance');
+
+    await expect(page.getByRole('heading', { level: 1, name: /Bảo dưỡng/ })).toBeVisible();
+    await expect(page.locator('#tx-main')).toContainText('chưa nối');
   });
 
   test('duong nhay ban phim dua tieu diem vao thang noi dung', async ({ page }) => {
@@ -500,10 +732,25 @@ test.describe('be rong man hinh', () => {
 
 test.describe('anh chup lam bang chung', () => {
   test('chup bo anh o be rong may tinh va dien thoai', async ({ page }, testInfo) => {
+    // Muoi anh `fullPage` tren `next dev` (bien dich tung route lan dau) khong vua trong 30 giay
+    // mac dinh. Bai nay CHUP chu khong khang dinh toc do, nen noi rong thoi gian la dung viec —
+    // moi khang dinh ve hanh vi van nam o cac bai khac, voi thoi gian mac dinh.
+    test.setTimeout(300_000);
     await mockTransport(page, 'ADMIN');
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    for (const section of ['', 'trips', 'fleet', 'driver-fund', 'fuel', 'settlement']) {
+    // `maintenance` va `payroll` nam trong bo anh vi goi xem truoc BAT hai nang luc T6 — nguoi
+    // review can thay ca cac muc chua noi vao may chu, dung nhu chung dang hien ra.
+    for (const section of [
+      '',
+      'trips',
+      'fleet',
+      'driver-fund',
+      'fuel',
+      'settlement',
+      'maintenance',
+      'payroll',
+    ]) {
       await page.goto(section === '' ? '/' : `/?section=${section}`);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await page.screenshot({
@@ -521,5 +768,9 @@ test.describe('anh chup lam bang chung', () => {
     await page.goto('/?surface=driver');
     await expect(page.getByRole('heading', { level: 1, name: 'Trang chủ' })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('mobile-driver-home.png'), fullPage: true });
+
+    await page.goto('/?surface=driver&screen=trip');
+    await expect(page.getByRole('heading', { level: 1, name: 'Chuyến' })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('mobile-driver-trip.png'), fullPage: true });
   });
 });

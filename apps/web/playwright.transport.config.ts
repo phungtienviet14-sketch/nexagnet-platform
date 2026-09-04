@@ -12,7 +12,15 @@ import { resolve } from 'node:path';
  *
  * Cong 3011 de khong dung vao 3010 (b2b), 3002 (`dev-transport.mjs`) hay 3000 (`dev`).
  */
-const TRANSPORT_TENANT_DIR = resolve(__dirname, 'e2e/fixtures/tenant-transport');
+/**
+ * Chay tren GOI KHACH THAT, khong phai mot fixture.
+ *
+ * Truoc day day tro vao `e2e/fixtures/tenant-transport` vi khong co goi khach nao bat nghiep vu
+ * van tai (khoang cach `G-07`). #180 dua `tenants/transport-preview` vao repo, nen bo E2E chay
+ * thang tren chinh goi se duoc trien khai — mot goi hong se lam do E2E, thay vi do luc boot tren
+ * may chu.
+ */
+const TRANSPORT_TENANT_DIR = resolve(__dirname, '../../tenants/transport-preview');
 
 export default defineConfig({
   testDir: './e2e/transport',
