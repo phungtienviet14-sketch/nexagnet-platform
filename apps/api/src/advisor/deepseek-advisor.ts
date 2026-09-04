@@ -118,6 +118,10 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
             content: JSON.stringify(outcome.output),
           });
         }
+        // Cong cu ket thuc luot — giong ban Claude. Xem chu thich cung cho o `advisor-agent.ts`.
+        if (outcomes.some((outcome) => outcome.plan)) {
+          return finalizeAdvisorReply('', outcomes, usedTools, this.logger);
+        }
       }
       return null;
     } catch (error: unknown) {

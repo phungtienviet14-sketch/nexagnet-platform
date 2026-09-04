@@ -7,8 +7,11 @@ import { ClaudeAdvisorAgent, buildAdvisorSystem, type AdvisorRequest } from './a
  *
  * Ba dieu duoc khoa o day:
  *  1. LLM goi duoc cong cu va NHAN LAI ket qua that tu nguon su that (khong phai prompt nhoi san).
- *  2. Con so tien LLM viet ra phai la con so cong cu tra ve; bia ra thi ban soan BI BO.
+ *  2. Ban soan mang theo KE HOACH + DU KIEN + NGUON — ba thu ma bo soan dung de dung tin that.
  *  3. Hong/tu choi/het vong deu tra `null` — ben goi luon con duong tat dinh de lui ve.
+ *
+ * DOI O #189: tang nay khong con la noi mot con so bia bi chan. Xem chu thich truoc hai bai
+ * `con so bia ...` / `khong goi cong cu nao ...` ben duoi.
  */
 
 const knowledge = new KnowledgeService(undefined, new Date('2026-08-15T00:00:00.000Z'));
@@ -59,26 +62,49 @@ describe('ClaudeAdvisorAgent — vong lap cong cu', () => {
     expect(reply?.text).toContain('ạ');
     expect(reply?.usedTools).toEqual(['bao_gia']);
     // Luot thu hai phai mang theo tool_result cua luot dau — khong co no thi LLM viet trong tri nho.
-    const secondCall = create.mock.calls[1] as unknown as [{ messages: { role: string; content: unknown }[] }];
+    const secondCall = create.mock.calls[1] as unknown as [
+      { messages: { role: string; content: unknown }[] },
+    ];
     const secondTurn = secondCall[0];
     const lastMessage = secondTurn.messages.at(-1)!;
     expect(lastMessage.role).toBe('user');
     expect(JSON.stringify(lastMessage.content)).toContain(String(price));
   });
 
-  it('BO ban soan khi LLM bia mot con so tien khong cong cu nao tra ve', async () => {
+  /*
+   * HAU KIEM TIEN DOI VAI o #189 — doc `finalizeAdvisorReply` truoc khi doc hai bai nay.
+   *
+   * Truoc: `unverifiedAmounts()` thay mot con so la thi BO CA BAN SOAN (`reply()` tra `null`).
+   * Nay: no chi con la mot dong canh bao. Con so bia bi chan o cho DUNG hon — hop dong neo nguon
+   * cua bo soan (`outbound-narrative.ts` G2), noi phep neo dua tren CHUOI HE THONG SO HUU chu
+   * khong dua tren `JSON.stringify(toolOutput)` (ket qua cong cu co echo tham so model tu gui,
+   * nen model tu tao duoc bang chung cho chinh con so no sap viet).
+   *
+   * Hai bai duoi day vi the khang dinh dieu con dung o TANG NAY: ban soan van di tiep, va no mang
+   * theo `sources` — thu ma tang sau dung de tu choi. Viec con so bi chan duoc do o
+   * `outbound-composer.spec.ts` va `outbound-authority.pipeline.spec.ts`.
+   */
+  it('con so bia KHONG con bi bo o tang agent — no di tiep de bo soan tu choi', async () => {
     const agent = new ClaudeAdvisorAgent('sk-test');
     const sku = knowledge.products()[0]!.sku;
     stub(agent, [toolUse('bao_gia', { skus: [sku] }), text('Dạ bên em 123.456đ ạ.')]);
 
-    expect(await agent.reply(request())).toBeNull();
+    const reply = await agent.reply(request());
+
+    expect(reply?.text).toBe('Dạ bên em 123.456đ ạ.');
+    // `123456` KHONG nam trong nguon he thong ma `bao_gia` tra ve -> G2 se bo loi nhan nay.
+    expect(reply?.sources.join(' ')).not.toContain('123.456');
   });
 
-  it('khong goi cong cu nao ma van noi gia -> BO ban soan', async () => {
+  it('khong goi cong cu nao -> khong co nguon he thong nao, va G1 se chan o bo soan', async () => {
     const agent = new ClaudeAdvisorAgent('sk-test');
     stub(agent, [text('Dạ ghế Felix 1.150.000đ ạ.')]);
 
-    expect(await agent.reply(request())).toBeNull();
+    const reply = await agent.reply(request());
+
+    // Luot khong tra cuu gi -> `sources` rong. Do la dieu kien G1 dung de tu choi moi van xuoi.
+    expect(reply?.sources).toEqual([]);
+    expect(reply?.plan.requestedBlocks).toEqual([]);
   });
 
   it('cau tra loi khong co con so tien thi di qua binh thuong', async () => {
