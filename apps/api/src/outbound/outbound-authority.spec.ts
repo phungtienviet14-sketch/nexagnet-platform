@@ -9,6 +9,7 @@ import {
   grantsFromPricedOrder,
   grantsFromQuote,
   mergeAuthority,
+  outboundFingerprint,
   pinnedOutboundVerdict,
 } from './outbound-authority.js';
 
@@ -74,7 +75,7 @@ describe('am tinh — fail closed', () => {
       llm('Da anh, don gia 990.000đ, tong don 9.900.000đ ạ.'),
       NO_AUTHORITY,
     );
-    expect(verdict).toEqual({
+    expect(verdict).toMatchObject({
       sendable: false,
       reason: 'FINANCIAL_AUTHORITY_MISSING',
       missing: ['financial'],
@@ -156,7 +157,7 @@ describe('am tinh — fail closed', () => {
       llm('Don gia 990.000đ, cong no 30 ngay, em da ghi nhan don cua anh ạ.'),
       NO_AUTHORITY,
     );
-    expect(verdict).toEqual({
+    expect(verdict).toMatchObject({
       sendable: false,
       reason: 'FINANCIAL_AUTHORITY_MISSING',
       missing: ['financial', 'policy', 'order_commitment'],
@@ -182,7 +183,7 @@ describe('duong duong — khong giai bai toan bang cach cam sach', () => {
     const authority = mergeAuthority(grantsFromPricedOrder(priced));
     expect(
       decideOutboundAuthority(llm('Don gia 990.000đ, tong don 9.900.000đ ạ.'), authority),
-    ).toEqual({ sendable: true, reason: 'AUTHORITY_SATISFIED', claims: ['financial'] });
+    ).toMatchObject({ sendable: true, reason: 'AUTHORITY_SATISFIED', claims: ['financial'] });
   });
 
   it('8b. van ban tat dinh do chinh rules engine dung thi di thang', () => {
@@ -252,7 +253,7 @@ describe('duong duong — khong giai bai toan bang cach cam sach', () => {
         llm('Da may nay dung dien 220V, co che do ngu im va bao hanh chinh hang ạ.'),
         NO_AUTHORITY,
       ),
-    ).toEqual({ sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM', claims: [] });
+    ).toMatchObject({ sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM', claims: [] });
   });
 
   it('11b. so luong / thong so khong bi nham la so tien', () => {
@@ -269,8 +270,10 @@ describe('duong duong — khong giai bai toan bang cach cam sach', () => {
 });
 
 describe('cuong che o diem nghen gui', () => {
+  const TEXT = 'Don gia 990.000đ ạ.';
+
   it('khong co quyet dinh nao ghim tren trace -> KHONG gui', () => {
-    expect(pinnedOutboundVerdict(undefined)).toEqual({
+    expect(pinnedOutboundVerdict(undefined, TEXT)).toEqual({
       sendable: false,
       reason: 'AUTHORITY_DECISION_ABSENT',
       missing: [],
@@ -285,20 +288,35 @@ describe('cuong che o diem nghen gui', () => {
       llmCalls: 1,
       brainMode: 'mock',
       supervisor: { riskLevel: 'none', escalate: false, reasons: [] },
-      outbound: { text: 'Don gia 990.000đ ạ.' },
+      outbound: { text: TEXT },
     } as const;
-    expect(pinnedOutboundVerdict(legacyTrace as never)).toMatchObject({
+    expect(pinnedOutboundVerdict(legacyTrace as never, TEXT)).toMatchObject({
       sendable: false,
       reason: 'AUTHORITY_DECISION_ABSENT',
     });
   });
 
-  it('verdict da ghim duoc tra lai nguyen ven', () => {
+  it('verdict da ghim duoc tra lai nguyen ven khi van ban KHONG doi', () => {
+    const verdict = {
+      sendable: true,
+      reason: 'AUTHORITY_SATISFIED',
+      claims: ['financial'],
+      fingerprint: outboundFingerprint(TEXT),
+    } as const;
+    expect(pinnedOutboundVerdict({ outboundAuthority: verdict } as never, TEXT)).toEqual(verdict);
+  });
+
+  it('verdict CU (chua co dau van ban) khong con dung duoc -> KHONG gui', () => {
+    // Ban ghi soan truoc khi dau van ban ra doi. Khong chung minh duoc phan quyet thuoc ve chinh
+    // doan van nay, nen no khong duoc phep di tiep — fail-closed, nhu moi ban ghi cu khac.
     const verdict = {
       sendable: true,
       reason: 'AUTHORITY_SATISFIED',
       claims: ['financial'],
     } as const;
-    expect(pinnedOutboundVerdict({ outboundAuthority: verdict } as never)).toEqual(verdict);
+    expect(pinnedOutboundVerdict({ outboundAuthority: verdict } as never, TEXT)).toMatchObject({
+      sendable: false,
+      reason: 'AUTHORITY_PAYLOAD_MISMATCH',
+    });
   });
 });
