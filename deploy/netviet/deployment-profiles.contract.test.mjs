@@ -190,8 +190,12 @@ test('no profile can name an Ultty-scoped secret: the prefix is the stack, not t
     false,
     'a preview profile must never resolve an Ultty-scoped secret name',
   );
-  // There is no fallback path: an unsafe slug throws instead of degrading to a shared name.
-  assert.throws(() => requiredSecretNamesFor(previewProfile(), 'Ultty GD1'), /Invalid stack slug/);
+  // There is no fallback path: an unsafe or absent slug throws instead of degrading to a name
+  // that belongs to no stack. `undefined` matters most — it coerces to the valid-looking
+  // string "undefined", so type-checking has to come before the pattern.
+  for (const bad of ['Ultty GD1', '', undefined, null, 7, 'zalo_ultty']) {
+    assert.throws(() => requiredSecretNamesFor(previewProfile(), bad), /Invalid stack slug/);
+  }
 });
 
 // --- 10. Isolation matrix: two profiles, no shared identifier ---------------------------------

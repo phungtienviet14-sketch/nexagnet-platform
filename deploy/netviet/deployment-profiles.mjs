@@ -112,7 +112,10 @@ export function requiredSecretSuffixesFor(profile, switches = {}) {
  * the isolation boundary at the credential layer, one layer with the volume and network names.
  */
 export function requiredSecretNamesFor(profile, stackSlug, switches = {}) {
-  if (!SAFE_SLUG.test(String(stackSlug))) {
+  // `typeof` FIRST, not String(stackSlug): coercing `undefined` yields the string "undefined",
+  // which is a perfectly valid-looking slug and would mint `zalo-undefined-api-key` — a name that
+  // belongs to no stack, on the one path where a wrong name means reading someone else's secret.
+  if (typeof stackSlug !== 'string' || !SAFE_SLUG.test(stackSlug)) {
     throw new Error(`Invalid stack slug: ${JSON.stringify(stackSlug)}`);
   }
   return Object.freeze(
