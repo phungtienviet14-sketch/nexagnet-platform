@@ -15,12 +15,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "agent.run": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 488
+      "line": 492
     },
     "audit.persist": {
       "functionName": "OrdersService.recordManualAction",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 574
+      "line": 577
     },
     "auth.credentials.change": {
       "functionName": "AuthService.changePassword",
@@ -88,7 +88,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conversation.resolve": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 450
+      "line": 454
     },
     "costing.reversal": {
       "functionName": "CostingService.reverseCorrelation",
@@ -123,7 +123,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "message.persist": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 190
+      "line": 194
     },
     "nexagnet.failure.reason": {
       "functionName": "OtelWorkerTraceBridge.finish",
@@ -136,7 +136,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.complete_handoff": {
       "functionName": "OrdersService.completeSalesHandoff",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 232
+      "line": 235
     },
     "order.manual_approve": {
       "functionName": "OrdersService.approveTurn",
@@ -164,7 +164,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "outbound.send_advice": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 532
+      "line": 536
     },
     "outbound.send_confirmation": {
       "functionName": "SalesOrderOutcomeService.settle",
@@ -457,12 +457,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "advice.auto_reply|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 523
+      "line": 527
     },
     "advice.auto_reply|ALLOWED": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 539
+      "line": 543
     },
     "advisor.compose|COMPOSED": {
       "functionName": "AgentOrchestrator.composeReply",
@@ -556,7 +556,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 466
+      "line": 470
     },
     "costing.reversal|*": {
       "functionName": "CostingService.denyReversal",
@@ -873,22 +873,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 223
+      "line": 227
     },
     "message.intake|DUPLICATE_MESSAGE": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 195
+      "line": 199
     },
     "message.intake|GROUP_NOT_MAPPED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 214
+      "line": 218
     },
     "message.intake|PARTICIPANT_IGNORED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 181
+      "line": 185
     },
     "order.auto_confirm|*": {
       "functionName": "SalesOrderOutcomeService.settle",
@@ -908,7 +908,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.handoff_followup_schedule|*": {
       "functionName": "OrdersService.decideSchedule",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 222
+      "line": 225
     },
     "outbound.authority|*": {
       "functionName": "AgentOrchestrator.composeReply",
