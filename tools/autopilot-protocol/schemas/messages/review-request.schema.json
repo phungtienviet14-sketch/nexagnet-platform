@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nexagnet:autopilot:v0:message:review-request",
+  "title": "REVIEW_REQUEST",
+  "description": "Orchestrator moi ChatGPT Reviewer. CHI hop le khi moi required check xanh tren dung HEAD. CI -> REVIEWING. Khoa review-request:<pr>:<head_sha>.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "marker", "type", "issue", "pr", "head_sha", "ci_run", "risk"],
+  "properties": {
+    "protocol": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/protocolVersion" },
+    "marker": { "const": "AUTOPILOT_REVIEW_REQUEST_V0" },
+    "type": { "const": "REVIEW_REQUEST" },
+    "issue": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/issueNumber" },
+    "pr": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/prNumber" },
+    "head_sha": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/sha40" },
+    "ci_run": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/runId",
+      "description": "Lan chay CI da xanh cho HEAD nay — bang chung, khong phai loi khai."
+    },
+    "risk": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/risk" }
+  }
+}

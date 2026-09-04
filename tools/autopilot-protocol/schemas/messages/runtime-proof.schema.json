@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nexagnet:autopilot:v0:message:runtime-proof",
+  "title": "RUNTIME_PROOF",
+  "description": "Runtime Verifier bao ket qua kiem tren moi truong that cho DUNG release SHA. PASS => du dieu kien TASK_DONE; FAIL => BLOCKED. Khoa runtime:<release_sha>:<env>.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "marker",
+    "type",
+    "issue",
+    "pr",
+    "release_sha",
+    "env",
+    "deploy_run",
+    "verdict"
+  ],
+  "properties": {
+    "protocol": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/protocolVersion" },
+    "marker": { "const": "AUTOPILOT_RUNTIME_PROOF_V0" },
+    "type": { "const": "RUNTIME_PROOF" },
+    "issue": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/issueNumber" },
+    "pr": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/prNumber" },
+    "release_sha": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/sha40",
+      "description": "SHA cua release da deploy — voi repo nay la merge commit tren main."
+    },
+    "env": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/environment" },
+    "deploy_run": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/runId" },
+    "verdict": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/runtimeVerdict" }
+  }
+}

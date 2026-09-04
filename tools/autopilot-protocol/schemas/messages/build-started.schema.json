@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nexagnet:autopilot:v0:message:build-started",
+  "title": "BUILD_STARTED",
+  "description": "Claude Builder bao da bat dau: nhanh nao, tu SHA main nao. READY -> RUNNING. Khoa idempotency build:<issue>.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "marker", "type", "issue", "branch", "base_sha"],
+  "properties": {
+    "protocol": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/protocolVersion" },
+    "marker": { "const": "AUTOPILOT_BUILD_STARTED_V0" },
+    "type": { "const": "BUILD_STARTED" },
+    "issue": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/issueNumber" },
+    "branch": { "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/branchName" },
+    "base_sha": {
+      "$ref": "urn:nexagnet:autopilot:v0:common#/$defs/sha40",
+      "description": "SHA cua live main luc bat dau. Bang chung 'dung main lam authority'."
+    }
+  }
+}

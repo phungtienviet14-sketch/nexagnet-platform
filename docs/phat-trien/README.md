@@ -13,6 +13,7 @@ Khu vực này chứa tài liệu do đội phát triển hoặc AI coding tạo
 7. [`van-hanh/github-governance.md`](van-hanh/github-governance.md) — **đọc trước khi đổi tên job CI hoặc sửa cổng deploy**: `main` được bảo vệ bằng gì, 7 status check bắt buộc và bẫy đổi tên job, cổng environment, bằng chứng phủ định, và giới hạn chưa gỡ được.
 8. [`van-hanh/chay-kiem-workflow-engine.md`](van-hanh/chay-kiem-workflow-engine.md) — **hướng dẫn dùng cổng CI `workflow-integration`**: nó chứng minh gì, chạy lại 24 bài trên máy mình thế nào, và bốn kiểu đỏ đã đo được.
 9. [`van-hanh/nguon-khach-hang.md`](van-hanh/nguon-khach-hang.md) — **đọc trước khi mở một tệp tài liệu khách trên máy**: byte gốc sống ở kho riêng, repo giữ SHA-256; bảy bước nạp một tài liệu, bốn bất biến không nhảy được bước nào, cổng CI `NO_RAW_CUSTOMER_ARTIFACT_IN_GIT`, và phải làm gì khi đã lỡ commit.
+10. [`van-hanh/autopilot-protocol-v0.md`](van-hanh/autopilot-protocol-v0.md) — **đọc trước khi viết Issue/comment cho autopilot hoặc đụng vào `tools/autopilot-protocol/`**: giao thức ChatGPT ↔ GitHub ↔ Claude V0 — tác nhân, 9 thông điệp có marker, máy trạng thái 8 trạng thái, quy tắc SHA/CI/rủi ro/retry/idempotency, Task Contract, validator CLI. **Nền tảng giao thức** — chưa có orchestrator hay dispatcher.
 
 ## Cấu trúc
 
