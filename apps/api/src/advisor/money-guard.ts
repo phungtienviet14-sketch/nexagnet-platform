@@ -11,11 +11,17 @@
  * duoc, mien la dung con so do.
  */
 
-/** Bat "1.150k", "2tr5", "1.150.000d", "2 trieu" — cach viet tien pho bien trong nhom Zalo. */
-const MONEY_PATTERN = /(\d[\d.,]*)\s*(k|tr\d*|tri[eệ]u|vnd|ngh[iì]n|[dđ])(?![\p{L}\d])/giu;
-
-/** So tran: duoi nguong nay thi khong phai gia ma la so luong, thang, kich thuoc… */
-const MIN_MONEY_DIGITS = 3;
+/**
+ * MOT MAU DUY NHAT cho "mot so tien trong van ban", dung chung voi `outbound/outbound-claims.ts`.
+ *
+ * Hai ban sao cua cung mot khai niem se lech nhau theo thoi gian, va cho lech chinh la cho lot:
+ * mot con so ma lop nay bat duoc con lop kia thi khong (hoac nguoc lai) se lam ca hai lop kho tin.
+ */
+import {
+  MIN_MONEY_DIGITS,
+  MONEY_PATTERN,
+  canonicalMoneyForms,
+} from '../outbound/outbound-claims.js';
 
 /** Con so tien LLM viet ra ma khong cong cu nao tra ve. Rong = sach. */
 export function unverifiedAmounts(text: string, toolOutputs: readonly unknown[]): string[] {
@@ -23,32 +29,12 @@ export function unverifiedAmounts(text: string, toolOutputs: readonly unknown[])
   const found = new Set<string>();
   for (const match of text.matchAll(MONEY_PATTERN)) {
     const written = match[0];
-    for (const candidate of canonicalForms(match[1] ?? '', match[2] ?? '')) {
+    for (const candidate of canonicalMoneyForms(match[1] ?? '', match[2] ?? '')) {
       if (candidate.length < MIN_MONEY_DIGITS) continue;
       if (!allowed.has(candidate)) found.add(written.trim());
     }
   }
   return [...found];
-}
-
-/**
- * Mot cach viet ra NHIEU con so co the: "1.150k" co the la 1150 (chu so nhu viet) hoac 1150000
- * (da nhan 1000). Chap nhan neu BAT KY dang nao khop — chan bia, khong chan cach viet.
- */
-function canonicalForms(digits: string, unit: string): string[] {
-  const bare = digits.replace(/[.,\s]/g, '');
-  if (!bare) return [];
-  const scaled = scaleFor(unit);
-  const forms = [bare];
-  if (scaled) forms.push(String(Number(bare) * scaled));
-  return forms.filter((form) => /^\d+$/.test(form));
-}
-
-function scaleFor(unit: string): number | null {
-  const normalized = unit.toLowerCase();
-  if (normalized.startsWith('k') || normalized.startsWith('ngh')) return 1_000;
-  if (normalized.startsWith('tr')) return 1_000_000;
-  return null;
 }
 
 /**

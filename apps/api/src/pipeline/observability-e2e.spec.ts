@@ -158,7 +158,7 @@ describe('CAU HOI: "khach bao bot tra loi sai" — lan tu mot tin ra ca cay xu l
       advisor: new StubAdvisor({
         text: 'Dạ máy có đèn ngủ ạ.',
         usedTools: ['tra_cuu_san_pham'],
-        handoff: false,
+        handoff: false, authority: { grants: [] },
       }),
     });
 
@@ -173,7 +173,7 @@ describe('CAU HOI: "khach bao bot tra loi sai" — lan tu mot tin ra ca cay xu l
 
   it('doc duoc CAY NGHIEP VU 5-15 buoc, khong phai hang tram span vun', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false, authority: { grants: [] } }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -191,7 +191,7 @@ describe('CAU HOI: "khach bao bot tra loi sai" — lan tu mot tin ra ca cay xu l
       advisor: new StubAdvisor({
         text: 'Dạ máy có đèn ngủ ạ.',
         usedTools: ['tra_cuu_san_pham', 'tra_cuu_tai_lieu'],
-        handoff: false,
+        handoff: false, authority: { grants: [] },
       }),
     });
 
@@ -209,7 +209,7 @@ describe('CAU HOI: "khach bao bot tra loi sai" — lan tu mot tin ra ca cay xu l
 
   it('moi ban ghi neo duoc vao khach, moi truong va RELEASE dang chay', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false, authority: { grants: [] } }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -229,7 +229,7 @@ describe('CAU HOI: "AI tra loi dung nhung he thong khong gui" — CASE C', () =>
       advisor: new StubAdvisor({
         text: 'Dạ em nhờ Sale kiểm tra lại giúp mình ạ.',
         usedTools: ['tra_cuu_tai_lieu'],
-        handoff: true,
+        handoff: true, authority: { grants: [] },
       }),
     });
 
@@ -261,7 +261,7 @@ describe('CAU HOI: "AI tra loi dung nhung he thong khong gui" — CASE C', () =>
 
   it('phan biet duoc "kill switch tat" voi "agent xin chuyen Sale"', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false, authority: { grants: [] } }),
       autoSend: 'off',
     });
 
@@ -316,7 +316,7 @@ describe('CAU HOI: "luot nay dot bao nhieu token, va o dau?"', () => {
   it('ca hai lan goi LLM deu co so token — parse VA compose', async () => {
     const { pipeline, sink } = await build({
       parseUsage: { inputTokens: 2_310, outputTokens: 96 },
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: ['tra_cuu_san_pham'], handoff: false }, [
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: ['tra_cuu_san_pham'], handoff: false, authority: { grants: [] } }, [
         { inputTokens: 3_100, outputTokens: 120 },
         { inputTokens: 880, outputTokens: 90 },
       ]),
@@ -350,7 +350,7 @@ describe('CAU HOI: "luot nay dot bao nhieu token, va o dau?"', () => {
 
   it('nha cung cap khong bao gi -> KHONG co truong token, khong phai `0`', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false, authority: { grants: [] } }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -366,7 +366,7 @@ describe('CAU HOI: "luot nay dot bao nhieu token, va o dau?"', () => {
 describe('CAU HOI: "vi sao don nay khong tu gui?"', () => {
   it('tra loi bang mot ma, kem so lieu nguong', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false, authority: { grants: [] } }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -379,7 +379,7 @@ describe('CAU HOI: "vi sao don nay khong tu gui?"', () => {
 
   it('cong quyen GHI cua agent nhin duoc — cap hay khong, va vi sao', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false, authority: { grants: [] } }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -416,7 +416,7 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
       undefined,
       undefined,
       content,
-      new StubAdvisor({ text: 'Dạ máy có đèn ngủ ạ.', usedTools: [], handoff: false }),
+      new StubAdvisor({ text: 'Dạ máy có đèn ngủ ạ.', usedTools: [], handoff: false, authority: { grants: [] } }),
       undefined,
       telemetry,
     );
@@ -462,7 +462,7 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
       undefined,
       undefined,
       content,
-      new StubAdvisor({ text: 'Dạ máy có đèn ngủ ạ.', usedTools: [], handoff: false }),
+      new StubAdvisor({ text: 'Dạ máy có đèn ngủ ạ.', usedTools: [], handoff: false, authority: { grants: [] } }),
     );
     const outbound = new MockAdapter();
     const router = new OutboundChannelRouter(new MockAdapter(), new MockAdapter(), outbound);

@@ -112,7 +112,7 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
       new StubAdvisor({
         text: 'Dạ máy có đèn ngủ ạ, đèn khí quyển học dùng làm đèn trang trí buổi tối ạ.',
         usedTools: ['tra_cuu_san_pham', 'tra_cuu_tai_lieu'],
-        handoff: false,
+        handoff: false, authority: { grants: [] },
       }),
     );
 
@@ -128,7 +128,7 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
       new StubAdvisor({
         text: 'Dạ sản phẩm được bảo hành 12 tháng kể từ ngày mua ạ.',
         usedTools: ['tra_cuu_tai_lieu'],
-        handoff: false,
+        handoff: false, authority: { grants: [] },
       }),
       'bao_hanh_khieu_nai',
     );
@@ -145,7 +145,7 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
       new StubAdvisor({
         text: 'Dạ em nhờ Sale kiểm tra lại giúp mình ạ.',
         usedTools: ['tra_cuu_tai_lieu'],
-        handoff: true,
+        handoff: true, authority: { grants: [] },
       }),
     );
 

@@ -60,6 +60,15 @@ export const AUTO_REPLY_REASONS = [
   'STATUS_NOT_PENDING_REVIEW',
   /** Vai da soan xong nhung khong co payload de gui. */
   'NO_OUTBOUND_CONTENT',
+  /**
+   * Co payload, nhung cong tham quyen outbound chua cho phep gui no cho khach.
+   *
+   * KHONG phai mot thuat ngu nghiep vu: `outbound` la ranh gioi GUI cua nen tang, khong phai mot
+   * mien nghiep vu cua mot khach — mot to ho tro khong ban gi cung co dung ranh gioi nay. Ly do
+   * CHI TIET (thieu tien / thieu chinh sach / chua uy quyen cam ket) nam o bo tu vung so huu no,
+   * `outbound/outbound-decisions.ts`; o day chi can biet cong da dong.
+   */
+  'OUTBOUND_AUTHORITY_NOT_GRANTED',
   'SUPERVISOR_FLAGGED_RISK',
   /** Chinh LLM xin chuyen nguoi that — chot chan cuoi, ton trong no. */
   'AGENT_REQUESTED_HANDOFF',
@@ -144,6 +153,7 @@ export const TURN_DECISIONS = defineDecisionVocabulary({
     ORDER_INTENT_HAS_OWN_PATH: 'Ý định này đi đường xác nhận riêng',
     STATUS_NOT_PENDING_REVIEW: 'Trạng thái không ở diện chờ duyệt',
     NO_OUTBOUND_CONTENT: 'Không có nội dung để gửi',
+    OUTBOUND_AUTHORITY_NOT_GRANTED: 'Cổng thẩm quyền outbound chưa cho phép gửi',
     SUPERVISOR_FLAGGED_RISK: 'Giám sát đánh dấu rủi ro',
     AGENT_REQUESTED_HANDOFF: 'Agent tự xin chuyển người thật',
     ALLOWED: 'Cho phép',
