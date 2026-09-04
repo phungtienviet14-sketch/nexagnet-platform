@@ -163,7 +163,9 @@ async function listOrders(deps: OrderToolDeps): Promise<OrderToolOutcome> {
     grants: orders.flatMap((order) => grantsFromPersistedOrder(order)),
     facts: orderStateFacts(orders),
     sources: orders.flatMap((order) => [
-      ...(order.priced?.lines ?? []).map((line) => line.productName ?? line.skuRaw),
+      ...(order.priced?.lines ?? []).flatMap((line) =>
+        line.productName ? [line.productName] : [],
+      ),
       ...(order.priced ? [formatVnd(order.priced.grandTotal)] : []),
     ]),
   };
@@ -234,7 +236,9 @@ async function amendOrder(
       grants: grantsFromPersistedOrder(replacement),
       facts: orderStateFacts([replacement]),
       sources: [
-        ...(replacement.priced?.lines ?? []).map((line) => line.productName ?? line.skuRaw),
+        ...(replacement.priced?.lines ?? []).flatMap((line) =>
+          line.productName ? [line.productName] : [],
+        ),
         ...(replacement.priced ? [formatVnd(replacement.priced.grandTotal)] : []),
       ],
       output: {

@@ -32,8 +32,16 @@ import { ORDER_TOOL_SPECS, isOrderTool, runOrderTool, type OrderToolDeps } from 
  * (nho chinh xac mot bang so) cho Postgres.
  *
  * BAT BIEN KHONG DUOC DAO NGUOC (CLAUDE.md quyet dinh #5): LLM khong TINH tien. Moi con so tien
- * trong ket qua deu do `priceOrder()` / bang gia tao ra; LLM chi duoc NHAC LAI. `money-guard.ts`
- * kiem lai dieu do sau khi LLM viet xong.
+ * trong ket qua deu do `priceOrder()` / bang gia tao ra.
+ *
+ * TU #189, moi cong cu con tra ve HAI thu nua ngoai `output`/`grants`:
+ *   · `facts`   — du kien CO KIEU, thu duy nhat bo soan render duoc thanh khoi nghiep vu;
+ *   · `sources` — CHUOI HE THONG SO HUU (ten trong danh muc, van ban tai lieu da duyet, so tien
+ *                 `formatVnd()` cua rules engine, nhan chinh sach), de neo nguon cho loi nhan.
+ *
+ * QUY TAC CUNG CHO `sources`: khong bao gio dat vao do mot chuoi den tu THAM SO MODEL TU GUI.
+ * `output` thi co echo tham so do (`bao_gia(skus:["990"])` tra ve `{sku:"990"}`), nen neo vao
+ * `output` la de model tu tao bang chung cho chinh con so no sap viet. Xem `outbound-narrative.ts`.
  *
  * CONG CU TRONG FILE NAY DEU CHI DOC. Cong cu GHI (huy don, sua don) nam rieng o
  * `order-tools.ts` — tach file de ranh gioi "doc vs ghi" la ranh gioi NHIN THAY DUOC, khong phai
@@ -498,9 +506,21 @@ function computeOrder(rawItems: unknown, ctx: AdvisorToolContext): AdvisorToolOu
     // ten SP va tung khoan (tam tinh/cuoc/COD/VAT/tong), khong chi tap gia tri nhu `grants`.
     facts: { pricedOrder: priced },
     sources: [
+      /*
+       * CHI TEN DA KHOP DANH MUC va CON SO DO RULES ENGINE TINH.
+       *
+       * KHONG duoc dat `line.skuRaw` hay `line.quantity` vao day, va do KHONG phai mot lua chon
+       * thanh my: ca hai deu la THAM SO MODEL TU GUI. `tinh_don({items:[{sku:"990", so_luong:1}]})`
+       * cho ra mot dong khong khop danh muc, va neu `skuRaw` di vao nguon thi model vua tu tao
+       * bang chung neo nguon cho chinh chuoi "990" no sap viet vao loi nhan — G2 se cho qua. Do la
+       * dung lop tan cong ma `outbound-narrative.ts` canh bao ve `JSON.stringify(toolOutput)`.
+       *
+       * `productName` chi khac `null` khi dong da khop danh muc, nen no luon la ten trong DB.
+       * So luong khong can o day: khach tu noi thi da neo qua `customerText`, con ban soan thi tu
+       * render so luong trong khoi va tu gop vao bang chung ghim (`widen`).
+       */
       ...priced.lines.flatMap((line) => [
-        line.productName ?? line.skuRaw,
-        String(line.quantity),
+        ...(line.productName ? [line.productName] : []),
         formatVnd(line.unitPrice),
         formatVnd(line.lineTotal),
       ]),
@@ -567,7 +587,9 @@ function recentOrders(ctx: AdvisorToolContext): AdvisorToolOutcome {
     grants: orders.flatMap((order) => grantsFromPersistedOrder(order)),
     facts: orderStateFacts(orders),
     sources: orders.flatMap((order) => [
-      ...(order.priced?.lines ?? []).map((line) => line.productName ?? line.skuRaw),
+      ...(order.priced?.lines ?? []).flatMap((line) =>
+        line.productName ? [line.productName] : [],
+      ),
       ...(order.priced ? [formatVnd(order.priced.grandTotal)] : []),
     ]),
   };
