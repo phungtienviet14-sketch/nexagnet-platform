@@ -15,12 +15,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "agent.run": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 487
+      "line": 488
     },
     "audit.persist": {
       "functionName": "OrdersService.recordManualAction",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 545
+      "line": 573
     },
     "auth.credentials.change": {
       "functionName": "AuthService.changePassword",
@@ -88,7 +88,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conversation.resolve": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 449
+      "line": 450
     },
     "costing.reversal": {
       "functionName": "CostingService.reverseCorrelation",
@@ -123,7 +123,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "message.persist": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 189
+      "line": 190
     },
     "nexagnet.failure.reason": {
       "functionName": "OtelWorkerTraceBridge.finish",
@@ -136,7 +136,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.complete_handoff": {
       "functionName": "OrdersService.completeSalesHandoff",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 231
+      "line": 232
     },
     "order.manual_approve": {
       "functionName": "OrdersService.approveTurn",
@@ -157,10 +157,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "OrdersService.completeSalesHandoffTurn",
       "filePath": "apps/api/src/orders/orders.service.ts"
     },
+    "order.state": {
+      "functionName": "grantsFromPersistedOrder",
+      "filePath": "apps/api/src/outbound/outbound-authority.ts"
+    },
     "outbound.send_advice": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 531
+      "line": 532
     },
     "outbound.send_confirmation": {
       "functionName": "SalesOrderOutcomeService.settle",
@@ -206,6 +210,20 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PricePeriodsService.removeDraftPrice",
       "filePath": "apps/api/src/settings/price-periods.service.ts",
       "line": 397
+    },
+    "rules.policy": {
+      "functionName": "grantsFromDealerPolicy",
+      "filePath": "apps/api/src/outbound/outbound-authority.ts",
+      "line": 138
+    },
+    "rules.pricing": {
+      "functionName": "grantsFromPricedOrder",
+      "filePath": "apps/api/src/outbound/outbound-authority.ts"
+    },
+    "rules.quote": {
+      "functionName": "grantsFromQuote",
+      "filePath": "apps/api/src/outbound/outbound-authority.ts",
+      "line": 133
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
@@ -451,37 +469,37 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "advice.auto_reply|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 522
+      "line": 523
     },
     "advice.auto_reply|ALLOWED": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 538
+      "line": 539
     },
     "advisor.compose|COMPOSED": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 272
+      "line": 297
     },
     "advisor.compose|COMPOSER_DISABLED": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 173
+      "line": 198
     },
     "advisor.compose|DETERMINISTIC_PATH_SUFFICIENT": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 182
+      "line": 207
     },
     "advisor.compose|LLM_RETURNED_NOTHING": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 264
+      "line": 289
     },
     "agent.tool_authorization|*": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 195
+      "line": 220
     },
     "alerts.operational_feed|OPERATIONAL_ALERTS_COMPILED": {
       "functionName": "OperationalAlertsService.feed",
@@ -550,7 +568,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 465
+      "line": 466
     },
     "costing.reversal|*": {
       "functionName": "CostingService.denyReversal",
@@ -895,22 +913,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 222
+      "line": 223
     },
     "message.intake|DUPLICATE_MESSAGE": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 194
+      "line": 195
     },
     "message.intake|GROUP_NOT_MAPPED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 213
+      "line": 214
     },
     "message.intake|PARTICIPANT_IGNORED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 180
+      "line": 181
     },
     "order.auto_confirm|*": {
       "functionName": "SalesOrderOutcomeService.settle",
@@ -930,7 +948,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.handoff_followup_schedule|*": {
       "functionName": "OrdersService.decideSchedule",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 221
+      "line": 222
+    },
+    "outbound.authority|*": {
+      "functionName": "AgentOrchestrator.composeReply",
+      "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
+      "line": 331
+    },
+    "outbound.send_guard|*": {
+      "functionName": "TurnReplyService.performSendAdviceReply",
+      "filePath": "apps/api/src/turns/turn-reply.service.ts",
+      "line": 81
     },
     "payroll.driver_fund_disclosure|DRIVER_FUND_NOT_AVAILABLE": {
       "functionName": "WorkforceService.emitFundDisclosure",
@@ -989,12 +1017,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 695
+      "line": 780
     },
     "rules.price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 719
+      "line": 804
     },
     "settlement.allocate|*": {
       "functionName": "SettlementService.allocate",
@@ -1067,7 +1095,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 579
+      "line": 663
     },
     "trip.assignment_change|*": {
       "functionName": "TripService.assign",

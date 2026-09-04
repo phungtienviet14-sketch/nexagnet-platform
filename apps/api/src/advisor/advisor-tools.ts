@@ -1,5 +1,11 @@
-import type { OrderView, SenderType } from '@netviet/shared';
+import type { OrderView, OutboundAuthorityGrant, SenderType } from '@netviet/shared';
 import { tenantRetailAdviceOrNull } from '@netviet/tenant';
+import {
+  grantsFromDealerPolicy,
+  grantsFromPersistedOrder,
+  grantsFromPricedOrder,
+  grantsFromQuote,
+} from '../outbound/outbound-authority.js';
 import { POLICY_LABELS, quotePriceField, quoteQualifier } from '../agents/risk-rules.js';
 import type { ContentService } from '../content/content.service.js';
 import type { KnowledgeService, ResolvedGroup } from '../knowledge/knowledge.service.js';
@@ -57,6 +63,21 @@ export interface AdvisorToolSpec {
 
 /** Ket qua tra ve cho LLM: JSON gon, khong phai cau chu — LLM tu viet cau chu. */
 export type AdvisorToolResult = Record<string, unknown>;
+
+/**
+ * MOT LAN TRA CUU: du kien cho LLM, KEM tham quyen tat dinh ma lan tra cuu do sinh ra.
+ *
+ * Day la cho DUY NHAT tham quyen tien/chinh sach/cam ket don duoc sinh ra tren duong co LLM. Bat
+ * bien: `grants` chi den tu chinh ket qua rules engine / bang gia / cap dai ly / trang thai don —
+ * khong bao gio tu van ban model viet ra. Xem `outbound/outbound-authority.ts`.
+ */
+export interface AdvisorToolOutcome {
+  readonly output: AdvisorToolResult;
+  readonly grants: readonly OutboundAuthorityGrant[];
+}
+
+/** Cong cu chi tra du kien mo ta, khong sinh tham quyen he qua nao. */
+const descriptive = (output: AdvisorToolResult): AdvisorToolOutcome => ({ output, grants: [] });
 
 /** Tran so muc tai lieu do vao prompt. Du de LLM chon, chua den muc thoi phong chi phi moi luot. */
 const MAX_DOCS = 8;
@@ -140,17 +161,17 @@ export async function runAdvisorTool(
   name: string,
   input: Record<string, unknown>,
   ctx: AdvisorToolContext,
-): Promise<AdvisorToolResult> {
+): Promise<AdvisorToolOutcome> {
   if (isOrderTool(name)) {
     return ctx.orderCommands
       ? runOrderTool(name, input, ctx.orderCommands)
-      : { loi: 'He thong chua bat quyen thay doi don o kenh nay.' };
+      : descriptive({ loi: 'He thong chua bat quyen thay doi don o kenh nay.' });
   }
   switch (name) {
     case 'tra_cuu_san_pham':
-      return findProducts(String(input.tu_khoa ?? ''), ctx);
+      return descriptive(findProducts(String(input.tu_khoa ?? ''), ctx));
     case 'tra_cuu_tai_lieu':
-      return findDocs(String(input.sku ?? ''), String(input.cau_hoi ?? ''), ctx);
+      return descriptive(findDocs(String(input.sku ?? ''), String(input.cau_hoi ?? ''), ctx));
     case 'bao_gia':
       return quote(toStringArray(input.skus), ctx);
     case 'tinh_don':
@@ -160,7 +181,7 @@ export async function runAdvisorTool(
     case 'lich_su_don':
       return recentOrders(ctx);
     default:
-      return { loi: `Khong co cong cu ten "${name}"` };
+      return descriptive({ loi: `Khong co cong cu ten "${name}"` });
   }
 }
 
@@ -227,12 +248,12 @@ function findDocs(sku: string, question: string, ctx: AdvisorToolContext): Advis
   };
 }
 
-function quote(skus: readonly string[], ctx: AdvisorToolContext): AdvisorToolResult {
+function quote(skus: readonly string[], ctx: AdvisorToolContext): AdvisorToolOutcome {
   const strategy = tenantRetailAdviceOrNull();
   // Khach khong ban hang khong co chien luoc bao gia nao — tra ve mot ket qua NOI RO dieu do, de
   // LLM khong bia ra mot con so, thay vi nem giua mot vong goi cong cu.
   if (!strategy) {
-    return { bao_gia: [], loi: 'Goi khach nay khong co bang gia ban le de tra cuu' };
+    return descriptive({ bao_gia: [], loi: 'Goi khach nay khong co bang gia ban le de tra cuu' });
   }
   const field = quotePriceField(strategy, ctx.senderType);
   const prices = ctx.knowledge.prices();
@@ -247,15 +268,22 @@ function quote(skus: readonly string[], ctx: AdvisorToolContext): AdvisorToolRes
     return { sku, ten: product.name, don_gia: price, don_gia_chu: formatVnd(price) };
   });
   return {
-    ky_gia: ctx.knowledge.pricePeriod()?.validMonth ?? null,
-    bao_gia: rows,
-    cau_kem_theo: quoteQualifier(strategy, ctx.senderType),
+    output: {
+      ky_gia: ctx.knowledge.pricePeriod()?.validMonth ?? null,
+      bao_gia: rows,
+      cau_kem_theo: quoteQualifier(strategy, ctx.senderType),
+    },
+    // CHI nhung dong DA tra ra mot muc gia moi uy quyen. Dong bao "chua co dong gia hien hanh"
+    // khong cap gi — do dung la truong hop phai chuyen Sale, khong phai truong hop de LLM doan.
+    grants: grantsFromQuote(
+      rows.flatMap((row) => (typeof row.don_gia === 'number' ? [row.don_gia] : [])),
+    ),
   };
 }
 
-function computeOrder(rawItems: unknown, ctx: AdvisorToolContext): AdvisorToolResult {
+function computeOrder(rawItems: unknown, ctx: AdvisorToolContext): AdvisorToolOutcome {
   const items = toOrderItems(rawItems);
-  if (!items.length) return { loi: 'Chua co dong hang nao de tinh.' };
+  if (!items.length) return descriptive({ loi: 'Chua co dong hang nao de tinh.' });
   const priced = priceOrder(
     { orderType: 'TH1', items, noVat: false },
     {
@@ -268,36 +296,48 @@ function computeOrder(rawItems: unknown, ctx: AdvisorToolContext): AdvisorToolRe
     },
   );
   return {
-    dong_hang: priced.lines.map((line) => ({
-      ten: line.productName ?? line.skuRaw,
-      so_luong: line.quantity,
-      don_gia: line.unitPrice,
-      thanh_tien: line.lineTotal,
-      thanh_tien_chu: formatVnd(line.lineTotal),
-      khop_danh_muc: line.matched,
-    })),
-    tong: priced.grandTotal,
-    tong_chu: formatVnd(priced.grandTotal),
-    chinh_sach: priced.policy ? POLICY_LABELS[priced.policy] : null,
-    canh_bao: priced.warnings,
+    output: {
+      dong_hang: priced.lines.map((line) => ({
+        ten: line.productName ?? line.skuRaw,
+        so_luong: line.quantity,
+        don_gia: line.unitPrice,
+        thanh_tien: line.lineTotal,
+        thanh_tien_chu: formatVnd(line.lineTotal),
+        khop_danh_muc: line.matched,
+      })),
+      tong: priced.grandTotal,
+      tong_chu: formatVnd(priced.grandTotal),
+      chinh_sach: priced.policy ? POLICY_LABELS[priced.policy] : null,
+      canh_bao: priced.warnings,
+    },
+    // `priceOrder()` la nguon tat dinh duy nhat cho tien trong ca he thong (CLAUDE.md #5), nen
+    // chinh ket qua cua no — khong phai van ban LLM viet lai — la thu cap tham quyen.
+    grants: grantsFromPricedOrder(priced),
   };
 }
 
-function policy(ctx: AdvisorToolContext): AdvisorToolResult {
+function policy(ctx: AdvisorToolContext): AdvisorToolOutcome {
   const dealer = ctx.resolved.dealer;
   if (!dealer) {
-    return { loi: 'Nhom Zalo nay chua duoc map dai ly — khong tra loi chinh sach duoc, phai chuyen Sale.' };
+    return descriptive({
+      loi: 'Nhom Zalo nay chua duoc map dai ly — khong tra loi chinh sach duoc, phai chuyen Sale.',
+    });
   }
   return {
-    dai_ly: dealer.name,
-    cap: dealer.tier,
-    chinh_sach: POLICY_LABELS[dealer.defaultPolicy],
+    output: {
+      dai_ly: dealer.name,
+      cap: dealer.tier,
+      chinh_sach: POLICY_LABELS[dealer.defaultPolicy],
+    },
+    // Chua map dai ly -> khong grant. Do chinh la ca "policy_finance skipped" ma muc 7 doi phai
+    // fail closed: khong co cap dai ly thi khong co dieu khoan nao de noi.
+    grants: grantsFromDealerPolicy(dealer.defaultPolicy),
   };
 }
 
-function recentOrders(ctx: AdvisorToolContext): AdvisorToolResult {
+function recentOrders(ctx: AdvisorToolContext): AdvisorToolOutcome {
   const orders = (ctx.recentOrders ?? []).slice(0, 5);
-  return {
+  const output = {
     don: orders.map((order) => ({
       ma_don: order.id,
       trang_thai: order.status,
@@ -312,6 +352,7 @@ function recentOrders(ctx: AdvisorToolContext): AdvisorToolResult {
       ? {}
       : { ghi_chu: 'Khong tim thay don nao cua nguoi nay trong nhom — dung doan, hay hoi lai khach.' }),
   };
+  return { output, grants: orders.flatMap((order) => grantsFromPersistedOrder(order)) };
 }
 
 function toStringArray(value: unknown): string[] {

@@ -1,17 +1,23 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Logger } from '@nestjs/common';
-import type { ClarifySlot, ConversationContext, OrderDraft } from '@netviet/shared';
+import type {
+  ClarifySlot,
+  ConversationContext,
+  OrderDraft,
+  OutboundAuthority,
+} from '@netviet/shared';
 import type { ClosedOrderContext } from '../conversations/conversation-thread.js';
 import type { AmendSignal } from '../pipeline/amend-detect.js';
 import { reportAnthropicUsage, type LlmUsageReporter } from '../observability/llm-usage.js';
 import { formatTranscript } from '../messages/conversation-transcript.js';
+import { mergeAuthority } from '../outbound/outbound-authority.js';
 import { unverifiedAmounts } from './money-guard.js';
 import {
   advisorToolsFor,
   runAdvisorTool,
   type AdvisorToolContext,
   type AdvisorToolSpec,
-  type AdvisorToolResult,
+  type AdvisorToolOutcome,
 } from './advisor-tools.js';
 
 /**
@@ -58,6 +64,15 @@ export interface AdvisorReply {
   readonly usedTools: string[];
   /** True khi LLM ket luan phai chuyen nguoi that. */
   readonly handoff: boolean;
+  /**
+   * THAM QUYEN TAT DINH da thu thap duoc trong chinh luot nay — KHONG phai mot phan quyet cua LLM.
+   *
+   * Di kem ban soan vi ben goi (`AgentOrchestrator.composeReply`) can ca hai de xet: van ban model
+   * viet, va nhung gi rules engine / bang gia / cap dai ly / trang thai don thuc su cho phep noi.
+   * Rong la mot gia tri BINH THUONG va co nghia — mot luot khong tra cuu gi thi khong duoc khang
+   * dinh gi co he qua.
+   */
+  readonly authority: OutboundAuthority;
 }
 
 export abstract class AdvisorAgent {
@@ -108,7 +123,7 @@ export const HANDOFF_MARKER = '[CHUYEN_SALE]';
  */
 export function finalizeAdvisorReply(
   raw: string,
-  toolOutputs: readonly AdvisorToolResult[],
+  outcomes: readonly AdvisorToolOutcome[],
   usedTools: string[],
   logger: Logger,
 ): AdvisorReply | null {
@@ -119,7 +134,13 @@ export function finalizeAdvisorReply(
   const text = trimmed.replaceAll(HANDOFF_MARKER, '').trim();
   if (!text) return null;
 
-  const invented = unverifiedAmounts(text, toolOutputs);
+  // HAU KIEM TIEN giu nguyen vai tro PHONG THU CHIEU SAU. No khong phai mo hinh tham quyen (cong
+  // do o `outbound/outbound-authority.ts`) — no chi bat som mot ban soan da lo con so, de ben goi
+  // lui ve duong tat dinh thay vi di tiep voi mot ban se bi tu choi o cuoi.
+  const invented = unverifiedAmounts(
+    text,
+    outcomes.map((outcome) => outcome.output),
+  );
   if (invented.length) {
     logger.warn(
       `Ban soan chua con so khong co trong ket qua cong cu (${invented.join(', ')}) — bo ban soan.`,
@@ -127,7 +148,12 @@ export function finalizeAdvisorReply(
     return null;
   }
   logger.log(`[advisor] cong cu=${usedTools.join(',') || 'khong'} handoff=${handoff}`);
-  return { text, usedTools, handoff };
+  return {
+    text,
+    usedTools,
+    handoff,
+    authority: mergeAuthority(...outcomes.map((outcome) => outcome.grants)),
+  };
 }
 
 export class ClaudeAdvisorAgent extends AdvisorAgent {
@@ -147,7 +173,7 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
     const messages: Anthropic.MessageParam[] = [
       { role: 'user', content: request.customerText.trim() || '(khach gui mot anh)' },
     ];
-    const toolOutputs: AdvisorToolResult[] = [];
+    const outcomes: AdvisorToolOutcome[] = [];
     const usedTools: string[] = [];
 
     try {
@@ -167,7 +193,7 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
           return null;
         }
         if (response.stop_reason !== 'tool_use') {
-          return this.finalize(response, toolOutputs, usedTools);
+          return this.finalize(response, outcomes, usedTools);
         }
         // Vong CUOI van tra `tool_use` nghia la LLM chua chiu ket luan; ep no viet cau tra loi
         // bang du kien da co thay vi tra ve tay khong.
@@ -182,16 +208,18 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
           calls.map(async (call) => {
             usedTools.push(call.name);
             // `input` la JSON do LLM sinh — coi nhu du lieu ngoai, tung cong cu tu ep kieu.
-            const output = await runAdvisorTool(
+            const outcome = await runAdvisorTool(
               call.name,
               (call.input ?? {}) as Record<string, unknown>,
               request.tools,
             );
-            toolOutputs.push(output);
+            outcomes.push(outcome);
             return {
               type: 'tool_result' as const,
               tool_use_id: call.id,
-              content: JSON.stringify(output),
+              // CHI `output` di sang LLM. Tham quyen la thu he thong giu de xet ban soan — dua no
+              // vao prompt se bien mot rang buoc thanh mot goi y ma model co the doc va bat chuoc.
+              content: JSON.stringify(outcome.output),
             };
           }),
         );
@@ -211,14 +239,14 @@ export class ClaudeAdvisorAgent extends AdvisorAgent {
 
   private finalize(
     response: Anthropic.Message,
-    toolOutputs: readonly AdvisorToolResult[],
+    outcomes: readonly AdvisorToolOutcome[],
     usedTools: string[],
   ): AdvisorReply | null {
     const raw = response.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
       .map((block) => block.text)
       .join('');
-    return finalizeAdvisorReply(raw, toolOutputs, usedTools, this.logger);
+    return finalizeAdvisorReply(raw, outcomes, usedTools, this.logger);
   }
 }
 
