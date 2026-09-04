@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@netviet/api", "dev"],
       "port": 3001
+    },
+    {
+      "name": "web-transport",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["apps/web/dev-transport.mjs"],
+      "port": 3002
     }
   ]
 }
