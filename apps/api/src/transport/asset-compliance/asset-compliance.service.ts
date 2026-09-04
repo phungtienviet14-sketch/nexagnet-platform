@@ -133,6 +133,32 @@ export class AssetComplianceService {
           `Khong tim thay ke hoach ${input.planId}`,
         );
       }
+
+      /**
+       * KE HOACH VA XE PHAI LA MOT CAP, khong phai hai su ton tai roi rac.
+       *
+       * Hai kiem o tren tra loi "ke hoach nay co that" va "xe nay co that" — ca hai dung ma
+       * cap doi van sai, vi schema noi lenh sua toi xe va toi ke hoach bang HAI khoa ngoai doc
+       * lap. `maintenance-schedule.ts` tinh han bao duong ke tiep tu cac lenh DA DONG cua ke
+       * hoach, nen mot lenh cua xe B nam trong ke hoach cua xe A keo moc chu ky cua xe A di
+       * theo so odo cua xe B — roi khoa/mo xe theo mot lich sai.
+       *
+       * Trigger `TransportMaintenanceWorkOrder_plan_same_vehicle` giu cung dieu nay o tang luu
+       * tru, cho duong ghi thang khong di qua day.
+       */
+      if (plan.vehicleId !== input.vehicleId) {
+        this.telemetry?.decision({
+          vocabulary: TRANSPORT_ASSET_COMPLIANCE_DECISIONS,
+          point: 'maintenance.work_order_open',
+          outcome: 'denied',
+          reason: 'MAINTENANCE_PLAN_VEHICLE_MISMATCH',
+          detail: { planId: input.planId, vehicleId: input.vehicleId },
+        });
+        throw TransportDomainError.invalid(
+          'MAINTENANCE_PLAN_VEHICLE_MISMATCH',
+          `Ke hoach ${input.planId} thuoc ve mot xe khac`,
+        );
+      }
     }
 
     const created = await this.repository.openWorkOrder(input);

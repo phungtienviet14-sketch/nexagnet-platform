@@ -8,7 +8,11 @@ import {
   PAYSLIP_POSTED_IMMUTABLE_TRIGGER,
   WORKFORCE_UNIQUE_INDEXES,
 } from '../workforce/workforce-storage-conflict.js';
-import { ASSET_COMPLIANCE_UNIQUE_INDEXES } from './asset-compliance-storage-conflict.js';
+import {
+  ASSET_COMPLIANCE_UNIQUE_INDEXES,
+  MAINTENANCE_PLAN_VEHICLE_IMMUTABLE_TRIGGER,
+  MAINTENANCE_WORK_ORDER_PLAN_SAME_VEHICLE_TRIGGER,
+} from './asset-compliance-storage-conflict.js';
 
 /**
  * DOI CHIEU VAN BAN giua migration va cac hang so cua mien.
@@ -68,6 +72,20 @@ const CHECK_CONSTRAINTS = [
   'TransportPayslipComponent_manual_needs_signer',
 ];
 
+/**
+ * MOI TRIGGER cua migration nay.
+ *
+ * Hai cai dau giu lich su phieu luong bat bien (`INV-20`, acceptance 12); hai cai sau giu mot
+ * lenh sua va ke hoach cua no noi ve CUNG mot xe — mot bat bien khong `CHECK` nao dat duoc, vi
+ * `CHECK` chi doc duoc hang cua chinh no.
+ */
+const ALL_TRIGGERS = [
+  PAYSLIP_POSTED_IMMUTABLE_TRIGGER,
+  PAYSLIP_COMPONENT_FROZEN_TRIGGER,
+  MAINTENANCE_WORK_ORDER_PLAN_SAME_VEHICLE_TRIGGER,
+  MAINTENANCE_PLAN_VEHICLE_IMMUTABLE_TRIGGER,
+] as const;
+
 /** Doan tu mot `CREATE ...` den dau cham phay ke tiep, tren ban da gop khoang trang. */
 function statementStartingWith(needle: string): string {
   const start = flat.indexOf(needle);
@@ -122,16 +140,91 @@ describe('trigger — bat bien duy nhat CHECK khong lam duoc', () => {
    * Mot `CHECK` chi nhin duoc hang MOI. Cau hoi "hang CU dang o trang thai nao" chi trigger tra loi
    * duoc, va do la toan bo ly do hai trigger nay ton tai.
    */
-  it('hai trigger duoc tao cung ham cua chung', () => {
-    for (const name of [PAYSLIP_POSTED_IMMUTABLE_TRIGGER, PAYSLIP_COMPONENT_FROZEN_TRIGGER]) {
+  it('bon trigger duoc tao cung ham cua chung', () => {
+    for (const name of ALL_TRIGGERS) {
       expect(statements, name).toContain(`CREATE TRIGGER "${name}"`);
     }
-    expect(statements).toContain(
-      'CREATE OR REPLACE FUNCTION "transport_payslip_posted_immutable"()',
+    for (const fn of [
+      'transport_payslip_posted_immutable',
+      'transport_payslip_component_frozen',
+      'transport_work_order_plan_same_vehicle',
+      'transport_plan_vehicle_immutable',
+    ]) {
+      expect(statements, fn).toContain(`CREATE OR REPLACE FUNCTION "${fn}"()`);
+    }
+  });
+
+  /**
+   * B1 — CHA CUA MOT DONG LA DANH TINH, KHONG PHAI MOT O SUA DUOC.
+   *
+   * Trigger cu chi hoi "phieu o `NEW.payslipId` co phai DRAFT khong", nen mot `UPDATE` doi chinh
+   * `payslipId` tu mot phieu DA CHOT sang mot ban nhap lot qua: cau hoi duoc dat ve phia phieu
+   * DEN. Bang chung chay that o `B1 (P7)` cua `transport-workforce.int.spec.ts`; bai nay giu cau
+   * lenh khoi bien mat trong mot lan sinh lai migration.
+   */
+  it('trigger dong luong CHAN phep doi `payslipId` cua mot dong da co', () => {
+    const fn = flat.slice(
+      flat.indexOf('CREATE OR REPLACE FUNCTION "transport_payslip_component_frozen"()'),
+      flat.indexOf('CREATE TRIGGER "TransportPayslip_component_frozen"'),
     );
-    expect(statements).toContain(
-      'CREATE OR REPLACE FUNCTION "transport_payslip_component_frozen"()',
+    expect(fn).toContain(`TG_OP = 'UPDATE' AND NEW."payslipId" IS DISTINCT FROM OLD."payslipId"`);
+  });
+
+  /**
+   * B2 — LICH SU cua mot phieu da chot cung dong bang, khong chi cac con so tien.
+   *
+   * Bang canh trang thai cua chinh trigger nay CHAP NHAN canh `X -> X`, nen mot `UPDATE` khong
+   * doi trang thai di qua duoc — va neu cac cot duoi de ngo thi nguoi da duyet, moc da tra va ly
+   * do sua cua mot phieu da chot viet lai duoc bang mot lenh ghi thang.
+   */
+  it('trigger phieu da chot dong bang ca CAC COT LICH SU, khong chi tien', () => {
+    const fn = flat.slice(
+      flat.indexOf('CREATE OR REPLACE FUNCTION "transport_payslip_posted_immutable"()'),
+      flat.indexOf('CREATE TRIGGER "TransportPayslip_posted_immutable"'),
     );
+    for (const column of ['approvedAt', 'approvedBy', 'correctionReason', 'createdAt', 'id']) {
+      expect(fn, column).toContain(`NEW."${column}" IS DISTINCT FROM OLD."${column}"`);
+    }
+    // Moc da tra chi ghi duoc tren DUNG MOT canh.
+    expect(fn).toContain(`OLD."status" = 'APPROVED' AND NEW."status" = 'PAID'`);
+    expect(fn).toContain(`NEW."paidAt" IS DISTINCT FROM OLD."paidAt"`);
+    expect(fn).toContain(`NEW."paidBy" IS DISTINCT FROM OLD."paidBy"`);
+  });
+
+  /**
+   * B2 (bis) — MOT PHIEU DA TRA PHAI DAO DUOC.
+   *
+   * `..._posted_fields` tung viet ve thu hai la mot DANG THUC, va dang thuc do lam canh
+   * `PAID -> REVERSED` bat kha thi o DB trong khi may trang thai van hua co no. Bai nay giu cho
+   * dang thuc do khong quay lai.
+   */
+  it('`..._posted_fields` KHONG rang buoc moc da tra bang mot dang thuc', () => {
+    const posted = statementStartingWith(
+      'ALTER TABLE "TransportPayslip" ADD CONSTRAINT "TransportPayslip_posted_fields"',
+    );
+    expect(posted).not.toBe('');
+    expect(posted).not.toContain(`("status" = 'PAID') = (`);
+    expect(posted).toContain(`("paidAt" IS NULL) = ("paidBy" IS NULL)`);
+    expect(posted).toContain(`"status" <> 'PAID' OR "paidAt" IS NOT NULL`);
+    expect(posted).toContain(`"status" NOT IN ('DRAFT', 'APPROVED') OR "paidAt" IS NULL`);
+  });
+
+  /**
+   * B3 — LENH SUA VA KE HOACH PHAI NOI VE CUNG MOT XE.
+   *
+   * Hai khoa ngoai doc lap deu tro toi hang co that trong khi cap doi van sai, va `CHECK` khong
+   * doc duoc `vehicleId` cua mot bang khac. Trigger la thu duy nhat lam duoc, va CO Y khong dung
+   * khoa ngoai gop `(planId, vehicleId)`: Prisma khong bieu dien duoc no nen mot lan
+   * `migrate diff` sau nay se sinh cau lenh xoa no.
+   */
+  it('cap ke hoach/xe cua lenh sua duoc cuong che bang trigger, KHONG bang khoa ngoai gop', () => {
+    expect(flat).toContain(
+      `CREATE TRIGGER "${MAINTENANCE_WORK_ORDER_PLAN_SAME_VEHICLE_TRIGGER}" BEFORE INSERT OR UPDATE ON "TransportMaintenanceWorkOrder"`,
+    );
+    expect(flat).toContain(
+      `CREATE TRIGGER "${MAINTENANCE_PLAN_VEHICLE_IMMUTABLE_TRIGGER}" BEFORE UPDATE ON "TransportMaintenancePlan"`,
+    );
+    expect(flat).not.toMatch(/FOREIGN KEY \("planId", *"vehicleId"\)/);
   });
 
   /**
@@ -142,7 +235,7 @@ describe('trigger — bat bien duy nhat CHECK khong lam duoc', () => {
    * lam ham do luon tra `false` — mot cong im lang mo toang.
    */
   it('cau RAISE EXCEPTION mang TEN TRIGGER de tang mien nhan dien duoc', () => {
-    for (const name of [PAYSLIP_POSTED_IMMUTABLE_TRIGGER, PAYSLIP_COMPONENT_FROZEN_TRIGGER]) {
+    for (const name of ALL_TRIGGERS) {
       expect(flat, name).toContain(`RAISE EXCEPTION '${name}:`);
     }
   });
@@ -192,8 +285,9 @@ describe('duong lui', () => {
     for (const index of [...ASSET_COMPLIANCE_UNIQUE_INDEXES, ...WORKFORCE_UNIQUE_INDEXES]) {
       expect(rollback, index.indexName).toContain(`DROP INDEX IF EXISTS "${index.indexName}"`);
     }
-    expect(rollback).toContain(`DROP TRIGGER IF EXISTS "${PAYSLIP_POSTED_IMMUTABLE_TRIGGER}"`);
-    expect(rollback).toContain(`DROP TRIGGER IF EXISTS "${PAYSLIP_COMPONENT_FROZEN_TRIGGER}"`);
+    for (const name of ALL_TRIGGERS) {
+      expect(rollback, name).toContain(`DROP TRIGGER IF EXISTS "${name}"`);
+    }
     expect(rollback).toContain(
       `DROP CONSTRAINT IF EXISTS "${PAYROLL_PERIOD_NO_OVERLAP_CONSTRAINT}"`,
     );

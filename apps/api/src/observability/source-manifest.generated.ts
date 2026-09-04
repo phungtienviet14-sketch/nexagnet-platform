@@ -509,7 +509,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "compliance.document_register|COMPLIANCE_DOCUMENT_REGISTERED": {
       "functionName": "AssetComplianceService.registerDocument",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
-      "line": 335
+      "line": 361
     },
     "compliance.document_register|COMPLIANCE_SUBJECT_SHAPE_INVALID": {
       "functionName": "AssetComplianceService.assertSubject",
@@ -518,12 +518,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "compliance.document_register|COMPLIANCE_SUBJECT_UNKNOWN": {
       "functionName": "AssetComplianceService.assertSubject",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
-      "line": 302
+      "line": 328
     },
     "compliance.document_register|COMPLIANCE_VALIDITY_RANGE_INVALID": {
       "functionName": "AssetComplianceService.registerDocument",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
-      "line": 320
+      "line": 346
     },
     "conflict.resolution|*": {
       "functionName": "SourceRegistryService.resolveConflict",
@@ -812,17 +812,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "maintenance.work_order_close|MAINTENANCE_ODO_REGRESSION": {
       "functionName": "AssetComplianceService.completeWorkOrder",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
-      "line": 176
+      "line": 202
     },
     "maintenance.work_order_close|MAINTENANCE_WORK_ORDER_CANCELLED": {
       "functionName": "AssetComplianceService.cancelWorkOrder",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
-      "line": 245
+      "line": 271
     },
     "maintenance.work_order_close|MAINTENANCE_WORK_ORDER_COMPLETED": {
       "functionName": "AssetComplianceService.completeWorkOrder",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
-      "line": 214
+      "line": 240
     },
     "maintenance.work_order_close|MAINTENANCE_WORK_ORDER_NOT_OPEN": {
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts"
@@ -832,6 +832,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
       "line": 124
     },
+    "maintenance.work_order_open|MAINTENANCE_PLAN_VEHICLE_MISMATCH": {
+      "functionName": "AssetComplianceService.openWorkOrder",
+      "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
+      "line": 150
+    },
     "maintenance.work_order_open|MAINTENANCE_VEHICLE_UNKNOWN": {
       "functionName": "AssetComplianceService.openWorkOrder",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
@@ -840,12 +845,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "maintenance.work_order_open|MAINTENANCE_WORK_ORDER_ALREADY_OPEN": {
       "functionName": "AssetComplianceService.openWorkOrder",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
-      "line": 140
+      "line": 166
     },
     "maintenance.work_order_open|MAINTENANCE_WORK_ORDER_OPENED": {
       "functionName": "AssetComplianceService.openWorkOrder",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance.service.ts",
-      "line": 153
+      "line": 179
     },
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
@@ -920,12 +925,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "payslip.correction|*": {
       "functionName": "WorkforceService.issueCorrection",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 430
+      "line": 433
     },
     "payslip.correction|PAYSLIP_ALREADY_REVERSED": {
       "functionName": "WorkforceService.issueCorrection",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 417
+      "line": 420
     },
     "payslip.correction|PAYSLIP_NOT_CORRECTABLE": {
       "functionName": "WorkforceService.issueCorrection",

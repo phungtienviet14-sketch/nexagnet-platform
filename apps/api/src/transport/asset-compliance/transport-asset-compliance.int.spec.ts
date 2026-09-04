@@ -171,6 +171,59 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     });
 
     /**
+     * B3 — MOT LENH SUA KHONG NAM DUOC TRONG KE HOACH CUA MOT CHIEC XE KHAC.
+     *
+     * Schema noi `TransportMaintenanceWorkOrder` toi xe va toi ke hoach bang HAI khoa ngoai DOC
+     * LAP, nen ca hai deu tro toi hang co that ma cap doi van sai. Hau qua o
+     * `maintenance-schedule.ts`: han bao duong ke tiep cua mot ke hoach duoc tinh tu cac lenh DA
+     * DONG cua chinh no, nen mot lenh cua xe khac keo moc chu ky di theo so odo cua chiec xe do.
+     *
+     * Cong o service chan duoc nguoi dung. Trigger la thu duy nhat chan duoc mot lan ghi THANG.
+     */
+    it('B3 (P6): lenh sua tro toi ke hoach cua XE KHAC bi trigger chan', async () => {
+      const other = await fleet.createVehicle({
+        registrationPlate: `${PREFIX}-29H-002`,
+        vehicleClass: 'TRUCK',
+        currentOdoKm: 80_000,
+      });
+      const plan = await service.schedulePlan({
+        vehicleId,
+        name: `${PREFIX} Thay lop`,
+        triggerKind: 'ODOMETER',
+        intervalKm: 40_000,
+        intervalDays: null,
+        baselineOdoKm: 100_000,
+        baselineDate: '2026-06-01',
+        createdBy: `${PREFIX}-ke-toan`,
+      });
+
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      const db = prisma as unknown as Record<string, any>;
+      await expect(
+        db.transportMaintenanceWorkOrder.create({
+          data: {
+            vehicleId: other.id,
+            planId: plan.id,
+            description: `${PREFIX} Lech xe`,
+            openedDate: '2026-09-03',
+            openedOdoKm: 80_500,
+            openedBy: `${PREFIX}-ke-toan`,
+          },
+        }),
+      ).rejects.toThrow(/TransportMaintenanceWorkOrder_plan_same_vehicle/);
+
+      // Va khong go duoc rang buoc bang cach doi xe cua chinh ke hoach.
+      await expect(
+        db.transportMaintenancePlan.update({
+          where: { id: plan.id },
+          data: { vehicleId: other.id },
+        }),
+      ).rejects.toThrow(/TransportMaintenancePlan_vehicle_immutable/);
+
+      expect((await repo.findPlan(plan.id))?.vehicleId).toBe(vehicleId);
+    });
+
+    /**
      * ACCEPTANCE 13 — trang thai song sot qua mot KET NOI MOI.
      *
      * `PrismaService` moi = client moi, pool moi. Neu mot phan trang thai con nam trong bo nho cua

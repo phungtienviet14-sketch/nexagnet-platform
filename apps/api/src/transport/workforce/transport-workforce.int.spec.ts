@@ -240,6 +240,131 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       ).rejects.toBeTruthy();
     });
 
+    /**
+     * B1 — MOT DONG KHONG ROI KHOI PHIEU DA CHOT BANG CACH DOI CHA.
+     *
+     * Trigger cu chi tra loi cau hoi "phieu MOI co phai DRAFT khong". Voi mot `UPDATE` doi
+     * `payslipId`, phieu MOI la ban nhap va phieu CU la ban da chot — nen cau hoi do tra ve
+     * "duoc", va dong tien roi khoi mot phieu da duyet ma khong de lai dau vet nao. Tong tren
+     * phieu goc van nguyen, cac dong giai thich no thi bot mot: phieu in ra khong con doi chieu
+     * duoc voi chinh no, dung dieu acceptance 12 hua la khong xay ra.
+     *
+     * Duong di cua bai nay la duong cua mot bug tuong lai: `UPDATE` THANG, khong qua service.
+     */
+    it('B1 (P7): doi `payslipId` cua mot dong sang phieu DRAFT khac bi trigger chan', async () => {
+      const period = await openPeriod('Thang 7/2027', '2027-07-01', '2027-07-31');
+      const posted = await service.runPayroll({ periodId: period.id, runBy: `${PREFIX}-kt` });
+      if (posted.kind !== 'RECORDED') throw new Error('mong doi RECORDED');
+      const postedId = mine(posted.payslips)!.id;
+      await service.approvePayslip(postedId, `${PREFIX}-gd`);
+
+      // Lan chay THU HAI trong cung ky — mot phieu con DRAFT de lam noi den cua phep doi cha.
+      const draftRun = await service.runPayroll({ periodId: period.id, runBy: `${PREFIX}-kt` });
+      if (draftRun.kind !== 'RECORDED') throw new Error('mong doi RECORDED');
+      const draftId = mine(draftRun.payslips)!.id;
+
+      const before = await repo.findPayslip(postedId);
+      const componentId = before!.components[0]!.id;
+
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      const db = prisma as unknown as Record<string, any>;
+      await expect(
+        db.transportPayslipComponent.update({
+          where: { id: componentId },
+          data: { payslipId: draftId },
+        }),
+      ).rejects.toThrow(/TransportPayslip_component_frozen/);
+
+      const after = await repo.findPayslip(postedId);
+      expect(after?.components).toEqual(before?.components);
+      expect((await repo.findPayslip(draftId))?.components.map((c) => c.id)).not.toContain(
+        componentId,
+      );
+    });
+
+    /**
+     * B2 — LICH SU cua mot phieu da chot cung dong bang, khong chi cac con so tien.
+     *
+     * Trigger cu dong bang tien va tham chieu, nhung de ngo `approvedBy`, `approvedAt`, `paidBy`,
+     * `paidAt` va `correctionReason`. Vi mot `UPDATE` giu nguyen trang thai van duoc cho qua, mot
+     * lan ghi thang vao DB doi duoc NGUOI DA DUYET va NGAY DA TRA cua mot phieu da chot — khong
+     * mot phieu bo sung nao, khong mot phieu dao nao, khong mot dau vet nao.
+     *
+     * `APPROVED -> PAID` la ngoai le DUY NHAT: canh do phai ghi duoc moc da tra, va chi no.
+     */
+    it('B2 (P8): nguoi duyet / nguoi tra / ly do sua cua phieu da chot khong viet lai duoc', async () => {
+      const period = await openPeriod('Thang 8/2027', '2027-08-01', '2027-08-31');
+      const outcome = await service.runPayroll({ periodId: period.id, runBy: `${PREFIX}-kt` });
+      if (outcome.kind !== 'RECORDED') throw new Error('mong doi RECORDED');
+      const payslipId = mine(outcome.payslips)!.id;
+      await service.approvePayslip(payslipId, `${PREFIX}-gd`);
+
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      const db = prisma as unknown as Record<string, any>;
+      const rewrite = (data: Record<string, unknown>) =>
+        db.transportPayslip.update({ where: { id: payslipId }, data });
+
+      await expect(rewrite({ approvedBy: `${PREFIX}-nguoi-khac` })).rejects.toThrow(
+        /TransportPayslip_posted_immutable/,
+      );
+      await expect(rewrite({ approvedAt: new Date('2020-01-01T00:00:00.000Z') })).rejects.toThrow(
+        /TransportPayslip_posted_immutable/,
+      );
+      await expect(rewrite({ correctionReason: 'vien co dan vao sau' })).rejects.toThrow(
+        /TransportPayslip_posted_immutable/,
+      );
+      await expect(rewrite({ createdAt: new Date('2020-01-01T00:00:00.000Z') })).rejects.toThrow(
+        /TransportPayslip_posted_immutable/,
+      );
+
+      // Canh hop le VAN di duoc, va no la canh duy nhat ghi duoc moc da tra.
+      await service.payPayslip(payslipId, `${PREFIX}-kt`);
+      await expect(rewrite({ paidBy: `${PREFIX}-nguoi-khac` })).rejects.toThrow(
+        /TransportPayslip_posted_immutable/,
+      );
+      await expect(rewrite({ paidAt: new Date('2020-01-01T00:00:00.000Z') })).rejects.toThrow(
+        /TransportPayslip_posted_immutable/,
+      );
+
+      const after = await repo.findPayslip(payslipId);
+      expect(after?.payslip.approvedBy).toBe(`${PREFIX}-gd`);
+      expect(after?.payslip.paidBy).toBe(`${PREFIX}-kt`);
+      expect(after?.payslip.correctionReason).toBeNull();
+    });
+
+    /**
+     * B4 — PHIEU DAO RA DOI DA CHOT, va mot phieu DA TRA van dao duoc.
+     *
+     * Hai dieu nay di cung nhau vi cung mot lan ghi phai dung ca hai: ban dao mang `APPROVED` +
+     * nguoi ky ngay tu `INSERT`, con ban goc di canh `PAID -> REVERSED` ma KHONG duoc mat moc
+     * da tra cua no.
+     */
+    it('B4 (P9): phieu dao ghi xuong DA CHOT, va phieu DA TRA dao duoc ma giu moc da tra', async () => {
+      const period = await openPeriod('Thang 9/2027', '2027-09-01', '2027-09-30');
+      const outcome = await service.runPayroll({ periodId: period.id, runBy: `${PREFIX}-kt` });
+      if (outcome.kind !== 'RECORDED') throw new Error('mong doi RECORDED');
+      const payslipId = mine(outcome.payslips)!.id;
+      await service.approvePayslip(payslipId, `${PREFIX}-gd`);
+      await service.payPayslip(payslipId, `${PREFIX}-kt`);
+
+      const reversal = await service.issueCorrection({
+        payslipId,
+        kind: 'REVERSAL',
+        reason: 'Tra nham lai xe',
+        actor: `${PREFIX}-gd`,
+      });
+
+      const stored = await repo.findPayslip(reversal.id);
+      expect(stored?.payslip.status).toBe('APPROVED');
+      expect(stored?.payslip.approvedBy).toBe(`${PREFIX}-gd`);
+      expect(stored?.payslip.approvedAt).not.toBeNull();
+
+      const original = await repo.findPayslip(payslipId);
+      expect(original?.payslip.status).toBe('REVERSED');
+      expect(original?.payslip.paidBy).toBe(`${PREFIX}-kt`);
+      expect(original?.payslip.paidAt).not.toBeNull();
+    });
+
     /** ACCEPTANCE 13 — ca chuoi phieu doc lai duoc bang mot client HOAN TOAN MOI. */
     it('ACCEPTANCE 13 (P6): phieu va cac dong song sot qua mot client moi', async () => {
       const period = await openPeriod('Thang 6/2027', '2027-06-01', '2027-06-30');

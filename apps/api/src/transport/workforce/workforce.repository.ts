@@ -77,6 +77,13 @@ export interface IssueCorrectionInput {
   readonly runId: string;
   readonly reason: string;
   readonly actor: string;
+  /**
+   * KHOANH KHAC CUA HANH DONG SUA — do nguoi goi dua vao, khong do kho tu lay.
+   *
+   * Voi `REVERSAL` day chinh la moc duyet cua ban dao: phat mot phieu dao LA hanh dong chot, nen
+   * `actor` + `at` di thang vao `approvedBy`/`approvedAt` cua no. Xem `issueCorrection()` ben duoi.
+   */
+  readonly at: Date;
   readonly payslip: PayslipWriteInput;
 }
 
@@ -115,5 +122,18 @@ export abstract class WorkforceRepository {
     from: PayslipStatus,
     input: TransitionPayslipInput,
   ): Promise<TransitionPayslipOutcome>;
+  /**
+   * Phat mot phieu bu. HAI hinh dang khac nhau tuy `payslip.kind`, va khac biet do la co y:
+   *
+   *   · `REVERSAL`     — ban dao ra doi DA CHOT (`APPROVED`, mang `actor`/`at`), va ban goc
+   *                      chuyen sang `REVERSED` trong CUNG giao dich. Khong co gi de duyet o mot
+   *                      buoc thu hai: ban dao la phep phu dinh tat dinh cua ban goc, khong mot
+   *                      con so nao do nguoi nhap. Neu no ra doi `DRAFT` thi ton tai mot trang
+   *                      thai doc duoc tu ben ngoai la "phieu nay da bi dao" trong khi CHUNG TU
+   *                      dao no chua duoc ai chot — va ke toan doi chieu luc do khong tra loi
+   *                      duoc "dao bang cai gi".
+   *   · `SUPPLEMENTAL` — ban bo sung ra doi `DRAFT` va ban goc KHONG doi trang thai. So tien
+   *                      tren no do NGUOI nhap, nen no phai qua mot lan duyet that.
+   */
   abstract issueCorrection(input: IssueCorrectionInput): Promise<IssueCorrectionOutcome>;
 }

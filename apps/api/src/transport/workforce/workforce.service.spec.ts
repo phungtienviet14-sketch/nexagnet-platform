@@ -273,6 +273,76 @@ describe('vong doi phieu va SUA — ACCEPTANCE 12', () => {
     expect(reversal.netAmount).toBe(-(before?.payslip.netAmount ?? 0));
   });
 
+  /**
+   * B4 — MOT PHIEU DAO KHONG DUOC LA MOT BAN NHAP.
+   *
+   * Ban goc chuyen sang `REVERSED` NGAY trong cung giao dich. Neu ban dao ra doi o `DRAFT` thi
+   * giua hai thoi diem — va co the mai mai, neu khong ai bam duyet — ton tai mot trang thai doc
+   * ra duoc tu ben ngoai la: "phieu nay da bi dao", trong khi CHUNG TU dao no chua duoc ai chot.
+   * Ke toan doi chieu luc do khong tra loi duoc "dao bang cai gi".
+   *
+   * NGU NGHIA DA CHON: phat mot phieu dao CHINH LA hanh dong chot. Ban dao khong co mot con so
+   * nao do nguoi nhap — no la phep phu dinh tat dinh cua ban goc — nen khong co gi de duyet o
+   * mot buoc thu hai. Nguoi ky va khoanh khac duoc ghi ngay tren no.
+   *
+   * `SUPPLEMENTAL` di duong NGUOC LAI, va bai ke tiep giu dieu do: so tien cua mot phieu bo sung
+   * do NGUOI nhap, nen no phai qua mot lan duyet — va ban goc KHONG doi trang thai.
+   */
+  it('B4: phieu dao ra doi DA CHOT, mang ten nguoi ky va khoanh khac', async () => {
+    const { service, repository, payslipId } = await approvedPayslip();
+
+    const reversal = await service.issueCorrection({
+      payslipId,
+      kind: 'REVERSAL',
+      reason: 'Chay nham ky',
+      actor: 'giam-doc',
+    });
+
+    expect(reversal.status).toBe('APPROVED');
+    expect(reversal.approvedBy).toBe('giam-doc');
+    expect(reversal.approvedAt).not.toBeNull();
+    expect((await repository.findPayslip(payslipId))?.payslip.status).toBe('REVERSED');
+  });
+
+  it('B4: phieu BO SUNG van la ban nhap, va ban goc GIU NGUYEN trang thai', async () => {
+    const { service, repository, payslipId } = await approvedPayslip();
+
+    const supplement = await service.issueCorrection({
+      payslipId,
+      kind: 'SUPPLEMENTAL',
+      reason: 'Bu thieu khoan chuyen ngay 31/08',
+      actor: 'giam-doc',
+      components: [
+        { kind: 'EARNING', label: 'Bu chuyen 31/08', amount: 250_000, recordedBy: 'giam-doc' },
+      ],
+    });
+
+    expect(supplement.status).toBe('DRAFT');
+    expect(supplement.approvedAt).toBeNull();
+    expect((await repository.findPayslip(payslipId))?.payslip.status).toBe('APPROVED');
+  });
+
+  /** Mot phieu DA TRA cung dao duoc — canh `PAID -> REVERSED` cua may trang thai. */
+  it('B4: phieu DA TRA dao duoc, va moc da tra tren ban goc khong bi xoa', async () => {
+    const { service, repository, payslipId } = await approvedPayslip();
+    await service.payPayslip(payslipId, 'ke-toan');
+    const before = await repository.findPayslip(payslipId);
+
+    const reversal = await service.issueCorrection({
+      payslipId,
+      kind: 'REVERSAL',
+      reason: 'Tra nham lai xe',
+      actor: 'giam-doc',
+    });
+
+    const after = await repository.findPayslip(payslipId);
+    expect(reversal.status).toBe('APPROVED');
+    expect(after?.payslip.status).toBe('REVERSED');
+    expect(after?.payslip.paidAt).toBe(before?.payslip.paidAt);
+    expect(after?.payslip.paidBy).toBe('ke-toan');
+    expect(after?.payslip.approvedBy).toBe(before?.payslip.approvedBy);
+  });
+
   it('mot ban goc chi co MOT phieu dao', async () => {
     const { service, payslipId } = await approvedPayslip();
     await service.issueCorrection({

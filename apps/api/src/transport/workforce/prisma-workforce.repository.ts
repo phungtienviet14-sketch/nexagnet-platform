@@ -334,6 +334,8 @@ export class PrismaWorkforceRepository extends WorkforceRepository {
         return { kind: 'NOT_CORRECTABLE' as const, current: target.status };
       }
 
+      const reversing = input.payslip.kind === 'REVERSAL';
+
       try {
         const row = await model(scoped, 'transportPayslip').create({
           data: {
@@ -343,14 +345,34 @@ export class PrismaWorkforceRepository extends WorkforceRepository {
           },
         });
 
-        if (input.payslip.kind === 'REVERSAL') {
-          await model(scoped, 'transportPayslip').update({
-            where: { id: input.correctsId },
-            data: { status: 'REVERSED' },
-          });
-        }
+        if (!reversing) return { kind: 'ISSUED' as const, payslip: toPayslip(row) };
 
-        return { kind: 'ISSUED' as const, payslip: toPayslip(row) };
+        /**
+         * BAN DAO RA DOI DA CHOT — nhung phai chot o BUOC THU HAI, khong o `INSERT`.
+         *
+         * `TransportPayslip_component_frozen` cam them dong vao mot phieu da chot, va cac dong
+         * cua ban dao duoc ghi long trong chinh lenh `create` o tren. Sinh thang ra `APPROVED`
+         * thi trigger do chan lai cac dong cua no — dung, va la mot phep thu that: bat bien
+         * "phieu da chot khong nhan them dong" khong duoc ha xuong cho rieng ban dao.
+         *
+         * Nen thu tu la: ghi ban nhap kem cac dong -> chot no -> dao ban goc. CA BA nam trong
+         * CUNG mot giao dich, nen trang thai `DRAFT` o giua khong bao gio doc duoc tu ben ngoai:
+         * mot phien khac hoac thay chua co ban dao nao, hoac thay mot ban dao DA CHOT.
+         *
+         * `TransportPayslip_posted_fields` doi `approvedAt` + `approvedBy` di kem `APPROVED`,
+         * nen ba truong nay luon duoc ghi cung nhau.
+         */
+        const posted = await model(scoped, 'transportPayslip').update({
+          where: { id: row.id },
+          data: { status: 'APPROVED', approvedAt: input.at, approvedBy: input.actor },
+        });
+
+        await model(scoped, 'transportPayslip').update({
+          where: { id: input.correctsId },
+          data: { status: 'REVERSED' },
+        });
+
+        return { kind: 'ISSUED' as const, payslip: toPayslip(posted) };
       } catch (error) {
         if (isUniqueViolationOn(error, PAYSLIP_ONE_REVERSAL_PER_TARGET)) {
           return { kind: 'ALREADY_REVERSED' as const };

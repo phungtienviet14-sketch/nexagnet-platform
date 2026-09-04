@@ -21,6 +21,13 @@ export const MAINTENANCE_WORK_ORDER_OPEN_REASONS = [
   'MAINTENANCE_WORK_ORDER_ALREADY_OPEN',
   'MAINTENANCE_VEHICLE_UNKNOWN',
   'MAINTENANCE_PLAN_UNKNOWN',
+  /**
+   * Ke hoach co that, xe co that, nhung ke hoach do THUOC VE mot chiec xe khac.
+   *
+   * Ma RIENG chu khong gop vao `MAINTENANCE_PLAN_UNKNOWN`: hai duong tu choi nay noi hai viec
+   * khac han cho nguoi truc — "ban go nham ma ke hoach" so voi "ban dang mo lenh cho nham xe".
+   */
+  'MAINTENANCE_PLAN_VEHICLE_MISMATCH',
 ] as const;
 export type MaintenanceWorkOrderOpenReason = (typeof MAINTENANCE_WORK_ORDER_OPEN_REASONS)[number];
 
@@ -96,6 +103,7 @@ export const TRANSPORT_ASSET_COMPLIANCE_DECISIONS = defineDecisionVocabulary({
     MAINTENANCE_WORK_ORDER_ALREADY_OPEN: 'Kế hoạch này đã có một lệnh sửa đang mở',
     MAINTENANCE_VEHICLE_UNKNOWN: 'Không tìm thấy xe trong đội xe',
     MAINTENANCE_PLAN_UNKNOWN: 'Không tìm thấy kế hoạch bảo dưỡng',
+    MAINTENANCE_PLAN_VEHICLE_MISMATCH: 'Kế hoạch bảo dưỡng này thuộc về một xe khác',
 
     MAINTENANCE_WORK_ORDER_COMPLETED: 'Đã đóng lệnh sửa; mốc chu kỳ tính lại từ đây',
     MAINTENANCE_WORK_ORDER_CANCELLED: 'Đã huỷ lệnh sửa mở nhầm, giữ lại dấu vết',

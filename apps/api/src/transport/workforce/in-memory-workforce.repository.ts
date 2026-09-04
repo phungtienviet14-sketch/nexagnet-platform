@@ -88,14 +88,22 @@ export class InMemoryWorkforceRepository extends WorkforceRepository {
     return [...this.periods.values()];
   }
 
-  private materialize(runId: string, input: PayslipWriteInput): Payslip {
+  /**
+   * `posted` chi duoc dat cho mot BAN DAO — xem ghi chu tren `WorkforceRepository.issueCorrection`.
+   * Moi phieu khac ra doi `DRAFT`, va duong duy nhat roi khoi do la `transitionPayslip()`.
+   */
+  private materialize(
+    runId: string,
+    input: PayslipWriteInput,
+    posted?: { readonly at: string; readonly actor: string },
+  ): Payslip {
     const at = iso(this.now());
     const payslip: Payslip = {
       id: randomUUID(),
       runId,
       driverId: input.driverId,
       kind: input.kind,
-      status: 'DRAFT',
+      status: posted ? 'APPROVED' : 'DRAFT',
       grossEarnings: input.grossEarnings,
       totalDeductions: input.totalDeductions,
       netAmount: input.netAmount,
@@ -105,8 +113,8 @@ export class InMemoryWorkforceRepository extends WorkforceRepository {
       distanceKm: input.distanceKm,
       correctsId: input.correctsId,
       correctionReason: input.correctionReason,
-      approvedAt: null,
-      approvedBy: null,
+      approvedAt: posted?.at ?? null,
+      approvedBy: posted?.actor ?? null,
       paidAt: null,
       paidBy: null,
       createdAt: at,
@@ -235,20 +243,22 @@ export class InMemoryWorkforceRepository extends WorkforceRepository {
       if (existing) return { kind: 'ALREADY_REVERSED' };
     }
 
-    const payslip = this.materialize(input.runId, {
-      ...input.payslip,
-      correctsId: input.correctsId,
-      correctionReason: input.reason,
-    });
+    const reversing = input.payslip.kind === 'REVERSAL';
+    const payslip = this.materialize(
+      input.runId,
+      { ...input.payslip, correctsId: input.correctsId, correctionReason: input.reason },
+      reversing ? { at: iso(input.at), actor: input.actor } : undefined,
+    );
 
-    if (input.payslip.kind === 'REVERSAL') {
-      const at = iso(this.now());
+    if (reversing) {
+      // CHI `status`. Moc duyet va moc da tra cua ban goc khong duoc dong vao — trigger
+      // `TransportPayslip_posted_immutable` chan dung dieu do o duoi Postgres, va ban trong bo
+      // nho phai giu cung mot bat bien, neu khong cac bai `*.service.spec.ts` se xanh trong khi
+      // duong that do o DB.
       this.payslips.set(target.id, {
         ...target,
         status: 'REVERSED',
-        approvedAt: target.approvedAt ?? at,
-        approvedBy: target.approvedBy ?? input.actor,
-        updatedAt: at,
+        updatedAt: iso(this.now()),
       });
     }
     return { kind: 'ISSUED', payslip };

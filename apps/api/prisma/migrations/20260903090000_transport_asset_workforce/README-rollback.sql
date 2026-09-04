@@ -25,8 +25,12 @@
 -- CO Y THUC — cung quy uoc voi cac duong lui cua T3/T4/T5.
 
 -- 1. Trigger va ham cua chung.
+DROP TRIGGER IF EXISTS "TransportMaintenancePlan_vehicle_immutable" ON "TransportMaintenancePlan";
+DROP TRIGGER IF EXISTS "TransportMaintenanceWorkOrder_plan_same_vehicle" ON "TransportMaintenanceWorkOrder";
 DROP TRIGGER IF EXISTS "TransportPayslip_component_frozen" ON "TransportPayslipComponent";
 DROP TRIGGER IF EXISTS "TransportPayslip_posted_immutable" ON "TransportPayslip";
+DROP FUNCTION IF EXISTS "transport_plan_vehicle_immutable"();
+DROP FUNCTION IF EXISTS "transport_work_order_plan_same_vehicle"();
 DROP FUNCTION IF EXISTS "transport_payslip_component_frozen"();
 DROP FUNCTION IF EXISTS "transport_payslip_posted_immutable"();
 

@@ -131,6 +131,50 @@ describe('lenh sua — mot lenh dang mo cho moi ke hoach', () => {
     ).rejects.toMatchObject({ reason: 'MAINTENANCE_PLAN_NOT_FOUND' });
   });
 
+  /**
+   * B3 — KE HOACH VA LENH SUA PHAI NOI VE CUNG MOT XE.
+   *
+   * Schema noi hai khoa ngoai DOC LAP toi `TransportVehicle` va `TransportMaintenancePlan`, nen
+   * "ke hoach nay co that" va "xe nay co that" deu dung ma cap doi van sai. Hau qua khong dung o
+   * mot hang xau: `maintenance-schedule.ts` tinh han bao duong ke tiep tu cac lenh DA DONG cua
+   * ke hoach, nen mot lenh cua xe B nam trong ke hoach cua xe A day moc chu ky cua xe A di theo
+   * so odo cua mot chiec xe khac — va khoa/mo xe theo mot lich sai.
+   */
+  it('B3: lenh sua cua xe KHAC khong gan duoc vao ke hoach cua xe nay', async () => {
+    const { service } = build(
+      new StubCore([
+        {
+          id: 'veh-1',
+          registrationPlate: '29H-11111',
+          vehicleClass: 'TRUCK',
+          currentOdoKm: 100_000,
+          status: 'IDLE',
+        },
+        {
+          id: 'veh-2',
+          registrationPlate: '29H-22222',
+          vehicleClass: 'TRUCK',
+          currentOdoKm: 90_000,
+          status: 'IDLE',
+        },
+      ]),
+    );
+    const plan = await service.schedulePlan(planInput);
+
+    await expect(
+      service.openWorkOrder({ ...openInput, vehicleId: 'veh-2', planId: plan.id }),
+    ).rejects.toMatchObject({ reason: 'MAINTENANCE_PLAN_VEHICLE_MISMATCH' });
+  });
+
+  it('B3: dung xe cua ke hoach thi lenh sua mo binh thuong', async () => {
+    const { service } = build();
+    const plan = await service.schedulePlan(planInput);
+
+    await expect(
+      service.openWorkOrder({ ...openInput, vehicleId: 'veh-1', planId: plan.id }),
+    ).resolves.toMatchObject({ status: 'OPEN', planId: plan.id });
+  });
+
   it('dong lenh voi odo NHO HON luc mo bi tu choi', async () => {
     const { service } = build();
     const order = await service.openWorkOrder(openInput);

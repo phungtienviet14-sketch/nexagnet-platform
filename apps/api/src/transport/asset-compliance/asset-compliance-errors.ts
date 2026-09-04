@@ -23,6 +23,14 @@ export const TRANSPORT_ASSET_COMPLIANCE_VALIDATION_REASONS = [
   'COMPLIANCE_SUBJECT_SHAPE_INVALID',
   /** Chu ky khong khop `triggerKind` — vd lich `ODOMETER` khong co `intervalKm`. */
   'MAINTENANCE_INTERVAL_MISMATCH',
+  /**
+   * Lenh sua tro toi mot ke hoach cua CHIEC XE KHAC.
+   *
+   * Hai khoa ngoai doc lap (xe, ke hoach) deu tro toi hang co that trong khi cap doi van sai.
+   * `maintenance-schedule.ts` tinh han bao duong ke tiep tu cac lenh DA DONG cua ke hoach, nen
+   * mot lenh lech xe keo moc chu ky cua xe nay di theo so odo cua xe kia.
+   */
+  'MAINTENANCE_PLAN_VEHICLE_MISMATCH',
   /** `validFrom` sau `validTo`, hoac mot trong hai khong phai ngay co that. */
   'COMPLIANCE_VALIDITY_RANGE_INVALID',
   /** Odo luc dong lenh nho hon luc mo — mot con so nhap sai, khong phai mot xe chay lui. */

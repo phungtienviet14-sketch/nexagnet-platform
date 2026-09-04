@@ -463,12 +463,26 @@ ALTER TABLE "TransportPayslip"
   ADD CONSTRAINT "TransportPayslip_no_self_correction"
   CHECK ("correctsId" IS NULL OR "correctsId" <> "id");
 
+-- MOC DA TRA SONG SOT QUA `REVERSED`.
+--
+-- Ve thu hai tung la mot DANG THUC `("status" = 'PAID') = (paid* IS NOT NULL)`.
+-- Dang thuc do lam mot phieu DA TRA khong bao gio dao duoc: canh
+-- `PAID -> REVERSED` giu nguyen moc da tra, nen ve trai thanh sai trong khi ve
+-- phai van dung, va Postgres tu choi hang moi. May trang thai
+-- (`payslip-lifecycle.ts`) va kho thi deu cho phep dung canh do — ba lop noi
+-- hai dieu khac nhau, va lop duoi cung la lop thang. Bai `B4 (P9)` cua
+-- `transport-workforce.int.spec.ts` giu cho no khong quay lai.
+--
+-- Cai VAN duoc giu nguyen: phieu `PAID` bat buoc co moc da tra; phieu chua tra
+-- (`DRAFT`/`APPROVED`) bat buoc KHONG co; va hai cot do luon di cung nhau.
 ALTER TABLE "TransportPayslip"
   ADD CONSTRAINT "TransportPayslip_posted_fields"
   CHECK (
     (("status" IN ('APPROVED', 'PAID', 'REVERSED'))
       = ("approvedAt" IS NOT NULL AND "approvedBy" IS NOT NULL))
-    AND (("status" = 'PAID') = ("paidAt" IS NOT NULL AND "paidBy" IS NOT NULL))
+    AND (("paidAt" IS NULL) = ("paidBy" IS NULL))
+    AND ("status" <> 'PAID' OR "paidAt" IS NOT NULL)
+    AND ("status" NOT IN ('DRAFT', 'APPROVED') OR "paidAt" IS NULL)
   );
 
 -- MOT phieu goc cho moi (lan chay, lai xe). Chay lai luong = mot
@@ -557,6 +571,36 @@ BEGIN
       'TransportPayslip_posted_immutable: phieu luong da chot khong sua duoc noi dung, dung phieu bo sung hoac phieu dao';
   END IF;
 
+  -- LICH SU cung dong bang, khong chi cac con so tien.
+  --
+  -- Bang canh ben duoi CHAP NHAN canh `X -> X`, tuc mot `UPDATE` khong doi trang thai van di
+  -- qua duoc. Nen neu cac cot nay de ngo thi mot lan ghi THANG vao DB doi duoc NGUOI DA DUYET
+  -- va LY DO SUA cua mot phieu da chot — khong phieu bo sung, khong phieu dao, khong mot dau
+  -- vet nao. Do dung la viet lai lich su ma acceptance 12 noi la khong xay ra; tien dung yen
+  -- ma chu ky doi nguoi thi ban doi chieu van sai, chi la sai o cot khac.
+  IF NEW."id" IS DISTINCT FROM OLD."id"
+     OR NEW."createdAt" IS DISTINCT FROM OLD."createdAt"
+     OR NEW."approvedAt" IS DISTINCT FROM OLD."approvedAt"
+     OR NEW."approvedBy" IS DISTINCT FROM OLD."approvedBy"
+     OR NEW."correctionReason" IS DISTINCT FROM OLD."correctionReason"
+  THEN
+    RAISE EXCEPTION
+      'TransportPayslip_posted_immutable: lich su cua phieu luong da chot khong viet lai duoc';
+  END IF;
+
+  -- MOC DA TRA chi ghi duoc tren DUNG MOT canh, va vi the chi ghi duoc MOT lan.
+  --
+  -- `APPROVED -> PAID` la lan duy nhat `paidAt`/`paidBy` co quyen doi gia tri. Moi lan khac —
+  -- ke ca `PAID -> PAID` va `PAID -> REVERSED` — phai giu nguyen chung.
+  IF NOT (OLD."status" = 'APPROVED' AND NEW."status" = 'PAID') THEN
+    IF NEW."paidAt" IS DISTINCT FROM OLD."paidAt"
+       OR NEW."paidBy" IS DISTINCT FROM OLD."paidBy"
+    THEN
+      RAISE EXCEPTION
+        'TransportPayslip_posted_immutable: moc da tra chi ghi duoc khi phieu chuyen sang PAID';
+    END IF;
+  END IF;
+
   IF NOT (
     (OLD."status" = 'APPROVED' AND NEW."status" IN ('APPROVED', 'PAID', 'REVERSED'))
     OR (OLD."status" = 'PAID' AND NEW."status" IN ('PAID', 'REVERSED'))
@@ -593,6 +637,22 @@ DECLARE
   parent_status "TransportPayslipStatus";
   parent_id TEXT;
 BEGIN
+  -- MOT DONG KHONG DOI CHA.
+  --
+  -- Phan con lai cua ham nay hoi DUNG MOT cau: "phieu o `NEW.payslipId` co phai `DRAFT`
+  -- khong". Voi mot `UPDATE` doi chinh `payslipId`, cau hoi do duoc dat ve phia phieu DEN —
+  -- va neu phieu den la mot ban nhap thi cau tra loi la "duoc", trong khi hang vua roi khoi
+  -- mot phieu DA CHOT. Tong tren phieu goc van nguyen, cac dong giai thich no thi bot mot:
+  -- phieu in ra khong con doi chieu duoc voi chinh no.
+  --
+  -- Cha cua mot dong la mot phan DANH TINH cua dong do, khong phai mot o sua duoc. Chan o day
+  -- cung lam cho lan `SELECT` ben duoi du: sau cau nay `OLD."payslipId"` va `NEW."payslipId"`
+  -- luon bang nhau, nen kiem mot phia la kiem ca hai.
+  IF TG_OP = 'UPDATE' AND NEW."payslipId" IS DISTINCT FROM OLD."payslipId" THEN
+    RAISE EXCEPTION
+      'TransportPayslip_component_frozen: khong doi duoc phieu cha cua mot dong luong';
+  END IF;
+
   IF TG_OP = 'DELETE' THEN
     parent_id := OLD."payslipId";
   ELSE
@@ -624,3 +684,83 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "TransportPayslip_component_frozen"
   BEFORE INSERT OR UPDATE OR DELETE ON "TransportPayslipComponent"
   FOR EACH ROW EXECUTE FUNCTION "transport_payslip_component_frozen"();
+
+-- ===========================================================================
+-- TRIGGER — LENH SUA VA KE HOACH BAO DUONG PHAI NOI VE CUNG MOT XE.
+--
+-- `TransportMaintenanceWorkOrder` co HAI khoa ngoai DOC LAP: mot toi xe, mot
+-- toi ke hoach. Ca hai deu tro toi hang co that trong khi CAP DOI van sai, va
+-- khong khoa ngoai nao phat hien duoc dieu do. `CHECK` cung khong: no chi doc
+-- duoc hang cua chinh no, con `vehicleId` cua ke hoach nam o BANG KHAC.
+--
+-- Cai bi hong khi cap doi sai khong phai mot hang xau nhin thay ngay:
+-- `maintenance-schedule.ts` tinh han bao duong ke tiep cua mot ke hoach tu cac
+-- lenh DA DONG cua chinh ke hoach do. Mot lenh cua xe B nam trong ke hoach cua
+-- xe A keo moc chu ky cua xe A di theo so odo cua mot chiec xe khac — roi khoa
+-- va mo xe theo mot lich sai.
+--
+-- KHONG dung khoa ngoai gop `(planId, vehicleId)`: Prisma khong bieu dien duoc
+-- no trong `schema.prisma`, nen mot lan `migrate diff` sau nay se sinh ra cau
+-- lenh XOA no — dung cai bay do lech ma `transport-asset-workforce-storage.spec.ts`
+-- dang canh. Trigger thi Prisma khong nhin thay, cung ly do hai trigger phieu
+-- luong o tren la trigger.
+-- ===========================================================================
+
+CREATE OR REPLACE FUNCTION "transport_work_order_plan_same_vehicle"()
+RETURNS TRIGGER AS $$
+DECLARE
+  plan_vehicle_id TEXT;
+BEGIN
+  -- Sua DOT XUAT khong theo lich nao — khong co gi de doi chieu.
+  IF NEW."planId" IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT "vehicleId" INTO plan_vehicle_id
+    FROM "TransportMaintenancePlan" WHERE "id" = NEW."planId";
+
+  -- Ke hoach khong ton tai la viec cua khoa ngoai, khong phai cua trigger nay.
+  IF NOT FOUND THEN
+    RETURN NEW;
+  END IF;
+
+  IF plan_vehicle_id <> NEW."vehicleId" THEN
+    RAISE EXCEPTION
+      'TransportMaintenanceWorkOrder_plan_same_vehicle: lenh sua va ke hoach bao duong phai cung mot xe';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "TransportMaintenanceWorkOrder_plan_same_vehicle"
+  BEFORE INSERT OR UPDATE ON "TransportMaintenanceWorkOrder"
+  FOR EACH ROW EXECUTE FUNCTION "transport_work_order_plan_same_vehicle"();
+
+-- ===========================================================================
+-- TRIGGER — MOT KE HOACH BAO DUONG KHONG DOI SANG XE KHAC.
+--
+-- Cua sau cua trigger tren: neu `TransportMaintenancePlan.vehicleId` sua duoc
+-- thi mot lan `UPDATE` tren BANG KE HOACH lam moi lenh sua dang treo o do lech
+-- xe cung mot luc — va trigger o bang lenh sua khong he chay.
+--
+-- `UpdateMaintenancePlanInput` khong co truong `vehicleId`, nen duong ung dung
+-- da dong. Cau nay dong not duong ghi thang. Mot ke hoach thuoc ve mot chiec xe
+-- tron doi; muon lich do cho xe khac thi lap mot ke hoach moi, va lich su bao
+-- duong cua tung xe van doc duoc theo mot chieu.
+-- ===========================================================================
+
+CREATE OR REPLACE FUNCTION "transport_plan_vehicle_immutable"()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."vehicleId" IS DISTINCT FROM OLD."vehicleId" THEN
+    RAISE EXCEPTION
+      'TransportMaintenancePlan_vehicle_immutable: ke hoach bao duong khong chuyen sang xe khac duoc';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "TransportMaintenancePlan_vehicle_immutable"
+  BEFORE UPDATE ON "TransportMaintenancePlan"
+  FOR EACH ROW EXECUTE FUNCTION "transport_plan_vehicle_immutable"();

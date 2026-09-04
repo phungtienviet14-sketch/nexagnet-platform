@@ -398,6 +398,9 @@ export class WorkforceService {
       runId: detail.payslip.runId,
       reason: input.reason,
       actor: input.actor,
+      // Voi `REVERSAL` day la moc DUYET cua ban dao: phat mot phieu dao chinh la hanh dong chot,
+      // nen ban dao khong bao gio ton tai o `DRAFT` ben canh mot ban goc da mang `REVERSED`.
+      at: new Date(),
       payslip: toWriteInput(draft, input.kind, input.payslipId, input.reason),
     });
 
