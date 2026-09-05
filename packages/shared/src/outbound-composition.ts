@@ -153,6 +153,19 @@ export interface OmittedBlock {
 export const NARRATIVE_REJECTIONS = [
   /** G1 — luot nay khong tra cuu duoc nguon he thong nao, nen khong co gi de ke. */
   'NO_SYSTEM_SOURCE',
+  /*
+   * G5 — LOI NHAN NOI MOT DIEU KHONG NGUON NAO CUA LUOT NOI.
+   *
+   * G1 chi hoi "co nguon nao khong", va review doc lap (05/09/2026) cho thay do la mot cong hong
+   * mo: mot cau MO TA SAN PHAM khong lien quan van du de mo duong cho mot loi hua thanh toan bia
+   * ("bên em cho mình khất tiền hàng tới khi bán xong") — cau do khong chu so nen G2 khong xet,
+   * ngoai `POLICY_SURFACES` nen G3 khong xet, khong grant nen G4 khong xet.
+   *
+   * G5 doi hoi manh hon HAN: TUNG TU NGU NOI DUNG cua loi nhan phai co mat trong nguon he thong
+   * cua chinh luot nay, hoac phai la mot tu chuc nang trong `CONVERSATIONAL_ENVELOPE`. Do la mot
+   * danh sach CHO, nen mot cach dien dat MOI bi chan vi no moi — khong phai vi ai do kip liet ke.
+   */
+  'NARRATIVE_NOT_SOURCE_BACKED',
   /** G2 — mot con so trong loi nhan khong truy nguyen duoc ve nguon/grant/tin khach. */
   'NUMERAL_NOT_GROUNDED',
   /** G3 — mot ma chinh sach trong loi nhan khong duoc cap va khong co trong nguon. */
@@ -182,6 +195,7 @@ export type NarrativeRejection = (typeof NARRATIVE_REJECTIONS)[number];
 
 export const NARRATIVE_REJECTION_LABELS: Record<NarrativeRejection, string> = {
   NO_SYSTEM_SOURCE: 'Lượt này không tra cứu được nguồn hệ thống nào',
+  NARRATIVE_NOT_SOURCE_BACKED: 'Lời nhắn nói điều không nguồn hệ thống nào của lượt này nói',
   NUMERAL_NOT_GROUNDED: 'Lời nhắn chứa con số không truy nguyên được về nguồn',
   POLICY_CARRIER_NOT_GROUNDED: 'Lời nhắn nói chính sách không được cấp và không có trong nguồn',
   COMMITMENT_CARRIER_NOT_GROUNDED:
