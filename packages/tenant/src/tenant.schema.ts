@@ -308,6 +308,20 @@ export const tenantBootstrapSchema = z
     salesOrder: bootstrapEntrySchema.optional(),
     content: bootstrapEntrySchema.optional(),
     demoMessages: bootstrapEntrySchema.optional(),
+    /**
+     * THANG VAN HANH MAU cua mot GOI MAU — bo du lieu van tai tat dinh (T8/#90).
+     *
+     * KHONG cung loai voi bon muc tren. Ba muc dau gieo cai ma khach DA CO SAN (danh muc, dai ly,
+     * noi dung), con muc nay gieo mot thang lam viec DUOC NGHI RA: xe, lai xe, chuyen, phieu dau,
+     * cong no, luong. Do la ly do no khong duoc phep xuat hien tren mot goi khach that.
+     *
+     * Cong bao ve KHONG nam o day. Schema chi biet mot duong dan hop le; no khong biet duong ghi
+     * nao se doc duong dan do, nen no khong the tu choi dung luc. Cuong che nam o
+     * `assertTransportDemoTenant()` cua mien van tai, chay ngay truoc khi ghi — va no doc chinh
+     * `readiness.demoTenant`, co ma `transport-tenant-allowlist.spec.ts` da chung minh khong goi
+     * khach that nao mang.
+     */
+    transportDemo: bootstrapEntrySchema.optional(),
   })
   .strict();
 

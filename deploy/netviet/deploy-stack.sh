@@ -174,6 +174,17 @@ stage rollout ROLLOUT_AUTH_BOOTSTRAP_FAILED
 stage rollout ROLLOUT_SEED_FAILED
 "${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
   node deploy/netviet/seed-tenant-knowledge.mjs
+# GIEO THANG VAN HANH MAU — chi cho goi TU KHAI la goi mau (`readiness.demoTenant`).
+#
+# Chay cho MOI stack va tu bo qua o goi khach that: script bat `DemoTenantGuardError` roi ra ve voi
+# ma thoat 0. KHONG dat mot dieu kien `if` theo ten khach o day — cau hoi "goi nay co phai goi mau
+# khong" da co mot cau tra loi trong chinh goi khach, va nhan doi no vao mot tep bash la tao ra cho
+# thu hai de sai.
+#
+# Cung IDEMPOTENT nhu buoc tren: DB da co chuyen thi khong dung toi gi ca.
+stage rollout ROLLOUT_TRANSPORT_DEMO_SEED_FAILED
+"${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
+  node deploy/netviet/seed-transport-demo.mjs
 # WORKFLOW ENGINE — dung TRUOC `api`, va CHI khi cong tac bat.
 #
 # `--profile workflow` la thu duy nhat lam cum Hatchet ton tai. Stack khong bat thi doan nay khong

@@ -99,6 +99,21 @@ jobs:
         run: pnpm --filter @netviet/api test
         env:
           RUN_PRISMA_IT: '1'
+      # THANG VAN HANH MAU (T8/#90) — BUOC RIENG, SAU CUNG, TUAN TU.
+      #
+      # Bai nay PHA HUY: no xoa sach moi bang van tai roi gieo lai de chung minh lenh reset tra ve
+      # dung mot trang thai. Cac bai IT van tai khac dung fixture co tien to va job tren chay cac
+      # tep SONG SONG — chay chung thi mot bai xoa sach se cuop fixture cua ba tep ben canh va de
+      # ra mot chuoi loi khong lien quan gi den nguyen nhan.
+      #
+      # `RUN_TRANSPORT_DEMO_IT` KHONG phai de bai nay de xanh hon: no VAN chay o moi lan CI. Bien
+      # rieng chi de no duoc chay MOT MINH, sau khi cac tep kia da xong.
+      - name: Gieo thang van hanh mau tren Postgres THAT (pha huy)
+        run: pnpm --filter @netviet/api exec vitest run src/transport/demo --no-file-parallelism
+        env:
+          RUN_PRISMA_IT: '1'
+          RUN_TRANSPORT_DEMO_IT: '1'
+          TENANT: transport-preview
 
   # 24 BAI IT CUA WORKFLOW ENGINE — job nay ton tai vi "CI xanh" tung KHONG chung minh gi ve engine.
   #

@@ -1,0 +1,930 @@
+{
+  "version": 1,
+  "note": "Thang van hanh mau — SO LIEU NGHI RA, khong phai cua khach hang nao. Moi ngay nghiep vu la mot DO LECH so voi ngay gieo, khong phai mot ngay lich co dinh: mot bo du lieu dong cung ngay se het han sau mot thang va bien 'giay to sap het han' thanh 'giay to da het han het'.",
+
+  "fuel": {
+    "pricePerLiterVnd": 21000
+  },
+
+  "vehicles": [
+    {
+      "ref": "XE01",
+      "plate": "29H-152.44",
+      "class": "Tải 5 tấn",
+      "payloadKg": 5000,
+      "odoKm": 214800
+    },
+    {
+      "ref": "XE02",
+      "plate": "29H-168.90",
+      "class": "Tải 5 tấn",
+      "payloadKg": 5000,
+      "odoKm": 187350
+    },
+    {
+      "ref": "XE03",
+      "plate": "29C-334.71",
+      "class": "Tải 8 tấn",
+      "payloadKg": 8000,
+      "odoKm": 302640
+    },
+    {
+      "ref": "XE04",
+      "plate": "20C-091.55",
+      "class": "Tải 8 tấn",
+      "payloadKg": 8000,
+      "odoKm": 156920
+    },
+    {
+      "ref": "XE05",
+      "plate": "20H-224.18",
+      "class": "Tải 5 tấn",
+      "payloadKg": 5000,
+      "odoKm": 98410
+    },
+    {
+      "ref": "XE06",
+      "plate": "89C-117.02",
+      "class": "Tải 15 tấn",
+      "payloadKg": 15000,
+      "odoKm": 421070
+    },
+    {
+      "ref": "XE07",
+      "plate": "15C-556.33",
+      "class": "Đầu kéo container",
+      "payloadKg": 30000,
+      "odoKm": 512880
+    },
+    {
+      "ref": "XE08",
+      "plate": "29H-301.77",
+      "class": "Tải 2 tấn",
+      "payloadKg": 2000,
+      "odoKm": 64230
+    },
+    {
+      "ref": "XE09",
+      "plate": "34C-448.19",
+      "class": "Tải 8 tấn",
+      "payloadKg": 8000,
+      "odoKm": 233590
+    },
+    {
+      "ref": "XE10",
+      "plate": "29C-512.60",
+      "class": "Tải 15 tấn",
+      "payloadKg": 15000,
+      "odoKm": 178040
+    }
+  ],
+
+  "drivers": [
+    {
+      "ref": "LX01",
+      "name": "Nguyễn Văn Bình",
+      "phone": "0901120301",
+      "licenceClass": "FC",
+      "licenceExpiryDay": 245,
+      "vehicle": "XE01",
+      "login": "lx.binh"
+    },
+    {
+      "ref": "LX02",
+      "name": "Trần Quốc Hùng",
+      "phone": "0901120302",
+      "licenceClass": "FC",
+      "licenceExpiryDay": 118,
+      "vehicle": "XE02",
+      "login": "lx.hung"
+    },
+    {
+      "ref": "LX03",
+      "name": "Lê Minh Tuấn",
+      "phone": "0901120303",
+      "licenceClass": "FC",
+      "licenceExpiryDay": 21,
+      "vehicle": "XE03",
+      "login": "lx.tuan"
+    },
+    {
+      "ref": "LX04",
+      "name": "Phạm Văn Sơn",
+      "phone": "0901120304",
+      "licenceClass": "C",
+      "licenceExpiryDay": 402,
+      "vehicle": "XE04",
+      "login": "lx.son"
+    },
+    {
+      "ref": "LX05",
+      "name": "Hoàng Đức Thắng",
+      "phone": "0901120305",
+      "licenceClass": "C",
+      "licenceExpiryDay": 330,
+      "vehicle": "XE05",
+      "login": "lx.thang"
+    },
+    {
+      "ref": "LX06",
+      "name": "Vũ Ngọc Hải",
+      "phone": "0901120306",
+      "licenceClass": "FC",
+      "licenceExpiryDay": 176,
+      "vehicle": "XE06",
+      "login": "lx.hai"
+    },
+    {
+      "ref": "LX07",
+      "name": "Đặng Trung Kiên",
+      "phone": "0901120307",
+      "licenceClass": "FC",
+      "licenceExpiryDay": 289,
+      "vehicle": "XE07",
+      "login": "lx.kien"
+    },
+    {
+      "ref": "LX08",
+      "name": "Bùi Thanh Long",
+      "phone": "0901120308",
+      "licenceClass": "C",
+      "licenceExpiryDay": 512,
+      "vehicle": "XE08",
+      "login": "lx.long"
+    },
+    {
+      "ref": "LX09",
+      "name": "Ngô Văn Dũng",
+      "phone": "0901120309",
+      "licenceClass": "FC",
+      "licenceExpiryDay": 96,
+      "vehicle": "XE09",
+      "login": "lx.dung"
+    },
+    {
+      "ref": "LX10",
+      "name": "Đỗ Hữu Nam",
+      "phone": "0901120310",
+      "licenceClass": "FC",
+      "licenceExpiryDay": 358,
+      "vehicle": "XE10",
+      "login": "lx.nam"
+    },
+    {
+      "ref": "LX11",
+      "name": "Trịnh Bá Cường",
+      "phone": "0901120311",
+      "licenceClass": "C",
+      "licenceExpiryDay": 264,
+      "vehicle": null,
+      "login": "lx.cuong"
+    },
+    {
+      "ref": "LX12",
+      "name": "Lý Văn Hòa",
+      "phone": "0901120312",
+      "licenceClass": "C",
+      "licenceExpiryDay": 143,
+      "vehicle": null,
+      "login": "lx.hoa"
+    }
+  ],
+
+  "customers": [
+    {
+      "ref": "KH01",
+      "name": "Công ty TNHH Thương mại Bắc Hà",
+      "phone": "02436421180",
+      "taxCode": "0106552418",
+      "address": "Số 128 Nguyễn Trãi, Thanh Xuân, Hà Nội",
+      "paymentTermDays": 30,
+      "creditLimitVnd": 400000000
+    },
+    {
+      "ref": "KH02",
+      "name": "Công ty CP Thép Đông Á",
+      "phone": "02253847220",
+      "taxCode": "0200788341",
+      "address": "Lô C7 KCN Đình Vũ, Hải An, Hải Phòng",
+      "paymentTermDays": 45,
+      "creditLimitVnd": 900000000
+    },
+    {
+      "ref": "KH03",
+      "name": "Công ty TNHH Nhựa Tân Phú Hưng",
+      "phone": "02083758410",
+      "taxCode": "4600921537",
+      "address": "Km 8 QL3, Phú Lương, Thái Nguyên",
+      "paymentTermDays": 30,
+      "creditLimitVnd": 250000000
+    },
+    {
+      "ref": "KH04",
+      "name": "Công ty CP Thực phẩm Minh Khang",
+      "phone": "02283641900",
+      "taxCode": "0600471228",
+      "address": "Cụm CN Hòa Xá, TP Nam Định",
+      "paymentTermDays": 15,
+      "creditLimitVnd": 180000000
+    },
+    {
+      "ref": "KH05",
+      "name": "Công ty TNHH Vật tư Nông nghiệp Sông Cầu",
+      "phone": "02043925617",
+      "taxCode": "4601102983",
+      "address": "Số 45 Lương Ngọc Quyến, TP Thái Nguyên",
+      "paymentTermDays": 30,
+      "creditLimitVnd": 150000000
+    }
+  ],
+
+  "fuelSuppliers": [
+    {
+      "ref": "CX01",
+      "name": "Cây xăng Petrolimex 21 Thái Nguyên",
+      "code": "PLX-TN-21",
+      "phone": "02083855120",
+      "taxCode": "4600238819",
+      "address": "Km 5 QL3, TP Thái Nguyên"
+    },
+    {
+      "ref": "CX02",
+      "name": "Cửa hàng xăng dầu PVOIL Pháp Vân",
+      "code": "PVO-HN-07",
+      "phone": "02436812440",
+      "taxCode": "0101448270",
+      "address": "Cao tốc Pháp Vân, Hoàng Mai, Hà Nội"
+    },
+    {
+      "ref": "CX03",
+      "name": "Trạm xăng dầu Đình Vũ",
+      "code": "DVU-HP-02",
+      "phone": "02253776081",
+      "taxCode": "0200914466",
+      "address": "KCN Đình Vũ, Hải An, Hải Phòng"
+    }
+  ],
+
+  "partners": [
+    { "ref": "DT01", "name": "Nhà xe Hoàng Long", "phone": "0912440118", "roles": ["CARRIER"] },
+    {
+      "ref": "DT02",
+      "name": "Công ty Giao nhận Việt Tín",
+      "phone": "0913770254",
+      "roles": ["ORDER_REFERRER"]
+    },
+    {
+      "ref": "DT03",
+      "name": "Vận tải Đông Đô",
+      "phone": "0918225603",
+      "roles": ["CARRIER", "ORDER_REFERRER"]
+    }
+  ],
+
+  "routes": [
+    {
+      "ref": "TU01",
+      "origin": "Hà Nội",
+      "destination": "Thái Nguyên",
+      "distanceKm": 80,
+      "freightVnd": 4200000,
+      "carrierCostVnd": 3150000
+    },
+    {
+      "ref": "TU02",
+      "origin": "Hà Nội",
+      "destination": "Hải Phòng",
+      "distanceKm": 105,
+      "freightVnd": 5100000,
+      "carrierCostVnd": 3850000
+    },
+    {
+      "ref": "TU03",
+      "origin": "Hà Nội",
+      "destination": "Nam Định",
+      "distanceKm": 90,
+      "freightVnd": 4500000,
+      "carrierCostVnd": 3400000
+    },
+    {
+      "ref": "TU04",
+      "origin": "Hà Nội",
+      "destination": "Vinh",
+      "distanceKm": 300,
+      "freightVnd": 12800000,
+      "carrierCostVnd": 9600000
+    },
+    {
+      "ref": "TU05",
+      "origin": "Hải Phòng",
+      "destination": "Hà Nội",
+      "distanceKm": 105,
+      "freightVnd": 4900000,
+      "carrierCostVnd": 3700000
+    },
+    {
+      "ref": "TU06",
+      "origin": "Hà Nội",
+      "destination": "Lào Cai",
+      "distanceKm": 290,
+      "freightVnd": 12400000,
+      "carrierCostVnd": 9300000
+    },
+    {
+      "ref": "TU07",
+      "origin": "Hà Nội",
+      "destination": "Quảng Ninh",
+      "distanceKm": 150,
+      "freightVnd": 6800000,
+      "carrierCostVnd": 5100000
+    },
+    {
+      "ref": "TU08",
+      "origin": "Thái Nguyên",
+      "destination": "Bắc Ninh",
+      "distanceKm": 95,
+      "freightVnd": 4300000,
+      "carrierCostVnd": 3250000
+    },
+    {
+      "ref": "TU09",
+      "origin": "Hà Nội",
+      "destination": "Thanh Hóa",
+      "distanceKm": 160,
+      "freightVnd": 7200000,
+      "carrierCostVnd": 5400000
+    },
+    {
+      "ref": "TU10",
+      "origin": "Hà Nội",
+      "destination": "Bắc Giang",
+      "distanceKm": 60,
+      "freightVnd": 3400000,
+      "carrierCostVnd": 2550000
+    }
+  ],
+
+  "commissionRules": [
+    {
+      "ref": "HH01",
+      "partner": "DT02",
+      "calcKind": "PERCENTAGE",
+      "rateBasisPoints": 800,
+      "effectiveFromDay": -120
+    },
+    {
+      "ref": "HH02",
+      "partner": "DT03",
+      "calcKind": "FIXED",
+      "fixedAmountVnd": 450000,
+      "effectiveFromDay": -120
+    }
+  ],
+
+  "scenarioTrips": [
+    {
+      "id": "DEMO-TRIP-DIRECT",
+      "code": "CH-25081",
+      "kind": "OWN_DIRECT",
+      "status": "RECONCILED",
+      "route": "TU01",
+      "vehicle": "XE01",
+      "driver": "LX01",
+      "customer": "KH01",
+      "day": -24,
+      "cargo": "Hàng bách hóa đóng kiện",
+      "advanceVnd": 1500000,
+      "returnVnd": 260000,
+      "expenses": [
+        { "category": "Phí cầu đường", "amountVnd": 240000, "fundedBy": "DRIVER_FUND" },
+        { "category": "Bốc xếp", "amountVnd": 300000, "fundedBy": "DRIVER_FUND" }
+      ],
+      "fuel": { "supplier": "CX01", "liters": "16.400", "case": "MATCH" },
+      "receivable": "PAID"
+    },
+    {
+      "id": "DEMO-DRIVER-FUND",
+      "code": "CH-25082",
+      "kind": "OWN_DIRECT",
+      "status": "RECONCILED",
+      "route": "TU04",
+      "vehicle": "XE06",
+      "driver": "LX06",
+      "customer": "KH02",
+      "day": -19,
+      "cargo": "Thép cuộn",
+      "advanceVnd": 6000000,
+      "returnVnd": 900000,
+      "expenses": [
+        { "category": "Phí cầu đường", "amountVnd": 620000, "fundedBy": "DRIVER_FUND" },
+        { "category": "Ăn ở dọc đường", "amountVnd": 480000, "fundedBy": "DRIVER_FUND" },
+        { "category": "Bốc xếp", "amountVnd": 850000, "fundedBy": "DRIVER_FUND" },
+        { "category": "Phí bến bãi", "amountVnd": 150000, "fundedBy": "COMPANY_DIRECT" }
+      ],
+      "fuel": { "supplier": "CX02", "liters": "101.500", "case": "MATCH" },
+      "receivable": "CURRENT"
+    },
+    {
+      "id": "DEMO-FUEL-MATCH",
+      "code": "CH-25083",
+      "kind": "OWN_DIRECT",
+      "status": "RECONCILED",
+      "route": "TU02",
+      "vehicle": "XE03",
+      "driver": "LX03",
+      "customer": "KH02",
+      "day": -17,
+      "cargo": "Thép tấm",
+      "advanceVnd": 2000000,
+      "returnVnd": 0,
+      "expenses": [{ "category": "Phí cầu đường", "amountVnd": 310000, "fundedBy": "DRIVER_FUND" }],
+      "fuel": { "supplier": "CX03", "liters": "27.900", "case": "MATCH" },
+      "receivable": "CURRENT"
+    },
+    {
+      "id": "DEMO-FUEL-MISMATCH",
+      "code": "CH-25084",
+      "kind": "OWN_DIRECT",
+      "status": "RECONCILED",
+      "route": "TU07",
+      "vehicle": "XE09",
+      "driver": "LX09",
+      "customer": "KH01",
+      "day": -15,
+      "cargo": "Hàng tiêu dùng",
+      "advanceVnd": 2500000,
+      "returnVnd": 0,
+      "expenses": [{ "category": "Phí cầu đường", "amountVnd": 420000, "fundedBy": "DRIVER_FUND" }],
+      "fuel": {
+        "supplier": "CX01",
+        "liters": "39.600",
+        "case": "MISMATCH",
+        "statementDeltaVnd": 186000
+      },
+      "receivable": "CURRENT"
+    },
+    {
+      "id": "DEMO-FUEL-AMBIGUOUS",
+      "code": "CH-25085",
+      "kind": "OWN_DIRECT",
+      "status": "RECONCILED",
+      "route": "TU10",
+      "vehicle": "XE05",
+      "driver": "LX05",
+      "customer": "KH05",
+      "day": -12,
+      "cargo": "Phân bón đóng bao",
+      "advanceVnd": 1200000,
+      "returnVnd": 0,
+      "expenses": [{ "category": "Bốc xếp", "amountVnd": 260000, "fundedBy": "DRIVER_FUND" }],
+      "fuel": { "supplier": "CX01", "liters": "12.300", "case": "AMBIGUOUS" },
+      "receivable": "CURRENT"
+    },
+    {
+      "id": "DEMO-OUTSOURCED",
+      "code": "CH-25086",
+      "kind": "EXTERNAL_CARRIER",
+      "status": "RECONCILED",
+      "route": "TU06",
+      "vehicle": null,
+      "driver": null,
+      "customer": "KH03",
+      "carrier": "DT01",
+      "day": -13,
+      "cargo": "Nguyên liệu nhựa",
+      "receivable": "CURRENT"
+    },
+    {
+      "id": "DEMO-PARTNER-REFERRED",
+      "code": "CH-25087",
+      "kind": "PARTNER_REFERRED_INTERNAL_RUN",
+      "status": "RECONCILED",
+      "route": "TU09",
+      "vehicle": "XE10",
+      "driver": "LX10",
+      "customer": "KH04",
+      "referrer": "DT02",
+      "day": -11,
+      "cargo": "Hàng thực phẩm khô",
+      "advanceVnd": 3000000,
+      "returnVnd": 400000,
+      "expenses": [{ "category": "Phí cầu đường", "amountVnd": 380000, "fundedBy": "DRIVER_FUND" }],
+      "fuel": { "supplier": "CX02", "liters": "53.800", "case": "MATCH" },
+      "receivable": "CURRENT"
+    },
+    {
+      "id": "DEMO-CREDIT-WARNING",
+      "code": "CH-25088",
+      "kind": "OWN_DIRECT",
+      "status": "RECONCILED",
+      "route": "TU03",
+      "vehicle": "XE02",
+      "driver": "LX02",
+      "customer": "KH04",
+      "day": -52,
+      "cargo": "Hàng thực phẩm khô",
+      "advanceVnd": 1800000,
+      "returnVnd": 0,
+      "expenses": [{ "category": "Phí cầu đường", "amountVnd": 260000, "fundedBy": "DRIVER_FUND" }],
+      "fuel": null,
+      "receivable": "OVERDUE"
+    },
+    {
+      "id": "DEMO-COMPLIANCE",
+      "code": "CH-25089",
+      "kind": "OWN_DIRECT",
+      "status": "DELIVERED",
+      "route": "TU08",
+      "vehicle": "XE04",
+      "driver": "LX04",
+      "customer": "KH03",
+      "day": -3,
+      "cargo": "Hạt nhựa PP",
+      "advanceVnd": 1600000,
+      "returnVnd": 0,
+      "expenses": [{ "category": "Phí cầu đường", "amountVnd": 290000, "fundedBy": "DRIVER_FUND" }],
+      "fuel": null,
+      "receivable": null
+    },
+    {
+      "id": "DEMO-PAYROLL",
+      "code": "CH-25090",
+      "kind": "OWN_DIRECT",
+      "status": "RECONCILED",
+      "route": "TU05",
+      "vehicle": "XE07",
+      "driver": "LX07",
+      "customer": "KH02",
+      "day": -9,
+      "cargo": "Container hàng khô",
+      "advanceVnd": 2200000,
+      "returnVnd": 150000,
+      "expenses": [{ "category": "Phí cầu đường", "amountVnd": 350000, "fundedBy": "DRIVER_FUND" }],
+      "fuel": { "supplier": "CX03", "liters": "40.700", "case": "MATCH" },
+      "receivable": "CURRENT"
+    },
+    {
+      "id": "DEMO-TRIP-PLANNED",
+      "code": "CH-25091",
+      "kind": "OWN_DIRECT",
+      "status": "PLANNED",
+      "route": "TU01",
+      "vehicle": null,
+      "driver": null,
+      "customer": "KH01",
+      "day": 1,
+      "cargo": "Hàng bách hóa đóng kiện",
+      "receivable": null
+    },
+    {
+      "id": "DEMO-TRIP-IN-TRANSIT",
+      "code": "CH-25092",
+      "kind": "OWN_DIRECT",
+      "status": "IN_TRANSIT",
+      "route": "TU02",
+      "vehicle": "XE08",
+      "driver": "LX08",
+      "customer": "KH02",
+      "day": 0,
+      "cargo": "Hàng tiêu dùng",
+      "advanceVnd": 1400000,
+      "returnVnd": 0,
+      "expenses": [],
+      "fuel": null,
+      "receivable": null
+    },
+    {
+      "id": "DEMO-TRIP-CANCELLED",
+      "code": "CH-25093",
+      "kind": "OWN_DIRECT",
+      "status": "CANCELLED",
+      "route": "TU10",
+      "vehicle": null,
+      "driver": null,
+      "customer": "KH05",
+      "day": -6,
+      "cargo": "Phân bón đóng bao",
+      "receivable": null
+    }
+  ],
+
+  "fill": {
+    "note": "Nen cua thang — sinh bang phep chia lay du tren chi so, khong co so ngau nhien nao. Cung mot moc ngay thi ra cung tung dong.",
+    "tripCount": 31,
+    "codePrefix": "CH-250",
+    "codeStart": 101,
+    "firstDay": -30,
+    "lastDay": -2,
+    "kindCycle": [
+      "OWN_DIRECT",
+      "OWN_DIRECT",
+      "OWN_DIRECT",
+      "EXTERNAL_CARRIER",
+      "OWN_DIRECT",
+      "OWN_DIRECT",
+      "PARTNER_REFERRED_INTERNAL_RUN",
+      "OWN_DIRECT"
+    ],
+    "carrierCycle": ["DT01", "DT03"],
+    "referrerCycle": ["DT02", "DT03"],
+    "advanceRatePercent": 35,
+    "tollRatePercent": 6,
+    "fuelEveryNthTrip": 1
+  },
+
+  "maintenancePlans": [
+    {
+      "ref": "BD01",
+      "vehicle": "XE01",
+      "name": "Thay dầu máy + lọc dầu",
+      "triggerKind": "ODOMETER",
+      "intervalKm": 12000,
+      "intervalDays": null,
+      "baselineOdoKm": 208000,
+      "baselineDay": -75
+    },
+    {
+      "ref": "BD02",
+      "vehicle": "XE03",
+      "name": "Bảo dưỡng cấp 2",
+      "triggerKind": "ODOMETER_OR_CALENDAR",
+      "intervalKm": 20000,
+      "intervalDays": 180,
+      "baselineOdoKm": 288000,
+      "baselineDay": -160
+    },
+    {
+      "ref": "BD03",
+      "vehicle": "XE06",
+      "name": "Kiểm tra hệ thống phanh",
+      "triggerKind": "CALENDAR",
+      "intervalKm": null,
+      "intervalDays": 90,
+      "baselineOdoKm": 410000,
+      "baselineDay": -86
+    },
+    {
+      "ref": "BD04",
+      "vehicle": "XE07",
+      "name": "Thay lốp trục kéo",
+      "triggerKind": "ODOMETER",
+      "intervalKm": 60000,
+      "intervalDays": null,
+      "baselineOdoKm": 480000,
+      "baselineDay": -210
+    },
+    {
+      "ref": "BD05",
+      "vehicle": "XE09",
+      "name": "Thay dầu máy + lọc gió",
+      "triggerKind": "ODOMETER",
+      "intervalKm": 12000,
+      "intervalDays": null,
+      "baselineOdoKm": 228000,
+      "baselineDay": -40
+    }
+  ],
+
+  "workOrders": [
+    {
+      "vehicle": "XE01",
+      "plan": "BD01",
+      "description": "Thay dầu máy, lọc dầu, lọc nhiên liệu",
+      "openedDay": -68,
+      "openedOdoKm": 208420,
+      "status": "COMPLETED",
+      "completedDay": -67,
+      "completedOdoKm": 208430,
+      "costVnd": 3850000
+    },
+    {
+      "vehicle": "XE03",
+      "plan": "BD02",
+      "description": "Bảo dưỡng cấp 2 theo định kỳ",
+      "openedDay": -95,
+      "openedOdoKm": 289100,
+      "status": "COMPLETED",
+      "completedDay": -93,
+      "completedOdoKm": 289140,
+      "costVnd": 12400000
+    },
+    {
+      "vehicle": "XE06",
+      "plan": null,
+      "description": "Sửa hệ thống điện đèn hậu",
+      "openedDay": -21,
+      "openedOdoKm": 418900,
+      "status": "COMPLETED",
+      "completedDay": -20,
+      "completedOdoKm": 418910,
+      "costVnd": 1650000
+    },
+    {
+      "vehicle": "XE04",
+      "plan": null,
+      "description": "Kiểm tra tiếng kêu hệ thống treo cầu sau",
+      "openedDay": -2,
+      "openedOdoKm": 156900,
+      "status": "OPEN",
+      "completedDay": null,
+      "completedOdoKm": null,
+      "costVnd": null
+    },
+    {
+      "vehicle": "XE09",
+      "plan": "BD05",
+      "description": "Thay dầu máy theo định kỳ",
+      "openedDay": -1,
+      "openedOdoKm": 233520,
+      "status": "OPEN",
+      "completedDay": null,
+      "completedOdoKm": null,
+      "costVnd": null
+    }
+  ],
+
+  "complianceDocuments": [
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE01",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-29H15244-06",
+      "validFromDay": -160,
+      "validToDay": 205
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE01",
+      "documentType": "VEHICLE_INSURANCE",
+      "documentNo": "BH-PTI-448127",
+      "validFromDay": -300,
+      "validToDay": 65
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE02",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-29H16890-04",
+      "validFromDay": -350,
+      "validToDay": 15
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE02",
+      "documentType": "VEHICLE_TRANSPORT_BADGE",
+      "documentNo": "PH-HN-2291",
+      "validFromDay": -400,
+      "validToDay": 330
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE03",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-29C33471-09",
+      "validFromDay": -190,
+      "validToDay": 175
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE03",
+      "documentType": "VEHICLE_INSURANCE",
+      "documentNo": "BH-BVH-771903",
+      "validFromDay": -380,
+      "validToDay": -14
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE04",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-20C09155-02",
+      "validFromDay": -120,
+      "validToDay": 245
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE04",
+      "documentType": "VEHICLE_TRANSPORT_BADGE",
+      "documentNo": "PH-TN-0884",
+      "validFromDay": -420,
+      "validToDay": 8
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE05",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-20H22418-07",
+      "validFromDay": -95,
+      "validToDay": 270
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE06",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-89C11702-01",
+      "validFromDay": -200,
+      "validToDay": 165
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE06",
+      "documentType": "VEHICLE_INSURANCE",
+      "documentNo": "BH-PJICO-330671",
+      "validFromDay": -340,
+      "validToDay": 25
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE07",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-15C55633-05",
+      "validFromDay": -170,
+      "validToDay": 195
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE07",
+      "documentType": "VEHICLE_TRANSPORT_BADGE",
+      "documentNo": "PH-HP-1145",
+      "validFromDay": -390,
+      "validToDay": -6
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE08",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-29H30177-03",
+      "validFromDay": -140,
+      "validToDay": 225
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE09",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-34C44819-08",
+      "validFromDay": -210,
+      "validToDay": 155
+    },
+    {
+      "subjectKind": "VEHICLE",
+      "subject": "XE10",
+      "documentType": "VEHICLE_INSPECTION",
+      "documentNo": "DK-29C51260-06",
+      "validFromDay": -100,
+      "validToDay": 265
+    },
+    {
+      "subjectKind": "DRIVER",
+      "subject": "LX03",
+      "documentType": "DRIVER_LICENCE",
+      "documentNo": "GPLX-011224778",
+      "validFromDay": -1800,
+      "validToDay": 21
+    },
+    {
+      "subjectKind": "DRIVER",
+      "subject": "LX09",
+      "documentType": "DRIVER_LICENCE",
+      "documentNo": "GPLX-011907342",
+      "validFromDay": -1700,
+      "validToDay": 96
+    },
+    {
+      "subjectKind": "DRIVER",
+      "subject": "LX02",
+      "documentType": "DRIVER_LICENCE",
+      "documentNo": "GPLX-011550916",
+      "validFromDay": -1900,
+      "validToDay": 118
+    },
+    {
+      "subjectKind": "COMPANY",
+      "subject": null,
+      "documentType": "COMPANY_TRANSPORT_LICENSE",
+      "documentNo": "GPKD-VT-HN-4471",
+      "validFromDay": -900,
+      "validToDay": 640
+    }
+  ],
+
+  "payroll": {
+    "label": "Kỳ lương tháng vận hành mẫu",
+    "startDay": -30,
+    "endDay": -1,
+    "manualComponents": [
+      {
+        "driver": "LX01",
+        "kind": "EARNING",
+        "label": "Thưởng chuyên cần",
+        "amountVnd": 500000,
+        "note": "Đủ ngày công trong kỳ"
+      },
+      {
+        "driver": "LX06",
+        "kind": "DEDUCTION",
+        "label": "Tạm giữ chờ đối chiếu chứng từ",
+        "amountVnd": 300000,
+        "note": "Thiếu hóa đơn bốc xếp chuyến CH-25082"
+      }
+    ]
+  }
+}
