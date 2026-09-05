@@ -2,7 +2,6 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { gapsForSection } from '../api-gaps';
 import { MetricCard, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -52,8 +51,6 @@ export function DriverSurface({ screen }: { readonly screen: DriverScreenId }) {
       return <DriverFund />;
     case 'history':
       return <DriverHistory />;
-    case 'payslip':
-      return <DriverPayslip />;
   }
 }
 
@@ -217,17 +214,17 @@ function DriverTrip() {
 /**
  * DOC duoc, NOP thi chua.
  *
- * Man nay co y khong co o nhap: `POST /transport/me/fuel/slips` doi `vehicleId`, va khong endpoint
+ * Man nay CO Y khong co o nhap: `POST /transport/me/fuel/slips` doi `vehicleId`, va khong endpoint
  * nao ma lai xe duoc goi tra ve id do. Bay mot bieu mau roi de nguoi dung go het so lit, so tien,
- * so km — roi bam gui va nhan 400 — la te hon nhieu so voi noi truoc rang duong nop chua mo.
+ * so km — roi bam gui va nhan 400 — la te hon nhieu so voi noi truoc rang chua gui duoc.
+ *
+ * Cau tren man hinh noi VIEC CAN LAM (dua phieu giay cho ke toan), khong noi ly do ky thuat: lai xe
+ * khong lam gi duoc voi mot cau ve `vehicleId` (#195).
  */
 function DriverFuel() {
   const navigation = useNavigationInput();
   const slips = toSectionQuery(useDriverFuelSlips(navigation));
   const rows = toDriverFuelSlipRows(slips.data ?? []);
-  const blocking = gapsForSection('fuel').filter(
-    (gap) => gap.id === 'driver-cannot-learn-vehicle-id',
-  );
 
   return (
     <>
@@ -236,15 +233,8 @@ function DriverFuel() {
       <section className="tx-driver__card" aria-label="Nộp phiếu đổ dầu">
         <h2>Ghi phiếu đổ nhiên liệu</h2>
         <p className="tx-note tx-note--warn">
-          Đường nộp phiếu từ điện thoại chưa mở được. Máy chủ bắt buộc phải có mã xe trong phiếu,
-          nhưng màn hình lái xe chỉ đọc được biển số chứ không đọc được mã xe. Trong lúc chờ, hãy
-          đưa phiếu giấy cho kế toán nhập hộ.
+          Chưa gửi được phiếu đổ nhiên liệu từ điện thoại. Hãy đưa phiếu giấy cho kế toán nhập giúp.
         </p>
-        {blocking.map((gap) => (
-          <p key={gap.id} className="tx-note">
-            {gap.serverSide}
-          </p>
-        ))}
       </section>
 
       {slips.errorMessage === null ? null : (
@@ -367,25 +357,6 @@ function DriverHistory() {
           ))}
         </ul>
       )}
-    </>
-  );
-}
-
-/**
- * `TX-07`. Man nay chi hien khi khach bat `transport-workforce`; may chu da co route phieu luong
- * nhung be mat lai xe chua noi vao (T7D — #170). Nen cau duoi NOI THAT thay vi bay mot phieu luong
- * rong hay mot con so bia.
- */
-function DriverPayslip() {
-  return (
-    <>
-      <h1 className="tx-driver__title">Phiếu lương</h1>
-      <EmptyState title="Nghiệp vụ lương chưa được bật cho doanh nghiệp này." />
-      <ul className="tx-designnote">
-        {gapsForSection('payroll').map((gap) => (
-          <li key={gap.id}>{gap.actual}</li>
-        ))}
-      </ul>
     </>
   );
 }

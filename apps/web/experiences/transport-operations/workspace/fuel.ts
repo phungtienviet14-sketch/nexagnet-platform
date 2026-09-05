@@ -73,7 +73,10 @@ export interface FuelEntryRow {
   readonly canAmend: boolean;
   /** Ly do khong sua duoc — HAI ly do khac nhau, doi hai viec khac nhau cua nguoi dung. */
   readonly amendBlockedReason: string | null;
-  /** Phieu bi tu choi la duong cut hom nay — xem `api-gaps.ts#no-fuel-resubmit-route`. */
+  /**
+   * Phieu bi tu choi la duong cut hom nay: khong co duong nop lai, nen viec can lam la lap phieu
+   * moi. Cau nay noi VIEC CAN LAM, khong noi ly do ky thuat cua duong cut (#195).
+   */
   readonly deadEndNote: string | null;
 }
 
@@ -124,7 +127,7 @@ export const toFuelEntryRow = (
     amendBlockedReason: blocked,
     deadEndNote:
       entry.verificationStatus === 'REJECTED'
-        ? 'Phiếu bị từ chối. Máy chủ chưa mở đường nộp lại, nên hiện phải lập một phiếu mới.'
+        ? 'Phiếu bị từ chối. Hiện chưa nộp lại được phiếu này — hãy lập một phiếu mới.'
         : null,
   };
 };

@@ -48,14 +48,20 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
   });
 
   /**
-   * MOT GOI DUOC MIEN TRU PHAI TU NHAN LA BAN XEM TRUOC.
+   * MOT GOI DUOC MIEN TRU KHONG DUOC NOI VAO BAT KY DUONG SONG NAO.
    *
-   * Day la cho hai muc dich gap nhau: `readiness.previewNotice` vua la thu bay dai bang tren man
-   * hinh, vua la loi tu khai bang van ban rang goi nay khong phai ban cho khach dung. Bat buoc no
-   * o day nghia la khong the lang le them mot goi vao danh sach mien tru ma khong dong thoi noi
-   * that dieu do voi bat ky ai mo man hinh len.
+   * TRUOC #195, cau nay duoc kiem bang `readiness.previewNotice`: goi duoc mien tru phai tu khai
+   * la ban xem truoc, va loi tu khai do dong thoi bay mot dai bang len man hinh. #195 bo dai bang
+   * — no la ngon ngu noi bo tren be mat khach hang — nen CHO NEO cua bai kiem phai doi.
+   *
+   * Tinh chat can giu KHONG doi: khong the lang le them mot goi vao danh sach mien tru roi tro no
+   * vao mot khach that. Cho neo moi la `integrations` + `bootstrap`, va no CHAT HON cho cu vi no
+   * khong the thoa man bang mot cau van: mot goi duoc mien tru khong khai mot adapter nao (Zalo,
+   * ERP, nguon noi dung) va khong co buoc gieo du lieu nao. Ca ba goi khach that deu khai — nen
+   * keo mot goi khach that vao danh sach nay se lam bai nay DO ngay, khong can ai nho viet them
+   * mot cau tu khai.
    */
-  it('moi goi duoc phep deu tu khai la ban xem truoc', () => {
+  it('goi duoc phep khong noi vao mot adapter hay buoc gieo du lieu nao', () => {
     for (const slug of TRANSPORT_PREVIEW_TENANTS) {
       process.env.TENANT = slug;
       delete process.env.TENANT_DIR;
@@ -63,19 +69,37 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
 
       const config = loadTenantConfig();
       expect(config.slug, slug).toBe(slug);
-      expect(config.policies.readiness.previewNotice, slug).toBeDefined();
-      expect(config.policies.readiness.previewNotice?.label.length, slug).toBeGreaterThan(0);
-      expect(config.policies.readiness.previewNotice?.note.length, slug).toBeGreaterThan(0);
+      expect(Object.keys(config.integrations), slug).toEqual([]);
+      expect(Object.keys(config.bootstrap), slug).toEqual([]);
+      expect(config.smoke, slug).toBeNull();
     }
   });
 
   /**
-   * Chieu nguoc lai, va la chieu quan trong hon: khach THAT khong duoc co dai bang xem truoc.
-   * Mot goi khach that tu nhan la "ban xem truoc" se vua lam sai ky vong cua khach, vua tu mo cho
-   * minh mot duong vao danh sach mien tru o lan sua sau.
+   * Chieu nguoc lai: moi goi khach THAT deu phai khai it nhat mot adapter. Day la nua con lai cua
+   * bai tren — no la thu lam cho `integrations: {}` co suc phan biet, thay vi chi la mot su that
+   * ngau nhien ve mot goi.
    */
-  it('khong goi khach that nao tu khai la ban xem truoc', () => {
+  it('moi goi khach that deu khai it nhat mot adapter', () => {
     for (const slug of CUSTOMER_TENANTS) {
+      process.env.TENANT = slug;
+      delete process.env.TENANT_DIR;
+      resetTenantCache();
+
+      expect(Object.keys(loadTenantConfig().integrations).length, slug).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * KHONG GOI NAO — mien tru hay khach that — duoc bay dai bang xem truoc.
+   *
+   * `previewNotice` van con trong schema nhu mot nang luc cua nen tang, nhung khong be mat khach
+   * hang nao duoc dung no: mot dai bang noi "BẢN XEM TRƯỚC / khong phai UAT / khong co du lieu
+   * khach hang" la ngon ngu noi bo, va #195 bo han no. Bai nay giu cho no khong quay lai bang mot
+   * lan sua goi khach.
+   */
+  it('khong goi nao tu khai dai bang xem truoc', () => {
+    for (const slug of [...TRANSPORT_PREVIEW_TENANTS, ...CUSTOMER_TENANTS]) {
       process.env.TENANT = slug;
       delete process.env.TENANT_DIR;
       resetTenantCache();
