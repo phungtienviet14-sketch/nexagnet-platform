@@ -97,7 +97,7 @@ export function usePartners(input: NavigationInput) {
 
 /**
  * Phan cong CUA MOT chuyen. Phai goi theo tung chuyen vi `Trip` khong mang phan cong dang hieu luc
- * — xem `api-gaps.ts#trip-has-no-names`. Nen chi goi khi da MO mot chuyen, khong goi cho ca bang.
+ * — `Trip` chi tra ve khoa ngoai. Nen chi goi khi da MO mot chuyen, khong goi cho ca bang.
  */
 export function useTripAssignments(input: NavigationInput, tripId: string | null) {
   return useQuery({

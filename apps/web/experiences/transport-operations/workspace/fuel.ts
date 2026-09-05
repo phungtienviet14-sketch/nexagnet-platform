@@ -73,7 +73,7 @@ export interface FuelEntryRow {
   readonly canAmend: boolean;
   /** Ly do khong sua duoc — HAI ly do khac nhau, doi hai viec khac nhau cua nguoi dung. */
   readonly amendBlockedReason: string | null;
-  /** Phieu bi tu choi la duong cut hom nay — xem `api-gaps.ts#no-fuel-resubmit-route`. */
+  /** Phieu bi tu choi nop lai duoc qua `POST /transport/me/fuel/slips/:id/resubmit` (`#168 B5`). */
   readonly deadEndNote: string | null;
 }
 

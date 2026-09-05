@@ -1,6 +1,5 @@
 'use client';
 
-import { gapsForSection } from '../api-gaps';
 import { MetricCard, PageHeader } from '../components/primitives';
 import { ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -104,16 +103,6 @@ export function OverviewView() {
             </li>
           ))}
         </ul>
-        <details className="tx-details">
-          <summary>Chi tiết kỹ thuật của các khoảng cách này</summary>
-          <ul>
-            {gapsForSection('overview').map((gap) => (
-              <li key={gap.id}>
-                <strong>{gap.title}</strong> — {gap.actual}
-              </li>
-            ))}
-          </ul>
-        </details>
       </section>
     </>
   );

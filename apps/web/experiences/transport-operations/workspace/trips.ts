@@ -27,7 +27,7 @@ import type {
  * MO HINH KHUNG NHIN cua man Chuyen xe — ham thuan, khong React, khong goi mang.
  *
  * Vi sao nhieu logic o day hon mong doi: API van tai KHONG co bo loc, KHONG co tim kiem, KHONG co
- * phan trang, va `Trip` chi tra ve KHOA NGOAI chu khong tra ten (xem `api-gaps.ts`). Nen viec ghep
+ * phan trang, va `Trip` chi tra ve KHOA NGOAI chu khong tra ten. Nen viec ghep
  * ten va loc buoc phai lam o phia man hinh. Do la mot khoang cach da duoc ghi so, khong phai mot
  * lua chon thiet ke — va no nam trong mot tep thuan de con do duoc bang test thay vi tan trong JSX.
  */
@@ -151,12 +151,7 @@ const D_STROKE = /[Đđ]/g;
  * Nguoi dieu hanh go nhanh va thuong khong bo dau; go "thai nguyen" phai tim ra "Thái Nguyên".
  */
 const normalise = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(COMBINING_MARKS, '')
-    .replace(D_STROKE, 'd')
-    .toLowerCase()
-    .trim();
+  value.normalize('NFD').replace(COMBINING_MARKS, '').replace(D_STROKE, 'd').toLowerCase().trim();
 
 export const filterTrips = (trips: readonly Trip[], filter: TripFilter): readonly Trip[] => {
   const needle = normalise(filter.search);
@@ -389,7 +384,7 @@ export const toTripTimeline = (
 
 /**
  * Mot chuyen `CANCELLED` ma khong co `cancelledAt`/`cancellationReason` la du lieu THAT co the gap:
- * duong `transition` tao ra duoc dung hinh dang do (xem `api-gaps.ts#cancel-backdoor-via-transition`).
+ * duong `transition` tao ra duoc dung hinh dang do — `#168 B6` da dong duong di vong do.
  * Man hinh phai noi la khong ro ly do, chu khong duoc de trong nhu the khong co chuyen gi.
  */
 export const cancellationNote = (trip: Trip): string | null => {

@@ -84,7 +84,7 @@ const countBy = <T, K extends string>(
 };
 
 /**
- * Danh sach the KHONG dung duoc. Moi dong tro ve mot khoang cach da do trong `api-gaps.ts`, va
+ * Danh sach the KHONG dung duoc — moi dong tro ve mot nang luc khach chua bat, va
  * cau `reason` la cau se hien tren man hinh — nen no phai doc len duoc cho nguoi khong lam ky thuat.
  */
 const unavailableCards = (capabilities: readonly CapabilityId[]): readonly UnavailableCard[] => {

@@ -15,8 +15,6 @@ import { canPerform, type TransportAction } from './transport-actions';
  *   1. `requiredCapabilities` — khach co MUA nghiep vu nay khong (`CapabilityId`, dong kin).
  *   2. `requiredAction`       — vai nay co lam duoc viec do khong (`GD-22`, theo hanh dong).
  *
- * Va mot truc thu ba chi de NOI THAT, khong de loc: `dataSource`.
- *
  * TRUOC DAY co mot truc thu tu — `pendingCapability` — so bang CHUOI voi danh sach nang luc luc
  * chay, vi `TX-06`/`TX-07` chua co ma trong `CapabilityId` khi T7A duoc viet. T6 da vao `main`
  * (PR #152, #88 dong), va `CAPABILITY_IDS` nay da co `transport-asset-compliance` +
@@ -57,19 +55,6 @@ export const TRANSPORT_SECTION_GROUPS = [
   { id: 'reports', label: 'BÁO CÁO' },
 ] as const satisfies readonly TransportSectionGroup[];
 
-/**
- * Muc nay co duong API that hay khong — de NOI THAT tren man hinh, khong phai de loc.
- *
- *   · `live`         — co route HTTP, man hinh chay du.
- *   · `awaiting-api` — read model DA CHAY o server nhung KHONG co route nao tra no ra.
- *
- * `awaiting-api` la ket qua do duoc, khong phai mot phong doan: `transport-settlement.module.ts`
- * khong khai `controllers` nao, va khong co tep `*.controller.ts` nao trong thu muc settlement. Ta
- * KHONG bia so lieu cho nhung muc do, va cung khong an chung di khi khach da bat nang luc — an di
- * se lam khach tuong nghiep vu chua duoc mua.
- */
-export type TransportDataSource = 'live' | 'awaiting-api';
-
 export interface TransportSection {
   readonly id: TransportSectionId;
   readonly label: string;
@@ -77,7 +62,6 @@ export interface TransportSection {
   readonly summary: string;
   readonly requiredCapabilities: readonly CapabilityId[];
   readonly requiredAction: TransportAction;
-  readonly dataSource: TransportDataSource;
 }
 
 export const TRANSPORT_SECTIONS = [
@@ -88,7 +72,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Chuyến đang chạy, đội xe, và những việc đang chờ người xử lý.',
     requiredCapabilities: [],
     requiredAction: 'transport.trip.read',
-    dataSource: 'live',
   },
   {
     id: 'trips',
@@ -97,7 +80,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Lập chuyến, phân công xe và lái xe, theo dõi vòng đời chuyến.',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.trip.read',
-    dataSource: 'live',
   },
   {
     id: 'fleet',
@@ -106,7 +88,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Hồ sơ xe, hồ sơ lái xe, lịch sử phụ trách và số km đồng hồ.',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.vehicle.read',
-    dataSource: 'live',
   },
   {
     id: 'driver-fund',
@@ -115,7 +96,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Số dư quỹ từng lái xe, tạm ứng, hoàn quỹ, chi phí chuyến và kỳ quỹ.',
     requiredCapabilities: ['transport-costing'],
     requiredAction: 'transport.costing.driver_fund.read',
-    dataSource: 'live',
   },
   {
     id: 'fuel',
@@ -124,7 +104,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Phiếu đổ dầu, xác thực phiếu, nhập bảng kê cây xăng và đối soát.',
     requiredCapabilities: ['transport-fuel'],
     requiredAction: 'transport.fuel.entry.read',
-    dataSource: 'live',
   },
   {
     id: 'settlement',
@@ -133,7 +112,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Năm dòng tiền giữ riêng: khách hàng, nhà xe, nguồn đơn, cây xăng, lái xe.',
     requiredCapabilities: ['transport-settlement'],
     requiredAction: 'transport.costing.period.read',
-    dataSource: 'awaiting-api',
   },
   {
     id: 'maintenance',
@@ -142,7 +120,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Lịch bảo dưỡng đến hạn, lệnh sửa chữa, giấy tờ sắp hết hạn.',
     requiredCapabilities: ['transport-core', 'transport-asset-compliance'],
     requiredAction: 'transport.vehicle.read',
-    dataSource: 'awaiting-api',
   },
   {
     id: 'payroll',
@@ -151,7 +128,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Kỳ lương, bảng tính thử, phiếu lương và các khoản cấu thành.',
     requiredCapabilities: ['transport-costing', 'transport-workforce'],
     requiredAction: 'transport.costing.period.read',
-    dataSource: 'awaiting-api',
   },
   {
     id: 'margin',
@@ -160,7 +136,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Doanh thu trừ chi phí trực tiếp của từng chuyến — chưa gồm chi phí cố định.',
     requiredCapabilities: ['transport-settlement'],
     requiredAction: 'transport.trip.read',
-    dataSource: 'awaiting-api',
   },
   {
     id: 'ar-ap',
@@ -169,7 +144,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Tuổi nợ phải thu và phải trả theo từng đối tác.',
     requiredCapabilities: ['transport-settlement'],
     requiredAction: 'transport.costing.period.read',
-    dataSource: 'awaiting-api',
   },
   {
     id: 'exports',
@@ -178,7 +152,6 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Kết xuất sổ sách để đối chiếu ngoài hệ thống.',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.trip.read',
-    dataSource: 'awaiting-api',
   },
 ] as const satisfies readonly TransportSection[];
 
@@ -194,11 +167,10 @@ const DEFAULT_SECTION: TransportSectionId = 'overview';
  * do o §12. No la mot dia chi rieng (`?surface=driver`), va moi payload cua no di qua kieu khung
  * nhin rieng khong co truong doanh thu (`DriverTripView`, `DriverFuelSlipView` — `INV-09`).
  *
- * KHONG co man "Chi phi": as-built khong co route nao cho lai xe tu ghi mot khoan chi thuong. Bo
- * hanh dong `transport.driver.self.*` chi co doc chuyen, doi trang thai chuyen, doc quy, doc va nop
- * PHIEU DAU. De mot man hinh nhap chi phi o day la de mot nut bam khong bao gio gui duoc.
+ * Man "Chi phi" CO tu T7B: `#168 B3` mo `POST /transport/me/expenses`, va `#169` acceptance 4
+ * cho phep dinh anh chung tu ngay trong cung lan goi do.
  */
-export type DriverScreenId = 'home' | 'trip' | 'fuel' | 'fund' | 'history' | 'payslip';
+export type DriverScreenId = 'home' | 'trip' | 'fuel' | 'expense' | 'fund' | 'history' | 'payslip';
 
 export interface DriverScreen {
   readonly id: DriverScreenId;
@@ -227,6 +199,12 @@ export const DRIVER_SCREENS = [
     requiredAction: 'transport.driver.self.fuel.read',
   },
   {
+    id: 'expense',
+    label: 'Chi phí',
+    requiredCapabilities: ['transport-costing'],
+    requiredAction: 'transport.driver.self.expense.record',
+  },
+  {
     id: 'fund',
     label: 'Quỹ',
     requiredCapabilities: ['transport-costing'],
@@ -241,8 +219,8 @@ export const DRIVER_SCREENS = [
   {
     id: 'payslip',
     label: 'Phiếu lương',
-    requiredCapabilities: ['transport-costing', 'transport-workforce'],
-    requiredAction: 'transport.driver.self.fund.read',
+    requiredCapabilities: ['transport-workforce'],
+    requiredAction: 'transport.driver.self.payslip.read',
   },
 ] as const satisfies readonly DriverScreen[];
 

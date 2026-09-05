@@ -51,7 +51,28 @@ export interface DriverFuelSlipView {
   /** Ly do ke toan tra lai phieu. `null` khi chua ai tra lai. */
   readonly reviewNote: string | null;
   readonly evidenceCount: number;
+  /**
+   * ANH CUA CHINH PHIEU NAY — chi `id` va loai noi dung, khong hon.
+   *
+   * Vi sao phai co: `GET /transport/me/fuel/slips/:id/evidence/:evidenceId` doi mot `evidenceId`,
+   * va truoc lan sua nay be mat lai xe KHONG co duong nao hoc duoc ma do — chi biet co BAO NHIEU
+   * anh (`evidenceCount`). Nen lai xe tai anh len duoc nhung khong xem lai duoc no sau khi tai
+   * trang, va acceptance 8 cua #170 khong the dat.
+   *
+   * `locator` CO Y vang mat: no la khoa trong kho anh, va dua no ra trinh duyet se bien mot dinh vi
+   * duc thanh mot dia chi doan duoc. `uploadedBy` cung vang mat — do la danh tinh nguoi van hanh,
+   * cung ly le voi bon truong bi bo o be mat phieu luong (`#168 B8 §3`).
+   *
+   * `contentType` co mat vi man hinh phai chon giua the anh va mot lien ket tai ve cho PDF.
+   */
+  readonly evidence: readonly DriverFuelEvidenceView[];
   readonly createdAt: string;
+}
+
+/** Mot anh cua phieu, o dang lai xe duoc phep biet. */
+export interface DriverFuelEvidenceView {
+  readonly id: string;
+  readonly contentType: string | null;
 }
 
 /**
@@ -86,6 +107,9 @@ export function toDriverFuelSlipView(
     note: entry.note,
     reviewNote: entry.reviewNote,
     evidenceCount: evidence.length,
+    // Chon TUNG TRUONG, khong spread: `FuelReceiptEvidence` mang `locator` va `uploadedBy`, va mot
+    // `...row` o day se lang le day ca hai ra trinh duyet.
+    evidence: evidence.map((row) => ({ id: row.id, contentType: row.contentType })),
     createdAt: entry.createdAt,
   };
 }

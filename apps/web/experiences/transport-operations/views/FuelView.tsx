@@ -2,7 +2,6 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { gapsForSection } from '../api-gaps';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -121,17 +120,6 @@ export function FuelView() {
           onChanged={() => void queryClient.invalidateQueries({ queryKey: ['transport', 'fuel'] })}
         />
       )}
-
-      <details className="tx-details">
-        <summary>Những phần của nghiệp vụ này còn thiếu đường dữ liệu</summary>
-        <ul>
-          {gapsForSection('fuel').map((gap) => (
-            <li key={gap.id}>
-              <strong>{gap.title}</strong> — {gap.actual}
-            </li>
-          ))}
-        </ul>
-      </details>
     </>
   );
 }

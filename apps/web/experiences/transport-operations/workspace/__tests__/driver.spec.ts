@@ -111,9 +111,41 @@ describe('phieu dau cua chinh minh', () => {
     expect(row.consumptionLabel).toBe('40,000 L/100km');
   });
 
-  it('phieu bi tu choi noi ro la hien chua tu nop lai duoc', () => {
-    const rejected: DriverFuelSlipView = driverFuelSlip({ verificationStatus: 'REJECTED' });
-    expect(toDriverFuelSlipRows([rejected])[0]!.rejectedNote).toContain('chưa mở đường tự nộp lại');
+  /**
+   * BAI NAY DA BI LAT. Ban truoc khang dinh phieu bi tu choi la mot NGO CUT ("chưa mở đường tự nộp
+   * lại") — tuc no ghi lai mot GIOI HAN, va gioi han do da bien mat khi `#168 B5` mo
+   * `POST /transport/me/fuel/slips/:id/resubmit`.
+   *
+   * Giu nguyen bai cu se lam man hinh tiep tuc noi voi lai xe rang ho phai di tim ke toan, trong
+   * khi cai nut nop lai dang o ngay tren tay ho.
+   */
+  it('phieu bi tu choi NOP LAI duoc, va ghi chu cua nguoi duyet duoc giu nguyen van', () => {
+    const rejected: DriverFuelSlipView = driverFuelSlip({
+      verificationStatus: 'REJECTED',
+      reviewNote: 'Ảnh mờ, không đọc được số lít.',
+    });
+    const row = toDriverFuelSlipRows([rejected])[0]!;
+    expect(row.canResubmit).toBe(true);
+    expect(row.rejectedNote).toBe('Ảnh mờ, không đọc được số lít.');
+  });
+
+  it('bi tu choi ma khong co ghi chu thi van co mot cau viec-can-lam', () => {
+    const rejected: DriverFuelSlipView = driverFuelSlip({
+      verificationStatus: 'REJECTED',
+      reviewNote: null,
+    });
+    expect(toDriverFuelSlipRows([rejected])[0]!.rejectedNote).toContain('nộp lại');
+  });
+
+  it('phieu chua bi tu choi thi KHONG bay nut nop lai', () => {
+    expect(toDriverFuelSlipRows([driverFuelSlip()])[0]!.canResubmit).toBe(false);
+  });
+
+  /** Lai xe phai hoc duoc `evidenceId` de dung dia chi xem anh — xem `DriverFuelSlipView.evidence`. */
+  it('anh cua phieu di kem MA, khong chi mot con so dem', () => {
+    const row = toDriverFuelSlipRows([driverFuelSlip()])[0]!;
+    expect(row.hasEvidence).toBe(true);
+    expect(row.evidence.map((item) => item.id)).toEqual(['ev-1']);
   });
 
   it('phieu binh thuong khong bay canh bao gi', () => {

@@ -165,6 +165,14 @@ export interface DriverTripView {
   readonly cargoDescription: string | null;
   readonly distanceKm: number | null;
   readonly customerName: string | null;
+  /**
+   * MA XE cua chinh phan cong nay (`#168 B2`).
+   *
+   * `POST /transport/me/fuel/slips` doi `vehicleId`, va truoc B2 be mat lai xe chi doc duoc
+   * BIEN SO — nen lai xe khong nop noi phieu dau dau tien tu dien thoai. Day la duong duy nhat
+   * ho hoc duoc ma xe, va no chi ra ma xe cua CHINH phan cong cua ho.
+   */
+  readonly vehicleId: string | null;
   readonly vehicleRegistrationPlate: string | null;
   readonly assignedAt: string | null;
   readonly isCurrentAssignee: boolean;
@@ -450,7 +458,19 @@ export interface DriverFuelSlipView {
   readonly note: string | null;
   readonly reviewNote: string | null;
   readonly evidenceCount: number;
+  /**
+   * ANH cua chinh phieu nay — chi `id` va loai noi dung.
+   *
+   * `locator` va `uploadedBy` CO Y khong co: cai dau la khoa trong kho anh, cai sau la danh
+   * tinh nguoi van hanh. Man hinh dung `id` de dung dia chi doc byte qua route co xac thuc.
+   */
+  readonly evidence: readonly DriverFuelEvidenceView[];
   readonly createdAt: string;
+}
+
+export interface DriverFuelEvidenceView {
+  readonly id: string;
+  readonly contentType: string | null;
 }
 
 export interface FuelSupplierStatement {

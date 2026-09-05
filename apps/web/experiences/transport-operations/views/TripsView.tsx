@@ -42,7 +42,7 @@ import {
  * Man CHUYEN XE.
  *
  * Chon dong bang MA CHUYEN, khong bang `id`: dia chi phai doc duoc va dan duoc cho nguoi khac. API
- * khong co duong tra cuu theo ma (`api-gaps.ts#no-list-filters`), nen ma duoc doi nguoc ve `id`
+ * khong co duong tra cuu theo ma chuyen, nen ma duoc doi nguoc ve `id`
  * ngay tren danh sach da tai ve — mot hau qua tinh co thuan tien cua viec API tra ve ca bang.
  */
 export function TripsView({
