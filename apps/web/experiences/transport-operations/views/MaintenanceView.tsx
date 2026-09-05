@@ -175,6 +175,10 @@ export function MaintenanceComplianceView() {
             <WorkOrderRowActions
               key={row.id}
               workOrder={row}
+              vehicleLabel={
+                (vehicles.data ?? []).find((v) => v.id === row.vehicleId)?.registrationPlate ??
+                'Xe chưa đọc được biển số'
+              }
               role={navigation.role}
               onChanged={refreshAssets}
             />

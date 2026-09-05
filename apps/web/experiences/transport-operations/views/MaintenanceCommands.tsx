@@ -154,10 +154,18 @@ export function WorkOrderCommands({
  */
 export function WorkOrderRowActions({
   workOrder,
+  vehicleLabel,
   role,
   onChanged,
 }: {
   readonly workOrder: MaintenanceWorkOrder;
+  /**
+   * BIEN SO, khong phai `vehicleId`. Bat buoc, va do la co y: khoi nay ve ra MOT LAN CHO MOI lenh
+   * dang mo, nen hai lenh dang mo se cho hai hang o nhap GIONG HET NHAU. Khong noi ro hang nao
+   * thuoc xe nao thi nguoi van hanh co the go ngay hoan tat cua xe nay vao lenh cua xe kia — va
+   * khong co gi tren man hinh ngan ho lai.
+   */
+  readonly vehicleLabel: string;
   readonly role: AuthRole | null;
   readonly onChanged: () => void;
 }) {
@@ -201,6 +209,9 @@ export function WorkOrderRowActions({
   return (
     <>
       {failure === null ? null : <ErrorState message={failure} />}
+      <p className="tx-note">
+        <strong>{vehicleLabel}</strong> · {workOrder.description}
+      </p>
       <div className="tx-rowbtns">
         <label className="tx-field tx-field--inline">
           <span>Ngày hoàn tất</span>
@@ -238,7 +249,11 @@ export function WorkOrderRowActions({
 
       <ConfirmAction
         open={pending !== null}
-        title={pending === 'cancel' ? 'Huỷ lệnh sửa chữa?' : 'Hoàn tất lệnh sửa chữa?'}
+        title={
+          pending === 'cancel'
+            ? `Huỷ lệnh sửa chữa của ${vehicleLabel}?`
+            : `Hoàn tất lệnh sửa chữa của ${vehicleLabel}?`
+        }
         detail={
           pending === 'cancel'
             ? 'Lệnh đã huỷ không mở lại được.'
