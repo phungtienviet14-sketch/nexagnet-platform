@@ -8,7 +8,11 @@ import type {
 } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { AdvisorAgent, type AdvisorReply } from '../advisor/advisor-agent.js';
-import { fakeAdvisorReply } from '../advisor/__tests__/advisor-reply.fixture.js';
+import {
+  fakeAdvisorReply,
+  stubEvidence,
+  stubEvidenceRegistry,
+} from '../advisor/__tests__/advisor-reply.fixture.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryContentRepository } from '../content/content.repository.js';
@@ -99,7 +103,13 @@ async function build(advisor: AdvisorAgent, intent: Intent = 'khac') {
   );
   const channel = new MockAdapter();
   const router = new OutboundChannelRouter(new MockAdapter(), new MockAdapter(), channel);
-  const turnReply = new TurnReplyService(ordersRepo, router);
+  const turnReply = new TurnReplyService(
+    ordersRepo,
+    router,
+    undefined,
+    undefined,
+    stubEvidenceRegistry(),
+  );
   const orders = new OrdersService(ordersRepo, router, undefined, undefined, undefined, turnReply);
   const settings = { autoSend: () => 'on' } as RuntimeSettingsService;
   const pipeline = new PipelineService(
@@ -129,8 +139,8 @@ const draft = (
     text,
     authority,
     // Luot co loi nhan la luot da tra cuu duoc mot nguon he thong (G1). Test nao muon chung minh
-    // dieu nguoc lai phai TU truyen `sources: []`.
-    sources: ['Tai lieu da duyet cua san pham (gia lap cho test).'],
+    // dieu nguoc lai phai TU truyen `sources: stubEvidence([])`.
+    sources: stubEvidence(['Tai lieu da duyet cua san pham (gia lap cho test).']),
     ...overrides,
   });
 
@@ -362,7 +372,7 @@ describe('duong duong — cong nay khong lam hong nhung luot hop le', () => {
       new StubAdvisor(
         // #200: cau tra loi trich TRON VEN hai menh de cua nguon, ke ca dau phay ngat giua chung.
         draft('Dạ máy dùng điện 220V, có chế độ ngủ im ạ.', NO_AUTHORITY, {
-          sources: ['Máy dùng điện 220V, có chế độ ngủ im.'],
+          sources: stubEvidence(['Máy dùng điện 220V, có chế độ ngủ im.']),
         }),
       ),
     );

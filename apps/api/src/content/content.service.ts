@@ -10,11 +10,13 @@ import { loadFoundationEnv } from '../config/foundation-env.js';
 import { normalize } from '../rules/text.js';
 import { rankFaqs, type GlossaryTerm } from './faq-ranking.js';
 import { ContentRepository, type ContentEntityKind } from './content.repository.js';
+import { EvidenceRegistry } from '../outbound/evidence-registry.port.js';
+import { documentSourceId, evidenceVersion } from '../outbound/source-evidence.js';
 
 type ProductRef = { sku: string; name: string; aliases?: string[] };
 
 @Injectable()
-export class ContentService implements OnModuleInit {
+export class ContentService implements OnModuleInit, EvidenceRegistry {
   private readonly logger = new Logger('ContentService');
   private cache: ContentSnapshotView = {
     provenance: [],
@@ -44,6 +46,34 @@ export class ContentService implements OnModuleInit {
 
   snapshot(): ContentSnapshotView {
     return structuredClone(this.cache);
+  }
+
+  /**
+   * SO GHI BANG CHUNG DANG CO HIEU LUC (`EvidenceRegistry`, Issue #205).
+   *
+   * CHI ban ghi vua `active` VUA duoc tuyen bo `narrativeEligible` moi co mat. Hai dieu kien
+   * cong lai chu khong thay nhau: mot bai da duyet nhung chua ai xet quyen ke thi khong duoc ke,
+   * va mot bai duoc phep ke nhung da go `active` thi cung khong.
+   *
+   * `version` tinh bang `evidenceVersion()` — DUNG ham ma luc soan da dung, nen mot lan sua noi
+   * dung lam lech dau va ban soan cu dung lai o diem nghen gui.
+   */
+  narrativeEvidenceIndex(): ReadonlyMap<string, string> {
+    const index = new Map<string, string>();
+    const put = (id: string, text: string): void => {
+      index.set(id, evidenceVersion(text));
+    };
+    for (const faq of this.cache.faqs) {
+      if (faq.status !== 'active' || faq.narrativeEligible !== true) continue;
+      put(documentSourceId('faq', faq.externalId, 'q'), faq.question);
+      put(documentSourceId('faq', faq.externalId, 'a'), faq.answer);
+    }
+    for (const row of this.cache.advice) {
+      if (row.status !== 'active' || row.narrativeEligible !== true) continue;
+      put(documentSourceId('advice', row.externalId, 'title'), row.title);
+      put(documentSourceId('advice', row.externalId, 'body'), row.body);
+    }
+    return index;
   }
 
   async setStatus(

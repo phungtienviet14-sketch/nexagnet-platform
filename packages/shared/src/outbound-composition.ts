@@ -180,6 +180,15 @@ export const NARRATIVE_REJECTIONS = [
    * Xem `apps/api/src/outbound/outbound-proposition.ts`.
    */
   'NARRATIVE_NOT_SOURCE_BOUND',
+  /*
+   * G7 - LOI NHAN TRON PHAM VI CUA HAI SAN PHAM (Issue #205).
+   *
+   * Mot luot tra cuu tai lieu cua nhieu SKU thi menh de cua ca hai deu chon duoc, va mot cau
+   * ghep chung lai doc len nhu mot khang dinh ve mot san pham. Ma nay tach khoi
+   * `NARRATIVE_NOT_SOURCE_BOUND` vi hai thu doi hai hanh dong khac nhau: cau kia la model
+   * ghep chu, cau nay la model tra loi dung chu nhung sai san pham.
+   */
+  'NARRATIVE_SCOPE_CONFLICT',
   /** G2 — mot con so trong loi nhan khong truy nguyen duoc ve nguon/grant/tin khach. */
   'NUMERAL_NOT_GROUNDED',
   /** G3 — mot ma chinh sach trong loi nhan khong duoc cap va khong co trong nguon. */
@@ -212,6 +221,7 @@ export const NARRATIVE_REJECTION_LABELS: Record<NarrativeRejection, string> = {
   NARRATIVE_NOT_SOURCE_BACKED: 'Lời nhắn nói điều không nguồn hệ thống nào của lượt này nói',
   NARRATIVE_NOT_SOURCE_BOUND:
     'Lời nhắn ghép lại từ ngữ của nguồn thành một mệnh đề không nguồn nào nói',
+  NARRATIVE_SCOPE_CONFLICT: 'Lời nhắn trộn mệnh đề của hai sản phẩm khác nhau',
   NUMERAL_NOT_GROUNDED: 'Lời nhắn chứa con số không truy nguyên được về nguồn',
   POLICY_CARRIER_NOT_GROUNDED: 'Lời nhắn nói chính sách không được cấp và không có trong nguồn',
   COMMITMENT_CARRIER_NOT_GROUNDED:

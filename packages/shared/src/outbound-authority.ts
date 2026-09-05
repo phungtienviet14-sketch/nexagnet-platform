@@ -207,6 +207,21 @@ export const OUTBOUND_AUTHORITY_REASONS = [
    * (`x:` trong `OutboundComposition.grounded`).
    */
   'COMPOSITION_TEXT_NOT_SOURCE_BOUND',
+  /**
+   * PHONG THU CHIEU SAU (muc 7), lop thu tu - o muc PHAM VI (Issue #205).
+   *
+   * Ba ma tren hoi van ban cuoi den TU DAU. Ma nay hoi no noi VE CAI GI: cac menh de da ghim
+   * phai cung thuoc mot pham vi san pham. Mot ban soan tron menh de cua SKU A voi menh de cua
+   * SKU B doc len nhu mot khang dinh ve mot san pham, va khong ban ghi nao noi dieu do.
+   */
+  'COMPOSITION_SCOPE_CONFLICT',
+  /**
+   * BAN GHI NGUON DA DOI HAY DA BI RUT QUYEN KE ke tu luc soan (Issue #205).
+   *
+   * Mot ban soan nam trong hang cho cua Sale co the nhieu gio. Ma nay la cach he thong noi
+   * rang cau do TUNG duoc phep, va bay gio thi khong — thay vi am tham cap phep lai.
+   */
+  'COMPOSITION_EVIDENCE_STALE',
 ] as const;
 export type OutboundAuthorityReason = (typeof OUTBOUND_AUTHORITY_REASONS)[number];
 
@@ -262,4 +277,6 @@ export const OUTBOUND_AUTHORITY_REASON_LABELS: Record<OutboundAuthorityReason, s
     'Văn bản cuối chứa từ ngữ không nguồn hệ thống nào của lượt này nói',
   COMPOSITION_TEXT_NOT_SOURCE_BOUND:
     'Văn bản cuối chứa mệnh đề không khớp trọn vẹn nguồn nào của lượt này',
+  COMPOSITION_SCOPE_CONFLICT: 'Văn bản cuối trộn nguồn của hai sản phẩm khác nhau',
+  COMPOSITION_EVIDENCE_STALE: 'Nguồn của nội dung này đã đổi hoặc không còn được phép kể lại',
 };

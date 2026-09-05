@@ -8,6 +8,7 @@ import {
 } from './outbound-claims.js';
 import { unattestedWords } from './outbound-envelope.js';
 import { bindProposition, type SourceUnit } from './outbound-proposition.js';
+import { singleProductScope } from './source-evidence.js';
 
 /**
  * HOP DONG NEO NGUON CHO LOI NHAN — cai gi cho phep mot cau van xuoi cua model den tay khach.
@@ -123,9 +124,10 @@ function grantedValues(
 /**
  * Dung bang chung neo nguon cua luot.
  *
- * `systemSources` = chuoi he thong so huu (van ban tai lieu da duyet, ten/mo ta san pham trong
- * danh muc, so tien rules engine da dinh dang, nhan chinh sach). `customerText` = tin khach vua
- * gui — CHI dong gop cho lop SO.
+ * `narrativeSources` = van ban cua nhung ban ghi DA DUOC TUYEN BO la ke duoc, va CHI nhung ban
+ * ghi do (Issue #205). Bang chung thuoc tham quyen — gia, chinh sach, trang thai don — khong di
+ * qua day: chung render thanh KHOI, khong thanh van xuoi. `customerText` = tin khach vua gui,
+ * CHI dong gop cho lop SO.
  *
  * VI SAO tin khach chi cho lop so: khach viet "lay 20 cai" thi cau xac nhan "da nhan 20 cai a"
  * phai noi duoc, neu khong moi cau xac nhan so luong deu bi tu choi. Nhung mot cau CHINH SACH hay
@@ -133,30 +135,83 @@ function grantedValues(
  * he thong co quyen hua cong no. Do la ranh gioi co chu y, va no duoc khoa bang test.
  */
 export function buildGrounding(
-  systemSources: readonly string[],
+  narrativeSources: readonly string[],
   customerText: string,
   authority: OutboundAuthority,
 ): NarrativeGrounding {
-  const systemText = systemSources.join('\n');
+  const systemText = narrativeSources.join('\n');
   return {
+    /*
+     * SO: van ban nguon chi neo duoc con so KHONG mang hinh dang tien. Mot con so TIEN chi neo
+     * duoc bang GRANT tat dinh.
+     *
+     * Day la ban sua truc tiep cua do luong A1/A2/A3 (#205). Truoc ban nay `numeralValues(
+     * systemText)` do MOI con so cua nguon vao tap cho phep, nen mot bai FAQ da duyet noi
+     * `Gia ban le: 8.500.000 VND` TU NEO NGUON cho chinh con so do, khong can mot grant nao.
+     * Cau do doc len la mot lan bao gia that truoc mat ca nhom, va do duoc rang no de bep ca
+     * bang gia dang chay: luot co grant 1.150.000 van cho con so 8.500.000 cua FAQ ra kenh.
+     */
     numerals: new Set<string>([
-      ...numeralValues(systemText),
+      ...sourceNumeralValues(systemText),
       ...nonMonetaryValues(customerText),
       ...grantedValues(authority, 'financial'),
     ]),
-    policy: new Set([...policyClaimTokens(systemText), ...grantedValues(authority, 'policy')]),
-    commitment: new Set([
-      ...commitmentTokensIn(systemText),
-      ...grantedValues(authority, 'order_commitment'),
-    ]),
+    /*
+     * CHINH SACH va CAM KET DON: CHI grant. Van ban nguon khong con neo duoc hai lop nay.
+     *
+     * Do luong B1/B2 (#205): mot cau bao hanh `1 doi 1 trong 7 ngay` hay mot cau cong no 45
+     * ngay co that trong tai lieu da duyet TU NEO NGUON cho chinh no, nen no ra duoc kenh nhu
+     * mot QUYEN LOI cua khach ma khong bo phan tat dinh nao cap. Repo khong co may tinh quyen
+     * bao hanh, va muc 2 hop dong doi dung phep fail-closed cho truong hop do: khong cap duoc
+     * thi khong noi, va luot do chuyen Sale.
+     */
+    policy: new Set(grantedValues(authority, 'policy')),
+    commitment: new Set(grantedValues(authority, 'order_commitment')),
   };
 }
 
-/** Gia tri so doc duoc tu mot doan van, dang chuoi thap phan. Cach viet nhap nhang bi bo qua. */
-function numeralValues(text: string): string[] {
+/**
+ * Con so trong TAI LIEU HE THONG ma khong phai mot cau noi ve TIEN.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * KHAC `nonMonetaryValues` O DUNG MOT CHO: KHONG loai theo DO LON.
+ *
+ * `monetaryLiterals()` coi moi con so tu 1.000 tro len la tien (`MONEY_MAGNITUDE_FLOOR`). Nguong
+ * do dung cho TIN KHACH — kenh khong dang tin, noi mot dai ly co the tu go `giá 990` de tu tao
+ * bang chung. No SAI cho tai lieu he thong: do luong 04/09/2026 tren kho tai lieu that cho thay
+ * `9700 lít/phút`, `12000 giờ`, `4500 m3` deu vuot nguong, va loai chung di thi mot cau thong so
+ * ky thuat hoan toan vo hai bi tu choi — dung thu muc 8 ca 13 hop dong #205 bat phai giu.
+ *
+ * O day phep loai la: CO DON VI TIEN di kem (`literal.money`: `đ`, `k`, `tr`, `nghìn`), hoac
+ * khong quy duoc ve mot gia tri. `Giá bán lẻ: 8.500.000 VNĐ` roi vao ve dau va bi loai; `9700
+ * lít/phút` thi khong.
+ *
+ * VA PHEP LOAI NAY KHONG PHAI CONG CHO PHEP. Cua cho phep la LOP cua ban ghi (`evidenceClass`):
+ * mot tai lieu chua ai tuyen bo thi khong den duoc day. Day chi la lop THU HEP thu hai, dung
+ * tren mot ban ghi ma mot nguoi that da bam duyet cho ke lai.
+ */
+function sourceNumeralValues(text: string): string[] {
   return numeralLiterals(text).flatMap((literal) =>
-    literal.value === null ? [] : [String(literal.value)],
+    literal.value === null || monetaryByMarker(text, literal) ? [] : [String(literal.value)],
   );
+}
+
+/**
+ * DON VI TIEN VIET ROI, dung sau con so — `8.500.000 VNĐ`, `12.000.000 đồng`.
+ *
+ * `numeralLiterals()` chi gan `money` khi don vi DINH LIEN con so (`990k`, `1.150.000đ`). Kho tai
+ * lieu that cua khach viet cach ra, nen thieu phep nay thi cau bao gia cua `faq:cr022:skj-cr022:021`
+ * ra duoc kenh — do luong A1/A2 tren Issue #205.
+ *
+ * Danh sach nay CHI LAM GIAM kha nang gui, khong bao gio cap phep: bo het no di thi khong mot cau
+ * nao duoc phep them, chi co them cau bi chan. Cua cho phep van la LOP cua ban ghi.
+ */
+const CURRENCY_AFTER = /^[\s.]*(vnđ|vnd|đồng|dong|đ|d)(?!\p{L})/iu;
+
+function monetaryByMarker(text: string, literal: { written: string; money: boolean }): boolean {
+  if (literal.money) return true;
+  const at = text.indexOf(literal.written);
+  return at >= 0 && CURRENCY_AFTER.test(text.slice(at + literal.written.length));
 }
 
 /**
@@ -189,9 +244,27 @@ function nonMonetaryValues(text: string): string[] {
   );
 }
 
-function commitmentTokensIn(text: string): string[] {
+/**
+ * NEO NGUON CUA DONG DO CHINH BO SOAN VUA RENDER.
+ *
+ * KHAC `buildGrounding` o dung mot cho, va do la cho quan trong nhat: o day MOI con so deu neo
+ * duoc, ke ca so tien. Hop le, vi day khong phai van ban nguon — day la dong `Tong don:
+ * 12.850.000d` do bo soan viet tu `TurnBusinessFacts`, va no DA qua chang doi chieu grant o
+ * `decideOutboundAuthority`. Thieu ham nay thi lop phong thu chieu sau se bao dong gia tren
+ * chinh nhung con so ma he thong vua duoc cap phep.
+ */
+export function renderedGrounding(lines: readonly string[]): NarrativeGrounding {
+  const text = lines.join('\n');
   const level = claimedCommitmentLevel(text);
-  return level ? [commitmentToken(level)] : [];
+  return {
+    numerals: new Set(
+      numeralLiterals(text).flatMap((literal) =>
+        literal.value === null ? [] : [String(literal.value)],
+      ),
+    ),
+    policy: new Set(policyClaimTokens(text)),
+    commitment: new Set(level ? [commitmentToken(level)] : []),
+  };
 }
 
 /** Ma/gia tri neo nguon duoi dang MOT danh sach — de ghim vao `OutboundComposition.grounded`. */
@@ -291,9 +364,25 @@ export function admitNarrative(
    * #200 doi — "renderer owns the exact customer-visible factual/policy statement".
    */
   const bound = bindProposition(text, options.units);
-  return bound.bound
-    ? { admitted: true, text: bound.text }
-    : { admitted: false, reason: 'NARRATIVE_NOT_SOURCE_BOUND' };
+  if (!bound.bound) return { admitted: false, reason: 'NARRATIVE_NOT_SOURCE_BOUND' };
+  /*
+   * G7 - MOT LOI NHAN CHI NOI VE MOT SAN PHAM (Issue #205, muc 4 hop dong).
+   *
+   * Mot luot co the tra cuu tai lieu cua nhieu SKU. Khi do moi menh de cua ca hai deu chon
+   * duoc, va mot cau tra loi tron menh de cua SKU A voi menh de cua SKU B doc len nhu mot
+   * khang dinh ve MOT san pham — dung cai hop dong goi ten: "a source record for SKU A must
+   * not become narrative evidence for SKU B merely because both were returned in the same
+   * model turn".
+   *
+   * Phep kiem doc PHAM VI he thong da gan cho tung ban ghi, khong doc mot chu nao cua van xuoi.
+   * Ban ghi pham vi toan khach (`productSku: null`) luon hoa hop, nen mot cau thuong hieu van
+   * di kem duoc mot cau san pham.
+   */
+  const scopes = bound.units.map((unit) => unit.evidence.scope.productSku);
+  if (!singleProductScope(scopes)) {
+    return { admitted: false, reason: 'NARRATIVE_SCOPE_CONFLICT' };
+  }
+  return { admitted: true, text: bound.text };
 }
 
 /** Vat mang trong loi nhan ma luot NAY co tham quyen — phai di qua khoi. `null` = sach. */
