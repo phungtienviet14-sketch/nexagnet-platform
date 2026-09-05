@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { useMemo } from 'react';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
@@ -32,14 +34,25 @@ import {
  * `state` va `effectiveStatus` deu do may chu quyet (`#170 §4.B`). Neu mot ngay nao do co mot phep
  * so `dueOnDate` voi hom nay o tep nay, hai nguoi o hai mui gio se doc ra hai ket qua.
  */
+import {
+  ComplianceDocumentForm,
+  WorkOrderCommands,
+  WorkOrderRowActions,
+} from './MaintenanceCommands';
+
 export function MaintenanceComplianceView() {
   const navigation = useNavigationInput();
+  const queryClient = useQueryClient();
   const vehicles = toSectionQuery(useVehicles(navigation));
   const drivers = toSectionQuery(useDrivers(navigation));
   const due = toSectionQuery(useMaintenanceDue(navigation));
   const workOrders = toSectionQuery(useWorkOrders(navigation));
   const documents = toSectionQuery(useComplianceDocuments(navigation));
   const complianceAlerts = toSectionQuery(useComplianceAlerts(navigation));
+
+  const refreshAssets = () => {
+    void queryClient.invalidateQueries({ queryKey: ['transport', 'assets'] });
+  };
   const fleetStatus = toSectionQuery(useFleetStatus(navigation));
   const operational = toSectionQuery(useOperationalAlerts(navigation));
 
@@ -144,6 +157,21 @@ export function MaintenanceComplianceView() {
 
       <section className="tx-panel" aria-label="Lệnh sửa chữa">
         <h2>Lệnh sửa chữa</h2>
+        <WorkOrderCommands
+          vehicles={vehicles.data ?? []}
+          role={navigation.role}
+          onChanged={refreshAssets}
+        />
+        {(workOrders.data ?? [])
+          .filter((row) => row.status === 'OPEN')
+          .map((row) => (
+            <WorkOrderRowActions
+              key={row.id}
+              workOrder={row}
+              role={navigation.role}
+              onChanged={refreshAssets}
+            />
+          ))}
         {orderRows.length === 0 ? (
           <EmptyState title="Chưa có lệnh sửa chữa nào." />
         ) : (
@@ -204,6 +232,12 @@ export function MaintenanceComplianceView() {
 
       <section className="tx-panel" aria-label="Hồ sơ giấy tờ">
         <h2>Hồ sơ giấy tờ</h2>
+        <ComplianceDocumentForm
+          vehicles={vehicles.data ?? []}
+          drivers={drivers.data ?? []}
+          role={navigation.role}
+          onChanged={refreshAssets}
+        />
         {documentRows.length === 0 ? (
           <EmptyState title="Chưa có giấy tờ nào được ghi nhận." />
         ) : (

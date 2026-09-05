@@ -13,14 +13,15 @@ import {
   usePartners,
   useTripAssignments,
   useTripCost,
-  useTripFuelEntries,
   useTrips,
   useVehicles,
 } from '../hooks/useTransportWorkspace';
-import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
+import { canPerform, hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import { TRIP_KINDS, TRIP_STATUSES, type TripKind, type TripStatus } from '../transport-types';
 import { toTripCost } from '../workspace/driver-fund';
+import { TripFuelEntries } from './TripFuelEntries';
+import { TripAssignForm, TripPlanForm } from './TripCommands';
 import {
   activeAssignment,
   cancellationNote,
@@ -62,6 +63,7 @@ export function TripsView({
   const drivers = toSectionQuery(useDrivers(navigation));
 
   const [filter, setFilter] = useState(EMPTY_TRIP_FILTER);
+  const [isPlanning, setPlanning] = useState(false);
 
   const directory = useMemo(
     () =>
@@ -104,7 +106,31 @@ export function TripsView({
               : `${visible.length} / ${all.length} chuyến`}
           </span>
         }
+        actions={
+          canPerform(navigation.role, 'transport.trip.create') ? (
+            <button
+              type="button"
+              className="tx-btn tx-btn--go"
+              onClick={() => setPlanning((prev) => !prev)}
+            >
+              {isPlanning ? 'Đóng biểu mẫu' : 'Lập chuyến'}
+            </button>
+          ) : null
+        }
       />
+
+      {isPlanning ? (
+        <TripPlanForm
+          customers={customers.data ?? []}
+          partners={partners.data ?? []}
+          onCancel={() => setPlanning(false)}
+          onDone={(code) => {
+            setPlanning(false);
+            invalidateTrips();
+            onSelect(code);
+          }}
+        />
+      ) : null}
 
       <form
         className="tx-filters"
@@ -240,7 +266,6 @@ function TripDetailView({
   const drivers = toSectionQuery(useDrivers(navigation));
   const assignments = toSectionQuery(useTripAssignments(navigation, tripId));
   const cost = toSectionQuery(useTripCost(navigation, tripId));
-  const fuel = toSectionQuery(useTripFuelEntries(navigation, tripId));
 
   const [pending, setPending] = useState<TripActionOffer | null>(null);
   const [reason, setReason] = useState('');
@@ -362,6 +387,18 @@ function TripDetailView({
         <div className="tx-detail__block">
           <h3>Phân công</h3>
           {assignments.isLoading ? <LoadingState label="Đang đọc phân công…" /> : null}
+          <TripAssignForm
+            tripId={tripId}
+            vehicles={vehicles.data ?? []}
+            drivers={drivers.data ?? []}
+            currentVehicleId={current?.vehicleId ?? null}
+            currentDriverId={current?.driverId ?? null}
+            role={navigation.role}
+            onDone={() => {
+              void queryClient.invalidateQueries({ queryKey: ['transport', 'trips'] });
+              onChanged();
+            }}
+          />
           {assignments.data === undefined || assignments.data.length === 0 ? (
             <EmptyState title="Chuyến này chưa có phân công nào." />
           ) : (
@@ -412,9 +449,18 @@ function TripDetailView({
               ))}
             </ul>
           )}
-          {fuel.data === undefined || fuel.data.length === 0 ? null : (
-            <p className="tx-detail__note">{fuel.data.length} phiếu đổ dầu gắn với chuyến này.</p>
-          )}
+        </div>
+
+        {/*
+         * PHIEU DO DAU — day du vong doi, khong phai mot con so dem.
+         *
+         * Truoc day cho nay chi in "N phieu do dau gan voi chuyen nay". Mot con so dem noi rang
+         * co viec phai lam nhung khong cho ai lam viec do: ke toan van phai di duong khac de xac
+         * thuc, tu choi hay cho nop lai. Nay danh sach that nam o day, kem anh chung tu.
+         */}
+        <div className="tx-detail__block tx-detail__block--wide">
+          <h3>Phiếu đổ dầu</h3>
+          <TripFuelEntries tripId={tripId} onChanged={onChanged} />
         </div>
       </div>
 

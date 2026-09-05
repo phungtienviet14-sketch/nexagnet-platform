@@ -124,6 +124,21 @@ export function useTripFuelEntries(input: NavigationInput, tripId: string | null
   });
 }
 
+/**
+ * MOT phieu do dau kem BANG CHUNG.
+ *
+ * Doc rieng thay vi lay tu danh sach: `GET /transport/fuel/trips/:id/entries` tra `FuelEntry[]`
+ * KHONG kem anh, con `GET /transport/fuel/entries/:id` tra `{ entry, evidence[] }`. Ke toan can
+ * nhin anh phieu TRUOC khi bam xac thuc, nen man hinh phai co duong doc that su mang `evidence`.
+ */
+export function useFuelEntryDetail(input: NavigationInput, entryId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'fuel', 'entries', entryId],
+    queryFn: () => transportApi.fuel.entry(entryId as string),
+    enabled: entryId !== null && allowed(input, 'transport-fuel', 'transport.fuel.entry.read'),
+  });
+}
+
 export function useFundStatement(input: NavigationInput, driverId: string | null) {
   return useQuery({
     queryKey: ['transport', 'costing', 'fund', driverId],

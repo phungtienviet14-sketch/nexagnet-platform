@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { MANAGER_HAS_NO_TRANSPORT_SCOPE } from '../../experiences/transport-operations/transport-actions';
 
 /**
  * Be mat VAN HANH VAN TAI tren mot may chu that, voi API duoc chan o tang mang.
@@ -719,9 +720,16 @@ test.describe('vo va kien truc thong tin', () => {
   test('MANAGER khong co thao tac nao, va man hinh noi that dieu do', async ({ page }) => {
     await mockTransport(page, 'MANAGER');
     await page.goto('/');
-    // Bang bridge `GD-22` khai `MANAGER: []` co chu dich. Man hinh khong duoc bia mot anh xa quyen.
+    /*
+     * Bang bridge `GD-22` khai `MANAGER: []` co chu dich. Man hinh khong duoc bia mot anh xa quyen.
+     *
+     * Doi chieu voi CHINH HANG SO chu khong chep lai cau chu. Ban truoc chep tay "Vai Quan ly chua
+     * duoc cap thao tac", roi cau hien thi duoc viet lai cho huong khach ma bai test thi khong —
+     * nen bai nay DO vi mot ly do khong lien quan gi den dieu no muon giu. Neo vao hang so thi cau
+     * chu sua bao nhieu lan cung duoc, con tinh chat "man hinh noi that voi MANAGER" van duoc khoa.
+     */
     await expect(page.locator('#tx-main').getByRole('alert')).toContainText(
-      'Vai Quản lý chưa được cấp thao tác',
+      MANAGER_HAS_NO_TRANSPORT_SCOPE,
     );
   });
 });

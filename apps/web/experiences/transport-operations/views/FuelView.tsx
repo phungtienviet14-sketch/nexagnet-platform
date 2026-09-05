@@ -13,6 +13,7 @@ import {
 } from '../hooks/useTransportWorkspace';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { transportApi } from '../transport-api';
+import { StatementImport } from './StatementImport';
 import type { FuelDiscrepancyResolution } from '../transport-types';
 import {
   MATCHING_REQUIRES_REFETCH,
@@ -63,6 +64,12 @@ export function FuelView() {
         <ErrorState message={reconciliations.errorMessage} onRetry={reconciliations.refetch} />
       )}
       {reconciliations.isLoading ? <LoadingState label="Đang đọc các kỳ đối soát…" /> : null}
+
+      <StatementImport
+        suppliers={suppliers.data ?? []}
+        role={navigation.role}
+        onImported={() => void queryClient.invalidateQueries({ queryKey: ['transport', 'fuel'] })}
+      />
 
       <section aria-label="Kỳ đối soát bảng kê">
         <h2>Kỳ đối soát</h2>

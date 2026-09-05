@@ -35,6 +35,8 @@ import {
  * Hai thao tac ghi deu doi XAC NHAN, va deu di theo dung vong doi may chu cho phep — mot phieu DA
  * TRA khong sua truc tiep duoc, chi phat duoc phieu bu hoac phieu dao (`INV-20`).
  */
+import { PayrollPeriodCommands, PayrollRunCommand, PayslipCorrection } from './PayrollCommands';
+
 export function PayrollView() {
   const navigation = useNavigationInput();
   const queryClient = useQueryClient();
@@ -54,6 +56,10 @@ export function PayrollView() {
   const runs = toSectionQuery(usePayrollRuns(navigation, periodId));
   const payslips = toSectionQuery(useRunPayslips(navigation, runId));
   const detail = toSectionQuery(usePayslipDetail(navigation, payslipId));
+
+  const refreshPayroll = () => {
+    void queryClient.invalidateQueries({ queryKey: ['transport', 'payroll'] });
+  };
 
   const directory = useMemo(
     () => toAssetDirectory({ vehicles: vehicles.data ?? [], drivers: drivers.data ?? [] }),
@@ -101,6 +107,11 @@ export function PayrollView() {
 
       <section className="tx-panel" aria-label="Kỳ lương">
         <h2>Kỳ lương</h2>
+        <PayrollPeriodCommands
+          periods={periods.data ?? []}
+          role={navigation.role}
+          onChanged={refreshPayroll}
+        />
         {periodRows.length === 0 && !periods.isLoading ? (
           <EmptyState title="Chưa có kỳ lương nào được mở." />
         ) : (
@@ -131,6 +142,14 @@ export function PayrollView() {
       {periodId === null ? null : (
         <section className="tx-panel" aria-label="Lần chạy lương">
           <h2>Lần chạy</h2>
+          <PayrollRunCommand
+            periodId={periodId}
+            periodStatus={
+              (periods.data ?? []).find((row) => row.id === periodId)?.status ?? 'CLOSED'
+            }
+            role={navigation.role}
+            onChanged={refreshPayroll}
+          />
           {runs.isLoading ? <LoadingState label="Đang đọc các lần chạy…" /> : null}
           {runRows.length === 0 && !runs.isLoading ? (
             <EmptyState title="Kỳ này chưa được chạy lần nào." />
@@ -265,6 +284,12 @@ export function PayrollView() {
       {detailModel === null ? null : (
         <section className="tx-panel" aria-label="Chi tiết phiếu lương">
           <h2>Chi tiết phiếu — {detailModel.row.driverLabel}</h2>
+          <PayslipCorrection
+            payslipId={detailModel.row.id}
+            canCorrect={detailModel.row.canCorrect}
+            role={navigation.role}
+            onChanged={refreshPayroll}
+          />
           <div className="tx-cards">
             <MetricCard label="Thực nhận" value={detailModel.row.netLabel} />
             <MetricCard label="Duyệt lúc" value={detailModel.approvedAtLabel} />

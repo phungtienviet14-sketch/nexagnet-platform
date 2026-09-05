@@ -1051,3 +1051,49 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Anh chung tu — be mat lai xe VA be mat van hanh
+ *
+ * `.tx-driver__thumbs` DA TON TAI trong `DriverSurface` tu truoc ma KHONG co mot dong CSS nao.
+ * Hau qua doc duoc tren man 390px: anh phieu chup bang dien thoai (thuong ~3000px ngang) ve ra o
+ * kich thuoc THAT, nen no day ca trang truot ngang — dung dieu ma "khong tran ngang o 390px" cam.
+ * Khoi nay dat tran cho ca hai be mat cung mot cho, de lan sau them mot noi ve anh thi khong phai
+ * nho lai bai hoc nay.
+ * ------------------------------------------------------------------ */
+
+.tx-driver__thumbs,
+.tx-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.tx-driver__thumbs img,
+.tx-evidence img {
+  max-width: min(9rem, 40vw);
+  max-height: 9rem;
+  width: auto;
+  height: auto;
+  object-fit: cover;
+  border-radius: 0.375rem;
+  border: 1px solid var(--tx-line, rgb(0 0 0 / 12%));
+}
+
+.tx-evidence h5 {
+  flex-basis: 100%;
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* Ly do soat xet do may chu tra ve — danh sach doc duoc, khong phai mot dong dinh lien. */
+.tx-detail__reasons {
+  margin: 0.5rem 0 0;
+  padding-left: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
