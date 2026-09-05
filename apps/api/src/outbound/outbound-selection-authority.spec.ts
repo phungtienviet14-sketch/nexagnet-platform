@@ -27,6 +27,10 @@ import {
   stalePins,
   type SourceEvidence,
 } from './source-evidence.js';
+import { UNRESOLVED_SUBJECT, type TurnSubject } from './turn-subject.js';
+import { admitNarrative, buildGrounding } from './outbound-narrative.js';
+import { sourceUnits } from './outbound-proposition.js';
+import { attestedWords } from './outbound-envelope.js';
 
 /**
  * MUC 8 HOP DONG #205 — QUYEN CHON, khong phai quyen viet.
@@ -62,9 +66,29 @@ const PLAIN_DOC = 'Quạt BB quay 4 góc: 30, 60, 90, 120 độ.';
 
 const NO_GRANT = { grants: [] } as const;
 
-/** Soan mot luot chi co van xuoi, tren mot bo bang chung cho truoc. */
-const on = (narrative: string, evidence: readonly SourceEvidence[]) =>
-  compose(plan([], narrative), undefined, { evidence });
+/**
+ * CHU THE cua cac bai dung bang chung THEO SAN PHAM (Issue #208).
+ *
+ * Truoc #208, bang chung theo san pham dung duoc trong bat ky luot nao — do chinh la lo hong
+ * #208 sua. Nay moi luot phai NOI RA no dang noi ve san pham nao, nen cac bai duoi day khai bao
+ * chu the khop voi bang chung cua chinh chung. Chung dang chung minh tinh chat cua #205 (lop
+ * nguon, ban ghim, khach), khong phai tinh chat pham vi — nen dat dung chu the la giu nguyen
+ * dieu chung do, khong phai noi long mot cong nao.
+ */
+const BB_GREY: TurnSubject = { kind: 'single', productSku: 'BB-GREY' };
+
+/**
+ * Soan mot luot chi co van xuoi, tren mot bo bang chung cho truoc.
+ *
+ * `subject` mac dinh `unresolved` — khong phai vi tien, ma vi do la trang thai cua PHAN LON luot
+ * that: khach hoi tiep ma khong nhac ten san pham. Bai nao dung bang chung theo san pham phai noi
+ * ra chu the cua no.
+ */
+const on = (
+  narrative: string,
+  evidence: readonly SourceEvidence[],
+  subject: TurnSubject = UNRESOLVED_SUBJECT,
+) => compose(plan([], narrative), undefined, { evidence, subject });
 
 /* ================================================================== *
  * 1-11. KHANG DINH CO HE QUA — AM TINH
@@ -178,15 +202,56 @@ describe('#205/7 — cam ket don phai den tu trang thai da ben vung', () => {
 describe('#205/8 — pham vi san pham', () => {
   const BOTH = 'Dạ lưu lượng gió lên tới 9700 lít/phút. Quạt BB quay 4 góc: 30, 60, 90, 120 độ ạ.';
 
+  /*
+   * BAI NAY DOI MA SAU #208, VA VIEC DOI MA LA MOT PHAN CUA BAN SUA — khong phai mot noi long.
+   *
+   * Truoc #208: luot khong co chu the, ca hai manh deu vao duoc tap chon duoc, model tron chung
+   * lai, va G7 bat o cuoi bang `NARRATIVE_SCOPE_CONFLICT`.
+   *
+   * Sau #208: luot NOI RA no dang noi ve `BB-GREY`, nen manh cua `SKJ-CR022` bi loai khoi tap
+   * chon duoc TRUOC KHI model chon. No khong con la mot "xung dot" nua — no khong con la ung
+   * vien. Ma tra ve la `NARRATIVE_SUBJECT_MISMATCH`, va do la mot cau CHINH XAC HON: van de
+   * khong phai hai nguon khong hop nhau, ma la mot trong hai khong thuoc ve luot nay.
+   *
+   * Tinh chat cua muc 4 hop dong #205 duoc giu NGUYEN, va manh hon: "A source record for SKU A
+   * must not become narrative evidence for SKU B merely because both were returned in the same
+   * model turn."
+   */
   it('menh de cua SKU A tron voi menh de cua SKU B trong MOT loi nhan -> tu choi', () => {
     expect(
-      on(BOTH, [tellable(SPEC_DOC, 'SKJ-CR022'), tellable(PLAIN_DOC, 'BB-GREY')]).narrative,
-    ).toMatchObject({ reason: 'NARRATIVE_SCOPE_CONFLICT' });
+      on(BOTH, [tellable(SPEC_DOC, 'SKJ-CR022'), tellable(PLAIN_DOC, 'BB-GREY')], BB_GREY)
+        .narrative,
+    ).toMatchObject({ admitted: false, reason: 'NARRATIVE_SUBJECT_MISMATCH' });
+  });
+
+  /*
+   * G7 VAN SONG, va bai nay la cho chung minh dieu do.
+   *
+   * Qua `composeOutbound`, G7 khong con voi toi duoc: phep loc theo chu the chi cho qua pham vi
+   * `null` va DUNG MOT SKU, nen `singleProductScope` luon dung. Nhung G7 khong bi go — no van la
+   * lop cuoi cua `admitNarrative`, va no van la chang 3d cua `decideOutboundAuthority`, noi cac
+   * ghim duoc doc lai tu VAN BAN CUOI (mot doan ghep them sau khi soan co the mang ghim tron).
+   *
+   * Nen goi THANG vao `admitNarrative` voi mot tap don vi tron pham vi — dung tinh huong ma phep
+   * loc khong the tao ra, de lop phong thu khong am tham chet ma khong bai nao do.
+   */
+  it('G7 van tu choi tap don vi tron pham vi khi duoc goi thang', () => {
+    const mixed = sourceUnits([tellable(SPEC_DOC, 'SKJ-CR022'), tellable(PLAIN_DOC, 'BB-GREY')]);
+    expect(
+      admitNarrative(BOTH, {
+        hasSystemSource: true,
+        grounding: buildGrounding([SPEC_DOC, PLAIN_DOC], '', NO_GRANT),
+        granted: { numerals: new Set(), policy: new Set(), commitment: new Set() },
+        attested: attestedWords([SPEC_DOC, PLAIN_DOC]),
+        units: mixed,
+        outOfSubjectUnits: [],
+      }),
+    ).toMatchObject({ admitted: false, reason: 'NARRATIVE_SCOPE_CONFLICT' });
   });
 
   it('cung hai cau do nhung CUNG mot san pham thi binh thuong', () => {
     expect(
-      on(BOTH, [tellable(SPEC_DOC, 'BB-GREY'), tellable(PLAIN_DOC, 'BB-GREY')]).narrative,
+      on(BOTH, [tellable(SPEC_DOC, 'BB-GREY'), tellable(PLAIN_DOC, 'BB-GREY')], BB_GREY).narrative,
     ).toMatchObject({ admitted: true });
   });
 });
@@ -194,7 +259,8 @@ describe('#205/8 — pham vi san pham', () => {
 describe('#205/9 — hai su that rieng le khong cong lai thanh mot tham quyen', () => {
   it('nua menh de cua nguon A noi voi nua menh de cua nguon B -> khong menh de nao', () => {
     expect(
-      on('Dạ lưu lượng gió quay 4 góc ạ.', tellableAll([SPEC_DOC, PLAIN_DOC], 'BB-GREY')).narrative,
+      on('Dạ lưu lượng gió quay 4 góc ạ.', tellableAll([SPEC_DOC, PLAIN_DOC], 'BB-GREY'), BB_GREY)
+        .narrative,
     ).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });
   });
 });
@@ -289,6 +355,7 @@ describe('#205/14-15 — cac tinh chat cua #200 giu nguyen', () => {
       on(
         'Dạ lưu lượng gió lên tới 9700 lít/phút: quạt BB quay 4 góc: 30, 60, 90, 120 độ ạ.',
         tellableAll([SPEC_DOC, PLAIN_DOC], 'BB-GREY'),
+        BB_GREY,
       ).narrative,
     ).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });
   });
@@ -452,7 +519,7 @@ describe('#205 — dot bien: khong phep bien doi nao bien SO HUU thanh THAM QUYE
       [a, a, b],
       [b, a, b, a],
     ]) {
-      expect(on(narrative, evidence).narrative, `${evidence.length} manh`).toMatchObject({
+      expect(on(narrative, evidence, BB_GREY).narrative, `${evidence.length} manh`).toMatchObject({
         admitted: true,
       });
     }

@@ -214,7 +214,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.policy": {
       "functionName": "grantsFromDealerPolicy",
       "filePath": "apps/api/src/outbound/outbound-authority.ts",
-      "line": 225
+      "line": 227
     },
     "rules.pricing": {
       "functionName": "grantsFromPricedOrder",
@@ -223,7 +223,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.quote": {
       "functionName": "grantsFromQuote",
       "filePath": "apps/api/src/outbound/outbound-authority.ts",
-      "line": 220
+      "line": 222
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
@@ -464,27 +464,27 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "advisor.compose|COMPOSED": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 303
+      "line": 305
     },
     "advisor.compose|COMPOSER_DISABLED": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 204
+      "line": 206
     },
     "advisor.compose|DETERMINISTIC_PATH_SUFFICIENT": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 213
+      "line": 215
     },
     "advisor.compose|LLM_RETURNED_NOTHING": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 295
+      "line": 297
     },
     "agent.tool_authorization|*": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 226
+      "line": 228
     },
     "alerts.operational_feed|OPERATIONAL_ALERTS_COMPILED": {
       "functionName": "OperationalAlertsService.feed",
@@ -968,7 +968,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "outbound.authority|*": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 388
+      "line": 413
     },
     "outbound.send_guard|*": {
       "functionName": "TurnReplyService.performSendAdviceReply",
@@ -1037,12 +1037,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 853
+      "line": 881
     },
     "rules.price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 877
+      "line": 905
     },
     "settlement.allocate|*": {
       "functionName": "SettlementService.allocate",
@@ -1115,7 +1115,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 735
+      "line": 763
     },
     "trip.assignment_change|*": {
       "functionName": "TripService.assign",
