@@ -222,6 +222,19 @@ export const OUTBOUND_AUTHORITY_REASONS = [
    * rang cau do TUNG duoc phep, va bay gio thi khong — thay vi am tham cap phep lai.
    */
   'COMPOSITION_EVIDENCE_STALE',
+  /**
+   * PHONG THU CHIEU SAU (muc 7), lop thu nam — QUAN HE giua ban soan va CHU THE cua luot (#208).
+   *
+   * `COMPOSITION_SCOPE_CONFLICT` o tren hoi cac ghim co hoa hop VOI NHAU khong. Review doc lap
+   * 05/09/2026 chung minh cau hoi do chua du: mot ban soan chi trich nguon cua SKU A luon "hoa
+   * hop voi chinh no", ke ca khi luot dang noi ve SKU B. Ma nay doi chieu ghim `x:` voi ghim
+   * `t:` — chu the ma he thong so huu, da duoc ghim vao chinh ban soan luc soan.
+   *
+   * Vi sao PHAI ghim chu the chu khong tinh lai luc gui: luc Sale bam `Duyệt & gửi`, tin cua
+   * khach va danh muc luc soan khong con nua. Tinh lai se hoac ra mot chu the KHAC, hoac ra
+   * `unresolved` cho moi ban soan — ca hai deu sai.
+   */
+  'COMPOSITION_SUBJECT_MISMATCH',
 ] as const;
 export type OutboundAuthorityReason = (typeof OUTBOUND_AUTHORITY_REASONS)[number];
 
@@ -279,4 +292,5 @@ export const OUTBOUND_AUTHORITY_REASON_LABELS: Record<OutboundAuthorityReason, s
     'Văn bản cuối chứa mệnh đề không khớp trọn vẹn nguồn nào của lượt này',
   COMPOSITION_SCOPE_CONFLICT: 'Văn bản cuối trộn nguồn của hai sản phẩm khác nhau',
   COMPOSITION_EVIDENCE_STALE: 'Nguồn của nội dung này đã đổi hoặc không còn được phép kể lại',
+  COMPOSITION_SUBJECT_MISMATCH: 'Văn bản cuối kể nguồn của sản phẩm khác chủ thể của lượt',
 };

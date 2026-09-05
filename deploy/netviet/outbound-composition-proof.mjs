@@ -23,10 +23,18 @@
  */
 
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 const SIGNAL_PREFIX = '##DEPLOY-SIGNAL##';
 const LAYER = 'outboundComposition';
 const DIST = process.env.API_DIST_DIR ?? '/app/apps/api/dist';
+/*
+ * Duong dan TUYET DOI phai thanh `file://` truoc khi `import()` — tren Linux (cho tep nay that su
+ * chay) hai dang giong nhau, nhung tren Windows mot duong `C:\...` bi ESM loader tu choi thang.
+ * Khong co dong nay thi khong ai kiem duoc bo chung trước khi deploy, va mot bo chung chi chay
+ * duoc SAU khi da len stack la mot bo chung phat hien su co qua muon.
+ */
+const distUrl = (name) => pathToFileURL(`${DIST}/${name}`).href;
 
 function emit(status, reason, detail) {
   process.stdout.write(
@@ -44,11 +52,15 @@ let composer;
 let authority;
 let facts;
 let evidence;
+let subjects;
+let rules;
 try {
-  composer = await import(`${DIST}/outbound/outbound-composer.js`);
-  authority = await import(`${DIST}/outbound/outbound-authority.js`);
-  facts = await import(`${DIST}/outbound/outbound-facts.js`);
-  evidence = await import(`${DIST}/outbound/source-evidence.js`);
+  composer = await import(distUrl('outbound/outbound-composer.js'));
+  authority = await import(distUrl('outbound/outbound-authority.js'));
+  facts = await import(distUrl('outbound/outbound-facts.js'));
+  evidence = await import(distUrl('outbound/source-evidence.js'));
+  subjects = await import(distUrl('outbound/turn-subject.js'));
+  rules = await import(distUrl('rules/rules.js'));
 } catch (error) {
   emit('fail', 'SHIPPED_DIST_NOT_IMPORTABLE', { dist: DIST, error: String(error) });
   process.exit(1);
@@ -72,6 +84,18 @@ const {
   parsePinnedEvidence,
   stalePins,
 } = evidence;
+
+/*
+ * CHU THE CUA LUOT (Issue #208) — ve CON LAI cua quan he pham vi.
+ *
+ * Tep nay la JS, nen no KHONG duoc TypeScript nhac khi `ComposeContext` moc them mot truong bat
+ * buoc. Thieu `subject` thi `subjectAdmits(undefined, sku)` nem TypeError va ca bo chung chet o
+ * mot cho khong lien quan gi den thu no dinh do. Nen no duoc khai bao TUONG MINH o `compose()`.
+ */
+const { resolveTurnSubject, subjectPinToken, UNRESOLVED_SUBJECT } = subjects;
+const subjectFor = (sku) => resolveTurnSubject(sku ? [sku] : []);
+/** Chu so huu DUY NHAT cua phep so khop danh muc — dung chinh no de chung minh muc 13 ca F. */
+const { matchProductsInText } = rules;
 
 /* ------------------------------------------------------------------ *
  * DU KIEN TONG HOP — khong mot dong nao la du lieu khach that
@@ -152,6 +176,7 @@ const compose = (outboundPlan, patch = {}, context = {}) =>
     tenant: TENANT,
     customerText: '',
     authority: { grants: [] },
+    subject: UNRESOLVED_SUBJECT,
     ...context,
   });
 
@@ -554,11 +579,15 @@ const SPEC_DOC = 'Luu luong gio len toi 9700 lit/phut.';
         doc(SPEC_DOC, { sku: 'SKU-A' }),
         doc('Khung thep son tinh dien.', { sku: 'SKU-B' }),
       ],
+      subject: subjectFor('SKU-B'),
     },
   );
+  // Sau #208 ma doi tu `NARRATIVE_SCOPE_CONFLICT` sang `NARRATIVE_SUBJECT_MISMATCH`, va do la
+  // mot cau CHINH XAC HON: manh cua SKU-A khong con la mot "xung dot", no khong con la ung vien.
   check(
     '#205 D — tron pham vi hai san pham -> tu choi',
-    composition.narrative.reason === 'NARRATIVE_SCOPE_CONFLICT',
+    composition.narrative.admitted === false &&
+      composition.narrative.reason === 'NARRATIVE_SUBJECT_MISMATCH',
     `narrative=${composition.narrative.reason}`,
   );
 }
@@ -674,6 +703,184 @@ const SPEC_DOC = 'Luu luong gio len toi 9700 lit/phut.';
     '#205 khach — bang chung cua khach khac khong dung duoc',
     composition.narrative.reason === 'NO_SYSTEM_SOURCE' && composition.text === '',
     `narrative=${composition.narrative.reason}`,
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * #208 — BANG CHUNG PHAI KHOP CHU THE CUA LUOT (muc 13 hop dong A-G)
+ * ------------------------------------------------------------------ */
+
+/*
+ * DO TREN `main` (63ebe04) TRUOC KHI SUA, dung chinh duong nay:
+ *
+ *     chu the that cua luot   = SKU B
+ *     bang chung tra cuu duoc = mot cau cua SKU A
+ *     model chon DUY NHAT cau cua A
+ *     -> admitted: true, sendable: true, va qua duoc ca `pinnedOutboundVerdict`
+ *
+ * Vi `singleProductScope({A}) === true` — phep kiem pham vi cua #205 doc nguoc vao chinh no.
+ */
+
+const DOC_A = 'Mang loc HEPA H13 giu lai bui min.';
+const DOC_B = 'San pham co tua lung luoi thoang khi.';
+const DOC_WIDE = 'Thuong hieu gia dung cao cap.';
+const SUBJECT_B = subjectFor('SKU-B');
+
+const onSubject = (narrative, evidence, subject) =>
+  compose(plan([], narrative), {}, { evidence, subject });
+
+{
+  // A — chu the B, CHI co bang chung A, trich tron ven cau cua A.
+  const composition = onSubject(DOC_A, [doc(DOC_A, { sku: 'SKU-A' })], SUBJECT_B);
+  const verdict = decideOutboundAuthority(composition, NO_GRANT);
+  check(
+    '#208 A — cau cua SKU khac khong ra duoc kenh du trich tron ven',
+    composition.narrative.admitted === false &&
+      composition.narrative.reason === 'NARRATIVE_SUBJECT_MISMATCH' &&
+      composition.text === '' &&
+      verdict.sendable === false,
+    `narrative=${composition.narrative.reason} text="${composition.text}" verdict=${verdict.reason}`,
+  );
+}
+
+{
+  // B — chu the B, co ca A lan B, model chon MOI A.
+  const composition = onSubject(
+    DOC_A,
+    [doc(DOC_A, { sku: 'SKU-A' }), doc(DOC_B, { sku: 'SKU-B' })],
+    SUBJECT_B,
+  );
+  check(
+    '#208 B — chon dung mot pham vi noi bo hoa hop van khong du',
+    composition.narrative.admitted === false && composition.text === '',
+    `narrative=${composition.narrative.reason}`,
+  );
+}
+
+{
+  // C — chu the B, bang chung B: duong dung phai van chay.
+  const composition = onSubject(DOC_B, [doc(DOC_B, { sku: 'SKU-B' })], SUBJECT_B);
+  check(
+    '#208 C — bang chung DUNG pham vi van ke duoc',
+    composition.narrative.admitted === true && composition.text.includes('tua lung luoi'),
+    `narrative=${composition.narrative.admitted ? 'admitted' : composition.narrative.reason}`,
+  );
+}
+
+{
+  // D — bang chung TOAN KHACH hoa hop voi moi chu the.
+  const composition = onSubject(DOC_WIDE, [doc(DOC_WIDE)], SUBJECT_B);
+  check(
+    '#208 D — bang chung toan khach van ke duoc duoi mot chu the cu the',
+    composition.narrative.admitted === true,
+    `narrative=${composition.narrative.admitted ? 'admitted' : composition.narrative.reason}`,
+  );
+}
+
+{
+  // E — chu the CHUA GIAI RA / NHAP NHANG + bang chung theo san pham -> fail closed.
+  const unresolved = onSubject(DOC_B, [doc(DOC_B, { sku: 'SKU-B' })], UNRESOLVED_SUBJECT);
+  const ambiguous = onSubject(DOC_B, [doc(DOC_B, { sku: 'SKU-B' })], {
+    kind: 'ambiguous',
+    productSkus: ['SKU-A', 'SKU-B'],
+  });
+  check(
+    '#208 E — chu the chua giai ra / nhap nhang -> van xuoi theo san pham fail closed',
+    unresolved.narrative.admitted === false &&
+      unresolved.text === '' &&
+      ambiguous.narrative.admitted === false &&
+      ambiguous.text === '',
+    `unresolved=${unresolved.narrative.reason} ambiguous=${ambiguous.narrative.reason}`,
+  );
+}
+
+{
+  /*
+   * F — THAM SO CONG CU CUA MODEL KHONG MO RONG DUOC CHU THE.
+   *
+   * Do o dung cho quyet dinh: chu the den tu mot phep so khop TAT DINH tren tin CUA KHACH. Model
+   * goi `tra_cuu_tai_lieu({sku: 'SKU-A'})` bao nhieu lan cung khong doi duoc mot ky tu nao trong
+   * tin do — nen bang chung ma chinh lan goi ay keo ve van bi loai.
+   */
+  const CATALOG = [
+    { sku: 'SKU-A', name: 'May loc khong khi thu nghiem', aliases: ['may loc'] },
+    { sku: 'SKU-B', name: 'Ghe cong thai hoc thu nghiem', aliases: ['ghe cong thai hoc'] },
+  ];
+  const resolved = resolveTurnSubject(
+    matchProductsInText('ghe cong thai hoc co tua lung luoi khong a', CATALOG).map((p) => p.sku),
+  );
+  const composition = onSubject(DOC_A, [doc(DOC_A, { sku: 'SKU-A' })], resolved);
+  check(
+    '#208 F — tham so cong cu cua model khong mo rong duoc chu the he thong so huu',
+    resolved.kind === 'single' &&
+      resolved.productSku === 'SKU-B' &&
+      composition.narrative.admitted === false,
+    `subject=${resolved.kind}:${resolved.productSku ?? '-'} narrative=${composition.narrative.reason}`,
+  );
+}
+
+{
+  /*
+   * G — DIEM NGHEN GUI KIEM LAI QUAN HE (muc 2 hop dong).
+   *
+   * Ban nhap nam trong hang cho cua Sale co the nhieu gio. Neu quan he chi duoc kiem luc soan thi
+   * mot cu bam `Duyet & gui` van dua no ra nhom. Ba hinh dang deu phai dung lai:
+   * ghim chu the BI XOA, ghim chu the DOI sang san pham khac, va ban soan cu khong co ghim nao.
+   */
+  const good = onSubject(DOC_B, [doc(DOC_B, { sku: 'SKU-B' })], SUBJECT_B);
+  const trace = (composition) => ({
+    steps: [],
+    primaryRole: 'router',
+    senderType: 'dai_ly',
+    llmCalls: 1,
+    brainMode: 'stub',
+    supervisor: { riskLevel: 'none', escalate: false, reasons: [] },
+    outbound: { text: composition.text },
+    outboundAuthority: decideOutboundAuthority(composition, NO_GRANT),
+    outboundComposition: composition,
+  });
+
+  const stripped = { ...good, grounded: good.grounded.filter((t) => !t.startsWith('t:')) };
+  const swapped = {
+    ...good,
+    grounded: good.grounded.map((t) =>
+      t.startsWith('t:') ? subjectPinToken(subjectFor('SKU-A')) : t,
+    ),
+  };
+
+  const sentOk = pinnedOutboundVerdict(trace(good), good.text);
+  const sentStripped = pinnedOutboundVerdict(trace(stripped), stripped.text);
+  const sentSwapped = pinnedOutboundVerdict(trace(swapped), swapped.text);
+
+  check(
+    '#208 G — nut `Duyet & gui` kiem lai quan he chu the <-> bang chung',
+    sentOk.sendable === true &&
+      sentStripped.sendable === false &&
+      sentStripped.reason === 'COMPOSITION_SUBJECT_MISMATCH' &&
+      sentSwapped.sendable === false &&
+      sentSwapped.reason === 'COMPOSITION_SUBJECT_MISMATCH',
+    `ok=${sentOk.reason} stripped=${sentStripped.reason} swapped=${sentSwapped.reason}`,
+  );
+}
+
+{
+  /*
+   * KHOI TAT DINH KHONG BI BAN SUA NAY CHAM VAO (muc 9 ca 12 hop dong).
+   *
+   * Cong chu the nam tron ven trong phep xet loi nhan. Mot luot bi tu choi phan van xuoi vi sai
+   * pham vi VAN gui du bang gia — dieu do dung theo CAU TRUC, va day la cho do no.
+   */
+  const composition = compose(plan(['price_quote'], DOC_A), quoteFacts, {
+    evidence: [doc(DOC_A, { sku: 'SKU-A' })],
+    subject: SUBJECT_B,
+    authority: mergeAuthority(grantsFromQuote([UNIT_PRICE])),
+  });
+  check(
+    '#208 H — khoi bao gia tat dinh render nguyen ven du van xuoi bi tu choi',
+    composition.narrative.admitted === false &&
+      composition.text.includes('1.150.000') &&
+      !composition.text.includes('HEPA'),
+    `narrative=${composition.narrative.reason} blocks=${composition.blocks.length}`,
   );
 }
 
