@@ -196,7 +196,7 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
   ];
 
   it('cau tra loi lay tu tai lieu da duyet van den duoc khach', () => {
-    for (const answer of [...FAQ_ANSWERS, ...FAQ_ANSWERS.map(stripAccents)]) {
+    for (const answer of FAQ_ANSWERS) {
       const composition = compose(plan([], answer), NO_BUSINESS_FACTS, {
         systemSources: APPROVED,
       });
@@ -205,6 +205,39 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
       expect(decideOutboundAuthority(composition, { grants: [] }), answer).toMatchObject({
         sendable: true,
         reason: 'NARRATIVE_ONLY_COMPOSITION',
+      });
+    }
+  });
+
+  /*
+   * BAN NHAP VIET HOAN TOAN KHONG DAU KHONG CON LA BAN NHAP CO NGUON — doi tu 05/09/2026.
+   *
+   * Truoc ban nay bai tren chay ca tren `FAQ_ANSWERS.map(stripAccents)` va doi chung duoc NHAN.
+   * G5 doi chieu tu ngu theo DUNG cach viet, nen chung khong con duoc nhan, va do la CO Y:
+   *
+   *   bo dau  =>  `nợ` (mon no) va `nó` (dai tu) la cung mot chuoi
+   *
+   * Do luong tren 98 tai lieu da duyet: neu doi chieu tren ban bo dau thi mot bai FAQ ve QUAT
+   * ("...cho nên chắc chắn là mát") bao lanh duoc cho "Dạ bên em cho mình nợ ạ." — mot loi hua
+   * cong no — o 3/98 tai lieu. Doi chieu theo dung cach viet thi con so do la 0/98.
+   *
+   * DANH DOI: mot ban nhap khong dau se khong gui duoc phan van xuoi. Chap nhan duoc vi (a) ban
+   * nhap gui khach do persona viet tieng Viet CO DAU — cung gia dinh ma `PERFECTIVE` trong
+   * `outbound-claims.ts` da dua tren, va (b) huong hong la FAIL-CLOSED, trung tien le co san:
+   * `numeralValue()` tra `null` cho mot cach viet nhap nhang, va `null` o cong tham quyen la
+   * KHONG GUI. Mot cach viet nhap nhang khong duoc phep tu chon nghia co loi cho no.
+   *
+   * Phan KHOI NGHIEP VU khong bi anh huong: chung do bo soan render, khong do model viet.
+   */
+  it('cung cau tra loi do nhung viet KHONG DAU -> khong con truy nguyen duoc tu ngu, bi bo', () => {
+    for (const answer of FAQ_ANSWERS.map(stripAccents)) {
+      const composition = compose(plan([], answer), NO_BUSINESS_FACTS, {
+        systemSources: APPROVED,
+      });
+
+      expect(composition.narrative, answer).toEqual({
+        admitted: false,
+        reason: 'NARRATIVE_NOT_SOURCE_BACKED',
       });
     }
   });

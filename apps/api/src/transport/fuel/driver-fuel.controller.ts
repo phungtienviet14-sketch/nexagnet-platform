@@ -107,6 +107,33 @@ export class DriverFuelController {
     });
   }
 
+  /**
+   * CHUP LAI VA NOP LAI mot phieu bi tu choi — `#168 B5`.
+   *
+   * `fuel-lifecycle.ts` goi canh `REJECTED -> DECLARED` la "duong chay thuong ngay", nhung truoc
+   * task nay khong controller nao phoi no ra — nen mot phieu bi tu choi la NGO CUT tren dien thoai
+   * cua lai xe, du may trang thai va `FuelService.resubmitFuelEntry` deu da san sang.
+   *
+   * QUYEN SO HUU DUOC DOC TRUOC KHI GHI, dung khuon `attachEvidence` ngay tren: `getMyFuelSlip`
+   * nem `SELF_FUEL_SCOPE_NOT_OWNED` cho phieu cua nguoi khac. Cat hanh dong thoi thi khong du — hai
+   * lai xe khac nhau van mang cung mot vai `SALE`, nen vai khong the la cong.
+   */
+  @Post('slips/:id/resubmit')
+  @Roles('SALE', 'ADMIN')
+  @RequiresTransportAction('transport.driver.self.fuel.submit')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  resubmit(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<DriverFuelSlipView> {
+    const authUserId = requireAuthUserId(request);
+    return this.guard(async () => {
+      await this.read.getMyFuelSlip(authUserId, id);
+      await this.fuel.resubmitFuelEntry(id, transportActorOf(request));
+      return this.read.getMyFuelSlip(authUserId, id);
+    });
+  }
+
   private parse<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {
     const parsed = schema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(firstIssue(parsed.error));

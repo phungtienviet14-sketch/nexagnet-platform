@@ -329,6 +329,84 @@ export class CostingService {
     return posted;
   }
 
+  /**
+   * LAI XE TU GHI mot khoan chi cua chinh minh — `#168 B3`.
+   *
+   * Mot lop MONG dat tren `recordTripExpense`, va do la ca thiet ke. No lam dung hai viec ma be mat
+   * lai xe can, roi giao toan bo phan con lai cho duong da co:
+   *
+   *   1. DICH `authUserId` -> ho so lai xe. Danh tinh den tu phien, khong tu than yeu cau;
+   *   2. CHOT `fundedBy = DRIVER_FUND` va `driverId` = chinh nguoi dang dang nhap.
+   *
+   * KHONG mot phep kiem quyen nao duoc viet lai o day — va do la diem quan trong nhat. Cau hoi
+   * "lai xe nay co duoc ghi chi phi vao chuyen do khong" da co mot cau tra loi DUY NHAT trong he
+   * thong: `requireDriverAssignedToTrip()` ben trong `recordTripExpense`, chay vi `driverId` khac
+   * `null`. Viet mot phep kiem thu hai o day se tao ra hai luat cho mot cau hoi, va den mot luc nao
+   * do chung se lech nhau.
+   *
+   * Cung ly do, ky quy dang dong / chuyen da doi soat / chuyen thue ngoai / danh muc chi phi deu
+   * van do duong cu tu choi, kem nguyen ma ly do cu.
+   */
+  async recordSelfTripExpense(
+    authUserId: string,
+    input: Omit<RecordTripExpenseCommand, 'driverId' | 'fundedBy'>,
+    actor: string,
+  ): Promise<CorrelatedPosting> {
+    const driver = await this.core.findDriverByAuthUserId(authUserId);
+    if (!driver) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_COSTING_DECISIONS,
+        point: 'driver.self_expense_scope',
+        outcome: 'denied',
+        reason: 'SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING',
+        detail: { authUserId },
+      });
+      throw TransportDomainError.denied(
+        'SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING',
+        'Tai khoan nay chua duoc noi voi ho so lai xe nao',
+      );
+    }
+
+    const posted = await this.recordTripExpense(
+      { ...input, driverId: driver.id, fundedBy: 'DRIVER_FUND' },
+      actor,
+    );
+
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_COSTING_DECISIONS,
+      point: 'driver.self_expense_scope',
+      outcome: 'allowed',
+      reason: 'SELF_EXPENSE_SCOPE_GRANTED',
+      detail: {
+        driverId: driver.id,
+        tripId: input.tripId,
+        expenseId: posted.expense?.id ?? null,
+      },
+    });
+    return posted;
+  }
+
+  /**
+   * DANH MUC NHOM CHI PHI ma goi khach cho phep — `#168 B4`.
+   *
+   * Truoc task nay danh muc ton tai nhung KHONG doc ra duoc: `requireCategory()` kiem theo no va tra
+   * 400, con nguoi dung thi khong co cach nao biet duoc danh sach — nen duong "dung" tren giao dien
+   * la GO THU roi doi may chu bao sai.
+   *
+   * Dat CANH `requireCategory()` chu khong o `CostingReadService`, va do khong phai tien tay: hai
+   * ham nay doc CUNG MOT `this.policy.expenseCategories`. Tach chung sang hai lop se mo ra kha nang
+   * mot ben doc cau hinh cua tenant nay con ben kia doc cua tenant khac — va trieu chung se la
+   * "danh sach tren man hinh khong khop voi cai may chu nhan".
+   *
+   * `unrestricted` la mot truong TUONG MINH, khong phai mot mang rong de nguoi doc tu doan:
+   * `[]` o day nghia la "nhap tu do", khong phai "khong nhom nao hop le" — va hai nghia do doi
+   * nguoc nhau hoan toan tren giao dien.
+   */
+  expenseCatalogue(): { categories: readonly string[]; unrestricted: boolean } {
+    const categories = this.policy.expenseCategories;
+    return { categories, unrestricted: categories.length === 0 };
+  }
+
   /* ------------------------------ Dao ------------------------------ */
 
   /**

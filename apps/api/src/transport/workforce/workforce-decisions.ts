@@ -56,11 +56,47 @@ export const PAYROLL_FUND_DISCLOSURE_REASONS = [
 ] as const;
 export type PayrollFundDisclosureReason = (typeof PAYROLL_FUND_DISCLOSURE_REASONS)[number];
 
+/**
+ * BE MAT LAI XE cho phieu luong (`#168 B8`) — MOT diem quyet dinh, BAY ma.
+ *
+ * BA MA CUOI CUNG KHONG BAO GIO RA TOI NGUOI GOI, va do la ca thiet ke:
+ *
+ *   `SELF_PAYSLIP_SCOPE_NOT_OWNED`      — phieu co that, cua lai xe khac;
+ *   `SELF_PAYSLIP_SCOPE_NOT_PUBLISHED`  — phieu cua chinh ho, nhung con `DRAFT`;
+ *   `SELF_PAYSLIP_SCOPE_UNKNOWN_ID`     — khong co phieu nao mang ma do.
+ *
+ * Ca ba tinh huong tra ra NGOAI cung MOT cau tra loi `SELF_PAYSLIP_NOT_VISIBLE` (404). Neu chung
+ * tra ba ma khac nhau thi mot nguoi go ma ngau nhien se do duoc ma nao CO THAT trong he thong —
+ * va `#168 B8` cam dung dieu do: mot ma phieu cua nguoi khac khong duoc phep tiet lo rang phieu do
+ * ton tai. Ma chi tiet van duoc PHAT RA, chi la phat vao trace: nguoi ho tro can biet minh dang
+ * nhin su co nao, con nguoi go ma thi khong.
+ */
+export const DRIVER_SELF_PAYSLIP_SCOPE_REASONS = [
+  'SELF_PAYSLIP_SCOPE_GRANTED',
+  /** Tai khoan dang dang nhap chua duoc noi voi ho so lai xe nao (`Driver.authUserId`). */
+  'SELF_PAYSLIP_SCOPE_NO_DRIVER_BINDING',
+  /** CAU TRA LOI DUY NHAT di ra ngoai cho ba duong ben duoi. Xem khoi chu thich tren. */
+  'SELF_PAYSLIP_NOT_VISIBLE',
+  'SELF_PAYSLIP_SCOPE_NOT_OWNED',
+  'SELF_PAYSLIP_SCOPE_NOT_PUBLISHED',
+  'SELF_PAYSLIP_SCOPE_UNKNOWN_ID',
+  /**
+   * Quy tac cong bo DA CHAY va da giu lai it nhat mot phieu `DRAFT`.
+   *
+   * Cung ly le voi `DRIVER_FUND_SHOWN_WITHOUT_DEDUCTION` ngay tren: mot bat bien "khong bao gio
+   * cong bo luong tam tinh" ma khong de lai dau vet nao thi khong chung minh duoc la no dang duoc
+   * giu — chi chung minh duoc rang chua ai bat qua tang no khong duoc giu.
+   */
+  'SELF_PAYSLIP_DRAFT_WITHHELD',
+] as const;
+export type DriverSelfPayslipScopeReason = (typeof DRIVER_SELF_PAYSLIP_SCOPE_REASONS)[number];
+
 export type TransportWorkforceDecisionReason =
   | PayrollRunReason
   | PayslipTransitionReason
   | PayslipCorrectionReason
-  | PayrollFundDisclosureReason;
+  | PayrollFundDisclosureReason
+  | DriverSelfPayslipScopeReason;
 
 export const TRANSPORT_WORKFORCE_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-workforce',
@@ -69,6 +105,7 @@ export const TRANSPORT_WORKFORCE_DECISIONS = defineDecisionVocabulary({
     'payslip.transition',
     'payslip.correction',
     'payroll.driver_fund_disclosure',
+    'driver.self_payslip_scope',
   ],
   labels: {
     PAYROLL_RUN_COMPLETED: 'Đã chạy lương và sinh phiếu nháp cho kỳ',
@@ -90,5 +127,15 @@ export const TRANSPORT_WORKFORCE_DECISIONS = defineDecisionVocabulary({
     DRIVER_FUND_SHOWN_WITHOUT_DEDUCTION:
       'Số dư quỹ hiển thị trên phiếu như thông tin — không sinh khoản trừ nào (GD-12)',
     DRIVER_FUND_NOT_AVAILABLE: 'Không đọc được số dư quỹ vì transport-costing đang tắt',
+
+    SELF_PAYSLIP_SCOPE_GRANTED: 'Lái xe đọc đúng phiếu lương của chính mình',
+    SELF_PAYSLIP_SCOPE_NO_DRIVER_BINDING: 'Tài khoản đăng nhập chưa nối với hồ sơ lái xe nào',
+    SELF_PAYSLIP_NOT_VISIBLE:
+      'Không có phiếu lương nào mang mã đó trong phạm vi của người đang đăng nhập',
+    SELF_PAYSLIP_SCOPE_NOT_OWNED: 'Phiếu có thật nhưng thuộc lái xe khác (chỉ phát vào trace)',
+    SELF_PAYSLIP_SCOPE_NOT_PUBLISHED:
+      'Phiếu của chính lái xe đó nhưng còn nháp — chưa được công bố (chỉ phát vào trace)',
+    SELF_PAYSLIP_SCOPE_UNKNOWN_ID: 'Không có phiếu nào mang mã đó (chỉ phát vào trace)',
+    SELF_PAYSLIP_DRAFT_WITHHELD: 'Đã giữ lại phiếu nháp khỏi bề mặt lái xe theo quy tắc công bố',
   } satisfies Record<TransportWorkforceDecisionReason, string>,
 });

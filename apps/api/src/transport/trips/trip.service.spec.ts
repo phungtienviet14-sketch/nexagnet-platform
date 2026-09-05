@@ -5,6 +5,7 @@ import {
 } from '../../audit/audit-log.repository.js';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { InMemoryFleetRepository } from '../fleet/fleet.repository.js';
+import { driverFuelSubmitSchema } from '../fuel/fuel.schemas.js';
 import { FleetService } from '../fleet/fleet.service.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { InMemoryTripRepository } from './trip.repository.js';
@@ -301,6 +302,51 @@ describe('TripService', () => {
         reason: 'CANCEL_TRIP_RECONCILED',
       });
     });
+
+    /**
+     * `#168 B6` — DUONG VONG bi dong o tang MIEN, khong chi o schema HTTP.
+     *
+     * Truoc task nay `service.transition(id, 'CANCELLED')` chay tron: no goi `setStatus()`, ma
+     * `setStatus()` KHONG ghi `cancelledAt` lan `cancellationReason`. Ket qua la mot chuyen mang
+     * trang thai `CANCELLED` MA KHONG CO LY DO va khong co moc thoi gian — mot ban ghi ma `GD-02`
+     * ("huy thay cho xoa") sinh ra de ngan.
+     *
+     * Bai nay do o tang service chu khong o controller vi mot cong dat o controller chi bao ve dung
+     * mot route.
+     */
+    it('#168 B6: chuyen trang thai chung KHONG huy duoc chuyen', async () => {
+      const trip = await planOwnTrip();
+
+      await expect(service.transition(trip.id, 'CANCELLED', ACTOR)).rejects.toMatchObject({
+        reason: 'TRIP_CANCEL_REQUIRES_DEDICATED_PATH',
+      });
+
+      // Va quan trong hon ca ma loi: chuyen KHONG bi doi trang thai.
+      const after = await service.getTrip(trip.id);
+      expect(after.status).toBe('PLANNED');
+      expect(after.cancelledAt).toBeNull();
+      expect(after.cancellationReason).toBeNull();
+    });
+
+    it('#168 B6: duong huy RIENG van chay, va van ghi day du ly do + moc', async () => {
+      const trip = await planOwnTrip();
+      const cancelled = await service.cancel(trip.id, 'Khach bao huy', ACTOR);
+
+      expect(cancelled.status).toBe('CANCELLED');
+      expect(cancelled.cancellationReason).toBe('Khach bao huy');
+      expect(cancelled.cancelledAt).not.toBeNull();
+    });
+
+    it('#168 B6: cong huy khong chan cac canh vong doi binh thuong', async () => {
+      const trip = await planOwnTrip();
+      const vehicle = await registerVehicle('29H-100.13');
+      const driver = await registerDriver('Lai Xe B', '0900000104');
+      await service.assign(trip.id, { vehicleId: vehicle.id, driverId: driver.id }, ACTOR);
+
+      expect((await service.transition(trip.id, 'IN_TRANSIT', ACTOR)).status).toBe('IN_TRANSIT');
+      expect((await service.transition(trip.id, 'DELIVERED', ACTOR)).status).toBe('DELIVERED');
+      expect((await service.transition(trip.id, 'RECONCILED', ACTOR)).status).toBe('RECONCILED');
+    });
   });
 
   // ASSIGNMENT-002
@@ -405,6 +451,73 @@ describe('TripService', () => {
       expect(detail.originLabel).toBe('Ha Noi');
       expect(detail.destinationLabel).toBe('Thai Nguyen');
       expect(detail.vehicleRegistrationPlate).toBe('29H-300.30');
+    });
+
+    /**
+     * `#168 B2` — mot lai xe phai NOP DUOC PHIEU DAU DAU TIEN cua minh chi bang khung nhin nay.
+     *
+     * `POST /transport/me/fuel/slips` doi `vehicleId`. Vai `SALE` khong co `transport.vehicle.read`
+     * nen `/transport/vehicles` tra 403, va `DriverFuelSlipView` chi mang `vehicleId` tren phieu DA
+     * nop. Neu truong nay khong o day thi mot lai xe chua tung nop phieu se khong bao gio nop duoc
+     * phieu dau tien — mot ngo cut ma khong loi nao chi ra.
+     */
+    it('#168 B2: khung nhin mang vehicleId cua CHINH ban phan cong nay', async () => {
+      const { tripA, vehicle } = await twoDriversOneTripEach();
+      const detail = await service.getDriverTrip(DRIVER_A_USER, tripA.id);
+
+      expect(detail.vehicleId).toBe(vehicle.id);
+    });
+
+    /**
+     * `#168` acceptance 3 — noi hai dau lai voi nhau.
+     *
+     * Bai tren chung minh khung nhin CO truong do. Bai nay chung minh truong do DUNG LA thu ma
+     * `POST /transport/me/fuel/slips` doi: neu mot ben doi `vehicleId` khong rong con ben kia tra
+     * `null`, hai bai rieng le van xanh trong khi lai xe van khong nop duoc phieu dau tien.
+     */
+    it('#168 B2: vehicleId lay tu khung nhin qua duoc schema nop phieu dau', async () => {
+      const { tripA } = await twoDriversOneTripEach();
+      const detail = await service.getDriverTrip(DRIVER_A_USER, tripA.id);
+
+      const parsed = driverFuelSubmitSchema.safeParse({
+        tripId: detail.id,
+        vehicleId: detail.vehicleId,
+        businessDate: detail.businessDate,
+        litersUnits: 200_000,
+        unitPrice: 21_000,
+        totalAmount: 4_200_000,
+        odometerKm: 120_000,
+        correlationKey: 'IT-B2-phieu-dau-tien',
+      });
+
+      // Neu schema doi them truong, bai nay do voi thong bao noi ro truong nao — chu khong lang le
+      // xanh nhu mot phep `expect(true)`.
+      expect(parsed.error?.issues.map((issue) => issue.path.join('.')) ?? []).not.toContain(
+        'vehicleId',
+      );
+    });
+
+    it('#168 B2: them vehicleId KHONG keo mot truong tien nao vao be mat lai xe', async () => {
+      const { tripA } = await twoDriversOneTripEach();
+
+      const list = await service.listDriverTrips(DRIVER_A_USER);
+      const detail = await service.getDriverTrip(DRIVER_A_USER, tripA.id);
+
+      for (const payload of [list, detail]) {
+        for (const key of deepKeys(payload)) {
+          expect(MONEY_SHAPED.test(key), `ro ri truong tien: ${key}`).toBe(false);
+        }
+      }
+    });
+
+    it('#168 B2: lai xe A khong hoc duoc vehicleId qua chuyen cua lai xe B', async () => {
+      const { tripB } = await twoDriversOneTripEach();
+
+      // Cung mot chiec xe duoc gan cho ca hai chuyen trong fixture nay — nen phep thu that khong
+      // phai "id co khac nhau khong", ma la "duong doc co mo ra khong".
+      await expect(service.getDriverTrip(DRIVER_A_USER, tripB.id)).rejects.toMatchObject({
+        reason: 'SELF_SCOPE_NOT_ASSIGNED',
+      });
     });
 
     it('DRIVER-VIEW-002: lai xe A doi chuyen cua lai xe B thi bi TU CHOI', async () => {

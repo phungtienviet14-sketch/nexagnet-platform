@@ -7,7 +7,13 @@ import { nonPreviewTenantPacks } from '../__tests__/tenant-packs.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
-const WORKFORCE_ARTEFACTS = ['PayrollController', 'TransportWorkforceModule'];
+const WORKFORCE_ARTEFACTS = [
+  'PayrollController',
+  // BE MAT LAI XE (`#168 B8`) — den cung capability nay va bien mat cung no. Khong tinh luong thi
+  // khong co phieu de lai xe doc, nen mot route mo cho mot bang rong se la mot loi hua sai.
+  'DriverPayslipsController',
+  'TransportWorkforceModule',
+];
 
 function compositionNames(capabilities: readonly CapabilityId[]): string[] {
   const built = buildAppComposition(capabilities);

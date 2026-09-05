@@ -27,6 +27,21 @@ export interface DriverTripView {
   readonly distanceKm: number | null;
   /** Ten khach de lai xe biet giao cho ai — KHONG kem dieu khoan hay so tien nao. */
   readonly customerName: string | null;
+  /**
+   * XE dang duoc phan cong cho chuyen nay — `#168 B2`.
+   *
+   * `POST /transport/me/fuel/slips` doi `vehicleId` khong rong, nhung truoc day khung nhin nay chi
+   * tra BIEN SO. Va vai `SALE` khong co `transport.vehicle.read`, nen `/transport/vehicles` tra
+   * 403. Ket qua do duoc: mot lai xe KHONG nop noi phieu do dau DAU TIEN cua minh —
+   * `DriverFuelSlipView` co `vehicleId`, nhung chi tren phieu DA nop.
+   *
+   * `DriverTripViewSources` von da mang san ca doi tuong `Vehicle` khi dung khung nhin, nen day la
+   * MOT TRUONG, khong phai mot truy van moi.
+   *
+   * KHONG lam ro doanh thu: `Vehicle.id` la mot khoa, khong phai mot con so tien. Va vi no chi den
+   * tu XE CUA CHINH BAN PHAN CONG NAY, no khong noi gi ve chuyen cua nguoi khac.
+   */
+  readonly vehicleId: string | null;
   readonly vehicleRegistrationPlate: string | null;
   /** Luc ban phan cong dang xet bat dau. */
   readonly assignedAt: string | null;
@@ -67,6 +82,7 @@ export function toDriverTripView({
     cargoDescription: trip.cargoDescription,
     distanceKm: trip.distanceKm,
     customerName: customer?.name ?? null,
+    vehicleId: vehicle?.id ?? null,
     vehicleRegistrationPlate: vehicle?.registrationPlate ?? null,
     assignedAt: assignment?.effectiveFrom ?? null,
     isCurrentAssignee,

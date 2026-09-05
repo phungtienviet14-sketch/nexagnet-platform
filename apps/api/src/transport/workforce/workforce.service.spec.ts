@@ -6,6 +6,7 @@ import {
   WorkforceCostingFacts,
   WorkforceFuelFacts,
   type DriverPeriodWork,
+  type WorkforceDriverFacts,
 } from './workforce.ports.js';
 import { WorkforceService } from './workforce.service.js';
 import type { PayrollPolicySnapshot } from './workforce.types.js';
@@ -32,6 +33,10 @@ class StubCore extends WorkforceCoreFacts {
   }
   async workByDriver(): Promise<readonly DriverPeriodWork[]> {
     return this.work;
+  }
+  /** Chay luong khong bao gio hoi "ai dang dang nhap" — cong nay chi phuc vu be mat lai xe. */
+  async findDriverByAuthUserId(): Promise<WorkforceDriverFacts | null> {
+    return null;
   }
 }
 
