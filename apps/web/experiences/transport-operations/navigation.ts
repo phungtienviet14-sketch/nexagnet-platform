@@ -29,9 +29,14 @@ import { canPerform, type TransportAction } from './transport-actions';
 /**
  * Muc CO MAT tren be mat khach hang.
  *
- * Danh sach nay chi giu nhung muc DUNG DUOC hom nay. Mot muc chua co duong du lieu thi khong nam
- * o day: bay no ra roi de no tu giai thich vi sao no trong luon dan den mot cau ky thuat ma nguoi
- * dung khong lam gi duoc. Khi duong du lieu mo, muc quay lai day cung voi khung nhin that cua no.
+ * Danh sach nay chi giu nhung muc DUNG DUOC hom nay — do la mot cau ve MAN HINH, khong phai ve
+ * may chu. T7B (#168) da mo duong HTTP cho bao cao quyet toan va phieu luong, nhung `transport-api.ts`
+ * chua goi mot duong nao trong so do, nen cac muc ay van chua co gi de bay. Viec noi chung vao
+ * thuoc T7D (#170).
+ *
+ * Mot muc nhu vay khong nam o day: bay no ra roi de no tu giai thich vi sao no trong luon dan den
+ * mot cau ky thuat ma nguoi dung khong lam gi duoc. Khi man hinh noi xong, muc quay lai day cung
+ * voi khung nhin that cua no.
  *
  * Day la mot quyet dinh TRINH BAY. No KHONG thay the hai cong loc ben duoi
  * (`requiredCapabilities` + `requiredAction`), va cung khong noi long chung.
