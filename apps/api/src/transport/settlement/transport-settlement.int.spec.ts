@@ -108,7 +108,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         select: { id: true },
       });
       const ruleIds = rules.map((row) => row.id);
-      await prisma.transportCommissionRuleVersion.deleteMany({ where: { ruleId: { in: ruleIds } } });
+      await prisma.transportCommissionRuleVersion.deleteMany({
+        where: { ruleId: { in: ruleIds } },
+      });
       await prisma.transportCommissionRule.deleteMany({ where: { id: { in: ruleIds } } });
 
       const customers = await prisma.transportCustomer.findMany({

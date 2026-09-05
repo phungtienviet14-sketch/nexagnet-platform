@@ -660,6 +660,26 @@
   border-color: var(--tx-accent);
 }
 
+/*
+ * Muc cua danh sach viec KHONG phai lien ket — vd mot dong canh bao van hanh, hay mot lan chay
+ * luong. Truoc day chi `.tx-worklist a` duoc xep thanh cot, nen mot muc dung `<div>` roi ve inline
+ * va ba manh chu dinh lien vao nhau ("Bao duong qua han29H-123.45..."). Ay la mot loi DOC DUOC tren
+ * anh chup, khong phai mot khac biet ve khoang cach.
+ */
+.tx-worklist li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.tx-worklist li > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
 .tx-worklist span,
 .tx-unavailable span,
 .tx-timeline span {

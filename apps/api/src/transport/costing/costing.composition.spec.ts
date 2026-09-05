@@ -19,7 +19,8 @@ function compositionNames(capabilities: readonly CapabilityId[]): string[] {
   return [
     ...composition.controllers.map((controller) => controller.name),
     ...composition.imports.map((entry) =>
-      typeof entry === 'function' ? entry.name : String((entry as { name?: string }).name ?? '')),
+      typeof entry === 'function' ? entry.name : String((entry as { name?: string }).name ?? ''),
+    ),
   ];
 }
 

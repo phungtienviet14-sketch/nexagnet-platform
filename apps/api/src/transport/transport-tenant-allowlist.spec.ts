@@ -48,14 +48,15 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
   });
 
   /**
-   * MOT GOI DUOC MIEN TRU PHAI TU NHAN LA BAN XEM TRUOC.
+   * BAI NAY DA DOI CHO DUA. Ban truoc doi moi goi duoc mien tru phai khai `previewNotice` — tuc mot
+   * DAI BANG KHACH NHIN THAY. #195 cam dai bang do tren be mat huong khach, va luc do hai yeu cau
+   * danh nhau: khong go duoc dai bang ma khong pha cong bao ve.
    *
-   * Day la cho hai muc dich gap nhau: `readiness.previewNotice` vua la thu bay dai bang tren man
-   * hinh, vua la loi tu khai bang van ban rang goi nay khong phai ban cho khach dung. Bat buoc no
-   * o day nghia la khong the lang le them mot goi vao danh sach mien tru ma khong dong thoi noi
-   * that dieu do voi bat ky ai mo man hinh len.
+   * Cai cong THUC SU muon biet la mot su that KY THUAT: "goi nay co phai khach that khong". Nen no
+   * doc `demoTenant` — mot co NOI BO khong bao gio ra man hinh. Nho vay mot goi mau trong y het mot
+   * san pham binh thuong ma cong van dung, va #195 khong con phai danh doi voi bao mat.
    */
-  it('moi goi duoc phep deu tu khai la ban xem truoc', () => {
+  it('moi goi duoc phep deu tu khai la GOI MAU — bang mot co NOI BO', () => {
     for (const slug of TRANSPORT_PREVIEW_TENANTS) {
       process.env.TENANT = slug;
       delete process.env.TENANT_DIR;
@@ -63,24 +64,37 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
 
       const config = loadTenantConfig();
       expect(config.slug, slug).toBe(slug);
-      expect(config.policies.readiness.previewNotice, slug).toBeDefined();
-      expect(config.policies.readiness.previewNotice?.label.length, slug).toBeGreaterThan(0);
-      expect(config.policies.readiness.previewNotice?.note.length, slug).toBeGreaterThan(0);
+      expect(config.policies.readiness.demoTenant, slug).toBe(true);
     }
   });
 
   /**
-   * Chieu nguoc lai, va la chieu quan trong hon: khach THAT khong duoc co dai bang xem truoc.
-   * Mot goi khach that tu nhan la "ban xem truoc" se vua lam sai ky vong cua khach, vua tu mo cho
-   * minh mot duong vao danh sach mien tru o lan sua sau.
+   * Va goi mau KHONG con khai mot dai bang huong khach nao — #195.
+   *
+   * Bai nay la luoi chan cho mot buoc lui de xay ra: ai do thay man hinh "trong qua" roi them lai
+   * `previewNotice` de noi ro day la ban demo. Cau do dung o GitHub va trong tai lieu, khong dung
+   * tren man hinh cua nguoi dang xem san pham.
    */
-  it('khong goi khach that nao tu khai la ban xem truoc', () => {
+  it('goi mau KHONG con khai mot dai bang huong khach nao', () => {
+    for (const slug of TRANSPORT_PREVIEW_TENANTS) {
+      process.env.TENANT = slug;
+      delete process.env.TENANT_DIR;
+      resetTenantCache();
+      expect(loadTenantConfig().policies.readiness.previewNotice, slug).toBeUndefined();
+    }
+  });
+
+  /**
+   * Chieu nguoc lai, va la chieu quan trong hon: khach THAT khong duoc tu khai la goi mau. Mot goi
+   * khach that mang co do se tu mo cho minh mot duong vao danh sach mien tru o lan sua sau.
+   */
+  it('khong goi khach that nao tu khai la goi mau', () => {
     for (const slug of CUSTOMER_TENANTS) {
       process.env.TENANT = slug;
       delete process.env.TENANT_DIR;
       resetTenantCache();
 
-      expect(loadTenantConfig().policies.readiness.previewNotice, slug).toBeUndefined();
+      expect(loadTenantConfig().policies.readiness.demoTenant ?? false, slug).toBe(false);
     }
   });
 });

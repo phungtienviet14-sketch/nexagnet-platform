@@ -69,6 +69,21 @@ export const tenantReadinessSchema = z
     /** Cac blocker nghiep vu do tenant khai bao; core chi hien thi, khong suy dien hanh vi. */
     blockedCapabilities: z.array(blockedCapabilitySchema).max(100),
     previewNotice: previewNoticeSchema.optional(),
+    /**
+     * GOI NAY LA GOI MAU/THAM CHIEU, khong phai mot khach hang that.
+     *
+     * KHONG BAO GIO HIEN RA MAN HINH. Khac han `previewNotice` o dung diem do: cai kia la mot cau
+     * chu HUONG NGUOI DUNG, con day la mot su that KY THUAT de cac cong bao ve doc.
+     *
+     * Vi sao can mot truong rieng: cong chan nghiep vu van tai phai tra loi duoc cau "goi nay co
+     * phai khach that khong". Truoc day no suy ra dieu do tu `previewNotice` — tuc rang buoc mot
+     * tinh chat ky thuat vao mot DAI BANG KHACH NHIN THAY, va he qua la khong go duoc dai bang ma
+     * khong pha cong. Tach ra thi hai thu doc lap: mot goi mau co the trong nhu mot san pham binh
+     * thuong ma cong bao ve van dung.
+     *
+     * Vang mat ⇒ `false` ⇒ mot goi khach that. Moi goi khach dang co giu nguyen hanh vi.
+     */
+    demoTenant: z.boolean().optional(),
   })
   .strict();
 

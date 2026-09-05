@@ -78,7 +78,12 @@ function harness(): Harness {
   core.drivers.set('drv-1', { id: 'drv-1', fullName: 'Lai xe A' });
   core.drivers.set('drv-2', { id: 'drv-2', fullName: 'Lai xe B' });
   core.bindings.set('user-1', 'drv-1');
-  core.trips.set('trip-a', { id: 'trip-a', code: 'CH-A', kind: 'OWN_DIRECT', status: 'IN_TRANSIT' });
+  core.trips.set('trip-a', {
+    id: 'trip-a',
+    code: 'CH-A',
+    kind: 'OWN_DIRECT',
+    status: 'IN_TRANSIT',
+  });
   core.trips.set('trip-done', {
     id: 'trip-done',
     code: 'CH-DONE',
@@ -107,15 +112,7 @@ function harness(): Harness {
   return {
     ledger,
     core,
-    costing: new CostingService(
-      ledger,
-      core,
-      audit,
-      CORE_POLICY,
-      COSTING_POLICY,
-      undefined,
-      CLOCK,
-    ),
+    costing: new CostingService(ledger, core, audit, CORE_POLICY, COSTING_POLICY, undefined, CLOCK),
     read: new CostingReadService(ledger, core),
     periods: new FundPeriodService(ledger, core, audit, CORE_POLICY, undefined, CLOCK),
   };
@@ -272,7 +269,12 @@ describe('ba cong tu choi cua mot khoan chi moi, ba ma khac nhau', () => {
    */
   it('chuyen thue ngoai VAN nhan duoc khoan cong ty tra thang (DA-T3-03)', async () => {
     const posted = await h.costing.recordTripExpense(
-      { tripId: 'trip-outsourced', categoryCode: 'CAU_DUONG', amount: 1_000, fundedBy: 'COMPANY_DIRECT' },
+      {
+        tripId: 'trip-outsourced',
+        categoryCode: 'CAU_DUONG',
+        amount: 1_000,
+        fundedBy: 'COMPANY_DIRECT',
+      },
       'ke-toan',
     );
     expect(posted.expense?.signedAmount).toBe(1_000);
@@ -355,7 +357,10 @@ describe('dao — sua = dao + ghi moi, khong bao gio UPDATE (INV-20)', () => {
   });
 
   it('dao mot lan tam ung KHONG gan chuyen cung chay — chi mot chan', async () => {
-    const advance = await h.costing.postAdvance({ driverId: 'drv-1', amount: 5_000_000 }, 'ke-toan');
+    const advance = await h.costing.postAdvance(
+      { driverId: 'drv-1', amount: 5_000_000 },
+      'ke-toan',
+    );
     const reversal = await h.costing.reverseFundEntry(advance.id, 'ung nham nguoi', 'ke-toan');
 
     expect(reversal.entry?.signedAmount).toBe(-5_000_000);

@@ -73,9 +73,9 @@ describe('FleetService', () => {
     });
 
     it('sua mot xe khong ton tai thi nem, khong lang le tao moi', async () => {
-      await expect(service.updateVehicle('khong-co-that', { status: 'IDLE' }, ACTOR)).rejects.toThrow(
-        TransportDomainError,
-      );
+      await expect(
+        service.updateVehicle('khong-co-that', { status: 'IDLE' }, ACTOR),
+      ).rejects.toThrow(TransportDomainError);
     });
   });
 
@@ -197,12 +197,12 @@ describe('FleetService', () => {
         { registrationPlate: '29H-333.33', vehicleClass: 'Xe tai' },
         ACTOR,
       );
-      await expect(service.assignDriverToVehicle(vehicle.id, 'khong-co-that', ACTOR)).rejects.toThrow(
-        TransportDomainError,
-      );
-      await expect(service.assignDriverToVehicle('khong-co-that', vehicle.id, ACTOR)).rejects.toThrow(
-        TransportDomainError,
-      );
+      await expect(
+        service.assignDriverToVehicle(vehicle.id, 'khong-co-that', ACTOR),
+      ).rejects.toThrow(TransportDomainError);
+      await expect(
+        service.assignDriverToVehicle('khong-co-that', vehicle.id, ACTOR),
+      ).rejects.toThrow(TransportDomainError);
     });
   });
 

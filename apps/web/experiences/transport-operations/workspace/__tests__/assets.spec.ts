@@ -253,7 +253,13 @@ describe('bang canh bao gom chung', () => {
     expect(model.headline).toContain('2');
   });
 
-  it('so lieu kem theo doi thanh chuoi, bo qua o rong', () => {
+  /**
+   * KHOA KY THUAT KHONG DUOC RA MAN HINH. Ban truoc in `${key}: ${value}`, va anh chup E2E cho ra
+   * mot dong that: `odoRemainingKm: -450`. Do dung la thu #195/#92 goi la "ten truong ky thuat lam
+   * nhan nghiep vu". Khoa chua co trong tu dien bi BO HAN — cho phat hien mot nguon canh bao moi
+   * chua ai dich la CI, khong phai man hinh cua khach.
+   */
+  it('so lieu kem theo doi thanh CAU TIENG VIET, khoa la thi bo han', () => {
     const model = toOperationalAlerts(
       feed({
         alerts: [
@@ -262,13 +268,14 @@ describe('bang canh bao gom chung', () => {
             severity: 'WARNING',
             subjectKind: 'VEHICLE',
             subjectId: 'veh-1',
-            detail: { observed: 42, expected: null },
+            detail: { odoRemainingKm: -450, khoaLaKhongAiDich: 7, expected: null },
           },
         ],
       }),
       directory,
     );
-    expect(model.rows[0]?.details).toEqual(['observed: 42']);
+    expect(model.rows[0]?.details).toEqual(['Đã vượt mốc 450 km']);
+    expect(model.rows[0]?.details.join(' ')).not.toContain('khoaLaKhongAiDich');
   });
 
   it('chua doc duoc feed thi noi that, khong dung bang rong', () => {

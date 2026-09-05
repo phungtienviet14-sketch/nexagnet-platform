@@ -157,9 +157,7 @@ const TRANSITIONABLE_TRIP_STATUSES = TRIP_STATUSES.filter((status) => status !==
   ...(typeof TRIP_STATUSES)[number][],
 ];
 
-export const transitionTripSchema = z
-  .object({ to: z.enum(TRANSITIONABLE_TRIP_STATUSES) })
-  .strict();
+export const transitionTripSchema = z.object({ to: z.enum(TRANSITIONABLE_TRIP_STATUSES) }).strict();
 
 export const cancelTripSchema = z.object({ reason: nonEmpty.max(500) }).strict();
 

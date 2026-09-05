@@ -197,11 +197,7 @@ export class FundPeriodService {
    * audit mang ca ly do do. Mot lan mo lai khong giai trinh duoc thi bang chung ve so lieu da bao
    * cao ra ngoai cung mat theo.
    */
-  async reopenPeriod(
-    periodId: string,
-    reason: string,
-    actor: string,
-  ): Promise<DriverFundPeriod> {
+  async reopenPeriod(periodId: string, reason: string, actor: string): Promise<DriverFundPeriod> {
     const period = await this.requirePeriod(periodId);
     const reopened = await this.transition(period, 'REOPENED', actor, reason);
 

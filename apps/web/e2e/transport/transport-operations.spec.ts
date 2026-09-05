@@ -18,6 +18,118 @@ const json = async (route: Route, body: unknown, status = 200): Promise<void> =>
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 };
 
+/* --- TX-05 / TX-06: so tong hop, du de man hinh ve ra mot bang co noi dung --- */
+
+const AR_AGING = {
+  asOf: '2026-09-30',
+  rows: [
+    {
+      documentId: 'doc-1',
+      counterpartyId: 'cus-1',
+      businessDate: '2026-09-01',
+      dueDate: '2026-09-15',
+      outstandingAmount: 11_500_000,
+      daysOverdue: 15,
+      bucket: 'D1_30',
+      currencyCode: 'VND',
+    },
+  ],
+  totalsByBucket: { CURRENT: 0, D1_30: 11_500_000, D31_60: 0, D60_PLUS: 0 },
+  outstandingTotal: 11_500_000,
+  overdueTotal: 11_500_000,
+};
+
+const AP_ROWS = [
+  {
+    counterpartyId: 'par-1',
+    flow: 'CARRIER_SERVICE',
+    documentCount: 2,
+    outstandingAmount: 6_000_000,
+    currencyCode: 'VND',
+  },
+];
+
+const PARTNER_POSITION = {
+  partnerId: 'par-1',
+  receivableAmount: 3_000_000,
+  carrierPayableAmount: 5_000_000,
+  commissionPayableAmount: 1_000_000,
+  netDisplay: -3_000_000,
+  currencyCode: 'VND',
+};
+
+const DIRECT_MARGIN = {
+  tripId: 'trip-1',
+  tripKind: 'OWN_DIRECT',
+  revenueAmount: 11_500_000,
+  directCostAmount: 6_000_000,
+  carrierPayableAmount: 0,
+  commissionAmount: 0,
+  deductionAmount: 6_000_000,
+  marginAmount: 5_500_000,
+  marginBasisPoints: 4782,
+  currencyCode: 'VND',
+  fixedCostsIncluded: false,
+  disclosure: 'Chưa gồm chi phí cố định',
+  unexpectedInternalCost: false,
+};
+
+const MARGIN_ROLLUP = {
+  revenueAmount: 23_000_000,
+  deductionAmount: 12_000_000,
+  marginAmount: 11_000_000,
+  marginBasisPoints: 4782,
+  tripCount: 2,
+  skippedTripCount: 0,
+  fixedCostsIncluded: false,
+  disclosure: 'Chưa gồm chi phí cố định',
+};
+
+const MAINTENANCE_DUE = [
+  {
+    planId: 'plan-1',
+    vehicleId: 'veh-1',
+    planName: 'Thay dầu máy',
+    triggerKind: 'ODOMETER',
+    state: 'OVERDUE',
+    dueAtOdoKm: 120_000,
+    dueOnDate: null,
+    odoRemainingKm: -450,
+    daysRemaining: null,
+    reachedBy: 'ODOMETER',
+    currentOdoKm: 120_450,
+    lastServicedDate: '2026-06-01',
+    lastServicedOdoKm: 110_000,
+  },
+];
+
+const COMPLIANCE_ALERTS = [
+  {
+    documentId: 'doc-insp-1',
+    subjectKind: 'VEHICLE',
+    subjectId: 'veh-1',
+    documentType: 'VEHICLE_INSPECTION',
+    validTo: '2026-10-05',
+    health: 'DUE_SOON',
+    daysUntilExpiry: 5,
+    thresholdDays: 30,
+  },
+];
+
+const ALERT_FEED = {
+  generatedFor: '2026-09-30',
+  alerts: [
+    {
+      kind: 'MAINTENANCE_OVERDUE',
+      severity: 'CRITICAL',
+      subjectKind: 'VEHICLE',
+      subjectId: 'veh-1',
+      detail: { odoRemainingKm: -450 },
+    },
+  ],
+  unavailableSources: [],
+};
+
 interface MockTrip {
   id: string;
   code: string;
@@ -447,6 +559,34 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
     json(route, []),
   );
 
+  /*
+   * TX-05 / TX-06 / TX-07 — sau muc T7D noi vao. Mock o day de bo E2E chung minh man hinh DOC va
+   * VE duoc du lieu that; noi dung deu la so tong hop, khong phai cua khach nao.
+   */
+  await page.route('**/transport/settlement/ar-aging*', (route) => json(route, AR_AGING));
+  await page.route('**/transport/settlement/ap*', (route) => json(route, AP_ROWS));
+  await page.route('**/transport/settlement/partners/*/position', (route) =>
+    json(route, PARTNER_POSITION),
+  );
+  await page.route('**/transport/settlement/direct-margin/rollup*', (route) =>
+    json(route, MARGIN_ROLLUP),
+  );
+  await page.route('**/transport/settlement/trips/*/direct-margin', (route) =>
+    json(route, DIRECT_MARGIN),
+  );
+  await page.route('**/transport/maintenance/due', (route) => json(route, MAINTENANCE_DUE));
+  await page.route('**/transport/maintenance/plans', (route) => json(route, []));
+  await page.route('**/transport/maintenance/work-orders', (route) => json(route, []));
+  await page.route('**/transport/compliance/documents', (route) => json(route, []));
+  await page.route('**/transport/compliance/alerts', (route) => json(route, COMPLIANCE_ALERTS));
+  await page.route('**/transport/fleet-status', (route) => json(route, []));
+  await page.route('**/transport/alerts', (route) => json(route, ALERT_FEED));
+  await page.route('**/transport/payroll/periods', (route) => json(route, []));
+  await page.route('**/transport/me/payslips', (route) => json(route, []));
+  await page.route('**/transport/me/expense-categories', (route) =>
+    json(route, { categories: ['BOT', 'BAI_XE'], unrestricted: false }),
+  );
+
   await page.route('**/transport/trips', (route) => json(route, [...trips.values()]));
   await page.route('**/transport/trips/*/assignments', (route) =>
     json(route, route.request().url().includes('trip-1') ? [ASSIGNMENT] : []),
@@ -497,26 +637,45 @@ test.describe('vo va kien truc thong tin', () => {
    * Day la cau duy nhat tren man hinh noi rang ban nay khong phai ban cho khach dung. Neu no bien
    * mat trong mot lan doi layout, khong con gi ngan mot nguoi xem tuong nghiep vu da chay du.
    */
-  test('dai bang xem truoc hien ra va noi ro day khong phai ban chay that', async ({ page }) => {
+  test('KHONG con mot chu nao ve trang thai noi bo tren be mat khach', async ({ page }) => {
     await mockTransport(page);
     await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
-    const ribbon = page.getByRole('status').filter({ hasText: 'BẢN XEM TRƯỚC' });
-    await expect(ribbon).toBeVisible();
-    await expect(ribbon).toContainText('Dữ liệu tổng hợp');
-    await expect(ribbon).toContainText('không có dữ liệu khách hàng');
+    const body = (await page.locator('body').innerText()).toLowerCase();
+    for (const forbidden of [
+      'bản xem trước',
+      'xem trước',
+      'preview',
+      'uat',
+      'chờ api',
+      'runtime-proven',
+      'customer-ready',
+      'business-proven',
+      'chưa có khách hàng',
+      'dữ liệu tổng hợp',
+    ]) {
+      expect(body, forbidden).not.toContain(forbidden);
+    }
   });
 
   /**
    * Hai muc cua T6 hien ra thi phai NOI THAT rang chung chua noi vao may chu — khong duoc bay mot
    * bang rong trong nhu da tai xong, va tuyet doi khong duoc bia mot con so nao.
    */
-  test('muc Bao duong noi that rang chua noi vao may chu, khong bia so', async ({ page }) => {
+  test('muc Bao duong VE RA du lieu that cua may chu, khong phai mot cau xin loi', async ({
+    page,
+  }) => {
     await mockTransport(page, 'ADMIN');
     await page.goto('/?section=maintenance');
 
     await expect(page.getByRole('heading', { level: 1, name: /Bảo dưỡng/ })).toBeVisible();
-    await expect(page.locator('#tx-main')).toContainText('chưa nối');
+    const main = page.locator('#tx-main');
+    // BIEN SO chu khong phai `vehicleId`, va tinh trang doc bang chu tieng Viet.
+    await expect(main).toContainText('29H-123.45');
+    await expect(main).toContainText('Quá hạn');
+    await expect(main).toContainText('Thay dầu máy');
+    await expect(main).not.toContainText('chưa nối');
   });
 
   test('duong nhay ban phim dua tieu diem vao thang noi dung', async ({ page }) => {
@@ -535,7 +694,9 @@ test.describe('vo va kien truc thong tin', () => {
     await mockTransport(page, 'MANAGER');
     await page.goto('/');
     // Bang bridge `GD-22` khai `MANAGER: []` co chu dich. Man hinh khong duoc bia mot anh xa quyen.
-    await expect(page.locator('#tx-main').getByRole('alert')).toContainText('Vai Quản lý chưa được cấp thao tác');
+    await expect(page.locator('#tx-main').getByRole('alert')).toContainText(
+      'Vai Quản lý chưa được cấp thao tác',
+    );
   });
 });
 

@@ -181,8 +181,11 @@ describe('Ngay-chi-co-ngay: giu chuoi, siet bang CHECK (T2.1/F3)', () => {
 
 describe('Nhan dien va cham ghi (T2.1/F2)', () => {
   /** Dung hinh dang loi cua Prisma, khong dung lop that: tang nay CO Y khong phu thuoc ban sinh. */
-  const prismaError = (code: string, meta: unknown, message = 'Unique constraint failed'): unknown =>
-    Object.assign(new Error(message), { code, meta });
+  const prismaError = (
+    code: string,
+    meta: unknown,
+    message = 'Unique constraint failed',
+  ): unknown => Object.assign(new Error(message), { code, meta });
 
   it('nhan ra dang THAT SU xay ra tren Postgres: Prisma doi ten index thanh ten TRUONG', () => {
     // Do duoc o CI 29/08/2026: Postgres bao `..._activeTrip_key`, Prisma mo ra thanh
@@ -252,7 +255,9 @@ describe('Nhan dien va cham ghi (T2.1/F2)', () => {
       target: ['tripId'],
     });
     expect(isActiveAssignmentConflict(notUnique, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
-    expect(isActiveAssignmentConflict(new Error('mat ket noi'), ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
+    expect(isActiveAssignmentConflict(new Error('mat ket noi'), ACTIVE_TRIP_ASSIGNMENT)).toBe(
+      false,
+    );
     expect(isActiveAssignmentConflict(null, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
     expect(isActiveAssignmentConflict(undefined, ACTIVE_TRIP_ASSIGNMENT)).toBe(false);
   });

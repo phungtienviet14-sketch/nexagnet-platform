@@ -303,9 +303,56 @@ export interface OperationalAlertRow {
   readonly severityLabel: string;
   readonly tone: StatusTone;
   readonly subjectLabel: string;
-  /** Cac so lieu kem theo, da doi thanh chuoi — khong bay `Record` tho len man hinh. */
+  /**
+   * So lieu kem theo, DA DOI THANH CAU TIENG VIET.
+   *
+   * `OperationalAlert.detail` la mot `Record` mo do tung nguon canh bao tu dat khoa. In thang no ra
+   * cho mot dong nhu `odoRemainingKm: -450` tren man hinh khach — dung cai ma #195 va #92 goi la
+   * "id/ten truong ky thuat lam nhan nghiep vu". Khoa khong co trong tu dien bi BO HAN, chu khong
+   * duoc in ra o dang tho: mot khoa la nghia la mot nguon canh bao moi chua ai dich, va cho dung de
+   * phat hien dieu do la CI, khong phai man hinh cua khach.
+   */
   readonly details: readonly string[];
 }
+
+/**
+ * Tu dien khoa `detail` → cau tieng Viet. Nguon: `alert-sources.ts` va `asset-compliance.types.ts`.
+ *
+ * Ham dich nhan ca GIA TRI vi mot so khoa doi don vi (km, ngay, tien) — mot cap khoa/gia tri roi
+ * rac khong du de viet mot cau doc len nghe ra viec.
+ */
+const ALERT_DETAIL_LABEL: Readonly<Record<string, (value: number | string) => string>> = {
+  odoRemainingKm: (value) =>
+    Number(value) < 0
+      ? `Đã vượt mốc ${formatOdometer(Math.abs(Number(value)))}`
+      : `Còn ${formatOdometer(Number(value))} tới hạn`,
+  daysRemaining: (value) =>
+    Number(value) < 0
+      ? `Đã quá hạn ${formatCount(Math.abs(Number(value)))} ngày`
+      : `Còn ${formatCount(Number(value))} ngày`,
+  daysUntilExpiry: (value) =>
+    Number(value) < 0
+      ? `Đã hết hạn ${formatCount(Math.abs(Number(value)))} ngày`
+      : `Còn ${formatCount(Number(value))} ngày`,
+  thresholdDays: (value) => `Ngưỡng cảnh báo ${formatCount(Number(value))} ngày`,
+  observedConsumptionUnits: (value) => `Mức tiêu hao đo được ${Number(value) / 1000} L/100km`,
+  expectedConsumptionUnits: (value) => `Mức tiêu hao thường thấy ${Number(value) / 1000} L/100km`,
+  balance: (value) => `Số dư quỹ ${formatMoney(Number(value))}`,
+  documentType: (value) => {
+    // `noUncheckedIndexedAccess`: mot ma la khong duoc ep kieu roi im lang tra ve `undefined`.
+    const labels: Readonly<Record<string, string>> = COMPLIANCE_DOCUMENT_TYPE_LABEL;
+    return labels[String(value)] ?? String(value);
+  },
+};
+
+const alertDetailLines = (
+  detail: Readonly<Record<string, number | string | null>>,
+): readonly string[] =>
+  Object.entries(detail).flatMap(([key, value]) => {
+    if (value === null) return [];
+    const translate = ALERT_DETAIL_LABEL[key];
+    return translate === undefined ? [] : [translate(value)];
+  });
 
 export interface OperationalAlertModel {
   readonly generatedForLabel: string;
@@ -339,9 +386,7 @@ export const toOperationalAlerts = (
     severityLabel: OPERATIONAL_ALERT_SEVERITY_LABEL[alert.severity],
     tone: alertSeverityTone(alert.severity),
     subjectLabel: subjectLabelOf(directory, alert.subjectKind, alert.subjectId),
-    details: Object.entries(alert.detail)
-      .filter((entry): entry is [string, number | string] => entry[1] !== null)
-      .map(([key, value]) => `${key}: ${String(value)}`),
+    details: alertDetailLines(alert.detail),
   }));
 
   const criticalCount = feed.alerts.filter((alert) => alert.severity === 'CRITICAL').length;
