@@ -1,0 +1,116 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Nexagnet Conversation Bridge</title>
+<style>
+  body {
+    font:
+      14px/1.6 system-ui,
+      sans-serif;
+    margin: 24px;
+    max-width: 46rem;
+  }
+  h1 {
+    font-size: 1.15rem;
+  }
+  h2 {
+    font-size: 1rem;
+    margin-top: 2rem;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+    gap: 4px 12px;
+  }
+  dt {
+    color: #555;
+  }
+  code {
+    background: #f2f2f2;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  input {
+    width: 100%;
+    padding: 6px;
+    font: inherit;
+  }
+  button {
+    padding: 6px 12px;
+    font: inherit;
+    margin-right: 8px;
+  }
+  .warn {
+    color: #8a3b00;
+  }
+  p.note {
+    color: #555;
+  }
+  ul#burned {
+    list-style: none;
+    padding: 0;
+  }
+  ul#burned li {
+    border-top: 1px solid #e5e5e5;
+    padding: 8px 0;
+  }
+  ul#burned code {
+    font-size: 0.9em;
+  }
+</style>
+<h1>Conversation Bridge V0 — chi vao, khong doc</h1>
+<p class="note">
+  Tien ich nay dat mot tin nhan co dinh vao khung soan cua <strong>dung mot</strong> cuoc hoi thoai
+  ChatGPT ma ban arm ben duoi, roi gui. No <strong>khong doc cau tra loi</strong>, khong doc lich su
+  hoi thoai, khong dung cookie/phien dang nhap.
+</p>
+<dl>
+  <dt>Trang thai</dt>
+  <dd><code id="state">?</code></dd>
+  <dt>Cuoc hoi thoai da arm</dt>
+  <dd><code id="target">?</code></dd>
+  <dt>Duong ong toi native host</dt>
+  <dd><code id="link">?</code></dd>
+  <dt>So khoa giao cuc bo</dt>
+  <dd><code id="delivered">?</code></dd>
+</dl>
+<p>
+  <label for="url">URL cuoc hoi thoai (dang <code>https://chatgpt.com/c/&lt;id&gt;</code>)</label>
+  <input id="url" type="url" placeholder="https://chatgpt.com/c/..." />
+</p>
+<p>
+  <button id="arm">Arm dung cuoc hoi thoai nay</button>
+  <button id="disarm">Disarm</button>
+</p>
+<p class="note">
+  Chrome cap quyen host theo <strong>origin</strong>: mau <code>https://chatgpt.com/*</code> va mau
+  <code>https://chatgpt.com/c/&lt;id&gt;</code> cho ra <em>cung mot</em> pham vi, vi thanh phan
+  duong dan trong quyen host bi bo qua. Nen tien ich xin dung <code>https://chatgpt.com/*</code>.
+  Viec chi <strong>mot</strong> cuoc hoi thoai bi cham toi la do <strong>ma nguon</strong> giu: URL
+  da arm o tren, doi chieu chinh xac URL cua tab, doi hoi dung mot tab khop, va mot lan doi chieu
+  <code>location.href</code> nua ngay ben trong trang truoc thao tac DOM dau tien.
+</p>
+
+<h2>Duong ong toi native host</h2>
+<p class="note">
+  Neu ban nap tien ich <em>truoc</em> khi dang ky native host (dung thu tu trong tai lieu), lan mo
+  dau tien se that bai. Sau khi dang ky host xong, bam <strong>Ket noi lai</strong> — khong can nap
+  lai tien ich, khong can khoi dong lai Chrome. Cau noi cung tu mo lai co chan khi host chet giua
+  chung; het ngan sach thu lai thi no dung han va doi dung cai nut nay.
+</p>
+<p><button id="reconnect">Ket noi lai</button></p>
+
+<h2>Hoa giai mot khoa giao da chay</h2>
+<p class="note">
+  Mot lan tiem that bai van <strong>chay</strong> khoa cua no — do la cai gia cua huong an toan
+  at-most-once. Co <strong>hai</strong> so khoa: mot ben native host (tren dia), mot ben tien ich
+  (<code>chrome.storage</code>). Xoa mot minh so cua tien ich <strong>khong</strong> hoi phuc duoc
+  gi: host van giu khoa, va lan poll sau van dung o <code>ALREADY_DELIVERED</code>.
+</p>
+<p class="warn">
+  Nen hoa giai o day di qua <strong>ca hai</strong> so, cho <strong>dung mot</strong> khoa ban chon,
+  va chi khi host xac nhan da go thi khoa cuc bo moi bi xoa. Bam lan mot de chon, bam lan hai de xac
+  nhan. Sau do HEAD do co the duoc danh thuc lai <strong>dung mot lan nua</strong>.
+</p>
+<ul id="burned"></ul>
+<p id="message" class="note"></p>
+<script type="module" src="options.js"></script>

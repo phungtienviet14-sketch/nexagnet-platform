@@ -54,6 +54,7 @@ của chúng ta ở `kien-truc/`**.
 | File | Là gì | Không phải gì |
 |---|---|---|
 | [`phat-trien/van-hanh/autopilot-protocol-v0.md`](phat-trien/van-hanh/autopilot-protocol-v0.md) | **Giao thức ChatGPT ↔ GitHub ↔ Claude V0** — tác nhân, 9 thông điệp có marker, máy trạng thái, quy tắc SHA/CI/rủi ro/retry/idempotency, Task Contract; bản máy đọc + validator ở `tools/autopilot-protocol/` | Chưa có orchestrator, dispatcher Claude, auto-merge hay CD — **nền tảng giao thức**, không phải tự động hoá đang chạy |
+| [`phat-trien/van-hanh/conversation-bridge-v0.md`](phat-trien/van-hanh/conversation-bridge-v0.md) | **Conversation Bridge V0** — cầu nối cục bộ CHỈ-VÀO đánh thức đúng một cuộc hội thoại ChatGPT Web từ một `REVIEW_REQUEST` hợp lệ: bốn ranh giới tin cậy, cổng xuất xứ, cổng HEAD sống, idempotency at-most-once, bảng mối đe doạ | **Chưa cài đặt thật** — dừng trước lần ghi registry đầu tiên; không đọc câu trả lời, không cổng vào, không ghi GitHub |
 
 ## Quy ước đặt tên
 
