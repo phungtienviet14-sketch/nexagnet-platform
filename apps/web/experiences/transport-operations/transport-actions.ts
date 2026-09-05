@@ -49,6 +49,18 @@ export const TRANSPORT_ACTIONS = [
   'transport.fuel.reconciliation.resolve',
   'transport.fuel.reconciliation.close',
   'transport.fuel.reconciliation.reopen',
+  /* --- `transport-settlement` (`TX-05`) --- */
+  /**
+   * BAO CAO quyet toan — tuoi no, cong no phai tra, vi the doi tac, bien truc tiep, cong don. MOT
+   * ma cho ca nam bao cao: chung tra loi cung mot cau hoi nghiep vu ("cong ty dang o dau ve tien").
+   * `TX-05` di vao HTTP o T7 va KHONG mang mot ma GHI nao — bao cao khong bao gio sua so.
+   */
+  'transport.settlement.report.read',
+  /**
+   * CHUOI CHUNG TU goc + cac ban dieu chinh/dao — tach khoi `.report.read`. Bao cao noi "con no bao
+   * nhieu"; chuoi chung tu noi "ai da sua con so nay, luc nao, vi sao". Do la mot quyen khac.
+   */
+  'transport.settlement.document.read',
   /* --- `transport-asset-compliance` (`TX-06`) --- */
   'transport.maintenance.plan.read',
   'transport.maintenance.plan.manage',
@@ -71,6 +83,16 @@ export const TRANSPORT_ACTIONS = [
   'transport.driver.self.fund.read',
   'transport.driver.self.fuel.read',
   'transport.driver.self.fuel.submit',
+  /**
+   * Khoan chi thuong CUA CHINH MINH — tach han khoi `transport.costing.expense.record`, vi ma van
+   * hanh kia ghi duoc cho bat ky chuyen/lai xe nao va chon duoc ca nguon `COMPANY_DIRECT`.
+   */
+  'transport.driver.self.expense.record',
+  /**
+   * Phieu luong CUA CHINH MINH — chi doc, va chi phieu DA CONG BO. Tach han khoi
+   * `transport.payroll.period.read` (bang luong ca doi xe) va khong mo mot duong ghi nao.
+   */
+  'transport.driver.self.payslip.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -81,6 +103,8 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fund.read',
   'transport.driver.self.fuel.read',
   'transport.driver.self.fuel.submit',
+  'transport.driver.self.expense.record',
+  'transport.driver.self.payslip.read',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
