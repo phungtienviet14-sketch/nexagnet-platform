@@ -492,19 +492,20 @@ test.describe('vo va kien truc thong tin', () => {
   });
 
   /**
-   * DAI BANG XEM TRUOC PHAI CO MAT, va phai la mot cau NGUOI DOC HIEU.
+   * KHONG CON DAI BANG SOC VANG tren dau trang.
    *
-   * Day la cau duy nhat tren man hinh noi rang ban nay khong phai ban cho khach dung. Neu no bien
-   * mat trong mot lan doi layout, khong con gi ngan mot nguoi xem tuong nghiep vu da chay du.
+   * Day la THAY DOI DUY NHAT so voi ban truoc: goi khach khong con khai
+   * `readiness.previewNotice`, nen `layout.tsx` khong ve dai bang nua. Moi thu khac cua man hinh
+   * giu nguyen. Bai nay khoa chieu do lai — ca the, ca thuoc tinh tren `body`, ca chu.
    */
-  test('dai bang xem truoc hien ra va noi ro day khong phai ban chay that', async ({ page }) => {
+  test('khong con dai bang soc vang tren dau trang', async ({ page }) => {
     await mockTransport(page);
     await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
 
-    const ribbon = page.getByRole('status').filter({ hasText: 'BẢN XEM TRƯỚC' });
-    await expect(ribbon).toBeVisible();
-    await expect(ribbon).toContainText('Dữ liệu tổng hợp');
-    await expect(ribbon).toContainText('không có dữ liệu khách hàng');
+    await expect(page.locator('.preview-ribbon')).toHaveCount(0);
+    await expect(page.locator('body[data-preview]')).toHaveCount(0);
+    await expect(page.getByText('BẢN XEM TRƯỚC')).toHaveCount(0);
   });
 
   /**
@@ -535,7 +536,9 @@ test.describe('vo va kien truc thong tin', () => {
     await mockTransport(page, 'MANAGER');
     await page.goto('/');
     // Bang bridge `GD-22` khai `MANAGER: []` co chu dich. Man hinh khong duoc bia mot anh xa quyen.
-    await expect(page.locator('#tx-main').getByRole('alert')).toContainText('Vai Quản lý chưa được cấp thao tác');
+    await expect(page.locator('#tx-main').getByRole('alert')).toContainText(
+      'Vai Quản lý chưa được cấp thao tác',
+    );
   });
 });
 

@@ -50,11 +50,7 @@
           "label": "Lương",
           "reason": "Kỳ lương cần một chính sách lương của doanh nghiệp thật; bản xem trước không bịa chính sách đó, nên mục này chỉ có bản thiết kế. Xem #170."
         }
-      ],
-      "previewNotice": {
-        "label": "BẢN XEM TRƯỚC",
-        "note": "Dữ liệu tổng hợp để xem giao diện. Không phải bản chạy thật, không phải UAT, không có dữ liệu khách hàng."
-      }
+      ]
     }
   },
   "integrations": {},
