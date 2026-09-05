@@ -247,7 +247,7 @@ export const PLAN_TOOL_SPEC: AdvisorToolSpec = {
       loi_nhan: {
         type: 'string',
         description:
-          'Cau tra loi cho khach: giai thich, tra loi cong nang/cach dung/bao hanh tu tai lieu da duyet, hoi lai thong tin con thieu. Khong chua con so tien, dieu khoan thanh toan hay cau xac nhan don.',
+          'Cau tra loi cho khach, GHEP TU CAC CAU CHEP NGUYEN VAN cua tai lieu da duyet — moi cau chep tron ven tu chu dau den dau cham cuoi, ke ca ve dieu kien ngan bang dau phay. Ban chi duoc them tieng xung ho/le phep o hai dau va noi cac cau bang dau cham. Dien y lai, chep thieu mot chu, bo ve dieu kien, hay ghep nua cau nay voi nua cau kia deu lam ca loi nhan bi bo. Khong chua con so tien, dieu khoan thanh toan hay cau xac nhan don.',
       },
     },
     ['y_dinh', 'loi_nhan'],

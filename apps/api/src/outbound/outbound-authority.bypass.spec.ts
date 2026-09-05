@@ -181,6 +181,16 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
    * Doi trong cua bo tren. Neo nguon phai HAP THU duoc bao dong gia cua bo trich (do luong
    * 04/09/2026: ~26% tai lieu da duyet lam no bao dong), neu khong thi muc 8 ca 16 hop dong
    * ("ordinary non-consequential FAQ remains usable") khong dat.
+   *
+   * PHAM VI CUA CAU TREN DA HEP LAI TU #200, va cho nay noi ro de khong ai doc nham. Bo nay CHI
+   * con chung minh mot TRICH DAN nguyen van cua tai lieu di ra duoc; mot ban DIEN Y thi khong,
+   * ke ca khi no vo hai. Do la mot mat cua danh doi, khong phai mot he qua ngoai y muon: he thong
+   * khong con phan biet "dien y vo hai" voi "dien y doi nghia", vi phep phan biet do chinh la mot
+   * bo nhan dang, va muc 3 hop dong #200 loai tru bo nhan dang khoi vai tro ranh gioi dung sai.
+   * Muc 8 ca 16 vi the duoc doc theo nghia: mot cau FAQ CO NGUON van den duoc tay khach.
+   *
+   * Do luong tren 98 tai lieu da duyet cua khach: 95/98 cau tra loi lay tu chinh tai lieu van di
+   * ra duoc, ke ca sau khi boc vo le phep. 3 tai lieu con lai co cau tra loi dung mot chu "Có".
    */
   const APPROVED = [
     'Lưu lượng gió lên tới 9700 lít/phút, 9 cấp độ gió.',
@@ -189,7 +199,22 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
     APPROVED_DOC,
   ];
 
+  /*
+   * TU #200, MOT CAU TRA LOI LA MOT TRICH DAN, KHONG PHAI MOT BAN DIEN Y.
+   *
+   * Ba cau duoi day trich TRON VEN cac menh de cua `APPROVED` o tren. Ban truoc cua bo nay dien y
+   * ("với 9 cấp độ" thay cho "9 cấp độ gió", "7 ngày đầu" thay cho "7 ngày đầu tiên nếu có
+   * lỗi từ nhà sản xuất"), va cau thu hai la mot vi du that cua chinh moi nguy: no cat mat dieu
+   * kien bao hanh. Bo `PARAPHRASES` ngay duoi khoa lai rang chung KHONG con di qua duoc.
+   */
   const FAQ_ANSWERS = [
+    'Dạ lưu lượng gió lên tới 9700 lít/phút, 9 cấp độ gió ạ.',
+    'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên nếu có lỗi từ nhà sản xuất ạ.',
+    'Dạ máy lọc dùng màng lọc HEPA, khử mùi bằng than hoạt tính ạ.',
+  ];
+
+  /** Cung ba cau do, dien y lai — moi cau doi mot chi tiet cua tai lieu. */
+  const PARAPHRASES = [
     'Dạ lưu lượng gió lên tới 9700 lít/phút với 9 cấp độ ạ.',
     'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu ạ.',
     'Dạ máy dùng màng lọc HEPA và than hoạt tính ạ.',
@@ -205,6 +230,30 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
       expect(decideOutboundAuthority(composition, { grants: [] }), answer).toMatchObject({
         sendable: true,
         reason: 'NARRATIVE_ONLY_COMPOSITION',
+      });
+    }
+  });
+
+  /*
+   * #200 — BAN DIEN Y KHONG CON DI QUA DUOC, KE CA KHI NO VO HAI.
+   *
+   * Day la ranh gioi ma ban nay ve lai: he thong khong con phan biet "dien y vo hai" voi "dien y
+   * doi nghia", vi phep phan biet do chinh la mot bo nhan dang, va muc 3 hop dong #200 loai tru
+   * bo nhan dang khoi vai tro ranh gioi dung sai. Cau thu hai trong bo nay cat mat dieu kien bao
+   * hanh ("nếu có lỗi từ nhà sản xuất"), tuc no KHONG vo hai.
+   */
+  it('#200: ban dien y cua chinh tai lieu do khong con den tay khach', () => {
+    for (const answer of PARAPHRASES) {
+      const composition = compose(plan([], answer), NO_BUSINESS_FACTS, {
+        systemSources: APPROVED,
+      });
+
+      expect(composition.narrative, answer).toMatchObject({
+        reason: 'NARRATIVE_NOT_SOURCE_BOUND',
+      });
+      expect(decideOutboundAuthority(composition, { grants: [] }), answer).toMatchObject({
+        sendable: false,
+        reason: 'COMPOSITION_EMPTY',
       });
     }
   });

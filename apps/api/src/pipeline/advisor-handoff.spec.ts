@@ -123,7 +123,8 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
   it('tu tra loi cau hoi san pham khi LLM da soan xong, du cong tat dinh doi chuyen Sale', async () => {
     const { pipeline, outbound } = await build(
       new StubAdvisor({
-        text: 'Dạ máy có đèn ngủ ạ, đèn khí quyển học dùng làm đèn trang trí buổi tối ạ.',
+        // #200: don vi rang buoc la CA CAU, nen hai cau nguon duoc noi bang DAU CHAM.
+        text: 'Dạ máy có đèn ngủ ạ. Đèn khí quyển học dùng làm đèn trang trí buổi tối ạ.',
         usedTools: ['tra_cuu_san_pham', 'tra_cuu_tai_lieu'],
         handoff: false,
         authority: { grants: [] },

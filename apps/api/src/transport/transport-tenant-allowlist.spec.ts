@@ -55,13 +55,23 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
    * — no la ngon ngu noi bo tren be mat khach hang — nen CHO NEO cua bai kiem phai doi.
    *
    * Tinh chat can giu KHONG doi: khong the lang le them mot goi vao danh sach mien tru roi tro no
-   * vao mot khach that. Cho neo moi la `integrations` + `demoTenant`, va no CHAT HON cho cu vi no
-   * khong the thoa man bang mot cau van: mot goi duoc mien tru khong khai mot adapter nao (Zalo,
-   * ERP, nguon noi dung) va khong co buoc gieo du lieu nao. Ca ba goi khach that deu khai — nen
-   * keo mot goi khach that vao danh sach nay se lam bai nay DO ngay, khong can ai nho viet them
-   * mot cau tu khai.
+   * vao mot khach that. Cho neo moi la `integrations` + `demoTenant`.
+   *
+   * BAI NAY KIEM DUNG MOT DIEU, va ten cua no noi dung mot dieu do: goi duoc mien tru khong khai
+   * mot adapter nao (Zalo, ERP, nguon noi dung). Ca ba goi khach that deu khai it nhat mot — bai
+   * `moi goi khach that deu khai it nhat mot adapter` o duoi la nua kia cua cap — nen keo mot goi
+   * khach that vao danh sach nay lam bai nay DO ngay.
+   *
+   * `bootstrap` va `smoke` DA TUNG duoc kiem o day va da duoc BO CO Y. Ca hai la su that ve goi
+   * HOM NAY chu khong phai tinh chat cua mot goi mau: T8 (#90) dua vao mot buoc gieo du lieu tat
+   * dinh, va luc do `bootstrap: {}` tro thanh sai. Neo mot cong bao ve vao mot su that sap doi la
+   * cach lam ra mot bai test phai xoa.
+   *
+   * Ten bai va cau chu o day DA TUNG con nhac "buoc gieo du lieu" sau khi phep kiem do bi bo —
+   * tuc chung hua mot dieu ma than bai khong con kiem. Mot bai test noi qua pham vi cua chinh no
+   * la mot bai test lam nguoi doc tin nham, nen ca hai da duoc cat lai cho dung.
    */
-  it('goi duoc phep khong noi vao mot adapter hay buoc gieo du lieu nao', () => {
+  it('goi duoc phep khong khai mot adapter nao', () => {
     for (const slug of TRANSPORT_PREVIEW_TENANTS) {
       process.env.TENANT = slug;
       delete process.env.TENANT_DIR;
@@ -70,17 +80,6 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
       const config = loadTenantConfig();
       expect(config.slug, slug).toBe(slug);
       expect(Object.keys(config.integrations), slug).toEqual([]);
-
-      /*
-       * `bootstrap` va `smoke` DA TUNG duoc kiem o day, va da duoc BO CO Y.
-       *
-       * Ca hai la su that ve goi HOM NAY chu khong phai tinh chat cua mot goi mau: T8 (#90) dua vao
-       * mot buoc gieo du lieu tat dinh, va luc do `bootstrap: {}` tro thanh sai — mot bai test khoa
-       * lai dieu do se chan dung viec ma hop dong doi phai lam. Neo mot cong bao ve vao mot su that
-       * sap doi la cach lam ra mot bai test phai xoa; nen cho neo con lai la `integrations` (goi mau
-       * khong noi ra he ngoai nao) cong voi `demoTenant` ngay duoi — hai tinh chat DUNG ca truoc va
-       * sau T8.
-       */
     }
   });
 

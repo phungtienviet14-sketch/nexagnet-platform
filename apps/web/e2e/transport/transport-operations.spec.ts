@@ -632,22 +632,38 @@ test.describe('vo va kien truc thong tin', () => {
   });
 
   /**
-   * DAI BANG XEM TRUOC PHAI CO MAT, va phai la mot cau NGUOI DOC HIEU.
+   * BE MAT KHACH KHONG NOI NGON NGU NOI BO — quyet dinh cua chu so huu tren #202 / #196.
    *
-   * Day la cau duy nhat tren man hinh noi rang ban nay khong phai ban cho khach dung. Neu no bien
-   * mat trong mot lan doi layout, khong con gi ngan mot nguoi xem tuong nghiep vu da chay du.
+   * Bai nay khoa HAI chieu cua cung mot yeu cau, va ca hai deu can:
+   *
+   *  · CHIEU CHU — `innerText` khong duoc chua mot tu nao trong bo tu vung bi cam. Bo tu vung do
+   *    chep tu quyet dinh cua chu so huu, khong phai do bai test tu nghi ra.
+   *  · CHIEU CAU TRUC — `.preview-ribbon` va `body[data-preview]` phai vang mat. Giu lai tu
+   *    `5f47e12`, va no KHONG thua: mot dai bang ve ra bang icon, bang anh, hay bang chu bi
+   *    `visibility:hidden` se lot qua chieu chu ma van con nguyen trong DOM.
+   *
+   * VA MOT CHIEU THU BA — khong ma so Issue/PR nao duoc ro ra man hinh. Truoc day goi khach mang
+   * nhung cau nhu "Xem #168" trong `blockedCapabilities`; do la ghi chu ky thuat noi bo, va no
+   * tung chay THAT tren stack cong khai.
    */
   test('KHONG con mot chu nao ve trang thai noi bo tren be mat khach', async ({ page }) => {
     await mockTransport(page);
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
+    // Chieu CAU TRUC — mot dai bang khong co chu van la mot dai bang.
+    await expect(page.locator('.preview-ribbon')).toHaveCount(0);
+    await expect(page.locator('body[data-preview]')).toHaveCount(0);
+
     const body = (await page.locator('body').innerText()).toLowerCase();
     for (const forbidden of [
       'bản xem trước',
       'xem trước',
+      'vt mẫu',
       'preview',
       'uat',
+      'synthetic',
+      'demo tenant',
       'chờ api',
       'runtime-proven',
       'customer-ready',
@@ -657,11 +673,21 @@ test.describe('vo va kien truc thong tin', () => {
     ]) {
       expect(body, forbidden).not.toContain(forbidden);
     }
+
+    // Ma so Issue/PR — `#168`, `#170`, … Neo bang KHUON chu khong bang danh sach, vi danh sach chi
+    // bat duoc nhung so ai do da nho viet vao no.
+    expect(body, 'ma so Issue/PR').not.toMatch(/#\d{2,}/);
   });
 
   /**
-   * Hai muc cua T6 hien ra thi phai NOI THAT rang chung chua noi vao may chu — khong duoc bay mot
-   * bang rong trong nhu da tai xong, va tuyet doi khong duoc bia mot con so nao.
+   * Muc Bao duong NOI VAO read model that — va bai nay kiem dung cai do, khong kiem "co chu tren
+   * man hinh".
+   *
+   * Ba khang dinh duoi day chon co y: BIEN SO (`29H-123.45`) chung minh man hinh dich `vehicleId`
+   * ra nhan nghiep vu thay vi in mot UUID; `Quá hạn` chung minh tinh trang la chu tieng Viet do
+   * may chu suy ra chu khong phai mot khoa ky thuat; `Thay dầu máy` chung minh hang thuc su den
+   * tu du lieu. Va `not.toContainText('chưa nối')` khoa chieu nguoc lai — cau xin loi cu khong
+   * duoc quay lai bang mot lan revert.
    */
   test('muc Bao duong VE RA du lieu that cua may chu, khong phai mot cau xin loi', async ({
     page,

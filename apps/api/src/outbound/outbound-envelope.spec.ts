@@ -63,7 +63,7 @@ describe('#189 G5 — vo hoi thoai khong duoc mang mot nghia nghiep vu nao', () 
 
 describe('#189 G5 — tu ngu noi dung phai co mat trong nguon he thong cua luot', () => {
   const APPROVED = [
-    'Ghế Felix có tựa lưng lưới, khung thép sơn tĩnh điện.',
+    'Ghế Felix có tựa lưng lưới. Khung thép sơn tĩnh điện.',
     'Lưu lượng gió lên tới 9700 lít/phút, 9 cấp độ gió.',
   ];
 
@@ -108,7 +108,7 @@ describe('#189 G5 — tu ngu noi dung phai co mat trong nguon he thong cua luot'
    */
   it('cau tra loi lay tu chinh tai lieu da duyet van di duoc toi khach', () => {
     const composition = compose(
-      plan([], 'Dạ ghế Felix có tựa lưng lưới, khung thép sơn tĩnh điện ạ.'),
+      plan([], 'Dạ ghế Felix có tựa lưng lưới. Khung thép sơn tĩnh điện ạ.'),
       NO_BUSINESS_FACTS,
       { systemSources: APPROVED },
     );
@@ -177,7 +177,7 @@ describe('#189 G5 — quet lai o diem nghen gui (phong thu chieu sau)', () => {
    */
   it('ghep them mot cau vao van ban cuoi -> diem nghen gui tu choi', () => {
     const composition = compose(plan([], 'Dạ ghế Felix có tựa lưng lưới ạ.'), NO_BUSINESS_FACTS, {
-      systemSources: ['Ghế Felix có tựa lưng lưới, khung thép sơn tĩnh điện.'],
+      systemSources: ['Ghế Felix có tựa lưng lưới. Khung thép sơn tĩnh điện.'],
     });
     const tampered = {
       ...composition,
