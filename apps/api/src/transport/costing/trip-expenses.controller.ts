@@ -44,6 +44,23 @@ export class TripExpensesController {
     return this.guard(() => this.read.tripCostBreakdown(tripId));
   }
 
+  /**
+   * DANH MUC NHOM CHI PHI cho o chon cua be mat van hanh — `#168 B4`.
+   *
+   * Doi ban cua `GET /transport/me/expense-categories`, doc cung mot cau hinh. HAI route chu khong
+   * mot, vi bang phan quyen la mot PHAN HOACH: `OPERATIONS_ACTIONS` duoc dinh nghia la "moi ma TRU
+   * pham vi lai xe", nen khong ma nao nam duoc o ca hai ben. Nhap chung lai thanh mot route se buoc
+   * pha cau truc do de phuc vu mot danh sach chuoi.
+   *
+   * `transport.costing.expense.read` chu khong mot ma moi: ai doc duoc chi phi cua chuyen thi doc
+   * duoc danh muc phan loai chung.
+   */
+  @Get('expense-categories')
+  @RequiresTransportAction('transport.costing.expense.read')
+  categories(): { categories: readonly string[]; unrestricted: boolean } {
+    return this.costing.expenseCatalogue();
+  }
+
   @Post('expenses')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.costing.expense.record')

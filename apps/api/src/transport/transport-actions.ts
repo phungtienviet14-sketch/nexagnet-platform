@@ -83,6 +83,31 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.fuel.reconciliation.reopen',
 
+  /* --- `transport-settlement` (`TX-05`) --- */
+  /**
+   * BAO CAO quyet toan — AR aging, cong no phai tra, vi the doi tac, bien truc tiep, cong don.
+   *
+   * MOT ma cho ca nam bao cao, khong nam ma: chung tra loi cung mot cau hoi nghiep vu ("cong ty
+   * dang o dau ve tien"), va khong nguon nao noi rang mot nguoi duoc xem tuoi no ma khong duoc xem
+   * cong no phai tra. Chia bang phan quyen theo tung endpoint la chia theo hinh dang cua code, chu
+   * khong theo hinh dang cua cong viec.
+   *
+   * `TX-05` di vao HTTP o T7 va KHONG mang mot ma GHI nao. `SettlementService` co day du lenh ghi
+   * (ghi nhan cong no, dieu chinh, dao, phan bo, dieu khoan, ky, quy tac hoa hong), nhung khong
+   * lenh nao trong so do da tung duoc phoi ra hay duoc gan quyen — va #168 §2.B1 doi dung
+   * *"expose only those commands that are already defined and permissioned"*, kem
+   * *"Reporting never mutates"*. Cap quyen GHI tai chinh o day se la mot quyet dinh chinh sach ma
+   * chua ai quyet.
+   */
+  'transport.settlement.report.read',
+  /**
+   * CHUOI CHUNG TU goc + cac ban dieu chinh/dao cua no — tach khoi `.report.read`.
+   *
+   * Mot bao cao noi "con no bao nhieu"; mot chuoi chung tu noi "ai da sua con so nay, luc nao, va
+   * vi sao". Cai thu hai la LICH SU SUA DOI tai chinh, va do dung nghia la mot quyen khac.
+   */
+  'transport.settlement.document.read',
+
   /* --- `transport-asset-compliance` (`TX-06`) --- */
   'transport.maintenance.plan.read',
   'transport.maintenance.plan.manage',
@@ -129,6 +154,36 @@ export const TRANSPORT_ACTIONS = [
   /** PHIEU DO DAU CUA CHINH MINH — nop va xem. Danh tinh den tu phien, khong tu than yeu cau. */
   'transport.driver.self.fuel.read',
   'transport.driver.self.fuel.submit',
+  /**
+   * KHOAN CHI THUONG CUA CHINH MINH — lai xe tu ghi mot khoan da tra bang tien tam ung.
+   *
+   * TACH HAN khoi `transport.costing.expense.record`, va do la ca diem. Ma kia la quyen VAN HANH:
+   * no ghi duoc cho BAT KY chuyen nao, BAT KY lai xe nao, va chon duoc ca nguon tien
+   * (`COMPANY_DIRECT` — tien cong ty tra thang). Ma nay chi lam duoc mot viec: ghi mot khoan lay
+   * tu quy CUA CHINH NGUOI DANG DANG NHAP, tren mot chuyen ma chinh ho duoc phan cong.
+   *
+   * Cap `transport.costing.expense.record` cho lai xe de "tien cho nhanh" se cho ho ghi chi phi vao
+   * chuyen cua dong nghiep va rut tien tu quy cua nguoi khac. Cong that van nam o `CostingService`
+   * (`requireDriverAssignedToTrip`); ma nay chi bao dam be mat lai xe khong bao gio cham toi duong
+   * van hanh.
+   */
+  'transport.driver.self.expense.record',
+  /**
+   * PHIEU LUONG CUA CHINH MINH — lai xe doc lich su luong da cong bo cua chinh ho (`#168 B8`).
+   *
+   * TACH HAN khoi `transport.payroll.period.read`, va do la ca diem. Ma kia la quyen VAN HANH: no
+   * doc duoc ky luong, lan chay, va phieu cua BAT KY lai xe nao — tuc bang luong ca doi xe. Cap no
+   * cho lai xe de "tien cho nhanh" se cho moi nguoi doc luong cua dong nghiep.
+   *
+   * Ma nay cung KHONG mo mot duong ghi nao. Duyet (`transport.payslip.approve`), chi tra
+   * (`.pay`) va phat phieu bu (`.correct`) deu nam ben van hanh, va khong ma nao trong so do co
+   * mot bien the "cua chinh minh": mot nguoi tu duyet phieu luong cua chinh minh la dung cai ma
+   * kiem soat noi bo sinh ra de chan.
+   *
+   * Cong THAT nam o `WorkforceReadService` (`Driver.authUserId` + quy tac cong bo `DRAFT`); ma nay
+   * chi bao dam be mat lai xe khong bao gio cham toi duong van hanh.
+   */
+  'transport.driver.self.payslip.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -139,6 +194,8 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fund.read',
   'transport.driver.self.fuel.read',
   'transport.driver.self.fuel.submit',
+  'transport.driver.self.expense.record',
+  'transport.driver.self.payslip.read',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */

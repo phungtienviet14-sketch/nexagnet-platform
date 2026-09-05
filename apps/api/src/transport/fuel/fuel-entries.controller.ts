@@ -116,6 +116,26 @@ export class FuelEntriesController {
     return this.guard(() => this.fuel.rejectFuelEntry(id, reason, transportActorOf(request)));
   }
 
+  /**
+   * MO LAI mot phieu DA BI TU CHOI: `REJECTED -> DECLARED` — `#168 B5`.
+   *
+   * Duong cua KE TOAN: lai xe dua lai phieu giay, hoac chinh nguoi duyet bam nham nut tu choi.
+   * Duong cua LAI XE nam o `DriverFuelController` va di kem phep kiem quyen so huu.
+   *
+   * `transport.fuel.entry.verify` chu khong mot ma moi: dua mot phieu tro lai hang doi duyet la mot
+   * thao tac DUYET — no dao nguoc dung ket qua ma `.verify`/`.reject` vua tao ra — chu khong phai
+   * mot lan nop moi.
+   *
+   * `FuelService.resubmitFuelEntry` da hien thuc san canh nay tu T4, nen o day khong co mot mau
+   * vong doi THU HAI, chi co mot duong HTTP toi mau duy nhat da co.
+   */
+  @Post('entries/:id/resubmit')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.fuel.entry.verify')
+  resubmit(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.guard(() => this.fuel.resubmitFuelEntry(id, transportActorOf(request)));
+  }
+
   private parse<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {
     const parsed = schema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(firstIssue(parsed.error));

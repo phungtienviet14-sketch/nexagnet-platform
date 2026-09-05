@@ -95,10 +95,36 @@ describe('Vong doi chuyen', () => {
   });
 
   // TRIP-CORE-004 (nhanh huy — xem trip.service.spec.ts cho phan "khong xoa cung")
-  it('TRIP-CORE-004: huy duoc tu PLANNED, IN_TRANSIT va DELIVERED', () => {
+  //
+  // Bai nay TRUOC `#168 B6` khang dinh `.allowed === true`, tuc no ghi lai CHINH LO HONG: duong
+  // chuyen trang thai chung dua duoc mot chuyen sang `CANCELLED`. Duong huy that van con nguyen o
+  // `TripService.cancel()`; cai bi dong la duong VONG.
+  it('TRIP-CORE-004 / #168 B6: huy KHONG di qua duong chuyen trang thai chung', () => {
     for (const from of ['PLANNED', 'IN_TRANSIT', 'DELIVERED'] as const) {
-      expect(evaluateTripTransition(from, 'CANCELLED', internalRun).allowed).toBe(true);
+      expect(evaluateTripTransition(from, 'CANCELLED', internalRun)).toEqual({
+        allowed: false,
+        reason: 'TRIP_CANCEL_REQUIRES_DEDICATED_PATH',
+      });
     }
+  });
+
+  it('#168 B6: ly do noi ro la "sai duong", khong phai "canh khong ton tai"', () => {
+    // Phan biet nay la ca diem. `PLANNED -> CANCELLED` LA mot canh hop le cua do thi, nen tra
+    // `TRANSITION_NOT_PERMITTED` se noi doi ve mo hinh va lam nguoi doc di tim mot canh khong thieu.
+    expect(evaluateTripTransition('PLANNED', 'CANCELLED', internalRun).reason).toBe(
+      'TRIP_CANCEL_REQUIRES_DEDICATED_PATH',
+    );
+    expect(evaluateTripTransition('PLANNED', 'DELIVERED', internalRun).reason).toBe(
+      'TRANSITION_NOT_PERMITTED',
+    );
+  });
+
+  it('#168 B6: chuyen DA huy van tra diem-cuoi, khong tra ma cua duong huy', () => {
+    // Thu tu kiem tra phai giu: `isTerminalTripStatus(from)` chay TRUOC cong huy, nen mot chuyen da
+    // huy khong bao gio duoc mach nuoc "hay dung duong huy rieng".
+    expect(evaluateTripTransition('CANCELLED', 'CANCELLED', internalRun).reason).toBe(
+      'TRIP_ALREADY_TERMINAL',
+    );
   });
 
   describe('dieu kien nguon luc de lan banh — phan biet theo LOAI chuyen', () => {

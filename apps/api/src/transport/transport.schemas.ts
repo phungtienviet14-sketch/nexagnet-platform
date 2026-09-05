@@ -43,6 +43,14 @@ const businessDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'ngay nghiep vu phai co dang YYYY-MM-DD');
 
+/**
+ * XUAT ra cho `settlement/settlement.schemas.ts` — `#168 B1`.
+ *
+ * Go lai cung mot bieu thuc o tep khac se cho ra hai dinh nghia cua "ngay nghiep vu", va chung se
+ * lech nhau dung vao lan dau tien ai do noi long mot ben.
+ */
+export const businessDateSchema = businessDate;
+
 export const createVehicleSchema = z
   .object({
     registrationPlate: nonEmpty.max(20),
@@ -130,7 +138,28 @@ export const assignTripSchema = z
   })
   .strict();
 
-export const transitionTripSchema = z.object({ to: z.enum(TRIP_STATUSES) }).strict();
+/**
+ * Duong CHUYEN TRANG THAI chung — KHONG nhan `CANCELLED` (`#168 B6`).
+ *
+ * Tang thu hai, khong phai tang duy nhat: cong that nam o `evaluateTripTransition()`, vi mot cong
+ * dat o schema chi bao ve nhung nguoi goi di qua HTTP. Dat ca hai vi chung tra loi hai cau khac
+ * nhau — schema noi "truong nay khong nhan gia tri do" (400, doc duoc ngay tren giao dien), con ham
+ * mien noi "huy phai di qua duong rieng" (403 kem `reason` co kieu, dung cho MOI nguoi goi).
+ *
+ * Huy di qua `POST /transport/trips/:id/cancel`: no doi `transport.trip.cancel` va bat buoc mot ly
+ * do, roi ghi `cancelledAt`/`cancellationReason`.
+ *
+ * Loc tu `TRIP_STATUSES` chu khong go tay bon chuoi: them mot trang thai moi vao vong doi ma quen
+ * cho vao day se lam route chet lang le, con o dang nay thi no tu co mat.
+ */
+const TRANSITIONABLE_TRIP_STATUSES = TRIP_STATUSES.filter((status) => status !== 'CANCELLED') as [
+  (typeof TRIP_STATUSES)[number],
+  ...(typeof TRIP_STATUSES)[number][],
+];
+
+export const transitionTripSchema = z
+  .object({ to: z.enum(TRANSITIONABLE_TRIP_STATUSES) })
+  .strict();
 
 export const cancelTripSchema = z.object({ reason: nonEmpty.max(500) }).strict();
 
