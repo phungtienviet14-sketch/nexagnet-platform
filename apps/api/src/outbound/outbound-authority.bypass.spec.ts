@@ -13,6 +13,7 @@ import {
   pricedFacts,
   pricedOrder,
   quoteFacts,
+  tellableAll,
 } from './__tests__/composition.fixture.js';
 
 /**
@@ -194,7 +195,7 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
    */
   const APPROVED = [
     'Lưu lượng gió lên tới 9700 lít/phút, 9 cấp độ gió.',
-    'Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên nếu có lỗi từ nhà sản xuất.',
+    'Màng lọc thay sau 2000 giờ chạy nếu dùng ở chế độ tự động.',
     'Máy lọc dùng màng lọc HEPA, khử mùi bằng than hoạt tính.',
     APPROVED_DOC,
   ];
@@ -209,21 +210,21 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
    */
   const FAQ_ANSWERS = [
     'Dạ lưu lượng gió lên tới 9700 lít/phút, 9 cấp độ gió ạ.',
-    'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên nếu có lỗi từ nhà sản xuất ạ.',
+    'Dạ màng lọc thay sau 2000 giờ chạy nếu dùng ở chế độ tự động ạ.',
     'Dạ máy lọc dùng màng lọc HEPA, khử mùi bằng than hoạt tính ạ.',
   ];
 
   /** Cung ba cau do, dien y lai — moi cau doi mot chi tiet cua tai lieu. */
   const PARAPHRASES = [
     'Dạ lưu lượng gió lên tới 9700 lít/phút với 9 cấp độ ạ.',
-    'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu ạ.',
+    'Dạ màng lọc thay sau 2000 giờ chạy ạ.',
     'Dạ máy dùng màng lọc HEPA và than hoạt tính ạ.',
   ];
 
   it('cau tra loi lay tu tai lieu da duyet van den duoc khach', () => {
     for (const answer of FAQ_ANSWERS) {
       const composition = compose(plan([], answer), NO_BUSINESS_FACTS, {
-        systemSources: APPROVED,
+        evidence: tellableAll(APPROVED),
       });
 
       expect(composition.narrative, answer).toMatchObject({ admitted: true });
@@ -245,7 +246,7 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
   it('#200: ban dien y cua chinh tai lieu do khong con den tay khach', () => {
     for (const answer of PARAPHRASES) {
       const composition = compose(plan([], answer), NO_BUSINESS_FACTS, {
-        systemSources: APPROVED,
+        evidence: tellableAll(APPROVED),
       });
 
       expect(composition.narrative, answer).toMatchObject({
@@ -281,7 +282,7 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
   it('cung cau tra loi do nhung viet KHONG DAU -> khong con truy nguyen duoc tu ngu, bi bo', () => {
     for (const answer of FAQ_ANSWERS.map(stripAccents)) {
       const composition = compose(plan([], answer), NO_BUSINESS_FACTS, {
-        systemSources: APPROVED,
+        evidence: tellableAll(APPROVED),
       });
 
       expect(composition.narrative, answer).toEqual({
@@ -295,7 +296,7 @@ describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan
     const composition = compose(
       plan([], 'Dạ lưu lượng gió lên tới 9800 lít/phút ạ.'),
       NO_BUSINESS_FACTS,
-      { systemSources: APPROVED },
+      { evidence: tellableAll(APPROVED) },
     );
 
     expect(composition.narrative).toEqual({ admitted: false, reason: 'NUMERAL_NOT_GROUNDED' });

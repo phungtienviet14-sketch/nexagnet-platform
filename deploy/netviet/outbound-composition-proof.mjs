@@ -43,10 +43,12 @@ function check(name, ok, detail) {
 let composer;
 let authority;
 let facts;
+let evidence;
 try {
   composer = await import(`${DIST}/outbound/outbound-composer.js`);
   authority = await import(`${DIST}/outbound/outbound-authority.js`);
   facts = await import(`${DIST}/outbound/outbound-facts.js`);
+  evidence = await import(`${DIST}/outbound/source-evidence.js`);
 } catch (error) {
   emit('fail', 'SHIPPED_DIST_NOT_IMPORTABLE', { dist: DIST, error: String(error) });
   process.exit(1);
@@ -62,6 +64,14 @@ const {
   pinnedOutboundVerdict,
 } = authority;
 const { NO_BUSINESS_FACTS, mergeBusinessFacts } = facts;
+const {
+  businessAuthorityEvidence,
+  documentEvidence,
+  documentSourceId,
+  evidenceVersion,
+  parsePinnedEvidence,
+  stalePins,
+} = evidence;
 
 /* ------------------------------------------------------------------ *
  * DU KIEN TONG HOP — khong mot dong nao la du lieu khach that
@@ -112,9 +122,34 @@ const plan = (requestedBlocks, narrative = '', kind = 'faq') => ({
   narrative,
 });
 
+/*
+ * KHACH CUA BO CHUNG: bat ky gia tri nao cung duoc, mien la CUNG mot gia tri o hai dau — do
+ * chinh la thu dang duoc kiem (Issue #205 muc 4).
+ */
+const TENANT = 'proof-tenant';
+
+/** Mot TAI LIEU DA DUYET. `eligible` mac dinh `true`; dat `false`/`undefined` de thu fail-closed. */
+const doc = (text, options = {}) =>
+  documentEvidence(
+    documentSourceId('faq', `proof:${evidenceVersion(text)}`, 'a'),
+    text,
+    { tenant: options.tenant ?? TENANT, productSku: options.sku ?? null },
+    // `in` chu khong `=== undefined`: mot ban ghi CO Y khong tuyen bo phai giu nguyen trang thai
+    // do, neu khong thi phep thu fail-closed se tu bien thanh phep thu duong tinh.
+    'eligible' in options ? options.eligible : true,
+  );
+
+/** Bang chung THUOC THAM QUYEN — khong bao gio thanh mot menh de chon duoc. */
+const authorityDoc = (text) =>
+  businessAuthorityEvidence(`quote:proof:${evidenceVersion(text)}`, text, {
+    tenant: TENANT,
+    productSku: null,
+  });
+
 const compose = (outboundPlan, patch = {}, context = {}) =>
   composeOutbound(outboundPlan, mergeBusinessFacts(NO_BUSINESS_FACTS, patch), {
-    systemSources: [APPROVED_DOC],
+    evidence: [doc(APPROVED_DOC)],
+    tenant: TENANT,
     customerText: '',
     authority: { grants: [] },
     ...context,
@@ -244,16 +279,17 @@ const NO_GRANT = { grants: [] };
  * #200 — GHEP LAI TU NGU CUA NGUON KHONG TAO RA MOT MENH DE MOI
  * ------------------------------------------------------------------ */
 
-const SAME_SOURCE = 'Khach hang thanh toan ngay khi nhan hang. Hang ban xong khong duoc doi tra.';
-const SOURCE_A = 'Khach hang thanh toan ngay khi nhan hang.';
-const SOURCE_B = 'Hang ban xong khong duoc doi tra.';
+const SAME_SOURCE =
+  'May loc bui min ngay khi bat nguon. Mang loc dung het mot nam khong duoc rua lai.';
+const SOURCE_A = 'May loc bui min ngay khi bat nguon.';
+const SOURCE_B = 'Mang loc dung het mot nam khong duoc rua lai.';
 
 {
   // Muc 5 ca 1 — chinh phan vi du cua hop dong: doi ky han thanh toan bang chu cua chinh nguon.
   const composition = compose(
-    plan([], 'Khach hang thanh toan khi ban xong.'),
+    plan([], 'May loc bui min khi dung het mot nam.'),
     {},
-    { systemSources: [SAME_SOURCE] },
+    { evidence: [doc(SAME_SOURCE)] },
   );
   const verdict = decideOutboundAuthority(composition, NO_GRANT);
   check(
@@ -269,9 +305,9 @@ const SOURCE_B = 'Hang ban xong khong duoc doi tra.';
 {
   // Muc 5 ca 2 — cung cau do, nhung hai menh de den tu HAI lan tra cuu khac nhau.
   const composition = compose(
-    plan([], 'Khach hang thanh toan khi ban xong.'),
+    plan([], 'May loc bui min khi dung het mot nam.'),
     {},
-    { systemSources: [SOURCE_A, SOURCE_B] },
+    { evidence: [doc(SOURCE_A), doc(SOURCE_B)] },
   );
   const verdict = decideOutboundAuthority(composition, NO_GRANT);
   check(
@@ -286,9 +322,9 @@ const SOURCE_B = 'Hang ban xong khong duoc doi tra.';
 {
   // Dao nguoc bang dung nhung tu ma vo hoi thoai cua G5 tang khong (`khong`, `duoc`).
   const composition = compose(
-    plan([], 'Hang ban xong duoc doi tra a.'),
+    plan([], 'Mang loc dung het mot nam duoc rua lai a.'),
     {},
-    { systemSources: [SAME_SOURCE] },
+    { evidence: [doc(SAME_SOURCE)] },
   );
   check(
     '#200 ca 3 — bo chu phu dinh cua nguon -> khong den tay khach',
@@ -300,9 +336,9 @@ const SOURCE_B = 'Hang ban xong khong duoc doi tra.';
 {
   // DOI TRONG: cung tap nguon do, mot cau TRICH TRON VEN van gui duoc, va van ban la cua NGUON.
   const composition = compose(
-    plan([], 'Dạ Khach hang thanh toan ngay khi nhan hang ạ.'),
+    plan([], 'Dạ May loc bui min ngay khi bat nguon ạ.'),
     {},
-    { systemSources: [SAME_SOURCE] },
+    { evidence: [doc(SAME_SOURCE)] },
   );
   const verdict = decideOutboundAuthority(composition, NO_GRANT);
   check(
@@ -310,7 +346,7 @@ const SOURCE_B = 'Hang ban xong khong duoc doi tra.';
     composition.narrative.admitted === true &&
       verdict.sendable === true &&
       verdict.reason === 'NARRATIVE_ONLY_COMPOSITION' &&
-      composition.text.includes('Khach hang thanh toan ngay khi nhan hang'),
+      composition.text.includes('May loc bui min ngay khi bat nguon'),
     `verdict=${verdict.reason} text=${JSON.stringify(composition.text)}`,
   );
 }
@@ -318,11 +354,11 @@ const SOURCE_B = 'Hang ban xong khong duoc doi tra.';
 {
   // Chang 3c: mot menh de ghep them vao van ban CUOI bang chinh chu da ghim van bi tu choi.
   const composition = compose(
-    plan([], 'Dạ Khach hang thanh toan ngay khi nhan hang ạ.'),
+    plan([], 'Dạ May loc bui min ngay khi bat nguon ạ.'),
     {},
-    { systemSources: [SOURCE_A] },
+    { evidence: [doc(SOURCE_A)] },
   );
-  const tampered = { ...composition, text: `${composition.text}\nKhach hang nhan hang ngay.` };
+  const tampered = { ...composition, text: `${composition.text}\nMay bat nguon loc ngay.` };
   const verdict = decideOutboundAuthority(tampered, NO_GRANT);
   check(
     '#200 ca 5 — van ban cuoi bi ghep them mot menh de -> KHONG gui',
@@ -436,6 +472,208 @@ const SOURCE_B = 'Hang ban xong khong duoc doi tra.';
     deterministicComposition('Xac nhan don').mode === 'deterministic_document' &&
       outboundFingerprint('a  b') === outboundFingerprint(' a b '),
     'deterministic_document + dau bo qua khoang trang',
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * #205 — QUYEN CHON: cau dung nguon chua du, phai dung quyen cua luot
+ * ------------------------------------------------------------------ */
+
+/* Cau GIA that trong kho tai lieu da duyet cua khach (`faq:cr022:skj-cr022:021`). */
+const PRICE_DOC = 'Gia niem yet: 12.000.000 VND. Gia ban le: 8.500.000 VND.';
+/* Bao hanh + 1 doi 1 — mot QUYEN LOI cua khach (`faq:bb:bb-grey:017`). */
+const WARRANTY_DOC = 'Bao hanh 3 nam, 1 doi 1 trong 7 ngay dau tien.';
+const DEBT_DOC = 'Dai ly duoc thanh toan cong no trong 45 ngay.';
+const COMMIT_DOC = 'Don cua minh da duoc chot.';
+/* Thong so ky thuat — con so lon nhung KHONG phai tien (`faq:bb:bb-grey:011`). */
+const SPEC_DOC = 'Luu luong gio len toi 9700 lit/phut.';
+
+{
+  // A — cau gia cua tai lieu, KHONG mot grant nao.
+  const composition = compose(
+    plan([], 'Dạ Gia ban le: 8.500.000 VND ạ.'),
+    {},
+    {
+      evidence: [doc(PRICE_DOC)],
+    },
+  );
+  const verdict = decideOutboundAuthority(composition, NO_GRANT);
+  check(
+    '#205 A — gia trong tai lieu da duyet khong phai tham quyen gia',
+    composition.narrative.admitted === false &&
+      composition.text.includes('8.500.000') === false &&
+      verdict.sendable === false,
+    `narrative=${composition.narrative.reason} verdict=${verdict.reason}`,
+  );
+}
+
+{
+  // B — cung cau do, nhung luot NAY co bang gia tat dinh. Con so tat dinh phai thang.
+  const grants = mergeAuthority(grantsFromPricedOrder(pricedOrder));
+  const composition = compose(
+    plan(['order_pricing'], 'Dạ Gia ban le: 8.500.000 VND ạ.'),
+    { pricedOrder },
+    { evidence: [doc(PRICE_DOC)], authority: grants },
+  );
+  const verdict = decideOutboundAuthority(composition, grants);
+  check(
+    '#205 B — tai lieu KHONG de bep duoc bang gia dang chay',
+    composition.narrative.admitted === false &&
+      composition.text.includes('8.500.000') === false &&
+      composition.text.includes('11.500.000đ') &&
+      verdict.sendable === true,
+    `narrative=${composition.narrative.reason} verdict=${verdict.reason}`,
+  );
+}
+
+{
+  // C — chinh sach / bao hanh / cam ket don, khong grant nao khop.
+  const cases = [
+    [WARRANTY_DOC, 'Dạ Bao hanh 3 nam, 1 doi 1 trong 7 ngay dau tien ạ.'],
+    [DEBT_DOC, 'Dạ Dai ly duoc thanh toan cong no trong 45 ngay ạ.'],
+    [COMMIT_DOC, 'Dạ Don cua minh da duoc chot ạ.'],
+  ];
+  const leaked = cases.filter(([source, narrative]) => {
+    const composition = compose(plan([], narrative), {}, { evidence: [doc(source)] });
+    return composition.narrative.admitted === true;
+  });
+  check(
+    '#205 C — bao hanh / cong no / cam ket don khong grant -> khong den tay khach',
+    leaked.length === 0,
+    `${cases.length} ca, ${leaked.length} lot`,
+  );
+}
+
+{
+  // D — menh de cua SKU A tron voi menh de cua SKU B trong MOT loi nhan.
+  const composition = compose(
+    plan([], 'Dạ Luu luong gio len toi 9700 lit/phut. Khung thep son tinh dien ạ.'),
+    {},
+    {
+      evidence: [
+        doc(SPEC_DOC, { sku: 'SKU-A' }),
+        doc('Khung thep son tinh dien.', { sku: 'SKU-B' }),
+      ],
+    },
+  );
+  check(
+    '#205 D — tron pham vi hai san pham -> tu choi',
+    composition.narrative.reason === 'NARRATIVE_SCOPE_CONFLICT',
+    `narrative=${composition.narrative.reason}`,
+  );
+}
+
+{
+  // E — ban ghi doi noi dung / bi rut quyen ke sau khi soan.
+  const composition = compose(
+    plan([], 'Dạ Luu luong gio len toi 9700 lit/phut ạ.'),
+    {},
+    {
+      evidence: [doc(SPEC_DOC)],
+    },
+  );
+  const pins = parsePinnedEvidence(composition.grounded);
+  const fresh = new Map(pins.map((pin) => [pin.sourceId, pin.version]));
+  const changed = new Map(pins.map((pin) => [pin.sourceId, evidenceVersion('Noi dung khac han.')]));
+  check(
+    '#205 E — ghim mang danh tinh + ban, va het han khi ban ghi doi hay bi rut quyen',
+    pins.length === 1 &&
+      pins[0].version === evidenceVersion(SPEC_DOC) &&
+      stalePins(pins, fresh).length === 0 &&
+      stalePins(pins, new Map()).length === 1 &&
+      stalePins(pins, changed).length === 1,
+    `pins=${pins.length} sourceId=${pins[0] ? pins[0].sourceId : '-'}`,
+  );
+}
+
+{
+  // F + G — tai lieu da tuyen bo van tra loi duoc, ke ca khi mang con so ky thuat lon.
+  const plain = compose(plan([], 'Dạ San pham co tua lung luoi ạ.'));
+  const technical = compose(
+    plan([], 'Dạ Luu luong gio len toi 9700 lit/phut ạ.'),
+    {},
+    {
+      evidence: [doc(SPEC_DOC)],
+    },
+  );
+  check(
+    '#205 F/G — FAQ thuong va thong so ky thuat van gui duoc',
+    plain.narrative.admitted === true &&
+      decideOutboundAuthority(plain, NO_GRANT).sendable === true &&
+      technical.narrative.admitted === true &&
+      technical.text.includes('9700') &&
+      decideOutboundAuthority(technical, NO_GRANT).sendable === true,
+    `plain=${plain.narrative.admitted} technical=${technical.narrative.admitted}`,
+  );
+}
+
+{
+  // I — duong Sale bam `Duyet & gui` di qua DUNG mot phan quyet do, khong co duong rieng.
+  const composition = compose(
+    plan([], 'Dạ Gia ban le: 8.500.000 VND ạ.'),
+    {},
+    {
+      evidence: [doc(PRICE_DOC)],
+    },
+  );
+  const verdict = decideOutboundAuthority(composition, NO_GRANT);
+  const trace = {
+    steps: [],
+    primaryRole: 'router',
+    senderType: 'dai_ly',
+    llmCalls: 1,
+    brainMode: 'proof',
+    supervisor: { riskLevel: 'none', escalate: false, reasons: [] },
+    outbound: { text: composition.text },
+    outboundAuthority: verdict,
+    outboundComposition: composition,
+  };
+  check(
+    '#205 I — nut Duyet & gui khong di vong duoc phan quyet',
+    verdict.sendable === false && pinnedOutboundVerdict(trace, composition.text).sendable === false,
+    `verdict=${verdict.reason}`,
+  );
+}
+
+{
+  /*
+   * TINH CHAT TRUNG TAM: CUNG MOT CHUOI, ba lop khac nhau -> ba ket cuc khac nhau.
+   *
+   * Neu ranh gioi la VAN BAN (regex / POLICY_SURFACES / bo do so / classifier) thi ba ve nay
+   * phai ra cung mot ket qua. Chung ra khac nhau, nen ranh gioi khong phai van ban.
+   */
+  const narrative = 'Dạ San pham co tua lung luoi ạ.';
+  const tellable = compose(plan([], narrative), {}, { evidence: [doc(APPROVED_DOC)] });
+  const unclassified = compose(
+    plan([], narrative),
+    {},
+    {
+      evidence: [doc(APPROVED_DOC, { eligible: undefined })],
+    },
+  );
+  const owned = compose(plan([], narrative), {}, { evidence: [authorityDoc(APPROVED_DOC)] });
+  check(
+    '#205 tinh chat — cung mot cau, lop khac nhau -> ket cuc khac nhau',
+    tellable.narrative.admitted === true &&
+      unclassified.narrative.admitted === false &&
+      owned.narrative.admitted === false,
+    `tellable=${tellable.narrative.admitted} unclassified=${unclassified.narrative.reason} owned=${owned.narrative.reason}`,
+  );
+}
+
+{
+  // Bang chung cua KHACH KHAC khong bao gio thoa man ban soan cua khach nay.
+  const composition = compose(
+    plan([], 'Dạ San pham co tua lung luoi ạ.'),
+    {},
+    {
+      evidence: [doc(APPROVED_DOC, { tenant: 'khach-khac' })],
+    },
+  );
+  check(
+    '#205 khach — bang chung cua khach khac khong dung duoc',
+    composition.narrative.reason === 'NO_SYSTEM_SOURCE' && composition.text === '',
+    `narrative=${composition.narrative.reason}`,
   );
 }
 

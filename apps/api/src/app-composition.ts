@@ -74,6 +74,8 @@ import {
   TurnRecordsRepository,
 } from './turns/turn-records.repository.js';
 import { TurnReplyService } from './turns/turn-reply.service.js';
+import { EvidenceRegistry } from './outbound/evidence-registry.port.js';
+import { ContentService } from './content/content.service.js';
 import { MessagesController } from './turns/turns.controller.js';
 import { OrdersService } from './orders/orders.service.js';
 import { SalesOrderOutcomeService } from './orders/sales-order-outcome.service.js';
@@ -318,6 +320,15 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   // `OrdersRepository` la CUNG MOT INSTANCE, doc bang ngon ngu don hang. `useExisting` chu khong
   // phai mot factory thu hai: hai kho tach roi la cach chac chan de don va luot lech nhau.
   owned('sales-order', { provide: OrdersRepository, useExisting: TurnRecordsRepository }),
+  /*
+   * SO GHI BANG CHUNG cho diem nghen gui (Issue #205).
+   *
+   * `useExisting` chu khong `useClass`: phai la CUNG MOT INSTANCE voi `ContentService`, neu
+   * khong thi so ghi doc tu mot cache khac va mot lan `reload()` se khong nhin thay duoc.
+   * Thuoc `knowledge` vi no doc tai lieu; khach khong co knowledge thi khong co cong nay, va
+   * cung khong co ghim tai lieu nao de kiem.
+   */
+  owned('knowledge', { provide: EvidenceRegistry, useExisting: ContentService }),
   owned('turn-processing', TurnReplyService),
   owned('turn-processing', ConversationContextBuilder),
   owned('turn-processing', {

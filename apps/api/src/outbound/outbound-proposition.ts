@@ -1,3 +1,5 @@
+import { evidencePin, type SourceEvidence } from './source-evidence.js';
+
 /**
  * RANG BUOC MENH DE — cai gi quyet dinh NGHIA cua phan van xuoi den tay khach.
  *
@@ -145,6 +147,14 @@ export interface SourceUnit {
   readonly text: string;
   /** Tu ngu da chuan hoa (chu thuong, GIU DAU) — khoa doi chieu, KHONG phai thu duoc phat ra. */
   readonly keys: readonly string[];
+  /**
+   * BAN GHI DA SINH RA CAU NAY (Issue #205).
+   *
+   * Thieu truong nay thi mot don vi chi con la mot chuoi, va mot chuoi khong tra loi duoc "ban
+   * ghi nao, pham vi nao, duoc ke hay thuoc tham quyen" - dung cai muc 3 hop dong #205 goi la
+   * fake provenance. Ca phep loc lop lan phep ghim ban deu doc tu day.
+   */
+  readonly evidence: SourceEvidence;
 }
 
 interface TokenSpan {
@@ -187,10 +197,10 @@ function sentencesOf(text: string): string[] {
  * #200 goi ten la khong con duong nao de xay ra: mot phan trich phai nam gon trong mot cau, va
  * mot cau nam gon trong mot chuoi.
  */
-export function sourceUnits(sources: readonly string[]): SourceUnit[] {
+export function sourceUnits(evidence: readonly SourceEvidence[]): SourceUnit[] {
   const units: SourceUnit[] = [];
-  for (const source of sources) {
-    for (const sentence of sentencesOf(source)) {
+  for (const source of evidence) {
+    for (const sentence of sentencesOf(source.text)) {
       const range = coreRange(tokenSpans(sentence));
       if (!range) continue;
       const keys = tokenSpans(sentence)
@@ -198,14 +208,14 @@ export function sourceUnits(sources: readonly string[]): SourceUnit[] {
         .map((span) => span.key);
       // Mot cau chi gom tu cuc khong bao lanh duoc gi — xem chu thich `POLARITY`.
       if (!keys.some((key) => !POLARITY.has(key))) continue;
-      units.push({ text: sentence, keys });
+      units.push({ text: sentence, keys, evidence: source });
     }
   }
   return units;
 }
 
 export type PropositionBinding =
-  | { readonly bound: true; readonly text: string; readonly excerpts: readonly string[] }
+  | { readonly bound: true; readonly text: string; readonly units: readonly SourceUnit[] }
   | { readonly bound: false };
 
 const NOT_BOUND: PropositionBinding = { bound: false };
@@ -232,7 +242,7 @@ export function bindProposition(
   units: readonly SourceUnit[],
 ): PropositionBinding {
   const parts = narrative.split(SENTENCE_BOUNDARY);
-  const excerpts: string[] = [];
+  const bound: SourceUnit[] = [];
   const pieces: string[] = [];
   for (const [index, part] of parts.entries()) {
     // Chi so le la DAU NGAT do `SENTENCE_BOUNDARY` bat lai — quy ve mot tap ba ky tu, xem duoi.
@@ -257,7 +267,7 @@ export function bindProposition(
     // MOT DOAN KHONG RANG BUOC DUOC LAM HONG CA LOI NHAN. Bo rieng doan do se de lai mot cau con
     // lai ma khong ai chon — va phan bi bo chinh la phan doi nghia.
     if (!unit) return NOT_BOUND;
-    excerpts.push(unit.text);
+    bound.push(unit);
     pieces.push(
       [
         ...spans.slice(0, range.first).map((span) => span.raw),
@@ -268,8 +278,8 @@ export function bindProposition(
   }
   // Khong menh de nao duoc trich = khong co gi de noi. Mot loi nhan toan tu boc khong phai mot
   // cau tra loi, va cho no di tiep se lam `mode` thanh `narrative_only` voi noi dung rong.
-  if (!excerpts.length) return NOT_BOUND;
-  return { bound: true, text: assemble(pieces), excerpts };
+  if (!bound.length) return NOT_BOUND;
+  return { bound: true, text: assemble(pieces), units: bound };
 }
 
 /**
@@ -301,12 +311,15 @@ function assemble(pieces: readonly string[]): string {
   return text.trim();
 }
 
-/** Ghim menh de da rang buoc vao bang chung — doc nguoc bang `parseBoundExcerpts()`. */
-export function boundExcerptTokens(excerpts: readonly string[]): string[] {
-  return [...new Set(excerpts)].map((excerpt) => `x:${excerpt}`);
-}
-
-/** Doc nguoc `boundExcerptTokens()` — diem nghen gui dung de kiem lai doc lap. */
-export function parseBoundExcerpts(tokens: readonly string[]): string[] {
-  return tokens.flatMap((token) => (token.startsWith('x:') ? [token.slice(2)] : []));
+/**
+ * GHIM MENH DE DA RANG BUOC - kem DANH TINH, BAN va PHAM VI cua ban ghi (Issue #205).
+ *
+ * Truoc #205 cho nay ghim `x:<van ban>`: chi mot chuoi. Diem nghen gui doc lai chuoi do roi coi
+ * chinh no la bang chung nguon goc - dung cai muc 3 hop dong goi la fake provenance. Mot ban ghi
+ * da bi sua hay da bi rut quyen ke van cho qua mot ban soan cu, vi van ban thi khong doi.
+ *
+ * Doc nguoc bang `parsePinnedEvidence()` trong `source-evidence.ts`.
+ */
+export function boundExcerptTokens(units: readonly SourceUnit[]): string[] {
+  return [...new Set(units.map((unit) => evidencePin(unit.evidence, unit.text)))];
 }

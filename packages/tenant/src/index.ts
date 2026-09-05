@@ -13,6 +13,7 @@ export {
   tenantExperience,
   tenantHasCapability,
   tenantIdentity,
+  tenantSlug,
   tenantIntegrations,
   tenantKnowledgePersona,
   tenantMessagingPersona,

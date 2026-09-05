@@ -18,6 +18,7 @@ import type { AmendSignal } from '../pipeline/amend-detect.js';
 import { reportAnthropicUsage, type LlmUsageReporter } from '../observability/llm-usage.js';
 import { formatTranscript } from '../messages/conversation-transcript.js';
 import { mergeAuthority } from '../outbound/outbound-authority.js';
+import type { SourceEvidence } from '../outbound/source-evidence.js';
 import { unverifiedAmounts } from './money-guard.js';
 import {
   advisorToolsFor,
@@ -103,8 +104,14 @@ export interface AdvisorReply {
   readonly plan: OutboundPlan;
   /** Du kien tat dinh luot nay tra cuu duoc — thu duy nhat bo soan render duoc. */
   readonly facts: TurnBusinessFacts;
-  /** Chuoi he thong so huu da tra cuu — bang chung neo nguon cho loi nhan. */
-  readonly sources: readonly string[];
+  /**
+   * BANG CHUNG CO DANH TINH da tra cuu (Issue #205).
+   *
+   * Truoc #205 day la `readonly string[]`, va do la chinh cho seam nam: mot chuoi khong noi
+   * duoc no den tu ban ghi nao, thuoc pham vi nao, va co duoc ke hay khong. Xem
+   * `outbound/source-evidence.ts`.
+   */
+  readonly sources: readonly SourceEvidence[];
 }
 
 export abstract class AdvisorAgent {

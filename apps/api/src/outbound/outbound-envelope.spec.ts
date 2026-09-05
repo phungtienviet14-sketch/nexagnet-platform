@@ -3,7 +3,7 @@ import { decideOutboundAuthority } from './outbound-authority.js';
 import { claimedCommitmentLevel, monetaryLiterals, policyClaimTokens } from './outbound-claims.js';
 import { attestedWords, ENVELOPE_WORDS, unattestedWords } from './outbound-envelope.js';
 import { NO_BUSINESS_FACTS } from './outbound-facts.js';
-import { compose, plan, quoteFacts } from './__tests__/composition.fixture.js';
+import { compose, plan, quoteFacts, tellableAll } from './__tests__/composition.fixture.js';
 
 /**
  * G5 — LOI NHAN PHAI CO NGUON, VA VO HOI THOAI KHONG DUOC TRO THANH CONG SAU.
@@ -91,7 +91,9 @@ describe('#189 G5 — tu ngu noi dung phai co mat trong nguon he thong cua luot'
 
   it('khong cau he qua nao di duoc toi khach, va khong cau nao con ky tu trong van ban', () => {
     for (const text of CONSEQUENTIAL) {
-      const composition = compose(plan([], text), NO_BUSINESS_FACTS, { systemSources: APPROVED });
+      const composition = compose(plan([], text), NO_BUSINESS_FACTS, {
+        evidence: tellableAll(APPROVED),
+      });
 
       expect(composition.narrative, text).toMatchObject({ admitted: false });
       expect(composition.text, text).toBe('');
@@ -110,7 +112,7 @@ describe('#189 G5 — tu ngu noi dung phai co mat trong nguon he thong cua luot'
     const composition = compose(
       plan([], 'Dạ ghế Felix có tựa lưng lưới. Khung thép sơn tĩnh điện ạ.'),
       NO_BUSINESS_FACTS,
-      { systemSources: APPROVED },
+      { evidence: tellableAll(APPROVED) },
     );
 
     expect(composition.narrative).toMatchObject({ admitted: true });
@@ -130,7 +132,7 @@ describe('#189 G5 — tu ngu noi dung phai co mat trong nguon he thong cua luot'
       plan([], 'Dạ bên em cho mình khất tiền hàng tới khi bán xong ạ.'),
       NO_BUSINESS_FACTS,
       {
-        systemSources: APPROVED,
+        evidence: tellableAll(APPROVED),
         customerText: 'ben em cho minh khat tien hang toi khi ban xong duoc khong',
       },
     );
@@ -154,7 +156,7 @@ describe('#189 G5 — tu ngu noi dung phai co mat trong nguon he thong cua luot'
       // gi ve no. Loi nhan van phai bi bo.
       plan(['price_quote'], 'Dạ ghế Felix bên em bán chạy lắm ạ.'),
       quoteFacts(),
-      { systemSources: ['Không có tài liệu nào về sản phẩm.'] },
+      { evidence: tellableAll(['Không có tài liệu nào về sản phẩm.']) },
     );
 
     expect(composition.narrative).toEqual({
@@ -177,7 +179,7 @@ describe('#189 G5 — quet lai o diem nghen gui (phong thu chieu sau)', () => {
    */
   it('ghep them mot cau vao van ban cuoi -> diem nghen gui tu choi', () => {
     const composition = compose(plan([], 'Dạ ghế Felix có tựa lưng lưới ạ.'), NO_BUSINESS_FACTS, {
-      systemSources: ['Ghế Felix có tựa lưng lưới. Khung thép sơn tĩnh điện.'],
+      evidence: tellableAll(['Ghế Felix có tựa lưng lưới. Khung thép sơn tĩnh điện.']),
     });
     const tampered = {
       ...composition,

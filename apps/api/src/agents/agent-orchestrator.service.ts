@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { tenantHasCapability, tenantRetailAdviceOrNull } from '@netviet/tenant';
+import { tenantHasCapability, tenantRetailAdviceOrNull, tenantSlug } from '@netviet/tenant';
 import {
   AGENT_ROLES,
   INTENT_LABELS,
@@ -71,6 +71,7 @@ import {
 } from '../outbound/outbound-authority.js';
 import { composeOutbound, deterministicComposition } from '../outbound/outbound-composer.js';
 import { mergeBusinessFacts } from '../outbound/outbound-facts.js';
+import { documentEvidence } from '../outbound/source-evidence.js';
 import { OUTBOUND_DECISIONS } from '../outbound/outbound-decisions.js';
 import {
   POLICY_LABELS,
@@ -358,12 +359,28 @@ export class AgentOrchestrator {
       dispatch.priced && !reply.facts.pricedOrder ? { pricedOrder: dispatch.priced } : {},
     );
     const composition = composeOutbound(reply.plan, facts, {
-      // Van ban tat dinh cua nhanh dispatch (manh FAQ da duyet, mau chuyen Sale) cung la nguon he
-      // thong so huu — no den tu `ContentService`, khong tu model.
-      systemSources: [
+      /*
+       * BANG CHUNG CUA LUOT — cac lan agent tra cuu, cong van ban tat dinh cua nhanh dispatch.
+       *
+       * Van ban dispatch vao voi lop `unclassified`, va do la mot lua chon FAIL-CLOSED co chu y
+       * (Issue #205): o day ta chi con CHUOI da ghep, khong con ban ghi nao de doc lop tu do.
+       * Khong ke duoc thi khong ke — ban tra loi tat dinh van den tay khach nguyen ven qua
+       * `deterministicComposition()`, la duong rieng cua no.
+       */
+      evidence: [
         ...reply.sources,
-        ...(dispatch.outbound?.text ? [dispatch.outbound.text] : []),
+        ...(dispatch.outbound?.text
+          ? [
+              documentEvidence(
+                'dispatch:outbound',
+                dispatch.outbound.text,
+                { tenant: tenantSlug(), productSku: null },
+                undefined,
+              ),
+            ]
+          : []),
       ],
+      tenant: tenantSlug(),
       customerText: input.customerText,
       authority,
     });

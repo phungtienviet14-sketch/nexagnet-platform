@@ -173,9 +173,7 @@ async function mockWorkspace(page: Page, role?: Role): Promise<void> {
     ],
   ]);
 
-  await page.route('**/auth/config', (route) =>
-    json(route, { mode: role ? 'session' : 'none' }),
-  );
+  await page.route('**/auth/config', (route) => json(route, { mode: role ? 'session' : 'none' }));
   await page.route('**/auth/csrf', (route) => json(route, { csrfToken: 'e2e-csrf' }));
   await page.route('**/auth/me', (route) =>
     role
@@ -239,7 +237,11 @@ test('Tong quan la mot bang viec: doc duoc hom nay phai lam gi, va bam thang toi
   await expect(workload.getByText('Chờ duyệt & gửi')).toBeVisible();
 
   // Mot dong viec dan THANG toi don cua no o muc Duyệt & gửi.
-  await page.getByRole('region', { name: 'Cần xử lý ngay' }).getByRole('link', { name: 'Mở để duyệt' }).first().click();
+  await page
+    .getByRole('region', { name: 'Cần xử lý ngay' })
+    .getByRole('link', { name: 'Mở để duyệt' })
+    .first()
+    .click();
   await expect(page).toHaveURL(/section=approvals&selected=ord-1/);
   await expect(page.getByRole('heading', { level: 1, name: 'Duyệt & gửi' })).toBeVisible();
 });
@@ -387,7 +389,10 @@ test('Cảnh báo: gom du viec cua nguoi, du lieu chua san sang va tinh trang ke
   await expect(page.getByRole('region', { name: 'Kết nối / kênh cần chú ý' })).toBeHidden();
 
   // Mot dong canh bao dan THANG toi don cua no.
-  await page.getByRole('region', { name: 'Cần nhập đơn' }).getByRole('link', { name: 'Mở đơn' }).click();
+  await page
+    .getByRole('region', { name: 'Cần nhập đơn' })
+    .getByRole('link', { name: 'Mở đơn' })
+    .click();
   await expect(page).toHaveURL(/section=orders&selected=ord-3/);
 });
 
@@ -402,7 +407,9 @@ test('mot khoi chet KHONG lam trong khoi khac — nghiep vu chua san sang van do
   await expect(page.getByText('COD và cước vận chuyển', { exact: true })).toBeVisible();
   await expect(page.getByText('Chưa có bảng phí COD chính thức.')).toBeVisible();
   // Cong go-live doc tu mot nguon khac cung van con.
-  await expect(page.getByText('Còn 1 điều kiện bắt buộc chưa đạt trước khi chạy thật.')).toBeVisible();
+  await expect(
+    page.getByText('Còn 1 điều kiện bắt buộc chưa đạt trước khi chạy thật.'),
+  ).toBeVisible();
   // Va khoi hong thi noi ro la hong, bang tieng nguoi.
   await expect(
     page.getByRole('region', { name: 'Cần xử lý ngay' }).getByRole('alert'),
@@ -596,9 +603,11 @@ test('KHONG duong dan nao tren man hinh tro toi muc ke toan khong mo duoc', asyn
     await page.goto(`/${step}`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
-    const targets = await page.locator('a[href*="section="]').evaluateAll((nodes) =>
-      nodes.map((node) => new URL((node as HTMLAnchorElement).href).searchParams.get('section')),
-    );
+    const targets = await page
+      .locator('a[href*="section="]')
+      .evaluateAll((nodes) =>
+        nodes.map((node) => new URL((node as HTMLAnchorElement).href).searchParams.get('section')),
+      );
     for (const target of targets) {
       expect(
         forbidden,
@@ -613,10 +622,22 @@ test('SALE thi chinh nhung duong dan do PHAI co — bai tren khong xanh nho man 
 }) => {
   await mockWorkspace(page, 'SALE');
   await page.goto('/?section=alerts');
+  /*
+   * DOI MAN HINH DUNG XONG DA — cung phep cho ma bai ACCOUNTING o tren da dung.
+   *
+   * Thieu no, phep doc chay ngay sau `goto` va co the thay MOT MAN HINH CHUA DUNG: luc do
+   * `targets` la `[]`, va bai bao "thieu duong dan approvals" trong khi that ra no chua kip
+   * render. Do dung la cach bai nay do o CI ngay 05/09/2026 — `Received array: []`, khong phai
+   * mot mang thieu mot muc. Phep cho nay lam bai TAT DINH, khong lam no de hon: hai khang dinh
+   * ben duoi giu nguyen.
+   */
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
-  const targets = await page.locator('a[href*="section="]').evaluateAll((nodes) =>
-    nodes.map((node) => new URL((node as HTMLAnchorElement).href).searchParams.get('section')),
-  );
+  const targets = await page
+    .locator('a[href*="section="]')
+    .evaluateAll((nodes) =>
+      nodes.map((node) => new URL((node as HTMLAnchorElement).href).searchParams.get('section')),
+    );
   expect(targets).toContain('approvals');
   expect(targets).toContain('conversations');
 });

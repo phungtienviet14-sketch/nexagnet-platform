@@ -6,7 +6,7 @@ import type {
   OutboundPlanKind,
   SenderType,
 } from '@netviet/shared';
-import { tenantRetailAdviceOrNull } from '@netviet/tenant';
+import { tenantRetailAdviceOrNull, tenantSlug } from '@netviet/tenant';
 import {
   grantsFromDealerPolicy,
   grantsFromPersistedOrder,
@@ -14,6 +14,14 @@ import {
   grantsFromQuote,
 } from '../outbound/outbound-authority.js';
 import { orderStateFacts, type BusinessFactsPatch } from '../outbound/outbound-facts.js';
+import {
+  businessAuthorityEvidence,
+  catalogEvidence,
+  documentEvidence,
+  documentSourceId,
+  type EvidenceScope,
+  type SourceEvidence,
+} from '../outbound/source-evidence.js';
 import { POLICY_LABELS, quotePriceField, quoteQualifier } from '../agents/risk-rules.js';
 import type { ContentService } from '../content/content.service.js';
 import type { KnowledgeService, ResolvedGroup } from '../knowledge/knowledge.service.js';
@@ -99,9 +107,19 @@ export interface AdvisorToolOutcome {
    * KHONG duoc dat `output` da serialize vao day. `output` co echo tham so model tu gui, nen neo
    * vao no la de model tu tao bang chung cho con so no sap viet. Xem `outbound-narrative.ts`.
    */
-  readonly sources?: readonly string[];
+  readonly sources?: readonly SourceEvidence[];
   /** Chi cong cu `soan_tra_loi` dat truong nay — ke hoach tra loi, KHONG mang tham quyen. */
   readonly plan?: OutboundPlan;
+}
+
+/**
+ * PHAM VI cua mot manh bang chung sinh trong luot nay (Issue #205).
+ *
+ * `tenant` lay tu goi khach dang chay, KHONG tu tham so model. Ben soan doi chieu lai bang chinh
+ * gia tri do, nen mot manh cua khach khac khong the thoa man ban soan cua khach nay.
+ */
+function scopeOf(productSku: string | null): EvidenceScope {
+  return { tenant: tenantSlug(), productSku };
 }
 
 /** Cong cu chi tra du kien mo ta, khong sinh tham quyen he qua nao. */
@@ -358,12 +376,18 @@ function findProducts(keyword: string, ctx: AdvisorToolContext): AdvisorToolOutc
     grants: [],
     // Danh muc la NGUON HE THONG: ten/don vi/mo ta deu tu DB cua khach. `tu_khoa` model go KHONG
     // co trong day — no la dau vao cua model, va neo nguon vao dau vao cua model la khong neo gi.
-    sources: found.flatMap((product) => [
-      product.name,
-      product.unit,
-      ...(product.description ? [product.description] : []),
-      ...product.aliases,
-    ]),
+    sources: found.flatMap((product) => {
+      const scope = scopeOf(product.sku);
+      const id = `catalog:${product.sku}`;
+      return [
+        catalogEvidence(`${id}:name`, product.name, scope),
+        catalogEvidence(`${id}:unit`, product.unit, scope),
+        ...(product.description
+          ? [catalogEvidence(`${id}:description`, product.description, scope)]
+          : []),
+        ...product.aliases.map((alias, i) => catalogEvidence(`${id}:alias:${i}`, alias, scope)),
+      ];
+    }),
   };
 }
 
@@ -417,9 +441,48 @@ function findDocs(sku: string, question: string, ctx: AdvisorToolContext): Advis
     // Tai lieu DA DUYET la nguon he thong manh nhat co trong luot: mot nguoi that da doc va bam
     // duyet tung dong. Do luong 04/09/2026 cho thay ~26% so tai lieu nay lam bo trich vat mang
     // bao dong (9700 lít/phút, bảo hành 7 ngày) — neo nguon o day chinh la thu hap thu chung.
-    sources: selected
-      .flatMap((faq) => [faq.question, faq.answer])
-      .concat(advice.flatMap((row) => [row.title, row.body])),
+    /*
+     * TAI LIEU DA DUYET: LOP LAY TU BAN GHI, khong doc ra tu cau chu (Issue #205).
+     *
+     * Do luong tren chinh kho tai lieu cua khach cho thay day la mot kho TRON: cau thong so ky
+     * thuat nam canh cau bao gia, cau bao hanh 1-doi-1, cau dieu kien doi tra. Truoc #205 ca
+     * kho di vao mot mang chuoi phang, nen mot cau GIA co that trong tai lieu tu neo nguon cho
+     * chinh no va ra duoc kenh ma khong mot grant nao cap.
+     *
+     * `narrativeEligible` la mot TUYEN BO tren ban ghi, dat luc xuat ban. Vang mat = tu choi:
+     * ban ghi chua ai xet thi khong ke duoc, va luot do di duong chuyen Sale. Muc 9 hop dong
+     * cam han viec doan lop tu van xuoi, ke ca luc nap.
+     */
+    sources: [
+      ...selected.flatMap((faq) => [
+        documentEvidence(
+          documentSourceId('faq', faq.externalId, 'q'),
+          faq.question,
+          scopeOf(faq.productSku ?? null),
+          faq.narrativeEligible,
+        ),
+        documentEvidence(
+          documentSourceId('faq', faq.externalId, 'a'),
+          faq.answer,
+          scopeOf(faq.productSku ?? null),
+          faq.narrativeEligible,
+        ),
+      ]),
+      ...advice.flatMap((row) => [
+        documentEvidence(
+          documentSourceId('advice', row.externalId, 'title'),
+          row.title,
+          scopeOf(row.productSku ?? null),
+          row.narrativeEligible,
+        ),
+        documentEvidence(
+          documentSourceId('advice', row.externalId, 'body'),
+          row.body,
+          scopeOf(row.productSku ?? null),
+          row.narrativeEligible,
+        ),
+      ]),
+    ],
   };
 }
 
@@ -462,10 +525,19 @@ function quote(skus: readonly string[], ctx: AdvisorToolContext): AdvisorToolOut
     output: { ky_gia: period, bao_gia: rows, cau_kem_theo: qualifier },
     grants: grantsFromQuote(priced.map((line) => line.unitPrice)),
     facts: priced.length ? { quote: { period, qualifier, lines: priced } } : {},
+    // BANG CHUNG THUOC THAM QUYEN: con so cua bang gia phai di qua KHOI bao gia, khong qua van
+    // xuoi. Xem `businessAuthorityEvidence` — chung khong bao gio thanh menh de chon duoc.
     sources: [
-      ...priced.flatMap((line) => [line.name, line.unit, formatVnd(line.unitPrice)]),
-      ...(period ? [period] : []),
-      qualifier,
+      ...priced.flatMap((line) => {
+        const scope = scopeOf(line.sku);
+        return [
+          businessAuthorityEvidence(`quote:${line.sku}:name`, line.name, scope),
+          businessAuthorityEvidence(`quote:${line.sku}:unit`, line.unit, scope),
+          businessAuthorityEvidence(`quote:${line.sku}:price`, formatVnd(line.unitPrice), scope),
+        ];
+      }),
+      ...(period ? [businessAuthorityEvidence(`quote:period`, period, scopeOf(null))] : []),
+      businessAuthorityEvidence(`quote:qualifier`, qualifier, scopeOf(null)),
     ],
   };
 }
@@ -519,14 +591,21 @@ function computeOrder(rawItems: unknown, ctx: AdvisorToolContext): AdvisorToolOu
        * So luong khong can o day: khach tu noi thi da neo qua `customerText`, con ban soan thi tu
        * render so luong trong khoi va tu gop vao bang chung ghim (`widen`).
        */
-      ...priced.lines.flatMap((line) => [
-        ...(line.productName ? [line.productName] : []),
-        formatVnd(line.unitPrice),
-        formatVnd(line.lineTotal),
-      ]),
-      formatVnd(priced.itemsSubtotal),
-      formatVnd(priced.grandTotal),
-      ...(priced.policy ? [POLICY_LABELS[priced.policy]] : []),
+      ...priced.lines.flatMap((line, i) => {
+        const scope = scopeOf(line.sku ?? null);
+        return [
+          ...(line.productName
+            ? [businessAuthorityEvidence(`priced:line:${i}:name`, line.productName, scope)]
+            : []),
+          businessAuthorityEvidence(`priced:line:${i}:unit`, formatVnd(line.unitPrice), scope),
+          businessAuthorityEvidence(`priced:line:${i}:total`, formatVnd(line.lineTotal), scope),
+        ];
+      }),
+      businessAuthorityEvidence(`priced:subtotal`, formatVnd(priced.itemsSubtotal), scopeOf(null)),
+      businessAuthorityEvidence(`priced:total`, formatVnd(priced.grandTotal), scopeOf(null)),
+      ...(priced.policy
+        ? [businessAuthorityEvidence(`priced:policy`, POLICY_LABELS[priced.policy], scopeOf(null))]
+        : []),
     ],
   };
 }
@@ -555,9 +634,15 @@ function policy(ctx: AdvisorToolContext): AdvisorToolOutcome {
       },
     },
     sources: [
-      dealer.name,
-      POLICY_LABELS[dealer.defaultPolicy],
-      ...(dealer.tier ? [dealer.tier] : []),
+      businessAuthorityEvidence(`dealer:name`, dealer.name, scopeOf(null)),
+      businessAuthorityEvidence(
+        `dealer:policy`,
+        POLICY_LABELS[dealer.defaultPolicy],
+        scopeOf(null),
+      ),
+      ...(dealer.tier
+        ? [businessAuthorityEvidence(`dealer:tier`, dealer.tier, scopeOf(null))]
+        : []),
     ],
   };
 }
@@ -587,10 +672,26 @@ function recentOrders(ctx: AdvisorToolContext): AdvisorToolOutcome {
     grants: orders.flatMap((order) => grantsFromPersistedOrder(order)),
     facts: orderStateFacts(orders),
     sources: orders.flatMap((order) => [
-      ...(order.priced?.lines ?? []).flatMap((line) =>
-        line.productName ? [line.productName] : [],
+      ...(order.priced?.lines ?? []).flatMap((line, i) =>
+        line.productName
+          ? [
+              businessAuthorityEvidence(
+                `order:${order.id}:line:${i}`,
+                line.productName,
+                scopeOf(line.sku ?? null),
+              ),
+            ]
+          : [],
       ),
-      ...(order.priced ? [formatVnd(order.priced.grandTotal)] : []),
+      ...(order.priced
+        ? [
+            businessAuthorityEvidence(
+              `order:${order.id}:total`,
+              formatVnd(order.priced.grandTotal),
+              scopeOf(null),
+            ),
+          ]
+        : []),
     ]),
   };
 }

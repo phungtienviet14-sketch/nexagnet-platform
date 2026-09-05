@@ -8,7 +8,14 @@ import {
   POLARITY_WORDS,
   sourceUnits,
 } from './outbound-proposition.js';
-import { authorityFor, compose, plan, quoteFacts } from './__tests__/composition.fixture.js';
+import { parsePinnedEvidence } from './source-evidence.js';
+import {
+  authorityFor,
+  compose,
+  plan,
+  quoteFacts,
+  tellableAll,
+} from './__tests__/composition.fixture.js';
 
 /**
  * MUC 4 HOP DONG #200 — bon nhom bat buoc, cong cac lop giu nguyen an toan da co.
@@ -18,13 +25,14 @@ import { authorityFor, compose, plan, quoteFacts } from './__tests__/composition
  */
 
 /** Nguon tong hop cua muc 2 hop dong — hai menh de doi lap trong CUNG mot chuoi. */
-const SAME_SOURCE = 'Khách hàng thanh toán ngay khi nhận hàng. Hàng bán xong không được đổi trả.';
+const SAME_SOURCE =
+  'Máy lọc bụi mịn ngay khi bật nguồn. Màng lọc dùng hết một năm không được rửa lại.';
 /** Cung hai menh de do, nhung o HAI chuoi nguon khac nhau (hai lan tra cuu khac nhau). */
-const SOURCE_A = 'Khách hàng thanh toán ngay khi nhận hàng.';
-const SOURCE_B = 'Hàng bán xong không được đổi trả.';
+const SOURCE_A = 'Máy lọc bụi mịn ngay khi bật nguồn.';
+const SOURCE_B = 'Màng lọc dùng hết một năm không được rửa lại.';
 
 const narrativeOf = (narrative: string, sources: readonly string[]) =>
-  compose(plan([], narrative), NO_BUSINESS_FACTS, { systemSources: [...sources] });
+  compose(plan([], narrative), NO_BUSINESS_FACTS, { evidence: tellableAll([...sources]) });
 
 describe('#200 — ghep lai tu ngu cua nguon trong CUNG mot nguon', () => {
   /*
@@ -35,7 +43,7 @@ describe('#200 — ghep lai tu ngu cua nguon trong CUNG mot nguon', () => {
    * HANG thanh TRA SAU KHI BAN XONG, ma khong mot chu nao nam ngoai nguon.
    */
   it('doi ky han thanh toan bang cach ghep lai chu cua nguon -> khong den tay khach', () => {
-    const composition = narrativeOf('Khách hàng thanh toán khi bán xong.', [SAME_SOURCE]);
+    const composition = narrativeOf('Máy lọc bụi mịn khi dùng hết một năm.', [SAME_SOURCE]);
 
     expect(composition.narrative).toEqual({
       admitted: false,
@@ -56,7 +64,7 @@ describe('#200 — ghep lai tu ngu cua nguon trong CUNG mot nguon', () => {
    * phep rang buoc — muc 7 hop dong cam lay `POLICY_SURFACES` lam ban sua chinh.
    */
   it('bon cong truoc deu IM voi chinh cau do — G2, G3 va G4 khong thay gi', () => {
-    const sentence = 'Khách hàng thanh toán khi bán xong.';
+    const sentence = 'Máy lọc bụi mịn khi dùng hết một năm.';
 
     expect(numeralLiterals(sentence)).toEqual([]);
     expect(policyClaimTokens(sentence)).toEqual([]);
@@ -64,15 +72,13 @@ describe('#200 — ghep lai tu ngu cua nguon trong CUNG mot nguon', () => {
   });
 
   it('cat duoi mot ngoai le o cuoi menh de cung la doi nghia -> bi chan', () => {
-    const composition = narrativeOf('Dạ khách hàng thanh toán ngay ạ.', [SAME_SOURCE]);
+    const composition = narrativeOf('Dạ máy lọc bụi mịn ngay ạ.', [SAME_SOURCE]);
 
     expect(composition.narrative).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });
   });
 
   it('dao thu tu tu ngu trong cung mot menh de -> bi chan', () => {
-    const composition = narrativeOf('Dạ thanh toán khách hàng ngay khi nhận hàng ạ.', [
-      SAME_SOURCE,
-    ]);
+    const composition = narrativeOf('Dạ lọc máy bụi mịn ngay khi bật nguồn ạ.', [SAME_SOURCE]);
 
     expect(composition.narrative).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });
   });
@@ -84,7 +90,7 @@ describe('#200 — phu dinh / dao nguoc bang chinh tu cua vo hoi thoai', () => {
    * nay model dao nguoc duoc mot cau nguon MA KHONG CAN THEM MOT CHU NAO — G5 tang khong het.
    */
   it('bo chu `không` di thi cau con lai khong con la menh de nao', () => {
-    const composition = narrativeOf('Hàng bán xong được đổi trả ạ.', [SAME_SOURCE]);
+    const composition = narrativeOf('Màng lọc dùng hết một năm được rửa lại ạ.', [SAME_SOURCE]);
 
     expect(composition.narrative).toEqual({
       admitted: false,
@@ -93,7 +99,7 @@ describe('#200 — phu dinh / dao nguoc bang chinh tu cua vo hoi thoai', () => {
   });
 
   it('cat bo phan dau mang phu dinh roi giu ve sau -> bi chan', () => {
-    const composition = narrativeOf('Dạ được đổi trả ạ.', [SAME_SOURCE]);
+    const composition = narrativeOf('Dạ được rửa lại ạ.', [SAME_SOURCE]);
 
     expect(composition.narrative).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });
   });
@@ -112,7 +118,7 @@ describe('#200 — phu dinh / dao nguoc bang chinh tu cua vo hoi thoai', () => {
   });
 
   it('mot menh de nguon chi gom tu cuc khong bao lanh duoc gi', () => {
-    expect(sourceUnits(['Có. Được. Chưa.'])).toEqual([]);
+    expect(sourceUnits(tellableAll(['Có. Được. Chưa.']))).toEqual([]);
   });
 });
 
@@ -123,7 +129,7 @@ describe('#200 — ghep CHEO nhieu nguon da tra cuu trong mot luot', () => {
    * menh de khong bao gio trai qua hai chuoi nguon.
    */
   it('hai nguon rieng biet khong cong lai thanh mot tham quyen moi', () => {
-    const composition = narrativeOf('Khách hàng thanh toán khi bán xong.', [SOURCE_A, SOURCE_B]);
+    const composition = narrativeOf('Máy lọc bụi mịn khi dùng hết một năm.', [SOURCE_A, SOURCE_B]);
 
     expect(composition.narrative).toEqual({
       admitted: false,
@@ -132,31 +138,28 @@ describe('#200 — ghep CHEO nhieu nguon da tra cuu trong mot luot', () => {
   });
 
   it('nua menh de cua nguon A noi voi nua menh de cua nguon B -> bi chan', () => {
-    const composition = narrativeOf('Khách hàng thanh toán không được đổi trả.', [
-      SOURCE_A,
-      SOURCE_B,
-    ]);
+    const composition = narrativeOf('Máy lọc bụi mịn không được rửa lại.', [SOURCE_A, SOURCE_B]);
 
     expect(composition.narrative).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });
   });
 
   it('tung nguon rieng le van tra loi duoc — day khong phai "chan het"', () => {
     expect(
-      narrativeOf('Dạ khách hàng thanh toán ngay khi nhận hàng ạ.', [SOURCE_A, SOURCE_B]),
+      narrativeOf('Dạ máy lọc bụi mịn ngay khi bật nguồn ạ.', [SOURCE_A, SOURCE_B]),
     ).toMatchObject({ narrative: { admitted: true }, mode: 'narrative_only' });
     expect(
-      narrativeOf('Dạ hàng bán xong không được đổi trả ạ.', [SOURCE_A, SOURCE_B]),
+      narrativeOf('Dạ màng lọc dùng hết một năm không được rửa lại ạ.', [SOURCE_A, SOURCE_B]),
     ).toMatchObject({ narrative: { admitted: true } });
   });
 });
 
 describe('#200 — FAQ co nguon van dung duoc', () => {
   it('cau tra loi trich tron ven menh de nguon -> gui duoc, va van ban la ky tu cua NGUON', () => {
-    const composition = narrativeOf('Dạ khách hàng thanh toán ngay khi nhận hàng ạ.', [SOURCE_A]);
+    const composition = narrativeOf('Dạ máy lọc bụi mịn ngay khi bật nguồn ạ.', [SOURCE_A]);
 
     expect(composition.narrative).toEqual({
       admitted: true,
-      text: 'Dạ Khách hàng thanh toán ngay khi nhận hàng ạ.',
+      text: 'Dạ Máy lọc bụi mịn ngay khi bật nguồn ạ.',
     });
     expect(decideOutboundAuthority(composition, { grants: [] })).toMatchObject({
       sendable: true,
@@ -165,17 +168,32 @@ describe('#200 — FAQ co nguon van dung duoc', () => {
   });
 
   it('menh de da trich duoc ghim vao bang chung de diem nghen gui kiem lai', () => {
-    const composition = narrativeOf('Dạ khách hàng thanh toán ngay khi nhận hàng ạ.', [SOURCE_A]);
+    const composition = narrativeOf('Dạ máy lọc bụi mịn ngay khi bật nguồn ạ.', [SOURCE_A]);
 
-    expect(composition.grounded).toContain('x:Khách hàng thanh toán ngay khi nhận hàng');
+    const pinned = parsePinnedEvidence(composition.grounded);
+
+    expect(pinned).toEqual([
+      expect.objectContaining({ excerpt: 'Máy lọc bụi mịn ngay khi bật nguồn' }),
+    ]);
+    /*
+     * #205 - CAI DUOC GHIM KHONG CON LA MOT CHUOI TRON.
+     *
+     * Ban ghi, ban va pham vi deu di theo, va do la thu diem nghen gui doi chieu lai. Truoc #205
+     * cho nay ghim moi van ban, nen mot ban ghi da bi sua hay da bi rut quyen ke van cho qua mot
+     * ban soan cu.
+     */
+    expect(pinned[0]!.sourceId).toMatch(/^faq:test:/u);
+    expect(pinned[0]!.version).toHaveLength(16);
   });
 
   it('mot luot nhieu menh de: model chon menh de nao va thu tu nao', () => {
-    const composition = narrativeOf('Dạ hàng bán xong không được đổi trả ạ.', [SAME_SOURCE]);
+    const composition = narrativeOf('Dạ màng lọc dùng hết một năm không được rửa lại ạ.', [
+      SAME_SOURCE,
+    ]);
 
     expect(composition.narrative).toEqual({
       admitted: true,
-      text: 'Dạ Hàng bán xong không được đổi trả ạ.',
+      text: 'Dạ Màng lọc dùng hết một năm không được rửa lại ạ.',
     });
   });
 
@@ -184,9 +202,11 @@ describe('#200 — FAQ co nguon van dung duoc', () => {
    * ban cua he thong — day la cho tinh chat "renderer owns the statement" nhin thay duoc.
    */
   it('van ban den tay khach lay tu nguon, khong phai chuoi model viet', () => {
-    const composition = narrativeOf('dạ HÀNG BÁN XONG KHÔNG ĐƯỢC ĐỔI TRẢ ạ.', [SAME_SOURCE]);
+    const composition = narrativeOf('dạ MÀNG LỌC DÙNG HẾT MỘT NĂM KHÔNG ĐƯỢC RỬA LẠI ạ.', [
+      SAME_SOURCE,
+    ]);
 
-    expect(composition.text).toBe('dạ Hàng bán xong không được đổi trả ạ.');
+    expect(composition.text).toBe('dạ Màng lọc dùng hết một năm không được rửa lại ạ.');
   });
 });
 
@@ -201,7 +221,7 @@ describe('#200 — dau noi model chon khong duoc khang dinh mot quan he', () => 
    */
   it('dau hai cham noi hai cau -> ca loi nhan bi bo', () => {
     const composition = narrativeOf(
-      'Dạ khách hàng thanh toán ngay khi nhận hàng: hàng bán xong không được đổi trả ạ.',
+      'Dạ máy lọc bụi mịn ngay khi bật nguồn: màng lọc dùng hết một năm không được rửa lại ạ.',
       [SAME_SOURCE],
     );
 
@@ -211,7 +231,7 @@ describe('#200 — dau noi model chon khong duoc khang dinh mot quan he', () => 
   it('gach ngang, cham phay va dau phay cung the', () => {
     for (const joiner of ['—', ';', ',']) {
       const composition = narrativeOf(
-        `Dạ khách hàng thanh toán ngay khi nhận hàng ${joiner} hàng bán xong không được đổi trả ạ.`,
+        `Dạ máy lọc bụi mịn ngay khi bật nguồn ${joiner} màng lọc dùng hết một năm không được rửa lại ạ.`,
         [SAME_SOURCE],
       );
 
@@ -223,21 +243,19 @@ describe('#200 — dau noi model chon khong duoc khang dinh mot quan he', () => 
 
   it('noi bang dau cham thi duoc — do la hai cau nguon, va do la phan du da noi ro', () => {
     const composition = narrativeOf(
-      'Dạ khách hàng thanh toán ngay khi nhận hàng. Hàng bán xong không được đổi trả ạ.',
+      'Dạ máy lọc bụi mịn ngay khi bật nguồn. Màng lọc dùng hết một năm không được rửa lại ạ.',
       [SAME_SOURCE],
     );
 
     expect(composition.text).toBe(
-      'Dạ Khách hàng thanh toán ngay khi nhận hàng. Hàng bán xong không được đổi trả ạ.',
+      'Dạ Máy lọc bụi mịn ngay khi bật nguồn. Màng lọc dùng hết một năm không được rửa lại ạ.',
     );
   });
 
   it('dau ket cau duoc giu — mot cau hoi khong phai mot cam ket', () => {
-    const composition = narrativeOf('Dạ khách hàng thanh toán ngay khi nhận hàng ạ?', [
-      SAME_SOURCE,
-    ]);
+    const composition = narrativeOf('Dạ máy lọc bụi mịn ngay khi bật nguồn ạ?', [SAME_SOURCE]);
 
-    expect(composition.text).toBe('Dạ Khách hàng thanh toán ngay khi nhận hàng ạ?');
+    expect(composition.text).toBe('Dạ Máy lọc bụi mịn ngay khi bật nguồn ạ?');
   });
 });
 
@@ -259,20 +277,18 @@ describe('#200 — PHAN DU DA BIET: model chon duoc CAU NAO va THU TU NAO', () =
    * trong van xuoi (no phai di qua khoi bao gia), va khoi `promotion` thi LUON bi bo vi repo
    * khong co nguon tat dinh nao cho no.
    */
-  const DOC =
-    'Giá gốc ghế Felix là 1.150.000đ. Chương trình giảm giá 50% dịp khai trương áp dụng cho đơn đặt trong tháng 3/2024.';
+  const DOC = 'Máy có ba cấp lọc. Chế độ ban đêm tắt toàn bộ đèn báo.';
 
   it('hai cau nguyen van cua cung mot tai lieu van dat canh nhau duoc', () => {
-    const composition = narrativeOf(
-      'Dạ giá gốc ghế Felix là 1.150.000đ. Chương trình giảm giá 50% dịp khai trương áp dụng cho đơn đặt trong tháng 3/2024 ạ.',
-      [DOC],
-    );
+    const composition = narrativeOf('Dạ máy có ba cấp lọc. Chế độ ban đêm tắt toàn bộ đèn báo ạ.', [
+      DOC,
+    ]);
 
     expect(composition.narrative).toMatchObject({ admitted: true });
   });
 
   it('nhung ghep lai TU NGU cua chinh hai cau do thi khong', () => {
-    const composition = narrativeOf('Dạ giá ghế Felix giảm giá 50% ạ.', [DOC]);
+    const composition = narrativeOf('Dạ máy tắt toàn bộ cấp lọc ạ.', [DOC]);
 
     expect(composition.narrative).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });
   });
@@ -323,9 +339,9 @@ describe('#200 — hai tap tu boc khong duoc phep mang nghia thuong mai', () => 
    * phu ca `chỉ`/`chi` — va phep cat hai dau se cat mat chu THAT cua nguon.
    */
   it('cat tu boc theo DUNG cach viet: `da` trong nguon khong bi coi la tieng `dạ`', () => {
-    expect(sourceUnits(['Không gây hại cho mắt và da']).map((unit) => unit.text)).toEqual([
-      'Không gây hại cho mắt và da',
-    ]);
+    expect(
+      sourceUnits(tellableAll(['Không gây hại cho mắt và da'])).map((unit) => unit.text),
+    ).toEqual(['Không gây hại cho mắt và da']);
   });
 });
 
@@ -335,7 +351,7 @@ describe('#200 — dau cham chi duoc mien khi co chu so o CA HAI ben', () => {
    * don vi "1" / "150" / "000đ", va mot don vi mot chu so se bao lanh cho bat ky chu so nao.
    */
   it('dau cham giua hai chu so khong cat mot so tien lam doi', () => {
-    expect(sourceUnits(['Tổng đơn là 1.150.000đ.']).map((unit) => unit.text)).toEqual([
+    expect(sourceUnits(tellableAll(['Tổng đơn là 1.150.000đ.'])).map((unit) => unit.text)).toEqual([
       'Tổng đơn là 1.150.000đ',
     ]);
   });
@@ -349,16 +365,16 @@ describe('#200 — dau cham chi duoc mien khi co chu so o CA HAI ben', () => {
    */
   it('dau cham sau mot ma co chu so VAN la ranh gioi cau', () => {
     expect(
-      sourceUnits(['Máy dùng khí Gas R290. Đây là loại khí gas cao cấp nhất.']).map(
+      sourceUnits(tellableAll(['Máy dùng khí Gas R290. Đây là loại khí gas cao cấp nhất.'])).map(
         (unit) => unit.text,
       ),
     ).toEqual(['Máy dùng khí Gas R290', 'Đây là loại khí gas cao cấp nhất']);
   });
 
   it('dau phay khong con la ranh gioi — mot cau la mot don vi', () => {
-    expect(sourceUnits(['Lọc bụi mịn 99,97%, 9 cấp độ gió.']).map((unit) => unit.text)).toEqual([
-      'Lọc bụi mịn 99,97%, 9 cấp độ gió',
-    ]);
+    expect(
+      sourceUnits(tellableAll(['Lọc bụi mịn 99,97%, 9 cấp độ gió.'])).map((unit) => unit.text),
+    ).toEqual(['Lọc bụi mịn 99,97%, 9 cấp độ gió']);
   });
 });
 
@@ -372,12 +388,12 @@ describe('#200 — cat duoi mot ve DIEU KIEN ngan bang dau phay', () => {
    * vung. Don vi la CA CAU thi ca ba dung lai.
    */
   const CONDITIONAL: readonly (readonly [string, string])[] = [
+    ['Máy chạy êm ở mọi cấp gió, trừ cấp mạnh nhất.', 'Dạ máy chạy êm ở mọi cấp gió ạ.'],
+    ['Màng lọc rửa được bằng nước, trừ lớp than hoạt tính.', 'Dạ màng lọc rửa được bằng nước ạ.'],
     [
-      'Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên, nếu có lỗi từ nhà sản xuất.',
-      'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên ạ.',
+      'Chế độ tự động chạy ở mọi phòng, trừ phòng có máy tạo ẩm.',
+      'Dạ chế độ tự động chạy ở mọi phòng ạ.',
     ],
-    ['Giá áp dụng cho tất cả đại lý, trừ đại lý cấp 1.', 'Dạ giá áp dụng cho tất cả đại lý ạ.'],
-    ['Đơn được miễn phí ship, trừ khu vực miền núi.', 'Dạ đơn được miễn phí ship ạ.'],
   ];
 
   it('bo ve dieu kien di thi ca loi nhan bi bo', () => {
@@ -389,13 +405,12 @@ describe('#200 — cat duoi mot ve DIEU KIEN ngan bang dau phay', () => {
   });
 
   it('trich CA CAU, ke ca ve dieu kien, thi van gui duoc', () => {
-    const composition = narrativeOf(
-      'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên, nếu có lỗi từ nhà sản xuất ạ.',
-      [CONDITIONAL[0]![0]],
-    );
+    const composition = narrativeOf('Dạ máy chạy êm ở mọi cấp gió, trừ cấp mạnh nhất ạ.', [
+      CONDITIONAL[0]![0],
+    ]);
 
     expect(composition.narrative).toMatchObject({ admitted: true });
-    expect(composition.text).toContain('nếu có lỗi từ nhà sản xuất');
+    expect(composition.text).toContain('trừ cấp mạnh nhất');
   });
 });
 
@@ -410,7 +425,7 @@ describe('#200 — tu boc dong am voi tu noi dung khong cat mat chu cua nguon', 
   it('`kính` cuoi cau khong bi cat khoi ban phat ra', () => {
     const source = 'Gas R290 không gây hiện tượng nhà kính, không phá hủy tầng ozon.';
 
-    expect(sourceUnits([source]).map((unit) => unit.text)).toEqual([
+    expect(sourceUnits(tellableAll([source])).map((unit) => unit.text)).toEqual([
       'Gas R290 không gây hiện tượng nhà kính, không phá hủy tầng ozon',
     ]);
     expect(narrativeOf(`Dạ ${source.slice(0, -1)} ạ.`, [source]).text).toContain('nhà kính');
@@ -426,8 +441,8 @@ describe('#200 — chang 3c: van ban CUOI bi ghep them sau khi soan', () => {
    * chi phep doi chieu muc MENH DE moi thay cau do khong thuoc ve ai.
    */
   it('mot menh de ghep them tu chinh chu DA GHIM van bi tu choi o diem nghen gui', () => {
-    const composition = narrativeOf('Dạ khách hàng thanh toán ngay khi nhận hàng ạ.', [SOURCE_A]);
-    const tampered = { ...composition, text: `${composition.text}\nKhách hàng nhận hàng ngay.` };
+    const composition = narrativeOf('Dạ máy lọc bụi mịn ngay khi bật nguồn ạ.', [SOURCE_A]);
+    const tampered = { ...composition, text: `${composition.text}\nMáy bật nguồn lọc ngay.` };
 
     expect(decideOutboundAuthority(tampered, { grants: [] })).toMatchObject({
       sendable: false,
@@ -437,7 +452,7 @@ describe('#200 — chang 3c: van ban CUOI bi ghep them sau khi soan', () => {
 
   /** Chang 3b van la lop dau tien cham vao: mot chu HOAN TOAN moi hong o do, khong phai o 3c. */
   it('mot chu hoan toan moi van hong o chang 3b, khong phai o 3c', () => {
-    const composition = narrativeOf('Dạ khách hàng thanh toán ngay khi nhận hàng ạ.', [SOURCE_A]);
+    const composition = narrativeOf('Dạ máy lọc bụi mịn ngay khi bật nguồn ạ.', [SOURCE_A]);
     const tampered = { ...composition, text: `${composition.text}\nBên em tặng thêm quà.` };
 
     expect(decideOutboundAuthority(tampered, { grants: [] })).toMatchObject({
@@ -459,11 +474,13 @@ describe('#200 — chang 3c: van ban CUOI bi ghep them sau khi soan', () => {
 
 describe('#200 — bindProposition truc tiep', () => {
   it('loi nhan toan tu boc khong phai mot cau tra loi', () => {
-    expect(bindProposition('Dạ vâng ạ.', sourceUnits([SOURCE_A]))).toEqual({ bound: false });
+    expect(bindProposition('Dạ vâng ạ.', sourceUnits(tellableAll([SOURCE_A])))).toEqual({
+      bound: false,
+    });
   });
 
   it('khong nguon nao thi khong rang buoc duoc gi', () => {
-    expect(bindProposition('Dạ khách hàng thanh toán ngay khi nhận hàng ạ.', [])).toEqual({
+    expect(bindProposition('Dạ máy lọc bụi mịn ngay khi bật nguồn ạ.', [])).toEqual({
       bound: false,
     });
   });

@@ -15,6 +15,7 @@ import {
   pricedFacts,
   pricedOrder,
   quoteFacts,
+  tellableAll,
 } from './__tests__/composition.fixture.js';
 
 /**
@@ -314,7 +315,7 @@ describe('#189 — bo soan la ham thuan, va thu tu khoi khong theo thu tu model 
 describe('#189 — hop dong neo nguon cho loi nhan', () => {
   it('G1: luot khong tra cuu duoc nguon he thong nao -> khong co van xuoi nao ra khach', () => {
     const composition = compose(plan([], 'Dạ máy này dùng tốt lắm ạ.'), NO_BUSINESS_FACTS, {
-      systemSources: [],
+      evidence: tellableAll([]),
     });
 
     expect(composition.narrative).toEqual({ admitted: false, reason: 'NO_SYSTEM_SOURCE' });
@@ -332,7 +333,7 @@ describe('#189 — hop dong neo nguon cho loi nhan', () => {
     const composition = compose(
       plan([], 'Dạ lưu lượng gió lên tới 9700 lít/phút ạ.'),
       NO_BUSINESS_FACTS,
-      { systemSources: ['Lưu lượng gió lên tới 9700 lít/phút.'] },
+      { evidence: tellableAll(['Lưu lượng gió lên tới 9700 lít/phút.']) },
     );
 
     // Van ban den tay khach la KY TU CUA NGUON (G6, #200) — chu hoa đầu menh de la cua tai lieu.
@@ -357,7 +358,7 @@ describe('#189 — hop dong neo nguon cho loi nhan', () => {
   it('#200: cau xac nhan so luong tu ghep tu hai manh nguon KHONG con qua duong van xuoi', () => {
     const composition = compose(plan([], 'Dạ Ghế Felix 20 cái ạ.'), NO_BUSINESS_FACTS, {
       customerText: 'lay 20 cai ghe Felix nhe',
-      systemSources: ['Ghế Felix', 'cái'],
+      evidence: tellableAll(['Ghế Felix', 'cái']),
     });
 
     expect(composition.narrative).toEqual({
@@ -431,7 +432,7 @@ describe('#189 — hop dong neo nguon cho loi nhan', () => {
   it('G3: tin khach KHONG neo nguon duoc cho mot cau chinh sach — khach xin cong no khong tao ra cong no', () => {
     const composition = compose(plan([], 'Dạ bên em cho mình công nợ ạ.'), NO_BUSINESS_FACTS, {
       customerText: 'ben minh cho cong no khong',
-      systemSources: [APPROVED_DOC],
+      evidence: tellableAll([APPROVED_DOC]),
     });
 
     expect(composition.narrative).toEqual({

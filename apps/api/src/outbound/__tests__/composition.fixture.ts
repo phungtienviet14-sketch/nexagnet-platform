@@ -19,6 +19,12 @@ import {
 } from '../outbound-authority.js';
 import { composeOutbound, type ComposeContext } from '../outbound-composer.js';
 import {
+  businessAuthorityEvidence,
+  documentEvidence,
+  evidenceVersion,
+  type SourceEvidence,
+} from '../source-evidence.js';
+import {
   mergeBusinessFacts,
   NO_BUSINESS_FACTS,
   type BusinessFactsPatch,
@@ -168,6 +174,55 @@ export const APPROVED_DOC = 'Ghế Felix có tựa lưng lưới. Khung thép s�
  * `context` cho phep tung bai ghi de nguon/tin khach/tham quyen — vd de chung minh mot loi nhan
  * KHONG co nguon thi bi tu choi (G1), hay mot grant vang mat thi khoi bien mat.
  */
+/**
+ * KHACH CUA BO TEST. Bat ky gia tri nao cung duoc, mien la CUNG mot gia tri o hai dau — do chinh
+ * la thu dang duoc kiem: mot manh bang chung cua khach khac khong thoa man duoc ban soan nay.
+ */
+export const TEST_TENANT = 'test-tenant';
+
+/** Khach KHAC — dung de chung minh phep loc theo khach that su chan (muc 8 ca 20 hop dong #205). */
+export const OTHER_TENANT = 'other-tenant';
+
+/**
+ * TAI LIEU DA DUYET DA DUOC TUYEN BO LA KE DUOC.
+ *
+ * `sourceId` gan theo dau cua chinh doan van, nen hai doan khac nhau khong bao gio ghim trung —
+ * bo test doi chieu duoc tung ghim mot.
+ */
+export function tellable(
+  text: string,
+  productSku: string | null = null,
+  tenant: string = TEST_TENANT,
+): SourceEvidence {
+  return documentEvidence(`faq:test:${evidenceVersion(text)}`, text, { tenant, productSku }, true);
+}
+
+/** Nhieu doan cung mot luc, tat ca deu ke duoc. */
+export function tellableAll(
+  texts: readonly string[],
+  productSku: string | null = null,
+): SourceEvidence[] {
+  return texts.map((text) => tellable(text, productSku));
+}
+
+/** TAI LIEU CHUA AI TUYEN BO — mac dinh cua moi ban ghi dang co. Fail closed. */
+export function unclassified(text: string, productSku: string | null = null): SourceEvidence {
+  return documentEvidence(
+    `faq:test:${evidenceVersion(text)}`,
+    text,
+    { tenant: TEST_TENANT, productSku },
+    undefined,
+  );
+}
+
+/** BANG CHUNG THUOC THAM QUYEN — gia/chinh sach/trang thai don. Khong bao gio chon duoc. */
+export function authorityOwned(text: string, productSku: string | null = null): SourceEvidence {
+  return businessAuthorityEvidence(`quote:test:${evidenceVersion(text)}`, text, {
+    tenant: TEST_TENANT,
+    productSku,
+  });
+}
+
 export function compose(
   outboundPlan: OutboundPlan,
   patch: BusinessFactsPatch = {},
@@ -175,7 +230,8 @@ export function compose(
 ): OutboundComposition {
   const turn = mergeBusinessFacts(NO_BUSINESS_FACTS, patch);
   return composeOutbound(outboundPlan, turn, {
-    systemSources: [APPROVED_DOC],
+    evidence: [tellable(APPROVED_DOC)],
+    tenant: TEST_TENANT,
     customerText: '',
     authority: authorityFor(turn),
     ...context,

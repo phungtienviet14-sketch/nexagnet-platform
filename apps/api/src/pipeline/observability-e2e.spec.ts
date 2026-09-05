@@ -7,7 +7,11 @@ import {
   type AdvisorReply,
   type AdvisorRequest,
 } from '../advisor/advisor-agent.js';
-import { fakeAdvisorReply } from '../advisor/__tests__/advisor-reply.fixture.js';
+import {
+  fakeAdvisorReply,
+  stubEvidence,
+  stubEvidenceRegistry,
+} from '../advisor/__tests__/advisor-reply.fixture.js';
 import type { LlmUsage } from '../observability/llm-usage.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
@@ -71,7 +75,9 @@ class StubAdvisor extends AdvisorAgent {
     private readonly rounds: readonly LlmUsage[] = [],
   ) {
     super();
-    this.canned = canned ? fakeAdvisorReply({ sources: STUB_SOURCES, ...canned }) : null;
+    this.canned = canned
+      ? fakeAdvisorReply({ sources: stubEvidence(STUB_SOURCES), ...canned })
+      : null;
   }
   async reply(request: AdvisorRequest): Promise<AdvisorReply | null> {
     for (const round of this.rounds) request.reportUsage?.(round);
@@ -139,7 +145,13 @@ async function build(options: {
   );
   const outbound = new MockAdapter();
   const router = new OutboundChannelRouter(new MockAdapter(), new MockAdapter(), outbound);
-  const turnReply = new TurnReplyService(ordersRepo, router);
+  const turnReply = new TurnReplyService(
+    ordersRepo,
+    router,
+    undefined,
+    undefined,
+    stubEvidenceRegistry(),
+  );
   const orders = new OrdersService(ordersRepo, router, undefined, telemetry, undefined, turnReply);
   const settings = { autoSend: () => options.autoSend ?? 'on' } as RuntimeSettingsService;
   const pipeline = new PipelineService(
@@ -496,7 +508,13 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
     );
     const outbound = new MockAdapter();
     const router = new OutboundChannelRouter(new MockAdapter(), new MockAdapter(), outbound);
-    const turnReply = new TurnReplyService(ordersRepo, router);
+    const turnReply = new TurnReplyService(
+      ordersRepo,
+      router,
+      undefined,
+      undefined,
+      stubEvidenceRegistry(),
+    );
     const pipeline = new PipelineService(
       orchestrator,
       new SalesOrderOutcomeService(
@@ -545,7 +563,13 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
     );
     const outbound = new MockAdapter();
     const router = new OutboundChannelRouter(new MockAdapter(), new MockAdapter(), outbound);
-    const turnReply = new TurnReplyService(ordersRepo, router);
+    const turnReply = new TurnReplyService(
+      ordersRepo,
+      router,
+      undefined,
+      undefined,
+      stubEvidenceRegistry(),
+    );
     const pipeline = new PipelineService(
       orchestrator,
       new SalesOrderOutcomeService(

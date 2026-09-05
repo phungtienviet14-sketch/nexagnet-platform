@@ -20,7 +20,13 @@ import {
   policyClaimTokens,
 } from './outbound-claims.js';
 import { attestedWords, parseAttestedTokens, unattestedWords } from './outbound-envelope.js';
-import { bindProposition, parseBoundExcerpts, sourceUnits } from './outbound-proposition.js';
+import { bindProposition, sourceUnits } from './outbound-proposition.js';
+import {
+  composedBlockEvidence,
+  parsePinnedEvidence,
+  pinnedEvidence,
+  singleProductScope,
+} from './source-evidence.js';
 import {
   parseGroundingTokens,
   ungroundedCarrier,
@@ -422,14 +428,37 @@ export function decideOutboundAuthority(
    * Thu no bat duoc ma chang soan khong bat duoc la mot doan VAN XUOI bi ghep them vao `text` SAU
    * khi ban soan da xet: doan do se khong trung tron ven menh de nao trong hai nguon tren.
    */
+  /*
+   * DOI CHIEU VOI DUNG BAN GHI DA GHIM, khong voi mot tap chuoi bat ky (Issue #205).
+   *
+   * Truoc #205 cho nay doc `x:<van ban>` roi coi chinh chuoi do la bang chung nguon goc — muc 3
+   * hop dong goi dung ten la fake provenance. Nay moi ghim mang `sourceId@version#pham-vi`, nen
+   * chang kiem lai tra loi duoc ban ghi NAO da cap phep cho cau nay.
+   */
+  const pins = parsePinnedEvidence(composition.grounded);
   const boundText = bindProposition(composition.text, [
-    ...sourceUnits(parseBoundExcerpts(composition.grounded)),
-    ...sourceUnits(composition.blocks.flatMap((block) => block.lines)),
+    ...sourceUnits(pinnedEvidence(pins)),
+    ...sourceUnits(composedBlockEvidence(composition.blocks.flatMap((block) => block.lines))),
   ]);
   if (!boundText.bound) {
     return {
       sendable: false,
       reason: 'COMPOSITION_TEXT_NOT_SOURCE_BOUND',
+      missing: [],
+      fingerprint,
+    };
+  }
+  /*
+   * CHANG 3d - PHAM VI, doc lai tren chinh cac ghim (Issue #205, muc 4 hop dong).
+   *
+   * G7 da xet luc soan. Xet lai o day vi cung mot ly do voi ba chang tren: chang soan chi nhin
+   * `plan.narrative`, con day nhin VAN BAN CUOI — mot doan bi ghep them sau khi soan xong se
+   * khong co chang nao khac bat duoc.
+   */
+  if (!singleProductScope(boundText.units.map((unit) => unit.evidence.scope.productSku))) {
+    return {
+      sendable: false,
+      reason: 'COMPOSITION_SCOPE_CONFLICT',
       missing: [],
       fingerprint,
     };

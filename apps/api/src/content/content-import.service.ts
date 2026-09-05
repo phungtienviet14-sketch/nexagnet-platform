@@ -90,6 +90,16 @@ export class ContentImportService {
           ...(item.productSku ? { productSku: item.productSku } : {}),
           question: item.question,
           answer: item.answer,
+          /*
+           * LOP THAM QUYEN di theo ban ghi tu manifest, va CHI khi manifest noi ro (Issue #205).
+           *
+           * Khong co mac dinh o day, va khong co phep doan nao doc `question`/`answer` de suy ra
+           * lop. Manifest im lang thi ban ghi vao DB voi NULL, tuc khong ke duoc — muc 9 hop dong
+           * cam han viec tu gan nhan tu ngu nghia doan duoc.
+           */
+          ...(item.narrativeEligible === undefined
+            ? {}
+            : { narrativeEligible: item.narrativeEligible }),
           status: 'draft',
           provenanceKey: key,
           operatorEdited: false,
@@ -103,6 +113,9 @@ export class ContentImportService {
           ...(item.productSku ? { productSku: item.productSku } : {}),
           title: item.title,
           body: item.body,
+          ...(item.narrativeEligible === undefined
+            ? {}
+            : { narrativeEligible: item.narrativeEligible }),
           status: 'draft',
           provenanceKey: key,
           operatorEdited: false,

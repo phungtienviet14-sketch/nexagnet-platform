@@ -23,7 +23,8 @@ export const assetLocatorSchema = z
   .max(2_000)
   .refine(
     (value) =>
-      (value.startsWith('/') && !value.startsWith('//')) || z.string().url().safeParse(value).success,
+      (value.startsWith('/') && !value.startsWith('//')) ||
+      z.string().url().safeParse(value).success,
     { message: 'locator phai la URL tuyet doi hoac duong dan bat dau bang "/"' },
   );
 
@@ -75,6 +76,12 @@ export const contentImportManifestSchema = z
             productSku: z.string().trim().min(1).max(100).optional(),
             question: z.string().trim().min(1).max(2_000),
             answer: z.string().trim().min(1).max(20_000),
+            /**
+             * Xem `FaqView.narrativeEligible`. VANG MAT = KHONG ke duoc: khong co `.default()` o
+             * day, va do la co y - mot mac dinh `false` va mot truong vang mat phai phan biet
+             * duoc o tang duoi, con o tang nay ca hai deu dan den tu choi.
+             */
+            narrativeEligible: z.boolean().optional(),
           })
           .strict(),
       )
@@ -87,6 +94,8 @@ export const contentImportManifestSchema = z
             productSku: z.string().trim().min(1).max(100).optional(),
             title: z.string().trim().min(1).max(500),
             body: z.string().trim().min(1).max(20_000),
+            /** Xem `AdviceContentView.narrativeEligible`. Vang mat = khong ke duoc. */
+            narrativeEligible: z.boolean().optional(),
           })
           .strict(),
       )
@@ -203,6 +212,18 @@ export interface FaqView {
   question: string;
   answer: string;
   status: ContentLifecycleStatus;
+  /**
+   * BAN GHI NAY CO DUOC KE LAI TRONG LOI NHAN KHONG? (Issue #205)
+   *
+   * `true` = mot HANH VI XUAT BAN cua nguoi van hanh: menh de cua ban ghi nay duoc phep chon vao
+   * phan van xuoi den tay khach. `false` hay VANG MAT = khong duoc — va vang mat la TU CHOI, chua
+   * bao gio la cho phep.
+   *
+   * Kho tai lieu da duyet la mot kho TRON: cau thong so ky thuat nam canh cau bao gia, cau bao
+   * hanh 1-doi-1, cau dieu kien doi tra. Khong mot phep quet van xuoi nao duoc phep dat truong
+   * nay — muc 3 va muc 9 hop dong #205 cam ca quet luc chay lan quet luc nap.
+   */
+  narrativeEligible?: boolean;
   provenanceKey?: string;
   operatorEdited: boolean;
 }
@@ -214,6 +235,18 @@ export interface AdviceContentView {
   title: string;
   body: string;
   status: ContentLifecycleStatus;
+  /**
+   * BAN GHI NAY CO DUOC KE LAI TRONG LOI NHAN KHONG? (Issue #205)
+   *
+   * `true` = mot HANH VI XUAT BAN cua nguoi van hanh: menh de cua ban ghi nay duoc phep chon vao
+   * phan van xuoi den tay khach. `false` hay VANG MAT = khong duoc — va vang mat la TU CHOI, chua
+   * bao gio la cho phep.
+   *
+   * Kho tai lieu da duyet la mot kho TRON: cau thong so ky thuat nam canh cau bao gia, cau bao
+   * hanh 1-doi-1, cau dieu kien doi tra. Khong mot phep quet van xuoi nao duoc phep dat truong
+   * nay — muc 3 va muc 9 hop dong #205 cam ca quet luc chay lan quet luc nap.
+   */
+  narrativeEligible?: boolean;
   provenanceKey?: string;
   operatorEdited: boolean;
 }
