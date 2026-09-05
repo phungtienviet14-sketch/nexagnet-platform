@@ -40,7 +40,7 @@ Vì ba đường có thể cùng đủ điều kiện trên **một** HEAD, mọ
 (`findPostedClaim`), so bằng **khoá idempotency của giao thức**. V0 read-only không có sổ ledger bên
 ngoài, nên **luồng comment chính là sổ ledger**.
 
-## Mười ba tệp, hai tệp bẩn
+## Mười bốn tệp, hai tệp bẩn
 
 | Tệp                   | Thuần? | Việc                                                                                                          |
 | --------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
@@ -49,7 +49,8 @@ ngoài, nên **luồng comment chính là sổ ledger**.
 | `src/evidence.mjs`    | ✅     | Hình dạng GitHub REST → tham số validator. Fail-closed.                                                       |
 | `src/inbox.mjs`       | ✅     | Luồng comment → tra cứu `BUILD_READY` ở đúng HEAD, và cổng chống trùng.                                       |
 | `src/registry.mjs`    | ✅     | Sơ đồ `principal → vai`. Đọc từ biến môi trường, **không ghi cứng login nào**.                                |
-| `src/permissions.mjs` | ✅     | Bảng "lời gọi API ↔ quyền". Một nguồn cho cả preflight lẫn bài kiểm hợp đồng workflow.                        |
+| `src/permissions.mjs` | ✅     | Bảng "lời gọi API ↔ quyền", quyền **dẫn xuất từ loại tài nguyên**. Một nguồn cho cả preflight lẫn bài kiểm hợp đồng workflow. |
+| `src/api-error.mjs`   | ✅     | Thân lỗi GitHub → chẩn đoán **đã làm sạch**. Không header nào đi qua; chỉ các trường GitHub **tài liệu hoá** đi ra, còn thân **không nhận ra** chỉ ra metadata (loại/độ dài/dấu vân) — không một chữ nào của nó. |
 | `src/decide.mjs`      | ✅     | Sự kiện + bằng chứng → mô tả việc phải làm.                                                                   |
 | `src/ledger.mjs`      | ✅     | Đọc **trọn vẹn** luồng comment bằng phân trang. Đọc thiếu ⇒ fail-closed, không quyết định trên một phần sổ. |
 | `src/labels.mjs`      | ✅     | Hoà giải nhãn, **đọc kết quả từng lời gọi**. Chỉ `404` khi gỡ nhãn vắng mới là thành công.                  |
@@ -174,17 +175,42 @@ duyệt" được thoả — điều mà nếu chỉ nhìn `user.login` thì kh�
 2. **`issue_comment` cũng chưa chạy thật**, và không thể chạy thật cho tới khi bản này lên `main`
    (cạm bẫy 3).
 3. **`pull_request` chỉ chứng minh được phần ĐỌC.** Từ blocker B4, job chạy trên trigger đó không
-   còn được cầm `issues: write` — nên `preflight` **không thể** đo quyền ghi bằng một lời gọi thật
-   nữa, và sẽ không bao giờ đo được: không thể vừa cho mã nguồn PR chạy vừa cho nó cầm quyền ghi để
-   đo. Quyền ấy nay được canh bằng một hợp đồng **tĩnh** (`tests/workflow-contract.test.mjs` đọc
-   thẳng khối `permissions:` của job `orchestrate`; từ blocker B7 thì so khớp **chính xác** với bảng
-   `WRITE_CALLS` — thừa một dòng `: write` là đỏ). Đó là một bằng chứng yếu hơn hẳn một lời gọi 200,
-   và nói ra ở đây chứ không giấu.
-4. **Đường ghi chưa từng chạy thật.** Nó chỉ chạy trên `issue_comment`/`check_suite`, tức chỉ sau
+   còn được cầm **một quyền ghi nào** — nên `preflight` **không thể** đo quyền ghi bằng một lời gọi
+   thật nữa, và sẽ không bao giờ đo được: không thể vừa cho mã nguồn PR chạy vừa cho nó cầm quyền
+   ghi để đo. Quyền ấy nay được canh bằng một hợp đồng **tĩnh** (`tests/workflow-contract.test.mjs`
+   đọc thẳng khối `permissions:` của job `orchestrate`, so khớp **chính xác** với bảng `WRITE_CALLS`
+   — thừa một dòng `: write` là đỏ). Đó là một bằng chứng yếu hơn hẳn một lời gọi 200, và nói ra ở
+   đây chứ không giấu. **Cạm bẫy 3 vừa chứng minh điều đó không phải nói cho có** — xem mục 4.
+4. **`pull-requests: write` là GIẢ THUYẾT, chưa được chứng minh.** Đây là mục quan trọng nhất của cả
+   danh sách, vì nó là chỗ một hợp đồng tĩnh **đã** khoá nhầm một tiền đề sai và không ai biết:
+
+   - Blocker **B7** của PR #167 suy luận từ tài liệu REST (`/issues/{n}/comments` đòi *"Issues"
+     write **hoặc** "Pull requests" write*) rằng `issues: write` là đủ, rồi **gỡ**
+     `pull-requests: write` đi. Bài kiểm hợp đồng được viết để khoá đúng kết luận ấy lại.
+   - Run **33889198070** (04/09/2026) bác bỏ: token có đúng `Issues: write` + `PullRequests: read`
+     (log runner xác nhận), lối quyết định chạy đúng tới cuối (`HEAD_MISMATCH`), rồi
+     `POST /issues/167/comments` trả **403**. Lặp lại hai lần. Đã loại trừ: PR không `locked`, repo
+     không archived, không interaction limit, và `default_workflow_permissions` **không** phải
+     nguyên nhân (thử cả `read` lẫn `write` đều 403 y hệt).
+   - Cách đọc hiện tại — quyền theo **loại tài nguyên** được địa chỉ hoá, không theo tiền tố đường
+     dẫn — là **giả thuyết mạnh nhất còn lại**, không phải root cause đã chứng minh. Chứng minh nó
+     đòi một `201` **thật** từ GitHub sau khi bản này lên `main`. Nếu bộ quyền mới vẫn 403 thì
+     **dừng lại** với bằng chứng đã làm sạch; **không** cầm thêm quyền "cho chắc".
+   - Bài học đã đóng lại được: `WRITE_CALLS` không còn cho ai **viết tay** một dòng `grant` — quyền
+     dẫn xuất từ loại tài nguyên, và loại tài nguyên là thứ người đọc mã kiểm được (`{n}` là số PR
+     hay số Issue). Và `src/api-error.mjs` giữ lại **câu** GitHub trả về khi non-2xx, để lần sau một
+     `403` không còn về tới log dưới dạng đúng một con số. "Câu" ở đây là **các trường GitHub đã
+     tài liệu hoá** (`message`, `documentation_url`, `errors[]`) sau khi qua bộ mẫu bí mật — chứ
+     không phải cả thân: một thân **không nhận ra** (JSON lạ, hay không phải JSON) chỉ ra được
+     **loại / độ dài / dấu vân**. Bản đầu của #188 đổ nguyên văn thân lạ ra log, và trên một repo
+     public thì đó là fail-open — mở rộng đúng cách là thêm trường vào danh sách cho phép khi
+     GitHub tài liệu hoá nó, không phải làm bộ mẫu đoán giỏi hơn.
+
+5. **Đường ghi chưa từng chạy thật.** Nó chỉ chạy trên `issue_comment`/`check_suite`, tức chỉ sau
    khi bản này lên `main` (cạm bẫy 3). Trong PR, đường ghi được đo bằng `tests/recovery.test.mjs` —
    chạy thật `node src/main.mjs` hai lần với mạng được dựng lại, không phải bằng một lần chạy
    GitHub thật.
-5. **Vẫn chưa có người thứ hai đọc mã** (repo một chủ).
+6. **Vẫn chưa có người thứ hai đọc mã** (repo một chủ).
 
 ## Chạy test
 

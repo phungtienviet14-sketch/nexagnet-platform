@@ -20,8 +20,8 @@
 #
 # 2. VA CHINH VI THE, `pull_request` KHONG DUOC CAM QUYEN GHI (blocker B4 cua PR #167). Tren trigger
 #    do, ma nguon cua PR chua duyet quyet dinh CA BA thu: `main.mjs`, cac tep giao thuc no import,
-#    VA CHINH TEP YAML NAY. Mot job `pull_request` cam `issues: write` la mot job cho phep ma nguon
-#    chua duyet ghi vao dung mat phang trang thai ma no dang xin duyet. Nen workflow nay tach lam
+#    VA CHINH TEP YAML NAY. Mot job `pull_request` cam BAT KY quyen ghi nao la mot job cho phep ma
+#    nguon chua duyet ghi vao dung mat phang trang thai ma no dang xin duyet. Nen workflow tach lam
 #    HAI duong thuc thi, va ranh gioi giua chung la quyen chu khong phai loi hua:
 #
 #      duong KHONG TIN CAY  `preflight` + `orchestrate-readonly`
@@ -197,22 +197,35 @@ jobs:
           && github.event.check_suite.pull_requests[0] != null)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # DUNG MOT QUYEN GHI, VA NO LA `issues: write` (blocker B7 cua PR #167).
+    # DUNG MOT QUYEN GHI, VA NO LA `pull-requests: write` (Issue #188).
     #
-    # Ca ba loi goi ghi cua orchestrator deu la `/issues/...`: dang comment, gan nhan, go nhan. Tai
-    # lieu REST cua GitHub ghi cho ca ba cung mot cau — can "Issues" write HOAC "Pull requests"
-    # write, MOT trong hai. Nen `pull-requests` o day chi can `: read`, cho dung mot viec con lai:
-    # `GET /pulls/{n}` lay HEAD that.
+    # BLOCKER B7 CUA PR #167 DA BI MOT LOI GOI THAT BAC BO. B7 doc theo DUONG DAN: ca ba loi goi
+    # ghi deu la `/issues/...`, tai lieu REST ghi "Issues write HOAC Pull requests write", nen B7
+    # ket luan `issues: write` la du va go `pull-requests: write` di.
     #
-    # Ban truoc cam ca `pull-requests: write`. Khong mot loi goi nao doi no, va no uy quyen cho MOI
-    # thao tac ghi khac tren PR — doi base, doi title, dong PR — trong dung mot job cam quyen ghi
-    # cua ca mat phang dieu khien. Bang `WRITE_CALLS` trong `src/permissions.mjs` khoa dieu do lai:
-    # quyen ghi o day DAN XUAT tu loi goi co that, va `tests/workflow-contract.test.mjs` so khop
-    # CHINH XAC — them mot dong `: write` khong co endpoint doi no thi bai kiem do.
+    # Do ngay 04/09/2026, run 33889198070: token cua job nay co dung `Issues: write` +
+    # `PullRequests: read` (log runner xac nhan), loi quyet dinh chay dung toi cuoi
+    # (`HEAD_MISMATCH`), roi `POST /issues/167/comments` tra ve 403. Lap lai hai lan.
+    # Da loai tru: PR khong `locked`, repo khong archived, khong interaction limit, va
+    # `default_workflow_permissions` khong phai nguyen nhan (thu ca `read` lan `write` deu 403).
+    #
+    # Cach doc dung la theo LOAI TAI NGUYEN: `{n}` o ca ba duong dan la mot SO PR, nen quyen phai la
+    # quyen tren PR. `/issues/` trong URL chi la di san cua viec GitHub dung chung mot khong gian so.
+    #
+    # DAY VAN LA GIA THUYET. `issues: write` da bi bac bo; `pull-requests: write` la gia thuyet manh
+    # nhat con lai va CHUA duoc chung minh — chung minh no doi mot `201` that sau khi ban nay len
+    # `main`. Neu van 403 thi DUNG LAI voi bang chung da lam sach, khong cam them quyen "cho chac".
+    #
+    # `issues` HA XUONG `: read`, khong bo han: `main.mjs` doc than Issue mang hop dong task
+    # (`GET /issues/{n}` — mot Issue THAT, khong phai PR) va doc luong comment cua PR.
+    #
+    # Bang `WRITE_CALLS` trong `src/permissions.mjs` khoa bo quyen nay lai: `grant` DAN XUAT tu loai
+    # tai nguyen cua tung loi goi, va `tests/workflow-contract.test.mjs` so khop CHINH XAC — them
+    # mot dong `: write` khong co loi goi ghi nao doi den thi bai kiem do.
     permissions:
       contents: read
-      issues: write
-      pull-requests: read
+      issues: read
+      pull-requests: write
       checks: read
       actions: read
     steps:
