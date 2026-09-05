@@ -119,4 +119,76 @@ export class CostingReadService {
       expenses,
     };
   }
+
+  /**
+   * KHOAN CHI CUA CHINH TOI + dinh vi bang chung cua no — cong DOC cua duong anh (#169 §4).
+   *
+   * Cung cau truc voi `getMyFuelSlip()`: danh tinh den tu PHIEN, roi hang duoc doc len va doi chieu
+   * `driverId`. Mot `:expenseId` tren duong dan KHONG bao gio la danh tinh.
+   *
+   * BA duong tu choi mang BA MA rieng de trace phan biet duoc, nhung than HTTP thi khong phan biet:
+   * hang khong ton tai va hang cua nguoi khac tra CUNG mot cau.
+   */
+  async selfTripExpenseEvidence(
+    authUserId: string,
+    expenseId: string,
+  ): Promise<{ readonly expenseId: string; readonly locator: string }> {
+    const driver = await this.core.findDriverByAuthUserId(authUserId);
+    if (!driver) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_COSTING_DECISIONS,
+        point: 'driver.self_expense_scope',
+        outcome: 'denied',
+        reason: 'SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING',
+        detail: { authUserId },
+      });
+      throw TransportDomainError.denied(
+        'SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING',
+        'Tai khoan nay chua duoc noi voi ho so lai xe nao',
+      );
+    }
+
+    const expense = await this.ledger.findExpense(expenseId);
+    // "Khong ton tai" va "cua nguoi khac" KHONG duoc tra hai cau khac nhau: neu khac, mot vong lap
+    // go ma se do ra ma nao CO THAT trong bang du khong doc noi mot dong noi dung nao.
+    if (!expense || expense.driverId !== driver.id) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_COSTING_DECISIONS,
+        point: 'driver.self_expense_scope',
+        outcome: 'denied',
+        reason: expense ? 'SELF_EXPENSE_SCOPE_NOT_OWNED' : 'SELF_EXPENSE_SCOPE_UNKNOWN_ID',
+        detail: { driverId: driver.id, expenseId },
+      });
+      // `TRIP_EXPENSE_NOT_FOUND` — ma DA CO, khong bia them mot ma "khong duoc xem" thu hai.
+      // Tu be mat lai xe, khoan chi cua dong nghiep DUNG LA khong ton tai: do la cau tra loi that
+      // ma be mat nay duoc phep dua ra, va no giong het cau cho mot ma bia.
+      throw TransportDomainError.notFound(
+        'TRIP_EXPENSE_NOT_FOUND',
+        'Khong tim thay khoan chi nay trong so cua ban',
+      );
+    }
+
+    if (expense.evidenceLocator === null) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_COSTING_DECISIONS,
+        point: 'driver.self_expense_scope',
+        outcome: 'denied',
+        reason: 'SELF_EXPENSE_SCOPE_NO_EVIDENCE',
+        detail: { driverId: driver.id, expenseId },
+      });
+      throw TransportDomainError.notFound(
+        'EVIDENCE_NOT_ON_RECORD',
+        `Khoan chi ${expenseId} khong co anh bang chung nao`,
+      );
+    }
+
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_COSTING_DECISIONS,
+      point: 'driver.self_expense_scope',
+      outcome: 'allowed',
+      reason: 'SELF_EXPENSE_SCOPE_GRANTED',
+      detail: { driverId: driver.id, expenseId },
+    });
+    return { expenseId: expense.id, locator: expense.evidenceLocator };
+  }
 }

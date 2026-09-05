@@ -8,6 +8,7 @@ import { FuelRepository } from './fuel.repository.js';
 import type {
   FuelEntry,
   FuelEntryDetail,
+  FuelReceiptEvidence,
   FuelReconciliation,
   FuelReconciliationWorkspace,
   FuelSupplier,
@@ -182,6 +183,53 @@ export class FuelReadService {
       );
     }
     return driver;
+  }
+
+  /**
+   * MOT HANG BANG CHUNG cua phieu CUA CHINH TOI — `#169`.
+   *
+   * Di qua `getMyFuelSlip()` chu khong tu kiem lai `entry.driverId`: cong "phieu cua chinh toi" da
+   * co MOT cau tra loi trong he thong, va viet cau thu hai o day se tao ra hai luat de lech nhau.
+   *
+   * Tra ve ca `locator`, nhung KHONG qua `DriverFuelSlipView` — khung nhin cua lai xe co y chi mang
+   * `evidenceCount`. Dinh vi la chi tiet cua tang luu tru, va no chi duoc di toi `MediaStore`, khong
+   * di toi trinh duyet.
+   */
+  async myFuelSlipEvidence(
+    authUserId: string,
+    entryId: string,
+    evidenceId: string,
+  ): Promise<FuelReceiptEvidence> {
+    await this.getMyFuelSlip(authUserId, entryId);
+    return this.requireEvidenceOnEntry(entryId, evidenceId);
+  }
+
+  /** Nhu tren, cho be mat VAN HANH: quyen do `transport.fuel.entry.read` chot o controller. */
+  async fuelEntryEvidence(entryId: string, evidenceId: string): Promise<FuelReceiptEvidence> {
+    await this.requireEntry(entryId);
+    return this.requireEvidenceOnEntry(entryId, evidenceId);
+  }
+
+  /**
+   * Hang bang chung phai THUOC VE phieu tren duong dan.
+   *
+   * Doc theo `fuelEntryId` roi loc trong danh sach do, chu khong tra thang `evidenceId`: mot ham
+   * `findEvidence(id)` se tra ve hang cua phieu BAT KY, va luc do quyen so huu vua kiem o tren
+   * khong con y nghia gi — nguoi goi chi viec doi `evidenceId` tren URL.
+   */
+  private async requireEvidenceOnEntry(
+    entryId: string,
+    evidenceId: string,
+  ): Promise<FuelReceiptEvidence> {
+    const evidence = await this.repository.listEvidence(entryId);
+    const found = evidence.find((row) => row.id === evidenceId);
+    if (!found) {
+      throw TransportDomainError.notFound(
+        'EVIDENCE_NOT_ON_RECORD',
+        `Phieu ${entryId} khong co bang chung ${evidenceId}`,
+      );
+    }
+    return found;
   }
 
   private async requireEntry(entryId: string): Promise<FuelEntry> {
