@@ -18,6 +18,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { deriveCorpus, probeStandalone, probeValidationConfigStates } from './src/derive.mjs';
+import { probeEngineAuthPaths } from './src/engine-auth-probe.mjs';
+import { buildEvidenceIndex } from './src/evidence-index.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const upstream = JSON.parse(readFileSync(join(here, 'upstream.json'), 'utf8'));
@@ -25,6 +27,11 @@ const upstream = JSON.parse(readFileSync(join(here, 'upstream.json'), 'utf8'));
 const write = process.argv.includes('--write');
 const repoRoot =
   process.argv.slice(2).find((arg) => !arg.startsWith('-')) ?? process.env.GH_AW_REPO;
+
+// PoC D can THEM mot nhi phan trinh bien dich dung tu chinh clone do; ba bang chung kia chi can doc
+// tep. Tach lam hai vi mot cai doi Go toolchain con ba cai kia thi khong — nguoi ngoai kiem duoc
+// phan lon bang chung ma khong phai cai Go, va van kiem duoc phan con lai khi ho muon.
+const compilerBin = process.env.GH_AW_BIN;
 
 if (!repoRoot || !existsSync(repoRoot)) {
   console.error(
@@ -49,7 +56,20 @@ const artefacts = {
   'permissions-corpus.json': deriveCorpus(repoRoot),
   'standalone-probe.json': probeStandalone(repoRoot),
   'validation-config-states.json': probeValidationConfigStates(repoRoot),
+  'evidence-index.json': buildEvidenceIndex(repoRoot, upstream.auditedSha),
 };
+
+if (compilerBin) artefacts['engine-auth-paths.json'] = probeEngineAuthPaths(compilerBin);
+
+/**
+ * SO SANH KHONG PHU THUOC KY TU XUONG DONG.
+ *
+ * Tren mot ban checkout Windows, git tra tep ve dang CRLF, con phep dan xuat luon sinh ra LF. So
+ * tung byte thi ba tep KHOP NOI DUNG van bi bao LECH — va mot phep kiem bao dong khi khong co gi
+ * sai thi lan sau khong ai tin no nua. Chuan hoa xuong dong roi moi so; con noi dung thi van so
+ * DUNG TUNG KY TU.
+ */
+const sameContent = (left, right) => left.replace(/\r\n/g, '\n') === right;
 
 let drift = 0;
 for (const [name, derived] of Object.entries(artefacts)) {
@@ -60,12 +80,18 @@ for (const [name, derived] of Object.entries(artefacts)) {
     console.log(`ghi   ${name}`);
     continue;
   }
-  if (existsSync(path) && readFileSync(path, 'utf8') === body) {
+  if (existsSync(path) && sameContent(readFileSync(path, 'utf8'), body)) {
     console.log(`khop  ${name}`);
     continue;
   }
   console.error(`LECH  ${name} — chay lai voi --write neu upstream that su da doi.`);
   drift += 1;
+}
+
+if (!compilerBin) {
+  console.log(
+    'bo qua engine-auth-paths.json — dat GH_AW_BIN=<nhi phan gh-aw dung tai SHA da ghim> de do luon PoC D.',
+  );
 }
 
 process.exit(drift === 0 ? 0 : 1);

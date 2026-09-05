@@ -35,15 +35,24 @@ node tools/poc-gh-aw-evaluation/derive-fixtures.mjs /tmp/gh-aw
 Sinh lại thì thêm `--write`. Script **từ chối chạy** nếu clone không ở đúng SHA — một bằng chứng ghim
 SHA mà đọc nhầm cây thì không còn là bằng chứng.
 
-## Ba phép đo
+PoC D cần thêm một **nhị phân trình biên dịch dựng từ chính clone đó**. Tách khỏi ba phép đo kia có
+chủ đích: chúng chỉ cần đọc tệp, nên người kiểm chứng được phần lớn bằng chứng mà không phải cài Go.
 
-| PoC   | Câu hỏi (§10 hợp đồng task)                       | Tệp                                |
+```bash
+cd /tmp/gh-aw && go build -buildvcs=false -o /tmp/gh-aw-bin ./cmd/gh-aw
+GH_AW_BIN=/tmp/gh-aw-bin node tools/poc-gh-aw-evaluation/derive-fixtures.mjs /tmp/gh-aw
+```
+
+## Bốn phép đo
+
+| PoC   | Câu hỏi (§5 và §10 hợp đồng task)                 | Tệp                                |
 | ----- | ------------------------------------------------- | ---------------------------------- |
 | **A** | Safe Outputs tái sử dụng độc lập được không?      | `tests/poc-a-standalone.test.mjs`  |
 | **B** | gh-aw suy quyền từ loại Safe Output ra sao?       | `tests/poc-b-permissions.test.mjs` |
 | **C** | Ranh giới không-tin-cậy / được-ghi có thật không? | `tests/poc-c-boundary.test.mjs`    |
+| **D** | gh-aw giao được `CLAUDE_CODE_OAUTH_TOKEN` không?  | `tests/poc-d-engine-auth.test.mjs` |
 
-Ba kết quả, nói ngắn:
+Bốn kết quả, nói ngắn:
 
 - **A — `PARTIAL`.** Cả 5 tệp `.cjs` của tầng Safe Outputs **nạp và chạy được** trong một tiến trình
   Node trần (không trình biên dịch Go, không npm, không bí mật). Nhưng luật xác thực không nằm trong
@@ -55,6 +64,19 @@ Ba kết quả, nói ngắn:
   là Issue hay PR. Thao tác chỉ chạm Issue thì chỉ `issues: write`.
 - **C — ranh giới có thật và được cưỡng chế.** Trên cả 299 workflow, job `agent` **không bao giờ**
   cầm `issues`/`pull-requests`/`contents: write`. Quyền ghi chỉ nằm ở job `safe_outputs` riêng biệt.
+- **D — OAuth: `CÓ`, nhưng chỉ một trong hai đường.** Một engine **tự định nghĩa** gắn
+  `auth: [{ secret: CLAUDE_CODE_OAUTH_TOKEN }]` **biên dịch được**, và tệp `.lock.yml` sinh ra giao
+  đúng token cho bước chạy tác nhân — `ANTHROPIC_API_KEY` **0 lần**. Cùng lúc, engine `claude` dựng
+  sẵn **từ chối** nhận bí mật qua `engine.env`. Bản đánh giá đầu chỉ đo đường thứ hai rồi kết luận
+  cho cả khung; PoC D tồn tại để sửa đúng chỗ đó.
+
+## Hợp đồng bằng chứng
+
+`evidence-claims.json` khai 22 khẳng định dẫn đến quyết định. Hai bài kiểm khép hai đầu:
+`src/evidence-index.mjs` bắt buộc `anchor` **còn nằm đúng dòng** trong clone tại SHA đã ghim, và
+`tests/evidence-contract.test.mjs` bắt buộc bản báo cáo **chứa đủ mọi permalink** và **không** có link
+`blob/main` nào. Nhờ vậy tài liệu không thể lặng lẽ mất bằng chứng, và bằng chứng không thể lặng lẽ
+trôi khỏi upstream.
 
 ## Bộ chuyển đổi trong `src/v0-to-safe-output.mjs`
 

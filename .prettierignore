@@ -12,3 +12,10 @@ apps/api/src/observability/source-manifest.generated.ts
 # SHA roi so TUNG KY TU voi ban da commit, de bang chung khong the lang le troi khoi upstream. Cho
 # prettier dinh dang lai chung la lam phep so do bao LECH trong khi upstream khong he doi.
 tools/poc-gh-aw-evaluation/fixtures/
+
+# DAU VAO CUA MOT PHEP DO — dinh dang la mot phan cua phep do.
+#
+# `probe/*.md` la frontmatter YAML dua THANG vao trinh bien dich gh-aw. Prettier sap xep lai YAML
+# theo quy uoc cua no, va mot phep do "trinh bien dich chap nhan gi" thi khong duoc de cong cu cua
+# ta sua dau vao truoc khi do.
+tools/poc-gh-aw-evaluation/probe/
