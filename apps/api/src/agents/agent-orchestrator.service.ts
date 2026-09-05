@@ -53,6 +53,7 @@ import {
   classifyPricing,
   explainDealerPricing,
   matchProduct,
+  matchProductsInText,
   priceOrder,
   routeStatus,
 } from '../rules/rules.js';
@@ -70,6 +71,7 @@ import {
   mergeAuthority,
 } from '../outbound/outbound-authority.js';
 import { composeOutbound, deterministicComposition } from '../outbound/outbound-composer.js';
+import { resolveTurnSubject } from '../outbound/turn-subject.js';
 import { mergeBusinessFacts } from '../outbound/outbound-facts.js';
 import { documentEvidence } from '../outbound/source-evidence.js';
 import { OUTBOUND_DECISIONS } from '../outbound/outbound-decisions.js';
@@ -358,6 +360,28 @@ export class AgentOrchestrator {
       reply.facts,
       dispatch.priced && !reply.facts.pricedOrder ? { pricedOrder: dispatch.priced } : {},
     );
+    /*
+     * CHU THE CUA LUOT — do HE THONG giai, tu tin CUA CHINH KHACH (Issue #208).
+     *
+     * Ba dieu ve dong nay, va ca ba deu la yeu cau cua muc 3 hop dong:
+     *
+     *  1. DAU VAO LA `input.customerText` — nhung byte khach that su gui. Model khong voi toi
+     *     duoc chung. Mot lan `tra_cuu_tai_lieu({sku: "A"})` sinh ra BANG CHUNG, va bang chung la
+     *     DOI TUONG bi kiem, khong bao gio la nguon cua tham quyen dang kiem.
+     *  2. TINH MOT LAN, KHONG THEO INTENT. `productAdvice` chi chay o nhanh `hoi_san_pham`; buoc
+     *     chu the theo do se lam moi intent khac am tham khong co chu so huu pham vi nao.
+     *  3. KHONG SUY TU BANG CHUNG DA CHON va khong suy tu ket qua parser. Parser la mot LLM: no
+     *     chon chuoi nao de trich, nen mot SKU di ra tu do van la thu model chon.
+     *
+     * Khong giai ra san pham nao -> `unresolved`, va do la SU THAT chu khong phai mot cho trong
+     * can lap: mot cau noi tiep ("bao hanh bao lau") that su khong noi ve san pham nao ca. Luc do
+     * chi con bang chung TOAN KHACH ke duoc; bang chung theo san pham fail closed (muc 4).
+     */
+    const subject = resolveTurnSubject(
+      matchProductsInText(input.customerText, this.knowledge.products()).map(
+        (product) => product.sku,
+      ),
+    );
     const composition = composeOutbound(reply.plan, facts, {
       /*
        * BANG CHUNG CUA LUOT — cac lan agent tra cuu, cong van ban tat dinh cua nhanh dispatch.
@@ -383,6 +407,7 @@ export class AgentOrchestrator {
       tenant: tenantSlug(),
       customerText: input.customerText,
       authority,
+      subject,
     });
     const verdict = decideOutboundAuthority(composition, authority);
     this.telemetry?.decision({
@@ -399,6 +424,9 @@ export class AgentOrchestrator {
         // ly do loi nhan bi tu choi. Do la thu nguoi truc can de tra loi "vi sao khach khong thay
         // bang gia" ma khong phai mo lai noi dung tin cua khach.
         mode: composition.mode,
+        // CHU THE cua luot — ma/SKU, khong noi dung. Khong co dong nay thi "vi sao loi nhan bi tu
+        // choi la SUBJECT_MISMATCH" khong tra loi duoc ma khong doc lai tin cua khach.
+        subject: subject.kind === 'single' ? `single:${subject.productSku}` : subject.kind,
         blocks: composition.blocks.map((block) => block.kind).join(',') || 'khong',
         omitted:
           composition.omitted.map((entry) => `${entry.kind}:${entry.reason}`).join(',') || 'khong',

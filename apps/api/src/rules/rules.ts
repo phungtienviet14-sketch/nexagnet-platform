@@ -48,6 +48,42 @@ export function matchProduct(skuRaw: string, products: Product[]): Product | nul
 }
 
 /**
+ * MOI SAN PHAM MA CHINH TIN CUA KHACH NHAC TEN — phep so khop TAT DINH, mot chu so huu duy nhat.
+ *
+ * KHAC `matchProduct` o tren mot cach can ban, va su khac do la ca ly do tep nay giu ca hai:
+ *
+ *   · `matchProduct(skuRaw, ...)`   — dau vao la MOT TU KHOA, thuong do parser/model dua ra, va
+ *                                     no tra ve DUNG MOT san pham (khop dai nhat thang).
+ *   · `matchProductsInText(text, ...)` — dau vao la CA CAU CUA KHACH, va no tra ve MOI san pham
+ *                                     duoc nhac, khong chon ho ai ca.
+ *
+ * Ham nay la chu so huu DUY NHAT cua cau hoi "tin nay nhac nhung san pham nao" (Issue #208).
+ * `ContentService.productAdvice()` goi chinh no, va chu the cua luot cung goi chinh no. Neu hai
+ * ben giu hai ban sao thi mot ngay nao do chung lech nhau — va lech o day nghia la bang chung
+ * duoc tra cuu cho mot tap san pham nhung lai duoc cap phep theo mot tap khac. Mot phep so khop,
+ * mot chu so huu.
+ *
+ * KHONG chon giup khi co nhieu ket qua: hai san pham duoc nhac thi tra ve ca hai, va ben goi
+ * quyet dinh y nghia cua dieu do (`resolveTurnSubject` doc no thanh `ambiguous` va fail closed).
+ * Chon ho o day se giau mat su nhap nhang o dung cho khong duoc phep giau.
+ *
+ * `sku` NAM TRONG tap ung vien — khac `matchProduct`, vi khach hoan toan co the go thang ma SP.
+ * Nguong 3 ky tu giu nguyen: mot alias hai ky tu se khop nham gan nhu moi cau.
+ */
+export function matchProductsInText<
+  T extends { readonly sku: string; readonly name: string; readonly aliases?: readonly string[] },
+>(text: string, products: readonly T[]): T[] {
+  const norm = normalize(text);
+  if (!norm) return [];
+  return products.filter((product) =>
+    [product.sku, product.name, ...(product.aliases ?? [])]
+      .map(normalize)
+      .filter((candidate) => candidate.length >= 3)
+      .some((candidate) => norm.includes(candidate)),
+  );
+}
+
+/**
  * Gia si dai ly/CTV tra cho 1 SKU = deal rieng cua dai ly (neu co) > gia si chung (wholesale).
  * Gia si chung nhu nhau moi dai ly/CTV (khao sat: "bang gia chung" + deal rieng); biet duoc
  * ke ca chua map dai ly.
@@ -124,7 +160,9 @@ const POLICY_LABELS: Record<NonNullable<PricedOrder['policy']>, string> = {
 
 function buildConfirmation(p: Omit<PricedOrder, 'confirmationText'>, now: Date): string {
   const dateStamp = `${now.getDate()}.${now.getMonth() + 1}`;
-  const header = [p.branch, dateStamp, p.dealerName].filter((x): x is string => Boolean(x)).join('_');
+  const header = [p.branch, dateStamp, p.dealerName]
+    .filter((x): x is string => Boolean(x))
+    .join('_');
   const lines: string[] = [header || 'Đơn hàng', '━━━━━━━━━━━━'];
   lines.push(p.orderType === 'TH2' ? 'Đơn giao khách (TH2)' : 'Đơn giao đại lý (TH1)');
   if (p.orderType === 'TH2') {
@@ -134,7 +172,9 @@ function buildConfirmation(p: Omit<PricedOrder, 'confirmationText'>, now: Date):
   }
   for (const l of p.lines) {
     const name = l.productName ?? l.skuRaw;
-    lines.push(`• ${l.quantity} x ${name} — ${formatVnd(l.unitPrice)}/SP = ${formatVnd(l.lineTotal)}`);
+    lines.push(
+      `• ${l.quantity} x ${name} — ${formatVnd(l.unitPrice)}/SP = ${formatVnd(l.lineTotal)}`,
+    );
   }
   lines.push(`Tiền hàng: ${formatVnd(p.itemsSubtotal)}`);
   if (p.orderType === 'TH2') lines.push('Phí ship/COD: Chưa cấu hình — Sale sẽ xác nhận');

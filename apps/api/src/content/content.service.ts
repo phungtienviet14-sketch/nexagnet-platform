@@ -8,6 +8,7 @@ import {
 } from '@netviet/shared';
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import { normalize } from '../rules/text.js';
+import { matchProductsInText } from '../rules/rules.js';
 import { rankFaqs, type GlossaryTerm } from './faq-ranking.js';
 import { ContentRepository, type ContentEntityKind } from './content.repository.js';
 import { EvidenceRegistry } from '../outbound/evidence-registry.port.js';
@@ -137,12 +138,10 @@ export class ContentService implements OnModuleInit, EvidenceRegistry {
     glossary: readonly GlossaryTerm[] = [],
   ): ProductAdviceResult {
     const norm = normalize(text);
-    const matched = products.filter((product) =>
-      [product.sku, product.name, ...(product.aliases ?? [])]
-        .map(normalize)
-        .filter((candidate) => candidate.length >= 3)
-        .some((candidate) => norm.includes(candidate)),
-    );
+    // MOT chu so huu duy nhat cho phep so khop danh muc (Issue #208): chu the cua luot doc chinh
+    // ham nay, nen mot ban sao o day se lam bang chung duoc TRA CUU theo mot tap san pham ma lai
+    // duoc CAP PHEP theo mot tap khac.
+    const matched = matchProductsInText(text, products);
     const productSkus = matched.map((product) => product.sku);
     if (!productSkus.length) {
       return safeHandoff([], ['identified_product']);

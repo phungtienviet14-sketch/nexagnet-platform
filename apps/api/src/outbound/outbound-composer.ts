@@ -21,6 +21,7 @@ import {
   type SourceUnit,
 } from './outbound-proposition.js';
 import { evidenceTexts, narrativeEvidence, type SourceEvidence } from './source-evidence.js';
+import { subjectAdmits, subjectPinToken, type TurnSubject } from './turn-subject.js';
 import { outboundFingerprint, policyGrantTokens } from './outbound-authority.js';
 import type { OrderStateFact, QuoteFact, TurnBusinessFacts } from './outbound-facts.js';
 import {
@@ -90,6 +91,17 @@ export interface ComposeContext {
   /** Tin khach vua gui — chi neo nguon cho lop SO. */
   readonly customerText: string;
   readonly authority: OutboundAuthority;
+  /**
+   * CHU THE CUA LUOT — luot nay duoc phep noi ve san pham nao (Issue #208).
+   *
+   * BAT BUOC, khong co mac dinh. Mot truong tuy chon o day se lam moi cho goi quen khai bao am
+   * tham tro ve hanh vi cu — tuc mo lai dung cai cong nay dong. Ben goi phai NOI RA, ke ca khi
+   * cau tra loi la `unresolved`.
+   *
+   * Do `matchProductsInText()` chay tren chinh tin cua khach sinh ra, KHONG phai tu tham so cong
+   * cu model tu gui va KHONG phai tu tap bang chung da chon. Xem `turn-subject.ts`.
+   */
+  readonly subject: TurnSubject;
 }
 
 /**
@@ -129,7 +141,29 @@ export function composeOutbound(
    * trong day, nen khong co duong nao dua chung thanh mot menh de model chon duoc. Chung van
    * di vao prompt qua `output` cua cong cu, de model hieu luot va biet duong xin chuyen Sale.
    */
-  const tellable = narrativeEvidence(context.evidence, context.tenant);
+  const tellableForTenant = narrativeEvidence(context.evidence, context.tenant);
+  /*
+   * LOC THEO CHU THE CUA LUOT — bang chung ngoai pham vi KHONG TRO THANH UNG VIEN (Issue #208).
+   *
+   * Day la lop CHINH cua ban sua, va no la mot phep GO NANG LUC chu khong phai mot bo nhan dang.
+   * Cung tinh than voi ca tep nay: tien/chinh sach khong bi "phat hien" trong van xuoi, chung
+   * don gian la KHONG CO DUONG NAO render ra. O day cung vay — mot cau cua SKU A trong mot luot
+   * ve SKU B khong bi tu choi, no KHONG BAO GIO LA UNG VIEN.
+   *
+   * Vi sao phai loc TRUOC ca G5/G6 chu khong chi kiem sau khi model da chon: `attested` (G5) va
+   * `units` (G6) deu dung tu tap nay. De bang chung ngoai pham vi vao thi TU VUNG cua SKU A se
+   * bao lanh cho mot cau ve SKU B — mot phep noi rong that su, khong chi la mot ma ly do sai.
+   *
+   * Phan bi loai KHONG bi vut di: no di tiep xuong `admitNarrative` lam CU LIEU CHAN DOAN, de
+   * ma tra ve noi dung su that ("ke nguon cua san pham khac") thay vi mot cau sai ("luot nay
+   * khong co nguon nao").
+   */
+  const tellable = tellableForTenant.filter((item) =>
+    subjectAdmits(context.subject, item.scope.productSku),
+  );
+  const outOfSubject = tellableForTenant.filter(
+    (item) => !subjectAdmits(context.subject, item.scope.productSku),
+  );
   const tellableTexts = evidenceTexts(tellable);
   const strict = buildGrounding(tellableTexts, context.customerText, context.authority);
   /*
@@ -153,6 +187,7 @@ export function composeOutbound(
     granted: grantGrounding(context.authority),
     attested,
     units,
+    outOfSubjectUnits: sourceUnits(outOfSubject),
   });
 
   const text = [
@@ -183,7 +218,13 @@ export function composeOutbound(
     // 3c cua diem nghen gui doi chieu duoc van ban cuoi o muc menh de — thu ma `s:` (muc tu ngu)
     // khong lam duoc. Doc lai tu chinh van ban da rang buoc, nen day cung la mot phep kiem tinh
     // BAT BIEN: mot phep rang buoc dung phai cho ra cung tap menh de khi chay lai tren ket qua.
+    //
+    // `t:` la VE CON LAI CUA QUAN HE (Issue #208): chu the ma he thong so huu cho luot nay. Ghim
+    // `x:` da mang dung SKU cua tung nguon tu #205, nhung mot minh no chi tu doi chieu voi chinh
+    // no duoc. Ghim ca hai ve thi diem nghen gui — chay hang gio sau, khi tin cua khach va danh
+    // muc luc soan deu khong con — van kiem lai duoc dung quan he da duoc cap phep luc soan.
     grounded: [
+      subjectPinToken(context.subject),
       ...groundingTokens(widen(strict, blocks)),
       ...(narrative.admitted ? attestedTokens(narrative.text, attested) : []),
       ...(narrative.admitted ? boundExcerptTokens(boundOf(narrative.text, units)) : []),

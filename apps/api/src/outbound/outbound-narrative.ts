@@ -303,10 +303,49 @@ export function admitNarrative(
     readonly attested: ReadonlySet<string>;
     /** G6 — menh de he thong so huu cua luot nay. Xem `outbound-proposition.ts`. */
     readonly units: readonly SourceUnit[];
+    /**
+     * G0 — menh de DA BI LOAI vi ngoai chu the cua luot (Issue #208). CHAN DOAN, khong cap phep.
+     *
+     * Chung khong nam trong `units`, nen khong duong nao dua chung ra kenh. Chung o day chi de
+     * G0 goi dung ten su co thay vi de G5/G6 bao mot trieu chung.
+     */
+    readonly outOfSubjectUnits: readonly SourceUnit[];
   },
 ): NarrativeDecision {
   const text = narrative.trim();
   if (!text) return { admitted: false, reason: 'EMPTY' };
+  /*
+   * G0 — LOI NHAN KE NGUON CUA SAN PHAM KHAC CHU THE CUA LUOT (Issue #208).
+   *
+   * DAY LA MOT CONG CHAN DOAN, KHONG PHAI MOT CONG AN TOAN — va cho khac biet do dang doc.
+   *
+   * `outOfSubjectUnits` la nhung menh de DA BI LOAI khoi tap chon duoc o `composeOutbound`. Vi
+   * chung khong nam trong `options.units`, khong nhanh nao ben duoi cap phep cho chung duoc:
+   * G5 se tu choi vi tu vung la, hoac G6 tu choi vi khong menh de nao trung. An toan da xong
+   * TRUOC khi den day.
+   *
+   * Cai G0 them vao la SU THAT. Khong co no, luot "khach hoi ve ghe, model ke thong so may loc
+   * khong khi" bao `NO_SYSTEM_SOURCE` — mot cau sai han: luot do tra cuu duoc RAT NHIEU nguon,
+   * chung deu ve san pham khac. Nguoi truc doc ma do se di kiem tra cuu, va khong tim ra gi.
+   *
+   * XEP NGAY SAU `EMPTY` vi no la ma BAO TRUM nhat: khi no dung, moi ma khac chi la trieu chung.
+   */
+  /*
+   * DOI CHIEU TREN TAP GOP, roi hoi tap DA RANG BUOC co cham vao phan ngoai chu the khong.
+   *
+   * Khong doi chieu rieng tren `outOfSubjectUnits`: `bindProposition` doi MOI menh de cua loi
+   * nhan phai trung, nen mot loi nhan TRON (mot cau cua A, mot cau cua B) se khong rang buoc
+   * duoc chi bang cac don vi cua A — va G0 se im lang dung o ca truong hop dang can goi ten
+   * nhat. Gop lai roi nhin tap ket qua thi ca hai hinh dang deu lo ra: loi nhan HOAN TOAN cua
+   * san pham khac (dung ca #208 muc 7), va loi nhan TRON.
+   */
+  if (options.outOfSubjectUnits.length) {
+    const outside = new Set(options.outOfSubjectUnits);
+    const mixed = bindProposition(text, [...options.units, ...options.outOfSubjectUnits]);
+    if (mixed.bound && mixed.units.some((unit) => outside.has(unit))) {
+      return { admitted: false, reason: 'NARRATIVE_SUBJECT_MISMATCH' };
+    }
+  }
   if (!options.hasSystemSource) return { admitted: false, reason: 'NO_SYSTEM_SOURCE' };
   /*
    * THU TU: G2/G3 TRUOC, G4 SAU — va thu tu do la mot quyet dinh ve CHAN DOAN, khong ve an toan.

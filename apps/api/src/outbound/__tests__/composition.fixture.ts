@@ -18,6 +18,7 @@ import {
   mergeAuthority,
 } from '../outbound-authority.js';
 import { composeOutbound, type ComposeContext } from '../outbound-composer.js';
+import { UNRESOLVED_SUBJECT, type TurnSubject } from '../turn-subject.js';
 import {
   businessAuthorityEvidence,
   documentEvidence,
@@ -234,6 +235,7 @@ export function compose(
     tenant: TEST_TENANT,
     customerText: '',
     authority: authorityFor(turn),
+    subject: UNRESOLVED_SUBJECT,
     ...context,
   });
 }
@@ -242,3 +244,17 @@ export function compose(
 export function blockText(composition: OutboundComposition): string {
   return composition.blocks.flatMap((block) => block.lines).join('\n');
 }
+
+/**
+ * CHU THE MAC DINH CUA BO TEST — SKU cua `tellable()` khi bai khong noi gi khac.
+ *
+ * `null` (toan khach) la mac dinh DUNG cho fixture: no giu moi bai #189/#200/#205 cu nguyen
+ * nghia — chung dung nguon toan khach, va nguon toan khach hoa hop voi moi chu the. Bai nao noi
+ * ve pham vi san pham thi khai bao `subject` tuong minh.
+ */
+export const SUBJECT_B: TurnSubject = { kind: 'single', productSku: 'SKU-B' };
+export const SUBJECT_A: TurnSubject = { kind: 'single', productSku: 'SKU-A' };
+export const SUBJECT_AMBIGUOUS: TurnSubject = {
+  kind: 'ambiguous',
+  productSkus: ['SKU-A', 'SKU-B'],
+};
