@@ -19,12 +19,30 @@
  * tho ra log: no CHON dung nhung truong GitHub tai lieu hoa (`message`, `documentation_url`,
  * `errors[]`), va chay moi chuoi qua mot bo mau bi mat truoc khi tra ve.
  *
+ * VA KHI KHONG NHAN RA THAN THI NO IM — DAY LA CHO TUNG HONG.
+ *
+ * Ban truoc con mot duong lui: than khong phai JSON, hoac JSON ma khong mang mot truong nao ta
+ * biet, thi do NGUYEN VAN (chi qua bo mau) vao mot truong `raw`. Duong do FAIL-OPEN. Bo mau chi
+ * biet vai tien to token cua GitHub, nen `{"secret":"gia-tri-tho"}` hay `password=gia-tri-tho` di
+ * thang ra log cong khai — dung thu ma doan ngay tren day noi la khong duoc phep.
+ *
+ * Quy tac bay gio: MOT THAN KHONG NHAN RA THI KHONG RA MOT CHU NAO CUA NO. Cai duy nhat di ra la
+ * METADATA khong mang noi dung — than thuoc LOAI gi, DAI bao nhieu, va mot DAU VAN ngan de doi
+ * chieu hai lan chay voi nhau. Doc duoc "than 812 ky tu, khong phai JSON" van du de nghi toi mot
+ * proxy chen giua, ma khong phai tin rang bo mau bat duoc moi hinh dang bi mat co the co.
+ *
+ * MO RONG DUNG CACH la them truong vao DANH SACH CHO PHEP khi GitHub tai lieu hoa no — khong phai
+ * lam bo mau thong minh hon. Mot bo do bi mat tong quat se sai vao mot ngay nao do, va o day "sai
+ * mot lan" nghia la mot bi mat nam vinh vien trong log cong khai cua mot repo public.
+ *
  * KHONG MOT HEADER NAO di qua day, va do la mot quyet dinh CAU TRUC chu khong phai mot bo loc:
  * `authorization` khong the lo ra tu mot ham chi nhan `text`. Cai duy nhat con phai loc la than —
  * va no chi lo bi mat khi co ai do o dau day doi lai chinh cau tra loi cua GitHub (proxy, gateway).
  *
- * Tep nay THUAN. Viec goi mang nam o `github.mjs`.
+ * Tep nay THUAN. Viec goi mang nam o `github.mjs`. (`createHash` khong pha dieu do: bam mot chuoi
+ * la mot phep tinh, khong phai mot lan cham vao the gioi ben ngoai.)
  */
+import { createHash } from 'node:crypto';
 
 /** Chuoi thay cho mot bi mat bi cat. Mot MA, khong phai mot cau — no di thang vao log. */
 export const REDACTED = '[REDACTED]';
@@ -37,6 +55,14 @@ const MAX_TEXT = 300;
 
 /** Toi da phan tu cua `errors[]` giu lai. Mot loi validation thu sau khong noi them dieu gi. */
 const MAX_ERRORS = 5;
+
+/**
+ * So ky tu hex giu lai cua dau van mot than khong nhan ra.
+ *
+ * Du de tra loi dung mot cau hoi: "hai lan chay vua roi co gap DUNG mot than khong?". Khong du, va
+ * cung khong nham, de ai do doi chieu nguoc lai ra noi dung.
+ */
+const DIGEST_CHARS = 12;
 
 /**
  * MAU CUA BI MAT — NEO O TIEN TO, KHONG O DO HON LOAN.
@@ -107,10 +133,42 @@ function cleanErrors(value) {
 }
 
 /**
+ * MOT THAN KHONG NHAN RA -> METADATA, KHONG PHAI NOI DUNG.
+ *
+ * Ba truong duoi day khong mang mot ky tu nao cua than:
+ *
+ *   `bodyKind`    than thuoc hinh dang gi — phan biet mot trang HTML cua proxy voi mot cau JSON
+ *                 that cua GitHub ma ta chua tai lieu hoa. Hai cai do doi hai hanh dong khac nhau.
+ *   `bodyLength`  do dai. "Rong 40 ky tu" va "rong 12 nghin ky tu" khong cung mot nghi ngo.
+ *   `bodyDigest`  sha256 cat con `DIGEST_CHARS` ky tu, chi de doi chieu hai lan chay voi nhau.
+ *
+ * Con `bodyKind` la mot trong BA nhan co san o day, khong phai chuoi lay tu than — nen no khong
+ * mang duoc gi tu ben ngoai vao log.
+ *
+ * @param {string} raw Than tho da cat khoang trang hai dau.
+ * @param {'text' | 'json-scalar' | 'json-unrecognized'} kind
+ * @returns {Record<string, unknown>}
+ */
+function describeOpaqueBody(raw, kind) {
+  return {
+    bodyKind: kind,
+    bodyLength: raw.length,
+    bodyDigest: createHash('sha256').update(raw).digest('hex').slice(0, DIGEST_CHARS),
+  };
+}
+
+/**
  * Than tho cua mot cau tra loi non-2xx -> chan doan da lam sach, hoac `null` neu than rong.
  *
  * `null` la mot cau tra loi CO NGHIA: "GitHub khong noi gi ca". No khac han "GitHub noi khong du
  * quyen", va nguoi truc phai phan biet duoc hai cai do.
+ *
+ * Ket qua co DUNG hai hinh dang, va nguoi doc phan biet duoc ngay:
+ *
+ *   NHAN RA     `message` / `documentationUrl` / `errors[]` — chu cua GitHub, da qua bo mau.
+ *   KHONG NHAN  `bodyKind` / `bodyLength` / `bodyDigest` — metadata, khong mot chu nao cua than.
+ *
+ * Khong co hinh dang thu ba, va nhat la khong co duong nao do than tho ra log.
  *
  * @param {unknown} text Than tho, dung nhu `response.text()` tra ve.
  * @returns {Record<string, unknown> | null}
@@ -125,12 +183,15 @@ export function describeApiError(text) {
     parsed = JSON.parse(raw);
   } catch {
     // Than khong phai JSON — mot trang loi cua proxy, hoac HTML cua GitHub. "Khong doc duoc" cung
-    // la mot chan doan, va no khac han mot cau tu chinh GitHub.
-    return withoutNulls({ raw: cleanText(raw) });
+    // la mot chan doan, va no khac han mot cau tu chinh GitHub. Nhung khong ai tai lieu hoa cai
+    // than nay, nen khong ai biet trong do co gi: no ra bang METADATA, khong bang noi dung.
+    return describeOpaqueBody(raw, 'text');
   }
 
+  // JSON hop le nhung khong phai mot object — mot chuoi, mot so. GitHub khong tra loi kieu nay,
+  // nen thu dang cam tren tay la thu khong ai giai thich duoc: khong do no ra log.
   if (parsed === null || typeof parsed !== 'object') {
-    return withoutNulls({ raw: cleanText(raw) });
+    return describeOpaqueBody(raw, 'json-scalar');
   }
 
   const source = /** @type {Record<string, unknown>} */ (parsed);
@@ -140,7 +201,10 @@ export function describeApiError(text) {
     errors: cleanErrors(source.errors),
   });
 
-  // Than JSON co that nhung khong mang mot truong nao ta biet: giu mot manh tho da lam sach, con
-  // hon tra ve mot object rong roi de nguoi truc doan.
-  return Object.keys(described).length > 0 ? described : withoutNulls({ raw: cleanText(raw) });
+  // Than JSON co that nhung khong mang mot truong nao ta biet. Day dung la cho ban truoc do nguyen
+  // than ra "cho nguoi truc do khoi phai doan" — va la cho mot `{"secret":"..."}` di ra log cong
+  // khai. Mot truong la la mot truong CHUA AI XEM XET; no ra bang metadata.
+  return Object.keys(described).length > 0
+    ? described
+    : describeOpaqueBody(raw, 'json-unrecognized');
 }

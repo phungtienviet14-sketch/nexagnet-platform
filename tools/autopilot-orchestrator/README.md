@@ -50,7 +50,7 @@ ngoài, nên **luồng comment chính là sổ ledger**.
 | `src/inbox.mjs`       | ✅     | Luồng comment → tra cứu `BUILD_READY` ở đúng HEAD, và cổng chống trùng.                                       |
 | `src/registry.mjs`    | ✅     | Sơ đồ `principal → vai`. Đọc từ biến môi trường, **không ghi cứng login nào**.                                |
 | `src/permissions.mjs` | ✅     | Bảng "lời gọi API ↔ quyền", quyền **dẫn xuất từ loại tài nguyên**. Một nguồn cho cả preflight lẫn bài kiểm hợp đồng workflow. |
-| `src/api-error.mjs`   | ✅     | Thân lỗi GitHub → chẩn đoán **đã làm sạch**. Không header nào đi qua; token bị cắt trước khi ra log công khai. |
+| `src/api-error.mjs`   | ✅     | Thân lỗi GitHub → chẩn đoán **đã làm sạch**. Không header nào đi qua; chỉ các trường GitHub **tài liệu hoá** đi ra, còn thân **không nhận ra** chỉ ra metadata (loại/độ dài/dấu vân) — không một chữ nào của nó. |
 | `src/decide.mjs`      | ✅     | Sự kiện + bằng chứng → mô tả việc phải làm.                                                                   |
 | `src/ledger.mjs`      | ✅     | Đọc **trọn vẹn** luồng comment bằng phân trang. Đọc thiếu ⇒ fail-closed, không quyết định trên một phần sổ. |
 | `src/labels.mjs`      | ✅     | Hoà giải nhãn, **đọc kết quả từng lời gọi**. Chỉ `404` khi gỡ nhãn vắng mới là thành công.                  |
@@ -199,7 +199,12 @@ duyệt" được thoả — điều mà nếu chỉ nhìn `user.login` thì kh�
    - Bài học đã đóng lại được: `WRITE_CALLS` không còn cho ai **viết tay** một dòng `grant` — quyền
      dẫn xuất từ loại tài nguyên, và loại tài nguyên là thứ người đọc mã kiểm được (`{n}` là số PR
      hay số Issue). Và `src/api-error.mjs` giữ lại **câu** GitHub trả về khi non-2xx, để lần sau một
-     `403` không còn về tới log dưới dạng đúng một con số.
+     `403` không còn về tới log dưới dạng đúng một con số. "Câu" ở đây là **các trường GitHub đã
+     tài liệu hoá** (`message`, `documentation_url`, `errors[]`) sau khi qua bộ mẫu bí mật — chứ
+     không phải cả thân: một thân **không nhận ra** (JSON lạ, hay không phải JSON) chỉ ra được
+     **loại / độ dài / dấu vân**. Bản đầu của #188 đổ nguyên văn thân lạ ra log, và trên một repo
+     public thì đó là fail-open — mở rộng đúng cách là thêm trường vào danh sách cho phép khi
+     GitHub tài liệu hoá nó, không phải làm bộ mẫu đoán giỏi hơn.
 
 5. **Đường ghi chưa từng chạy thật.** Nó chỉ chạy trên `issue_comment`/`check_suite`, tức chỉ sau
    khi bản này lên `main` (cạm bẫy 3). Trong PR, đường ghi được đo bằng `tests/recovery.test.mjs` —

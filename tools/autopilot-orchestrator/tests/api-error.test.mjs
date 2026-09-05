@@ -15,8 +15,13 @@
  *   GIU DU     — status + cau cua GitHub du de chan doan ma khong phai chay lai;
  *   KHONG RO   — khong mot token nao di qua duong nay, ke ca khi than mang no.
  *
+ * "KHONG RO" khong tua vao bo mau. Bo mau chi biet vai dinh dang token GitHub tai lieu hoa, nen mot
+ * `{"secret":"..."}` hay `password=...` di qua no khong suy suyen — do dung la cho ban dau tep nay
+ * do NGUYEN VAN than la ra log cong khai. Nen bai o day do ca hinh dang thu hai: mot than khong
+ * nhan ra thi KHONG ra mot chu nao cua no, chi ra metadata (loai / do dai / dau van).
+ *
  * Cac chuoi giong token trong tep nay la GIA — dung tien to that de mau bat duoc, con phan con lai
- * la ky tu bia.
+ * la ky tu bia. Rieng `BI_MAT_KHONG_TIEN_TO` co y KHONG mang tien to nao.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -26,6 +31,15 @@ import { api } from '../src/github.mjs';
 
 /** Token gia, dung tien to `ghs_` cua `GITHUB_TOKEN` trong Actions. */
 const FAKE_TOKEN = 'ghs_KhongPhaiTokenThat0123456789abcdefGH';
+
+/**
+ * Mot bi mat KHONG mang tien to nao — va do chinh la de bai.
+ *
+ * Bo mau o `api-error.mjs` chi biet cac dinh dang token GitHub tai lieu hoa. Mot chuoi nhu the nay
+ * di qua no khong suy suyen. Nen thu duy nhat giu no lai khoi log cong khai la viec than khong nhan
+ * ra thi KHONG ra mot chu nao — chu khong phai viec bo mau doan trung.
+ */
+const BI_MAT_KHONG_TIEN_TO = 'ChuoiBiMatKhongTienTo-4f7a19c3';
 
 test('cau cua GitHub duoc giu lai — day la thu lan chay 33889198070 khong co', () => {
   const described = describeApiError(
@@ -88,9 +102,89 @@ test('KHONG RO BI MAT: mot header bi doi nguoc vao than cung bi cat', () => {
   assert.ok(text.includes(REDACTED));
 });
 
-test('than KHONG phai JSON van cho mot chan doan — "khong doc duoc" cung la mot cau tra loi', () => {
-  const described = describeApiError('<html><body>502 Bad Gateway</body></html>');
-  assert.match(String(described?.raw), /502 Bad Gateway/);
+// ------------------------------------------------------------------------------------------------
+// FAIL CLOSED — mot than KHONG NHAN RA thi khong ra mot chu nao cua no.
+//
+// Hai bai duoi day do dung cho ban dau fail-open: bo mau khong bat duoc bi mat trong chung, nen
+// neu con bat ky duong nao do than tho ra ket qua, chung DO. Do la muc dich cua chung.
+// ------------------------------------------------------------------------------------------------
+
+test('FAIL CLOSED: than JSON khong co truong nao ta biet => metadata, khong mot chu nao cua than', () => {
+  const body = JSON.stringify({
+    secret: BI_MAT_KHONG_TIEN_TO,
+    note: 'gateway noi mot cau khong ai tai lieu hoa',
+  });
+  const described = describeApiError(body);
+  const text = JSON.stringify(described);
+
+  assert.ok(!text.includes(BI_MAT_KHONG_TIEN_TO), 'bi mat khong duoc co mat trong chan doan');
+  assert.ok(!text.includes('secret'), 'ke ca TEN truong — no cung do ben ngoai dat ra');
+  assert.ok(!text.includes('gateway noi'), 'khong mot manh noi dung nao di ra');
+
+  // Cai di ra la metadata, va no phai du de nguoi truc biet co chuyen gi.
+  assert.deepEqual(Object.keys(described ?? {}).sort(), ['bodyDigest', 'bodyKind', 'bodyLength']);
+  assert.equal(described?.bodyKind, 'json-unrecognized');
+  assert.equal(described?.bodyLength, body.length);
+  assert.match(String(described?.bodyDigest), /^[0-9a-f]{12}$/);
+});
+
+test('FAIL CLOSED: than khong phai JSON mang `password=` => metadata, khong mot chu nao cua than', () => {
+  const body = `PROXY 502: upstream rejected credentials (password=${BI_MAT_KHONG_TIEN_TO})`;
+  const described = describeApiError(body);
+  const text = JSON.stringify(described);
+
+  assert.ok(!text.includes(BI_MAT_KHONG_TIEN_TO), 'bi mat khong duoc co mat trong chan doan');
+  assert.ok(!text.includes('password'), 'ke ca ten truong dan toi no');
+  assert.ok(!text.includes('PROXY 502'), 'khong mot manh noi dung nao di ra');
+
+  assert.deepEqual(Object.keys(described ?? {}).sort(), ['bodyDigest', 'bodyKind', 'bodyLength']);
+  assert.equal(described?.bodyKind, 'text');
+  assert.equal(described?.bodyLength, body.length);
+  assert.match(String(described?.bodyDigest), /^[0-9a-f]{12}$/);
+});
+
+test('FAIL CLOSED: mot truong LA di kem mot truong ta BIET thi truong la van bi bo', () => {
+  // Ban truoc chi do than tho ra khi KHONG nhan ra truong nao. Bai nay khoa not nua con lai: co
+  // nhan ra mot truong thi cung chi truong do di ra, khong keo theo hang xom cua no.
+  const described = describeApiError(
+    JSON.stringify({ message: 'Not Found', secret: BI_MAT_KHONG_TIEN_TO }),
+  );
+  assert.equal(described?.message, 'Not Found');
+  assert.ok(!JSON.stringify(described).includes(BI_MAT_KHONG_TIEN_TO));
+});
+
+test('than KHONG phai JSON van cho mot chan doan — nhung la METADATA, khong phai noi dung', () => {
+  const body = '<html><body>502 Bad Gateway</body></html>';
+  const described = describeApiError(body);
+
+  // "Khong doc duoc" van la mot cau tra loi: co mot than, no dai chung nay, va no khong phai JSON.
+  assert.equal(described?.bodyKind, 'text');
+  assert.equal(described?.bodyLength, body.length);
+  assert.match(String(described?.bodyDigest), /^[0-9a-f]{12}$/);
+
+  // Va no khong mang noi dung. `raw` la duong FAIL-OPEN cu; no phai bien mat han, khong phai bi
+  // loc chat hon — mot bo loc con la mot bo loc co the sai.
+  assert.equal(described?.raw, undefined, 'truong `raw` khong duoc ton tai nua');
+  assert.ok(
+    !JSON.stringify(described).includes('Bad Gateway'),
+    'khong mot manh noi dung nao cua than di ra',
+  );
+});
+
+test('than JSON hop le nhung KHONG phai object cung ra metadata', () => {
+  const described = describeApiError(JSON.stringify(`chuoi tran: ${BI_MAT_KHONG_TIEN_TO}`));
+  assert.equal(described?.bodyKind, 'json-scalar');
+  assert.ok(!JSON.stringify(described).includes(BI_MAT_KHONG_TIEN_TO));
+});
+
+test('DAU VAN doi chieu duoc: cung mot than ra cung mot dau, khac than ra khac dau', () => {
+  // Day la thu con lai thay cho noi dung — no phai du de tra loi "hai lan chay vua roi co gap dung
+  // mot than khong?", neu khong thi bo ba metadata nay khong dang mot dong log.
+  const mot = describeApiError('<html>upstream A</html>');
+  const lai = describeApiError('<html>upstream A</html>');
+  const khac = describeApiError('<html>upstream B</html>');
+  assert.equal(mot?.bodyDigest, lai?.bodyDigest);
+  assert.notEqual(mot?.bodyDigest, khac?.bodyDigest);
 });
 
 test('than RONG tra ve `null` — "GitHub khong noi gi" khac "GitHub noi khong du quyen"', () => {
@@ -152,6 +246,26 @@ test('REGRESSION: token KHONG bao gio nam trong ket qua cua `api()`', async () =
     !JSON.stringify(result).includes(FAKE_TOKEN),
     'ket qua cua `api()` di thang vao log — mot token o day la mot token cong khai',
   );
+});
+
+test('FAIL CLOSED qua `api()`: mot than LA khong mang bi mat vao ket qua', async () => {
+  // Cung mot de bai nhu hai bai fail-closed o tren, nhung do o dung cai object ma `main.mjs` in ra:
+  // ket qua cua `api()`. Chan tren ham thuan ma ho o day thi van la mot bi mat trong log cong khai.
+  const result = await withStubbedFetch(
+    {
+      ok: false,
+      status: 502,
+      text: `<html><body>upstream auth failed: password=${BI_MAT_KHONG_TIEN_TO}</body></html>`,
+    },
+    () => api(FAKE_TOKEN, '/repos/o/r/issues/167/comments', { method: 'POST', body: '{}' }),
+  );
+
+  assert.equal(result.status, 502, 'status van phai la bang chung doc duoc');
+  const text = JSON.stringify(result);
+  assert.ok(!text.includes(BI_MAT_KHONG_TIEN_TO), 'bi mat khong duoc di ra qua `api()`');
+  assert.ok(!text.includes('password'));
+  // Nguoi truc van biet co mot than va no khong doc duoc — do la phan chan doan con lai.
+  assert.equal(result.error?.bodyKind, 'text');
 });
 
 test('2xx thi `error` la `null` — khong bat nguoi doc phan biet bang mot object rong', async () => {
