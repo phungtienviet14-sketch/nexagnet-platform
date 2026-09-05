@@ -148,13 +148,6 @@ const send = async <T>(method: 'POST' | 'PATCH', path: string, body?: unknown): 
   );
 
 /**
- * Khoa tuong quan cho MOT lan bam nut, tao mot lan roi giu qua cac lan thu lai.
- *
- * Day la co che chan trung DUY NHAT cua API, va dung lai khoa voi noi dung khac la 409 dut khoat
- * (`FUEL_CORRELATION_KEY_REUSED`). Khong co duong "tra ve ban ghi da co" — nen sinh moi khoa cho
- * moi lan bam, va truyen lai DUNG khoa do khi mang loi va nguoi dung bam lai.
- */
-/**
  * MULTIPART — cho duong tai anh bang chung (#169).
  *
  * KHONG dat `content-type`: trinh duyet phai tu dat `multipart/form-data; boundary=...`, va mot
@@ -183,6 +176,13 @@ export const evidenceUrls = {
     `${BASE}/transport/me/expenses/${encodeURIComponent(expenseId)}/evidence`,
 } as const;
 
+/**
+ * Khoa tuong quan cho MOT lan bam nut, tao mot lan roi giu qua cac lan thu lai.
+ *
+ * Day la co che chan trung DUY NHAT cua API, va dung lai khoa voi noi dung khac la 409 dut khoat
+ * (`FUEL_CORRELATION_KEY_REUSED`). Khong co duong "tra ve ban ghi da co" — nen sinh moi khoa cho
+ * moi lan bam, va truyen lai DUNG khoa do khi mang loi va nguoi dung bam lai.
+ */
 export const newCorrelationKey = (): string =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
