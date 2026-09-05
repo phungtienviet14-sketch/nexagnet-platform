@@ -28,12 +28,68 @@
     "transportCore": {
       "timeZone": "Asia/Ho_Chi_Minh"
     },
+    "transportCosting": {
+      "expenseCategories": [
+        "Phí cầu đường",
+        "Bốc xếp",
+        "Ăn ở dọc đường",
+        "Phí bến bãi",
+        "Sửa chữa dọc đường",
+        "FUEL"
+      ]
+    },
+    "transportFuel": {
+      "matching": {
+        "amountToleranceVnd": 1000,
+        "businessDateToleranceDays": 1
+      },
+      "statement": {
+        "columns": {
+          "vehiclePlate": "Biển số",
+          "businessDate": "Ngày",
+          "liters": "Số lít",
+          "amount": "Thành tiền",
+          "invoiceNo": "Số hóa đơn",
+          "note": "Ghi chú"
+        },
+        "dateFormat": "dmy"
+      },
+      "consumption": {
+        "normsByVehicleClass": {
+          "Tải 2 tấn": 13,
+          "Tải 5 tấn": 20,
+          "Tải 8 tấn": 26,
+          "Tải 15 tấn": 33,
+          "Đầu kéo container": 38
+        },
+        "tolerancePercent": 15
+      }
+    },
+    "transportCompliance": {
+      "expiryWarningDays": 30,
+      "expiryWarningDaysByType": {
+        "VEHICLE_INSURANCE": 45
+      },
+      "maintenance": {
+        "dueSoonKm": 1000,
+        "dueSoonDays": 14
+      }
+    },
+    "transportPayroll": {
+      "baseSalaryVnd": 6000000,
+      "perTripVnd": 250000,
+      "perKmVnd": 1200
+    },
     "readiness": {
       "blockedCapabilities": [],
       "demoTenant": true
     }
   },
   "integrations": {},
-  "bootstrap": {},
+  "bootstrap": {
+    "transportDemo": {
+      "path": "data/demo-month.json"
+    }
+  },
   "smoke": null
 }
