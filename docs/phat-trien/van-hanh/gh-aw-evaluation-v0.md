@@ -599,7 +599,14 @@ production.
 
 Điều kiện **mở lại** đánh giá — bất kỳ điều nào:
 
-- gh-aw hỗ trợ `CLAUDE_CODE_OAUTH_TOKEN`, **hoặc** Nexagent bỏ ràng buộc Claude Max;
 - gh-aw tách Safe Outputs thành action/gói dùng được **không cần agent job**;
 - gh-aw thêm idempotency thật (khóa + tra cứu trước khi ghi), không phải retry;
-- gh-aw xuất bản runtime JS có phiên bản lên npm.
+- tầng xác thực Safe Outputs đổi mặc định thành **fail-closed** khi thiếu/hỏng cấu hình;
+- gh-aw xuất bản runtime JS có phiên bản lên npm;
+- engine `claude` **dựng sẵn** nhận `CLAUDE_CODE_OAUTH_TOKEN` — lúc đó đường OAuth không còn phải đi
+  qua một định nghĩa engine `experimental` tự nuôi (§10.3).
+
+> Điều kiện "gh-aw hỗ trợ `CLAUDE_CODE_OAUTH_TOKEN`" **đã bị bỏ khỏi danh sách này**, vì PoC D chứng
+> minh nó **đã đúng** ở SHA đang audit — qua behavior-defined engine. Một điều kiện mở-lại đã thành
+> hiện thực mà quyết định không đổi thì nó chưa bao giờ là điều kiện thật; giữ lại chỉ khiến tài liệu
+> tự mâu thuẫn.
