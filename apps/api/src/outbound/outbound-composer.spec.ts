@@ -40,8 +40,20 @@ describe('#189 muc 8 — am tinh cau truc: khong co du kien thi khong co khoi', 
 
     expect(composition.blocks).toHaveLength(0);
     expect(composition.omitted).toEqual([{ kind: 'price_quote', reason: 'FACT_MISSING' }]);
-    expect(composition.mode).toBe('narrative_only');
     expect(composition.text).not.toMatch(/\d/u);
+    /*
+     * "gửi giá" cung khong ra duoc not (G5): nguon duy nhat cua luot ta cai ghe, khong nguon nao
+     * noi ve viec gui gia. Truoc ban 05/09/2026 cau nay di duoc toi khach nhu mot loi hua se bao
+     * gia — mot cau CO HE QUA ma luot khong co gi de dua no ra.
+     *
+     * Ket cuc `empty` la dung theo muc 5 hop dong: "omit it and produce an explicit safe handoff",
+     * chu khong phai de model viet mot cau cam chung lap cho trong. Duong that se chuyen Sale.
+     */
+    expect(composition.mode).toBe('empty');
+    expect(decideOutboundAuthority(composition, { grants: [] })).toMatchObject({
+      sendable: false,
+      reason: 'COMPOSITION_EMPTY',
+    });
   });
 
   it('2. xin khoi chinh sach thanh toan ma khong co tham quyen chinh sach -> khong cau nao duoc render', () => {
@@ -83,18 +95,39 @@ describe('#189 muc 8 — am tinh cau truc: khong co du kien thi khong co khoi', 
     });
   });
 
-  it('5. cum chinh sach LA, khong chu so, ngoai POLICY_SURFACES -> khong ra duoc mot khoi chinh sach', () => {
+  /*
+   * CA 5 — BAI NAY LA CHINH BLOCKER CUA REVIEW DOC LAP 05/09/2026, VA NO DA TUNG KHANG DINH
+   * NGUOC LAI.
+   *
+   * Ban truoc bai nay chung minh "khong co KHOI chinh sach nao" roi dung lai o do — va khang dinh
+   * tiep rang cau van van `sendable: true`. Review chi thang ra rang do la doc sai hop dong: muc 2
+   * noi ve VAN BAN KHACH NHIN THAY, khong ve `blocks[]`. Khach doc "bên em cho mình khất tiền
+   * hàng tới khi bán xong" thi da nhan mot loi hua cong no, bat ke ben trong he thong goi no la
+   * gi. Mot bai test chung minh cau do di duoc toi khach la mot bai test chung minh mot lo hong.
+   *
+   * Cai chan no BAY GIO khong phai cau truc khoi, ma la G5: cac chu "khất", "tiền", "hàng",
+   * "bán", "xong" khong co trong nguon he thong nao cua luot (`APPROVED_DOC` ta cai ghe). Va G5
+   * chan duoc no MA KHONG CAN nhan ra day la mot cau chinh sach — do la ca diem cua no.
+   *
+   * `POLICY_SURFACES` KHONG duoc dong den. Neu mot ngay nao do ai do vá bai nay bang cach them
+   * "khat tien hang" vao do, hay doc lai #187: danh sach cam dai them mot muc thi lop bo sot chi
+   * dich di mot cho, con danh sach cho thi khong co lop bo sot de dich.
+   */
+  it('5. cum chinh sach LA, khong chu so, ngoai POLICY_SURFACES -> KHONG den duoc tay khach', () => {
     const composition = compose(plan([], 'Dạ bên em cho mình khất tiền hàng tới khi bán xong ạ.'));
 
-    // Bo trich khong nhan ra cum nay — do la gia dinh cua bai. Cai chan no la CAU TRUC: khong co
-    // `payment_policy` trong `requestedBlocks` va khong co du kien chinh sach, nen khong co khoi
-    // chinh sach nao ton tai de mang cau do di.
     expect(composition.blocks).toHaveLength(0);
-    expect(composition.mode).toBe('narrative_only');
+    expect(composition.narrative).toEqual({
+      admitted: false,
+      reason: 'NARRATIVE_NOT_SOURCE_BACKED',
+    });
+    // Khang dinh QUAN TRONG NHAT cua ca tep: cau do khong con mot ky tu nao trong van ban gui ra.
+    expect(composition.text).toBe('');
+    expect(composition.text).not.toContain('khất');
+    expect(composition.mode).toBe('empty');
     expect(decideOutboundAuthority(composition, { grants: [] })).toMatchObject({
-      sendable: true,
-      reason: 'NARRATIVE_ONLY_COMPOSITION',
-      claims: [],
+      sendable: false,
+      reason: 'COMPOSITION_EMPTY',
     });
   });
 
@@ -301,12 +334,46 @@ describe('#189 — hop dong neo nguon cho loi nhan', () => {
     });
   });
 
-  it('G2: so cua CHINH tin khach thi nhac lai duoc — cau xac nhan so luong phai noi duoc', () => {
+  /*
+   * G2 va G5 LA HAI LOP DOC LAP, VA BAI NAY CHUNG MINH DUNG CHO GIAO NHAU CUA CHUNG.
+   *
+   * `20` den tu TIN KHACH (G2 cho phep — neu khong thi khong cau xac nhan so luong nao noi duoc);
+   * "Ghế Felix" va "cái" den tu DANH MUC — dung hai chuoi ma `bao_gia`/`tim_san_pham` that su dat
+   * vao `sources` (`line.name`, `line.unit`). Ca hai deu la nguon HE THONG, khong phai chu model
+   * tu nghi.
+   */
+  it('G2+G5: so cua tin khach + tu ngu cua danh muc -> cau xac nhan so luong noi duoc', () => {
+    const composition = compose(plan([], 'Dạ Ghế Felix 20 cái ạ.'), NO_BUSINESS_FACTS, {
+      customerText: 'lay 20 cai ghe Felix nhe',
+      systemSources: ['Ghế Felix', 'cái'],
+    });
+
+    expect(composition.narrative).toMatchObject({ admitted: true });
+  });
+
+  /*
+   * MAT KIA CUA CUNG MOT CHO GIAO NHAU: TIN KHACH KHONG NEO NGUON DUOC CHO MOT TU NGU.
+   *
+   * "ghi nhận" la mot khang dinh ve TRANG THAI HE THONG ("don cua minh da vao he thong"), va no
+   * khong co trong nguon nao cua luot — chi co trong cau model tu viet. G5 chan no. Cau do van
+   * noi duoc, nhung phai qua khoi `order_commitment`, tuc phai co mot don THAT o mot trang thai
+   * uy quyen den muc do (muc 8 ca 14/15). Do dung la huong ma review doc lap chi dinh: noi dung
+   * ve don den tu du kien tat dinh, khong tu van xuoi.
+   *
+   * VA TIN KHACH KHONG MO DUOC CONG NAY: `attestedWords()` khong nhan `customerText`. Neu no
+   * nhan, mot dai ly chi can go "cho minh khat tien hang" la tu cap tu ngu cho he thong hua lai
+   * dung cau do — cung ranh gioi ma G3 da dat cho lop chinh sach.
+   */
+  it('G5: cau "ghi nhan" khong co trong nguon -> phai di qua khoi, khong qua van xuoi', () => {
     const composition = compose(plan([], 'Dạ em ghi nhận 20 cái ạ.'), NO_BUSINESS_FACTS, {
       customerText: 'lay 20 cai nhe',
     });
 
-    expect(composition.narrative).toMatchObject({ admitted: true });
+    expect(composition.narrative).toEqual({
+      admitted: false,
+      reason: 'NARRATIVE_NOT_SOURCE_BACKED',
+    });
+    expect(composition.text).toBe('');
   });
 
   /*

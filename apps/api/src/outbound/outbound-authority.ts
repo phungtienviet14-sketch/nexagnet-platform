@@ -19,6 +19,7 @@ import {
   monetaryLiterals,
   policyClaimTokens,
 } from './outbound-claims.js';
+import { attestedWords, parseAttestedTokens, unattestedWords } from './outbound-envelope.js';
 import {
   parseGroundingTokens,
   ungroundedCarrier,
@@ -375,6 +376,34 @@ export function decideOutboundAuthority(
       sendable: false,
       reason: 'NARRATIVE_CARRIER_NOT_GROUNDED',
       missing: [CARRIER_CLASS[ungrounded]],
+      fingerprint,
+    };
+  }
+
+  /*
+   * CHANG 3b — G5 QUET LAI TREN VAN BAN CUOI (phong thu chieu sau, muc 7 hop dong).
+   *
+   * Doi chieu voi HAI nguon bang chung, va ca hai deu KHONG phai loi khai cua model:
+   *   · `s:` ghim tren ban soan — tu ngu ma loi nhan da dung VA da truy nguyen ve nguon he thong;
+   *   · dong cua cac khoi da render — do chinh bo soan viet ra tu `TurnBusinessFacts`.
+   *
+   * Cai bat duoc o day ma chang soan khong bat duoc: mot doan VAN XUOI xuat hien trong `text` ma
+   * khong lan soan nao nhan. Chang soan chi xet `plan.narrative`; neu mot duong soan moi (hay mot
+   * lan sua sau nay) ghep them chu vao `text`, chang soan khong biet — con o day thi tung chu cua
+   * chuoi sap ra kenh deu phai chi ra duoc no tu dau ma co.
+   */
+  const unattested = unattestedWords(
+    composition.text,
+    new Set([
+      ...parseAttestedTokens(composition.grounded),
+      ...attestedWords(composition.blocks.flatMap((block) => block.lines)),
+    ]),
+  );
+  if (unattested.length) {
+    return {
+      sendable: false,
+      reason: 'COMPOSITION_TEXT_NOT_SOURCE_BACKED',
+      missing: [],
       fingerprint,
     };
   }

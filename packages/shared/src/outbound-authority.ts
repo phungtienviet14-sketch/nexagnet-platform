@@ -188,6 +188,16 @@ export const OUTBOUND_AUTHORITY_REASONS = [
    * (co khoi render duoc hay khong), khong phai "khong trich duoc gi".
    */
   'NARRATIVE_CARRIER_NOT_GROUNDED',
+  /**
+   * PHONG THU CHIEU SAU (muc 7), lop thu hai: van ban cuoi chua TU NGU ma khong nguon he thong
+   * nao cua luot noi, va khong khoi da render nao viet ra.
+   *
+   * Khac `NARRATIVE_CARRIER_NOT_GROUNDED` o cho no khong can NHAN RA mot vat mang nao: no chi hoi
+   * "tung chu trong doan van sap gui den tu dau". Do la thu bat duoc mot doan van xuoi bi ghep
+   * them vao `text` SAU khi ban soan da xet — chang soan chi nhin `plan.narrative`, con day nhin
+   * chinh chuoi sap ra kenh.
+   */
+  'COMPOSITION_TEXT_NOT_SOURCE_BACKED',
 ] as const;
 export type OutboundAuthorityReason = (typeof OUTBOUND_AUTHORITY_REASONS)[number];
 
@@ -239,4 +249,6 @@ export const OUTBOUND_AUTHORITY_REASON_LABELS: Record<OutboundAuthorityReason, s
   COMPOSITION_ABSENT: 'Nội dung này chưa qua bộ soạn có kiểu',
   COMPOSITION_EMPTY: 'Bộ soạn không dựng được khối nào và lời nhắn bị từ chối',
   NARRATIVE_CARRIER_NOT_GROUNDED: 'Văn bản cuối mang khẳng định không truy nguyên được về nguồn',
+  COMPOSITION_TEXT_NOT_SOURCE_BACKED:
+    'Văn bản cuối chứa từ ngữ không nguồn hệ thống nào của lượt này nói',
 };

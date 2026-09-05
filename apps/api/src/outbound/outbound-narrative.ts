@@ -6,6 +6,7 @@ import {
   numeralLiterals,
   policyClaimTokens,
 } from './outbound-claims.js';
+import { unattestedWords } from './outbound-envelope.js';
 
 /**
  * HOP DONG NEO NGUON CHO LOI NHAN — cai gi cho phep mot cau van xuoi cua model den tay khach.
@@ -34,6 +35,13 @@ import {
  *                            co mat trong nguon.
  *   G4 DA CO THAM QUYEN THI PHAI DI QUA KHOI — con so/chinh sach/cam ket ma luot NAY duoc uy quyen
  *                            KHONG duoc nam trong van xuoi; chung thuoc ve khoi nghiep vu.
+ *   G5 TUNG TU NGU PHAI CO NGUON — moi tu ngu noi dung cua loi nhan phai co mat trong nguon he
+ *                            thong cua luot, hoac la mot tu chuc nang. Xem `outbound-envelope.ts`.
+ *
+ * G5 la lop DUY NHAT trong nam lop khong dua tren mot bo nhan dang. Bon lop kia hoi "loi nhan co
+ * mang mot vat mang ma ta NHAN RA khong?", nen chung chi manh bang bo nhan dang — va review doc
+ * lap da hai lan chung minh rang bo nhan dang nao cung co lop bo sot. G5 hoi nguoc: "co tu ngu nao
+ * ma KHONG nguon nao noi khong?". Do la mot danh sach CHO, nen no hong theo chieu DONG.
  *
  * G2 la thu that su giet duoc lop bo sot ma muc 1 hop dong goi ten ("bare numeral below 1000 with
  * implied k"): `giá 990` khong quy duoc ve nguon nao -> loi nhan bi bo. No lam duoc dieu do vi no
@@ -208,6 +216,8 @@ export function admitNarrative(
     readonly grounding: NarrativeGrounding;
     /** Rieng phan tu GRANT — xem G4 duoi day. */
     readonly granted: NarrativeGrounding;
+    /** G5 — tap tu ngu ma nguon he thong cua luot nay so huu. Xem `outbound-envelope.ts`. */
+    readonly attested: ReadonlySet<string>;
   },
 ): NarrativeDecision {
   const text = narrative.trim();
@@ -234,7 +244,27 @@ export function admitNarrative(
   const ungrounded = ungroundedCarrier(text, options.grounding);
   if (ungrounded) return { admitted: false, reason: ungrounded };
   const claimed = claimedCarrier(text, options.granted);
-  return claimed ? { admitted: false, reason: claimed } : { admitted: true, text };
+  if (claimed) return { admitted: false, reason: claimed };
+  /*
+   * G5 — MOI TU NGU NOI DUNG PHAI CO MAT TRONG NGUON HE THONG CUA LUOT.
+   *
+   * XEP CUOI, va do la mot quyet dinh ve CHAN DOAN chu khong ve an toan: ca nam lop deu chi CHAN,
+   * khong lop nao cap phep, nen doi thu tu khong doi duoc ket cuc — chi doi MA ma nguoi truc doc.
+   *
+   * Vi sao G5 di sau G4: G4 chi no khi vat mang do luot NAY DA DUOC UY QUYEN. Luc do model khong
+   * bia gi ca, no chi dat mot con so that vao sai cho, va cau dung phai la "so nay thuoc ve khoi
+   * bao gia". Bao `NARRATIVE_NOT_SOURCE_BACKED` o do se noi SAI: nguon cho con so ay co that.
+   *
+   * VI SAO G5 LA THU DONG DUOC CONG MA G1..G4 DE MO. Bon lop kia deu hoi "loi nhan co mang mot
+   * vat mang ma ta NHAN RA khong?" — nen chung chi manh bang bo nhan dang, va review doc lap da
+   * chung minh hai lan rang bo nhan dang nao cung co lop bo sot. G5 hoi nguoc lai: "co tu ngu nao
+   * trong loi nhan ma KHONG nguon nao noi khong?" — cau do khong can nhan ra dieu gi ca. Mot loi
+   * hua thanh toan chua tung gap bi chan khong phai vi ta biet no la loi hua, ma vi cac chu
+   * "khất", "tiền", "hàng", "bán", "xong" khong co trong bat ky nguon nao cua luot.
+   */
+  return unattestedWords(text, options.attested).length
+    ? { admitted: false, reason: 'NARRATIVE_NOT_SOURCE_BACKED' }
+    : { admitted: true, text };
 }
 
 /** Vat mang trong loi nhan ma luot NAY co tham quyen — phai di qua khoi. `null` = sach. */
