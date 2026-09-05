@@ -472,50 +472,8 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
   });
 }
 
-/**
- * TU VUNG NOI BO — mot tu nao trong day lot ra man hinh khach hang la mot loi.
- *
- * Danh sach lay thang tu #195. No co ca chu tieng Anh lan tieng Viet vi hai nguon khac nhau tung
- * de lot: goi khach (`previewNotice`, nhan `BẢN XEM TRƯỚC`) va chinh cac component (`chờ API`,
- * cac cau giai thich thieu route/read model).
- */
-const INTERNAL_VOCABULARY = [
-  'PREVIEW',
-  'BẢN XEM TRƯỚC',
-  'xem trước',
-  'EARLY UX REVIEWABLE',
-  'UAT',
-  'synthetic',
-  'demo tenant',
-  'chưa có khách hàng',
-  'không có dữ liệu khách hàng',
-  'customer-ready',
-  'business-proven',
-  'runtime-proven',
-  'chờ API',
-  'read model',
-  'endpoint',
-  'route HTTP',
-  'đường HTTP',
-];
-
-/** Moi dau vet co the con sot cua dai bang xem truoc — the, thuoc tinh, lop CSS. */
-const expectNoPreviewChrome = async (page: Page): Promise<void> => {
-  await expect(page.locator('.preview-ribbon')).toHaveCount(0);
-  await expect(page.locator('body[data-preview]')).toHaveCount(0);
-};
-
-const expectNoInternalVocabulary = async (page: Page): Promise<void> => {
-  const text = (await page.locator('body').innerText()).toLowerCase();
-  for (const term of INTERNAL_VOCABULARY) {
-    expect(text, `"${term}" khong duoc xuat hien tren be mat khach hang`).not.toContain(
-      term.toLowerCase(),
-    );
-  }
-};
-
 test.describe('vo va kien truc thong tin', () => {
-  test('danh muc chi chua muc dung duoc', async ({ page }) => {
+  test('danh muc dung nhom, va HAI muc cua T6 hien theo nang luc goi khach', async ({ page }) => {
     await mockTransport(page);
     await page.goto('/');
 
@@ -525,74 +483,40 @@ test.describe('vo va kien truc thong tin', () => {
     await expect(nav.getByRole('link', { name: /Quỹ lái xe/ })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Nhiên liệu' })).toBeVisible();
 
-    // Goi `transport-preview` bat CA `transport-settlement`, `transport-asset-compliance` lan
-    // `transport-workforce`. Khong mot muc nao trong so do duoc hien ra chung nao chua co duong
-    // du lieu — bat nang luc KHONG phai la cai mo mot muc tren be mat khach hang (#195).
-    for (const hidden of [
-      /Bảo dưỡng/,
-      /^Lương$/,
-      /Công nợ/,
-      /Biên trực tiếp/,
-      /AR\/AP/,
-      /Xuất dữ liệu/,
-    ]) {
-      await expect(nav.getByRole('link', { name: hidden })).toHaveCount(0);
-    }
-    await expect(page.getByText('TÀI SẢN & NHÂN SỰ')).toHaveCount(0);
-    await expect(page.getByText('BÁO CÁO')).toHaveCount(0);
+    // Goi `transport-preview` bat ca `transport-asset-compliance` lan `transport-workforce`, nen
+    // hai muc cua T6 HIEN — va nhom cua chung khong con mo coi. Chieu nguoc lai (khach khong bat
+    // thi an) duoc khoa o `__tests__/navigation.spec.ts`, cho ca hai chieu.
+    await expect(nav.getByRole('link', { name: /Bảo dưỡng/ })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Lương' })).toBeVisible();
+    await expect(page.getByText('TÀI SẢN & NHÂN SỰ')).toBeVisible();
   });
 
   /**
-   * KHONG CON DAI BANG XEM TRUOC, va khong con mot tu noi bo nao — #195.
+   * DAI BANG XEM TRUOC PHAI CO MAT, va phai la mot cau NGUOI DOC HIEU.
    *
-   * Bai nay doc TOAN BO chu tren trang chu khong chi mot the, vi cac tu do tung nam o ba cho khac
-   * nhau: dai bang o `layout.tsx`, phu hieu tren thanh ben, va cac cau giai thich trong tung muc.
+   * Day la cau duy nhat tren man hinh noi rang ban nay khong phai ban cho khach dung. Neu no bien
+   * mat trong mot lan doi layout, khong con gi ngan mot nguoi xem tuong nghiep vu da chay du.
    */
-  test('khong con dai bang xem truoc hay tu ngu noi bo tren be mat khach hang', async ({
-    page,
-  }) => {
-    // Nam lan tai trang THAT tren `next dev` (bien dich tung route lan dau) khong vua trong 30
-    // giay mac dinh. Bai nay quet CHU tren nhieu muc chu khong khang dinh toc do.
-    test.setTimeout(150_000);
-    await mockTransport(page, 'ADMIN');
+  test('dai bang xem truoc hien ra va noi ro day khong phai ban chay that', async ({ page }) => {
+    await mockTransport(page);
+    await page.goto('/');
 
-    for (const address of [
-      '/',
-      '/?section=trips',
-      '/?section=fleet',
-      '/?section=driver-fund',
-      '/?section=fuel',
-    ]) {
-      await page.goto(address);
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-      await expectNoPreviewChrome(page);
-      await expectNoInternalVocabulary(page);
-    }
-  });
-
-  test('be mat lai xe cung khong co tu ngu noi bo', async ({ page }) => {
-    test.setTimeout(90_000);
-    await mockTransport(page, 'SALE');
-    for (const address of ['/?surface=driver', '/?surface=driver&screen=fuel']) {
-      await page.goto(address);
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-      await expectNoPreviewChrome(page);
-      await expectNoInternalVocabulary(page);
-    }
+    const ribbon = page.getByRole('status').filter({ hasText: 'BẢN XEM TRƯỚC' });
+    await expect(ribbon).toBeVisible();
+    await expect(ribbon).toContainText('Dữ liệu tổng hợp');
+    await expect(ribbon).toContainText('không có dữ liệu khách hàng');
   });
 
   /**
-   * Go tay dia chi cua mot muc chua dung duoc phai roi ve Tong quan — khong ra trang trang, va
-   * khong ra mot man hinh tu giai thich vi sao no trong.
+   * Hai muc cua T6 hien ra thi phai NOI THAT rang chung chua noi vao may chu — khong duoc bay mot
+   * bang rong trong nhu da tai xong, va tuyet doi khong duoc bia mot con so nao.
    */
-  test('dia chi cua muc chua dung duoc roi ve Tong quan', async ({ page }) => {
-    // Sau lan tai trang THAT — cung ly do nhu bai quet tu ngu o tren.
-    test.setTimeout(150_000);
+  test('muc Bao duong noi that rang chua noi vao may chu, khong bia so', async ({ page }) => {
     await mockTransport(page, 'ADMIN');
-    for (const section of ['maintenance', 'payroll', 'settlement', 'margin', 'ar-ap', 'exports']) {
-      await page.goto(`/?section=${section}`);
-      await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
-    }
+    await page.goto('/?section=maintenance');
+
+    await expect(page.getByRole('heading', { level: 1, name: /Bảo dưỡng/ })).toBeVisible();
+    await expect(page.locator('#tx-main')).toContainText('chưa nối');
   });
 
   test('duong nhay ban phim dua tieu diem vao thang noi dung', async ({ page }) => {
@@ -607,16 +531,11 @@ test.describe('vo va kien truc thong tin', () => {
     await expect(page.locator('#tx-main')).toBeFocused();
   });
 
-  test('MANAGER khong co thao tac nao, va man hinh noi ro viec can lam', async ({ page }) => {
+  test('MANAGER khong co thao tac nao, va man hinh noi that dieu do', async ({ page }) => {
     await mockTransport(page, 'MANAGER');
     await page.goto('/');
-    // Bang bridge `GD-22` khai `MANAGER: []` co chu dich. Man hinh khong duoc bia mot anh xa quyen
-    // — nhung cau bao cho nguoi dung phai la mot cau SAN PHAM: noi viec can lam, khong noi tang
-    // phan quyen (#195).
-    const alert = page.locator('#tx-main').getByRole('alert');
-    await expect(alert).toContainText('chưa được cấp quyền');
-    await expect(alert).toContainText('quản trị viên');
-    await expectNoInternalVocabulary(page);
+    // Bang bridge `GD-22` khai `MANAGER: []` co chu dich. Man hinh khong duoc bia mot anh xa quyen.
+    await expect(page.locator('#tx-main').getByRole('alert')).toContainText('Vai Quản lý chưa được cấp thao tác');
   });
 });
 
@@ -820,9 +739,18 @@ test.describe('anh chup lam bang chung', () => {
     await mockTransport(page, 'ADMIN');
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    // Dung NAM muc co that tren be mat khach hang. Cac muc chua co duong du lieu khong con nam
-    // trong bo anh vi chung khong con nam tren man hinh (#195).
-    for (const section of ['', 'trips', 'fleet', 'driver-fund', 'fuel']) {
+    // `maintenance` va `payroll` nam trong bo anh vi goi xem truoc BAT hai nang luc T6 — nguoi
+    // review can thay ca cac muc chua noi vao may chu, dung nhu chung dang hien ra.
+    for (const section of [
+      '',
+      'trips',
+      'fleet',
+      'driver-fund',
+      'fuel',
+      'settlement',
+      'maintenance',
+      'payroll',
+    ]) {
       await page.goto(section === '' ? '/' : `/?section=${section}`);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await page.screenshot({

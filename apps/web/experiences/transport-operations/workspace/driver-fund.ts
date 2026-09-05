@@ -194,13 +194,13 @@ export const fundActionOffers = (role: AuthRole | null): readonly FundActionOffe
         id: 'advance',
         label: 'Tạm ứng',
         requiredAction: 'transport.costing.driver_fund.advance',
-        hint: 'Nhập số dương; hệ thống tự ghi đúng dấu theo loại bút toán.',
+        hint: 'Nhập số dương; dấu do máy chủ quyết theo loại bút toán.',
       },
       {
         id: 'return',
         label: 'Hoàn quỹ',
         requiredAction: 'transport.costing.driver_fund.return',
-        hint: 'Nhập số dương; khoản này được ghi thành bút toán giảm.',
+        hint: 'Nhập số dương; máy chủ ghi thành bút toán giảm.',
       },
       {
         id: 'adjust',

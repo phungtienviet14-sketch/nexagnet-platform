@@ -169,7 +169,7 @@ export const toDriverFuelSlipRows = (
     hasEvidence: slip.evidenceCount > 0,
     rejectedNote:
       slip.verificationStatus === 'REJECTED'
-        ? 'Phiếu bị từ chối. Hãy báo kế toán để lập lại phiếu.'
+        ? 'Phiếu bị từ chối. Hãy báo kế toán — máy chủ chưa mở đường tự nộp lại.'
         : null,
   }));
 
@@ -179,7 +179,7 @@ export const toDriverFuelSlipRows = (
  * mot o xem anh khong bao gio tai duoc.
  */
 export const EVIDENCE_VIEW_UNAVAILABLE =
-  'Ảnh đã gửi được đếm, nhưng chưa xem lại được trên điện thoại.';
+  'Ảnh đã gửi được đếm nhưng chưa xem lại được trên máy: hệ thống chưa có đường đọc ảnh chứng từ.';
 
 /* ------------------------------------------------------------------ *
  * Trang chu

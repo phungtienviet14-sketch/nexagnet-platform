@@ -1,5 +1,6 @@
 'use client';
 
+import { gapsForSection } from '../api-gaps';
 import { MetricCard, PageHeader } from '../components/primitives';
 import { ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -15,15 +16,12 @@ import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions
 import { toDashboard } from '../workspace/dashboard';
 
 /**
- * BANG DIEU KHIEN — chi nhung con so DEM DUOC tu du lieu that dang co tren tay.
+ * BANG DIEU KHIEN — con so that, va ten cua nhung con so CHUA lay duoc.
  *
- * #161 §4.B cam bia the bao duong/tuan thu/luong, va chi cho lay trang thai doi xe *"tu du lieu
- * truoc T6 o cho nao noi that duoc"*. Lenh cam do van nguyen: mot con so khong dem duoc thi KHONG
- * len bang, va tuyet doi khong duoc uoc doan cho day cho.
- *
- * TRUOC DAY cuoi trang con mot khoi "Chua dung duoc" liet ke ten cac con so thieu kem ly do ky
- * thuat cua tung cai. Khoi do da bo (#195): khong hien mot con so la du: no khong tuyen bo gi sai,
- * va no khong bat nguoi doc phai hieu kien truc may chu de dung mot bang dieu khien.
+ * #161 §4.B cam bia the bao duong/tuan thu/luong truoc khi `TX-06`/`TX-07` co san, va chi cho lay
+ * trang thai doi xe *"tu du lieu truoc T6 o cho nao noi that duoc"*. Nen khoi "Chua dung duoc" o
+ * cuoi trang khong phai mot loi xin loi — no la phan quan trong nhat cua man hinh nay: no cho biet
+ * con so nao KHONG co tren bang, de khong ai di tim mot con so khong ton tai.
  */
 export function OverviewView() {
   const navigation = useNavigationInput();
@@ -90,6 +88,32 @@ export function OverviewView() {
             ))}
           </ul>
         ) : null}
+      </section>
+
+      <section className="tx-panel tx-panel--muted" aria-label="Chưa dùng được">
+        <h2>Chưa dùng được</h2>
+        <p className="tx-panel__lead">
+          Những con số dưới đây cố tình không có trên bảng, vì hôm nay chưa lấy ra được một cách
+          trung thực.
+        </p>
+        <ul className="tx-unavailable">
+          {model.unavailable.map((card) => (
+            <li key={card.label}>
+              <strong>{card.label}</strong>
+              <span>{card.reason}</span>
+            </li>
+          ))}
+        </ul>
+        <details className="tx-details">
+          <summary>Chi tiết kỹ thuật của các khoảng cách này</summary>
+          <ul>
+            {gapsForSection('overview').map((gap) => (
+              <li key={gap.id}>
+                <strong>{gap.title}</strong> — {gap.actual}
+              </li>
+            ))}
+          </ul>
+        </details>
       </section>
     </>
   );
