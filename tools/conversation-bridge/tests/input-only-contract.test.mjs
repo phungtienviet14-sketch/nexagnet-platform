@@ -17,6 +17,7 @@ import {
   shippedSources,
 } from './fixtures/source-scan.mjs';
 import { ADAPTER_REASONS } from '../extension/shared/composer-adapter.js';
+import { CHATGPT_HOST_PERMISSION } from '../extension/shared/arming.js';
 import { BRIDGE_REASONS } from '../extension/shared/states.js';
 import { NATIVE_HOST_NAME } from '../install/windows-registry.mjs';
 import { WAKE_MESSAGE_PATTERN, buildWakeMessage } from '../extension/shared/wake-message.js';
@@ -147,9 +148,10 @@ test('18. tien ich khong xin mot quyen nao ngoai ba quyen co loi goi cu the', ()
   //   storage         -> trang thai arm + so khoa giao cuc bo
   //   scripting       -> chrome.scripting.executeScript vao dung tab da arm
   assert.deepEqual([...manifest.permissions].sort(), ['nativeMessaging', 'scripting', 'storage']);
-  // Khong xin quyen host LUC CAI DAT. Quyen host duoc xin luc arm, cho DUNG mot duong dan.
+  // Khong xin quyen host LUC CAI DAT — ngay sau khi cai, tien ich khong co quyen tren trang nao.
+  // Quyen host duoc xin luc ARM, va no la quyen theo ORIGIN (xem bai 18e).
   assert.equal(manifest.host_permissions, undefined);
-  assert.deepEqual(manifest.optional_host_permissions, ['https://chatgpt.com/*']);
+  assert.deepEqual(manifest.optional_host_permissions, [CHATGPT_HOST_PERMISSION]);
   // Khong content script thuong tru: khong co ma nao cua ta song san tren trang ChatGPT.
   assert.equal(manifest.content_scripts, undefined);
   assert.equal(manifest.manifest_version, 3);
@@ -173,6 +175,42 @@ test('18c. ten native host trong manifest cai dat trung voi hang trong service w
   );
   assert.equal(template.name, NATIVE_HOST_NAME);
   assert.equal(template.type, 'stdio');
+});
+
+test('18e. MO HINH QUYEN KHAI RA DUNG BANG THU RUNTIME CAP — theo origin, khong theo duong dan', () => {
+  // Tai lieu Match Patterns cua Chrome: voi quyen host, thanh phan duong dan BAT BUOC PHAI CO
+  // nhung BI BO QUA. Nen xin `https://chatgpt.com/c/<id>` cap dung cung mot pham vi voi
+  // `https://chatgpt.com/*`, va chi khac o cho no ke mot cau chuyen sai.
+  assert.equal(CHATGPT_HOST_PERMISSION, 'https://chatgpt.com/*');
+  assert.deepEqual(readManifest().optional_host_permissions, [CHATGPT_HOST_PERMISSION]);
+
+  const options = readFileSync(join(PACKAGE_ROOT, 'extension', 'options.js'), 'utf8');
+  const requests = [...options.matchAll(/chrome\.permissions\.(request|remove)\(([^)]*)\)/g)];
+  assert.equal(requests.length, 2, 'dung mot loi xin va mot loi tra quyen');
+  for (const [, call, args] of requests) {
+    assert.ok(
+      args.includes('CHATGPT_HOST_PERMISSION'),
+      `chrome.permissions.${call} phai dung dung hang so da khai, khong dung mot chuoi khac`,
+    );
+    assert.ok(
+      !args.includes('conversationUrl'),
+      `chrome.permissions.${call} KHONG duoc xin theo URL hoi thoai — Chrome bo qua duong dan, nen ` +
+        'lam vay chi tao ra mot mo hinh quyen sai',
+    );
+  }
+
+  // Va cach ly "dung mot cuoc hoi thoai" phai nam trong MA NGUON. Ba lop duoi day la ba dong ma
+  // neu bien mat thi mot URL hoi thoai khac se cham toi duoc DOM (bai `browser-target` 16c-16f).
+  const router = readFileSync(join(PACKAGE_ROOT, 'extension', 'shared', 'wake-router.js'), 'utf8');
+  assert.ok(router.includes('isExactConfiguredConversation'), 'loc tab theo URL da arm');
+  assert.ok(router.includes('TARGET_TAB_AMBIGUOUS'), 'nhieu tab khop la tu choi, khong doan');
+  assert.ok(router.includes('armedHref: conversationUrl'), 'URL da arm di thang vao trang');
+  const adapter = readFileSync(
+    join(PACKAGE_ROOT, 'extension', 'shared', 'composer-adapter.js'),
+    'utf8',
+  );
+  assert.ok(adapter.includes('loc.href !== input.expectedHref'), 'doi chieu trong trang');
+  assert.ok(adapter.includes('input.armedHref'), 'va doi chieu voi chinh trang thai arm');
 });
 
 test('18d. ma ly do cua bo noi khung soan deu thuoc bo tu vung chung', () => {

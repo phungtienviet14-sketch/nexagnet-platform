@@ -88,6 +88,27 @@ export const withRecord = (ledger, key, state, at) =>
   });
 
 /**
+ * Go DUNG MOT khoa. Khong co ham nao xoa nhieu khoa, va do la co y: "xoa het so" chinh la cach
+ * bien mot lan hoi phuc co dich thanh mot tran phat lai moi carrier cu (xem `reset-request.js`).
+ *
+ * Khoa khong ton tai thi tra ve chinh so cu — nguoi goi phai kiem `hasKey` truoc do de con phan
+ * biet duoc "da go" voi "khong co gi de go".
+ *
+ * @param {Ledger} ledger
+ * @param {string} key
+ * @returns {Ledger}
+ */
+export function withoutRecord(ledger, key) {
+  if (!hasKey(ledger, key)) return ledger;
+  /** @type {Record<string, { state: string, at: string }>} */
+  const records = {};
+  for (const [existing, value] of Object.entries(ledger.records)) {
+    if (existing !== key) records[existing] = value;
+  }
+  return Object.freeze({ version: LEDGER_VERSION, records: Object.freeze(records) });
+}
+
+/**
  * @param {string} path
  * @param {Ledger} ledger
  * @returns {{ ok: true } | { ok: false, error: string }}

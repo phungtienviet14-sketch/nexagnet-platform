@@ -17,7 +17,7 @@ import { createLogger } from './log.mjs';
 import { loadConfig } from './config.mjs';
 import { loadLedger } from './ledger.mjs';
 import { readerFor } from './github.mjs';
-import { applyResult, pollOnce } from './poll.mjs';
+import { applyReset, applyResult, pollOnce } from './poll.mjs';
 import { registryFromConfig } from '../protocol/provenance.mjs';
 import { decodeFrame, IPC_KINDS } from '../extension/shared/ipc.js';
 
@@ -119,6 +119,12 @@ export function main() {
       }
       if (decoded.frame.kind === IPC_KINDS.RESULT) {
         applyResult(runtime, /** @type {any} */ (decoded.frame));
+        continue;
+      }
+      // Hoa giai mot khoa da "chay". Khung nay den tu mot cu cham cua NGUOI tren trang tuy chon —
+      // `applyReset` van kiem lai tung cong nhu the no den tu mot noi khong tin cay.
+      if (decoded.frame.kind === IPC_KINDS.RESET) {
+        applyReset(runtime, /** @type {any} */ (decoded.frame));
       }
     }
   });

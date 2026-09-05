@@ -24,11 +24,17 @@ import { ARMED_URL, makeDeps } from './fixtures/router-deps.mjs';
 const KEY = deliveryKeyFor({ repo: REPO, pr: 205, headSha: HEAD_SHA });
 const FRAME = { v: 1, kind: 'WAKE', key: KEY, repo: REPO, pr: 205, headSha: HEAD_SHA };
 
-/** Chay bo noi tren mot cay DOM, dung cach service worker chay no. */
-const inject = (dom, expectedHref = ARMED_URL) =>
+/**
+ * Chay bo noi tren mot cay DOM, dung cach service worker chay no.
+ *
+ * `armedHref` mac dinh bang `expectedHref` — hai gia tri chi tach ra o nhung bai CO Y tach chung,
+ * de bat duoc truong hop bo loc phia service worker bi qua mat.
+ */
+const inject = (dom, expectedHref = ARMED_URL, armedHref = expectedHref) =>
   withDom(dom, () =>
     injectWakeMessage({
       expectedHref,
+      armedHref,
       message: 'review autopilot pending',
       composerSelectors: [...COMPOSER_SELECTORS],
       submitSelectors: [...SUBMIT_SELECTORS],
@@ -148,6 +154,85 @@ test('16. khong selector nao cham vao mot nut cua khoi hoi thoai', () => {
   assert.equal(trapped.length, 2);
   assert.throws(() => String(trapped[0].isContentEditable));
   assert.ok(dom.touchedTraps.length > 0, 'min phai ghi lai duoc lan cham');
+});
+
+/**
+ * Cac cuoc hoi thoai KHAC dang mo cung luc. Quyen host cap theo origin phu het chung — day dung la
+ * tap tab ma mot lan `chrome.tabs.query` co the tra ve.
+ */
+const OTHER_CONVERSATIONS = Object.freeze([
+  { id: 1, url: 'https://chatgpt.com/c/11112222-3333-4444-5555-666677778888' },
+  { id: 2, url: 'https://chatgpt.com/c/99998888-7777-6666-5555-444433332222' },
+  { id: 3, url: 'https://chatgpt.com/' },
+  { id: 4, url: `${ARMED_URL}?model=x` },
+  { id: 5, url: `${ARMED_URL}-2` },
+]);
+
+test('16c. quyen host la ORIGIN-WIDE: moi tab chatgpt.com deu thay duoc, khong tab nao bi cham', async () => {
+  // Chrome BO QUA duong dan trong mau quyen host, nen mot lan truy van co the tra ve ca nam tab
+  // duoi day. Khong tab nao trong so do la cuoc hoi thoai da arm => khong mot thao tac DOM nao.
+  const harness = makeDeps({ tabs: [...OTHER_CONVERSATIONS] });
+  const outcome = await routeWakeFrame(FRAME, harness.deps);
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.state, 'REJECTED_WRONG_CHAT');
+  assert.equal(outcome.reason, 'TARGET_TAB_NOT_FOUND');
+  assert.deepEqual(harness.injections, []);
+  assertPageUntouched(harness.dom, 'origin-wide, khong co tab da arm');
+  // Va bo dinh tuyen VAN hoi dung URL da arm — quyen rong khong lam loi hoi rong theo.
+  assert.deepEqual(harness.tabQueries, [ARMED_URL]);
+});
+
+test('16d. origin-wide + tab da arm nam LAN giua cac tab khac -> chi tab da arm bi cham', async () => {
+  const harness = makeDeps({
+    tabs: [
+      ...OTHER_CONVERSATIONS,
+      { id: 42, url: ARMED_URL },
+      { id: 6, url: 'https://chatgpt.com/c/aaaabbbb-cccc-dddd-eeee-ffff00001111' },
+    ],
+  });
+  const outcome = await routeWakeFrame(FRAME, harness.deps);
+  assert.equal(outcome.ok, true);
+  assert.equal(harness.injections.length, 1, 'dung mot lan tiem');
+  assert.equal(harness.injections[0].tabId, 42, 'va dung vao tab da arm');
+  assert.equal(harness.injections[0].armedHref, ARMED_URL, 'URL da arm di thang vao trang');
+});
+
+test('16e. LOP CUOI: du bo loc tab bi qua mat, trang khac van khong bi ghi', () => {
+  // Dung mot cuoc hoi thoai KHAC, va gia dinh xau nhat: `expectedHref` da bi lam cho khop voi
+  // chinh trang do (tuc bo loc phia service worker coi nhu da thung). Chi con `armedHref` chan.
+  const otherHref = 'https://chatgpt.com/c/11112222-3333-4444-5555-666677778888';
+  const dom = chatgptPage({ href: otherHref });
+  const outcome = inject(dom, otherHref, ARMED_URL);
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.reason, 'ARMED_URL_MISMATCH');
+  assertPageUntouched(dom, 'lop cuoi, bo loc tab da thung');
+
+  // DOI CHUNG: chinh cay DOM do, khi URL DUNG la URL da arm, van chay het duong thanh cong. Khong
+  // co khang dinh nay thi bai tren co the xanh chi vi cay DOM khong the tiem duoc.
+  const armed = chatgptPage({ href: ARMED_URL });
+  assert.equal(inject(armed, ARMED_URL, ARMED_URL).ok, true);
+});
+
+test('16f. `armedHref` thieu / rong -> tu choi; dau `/` cuoi thi khong', () => {
+  const dom = () => chatgptPage({ href: ARMED_URL });
+  for (const bad of [undefined, '', null, 42]) {
+    const page = dom();
+    const outcome = withDom(page, () =>
+      injectWakeMessage(
+        /** @type {any} */ ({
+          expectedHref: ARMED_URL,
+          armedHref: bad,
+          message: 'x',
+          composerSelectors: [...COMPOSER_SELECTORS],
+          submitSelectors: [...SUBMIT_SELECTORS],
+        }),
+      ),
+    );
+    assert.equal(outcome.reason, 'ARMED_URL_MISMATCH', String(bad));
+    assertPageUntouched(page, `armedHref = ${String(bad)}`);
+  }
+  // Trinh duyet co the tra ve URL tab co dau `/` cuoi. Do la CUNG mot trang, khong duoc tu choi.
+  assert.equal(inject(dom(), ARMED_URL, `${ARMED_URL}/`).ok, true);
 });
 
 test('16b. so sanh URL la CHINH XAC, khong phai "bat dau bang"', () => {

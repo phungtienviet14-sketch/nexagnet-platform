@@ -6,16 +6,23 @@
  * mot bug parse, mot tep cau hinh bi sua, mot tien trinh bi thay the — deu tro thanh mot duong
  * viet chu tuy y vao ChatGPT.
  *
- * Nen o day kenh chi mang BA loai khung, moi khung co tap truong DONG:
+ * Nen o day kenh chi mang NAM loai khung, moi khung co tap truong DONG:
  *
- *   HOST -> TIEN ICH   WAKE    { v, kind, key, repo, pr, headSha }
- *   TIEN ICH -> HOST   RESULT  { v, kind, key, state, reason }
- *   TIEN ICH -> HOST   HELLO   { v, kind }
+ *   HOST -> TIEN ICH   WAKE          { v, kind, key, repo, pr, headSha }
+ *   TIEN ICH -> HOST   RESULT        { v, kind, key, state, reason }
+ *   TIEN ICH -> HOST   HELLO         { v, kind }
+ *   TIEN ICH -> HOST   RESET         { v, kind, key, repo, pr, headSha }
+ *   HOST -> TIEN ICH   RESET_RESULT  { v, kind, key, state, reason }
  *
  * Chu y truong KHONG co trong `WAKE`: **khong co truong van ban**. Tien ich TU DUNG tin nhan tu
  * `buildWakeMessage(repo, pr, headSha)`. Do la khac biet quan trong nhat cua tep nay: ke ca khi
  * phia Node bi thay the hoan toan, no van chi doc duoc ba nguyen thuy da kiem hinh dang, va cai
  * di vao khung soan van la ban mau cua repo nay.
+ *
+ * `RESET` co CUNG tap truong voi `WAKE`, va do la co y. No la duong DUY NHAT go mot khoa giao da
+ * "chay" ra khoi so ben cua host, nen no phai mang du du lieu de host TU DUNG LAI khoa canonical
+ * roi doi chieu — khong co chuyen "tin tien ich noi khoa nao". Cung nhu `WAKE`, no khong co truong
+ * van ban: khong mot chu tu do nao di qua duong ong nay, theo chieu nao.
  */
 
 export const IPC_VERSION = 1;
@@ -24,7 +31,20 @@ export const IPC_KINDS = Object.freeze({
   WAKE: 'WAKE',
   RESULT: 'RESULT',
   HELLO: 'HELLO',
+  RESET: 'RESET',
+  RESET_RESULT: 'RESET_RESULT',
 });
+
+/**
+ * Khung mang bo ba `{repo, pr, headSha}` — kiem hinh dang giong het nhau.
+ * @type {ReadonlyArray<string>}
+ */
+const CARRIER_KINDS = Object.freeze([IPC_KINDS.WAKE, IPC_KINDS.RESET]);
+/**
+ * Khung mang bo doi `{state, reason}` — hai ma viet HOA, khong phai van xuoi.
+ * @type {ReadonlyArray<string>}
+ */
+const OUTCOME_KINDS = Object.freeze([IPC_KINDS.RESULT, IPC_KINDS.RESET_RESULT]);
 
 /**
  * Tap truong DONG cua tung loai khung. Thua mot truong = tu choi, khong phai bo qua.
@@ -34,6 +54,8 @@ const FRAME_FIELDS = Object.freeze({
   [IPC_KINDS.WAKE]: Object.freeze(['v', 'kind', 'key', 'repo', 'pr', 'headSha']),
   [IPC_KINDS.RESULT]: Object.freeze(['v', 'kind', 'key', 'state', 'reason']),
   [IPC_KINDS.HELLO]: Object.freeze(['v', 'kind']),
+  [IPC_KINDS.RESET]: Object.freeze(['v', 'kind', 'key', 'repo', 'pr', 'headSha']),
+  [IPC_KINDS.RESET_RESULT]: Object.freeze(['v', 'kind', 'key', 'state', 'reason']),
 });
 
 const REPO_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
@@ -80,7 +102,7 @@ export function decodeFrame(value) {
   if (typeof value.key !== 'string' || !KEY_PATTERN.test(value.key)) {
     return { ok: false, error: 'FRAME_KEY_INVALID' };
   }
-  if (kind === IPC_KINDS.RESULT) {
+  if (OUTCOME_KINDS.includes(kind)) {
     if (typeof value.state !== 'string' || !CODE_PATTERN.test(value.state)) {
       return { ok: false, error: 'FRAME_STATE_INVALID' };
     }
@@ -89,6 +111,8 @@ export function decodeFrame(value) {
     }
     return { ok: true, frame: Object.freeze({ ...value }) };
   }
+  /* c8 ignore next -- moi `kind` con lai deu la CARRIER_KINDS; nhanh nay giu cho lan them kind sau */
+  if (!CARRIER_KINDS.includes(kind)) return { ok: false, error: 'FRAME_KIND_UNKNOWN' };
   if (typeof value.repo !== 'string' || !REPO_PATTERN.test(value.repo)) {
     return { ok: false, error: 'FRAME_REPO_INVALID' };
   }
@@ -99,6 +123,31 @@ export function decodeFrame(value) {
     return { ok: false, error: 'FRAME_HEAD_SHA_INVALID' };
   }
   return { ok: true, frame: Object.freeze({ ...value }) };
+}
+
+/**
+ * Doc mot khoa giao canonical NGUOC lai thanh ba nguyen thuy.
+ *
+ * Vi sao o day chu khong o `protocol/delivery-key.mjs`: trang tuy chon va service worker deu can
+ * ham nay, va ca hai chay trong TRINH DUYET. `delivery-key.mjs` keo theo `node:crypto` va goi
+ * `@netviet/autopilot-protocol` — hai thu khong ton tai o do (co bai kiem 17d khoa dieu nay).
+ *
+ * Rang buoc bu lai: co bai kiem doi hoi `deliveryKeyFor(x)` roi `parseDeliveryKey` phai tra ve
+ * DUNG `x`, nen hai dinh nghia khong the troi ra khoi nhau ma van xanh.
+ *
+ * @param {unknown} key
+ * @returns {{ ok: true, repo: string, pr: number, headSha: string } | { ok: false, error: string }}
+ */
+export function parseDeliveryKey(key) {
+  if (typeof key !== 'string' || !KEY_PATTERN.test(key)) {
+    return { ok: false, error: 'FRAME_KEY_INVALID' };
+  }
+  // Khoa la `conversation-bridge:<owner>/<name>:<pr>:<sha>`. Ten kho khong duoc chua `:` (xem
+  // REPO_PATTERN), nen tach theo `:` luon ra dung bon manh — khong can doan ranh gioi.
+  const parts = key.split(':');
+  if (parts.length !== 4) return { ok: false, error: 'FRAME_KEY_INVALID' };
+  const [, repo, pr, headSha] = parts;
+  return { ok: true, repo, pr: Number(pr), headSha };
 }
 
 /**
@@ -119,6 +168,28 @@ export function resultFrame({ key, state, reason }) {
   const frame = { v: IPC_VERSION, kind: IPC_KINDS.RESULT, key, state, reason };
   const decoded = decodeFrame(frame);
   if (!decoded.ok) throw new Error(`Khung RESULT tu dung khong hop le: ${decoded.error}`);
+  return frame;
+}
+
+/**
+ * Khung RESET — tien ich XIN host go DUNG MOT khoa khoi so ben. Xin, khong ra lenh: host tu dung
+ * lai khoa canonical tu `{repo, pr, headSha}` roi doi chieu, va tu choi neu lech.
+ * @param {{ key: string, repo: string, pr: number, headSha: string }} input
+ */
+export function resetFrame({ key, repo, pr, headSha }) {
+  const frame = { v: IPC_VERSION, kind: IPC_KINDS.RESET, key, repo, pr, headSha };
+  const decoded = decodeFrame(frame);
+  if (!decoded.ok) throw new Error(`Khung RESET tu dung khong hop le: ${decoded.error}`);
+  return frame;
+}
+
+/**
+ * @param {{ key: string, state: string, reason: string }} input
+ */
+export function resetResultFrame({ key, state, reason }) {
+  const frame = { v: IPC_VERSION, kind: IPC_KINDS.RESET_RESULT, key, state, reason };
+  const decoded = decodeFrame(frame);
+  if (!decoded.ok) throw new Error(`Khung RESET_RESULT tu dung khong hop le: ${decoded.error}`);
   return frame;
 }
 

@@ -53,7 +53,7 @@ rồi tự đăng `REVIEW_PASS` / `REVIEW_BLOCK`. Cầu nối không tham gia v�
    │ RANH GIỚI 3 — trạng thái arm của tiện ích    │
    │ extension/  (service worker MV3)             │
    │  · đúng một URL hội thoại được arm           │
-   │  · quyền host xin lúc arm, cho ĐÚNG một path │
+   │  · lọc tab + so URL chính xác + đúng MỘT tab │
    │  · sổ khoá giao cục bộ trong chrome.storage  │
    └──────────────────────────────────────────────┘
         │  RANH GIỚI 4 — bề mặt DOM 11 thao tác, CHỈ GHI
@@ -129,14 +129,67 @@ Không có bộ nhớ đệm. Mỗi lần cân nhắc giao là một lần đọ
 Mặc định là `DISARMED`: **không cuộc hội thoại nào** đủ điều kiện. Người dùng phải mở trang tuỳ
 chọn của tiện ích, dán đúng một URL dạng `https://chatgpt.com/c/<id>` và bấm arm.
 
-Lúc arm, tiện ích gọi `chrome.permissions.request` xin quyền host **cho đúng đường dẫn đó** —
-không phải cho `https://chatgpt.com/*`. Manifest **không khai `host_permissions`** nào; nó chỉ khai
-`optional_host_permissions` làm tập cha để lời xin lúc chạy là hợp lệ. Nghĩa là ngay sau khi cài,
-tiện ích **không có quyền trên bất kỳ trang nào**.
+#### Quyền host của Chrome là **theo origin**, không theo đường dẫn
+
+Đây là một sự thật kỹ thuật phải nói thẳng, vì một bản trước của tài liệu này đã nói sai nó:
+
+> Tài liệu Match Patterns của Chrome quy định rằng với **quyền host**, thành phần đường dẫn là
+> **bắt buộc phải có** trong mẫu nhưng **bị bỏ qua**.
+
+Nghĩa là xin `https://chatgpt.com/c/<id>` và xin `https://chatgpt.com/*` cấp ra **đúng cùng một
+phạm vi**: toàn bộ origin `https://chatgpt.com`. Một lời xin theo đường dẫn không hề hẹp hơn — nó
+chỉ **kể một câu chuyện sai** trong manifest, trong tài liệu, và trong đầu người đọc review.
+
+Nên tiện ích xin đúng `https://chatgpt.com/*`, để **mô hình quyền khai ra bằng đúng thứ runtime
+thật sự cấp**. Manifest vẫn **không khai `host_permissions`** nào; nó chỉ khai
+`optional_host_permissions` làm tập cha để lời xin lúc chạy là hợp lệ. Nên ngay sau khi cài, tiện
+ích **không có quyền trên bất kỳ trang nào**; sau khi arm, nó có quyền trên **cả origin ChatGPT**.
+
+#### Vậy cái gì thật sự giữ "đúng một cuộc hội thoại"
+
+**Mã nguồn**, bằng bốn lớp xếp chồng — mỗi lớp có bài kiểm riêng, và **lớp cuối vẫn chặn khi ba lớp
+trên bị bỏ qua**:
+
+| #   | Lớp                                                                                                                   | Ở đâu                 | Bài kiểm             |
+| --- | --------------------------------------------------------------------------------------------------------------------- | --------------------- | -------------------- |
+| 1   | Trạng thái `ARMED_EXACT_CHAT` giữ **một** URL canonical do người dán vào                                              | `arming.js`           | `arming`             |
+| 2   | Lọc tab bằng `isExactConfiguredConversation(tab.url, đã-arm)`                                                         | `wake-router.js`      | `browser-target` 16c |
+| 3   | Đúng **một** tab khớp — không tab hoặc nhiều tab đều là từ chối, không đoán                                           | `wake-router.js`      | `browser-target` 12b |
+| 4   | Trong trang: `location.href` phải bằng URL tab **và** bằng URL đã arm, đối chiếu **ngay trước** thao tác DOM đầu tiên | `composer-adapter.js` | `browser-target` 16e |
+
+Lớp 4 nhận `armedHref` **thẳng từ trạng thái arm**, không đi qua bản ghi tab, nên nó vẫn chặn ngay
+cả khi lớp 2 bị qua mặt. Bài `browser-target` 16e dựng đúng tình huống đó: một cuộc hội thoại khác,
+với `expectedHref` đã bị làm cho khớp, và vẫn **không một thao tác DOM nào** xảy ra.
 
 URL được so **chính xác** (chỉ tha dấu `/` cuối và chữ hoa/thường của scheme+host). Query và
 fragment không được bỏ qua — `?model=x` là một trang khác. Chỉ host `chatgpt.com`; host cũ của
 ChatGPT và mọi host của ChatGPT Work đều không arm được.
+
+### 4.5 Đường ống tới native host — mở lại được, **có chặn**
+
+`chrome.runtime.connectNative` **không ném** khi native host chưa được đăng ký: nó trả về một Port
+rồi bắn `onDisconnect` gần như tức thì. Hai tình huống rất khác nhau đi vào cùng một sự kiện đó:
+
+- **A — host chưa có.** Tiện ích được nạp _trước_ khi host được đăng ký (đúng thứ tự cài đặt ở §8).
+  Việc đăng ký host sau đó **không sinh ra sự kiện nào** gọi `connect()` lại.
+- **B — host đang chạy rồi chết.** Tiến trình sập, hoặc Chrome giết nó.
+
+Phân biệt bằng **thời gian sống**, không bằng đoán: một port sống được ≥ 5 giây trước khi đứt là một
+kết nối **đã thật sự chạy** (B) ⇒ ngân sách lùi về đầu. Một port đứt gần như tức thì là một lần mở
+**hỏng** (A) ⇒ lùi theo cấp số nhân **1s → 2 → 4 → 8 → 16 → 30s**, trần 30 giây.
+
+Sau **6** lần mở hỏng liên tiếp (≈61 giây), bộ máy **dừng hẳn** ở `GAVE_UP`. Không quay tít, không
+tốn pin, không rác log — một host cấu hình sai sẽ hỏng mãi mãi, và thử lại vô hạn không sửa được gì.
+Đường ra khỏi `GAVE_UP` là **nút _Ket noi lai_ trên trang tuỳ chọn**, tức một thao tác của người.
+Nút đó cũng huỷ luôn lịch hẹn đang chờ, nên không ai phải đợi hết 30 giây.
+
+Hai bất biến nữa, đều có bài kiểm: **đúng một** lịch hẹn và **đúng một** lần mở đang bay tại mọi
+thời điểm (gọi `open()` 25 lần chồng nhau vẫn ra một Port); và một sự kiện `onDisconnect` **muộn**
+của port cũ không đụng tới port đang chạy.
+
+Service worker MV3 bị Chrome thu hồi bất kỳ lúc nào. `link.open()` được gọi ở **mức module**, nên
+mỗi lần worker sống lại — kể cả khi nó sống lại chỉ vì một tin nhắn từ trang tuỳ chọn — đều là một
+cơ hội mở lại. Trạng thái lùi **cố ý không** được lưu bền: một worker mới là một khởi đầu mới.
 
 ### 4.4 Cổng idempotency — _đúng một lần_
 
@@ -157,11 +210,15 @@ trường kho — PR #7 của hai kho sẽ dùng chung khoá, và đó là một
 
 Ba quyền, mỗi quyền một lời gọi cụ thể:
 
-| Quyền             | Lời gọi duy nhất dùng tới nó                         |
-| ----------------- | ---------------------------------------------------- |
-| `nativeMessaging` | `chrome.runtime.connectNative`                       |
-| `storage`         | trạng thái arm + sổ khoá giao cục bộ                 |
-| `scripting`       | `chrome.scripting.executeScript` vào đúng tab đã arm |
+| Quyền             | Lời gọi duy nhất dùng tới nó                          |
+| ----------------- | ----------------------------------------------------- |
+| `nativeMessaging` | `chrome.runtime.connectNative`                        |
+| `storage`         | trạng thái arm + sổ khoá giao cục bộ + trạng thái ống |
+| `scripting`       | `chrome.scripting.executeScript` vào đúng tab đã arm  |
+
+Cộng **một** quyền host tuỳ chọn, xin lúc arm: `https://chatgpt.com/*` — **cả origin**, vì đó là
+đơn vị duy nhất Chrome thật sự cấp (§4.3). Việc chỉ một cuộc hội thoại bị chạm tới do **mã nguồn**
+giữ, và bảng bốn lớp ở §4.3 nói rõ mỗi lớp nằm ở đâu.
 
 **Không** `tabs`, **không** `cookies`, **không** `webRequest`, **không** `history`, **không**
 `debugger`, **không** `<all_urls>`, **không content script thường trú**. Không có mã nào của cầu
@@ -248,26 +305,36 @@ thì gõ nhầm được; hai cờ, trong đó một cờ đọc lên thành m�
 
 ### Thủ tục smoke thủ công (giai đoạn sau, có người duyệt)
 
+**Thứ tự này bắt buộc phải nạp tiện ích _trước_ khi đăng ký native host** — extension ID chỉ tồn
+tại sau khi nạp, mà manifest của host lại phải nêu đúng ID đó trong `allowed_origins`. Hệ quả:
+**lần `connectNative()` đầu tiên chắc chắn thất bại**, và Chrome không sinh ra sự kiện nào để thử
+lại. Bước 5 là chỗ xử lý điều đó, và nó không đòi nạp lại tiện ích (xem §4.5).
+
 1. Sao `config.example.json` → `config.json`; điền `repo` và `allowedProducers` thật; giữ
    `enabled: false`.
 2. `chrome://extensions` → bật _Developer mode_ → _Load unpacked_ → chọn thư mục
    `tools/conversation-bridge/extension/`. **Đây là bước thủ công duy nhất không tự động hoá được**
    (Chrome không cho đăng ký tiện ích chưa đóng gói bằng dòng lệnh), và nó sinh ra _extension ID_
-   cần cho bước sau.
+   cần cho bước sau. Lúc này trang tuỳ chọn sẽ báo đường ống `BACKING_OFF` rồi `GAVE_UP` — **đúng
+   như dự kiến**, host chưa tồn tại.
 3. Chạy `install:dry-run --extension-id=<id vừa lấy>`, **đọc kỹ đầu ra**, rồi mới `--apply
 --i-understand-this-writes-to-my-registry`.
-4. Mở trang tuỳ chọn của tiện ích, dán URL cuộc hội thoại, bấm arm, chấp nhận lời xin quyền host.
-5. Đặt `enabled: true` trong `config.json`.
-6. Quan sát `stderr` của native host qua `chrome://extensions` → _service worker_ → _Errors_.
+4. Mở trang tuỳ chọn của tiện ích, dán URL cuộc hội thoại, bấm arm, chấp nhận lời xin quyền host
+   (Chrome sẽ hỏi cho **cả `chatgpt.com`** — xem §4.3 về vì sao và cái gì thay nó giữ ranh giới).
+5. Vẫn trên trang tuỳ chọn, bấm **_Ket noi lai_**. Đường ống phải chuyển sang `CONNECTED`. Không
+   cần nạp lại tiện ích, không cần khởi động lại Chrome.
+6. Đặt `enabled: true` trong `config.json`.
+7. Quan sát `stderr` của native host qua `chrome://extensions` → _service worker_ → _Errors_.
 
 ### Tắt và lùi
 
-| Muốn                   | Làm                                                                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Dừng ngay, giữ mọi thứ | Bấm **Disarm** trên trang tuỳ chọn — không cuộc hội thoại nào còn đủ điều kiện                                           |
-| Dừng đọc GitHub        | Đặt `enabled: false` trong `config.json` — không một lần đọc nào xảy ra nữa                                              |
-| Gỡ hẳn                 | `uninstall:dry-run`, đọc, rồi `--apply …`; sau đó _Remove_ tiện ích trong `chrome://extensions`                          |
-| Xoá dấu vết            | Xoá `tools/conversation-bridge/state/` (sổ khoá giao) — **cẩn thận**: sau đó một carrier cũ có thể được giao lại một lần |
+| Muốn                       | Làm                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dừng ngay, giữ mọi thứ     | Bấm **Disarm** trên trang tuỳ chọn — không cuộc hội thoại nào còn đủ điều kiện                                                                         |
+| Dừng đọc GitHub            | Đặt `enabled: false` trong `config.json` — không một lần đọc nào xảy ra nữa                                                                            |
+| Đánh thức lại **một** HEAD | Hoà giải **đúng một khoá** trên trang tuỳ chọn (§9) — đi qua **cả hai** sổ                                                                             |
+| Gỡ hẳn                     | `uninstall:dry-run`, đọc, rồi `--apply …`; sau đó _Remove_ tiện ích trong `chrome://extensions`                                                        |
+| Xoá dấu vết                | Xoá `tools/conversation-bridge/state/` (sổ bên host) — **cẩn thận**: đây là "phát lại **mọi** carrier còn hợp lệ", không phải một lần hồi phục có đích |
 
 ## 9. Ngữ nghĩa giao: **AT-MOST-ONCE**, và vì sao không hơn
 
@@ -294,33 +361,81 @@ nào có giao dịch**.
 Bốn ranh giới replay đều được kiểm riêng: hai vòng poll cùng tiến trình · khởi động lại tiến trình
 host · service worker bị thu hồi · HEAD mới (khoá mới, giao được đúng một lần nữa).
 
+### 9.1 Hai sổ, và vì sao xoá một mình sổ của tiện ích **không** hồi phục được gì
+
+Có **hai** sổ khoá giao, không phải một:
+
+| #   | Ở đâu                                   | Ghi lúc nào              |
+| --- | --------------------------------------- | ------------------------ |
+| #1  | native host, **trên đĩa** (`statePath`) | trước khi gửi khung WAKE |
+| #2  | tiện ích, `chrome.storage.local`        | trước khi chạm vào DOM   |
+
+Một bản trước của tài liệu này khai rằng nút _Xoá sổ khoá giao cục bộ_ là đường hồi phục cho R1.
+**Điều đó sai.** Nút ấy chỉ xoá sổ #2; sổ #1 vẫn giữ khoá, nên vòng poll kế tiếp dừng ở
+`ALREADY_DELIVERED` và khung WAKE không bao giờ được dựng lại. Nút ấy đã bị **gỡ bỏ**, và bài kiểm
+`two-ledger-recovery` 34 khoá lại kết luận đó — nếu ai đó làm lại một nút như vậy rồi gọi nó là
+đường hồi phục, bài 34 sẽ đỏ.
+
+### 9.2 Hoà giải **có đích**: một khoá, hai sổ, do một con người bấm
+
+```text
+1. người chọn ĐÚNG MỘT mục trong danh sách khoá đã cháy, bấm xác nhận (hai nhịp)
+2. tiện ích dựng khung RESET có kiểu {key, repo, pr, headSha} — KHÔNG có trường văn bản
+3. host TỰ DỰNG LẠI khoá canonical từ {repo, pr, headSha} rồi đối chiếu; ba cổng:
+      · đúng kho đã cấu hình              → REPOSITORY_MISMATCH
+      · khoá TỰ MÂU THUẪN với {pr, sha}   → KEY_NOT_CANONICAL
+      · khoá phải ĐÃ CÓ trong sổ          → KEY_UNKNOWN   (RESET không bao giờ TẠO khoá)
+4. host gỡ đúng một bản ghi, ghi đĩa, rồi trả khung RESET_RESULT có kiểu
+5. CHỈ KHI host báo xong, tiện ích mới gỡ đúng khoá đó khỏi sổ #2
+```
+
+Bước 5 đặt **sau** bước 4 có chủ đích: gỡ trước sẽ để lại đúng cái trạng thái lệch nói ở §9.1, chỉ
+lệch theo chiều ngược lại.
+
+Điều này **không** biến at-most-once thành at-least-once. Không có lần thử lại tự động nào; một
+khoá đã cháy chỉ được mở lại bởi **một con người**, cho **đúng một khoá được gọi tên**, và sau đó
+HEAD ấy lại chịu **đầy đủ** mọi cổng (xuất xứ, HEAD sống, PR còn mở) rồi giao **đúng một lần**.
+Hoà giải trả lại _quyền được cân nhắc_, không phải một lần gửi.
+
+Không có đường nào xoá nhiều hơn một khoá, và **không** có đường nào để tiện ích **ghi** vào sổ của
+host: một khung RESET nhắm vào khoá không tồn tại bị từ chối bằng `RESET_KEY_UNKNOWN`, chứ không tạo
+ra bản ghi nào (`two-ledger-recovery` 36b).
+
 ## 10. Rủi ro còn lại
 
-| #   | Rủi ro                                                               | Ảnh hưởng                                           | Vì sao chấp nhận / cách xử lý                                                                                                                                           |
-| --- | -------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | Một lần tiêm thất bại "cháy" khoá; HEAD đó không được đánh thức lại  | Bỏ lỡ một lần đánh thức                             | Hướng an toàn có chủ đích (§9). Khôi phục = nút **Xoá sổ khoá giao** trên trang tuỳ chọn — một hành động có ý thức của con người                                        |
-| R2  | Ghi đè bản nháp đang có trong khung soạn của cuộc hội thoại đã arm   | Mất một đoạn người dùng đang gõ                     | `selectAll` + `insertText` là _thay thế_, vì nối thêm sẽ cho ra một tin nhắn không tất định (§8 của #204 cấm). Cuộc hội thoại được arm là cuộc **dành cho tự động hoá** |
-| R3  | ChatGPT đổi cấu trúc khung soạn                                      | Cầu nối ngừng hoạt động                             | Fail closed: `COMPOSER_NOT_FOUND` / `COMPOSER_AMBIGUOUS`, **không bấm nút tuỳ ý**. Selector là `id` ổn định + thuộc tính ngữ nghĩa, không phải lớp CSS sinh ra          |
-| R4  | Chế độ `unauthenticated` chỉ có 60 lần gọi/giờ                       | Poll bị chặn                                        | Chỉ dùng cho kho công khai; mặc định là `gh-cli`. Đọc thất bại ⇒ `LIVE_STATE_UNAVAILABLE`, không giao                                                                   |
-| R5  | Native host chạy với **toàn quyền của người dùng**                   | Một `config.json` bị sửa có thể trỏ sang kho khác   | Cấu hình nằm cạnh mã, trong `.gitignore`; khung IPC vẫn chỉ mang ba nguyên thuỷ; **cuộc hội thoại đích do tiện ích giữ, host không đổi được**                           |
-| R6  | `optional_host_permissions` khai `https://chatgpt.com/*` làm tập cha | Người dùng _có thể_ cấp rộng hơn nếu Chrome hỏi vậy | Lời xin lúc chạy nêu **đúng một đường dẫn**; và mã vẫn so URL chính xác trước mọi thao tác DOM, nên quyền rộng hơn cũng không mở thêm đích                              |
-| R7  | Chưa từng chạy thật với ChatGPT                                      | Chưa có bằng chứng runtime                          | Cố ý (§8). Smoke là bước có người duyệt, sau review độc lập                                                                                                             |
+| #   | Rủi ro                                                                               | Ảnh hưởng                                                  | Vì sao chấp nhận / cách xử lý                                                                                                                                                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Một lần tiêm thất bại "cháy" khoá; HEAD đó không được đánh thức lại                  | Bỏ lỡ một lần đánh thức                                    | Hướng an toàn có chủ đích (§9). Khôi phục = **hoà giải có đích một khoá** trên trang tuỳ chọn (§9.2), đi qua **cả hai** sổ. Xoá một mình sổ của tiện ích **không** hồi phục được gì (§9.1)                                                                                               |
+| R2  | Ghi đè bản nháp đang có trong khung soạn của cuộc hội thoại đã arm                   | Mất một đoạn người dùng đang gõ                            | `selectAll` + `insertText` là _thay thế_, vì nối thêm sẽ cho ra một tin nhắn không tất định (§8 của #204 cấm). Cuộc hội thoại được arm là cuộc **dành cho tự động hoá**                                                                                                                  |
+| R3  | ChatGPT đổi cấu trúc khung soạn                                                      | Cầu nối ngừng hoạt động                                    | Fail closed: `COMPOSER_NOT_FOUND` / `COMPOSER_AMBIGUOUS`, **không bấm nút tuỳ ý**. Selector là `id` ổn định + thuộc tính ngữ nghĩa, không phải lớp CSS sinh ra                                                                                                                           |
+| R4  | Chế độ `unauthenticated` chỉ có 60 lần gọi/giờ                                       | Poll bị chặn                                               | Chỉ dùng cho kho công khai; mặc định là `gh-cli`. Đọc thất bại ⇒ `LIVE_STATE_UNAVAILABLE`, không giao                                                                                                                                                                                    |
+| R5  | Native host chạy với **toàn quyền của người dùng**                                   | Một `config.json` bị sửa có thể trỏ sang kho khác          | Cấu hình nằm cạnh mã, trong `.gitignore`; khung IPC vẫn chỉ mang ba nguyên thuỷ; **cuộc hội thoại đích do tiện ích giữ, host không đổi được**                                                                                                                                            |
+| R6  | Quyền host được cấp là **cả origin** `https://chatgpt.com` — Chrome bỏ qua đường dẫn | Tiện ích _về mặt kỹ thuật_ chạm được mọi trang chatgpt.com | Không giấu, không giả vờ hẹp: mô hình quyền khai ra đúng như vậy (§4.3). Ranh giới thật là **bốn lớp trong mã**, và lớp cuối chạy _bên trong_ trang, đối chiếu thẳng với trạng thái arm. `browser-target` 16c-16f dựng đúng tình huống origin-wide và đòi **không một thao tác DOM nào** |
+| R7  | Chưa từng chạy thật với ChatGPT                                                      | Chưa có bằng chứng runtime                                 | Cố ý (§8). Smoke là bước có người duyệt, sau review độc lập                                                                                                                                                                                                                              |
+| R8  | Đường ống tự dừng ở `GAVE_UP` sau 6 lần mở hỏng liên tiếp                            | Cầu nối im cho tới khi có người bấm                        | Cố ý (§4.5): host hỏng cấu hình sẽ hỏng mãi, thử lại vô hạn không sửa được gì. Trạng thái hiện rõ trên trang tuỳ chọn, và một lần đứt sau khi **đã chạy** thì ngân sách về đầu chứ không cộng dồn                                                                                        |
+| R9  | Hoà giải khoá cho phép cùng một HEAD được giao **thêm một lần**                      | Một cuộc hội thoại thật nhận thêm một tin                  | Đòi **một con người** chọn **đúng một khoá** và xác nhận hai nhịp; host kiểm ba cổng và chỉ gỡ khoá **đã có**. Không có lần thử lại tự động nào, và HEAD đó vẫn phải qua đầy đủ mọi cổng ở lần poll sau (§9.2)                                                                           |
 
 ## 11. Bảng mối đe doạ
 
-| Mối đe doạ                                                       | Kiểm soát                                                                                                    | Chứng minh ở đâu                                 |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| Người lạ bình luận một `REVIEW_REQUEST` giả để đánh thức ChatGPT | Danh sách principal cục bộ, xét trên metadata GitHub đã xác thực; văn bản trong comment không cấp được quyền | `carrier-provenance` 3, 5                        |
-| Yêu cầu cũ đánh thức người review cho một SHA đã qua             | Đối chiếu HEAD **sống** mỗi lần, không bộ nhớ đệm                                                            | `exact-head` 6-8                                 |
-| Poll lặp lại làm ChatGPT bị dội tin                              | Sổ khoá bền hai phía, ghi trước khi hành động                                                                | `idempotency` 9-11                               |
-| Tab ChatGPT đang mở là một cuộc hội thoại khác                   | URL arm so **chính xác**; nhiều tab khớp ⇒ từ chối                                                           | `browser-target` 12, 12b, 16b                    |
-| Trang đổi cấu trúc DOM                                           | Fail closed, không bấm nút tuỳ ý, không đoán khi nhập nhằng                                                  | `browser-target` 15                              |
-| Cầu nối bị chiếm và cố quét câu trả lời                          | Bề mặt DOM 11 thao tác chỉ ghi + quyền tiện ích tối thiểu + quét mã nguồn + cây DOM đặt mìn                  | `input-only-contract` 17-18, `browser-target` 16 |
-| Trình duyệt / host khởi động lại giữa chừng                      | Trạng thái giao an toàn với replay (at-most-once)                                                            | `idempotency` 10, 10b                            |
-| Văn xuôi GitHub được dùng làm chỉ thị cho ChatGPT                | Khung IPC không có trường văn bản; bản mẫu tự kiểm đầu ra                                                    | `input-only-contract` 19, 19b                    |
-| Bí mật lọt vào cấu hình rồi lên kho                              | Danh sách trắng khoá + quét đệ quy theo **từ**; `config.json` trong `.gitignore`                             | `config-and-logs`                                |
-| Thân comment / thân lỗi HTTP lọt vào nhật ký                     | Chín trường + ràng buộc **hình dạng giá trị**                                                                | `config-and-logs`, `input-only-contract` 20      |
-| Một cổng vào bị mở trên máy                                      | Không module máy chủ nào; kiểm bằng cả quét mã nguồn lẫn tài nguyên đang sống của Node                       | `native-host` 24, 24b                            |
+| Mối đe doạ                                                       | Kiểm soát                                                                                                     | Chứng minh ở đâu                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Người lạ bình luận một `REVIEW_REQUEST` giả để đánh thức ChatGPT | Danh sách principal cục bộ, xét trên metadata GitHub đã xác thực; văn bản trong comment không cấp được quyền  | `carrier-provenance` 3, 5                           |
+| Yêu cầu cũ đánh thức người review cho một SHA đã qua             | Đối chiếu HEAD **sống** mỗi lần, không bộ nhớ đệm                                                             | `exact-head` 6-8                                    |
+| Poll lặp lại làm ChatGPT bị dội tin                              | Sổ khoá bền hai phía, ghi trước khi hành động                                                                 | `idempotency` 9-11                                  |
+| Tab ChatGPT đang mở là một cuộc hội thoại khác                   | URL arm so **chính xác**; nhiều tab khớp ⇒ từ chối                                                            | `browser-target` 12, 12b, 16b                       |
+| Quyền host origin-wide bị dùng để chạm vào một hội thoại khác    | Bốn lớp trong mã (§4.3); lớp cuối chạy **trong trang**, đối chiếu thẳng với trạng thái arm                    | `browser-target` 16c-16f, `input-only-contract` 18e |
+| Mô hình quyền trong tài liệu rộng hơn/hẹp hơn thứ runtime cấp    | Hằng số **một chỗ** khoá manifest ↔ lời xin lúc chạy; lời xin theo URL hội thoại bị bài kiểm chặn             | `input-only-contract` 18e                           |
+| Native host chết, cầu nối im lặng không ai biết                  | Mở lại có chặn, trần 30s, dừng hẳn sau 6 lần; trạng thái hiện trên trang tuỳ chọn                             | `native-link` 26-28                                 |
+| Lịch hẹn mở lại chồng nhau đẻ ra nhiều tiến trình host           | Đúng **một** lịch hẹn và **một** lần mở đang bay; sự kiện đứt muộn của port cũ bị bỏ qua                      | `native-link` 29, 29b                               |
+| Một khung RESET giả tay khoá của kho khác / khoá bịa ra khỏi sổ  | Ba cổng: đúng kho · khoá **tự mâu thuẫn** với `{pr, sha}` · khoá phải **đã có**; RESET không bao giờ TẠO khoá | `two-ledger-recovery` 36, 36b                       |
+| "Hồi phục" biến thành phát lại mọi carrier cũ                    | Không có đường xoá nhiều hơn **một** khoá; hoà giải đòi người chọn đúng một mục                               | `two-ledger-recovery` 34, 35, 38b                   |
+| Trang đổi cấu trúc DOM                                           | Fail closed, không bấm nút tuỳ ý, không đoán khi nhập nhằng                                                   | `browser-target` 15                                 |
+| Cầu nối bị chiếm và cố quét câu trả lời                          | Bề mặt DOM 11 thao tác chỉ ghi + quyền tiện ích tối thiểu + quét mã nguồn + cây DOM đặt mìn                   | `input-only-contract` 17-18, `browser-target` 16    |
+| Trình duyệt / host khởi động lại giữa chừng                      | Trạng thái giao an toàn với replay (at-most-once)                                                             | `idempotency` 10, 10b                               |
+| Văn xuôi GitHub được dùng làm chỉ thị cho ChatGPT                | Khung IPC không có trường văn bản; bản mẫu tự kiểm đầu ra                                                     | `input-only-contract` 19, 19b                       |
+| Bí mật lọt vào cấu hình rồi lên kho                              | Danh sách trắng khoá + quét đệ quy theo **từ**; `config.json` trong `.gitignore`                              | `config-and-logs`                                   |
+| Thân comment / thân lỗi HTTP lọt vào nhật ký                     | Chín trường + ràng buộc **hình dạng giá trị**                                                                 | `config-and-logs`, `input-only-contract` 20         |
+| Một cổng vào bị mở trên máy                                      | Không module máy chủ nào; kiểm bằng cả quét mã nguồn lẫn tài nguyên đang sống của Node                        | `native-host` 24, 24b                               |
 
 ## 12. Việc **không** thuộc phạm vi V0
 

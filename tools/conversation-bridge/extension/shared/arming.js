@@ -14,6 +14,28 @@
  *
  * `chatgpt.com` la ChatGPT Web THUONG — dung pham vi cua nhiem vu. Host cu cua ChatGPT va moi
  * host cua ChatGPT Work deu KHONG duoc arm.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * QUYEN HOST CUA CHROME KHONG HE HEP THEO DUONG DAN — doc ky truoc khi doc phan con lai.
+ *
+ * Tai lieu Match Patterns cua Chrome noi ro: voi QUYEN HOST, thanh phan duong dan BAT BUOC PHAI CO
+ * trong mau, nhung no BI BO QUA. Xin `https://chatgpt.com/c/<id>` va xin `https://chatgpt.com/*`
+ * cho ra CUNG MOT thu luc chay: quyen tren TOAN BO origin `https://chatgpt.com`.
+ *
+ * Nen o day ta xin dung `https://chatgpt.com/*` — de MO HINH QUYEN KHAI RA BANG DUNG THU RUNTIME
+ * THAT SU CAP. Mot loi xin theo duong dan van chay duoc, nhung no ke mot cau chuyen SAI trong
+ * manifest, trong tai lieu, va trong dau nguoi doc review.
+ *
+ * Cach ly "dung mot cuoc hoi thoai" vi vay KHONG do Chrome giu. No do MA NGUON giu, bang bon lop
+ * xep chong, moi lop co bai kiem rieng:
+ *
+ *   1. trang thai ARM   — dung mot `conversationUrl` canonical, do NGUOI dan vao (tep nay);
+ *   2. loc tab          — `isExactConfiguredConversation(tab.url, armed)` (`wake-router.js`);
+ *   3. dung MOT tab     — khong tab / nhieu tab deu la tu choi, khong doan (`wake-router.js`);
+ *   4. doi chieu TRONG TRANG — `location.href` phai bang URL DA ARM, kiem ngay truoc thao tac DOM
+ *      dau tien (`composer-adapter.js`).
+ *
+ * Bo ba lop dau di thi lop 4 van chan. Do la y nghia cua "quyen rong hon khong mo them dich nao".
  */
 import { BRIDGE_REASONS, BRIDGE_STATES, rejected } from './states.js';
 
@@ -24,6 +46,18 @@ export const ARM_STORAGE_KEY = 'conversationBridge.arm';
 export const DELIVERED_STORAGE_KEY = 'conversationBridge.delivered';
 
 export const ALLOWED_CONVERSATION_HOST = 'chatgpt.com';
+
+/**
+ * Mau quyen host DUY NHAT ma tien ich nay xin — va la dung thu Chrome that su cap.
+ *
+ * Phai trung tung ky tu voi `optional_host_permissions` trong `manifest.json`: mot loi xin luc
+ * chay nam ngoai tap cha khai trong manifest se bi Chrome tu choi thang. Co bai kiem hop dong
+ * khoa hai gia tri nay lai voi nhau (`input-only-contract` 18e).
+ *
+ * CO Y KHONG phai mot URL hoi thoai. Xem the than dau tep: duong dan trong mau quyen host bi bo
+ * qua, nen xin theo duong dan chi tao ra mot mo hinh quyen SAI, khong tao ra mot ranh gioi that.
+ */
+export const CHATGPT_HOST_PERMISSION = `https://${ALLOWED_CONVERSATION_HOST}/*`;
 
 const CONVERSATION_PATH = /^\/c\/[A-Za-z0-9-]{8,64}$/;
 

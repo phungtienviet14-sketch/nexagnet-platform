@@ -121,6 +121,71 @@ export const STATE_OF_REASON = Object.freeze({
 });
 
 /**
+ * -----------------------------------------------------------------------------------------------
+ * HOA GIAI MOT KHOA GIAO — mot bo tu vung RIENG, co y khong tron vao §3.3.
+ *
+ * `BRIDGE_STATES` mo ta ket cuc cua mot lan DANH THUC. Hoa giai khoa khong phai mot lan danh thuc:
+ * no khong cham vao DOM, khong doc GitHub, khong gui gi vao cuoc hoi thoai. Nhet no vao cung mot
+ * may trang thai se lam trang tuy chon hien "DELIVERED" cho mot viec chua he giao — nen no o rieng.
+ *
+ * Van dung nguyen tac cu: mot cong co N duong tu choi phai phan biet duoc N ly do. Cong nay co
+ * BAY duong tu choi that su khac nhau, va nguoi van hanh can biet minh dang o duong nao.
+ */
+
+/** Ket cuc tho cua mot lan hoa giai. Dong. */
+export const RESET_STATES = Object.freeze({
+  RESET_DONE: 'RESET_DONE',
+  RESET_REFUSED: 'RESET_REFUSED',
+});
+
+export const RESET_REASONS = Object.freeze({
+  /** Khoa da duoc go khoi so ben cua host. */
+  RESET_APPLIED: 'RESET_APPLIED',
+  /** Chuoi khoa khong dung hinh dang canonical — khong doc nguoc ra duoc ba nguyen thuy. */
+  RESET_KEY_MALFORMED: 'RESET_KEY_MALFORMED',
+  /** `{repo, pr, headSha}` dung lai KHONG ra dung chuoi khoa da gui. Khung tu mau thuan. */
+  RESET_KEY_NOT_CANONICAL: 'RESET_KEY_NOT_CANONICAL',
+  /** Khoa noi ve mot kho khac kho da cau hinh cua host. */
+  RESET_REPOSITORY_MISMATCH: 'RESET_REPOSITORY_MISMATCH',
+  /** Khoa khong co trong so — khong co gi de hoa giai, va KHONG duoc tao moi. */
+  RESET_KEY_UNKNOWN: 'RESET_KEY_UNKNOWN',
+  /** Go duoc trong bo nho nhung khong ghi duoc xuong dia => coi nhu KHONG go. */
+  RESET_LEDGER_UNWRITABLE: 'RESET_LEDGER_UNWRITABLE',
+  /** Phia tien ich: khong co duong ong toi host luc bam. */
+  RESET_LINK_DOWN: 'RESET_LINK_DOWN',
+  /** Phia tien ich: da gui nhung host khong tra loi trong han. */
+  RESET_TIMED_OUT: 'RESET_TIMED_OUT',
+});
+
+/**
+ * Moi ma hoa giai thuoc ve dung mot ket cuc — cung vai tro voi `STATE_OF_REASON`, tren bo tu vung
+ * rieng cua hoa giai.
+ * @type {Readonly<Record<string, string>>}
+ */
+export const STATE_OF_RESET_REASON = Object.freeze({
+  [RESET_REASONS.RESET_APPLIED]: RESET_STATES.RESET_DONE,
+  [RESET_REASONS.RESET_KEY_MALFORMED]: RESET_STATES.RESET_REFUSED,
+  [RESET_REASONS.RESET_KEY_NOT_CANONICAL]: RESET_STATES.RESET_REFUSED,
+  [RESET_REASONS.RESET_REPOSITORY_MISMATCH]: RESET_STATES.RESET_REFUSED,
+  [RESET_REASONS.RESET_KEY_UNKNOWN]: RESET_STATES.RESET_REFUSED,
+  [RESET_REASONS.RESET_LEDGER_UNWRITABLE]: RESET_STATES.RESET_REFUSED,
+  [RESET_REASONS.RESET_LINK_DOWN]: RESET_STATES.RESET_REFUSED,
+  [RESET_REASONS.RESET_TIMED_OUT]: RESET_STATES.RESET_REFUSED,
+});
+
+/**
+ * Dung mot ket cuc hoa giai. Ma khong co trong bang la LOI LAP TRINH — nem ngay, cung ly do voi
+ * `rejected()`: mot ket cuc khong xep duoc vao dau se hien ra mot o trong tren trang tuy chon.
+ * @param {string} reason
+ * @returns {{ ok: boolean, state: string, reason: string }}
+ */
+export function resetOutcome(reason) {
+  const state = STATE_OF_RESET_REASON[reason];
+  if (state === undefined) throw new Error(`Ly do hoa giai khong thuoc ket cuc nao: ${reason}`);
+  return { ok: state === RESET_STATES.RESET_DONE, state, reason };
+}
+
+/**
  * @typedef {{ ok: false, state: string, reason: string, detail?: Record<string, unknown> }} Rejection
  */
 

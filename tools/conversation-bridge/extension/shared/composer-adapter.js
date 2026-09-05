@@ -97,17 +97,39 @@ export function isExactConfiguredConversation(url, expected) {
  * Moi thu no can deu di qua `input` — ke ca danh sach selector — chinh vi ly do tuan tu hoa noi o
  * dau tep. Khong co hang so module nao bi tham chieu tu day.
  *
- * `expectedHref` la URL ma phia service worker DA doc duoc tu chinh tab do va da doi chieu voi
- * URL da arm. So sanh lai o day bang `!==` thuan tuy, khong chuan hoa: no khong lap lai logic nao,
- * no bat mot thu KHAC — trang dieu huong trong khe thoi gian giua luc kiem va luc tiem.
+ * DAY LA LOP CACH LY CUOI CUNG, va la lop DUY NHAT chay ben trong chinh trang dich. Quyen host ma
+ * Chrome cap la quyen tren TOAN BO origin `https://chatgpt.com` (duong dan trong mau quyen host bi
+ * BO QUA — xem the than dau `arming.js`), nen "dung mot cuoc hoi thoai" la mot tinh chat cua MA
+ * NGUON, va no ket thuc o day.
  *
- * @param {{ expectedHref: string, message: string, composerSelectors: ReadonlyArray<string>, submitSelectors: ReadonlyArray<string> }} input
+ * Hai doi chieu, co y KHAC NHAU ve NGUON:
+ *
+ *   · `expectedHref` — URL doc ra tu CHINH BAN GHI TAB roi da qua bo loc phia service worker. So
+ *     bang `!==` thuan tuy: no bat trang DIEU HUONG trong khe thoi gian giua luc loc va luc tiem.
+ *   · `armedHref`    — URL canonical trong TRANG THAI ARM cua nguoi dung. So sau khi bo dau `/`
+ *     cuoi (ban ghi tab co the co hoac khong co dau do). Doi chieu nay khong lap lai cai tren: no
+ *     khong tin mot chu nao trong ban ghi tab, nen no van chan neu chinh bo loc kia bi qua mat.
+ *
+ * Ca hai deu dung TRUOC lenh `querySelectorAll` dau tien. Ham nay chay dong bo trong mot tac vu,
+ * nen khong co lan dieu huong nao chen duoc vao giua doi chieu va thao tac DOM.
+ *
+ * @param {{ expectedHref: string, armedHref: string, message: string, composerSelectors: ReadonlyArray<string>, submitSelectors: ReadonlyArray<string> }} input
  * @returns {{ ok: boolean, reason: string }}
  */
 export function injectWakeMessage(input) {
   const doc = globalThis.document;
   const loc = globalThis.location;
+  /** @param {unknown} value @returns {unknown} */
+  const withoutTrailingSlash = (value) =>
+    typeof value === 'string' && value.endsWith('/') ? value.slice(0, -1) : value;
   if (!doc || !loc || loc.href !== input.expectedHref) {
+    return { ok: false, reason: 'ARMED_URL_MISMATCH' };
+  }
+  if (
+    typeof input.armedHref !== 'string' ||
+    input.armedHref.length === 0 ||
+    withoutTrailingSlash(loc.href) !== withoutTrailingSlash(input.armedHref)
+  ) {
     return { ok: false, reason: 'ARMED_URL_MISMATCH' };
   }
   try {

@@ -14,7 +14,13 @@
  *   4. dung mot tab      — khong tab / nhieu tab deu la tu choi, khong doan
  *   5. URL tab dung y    — doi chieu voi URL da arm, khong phai voi mot mau
  *   6. GHI KHOA          <- TRUOC khi cham vao DOM
- *   7. tiem
+ *   7. tiem              — va trong trang lai doi chieu `location.href` mot lan nua
+ *
+ * BUOC 4-5 LA RANH GIOI THAT, KHONG PHAI QUYEN CUA CHROME. Quyen host cap cho tien ich la quyen
+ * tren TOAN BO origin `https://chatgpt.com` — duong dan trong mau quyen host bi Chrome bo qua (xem
+ * the than dau `arming.js`). Nghia la `queryTabs` co the tra ve moi tab chatgpt.com dang mo, ke ca
+ * cac cuoc hoi thoai khac. Bo loc `isExactConfiguredConversation` o buoc 5 moi la thu quyet dinh
+ * tab nao du dieu kien, va buoc 7 con doi chieu lai lan nua tu ben trong chinh trang do.
  *
  * Buoc 6 dat truoc buoc 7 co chu dich va co cai gia phai tra. Neu ghi sau, mot service worker bi
  * dung giua chung (Chrome thu hoi service worker bat ky luc nao) se de lai mot khoa CHUA ghi cho
@@ -96,6 +102,9 @@ export async function routeWakeFrame(frame, deps) {
     args: [
       {
         expectedHref: /** @type {string} */ (target.url),
+        // URL da ARM di THANG vao trang, khong di qua ban ghi tab. Trong trang, hai gia tri nay
+        // duoc doi chieu doc lap — xem the than cua `injectWakeMessage`.
+        armedHref: conversationUrl,
         message,
         composerSelectors: [...COMPOSER_SELECTORS],
         submitSelectors: [...SUBMIT_SELECTORS],

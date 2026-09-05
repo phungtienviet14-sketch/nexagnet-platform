@@ -45,6 +45,23 @@ declare namespace chrome {
     const lastError: { message?: string } | undefined;
     const onStartup: { addListener(listener: () => void): void };
     const onInstalled: { addListener(listener: () => void): void };
+    /**
+     * Kenh giua TRANG TUY CHON va service worker — xem `shared/link-messages.js`.
+     *
+     * Day KHONG phai mot duong noi voi trang ChatGPT. `chrome.runtime.sendMessage` khong co tham
+     * so `tabId`, nen no chi den duoc cac trang CUA CHINH tien ich; muon noi voi mot tab thi phai
+     * la `chrome.tabs.sendMessage`, va loi goi do co y khong duoc khai o day.
+     */
+    const onMessage: {
+      addListener(
+        listener: (
+          message: unknown,
+          sender: unknown,
+          sendResponse: (response: unknown) => void,
+        ) => boolean | void,
+      ): void;
+    };
+    function sendMessage(message: unknown): Promise<unknown>;
   }
   namespace storage {
     interface Area {

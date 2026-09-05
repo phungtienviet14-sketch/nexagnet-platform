@@ -15,10 +15,15 @@
  */
 import { getPullRequest, listRepositoryComments } from './github.mjs';
 import { hashDeliveryKey } from '../protocol/delivery-key.mjs';
-import { confirmLive, screenCarrier } from './decide.mjs';
-import { saveLedger, withRecord } from './ledger.mjs';
-import { wakeFrame } from '../extension/shared/ipc.js';
-import { BRIDGE_REASONS, BRIDGE_STATES } from '../extension/shared/states.js';
+import { confirmLive, decideReset, screenCarrier } from './decide.mjs';
+import { saveLedger, withRecord, withoutRecord } from './ledger.mjs';
+import { resetResultFrame, wakeFrame } from '../extension/shared/ipc.js';
+import {
+  BRIDGE_REASONS,
+  BRIDGE_STATES,
+  RESET_REASONS,
+  resetOutcome,
+} from '../extension/shared/states.js';
 
 /**
  * @typedef {object} BridgeRuntime
@@ -141,4 +146,50 @@ export function applyResult(runtime, result) {
     idempotency_key_hash: hashDeliveryKey(result.key),
   });
   return true;
+}
+
+/**
+ * HOA GIAI MOT KHOA — duong DUY NHAT go mot ban ghi ra khoi so ben, va no doi mot thao tac cua
+ * NGUOI o phia trang tuy chon (xem `extension/shared/reset-request.js`).
+ *
+ * Ba dieu tep nay CO Y khong lam:
+ *
+ *   · khong xoa nhieu hon MOT khoa — khong ton tai duong nao "xoa het so";
+ *   · khong tao ra khoa moi — `decideReset` doi khoa phai DA co, nen mot khung RESET khong bao gio
+ *     viet duoc vao so cua host;
+ *   · khong tu thu lai — go xong la xong; lan poll ke tiep se lai di qua DAY DU moi cong (xuat xu,
+ *     HEAD song, PR con mo). Hoa giai chi tra lai QUYEN DUOC CAN NHAC, khong phai mot lan gui.
+ *
+ * Ghi dia TRUOC khi tra ket qua, cung huong voi `pollOnce`: neu khong ghi duoc thi khoa VAN CON,
+ * va noi "da go" luc do se lam nguoi van hanh tin vao mot dieu khong co that.
+ *
+ * @param {BridgeRuntime} runtime
+ * @param {{ key: string, repo: string, pr: number, headSha: string }} frame
+ * @returns {{ ok: boolean, state: string, reason: string }}
+ */
+export function applyReset(runtime, frame) {
+  const decided = decideReset({
+    frame,
+    repo: runtime.config.repo,
+    ledger: runtime.ledgerStore.current(),
+  });
+  const finish = (/** @type {{ ok: boolean, state: string, reason: string }} */ outcome) => {
+    runtime.logger.emit({
+      bridge_status: outcome.state,
+      error_code: outcome.reason,
+      repo: runtime.config.repo,
+      idempotency_key_hash: hashDeliveryKey(frame.key),
+    });
+    runtime.send(
+      resetResultFrame({ key: frame.key, state: outcome.state, reason: outcome.reason }),
+    );
+    return outcome;
+  };
+  if (!decided.ok) return finish(decided);
+
+  const next = withoutRecord(runtime.ledgerStore.current(), /** @type {string} */ (decided.key));
+  const saved = saveLedger(runtime.config.statePath, next);
+  if (!saved.ok) return finish(resetOutcome(RESET_REASONS.RESET_LEDGER_UNWRITABLE));
+  runtime.ledgerStore.replace(next);
+  return finish(resetOutcome(RESET_REASONS.RESET_APPLIED));
 }

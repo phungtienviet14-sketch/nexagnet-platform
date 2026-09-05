@@ -16,7 +16,12 @@
 import { readReviewRequestCarrier } from '../protocol/carrier.mjs';
 import { authorizeCarrierProducer } from '../protocol/provenance.mjs';
 import { deliveryKeyFor } from '../protocol/delivery-key.mjs';
-import { BRIDGE_REASONS, rejected } from '../extension/shared/states.js';
+import {
+  BRIDGE_REASONS,
+  RESET_REASONS,
+  rejected,
+  resetOutcome,
+} from '../extension/shared/states.js';
 import { hasKey } from './ledger.mjs';
 
 /**
@@ -85,4 +90,42 @@ export function confirmLive({ carrier, repo, live, ledger }) {
   const key = deliveryKeyFor({ repo, pr: carrier.pr, headSha });
   if (hasKey(ledger, key)) return rejected(BRIDGE_REASONS.ALREADY_DELIVERED, { key });
   return { ok: true, key, wake: { repo, pr: carrier.pr, headSha } };
+}
+
+/**
+ * HOA GIAI MOT KHOA — chang quyet dinh, thuan. Doi ung cua `confirmLive`, chay nguoc chieu.
+ *
+ * Khung RESET den tu tien ich, tuc la tu ben kia duong ong Native Messaging. Duong ong do la cuc
+ * bo va do Chrome dung nen (`allowed_origins` trong manifest cai dat gioi han dung mot extension
+ * ID), nhung "den tu mot noi tin cay" khong bao gio duoc thay cho viec KIEM. Nen o day co BA cong,
+ * va moi cong chan mot kieu sai KHAC NHAU:
+ *
+ *   1. dung kho          — mot host chi theo doi mot kho; khoa cua kho khac khong lien quan gi
+ *   2. khoa TU MAU THUAN — dung lai khoa canonical tu {repo, pr, headSha} roi so voi chuoi khoa da
+ *                          gui. Mot chuoi khoa bia (hay mot khoa cua namespace khac) lech ngay o
+ *                          day, va day la ly do khung RESET mang ca ba nguyen thuy chu khong chi
+ *                          mang chuoi khoa
+ *   3. khoa CO THAT      — chi go thu dang co. Mot lan RESET khong bao gio TAO ra ban ghi nao, nen
+ *                          no khong the dung de viet vao so cua host
+ *
+ * Khong cong nao doc mot chu van xuoi nao — khung RESET khong co truong van ban de doc.
+ *
+ * @param {{
+ *   frame: { key: string, repo: string, pr: number, headSha: string },
+ *   repo: string,
+ *   ledger: import('./ledger.mjs').Ledger,
+ * }} input
+ * @returns {{ ok: boolean, state: string, reason: string, key?: string }}
+ */
+export function decideReset({ frame, repo, ledger }) {
+  if (frame.repo !== repo) return resetOutcome(RESET_REASONS.RESET_REPOSITORY_MISMATCH);
+  let canonical;
+  try {
+    canonical = deliveryKeyFor({ repo, pr: frame.pr, headSha: frame.headSha });
+  } catch {
+    return resetOutcome(RESET_REASONS.RESET_KEY_MALFORMED);
+  }
+  if (canonical !== frame.key) return resetOutcome(RESET_REASONS.RESET_KEY_NOT_CANONICAL);
+  if (!hasKey(ledger, canonical)) return resetOutcome(RESET_REASONS.RESET_KEY_UNKNOWN);
+  return { ...resetOutcome(RESET_REASONS.RESET_APPLIED), key: canonical };
 }
