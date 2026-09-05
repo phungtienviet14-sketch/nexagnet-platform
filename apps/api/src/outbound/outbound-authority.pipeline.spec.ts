@@ -360,7 +360,8 @@ describe('duong duong — cong nay khong lam hong nhung luot hop le', () => {
   it('11. cau tu van thuong khong mang khang dinh he qua van gui binh thuong', async () => {
     const { pipeline, channel } = await build(
       new StubAdvisor(
-        draft('Dạ máy dùng điện 220V và có chế độ ngủ im ạ.', NO_AUTHORITY, {
+        // #200: cau tra loi trich TRON VEN hai menh de cua nguon, ke ca dau phay ngat giua chung.
+        draft('Dạ máy dùng điện 220V, có chế độ ngủ im ạ.', NO_AUTHORITY, {
           sources: ['Máy dùng điện 220V, có chế độ ngủ im.'],
         }),
       ),

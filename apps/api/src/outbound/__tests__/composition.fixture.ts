@@ -153,8 +153,14 @@ export function plan(
   return { kind, requestedBlocks, narrative };
 }
 
-/** Nguon he thong mac dinh: mot bai FAQ da duyet khong mang con so nao. */
-export const APPROVED_DOC = 'Ghế Felix có tựa lưng lưới, khung thép sơn tĩnh điện.';
+/**
+ * Nguon he thong mac dinh: mot bai FAQ da duyet khong mang con so nao.
+ *
+ * HAI CAU, khong phai mot cau hai ve ngan bang dau phay — tu #200 don vi rang buoc la CA CAU,
+ * nen mot nguon mot cau se chi cho phep trich dung ca cau do. Hai cau cho phep bo test van do
+ * duoc phep CHON (bai nay trich cau dau, bai kia trich cau sau) ma khong phai trich nua cau.
+ */
+export const APPROVED_DOC = 'Ghế Felix có tựa lưng lưới. Khung thép sơn tĩnh điện.';
 
 /**
  * Soan mot ban, voi tham quyen suy tu chinh du kien.

@@ -247,7 +247,7 @@ describe('#189 muc 8 — duong duong: du kien co that thi render DUNG con so tat
 
   it('16. cau FAQ thuong khong mang he qua van di duoc toi khach', () => {
     const composition = compose(
-      plan([], 'Dạ ghế Felix có tựa lưng lưới, khung thép sơn tĩnh điện ạ.'),
+      plan([], 'Dạ ghế Felix có tựa lưng lưới. Khung thép sơn tĩnh điện ạ.'),
     );
 
     expect(composition.mode).toBe('narrative_only');
@@ -321,34 +321,59 @@ describe('#189 — hop dong neo nguon cho loi nhan', () => {
     expect(composition.text).toBe('');
   });
 
-  it('G2: con so CO trong tai lieu da duyet thi noi duoc — do luong cho thay 26% tai lieu bi bo trich bao dong gia', () => {
+  /*
+   * TEN BAI DA DOI TU #200. Ban truoc goi la "do luong cho thay 26% tai lieu bi bo trich bao dong
+   * gia" va dung mot nguon KHAC voi loi nhan ("Đưa ra lưu lượng gió..." vs "lưu lượng gió...").
+   * Sau G6 thi menh de phai trung tron ven, nen bai nay khong con do duoc phep HAP THU bao dong
+   * gia cua G3 nua — cai no do la: mot con so cua tai lieu di ra duoc, va di ra duoi dang KY TU
+   * CUA TAI LIEU. Phep hap thu bao dong gia van con, va van do o `outbound-authority.spec.ts`.
+   */
+  it('G2: con so CO trong tai lieu da duyet thi noi duoc, va no ra duoi dang ky tu cua tai lieu', () => {
     const composition = compose(
       plan([], 'Dạ lưu lượng gió lên tới 9700 lít/phút ạ.'),
       NO_BUSINESS_FACTS,
-      { systemSources: ['Đưa ra lưu lượng gió lên tới 9700 lít/phút.'] },
+      { systemSources: ['Lưu lượng gió lên tới 9700 lít/phút.'] },
     );
 
+    // Van ban den tay khach la KY TU CUA NGUON (G6, #200) — chu hoa đầu menh de la cua tai lieu.
     expect(composition.narrative).toEqual({
       admitted: true,
-      text: 'Dạ lưu lượng gió lên tới 9700 lít/phút ạ.',
+      text: 'Dạ Lưu lượng gió lên tới 9700 lít/phút ạ.',
     });
   });
 
   /*
-   * G2 va G5 LA HAI LOP DOC LAP, VA BAI NAY CHUNG MINH DUNG CHO GIAO NHAU CUA CHUNG.
+   * CAU XAC NHAN SO LUONG DOI CHU TU #200, VA DAY LA MOT DANH DOI DA CHON, KHONG PHAI MOT LOI.
    *
-   * `20` den tu TIN KHACH (G2 cho phep — neu khong thi khong cau xac nhan so luong nao noi duoc);
-   * "Ghế Felix" va "cái" den tu DANH MUC — dung hai chuoi ma `bao_gia`/`tim_san_pham` that su dat
-   * vao `sources` (`line.name`, `line.unit`). Ca hai deu la nguon HE THONG, khong phai chu model
-   * tu nghi.
+   * Truoc #200 bai nay chung minh cau "Dạ Ghế Felix 20 cái ạ." noi duoc: `20` neo vao TIN KHACH
+   * (G2), "Ghế Felix"/"cái" neo vao DANH MUC (G5). Ca hai lop do van nguyen ven — nhung ca cau
+   * ay khong la MENH DE cua nguon nao ca, no la mot cau model tu ghep tu hai manh, nen G6 bo no.
+   *
+   * Danh doi: mot cau xac nhan so luong khong con di duoc qua duong van xuoi. No van den tay
+   * khach — qua KHOI `order_pricing`, noi so luong do `priceOrder()` cap va bo soan render. Bai
+   * ngay duoi khoa lai dieu do, nen day khong phai mot nang luc bi mat, ma la mot nang luc bi
+   * chuyen sang dung duong.
    */
-  it('G2+G5: so cua tin khach + tu ngu cua danh muc -> cau xac nhan so luong noi duoc', () => {
+  it('#200: cau xac nhan so luong tu ghep tu hai manh nguon KHONG con qua duong van xuoi', () => {
     const composition = compose(plan([], 'Dạ Ghế Felix 20 cái ạ.'), NO_BUSINESS_FACTS, {
       customerText: 'lay 20 cai ghe Felix nhe',
       systemSources: ['Ghế Felix', 'cái'],
     });
 
-    expect(composition.narrative).toMatchObject({ admitted: true });
+    expect(composition.narrative).toEqual({
+      admitted: false,
+      reason: 'NARRATIVE_NOT_SOURCE_BOUND',
+    });
+  });
+
+  it('#200: so luong van den tay khach — qua khoi `order_pricing`, do bo soan render', () => {
+    const priced = pricedFacts(pricedOrder({ lines: [line({ quantity: 20 })] }));
+    const composition = compose(plan(['order_pricing']), priced);
+
+    expect(blockText(composition)).toContain('Ghế Felix: 20 x');
+    expect(decideOutboundAuthority(composition, authorityFor(priced))).toMatchObject({
+      sendable: true,
+    });
   });
 
   /*

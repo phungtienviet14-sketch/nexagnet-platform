@@ -14,6 +14,12 @@ import { POLICY_LABELS } from '../agents/risk-rules.js';
 import { formatVnd } from '../rules/text.js';
 import { authorizedAmounts, commitmentToken } from './outbound-claims.js';
 import { attestedTokens, attestedWords } from './outbound-envelope.js';
+import {
+  bindProposition,
+  boundExcerptTokens,
+  sourceUnits,
+  type SourceUnit,
+} from './outbound-proposition.js';
 import { outboundFingerprint, policyGrantTokens } from './outbound-authority.js';
 import type { OrderStateFact, QuoteFact, TurnBusinessFacts } from './outbound-facts.js';
 import {
@@ -115,11 +121,19 @@ export function composeOutbound(
    * TRUOC khi soan, khong phai thu bo soan vua tu viet ra.
    */
   const attested = attestedWords(context.systemSources);
+  /*
+   * G6 DUNG DUNG TAP NGUON DO — khong ke phan bo soan vua render, cung mot ly do voi hai doan tren.
+   *
+   * Menh de cua mot khoi vua render ("Tổng đơn: 12.850.000đ") KHONG duoc bao lanh cho loi nhan:
+   * neu duoc thi loi nhan lai noi duoc ve tien, va G4 ton tai chinh de cam dieu do.
+   */
+  const units = sourceUnits(context.systemSources);
   const narrative = admitNarrative(plan.narrative, {
     hasSystemSource: context.systemSources.length > 0,
     grounding: strict,
     granted: grantGrounding(context.authority),
     attested,
+    units,
   });
 
   const text = [
@@ -145,11 +159,23 @@ export function composeOutbound(
     // phai ca kho tu vung cua nguon. Ghim ca kho se lam trace phinh len theo do dai tai lieu ma
     // khong them mot bang chung nao; ghim dung phan da dung thi diem nghen gui van doi chieu
     // duoc tung chu cua van ban cuoi.
+    //
+    // `x:` la phan cua G6: chinh cac MENH DE NGUON ma loi nhan da trich. Ghim chung lai de chang
+    // 3c cua diem nghen gui doi chieu duoc van ban cuoi o muc menh de — thu ma `s:` (muc tu ngu)
+    // khong lam duoc. Doc lai tu chinh van ban da rang buoc, nen day cung la mot phep kiem tinh
+    // BAT BIEN: mot phep rang buoc dung phai cho ra cung tap menh de khi chay lai tren ket qua.
     grounded: [
       ...groundingTokens(widen(strict, blocks)),
       ...(narrative.admitted ? attestedTokens(narrative.text, attested) : []),
+      ...(narrative.admitted ? boundExcerptTokens(boundOf(narrative.text, units)) : []),
     ],
   };
+}
+
+/** Menh de nguon ma mot loi nhan DA RANG BUOC trich — rong la khong the, xem chu thich tren. */
+function boundOf(text: string, units: readonly SourceUnit[]): readonly string[] {
+  const bound = bindProposition(text, units);
+  return bound.bound ? bound.excerpts : [];
 }
 
 /**

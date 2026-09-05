@@ -198,6 +198,15 @@ export const OUTBOUND_AUTHORITY_REASONS = [
    * chinh chuoi sap ra kenh.
    */
   'COMPOSITION_TEXT_NOT_SOURCE_BACKED',
+  /**
+   * PHONG THU CHIEU SAU (muc 7), lop thu ba — o muc MENH DE thay vi muc TU NGU (Issue #200).
+   *
+   * `COMPOSITION_TEXT_NOT_SOURCE_BACKED` hoi "tung chu den tu dau", nen no van cho qua mot doan
+   * van ghep lai chu cua nguon thanh mot y khac. Ma nay hoi chat hon: tung menh de cua van ban
+   * cuoi phai la mot dong khoi da render, hoac trung TRON VEN mot menh de nguon da duoc ghim
+   * (`x:` trong `OutboundComposition.grounded`).
+   */
+  'COMPOSITION_TEXT_NOT_SOURCE_BOUND',
 ] as const;
 export type OutboundAuthorityReason = (typeof OUTBOUND_AUTHORITY_REASONS)[number];
 
@@ -251,4 +260,6 @@ export const OUTBOUND_AUTHORITY_REASON_LABELS: Record<OutboundAuthorityReason, s
   NARRATIVE_CARRIER_NOT_GROUNDED: 'Văn bản cuối mang khẳng định không truy nguyên được về nguồn',
   COMPOSITION_TEXT_NOT_SOURCE_BACKED:
     'Văn bản cuối chứa từ ngữ không nguồn hệ thống nào của lượt này nói',
+  COMPOSITION_TEXT_NOT_SOURCE_BOUND:
+    'Văn bản cuối chứa mệnh đề không khớp trọn vẹn nguồn nào của lượt này',
 };
