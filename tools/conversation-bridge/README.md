@@ -16,12 +16,12 @@ lai): [`docs/phat-trien/van-hanh/conversation-bridge-v0.md`](../../docs/phat-tri
 | `extension/`        | Chrome MV3                 | Arm dung mot URL, nhan khung WAKE, dat chu vao khung soan, gui mot lan                         |
 | `extension/shared/` | **ca hai**                 | Ma tu chua khong phu thuoc: ban mau tin nhan, IPC, trang thai, bo noi khung soan, duong ong    |
 | `install/`          | Node                       | Ke hoach dang ky Native Messaging cho Chrome tren Windows — **mac dinh chay kho**              |
-| `tests/`            | Node                       | 90 bai kiem tat dinh; khong bai nao cham mang hay chatgpt.com                                  |
+| `tests/`            | Node                       | 97 bai kiem tat dinh; khong bai nao cham mang hay chatgpt.com                                  |
 
 ## Lenh
 
 ```bash
-pnpm --filter @netviet/conversation-bridge test        # 90 bai, tat dinh
+pnpm --filter @netviet/conversation-bridge test        # 97 bai, tat dinh
 pnpm --filter @netviet/conversation-bridge typecheck
 pnpm --filter @netviet/conversation-bridge install:dry-run -- --extension-id=<32 chu a-p>
 pnpm --filter @netviet/conversation-bridge uninstall:dry-run
@@ -40,9 +40,31 @@ pnpm --filter @netviet/conversation-bridge uninstall:dry-run
 | Khong cong vao                    | Quet ma nguon + hoi Node ve tai nguyen dang song          | `native-host` 24                                     |
 | Khong danh thuc cho HEAD cu       | Doc PR SONG moi lan, khong bo nho dem                     | `exact-head` 6-8                                     |
 | Khong danh thuc hai lan           | So ghi TRUOC khi gui, ca hai phia                         | `idempotency` 9-11                                   |
-| Chi cuoc hoi thoai da arm         | **Ma nguon** giu, khong phai quyen Chrome (xem duoi)      | `browser-target` 12-14, 16c-16f                      |
+| Chi cuoc hoi thoai da arm         | **Ma nguon** giu, khong phai quyen Chrome (xem duoi)      | `browser-target` 12-14, 16c-16j                      |
 | Mo lai duong ong khong quay tit   | Lui co tran 1s→30s, dung han sau 6 lan, nguoi bam de mo   | `native-link` 25-31                                  |
 | Hoi phuc khoa la CO DICH          | Mot khoa, hai so, host kiem ba cong roi moi go            | `two-ledger-recovery` 33-38                          |
+
+## URL arm duoc: dung HAI hinh dang, va chung la HAI DICH
+
+```text
+https://chatgpt.com/c/<ma hoi thoai>                                  # ChatGPT Web thuong
+https://chatgpt.com/g/g-p-<ma du an>[-<ten>]/c/<ma hoi thoai>         # trong mot ChatGPT Project
+```
+
+Dan **dung chuoi dang hien tren thanh dia chi** cua chinh cuoc hoi thoai do. Hai hinh dang tren la
+**hai dich khac nhau**: arm `/c/<id>` **khong** danh thuc mot tab dang mo `/g/g-p-…/c/<id>`, ke ca
+khi ma hoi thoai trung nhau — `browser-target` 16g/16h dung dung cap URL do va doi hoi khong mot
+thao tac DOM nao xay ra theo **ca hai** chieu.
+
+Bi tu choi (`NOT_A_CONVERSATION_PATH`), co chu dich: GPT tuy chinh `/g/g-<ma>/c/<id>` — mot he
+thong prompt cua nguoi khac, khong phai cuoc hoi thoai cua nguoi dung; trang cua chinh du an
+`/g/g-p-…/project`; duong dan chia se `/g/g-p-…/shared/c/<id>`; ma du an sai hinh dang (`g-p-` phai
+di kem 16–64 chu hex **thuong** — 32 chu la con so quan sat duoc); ma hoi thoai sai hinh dang; va
+moi URL co query hoac fragment (`HAS_QUERY_OR_FRAGMENT`).
+
+Slug cua du an duoc doc theo cac nhom `-<chu-va-so>`, nen mot slug mang ky tu **da ma hoa phan
+tram** (vi du ten du an tieng Viet co dau) se bi tu choi. Do la fail-closed co chu dich; duong ra
+la dan hinh dang `/c/<id>` cua **chinh** cuoc hoi thoai do.
 
 ## Quyen host: theo ORIGIN, khong theo duong dan
 

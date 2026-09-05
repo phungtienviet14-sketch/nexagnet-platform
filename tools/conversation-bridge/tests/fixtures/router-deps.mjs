@@ -13,15 +13,27 @@ import { withDom } from './dom.mjs';
 export const ARMED_URL = 'https://chatgpt.com/c/6a1f0c9e-2b7d-4f11-9a30-5c8e2d1b4a77';
 
 /**
+ * DUNG cuoc hoi thoai o tren, nhung nhin tu ben trong mot ChatGPT Project.
+ *
+ * Ma hoi thoai CO Y trung tung ky tu voi `ARMED_URL`: hai hang nay vi vay chi khac nhau o doan
+ * `/g/g-p-<du an>`, va do la dung cho ma mot phep so "gan dung" se truot. Neu mot ngay nao do bo
+ * loc tab hay lop doi chieu trong trang duoc noi long thanh "cung ma hoi thoai la duoc", chinh cap
+ * hang nay se do — xem `browser-target` 16g/16h.
+ */
+export const PROJECT_ARMED_URL =
+  'https://chatgpt.com/g/g-p-6a22b674b76881918809ceac4396a409-nexagnet-platform/c/6a1f0c9e-2b7d-4f11-9a30-5c8e2d1b4a77';
+
+/**
  * @param {{
  *   arm?: unknown,
  *   delivered?: Record<string, unknown>,
  *   tabs?: Array<{ id?: number, url?: string }>,
  *   page?: ReturnType<typeof chatgptPage>,
+ *   armedUrl?: string,
  * }} [options]
  */
-export function makeDeps({ arm, delivered = {}, tabs, page } = {}) {
-  const dom = page ?? chatgptPage({ href: ARMED_URL });
+export function makeDeps({ arm, delivered = {}, tabs, page, armedUrl = ARMED_URL } = {}) {
+  const dom = page ?? chatgptPage({ href: armedUrl });
   let store = { ...delivered };
   const writes = [];
   const injections = [];
@@ -35,7 +47,7 @@ export function makeDeps({ arm, delivered = {}, tabs, page } = {}) {
     deliveredNow: () => store,
     deps: {
       readArm: async () =>
-        arm === undefined ? { state: 'ARMED_EXACT_CHAT', conversationUrl: ARMED_URL } : arm,
+        arm === undefined ? { state: 'ARMED_EXACT_CHAT', conversationUrl: armedUrl } : arm,
       readDelivered: async () => store,
       writeDelivered: async (next) => {
         writes.push(Object.keys(next));
@@ -43,7 +55,7 @@ export function makeDeps({ arm, delivered = {}, tabs, page } = {}) {
       },
       queryTabs: async (url) => {
         tabQueries.push(url);
-        return tabs ?? [{ id: 42, url: ARMED_URL }];
+        return tabs ?? [{ id: 42, url: armedUrl }];
       },
       executeInTab: async ({ tabId, func, args }) => {
         injections.push({ tabId, message: args[0]?.message, armedHref: args[0]?.armedHref });

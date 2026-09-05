@@ -74,8 +74,20 @@
   <dd><code id="delivered">?</code></dd>
 </dl>
 <p>
-  <label for="url">URL cuoc hoi thoai (dang <code>https://chatgpt.com/c/&lt;id&gt;</code>)</label>
+  <label for="url">
+    URL cuoc hoi thoai — dan <strong>dung chuoi dang hien tren thanh dia chi</strong> cua cuoc hoi
+    thoai do. Hai dang duoc chap nhan: <code>https://chatgpt.com/c/&lt;id&gt;</code> va
+    <code>https://chatgpt.com/g/g-p-&lt;ma du an&gt;[-&lt;ten&gt;]/c/&lt;id&gt;</code> (cuoc hoi
+    thoai nam trong mot ChatGPT Project).
+  </label>
   <input id="url" type="url" placeholder="https://chatgpt.com/c/..." />
+</p>
+<p class="note">
+  Hai dang do la <strong>hai dich khac nhau</strong>, khong phai hai bi danh cua mot dich: arm dang
+  <code>/c/&lt;id&gt;</code> se <em>khong</em> danh thuc mot tab dang mo dang
+  <code>/g/g-p-…/c/&lt;id&gt;</code>, va nguoc lai. Dan dung chuoi ban dang nhin thay.
+  <code>/g/g-…</code> cua mot GPT tuy chinh, trang <code>/project</code>, va duong dan
+  <code>/shared/…</code> deu <strong>khong</strong> arm duoc.
 </p>
 <p>
   <button id="arm">Arm dung cuoc hoi thoai nay</button>

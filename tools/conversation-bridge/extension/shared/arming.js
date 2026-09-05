@@ -8,8 +8,9 @@
  *
  *   · chi `https:`                — khong cho ha cap giao thuc;
  *   · chi host `chatgpt.com`      — arm mot host khac tuc la cho phep tiem chu vao mot trang khac;
- *   · chi duong dan `/c/<id>`     — trang chu `/` la "cuoc hoi thoai moi", va tiem vao do se de ra
- *                                   mot cuoc hoi thoai MOI moi lan, khong phai cuoc da cau hinh;
+ *   · chi DUNG HAI hinh dang duong dan hoi thoai (xem `CONVERSATION_PATHS`) — trang chu `/` la
+ *                                   "cuoc hoi thoai moi", va tiem vao do se de ra mot cuoc hoi
+ *                                   thoai MOI moi lan, khong phai cuoc da cau hinh;
  *   · khong query, khong fragment — hai thu do phan biet duoc hai trang khac nhau.
  *
  * `chatgpt.com` la ChatGPT Web THUONG — dung pham vi cua nhiem vu. Host cu cua ChatGPT va moi
@@ -59,7 +60,47 @@ export const ALLOWED_CONVERSATION_HOST = 'chatgpt.com';
  */
 export const CHATGPT_HOST_PERMISSION = `https://${ALLOWED_CONVERSATION_HOST}/*`;
 
-const CONVERSATION_PATH = /^\/c\/[A-Za-z0-9-]{8,64}$/;
+/**
+ * Ma cua MOT cuoc hoi thoai. Dung mot luat, dung o CA HAI hinh dang duong dan ben duoi — hai ban
+ * sao roi nhau la cach chac chan nhat de mot ngay nao do chung khac nhau.
+ */
+const CONVERSATION_ID = '[A-Za-z0-9-]{8,64}';
+
+/**
+ * Doan `/g/<...>` cua mot cuoc hoi thoai nam TRONG mot ChatGPT Project.
+ *
+ * `g-p-` la thu PHAN BIET Project voi GPT tuy chinh, va do la ca ranh gioi an toan o day:
+ *
+ *   · Project     `https://chatgpt.com/g/g-p-6a22b674b76881918809ceac4396a409-sparta-explorer/c/<id>`
+ *   · GPT tuy chinh `https://chatgpt.com/g/g-ClUusYYbO-url-slug-gpt/c/<id>`   <- KHONG arm duoc
+ *
+ * Nen o day KHONG viet `/g/<bat ky>/c/<id>`. Mot GPT tuy chinh la mot he thong prompt cua NGUOI
+ * KHAC; arm vao do la dat tin nhan danh thuc vao mot noi khong phai cuoc hoi thoai cua nguoi dung.
+ *
+ * Ma Project quan sat duoc la 32 chu HEX THUONG (nguon: URL that duoc dan trong REVIEW_BLOCK cua
+ * #206). Khoang `{16,64}` khong phai su bua bai: no van la HEX — tuc van loai duoc bang chu cai
+ * hoa/thuong hon tap cua ma GPT tuy chinh (`ClUusYYbO`) va moi thu khong phai ma — nhung chua mot
+ * chut cho de OpenAI doi do dai ma khong lam cau noi chet cam.
+ *
+ * Slug (`-sparta-explorer`) la TUY CHON va co the vang han voi mot Project chua dat ten. No duoc
+ * viet thanh cac nhom `-<chu-va-so>`, nen mot slug ket thuc bang `-`, co `--`, hay mang ky tu da
+ * ma hoa phan tram (`%E1%BA%BF`) deu bi TU CHOI. Do la fail-closed co chu dich: duong ra cho mot
+ * Project ten tieng Viet la dan hinh dang `/c/<id>` cua CHINH cuoc hoi thoai do.
+ */
+const PROJECT_SEGMENT = 'g-p-[0-9a-f]{16,64}(?:-[A-Za-z0-9]+)*';
+
+/**
+ * HAI hinh dang duong dan hoi thoai duoc arm — va dung hai, khong hon.
+ *
+ * Hai hinh dang nay la HAI DICH KHAC NHAU, khong phai hai bi danh cua mot dich: `/c/<id>` va
+ * `/g/g-p-<du an>/c/<id>` cho ra hai chuoi canonical khac nhau, nen mot ho so arm o hinh dang nay
+ * KHONG bao gio khop mot tab o hinh dang kia. Do chinh la bat bien "dung mot cuoc hoi thoai" —
+ * xem `browser-target` 16g/16h.
+ */
+const CONVERSATION_PATHS = Object.freeze([
+  new RegExp(`^/c/${CONVERSATION_ID}$`),
+  new RegExp(`^/g/${PROJECT_SEGMENT}/c/${CONVERSATION_ID}$`),
+]);
 
 /**
  * @typedef {{ state: 'ARMED_EXACT_CHAT', conversationUrl: string } | { state: 'DISARMED' }} ArmState
@@ -70,6 +111,11 @@ export const disarmed = () => Object.freeze({ state: BRIDGE_STATES.DISARMED });
 
 /**
  * Chuan hoa mot URL hoi thoai ve dang canonical, hoac tu choi.
+ *
+ * "Canonical" o day GIU NGUYEN duong dan nguoi dung dan vao — chi bo dau `/` cuoi va ha chu host
+ * ve thuong. Doan Project KHONG bi cat: URL nguoi dung arm chinh la URL duoc luu, va do la ly do
+ * `/c/<id>` voi `/g/g-p-<du an>/c/<id>` khong bao gio lan sang nhau.
+ *
  * @param {unknown} url
  * @returns {{ ok: true, conversationUrl: string } | import('./states.js').Rejection}
  */
@@ -90,7 +136,7 @@ export function normalizeConversationUrl(url) {
     return rejected(BRIDGE_REASONS.ARMED_URL_MISMATCH, { problem: 'HOST_NOT_ALLOWED' });
   }
   const path = parsed.pathname.endsWith('/') ? parsed.pathname.slice(0, -1) : parsed.pathname;
-  if (!CONVERSATION_PATH.test(path)) {
+  if (!CONVERSATION_PATHS.some((shape) => shape.test(path))) {
     return rejected(BRIDGE_REASONS.ARMED_URL_MISMATCH, { problem: 'NOT_A_CONVERSATION_PATH' });
   }
   if (parsed.search.length > 0 || parsed.hash.length > 0) {

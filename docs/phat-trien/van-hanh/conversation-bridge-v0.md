@@ -127,7 +127,44 @@ Không có bộ nhớ đệm. Mỗi lần cân nhắc giao là một lần đọ
 ### 4.3 Cổng arm — _vào cuộc hội thoại nào_
 
 Mặc định là `DISARMED`: **không cuộc hội thoại nào** đủ điều kiện. Người dùng phải mở trang tuỳ
-chọn của tiện ích, dán đúng một URL dạng `https://chatgpt.com/c/<id>` và bấm arm.
+chọn của tiện ích, dán **đúng chuỗi đang hiện trên thanh địa chỉ** của cuộc hội thoại đó, và bấm
+arm.
+
+#### Hai hình dạng URL arm được — và chúng là **hai đích**, không phải hai bí danh
+
+```text
+https://chatgpt.com/c/<mã hội thoại>                           # ChatGPT Web thường
+https://chatgpt.com/g/g-p-<mã dự án>[-<tên>]/c/<mã hội thoại>  # hội thoại trong một ChatGPT Project
+```
+
+Một cuộc hội thoại **bên trong một Project** (đúng loại mà #204 yêu cầu đánh thức) hiển thị trên
+thanh địa chỉ ở hình dạng thứ hai, ví dụ
+`https://chatgpt.com/g/g-p-6a22b674b76881918809ceac4396a409-sparta-explorer/c/<mã hội thoại>`.
+
+Hai hình dạng **không** được gộp lại. Chuỗi canonical được lưu chính là chuỗi người dùng dán vào
+(chỉ bỏ dấu `/` cuối và hạ chữ host về thường), nên arm `/c/<id>` sẽ **không** đánh thức một tab
+đang mở `/g/g-p-…/c/<id>`, và ngược lại — kể cả khi mã hội thoại trùng từng ký tự. Bài
+`browser-target` 16g/16h dựng đúng cặp URL đó và đòi **không một thao tác DOM nào** theo cả hai
+chiều; 16j đòi điều đó vẫn đúng khi bộ lọc tab bị coi như đã thủng.
+
+Bị từ chối, có chủ đích:
+
+| URL                                | Vì sao                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------- |
+| `/g/g-<mã>/c/<id>`                 | **GPT tuỳ chỉnh** — hệ thống prompt của người khác, không phải hội thoại của người dùng |
+| `/g/g-p-…/project`                 | Trang của chính dự án, không phải một cuộc hội thoại                                    |
+| `/g/g-p-…/shared/c/<id>`           | Đường dẫn chia sẻ — một trang khác                                                      |
+| `g-p-` + mã sai hình dạng          | Mã dự án phải là **16–64 chữ hex thường** (32 là con số quan sát được)                  |
+| `/c/<id>` với `<id>` sai hình dạng | Mã hội thoại phải là 8–64 ký tự `[A-Za-z0-9-]`                                          |
+| Bất kỳ URL nào có query/fragment   | `?model=x` và `#…` phân biệt được hai trang khác nhau                                   |
+
+Slug của dự án được đọc theo các nhóm `-<chữ-và-số>`, nên một slug mang ký tự **đã mã hoá phần
+trăm** (tên dự án tiếng Việt có dấu) sẽ bị từ chối. Đó là fail-closed có chủ đích — không nới luật
+để đoán; đường ra là dán hình dạng `/c/<id>` của **chính** cuộc hội thoại đó.
+
+Điều **không** đổi theo thay đổi này: quyền host vẫn là `https://chatgpt.com/*` theo origin (bên
+dưới), bộ lọc tab vẫn so **chính xác**, và lần đối chiếu `location.href` bên trong trang vẫn so
+**chính xác** với trạng thái arm.
 
 #### Quyền host của Chrome là **theo origin**, không theo đường dẫn
 
@@ -152,7 +189,7 @@ trên bị bỏ qua**:
 
 | #   | Lớp                                                                                                                   | Ở đâu                 | Bài kiểm             |
 | --- | --------------------------------------------------------------------------------------------------------------------- | --------------------- | -------------------- |
-| 1   | Trạng thái `ARMED_EXACT_CHAT` giữ **một** URL canonical do người dán vào                                              | `arming.js`           | `arming`             |
+| 1   | Trạng thái `ARMED_EXACT_CHAT` giữ **một** URL canonical do người dán vào — một trong hai hình dạng ở trên, giữ nguyên | `arming.js`           | `arming`             |
 | 2   | Lọc tab bằng `isExactConfiguredConversation(tab.url, đã-arm)`                                                         | `wake-router.js`      | `browser-target` 16c |
 | 3   | Đúng **một** tab khớp — không tab hoặc nhiều tab đều là từ chối, không đoán                                           | `wake-router.js`      | `browser-target` 12b |
 | 4   | Trong trang: `location.href` phải bằng URL tab **và** bằng URL đã arm, đối chiếu **ngay trước** thao tác DOM đầu tiên | `composer-adapter.js` | `browser-target` 16e |
@@ -161,9 +198,9 @@ Lớp 4 nhận `armedHref` **thẳng từ trạng thái arm**, không đi qua b�
 cả khi lớp 2 bị qua mặt. Bài `browser-target` 16e dựng đúng tình huống đó: một cuộc hội thoại khác,
 với `expectedHref` đã bị làm cho khớp, và vẫn **không một thao tác DOM nào** xảy ra.
 
-URL được so **chính xác** (chỉ tha dấu `/` cuối và chữ hoa/thường của scheme+host). Query và
-fragment không được bỏ qua — `?model=x` là một trang khác. Chỉ host `chatgpt.com`; host cũ của
-ChatGPT và mọi host của ChatGPT Work đều không arm được.
+URL được so **chính xác** (chỉ tha dấu `/` cuối và chữ hoa/thường của scheme+host) — **cả** đoạn
+`/g/g-p-…` nếu có. Query và fragment không được bỏ qua — `?model=x` là một trang khác. Chỉ host
+`chatgpt.com`; host cũ của ChatGPT và mọi host của ChatGPT Work đều không arm được.
 
 ### 4.5 Đường ống tới native host — mở lại được, **có chặn**
 
@@ -319,8 +356,15 @@ lại. Bước 5 là chỗ xử lý điều đó, và nó không đòi nạp l�
    như dự kiến**, host chưa tồn tại.
 3. Chạy `install:dry-run --extension-id=<id vừa lấy>`, **đọc kỹ đầu ra**, rồi mới `--apply
 --i-understand-this-writes-to-my-registry`.
-4. Mở trang tuỳ chọn của tiện ích, dán URL cuộc hội thoại, bấm arm, chấp nhận lời xin quyền host
-   (Chrome sẽ hỏi cho **cả `chatgpt.com`** — xem §4.3 về vì sao và cái gì thay nó giữ ranh giới).
+4. Mở **chính** cuộc hội thoại ChatGPT muốn đánh thức trong trình duyệt, rồi **sao đúng chuỗi trên
+   thanh địa chỉ**. Với một cuộc hội thoại nằm trong Project `nexagnet-platform`, chuỗi đó có dạng
+   `https://chatgpt.com/g/g-p-<mã dự án>-nexagnet-platform/c/<mã hội thoại>` — **dán nguyên cả đoạn
+   `/g/g-p-…`**, đừng rút gọn về `/c/<mã hội thoại>`: hai hình dạng đó là **hai đích khác nhau**
+   (§4.3), và arm nhầm hình dạng sẽ cho ra `TARGET_TAB_NOT_FOUND` chứ không đánh thức nhầm chỗ.
+   Mở trang tuỳ chọn của tiện ích, dán chuỗi đó, bấm arm, chấp nhận lời xin quyền host (Chrome sẽ
+   hỏi cho **cả `chatgpt.com`** — xem §4.3 về vì sao và cái gì thay nó giữ ranh giới). Đối chiếu
+   ô **`target`** trên trang tuỳ chọn: nó phải hiện lại **đúng** chuỗi vừa dán. Nếu tiện ích từ
+   chối với `NOT_A_CONVERSATION_PATH`, đọc bảng "bị từ chối" ở §4.3 trước khi thử URL khác.
 5. Vẫn trên trang tuỳ chọn, bấm **_Ket noi lai_**. Đường ống phải chuyển sang `CONNECTED`. Không
    cần nạp lại tiện ích, không cần khởi động lại Chrome.
 6. Đặt `enabled: true` trong `config.json`.
@@ -410,7 +454,7 @@ ra bản ghi nào (`two-ledger-recovery` 36b).
 | R3  | ChatGPT đổi cấu trúc khung soạn                                                      | Cầu nối ngừng hoạt động                                    | Fail closed: `COMPOSER_NOT_FOUND` / `COMPOSER_AMBIGUOUS`, **không bấm nút tuỳ ý**. Selector là `id` ổn định + thuộc tính ngữ nghĩa, không phải lớp CSS sinh ra                                                                                                                           |
 | R4  | Chế độ `unauthenticated` chỉ có 60 lần gọi/giờ                                       | Poll bị chặn                                               | Chỉ dùng cho kho công khai; mặc định là `gh-cli`. Đọc thất bại ⇒ `LIVE_STATE_UNAVAILABLE`, không giao                                                                                                                                                                                    |
 | R5  | Native host chạy với **toàn quyền của người dùng**                                   | Một `config.json` bị sửa có thể trỏ sang kho khác          | Cấu hình nằm cạnh mã, trong `.gitignore`; khung IPC vẫn chỉ mang ba nguyên thuỷ; **cuộc hội thoại đích do tiện ích giữ, host không đổi được**                                                                                                                                            |
-| R6  | Quyền host được cấp là **cả origin** `https://chatgpt.com` — Chrome bỏ qua đường dẫn | Tiện ích _về mặt kỹ thuật_ chạm được mọi trang chatgpt.com | Không giấu, không giả vờ hẹp: mô hình quyền khai ra đúng như vậy (§4.3). Ranh giới thật là **bốn lớp trong mã**, và lớp cuối chạy _bên trong_ trang, đối chiếu thẳng với trạng thái arm. `browser-target` 16c-16f dựng đúng tình huống origin-wide và đòi **không một thao tác DOM nào** |
+| R6  | Quyền host được cấp là **cả origin** `https://chatgpt.com` — Chrome bỏ qua đường dẫn | Tiện ích _về mặt kỹ thuật_ chạm được mọi trang chatgpt.com | Không giấu, không giả vờ hẹp: mô hình quyền khai ra đúng như vậy (§4.3). Ranh giới thật là **bốn lớp trong mã**, và lớp cuối chạy _bên trong_ trang, đối chiếu thẳng với trạng thái arm. `browser-target` 16c-16j dựng đúng tình huống origin-wide và đòi **không một thao tác DOM nào** |
 | R7  | Chưa từng chạy thật với ChatGPT                                                      | Chưa có bằng chứng runtime                                 | Cố ý (§8). Smoke là bước có người duyệt, sau review độc lập                                                                                                                                                                                                                              |
 | R8  | Đường ống tự dừng ở `GAVE_UP` sau 6 lần mở hỏng liên tiếp                            | Cầu nối im cho tới khi có người bấm                        | Cố ý (§4.5): host hỏng cấu hình sẽ hỏng mãi, thử lại vô hạn không sửa được gì. Trạng thái hiện rõ trên trang tuỳ chọn, và một lần đứt sau khi **đã chạy** thì ngân sách về đầu chứ không cộng dồn                                                                                        |
 | R9  | Hoà giải khoá cho phép cùng một HEAD được giao **thêm một lần**                      | Một cuộc hội thoại thật nhận thêm một tin                  | Đòi **một con người** chọn **đúng một khoá** và xác nhận hai nhịp; host kiểm ba cổng và chỉ gỡ khoá **đã có**. Không có lần thử lại tự động nào, và HEAD đó vẫn phải qua đầy đủ mọi cổng ở lần poll sau (§9.2)                                                                           |
@@ -422,8 +466,8 @@ ra bản ghi nào (`two-ledger-recovery` 36b).
 | Người lạ bình luận một `REVIEW_REQUEST` giả để đánh thức ChatGPT | Danh sách principal cục bộ, xét trên metadata GitHub đã xác thực; văn bản trong comment không cấp được quyền  | `carrier-provenance` 3, 5                           |
 | Yêu cầu cũ đánh thức người review cho một SHA đã qua             | Đối chiếu HEAD **sống** mỗi lần, không bộ nhớ đệm                                                             | `exact-head` 6-8                                    |
 | Poll lặp lại làm ChatGPT bị dội tin                              | Sổ khoá bền hai phía, ghi trước khi hành động                                                                 | `idempotency` 9-11                                  |
-| Tab ChatGPT đang mở là một cuộc hội thoại khác                   | URL arm so **chính xác**; nhiều tab khớp ⇒ từ chối                                                            | `browser-target` 12, 12b, 16b                       |
-| Quyền host origin-wide bị dùng để chạm vào một hội thoại khác    | Bốn lớp trong mã (§4.3); lớp cuối chạy **trong trang**, đối chiếu thẳng với trạng thái arm                    | `browser-target` 16c-16f, `input-only-contract` 18e |
+| Tab ChatGPT đang mở là một cuộc hội thoại khác                   | URL arm so **chính xác**; nhiều tab khớp ⇒ từ chối                                                            | `browser-target` 12, 12b, 16b, 16g, 16h             |
+| Quyền host origin-wide bị dùng để chạm vào một hội thoại khác    | Bốn lớp trong mã (§4.3); lớp cuối chạy **trong trang**, đối chiếu thẳng với trạng thái arm                    | `browser-target` 16c-16j, `input-only-contract` 18e |
 | Mô hình quyền trong tài liệu rộng hơn/hẹp hơn thứ runtime cấp    | Hằng số **một chỗ** khoá manifest ↔ lời xin lúc chạy; lời xin theo URL hội thoại bị bài kiểm chặn             | `input-only-contract` 18e                           |
 | Native host chết, cầu nối im lặng không ai biết                  | Mở lại có chặn, trần 30s, dừng hẳn sau 6 lần; trạng thái hiện trên trang tuỳ chọn                             | `native-link` 26-28                                 |
 | Lịch hẹn mở lại chồng nhau đẻ ra nhiều tiến trình host           | Đúng **một** lịch hẹn và **một** lần mở đang bay; sự kiện đứt muộn của port cũ bị bỏ qua                      | `native-link` 29, 29b                               |

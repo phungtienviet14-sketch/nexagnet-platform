@@ -19,7 +19,7 @@ import { deliveryKeyFor } from '../protocol/delivery-key.mjs';
 import { HEAD_SHA, REPO } from './fixtures/github.mjs';
 import { chatgptPage } from './fixtures/chatgpt-page.mjs';
 import { withDom } from './fixtures/dom.mjs';
-import { ARMED_URL, makeDeps } from './fixtures/router-deps.mjs';
+import { ARMED_URL, PROJECT_ARMED_URL, makeDeps } from './fixtures/router-deps.mjs';
 
 const KEY = deliveryKeyFor({ repo: REPO, pr: 205, headSha: HEAD_SHA });
 const FRAME = { v: 1, kind: 'WAKE', key: KEY, repo: REPO, pr: 205, headSha: HEAD_SHA };
@@ -235,6 +235,70 @@ test('16f. `armedHref` thieu / rong -> tu choi; dau `/` cuoi thi khong', () => {
   assert.equal(inject(dom(), ARMED_URL, `${ARMED_URL}/`).ok, true);
 });
 
+/**
+ * Cuoc hoi thoai NAM TRONG mot ChatGPT Project (blocker B5 cua REVIEW_BLOCK #206).
+ *
+ * `PROJECT_ARMED_URL` va `ARMED_URL` mang CUNG mot ma hoi thoai, chi khac o doan `/g/g-p-<du an>`.
+ * Bon bai duoi day doi hoi hai URL do la HAI DICH theo CA HAI chieu: khong chieu nao duoc coi la
+ * "gan dung" chieu kia, o ca lop loc tab lan lop doi chieu ben trong trang.
+ */
+test('16g. arm hinh dang goc, tab lai la Project -> khong mot thao tac DOM nao', async () => {
+  const harness = makeDeps({ tabs: [{ id: 7, url: PROJECT_ARMED_URL }] });
+  const outcome = await routeWakeFrame(FRAME, harness.deps);
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.state, 'REJECTED_WRONG_CHAT');
+  assert.equal(outcome.reason, 'TARGET_TAB_NOT_FOUND');
+  assert.deepEqual(harness.injections, []);
+  assertPageUntouched(harness.dom, 'goc arm / tab Project');
+  assert.deepEqual(harness.tabQueries, [ARMED_URL]);
+});
+
+test('16h. arm hinh dang Project, tab lai la goc -> khong mot thao tac DOM nao', async () => {
+  const harness = makeDeps({ armedUrl: PROJECT_ARMED_URL, tabs: [{ id: 7, url: ARMED_URL }] });
+  const outcome = await routeWakeFrame(FRAME, harness.deps);
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.state, 'REJECTED_WRONG_CHAT');
+  assert.equal(outcome.reason, 'TARGET_TAB_NOT_FOUND');
+  assert.deepEqual(harness.injections, []);
+  assertPageUntouched(harness.dom, 'Project arm / tab goc');
+  assert.deepEqual(harness.tabQueries, [PROJECT_ARMED_URL]);
+});
+
+test('16i. dung URL Project da arm -> dat chu va gui, DUNG MOT lan', async () => {
+  const harness = makeDeps({ armedUrl: PROJECT_ARMED_URL });
+  const outcome = await routeWakeFrame(FRAME, harness.deps);
+  assert.equal(outcome.ok, true);
+  assert.equal(outcome.state, 'DELIVERED');
+  assert.equal(harness.injections.length, 1, 'dung mot lan tiem');
+  assert.equal(harness.injections[0].tabId, 42);
+  assert.equal(harness.injections[0].armedHref, PROJECT_ARMED_URL);
+  assert.deepEqual(harness.tabQueries, [PROJECT_ARMED_URL]);
+  assert.deepEqual(harness.dom.execCommands(), [
+    { command: 'selectAll', value: undefined },
+    { command: 'insertText', value: harness.injections[0].message },
+  ]);
+  assert.equal(harness.dom.find('button')[0].clicked, 1);
+  assert.deepEqual(harness.dom.touchedTraps, []);
+});
+
+test('16j. LOP CUOI van chan khi hai hinh dang bi trao cho nhau', () => {
+  // Trang la cuoc hoi thoai GOC, va `expectedHref` da bi lam cho khop voi chinh no — tuc bo loc
+  // phia service worker coi nhu da thung. Chi con `armedHref` (hinh dang Project) chan lai.
+  const rootPage = chatgptPage({ href: ARMED_URL });
+  const outcome = inject(rootPage, ARMED_URL, PROJECT_ARMED_URL);
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.reason, 'ARMED_URL_MISMATCH');
+  assertPageUntouched(rootPage, 'lop cuoi / Project da arm, trang goc');
+
+  // Va chieu nguoc lai.
+  const projectPage = chatgptPage({ href: PROJECT_ARMED_URL });
+  assert.equal(inject(projectPage, PROJECT_ARMED_URL, ARMED_URL).reason, 'ARMED_URL_MISMATCH');
+  assertPageUntouched(projectPage, 'lop cuoi / goc da arm, trang Project');
+
+  // DOI CHUNG: chinh cay DOM Project do, khi URL DUNG la URL da arm, van chay het duong thanh cong.
+  assert.equal(inject(chatgptPage({ href: PROJECT_ARMED_URL }), PROJECT_ARMED_URL).ok, true);
+});
+
 test('16b. so sanh URL la CHINH XAC, khong phai "bat dau bang"', () => {
   const base = ARMED_URL;
   assert.equal(isExactConfiguredConversation(base, base), true);
@@ -247,9 +311,15 @@ test('16b. so sanh URL la CHINH XAC, khong phai "bat dau bang"', () => {
     'https://chatgpt.com.evil.tld/c/6a1f0c9e-2b7d-4f11-9a30-5c8e2d1b4a77',
     'http://chatgpt.com/c/6a1f0c9e-2b7d-4f11-9a30-5c8e2d1b4a77',
     'https://chatgpt.com/',
+    // CUNG ma hoi thoai, nhung nhin tu trong mot Project. Doan `/g/g-p-...` khong duoc bo qua.
+    PROJECT_ARMED_URL,
     '',
   ];
   for (const impostor of impostors) {
     assert.equal(isExactConfiguredConversation(impostor, base), false, impostor);
   }
+  // Hinh dang Project so voi CHINH no thi khop; so cheo voi hinh dang goc thi khong, ca hai chieu.
+  assert.equal(isExactConfiguredConversation(PROJECT_ARMED_URL, PROJECT_ARMED_URL), true);
+  assert.equal(isExactConfiguredConversation(`${PROJECT_ARMED_URL}/`, PROJECT_ARMED_URL), true);
+  assert.equal(isExactConfiguredConversation(base, PROJECT_ARMED_URL), false);
 });
