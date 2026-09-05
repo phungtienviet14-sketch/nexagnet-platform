@@ -414,9 +414,10 @@ describe('Be mat lai xe — INV-09 va pham vi cua chinh minh', () => {
       phone: '0900000000',
       address: 'So 1 Cau Giay',
       taxCode: '0101234567',
-      createdAt: new Date('2026-09-01T00:00:00.000Z'),
-      updatedAt: new Date('2026-09-01T00:00:00.000Z'),
-    } as Parameters<typeof toDriverFuelSupplierView>[0]);
+      status: 'ACTIVE',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
 
     expect(Object.keys(view).sort()).toEqual(['id', 'name']);
     expect(JSON.stringify(view)).not.toContain('0101234567');
