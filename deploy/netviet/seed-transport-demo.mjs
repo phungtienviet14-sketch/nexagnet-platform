@@ -4,7 +4,10 @@ import process from 'node:process';
 import { PrismaClient } from '../../apps/api/node_modules/@prisma/client/default.js';
 import { argon2id, hash } from '../../apps/api/node_modules/argon2/argon2.cjs';
 import { DemoTenantGuardError } from '../../apps/api/dist/transport/demo/demo-guard.js';
-import { seedTransportDemoMonth } from '../../apps/api/dist/transport/demo/demo-seed.js';
+import {
+  backfillDemoDriverLogins,
+  seedTransportDemoMonth,
+} from '../../apps/api/dist/transport/demo/demo-seed.js';
 
 /**
  * GIEO THANG VAN HANH MAU cho goi khach dang chay (T8/#90).
@@ -32,14 +35,19 @@ import { seedTransportDemoMonth } from '../../apps/api/dist/transport/demo/demo-
 
 const prisma = new PrismaClient();
 try {
-  const result = await seedTransportDemoMonth(prisma, {
-    hashPassword: (plain) => hash(plain, { type: argon2id }),
-  });
+  const hashPassword = (plain) => hash(plain, { type: argon2id });
+  const result = await seedTransportDemoMonth(prisma, { hashPassword });
 
   if (result.skipped) {
     process.stdout.write(
       `Da co ${result.counts.transportTrip} chuyen trong DB — Postgres la nguon su that, khong gieo lai.\n`,
     );
+    // "Gieo truoc, cau hinh mat khau sau" phai la mot trinh tu chay duoc: khong co buoc nay thi
+    // mot lan gieo som (chua co bien mat khau) se khoa be mat lai xe lai vinh vien.
+    const created = await backfillDemoDriverLogins(prisma, { hashPassword });
+    if (created > 0) {
+      process.stdout.write(`Da tao bu ${created} tai khoan dang nhap cho lai xe.\n`);
+    }
   } else {
     const summary = Object.entries(result.counts)
       .map(([key, value]) => `${key}=${value}`)

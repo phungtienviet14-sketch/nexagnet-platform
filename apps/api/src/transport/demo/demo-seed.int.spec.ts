@@ -8,7 +8,11 @@ import { WorkforceCoreFactsAdapter } from '../workforce/workforce.ports.js';
 import { loadDemoMonthDataset } from './demo-dataset.js';
 import { DEMO_RESET_ENV, DEMO_RESET_TOKEN } from './demo-guard.js';
 import { buildDemoPlan } from './demo-plan.js';
-import { resetTransportDemoData, seedTransportDemoMonth } from './demo-seed.js';
+import {
+  backfillDemoDriverLogins,
+  resetTransportDemoData,
+  seedTransportDemoMonth,
+} from './demo-seed.js';
 
 /**
  * THANG VAN HANH MAU tren Postgres THAT.
@@ -249,6 +253,46 @@ describe.runIf(RUN)('Gieo thang van hanh mau (Postgres THAT)', () => {
     expect(users.length).toBe(dataset.drivers.length);
     /** `GD-22` — cau noi vai: LAI XE anh xa sang `SALE` o tang xac thuc nen tang. */
     for (const user of users) expect(user.role).toBe('SALE');
+  });
+
+  /**
+   * "GIEO TRUOC, CAU HINH MAT KHAU SAU" PHAI LA MOT TRINH TU CHAY DUOC.
+   *
+   * Lenh gieo tu bo qua khi DB da co chuyen. Neu tai khoan lai xe CHI duoc tao trong lan gieo dau,
+   * thi mot stack len truoc khi co `TRANSPORT_DEMO_DRIVER_PASSWORD` se khoa be mat lai xe lai VINH
+   * VIEN — tru khi xoa sach ca thang du lieu di lam lai. Bai nay dung mot ngo cut im lang.
+   */
+  it('tao bu duoc tai khoan cho lai xe khi mat khau den sau lan gieo', async () => {
+    const dataset = loadDemoMonthDataset();
+    const target = await prisma.transportDriver.findFirstOrThrow({
+      where: { phone: dataset.drivers[0]?.phone },
+    });
+
+    // Dung lai trang thai "da gieo nhung chua co tai khoan".
+    await prisma.transportDriver.update({ where: { id: target.id }, data: { authUserId: null } });
+    await prisma.user.delete({ where: { id: target.authUserId as string } });
+    expect(await prisma.transportDriver.count({ where: { authUserId: null } })).toBe(1);
+
+    const created = await backfillDemoDriverLogins(prisma, {
+      driverPassword: 'mat-khau-chi-dung-trong-bai-test',
+      hashPassword: async (plain) => `${HASH_MARKER}${plain}`,
+    });
+
+    expect(created).toBe(1);
+    expect(await prisma.transportDriver.count({ where: { authUserId: null } })).toBe(0);
+
+    /** Chay lai khong tao them gi — lai xe da co tai khoan thi khong bi dung toi. */
+    expect(
+      await backfillDemoDriverLogins(prisma, {
+        driverPassword: 'mat-khau-chi-dung-trong-bai-test',
+        hashPassword: async (plain) => `${HASH_MARKER}${plain}`,
+      }),
+    ).toBe(0);
+  });
+
+  /** Khong co mat khau thi khong tao gi, va KHONG nem — buoc deploy phai di tiep duoc. */
+  it('thieu mat khau thi khong tao tai khoan nao va cung khong nem', async () => {
+    expect(await backfillDemoDriverLogins(prisma, {})).toBe(0);
   });
 
   it('gieo lan hai KHONG ghi de len du lieu da co', async () => {

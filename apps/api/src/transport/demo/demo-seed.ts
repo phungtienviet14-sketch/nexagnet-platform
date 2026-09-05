@@ -199,6 +199,71 @@ export async function resetTransportDemoData(
  * `seed-tenant-knowledge.mjs`: goi khach la HAT GIONG, khong phai nguon su that luc chay, nen mot
  * lan deploy lai khong duoc ghi de len thu nguoi ta da sua tren man hinh.
  */
+/**
+ * TAO BU TAI KHOAN DANG NHAP cho cac lai xe da gieo ma chua co tai khoan.
+ *
+ * ---------------------------------------------------------------------------
+ * VI SAO CAN MOT DUONG RIENG, KHONG GOP VAO `seedTransportDemoMonth()`.
+ *
+ * Lenh gieo TU BO QUA khi DB da co chuyen — dung, va do la thu giu cho mot lan deploy lai khong
+ * ghi de len du lieu nguoi ta da sua. Nhung no de ra mot cai bay: gieo mot lan KHONG co
+ * `TRANSPORT_DEMO_DRIVER_PASSWORD`, roi dat bien do va deploy lai, thi lan sau cham vao nhanh "bo
+ * qua" va tai khoan lai xe KHONG BAO GIO duoc tao — be mat lai xe vinh vien khong ai dang nhap
+ * duoc, tru khi xoa sach ca thang du lieu di lam lai.
+ *
+ * Do la mot ngo cut im lang, cung ho voi cai da gap o vong truoc (o chon cay xang luon rong). Nen
+ * duong nay ton tai de "gieo truoc, cau hinh sau" van la mot trinh tu chay duoc.
+ *
+ * CHI dung vao lai xe CHUA co tai khoan. Mot lai xe da noi voi mot `User` thi khong bi dung toi —
+ * ham nay khong doi mat khau cua ai, cung ly le voi `bootstrap-auth-user.mjs`.
+ */
+export async function backfillDemoDriverLogins(
+  prisma: PrismaClient,
+  options: Pick<DemoSeedOptions, 'driverPassword' | 'hashPassword'> = {},
+): Promise<number> {
+  assertTransportDemoTenant('tao tai khoan dang nhap cho lai xe mau');
+
+  const password = options.driverPassword ?? process.env[DEMO_DRIVER_PASSWORD_ENV];
+  const hashPassword = options.hashPassword;
+  if (password === undefined || password === '' || hashPassword === undefined) return 0;
+
+  const pending = await prisma.transportDriver.findMany({
+    where: { authUserId: null },
+    select: { id: true, fullName: true, phone: true },
+  });
+  if (pending.length === 0) return 0;
+
+  /** Khop theo SO DIEN THOAI: ten co dau va co the trung, so dien thoai thi khong. */
+  const loginByPhone = new Map(
+    loadDemoMonthDataset().drivers.map((driver) => [driver.phone, driver.login]),
+  );
+
+  let created = 0;
+  for (const driver of pending) {
+    const login = loginByPhone.get(driver.phone);
+    if (login === undefined) continue;
+    const existing = await prisma.user.findUnique({ where: { username: login } });
+    const user =
+      existing ??
+      (await prisma.user.create({
+        data: {
+          username: login,
+          name: driver.fullName,
+          passwordHash: await hashPassword(password),
+          // `GD-22` — cau noi vai: LAI XE anh xa sang `SALE` o tang xac thuc nen tang.
+          role: 'SALE',
+          passwordChangedAt: new Date(),
+        },
+      }));
+    await prisma.transportDriver.update({
+      where: { id: driver.id },
+      data: { authUserId: user.id },
+    });
+    created += 1;
+  }
+  return created;
+}
+
 export async function seedTransportDemoMonth(
   prisma: PrismaClient,
   options: DemoSeedOptions = {},
