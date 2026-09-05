@@ -46,7 +46,21 @@ class RecordingSink implements TelemetrySink {
 }
 
 /** Nguon he thong gia lap: mot luot that co loi nhan la luot DA tra cuu duoc tai lieu da duyet (G1). */
-const STUB_SOURCES = ['Tai lieu da duyet cua san pham (gia lap cho test).'];
+/*
+ * NGUON GIA LAP PHAI THAT SU NOI DIEU MA BAN NHAP GIA LAP NOI (doi 05/09/2026, G5).
+ *
+ * Ban truoc o day la mot cau chung chung ("Tai lieu da duyet cua san pham") — va no du de moi ban
+ * nhap trong tep nay duoc nhan. Do dung la hinh dang lo hong ma review doc lap goi ten: mot nguon
+ * KHONG LIEN QUAN van mo cong cho van xuoi. Tu G5, tu ngu cua ban nhap phai co trong nguon, nen
+ * mot fixture nhu vay khong con hop dong bo — va do la dieu DUNG: fixture phai mo phong mot luot
+ * co that, tuc mot luot da tra cuu duoc tai lieu NOI VE dung dieu agent sap tra loi.
+ *
+ * Cac bai o day khong do G5; chung do quan sat va duong nghiep vu. Nen viec can lam la lam fixture
+ * hop le, khong phai noi long cong.
+ */
+const STUB_SOURCES = [
+  'Tài liệu tham chiếu (giả lập cho test): máy có đèn ngủ. Nhờ Sale kiểm tra lại giúp khách.',
+];
 
 class StubAdvisor extends AdvisorAgent {
   readonly name = 'stub';
