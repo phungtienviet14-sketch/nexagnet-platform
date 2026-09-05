@@ -13,6 +13,7 @@ import type {
 import { POLICY_LABELS } from '../agents/risk-rules.js';
 import { formatVnd } from '../rules/text.js';
 import { authorizedAmounts, commitmentToken } from './outbound-claims.js';
+import { attestedTokens, attestedWords } from './outbound-envelope.js';
 import { outboundFingerprint, policyGrantTokens } from './outbound-authority.js';
 import type { OrderStateFact, QuoteFact, TurnBusinessFacts } from './outbound-facts.js';
 import {
@@ -106,10 +107,19 @@ export function composeOutbound(
    * chua he co dong gia nao cho mau do. Nen thu tu la: xet loi nhan truoc, gop sau.
    */
   const strict = buildGrounding(context.systemSources, context.customerText, context.authority);
+  /*
+   * G5 DOI CHIEU TREN NGUON HE THONG, KHONG KE PHAN BO SOAN VUA RENDER — cung ly do voi doan tren.
+   *
+   * Gop dong khoi vao day thi mot khoi bao gia vua render "Ghế Felix" se bao lanh cho mot loi nhan
+   * noi ve ghe Felix ma chua nguon nao ta ve no. Tap tu ngu duoc phep phai la thu he thong DA CO
+   * TRUOC khi soan, khong phai thu bo soan vua tu viet ra.
+   */
+  const attested = attestedWords(context.systemSources);
   const narrative = admitNarrative(plan.narrative, {
     hasSystemSource: context.systemSources.length > 0,
     grounding: strict,
     granted: grantGrounding(context.authority),
+    attested,
   });
 
   const text = [
@@ -130,7 +140,15 @@ export function composeOutbound(
     // Bang chung ghim lai CO ke phan bo soan tu render: diem nghen gui quet lai VAN BAN CUOI, ma
     // van ban cuoi co ca so luong, ky gia, nhan chinh sach — nhung thu bo soan tu viet ra chu
     // khong phai model. Thieu chung thi lop phong thu chieu sau se bao dong gia moi lan gui.
-    grounded: groundingTokens(widen(strict, blocks)),
+    //
+    // `s:` la phan cua G5: CHI nhung tu ngu ma loi nhan DA DUNG va da truy nguyen duoc — khong
+    // phai ca kho tu vung cua nguon. Ghim ca kho se lam trace phinh len theo do dai tai lieu ma
+    // khong them mot bang chung nao; ghim dung phan da dung thi diem nghen gui van doi chieu
+    // duoc tung chu cua van ban cuoi.
+    grounded: [
+      ...groundingTokens(widen(strict, blocks)),
+      ...(narrative.admitted ? attestedTokens(narrative.text, attested) : []),
+    ],
   };
 }
 

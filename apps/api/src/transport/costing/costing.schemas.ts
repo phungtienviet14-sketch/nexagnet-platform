@@ -81,6 +81,31 @@ export const recordTripExpenseSchema = z
   })
   .strict();
 
+/**
+ * LAI XE TU GHI mot khoan chi cua chinh minh — `#168 B3`.
+ *
+ * Khac `recordTripExpenseSchema` o dung hai truong, va ca hai deu la CHO VANG CO CHU Y:
+ *
+ *   · KHONG `driverId` — danh tinh den tu PHIEN. Mot truong `driverId` o day se la duong de mot lai
+ *     xe ghi khoan chi bang tien cua nguoi khac, va khong bo loc nao phat hien duoc dieu do;
+ *   · KHONG `fundedBy` — be mat nay CHI ghi duoc `DRIVER_FUND`. Cho chon `COMPANY_DIRECT` se la cho
+ *     lai xe tuyen bo "cong ty da tra thang khoan nay", tuc mot dong gia thanh khong di kem but
+ *     toan quy nao de doi soat.
+ *
+ * `.strict()` bien ca hai thanh mot loi 400 CO TEN, chu khong phai mot truong bi bo qua im lang.
+ */
+export const driverSelfExpenseSchema = z
+  .object({
+    tripId: nonEmpty,
+    categoryCode: nonEmpty.max(60),
+    amount: vndMagnitude,
+    businessDate: businessDate.optional(),
+    evidenceLocator: z.string().trim().min(1).max(500).nullable().optional(),
+    note: optionalText,
+    correlationKey,
+  })
+  .strict();
+
 export const reversalSchema = z.object({ reason: nonEmpty.max(500) }).strict();
 
 export const openFundPeriodSchema = z

@@ -93,6 +93,9 @@ export const TRANSPORT_DECISIONS = defineDecisionVocabulary({
     ASSIGNMENT_UNCHANGED: 'Phân công không đổi so với bản đang hiệu lực',
     ASSIGNMENT_TRIP_TERMINAL: 'Chuyến đã ở điểm cuối nên không phân công lại được',
 
+    TRIP_CANCEL_REQUIRES_DEDICATED_PATH:
+      'Huỷ chuyến phải đi qua đường huỷ riêng — đường chuyển trạng thái chung không huỷ được',
+
     CANCEL_RECORDED: 'Đã huỷ chuyến (huỷ thay cho xoá)',
     CANCEL_ALREADY_CANCELLED: 'Chuyến đã huỷ trước đó',
     CANCEL_TRIP_RECONCILED: 'Chuyến đã đối soát — không huỷ, phải dùng chứng từ điều chỉnh',

@@ -8,6 +8,7 @@ import { PrismaFuelRepository } from '../fuel/prisma-fuel.repository.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
 import { PrismaSettlementRepository } from './prisma-settlement.repository.js';
 import { SettlementReadService } from './settlement-read.service.js';
+import { SettlementReportsController } from './settlement-reports.controller.js';
 import {
   FuelSettlementSourceAdapter,
   SettlementCoreFactsAdapter,
@@ -696,6 +697,78 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
           endDate: '2099-02-15',
         }),
       ).rejects.toMatchObject({ reason: 'SETTLEMENT_PERIOD_OVERLAP' });
+    });
+
+    /* ================================================================ *
+     * P14 — `#168 B1`: BE MAT HTTP doc dung nhung con so nay
+     *
+     * Cac bai P1-P13 chung minh tang DOC dung tren Postgres that. Bai nay chung minh mot dieu khac
+     * han, va la dieu duy nhat T7B them vao: cai ma NGUOI DUNG goi qua HTTP tra ve DUNG nhung con
+     * so do — khong phai mot ban da bi controller nan lai, cat bot, hay gop chung.
+     *
+     * Dung chinh `read` da dung o tren chu khong mot ban gia: neu controller lo tay goi sai tham so
+     * hay doi hinh dang ket qua, bai nay do duoc; mot mock thi khong.
+     * ================================================================ */
+    const controller = new SettlementReportsController(read);
+
+    it('P14a — AR aging qua HTTP tra dung bao cao cua tang doc', async () => {
+      const viaHttp = await controller.arAging({ asOf: TODAY });
+
+      expect(viaHttp).toEqual(await read.arAging(TODAY));
+      // ...va no thuc su co du lieu, nen phep so sanh tren khong phai hai bang rong bang nhau.
+      expect(viaHttp.rows.length).toBeGreaterThan(0);
+      expect(viaHttp.asOf).toBe(TODAY);
+    });
+
+    it('P14b — loc theo khach cua HTTP di dung xuong tang doc', async () => {
+      const viaHttp = await controller.arAging({ asOf: TODAY, customerId: state.customerId });
+
+      expect(viaHttp).toEqual(await read.arAging(TODAY, state.customerId));
+      for (const row of viaHttp.rows) expect(row.counterpartyId).toBe(state.customerId);
+    });
+
+    /**
+     * `GD-15` do TREN DAY, khong chi trong don vi: mot doi tac giu CA cong no nha xe LAN hoa hong,
+     * va ca hai con so goc phai den duoc nguoi doc canh nhau.
+     */
+    it('P14c — vi the doi tac qua HTTP giu ca hai chieu, khong bu tru', async () => {
+      const position = await controller.partnerPosition(state.partnerId);
+
+      expect(position).toEqual(await read.partnerPosition(state.partnerId));
+      expect(position.carrierPayableAmount).toBeGreaterThan(0);
+      expect(position.commissionPayableAmount).toBeGreaterThan(0);
+      expect(position.netDisplay).toBe(
+        position.receivableAmount -
+          (position.carrierPayableAmount + position.commissionPayableAmount),
+      );
+    });
+
+    it('P14d — cong no phai tra qua HTTP giu RIENG tung dong', async () => {
+      const carrier = await controller.apByCounterparty({ flow: 'CARRIER_SERVICE' });
+      const commission = await controller.apByCounterparty({ flow: 'PARTNER_COMMISSION' });
+
+      expect(carrier).toEqual(await read.apByCounterparty('CARRIER_SERVICE'));
+      for (const row of carrier) expect(row.flow).toBe('CARRIER_SERVICE');
+      for (const row of commission) expect(row.flow).toBe('PARTNER_COMMISSION');
+    });
+
+    it('P14e — bien truc tiep cua mot chuyen qua HTTP', async () => {
+      const margin = await controller.tripDirectMargin(state.tripOutsourced);
+      expect(margin).toEqual(await read.tripDirectMargin(state.tripOutsourced));
+    });
+
+    it('P14f — chuyen KHONG ton tai ra 404, khong phai than null mang ma 200', async () => {
+      await expect(controller.tripDirectMargin('IT-T5-khong-co-that')).rejects.toMatchObject({
+        status: 404,
+      });
+    });
+
+    it('P14g — cong don qua HTTP bang tong cua hai chuyen doc rieng', async () => {
+      const rollup = await controller.directMarginRollup({
+        tripIds: `${state.tripOwn},${state.tripOutsourced}`,
+      });
+
+      expect(rollup).toEqual(await read.directMarginRollup([state.tripOwn, state.tripOutsourced]));
     });
   },
 );

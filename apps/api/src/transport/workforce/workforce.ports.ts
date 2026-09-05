@@ -22,6 +22,18 @@ export interface DriverPeriodWork {
   readonly distanceKm: number;
 }
 
+/**
+ * HO SO LAI XE toi thieu — DU de tra loi "phien nay la ai", KHONG hon.
+ *
+ * Hai truong, cung hinh dang voi `FuelDriverFacts` cua `TX-04`. Tra ve ca `Driver` se mang so
+ * GPLX, han GPLX va trang thai nhan su vao pham vi cua `transport-workforce` — va tu do khong con
+ * gi ngan mot khung nhin phieu luong vo tinh bay chung ra be mat lai xe.
+ */
+export interface WorkforceDriverFacts {
+  readonly id: string;
+  readonly fullName: string;
+}
+
 export abstract class WorkforceCoreFacts {
   abstract listActiveDriverIds(): Promise<string[]>;
   /**
@@ -40,6 +52,18 @@ export abstract class WorkforceCoreFacts {
     startDate: BusinessDate,
     endDate: BusinessDate,
   ): Promise<readonly DriverPeriodWork[]>;
+
+  /**
+   * PHIEN -> HO SO LAI XE — cau noi `Driver.authUserId`, `#168 B8`.
+   *
+   * Nam o CONG chu khong o mot `FleetRepository` duoc tiem thang: `transport-workforce` khong duoc
+   * cam vao kho cua `transport-core` (T1 §4.1 luat 4), va cong nay khong co mot ham ghi nao.
+   *
+   * `null` khi tai khoan chua duoc noi voi ho so lai xe nao. Do la mot trang thai THAT cua du lieu
+   * (mot nhan vien van phong dang nhap chang han), khong phai mot loi — nen no duoc TRA VE, va tang
+   * goi quyet dinh no co nghia la tu choi hay khong.
+   */
+  abstract findDriverByAuthUserId(authUserId: string): Promise<WorkforceDriverFacts | null>;
 }
 
 @Injectable()
@@ -54,6 +78,11 @@ export class WorkforceCoreFactsAdapter extends WorkforceCoreFacts {
   async listActiveDriverIds(): Promise<string[]> {
     const drivers = await this.fleet.listDrivers();
     return drivers.filter((driver) => driver.status === 'ACTIVE').map((driver) => driver.id);
+  }
+
+  async findDriverByAuthUserId(authUserId: string): Promise<WorkforceDriverFacts | null> {
+    const driver = await this.fleet.findDriverByAuthUserId(authUserId);
+    return driver ? { id: driver.id, fullName: driver.fullName } : null;
   }
 
   async workByDriver(

@@ -89,12 +89,31 @@ export const DRIVER_SELF_FUND_SCOPE_REASONS = [
 ] as const;
 export type DriverSelfFundScopeReason = (typeof DRIVER_SELF_FUND_SCOPE_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * driver.self_expense_scope — CONG cua be mat lai xe cho KHOAN CHI (`#168 B3`)
+ *
+ * MOT DIEM RIENG chu khong dung lai `driver.self_fund_scope`. Hai cong tra loi hai cau hoi khac
+ * nhau, va gop lai se lam bang loc trace mat dung phan biet dang can: cong kia hoi "nguoi nay co
+ * duoc XEM so quy cua minh khong" (chi doc), cong nay hoi "nguoi nay co duoc GHI mot khoan tien
+ * vao chuyen do khong" (co tac dung phu tai chinh).
+ *
+ * Phep kiem "co duoc phan cong vao chuyen nay khong" KHONG nam o day: no da co san o
+ * `trip_expense.record` duoi ma `EXPENSE_DRIVER_NOT_ASSIGNED`, va nhan doi no se tao ra hai cho
+ * cung tra loi mot cau.
+ * ------------------------------------------------------------------ */
+export const DRIVER_SELF_EXPENSE_SCOPE_REASONS = [
+  'SELF_EXPENSE_SCOPE_GRANTED',
+  'SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING',
+] as const;
+export type DriverSelfExpenseScopeReason = (typeof DRIVER_SELF_EXPENSE_SCOPE_REASONS)[number];
+
 export type TransportCostingDecisionReason =
   | TripExpenseRecordReason
   | DriverFundPostReason
   | CostingReversalReason
   | FundPeriodTransitionReason
-  | DriverSelfFundScopeReason;
+  | DriverSelfFundScopeReason
+  | DriverSelfExpenseScopeReason;
 
 export const TRANSPORT_COSTING_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-costing',
@@ -104,6 +123,7 @@ export const TRANSPORT_COSTING_DECISIONS = defineDecisionVocabulary({
     'costing.reversal',
     'fund_period.transition',
     'driver.self_fund_scope',
+    'driver.self_expense_scope',
   ],
   labels: {
     EXPENSE_RECORDED: 'Đã ghi khoản chi cho chuyến',
@@ -132,5 +152,9 @@ export const TRANSPORT_COSTING_DECISIONS = defineDecisionVocabulary({
 
     SELF_FUND_SCOPE_GRANTED: 'Lái xe xem đúng sổ quỹ của chính mình',
     SELF_FUND_SCOPE_NO_DRIVER_BINDING: 'Tài khoản đăng nhập chưa nối với hồ sơ lái xe nào',
+
+    SELF_EXPENSE_SCOPE_GRANTED: 'Lái xe tự ghi khoản chi trên chuyến của chính mình',
+    SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING:
+      'Tài khoản đăng nhập chưa nối với hồ sơ lái xe nào — không ghi được khoản chi tự phục vụ',
   } satisfies Record<TransportCostingDecisionReason, string>,
 });

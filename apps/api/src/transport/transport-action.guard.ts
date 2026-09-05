@@ -14,7 +14,11 @@ import { isInternalServiceRequest } from '../auth/internal-service.guard.js';
 import type { AuthenticatedRequest } from '../auth/session.types.js';
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import { roleCanPerform, type TransportAction } from './transport-actions.js';
-import { TransportDomainError } from './transport.errors.js';
+import {
+  TransportDomainError,
+  type TransportErrorKind,
+  type TransportErrorReason,
+} from './transport.errors.js';
 
 export const TRANSPORT_ACTION_KEY = 'netviet.transport.action';
 
@@ -91,13 +95,62 @@ export function transportErrorToHttp(error: unknown): never {
   if (!(error instanceof TransportDomainError)) throw error;
   switch (error.kind) {
     case 'NOT_FOUND':
-      throw new NotFoundException(error.message);
+      throw new NotFoundException(transportErrorBody(error));
     case 'CONFLICT':
-      throw new ConflictException(error.message);
+      throw new ConflictException(transportErrorBody(error));
     case 'INVALID':
-      throw new BadRequestException(error.message);
+      throw new BadRequestException(transportErrorBody(error));
     case 'DENIED':
       // 403 chu khong phai 409: day la mot cong tu choi, khong phai mot va cham du lieu.
-      throw new ForbiddenException(error.message);
+      throw new ForbiddenException(transportErrorBody(error));
   }
+}
+
+/**
+ * Ba truong CHUAN cua Nest theo tung loai loi mien.
+ *
+ * Go tay ra day chu khong de Nest tu sinh, vi truyen mot OBJECT vao `NotFoundException` se lam Nest
+ * dung nguyen object do lam than phan hoi — tuc `statusCode` va `error` khong con tu dong xuat hien.
+ * Bang nay giu chung nguyen van dung gia tri cu.
+ */
+const HTTP_SHAPE: Readonly<Record<TransportErrorKind, { status: number; error: string }>> = {
+  NOT_FOUND: { status: 404, error: 'Not Found' },
+  CONFLICT: { status: 409, error: 'Conflict' },
+  INVALID: { status: 400, error: 'Bad Request' },
+  DENIED: { status: 403, error: 'Forbidden' },
+};
+
+export interface TransportErrorBody {
+  readonly statusCode: number;
+  readonly message: string;
+  readonly error: string;
+  /** Ly do CO KIEU cua mien — xem khoi chu thich cua ham. */
+  readonly reason: TransportErrorReason;
+}
+
+/**
+ * THAN LOI tren day — `#168 B7`.
+ *
+ * Truoc day chi `error.message` di qua bien, nen `reason` CO KIEU cua mien bi bo lai o may chu. Hau
+ * qua do duoc: mot ma **403 mang bon nghia khac nhau**, va giao dien khong phan biet noi
+ * `FUND_PERIOD_STATUS_RACE` (nguoi dung phai TAI LAI) voi `FUND_PERIOD_OVERLAP` (nguoi dung phai
+ * SUA NGAY) — dung cai phan biet ma `costing-errors.ts` duoc viet ra de giu. Man hinh vi vay chi
+ * con cach hien nguyen van cau tieng Viet cua may chu.
+ *
+ * THEM MOT TRUONG, khong doi truong nao: `statusCode`, `message` va `error` giu nguyen ten, nguyen
+ * kieu va nguyen gia tri cu, nen moi client dang doc chung khong phai sua mot dong nao.
+ *
+ * KHONG RO RI: `reason` la mot union DONG cac hang so cua mien (`TransportErrorReason`) — khong
+ * phai `error.stack`, khong phai ma loi Prisma/SQL, khong phai doi tuong ngoai le, va khong mang
+ * mot manh du lieu nghiep vu nao. Dieu duy nhat no noi la DUONG TU CHOI nao da dong, va do chinh
+ * la thu giao dien can de chon cach xu ly.
+ */
+export function transportErrorBody(error: TransportDomainError): TransportErrorBody {
+  const shape = HTTP_SHAPE[error.kind];
+  return {
+    statusCode: shape.status,
+    message: error.message,
+    error: shape.error,
+    reason: error.reason,
+  };
 }

@@ -33,8 +33,15 @@ import { PipelineService } from './pipeline.service.js';
 
 const CHAT_ID = SEED.groups[0]!.chatId;
 
-/** Nguon he thong gia lap: mot luot that co loi nhan la luot DA tra cuu duoc tai lieu da duyet (G1). */
-const STUB_SOURCES = ['Tai lieu da duyet cua san pham (gia lap cho test).'];
+/**
+ * NGUON HE THONG GIA LAP — phai NOI dung dieu ma ban nhap gia lap noi (doi 05/09/2026, G5).
+ *
+ * Ban truoc la mot cau chung chung ("Tai lieu da duyet cua san pham"), va no du de moi ban nhap
+ * duoc nhan — dung hinh dang lo hong ma review doc lap goi ten. Tu G5, tu ngu cua loi nhan phai
+ * co trong nguon, nen fixture phai mo phong mot luot CO THAT: `tra_cuu_tai_lieu` tra ve mot bai
+ * da duyet, va agent tra loi tu chinh bai do.
+ */
+const STUB_SOURCES = ['Máy có đèn ngủ. Đèn khí quyển học dùng làm đèn trang trí buổi tối.'];
 
 class StubAdvisor extends AdvisorAgent {
   readonly name = 'stub';
@@ -137,10 +144,15 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
         usedTools: ['tra_cuu_tai_lieu'],
         handoff: false,
         authority: { grants: [] },
-        // Con so trong loi nhan phai truy nguyen duoc ve NGUON HE THONG (G2) — day chinh la bai
-        // FAQ da duyet ma `tra_cuu_tai_lieu` vua tra ve. Bo dong nay di thi loi nhan bi tu choi,
-        // va do la hanh vi DUNG: khong co tai lieu nao noi 12 thang thi khong duoc noi 12 thang.
-        sources: ['San pham duoc bao hanh 12 thang ke tu ngay mua.'],
+        // Con so trong loi nhan phai truy nguyen duoc ve NGUON HE THONG (G2), va tu ngu cung vay
+        // (G5) — day chinh la bai FAQ da duyet ma `tra_cuu_tai_lieu` vua tra ve. Bo dong nay di
+        // thi loi nhan bi tu choi, va do la hanh vi DUNG: khong tai lieu nao noi 12 thang thi
+        // khong duoc noi 12 thang.
+        //
+        // VIET CO DAU la mot phan cua fixture, khong phai trang tri: G5 doi chieu tu ngu theo
+        // dung cach viet (xem `outbound-envelope.ts`), va tai lieu duyet that cua khach deu la
+        // tieng Viet co dau. Mot nguon go khong dau la mot nguon KHONG co that.
+        sources: ['Sản phẩm được bảo hành 12 tháng kể từ ngày mua.'],
       }),
       'bao_hanh_khieu_nai',
     );
