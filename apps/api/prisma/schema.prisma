@@ -446,6 +446,9 @@ model FAQ {
   question       String
   answer         String
   status         ContentStatus     @default(draft)
+  /// #205: ban ghi nay co duoc KE LAI trong loi nhan khong.
+  /// NULL = chua ai tuyen bo = KHONG ke duoc. Vang mat la tu choi, khong bao gio la cho phep.
+  narrativeEligible Boolean?
   provenanceId   String?
   provenance     SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
   operatorEdited Boolean           @default(false)
@@ -464,6 +467,9 @@ model AdviceContent {
   title          String
   body           String
   status         ContentStatus     @default(draft)
+  /// #205: ban ghi nay co duoc KE LAI trong loi nhan khong.
+  /// NULL = chua ai tuyen bo = KHONG ke duoc. Vang mat la tu choi, khong bao gio la cho phep.
+  narrativeEligible Boolean?
   provenanceId   String?
   provenance     SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
   operatorEdited Boolean           @default(false)

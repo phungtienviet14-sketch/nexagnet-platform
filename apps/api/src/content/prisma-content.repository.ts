@@ -62,6 +62,7 @@ export class PrismaContentRepository extends ContentRepository {
         title: row.title,
         body: row.body,
         status: row.status,
+        ...(row.narrativeEligible === null ? {} : { narrativeEligible: row.narrativeEligible }),
         ...(row.provenanceId ? { provenanceKey: row.provenanceId } : {}),
         operatorEdited: row.operatorEdited,
       })),
@@ -183,6 +184,7 @@ export class PrismaContentRepository extends ContentRepository {
       question: value.question,
       answer: value.answer,
       status: value.status,
+      narrativeEligible: value.narrativeEligible ?? null,
       provenanceId: value.provenanceKey,
       operatorEdited: value.operatorEdited,
     };
@@ -200,6 +202,7 @@ export class PrismaContentRepository extends ContentRepository {
       title: value.title,
       body: value.body,
       status: value.status,
+      narrativeEligible: value.narrativeEligible ?? null,
       provenanceId: value.provenanceKey,
       operatorEdited: value.operatorEdited,
     };
@@ -250,6 +253,7 @@ function mapFaq(row: {
   question: string;
   answer: string;
   status: FaqView['status'];
+  narrativeEligible: boolean | null;
   provenanceId: string | null;
   operatorEdited: boolean;
 }): FaqView {
@@ -260,6 +264,14 @@ function mapFaq(row: {
     question: row.question,
     answer: row.answer,
     status: row.status,
+    /*
+     * NULL trong DB = truong VANG MAT tren view = `unclassified` o tang bang chung.
+     *
+     * Khong quy NULL ve `false`: hai gia tri do doi hai hanh dong khac nhau tu nguoi van hanh
+     * (mot cai la "chua ai xet", mot cai la "da xet va tu choi"), va bao cao mat mat nang luc
+     * phai dem duoc chung rieng ra. Ca hai deu KHONG ke duoc, nen an toan khong doi.
+     */
+    ...(row.narrativeEligible === null ? {} : { narrativeEligible: row.narrativeEligible }),
     ...(row.provenanceId ? { provenanceKey: row.provenanceId } : {}),
     operatorEdited: row.operatorEdited,
   };

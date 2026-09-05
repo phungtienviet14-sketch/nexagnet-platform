@@ -25,6 +25,7 @@ import {
   pricedFacts,
   pricedOrder,
   quoteFacts,
+  tellableAll,
 } from './__tests__/composition.fixture.js';
 
 /**
@@ -65,7 +66,7 @@ describe('bat bien kien truc', () => {
 
 describe('chang 1 — hai duong tat', () => {
   it('ban soan khong con gi de gui -> COMPOSITION_EMPTY, fail closed', () => {
-    const composition = compose(plan([], ''), undefined, { systemSources: [] });
+    const composition = compose(plan([], ''), undefined, { evidence: tellableAll([]) });
 
     expect(composition.mode).toBe('empty');
     expect(decideOutboundAuthority(composition, NO_GRANT)).toMatchObject({
@@ -211,13 +212,13 @@ describe('chang 3 — phong thu chieu sau tren van ban CUOI', () => {
     const composition = compose(
       plan(
         [],
-        'Dạ lưu lượng gió lên tới 9700 lít/phút. Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên ạ.',
+        'Dạ lưu lượng gió lên tới 9700 lít/phút. Màng lọc thay sau 2000 giờ chạy đầu tiên ạ.',
       ),
       undefined,
       {
-        systemSources: [
-          'Lưu lượng gió lên tới 9700 lít/phút. Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên.',
-        ],
+        evidence: tellableAll([
+          'Lưu lượng gió lên tới 9700 lít/phút. Màng lọc thay sau 2000 giờ chạy đầu tiên.',
+        ]),
       },
     );
 
@@ -233,10 +234,10 @@ describe('chang 3 — phong thu chieu sau tren van ban CUOI', () => {
    * bao hanh bi cat duoi la mot dieu kien bao hanh khac.
    */
   it('#200: cat duoi mot menh de bao hanh — du chi mot chu — khong con di qua duoc', () => {
-    const composition = compose(plan([], 'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày ạ.'), undefined, {
-      systemSources: [
-        'Lưu lượng gió lên tới 9700 lít/phút. Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên.',
-      ],
+    const composition = compose(plan([], 'Dạ màng lọc thay sau 2000 giờ chạy ạ.'), undefined, {
+      evidence: tellableAll([
+        'Lưu lượng gió lên tới 9700 lít/phút. Màng lọc thay sau 2000 giờ chạy đầu tiên.',
+      ]),
     });
 
     expect(composition.narrative).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });

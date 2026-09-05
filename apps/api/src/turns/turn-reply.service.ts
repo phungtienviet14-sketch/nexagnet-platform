@@ -11,6 +11,8 @@ import { legacyReplyChannel } from '../channels/legacy-reply-channel.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
 import { pinnedOutboundVerdict } from '../outbound/outbound-authority.js';
+import { EvidenceRegistry } from '../outbound/evidence-registry.port.js';
+import { parsePinnedEvidence, stalePins } from '../outbound/source-evidence.js';
 import { OUTBOUND_DECISIONS } from '../outbound/outbound-decisions.js';
 import { TurnRecordsRepository } from './turn-records.repository.js';
 
@@ -32,6 +34,11 @@ export class TurnReplyService {
     @Optional() private readonly events?: AgentEventsService,
     /** Vang mat -> khong quan sat; cong tham quyen ben duoi van chan y het (bat bien muc 20). */
     @Optional() private readonly telemetry?: TelemetryService,
+    /**
+     * SO GHI BANG CHUNG (Issue #205). Vang mat khi khach khong co `knowledge` — va khi do
+     * `tra_cuu_tai_lieu` cung khong chay duoc, nen khong ghim tai lieu nao ton tai de kiem.
+     */
+    @Optional() private readonly evidence?: EvidenceRegistry,
   ) {}
 
   /**
@@ -87,6 +94,35 @@ export class TurnReplyService {
         ? { claims: verdict.claims.join(',') }
         : { missing: verdict.missing.join(',') },
     });
+    /*
+     * BAN GHI NGUON CON HIEU LUC KHONG? (Issue #205, muc 8 ca 10)
+     *
+     * `pinnedOutboundVerdict` doi chieu ban soan voi CHINH NO: dau van ban, dau ban soan. No
+     * khong nhin thay mot thay doi NGOAI ban soan — ban ghi nguon bi sua, bi go `active`, hay bi
+     * rut quyen ke lai trong luc ban nhap nam cho Sale. Ba thay doi do deu co nghia la cau nay
+     * khong con duoc phep noi, va bo qua chung la tu cap phep lai.
+     */
+    const composition = view.trace?.outboundComposition;
+    const stale = composition
+      ? stalePins(
+          parsePinnedEvidence(composition.grounded),
+          this.evidence?.narrativeEvidenceIndex() ?? new Map(),
+        )
+      : [];
+    if (verdict.sendable && stale.length) {
+      this.telemetry?.decision({
+        vocabulary: OUTBOUND_DECISIONS,
+        point: 'outbound.send_guard',
+        outcome: 'denied',
+        reason: 'COMPOSITION_EVIDENCE_STALE',
+        // SO va MA nguon, khong noi dung: du de lan vet ban ghi nao da doi.
+        detail: { sources: stale.map((pin) => pin.sourceId).join(',') },
+      });
+      throw new UnprocessableEntityException(
+        `Nguồn của nội dung này đã đổi hoặc không còn được phép kể lại (COMPOSITION_EVIDENCE_STALE). ` +
+          'Sale cần soạn lại trên nguồn hiện hành trước khi gửi.',
+      );
+    }
     if (!verdict.sendable) {
       throw new UnprocessableEntityException(
         `Nội dung này chưa đủ thẩm quyền để gửi cho khách (${verdict.reason}). ` +
