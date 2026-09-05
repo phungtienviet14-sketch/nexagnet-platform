@@ -8,49 +8,99 @@ import {
   parseSecretInventory,
   remoteSecretInventoryCommand,
 } from './gd1-test-secret-inventory.mjs';
+import {
+  preflightExpectationsFor,
+  requiredSecretSuffixesFor,
+  resolveDeploymentProfile,
+} from './deployment-profiles.mjs';
 
 const execFileAsync = promisify(execFile);
 
 /**
- * Be mat khach cua Ultty tren stack GD1-test.
+ * MOT CONG, HAI NUA — VA CHI MOT NUA LA CUA ULTTY.
  *
- * Doi tu `operations-console` sang `b2b-sales-operations` ngay U-UI0 (Issue #107 §9.1). Cong nay
- * van khoa DUNG MOT gia tri chu khong noi thanh "experience nao cung duoc": deploy nham mot be mat
- * khac cho khach dang chay that la mot su co nhin thay ngay tren man hinh cua ho.
+ * Truoc ban nay tep nay la mot cong gd1-test DUY NHAT, va no hoi nhung cau chi Ultty tra loi
+ * duoc: tenant phai la `ultty`, experience phai la `b2b-sales-operations`, phai co tep phien ZCA,
+ * phai co dung hai nhom TEST duoc duyet, provider phai dat smoke. Voi mot stack khong chay kenh
+ * nao va khong chay LLM nao, bon cau cuoi KHONG CO CAU TRA LOI — va mot phep kiem that bai vi
+ * khong the tra loi thi doc len giong het mot vi pham an toan. Do la nua thu hai cua ly do
+ * `gd1-test` chua bao gio la mot moi truong (nua thu nhat la `render-secrets.sh`).
+ *
+ * `gateSpecFor(profile)` tach hai nua ra:
+ *   · NUA CHUNG     — danh tinh stack, main + CI tren dung SHA, kiem ke bi mat SUY TU ho so,
+ *                     digest rollback, hop dong runtime. Chay cho MOI ho so, khong ngoai le.
+ *   · NUA NGHIEP VU — experience + bo nang luc. CHI ton tai khi ho so khai `business`.
+ * Ultty khai `business`, nen no giu nguyen tung phep kiem cu.
+ *
+ * Cai gi HOI DUOC thi duoc suy ra tu he thong con (`preflightExpectationsFor`): khong chay ZCA thi
+ * khong co phien de stat va khong co danh sach nhom de bam; khong chay parser thi khong co
+ * provider de smoke; khong chay Flowise thi khong co image Flowise de quay ve.
  */
-const EXPECTED_EXPERIENCE = 'b2b-sales-operations';
-const REQUIRED_CAPABILITIES = [
-  'knowledge',
-  'messaging',
-  'sales-order',
-  'campaign',
-  'operations',
-  'notifications',
-];
-const REQUIRED_SECRET_SUFFIXES = [
-  'postgres-admin-password',
-  'zalo-db-password',
-  'flowise-db-password',
-  'deepseek-api-key',
-  'api-key',
-  'operator-password',
-  'flowise-secretkey',
-  'flowise-admin-email',
-  'flowise-admin-password',
-  'flowise-jwt-secret',
-  'flowise-refresh-secret',
-  'flowise-session-secret',
-  'flowise-token-hash-secret',
-];
-const REQUIRED_RUNTIME = Object.freeze({
-  persistence: 'prisma',
-  channel: 'zca',
-  parser: 'deepseek',
-  mediaStore: 'gcs',
-  auth: 'session',
-  autoSend: 'off',
-  dataClassification: 'test',
-});
+const DEFAULT_PROFILE_ID = 'ultty-gd1-test';
+
+/**
+ * Phan runtime KHONG thuoc ve ho so nao ca — moi stack cua nen tang deu chay Prisma va deu dung
+ * dang nhap session. De chung o day thay vi nhet vao tung ho so: mot hang so nen tang bi chep vao
+ * N ho so la N cho de lech.
+ */
+const PLATFORM_RUNTIME = Object.freeze({ persistence: 'prisma', auth: 'session' });
+const REQUIRED_APPROVED_TEST_GROUP_COUNT = 2;
+
+/**
+ * Cac module preflight tep nay THUC SU hien thuc. Mot ho so tro toi mot ten khac la mot ho so tin
+ * rang co ai do dang kiem giup no — va khong ai ca. Fail-closed o day, truoc moi phep do.
+ *
+ * `gd1-test-preflight` = nua chung + nua nghiep vu (ho so PHAI khai `business`).
+ * `gd1-test-baseline`  = chi nua chung (ho so PHAI KHONG khai `business`; neu khai, no dang mo ta
+ *                        mot ky vong nghiep vu ma khong ai doc toi).
+ */
+const IMPLEMENTED_PREFLIGHT_MODULES = Object.freeze(['gd1-test-preflight', 'gd1-test-baseline']);
+
+export function gateSpecFor(profileId) {
+  const profile = resolveDeploymentProfile(profileId ?? DEFAULT_PROFILE_ID);
+  const expectations = preflightExpectationsFor(profile);
+  const runtime = expectations.runtime;
+  if (!runtime) {
+    throw new Error(`profile ${profile.id} has no runtime contract; it cannot serve a gated gate`);
+  }
+  if (!IMPLEMENTED_PREFLIGHT_MODULES.includes(expectations.module)) {
+    throw new Error(
+      `profile ${profile.id} names preflight module ${JSON.stringify(expectations.module)}, which this gate does not implement`,
+    );
+  }
+  if ((expectations.module === 'gd1-test-preflight') !== (expectations.business !== null)) {
+    throw new Error(
+      `profile ${profile.id}: module ${expectations.module} and business expectations disagree`,
+    );
+  }
+  return Object.freeze({
+    profileId: profile.id,
+    module: expectations.module,
+    tenants: profile.tenants,
+    // DERIVED, NOT LISTED. The set this gate demands is exactly the set the profile enables —
+    // Ultty still lands on the same 13 (base + Flowise + DeepSeek). Keeping a second hand-written
+    // copy here is how the deploy-time contract and the render-time contract drift apart without
+    // either side going red.
+    secretSuffixes: requiredSecretSuffixesFor(profile),
+    requiredRuntime: Object.freeze({
+      persistence: PLATFORM_RUNTIME.persistence,
+      channel: runtime.channelMode,
+      parser: runtime.parserMode,
+      mediaStore: runtime.mediaStore,
+      auth: PLATFORM_RUNTIME.auth,
+      autoSend: runtime.autoSend,
+      dataClassification: runtime.dataClassification,
+    }),
+    business: expectations.business,
+    requiresZcaSession: expectations.requiresZcaSession,
+    requiresApprovedTestGroups: expectations.requiresApprovedTestGroups,
+    requiresProviderSmoke: expectations.requiresProviderSmoke,
+    requiresFlowiseRollbackDigest: expectations.requiresFlowiseRollbackDigest,
+    approvedTestGroupCount: expectations.requiresApprovedTestGroups
+      ? REQUIRED_APPROVED_TEST_GROUP_COUNT
+      : 0,
+  });
+}
 const DIGEST_PATTERN = /@sha256:[a-f0-9]{64}$/;
 const SHA_PATTERN = /^[a-f0-9]{40}$/;
 const GROUP_HASH_PATTERN = /^[a-f0-9]{64}$/;
@@ -62,7 +112,6 @@ const DEFAULT_GCP_PROJECT_ID = 'netviet-host-968934832433';
 const DEFAULT_GCP_REGION = 'asia-southeast1';
 const DEFAULT_GCP_ZONE = 'asia-southeast1-b';
 const DEFAULT_VM_NAME = 'netviet';
-const REQUIRED_APPROVED_TEST_GROUP_COUNT = 2;
 
 export function hashZaloGroupId(groupId) {
   if (!isNonEmptyString(groupId)) throw new Error('Zalo group id is required');
@@ -196,11 +245,13 @@ function remoteRuntimeCommand(appDir) {
     `for (const key of ${JSON.stringify(keys)})`,
     'console.log(key + "=" + process.env[key])',
   ].join(' ');
-  return remoteSudoCommand([
-    'set -euo pipefail',
-    `cd '${appDir}'`,
-    `docker compose --env-file .runtime/secrets.env -f compose.yaml exec -T api node --input-type=module -e '${program}'`,
-  ].join('; '));
+  return remoteSudoCommand(
+    [
+      'set -euo pipefail',
+      `cd '${appDir}'`,
+      `docker compose --env-file .runtime/secrets.env -f compose.yaml exec -T api node --input-type=module -e '${program}'`,
+    ].join('; '),
+  );
 }
 
 export function remoteProviderSmokeCommand(appDir, hostname) {
@@ -224,38 +275,40 @@ function remoteAllowedGroupsHashCommand(appDir) {
   // python3, khong phai node: VM host KHONG cai node (da xac minh 20/08/2026) — node chi co ben
   // trong container. Mot probe goi `node` tren host luon that bai va bi doc nham thanh "khong doc
   // duoc", tuc la preflight bao dong gia dung vao dung cho no phai chinh xac nhat.
-  return remoteSudoCommand([
-    'set -euo pipefail',
-    `python3 - <<'PY'`,
-    'import hashlib, json, sys',
-    `path = '${appDir}/.runtime/zalo/zalo-allowed-groups.json'`,
-    'try:',
-    "    groups = json.load(open(path, encoding='utf-8'))",
-    'except FileNotFoundError:',
-    '    sys.exit(65)',
-    'if not isinstance(groups, list):',
-    '    sys.exit(66)',
-    'for group in groups:',
-    '    if not isinstance(group, str) or not group.strip():',
-    '        sys.exit(67)',
-    "    print(hashlib.sha256(group.strip().encode('utf-8')).hexdigest())",
-    'PY',
-  ].join('\n'));
-}
-
-function remoteZcaSessionCommand(appDir) {
   return remoteSudoCommand(
-    `stat -c '%F|%a|%s' '${appDir}/.runtime/zalo/zalo-cred.json'`,
+    [
+      'set -euo pipefail',
+      `python3 - <<'PY'`,
+      'import hashlib, json, sys',
+      `path = '${appDir}/.runtime/zalo/zalo-allowed-groups.json'`,
+      'try:',
+      "    groups = json.load(open(path, encoding='utf-8'))",
+      'except FileNotFoundError:',
+      '    sys.exit(65)',
+      'if not isinstance(groups, list):',
+      '    sys.exit(66)',
+      'for group in groups:',
+      '    if not isinstance(group, str) or not group.strip():',
+      '        sys.exit(67)',
+      "    print(hashlib.sha256(group.strip().encode('utf-8')).hexdigest())",
+      'PY',
+    ].join('\n'),
   );
 }
 
+function remoteZcaSessionCommand(appDir) {
+  return remoteSudoCommand(`stat -c '%F|%a|%s' '${appDir}/.runtime/zalo/zalo-cred.json'`);
+}
+
 function remoteRuntimeValueCommand(appDir, key) {
-  return remoteSudoCommand([
-    'set -euo pipefail',
-    `cd '${appDir}'`,
-    'runtime_value() { sed -n "s/^$1=//p" .runtime/secrets.env | tail -n 1; }',
-    `runtime_value ${key}`,
-  ].join('; '));
+  return remoteSudoCommand(
+    [
+      'set -euo pipefail',
+      `cd '${appDir}'`,
+      'runtime_value() { sed -n "s/^$1=//p" .runtime/secrets.env | tail -n 1; }',
+      `runtime_value ${key}`,
+    ].join('; '),
+  );
 }
 
 /**
@@ -350,15 +403,12 @@ async function safeRun(run, program, args) {
  *   - a secret the VM may not read          -> access fails -> blocked
  * Every blocking case is still caught; only the redundant privileged call is gone.
  */
-async function collectSecretMetadata({ env, run, stackSlug }) {
+async function collectSecretMetadata({ env, run, stackSlug, spec }) {
   const projectId = env.GCP_PROJECT_ID ?? DEFAULT_GCP_PROJECT_ID;
-  const names = REQUIRED_SECRET_SUFFIXES.map((suffix) => `zalo-${stackSlug}-${suffix}`);
+  const names = spec.secretSuffixes.map((suffix) => `zalo-${stackSlug}-${suffix}`);
   let stdout;
   try {
-    stdout = await run(
-      'gcloud',
-      sshArgs(env, remoteSecretInventoryCommand(projectId, names)),
-    );
+    stdout = await run('gcloud', sshArgs(env, remoteSecretInventoryCommand(projectId, names)));
   } catch {
     throw new Error('required secret inventory probe transport failed');
   }
@@ -383,18 +433,29 @@ async function collectSecretMetadata({ env, run, stackSlug }) {
   });
 }
 
-function staticCollectionErrors(env, approvedAllowedGroups) {
+function staticCollectionErrors(env, approvedAllowedGroups, spec) {
   const errors = [];
-  if ((env.TENANT ?? 'ultty') !== 'ultty') errors.push('TENANT must be ultty');
+  // TENANT PHAI NAM TRONG DANH SACH CUA HO SO — thay cho `TENANT must be ultty`. Cung suc chan
+  // voi Ultty (`tenants: ['ultty']`), chi khac la cai neo la MOT HO SO CO TEN chu khong phai mot
+  // ten khach viet cung trong mot phep so sanh chuoi.
+  const requestedTenant = env.TENANT ?? spec.tenants?.[0] ?? 'ultty';
+  if (spec.tenants !== null && !spec.tenants.includes(requestedTenant)) {
+    errors.push(`TENANT ${requestedTenant} is not served by profile ${spec.profileId}`);
+  }
   if (env.ENVIRONMENT !== 'gd1-test') errors.push('ENVIRONMENT must be gd1-test');
   if (env.GD1_TEST_TARGET_CONFIRMED !== '1' && env.GD1_TEST_TARGET_CONFIRMED !== 'true') {
     errors.push('GD1_TEST_TARGET_CONFIRMED must be 1 before preflight probes run');
   }
-  if (approvedAllowedGroups.length !== REQUIRED_APPROVED_TEST_GROUP_COUNT) {
-    errors.push('GD1_TEST_APPROVED_GROUP_HASHES must contain exactly two approved TEST group hashes');
+  if (approvedAllowedGroups.length !== spec.approvedTestGroupCount) {
+    errors.push(
+      spec.approvedTestGroupCount === 0
+        ? `profile ${spec.profileId} runs no chat channel; GD1_TEST_APPROVED_GROUP_HASHES must be empty`
+        : 'GD1_TEST_APPROVED_GROUP_HASHES must contain exactly two approved TEST group hashes',
+    );
   }
   for (const hash of approvedAllowedGroups) {
-    if (!GROUP_HASH_PATTERN.test(hash)) errors.push('approved TEST group hashes must be sha256 hex');
+    if (!GROUP_HASH_PATTERN.test(hash))
+      errors.push('approved TEST group hashes must be sha256 hex');
   }
   for (const [name, value] of [
     ['GCP_PROJECT_ID', env.GCP_PROJECT_ID ?? DEFAULT_GCP_PROJECT_ID],
@@ -415,17 +476,29 @@ function staticCollectionErrors(env, approvedAllowedGroups) {
  * wrong plan is rejected before build, and the real values are then observed by the post-deploy
  * verifier. Nothing is ever reported as verified on the strength of this object alone.
  */
-const PLANNED_GD1_TEST_RUNTIME = Object.freeze({ ...REQUIRED_RUNTIME });
+function plannedRuntimeFor(spec) {
+  return { ...spec.requiredRuntime };
+}
 
 export async function collectGd1TestPreflight(options = {}) {
   const env = options.env ?? process.env;
   const run = options.run ?? createDefaultRun();
-  const tenantPath = options.tenantPath ?? new URL('../../tenants/ultty/tenant.json', import.meta.url);
+  // HO SO CHON CONG, KHONG PHAI MOI TRUONG. Mac dinh `ultty-gd1-test` giu nguyen moi duong goi cu
+  // (bo test hien co, `deploy.ps1`) — them mot ho so khong doi hanh vi cua ho so nao dang chay.
+  const spec = gateSpecFor(options.profileId ?? env.DEPLOYMENT_PROFILE ?? DEFAULT_PROFILE_ID);
+  const tenantSlug = env.TENANT ?? spec.tenants?.[0] ?? 'ultty';
+  const tenantPath =
+    options.tenantPath ?? new URL(`../../tenants/${tenantSlug}/tenant.json`, import.meta.url);
   const approvedAllowedGroups = parseGroupHashes(env.GD1_TEST_APPROVED_GROUP_HASHES);
 
-  const staticErrors = staticCollectionErrors(env, approvedAllowedGroups);
+  const staticErrors = staticCollectionErrors(env, approvedAllowedGroups, spec);
   if (staticErrors.length > 0) {
-    return Object.freeze({ ok: false, errors: Object.freeze(staticErrors), input: undefined, plan: undefined });
+    return Object.freeze({
+      ok: false,
+      errors: Object.freeze(staticErrors),
+      input: undefined,
+      plan: undefined,
+    });
   }
 
   try {
@@ -475,18 +548,25 @@ export async function collectGd1TestPreflight(options = {}) {
     const firstRelease = stackState === 'absent';
 
     const runtime = firstRelease
-      ? { ...PLANNED_GD1_TEST_RUNTIME }
+      ? plannedRuntimeFor(spec)
       : parseRuntimeEnv(await run('gcloud', sshArgs(env, remoteRuntimeCommand(identity.appDir))));
-    const observedAllowedGroups = firstRelease
-      ? []
-      : parseGroupHashes(
-          await run('gcloud', sshArgs(env, remoteAllowedGroupsHashCommand(identity.appDir))),
-        );
-    const zcaSession = firstRelease
-      ? { deferred: true }
-      : parseZcaSession(
-          await run('gcloud', sshArgs(env, remoteZcaSessionCommand(identity.appDir))),
-        );
+    // KHONG HOI CAU KHONG AI TRA LOI DUOC. Ho so khong chay ZCA thi khong co tep phien de stat va
+    // khong co danh sach nhom de bam — thu duy nhat mot phep do o day sinh ra la mot loi truyen
+    // tai, va no doc len y het mot vi pham an toan. `notApplicable` la cau tra loi trung thuc, va
+    // `credentialErrors` phan biet duoc no voi "chua kip do".
+    const observedAllowedGroups =
+      firstRelease || !spec.requiresApprovedTestGroups
+        ? []
+        : parseGroupHashes(
+            await run('gcloud', sshArgs(env, remoteAllowedGroupsHashCommand(identity.appDir))),
+          );
+    const zcaSession = !spec.requiresZcaSession
+      ? { notApplicable: true }
+      : firstRelease
+        ? { deferred: true }
+        : parseZcaSession(
+            await run('gcloud', sshArgs(env, remoteZcaSessionCommand(identity.appDir))),
+          );
     const appImage = firstRelease
       ? ''
       : (
@@ -503,18 +583,27 @@ export async function collectGd1TestPreflight(options = {}) {
     const credentials = {
       firstRelease,
       zcaSession,
-      requiredSecrets: await collectSecretMetadata({ env, run, stackSlug: identity.stackSlug }),
+      requiredSecrets: await collectSecretMetadata({
+        env,
+        run,
+        stackSlug: identity.stackSlug,
+        spec,
+      }),
     };
-    const providerSmoke = firstRelease
-      ? { ok: false, deferred: true }
-      : await safeRun(
-          run,
-          'gcloud',
-          sshArgs(env, remoteProviderSmokeCommand(identity.appDir, identity.operatorDomain)),
-        );
+    const providerSmoke =
+      firstRelease || !spec.requiresProviderSmoke
+        ? { ok: false, deferred: true }
+        : await safeRun(
+            run,
+            'gcloud',
+            sshArgs(env, remoteProviderSmokeCommand(identity.appDir, identity.operatorDomain)),
+          );
     const providerSmokeOutcome = evaluateProviderSmoke(providerSmoke);
     const providerProof = {
       firstRelease,
+      // Ho so khong chay parser nao thi khong co "provider" de chung minh. Danh dau thang thay vi
+      // bao PASS cho mot thu khong ton tai — mot dau tick xanh re tien la thu §8.1 cam.
+      notApplicable: !spec.requiresProviderSmoke,
       adapter: runtime.parser,
       credentialReady: credentials.requiredSecrets.some(
         (secret) =>
@@ -545,9 +634,14 @@ export async function collectGd1TestPreflight(options = {}) {
     // thay su that. Xem `reference-platform-stack.md` §7.2.
     const input = {
       tenant,
+      // BANG CHUNG PHAI MANG THEO CONG DA DO NO. `validateGd1TestPreflight` con duoc goi lai tren
+      // mot TEP bang chung (duong `run-gd1-test-preflight.mjs <file>`); tep khong noi duoc no
+      // thuoc ho so nao thi lan kiem lai se ap cong cua Ultty len bang chung cua stack khac.
+      profile: spec.profileId,
       deployment: {
         environment: env.ENVIRONMENT,
-        targetConfirmed: env.GD1_TEST_TARGET_CONFIRMED === '1' || env.GD1_TEST_TARGET_CONFIRMED === 'true',
+        targetConfirmed:
+          env.GD1_TEST_TARGET_CONFIRMED === '1' || env.GD1_TEST_TARGET_CONFIRMED === 'true',
         stack: identity.stackSlug,
         firstRelease,
         target: {
@@ -613,7 +707,10 @@ function targetErrors(target) {
       errors.push(`deployment ${field} contains unsafe characters`);
     }
   }
-  if (isNonEmptyString(target?.appDir) && !/^\/srv\/netviet\/apps\/[a-z0-9-]+$/.test(target.appDir)) {
+  if (
+    isNonEmptyString(target?.appDir) &&
+    !/^\/srv\/netviet\/apps\/[a-z0-9-]+$/.test(target.appDir)
+  ) {
     errors.push('deployment appDir must be an absolute tenant app path');
   }
   if (isNonEmptyString(target?.hostname) && !/^[a-z0-9.-]+$/.test(target.hostname)) {
@@ -625,35 +722,51 @@ function targetErrors(target) {
   return errors;
 }
 
-function tenantErrors(tenant, runtime) {
+function tenantErrors(tenant, runtime, spec) {
   const errors = [];
   if (tenant?.schemaVersion !== 2) errors.push('tenant schemaVersion must be 2');
-  if (tenant?.slug !== 'ultty') errors.push('tenant slug must be ultty for this deployment gate');
-  if (tenant?.experience !== EXPECTED_EXPERIENCE) {
-    errors.push(`tenant experience must be ${EXPECTED_EXPERIENCE} for Ultty GD1-test`);
+  // NUA CHUNG: goi khach duoc mount phai la goi cua mot tenant MA HO SO PHUC VU. Voi Ultty
+  // (`tenants: ['ultty']`) day la dung phep kiem cu, chi khac nguon cua danh sach.
+  if (spec.tenants !== null && !spec.tenants.includes(tenant?.slug)) {
+    errors.push(`tenant slug ${tenant?.slug} is not served by profile ${spec.profileId}`);
   }
 
-  const capabilities = new Set(Array.isArray(tenant?.capabilities) ? tenant.capabilities : []);
-  for (const capability of REQUIRED_CAPABILITIES) {
-    if (!capabilities.has(capability)) {
-      errors.push(`tenant capability ${capability} is required for Ultty GD1-test`);
+  // NUA NGHIEP VU: chi ton tai khi ho so khai `business`. Mot ho so xem truoc cua NEN TANG khong
+  // co "experience dung" hay "bo nang luc bat buoc" — bia ra mot bo la bia ra nghiep vu cua khach
+  // (#180 §12), va bo qua trong im lang la mot dau tick xanh khong kiem gi.
+  if (spec.business !== null) {
+    if (tenant?.experience !== spec.business.experience) {
+      errors.push(`tenant experience must be ${spec.business.experience} for ${spec.profileId}`);
+    }
+    const capabilities = new Set(Array.isArray(tenant?.capabilities) ? tenant.capabilities : []);
+    for (const capability of spec.business.requiredCapabilities) {
+      if (!capabilities.has(capability)) {
+        errors.push(`tenant capability ${capability} is required for ${spec.profileId}`);
+      }
     }
   }
 
-  const channelAllowlist = tenant?.integrations?.channel?.allowedAdapters;
-  if (!Array.isArray(channelAllowlist) || !channelAllowlist.includes(runtime?.channel)) {
-    errors.push('selected channel is not allowed by the tenant pack');
+  // GOI KHACH PHAI CHO PHEP CAI DANG CHAY — nhung chi khi ho so THAT SU chay no. Mot goi khong co
+  // `sales-order`/`messaging` khong khai `integrations`, va doi no khai la doi mot dieu no cot y
+  // khong co (`integrations: {}` la mot khang dinh, khong phai mot thieu sot).
+  if (spec.requiresApprovedTestGroups) {
+    const channelAllowlist = tenant?.integrations?.channel?.allowedAdapters;
+    if (!Array.isArray(channelAllowlist) || !channelAllowlist.includes(runtime?.channel)) {
+      errors.push('selected channel is not allowed by the tenant pack');
+    }
   }
-  const parserAllowlist = tenant?.integrations?.parser?.allowedAdapters;
-  if (!Array.isArray(parserAllowlist) || !parserAllowlist.includes(runtime?.parser)) {
-    errors.push('selected parser is not allowed by the tenant pack');
+  if (spec.requiresProviderSmoke) {
+    const parserAllowlist = tenant?.integrations?.parser?.allowedAdapters;
+    if (!Array.isArray(parserAllowlist) || !parserAllowlist.includes(runtime?.parser)) {
+      errors.push('selected parser is not allowed by the tenant pack');
+    }
   }
   return errors;
 }
 
-function runtimeErrors(runtime) {
+function runtimeErrors(runtime, spec) {
   const errors = [];
-  for (const [field, expected] of Object.entries(REQUIRED_RUNTIME)) {
+  for (const [field, expected] of Object.entries(spec.requiredRuntime)) {
     if (runtime?.[field] !== expected) {
       errors.push(`runtime ${field} must be ${expected}`);
     }
@@ -661,7 +774,17 @@ function runtimeErrors(runtime) {
   return errors;
 }
 
-function providerErrors(providerProof, runtime) {
+function providerErrors(providerProof, runtime, spec) {
+  // HO SO KHONG CHAY PARSER NAO -> KHONG CO PROVIDER DE CHUNG MINH.
+  //
+  // Doi `credentialReady` o day se doi mot khoa LLM cho mot stack co hop dong bi mat KHONG chua
+  // khoa nao — tuc buoc nguoi ta bia ra mot credential de thoa man mot cong khong ap dung (#192
+  // §4 cam dung dieu do). Mot dong bang chung noi thang la KHONG AP DUNG.
+  if (spec.requiresProviderSmoke !== true) {
+    return providerProof?.notApplicable === true
+      ? []
+      : ['provider proof must declare notApplicable when the profile runs no parser'];
+  }
   // Smoke provider chay BEN TRONG stack, nen o lan deploy dau khong co gi de chay no. Credential
   // van bat buoc phai san sang ngay bay gio; con lan goi that duoc chung minh o buoc verify sau
   // deploy, va khong duoc phep ghi la "da chung minh" truoc do.
@@ -703,14 +826,20 @@ function providerErrorsForLiveStack(providerProof, runtime) {
   return errors;
 }
 
-function credentialErrors(credentials, secretPrefix) {
+function credentialErrors(credentials, secretPrefix, spec) {
   const errors = [];
   const zcaSession = credentials?.zcaSession;
   // Phien zca duoc tao bang cach QUET QR tren trang operator cua chinh stack do, tuc la sau khi
   // stack ton tai. O lan deploy dau chua the co phien — day KHONG phai mock: adapter zca that van
   // duoc nap, chi la chua dang nhap. Bang chung phien `ready` thuoc ve buoc verify sau deploy va
   // la dieu kien bat buoc TRUOC khi chay E2E, khong phai truoc khi dung stack len.
-  if (credentials?.firstRelease !== true) {
+  if (spec.requiresZcaSession !== true) {
+    // Ho so khong chay ZCA: khong co phien nao phai ton tai. Van doi bang chung NOI RA dieu do —
+    // mot truong vang mat doc len giong "chua kip do", va hai thu do khong duoc lan nhau.
+    if (zcaSession?.notApplicable !== true) {
+      errors.push('ZCA session evidence must declare notApplicable when the profile runs no ZCA');
+    }
+  } else if (credentials?.firstRelease !== true) {
     if (
       zcaSession?.exists !== true ||
       zcaSession?.regularFile !== true ||
@@ -726,10 +855,10 @@ function credentialErrors(credentials, secretPrefix) {
     return errors;
   }
 
-  const expectedNames = REQUIRED_SECRET_SUFFIXES.map((suffix) => `${secretPrefix}${suffix}`);
+  const expectedNames = spec.secretSuffixes.map((suffix) => `${secretPrefix}${suffix}`);
   const receivedNames = credentials.requiredSecrets.map((secret) => secret?.name);
   if (!exactStringSet(expectedNames, receivedNames)) {
-    errors.push('required secret inventory does not exactly match the Ultty GD1-test contract');
+    errors.push(`required secret inventory does not exactly match the ${spec.profileId} contract`);
   }
 
   for (const [index, secret] of credentials.requiredSecrets.entries()) {
@@ -751,7 +880,7 @@ function credentialErrors(credentials, secretPrefix) {
   return errors;
 }
 
-function releaseErrors(deployment) {
+function releaseErrors(deployment, spec) {
   const errors = [];
   if (deployment?.environment !== 'gd1-test') {
     errors.push('deployment environment must be gd1-test');
@@ -780,8 +909,13 @@ function releaseErrors(deployment) {
     if (!DIGEST_PATTERN.test(deployment?.rollback?.appImage ?? '')) {
       errors.push('app rollback image must be pinned by digest');
     }
-    if (!DIGEST_PATTERN.test(deployment?.rollback?.flowiseImage ?? '')) {
-      errors.push('Flowise rollback image must be pinned by digest');
+    // Ho so khong chay Flowise thi khong co container Flowise nao de quay ve. Doi mot digest o
+    // day chi de lai hai lua chon, ca hai deu te: ghim mot image khong bao gio chay, hoac khong
+    // bao gio deploy lai duoc — cung hinh dang bay voi `firstRelease` ngay tren.
+    if (spec.requiresFlowiseRollbackDigest) {
+      if (!DIGEST_PATTERN.test(deployment?.rollback?.flowiseImage ?? '')) {
+        errors.push('Flowise rollback image must be pinned by digest');
+      }
     }
   }
   return errors;
@@ -816,29 +950,46 @@ function createPlan(tenant, deployment) {
   });
 }
 
-export function validateGd1TestPreflight(input) {
+export function validateGd1TestPreflight(input, options = {}) {
   const tenant = input?.tenant;
   const deployment = input?.deployment;
+  // BANG CHUNG NOI NO THUOC HO SO NAO. Thieu thi roi ve `ultty-gd1-test` — huong SIET, vi do la
+  // ho so co nhieu doi hoi nhat; mot tep bang chung khong khai ho so khong the tu no lam nhe cong.
+  let spec;
+  try {
+    spec = gateSpecFor(options.profileId ?? input?.profile ?? DEFAULT_PROFILE_ID);
+  } catch (error) {
+    return Object.freeze({
+      ok: false,
+      errors: Object.freeze([error instanceof Error ? error.message : String(error)]),
+      plan: undefined,
+    });
+  }
   const errors = [
-    ...releaseErrors(deployment),
+    ...releaseErrors(deployment, spec),
     ...targetErrors(deployment?.target),
-    ...runtimeErrors(deployment?.runtime),
-    ...tenantErrors(tenant, deployment?.runtime),
-    ...providerErrors(deployment?.providerProof, deployment?.runtime),
-    ...credentialErrors(deployment?.credentials, deployment?.target?.secretPrefix),
+    ...runtimeErrors(deployment?.runtime, spec),
+    ...tenantErrors(tenant, deployment?.runtime, spec),
+    ...providerErrors(deployment?.providerProof, deployment?.runtime, spec),
+    ...credentialErrors(deployment?.credentials, deployment?.target?.secretPrefix, spec),
   ];
 
   // Allowlist cua mot stack moi duoc GIEO luc deploy, nen chua co gi de doi chieu o lan dau. Bo
   // duoc PHE DUYET thi van bat buoc dung hai ID (kiem ngay duoi), va buoc verify sau deploy phai
   // doi chieu allowlist that voi dung bo do truoc khi bat ky tin nao duoc xu ly.
   if (
+    spec.requiresApprovedTestGroups &&
     deployment?.firstRelease !== true &&
     !exactStringSet(deployment?.approvedAllowedGroups, deployment?.observedAllowedGroups)
   ) {
     errors.push('observed Zalo allowed groups do not exactly match the approved TEST group set');
   }
-  if (deployment?.approvedAllowedGroups?.length !== REQUIRED_APPROVED_TEST_GROUP_COUNT) {
-    errors.push('Ultty GD1-test requires exactly two approved TEST groups');
+  if (deployment?.approvedAllowedGroups?.length !== spec.approvedTestGroupCount) {
+    errors.push(
+      spec.approvedTestGroupCount === 0
+        ? `profile ${spec.profileId} runs no chat channel and must approve no Zalo groups`
+        : `${spec.profileId} requires exactly ${spec.approvedTestGroupCount} approved TEST groups`,
+    );
   }
 
   const canCreatePlan =

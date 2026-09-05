@@ -17,7 +17,7 @@
       "githubEnvironment": "dev",
       "runtimeEnvironment": "dev",
       "target": "current-shared-vm",
-      "preflight": "standard"
+      "profile": "standard"
     },
     {
       "tenant": "ultty",
@@ -26,7 +26,7 @@
       "githubEnvironment": "gd1-test",
       "runtimeEnvironment": "gd1-test",
       "target": "current-shared-vm",
-      "preflight": "gd1-test"
+      "profile": "ultty-gd1-test"
     },
     {
       "tenant": "ultty",
@@ -35,7 +35,16 @@
       "githubEnvironment": "production",
       "runtimeEnvironment": "prod",
       "target": "current-shared-vm",
-      "preflight": "standard"
+      "profile": "standard"
+    },
+    {
+      "tenant": "transport-preview",
+      "environment": "gd1-test",
+      "stackSlug": "transport-preview-gd1-test",
+      "githubEnvironment": "gd1-test",
+      "runtimeEnvironment": "gd1-test",
+      "target": "current-shared-vm",
+      "profile": "transport-preview-gd1-test"
     },
     {
       "tenant": "amico",
@@ -44,7 +53,7 @@
       "githubEnvironment": "dev",
       "runtimeEnvironment": "dev",
       "target": "current-shared-vm",
-      "preflight": "standard"
+      "profile": "standard"
     },
     {
       "tenant": "amico",
@@ -53,7 +62,7 @@
       "githubEnvironment": "production",
       "runtimeEnvironment": "prod",
       "target": "current-shared-vm",
-      "preflight": "standard"
+      "profile": "standard"
     },
     {
       "tenant": "wata",
@@ -62,7 +71,7 @@
       "githubEnvironment": "dev",
       "runtimeEnvironment": "dev",
       "target": "current-shared-vm",
-      "preflight": "standard"
+      "profile": "standard"
     },
     {
       "tenant": "wata",
@@ -71,7 +80,7 @@
       "githubEnvironment": "production",
       "runtimeEnvironment": "prod",
       "target": "current-shared-vm",
-      "preflight": "standard"
+      "profile": "standard"
     }
   ]
 }

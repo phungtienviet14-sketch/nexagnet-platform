@@ -1,304 +1,313 @@
 import { describe, expect, it } from 'vitest';
-import { OUTBOUND_AUTHORITY_SOURCES, type OrderStatus, type PricedOrder } from '@netviet/shared';
 import {
-  NO_AUTHORITY,
-  ORDER_COMMITMENT_STATES,
+  OUTBOUND_AUTHORITY_SOURCES,
+  type AgentTrace,
+  type OutboundAuthority,
+} from '@netviet/shared';
+import {
   decideOutboundAuthority,
   grantsFromDealerPolicy,
   grantsFromPersistedOrder,
   grantsFromPricedOrder,
   grantsFromQuote,
   mergeAuthority,
+  outboundFingerprint,
   pinnedOutboundVerdict,
 } from './outbound-authority.js';
+import { deterministicComposition } from './outbound-composer.js';
+import {
+  authorityFor,
+  compose,
+  facts,
+  orderStateFactsFor,
+  plan,
+  policyFacts,
+  pricedFacts,
+  pricedOrder,
+  quoteFacts,
+} from './__tests__/composition.fixture.js';
 
 /**
- * MA TRAN HOI QUY muc 7 hop dong nhiem vu, o muc HOP DONG (ham thuan).
+ * CONG THAM QUYEN — no xet BAN SOAN, khong xet doan van (Issue #189).
  *
- * MOI SO TRONG TEP NAY LA SO BIA. Khong mot gia, mot chinh sach hay mot ma SKU nao o day den tu
- * mot khach that — muc 8 hop dong cam dieu do, va mot bo test mang bang gia that cua khach vao
- * mot repo public la mot su co ro ri chu khong phai mot bai test.
+ * Tep nay do ba thu, va chung la ba chang cua `decideOutboundAuthority`:
+ *   1. ban soan rong / van ban tat dinh tron -> hai duong tat, hai ket cuc khac han nhau;
+ *   2. TUNG KHANG DINH cua TUNG KHOI phai nam trong grant (ranh gioi dung sai);
+ *   3. phong thu chieu sau: quet lai vat mang tren van ban CUOI (muc 7 hop dong).
+ *
+ * Cac tinh chat B2/B3 cua PR #187 (tien la GIA TRI chu khong phai chuoi chu so; chinh sach chinh
+ * xac tung loai; cam ket don chinh xac tung muc) VAN duoc do o day — chung chi doi cho: gio
+ * chung song trong phep doi chieu `ComposedBlockClaim.authorized` voi grant, chu khong con trong
+ * mot phep doc van ban.
  */
 
-const line = (unitPrice: number, quantity: number) => ({
-  skuRaw: 'SKU-A',
-  sku: 'SKU-A',
-  productName: 'San pham A',
-  quantity,
-  unitPrice,
-  lineTotal: unitPrice * quantity,
-  matched: true,
-});
-
-function pricedFixture(overrides: Partial<PricedOrder> = {}): PricedOrder {
-  const lines = overrides.lines ?? [line(990_000, 10)];
-  const itemsSubtotal = lines.reduce((sum, row) => sum + row.lineTotal, 0);
-  return {
-    orderType: 'TH1',
-    dealerName: 'Dai ly thu nghiem',
-    branch: null,
-    lines,
-    itemsSubtotal,
-    shippingFee: 0,
-    policy: 'cong_no_30',
-    codCollect: false,
-    codFee: 0,
-    vat: false,
-    vatAmount: 0,
-    grandTotal: itemsSubtotal,
-    warnings: [],
-    confirmationText: 'Xac nhan don',
-    ...overrides,
-  };
-}
-
-const llm = (text: string) => ({ text, provenance: 'llm_draft' as const });
+const NO_GRANT: OutboundAuthority = { grants: [] };
 
 describe('bat bien kien truc', () => {
   it('khong mot nguon cap tham quyen nao mang ten model/LLM', () => {
     for (const source of OUTBOUND_AUTHORITY_SOURCES) {
-      expect(source).not.toMatch(/llm|model|advisor|agent|prompt/i);
+      expect(source).not.toMatch(/llm|model|advisor|agent/iu);
     }
   });
 
-  it('bao tham quyen rong khong cap duoc gi cho mot ban nhap co khang dinh', () => {
-    const verdict = decideOutboundAuthority(llm('Don gia 990.000đ ạ.'), NO_AUTHORITY);
-    expect(verdict.sendable).toBe(false);
+  it('bao tham quyen rong khong cap duoc gi cho mot ban soan co khoi', () => {
+    // Khoi ton tai (du kien co that) nhung KHONG co grant nao -> tu choi. Hai thu nay tach roi co
+    // y: du kien noi "render duoc gi", grant noi "duoc phep noi gi". Ca hai deu phai dat.
+    const composition = compose(plan(['price_quote']), quoteFacts(), { authority: NO_GRANT });
+
+    expect(decideOutboundAuthority(composition, NO_GRANT)).toMatchObject({
+      sendable: false,
+      reason: 'FINANCIAL_AUTHORITY_MISSING',
+      missing: ['financial'],
+    });
   });
 });
 
-describe('am tinh — fail closed', () => {
-  // Ca 1: intent != dat_don, priced = null, ban nhap co don gia + tong tien.
-  it('1. khong co ket qua dinh gia -> tien khong gui duoc', () => {
-    const verdict = decideOutboundAuthority(
-      llm('Da anh, don gia 990.000đ, tong don 9.900.000đ ạ.'),
-      NO_AUTHORITY,
+describe('chang 1 — hai duong tat', () => {
+  it('ban soan khong con gi de gui -> COMPOSITION_EMPTY, fail closed', () => {
+    const composition = compose(plan([], ''), undefined, { systemSources: [] });
+
+    expect(composition.mode).toBe('empty');
+    expect(decideOutboundAuthority(composition, NO_GRANT)).toMatchObject({
+      sendable: false,
+      reason: 'COMPOSITION_EMPTY',
+    });
+  });
+
+  it('van ban do tang tat dinh dung tron di thang — gia tri trong do CHINH LA ket qua co tham quyen', () => {
+    const composition = deterministicComposition(
+      'HN_30.9_Meta HN\n10 x Ghế Felix — 1.150.000đ\nTổng: 11.500.000đ',
     );
-    expect(verdict).toEqual({
-      sendable: false,
-      reason: 'FINANCIAL_AUTHORITY_MISSING',
-      missing: ['financial'],
+
+    expect(decideOutboundAuthority(composition, NO_GRANT)).toMatchObject({
+      sendable: true,
+      reason: 'DETERMINISTIC_AUTHORITY',
     });
   });
+});
 
-  // Ca 2: dinh gia bi bo qua / khong giai duoc -> khong con so nao ra toi khach.
-  it('2. bao gia khong giai duoc SKU nao -> khong co grant tien', () => {
-    const authority = mergeAuthority(grantsFromQuote([]));
-    expect(authority.grants).toHaveLength(0);
-    const verdict = decideOutboundAuthority(llm('Cai nay 990.000đ anh nhe.'), authority);
-    expect(verdict).toMatchObject({ sendable: false, reason: 'FINANCIAL_AUTHORITY_MISSING' });
+describe('chang 2 — tung khang dinh cua tung khoi phai nam trong grant', () => {
+  it('B2: tham quyen cho 1.150.000d KHONG phu cho mot don gia khac', () => {
+    // Khoi render tu du kien 990.000d, nhung grant chi co 1.150.000d — vd mot ban soan dung du
+    // kien cua luot truoc. Doi chieu la GIA TRI voi GIA TRI, nen no bi bat.
+    const composition = compose(plan(['price_quote']), quoteFacts(990_000));
+
+    expect(
+      decideOutboundAuthority(composition, mergeAuthority(grantsFromQuote([1_150_000]))),
+    ).toMatchObject({ sendable: false, reason: 'FINANCIAL_VALUE_NOT_AUTHORIZED' });
   });
 
-  it('2b. co grant tien nhung con so viet ra la con so khac -> tu choi', () => {
-    const authority = mergeAuthority(grantsFromQuote([990_000]));
-    const verdict = decideOutboundAuthority(llm('Cai nay 1.250.000đ anh nhe.'), authority);
-    expect(verdict).toMatchObject({
-      sendable: false,
-      reason: 'FINANCIAL_VALUE_NOT_AUTHORIZED',
-      missing: ['financial'],
-    });
+  it('B3: dai ly "thanh toan ngay" KHONG phu cho mot khoi chinh sach "ky gui"', () => {
+    const composition = compose(plan(['payment_policy']), policyFacts('ky_gui'));
+
+    expect(
+      decideOutboundAuthority(
+        composition,
+        mergeAuthority(grantsFromDealerPolicy('thanh_toan_ngay')),
+      ),
+    ).toMatchObject({ sendable: false, reason: 'POLICY_STATEMENT_NOT_AUTHORIZED' });
   });
 
-  // Ca 3: policy_finance skipped, ban nhap noi "cong no 30 ngay".
-  it('3. khong co ket qua chinh sach -> khang dinh cong no khong gui duoc', () => {
-    const authority = mergeAuthority(grantsFromDealerPolicy(null));
-    const verdict = decideOutboundAuthority(
-      llm('Ben minh cho cong no 30 ngay anh nhe.'),
-      authority,
-    );
-    expect(verdict).toMatchObject({
-      sendable: false,
-      reason: 'POLICY_AUTHORITY_MISSING',
-      missing: ['policy'],
-    });
+  it('B3: ky han 45 ngay KHONG phu cho mot khoi chinh sach cong no 30 ngay', () => {
+    const composition = compose(plan(['payment_policy']), policyFacts('cong_no_30'));
+
+    expect(
+      decideOutboundAuthority(composition, mergeAuthority(grantsFromDealerPolicy('cong_no_45'))),
+    ).toMatchObject({ sendable: false, reason: 'POLICY_STATEMENT_NOT_AUTHORIZED' });
   });
 
-  // Ca 4: khong co trang thai don ben vung, ban nhap noi "da ghi nhan don".
-  it('4. khong co trang thai don -> cam ket don khong gui duoc', () => {
-    const verdict = decideOutboundAuthority(llm('Da em da ghi nhan don cua anh ạ.'), NO_AUTHORITY);
-    expect(verdict).toMatchObject({
+  it('B3: khoi cam ket muc `confirmed` KHONG duoc phu boi mot don `needs_edit`', () => {
+    const composition = compose(plan(['order_commitment']), orderStateFactsFor('approved'));
+
+    expect(
+      decideOutboundAuthority(
+        composition,
+        mergeAuthority(grantsFromPersistedOrder({ status: 'needs_edit', priced: null })),
+      ),
+    ).toMatchObject({ sendable: false, reason: 'ORDER_COMMITMENT_LEVEL_NOT_AUTHORIZED' });
+  });
+
+  it('khong co grant cua LOP do -> ma "thieu tham quyen", khac ma "gia tri khong duoc uy quyen"', () => {
+    const composition = compose(plan(['order_commitment']), orderStateFactsFor('approved'));
+
+    expect(decideOutboundAuthority(composition, NO_GRANT)).toMatchObject({
       sendable: false,
       reason: 'ORDER_COMMITMENT_NOT_AUTHORIZED',
-      missing: ['order_commitment'],
     });
-  });
-
-  it('4b. don o trang thai khong uy quyen (draft/rejected) khong cap cam ket', () => {
-    for (const status of ['draft', 'rejected'] as OrderStatus[]) {
-      const authority = mergeAuthority(grantsFromPersistedOrder({ status, priced: null }));
-      expect(authority.grants).toHaveLength(0);
-      expect(
-        decideOutboundAuthority(llm('Em da chot don cho anh roi ạ.'), authority),
-      ).toMatchObject({ sendable: false, reason: 'ORDER_COMMITMENT_NOT_AUTHORIZED' });
-    }
-  });
-
-  // Ca 5: VAT/COD/cuoc/khuyen mai khong co nguon tat dinh -> LLM khong duoc bia ra.
-  it('5. don co gia nhung khong bat VAT/COD/cuoc -> khong noi duoc ve chung', () => {
-    const priced = pricedFixture();
-    const authority = mergeAuthority(grantsFromPricedOrder(priced));
-    for (const invented of [
-      'Don nay xuat hoa don VAT day du ạ.',
-      'Ship COD thu ho tan noi anh nhe.',
-      'Ben em mien phi van chuyen don nay ạ.',
-      'Don nay duoc chiet khau them ạ.',
-    ]) {
-      expect(decideOutboundAuthority(llm(invented), authority)).toMatchObject({
-        sendable: false,
-        reason: 'POLICY_STATEMENT_NOT_AUTHORIZED',
-        missing: ['policy'],
-      });
-    }
   });
 
   it('gom DU cac lop thieu, khong dung o lop dau tien', () => {
-    const verdict = decideOutboundAuthority(
-      llm('Don gia 990.000đ, cong no 30 ngay, em da ghi nhan don cua anh ạ.'),
-      NO_AUTHORITY,
+    const composition = compose(
+      plan(['order_pricing', 'payment_policy', 'order_commitment']),
+      facts(
+        pricedFacts(pricedOrder({ policy: 'cong_no_30' })),
+        policyFacts('cong_no_30'),
+        orderStateFactsFor('approved'),
+      ),
     );
-    expect(verdict).toEqual({
+
+    expect(decideOutboundAuthority(composition, NO_GRANT)).toMatchObject({
       sendable: false,
-      reason: 'FINANCIAL_AUTHORITY_MISSING',
       missing: ['financial', 'policy', 'order_commitment'],
     });
   });
 
-  // Ca 6: quyet dinh cau truc khong doi theo do tin cay cua model.
-  it('6. quyet dinh chi phu thuoc (van ban, tham quyen) — khong co truc do tin cay', () => {
-    const text = 'Don gia 990.000đ ạ.';
-    const first = decideOutboundAuthority(llm(text), NO_AUTHORITY);
-    const second = decideOutboundAuthority(llm(text), NO_AUTHORITY);
-    expect(second).toEqual(first);
-    // Hop dong o muc kieu: `decideOutboundAuthority` nhan dung HAI tham so, va khong tham so nao
-    // mang do tin cay/rui ro. Mot lan them truc do vao day se lam bai nay do.
-    expect(decideOutboundAuthority.length).toBe(2);
-  });
-});
+  it('don da tinh gia uy quyen dung don gia / thanh tien / tam tinh / tong cua chinh no', () => {
+    const priced = pricedOrder();
+    const composition = compose(plan(['order_pricing']), pricedFacts(priced));
 
-describe('duong duong — khong giai bai toan bang cach cam sach', () => {
-  // Ca 8: don co tham quyen -> con so hien thi khop CHINH XAC ket qua tat dinh.
-  it('8. don da tinh gia uy quyen dung don gia / thanh tien / tong', () => {
-    const priced = pricedFixture({ lines: [line(990_000, 10)] });
-    const authority = mergeAuthority(grantsFromPricedOrder(priced));
     expect(
-      decideOutboundAuthority(llm('Don gia 990.000đ, tong don 9.900.000đ ạ.'), authority),
-    ).toEqual({ sendable: true, reason: 'AUTHORITY_SATISFIED', claims: ['financial'] });
-  });
-
-  it('8b. van ban tat dinh do chinh rules engine dung thi di thang', () => {
-    const priced = pricedFixture();
-    expect(
-      decideOutboundAuthority(
-        { text: priced.confirmationText, provenance: 'deterministic' },
-        NO_AUTHORITY,
-      ),
-    ).toMatchObject({ sendable: true, reason: 'DETERMINISTIC_AUTHORITY' });
-  });
-
-  it('8c. cach VIET khac cua dung con so do van duoc — chan con so bia, khong chan cach viet', () => {
-    const authority = mergeAuthority(grantsFromQuote([990_000]));
-    expect(decideOutboundAuthority(llm('Gia 990k anh nhe.'), authority)).toMatchObject({
-      sendable: true,
-      reason: 'AUTHORITY_SATISFIED',
-    });
-  });
-
-  // Ca 9: chinh sach co tham quyen -> duoc noi DUNG chinh sach do, khong phai mot bien the.
-  it('9. cap dai ly da map uy quyen dung dieu khoan thanh toan cua ho', () => {
-    const authority = mergeAuthority(grantsFromDealerPolicy('cong_no_30'));
-    expect(
-      decideOutboundAuthority(llm('Ben minh ap cong no 30 ngay cho anh ạ.'), authority),
-    ).toMatchObject({ sendable: true, reason: 'AUTHORITY_SATISFIED', claims: ['policy'] });
-  });
-
-  it('9b. co tham quyen thanh toan van khong duoc noi sang VAT', () => {
-    const authority = mergeAuthority(grantsFromDealerPolicy('cong_no_30'));
-    expect(
-      decideOutboundAuthority(llm('Cong no 30 ngay va co xuat hoa don VAT ạ.'), authority),
-    ).toMatchObject({ sendable: false, reason: 'POLICY_STATEMENT_NOT_AUTHORIZED' });
-  });
-
-  it('9c. chinh sach COD cua dai ly uy quyen ca thanh toan lan COD', () => {
-    const authority = mergeAuthority(grantsFromDealerPolicy('cod'));
-    expect(decideOutboundAuthority(llm('Don nay ship COD thu ho ạ.'), authority)).toMatchObject({
-      sendable: true,
-      reason: 'AUTHORITY_SATISFIED',
-    });
-  });
-
-  // Ca 10: trang thai don da uy quyen -> duoc noi da ghi nhan.
-  it('10. don da ben vung o trang thai duoc uy quyen -> noi duoc "da ghi nhan don"', () => {
-    for (const status of ORDER_COMMITMENT_STATES) {
-      const authority = mergeAuthority(grantsFromPersistedOrder({ status, priced: null }));
-      expect(
-        decideOutboundAuthority(llm('Da em da ghi nhan don cua anh ạ.'), authority),
-      ).toMatchObject({ sendable: true, reason: 'AUTHORITY_SATISFIED' });
-    }
-  });
-
-  it('10b. don da ben vung uy quyen luon cac con so cua chinh no', () => {
-    const authority = mergeAuthority(
-      grantsFromPersistedOrder({ status: 'sent', priced: pricedFixture() }),
-    );
-    expect(
-      decideOutboundAuthority(llm('Don cua anh da ghi nhan, tong 9.900.000đ ạ.'), authority),
+      decideOutboundAuthority(composition, mergeAuthority(grantsFromPricedOrder(priced))),
     ).toMatchObject({ sendable: true, reason: 'AUTHORITY_SATISFIED' });
   });
 
-  // Ca 11: tu van/FAQ thuong khong mang khang dinh he qua -> van dung duoc.
-  it('11. cau tra loi tu van thuong khong bi cong nay dong lai', () => {
-    expect(
-      decideOutboundAuthority(
-        llm('Da may nay dung dien 220V, co che do ngu im va bao hanh chinh hang ạ.'),
-        NO_AUTHORITY,
-      ),
-    ).toEqual({ sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM', claims: [] });
+  it('don co gia nhung KHONG bat VAT/COD/cuoc -> khoi VAT/COD/cuoc bi bo, khong bi "cho qua"', () => {
+    const composition = compose(plan(['vat_cod_shipping']), pricedFacts(pricedOrder()));
+
+    expect(composition.omitted).toEqual([{ kind: 'vat_cod_shipping', reason: 'FACT_INCOMPLETE' }]);
+    expect(composition.blocks).toHaveLength(0);
   });
 
-  it('11b. so luong / thong so khong bi nham la so tien', () => {
+  it('don CO bat VAT/COD -> khoi noi dung nhung thu don do bat, khong hon', () => {
+    const priced = pricedOrder({
+      vat: true,
+      vatAmount: 1_150_000,
+      codCollect: true,
+      codFee: 50_000,
+    });
+    const composition = compose(plan(['vat_cod_shipping']), pricedFacts(priced));
+    const block = composition.blocks[0];
+
+    expect(block?.claims[0]?.authorized).toEqual(['vat', 'cod']);
+    expect(block?.lines.join('\n')).not.toContain('cước vận chuyển');
     expect(
-      decideOutboundAuthority(llm('Loc duoc 45 m2, con 12 thang bao hanh ạ.'), NO_AUTHORITY),
-    ).toMatchObject({ sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM' });
+      decideOutboundAuthority(composition, mergeAuthority(grantsFromPricedOrder(priced))),
+    ).toMatchObject({ sendable: true });
+  });
+});
+
+describe('chang 3 — phong thu chieu sau tren van ban CUOI', () => {
+  it('van ban cuoi mang mot con so khong nam trong bang chung neo nguon -> tu choi', () => {
+    const quote = quoteFacts();
+    const composition = compose(plan(['price_quote']), quote);
+    // Gia dinh mot loi lap trinh tuong lai: mot buoc hau xu ly noi them mot con so vao van ban ma
+    // khong cap nhat bang chung neo nguon. Lop nay bat duoc, va no doc lap voi lan xet luc soan.
+    const tampered = { ...composition, text: `${composition.text}\nGiá gốc 990.000đ.` };
+
+    expect(decideOutboundAuthority(tampered, authorityFor(quote))).toMatchObject({
+      sendable: false,
+      reason: 'NARRATIVE_CARRIER_NOT_GROUNDED',
+      missing: ['financial'],
+    });
   });
 
-  it('11c. mot cau ghi nhan y kien khong phai cam ket don', () => {
-    expect(
-      decideOutboundAuthority(llm('Da em da ghi nhan gop y cua anh ạ.'), NO_AUTHORITY),
-    ).toMatchObject({ sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM' });
+  it('van ban cuoi hop le KHONG bi lop nay bao dong gia — ke ca khi day so lieu ky thuat', () => {
+    const composition = compose(
+      plan([], 'Dạ lưu lượng gió 9700 lít/phút, bảo hành 3 năm, 1 đổi 1 trong 7 ngày ạ.'),
+      undefined,
+      {
+        systemSources: [
+          'Lưu lượng gió lên tới 9700 lít/phút. Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên.',
+        ],
+      },
+    );
+
+    expect(composition.narrative).toMatchObject({ admitted: true });
+    expect(decideOutboundAuthority(composition, NO_GRANT)).toMatchObject({ sendable: true });
   });
 });
 
 describe('cuong che o diem nghen gui', () => {
+  const BASE: AgentTrace = {
+    steps: [],
+    primaryRole: 'router',
+    senderType: 'dai_ly',
+    llmCalls: 1,
+    brainMode: 'stub',
+    supervisor: { riskLevel: 'none', escalate: false, reasons: [] },
+  };
+
   it('khong co quyet dinh nao ghim tren trace -> KHONG gui', () => {
-    expect(pinnedOutboundVerdict(undefined)).toEqual({
-      sendable: false,
-      reason: 'AUTHORITY_DECISION_ABSENT',
-      missing: [],
-    });
-  });
-
-  it('ban ghi cu co outbound nhung khong co verdict -> KHONG gui', () => {
-    const legacyTrace = {
-      steps: [],
-      primaryRole: 'router',
-      senderType: 'unknown',
-      llmCalls: 1,
-      brainMode: 'mock',
-      supervisor: { riskLevel: 'none', escalate: false, reasons: [] },
-      outbound: { text: 'Don gia 990.000đ ạ.' },
-    } as const;
-    expect(pinnedOutboundVerdict(legacyTrace as never)).toMatchObject({
+    expect(pinnedOutboundVerdict(BASE, 'Dạ vâng ạ.')).toMatchObject({
       sendable: false,
       reason: 'AUTHORITY_DECISION_ABSENT',
     });
   });
 
-  it('verdict da ghim duoc tra lai nguyen ven', () => {
-    const verdict = {
+  it('co phan quyet nhung KHONG co ban soan co kieu -> COMPOSITION_ABSENT', () => {
+    const text = 'Dạ vâng ạ.';
+    const trace: AgentTrace = {
+      ...BASE,
+      outbound: { text },
+      outboundAuthority: {
+        sendable: true,
+        reason: 'NARRATIVE_ONLY_COMPOSITION',
+        claims: [],
+        fingerprint: outboundFingerprint(text),
+      },
+    };
+
+    expect(pinnedOutboundVerdict(trace, text)).toMatchObject({
+      sendable: false,
+      reason: 'COMPOSITION_ABSENT',
+    });
+  });
+
+  it('phan quyet + ban soan khop dau -> tra lai nguyen ven', () => {
+    const composition = compose(plan([], 'Dạ ghế Felix có tựa lưng lưới ạ.'));
+    const verdict = decideOutboundAuthority(composition, NO_GRANT);
+    const trace: AgentTrace = {
+      ...BASE,
+      outbound: { text: composition.text },
+      outboundAuthority: verdict,
+      outboundComposition: composition,
+    };
+
+    expect(pinnedOutboundVerdict(trace, composition.text)).toEqual(verdict);
+  });
+
+  it('van ban doi sau khi duoc cap phan quyet -> AUTHORITY_PAYLOAD_MISMATCH', () => {
+    const composition = compose(plan([], 'Dạ ghế Felix có tựa lưng lưới ạ.'));
+    const trace: AgentTrace = {
+      ...BASE,
+      outbound: { text: composition.text },
+      outboundAuthority: decideOutboundAuthority(composition, NO_GRANT),
+      outboundComposition: composition,
+    };
+
+    expect(pinnedOutboundVerdict(trace, 'Dạ ghế Felix giá 990.000đ ạ.')).toMatchObject({
+      sendable: false,
+      reason: 'AUTHORITY_PAYLOAD_MISMATCH',
+    });
+  });
+
+  it('phan quyet cua luot nay ghep voi ban soan cua luot khac -> van bi chan', () => {
+    const mine = compose(plan([], 'Dạ ghế Felix có tựa lưng lưới ạ.'));
+    const other = compose(plan([], 'Dạ khung thép sơn tĩnh điện ạ.'));
+    const trace: AgentTrace = {
+      ...BASE,
+      outbound: { text: mine.text },
+      outboundAuthority: decideOutboundAuthority(mine, NO_GRANT),
+      outboundComposition: other,
+    };
+
+    expect(pinnedOutboundVerdict(trace, mine.text)).toMatchObject({
+      sendable: false,
+      reason: 'AUTHORITY_PAYLOAD_MISMATCH',
+    });
+  });
+
+  it('dau van ban khong doi khi chi khac khoang trang thua', () => {
+    const composition = compose(plan([], 'Dạ ghế Felix có tựa lưng lưới ạ.'));
+    const trace: AgentTrace = {
+      ...BASE,
+      outbound: { text: composition.text },
+      outboundAuthority: decideOutboundAuthority(composition, NO_GRANT),
+      outboundComposition: composition,
+    };
+
+    expect(pinnedOutboundVerdict(trace, `  ${composition.text}  `)).toMatchObject({
       sendable: true,
-      reason: 'AUTHORITY_SATISFIED',
-      claims: ['financial'],
-    } as const;
-    expect(pinnedOutboundVerdict({ outboundAuthority: verdict } as never)).toEqual(verdict);
+    });
   });
 });

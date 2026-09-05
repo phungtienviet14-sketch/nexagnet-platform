@@ -37,7 +37,23 @@ try {
   }
 
   const tenant = JSON.parse(await readFile(`${TENANT_DIR}/tenant.json`, 'utf8'));
-  const knowledgePath = tenant.bootstrap?.knowledge?.path ?? 'data/knowledge.json';
+  // `bootstrap: {}` LA MOT KHANG DINH, KHONG PHAI MOT THIEU SOT.
+  //
+  // Duong dan mac dinh `data/knowledge.json` doan ho cho moi goi khach, nen mot goi CO Y khong
+  // mang nguon su that thuong mai nao (khong `knowledge`, khong `sales-order` — vi du be mat van
+  // tai) se lam buoc nay chet ENOENT, va `deploy-stack.sh` bien no thanh ROLLOUT_SEED_FAILED. Tuc
+  // mot goi khai bao DUNG lai danh do ca lan deploy.
+  //
+  // Bon goi khach hien co (ultty, amico, wata, transport-preview) deu khai TUONG MINH: ba goi dau
+  // tro `bootstrap.knowledge.path`, goi thu tu khai `{}`. Nen bo mac dinh khong lam thay doi mot
+  // lan gieo nao dang chay — no chi ngung bia ra mot duong dan cho goi da noi la khong co.
+  const knowledgePath = tenant.bootstrap?.knowledge?.path;
+  if (!knowledgePath) {
+    process.stdout.write(
+      'Goi khach khong khai `bootstrap.knowledge` — khong co nguon su that thuong mai de gieo.\n',
+    );
+    process.exit(0);
+  }
   const knowledge = JSON.parse(await readFile(`${TENANT_DIR}/${knowledgePath}`, 'utf8'));
 
   const products = required(knowledge.products, 'products');

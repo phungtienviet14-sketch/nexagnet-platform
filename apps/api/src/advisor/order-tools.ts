@@ -1,5 +1,6 @@
 import type { OrderView, OutboundAuthorityGrant, ParsedOrderItem } from '@netviet/shared';
 import { grantsFromPersistedOrder } from '../outbound/outbound-authority.js';
+import { orderStateFacts, type BusinessFactsPatch } from '../outbound/outbound-facts.js';
 import { formatVnd } from '../rules/text.js';
 
 /**
@@ -56,6 +57,10 @@ export type ToolResult = Record<string, unknown>;
 export interface OrderToolOutcome {
   readonly output: ToolResult;
   readonly grants: readonly OutboundAuthorityGrant[];
+  /** Du kien co kieu cho bo soan (Issue #189) — xem `AdvisorToolOutcome.facts`. */
+  readonly facts?: BusinessFactsPatch;
+  /** Chuoi he thong so huu de neo nguon loi nhan — xem `AdvisorToolOutcome.sources`. */
+  readonly sources?: readonly string[];
 }
 
 /** Cong cu chi tra du kien, khong sinh tham quyen nao. */
@@ -156,6 +161,13 @@ async function listOrders(deps: OrderToolDeps): Promise<OrderToolOutcome> {
   return {
     output: { don: orders.map(summarize) },
     grants: orders.flatMap((order) => grantsFromPersistedOrder(order)),
+    facts: orderStateFacts(orders),
+    sources: orders.flatMap((order) => [
+      ...(order.priced?.lines ?? []).flatMap((line) =>
+        line.productName ? [line.productName] : [],
+      ),
+      ...(order.priced ? [formatVnd(order.priced.grandTotal)] : []),
+    ]),
   };
 }
 
@@ -168,8 +180,23 @@ async function cancelOrder(
   if (outOfScope(found)) return readOnly(found);
   try {
     const cancelled = await deps.port.cancel(found.order.id, reason || 'khach yeu cau huy');
-    // HUY KHONG cap tham quyen cam ket: mot don vua bi huy la don KHONG duoc phep noi la da chot.
-    return readOnly({ da_huy: true, ma_don: cancelled.id, trang_thai: cancelled.status });
+    /*
+     * HUY KHONG cap tham quyen cam ket — VA no phai THU HOI cai da cap truoc do trong cung luot.
+     *
+     * `readOnly()` (grants rong, khong khai bao `facts`) chi lam duoc ve dau. Ve sau moi la cho
+     * nguy hiem: quy trinh chuan cua chinh prompt la `tra_cuu_don` roi moi `huy_don`, va vong
+     * `tra_cuu_don` da nap mot anh chup `orderState` cua don luc no con `approved`. Khong thu hoi
+     * thi bo soan van render duoc "Đơn của mình đã được chốt." cho don vua bi huy — mot cau sai
+     * di ra tu duong tat dinh, tuc khong mot phep neo nguon nao cham toi.
+     *
+     * `orderState: null` la KHAI BAO TUONG MINH "du kien cu khong con dung", khac han voi viec bo
+     * trong truong (= khong co y kien). Xem `mergeBusinessFacts`.
+     */
+    return {
+      output: { da_huy: true, ma_don: cancelled.id, trang_thai: cancelled.status },
+      grants: [],
+      facts: { orderState: null },
+    };
   } catch (error: unknown) {
     return readOnly({ da_huy: false, loi: errorText(error) });
   }
@@ -222,16 +249,23 @@ async function amendOrder(
       // Don THAY THE da ben vung -> tu day moi duoc phep noi "da ghi nhan don moi", va moi duoc
       // nhac lai con so cua no. Truoc khi `replaceItems` thanh cong thi khong co gi ca.
       grants: grantsFromPersistedOrder(replacement),
+      facts: orderStateFacts([replacement]),
+      sources: [
+        ...(replacement.priced?.lines ?? []).flatMap((line) =>
+          line.productName ? [line.productName] : [],
+        ),
+        ...(replacement.priced ? [formatVnd(replacement.priced.grandTotal)] : []),
+      ],
       output: {
-      da_sua: true,
-      ma_don_cu: found.order.id,
-      ma_don_moi: replacement.id,
-      don_moi: summarize(replacement),
-      // NOI DUNG SU THAT, khong hua thay he thong: don thay the nam trong hang cho "Duyet & gui"
-      // cua Sale, KHONG tu bay ra nhom. Truoc do cho nay ghi "he thong se gui ban xac nhan moi",
-      // ma khong duong nao gui — agent se bao khach mot thu khong xay ra.
-      ghi_chu:
-        'Da ghi nhan don moi. Bao khach la da doi xong va Sale se gui lai ban xac nhan moi ngay. KHONG duoc tu doc lai con so tien.',
+        da_sua: true,
+        ma_don_cu: found.order.id,
+        ma_don_moi: replacement.id,
+        don_moi: summarize(replacement),
+        // NOI DUNG SU THAT, khong hua thay he thong: don thay the nam trong hang cho "Duyet & gui"
+        // cua Sale, KHONG tu bay ra nhom. Truoc do cho nay ghi "he thong se gui ban xac nhan moi",
+        // ma khong duong nao gui — agent se bao khach mot thu khong xay ra.
+        ghi_chu:
+          'Da ghi nhan don moi. Bao khach la da doi xong va Sale se gui lai ban xac nhan moi ngay. KHONG duoc tu doc lai con so tien.',
       },
     };
   } catch (error: unknown) {

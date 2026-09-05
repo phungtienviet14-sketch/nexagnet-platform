@@ -1,0 +1,54 @@
+{
+  "check_runs": [
+    {
+      "conclusion": "success",
+      "head_sha": "c86219b22be19ce3db7a9753bd9866316b654cbe",
+      "id": 100904759226,
+      "name": "tenant-packs",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "c86219b22be19ce3db7a9753bd9866316b654cbe",
+      "id": 100904753677,
+      "name": "e2e",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "c86219b22be19ce3db7a9753bd9866316b654cbe",
+      "id": 100904749354,
+      "name": "integration",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "c86219b22be19ce3db7a9753bd9866316b654cbe",
+      "id": 100904733536,
+      "name": "verify",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "c86219b22be19ce3db7a9753bd9866316b654cbe",
+      "id": 100904733268,
+      "name": "images",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "c86219b22be19ce3db7a9753bd9866316b654cbe",
+      "id": 100904733180,
+      "name": "workflow-integration",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "c86219b22be19ce3db7a9753bd9866316b654cbe",
+      "id": 100904732357,
+      "name": "audit",
+      "status": "completed"
+    }
+  ],
+  "total_count": 7
+}

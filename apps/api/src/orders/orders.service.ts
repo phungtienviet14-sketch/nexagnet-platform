@@ -183,7 +183,10 @@ export class OrdersService {
     const enabled = Boolean(policy?.enabled) && Boolean(this.workflows);
 
     if (!enabled) {
-      this.decideSchedule('denied', policy?.enabled ? 'FOLLOWUP_NO_WORKFLOW_BINDING' : 'FOLLOWUP_DISABLED');
+      this.decideSchedule(
+        'denied',
+        policy?.enabled ? 'FOLLOWUP_NO_WORKFLOW_BINDING' : 'FOLLOWUP_DISABLED',
+      );
       return (await this.repo.update(id, patch))!;
     }
 
@@ -342,9 +345,10 @@ export class OrdersService {
      * Muc 7 ca 7 hop dong: mot cu bam duyet khong duoc bien mot ban nhap LLM thanh mot cam ket
      * co tham quyen.
      */
-    if (route === 'ROUTED_TO_ADVICE' && !pinnedOutboundVerdict(view.trace).sendable) {
+    const advicePinned = pinnedOutboundVerdict(view.trace, view.trace?.outbound?.text ?? '');
+    if (route === 'ROUTED_TO_ADVICE' && !advicePinned.sendable) {
       this.decide('order.manual_approve', 'denied', 'OUTBOUND_AUTHORITY_NOT_GRANTED', {
-        reason: pinnedOutboundVerdict(view.trace).reason,
+        reason: advicePinned.reason,
       });
       await this.recordManualAction(
         actor,
