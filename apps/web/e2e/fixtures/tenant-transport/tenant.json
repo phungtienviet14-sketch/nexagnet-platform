@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "slug": "e2e-transport-fixture",
+  "identity": {
+    "displayName": "Doanh nghiệp vận tải kiểm thử",
+    "shortName": "VT-E2E"
+  },
+  "branding": {
+    "productName": "Vận hành vận tải E2E",
+    "installName": "VT-E2E — Vận hành vận tải",
+    "pageTitle": "Vận hành vận tải E2E",
+    "pageDescription": "Tenant fixture trung tính cho kiểm thử bề mặt vận tải",
+    "themeColor": "#1f4e5f",
+    "backgroundColor": "#f7f5f1",
+    "monogram": "VT",
+    "composerPlaceholder": "Không dùng ở bề mặt vận tải"
+  },
+  "experience": "transport-operations",
+  "capabilities": [
+    "transport-core",
+    "transport-costing",
+    "transport-fuel",
+    "transport-settlement"
+  ],
+  "policies": {
+    "readiness": {
+      "blockedCapabilities": []
+    }
+  },
+  "integrations": {
+    "channel": { "allowedAdapters": ["mock"] },
+    "parser": { "allowedAdapters": ["claude"] },
+    "erp": { "adapter": "none" },
+    "contentSource": { "adapter": "local_manifest" }
+  },
+  "bootstrap": {},
+  "smoke": null
+}

@@ -1,285 +1,221 @@
 import { describe, expect, it } from 'vitest';
-import type { OrderStatus, PricedOrder } from '@netviet/shared';
+import { OUTBOUND_BLOCK_KINDS, type OutboundBlockKind } from '@netviet/shared';
+import { decideOutboundAuthority } from './outbound-authority.js';
+import { NO_BUSINESS_FACTS } from './outbound-facts.js';
 import {
-  NO_AUTHORITY,
-  decideOutboundAuthority,
-  grantsFromDealerPolicy,
-  grantsFromPersistedOrder,
-  grantsFromQuote,
-  mergeAuthority,
-  outboundFingerprint,
-  pinnedOutboundVerdict,
-} from './outbound-authority.js';
+  APPROVED_DOC,
+  authorityFor,
+  blockText,
+  compose,
+  facts,
+  plan,
+  policyFacts,
+  pricedFacts,
+  pricedOrder,
+  quoteFacts,
+} from './__tests__/composition.fixture.js';
 
 /**
- * CAC DUONG DI VONG DO REVIEW DOC LAP CHI RA (ChatGPT, 04/09/2026) — B1, B2, B3.
+ * BO TEST DOT BIEN — muc 8 hop dong #189, phan "Adversarial/property testing".
  *
  * ---------------------------------------------------------------------------------------------
- * VI SAO BO TEST NAY TON TAI RIENG. Ban dau, cong tham quyen tra `NO_CONSEQUENTIAL_CLAIM` voi
- * `sendable: true` MOI KHI ba bo trich (tien / chinh sach / cam ket don) khong nhan ra gi. Tuc la
- * bo trich van ban da nam TRONG ranh gioi CHO PHEP: bo sot mot cach dien dat = cho di.
+ * MUC TIEU CHUNG MINH KHONG PHAI "bo trich nhan ra moi cach dien dat".
  *
- * Muc 4 hop dong nhiem vu cam dung dieu do: quet van ban chi duoc la phong thu chieu sau.
+ * Hop dong noi thang: "The proof target is: no mutation can cause an unauthorized structured
+ * business block/value/state to be rendered/sent." Do la mot khang dinh ve CAU TRUC, va no kiem
+ * duoc: sinh ra hang tram bien the cua mot cau, nem vao truong van xuoi, roi khang dinh rang
+ * TAP KHOI DA RENDER khong doi — vi khoi khong den tu van ban.
  *
- * Moi ca o day deu la TIENG VIET THUONG, khong phai chuoi doi khang. Va quan trong hon: khong ca
- * nao duoc phep xanh len chi vi ai do THEM MOT CUM TU vao tu dien. Neu ban vua sua tep nay bang
- * cach them mot chuoi vao mot bang tu vung, ban dang va chu khong sua.
+ * Vi sao khang dinh nay manh hon "khong bai nao lot": no dung ke ca voi mot cau ma bo trich khong
+ * he nhan ra. Bo trich co lot hay khong cung khong lam xuat hien them mot khoi nao.
+ *
  * ---------------------------------------------------------------------------------------------
+ * BA CAU B1 cua review doc lap (#187) van nam trong corpus duoi day, cung voi cac lop bo sot ma
+ * chinh bao cao #187 tu liet ke: so tran duoi 1000 co `k` ngam, tieng Viet khong dau mat the hoan
+ * thanh, va cau chinh sach khong chu so ngoai `POLICY_SURFACES`.
  */
 
-const draft = (text: string) => ({ text, provenance: 'llm_draft' as const });
+/** Bo cau goc: moi cau deu la mot khang dinh CO HE QUA ma luot KHONG duoc phep noi. */
+const CONSEQUENTIAL_SEEDS: readonly string[] = [
+  'Tổng đơn là 1.150.000.',
+  'Anh được thanh toán sau 30 ngày.',
+  'Đơn của anh đã vào hệ thống rồi.',
+  'Dạ giá 990 thôi ạ.',
+  'Bên mình cho khất tiền hàng tới khi bán xong.',
+  'Đơn của mình chốt xong rồi nhé.',
+  'Giá gốc 1150k, mình lấy được luôn.',
+  'Em duyệt đơn này cho anh rồi ạ.',
+  'Bên em tặng kèm bộ lọc cho đơn này.',
+  'Hàng của mình được miễn cước vận chuyển.',
+];
 
-function priced(patch: Partial<PricedOrder> = {}): PricedOrder {
-  return {
-    orderType: 'TH1',
-    dealerName: null,
-    branch: null,
-    lines: [],
-    itemsSubtotal: 0,
-    shippingFee: 0,
-    policy: null,
-    codCollect: false,
-    codFee: 0,
-    vat: false,
-    vatAmount: 0,
-    grandTotal: 0,
-    warnings: [],
-    confirmationText: '',
-    ...patch,
-  };
+const stripAccents = (text: string): string =>
+  text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/đ/gu, 'd')
+    .replace(/Đ/gu, 'D');
+
+/**
+ * MOT CAU -> NHIEU BIEN THE. Cac truc dot bien lay dung theo muc 8 hop dong: dau cau, dau tieng
+ * Viet, dong tu la, cach dien dat chinh sach la, va dinh dang so.
+ */
+function mutations(seed: string): string[] {
+  const withoutPunctuation = seed.replace(/[.,!?]/gu, '');
+  const spaced = seed.replace(/\s+/gu, '  ');
+  const numberForms = [
+    seed.replace(/1\.150\.000/gu, '1150k'),
+    seed.replace(/1\.150\.000/gu, '1,15tr'),
+    seed.replace(/1\.150\.000/gu, '1.150.000đ'),
+    seed.replace(/30 ngày/gu, 'ba mươi ngày'),
+    seed.replace(/990/gu, '990k'),
+  ];
+  const unseenVerbs = [
+    seed.replace(/đã vào hệ thống/gu, 'đã nằm trong hệ thống'),
+    seed.replace(/chốt xong/gu, 'khoá sổ xong'),
+    seed.replace(/duyệt/gu, 'phê chuẩn'),
+  ];
+  const unseenPolicy = [
+    seed.replace(/thanh toán sau/gu, 'trả tiền sau'),
+    seed.replace(/khất tiền hàng/gu, 'gối đầu tiền hàng'),
+    seed.replace(/miễn cước vận chuyển/gu, 'không mất phí ship'),
+  ];
+  return [
+    seed,
+    withoutPunctuation,
+    spaced,
+    stripAccents(seed),
+    stripAccents(withoutPunctuation),
+    seed.toUpperCase(),
+    seed.toLowerCase(),
+    ...numberForms,
+    ...unseenVerbs,
+    ...unseenPolicy,
+    ...numberForms.map(stripAccents),
+    ...unseenVerbs.map(stripAccents),
+    ...unseenPolicy.map(stripAccents),
+  ];
 }
 
-const persisted = (status: OrderStatus, order: PricedOrder | null = null) =>
-  mergeAuthority(grantsFromPersistedOrder({ status, priced: order }));
+const ALL_MUTATIONS: readonly string[] = [...new Set(CONSEQUENTIAL_SEEDS.flatMap(mutations))];
 
-/* ============================================================================================ *
- * B1 — MOT CACH NOI NGOAI TU DIEN VAN KHONG DUOC PHEP LOT
- *
- * Ba ca duoi day deu tung ra `NO_CONSEQUENTIAL_CLAIM` + `sendable: true`. Chung phai bi chan BOI
- * HINH DANG cua van ban (co chu so do lon / co danh tu don kem the hoan thanh), khong boi viec ai
- * do da kip liet ke dung cum tu do.
- * ============================================================================================ */
-
-describe('B1 — be mat khong nam trong tu dien van khong duoc lot', () => {
-  it('B1.1 so tien KHONG HAU TO ("Tổng đơn là 1.150.000.") ma khong co dinh gia -> chan', () => {
-    const verdict = decideOutboundAuthority(draft('Tổng đơn là 1.150.000.'), NO_AUTHORITY);
-
-    expect(verdict.sendable).toBe(false);
-    expect(verdict.reason).toBe('FINANCIAL_AUTHORITY_MISSING');
+describe('#189 muc 8 — dot bien: khong bien the nao lam xuat hien mot khoi khong duoc uy quyen', () => {
+  it('corpus du lon de co nghia', () => {
+    expect(ALL_MUTATIONS.length).toBeGreaterThan(80);
   });
 
-  it('B1.2 "thanh toán sau 30 ngày" — cum ngoai tu dien chinh sach -> van chan', () => {
-    const verdict = decideOutboundAuthority(
-      draft('Anh được thanh toán sau 30 ngày.'),
-      NO_AUTHORITY,
-    );
+  /*
+   * TINH CHAT 1 — LUOT KHONG CO DU KIEN NAO.
+   *
+   * Model duoc quyen xin MOI loai khoi VA nhet bien the vao truong van xuoi cung luc. Khang dinh:
+   * khong mot bien the nao dung duoc mot khoi. Do la ket qua cua CAU TRUC, khong cua bo trich —
+   * nen no dung ca voi nhung cau ma bo trich hoan toan khong nhan ra.
+   */
+  it('luot khong tham quyen: moi bien the -> KHONG khoi nao, khong ky tu nghiep vu nao', () => {
+    for (const text of ALL_MUTATIONS) {
+      const composition = compose(plan(OUTBOUND_BLOCK_KINDS, text), NO_BUSINESS_FACTS);
 
-    expect(verdict).toMatchObject({
-      sendable: false,
-      missing: expect.arrayContaining(['policy']),
-    });
+      expect(composition.blocks, text).toHaveLength(0);
+      expect(blockText(composition), text).toBe('');
+      expect(composition.mode, text).not.toBe('deterministic_business');
+    }
   });
 
-  it('B1.3 "Đơn của anh đã vào hệ thống rồi." — dong tu ngoai tu dien -> van chan', () => {
-    const verdict = decideOutboundAuthority(
-      draft('Đơn của anh đã vào hệ thống rồi.'),
-      NO_AUTHORITY,
+  /*
+   * TINH CHAT 2 — LUOT CO DAY DU DU KIEN.
+   *
+   * Day la truong hop kho hon va quan trong hon: luot NAY duoc phep noi ve tien va chinh sach. Cau
+   * hoi la mot bien the trong truong van xuoi co lam DOI dieu duoc noi ra khong. Khang dinh: tap
+   * khoi va van ban cua khoi khong phu thuoc vao van xuoi — mot ky tu.
+   */
+  it('luot co tham quyen: van xuoi khong lam doi mot ky tu nao cua phan khoi', () => {
+    const turn = facts(
+      pricedFacts(pricedOrder({ policy: 'cong_no_30' })),
+      policyFacts('cong_no_30'),
     );
+    const requested: readonly OutboundBlockKind[] = ['order_pricing', 'payment_policy'];
+    const baseline = blockText(compose(plan(requested, ''), turn));
 
-    expect(verdict).toMatchObject({
-      sendable: false,
-      missing: expect.arrayContaining(['order_commitment']),
-    });
+    expect(baseline).not.toBe('');
+    for (const text of ALL_MUTATIONS) {
+      expect(blockText(compose(plan(requested, text), turn)), text).toBe(baseline);
+    }
   });
 
-  it('B1.4 mot ban nhap KHONG mang chu so lon va KHONG cam ket don van gui duoc', () => {
-    // Doi trong cua ba ca tren: cong nay khong duoc bien thanh "cam het". Mot cau tu van thuong
-    // — khong con so co do lon tien te, khong the hoan thanh + danh tu don — phai di thang.
-    const verdict = decideOutboundAuthority(
-      draft('Dạ máy này dùng điện 220V, bảo hành 12 tháng ạ.'),
-      NO_AUTHORITY,
-    );
+  /*
+   * TINH CHAT 3 — VAN BAN GUI DUOC khong bao gio mang mot cau dot bien nao.
+   *
+   * Ba cau tren la ve KHOI. Cau nay ve VAN BAN CUOI: neu phan quyet cho gui, thi cau dot bien do
+   * hoac da bi hop dong neo nguon bo, hoac (khi no vo tinh truy nguyen duoc) khong con la mot
+   * khang dinh co tham quyen vi khong khoi nao mang no.
+   */
+  it('van ban gui duoc khong bao gio chua mot cau dot bien chua truy nguyen duoc', () => {
+    const quote = quoteFacts();
+    for (const text of ALL_MUTATIONS) {
+      const composition = compose(plan(['price_quote'], text), quote);
+      const verdict = decideOutboundAuthority(composition, authorityFor(quote));
+      if (!verdict.sendable) continue;
+      expect(composition.narrative.admitted || !composition.text.includes(text), text).toBe(true);
+    }
+  });
 
-    expect(verdict).toMatchObject({ sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM' });
+  /*
+   * TINH CHAT 4 — NHAN CUA MODEL KHONG MUA DUOC GI.
+   *
+   * Chay lai tinh chat 1 tren MOI `planKind`. Neu mot ngay nao do ai do suy `mode` tu `plan.kind`
+   * thi bai nay do — do dung la duong di vong ma muc 3 hop dong goi ten.
+   */
+  it('moi nhan y dinh cua model deu cho cung mot ket qua khi khong co du kien', () => {
+    for (const kind of ['faq', 'product_advice', 'order_status', 'handoff'] as const) {
+      for (const text of CONSEQUENTIAL_SEEDS) {
+        const composition = compose(plan(OUTBOUND_BLOCK_KINDS, text, kind), NO_BUSINESS_FACTS);
+
+        expect(composition.blocks, `${kind}: ${text}`).toHaveLength(0);
+      }
+    }
   });
 });
 
-/* ============================================================================================ *
- * B2 — MOT CACH VIET TIEN ANH XA DUNG MOT GIA TRI VND
- *
- * Truoc day mot so tien duoc uy quyen bang TAP CHUOI ("1150000" va ca "1150" cho tien rut gon).
- * Hai con so khac han nhau vi the dung chung mot the: uy quyen 1.150.000d lam "1150d" lot.
- * ============================================================================================ */
+describe('#189 — dot bien tren mot luot FAQ that: cau vo hai KHONG bi chan oan', () => {
+  /*
+   * Doi trong cua bo tren. Neo nguon phai HAP THU duoc bao dong gia cua bo trich (do luong
+   * 04/09/2026: ~26% tai lieu da duyet lam no bao dong), neu khong thi muc 8 ca 16 hop dong
+   * ("ordinary non-consequential FAQ remains usable") khong dat.
+   */
+  const APPROVED = [
+    'Lưu lượng gió lên tới 9700 lít/phút, 9 cấp độ gió.',
+    'Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên nếu có lỗi từ nhà sản xuất.',
+    'Máy lọc dùng màng lọc HEPA, khử mùi bằng than hoạt tính.',
+    APPROVED_DOC,
+  ];
 
-describe('B2 — tien la GIA TRI VND, khong phai mot tap chuoi chu so', () => {
-  it('B2.1 uy quyen 1.150.000đ KHONG lam cho ban nhap noi "1150đ" hop le', () => {
-    const authority = mergeAuthority(grantsFromQuote([1_150_000]));
+  const FAQ_ANSWERS = [
+    'Dạ lưu lượng gió lên tới 9700 lít/phút với 9 cấp độ ạ.',
+    'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu ạ.',
+    'Dạ máy dùng màng lọc HEPA và than hoạt tính ạ.',
+  ];
 
-    const verdict = decideOutboundAuthority(draft('Dạ giá chỉ 1150đ thôi ạ.'), authority);
+  it('cau tra loi lay tu tai lieu da duyet van den duoc khach', () => {
+    for (const answer of [...FAQ_ANSWERS, ...FAQ_ANSWERS.map(stripAccents)]) {
+      const composition = compose(plan([], answer), NO_BUSINESS_FACTS, {
+        systemSources: APPROVED,
+      });
 
-    expect(verdict.sendable).toBe(false);
-    expect(verdict.reason).toBe('FINANCIAL_VALUE_NOT_AUTHORIZED');
+      expect(composition.narrative, answer).toMatchObject({ admitted: true });
+      expect(decideOutboundAuthority(composition, { grants: [] }), answer).toMatchObject({
+        sendable: true,
+        reason: 'NARRATIVE_ONLY_COMPOSITION',
+      });
+    }
   });
 
-  it('B2.2 "2tr5" la 2.500.000, khong phai 2.000.000', () => {
-    const twoMillion = mergeAuthority(grantsFromQuote([2_000_000]));
-    const twoPointFive = mergeAuthority(grantsFromQuote([2_500_000]));
-
-    expect(decideOutboundAuthority(draft('Dạ 2tr5 ạ.'), twoMillion).sendable).toBe(false);
-    expect(decideOutboundAuthority(draft('Dạ 2tr5 ạ.'), twoPointFive).sendable).toBe(true);
-  });
-
-  it('B2.3 cach viet rut gon cua CHINH con so da uy quyen van gui duoc', () => {
-    const authority = mergeAuthority(grantsFromQuote([1_150_000]));
-
-    // Chan mot CON SO bia, khong chan mot CACH VIET: 1.150k va 1,15tr deu la 1.150.000.
-    expect(decideOutboundAuthority(draft('Dạ 1.150k ạ.'), authority).sendable).toBe(true);
-    expect(decideOutboundAuthority(draft('Dạ 1,15tr ạ.'), authority).sendable).toBe(true);
-    expect(decideOutboundAuthority(draft('Dạ 1.150.000đ ạ.'), authority).sendable).toBe(true);
-  });
-});
-
-/* ============================================================================================ *
- * B3 — GRANT PHAI MANG GIA TRI VA MUC, KHONG CHI MANG LOP
- * ============================================================================================ */
-
-describe('B3 — chinh sach chinh xac tung loai, cam ket don chinh xac tung muc', () => {
-  it('B3.1 dai ly "thanh toán ngay" KHONG phu cho ban nhap noi "ký gửi"', () => {
-    const authority = mergeAuthority(grantsFromDealerPolicy('thanh_toan_ngay'));
-
-    const verdict = decideOutboundAuthority(
-      draft('Dạ bên em cho anh nhận hàng ký gửi ạ.'),
-      authority,
+  it('doi MOT con so trong cau tra loi -> khong con truy nguyen duoc -> bi bo', () => {
+    const composition = compose(
+      plan([], 'Dạ lưu lượng gió lên tới 9800 lít/phút ạ.'),
+      NO_BUSINESS_FACTS,
+      { systemSources: APPROVED },
     );
 
-    expect(verdict.sendable).toBe(false);
-    expect(verdict.reason).toBe('POLICY_STATEMENT_NOT_AUTHORIZED');
-  });
-
-  it('B3.2 dai ly "ký gửi" KHONG phu cho ban nhap noi "thanh toán ngay"', () => {
-    const authority = mergeAuthority(grantsFromDealerPolicy('ky_gui'));
-
-    expect(
-      decideOutboundAuthority(draft('Dạ đơn này thanh toán ngay ạ.'), authority).sendable,
-    ).toBe(false);
-  });
-
-  it('B3.3 dai ly ky han 45 ngay KHONG phu cho cau "công nợ 30 ngày"', () => {
-    const authority = mergeAuthority(grantsFromDealerPolicy('cong_no_45'));
-
-    expect(
-      decideOutboundAuthority(draft('Dạ bên em cho công nợ 30 ngày ạ.'), authority).sendable,
-    ).toBe(false);
-    expect(
-      decideOutboundAuthority(draft('Dạ bên em cho công nợ 45 ngày ạ.'), authority).sendable,
-    ).toBe(true);
-  });
-
-  it('B3.4 don `needs_edit` KHONG cho phep noi "đã chốt đơn"', () => {
-    const verdict = decideOutboundAuthority(
-      draft('Dạ em đã chốt đơn cho anh rồi ạ.'),
-      persisted('needs_edit'),
-    );
-
-    expect(verdict.sendable).toBe(false);
-    expect(verdict.reason).toBe('ORDER_COMMITMENT_LEVEL_NOT_AUTHORIZED');
-  });
-
-  it('B3.5 don `needs_edit` VAN cho phep noi "đã ghi nhận đơn" (dung muc)', () => {
-    const verdict = decideOutboundAuthority(
-      draft('Dạ em đã ghi nhận đơn của anh ạ.'),
-      persisted('needs_edit'),
-    );
-
-    expect(verdict).toMatchObject({ sendable: true });
-  });
-
-  it('B3.6 don `approved` cho phep noi "đã chốt đơn"', () => {
-    const verdict = decideOutboundAuthority(
-      draft('Dạ em đã chốt đơn cho anh rồi ạ.'),
-      persisted('approved'),
-    );
-
-    expect(verdict).toMatchObject({ sendable: true });
-  });
-
-  it('B3.7 don `draft` khong cap mot muc cam ket nao', () => {
-    const verdict = decideOutboundAuthority(
-      draft('Dạ em đã ghi nhận đơn của anh ạ.'),
-      persisted('draft'),
-    );
-
-    expect(verdict.sendable).toBe(false);
-    expect(verdict.reason).toBe('ORDER_COMMITMENT_NOT_AUTHORIZED');
-  });
-});
-
-/* ============================================================================================ *
- * PHAN QUYET GAN CHAT VOI DUNG DOAN VAN DA XET
- *
- * Khuyen nghi cua review: mot verdict PASS khong duoc phep song sot neu van ban bi thay sau luc
- * soan. Neu khong, "sua ban nhap roi bam gui" la mot duong di vong hoan chinh.
- * ============================================================================================ */
-
-describe('verdict di kem dau van ban da xet', () => {
-  it('phan quyet cho MOT doan van khong dung duoc cho doan van khac', () => {
-    const authority = mergeAuthority(grantsFromQuote([990_000]));
-    const original = 'Dạ đơn giá 990.000đ ạ.';
-    const verdict = decideOutboundAuthority(draft(original), authority);
-    expect(verdict.sendable).toBe(true);
-
-    const trace = { outboundAuthority: verdict } as never;
-
-    expect(pinnedOutboundVerdict(trace, original).sendable).toBe(true);
-    expect(pinnedOutboundVerdict(trace, 'Dạ đơn giá 1.990.000đ ạ.')).toMatchObject({
-      sendable: false,
-      reason: 'AUTHORITY_PAYLOAD_MISMATCH',
-    });
-  });
-
-  it('dau van ban khong doi khi chi khac khoang trang thua', () => {
-    // Duong gui co thoi them nhan tu dong / gop dong. Dau phai on dinh truoc nhung thay doi
-    // KHONG mang noi dung, neu khong cong se bao dong gia lien tuc va bi tat.
-    expect(outboundFingerprint('Dạ  em chào anh ạ.\n')).toBe(
-      outboundFingerprint('Dạ em chào anh ạ.'),
-    );
-  });
-
-  it('vang mat phan quyet van la KHONG GUI', () => {
-    expect(pinnedOutboundVerdict(undefined, 'bat ky')).toMatchObject({
-      sendable: false,
-      reason: 'AUTHORITY_DECISION_ABSENT',
-    });
-  });
-});
-
-/* ============================================================================================ *
- * DUONG HOP LE KHONG BI CONG NAY LAM HONG (muc 11/12 hop dong)
- * ============================================================================================ */
-
-describe('duong hop le van chay', () => {
-  it('van ban do tang tat dinh dung van di thang', () => {
-    const verdict = decideOutboundAuthority(
-      { text: 'Tổng: 11.500.000đ', provenance: 'deterministic' },
-      NO_AUTHORITY,
-    );
-
-    expect(verdict).toMatchObject({ sendable: true, reason: 'DETERMINISTIC_AUTHORITY' });
-  });
-
-  it('don da tinh gia cho phep nhac lai dung cac con so cua chinh no', () => {
-    const authority = mergeAuthority(
-      grantsFromPersistedOrder({
-        status: 'approved',
-        priced: priced({ itemsSubtotal: 11_500_000, grandTotal: 11_500_000 }),
-      }),
-    );
-
-    const verdict = decideOutboundAuthority(
-      draft('Dạ em đã chốt đơn, tổng 11.500.000đ ạ.'),
-      authority,
-    );
-
-    expect(verdict).toMatchObject({ sendable: true });
+    expect(composition.narrative).toEqual({ admitted: false, reason: 'NUMERAL_NOT_GROUNDED' });
   });
 });

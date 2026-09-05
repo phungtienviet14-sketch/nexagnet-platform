@@ -8,7 +8,7 @@ import type {
   OutboundAuthorityVerdict,
   OutboundClaimClass,
   OutboundCommitmentLevel,
-  OutboundProvenance,
+  OutboundComposition,
   PolicyType,
   PricedOrder,
 } from '@netviet/shared';
@@ -19,6 +19,11 @@ import {
   monetaryLiterals,
   policyClaimTokens,
 } from './outbound-claims.js';
+import {
+  parseGroundingTokens,
+  ungroundedCarrier,
+  type UngroundedCarrier,
+} from './outbound-narrative.js';
 
 /**
  * CONG THAM QUYEN CUA TIN GUI RA — mot tin chi tro thanh "gui duoc cho khach" o day.
@@ -68,6 +73,24 @@ import {
  * VI SAO KHONG DI LOI "CAM HET MOI CON SO": muc 6 hop dong cam giai bai toan bang cach chan sach.
  * Don da tinh gia van phai gui duoc dung tung dong, chinh sach cua dai ly da map van phai noi
  * duoc — chi khac la con so va cau chinh sach do phai den TU KET QUA TAT DINH.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * BAN SUA 04/09/2026 (thu hai) — ISSUE #189. REVIEW DOC LAP CHAP NHAN B1-B3 LA CAI TIEN THAT,
+ * NHUNG KHONG CHAP NHAN KET QUA: sau #187 nhanh cuoi cua ham van la
+ *
+ *     khong trich duoc vat mang nao  =>  CHO GUI
+ *
+ * Bo trich rong hon KHONG sua duoc dieu do. Mot bo trich huu han tren mot ngon ngu vo han se luon
+ * co lop bo sot — chinh bao cao #187 liet ke bon lop con lai (so tran duoi 1000 co `k` ngam,
+ * tieng Viet khong dau mat the hoan thanh, cau chinh sach khong chu so, va "ngon ngu luon dien dat
+ * duoc mot su that co he qua theo mot cach bo trich khong phan loai").
+ *
+ * NEN THU DUOC DOI KHONG PHAI BO TRICH, MA LA DAU VAO CUA HAM NAY. Xem
+ * `outbound-composer.ts`: van ban den tay khach gio do BO SOAN dung tu du kien co kieu, va ham nay
+ * xet BAN SOAN chu khong xet doan van. Bo trich o `outbound-claims.ts` giu nguyen va van chay —
+ * nhung o CHANG 3, tuc chi de LAM GIAM kha nang gui (muc 7 hop dong: defense-in-depth). Mot lan
+ * bo sot cua no khong con bien mot khang dinh khong tham quyen thanh mot tin gui duoc, boi vi
+ * duong cho phep khong di qua no nua.
  */
 
 /* ------------------------------------------------------------------ *
@@ -124,8 +147,26 @@ const POLICY_GRANT_TOKENS: Readonly<Record<PolicyType, readonly string[]>> = {
   cod: ['payment_policy:cod', 'cod'],
 };
 
-function policyClaimsOf(policy: PolicyType): readonly string[] {
+/**
+ * Ma uy quyen cua MOT loai chinh sach.
+ *
+ * Xuat ra (truoc #189 la `policyClaimsOf` noi bo) vi bo soan can chinh bo ma nay khi no render
+ * khoi chinh sach: khoi phai khai bao DUNG nhung ma ma grant se duoc doi chieu, neu khong thi
+ * phep kiem o `decideOutboundAuthority` se so hai bo tu vung khac nhau.
+ */
+export function policyGrantTokens(policy: PolicyType): readonly string[] {
   return POLICY_GRANT_TOKENS[policy];
+}
+
+/**
+ * MUC CAM KET ma mot trang thai don uy quyen — cong don theo thang bac.
+ *
+ * Xuat ra de tang du kien (`outbound-facts.ts`) dung duoc chinh bang nay. Doc bang truc tiep tu
+ * ben ngoai thi mot ngay nao do se co hai cach tinh "trang thai nay noi duoc gi", va chung se
+ * lech nhau.
+ */
+export function commitmentLevelsFor(status: OrderStatus): readonly OutboundCommitmentLevel[] {
+  return COMMITMENT_LEVELS_BY_STATE[status];
 }
 
 function grant(
@@ -155,7 +196,7 @@ export function grantsFromPricedOrder(priced: PricedOrder): OutboundAuthorityGra
     priced.grandTotal,
   ];
   const policies: string[] = [
-    ...(priced.policy ? policyClaimsOf(priced.policy) : []),
+    ...(priced.policy ? policyGrantTokens(priced.policy) : []),
     ...(priced.vat ? ['vat'] : []),
     ...(priced.codCollect ? ['cod'] : []),
     ...(priced.shippingFee > 0 ? ['shipping'] : []),
@@ -173,7 +214,7 @@ export function grantsFromQuote(unitPrices: readonly number[]): OutboundAuthorit
 
 /** THAM QUYEN TU CAP DAI LY DA MAP — chinh sach mac dinh cua ho, khong phai bien the model viet. */
 export function grantsFromDealerPolicy(policy: PolicyType | null): OutboundAuthorityGrant[] {
-  return policy ? grant('policy', 'rules.policy', policyClaimsOf(policy)) : [];
+  return policy ? grant('policy', 'rules.policy', policyGrantTokens(policy)) : [];
 }
 
 /**
@@ -236,12 +277,6 @@ export function outboundFingerprint(text: string): string {
  * XET THAM QUYEN
  * ------------------------------------------------------------------ */
 
-export interface OutboundCandidate {
-  /** Van ban se den tay khach. */
-  readonly text: string;
-  readonly provenance: OutboundProvenance;
-}
-
 /**
  * THU TU XET co dinh: tien -> chinh sach -> cam ket don.
  *
@@ -250,63 +285,108 @@ export interface OutboundCandidate {
  */
 const DENIAL_ORDER: readonly OutboundClaimClass[] = ['financial', 'policy', 'order_commitment'];
 
+/** Lop khong co grant nao. */
+const MISSING_REASON: Readonly<Record<OutboundClaimClass, OutboundAuthorityDenyReason>> = {
+  financial: 'FINANCIAL_AUTHORITY_MISSING',
+  policy: 'POLICY_AUTHORITY_MISSING',
+  order_commitment: 'ORDER_COMMITMENT_NOT_AUTHORIZED',
+};
+
+/** Co grant, nhung gia tri/ma khoi noi ra khong nam trong do. */
+const UNAUTHORIZED_REASON: Readonly<Record<OutboundClaimClass, OutboundAuthorityDenyReason>> = {
+  financial: 'FINANCIAL_VALUE_NOT_AUTHORIZED',
+  policy: 'POLICY_STATEMENT_NOT_AUTHORIZED',
+  order_commitment: 'ORDER_COMMITMENT_LEVEL_NOT_AUTHORIZED',
+};
+
+/** Vat mang khong truy nguyen duoc thuoc lop nao — de `missing` chi dung cho can bo sung. */
+const CARRIER_CLASS: Readonly<Record<UngroundedCarrier, OutboundClaimClass>> = {
+  NUMERAL_NOT_GROUNDED: 'financial',
+  POLICY_CARRIER_NOT_GROUNDED: 'policy',
+  COMMITMENT_CARRIER_NOT_GROUNDED: 'order_commitment',
+};
+
 /**
- * Ban nhap nay co tro thanh mot tin GUI DUOC CHO KHACH khong?
+ * BAN SOAN NAY CO TRO THANH MOT TIN GUI DUOC CHO KHACH KHONG?
  *
- * `deterministic` di thang: van ban do chinh tang tat dinh dung tu ket qua cua no, nen kiem lai
- * la kiem chinh minh. `llm_draft` phai chung minh TUNG VAT MANG.
+ * ---------------------------------------------------------------------------------------------
+ * DOI DAU VAO O #189, va do la ca ban sua: ham nay khong con nhan MOT DOAN VAN nua, no nhan mot
+ * `OutboundComposition`. Truoc day chu ky la `(candidate: { text, provenance }, authority)`, nen
+ * cau hoi thuc su duoc tra loi la "doc doan van nay, co thay khang dinh nao khong?" — va nhanh
+ * cuoi cua no la `khong thay gi => cho gui`. Bo trich van ban vi the nam TRONG ranh gioi cho phep.
+ *
+ * Nay cau hoi la: "ban soan nay da dung nhung KHOI nao, va tung khoi co grant chua?". Mot cach
+ * dien dat ngoai tam bo trich khong con y nghia gi o day, boi vi khong co bo trich nao tren duong
+ * CHO PHEP ca: khoi ton tai vi bo soan render duoc no tu du kien tat dinh, cham het.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * BA CHANG, THEO DUNG THU TU NAY:
+ *
+ *  0. KHONG CO GI DE GUI          -> `COMPOSITION_EMPTY`, fail closed.
+ *  1. VAN BAN TAT DINH TRON       -> qua thang; gia tri trong do chinh la ket qua co tham quyen.
+ *  2. TUNG KHANG DINH CUA TUNG KHOI phai nam trong grant. Day la ranh gioi DUNG SAI.
+ *  3. PHONG THU CHIEU SAU (muc 7 hop dong): quet lai vat mang tren VAN BAN CUOI. Lop nay chi
+ *     LAM GIAM kha nang gui — no khong cap phep cho gi, nen mot lan bo sot cua no khong con la
+ *     mot duong di vong. Do la toan bo su khac nhau giua no va ban truoc #189.
  */
 export function decideOutboundAuthority(
-  candidate: OutboundCandidate,
+  composition: OutboundComposition,
   authority: OutboundAuthority,
 ): OutboundAuthorityVerdict {
-  const fingerprint = outboundFingerprint(candidate.text);
-  const surfaced = surfacedClaimClasses(candidate.text);
-  if (candidate.provenance === 'deterministic') {
-    return { sendable: true, reason: 'DETERMINISTIC_AUTHORITY', claims: surfaced, fingerprint };
+  const fingerprint = composition.fingerprint;
+  if (composition.mode === 'empty') {
+    return { sendable: false, reason: 'COMPOSITION_EMPTY', missing: [], fingerprint };
+  }
+  if (composition.mode === 'deterministic_document') {
+    return {
+      sendable: true,
+      reason: 'DETERMINISTIC_AUTHORITY',
+      claims: surfacedClaimClasses(composition.text),
+      fingerprint,
+    };
   }
 
+  // CHANG 2 — cau truc. Moi khoi khai bao chinh xac nhung gia tri/ma no noi ra; grant phai phu het.
   const denials = new Map<OutboundClaimClass, OutboundAuthorityDenyReason>();
-
-  // TIEN — moi con so mang nghia tien phai la MOT GIA TRI da duoc uy quyen. Con so khong quy duoc
-  // ve mot gia tri duy nhat (`value === null`) bi coi la chua duoc uy quyen: mot cach viet nhap
-  // nhang khong duoc tu chon nghia co loi cho no.
-  const money = monetaryLiterals(candidate.text);
-  if (money.length) {
-    const allowed = authorizedValues(authority, 'financial');
-    if (!allowed) denials.set('financial', 'FINANCIAL_AUTHORITY_MISSING');
-    else if (money.some((literal) => !allowed.has(String(literal.value)))) {
-      denials.set('financial', 'FINANCIAL_VALUE_NOT_AUTHORIZED');
+  for (const block of composition.blocks) {
+    for (const entry of block.claims) {
+      const allowed = authorizedValues(authority, entry.claim);
+      if (!allowed) {
+        denials.set(entry.claim, MISSING_REASON[entry.claim]);
+      } else if (entry.authorized.some((value) => !allowed.has(value))) {
+        denials.set(entry.claim, UNAUTHORIZED_REASON[entry.claim]);
+      }
     }
   }
-
-  // CHINH SACH — ma chinh xac tung loai, cong voi moi so ngay xuat hien trong bai.
-  const policies = policyClaimTokens(candidate.text);
-  if (policies.length) {
-    const allowed = authorizedValues(authority, 'policy');
-    if (!allowed) denials.set('policy', 'POLICY_AUTHORITY_MISSING');
-    else if (policies.some((code) => !allowed.has(code))) {
-      denials.set('policy', 'POLICY_STATEMENT_NOT_AUTHORIZED');
-    }
-  }
-
-  // CAM KET DON — dung MUC ma cau noi tuyen bo, khong phai "co noi ve don hay khong".
-  const level = claimedCommitmentLevel(candidate.text);
-  if (level) {
-    const allowed = authorizedValues(authority, 'order_commitment');
-    if (!allowed) denials.set('order_commitment', 'ORDER_COMMITMENT_NOT_AUTHORIZED');
-    else if (!allowed.has(commitmentToken(level))) {
-      denials.set('order_commitment', 'ORDER_COMMITMENT_LEVEL_NOT_AUTHORIZED');
-    }
-  }
-
   if (denials.size) {
     const missing = DENIAL_ORDER.filter((claim) => denials.has(claim));
     return { sendable: false, reason: denials.get(missing[0]!)!, missing, fingerprint };
   }
-  return surfaced.length
-    ? { sendable: true, reason: 'AUTHORITY_SATISFIED', claims: surfaced, fingerprint }
-    : { sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM', claims: [], fingerprint };
+
+  // CHANG 3 — phong thu chieu sau. Quet tren van ban CUOI, doi chieu voi bang chung neo nguon ma
+  // chinh ban soan ghim lai. Bao dong gia cua bo trich (do duoc: ~26% tai lieu da duyet) da bi
+  // neo nguon hap thu o buoc soan, nen o day no khong con lam hong cau FAQ binh thuong nua.
+  const ungrounded = ungroundedCarrier(
+    composition.text,
+    parseGroundingTokens(composition.grounded),
+  );
+  if (ungrounded) {
+    return {
+      sendable: false,
+      reason: 'NARRATIVE_CARRIER_NOT_GROUNDED',
+      missing: [CARRIER_CLASS[ungrounded]],
+      fingerprint,
+    };
+  }
+
+  return composition.blocks.length
+    ? {
+        sendable: true,
+        reason: 'AUTHORITY_SATISFIED',
+        claims: [...new Set(composition.blocks.flatMap((b) => b.claims.map((c) => c.claim)))],
+        fingerprint,
+      }
+    : { sendable: true, reason: 'NARRATIVE_ONLY_COMPOSITION', claims: [], fingerprint };
 }
 
 /** `null` = KHONG co grant nao cho lop nay (khac han "co grant nhung tap gia tri khong khop"). */
@@ -360,8 +440,27 @@ export function pinnedOutboundVerdict(
   if (!verdict) {
     return { sendable: false, reason: 'AUTHORITY_DECISION_ABSENT', missing: [] };
   }
+  /*
+   * BAN SOAN CO KIEU PHAI CO MAT (#189).
+   *
+   * Mot phan quyet don doc khong con du. Truoc #189, `outboundAuthority` co the duoc cap cho mot
+   * doan van XUOI ma model viet — do la ca lop lo hong. Nen tu day: khong co
+   * `trace.outboundComposition` nghia la noi dung nay CHUA di qua bo soan, va no bi tu choi ke ca
+   * khi mang mot phan quyet trong hop le. Ban ghi soan truoc #189 roi vao dung nhanh nay, va do
+   * la yeu cau o muc 8 ca 10 hop dong.
+   */
+  const composition = trace?.outboundComposition;
+  if (!composition) {
+    return {
+      sendable: false,
+      reason: 'COMPOSITION_ABSENT',
+      missing: verdict.sendable ? [] : verdict.missing,
+    };
+  }
   const fingerprint = outboundFingerprint(text);
-  if (verdict.fingerprint !== fingerprint) {
+  // MOT dau cho CA HAI: phan quyet, ban soan va doan van sap gui phai la cung mot thu. Ban soan
+  // co dau rieng nen mot ban ghi bi ghep tu hai luot khac nhau cung dung lai o day.
+  if (verdict.fingerprint !== fingerprint || composition.fingerprint !== fingerprint) {
     return {
       sendable: false,
       reason: 'AUTHORITY_PAYLOAD_MISMATCH',

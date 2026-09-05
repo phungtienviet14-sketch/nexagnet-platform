@@ -24,6 +24,41 @@ STACK_SLUG="${STACK_SLUG:-${TENANT_SLUG}}"
   echo "STACK_SLUG khong hop le: '${STACK_SLUG}'." >&2
   exit 64
 }
+# --- HO SO TRIEN KHAI (DEPLOYMENT PROFILE) ------------------------------------------------------
+#
+# Truoc ban nay, tep nay TU quyet dinh moi thu bang mot phep so sanh tenant:
+#   `[[ "${TENANT_SLUG}" == 'ultty' ]] || exit 64` cho moi truong gd1-test.
+# Do la mot cong DUNG (fail-closed) nhung dat SAI CHO: no khien `gd1-test` khong phai mot moi
+# truong ma la mot duong cam cung vao pilot cua mot khach — nen mot stack xem truoc thu hai chi co
+# hai loi vao, va ca hai deu sai (noi long ho so cua Ultty, hoac roi xuong `preflight: standard`
+# von bo han bang chung CI tren dung SHA cua main — xem #180/#186).
+#
+# Ho so lam dung viec do, chi khac la no CO TEN. Suy ra o RUNNER (`deploy-ci.sh` goi
+# `describeRuntimeContract` trong `deployment-profiles.mjs`) roi truyen xuong day, vi VM KHONG cai
+# node — node chi co ben trong container (da xac minh 20/08/2026).
+#
+# MAC DINH = HANH VI CU, VA MAC DINH LA HUONG SIET:
+#   · `PROFILE_FLOWISE=on`  -> van doi du 8 secret Flowise nhu truoc;
+#   · `PROFILE_TENANTS=ultty` -> mot lan chay gd1-test thieu bien van chi cho phep Ultty di qua.
+# Nghia la mot bien BI MAT tren duong truyen khong bao gio noi long duoc cong nao.
+DEPLOYMENT_PROFILE="${DEPLOYMENT_PROFILE:-}"
+PROFILE_TENANTS="${PROFILE_TENANTS:-ultty}"
+PROFILE_FLOWISE="${PROFILE_FLOWISE:-on}"
+PROFILE_PARSER="${PROFILE_PARSER:-deepseek}"
+PROFILE_CHANNEL="${PROFILE_CHANNEL:-zca}"
+[[ "${PROFILE_FLOWISE}" =~ ^(on|off)$ ]] || {
+  echo "PROFILE_FLOWISE phai la on hoac off (dang la '${PROFILE_FLOWISE}')." >&2
+  exit 64
+}
+[[ "${PROFILE_PARSER}" =~ ^(deepseek|flowise|claude|none)$ ]] || {
+  echo "PROFILE_PARSER khong hop le: '${PROFILE_PARSER}'." >&2
+  exit 64
+}
+[[ "${PROFILE_CHANNEL}" =~ ^(zca|bot|mock|none)$ ]] || {
+  echo "PROFILE_CHANNEL khong hop le: '${PROFILE_CHANNEL}'." >&2
+  exit 64
+}
+
 APP_DIR="${APP_DIR:-/srv/netviet/apps/zalo-${STACK_SLUG}}"
 RUNTIME_DIR="${RUNTIME_DIR:-${APP_DIR}/.runtime}"
 EDGE_DIR="${EDGE_DIR:-/srv/netviet/edge}"
@@ -93,8 +128,22 @@ optional_secret() {
 
 POSTGRES_ADMIN_PASSWORD="$(secret zalo-${STACK_SLUG}-postgres-admin-password)"
 ZALO_DB_PASSWORD="$(secret zalo-${STACK_SLUG}-zalo-db-password)"
-FLOWISE_DB_PASSWORD="$(secret zalo-${STACK_SLUG}-flowise-db-password)"
-DEEPSEEK_API_KEY="$(secret zalo-${STACK_SLUG}-deepseek-api-key)"
+# HOP DONG BI MAT SUY RA TU HE THONG CON DUOC BAT, khong phai tu mot danh sach co dinh.
+#
+# Truoc ban nay ca 13 loi goi `secret` deu VO DIEU KIEN, nen mot ho so khong chay Flowise va khong
+# chay LLM van bi doi du 13 ten — tuc muon co mot ban xem truoc thi phai tao ra 9 bi mat cho cac he
+# thong con KHONG chay. Do la "bia ra mot credential de thoa man ha tang cu" ma #192 §4 cam.
+#
+# `secret` (khong phai `optional_secret`) van duoc dung o nhanh BAT: mot he thong con da duoc bat
+# ma thieu khoa phai chet ngay tai day, khong duoc lui ve che do hong.
+FLOWISE_DB_PASSWORD=''
+if [[ "${PROFILE_FLOWISE}" == 'on' ]]; then
+  FLOWISE_DB_PASSWORD="$(secret zalo-${STACK_SLUG}-flowise-db-password)"
+fi
+DEEPSEEK_API_KEY=''
+if [[ "${PROFILE_PARSER}" == 'deepseek' ]]; then
+  DEEPSEEK_API_KEY="$(secret zalo-${STACK_SLUG}-deepseek-api-key)"
+fi
 # AGENT TU VAN. `optional_secret` chu khong `secret`: khong co khoa thi agent lui ve
 # `NoopAdvisorAgent` va he thong giu nguyen duong tat dinh — thieu mot cau tra loi muot hon khong
 # duoc phep lam chet ca stack.
@@ -224,39 +273,94 @@ AUTO_SEND="${AUTO_SEND:-on}"
 PARSER_MODE="${PARSER_MODE:-deepseek}"
 DATA_CLASSIFICATION="${DATA_CLASSIFICATION:-test}"
 if [[ "${DEPLOYMENT_ENVIRONMENT}" == 'gd1-test' ]]; then
-  [[ "${TENANT_SLUG}" == 'ultty' ]] || {
-    echo 'Runtime profile gd1-test chi duoc dang ky cho tenant ultty.' >&2
+  # CONG NAY GIU NGUYEN SUC, CHI DOI CHO NEO.
+  #
+  # Truoc: `[[ "${TENANT_SLUG}" == 'ultty' ]] || exit 64` — dung ve an toan, sai ve pham vi. No
+  # bien `gd1-test` thanh duong cam cung vao pilot cua MOT khach, nen khach thu hai chi con hai
+  # loi vao va ca hai deu pha mot cong (xem khoi chu thich HO SO TRIEN KHAI o dau tep).
+  #
+  # Sau: tenant phai nam trong DANH SACH CUA HO SO, va cac gia tri runtime duoc ghim TU HO SO.
+  # Ultty di qua dung nhu truoc (`PROFILE_TENANTS='ultty'`, ghim zca/deepseek/off/test), va mot
+  # ho so khong duoc dang ky cho tenant nay van bi chan tai day — them mot lop nua sau
+  # `validateProfileForEntry` o tang resolver va sau phep kiem cua `deploy-ci.sh`.
+  [[ -n "${DEPLOYMENT_PROFILE}" ]] || {
+    echo 'Moi truong gd1-test bat buoc co DEPLOYMENT_PROFILE; khong co ho so thi khong render.' >&2
     exit 64
   }
-  [[ "${CHANNEL_MODE}" == 'zca' ]] || {
-    echo 'Ultty GD1-test bat buoc CHANNEL_MODE=zca; khong fallback sang channel khac.' >&2
-    exit 1
+  profile_allows_tenant=0
+  for allowed_tenant in ${PROFILE_TENANTS}; do
+    [[ "${allowed_tenant}" == "${TENANT_SLUG}" ]] && profile_allows_tenant=1
+  done
+  [[ "${profile_allows_tenant}" -eq 1 ]] || {
+    echo "Ho so '${DEPLOYMENT_PROFILE}' khong duoc dang ky cho tenant '${TENANT_SLUG}'." >&2
+    echo "(ho so nay phuc vu: ${PROFILE_TENANTS})" >&2
+    exit 64
   }
-  CHANNEL_MODE='zca'
-  PARSER_MODE='deepseek'
-  AUTO_SEND='off'
-  DATA_CLASSIFICATION='test'
-  # AGENT TU VAN tren gd1-test chay DeepSeek, cung nha cung cap voi parser.
+  # HO SO PHAI GHIM DU BON GIA TRI. Thieu mot cai = mot gia tri runtime cua moi truong bi khoa
+  # cong roi ve mac dinh cua tep nay (`AUTO_SEND=on`!), tuc dung cai bay ma #180 mo ra.
+  for pinned in PROFILE_CHANNEL_MODE PROFILE_PARSER_MODE PROFILE_AUTO_SEND PROFILE_DATA_CLASSIFICATION; do
+    [[ -n "${!pinned:-}" ]] || {
+      echo "Ho so '${DEPLOYMENT_PROFILE}' thieu ${pinned} cho moi truong bi khoa cong." >&2
+      exit 64
+    }
+  done
+  # KENH THAT KHONG DUOC AM THAM DOI. Voi ho so chay ZCA, override cua operator trong
+  # `.runtime/channel-mode.env` phai KHOP ho so — day dung la phep kiem cu cua Ultty
+  # (`CHANNEL_MODE == 'zca'` hoac exit 1), chi khac la gia tri doi chieu den tu ho so.
   #
-  # Vi sao khong phai Claude (lua chon dung ve tuan thu): do ngay 21/08/2026, khoa Anthropic tra
-  # `credit balance is too low` — agent lui ve duong tat dinh, tuc tinh nang khong chung minh duoc
-  # gi. Nhanh nay chi mo cho gd1-test, noi `DATA_CLASSIFICATION=test` va chi co nhom/du lieu TEST;
-  # do dung pham vi CLAUDE.md cho phep dung DeepSeek. Stack chay du lieu khach that PHAI dung
-  # `ADVICE_COMPOSER=claude` (hoac bo sung DeepSeek vao thoa thuan xu ly du lieu truoc).
-  ADVICE_COMPOSER='deepseek'
+  # Voi ho so KHONG chay kenh nao (`channel=none` -> ghim `mock`), khong co gi de bao ve: `mock`
+  # la kenh ngoai tuyen tat dinh, khong tai khoan, khong phien, khong rui ro ToS. Nen ghim thang.
+  if [[ "${PROFILE_CHANNEL}" != 'none' ]]; then
+    [[ "${CHANNEL_MODE}" == "${PROFILE_CHANNEL_MODE}" ]] || {
+      echo "Ho so '${DEPLOYMENT_PROFILE}' bat buoc CHANNEL_MODE=${PROFILE_CHANNEL_MODE}; khong fallback sang channel khac." >&2
+      exit 1
+    }
+  fi
+  CHANNEL_MODE="${PROFILE_CHANNEL_MODE}"
+  PARSER_MODE="${PROFILE_PARSER_MODE}"
+  AUTO_SEND="${PROFILE_AUTO_SEND}"
+  DATA_CLASSIFICATION="${PROFILE_DATA_CLASSIFICATION}"
+  # AGENT TU VAN — quyet dinh XU LY DU LIEU RIENG, khong bam theo parser.
+  #
+  # Ultty gd1-test ghim `deepseek` (cung nha cung cap voi parser). Ly do khong phai Claude: ngay
+  # 21/08/2026 khoa Anthropic tra `credit balance is too low` — agent lui ve duong tat dinh, tuc
+  # tinh nang khong chung minh duoc gi. Nhanh do chi mo cho gd1-test, noi
+  # `DATA_CLASSIFICATION=test` va chi co nhom/du lieu TEST; dung pham vi CLAUDE.md cho phep dung
+  # DeepSeek. Stack chay du lieu khach that PHAI dung `ADVICE_COMPOSER=claude`.
+  #
+  # Ho so xem truoc ghim `off`: khong nha cung cap LLM nao duoc goi, nen khong ben thu ba nao nhan
+  # mot byte du lieu nao.
+  ADVICE_COMPOSER="${PROFILE_ADVICE_COMPOSER:-off}"
+  # GHI LAI OVERRIDE TREN DIA cho khop `secrets.env`.
+  #
+  # `.runtime/channel-mode.env` khong bi rsync ghi de, va `deploy-stack.sh` doc CHINH no (khong
+  # doc `secrets.env`) de biet dang chay kenh nao. Voi ho so ghim `mock`, mot tep vang mat se
+  # duoc `channel-mode.sh read` doc thanh `zca` — hai nguon noi hai chuyen khac nhau ve cung mot
+  # stack. Ho so la cai ghim, nen ghi no ra la lam cho dia noi dung su that, khong phai them mot
+  # quyet dinh moi: voi Ultty gia tri nay da bat buoc bang `zca` o ngay tren.
+  "${SCRIPT_DIR}/channel-mode.sh" write "${RUNTIME_DIR}/channel-mode.env" "${CHANNEL_MODE}"
 fi
 API_KEY=$(secret zalo-${STACK_SLUG}-api-key)
 # VM da duoc cap quyen doc API key. Dan xuat domain-separated session signing key thay vi doi IAM
 # de them mot secret moi; gia tri goc khong nam trong command args va khong duoc ghi log.
 SESSION_SECRET="$(printf 'netviet-api-session-v1:%s' "${API_KEY}" | sha256sum | cut -d' ' -f1)"
 PILOT_OPERATOR_PASSWORD="$(secret zalo-${STACK_SLUG}-operator-password)"
-FLOWISE_SECRETKEY="$(secret zalo-${STACK_SLUG}-flowise-secretkey)"
-FLOWISE_ADMIN_EMAIL="$(secret zalo-${STACK_SLUG}-flowise-admin-email)"
-FLOWISE_ADMIN_PASSWORD="$(secret zalo-${STACK_SLUG}-flowise-admin-password)"
-FLOWISE_JWT_SECRET="$(secret zalo-${STACK_SLUG}-flowise-jwt-secret)"
-FLOWISE_REFRESH_SECRET="$(secret zalo-${STACK_SLUG}-flowise-refresh-secret)"
-FLOWISE_SESSION_SECRET="$(secret zalo-${STACK_SLUG}-flowise-session-secret)"
-FLOWISE_TOKEN_HASH_SECRET="$(secret zalo-${STACK_SLUG}-flowise-token-hash-secret)"
+FLOWISE_SECRETKEY=''
+FLOWISE_ADMIN_EMAIL=''
+FLOWISE_ADMIN_PASSWORD=''
+FLOWISE_JWT_SECRET=''
+FLOWISE_REFRESH_SECRET=''
+FLOWISE_SESSION_SECRET=''
+FLOWISE_TOKEN_HASH_SECRET=''
+if [[ "${PROFILE_FLOWISE}" == 'on' ]]; then
+  FLOWISE_SECRETKEY="$(secret zalo-${STACK_SLUG}-flowise-secretkey)"
+  FLOWISE_ADMIN_EMAIL="$(secret zalo-${STACK_SLUG}-flowise-admin-email)"
+  FLOWISE_ADMIN_PASSWORD="$(secret zalo-${STACK_SLUG}-flowise-admin-password)"
+  FLOWISE_JWT_SECRET="$(secret zalo-${STACK_SLUG}-flowise-jwt-secret)"
+  FLOWISE_REFRESH_SECRET="$(secret zalo-${STACK_SLUG}-flowise-refresh-secret)"
+  FLOWISE_SESSION_SECRET="$(secret zalo-${STACK_SLUG}-flowise-session-secret)"
+  FLOWISE_TOKEN_HASH_SECRET="$(secret zalo-${STACK_SLUG}-flowise-token-hash-secret)"
+fi
 # PRE-PILOT PUBLIC — SESSION AUTH:
 # Caddy khong can Basic Auth; NestJS dung login session/role/CSRF va PostgreSQL session store.
 # URL pilot public phai dung session server-side. API key van render san cho automation tuong lai,
@@ -349,6 +453,15 @@ PILOT_OPERATOR_NAME=Pilot Operator
 PILOT_OPERATOR_PASSWORD=${PILOT_OPERATOR_PASSWORD}
 MEDIA_STORE=${MEDIA_STORE}
 MEDIA_BUCKET=${MEDIA_BUCKET}
+# CONG TAC HE THONG CON, doc boi deploy-stack.sh tren VM. No KHONG di vao container nao: mot
+# container khong can biet Flowise co ton tai hay khong, con lop rollout thi phai biet — no quyet
+# dinh co keo compose.flowise.yaml vao, co doi Flowise healthy, va co doi chieu digest cua no.
+#
+# KHONG DAT TEN TEP TRONG DAU HUYEN O DAY. Khoi nay la mot heredoc KHONG duoc trich dan, nen dau
+# huyen la THAY THE LENH: ban dau tien cua dong tren dat hai ten tep trong dau huyen va bash da co
+# CHAY chung ("deploy-stack.sh: command not found"), roi set -e giet ca lan render. Cac dong khac
+# trong khoi nay thoat dau huyen; o day bo han cho gon.
+FLOWISE_ENABLED=${PROFILE_FLOWISE}
 FLOWISE_SECRETKEY=${FLOWISE_SECRETKEY}
 FLOWISE_ADMIN_EMAIL=${FLOWISE_ADMIN_EMAIL}
 FLOWISE_ADMIN_PASSWORD=${FLOWISE_ADMIN_PASSWORD}
@@ -384,10 +497,28 @@ EOF
 install -d -m 0750 "${EDGE_DIR}"
 install -d -m 0750 "${EDGE_DIR}/.runtime"
 install -d -m 0750 "${EDGE_DIR}/tenants"
-cat >"${EDGE_DIR}/.runtime/caddy.env" <<EOF
+# `ACME_EMAIL` LA CAU HINH CUA EDGE DUNG CHUNG, KHONG PHAI CUA STACK NAY.
+#
+# Gia tri von duoc lay tu `flowise-admin-email` — mot bi mat chi ton tai voi ho so co Flowise. Ghi
+# de no bang chuoi rong khi trien khai mot ho so KHONG Flowise se lam `email {$ACME_EMAIL}` trong
+# Caddyfile con ZERO tham so => Caddyfile khong parse duoc => `caddy reload` that bai => duong lui
+# la `--force-recreate gateway`, tuc RUNG het network attachment va lam MOI khach tra 502 cung
+# luc (da xay ra that 21/08/2026 voi ca bon stack).
+#
+# Nen: chi ghi khi co gia tri; da co tep thi GIU NGUYEN cua khach da dung truoc; chua co tep va
+# cung khong co gia tri thi DUNG HAN va noi ro viec nguoi can lam — khong doan mot dia chi email.
+if [[ -n "${FLOWISE_ADMIN_EMAIL}" ]]; then
+  cat >"${EDGE_DIR}/.runtime/caddy.env" <<EOF
 ACME_EMAIL=${FLOWISE_ADMIN_EMAIL}
 EOF
-chmod 600 "${EDGE_DIR}/.runtime/caddy.env"
+  chmod 600 "${EDGE_DIR}/.runtime/caddy.env"
+elif [[ -f "${EDGE_DIR}/.runtime/caddy.env" ]]; then
+  echo "render-secrets: giu nguyen ACME_EMAIL cua edge dung chung (ho so nay khong co Flowise)." >&2
+else
+  echo "Edge dung chung chua co ACME_EMAIL va ho so '${DEPLOYMENT_PROFILE:-mac-dinh}' khong cung cap duoc." >&2
+  echo "Ghi mot dong 'ACME_EMAIL=<dia chi>' vao ${EDGE_DIR}/.runtime/caddy.env roi chay lai." >&2
+  exit 78
+fi
 
 # MANH CAU HINH CUA RIENG KHACH NAY. Moi khach mot tep: them khach khong phai sua tep cua khach
 # khac, va go mot khach chi la xoa mot tep roi nap lai.
@@ -410,6 +541,15 @@ ${OPERATOR_DOMAIN}${OPERATOR_ALIASES:+, ${OPERATOR_ALIASES}} {
 	import app_headers
 	import app_routes api-${STACK_SLUG} web-${STACK_SLUG} "${API_KEY}"
 }
+EOF
+
+# ROUTE FLOWISE — CHI phat khi ho so that su chay Flowise.
+#
+# Cung ly le voi route cua workflow dashboard ngay duoi: phat mot hostname cong khai tro toi mot
+# service khong ton tai thi Caddy van di xin chung chi ACME cho no — ton han muc Let's Encrypt cho
+# mot ten tra 502, va lo ra mot be mat khong phuc vu gi.
+if [[ "${PROFILE_FLOWISE}" == 'on' ]]; then
+  cat >>"${tenant_site}" <<EOF
 
 ${FLOWISE_DOMAIN}${FLOWISE_ALIASES:+, ${FLOWISE_ALIASES}} {
 	import secure_headers
@@ -418,6 +558,7 @@ ${FLOWISE_DOMAIN}${FLOWISE_ALIASES:+, ${FLOWISE_ALIASES}} {
 	}
 }
 EOF
+fi
 
 # DASHBOARD CUA WORKFLOW ENGINE — CHI phat route khi cong tac BAT.
 #

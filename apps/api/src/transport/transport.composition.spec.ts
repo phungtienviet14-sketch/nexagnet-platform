@@ -1,9 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CapabilityId } from '@netviet/tenant';
 import { describe, expect, it } from 'vitest';
 import { buildAppComposition } from '../app-composition.js';
+import { nonPreviewTenantPacks } from './__tests__/tenant-packs.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
@@ -76,23 +76,20 @@ describe('composition cua capability transport-core', () => {
 
     /**
      * Kiem tren GOI KHACH THAT chu khong chi tren composition: mot capability chi ro ri khi co ai
-     * do khai no. Bai test nay se do ngay lan dau tien mot khach dang co duoc bat `transport-core`
+     * do khai no. Bai test nay do ngay lan dau tien mot khach dang co duoc bat `transport-core`
      * ma khong ai co y — ke ca khi moi bai test khac van xanh.
+     *
+     * "Khong ai co y" la trong tam cua cau nay, va do la ly do danh sach goi XEM TRUOC duoc phep
+     * nam tach o `__tests__/tenant-packs.ts` thay vi bien mat vao mot dieu kien noi day: mot goi
+     * co chu y phai duoc VIET RA, va viec no khong duoc chua khach that lai co mot bai rieng
+     * khoa lai (`transport-tenant-allowlist.spec.ts`).
      */
-    it('khong goi khach nao dang co trong `tenants/` bat transport-core', () => {
-      const tenantsDir = join(repoRoot, 'tenants');
-      const slugs = readdirSync(tenantsDir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name);
-
-      expect(slugs.length).toBeGreaterThan(0);
-      for (const slug of slugs) {
-        const config = JSON.parse(readFileSync(join(tenantsDir, slug, 'tenant.json'), 'utf8')) as {
-          capabilities: string[];
-          experience: string;
-        };
-        expect(config.capabilities, slug).not.toContain('transport-core');
-        expect(config.experience, slug).not.toBe('transport-operations');
+    it('khong goi khach THAT nao bat transport-core hay experience van tai', () => {
+      const packs = nonPreviewTenantPacks(repoRoot);
+      expect(packs.length).toBeGreaterThan(0);
+      for (const pack of packs) {
+        expect(pack.capabilities, pack.slug).not.toContain('transport-core');
+        expect(pack.experience, pack.slug).not.toBe('transport-operations');
       }
     });
   });

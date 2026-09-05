@@ -207,6 +207,30 @@ export type {
   OutboundProvenance,
 } from './outbound-authority.js';
 export {
+  OUTBOUND_BLOCK_KINDS,
+  OUTBOUND_BLOCK_KIND_LABELS,
+  OUTBOUND_COMPOSITION_MODES,
+  OUTBOUND_OMISSION_REASONS,
+  OUTBOUND_OMISSION_REASON_LABELS,
+  OUTBOUND_PLAN_KINDS,
+  NARRATIVE_REJECTIONS,
+  NARRATIVE_REJECTION_LABELS,
+  narrativeOnlyPlan,
+} from './outbound-composition.js';
+export type {
+  ComposedBlock,
+  ComposedBlockClaim,
+  NarrativeDecision,
+  NarrativeRejection,
+  OmittedBlock,
+  OutboundBlockKind,
+  OutboundComposition,
+  OutboundCompositionMode,
+  OutboundOmissionReason,
+  OutboundPlan,
+  OutboundPlanKind,
+} from './outbound-composition.js';
+export {
   CONTENT_LIFECYCLE_STATUSES,
   ASSET_KINDS,
   CONTENT_LINK_KINDS,

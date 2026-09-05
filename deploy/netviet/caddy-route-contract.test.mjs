@@ -3,10 +3,12 @@ import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 
 import { resolveStackSlug } from './stack-identity.mjs';
+import { DEPLOYMENT_PROFILES } from './deployment-profiles.mjs';
 
 const caddyfile = await readFile(new URL('./edge/Caddyfile', import.meta.url), 'utf8');
 const deployStack = await readFile(new URL('./deploy-stack.sh', import.meta.url), 'utf8');
 const compose = await readFile(new URL('./compose.yaml', import.meta.url), 'utf8');
+const flowiseCompose = await readFile(new URL('./compose.flowise.yaml', import.meta.url), 'utf8');
 const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.url), 'utf8');
 const channelMode = await readFile(new URL('./channel-mode.sh', import.meta.url), 'utf8');
 const setChannelMode = await readFile(new URL('./set-channel-mode.sh', import.meta.url), 'utf8');
@@ -99,7 +101,10 @@ function covered(tokens, path) {
 test('moi namespace controller deu co duong di qua Caddy — khong route nao roi xuong Next.js', async () => {
   const apiMatcher = caddyfile.match(/\(app_routes\)[\s\S]*?@api path ([^\r\n]+)/)?.[1] ?? '';
   const tokens = apiMatcher.trim().split(/\s+/);
-  const srcDir = new URL('../../apps/api/src', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+  const srcDir = new URL('../../apps/api/src', import.meta.url).pathname.replace(
+    /^\/([A-Za-z]:)/,
+    '$1',
+  );
 
   const required = new Set();
   /**
@@ -204,7 +209,12 @@ test('moi STACK co hostname, alias mang, secret va volume rieng', () => {
   assert.match(compose, /^name: zalo-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
   assert.match(compose, /- api-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
   assert.match(compose, /- web-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
-  assert.match(compose, /- flowise-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
+  // Alias cua Flowise di theo service cua no sang `compose.flowise.yaml`. Cach ly khong doi mot
+  // ly: van la alias mang slug, chi khac tep. Kiem o dung tep dang giu no.
+  assert.match(flowiseCompose, /- flowise-\$\{STACK_SLUG:-\$\{TENANT_SLUG\}\}$/m);
+  // Va lop phu KHONG duoc tu dat lai `name:` — neu no dat, ban hop nhat se doi ten compose project
+  // (tuc doi ten volume) va stack se moc mot bo du lieu rong moi.
+  assert.doesNotMatch(flowiseCompose, /^name:/m);
 
   // Thu muc stack, unit systemd va tien to backup cung phai theo stack, neu khong stack moi se
   // ghi de len thu muc, timer va cua so luu tru cua stack dang chay.
@@ -254,7 +264,10 @@ test('deploy tay truyen slug khach xuong VM thay vi de VM doan', () => {
 // `--network host` toi 127.0.0.1:3002 — dut duong ma khong ai thay, vi rotate khong nam trong luong
 // deploy. Duong vao dung la mang RIENG cua khach do.
 test('rotate Flowise di vao dung container cua khach, khong qua cong host', async () => {
-  const rotate = await readFile(new URL('./rotate-flowise-admin-password.sh', import.meta.url), 'utf8');
+  const rotate = await readFile(
+    new URL('./rotate-flowise-admin-password.sh', import.meta.url),
+    'utf8',
+  );
   // Bo dong comment truoc khi kiem: chinh comment giai thich su co co nhac `--network host` va cong
   // 3002 cu — chi lenh THAT moi tinh (cung cach test Caddyfile o tren xu ly `basic_auth`).
   const commands = rotate
@@ -314,12 +327,16 @@ test('every process that mutates compose takes the shared lock', async () => {
     'channel override must be written only after the compose lock is held',
   );
   assert.ok(
-    renderSecrets.indexOf('flock -w 300 9') < renderSecrets.indexOf('cat >"${RUNTIME_DIR}/secrets.env"'),
+    renderSecrets.indexOf('flock -w 300 9') <
+      renderSecrets.indexOf('cat >"${RUNTIME_DIR}/secrets.env"'),
     'secrets.env must be written only after the compose lock is held',
   );
 
   const unit = await readFile(new URL('./systemd/netviet-stack@.service', import.meta.url), 'utf8');
-  assert.match(unit, /ExecStart=\/usr\/bin\/flock -w 300 \S*compose\.lock \/usr\/bin\/docker compose/);
+  assert.match(
+    unit,
+    /ExecStart=\/usr\/bin\/flock -w 300 \S*compose\.lock \/usr\/bin\/docker compose/,
+  );
 });
 
 test('deployment smoke checks public pages and requires auth for Zalo status API', () => {
@@ -358,10 +375,27 @@ test('pilot deploy defaults to zca and auto-send, while preserving a validated c
 
 test('Ultty GD1-test renders an explicit no-mock safety profile without changing pilot defaults', () => {
   assert.match(renderSecrets, /DEPLOYMENT_ENVIRONMENT/);
-  assert.match(renderSecrets, /gd1-test[\s\S]*CHANNEL_MODE='zca'/);
-  assert.match(renderSecrets, /gd1-test[\s\S]*PARSER_MODE='deepseek'/);
-  assert.match(renderSecrets, /gd1-test[\s\S]*AUTO_SEND='off'/);
-  assert.match(renderSecrets, /gd1-test[\s\S]*DATA_CLASSIFICATION='test'/);
+  // BON GIA TRI NAY VAN BI GHIM — chi khac la ho so ghim chung, khong phai mot phep so sanh
+  // tenant. Bai test doi chieu voi DANH MUC, tuc voi thu that su di vao `secrets.env`; mot lan
+  // sua danh muc lam bai nay do, con mot lan sua van ban shell thi khong the lam no xanh gia.
+  const ultty = DEPLOYMENT_PROFILES['ultty-gd1-test'];
+  assert.equal(ultty.runtime.channelMode, 'zca');
+  assert.equal(ultty.runtime.parserMode, 'deepseek');
+  assert.equal(ultty.runtime.autoSend, 'off');
+  assert.equal(ultty.runtime.dataClassification, 'test');
+  // Va tang render that su ghim tu ho so, chu khong roi ve mac dinh cua chinh no.
+  assert.match(renderSecrets, /gd1-test[\s\S]*CHANNEL_MODE="\$\{PROFILE_CHANNEL_MODE\}"/);
+  assert.match(renderSecrets, /gd1-test[\s\S]*PARSER_MODE="\$\{PROFILE_PARSER_MODE\}"/);
+  assert.match(renderSecrets, /gd1-test[\s\S]*AUTO_SEND="\$\{PROFILE_AUTO_SEND\}"/);
+  assert.match(
+    renderSecrets,
+    /gd1-test[\s\S]*DATA_CLASSIFICATION="\$\{PROFILE_DATA_CLASSIFICATION\}"/,
+  );
+  // Ho so THIEU mot trong bon gia tri do phai lam lan render CHET, khong duoc roi ve `AUTO_SEND=on`.
+  assert.match(
+    renderSecrets,
+    /for pinned in PROFILE_CHANNEL_MODE PROFILE_PARSER_MODE PROFILE_AUTO_SEND PROFILE_DATA_CLASSIFICATION/,
+  );
   assert.match(renderSecrets, /^DATA_CLASSIFICATION=\$\{DATA_CLASSIFICATION\}$/m);
   assert.match(compose, /DATA_CLASSIFICATION:\s*\$\{DATA_CLASSIFICATION:-test\}/);
   assert.match(deployRemote, /DEPLOYMENT_ENVIRONMENT/);
@@ -382,7 +416,10 @@ test('deploy smoke cannot approve through a live Zalo API transport', async () =
   assert.match(deployStack, /-e "CHANNEL_MODE=\$\{channel_mode\}"/);
   const recreateIndex = deployStack.indexOf('up -d --no-deps --force-recreate api web');
   const smokeIndex = deployStack.indexOf('smoke_output=');
-  assert.ok(recreateIndex >= 0 && recreateIndex < smokeIndex, 'API must reset AUTO_SEND before smoke');
+  assert.ok(
+    recreateIndex >= 0 && recreateIndex < smokeIndex,
+    'API must reset AUTO_SEND before smoke',
+  );
   assert.match(
     await readFile(new URL('./smoke-test.mjs', import.meta.url), 'utf8'),
     /if \(!liveZaloTransport\) \{[\s\S]*\/approve/,
@@ -390,7 +427,9 @@ test('deploy smoke cannot approve through a live Zalo API transport', async () =
 });
 
 test('PowerShell deploy creates the remote tenant-pack destination before Windows pscp uploads', () => {
-  const createParent = deployPs1.indexOf("install -d -m 0700 '$remoteParent' '$remoteParent/tenant-pack'");
+  const createParent = deployPs1.indexOf(
+    "install -d -m 0700 '$remoteParent' '$remoteParent/tenant-pack'",
+  );
   const uploadTenant = deployPs1.indexOf('"${VmName}:$remoteParent/tenant-pack"');
   assert.ok(createParent >= 0 && createParent < uploadTenant);
 });
@@ -403,7 +442,10 @@ test('public pilot uses persistent session auth and bootstraps one operator with
   assert.match(compose, /SESSION_SECRET: \$\{SESSION_SECRET\}/);
   const migrateIndex = deployStack.indexOf('prisma migrate deploy');
   const authBootstrapIndex = deployStack.indexOf('bootstrap-auth-user.mjs');
-  assert.ok(migrateIndex >= 0 && migrateIndex < authBootstrapIndex, 'migrate before auth bootstrap');
+  assert.ok(
+    migrateIndex >= 0 && migrateIndex < authBootstrapIndex,
+    'migrate before auth bootstrap',
+  );
   assert.match(deployStack, /PILOT_BASE_URL=https:\/\/\$\{OPERATOR_DOMAIN\}/);
   assert.match(compose, /extra_hosts:[\s\S]*"\$\{OPERATOR_DOMAIN\}:host-gateway"/);
   assert.match(deployStack, /runtime_value OPERATOR_DOMAIN/);
@@ -549,7 +591,10 @@ test('smoke: cong SSE thu hep theo nang luc va bao to khi thu hep', async () => 
   assert.match(smoke, /hasSalesOrder/);
   assert.match(smoke, /SMOKE_SKIPPED_SSE=1/);
   // Khong doc duoc goi khach -> van doi SSE. Lam yeu cong smoke o nhanh nay la vi pham bat bien 7.
-  assert.match(smoke, /tenantCapabilities === null \|\| tenantCapabilities\.includes\('sales-order'\)/);
+  assert.match(
+    smoke,
+    /tenantCapabilities === null \|\| tenantCapabilities\.includes\('sales-order'\)/,
+  );
 });
 
 test('gieo nguon su that: `dealers` chi bat buoc voi khach co nang luc sales-order', async () => {

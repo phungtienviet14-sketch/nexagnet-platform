@@ -57,76 +57,23 @@ jobs:
           fi
           echo "✔ Đã tìm thấy tenant package: tenants/${{ inputs.tenant }}"
 
+      # MOT CUA DUY NHAT, VA NO TESTABLE DUOC.
+      #
+      # Truoc day toan bo phep phan giai la mot heredoc noi thang vao day. Hai he qua, ca hai deu
+      # chiu luc: khong bo test nao cham vao no duoc, va cot `preflight` cua registry la van ban
+      # TU DO ma phep kiem duy nhat la mot `==` trong `if:` cua buoc ben duoi. Do chinh la duong
+      # ma #180 roi qua — mot dong khai `preflight: standard` cho moi truong `gd1-test` lam buoc
+      # `Verify exact main SHA passed CI` bi BO QUA hoan toan (do tren 213af13: resolver tra 0).
+      #
+      # Logic gio nam o `deploy/netviet/resolve-deployment-target.mjs`, di kem bo test am tinh.
       - name: Resolve deployment target
         id: target
         env:
           REQUESTED_TENANT: ${{ inputs.tenant }}
           REQUESTED_ENVIRONMENT: ${{ inputs.environment }}
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          const fs = await import('node:fs');
-          const { pathToFileURL } = await import('node:url');
-          const registry = JSON.parse(fs.readFileSync('.github/deployment-targets.json', 'utf8'));
-          // pathToFileURL, khong phai ghep chuoi: mot duong dan tuyet doi tho khong phai la ESM URL
-          // hop le (tren Windows no thanh scheme `c:`), nen ghep chuoi chay duoc tren CI ma vo ly
-          // khi chay tay o may lap trinh vien.
-          const { resolveStackSlug } = await import(
-            pathToFileURL('deploy/netviet/stack-identity.mjs').href
-          );
-          const tenant = process.env.REQUESTED_TENANT;
-          const environment = process.env.REQUESTED_ENVIRONMENT;
-          const deployment = registry.deployments.find(
-            (entry) => entry.tenant === tenant && entry.environment === environment,
-          );
-          if (!deployment) {
-            console.error(`Unsupported deployment target: tenant=${tenant} environment=${environment}`);
-            process.exit(64);
-          }
-          if (deployment.githubEnvironment !== environment) {
-            console.error(
-              `Deployment registry mismatch: ${tenant}/${environment} maps to GitHub environment ${deployment.githubEnvironment}`,
-            );
-            process.exit(65);
-          }
-          const target = registry.targets[deployment.target];
-          if (!target) {
-            console.error(`Unsupported deployment target id: ${deployment.target}`);
-            process.exit(66);
-          }
-          // The stack slug decides the compose project name, and the compose project name decides
-          // the volume names. A registry entry that disagrees with the rule would point a new
-          // environment at a running stack's PostgreSQL volume, so refuse rather than reconcile.
-          const stackSlug = resolveStackSlug(tenant, environment);
-          if (deployment.stackSlug !== stackSlug) {
-            console.error(
-              `Deployment registry declares stack ${deployment.stackSlug} but the rule derives ${stackSlug}`,
-            );
-            process.exit(68);
-          }
-          const required = ['vmName', 'gcpProjectId', 'region', 'zone', 'primaryTenant'];
-          for (const field of required) {
-            if (typeof target[field] !== 'string' || target[field].trim() === '') {
-              console.error(`Deployment target ${deployment.target} is missing ${field}`);
-              process.exit(67);
-            }
-          }
-          const output = fs.createWriteStream(process.env.GITHUB_OUTPUT, { flags: 'a' });
-          for (const [key, value] of Object.entries({
-            stack_slug: stackSlug,
-            target_id: deployment.target,
-            vm_name: target.vmName,
-            gcp_project_id: target.gcpProjectId,
-            gcp_region: target.region,
-            gcp_zone: target.zone,
-            primary_tenant: target.primaryTenant,
-            runtime_environment: deployment.runtimeEnvironment,
-            preflight: deployment.preflight,
-          })) {
-            output.write(`${key}=${value}\n`);
-          }
-          output.end();
-          NODE
+          WORKFLOW_ENGINE: ${{ inputs.workflow_engine }}
+          OBSERVABILITY_STACK: ${{ inputs.observability_stack }}
+        run: node deploy/netviet/run-resolve-deployment-target.mjs
 
       - id: auth
         uses: google-github-actions/auth@v2
@@ -170,7 +117,7 @@ jobs:
 
       - name: Verify exact main SHA passed CI
         id: ci
-        if: steps.target.outputs.preflight == 'gd1-test'
+        if: steps.target.outputs.requires_exact_main_ci == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -202,6 +149,9 @@ jobs:
           WORKFLOW_ENGINE: ${{ inputs.workflow_engine }}
           OBSERVABILITY_STACK: ${{ inputs.observability_stack }}
           ENVIRONMENT: ${{ steps.target.outputs.runtime_environment }}
+          # MOI TRUONG THAT, tach khoi NHAN LUC CHAY o tren (`production` -> `prod`). Cong
+          # khoa cua deploy-ci.sh suy tu bien nay, nen no khong the bien mat vi mot nhan sai.
+          DEPLOYMENT_ENVIRONMENT_ID: ${{ inputs.environment }}
           STACK_SLUG: ${{ steps.target.outputs.stack_slug }}
           GCP_PROJECT_ID: ${{ steps.target.outputs.gcp_project_id }}
           GCP_REGION: ${{ steps.target.outputs.gcp_region }}
@@ -210,7 +160,9 @@ jobs:
           PRIMARY_TENANT: ${{ steps.target.outputs.primary_tenant }}
           DEPLOYMENT_TARGET_ID: ${{ steps.target.outputs.target_id }}
           GITHUB_REF: ${{ github.ref }}
-          GD1_TEST_TARGET_CONFIRMED: ${{ steps.target.outputs.preflight == 'gd1-test' && '1' || '0' }}
+          DEPLOYMENT_PROFILE: ${{ steps.target.outputs.deployment_profile }}
+          DEPLOYMENT_GATE: ${{ steps.target.outputs.deployment_gate }}
+          GD1_TEST_TARGET_CONFIRMED: ${{ steps.target.outputs.requires_exact_main_ci == 'true' && '1' || '0' }}
           GD1_TEST_CI_CONCLUSION: ${{ steps.ci.outputs.conclusion }}
           GD1_TEST_APPROVED_GROUP_HASHES: ${{ vars.GD1_TEST_APPROVED_GROUP_HASHES }}
 

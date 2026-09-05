@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChannelMessage, Intent, ParseResult } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { AdvisorAgent, type AdvisorReply } from '../advisor/advisor-agent.js';
+import { fakeAdvisorReply } from '../advisor/__tests__/advisor-reply.fixture.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryContentRepository } from '../content/content.repository.js';
@@ -32,10 +33,15 @@ import { PipelineService } from './pipeline.service.js';
 
 const CHAT_ID = SEED.groups[0]!.chatId;
 
+/** Nguon he thong gia lap: mot luot that co loi nhan la luot DA tra cuu duoc tai lieu da duyet (G1). */
+const STUB_SOURCES = ['Tai lieu da duyet cua san pham (gia lap cho test).'];
+
 class StubAdvisor extends AdvisorAgent {
   readonly name = 'stub';
-  constructor(private readonly canned: AdvisorReply | null) {
+  private readonly canned: AdvisorReply | null;
+  constructor(canned: (Partial<AdvisorReply> & { readonly text: string }) | null) {
     super();
+    this.canned = canned ? fakeAdvisorReply({ sources: STUB_SOURCES, ...canned }) : null;
   }
   async reply(): Promise<AdvisorReply | null> {
     return this.canned;
@@ -112,7 +118,8 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
       new StubAdvisor({
         text: 'Dạ máy có đèn ngủ ạ, đèn khí quyển học dùng làm đèn trang trí buổi tối ạ.',
         usedTools: ['tra_cuu_san_pham', 'tra_cuu_tai_lieu'],
-        handoff: false, authority: { grants: [] },
+        handoff: false,
+        authority: { grants: [] },
       }),
     );
 
@@ -128,7 +135,12 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
       new StubAdvisor({
         text: 'Dạ sản phẩm được bảo hành 12 tháng kể từ ngày mua ạ.',
         usedTools: ['tra_cuu_tai_lieu'],
-        handoff: false, authority: { grants: [] },
+        handoff: false,
+        authority: { grants: [] },
+        // Con so trong loi nhan phai truy nguyen duoc ve NGUON HE THONG (G2) — day chinh la bai
+        // FAQ da duyet ma `tra_cuu_tai_lieu` vua tra ve. Bo dong nay di thi loi nhan bi tu choi,
+        // va do la hanh vi DUNG: khong co tai lieu nao noi 12 thang thi khong duoc noi 12 thang.
+        sources: ['San pham duoc bao hanh 12 thang ke tu ngay mua.'],
       }),
       'bao_hanh_khieu_nai',
     );
@@ -145,7 +157,8 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
       new StubAdvisor({
         text: 'Dạ em nhờ Sale kiểm tra lại giúp mình ạ.',
         usedTools: ['tra_cuu_tai_lieu'],
-        handoff: true, authority: { grants: [] },
+        handoff: true,
+        authority: { grants: [] },
       }),
     );
 

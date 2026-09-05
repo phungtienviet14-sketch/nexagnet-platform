@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -54,13 +55,17 @@ const deterministicSmoke = read('deterministic-smoke.mjs');
 const EXPECTED_SHA = '1'.repeat(40);
 const MISMATCHED_SHA = '2'.repeat(40);
 
-function withReleaseMismatchHarness(body) {
+function withReleaseMismatchHarness(body, { flowiseEnabled = 'on' } = {}) {
   const scratch = mkdtempSync(join(tmpdir(), 'release-mismatch-'));
   try {
     const runtime = join(scratch, '.runtime');
     const postgres = join(scratch, 'postgres');
     mkdirSync(runtime, { recursive: true });
     mkdirSync(postgres, { recursive: true });
+    // `deploy-stack.sh` suy ra thanh phan cua stack tu tep nay (`stack-compose.sh`), khong tu mot
+    // danh sach viet cung — nen harness phai mang no theo, dung ban THAT trong repo. Dung mot ban
+    // gia o day se lam bai test chung minh mot thu khong chay tren VM.
+    copyFileSync(join(here, 'stack-compose.sh'), join(scratch, 'stack-compose.sh'));
     writeFileSync(
       join(runtime, 'secrets.env'),
       [
@@ -71,6 +76,7 @@ function withReleaseMismatchHarness(body) {
         'FLOWISE_IMAGE=registry.example/flowise@sha256:bbbb',
         `RELEASE_GIT_SHA=${EXPECTED_SHA}`,
         'WORKFLOW_ENGINE=off',
+        `FLOWISE_ENABLED=${flowiseEnabled}`,
       ].join('\n'),
       'utf8',
     );

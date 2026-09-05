@@ -5,6 +5,7 @@ import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryOrdersRepository } from '../orders/orders.repository.js';
 import { outboundFingerprint } from './outbound-authority.js';
+import { deterministicComposition } from './outbound-composer.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
 
@@ -53,9 +54,14 @@ function build() {
 function pin(trace: AgentTrace): AgentTrace {
   const verdict = trace.outboundAuthority;
   if (!verdict) return trace;
+  const text = trace.outbound?.text ?? '';
   return {
     ...trace,
-    outboundAuthority: { ...verdict, fingerprint: outboundFingerprint(trace.outbound?.text ?? '') },
+    outboundAuthority: { ...verdict, fingerprint: outboundFingerprint(text) },
+    // BAN SOAN cung phai duoc ghim (Issue #189): tu khi cong doi ca hai, mot fixture chi ghim
+    // phan quyet se bi tu choi voi `COMPOSITION_ABSENT` — tuc do sai ly do. Ca 10 cua muc 8 hop
+    // dong do dung nhanh do, va no co bo test rieng ben duoi.
+    outboundComposition: deterministicComposition(text),
   };
 }
 
@@ -122,6 +128,39 @@ describe('7. duyet tay khong vuot qua duoc tham quyen thieu', () => {
     await expect(orders.approve(saved.id)).rejects.toThrow(UnprocessableEntityException);
     expect(channel.sent).toHaveLength(0);
   });
+
+  /*
+   * CA 10 muc 8 hop dong #189: "old record without structured composition decision -> fail closed".
+   *
+   * Ban ghi nay MANH hon ca tren: no CO mot phan quyet `sendable: true` hop le, dau khop chinh xac
+   * doan van sap gui. Thu duy nhat thieu la ban soan co kieu. Truoc #189 mot ban ghi nhu the nay
+   * gui duoc — va do dung la lop ban ghi cu, soan khi van ban con la van xuoi tu do cua model.
+   */
+  it('ban ghi co phan quyet HOP LE nhung KHONG co ban soan co kieu -> COMPOSITION_ABSENT', async () => {
+    const { turnReply, repo, channel } = build();
+    const text = 'Dạ máy này dùng điện 220V ạ.';
+    const saved = await repo.create(
+      view({
+        ...BASE_TRACE,
+        outbound: { text },
+        outboundAuthority: {
+          sendable: true,
+          reason: 'NARRATIVE_ONLY_COMPOSITION',
+          claims: [],
+          fingerprint: outboundFingerprint(text),
+        },
+      }),
+    );
+    // `view()` chay qua `pin()`, ma `pin()` ghim CA ban soan. Go rieng ban soan ra o day — day
+    // chinh la dieu dang duoc do, va no phai duoc lam TUONG MINH chu khong bang mot fixture khac.
+    const withoutComposition = await repo.update(saved.id, {
+      trace: { ...saved.trace!, outboundComposition: undefined },
+    });
+    expect(withoutComposition?.trace?.outboundComposition).toBeUndefined();
+
+    await expect(turnReply.sendAdviceReply(saved.id)).rejects.toThrow(/COMPOSITION_ABSENT/);
+    expect(channel.sent).toHaveLength(0);
+  });
 });
 
 describe('6. quyet dinh cau truc doc lap voi heuristic do tin cay', () => {
@@ -151,7 +190,7 @@ describe('6. quyet dinh cau truc doc lap voi heuristic do tin cay', () => {
         ...BASE_TRACE,
         supervisor: { riskLevel: 'escalate', escalate: true, reasons: ['LOW_CONFIDENCE'] },
         outbound: { text: 'Dạ máy này dùng điện 220V ạ.' },
-        outboundAuthority: { sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM', claims: [] },
+        outboundAuthority: { sendable: true, reason: 'NARRATIVE_ONLY_COMPOSITION', claims: [] },
       }),
     );
 
@@ -170,7 +209,7 @@ describe('11/12. duong hop le khong bi cong nay lam hong', () => {
       view({
         ...BASE_TRACE,
         outbound: { text: 'Dạ sản phẩm bảo hành 12 tháng ạ.' },
-        outboundAuthority: { sendable: true, reason: 'NO_CONSEQUENTIAL_CLAIM', claims: [] },
+        outboundAuthority: { sendable: true, reason: 'NARRATIVE_ONLY_COMPOSITION', claims: [] },
       }),
     );
 
