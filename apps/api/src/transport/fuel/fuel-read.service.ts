@@ -1,7 +1,12 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { TransportDomainError } from '../transport.errors.js';
-import { toDriverFuelSlipView, type DriverFuelSlipView } from './driver-fuel.view.js';
+import {
+  toDriverFuelSlipView,
+  toDriverFuelSupplierView,
+  type DriverFuelSlipView,
+  type DriverFuelSupplierView,
+} from './driver-fuel.view.js';
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
@@ -41,6 +46,16 @@ export class FuelReadService {
 
   async listSuppliers(): Promise<FuelSupplier[]> {
     return this.repository.listSuppliers();
+  }
+
+  /**
+   * CAY XANG cho BE MAT LAI XE — danh sach y het, KHUNG NHIN hep hon.
+   *
+   * Khong dung lai `listSuppliers()` o tang controller roi cat bot truong: cat o cho goi la thu
+   * de quen o lan them route sau. Cat o DAY, mot lan, va kieu tra ve la thu cuong che dieu do.
+   */
+  async listSuppliersForDriver(): Promise<DriverFuelSupplierView[]> {
+    return (await this.repository.listSuppliers()).map(toDriverFuelSupplierView);
   }
 
   async fuelEntryDetail(entryId: string): Promise<FuelEntryDetail> {

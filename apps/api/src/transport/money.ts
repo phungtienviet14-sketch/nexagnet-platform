@@ -73,7 +73,9 @@ export const zeroMoney = (): Money => money(0);
 
 export function addMoney(left: Money, right: Money): Money {
   if (left.currencyCode !== right.currencyCode) {
-    throw new MoneyError(`Khong cong duoc hai loai tien: ${left.currencyCode} + ${right.currencyCode}`);
+    throw new MoneyError(
+      `Khong cong duoc hai loai tien: ${left.currencyCode} + ${right.currencyCode}`,
+    );
   }
   return money(left.amount + right.amount);
 }

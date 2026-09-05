@@ -146,7 +146,13 @@ export interface DriverFuelSlipRow {
   readonly reviewNote: string | null;
   readonly evidenceCountLabel: string;
   readonly hasEvidence: boolean;
-  /** Bi tu choi thi hom nay khong nop lai duoc — noi thang thay vi de nguoi ta doi. */
+  /**
+   * ANH cua chinh phieu — `id` de dung dia chi doc byte, `contentType` de chon giua the anh va mot
+   * lien ket tai ve cho PDF.
+   */
+  readonly evidence: readonly { readonly id: string; readonly contentType: string | null }[];
+  /** Bi tu choi thi NOP LAI duoc qua dung vong doi cu (`#168 B5`). */
+  readonly canResubmit: boolean;
   readonly rejectedNote: string | null;
 }
 
@@ -167,19 +173,17 @@ export const toDriverFuelSlipRows = (
     reviewNote: slip.reviewNote,
     evidenceCountLabel: formatCount(slip.evidenceCount),
     hasEvidence: slip.evidenceCount > 0,
+    evidence: slip.evidence,
+    canResubmit: slip.verificationStatus === 'REJECTED',
     rejectedNote:
       slip.verificationStatus === 'REJECTED'
-        ? 'Phiếu bị từ chối. Hãy báo kế toán — máy chủ chưa mở đường tự nộp lại.'
+        ? (slip.reviewNote ?? 'Phiếu bị từ chối. Sửa lại theo ghi chú rồi nộp lại.')
         : null,
   }));
 
-/**
- * Lai xe chi thay mot con SO DEM anh, khong liet ke lai duoc anh vua gui
- * (`DriverFuelSlipView.evidenceCount`, va khong route nao phuc vu byte anh). Noi that thay vi bay
- * mot o xem anh khong bao gio tai duoc.
- */
-export const EVIDENCE_VIEW_UNAVAILABLE =
-  'Ảnh đã gửi được đếm nhưng chưa xem lại được trên máy: hệ thống chưa có đường đọc ảnh chứng từ.';
+/** Cau canh o tai anh — noi ro anh di dau, vi day la anh chung tu tien. */
+export const EVIDENCE_UPLOAD_HINT =
+  'Chụp rõ phiếu, đủ số lít và số tiền. Ảnh gắn vào đúng phiếu này và kế toán xem được khi đối soát.';
 
 /* ------------------------------------------------------------------ *
  * Trang chu

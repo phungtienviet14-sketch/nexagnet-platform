@@ -73,8 +73,14 @@ export interface FuelEntryRow {
   readonly canAmend: boolean;
   /** Ly do khong sua duoc — HAI ly do khac nhau, doi hai viec khac nhau cua nguoi dung. */
   readonly amendBlockedReason: string | null;
-  /** Phieu bi tu choi la duong cut hom nay — xem `api-gaps.ts#no-fuel-resubmit-route`. */
-  readonly deadEndNote: string | null;
+  /**
+   * Phieu bi tu choi NOP LAI duoc — `#168 B5` mo `POST /transport/fuel/entries/:id/resubmit`.
+   *
+   * Truoc do o day co mot `deadEndNote` noi "Máy chủ chưa mở đường nộp lại". Cau do nay SAI ve
+   * nghiep vu, va con vi pham #195 o cho no ke ve may chu thay vi noi viec can lam.
+   */
+  readonly canResubmit: boolean;
+  readonly rejectedNote: string | null;
 }
 
 const LOCKED_RECONCILIATION: readonly FuelReconciliationStatus[] = ['SETTLED', 'IGNORED'];
@@ -122,9 +128,11 @@ export const toFuelEntryRow = (
     canReject: mayVerify && entry.verificationStatus === 'DECLARED',
     canAmend: mayVerify && blocked === null,
     amendBlockedReason: blocked,
-    deadEndNote:
+    canResubmit: mayVerify && entry.verificationStatus === 'REJECTED',
+    // Giu NGUYEN VAN ghi chu cua nguoi tu choi khi co: no la thu duy nhat noi ro phai sua cai gi.
+    rejectedNote:
       entry.verificationStatus === 'REJECTED'
-        ? 'Phiếu bị từ chối. Máy chủ chưa mở đường nộp lại, nên hiện phải lập một phiếu mới.'
+        ? (entry.reviewNote ?? 'Phiếu bị từ chối. Sửa lại theo ghi chú rồi nộp lại.')
         : null,
   };
 };

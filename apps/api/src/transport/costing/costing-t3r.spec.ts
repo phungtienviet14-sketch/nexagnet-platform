@@ -100,7 +100,12 @@ function harness(ledger: InMemoryCostingRepository = new InMemoryCostingReposito
   core.drivers.set('drv-a', { id: 'drv-a', fullName: 'Lai xe A' });
   core.drivers.set('drv-b', { id: 'drv-b', fullName: 'Lai xe B' });
   core.drivers.set('drv-ngoai', { id: 'drv-ngoai', fullName: 'Lai xe khong lien quan' });
-  core.trips.set('trip-a', { id: 'trip-a', code: 'CH-A', kind: 'OWN_DIRECT', status: 'IN_TRANSIT' });
+  core.trips.set('trip-a', {
+    id: 'trip-a',
+    code: 'CH-A',
+    kind: 'OWN_DIRECT',
+    status: 'IN_TRANSIT',
+  });
 
   // A nhan chuyen truoc, sau do B thay ca. CA HAI deu nam trong lich su (`GD-06`); lai xe thu ba
   // thi khong.

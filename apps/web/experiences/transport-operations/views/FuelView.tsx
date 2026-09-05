@@ -2,7 +2,6 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { gapsForSection } from '../api-gaps';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -14,6 +13,7 @@ import {
 } from '../hooks/useTransportWorkspace';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { transportApi } from '../transport-api';
+import { StatementImport } from './StatementImport';
 import type { FuelDiscrepancyResolution } from '../transport-types';
 import {
   MATCHING_REQUIRES_REFETCH,
@@ -65,16 +65,19 @@ export function FuelView() {
       )}
       {reconciliations.isLoading ? <LoadingState label="Đang đọc các kỳ đối soát…" /> : null}
 
+      <StatementImport
+        suppliers={suppliers.data ?? []}
+        role={navigation.role}
+        onImported={() => void queryClient.invalidateQueries({ queryKey: ['transport', 'fuel'] })}
+      />
+
       <section aria-label="Kỳ đối soát bảng kê">
         <h2>Kỳ đối soát</h2>
         {rows.length === 0 && !reconciliations.isLoading ? (
           <EmptyState
             title="Chưa có kỳ đối soát nào."
             nextAction={
-              <p className="tx-note">
-                Kỳ đối soát được tạo khi nhập một bảng kê của cây xăng. Máy chủ nhận tệp dưới dạng
-                nội dung base64 trong thân yêu cầu, chưa có đường tải tệp lên trực tiếp.
-              </p>
+              <p className="tx-note">Kỳ đối soát được tạo khi nhập bảng kê của cây xăng.</p>
             }
           />
         ) : (
@@ -103,7 +106,7 @@ export function FuelView() {
                 header: 'Chênh lệch chờ',
                 render: (row) =>
                   row.pendingCount === null ? (
-                    <span title="Danh sách kỳ không kèm con số này — mở kỳ để xem">—</span>
+                    <span title="Mở kỳ để xem">—</span>
                   ) : (
                     String(row.pendingCount)
                   ),
@@ -121,17 +124,6 @@ export function FuelView() {
           onChanged={() => void queryClient.invalidateQueries({ queryKey: ['transport', 'fuel'] })}
         />
       )}
-
-      <details className="tx-details">
-        <summary>Những phần của nghiệp vụ này còn thiếu đường dữ liệu</summary>
-        <ul>
-          {gapsForSection('fuel').map((gap) => (
-            <li key={gap.id}>
-              <strong>{gap.title}</strong> — {gap.actual}
-            </li>
-          ))}
-        </ul>
-      </details>
     </>
   );
 }
@@ -352,6 +344,7 @@ function ReconciliationWorkspace({
           <label className="tx-field">
             <span>Cách xử lý</span>
             <select
+              aria-label="Cách xử lý"
               required
               value={resolution}
               onChange={(event) =>
@@ -372,6 +365,7 @@ function ReconciliationWorkspace({
               <label className="tx-field">
                 <span>Dòng bảng kê</span>
                 <select
+                  aria-label="Dòng bảng kê"
                   required
                   value={pairLineId}
                   onChange={(event) => setPairLineId(event.target.value)}
@@ -387,6 +381,7 @@ function ReconciliationWorkspace({
               <label className="tx-field">
                 <span>Phiếu đổ dầu</span>
                 <select
+                  aria-label="Phiếu đổ dầu"
                   required
                   value={pairEntryId}
                   onChange={(event) => setPairEntryId(event.target.value)}
