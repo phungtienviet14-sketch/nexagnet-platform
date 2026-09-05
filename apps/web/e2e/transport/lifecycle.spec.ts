@@ -165,7 +165,9 @@ test.describe('chuoi nghiep vu — bao duong va giay to', () => {
 });
 
 test.describe('chuoi nghiep vu — luong', () => {
-  test('mo ky, chay tinh luong, duyet, tra, roi phat phieu bu giu nguyen phieu goc', async ({
+  // Chuoi day du: mo ky -> chay -> duyet -> tra -> phat phieu bu. Nhieu lan tai trang.
+  test.setTimeout(120_000);
+  test('mo ky, chay tinh luong, duyet, tra, roi phat phieu bu GIU NGUYEN phieu goc', async ({
     page,
   }) => {
     const state = await mockLifecycle(page, 'ADMIN');
@@ -191,6 +193,45 @@ test.describe('chuoi nghiep vu — luong', () => {
 
     const slip = [...state.payslips.values()][0]!;
     expect(slip.status).toBe('DRAFT');
+
+    /*
+     * MO LAN CHAY ra thi bang phieu moi ve. Danh sach phieu la cua MOT lan chay, khong phai
+     * cua ca ky — nen phai chon lan chay truoc, giong het thao tac that.
+     */
+    await page.getByRole('button', { name: 'Xem phiếu' }).first().click();
+    await expect(page.getByRole('region', { name: 'Phiếu lương của lần chạy' })).toBeVisible();
+
+    /* --- DUYET roi CHI TRA --- */
+    await page.getByRole('button', { name: 'Duyệt', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Duyệt', exact: true }).last().click();
+    await expect.poll(() => state.payslips.get(slip.id)?.status).toBe('APPROVED');
+
+    await page.getByRole('button', { name: 'Chi trả' }).first().click();
+    await page.getByRole('button', { name: 'Đã trả' }).click();
+    await expect.poll(() => state.payslips.get(slip.id)?.status).toBe('PAID');
+
+    /* --- PHAT PHIEU BU: `INV-20` — phieu goc GIU NGUYEN --- */
+    await page
+      .getByRole('row', { name: /Trần Văn Bình/ })
+      .first()
+      .click();
+    await expect(page.getByRole('heading', { name: 'Sửa phiếu đã chốt' })).toBeVisible();
+    await page.getByLabel('Lý do', { exact: true }).fill('Bù công tác phí tháng 9.');
+    await page.getByRole('button', { name: 'Phát phiếu', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Phát phiếu', exact: true }).last().click();
+
+    await expect.poll(() => state.payslips.size).toBe(2);
+
+    /*
+     * DAY LA CA DIEM CUA `INV-20`, va no duoc kiem o PHIA MAY CHU chu khong phai tren man hinh:
+     * phieu GOC khong bi sua mot chut nao — van `PAID`, van khong tro ve phieu nao — va phieu moi
+     * la mot ban ghi RIENG tro nguoc lai phieu goc kem ly do.
+     */
+    expect(state.payslips.get(slip.id)?.status).toBe('PAID');
+    expect(state.payslips.get(slip.id)?.correctsId).toBeNull();
+    const issued = [...state.payslips.values()].find((row) => row.correctsId === slip.id);
+    expect(issued?.correctionReason).toBe('Bù công tác phí tháng 9.');
+    expect(issued?.status).toBe('DRAFT');
   });
 });
 
