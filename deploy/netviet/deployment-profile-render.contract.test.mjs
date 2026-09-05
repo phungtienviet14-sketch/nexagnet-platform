@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -444,4 +445,62 @@ test('SEED: moi goi khach khai bootstrap.knowledge deu co tep do, va nguoc lai',
       }
     }
   }
+});
+
+// --- 8. GIEO THANG VAN HANH MAU: buoc nay di qua loader goi khach, nen no can mot bien -------
+
+test('DEMO SEED: buoc gieo du lieu van tai duoc truyen TENANT_DIR', () => {
+  const script = readScript('deploy-stack.sh');
+
+  // Container `bootstrap` KHONG mang `TENANT` lan `TENANT_DIR` — no chi MOUNT goi khach vao
+  // `/srv/tenant`. `seed-tenant-knowledge.mjs` khong vuong vi no doc thang duong dan do lam mac
+  // dinh; con buoc nay di qua `loadTenantConfig()`, va ham do NEM khi thieu ca hai bien.
+  //
+  // Lan deploy dau tien cua T8 chet dung o day (run 33985173812, `ROLLOUT_TRANSPORT_DEMO_SEED_FAILED`
+  // / "Thieu bien TENANT"). Bai nay giu cho bien do khong bi go ra trong mot lan don dep sau nay.
+  const invocation = script.slice(script.indexOf('ROLLOUT_TRANSPORT_DEMO_SEED_FAILED'));
+  assert.ok(
+    invocation.includes('seed-transport-demo.mjs'),
+    'khong tim thay lenh goi seed-transport-demo.mjs sau stage cua no',
+  );
+  assert.ok(
+    invocation
+      .slice(0, invocation.indexOf('seed-transport-demo.mjs'))
+      .includes('-e TENANT_DIR=/srv/tenant'),
+    'buoc gieo du lieu van tai phai duoc truyen TENANT_DIR=/srv/tenant',
+  );
+});
+
+test('DEMO SEED: goi khach nao khai bootstrap.transportDemo thi tep do phai co that', () => {
+  const tenantsDir = join(here, '..', '..', 'tenants');
+  const slugs = readdirSync(tenantsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  let declaredCount = 0;
+  for (const slug of slugs) {
+    const manifest = join(tenantsDir, slug, 'tenant.json');
+    if (!existsSync(manifest)) continue;
+    const pack = JSON.parse(readFileSync(manifest, 'utf8'));
+    const declared = pack.bootstrap?.transportDemo?.path;
+    if (!declared) continue;
+
+    declaredCount += 1;
+    assert.ok(
+      existsSync(join(tenantsDir, slug, declared)),
+      `${slug} khai bootstrap.transportDemo.path=${declared} nhung tep do khong ton tai`,
+    );
+    // Mot thang van hanh mau CHI hop le tren goi tu khai la goi mau. Cong that nam o
+    // `assertTransportDemoTenant()` luc chay; day la luoi thu hai, bat ngay tu CI.
+    assert.equal(
+      pack.policies?.readiness?.demoTenant,
+      true,
+      `${slug} khai bootstrap.transportDemo nhung khong tu khai readiness.demoTenant`,
+    );
+  }
+
+  assert.ok(
+    declaredCount >= 1,
+    'khong goi khach nao khai bootstrap.transportDemo — phep quet hong',
+  );
 });
