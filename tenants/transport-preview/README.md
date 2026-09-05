@@ -9,13 +9,19 @@
 | Không phải | Vì sao ghi ra đây |
 |---|---|
 | Không phải T8 (`#90`) | T8 là tenant tham chiếu + một tháng dữ liệu thật-như-thật. Gói này tối thiểu và sẽ bị T8 thay thế. |
-| Không phải bản chạy được cho khách | Nghiệp vụ quyết toán, tải ảnh bằng chứng, bảo dưỡng và lương đều **chưa nối** — xem `policies.readiness.blockedCapabilities`. |
+| Không phải bản chạy được cho khách | Nghiệp vụ quyết toán, tải ảnh bằng chứng, bảo dưỡng và lương đều **chưa nối**. Từ #195 các mục đó bị **ẩn khỏi điều hướng** thay vì hiện kèm lời giải thích kỹ thuật; `policies.readiness.blockedCapabilities` giữ danh sách bằng câu trung tính. |
 | Không phải UAT | Không có dữ liệu nghiệp vụ nào được kiểm chứng ở đây. |
 | Không phải chỗ giữ chính sách lương | `policies.transportPayroll` **cố tình để trống**: bịa một chính sách lương là bịa nghiệp vụ của khách (#180 §12). |
 
-Gói tự khai điều đó bằng `policies.readiness.previewNotice`, và dải băng **BẢN XEM TRƯỚC** hiện
-trên mọi màn hình. Đó không phải trang trí: `apps/api/src/transport/transport-tenant-allowlist.spec.ts`
-**bắt buộc** mọi gói được miễn trừ khỏi cổng chặn nghiệp vụ vận tải phải tự khai như vậy.
+Những điều trên là **sự thật nội bộ**, và nó ở lại đây — không lên màn hình. Trước #195, gói tự
+khai bằng `policies.readiness.previewNotice` và một dải băng **BẢN XEM TRƯỚC** hiện trên mọi màn
+hình; dải băng đó đã bị bỏ, vì nó là ngôn ngữ nội bộ đặt trước mặt người dùng.
+
+Chỗ neo của cổng chặn vì vậy đã đổi, nhưng tính chất thì không:
+`apps/api/src/transport/transport-tenant-allowlist.spec.ts` **bắt buộc** mọi gói được miễn trừ phải
+có `integrations: {}`, `bootstrap: {}` và `smoke: null` — tức không nối vào một đường sống nào. Chỗ
+neo mới chặt hơn chỗ cũ: nó không thể thoả mãn bằng một câu văn, và cả ba gói khách thật đều khai
+adapter nên không gói nào lọt vào danh sách miễn trừ mà không làm đỏ bài test đó.
 
 ## Vì sao nó được phép bật `transport-*`
 
