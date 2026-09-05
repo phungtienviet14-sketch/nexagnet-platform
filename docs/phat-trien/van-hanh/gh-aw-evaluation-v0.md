@@ -94,6 +94,17 @@ Theo §2.3 hợp đồng task: **`main` là nền production đã chấp nhận*
 Mọi số liệu và trích dẫn Nexagent dưới đây lấy từ `main`, **không** từ #191. Chỗ nào #191 sẽ đổi kết
 luận thì được nói rõ.
 
+> **`NEXAGENT_BASE_SHA` là nền lúc ĐO, không phải nền lúc merge.** Hai thứ này khác nhau và không
+> được lẫn — blocker B2 của `REVIEW_BLOCK 5550187530` sinh ra đúng từ chỗ lẫn ấy.
+>
+> `main` đã dịch hai lần kể từ lúc đo: `b827b9f7` → `582ded32` → **`e10258e1`**. Nhánh này được
+> **merge** live main (không rebase, không force) trước khi chạy lại CI trên đúng HEAD mới; SHA nền
+> dùng cho lần `BUILD_READY` này là **`e10258e1`**, và nó được ghi trong chính comment đó.
+>
+> Không phép đo nào ở trên phải làm lại: diff của cả hai lần dịch nằm trọn trong
+> `apps/web/…/transport-operations/**` và `tenants/transport-preview/**`, không chạm một tệp nào của
+> `tools/autopilot-orchestrator/**` hay của gói bằng chứng này.
+
 ## 4. Bản đồ kiến trúc
 
 ```text
