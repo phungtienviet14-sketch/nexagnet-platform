@@ -581,12 +581,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NOT_OWNED": {
       "functionName": "FuelReadService.getMyFuelSlip",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 140
+      "line": 155
     },
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NO_DRIVER_BINDING": {
       "functionName": "FuelReadService.requireDriverBinding",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 173
+      "line": 188
     },
     "driver.self_fund_scope|SELF_FUND_SCOPE_GRANTED": {
       "functionName": "CostingReadService.selfFundStatement",
@@ -642,32 +642,32 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "evidence.read|EVIDENCE_LOCATOR_OUT_OF_SCOPE": {
       "functionName": "TransportEvidenceService.read",
       "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
-      "line": 119
+      "line": 118
     },
     "evidence.read|EVIDENCE_OBJECT_MISSING": {
       "functionName": "TransportEvidenceService.read",
       "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
-      "line": 136
+      "line": 135
     },
     "evidence.read|EVIDENCE_SERVED": {
       "functionName": "TransportEvidenceService.read",
       "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
-      "line": 146
+      "line": 145
     },
     "evidence.upload|*": {
       "functionName": "TransportEvidenceService.put",
       "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
-      "line": 72
+      "line": 71
     },
     "evidence.upload|EVIDENCE_STORED": {
       "functionName": "TransportEvidenceService.put",
       "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
-      "line": 100
+      "line": 99
     },
     "evidence.upload|EVIDENCE_STORE_DISABLED": {
       "functionName": "TransportEvidenceService.put",
       "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
-      "line": 84
+      "line": 83
     },
     "fact.supersession|*": {
       "functionName": "SourceRegistryService.supersedeFact",

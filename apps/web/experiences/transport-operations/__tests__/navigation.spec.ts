@@ -170,11 +170,16 @@ describe('nhom tren thanh ben', () => {
   });
 });
 
-describe('moi muc phai khai du ba truc', () => {
-  it('khong muc nao thieu hanh dong bat buoc hay nguon du lieu', () => {
+describe('moi muc phai khai du hai truc', () => {
+  /**
+   * TRUOC DAY co mot truc thu ba, `dataSource`, phan biet muc DA CO duong du lieu voi muc chua co.
+   * T7D (#170) noi het cac duong con thieu, nen truc do khong con phan biet duoc gi — moi muc deu
+   * `live`. Mot truc chi con MOT gia tri khong phai mot truc; giu lai se lam nguoi doc tuong con
+   * mot muc nao do chua chay.
+   */
+  it('khong muc nao thieu hanh dong bat buoc hay nhan', () => {
     for (const section of TRANSPORT_SECTIONS) {
       expect(section.requiredAction.startsWith('transport.')).toBe(true);
-      expect(['live', 'awaiting-api']).toContain(section.dataSource);
       expect(section.label.length).toBeGreaterThan(0);
     }
   });

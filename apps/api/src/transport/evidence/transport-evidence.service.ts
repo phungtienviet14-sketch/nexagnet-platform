@@ -23,8 +23,7 @@ export interface StoredEvidence {
 
 /** Ket qua doc: hoac co byte, hoac mot trang thai NGHIEP VU noi ro vi sao khong co. */
 export type EvidenceReadResult =
-  | { readonly kind: 'FOUND'; readonly object: MediaObject }
-  | { readonly kind: 'MISSING' };
+  { readonly kind: 'FOUND'; readonly object: MediaObject } | { readonly kind: 'MISSING' };
 
 /**
  * BIEN GIOI MEDIA cua bang chung van tai — `#169`.

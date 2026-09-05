@@ -219,7 +219,9 @@ export class PrismaCostingRepository extends CostingRepository {
   }
 
   async findAccount(id: string): Promise<DriverFundAccount | null> {
-    const row = await model(this.prisma, 'transportDriverFundAccount').findUnique({ where: { id } });
+    const row = await model(this.prisma, 'transportDriverFundAccount').findUnique({
+      where: { id },
+    });
     return row ? toAccount(row) : null;
   }
 
@@ -534,9 +536,11 @@ export class PrismaCostingRepository extends CostingRepository {
   ): Promise<DriverFundPeriod | null> {
     return this.prisma.$transaction(async (tx) => {
       const scoped = tx as unknown as PrismaService;
-      const current: PeriodRow | null = await model(scoped, 'transportDriverFundPeriod').findUnique({
-        where: { id },
-      });
+      const current: PeriodRow | null = await model(scoped, 'transportDriverFundPeriod').findUnique(
+        {
+          where: { id },
+        },
+      );
       if (!current) return null;
 
       // CUNG mot khoa ma duong ghi so cai phai lay. `OPEN -> CLOSING` la khoanh khac ky dong
@@ -616,7 +620,12 @@ export class PrismaCostingRepository extends CostingRepository {
 
       const moved = await model(scoped, 'transportDriverFundPeriod').updateMany({
         where: { id: period.id, status: 'CLOSING' },
-        data: { status: 'CLOSED', updatedAt: input.at, closedAt: input.at, closedBy: input.takenBy },
+        data: {
+          status: 'CLOSED',
+          updatedAt: input.at,
+          closedAt: input.at,
+          closedBy: input.takenBy,
+        },
       });
       // Khong the xay ra: buoc (3) da kiem duoi khoa. NEM thay vi tra `null` — tra `null` o day
       // se COMMIT anh chup vua ghi len mot ky chua `CLOSED`, dung cai trang thai nua voi ma ca
@@ -658,22 +667,22 @@ export class PrismaCostingRepository extends CostingRepository {
     input: AppendSnapshotInput,
   ): Promise<FundPeriodSnapshot> {
     const taken = await model(scoped, 'transportDriverFundPeriodSnapshot').count({
-        where: { periodId: input.periodId },
-      });
-      return toSnapshot(
-        await model(scoped, 'transportDriverFundPeriodSnapshot').create({
-          data: {
-            periodId: input.periodId,
-            sequence: Number(taken) + 1,
-            openingBalance: toStoredAmount(input.openingBalance),
-            periodNet: toStoredAmount(input.periodNet),
-            closingBalance: toStoredAmount(input.closingBalance),
-            entryCount: input.entryCount,
-            currencyCode: TRANSPORT_CURRENCY,
-            takenAt: input.at,
-            takenBy: input.takenBy,
-          },
-        }),
+      where: { periodId: input.periodId },
+    });
+    return toSnapshot(
+      await model(scoped, 'transportDriverFundPeriodSnapshot').create({
+        data: {
+          periodId: input.periodId,
+          sequence: Number(taken) + 1,
+          openingBalance: toStoredAmount(input.openingBalance),
+          periodNet: toStoredAmount(input.periodNet),
+          closingBalance: toStoredAmount(input.closingBalance),
+          entryCount: input.entryCount,
+          currencyCode: TRANSPORT_CURRENCY,
+          takenAt: input.at,
+          takenBy: input.takenBy,
+        },
+      }),
     );
   }
 

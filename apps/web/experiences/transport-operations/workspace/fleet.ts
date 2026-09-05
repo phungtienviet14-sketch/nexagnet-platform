@@ -178,5 +178,4 @@ export const toVehicleDriverHistoryRows = (
  * Khong co duong nao tra ve "lai xe dang phu trach cua MOI xe" — chi co duong theo tung xe.
  * Nen man hinh danh sach khong bay cot do, va cau nay giai thich vi sao thay vi de mot cot trong.
  */
-export const NO_FLEET_WIDE_ASSIGNMENT_NOTE =
-  'Người phụ trách hiện tại xem được khi mở từng xe: máy chủ chưa có đường đọc phân công của cả đội.';
+export const NO_FLEET_WIDE_ASSIGNMENT_NOTE = 'Mở từng xe để xem người đang phụ trách.';

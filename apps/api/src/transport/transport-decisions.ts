@@ -67,10 +67,7 @@ export const DRIVER_SELF_SCOPE_REASONS = [
 export type DriverSelfScopeReason = (typeof DRIVER_SELF_SCOPE_REASONS)[number];
 
 export type TransportDecisionReason =
-  | TripTransitionDecisionReason
-  | TripAssignmentReason
-  | TripCancelReason
-  | DriverSelfScopeReason;
+  TripTransitionDecisionReason | TripAssignmentReason | TripCancelReason | DriverSelfScopeReason;
 
 export const TRANSPORT_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-core',

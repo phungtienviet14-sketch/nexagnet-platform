@@ -401,7 +401,9 @@ export class InMemorySettlementRepository extends SettlementRepository {
     return (
       [...this.periods.values()].find(
         (period) =>
-          period.flow === flow && period.startDate <= businessDate && businessDate <= period.endDate,
+          period.flow === flow &&
+          period.startDate <= businessDate &&
+          businessDate <= period.endDate,
       ) ?? null
     );
   }

@@ -171,15 +171,6 @@
   font-weight: 600;
 }
 
-.tx-nav__flag {
-  font-size: 0.66rem;
-  padding: 0.05rem 0.35rem;
-  border-radius: 999px;
-  background: var(--tx-wait-wash);
-  color: var(--tx-wait);
-  white-space: nowrap;
-}
-
 .tx-rail__foot {
   display: flex;
   flex-direction: column;
@@ -633,8 +624,6 @@
 }
 
 .tx-worklist,
-.tx-unavailable,
-.tx-designnote,
 .tx-timeline,
 .tx-driver__list {
   list-style: none;
@@ -660,25 +649,29 @@
   border-color: var(--tx-accent);
 }
 
-.tx-worklist span,
-.tx-unavailable span,
-.tx-timeline span {
-  font-size: 0.82rem;
-  color: var(--tx-ink-soft);
+/*
+ * Muc cua danh sach viec KHONG phai lien ket — vd mot dong canh bao van hanh, hay mot lan chay
+ * luong. Truoc day chi `.tx-worklist a` duoc xep thanh cot, nen mot muc dung `<div>` roi ve inline
+ * va ba manh chu dinh lien vao nhau ("Bao duong qua han29H-123.45..."). Ay la mot loi DOC DUOC tren
+ * anh chup, khong phai mot khac biet ve khoang cach.
+ */
+.tx-worklist li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.tx-unavailable li {
+.tx-worklist li > div:first-child {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  padding-left: 0.75rem;
-  border-left: 2px solid var(--tx-line-strong);
+  min-width: 0;
 }
 
-.tx-designnote li {
-  padding-left: 0.75rem;
-  border-left: 2px solid var(--tx-accent);
-  font-size: 0.86rem;
+.tx-worklist span,
+.tx-timeline span {
+  font-size: 0.82rem;
   color: var(--tx-ink-soft);
 }
 
@@ -694,71 +687,6 @@
 
 .tx-timeline li[data-active] {
   border-left-color: var(--tx-go);
-}
-
-.tx-awaiting {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  padding: 1rem 1.1rem;
-  background: var(--tx-wait-wash);
-  border: 1px solid var(--tx-wait);
-  border-radius: var(--tx-radius);
-}
-
-.tx-awaiting__lead {
-  margin: 0;
-  color: var(--tx-wait);
-  max-width: 72ch;
-}
-
-.tx-awaiting__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
-.tx-awaiting__item h3 {
-  margin: 0 0 0.35rem;
-  font-size: 0.98rem;
-}
-
-.tx-awaiting__item dl {
-  margin: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
-  gap: 0.2rem 0.75rem;
-  font-size: 0.84rem;
-}
-
-.tx-awaiting__item dt {
-  color: var(--tx-ink-faint);
-}
-
-.tx-awaiting__item dd {
-  margin: 0;
-  color: var(--tx-ink-soft);
-}
-
-.tx-details {
-  font-size: 0.84rem;
-  color: var(--tx-ink-soft);
-}
-
-.tx-details summary {
-  cursor: pointer;
-  color: var(--tx-accent);
-}
-
-.tx-details ul {
-  margin: 0.5rem 0 0;
-  padding-left: 1.1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
 }
 
 .tx-tabs {
@@ -1122,4 +1050,50 @@
   .tx-rail {
     transition: none;
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Anh chung tu — be mat lai xe VA be mat van hanh
+ *
+ * `.tx-driver__thumbs` DA TON TAI trong `DriverSurface` tu truoc ma KHONG co mot dong CSS nao.
+ * Hau qua doc duoc tren man 390px: anh phieu chup bang dien thoai (thuong ~3000px ngang) ve ra o
+ * kich thuoc THAT, nen no day ca trang truot ngang — dung dieu ma "khong tran ngang o 390px" cam.
+ * Khoi nay dat tran cho ca hai be mat cung mot cho, de lan sau them mot noi ve anh thi khong phai
+ * nho lai bai hoc nay.
+ * ------------------------------------------------------------------ */
+
+.tx-driver__thumbs,
+.tx-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.tx-driver__thumbs img,
+.tx-evidence img {
+  max-width: min(9rem, 40vw);
+  max-height: 9rem;
+  width: auto;
+  height: auto;
+  object-fit: cover;
+  border-radius: 0.375rem;
+  border: 1px solid var(--tx-line, rgb(0 0 0 / 12%));
+}
+
+.tx-evidence h5 {
+  flex-basis: 100%;
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* Ly do soat xet do may chu tra ve — danh sach doc duoc, khong phai mot dong dinh lien. */
+.tx-detail__reasons {
+  margin: 0.5rem 0 0;
+  padding-left: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
 }

@@ -51,6 +51,18 @@ export interface PublicTenantDescriptor {
     /** Chi co o goi khach TU KHAI la ban xem truoc. `undefined` cho moi khach that. */
     readonly previewNotice?: PreviewNoticeDescriptor;
   };
+  /**
+   * LICH NGHIEP VU cua khach van tai — mui gio IANA, khong phai mot tuy chon hien thi.
+   *
+   * Ra toi trinh duyet vi mot ly do cu the: bao cao tuoi no BAT BUOC tham so `asOf`, va no phai la
+   * NGAY NGHIEP VU theo lich cua khach. Lay ngay tu dong ho may se cho ra ngay khac khi nguoi dung
+   * mo man hinh tu mot mui gio khac — hoac khi may cai sai mui gio — va hai nguoi se doc ra hai
+   * bang cong no khac nhau ma khong ai biet vi sao.
+   *
+   * `undefined` khi khach khong khai (moi khach khong van tai). Luc do man hinh dung mui gio cua
+   * may va NOI RA dieu do, chu khong im lang.
+   */
+  readonly transport?: { readonly timeZone?: string };
 }
 
 /**
@@ -85,13 +97,15 @@ export function toPublicTenantDescriptor(config: TenantConfig): PublicTenantDesc
           }
         : {}),
     },
+    // Chon tung truong, khong spread: `transportCore` co the nhan them truong noi bo sau nay va
+    // khong truong nao duoc lang le di ra trinh duyet chi vi no duoc them vao chinh sach.
+    ...(config.policies.transportCore?.timeZone
+      ? { transport: { timeZone: config.policies.transportCore.timeZone } }
+      : {}),
   };
 }
 
-export function hasCapability(
-  tenant: PublicTenantDescriptor,
-  capability: CapabilityId,
-): boolean {
+export function hasCapability(tenant: PublicTenantDescriptor, capability: CapabilityId): boolean {
   return tenant.capabilities.includes(capability);
 }
 
