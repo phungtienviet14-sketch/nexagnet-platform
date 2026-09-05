@@ -19,7 +19,15 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const renderSecrets = readFileSync(join(here, 'render-secrets.sh'), 'utf8');
-const compose = readFileSync(join(here, 'compose.yaml'), 'utf8');
+const baseCompose = readFileSync(join(here, 'compose.yaml'), 'utf8');
+// LOP PHU FLOWISE LA MOT PHAN CUA BAN DUNG, KHONG PHAI MOT TEP PHU.
+//
+// `deploy-stack.sh` chay `-f compose.yaml -f compose.flowise.yaml` khi ho so bat Flowise, nen mot
+// bien chi duoc nhac trong lop phu VAN toi duoc container. Doc mot minh tep goc se bao bay bien
+// FLOWISE_* la "mo coi" trong khi chung dang chay tot — mot bao dong gia, va cach "sua" no bang
+// cach go bien ra khoi render se lam hong Ultty.
+const flowiseCompose = readFileSync(join(here, 'compose.flowise.yaml'), 'utf8');
+const compose = `${baseCompose}\n${flowiseCompose}`;
 
 /**
  * Bien duoc render nhung KHONG danh cho compose. Moi dong phai kem ly do — danh sach nay la cho
@@ -29,6 +37,12 @@ const NOT_FOR_COMPOSE = new Map([
   ['GCP_PROJECT_ID', 'script deploy tren VM doc, khong phai container'],
   ['DEMO_DOMAIN', 'render-secrets.sh dung de sinh manh cau hinh Caddy'],
   ['FLOWISE_DOMAIN', 'nhu tren'],
+  [
+    'FLOWISE_ENABLED',
+    'cong tac cua TANG VM (deploy-stack/backup/health-check doc qua stack-compose.sh): no quyet ' +
+      'dinh co keo compose.flowise.yaml vao hay khong, nen theo dinh nghia no khong the la mot bien ' +
+      'ma compose tieu thu — va khong container nao can biet',
+  ],
   ['PILOT_OPERATOR_USERNAME', 'bootstrap-auth-user.mjs doc tu secrets.env'],
   ['PILOT_OPERATOR_NAME', 'nhu tren'],
   ['PILOT_OPERATOR_PASSWORD', 'nhu tren'],

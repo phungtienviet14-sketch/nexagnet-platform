@@ -20,7 +20,12 @@ import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { TurnOutcomePort } from '../turns/turn-outcome.port.js';
 import { RuntimeSettingsService } from '../runtime/runtime-settings.service.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
-import { TURN_DECISIONS, type AutoReplyReason, type ConversationReason } from '../turns/turn-decisions.js';
+import {
+  TURN_DECISIONS,
+  type AutoReplyReason,
+  type ConversationReason,
+} from '../turns/turn-decisions.js';
+import { pinnedOutboundVerdict } from '../outbound/outbound-authority.js';
 import { detectAmend } from './amend-detect.js';
 
 /**
@@ -569,7 +574,16 @@ export class PipelineService implements OnModuleDestroy {
     //
     // Chi lay khi `composed`: chuoi mac dinh cua nhanh `khac` ("Da em da ghi nhan a...") khong
     // phai mot cau hoi, gui no thay cho cau hoi that la lam mach dung han.
-    const composedQuestion = view.trace?.composed ? view.trace.reply : undefined;
+    //
+    // ...VA no phai qua cung mot cong tham quyen: mot cau hoi lai cung la mot tin TU DONG GUI VAO
+    // NHOM. Khong co cong nay thi duong hoi-lai tro thanh cua sau cua chinh hop dong nay — LLM
+    // van doc duoc con so va chinh sach trong ngu canh, va mot "cau hoi" hoan toan co the mang
+    // theo mot cam ket. Khong dat -> lui ve ban mau tat dinh (`buildClarifyQuestion`), khong phai
+    // im lang.
+    const composedQuestion =
+      view.trace?.composed && pinnedOutboundVerdict(view.trace, view.trace.reply ?? '').sendable
+        ? view.trace.reply
+        : undefined;
     const conversation = await this.conversations.settle({
       key,
       message,
@@ -734,6 +748,18 @@ export class PipelineService implements OnModuleDestroy {
       return { allowed: false, reason: 'STATUS_NOT_PENDING_REVIEW' };
     }
     if (!trace?.outbound) return { allowed: false, reason: 'NO_OUTBOUND_CONTENT' };
+    /*
+     * CONG THAM QUYEN, DAT TRUOC cong rui ro CO CHU Y.
+     *
+     * Hai cong nay tra loi hai cau khac han nhau, va thu tu noi len dieu do: "he thong CO DUOC
+     * PHEP noi cau nay khong" phai duoc hoi truoc "cau nay co dau hieu rui ro khong". Truoc ban
+     * nay chi co cau thu hai, nen thu duy nhat da chan mot ban nhap chua don gia + tong tien +
+     * cong no + "da ghi nhan don" cua mot luot `intent=khac`, `priced=null` la mot heuristic do
+     * tin cay — no dung mot lan, va no khong phai mot ranh gioi.
+     */
+    if (!pinnedOutboundVerdict(trace, trace.outbound.text).sendable) {
+      return { allowed: false, reason: 'OUTBOUND_AUTHORITY_NOT_GRANTED' };
+    }
     if (trace.supervisor.riskLevel !== 'none') {
       return { allowed: false, reason: 'SUPERVISOR_FLAGGED_RISK' };
     }

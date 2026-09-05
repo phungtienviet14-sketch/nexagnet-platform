@@ -1,8 +1,12 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AuthenticatedRequest } from '../../auth/session.types.js';
 import { PrismaService } from '../../config/prisma.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
+import { DriverPayslipsController } from './driver-payslips.controller.js';
 import { PrismaWorkforceRepository } from './prisma-workforce.repository.js';
+import { WorkforceReadService } from './workforce-read.service.js';
 import { WorkforceCoreFacts, WorkforceCoreFactsAdapter } from './workforce.ports.js';
 import { WorkforceService } from './workforce.service.js';
 import type { PayrollPolicySnapshot, Payslip } from './workforce.types.js';
@@ -51,15 +55,24 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
      */
     const scopedCore = new (class extends WorkforceCoreFacts {
       async listActiveDriverIds(): Promise<string[]> {
-        return [driverId];
+        return [driverId, driverBId];
       }
       workByDriver = realCore.workByDriver.bind(realCore);
+      findDriverByAuthUserId = realCore.findDriverByAuthUserId.bind(realCore);
     })();
 
     const service = new WorkforceService(repo, scopedCore, POLICY);
 
     const PREFIX = 'IT-T6W';
+    /**
+     * HAI LAI XE, va do la dieu kien de phep loc theo quyen so huu co gi de chung minh (`#168 B8`).
+     * `authUserId` la cot `@unique` co that tren `TransportDriver`, khong co khoa ngoai sang bang
+     * nguoi dung — nen mot ma tien to `PREFIX` la du va khong dinh vao du lieu cua tep IT khac.
+     */
+    const USER_A = `${PREFIX}-user-a`;
+    const USER_B = `${PREFIX}-user-b`;
     let driverId = '';
+    let driverBId = '';
 
     beforeAll(async () => {
       /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
@@ -87,8 +100,18 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         phone: '0900000002',
         licenceClass: 'FC',
         licenceExpiry: '2027-01-01',
+        authUserId: USER_A,
       });
       driverId = driver.id;
+
+      const driverB = await fleet.createDriver({
+        fullName: `${PREFIX} Lai xe B`,
+        phone: '0900000003',
+        licenceClass: 'FC',
+        licenceExpiry: '2027-01-01',
+        authUserId: USER_B,
+      });
+      driverBId = driverB.id;
     });
 
     /**
@@ -387,6 +410,134 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         await freshPrisma.$disconnect();
       }
     });
+    /**
+     * `#168 B8` — BE MAT LAI XE TREN POSTGRES THAT, HAI lai xe va trang thai TRON.
+     *
+     * Bo nay CO Y khong chay tren kho trong bo nho. Ba thu chi dung khi cham DB that:
+     *
+     *   · `Driver.authUserId` la mot cot `@unique` co that — phep doi phien -> lai xe di qua
+     *     `findUnique`, khong qua mot `Map` do chinh bai test nap;
+     *   · phieu cua HAI lai xe nam CHUNG mot bang va chung mot lan chay, nen phep loc theo quyen
+     *     so huu phai that su loc — mot fixture mot lai xe se xanh ngay ca khi phep loc bi go bo;
+     *   · trang thai tron (`PAID`, `REVERSED`, ban dao `APPROVED`, va mot ban con `DRAFT`) den tu
+     *     chinh may trang thai + trigger cua T6, khong tu mot lan nhoi tay.
+     */
+    describe('B8 (P10): be mat lai xe cho phieu luong', () => {
+      const controller = new DriverPayslipsController(new WorkforceReadService(repo, scopedCore));
+      const requestOf = (authUserId: string) =>
+        ({ authUser: { id: authUserId, role: 'SALE' } }) as unknown as AuthenticatedRequest;
+
+      /** Phieu cua lai xe A: DA TRA, roi bi DAO — nen no mang `REVERSED` va co mot ban dao. */
+      let daDao = '';
+      let banDao = '';
+      /** Phieu cua lai xe A o ky sau: con `DRAFT`. Day la phieu quy tac cong bo phai giu lai. */
+      let nhapCuaA = '';
+      /** Phieu CO THAT cua lai xe B, DA DUYET — de phep thu "ma cua nguoi khac" khong rong. */
+      let cuaLaiXeB = '';
+
+      beforeAll(async () => {
+        const ky10 = await openPeriod('Thang 10/2027', '2027-10-01', '2027-10-31');
+        const chay10 = await service.runPayroll({ periodId: ky10.id, runBy: `${PREFIX}-kt` });
+        if (chay10.kind !== 'RECORDED') throw new Error('mong doi RECORDED');
+        const a10 = chay10.payslips.find((entry) => entry.driverId === driverId)!;
+        const b10 = chay10.payslips.find((entry) => entry.driverId === driverBId)!;
+
+        await service.approvePayslip(a10.id, `${PREFIX}-kt`);
+        daDao = (await service.payPayslip(a10.id, `${PREFIX}-kt`)).id;
+        banDao = (
+          await service.issueCorrection({
+            payslipId: daDao,
+            kind: 'REVERSAL',
+            reason: 'Tinh nham so km cua ky 10',
+            actor: `${PREFIX}-kt`,
+          })
+        ).id;
+        cuaLaiXeB = (await service.approvePayslip(b10.id, `${PREFIX}-kt`)).id;
+
+        const ky11 = await openPeriod('Thang 11/2027', '2027-11-01', '2027-11-30');
+        const chay11 = await service.runPayroll({ periodId: ky11.id, runBy: `${PREFIX}-kt` });
+        if (chay11.kind !== 'RECORDED') throw new Error('mong doi RECORDED');
+        nhapCuaA = chay11.payslips.find((entry) => entry.driverId === driverId)!.id;
+      });
+
+      it('lai xe chi thay phieu DA CONG BO cua CHINH MINH', async () => {
+        const cuaA = await controller.list(requestOf(USER_A));
+        const idsCuaA = cuaA.map((view) => view.id);
+
+        expect(idsCuaA).toContain(daDao);
+        expect(idsCuaA).toContain(banDao);
+        // Phieu nhap cua chinh ho: bi giu lai theo quy tac cong bo.
+        expect(idsCuaA).not.toContain(nhapCuaA);
+        // Phieu cua dong nghiep: khong bao gio co mat, du nam chung mot lan chay.
+        expect(idsCuaA).not.toContain(cuaLaiXeB);
+        for (const view of cuaA) expect(view.status, view.id).not.toBe('DRAFT');
+
+        // Ban goc DA BI DAO van hien — giau no di se lam ban dao thanh mot dong am khong doi ung.
+        expect(cuaA.find((view) => view.id === daDao)?.status).toBe('REVERSED');
+        expect(cuaA.find((view) => view.id === banDao)?.correctsId).toBe(daDao);
+
+        const cuaB = await controller.list(requestOf(USER_B));
+        expect(cuaB.map((view) => view.id)).toContain(cuaLaiXeB);
+        expect(cuaB.map((view) => view.id)).not.toContain(daDao);
+      });
+
+      /**
+       * PHEP THU THAT: khong phai "co tu choi khong", ma la "ba cau tra loi co GIONG HET nhau
+       * khong". Neu ma cua nguoi khac tra khac ma bia ra, thi mot vong lap go ma se do duoc ma nao
+       * CO THAT trong bang — du khong doc duoc mot dong noi dung nao.
+       */
+      it('ma cua nguoi khac, ma khong ton tai va phieu nhap cua chinh minh tra CUNG mot cau', async () => {
+        const bat = async (payslipId: string) => {
+          try {
+            await controller.get(requestOf(USER_A), payslipId);
+          } catch (error) {
+            return {
+              name: (error as Error).constructor.name,
+              body: (error as NotFoundException).getResponse(),
+            };
+          }
+          throw new Error(`mong doi tu choi cho ${payslipId}`);
+        };
+
+        const cuaNguoiKhac = await bat(cuaLaiXeB);
+        const khongTonTai = await bat('phieu-khong-bao-gio-ton-tai');
+        const nhapCuaChinhMinh = await bat(nhapCuaA);
+
+        expect(cuaNguoiKhac).toEqual(khongTonTai);
+        expect(cuaNguoiKhac).toEqual(nhapCuaChinhMinh);
+        expect(cuaNguoiKhac.body).toMatchObject({
+          statusCode: 404,
+          reason: 'SELF_PAYSLIP_NOT_VISIBLE',
+        });
+      });
+
+      it('tai khoan chua noi ho so lai xe bi tu choi, ke ca voi mot ma CO THAT', async () => {
+        await expect(controller.get(requestOf(`${PREFIX}-user-van-phong`), daDao)).rejects.toThrow(
+          ForbiddenException,
+        );
+        await expect(controller.list(requestOf(`${PREFIX}-user-van-phong`))).rejects.toThrow(
+          ForbiddenException,
+        );
+      });
+
+      it('khung nhin khong mang danh tinh nguoi van hanh, cuoc, doanh thu hay bien', async () => {
+        const serialised = JSON.stringify(await controller.list(requestOf(USER_A)));
+        for (const leak of [
+          'runBy',
+          'approvedBy',
+          'paidBy',
+          'recordedBy',
+          'freight',
+          'revenue',
+          'margin',
+          'runId',
+          'driverId',
+        ]) {
+          expect(serialised, leak).not.toContain(leak);
+        }
+      });
+    });
+
     /**
      * DON DEP SAU KHI CHAY, khong chi truoc.
      *

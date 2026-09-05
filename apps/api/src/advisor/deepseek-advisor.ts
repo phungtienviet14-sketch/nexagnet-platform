@@ -11,7 +11,7 @@ import {
 import {
   advisorToolsFor,
   runAdvisorTool,
-  type AdvisorToolResult,
+  type AdvisorToolOutcome,
   type AdvisorToolSpec,
 } from './advisor-tools.js';
 import {
@@ -81,7 +81,7 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
       { role: 'system', content: [ADVISOR_STATIC_PROMPT, turn].filter(Boolean).join('\n') },
       { role: 'user', content: request.customerText.trim() || '(khach gui mot anh)' },
     ];
-    const toolOutputs: AdvisorToolResult[] = [];
+    const outcomes: AdvisorToolOutcome[] = [];
     const usedTools: string[] = [];
 
     try {
@@ -94,7 +94,7 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
         const calls = message?.tool_calls ?? [];
         if (!message) return null;
         if (!calls.length) {
-          return finalizeAdvisorReply(message.content ?? '', toolOutputs, usedTools, this.logger);
+          return finalizeAdvisorReply(message.content ?? '', outcomes, usedTools, this.logger);
         }
         if (round === MAX_TOOL_ROUNDS) {
           this.logger.warn(`Het ${MAX_TOOL_ROUNDS} vong cong cu — dung duong tat dinh.`);
@@ -103,19 +103,24 @@ export class DeepSeekAdvisorAgent extends AdvisorAgent {
         messages.push(message);
         for (const call of calls) {
           usedTools.push(call.function.name);
-          const output = await runAdvisorTool(
+          const outcome = await runAdvisorTool(
             call.function.name,
             parseArguments(call.function.arguments),
             request.tools,
           );
-          toolOutputs.push(output);
+          outcomes.push(outcome);
           // Giao thuc OpenAI doi MOI tin `tool` di RIENG, kem `tool_call_id` — khac Anthropic (mot
           // tin nguoi dung chua tat ca tool_result). Gop chung lai la loi 400.
           messages.push({
             role: 'tool',
             tool_call_id: call.id,
-            content: JSON.stringify(output),
+            // CHI `output` di sang LLM — tham quyen la thu he thong giu, khong phai thu model doc.
+            content: JSON.stringify(outcome.output),
           });
+        }
+        // Cong cu ket thuc luot — giong ban Claude. Xem chu thich cung cho o `advisor-agent.ts`.
+        if (outcomes.some((outcome) => outcome.plan)) {
+          return finalizeAdvisorReply('', outcomes, usedTools, this.logger);
         }
       }
       return null;

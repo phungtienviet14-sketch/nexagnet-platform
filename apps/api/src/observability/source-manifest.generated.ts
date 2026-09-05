@@ -15,12 +15,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "agent.run": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 487
+      "line": 492
     },
     "audit.persist": {
       "functionName": "OrdersService.recordManualAction",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 545
+      "line": 577
     },
     "auth.credentials.change": {
       "functionName": "AuthService.changePassword",
@@ -88,12 +88,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conversation.resolve": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 449
+      "line": 454
     },
     "costing.reversal": {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 394
+      "line": 472
     },
     "dealers.configured": {
       "functionName": "evaluateOperationalReadiness",
@@ -123,7 +123,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "message.persist": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 189
+      "line": 194
     },
     "nexagnet.failure.reason": {
       "functionName": "OtelWorkerTraceBridge.finish",
@@ -136,7 +136,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.complete_handoff": {
       "functionName": "OrdersService.completeSalesHandoff",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 231
+      "line": 235
     },
     "order.manual_approve": {
       "functionName": "OrdersService.approveTurn",
@@ -157,10 +157,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "OrdersService.completeSalesHandoffTurn",
       "filePath": "apps/api/src/orders/orders.service.ts"
     },
+    "order.state": {
+      "functionName": "grantsFromPersistedOrder",
+      "filePath": "apps/api/src/outbound/outbound-authority.ts"
+    },
     "outbound.send_advice": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 531
+      "line": 536
     },
     "outbound.send_confirmation": {
       "functionName": "SalesOrderOutcomeService.settle",
@@ -206,6 +210,20 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PricePeriodsService.removeDraftPrice",
       "filePath": "apps/api/src/settings/price-periods.service.ts",
       "line": 397
+    },
+    "rules.policy": {
+      "functionName": "grantsFromDealerPolicy",
+      "filePath": "apps/api/src/outbound/outbound-authority.ts",
+      "line": 218
+    },
+    "rules.pricing": {
+      "functionName": "grantsFromPricedOrder",
+      "filePath": "apps/api/src/outbound/outbound-authority.ts"
+    },
+    "rules.quote": {
+      "functionName": "grantsFromQuote",
+      "filePath": "apps/api/src/outbound/outbound-authority.ts",
+      "line": 213
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
@@ -260,14 +278,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "line": 75
     },
     "transport.costing.expense.read": {
-      "functionName": "TripExpensesController.breakdown",
-      "filePath": "apps/api/src/transport/costing/trip-expenses.controller.ts",
-      "line": 42
+      "filePath": "apps/api/src/transport/costing/trip-expenses.controller.ts"
     },
     "transport.costing.expense.record": {
       "functionName": "TripExpensesController.record",
       "filePath": "apps/api/src/transport/costing/trip-expenses.controller.ts",
-      "line": 49
+      "line": 66
     },
     "transport.costing.period.manage": {
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts"
@@ -292,10 +308,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
+    "transport.driver.self.expense.record": {
+      "filePath": "apps/api/src/transport/costing/driver-expenses-self.controller.ts"
+    },
     "transport.driver.self.fund.read": {
       "functionName": "DriverFundSelfController.statement",
       "filePath": "apps/api/src/transport/costing/driver-fund-self.controller.ts",
       "line": 34
+    },
+    "transport.driver.self.payslip.read": {
+      "filePath": "apps/api/src/transport/workforce/driver-payslips.controller.ts"
     },
     "transport.driver.self.trip.read": {
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts"
@@ -383,6 +405,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
       "line": 145
     },
+    "transport.settlement.document.read": {
+      "functionName": "SettlementReportsController.documentChain",
+      "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts",
+      "line": 121
+    },
+    "transport.settlement.report.read": {
+      "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts"
+    },
     "transport.trip.assign": {
       "functionName": "TripsController.assign",
       "filePath": "apps/api/src/transport/trips/trips.controller.ts",
@@ -427,37 +457,37 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "advice.auto_reply|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 522
+      "line": 527
     },
     "advice.auto_reply|ALLOWED": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 538
+      "line": 543
     },
     "advisor.compose|COMPOSED": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 272
+      "line": 302
     },
     "advisor.compose|COMPOSER_DISABLED": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 173
+      "line": 203
     },
     "advisor.compose|DETERMINISTIC_PATH_SUFFICIENT": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 182
+      "line": 212
     },
     "advisor.compose|LLM_RETURNED_NOTHING": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 264
+      "line": 294
     },
     "agent.tool_authorization|*": {
       "functionName": "AgentOrchestrator.composeReply",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 195
+      "line": 225
     },
     "alerts.operational_feed|OPERATIONAL_ALERTS_COMPILED": {
       "functionName": "OperationalAlertsService.feed",
@@ -526,17 +556,27 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 465
+      "line": 470
     },
     "costing.reversal|*": {
       "functionName": "CostingService.denyReversal",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 458
+      "line": 536
     },
     "costing.reversal|REVERSAL_POSTED": {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 432
+      "line": 510
+    },
+    "driver.self_expense_scope|SELF_EXPENSE_SCOPE_GRANTED": {
+      "functionName": "CostingService.recordSelfTripExpense",
+      "filePath": "apps/api/src/transport/costing/costing.service.ts",
+      "line": 375
+    },
+    "driver.self_expense_scope|SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING": {
+      "functionName": "CostingService.recordSelfTripExpense",
+      "filePath": "apps/api/src/transport/costing/costing.service.ts",
+      "line": 357
     },
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_GRANTED": {
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts"
@@ -560,6 +600,24 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "CostingReadService.selfFundStatement",
       "filePath": "apps/api/src/transport/costing/costing-read.service.ts",
       "line": 81
+    },
+    "driver.self_payslip_scope|*": {
+      "functionName": "WorkforceReadService.notVisible",
+      "filePath": "apps/api/src/transport/workforce/workforce-read.service.ts",
+      "line": 179
+    },
+    "driver.self_payslip_scope|SELF_PAYSLIP_DRAFT_WITHHELD": {
+      "functionName": "WorkforceReadService.listMyPayslips",
+      "filePath": "apps/api/src/transport/workforce/workforce-read.service.ts",
+      "line": 98
+    },
+    "driver.self_payslip_scope|SELF_PAYSLIP_SCOPE_GRANTED": {
+      "filePath": "apps/api/src/transport/workforce/workforce-read.service.ts"
+    },
+    "driver.self_payslip_scope|SELF_PAYSLIP_SCOPE_NO_DRIVER_BINDING": {
+      "functionName": "WorkforceReadService.requireDriverBinding",
+      "filePath": "apps/api/src/transport/workforce/workforce-read.service.ts",
+      "line": 201
     },
     "driver.self_scope|SELF_SCOPE_GRANTED": {
       "functionName": "TripService.listDriverTrips",
@@ -873,22 +931,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "message.intake|ACCEPTED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 222
+      "line": 227
     },
     "message.intake|DUPLICATE_MESSAGE": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 194
+      "line": 199
     },
     "message.intake|GROUP_NOT_MAPPED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 213
+      "line": 218
     },
     "message.intake|PARTICIPANT_IGNORED": {
       "functionName": "PipelineService.intakeTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
-      "line": 180
+      "line": 185
     },
     "order.auto_confirm|*": {
       "functionName": "SalesOrderOutcomeService.settle",
@@ -908,7 +966,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.handoff_followup_schedule|*": {
       "functionName": "OrdersService.decideSchedule",
       "filePath": "apps/api/src/orders/orders.service.ts",
-      "line": 221
+      "line": 225
+    },
+    "outbound.authority|*": {
+      "functionName": "AgentOrchestrator.composeReply",
+      "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
+      "line": 371
+    },
+    "outbound.send_guard|*": {
+      "functionName": "TurnReplyService.performSendAdviceReply",
+      "filePath": "apps/api/src/turns/turn-reply.service.ts",
+      "line": 81
     },
     "payroll.driver_fund_disclosure|DRIVER_FUND_NOT_AVAILABLE": {
       "functionName": "WorkforceService.emitFundDisclosure",
@@ -967,12 +1035,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 695
+      "line": 836
     },
     "rules.price|*": {
       "functionName": "AgentOrchestrator.dispatch",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 719
+      "line": 860
     },
     "settlement.allocate|*": {
       "functionName": "SettlementService.allocate",
@@ -1045,7 +1113,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "supervisor.risk|*": {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
-      "line": 579
+      "line": 718
     },
     "trip.assignment_change|*": {
       "functionName": "TripService.assign",
@@ -1080,12 +1148,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "trip_expense.record|*": {
       "functionName": "CostingService.guardTripAcceptsExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 539
+      "line": 617
     },
     "trip_expense.record|EXPENSE_DRIVER_NOT_ASSIGNED": {
       "functionName": "CostingService.requireDriverAssignedToTrip",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 625
+      "line": 703
     },
     "trip_expense.record|EXPENSE_IDEMPOTENT_REPLAY": {
       "functionName": "CostingService.recordTripExpense",

@@ -1,13 +1,19 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tenantConfigSchema, type CapabilityId } from '@netviet/tenant';
 import { describe, expect, it } from 'vitest';
 import { buildAppComposition } from '../../app-composition.js';
+import { nonPreviewTenantPacks } from '../__tests__/tenant-packs.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
-const WORKFORCE_ARTEFACTS = ['PayrollController', 'TransportWorkforceModule'];
+const WORKFORCE_ARTEFACTS = [
+  'PayrollController',
+  // BE MAT LAI XE (`#168 B8`) — den cung capability nay va bien mat cung no. Khong tinh luong thi
+  // khong co phieu de lai xe doc, nen mot route mo cho mot bang rong se la mot loi hua sai.
+  'DriverPayslipsController',
+  'TransportWorkforceModule',
+];
 
 function compositionNames(capabilities: readonly CapabilityId[]): string[] {
   const built = buildAppComposition(capabilities);
@@ -57,18 +63,16 @@ describe('composition cua capability transport-workforce', () => {
     for (const artefact of WORKFORCE_ARTEFACTS) expect(names, artefact).not.toContain(artefact);
   });
 
-  it('khong goi khach nao dang co trong `tenants/` bat transport-workforce', () => {
-    const tenantsDir = join(repoRoot, 'tenants');
-    const slugs = readdirSync(tenantsDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-
-    expect(slugs.length).toBeGreaterThan(0);
-    for (const slug of slugs) {
-      const config = JSON.parse(readFileSync(join(tenantsDir, slug, 'tenant.json'), 'utf8')) as {
-        capabilities: string[];
-      };
-      expect(config.capabilities, slug).not.toContain('transport-workforce');
+  /**
+   * Cong nay bat viec bat `transport-workforce` cho mot goi khach THAT. Danh sach goi
+   * duoc phep nam o `__tests__/tenant-packs.ts`, va co mot bai rieng khoa lai rang khong mot
+   * khach that nao lot vao do — xem `transport-tenant-allowlist.spec.ts`.
+   */
+  it('khong goi khach THAT nao bat transport-workforce', () => {
+    const packs = nonPreviewTenantPacks(repoRoot);
+    expect(packs.length).toBeGreaterThan(0);
+    for (const pack of packs) {
+      expect(pack.capabilities, pack.slug).not.toContain('transport-workforce');
     }
   });
 });

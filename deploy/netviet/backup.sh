@@ -46,9 +46,21 @@ prune_prefix() {
 }
 
 cd "${APP_DIR}"
-COMPOSE=(docker compose --env-file .runtime/secrets.env -f compose.yaml)
+# CSDL PHAI SAO LUU LA CSDL THAT SU TON TAI.
+#
+# `flowise` chi duoc tao khi ho so bat Flowise (xem `postgres/init-databases.sh`). Giu no trong mot
+# danh sach co dinh se lam `pg_dump --dbname flowise` chet tren stack khong co CSDL do — va vi tep
+# nay chay voi `VERIFY_RESTORE=1` NGAY SAU `deploy-stack.sh`, mot lan chet o day danh do CA LAN
+# DEPLOY sau khi ung dung da len va da khoe.
+source "${APP_DIR}/stack-compose.sh"
+netviet_load_stack_composition
+COMPOSE=(docker compose --env-file .runtime/secrets.env "${NETVIET_COMPOSE_FILES[@]}")
+BACKED_UP_DATABASES=(zalo)
+if [[ "${NETVIET_FLOWISE_ENABLED}" == 'on' ]]; then
+  BACKED_UP_DATABASES+=(flowise)
+fi
 
-for database in zalo flowise; do
+for database in "${BACKED_UP_DATABASES[@]}"; do
   "${COMPOSE[@]}" exec -T postgres \
     pg_dump --username netviet_admin --format=custom --no-owner --dbname "${database}" \
     >"${TMP_DIR}/${database}-${STAMP}.dump"
@@ -157,8 +169,9 @@ if ! backup_observability_store; then
 fi
 
 if [[ "${VERIFY_RESTORE:-0}" == "1" ]]; then
-  "${APP_DIR}/restore-check.sh" zalo "${TMP_DIR}/zalo-${STAMP}.dump"
-  "${APP_DIR}/restore-check.sh" flowise "${TMP_DIR}/flowise-${STAMP}.dump"
+  for database in "${BACKED_UP_DATABASES[@]}"; do
+    "${APP_DIR}/restore-check.sh" "${database}" "${TMP_DIR}/${database}-${STAMP}.dump"
+  done
   # Chi kiem khi stack that su co engine — `backup_workflow_engine` tu bo qua thi khong co dump.
   if [[ -s "${TMP_DIR}/hatchet-${STAMP}.dump" ]]; then
     "${APP_DIR}/restore-check.sh" hatchet "${TMP_DIR}/hatchet-${STAMP}.dump"

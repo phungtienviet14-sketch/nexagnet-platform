@@ -7,6 +7,7 @@ import {
   type AdvisorReply,
   type AdvisorRequest,
 } from '../advisor/advisor-agent.js';
+import { fakeAdvisorReply } from '../advisor/__tests__/advisor-reply.fixture.js';
 import type { LlmUsage } from '../observability/llm-usage.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
@@ -44,14 +45,33 @@ class RecordingSink implements TelemetrySink {
   }
 }
 
+/** Nguon he thong gia lap: mot luot that co loi nhan la luot DA tra cuu duoc tai lieu da duyet (G1). */
+/*
+ * NGUON GIA LAP PHAI THAT SU NOI DIEU MA BAN NHAP GIA LAP NOI (doi 05/09/2026, G5).
+ *
+ * Ban truoc o day la mot cau chung chung ("Tai lieu da duyet cua san pham") — va no du de moi ban
+ * nhap trong tep nay duoc nhan. Do dung la hinh dang lo hong ma review doc lap goi ten: mot nguon
+ * KHONG LIEN QUAN van mo cong cho van xuoi. Tu G5, tu ngu cua ban nhap phai co trong nguon, nen
+ * mot fixture nhu vay khong con hop dong bo — va do la dieu DUNG: fixture phai mo phong mot luot
+ * co that, tuc mot luot da tra cuu duoc tai lieu NOI VE dung dieu agent sap tra loi.
+ *
+ * Cac bai o day khong do G5; chung do quan sat va duong nghiep vu. Nen viec can lam la lam fixture
+ * hop le, khong phai noi long cong.
+ */
+const STUB_SOURCES = [
+  'Tài liệu tham chiếu (giả lập cho test): máy có đèn ngủ. Nhờ Sale kiểm tra lại giúp khách.',
+];
+
 class StubAdvisor extends AdvisorAgent {
   readonly name = 'stub';
+  private readonly canned: AdvisorReply | null;
   constructor(
-    private readonly canned: AdvisorReply | null,
+    canned: (Partial<AdvisorReply> & { readonly text: string }) | null,
     /** Mot phan tu = mot VONG goi cong cu; agent that bao tung vong, ben goi cong don. */
     private readonly rounds: readonly LlmUsage[] = [],
   ) {
     super();
+    this.canned = canned ? fakeAdvisorReply({ sources: STUB_SOURCES, ...canned }) : null;
   }
   async reply(request: AdvisorRequest): Promise<AdvisorReply | null> {
     for (const round of this.rounds) request.reportUsage?.(round);
@@ -92,7 +112,12 @@ async function build(options: {
   const sink = new RecordingSink();
   const telemetry = new TelemetryService();
   telemetry.configure({
-    release: { tenant: 'ultty', environment: 'gd1-test', gitSha: 'c37ee04'.padEnd(40, '0'), source: 'manifest' },
+    release: {
+      tenant: 'ultty',
+      environment: 'gd1-test',
+      gitSha: 'c37ee04'.padEnd(40, '0'),
+      source: 'manifest',
+    },
     privacy: 'full',
     sinks: [sink],
   });
@@ -159,6 +184,7 @@ describe('CAU HOI: "khach bao bot tra loi sai" — lan tu mot tin ra ca cay xu l
         text: 'Dạ máy có đèn ngủ ạ.',
         usedTools: ['tra_cuu_san_pham'],
         handoff: false,
+        authority: { grants: [] },
       }),
     });
 
@@ -173,7 +199,12 @@ describe('CAU HOI: "khach bao bot tra loi sai" — lan tu mot tin ra ca cay xu l
 
   it('doc duoc CAY NGHIEP VU 5-15 buoc, khong phai hang tram span vun', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({
+        text: 'Dạ có ạ.',
+        usedTools: [],
+        handoff: false,
+        authority: { grants: [] },
+      }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -192,6 +223,7 @@ describe('CAU HOI: "khach bao bot tra loi sai" — lan tu mot tin ra ca cay xu l
         text: 'Dạ máy có đèn ngủ ạ.',
         usedTools: ['tra_cuu_san_pham', 'tra_cuu_tai_lieu'],
         handoff: false,
+        authority: { grants: [] },
       }),
     });
 
@@ -209,7 +241,12 @@ describe('CAU HOI: "khach bao bot tra loi sai" — lan tu mot tin ra ca cay xu l
 
   it('moi ban ghi neo duoc vao khach, moi truong va RELEASE dang chay', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({
+        text: 'Dạ có ạ.',
+        usedTools: [],
+        handoff: false,
+        authority: { grants: [] },
+      }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -230,6 +267,7 @@ describe('CAU HOI: "AI tra loi dung nhung he thong khong gui" — CASE C', () =>
         text: 'Dạ em nhờ Sale kiểm tra lại giúp mình ạ.',
         usedTools: ['tra_cuu_tai_lieu'],
         handoff: true,
+        authority: { grants: [] },
       }),
     });
 
@@ -261,7 +299,12 @@ describe('CAU HOI: "AI tra loi dung nhung he thong khong gui" — CASE C', () =>
 
   it('phan biet duoc "kill switch tat" voi "agent xin chuyen Sale"', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({
+        text: 'Dạ có ạ.',
+        usedTools: [],
+        handoff: false,
+        authority: { grants: [] },
+      }),
       autoSend: 'off',
     });
 
@@ -281,7 +324,10 @@ describe('CAU HOI: "AI tra loi dung nhung he thong khong gui" — CASE C', () =>
    * `LLM_RETURNED_NOTHING`, tuc bao "LLM hong" cho mot lan goi chua he xay ra).
    */
   it.each([
-    ['NoopAdvisorAgent (dung cai stack that tiem khi ADVICE_COMPOSER rong)', new NoopAdvisorAgent()],
+    [
+      'NoopAdvisorAgent (dung cai stack that tiem khi ADVICE_COMPOSER rong)',
+      new NoopAdvisorAgent(),
+    ],
     ['khong tiem advisor nao (CI/demo offline)', undefined],
   ])(
     'SU CO 19/08-21/08: `ADVICE_COMPOSER` rong hien ra thanh mot dong loc duoc — %s',
@@ -316,10 +362,18 @@ describe('CAU HOI: "luot nay dot bao nhieu token, va o dau?"', () => {
   it('ca hai lan goi LLM deu co so token — parse VA compose', async () => {
     const { pipeline, sink } = await build({
       parseUsage: { inputTokens: 2_310, outputTokens: 96 },
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: ['tra_cuu_san_pham'], handoff: false }, [
-        { inputTokens: 3_100, outputTokens: 120 },
-        { inputTokens: 880, outputTokens: 90 },
-      ]),
+      advisor: new StubAdvisor(
+        {
+          text: 'Dạ có ạ.',
+          usedTools: ['tra_cuu_san_pham'],
+          handoff: false,
+          authority: { grants: [] },
+        },
+        [
+          { inputTokens: 3_100, outputTokens: 120 },
+          { inputTokens: 880, outputTokens: 90 },
+        ],
+      ),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -350,7 +404,12 @@ describe('CAU HOI: "luot nay dot bao nhieu token, va o dau?"', () => {
 
   it('nha cung cap khong bao gi -> KHONG co truong token, khong phai `0`', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({
+        text: 'Dạ có ạ.',
+        usedTools: [],
+        handoff: false,
+        authority: { grants: [] },
+      }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -366,7 +425,12 @@ describe('CAU HOI: "luot nay dot bao nhieu token, va o dau?"', () => {
 describe('CAU HOI: "vi sao don nay khong tu gui?"', () => {
   it('tra loi bang mot ma, kem so lieu nguong', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({
+        text: 'Dạ có ạ.',
+        usedTools: [],
+        handoff: false,
+        authority: { grants: [] },
+      }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -379,7 +443,12 @@ describe('CAU HOI: "vi sao don nay khong tu gui?"', () => {
 
   it('cong quyen GHI cua agent nhin duoc — cap hay khong, va vi sao', async () => {
     const { pipeline, sink } = await build({
-      advisor: new StubAdvisor({ text: 'Dạ có ạ.', usedTools: [], handoff: false }),
+      advisor: new StubAdvisor({
+        text: 'Dạ có ạ.',
+        usedTools: [],
+        handoff: false,
+        authority: { grants: [] },
+      }),
     });
 
     await pipeline.process(message('ELNI co den ngu khong'));
@@ -416,7 +485,12 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
       undefined,
       undefined,
       content,
-      new StubAdvisor({ text: 'Dạ máy có đèn ngủ ạ.', usedTools: [], handoff: false }),
+      new StubAdvisor({
+        text: 'Dạ máy có đèn ngủ ạ.',
+        usedTools: [],
+        handoff: false,
+        authority: { grants: [] },
+      }),
       undefined,
       telemetry,
     );
@@ -462,7 +536,12 @@ describe('BAT BIEN: quan sat hong KHONG duoc lam hong nghiep vu (muc 20)', () =>
       undefined,
       undefined,
       content,
-      new StubAdvisor({ text: 'Dạ máy có đèn ngủ ạ.', usedTools: [], handoff: false }),
+      new StubAdvisor({
+        text: 'Dạ máy có đèn ngủ ạ.',
+        usedTools: [],
+        handoff: false,
+        authority: { grants: [] },
+      }),
     );
     const outbound = new MockAdapter();
     const router = new OutboundChannelRouter(new MockAdapter(), new MockAdapter(), outbound);

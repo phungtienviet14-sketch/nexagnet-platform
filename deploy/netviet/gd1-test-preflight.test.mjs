@@ -5,9 +5,11 @@ import test from 'node:test';
 import {
   collectGd1TestPreflight,
   formatDeploymentPlan,
+  gateSpecFor,
   hashZaloGroupId,
   validateGd1TestPreflight,
 } from './gd1-test-preflight.mjs';
+import { DEPLOYMENT_PROFILES } from './deployment-profiles.mjs';
 
 const digest = (character) =>
   `asia-southeast1-docker.pkg.dev/example/netviet/app@sha256:${character.repeat(64)}`;
@@ -110,14 +112,14 @@ function validInput() {
       credentials: {
         zcaSession: { exists: true, regularFile: true, mode: '600', nonEmpty: true },
         requiredSecrets: secretSuffixes.map((suffix) => ({
-            name: `zalo-ultty-${suffix}`,
-            exists: true,
-            enabledVersion: true,
-            vmCanAccess: true,
-            nonEmpty: true,
-            hasCarriageReturn: false,
-            hasLineFeed: false,
-          })),
+          name: `zalo-ultty-${suffix}`,
+          exists: true,
+          enabledVersion: true,
+          vmCanAccess: true,
+          nonEmpty: true,
+          hasCarriageReturn: false,
+          hasLineFeed: false,
+        })),
       },
       rollback: {
         appImage: digest('b'),
@@ -272,7 +274,10 @@ test('collector reports IAP transport failure instead of inventing missing secre
   const result = await collectGd1TestPreflight({ env, run });
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join('\n'), /preflight collection failed.*secret inventory.*transport/i);
+  assert.match(
+    result.errors.join('\n'),
+    /preflight collection failed.*secret inventory.*transport/i,
+  );
   assert.doesNotMatch(result.errors.join('\n'), /secret #\d+ does not exist/);
 });
 
@@ -292,7 +297,10 @@ test('collector does not classify a stack-probe transport failure as first relea
 
   assert.equal(result.ok, false);
   assert.equal(result.plan, undefined);
-  assert.match(result.errors.join('\n'), /preflight collection failed.*stack existence.*transport/i);
+  assert.match(
+    result.errors.join('\n'),
+    /preflight collection failed.*stack existence.*transport/i,
+  );
 });
 
 test('collector rejects an incomplete existing stack instead of treating it as first release', async () => {
@@ -342,7 +350,10 @@ test('collector rejects incomplete batched secret evidence', async () => {
       return '__NETVIET_STACK_STATE__=absent\n';
     }
     if (commandText.includes('secrets versions access')) {
-      return secretInventoryOutput().split('\n').filter((line) => !line.startsWith('10|')).join('\n');
+      return secretInventoryOutput()
+        .split('\n')
+        .filter((line) => !line.startsWith('10|'))
+        .join('\n');
     }
     throw new Error(`unexpected command: ${commandText}`);
   };
@@ -410,24 +421,42 @@ test('deploy-ci uses one archive transfer and one post-transfer IAP session', as
   assert.equal((afterArchive.match(/\bscp_vm\s+"/g) ?? []).length, 1);
   assert.equal((afterArchive.match(/\bssh_vm\s+"/g) ?? []).length, 1);
   assert.match(afterArchive, /scp_vm "\$\{staging\}\/payload\.tar\.gz" "\$\{remote_archive\}"/);
-  assert.match(
-    afterArchive,
-    /ssh_vm "install -d[^\n]+tar -xzf[^\n]+rm -f[^\n]+deploy-remote\.sh/,
-  );
+  assert.match(afterArchive, /ssh_vm "install -d[^\n]+tar -xzf[^\n]+rm -f[^\n]+deploy-remote\.sh/);
 });
 
 // Cong "chi ultty moi co gd1-test" khong con nam trong deploy-ci.sh: deploy-ci gate theo MOI
 // TRUONG, con rang buoc khach nam o hai cho khong the di vong — registry (chi dang ky
 // ultty/gd1-test) va render-secrets.sh (tu choi render profile gd1-test cho khach khac).
 // Kiem o day de mot lan "don dep" khong lang le go mat cong do.
-test('the gd1-test runtime profile is refused for any tenant other than Ultty', async () => {
+test('the gd1-test runtime profile is refused for any tenant the profile does not serve', async () => {
+  // BAY DAY KHONG DUOC GO — no chi doi NEO.
+  //
+  // Truoc day cong nay la mot phep so sanh chuoi trong `render-secrets.sh`
+  // (`[[ "${TENANT_SLUG}" == 'ultty' ]] || exit 64`), va bai test khoa dung dong van ban do de mot
+  // lan "don dep" khong lang le go mat no. Cai pin ay nay treo tren MOT HO SO CO TEN, nen bai test
+  // khoa ca hai dau: van ban cua cong o tang render, VA gia tri ma danh muc thuc su ghim.
   const renderSecrets = await readFile(new URL('./render-secrets.sh', import.meta.url), 'utf8');
   const profileIndex = renderSecrets.indexOf("DEPLOYMENT_ENVIRONMENT}\" == 'gd1-test'");
 
   assert.ok(profileIndex > 0, 'render-secrets must carry an explicit gd1-test profile');
-  assert.match(renderSecrets, /\$\{TENANT_SLUG\}"\s*==\s*'ultty'/);
-  assert.match(renderSecrets, /AUTO_SEND='off'/);
-  assert.match(renderSecrets, /CHANNEL_MODE='zca'/);
+  // Khong co ho so thi KHONG render — chat hon ban cu, von van render cho Ultty ma khong hoi gi.
+  assert.match(renderSecrets, /Moi truong gd1-test bat buoc co DEPLOYMENT_PROFILE/);
+  // Tenant phai nam trong danh sach cua ho so, va mac dinh khi mat bien van la Ultty.
+  assert.match(renderSecrets, /profile_allows_tenant/);
+  assert.match(renderSecrets, /PROFILE_TENANTS:-ultty/);
+
+  // ULTTY GIU NGUYEN TUNG GIA TRI. Doc tu danh muc thay vi tu van ban shell: day moi la thu that
+  // su duoc ghim vao `secrets.env`, va mot lan sua danh muc phai lam bai test nay do.
+  const ultty = DEPLOYMENT_PROFILES['ultty-gd1-test'];
+  assert.equal(ultty.runtime.autoSend, 'off');
+  assert.equal(ultty.runtime.channelMode, 'zca');
+  assert.equal(ultty.runtime.parserMode, 'deepseek');
+  assert.equal(ultty.runtime.dataClassification, 'test');
+  assert.deepEqual(ultty.tenants, ['ultty']);
+
+  // Va cong that su tu choi mot tenant khac: goi khach cua `wata` khong the di qua ho so Ultty.
+  const spec = gateSpecFor('ultty-gd1-test');
+  assert.equal(spec.tenants.includes('wata'), false);
 });
 
 test('a first release is collectable and names what it has not proved yet', async () => {
@@ -642,7 +671,9 @@ test('rejects GD1-test snapshots that do not name exactly two approved TEST grou
   const result = validateGd1TestPreflight(input);
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join('\n'), /exactly two approved TEST groups/);
+  // So luong den TU HO SO (`approvedTestGroupCount`), nen thong diep mang ten ho so. Doi hoi thi
+  // khong doi: Ultty van phai la DUNG hai nhom TEST duoc duyet.
+  assert.match(result.errors.join('\n'), /ultty-gd1-test requires exactly 2 approved TEST groups/);
 });
 
 test('rejects missing ZCA credentials and unhealthy secret metadata', () => {
@@ -780,10 +811,7 @@ test('rejects missing secret attributes and an unnamed secret safely', () => {
       ...base.deployment,
       credentials: {
         ...base.deployment.credentials,
-        requiredSecrets: [
-          {},
-          ...base.deployment.credentials.requiredSecrets.slice(1),
-        ],
+        requiredSecrets: [{}, ...base.deployment.credentials.requiredSecrets.slice(1)],
       },
     },
   };

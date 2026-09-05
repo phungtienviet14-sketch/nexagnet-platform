@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChannelMessage, Intent, ParseResult } from '@netviet/shared';
 import { AgentOrchestrator } from '../agents/agent-orchestrator.service.js';
 import { AdvisorAgent, type AdvisorReply } from '../advisor/advisor-agent.js';
+import { fakeAdvisorReply } from '../advisor/__tests__/advisor-reply.fixture.js';
 import { MockAdapter } from '../channels/mock.adapter.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import { InMemoryContentRepository } from '../content/content.repository.js';
@@ -32,10 +33,22 @@ import { PipelineService } from './pipeline.service.js';
 
 const CHAT_ID = SEED.groups[0]!.chatId;
 
+/**
+ * NGUON HE THONG GIA LAP — phai NOI dung dieu ma ban nhap gia lap noi (doi 05/09/2026, G5).
+ *
+ * Ban truoc la mot cau chung chung ("Tai lieu da duyet cua san pham"), va no du de moi ban nhap
+ * duoc nhan — dung hinh dang lo hong ma review doc lap goi ten. Tu G5, tu ngu cua loi nhan phai
+ * co trong nguon, nen fixture phai mo phong mot luot CO THAT: `tra_cuu_tai_lieu` tra ve mot bai
+ * da duyet, va agent tra loi tu chinh bai do.
+ */
+const STUB_SOURCES = ['Máy có đèn ngủ. Đèn khí quyển học dùng làm đèn trang trí buổi tối.'];
+
 class StubAdvisor extends AdvisorAgent {
   readonly name = 'stub';
-  constructor(private readonly canned: AdvisorReply | null) {
+  private readonly canned: AdvisorReply | null;
+  constructor(canned: (Partial<AdvisorReply> & { readonly text: string }) | null) {
     super();
+    this.canned = canned ? fakeAdvisorReply({ sources: STUB_SOURCES, ...canned }) : null;
   }
   async reply(): Promise<AdvisorReply | null> {
     return this.canned;
@@ -113,6 +126,7 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
         text: 'Dạ máy có đèn ngủ ạ, đèn khí quyển học dùng làm đèn trang trí buổi tối ạ.',
         usedTools: ['tra_cuu_san_pham', 'tra_cuu_tai_lieu'],
         handoff: false,
+        authority: { grants: [] },
       }),
     );
 
@@ -129,6 +143,16 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
         text: 'Dạ sản phẩm được bảo hành 12 tháng kể từ ngày mua ạ.',
         usedTools: ['tra_cuu_tai_lieu'],
         handoff: false,
+        authority: { grants: [] },
+        // Con so trong loi nhan phai truy nguyen duoc ve NGUON HE THONG (G2), va tu ngu cung vay
+        // (G5) — day chinh la bai FAQ da duyet ma `tra_cuu_tai_lieu` vua tra ve. Bo dong nay di
+        // thi loi nhan bi tu choi, va do la hanh vi DUNG: khong tai lieu nao noi 12 thang thi
+        // khong duoc noi 12 thang.
+        //
+        // VIET CO DAU la mot phan cua fixture, khong phai trang tri: G5 doi chieu tu ngu theo
+        // dung cach viet (xem `outbound-envelope.ts`), va tai lieu duyet that cua khach deu la
+        // tieng Viet co dau. Mot nguon go khong dau la mot nguon KHONG co that.
+        sources: ['Sản phẩm được bảo hành 12 tháng kể từ ngày mua.'],
       }),
       'bao_hanh_khieu_nai',
     );
@@ -146,6 +170,7 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
         text: 'Dạ em nhờ Sale kiểm tra lại giúp mình ạ.',
         usedTools: ['tra_cuu_tai_lieu'],
         handoff: true,
+        authority: { grants: [] },
       }),
     );
 

@@ -185,6 +185,52 @@ export type {
   SupervisorSummary,
 } from './agents.js';
 export {
+  OUTBOUND_CLAIM_CLASSES,
+  OUTBOUND_CLAIM_CLASS_LABELS,
+  OUTBOUND_AUTHORITY_SOURCES,
+  OUTBOUND_PROVENANCES,
+  OUTBOUND_AUTHORITY_REASONS,
+  OUTBOUND_AUTHORITY_REASON_LABELS,
+  OUTBOUND_COMMITMENT_LEVELS,
+  OUTBOUND_COMMITMENT_LEVEL_LABELS,
+} from './outbound-authority.js';
+export type {
+  OutboundAuthority,
+  OutboundAuthorityAllowReason,
+  OutboundAuthorityDenyReason,
+  OutboundAuthorityGrant,
+  OutboundAuthorityReason,
+  OutboundAuthoritySource,
+  OutboundAuthorityVerdict,
+  OutboundClaimClass,
+  OutboundCommitmentLevel,
+  OutboundProvenance,
+} from './outbound-authority.js';
+export {
+  OUTBOUND_BLOCK_KINDS,
+  OUTBOUND_BLOCK_KIND_LABELS,
+  OUTBOUND_COMPOSITION_MODES,
+  OUTBOUND_OMISSION_REASONS,
+  OUTBOUND_OMISSION_REASON_LABELS,
+  OUTBOUND_PLAN_KINDS,
+  NARRATIVE_REJECTIONS,
+  NARRATIVE_REJECTION_LABELS,
+  narrativeOnlyPlan,
+} from './outbound-composition.js';
+export type {
+  ComposedBlock,
+  ComposedBlockClaim,
+  NarrativeDecision,
+  NarrativeRejection,
+  OmittedBlock,
+  OutboundBlockKind,
+  OutboundComposition,
+  OutboundCompositionMode,
+  OutboundOmissionReason,
+  OutboundPlan,
+  OutboundPlanKind,
+} from './outbound-composition.js';
+export {
   CONTENT_LIFECYCLE_STATUSES,
   ASSET_KINDS,
   CONTENT_LINK_KINDS,

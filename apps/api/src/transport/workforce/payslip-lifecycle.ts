@@ -63,3 +63,27 @@ export const isPosted = (status: PayslipStatus): boolean => status !== 'DRAFT';
  */
 export const isCorrectable = (status: PayslipStatus): boolean =>
   status === 'APPROVED' || status === 'PAID';
+
+/**
+ * TRANG THAI MA LAI XE DUOC NHIN THAY — `#168 B8`.
+ *
+ * `DRAFT` bi cat o TANG KIEU, khong o mot bo loc: nguon cua khach khong cho phep cong bo luong TAM
+ * TINH cho lai xe, va mot phieu nhap chua duyet la dung nghia mot con so co the con doi. Cong bo no
+ * roi sua se lam nguoi nhan luong nho mot con so ma bang luong khong bao gio mang.
+ *
+ * `REVERSED` thi VAN hien: mot phieu da bi dao la mot su that lai xe phai doc duoc, khong phai mot
+ * ban ghi bi giau. Giau no di se lam phieu dao tro thanh mot dong am khong co doi ung.
+ */
+export type DriverVisiblePayslipStatus = Exclude<PayslipStatus, 'DRAFT'>;
+
+/**
+ * Cung phep phan biet ma `isPosted()` dang giu — nhung MOT CAI TEN KHAC, co chu dich.
+ *
+ * `isPosted()` tra loi cau hoi cua tang GHI: "noi dung phieu nay con sua truc tiep duoc khong"
+ * (`INV-20`). Ham nay tra loi cau hoi cua tang CONG BO: "phieu nay duoc dua ra ngoai chua". Hom nay
+ * hai cau tra loi trung nhau; chung KHONG buoc phai trung nhau mai mai, va neu mot ngay may trang
+ * thai them mot buoc duyet thu hai thi noi phai sua se doc duoc ngay tu ten ham.
+ */
+export const isPublishableToDriver = (
+  status: PayslipStatus,
+): status is DriverVisiblePayslipStatus => isPosted(status);

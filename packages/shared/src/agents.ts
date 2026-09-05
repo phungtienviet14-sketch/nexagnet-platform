@@ -1,5 +1,7 @@
 import type { Intent } from './order.js';
 import type { OutboundContent } from './content.js';
+import type { OutboundAuthorityVerdict } from './outbound-authority.js';
+import type { OutboundComposition } from './outbound-composition.js';
 
 /**
  * Multi-agent 6 con theo docs/khach-hang/ultty/nguon-goc/de-xuat-giai-phap-netviet.md §5.1 — pham vi demo.
@@ -100,6 +102,31 @@ export interface AgentTrace {
   reply?: string;
   /** Payload du kien de channel gui dung capability; video/catalog luon la link. */
   outbound?: OutboundContent;
+  /**
+   * QUYET DINH THAM QUYEN cho chinh `outbound` o tren — thu bien mot ban nhap thanh mot tin
+   * GUI DUOC CHO KHACH.
+   *
+   * Vi sao no nam TREN TRACE chu khong chi la mot bien cuc bo luc soan: co hai duong dua `outbound`
+   * toi khach — cong tu dong (`PipelineService.evaluateAutoReplyAdvice`) va nut "Duyệt & gửi" cua
+   * Sale (`OrdersService.approve`) — va ca hai deu doc BAN GHI DA LUU, khong doc lai ngu canh luc
+   * soan. Khong ghim quyet dinh vao day thi duong nguoi-duyet se khong biet gi ve tham quyen, va
+   * mot ban nhap thieu tham quyen van ra khoi he thong chi vi co nguoi bam nut.
+   *
+   * VANG MAT = CHUA QUA CONG. `TurnReplyService` doc do la `AUTHORITY_DECISION_ABSENT` va TU CHOI
+   * gui — ban ghi cu (truoc ban nay) va moi duong soan tuong lai quen goi cong deu roi vao day.
+   */
+  outboundAuthority?: OutboundAuthorityVerdict;
+  /**
+   * BAN SOAN CO KIEU ma phan quyet o tren duoc cap cho (Issue #189).
+   *
+   * Doi voi `outboundAuthority` thi day la BANG CHUNG, khong phai mot ban sao: phan quyet noi
+   * "duoc gui", con ban ghi nay noi RA KHOI NAO da duoc dung, tu du kien tat dinh nao, khoi nao
+   * bi bo va vi sao, va loi nhan co qua duoc hop dong neo nguon khong.
+   *
+   * VANG MAT = CHUA QUA BO SOAN CO KIEU. `TurnReplyService` doc do la `COMPOSITION_ABSENT` va TU
+   * CHOI gui — ban ghi soan truoc #189 roi vao day, dung nhu muc 8 ca 10 hop dong doi.
+   */
+  outboundComposition?: OutboundComposition;
   /**
    * `reply` do AGENT CO CONG CU soan (khong phai ban mau tat dinh).
    *

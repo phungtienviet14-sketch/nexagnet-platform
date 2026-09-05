@@ -15,6 +15,7 @@ import { legacyReplyChannel } from '../channels/legacy-reply-channel.js';
 import { OutboundChannelRouter } from '../channels/outbound-channel.router.js';
 import type { DecisionOutcome, DecisionPointOf } from '../observability/decision-vocabulary.js';
 import { TelemetryService } from '../observability/telemetry.service.js';
+import { pinnedOutboundVerdict } from '../outbound/outbound-authority.js';
 import { TurnReplyService } from '../turns/turn-reply.service.js';
 import { WorkflowHandoffService } from '../workflow/workflow-handoff.service.js';
 import { SALES_HANDOFF_FOLLOWUP_KEY } from '../workflow/workflow-registry.js';
@@ -182,7 +183,10 @@ export class OrdersService {
     const enabled = Boolean(policy?.enabled) && Boolean(this.workflows);
 
     if (!enabled) {
-      this.decideSchedule('denied', policy?.enabled ? 'FOLLOWUP_NO_WORKFLOW_BINDING' : 'FOLLOWUP_DISABLED');
+      this.decideSchedule(
+        'denied',
+        policy?.enabled ? 'FOLLOWUP_NO_WORKFLOW_BINDING' : 'FOLLOWUP_DISABLED',
+      );
       return (await this.repo.update(id, patch))!;
     }
 
@@ -327,6 +331,34 @@ export class OrdersService {
       await this.recordManualAction(actor, 'order.approve', view, view, 'NOTHING_TO_SEND');
       throw new UnprocessableEntityException(
         'Tin nay chua co ban xac nhan hay ban tu van nao de gui',
+      );
+    }
+
+    /*
+     * NGUOI THAT BAM DUYET KHONG PHAI MOT NGUON THAM QUYEN.
+     *
+     * `TurnReplyService` van la diem nghen cuong che that (no chan ca duong tu dong), nhung o day
+     * ta hoi TRUOC de tra ve mot ma dung: mot ban tu van bi tu choi vi thieu tham quyen la mot
+     * quyet dinh CO CHU Y, khong phai mot lan gui hong. Gop hai thu lam mot se day Sale vao thoi
+     * quen bam lai nut cho mot cong se khong bao gio mo.
+     *
+     * Muc 7 ca 7 hop dong: mot cu bam duyet khong duoc bien mot ban nhap LLM thanh mot cam ket
+     * co tham quyen.
+     */
+    const advicePinned = pinnedOutboundVerdict(view.trace, view.trace?.outbound?.text ?? '');
+    if (route === 'ROUTED_TO_ADVICE' && !advicePinned.sendable) {
+      this.decide('order.manual_approve', 'denied', 'OUTBOUND_AUTHORITY_NOT_GRANTED', {
+        reason: advicePinned.reason,
+      });
+      await this.recordManualAction(
+        actor,
+        'order.approve',
+        view,
+        view,
+        'OUTBOUND_AUTHORITY_NOT_GRANTED',
+      );
+      throw new UnprocessableEntityException(
+        'Bản tư vấn này chưa đủ thẩm quyền để gửi cho khách — cần soạn lại hoặc bổ sung dữ kiện có thẩm quyền.',
       );
     }
 
