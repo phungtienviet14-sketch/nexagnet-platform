@@ -201,9 +201,18 @@ describe('chang 3 — phong thu chieu sau tren van ban CUOI', () => {
     });
   });
 
+  /*
+   * "HOP LE" TU #200 CO NGHIA LA MOT TRICH DAN TRON VEN. Fixture cua bai nay da doi cho phu hop
+   * (them "lên tới" va "đầu tiên"), va bai ngay duoi chung minh ban CAT DUOI khong con qua duoc.
+   * Thu bai nay do van la thu no vua do: ba con so ky thuat (9700, 3, 1, 7) lam bo trich vat mang
+   * bao dong, va neo nguon phai hap thu duoc chung — neu khong thi chang 3 se bo ca tin.
+   */
   it('van ban cuoi hop le KHONG bi lop nay bao dong gia — ke ca khi day so lieu ky thuat', () => {
     const composition = compose(
-      plan([], 'Dạ lưu lượng gió 9700 lít/phút, bảo hành 3 năm, 1 đổi 1 trong 7 ngày ạ.'),
+      plan(
+        [],
+        'Dạ lưu lượng gió lên tới 9700 lít/phút. Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên ạ.',
+      ),
       undefined,
       {
         systemSources: [
@@ -214,6 +223,23 @@ describe('chang 3 — phong thu chieu sau tren van ban CUOI', () => {
 
     expect(composition.narrative).toMatchObject({ admitted: true });
     expect(decideOutboundAuthority(composition, NO_GRANT)).toMatchObject({ sendable: true });
+  });
+
+  /*
+   * DOI TRONG, VA NO LA CHO #200 THAY DOI HANH VI CUA CHINH BAI TREN.
+   *
+   * Ban truoc cua bai tren viet "bảo hành 3 năm, 1 đổi 1 trong 7 ngày" — cat mat "đầu tiên" cua
+   * tai lieu. Doc len thi vo hai, nhung do dung la phep CAT DUOI ma G6 phai chan: mot menh de
+   * bao hanh bi cat duoi la mot dieu kien bao hanh khac.
+   */
+  it('#200: cat duoi mot menh de bao hanh — du chi mot chu — khong con di qua duoc', () => {
+    const composition = compose(plan([], 'Dạ bảo hành 3 năm, 1 đổi 1 trong 7 ngày ạ.'), undefined, {
+      systemSources: [
+        'Lưu lượng gió lên tới 9700 lít/phút. Bảo hành 3 năm, 1 đổi 1 trong 7 ngày đầu tiên.',
+      ],
+    });
+
+    expect(composition.narrative).toMatchObject({ reason: 'NARRATIVE_NOT_SOURCE_BOUND' });
   });
 });
 

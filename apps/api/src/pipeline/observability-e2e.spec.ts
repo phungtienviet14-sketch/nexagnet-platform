@@ -59,7 +59,7 @@ class RecordingSink implements TelemetrySink {
  * hop le, khong phai noi long cong.
  */
 const STUB_SOURCES = [
-  'Tài liệu tham chiếu (giả lập cho test): máy có đèn ngủ. Nhờ Sale kiểm tra lại giúp khách.',
+  'Tài liệu tham chiếu (giả lập cho test). Máy có đèn ngủ. Nhờ Sale kiểm tra lại giúp khách.',
 ];
 
 class StubAdvisor extends AdvisorAgent {

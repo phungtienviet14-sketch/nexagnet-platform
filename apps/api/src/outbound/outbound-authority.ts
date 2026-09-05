@@ -20,6 +20,7 @@ import {
   policyClaimTokens,
 } from './outbound-claims.js';
 import { attestedWords, parseAttestedTokens, unattestedWords } from './outbound-envelope.js';
+import { bindProposition, parseBoundExcerpts, sourceUnits } from './outbound-proposition.js';
 import {
   parseGroundingTokens,
   ungroundedCarrier,
@@ -403,6 +404,32 @@ export function decideOutboundAuthority(
     return {
       sendable: false,
       reason: 'COMPOSITION_TEXT_NOT_SOURCE_BACKED',
+      missing: [],
+      fingerprint,
+    };
+  }
+
+  /*
+   * CHANG 3c — G6 QUET LAI TREN VAN BAN CUOI, O MUC MENH DE (Issue #200).
+   *
+   * Chang 3b hoi "tung CHU den tu dau", va do la cau hoi ma #200 chung minh la chua du: ghep lai
+   * chinh chu cua nguon van tao duoc mot ky han thanh toan khac. O day cau hoi la "tung MENH DE
+   * den tu dau", va bang chung doi chieu gom dung hai thu, ca hai deu KHONG phai loi khai model:
+   *
+   *   · `x:` ghim tren ban soan — chinh cac menh de nguon ma loi nhan da trich;
+   *   · dong cua cac khoi da render — do bo soan viet ra tu `TurnBusinessFacts`.
+   *
+   * Thu no bat duoc ma chang soan khong bat duoc la mot doan VAN XUOI bi ghep them vao `text` SAU
+   * khi ban soan da xet: doan do se khong trung tron ven menh de nao trong hai nguon tren.
+   */
+  const boundText = bindProposition(composition.text, [
+    ...sourceUnits(parseBoundExcerpts(composition.grounded)),
+    ...sourceUnits(composition.blocks.flatMap((block) => block.lines)),
+  ]);
+  if (!boundText.bound) {
+    return {
+      sendable: false,
+      reason: 'COMPOSITION_TEXT_NOT_SOURCE_BOUND',
       missing: [],
       fingerprint,
     };

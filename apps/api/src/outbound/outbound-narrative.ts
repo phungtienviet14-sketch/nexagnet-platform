@@ -7,6 +7,7 @@ import {
   policyClaimTokens,
 } from './outbound-claims.js';
 import { unattestedWords } from './outbound-envelope.js';
+import { bindProposition, type SourceUnit } from './outbound-proposition.js';
 
 /**
  * HOP DONG NEO NGUON CHO LOI NHAN — cai gi cho phep mot cau van xuoi cua model den tay khach.
@@ -37,7 +38,16 @@ import { unattestedWords } from './outbound-envelope.js';
  *                            KHONG duoc nam trong van xuoi; chung thuoc ve khoi nghiep vu.
  *   G5 TUNG TU NGU PHAI CO NGUON — moi tu ngu noi dung cua loi nhan phai co mat trong nguon he
  *                            thong cua luot, hoac la mot tu chuc nang. Xem `outbound-envelope.ts`.
+ *   G6 TUNG MENH DE PHAI TRUNG TRON VEN MOT MENH DE NGUON — va van ban phat ra la ky tu cua
+ *                            NGUON. Xem `outbound-proposition.ts`.
  *
+ * G6 la lop DUY NHAT khong phai mot cong CHAN. Nam lop tren deu tra loi "co cho di khong"; G6 tra
+ * loi "cai gi duoc di". Do la ly do no ton tai: review doc lap 05/09/2026 (#200) chung minh G5
+ * dong duoc cong TU VUNG ma khong dong duoc cong NGHIA — model ghep lai chinh chu cua nguon thanh
+ * mot ky han thanh toan khac ("thanh toán ngay khi nhận hàng" -> "thanh toán khi bán xong"), va
+ * dao nguoc duoc mot cau nguon bang dung nhung tu ma vo hoi thoai tang khong (`không`, `được`).
+ *
+
  * G5 la lop DUY NHAT trong nam lop khong dua tren mot bo nhan dang. Bon lop kia hoi "loi nhan co
  * mang mot vat mang ma ta NHAN RA khong?", nen chung chi manh bang bo nhan dang — va review doc
  * lap da hai lan chung minh rang bo nhan dang nao cung co lop bo sot. G5 hoi nguoc: "co tu ngu nao
@@ -218,6 +228,8 @@ export function admitNarrative(
     readonly granted: NarrativeGrounding;
     /** G5 — tap tu ngu ma nguon he thong cua luot nay so huu. Xem `outbound-envelope.ts`. */
     readonly attested: ReadonlySet<string>;
+    /** G6 — menh de he thong so huu cua luot nay. Xem `outbound-proposition.ts`. */
+    readonly units: readonly SourceUnit[];
   },
 ): NarrativeDecision {
   const text = narrative.trim();
@@ -262,9 +274,26 @@ export function admitNarrative(
    * hua thanh toan chua tung gap bi chan khong phai vi ta biet no la loi hua, ma vi cac chu
    * "khất", "tiền", "hàng", "bán", "xong" khong co trong bat ky nguon nao cua luot.
    */
-  return unattestedWords(text, options.attested).length
-    ? { admitted: false, reason: 'NARRATIVE_NOT_SOURCE_BACKED' }
-    : { admitted: true, text };
+  if (unattestedWords(text, options.attested).length) {
+    return { admitted: false, reason: 'NARRATIVE_NOT_SOURCE_BACKED' };
+  }
+  /*
+   * G6 — TUNG MENH DE PHAI TRUNG TRON VEN MOT MENH DE CUA NGUON, VA VAN BAN PHAT RA LA CUA NGUON.
+   *
+   * XEP CUOI CUNG vi no la lop CHAT NHAT: mot loi nhan hong o G2..G5 hong theo mot cach cu the
+   * (bia con so, bia chinh sach, dat sai cho, dung chu la), va nhung ma do noi cho nguoi truc
+   * biet phai lam gi. `NARRATIVE_NOT_SOURCE_BOUND` la ma con lai khi loi nhan KHONG bia mot chu
+   * nao — no chi ghep lai chu cua nguon thanh mot y khac. Bao ma do truoc se giau mat cac lop kia.
+   *
+   * DAY LA CHO DUY NHAT TRONG CA HAM NAY TRA VE MOT VAN BAN KHAC VOI VAN BAN MODEL VIET. G1..G5
+   * deu la cong CHAN: qua thi chuoi cua model di tiep nguyen ven. G6 khong chan, no THAY THE:
+   * phan su kien duoc phat lai tu ban sao cua he thong. Do la ca khac biet ma muc 3 hop dong
+   * #200 doi — "renderer owns the exact customer-visible factual/policy statement".
+   */
+  const bound = bindProposition(text, options.units);
+  return bound.bound
+    ? { admitted: true, text: bound.text }
+    : { admitted: false, reason: 'NARRATIVE_NOT_SOURCE_BOUND' };
 }
 
 /** Vat mang trong loi nhan ma luot NAY co tham quyen — phai di qua khoi. `null` = sach. */
