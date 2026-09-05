@@ -437,6 +437,17 @@ export interface FuelEntryDetail {
  * Khung nhin cua LAI XE cho phieu dau — kieu RIENG, khong phai `FuelEntry` da loc.
  * Bang chung chi lo ra mot con SO DEM: lai xe khong liet ke lai duoc anh vua gui.
  */
+/**
+ * CAY XANG tren BE MAT LAI XE — kieu RIENG, hep hon `FuelSupplier`.
+ *
+ * `taxCode` va cac truong ke toan khac co y vang mat: lai xe chon cay xang bang TEN tren bien
+ * hieu. Mot truong khong duoc gui di la mot truong khong the ro ri.
+ */
+export interface DriverFuelSupplier {
+  readonly id: string;
+  readonly name: string;
+}
+
 export interface DriverFuelSlipView {
   readonly id: string;
   readonly tripId: string;

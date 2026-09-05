@@ -11,7 +11,7 @@ import {
   useDriverFund,
   useDriverPayslips,
   useDriverTrips,
-  useFuelSuppliers,
+  useDriverFuelSuppliers,
   useNavigationInput,
 } from '../hooks/useTransportWorkspace';
 import type { DriverScreenId } from '../navigation';
@@ -227,7 +227,14 @@ function DriverFuel() {
   const queryClient = useQueryClient();
   const trips = toSectionQuery(useDriverTrips(navigation));
   const slips = toSectionQuery(useDriverFuelSlips(navigation));
-  const suppliers = toSectionQuery(useFuelSuppliers(navigation));
+  /*
+   * Duong doc CUA CHINH MINH, khong phai duong van hanh.
+   *
+   * `useFuelSuppliers` gac bang `transport.fuel.entry.read` — mot quyen VAN HANH. Voi vai lai xe
+   * no khong bao gio chay, nen o chon cay xang o duoi LUON RONG; va vi o do `required`, lai xe
+   * khong bao gio nop duoc mot phieu nao. Do la mot ngo cut im lang, khong phai mot thong bao loi.
+   */
+  const suppliers = toSectionQuery(useDriverFuelSuppliers(navigation));
 
   const [failure, setFailure] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -348,6 +355,7 @@ function DriverFuel() {
             <label className="tx-field">
               <span>Cây xăng</span>
               <select
+                aria-label="Cây xăng"
                 value={form.supplierId}
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, supplierId: event.target.value }))
@@ -598,7 +606,12 @@ function DriverExpense() {
           >
             <label className="tx-field">
               <span>Chuyến</span>
-              <select value={tripId} onChange={(event) => setTripId(event.target.value)} required>
+              <select
+                aria-label="Chuyến"
+                value={tripId}
+                onChange={(event) => setTripId(event.target.value)}
+                required
+              >
                 <option value="">Chọn chuyến</option>
                 {openTrips.map((trip) => (
                   <option key={trip.id} value={trip.id}>
@@ -624,6 +637,7 @@ function DriverExpense() {
                 />
               ) : (
                 <select
+                  aria-label="Nhóm chi phí"
                   value={categoryCode}
                   onChange={(event) => setCategoryCode(event.target.value)}
                   required

@@ -208,6 +208,18 @@ export function useDriverFuelSlips(input: NavigationInput) {
   });
 }
 
+/**
+ * Cay xang ma LAI XE doc duoc. Gac bang hanh dong PHAM VI CUA CHINH MINH — `useFuelSuppliers` gac
+ * bang `transport.fuel.entry.read`, nen voi vai lai xe no khong bao gio chay.
+ */
+export function useDriverFuelSuppliers(input: NavigationInput) {
+  return useQuery({
+    queryKey: ['transport', 'me', 'fuel', 'suppliers'],
+    queryFn: () => transportApi.me.fuelSuppliers(),
+    enabled: allowed(input, 'transport-fuel', 'transport.driver.self.fuel.submit'),
+  });
+}
+
 export function useDriverPayslips(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.driverPayslips,

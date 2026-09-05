@@ -103,7 +103,11 @@ export function TripPlanForm({
         </label>
         <label className="tx-field">
           <span>Loại chuyến</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value as TripKind)}>
+          <select
+            aria-label="Loại chuyến"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as TripKind)}
+          >
             {TRIP_KINDS.map((value) => (
               <option key={value} value={value}>
                 {TRIP_KIND_LABEL[value]}
@@ -133,7 +137,11 @@ export function TripPlanForm({
         </label>
         <label className="tx-field">
           <span>Khách hàng</span>
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+          <select
+            aria-label="Khách hàng"
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
+          >
             <option value="">Không chỉ định</option>
             {customers.map((row) => (
               <option key={row.id} value={row.id}>
@@ -151,7 +159,11 @@ export function TripPlanForm({
         {kind === 'EXTERNAL_CARRIER' ? (
           <label className="tx-field">
             <span>Nhà xe thầu lại</span>
-            <select value={carrierPartnerId} onChange={(e) => setCarrierPartnerId(e.target.value)}>
+            <select
+              aria-label="Nhà xe thầu lại"
+              value={carrierPartnerId}
+              onChange={(e) => setCarrierPartnerId(e.target.value)}
+            >
               <option value="">Chưa chọn</option>
               {partners.map((row) => (
                 <option key={row.id} value={row.id}>
@@ -165,6 +177,7 @@ export function TripPlanForm({
           <label className="tx-field">
             <span>Đối tác giới thiệu</span>
             <select
+              aria-label="Đối tác giới thiệu"
               value={referrerPartnerId}
               onChange={(e) => setReferrerPartnerId(e.target.value)}
             >
@@ -271,7 +284,7 @@ export function TripAssignForm({
       {failure === null ? null : <ErrorState message={failure} />}
       <label className="tx-field tx-field--inline">
         <span>Xe</span>
-        <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+        <select aria-label="Xe" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
           <option value="">Chưa gán xe</option>
           {vehicles.map((row) => (
             <option key={row.id} value={row.id}>
@@ -282,7 +295,7 @@ export function TripAssignForm({
       </label>
       <label className="tx-field tx-field--inline">
         <span>Lái xe</span>
-        <select value={driverId} onChange={(e) => setDriverId(e.target.value)}>
+        <select aria-label="Lái xe" value={driverId} onChange={(e) => setDriverId(e.target.value)}>
           <option value="">Chưa gán lái xe</option>
           {drivers.map((row) => (
             <option key={row.id} value={row.id}>

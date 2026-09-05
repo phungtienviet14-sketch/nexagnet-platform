@@ -195,6 +195,7 @@ export function DriverFundView() {
         {/* Khoa khi dang mo mot phieu: ban nhap da ghim lai xe cua chinh no, va de o nay bam duoc
             chi tao ra mot man hinh noi hai dieu khac nhau cung mot luc. */}
         <select
+          aria-label="Lái xe"
           value={activeDriverId ?? ''}
           onChange={(event) => setDriverId(event.target.value)}
           disabled={movement !== null || drivers.data === undefined || drivers.data.length === 0}

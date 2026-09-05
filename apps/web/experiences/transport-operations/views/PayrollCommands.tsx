@@ -260,6 +260,7 @@ export function PayslipCorrection({
         <label className="tx-field tx-field--inline">
           <span>Loại phiếu</span>
           <select
+            aria-label="Loại phiếu"
             value={kind}
             onChange={(e) => setKind(e.target.value as 'SUPPLEMENTAL' | 'REVERSAL')}
           >

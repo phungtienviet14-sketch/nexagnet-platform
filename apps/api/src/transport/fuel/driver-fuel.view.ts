@@ -4,7 +4,12 @@ import type {
   FuelReviewReason,
   FuelVerificationStatus,
 } from './fuel-lifecycle.js';
-import type { FuelEntry, FuelPaymentMethod, FuelReceiptEvidence } from './fuel.types.js';
+import type {
+  FuelEntry,
+  FuelPaymentMethod,
+  FuelReceiptEvidence,
+  FuelSupplier,
+} from './fuel.types.js';
 
 /**
  * KHUNG NHIN CUA LAI XE cho phieu do dau — `INV-09`, VT-083, `GD-23`.
@@ -112,4 +117,30 @@ export function toDriverFuelSlipView(
     evidence: evidence.map((row) => ({ id: row.id, contentType: row.contentType })),
     createdAt: entry.createdAt,
   };
+}
+/**
+ * CAY XANG — khung nhin cua LAI XE.
+ *
+ * ==============================================================================================
+ * VI SAO KHUNG NHIN NAY PHAI TON TAI
+ *
+ * `POST /transport/me/fuel/slips` DOI `supplierId`. Nhung duong doc danh sach cay xang duy nhat
+ * (`GET /transport/fuel/suppliers`) doi `transport.fuel.entry.read` — mot quyen VAN HANH ma lai xe
+ * khong co, va khong duoc co. Hau qua doc duoc tren man hinh: o chon cay xang cua lai xe LUON
+ * RONG, va vi no `required` nen lai xe KHONG BAO GIO nop duoc phieu.
+ *
+ * Cach sua sai la cap cho lai xe quyen van hanh. Cach dung la mo mot duong doc THUOC PHAM VI CUA
+ * CHINH HO, tra ve dung nhung gi can de chon mot cay xang: ma va TEN.
+ *
+ * `taxCode` co y VANG MAT. Lai xe chon cay xang bang ten tren bien hieu; ma so thue la thong tin
+ * ke toan, va mot truong khong duoc gui di la mot truong khong the ro ri.
+ */
+export interface DriverFuelSupplierView {
+  readonly id: string;
+  readonly name: string;
+}
+
+export function toDriverFuelSupplierView(supplier: FuelSupplier): DriverFuelSupplierView {
+  // Chon TUNG TRUONG, khong spread — cung ly le nhu `evidence` o tren.
+  return { id: supplier.id, name: supplier.name };
 }

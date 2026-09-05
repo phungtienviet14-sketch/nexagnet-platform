@@ -51,7 +51,14 @@ export function MaintenanceComplianceView() {
   const complianceAlerts = toSectionQuery(useComplianceAlerts(navigation));
 
   const refreshAssets = () => {
-    void queryClient.invalidateQueries({ queryKey: ['transport', 'assets'] });
+    for (const queryKey of [
+      ['transport', 'maintenance'],
+      ['transport', 'compliance'],
+      ['transport', 'fleet-status'],
+      ['transport', 'alerts'],
+    ]) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
   };
   const fleetStatus = toSectionQuery(useFleetStatus(navigation));
   const operational = toSectionQuery(useOperationalAlerts(navigation));

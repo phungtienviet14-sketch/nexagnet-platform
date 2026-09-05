@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { AuthRole } from '../../../lib/auth';
 import { ConfirmAction, ErrorState } from '../components/SectionState';
@@ -38,6 +38,29 @@ import {
  * la ban ghi cua doi xe co vong doi rieng. Man nay chi mo/dong lenh sua chua; no khong bao gio
  * ghi mot khoan chi cua chuyen, va nguoc lai.
  */
+
+/**
+ * DOC LAI DUNG NHUNG KHOA MA MAN NAY THUC SU DUNG.
+ *
+ * `['transport', 'assets']` KHONG khop mot truy van nao — cac hook doc theo
+ * `['transport','maintenance',…]`, `['transport','compliance',…]`, `['transport','fleet-status']`
+ * va `['transport','alerts']`. Mot lan `invalidateQueries` tro nham khoa khong bao loi: no chi
+ * lang le khong lam gi, va man hinh dung yen sau khi nguoi dung vua bam mot lenh THANH CONG. Bai
+ * E2E `mo lenh sua chua roi hoan tat` bat duoc dung loi do.
+ */
+const ASSET_QUERY_ROOTS = [
+  ['transport', 'maintenance'],
+  ['transport', 'compliance'],
+  ['transport', 'fleet-status'],
+  ['transport', 'alerts'],
+] as const;
+
+const invalidateAssets = (queryClient: QueryClient): void => {
+  for (const queryKey of ASSET_QUERY_ROOTS) {
+    void queryClient.invalidateQueries({ queryKey: [...queryKey] });
+  }
+};
+
 export function WorkOrderCommands({
   vehicles,
   role,
@@ -67,7 +90,7 @@ export function WorkOrderCommands({
       setFailure(null);
       setDescription('');
       setOpenedOdoKm('');
-      void queryClient.invalidateQueries({ queryKey: ['transport', 'assets'] });
+      invalidateAssets(queryClient);
       onChanged();
     },
     onError: (error: Error) => setFailure(error.message),
@@ -90,7 +113,7 @@ export function WorkOrderCommands({
       {failure === null ? null : <ErrorState message={failure} />}
       <label className="tx-field tx-field--inline">
         <span>Xe</span>
-        <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+        <select aria-label="Xe" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
           <option value="">Chọn xe</option>
           {vehicles.map((row) => (
             <option key={row.id} value={row.id}>
@@ -166,7 +189,7 @@ export function WorkOrderRowActions({
       setPending(null);
       setReason('');
       setFailure(null);
-      void queryClient.invalidateQueries({ queryKey: ['transport', 'assets'] });
+      invalidateAssets(queryClient);
       onChanged();
     },
     onError: (error: Error) => setFailure(error.message),
@@ -279,7 +302,7 @@ export function ComplianceDocumentForm({
     onSuccess: () => {
       setFailure(null);
       setDocumentNo('');
-      void queryClient.invalidateQueries({ queryKey: ['transport', 'assets'] });
+      invalidateAssets(queryClient);
       onChanged();
     },
     onError: (error: Error) => setFailure(error.message),
@@ -302,6 +325,7 @@ export function ComplianceDocumentForm({
       <label className="tx-field tx-field--inline">
         <span>Áp cho</span>
         <select
+          aria-label="Áp cho"
           value={subjectKind}
           onChange={(e) => {
             setSubjectKind(e.target.value as ComplianceSubjectKind);
@@ -317,7 +341,11 @@ export function ComplianceDocumentForm({
       </label>
       <label className="tx-field tx-field--inline">
         <span>Đối tượng</span>
-        <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+        <select
+          aria-label="Đối tượng"
+          value={subjectId}
+          onChange={(e) => setSubjectId(e.target.value)}
+        >
           <option value="">Toàn doanh nghiệp</option>
           {subjectKind === 'DRIVER'
             ? drivers.map((row) => (
@@ -335,6 +363,7 @@ export function ComplianceDocumentForm({
       <label className="tx-field tx-field--inline">
         <span>Loại giấy tờ</span>
         <select
+          aria-label="Loại giấy tờ"
           value={documentType}
           onChange={(e) => setDocumentType(e.target.value as ComplianceDocumentType)}
         >

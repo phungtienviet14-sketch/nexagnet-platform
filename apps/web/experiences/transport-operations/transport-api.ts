@@ -33,6 +33,7 @@ import type {
   SettlementDocumentChain,
   SettlementFlow,
   DriverFuelSlipView,
+  DriverFuelSupplier,
   DriverFundEntry,
   DriverFundPeriod,
   DriverFundStatement,
@@ -600,6 +601,14 @@ export const transportApi = {
     setTripStatus: (id: string, to: 'IN_TRANSIT' | 'DELIVERED'): Promise<DriverTripView> =>
       send('PATCH', `/transport/me/trips/${encodeURIComponent(id)}/status`, { to }),
     fund: (): Promise<DriverFundStatement> => get('/transport/me/fund'),
+    /**
+     * CAY XANG ma lai xe duoc doc — `GET /transport/me/fuel/suppliers`.
+     *
+     * KHONG dung `fuel.suppliers()`: duong do doi `transport.fuel.entry.read`, mot quyen van hanh.
+     * Lai xe goi vao do se an 403, va o chon cay xang tren be mat cua ho se rong vinh vien.
+     */
+    fuelSuppliers: (): Promise<readonly DriverFuelSupplier[]> =>
+      get('/transport/me/fuel/suppliers'),
     fuelSlips: (): Promise<readonly DriverFuelSlipView[]> => get('/transport/me/fuel/slips'),
     fuelSlip: (id: string): Promise<DriverFuelSlipView> =>
       get(`/transport/me/fuel/slips/${encodeURIComponent(id)}`),

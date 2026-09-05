@@ -20,7 +20,7 @@ import {
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
-import type { DriverFuelSlipView } from './driver-fuel.view.js';
+import type { DriverFuelSlipView, DriverFuelSupplierView } from './driver-fuel.view.js';
 import { FuelReadService } from './fuel-read.service.js';
 import { FuelService } from './fuel.service.js';
 import { attachFuelEvidenceSchema, driverFuelSubmitSchema } from './fuel.schemas.js';
@@ -48,6 +48,19 @@ export class DriverFuelController {
     private readonly fuel: FuelService,
     private readonly read: FuelReadService,
   ) {}
+
+  /**
+   * DANH SACH CAY XANG cho lai xe — pham vi CUA CHINH HO, khong phai quyen van hanh.
+   *
+   * Gac bang `transport.driver.self.fuel.submit` chu khong phai `transport.fuel.entry.read`: day
+   * la thu mot nguoi PHAI co de nop duoc phieu cua chinh minh. Truoc route nay, o chon cay xang o
+   * be mat lai xe luon rong — va vi no bat buoc, lai xe khong bao gio nop duoc phieu nao.
+   */
+  @Get('suppliers')
+  @RequiresTransportAction('transport.driver.self.fuel.submit')
+  listSuppliers(): Promise<DriverFuelSupplierView[]> {
+    return this.guard(() => this.read.listSuppliersForDriver());
+  }
 
   @Get('slips')
   @RequiresTransportAction('transport.driver.self.fuel.read')

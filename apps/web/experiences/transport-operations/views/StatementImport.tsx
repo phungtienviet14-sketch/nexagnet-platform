@@ -111,7 +111,11 @@ export function StatementImport({
       <div className="tx-detail__grid">
         <label className="tx-field">
           <span>Cây xăng</span>
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+          <select
+            aria-label="Cây xăng"
+            value={supplierId}
+            onChange={(e) => setSupplierId(e.target.value)}
+          >
             <option value="">Chọn cây xăng</option>
             {suppliers.map((row) => (
               <option key={row.id} value={row.id}>
@@ -130,7 +134,11 @@ export function StatementImport({
         </label>
         <label className="tx-field">
           <span>Định dạng</span>
-          <select value={format} onChange={(e) => setFormat(e.target.value as FuelStatementFormat)}>
+          <select
+            aria-label="Định dạng"
+            value={format}
+            onChange={(e) => setFormat(e.target.value as FuelStatementFormat)}
+          >
             {FUEL_STATEMENT_FORMATS.map((value) => (
               <option key={value} value={value}>
                 {value}

@@ -163,6 +163,7 @@ export function ExportsView() {
         <label className="tx-field">
           <span>Lái xe</span>
           <select
+            aria-label="Lái xe"
             value={driverId ?? ''}
             onChange={(event) => setDriverId(event.target.value === '' ? null : event.target.value)}
           >
@@ -193,6 +194,7 @@ export function ExportsView() {
         <label className="tx-field">
           <span>Chuyến</span>
           <select
+            aria-label="Chuyến"
             value={tripId ?? ''}
             onChange={(event) => setTripId(event.target.value === '' ? null : event.target.value)}
           >
@@ -219,6 +221,7 @@ export function ExportsView() {
         <label className="tx-field">
           <span>Kỳ lương</span>
           <select
+            aria-label="Kỳ lương"
             value={periodId ?? ''}
             onChange={(event) => setPeriodId(event.target.value === '' ? null : event.target.value)}
           >

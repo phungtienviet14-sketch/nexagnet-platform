@@ -95,6 +95,7 @@ export function SettlementView() {
         <label className="tx-field">
           <span>Khách hàng</span>
           <select
+            aria-label="Khách hàng"
             value={customerId ?? ''}
             onChange={(event) =>
               setCustomerId(event.target.value === '' ? null : event.target.value)
@@ -227,6 +228,7 @@ function PartnerPositionPanel() {
       <label className="tx-field">
         <span>Đối tác</span>
         <select
+          aria-label="Đối tác"
           value={partnerId ?? ''}
           onChange={(event) => setPartnerId(event.target.value === '' ? null : event.target.value)}
         >
@@ -351,6 +353,7 @@ export function MarginView() {
         <label className="tx-field">
           <span>Chuyến</span>
           <select
+            aria-label="Chuyến"
             value={tripId ?? ''}
             onChange={(event) => setTripId(event.target.value === '' ? null : event.target.value)}
           >

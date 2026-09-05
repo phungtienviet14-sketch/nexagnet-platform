@@ -150,6 +150,7 @@ export function TripsView({
         <label className="tx-field">
           <span>Trạng thái</span>
           <select
+            aria-label="Trạng thái"
             value={filter.status}
             onChange={(event) =>
               setFilter((prev) => ({ ...prev, status: event.target.value as TripStatus | 'ALL' }))
@@ -166,6 +167,7 @@ export function TripsView({
         <label className="tx-field">
           <span>Loại chuyến</span>
           <select
+            aria-label="Loại chuyến"
             value={filter.kind}
             onChange={(event) =>
               setFilter((prev) => ({ ...prev, kind: event.target.value as TripKind | 'ALL' }))

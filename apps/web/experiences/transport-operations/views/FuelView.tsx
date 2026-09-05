@@ -344,6 +344,7 @@ function ReconciliationWorkspace({
           <label className="tx-field">
             <span>Cách xử lý</span>
             <select
+              aria-label="Cách xử lý"
               required
               value={resolution}
               onChange={(event) =>
@@ -364,6 +365,7 @@ function ReconciliationWorkspace({
               <label className="tx-field">
                 <span>Dòng bảng kê</span>
                 <select
+                  aria-label="Dòng bảng kê"
                   required
                   value={pairLineId}
                   onChange={(event) => setPairLineId(event.target.value)}
@@ -379,6 +381,7 @@ function ReconciliationWorkspace({
               <label className="tx-field">
                 <span>Phiếu đổ dầu</span>
                 <select
+                  aria-label="Phiếu đổ dầu"
                   required
                   value={pairEntryId}
                   onChange={(event) => setPairEntryId(event.target.value)}
