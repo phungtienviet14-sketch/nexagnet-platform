@@ -120,40 +120,41 @@ describe('hang viec — con so tieu de KHONG duoc bao thieu', () => {
   });
 });
 
-/**
- * BANG CHI DEM DUOC MOI HIEN — #195.
- *
- * Truoc day bang co them mot danh sach "chua dung duoc", moi dong kem mot LY DO ky thuat (may chu
- * chua mo duong nao, chua co route HTTP). Danh sach do da bo: khong hien mot con so la du, va no
- * khong doi nguoi doc phai hieu kien truc. Cai KHONG duoc phep thay doi la chieu con lai — bang
- * van tuyet doi khong duoc BIA mot con so nao.
- */
-describe('bang khong duoc bia so', () => {
-  it('KHONG bia the bao duong / tuan thu / luong', () => {
-    const model = toDashboard(input({ capabilities: WITH_SETTLEMENT }));
-    const text = [
-      ...model.stats.map((stat) => stat.label),
-      ...model.work.map((item) => item.title),
-    ];
-    for (const forbidden of ['Bảo dưỡng', 'Giấy tờ', 'Lương', 'Phiếu lương']) {
-      expect(text.some((label) => label.includes(forbidden))).toBe(false);
+describe('the KHONG dung duoc — noi that thay vi bia so', () => {
+  it('luon noi ten ba con so chua lay ra duoc, ke ca khi chi bat transport-core', () => {
+    const labels = toDashboard(input()).unavailable.map((card) => card.label);
+    expect(labels).toContain('Số dư quỹ toàn đội');
+    expect(labels).toContain('Phiếu dầu chờ xác thực');
+    expect(labels).toContain('Chênh lệch chờ xử lý');
+  });
+
+  it('moi the deu co LY DO doc len duoc, khong de trong', () => {
+    for (const card of toDashboard(input()).unavailable) {
+      expect(card.reason.length).toBeGreaterThan(20);
     }
   });
 
-  it('bat them nghiep vu quyet toan KHONG lam moc them mot con so nao', () => {
-    // Khach bat `transport-settlement` o goi khach that. Khong co duong du lieu nao cho no, nen
-    // bang phai y NGUYEN — them mot the cong no o day la bia so.
-    const withoutSettlement = toDashboard(input()).stats.map((stat) => stat.label);
-    const withSettlement = toDashboard(input({ capabilities: WITH_SETTLEMENT })).stats.map(
-      (stat) => stat.label,
+  it('chi noi ve cong no va bien khi khach DA bat nghiep vu quyet toan', () => {
+    const withoutSettlement = toDashboard(input()).unavailable.map((card) => card.label);
+    expect(withoutSettlement).not.toContain('Công nợ phải thu / phải trả');
+    expect(withoutSettlement).not.toContain('Biên trực tiếp');
+
+    // Bat roi thi day tro thanh mot khoang cach THAT (`TX-05` khong co route HTTP nao), nen phai noi.
+    const withSettlement = toDashboard(input({ capabilities: WITH_SETTLEMENT })).unavailable.map(
+      (card) => card.label,
     );
-    expect(withSettlement).toEqual(withoutSettlement);
+    expect(withSettlement).toContain('Công nợ phải thu / phải trả');
+    expect(withSettlement).toContain('Biên trực tiếp');
   });
 
-  it('moi con so tren bang deu tro ve mot muc dung duoc, hoac khong tro di dau', () => {
-    const surfaced = ['overview', 'trips', 'fleet', 'driver-fund', 'fuel', null];
-    for (const stat of toDashboard(input({ capabilities: WITH_SETTLEMENT })).stats) {
-      expect(surfaced).toContain(stat.section);
+  it('KHONG bia the bao duong / tuan thu / luong truoc khi TX-06 va TX-07 co san', () => {
+    const model = toDashboard(input({ capabilities: WITH_SETTLEMENT }));
+    const text = [
+      ...model.stats.map((stat) => stat.label),
+      ...model.unavailable.map((card) => card.label),
+    ];
+    for (const forbidden of ['Bảo dưỡng', 'Giấy tờ', 'Lương', 'Phiếu lương']) {
+      expect(text.some((label) => label.includes(forbidden))).toBe(false);
     }
   });
 });

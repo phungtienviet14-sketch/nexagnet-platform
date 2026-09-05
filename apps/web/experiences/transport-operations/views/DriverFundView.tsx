@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { gapsForSection } from '../api-gaps';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -99,7 +100,7 @@ export function DriverFundView() {
         if (amount === 0) throw new Error('Điều chỉnh 0 đồng không nói gì.');
         return transportApi.costing.adjust({ ...base, signedAmount: amount });
       }
-      if (amount <= 0) throw new Error('Số tiền phải lớn hơn 0.');
+      if (amount <= 0) throw new Error('Số tiền phải lớn hơn 0; dấu do máy chủ quyết.');
       return draft.kind === 'advance'
         ? transportApi.costing.advance({ ...base, amount })
         : transportApi.costing.returnFund({ ...base, amount });
@@ -113,7 +114,8 @@ export function DriverFundView() {
   });
 
   const postReversal = useMutation({
-    mutationFn: async (row: FundLedgerRow) => transportApi.costing.reverseFundEntry(row.id, reason),
+    mutationFn: async (row: FundLedgerRow) =>
+      transportApi.costing.reverseFundEntry(row.id, reason),
     onSuccess: () => {
       setPendingReversal(null);
       setReason('');
@@ -124,10 +126,7 @@ export function DriverFundView() {
   });
 
   const movePeriod = useMutation({
-    mutationFn: async (input: {
-      readonly row: FundPeriodRow;
-      readonly intent: 'close' | 'reopen';
-    }) =>
+    mutationFn: async (input: { readonly row: FundPeriodRow; readonly intent: 'close' | 'reopen' }) =>
       input.intent === 'close'
         ? transportApi.costing.closePeriod(input.row.id)
         : transportApi.costing.reopenPeriod(input.row.id, reason),
@@ -231,7 +230,7 @@ export function DriverFundView() {
           <p className="tx-panel__lead">
             {movement.kind === 'adjust'
               ? 'Ô này nhận số CÓ DẤU, và không nhận 0.'
-              : 'Nhập số dương; hệ thống tự ghi đúng dấu theo loại bút toán.'}
+              : 'Nhập số dương; dấu do máy chủ quyết theo loại bút toán.'}
           </p>
           <div className="tx-inlineform">
             <label className="tx-field">
@@ -242,9 +241,7 @@ export function DriverFundView() {
                 required
                 value={movement.amount}
                 onChange={(event) =>
-                  setMovement((prev) =>
-                    prev === null ? prev : { ...prev, amount: event.target.value },
-                  )
+                  setMovement((prev) => (prev === null ? prev : { ...prev, amount: event.target.value }))
                 }
               />
             </label>
@@ -253,9 +250,7 @@ export function DriverFundView() {
               <input
                 value={movement.note}
                 onChange={(event) =>
-                  setMovement((prev) =>
-                    prev === null ? prev : { ...prev, note: event.target.value },
-                  )
+                  setMovement((prev) => (prev === null ? prev : { ...prev, note: event.target.value }))
                 }
               />
             </label>
@@ -407,10 +402,23 @@ export function DriverFundView() {
                 },
               ]}
             />
-            {closingHint === null ? null : <p className="tx-note tx-note--warn">{closingHint}</p>}
+            {closingHint === null ? null : (
+              <p className="tx-note tx-note--warn">{closingHint}</p>
+            )}
           </>
         )}
       </section>
+
+      <details className="tx-details">
+        <summary>Những phần của nghiệp vụ này còn thiếu đường dữ liệu</summary>
+        <ul>
+          {gapsForSection('driver-fund').map((gap) => (
+            <li key={gap.id}>
+              <strong>{gap.title}</strong> — {gap.actual}
+            </li>
+          ))}
+        </ul>
+      </details>
 
       <ConfirmAction
         open={pendingReversal !== null}

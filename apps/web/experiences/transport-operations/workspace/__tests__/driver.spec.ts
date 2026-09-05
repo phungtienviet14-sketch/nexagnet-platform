@@ -111,12 +111,9 @@ describe('phieu dau cua chinh minh', () => {
     expect(row.consumptionLabel).toBe('40,000 L/100km');
   });
 
-  it('phieu bi tu choi noi ro VIEC CAN LAM, khong noi ly do ky thuat', () => {
+  it('phieu bi tu choi noi ro la hien chua tu nop lai duoc', () => {
     const rejected: DriverFuelSlipView = driverFuelSlip({ verificationStatus: 'REJECTED' });
-    const note = toDriverFuelSlipRows([rejected])[0]!.rejectedNote;
-    expect(note).toContain('báo kế toán');
-    // #195: cau bao cho lai xe khong duoc nhac may chu hay duong du lieu.
-    expect(note).not.toContain('máy chủ');
+    expect(toDriverFuelSlipRows([rejected])[0]!.rejectedNote).toContain('chưa mở đường tự nộp lại');
   });
 
   it('phieu binh thuong khong bay canh bao gi', () => {

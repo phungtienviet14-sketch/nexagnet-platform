@@ -50,16 +50,14 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
   /**
    * MOT GOI DUOC MIEN TRU KHONG DUOC NOI VAO BAT KY DUONG SONG NAO.
    *
-   * TRUOC #195, cau nay duoc kiem bang `readiness.previewNotice`: goi duoc mien tru phai tu khai
-   * la ban xem truoc, va loi tu khai do dong thoi bay mot dai bang len man hinh. #195 bo dai bang
-   * — no la ngon ngu noi bo tren be mat khach hang — nen CHO NEO cua bai kiem phai doi.
+   * TRUOC DAY cau nay duoc kiem bang `readiness.previewNotice`: goi duoc mien tru phai tu khai la
+   * ban xem truoc, va loi tu khai do dong thoi bay mot DAI BANG SOC VANG len dau moi man hinh. Dai
+   * bang da bi bo theo yeu cau van hanh, nen CHO NEO phai doi — nhung tinh chat thi khong.
    *
-   * Tinh chat can giu KHONG doi: khong the lang le them mot goi vao danh sach mien tru roi tro no
-   * vao mot khach that. Cho neo moi la `integrations` + `bootstrap`, va no CHAT HON cho cu vi no
-   * khong the thoa man bang mot cau van: mot goi duoc mien tru khong khai mot adapter nao (Zalo,
-   * ERP, nguon noi dung) va khong co buoc gieo du lieu nao. Ca ba goi khach that deu khai — nen
-   * keo mot goi khach that vao danh sach nay se lam bai nay DO ngay, khong can ai nho viet them
-   * mot cau tu khai.
+   * Cho neo moi la `integrations` + `bootstrap`, va no CHAT HON cho cu vi khong the thoa man bang
+   * mot cau van: mot goi duoc mien tru khong khai mot adapter nao (Zalo, ERP, nguon noi dung) va
+   * khong co buoc gieo du lieu nao. Ca ba goi khach that deu khai adapter, nen keo mot goi khach
+   * that vao danh sach nay se lam bai nay DO ngay.
    */
   it('goi duoc phep khong noi vao mot adapter hay buoc gieo du lieu nao', () => {
     for (const slug of TRANSPORT_PREVIEW_TENANTS) {
@@ -76,9 +74,8 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
   });
 
   /**
-   * Chieu nguoc lai: moi goi khach THAT deu phai khai it nhat mot adapter. Day la nua con lai cua
-   * bai tren — no la thu lam cho `integrations: {}` co suc phan biet, thay vi chi la mot su that
-   * ngau nhien ve mot goi.
+   * Nua con lai cua bai tren — thu lam cho `integrations: {}` co suc phan biet, thay vi chi la mot
+   * su that ngau nhien ve mot goi.
    */
   it('moi goi khach that deu khai it nhat mot adapter', () => {
     for (const slug of CUSTOMER_TENANTS) {
@@ -90,14 +87,7 @@ describe('danh sach goi khach duoc phep bat nghiep vu van tai', () => {
     }
   });
 
-  /**
-   * KHONG GOI NAO — mien tru hay khach that — duoc bay dai bang xem truoc.
-   *
-   * `previewNotice` van con trong schema nhu mot nang luc cua nen tang, nhung khong be mat khach
-   * hang nao duoc dung no: mot dai bang noi "BẢN XEM TRƯỚC / khong phai UAT / khong co du lieu
-   * khach hang" la ngon ngu noi bo, va #195 bo han no. Bai nay giu cho no khong quay lai bang mot
-   * lan sua goi khach.
-   */
+  /** KHONG goi nao — mien tru hay khach that — duoc bay lai dai bang soc vang. */
   it('khong goi nao tu khai dai bang xem truoc', () => {
     for (const slug of [...TRANSPORT_PREVIEW_TENANTS, ...CUSTOMER_TENANTS]) {
       process.env.TENANT = slug;

@@ -171,6 +171,15 @@
   font-weight: 600;
 }
 
+.tx-nav__flag {
+  font-size: 0.66rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--tx-wait-wash);
+  color: var(--tx-wait);
+  white-space: nowrap;
+}
+
 .tx-rail__foot {
   display: flex;
   flex-direction: column;
@@ -624,6 +633,8 @@
 }
 
 .tx-worklist,
+.tx-unavailable,
+.tx-designnote,
 .tx-timeline,
 .tx-driver__list {
   list-style: none;
@@ -650,8 +661,24 @@
 }
 
 .tx-worklist span,
+.tx-unavailable span,
 .tx-timeline span {
   font-size: 0.82rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-unavailable li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--tx-line-strong);
+}
+
+.tx-designnote li {
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--tx-accent);
+  font-size: 0.86rem;
   color: var(--tx-ink-soft);
 }
 
@@ -667,6 +694,71 @@
 
 .tx-timeline li[data-active] {
   border-left-color: var(--tx-go);
+}
+
+.tx-awaiting {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  background: var(--tx-wait-wash);
+  border: 1px solid var(--tx-wait);
+  border-radius: var(--tx-radius);
+}
+
+.tx-awaiting__lead {
+  margin: 0;
+  color: var(--tx-wait);
+  max-width: 72ch;
+}
+
+.tx-awaiting__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.tx-awaiting__item h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
+}
+
+.tx-awaiting__item dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+  gap: 0.2rem 0.75rem;
+  font-size: 0.84rem;
+}
+
+.tx-awaiting__item dt {
+  color: var(--tx-ink-faint);
+}
+
+.tx-awaiting__item dd {
+  margin: 0;
+  color: var(--tx-ink-soft);
+}
+
+.tx-details {
+  font-size: 0.84rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-details summary {
+  cursor: pointer;
+  color: var(--tx-accent);
+}
+
+.tx-details ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .tx-tabs {
