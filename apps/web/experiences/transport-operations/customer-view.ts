@@ -1,6 +1,27 @@
 import { formatVnd } from '../../lib/format';
 import type {
+  AgingBucket,
   BusinessDate,
+  ComplianceDocumentStatus,
+  ComplianceDocumentType,
+  ComplianceHealth,
+  ComplianceSubjectKind,
+  EffectiveVehicleStateReason,
+  MaintenanceDueState,
+  MaintenanceTriggerKind,
+  MaintenanceWorkOrderStatus,
+  OperationalAlertKind,
+  OperationalAlertSeverity,
+  OperationalAlertSource,
+  PayrollMissingInput,
+  PayrollPeriodStatus,
+  PayslipComponentSource,
+  PayslipKind,
+  PayslipStatus,
+  SettlementDocumentKind,
+  SettlementDocumentStatus,
+  SettlementFlow,
+  VehicleStateInconsistency,
   DriverFundEntryKind,
   DriverStatus,
   ExpenseFundingSource,
@@ -374,3 +395,241 @@ export const entityLabel = (name: string | null | undefined, fallback: string): 
  * the do la ten nghiep vu — #161 §7 cam lay `id` noi bo lam nhan chinh.
  */
 export const unresolvedReference = (kind: string): string => `${kind} chưa đọc được tên`;
+
+/* ------------------------------------------------------------------ *
+ * `TX-05` — quyet toan
+ * ------------------------------------------------------------------ */
+
+export const AGING_BUCKET_LABEL = {
+  CURRENT: 'Trong hạn',
+  D1_30: 'Quá hạn 1–30 ngày',
+  D31_60: 'Quá hạn 31–60 ngày',
+  D60_PLUS: 'Quá hạn trên 60 ngày',
+} as const satisfies Record<AgingBucket, string>;
+
+/**
+ * NAM DONG TIEN, moi dong mot cau. Khong duoc gop hai dong doi tac lam mot: mot doi tac co the vua
+ * la nha xe vua la nguon don, va khoa phan biet la VAI chu khong phai partner (`GD-15`).
+ */
+export const SETTLEMENT_FLOW_LABEL = {
+  CUSTOMER_FREIGHT: 'Cước khách hàng',
+  FUEL_SUPPLIER: 'Cây xăng',
+  CARRIER_SERVICE: 'Nhà xe',
+  PARTNER_COMMISSION: 'Hoa hồng nguồn đơn',
+} as const satisfies Record<SettlementFlow, string>;
+
+export const SETTLEMENT_DOCUMENT_KIND_LABEL = {
+  ORIGINAL: 'Chứng từ gốc',
+  ADJUSTMENT: 'Điều chỉnh',
+  REVERSAL: 'Đảo chứng từ',
+} as const satisfies Record<SettlementDocumentKind, string>;
+
+export const SETTLEMENT_DOCUMENT_STATUS_LABEL = {
+  OPEN: 'Còn nợ',
+  SETTLED: 'Đã tất toán',
+  VOID: 'Đã huỷ hiệu lực',
+} as const satisfies Record<SettlementDocumentStatus, string>;
+
+export const agingBucketTone = (bucket: AgingBucket): StatusTone => {
+  switch (bucket) {
+    case 'CURRENT':
+      return 'done';
+    case 'D1_30':
+      return 'wait';
+    case 'D31_60':
+      return 'wait';
+    case 'D60_PLUS':
+      return 'stop';
+  }
+};
+
+/* ------------------------------------------------------------------ *
+ * `TX-06` — bao duong va giay to
+ * ------------------------------------------------------------------ */
+
+export const MAINTENANCE_TRIGGER_LABEL = {
+  ODOMETER: 'Theo số km',
+  CALENDAR: 'Theo ngày',
+  ODOMETER_OR_CALENDAR: 'Theo km hoặc ngày, cái nào đến trước',
+} as const satisfies Record<MaintenanceTriggerKind, string>;
+
+export const MAINTENANCE_DUE_STATE_LABEL = {
+  OK: 'Còn hạn',
+  DUE_SOON: 'Sắp đến hạn',
+  OVERDUE: 'Quá hạn',
+} as const satisfies Record<MaintenanceDueState, string>;
+
+export const MAINTENANCE_WORK_ORDER_STATUS_LABEL = {
+  OPEN: 'Đang sửa',
+  COMPLETED: 'Đã xong',
+  CANCELLED: 'Đã huỷ',
+} as const satisfies Record<MaintenanceWorkOrderStatus, string>;
+
+export const COMPLIANCE_DOCUMENT_TYPE_LABEL = {
+  VEHICLE_INSPECTION: 'Đăng kiểm xe',
+  VEHICLE_INSURANCE: 'Bảo hiểm xe',
+  VEHICLE_TRANSPORT_BADGE: 'Phù hiệu vận tải',
+  DRIVER_LICENCE: 'Giấy phép lái xe',
+  COMPANY_TRANSPORT_LICENSE: 'Giấy phép kinh doanh vận tải',
+  CONDITIONAL_CARGO_PERMIT: 'Giấy phép hàng có điều kiện',
+} as const satisfies Record<ComplianceDocumentType, string>;
+
+export const COMPLIANCE_SUBJECT_LABEL = {
+  VEHICLE: 'Xe',
+  DRIVER: 'Lái xe',
+  COMPANY: 'Công ty',
+} as const satisfies Record<ComplianceSubjectKind, string>;
+
+export const COMPLIANCE_DOCUMENT_STATUS_LABEL = {
+  ACTIVE: 'Đang hiệu lực',
+  SUPERSEDED: 'Đã thay bằng bản mới',
+  REVOKED: 'Đã thu hồi',
+} as const satisfies Record<ComplianceDocumentStatus, string>;
+
+export const COMPLIANCE_HEALTH_LABEL = {
+  HEALTHY: 'Còn hạn',
+  DUE_SOON: 'Sắp hết hạn',
+  EXPIRED: 'Đã hết hạn',
+} as const satisfies Record<ComplianceHealth, string>;
+
+/**
+ * MOT MAU THUAN VAN HANH, khong phai mot trang thai. Hai cau nay noi ra dieu he thong DO DUOC,
+ * khong phai dieu no doan.
+ */
+export const VEHICLE_STATE_INCONSISTENCY_LABEL = {
+  MAINTENANCE_WHILE_IN_TRANSIT: 'Xe đang chạy chuyến nhưng có lệnh sửa chữa đang mở',
+  RECORDED_STATUS_STALE: 'Trạng thái ghi trong hồ sơ đã cũ so với thực tế',
+} as const satisfies Record<VehicleStateInconsistency, string>;
+
+export const EFFECTIVE_VEHICLE_STATE_REASON_LABEL = {
+  MAINTENANCE_LOCK: 'Đang có lệnh sửa chữa mở',
+  ACTIVE_IN_TRANSIT_TRIP: 'Đang chạy một chuyến',
+  NO_ACTIVE_WORK: 'Không có việc nào đang mở',
+} as const satisfies Record<EffectiveVehicleStateReason, string>;
+
+export const OPERATIONAL_ALERT_KIND_LABEL = {
+  COMPLIANCE_DOCUMENT_EXPIRED: 'Giấy tờ đã hết hạn',
+  COMPLIANCE_DOCUMENT_EXPIRING: 'Giấy tờ sắp hết hạn',
+  COMPLIANCE_DOCUMENT_MISSING: 'Thiếu giấy tờ bắt buộc',
+  MAINTENANCE_OVERDUE: 'Bảo dưỡng quá hạn',
+  MAINTENANCE_DUE_SOON: 'Bảo dưỡng sắp đến hạn',
+  FUEL_CONSUMPTION_ABNORMAL: 'Mức tiêu hao nhiên liệu bất thường',
+  DRIVER_FUND_BALANCE_UNUSUAL: 'Số dư quỹ lái xe bất thường',
+  VEHICLE_STATE_INCONSISTENT: 'Trạng thái xe mâu thuẫn',
+} as const satisfies Record<OperationalAlertKind, string>;
+
+export const OPERATIONAL_ALERT_SEVERITY_LABEL = {
+  INFO: 'Ghi nhận',
+  WARNING: 'Cần để ý',
+  CRITICAL: 'Cần xử lý ngay',
+} as const satisfies Record<OperationalAlertSeverity, string>;
+
+/**
+ * Nguon canh bao KHONG doc duoc — vi khach khong bat nghiep vu do. Phai noi ra: mot bang canh bao
+ * rong khi thieu nguon se doc y het mot doi xe khong co van de gi.
+ */
+export const OPERATIONAL_ALERT_SOURCE_LABEL = {
+  FUEL_CONSUMPTION: 'Mức tiêu hao nhiên liệu',
+  DRIVER_FUND: 'Số dư quỹ lái xe',
+} as const satisfies Record<OperationalAlertSource, string>;
+
+export const maintenanceDueTone = (state: MaintenanceDueState): StatusTone => {
+  switch (state) {
+    case 'OK':
+      return 'done';
+    case 'DUE_SOON':
+      return 'wait';
+    case 'OVERDUE':
+      return 'stop';
+  }
+};
+
+export const complianceHealthTone = (health: ComplianceHealth): StatusTone => {
+  switch (health) {
+    case 'HEALTHY':
+      return 'done';
+    case 'DUE_SOON':
+      return 'wait';
+    case 'EXPIRED':
+      return 'stop';
+  }
+};
+
+export const alertSeverityTone = (severity: OperationalAlertSeverity): StatusTone => {
+  switch (severity) {
+    case 'INFO':
+      return 'flat';
+    case 'WARNING':
+      return 'wait';
+    case 'CRITICAL':
+      return 'stop';
+  }
+};
+
+export const workOrderStatusTone = (status: MaintenanceWorkOrderStatus): StatusTone => {
+  switch (status) {
+    case 'OPEN':
+      return 'go';
+    case 'COMPLETED':
+      return 'done';
+    case 'CANCELLED':
+      return 'flat';
+  }
+};
+
+/* ------------------------------------------------------------------ *
+ * `TX-07` — luong
+ * ------------------------------------------------------------------ */
+
+export const PAYROLL_PERIOD_STATUS_LABEL = {
+  OPEN: 'Đang mở',
+  CLOSED: 'Đã chốt',
+} as const satisfies Record<PayrollPeriodStatus, string>;
+
+export const PAYSLIP_STATUS_LABEL = {
+  DRAFT: 'Tạm tính',
+  APPROVED: 'Đã duyệt',
+  PAID: 'Đã trả',
+  REVERSED: 'Đã bị đảo',
+} as const satisfies Record<PayslipStatus, string>;
+
+export const PAYSLIP_KIND_LABEL = {
+  ORIGINAL: 'Phiếu gốc',
+  SUPPLEMENTAL: 'Phiếu bổ sung',
+  REVERSAL: 'Phiếu đảo',
+} as const satisfies Record<PayslipKind, string>;
+
+export const PAYSLIP_COMPONENT_SOURCE_LABEL = {
+  BASE_SALARY: 'Lương cơ bản',
+  PER_TRIP: 'Theo chuyến',
+  PER_KM: 'Theo km',
+  FUEL_SAVING_BONUS: 'Thưởng tiết kiệm nhiên liệu',
+  MANUAL_BONUS: 'Thưởng nhập tay',
+  MANUAL_DEDUCTION: 'Khoản trừ nhập tay',
+} as const satisfies Record<PayslipComponentSource, string>;
+
+/**
+ * DU LIEU DAU VAO THIEU cua mot lan chay luong. Phai hien ra: mot lan chay thieu nguon van cho ra
+ * phieu, chi la thieu mot khoan — va nguoi duyet can biet minh dang duyet mot bang khong day du.
+ */
+export const PAYROLL_MISSING_INPUT_LABEL = {
+  FUEL_SAVING_UNAVAILABLE:
+    'Chưa đọc được dữ liệu tiết kiệm nhiên liệu — không tính khoản thưởng đó',
+  DRIVER_FUND_UNAVAILABLE: 'Chưa đọc được số dư quỹ lái xe — phiếu không kèm ảnh chụp số dư',
+} as const satisfies Record<PayrollMissingInput, string>;
+
+export const payrollPeriodTone = (status: PayrollPeriodStatus): StatusTone =>
+  status === 'OPEN' ? 'go' : 'done';
+
+export const payslipStatusTone = (status: PayslipStatus): StatusTone => {
+  switch (status) {
+    case 'DRAFT':
+      return 'flat';
+    case 'APPROVED':
+      return 'wait';
+    case 'PAID':
+      return 'done';
+    case 'REVERSED':
+      return 'stop';
+  }
+};
