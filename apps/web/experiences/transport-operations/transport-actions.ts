@@ -148,8 +148,8 @@ export const hasDriverScope = (role: AuthRole | null): boolean =>
  * muon vai nay lam duoc viec, cho dung de sua la bang o `apps/api/src/transport/transport-actions.ts`.
  */
 export const MANAGER_HAS_NO_TRANSPORT_SCOPE =
-  'Vai Quản lý chưa được cấp thao tác vận tải nào. Đây là cấu hình có chủ đích ở tầng phân quyền, ' +
-  'không phải lỗi màn hình — cần quyết định của doanh nghiệp trước khi mở.';
+  'Tài khoản của bạn chưa được cấp quyền dùng phần vận hành vận tải. Hãy liên hệ quản trị viên ' +
+  'của doanh nghiệp để được mở quyền.';
 
 /**
  * Cau cho mot vai KHONG co pham vi van hanh — va hai truong hop nay phai noi HAI cau khac nhau.

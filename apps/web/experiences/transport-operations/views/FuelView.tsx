@@ -2,7 +2,6 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { gapsForSection } from '../api-gaps';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -71,10 +70,7 @@ export function FuelView() {
           <EmptyState
             title="Chưa có kỳ đối soát nào."
             nextAction={
-              <p className="tx-note">
-                Kỳ đối soát được tạo khi nhập một bảng kê của cây xăng. Máy chủ nhận tệp dưới dạng
-                nội dung base64 trong thân yêu cầu, chưa có đường tải tệp lên trực tiếp.
-              </p>
+              <p className="tx-note">Kỳ đối soát được tạo khi nhập bảng kê của cây xăng.</p>
             }
           />
         ) : (
@@ -103,7 +99,7 @@ export function FuelView() {
                 header: 'Chênh lệch chờ',
                 render: (row) =>
                   row.pendingCount === null ? (
-                    <span title="Danh sách kỳ không kèm con số này — mở kỳ để xem">—</span>
+                    <span title="Mở kỳ để xem">—</span>
                   ) : (
                     String(row.pendingCount)
                   ),
@@ -121,17 +117,6 @@ export function FuelView() {
           onChanged={() => void queryClient.invalidateQueries({ queryKey: ['transport', 'fuel'] })}
         />
       )}
-
-      <details className="tx-details">
-        <summary>Những phần của nghiệp vụ này còn thiếu đường dữ liệu</summary>
-        <ul>
-          {gapsForSection('fuel').map((gap) => (
-            <li key={gap.id}>
-              <strong>{gap.title}</strong> — {gap.actual}
-            </li>
-          ))}
-        </ul>
-      </details>
     </>
   );
 }
