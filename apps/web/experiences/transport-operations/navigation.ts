@@ -15,35 +15,34 @@ import { canPerform, type TransportAction } from './transport-actions';
  *   1. `requiredCapabilities` — khach co MUA nghiep vu nay khong (`CapabilityId`, dong kin).
  *   2. `requiredAction`       — vai nay co lam duoc viec do khong (`GD-22`, theo hanh dong).
  *
- * Ca hai deu la CONG LOC, va ca hai deu giu nguyen. Cai da bo di la mot truc thu ba —
- * `dataSource` — von de mot muc CHUA dung duoc van hien ra roi tu giai thich vi sao no trong.
- * Loi giai thich do luon la mot cau ky thuat (thieu route, thieu read model, so hieu issue) va
- * nguoi dung khong lam gi duoc voi no. Nay muc chua dung duoc thi KHONG co mat trong danh sach;
- * khi duong du lieu mo, no quay lai cung khung nhin that cua no. Xem #195.
+ * Va mot truc thu ba chi de NOI THAT, khong de loc: `dataSource`.
+ *
+ * TRUOC DAY co mot truc thu tu — `pendingCapability` — so bang CHUOI voi danh sach nang luc luc
+ * chay, vi `TX-06`/`TX-07` chua co ma trong `CapabilityId` khi T7A duoc viet. T6 da vao `main`
+ * (PR #152, #88 dong), va `CAPABILITY_IDS` nay da co `transport-asset-compliance` +
+ * `transport-workforce` (`packages/tenant/src/tenant.schema.ts:189,197`). Nen cho tam do da duoc
+ * GO HAN: hai muc do gio dung `requiredCapabilities` co kieu nhu moi muc khac, va `tsc` kiem duoc
+ * chung — dung §4.2 cua #180.
  */
 
 /* ------------------------------------------------------------------ *
  * Muc va nhom
  * ------------------------------------------------------------------ */
 
-/**
- * Muc CO MAT tren be mat khach hang.
- *
- * Danh sach nay chi giu nhung muc DUNG DUOC hom nay — do la mot cau ve MAN HINH, khong phai ve
- * may chu. T7B (#168) da mo duong HTTP cho bao cao quyet toan va phieu luong, nhung `transport-api.ts`
- * chua goi mot duong nao trong so do, nen cac muc ay van chua co gi de bay. Viec noi chung vao
- * thuoc T7D (#170).
- *
- * Mot muc nhu vay khong nam o day: bay no ra roi de no tu giai thich vi sao no trong luon dan den
- * mot cau ky thuat ma nguoi dung khong lam gi duoc. Khi man hinh noi xong, muc quay lai day cung
- * voi khung nhin that cua no.
- *
- * Day la mot quyet dinh TRINH BAY. No KHONG thay the hai cong loc ben duoi
- * (`requiredCapabilities` + `requiredAction`), va cung khong noi long chung.
- */
-export type TransportSectionId = 'overview' | 'trips' | 'fleet' | 'driver-fund' | 'fuel';
+export type TransportSectionId =
+  | 'overview'
+  | 'trips'
+  | 'fleet'
+  | 'driver-fund'
+  | 'fuel'
+  | 'settlement'
+  | 'maintenance'
+  | 'payroll'
+  | 'margin'
+  | 'ar-ap'
+  | 'exports';
 
-export type TransportSectionGroupId = 'root' | 'dispatch' | 'cost';
+export type TransportSectionGroupId = 'root' | 'dispatch' | 'cost' | 'assets' | 'reports';
 
 export interface TransportSectionGroup {
   readonly id: TransportSectionGroupId;
@@ -54,7 +53,22 @@ export const TRANSPORT_SECTION_GROUPS = [
   { id: 'root', label: '' },
   { id: 'dispatch', label: 'ĐIỀU HÀNH' },
   { id: 'cost', label: 'CHI PHÍ & ĐỐI SOÁT' },
+  { id: 'assets', label: 'TÀI SẢN & NHÂN SỰ' },
+  { id: 'reports', label: 'BÁO CÁO' },
 ] as const satisfies readonly TransportSectionGroup[];
+
+/**
+ * Muc nay co duong API that hay khong — de NOI THAT tren man hinh, khong phai de loc.
+ *
+ *   · `live`         — co route HTTP, man hinh chay du.
+ *   · `awaiting-api` — read model DA CHAY o server nhung KHONG co route nao tra no ra.
+ *
+ * `awaiting-api` la ket qua do duoc, khong phai mot phong doan: `transport-settlement.module.ts`
+ * khong khai `controllers` nao, va khong co tep `*.controller.ts` nao trong thu muc settlement. Ta
+ * KHONG bia so lieu cho nhung muc do, va cung khong an chung di khi khach da bat nang luc — an di
+ * se lam khach tuong nghiep vu chua duoc mua.
+ */
+export type TransportDataSource = 'live' | 'awaiting-api';
 
 export interface TransportSection {
   readonly id: TransportSectionId;
@@ -63,6 +77,7 @@ export interface TransportSection {
   readonly summary: string;
   readonly requiredCapabilities: readonly CapabilityId[];
   readonly requiredAction: TransportAction;
+  readonly dataSource: TransportDataSource;
 }
 
 export const TRANSPORT_SECTIONS = [
@@ -73,6 +88,7 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Chuyến đang chạy, đội xe, và những việc đang chờ người xử lý.',
     requiredCapabilities: [],
     requiredAction: 'transport.trip.read',
+    dataSource: 'live',
   },
   {
     id: 'trips',
@@ -81,6 +97,7 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Lập chuyến, phân công xe và lái xe, theo dõi vòng đời chuyến.',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.trip.read',
+    dataSource: 'live',
   },
   {
     id: 'fleet',
@@ -89,6 +106,7 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Hồ sơ xe, hồ sơ lái xe, lịch sử phụ trách và số km đồng hồ.',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.vehicle.read',
+    dataSource: 'live',
   },
   {
     id: 'driver-fund',
@@ -97,6 +115,7 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Số dư quỹ từng lái xe, tạm ứng, hoàn quỹ, chi phí chuyến và kỳ quỹ.',
     requiredCapabilities: ['transport-costing'],
     requiredAction: 'transport.costing.driver_fund.read',
+    dataSource: 'live',
   },
   {
     id: 'fuel',
@@ -105,6 +124,61 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Phiếu đổ dầu, xác thực phiếu, nhập bảng kê cây xăng và đối soát.',
     requiredCapabilities: ['transport-fuel'],
     requiredAction: 'transport.fuel.entry.read',
+    dataSource: 'live',
+  },
+  {
+    id: 'settlement',
+    label: 'Công nợ & quyết toán',
+    group: 'cost',
+    summary: 'Năm dòng tiền giữ riêng: khách hàng, nhà xe, nguồn đơn, cây xăng, lái xe.',
+    requiredCapabilities: ['transport-settlement'],
+    requiredAction: 'transport.costing.period.read',
+    dataSource: 'awaiting-api',
+  },
+  {
+    id: 'maintenance',
+    label: 'Bảo dưỡng & giấy tờ',
+    group: 'assets',
+    summary: 'Lịch bảo dưỡng đến hạn, lệnh sửa chữa, giấy tờ sắp hết hạn.',
+    requiredCapabilities: ['transport-core', 'transport-asset-compliance'],
+    requiredAction: 'transport.vehicle.read',
+    dataSource: 'awaiting-api',
+  },
+  {
+    id: 'payroll',
+    label: 'Lương',
+    group: 'assets',
+    summary: 'Kỳ lương, bảng tính thử, phiếu lương và các khoản cấu thành.',
+    requiredCapabilities: ['transport-costing', 'transport-workforce'],
+    requiredAction: 'transport.costing.period.read',
+    dataSource: 'awaiting-api',
+  },
+  {
+    id: 'margin',
+    label: 'Biên trực tiếp',
+    group: 'reports',
+    summary: 'Doanh thu trừ chi phí trực tiếp của từng chuyến — chưa gồm chi phí cố định.',
+    requiredCapabilities: ['transport-settlement'],
+    requiredAction: 'transport.trip.read',
+    dataSource: 'awaiting-api',
+  },
+  {
+    id: 'ar-ap',
+    label: 'AR/AP',
+    group: 'reports',
+    summary: 'Tuổi nợ phải thu và phải trả theo từng đối tác.',
+    requiredCapabilities: ['transport-settlement'],
+    requiredAction: 'transport.costing.period.read',
+    dataSource: 'awaiting-api',
+  },
+  {
+    id: 'exports',
+    label: 'Xuất dữ liệu',
+    group: 'reports',
+    summary: 'Kết xuất sổ sách để đối chiếu ngoài hệ thống.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.trip.read',
+    dataSource: 'awaiting-api',
   },
 ] as const satisfies readonly TransportSection[];
 
@@ -124,7 +198,7 @@ const DEFAULT_SECTION: TransportSectionId = 'overview';
  * hanh dong `transport.driver.self.*` chi co doc chuyen, doi trang thai chuyen, doc quy, doc va nop
  * PHIEU DAU. De mot man hinh nhap chi phi o day la de mot nut bam khong bao gio gui duoc.
  */
-export type DriverScreenId = 'home' | 'trip' | 'fuel' | 'fund' | 'history';
+export type DriverScreenId = 'home' | 'trip' | 'fuel' | 'fund' | 'history' | 'payslip';
 
 export interface DriverScreen {
   readonly id: DriverScreenId;
@@ -163,6 +237,12 @@ export const DRIVER_SCREENS = [
     label: 'Lịch sử',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.driver.self.trip.read',
+  },
+  {
+    id: 'payslip',
+    label: 'Phiếu lương',
+    requiredCapabilities: ['transport-costing', 'transport-workforce'],
+    requiredAction: 'transport.driver.self.fund.read',
   },
 ] as const satisfies readonly DriverScreen[];
 
@@ -348,11 +428,9 @@ export const buildNavigationUrl = (navigation: ResolvedNavigation): string =>
     : buildSectionUrl(navigation.section, navigation.selection);
 
 /**
- * Cau duoi thanh ben — mot cau san pham, khong phai mot loi giai thich ky thuat.
- *
- * No noi dung mot dieu nguoi dung can biet: danh muc thay doi theo nghiep vu da bat va theo quyen
- * cua tai khoan. Cach cuong che (`RolesGuard`, quyen o may chu) la chuyen ben trong; noi ra o day
- * chi lam nguoi doc phai hieu kien truc de dung mot man hinh.
+ * Cau duoi thanh ben. Noi that ve gioi han cua tang cuong che hom nay thay vi de khach suy ra rang
+ * man hinh la hang rao — `RolesGuard` mo hoan toan khi tenant khong chay che do phien dang nhap.
  */
 export const NAVIGATION_ENFORCEMENT_NOTE =
-  'Danh mục hiển thị theo nghiệp vụ đã bật và quyền của tài khoản.';
+  'Danh mục hiển thị theo nghiệp vụ doanh nghiệp đã bật và quyền của tài khoản. Quyền thực thi do ' +
+  'máy chủ quyết định, không phải do màn hình ẩn bớt.';

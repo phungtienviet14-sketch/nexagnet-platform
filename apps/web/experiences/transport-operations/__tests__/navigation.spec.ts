@@ -16,9 +16,8 @@ import {
 } from '../navigation';
 
 /**
- * Kien truc thong tin la mot HOP DONG. Bo test nay giu no dung ba dieu:
- * loc theo nang luc + vai, be mat khach hang chi chua muc DUNG DUOC, va dia chi song sot qua
- * tai lai/back/forward.
+ * Kien truc thong tin la mot HOP DONG. Bo test nay giu no dung ba dieu ma #161 doi:
+ * loc theo nang luc + vai, che `TX-06`/`TX-07`, va dia chi song sot qua tai lai/back/forward.
  */
 
 /** Nang luc TOI THIEU cua experience nay — ghim thang vao hop dong cua `packages/tenant`. */
@@ -31,11 +30,11 @@ const FULL: readonly CapabilityId[] = [
 ];
 
 /**
- * Nang luc cua nhung nghiep vu CHUA co man hinh dung duoc. Khach bat chung o goi khach that
- * (`tenants/transport-preview`), va dieu do KHONG duoc lam moc them muc nao vao danh muc —
- * xem #195.
+ * Hai ma cua T6 — CO THAT trong `CapabilityId` tu khi PR #152 vao `main`. Truoc day bo test nay
+ * phai `as unknown as` de dien lai mot tinh huong tuong lai; nay khong con phai, va do chinh la
+ * y nghia cua §4.2 trong #180: cho tam bang chuoi da duoc thay bang kieu that.
  */
-const NOT_YET_SURFACED: readonly CapabilityId[] = [
+const T6_CAPABILITIES: readonly CapabilityId[] = [
   'transport-asset-compliance',
   'transport-workforce',
 ];
@@ -69,65 +68,75 @@ describe('nang luc toi thieu — chi bat transport-core', () => {
     expect(MINIMUM).toEqual(['transport-core']);
   });
 
-  it('khach chi bat transport-core khong thay muc chi phi hay nhien lieu', () => {
+  it('khach chi bat transport-core khong thay muc chi phi, nhien lieu hay quyet toan', () => {
     const visible = idsOf(director(MINIMUM));
     expect(visible).toContain('trips');
     expect(visible).toContain('fleet');
     expect(visible).not.toContain('driver-fund');
     expect(visible).not.toContain('fuel');
+    expect(visible).not.toContain('settlement');
   });
 
   it('bat them costing va fuel thi dung hai muc do hien ra', () => {
     const visible = idsOf(director(['transport-core', 'transport-costing', 'transport-fuel']));
     expect(visible).toContain('driver-fund');
     expect(visible).toContain('fuel');
+    expect(visible).not.toContain('settlement');
   });
 });
 
-/**
- * BE MAT KHACH HANG CHI CHUA MUC DUNG DUOC — #195.
- *
- * Day la cong thu ba, va no doc lap voi hai cong kia: mot muc chua co duong du lieu KHONG duoc
- * hien ra du khach da bat nang luc va du vai co quyen. Truoc day chung hien ra kem mot loi giai
- * thich ky thuat (thieu route, thieu read model, so hieu issue) — thu ma nguoi dung khong lam gi
- * duoc voi no.
- */
-describe('be mat khach hang chi chua muc dung duoc', () => {
-  const NOT_SURFACED = ['settlement', 'maintenance', 'payroll', 'margin', 'ar-ap', 'exports'];
-
-  it('khong muc nao chua co duong du lieu lot vao danh muc, du khach bat DU nang luc', () => {
-    const everything = director([...FULL, ...NOT_YET_SURFACED]);
-    for (const id of NOT_SURFACED) {
-      expect(idsOf(everything)).not.toContain(id);
-      expect(canNavigateTo(id, everything)).toBe(false);
+describe('TX-06 / TX-07 — theo dung nang luc khach da bat, khong phai mot cho trong chet', () => {
+  it('hai muc bao duong va luong an khi khach KHONG bat hai nang luc do', () => {
+    // `FULL` co du bon nang luc van tai cu nhung KHONG co hai ma cua T6. Muc bi an — dung yeu cau
+    // cua #161 §2: khong hien mot cho trong chet cho khach.
+    for (const input of [director(), accountant(), unknownRole()]) {
+      expect(idsOf(input)).not.toContain('maintenance');
+      expect(idsOf(input)).not.toContain('payroll');
     }
+    expect(canNavigateTo('maintenance', director())).toBe(false);
+    expect(canNavigateTo('payroll', director())).toBe(false);
   });
 
-  it('go tay dia chi cua mot muc do thi roi ve Tong quan, khong ra trang trang', () => {
-    for (const id of NOT_SURFACED) {
-      expect(resolveSection(id, director([...FULL, ...NOT_YET_SURFACED]))).toBe('overview');
-    }
+  it('hai muc do hien khi khach bat ma nang luc T6 — khong phai sua dieu huong', () => {
+    const visible = idsOf(director([...FULL, ...T6_CAPABILITIES]));
+    expect(visible).toContain('maintenance');
+    expect(visible).toContain('payroll');
   });
 
-  it('man phieu luong cua lai xe cung khong con tren thanh dieu huong', () => {
-    for (const capabilities of [FULL, [...FULL, ...NOT_YET_SURFACED]]) {
-      expect(
-        visibleDriverScreens({ capabilities, role: 'SALE' }).map((screen) => screen.id),
-      ).not.toContain('payslip');
-    }
+  it('moi muc doi DU bo nang luc cua no, khong chi mot ma', () => {
+    // Bao duong doi `transport-core` + `transport-asset-compliance`. Bat mot minh ma T6 ma thieu
+    // loi thi van phai an — neu khong, mot goi khach khai thieu se ra mot man hinh goi API 403.
+    const onlyCompliance = idsOf(director(['transport-asset-compliance']));
+    expect(onlyCompliance).not.toContain('maintenance');
+    // Luong doi `transport-costing` + `transport-workforce`.
+    const workforceWithoutCosting = idsOf(director(['transport-core', 'transport-workforce']));
+    expect(workforceWithoutCosting).not.toContain('payroll');
   });
 
-  it('danh muc dung duoc KHONG doi khi khach bat them nang luc chua co man hinh', () => {
-    // Bat `transport-asset-compliance` + `transport-workforce` la dieu goi khach that dang lam.
-    // No khong duoc moc them mot muc nao — neu khong, mot goi khach se lam be mat khach hang moc
-    // lai dung nhung muc vua go di.
-    expect(idsOf(director([...FULL, ...NOT_YET_SURFACED]))).toEqual(idsOf(director()));
+  it('man phieu luong cua lai xe cung theo dung mot cong do', () => {
+    expect(visibleDriverScreens(driver()).map((screen) => screen.id)).not.toContain('payslip');
+    expect(
+      visibleDriverScreens({
+        capabilities: [...FULL, ...T6_CAPABILITIES],
+        role: 'SALE',
+      }).map((screen) => screen.id),
+    ).toContain('payslip');
   });
 });
 
 describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
   it('Giam doc thay moi muc van hanh khach da bat', () => {
-    expect(idsOf(director())).toEqual(['overview', 'trips', 'fleet', 'driver-fund', 'fuel']);
+    expect(idsOf(director())).toEqual([
+      'overview',
+      'trips',
+      'fleet',
+      'driver-fund',
+      'fuel',
+      'settlement',
+      'margin',
+      'ar-ap',
+      'exports',
+    ]);
   });
 
   it('Ke toan thay dung nhung muc do — ba quyen bi cat khong phai quyen DOC', () => {
@@ -152,7 +161,7 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
 describe('nhom tren thanh ben', () => {
   it('nhom rong bi bo han, khong de lai tieu de mo coi', () => {
     const groups = navigationGroups(director(MINIMUM));
-    expect(groups.map((entry) => entry.group.id)).toEqual(['root', 'dispatch']);
+    expect(groups.map((entry) => entry.group.id)).toEqual(['root', 'dispatch', 'reports']);
     for (const entry of groups) expect(entry.sections.length).toBeGreaterThan(0);
   });
 
@@ -161,10 +170,11 @@ describe('nhom tren thanh ben', () => {
   });
 });
 
-describe('moi muc phai khai du hai truc', () => {
-  it('khong muc nao thieu hanh dong bat buoc hay nhan', () => {
+describe('moi muc phai khai du ba truc', () => {
+  it('khong muc nao thieu hanh dong bat buoc hay nguon du lieu', () => {
     for (const section of TRANSPORT_SECTIONS) {
       expect(section.requiredAction.startsWith('transport.')).toBe(true);
+      expect(['live', 'awaiting-api']).toContain(section.dataSource);
       expect(section.label.length).toBeGreaterThan(0);
     }
   });
@@ -190,7 +200,7 @@ describe('trang thai tren dia chi', () => {
 
   it('dau trang cu hoac muc bi cam luon roi ve mac dinh, khong ra trang trang', () => {
     expect(resolveSection('khong-ton-tai', director())).toBe('overview');
-    expect(resolveSection('fuel', director(MINIMUM))).toBe('overview');
+    expect(resolveSection('settlement', director(MINIMUM))).toBe('overview');
     expect(resolveSection(null, director())).toBe('overview');
   });
 

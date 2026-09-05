@@ -2,14 +2,14 @@
   "schemaVersion": 2,
   "slug": "transport-preview",
   "identity": {
-    "displayName": "Vận hành vận tải",
-    "shortName": "Vận tải"
+    "displayName": "Doanh nghiệp vận tải mẫu — bản xem trước",
+    "shortName": "VT Mẫu"
   },
   "branding": {
     "productName": "Vận hành vận tải",
-    "installName": "Vận hành vận tải",
-    "pageTitle": "Vận hành vận tải",
-    "pageDescription": "Điều hành chuyến xe, đội xe, quỹ lái xe và nhiên liệu.",
+    "installName": "VT Mẫu — Vận hành vận tải (xem trước)",
+    "pageTitle": "Vận hành vận tải — bản xem trước",
+    "pageDescription": "Môi trường xem trước bề mặt vận hành vận tải. Dữ liệu tổng hợp, không phải của khách hàng nào.",
     "themeColor": "#1f4e5f",
     "backgroundColor": "#f7f5f1",
     "monogram": "VT",
@@ -31,24 +31,24 @@
     "readiness": {
       "blockedCapabilities": [
         {
-          "key": "transport-settlement-ui",
+          "key": "transport-settlement-http",
           "label": "Công nợ & quyết toán",
-          "reason": "Chưa khả dụng."
+          "reason": "Máy chủ đã có read model quyết toán nhưng chưa phơi một đường HTTP nào, nên màn hình không lấy ra được số. Xem #168."
         },
         {
           "key": "transport-evidence-upload",
-          "label": "Ảnh chứng từ",
-          "reason": "Chưa khả dụng."
+          "label": "Ảnh bằng chứng phiếu dầu và chứng từ",
+          "reason": "Chưa có đường tải lên hay đọc lại ảnh trong nghiệp vụ vận tải. Xem #169."
         },
         {
           "key": "transport-asset-compliance-ui",
           "label": "Bảo dưỡng & giấy tờ",
-          "reason": "Chưa khả dụng."
+          "reason": "Máy chủ đã có đủ đường HTTP, nhưng màn hình chưa nối vào read model. Xem #170."
         },
         {
           "key": "transport-workforce-ui",
           "label": "Lương",
-          "reason": "Chưa khả dụng."
+          "reason": "Kỳ lương cần một chính sách lương của doanh nghiệp thật; bản xem trước không bịa chính sách đó, nên mục này chỉ có bản thiết kế. Xem #170."
         }
       ]
     }

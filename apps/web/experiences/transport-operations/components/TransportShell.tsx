@@ -106,6 +106,11 @@ export function TransportShell({
                       }}
                     >
                       <span>{section.label}</span>
+                      {section.dataSource === 'awaiting-api' ? (
+                        <span className="tx-nav__flag" title="Chưa có đường dữ liệu">
+                          chờ API
+                        </span>
+                      ) : null}
                     </a>
                   </li>
                 ))}
