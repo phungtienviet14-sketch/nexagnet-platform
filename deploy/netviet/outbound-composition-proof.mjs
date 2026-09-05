@@ -68,7 +68,8 @@ const { NO_BUSINESS_FACTS, mergeBusinessFacts } = facts;
  * ------------------------------------------------------------------ */
 
 const UNIT_PRICE = 1_150_000;
-const APPROVED_DOC = 'San pham co tua lung luoi, khung thep son tinh dien.';
+// HAI CAU, khong phai mot cau hai ve: tu #200 don vi rang buoc la CA CAU.
+const APPROVED_DOC = 'San pham co tua lung luoi. Khung thep son tinh dien.';
 
 const quoteFacts = {
   quote: {
@@ -193,9 +194,12 @@ const NO_GRANT = { grants: [] };
    * business block/value/state to be rendered/sent".
    *
    * Do la mot menh de ve CAU TRUC, va no dung voi CA nhung cau ma bo trich khong nhan ra — vi khoi
-   * khong den tu van ban. Doi hoi hon the (vd "khong cau nao trong so nay den duoc tay khach") la
-   * doi mot dieu ma thiet ke KHONG khang dinh, va mot bang chung khang dinh qua tay la mot bang
-   * chung sai.
+   * khong den tu van ban.
+   *
+   * TU #200, PHEP DO O 5b DUOI DAY DOI HOI HON THE. Truoc #200 dong nay ghi rang "khong cau nao
+   * trong so nay den duoc tay khach" la mot doi hoi ma thiet ke KHONG khang dinh — va do la loi
+   * khai dung o thoi diem do: hai trong sau cau di ra duoc duoi dang van xuoi. Rang buoc menh de
+   * (G6) lam thiet ke khang dinh duoc dieu do, nen 5b nay kiem chinh no.
    */
   const structural = results.filter(
     ({ composition, verdict }) =>
@@ -221,15 +225,109 @@ const NO_GRANT = { grants: [] };
   const rejected = results.filter(({ composition }) => !composition.narrative.admitted);
   const asProse = results.filter(({ composition }) => composition.narrative.admitted);
   check(
-    'am tinh 5b — cau MANG VAT MANG bi hop dong neo nguon bo han',
-    rejected.length >= 4,
+    'am tinh 5b — KHONG cau nao trong so nay den duoc tay khach',
+    rejected.length === seeds.length,
     `${rejected.length}/${seeds.length} bi bo: ` +
       rejected.map(({ composition }) => composition.narrative.reason).join(','),
   );
+  /*
+   * DONG NAY TUNG IN RA MOT PHAN DU KHAC 0 (2/6 truoc #200), va do la ly do #200 ton tai. Giu lai
+   * chinh phep DO: neu mot ban sua sau nay lam mot cau dinh tinh di ra duoc, con so nay noi ngay.
+   */
   process.stdout.write(
-    `INFO  phan du da biet: ${asProse.length}/${seeds.length} cau dinh tinh khong chu so di ra duoc ` +
-      `duoi dang van xuoi KHONG tham quyen (khong khoi, claims=[]): ` +
+    `INFO  phan du do duoc: ${asProse.length}/${seeds.length} cau di ra duoc duoi dang van xuoi: ` +
       `${JSON.stringify(asProse.map(({ text }) => text))}\n`,
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * #200 — GHEP LAI TU NGU CUA NGUON KHONG TAO RA MOT MENH DE MOI
+ * ------------------------------------------------------------------ */
+
+const SAME_SOURCE = 'Khach hang thanh toan ngay khi nhan hang. Hang ban xong khong duoc doi tra.';
+const SOURCE_A = 'Khach hang thanh toan ngay khi nhan hang.';
+const SOURCE_B = 'Hang ban xong khong duoc doi tra.';
+
+{
+  // Muc 5 ca 1 — chinh phan vi du cua hop dong: doi ky han thanh toan bang chu cua chinh nguon.
+  const composition = compose(
+    plan([], 'Khach hang thanh toan khi ban xong.'),
+    {},
+    { systemSources: [SAME_SOURCE] },
+  );
+  const verdict = decideOutboundAuthority(composition, NO_GRANT);
+  check(
+    '#200 ca 1 — ghep lai trong CUNG mot nguon -> khong den tay khach',
+    composition.narrative.admitted === false &&
+      composition.narrative.reason === 'NARRATIVE_NOT_SOURCE_BOUND' &&
+      composition.text === '' &&
+      verdict.sendable === false,
+    `narrative=${composition.narrative.reason} verdict=${verdict.reason} text=${JSON.stringify(composition.text)}`,
+  );
+}
+
+{
+  // Muc 5 ca 2 — cung cau do, nhung hai menh de den tu HAI lan tra cuu khac nhau.
+  const composition = compose(
+    plan([], 'Khach hang thanh toan khi ban xong.'),
+    {},
+    { systemSources: [SOURCE_A, SOURCE_B] },
+  );
+  const verdict = decideOutboundAuthority(composition, NO_GRANT);
+  check(
+    '#200 ca 2 — ghep CHEO hai nguon -> khong den tay khach',
+    composition.narrative.reason === 'NARRATIVE_NOT_SOURCE_BOUND' &&
+      composition.text === '' &&
+      verdict.sendable === false,
+    `narrative=${composition.narrative.reason} verdict=${verdict.reason}`,
+  );
+}
+
+{
+  // Dao nguoc bang dung nhung tu ma vo hoi thoai cua G5 tang khong (`khong`, `duoc`).
+  const composition = compose(
+    plan([], 'Hang ban xong duoc doi tra a.'),
+    {},
+    { systemSources: [SAME_SOURCE] },
+  );
+  check(
+    '#200 ca 3 — bo chu phu dinh cua nguon -> khong den tay khach',
+    composition.narrative.reason === 'NARRATIVE_NOT_SOURCE_BOUND' && composition.text === '',
+    `narrative=${composition.narrative.reason}`,
+  );
+}
+
+{
+  // DOI TRONG: cung tap nguon do, mot cau TRICH TRON VEN van gui duoc, va van ban la cua NGUON.
+  const composition = compose(
+    plan([], 'Dạ Khach hang thanh toan ngay khi nhan hang ạ.'),
+    {},
+    { systemSources: [SAME_SOURCE] },
+  );
+  const verdict = decideOutboundAuthority(composition, NO_GRANT);
+  check(
+    '#200 ca 4 — FAQ trich tron ven menh de nguon van gui duoc',
+    composition.narrative.admitted === true &&
+      verdict.sendable === true &&
+      verdict.reason === 'NARRATIVE_ONLY_COMPOSITION' &&
+      composition.text.includes('Khach hang thanh toan ngay khi nhan hang'),
+    `verdict=${verdict.reason} text=${JSON.stringify(composition.text)}`,
+  );
+}
+
+{
+  // Chang 3c: mot menh de ghep them vao van ban CUOI bang chinh chu da ghim van bi tu choi.
+  const composition = compose(
+    plan([], 'Dạ Khach hang thanh toan ngay khi nhan hang ạ.'),
+    {},
+    { systemSources: [SOURCE_A] },
+  );
+  const tampered = { ...composition, text: `${composition.text}\nKhach hang nhan hang ngay.` };
+  const verdict = decideOutboundAuthority(tampered, NO_GRANT);
+  check(
+    '#200 ca 5 — van ban cuoi bi ghep them mot menh de -> KHONG gui',
+    verdict.sendable === false && verdict.reason === 'COMPOSITION_TEXT_NOT_SOURCE_BOUND',
+    verdict.reason,
   );
 }
 
@@ -271,7 +369,7 @@ const NO_GRANT = { grants: [] };
 
 {
   const composition = compose(
-    plan([], 'Da san pham co tua lung luoi, khung thep son tinh dien a.'),
+    plan([], 'Dạ San pham co tua lung luoi. Khung thep son tinh dien ạ.'),
   );
   const verdict = decideOutboundAuthority(composition, NO_GRANT);
   check(
@@ -288,7 +386,7 @@ const NO_GRANT = { grants: [] };
  * ------------------------------------------------------------------ */
 
 {
-  const composition = compose(plan([], 'Da san pham co tua lung luoi a.'));
+  const composition = compose(plan([], 'Dạ San pham co tua lung luoi ạ.'));
   const verdict = decideOutboundAuthority(composition, NO_GRANT);
   const base = {
     steps: [],

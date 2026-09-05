@@ -166,6 +166,20 @@ export const NARRATIVE_REJECTIONS = [
    * danh sach CHO, nen mot cach dien dat MOI bi chan vi no moi — khong phai vi ai do kip liet ke.
    */
   'NARRATIVE_NOT_SOURCE_BACKED',
+  /*
+   * G6 — LOI NHAN GHEP LAI TU NGU CUA NGUON THANH MOT MENH DE KHAC (Issue #200).
+   *
+   * G5 dong cong TU VUNG, khong dong cong NGHIA. Review doc lap 05/09/2026 do duoc dieu do tren
+   * chinh `main`: nguon noi "Khách hàng thanh toán ngay khi nhận hàng. Hàng bán xong không được
+   * đổi trả.", model viet "Khách hàng thanh toán khi bán xong." — moi tu deu cua nguon, ky han
+   * thanh toan thi doi han. Va vi `không/có/được/khi` deu nam trong vo hoi thoai, model con dao
+   * nguoc duoc mot cau nguon ma khong can them mot chu nao.
+   *
+   * G6 doi hoi TUNG DOAN cua loi nhan, sau khi cat tu xung ho/le phep o hai dau, phai TRUNG TRON
+   * VEN mot MENH DE cua nguon — va van ban phat ra la ky tu cua NGUON, khong phai cua model.
+   * Xem `apps/api/src/outbound/outbound-proposition.ts`.
+   */
+  'NARRATIVE_NOT_SOURCE_BOUND',
   /** G2 — mot con so trong loi nhan khong truy nguyen duoc ve nguon/grant/tin khach. */
   'NUMERAL_NOT_GROUNDED',
   /** G3 — mot ma chinh sach trong loi nhan khong duoc cap va khong co trong nguon. */
@@ -196,6 +210,8 @@ export type NarrativeRejection = (typeof NARRATIVE_REJECTIONS)[number];
 export const NARRATIVE_REJECTION_LABELS: Record<NarrativeRejection, string> = {
   NO_SYSTEM_SOURCE: 'Lượt này không tra cứu được nguồn hệ thống nào',
   NARRATIVE_NOT_SOURCE_BACKED: 'Lời nhắn nói điều không nguồn hệ thống nào của lượt này nói',
+  NARRATIVE_NOT_SOURCE_BOUND:
+    'Lời nhắn ghép lại từ ngữ của nguồn thành một mệnh đề không nguồn nào nói',
   NUMERAL_NOT_GROUNDED: 'Lời nhắn chứa con số không truy nguyên được về nguồn',
   POLICY_CARRIER_NOT_GROUNDED: 'Lời nhắn nói chính sách không được cấp và không có trong nguồn',
   COMMITMENT_CARRIER_NOT_GROUNDED:

@@ -214,7 +214,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.policy": {
       "functionName": "grantsFromDealerPolicy",
       "filePath": "apps/api/src/outbound/outbound-authority.ts",
-      "line": 218
+      "line": 219
     },
     "rules.pricing": {
       "functionName": "grantsFromPricedOrder",
@@ -223,7 +223,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "rules.quote": {
       "functionName": "grantsFromQuote",
       "filePath": "apps/api/src/outbound/outbound-authority.ts",
-      "line": 213
+      "line": 214
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
