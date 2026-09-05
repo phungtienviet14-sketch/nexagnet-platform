@@ -144,10 +144,15 @@ describe('agent tu van ghi de phan quyet handoff tat dinh', () => {
         usedTools: ['tra_cuu_tai_lieu'],
         handoff: false,
         authority: { grants: [] },
-        // Con so trong loi nhan phai truy nguyen duoc ve NGUON HE THONG (G2) — day chinh la bai
-        // FAQ da duyet ma `tra_cuu_tai_lieu` vua tra ve. Bo dong nay di thi loi nhan bi tu choi,
-        // va do la hanh vi DUNG: khong co tai lieu nao noi 12 thang thi khong duoc noi 12 thang.
-        sources: ['San pham duoc bao hanh 12 thang ke tu ngay mua.'],
+        // Con so trong loi nhan phai truy nguyen duoc ve NGUON HE THONG (G2), va tu ngu cung vay
+        // (G5) — day chinh la bai FAQ da duyet ma `tra_cuu_tai_lieu` vua tra ve. Bo dong nay di
+        // thi loi nhan bi tu choi, va do la hanh vi DUNG: khong tai lieu nao noi 12 thang thi
+        // khong duoc noi 12 thang.
+        //
+        // VIET CO DAU la mot phan cua fixture, khong phai trang tri: G5 doi chieu tu ngu theo
+        // dung cach viet (xem `outbound-envelope.ts`), va tai lieu duyet that cua khach deu la
+        // tieng Viet co dau. Mot nguon go khong dau la mot nguon KHONG co that.
+        sources: ['Sản phẩm được bảo hành 12 tháng kể từ ngày mua.'],
       }),
       'bao_hanh_khieu_nai',
     );
