@@ -99,7 +99,7 @@ export function DriverFundView() {
         if (amount === 0) throw new Error('Điều chỉnh 0 đồng không nói gì.');
         return transportApi.costing.adjust({ ...base, signedAmount: amount });
       }
-      if (amount <= 0) throw new Error('Số tiền phải lớn hơn 0; dấu do máy chủ quyết.');
+      if (amount <= 0) throw new Error('Số tiền phải lớn hơn 0.');
       return draft.kind === 'advance'
         ? transportApi.costing.advance({ ...base, amount })
         : transportApi.costing.returnFund({ ...base, amount });
@@ -231,7 +231,7 @@ export function DriverFundView() {
           <p className="tx-panel__lead">
             {movement.kind === 'adjust'
               ? 'Ô này nhận số CÓ DẤU, và không nhận 0.'
-              : 'Nhập số dương; dấu do máy chủ quyết theo loại bút toán.'}
+              : 'Nhập số dương; hệ thống tự ghi đúng dấu theo loại bút toán.'}
           </p>
           <div className="tx-inlineform">
             <label className="tx-field">

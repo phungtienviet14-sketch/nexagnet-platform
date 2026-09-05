@@ -37,11 +37,6 @@ export interface DashboardWorkItem {
   readonly selection: string | null;
 }
 
-export interface UnavailableCard {
-  readonly label: string;
-  readonly reason: string;
-}
-
 export interface DashboardModel {
   readonly stats: readonly DashboardStat[];
   /** Da CAT xuong `WORK_LIMIT` de bay len bang. */
@@ -56,7 +51,6 @@ export interface DashboardModel {
   readonly pendingTotal: number;
   readonly hasWork: boolean;
   readonly headline: string;
-  readonly unavailable: readonly UnavailableCard[];
 }
 
 export interface DashboardInput {
@@ -81,53 +75,6 @@ const countBy = <T, K extends string>(
     counts[bucket] = (counts[bucket] ?? 0) + 1;
   }
   return counts;
-};
-
-/**
- * Danh sach the KHONG dung duoc — moi dong tro ve mot nang luc khach chua bat, va
- * cau `reason` la cau se hien tren man hinh — nen no phai doc len duoc cho nguoi khong lam ky thuat.
- */
-const unavailableCards = (capabilities: readonly CapabilityId[]): readonly UnavailableCard[] => {
-  const enabled = new Set<string>(capabilities);
-  const cards: UnavailableCard[] = [
-    {
-      label: 'Số dư quỹ toàn đội',
-      reason:
-        'Máy chủ chỉ trả số dư của từng lái xe một, chưa có đường đọc tổng cả đội. Mở mục Quỹ lái ' +
-        'xe để xem theo từng người.',
-    },
-    {
-      label: 'Phiếu dầu chờ xác thực',
-      reason:
-        'Phiếu dầu chỉ đọc được theo từng chuyến, chưa có đường đọc phiếu của cả đội. Con số toàn ' +
-        'đội vì vậy chưa đếm được.',
-    },
-    {
-      label: 'Chênh lệch chờ xử lý',
-      reason:
-        'Danh sách kỳ đối soát không kèm số chênh lệch còn treo, nên con số này chỉ đúng khi mở ' +
-        'từng kỳ.',
-    },
-  ];
-
-  // Chi noi ve AR/AP va bien khi khach DA bat nghiep vu quyet toan — con khong thi day khong phai
-  // mot khoang cach, ma la mot nghiep vu ho chua mua.
-  if (enabled.has('transport-settlement')) {
-    cards.push(
-      {
-        label: 'Công nợ phải thu / phải trả',
-        reason:
-          'Nghiệp vụ quyết toán đã bật nhưng máy chủ chưa mở đường HTTP nào cho nó, nên số liệu ' +
-          'công nợ chưa lấy ra được.',
-      },
-      {
-        label: 'Biên trực tiếp',
-        reason: 'Cùng lý do với công nợ: phần tính biên đã chạy ở máy chủ nhưng chưa có đường đọc.',
-      },
-    );
-  }
-
-  return cards;
 };
 
 const OPEN_RECONCILIATION_STATES = new Set(['DRAFT', 'MATCHING', 'RESOLVED', 'REOPENED']);
@@ -231,6 +178,5 @@ export const toDashboard = (input: DashboardInput): DashboardModel => {
         : pending.length > work.length
           ? `${formatCount(pending.length)} việc đang chờ người xử lý — bảng đang hiện ${formatCount(work.length)} việc đầu.`
           : `${formatCount(pending.length)} việc đang chờ người xử lý.`,
-    unavailable: unavailableCards(input.capabilities),
   };
 };

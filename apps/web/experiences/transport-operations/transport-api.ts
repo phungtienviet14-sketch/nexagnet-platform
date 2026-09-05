@@ -98,8 +98,7 @@ export class TransportApiError extends Error {
 
 const BASE = publicApiBase();
 
-const NOT_MOUNTED_MESSAGE =
-  'Máy chủ không có đường nghiệp vụ vận tải cho doanh nghiệp này. Thường là do nghiệp vụ chưa được bật.';
+const NOT_MOUNTED_MESSAGE = 'Nghiệp vụ vận tải chưa được bật cho doanh nghiệp này.';
 
 const readBody = async <T>(response: Response): Promise<T> => {
   const text = await response.text();
@@ -117,7 +116,7 @@ const readBody = async <T>(response: Response): Promise<T> => {
     // nhau tren man hinh, nen phai phan biet o day.
     if (response.status === 404) throw new TransportApiError(NOT_MOUNTED_MESSAGE, 404, true);
     throw new TransportApiError(
-      `Máy chủ trả về nội dung không đọc được (HTTP ${response.status}).`,
+      'Không đọc được phản hồi của hệ thống. Hãy thử lại.',
       response.status,
     );
   }
@@ -128,7 +127,7 @@ const readBody = async <T>(response: Response): Promise<T> => {
     // Nest tra `message` la chuoi, hoac MOT MANG chuoi khi zod bat nhieu loi cung luc.
     const message = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.join(', ') : '';
     throw new TransportApiError(
-      message.length > 0 ? message : `Yêu cầu thất bại (HTTP ${response.status}).`,
+      message.length > 0 ? message : 'Không thực hiện được yêu cầu. Hãy thử lại.',
       response.status,
     );
   }
@@ -562,6 +561,9 @@ export const transportApi = {
       send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/verify`),
     rejectEntry: (id: string, reason: string): Promise<FuelEntry> =>
       send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/reject`, { reason }),
+    /** `REJECTED -> DECLARED` qua dung vong doi da co (`#168 B5`), be mat VAN HANH. */
+    resubmitEntry: (id: string): Promise<FuelEntry> =>
+      send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/resubmit`),
 
     /** Xem truoc KHONG ghi gi — an de chay truoc khi nhap that. */
     previewStatement: (input: ImportStatementInput): Promise<StatementImportPreview> =>
