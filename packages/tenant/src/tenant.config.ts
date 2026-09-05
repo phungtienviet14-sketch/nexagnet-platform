@@ -282,6 +282,19 @@ export function tenantIdentity(): TenantConfig['identity'] {
   return loadTenantConfig().identity;
 }
 
+/**
+ * DANH TINH MAY DOC DUOC cua goi khach dang chay.
+ *
+ * Khac `tenantIdentity()`, la ten NGUOI doc. Slug la thu duoc dem di so sanh: no khoa mot manh
+ * bang chung vao dung khach da sinh ra no (Issue #205), nen no phai on dinh va khong dau.
+ *
+ * KHONG duoc re nhanh nghiep vu theo gia tri nay trong core (muc 22 hop dong #205, va quyet dinh
+ * kien truc #6): no la mot DINH DANH de doi chieu, khong phai mot cong tac tinh nang.
+ */
+export function tenantSlug(): string {
+  return loadTenantConfig().slug;
+}
+
 export function tenantExperience(): ExperienceId {
   return loadTenantConfig().experience;
 }

@@ -1,12 +1,39 @@
 import { publicApiBase } from '../../lib/api-base';
 import { authFetch } from '../../lib/auth';
 import type {
+  ApByCounterpartyRow,
+  ArAgingReport,
   BusinessDate,
   ClosedFundPeriod,
   ClosedReconciliationResult,
+  ComplianceAlert,
+  ComplianceDocument,
+  ComplianceDocumentStatus,
+  ComplianceDocumentType,
+  ComplianceSubjectKind,
   CorrelatedPosting,
+  DirectMargin,
+  DirectMarginRollup,
   Driver,
+  DriverPayslipView,
+  EffectiveVehicleState,
+  ExpenseCatalogue,
+  MaintenanceDue,
+  MaintenancePlan,
+  MaintenancePlanStatus,
+  MaintenanceTriggerKind,
+  MaintenanceWorkOrder,
+  OperationalAlertFeed,
+  PartnerPosition,
+  PayrollPeriod,
+  PayrollRun,
+  Payslip,
+  PayslipComponentKind,
+  PayslipDetail,
+  SettlementDocumentChain,
+  SettlementFlow,
   DriverFuelSlipView,
+  DriverFuelSupplier,
   DriverFundEntry,
   DriverFundPeriod,
   DriverFundStatement,
@@ -72,8 +99,7 @@ export class TransportApiError extends Error {
 
 const BASE = publicApiBase();
 
-const NOT_MOUNTED_MESSAGE =
-  'Máy chủ không có đường nghiệp vụ vận tải cho doanh nghiệp này. Thường là do nghiệp vụ chưa được bật.';
+const NOT_MOUNTED_MESSAGE = 'Nghiệp vụ vận tải chưa được bật cho doanh nghiệp này.';
 
 const readBody = async <T>(response: Response): Promise<T> => {
   const text = await response.text();
@@ -91,7 +117,7 @@ const readBody = async <T>(response: Response): Promise<T> => {
     // nhau tren man hinh, nen phai phan biet o day.
     if (response.status === 404) throw new TransportApiError(NOT_MOUNTED_MESSAGE, 404, true);
     throw new TransportApiError(
-      `Máy chủ trả về nội dung không đọc được (HTTP ${response.status}).`,
+      'Không đọc được phản hồi của hệ thống. Hãy thử lại.',
       response.status,
     );
   }
@@ -102,7 +128,7 @@ const readBody = async <T>(response: Response): Promise<T> => {
     // Nest tra `message` la chuoi, hoac MOT MANG chuoi khi zod bat nhieu loi cung luc.
     const message = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.join(', ') : '';
     throw new TransportApiError(
-      message.length > 0 ? message : `Yêu cầu thất bại (HTTP ${response.status}).`,
+      message.length > 0 ? message : 'Không thực hiện được yêu cầu. Hãy thử lại.',
       response.status,
     );
   }
@@ -120,6 +146,35 @@ const send = async <T>(method: 'POST' | 'PATCH', path: string, body?: unknown): 
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   );
+
+/**
+ * MULTIPART — cho duong tai anh bang chung (#169).
+ *
+ * KHONG dat `content-type`: trinh duyet phai tu dat `multipart/form-data; boundary=...`, va mot
+ * `content-type` viet tay se thieu boundary, lam may chu doc ra mot than rong. `authFetch` van gan
+ * cookie phien + `x-csrf-token` nhu moi lenh ghi khac.
+ */
+const sendForm = async <T>(path: string, form: FormData): Promise<T> =>
+  readBody<T>(await authFetch(`${BASE}${path}`, { method: 'POST', body: form }));
+
+/**
+ * DIA CHI ANH de dat vao `<img src>`.
+ *
+ * Byte di qua mot route CO XAC THUC chu khong phai URL ky (xem #169): kho anh la bucket PRIVATE
+ * chua PII, va mot URL ky la mot manh giay uy quyen roi khoi he thong — no con song sau khi phien
+ * het han va di duoc vao lich su duyet, log proxy hay mot tin nhan chuyen tiep.
+ *
+ * Vi vay day tra ve duong dan THUONG; cookie phien di kem theo `credentials` cua chinh the `<img>`
+ * khi cung goc. Do la ly do khong co ham `fetch` o day.
+ */
+export const evidenceUrls = {
+  driverFuelSlip: (slipId: string, evidenceId: string): string =>
+    `${BASE}/transport/me/fuel/slips/${encodeURIComponent(slipId)}/evidence/${encodeURIComponent(evidenceId)}`,
+  fuelEntry: (entryId: string, evidenceId: string): string =>
+    `${BASE}/transport/fuel/entries/${encodeURIComponent(entryId)}/evidence/${encodeURIComponent(evidenceId)}`,
+  driverExpense: (expenseId: string): string =>
+    `${BASE}/transport/me/expenses/${encodeURIComponent(expenseId)}/evidence`,
+} as const;
 
 /**
  * Khoa tuong quan cho MOT lan bam nut, tao mot lan roi giu qua cac lan thu lai.
@@ -153,6 +208,102 @@ export interface PlanTripInput {
 
 /** `code`, `kind`, `businessDate` KHONG sua duoc sau khi lap chuyen. */
 export type UpdateTripInput = Partial<Omit<PlanTripInput, 'code' | 'kind' | 'businessDate'>>;
+
+/**
+ * KHOAN CHI CUA CHINH LAI XE (`#168 B3`).
+ *
+ * `driverId` va `fundedBy` CO Y vang mat: ca hai la 400 tuong minh o may chu (`.strict()`), khong
+ * phai truong bi bo qua im lang. Danh tinh den tu phien, va nguon tien luon la quy cua chinh nguoi
+ * dang dang nhap.
+ */
+export interface DriverSelfExpenseInput {
+  readonly tripId: string;
+  readonly categoryCode: string;
+  /** DO LON, so nguyen DONG. Khong bao gio am — dau do may chu quyet theo loai but toan. */
+  readonly amount: number;
+  readonly businessDate?: BusinessDate;
+  readonly note?: string | null;
+  readonly correlationKey?: string;
+}
+
+export interface CreateMaintenancePlanInput {
+  readonly vehicleId: string;
+  readonly name: string;
+  readonly triggerKind: MaintenanceTriggerKind;
+  readonly intervalKm?: number | null;
+  readonly intervalDays?: number | null;
+  readonly baselineOdoKm: number;
+  readonly baselineDate: BusinessDate;
+}
+
+export type UpdateMaintenancePlanInput = Partial<
+  Pick<CreateMaintenancePlanInput, 'name' | 'triggerKind' | 'intervalKm' | 'intervalDays'>
+> & { readonly status?: MaintenancePlanStatus };
+
+/**
+ * `planId` la BAT BUOC CO MAT nhung duoc phep `null` — schema may chu la `nonEmpty.nullable()`,
+ * khong phai `.optional()`. Kieu o day phai noi dung dieu do, neu khong mot lan bo quen truong se
+ * ra 400 luc chay thay vi do luc bien dich. Cung the voi `subjectId` cua giay to.
+ */
+export interface OpenWorkOrderInput {
+  readonly vehicleId: string;
+  readonly planId: string | null;
+  readonly description: string;
+  readonly openedDate: BusinessDate;
+  readonly openedOdoKm: number;
+  readonly note?: string | null;
+}
+
+export interface CompleteWorkOrderInput {
+  readonly completedDate: BusinessDate;
+  readonly completedOdoKm: number;
+  readonly costAmount?: number | null;
+  readonly costingExpenseRef?: string | null;
+  readonly note?: string | null;
+}
+
+export interface RegisterComplianceDocumentInput {
+  readonly subjectKind: ComplianceSubjectKind;
+  readonly subjectId: string | null;
+  readonly documentType: ComplianceDocumentType;
+  readonly documentNo?: string | null;
+  readonly validFrom: BusinessDate;
+  readonly validTo: BusinessDate;
+  readonly evidenceRef?: string | null;
+  readonly note?: string | null;
+}
+
+export interface OpenPayrollPeriodInput {
+  readonly label: string;
+  readonly startDate: BusinessDate;
+  readonly endDate: BusinessDate;
+}
+
+/** Mot khoan cong/tru NHAP TAY cho mot lai xe trong lan chay. Man hinh KHONG tu tinh khoan nao. */
+export interface ManualPayrollComponentInput {
+  readonly kind: PayslipComponentKind;
+  readonly label: string;
+  /** DO LON, so nguyen DONG. Dau do `kind` quyet, khong phai dau cua so nay. */
+  readonly amount: number;
+  readonly note?: string | null;
+}
+
+/**
+ * CHAY LUONG cho ca ky. KHONG co `driverIds`: may chu chay cho moi lai xe co phat sinh trong ky,
+ * va mot bo loc o client se lam hai lan chay cung mot ky cho ra hai bang luong khac nhau.
+ */
+export interface RunPayrollInput {
+  readonly periodId: string;
+  /** Khoa la `driverId`. Vang mat = khong co khoan nhap tay nao. */
+  readonly manualComponents?: Readonly<Record<string, readonly ManualPayrollComponentInput[]>>;
+}
+
+/** Phat mot phieu BU/DAO. Ly do BAT BUOC — mot lan sua tien phai noi duoc vi sao. */
+export interface CorrectPayslipInput {
+  readonly kind: 'SUPPLEMENTAL' | 'REVERSAL';
+  readonly reason: string;
+  readonly components?: readonly ManualPayrollComponentInput[];
+}
 
 /** CA HAI khoa deu BAT BUOC co mat (duoc phep `null`). Than thieu khoa la 400. */
 export interface AssignTripInput {
@@ -411,6 +562,9 @@ export const transportApi = {
       send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/verify`),
     rejectEntry: (id: string, reason: string): Promise<FuelEntry> =>
       send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/reject`, { reason }),
+    /** `REJECTED -> DECLARED` qua dung vong doi da co (`#168 B5`), be mat VAN HANH. */
+    resubmitEntry: (id: string): Promise<FuelEntry> =>
+      send('POST', `/transport/fuel/entries/${encodeURIComponent(id)}/resubmit`),
 
     /** Xem truoc KHONG ghi gi — an de chay truoc khi nhap that. */
     previewStatement: (input: ImportStatementInput): Promise<StatementImportPreview> =>
@@ -447,6 +601,14 @@ export const transportApi = {
     setTripStatus: (id: string, to: 'IN_TRANSIT' | 'DELIVERED'): Promise<DriverTripView> =>
       send('PATCH', `/transport/me/trips/${encodeURIComponent(id)}/status`, { to }),
     fund: (): Promise<DriverFundStatement> => get('/transport/me/fund'),
+    /**
+     * CAY XANG ma lai xe duoc doc — `GET /transport/me/fuel/suppliers`.
+     *
+     * KHONG dung `fuel.suppliers()`: duong do doi `transport.fuel.entry.read`, mot quyen van hanh.
+     * Lai xe goi vao do se an 403, va o chon cay xang tren be mat cua ho se rong vinh vien.
+     */
+    fuelSuppliers: (): Promise<readonly DriverFuelSupplier[]> =>
+      get('/transport/me/fuel/suppliers'),
     fuelSlips: (): Promise<readonly DriverFuelSlipView[]> => get('/transport/me/fuel/slips'),
     fuelSlip: (id: string): Promise<DriverFuelSlipView> =>
       get(`/transport/me/fuel/slips/${encodeURIComponent(id)}`),
@@ -454,5 +616,137 @@ export const transportApi = {
       send('POST', '/transport/me/fuel/slips', input),
     attachFuelEvidence: (id: string, input: AttachFuelEvidenceInput): Promise<DriverFuelSlipView> =>
       send('POST', `/transport/me/fuel/slips/${encodeURIComponent(id)}/evidence`, input),
+    /** TAI ANH THAT (#169). Mot lan goi: byte vao kho roi gan vao phieu, khong de object mo coi. */
+    uploadFuelEvidence: (id: string, file: File): Promise<DriverFuelSlipView> => {
+      const form = new FormData();
+      form.append('file', file);
+      return sendForm(`/transport/me/fuel/slips/${encodeURIComponent(id)}/evidence`, form);
+    },
+    /** `REJECTED -> DECLARED` qua dung vong doi da co (`#168 B5`). */
+    resubmitFuelSlip: (id: string): Promise<DriverFuelSlipView> =>
+      send('POST', `/transport/me/fuel/slips/${encodeURIComponent(id)}/resubmit`),
+
+    /** `#168 B4` — danh muc de CHON, khong de go thu roi doi may chu bao sai. */
+    expenseCategories: (): Promise<ExpenseCatalogue> => get('/transport/me/expense-categories'),
+    /** `#168 B3`. Than KHONG nhan `driverId`/`fundedBy` — ca hai la 400 tuong minh. */
+    recordExpense: (input: DriverSelfExpenseInput): Promise<CorrelatedPosting> =>
+      send('POST', '/transport/me/expenses', input),
+    /**
+     * `#169` acceptance 4 — khoan chi KEM ANH, MOT lan goi.
+     *
+     * Khong co duong "gan anh sau": `TripExpense.evidenceLocator` la mot COT duoc dat luc `INSERT`,
+     * va so cai append-only khong cho sua mot hang da ghi (`INV-22`).
+     */
+    recordExpenseWithEvidence: (
+      input: DriverSelfExpenseInput,
+      file: File,
+    ): Promise<CorrelatedPosting> => {
+      const form = new FormData();
+      form.append('tripId', input.tripId);
+      form.append('categoryCode', input.categoryCode);
+      form.append('amount', String(input.amount));
+      if (input.businessDate) form.append('businessDate', input.businessDate);
+      if (input.note) form.append('note', input.note);
+      if (input.correlationKey) form.append('correlationKey', input.correlationKey);
+      form.append('file', file);
+      return sendForm('/transport/me/expenses/with-evidence', form);
+    },
+
+    /** `#168 B8` — CHI DOC, chi phieu DA CONG BO. Khong tham so, khong `:driverId`. */
+    payslips: (): Promise<readonly DriverPayslipView[]> => get('/transport/me/payslips'),
+    payslip: (id: string): Promise<DriverPayslipView> =>
+      get(`/transport/me/payslips/${encodeURIComponent(id)}`),
+  },
+
+  /**
+   * `TX-05` — BAO CAO quyet toan. CHI DOC, khong mot lenh ghi nao (`#168 B1`).
+   *
+   * `SettlementService` co du lenh ghi tai chinh nhung khong lenh nao duoc phoi ra hay gan quyen.
+   * Neu mot ham o day doc len nhu mot lenh ghi, do la mot loi — khong phai mot tinh nang thieu.
+   */
+  settlement: {
+    /** `asOf` BAT BUOC: mot mac dinh im lang lam hai nguoi mo cung man qua nua dem doc hai bang. */
+    arAging: (asOf: BusinessDate, customerId?: string | null): Promise<ArAgingReport> => {
+      const params = new URLSearchParams({ asOf });
+      if (customerId) params.set('customerId', customerId);
+      return get(`/transport/settlement/ar-aging?${params.toString()}`);
+    },
+    /** `flow` BAT BUOC — `GD-15` o tang HTTP: khong co ban "tat ca cac dong". */
+    apByFlow: (flow: SettlementFlow): Promise<readonly ApByCounterpartyRow[]> =>
+      get(`/transport/settlement/ap?flow=${encodeURIComponent(flow)}`),
+    partnerPosition: (partnerId: string): Promise<PartnerPosition> =>
+      get(`/transport/settlement/partners/${encodeURIComponent(partnerId)}/position`),
+    /** 404 khi chuyen khong co du lieu bien — man hinh phai chiu duoc, khong coi la su co. */
+    tripDirectMargin: (tripId: string): Promise<DirectMargin> =>
+      get(`/transport/settlement/trips/${encodeURIComponent(tripId)}/direct-margin`),
+    /** Tran 200 chuyen/lan o may chu. Man hinh chia lo truoc khi goi. */
+    directMarginRollup: (tripIds: readonly string[]): Promise<DirectMarginRollup> =>
+      get(
+        `/transport/settlement/direct-margin/rollup?tripIds=${encodeURIComponent(tripIds.join(','))}`,
+      ),
+    documentChain: (originalId: string): Promise<SettlementDocumentChain> =>
+      get(`/transport/settlement/documents/${encodeURIComponent(originalId)}/chain`),
+  },
+
+  /** `TX-06` — bao duong, giay to, trang thai hieu luc, bang canh bao. */
+  assets: {
+    plans: (): Promise<readonly MaintenancePlan[]> => get('/transport/maintenance/plans'),
+    createPlan: (input: CreateMaintenancePlanInput): Promise<MaintenancePlan> =>
+      send('POST', '/transport/maintenance/plans', input),
+    updatePlan: (id: string, input: UpdateMaintenancePlanInput): Promise<MaintenancePlan> =>
+      send('PATCH', `/transport/maintenance/plans/${encodeURIComponent(id)}`, input),
+    /** MAY CHU tinh den han. Man hinh khong duoc tinh lai — xem `#170 §4.B`. */
+    due: (): Promise<readonly MaintenanceDue[]> => get('/transport/maintenance/due'),
+    workOrders: (): Promise<readonly MaintenanceWorkOrder[]> =>
+      get('/transport/maintenance/work-orders'),
+    openWorkOrder: (input: OpenWorkOrderInput): Promise<MaintenanceWorkOrder> =>
+      send('POST', '/transport/maintenance/work-orders', input),
+    completeWorkOrder: (id: string, input: CompleteWorkOrderInput): Promise<MaintenanceWorkOrder> =>
+      send('POST', `/transport/maintenance/work-orders/${encodeURIComponent(id)}/complete`, input),
+    cancelWorkOrder: (id: string, reason: string): Promise<MaintenanceWorkOrder> =>
+      send('POST', `/transport/maintenance/work-orders/${encodeURIComponent(id)}/cancel`, {
+        reason,
+      }),
+
+    complianceDocuments: (): Promise<readonly ComplianceDocument[]> =>
+      get('/transport/compliance/documents'),
+    registerComplianceDocument: (
+      input: RegisterComplianceDocumentInput,
+    ): Promise<ComplianceDocument> => send('POST', '/transport/compliance/documents', input),
+    setComplianceDocumentStatus: (
+      id: string,
+      status: ComplianceDocumentStatus,
+    ): Promise<ComplianceDocument> =>
+      send('PATCH', `/transport/compliance/documents/${encodeURIComponent(id)}/status`, { status }),
+    complianceAlerts: (): Promise<readonly ComplianceAlert[]> =>
+      get('/transport/compliance/alerts'),
+
+    fleetStatus: (): Promise<readonly EffectiveVehicleState[]> => get('/transport/fleet-status'),
+    /** BANG CANH BAO GOM CHUNG — `unavailableSources` phai duoc hien, khong duoc bo. */
+    operationalAlerts: (): Promise<OperationalAlertFeed> => get('/transport/alerts'),
+  },
+
+  /** `TX-07` — ky luong va phieu luong. Man hinh KHONG BAO GIO tu tinh mot khoan luong nao. */
+  payroll: {
+    periods: (): Promise<readonly PayrollPeriod[]> => get('/transport/payroll/periods'),
+    openPeriod: (input: OpenPayrollPeriodInput): Promise<PayrollPeriod> =>
+      send('POST', '/transport/payroll/periods', input),
+    closePeriod: (id: string): Promise<PayrollPeriod> =>
+      send('POST', `/transport/payroll/periods/${encodeURIComponent(id)}/close`),
+    runs: (periodId: string): Promise<readonly PayrollRun[]> =>
+      get(`/transport/payroll/periods/${encodeURIComponent(periodId)}/runs`),
+    run: (input: RunPayrollInput): Promise<PayrollRun> =>
+      send('POST', '/transport/payroll/runs', input),
+    payslipsOfRun: (runId: string): Promise<readonly Payslip[]> =>
+      get(`/transport/payroll/runs/${encodeURIComponent(runId)}/payslips`),
+    payslip: (id: string): Promise<PayslipDetail> =>
+      get(`/transport/payroll/payslips/${encodeURIComponent(id)}`),
+    approvePayslip: (id: string): Promise<Payslip> =>
+      send('POST', `/transport/payroll/payslips/${encodeURIComponent(id)}/approve`),
+    payPayslip: (id: string): Promise<Payslip> =>
+      send('POST', `/transport/payroll/payslips/${encodeURIComponent(id)}/pay`),
+    /** SUA mot phieu DA CHOT = phat mot phieu bu/dao, KHONG sua so cu (`INV-20`). */
+    correctPayslip: (id: string, input: CorrectPayslipInput): Promise<Payslip> =>
+      send('POST', `/transport/payroll/payslips/${encodeURIComponent(id)}/corrections`, input),
   },
 } as const;

@@ -4,7 +4,7 @@ import { AuditLogService } from '../../audit/audit-log.service.js';
 import type { TransportCorePolicy } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
 import type { TripKind, TripStatus } from '../trips/trip-lifecycle.js';
-import { toDriverFuelSlipView } from './driver-fuel.view.js';
+import { toDriverFuelSlipView, toDriverFuelSupplierView } from './driver-fuel.view.js';
 import { DEFAULT_FUEL_STATEMENT_COLUMNS, type TransportFuelPolicy } from './fuel-policy.js';
 import { FuelReadService } from './fuel-read.service.js';
 import {
@@ -393,6 +393,34 @@ describe('Be mat lai xe — INV-09 va pham vi cua chinh minh', () => {
       expect(Object.keys(view)).not.toContain(forbidden);
     }
     expect(JSON.stringify(view)).not.toContain('freight');
+  });
+
+  /**
+   * O CHON CAY XANG CUA LAI XE TUNG LUON RONG — va vi no bat buoc, lai xe khong nop duoc phieu nao.
+   *
+   * Nguyen nhan la mot khoang trong QUYEN, khong phai mot loi giao dien: duong doc danh sach cay
+   * xang duy nhat (`GET /transport/fuel/suppliers`) doi `transport.fuel.entry.read` — quyen VAN
+   * HANH — trong khi `POST /transport/me/fuel/slips` van DOI `supplierId`. Lai xe khong co duong
+   * hop le nao de biet mot `supplierId`.
+   *
+   * Cach sua sai la cap quyen van hanh cho lai xe. Cach dung la mot khung nhin HEP tren duong cua
+   * chinh ho. Bai nay khoa do hep do lai: them mot truong ke toan vao day sau nay se lam no DO.
+   */
+  it('khung nhin cay xang cua lai xe chi co ma va TEN', () => {
+    const view = toDriverFuelSupplierView({
+      id: 'sup-1',
+      name: 'Petrolimex Cau Giay',
+      code: 'PLX-01',
+      phone: '0900000000',
+      address: 'So 1 Cau Giay',
+      taxCode: '0101234567',
+      status: 'ACTIVE',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
+
+    expect(Object.keys(view).sort()).toEqual(['id', 'name']);
+    expect(JSON.stringify(view)).not.toContain('0101234567');
   });
 
   it('lai xe chi doc duoc phieu cua chinh minh', async () => {

@@ -6,7 +6,11 @@ import {
   selectCommissionRule,
   type CommissionRuleCandidate,
 } from './commission-rules.js';
-import { computeDirectMargin, rollupDirectMargin, type DirectMarginInput } from './direct-margin.js';
+import {
+  computeDirectMargin,
+  rollupDirectMargin,
+  type DirectMarginInput,
+} from './direct-margin.js';
 import {
   adjustmentDelta,
   canAdjust,
@@ -372,7 +376,9 @@ describe('TX-05 §4 — chung tu chi them, khong ghi de', () => {
 
   it('ban dao doi dau toan bo, tong chuoi ve 0', () => {
     expect(reversalAmount(10_000_000)).toBe(-10_000_000);
-    expect(outstandingOf([{ signedAmount: 10_000_000 }, { signedAmount: -10_000_000 }], [])).toBe(0);
+    expect(outstandingOf([{ signedAmount: 10_000_000 }, { signedAmount: -10_000_000 }], [])).toBe(
+      0,
+    );
   });
 
   it('da bi dao thi khong sua duoc nua', () => {

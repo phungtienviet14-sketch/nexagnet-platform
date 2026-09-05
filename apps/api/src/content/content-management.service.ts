@@ -29,12 +29,16 @@ const faqSchema = z.object({
   question: z.string().trim().min(1).max(2_000),
   answer: z.string().trim().min(1).max(20_000),
   status: contentLifecycleStatusSchema.default('draft'),
+  /** Xem `FaqView.narrativeEligible` - HANH VI XUAT BAN, khong phai mot phep doan. */
+  narrativeEligible: z.boolean().optional(),
 });
 const adviceSchema = z.object({
   productSku: z.string().trim().min(1).max(100).optional(),
   title: z.string().trim().min(1).max(500),
   body: z.string().trim().min(1).max(20_000),
   status: contentLifecycleStatusSchema.default('draft'),
+  /** Xem `AdviceContentView.narrativeEligible`. */
+  narrativeEligible: z.boolean().optional(),
 });
 const linkSchema = z.object({
   productSku: z.string().trim().min(1).max(100).optional(),

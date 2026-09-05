@@ -66,7 +66,8 @@ describe('phieu dau — HAI truc doc lap, khong gop', () => {
       suppliers,
       'ADMIN',
     )[0]!;
-    expect(row.deadEndNote).toContain('chưa mở đường nộp lại');
+    expect(row.canResubmit).toBe(true);
+    expect(row.rejectedNote).not.toContain('Máy chủ');
     expect(row.canVerify).toBe(false);
   });
 

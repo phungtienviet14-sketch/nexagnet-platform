@@ -37,9 +37,7 @@ export const TRANSPORT_EVIDENCE_KEY_PREFIX = `${MEDIA_KEY_PREFIX}transport-evide
 const SAFE_ID = /^[A-Za-z0-9_-]+$/;
 
 export type EvidenceRejection =
-  | 'EVIDENCE_CONTENT_TYPE_NOT_ALLOWED'
-  | 'EVIDENCE_EMPTY'
-  | 'EVIDENCE_TOO_LARGE';
+  'EVIDENCE_CONTENT_TYPE_NOT_ALLOWED' | 'EVIDENCE_EMPTY' | 'EVIDENCE_TOO_LARGE';
 
 export interface EvidenceCandidate {
   readonly contentType: string;

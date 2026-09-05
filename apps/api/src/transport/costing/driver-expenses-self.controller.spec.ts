@@ -68,8 +68,18 @@ function harness(expenseCategories: readonly string[] = []) {
   core.drivers.set('drv-b', { id: 'drv-b', fullName: 'Lai Xe B' });
   core.bindings.set(DRIVER_A_USER, 'drv-a');
   core.bindings.set(DRIVER_B_USER, 'drv-b');
-  core.trips.set('trip-a', { id: 'trip-a', code: 'CH-A', kind: 'OWN_DIRECT', status: 'IN_TRANSIT' });
-  core.trips.set('trip-b', { id: 'trip-b', code: 'CH-B', kind: 'OWN_DIRECT', status: 'IN_TRANSIT' });
+  core.trips.set('trip-a', {
+    id: 'trip-a',
+    code: 'CH-A',
+    kind: 'OWN_DIRECT',
+    status: 'IN_TRANSIT',
+  });
+  core.trips.set('trip-b', {
+    id: 'trip-b',
+    code: 'CH-B',
+    kind: 'OWN_DIRECT',
+    status: 'IN_TRANSIT',
+  });
   core.assign('trip-a', 'drv-a');
   core.assign('trip-b', 'drv-b');
 

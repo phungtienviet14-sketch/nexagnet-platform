@@ -62,5 +62,4 @@ export const TRANSPORT_COSTING_CONFLICT_REASONS = [
 export type TransportCostingConflictReason = (typeof TRANSPORT_COSTING_CONFLICT_REASONS)[number];
 
 export type TransportCostingErrorReason =
-  | TransportCostingValidationReason
-  | TransportCostingConflictReason;
+  TransportCostingValidationReason | TransportCostingConflictReason;

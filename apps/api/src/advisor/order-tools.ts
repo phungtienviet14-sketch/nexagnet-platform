@@ -2,6 +2,12 @@ import type { OrderView, OutboundAuthorityGrant, ParsedOrderItem } from '@netvie
 import { grantsFromPersistedOrder } from '../outbound/outbound-authority.js';
 import { orderStateFacts, type BusinessFactsPatch } from '../outbound/outbound-facts.js';
 import { formatVnd } from '../rules/text.js';
+import { tenantSlug } from '@netviet/tenant';
+import {
+  businessAuthorityEvidence,
+  type EvidenceScope,
+  type SourceEvidence,
+} from '../outbound/source-evidence.js';
 
 /**
  * CONG CU GHI cua agent — cua duy nhat de LLM DOI trang thai he thong.
@@ -60,7 +66,43 @@ export interface OrderToolOutcome {
   /** Du kien co kieu cho bo soan (Issue #189) — xem `AdvisorToolOutcome.facts`. */
   readonly facts?: BusinessFactsPatch;
   /** Chuoi he thong so huu de neo nguon loi nhan — xem `AdvisorToolOutcome.sources`. */
-  readonly sources?: readonly string[];
+  readonly sources?: readonly SourceEvidence[];
+}
+
+/** Pham vi cua bang chung sinh o day — xem `scopeOf` trong `advisor-tools.ts`. */
+function scopeOf(productSku: string | null): EvidenceScope {
+  return { tenant: tenantSlug(), productSku };
+}
+
+/**
+ * BANG CHUNG cua mot don DA BEN VUNG — luon thuoc THAM QUYEN, khong bao gio ke duoc.
+ *
+ * Ten san pham va tong tien cua mot don la khang dinh co he qua: chung phai di qua khoi trang
+ * thai don / khoi tien, noi bo soan viet cau chu quanh chung.
+ */
+function orderEvidence(prefix: string, order: OrderView): SourceEvidence[] {
+  return [
+    ...(order.priced?.lines ?? []).flatMap((line, i) =>
+      line.productName
+        ? [
+            businessAuthorityEvidence(
+              `${prefix}:${order.id}:line:${i}`,
+              line.productName,
+              scopeOf(line.sku ?? null),
+            ),
+          ]
+        : [],
+    ),
+    ...(order.priced
+      ? [
+          businessAuthorityEvidence(
+            `${prefix}:${order.id}:total`,
+            formatVnd(order.priced.grandTotal),
+            scopeOf(null),
+          ),
+        ]
+      : []),
+  ];
 }
 
 /** Cong cu chi tra du kien, khong sinh tham quyen nao. */
@@ -162,12 +204,7 @@ async function listOrders(deps: OrderToolDeps): Promise<OrderToolOutcome> {
     output: { don: orders.map(summarize) },
     grants: orders.flatMap((order) => grantsFromPersistedOrder(order)),
     facts: orderStateFacts(orders),
-    sources: orders.flatMap((order) => [
-      ...(order.priced?.lines ?? []).flatMap((line) =>
-        line.productName ? [line.productName] : [],
-      ),
-      ...(order.priced ? [formatVnd(order.priced.grandTotal)] : []),
-    ]),
+    sources: orders.flatMap((order) => orderEvidence('order', order)),
   };
 }
 
@@ -250,12 +287,7 @@ async function amendOrder(
       // nhac lai con so cua no. Truoc khi `replaceItems` thanh cong thi khong co gi ca.
       grants: grantsFromPersistedOrder(replacement),
       facts: orderStateFacts([replacement]),
-      sources: [
-        ...(replacement.priced?.lines ?? []).flatMap((line) =>
-          line.productName ? [line.productName] : [],
-        ),
-        ...(replacement.priced ? [formatVnd(replacement.priced.grandTotal)] : []),
-      ],
+      sources: orderEvidence('order', replacement),
       output: {
         da_sua: true,
         ma_don_cu: found.order.id,

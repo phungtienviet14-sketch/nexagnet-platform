@@ -165,6 +165,14 @@ export interface DriverTripView {
   readonly cargoDescription: string | null;
   readonly distanceKm: number | null;
   readonly customerName: string | null;
+  /**
+   * MA XE cua chinh phan cong nay (`#168 B2`).
+   *
+   * `POST /transport/me/fuel/slips` doi `vehicleId`, va truoc B2 be mat lai xe chi doc duoc
+   * BIEN SO — nen lai xe khong nop noi phieu dau dau tien tu dien thoai. Day la duong duy nhat
+   * ho hoc duoc ma xe, va no chi ra ma xe cua CHINH phan cong cua ho.
+   */
+  readonly vehicleId: string | null;
   readonly vehicleRegistrationPlate: string | null;
   readonly assignedAt: string | null;
   readonly isCurrentAssignee: boolean;
@@ -429,6 +437,17 @@ export interface FuelEntryDetail {
  * Khung nhin cua LAI XE cho phieu dau — kieu RIENG, khong phai `FuelEntry` da loc.
  * Bang chung chi lo ra mot con SO DEM: lai xe khong liet ke lai duoc anh vua gui.
  */
+/**
+ * CAY XANG tren BE MAT LAI XE — kieu RIENG, hep hon `FuelSupplier`.
+ *
+ * `taxCode` va cac truong ke toan khac co y vang mat: lai xe chon cay xang bang TEN tren bien
+ * hieu. Mot truong khong duoc gui di la mot truong khong the ro ri.
+ */
+export interface DriverFuelSupplier {
+  readonly id: string;
+  readonly name: string;
+}
+
 export interface DriverFuelSlipView {
   readonly id: string;
   readonly tripId: string;
@@ -450,7 +469,19 @@ export interface DriverFuelSlipView {
   readonly note: string | null;
   readonly reviewNote: string | null;
   readonly evidenceCount: number;
+  /**
+   * ANH cua chinh phieu nay — chi `id` va loai noi dung.
+   *
+   * `locator` va `uploadedBy` CO Y khong co: cai dau la khoa trong kho anh, cai sau la danh
+   * tinh nguoi van hanh. Man hinh dung `id` de dung dia chi doc byte qua route co xac thuc.
+   */
+  readonly evidence: readonly DriverFuelEvidenceView[];
   readonly createdAt: string;
+}
+
+export interface DriverFuelEvidenceView {
+  readonly id: string;
+  readonly contentType: string | null;
 }
 
 export interface FuelSupplierStatement {
@@ -589,4 +620,485 @@ export interface ImportedStatement {
 export interface ClosedReconciliationResult {
   readonly reconciliation: FuelReconciliation;
   readonly handoff: FuelSettlementHandoff;
+}
+
+/* ------------------------------------------------------------------ *
+ * `TX-05` — quyet toan (T7D: da co duong HTTP, xem `SettlementReportsController`)
+ * ------------------------------------------------------------------ */
+
+export const AGING_BUCKETS = ['CURRENT', 'D1_30', 'D31_60', 'D60_PLUS'] as const;
+export type AgingBucket = (typeof AGING_BUCKETS)[number];
+
+/**
+ * NAM DONG TIEN GIU RIENG (`GD-15`) — khong co ban "tat ca cac dong".
+ *
+ * Duong HTTP bat buoc tham so `flow`, va do la co y: gop bon dong phai tra vao mot bang se lam ke
+ * toan doc ra mot con so khong tra loi duoc cau hoi nao — "cong ty no ai bao nhieu" chi co nghia
+ * khi biet no AI.
+ */
+export const SETTLEMENT_FLOWS = [
+  'CUSTOMER_FREIGHT',
+  'FUEL_SUPPLIER',
+  'CARRIER_SERVICE',
+  'PARTNER_COMMISSION',
+] as const;
+export type SettlementFlow = (typeof SETTLEMENT_FLOWS)[number];
+
+export const SETTLEMENT_DIRECTIONS = ['RECEIVABLE', 'PAYABLE'] as const;
+export type SettlementDirection = (typeof SETTLEMENT_DIRECTIONS)[number];
+
+export const SETTLEMENT_DOCUMENT_KINDS = ['ORIGINAL', 'ADJUSTMENT', 'REVERSAL'] as const;
+export type SettlementDocumentKind = (typeof SETTLEMENT_DOCUMENT_KINDS)[number];
+
+export const SETTLEMENT_DOCUMENT_STATUSES = ['OPEN', 'SETTLED', 'VOID'] as const;
+export type SettlementDocumentStatus = (typeof SETTLEMENT_DOCUMENT_STATUSES)[number];
+
+export interface ArAgingRow {
+  readonly documentId: string;
+  readonly counterpartyId: string;
+  readonly businessDate: BusinessDate;
+  readonly dueDate: BusinessDate | null;
+  readonly outstandingAmount: number;
+  readonly daysOverdue: number;
+  readonly bucket: AgingBucket;
+  readonly currencyCode: string;
+}
+
+export interface ArAgingReport {
+  /** Moc do BAT BUOC — khong co mac dinh "hom nay". Xem chu thich cua route. */
+  readonly asOf: BusinessDate;
+  readonly rows: readonly ArAgingRow[];
+  readonly totalsByBucket: Readonly<Record<AgingBucket, number>>;
+  readonly outstandingTotal: number;
+  readonly overdueTotal: number;
+}
+
+export interface ApByCounterpartyRow {
+  readonly counterpartyId: string;
+  readonly flow: SettlementFlow;
+  readonly documentCount: number;
+  /** DUONG — so tien cong ty con no. Da doi dau san o may chu de bao cao doc thuan. */
+  readonly outstandingAmount: number;
+  readonly currencyCode: string;
+}
+
+/**
+ * HAI CHIEU cua MOT doi tac, canh nhau. `netDisplay` CHI de hien thi (`GD-15`) — no khong ton tai
+ * trong bang nao va khong ai tra tien theo no. Ba con so goc luon phai hien cung no.
+ */
+export interface PartnerPosition {
+  readonly partnerId: string;
+  readonly receivableAmount: number;
+  readonly carrierPayableAmount: number;
+  readonly commissionPayableAmount: number;
+  readonly netDisplay: number;
+  readonly currencyCode: string;
+}
+
+export interface DirectMargin {
+  readonly tripId: string;
+  readonly tripKind: TripKind;
+  /** `null` = CHUA NHAP gia cuoc — khac han `0`. */
+  readonly revenueAmount: number | null;
+  readonly directCostAmount: number;
+  readonly carrierPayableAmount: number;
+  readonly commissionAmount: number;
+  readonly deductionAmount: number;
+  readonly marginAmount: number | null;
+  /** DIEM CO BAN (1% = 100). `null` khi khong tinh duoc hoac doanh thu = 0. */
+  readonly marginBasisPoints: number | null;
+  readonly currencyCode: string;
+  /** `GD-13` — LUON `false`. Mot hang so co ten de man hinh khong phai tu doan. */
+  readonly fixedCostsIncluded: false;
+  /** Cau phai hien CANH con so. Khong duoc bo, khong duoc dien dat lai. */
+  readonly disclosure: string;
+  /** MAU THUAN DU LIEU (`INV-04`), khong phai mot con so: chuyen thue ngoai co chi phi noi bo. */
+  readonly unexpectedInternalCost: boolean;
+}
+
+export interface DirectMarginRollup {
+  readonly revenueAmount: number;
+  readonly deductionAmount: number;
+  readonly marginAmount: number;
+  readonly marginBasisPoints: number | null;
+  readonly tripCount: number;
+  /** Chuyen CHUA co gia cuoc bi BO QUA chu khong coi la 0 — con so nay noi ra bao nhieu. */
+  readonly skippedTripCount: number;
+  readonly fixedCostsIncluded: false;
+  readonly disclosure: string;
+}
+
+export interface SettlementDocument {
+  readonly id: string;
+  readonly direction: SettlementDirection;
+  readonly flow: SettlementFlow;
+  readonly counterpartyKind: string;
+  readonly counterpartyId: string;
+  readonly kind: SettlementDocumentKind;
+  readonly status: SettlementDocumentStatus;
+  readonly signedAmount: number;
+  readonly currencyCode: string;
+  readonly businessDate: BusinessDate;
+  readonly dueDate: BusinessDate | null;
+  readonly tripId: string | null;
+  readonly invoiceRef: string | null;
+  readonly note: string | null;
+  readonly createdAt: string;
+}
+
+export interface SettlementAllocation {
+  readonly id: string;
+  readonly documentId: string;
+  readonly amount: number;
+  readonly businessDate: BusinessDate;
+  readonly method: string;
+  readonly note: string | null;
+  readonly createdAt: string;
+}
+
+/** So du cua mot chung tu doc qua CA CHUOI, khong doc tren ban goc. */
+export interface SettlementDocumentChain {
+  readonly original: SettlementDocument;
+  readonly corrections: readonly SettlementDocument[];
+  readonly allocations: readonly SettlementAllocation[];
+  readonly grossAmount: number;
+  readonly outstandingAmount: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * `TX-06` — bao duong, giay to, trang thai hieu luc
+ * ------------------------------------------------------------------ */
+
+export const MAINTENANCE_TRIGGER_KINDS = ['ODOMETER', 'CALENDAR', 'ODOMETER_OR_CALENDAR'] as const;
+export type MaintenanceTriggerKind = (typeof MAINTENANCE_TRIGGER_KINDS)[number];
+
+export const MAINTENANCE_PLAN_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+export type MaintenancePlanStatus = (typeof MAINTENANCE_PLAN_STATUSES)[number];
+
+export const MAINTENANCE_WORK_ORDER_STATUSES = ['OPEN', 'COMPLETED', 'CANCELLED'] as const;
+export type MaintenanceWorkOrderStatus = (typeof MAINTENANCE_WORK_ORDER_STATUSES)[number];
+
+export const MAINTENANCE_DUE_STATES = ['OK', 'DUE_SOON', 'OVERDUE'] as const;
+export type MaintenanceDueState = (typeof MAINTENANCE_DUE_STATES)[number];
+
+export const MAINTENANCE_DUE_TRIGGERS = ['ODOMETER', 'CALENDAR'] as const;
+export type MaintenanceDueTrigger = (typeof MAINTENANCE_DUE_TRIGGERS)[number];
+
+export const COMPLIANCE_DOCUMENT_TYPES = [
+  'VEHICLE_INSPECTION',
+  'VEHICLE_INSURANCE',
+  'VEHICLE_TRANSPORT_BADGE',
+  'DRIVER_LICENCE',
+  'COMPANY_TRANSPORT_LICENSE',
+  'CONDITIONAL_CARGO_PERMIT',
+] as const;
+export type ComplianceDocumentType = (typeof COMPLIANCE_DOCUMENT_TYPES)[number];
+
+export const COMPLIANCE_SUBJECT_KINDS = ['VEHICLE', 'DRIVER', 'COMPANY'] as const;
+export type ComplianceSubjectKind = (typeof COMPLIANCE_SUBJECT_KINDS)[number];
+
+export const COMPLIANCE_DOCUMENT_STATUSES = ['ACTIVE', 'SUPERSEDED', 'REVOKED'] as const;
+export type ComplianceDocumentStatus = (typeof COMPLIANCE_DOCUMENT_STATUSES)[number];
+
+export const COMPLIANCE_HEALTHS = ['HEALTHY', 'DUE_SOON', 'EXPIRED'] as const;
+export type ComplianceHealth = (typeof COMPLIANCE_HEALTHS)[number];
+
+export interface MaintenancePlan {
+  readonly id: string;
+  readonly vehicleId: string;
+  readonly name: string;
+  readonly triggerKind: MaintenanceTriggerKind;
+  readonly intervalKm: number | null;
+  readonly intervalDays: number | null;
+  readonly baselineOdoKm: number;
+  readonly baselineDate: BusinessDate;
+  readonly status: MaintenancePlanStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface MaintenanceWorkOrder {
+  readonly id: string;
+  readonly vehicleId: string;
+  readonly planId: string | null;
+  readonly status: MaintenanceWorkOrderStatus;
+  readonly description: string;
+  readonly openedDate: BusinessDate;
+  readonly openedOdoKm: number;
+  readonly openedAt: string;
+  readonly completedDate: BusinessDate | null;
+  readonly completedOdoKm: number | null;
+  readonly completedAt: string | null;
+  readonly cancelledAt: string | null;
+  readonly cancellationReason: string | null;
+  readonly costAmount: number | null;
+  readonly currencyCode: string;
+  readonly note: string | null;
+  readonly updatedAt: string;
+}
+
+/** MOT KE HOACH DEN HAN — may chu tinh, man hinh KHONG duoc tinh lai (`#170 §4.B`). */
+export interface MaintenanceDue {
+  readonly planId: string;
+  readonly vehicleId: string;
+  readonly planName: string;
+  readonly triggerKind: MaintenanceTriggerKind;
+  readonly state: MaintenanceDueState;
+  readonly dueAtOdoKm: number | null;
+  readonly dueOnDate: BusinessDate | null;
+  readonly odoRemainingKm: number | null;
+  readonly daysRemaining: number | null;
+  readonly reachedBy: MaintenanceDueTrigger | null;
+  readonly currentOdoKm: number;
+  readonly lastServicedDate: BusinessDate;
+  readonly lastServicedOdoKm: number;
+}
+
+export interface ComplianceDocument {
+  readonly id: string;
+  readonly subjectKind: ComplianceSubjectKind;
+  readonly subjectId: string | null;
+  readonly documentType: ComplianceDocumentType;
+  readonly documentNo: string | null;
+  readonly validFrom: BusinessDate;
+  readonly validTo: BusinessDate;
+  readonly status: ComplianceDocumentStatus;
+  readonly evidenceRef: string | null;
+  readonly note: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface ComplianceAlert {
+  readonly documentId: string;
+  readonly subjectKind: ComplianceSubjectKind;
+  readonly subjectId: string | null;
+  readonly documentType: ComplianceDocumentType;
+  readonly validTo: BusinessDate;
+  readonly health: ComplianceHealth;
+  readonly daysUntilExpiry: number;
+  readonly thresholdDays: number;
+}
+
+export const VEHICLE_STATE_INCONSISTENCIES = [
+  'MAINTENANCE_WHILE_IN_TRANSIT',
+  'RECORDED_STATUS_STALE',
+] as const;
+export type VehicleStateInconsistency = (typeof VEHICLE_STATE_INCONSISTENCIES)[number];
+
+export const EFFECTIVE_VEHICLE_STATE_REASONS = [
+  'MAINTENANCE_LOCK',
+  'ACTIVE_IN_TRANSIT_TRIP',
+  'NO_ACTIVE_WORK',
+] as const;
+export type EffectiveVehicleStateReason = (typeof EFFECTIVE_VEHICLE_STATE_REASONS)[number];
+
+/**
+ * TRANG THAI HIEU LUC cua mot xe — may chu la nguon, man hinh KHONG suy lai.
+ *
+ * `recordedStatus` di kem co chu dich: khi hai gia tri lech nhau thi do la mot MAU THUAN VAN HANH
+ * doc duoc (`inconsistencies`), khong phai mot con so de chon cai nao dep hon.
+ */
+export interface EffectiveVehicleState {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly effectiveStatus: VehicleStatus;
+  readonly reason: EffectiveVehicleStateReason;
+  readonly recordedStatus: VehicleStatus;
+  readonly openWorkOrderIds: readonly string[];
+  readonly inTransitTripIds: readonly string[];
+  readonly inconsistencies: readonly VehicleStateInconsistency[];
+}
+
+export const OPERATIONAL_ALERT_KINDS = [
+  'COMPLIANCE_DOCUMENT_EXPIRED',
+  'COMPLIANCE_DOCUMENT_EXPIRING',
+  'COMPLIANCE_DOCUMENT_MISSING',
+  'MAINTENANCE_OVERDUE',
+  'MAINTENANCE_DUE_SOON',
+  'FUEL_CONSUMPTION_ABNORMAL',
+  'DRIVER_FUND_BALANCE_UNUSUAL',
+  'VEHICLE_STATE_INCONSISTENT',
+] as const;
+export type OperationalAlertKind = (typeof OPERATIONAL_ALERT_KINDS)[number];
+
+export const OPERATIONAL_ALERT_SEVERITIES = ['INFO', 'WARNING', 'CRITICAL'] as const;
+export type OperationalAlertSeverity = (typeof OPERATIONAL_ALERT_SEVERITIES)[number];
+
+export const OPERATIONAL_ALERT_SOURCES = ['FUEL_CONSUMPTION', 'DRIVER_FUND'] as const;
+export type OperationalAlertSource = (typeof OPERATIONAL_ALERT_SOURCES)[number];
+
+export interface OperationalAlert {
+  readonly kind: OperationalAlertKind;
+  readonly severity: OperationalAlertSeverity;
+  readonly subjectKind: ComplianceSubjectKind;
+  readonly subjectId: string | null;
+  readonly detail: Readonly<Record<string, number | string | null>>;
+}
+
+/**
+ * `unavailableSources` KHONG phai mot loi — no la cau tra loi that khi khach khong bat nghiep vu
+ * nguon. Man hinh phai noi ra thay vi hien mot bang canh bao rong nhu the moi thu deu on.
+ */
+export interface OperationalAlertFeed {
+  readonly generatedFor: BusinessDate;
+  readonly alerts: readonly OperationalAlert[];
+  readonly unavailableSources: readonly OperationalAlertSource[];
+}
+
+/* ------------------------------------------------------------------ *
+ * `TX-07` — ky luong, phieu luong
+ * ------------------------------------------------------------------ */
+
+export const PAYROLL_PERIOD_STATUSES = ['OPEN', 'CLOSED'] as const;
+export type PayrollPeriodStatus = (typeof PAYROLL_PERIOD_STATUSES)[number];
+
+export const PAYSLIP_STATUSES = ['DRAFT', 'APPROVED', 'PAID', 'REVERSED'] as const;
+export type PayslipStatus = (typeof PAYSLIP_STATUSES)[number];
+
+export const PAYSLIP_KINDS = ['ORIGINAL', 'SUPPLEMENTAL', 'REVERSAL'] as const;
+export type PayslipKind = (typeof PAYSLIP_KINDS)[number];
+
+export const PAYSLIP_COMPONENT_KINDS = ['EARNING', 'DEDUCTION'] as const;
+export type PayslipComponentKind = (typeof PAYSLIP_COMPONENT_KINDS)[number];
+
+export const PAYSLIP_COMPONENT_SOURCES = [
+  'BASE_SALARY',
+  'PER_TRIP',
+  'PER_KM',
+  'FUEL_SAVING_BONUS',
+  'MANUAL_BONUS',
+  'MANUAL_DEDUCTION',
+] as const;
+export type PayslipComponentSource = (typeof PAYSLIP_COMPONENT_SOURCES)[number];
+
+export const PAYROLL_MISSING_INPUTS = [
+  'FUEL_SAVING_UNAVAILABLE',
+  'DRIVER_FUND_UNAVAILABLE',
+] as const;
+export type PayrollMissingInput = (typeof PAYROLL_MISSING_INPUTS)[number];
+
+export interface PayrollPeriod {
+  readonly id: string;
+  readonly label: string;
+  readonly startDate: BusinessDate;
+  readonly endDate: BusinessDate;
+  readonly status: PayrollPeriodStatus;
+  readonly closedAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface PayrollPolicySnapshot {
+  readonly baseSalaryVnd: number;
+  readonly perTripVnd: number;
+  readonly perKmVnd: number;
+  readonly fuelSavingBonusVndPerLiter: number;
+}
+
+/**
+ * `missingInputs` phai HIEN RA. Mot lan chay thieu du lieu tiet kiem dau van cho ra phieu luong —
+ * chi la thieu mot khoan thuong. Giau di se lam ke toan duyet mot bang luong khong day du ma khong
+ * biet minh dang duyet cai gi.
+ */
+export interface PayrollRun {
+  readonly id: string;
+  readonly periodId: string;
+  readonly sequence: number;
+  readonly policySnapshot: PayrollPolicySnapshot;
+  readonly policyVersion: string;
+  readonly missingInputs: readonly PayrollMissingInput[];
+  readonly runAt: string;
+}
+
+export interface PayslipComponent {
+  readonly id: string;
+  readonly payslipId: string;
+  readonly kind: PayslipComponentKind;
+  readonly source: PayslipComponentSource;
+  readonly label: string;
+  readonly amount: number;
+  readonly quantity: number | null;
+  readonly unitAmount: number | null;
+  readonly note: string | null;
+  readonly createdAt: string;
+}
+
+export interface Payslip {
+  readonly id: string;
+  readonly runId: string;
+  readonly driverId: string;
+  readonly kind: PayslipKind;
+  readonly status: PayslipStatus;
+  readonly grossEarnings: number;
+  readonly totalDeductions: number;
+  readonly netAmount: number;
+  readonly currencyCode: string;
+  readonly driverFundBalanceSnapshot: number | null;
+  readonly tripCount: number;
+  readonly distanceKm: number;
+  readonly correctsId: string | null;
+  readonly correctionReason: string | null;
+  readonly approvedAt: string | null;
+  readonly paidAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface PayslipDetail {
+  readonly payslip: Payslip;
+  readonly components: readonly PayslipComponent[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Be mat LAI XE — phieu luong cua chinh minh (`#168 B8`)
+ * ------------------------------------------------------------------ */
+
+export interface DriverPayslipPeriodView {
+  readonly id: string;
+  readonly label: string;
+  readonly startDate: BusinessDate;
+  readonly endDate: BusinessDate;
+}
+
+export interface DriverPayslipComponentView {
+  readonly kind: PayslipComponentKind;
+  readonly source: PayslipComponentSource;
+  readonly label: string;
+  readonly amount: number;
+  readonly quantity: number | null;
+  readonly unitAmount: number | null;
+  readonly note: string | null;
+}
+
+/**
+ * KHUNG NHIN RIENG, khong phai `Payslip` cat bot.
+ *
+ * `status` KHONG BAO GIO la `DRAFT`: may chu tra `null` cho phieu nhap ngay o ham dung khung nhin,
+ * nen mot phieu tam tinh khong the ra toi day. Va bon danh tinh nguoi van hanh (`runBy`,
+ * `approvedBy`, `paidBy`, `recordedBy`) co y VANG MAT — xem `#168 B8 §3`.
+ */
+export interface DriverPayslipView {
+  readonly id: string;
+  readonly period: DriverPayslipPeriodView;
+  readonly kind: PayslipKind;
+  readonly status: Exclude<PayslipStatus, 'DRAFT'>;
+  readonly grossEarnings: number;
+  readonly totalDeductions: number;
+  readonly netAmount: number;
+  readonly currencyCode: string;
+  readonly tripCount: number;
+  readonly distanceKm: number;
+  readonly correctsId: string | null;
+  readonly correctionReason: string | null;
+  readonly components: readonly DriverPayslipComponentView[];
+  readonly approvedAt: string | null;
+  readonly paidAt: string | null;
+  readonly createdAt: string;
+}
+
+/** `#168 B4` — `unrestricted` la mot truong TUONG MINH: `[]` = nhap tu do, khong phai "cam het". */
+export interface ExpenseCatalogue {
+  readonly categories: readonly string[];
+  readonly unrestricted: boolean;
 }

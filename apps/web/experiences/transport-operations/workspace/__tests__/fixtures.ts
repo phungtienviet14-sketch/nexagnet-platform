@@ -306,6 +306,7 @@ export const driverTrip = (over: Partial<DriverTripView> = {}): DriverTripView =
   cargoDescription: 'Hàng gia dụng',
   distanceKm: 78,
   customerName: 'Công ty Đông Anh',
+  vehicleId: 'veh-1',
   vehicleRegistrationPlate: '29H-123.45',
   assignedAt: '2026-09-04T02:00:00.000Z',
   isCurrentAssignee: true,
@@ -333,6 +334,7 @@ export const driverFuelSlip = (over: Partial<DriverFuelSlipView> = {}): DriverFu
   note: null,
   reviewNote: null,
   evidenceCount: 1,
+  evidence: [{ id: 'ev-1', contentType: 'image/png' }],
   createdAt: '2026-09-04T06:35:00.000Z',
   ...over,
 });

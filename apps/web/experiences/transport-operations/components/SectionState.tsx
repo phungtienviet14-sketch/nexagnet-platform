@@ -1,15 +1,15 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { TransportApiGap } from '../api-gaps';
 
 /**
  * NAM trang thai ma moi man hinh van hanh phai co (#161 §7), gom vao mot tep — dung khuon
  * `b2b-sales-operations/components/SectionState.tsx` da co san, thay vi dung mot he thiet ke thu hai.
  *
- * Trang thai thu nam la thu ma mot man hinh binh thuong khong can: `AwaitingApiState`. No ton tai vi
- * mot phan nghiep vu DA CHAY o may chu nhung chua co duong HTTP nao — va cach trung thuc duy nhat
- * la noi ro dieu do, chu khong phai bay mot bang trong nhu the khach chua co du lieu.
+ * TRUOC DAY co mot trang thai thu nam, `AwaitingApiState`: mot phan nghiep vu DA CHAY o may chu
+ * nhung chua co duong HTTP nao, va cach trung thuc duy nhat luc do la noi ro dieu do. T7D (#170) da
+ * noi het cac duong con thieu, nen trang thai do KHONG con ly do ton tai — giu lai mot khoi "chua
+ * dung duoc" khi moi thu da dung duoc la noi doi theo huong nguoc lai.
  */
 
 export function LoadingState({ label }: { readonly label: string }) {
@@ -58,46 +58,6 @@ export function ErrorState({
           Thử lại
         </button>
       )}
-    </div>
-  );
-}
-
-/**
- * Phan nghiep vu chua co duong API. Bay dung ba dieu ma `api-gaps.ts` bat moi muc phai tra loi:
- * can gi · hom nay co gi · da co san o may chu chua.
- */
-export function AwaitingApiState({
-  title,
-  gaps,
-}: {
-  readonly title: string;
-  readonly gaps: readonly TransportApiGap[];
-}) {
-  return (
-    <div className="tx-awaiting" role="region" aria-label={`Chưa dùng được: ${title}`}>
-      <p className="tx-awaiting__lead">
-        Phần này chưa dùng được vì máy chủ chưa mở đường dữ liệu cho nó. Dưới đây là hiện trạng chính
-        xác, không phải số liệu tạm.
-      </p>
-      <ul className="tx-awaiting__list">
-        {gaps.map((gap) => (
-          <li key={gap.id} className="tx-awaiting__item">
-            <h3>{gap.title}</h3>
-            <dl>
-              <dt>Màn hình cần</dt>
-              <dd>{gap.needs}</dd>
-              <dt>Hiện trạng</dt>
-              <dd>{gap.actual}</dd>
-              {gap.serverSide === null ? null : (
-                <>
-                  <dt>Đã có ở máy chủ</dt>
-                  <dd>{gap.serverSide}</dd>
-                </>
-              )}
-            </dl>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

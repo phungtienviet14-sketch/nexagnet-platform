@@ -236,7 +236,10 @@ export class InMemoryCostingRepository extends CostingRepository {
    * quyet o `fund-period.ts`. Viet lai o day nghia la co hai ban cua cung mot luat, va lan troi dau
    * tien se lam kho trong bo nho va kho that tra loi khac nhau cho dung mot cau hoi.
    */
-  async periodsCovering(accountId: string, businessDate: BusinessDate): Promise<DriverFundPeriod[]> {
+  async periodsCovering(
+    accountId: string,
+    businessDate: BusinessDate,
+  ): Promise<DriverFundPeriod[]> {
     return [...this.periods.values()].filter(
       (period) => period.accountId === accountId && periodCovers(period, businessDate),
     );
@@ -312,7 +315,8 @@ export class InMemoryCostingRepository extends CostingRepository {
       at: input.at,
       actor: input.takenBy,
     });
-    if (!closed) throw new Error(`Ky quy ${period.id} doi trang thai giua chung — khong the xay ra`);
+    if (!closed)
+      throw new Error(`Ky quy ${period.id} doi trang thai giua chung — khong the xay ra`);
     return { period: closed, snapshot };
   }
 

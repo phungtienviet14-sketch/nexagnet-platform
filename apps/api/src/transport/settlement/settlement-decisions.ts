@@ -101,7 +101,8 @@ export const SETTLEMENT_PERIOD_TRANSITION_REASONS = [
   'PERIOD_ALREADY_IN_STATE',
   'PERIOD_OVERLAP',
 ] as const;
-export type SettlementPeriodTransitionReason = (typeof SETTLEMENT_PERIOD_TRANSITION_REASONS)[number];
+export type SettlementPeriodTransitionReason =
+  (typeof SETTLEMENT_PERIOD_TRANSITION_REASONS)[number];
 
 export type TransportSettlementDecisionReason =
   | SettlementRecogniseReason

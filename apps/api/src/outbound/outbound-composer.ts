@@ -20,6 +20,7 @@ import {
   sourceUnits,
   type SourceUnit,
 } from './outbound-proposition.js';
+import { evidenceTexts, narrativeEvidence, type SourceEvidence } from './source-evidence.js';
 import { outboundFingerprint, policyGrantTokens } from './outbound-authority.js';
 import type { OrderStateFact, QuoteFact, TurnBusinessFacts } from './outbound-facts.js';
 import {
@@ -27,6 +28,7 @@ import {
   buildGrounding,
   grantGrounding,
   groundingTokens,
+  renderedGrounding,
   type NarrativeGrounding,
 } from './outbound-narrative.js';
 
@@ -77,7 +79,14 @@ export interface ComposeContext {
    * so tien rules engine da dinh dang, nhan chinh sach. KHONG phai ket qua cong cu da serialize:
    * ket qua cong cu echo lai tham so model tu gui, xem `outbound-narrative.ts`.
    */
-  readonly systemSources: readonly string[];
+  readonly evidence: readonly SourceEvidence[];
+  /**
+   * KHACH CUA LUOT — khoa cung cua phep loc bang chung (Issue #205, muc 4 hop dong).
+   *
+   * Mot manh bang chung cua khach khac KHONG BAO GIO thoa man duoc ban soan nay. Phep loc do
+   * `narrativeEvidence()` lam, o mot cho duy nhat — khong rai o tung cho goi cong cu.
+   */
+  readonly tenant: string;
   /** Tin khach vua gui — chi neo nguon cho lop SO. */
   readonly customerText: string;
   readonly authority: OutboundAuthority;
@@ -112,7 +121,17 @@ export function composeOutbound(
    * khoi bao gia render 1.150.000d, roi loi nhan noi "ben em con mau khac cung 1.150.000d" ma
    * chua he co dong gia nao cho mau do. Nen thu tu la: xet loi nhan truoc, gop sau.
    */
-  const strict = buildGrounding(context.systemSources, context.customerText, context.authority);
+  /*
+   * BANG CHUNG KE DUOC CUA LUOT — loc theo LOP va theo KHACH, mot lan, o day (Issue #205).
+   *
+   * Moi thu ben duoi doc tu tap nay: neo nguon, tu vung G5, va menh de G6. Bang chung thuoc
+   * tham quyen (gia, chinh sach, trang thai don) va bang chung CHUA AI TUYEN BO khong nam
+   * trong day, nen khong co duong nao dua chung thanh mot menh de model chon duoc. Chung van
+   * di vao prompt qua `output` cua cong cu, de model hieu luot va biet duong xin chuyen Sale.
+   */
+  const tellable = narrativeEvidence(context.evidence, context.tenant);
+  const tellableTexts = evidenceTexts(tellable);
+  const strict = buildGrounding(tellableTexts, context.customerText, context.authority);
   /*
    * G5 DOI CHIEU TREN NGUON HE THONG, KHONG KE PHAN BO SOAN VUA RENDER — cung ly do voi doan tren.
    *
@@ -120,16 +139,16 @@ export function composeOutbound(
    * noi ve ghe Felix ma chua nguon nao ta ve no. Tap tu ngu duoc phep phai la thu he thong DA CO
    * TRUOC khi soan, khong phai thu bo soan vua tu viet ra.
    */
-  const attested = attestedWords(context.systemSources);
+  const attested = attestedWords(tellableTexts);
   /*
    * G6 DUNG DUNG TAP NGUON DO — khong ke phan bo soan vua render, cung mot ly do voi hai doan tren.
    *
    * Menh de cua mot khoi vua render ("Tổng đơn: 12.850.000đ") KHONG duoc bao lanh cho loi nhan:
    * neu duoc thi loi nhan lai noi duoc ve tien, va G4 ton tai chinh de cam dieu do.
    */
-  const units = sourceUnits(context.systemSources);
+  const units = sourceUnits(tellable);
   const narrative = admitNarrative(plan.narrative, {
-    hasSystemSource: context.systemSources.length > 0,
+    hasSystemSource: tellable.length > 0,
     grounding: strict,
     granted: grantGrounding(context.authority),
     attested,
@@ -173,9 +192,9 @@ export function composeOutbound(
 }
 
 /** Menh de nguon ma mot loi nhan DA RANG BUOC trich — rong la khong the, xem chu thich tren. */
-function boundOf(text: string, units: readonly SourceUnit[]): readonly string[] {
+function boundOf(text: string, units: readonly SourceUnit[]): readonly SourceUnit[] {
   const bound = bindProposition(text, units);
-  return bound.bound ? bound.excerpts : [];
+  return bound.bound ? bound.units : [];
 }
 
 /**
@@ -213,11 +232,7 @@ function modeOf(
 /** Gop phan bo soan tu render vao bang chung neo nguon — xem chu thich o `composeOutbound`. */
 function widen(base: NarrativeGrounding, blocks: readonly ComposedBlock[]): NarrativeGrounding {
   if (!blocks.length) return base;
-  const rendered = buildGrounding(
-    blocks.flatMap((block) => block.lines),
-    '',
-    { grants: [] },
-  );
+  const rendered = renderedGrounding(blocks.flatMap((block) => block.lines));
   return {
     numerals: new Set([...base.numerals, ...rendered.numerals]),
     policy: new Set([...base.policy, ...rendered.policy]),

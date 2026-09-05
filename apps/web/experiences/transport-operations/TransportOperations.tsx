@@ -19,15 +19,11 @@ import {
   type TransportSurface,
 } from './navigation';
 import { hasOperationsScope, operationsEmptyMessage } from './transport-actions';
-import {
-  ArApView,
-  ExportsView,
-  MaintenanceComplianceView,
-  MarginView,
-  PayrollView,
-  SettlementView,
-} from './views/AwaitingApiViews';
 import { DriverFundView } from './views/DriverFundView';
+import { ExportsView } from './views/ExportsView';
+import { MaintenanceComplianceView } from './views/MaintenanceView';
+import { PayrollView } from './views/PayrollView';
+import { ArApView, MarginView, SettlementView } from './views/SettlementViews';
 import { FleetView } from './views/FleetView';
 import { FuelView } from './views/FuelView';
 import { OverviewView } from './views/OverviewView';
@@ -53,7 +49,9 @@ const INITIAL: ResolvedNavigation = {
 };
 
 const readNavigation = (input: NavigationInput): ResolvedNavigation =>
-  typeof window === 'undefined' ? INITIAL : parseNavigationFromSearch(window.location.search, input);
+  typeof window === 'undefined'
+    ? INITIAL
+    : parseNavigationFromSearch(window.location.search, input);
 
 export function TransportOperations() {
   const navigation = useNavigationInput();
@@ -206,8 +204,7 @@ function SectionBody({
     case 'exports':
       return <ExportsView />;
     // Hai muc duoi hien theo dung nang luc khach bat (`transport-asset-compliance` /
-    // `transport-workforce` — co that trong `CapabilityId` tu khi T6 vao `main`). Man hinh cua
-    // chung chua noi vao read model cua may chu; do la viec cua T7D (#170).
+    // `transport-workforce`) va nay doc thang read model cua may chu — T7D (#170) da noi chung vao.
     case 'maintenance':
       return <MaintenanceComplianceView />;
     case 'payroll':

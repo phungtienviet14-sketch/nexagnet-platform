@@ -94,5 +94,4 @@ export const TRANSPORT_SETTLEMENT_DENIED_REASONS = [
 export type TransportSettlementDeniedReason = (typeof TRANSPORT_SETTLEMENT_DENIED_REASONS)[number];
 
 export type TransportSettlementErrorReason =
-  | TransportSettlementValidationReason
-  | TransportSettlementDeniedReason;
+  TransportSettlementValidationReason | TransportSettlementDeniedReason;
