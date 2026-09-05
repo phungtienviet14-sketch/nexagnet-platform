@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Nexagnet Conversation Bridge (V0, input-only)",
+  "version": "0.1.0",
+  "description": "Danh thuc DUNG MOT cuoc hoi thoai ChatGPT Web da duoc arm bang mot tin nhan co dinh. Chi ghi, khong doc cau tra loi.",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_page": "options.html",
+  "permissions": ["nativeMessaging", "storage", "scripting"],
+  "optional_host_permissions": ["https://chatgpt.com/*"]
+}

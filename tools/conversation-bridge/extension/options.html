@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Nexagnet Conversation Bridge</title>
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 24px; max-width: 46rem; }
+  h1 { font-size: 1.15rem; }
+  dl { display: grid; grid-template-columns: 12rem 1fr; gap: 4px 12px; }
+  dt { color: #555; }
+  code { background: #f2f2f2; padding: 1px 4px; border-radius: 3px; }
+  input { width: 100%; padding: 6px; font: inherit; }
+  button { padding: 6px 12px; font: inherit; margin-right: 8px; }
+  .warn { color: #8a3b00; }
+  p.note { color: #555; }
+</style>
+<h1>Conversation Bridge V0 — chi vao, khong doc</h1>
+<p class="note">
+  Tien ich nay dat mot tin nhan co dinh vao khung soan cua <strong>dung mot</strong> cuoc hoi thoai
+  ChatGPT ma ban arm ben duoi, roi gui. No <strong>khong doc cau tra loi</strong>, khong doc lich su
+  hoi thoai, khong dung cookie/phien dang nhap.
+</p>
+<dl>
+  <dt>Trang thai</dt><dd><code id="state">?</code></dd>
+  <dt>Cuoc hoi thoai da arm</dt><dd><code id="target">?</code></dd>
+  <dt>So khoa giao cuc bo</dt><dd><code id="delivered">?</code></dd>
+</dl>
+<p>
+  <label for="url">URL cuoc hoi thoai (dang <code>https://chatgpt.com/c/&lt;id&gt;</code>)</label>
+  <input id="url" type="url" placeholder="https://chatgpt.com/c/..." />
+</p>
+<p>
+  <button id="arm">Arm dung cuoc hoi thoai nay</button>
+  <button id="disarm">Disarm</button>
+</p>
+<p class="warn">
+  <button id="reset">Xoa so khoa giao cuc bo</button>
+  Chi dung khi mot lan tiem that bai da lam "chay" mot khoa. Sau khi xoa, mot carrier cu co the
+  duoc giao lai mot lan nua.
+</p>
+<p id="message" class="note"></p>
+<script type="module" src="options.js"></script>

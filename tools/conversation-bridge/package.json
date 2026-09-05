@@ -1,0 +1,20 @@
+{
+  "name": "@netviet/conversation-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Conversation Bridge V0 — cau noi CHI-VAO (input-only) tu REVIEW_REQUEST tren GitHub toi DUNG MOT cuoc hoi thoai ChatGPT Web da duoc arm",
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "install:dry-run": "node install/install.mjs --dry-run",
+    "uninstall:dry-run": "node install/install.mjs --uninstall --dry-run"
+  },
+  "dependencies": {
+    "@netviet/autopilot-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "repo": "phungtienviet14-sketch/nexagnet-platform",
+  "allowedProducers": [{ "kind": "APP", "id": "nexagent-autopilot", "roles": ["GITHUB_ACTIONS"] }],
+  "pollIntervalSeconds": 120,
+  "enabled": false,
+  "statePath": "./state/delivery-ledger.json",
+  "githubAccess": "gh-cli"
+}

@@ -89,3 +89,11 @@ tmp/
 # Bao cao tin hieu deploy — sinh ra o goc checkout luc chay CD (deploy-ci.sh), khong commit.
 deploy-signals.json
 deploy-signals.log
+
+# Conversation Bridge V0 (tools/conversation-bridge) — cau hinh CUC BO cua tung may va so khoa
+# giao. `config.example.json` la ban mau duy nhat duoc commit; ban that mang ten kho, danh sach
+# principal va duong dan may cua nguoi dung. So khoa giao la trang thai chay, khong phai ma nguon.
+tools/conversation-bridge/config.json
+tools/conversation-bridge/state/
+tools/conversation-bridge/native-host/launch-host.cmd
+tools/conversation-bridge/install/com.nexagnet.conversation_bridge.json
