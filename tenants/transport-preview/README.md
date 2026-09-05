@@ -6,12 +6,12 @@
 
 ## Nó KHÔNG phải cái gì
 
-| Không phải | Vì sao ghi ra đây |
-|---|---|
-| Không phải T8 (`#90`) | T8 là tenant tham chiếu + một tháng dữ liệu thật-như-thật. Gói này tối thiểu và sẽ bị T8 thay thế. |
-| Không phải bản chạy được cho khách | Nghiệp vụ quyết toán, tải ảnh bằng chứng, bảo dưỡng và lương đều **chưa nối**. Từ #195 các mục đó bị **ẩn khỏi điều hướng** thay vì hiện kèm lời giải thích kỹ thuật; `policies.readiness.blockedCapabilities` giữ danh sách bằng câu trung tính. |
-| Không phải UAT | Không có dữ liệu nghiệp vụ nào được kiểm chứng ở đây. |
-| Không phải chỗ giữ chính sách lương | `policies.transportPayroll` **cố tình để trống**: bịa một chính sách lương là bịa nghiệp vụ của khách (#180 §12). |
+| Không phải                          | Vì sao ghi ra đây                                                                                                                                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Không phải T8 (`#90`)               | T8 là tenant tham chiếu + một tháng dữ liệu thật-như-thật. Gói này tối thiểu và sẽ bị T8 thay thế.                                                                                                                                                |
+| Không phải bản chạy được cho khách  | Nghiệp vụ quyết toán, tải ảnh bằng chứng, bảo dưỡng và lương đều **chưa nối**. Từ #195 các mục đó bị **ẩn khỏi điều hướng** thay vì hiện kèm lời giải thích kỹ thuật; `policies.readiness.blockedCapabilities` giữ danh sách bằng câu trung tính. |
+| Không phải UAT                      | Không có dữ liệu nghiệp vụ nào được kiểm chứng ở đây.                                                                                                                                                                                             |
+| Không phải chỗ giữ chính sách lương | `policies.transportPayroll` **cố tình để trống**: bịa một chính sách lương là bịa nghiệp vụ của khách (#180 §12).                                                                                                                                 |
 
 Những điều trên là **sự thật nội bộ**, và nó ở lại đây — không lên màn hình. Trước #195, gói tự
 khai bằng `policies.readiness.previewNotice` và một dải băng **BẢN XEM TRƯỚC** hiện trên mọi màn
