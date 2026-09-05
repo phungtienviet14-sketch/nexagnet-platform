@@ -93,7 +93,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "costing.reversal": {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 472
+      "line": 510
     },
     "dealers.configured": {
       "functionName": "evaluateOperationalReadiness",
@@ -103,7 +103,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver_fund.post_entry": {
       "functionName": "CostingService.postEntryOnly",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 186
+      "line": 183
     },
     "golden.evaluated": {
       "functionName": "evaluateOperationalReadiness",
@@ -308,9 +308,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
-    "transport.driver.self.expense.record": {
-      "filePath": "apps/api/src/transport/costing/driver-expenses-self.controller.ts"
-    },
     "transport.driver.self.fund.read": {
       "functionName": "DriverFundSelfController.statement",
       "filePath": "apps/api/src/transport/costing/driver-fund-self.controller.ts",
@@ -450,7 +447,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "trip_expense.record": {
       "functionName": "CostingService.recordTripExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 278
+      "line": 275
     }
   },
   "decisions": {
@@ -561,22 +558,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "costing.reversal|*": {
       "functionName": "CostingService.denyReversal",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 536
+      "line": 574
     },
     "costing.reversal|REVERSAL_POSTED": {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 510
+      "line": 548
     },
-    "driver.self_expense_scope|SELF_EXPENSE_SCOPE_GRANTED": {
-      "functionName": "CostingService.recordSelfTripExpense",
-      "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 375
+    "driver.self_expense_scope|*": {
+      "functionName": "CostingReadService.selfTripExpenseEvidence",
+      "filePath": "apps/api/src/transport/costing/costing-read.service.ts",
+      "line": 155
     },
-    "driver.self_expense_scope|SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING": {
-      "functionName": "CostingService.recordSelfTripExpense",
-      "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 357
+    "driver.self_expense_scope|SELF_EXPENSE_SCOPE_NO_EVIDENCE": {
+      "functionName": "CostingReadService.selfTripExpenseEvidence",
+      "filePath": "apps/api/src/transport/costing/costing-read.service.ts",
+      "line": 172
     },
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_GRANTED": {
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts"
@@ -635,12 +632,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver_fund.post_entry|FUND_ENTRY_IDEMPOTENT_REPLAY": {
       "functionName": "CostingService.postEntryOnly",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 176
+      "line": 173
     },
     "driver_fund.post_entry|FUND_ENTRY_POSTED": {
       "functionName": "CostingService.postEntryOnly",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 203
+      "line": 200
     },
     "evidence.read|EVIDENCE_LOCATOR_OUT_OF_SCOPE": {
       "functionName": "TransportEvidenceService.read",
@@ -1148,22 +1145,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "trip_expense.record|*": {
       "functionName": "CostingService.guardTripAcceptsExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 617
+      "line": 655
     },
     "trip_expense.record|EXPENSE_DRIVER_NOT_ASSIGNED": {
       "functionName": "CostingService.requireDriverAssignedToTrip",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 703
+      "line": 741
     },
     "trip_expense.record|EXPENSE_IDEMPOTENT_REPLAY": {
       "functionName": "CostingService.recordTripExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 268
+      "line": 265
     },
     "trip_expense.record|EXPENSE_RECORDED": {
       "functionName": "CostingService.recordTripExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 309
+      "line": 306
     }
   }
 };

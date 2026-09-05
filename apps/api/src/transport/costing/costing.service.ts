@@ -15,10 +15,7 @@ import {
   requireTripFacts,
   resolveCostingBusinessDate,
 } from './costing-guards.js';
-import {
-  TRANSPORT_COSTING_POLICY,
-  type TransportCostingPolicy,
-} from './costing-policy.js';
+import { TRANSPORT_COSTING_POLICY, type TransportCostingPolicy } from './costing-policy.js';
 import {
   CostingRepository,
   FundPeriodFrozenError,
@@ -347,6 +344,39 @@ export class CostingService {
    * Cung ly do, ky quy dang dong / chuyen da doi soat / chuyen thue ngoai / danh muc chi phi deu
    * van do duong cu tu choi, kem nguyen ma ly do cu.
    */
+  /**
+   * DANH GIA SOM quyen ghi cua chinh lai xe — KHONG ghi gi, khong tao mot hang nao.
+   *
+   * Ton tai vi DUNG mot ly do, va ly do do thuoc ve duong bang chung (#169): route anh phai LUU
+   * BYTE truoc khi goi `recordSelfTripExpense`, boi `TripExpense.evidenceLocator` duoc dat luc
+   * INSERT — so cai la append-only (`INV-22`), khong co duong sua mot hang da ghi de gan anh sau.
+   * Va `MediaStore` khong co lenh xoa. Nen neu de lenh ghi tu choi SAU khi byte da nam trong
+   * bucket, moi lan tu choi de lai mot object mo coi ma khong ai don.
+   *
+   * KHONG phai mot luat thu hai. No goi DUNG hai phep kiem ma `recordSelfTripExpense` se goi lai
+   * ngay sau do — `findDriverByAuthUserId` va `requireDriverAssignedToTrip` — va lenh ghi VAN kiem
+   * lai day du. Day chi la mot lan danh gia som de khong phai don rac; bo no di thi nghiep vu van
+   * dung, chi ton bucket.
+   */
+  async assertSelfTripExpenseAllowed(authUserId: string, tripId: string): Promise<void> {
+    const driver = await this.core.findDriverByAuthUserId(authUserId);
+    if (!driver) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_COSTING_DECISIONS,
+        point: 'driver.self_expense_scope',
+        outcome: 'denied',
+        reason: 'SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING',
+        detail: { authUserId },
+      });
+      throw TransportDomainError.denied(
+        'SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING',
+        'Tai khoan nay chua duoc noi voi ho so lai xe nao',
+      );
+    }
+    const trip = await requireTripFacts(this.core, tripId);
+    await this.requireDriverAssignedToTrip(trip, driver.id, 'DRIVER_FUND');
+  }
+
   async recordSelfTripExpense(
     authUserId: string,
     input: Omit<RecordTripExpenseCommand, 'driverId' | 'fundedBy'>,
@@ -422,7 +452,11 @@ export class CostingService {
    * `REVERSAL_PERIOD_FROZEN` — CHU KHONG lang le day but toan sang ky hien tai. `INV-22` cam dung
    * viec do: "khong bao gio ghi lang le vao ky da chot". Duong hop le la mo lai ky co quyen rieng.
    */
-  async reverseExpense(expenseId: string, reason: string, actor: string): Promise<CorrelatedPosting> {
+  async reverseExpense(
+    expenseId: string,
+    reason: string,
+    actor: string,
+  ): Promise<CorrelatedPosting> {
     const expense = await this.ledger.findExpense(expenseId);
     if (!expense) {
       throw TransportDomainError.notFound(
@@ -433,7 +467,11 @@ export class CostingService {
     return this.reverseCorrelation(expense.correlationKey, reason, actor);
   }
 
-  async reverseFundEntry(entryId: string, reason: string, actor: string): Promise<CorrelatedPosting> {
+  async reverseFundEntry(
+    entryId: string,
+    reason: string,
+    actor: string,
+  ): Promise<CorrelatedPosting> {
     const entry = await this.ledger.findEntry(entryId);
     if (!entry) {
       throw TransportDomainError.notFound(

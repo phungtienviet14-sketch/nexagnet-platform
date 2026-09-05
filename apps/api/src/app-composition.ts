@@ -102,6 +102,7 @@ import { DriverFundController } from './transport/costing/driver-fund.controller
 import { DriverExpensesSelfController } from './transport/costing/driver-expenses-self.controller.js';
 import { DriverFundSelfController } from './transport/costing/driver-fund-self.controller.js';
 import { TransportCostingModule } from './transport/costing/transport-costing.module.js';
+import { DriverExpenseEvidenceController } from './transport/evidence/driver-expense-evidence.controller.js';
 import { DriverFuelEvidenceController } from './transport/evidence/driver-fuel-evidence.controller.js';
 import {
   transportEvidenceMaxBytesProvider,
@@ -237,6 +238,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // KHOAN CHI CUA CHINH TOI (`#168 B3`/`B4`) — route rieng, cung ly le. Den cung `transport-costing`
   // va bien mat cung no: mot khach khong bat gia thanh thi khong co "khoan chi" de lai xe tu ghi.
   owned('transport-costing', DriverExpensesSelfController),
+  // ANH BANG CHUNG cho KHOAN CHI cua chinh lai xe (`#169` acceptance 4). Thuoc `transport-costing`
+  // chu khong `transport-fuel`: no ghi mot `TripExpense`, va `CostingService` chi ton tai o day.
+  // Kho anh no dung den nam o `transport-core` — xem khoi PROVIDERS.
+  owned('transport-costing', DriverExpenseEvidenceController),
   owned('transport-fuel', FuelEntriesController),
   owned('transport-fuel', FuelReconciliationController),
   // PHIEU DAU CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
@@ -363,9 +368,16 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('turn-processing', mediaStoreProvider),
   // Kho anh CUA MIEN VAN TAI — token rieng, vi `mediaStoreProvider` thuoc `turn-processing` va
   // mot khach van tai khong bat capability do. Xem `transport/evidence/evidence.provider.ts`.
-  owned('transport-fuel', transportEvidenceStoreProvider),
-  owned('transport-fuel', transportEvidenceMaxBytesProvider),
-  owned('transport-fuel', transportEvidenceServiceProvider),
+  //
+  // `transport-core` chu khong `transport-fuel`, va do la mot SUA LOI so huu chu khong phai noi
+  // long: `TransportEvidenceService` nhan byte va tra ve mot dinh vi duc — no khong biet gi ve
+  // phieu dau. Tu #169 no co HAI nguoi tieu thu o hai capability khac nhau (phieu dau o
+  // `transport-fuel`, khoan chi cua lai xe o `transport-costing`). Ghim kho vao mot trong hai se
+  // lam do thi Nest cua khach kia KHONG DUNG NOI — mot khach bat gia thanh ma khong bat nhien lieu
+  // se chet luc boot vi thieu token, chu khong phai mat mot tinh nang.
+  owned('transport-core', transportEvidenceStoreProvider),
+  owned('transport-core', transportEvidenceMaxBytesProvider),
+  owned('transport-core', transportEvidenceServiceProvider),
   owned('knowledge', catalogStoreProvider),
   owned('turn-processing', mediaFetcherProvider),
   owned('turn-processing', parserProvider),

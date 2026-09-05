@@ -173,7 +173,10 @@ describe('#169 — DriverFuelEvidenceController giu quyen so huu TRUOC khi ghi',
             TransportDomainError.denied('SELF_FUEL_SCOPE_NOT_OWNED', 'phieu cua nguoi khac'),
           );
         }
-        return Promise.resolve({ id: evidenceId, locator: `${TRANSPORT_EVIDENCE_KEY_PREFIX}x.png` });
+        return Promise.resolve({
+          id: evidenceId,
+          locator: `${TRANSPORT_EVIDENCE_KEY_PREFIX}x.png`,
+        });
       },
     };
     const evidence = {
@@ -187,7 +190,10 @@ describe('#169 — DriverFuelEvidenceController giu quyen so huu TRUOC khi ghi',
       },
       read: () => {
         order.push('fetch');
-        return Promise.resolve({ kind: 'FOUND' as const, object: { body: PNG, contentType: 'image/png' } });
+        return Promise.resolve({
+          kind: 'FOUND' as const,
+          object: { body: PNG, contentType: 'image/png' },
+        });
       },
     };
     const fuel = {
@@ -300,6 +306,177 @@ describe('#169 — quyen cua hai be mat bang chung', () => {
 });
 
 /**
+ * acceptance 4 — BANG CHUNG cho KHOAN CHI THUONG cua lai xe.
+ *
+ * Muc nay bi CHAN cho toi khi #179 dua `POST /transport/me/expenses` vao `main`; nay no da vao, nen
+ * bo test khong con quyen ghi "⛔ chan" nua.
+ *
+ * Cung phep thu voi be mat phieu dau, va no van la phep thu quan trong nhat: khong phai "co nem loi
+ * khong", ma la "co GHI khong". Chi khac mot dieu ve LUU TRU, va no doi mot thu tu khac:
+ *
+ *   phieu dau — bang chung o BANG CON  ⇒ kiem quyen → luu byte → GAN vao hang da co
+ *   khoan chi — bang chung o mot COT   ⇒ kiem quyen → luu byte → GHI hang MOI kem dinh vi
+ *
+ * Khong co buoc "gan sau", vi gan sau nghia la SUA mot hang da ghi cua mot so cai append-only.
+ */
+describe('#169 acceptance 4 — bang chung cho khoan chi thuong cua lai xe', () => {
+  function harness(assignedTripIds: readonly string[], ownedExpenseIds: readonly string[]) {
+    const order: string[] = [];
+    const costing = {
+      assertSelfTripExpenseAllowed: (_authUserId: string, tripId: string) => {
+        order.push(`allow:${tripId}`);
+        if (!assignedTripIds.includes(tripId)) {
+          return Promise.reject(
+            TransportDomainError.denied('EXPENSE_DRIVER_NOT_ASSIGNED', 'chuyen cua nguoi khac'),
+          );
+        }
+        return Promise.resolve();
+      },
+      recordSelfTripExpense: (
+        _authUserId: string,
+        input: { readonly tripId: string; readonly evidenceLocator?: string | null },
+      ) => {
+        order.push(`record:${input.tripId}:${input.evidenceLocator ?? 'KHONG-CO-DINH-VI'}`);
+        return Promise.resolve({ expense: { id: 'chi-1' } });
+      },
+    };
+    const read = {
+      selfTripExpenseEvidence: (_authUserId: string, expenseId: string) => {
+        order.push(`row:${expenseId}`);
+        if (!ownedExpenseIds.includes(expenseId)) {
+          return Promise.reject(
+            TransportDomainError.notFound('TRIP_EXPENSE_NOT_FOUND', 'khong thay trong so cua ban'),
+          );
+        }
+        return Promise.resolve({
+          expenseId,
+          locator: `${TRANSPORT_EVIDENCE_KEY_PREFIX}2026/09/da-co.png`,
+        });
+      },
+    };
+    const evidence = {
+      put: () => {
+        order.push('store');
+        return Promise.resolve({
+          locator: `${TRANSPORT_EVIDENCE_KEY_PREFIX}2026/09/moi.png`,
+          contentType: 'image/png',
+          byteSize: PNG.byteLength,
+        });
+      },
+      read: () => {
+        order.push('fetch');
+        return Promise.resolve({
+          kind: 'FOUND' as const,
+          object: { body: PNG, contentType: 'image/png' },
+        });
+      },
+    };
+    return { order, costing, read, evidence };
+  }
+
+  const controllerOf = async (h: ReturnType<typeof harness>) => {
+    const { DriverExpenseEvidenceController } =
+      await import('./driver-expense-evidence.controller.js');
+    return new DriverExpenseEvidenceController(
+      h.evidence as never,
+      h.costing as never,
+      h.read as never,
+    ) as unknown as {
+      record(request: unknown, body: unknown, file: unknown): Promise<unknown>;
+      serve(request: unknown, expenseId: string, response: unknown): Promise<void>;
+    };
+  };
+
+  const session = { authUser: { id: 'user-lai-xe-a', role: 'SALE' } };
+  const file = { buffer: PNG, mimetype: 'image/png', size: PNG.byteLength, originalname: 'x.png' };
+  const body = { tripId: 'chuyen-cua-toi', categoryCode: 'BOT', amount: '120000' };
+
+  it('anh + khoan chi vao lam MOT lan goi, va dinh vi den tu KHO chu khong tu client', async () => {
+    const h = harness(['chuyen-cua-toi'], []);
+    await (await controllerOf(h)).record(session, body, file);
+
+    expect(h.order).toEqual([
+      'allow:chuyen-cua-toi',
+      'store',
+      `record:chuyen-cua-toi:${TRANSPORT_EVIDENCE_KEY_PREFIX}2026/09/moi.png`,
+    ]);
+  });
+
+  /**
+   * `MediaStore` khong co lenh xoa. Neu phep kiem quyen chay SAU `put()`, moi lan tu choi de lai
+   * mot object mo coi trong bucket ma khong ai don — nen thu tu o day la mot rang buoc that, khong
+   * phai mot so thich.
+   */
+  it('chuyen cua dong nghiep bi chan TRUOC khi mot byte nao vao kho', async () => {
+    const h = harness(['chuyen-cua-toi'], []);
+    await expect(
+      (await controllerOf(h)).record(session, { ...body, tripId: 'chuyen-nguoi-khac' }, file),
+    ).rejects.toThrow();
+
+    expect(h.order).toEqual(['allow:chuyen-nguoi-khac']);
+    expect(h.order).not.toContain('store');
+    expect(h.order.some((step) => step.startsWith('record:'))).toBe(false);
+  });
+
+  /**
+   * Multipart mang MOI truong len duoi dang chuoi, nen `amount` phai duoc doi kieu o bien gioi. Bai
+   * nay do neu ai do dung lai `driverSelfExpenseSchema` (ban JSON) cho duong nay: `"120000"` se
+   * khong qua duoc `z.number()`, va nguoi dung nhan mot 400 kho hieu cho mot form dung.
+   */
+  it('so tien den duoi dang chuoi van qua duoc bien gioi multipart', async () => {
+    const h = harness(['chuyen-cua-toi'], []);
+    const controller = await controllerOf(h);
+    await expect(
+      controller.record(session, { ...body, amount: '250000' }, file),
+    ).resolves.toBeDefined();
+  });
+
+  /**
+   * Ca hai bai duoi dung `expect(() => ...)` chu khong `.rejects`, va do la mot khang dinh THAT ve
+   * hinh dang cua controller: `parse()` va `uploadedBytes()` nem NGAY o than ham, truoc khi mot
+   * `Promise` nao duoc tao. Neu ai do goi chung ben trong `this.guard(async () => ...)`, hai bai
+   * nay do — va do la dieu can biet, vi luc do mot dau vao hong se di qua duoc phep kiem quyen.
+   */
+  it('client KHONG tu dat duoc dinh vi — truong la la 400, khong bi bo qua im lang', async () => {
+    const h = harness(['chuyen-cua-toi'], []);
+    const controller = await controllerOf(h);
+    expect(() =>
+      controller.record(
+        session,
+        { ...body, evidenceLocator: 'media/2026/08/anh-cua-khach.webp' },
+        file,
+      ),
+    ).toThrow(BadRequestException);
+    expect(h.order).toEqual([]);
+  });
+
+  it('thieu tep multipart la 400 CO CAU CHU, va khong lan goi nao xuong kho', async () => {
+    const h = harness(['chuyen-cua-toi'], []);
+    const controller = await controllerOf(h);
+    expect(() => controller.record(session, body, undefined)).toThrow(BadRequestException);
+    expect(h.order).toEqual([]);
+  });
+
+  it('doc lai anh cua khoan chi CUA CHINH MINH', async () => {
+    const h = harness([], ['chi-cua-toi']);
+    const response = { setHeader: () => {}, end: () => {} };
+    await (await controllerOf(h)).serve(session, 'chi-cua-toi', response);
+    expect(h.order).toEqual(['row:chi-cua-toi', 'fetch']);
+  });
+
+  it('acceptance 5: khoan chi cua lai xe khac bi chan TRUOC khi cham kho', async () => {
+    const h = harness([], ['chi-cua-toi']);
+    const response = { setHeader: () => {}, end: () => {} };
+    await expect(
+      (await controllerOf(h)).serve(session, 'chi-cua-dong-nghiep', response),
+    ).rejects.toThrow();
+
+    expect(h.order).toEqual(['row:chi-cua-dong-nghiep']);
+    expect(h.order).not.toContain('fetch');
+  });
+});
+
+/**
  * acceptance 6 — mot khach khong bat nghiep vu nhien lieu KHONG nap mot manh nao cua bang chung.
  *
  * Day la hinh dang cua "cach ly khach" tren nen tang nay: moi khach mot stack, va ranh gioi doc
@@ -309,21 +486,50 @@ describe('#169 — composition cua be mat bang chung', () => {
   const namesFor = (capabilities: readonly CapabilityId[]): string[] =>
     buildAppComposition(capabilities).controllers.map((controller) => controller.name);
 
-  const EVIDENCE = ['DriverFuelEvidenceController', 'FuelEvidenceController'];
+  const FUEL_EVIDENCE = ['DriverFuelEvidenceController', 'FuelEvidenceController'];
 
-  it('bat transport-fuel thi ca hai be mat bang chung co mat', () => {
+  it('bat transport-fuel thi ca hai be mat bang chung phieu dau co mat', () => {
     const names = namesFor(['transport-core', 'transport-costing', 'transport-fuel']);
-    for (const artefact of EVIDENCE) expect(names, artefact).toContain(artefact);
+    for (const artefact of FUEL_EVIDENCE) expect(names, artefact).toContain(artefact);
   });
 
-  it('KHONG bat nhien lieu thi khong be mat bang chung nao duoc nap', () => {
+  it('KHONG bat nhien lieu thi khong be mat bang chung PHIEU DAU nao duoc nap', () => {
     const names = namesFor(['transport-core', 'transport-costing']);
-    for (const artefact of EVIDENCE) expect(names, artefact).not.toContain(artefact);
+    for (const artefact of FUEL_EVIDENCE) expect(names, artefact).not.toContain(artefact);
     expect(names).toContain('TripsController');
   });
 
   it('mot khach BAN HANG khong nap mot manh nao cua bang chung van tai', () => {
     const names = namesFor(['knowledge', 'messaging', 'turn-processing', 'sales-order']);
-    for (const artefact of EVIDENCE) expect(names, artefact).not.toContain(artefact);
+    for (const artefact of FUEL_EVIDENCE) expect(names, artefact).not.toContain(artefact);
+    expect(names).not.toContain('DriverExpenseEvidenceController');
+  });
+
+  /**
+   * KHO ANH THUOC `transport-core`, KHONG thuoc `transport-fuel` — va bai nay la ly do.
+   *
+   * Tu acceptance 4 co HAI nguoi tieu thu `TransportEvidenceService` o hai capability khac nhau.
+   * Neu kho van ghim vao `transport-fuel` thi mot khach bat gia thanh ma khong bat nhien lieu se
+   * KHONG DUNG NOI do thi Nest — chet luc boot vi thieu token, chu khong phai mat mot tinh nang.
+   */
+  it('khach co gia thanh nhung KHONG co nhien lieu van co be mat anh khoan chi VA co kho anh', () => {
+    const composition = buildAppComposition(['transport-core', 'transport-costing']);
+    const names = composition.controllers.map((controller) => controller.name);
+    expect(names).toContain('DriverExpenseEvidenceController');
+
+    // `provide` la mot LOP, khong phai mot chuoi — `String(class)` tra ve ca ma nguon, nen phai
+    // doc `.name`. Doc nham cho ra mot bai LUON DO ma thong bao khong noi len dieu do.
+    const provides = composition.providers.map((provider) => {
+      const token: unknown =
+        typeof provider === 'function' ? provider : (provider as { provide?: unknown }).provide;
+      return typeof token === 'function' ? token.name : String(token ?? '');
+    });
+    expect(provides).toContain('TransportEvidenceService');
+  });
+
+  it('be mat anh khoan chi bien mat cung `transport-costing`', () => {
+    const names = namesFor(['transport-core', 'transport-fuel']);
+    expect(names).not.toContain('DriverExpenseEvidenceController');
+    expect(names).toContain('DriverFuelEvidenceController');
   });
 });
