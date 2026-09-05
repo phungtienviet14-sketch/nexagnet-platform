@@ -26,7 +26,9 @@ import {
   parsePinnedEvidence,
   pinnedEvidence,
   singleProductScope,
+  type PinnedEvidence,
 } from './source-evidence.js';
+import { parseSubjectPin, subjectAdmits } from './turn-subject.js';
 import {
   parseGroundingTokens,
   ungroundedCarrier,
@@ -464,6 +466,30 @@ export function decideOutboundAuthority(
     };
   }
 
+  /*
+   * CHANG 3e - QUAN HE VOI CHU THE CUA LUOT, doc lai tren chinh cac ghim (Issue #208).
+   *
+   * Chang 3d ngay tren hoi cac ghim co hoa hop VOI NHAU khong — mot cau hoi phan than, va no
+   * luon dung khi ban soan chi trich nguon cua DUY NHAT mot san pham sai. Chang nay hoi ve con
+   * lai: tung ghim co thuoc san pham ma luot nay duoc phep noi den khong.
+   *
+   * Xet lai o day du G0 da xet luc soan, va vi dung ly do voi ba chang tren: chang soan chi nhin
+   * `plan.narrative`, con day nhin VAN BAN CUOI — mot doan bi ghep them sau khi soan xong khong
+   * co chang nao khac bat duoc.
+   *
+   * Ca hai ve deu doc tu `composition.grounded`, tuc deu la du lieu HE THONG DA GHIM luc soan.
+   * Khong ve nao doc lai van xuoi, va khong ve nao hoi model.
+   */
+  const subjectMismatch = pinsOutsideSubject(composition.grounded, pins);
+  if (subjectMismatch) {
+    return {
+      sendable: false,
+      reason: 'COMPOSITION_SUBJECT_MISMATCH',
+      missing: [],
+      fingerprint,
+    };
+  }
+
   return composition.blocks.length
     ? {
         sendable: true,
@@ -497,6 +523,36 @@ export function surfacedClaimClasses(text: string): OutboundClaimClass[] {
 /* ------------------------------------------------------------------ *
  * CUONG CHE O DIEM NGHEN GUI
  * ------------------------------------------------------------------ */
+
+/**
+ * CO GHIM NAO NAM NGOAI CHU THE DA GHIM KHONG? (Issue #208)
+ *
+ * Dung CHUNG cho chang soan (`decideOutboundAuthority`) va diem nghen gui (`pinnedOutboundVerdict`)
+ * — mot phep kiem, mot cho dinh nghia. Hai ben tu viet rieng thi mot ngay nao do chung lech nhau,
+ * va lech o day nghia la duong gui de qua thu duong soan da chan.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * VANG MAT CHU THE: TU CHOI, NHUNG CHI KHI CO GI DE TU CHOI.
+ *
+ * `parseSubjectPin` tra `null` cho ban soan tao TRUOC ban nay (chua co the `t:`). Xu ly nhanh do
+ * can chinh xac, khong duoc "chat" cung khong duoc "long":
+ *
+ *  · Ban soan co it nhat MOT ghim theo san pham + khong co chu the -> TU CHOI. Do dung la tap
+ *    ban soan ma quan he CO THE bi vi pham, va khong con cach nao chung minh no khong bi.
+ *  · Moi ghim deu TOAN KHACH (`#*`), hay khong ghim nao -> CHO QUA. Bang chung toan khach hoa
+ *    hop voi MOI chu the theo dinh nghia (`subjectAdmits` tra `true` cho `null` o moi nhanh),
+ *    nen doi the `t:` o day se la mot phep fail-closed KHONG BAO VE GI trong khi lam hong viec
+ *    gui lai nhung ban ghi cu hoan toan an toan.
+ *
+ * Do khong phai mot nhan nhuong: no la ranh gioi dung, ve dung tap ma tinh chat co the sai.
+ */
+function pinsOutsideSubject(grounded: readonly string[], pins: readonly PinnedEvidence[]): boolean {
+  const scoped = pins.filter((pin) => pin.productSku !== null);
+  if (!scoped.length) return false;
+  const subject = parseSubjectPin(grounded);
+  if (!subject) return true;
+  return scoped.some((pin) => !subjectAdmits(subject, pin.productSku));
+}
 
 /**
  * VERDICT DA GHIM tren mot ban ghi luot — thu ma duong GUI doc, VA doan van no duoc cap cho.
@@ -549,6 +605,32 @@ export function pinnedOutboundVerdict(
     return {
       sendable: false,
       reason: 'AUTHORITY_PAYLOAD_MISMATCH',
+      missing: verdict.sendable ? [] : verdict.missing,
+      fingerprint,
+    };
+  }
+  /*
+   * QUAN HE CHU THE ↔ BANG CHUNG, KIEM LAI TAI DIEM NGHEN GUI (Issue #208).
+   *
+   * VI SAO PHAI O DAY, du chang soan da xet: mot ban nhap nam trong hang cho cua Sale co the
+   * nhieu gio (co y — muc 5 #205 doi giu bang chung). Neu quan he chi duoc kiem luc soan thi mot
+   * cu bam `Duyệt & gửi` van dua no ra nhom. Do dung la dieu ma muc 7 ca 7 hop dong #205 goi ten
+   * cho tham quyen, va #208 muc 2 goi ten lai cho pham vi: "Sale `Duyệt & gửi` phai revalidate
+   * dung quan he turn/evidence da ghim".
+   *
+   * DO LA MOT PHEP KIEM DOC LAP, khong phai mot lan doc lai ket qua cu: no doc THANG hai ve tu
+   * `composition.grounded` va tu ket luan, khong tin vao `verdict.sendable` da ghim. Mot ban ghi
+   * mang mot verdict `sendable` hop le nhung quan he sai — ban ghi soan truoc ban nay, hay mot
+   * trace dung bang tay — dung lai o day.
+   *
+   * DAY LA HAM MA CA BA DUONG GUI DEU GOI (`PipelineService` tu dong, `OrdersService.approve`,
+   * `TurnReplyService.sendAdviceReply`), nen dat phep kiem o day la dat no vao CAU TRUC: mot
+   * duong gui moi trong tuong lai duoc thua huong no ma khong phai nho.
+   */
+  if (pinsOutsideSubject(composition.grounded, parsePinnedEvidence(composition.grounded))) {
+    return {
+      sendable: false,
+      reason: 'COMPOSITION_SUBJECT_MISMATCH',
       missing: verdict.sendable ? [] : verdict.missing,
       fingerprint,
     };

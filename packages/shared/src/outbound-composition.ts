@@ -151,6 +151,25 @@ export interface OmittedBlock {
  * nguyen duoc".
  */
 export const NARRATIVE_REJECTIONS = [
+  /*
+   * G0 — LOI NHAN KE NGUON CUA MOT SAN PHAM KHAC CHU THE CUA LUOT (Issue #208).
+   *
+   * G7 ben duoi hoi "cac nguon DA CHON co hoa hop VOI NHAU khong" — mot cau hoi PHAN THAN. Review
+   * doc lap 05/09/2026 do duoc lo hong do tren chinh ban #205 da merge: chu the that cua luot la
+   * SKU B, bang chung tra cuu duoc chi co cua SKU A, model chon DUY NHAT cau cua A, nen tap pham
+   * vi la {A} va `singleProductScope({A}) === true` — cau cua san pham khac di thang ra kenh.
+   *
+   * G0 hoi cau con lai: bang chung nay co thuoc san pham ma LUOT NAY dang noi den khong. Chu the
+   * do he thong so huu — `matchProductsInText()` chay tren chinh tin cua khach — nen model khong
+   * mo rong duoc no bang mot tham so cong cu.
+   *
+   * XEP DAU (ngay sau `EMPTY`), va do la mot quyet dinh ve CHAN DOAN chu khong ve an toan: bang
+   * chung ngoai pham vi da bi LOC KHOI tap chon duoc truoc khi vao day, nen khong nhanh nao con
+   * cap phep cho no. Cai G0 quyet dinh la MA ma nguoi truc doc duoc. Khong co no, luot "hoi ve
+   * ghe, tra loi bang thong so may loc khong khi" se bao `NO_SYSTEM_SOURCE` — mot cau SAI, vi
+   * luot do tra cuu duoc rat nhieu nguon; chung deu ve san pham khac.
+   */
+  'NARRATIVE_SUBJECT_MISMATCH',
   /** G1 — luot nay khong tra cuu duoc nguon he thong nao, nen khong co gi de ke. */
   'NO_SYSTEM_SOURCE',
   /*
@@ -222,6 +241,7 @@ export const NARRATIVE_REJECTION_LABELS: Record<NarrativeRejection, string> = {
   NARRATIVE_NOT_SOURCE_BOUND:
     'Lời nhắn ghép lại từ ngữ của nguồn thành một mệnh đề không nguồn nào nói',
   NARRATIVE_SCOPE_CONFLICT: 'Lời nhắn trộn mệnh đề của hai sản phẩm khác nhau',
+  NARRATIVE_SUBJECT_MISMATCH: 'Lời nhắn kể nguồn của sản phẩm khác chủ thể của lượt',
   NUMERAL_NOT_GROUNDED: 'Lời nhắn chứa con số không truy nguyên được về nguồn',
   POLICY_CARRIER_NOT_GROUNDED: 'Lời nhắn nói chính sách không được cấp và không có trong nguồn',
   COMMITMENT_CARRIER_NOT_GROUNDED:
