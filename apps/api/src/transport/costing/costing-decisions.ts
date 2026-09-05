@@ -104,6 +104,17 @@ export type DriverSelfFundScopeReason = (typeof DRIVER_SELF_FUND_SCOPE_REASONS)[
 export const DRIVER_SELF_EXPENSE_SCOPE_REASONS = [
   'SELF_EXPENSE_SCOPE_GRANTED',
   'SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING',
+  /**
+   * BA ma duoi day chi song trong TRACE. Than HTTP gop `NOT_OWNED` va `UNKNOWN_ID` thanh MOT cau
+   * (`SELF_EXPENSE_EVIDENCE_NOT_VISIBLE`), vi phan biet chung tren duong truyen se bien mot vong
+   * lap go ma thanh mot cong do "ma nao co that trong bang".
+   *
+   * Trong trace thi phai phan biet: mot lai xe bam nham vao khoan chi cua dong nghiep va mot client
+   * dang do ma la hai su co khac han nhau ve muc do.
+   */
+  'SELF_EXPENSE_SCOPE_NOT_OWNED',
+  'SELF_EXPENSE_SCOPE_UNKNOWN_ID',
+  'SELF_EXPENSE_SCOPE_NO_EVIDENCE',
 ] as const;
 export type DriverSelfExpenseScopeReason = (typeof DRIVER_SELF_EXPENSE_SCOPE_REASONS)[number];
 
@@ -156,5 +167,8 @@ export const TRANSPORT_COSTING_DECISIONS = defineDecisionVocabulary({
     SELF_EXPENSE_SCOPE_GRANTED: 'Lái xe tự ghi khoản chi trên chuyến của chính mình',
     SELF_EXPENSE_SCOPE_NO_DRIVER_BINDING:
       'Tài khoản đăng nhập chưa nối với hồ sơ lái xe nào — không ghi được khoản chi tự phục vụ',
+    SELF_EXPENSE_SCOPE_NOT_OWNED: 'Khoản chi này thuộc lái xe khác',
+    SELF_EXPENSE_SCOPE_UNKNOWN_ID: 'Không có khoản chi nào mang mã này',
+    SELF_EXPENSE_SCOPE_NO_EVIDENCE: 'Khoản chi có thật nhưng chưa đính ảnh bằng chứng nào',
   } satisfies Record<TransportCostingDecisionReason, string>,
 });

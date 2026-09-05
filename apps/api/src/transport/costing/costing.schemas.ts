@@ -106,6 +106,29 @@ export const driverSelfExpenseSchema = z
   })
   .strict();
 
+/**
+ * Cung mot lenh, nhung den qua `multipart/form-data` — nen MOI truong la CHUOI.
+ *
+ * Mot ban sao thay vi `.extend()` hay mot lop `coerce` tren ban goc, va do la co y: neu ban JSON
+ * cung nhan `"120000"` thi mot client go nham kieu se lang le di qua, va cai gia phai tra la mot so
+ * tien. Duong multipart thi khong co lua chon — HTTP khong mang kieu o day — nen no la cho DUY
+ * NHAT duoc phep noi long, va cho do duoc ghi ten ra.
+ *
+ * `evidenceLocator` CO Y vang mat: dinh vi den tu `TransportEvidenceService.put()` ngay trong lan
+ * goi do, khong bao gio tu than yeu cau. Nhan no o day se cho client tro khoan chi cua minh vao mot
+ * object bat ky trong bucket.
+ */
+export const driverSelfExpenseMultipartSchema = z
+  .object({
+    tripId: nonEmpty,
+    categoryCode: nonEmpty.max(60),
+    amount: z.coerce.number().int().positive().max(MONEY_MAX_AMOUNT),
+    businessDate: businessDate.optional(),
+    note: optionalText,
+    correlationKey,
+  })
+  .strict();
+
 export const reversalSchema = z.object({ reason: nonEmpty.max(500) }).strict();
 
 export const openFundPeriodSchema = z
