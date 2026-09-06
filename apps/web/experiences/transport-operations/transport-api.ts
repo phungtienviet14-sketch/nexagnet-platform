@@ -414,8 +414,12 @@ export interface DriverFuelSubmitInput extends FuelEntryFields {
 }
 
 /**
- * Bang chung la mot CHUOI DINH VI, khong phai mot lan tai tep len.
- * `PG-05` chua co, nen API khong nhan `multipart/form-data` o bat cu dau.
+ * Bang chung dang CHUOI DINH VI — mot tham chieu toi byte da nam san trong kho.
+ *
+ * Cau "API khong nhan `multipart/form-data` o bat cu dau" o day da SAI tu #169: `uploadFuelEvidence`
+ * va `recordExpenseWithEvidence` deu gui tep that. Giu lai cau do la ly do nguoi ta khong ngo hai
+ * ham cung tro toi mot URL — va do dung la cach route tai anh bi che khuat cho toi khi T9 do no
+ * tren ban dang chay.
  */
 export interface AttachFuelEvidenceInput {
   readonly locator: string;
@@ -616,11 +620,18 @@ export const transportApi = {
       send('POST', '/transport/me/fuel/slips', input),
     attachFuelEvidence: (id: string, input: AttachFuelEvidenceInput): Promise<DriverFuelSlipView> =>
       send('POST', `/transport/me/fuel/slips/${encodeURIComponent(id)}/evidence`, input),
-    /** TAI ANH THAT (#169). Mot lan goi: byte vao kho roi gan vao phieu, khong de object mo coi. */
+    /**
+     * TAI ANH THAT (#169). Mot lan goi: byte vao kho roi gan vao phieu, khong de object mo coi.
+     *
+     * `/upload` chu KHONG phai `/evidence`: `attachFuelEvidence` ngay tren da chiem duong do o may
+     * chu, va hai route cung method + cung path thi Nest chi gan MOT cai. Ban truoc goi cung mot
+     * URL, nen moi lan tai anh deu tra 400 `body: expected object, received undefined` — do duoc
+     * tren ban DA TRIEN KHAI o T9, khong phai suy dien tu ma nguon.
+     */
     uploadFuelEvidence: (id: string, file: File): Promise<DriverFuelSlipView> => {
       const form = new FormData();
       form.append('file', file);
-      return sendForm(`/transport/me/fuel/slips/${encodeURIComponent(id)}/evidence`, form);
+      return sendForm(`/transport/me/fuel/slips/${encodeURIComponent(id)}/evidence/upload`, form);
     },
     /** `REJECTED -> DECLARED` qua dung vong doi da co (`#168 B5`). */
     resubmitFuelSlip: (id: string): Promise<DriverFuelSlipView> =>

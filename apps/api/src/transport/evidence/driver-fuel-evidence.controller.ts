@@ -63,7 +63,23 @@ export class DriverFuelEvidenceController {
    * Gop hai buoc co chu y: mot API tra ve dinh vi roi de client tu goi buoc gan se de lai nhung
    * object MO COI trong bucket moi lan mang rot giua chung — va khong ai don chung.
    */
-  @Post()
+  /**
+   * `upload` LA MOT DUONG RIENG, va no PHAI la duong rieng.
+   *
+   * `DriverFuelController` da giu `POST slips/:id/evidence` (gan mot CHUOI DINH VI, tu thoi `PG-05`
+   * chua co kho anh). Hai controller cung nhan mot method + mot path thi Nest gan cai duoc dang ky
+   * TRUOC — o `app-composition.ts` do la `DriverFuelController` — va route tai anh nay KHONG BAO
+   * GIO duoc goi toi.
+   *
+   * Do khong phai suy dien: do tren ban DA TRIEN KHAI (T9), cung mot URL tra 201 voi than JSON
+   * `{locator}` va 400 `body: expected object, received undefined` voi `multipart/form-data`. Tuc
+   * nut "tai anh bien lai" cua lai xe hong IM LANG — khong loi build, khong test do, chi la mot
+   * tinh nang (#169) khong ton tai luc chay.
+   *
+   * `with-evidence` cua `DriverExpenseEvidenceController` da dung dung khuon nay va chay tot; day
+   * chi la ap lai khuon do cho nhien lieu.
+   */
+  @Post('upload')
   @Roles('SALE', 'ADMIN')
   @RequiresTransportAction('transport.driver.self.fuel.submit')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
