@@ -337,14 +337,31 @@ test('transport-preview/gd1-test phan giai duoc, va mang DUNG cong cua Ultty', (
   assert.equal(toStepOutputs(plan).requires_exact_main_ci, 'true');
 });
 
-test('hop dong bi mat cua ban xem truoc la DUNG bon ten, va roi khoi Ultty hoan toan', () => {
+test('hop dong bi mat cua ban xem truoc la DUNG nam ten, va roi khoi Ultty hoan toan', () => {
   const plan = resolveDeploymentTarget(registry, {
     tenant: 'transport-preview',
     environment: 'gd1-test',
   });
   const names = plan.secretContract.secretNames;
 
-  assert.equal(names.length, 4);
+  // BON ten nen tang + MOT ten cua he thong con `transportDemo`. Liet ke DU thay vi dem: mot con
+  // so mot minh no khong noi duoc ten nao vua vao, ma vua vao CAI GI moi la dieu can khoa.
+  //
+  // Ten thu nam la mat khau nhan vat mau. No o day vi ho so nay phuc vu mot GOI MAU, va vi T8 da
+  // chung minh cai gia cua viec khong co no: mot thang du lieu that voi khong mot lai xe nao dang
+  // nhap duoc. Khong stack khach nao bi tinh phi cai ten nay — phep giao voi Ultty o duoi la cho
+  // dieu do duoc DO, khong phai duoc khang dinh.
+  assert.deepEqual(
+    [...names].sort(),
+    [
+      'zalo-transport-preview-gd1-test-api-key',
+      'zalo-transport-preview-gd1-test-operator-password',
+      'zalo-transport-preview-gd1-test-postgres-admin-password',
+      'zalo-transport-preview-gd1-test-transport-demo-driver-password',
+      'zalo-transport-preview-gd1-test-zalo-db-password',
+    ],
+    'hop dong bi mat cua ban xem truoc doi',
+  );
   for (const name of names) {
     assert.ok(
       name.startsWith('zalo-transport-preview-gd1-test-'),

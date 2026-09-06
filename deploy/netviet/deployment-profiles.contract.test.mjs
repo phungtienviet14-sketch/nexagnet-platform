@@ -303,3 +303,69 @@ test('no profile introduces or gates a production target', () => {
     'production hardening is a separate governance decision, not this change',
   );
 });
+
+// --- 10. The demo-tenant subsystem: one credential, charged to one profile ---------------------
+
+test('a demo profile is charged the seeded-persona password and nothing else', () => {
+  const plain = requiredSecretSuffixesFor(previewProfile());
+  const demo = requiredSecretSuffixesFor(
+    previewProfile({
+      subsystems: { flowise: false, parser: 'none', channel: 'none', transportDemo: true },
+    }),
+  );
+
+  assert.deepEqual(
+    demo.filter((suffix) => !plain.includes(suffix)),
+    ['transport-demo-driver-password'],
+  );
+  // The flag is what adds it. Without the flag it is absent — that is the whole isolation claim.
+  assert.equal(plain.includes('transport-demo-driver-password'), false);
+});
+
+test('no customer profile in the catalogue enables the demo-tenant subsystem', () => {
+  for (const [id, profile] of Object.entries(DEPLOYMENT_PROFILES)) {
+    const enabled = profile.subsystems.transportDemo === true;
+    assert.equal(
+      enabled,
+      id === 'transport-preview-gd1-test',
+      `profile ${id} declares transportDemo=${enabled}`,
+    );
+    // Stated as a NAME check too: the suffix must not reach any other profile's contract, whatever
+    // route it takes to get there.
+    assert.equal(
+      requiredSecretSuffixesFor(profile).includes('transport-demo-driver-password'),
+      enabled,
+      `profile ${id} secret contract disagrees with its own subsystem declaration`,
+    );
+  }
+});
+
+test('subsystems.transportDemo must be boolean when present', () => {
+  // Undefined is allowed and means false: every profile that predates this subsystem stays valid
+  // without a line saying it does not seed personas.
+  assert.doesNotThrow(() => previewProfile());
+  for (const bad of ['true', 1, null, {}]) {
+    assert.throws(
+      () =>
+        previewProfile({
+          subsystems: { flowise: false, parser: 'none', channel: 'none', transportDemo: bad },
+        }),
+      /transportDemo must be boolean/,
+      `transportDemo=${JSON.stringify(bad)} must be rejected`,
+    );
+  }
+});
+
+test('the demo credential is stack-scoped, so it can never be shared with a customer', () => {
+  const demo = requiredSecretNamesFor(
+    previewProfile({
+      subsystems: { flowise: false, parser: 'none', channel: 'none', transportDemo: true },
+    }),
+    'transport-preview-gd1-test',
+  );
+  assert.ok(demo.includes('zalo-transport-preview-gd1-test-transport-demo-driver-password'));
+  assert.equal(
+    requiredSecretNamesFor(ULTTY, 'ultty-gd1-test').some((name) => /transport-demo/.test(name)),
+    false,
+  );
+});

@@ -80,6 +80,19 @@ const SUBSYSTEM_SECRET_SUFFIXES = Object.freeze({
     'flowise-token-hash-secret',
   ]),
   deepseekParser: Object.freeze(['deepseek-api-key']),
+  /**
+   * A REFERENCE TENANT seeds personas, and a persona nobody can log in as is not a demo.
+   *
+   * T8 shipped the seeded month without this name, and the consequence was measured rather than
+   * imagined: the stack deployed green, 44 trips were real in Postgres, and the driver surface had
+   * ZERO accounts — the one surface a driver would ever touch. The seed said so in its own log,
+   * which is the only reason it was not silent.
+   *
+   * Charging it to the SUBSYSTEM rather than to the base list is what keeps Ultty/Amico/Wata out
+   * of it: a customer stack seeds no personas, so it is never asked for a credential it has no use
+   * for. That is the same rule Flowise and the parser already live under.
+   */
+  transportDemo: Object.freeze(['transport-demo-driver-password']),
   workflowEngine: Object.freeze(['hatchet-db-password', 'workflow-dashboard-htpasswd']),
   observability: Object.freeze([
     'otlp-ingest-token',
@@ -113,6 +126,7 @@ export function requiredSecretSuffixesFor(profile, switches = {}) {
   const suffixes = [...BASE_SECRET_SUFFIXES];
   if (subsystems.flowise === true) suffixes.push(...SUBSYSTEM_SECRET_SUFFIXES.flowise);
   if (subsystems.parser === 'deepseek') suffixes.push(...SUBSYSTEM_SECRET_SUFFIXES.deepseekParser);
+  if (subsystems.transportDemo === true) suffixes.push(...SUBSYSTEM_SECRET_SUFFIXES.transportDemo);
   if (switches.workflowEngine === true) suffixes.push(...SUBSYSTEM_SECRET_SUFFIXES.workflowEngine);
   if (switches.observability === true) suffixes.push(...SUBSYSTEM_SECRET_SUFFIXES.observability);
   return Object.freeze(suffixes);
@@ -188,6 +202,17 @@ export function defineDeploymentProfile(input) {
     }
     if (!CHANNEL_ADAPTERS.includes(subsystems.channel)) {
       errors.push(`subsystems.channel must be one of ${CHANNEL_ADAPTERS.join(', ')}`);
+    }
+    // OPTIONAL, defaulting to false — deliberately not mandatory like the three above.
+    //
+    // Making it required would have forced a line onto every existing profile and every test
+    // fixture that builds one, for a field that is false in all of them. The drift it would have
+    // guarded against is guarded better elsewhere: `deployment-profile-render.contract.test.mjs`
+    // cross-checks this flag against the TENANT PACK's own `bootstrap.transportDemo`, so a demo
+    // pack served by a profile that forgot the flag fails a test rather than deploying without a
+    // driver login. Undefined means false; anything non-boolean is still a malformed profile.
+    if (subsystems.transportDemo !== undefined && typeof subsystems.transportDemo !== 'boolean') {
+      errors.push('subsystems.transportDemo must be boolean when present');
     }
   }
 
@@ -349,7 +374,12 @@ export const DEPLOYMENT_PROFILES = Object.freeze({
     gate: 'gd1-test',
     environments: { 'gd1-test': 'gd1-test' },
     tenants: ['transport-preview'],
-    subsystems: { flowise: false, parser: 'none', channel: 'none' },
+    // `transportDemo: true` is the ONLY profile in this catalogue that carries it, and that is the
+    // point: it is derived from the pack this profile serves, which declares
+    // `bootstrap.transportDemo` and `policies.readiness.demoTenant`. No customer pack declares
+    // either (proven by `transport-tenant-allowlist.spec.ts`), so no customer stack is ever
+    // charged this credential.
+    subsystems: { flowise: false, parser: 'none', channel: 'none', transportDemo: true },
     runtime: {
       // PLACEHOLDER, NOT A DEPENDENCY. `PARSER_MODE` is a closed enum in `packages/shared/env.ts`
       // with no `none` member, and the tenant pack declares no `sales-order` capability, so
@@ -481,6 +511,11 @@ export function describeRuntimeContract(profile) {
     PROFILE_FLOWISE: profile.subsystems.flowise === true ? 'on' : 'off',
     PROFILE_PARSER: profile.subsystems.parser,
     PROFILE_CHANNEL: profile.subsystems.channel,
+    // `render-secrets.sh` reads this to decide whether to DEMAND the seeded-persona password.
+    // `on` makes the fetch a `secret()` (fail fast) rather than an `optional_secret()`: on a stack
+    // that promises a driver surface, a missing credential must stop the deploy, not quietly ship
+    // a demo with a surface nobody can enter.
+    PROFILE_TRANSPORT_DEMO: profile.subsystems.transportDemo === true ? 'on' : 'off',
     // Empty when the profile pins nothing — `render-secrets.sh` then keeps its own defaults, so
     // `dev`/`production` are untouched.
     PROFILE_PARSER_MODE: runtime?.parserMode ?? '',

@@ -504,3 +504,111 @@ test('DEMO SEED: goi khach nao khai bootstrap.transportDemo thi tep do phai co t
     'khong goi khach nao khai bootstrap.transportDemo — phep quet hong',
   );
 });
+
+// --- 9. MAT KHAU NHAN VAT MAU: DUNG MOT STACK DUOC HOI, VA DUONG TRUYEN KHONG DUOC DUT ---------
+//
+// T8 giao mot thang du lieu van tai that ma khong mot tai khoan lai xe nao: deploy xanh, 44 chuyen
+// co that trong Postgres, va khong ai vao duoc be mat lai xe. Bi mat khong nam trong kho ma nguon,
+// nen cach dung la mot bi mat RIENG CUA STACK, duoc SUY RA tu he thong con ma ho so bat.
+
+test('BI MAT NHAN VAT MAU: chi ho so goi mau bi tinh phi cai ten do', () => {
+  const preview = describeRuntimeContract(DEPLOYMENT_PROFILES['transport-preview-gd1-test']);
+  assert.equal(preview.PROFILE_TRANSPORT_DEMO, 'on');
+
+  for (const [id, profile] of Object.entries(DEPLOYMENT_PROFILES)) {
+    if (id === 'transport-preview-gd1-test') continue;
+    assert.equal(
+      describeRuntimeContract(profile).PROFILE_TRANSPORT_DEMO,
+      'off',
+      `ho so ${id} khong phuc vu goi mau nao nen khong duoc doi mat khau nhan vat mau`,
+    );
+  }
+});
+
+test('RENDER THAT: ho so goi mau doc mat khau lai xe cua CHINH stack minh', () => {
+  const result = renderWithProfile({
+    profileId: 'transport-preview-gd1-test',
+    tenant: 'transport-preview',
+    stackSlug: 'transport-preview-gd1-test',
+    environment: 'gd1-test',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const name = 'zalo-transport-preview-gd1-test-transport-demo-driver-password';
+  assert.ok(result.secretNames.includes(name), `khong hoi ${name}`);
+  // Gia tri phai DI TIEP toi `secrets.env`: doc mot bi mat roi khong render no ra la dung hinh
+  // dang loi cua `ADVICE_COMPOSER` (render tu 21/08 ma khong bao gio toi container).
+  assert.equal(
+    runtimeValue(result.runtimeEnv, 'TRANSPORT_DEMO_DRIVER_PASSWORD'),
+    `stub-value-for-${name}`,
+  );
+});
+
+test('RENDER THAT: stack khach KHONG bi hoi mat khau nhan vat mau, va render ra RONG', () => {
+  const result = renderWithProfile({
+    profileId: 'ultty-gd1-test',
+    tenant: 'ultty',
+    stackSlug: 'ultty-gd1-test',
+    environment: 'gd1-test',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  for (const name of result.secretNames) {
+    assert.doesNotMatch(
+      name,
+      /transport-demo/,
+      `stack khach khong duoc hoi bi mat cua goi mau: ${name}`,
+    );
+  }
+  // RONG chu khong VANG MAT: `compose.yaml` nhac bien nay, va mot bien duoc nhac ma khong duoc
+  // render lam `docker compose` canh bao tren moi lan deploy cua moi khach.
+  assert.equal(runtimeValue(result.runtimeEnv, 'TRANSPORT_DEMO_DRIVER_PASSWORD'), '');
+});
+
+/**
+ * DUONG TRUYEN HO SO PHAI LIEN TUC — bat theo CAU TRUC, khong theo mot danh sach chep tay.
+ *
+ * `describeRuntimeContract` suy ra hop dong tren RUNNER; VM khong cai node (xac minh 20/08/2026)
+ * nen moi khoa phai di bo qua ba chang: `case` trong deploy-ci.sh -> dong `sudo env` qua SSH ->
+ * dong truyen cho `render-secrets.sh` trong deploy-remote.sh. Bo sot mot chang thi bien den noi
+ * rong va tinh nang khong chay MA KHONG CO LOI NAO — dung hinh dang su co `ADVICE_COMPOSER`, thu
+ * da xay ra hai lan o hai tang khac nhau.
+ *
+ * Bai nay do CHINH ba tep se chay, nen mot khoa moi them vao hop dong khong the lang le rot mat.
+ */
+test('DUONG TRUYEN: moi khoa cua hop dong ho so co mat du ba chang', () => {
+  // `readScript` chuan hoa CRLF: khong co no, moi neo `\\$` cua bai nay DO tren ban lam viec
+  // Windows va XANH tren CI — mot bai test co ket qua phu thuoc may la mot bai test khong dung.
+  const deployCi = readScript('deploy-ci.sh');
+  const deployRemote = readScript('deploy-remote.sh');
+  const renderSecrets = readScript('render-secrets.sh');
+
+  // `PROFILE_ID` la khoa doi chieu cua chinh deploy-ci.sh (no so voi DEPLOYMENT_PROFILE roi dung
+  // lai o do); no khong duoc truyen xuong VM va khong nen bi doi hoi la phai truyen.
+  const keys = Object.keys(describeRuntimeContract(DEPLOYMENT_PROFILES['ultty-gd1-test'])).filter(
+    (key) => key !== 'PROFILE_ID',
+  );
+  assert.ok(keys.length >= 9, `hop dong ho so chi con ${keys.length} khoa — phep quet hong`);
+
+  const sshLine = deployCi
+    .split('\n')
+    .find((line) => line.includes("bash '${remote_parent}/netviet/deploy-remote.sh'"));
+  assert.ok(sshLine, 'khong tim thay dong goi deploy-remote.sh qua SSH trong deploy-ci.sh');
+
+  for (const key of keys) {
+    assert.ok(
+      deployCi.includes(`      ${key}) ${key}="\${profile_value}" ;;`),
+      `deploy-ci.sh thieu nhanh case cho ${key} — hop dong se dung o \`exit 65\``,
+    );
+    assert.ok(sshLine.includes(`${key}='\${${key}}'`), `dong SSH khong truyen ${key} xuong VM`);
+    // Doi chieu bang CHUOI CON, khong bang bieu thuc chinh quy: mot mau nhieu dau gach cheo
+    // nguoc chi can di qua mot lop trich dan sai la vo mot cach IM LANG (no van khop rong, hoac
+    // khong khop gi ca) — dung chuyen da xay ra khi bai nay duoc viet lan dau. Tien to nay khong
+    // phu thuoc gia tri mac dinh cua tung khoa, nen no khong vo khi mot mac dinh doi.
+    assert.ok(
+      deployRemote.includes(`  ${key}="\${${key}:-`),
+      `deploy-remote.sh khong truyen ${key} cho render-secrets.sh`,
+    );
+    assert.ok(renderSecrets.includes(key), `render-secrets.sh khong doc ${key}`);
+  }
+});
