@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { MetricCard, StatusBadge } from '../components/primitives';
+import { expenseCategoryLabel } from '../customer-view';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
@@ -645,7 +646,7 @@ function DriverExpense() {
                   <option value="">Chọn nhóm chi phí</option>
                   {categories.map((code) => (
                     <option key={code} value={code}>
-                      {code}
+                      {expenseCategoryLabel(code)}
                     </option>
                   ))}
                 </select>

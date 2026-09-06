@@ -4,7 +4,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { DataTable, DetailRow, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
-import { formatMoney, TRIP_KIND_LABEL, TRIP_STATUS_LABEL } from '../customer-view';
+import {
+  expenseCategoryLabel,
+  formatMoney,
+  TRIP_KIND_LABEL,
+  TRIP_STATUS_LABEL,
+} from '../customer-view';
 import {
   toSectionQuery,
   useCustomers,
@@ -441,7 +446,7 @@ function TripDetailView({
               {costModel.rows.map((entry) => (
                 <li key={entry.id}>
                   <strong>
-                    {entry.categoryCode} · {entry.amountLabel}
+                    {expenseCategoryLabel(entry.categoryCode)} · {entry.amountLabel}
                   </strong>
                   <span>
                     {entry.fundedByLabel} · {entry.businessDateLabel}

@@ -575,14 +575,26 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
   await page.route('**/transport/settlement/trips/*/direct-margin', (route) =>
     json(route, DIRECT_MARGIN),
   );
-  await page.route('**/transport/maintenance/due', (route) => json(route, MAINTENANCE_DUE));
-  await page.route('**/transport/maintenance/plans', (route) => json(route, []));
-  await page.route('**/transport/maintenance/work-orders', (route) => json(route, []));
-  await page.route('**/transport/compliance/documents', (route) => json(route, []));
-  await page.route('**/transport/compliance/alerts', (route) => json(route, COMPLIANCE_ALERTS));
-  await page.route('**/transport/fleet-status', (route) => json(route, []));
+  // PHONG BI, khong mang tran. May chu that goi `{ due }`, `{ plans }`, `{ workOrders }`,
+  // `{ documents }`, `{ alerts, gaps }`, `{ vehicles, conflicts }`. Cac may chu gia o day tung tra
+  // ve mang tran, nen bo e2e xanh trong khi hai muc "Bao duong & giay to" va "Luong" TRANG MAN
+  // tren ban that (`N.map is not a function`, do o T10 tren `e4fbf95`).
+  await page.route('**/transport/maintenance/due', (route) =>
+    json(route, { due: MAINTENANCE_DUE }),
+  );
+  await page.route('**/transport/maintenance/plans', (route) => json(route, { plans: [] }));
+  await page.route('**/transport/maintenance/work-orders', (route) =>
+    json(route, { workOrders: [] }),
+  );
+  await page.route('**/transport/compliance/documents', (route) => json(route, { documents: [] }));
+  await page.route('**/transport/compliance/alerts', (route) =>
+    json(route, { alerts: COMPLIANCE_ALERTS, gaps: [] }),
+  );
+  await page.route('**/transport/fleet-status', (route) =>
+    json(route, { vehicles: [], conflicts: [] }),
+  );
   await page.route('**/transport/alerts', (route) => json(route, ALERT_FEED));
-  await page.route('**/transport/payroll/periods', (route) => json(route, []));
+  await page.route('**/transport/payroll/periods', (route) => json(route, { periods: [] }));
   await page.route('**/transport/me/payslips', (route) => json(route, []));
   await page.route('**/transport/me/expense-categories', (route) =>
     json(route, { categories: ['BOT', 'BAI_XE'], unrestricted: false }),

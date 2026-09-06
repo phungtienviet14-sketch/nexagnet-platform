@@ -108,7 +108,7 @@ export function calculatePayslip(
     components.push({
       kind: 'EARNING',
       source: 'BASE_SALARY',
-      label: 'Luong co ban',
+      label: 'Lương cơ bản',
       amount: money(policy.baseSalaryVnd).amount,
       quantity: null,
       unitAmount: policy.baseSalaryVnd,
@@ -121,7 +121,7 @@ export function calculatePayslip(
     components.push({
       kind: 'EARNING',
       source: 'PER_TRIP',
-      label: 'Khoan theo chuyen',
+      label: 'Khoán theo chuyến',
       amount: money(policy.perTripVnd * input.tripCount).amount,
       quantity: input.tripCount,
       unitAmount: policy.perTripVnd,
@@ -134,7 +134,7 @@ export function calculatePayslip(
     components.push({
       kind: 'EARNING',
       source: 'PER_KM',
-      label: 'Khoan theo ki-lo-met',
+      label: 'Khoán theo ki-lô-mét',
       amount: money(policy.perKmVnd * input.distanceKm).amount,
       quantity: input.distanceKm,
       unitAmount: policy.perKmVnd,
@@ -153,7 +153,7 @@ export function calculatePayslip(
     components.push({
       kind: 'EARNING',
       source: 'FUEL_SAVING_BONUS',
-      label: 'Thuong tiet kiem dau',
+      label: 'Thưởng tiết kiệm nhiên liệu',
       amount: money(policy.fuelSavingBonusVndPerLiter * litersSaved).amount,
       quantity: litersSaved,
       unitAmount: policy.fuelSavingBonusVndPerLiter,

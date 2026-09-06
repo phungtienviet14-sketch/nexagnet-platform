@@ -46,13 +46,24 @@ export function EmptyState({
 export function ErrorState({
   message,
   onRetry,
+  action,
 }: {
   readonly message: string;
   readonly onRetry?: () => void;
+  /**
+   * DUONG RA, khi loi khong phai thu-lai-duoc ma la di-cho-khac.
+   *
+   * Do o 390px tren ban dang chay: mot lai xe mo dia chi goc thay dung cau "Hãy dùng đường
+   * 'Mở màn hình lái xe'" — con duong do nam trong thanh ben, ma o be ngang dien thoai thanh ben
+   * DA GAP vao mot nut "Danh mục" khong duoc nhac toi. Cau chu tro toi mot thu nguoi doc khong
+   * nhin thay: mot ngo cut, dung tren THIET BI CHINH cua vai do.
+   */
+  readonly action?: ReactNode;
 }) {
   return (
     <div className="tx-state tx-state--error" role="alert">
       <p>{message}</p>
+      {action}
       {onRetry === undefined ? null : (
         <button type="button" className="tx-btn" onClick={onRetry}>
           Thử lại
