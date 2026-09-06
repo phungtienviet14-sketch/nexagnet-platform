@@ -36,10 +36,15 @@ import {
   type CreateFuelSupplierInput,
   type CreateStatementInput,
   type CreatedStatement,
+  type FuelEntryInboxFilter,
+  type FuelEntryInboxQuery,
+  type FuelEntryPage,
   type ReopenReconciliationInput,
   type ResolveDiscrepancyInput,
   type ResolveDiscrepancyOutcome,
   type SetFuelVerificationInput,
+  type WithdrawEvidenceInput,
+  type WithdrawEvidenceOutcome,
 } from './fuel.repository.js';
 import type {
   FuelDiscrepancy,
@@ -122,7 +127,38 @@ const toEvidence = (row: any): FuelReceiptEvidence => ({
   capturedAt: isoOrNull(row.capturedAt),
   uploadedBy: row.uploadedBy,
   createdAt: iso(row.createdAt),
+  withdrawnAt: isoOrNull(row.withdrawnAt),
+  withdrawnBy: row.withdrawnBy ?? null,
 });
+
+/**
+ * PHAN BO LOC KHONG DONG TOI TRUC TRANG THAI DUYET — #222 P1-B.
+ *
+ * Tach ra vi `pendingVerificationCount` phai dem tren DUNG bo loc nay va BO truc duyet di. Viet
+ * hai menh de `where` rieng se lam hai con so tren cung mot man hinh doc hai pham vi khac nhau
+ * ngay lan dau ai do them mot bo loc moi.
+ */
+const inboxScopeWhere = (filter: FuelEntryInboxFilter): Record<string, any> => {
+  const where: Record<string, any> = {};
+  // `null` = khong loc; `[]` = co loc va khong chuyen nao khop. Xem `FuelEntryInboxFilter`.
+  if (filter.tripIds !== null) where.tripId = { in: [...filter.tripIds] };
+  if (filter.driverId !== null) where.driverId = filter.driverId;
+  if (filter.vehicleId !== null) where.vehicleId = filter.vehicleId;
+  if (filter.supplierId !== null) where.supplierId = filter.supplierId;
+  if (filter.reconciliation !== null) where.reconciliationStatus = filter.reconciliation;
+  if (filter.from !== null || filter.to !== null) {
+    where.businessDate = {
+      ...(filter.from === null ? {} : { gte: filter.from }),
+      ...(filter.to === null ? {} : { lte: filter.to }),
+    };
+  }
+  return where;
+};
+
+const inboxVerificationWhere = (
+  filter: FuelEntryInboxFilter,
+): { verificationStatus?: FuelVerificationStatus } =>
+  filter.verification === null ? {} : { verificationStatus: filter.verification };
 
 const toStatement = (row: any): FuelSupplierStatement => ({
   id: row.id,
@@ -360,6 +396,49 @@ export class PrismaFuelRepository extends FuelRepository {
     });
     return rows.map(toEntry);
   }
+
+  /**
+   * HOP THU cua CA DOI — #222 P1-B.
+   *
+   * ===========================================================================
+   * BA CAU LENH, KHONG PHAI N+1
+   *
+   * `findMany` (mot trang), `count` (tong khop bo loc), `count` (viec dang cho). Ba lan cham DB CO
+   * BIEN, khong phu thuoc so chuyen hay so phieu. Duong ma #222 cam — mo N chuyen roi cong lai o
+   * trinh duyet — chinh la thu bi thay the o day.
+   *
+   * ===========================================================================
+   * `pendingVerificationCount` KHONG dung `where` cua trang
+   *
+   * No dem tren bo loc DA BO truc trang thai duyet. Nguoi dang loc "da duyet" van phai thay con bao
+   * nhieu viec cho ho; mot con so chay theo bo loc se tut ve 0 dung luc no can noi that nhat.
+   */
+  async listEntriesForInbox(query: FuelEntryInboxQuery): Promise<FuelEntryPage> {
+    const scope = inboxScopeWhere(query);
+    const where = { ...scope, ...inboxVerificationWhere(query) };
+
+    const [rows, total, pendingVerificationCount] = await Promise.all([
+      model(this.prisma, 'transportFuelEntry').findMany({
+        where,
+        // `verificationStatus asc` = thu tu KHAI BAO cua enum Postgres, va `DECLARED` la gia tri
+        // dau tien — xem chu thich cua `listEntriesForInbox` o `fuel.repository.ts`.
+        orderBy: [
+          { verificationStatus: 'asc' },
+          { businessDate: 'desc' },
+          { occurredAt: 'desc' },
+          { id: 'asc' },
+        ],
+        skip: query.offset,
+        take: query.limit,
+      }),
+      model(this.prisma, 'transportFuelEntry').count({ where }),
+      model(this.prisma, 'transportFuelEntry').count({
+        where: { ...scope, verificationStatus: 'DECLARED' },
+      }),
+    ]);
+
+    return { entries: rows.map(toEntry), total, pendingVerificationCount };
+  }
   async listEntriesForMatching(input: {
     supplierId: string;
     from: string;
@@ -524,12 +603,78 @@ export class PrismaFuelRepository extends FuelRepository {
     });
   }
 
+  /** CHI hang dang hieu luc — hang da bia mo (`withdrawnAt`) khong ra khoi tang kho. */
   async listEvidence(fuelEntryId: string): Promise<FuelReceiptEvidence[]> {
     const rows = await model(this.prisma, 'transportFuelReceiptEvidence').findMany({
-      where: { fuelEntryId },
+      where: { fuelEntryId, withdrawnAt: null },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
     return rows.map(toEvidence);
+  }
+
+  /**
+   * GO mot bang chung — BIA MO trong mot giao dich da khoa hang phieu (#222 P1-C).
+   *
+   * ===========================================================================
+   * THU TU BON BUOC, va khong buoc nao doi cho duoc
+   *
+   * ```text
+   * 1. khoa doc quyen hang phieu  (`SELECT ... FOR UPDATE`)
+   * 2. doc lai HAI truc trang thai TU HANG DA KHOA — khong tin gia tri doc truoc giao dich
+   * 3. tu choi neu mot trong hai truc da vuot qua ranh gioi bat bien
+   * 4. `UPDATE ... WHERE id = ? AND "withdrawnAt" IS NULL`  -> 0 hang = ai do vua go truoc
+   * ```
+   *
+   * Buoc 4 co menh de `withdrawnAt IS NULL` chu khong chi `id`: hai lan bam "Gỡ chứng từ" gan nhau
+   * se cho lan thu hai ghi de mot dau vet co that (`withdrawnBy` cua nguoi thu nhat) neu khong co
+   * no. Ket qua `ALREADY_WITHDRAWN` la mot cau tra loi that, khong phai mot loi.
+   */
+  async withdrawEvidence(input: WithdrawEvidenceInput): Promise<WithdrawEvidenceOutcome> {
+    return this.prisma.$transaction(async (tx) => {
+      const scoped = tx as unknown as PrismaService;
+      await scoped.$executeRaw`SELECT "id" FROM "TransportFuelEntry" WHERE "id" = ${input.fuelEntryId} FOR UPDATE`;
+
+      const entry = await model(scoped, 'transportFuelEntry').findUnique({
+        where: { id: input.fuelEntryId },
+        select: { verificationStatus: true, reconciliationStatus: true },
+      });
+      if (!entry) return { kind: 'ENTRY_NOT_FOUND' } as const;
+
+      if (
+        input.forbiddenVerificationStatuses.includes(entry.verificationStatus) ||
+        input.forbiddenReconciliationStatuses.includes(entry.reconciliationStatus)
+      ) {
+        return {
+          kind: 'STATE_RACE',
+          verification: entry.verificationStatus as FuelVerificationStatus,
+          reconciliation: entry.reconciliationStatus as FuelReconciliationStatus,
+        } as const;
+      }
+
+      // Doc theo `fuelEntryId` roi loc trong do — KHONG `findUnique({id: evidenceId})`. Mot phep
+      // tim thang theo id se tra ve hang cua phieu BAT KY, va luc do quyen so huu vua kiem o
+      // controller khong con y nghia gi: nguoi goi chi viec doi `evidenceId` tren URL.
+      const found = await model(scoped, 'transportFuelReceiptEvidence').findFirst({
+        where: { id: input.evidenceId, fuelEntryId: input.fuelEntryId },
+      });
+      if (!found) return { kind: 'EVIDENCE_NOT_FOUND' } as const;
+      if (found.withdrawnAt) return { kind: 'ALREADY_WITHDRAWN' } as const;
+
+      const updated = await model(scoped, 'transportFuelReceiptEvidence').updateMany({
+        where: { id: input.evidenceId, fuelEntryId: input.fuelEntryId, withdrawnAt: null },
+        data: { withdrawnAt: input.at, withdrawnBy: input.actor },
+      });
+      if (updated.count === 0) return { kind: 'ALREADY_WITHDRAWN' } as const;
+
+      return {
+        kind: 'WITHDRAWN',
+        evidence: toEvidence({
+          ...found,
+          withdrawnAt: input.at,
+          withdrawnBy: input.actor,
+        }),
+      } as const;
+    });
   }
 
   /* --------------------------- Bang ke ---------------------------- */

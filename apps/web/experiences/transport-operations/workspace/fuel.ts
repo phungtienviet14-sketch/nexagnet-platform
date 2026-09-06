@@ -26,6 +26,9 @@ import type {
   FuelDiscrepancyKind,
   FuelDiscrepancyResolution,
   FuelEntry,
+  FuelEntryInboxPage,
+  FuelEntryInboxRow,
+  FuelInboxEvidenceRef,
   FuelReconciliation,
   FuelReconciliationStatus,
   FuelReconciliationWorkspace,
@@ -144,6 +147,118 @@ export const toFuelEntryRows = (
 ): readonly FuelEntryRow[] => {
   const index = new Map(suppliers.map((row) => [row.id, row.name]));
   return entries.map((entry) => toFuelEntryRow(entry, index, role));
+};
+
+/* ------------------------------------------------------------------ *
+ * HOP THU PHIEU NHIEN LIEU cua CA DOI — #222 P1-B
+ * ------------------------------------------------------------------ */
+
+export interface FuelInboxRowModel {
+  readonly id: string;
+  readonly tripCode: string;
+  readonly driverLabel: string;
+  readonly vehicleLabel: string;
+  readonly supplierLabel: string;
+  readonly businessDateLabel: string;
+  readonly occurredAtLabel: string;
+  readonly litersLabel: string;
+  readonly amountLabel: string;
+  readonly invoiceNo: string | null;
+  readonly paymentLabel: string;
+  readonly verificationLabel: string;
+  readonly verificationTone: StatusTone;
+  readonly reconciliationLabel: string;
+  readonly reconciliationTone: StatusTone;
+  readonly reviewReasons: readonly string[];
+  readonly rejectedNote: string | null;
+  readonly evidenceCountLabel: string;
+  readonly evidence: readonly FuelInboxEvidenceRef[];
+  readonly canVerify: boolean;
+  readonly canReject: boolean;
+  readonly canResubmit: boolean;
+}
+
+/**
+ * MOT DONG HOP THU o dang man hinh doc duoc.
+ *
+ * KHONG dung lai `toFuelEntryRow`: dong hop thu da co san chu (`tripCode`, `driverName`,
+ * `vehiclePlate`, `supplierName`) do MAY CHU doi, con `toFuelEntryRow` nhan `FuelEntry` tho va tu
+ * tra bang cay xang. Ep chung chung mot ham se buoc mot trong hai ben phai gia vo co du lieu ma no
+ * khong co.
+ *
+ * Ba cong hanh dong (`canVerify`/`canReject`/`canResubmit`) dung DUNG luat cua `toFuelEntryRow` —
+ * mot ban sao lech o day se de hai man hinh cho hai cau tra loi khac nhau cho cung mot phieu.
+ */
+export const toFuelInboxRow = (
+  row: FuelEntryInboxRow,
+  role: AuthRole | null,
+): FuelInboxRowModel => {
+  const mayVerify = canPerform(role, 'transport.fuel.entry.verify');
+  return {
+    id: row.id,
+    tripCode: row.tripCode,
+    // May chu tra `null` khi ho so da bi xoa/doi ten. Noi that thay vi de mot o trong.
+    driverLabel: row.driverName ?? 'Lái xe chưa đọc được tên',
+    vehicleLabel: row.vehiclePlate ?? 'Xe chưa đọc được biển',
+    supplierLabel: row.supplierName ?? 'Cây xăng chưa đọc được tên',
+    businessDateLabel: formatBusinessDate(row.businessDate),
+    occurredAtLabel: formatInstant(row.occurredAt),
+    litersLabel: formatLiters(row.litersUnits),
+    amountLabel: formatMoney(row.amount),
+    invoiceNo: row.invoiceNo,
+    paymentLabel: FUEL_PAYMENT_METHOD_LABEL[row.paymentMethod],
+    verificationLabel: FUEL_VERIFICATION_LABEL[row.verificationStatus],
+    verificationTone: fuelVerificationTone(row.verificationStatus),
+    reconciliationLabel: FUEL_RECONCILIATION_STATUS_LABEL[row.reconciliationStatus],
+    reconciliationTone: fuelReconciliationStatusTone(row.reconciliationStatus),
+    reviewReasons: [...row.reviewReasons],
+    rejectedNote:
+      row.verificationStatus === 'REJECTED'
+        ? (row.reviewNote ?? 'Phiếu bị từ chối. Lái xe sửa lại theo ghi chú rồi nộp lại.')
+        : null,
+    evidenceCountLabel: formatCount(row.evidenceCount),
+    evidence: row.evidence,
+    canVerify: mayVerify && row.verificationStatus === 'DECLARED',
+    canReject: mayVerify && row.verificationStatus === 'DECLARED',
+    canResubmit: mayVerify && row.verificationStatus === 'REJECTED',
+  };
+};
+
+export interface FuelInboxModel {
+  readonly rows: readonly FuelInboxRowModel[];
+  /** `N chờ xác thực` — con so DUY NHAT tren man nay noi co viec phai lam. */
+  readonly pendingLabel: string;
+  readonly isIdle: boolean;
+  readonly totalLabel: string;
+  readonly rangeLabel: string;
+  readonly hasPrevious: boolean;
+  readonly hasNext: boolean;
+}
+
+/**
+ * TRANG HOP THU o dang man hinh doc duoc.
+ *
+ * `rangeLabel` (`1–50 / 214`) chu khong mot so trang: nguoi doi soat quan tam "toi dang nhin nhung
+ * dong nao trong bao nhieu dong", khong quan tam day la trang thu may cua mot phep chia.
+ */
+export const toFuelInboxModel = (
+  page: FuelEntryInboxPage,
+  role: AuthRole | null,
+): FuelInboxModel => {
+  const first = page.total === 0 ? 0 : page.offset + 1;
+  const last = Math.min(page.offset + page.rows.length, page.total);
+  return {
+    rows: page.rows.map((row) => toFuelInboxRow(row, role)),
+    pendingLabel:
+      page.pendingVerificationCount === 0
+        ? 'Không còn phiếu nào chờ xác thực'
+        : `${formatCount(page.pendingVerificationCount)} chờ xác thực`,
+    isIdle: page.pendingVerificationCount === 0,
+    totalLabel: `${formatCount(page.total)} phiếu`,
+    rangeLabel: page.total === 0 ? '0 / 0' : `${first}–${last} / ${formatCount(page.total)}`,
+    hasPrevious: page.offset > 0,
+    hasNext: page.offset + page.rows.length < page.total,
+  };
 };
 
 /* ------------------------------------------------------------------ *

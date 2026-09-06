@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { MetricCard, StatusBadge } from '../components/primitives';
 import { expenseCategoryLabel } from '../customer-view';
-import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
+import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
   useDriverExpenseCategories,
@@ -247,6 +247,10 @@ function DriverFuel() {
     invoiceNo: '',
   });
   const [correlationKey, setCorrelationKey] = useState(() => newCorrelationKey());
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    readonly slipId: string;
+    readonly evidenceId: string;
+  } | null>(null);
 
   const trip = currentDriverTrip(trips.data ?? []);
   const rows = toDriverFuelSlipRows(slips.data ?? []);
@@ -294,6 +298,30 @@ function DriverFuel() {
     onSuccess: () => {
       setFailure(null);
       setSuccess('Đã đính ảnh vào phiếu.');
+      invalidate();
+    },
+    onError: (error: Error) => {
+      setSuccess(null);
+      setFailure(error.message);
+    },
+  });
+
+  /**
+   * GO MOT CHUNG TU TAI NHAM — #222 P1-C.
+   *
+   * Chu so huu KHONG muon them mot buoc xac nhan TRUOC khi tai len (chon tep -> tai ngay van giu
+   * nguyen). Cai thieu la duong lui SAU mot lan tai nham, va no o day.
+   *
+   * May chu tra ve phieu DA CAP NHAT, nen man hinh khong doan trang thai moi; `invalidate()` van
+   * duoc goi de moi khung nhin khac cua cung phieu do lam moi theo.
+   */
+  const removeEvidence = useMutation({
+    mutationFn: (input: { readonly slipId: string; readonly evidenceId: string }) =>
+      transportApi.me.removeFuelEvidence(input.slipId, input.evidenceId),
+    onSuccess: () => {
+      setFailure(null);
+      setSuccess('Đã gỡ chứng từ khỏi phiếu.');
+      setPendingRemoval(null);
       invalidate();
     },
     onError: (error: Error) => {
@@ -458,29 +486,58 @@ function DriverFuel() {
                     ANH doc qua route CO XAC THUC, khong qua URL ky: kho anh la bucket PRIVATE chua
                     PII, va mot URL ky con song sau khi phien het han.
                   */}
+                  {/*
+                    MOI CHUNG TU CO DUONG XEM VA (khi con go duoc) DUONG GO — #222 P1-C.
+
+                    Nut `Gỡ chứng từ` di kem mot hop xac nhan PHA HUY: nguoi dung dang dao nguoc
+                    mot tep DA DINH VAO CHUNG TU TAI CHINH, khong phai dong mot hop thoai. Khi
+                    khong con go duoc, nut BIEN MAT va mot cau noi ro VI SAO thay cho no — mot nut
+                    bi tat khong loi giai la mot nut nguoi ta bam lai lan hai.
+                  */}
                   {row.evidence.length === 0 ? null : (
                     <span className="tx-driver__thumbs">
-                      {row.evidence.map((evidence) =>
-                        evidence.contentType === 'application/pdf' ? (
-                          <a
-                            key={evidence.id}
-                            href={evidenceUrls.driverFuelSlip(row.id, evidence.id)}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Xem chứng từ PDF
-                          </a>
-                        ) : (
-                          <img
-                            key={evidence.id}
-                            src={evidenceUrls.driverFuelSlip(row.id, evidence.id)}
-                            alt={`Ảnh chứng từ của phiếu ngày ${row.businessDateLabel}`}
-                            loading="lazy"
-                          />
-                        ),
-                      )}
+                      {row.evidence.map((evidence) => (
+                        <span key={evidence.id} className="tx-driver__thumb">
+                          {evidence.contentType === 'application/pdf' ? (
+                            <a
+                              href={evidenceUrls.driverFuelSlip(row.id, evidence.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Xem chứng từ PDF
+                            </a>
+                          ) : (
+                            <a
+                              href={evidenceUrls.driverFuelSlip(row.id, evidence.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <img
+                                src={evidenceUrls.driverFuelSlip(row.id, evidence.id)}
+                                alt={`Ảnh chứng từ của phiếu ngày ${row.businessDateLabel}`}
+                                loading="lazy"
+                              />
+                            </a>
+                          )}
+                          {row.canRemoveEvidence ? (
+                            <button
+                              type="button"
+                              className="tx-btn tx-btn--stop tx-btn--small"
+                              disabled={removeEvidence.isPending}
+                              onClick={() =>
+                                setPendingRemoval({ slipId: row.id, evidenceId: evidence.id })
+                              }
+                            >
+                              Gỡ chứng từ
+                            </button>
+                          ) : null}
+                        </span>
+                      ))}
                     </span>
                   )}
+                  {row.evidence.length > 0 && row.evidenceLockedReason !== null ? (
+                    <span className="tx-note">{row.evidenceLockedReason}</span>
+                  ) : null}
                   <label className="tx-field tx-field--file">
                     <span>Đính ảnh chứng từ</span>
                     <input
@@ -514,6 +571,26 @@ function DriverFuel() {
           </ul>
         )}
       </section>
+
+      {/*
+        XAC NHAN PHA HUY — #222 P1-C doi dung dieu nay: *"`Gỡ chứng từ` must require a destructive
+        confirmation because the user is reversing an already-uploaded business attachment."*
+
+        Cau `detail` noi ro HAI dieu ma nguoi dung can biet truoc khi bam: tep se bien mat that, va
+        dau vet cua lan go van o lai. Giau ve thu hai se lam nguoi ta ngai bam mot thao tac hop le.
+      */}
+      <ConfirmAction
+        open={pendingRemoval !== null}
+        title="Gỡ chứng từ khỏi phiếu này?"
+        detail="Tệp sẽ bị xoá khỏi kho ảnh và không xem lại được. Hệ thống vẫn ghi lại việc bạn đã gỡ nó."
+        confirmLabel="Gỡ chứng từ"
+        isDestructive
+        isBusy={removeEvidence.isPending}
+        onConfirm={() => {
+          if (pendingRemoval !== null) removeEvidence.mutate(pendingRemoval);
+        }}
+        onCancel={() => setPendingRemoval(null)}
+      />
     </>
   );
 }

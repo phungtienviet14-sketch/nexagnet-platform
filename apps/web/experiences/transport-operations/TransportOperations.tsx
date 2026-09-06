@@ -8,6 +8,7 @@ import { useNavigationInput } from './hooks/useTransportWorkspace';
 import {
   buildDriverUrl,
   buildNavigationUrl,
+  EMPTY_TRIP_FILTER_QUERY,
   findSection,
   navigationGroups,
   parseNavigationFromSearch,
@@ -18,6 +19,7 @@ import {
   type ResolvedNavigation,
   type TransportSectionId,
   type TransportSurface,
+  type TripFilterQuery,
 } from './navigation';
 import { hasOperationsScope, operationsEmptyMessage } from './transport-actions';
 import { DriverFundView } from './views/DriverFundView';
@@ -47,6 +49,7 @@ const INITIAL: ResolvedNavigation = {
   section: 'overview',
   screen: 'home',
   selection: null,
+  tripFilter: EMPTY_TRIP_FILTER_QUERY,
 };
 
 const readNavigation = (input: NavigationInput): ResolvedNavigation =>
@@ -69,6 +72,7 @@ export function TransportOperations() {
           section: current.section,
           screen: current.screen,
           selection: current.selection,
+          tripFilter: current.tripFilter,
         },
         null,
         navigation,
@@ -104,6 +108,8 @@ export function TransportOperations() {
           section: next.section ?? state.section,
           screen: next.screen ?? state.screen,
           selection: state.selection,
+          // Doi muc thi `resolveNavigation` tu bo bo loc di — cung luat voi lua chon (#222 P2 §3).
+          tripFilter: state.tripFilter,
         },
         { section: state.section, screen: state.screen },
         navigation,
@@ -126,6 +132,34 @@ export function TransportOperations() {
           section: state.section,
           screen: state.screen,
           selection,
+          tripFilter: state.tripFilter,
+        },
+        { section: state.section, screen: state.screen },
+        navigation,
+      );
+      window.history.replaceState(null, '', buildNavigationUrl(resolved));
+      setState(resolved);
+    },
+    [navigation, state],
+  );
+
+  /**
+   * DOI BO LOC — `replaceState`, cung ly le voi `selectWithin` (#222 P2).
+   *
+   * KHONG `pushState`: mot o tim kiem day mot muc lich su cho MOI KY TU go vao, va Back se thanh
+   * nut xoa tung chu. Nguoi dung mong Back la "ra khoi man hinh nay", va chinh yeu cau §2 cua #222
+   * ("Back/Forward restores prior filter state") duoc dap ung boi cac moc lich su THAT — doi muc,
+   * hoac mot dia chi duoc mo tu ngoai — chu khong boi tung phim.
+   */
+  const filterWithin = useCallback(
+    (tripFilter: TripFilterQuery) => {
+      const resolved = resolveNavigation(
+        {
+          surface: state.surface === 'driver' ? 'driver' : null,
+          section: state.section,
+          screen: state.screen,
+          selection: state.selection,
+          tripFilter,
         },
         { section: state.section, screen: state.screen },
         navigation,
@@ -182,7 +216,13 @@ export function TransportOperations() {
           }
         />
       ) : (
-        <SectionBody section={state.section} selection={state.selection} onSelect={selectWithin} />
+        <SectionBody
+          section={state.section}
+          selection={state.selection}
+          onSelect={selectWithin}
+          tripFilter={state.tripFilter}
+          onTripFilterChange={filterWithin}
+        />
       )}
     </TransportShell>
   );
@@ -192,16 +232,27 @@ function SectionBody({
   section,
   selection,
   onSelect,
+  tripFilter,
+  onTripFilterChange,
 }: {
   readonly section: TransportSectionId;
   readonly selection: string | null;
   readonly onSelect: (selection: string | null) => void;
+  readonly tripFilter: TripFilterQuery;
+  readonly onTripFilterChange: (filter: TripFilterQuery) => void;
 }) {
   switch (section) {
     case 'overview':
       return <OverviewView />;
     case 'trips':
-      return <TripsView selection={selection} onSelect={onSelect} />;
+      return (
+        <TripsView
+          selection={selection}
+          onSelect={onSelect}
+          filter={tripFilter}
+          onFilterChange={onTripFilterChange}
+        />
+      );
     case 'fleet':
       return <FleetView />;
     case 'driver-fund':

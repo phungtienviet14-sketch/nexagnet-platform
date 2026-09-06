@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { MediaStore, contentTypeForKey, type MediaObject } from './media-store.js';
 
@@ -42,5 +42,25 @@ export class LocalMediaStore extends MediaStore {
       // Khong co file = 404 o tang tren, khong phai loi he thong.
       return null;
     }
+  }
+
+  override get supportsRemove(): boolean {
+    return true;
+  }
+
+  /**
+   * Xoa mot tep. `force: true` lam lenh IDEMPOTENT — tep khong con thi khong nem (hop dong cua
+   * `MediaStore.remove`).
+   *
+   * Rao `../` duoc kiem LAN BA o day, cung ly le voi `put`/`get`. Voi mot lenh XOA no con quan
+   * trong hon ca hai: mot khoa vuot ra ngoai thu muc goc o duong doc chi lam lo mot tep, o duong
+   * nay no XOA mot tep bat ky cua may chu.
+   */
+  override async remove(key: string): Promise<void> {
+    const target = resolve(this.root, key);
+    if (!target.startsWith(this.root + sep)) {
+      throw new Error(`Khoa vuot ra ngoai thu muc goc, tu choi xoa: "${key}"`);
+    }
+    await rm(target, { force: true });
   }
 }

@@ -47,9 +47,20 @@ class StubCoreFacts extends TransportFuelCoreFacts {
     return { id: TRIP, code: 'CH-001', kind: this.tripKind, status: this.tripStatus };
   }
 
+  async findTripByCode(code: string): Promise<FuelTripFacts | null> {
+    return code === 'CH-001' ? this.findTrip(TRIP) : null;
+  }
+
   async findVehicle(vehicleId: string): Promise<FuelVehicleFacts | null> {
     if (vehicleId !== VEHICLE) return null;
     return { id: VEHICLE, registrationPlate: '29C-123.45', vehicleClass: 'tai-5-tan' };
+  }
+
+  async listDrivers(): Promise<FuelDriverFacts[]> {
+    return [
+      { id: DRIVER, fullName: `Lai xe ${DRIVER}` },
+      { id: OTHER_DRIVER, fullName: `Lai xe ${OTHER_DRIVER}` },
+    ];
   }
 
   async listVehicles(): Promise<FuelVehicleFacts[]> {

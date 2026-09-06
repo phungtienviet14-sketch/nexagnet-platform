@@ -164,6 +164,115 @@ export interface SetFuelVerificationInput {
 }
 
 /* ------------------------------------------------------------------ *
+ * HOP THU PHIEU cua CA DOI — #222 P1-B
+ * ------------------------------------------------------------------ */
+
+/**
+ * BO LOC cua hop thu — moi truong `null` nghia la KHONG loc theo truc do.
+ *
+ * ===========================================================================
+ * `tripIds` la MOT DANH SACH ID, khong phai mot chuoi ma chuyen
+ *
+ * Nguoi dung go MA CHUYEN (`UAT-VIET-01`), nhung phep doi ma -> id thuoc `transport-core` va di qua
+ * `TransportFuelCoreFacts`. Tang kho cua fuel KHONG duoc doc bang chuyen (T1 §4.1), nen no nhan ket
+ * qua da doi san. `[]` (mang rong) va `null` vi vay la HAI thu khac han:
+ *
+ * ```text
+ * null -> khong loc theo chuyen
+ * []   -> co loc, va KHONG chuyen nao khop  ->  ket qua rong
+ * ```
+ *
+ * Gop hai cai lam mot se lam mot lan tim "chuyen khong ton tai" tra ve TOAN BO hop thu.
+ */
+export interface FuelEntryInboxFilter {
+  readonly verification: FuelVerificationStatus | null;
+  readonly reconciliation: FuelReconciliationStatus | null;
+  readonly tripIds: readonly string[] | null;
+  readonly driverId: string | null;
+  readonly vehicleId: string | null;
+  readonly supplierId: string | null;
+  /** Khoang NGAY NGHIEP VU, hai dau DEU TINH. */
+  readonly from: BusinessDate | null;
+  readonly to: BusinessDate | null;
+}
+
+/**
+ * MOT TRANG cua hop thu — CO BIEN, luon luon.
+ *
+ * `limit` do tang ung dung chan trong mot khoang cung (`fuel.schemas.ts`) truoc khi toi day. Tang
+ * kho khong tu dat mac dinh: mot `findMany` khong `take` la mot cau lenh doc CA BANG, va no chay
+ * tot dung den ngay doi xe cua khach du lon de no khong chay tot nua.
+ */
+export interface FuelEntryInboxQuery extends FuelEntryInboxFilter {
+  readonly limit: number;
+  readonly offset: number;
+}
+
+export interface FuelEntryPage {
+  readonly entries: readonly FuelEntry[];
+  /** Bao nhieu phieu KHOP BO LOC — de phan trang. */
+  readonly total: number;
+  /**
+   * Bao nhieu phieu DANG CHO XAC THUC — CO Y bo qua `verification` cua bo loc.
+   *
+   * Day la con so "còn N việc chờ bạn" tren man hinh. Neu no chay theo bo loc, thi mot nguoi dang
+   * loc "da duyet" se thay `0 chờ xác thực` — dung luc ho khong nhin thay cong viec that.
+   */
+  readonly pendingVerificationCount: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * GO MOT BANG CHUNG — #222 P1-C
+ * ------------------------------------------------------------------ */
+
+/**
+ * BIA MO mot hang bang chung — KHONG xoa hang.
+ *
+ * ===========================================================================
+ * DIEU KIEN DI THEO LENH GHI, dung khuon `AmendFuelEntryGuard` (T4R §4)
+ *
+ * Kiem o tang mien roi buong ra la mot cong mo trong khoang giua luc doc va luc ghi:
+ *
+ * ```text
+ * A doc phieu    -> DECLARED, go duoc
+ * B duyet phieu  -> VERIFIED, va chi phi that vao gia thanh chuyen
+ * A ghi bia mo   -> UPDATE ... WHERE id = ...   (thanh cong)
+ * ```
+ *
+ * Ket cuc: mot phieu `VERIFIED` mat mot chung tu ma nguoi duyet vua doc de bam duyet. Nen dieu kien
+ * nam trong chinh giao dich ghi, tren hang phieu DA KHOA.
+ */
+export interface WithdrawEvidenceInput {
+  readonly fuelEntryId: string;
+  readonly evidenceId: string;
+  readonly actor: string;
+  readonly at: Date;
+  /** Phieu KHONG duoc dang o trang thai duyet nay luc ghi. */
+  readonly forbiddenVerificationStatuses: readonly FuelVerificationStatus[];
+  /** Va KHONG duoc o mot trong cac trang thai doi soat da khoa. */
+  readonly forbiddenReconciliationStatuses: readonly FuelReconciliationStatus[];
+}
+
+/**
+ * NAM ket cuc, va chung KHONG duoc gop.
+ *
+ * `ENTRY_NOT_FOUND` / `EVIDENCE_NOT_FOUND` / `ALREADY_WITHDRAWN` / `STATE_RACE` doi nguoi dung lam
+ * bon viec khac nhau — tai lai, doi id, khong lam gi, hoac di duong dao phieu. `WITHDRAWN` mang
+ * theo ca hang da bia mo vi `locator` cua no la thu DUY NHAT biet byte nam o dau, va ben goi phai
+ * don no ngay sau do.
+ */
+export type WithdrawEvidenceOutcome =
+  | { readonly kind: 'WITHDRAWN'; readonly evidence: FuelReceiptEvidence }
+  | { readonly kind: 'ENTRY_NOT_FOUND' }
+  | { readonly kind: 'EVIDENCE_NOT_FOUND' }
+  | { readonly kind: 'ALREADY_WITHDRAWN' }
+  | {
+      readonly kind: 'STATE_RACE';
+      readonly verification: FuelVerificationStatus;
+      readonly reconciliation: FuelReconciliationStatus;
+    };
+
+/* ------------------------------------------------------------------ *
  * Bang ke
  * ------------------------------------------------------------------ */
 
@@ -460,6 +569,19 @@ export abstract class FuelRepository {
    */
   abstract listEntriesNeedingReview(): Promise<FuelEntry[]>;
   /**
+   * HOP THU cua CA DOI — mot truy van MAY CHU, co bien, co bo loc (#222 P1-B).
+   *
+   * Truoc lan sua nay `TX-04` chi doc phieu theo TUNG CHUYEN (`listEntriesByTrip`) hoac theo TUNG
+   * LAI XE (`listEntriesByDriver`). Hau qua tren man hinh la ke toan phai mo lan luot N chuyen chi
+   * de biet phieu nao dang cho ho — tuc cong viec that (xac thuc phieu) khong co duong nao lam
+   * duoc o quy mo doi xe, va man Nhien lieu chi con la man nhap bang ke.
+   *
+   * THU TU: `verificationStatus ASC` roi `businessDate DESC, occurredAt DESC, id ASC`. `DECLARED`
+   * la gia tri DAU TIEN cua enum Postgres, nen viec dang cho nguoi len truoc, moi nhat truoc trong
+   * tung nhom — "actionable/newest first" ma khong can mot cot xep hang bia them.
+   */
+  abstract listEntriesForInbox(query: FuelEntryInboxQuery): Promise<FuelEntryPage>;
+  /**
    * Cac phieu CO THE khop voi mot bang ke: cung cay xang, ngay nghiep vu trong khoang DA NOI RONG
    * theo dung sai ngay.
    *
@@ -526,7 +648,20 @@ export abstract class FuelRepository {
     readonly at: Date;
     readonly forbiddenReconciliationStatuses: readonly FuelReconciliationStatus[];
   }): Promise<FuelReceiptEvidence | null>;
+  /**
+   * Bang chung DANG HIEU LUC cua mot phieu — hang da bia mo (`withdrawnAt`) KHONG co mat.
+   *
+   * Loc o TANG KHO, mot cho, chu khong de moi noi goi tu loc: co ba duong doc bang chung (be mat
+   * lai xe, be mat van hanh, hop thu), va mot trong ba quen loc la mot chung tu da go hien lai
+   * nhu dang hieu luc.
+   */
   abstract listEvidence(fuelEntryId: string): Promise<FuelReceiptEvidence[]>;
+  /**
+   * GO mot bang chung — bia mo, KHONG xoa hang (#222 P1-C).
+   *
+   * Xem `WithdrawEvidenceInput`: dieu kien vong doi di THEO lenh ghi, tren hang phieu da khoa.
+   */
+  abstract withdrawEvidence(input: WithdrawEvidenceInput): Promise<WithdrawEvidenceOutcome>;
 
   /* --- Bang ke --- */
   abstract createStatementWithReconciliation(

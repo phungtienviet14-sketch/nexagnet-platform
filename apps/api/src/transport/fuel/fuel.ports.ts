@@ -59,6 +59,38 @@ export interface FuelDriverFacts {
 
 export abstract class TransportFuelCoreFacts {
   abstract findTrip(tripId: string): Promise<FuelTripFacts | null>;
+  /**
+   * TIM CHUYEN THEO MA — cong cho bo loc cua hop thu (#222 P1-B).
+   *
+   * Nguoi dung go `UAT-VIET-01`, khong go mot `cuid`. Phep doi ma -> id thuoc `transport-core`, nen
+   * no di qua day; tang kho cua fuel van chi nhan `tripId` (§4.1 luat 4).
+   */
+  abstract findTripByCode(code: string): Promise<FuelTripFacts | null>;
+  /**
+   * MOI LAI XE — de dung bang tra `id -> ho ten` khi ve mot trang hop thu.
+   *
+   * Cung ly le voi `listVehicles()` ngay duoi: mot doi xe cua khach nay la con so nho co gioi han
+   * that (T1 §1), va mot lan doc ca bang re hon N lan tra tung dong. Duong con lai — de giao dien
+   * tu goi roi tu ghep — chinh la kieu N+1 ma #222 cam.
+   */
+  abstract listDrivers(): Promise<FuelDriverFacts[]>;
+
+  /**
+   * CHUYEN THEO MOT BO ID — de dung bang tra `id -> ma chuyen` cho MOT TRANG hop thu.
+   *
+   * MAC DINH hien thuc bang `findTrip` tung id, va do la mot lua chon co bien chu khong mot su
+   * luoi: `ids` o day luon la id CUA MOT TRANG (`limit` bi chan cung o `fuel.schemas.ts`), khong
+   * phai cua ca bang. So lan cham DB vi vay co tran cung, khong tang theo so chuyen cua khach.
+   *
+   * Mot hien thuc doc MOT lan van tot hon; cho de lam dieu do la `override` o adapter, va no khong
+   * doi mot dong nao cua ben goi.
+   */
+  async listTripsByIds(ids: readonly string[]): Promise<FuelTripFacts[]> {
+    const unique = [...new Set(ids)];
+    const found = await Promise.all(unique.map((id) => this.findTrip(id)));
+    return found.filter((trip): trip is FuelTripFacts => trip !== null);
+  }
+
   abstract findVehicle(vehicleId: string): Promise<FuelVehicleFacts | null>;
   /**
    * MOI xe, de dung bang tra `bien so -> id` luc nhap bang ke.
@@ -102,6 +134,17 @@ export class TransportFuelCoreFactsAdapter extends TransportFuelCoreFacts {
     const trip = await this.trips.find(tripId);
     if (!trip) return null;
     return { id: trip.id, code: trip.code, kind: trip.kind, status: trip.status };
+  }
+
+  async findTripByCode(code: string): Promise<FuelTripFacts | null> {
+    const trip = await this.trips.findByCode(code);
+    if (!trip) return null;
+    return { id: trip.id, code: trip.code, kind: trip.kind, status: trip.status };
+  }
+
+  async listDrivers(): Promise<FuelDriverFacts[]> {
+    const drivers = await this.fleet.listDrivers();
+    return drivers.map((driver) => ({ id: driver.id, fullName: driver.fullName }));
   }
 
   async findVehicle(vehicleId: string): Promise<FuelVehicleFacts | null> {

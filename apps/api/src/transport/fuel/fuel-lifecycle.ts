@@ -243,6 +243,77 @@ export function evaluateFuelEntryAmendment(
 }
 
 /* ------------------------------------------------------------------ *
+ * GO MOT BANG CHUNG DA TAI NHAM — #222 P1-C
+ * ------------------------------------------------------------------ */
+
+export const FUEL_EVIDENCE_REMOVAL_DENIED_REASONS = [
+  /**
+   * Phieu DA DUOC TIN (`VERIFIED`). Tam anh khong con la mot tep tai nham, no la CHUNG TU KE TOAN
+   * chong lung cho mot khoan chi da vao gia thanh chuyen.
+   *
+   * Duong dung o day KHONG phai go anh: la dao khoan chi o `TX-03` roi ghi phieu moi (`GD-10`).
+   */
+  'EVIDENCE_ENTRY_ALREADY_TRUSTED',
+  /**
+   * Phieu da KHOP voi mot dong bang ke, hoac da nam trong mot ky doi soat DA DONG (`GD-11`).
+   *
+   * Tach khoi ma tren vi nguoi dung phai lam viec KHAC: o tren ho di dao phieu, o day ho phai go
+   * cap khop hoac xin mo lai ky — mot thao tac co quyen rieng.
+   */
+  'EVIDENCE_ENTRY_RECONCILIATION_LOCKED',
+] as const;
+export type FuelEvidenceRemovalDeniedReason = (typeof FUEL_EVIDENCE_REMOVAL_DENIED_REASONS)[number];
+
+export type FuelEvidenceRemovalDecision =
+  | { readonly allowed: true }
+  | { readonly allowed: false; readonly reason: FuelEvidenceRemovalDeniedReason };
+
+/**
+ * MOT BANG CHUNG CON GO DUOC KHONG — #222 P1-C.
+ *
+ * ===========================================================================
+ * CONG NAY HEP HON CONG TAI LEN, VA DO LA CO Y
+ *
+ * `addEvidence` chi cam khi phieu da `SETTLED` (`EVIDENCE_FROZEN_...`): them mot tam anh khong doi
+ * mot con so nao, nen mot phieu DA KHOP van nhan them anh duoc. GO thi nguoc lai — no LAY DI mot
+ * chung tu ma ke toan co the da doc de bam duyet. Nen cong nay dung dung bo dieu kien cua
+ * `evaluateFuelEntryAmendment`: con `DECLARED`/`REJECTED`, va chua bi khoa boi doi soat.
+ *
+ * ===========================================================================
+ * VI SAO `REJECTED` VAN GO DUOC
+ *
+ * `REJECTED -> DECLARED` la "duong chay thuong ngay" (xem `VERIFICATION_EDGES`): ke toan tra lai
+ * phieu vi mo anh, lai xe chup lai roi nop lai. Bat ho nop lai ma khong go duoc tam anh mo di la
+ * bat ho de lai dung thu vua bi tu choi nam canh tam moi.
+ *
+ * `VERIFIED` thi KHONG, va khong co ngoai le: `VERIFICATION_EDGES.VERIFIED` la mot mang rong, tuc
+ * mot phieu da duyet khong co duong quay lai nao ca. Noi long o day se lam `GD-10` chi con la mot
+ * loi khuyen trong tai lieu.
+ */
+export function evaluateFuelEvidenceRemoval(
+  verification: FuelVerificationStatus,
+  reconciliation: FuelReconciliationStatus,
+): FuelEvidenceRemovalDecision {
+  if (verification === 'VERIFIED') {
+    return { allowed: false, reason: 'EVIDENCE_ENTRY_ALREADY_TRUSTED' };
+  }
+  if (isLockedFuelReconciliationStatus(reconciliation)) {
+    return { allowed: false, reason: 'EVIDENCE_ENTRY_RECONCILIATION_LOCKED' };
+  }
+  return { allowed: true };
+}
+
+/**
+ * Trang thai DOI SOAT chan mot lan go — dung bo `LOCKED_...` (`MATCHED` + `SETTLED`).
+ *
+ * Duoc VIET RA thanh mot hang so rieng vi tang kho phai nhan chinh bo nay lam dieu kien `WHERE`
+ * cua lenh ghi (cung khuon `AmendFuelEntryGuard`): mot cong chi kiem o tang mien la mot cong mo
+ * trong khoang giua luc doc va luc ghi.
+ */
+export const REMOVAL_BLOCKING_FUEL_RECONCILIATION_STATUSES: readonly FuelReconciliationStatus[] =
+  LOCKED_FUEL_RECONCILIATION_STATUSES;
+
+/* ------------------------------------------------------------------ *
  * DUONG DI TU DONG giua hai trang thai ky doi soat — T4R §1
  * ------------------------------------------------------------------ */
 

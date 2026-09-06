@@ -10,17 +10,20 @@ import {
   tripStatusTone,
   type StatusTone,
 } from '../customer-view';
+import type { TripFilterQuery } from '../navigation';
 import { canPerform, type TransportAction } from '../transport-actions';
-import type {
-  BusinessDate,
-  Driver,
-  TransportCustomer,
-  TransportPartner,
-  Trip,
-  TripAssignment,
-  TripKind,
-  TripStatus,
-  Vehicle,
+import {
+  TRIP_KINDS,
+  TRIP_STATUSES,
+  type BusinessDate,
+  type Driver,
+  type TransportCustomer,
+  type TransportPartner,
+  type Trip,
+  type TripAssignment,
+  type TripKind,
+  type TripStatus,
+  type Vehicle,
 } from '../transport-types';
 
 /**
@@ -134,6 +137,39 @@ export interface TripFilter {
 }
 
 export const EMPTY_TRIP_FILTER: TripFilter = { search: '', status: 'ALL', kind: 'ALL' };
+
+/**
+ * DIA CHI -> BO LOC CO KIEU — #222 P2 §4, "malformed values fail safely to valid defaults".
+ *
+ * Mot ma trang thai khong con ton tai (hoac ai do go tay `?status=BAY-GIO`) roi ve `ALL`, KHONG
+ * lam do man hinh va cung khong tra 400. Ly le: mot dia chi la thu nguoi ta dan cho nhau qua chat,
+ * va no bi cat/sua/go lai hang ngay. Mot bo loc hong phai mo ra danh sach day du — cai te nhat co
+ * the xay ra la nguoi dung thay nhieu hon ho dinh thay, va ho tu loc lai duoc.
+ */
+export const parseTripFilter = (query: TripFilterQuery): TripFilter => ({
+  search: query.search ?? '',
+  status: (TRIP_STATUSES as readonly string[]).includes(query.status ?? '')
+    ? (query.status as TripStatus)
+    : 'ALL',
+  kind: (TRIP_KINDS as readonly string[]).includes(query.kind ?? '')
+    ? (query.kind as TripKind)
+    : 'ALL',
+});
+
+/**
+ * BO LOC CO KIEU -> DIA CHI. `ALL` va chuoi rong deu thanh `null` = khong xuat hien tren dia chi.
+ *
+ * `search` duoc CAT KHOANG TRANG: mot dau cach thua khong phai mot bo loc, va de no vao dia chi se
+ * lam hai dia chi tro cung mot man hinh trong khi nhin thi khac nhau.
+ */
+export const toTripFilterQuery = (filter: TripFilter): TripFilterQuery => {
+  const search = filter.search.trim();
+  return {
+    search: search.length > 0 ? search : null,
+    status: filter.status === 'ALL' ? null : filter.status,
+    kind: filter.kind === 'ALL' ? null : filter.kind,
+  };
+};
 
 export const isFilterActive = (filter: TripFilter): boolean =>
   filter.search.trim().length > 0 || filter.status !== 'ALL' || filter.kind !== 'ALL';

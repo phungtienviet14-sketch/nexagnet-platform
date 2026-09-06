@@ -1808,6 +1808,13 @@ model TransportFuelEntry {
   @@index([verificationStatus])
   @@index([reconciliationStatus])
   @@index([sourceStatementId])
+  /// HOP THU PHIEU NHIEN LIEU cua ca doi — #222 P1-B.
+  ///
+  /// Thu tu doc cua hop thu la `(verificationStatus ASC, businessDate DESC)`: `DECLARED` la gia
+  /// tri DAU TIEN cua enum Postgres o tren, nen phieu DANG CHO XAC THUC len truoc, moi nhat truoc
+  /// trong tung nhom. Chi so mot cot `verificationStatus` da co khong phuc vu duoc phan sap xep
+  /// theo ngay, va man Nhien lieu la mot man mo hang ngay.
+  @@index([verificationStatus, businessDate])
 }
 
 /// ANH CHUNG TU cua mot phieu dau — `PG-05` chua co, nen day la THAM CHIEU co vong doi TOI THIEU.
@@ -1830,8 +1837,23 @@ model TransportFuelReceiptEvidence {
   capturedAt  DateTime?
   uploadedBy  String
   createdAt   DateTime           @default(now())
+  /// BIA MO, khong phai mot lan xoa hang — #222 P1-C.
+  ///
+  /// Lai xe tai nham mot tep thi phai go duoc no, nhung mot chung tu tai chinh KHONG duoc bien mat
+  /// khong dau vet. Nen duong "go" ghi hai cot nay roi moi don byte o kho anh; hang van o lai, va
+  /// `listEvidence` loc no ra khoi danh sach dang hieu luc.
+  ///
+  /// Vi sao tombstone TRUOC roi purge SAU, khong nguoc lai: neu xoa metadata truoc va lenh xoa
+  /// object hong, ta mat CA duong tim lai object mo coi LAN dau vet cua nguoi go. Theo thu tu nay,
+  /// truong hop xau nhat chi de lai mot object khong con ai tro toi — va `locator` van con o hang
+  /// da bia mo de don ve sau.
+  withdrawnAt DateTime?
+  /// AI go — danh tinh do may chu dung len (`transport-actor.ts`), khong tu than yeu cau.
+  withdrawnBy String?
 
   @@index([fuelEntryId])
+  /// Duong doc thuong xuyen nhat sau lan sua nay: "cac bang chung CON HIEU LUC cua mot phieu".
+  @@index([fuelEntryId, withdrawnAt])
 }
 
 /// BANG KE CAY XANG — MOT bang ke duy nhat cho mot `(cay xang, ky)` (T1 §5).

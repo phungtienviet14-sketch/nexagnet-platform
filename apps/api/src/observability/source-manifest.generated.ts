@@ -581,12 +581,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NOT_OWNED": {
       "functionName": "FuelReadService.getMyFuelSlip",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 155
+      "line": 281
     },
     "driver.self_fuel_scope|SELF_FUEL_SCOPE_NO_DRIVER_BINDING": {
       "functionName": "FuelReadService.requireDriverBinding",
       "filePath": "apps/api/src/transport/fuel/fuel-read.service.ts",
-      "line": 188
+      "line": 314
     },
     "driver.self_fund_scope|SELF_FUND_SCOPE_GRANTED": {
       "functionName": "CostingReadService.selfFundStatement",
@@ -654,6 +654,21 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
       "line": 145
     },
+    "evidence.remove|EVIDENCE_LOCATOR_OUT_OF_SCOPE": {
+      "functionName": "TransportEvidenceService.remove",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 178
+    },
+    "evidence.remove|EVIDENCE_PURGED": {
+      "functionName": "TransportEvidenceService.remove",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 203
+    },
+    "evidence.remove|EVIDENCE_PURGE_UNSUPPORTED": {
+      "functionName": "TransportEvidenceService.remove",
+      "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
+      "line": 192
+    },
     "evidence.upload|*": {
       "functionName": "TransportEvidenceService.put",
       "filePath": "apps/api/src/transport/evidence/transport-evidence.service.ts",
@@ -706,12 +721,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fuel.cost_posting|*": {
       "functionName": "FuelService.postFuelCost",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 531
+      "line": 677
     },
     "fuel.cost_posting|FUEL_COST_ALREADY_POSTED": {
       "functionName": "FuelService.postFuelCost",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 505
+      "line": 651
     },
     "fuel.match|*": {
       "functionName": "FuelReconciliationService.runMatching",
@@ -745,65 +760,85 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fuel_entry.amend|*": {
       "functionName": "FuelService.denyAmend",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 688
+      "line": 834
     },
     "fuel_entry.amend|FUEL_ENTRY_AMENDED": {
       "functionName": "FuelService.amendFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 362
+      "line": 508
     },
     "fuel_entry.amend|FUEL_ENTRY_AMEND_STATE_RACE": {
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts"
     },
+    "fuel_entry.evidence_withdraw|*": {
+      "functionName": "FuelService.denyEvidenceWithdrawal",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 409
+    },
+    "fuel_entry.evidence_withdraw|FUEL_EVIDENCE_ALREADY_WITHDRAWN": {
+      "functionName": "FuelService.withdrawEvidence",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 352
+    },
+    "fuel_entry.evidence_withdraw|FUEL_EVIDENCE_NOT_FOUND": {
+      "functionName": "FuelService.withdrawEvidence",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 339
+    },
+    "fuel_entry.evidence_withdraw|FUEL_EVIDENCE_WITHDRAWN": {
+      "functionName": "FuelService.withdrawEvidence",
+      "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
+      "line": 389
+    },
     "fuel_entry.review|*": {
       "functionName": "FuelService.denyReview",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 711
+      "line": 857
     },
     "fuel_entry.review|FUEL_ENTRY_REJECTED": {
       "functionName": "FuelService.rejectFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 455
+      "line": 601
     },
     "fuel_entry.review|FUEL_ENTRY_REVIEW_REOPENED": {
       "functionName": "FuelService.resubmitFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 484
+      "line": 630
     },
     "fuel_entry.review|FUEL_ENTRY_VERIFIED": {
       "functionName": "FuelService.verifyFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 425
+      "line": 571
     },
     "fuel_entry.submit|*": {
       "functionName": "FuelService.guardTripAcceptsFuel",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 600
+      "line": 746
     },
     "fuel_entry.submit|FUEL_CORRELATION_KEY_REUSED": {
       "functionName": "FuelService.assertSameEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 735
+      "line": 881
     },
     "fuel_entry.submit|FUEL_ENTRY_DRIVER_NOT_ASSIGNED": {
       "functionName": "FuelService.requireAssignedToTrip",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 626
+      "line": 772
     },
     "fuel_entry.submit|FUEL_ENTRY_IDEMPOTENT_REPLAY": {
       "functionName": "FuelService.submitFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 163
+      "line": 166
     },
     "fuel_entry.submit|FUEL_ENTRY_RECORDED": {
       "functionName": "FuelService.submitFuelEntry",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 206
+      "line": 209
     },
     "fuel_entry.submit|FUEL_ENTRY_VEHICLE_NOT_ASSIGNED": {
       "functionName": "FuelService.requireAssignedToTrip",
       "filePath": "apps/api/src/transport/fuel/fuel.service.ts",
-      "line": 640
+      "line": 786
     },
     "fuel_reconciliation.transition|*": {
       "functionName": "FuelReconciliationService.denyFrozen",

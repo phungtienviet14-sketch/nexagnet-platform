@@ -30,19 +30,22 @@ import { TripAssignForm, TripPlanForm } from './TripCommands';
 import {
   activeAssignment,
   cancellationNote,
-  EMPTY_TRIP_FILTER,
   filterTrips,
   findTripByCode,
+  parseTripFilter,
   primaryOffer,
   sortTrips,
   toAssignmentRows,
   toDirectory,
+  toTripFilterQuery,
   toTripRows,
   toTripTimeline,
   tripActionOffers,
   type TripActionOffer,
+  type TripFilter,
   type TripRow,
 } from '../workspace/trips';
+import { EMPTY_TRIP_FILTER_QUERY, type TripFilterQuery } from '../navigation';
 
 /**
  * Man CHUYEN XE.
@@ -54,10 +57,21 @@ import {
 export function TripsView({
   selection,
   onSelect,
+  filter: filterQuery,
+  onFilterChange,
 }: {
   readonly selection: string | null;
   /** Nhan MA chuyen. `null` de dong khoi chi tiet. */
   readonly onSelect: (code: string | null) => void;
+  /**
+   * BO LOC DEN TU DIA CHI, khong tu `useState` cua man nay — #222 P2.
+   *
+   * Truoc ban nay o tim kiem la trang thai cuc bo, nen tai lai trang la mat chu vua go trong khi
+   * khoi chi tiet van mo: mot man hinh tu mau thuan voi chinh no. Nay MOT nguon su that duy nhat —
+   * thanh dia chi — nen tai lai, Back/Forward va dan lien ket deu cho cung mot ket qua.
+   */
+  readonly filter: TripFilterQuery;
+  readonly onFilterChange: (filter: TripFilterQuery) => void;
 }) {
   const navigation = useNavigationInput();
   const queryClient = useQueryClient();
@@ -67,7 +81,9 @@ export function TripsView({
   const vehicles = toSectionQuery(useVehicles(navigation));
   const drivers = toSectionQuery(useDrivers(navigation));
 
-  const [filter, setFilter] = useState(EMPTY_TRIP_FILTER);
+  const filter = useMemo(() => parseTripFilter(filterQuery), [filterQuery]);
+  const setFilter = (next: (previous: TripFilter) => TripFilter) =>
+    onFilterChange(toTripFilterQuery(next(filter)));
   const [isPlanning, setPlanning] = useState(false);
 
   const directory = useMemo(
@@ -202,7 +218,11 @@ export function TripsView({
           }
           nextAction={
             all.length === 0 ? null : (
-              <button type="button" className="tx-btn" onClick={() => setFilter(EMPTY_TRIP_FILTER)}>
+              <button
+                type="button"
+                className="tx-btn"
+                onClick={() => onFilterChange(EMPTY_TRIP_FILTER_QUERY)}
+              >
                 Bỏ bộ lọc
               </button>
             )

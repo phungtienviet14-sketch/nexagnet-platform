@@ -303,6 +303,55 @@ export const SCREEN_QUERY_PARAM = 'screen';
  */
 export const SELECTION_QUERY_PARAM = 'selected';
 
+/* ------------------------------------------------------------------ *
+ * BO LOC CHUYEN NAM TREN DIA CHI — #222 P2
+ * ------------------------------------------------------------------ */
+
+/**
+ * BA THAM SO DOC DUOC, khong phai mot khoi trang thai ma hoa.
+ *
+ * ==============================================================================================
+ * LOI DUOC SUA O DAY
+ *
+ * Truoc ban nay, `?section=trips&selected=UAT-VIET-01` giu duoc LUA CHON nhung khong giu BO LOC:
+ * o tim kiem nam trong `useState` cua `TripsView`. Chu so huu go `UAT-VIET-01`, tai lai trang, va
+ * chu vua go bien mat trong khi khoi chi tiet van mo — mot man hinh tu mau thuan voi chinh no.
+ *
+ * ==============================================================================================
+ * `q` chu khong `search`, `status`/`kind` chu khong `s`/`k`
+ *
+ * Dia chi la thu nguoi ta DAN CHO NHAU. `q` la quy uoc pho quat cua mot o tim kiem; mot chu cai
+ * viet tat tiet kiem duoc sau ky tu va tra gia bang viec khong ai doc duoc dia chi do nua.
+ *
+ * Va KHONG mot `id` ky thuat nao o day: `status`/`kind` la ma nghiep vu dong (`TRIP_STATUSES`,
+ * `TRIP_KINDS`), `q` la chu nguoi dung go. Dung quy uoc da co cua `SELECTION_QUERY_PARAM`.
+ */
+export const SEARCH_QUERY_PARAM = 'q';
+export const STATUS_QUERY_PARAM = 'status';
+export const KIND_QUERY_PARAM = 'kind';
+
+/**
+ * Bo loc chuyen o dang DIA CHI — ba chuoi, khong hon.
+ *
+ * Tang dieu huong CO Y khong biet `TripStatus`/`TripKind` la nhung gia tri nao: no chi cho chuoi
+ * di qua, con viec doi chuoi -> ma hop le do `workspace/trips.ts` lam (`parseTripFilter`). Nho vay
+ * mot ma trang thai moi cua mien khong bat tep nay phai sua theo.
+ */
+export interface TripFilterQuery {
+  readonly search: string | null;
+  readonly status: string | null;
+  readonly kind: string | null;
+}
+
+export const EMPTY_TRIP_FILTER_QUERY: TripFilterQuery = {
+  search: null,
+  status: null,
+  kind: null,
+};
+
+export const isTripFilterQueryEmpty = (filter: TripFilterQuery): boolean =>
+  filter.search === null && filter.status === null && filter.kind === null;
+
 /**
  * Mot dia chi da duoc GIAI QUYET: be mat nao, muc/man nao, dang chon gi.
  * Muc khong hop le luon roi ve mac dinh — mot dau trang cu khong bao gio ra trang trang.
@@ -312,6 +361,13 @@ export interface ResolvedNavigation {
   readonly section: TransportSectionId;
   readonly screen: DriverScreenId;
   readonly selection: string | null;
+  /**
+   * BO LOC CHUYEN — di CUNG lua chon, va bien mat cung no khi doi muc (#222 P2 §3).
+   *
+   * Mot ma trang thai chuyen khong co nghia gi o man Nhien lieu, y het mot ma chuyen. Nen hai thu
+   * nay theo cung mot luat: giu khi con o trong muc, bo khi ra khoi.
+   */
+  readonly tripFilter: TripFilterQuery;
 }
 
 export const resolveSection = (
@@ -349,6 +405,7 @@ export const resolveNavigation = (
     readonly section: string | null;
     readonly screen: string | null;
     readonly selection: string | null;
+    readonly tripFilter?: TripFilterQuery;
   },
   previous: { readonly section: TransportSectionId; readonly screen: DriverScreenId } | null,
   input: NavigationInput,
@@ -359,7 +416,24 @@ export const resolveNavigation = (
   const movedSection = previous !== null && previous.section !== section;
   const movedScreen = previous !== null && previous.screen !== screen;
   const keepSelection = surface === 'driver' ? !movedScreen : !movedSection;
-  return { surface, section, screen, selection: keepSelection ? requested.selection : null };
+  /*
+   * BO LOC CHUYEN CHI SONG O MUC `trips`, tren BE MAT VAN HANH — #222 P2 §3.
+   *
+   * Hai cong, khong mot: (a) doi muc thi bo, cung luat voi lua chon; (b) muc dang xem phai DUNG la
+   * `trips`. Cong (b) la thu chan mot dia chi go tay kieu `?section=fuel&q=UAT-VIET-01` mang mot bo
+   * loc chuyen di lac vao man Nhien lieu roi nam do cho toi khi nguoi dung quay lai muc Chuyen xe.
+   */
+  const tripFilter =
+    keepSelection && surface === 'operations' && section === 'trips'
+      ? (requested.tripFilter ?? EMPTY_TRIP_FILTER_QUERY)
+      : EMPTY_TRIP_FILTER_QUERY;
+  return {
+    surface,
+    section,
+    screen,
+    selection: keepSelection ? requested.selection : null,
+    tripFilter,
+  };
 };
 
 const readParam = (search: string, key: string): string | null => {
@@ -378,16 +452,35 @@ export const parseNavigationFromSearch = (
       section: readParam(search, SECTION_QUERY_PARAM),
       screen: readParam(search, SCREEN_QUERY_PARAM),
       selection: readParam(search, SELECTION_QUERY_PARAM),
+      tripFilter: {
+        search: readParam(search, SEARCH_QUERY_PARAM),
+        status: readParam(search, STATUS_QUERY_PARAM),
+        kind: readParam(search, KIND_QUERY_PARAM),
+      },
     },
     null,
     input,
   );
 
-/** Muc mac dinh KHONG mang tham so — `/` van la mot dia chi sach de danh dau. */
-export const buildSectionUrl = (section: TransportSectionId, selection?: string | null): string => {
+/**
+ * Muc mac dinh KHONG mang tham so — `/` van la mot dia chi sach de danh dau.
+ *
+ * Bo loc CHI di kem khi co gia tri that: mot dia chi `?section=trips&q=&status=&kind=` dai them 24
+ * ky tu de noi dung mot dieu — "khong loc gi" — ma mot dia chi khong co chung da noi roi.
+ */
+export const buildSectionUrl = (
+  section: TransportSectionId,
+  selection?: string | null,
+  tripFilter?: TripFilterQuery,
+): string => {
   const params = new URLSearchParams();
   if (section !== DEFAULT_SECTION) params.set(SECTION_QUERY_PARAM, section);
   if (selection) params.set(SELECTION_QUERY_PARAM, selection);
+  if (tripFilter && !isTripFilterQueryEmpty(tripFilter)) {
+    if (tripFilter.search) params.set(SEARCH_QUERY_PARAM, tripFilter.search);
+    if (tripFilter.status) params.set(STATUS_QUERY_PARAM, tripFilter.status);
+    if (tripFilter.kind) params.set(KIND_QUERY_PARAM, tripFilter.kind);
+  }
   const query = params.toString();
   return query.length > 0 ? `/?${query}` : '/';
 };
@@ -403,7 +496,7 @@ export const buildDriverUrl = (screen: DriverScreenId, selection?: string | null
 export const buildNavigationUrl = (navigation: ResolvedNavigation): string =>
   navigation.surface === 'driver'
     ? buildDriverUrl(navigation.screen, navigation.selection)
-    : buildSectionUrl(navigation.section, navigation.selection);
+    : buildSectionUrl(navigation.section, navigation.selection, navigation.tripFilter);
 
 /**
  * Cau duoi thanh ben. Noi that ve gioi han cua tang cuong che hom nay thay vi de khach suy ra rang

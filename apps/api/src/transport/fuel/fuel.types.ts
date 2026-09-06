@@ -89,6 +89,15 @@ export interface FuelReceiptEvidence {
   readonly capturedAt: string | null;
   readonly uploadedBy: string;
   readonly createdAt: string;
+  /**
+   * BIA MO — #222 P1-C. `null` = dang hieu luc.
+   *
+   * Hai truong nay KHONG tuy chon (`?`) du cot la NULL duoc: mot truong tuy chon la mot truong ma
+   * phep anh xa co the quen dien, va quen dien o day nghia la mot bang chung DA GO hien lai nhu
+   * dang hieu luc. Bat buoc co mat, gia tri `null` moi la "chua ai go".
+   */
+  readonly withdrawnAt: string | null;
+  readonly withdrawnBy: string | null;
 }
 
 export const FUEL_STATEMENT_FORMATS = ['CSV', 'XLSX'] as const;
@@ -261,6 +270,82 @@ export interface FuelSettlementHandoff {
 export interface FuelEntryDetail {
   readonly entry: FuelEntry;
   readonly evidence: readonly FuelReceiptEvidence[];
+}
+
+/* ------------------------------------------------------------------ *
+ * HOP THU PHIEU NHIEN LIEU cua CA DOI — #222 P1-B
+ * ------------------------------------------------------------------ */
+
+/**
+ * MOT DONG CUA HOP THU — mot KIEU RIENG, khong phai `FuelEntry` co gan them nhan.
+ *
+ * ===========================================================================
+ * VI SAO KHONG TRA THANG `FuelEntry[]`
+ *
+ * Ke toan mo man Nhien lieu de tra loi mot cau: *"con phieu nao dang cho toi khong, cua ai, chuyen
+ * nao?"*. `FuelEntry` chi mang `tripId`/`driverId`/`vehicleId`/`supplierId` — bon `id` ky thuat.
+ * Neu giao dien phai tu doi bon id do ra chu, no se goi bon danh sach khac roi tu ghep, va do dung
+ * la kieu N+1 phia client ma #222 cam.
+ *
+ * Nen phep doi id -> chu duoc lam MOT LAN o tang doc, theo lo, va ket qua di ra day.
+ *
+ * ===========================================================================
+ * `locator` KHONG CO MAT, va do la mot rang buoc cua hop dong chu khong mot thieu sot
+ *
+ * #222 viet ro: *"Return only fields needed by operations UI plus safe evidence summary/IDs; do not
+ * expose storage locator/bucket key."* Nen o day chi co `evidenceCount` va danh sach `id` — du de
+ * ve mot lien ket toi route doc byte CO XAC THUC, khong du de doan cau truc kho anh.
+ */
+export interface FuelEntryInboxRow {
+  readonly id: string;
+  readonly tripId: string;
+  /** MA CHUYEN — dinh danh NGHIEP VU doc duoc, khong phai `tripId`. */
+  readonly tripCode: string;
+  readonly driverId: string;
+  readonly driverName: string | null;
+  readonly vehicleId: string;
+  readonly vehiclePlate: string | null;
+  readonly supplierId: string;
+  readonly supplierName: string | null;
+  readonly businessDate: BusinessDate;
+  readonly occurredAt: string;
+  readonly litersUnits: number;
+  readonly amount: number;
+  readonly currencyCode: string;
+  readonly invoiceNo: string | null;
+  readonly paymentMethod: FuelPaymentMethod;
+  readonly verificationStatus: FuelVerificationStatus;
+  readonly reconciliationStatus: FuelReconciliationStatus;
+  readonly reviewReasons: readonly FuelReviewReason[];
+  readonly reviewNote: string | null;
+  readonly evidenceCount: number;
+  /** Chi `id` + loai noi dung — du de mo bang route co xac thuc, khong lo dinh vi kho. */
+  readonly evidence: readonly FuelInboxEvidenceRef[];
+}
+
+export interface FuelInboxEvidenceRef {
+  readonly id: string;
+  readonly contentType: string | null;
+}
+
+/**
+ * MOT TRANG cua hop thu.
+ *
+ * `total` va `pendingVerificationCount` la HAI con so khac nhau va ca hai deu can:
+ *
+ *   · `total`                    — bao nhieu phieu KHOP BO LOC dang xem (de phan trang);
+ *   · `pendingVerificationCount` — bao nhieu phieu DANG CHO XAC THUC, KHONG theo bo loc trang thai.
+ *
+ * Con so thu hai la cai #222 goi la "actionable count" (`N chờ xác thực`). No CO Y bo qua bo loc
+ * trang thai: mot nguoi dang loc "da duyet" van phai thay con bao nhieu viec dang cho ho — nguoc
+ * lai con so se tut ve 0 dung luc ho khong nhin, va do la mot con so noi doi.
+ */
+export interface FuelEntryInboxPage {
+  readonly rows: readonly FuelEntryInboxRow[];
+  readonly total: number;
+  readonly pendingVerificationCount: number;
+  readonly limit: number;
+  readonly offset: number;
 }
 
 /**

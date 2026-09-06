@@ -152,6 +152,64 @@ export class TransportEvidenceService {
     return { kind: 'FOUND', object };
   }
 
+  /**
+   * DON BYTE cua mot bang chung DA DUOC BIA MO o tang nghiep vu — #222 P1-C.
+   *
+   * ===========================================================================
+   * SERVICE NAY VAN KHONG BIET GI VE QUYEN, va thu tu goi la thu giu dieu do dung
+   *
+   * No khong nhan `authUserId`, khong doc phien. Quyen so huu + vong doi da duoc chot TRUOC do
+   * bang chinh chung tu nghiep vu (`FuelService.withdrawEvidence`), va ham nay chi duoc goi voi
+   * mot `locator` doc ra TU hang da bia mo thanh cong. Dao thu tu — don byte truoc roi moi ghi
+   * tombstone — se lam mot lan tu choi o tang mien de lai mot object da mat.
+   *
+   * ===========================================================================
+   * `false` KHONG PHAI LOI
+   *
+   * `MEDIA_STORE=none` (mac dinh demo/CI) va cac kho chua hien thuc `remove` deu tra `false`. Luc
+   * do bang chung DA bien mat khoi ho so dung nhu nguoi dung yeu cau, chi con lai mot object khong
+   * ai tro toi. Bao len bang mot ma rieng (`EVIDENCE_PURGE_UNSUPPORTED`) thay vi nem: nem se lam
+   * ca thao tac go that bai sau khi no da thanh cong mot nua.
+   */
+  async remove(locator: string): Promise<boolean> {
+    if (!isTransportEvidenceLocator(locator)) {
+      // Cung rao voi `read()`: `locator` la mot cot chuoi TU DO, va mot lenh XOA di lac ra ngoai
+      // khu bang chung van tai nguy hiem hon han mot lenh doc di lac.
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_EVIDENCE_DECISIONS,
+        point: 'evidence.remove',
+        outcome: 'denied',
+        reason: 'EVIDENCE_LOCATOR_OUT_OF_SCOPE',
+        detail: { locator },
+      });
+      throw TransportDomainError.denied(
+        'EVIDENCE_LOCATOR_OUT_OF_SCOPE',
+        'Dinh vi nay khong thuoc khu bang chung van tai',
+      );
+    }
+
+    if (!this.store.enabled || !this.store.supportsRemove) {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_EVIDENCE_DECISIONS,
+        point: 'evidence.remove',
+        outcome: 'denied',
+        reason: 'EVIDENCE_PURGE_UNSUPPORTED',
+        detail: { locator, storeName: this.store.name },
+      });
+      return false;
+    }
+
+    await this.store.remove(locator);
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_EVIDENCE_DECISIONS,
+      point: 'evidence.remove',
+      outcome: 'allowed',
+      reason: 'EVIDENCE_PURGED',
+      detail: { locator, storeName: this.store.name },
+    });
+    return true;
+  }
+
   private rejectionMessage(rejection: EvidenceRejection): string {
     switch (rejection) {
       case 'EVIDENCE_EMPTY':

@@ -15,6 +15,10 @@ vi.mock('@aws-sdk/client-s3', () => ({
     readonly kind = 'ListObjectsV2';
     constructor(readonly input: Record<string, unknown>) {}
   },
+  DeleteObjectCommand: class {
+    readonly kind = 'DeleteObject';
+    constructor(readonly input: Record<string, unknown>) {}
+  },
 }));
 
 const { GcsMediaStore } = await import('./gcs-media.store.js');
@@ -57,6 +61,65 @@ describe('LocalMediaStore — cho dev', () => {
   it('tu choi khoa vuot ra ngoai thu muc goc', async () => {
     const store = new LocalMediaStore(root);
     await expect(store.put('../ngoai.webp', BODY, 'image/webp')).rejects.toThrow();
+  });
+});
+
+/**
+ * `remove()` — nang luc HEP mo cho #222 P1-C (go mot chung tu tai nham).
+ *
+ * Bon bai duoi day do dung mot hop dong: *xoa mot khoa khong ton tai KHONG phai loi*. No la thu
+ * duy nhat lam duong "go chung tu" an toan de goi lai — hai lan bam, mot lan thu lai sau su co
+ * mang, hay mot object da bi vong doi bucket quet di deu phai ket thuc o cung mot cho.
+ *
+ * `supportsRemove` duoc do RIENG vi no la mot co ben goi DOC TRUOC khi ghi tombstone: neu no noi
+ * doi, he thong se bao voi lai xe rang chung tu da duoc don trong khi byte van nam trong bucket.
+ */
+describe('MediaStore.remove — hop dong idempotent cua #222 P1-C', () => {
+  it('kho `none` khong nhan quyen xoa, va mot lan goi van vo hai', async () => {
+    const store = new NoopMediaStore();
+    expect(store.supportsRemove).toBe(false);
+    await expect(store.remove(KEY)).resolves.toBeUndefined();
+  });
+
+  it('kho tren dia xoa that, va xoa lan hai khong nem', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ultty-media-rm-'));
+    const store = new LocalMediaStore(root);
+    expect(store.supportsRemove).toBe(true);
+
+    await store.put(KEY, BODY, 'image/webp');
+    expect(await store.get(KEY)).not.toBeNull();
+
+    await store.remove(KEY);
+    expect(await store.get(KEY)).toBeNull();
+    // Lan thu hai: khong nem, khong doi trang thai.
+    await expect(store.remove(KEY)).resolves.toBeUndefined();
+  });
+
+  it('kho tren dia TU CHOI mot khoa vuot ra ngoai thu muc goc', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ultty-media-rm-'));
+    await expect(new LocalMediaStore(root).remove('../../etc/passwd')).rejects.toThrow(
+      /vuot ra ngoai/,
+    );
+  });
+
+  it('kho S3 gui DUNG mot lenh xoa cho dung khoa', async () => {
+    send.mockClear();
+    const store = new S3MediaStore({
+      bucket: 'thung-thu',
+      endpoint: 'https://storage.googleapis.com',
+      region: 'auto',
+      accessKeyId: 'khoa',
+      secretAccessKey: 'bi-mat',
+    });
+    expect(store.supportsRemove).toBe(true);
+
+    await store.remove(KEY);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0]?.input).toMatchObject({ Bucket: 'thung-thu', Key: KEY });
+    // `send` la mot spy dung chung o cap module. Tra no ve trang thai sach de bai KE TIEP dem
+    // duoc so lan goi CUA CHINH NO — thu tu chay khong duoc phep la mot phan cua phep do.
+    send.mockClear();
   });
 });
 

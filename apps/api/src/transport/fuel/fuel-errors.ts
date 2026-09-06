@@ -42,6 +42,14 @@ export const TRANSPORT_FUEL_VALIDATION_REASONS = [
    * `GD-09` cam.
    */
   'FUEL_MATCH_TARGET_REQUIRED',
+  /**
+   * Bang chung khong ton tai, hoac khong thuoc phieu tren duong dan — #222 P1-C.
+   *
+   * MOT ma cho ca hai truong hop, va do la co y: phan biet chung se xac nhan cho nguoi goi rang mot
+   * `evidenceId` nao do CO TON TAI o dau do trong he thong — dung kieu thong tin ma `DRIVER-VIEW-002`
+   * khong cho ro ri. Nguoi dung hop le thi hai truong hop nay giong het nhau: tai lai trang.
+   */
+  'FUEL_EVIDENCE_NOT_FOUND',
 ] as const;
 export type TransportFuelValidationReason = (typeof TRANSPORT_FUEL_VALIDATION_REASONS)[number];
 
@@ -80,6 +88,22 @@ export const TRANSPORT_FUEL_CONFLICT_REASONS = [
    * duong ghi thu hai vao bang cap khop ma khong ai biet.
    */
   'FUEL_MATCH_SELF_SOURCED',
+  /**
+   * Bang chung nay DA duoc go roi — #222 P1-C.
+   *
+   * Hai lan bam "Gỡ chứng từ" gan nhau, hoac hai tab cung mo. Khong phai mot loi cua ai ca, va
+   * KHONG duoc gop voi `FUEL_EVIDENCE_NOT_FOUND`: o day chung tu that su da tung ton tai va da
+   * duoc go dung y muon, nen cau tra loi la "khong con viec gi de lam", khong phai "tim khong ra".
+   */
+  'FUEL_EVIDENCE_ALREADY_WITHDRAWN',
+  /**
+   * Phieu DA DUOC DUYET — khong go bang chung duoc nua (`GD-10`).
+   *
+   * Xem `evaluateFuelEvidenceRemoval`. Duong dung la dao khoan chi o `TX-03` roi ghi phieu moi.
+   */
+  'FUEL_EVIDENCE_ENTRY_ALREADY_TRUSTED',
+  /** Phieu da khop hoac da nam trong ky doi soat DA DONG (`GD-11`) — khong go bang chung duoc. */
+  'FUEL_EVIDENCE_ENTRY_RECONCILIATION_LOCKED',
 ] as const;
 export type TransportFuelConflictReason = (typeof TRANSPORT_FUEL_CONFLICT_REASONS)[number];
 

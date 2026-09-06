@@ -77,7 +77,9 @@ export class GcsMediaStore extends MediaStore {
     if (!response.ok) {
       // NEM co chu y: `MediaFetcherService` bat loi nay va ghi `mediaError` len dong tin, tin nhan
       // van nam nguyen trong DB. Nuot loi o day thi anh mat ma khong con dau vet nao.
-      throw new Error(`GCS tu choi ghi ${key}: HTTP ${response.status} ${await safeBody(response)}`);
+      throw new Error(
+        `GCS tu choi ghi ${key}: HTTP ${response.status} ${await safeBody(response)}`,
+      );
     }
   }
 
@@ -98,12 +100,44 @@ export class GcsMediaStore extends MediaStore {
     });
     if (response.status === 404) return null;
     if (!response.ok) {
-      throw new Error(`GCS tu choi doc ${key}: HTTP ${response.status} ${await safeBody(response)}`);
+      throw new Error(
+        `GCS tu choi doc ${key}: HTTP ${response.status} ${await safeBody(response)}`,
+      );
     }
     return {
       body: Buffer.from(await response.arrayBuffer()),
       contentType: response.headers.get('content-type') ?? contentTypeForKey(key),
     };
+  }
+
+  override get supportsRemove(): boolean {
+    return true;
+  }
+
+  /**
+   * XOA mot object. `404` KHONG phai loi — hop dong cua `MediaStore.remove` la idempotent.
+   *
+   * `devstorage.read_write` da du cho `DELETE` object (khong can `full_control`), nen khong xin
+   * them scope nao: tam quyen giu nguyen nhu truoc lan sua nay.
+   *
+   * Cac ma loi khac VAN NEM. Mot lenh xoa bi 403 ma im lang se de lai mot object PII trong bucket
+   * trong khi man hinh vua noi voi lai xe rang chung tu da duoc go — dung kieu doi lech giua cai
+   * nguoi dung tin va cai he thong lam ma #222 P1-C sinh ra de dong.
+   */
+  override async remove(key: string): Promise<void> {
+    const url =
+      `${this.config.endpoint}/storage/v1/b/${encodeURIComponent(this.config.bucket)}/o/` +
+      encodeURIComponent(key);
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${await this.auth.getAccessToken()}` },
+    });
+    if (response.status === 404) return;
+    if (!response.ok) {
+      throw new Error(
+        `GCS tu choi xoa ${key}: HTTP ${response.status} ${await safeBody(response)}`,
+      );
+    }
   }
 
   /**

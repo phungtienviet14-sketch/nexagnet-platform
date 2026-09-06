@@ -433,6 +433,72 @@ export interface FuelEntryDetail {
   readonly evidence: readonly FuelReceiptEvidence[];
 }
 
+/* ------------------------------------------------------------------ *
+ * HOP THU PHIEU NHIEN LIEU cua CA DOI — #222 P1-B
+ * ------------------------------------------------------------------ */
+
+/** Mot anh cua phieu o dang hop thu duoc phep biet — KHONG co `locator`. */
+export interface FuelInboxEvidenceRef {
+  readonly id: string;
+  readonly contentType: string | null;
+}
+
+/**
+ * MOT DONG HOP THU — kieu RIENG, khong phai `FuelEntry` co gan them nhan.
+ *
+ * May chu da doi `tripId`/`driverId`/`vehicleId`/`supplierId` ra CHU truoc khi tra ve. Do la ca ly
+ * do hop thu ton tai: neu man hinh phai tu ghep bon bang tra, no se lai roi vao dung kieu N+1 ma
+ * #222 cam — va do la ly do man Nhien lieu truoc day khong co danh sach phieu nao.
+ */
+export interface FuelEntryInboxRow {
+  readonly id: string;
+  readonly tripId: string;
+  readonly tripCode: string;
+  readonly driverId: string;
+  readonly driverName: string | null;
+  readonly vehicleId: string;
+  readonly vehiclePlate: string | null;
+  readonly supplierId: string;
+  readonly supplierName: string | null;
+  readonly businessDate: BusinessDate;
+  readonly occurredAt: string;
+  readonly litersUnits: number;
+  readonly amount: number;
+  readonly currencyCode: string;
+  readonly invoiceNo: string | null;
+  readonly paymentMethod: FuelPaymentMethod;
+  readonly verificationStatus: FuelVerificationStatus;
+  readonly reconciliationStatus: FuelReconciliationStatus;
+  readonly reviewReasons: readonly FuelReviewReason[];
+  readonly reviewNote: string | null;
+  readonly evidenceCount: number;
+  readonly evidence: readonly FuelInboxEvidenceRef[];
+}
+
+export interface FuelEntryInboxPage {
+  readonly rows: readonly FuelEntryInboxRow[];
+  readonly total: number;
+  /** CO Y khong chay theo bo loc trang thai — xem hop dong cua may chu. */
+  readonly pendingVerificationCount: number;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+/** Bo loc gui len duoi dang query string. `null`/vang mat = khong loc theo truc do. */
+export interface FuelEntryInboxQuery {
+  readonly verification?: FuelVerificationStatus | null;
+  readonly reconciliation?: FuelReconciliationStatus | null;
+  /** MA CHUYEN doc duoc (`UAT-VIET-01`), khong phai `tripId`. */
+  readonly tripCode?: string | null;
+  readonly driverId?: string | null;
+  readonly vehicleId?: string | null;
+  readonly supplierId?: string | null;
+  readonly from?: BusinessDate | null;
+  readonly to?: BusinessDate | null;
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
 /**
  * Khung nhin cua LAI XE cho phieu dau — kieu RIENG, khong phai `FuelEntry` da loc.
  * Bang chung chi lo ra mot con SO DEM: lai xe khong liet ke lai duoc anh vua gui.

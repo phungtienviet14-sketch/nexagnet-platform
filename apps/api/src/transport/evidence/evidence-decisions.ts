@@ -54,7 +54,26 @@ export const EVIDENCE_READ_REASONS = [
 ] as const;
 export type EvidenceReadReason = (typeof EVIDENCE_READ_REASONS)[number];
 
-export type TransportEvidenceDecisionReason = EvidenceUploadReason | EvidenceReadReason;
+/* ------------------------------------------------------------------ *
+ * evidence.remove — go mot bang chung da tai nham (#222 P1-C)
+ * ------------------------------------------------------------------ */
+export const EVIDENCE_REMOVE_REASONS = [
+  /** Byte da duoc don khoi kho, sau khi hang metadata da duoc bia mo. */
+  'EVIDENCE_PURGED',
+  /**
+   * Hang DA duoc bia mo nhung kho anh KHONG don duoc byte (`MEDIA_STORE=none`, hoac mot kho chua
+   * hien thuc `remove`).
+   *
+   * Day KHONG phai mot loi cua nguoi dung, va cung KHONG duoc im lang: chung tu da bien mat khoi
+   * man hinh dung nhu ho yeu cau, nhung object van con trong bucket va can mot lan don thu cong.
+   * Mot ma rieng la thu duy nhat lam nguoi van hanh tim lai duoc no.
+   */
+  'EVIDENCE_PURGE_UNSUPPORTED',
+] as const;
+export type EvidenceRemoveReason = (typeof EVIDENCE_REMOVE_REASONS)[number];
+
+export type TransportEvidenceDecisionReason =
+  EvidenceUploadReason | EvidenceReadReason | EvidenceRemoveReason;
 
 /**
  * Ma tu choi cua chinh sach (`EvidenceRejection`) la TAP CON cua ma quyet dinh tai len.
@@ -71,7 +90,7 @@ void _rejectionsAreUploadReasons;
 
 export const TRANSPORT_EVIDENCE_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-core',
-  points: ['evidence.upload', 'evidence.read'],
+  points: ['evidence.upload', 'evidence.read', 'evidence.remove'],
   labels: {
     EVIDENCE_STORED: 'Đã lưu bằng chứng và gắn vào chứng từ nghiệp vụ',
     EVIDENCE_STORE_DISABLED: 'Kho ảnh đang tắt — từ chối thay vì nhận rồi vứt',
@@ -83,5 +102,9 @@ export const TRANSPORT_EVIDENCE_DECISIONS = defineDecisionVocabulary({
     EVIDENCE_NOT_ON_RECORD: 'Bằng chứng không thuộc chứng từ nghiệp vụ này',
     EVIDENCE_LOCATOR_OUT_OF_SCOPE: 'Định vị trỏ ra ngoài khu bằng chứng vận tải — từ chối đọc',
     EVIDENCE_OBJECT_MISSING: 'Có dòng bằng chứng nhưng không còn tệp trong kho',
+
+    EVIDENCE_PURGED: 'Đã dọn tệp khỏi kho ảnh sau khi bằng chứng được gỡ',
+    EVIDENCE_PURGE_UNSUPPORTED:
+      'Đã gỡ khỏi hồ sơ nhưng kho ảnh không dọn được tệp — cần một lần dọn thủ công',
   } satisfies Record<TransportEvidenceDecisionReason, string>,
 });
