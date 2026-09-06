@@ -51,8 +51,25 @@ import { type DemoPlan, buildDemoPlan } from './demo-plan.js';
  */
 export const DEMO_SEED_ACTOR = 'demo-seed';
 
-/** Mat khau lai xe den tu MOI TRUONG, khong bao gio tu kho ma nguon. */
+/** Mat khau nhan vat mau den tu MOI TRUONG, khong bao gio tu kho ma nguon. */
 export const DEMO_DRIVER_PASSWORD_ENV = 'TRANSPORT_DEMO_DRIVER_PASSWORD';
+
+/**
+ * NHAN VAT VAN PHONG cua ban demo — khong phai lai xe, nen khong co ho so `TransportDriver`.
+ *
+ * VI SAO VAI NAM TRONG MA NGUON CHU KHONG TRONG GOI KHACH:
+ * mot goi khach khai duoc vai o tang xac thuc thi mot goi khach cung PHONG duoc quyen cua chinh
+ * no — `role: 'ADMIN'` trong mot tep JSON la mot duong leo thang dac quyen. Nen goi khach quyet
+ * dinh DU LIEU, con ma nguon quyet dinh QUYEN.
+ *
+ * VI SAO CAN MOT KE TOAN THAT: `ACCOUNTING` khong phai `ADMIN` bi cat bot cho vui — no bi tu choi
+ * DUNG BA hanh dong (`transport-actions.ts`): huy chuyen (`GD-02`: huy thay xoa), mo lai ky chi phi
+ * va mo lai ky doi soat bang ke (ca hai deu `GD-11`). Khong co mot tai khoan `ACCOUNTING` that thi
+ * ba duong tu choi do khong bao gio duoc DO tren ban dang chay — chi duoc do trong bo nho.
+ */
+export const DEMO_STAFF_PERSONAS = [
+  { login: 'ke-toan', name: 'Kế toán mẫu', role: 'ACCOUNTING' },
+] as const;
 
 export interface DemoSeedOptions {
   /** Ngay nghiep vu lam moc. Mac dinh: hom nay theo mui gio cua goi khach. */
@@ -191,6 +208,25 @@ export async function resetTransportDemoData(
     const users = await prisma.user.deleteMany({ where: { id: { in: driverUserIds } } });
     if (users.count > 0) deleted['user'] = users.count;
   }
+
+  /**
+   * NHAN VAT VAN PHONG PHAI XOA THEO TEN DANG NHAP, va o day dieu do la DUNG chu khong phai mot
+   * ngoai le luom thuom cua quy tac ngay tren.
+   *
+   * Quy tac "khong loc theo ten dang nhap" o tren ton tai de bao ve tai khoan van hanh do
+   * `bootstrap-auth-user.mjs` tao: no khong duoc dinh vao du lieu mau, nen soi day `authUserId` la
+   * cach dung de nhan ra ai thuoc ban demo. Nhung mot ke toan mau KHONG CO soi day nao ca — khong
+   * ho so lai xe, khong khoa ngoai. Neu khong xoa no o day, no thanh hang MO COI va lan "xoa roi
+   * gieo lai" ke tiep chet o `User.username @unique`, tuc lenh reset lai chi chay duoc DUNG MOT
+   * LAN — chinh cai bay ma khoi chu thich tren duoc viet ra de canh bao.
+   *
+   * An toan vi danh sach la mot HANG SO CUA MA NGUON: goi khach khong dat ten vao day duoc, nen
+   * khong goi khach nao khien lenh reset xoa mot tai khoan ma no khong tao ra.
+   */
+  const staffLogins = DEMO_STAFF_PERSONAS.map((persona) => persona.login);
+  const staff = await prisma.user.deleteMany({ where: { username: { in: staffLogins } } });
+  if (staff.count > 0) deleted['user'] = (deleted['user'] ?? 0) + staff.count;
+
   return deleted;
 }
 
@@ -200,7 +236,7 @@ export async function resetTransportDemoData(
  * lan deploy lai khong duoc ghi de len thu nguoi ta da sua tren man hinh.
  */
 /**
- * TAO BU TAI KHOAN DANG NHAP cho cac lai xe da gieo ma chua co tai khoan.
+ * TAO BU TAI KHOAN DANG NHAP cho cac NHAN VAT MAU chua co tai khoan — lai xe VA nhan vat van phong.
  *
  * ---------------------------------------------------------------------------
  * VI SAO CAN MOT DUONG RIENG, KHONG GOP VAO `seedTransportDemoMonth()`.
@@ -214,31 +250,56 @@ export async function resetTransportDemoData(
  * Do la mot ngo cut im lang, cung ho voi cai da gap o vong truoc (o chon cay xang luon rong). Nen
  * duong nay ton tai de "gieo truoc, cau hinh sau" van la mot trinh tu chay duoc.
  *
- * CHI dung vao lai xe CHUA co tai khoan. Mot lai xe da noi voi mot `User` thi khong bi dung toi —
- * ham nay khong doi mat khau cua ai, cung ly le voi `bootstrap-auth-user.mjs`.
+ * CHI dung vao nhan vat CHUA co tai khoan. Mot lai xe da noi voi mot `User`, hay mot ten dang nhap
+ * van phong da ton tai, deu khong bi dung toi — ham nay khong doi mat khau cua ai, cung ly le voi
+ * `bootstrap-auth-user.mjs`.
+ *
+ * Duong nay con phai chay duoc cho mot ban DA GIEO DAY DU lai xe: `DEMO_STAFF_PERSONAS` duoc them
+ * SAU khi stack xem truoc da co ca thang du lieu, nen "khong lai xe nao thieu tai khoan" khong
+ * duoc phep co nghia la "khong con gi de tao".
  */
-export async function backfillDemoDriverLogins(
+export async function backfillDemoPersonaLogins(
   prisma: PrismaClient,
   options: Pick<DemoSeedOptions, 'driverPassword' | 'hashPassword'> = {},
 ): Promise<number> {
-  assertTransportDemoTenant('tao tai khoan dang nhap cho lai xe mau');
+  assertTransportDemoTenant('tao tai khoan dang nhap cho nhan vat mau');
 
   const password = options.driverPassword ?? process.env[DEMO_DRIVER_PASSWORD_ENV];
   const hashPassword = options.hashPassword;
   if (password === undefined || password === '' || hashPassword === undefined) return 0;
 
+  let created = 0;
+
+  // NHAN VAT VAN PHONG TRUOC, va khong co dieu kien "co lai xe nao thieu tai khoan khong".
+  // Hai nhom doc lap: mot ban gieo tu truoc khi `DEMO_STAFF_PERSONAS` ton tai co du 12 lai xe da
+  // co tai khoan, nen mot phep thoat som theo lai xe se lam ke toan KHONG BAO GIO duoc tao — dung
+  // hinh dang ngo cut ma ham nay duoc viet ra de dong.
+  for (const persona of DEMO_STAFF_PERSONAS) {
+    const existing = await prisma.user.findUnique({ where: { username: persona.login } });
+    if (existing) continue;
+    await prisma.user.create({
+      data: {
+        username: persona.login,
+        name: persona.name,
+        passwordHash: await hashPassword(password),
+        role: persona.role,
+        passwordChangedAt: new Date(),
+      },
+    });
+    created += 1;
+  }
+
   const pending = await prisma.transportDriver.findMany({
     where: { authUserId: null },
     select: { id: true, fullName: true, phone: true },
   });
-  if (pending.length === 0) return 0;
+  if (pending.length === 0) return created;
 
   /** Khop theo SO DIEN THOAI: ten co dau va co the trung, so dien thoai thi khong. */
   const loginByPhone = new Map(
     loadDemoMonthDataset().drivers.map((driver) => [driver.phone, driver.login]),
   );
 
-  let created = 0;
   for (const driver of pending) {
     const login = loginByPhone.get(driver.phone);
     if (login === undefined) continue;
@@ -362,6 +423,22 @@ async function writePlan(
         });
         vehicleId.set(vehicle.ref, row.id);
         bump('vehicles');
+      }
+
+      // NHAN VAT VAN PHONG: chi la mot hang `User`, khong co thuc the van tai nao tro toi.
+      if (context.driverPassword !== null) {
+        for (const persona of DEMO_STAFF_PERSONAS) {
+          await tx.user.create({
+            data: {
+              username: persona.login,
+              name: persona.name,
+              passwordHash: await context.hashPassword(context.driverPassword),
+              role: persona.role,
+              passwordChangedAt: new Date(),
+            },
+          });
+          bump('staffLogins');
+        }
       }
 
       const driverId = new Map<string, string>();
