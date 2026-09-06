@@ -182,9 +182,19 @@ stage rollout ROLLOUT_SEED_FAILED
 # thu hai de sai.
 #
 # Cung IDEMPOTENT nhu buoc tren: DB da co chuyen thi khong dung toi gi ca.
+# `TENANT_DIR` PHAI DUOC TRUYEN TUONG MINH, va day la cho de sai.
+#
+# Container `bootstrap` KHONG co `TENANT` lan `TENANT_DIR`: no chi MOUNT goi khach vao
+# `/srv/tenant` (`compose.yaml`). `seed-tenant-knowledge.mjs` khong vuong vi no doc thang duong dan
+# do lam mac dinh, con buoc nay di qua `loadTenantConfig()` cua `@netviet/tenant` — ham do doi mot
+# trong hai bien va NEM khi thieu ca hai.
+#
+# Do dung la cach lan deploy dau tien cua T8 chet (`ROLLOUT_TRANSPORT_DEMO_SEED_FAILED`, run
+# 33985173812): "Thieu bien TENANT: khong biet nap goi khach nao".
 stage rollout ROLLOUT_TRANSPORT_DEMO_SEED_FAILED
-"${COMPOSE[@]}" --profile tools run --rm --no-deps bootstrap \
-  node deploy/netviet/seed-transport-demo.mjs
+"${COMPOSE[@]}" --profile tools run --rm --no-deps \
+  -e TENANT_DIR=/srv/tenant \
+  bootstrap node deploy/netviet/seed-transport-demo.mjs
 # WORKFLOW ENGINE — dung TRUOC `api`, va CHI khi cong tac bat.
 #
 # `--profile workflow` la thu duy nhat lam cum Hatchet ton tai. Stack khong bat thi doan nay khong
