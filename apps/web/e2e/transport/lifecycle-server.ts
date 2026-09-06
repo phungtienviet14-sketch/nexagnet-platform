@@ -270,13 +270,20 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
 
   /* ---------------- doc tinh, du de man hinh ve ra ---------------- */
   await page.route('**/transport/settlement/**', (route) => json(route, []));
-  await page.route('**/transport/fleet-status', (route) => json(route, []));
+  // PHONG BI, khong mang tran — xem ghi chu `getList` trong `transport-api.ts`. May chu gia nay
+  // tung tra ve mang tran cho ca sau duong duoi day, va do la ly do mot loi TRANG MAN cua muc
+  // "Bao duong & giay to" va "Luong" di het duoc toi ban trien khai that.
+  await page.route('**/transport/fleet-status', (route) =>
+    json(route, { vehicles: [], conflicts: [] }),
+  );
   await page.route('**/transport/alerts', (route) =>
     json(route, { generatedFor: '2026-09-30', alerts: [], unavailableSources: [] }),
   );
-  await page.route('**/transport/maintenance/due', (route) => json(route, []));
-  await page.route('**/transport/maintenance/plans', (route) => json(route, []));
-  await page.route('**/transport/compliance/alerts', (route) => json(route, []));
+  await page.route('**/transport/maintenance/due', (route) => json(route, { due: [] }));
+  await page.route('**/transport/maintenance/plans', (route) => json(route, { plans: [] }));
+  await page.route('**/transport/compliance/alerts', (route) =>
+    json(route, { alerts: [], gaps: [] }),
+  );
   await page.route('**/transport/costing/driver-fund/**', (route) => json(route, []));
   /*
    * `GET /transport/costing/trips/:id/expenses` tra mot DOI TUONG `TripCostBreakdown`, khong phai
@@ -671,7 +678,8 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
 
   /* ---------------- BAO DUONG + GIAY TO ---------------- */
   await page.route('**/transport/maintenance/work-orders', async (route) => {
-    if (route.request().method() !== 'POST') return json(route, [...state.workOrders.values()]);
+    if (route.request().method() !== 'POST')
+      return json(route, { workOrders: [...state.workOrders.values()] });
     const body = route.request().postDataJSON() as Record<string, unknown>;
     const id = next('wo');
     const order: WorkOrder = {
@@ -731,7 +739,8 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
   });
 
   await page.route('**/transport/compliance/documents', async (route) => {
-    if (route.request().method() !== 'POST') return json(route, state.complianceDocuments);
+    if (route.request().method() !== 'POST')
+      return json(route, { documents: state.complianceDocuments });
     const body = route.request().postDataJSON() as Record<string, unknown>;
     const doc = { id: next('doc'), ...body, status: 'ACTIVE', createdAt: AT, updatedAt: AT };
     state.complianceDocuments = [...state.complianceDocuments, doc];
@@ -740,7 +749,8 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
 
   /* ---------------- LUONG ---------------- */
   await page.route('**/transport/payroll/periods', async (route) => {
-    if (route.request().method() !== 'POST') return json(route, [...state.payrollPeriods.values()]);
+    if (route.request().method() !== 'POST')
+      return json(route, { periods: [...state.payrollPeriods.values()] });
     const body = route.request().postDataJSON() as Record<string, unknown>;
     const id = next('per');
     const period: PayrollPeriod = {
@@ -768,10 +778,9 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
 
   await page.route('**/transport/payroll/periods/*/runs', (route) => {
     const periodId = idFrom(route.request().url(), /periods\/([^/]+)\/runs/);
-    return json(
-      route,
-      [...state.payrollRuns.values()].filter((run) => run.periodId === periodId),
-    );
+    return json(route, {
+      runs: [...state.payrollRuns.values()].filter((run) => run.periodId === periodId),
+    });
   });
 
   await page.route('**/transport/payroll/runs', async (route) => {
@@ -813,10 +822,12 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
 
   await page.route('**/transport/payroll/runs/*/payslips', (route) => {
     const runId = idFrom(route.request().url(), /runs\/([^/]+)\/payslips/);
-    return json(
-      route,
-      [...state.payslips.values()].filter((row) => row.runId === runId),
-    );
+    // HAI LOP: may chu tra `{ payslips: [{ payslip, components }] }`, khong phai mot mang phieu.
+    return json(route, {
+      payslips: [...state.payslips.values()]
+        .filter((row) => row.runId === runId)
+        .map((payslip) => ({ payslip, components: [] })),
+    });
   });
 
   const movePayslip = async (route: Route, to: string): Promise<void> => {

@@ -6,6 +6,7 @@ import { DriverShell, roleLabelOf, TransportShell } from './components/Transport
 import { DriverSurface } from './driver/DriverSurface';
 import { useNavigationInput } from './hooks/useTransportWorkspace';
 import {
+  buildDriverUrl,
   buildNavigationUrl,
   findSection,
   navigationGroups,
@@ -167,7 +168,19 @@ export function TransportOperations() {
       onNavigate={(section) => goTo({ section })}
     >
       {groups.length === 0 ? (
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState
+          message={operationsEmptyMessage(navigation.role)}
+          // Cau chu noi "Hãy dùng đường 'Mở màn hình lái xe'" — nen duong do phai o NGAY DAY.
+          // Trong thanh ben thi o 1440px no co that, con o 390px thanh ben da gap lai, va 390px
+          // moi la thiet bi cua lai xe.
+          action={
+            driverScreens.length === 0 ? undefined : (
+              <a className="tx-btn" href={buildDriverUrl('home')}>
+                Mở màn hình lái xe →
+              </a>
+            )
+          }
+        />
       ) : (
         <SectionBody section={state.section} selection={state.selection} onSelect={selectWithin} />
       )}
