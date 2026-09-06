@@ -138,6 +138,34 @@ const readBody = async <T>(response: Response): Promise<T> => {
 
 const get = async <T>(path: string): Promise<T> => readBody<T>(await authFetch(`${BASE}${path}`));
 
+/**
+ * DANH SACH NAM TRONG MOT PHONG BI, khong tra ve tran.
+ *
+ * `TX-06` va `TX-07` tra ve `{ plans }`, `{ due }`, `{ workOrders }`, `{ documents }`,
+ * `{ alerts, gaps }`, `{ vehicles, conflicts }`, `{ periods }`, `{ runs }`, `{ payslips }` — mot
+ * quyet dinh CO Y cua may chu: chung con cho them truong o canh (`gaps`, `conflicts`) ma khong pha
+ * vo dang phan hoi.
+ *
+ * Client tung khai bao chung la MANG TRAN. Hau qua do duoc tren ban dang chay o T10: hai muc
+ * "Bao duong & giay to" va "Luong" TRANG MAN voi `N.map is not a function` — khong phai mot o
+ * trong, ma mot trang loi cua trinh duyet.
+ *
+ * Vi sao khong bai kiem nao bat: ca hai may chu gia cua bo e2e (`transport-operations.spec.ts` va
+ * `lifecycle-server.ts`) deu tra ve mang tran, tuc chung khang dinh mot hop dong may chu KHONG CO
+ * THAT. Mot bai kiem xanh tren mot phep do bia ra thi khong noi gi ve san pham.
+ */
+const getList = async <T>(path: string, key: string): Promise<readonly T[]> => {
+  const body = await get<Record<string, unknown>>(path);
+  const rows = body?.[key];
+  if (!Array.isArray(rows)) {
+    // Khong roi ve `[]`: mot danh sach rong tu mot phan hoi sai dang se hien ra man hinh nhu "chua
+    // co du lieu", tuc dung mot cau noi doi de che mot loi hop dong. Bao len de nguoi dung thay
+    // trang thai loi that va tang tren co cai de log.
+    throw new TransportApiError(`Phản hồi của hệ thống cho ${path} không đúng dạng mong đợi.`, 502);
+  }
+  return rows as readonly T[];
+};
+
 const send = async <T>(method: 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> =>
   readBody<T>(
     await authFetch(`${BASE}${path}`, {
@@ -701,15 +729,16 @@ export const transportApi = {
 
   /** `TX-06` — bao duong, giay to, trang thai hieu luc, bang canh bao. */
   assets: {
-    plans: (): Promise<readonly MaintenancePlan[]> => get('/transport/maintenance/plans'),
+    plans: (): Promise<readonly MaintenancePlan[]> =>
+      getList('/transport/maintenance/plans', 'plans'),
     createPlan: (input: CreateMaintenancePlanInput): Promise<MaintenancePlan> =>
       send('POST', '/transport/maintenance/plans', input),
     updatePlan: (id: string, input: UpdateMaintenancePlanInput): Promise<MaintenancePlan> =>
       send('PATCH', `/transport/maintenance/plans/${encodeURIComponent(id)}`, input),
     /** MAY CHU tinh den han. Man hinh khong duoc tinh lai — xem `#170 §4.B`. */
-    due: (): Promise<readonly MaintenanceDue[]> => get('/transport/maintenance/due'),
+    due: (): Promise<readonly MaintenanceDue[]> => getList('/transport/maintenance/due', 'due'),
     workOrders: (): Promise<readonly MaintenanceWorkOrder[]> =>
-      get('/transport/maintenance/work-orders'),
+      getList('/transport/maintenance/work-orders', 'workOrders'),
     openWorkOrder: (input: OpenWorkOrderInput): Promise<MaintenanceWorkOrder> =>
       send('POST', '/transport/maintenance/work-orders', input),
     completeWorkOrder: (id: string, input: CompleteWorkOrderInput): Promise<MaintenanceWorkOrder> =>
@@ -720,7 +749,7 @@ export const transportApi = {
       }),
 
     complianceDocuments: (): Promise<readonly ComplianceDocument[]> =>
-      get('/transport/compliance/documents'),
+      getList('/transport/compliance/documents', 'documents'),
     registerComplianceDocument: (
       input: RegisterComplianceDocumentInput,
     ): Promise<ComplianceDocument> => send('POST', '/transport/compliance/documents', input),
@@ -730,26 +759,38 @@ export const transportApi = {
     ): Promise<ComplianceDocument> =>
       send('PATCH', `/transport/compliance/documents/${encodeURIComponent(id)}/status`, { status }),
     complianceAlerts: (): Promise<readonly ComplianceAlert[]> =>
-      get('/transport/compliance/alerts'),
+      getList('/transport/compliance/alerts', 'alerts'),
 
-    fleetStatus: (): Promise<readonly EffectiveVehicleState[]> => get('/transport/fleet-status'),
+    fleetStatus: (): Promise<readonly EffectiveVehicleState[]> =>
+      getList('/transport/fleet-status', 'vehicles'),
     /** BANG CANH BAO GOM CHUNG — `unavailableSources` phai duoc hien, khong duoc bo. */
     operationalAlerts: (): Promise<OperationalAlertFeed> => get('/transport/alerts'),
   },
 
   /** `TX-07` — ky luong va phieu luong. Man hinh KHONG BAO GIO tu tinh mot khoan luong nao. */
   payroll: {
-    periods: (): Promise<readonly PayrollPeriod[]> => get('/transport/payroll/periods'),
+    periods: (): Promise<readonly PayrollPeriod[]> =>
+      getList('/transport/payroll/periods', 'periods'),
     openPeriod: (input: OpenPayrollPeriodInput): Promise<PayrollPeriod> =>
       send('POST', '/transport/payroll/periods', input),
     closePeriod: (id: string): Promise<PayrollPeriod> =>
       send('POST', `/transport/payroll/periods/${encodeURIComponent(id)}/close`),
     runs: (periodId: string): Promise<readonly PayrollRun[]> =>
-      get(`/transport/payroll/periods/${encodeURIComponent(periodId)}/runs`),
+      getList(`/transport/payroll/periods/${encodeURIComponent(periodId)}/runs`, 'runs'),
     run: (input: RunPayrollInput): Promise<PayrollRun> =>
       send('POST', '/transport/payroll/runs', input),
-    payslipsOfRun: (runId: string): Promise<readonly Payslip[]> =>
-      get(`/transport/payroll/runs/${encodeURIComponent(runId)}/payslips`),
+    /**
+     * BOC HAI LOP. May chu tra `{ payslips: [{ payslip, components }] }` — moi hang la mot phieu
+     * KEM cac khoan cong/tru cua no. Man hinh bang phieu luong chi can phan `payslip`; ai can
+     * `components` thi doc chi tiet mot phieu (`payslip(id)`), va do la mot lan goi khac.
+     */
+    payslipsOfRun: async (runId: string): Promise<readonly Payslip[]> => {
+      const rows = await getList<{ readonly payslip?: Payslip } | Payslip>(
+        `/transport/payroll/runs/${encodeURIComponent(runId)}/payslips`,
+        'payslips',
+      );
+      return rows.map((row) => ('payslip' in row && row.payslip ? row.payslip : (row as Payslip)));
+    },
     payslip: (id: string): Promise<PayslipDetail> =>
       get(`/transport/payroll/payslips/${encodeURIComponent(id)}`),
     approvePayslip: (id: string): Promise<Payslip> =>

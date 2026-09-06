@@ -633,3 +633,39 @@ export const payslipStatusTone = (status: PayslipStatus): StatusTone => {
       return 'stop';
   }
 };
+
+/**
+ * NGUOI GHI mot but toan — ten tai khoan, tru khi khong co ai.
+ *
+ * Cac hang do buoc gieo du lieu tao ra mang tac nhan `demo-seed` (`DEMO_SEED_ACTOR` cua API). Do la
+ * su that trong so kiem toan va PHAI o nguyen do; nhung mot ke toan mo so quy va doc cot "Người
+ * ghi" thay chu `demo-seed` thi dang doc mot chi tiet ky thuat cua chung ta, khong phai mot cai ten.
+ *
+ * Doi o CHO HIEN THI, khong o cho luu: `recordedBy` van di nguyen ve may chu va van nam trong
+ * `AuditLog`. Man hinh la mot GOC NHIN, va goc nhin duoc phep dich.
+ */
+const SEED_ACTOR = 'demo-seed';
+
+export const actorLabel = (recordedBy: string | null | undefined): string => {
+  const actor = (recordedBy ?? '').trim();
+  if (actor.length === 0) return '—';
+  return actor === SEED_ACTOR ? 'Dữ liệu khởi tạo' : actor;
+};
+
+/**
+ * NHOM CHI PHI — ten do khach dat, tru mot ma HE THONG dat.
+ *
+ * Hau het cac nhom la chuoi tu goi khach (`policies.transportCosting.expenseCategories`) va da la
+ * tieng Viet san: "Phí cầu đường", "Bốc xếp"... Rieng `FUEL` la MA DANH RIENG cua nen tang
+ * (`FUEL_EXPENSE_CATEGORY_CODE` ben API): moi but toan sinh ra tu mot phieu do dau deu roi vao no,
+ * nen no khong doi ten duoc o tang du lieu.
+ *
+ * Ket qua tren man hinh lai xe: mot o chon liet ke nam nhom tieng Viet roi mot chu `FUEL` in hoa.
+ * Doi o CHO HIEN THI la cach duy nhat sua duoc ma khong dung vao ma he thong.
+ */
+const SYSTEM_EXPENSE_CATEGORY_LABEL: Readonly<Record<string, string>> = {
+  FUEL: 'Nhiên liệu',
+};
+
+export const expenseCategoryLabel = (code: string): string =>
+  SYSTEM_EXPENSE_CATEGORY_LABEL[code] ?? code;

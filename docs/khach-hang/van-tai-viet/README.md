@@ -15,22 +15,23 @@ riêng cho họ.
 
 ## Tài liệu
 
-| File | Nội dung |
-|---|---|
-| [`nghiep-vu/nguon-su-that-van-tai.md`](nghiep-vu/nguon-su-that-van-tai.md) | **T0 — Nguồn sự thật.** 60+ sự kiện truy vết tới từng trang/mục của tài liệu khách, kèm 8 xung đột, 23 quyết định còn mở, 6 mục thiếu nguồn |
-| [`../../kien-truc/transport-domain-contract.md`](../../kien-truc/transport-domain-contract.md) | **T1 — Hợp đồng Transport Domain.** Trung tính, không nhắc tên khách. Bounded context, aggregate, bất biến tài chính, capability, phân quyền, guardrail, 25 case nghiệm thu, 23 giả định demo |
+| File                                                                                           | Nội dung                                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`nghiep-vu/nguon-su-that-van-tai.md`](nghiep-vu/nguon-su-that-van-tai.md)                     | **T0 — Nguồn sự thật.** 60+ sự kiện truy vết tới từng trang/mục của tài liệu khách, kèm 8 xung đột, 23 quyết định còn mở, 6 mục thiếu nguồn                                                                 |
+| [`../../kien-truc/transport-domain-contract.md`](../../kien-truc/transport-domain-contract.md) | **T1 — Hợp đồng Transport Domain.** Trung tính, không nhắc tên khách. Bounded context, aggregate, bất biến tài chính, capability, phân quyền, guardrail, 25 case nghiệm thu, 23 giả định demo               |
+| [`ban-giao/`](ban-giao/README.md)                                                              | **T10 — Gói bàn giao.** Bắt đầu nhanh theo ba vai, bảng phân quyền, thủ tục chuyển sang dữ liệu thật, vận hành bản demo (sao lưu/phục hồi/làm lại), kịch bản demo 30–45 phút, và 12 giả định cần khách chốt |
 
 ## Hồ sơ gốc
 
-| Tài liệu | Vị trí | Trong git? |
-|---|---|---|
-| `Phan_tich_nghiep_vu_App_Van_Tai.pdf` — tài liệu phân tích nghiệp vụ do chính khách viết, 14 trang, v1.0 tháng 7/2026 | **Ngoài repo:** `C:\Users\phung\Documents\vietpt\khoi_nghiep\van_tai\customer_docs\van_tai_viet\` | **Không** |
+| Tài liệu                                                                                                              | Vị trí                                                                                            | Trong git? |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------- |
+| `Phan_tich_nghiep_vu_App_Van_Tai.pdf` — tài liệu phân tích nghiệp vụ do chính khách viết, 14 trang, v1.0 tháng 7/2026 | **Ngoài repo:** `C:\Users\phung\Documents\vietpt\khoi_nghiep\van_tai\customer_docs\van_tai_viet\` | **Không**  |
 
 > **Vì sao hồ sơ gốc không nằm trong repo.** `nexagnet-platform` là repo **public**. Một tài liệu
 > phân tích nghiệp vụ nội bộ của khách đưa vào đây là công bố nó ra ngoài. Tính toàn vẹn được bảo
 > đảm bằng **SHA-256** ghi ở [T0 §1.1](nghiep-vu/nguon-su-that-van-tai.md), không bằng một bản sao.
 >
-> Muốn đưa vào repo thì cần **văn bản đồng ý của khách** *và* một dòng `.gitignore` thêm **trước**,
+> Muốn đưa vào repo thì cần **văn bản đồng ý của khách** _và_ một dòng `.gitignore` thêm **trước**,
 > theo đúng cách hồ sơ khảo sát Ultty đang được xử lý.
 
 ## Chưa có — cần xin khách

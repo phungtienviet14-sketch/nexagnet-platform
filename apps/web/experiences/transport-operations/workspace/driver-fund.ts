@@ -1,5 +1,6 @@
 import type { AuthRole } from '../../../lib/auth';
 import {
+  actorLabel,
   EXPENSE_FUNDING_LABEL,
   FUND_BALANCE_STANCE_LABEL,
   FUND_ENTRY_KIND_LABEL,
@@ -90,7 +91,7 @@ export const toFundLedgerRows = (
       businessDateLabel: formatBusinessDate(entry.businessDate),
       tripId: entry.tripId,
       note: entry.note,
-      recordedBy: entry.recordedBy,
+      recordedBy: actorLabel(entry.recordedBy),
       createdAtLabel: formatInstant(entry.createdAt),
       isReversed,
       isReversal,
