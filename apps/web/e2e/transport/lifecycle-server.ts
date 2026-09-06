@@ -497,13 +497,25 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
     return json(route, driverSlipView(entry), 201);
   });
 
-  await page.route('**/transport/me/fuel/slips/*/evidence', async (route) => {
+  // HAI DUONG RIENG o may chu ke tu T9: `/evidence` gan mot chuoi dinh vi, `/evidence/upload` tai
+  // tep that. Truoc do ca hai dung mot path va route tai tep khong bao gio duoc goi toi.
+  //
+  // HAI loi goi `page.route` chu KHONG mot mau `{,/upload}`: `*` cua Playwright khong bang qua `/`
+  // nen mot mau khong du, con cu phap ngoac nhon thi khong duoc bao dam giua cac ban Playwright
+  // (bo cu phap glob da bi thu hep dan qua cac ban 1.4x). Hai dong tuong minh dung o moi ban, va
+  // doc len thay ngay co hai duong — dieu ma mot mau ngoac nhon giau di.
+  //
+  // LUU Y: khong bai e2e nao hien dang bam nut tai anh cua lai xe (`setInputFiles` duy nhat trong
+  // bo nay la cho tep bang ke). Do la mot phan ly do va cham route song sot lau den vay.
+  const fuelEvidenceMock = async (route: Route) => {
     const id = idFrom(route.request().url(), /slips\/([^/]+)\/evidence/);
     const list = state.fuelEvidence.get(id) ?? [];
     const file = { id: next('ev'), contentType: 'image/jpeg' };
     state.fuelEvidence.set(id, [...list, file]);
     return json(route, { ...file, fuelEntryId: id, createdAt: AT }, 201);
-  });
+  };
+  await page.route('**/transport/me/fuel/slips/*/evidence', fuelEvidenceMock);
+  await page.route('**/transport/me/fuel/slips/*/evidence/upload', fuelEvidenceMock);
 
   await page.route('**/transport/me/fuel/slips/*/resubmit', async (route) => {
     const id = idFrom(route.request().url(), /slips\/([^/]+)\/resubmit/);
