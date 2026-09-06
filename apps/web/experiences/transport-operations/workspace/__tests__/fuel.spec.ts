@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   discrepancyResolutionOptions,
   toFuelEntryRows,
+  toFuelInboxModel,
   toReconciliationRows,
   toReconciliationWorkspace,
   toStatementLineRows,
 } from '../fuel';
+import type { FuelEntryInboxPage, FuelEntryInboxRow } from '../../transport-types';
 import { discrepancy, fuelEntry, reconciliation, statementLine, workspace } from './fixtures';
 
 const suppliers = [{ id: 'sup-1', name: 'Cây xăng Petrolimex 12' }];
@@ -205,5 +207,145 @@ describe('ban lam viec doi soat', () => {
 
   it('chua ban giao thi khong bay dong nao ve ban giao', () => {
     expect(toReconciliationWorkspace(workspace(), 'ADMIN').handoffSummary).toBeNull();
+  });
+});
+
+/* ================================================================== *
+ * HOP THU PHIEU NHIEN LIEU — #222 P1-B
+ * ================================================================== */
+
+const inboxRow = (overrides: Partial<FuelEntryInboxRow> = {}): FuelEntryInboxRow => ({
+  id: 'phieu-1',
+  tripId: 'chuyen-1',
+  tripCode: 'UAT-VIET-01',
+  driverId: 'lai-xe-1',
+  driverName: 'Nguyễn Văn Bình',
+  vehicleId: 'xe-1',
+  vehiclePlate: '15C-556.33',
+  supplierId: 'sup-1',
+  supplierName: 'Cây xăng Petrolimex 12',
+  businessDate: '2026-09-05',
+  occurredAt: '2026-09-05T06:30:00+07:00',
+  litersUnits: 62_500,
+  amount: 1_437_500,
+  currencyCode: 'VND',
+  invoiceNo: null,
+  paymentMethod: 'DRIVER_CASH',
+  verificationStatus: 'DECLARED',
+  reconciliationStatus: 'UNMATCHED',
+  reviewReasons: [],
+  reviewNote: null,
+  evidenceCount: 1,
+  evidence: [{ id: 'bc-1', contentType: 'application/pdf' }],
+  ...overrides,
+});
+
+const inboxPage = (
+  rows: readonly FuelEntryInboxRow[],
+  overrides: Partial<FuelEntryInboxPage> = {},
+): FuelEntryInboxPage => ({
+  rows,
+  total: rows.length,
+  pendingVerificationCount: rows.filter((row) => row.verificationStatus === 'DECLARED').length,
+  limit: 50,
+  offset: 0,
+  ...overrides,
+});
+
+describe('#222 P1-B — hop thu bay du thu ke toan can de quyet', () => {
+  /**
+   * Day la dong ma chu so huu KHONG tim thay tren ban dang chay: phieu 62,500 L / 1.437.500 d cua
+   * lai xe, khong hien o dau trong menu Nhien lieu.
+   */
+  it('mot dong mang ma chuyen, ten lai xe, bien so va cay xang — khong mot `id` ky thuat nao', () => {
+    const model = toFuelInboxModel(inboxPage([inboxRow()]), 'ACCOUNTING');
+    const row = model.rows[0]!;
+
+    expect(row.tripCode).toBe('UAT-VIET-01');
+    expect(row.driverLabel).toBe('Nguyễn Văn Bình');
+    expect(row.vehicleLabel).toBe('15C-556.33');
+    expect(row.supplierLabel).toBe('Cây xăng Petrolimex 12');
+    expect(row.litersLabel).toContain('62');
+    expect(row.amountLabel).toContain('1.437.500');
+  });
+
+  it('ten khong doc duoc thi NOI THAT, khong de mot o trong', () => {
+    const model = toFuelInboxModel(
+      inboxPage([inboxRow({ driverName: null, vehiclePlate: null, supplierName: null })]),
+      'ADMIN',
+    );
+    const row = model.rows[0]!;
+
+    expect(row.driverLabel).toBe('Lái xe chưa đọc được tên');
+    expect(row.vehicleLabel).toBe('Xe chưa đọc được biển');
+    expect(row.supplierLabel).toBe('Cây xăng chưa đọc được tên');
+  });
+
+  it('`N chờ xác thực` doc tu con so cua may chu, khong dem lai tren trang', () => {
+    // Trang chi co MOT dong da duyet, nhung may chu noi con hai viec cho — con so phai theo may chu.
+    const model = toFuelInboxModel(
+      inboxPage([inboxRow({ verificationStatus: 'VERIFIED' })], {
+        total: 9,
+        pendingVerificationCount: 2,
+      }),
+      'ACCOUNTING',
+    );
+
+    expect(model.pendingLabel).toBe('2 chờ xác thực');
+    expect(model.isIdle).toBe(false);
+  });
+
+  it('het viec thi noi thanh cau, khong bay so `0`', () => {
+    const model = toFuelInboxModel(
+      inboxPage([inboxRow({ verificationStatus: 'VERIFIED' })], { pendingVerificationCount: 0 }),
+      'ACCOUNTING',
+    );
+
+    expect(model.pendingLabel).toBe('Không còn phiếu nào chờ xác thực');
+    expect(model.isIdle).toBe(true);
+  });
+
+  it('cong thao tac theo dung vai va dung trang thai duyet', () => {
+    const declared = toFuelInboxModel(inboxPage([inboxRow()]), 'ACCOUNTING').rows[0]!;
+    expect(declared.canVerify).toBe(true);
+    expect(declared.canReject).toBe(true);
+    expect(declared.canResubmit).toBe(false);
+
+    const rejected = toFuelInboxModel(
+      inboxPage([inboxRow({ verificationStatus: 'REJECTED', reviewNote: 'Ảnh mờ' })]),
+      'ACCOUNTING',
+    ).rows[0]!;
+    expect(rejected.canResubmit).toBe(true);
+    expect(rejected.rejectedNote).toBe('Ảnh mờ');
+
+    // Lai xe (`SALE`) khong co quyen van hanh — hop thu khong bao gio mo ra cho ho, va ke ca khi mo
+    // thi khong mot nut nao bam duoc.
+    const driverView = toFuelInboxModel(inboxPage([inboxRow()]), 'SALE').rows[0]!;
+    expect(driverView.canVerify).toBe(false);
+    expect(driverView.canReject).toBe(false);
+  });
+
+  it('pham vi trang doc duoc, va hai nut lat trang noi that ve chuyen di duoc hay khong', () => {
+    const first = toFuelInboxModel(
+      inboxPage([inboxRow(), inboxRow({ id: 'phieu-2' })], { total: 5, offset: 0, limit: 2 }),
+      'ADMIN',
+    );
+    expect(first.rangeLabel).toBe('1–2 / 5');
+    expect(first.hasPrevious).toBe(false);
+    expect(first.hasNext).toBe(true);
+
+    const last = toFuelInboxModel(
+      inboxPage([inboxRow({ id: 'phieu-5' })], { total: 5, offset: 4, limit: 2 }),
+      'ADMIN',
+    );
+    expect(last.rangeLabel).toBe('5–5 / 5');
+    expect(last.hasPrevious).toBe(true);
+    expect(last.hasNext).toBe(false);
+  });
+
+  it('hop thu rong khong bia ra mot pham vi', () => {
+    const model = toFuelInboxModel(inboxPage([]), 'ADMIN');
+    expect(model.rangeLabel).toBe('0 / 0');
+    expect(model.hasNext).toBe(false);
   });
 });

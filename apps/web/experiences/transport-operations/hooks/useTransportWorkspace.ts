@@ -7,7 +7,7 @@ import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import type { NavigationInput } from '../navigation';
 import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
-import type { SettlementFlow } from '../transport-types';
+import type { FuelEntryInboxQuery, SettlementFlow } from '../transport-types';
 
 /**
  * Duong DUY NHAT de mot khung nhin lay du lieu.
@@ -162,6 +162,23 @@ export function useFuelSuppliers(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.fuelSuppliers,
     queryFn: () => transportApi.fuel.suppliers(),
+    enabled: allowed(input, 'transport-fuel', 'transport.fuel.entry.read'),
+  });
+}
+
+/**
+ * HOP THU PHIEU NHIEN LIEU cua CA DOI — #222 P1-B.
+ *
+ * `queryKey` mang CA BO LOC: hai bo loc khac nhau la hai cau hoi khac nhau, va dung chung mot o nho
+ * se lam man hinh hien ket qua cua lan hoi truoc trong khi nguoi dung da doi dieu kien.
+ *
+ * Nam duoi tien to `['transport','fuel']` de moi lenh ghi cua man Nhien lieu (`invalidateQueries`
+ * theo tien to do) tu dong lam moi hop thu — khong phai nho don le tung cho.
+ */
+export function useFuelInbox(input: NavigationInput, query: FuelEntryInboxQuery) {
+  return useQuery({
+    queryKey: ['transport', 'fuel', 'inbox', query],
+    queryFn: () => transportApi.fuel.inbox(query),
     enabled: allowed(input, 'transport-fuel', 'transport.fuel.entry.read'),
   });
 }

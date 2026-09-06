@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useBranding } from '../../../lib/branding';
+import { AccountMenu } from './AccountMenu';
 import {
   buildDriverUrl,
   buildSectionUrl,
@@ -115,6 +116,14 @@ export function TransportShell({
         </nav>
 
         <div className="tx-rail__foot">
+          {/*
+            DANH TINH TAI KHOAN — #222 P1-D.
+
+            Nhan vai o duoi VAN O LAI: no la mot dong ngan noi be mat nay dang loc theo quyen gi, va
+            mot so bai e2e neo vao no. O tai khoan tra loi mot cau KHAC — "toi la ai" — nen hai thu
+            khong thay the nhau.
+          */}
+          <AccountMenu variant="rail" />
           {roleLabel === null ? null : <p className="tx-rail__role">{roleLabel}</p>}
           {driverScreens.length === 0 ? null : (
             <a className="tx-rail__driverlink" href={buildDriverUrl('home')}>
@@ -184,6 +193,12 @@ export function DriverShell({
             Về vận hành
           </button>
         )}
+        {/*
+          390px la thiet bi that cua lai xe, nen danh tinh o day la mot O GOI LAI: mot dong
+          `Tên · Vai trò`, mo ra moi thay du ba manh va nut `Đăng xuất`. Bay ca ba dong tren thanh
+          dau se an mat chinh noi dung ma man hinh sinh ra de hien.
+        */}
+        <AccountMenu variant="compact" />
       </header>
       <main className="tx-driver__main" id="tx-driver-main" tabIndex={-1}>
         {children}

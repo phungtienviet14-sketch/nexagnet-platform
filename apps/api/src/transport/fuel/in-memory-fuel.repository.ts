@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { TRANSPORT_CURRENCY } from '../money.js';
 import {
+  FUEL_VERIFICATION_STATUSES,
   INITIAL_FUEL_RECONCILIATION_STATE,
   INITIAL_FUEL_RECONCILIATION_STATUS,
   INITIAL_FUEL_VERIFICATION_STATUS,
@@ -23,10 +24,15 @@ import {
   type CreateFuelSupplierInput,
   type CreateStatementInput,
   type CreatedStatement,
+  type FuelEntryInboxFilter,
+  type FuelEntryInboxQuery,
+  type FuelEntryPage,
   type ReopenReconciliationInput,
   type ResolveDiscrepancyInput,
   type ResolveDiscrepancyOutcome,
   type SetFuelVerificationInput,
+  type WithdrawEvidenceInput,
+  type WithdrawEvidenceOutcome,
 } from './fuel.repository.js';
 import type {
   FuelDiscrepancy,
@@ -164,6 +170,28 @@ export class InMemoryFuelRepository extends FuelRepository {
   async listEntriesNeedingReview(): Promise<FuelEntry[]> {
     return [...this.entries.values()].filter((entry) => entry.reviewReasons.length > 0);
   }
+
+  /**
+   * HOP THU cua CA DOI — #222 P1-B.
+   *
+   * `pendingVerificationCount` dem tren PHAM VI (`matchesInboxScope`) chu khong tren trang: giong
+   * het ban Prisma, mot nguoi dang loc "da duyet" van phai thay con bao nhieu viec dang cho ho.
+   */
+  async listEntriesForInbox(query: FuelEntryInboxQuery): Promise<FuelEntryPage> {
+    const inScope = [...this.entries.values()].filter((entry) => matchesInboxScope(entry, query));
+    const matching = inScope.filter(
+      (entry) => query.verification === null || entry.verificationStatus === query.verification,
+    );
+    return {
+      entries: matching
+        .sort(compareInbox)
+        .slice(query.offset, query.offset + query.limit)
+        .map(clone),
+      total: matching.length,
+      pendingVerificationCount: inScope.filter((entry) => entry.verificationStatus === 'DECLARED')
+        .length,
+    };
+  }
   async listEntriesForMatching(input: {
     supplierId: string;
     from: string;
@@ -296,15 +324,72 @@ export class InMemoryFuelRepository extends FuelRepository {
       capturedAt: input.capturedAt?.toISOString() ?? null,
       uploadedBy: input.uploadedBy,
       createdAt: input.at.toISOString(),
+      withdrawnAt: null,
+      withdrawnBy: null,
     };
     this.evidence.set(record.id, record);
     return clone(record);
   }
 
+  /** CHI hang dang hieu luc — doi ban doi cua menh de `withdrawnAt: null` o kho Prisma. */
   async listEvidence(fuelEntryId: string): Promise<FuelReceiptEvidence[]> {
     return sortedById(
-      [...this.evidence.values()].filter((item) => item.fuelEntryId === fuelEntryId),
+      [...this.evidence.values()].filter(
+        (item) => item.fuelEntryId === fuelEntryId && item.withdrawnAt === null,
+      ),
     );
+  }
+
+  /** Doi ban doi cua ban Prisma — gom theo phieu, chi hang dang hieu luc. */
+  async listEvidenceForEntries(
+    fuelEntryIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly FuelReceiptEvidence[]>> {
+    const wanted = new Set(fuelEntryIds);
+    const grouped = new Map<string, FuelReceiptEvidence[]>();
+    for (const item of sortedById([...this.evidence.values()])) {
+      if (!wanted.has(item.fuelEntryId) || item.withdrawnAt !== null) continue;
+      const bucket = grouped.get(item.fuelEntryId);
+      if (bucket) bucket.push(item);
+      else grouped.set(item.fuelEntryId, [item]);
+    }
+    return grouped;
+  }
+
+  /**
+   * GO mot bang chung — #222 P1-C.
+   *
+   * Kho nay khong co giao dich, nen no khong chung minh duoc phan CHONG VA CHAM cua ban Prisma
+   * (xem khoi chu thich dau tep). Cai no chung minh la MAY TRANG THAI: bon ket cuc phan biet duoc,
+   * va hang o lai sau khi bi bia mo.
+   */
+  async withdrawEvidence(input: WithdrawEvidenceInput): Promise<WithdrawEvidenceOutcome> {
+    const entry = this.entries.get(input.fuelEntryId);
+    if (!entry) return { kind: 'ENTRY_NOT_FOUND' };
+
+    if (
+      input.forbiddenVerificationStatuses.includes(entry.verificationStatus) ||
+      input.forbiddenReconciliationStatuses.includes(entry.reconciliationStatus)
+    ) {
+      return {
+        kind: 'STATE_RACE',
+        verification: entry.verificationStatus,
+        reconciliation: entry.reconciliationStatus,
+      };
+    }
+
+    const found = this.evidence.get(input.evidenceId);
+    // Phai thuoc DUNG phieu tren duong dan: mot phep tim thang theo `evidenceId` se cho nguoi goi
+    // doi id tren URL de cham vao hang cua phieu khac.
+    if (!found || found.fuelEntryId !== input.fuelEntryId) return { kind: 'EVIDENCE_NOT_FOUND' };
+    if (found.withdrawnAt !== null) return { kind: 'ALREADY_WITHDRAWN' };
+
+    const withdrawn: FuelReceiptEvidence = {
+      ...found,
+      withdrawnAt: input.at.toISOString(),
+      withdrawnBy: input.actor,
+    };
+    this.evidence.set(withdrawn.id, withdrawn);
+    return { kind: 'WITHDRAWN', evidence: clone(withdrawn) };
   }
 
   /* --------------------------- Bang ke ---------------------------- */
@@ -720,6 +805,39 @@ const cloneOrNull = <T>(value: T | undefined): T | null => (value ? clone(value)
 
 const sortedById = <T extends { id: string }>(items: T[]): T[] =>
   items.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)).map(clone);
+
+/**
+ * THU TU CUA HOP THU — doi ban doi cua `orderBy` o kho Prisma (#222 P1-B).
+ *
+ * `FUEL_VERIFICATION_STATUSES` la CHINH thu tu khai bao cua enum Postgres, va bo test hop dong
+ * (`fuel-inbox-order.spec.ts`) doc `schema.prisma` de khoa dieu do. Nen hai kho sap xep GIONG NHAU
+ * ma khong ai phai nho — neu ai do doi thu tu enum, bai kiem do se do TRUOC khi hai kho lech nhau.
+ */
+const compareInbox = (left: FuelEntry, right: FuelEntry): number => {
+  const rank = (status: FuelVerificationStatus): number =>
+    FUEL_VERIFICATION_STATUSES.indexOf(status);
+  const byStatus = rank(left.verificationStatus) - rank(right.verificationStatus);
+  if (byStatus !== 0) return byStatus;
+  if (left.businessDate !== right.businessDate) {
+    return left.businessDate < right.businessDate ? 1 : -1;
+  }
+  if (left.occurredAt !== right.occurredAt) return left.occurredAt < right.occurredAt ? 1 : -1;
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+};
+
+/** Mot phieu co khop bo loc khong — KHONG ke truc trang thai duyet. Xem `inboxScopeWhere`. */
+const matchesInboxScope = (entry: FuelEntry, filter: FuelEntryInboxFilter): boolean => {
+  if (filter.tripIds !== null && !filter.tripIds.includes(entry.tripId)) return false;
+  if (filter.driverId !== null && entry.driverId !== filter.driverId) return false;
+  if (filter.vehicleId !== null && entry.vehicleId !== filter.vehicleId) return false;
+  if (filter.supplierId !== null && entry.supplierId !== filter.supplierId) return false;
+  if (filter.reconciliation !== null && entry.reconciliationStatus !== filter.reconciliation) {
+    return false;
+  }
+  if (filter.from !== null && entry.businessDate < filter.from) return false;
+  if (filter.to !== null && entry.businessDate > filter.to) return false;
+  return true;
+};
 
 const compareEntryChronology = (left: FuelEntry, right: FuelEntry): number => {
   if (left.businessDate !== right.businessDate) {

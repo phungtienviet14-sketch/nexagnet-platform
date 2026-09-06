@@ -14,7 +14,10 @@ import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
 import {
   EVIDENCE_FROZEN_FUEL_RECONCILIATION_STATUSES,
   LOCKED_FUEL_RECONCILIATION_STATUSES,
+  REMOVAL_BLOCKING_FUEL_RECONCILIATION_STATUSES,
   evaluateFuelEntryAmendment,
+  evaluateFuelEvidenceRemoval,
+  type FuelEvidenceRemovalDeniedReason,
   type FuelReviewReason,
 } from './fuel-lifecycle.js';
 import {
@@ -277,6 +280,149 @@ export class FuelService {
       after: evidence,
     });
     return evidence;
+  }
+
+  /**
+   * GO MOT BANG CHUNG DA TAI NHAM — #222 P1-C.
+   *
+   * ===========================================================================
+   * BON BUOC, VA THU TU CUA CHUNG LA CA NOI DUNG CUA TINH NANG
+   *
+   * ```text
+   * 1. doc phieu, chay cong vong doi  -> tu choi som, kem LY DO CO MA
+   * 2. bia mo hang trong mot giao dich da khoa hang phieu (cong THU HAI, luc ghi)
+   * 3. ghi dau vet KIEM TOAN
+   * 4. don byte o kho anh   (ben goi lam, sau khi ham nay tra ve)
+   * ```
+   *
+   * Buoc 2 truoc buoc 4 chu khong nguoc lai. Neu don byte truoc, mot lan tu choi o buoc 2 (vi ai do
+   * vua duyet phieu) se de lai mot phieu `VERIFIED` co dong bang chung tro toi mot object DA MAT —
+   * ke toan mo ra thay "khong con tep", va khong ai biet vi sao.
+   *
+   * ===========================================================================
+   * SERVICE NAY KHONG KIEM QUYEN SO HUU
+   *
+   * Cung khuon `attachEvidence`: pham vi "phieu cua chinh toi" co DUNG MOT cau tra loi trong he
+   * thong (`FuelReadService.getMyFuelSlip`), va controller goi no TRUOC. Viet mot phep kiem thu hai
+   * o day se tao ra hai luat de lech nhau.
+   */
+  async withdrawEvidence(
+    entryId: string,
+    evidenceId: string,
+    actor: string,
+  ): Promise<FuelReceiptEvidence> {
+    const entry = await this.requireEntry(entryId);
+
+    const decision = evaluateFuelEvidenceRemoval(
+      entry.verificationStatus,
+      entry.reconciliationStatus,
+    );
+    if (!decision.allowed) this.denyEvidenceWithdrawal(entry, decision.reason);
+
+    const outcome = await this.repository.withdrawEvidence({
+      fuelEntryId: entry.id,
+      evidenceId,
+      actor,
+      at: this.now(),
+      // Cong o tren doc trang thai roi buong; cong nay di THEO lenh ghi (T4R §4).
+      forbiddenVerificationStatuses: ['VERIFIED'],
+      forbiddenReconciliationStatuses: REMOVAL_BLOCKING_FUEL_RECONCILIATION_STATUSES,
+    });
+
+    if (outcome.kind === 'ENTRY_NOT_FOUND') {
+      throw TransportDomainError.notFound(
+        'FUEL_ENTRY_NOT_FOUND',
+        `Khong tim thay phieu ${entryId}`,
+      );
+    }
+    if (outcome.kind === 'EVIDENCE_NOT_FOUND') {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel_entry.evidence_withdraw',
+        outcome: 'denied',
+        reason: 'FUEL_EVIDENCE_NOT_FOUND',
+        detail: { fuelEntryId: entry.id, evidenceId },
+      });
+      throw TransportDomainError.notFound(
+        'FUEL_EVIDENCE_NOT_FOUND',
+        `Phieu ${entryId} khong co bang chung ${evidenceId}`,
+      );
+    }
+    if (outcome.kind === 'ALREADY_WITHDRAWN') {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_FUEL_DECISIONS,
+        point: 'fuel_entry.evidence_withdraw',
+        outcome: 'denied',
+        reason: 'FUEL_EVIDENCE_ALREADY_WITHDRAWN',
+        detail: { fuelEntryId: entry.id, evidenceId },
+      });
+      throw TransportDomainError.conflict(
+        'FUEL_EVIDENCE_ALREADY_WITHDRAWN',
+        'Chung tu nay da duoc go truoc do — tai lai trang de doc trang thai moi',
+      );
+    }
+    if (outcome.kind === 'STATE_RACE') {
+      // Trang thai DOI giua luc doc va luc ghi. Chay lai chinh cong vong doi tren gia tri DOC TU
+      // HANG DA KHOA, nen ly do bao ra la ly do THAT chu khong phai mot cau chung chung.
+      const raced = evaluateFuelEvidenceRemoval(outcome.verification, outcome.reconciliation);
+      this.denyEvidenceWithdrawal(
+        {
+          id: entry.id,
+          verificationStatus: outcome.verification,
+          reconciliationStatus: outcome.reconciliation,
+        },
+        raced.allowed ? 'EVIDENCE_ENTRY_RECONCILIATION_LOCKED' : raced.reason,
+      );
+    }
+
+    await this.audit.append({
+      actor,
+      action: 'transport.fuel.evidence.withdraw',
+      entityType: 'TransportFuelReceiptEvidence',
+      entityId: outcome.evidence.id,
+      // CA HAI phia: `before` giu ban con hieu luc, `after` giu ban da bia mo. Mot dau vet chi co
+      // `after` khong tra loi duoc "cai gi vua bien mat khoi ho so nay".
+      before: { ...outcome.evidence, withdrawnAt: null, withdrawnBy: null },
+      after: outcome.evidence,
+    });
+
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel_entry.evidence_withdraw',
+      outcome: 'allowed',
+      reason: 'FUEL_EVIDENCE_WITHDRAWN',
+      detail: { fuelEntryId: entry.id, evidenceId: outcome.evidence.id },
+    });
+    return outcome.evidence;
+  }
+
+  private denyEvidenceWithdrawal(
+    entry: Pick<FuelEntry, 'id' | 'verificationStatus' | 'reconciliationStatus'>,
+    reason: FuelEvidenceRemovalDeniedReason,
+  ): never {
+    // `EVIDENCE_ENTRY_*` (tu vung vong doi) -> `FUEL_EVIDENCE_ENTRY_*` (tu vung loi HTTP). Hai bo
+    // ma song song CO Y: mot bo thuoc may trang thai thuan, mot bo thuoc bien gioi loi cua mien.
+    const code =
+      reason === 'EVIDENCE_ENTRY_ALREADY_TRUSTED'
+        ? 'FUEL_EVIDENCE_ENTRY_ALREADY_TRUSTED'
+        : 'FUEL_EVIDENCE_ENTRY_RECONCILIATION_LOCKED';
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_FUEL_DECISIONS,
+      point: 'fuel_entry.evidence_withdraw',
+      outcome: 'denied',
+      reason: code,
+      detail: {
+        fuelEntryId: entry.id,
+        verificationStatus: entry.verificationStatus,
+        reconciliationStatus: entry.reconciliationStatus,
+      },
+    });
+    throw TransportDomainError.conflict(
+      code,
+      code === 'FUEL_EVIDENCE_ENTRY_ALREADY_TRUSTED'
+        ? 'Phieu da duoc xac thuc nen chung tu cua no khong go duoc nua'
+        : 'Phieu da khop bang ke hoac ky doi soat da dong nen chung tu khong go duoc nua',
+    );
   }
 
   /* ---------------------- Sua phieu ---------------------- */

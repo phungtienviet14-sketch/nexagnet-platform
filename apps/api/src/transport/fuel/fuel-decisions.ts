@@ -79,6 +79,21 @@ export const FUEL_ENTRY_AMEND_REASONS = [
 export type FuelEntryAmendReason = (typeof FUEL_ENTRY_AMEND_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
+ * fuel_entry.evidence_withdraw — go mot chung tu tai nham (#222 P1-C)
+ * ------------------------------------------------------------------ */
+export const FUEL_EVIDENCE_WITHDRAW_REASONS = [
+  'FUEL_EVIDENCE_WITHDRAWN',
+  /** Da go roi — hai lan bam, hoac hai tab. Khong phai loi cua ai. */
+  'FUEL_EVIDENCE_ALREADY_WITHDRAWN',
+  'FUEL_EVIDENCE_NOT_FOUND',
+  /** `GD-10` — phieu da duoc tin, tam anh nay gio la chung tu ke toan. */
+  'FUEL_EVIDENCE_ENTRY_ALREADY_TRUSTED',
+  /** `GD-11` — phieu da khop, hoac ky doi soat da dong. */
+  'FUEL_EVIDENCE_ENTRY_RECONCILIATION_LOCKED',
+] as const;
+export type FuelEvidenceWithdrawReason = (typeof FUEL_EVIDENCE_WITHDRAW_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
  * fuel.cost_posting — cau sang `TX-03`
  * ------------------------------------------------------------------ */
 export const FUEL_COST_POSTING_REASONS = [
@@ -212,6 +227,7 @@ export type TransportFuelDecisionReason =
   | FuelEntrySubmitReason
   | FuelEntryReviewReason
   | FuelEntryAmendReason
+  | FuelEvidenceWithdrawReason
   | FuelCostPostingReason
   | FuelStatementImportReason
   | FuelStatementRowReason
@@ -227,6 +243,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     'fuel_entry.submit',
     'fuel_entry.review',
     'fuel_entry.amend',
+    'fuel_entry.evidence_withdraw',
     'fuel.cost_posting',
     'fuel_statement.import',
     'fuel_statement.import_row',
@@ -256,6 +273,14 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     FUEL_ENTRY_AMEND_ALREADY_TRUSTED: 'Phiếu đã được duyệt — đường đúng là đảo phiếu',
     FUEL_ENTRY_AMEND_RECONCILIATION_LOCKED: 'Phiếu đã khớp hoặc kỳ đối soát đã đóng',
     FUEL_ENTRY_AMEND_STATE_RACE: 'Phiếu vừa được người khác duyệt hoặc khớp — tải lại rồi đọc lại',
+
+    FUEL_EVIDENCE_WITHDRAWN: 'Đã gỡ chứng từ tải nhầm khỏi phiếu, dấu vết vẫn ở lại',
+    FUEL_EVIDENCE_ALREADY_WITHDRAWN: 'Chứng từ này đã được gỡ trước đó — không còn việc gì để làm',
+    FUEL_EVIDENCE_NOT_FOUND: 'Không có chứng từ đó trên phiếu này',
+    FUEL_EVIDENCE_ENTRY_ALREADY_TRUSTED:
+      'Phiếu đã được duyệt — chứng từ thành chứng từ kế toán, đường đúng là đảo phiếu',
+    FUEL_EVIDENCE_ENTRY_RECONCILIATION_LOCKED:
+      'Phiếu đã khớp hoặc kỳ đối soát đã đóng — không gỡ chứng từ được',
 
     FUEL_COST_POSTED: 'Chi phí dầu đã vào giá thành chuyến',
     FUEL_COST_ALREADY_POSTED: 'Phiếu này đã có chân giá thành — không ghi thêm lần hai',

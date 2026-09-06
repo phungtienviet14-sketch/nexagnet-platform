@@ -14,7 +14,12 @@ import {
   tripStatusTone,
   type StatusTone,
 } from '../customer-view';
-import type { DriverFuelSlipView, DriverFundStatement, DriverTripView } from '../transport-types';
+import type {
+  DriverFuelSlipView,
+  DriverFundStatement,
+  DriverTripView,
+  FuelReconciliationStatus,
+} from '../transport-types';
 import { toFundBalance, type FundBalanceModel } from './driver-fund';
 
 /**
@@ -154,7 +159,39 @@ export interface DriverFuelSlipRow {
   /** Bi tu choi thi NOP LAI duoc qua dung vong doi cu (`#168 B5`). */
   readonly canResubmit: boolean;
   readonly rejectedNote: string | null;
+  /**
+   * GO DUOC CHUNG TU TAI NHAM khong — #222 P1-C.
+   *
+   * MAY CHU van la nguoi quyet (`evaluateFuelEvidenceRemoval` + mot cong thu hai di theo lenh ghi).
+   * Co nay chi de man hinh khong bay mot nut chac chan se bi tu choi — mot nut nhu vay day nguoi
+   * dung vao mot thong bao loi ma ho khong lam gi duoc.
+   *
+   * Va vi no la BAN SAO cua luat may chu, no phai giu DUNG hinh dang do: `VERIFIED` thi khong,
+   * `MATCHED`/`SETTLED` thi khong, `REJECTED` thi CO (chup lai roi nop lai la duong chay thuong
+   * ngay). Noi long o day se bay mot nut chi de nhan 409.
+   */
+  readonly canRemoveEvidence: boolean;
+  /** Vi sao khong go duoc — `null` khi go duoc. Cau noi that thay cho mot nut bi an im lang. */
+  readonly evidenceLockedReason: string | null;
 }
+
+/**
+ * Doi ban doi cua `evaluateFuelEvidenceRemoval` o may chu — GIU DUNG hai duong tu choi.
+ *
+ * Hai ma, hai cau: nguoi dung o hai tinh huong nay phai lam hai viec khac nhau (mot ben cho ke toan
+ * dao phieu, mot ben xin mo lai ky doi soat).
+ */
+const EVIDENCE_LOCKED_RECONCILIATION: readonly FuelReconciliationStatus[] = ['MATCHED', 'SETTLED'];
+
+const evidenceLockedReason = (slip: DriverFuelSlipView): string | null => {
+  if (slip.verificationStatus === 'VERIFIED') {
+    return 'Phiếu đã được kế toán xác thực nên chứng từ không gỡ được nữa.';
+  }
+  if (EVIDENCE_LOCKED_RECONCILIATION.includes(slip.reconciliationStatus)) {
+    return 'Phiếu đã vào kỳ đối soát bảng kê nên chứng từ không gỡ được nữa.';
+  }
+  return null;
+};
 
 export const toDriverFuelSlipRows = (
   slips: readonly DriverFuelSlipView[],
@@ -179,6 +216,8 @@ export const toDriverFuelSlipRows = (
       slip.verificationStatus === 'REJECTED'
         ? (slip.reviewNote ?? 'Phiếu bị từ chối. Sửa lại theo ghi chú rồi nộp lại.')
         : null,
+    canRemoveEvidence: evidenceLockedReason(slip) === null,
+    evidenceLockedReason: evidenceLockedReason(slip),
   }));
 
 /** Cau canh o tai anh — noi ro anh di dau, vi day la anh chung tu tien. */

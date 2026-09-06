@@ -10,14 +10,28 @@ import {
 import { TRANSPORT_FUEL_DECISIONS } from './fuel-decisions.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
+import type { FuelEntryInboxFilter } from './fuel.repository.js';
 import type {
   FuelEntry,
   FuelEntryDetail,
+  FuelEntryInboxPage,
   FuelReceiptEvidence,
   FuelReconciliation,
   FuelReconciliationWorkspace,
   FuelSupplier,
 } from './fuel.types.js';
+
+/**
+ * YEU CAU cua hop thu o TANG UNG DUNG — giong `FuelEntryInboxFilter` tru mot cho.
+ *
+ * Nguoi dung loc bang MA CHUYEN (`tripCode`), tang kho loc bang `tripIds`. Phep doi giua hai thu do
+ * la mot lan doc `transport-core`, va no thuoc tang nay chu khong thuoc tang kho (§4.1 luat 4).
+ */
+export interface FuelEntryInboxRequest extends Omit<FuelEntryInboxFilter, 'tripIds'> {
+  readonly tripCode: string | null;
+  readonly limit: number;
+  readonly offset: number;
+}
 
 /**
  * KHUNG NHIN cua `TX-04` — duong DOC, tach khoi duong GHI.
@@ -61,6 +75,116 @@ export class FuelReadService {
   async fuelEntryDetail(entryId: string): Promise<FuelEntryDetail> {
     const entry = await this.requireEntry(entryId);
     return { entry, evidence: await this.repository.listEvidence(entry.id) };
+  }
+
+  /**
+   * HOP THU PHIEU NHIEN LIEU cua CA DOI — #222 P1-B.
+   *
+   * ===========================================================================
+   * VI SAO CONG NAY PHAI TON TAI
+   *
+   * Truoc no, duong doc phieu duy nhat o be mat van hanh la THEO TUNG CHUYEN. Ke toan muon biet
+   * "phieu nao dang cho toi" phai mo lan luot tung chuyen — tuc cong viec ma man Nhien lieu quang
+   * cao (`Phiếu đổ dầu, xác thực phiếu…`) khong lam duoc o quy mo doi xe. Do la lo hong #222 P1-B
+   * do duoc tren ban DANG CHAY: mot phieu 62,500 L that cua lai xe khong xuat hien o dau trong
+   * menu Nhien lieu.
+   *
+   * ===========================================================================
+   * MA CHUYEN DUOC DOI SANG ID O DAY, va tra ve `[]` khi khong khop
+   *
+   * `tripIds: []` khac han `tripIds: null` (xem `FuelEntryInboxFilter`): loc theo mot ma chuyen
+   * khong ton tai phai cho ra hop thu RONG, khong phai TOAN BO hop thu.
+   *
+   * ===========================================================================
+   * PHEP DOI ID -> CHU LAM MOT LAN, THEO LO
+   *
+   * Bon bang tra duoc doc SONG SONG va MOI CAI MOT LAN, roi ap cho ca trang. Khong mot vong lap
+   * nao o day goi vao DB — do la ranh gioi giua "mot truy van may chu" va dung kieu N+1 ma #222
+   * cam.
+   */
+  async fuelEntryInbox(query: FuelEntryInboxRequest): Promise<FuelEntryInboxPage> {
+    const tripIds = await this.resolveTripFilter(query.tripCode);
+
+    const page = await this.repository.listEntriesForInbox({
+      verification: query.verification,
+      reconciliation: query.reconciliation,
+      tripIds,
+      driverId: query.driverId,
+      vehicleId: query.vehicleId,
+      supplierId: query.supplierId,
+      from: query.from,
+      to: query.to,
+      limit: query.limit,
+      offset: query.offset,
+    });
+
+    const [trips, drivers, vehicles, suppliers, evidence] = await Promise.all([
+      this.core.listTripsByIds(page.entries.map((entry) => entry.tripId)),
+      this.core.listDrivers(),
+      this.core.listVehicles(),
+      this.repository.listSuppliers(),
+      // MOT lan doc cho ca trang. Goi `listEvidence` tung dong se la N lan cham DB cho mot man
+      // hinh — dung kieu N+1 ma #222 cam, chi la doi cho tu trinh duyet xuong may chu.
+      this.repository.listEvidenceForEntries(page.entries.map((entry) => entry.id)),
+    ]);
+
+    const tripCode = new Map(trips.map((trip) => [trip.id, trip.code]));
+    const driverName = new Map(drivers.map((driver) => [driver.id, driver.fullName]));
+    const vehiclePlate = new Map(
+      vehicles.map((vehicle) => [vehicle.id, vehicle.registrationPlate]),
+    );
+    const supplierName = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
+    const evidenceByEntry = evidence;
+
+    return {
+      rows: page.entries.map((entry) => {
+        const files = evidenceByEntry.get(entry.id) ?? [];
+        return {
+          id: entry.id,
+          tripId: entry.tripId,
+          // Ma chuyen doc duoc khong ra thi HIEN `id` — mot o trong o cot dinh danh se lam nguoi
+          // doi soat mat duong tim nguoc ve chuyen.
+          tripCode: tripCode.get(entry.tripId) ?? entry.tripId,
+          driverId: entry.driverId,
+          driverName: driverName.get(entry.driverId) ?? null,
+          vehicleId: entry.vehicleId,
+          vehiclePlate: vehiclePlate.get(entry.vehicleId) ?? null,
+          supplierId: entry.supplierId,
+          supplierName: supplierName.get(entry.supplierId) ?? null,
+          businessDate: entry.businessDate,
+          occurredAt: entry.occurredAt,
+          litersUnits: entry.litersUnits,
+          amount: entry.amount,
+          currencyCode: entry.currencyCode,
+          invoiceNo: entry.invoiceNo,
+          paymentMethod: entry.paymentMethod,
+          verificationStatus: entry.verificationStatus,
+          reconciliationStatus: entry.reconciliationStatus,
+          reviewReasons: entry.reviewReasons,
+          reviewNote: entry.reviewNote,
+          evidenceCount: files.length,
+          // Chon TUNG TRUONG, khong spread: `FuelReceiptEvidence` mang `locator`, va mot `...row`
+          // o day se lang le day dinh vi kho anh ra trinh duyet.
+          evidence: files.map((file) => ({ id: file.id, contentType: file.contentType })),
+        };
+      }),
+      total: page.total,
+      pendingVerificationCount: page.pendingVerificationCount,
+      limit: query.limit,
+      offset: query.offset,
+    };
+  }
+
+  /**
+   * `null` = khong loc theo chuyen. `[]` = co loc va khong chuyen nao khop.
+   *
+   * Hai gia tri nay KHONG duoc gop: gop lai thi mot lan tim ma chuyen go sai se tra ve ca hop thu,
+   * va nguoi dung se doc mot danh sach khong lien quan gi den thu ho vua hoi.
+   */
+  private async resolveTripFilter(tripCode: string | null): Promise<readonly string[] | null> {
+    if (tripCode === null) return null;
+    const trip = await this.core.findTripByCode(tripCode);
+    return trip === null ? [] : [trip.id];
   }
 
   /** Phieu cua MOT CHUYEN — man hinh gia thanh chuyen cua Giam doc/Ke toan. */

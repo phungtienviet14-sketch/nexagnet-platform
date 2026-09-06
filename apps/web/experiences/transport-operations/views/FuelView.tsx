@@ -13,6 +13,7 @@ import {
 } from '../hooks/useTransportWorkspace';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { transportApi } from '../transport-api';
+import { FuelInbox } from './FuelInbox';
 import { StatementImport } from './StatementImport';
 import type { FuelDiscrepancyResolution } from '../transport-types';
 import {
@@ -59,6 +60,15 @@ export function FuelView() {
         summary="Phiếu đổ dầu, xác thực phiếu, nhập bảng kê cây xăng và đối soát."
         context={<span className="tx-count">{rows.length} kỳ đối soát</span>}
       />
+
+      {/*
+        HOP THU PHIEU DAT TREN CUNG — #222 P1-B.
+
+        Thu tu tren man nay la thu tu CONG VIEC, khong phai thu tu ky thuat: xac thuc phieu la viec
+        HANG NGAY, nhap bang ke va doi soat la viec CUOI THANG. Truoc ban nay khoi tren cung la
+        nhap bang ke, va viec hang ngay khong co cho nao de lam ca.
+      */}
+      <FuelInbox />
 
       {reconciliations.errorMessage === null ? null : (
         <ErrorState message={reconciliations.errorMessage} onRetry={reconciliations.refetch} />

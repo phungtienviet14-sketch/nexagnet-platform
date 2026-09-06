@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -123,6 +124,54 @@ export class DriverFuelEvidenceController {
     const authUserId = requireAuthUserId(request);
     const row = await this.guard(() => this.read.myFuelSlipEvidence(authUserId, id, evidenceId));
     sendEvidence(response, await this.guard(() => this.evidence.read(row.locator)));
+  }
+
+  /**
+   * GO MOT CHUNG TU DA TAI NHAM — #222 P1-C.
+   *
+   * ===========================================================================
+   * KHONG MOT MA HANH DONG MOI NAO
+   *
+   * Go mot tep vua tai nham la MOT PHAN cua viec nop phieu — nguoi lam duoc viec do la nguoi dang
+   * con quyen sua chinh phieu do. Nen route dung `transport.driver.self.fuel.submit`, y het duong
+   * `upload`. Che mot ma `transport.evidence.delete` se lam bang phan quyen dai them mot dong ma
+   * khong tra loi mot cau hoi nghiep vu nao khac.
+   *
+   * ===========================================================================
+   * BA HANG RAO, THEO DUNG THU TU NAY
+   *
+   * ```text
+   * 1. QUYEN SO HUU  — `getMyFuelSlip` nem `SELF_FUEL_SCOPE_NOT_OWNED` cho phieu cua nguoi khac
+   * 2. VONG DOI      — `FuelService.withdrawEvidence` chay cong `GD-10`/`GD-11`, ca luc doc lan ghi
+   * 3. DON BYTE      — chi khi hai rao tren da qua
+   * ```
+   *
+   * Rao 1 lam ca hai viec cua #222: lai xe A khong go duoc chung tu cua lai xe B, VA khong do duoc
+   * su ton tai cua mot `evidenceId` la — vi cau tra loi cho ca hai la cung mot 403 cua BUOC DAU,
+   * truoc khi bat cu phep tim bang chung nao chay.
+   *
+   * `driverId` KHONG bao gio den tu than yeu cau hay duong dan: danh tinh lay tu phien, dung nhu
+   * moi route khac cua be mat nay (`INV-09`).
+   */
+  @Delete(':evidenceId')
+  @Roles('SALE', 'ADMIN')
+  @RequiresTransportAction('transport.driver.self.fuel.submit')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  remove(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('evidenceId') evidenceId: string,
+  ): Promise<DriverFuelSlipView> {
+    const authUserId = requireAuthUserId(request);
+    return this.guard(async () => {
+      await this.read.getMyFuelSlip(authUserId, id);
+      const withdrawn = await this.fuel.withdrawEvidence(id, evidenceId, transportActorOf(request));
+      // BIA MO TRUOC, DON BYTE SAU. `remove` tra `false` khi kho khong don duoc (vd
+      // `MEDIA_STORE=none`) — khong nem, vi chung tu DA bien mat khoi ho so dung y nguoi dung va
+      // mot ngoai le o day se bao that bai cho mot thao tac da thanh cong.
+      await this.evidence.remove(withdrawn.locator);
+      return this.read.getMyFuelSlip(authUserId, id);
+    });
   }
 
   private async guard<T>(run: () => Promise<T>): Promise<T> {

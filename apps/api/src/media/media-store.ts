@@ -27,6 +27,38 @@ export abstract class MediaStore {
   }
 
   /**
+   * XOA mot object — NANG LUC HEP, mo dung du cho #222 P1-C (go mot chung tu tai nham).
+   *
+   * ===========================================================================
+   * BA DIEU CUA HOP DONG NAY, va moi dieu la mot quyet dinh chu khong mot chi tiet
+   *
+   *  1. IDEMPOTENT. Khoa khong ton tai KHONG phai loi — xoa hai lan, hoac xoa mot khoa ma object
+   *     da bi vong doi bucket quet di, deu ket thuc o cung mot trang thai: khong con byte. Nem o
+   *     day se buoc moi ben goi tu bat roi tu nuot, va cho nao nuot khong dung se giau mat mot
+   *     loi quyen that.
+   *  2. `supportsRemove` la mot CO DOC DUOC, khong phai mot phep thu. Ben goi phai biet TRUOC khi
+   *     go mot dong metadata rang kho co don duoc byte hay khong — neu khong, duong "go chung tu"
+   *     se xoa dau vet trong Postgres roi de lai mot object mo coi khong ai tim lai duoc.
+   *  3. MAC DINH la `false` + khong lam gi. Mot kho moi khong tu dung duoc quyen xoa; no phai VIET
+   *     RA rang minh xoa duoc. Cung khuon `get()` mac dinh tra `null`.
+   *
+   * ===========================================================================
+   * VI SAO KHONG PHAI MOT LAN TAI CAU TRUC KHO ANH
+   *
+   * #223 giu phan nen tang tep dung nghia (vong doi, quota, quet rac, ky URL). O day chi mo DUNG
+   * mot phep: bo mot khoa da biet. Khong duong liet ke, khong xoa theo tien to, khong xoa hang
+   * loat — ba thu do la duong bien mot lan go nham thanh mot lan mat du lieu.
+   */
+  async remove(key: string): Promise<void> {
+    void key;
+  }
+
+  /** Kho nay CO don duoc byte khong. Xem khoi chu thich cua `remove()`. */
+  get supportsRemove(): boolean {
+    return false;
+  }
+
+  /**
    * Kho CO THAT SU dung duoc khong — kiem bang mot request that toi noi luu, khong phai doc lai
    * bien moi truong.
    *

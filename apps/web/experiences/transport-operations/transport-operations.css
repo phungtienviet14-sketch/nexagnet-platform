@@ -1097,3 +1097,162 @@
   gap: 0.25rem;
   font-size: 0.8125rem;
 }
+
+/* ==================================================================
+ * O TAI KHOAN — #222 P1-D
+ *
+ * MOT khoi kieu cho CA HAI vo. `[data-variant]` chi doi cach bay (thanh ben doc / thanh dau ngang),
+ * khong doi mot mau hay mot khoang cach nao — hai be mat phai nhin ra la CUNG mot o.
+ * ================================================================== */
+
+.tx-account {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  position: relative;
+}
+
+.tx-account__note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--tx-ink-faint);
+}
+
+.tx-account__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-paper);
+  color: var(--tx-ink);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tx-account__trigger:hover,
+.tx-account__trigger:focus-visible {
+  border-color: var(--tx-line-strong);
+}
+
+/* Ten dai KHONG duoc day nut ra khoi thanh ben 264px — cat bang dau ba cham, khong xuong hang. */
+.tx-account__who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tx-account__caret {
+  flex: none;
+  font-size: 0.6rem;
+  color: var(--tx-ink-faint);
+}
+
+.tx-account__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-paper);
+}
+
+.tx-account__facts {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.tx-account__facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.78rem;
+}
+
+.tx-account__facts dt {
+  color: var(--tx-ink-faint);
+}
+
+.tx-account__facts dd {
+  margin: 0;
+  color: var(--tx-ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.tx-account__failure {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--tx-stop);
+}
+
+/*
+ * O 390px thanh dau la mot hang ngang chat cho. O tai khoan chiem het be ngang con lai va tha khoi
+ * chi tiet ra BEN TREN noi dung, chu khong day noi dung xuong.
+ */
+.tx-account[data-variant='compact'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tx-account[data-variant='compact'] .tx-account__panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  left: 0;
+  box-shadow: 0 8px 24px rgb(27 26 23 / 18%);
+}
+
+/* ==================================================================
+ * HOP THU PHIEU NHIEN LIEU — #222 P1-B
+ * ================================================================== */
+
+.tx-inbox__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/*
+ * `N chờ xác thực` — con so DUY NHAT tren man nay noi co viec phai lam. No duoc bay bang MAU va
+ * bang CHU: mau mot minh khong doc duoc voi nguoi khong phan biet duoc mau.
+ */
+.tx-inbox__pending {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--tx-wait-wash);
+  color: var(--tx-wait);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tx-inbox__pending[data-idle='true'] {
+  background: var(--tx-go-wash);
+  color: var(--tx-go);
+}
+
+.tx-inbox__evidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tx-inbox__pager {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--tx-ink-soft);
+}

@@ -112,6 +112,79 @@ export const attachFuelEvidenceSchema = z
 
 export const rejectFuelEntrySchema = z.object({ reason: nonEmpty.max(500) }).strict();
 
+/* ------------------------------------------------------------------ *
+ * HOP THU PHIEU NHIEN LIEU — #222 P1-B
+ * ------------------------------------------------------------------ */
+
+/**
+ * BIEN CUNG cua mot trang. KHONG phai mot goi y — mot `limit` do client dat khong tran la mot cau
+ * lenh doc ca bang duoc go tu thanh dia chi.
+ */
+export const FUEL_INBOX_MAX_LIMIT = 200;
+export const FUEL_INBOX_DEFAULT_LIMIT = 50;
+
+/** `?a=` (rong) va thieu han tham so deu la KHONG LOC — tra `null`, khong tra chuoi rong. */
+const optionalFilter = z
+  .string()
+  .trim()
+  .nullish()
+  .transform((value) => {
+    const trimmed = value?.trim() ?? '';
+    return trimmed.length > 0 ? trimmed : null;
+  });
+
+/**
+ * Mot so doc tu THANH DIA CHI — luon la chuoi truoc khi toi day.
+ *
+ * HAI luoi, va chung xu ly HAI kieu hong khac nhau:
+ *
+ *   · `catch(fallback)` — gia tri KHONG DOC DUOC (`?limit=abc`). Roi ve mac dinh. #222 P2 doi
+ *     "malformed values fail safely to valid defaults", va cung nguyen tac ap cho hop thu: mot dia
+ *     chi dan tay bi cat hong phai mo ra man hinh dung mac dinh, khong phai mot trang loi.
+ *   · `clamp` — gia tri DOC DUOC nhung ngoai khoang (`?limit=100000`). KEP ve bien gan nhat chu
+ *     khong roi ve mac dinh: nguoi hoi 100.000 dong ro rang muon "cang nhieu cang tot", va tra ve
+ *     50 la mot cau tra loi dung ngau nhien. `?offset=-5` cung vay — kep ve 0.
+ */
+const boundedNumber = (fallback: number, min: number, max: number) =>
+  z.coerce
+    .number()
+    .int()
+    .catch(fallback)
+    .default(fallback)
+    .transform((value) => Math.min(Math.max(value, min), max));
+
+/**
+ * BO LOC cua hop thu, doc tu query string.
+ *
+ * ===========================================================================
+ * MOI TRUONG DEU HONG DUOC MA KHONG LAM DO MAN HINH
+ *
+ * `catch(null)` tren hai truong enum va `catch(fallback)` tren hai truong so: mot ma trang thai
+ * khong con ton tai (vd sau mot lan doi enum) chi lam mat BO LOC do, khong lam mat CA MAN HINH.
+ * Nguoc lai, mot deep link cu se bien thanh mot trang loi ma nguoi dung khong sua duoc.
+ *
+ * `.strict()` KHONG duoc dung o day: query string that mang theo nhung tham so cua tang khac
+ * (`section`, `selected`, …) va mot lan tu choi vi "co tham so la" se lam moi lien ket sao chep tu
+ * thanh dia chi thanh mot loi 400.
+ */
+export const fuelEntryInboxQuerySchema = z.object({
+  verification: z.enum(['DECLARED', 'VERIFIED', 'REJECTED']).nullish().catch(null).default(null),
+  reconciliation: z
+    .enum(['UNMATCHED', 'MATCHED', 'MISMATCHED', 'SETTLED', 'IGNORED'])
+    .nullish()
+    .catch(null)
+    .default(null),
+  /** MA CHUYEN doc duoc (`UAT-VIET-01`), khong phai `tripId`. Xem `resolveTripFilter`. */
+  tripCode: optionalFilter,
+  driverId: optionalFilter,
+  vehicleId: optionalFilter,
+  supplierId: optionalFilter,
+  from: businessDate.nullish().catch(null).default(null),
+  to: businessDate.nullish().catch(null).default(null),
+  limit: boundedNumber(FUEL_INBOX_DEFAULT_LIMIT, 1, FUEL_INBOX_MAX_LIMIT),
+  offset: boundedNumber(0, 0, 1_000_000),
+});
+
 /** ~5 MB sau base64 la ~6,7 MB chuoi; bien nay khop bien byte cua `FileFuelStatementSource`. */
 const BASE64_MAX_LENGTH = 7_000_000;
 

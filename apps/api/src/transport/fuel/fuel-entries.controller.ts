@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +26,7 @@ import { FuelService } from './fuel.service.js';
 import {
   amendFuelEntrySchema,
   attachFuelEvidenceSchema,
+  fuelEntryInboxQuerySchema,
   rejectFuelEntrySchema,
   submitFuelEntrySchema,
 } from './fuel.schemas.js';
@@ -51,6 +53,35 @@ export class FuelEntriesController {
   @RequiresTransportAction('transport.fuel.entry.read')
   listSuppliers() {
     return this.guard(() => this.read.listSuppliers());
+  }
+
+  /**
+   * HOP THU PHIEU NHIEN LIEU cua CA DOI — #222 P1-B.
+   *
+   * ===========================================================================
+   * `GET entries` KHAI TRUOC `GET entries/:id`
+   *
+   * Nest gan route theo THU TU KHAI BAO. Hai duong nay khac so doan nen khong nuot nhau, nhung dat
+   * cai CHUNG truoc cai RIENG la thu tu doc dung, va no tranh dung bay ma `#169` da vap mot lan
+   * (hai route cung method + cung path, Nest chi gan mot).
+   *
+   * ===========================================================================
+   * QUYEN: `transport.fuel.entry.read` — KHONG mot ma moi
+   *
+   * Day la cung mot du lieu ma `entries/:id` va `trips/:tripId/entries` da tra ve, chi khac CACH
+   * HOI. Che mot quyen moi cho mot phep truy van moi tren cung mot tap du lieu se lam bang phan
+   * quyen mo ta CONG NGHE thay vi mo ta NGHIEP VU.
+   *
+   * Ke toan (`ACCOUNTING`) va Giam doc (`ADMIN`) deu co ma nay; `SALE` (cho giu tam cua vai lai xe)
+   * thi khong — nen hop thu cua ca doi khong bao gio mo ra tren be mat lai xe.
+   */
+  @Get('entries')
+  @RequiresTransportAction('transport.fuel.entry.read')
+  inbox(@Query() query: unknown) {
+    // KHONG `BadRequestException` cho mot bo loc go hong: schema `catch(...)` tung truong, nen mot
+    // deep link cu/cat hong mo ra man hinh mac dinh thay vi mot trang loi (cung nguyen tac #222 P2).
+    const parsed = fuelEntryInboxQuerySchema.parse(query ?? {});
+    return this.guard(() => this.read.fuelEntryInbox(parsed));
   }
 
   @Get('trips/:tripId/entries')

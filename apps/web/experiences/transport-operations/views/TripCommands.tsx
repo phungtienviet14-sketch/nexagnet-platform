@@ -1,11 +1,20 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ErrorState } from '../components/SectionState';
 import { TRIP_KIND_LABEL } from '../customer-view';
 import { canPerform } from '../transport-actions';
 import { transportApi } from '../transport-api';
+import {
+  assignmentDraftIsNoOp,
+  emptyAssignmentDraft,
+  hydrateAssignmentDraft,
+  releaseAssignmentDraft,
+  toAssignSubmission,
+  touchAssignmentDriver,
+  touchAssignmentVehicle,
+} from '../workspace/assignment-draft';
 import {
   TRIP_KINDS,
   type Driver,
@@ -253,18 +262,37 @@ export function TripAssignForm({
   readonly role: Parameters<typeof canPerform>[0];
   readonly onDone: () => void;
 }) {
-  const [vehicleId, setVehicleId] = useState(currentVehicleId ?? '');
-  const [driverId, setDriverId] = useState(currentDriverId ?? '');
+  const [draft, setDraft] = useState(emptyAssignmentDraft);
   const [failure, setFailure] = useState<string | null>(null);
 
+  const active = useMemo(
+    () => ({ vehicleId: currentVehicleId, driverId: currentDriverId }),
+    [currentVehicleId, currentDriverId],
+  );
+
+  /*
+   * PHAN CONG DEN SAU LAN VE DAU TIEN, va do la ca goc cua #222 P1-A.
+   *
+   * `useTripAssignments` la mot query RIENG: lan ve dau tien cua form nay luon thay `null`. Khong
+   * co lan dong bo nay thi hai o chon dung yen o "Chưa gán" ke ca khi dong thoi gian ngay ben canh
+   * da hien `15C-556.33 · Nguyễn Văn Bình`.
+   *
+   * `hydrateAssignmentDraft` tra ve CHINH doi tuong cu khi khong co gi doi, nen `setDraft` khong
+   * lam React ve lai — mot `useEffect` chay theo `active` vi vay khong thanh mot vong vo tan.
+   */
+  useEffect(() => {
+    setDraft((current) => hydrateAssignmentDraft(current, active));
+  }, [active]);
+
   const assign = useMutation({
-    mutationFn: () =>
-      transportApi.trips.assign(tripId, {
-        vehicleId: vehicleId === '' ? null : vehicleId,
-        driverId: driverId === '' ? null : driverId,
-      }),
+    // KHONG doc thang `draft`: `toAssignSubmission` lay tu PHAN CONG DANG CO o moi truong nguoi
+    // dung chua cham. Do la thu lam mot lan bam "khong doi gi" KHONG THE go phan cong cua chuyen.
+    mutationFn: () => transportApi.trips.assign(tripId, toAssignSubmission(draft, active)),
     onSuccess: () => {
       setFailure(null);
+      // Tha ban nhap ra: tu day o chon bam theo ket qua THAT cua may chu, chu khong giu lai lua
+      // chon vua gui — hai thu do trung nhau luc thanh cong, va khac nhau khi may chu sua lai.
+      setDraft(releaseAssignmentDraft);
       onDone();
     },
     onError: (error: Error) => setFailure(error.message),
@@ -272,19 +300,25 @@ export function TripAssignForm({
 
   if (!canPerform(role, 'transport.trip.assign')) return null;
 
+  const isNoOp = assignmentDraftIsNoOp(draft, active);
+
   return (
     <form
       className="tx-inlineform"
       aria-label="Phân công xe và lái xe"
       onSubmit={(event) => {
         event.preventDefault();
-        assign.mutate();
+        if (!isNoOp) assign.mutate();
       }}
     >
       {failure === null ? null : <ErrorState message={failure} />}
       <label className="tx-field tx-field--inline">
         <span>Xe</span>
-        <select aria-label="Xe" value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+        <select
+          aria-label="Xe"
+          value={draft.vehicleId}
+          onChange={(e) => setDraft((current) => touchAssignmentVehicle(current, e.target.value))}
+        >
           <option value="">Chưa gán xe</option>
           {vehicles.map((row) => (
             <option key={row.id} value={row.id}>
@@ -295,7 +329,11 @@ export function TripAssignForm({
       </label>
       <label className="tx-field tx-field--inline">
         <span>Lái xe</span>
-        <select aria-label="Lái xe" value={driverId} onChange={(e) => setDriverId(e.target.value)}>
+        <select
+          aria-label="Lái xe"
+          value={draft.driverId}
+          onChange={(e) => setDraft((current) => touchAssignmentDriver(current, e.target.value))}
+        >
           <option value="">Chưa gán lái xe</option>
           {drivers.map((row) => (
             <option key={row.id} value={row.id}>
@@ -304,9 +342,14 @@ export function TripAssignForm({
           ))}
         </select>
       </label>
-      <button type="submit" className="tx-btn" disabled={assign.isPending}>
+      {/*
+        TAT nut khi khong co gi doi, thay vi de no bam duoc roi am tham bo qua: mot nut bam duoc ma
+        khong lam gi la mot nut lam nguoi ta bam lai lan hai.
+      */}
+      <button type="submit" className="tx-btn" disabled={assign.isPending || isNoOp}>
         {assign.isPending ? 'Đang phân công…' : 'Phân công'}
       </button>
+      {isNoOp ? <span className="tx-note">Chưa đổi xe hoặc lái xe nào.</span> : null}
     </form>
   );
 }

@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -112,6 +113,26 @@ export class S3MediaStore extends MediaStore {
         healthy: false,
         detail: `s3: khong doc duoc bucket ${this.config.bucket} — ${reason.slice(0, 200)}`,
       };
+    }
+  }
+
+  override get supportsRemove(): boolean {
+    return true;
+  }
+
+  /**
+   * XOA mot object.
+   *
+   * S3 (va GCS qua XML API) coi `DeleteObject` tren mot khoa khong ton tai la THANH CONG, nen lenh
+   * nay von da idempotent; `isNotFound` o day chi de mot nha cung cap kho tinh hon — vd MinIO cau
+   * hinh rieng — khong bien mot lan xoa lap thanh mot loi.
+   */
+  override async remove(key: string): Promise<void> {
+    try {
+      await this.client.send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: key }));
+    } catch (error: unknown) {
+      if (isNotFound(error)) return;
+      throw error;
     }
   }
 

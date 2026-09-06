@@ -43,6 +43,8 @@ import type {
   FuelDiscrepancyResolution,
   FuelEntry,
   FuelEntryDetail,
+  FuelEntryInboxPage,
+  FuelEntryInboxQuery,
   FuelPaymentMethod,
   FuelReceiptEvidence,
   FuelReconciliation,
@@ -174,6 +176,33 @@ const send = async <T>(method: 'POST' | 'PATCH', path: string, body?: unknown): 
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   );
+
+/**
+ * XOA — mot method rieng chu khong nhet vao `send`.
+ *
+ * `DELETE` KHONG mang than yeu cau o day (moi thu can biet deu nam tren duong dan), nen gop no vao
+ * `send` se de lai mot tham so `body` khong bao gio dung — va mot tham so nhu vay la loi moi cho
+ * lan sau ai do gui mot than yeu cau ma may chu khong doc.
+ */
+const remove = async <T>(path: string): Promise<T> =>
+  readBody<T>(await authFetch(`${BASE}${path}`, { method: 'DELETE' }));
+
+/**
+ * BO LOC -> QUERY STRING. Truong rong/`null`/`undefined` KHONG di kem.
+ *
+ * Gui `?verification=` (rong) la mot cau hoi khac han voi khong gui gi: may chu `catch(null)` nen
+ * ket qua giong nhau hom nay, nhung mot dia chi mang nam tham so rong la mot dia chi khong ai doc
+ * duoc va khong ai dan cho nhau duoc.
+ */
+const toQuery = (params: Record<string, string | number | null | undefined>): string => {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined || value === '') continue;
+    search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query.length > 0 ? `?${query}` : '';
+};
 
 /**
  * MULTIPART — cho duong tai anh bang chung (#169).
@@ -580,6 +609,27 @@ export const transportApi = {
 
   fuel: {
     suppliers: (): Promise<readonly FuelSupplier[]> => get('/transport/fuel/suppliers'),
+    /**
+     * HOP THU cua CA DOI — #222 P1-B.
+     *
+     * MOT loi goi may chu, co bo loc va co phan trang. Truoc duong nay, "danh sach phieu cua doi
+     * xe" chi lam duoc bang cach mo tung chuyen mot — nen no khong ton tai.
+     */
+    inbox: (query: FuelEntryInboxQuery = {}): Promise<FuelEntryInboxPage> =>
+      get(
+        `/transport/fuel/entries${toQuery({
+          verification: query.verification,
+          reconciliation: query.reconciliation,
+          tripCode: query.tripCode,
+          driverId: query.driverId,
+          vehicleId: query.vehicleId,
+          supplierId: query.supplierId,
+          from: query.from,
+          to: query.to,
+          limit: query.limit,
+          offset: query.offset,
+        })}`,
+      ),
     tripEntries: (tripId: string): Promise<readonly FuelEntry[]> =>
       get(`/transport/fuel/trips/${encodeURIComponent(tripId)}/entries`),
     entry: (id: string): Promise<FuelEntryDetail> =>
@@ -661,6 +711,20 @@ export const transportApi = {
       form.append('file', file);
       return sendForm(`/transport/me/fuel/slips/${encodeURIComponent(id)}/evidence/upload`, form);
     },
+
+    /**
+     * GO MOT CHUNG TU DA TAI NHAM — #222 P1-C.
+     *
+     * `DELETE` chu khong `POST .../withdraw`: day dung la mot lan go mot tai nguyen co dia chi, va
+     * dung dung method cua no lam duong nay tu mo ta duoc trong log proxy va trong bang route.
+     *
+     * KHONG mot `driverId` nao tren duong dan — danh tinh den tu phien (`INV-09`). May chu tra ve
+     * phieu DA CAP NHAT, nen man hinh khong phai doan trang thai moi.
+     */
+    removeFuelEvidence: (slipId: string, evidenceId: string): Promise<DriverFuelSlipView> =>
+      remove(
+        `/transport/me/fuel/slips/${encodeURIComponent(slipId)}/evidence/${encodeURIComponent(evidenceId)}`,
+      ),
     /** `REJECTED -> DECLARED` qua dung vong doi da co (`#168 B5`). */
     resubmitFuelSlip: (id: string): Promise<DriverFuelSlipView> =>
       send('POST', `/transport/me/fuel/slips/${encodeURIComponent(id)}/resubmit`),
