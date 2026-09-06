@@ -51,7 +51,15 @@ export class FuelEvidenceController {
     private readonly read: FuelReadService,
   ) {}
 
-  @Post()
+  /**
+   * `upload` la duong rieng — cung ly do voi `DriverFuelEvidenceController`.
+   *
+   * `FuelEntriesController` giu `POST entries/:id/evidence` (gan chuoi dinh vi) va duoc dang ky
+   * TRUOC controller nay, nen route tai anh o day bi che khuat y het ban cua lai xe. Khac dung mot
+   * dieu: chua giao dien nao goi no, nen khong ai bao cao. Mot route chet ma khong ai keu con kho
+   * thay hon mot route chet co nguoi keu.
+   */
+  @Post('upload')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.fuel.entry.submit_for_driver')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })

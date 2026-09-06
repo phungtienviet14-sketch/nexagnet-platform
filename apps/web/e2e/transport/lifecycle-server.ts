@@ -497,7 +497,11 @@ export async function mockLifecycle(page: Page, role: Role = 'ADMIN'): Promise<L
     return json(route, driverSlipView(entry), 201);
   });
 
-  await page.route('**/transport/me/fuel/slips/*/evidence', async (route) => {
+  // `*` cua Playwright KHONG bang qua `/`, nen mau `*/evidence` khong con khop khi may khach goi
+  // `/evidence/upload`. Bat CA HAI duong: gan chuoi dinh vi (`/evidence`) va tai tep that
+  // (`/evidence/upload`) — hai duong RIENG o may chu ke tu T9, vi truoc do chung dam nhau va route
+  // tai tep khong bao gio duoc goi toi.
+  await page.route('**/transport/me/fuel/slips/*/evidence{,/upload}', async (route) => {
     const id = idFrom(route.request().url(), /slips\/([^/]+)\/evidence/);
     const list = state.fuelEvidence.get(id) ?? [];
     const file = { id: next('ev'), contentType: 'image/jpeg' };
