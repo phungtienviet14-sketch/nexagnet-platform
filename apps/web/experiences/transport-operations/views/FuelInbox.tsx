@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DataTable, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import { FUEL_RECONCILIATION_STATUS_LABEL, FUEL_VERIFICATION_LABEL } from '../customer-view';
@@ -45,10 +45,34 @@ export function FuelInbox() {
   const queryClient = useQueryClient();
 
   const [query, setQuery] = useState<FuelEntryInboxQuery>({ offset: 0 });
+  /**
+   * O MA CHUYEN GO TAY LA TRANG THAI CUC BO, khong phai mot phan cua truy van.
+   *
+   * Noi thang o nhap vao `query` se ban MOT yeu cau cho MOI KY TU: go `UAT-VIET-01` la 11 lan goi
+   * may chu de doc dung mot ket qua. Nen chu duoc giu o day va chi day vao truy van sau khi nguoi
+   * dung ngung go.
+   */
+  const [tripCodeInput, setTripCodeInput] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [pending, setPending] = useState<FuelInboxAction | null>(null);
   const [reason, setReason] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
+
+  /*
+   * 300ms — du de mot nguoi go xong mot ma chuyen, va van du nhanh de khong thay do la mot lan cho.
+   * `clearTimeout` o phan don dep la thu lam no thanh mot phep DON: moi lan go lai huy lan hen truoc.
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery((current) => {
+        const next = tripCodeInput.trim() === '' ? null : tripCodeInput.trim();
+        if ((current.tripCode ?? null) === next) return current;
+        // Doi bo loc thi ve TRANG DAU — xem `patchQuery`.
+        return { ...current, tripCode: next, offset: 0 };
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [tripCodeInput]);
 
   const inbox = toSectionQuery(useFuelInbox(navigation, query));
 
@@ -104,8 +128,8 @@ export function FuelInbox() {
           <input
             type="search"
             placeholder="Ví dụ: UAT-VIET-01"
-            value={query.tripCode ?? ''}
-            onChange={(event) => patchQuery({ tripCode: event.target.value })}
+            value={tripCodeInput}
+            onChange={(event) => setTripCodeInput(event.target.value)}
           />
         </label>
         <label className="tx-field">
@@ -180,7 +204,14 @@ export function FuelInbox() {
         <EmptyState
           title="Không có phiếu nào khớp bộ lọc đang chọn."
           nextAction={
-            <button type="button" className="tx-btn" onClick={() => setQuery({ offset: 0 })}>
+            <button
+              type="button"
+              className="tx-btn"
+              onClick={() => {
+                setTripCodeInput('');
+                setQuery({ offset: 0 });
+              }}
+            >
               Bỏ bộ lọc
             </button>
           }

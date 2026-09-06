@@ -340,6 +340,21 @@ export class InMemoryFuelRepository extends FuelRepository {
     );
   }
 
+  /** Doi ban doi cua ban Prisma — gom theo phieu, chi hang dang hieu luc. */
+  async listEvidenceForEntries(
+    fuelEntryIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly FuelReceiptEvidence[]>> {
+    const wanted = new Set(fuelEntryIds);
+    const grouped = new Map<string, FuelReceiptEvidence[]>();
+    for (const item of sortedById([...this.evidence.values()])) {
+      if (!wanted.has(item.fuelEntryId) || item.withdrawnAt !== null) continue;
+      const bucket = grouped.get(item.fuelEntryId);
+      if (bucket) bucket.push(item);
+      else grouped.set(item.fuelEntryId, [item]);
+    }
+    return grouped;
+  }
+
   /**
    * GO mot bang chung — #222 P1-C.
    *

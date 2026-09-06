@@ -657,6 +657,18 @@ export abstract class FuelRepository {
    */
   abstract listEvidence(fuelEntryId: string): Promise<FuelReceiptEvidence[]>;
   /**
+   * Bang chung DANG HIEU LUC cua NHIEU phieu — MOT lan doc, khong N lan (#222 P1-B).
+   *
+   * Hop thu ve toi 200 dong mot trang. Goi `listEvidence` cho tung dong la 200 lan cham DB cho mot
+   * man hinh — dung kieu N+1 ma #222 cam, chi la doi cho tu trinh duyet xuong may chu. Cho nao chua
+   * kip lo ra thanh cham thi cung se lo ra thanh mot cot tai DB ma khong ai doc duoc nguyen nhan.
+   *
+   * `[]` (khong phieu nao) tra ve mot map RONG, khong phai mot cau lenh `IN ()`.
+   */
+  abstract listEvidenceForEntries(
+    fuelEntryIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly FuelReceiptEvidence[]>>;
+  /**
    * GO mot bang chung — bia mo, KHONG xoa hang (#222 P1-C).
    *
    * Xem `WithdrawEvidenceInput`: dieu kien vong doi di THEO lenh ghi, tren hang phieu da khoa.

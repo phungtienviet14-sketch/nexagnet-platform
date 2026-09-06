@@ -123,11 +123,9 @@ export class FuelReadService {
       this.core.listDrivers(),
       this.core.listVehicles(),
       this.repository.listSuppliers(),
-      Promise.all(
-        page.entries.map(
-          async (entry) => [entry.id, await this.repository.listEvidence(entry.id)] as const,
-        ),
-      ),
+      // MOT lan doc cho ca trang. Goi `listEvidence` tung dong se la N lan cham DB cho mot man
+      // hinh — dung kieu N+1 ma #222 cam, chi la doi cho tu trinh duyet xuong may chu.
+      this.repository.listEvidenceForEntries(page.entries.map((entry) => entry.id)),
     ]);
 
     const tripCode = new Map(trips.map((trip) => [trip.id, trip.code]));
@@ -136,7 +134,7 @@ export class FuelReadService {
       vehicles.map((vehicle) => [vehicle.id, vehicle.registrationPlate]),
     );
     const supplierName = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
-    const evidenceByEntry = new Map(evidence);
+    const evidenceByEntry = evidence;
 
     return {
       rows: page.entries.map((entry) => {

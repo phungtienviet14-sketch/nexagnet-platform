@@ -613,6 +613,30 @@ export class PrismaFuelRepository extends FuelRepository {
   }
 
   /**
+   * Bang chung dang hieu luc cua NHIEU phieu — MOT cau lenh, gom lai o bo nho (#222 P1-B).
+   *
+   * `IN (...)` bi chan tren boi `limit` cua hop thu (toi da 200), nen do dai menh de co tran cung.
+   */
+  async listEvidenceForEntries(
+    fuelEntryIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly FuelReceiptEvidence[]>> {
+    const grouped = new Map<string, FuelReceiptEvidence[]>();
+    if (fuelEntryIds.length === 0) return grouped;
+
+    const rows = await model(this.prisma, 'transportFuelReceiptEvidence').findMany({
+      where: { fuelEntryId: { in: [...new Set(fuelEntryIds)] }, withdrawnAt: null },
+      orderBy: [{ fuelEntryId: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+    });
+    for (const row of rows) {
+      const evidence = toEvidence(row);
+      const bucket = grouped.get(evidence.fuelEntryId);
+      if (bucket) bucket.push(evidence);
+      else grouped.set(evidence.fuelEntryId, [evidence]);
+    }
+    return grouped;
+  }
+
+  /**
    * GO mot bang chung — BIA MO trong mot giao dich da khoa hang phieu (#222 P1-C).
    *
    * ===========================================================================
