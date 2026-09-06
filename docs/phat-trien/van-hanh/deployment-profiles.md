@@ -63,6 +63,7 @@ fixture.
 | Nền | Postgres của chính stack, API, đăng nhập operator | `postgres-admin-password`, `zalo-db-password`, `api-key`, `operator-password` | **mọi** hồ sơ (4) |
 | Flowise | container `flowise` + DB của nó | `flowise-db-password`, `flowise-secretkey`, `flowise-admin-email`, `flowise-admin-password`, `flowise-jwt-secret`, `flowise-refresh-secret`, `flowise-session-secret`, `flowise-token-hash-secret` | hồ sơ có `subsystems.flowise` (8) |
 | Parser DeepSeek | `PARSER_MODE=deepseek` | `deepseek-api-key` | hồ sơ có `subsystems.parser === 'deepseek'` (1) |
+| Gói mẫu | bước gieo `seed-transport-demo.mjs` tạo tài khoản đăng nhập cho nhân vật đã gieo | `transport-demo-driver-password` | hồ sơ có `subsystems.transportDemo` (1) |
 | Workflow engine | cụm Hatchet | `hatchet-db-password`, `workflow-dashboard-htpasswd` | chỉ khi `workflow_engine=on` lúc dispatch (2) |
 | Quan sát | OTel Collector + ClickHouse | `otlp-ingest-token`, `clickhouse-writer-password`, `clickhouse-reader-password` | chỉ khi `observability_stack=on` lúc dispatch (3) |
 
@@ -72,7 +73,14 @@ bí mật của stack kia.
 
 **Con số 13 không phải bất biến kiến trúc.** Nó là chi phí ĐO ĐƯỢC của đúng một hồ sơ:
 `ultty-gd1-test` = 4 nền + 8 Flowise + 1 DeepSeek. Một hồ sơ xem trước không bật Flowise và không
-dùng LLM parser cần **4**.
+dùng LLM parser cần **4** — cộng **1** nếu nó phục vụ một **gói mẫu**, tức
+`transport-preview-gd1-test` cần **5**.
+
+Bí mật thứ năm đó (`transport-demo-driver-password`) là mật khẩu của các **nhân vật đã gieo**.
+Nó được tính vào hệ thống con chứ không vào nhóm nền, và đó chính là điều giữ Ultty/Amico/Wata
+ra ngoài: một stack khách không gieo nhân vật nào nên không bao giờ bị hỏi. T8 đã đo được cái giá
+của việc thiếu nó — một tháng dữ liệu thật, deploy xanh, và **không một lái xe nào đăng nhập được**
+vào đúng màn hình duy nhất mà lái xe sẽ chạm tới.
 
 Nguồn cấp: cả 13 tên hiện có đều do **người vận hành tạo tay** trong GCP Secret Manager
 (`deploy.ps1` bootstrap), trừ `workflow-engine-token` do `bootstrap-workflow-engine.sh` sinh sau
@@ -126,7 +134,7 @@ nhưng tầng triển khai thì **chưa**. Ba trong bốn chặn đó đã đư�
 | Chặn | Trước | Nay |
 |---|---|---|
 | **C1** | `compose.yaml`: `api.depends_on.flowise: service_healthy`, service `flowise` **không** mang `profiles:` ⇒ Flowise luôn phải lên trước `api` | Flowise chuyển sang **`compose.flowise.yaml`**, một lớp phủ chỉ được `-f` vào khi `FLOWISE_ENABLED=on`. Không có lớp phủ thì **không ai tên `flowise`** để mà phụ thuộc. Với Ultty, bản hợp nhất ra **đúng** compose cũ (đối chiếu bằng `docker compose config`). |
-| **C2** | `render-secrets.sh`: 13 lời gọi `secret` **vô điều kiện**, gồm `deepseek-api-key` | Hợp đồng bí mật **suy ra từ hệ thống con được bật**: `PROFILE_FLOWISE`/`PROFILE_PARSER`. Một hồ sơ xem trước đọc **đúng 4** tên; Ultty vẫn đọc đủ 13. |
+| **C2** | `render-secrets.sh`: 13 lời gọi `secret` **vô điều kiện**, gồm `deepseek-api-key` | Hợp đồng bí mật **suy ra từ hệ thống con được bật**: `PROFILE_FLOWISE`/`PROFILE_PARSER`/`PROFILE_TRANSPORT_DEMO`. Một hồ sơ xem trước đọc **4** tên nền, **5** nếu nó phục vụ gói mẫu; Ultty vẫn đọc đủ 13. |
 | **C3** | `render-secrets.sh`: khối `gd1-test` ghim `TENANT_SLUG == 'ultty'` (exit 64) | Cổng **giữ nguyên sức**, chỉ đổi neo: tenant phải nằm trong `PROFILE_TENANTS`, và bốn giá trị runtime (`CHANNEL_MODE`/`PARSER_MODE`/`AUTO_SEND`/`DATA_CLASSIFICATION`) được ghim **từ hồ sơ**. Thiếu hồ sơ ⇒ **không render** (chặt hơn bản cũ). |
 | **C4** | `.github/workflows/deploy-tenant.yml`: input `tenant` là `choice` đóng | **Còn lại** — thuộc về việc đăng ký một khách xem trước *sống*, cùng với dòng registry và gói khách. |
 
