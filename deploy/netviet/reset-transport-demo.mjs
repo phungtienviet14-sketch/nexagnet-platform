@@ -35,12 +35,25 @@ import {
  * ---------------------------------------------------------------------------
  * CACH CHAY tren VM (trong thu muc stack cua ban demo):
  *
- *   sudo docker compose --env-file .runtime/secrets.env exec -T \
+ *   source ./stack-compose.sh
+ *   netviet_load_stack_composition
+ *   COMPOSE=(sudo docker compose --env-file .runtime/secrets.env "${NETVIET_COMPOSE_FILES[@]}")
+ *   "${COMPOSE[@]}" --profile tools run --rm --no-deps \
+ *     -e TENANT_DIR=/srv/tenant \
  *     -e TRANSPORT_DEMO_RESET=xoa-va-gieo-lai \
- *     api node deploy/netviet/reset-transport-demo.mjs
+ *     bootstrap node deploy/netviet/reset-transport-demo.mjs
  *
- * `TRANSPORT_DEMO_DRIVER_PASSWORD` da co san trong moi truong cua container api; thieu no thi van
- * gieo, chi khong tao lai tai khoan dang nhap cua lai xe — va dong log se noi ro dieu do.
+ * PHAI la `bootstrap`, KHONG phai `api` — va cho nay da lam hong mot lan chay that.
+ *
+ * `TRANSPORT_DEMO_DRIVER_PASSWORD` chi duoc gan cho service `bootstrap` trong `compose.yaml`, co y
+ * de gia tri khong bao gio xuat hien trong bang tien trinh cua VM. Chay qua `api exec` thi bien do
+ * VANG, va hau qua khong phai mot loi: lenh chay xong, in ra day du so lieu da gieo, va lang le bo
+ * lai mot ban demo KHONG AI DANG NHAP DUOC o be mat lai xe lan ke toan. Dong log
+ * `Khong tao tai khoan dang nhap cho lai xe` la thu duy nhat noi ra dieu do — de doc luot qua.
+ *
+ * `--profile tools` la thu duy nhat lam service `bootstrap` ton tai; `--no-deps` giu no khong keo
+ * theo Flowise; `TENANT_DIR=/srv/tenant` la cho goi khach duoc gan vao, giong het lenh gieo trong
+ * `deploy-stack.sh`.
  */
 
 const prisma = new PrismaClient();
