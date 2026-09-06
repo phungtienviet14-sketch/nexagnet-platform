@@ -118,6 +118,15 @@ PROFILE_TENANTS=''
 PROFILE_FLOWISE='on'
 PROFILE_PARSER='deepseek'
 PROFILE_CHANNEL='zca'
+# `off`, VA DO KHONG PHAI MOT NGOAI LE cua quy tac "moi mac dinh deu la huong siet".
+#
+# Bien nay chi co nghia voi mot GOI MAU. Mac dinh `on` se doi mot bi mat ma khong stack khach nao
+# co, tuc lam do mot lan deploy cua khach de bao ve be mat lai xe cua ban xem truoc — sai nguoi
+# ganh. Chieu siet o day duoc mua bang mot bai test CAU TRUC thay vi bang mot gia tri mac dinh:
+# `deployment-profile-render.contract.test.mjs` bat buoc MOI khoa cua `describeRuntimeContract`
+# phai co mat o ca ba chang cua duong truyen, nen mot bien bi bo sot la mot bai test DO, khong
+# phai mot tinh nang im lang khong chay (dung hinh dang loi cua `ADVICE_COMPOSER`).
+PROFILE_TRANSPORT_DEMO='off'
 PROFILE_PARSER_MODE=''
 PROFILE_CHANNEL_MODE=''
 PROFILE_ADVICE_COMPOSER=''
@@ -135,6 +144,7 @@ if [[ -n "${DEPLOYMENT_PROFILE:-}" ]]; then
       PROFILE_FLOWISE) PROFILE_FLOWISE="${profile_value}" ;;
       PROFILE_PARSER) PROFILE_PARSER="${profile_value}" ;;
       PROFILE_CHANNEL) PROFILE_CHANNEL="${profile_value}" ;;
+      PROFILE_TRANSPORT_DEMO) PROFILE_TRANSPORT_DEMO="${profile_value}" ;;
       PROFILE_PARSER_MODE) PROFILE_PARSER_MODE="${profile_value}" ;;
       PROFILE_CHANNEL_MODE) PROFILE_CHANNEL_MODE="${profile_value}" ;;
       PROFILE_ADVICE_COMPOSER) PROFILE_ADVICE_COMPOSER="${profile_value}" ;;
@@ -379,7 +389,7 @@ DEPLOY_SIGNAL_LOG="${DEPLOY_SIGNAL_LOG:-${REPOSITORY_ROOT}/deploy-signals.log}"
 DEPLOY_SIGNAL_JSON="${DEPLOY_SIGNAL_JSON:-${REPOSITORY_ROOT}/deploy-signals.json}"
 
 set +e
-ssh_vm "install -d -m 0700 '${remote_parent}' && tar -xzf '${remote_archive}' -C '${remote_parent}' && rm -f '${remote_archive}' && sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' OBSERVABILITY_STACK='${OBSERVABILITY_STACK:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' DEPLOYMENT_PROFILE='${DEPLOYMENT_PROFILE:-}' PROFILE_TENANTS='${PROFILE_TENANTS}' PROFILE_FLOWISE='${PROFILE_FLOWISE}' PROFILE_PARSER='${PROFILE_PARSER}' PROFILE_CHANNEL='${PROFILE_CHANNEL}' PROFILE_PARSER_MODE='${PROFILE_PARSER_MODE}' PROFILE_CHANNEL_MODE='${PROFILE_CHANNEL_MODE}' PROFILE_ADVICE_COMPOSER='${PROFILE_ADVICE_COMPOSER}' PROFILE_AUTO_SEND='${PROFILE_AUTO_SEND}' PROFILE_DATA_CLASSIFICATION='${PROFILE_DATA_CLASSIFICATION}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
+ssh_vm "install -d -m 0700 '${remote_parent}' && tar -xzf '${remote_archive}' -C '${remote_parent}' && rm -f '${remote_archive}' && sudo env WORKFLOW_ENGINE='${WORKFLOW_ENGINE:-off}' OBSERVABILITY_STACK='${OBSERVABILITY_STACK:-off}' PRIMARY_TENANT='${PRIMARY_TENANT}' STACK_SLUG='${STACK_SLUG}' GD1_FIRST_RELEASE='${first_release:-0}' DEPLOYMENT_TARGET_ID='${DEPLOYMENT_TARGET_ID}' RELEASE_GIT_SHA='${GIT_SHA_VALUE}' RELEASE_WORKFLOW_RUN_ID='${GITHUB_RUN_ID:-0}' ROLLBACK_APP_IMAGE='${rollback_app_image}' ROLLBACK_FLOWISE_IMAGE='${rollback_flowise_image}' DEPLOYMENT_PROFILE='${DEPLOYMENT_PROFILE:-}' PROFILE_TENANTS='${PROFILE_TENANTS}' PROFILE_FLOWISE='${PROFILE_FLOWISE}' PROFILE_PARSER='${PROFILE_PARSER}' PROFILE_CHANNEL='${PROFILE_CHANNEL}' PROFILE_TRANSPORT_DEMO='${PROFILE_TRANSPORT_DEMO}' PROFILE_PARSER_MODE='${PROFILE_PARSER_MODE}' PROFILE_CHANNEL_MODE='${PROFILE_CHANNEL_MODE}' PROFILE_ADVICE_COMPOSER='${PROFILE_ADVICE_COMPOSER}' PROFILE_AUTO_SEND='${PROFILE_AUTO_SEND}' PROFILE_DATA_CLASSIFICATION='${PROFILE_DATA_CLASSIFICATION}' bash '${remote_parent}/netviet/deploy-remote.sh' '${PROJECT_ID}' '${app_digest}' '${flowise_digest}' '${BACKUP_BUCKET}' '${public_ip}' '${TENANT_SLUG}' '${DEPLOYMENT_ENVIRONMENT}'" 2>&1 |
   tee "${DEPLOY_SIGNAL_LOG}"
 remote_status="${PIPESTATUS[0]}"
 set -e

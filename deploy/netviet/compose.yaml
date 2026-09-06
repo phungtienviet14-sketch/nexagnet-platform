@@ -54,6 +54,11 @@ services:
       PILOT_OPERATOR_USERNAME: ${PILOT_OPERATOR_USERNAME}
       PILOT_OPERATOR_NAME: ${PILOT_OPERATOR_NAME}
       PILOT_OPERATOR_PASSWORD: ${PILOT_OPERATOR_PASSWORD}
+      # Chi `seed-transport-demo.mjs` doc bien nay, va chi tren goi mau. RONG o moi stack khach —
+      # `render-secrets.sh` khong hoi bi mat do khi ho so khong bat `transportDemo`, va buoc gieo
+      # tu tra ve 0 khi bien rong. Dat o DAY (khong phai `-e` tren dong lenh) de gia tri khong bao
+      # gio xuat hien trong bang tien trinh cua VM.
+      TRANSPORT_DEMO_DRIVER_PASSWORD: ${TRANSPORT_DEMO_DRIVER_PASSWORD:-}
     command: ["node", "deploy/flowise/bootstrap-flowise.mjs"]
     volumes:
       - ./.runtime:/runtime

@@ -46,6 +46,15 @@ PROFILE_TENANTS="${PROFILE_TENANTS:-ultty}"
 PROFILE_FLOWISE="${PROFILE_FLOWISE:-on}"
 PROFILE_PARSER="${PROFILE_PARSER:-deepseek}"
 PROFILE_CHANNEL="${PROFILE_CHANNEL:-zca}"
+# `off` la mac dinh DUY NHAT trong khoi nay khong theo huong "doi nhieu hon", va co ly do:
+# bi mat nay chi ton tai cho mot GOI MAU. Doi no o mac dinh se lam do lan deploy cua MOI khach
+# that de bao ve be mat lai xe cua ban xem truoc. Chieu siet duoc mua o cho khac — mot bai test
+# cau truc bat moi khoa cua `describeRuntimeContract` phai co mat du ba chang cua duong truyen.
+PROFILE_TRANSPORT_DEMO="${PROFILE_TRANSPORT_DEMO:-off}"
+[[ "${PROFILE_TRANSPORT_DEMO}" =~ ^(on|off)$ ]] || {
+  echo "PROFILE_TRANSPORT_DEMO phai la on hoac off (dang la '${PROFILE_TRANSPORT_DEMO}')." >&2
+  exit 64
+}
 [[ "${PROFILE_FLOWISE}" =~ ^(on|off)$ ]] || {
   echo "PROFILE_FLOWISE phai la on hoac off (dang la '${PROFILE_FLOWISE}')." >&2
   exit 64
@@ -345,6 +354,16 @@ API_KEY=$(secret zalo-${STACK_SLUG}-api-key)
 # de them mot secret moi; gia tri goc khong nam trong command args va khong duoc ghi log.
 SESSION_SECRET="$(printf 'netviet-api-session-v1:%s' "${API_KEY}" | sha256sum | cut -d' ' -f1)"
 PILOT_OPERATOR_PASSWORD="$(secret zalo-${STACK_SLUG}-operator-password)"
+# MAT KHAU NHAN VAT MAU — chi cho goi mau, va `secret()` chu khong `optional_secret()`.
+#
+# Ban xem truoc HUA co mot be mat lai xe. T8 da giao dung mot thang du lieu that ma khong mot tai
+# khoan lai xe nao — deploy xanh, 44 chuyen co that trong Postgres, va khong ai dang nhap duoc vao
+# cai man hinh duy nhat mot lai xe se cham toi. `optional_secret` o day se dung lai chinh cai bay
+# do: mot binding IAM hong hoac mot lan xoa nham se lam ban demo "thanh cong" voi mot be mat rong.
+TRANSPORT_DEMO_DRIVER_PASSWORD=''
+if [[ "${PROFILE_TRANSPORT_DEMO}" == 'on' ]]; then
+  TRANSPORT_DEMO_DRIVER_PASSWORD="$(secret zalo-${STACK_SLUG}-transport-demo-driver-password)"
+fi
 FLOWISE_SECRETKEY=''
 FLOWISE_ADMIN_EMAIL=''
 FLOWISE_ADMIN_PASSWORD=''
@@ -451,6 +470,7 @@ SESSION_SECRET=${SESSION_SECRET}
 PILOT_OPERATOR_USERNAME=operator
 PILOT_OPERATOR_NAME=Pilot Operator
 PILOT_OPERATOR_PASSWORD=${PILOT_OPERATOR_PASSWORD}
+TRANSPORT_DEMO_DRIVER_PASSWORD=${TRANSPORT_DEMO_DRIVER_PASSWORD}
 MEDIA_STORE=${MEDIA_STORE}
 MEDIA_BUCKET=${MEDIA_BUCKET}
 # CONG TAC HE THONG CON, doc boi deploy-stack.sh tren VM. No KHONG di vao container nao: mot

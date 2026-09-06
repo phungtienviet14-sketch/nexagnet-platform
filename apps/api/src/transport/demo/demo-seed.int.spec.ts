@@ -9,7 +9,7 @@ import { loadDemoMonthDataset } from './demo-dataset.js';
 import { DEMO_RESET_ENV, DEMO_RESET_TOKEN } from './demo-guard.js';
 import { buildDemoPlan } from './demo-plan.js';
 import {
-  backfillDemoDriverLogins,
+  backfillDemoPersonaLogins,
   resetTransportDemoData,
   seedTransportDemoMonth,
 } from './demo-seed.js';
@@ -273,7 +273,7 @@ describe.runIf(RUN)('Gieo thang van hanh mau (Postgres THAT)', () => {
     await prisma.user.delete({ where: { id: target.authUserId as string } });
     expect(await prisma.transportDriver.count({ where: { authUserId: null } })).toBe(1);
 
-    const created = await backfillDemoDriverLogins(prisma, {
+    const created = await backfillDemoPersonaLogins(prisma, {
       driverPassword: 'mat-khau-chi-dung-trong-bai-test',
       hashPassword: async (plain) => `${HASH_MARKER}${plain}`,
     });
@@ -283,7 +283,7 @@ describe.runIf(RUN)('Gieo thang van hanh mau (Postgres THAT)', () => {
 
     /** Chay lai khong tao them gi — lai xe da co tai khoan thi khong bi dung toi. */
     expect(
-      await backfillDemoDriverLogins(prisma, {
+      await backfillDemoPersonaLogins(prisma, {
         driverPassword: 'mat-khau-chi-dung-trong-bai-test',
         hashPassword: async (plain) => `${HASH_MARKER}${plain}`,
       }),
@@ -292,7 +292,46 @@ describe.runIf(RUN)('Gieo thang van hanh mau (Postgres THAT)', () => {
 
   /** Khong co mat khau thi khong tao gi, va KHONG nem — buoc deploy phai di tiep duoc. */
   it('thieu mat khau thi khong tao tai khoan nao va cung khong nem', async () => {
-    expect(await backfillDemoDriverLogins(prisma, {})).toBe(0);
+    expect(await backfillDemoPersonaLogins(prisma, {})).toBe(0);
+  });
+
+  /**
+   * KE TOAN MAU la mot vai THAT, khong phai `ADMIN` bi cat bot.
+   *
+   * `ACCOUNTING` bi tu choi dung ba hanh dong (`transport-actions.ts`). Ba duong tu choi do chi DO
+   * duoc tren ban dang chay neu co mot tai khoan `ACCOUNTING` that de dang nhap.
+   */
+  it('gieo tao tai khoan ke toan mau voi vai ACCOUNTING', async () => {
+    const accountant = await prisma.user.findUnique({ where: { username: 'ke-toan' } });
+    expect(accountant?.role).toBe('ACCOUNTING');
+  });
+
+  /**
+   * NGO CUT THU HAI, khac ngo cut cua lai xe: `DEMO_STAFF_PERSONAS` duoc them SAU khi stack xem
+   * truoc da mang ca thang du lieu, nen tren ban do MOI lai xe deu da co tai khoan. Mot phep thoat
+   * som theo lai xe se lam ke toan khong bao gio duoc tao ra — va khong loi nao chi ra dieu do.
+   */
+  it('tao bu duoc ke toan NGAY CA KHI khong lai xe nao con thieu tai khoan', async () => {
+    await prisma.user.delete({ where: { username: 'ke-toan' } });
+    expect(await prisma.transportDriver.count({ where: { authUserId: null } })).toBe(0);
+
+    const created = await backfillDemoPersonaLogins(prisma, {
+      driverPassword: 'mat-khau-chi-dung-trong-bai-test',
+      hashPassword: async (plain) => `${HASH_MARKER}${plain}`,
+    });
+
+    expect(created).toBe(1);
+    expect((await prisma.user.findUnique({ where: { username: 'ke-toan' } }))?.role).toBe(
+      'ACCOUNTING',
+    );
+
+    /** Chay lai khong tao them gi — tai khoan da co thi khong bi dung toi. */
+    expect(
+      await backfillDemoPersonaLogins(prisma, {
+        driverPassword: 'mat-khau-chi-dung-trong-bai-test',
+        hashPassword: async (plain) => `${HASH_MARKER}${plain}`,
+      }),
+    ).toBe(0);
   });
 
   it('gieo lan hai KHONG ghi de len du lieu da co', async () => {

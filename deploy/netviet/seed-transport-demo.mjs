@@ -5,7 +5,7 @@ import { PrismaClient } from '../../apps/api/node_modules/@prisma/client/default
 import { argon2id, hash } from '../../apps/api/node_modules/argon2/argon2.cjs';
 import { DemoTenantGuardError } from '../../apps/api/dist/transport/demo/demo-guard.js';
 import {
-  backfillDemoDriverLogins,
+  backfillDemoPersonaLogins,
   seedTransportDemoMonth,
 } from '../../apps/api/dist/transport/demo/demo-seed.js';
 
@@ -44,9 +44,9 @@ try {
     );
     // "Gieo truoc, cau hinh mat khau sau" phai la mot trinh tu chay duoc: khong co buoc nay thi
     // mot lan gieo som (chua co bien mat khau) se khoa be mat lai xe lai vinh vien.
-    const created = await backfillDemoDriverLogins(prisma, { hashPassword });
+    const created = await backfillDemoPersonaLogins(prisma, { hashPassword });
     if (created > 0) {
-      process.stdout.write(`Da tao bu ${created} tai khoan dang nhap cho lai xe.\n`);
+      process.stdout.write(`Da tao bu ${created} tai khoan dang nhap cho nhan vat mau.\n`);
     }
   } else {
     const summary = Object.entries(result.counts)
