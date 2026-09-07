@@ -9,6 +9,8 @@ import type { TransportWorkforceDecisionReason } from './workforce/workforce-dec
 import type { TransportWorkforceErrorReason } from './workforce/workforce-errors.js';
 import type { TransportSettlementErrorReason } from './settlement/settlement-errors.js';
 import type { TransportEvidenceDecisionReason } from './evidence/evidence-decisions.js';
+import type { TransportExpenseClaimDecisionReason } from './claims/claim-decisions.js';
+import type { TransportExpenseClaimErrorReason } from './claims/claim-errors.js';
 import type { TransportMovementDecisionReason } from './movement/movement-decisions.js';
 import type { TransportMovementErrorReason } from './movement/movement-errors.js';
 import type { TransportCounterpartyDecisionReason } from './counterparty/counterparty-decisions.js';
@@ -102,6 +104,8 @@ export type TransportErrorReason =
   | TransportCounterpartyErrorReason
   | TransportMovementDecisionReason
   | TransportMovementErrorReason
+  | TransportExpenseClaimDecisionReason
+  | TransportExpenseClaimErrorReason
   | TransportProofDecisionReason;
 
 /**

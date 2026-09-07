@@ -45,6 +45,16 @@ export const TRANSPORT_ACTIONS = [
   'transport.order.manage',
   'transport.run.read',
   'transport.run.manage',
+  /**
+   * DE NGHI CHI CUA LAI XE + CONG DUYET (R1-C, #232 `D-06`).
+   *
+   * `.review` TACH khoi `.submit`, va do la ca diem cua tranche: nop mot de nghi la ghi mot y
+   * kien, con duyet no la bien y kien do thanh TIEN. Gop hai ma lam mot se cho bat ky ai nop
+   * duoc cung duyet duoc -- tuc go bo dung cai cong ma `D-06` doi phai co.
+   */
+  'transport.expense.claim.read',
+  'transport.expense.claim.submit',
+  'transport.expense.claim.review',
   'transport.trip.read',
   'transport.trip.create',
   'transport.trip.update',
@@ -200,6 +210,12 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.driver.self.expense.record',
   /**
+   * DE NGHI CHI CUA CHINH MINH. TACH HAN khoi `transport.expense.claim.review`: ma kia bien mot
+   * de nghi thanh gia thanh that, va mot nguoi tu duyet de nghi cua chinh minh la dung cai ma
+   * kiem soat noi bo sinh ra de chan.
+   */
+  'transport.driver.self.expense.claim.submit',
+  /**
    * PHIEU LUONG CUA CHINH MINH — lai xe doc lich su luong da cong bo cua chinh ho (`#168 B8`).
    *
    * TACH HAN khoi `transport.payroll.period.read`, va do la ca diem. Ma kia la quyen VAN HANH: no
@@ -264,6 +280,7 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fuel.read',
   'transport.driver.self.fuel.submit',
   'transport.driver.self.expense.record',
+  'transport.driver.self.expense.claim.submit',
   'transport.driver.self.payslip.read',
   'transport.driver.self.tracking.start',
   'transport.driver.self.tracking.report',

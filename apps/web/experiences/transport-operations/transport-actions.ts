@@ -28,6 +28,9 @@ export const TRANSPORT_ACTIONS = [
   'transport.order.manage',
   'transport.run.read',
   'transport.run.manage',
+  'transport.expense.claim.read',
+  'transport.expense.claim.submit',
+  'transport.expense.claim.review',
   'transport.trip.read',
   'transport.trip.create',
   'transport.trip.update',
@@ -96,6 +99,7 @@ export const TRANSPORT_ACTIONS = [
    * hanh kia ghi duoc cho bat ky chuyen/lai xe nao va chon duoc ca nguon `COMPANY_DIRECT`.
    */
   'transport.driver.self.expense.record',
+  'transport.driver.self.expense.claim.submit',
   /**
    * Phieu luong CUA CHINH MINH — chi doc, va chi phieu DA CONG BO. Tach han khoi
    * `transport.payroll.period.read` (bang luong ca doi xe) va khong mo mot duong ghi nao.
@@ -133,6 +137,7 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fuel.read',
   'transport.driver.self.fuel.submit',
   'transport.driver.self.expense.record',
+  'transport.driver.self.expense.claim.submit',
   'transport.driver.self.payslip.read',
   'transport.driver.self.tracking.start',
   'transport.driver.self.tracking.report',
