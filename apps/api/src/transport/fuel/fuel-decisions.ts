@@ -327,9 +327,31 @@ export const FUEL_DOCUMENT_SUPPLIER_REASONS = [
 ] as const;
 export type FuelDocumentSupplierReason = (typeof FUEL_DOCUMENT_SUPPLIER_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * fuel_document.extract — mot lan DOC ANH (Lane C / C3)
+ * ------------------------------------------------------------------ *
+ *
+ * Diem quyet dinh nay TACH khoi `fuel_document.ingest` du hai thu chay lien nhau, va ly do la de
+ * TRA LOI DUOC MOT CAU HOI VAN HANH: "bo doc anh dang hong bao nhieu phan tram?". Neu hai viec gop
+ * chung mot diem, con so do lan trong ca nhung lan hong cua duong XML — von khong lien quan gi den
+ * nha cung cap mo hinh, va thuong khong hong cung luc.
+ */
+export const FUEL_DOCUMENT_EXTRACT_REASONS = [
+  /** Doc duoc. `detail.model` ghi mo hinh THAT da chay, `detail.minConfidence` ghi o yeu nhat. */
+  'RECEIPT_EXTRACTED',
+  /** Byte khong phai anh, hoac loi khai lech voi byte — chan o ranh gioi, chua ra khoi tien trinh. */
+  'RECEIPT_MEDIA_REJECTED',
+  /** Bo doc khong tra loi duoc (mang / qua han / dich vu tu choi). Nhap lai duoc. */
+  'RECEIPT_EXTRACTION_UNAVAILABLE',
+  /** Co tra loi nhung khong dung khuon. Nhap lai KHONG chac giup — day la loi cua phia doc. */
+  'RECEIPT_EXTRACTION_MALFORMED',
+] as const;
+export type FuelDocumentExtractReason = (typeof FUEL_DOCUMENT_EXTRACT_REASONS)[number];
+
 export type TransportFuelDecisionReason =
   | FuelDocumentIngestReason
   | FuelDocumentSupplierReason
+  | FuelDocumentExtractReason
   | FuelEntrySubmitReason
   | FuelEntryReviewReason
   | FuelEntryAmendReason
@@ -368,6 +390,7 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     'fuel_supplier.profile',
     'fuel_document.ingest',
     'fuel_document.supplier_link',
+    'fuel_document.extract',
   ],
   labels: {
     FUEL_ENTRY_RECORDED: 'Đã ghi phiếu đổ dầu',
@@ -482,5 +505,10 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     SUPPLIER_TAX_CODE_UNKNOWN: 'Không nhà cung cấp nào trong danh mục mang mã số thuế đó',
     SUPPLIER_TAX_CODE_AMBIGUOUS:
       'Hai nhà cung cấp trở lên cùng một mã số thuế — danh mục nhập trùng',
+
+    RECEIPT_EXTRACTED: 'Đã đọc được ảnh phiếu đổ dầu — kết quả là ỨNG VIÊN, chưa phải sự thật',
+    RECEIPT_MEDIA_REJECTED: 'Tệp gửi lên không phải ảnh JPEG/PNG/WebP — chặn ở ranh giới',
+    RECEIPT_EXTRACTION_UNAVAILABLE: 'Bộ đọc ảnh không trả lời được — nhập lại sau',
+    RECEIPT_EXTRACTION_MALFORMED: 'Bộ đọc ảnh trả lời sai khuôn — lỗi ở phía đọc, không ở tệp',
   } satisfies Record<TransportFuelDecisionReason, string>,
 });

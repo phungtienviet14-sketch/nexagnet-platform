@@ -7,6 +7,7 @@ import { AuditLogService } from '../../audit/audit-log.service.js';
 import { InMemoryFuelDocumentRepository } from './fuel-document.repository.js';
 import { FuelDocumentService } from './fuel-document.service.js';
 import { XmlFuelInvoiceSource, type FuelInvoiceFile } from './fuel-invoice-source.js';
+import { StubFuelReceiptExtractor } from './fuel-receipt-extraction.stub.js';
 import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import { FuelStationService } from './fuel-station.service.js';
 import { TransportFuelCoreFacts, type FuelVehicleFacts } from './fuel.ports.js';
@@ -94,6 +95,7 @@ const buildService = (
   new FuelDocumentService(
     documents,
     new XmlFuelInvoiceSource(),
+    new StubFuelReceiptExtractor(),
     new FuelStationService(
       new InMemoryFuelStationRepository(),
       fuel,

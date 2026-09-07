@@ -1,4 +1,5 @@
 import type { FuelHintSource, FuelStationMatch } from './fuel-document.types.js';
+import type { ExtractionConfidence } from './fuel-receipt-extraction.js';
 import type { EInvoiceProvenance, ParsedInvoice } from './fuel-einvoice-parse.js';
 import type { FuelStationResolution } from './fuel-station-identity.js';
 import { normalizePlate } from './fuel-statement-mapping.js';
@@ -171,12 +172,35 @@ export interface NormalizedCandidate {
   readonly plateHintSource: FuelHintSource | null;
   readonly odometerHintKm: number | null;
   readonly provenance: EInvoiceProvenance;
+  /** `null` khi hoa don den tu mot nguon TAT DINH; mot bang muc tin khi no den tu mot buc anh. */
+  readonly confidence: ExtractionConfidence | null;
 }
 
 export interface NormalizeInvoiceInput {
   readonly invoice: ParsedInvoice;
   /** Ket qua nhan dang cay xang cho CA hoa don — moi dong cua mot hoa don deu o cung mot tram. */
   readonly station: FuelStationResolution;
+  /** Chi co o duong ANH (C3). Vang mat = nguon tat dinh, va moi ung vien mang `confidence = null`. */
+  readonly confidence?: ExtractionConfidence;
+}
+
+/**
+ * MUC TIN CUA MOT DONG = cac khoa CHUNG + cac khoa CUA CHINH DONG DO.
+ *
+ * Doi xung y het cach `provenance` duoc gop (`{...invoice.provenance, ...line.provenance}`), va vi
+ * mot ly do thuc te: moi hang ung vien phai TU DU. Neu de ca bang muc tin cua toan hoa don tren
+ * moi dong, thi mot nguoi nhin dong 2 se thay muc tin cua dong 1 va tuong dong minh dang xem bi mo.
+ */
+export function confidenceForLine(
+  confidence: ExtractionConfidence,
+  lineNumber: number,
+): ExtractionConfidence {
+  const mine = `line.${lineNumber}.`;
+  return Object.fromEntries(
+    Object.entries(confidence).filter(
+      ([key]) => !key.startsWith('line.') || key.startsWith(mine),
+    ),
+  );
 }
 
 /**
@@ -193,7 +217,7 @@ export interface NormalizeInvoiceInput {
 export function normalizeInvoiceCandidates(
   input: NormalizeInvoiceInput,
 ): readonly NormalizedCandidate[] {
-  const { invoice, station } = input;
+  const { invoice, station, confidence } = input;
   const plate = findPlateHint(invoice);
   const odometer = findOdometerHint(invoice);
   const resolved = station.outcome === 'RESOLVED' ? station.stationId : null;
@@ -220,5 +244,6 @@ export function normalizeInvoiceCandidates(
     plateHintSource: plate?.source ?? null,
     odometerHintKm: odometer,
     provenance: { ...invoice.provenance, ...line.provenance },
+    confidence: confidence ? confidenceForLine(confidence, line.lineNumber) : null,
   }));
 }

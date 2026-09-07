@@ -30,6 +30,7 @@ const clean = (over: Partial<FuelCandidate> = {}): FuelCandidate => ({
   invoiceSymbol: 'C26TAA',
   invoiceNo: '00001234',
   invoiceTemplate: '1',
+  confidence: null,
   sellerName: 'Cua hang so 5',
   stationLabelRaw: 'Cua hang so 5',
   stationId: 'st-1',

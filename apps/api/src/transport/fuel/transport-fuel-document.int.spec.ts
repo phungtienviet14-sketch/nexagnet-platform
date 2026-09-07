@@ -7,6 +7,7 @@ import { AuditLogService } from '../../audit/audit-log.service.js';
 import { PrismaService } from '../../config/prisma.service.js';
 import { FuelDocumentService } from './fuel-document.service.js';
 import { XmlFuelInvoiceSource, type FuelInvoiceFile } from './fuel-invoice-source.js';
+import { StubFuelReceiptExtractor } from './fuel-receipt-extraction.stub.js';
 import { FuelStationService } from './fuel-station.service.js';
 import { PrismaFuelDocumentRepository } from './prisma-fuel-document.repository.js';
 import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
@@ -41,6 +42,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const service = new FuelDocumentService(
       documents,
       new XmlFuelInvoiceSource(),
+      new StubFuelReceiptExtractor(),
       new FuelStationService(stations, fuel, audit),
       fuel,
       // Cong DOC THAT sang `transport-core`, khong mot ban gia lap nao: duong ra soat cua C4
