@@ -97,10 +97,10 @@ việc như *chưa làm* trong khi nó **đã chạy trên `main` từ T3/T4**, 
 |---|---|---|
 | `TransportSettlementDocument` + `Allocation` | `KEEP` | Đã có phân bổ một khoản thu/chi vào nhiều chứng từ |
 | `TransportSettlementPeriod` / `CustomerTerms` / `CommissionRule*` | `KEEP` | — |
-| `TransportMaintenancePlan` / `WorkOrder` | ~~`UNKNOWN`~~ → **`EXTEND`** | `TX-06b` bù bảy nguyên hàm còn thiếu (xưởng, phụ tùng/công thợ, bằng chứng, hỏng dọc đường, kế hoạch-vs-thực tế, downtime, bản chất lệnh). Xem §13 |
+| `TransportMaintenancePlan` / `WorkOrder` | ~~`UNKNOWN`~~ → **`EXTEND`** | `TX-06b` bù bảy nguyên hàm còn thiếu (xưởng, phụ tùng/công thợ, bằng chứng, hỏng dọc đường, kế hoạch-vs-thực tế, downtime, bản chất lệnh). Xem §14 |
 | `TransportComplianceDocument` | `KEEP` | Đã tách khỏi bảo dưỡng đúng như §12 đòi |
 | `TransportPayrollPeriod` / `Run` / `Payslip` / `Component` | `EXTEND` | Đã có `SUPPLEMENTAL`/`REVERSAL`, `policySnapshot`, `missingInputs` |
-| Chi trả / `Disbursement` | ~~`UNKNOWN`~~ → **`AS-BUILT`** | **Đã có từ `TX-07b`** (R5, PR của Lane D) — `TransportDriverCashout` + `…Allocation`. Xem §12 |
+| Chi trả / `Disbursement` | ~~`UNKNOWN`~~ → **`AS-BUILT`** | **Đã có từ `TX-07b`** (R5, PR của Lane D) — `TransportDriverCashout` + `…Allocation`. Xem §13 |
 
 ### 1.5. Nền tảng mà v2 sẽ dựa vào
 
@@ -558,10 +558,10 @@ Sắp theo **cái gì bị chặn**, không theo chủ đề.
 
 | Mã | Câu hỏi | Chặn cái gì | Vì sao không tự quyết được |
 |---|---|---|---|
-| `Q-01` | Một chuyến hàng và một **vòng chạy của xe** có phải hai thứ khác nhau trong cách B làm việc không? Cụ thể: (a) B có tính km rỗng/chiều về không, và tính để làm gì; (b) một chuyến có bao giờ gồm **nhiều đơn hàng của nhiều khách** không; (c) chiều về có khi nào là đơn của **đối tác C** không | **Order/Run/Leg (R1-A gốc), R8 analytics** | `F-04`: không một sự kiện T0 nào. Câu trả lời quyết định `Run` là cha hay con của `Trip` — chọn sai thì phải làm lại |
+| ~~`Q-01`~~ **ĐÃ TRẢ LỜI 07/09/2026 — #232 `D-01`** | Một chuyến hàng và một **vòng chạy của xe** có phải hai thứ khác nhau trong cách B làm việc không? Cụ thể: (a) B có tính km rỗng/chiều về không, và tính để làm gì; (b) một chuyến có bao giờ gồm **nhiều đơn hàng của nhiều khách** không; (c) chiều về có khi nào là đơn của **đối tác C** không | **Order/Run/Leg (R1-A gốc), R8 analytics** | ~~`F-04`~~ **Chủ sở hữu đã cấp sự kiện nguồn** trong #232 §1 `D-01`: hai trục **độc lập**, `RunLeg` thuộc `VehicleRun`, và Run **không** là cha/con của `TransportTrip`. Đã hiện thực — xem §12 |
 | `Q-02` | Xe của B đang dùng **hộp GSHT của hãng nào**, B có tài khoản dashboard không, và hãng đó có cho **xuất dữ liệu/API** không | **Toàn bộ R2 + R3** | `F-07`: nếu lấy được, R3 (app chống giả GPS) gần như không cần |
 | `Q-03` | Đã có **văn bản** về xử lý dữ liệu cá nhân của lái xe (vị trí, ảnh, GPLX, lương) chưa | **R2, R3** — điều kiện chặn cứng | `F-11` + T0 §14 `MISSING` |
-| `Q-04` | Kế toán có được **duyệt một phần** một khoản chi lái xe đề nghị không? Nếu có, số bị cắt đi về đâu | **ExpenseClaim (§9 lộ trình)** | `F-06`; và `C-02` của T0 vẫn chưa gỡ |
+| `Q-04` | Kế toán có được **duyệt một phần** một khoản chi lái xe đề nghị không? Nếu có, số bị cắt đi về đâu | **ExpenseClaim (§9 lộ trình)** | `F-06`; `C-02` của T0 vẫn chưa gỡ. **#232 `D-06` đã gỡ phần chặn**: duyệt TRỌN KHOẢN (`approvedAmount = claimedAmount`) được làm trước, duyệt MỘT PHẦN vẫn chờ `Q-04` |
 | `Q-05` | Cái gì **thật sự cấm** điều một xe đi (lệnh sửa đang mở? giấy tờ hết hạn?) và cái gì chỉ **cảnh báo** | **Bảo dưỡng v2 (R6)**, và cách sửa `F-09` | Thêm một cổng chặn sai là làm cả đội xe đứng bánh |
 | `Q-06` | B trả lương lái xe **thật sự** theo chu kỳ nào, và có đang chậm không | **R5** | `F-08`: dồn nhiều tháng vướng Đ.97 BLLĐ 2019. Cần biết thực tế trước khi mô hình hoá |
 | `Q-07` | B nạp và quyết toán **ETC** thế nào; tài khoản VETC/ePass đứng tên ai, đối soát bằng gì | **R7** — phần *hạch toán* | **Đã đo, xem [transport-etc-toll.md](transport-etc-toll.md).** Không nhà cung cấp nào có API công khai (đo 08/09/2026); phí quản lý tài khoản đã **công bố 01/08/2026 rồi tạm dừng ~20/08/2026** theo đề nghị của Cục Đường bộ. Câu **còn treo**: tài khoản đứng tên công ty hay cá nhân |
@@ -569,6 +569,13 @@ Sắp theo **cái gì bị chặn**, không theo chủ đề.
 | `Q-09` | Ảnh giao hàng có **bắt buộc** không, và có được phép có mặt người nhận trong ảnh không | **R2** | Chạm dữ liệu sinh trắc của **người thứ ba**, không phải nhân viên |
 
 Không câu nào trong số này chặn tranche đầu ở §10.
+
+> **Cập nhật 07/09/2026.** `Q-01` đã có lời — không phải do khảo sát thêm, mà do **chủ sở hữu
+> cấp một quyết định** trong #232 §1 `D-01`. Phán quyết `AMEND — hoãn` của `F-04` đúng **tại
+> thời điểm R0**: lúc đó chưa ai nêu chiều rỗng, và luật R0 tự đặt ra (*"không được khẳng định
+> sự thật của khách khi chủ sở hữu chưa cấp"*) áp cho chính nó. Nay sự thật đã được cấp thành
+> văn, nên điều kiện hoãn không còn. `F-04` **không bị xoá** — nó ghi lại vì sao tranche này
+> không được làm sớm hơn.
 
 ---
 
@@ -599,8 +606,8 @@ Bốn luật, áp cho mọi tranche v2:
 | R2 | Proof + geospatial | **Chặn ở `Q-03`** (pháp lý), định hình lại theo `Q-02` |
 | R3 | App lái xe | **Hạ ưu tiên** — chỉ đúng nếu `Q-02` trả lời "không lấy được dữ liệu GSHT" |
 | R4 | Fuel intelligence | Đảo thứ tự: **hoá đơn điện tử trước, OCR sau** (`F-10`). Chờ `Q-08` |
-| R5 | Driver settlement + payroll | **XONG** — `TX-07b`, xem §12. `Q-06` đã được chủ sở hữu trả lời ở #237 |
-| R6 | Maintenance v2 | **PARTIAL** — nguyên hàm xong (§13); cổng chặn điều chuyến vẫn chờ `Q-05`, và `blocking` cố ý RỖNG |
+| R5 | Driver settlement + payroll | **XONG** — `TX-07b`, xem §13. `Q-06` đã được chủ sở hữu trả lời ở #237 |
+| R6 | Maintenance v2 | **PARTIAL** — nguyên hàm xong (§14); cổng chặn điều chuyến vẫn chờ `Q-05`, và `blocking` cố ý RỖNG |
 | R7 | ETC | **XONG phần nghiên cứu + hợp đồng cổng** — [transport-etc-toll.md](transport-etc-toll.md) + `TollProviderPort`. Hạch toán vẫn chờ `Q-07` |
 | R8 · R9 | Analytics · hệ sinh thái | Phụ thuộc R1-C |
 
@@ -696,13 +703,101 @@ không phải giao diện, nên không thể va về mặt ngữ nghĩa với c�
 phân công, hộp thư dầu, gỡ chứng từ, đăng xuất). Ngoài nó ra, **không** tệp nào dưới `apps/web/**`,
 `packages/tenant/**`, `apps/api/src/media/**` hay `deploy/**` bị chạm.
 
+
 ---
 
-## 12. `R5` / `TX-07b` as-built — quyết toán lái xe (Lane D, Issue #237)
+## 12. `R1-B` as-built — Order / Run / Leg, đo trên nhánh `claude/tv2-lane-a-order-run-leg`
+
+Mục này ghi **cái đã chạy**, theo đúng quy ước T1 §18. Chỉ đạo: #234 A1 (LANE A), quyết định
+#232 §1 `D-01`. Đây là tranche **đảo lại phán quyết hoãn** của `F-04` — xem ghi chú ở §7.
+
+### 12.1. Hình dạng đã dựng
+
+```text
+TransportOrder            ← NGHĨA VỤ THƯƠNG MẠI (ai thuê, chở gì, bao nhiêu tiền)
+TransportVehicleRun       ← VÒNG CHẠY VẬT LÝ của MỘT xe
+ ├─ TransportRunLeg       ← từng chặng: LOADED (có thể trỏ Order) | EMPTY (không được trỏ)
+ └─ TransportRunAssignment← lịch sử cầm lái, một bản hiệu lực/vòng chạy
+
+TransportTripRunLegLink   ← BẢNG TƯƠNG ỨNG chuyến v1 ↔ chặng v2 (KHÔNG phải cha/con)
+```
+
+Hai trục **độc lập**: một đơn tồn tại và đọc được khi chưa có vòng chạy nào (`MV-005`).
+
+### 12.2. Vì sao tương thích v1 đi qua một bảng tương ứng
+
+`D-01` cấm biến Run thành cha hoặc con trực tiếp của `TransportTrip`. Nên **không** có cột `runId`
+trên `TransportTrip` và **không** có cột `tripId` trên `TransportVehicleRun`. Cái nối hai thế giới
+là `TransportTripRunLegLink` — cùng khuôn với `TransportCounterpartyLink` của `R1-A′`:
+
+- `tripId` là **khoá chính**, `legId` là **UNIQUE** ⇒ quan hệ MỘT-MỘT hai chiều;
+- chính cặp ràng buộc đó làm phép chiếu **tất định và lặp lại được**: chạy lại `projectTrip()`
+  không thể sinh bản thứ hai (`MV-IT-05` đo trên Postgres thật);
+- bỏ cả bảng đi thì **cả hai trục vẫn chạy nguyên vẹn** — đó là định nghĩa của "cộng thêm".
+
+Phép chiếu **từ chối có tên** hai trường hợp thay vì bịa ra dữ liệu: chuyến thuê xe ngoài
+(`PROJECTION_TRIP_OUTSOURCED` — xe không phải của mình, chiếu ra sẽ thổi phồng km đội xe) và chuyến
+chưa phân công xe (`PROJECTION_TRIP_HAS_NO_VEHICLE`).
+
+### 12.3. Bất biến ở tầng lưu trữ
+
+| Ràng buộc (SQL thô) | Nó chặn gì |
+|---|---|
+| `TransportRunLeg_empty_carries_no_order` | Chặng chạy rỗng mang nghĩa vụ thương mại. **Bất biến trung tâm**: nếu nó chỉ sống ở tầng miền thì một lần ghi thẳng DB làm mọi con số km rỗng sau đó sai mà không ai biết |
+| `TransportRunAssignment_activeRun_key` | Bản phân công thứ hai **đang** hiệu lực (unique một phần, `WHERE effectiveTo IS NULL`) |
+| `TransportRunLeg_sequence_positive` | Chặng số 0 hoặc số âm |
+| `TransportRunLeg_distance_non_negative` | Km âm. `NULL` **vẫn được phép** và có nghĩa riêng: *chưa biết*, không phải 0 |
+| `TransportOrder_freightAmount_money_range` | Số ngoài khoảng `money()` — cột là `BIGINT` nên DB nhận được số lớn hơn `Number.MAX_SAFE_INTEGER` |
+| `TransportOrder_code_not_blank` · `TransportVehicleRun_code_not_blank` | Mã rỗng chiếm mất chỗ UNIQUE của bản ghi thật |
+
+### 12.4. Km rỗng **không được đoán**
+
+`summariseRunDistance()` là hàm thuần, và nó từ chối đưa ra con số khi dữ liệu khuyết:
+
+- `distanceKm = NULL` **không** được coi là 0 — coi là 0 sẽ làm tỷ lệ rỗng nhỏ đi một cách có hệ
+  thống, tức sai theo hướng **làm đẹp số liệu**, kiểu sai không ai đi kiểm tra;
+- còn một chặng thiếu km ⇒ `complete = false` và `emptyRatio = null`, kèm `legsMissingDistance`
+  tách theo loại để người vận hành biết đi nhập chỗ nào (`MV-007`);
+- chặng **đã huỷ** không được đếm: xe không chạy nó.
+
+### 12.5. As-built
+
+| Thứ | Ở đâu |
+|---|---|
+| Bốn enum + năm bảng | `apps/api/prisma/schema.prisma` (khối cuối) |
+| Migration | `apps/api/prisma/migrations/20260907190000_transport_movement/` — kèm `README-rollback.sql` |
+| Sáu `CHECK` + một unique một phần | SQL thô trong migration; `transport-movement-storage.spec.ts` đọc thẳng tệp và đo |
+| Miền | `apps/api/src/transport/movement/` — 11 tệp nguồn |
+| Hành động | `transport.order.read` · `transport.order.manage` · `transport.run.read` · `transport.run.manage` |
+| Đăng ký | `owned('transport-core', …)` — **không** capability mới, nên không chạm `packages/tenant` (`F-12`) |
+| Nghiệm thu | 36 bài: 12 `movement.service.spec.ts` (`MV-001`…`MV-012`) · **7 trên Postgres thật** `transport-movement.int.spec.ts` (`MV-IT-01`…`MV-IT-07`) · 14 storage · 3 composition |
+
+**Tệp có sẵn bị sửa — đúng bảy, mỗi cái một dòng lý do:**
+
+- `schema.prisma` — khối mới ở **cuối tệp**, cộng **bốn dòng quan hệ ngược** trên `TransportVehicle`,
+  `TransportDriver`, `TransportCustomer`, `TransportTrip` (Prisma bắt buộc khai hai chiều; không cột
+  dữ liệu nào của bốn bảng đó đổi);
+- `transport-actions.ts` + `transport-actions.spec.ts` — bốn mã hành động, và danh sách khoá cứng
+  trong spec là **cố ý**;
+- `transport.errors.ts` — gộp hai union lý do mới vào kiểu chung;
+- `transport.module.ts` — một provider kho + một service;
+- `app-composition.ts` — hai dòng đăng ký controller;
+- `apps/web/experiences/transport-operations/transport-actions.ts` — **bản gương** của bảng phân
+  quyền, giữ đúng thứ tự với bản API (spec của web đọc thẳng tệp nguồn API và bắt khớp);
+- `observability/source-manifest.generated.ts` — **sinh lại** bằng `pnpm gen:source-manifest`,
+  không sửa tay.
+
+**`TransportTrip` không đổi một cột nào.** Migration không có một `ALTER TABLE "TransportTrip"` nào;
+chiều khoá ngoại chỉ đi **một hướng**: bảng mới → bảng cũ. `MV-IT-05` đọc lại chuyến sau khi chiếu
+và đối chiếu từng trường để khoá tính chất này bằng một bài đo, không bằng một câu trong tài liệu.
+
+---
+
+## 13. `R5` / `TX-07b` as-built — quyết toán lái xe (Lane D, Issue #237)
 
 Mục này ghi **cái đã chạy**, theo đúng quy ước T1 §18.
 
-### 12.1. Vì sao **không** có bảng `SettlementCredit`
+### 14.1. Vì sao **không** có bảng `SettlementCredit`
 
 #237 mô tả `monthly payroll credits + approved reimbursement payable → available balance`. Phản xạ
 đầu tiên là một bảng `credit` ghi một hàng mỗi khi phiếu lương được duyệt. Bảng đó sẽ mang một **bản
@@ -719,7 +814,7 @@ Hai nguồn tiền **đã là hai sổ cái có sẵn**, cả hai đều bất b
 
 Cái thực sự thiếu — và §1.4 đo đúng một dòng — là **bên chi**. Nên tranche này thêm đúng bên đó.
 
-### 12.2. Vì sao một lần chi hoàn ứng **phải** ghi một bút toán quỹ
+### 14.2. Vì sao một lần chi hoàn ứng **phải** ghi một bút toán quỹ
 
 Số dư quỹ âm nghĩa là lái xe đang bỏ tiền túi (`DA-T3-01`, `COMPANY_OWES_DRIVER`). Khi công ty trả
 lại, lái xe không còn bỏ tiền nữa ⇒ số dư phải về. Nếu lần chi chỉ được ghi ở bảng chứng từ chi mà
@@ -730,7 +825,7 @@ Nên `TransportDriverFundEntryKind` nhận thêm **một** giá trị `REIMBURSE
 ghi nó là `CostingService.postReimbursement` — **thuộc chính chủ sổ cái**, không phải `TX-07b`
 (§4.1 luật 4). `TX-07b` gọi qua `DriverSettlementFundPort`, là **cổng ghi duy nhất** trong cả tranche.
 
-### 12.3. Hình dạng
+### 14.3. Hình dạng
 
 | Thứ                        | Ở đâu                                                                                                    |
 | -------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -750,7 +845,7 @@ migration bảng phải viết lại `CHECK "TransportDriverFundEntry_sign_by_ki
 nhắc tên** `'REIMBURSEMENT'`. Prisma bọc mỗi tệp migration trong một giao dịch. Gộp hai việc làm một
 tệp sẽ cho ra `unsafe use of new value of enum type` **lúc deploy**, không phải lúc test.
 
-### 12.4. `F-08` được xử lý thế nào
+### 14.4. `F-08` được xử lý thế nào
 
 `F-08` đọc Điều 97 BLLĐ 2019 và cấm dựng lộ trình trên tiền đề "dồn lương nhiều tháng là dòng chảy
 bình thường". Chủ sở hữu đã trả lời `Q-06` ở #237: công ty **không** cố tình giữ lương; lái xe có thể
@@ -761,7 +856,7 @@ khi một kỳ đã qua cửa sổ mà tiền chưa chi — một mã lý do có
 (`WAGE_CREDIT_UNSETTLED_BEYOND_WINDOW`, cửa sổ mặc định 30 ngày theo Đ.97 k.4). Cảnh báo đó **không
 chặn gì, không sinh một khoản phải trả nào, không kết luận ai sai**.
 
-### 12.5. Còn chưa làm — có chủ đích
+### 13.5. Còn chưa làm — có chủ đích
 
 - **Không có vòng đời yêu cầu rút tiền** (`REQUESTED → APPROVED → PAID`). Hôm nay không nguồn nào mô
   tả lái xe yêu cầu rút qua hệ thống — họ nói với kế toán. Dựng một quy trình duyệt ở đây là bịa một
@@ -772,9 +867,9 @@ chặn gì, không sinh một khoản phải trả nào, không kết luận ai 
 
 ---
 
-## 13. `R6` / `TX-06b` as-built — bảo dưỡng v2 (Lane D, Issue #237)
+## 14. `R6` / `TX-06b` as-built — bảo dưỡng v2 (Lane D, Issue #237)
 
-### 13.1. Đo lại T6 trước — bảy khoảng trống, không phải "chưa khớp thực tế" chung chung
+### 14.1. Đo lại T6 trước — bảy khoảng trống, không phải "chưa khớp thực tế" chung chung
 
 §12 lộ trình chỉ nói T6 *"chưa khớp thực tế"*. Đo lại `TransportMaintenanceWorkOrder` cho ra một
 danh sách **đếm được**:
@@ -793,7 +888,7 @@ danh sách **đếm được**:
 | tire lifecycle | — | **KHÔNG làm** — xem §13.4 |
 | effective-state/warnings | `effective-vehicle-state.ts` + bảng cảnh báo | **đã có** |
 
-### 13.2. `F-09` lặp lại — lần này trong chính mã nguồn
+### 14.2. `F-09` lặp lại — lần này trong chính mã nguồn
 
 R0 tìm thấy `F-09` ở tài liệu bàn giao: câu *"Xe có lệnh bảo dưỡng đang mở bị khoá khỏi việc phân
 chuyến"* mô tả một cổng chặn **không tồn tại**. Tài liệu đó đã được sửa.
@@ -809,7 +904,7 @@ chuyến"* mô tả một cổng chặn **không tồn tại**. Tài liệu đó
 Cả ba đã được sửa **câu chữ**, không sửa hành vi. `Q-05` chưa có nguồn, nên không cổng chặn nào
 được thêm — #237: *"do not invent a hard block"*.
 
-### 13.3. Cổng chặn tương lai có hình dạng, chưa có nội dung
+### 14.3. Cổng chặn tương lai có hình dạng, chưa có nội dung
 
 `evaluateDispatchReadiness()` trả về **hai** danh sách: `warnings` (có nội dung) và `blocking`
 (**rỗng**). Khi B trả lời `Q-05`, thay đổi là chuyển một mã từ danh sách này sang danh sách kia —
@@ -820,7 +915,7 @@ nó đọc `trips/trip-lifecycle.ts` và khẳng định máy trạng thái chuy
 dưỡng nào. Nếu một cổng chặn ra đời mà không ai tuyên bố, bài đó đỏ trước khi điều độ đi vào một
 bản phát hành.
 
-### 13.4. Không làm — có chủ đích
+### 14.4. Không làm — có chủ đích
 
 - **Vòng đời lốp.** #237 nói *"tire lifecycle chỉ nếu justified"*. Không nguồn nào của B mô tả họ
   theo dõi lốp theo vòng đời (lắp → luân chuyển → đắp lại → thải), và một bảng `Tyre` kéo theo vị

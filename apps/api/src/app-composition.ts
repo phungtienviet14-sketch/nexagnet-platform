@@ -142,6 +142,8 @@ import { PayrollController } from './transport/workforce/payroll.controller.js';
 import { DriverPayslipsController } from './transport/workforce/driver-payslips.controller.js';
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
+import { TransportOrdersController } from './transport/movement/orders.controller.js';
+import { RunsController } from './transport/movement/runs.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
@@ -246,6 +248,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-core', FleetController),
   // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
   owned('transport-core', CounterpartyController),
+  // MO HINH VAN CHUYEN v2 (R1-B, #232 `D-01`) -- cong them. Khong duong nao cua v1 phu thuoc
+  // hai controller nay, va `TransportTrip` khong doi mot cot nao.
+  owned('transport-core', TransportOrdersController),
+  owned('transport-core', RunsController),
   owned('transport-core', TripsController),
   // BE MAT LAI XE — route rieng, khong phai mot nhanh `if` trong `TripsController` (`GD-23`).
   // Den cung `transport-core` va bien mat cung no.
