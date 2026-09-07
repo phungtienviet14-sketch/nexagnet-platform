@@ -104,9 +104,33 @@ export class DriverProofController {
         observationId: parsed.data.observationId,
         clientEventId: parsed.data.clientEventId,
         note: parsed.data.note ?? null,
+        challengeNonce: parsed.data.challengeNonce ?? null,
         photos: stored,
       }),
     );
+  }
+
+  /**
+   * XIN mot loi thach thuc cho phien dang mo CUA CHINH MINH.
+   *
+   * `POST` chu khong `GET`, va khong phai vi thoi quen: moi lan goi GHI mot hang moi va tieu mot
+   * chut han muc. Mot duong `GET` sinh ra tac dung phu la mot duong se bi cache o dau do.
+   *
+   * Cung ma quyen voi viec lap chung cu (`transport.driver.self.proof.record`): xin mot loi thach
+   * thuc chi co nghia doi voi nguoi sap lap chung cu, nen tach thanh mot quyen thu hai se tao ra
+   * mot dong trong bang phan quyen ma khong ai cap rieng bao gio.
+   */
+  @Post('challenge')
+  @Roles('SALE', 'ADMIN')
+  @RequiresTransportAction('transport.driver.self.proof.record')
+  async challenge(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<{ nonce: string; issuedAt: Date; expiresAt: Date }> {
+    const authUserId = requireAuthUserId(request);
+    const issued = await this.guard(() => this.proofs.issueChallenge(authUserId));
+    // KHONG tra ve `driverId`/`sessionId`: may khach khong can chung, va moi truong tra ra la mot
+    // truong ai do se gui NGUOC len trong mot lieu do nao do sau nay.
+    return { nonce: issued.nonce, issuedAt: issued.issuedAt, expiresAt: issued.expiresAt };
   }
 
   private async guard<T>(run: () => Promise<T>): Promise<T> {

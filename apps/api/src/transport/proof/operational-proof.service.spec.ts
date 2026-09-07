@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { InMemoryOperationalProofRepository } from './operational-proof.repository.js';
+import {
+  InMemoryOperationalProofRepository,
+  InMemoryProofChallengeRepository,
+} from './operational-proof.repository.js';
 import { OperationalProofService } from './operational-proof.service.js';
 import type { RecordProofCommand } from './operational-proof.types.js';
 import { DEFAULT_TRANSPORT_PROOF_POLICY } from './tracking-policy.js';
@@ -88,6 +91,8 @@ describe('Chung cu van hanh — PROOF-060', () => {
       tracking,
       facts,
       { timeZone: 'Asia/Ho_Chi_Minh' },
+      new InMemoryProofChallengeRepository(),
+      DEFAULT_TRANSPORT_PROOF_POLICY,
       undefined,
       () => T0,
     );

@@ -42,6 +42,7 @@ export class PrismaOperationalProofRepository extends OperationalProofRepository
         businessDate: input.businessDate,
         note: input.note,
         recordedBy: input.recordedBy,
+        challengeVerified: input.challengeVerified,
         photos: {
           create: input.photos.map((photo) => ({
             locator: photo.locator,
@@ -126,6 +127,15 @@ export class PrismaOperationalProofRepository extends OperationalProofRepository
       return row ? toProof(row) : null;
     });
   }
+
+  async markChallengeVerified(proofId: string): Promise<OperationalProof | null> {
+    const row = await this.prisma.transportOperationalProof.update({
+      where: { id: proofId },
+      data: { challengeVerified: true },
+      include: { photos: true },
+    });
+    return toProof(row);
+  }
 }
 
 function toProof(row: ProofRow): OperationalProof {
@@ -144,6 +154,7 @@ function toProof(row: ProofRow): OperationalProof {
     recordedBy: row.recordedBy,
     withdrawnAt: row.withdrawnAt,
     withdrawnBy: row.withdrawnBy,
+    challengeVerified: row.challengeVerified,
     photos: row.photos.map((photo) => ({
       id: photo.id,
       proofId: photo.proofId,
