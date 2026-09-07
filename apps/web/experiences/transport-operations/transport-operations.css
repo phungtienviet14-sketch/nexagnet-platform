@@ -1318,3 +1318,128 @@
   font-size: 0.82rem;
   color: var(--tx-ink-soft);
 }
+
+/* ------------------------------------------------------------------ *
+ * BANG DIEU HANH — bay cot cuon ngang (Lane G, #244)
+ *
+ * Cuon NGANG chu khong xuong dong: bay cot la mot QUY TRINH doc tu trai sang phai, va khi chung
+ * xuong dong thi thu tu do bien mat — nguoi doc khong con thay "sau khi xep hang thi den dang
+ * chay". Man hep doi lai bang mot thao tac cuon, khong doi lai bang mot y nghia bi mat.
+ * ------------------------------------------------------------------ */
+
+.tx-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(190px, 1fr);
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.tx-board__col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-paper);
+}
+
+/* Cot chua co nguon: nhat di va co vien dut — nhin ra ngay la CHUA DUNG DUOC, khong phai RONG. */
+.tx-board__col--pending {
+  border-style: dashed;
+  background: transparent;
+  color: var(--tx-ink-faint);
+}
+
+.tx-board__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tx-board__head h3 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.tx-board__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--tx-ink-soft);
+}
+
+.tx-board__note,
+.tx-board__empty {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--tx-ink-faint);
+}
+
+.tx-board__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tx-board__cards a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-canvas);
+  text-decoration: none;
+  color: inherit;
+  font-size: 0.78rem;
+}
+
+.tx-board__cards a:hover {
+  border-color: var(--tx-accent);
+}
+
+.tx-board__cards strong {
+  font-size: 0.84rem;
+}
+
+/* Cham muc nang tren hang viec — mau la thu THU HAI, chu da mang nghia (`tx-dot` chi to them). */
+.tx-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.tx-dot--danger {
+  background: var(--tx-stop);
+}
+
+.tx-dot--warn {
+  background: var(--tx-wait);
+}
+
+.tx-dot--muted {
+  background: var(--tx-line-strong);
+}
+
+.tx-notes {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--tx-ink-soft);
+}

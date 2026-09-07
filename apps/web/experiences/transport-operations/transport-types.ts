@@ -1441,3 +1441,124 @@ export interface ExpenseClaimDetail {
   readonly claim: ExpenseClaim;
   readonly decisions: readonly ExpenseClaimDecision[];
 }
+
+/* ------------------------------------------------------------------ *
+ * THAP DIEU HANH — `GET /transport/control-tower` (Lane G, #244)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/control-tower/control-tower.types.ts`.
+ *
+ * BA truong o cuoi `ControlTowerView` la phan de bo sot nhat khi doc, va bo sot chung se lam man
+ * hinh noi doi theo huong de chiu nhat:
+ *
+ *   · `unavailableSources` — khach TAT capability so huu muc do;
+ *   · `pendingWork`        — nen tang CHUA CO nguon cho viec do;
+ *   · `unavailableReason`  — cot ton tai tren bang nhung chua co du lieu de dien.
+ *
+ * Bo qua ca ba, man hinh se ve mot bang rong trong y het mot ngay khong co viec gi phai lam.
+ */
+export type OperationsBoardColumn =
+  'PLANNED' | 'PICKUP' | 'LOADING' | 'IN_TRANSIT' | 'ARRIVED' | 'WAITING' | 'DELIVERED';
+
+export type BoardColumnUnavailableReason = 'AWAITING_CHECKPOINT_SOURCE';
+
+export interface OperationsBoardCard {
+  readonly runId: string;
+  /** MA vong chay — dinh danh nghiep vu, thu duy nhat duoc phep dat len dia chi. */
+  readonly runCode: string;
+  readonly vehicleId: string;
+  readonly businessDate: BusinessDate;
+  readonly driverId: string | null;
+  readonly loadedLegs: number;
+  readonly emptyLegs: number;
+  /** `null` = con mot chang thieu km. KHONG duoc hien thi thanh `0`. */
+  readonly totalKm: number | null;
+}
+
+export interface OperationsBoardColumnView {
+  readonly column: OperationsBoardColumn;
+  readonly cards: readonly OperationsBoardCard[];
+  readonly total: number;
+  readonly unavailableReason: BoardColumnUnavailableReason | null;
+}
+
+export type ActionQueueSubjectKind =
+  | 'RUN'
+  | 'RUN_LEG'
+  | 'TRIP'
+  | 'VEHICLE'
+  | 'DRIVER'
+  | 'EXPENSE_CLAIM'
+  | 'FUEL_ENTRY'
+  | 'FUEL_RECONCILIATION'
+  | 'TRACKING_SESSION'
+  | 'COMPANY';
+
+export interface ActionQueueSubject {
+  readonly kind: ActionQueueSubjectKind;
+  readonly id: string;
+  /** `null` khi ban ghi khong co ma nguoi doc duoc — luc do KHONG duoc dat `id` len dia chi. */
+  readonly reference: string | null;
+}
+
+export type ActionQueueKind =
+  | 'RUN_ACTIVE_WITHOUT_DRIVER'
+  | 'RUN_LEG_MISSING_DISTANCE'
+  | 'EXPENSE_CLAIM_AWAITING_REVIEW'
+  | 'DRIVER_FUND_BALANCE_UNUSUAL'
+  | 'FUEL_ENTRY_AWAITING_VERIFICATION'
+  | 'FUEL_RECONCILIATION_OPEN'
+  | 'FUEL_CONSUMPTION_ABNORMAL'
+  | 'COMPLIANCE_DOCUMENT_EXPIRED'
+  | 'COMPLIANCE_DOCUMENT_EXPIRING'
+  | 'COMPLIANCE_DOCUMENT_MISSING'
+  | 'MAINTENANCE_OVERDUE'
+  | 'MAINTENANCE_DUE_SOON'
+  | 'VEHICLE_STATE_INCONSISTENT';
+
+export type PendingActionQueueKind =
+  | 'RECEIVER_WAITING_ABOVE_THRESHOLD'
+  | 'DELIVERY_PROOF_DOCUMENT_MISSING'
+  | 'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL'
+  | 'CUSTOMER_AR_OVERDUE'
+  | 'LOCATION_PROOF_REVIEW';
+
+export type PendingActionQueueReason =
+  | 'AWAITING_CHECKPOINT_SOURCE'
+  | 'AWAITING_RECEIVABLE_DUE_DATE_SOURCE'
+  | 'AWAITING_FLEET_WIDE_PROOF_QUERY';
+
+export interface PendingActionQueueEntry {
+  readonly kind: PendingActionQueueKind;
+  readonly reason: PendingActionQueueReason;
+}
+
+export type ActionQueueSeverity = 'INFO' | 'WARNING' | 'CRITICAL';
+
+export interface ActionQueueItem {
+  readonly kind: ActionQueueKind;
+  readonly severity: ActionQueueSeverity;
+  readonly subject: ActionQueueSubject;
+  readonly detail: Readonly<Record<string, number | string | null>>;
+}
+
+export type ControlTowerSource = 'EXPENSE_CLAIMS' | 'FUEL' | 'OPERATIONAL_ALERTS';
+
+export interface FleetPresenceView {
+  readonly total: number;
+  readonly idle: number;
+  readonly onTrip: number;
+  readonly underMaintenance: number;
+  readonly activeDrivers: number;
+}
+
+export interface ControlTowerView {
+  readonly generatedFor: BusinessDate;
+  readonly board: readonly OperationsBoardColumnView[];
+  readonly fleet: FleetPresenceView;
+  readonly queue: readonly ActionQueueItem[];
+  readonly queueTotal: number;
+  readonly unavailableSources: readonly ControlTowerSource[];
+  readonly pendingWork: readonly PendingActionQueueEntry[];
+}

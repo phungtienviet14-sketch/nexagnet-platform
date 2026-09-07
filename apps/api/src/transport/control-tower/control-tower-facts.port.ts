@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OperationalAlertsService } from '../asset-compliance/operational-alerts.service.js';
-import { ExpenseClaimRepository } from '../claims/claim.repository.js';
+import { ExpenseClaimService } from '../claims/claim.service.js';
 import { FuelRepository } from '../fuel/fuel.repository.js';
 import { FleetRepository } from '../fleet/fleet.repository.js';
 import { MovementRepository } from '../movement/movement.repository.js';
@@ -90,9 +90,17 @@ export abstract class ControlTowerClaimFacts {
   abstract listAwaitingReview(): Promise<readonly ControlTowerClaimFact[]>;
 }
 
+/**
+ * Tiem `ExpenseClaimService`, KHONG `ExpenseClaimRepository`.
+ *
+ * Khong phai so thich: `TransportCostingModule` chi `exports` cac service, khong export kho de
+ * nghi (`transport-costing.module.ts:58-64`). Mot adapter dang ky o TANG UNG DUNG ma tiem kho do
+ * se KHONG BOOT duoc o moi khach co bat `transport-costing` — va loi do chi lo ra o bai boot, sau
+ * khi `tsc` da xanh. Cung khuon `CostingFundAlertAdapter`, von tiem `CostingReadService`.
+ */
 @Injectable()
 export class ControlTowerClaimFactsAdapter extends ControlTowerClaimFacts {
-  constructor(private readonly claims: ExpenseClaimRepository) {
+  constructor(private readonly claims: ExpenseClaimService) {
     super();
   }
 
