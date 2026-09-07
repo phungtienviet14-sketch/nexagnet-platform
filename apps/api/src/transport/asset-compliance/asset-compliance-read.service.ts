@@ -19,6 +19,12 @@ import type {
 import { complianceDashboard } from './compliance-alerts.js';
 import { resolveEffectiveVehicleState } from './effective-vehicle-state.js';
 import { evaluateDue } from './maintenance-schedule.js';
+import {
+  evaluateDispatchReadiness,
+  foldVehicleDowntime,
+  type DispatchReadiness,
+  type VehicleDowntime,
+} from './vehicle-availability.js';
 
 /** Giay to mot chu the PHAI co — VT-011 (xe) va VT-014 (lai xe). */
 const REQUIRED_DOCUMENT_TYPES: Readonly<
@@ -189,6 +195,27 @@ export class AssetComplianceReadService {
     });
     this.emitStateDecision(state);
     return state;
+  }
+
+  /**
+   * `TX-06b` (#237) — MOT XE: trang thai hieu luc, canh bao truoc khi dieu, va so ngay da nghi.
+   *
+   * Ba con so, mot lan doc. Va `readiness.blocking` LUON RONG hom nay — `Q-05` chua co cau tra
+   * loi, va #237 cam bia mot cong chan. Xem chu thich dau `vehicle-availability.ts`.
+   */
+  async vehicleAvailability(vehicleId: string): Promise<{
+    readonly state: EffectiveVehicleState;
+    readonly readiness: DispatchReadiness;
+    readonly downtime: VehicleDowntime;
+  } | null> {
+    const state = await this.effectiveVehicleState(vehicleId);
+    if (!state) return null;
+    const workOrders = await this.repository.listWorkOrders(vehicleId);
+    return {
+      state,
+      readiness: evaluateDispatchReadiness(state),
+      downtime: foldVehicleDowntime(vehicleId, workOrders, this.today()),
+    };
   }
 
   /**

@@ -8,6 +8,7 @@ import type {
   MaintenancePlanStatus,
   MaintenanceTriggerKind,
   MaintenanceWorkOrder,
+  MaintenanceWorkOrderKind,
   MaintenanceWorkOrderStatus,
 } from './asset-compliance.types.js';
 
@@ -38,6 +39,21 @@ export interface OpenWorkOrderInput {
   readonly openedOdoKm: number;
   readonly openedBy: string;
   readonly note?: string | null;
+
+  /* ----- `TX-06b` (Issue #237) — tat ca deu TUY CHON, nen khong cho goi cu nao phai doi ----- */
+
+  /**
+   * BAN CHAT cua lenh. Vang mat => suy tat dinh tu `planId`, cung phep suy voi backfill cua
+   * migration. Ep bat buoc se lam moi cho goi hien co phai doi, va phep suy do khong bia gi.
+   */
+  readonly kind?: MaintenanceWorkOrderKind;
+  readonly vendorName?: string | null;
+  readonly vendorPhone?: string | null;
+  /** CHI hop le voi `ROADSIDE_BREAKDOWN` — cuong che o `CHECK ..._trip_only_roadside`. */
+  readonly tripId?: string | null;
+  /** MOC DEN HAN chup luc mo lenh. Nua "ke hoach" cua cap ke-hoach/thuc-te. */
+  readonly plannedDate?: BusinessDate | null;
+  readonly plannedOdoKm?: number | null;
 }
 
 export interface CompleteWorkOrderInput {
@@ -48,6 +64,20 @@ export interface CompleteWorkOrderInput {
   readonly costAmount?: number | null;
   readonly costingExpenseRef?: string | null;
   readonly note?: string | null;
+
+  /* ----- `TX-06b` (Issue #237) — hoa don xuong doc duoc luc DONG lenh, khong phai luc mo ----- */
+
+  /**
+   * TACH chi phi. Khi ca `costAmount` lan hai truong nay cung co mat thi tong phai khop — cuong
+   * che o `CHECK ..._cost_parts_labour`, khong phai o day: mot phep cong o tang service se bi mot
+   * duong ghi thu hai di vong qua.
+   */
+  readonly partsCost?: number | null;
+  readonly labourCost?: number | null;
+  readonly evidenceLocator?: string | null;
+  /** Ten xuong thuong chi biet chac luc lay xe ve, nen no ghi duoc o ca hai dau. */
+  readonly vendorName?: string | null;
+  readonly vendorPhone?: string | null;
 }
 
 export interface CancelWorkOrderInput {

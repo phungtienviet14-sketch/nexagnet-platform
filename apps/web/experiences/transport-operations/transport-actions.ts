@@ -74,6 +74,14 @@ export const TRANSPORT_ACTIONS = [
    * nhieu"; chuoi chung tu noi "ai da sua con so nay, luc nao, vi sao". Do la mot quyen khac.
    */
   'transport.settlement.document.read',
+  /* --- `R8` CHI SO VAN HANH (Issue #237) — den cung `transport-costing` --- */
+  /**
+   * BAO CAO CHI SO VAN HANH — km co hang/rong, bien truc tiep theo don va theo ca vong chay. KHONG
+   * co ma GHI di kem: bao cao chi tom tat, khong sua so lieu goc. Tach khoi
+   * `transport.settlement.report.read` vi hai bao cao tra loi hai cau hoi cho hai nguoi khac nhau —
+   * quyet toan noi "cong ty dang o dau ve TIEN", chi so van hanh noi "doi xe chay hieu qua den dau".
+   */
+  'transport.analytics.read',
   /* --- `transport-asset-compliance` (`TX-06`) --- */
   'transport.maintenance.plan.read',
   'transport.maintenance.plan.manage',
@@ -90,6 +98,10 @@ export const TRANSPORT_ACTIONS = [
   'transport.payslip.approve',
   'transport.payslip.pay',
   'transport.payslip.correct',
+  /* --- `TX-07b` quyet toan lai xe (Lane D, Issue #237) --- */
+  'transport.driver_settlement.read',
+  'transport.driver_settlement.cashout',
+  'transport.driver_settlement.reverse',
   /* --- pham vi CUA CHINH MINH — lai xe --- */
   'transport.driver.self.trip.read',
   'transport.driver.self.trip.update',
@@ -107,6 +119,13 @@ export const TRANSPORT_ACTIONS = [
    * `transport.payroll.period.read` (bang luong ca doi xe) va khong mo mot duong ghi nao.
    */
   'transport.driver.self.payslip.read',
+  /**
+   * Bang quyet toan CUA CHINH MINH (`TX-07b`) — da ghi nhan / da rut / con lai / hoan ung.
+   *
+   * Chi doc, va khong co bien the "tu rut tien cho chinh minh": mot nguoi tu chi tien cho chinh
+   * minh la dung cai ma kiem soat noi bo sinh ra de chan.
+   */
+  'transport.driver.self.settlement.read',
   /**
    * Bam vi tri CUA CHINH MINH (Issue #235 Lane B) — ba ma rieng, vi ba viec co ba hinh dang rui
    * ro khac nhau: MO phien la mot lan chon chuyen, GUI la mot dong bang chung lap lai hang nghin
@@ -146,6 +165,7 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.expense.record',
   'transport.driver.self.expense.claim.submit',
   'transport.driver.self.payslip.read',
+  'transport.driver.self.settlement.read',
   'transport.driver.self.tracking.start',
   'transport.driver.self.tracking.report',
   'transport.driver.self.tracking.stop',

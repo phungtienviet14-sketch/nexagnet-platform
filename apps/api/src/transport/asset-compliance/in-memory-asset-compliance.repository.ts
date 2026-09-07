@@ -113,6 +113,18 @@ export class InMemoryAssetComplianceRepository extends AssetComplianceRepository
       costingExpenseRef: null,
       note: input.note ?? null,
       updatedAt: at,
+      // `TX-06b` (#237) — cung mac dinh voi cot DB, va cung mot phep suy tat dinh voi backfill cua
+      // migration: co ke hoach => bao duong theo lich, khong thi la sua chua. Long tay hon ban
+      // Prisma se lam mot bai test xanh o CI ma do tren DB that.
+      kind: input.kind ?? (input.planId !== null ? 'SCHEDULED_SERVICE' : 'REPAIR'),
+      vendorName: input.vendorName ?? null,
+      vendorPhone: input.vendorPhone ?? null,
+      partsCost: null,
+      labourCost: null,
+      evidenceLocator: null,
+      tripId: input.tripId ?? null,
+      plannedDate: input.plannedDate ?? null,
+      plannedOdoKm: input.plannedOdoKm ?? null,
     };
     this.workOrders.set(order.id, order);
     return order;
@@ -135,6 +147,13 @@ export class InMemoryAssetComplianceRepository extends AssetComplianceRepository
       costAmount: input.costAmount ?? current.costAmount,
       costingExpenseRef: input.costingExpenseRef ?? current.costingExpenseRef,
       note: input.note ?? current.note,
+      // `TX-06b` (#237) — vang mat thi GIU nguyen gia tri cu, cung hanh vi voi ban Prisma. Mot lan
+      // dong lenh khong khai xuong sua khong duoc xoa mat ten xuong da ghi luc mo.
+      partsCost: input.partsCost ?? current.partsCost,
+      labourCost: input.labourCost ?? current.labourCost,
+      evidenceLocator: input.evidenceLocator ?? current.evidenceLocator,
+      vendorName: input.vendorName ?? current.vendorName,
+      vendorPhone: input.vendorPhone ?? current.vendorPhone,
       updatedAt: iso(this.now()),
     };
     this.workOrders.set(id, next);

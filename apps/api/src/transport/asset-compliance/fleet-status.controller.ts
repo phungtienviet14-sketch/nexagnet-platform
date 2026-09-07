@@ -48,4 +48,26 @@ export class FleetStatusController {
       return state;
     });
   }
+
+  /**
+   * `TX-06b` (#237) — trang thai + CANH BAO truoc khi dieu + so ngay da nghi.
+   *
+   * Mot route RIENG chu khong mo rong `GET :vehicleId`: khung nhin cu la mot hop dong da co nguoi
+   * dung, va them ba truong vao no se lam moi ben goi phai doc lai. Route nay tra loi mot cau hoi
+   * khac — *"co gi dang bao truoc khi toi dieu xe nay khong"*.
+   *
+   * `readiness.blocking` LUON RONG. `Q-05` chua co cau tra loi tu B, va #237 cam bia mot cong
+   * chan; khi co nguon, thay doi la mot phep chuyen ma tu `warnings` sang `blocking` — khong be
+   * mat nao o day phai doi.
+   */
+  @Get(':vehicleId/availability')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.fleet_status.read')
+  async vehicleAvailability(@Param('vehicleId') vehicleId: string) {
+    return this.guard(async () => {
+      const availability = await this.read.vehicleAvailability(vehicleId);
+      if (!availability) throw new NotFoundException(`Khong tim thay xe ${vehicleId}`);
+      return availability;
+    });
+  }
 }

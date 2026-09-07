@@ -99,7 +99,12 @@ export const TRANSPORT_ASSET_COMPLIANCE_DECISIONS = defineDecisionVocabulary({
     'alerts.operational_feed',
   ],
   labels: {
-    MAINTENANCE_WORK_ORDER_OPENED: 'Đã mở lệnh sửa và khoá xe khỏi đội hình',
+    // `TX-06b` (#237) SỬA CÂU CHỮ, không sửa hành vi. Câu cũ — "khoá xe khỏi đội hình" — nói một
+    // tính chất an toàn mà mã KHÔNG có: `TripService.assign()` kiểm đúng ba thứ (chuyến chưa ở
+    // điểm cuối, xe tồn tại, lái xe tồn tại) và không tra lệnh sửa; `evaluateTripTransition()`
+    // không nhận một đầu vào nào về xe. Đây đúng là lỗi `F-09` mà R0 tìm thấy ở tài liệu bàn giao,
+    // lần này nằm trong chính bộ từ vựng quyết định. `Q-05` chưa trả lời nên KHÔNG thêm cổng chặn.
+    MAINTENANCE_WORK_ORDER_OPENED: 'Đã mở lệnh sửa; xe hiện ra là đang sửa trên bảng đội xe',
     MAINTENANCE_WORK_ORDER_ALREADY_OPEN: 'Kế hoạch này đã có một lệnh sửa đang mở',
     MAINTENANCE_VEHICLE_UNKNOWN: 'Không tìm thấy xe trong đội xe',
     MAINTENANCE_PLAN_UNKNOWN: 'Không tìm thấy kế hoạch bảo dưỡng',
@@ -115,7 +120,10 @@ export const TRANSPORT_ASSET_COMPLIANCE_DECISIONS = defineDecisionVocabulary({
     COMPLIANCE_SUBJECT_SHAPE_INVALID: 'Giấy tờ công ty không được gắn vào xe hay người',
     COMPLIANCE_VALIDITY_RANGE_INVALID: 'Kỳ hiệu lực của giấy tờ không hợp lệ',
 
-    VEHICLE_UNDER_MAINTENANCE_LOCK: 'Xe đang có lệnh sửa mở nên không nhận chuyến',
+    // `TX-06b` (#237) — cùng lý do với `MAINTENANCE_WORK_ORDER_OPENED` ở trên. "Không nhận chuyến"
+    // là một cổng chặn KHÔNG tồn tại; cái có thật là trạng thái hiệu lực + một cảnh báo đọc được ở
+    // `evaluateDispatchReadiness()`, nơi danh sách `blocking` cố ý RỖNG cho tới khi `Q-05` có nguồn.
+    VEHICLE_UNDER_MAINTENANCE_LOCK: 'Xe đang có lệnh sửa mở — cảnh báo trước khi điều chuyến',
     VEHICLE_ON_ACTIVE_TRIP: 'Xe đang chạy một chuyến IN_TRANSIT được phân công',
     VEHICLE_IDLE: 'Xe rảnh — không lệnh sửa, không chuyến đang chạy',
     VEHICLE_MAINTENANCE_TRIP_CONFLICT:
