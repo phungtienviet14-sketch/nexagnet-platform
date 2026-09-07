@@ -1,0 +1,115 @@
+/**
+ * MO HINH VAN CHUYEN v2 -- HAI TRUC DOC LAP (#232 `D-01`, #234 A1).
+ *
+ * Day la tang kieu thuan: khong `@nestjs`, khong Prisma, khong I/O. Moi thu o day doc duoc ma
+ * khong can biet du lieu nam o dau.
+ *
+ *   `Order`      = NGHIA VU THUONG MAI. Ai thue, cho gi, tu dau den dau, bao nhieu tien.
+ *   `VehicleRun` = VONG CHAY VAT LY cua MOT xe.
+ *   `RunLeg`     = MOT chang cua vong chay do. `LOADED` co the tro toi mot don; `EMPTY` khong.
+ *
+ * Ngay thang deu la `string` ISO o bien mien, khong phai `Date` -- dung quy uoc da co cua
+ * `transport.types.ts`.
+ */
+
+export const ORDER_STATUSES = ['OPEN', 'FULFILLED', 'CANCELLED'] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+export const VEHICLE_RUN_STATUSES = ['PLANNED', 'ACTIVE', 'COMPLETED', 'CANCELLED'] as const;
+export type VehicleRunStatus = (typeof VEHICLE_RUN_STATUSES)[number];
+
+/**
+ * LOAI CHANG -- truc ma toan bo phan tich km rong dua vao.
+ *
+ * `EMPTY` la chay rong/deadhead. Hai gia tri, khong ba: moi sac thai khac (chay ve bai, di lay vo,
+ * dieu xe) van la `EMPTY` cho toi khi co mot nguon nghiep vu doi phan biet chung.
+ */
+export const RUN_LEG_KINDS = ['LOADED', 'EMPTY'] as const;
+export type RunLegKind = (typeof RUN_LEG_KINDS)[number];
+
+export const RUN_LEG_STATUSES = ['PLANNED', 'IN_TRANSIT', 'COMPLETED', 'CANCELLED'] as const;
+export type RunLegStatus = (typeof RUN_LEG_STATUSES)[number];
+
+export interface Order {
+  readonly id: string;
+  readonly code: string;
+  readonly status: OrderStatus;
+  readonly businessDate: string;
+  readonly customerId: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly cargoDescription: string | null;
+  /** DOANH THU -- so nguyen dong. `null` = chua bao gia. */
+  readonly freightAmount: number | null;
+  readonly currencyCode: string;
+  readonly note: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly cancelledAt: string | null;
+  readonly cancellationReason: string | null;
+}
+
+export interface VehicleRun {
+  readonly id: string;
+  readonly code: string;
+  /** BAT BUOC: mot vong chay LA vong chay cua mot chiec xe cu the. */
+  readonly vehicleId: string;
+  readonly status: VehicleRunStatus;
+  readonly businessDate: string;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly note: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly cancelledAt: string | null;
+  readonly cancellationReason: string | null;
+}
+
+export interface RunLeg {
+  readonly id: string;
+  readonly runId: string;
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  readonly status: RunLegStatus;
+  /** BAT BIEN: `null` bat buoc khi `kind === 'EMPTY'`. Duoc phep `null` khi `LOADED`. */
+  readonly orderId: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly businessDate: string;
+  /** `GD-14` -- nhap tay. `null` nghia la CHUA BIET, khong phai 0. */
+  readonly distanceKm: number | null;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly note: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** PHAN CONG LAI XE cho mot vong chay -- LICH SU, `effectiveTo === null` la ban dang hieu luc. */
+export interface RunAssignment {
+  readonly id: string;
+  readonly runId: string;
+  readonly driverId: string;
+  readonly effectiveFrom: string;
+  readonly effectiveTo: string | null;
+  readonly assignedBy: string;
+  readonly createdAt: string;
+}
+
+/**
+ * TUONG UNG mot chuyen v1 voi mot chang v2. KHONG phai quan he cha/con -- xem khoi ghi chu cua
+ * `TransportTripRunLegLink` trong `schema.prisma`.
+ */
+export interface TripRunLegLink {
+  readonly tripId: string;
+  readonly legId: string;
+  readonly projectedBy: string;
+  readonly createdAt: string;
+}
+
+/** Mot vong chay doc kem chang va phan cong dang hieu luc -- hinh dang ma be mat van hanh can. */
+export interface VehicleRunDetail {
+  readonly run: VehicleRun;
+  readonly legs: readonly RunLeg[];
+  readonly activeAssignment: RunAssignment | null;
+}
