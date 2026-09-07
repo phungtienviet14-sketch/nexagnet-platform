@@ -154,7 +154,40 @@ export const TRACKING_HISTORY_READ_REASONS = [
 ] as const;
 export type TrackingHistoryReadReason = (typeof TRACKING_HISTORY_READ_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * proof.record — OperationalProofService.record()
+ * ------------------------------------------------------------------ */
+export const PROOF_RECORD_REASONS = [
+  'PROOF_RECORDED',
+  /** Cung khoa su kien — mot lan bam bi gui lai. Tra ban cu, khong tao chung cu thu hai. */
+  'PROOF_REPLAYED',
+  'PROOF_DRIVER_BINDING_MISSING',
+  'PROOF_TRIP_NOT_FOUND',
+  'PROOF_DRIVER_NOT_ASSIGNED',
+  /** Giao hang khong co anh. Ho so B (`#232 D-08`) bat buoc — tu choi, khong ghi. */
+  'PROOF_PHOTO_REQUIRED',
+  'PROOF_OBSERVATION_NOT_FOUND',
+  /**
+   * Ban dinh vi do thuoc phien cua NGUOI KHAC.
+   *
+   * Khong co cong nay thi mot lai xe tro duoc chung cu cua minh vao mot ban dinh vi cua dong
+   * nghiep — tuc muon vi tri cua nguoi khac lam bang chung cho chinh minh.
+   */
+  'PROOF_OBSERVATION_NOT_OWNED',
+  /** Ban dinh vi da duoc dung cho mot chung cu khac — chan dung lai vi tri cu cho lan giao sau. */
+  'PROOF_OBSERVATION_ALREADY_USED',
+  /**
+   * Anh KHONG chup trong ung dung. Ban ghi VAN duoc nhan — day la `degraded`, khong phai `denied`.
+   *
+   * Doc cho dung: day la loi khai cua ung dung, khong phai mot su that may chu kiem duoc. Gia tri
+   * cua no la ngan he thong LANG LE cham cung mot muc tin cay cho hai duong khac nhau.
+   */
+  'PROOF_PHOTO_NOT_LIVE_CAMERA',
+] as const;
+export type ProofRecordReason = (typeof PROOF_RECORD_REASONS)[number];
+
 export type TransportProofDecisionReason =
+  | ProofRecordReason
   | TrackingSessionOpenReason
   | TrackingSessionCloseReason
   | TrackingIngestReason
@@ -173,6 +206,7 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     'tracking.history_read',
     'geofence.register',
     'geofence.evaluate',
+    'proof.record',
   ],
   labels: {
     SESSION_OPENED: 'Đã mở phiên bám vị trí',
@@ -217,6 +251,18 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     GEOFENCE_OUTSIDE: 'Nằm chắc chắn ngoài hàng rào',
     GEOFENCE_INDETERMINATE: 'Sai số trùm qua biên — hình học không đủ để kết luận',
     GEOFENCE_NONE_CONFIGURED: 'Chưa khai hàng rào nào cho điểm này',
+
+    PROOF_RECORDED: 'Đã ghi một chứng cứ vận hành',
+    PROOF_REPLAYED: 'Gửi lại đúng một lần bấm — trả bản cũ, không tạo chứng cứ thứ hai',
+    PROOF_DRIVER_BINDING_MISSING: 'Tài khoản đăng nhập chưa nối với hồ sơ lái xe nào',
+    PROOF_TRIP_NOT_FOUND: 'Không tìm thấy chuyến',
+    PROOF_DRIVER_NOT_ASSIGNED: 'Lái xe chưa từng được phân công vào chuyến này',
+    PROOF_PHOTO_REQUIRED: 'Giao hàng bắt buộc có ít nhất một tấm ảnh',
+    PROOF_OBSERVATION_NOT_FOUND: 'Không tìm thấy bản định vị cho chứng cứ này',
+    PROOF_OBSERVATION_NOT_OWNED: 'Bản định vị đó thuộc phiên của người khác',
+    PROOF_OBSERVATION_ALREADY_USED: 'Bản định vị đó đã được dùng cho một chứng cứ khác',
+    PROOF_PHOTO_NOT_LIVE_CAMERA:
+      'Ảnh không chụp trong ứng dụng — vẫn nhận, nhưng không cùng mức tin cậy',
 
     HISTORY_READ_GRANTED: 'Được đọc lịch sử toạ độ thô',
     HISTORY_READ_DENIED_NEED_TO_KNOW: 'Vai này chỉ được xem tóm tắt, không xem đường đi chi tiết',

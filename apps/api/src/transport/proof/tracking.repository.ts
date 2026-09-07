@@ -95,6 +95,8 @@ export abstract class TrackingRepository {
   ): Promise<LocationObservation | null>;
   /** Ban ghi moi nhat theo `capturedAt` — dau vao cua phep kiem lien tuc. */
   abstract lastObservation(sessionId: string): Promise<LocationObservation | null>;
+  /** Doc mot ban dinh vi theo id — chung cu van hanh TRO toi mot ban da ghi, khong tu ghi. */
+  abstract findObservationById(observationId: string): Promise<LocationObservation | null>;
   abstract appendObservation(input: AppendObservationInput): Promise<LocationObservation>;
   abstract listObservations(sessionId: string): Promise<readonly LocationObservation[]>;
 
@@ -186,6 +188,10 @@ export class InMemoryTrackingRepository extends TrackingRepository {
   async lastObservation(sessionId: string): Promise<LocationObservation | null> {
     const forSession = await this.listObservations(sessionId);
     return forSession.at(-1) ?? null;
+  }
+
+  async findObservationById(observationId: string): Promise<LocationObservation | null> {
+    return this.observations.get(observationId) ?? null;
   }
 
   async appendObservation(input: AppendObservationInput): Promise<LocationObservation> {
