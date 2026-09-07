@@ -255,6 +255,10 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/settings/price-periods.service.ts",
       "line": 397
     },
+    "proof.withdraw": {
+      "functionName": "OperationalProofService.withdraw",
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
+    },
     "rules.policy": {
       "functionName": "grantsFromDealerPolicy",
       "filePath": "apps/api/src/outbound/outbound-authority.ts",
@@ -487,6 +491,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.fuel.station.read": {
       "filePath": "apps/api/src/transport/fuel/fuel-station.controller.ts"
     },
+    "transport.geofence.manage": {
+      "functionName": "ProofReviewController.register",
+      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
+      "line": 110
+    },
+    "transport.geofence.read": {
+      "functionName": "ProofReviewController.list",
+      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
+      "line": 103
+    },
     "transport.location.history.read": {
       "functionName": "TrackingController.track",
       "filePath": "apps/api/src/transport/proof/tracking.controller.ts",
@@ -543,6 +557,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PayrollController.pay",
       "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
       "line": 145
+    },
+    "transport.proof.read": {
+      "functionName": "ProofReviewController.forTrip",
+      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
+      "line": 72
+    },
+    "transport.proof.withdraw": {
+      "functionName": "ProofReviewController.withdraw",
+      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
+      "line": 80
     },
     "transport.run.manage": {
       "filePath": "apps/api/src/transport/movement/runs.controller.ts"
@@ -1242,13 +1266,10 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
       "line": 291
     },
-    "proof.record|*": {
-      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
-    },
     "proof.record|PROOF_PHOTO_NOT_LIVE_CAMERA": {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
-      "line": 149
+      "line": 153
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",

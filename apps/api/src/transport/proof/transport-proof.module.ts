@@ -5,6 +5,11 @@ import { PrismaService } from '../../config/prisma.service.js';
 import { TRANSPORT_CORE_POLICY, tenantTransportCorePolicy } from '../transport-policy.js';
 import { TransportModule } from '../transport.module.js';
 import {
+  GeofenceRepository,
+  InMemoryGeofenceRepository,
+  PrismaGeofenceRepository,
+} from './geofence.repository.js';
+import {
   InMemoryOperationalProofRepository,
   OperationalProofRepository,
 } from './operational-proof.repository.js';
@@ -78,6 +83,14 @@ import {
           : new InMemoryOperationalProofRepository(),
       inject: [PrismaService],
     },
+    {
+      provide: GeofenceRepository,
+      useFactory: (prisma: PrismaService): GeofenceRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaGeofenceRepository(prisma)
+          : new InMemoryGeofenceRepository(),
+      inject: [PrismaService],
+    },
     TrackingService,
     OperationalProofService,
   ],
@@ -87,6 +100,7 @@ import {
     VehicleTelematicsPort,
     OperationalProofService,
     OperationalProofRepository,
+    GeofenceRepository,
   ],
 })
 export class TransportProofModule {}

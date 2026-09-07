@@ -53,6 +53,23 @@ export abstract class OperationalProofRepository {
   abstract findById(proofId: string): Promise<OperationalProof | null>;
   abstract listForTrip(tripId: string): Promise<readonly OperationalProof[]>;
   abstract listForDriver(driverId: string): Promise<readonly OperationalProof[]>;
+  /**
+   * BIA MO — mot phep ghi, khong phai mot phep xoa.
+   *
+   * Dau duoc dat len CA chung cu VA moi tam anh cua no trong CUNG mot lan. Neu chi danh dau chung
+   * cu, `photoCount` trong khung nhin van hanh van dem du anh, va nguoi duyet se thay mot chung cu
+   * vua bi rut vua con nguyen bang chung — hai cau tra loi trai nguoc tu cung mot hang.
+   *
+   * Tra `null` khi khong co chung cu do. Tang dich vu phan biet "khong tim thay" voi "da rut roi";
+   * kho luu chi noi duoc cai thu nhat.
+   */
+  abstract withdraw(input: WithdrawProofInput): Promise<OperationalProof | null>;
+}
+
+export interface WithdrawProofInput {
+  readonly proofId: string;
+  readonly withdrawnBy: string;
+  readonly withdrawnAt: Date;
 }
 
 export class InMemoryOperationalProofRepository extends OperationalProofRepository {
@@ -83,6 +100,7 @@ export class InMemoryOperationalProofRepository extends OperationalProofReposito
       capturedAt: input.capturedAt,
       uploadedBy: input.recordedBy,
       withdrawnAt: null,
+      withdrawnBy: null,
     }));
 
     const proof: OperationalProof = {
@@ -99,6 +117,7 @@ export class InMemoryOperationalProofRepository extends OperationalProofReposito
       note: input.note,
       recordedBy: input.recordedBy,
       withdrawnAt: null,
+      withdrawnBy: null,
       photos,
     };
     this.proofs.set(id, proof);
@@ -132,5 +151,25 @@ export class InMemoryOperationalProofRepository extends OperationalProofReposito
     return [...this.proofs.values()]
       .filter((proof) => proof.driverId === driverId)
       .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
+  }
+
+  async withdraw(input: WithdrawProofInput): Promise<OperationalProof | null> {
+    const current = this.proofs.get(input.proofId);
+    if (!current) return null;
+
+    const withdrawn: OperationalProof = {
+      ...current,
+      withdrawnAt: input.withdrawnAt,
+      withdrawnBy: input.withdrawnBy,
+      photos: current.photos.map((photo) =>
+        // Mot tam anh da rut TRUOC do giu nguyen dau cu: nguoi rut tam anh do va nguoi rut ca
+        // chung cu co the la hai nguoi khac nhau, va ghi de se xoa mat mot trong hai.
+        photo.withdrawnAt === null
+          ? { ...photo, withdrawnAt: input.withdrawnAt, withdrawnBy: input.withdrawnBy }
+          : photo,
+      ),
+    };
+    this.proofs.set(withdrawn.id, withdrawn);
+    return withdrawn;
   }
 }

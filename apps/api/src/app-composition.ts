@@ -126,6 +126,7 @@ import { TransportProofModule } from './transport/proof/transport-proof.module.j
 import { DriverTrackingController } from './transport/proof/driver-tracking.controller.js';
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
+import { ProofReviewController } from './transport/proof/proof-review.controller.js';
 import { OperationalAlertsService } from './transport/asset-compliance/operational-alerts.service.js';
 import {
   AlertDriverFundSource,
@@ -308,6 +309,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // khong dung kho tep thu hai. Dang ky o goc vi no can dich vu do, giong
   // `DriverFuelEvidenceController`.
   owned('transport-proof', DriverProofController),
+  // BE MAT NGUOI DUYET — doc tom tat chung cu, bia mo mot chung cu, khai hang rao. BA quyen tach
+  // roi: ke toan doc duoc, nhung khong rut duoc chung cu va khong doi duoc ban kinh mot hang rao
+  // (hang rao cham LUC DOC, nen sua no doi ket luan cua ca nhung lan giao da xong).
+  owned('transport-proof', ProofReviewController),
 ];
 
 const guardProviders: readonly Provider[] = [

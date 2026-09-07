@@ -56,7 +56,7 @@ describe('cau bridge GD-22 — web guong dung bang cua API', () => {
     expect([...SELF_SCOPE_ACTIONS]).toEqual(literalsInArray(source, 'SELF_SCOPE_ACTIONS'));
   });
 
-  it('bon hanh dong Ke toan khong co van dung bon hanh dong do', () => {
+  it('sau hanh dong Ke toan khong co van dung sau hanh dong do', () => {
     const denied = literalsInArray(source, 'ACCOUNTING_DENIED');
     expect(denied).toEqual([
       'transport.trip.cancel',
@@ -66,6 +66,11 @@ describe('cau bridge GD-22 — web guong dung bang cua API', () => {
       // con nguoi. Doi soat so sach khong CAN toa do, va mot quyen khong can den ma van duoc cap
       // la mot quyen se bi dung vao viec khac.
       'transport.location.history.read',
+      // Issue #235 Lane B — hai quyen SUA trong mien chung cu. Doi soat la doc mot ho so roi noi
+      // no khop hay khong; rut mot chung cu, va doi ban kinh mot hang rao (duoc cham LUC DOC, nen
+      // no doi phan quyet cua ca lich su), la sua chinh ho so dang duoc doi soat.
+      'transport.proof.withdraw',
+      'transport.geofence.manage',
     ]);
     for (const action of denied) {
       expect(roleCanPerform('ACCOUNTING', action as never)).toBe(false);
