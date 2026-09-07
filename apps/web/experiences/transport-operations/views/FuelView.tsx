@@ -11,6 +11,7 @@ import {
   useReconciliation,
   useReconciliations,
 } from '../hooks/useTransportWorkspace';
+import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import { FuelInbox } from './FuelInbox';
@@ -147,6 +148,7 @@ function ReconciliationWorkspace({
   readonly onClose: () => void;
   readonly onChanged: () => void;
 }) {
+  const reveal = useRevealOnOpen<HTMLElement>(reconciliationId);
   const navigation = useNavigationInput();
   const queryClient = useQueryClient();
   const workspace = toSectionQuery(useReconciliation(navigation, reconciliationId));
@@ -217,7 +219,7 @@ function ReconciliationWorkspace({
 
   if (workspace.data === undefined) {
     return (
-      <section className="tx-detail" aria-label="Bàn đối soát">
+      <section className="tx-detail" aria-label="Bàn đối soát" ref={reveal}>
         {workspace.isLoading ? (
           <LoadingState label="Đang đọc bàn đối soát…" />
         ) : workspace.errorMessage !== null ? (
@@ -234,7 +236,7 @@ function ReconciliationWorkspace({
     resolving?.options.find((option) => option.resolution === resolution)?.requiresTargets === true;
 
   return (
-    <section className="tx-detail" aria-label={`Bàn đối soát ${model.periodLabel}`}>
+    <section className="tx-detail" aria-label={`Bàn đối soát ${model.periodLabel}`} ref={reveal}>
       <header className="tx-detail__head">
         <div>
           <h2>Đối soát {model.periodLabel}</h2>

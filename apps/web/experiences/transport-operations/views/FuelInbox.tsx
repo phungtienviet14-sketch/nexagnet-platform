@@ -6,6 +6,7 @@ import { DataTable, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import { FUEL_RECONCILIATION_STATUS_LABEL, FUEL_VERIFICATION_LABEL } from '../customer-view';
 import { toSectionQuery, useFuelInbox, useNavigationInput } from '../hooks/useTransportWorkspace';
+import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { evidenceUrls, transportApi } from '../transport-api';
 import {
   FUEL_RECONCILIATION_STATUSES,
@@ -369,12 +370,16 @@ function FuelInboxDetail({
   readonly row: FuelInboxRowModel | null;
   readonly onAct: (action: FuelInboxAction) => void;
 }) {
+  // Truoc lan return som: hook phai chay o MOI lan ve, khong duoc nam sau mot nhanh dieu kien.
+  const reveal = useRevealOnOpen<HTMLElement>(row?.id ?? null);
+
   if (row === null) return null;
 
   return (
     <section
       className="tx-detail"
       aria-label={`Phiếu đổ dầu ${row.tripCode} ngày ${row.businessDateLabel}`}
+      ref={reveal}
     >
       <h4>
         {row.tripCode} · {row.driverLabel} · {row.vehicleLabel}
