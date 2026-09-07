@@ -2864,3 +2864,90 @@ model TransportPayslipComponent {
 
   @@index([payslipId])
 }
+
+// ----- Transport domain: xuong song danh tinh doi tac (R1-A, Issue #230) -----
+//
+// CANH BAO — RANG BUOC CUA R1-A KHONG CO O DAY. Chung song trong SQL tho cua migration
+// `20260907140000_transport_counterparty`, vi Prisma khong co cu phap cho `CHECK`:
+//
+//     1. `TransportCounterparty_name_not_blank`  — ten phap nhan khong duoc rong hay toan khoang trang
+//     2. `TransportCounterparty_taxCode_shape`   — ma so thue Viet Nam: 10 chu so, hoac 10-3 chu so
+//
+// `prisma migrate dev` sinh migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA ca
+// hai. Ai chay lenh do PHAI doc lai migration sinh ra va bo cac dong `DROP CONSTRAINT` truoc khi
+// commit — dung nhu canh bao da co o cac dau muc Transport phia tren.
+// `transport-counterparty-storage.spec.ts` doc chinh tep migration va do neu mot ten bien mat.
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO MOT XUONG SONG chu khong gop ba bang ben lam mot:
+//
+// R0 (`docs/kien-truc/transport-domain-v2.md` §2 `F-03`) do lai va thay da vai DA CO —
+// `TransportPartnerRole` khoa kep `(partnerId, role)` la dung mau. Cai KHONG co la danh tinh: mot
+// to chuc vua thue van chuyen vua chay ho hom nay phai ton tai HAI hang o HAI bang
+// (`TransportCustomer` + `TransportPartner`), va khong gi noi chung lai.
+//
+// Gop ba bang lam mot se phai doi khoa ngoai cua cac bang tai chinh dang co du lieu that, va pha
+// chinh ly do ba bang ton tai (T1 §9.1 xep nam luong cong no thanh nam so, nguon khong dong nhat).
+// Nen day la mot bang DANH TINH cong them, khong hang nao cua v1 phai doi.
+//
+// -----------------------------------------------------------------------------------------------
+// `subjectId` CO Y KHONG PHAI KHOA NGOAI.
+//
+// No tro toi HAI bang khac nhau tuy `kind`, va Prisma/Postgres khong co khoa ngoai da dich. Tinh
+// hop le duoc kiem o tang mien qua `CounterpartySubjectPort`, ma tang lap rap hien thuc bang dung
+// nhung kho DANG BAT — nen lien ket toi mot loai chu the chua co adapter bi tu choi CO TEN
+// (`SUBJECT_KIND_UNAVAILABLE`), chu khong im lang.
+//
+// Cai gia phai tra: xoa mot `TransportCustomer` khong tu don lien ket. Chap nhan duoc vi mien nay
+// khong co duong xoa cung nao cho mot ben doi tac — `GD-02` da chot huy thay xoa.
+
+/// LOAI CHU THE ma mot lien ket danh tinh tro toi.
+///
+/// R1-A chi khai HAI gia tri, va do la co y: nhu cau co nguon la A/C — mot to chuc vua la khach
+/// thue vua la nha xe/nguon don. Cay xang (`TransportFuelSupplier`) KHONG duoc them vao day khi
+/// chua ai can, vi T1 §9.1 coi nhien lieu la mot NGUON RIENG chu khong phai mot vai doi tac. Them
+/// sau la mot `ALTER TYPE ... ADD VALUE`, tuc cong them va re.
+enum TransportCounterpartySubjectKind {
+  CUSTOMER
+  PARTNER
+}
+
+/// PHAP NHAN trong doi that — thu ma ba bang ben chi la ba MAT cua no.
+///
+/// `taxCode` unique khi co: o Viet Nam ma so thue la danh tinh manh nhat cua mot doanh nghiep, va
+/// hai hang cung ma so thue gan nhu chac chan la mot lan nhap trung. NULL duoc phep vi ho kinh
+/// doanh ca the va CTV khong phai luc nao cung co.
+model TransportCounterparty {
+  id        String               @id @default(cuid())
+  name      String
+  taxCode   String?              @unique
+  status    TransportPartyStatus @default(ACTIVE)
+  note      String?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  links TransportCounterpartyLink[]
+
+  @@index([status])
+}
+
+/// LIEN KET mot hang chuyen mon voi phap nhan so huu no.
+///
+/// Khoa chinh kep `(kind, subjectId)` lam DUNG MOT viec, va do la bat bien cua ca tranche: mot
+/// hang chuyen mon thuoc TOI DA MOT phap nhan. Neu day la mot `id` roi mot unique khac, thi lan
+/// ghi thu hai se tao ban sao thu hai cua cung mot khach duoi hai phap nhan, va bao cao cong no
+/// gop theo phap nhan se dem doi.
+///
+/// KHONG unique tren `(counterpartyId, kind)`: mot phap nhan duoc phep gom NHIEU hang cung loai —
+/// do chinh la cach hop nhat hai ban ghi khach bi nhap trung ma khong phai xoa hang nao.
+model TransportCounterpartyLink {
+  counterpartyId String
+  counterparty   TransportCounterparty            @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  kind           TransportCounterpartySubjectKind
+  subjectId      String
+  linkedBy       String
+  createdAt      DateTime                         @default(now())
+
+  @@id([kind, subjectId])
+  @@index([counterpartyId])
+}

@@ -621,14 +621,21 @@ TransportCounterparty                 ← DANH TÍNH: một pháp nhân trong đ
 
 TransportCounterpartyLink             ← LIÊN KẾT tới hàng chuyên môn đã có
   (kind, subjectId) là KHOÁ CHÍNH     ← một hàng chuyên môn thuộc TỐI ĐA một pháp nhân
-  kind ∈ { CUSTOMER, PARTNER, FUEL_SUPPLIER }
-  subjectId → TransportCustomer.id | TransportPartner.id | TransportFuelSupplier.id
+  kind ∈ { CUSTOMER, PARTNER }
+  subjectId → TransportCustomer.id | TransportPartner.id
 ```
 
-`subjectId` **cố ý không phải khoá ngoại**: nó trỏ tới ba bảng khác nhau, và hai trong ba chỉ tồn
-tại khi khách bật capability tương ứng. Tính hợp lệ được kiểm ở tầng miền qua một cổng
-(`CounterpartySubjectPort`) mà tầng lắp ráp hiện thực bằng đúng những kho **đang bật** — nên liên
-kết tới một cây xăng khi khách tắt `transport-fuel` bị từ chối **có tên**, chứ không im lặng.
+**Hai loại, không phải ba.** Nhu cầu **có nguồn** là A và C — một tổ chức vừa thuê vận chuyển vừa
+chạy hộ/mang đơn về. Cây xăng (`TransportFuelSupplier`) *không* được thêm vào khi chưa ai cần: T1
+§9.1 xếp nhiên liệu là một **nguồn riêng**, không phải một vai đối tác. Thêm sau là một
+`ALTER TYPE … ADD VALUE`, tức cộng thêm và rẻ.
+
+`subjectId` **cố ý không phải khoá ngoại**: nó trỏ tới hai bảng khác nhau tuỳ `kind`, và Postgres
+không có khoá ngoại đa đích. Tính hợp lệ được kiểm ở tầng miền qua một cổng
+(`CounterpartySubjectPort`) mà tầng lắp ráp hiện thực bằng đúng những kho **đang bật** — nên một
+loại chủ thể chưa có adapter bị từ chối **có tên** (`SUBJECT_KIND_UNAVAILABLE`), chứ không im lặng.
+Cổng tồn tại chính vì loại thứ ba sẽ tới: khi nó tới, capability sở hữu nó đăng ký adapter của
+riêng nó, và `transport-core` không phải import một kho mà khách chưa bật.
 
 **Không** cột `roles` trên `TransportCounterparty`: vai đã ở `TransportPartnerRole`, và nhân đôi nó
 là tạo ra hai nguồn sự thật cho cùng một câu hỏi.
@@ -639,8 +646,39 @@ là tạo ra hai nguồn sự thật cho cùng một câu hỏi.
 - `CP-002` — liên kết một hàng chuyên môn **đã thuộc** pháp nhân khác bị từ chối với lý do có tên
   (`SUBJECT_ALREADY_LINKED`), không ghi đè.
 - `CP-003` — liên kết tới một `subjectId` **không tồn tại** bị từ chối (`SUBJECT_NOT_FOUND`).
-- `CP-004` — liên kết `FUEL_SUPPLIER` khi khách **tắt** `transport-fuel` bị từ chối
-  (`SUBJECT_KIND_UNAVAILABLE`).
+- `CP-004` — liên kết một loại chủ thể **chưa có adapter** bị từ chối (`SUBJECT_KIND_UNAVAILABLE`),
+  và cổng **không hỏi kho** — vì hỏi ở đó sẽ trả về `SUBJECT_NOT_FOUND` cho một `subjectId` hoàn
+  toàn đúng.
 - `CP-005` — dữ liệu vận tải **hiện có** (khách, đối tác, cây xăng, chuyến, công nợ) đọc và ghi
   **y như trước** khi chưa có một `TransportCounterparty` nào. Không đường nào của v1 phụ thuộc
   bảng mới.
+
+
+---
+
+## 11. `R1-A′` as-built — đo trên nhánh `claude/issue-230-transport-v2-r0`
+
+Đây là mục **ghi cái đã chạy**, theo đúng quy ước T1 §18: mọi thứ ở §10 là thiết kế, mục này là
+kết quả.
+
+| Thứ | Ở đâu |
+|---|---|
+| Hai bảng + enum | `apps/api/prisma/schema.prisma` (khối cuối) |
+| Migration | `apps/api/prisma/migrations/20260907140000_transport_counterparty/` — kèm `README-rollback.sql` |
+| Hai `CHECK` | `TransportCounterparty_name_not_blank`, `TransportCounterparty_taxCode_shape` (SQL thô — Prisma không có cú pháp) |
+| Miền | `apps/api/src/transport/counterparty/` — 10 tệp, không tệp nào ngoài thư mục này là mới |
+| Hành động | `transport.counterparty.read` · `transport.counterparty.manage` |
+| Đăng ký | `owned('transport-core', CounterpartyController)` — **không** capability mới |
+| Nghiệm thu | 17 bài, `counterparty.service.spec.ts` (`CP-001`…`CP-005`) · `transport-counterparty-storage.spec.ts` · `counterparty.composition.spec.ts` |
+
+**Tệp có sẵn bị sửa — đúng năm, và mỗi cái một dòng lý do:**
+
+- `schema.prisma` — thêm một khối ở **cuối tệp** (dễ gộp nhánh nhất);
+- `transport-actions.ts` + `transport-actions.spec.ts` — hai mã hành động, và danh sách khoá cứng
+  trong spec là **cố ý**: thêm một quyền phải là một lần sửa có ý thức;
+- `transport.errors.ts` — gộp hai union lý do mới vào kiểu chung;
+- `transport.module.ts` — hai provider + một cổng;
+- `app-composition.ts` — một dòng đăng ký controller.
+
+**Không** tệp nào dưới `apps/web/**`, `packages/tenant/**`, `apps/api/src/media/**` hay `deploy/**`
+bị chạm — tức không giao với #222, #223 hay #224.
