@@ -19,6 +19,7 @@ import type {
   OperationalProofView,
   ProofPhotoCaptureMode,
   RecordProofCommand,
+  WithdrawProofCommand,
 } from './operational-proof.types.js';
 import { TRANSPORT_PROOF_DECISIONS } from './proof-decisions.js';
 import { TrackingRepository } from './tracking.repository.js';
@@ -45,6 +46,9 @@ import { TransportProofCoreFacts } from './transport-proof-facts.port.js';
  *   · bat dau  -> BAT BUOC co vi tri hien tai;
  *   · giao hang -> BAT BUOC co vi tri hien tai VA it nhat mot tam anh.
  */
+/** Hai diem quyet dinh ma dich vu nay so huu. Ghi va rut la HAI viec, nen la hai diem. */
+type ProofDecisionPoint = 'proof.record' | 'proof.withdraw';
+
 @Injectable()
 export class OperationalProofService {
   constructor(
@@ -175,6 +179,54 @@ export class OperationalProofService {
     }
   }
 
+  /**
+   * BIA MO mot chung cu.
+   *
+   * Ba dieu tep nay CO Y khong lam, va tung dieu deu la mot lua chon:
+   *
+   *   1. KHONG xoa hang. Mot chung cu sai van la mot su kien da xay ra;
+   *   2. KHONG tra lai `observationId`. Cai khoa `@unique` tren cot do la MOT CHIEU. Neu rut ma
+   *      giai phong ban dinh vi, thi rut chinh la duong tai che mot vi tri cu — dung ban dinh vi
+   *      8h sang lam chung cu cho lan giao 5h chieu. Day la yeu cau "stale location ID" cua #235;
+   *   3. KHONG cho rut lan hai. Nguoi rut DAU TIEN la thu duy nhat tra loi duoc "ai quyet dinh bo
+   *      lan giao nay?", va mot lan ghi de se xoa mat no.
+   */
+  async withdraw(command: WithdrawProofCommand): Promise<OperationalProof> {
+    const current = await this.proofs.findById(command.proofId);
+    if (!current) {
+      this.deny('PROOF_WITHDRAW_NOT_FOUND', { proofId: command.proofId }, 'proof.withdraw');
+      throw TransportDomainError.notFound('PROOF_WITHDRAW_NOT_FOUND', 'Khong tim thay chung cu');
+    }
+    if (current.withdrawnAt !== null) {
+      this.deny(
+        'PROOF_ALREADY_WITHDRAWN',
+        { proofId: current.id, withdrawnBy: current.withdrawnBy },
+        'proof.withdraw',
+      );
+      throw TransportDomainError.conflict(
+        'PROOF_ALREADY_WITHDRAWN',
+        'Chung cu nay da duoc rut tu truoc',
+      );
+    }
+
+    const withdrawn = await this.proofs.withdraw({
+      proofId: current.id,
+      withdrawnBy: command.actorId,
+      withdrawnAt: this.now(),
+    });
+    if (!withdrawn) {
+      this.deny('PROOF_WITHDRAW_NOT_FOUND', { proofId: command.proofId }, 'proof.withdraw');
+      throw TransportDomainError.notFound('PROOF_WITHDRAW_NOT_FOUND', 'Khong tim thay chung cu');
+    }
+
+    this.allow(
+      'PROOF_WITHDRAWN',
+      { proofId: withdrawn.id, kind: withdrawn.kind, reason: command.reason },
+      'proof.withdraw',
+    );
+    return withdrawn;
+  }
+
   /** Chung cu CUA CHINH MINH — danh tinh tu phien, khong tu than yeu cau. */
   async listOwn(authUserId: string): Promise<readonly OperationalProof[]> {
     const driver = await this.core.findDriverByAuthUserId(authUserId);
@@ -243,20 +295,28 @@ export class OperationalProofService {
     return views;
   }
 
-  private allow(reason: string, detail: Record<string, unknown>): void {
+  private allow(
+    reason: string,
+    detail: Record<string, unknown>,
+    point: ProofDecisionPoint = 'proof.record',
+  ): void {
     this.telemetry?.decision({
       vocabulary: TRANSPORT_PROOF_DECISIONS,
-      point: 'proof.record',
+      point,
       outcome: 'allowed',
       reason: reason as never,
       detail,
     });
   }
 
-  private deny(reason: string, detail: Record<string, unknown>): void {
+  private deny(
+    reason: string,
+    detail: Record<string, unknown>,
+    point: ProofDecisionPoint = 'proof.record',
+  ): void {
     this.telemetry?.decision({
       vocabulary: TRANSPORT_PROOF_DECISIONS,
-      point: 'proof.record',
+      point,
       outcome: 'denied',
       reason: reason as never,
       detail,

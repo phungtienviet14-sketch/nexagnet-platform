@@ -186,8 +186,29 @@ export const PROOF_RECORD_REASONS = [
 ] as const;
 export type ProofRecordReason = (typeof PROOF_RECORD_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * proof.withdraw — OperationalProofService.withdraw()
+ * ------------------------------------------------------------------ */
+export const PROOF_WITHDRAW_REASONS = [
+  /**
+   * Da bia mo mot chung cu. KHONG phai xoa: hang o lai kem `withdrawnAt` + `withdrawnBy`.
+   *
+   * Mot chung cu sai van la mot su kien DA XAY RA. Xoa hang di thi cau "vi sao lan giao nay tung
+   * duoc tinh la xong roi lai khong?" mat luon cau tra loi.
+   */
+  'PROOF_WITHDRAWN',
+  /**
+   * Da rut tu truoc. Tu choi thay vi ghi de — nguoi rut DAU TIEN va luc do la thu duy nhat cau
+   * hoi "ai quyet dinh bo lan giao nay?" tra loi duoc, va mot lan rut thu hai se xoa mat no.
+   */
+  'PROOF_ALREADY_WITHDRAWN',
+  'PROOF_WITHDRAW_NOT_FOUND',
+] as const;
+export type ProofWithdrawReason = (typeof PROOF_WITHDRAW_REASONS)[number];
+
 export type TransportProofDecisionReason =
   | ProofRecordReason
+  | ProofWithdrawReason
   | TrackingSessionOpenReason
   | TrackingSessionCloseReason
   | TrackingIngestReason
@@ -207,6 +228,7 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     'geofence.register',
     'geofence.evaluate',
     'proof.record',
+    'proof.withdraw',
   ],
   labels: {
     SESSION_OPENED: 'Đã mở phiên bám vị trí',
@@ -263,6 +285,10 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     PROOF_OBSERVATION_ALREADY_USED: 'Bản định vị đó đã được dùng cho một chứng cứ khác',
     PROOF_PHOTO_NOT_LIVE_CAMERA:
       'Ảnh không chụp trong ứng dụng — vẫn nhận, nhưng không cùng mức tin cậy',
+
+    PROOF_WITHDRAWN: 'Đã bìa mộ một chứng cứ — hàng ở lại, kèm người rút và lúc rút',
+    PROOF_ALREADY_WITHDRAWN: 'Chứng cứ đã rút từ trước — không ghi đè người rút đầu tiên',
+    PROOF_WITHDRAW_NOT_FOUND: 'Không tìm thấy chứng cứ cần rút',
 
     HISTORY_READ_GRANTED: 'Được đọc lịch sử toạ độ thô',
     HISTORY_READ_DENIED_NEED_TO_KNOW: 'Vai này chỉ được xem tóm tắt, không xem đường đi chi tiết',

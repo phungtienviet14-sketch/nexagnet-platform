@@ -34,6 +34,8 @@ export interface ProofPhoto {
   readonly capturedAt: Date | null;
   readonly uploadedBy: string;
   readonly withdrawnAt: Date | null;
+  /** Di THEO CAP voi `withdrawnAt` — rang buoc `TransportProofPhoto_withdrawal_shape`. */
+  readonly withdrawnBy: string | null;
 }
 
 export interface OperationalProof {
@@ -50,7 +52,21 @@ export interface OperationalProof {
   readonly note: string | null;
   readonly recordedBy: string;
   readonly withdrawnAt: Date | null;
+  /** Di THEO CAP voi `withdrawnAt` — rang buoc `TransportOperationalProof_withdrawal_shape`. */
+  readonly withdrawnBy: string | null;
   readonly photos: readonly ProofPhoto[];
+}
+
+/**
+ * BIA MO mot chung cu — mot viec cua NGUOI DUYET, khong phai cua lai xe.
+ *
+ * `reason` la bat buoc va khong duoc de trong: mot lan rut khong ly do se buoc nguoi doc ho so sau
+ * nay phai doan, va thu ho doan ra thuong nang hon su that.
+ */
+export interface WithdrawProofCommand {
+  readonly proofId: string;
+  readonly actorId: string;
+  readonly reason: string;
 }
 
 export interface RecordProofCommand {

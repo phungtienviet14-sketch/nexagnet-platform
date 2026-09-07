@@ -115,6 +115,16 @@ export const recordProofSchema = z
   })
   .strict();
 
+/**
+ * BIA MO — `reason` BAT BUOC, va toi thieu 3 ky tu.
+ *
+ * Mot lan rut khong ly do buoc nguoi doc ho so sau nay phai doan, va thu ho doan ra thuong nang
+ * hon su that. Truong nay khong co mac dinh: mot chuoi rong duoc phep se tro thanh gia tri pho
+ * bien nhat trong bang chi sau vai tuan.
+ */
+export const withdrawProofSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+
+export type WithdrawProofBody = z.infer<typeof withdrawProofSchema>;
 export type RecordProofBody = z.infer<typeof recordProofSchema>;
 export type OpenTrackingSessionBody = z.infer<typeof openTrackingSessionSchema>;
 export type ReportObservationBody = z.infer<typeof reportObservationSchema>;

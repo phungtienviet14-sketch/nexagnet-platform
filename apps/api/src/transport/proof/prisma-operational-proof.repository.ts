@@ -7,6 +7,7 @@ import type { PrismaService } from '../../config/prisma.service.js';
 import {
   OperationalProofRepository,
   type CreateProofInput,
+  type WithdrawProofInput,
 } from './operational-proof.repository.js';
 import type { OperationalProof, OperationalProofKind } from './operational-proof.types.js';
 
@@ -94,6 +95,37 @@ export class PrismaOperationalProofRepository extends OperationalProofRepository
     });
     return rows.map(toProof);
   }
+
+  /**
+   * Chung cu va anh cua no phai mang dau trong CUNG mot giao dich.
+   *
+   * Neu tach lam hai lenh va lenh thu hai truot, ta con lai mot chung cu "da rut" ma anh van con
+   * hieu luc — dung trang thai ma rang buoc `*_withdrawal_shape` sinh ra de ngan.
+   *
+   * `updateMany` voi dieu kien `withdrawnAt: null` la mot cong CHONG CHAY DUA, khong phai mot cach
+   * viet ngan: hai nguoi duyet bam rut cung luc thi ban ghi thu hai sua 0 hang, va tang dich vu
+   * doc lai thay dau cua nguoi thu nhat.
+   */
+  async withdraw(input: WithdrawProofInput): Promise<OperationalProof | null> {
+    return this.prisma.$transaction(async (transaction) => {
+      const tx = transaction as unknown as PrismaService;
+      const marked = await tx.transportOperationalProof.updateMany({
+        where: { id: input.proofId, withdrawnAt: null },
+        data: { withdrawnAt: input.withdrawnAt, withdrawnBy: input.withdrawnBy },
+      });
+      if (marked.count === 1) {
+        await tx.transportProofPhoto.updateMany({
+          where: { proofId: input.proofId, withdrawnAt: null },
+          data: { withdrawnAt: input.withdrawnAt, withdrawnBy: input.withdrawnBy },
+        });
+      }
+      const row = await tx.transportOperationalProof.findUnique({
+        where: { id: input.proofId },
+        include: { photos: true },
+      });
+      return row ? toProof(row) : null;
+    });
+  }
 }
 
 function toProof(row: ProofRow): OperationalProof {
@@ -111,6 +143,7 @@ function toProof(row: ProofRow): OperationalProof {
     note: row.note,
     recordedBy: row.recordedBy,
     withdrawnAt: row.withdrawnAt,
+    withdrawnBy: row.withdrawnBy,
     photos: row.photos.map((photo) => ({
       id: photo.id,
       proofId: photo.proofId,
@@ -121,6 +154,7 @@ function toProof(row: ProofRow): OperationalProof {
       capturedAt: photo.capturedAt,
       uploadedBy: photo.uploadedBy,
       withdrawnAt: photo.withdrawnAt,
+      withdrawnBy: photo.withdrawnBy,
     })),
   };
 }
