@@ -896,6 +896,8 @@ model TransportDriver {
   payslips           TransportPayslip[]
   /// R1-B: lich su cam lai cac vong chay v2.
   runAssignments     TransportRunAssignment[]
+  /// R1-C: de nghi chi cua chinh lai xe nay.
+  expenseClaims      TransportExpenseClaim[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -1028,6 +1030,8 @@ model TransportTrip {
   /// R1-B: BANG TUONG UNG toi mot chang v2. KHONG phai quan he cha/con (#232 `D-01`) -
   /// bo `TransportTripRunLegLink` di thi chuyen nay van chay y nguyen.
   runLegLink          TransportTripRunLegLink?
+  /// R1-C: de nghi chi gan vao chuyen nay.
+  expenseClaims       TransportExpenseClaim[]
 
   @@index([status])
   @@index([businessDate])
@@ -1495,6 +1499,8 @@ model TransportTripExpense {
   note              String?
   recordedBy        String
   createdAt         DateTime                      @default(now())
+  /// R1-C: de nghi da sinh ra khoan chi nay. Nhieu nhat MOT (unique o phia kia).
+  settledClaim      TransportExpenseClaim?
 
   @@index([tripId, businessDate])
   @@index([driverId])
@@ -3103,6 +3109,8 @@ model TransportVehicleRun {
 
   legs        TransportRunLeg[]
   assignments TransportRunAssignment[]
+  /// R1-C: de nghi chi gan vao vong chay nay.
+  expenseClaims TransportExpenseClaim[]
 
   @@index([status])
   @@index([businessDate])
@@ -3165,6 +3173,8 @@ model TransportRunLeg {
   updatedAt        DateTime              @updatedAt
 
   tripLink TransportTripRunLegLink?
+  /// R1-C: de nghi chi gan vao chang nay.
+  expenseClaims TransportExpenseClaim[]
 
   @@unique([runId, sequence])
   @@index([orderId])
@@ -3189,4 +3199,121 @@ model TransportTripRunLegLink {
   leg         TransportRunLeg @relation(fields: [legId], references: [id])
   projectedBy String
   createdAt   DateTime        @default(now())
+}
+
+// ----- Van chuyen v2: DE NGHI CHI cua lai xe + duyet cua nguoi (R1-C, #232 D-06 / #234 A2) -----
+//
+// Duong tien hien tai (`TransportTripExpense` + `TransportDriverFundEntry`) ghi duoc moi khoan chi
+// va sua duoc moi sai sot bang but toan dao. Cai no THIEU khong phai kha nang GHI, ma la mot
+// CONG DUYET dat TRUOC khi mot de nghi cua lai xe tro thanh gia thanh that.
+//
+// `D-06`: phe duyet cua NGUOI la bat buoc truoc khi mot khoan lai xe de nghi thanh chi phi kinh
+// doanh co tham quyen / thanh khoan quyet toan quy. Nen o day co dung hai bang:
+//
+//   `TransportExpenseClaim`          de nghi goc + trang thai hien tai
+//   `TransportExpenseClaimDecision`  LICH SU QUYET DINH, chi ghi them, khong bao gio sua
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO GIU CA SO DE NGHI LAN SO DUYET
+//
+// `claimedAmount` la con so lai xe de nghi; `approvedAmount` la con so ke toan duyet. Hom nay hai
+// so LUON bang nhau -- `D-06` cho phep hien thuc duyet TRON KHOAN truoc, va duyet MOT PHAN van la
+// an so nghiep vu (`Q-04`, chua ai quyet so bi cat di ve dau).
+//
+// Nhung hai CO cot ngay tu dau, va `CHECK` chi doi `approvedAmount <= claimedAmount` chu khong doi
+// bang nhau. Nho vay khi `Q-04` co loi, duyet mot phan la mot lan noi long rang buoc -- KHONG phai
+// mot lan viet lai lich su cua nhung de nghi da duyet.
+//
+// -----------------------------------------------------------------------------------------------
+// NHIEN LIEU VA ETC KHONG BAO GIO DI DUONG NAY
+//
+// `D-05`: dau do o cay xang co hop dong la cong no cong ty, KHONG dung vao quy lai xe -- duong do
+// da co san tu T4 (`TransportFuelEntry` + `fundedBy = COMPANY_DIRECT`). `D-07`: ETC la tien cong
+// ty tra, va quy trinh quyet toan that cua khach CHUA AI BIET.
+//
+// De hai loai do lot vao day se tao NGUON SU THAT THU HAI cho cung mot khoan tien. Nen chung bi
+// chan bang `CHECK` o DB (`TransportExpenseClaim_category_not_reserved`), khong chi bang mot cong
+// o tang mien.
+// -----------------------------------------------------------------------------------------------
+
+enum TransportExpenseClaimStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum TransportExpenseClaimDecisionOutcome {
+  APPROVED
+  REJECTED
+}
+
+model TransportExpenseClaim {
+  id           String                      @id @default(cuid())
+  driverId     String
+  driver       TransportDriver             @relation(fields: [driverId], references: [id])
+  status       TransportExpenseClaimStatus @default(PENDING_REVIEW)
+  categoryCode String                      @db.VarChar(60)
+  /// SO LAI XE DE NGHI. Khong bao gio bi ghi de -- ke ca khi duyet it hon.
+  claimedAmount BigInt
+  /// SO DUOC DUYET. `NULL` cho toi khi co mot quyet dinh `APPROVED`.
+  approvedAmount BigInt?
+  currencyCode   String                    @default("VND") @db.VarChar(3)
+  businessDate   String                    @db.VarChar(10)
+  note            String?
+  /// Khoa duc trong kho tep -- cung quy uoc voi `TransportTripExpense.evidenceLocator`.
+  evidenceLocator String?
+
+  /// Ba tham chieu, DEU tuy chon, nhung phai co IT NHAT MOT (`CHECK`).
+  /// Chi `tripId` mo duong quyet toan: duong tien cua T3 di qua mot CHUYEN.
+  tripId String?
+  trip   TransportTrip?       @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  runId  String?
+  run    TransportVehicleRun? @relation(fields: [runId], references: [id], onDelete: Restrict)
+  legId  String?
+  leg    TransportRunLeg?     @relation(fields: [legId], references: [id], onDelete: Restrict)
+
+  submittedBy String
+  submittedAt DateTime  @default(now())
+  decidedAt   DateTime?
+
+  /// Khoan chi da ghi vao gia thanh. CHI co khi da duyet, va UNIQUE: mot de nghi sinh nhieu nhat
+  /// MOT khoan chi. Neu khong unique thi mot lan bam duyet hai lan se tinh tien hai lan.
+  settlementExpenseId String?               @unique
+  settlementExpense   TransportTripExpense? @relation(fields: [settlementExpenseId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  decisions TransportExpenseClaimDecision[]
+
+  @@index([driverId, status])
+  @@index([status, businessDate])
+  @@index([tripId])
+  @@index([runId])
+  @@index([legId])
+}
+
+/// LICH SU QUYET DINH -- chi ghi them.
+///
+/// Khong co duong sua hay xoa nao o tang kho, cung ly do voi `TransportDriverFundEntry`: mot lan
+/// duyet la mot su kien da xay ra. Doi y ve sau la mot quyet dinh MOI (`sequence` ke tiep), khong
+/// phai mot lan ghi de len quyet dinh cu -- ghi de la xoa mat dau ai duyet cai gi, luc nao.
+model TransportExpenseClaimDecision {
+  id       String                @id @default(cuid())
+  claimId  String
+  claim    TransportExpenseClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  /// Bat dau tu 1, duy nhat trong mot de nghi. Cho phep lich su nhieu buoc khi `Q-04` mo them.
+  sequence Int
+  outcome  TransportExpenseClaimDecisionOutcome
+  /// Chi co nghia khi `outcome = APPROVED` (`CHECK`).
+  approvedAmount BigInt?
+  /// MA co kieu, khong phai cau chu -- de loc duoc. Vd `EVIDENCE_SUFFICIENT`, `NO_EVIDENCE`.
+  reasonCode String   @db.VarChar(60)
+  note       String?
+  decidedBy  String
+  decidedAt  DateTime @default(now())
+
+  @@unique([claimId, sequence])
+  @@index([claimId])
+  @@index([decidedBy])
 }
