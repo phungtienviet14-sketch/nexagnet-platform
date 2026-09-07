@@ -78,6 +78,31 @@ export const registerGeofenceSchema = z
   })
   .strict();
 
+/**
+ * CHUNG CU VAN HANH — nhan `observationId`, KHONG nhan toa do.
+ *
+ * Mot chung cu tro toi mot ban dinh vi DA GHI qua duong ingest (da kiem bien, da co `receivedAt`
+ * cua may chu, da cham rui ro, da thuoc mot phien cua dung lai xe do). Nhan toa do tho o day se
+ * vong qua tat ca nhung dieu do.
+ *
+ * `captureModes` di kem THEO THU TU cua mang tep tai len. Thieu thi `UNKNOWN` — khong bao gio
+ * mac dinh `LIVE_CAMERA`, vi mac dinh cao la tu nang muc tin cay cua mot thu khong ai khai.
+ */
+export const recordProofSchema = z
+  .object({
+    kind: z.enum(['START', 'DELIVERY']),
+    tripId: z.string().min(1),
+    observationId: z.string().min(1),
+    clientEventId: z.string().min(1).max(200),
+    note: z.string().max(500).nullish(),
+    captureModes: z
+      .array(z.enum(['LIVE_CAMERA', 'GALLERY', 'UNKNOWN']))
+      .max(6)
+      .optional(),
+  })
+  .strict();
+
+export type RecordProofBody = z.infer<typeof recordProofSchema>;
 export type OpenTrackingSessionBody = z.infer<typeof openTrackingSessionSchema>;
 export type ReportObservationBody = z.infer<typeof reportObservationSchema>;
 export type ReportObservationBatchBody = z.infer<typeof reportObservationBatchSchema>;

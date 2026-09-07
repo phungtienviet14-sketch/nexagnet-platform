@@ -108,6 +108,13 @@ export class PrismaTrackingRepository extends TrackingRepository {
     return row ? toObservation(row) : null;
   }
 
+  async findObservationById(observationId: string): Promise<LocationObservation | null> {
+    const row = await this.prisma.transportLocationObservation.findUnique({
+      where: { id: observationId },
+    });
+    return row ? toObservation(row) : null;
+  }
+
   async appendObservation(input: AppendObservationInput): Promise<LocationObservation> {
     // Mot giao dich, hai buoc: ghi ban dinh vi va tang bo dem cua phien. Tach ra se de lai nhung
     // phien co `observationCount` khong khop so hang that — mot con so sai trong khung nhin tom
