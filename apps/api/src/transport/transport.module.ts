@@ -5,6 +5,14 @@ import { PrismaAuditLogRepository } from '../audit/prisma-audit-log.repository.j
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import { PrismaModule } from '../config/prisma.module.js';
 import { PrismaService } from '../config/prisma.service.js';
+import { CounterpartySubjectPort } from './counterparty/counterparty-subject.port.js';
+import {
+  CounterpartyRepository,
+  InMemoryCounterpartyRepository,
+} from './counterparty/counterparty.repository.js';
+import { CounterpartyService } from './counterparty/counterparty.service.js';
+import { FleetCounterpartySubjectAdapter } from './counterparty/fleet-counterparty-subject.adapter.js';
+import { PrismaCounterpartyRepository } from './counterparty/prisma-counterparty.repository.js';
 import { FleetRepository, InMemoryFleetRepository } from './fleet/fleet.repository.js';
 import { FleetService } from './fleet/fleet.service.js';
 import { PrismaFleetRepository } from './fleet/prisma-fleet.repository.js';
@@ -60,9 +68,29 @@ import { TripService } from './trips/trip.service.js';
           : new InMemoryTripRepository(),
       inject: [PrismaService],
     },
+    {
+      provide: CounterpartyRepository,
+      useFactory: (prisma: PrismaService): CounterpartyRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaCounterpartyRepository(prisma)
+          : new InMemoryCounterpartyRepository(),
+      inject: [PrismaService],
+    },
+    /*
+     * CONG kiem chu the — hien thuc duy nhat hom nay dung dung nhung danh muc cua chinh
+     * `transport-core`. Mot loai chu the thuoc capability khac se dang ky adapter cua rieng no o
+     * capability do, khong them mot canh phu thuoc nao vao day.
+     */
+    {
+      provide: CounterpartySubjectPort,
+      useFactory: (fleet: FleetRepository): CounterpartySubjectPort =>
+        new FleetCounterpartySubjectAdapter(fleet),
+      inject: [FleetRepository],
+    },
     { provide: TRANSPORT_CORE_POLICY, useFactory: tenantTransportCorePolicy },
     FleetService,
     TripService,
+    CounterpartyService,
     TransportActionGuard,
   ],
   /*
@@ -75,6 +103,7 @@ import { TripService } from './trips/trip.service.js';
   exports: [
     FleetService,
     TripService,
+    CounterpartyService,
     TransportActionGuard,
     FleetRepository,
     TripRepository,

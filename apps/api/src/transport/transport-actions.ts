@@ -27,6 +27,15 @@ export const TRANSPORT_ACTIONS = [
   'transport.customer.manage',
   'transport.partner.read',
   'transport.partner.manage',
+  /**
+   * DANH TINH PHAP NHAN (R1-A, #230) — doc va quan ly xuong song noi nhieu ban ghi chuyen mon
+   * ve mot doanh nghiep.
+   *
+   * Hai ma chu khong mot: doc danh tinh la viec hang ngay cua bat ky ai xem cong no; NOI hai ban
+   * ghi lai voi nhau doi mot bao cao gop theo phap nhan, nen no phai la mot quyen rieng.
+   */
+  'transport.counterparty.read',
+  'transport.counterparty.manage',
   'transport.trip.read',
   'transport.trip.create',
   'transport.trip.update',

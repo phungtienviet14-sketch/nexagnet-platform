@@ -134,6 +134,7 @@ import { OperationalAlertsController } from './transport/asset-compliance/operat
 import { PayrollController } from './transport/workforce/payroll.controller.js';
 import { DriverPayslipsController } from './transport/workforce/driver-payslips.controller.js';
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
+import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
@@ -229,6 +230,8 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('notifications', NotificationsController),
   owned('notifications', SettingsNotificationsController),
   owned('transport-core', FleetController),
+  // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
+  owned('transport-core', CounterpartyController),
   owned('transport-core', TripsController),
   // BE MAT LAI XE — route rieng, khong phai mot nhanh `if` trong `TripsController` (`GD-23`).
   // Den cung `transport-core` va bien mat cung no.

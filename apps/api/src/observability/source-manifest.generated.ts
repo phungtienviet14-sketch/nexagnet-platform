@@ -296,6 +296,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
       "line": 124
     },
+    "transport.counterparty.manage": {
+      "filePath": "apps/api/src/transport/counterparty/counterparty.controller.ts"
+    },
+    "transport.counterparty.read": {
+      "filePath": "apps/api/src/transport/counterparty/counterparty.controller.ts"
+    },
     "transport.customer.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
@@ -564,6 +570,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 548
+    },
+    "counterparty.link|*": {
+      "functionName": "CounterpartyService.denyLink",
+      "filePath": "apps/api/src/transport/counterparty/counterparty.service.ts",
+      "line": 195
+    },
+    "counterparty.link|LINK_CREATED": {
+      "functionName": "CounterpartyService.link",
+      "filePath": "apps/api/src/transport/counterparty/counterparty.service.ts",
+      "line": 126
+    },
+    "counterparty.link|LINK_UNCHANGED": {
+      "functionName": "CounterpartyService.link",
+      "filePath": "apps/api/src/transport/counterparty/counterparty.service.ts",
+      "line": 101
+    },
+    "counterparty.unlink|*": {
+      "functionName": "CounterpartyService.unlink",
+      "filePath": "apps/api/src/transport/counterparty/counterparty.service.ts",
+      "line": 148
     },
     "driver.self_expense_scope|*": {
       "functionName": "CostingReadService.selfTripExpenseEvidence",
