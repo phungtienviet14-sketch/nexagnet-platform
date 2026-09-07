@@ -50,6 +50,8 @@ export const TRANSPORT_QUERY_KEYS = {
   expenseClaims: ['transport', 'expense-claims'],
   /** Lane G — MOT khoa cho CA bang: mot lan goi, mot khung nhin. */
   controlTower: ['transport', 'control-tower'],
+  /** Lane G — sau con so tai chinh, cung mot lan doc. */
+  financeSummary: ['transport', 'finance', 'summary'],
 } as const;
 
 /** Nang luc + hanh dong deu phai dat truoc khi ban mot yeu cau. */
@@ -88,6 +90,20 @@ export function useControlTower(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.controlTower,
     queryFn: () => transportApi.controlTower.view(),
     enabled: allowed(input, 'transport-core', 'transport.control_tower.read'),
+  });
+}
+
+/**
+ * BANG TAI CHINH — mot `useQuery` cho ca sau con so (Lane G, #244 G5).
+ *
+ * Dung `transport.settlement.report.read`: bang khong phoi mot su that nao ma quyen do chua cho
+ * xem, nen no khong can mot ma quyen thu hai. Xem khoi chu thich cua `FinanceController`.
+ */
+export function useFinanceSummary(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.financeSummary,
+    queryFn: () => transportApi.finance.summary(),
+    enabled: allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
   });
 }
 
