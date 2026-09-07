@@ -51,6 +51,10 @@ export const TRANSPORT_QUERY_KEYS = {
   orders: ['transport', 'orders'],
   runs: ['transport', 'runs'],
   expenseClaims: ['transport', 'expense-claims'],
+  /** Lane G — MOT khoa cho CA bang: mot lan goi, mot khung nhin. */
+  controlTower: ['transport', 'control-tower'],
+  /** Lane G — sau con so tai chinh, cung mot lan doc. */
+  financeSummary: ['transport', 'finance', 'summary'],
 } as const;
 
 /** Nang luc + hanh dong deu phai dat truoc khi ban mot yeu cau. */
@@ -70,6 +74,39 @@ export function useTrips(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.trips,
     queryFn: () => transportApi.trips.list(),
     enabled: allowed(input, 'transport-core', 'transport.trip.read'),
+  });
+}
+
+/**
+ * THAP DIEU HANH — mot `useQuery` cho CA bang (Lane G, #244).
+ *
+ * Khong tach lam ba hook cho bang/hang viec/doi xe du tep nay von theo luat "mot nguon mot hook":
+ * luat do ton tai de mot nguon chet khong lam trang mot nguon con song, con o day CA BA den tu MOT
+ * lan goi va may chu da tu xu ly viec mot nguon vang hay hong (`unavailableSources`). Tach ra chi
+ * tao them ba anh chup lech nhau.
+ *
+ * `transport-core` la capability duy nhat can co: bang song trong do, va ba nguon con lai vang mat
+ * mot cach co cong bo chu khong lam hong lan goi.
+ */
+export function useControlTower(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.controlTower,
+    queryFn: () => transportApi.controlTower.view(),
+    enabled: allowed(input, 'transport-core', 'transport.control_tower.read'),
+  });
+}
+
+/**
+ * BANG TAI CHINH — mot `useQuery` cho ca sau con so (Lane G, #244 G5).
+ *
+ * Dung `transport.settlement.report.read`: bang khong phoi mot su that nao ma quyen do chua cho
+ * xem, nen no khong can mot ma quyen thu hai. Xem khoi chu thich cua `FinanceController`.
+ */
+export function useFinanceSummary(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.financeSummary,
+    queryFn: () => transportApi.finance.summary(),
+    enabled: allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
   });
 }
 

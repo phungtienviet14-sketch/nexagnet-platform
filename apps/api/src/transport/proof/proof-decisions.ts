@@ -206,9 +206,35 @@ export const PROOF_WITHDRAW_REASONS = [
 ] as const;
 export type ProofWithdrawReason = (typeof PROOF_WITHDRAW_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * proof.challenge — phat va tieu mot loi thach thuc cua may chu
+ * ------------------------------------------------------------------ */
+export const PROOF_CHALLENGE_REASONS = [
+  'CHALLENGE_ISSUED',
+  /** Loi thach thuc hop le va vua duoc tieu — chung cu di kem duoc danh dau da kiem. */
+  'CHALLENGE_VERIFIED',
+  /**
+   * Chung cu KHONG kem loi thach thuc. `degraded`, khong phai `denied`.
+   *
+   * Duong ngoai tuyen khong xin duoc `nonce` — xin mot cai doi mot lan khu hoi, ma mot lai xe
+   * trong vung lom thi khong co. Ban ghi VAN duoc nhan; no chi khong duoc huong muc tin cay cua
+   * duong co `nonce`. Cung khuon voi anh chup trong ung dung ⟂ anh lay tu thu vien.
+   */
+  'CHALLENGE_ABSENT_OFFLINE_PATH',
+  'CHALLENGE_NOT_FOUND',
+  /** Qua `expiresAt`. Day dung la phan "bounded" ma #235 doi phai chung minh. */
+  'CHALLENGE_EXPIRED',
+  /** Da tieu cho mot chung cu khac — chi muc duy nhat tren `nonce` cuong che dieu do. */
+  'CHALLENGE_ALREADY_USED',
+  /** Loi thach thuc do phat cho lai xe KHAC, hoac cho mot phien khac. */
+  'CHALLENGE_NOT_OWNED',
+] as const;
+export type ProofChallengeReason = (typeof PROOF_CHALLENGE_REASONS)[number];
+
 export type TransportProofDecisionReason =
   | ProofRecordReason
   | ProofWithdrawReason
+  | ProofChallengeReason
   | TrackingSessionOpenReason
   | TrackingSessionCloseReason
   | TrackingIngestReason
@@ -229,6 +255,7 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     'geofence.evaluate',
     'proof.record',
     'proof.withdraw',
+    'proof.challenge',
   ],
   labels: {
     SESSION_OPENED: 'Đã mở phiên bám vị trí',
@@ -289,6 +316,15 @@ export const TRANSPORT_PROOF_DECISIONS = defineDecisionVocabulary({
     PROOF_WITHDRAWN: 'Đã bìa mộ một chứng cứ — hàng ở lại, kèm người rút và lúc rút',
     PROOF_ALREADY_WITHDRAWN: 'Chứng cứ đã rút từ trước — không ghi đè người rút đầu tiên',
     PROOF_WITHDRAW_NOT_FOUND: 'Không tìm thấy chứng cứ cần rút',
+
+    CHALLENGE_ISSUED: 'Đã phát một lời thách thức cho lái xe',
+    CHALLENGE_VERIFIED: 'Chứng cứ kèm lời thách thức còn hạn — đã tiêu',
+    CHALLENGE_ABSENT_OFFLINE_PATH:
+      'Chứng cứ không kèm lời thách thức — đường ngoại tuyến, vẫn nhận, mức tin cậy thấp hơn',
+    CHALLENGE_NOT_FOUND: 'Không tìm thấy lời thách thức',
+    CHALLENGE_EXPIRED: 'Lời thách thức đã quá hạn',
+    CHALLENGE_ALREADY_USED: 'Lời thách thức đã được tiêu cho một chứng cứ khác',
+    CHALLENGE_NOT_OWNED: 'Lời thách thức đó phát cho lái xe hoặc phiên khác',
 
     HISTORY_READ_GRANTED: 'Được đọc lịch sử toạ độ thô',
     HISTORY_READ_DENIED_NEED_TO_KNOW: 'Vai này chỉ được xem tóm tắt, không xem đường đi chi tiết',

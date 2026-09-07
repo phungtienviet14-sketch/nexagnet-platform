@@ -29,6 +29,7 @@ import { canPerform, type TransportAction } from './transport-actions';
 
 export type TransportSectionId =
   | 'overview'
+  | 'control-tower'
   | 'trips'
   | 'movement'
   | 'fleet'
@@ -40,6 +41,7 @@ export type TransportSectionId =
   | 'payroll'
   | 'driver-settlement'
   | 'asset-ownership'
+  | 'finance'
   | 'margin'
   | 'ar-ap'
   | 'exports';
@@ -76,6 +78,20 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Chuyến đang chạy, đội xe, và những việc đang chờ người xử lý.',
     requiredCapabilities: [],
     requiredAction: 'transport.trip.read',
+  },
+  {
+    id: 'control-tower',
+    label: 'Bảng điều hành',
+    group: 'dispatch',
+    summary:
+      'Vòng chạy theo bảy cột của quy trình, đội xe đang ở đâu, và hàng việc đang chờ người xử lý.',
+    /**
+     * CHI `transport-core`. Ba nguồn còn lại (duyệt chi, nhiên liệu, cảnh báo) là TUỲ CHỌN ở tầng
+     * đọc: khách tắt thì bảng công bố `unavailableSources` chứ không biến mất. Khai thêm capability
+     * ở đây sẽ giấu cả bảng khỏi một khách vẫn dùng được phần lớn nó.
+     */
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.control_tower.read',
   },
   {
     id: 'trips',
@@ -180,6 +196,21 @@ export const TRANSPORT_SECTIONS = [
      */
     requiredCapabilities: ['transport-costing', 'transport-workforce'],
     requiredAction: 'transport.driver_settlement.read',
+  },
+  {
+    id: 'finance',
+    label: 'Bảng tài chính',
+    group: 'reports',
+    summary: 'Doanh thu, biên trực tiếp, và sáu dòng tiền giữ riêng — không cộng chung.',
+    /**
+     * KHONG mot ma quyen moi: bang doc chinh `arAging`/`apByCounterparty`/`directMarginRollup` cua
+     * bao cao quyet toan, roi bay chung canh nhau. Xem `FinanceController`.
+     *
+     * Cong `TX-07b` la TUY CHON o tang doc, nen o day chi khai `transport-settlement`: mot khach
+     * khong tinh luong van co bang, chi thieu hai o cuoi va bang noi ra dieu do.
+     */
+    requiredCapabilities: ['transport-settlement'],
+    requiredAction: 'transport.settlement.report.read',
   },
   {
     id: 'margin',

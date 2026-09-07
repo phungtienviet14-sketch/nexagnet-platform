@@ -34,6 +34,8 @@ import { AssetOwnershipView } from './views/AssetOwnershipView';
 import { FleetView } from './views/FleetView';
 import { FuelView } from './views/FuelView';
 import { StakeholderVehiclesView } from './views/StakeholderVehiclesView';
+import { ControlTowerView } from './views/ControlTowerView';
+import { FinanceView } from './views/FinanceView';
 import { OverviewView } from './views/OverviewView';
 import { TripsView } from './views/TripsView';
 
@@ -268,6 +270,10 @@ function SectionBody({
   switch (section) {
     case 'overview':
       return <OverviewView />;
+    case 'control-tower':
+      return <ControlTowerView />;
+    case 'finance':
+      return <FinanceView />;
     case 'trips':
       return (
         <TripsView

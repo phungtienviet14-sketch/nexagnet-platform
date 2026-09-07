@@ -489,7 +489,7 @@ Bảng này là **hợp đồng của sự trung thực**: cột cuối nói cá
 | GPS giả bằng app (không root) | `isMock()`; lệch với vị trí mạng | Không — chặn được, ghi cờ |
 | GPS giả có root / LSPosed | **Không có** tín hiệu phía client đáng tin | **Có** — chỉ đối chiếu chéo với GSHT (`F-07`) mới nói được |
 | Giả mạo tầng vô tuyến (SDR) | Bất thường AGC/C-N0; lệch GNSS ⟂ mạng | **Có** |
-| Phát lại ảnh/vị trí cũ | Nonce máy chủ + hạn dùng; `capturedAt` ⟂ `receivedAt`; hash nội dung | Một phần |
+| Phát lại ảnh/vị trí cũ | **as-built** (#235, `TransportProofChallenge`): nonce máy chủ dùng **một lần**, hạn `challengeTtlSeconds` = 300 s; `capturedAt` ⟂ `receivedAt` | Một phần — xem §4b |
 | Ảnh lấy từ thư viện thay vì chụp tại chỗ | Chụp trong app (không mở picker); EXIF; nonce | **Có** — không tuyệt đối |
 | Sửa đồng hồ máy | Máy chủ **chỉ tin `receivedAt`**; lệch quá ngưỡng thì gắn cờ | Không |
 | Gửi trùng khi offline | Khoá idempotency client + `correlationKey` unique **đã có sẵn ở miền** | Không |
@@ -501,6 +501,30 @@ Bảng này là **hợp đồng của sự trung thực**: cột cuối nói cá
 
 Ba dòng "**Có**" đầu bảng là lý do câu *"không bao giờ tuyên bố chống được GPS giả"* phải nằm trong
 hợp đồng, không phải trong ghi chú.
+
+### 4b. Lời thách thức máy chủ: ranh giới của nó, viết ra trước khi ai đó tin quá mức
+
+`POST /transport/me/proofs/challenge` phát một `nonce` 32 byte, **dùng một lần**, sống 300 giây.
+Chứng cứ đính kèm nó được ghi `challengeVerified = true`.
+
+**Nó chứng minh:** lần **gửi** chứng cứ xảy ra trong 300 giây kể từ một lần khứ hồi mà **máy chủ
+quan sát được**. Một chứng cứ lập sẵn từ hôm qua không mang được một `nonce` còn hạn, vì `nonce` đó
+chưa tồn tại vào lúc đó.
+
+**Nó KHÔNG chứng minh:** rằng tấm ảnh hay bản định vị được **chụp** đúng lúc đó. Một máy khách có
+thể xin một `nonce` rồi đính kèm một tấm ảnh cũ. Kết hợp với `observationId` (phải thuộc phiên của
+chính lái xe, mang `receivedAt` của máy chủ) thì khoảng có thể nói dối bị **thu hẹp** — không **bị
+đóng**.
+
+**Đường ngoại tuyến cố ý không có nó.** Xin một `nonce` đòi một lần khứ hồi, mà một lái xe trong
+vùng lõm thì không có. Bắt buộc sẽ làm mất bằng chứng ở đúng đoạn đường bằng chứng có giá trị nhất.
+Chứng cứ không kèm `nonce` **vẫn được ghi**, với `challengeVerified = false`, và khung nhìn vận hành
+bày ra sự khác biệt — cùng khuôn với ảnh chụp trong ứng dụng ⟂ ảnh lấy từ thư viện.
+
+Bốn cửa từ chối, mỗi cửa một mã: `CHALLENGE_NOT_FOUND` · `CHALLENGE_EXPIRED` ·
+`CHALLENGE_ALREADY_USED` · `CHALLENGE_NOT_OWNED`. Gộp thành một `boolean` sẽ làm người trực không
+phân biệt được *"máy khách gửi một chuỗi bịa"* với *"lái xe bấm chậm quá năm phút"* với *"một bản
+ghi bị phát lại"*.
 
 ---
 

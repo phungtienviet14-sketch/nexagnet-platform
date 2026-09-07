@@ -264,6 +264,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/settings/price-periods.service.ts",
       "line": 397
     },
+    "proof.challenge": {
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
+    },
     "proof.withdraw": {
       "functionName": "OperationalProofService.withdraw",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
@@ -363,6 +366,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.compliance.document.read": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
+    },
+    "transport.control_tower.read": {
+      "functionName": "ControlTowerController.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower.controller.ts",
+      "line": 43
     },
     "transport.costing.driver_fund.adjust": {
       "functionName": "DriverFundController.adjust",
@@ -617,9 +625,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts",
       "line": 121
     },
-    "transport.settlement.report.read": {
-      "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts"
-    },
     "transport.stakeholder.self.vehicle.read": {
       "filePath": "apps/api/src/transport/asset-ownership/stakeholder-vehicles.controller.ts"
     },
@@ -767,6 +772,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceRegistryService.openConflict",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
       "line": 644
+    },
+    "control_tower.board_projection|BOARD_CHECKPOINT_COLUMNS_UNAVAILABLE": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 84
+    },
+    "control_tower.compile|CONTROL_TOWER_COMPILED": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 92
+    },
+    "control_tower.compile|CONTROL_TOWER_SOURCE_FAILED": {
+      "functionName": "ControlTowerReadService.guard",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 253
+    },
+    "control_tower.compile|CONTROL_TOWER_SOURCE_UNAVAILABLE": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 75
     },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
@@ -995,6 +1020,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceReadinessService.canUseFact",
       "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
       "line": 131
+    },
+    "finance.summary|FINANCE_CURRENCY_MIXED": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 73
+    },
+    "finance.summary|FINANCE_SOURCE_FAILED": {
+      "functionName": "FinanceReadService.readDriverBalances",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 121
+    },
+    "finance.summary|FINANCE_SOURCE_UNAVAILABLE": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 83
+    },
+    "finance.summary|FINANCE_SUMMARY_COMPILED": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 92
     },
     "fleet.effective_vehicle_state|*": {
       "functionName": "AssetComplianceReadService.emitStateDecision",
@@ -1362,10 +1407,15 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
       "line": 291
     },
+    "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
+      "functionName": "OperationalProofService.record",
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
+      "line": 209
+    },
     "proof.record|PROOF_PHOTO_NOT_LIVE_CAMERA": {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
-      "line": 153
+      "line": 230
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",

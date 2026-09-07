@@ -5,6 +5,7 @@ import { isUniqueViolationOn } from '../storage-conflict.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
 import { PROOF_OBSERVATION_ONCE } from './operational-proof.repository.js';
 import { PrismaOperationalProofRepository } from './prisma-operational-proof.repository.js';
+import { PrismaProofChallengeRepository } from './prisma-proof-challenge.repository.js';
 import { PrismaTrackingRepository } from './prisma-tracking.repository.js';
 import {
   ACTIVE_TRACKING_SESSION,
@@ -53,6 +54,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Bat bien luu tru cua transpor
       where: { observation: { session: { trip: { code: TRIP_CODE } } } },
     });
     await prisma.transportLocationObservation.deleteMany({
+      where: { session: { trip: { code: TRIP_CODE } } },
+    });
+    // TRUOC phien: `TransportProofChallenge.session` dung `onDelete: Restrict`.
+    await prisma.transportProofChallenge.deleteMany({
       where: { session: { trip: { code: TRIP_CODE } } },
     });
     await prisma.transportTrackingSession.deleteMany({ where: { trip: { code: TRIP_CODE } } });
@@ -318,6 +323,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const prisma = new PrismaService();
     const tracking = new PrismaTrackingRepository(prisma);
     const proofs = new PrismaOperationalProofRepository(prisma);
+    const challenges = new PrismaProofChallengeRepository(prisma);
     const fleet = new PrismaFleetRepository(prisma);
     const trips = new PrismaTripRepository(prisma);
 
@@ -339,6 +345,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         where: { observation: { session: { trip: { code: TRIP_CODE } } } },
       });
       await prisma.transportLocationObservation.deleteMany({
+        where: { session: { trip: { code: TRIP_CODE } } },
+      });
+      // TRUOC phien: `TransportProofChallenge.session` dung `onDelete: Restrict`.
+      await prisma.transportProofChallenge.deleteMany({
         where: { session: { trip: { code: TRIP_CODE } } },
       });
       await prisma.transportTrackingSession.deleteMany({ where: { trip: { code: TRIP_CODE } } });
@@ -415,6 +425,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         businessDate: '2026-09-07',
         note: null,
         recordedBy: 'itwdraw',
+        challengeVerified: false,
         photos: [
           {
             locator: `itwdraw/${sequence}.jpg`,
@@ -491,6 +502,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
           businessDate: '2026-09-07',
           note: null,
           recordedBy: 'itwdraw',
+          challengeVerified: false,
           photos: [
             {
               locator: 'itwdraw/tai-che.jpg',
@@ -512,6 +524,67 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await expect(
         prisma.$executeRaw`UPDATE "TransportOperationalProof" SET "withdrawnAt" = NOW() WHERE "id" = ${proof.id}`,
       ).rejects.toThrow();
+    });
+
+    /* ---------------------------------------------------------------- *
+     * PROOF-112 — loi thach thuc tren Postgres THAT
+     * ---------------------------------------------------------------- */
+
+    const issueChallenge = async (nonce: string) =>
+      challenges.issue({
+        nonce,
+        driverId,
+        sessionId,
+        issuedAt: new Date('2026-09-09T03:00:00Z'),
+        expiresAt: new Date('2026-09-09T03:05:00Z'),
+      });
+
+    it('TIEU MOT LAN — lan thu hai sua 0 hang va tra `null`', async () => {
+      await issueChallenge('itwdraw-nonce-race');
+
+      const first = await challenges.consume(
+        'itwdraw-nonce-race',
+        new Date('2026-09-09T03:01:00Z'),
+        'proof-mot',
+      );
+      const second = await challenges.consume(
+        'itwdraw-nonce-race',
+        new Date('2026-09-09T03:02:00Z'),
+        'proof-hai',
+      );
+
+      expect(first?.consumedByProofId).toBe('proof-mot');
+      // Neu day tra ve mot ban ghi, mot loi thach thuc phuc vu duoc HAI chung cu. Cong nay nam o
+      // `where consumedAt: null` cua `updateMany`, khong o mot lenh `if` trong dich vu.
+      expect(second).toBeNull();
+    });
+
+    it('`nonce` la DUY NHAT o tang DB, khong chi o tang dich vu', async () => {
+      await issueChallenge('itwdraw-nonce-unique');
+      await expect(issueChallenge('itwdraw-nonce-unique')).rejects.toThrow();
+    });
+
+    it('`consumedAt` KHONG kem `consumedByProofId` bi CHECK tu choi', async () => {
+      const challenge = await issueChallenge('itwdraw-nonce-shape');
+      await expect(
+        prisma.$executeRaw`UPDATE "TransportProofChallenge" SET "consumedAt" = NOW() WHERE "id" = ${challenge.id}`,
+      ).rejects.toThrow();
+    });
+
+    it('han o TRUOC luc phat bi CHECK tu choi — mot hang vo nghia con te hon mot loi', async () => {
+      await expect(
+        challenges.issue({
+          nonce: 'itwdraw-nonce-nguoc',
+          driverId,
+          sessionId,
+          issuedAt: new Date('2026-09-09T03:05:00Z'),
+          expiresAt: new Date('2026-09-09T03:00:00Z'),
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('`nonce` rong bi chan — no lam ca co che vo hieu', async () => {
+      await expect(issueChallenge('   ')).rejects.toThrow();
     });
   },
 );

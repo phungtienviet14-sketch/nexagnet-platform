@@ -10,6 +10,8 @@ import type {
   ComplianceDocument,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ControlTowerView,
+  FinanceSummaryView,
   ComplianceSubjectKind,
   CorrelatedPosting,
   DirectMargin,
@@ -1083,5 +1085,27 @@ export const transportApi = {
       input: { reasonCode: string; note?: string | null },
     ): Promise<ExpenseClaimDetail> =>
       send('POST', `/transport/expense-claims/${encodeURIComponent(id)}/reject`, input),
+  },
+
+  /**
+   * THAP DIEU HANH (Lane G, #244) — MOT lan goi, MOT khung nhin.
+   *
+   * `get` chu khong `getList`: may chu tra ve mot DOI TUONG (`ControlTowerView`), khong phai mot
+   * phong bi bao quanh mot mang. Xem `control-tower.controller.ts` — mot route `@Get()` duy nhat,
+   * va do la co y: ba lan goi cho `/board`, `/queue`, `/fleet` se cho ra ba anh chup o ba khoanh
+   * khac khac nhau, roi man hinh se tu mau thuan voi chinh no.
+   */
+  controlTower: {
+    view: (): Promise<ControlTowerView> => get('/transport/control-tower'),
+  },
+
+  /**
+   * BANG TAI CHINH (Lane G, #244 G5) — mot DOI TUONG, nen `get` chu khong `getList`.
+   *
+   * Khong co bien the `?combined=true`: `SettlementBuckets` co y khong co truong tong, va mot tham
+   * so gop se dung lai chinh cai cong ma `GD-15` da dong o tang duoi.
+   */
+  finance: {
+    summary: (): Promise<FinanceSummaryView> => get('/transport/finance/summary'),
   },
 } as const;

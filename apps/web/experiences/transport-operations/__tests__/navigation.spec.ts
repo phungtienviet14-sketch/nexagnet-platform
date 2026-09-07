@@ -128,6 +128,7 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
   it('Giam doc thay moi muc van hanh khach da bat', () => {
     expect(idsOf(director())).toEqual([
       'overview',
+      'control-tower',
       'trips',
       'movement',
       'fleet',
@@ -139,6 +140,7 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
       // bat van tai, khong nhu `maintenance`/`payroll` doi them capability rieng. Quyen so huu la
       // mot su that ve chinh chiec xe, khong phai mot lop nghiep vu ban them.
       'asset-ownership',
+      'finance',
       'margin',
       'ar-ap',
       'exports',
