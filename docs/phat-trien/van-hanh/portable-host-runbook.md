@@ -56,7 +56,7 @@ Bí mật bắt buộc cho hồ sơ giá thấp (Flowise **off**, parser **deeps
 | `zalo-<stack>-api-key` | API key máy-tới-máy |
 | `zalo-<stack>-operator-password` | tài khoản Sale đầu tiên |
 | `restic-repo-password` | **mật khẩu kho backup** |
-| `restic-repository` | vd `s3:https://s3.us-west-004.backblazeb2.com/<bucket>/<stack>` |
+| `restic-repository` | vd `s3:https://<account>.r2.cloudflarestorage.com/<bucket>/<stack>` |
 | `restic-s3-access-key-id`, `restic-s3-secret-access-key` | khoá của kho offsite |
 
 Bật Flowise thì cần thêm 8 bí mật `zalo-<stack>-flowise-*`; dùng Claude cho agent tư vấn thì thêm
@@ -196,8 +196,12 @@ chạy timer 4 lần/ngày; khối lượng đo được (dump ~285 KB) khiến 
 
 ## H.1 Tiền kiểm
 
-- [ ] Chọn nhà cung cấp và mở máy chủ (khuyến nghị: iNET Turbo Cloud Server 4).
-- [ ] Mở tài khoản kho offsite ở **nhà cung cấp khác** (khuyến nghị: Backblaze B2).
+- [ ] Chọn nhà cung cấp và mở máy chủ (khuyến nghị: **Long Vân C2** — hỏi trước hai câu ở
+      §4 của tài liệu kiến trúc: VAT đã gồm chưa, và 285.000 ₫ có mua theo tháng được không.
+      Không thoả đáng thì lấy **iNET Turbo Cloud Server 4**).
+- [ ] Mở tài khoản kho offsite ở **nhà cung cấp khác** (khuyến nghị: **Cloudflare R2** — egress
+      $0 và có hiện diện gần Việt Nam; Backblaze B2 rẻ hơn nhưng **không có vùng APAC**, nên
+      restore là xuyên Thái Bình Dương).
 - [ ] Chạy `install-host.sh`, dựng stack **rỗng**, `restore.sh` **đạt** trên máy chủ mới.
 - [ ] Đối chiếu phiên bản PostgreSQL nguồn và đích (hiện tại `postgres:16-alpine`).
 - [ ] Xác nhận `pricePeriod.validMonth` của tháng cutover đang `active` — sang tháng mới mà chưa gia

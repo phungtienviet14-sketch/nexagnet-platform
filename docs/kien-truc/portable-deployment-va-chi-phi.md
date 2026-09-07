@@ -12,8 +12,8 @@
 | Ultty thật sự cần bao nhiêu? | **0,06 vCPU trung bình**, **RAM đỉnh 1,55 GB** (có Flowise) / **0,55 GB** (không Flowise), **~88 MB** dữ liệu nghiệp vụ |
 | 4 GB có đủ không? | **Có**, dư ~1,85 GB kể cả khi giữ Flowise |
 | 8 GB có cần không? | **Không**, cho riêng Ultty |
-| Có phương án ≤500k/tháng không? | **Có** — 350.900–367.323 ₫/tháng all-in, xem §4 |
-| Backup offsite tốn bao nhiêu? | 10 GB: **0 ₫** · 50 GB: **7.299 ₫** · 100 GB: **16.423 ₫** (Backblaze B2) |
+| Có phương án ≤500k/tháng không? | **Có, ba phương án** — rẻ nhất **285.000–313.500 ₫**/tháng all-in, xem §4 |
+| Backup offsite tốn bao nhiêu? | 10 GB **0 ₫** · 50 GB **7.297 ₫** · 100 GB **16.419 ₫** (B2); R2 **0 / 15.750 / 35.438 ₫** |
 | Restore từ số 0 mất bao lâu? | **13 giây** cho CSDL (đo thật, §5) |
 | Deploy được không cần GCP? | **Được** — đã boot full stack trên Ubuntu 24.04 sạch, §5 |
 
@@ -140,97 +140,126 @@ bucket, một miền sự cố.
 
 ## 3. Nghiên cứu thị trường — giá đọc từ trang chính thức, 07/09/2026
 
-**Tỷ giá** (Vietcombank, bảng ngày 07/09/2026, cập nhật 06/09/2026 23:00 +07, đối chiếu khớp giữa
-`portal.vietcombank.com.vn/.../pXML.aspx?b=10` và `vietcombank.com.vn/api/exchangerates`):
-**USD bán ra = 26.255 ₫** · **EUR bán ra = 31.071,21 ₫**.
+**Tỷ giá** — Vietcombank, **bảng thứ Hai 07/09/2026 mở lúc 08:07:06 +07**, đọc từ
+`vietcombank.com.vn/api/exchangerates?date=2026-09-07`:
+**USD bán ra 26.250 ₫** · **EUR bán ra 31.059,91 ₫**.
 
-### 3.1 Máy chủ, mục tiêu 2 vCPU / 4 GB
+> Một lần đọc sớm hơn cùng điểm cuối trả **26.255 / 31.071,21** đóng dấu `2026-09-06T23:00` — đó là
+> **bản chuyển tiếp cuối tuần của thứ Sáu 04/09**, bị thay khi bảng thứ Hai mở. Chênh 0,02 % nên mọi
+> tổng dưới đây không đổi quá vài đồng, nhưng con số đúng là **26.250**.
+> SBV: tỷ giá trung tâm 25.605 ₫ **của ngày 05/09** (368/TB-NHNN) — không xác nhận được bản 07/09.
 
-| Nhà cung cấp · gói | Vị trí | Đĩa | Băng thông | IPv4 | Giá/tháng | Quy đổi ₫ | VAT |
-|---|---|---|---|---|---|---|---|
-| **iNET · Turbo Cloud Server 4** | HN/HCM | 40 GB **NVMe** | 300 Mbps, không giới hạn lưu lượng | kèm | **319.000 ₫** | 319.000 | chưa gồm |
-| iNET · Cloud Server Linux 4 | HN/HCM | 60 GB SSD | 200 Mbps | kèm | 299.000 ₫ | 299.000 | chưa gồm |
-| Nhân Hoà · NVMe VPS C | VN (DC Viettel/FPT) | 55 GB NVMe | — | kèm | 321.000 ₫ (3 core/4 GB) | 321.000 | không nêu |
-| Viettel IDC · CS1 | Bắc/Nam | **20 GB** SSD | 300 Mbps | kèm | 614.000 ₫ | 614.000 | chưa gồm |
-| Mắt Bão · CS4-Linux | HCM | 40 GB SSD Enterprise | — | kèm | 819.000 ₫ | 819.000 | chưa gồm, tối thiểu 3 tháng |
-| OVHcloud · VPS-1 | **Singapore** | 40 GB NVMe | **500 GB rồi bóp còn 10 Mbps** | kèm | từ S$5,78 (~US$4,54) | ~119.200 | chưa gồm GST |
-| Hetzner · CX23 | **chỉ EU** | 40 GB NVMe | 20 TB | +€0,50 | €5,49 + 0,50 | **186.117** | chưa gồm |
-| Hetzner · CPX22 | Singapore | 80 GB NVMe | **1 TB** | +€0,50 | €26,49 + 0,50 | 838.612 | chưa gồm |
-| Linode/Akamai · 4 GB | Singapore (đã xác nhận không phụ thu vùng) | 80 GB | 4 TB | kèm | US$24,00 | 630.120 | chưa gồm |
-| Vultr · High Perf 2c/4GB | Singapore | 100 GB NVMe | 5 TB | kèm | US$24,00 | 630.120 | chưa gồm |
-| DigitalOcean · `s-2vcpu-4gb` | SGP1 | 80 GiB SSD | 4 TiB | kèm | US$24,00 | 630.120 | chưa gồm |
-| AWS Lightsail 4 GB | Singapore | 80 GB SSD | 4 TB | kèm | US$24,00 | 630.120 | chưa gồm |
-| **GCP `e2-medium` (baseline)** | asia-southeast1 | +$0,11/GiB | tính riêng | +$3,65 | $30,17 + đĩa + IP | **≥1.032.300** | chưa gồm |
-| **GCP `e2-standard-2` + 200 GB + IP (hiện trạng)** | asia-southeast1 | 200 GB pd-balanced | tính riêng | $3,65 | $86,00 | **2.257.930** | chưa gồm |
+### 3.1 Máy chủ Việt Nam, mục tiêu 2 vCPU / 4 GB
 
-Khách hàng tự sở hữu máy chủ (on-prem): chi phí phần cứng một lần + điện/mạng; không định giá được
-ở đây, nhưng `deploy/portable/` hỗ trợ đường này (§5) — đó chính là mục tiêu kiến trúc thứ hai.
-
-### 3.2 Lưu trữ offsite (nhà cung cấp KHÁC máy chủ chính)
-
-| Nhà cung cấp | Đơn giá | 10 GB | 50 GB | 100 GB | Tối thiểu lưu | Egress |
+| Nhà cung cấp · gói | Vị trí | Đĩa | Băng thông | IPv4 | Giá/tháng | VAT |
 |---|---|---|---|---|---|---|
-| **Backblaze B2** | $6,95/TB/th = $0,00695/GB | **0 ₫** (10 GB đầu miễn phí) | **7.299 ₫** | **16.423 ₫** | **không có** | miễn phí tới 3× dung lượng lưu |
-| Cloudflare R2 | $0,015/GB | 0 ₫ (10 GB free) | 15.753 ₫ | 35.444 ₫ | không (hạng Standard) | **miễn phí hoàn toàn** |
-| Hetzner Storage Box BX11 | €3,20 cho 1 TB | 99.428 ₫ | 99.428 ₫ | 99.428 ₫ | không | không giới hạn |
-| Wasabi | $7,99/TB | 209.777 ₫ | 209.777 ₫ | 209.777 ₫ | **90 ngày** | theo fair-use |
-| GCS Standard (asia-southeast1) | $0,020/GiB | 5.251 ₫ | 26.255 ₫ | 52.510 ₫ | không | **$0,12/GiB** |
-| AWS S3 Standard (ap-southeast-1) | $0,025/GB | 6.564 ₫ | 32.819 ₫ | 65.638 ₫ | không | $0,12/GB |
+| **Long Vân · C2** | HCM (tự sở hữu toà nhà) | 50 GB NVMe | 200 Mb/s | kèm + IPv6 | **285.000 ₫** (giá gia hạn) | **không nêu** |
+| **VNSO · VCloud-04** | HCM + HN | 60 GB NVMe | 200 Mbps nội / **10 Mbps quốc tế** | +100k/IP | **280.000 ₫** | chưa gồm |
+| **iNET · Turbo Cloud Server 4** | HN/HCM | 40 GB NVMe | 300 Mbps, không giới hạn | kèm | **319.000 ₫** | chưa gồm |
+| iNET · Cloud Server Linux 4 | HN/HCM | 60 GB SSD | 200 Mbps | kèm | 299.000 ₫ | chưa gồm |
+| Nhân Hoà · NVMe VPS C | VN (DC Viettel/FPT) | 55 GB NVMe | — | kèm | 321.000 ₫ (3 core/4 GB) | không nêu |
+| Vietnix · VPS NVME 2 | VN "Tier 3", không nêu tên DC | 40 GB NVMe | 400 Mbps nội / 10 quốc tế | kèm | 460.000 ₫ | chưa gồm |
+| VinaHost · NVME 2 + 2 GB RAM | DC của VNPT/Viettel/CMC | 50 GB NVMe | 100/10 Mbps **shared** | kèm | ~460.000 ₫ (tính ra) | chưa gồm |
+| AZDIGI · AMD CS 3 | VN | **30 GB** NVMe | 1 Gbps | kèm | 468.000 ₫ @3 tháng | chưa gồm |
+| Viettel IDC · CS1 | Bắc/Nam | **20 GB** SSD | 300 Mbps | kèm | 614.000 ₫ | chưa gồm |
+| Mắt Bão · CS4-Linux | HCM | 40 GB SSD Enterprise | — | kèm | 819.000 ₫ | chưa gồm, tối thiểu 3 tháng |
+| CMC Cloud · C6 Large 2 | 3 DC Tier 3 | **không kèm đĩa** | 500 Mbps | kèm | 1.100.000 ₫ | chưa gồm |
+| BizFly · Cloud Server Gói 4 | HN/HCM | 40 GB SSD **ephemeral** | 100 Mbps | không nêu | 240.000 ₫ | chưa gồm |
+| GenCloud · Platinum 04 | HCM (colo Viettel/FPT/VNPT) | 50 GB NVMe | 1 Gbps | kèm | 150.000 ₫ | **không nêu** |
+
+### 3.2 Quốc tế + baseline hyperscaler
+
+| Nhà cung cấp · gói | Vị trí | Đĩa | Băng thông | IPv4 | Giá | ₫/tháng |
+|---|---|---|---|---|---|---|
+| Hetzner CX23 | **chỉ EU** | 40 GB NVMe | 20 TB | +€0,50 | €5,99 | 186.049 |
+| OVHcloud VPS-1 | Singapore | 40 GB NVMe | **500 GB rồi 10 Mbps** | kèm | ~US$4,54 | ~119.175 |
+| Linode/Akamai 4 GB | Singapore (xác nhận không phụ thu) | 80 GB | 4 TB | kèm | US$24,00 | 630.000 |
+| Vultr High Perf 2c/4GB | Singapore (**giá theo DC không công bố**) | 100 GB NVMe | 5 TB | kèm | US$24,00 niêm yết | 630.000 |
+| DigitalOcean `s-2vcpu-4gb` | SGP1 | 80 GiB SSD | 4 TiB | kèm | US$24,00 | 630.000 |
+| AWS Lightsail 4 GB | Singapore | 80 GB | 4 TB | kèm | US$24,00 | 630.000 |
+| Hetzner CPX22 | Singapore | 80 GB NVMe | **1 TB** | +€0,50 | €26,99 | 838.307 |
+| GCP `e2-medium` | asia-southeast1 | +$0,11/GiB | riêng | +$3,65 | $30,17+ | ≥1.032.104 |
+| **GCP `e2-standard-2` + 200 GB + IP — HIỆN TRẠNG** | asia-southeast1 | 200 GB | riêng | $3,65 | **$86,00** | **2.257.500** |
+
+### 3.3 Lưu trữ offsite
+
+| Nhà cung cấp | Đơn giá | 10 GB | 50 GB | 100 GB | Min lưu | Egress | Vùng gần VN? |
+|---|---|---|---|---|---|---|---|
+| **Backblaze B2** | $0,00695/GB, **10 GB đầu free** | **0 ₫** | **7.297 ₫** | **16.419 ₫** | **không** | free tới 3× lưu trữ | **KHÔNG** — chỉ US/EU/Canada |
+| **Cloudflare R2 Standard** | $0,015/GB, **10 GB free** | **0 ₫** | 15.750 ₫ | 35.438 ₫ | **không** | **$0 luôn luôn** | **Có** (anycast) |
+| Cloudflare R2 IA | $0,01/GB (**mất free tier**) | 2.625 ₫ | 13.125 ₫ | 26.250 ₫ | **30 ngày** | $0 + $0,01/GB lấy về | Có |
+| Wasabi | $0,00799/GB | 209.738 ₫ | 209.738 ₫ | 209.738 ₫ | **90 ngày** | ≤ dung lượng lưu | — |
+| GCS Standard (asia-southeast1) | $0,020/GiB | 5.250 ₫ | 26.250 ₫ | 52.500 ₫ | không | **$0,12/GiB** | Có |
+| AWS S3 Standard (ap-southeast-1) | $0,025/GB | 6.563 ₫ | 32.813 ₫ | 65.625 ₫ | không | $0,12/GB | Có |
+| Hetzner Storage Box BX11 | 1 TB, **giá không đọc lại được** | — | — | — | không | không giới hạn | Không |
+
+**R2 IA là bẫy cho khối tải này:** rẻ hơn mỗi GB nhưng mất free tier 10 GB, thêm phí lấy về, gấp đôi
+Class A, và **tối thiểu 30 ngày** đụng thẳng vào `restic forget --prune` vốn xoá pack file liên tục.
+R2 Standard thắng R2 IA ở **cả ba** kịch bản.
 
 ---
 
 ## 4. Quyết định
 
-### Khuyến nghị — **iNET Turbo Cloud Server 4 (Việt Nam) + Backblaze B2**
+### Trần ≤500k: ĐẠT, với biên rộng
 
-| Khoản | 10 GB backup | 50 GB | 100 GB |
-|---|---|---|---|
-| Máy chủ 2 vCPU / 4 GB / 40 GB NVMe | 319.000 ₫ | 319.000 ₫ | 319.000 ₫ |
-| VAT 10 % | 31.900 ₫ | 31.900 ₫ | 31.900 ₫ |
-| IPv4 | kèm — 0 ₫ | 0 ₫ | 0 ₫ |
-| Snapshot của nhà cung cấp | kèm — 0 ₫ | 0 ₫ | 0 ₫ |
-| **Offsite Backblaze B2** | 0 ₫ | 7.299 ₫ | 16.423 ₫ |
-| **TỔNG all-in** | **350.900 ₫** | **358.199 ₫** | **367.323 ₫** |
+Ba phương án Việt Nam đều lọt sâu dưới trần. Câu hỏi không còn là "có đạt không" mà là "chọn cái nào".
 
-**≤ 500.000 ₫/tháng: ĐẠT ở cả ba kịch bản**, và nằm trong khoảng mong muốn 300–450k.
+| Ghép | Máy chủ | VAT 10 % | Offsite (10 GB) | **TỔNG** |
+|---|---|---|---|---|
+| **Long Vân C2 + R2** | 285.000 | *chưa rõ* | 0 | **285.000 – 313.500** |
+| **VNSO VCloud-04 + R2** | 280.000 | 28.000 | 0 | **308.000** |
+| **iNET Turbo 4 + B2** | 319.000 | 31.900 | 0 | **350.900** |
 
-Kịch bản thực tế của Ultty là **10 GB** (dữ liệu nghiệp vụ đo được 88 MB; một bản dump ~1,2 MB/đêm,
-restic khử trùng lặp, 7 daily + 4 weekly + 3 monthly vẫn dưới 1 GB).
+Ở kịch bản 100 GB, cộng thêm 16.419 ₫ (B2) hoặc 35.438 ₫ (R2) — **không phương án nào chạm 400k**.
+So sánh hiện trạng GCP **2.257.500 ₫** = **6,4–7,9×**.
 
-**Vì sao iNET, không phải rẻ hơn:**
-- Là phương án Việt Nam **duy nhất khớp đúng 2 vCPU/4 GB/40 GB NVMe** trong nghiên cứu.
-- Dữ liệu ở trong nước — phù hợp Luật BVDLCN 91/2025/QH15 + NĐ 356/2025 mà CLAUDE.md nêu, và tránh
-  câu hỏi chuyển dữ liệu xuyên biên giới.
-- Độ trễ tới đại lý/Sale ở Việt Nam là thấp nhất.
+### Recommended: **Long Vân C2 + Cloudflare R2** — kèm hai câu phải hỏi trước khi ký
 
-**Rủi ro của iNET, ghi rõ:** dịch vụ **unmanaged**, **không có backup phía nhà cung cấp** (snapshot
-tự phục vụ, cùng miền sự cố) — nên backup offsite ở §5 **không phải tuỳ chọn mà là bắt buộc**. SLA
-99,99 % công bố ở mức giá này cần đối chiếu văn bản SLA trước khi tin. Công ty nhỏ hơn Viettel/Mắt
-Bão đáng kể.
+Long Vân là phương án duy nhất trả lời được câu hỏi mà issue coi trọng nhất — *bản sao lưu có nằm
+cùng số phận với máy chủ không*: backup **hằng ngày, mã hoá, trên một hệ thống RIÊNG**, giữ 7 ngày.
+Cộng với restic offsite ở R2, khách có **ba lớp ở ba miền sự cố** mà vẫn dưới 320k.
 
-### Dự phòng — **Hetzner CX23 (Đức) + Backblaze B2** = 186.117 ₫ + 0–16.423 ₫
+Chọn **R2 thay B2** cho lớp offsite dù B2 rẻ hơn ~19k ₫/tháng ở 100 GB: **Backblaze không có vùng
+APAC** (chỉ US West/East, EU Central, Canada East), nên restore về một máy chủ Việt Nam là xuyên
+Thái Bình Dương. Với 88 MB dữ liệu hôm nay điều đó vô nghĩa; nhưng RTO là một câu hỏi nghiệm thu, và
+trả 19k để bỏ một đường truyền dài là đổi đúng chiều. R2 thêm **egress $0 tuyệt đối** — restore bao
+nhiêu lần cũng không phát sinh phí, mà diễn tập phục hồi thì phải chạy định kỳ.
 
-Rẻ nhất trong nhóm đã kiểm, 20 TB băng thông. Đánh đổi: **độ trễ EU↔VN ~250–280 ms** và dữ liệu ra
-ngoài lãnh thổ. Chỉ dùng nếu chấp nhận cả hai. **CX không có ở Singapore** — đã xác nhận trên ma
-trận vị trí của Hetzner; bản Singapore là CPX22 giá €26,49 (838.612 ₫), **vượt trần**.
+**Hai câu phải hỏi Long Vân trước khi chốt** (chưa công bố, cả hai đều đổi con số):
+1. **285.000 ₫ đã gồm VAT chưa?** Không trang nào nêu. Nếu chưa, tổng là 313.500 ₫ — vẫn đạt.
+2. **285.000 ₫ có mua được theo kỳ 1 tháng không?** Giá khuyến mại 242.250 ₫ kèm "tiết kiệm
+   513.000 ₫"; 513.000 ÷ 42.750 = **đúng 12**, nên khuyến mại là cam kết 12 tháng.
 
-Dự phòng trong nước: **iNET Cloud Server Linux 4** (299.000 ₫, 60 GB SSD) — rẻ hơn và nhiều đĩa
-hơn, đổi lại SSD thay vì NVMe.
+### Fallback: **iNET Turbo Cloud Server 4 + B2** — 350.900 ₫
+
+Đắt hơn ~40k nhưng **hai điều kiện thương mại đã rõ trên trang**: "chưa bao gồm VAT" và bậc kỳ hạn
+công bố với **tối thiểu 1 tháng**. Nếu hai câu hỏi cho Long Vân không được trả lời thoả đáng, đây là
+lựa chọn không cần hỏi ai.
+
+Fallback thứ hai: **VNSO VCloud-04** (280.000 ₫, 60 GB NVMe, có MST, hai thành phố) — rẻ nhất và
+nhiều đĩa nhất. Trừ điểm ở **10 Mbps quốc tế dùng chung**: kéo 100 GB từ kho offsite mất ~22 giờ.
+Với 88 MB thì không thành vấn đề, nhưng nó **đặt trần cứng lên RTO** khi dữ liệu lớn lên.
 
 ### Loại — và lý do
 
 | Loại | Lý do |
 |---|---|
-| Vultr / DigitalOcean / Linode / Lightsail | US$24 = 630.120 ₫, **vượt trần trước cả khi cộng backup** |
-| Hetzner CPX22 Singapore | €26,99 = 838.612 ₫; giá SG tăng 66 % từ 15/06/2026, băng thông 1 TB (EU là 20 TB) |
-| Viettel IDC CS1 | 614.000 ₫ và **chỉ 20 GB đĩa**; backup là sản phẩm bán riêng |
-| Mắt Bão CS4 | 819.000 ₫, tối thiểu 3 tháng; SLA/IOPS tốt nhất nhóm nhưng vượt trần 1,6× |
-| OVHcloud VPS-1 | Rẻ nhất Singapore **nhưng 500 GB rồi bóp còn 10 Mbps**, và **không công bố giá gia hạn**. Cần xác nhận hai điểm này trước khi dùng |
-| Wasabi | **Sàn 1 TB** (209.777 ₫ dù chỉ dùng 100 MB) + tối thiểu lưu **90 ngày** — xung khắc trực tiếp với `restic forget --prune` |
-| Oracle Cloud Always Free | Tài liệu Oracle nói rõ: có thể "out of host capacity", và **instance nhàn rỗi bị thu hồi**. Không phải nơi đặt production |
-| Giữ nguyên GCP `e2-standard-2` | 2.257.930 ₫/tháng = **4,5× trần**, cho một khối tải dùng 0,06 vCPU |
-| Nhân Hoà | Không có gói đúng 2 core/4 GB; RAM chỉ đạt mức quảng cáo khi trả trước 12 tháng — tín hiệu overselling |
-| VNG Cloud / GreenNode | **Không đọc được giá** từ nguồn chính thức (đang đổi thương hiệu, calculator không phân giải) |
+| **BizFly Gói 4** (240k) | Đĩa root **ephemeral** — trang của họ ghi rõ dữ liệu trên root disk bị xoá cùng máy chủ. Không đặt PostgreSQL lên đó |
+| **GenCloud** (150k) | Rẻ hơn đối thủ 2–3,5× cho **cùng** cấu hình — dấu hiệu overselling kinh điển. **Không công bố MST** ở bất kỳ trang nào kể cả điều khoản; liên hệ là **số di động cá nhân**; mâu thuẫn nội bộ (backup 1 vs 2 lần/tuần, port 1 vs 10 Gbps); không nêu VAT, kỳ hạn, giá gia hạn |
+| **Wasabi** | **Sàn 1 TB** (209.738 ₫ dù dùng 100 MB) + **min 90 ngày** — xung khắc trực tiếp với `restic forget --prune` |
+| Vultr / DO / Linode / Lightsail | US$24 = 630.000 ₫, vượt trần trước cả khi cộng backup |
+| Hetzner CPX22 Singapore | 838.307 ₫; giá SG **+66 %** từ 15/06/2026, băng thông 1 TB (EU 20 TB) |
+| CMC Cloud C6 | 1.100.000 ₫ **và không kèm đĩa** — thực tế còn cao hơn |
+| Viettel IDC CS1 | 614.000 ₫, **chỉ 20 GB**; backup bán riêng |
+| Mắt Bão CS4 | 819.000 ₫, tối thiểu 3 tháng |
+| AZDIGI | **Không có billing theo tháng** (sàn 3 tháng); AMD CS 3 chỉ 30 GB |
+| VinaHost | Không có bậc 4 GB; phải cộng RAM lẻ; băng thông yếu nhất bảng (100/10 Mbps **shared**); không sở hữu DC |
+| Vietnix | 460.000 ₫ — đạt trần nhưng đắt hơn nhóm dẫn đầu ~60 % mà không hơn về an toàn dữ liệu |
+| OVHcloud VPS-1 | Rẻ nhất Singapore nhưng **bóp còn 10 Mbps sau 500 GB** và **không công bố giá gia hạn** |
+| Oracle Cloud Always Free | Tài liệu Oracle nói rõ "out of host capacity" và **thu hồi instance nhàn rỗi** |
+| Giữ nguyên GCP `e2-standard-2` | 2.257.500 ₫ = **6,4×** phương án dẫn đầu, cho khối tải dùng 0,06 vCPU |
+| VNG Cloud/GreenNode · TinoHost · trang cloud-server của Viettel IDC | **Không đọc được giá** từ nguồn chính thức — render bằng JS hoặc đang đổi thương hiệu |
 
 ---
 
@@ -289,5 +318,12 @@ với giả định ban đầu của issue.
 - **Chưa đo đỉnh CPU của Ultty** — không có tải trong cửa sổ đo; §1.7 nói rõ.
 - **Chưa sửa `deploy/netviet/backup.sh` của live** sang restic; hai sai lệch ở §2 mới chỉ được *ghi
   nhận*, chưa vá trên stack đang chạy.
-- **Chưa xác nhận giá gia hạn của OVHcloud** và **phí vị trí Singapore của Contabo** — hai con số
-  không công bố công khai.
+- **Chưa xác nhận giá gia hạn của OVHcloud**, **phí vị trí Singapore của Contabo**, và **giá theo
+  datacenter của Vultr** — đều không công bố công khai.
+- **Hai câu hỏi cho Long Vân** (VAT đã gồm chưa; 285.000 ₫ có mua theo tháng được không) **chưa có
+  câu trả lời** — chúng quyết định ô Recommended, xem §4.
+- **Giá Backblaze $6.95/TB đọc gián tiếp**: backblaze.com chặn fetch tự động; con số được ba lần
+  tìm kiếm giới hạn trong tên miền của họ xác nhận trùng nhau, nhưng **không phải một lần đọc
+  trang trực tiếp**. Kết luận không đổi theo con số này (ở 10 GB chi phí là 0 ₫ nhờ free tier, và
+  kể cả gấp đôi thì tổng vẫn dưới 400k).
+- **Giá Hetzner Storage Box không đọc lại được** (trang render bằng JS) — bỏ khỏi bảng §3.3.
