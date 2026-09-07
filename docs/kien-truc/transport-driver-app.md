@@ -140,9 +140,33 @@ không thể tự phát hiện — nên đây là một ranh giới trung thực
 
 ---
 
+## 5b. Hàng đợi ngoại tuyến **đã được viết** — `@netviet/driver-outbox`
+
+Phần khó nhất của một ứng dụng ngoại tuyến không cần một chiếc điện thoại để viết đúng, và cũng
+không cần một chiếc điện thoại để **chứng minh** là đúng. Nên nó được viết trước, thành một gói
+riêng, **không phụ thuộc gì** (nạp được từ React Native, nơi không có `node:*`):
+
+| Bất biến                                                                                      | Cách hỏng nếu thiếu                                                                                                                                              |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `capturedAt` đóng băng lúc bấm                                                                | Một bản định vị ghi 14:00 gửi được 18:00 sẽ mang nhãn 18:00 ⇒ máy chủ tính quãng đường/tốc độ/liên tục trên một đường đi **không tồn tại**, và **không báo lỗi** |
+| `clientEventId` sinh một lần, giữ qua mọi lần gửi lại                                         | Máy chủ — đúng theo hợp đồng của nó — coi mỗi lần thử lại là một sự kiện MỚI và ghi thêm hàng                                                                    |
+| Mục bị từ chối **vĩnh viễn** sang `BLOCKED`, không thử lại                                    | Một yêu cầu sai hình dạng chặn cả hàng đợi phía sau; cả ngày làm việc không có gì lên được máy chủ                                                               |
+| Lô bị chặn trên ở `maxBatchSize` (mặc định **200**, đúng trần `reportObservationBatchSchema`) | Sau bốn tiếng mất sóng, lần nối lại đầu tiên là một yêu cầu vài nghìn phần tử và bị từ chối cả lô                                                                |
+| Ảnh giữ **tham chiếu tệp**, không giữ byte                                                    | 30 lần giao × 3 ảnh 4 MB = 360 MB nằm trong một bảng SQLite                                                                                                      |
+| Thiếu kết cục từ máy chủ ⇒ coi là **thử lại**                                                 | Giả sử "đã nhận" cho phần thiếu làm **mất bằng chứng vĩnh viễn** — hướng sai duy nhất không sửa được                                                             |
+
+`OutboxStore` là một **giao diện**; bản trong bộ nhớ là hiện thực tham chiếu mà bản `expo-sqlite`
+phải khớp, và 18 bài test chạy trên nó nên cái phải đạt không còn là một đoạn văn trong tài liệu.
+
+**Cái gói này không chứng minh:** rằng bám vị trí nền chạy được trên một máy Android thật. Đó là
+một phép đo khác, cần một thiết bị, và nó **chưa được làm** — xem §6.
+
+---
+
 ## 6. Cái tài liệu này **không** khẳng định
 
-- Rằng ứng dụng đã được viết. Chưa. Tài liệu này chốt nền tảng và ghi hai chặn bên ngoài.
+- Rằng ứng dụng đã được viết. Chưa — mới có **hàng đợi ngoại tuyến** (§5b) và hợp đồng máy chủ.
+  Màn hình, quyền hệ điều hành, dịch vụ nền và đóng gói phát hành đều chưa có.
 - Rằng có thể phát hành qua Play trong tháng này — xem `M-02`.
 - Rằng bám vị trí nền sẽ đáng tin mà không mua SDK — xem §2.
 - Rằng có thiết bị Android thật để chứng minh. Máy dựng hiện tại **không có** máy Android nào cắm

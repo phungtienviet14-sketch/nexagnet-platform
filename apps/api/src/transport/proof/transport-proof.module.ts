@@ -9,6 +9,7 @@ import {
   InMemoryGeofenceRepository,
   PrismaGeofenceRepository,
 } from './geofence.repository.js';
+import { GeofenceService } from './geofence.service.js';
 import {
   InMemoryOperationalProofRepository,
   OperationalProofRepository,
@@ -93,6 +94,7 @@ import {
     },
     TrackingService,
     OperationalProofService,
+    GeofenceService,
   ],
   exports: [
     TrackingService,
@@ -101,6 +103,9 @@ import {
     OperationalProofService,
     OperationalProofRepository,
     GeofenceRepository,
+    // `ProofReviewController` dang ky o GOC, nen no CHI thay danh sach nay. Mot provider noi bo
+    // (vd `TRANSPORT_PROOF_POLICY`) tiem vao controller do se chet luc khoi dong — da xay ra that.
+    GeofenceService,
   ],
 })
 export class TransportProofModule {}

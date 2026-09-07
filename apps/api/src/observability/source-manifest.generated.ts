@@ -517,12 +517,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.geofence.manage": {
       "functionName": "ProofReviewController.register",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
-      "line": 110
+      "line": 114
     },
     "transport.geofence.read": {
       "functionName": "ProofReviewController.list",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
-      "line": 103
+      "line": 107
     },
     "transport.location.history.read": {
       "functionName": "TrackingController.track",
@@ -584,12 +584,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.proof.read": {
       "functionName": "ProofReviewController.forTrip",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
-      "line": 72
+      "line": 76
     },
     "transport.proof.withdraw": {
       "functionName": "ProofReviewController.withdraw",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
-      "line": 80
+      "line": 84
     },
     "transport.run.manage": {
       "filePath": "apps/api/src/transport/movement/runs.controller.ts"

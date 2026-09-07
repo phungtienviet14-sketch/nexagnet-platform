@@ -1,8 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
-import { TransportDomainError } from '../transport.errors.js';
 import { InMemoryGeofenceRepository } from './geofence.repository.js';
+import { GeofenceService } from './geofence.service.js';
 import { InMemoryOperationalProofRepository } from './operational-proof.repository.js';
 import { OperationalProofService } from './operational-proof.service.js';
 import { ProofReviewController } from './proof-review.controller.js';
@@ -82,8 +82,33 @@ describe('Bien gioi HTTP cua be mat nguoi duyet — PROOF-100', () => {
       undefined,
       () => T0,
     );
-    controller = new ProofReviewController(proofService, geofences, DEFAULT_TRANSPORT_PROOF_POLICY);
+    controller = new ProofReviewController(
+      proofService,
+      new GeofenceService(geofences, DEFAULT_TRANSPORT_PROOF_POLICY),
+    );
   });
+
+  /**
+   * Bat mot lan tu choi va doc MA ly do trong than phan hoi.
+   *
+   * Kiem bang lop (`BadRequestException`) thoi thi yeu: ba phep kiem hang rao deu tra 400, nen mot
+   * bai do dung lop se van xanh khi cai nay bat nham cai kia. Ma ly do moi phan biet duoc chung.
+   *
+   * Va vi sao la `BadRequestException` chu khong phai `TransportDomainError`: dich vu nem loi mien,
+   * roi `guard()` cua controller dich no sang HTTP qua `transportErrorToHttp`. Truoc khi luat duoc
+   * don vao dich vu, controller nem THANG loi mien ra ngoai `guard()` — tuc no thoat khoi Nest
+   * duoi dang mot loi khong ai bat, va thanh 500 thay vi 400.
+   */
+  const reasonOf = async (run: Promise<unknown>): Promise<string> => {
+    try {
+      await run;
+      return 'KHONG BI TU CHOI';
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) throw error;
+      const body = error.getResponse() as { reason?: string };
+      return body.reason ?? 'KHONG CO MA';
+    }
+  };
 
   const fence = (overrides: Record<string, unknown> = {}) => ({
     label: 'Kho Hai Phong',
@@ -141,9 +166,9 @@ describe('Bien gioi HTTP cua be mat nguoi duyet — PROOF-100', () => {
     });
 
     it('tam o (0,0) bi tu choi — mot hang rao Null Island bao MOI diem deu o ngoai', async () => {
-      await expect(
-        controller.register(request, fence({ latitude: 0, longitude: 0 })),
-      ).rejects.toBeInstanceOf(TransportDomainError);
+      expect(
+        await reasonOf(controller.register(request, fence({ latitude: 0, longitude: 0 }))),
+      ).toBe('GEOFENCE_COORDINATE_REJECTED');
     });
 
     /**
@@ -167,18 +192,21 @@ describe('Bien gioi HTTP cua be mat nguoi duyet — PROOF-100', () => {
     });
 
     it('ban kinh hop le VE HINH DANG nhung ngoai chinh sach cua khach van bi tu choi', async () => {
-      const strict = new ProofReviewController(proofService, geofences, {
-        ...DEFAULT_TRANSPORT_PROOF_POLICY,
-        geofenceRadiusMetres: { min: 50, max: 500 },
-      });
+      const strict = new ProofReviewController(
+        proofService,
+        new GeofenceService(geofences, {
+          ...DEFAULT_TRANSPORT_PROOF_POLICY,
+          geofenceRadiusMetres: { min: 50, max: 500 },
+        }),
+      );
 
       // 20m qua duoc `.min(10)` cua lop hinh dang, nhung duoi san 50m cua khach nay.
-      await expect(strict.register(request, fence({ radiusMetres: 20 }))).rejects.toBeInstanceOf(
-        TransportDomainError,
+      expect(await reasonOf(strict.register(request, fence({ radiusMetres: 20 })))).toBe(
+        'GEOFENCE_RADIUS_OUT_OF_RANGE',
       );
       // 5000m cung vay o dau kia.
-      await expect(strict.register(request, fence({ radiusMetres: 5_000 }))).rejects.toBeInstanceOf(
-        TransportDomainError,
+      expect(await reasonOf(strict.register(request, fence({ radiusMetres: 5_000 })))).toBe(
+        'GEOFENCE_RADIUS_OUT_OF_RANGE',
       );
       // Va mot gia tri trong khoang cua khach thi qua ca hai lop.
       const created = await strict.register(request, fence({ radiusMetres: 200 }));
@@ -186,15 +214,17 @@ describe('Bien gioi HTTP cua be mat nguoi duyet — PROOF-100', () => {
     });
 
     it('loai co chu the ma THIEU chu the bi tu choi', async () => {
-      await expect(
-        controller.register(request, fence({ subjectId: undefined })),
-      ).rejects.toBeInstanceOf(TransportDomainError);
+      expect(await reasonOf(controller.register(request, fence({ subjectId: undefined })))).toBe(
+        'GEOFENCE_SUBJECT_SHAPE_INVALID',
+      );
     });
 
     it('AD_HOC ma LAI CO chu the cung bi tu choi — hinh dang sai o ca hai chieu', async () => {
-      await expect(
-        controller.register(request, fence({ subjectKind: 'AD_HOC', subjectId: 'kho-hp' })),
-      ).rejects.toBeInstanceOf(TransportDomainError);
+      expect(
+        await reasonOf(
+          controller.register(request, fence({ subjectKind: 'AD_HOC', subjectId: 'kho-hp' })),
+        ),
+      ).toBe('GEOFENCE_SUBJECT_SHAPE_INVALID');
     });
 
     it('AD_HOC khong chu the thi qua', async () => {
