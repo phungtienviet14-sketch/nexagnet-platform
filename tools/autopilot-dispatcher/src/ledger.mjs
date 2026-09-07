@@ -38,6 +38,10 @@ const LEDGER_FILE = 'ledger.json';
  * @property {string} updatedAt
  * @property {number} launches so lan DA phong tien trinh cho khoa nay
  * @property {string | null} lastReason
+ * @property {string} [handoffState] ket qua HAU KIEM tren GitHub, ghi rieng khoi `state`. Mot lan
+ *   chay bi giet giua chung van co the da mo PR va de lai ban giao that; `state` phai noi that
+ *   rang lan chay do khong sach, nhung bang chung do khong duoc bien mat cung voi no.
+ * @property {number | null} [pr]
  */
 
 /**

@@ -178,7 +178,10 @@ export function launchClaude(input) {
 
     child.on('close', (code, signal) => {
       const result = classifyResultJson(stdout.text());
-      const blockedByPermission = (result.permissionDenials ?? 0) > 0;
+      // `null` = KHONG KET LUAN DUOC (stdout bi cat vi `maxCaptureBytes`, hoac khong phai JSON),
+      // khac han `0` = do duoc va khong co lan chan nao. Chi `> 0` moi la bang chung bi chan;
+      // truong hop khong ket luan duoc roi ve phan loai theo ma thoat, chu khong duoc bao la sach.
+      const blockedByPermission = result.permissionDenials !== null && result.permissionDenials > 0;
       const state = timedOut
         ? DISPATCH_STATES.TIMED_OUT
         : blockedByPermission

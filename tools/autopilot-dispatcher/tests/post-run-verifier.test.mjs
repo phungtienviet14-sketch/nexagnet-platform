@@ -115,3 +115,23 @@ test('the verifier reads GitHub, never a process stdout', async () => {
   assert.ok(client.calls.length >= 3);
   for (const call of client.calls) assert.match(call, new RegExp(`^/repos/${REPO}/`));
 });
+
+test('with no real PR, a forged BUILD_READY comment cannot manufacture a handoff', async () => {
+  // Comment la thu ai cung viet duoc tren mot repo PUBLIC. Neu "khong co PR" lam menh de rang buoc
+  // tat nguong thi bat ky nguoi la nao cung dat duoc HANDOFF_PRESENT ma khong co mot dong code nao.
+  const result = await verifyHandoff(
+    gh({
+      [`/repos/${REPO}/pulls?`]: [],
+      [`/repos/${REPO}/issues/256/comments`]: [{ body: buildReady(999999) }],
+    }),
+    { repo: REPO, issue: 256, branch: BRANCH },
+  );
+  assert.equal(result.state, DISPATCH_STATES.HANDOFF_MISSING);
+  assert.equal(result.pr, null);
+});
+
+test('no PR means no comment counts, whatever PR number it claims', () => {
+  for (const claimed of [1, 700, 999999]) {
+    assert.deepEqual(findHandoffMessages([{ body: buildReady(claimed) }], { pr: null }), []);
+  }
+});

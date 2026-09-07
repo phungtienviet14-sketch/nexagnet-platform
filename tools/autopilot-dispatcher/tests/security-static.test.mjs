@@ -89,7 +89,25 @@ test('no source file dumps the environment', () => {
   }
 });
 
-test('no source file runs a destructive or history-rewriting git command', () => {
+test('only the worktree manager may run a git command', () => {
+  // Thu hep BE MAT truoc, roi moi quet noi dung: neu bat ky tep nao khac cung chay duoc git thi
+  // bai quet ben duoi (chi doc worktree-manager) khong con noi len dieu gi ve ca package.
+  //
+  // `cli.mjs` DUNG duoc `createGit` — do la day noi, khong phai mot lenh git. Thu bi cam la CHAY.
+  for (const { file, code } of sources) {
+    if (file === 'worktree-manager.mjs') continue;
+    assert.equal(
+      code.includes('git.run('),
+      false,
+      `${file} runs a git command; every one must live in worktree-manager.mjs`,
+    );
+  }
+});
+
+test('the worktree manager runs no destructive or history-rewriting git command', () => {
+  // Quet DUNG tep chay git. Quet ca package se bao dong gia: gh.mjs truyen co ngan cho GraphQL, va
+  // co do khong lien quan gi den viec viet lai lich su git.
+  const code = sources.find((entry) => entry.file === 'worktree-manager.mjs').code;
   const forbidden = [
     /'reset'/,
     /'--hard'/,
@@ -100,11 +118,15 @@ test('no source file runs a destructive or history-rewriting git command', () =>
     /'-f'/,
     /'push'/,
     /'--force-with-lease'/,
+    /'filter-branch'/,
+    /'gc'/,
   ];
-  for (const { file, code } of sources) {
-    for (const pattern of forbidden) {
-      assert.equal(pattern.test(code), false, `${file} contains git argument ${pattern}`);
-    }
+  for (const pattern of forbidden) {
+    assert.equal(
+      pattern.test(code),
+      false,
+      `worktree-manager.mjs contains git argument ${pattern}`,
+    );
   }
 });
 

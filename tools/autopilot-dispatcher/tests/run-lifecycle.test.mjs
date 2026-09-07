@@ -73,15 +73,18 @@ function world(t, over = {}) {
   assert.equal(parsed.ok, true, 'fixture config must be valid');
 
   const issue = over.issue ?? issueFixture({ number: 256 });
-  const gh = fakeGh({
-    [`/repos/${REPO}/issues?state=open`]: over.readyList ?? [issue],
-    [`/repos/${REPO}/issues/256/timeline`]: over.timeline ?? [labeledEvent()],
-    [`/repos/${REPO}/issues/256/comments`]: over.issueComments ?? [],
-    [`/repos/${REPO}/issues/256`]: issue,
-    [`/repos/${REPO}/git/ref/heads/`]: over.remoteBranch ?? null,
-    [`/repos/${REPO}/pulls?`]: over.pulls ?? [],
-    ...over.routes,
-  });
+  const gh = fakeGh(
+    {
+      [`/repos/${REPO}/issues?state=open`]: over.readyList ?? [issue],
+      [`/repos/${REPO}/issues/256/timeline`]: over.timeline ?? [labeledEvent()],
+      [`/repos/${REPO}/issues/256/comments`]: over.issueComments ?? [],
+      [`/repos/${REPO}/issues/256`]: issue,
+      [`/repos/${REPO}/git/ref/heads/`]: over.remoteBranch ?? null,
+      [`/repos/${REPO}/pulls?`]: over.pulls ?? [],
+      ...over.routes,
+    },
+    over.graphqlData,
+  );
 
   const logger = collectingLogger();
   const deps = {
@@ -385,4 +388,87 @@ test('the task with the lowest issue number is chosen deterministically', async 
   });
   const result = await runOnce({ config: w.config, mode: MODES.PLAN, deps: w.deps });
   assert.equal(result.plan.issue, 256);
+});
+
+test('a forged handoff comment with no PR leaves the run visibly incomplete', async (t) => {
+  const w = world(t, {
+    pulls: [],
+    issueComments: [{ body: buildReady(999999) }],
+  });
+  const result = await runOnce({ config: w.config, mode: MODES.EXECUTE, deps: w.deps });
+  assert.equal(result.ok, true);
+  assert.equal(result.process.state, DISPATCH_STATES.CLAUDE_EXITED_0);
+  assert.equal(result.state, DISPATCH_STATES.HANDOFF_MISSING);
+});
+
+test('an issue body edited after labelling is refused before anything is created', async (t) => {
+  const w = world(t, {
+    graphqlData: { repository: { issue: { lastEditedAt: '2026-09-07T23:00:00Z' } } },
+  });
+  const result = await runOnce({ config: w.config, mode: MODES.EXECUTE, deps: w.deps });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, REASONS.TRIGGER_ISSUE_EDITED_AFTER_LABEL);
+  assert.deepEqual(fs.readdirSync(w.worktreeRoot), []);
+  assert.equal(fs.existsSync(w.fakeClaude.reportFile), false);
+});
+
+test('an unreadable body-edit probe refuses rather than assuming nothing changed', async (t) => {
+  const w = world(t, { graphqlData: new Error('graphql down') });
+  const result = await runOnce({ config: w.config, mode: MODES.EXECUTE, deps: w.deps });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, REASONS.TRIGGER_EVIDENCE_UNAVAILABLE);
+  assert.deepEqual(fs.readdirSync(w.worktreeRoot), []);
+});
+
+test('a ledger write failure before launch stops the run instead of launching blind', async (t) => {
+  const w = world(t);
+  // So cai nhan lan `claim`, roi tu choi MOI lan ghi tiep. Neu bo qua ket qua ghi, dispatcher se
+  // phong Claude trong khi ban ghi ben duoi dung o CLAIMED — va moi lan chay sau se tu choi bang
+  // TASK_ALREADY_CLAIMED ma khong o dau noi ly do.
+  const real = w.deps.ledger;
+  const brittle = {
+    ...real,
+    get: real.get.bind(real),
+    claim: real.claim.bind(real),
+    priorContractsFor: real.priorContractsFor.bind(real),
+    update: () => ({ ok: false, reason: REASONS.LEDGER_UNWRITABLE }),
+  };
+
+  const result = await runOnce({
+    config: w.config,
+    mode: MODES.EXECUTE,
+    deps: { ...w.deps, ledger: brittle },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, REASONS.LEDGER_UNWRITABLE);
+  assert.equal(fs.existsSync(w.fakeClaude.reportFile), false, 'Claude must not have been launched');
+  assert.ok(
+    w.logger.lines.some((line) => line.event === 'dispatch.ledger_write_failed'),
+    'the failed write must be visible in the log',
+  );
+});
+
+test('a run killed by timeout is not reported as handed off, but the evidence is kept', async (t) => {
+  const w = world(t, {
+    claudeBehaviour: { hang: true },
+    pulls: [{ number: 700, head: { sha: HEAD } }],
+    routes: { [`/repos/${REPO}/issues/700/comments`]: [{ body: buildReady(700) }] },
+  });
+  // Timeout ngan dat THANG vao doi tuong cau hinh: `parseConfig` chan duoi 60s cho ban that, con
+  // bai test thi khong can cho mot phut de chung minh mot dieu ve trang thai.
+  const config = { ...w.config, claude: { ...w.config.claude, timeoutMs: 800, killGraceMs: 400 } };
+
+  const result = await runOnce({ config, mode: MODES.EXECUTE, deps: w.deps });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.process.state, DISPATCH_STATES.TIMED_OUT);
+  // Trang thai cua LAN CHAY noi that: no khong ket thuc sach.
+  assert.equal(result.state, DISPATCH_STATES.TIMED_OUT);
+  // Nhung ban giao that tren GitHub khong bi vut di.
+  assert.equal(result.handoff.state, DISPATCH_STATES.HANDOFF_PRESENT);
+  const record = Object.values(createLedger({ dir: w.stateDir }).readAll().records)[0];
+  assert.equal(record.state, DISPATCH_STATES.TIMED_OUT);
+  assert.equal(record.handoffState, DISPATCH_STATES.HANDOFF_PRESENT);
+  assert.equal(record.pr, 700);
 });

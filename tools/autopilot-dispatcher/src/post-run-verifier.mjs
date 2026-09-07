@@ -38,9 +38,14 @@ export function findHandoffMessages(comments, bound) {
     if (!parsed.ok) continue;
     const message = parsed.message;
     if (!HANDOFF_MESSAGE_TYPES.includes(/** @type {string} */ (message.type))) continue;
-    // Rang buoc voi PR THAT: mot BUILD_READY hop le cua mot task KHAC khong duoc tinh la ban giao
-    // cua lan chay nay.
-    if (bound.pr !== null && Number(message.pr) !== Number(bound.pr)) continue;
+    // Rang buoc voi PR THAT. Hai nua cua dieu kien nay deu can:
+    //
+    //   - khong co PR nao  => KHONG co gi de rang buoc vao, nen KHONG comment nao duoc tinh. Ban
+    //     truoc viet `bound.pr !== null && ...`, nen dung luc khong co PR thi menh de tat nguong
+    //     va MOI comment BUILD_READY hop le hinh dang deu duoc nhan. Comment la thu ai cung viet
+    //     duoc tren mot repo PUBLIC, nen do la mot duong gia mao bang chung hoan tat.
+    //   - co PR nhung so khac => mot BUILD_READY cua task KHAC khong phai ban giao cua lan nay.
+    if (bound.pr === null || Number(message.pr) !== Number(bound.pr)) continue;
     found.push(message);
   }
   return found;

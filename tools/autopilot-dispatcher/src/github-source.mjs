@@ -99,8 +99,10 @@ export async function findPullRequestByHead(gh, { repo, branch }) {
     `/repos/${repo}/pulls?state=all&per_page=100` + `&head=${encodeSegment(`${owner}:${branch}`)}`;
   const result = await gh.api(path);
   if (!result.ok) return result;
-  const list = Array.isArray(result.body) ? result.body : [];
-  return { ok: /** @type {const} */ (true), pull: list[0] ?? null };
+  // Than sai hinh dang la LOI, khong phai "khong co PR nao". Doc nham huong nay bien mot su co
+  // GitHub thanh mot ket luan "Claude chua mo PR" — mot ket luan sai ma khong ai kiem lai.
+  if (!Array.isArray(result.body)) return deny(REASONS.GITHUB_BAD_RESPONSE, { path });
+  return { ok: /** @type {const} */ (true), pull: result.body[0] ?? null };
 }
 
 /**
@@ -113,8 +115,38 @@ export async function readIssueComments(gh, { repo, number }) {
   const path = `/repos/${repo}/issues/${Number(number)}/comments?per_page=100`;
   const result = await gh.api(path, { paginate: true });
   if (!result.ok) return result;
-  return {
-    ok: /** @type {const} */ (true),
-    comments: Array.isArray(result.body) ? result.body : [],
-  };
+  // Cung ly do: "khong doc duoc comment" khong duoc bien thanh "khong co ban giao".
+  if (!Array.isArray(result.body)) return deny(REASONS.GITHUB_BAD_RESPONSE, { path });
+  return { ok: /** @type {const} */ (true), comments: result.body };
+}
+
+/**
+ * Than Issue duoc SUA LAN CUOI luc nao — `null` neu chua bao gio sua.
+ *
+ * Phai dung GraphQL: REST chi co `updated_at`, ma truong do nhay ca khi ai do binh luan hoac gan
+ * nhan, nen lay no lam bang chung "than da doi" se tu choi nham gan nhu moi task. `lastEditedAt`
+ * chi nhay khi CHINH than bi sua — dung thu can de biet nguoi gan nhan da duyet cai gi.
+ *
+ * Khong doc duoc => TU CHOI, khong coi nhu "chua sua". Day la mot cong fail-closed.
+ * @param {import('./gh.mjs').GhClient} gh
+ * @param {{ repo: string, issue: number }} input
+ */
+export async function readIssueBodyEdit(gh, { repo, issue }) {
+  const [owner, name] = repo.split('/');
+  const query =
+    'query($owner:String!,$name:String!,$number:Int!)' +
+    '{repository(owner:$owner,name:$name){issue(number:$number){lastEditedAt}}}';
+  const result = await gh.graphql(query, { owner, name, number: Number(issue) });
+  if (!result.ok) {
+    return deny(REASONS.TRIGGER_EVIDENCE_UNAVAILABLE, { probe: 'lastEditedAt' });
+  }
+  const node = result.data?.repository?.issue;
+  if (node === null || node === undefined) {
+    return deny(REASONS.TRIGGER_EVIDENCE_UNAVAILABLE, { probe: 'lastEditedAt' });
+  }
+  const lastEditedAt = node.lastEditedAt;
+  if (lastEditedAt !== null && typeof lastEditedAt !== 'string') {
+    return deny(REASONS.TRIGGER_EVIDENCE_UNAVAILABLE, { probe: 'lastEditedAt' });
+  }
+  return { ok: /** @type {const} */ (true), lastEditedAt };
 }

@@ -46,15 +46,23 @@ dòng sự kiện của Issue, lấy lần `labeled` gần nhất, suy ra princi
 
 Bốn đường từ chối, mỗi đường một mã riêng:
 
-| Mã                              | Nghĩa                                                       |
-| ------------------------------- | ----------------------------------------------------------- |
-| `TRIGGER_ALLOWLIST_MISSING`     | cấu hình không có allowlist ⇒ **không phải "ai cũng được"** |
-| `TRIGGER_EVENT_MISSING`         | nhãn đang có nhưng không có sự kiện gắn nào                 |
-| `TRIGGER_EVIDENCE_AMBIGUOUS`    | nhiều sự kiện gắn không xếp được theo thời gian             |
-| `TRIGGER_PRINCIPAL_NOT_ALLOWED` | biết ai, nhưng người đó không nằm trong allowlist           |
+| Mã                                 | Nghĩa                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| `TRIGGER_ALLOWLIST_MISSING`        | cấu hình không có allowlist ⇒ **không phải "ai cũng được"**                          |
+| `TRIGGER_EVENT_MISSING`            | nhãn đang có nhưng không có sự kiện gắn nào                                          |
+| `TRIGGER_EVIDENCE_AMBIGUOUS`       | nhiều sự kiện gắn không xếp được theo thời gian                                      |
+| `TRIGGER_PRINCIPAL_NOT_ALLOWED`    | biết ai, nhưng người đó không nằm trong allowlist                                    |
+| `TRIGGER_ISSUE_EDITED_AFTER_LABEL` | thân Issue bị sửa **sau** lần gắn nhãn — cái đã được duyệt không còn là cái sắp chạy |
 
 Một dòng `ROLE=CHATGPT_ARCHITECT` viết trong thân Issue **không cho thêm quyền gì** — có test khoá
 điều đó.
+
+Gắn nhãn là một lần **duyệt**, và nó duyệt **một nội dung cụ thể**. Tác giả Issue sửa được thân
+Issue của chính mình bất cứ lúc nào mà **không cần quyền ghi repo** — nên nếu thân đổi sau lần
+gắn nhãn, thứ đã được duyệt không còn là thứ sắp chạy. Dispatcher đo điều đó bằng
+`Issue.lastEditedAt` của GraphQL, **không** bằng `updated_at` của REST: `updated_at` nhảy cả khi
+ai đó bình luận hay gắn nhãn, nên dùng nó sẽ từ chối nhầm gần như mọi task. Gắn lại nhãn sau khi
+sửa là cách duyệt lại nội dung mới.
 
 ## 3. Vì sao chỉ gọi RA, không mở cổng VÀO
 
@@ -159,6 +167,17 @@ Trạng thái: `PLANNED → CLAIMED → WORKTREE_READY → CLAUDE_STARTING → C
 Timeout cấu hình được (mặc định 1 giờ) → `SIGTERM` → sau thời gian ân hạn → `SIGKILL`. stdout/stderr
 được thu **có chặn trên**, và chỉ **số byte** đi vào log.
 
+> ⚠️ **Trên Windows khoảng ân hạn đó không tồn tại.** Node không gửi được tín hiệu POSIX trên
+> Windows, nên `child.kill('SIGTERM')` giết tiến trình **ngay và dứt khoát** — đo được: một tiến
+> trình con cài sẵn bộ bắt `SIGTERM` không bao giờ chạy bộ bắt đó. Vậy `killGraceMs` chỉ có tác
+> dụng thật trên POSIX; trên Windows hãy coi `timeoutMs` là **thời điểm tiến trình bị giết không
+> báo trước**, và đặt nó đủ rộng.
+
+Vì thế một lần chạy **không kết thúc sạch** (timeout / thoát khác 0 / bị chặn quyền) **không** được
+báo là đã bàn giao, kể cả khi hậu kiểm tìm thấy bàn giao thật: tiến trình có thể đã mở PR rồi bị
+giết giữa chừng. Kết quả hậu kiểm vẫn được ghi riêng vào `handoffState` trong sổ cái, nên bằng
+chứng đó **không biến mất** — nó chỉ không được phép nói thay cho trạng thái của lần chạy.
+
 **Một task đã nhận được đúng MỘT lần phóng.** Thoát khác 0 không tự chạy lại — không có vòng lặp
 "thử đến khi xanh".
 
@@ -171,6 +190,11 @@ head là nhánh đó, và comment của Issue/PR chạy qua `readMessage` của 
 
 Một stdout chứa chữ "BUILD_READY" **không** tạo ra bàn giao. Kết cục
 `PROCESS_EXITED_0 + HANDOFF_MISSING` là hợp lệ và phải **nhìn thấy được là chưa xong**.
+
+**Không có PR thì không comment nào được tính.** Comment là thứ ai cũng viết được trên một repo
+PUBLIC; nếu "không tìm thấy PR" làm mệnh đề ràng buộc tắt ngưỡng thì một người lạ dán một
+`BUILD_READY` đúng hình dạng là đủ để bịa ra một lần bàn giao. Ràng buộc là **hai chiều**: phải
+có PR thật trên đúng nhánh này, **và** thông điệp phải trỏ đúng số PR đó.
 
 ## 11. Lệnh (dry-run là mặc định)
 

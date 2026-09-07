@@ -49,9 +49,17 @@ function isAllowed(allowlist, principal) {
  * @param {ReadonlyArray<Record<string, any>>} input.timeline
  * @param {string} input.readyLabel
  * @param {ReadonlyArray<{ kind: string, id: string }>} input.allowlist
+ * @param {string | null} [input.bodyLastEditedAt] thoi diem than Issue duoc sua lan cuoi (GraphQL
+ *   `lastEditedAt`); `null` = chua bao gio sua.
  * @returns {{ ok: true, principal: { kind: string, id: string }, event: { id: unknown, createdAt: string | null } } | import('./errors.mjs').Denied}
  */
-export function evaluateTriggerProvenance({ issue, timeline, readyLabel, allowlist }) {
+export function evaluateTriggerProvenance({
+  issue,
+  timeline,
+  readyLabel,
+  allowlist,
+  bodyLastEditedAt = null,
+}) {
   if (!Array.isArray(allowlist) || allowlist.length === 0) {
     return deny(REASONS.TRIGGER_ALLOWLIST_MISSING);
   }
@@ -77,6 +85,20 @@ export function evaluateTriggerProvenance({ issue, timeline, readyLabel, allowli
   const latest = [...labelEvents].sort((a, b) =>
     String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')),
   )[labelEvents.length - 1];
+
+  // Nhan la mot lan DUYET, va no duyet MOT NOI DUNG cu the. Tac gia Issue sua duoc than Issue
+  // cua chinh minh bat cu luc nao ma khong can quyen ghi repo — nen neu than doi SAU lan gan nhan,
+  // cai da duoc duyet khong con la cai sap chay. Do la nguon goc kich hoat MO HO, khong phai mot
+  // task hop le, va o day mo ho nghia la tu choi.
+  //
+  // Khong dung `issue.updated_at`: truong do nhay ca khi ai do binh luan hoac gan nhan, nen no se
+  // tu choi nham gan nhu moi task. `lastEditedAt` chi nhay khi CHINH than bi sua.
+  if (typeof bodyLastEditedAt === 'string') {
+    const labeledAt = typeof latest?.created_at === 'string' ? latest.created_at : null;
+    if (labeledAt === null || Date.parse(bodyLastEditedAt) > Date.parse(labeledAt)) {
+      return deny(REASONS.TRIGGER_ISSUE_EDITED_AFTER_LABEL, { label: readyLabel });
+    }
+  }
 
   const principal = timelineEventPrincipal(latest);
   if (principal === null) return deny(REASONS.TRIGGER_PRINCIPAL_UNKNOWN, { label: readyLabel });

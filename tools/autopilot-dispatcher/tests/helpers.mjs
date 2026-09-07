@@ -136,12 +136,24 @@ export function labeledEvent(overrides = {}) {
  * GitHub gia: mot bang tra cuu tu duong dan REST sang than tra ve, cong nhat ky moi lan goi.
  * @param {Record<string, any>} routes
  */
-export function fakeGh(routes) {
+export function fakeGh(routes, graphqlData) {
   /** @type {string[]} */
   const calls = [];
   return {
     calls,
     bin: 'gh',
+    /**
+     * Mac dinh: than Issue CHUA BAO GIO bi sua. Bai nao muon do cong "sua sau khi gan nhan" thi
+     * truyen `graphqlData` rieng.
+     */
+    async graphql() {
+      calls.push('graphql');
+      if (graphqlData instanceof Error) return { ok: false, reason: 'GITHUB_CALL_FAILED' };
+      return {
+        ok: true,
+        data: graphqlData ?? { repository: { issue: { lastEditedAt: null } } },
+      };
+    },
     /** @param {string} apiPath */
     async api(apiPath) {
       calls.push(apiPath);

@@ -52,7 +52,42 @@ export function createGh(deps) {
     }
   }
 
-  return { api, bin };
+  /**
+   * Truy van GraphQL. Ton tai vi REST KHONG noi duoc "than Issue sua lan cuoi luc nao" — no chi co
+   * `updated_at`, ma truong do nhay ca khi ai do binh luan hay gan nhan, nen dung no lam bang
+   * chung se tu choi nham gan nhu moi task. `Issue.lastEditedAt` cua GraphQL la dung thu can.
+   *
+   * Bien chi nhan gia tri do CAU HINH CUC BO va so nguyen da kiem sinh ra — khong bao gio la mot
+   * chuoi den tu GitHub. Va vi di qua `execFile` voi mang argv, chung khong the tro thanh cu phap.
+   * @param {string} query
+   * @param {Record<string, string | number>} variables
+   * @returns {Promise<{ ok: true, data: any } | import('./errors.mjs').Denied>}
+   */
+  async function graphql(query, variables) {
+    const args = ['api', 'graphql', '-f', `query=${query}`];
+    for (const [key, value] of Object.entries(variables)) {
+      // `-F` de GraphQL nhan Int/Boolean dung kieu; `-f` giu nguyen chuoi.
+      args.push(typeof value === 'number' ? '-F' : '-f', `${key}=${value}`);
+    }
+    const result = await deps.exec(bin, args, { timeoutMs });
+    if (!result.ok) {
+      return deny(REASONS.GITHUB_CALL_FAILED, {
+        path: 'graphql',
+        exitCode: result.code,
+        errorCode: result.errorCode,
+      });
+    }
+    try {
+      const body = JSON.parse(result.stdout);
+      // GraphQL tra 200 kem `errors` — mot loi 200 van la mot loi, khong phai du lieu.
+      if (body?.errors) return deny(REASONS.GITHUB_BAD_RESPONSE, { path: 'graphql' });
+      return { ok: /** @type {const} */ (true), data: body?.data ?? null };
+    } catch {
+      return deny(REASONS.GITHUB_BAD_RESPONSE, { path: 'graphql' });
+    }
+  }
+
+  return { api, graphql, bin };
 }
 
 /** @typedef {ReturnType<typeof createGh>} GhClient */

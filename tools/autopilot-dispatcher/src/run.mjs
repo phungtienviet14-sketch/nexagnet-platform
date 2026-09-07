@@ -16,7 +16,12 @@
  */
 import { assertArmed } from './config.mjs';
 import { DISPATCH_STATES, REASONS, deny } from './errors.mjs';
-import { listReadyIssues, readIssue, readIssueTimeline } from './github-source.mjs';
+import {
+  listReadyIssues,
+  readIssue,
+  readIssueBodyEdit,
+  readIssueTimeline,
+} from './github-source.mjs';
 import { evaluateTriggerProvenance } from './trigger-provenance.mjs';
 import { readTaskContract } from './task-reader.mjs';
 import { buildDispatchPlan, ledgerKeyFor } from './planner.mjs';
@@ -124,11 +129,20 @@ async function runInsideLock({ config, mode, deps, requestedIssue, log }) {
   });
   if (!timeline.ok) return refuse(log, mode, timeline, { issue: Number(issue.number) });
 
+  // Doc rieng: mot lan gan nhan duyet MOT noi dung, nen phai biet noi dung do co bi doi sau do
+  // khong. Khong doc duoc => tu choi, khong coi nhu "chua doi".
+  const bodyEdit = await readIssueBodyEdit(deps.gh, {
+    repo: config.repo,
+    issue: Number(issue.number),
+  });
+  if (!bodyEdit.ok) return refuse(log, mode, bodyEdit, { issue: Number(issue.number) });
+
   const provenance = evaluateTriggerProvenance({
     issue,
     timeline: timeline.timeline,
     readyLabel: config.readyLabel,
     allowlist: config.trustedTriggerPrincipals,
+    bodyLastEditedAt: bodyEdit.lastEditedAt,
   });
   if (!provenance.ok) return refuse(log, mode, provenance, { issue: Number(issue.number) });
 
@@ -275,10 +289,25 @@ async function executeDispatch({
   if (!claimed.ok) return refuse(log, MODES.EXECUTE, claimed, planFields);
   log('dispatch.claimed', { ...planFields, state: DISPATCH_STATES.CLAIMED });
 
-  /** @param {string} state @param {string | null} [reason] */
-  const mark = (state, reason = null) => {
-    deps.ledger.update(plan.ledgerKey, { state, lastReason: reason });
+  /**
+   * Ghi trang thai vao so cai VA doc lai ket qua ghi.
+   *
+   * Bo qua ket qua cua `update` la mot cai bay im lang: neu mot lan ghi hong (dia day, thu muc
+   * mat quyen mot luc, tep bi dong ngoai), ban ghi dung o `CLAIMED` vinh vien — va vi khoa so cai
+   * da ton tai, MOI lan chay sau deu tu choi bang `TASK_ALREADY_CLAIMED` ma khong o dau ghi lai
+   * LY DO trang thai khong bao gio tien. Task do khong bao gio ra khoi day ma khong co nguoi sua
+   * tay tep.
+   * @param {string} state
+   * @param {string | null} [reason]
+   * @param {Record<string, unknown>} [extra]
+   */
+  const mark = (state, reason = null, extra = {}) => {
+    const written = deps.ledger.update(plan.ledgerKey, { state, lastReason: reason, ...extra });
+    if (!written.ok) {
+      log('dispatch.ledger_write_failed', { ...planFields, state, reason: written.reason });
+    }
     log('dispatch.state', { ...planFields, state, ...(reason ? { reason } : {}) });
+    return written;
   };
 
   const worktree = await createWorktree(
@@ -297,8 +326,10 @@ async function executeDispatch({
   }
   mark(DISPATCH_STATES.WORKTREE_READY);
 
-  deps.ledger.update(plan.ledgerKey, { state: DISPATCH_STATES.CLAUDE_STARTING, launches: 1 });
-  log('dispatch.state', { ...planFields, state: DISPATCH_STATES.CLAUDE_STARTING });
+  // Lan ghi NAY la lan duy nhat bat buoc phai thanh cong truoc khi phong: no la thu ghi lai rang
+  // mot tien trinh sap chay. Ghi hong ma van phong thi so cai khong con dem duoc so lan phong.
+  const starting = mark(DISPATCH_STATES.CLAUDE_STARTING, null, { launches: 1 });
+  if (!starting.ok) return starting;
 
   const launched = await launchClaude({
     spawn: deps.spawn,
@@ -324,7 +355,7 @@ async function executeDispatch({
     stdout_bytes: outcome.stdoutBytes,
     stderr_bytes: outcome.stderrBytes,
   });
-  deps.ledger.update(plan.ledgerKey, { state: outcome.state });
+  mark(outcome.state);
 
   // Hau kiem chay cho MOI ket cuc, ke ca timeout va exit khac 0: Claude co the da mo PR roi moi
   // chet. Bo qua buoc nay khi exit != 0 la tu bo mat mot ban giao co that.
@@ -339,12 +370,19 @@ async function executeDispatch({
     return verified;
   }
 
-  // Trang thai cuoi cung: neu tien trinh khong ket thuc sach thi ket cuc cua TIEN TRINH thang;
-  // chi mot lan chay sach moi duoc lay ket luan tu GitHub. Nguoc lai mot lan timeout co san PR cu
-  // se doc ra thanh "xong".
+  // Trang thai cuoi cung: mot lan chay KHONG ket thuc sach thi ket cuc cua TIEN TRINH thang.
+  //
+  // Ly do KHONG phai "so doc nham mot PR cu": ten nhanh mang dau van tay hop dong va worktree tu
+  // choi moi va cham, nen mot PR tren nhanh do chi co the sinh ra trong CHINH lan chay nay. Ly do
+  // that la: mot tien trinh bi giet giua chung co the da kip mo PR nhung chua kip lam xong viec
+  // (tren Windows, xem `killGraceMs`, no bi giet KHONG co thoi gian an han). Bao "da ban giao"
+  // cho mot lan chay nhu vay la bao xong cho mot viec co the dang do.
+  //
+  // Nhung ket qua hau kiem KHONG bi vut di: no duoc ghi rieng vao `handoffState`, de mot lan
+  // timeout co ban giao that van doc ra duoc, thay vi bien mat sau mot chu `TIMED_OUT`.
   const processClean = outcome.state === DISPATCH_STATES.CLAUDE_EXITED_0;
   const finalState = processClean ? verified.state : outcome.state;
-  deps.ledger.update(plan.ledgerKey, { state: finalState, lastReason: verified.reason });
+  mark(finalState, verified.reason, { handoffState: verified.state, pr: verified.pr });
   log('dispatch.finished', {
     ...planFields,
     state: finalState,

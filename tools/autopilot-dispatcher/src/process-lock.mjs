@@ -63,14 +63,22 @@ export function acquireProcessLock(options) {
       const code = /** @type {any} */ (error)?.code;
       if (code !== 'EEXIST') return deny(REASONS.LOCK_UNWRITABLE, { code });
       if (!allowReclaim) return deny(REASONS.LOCK_HELD, { holder: null });
+      // `openSync('wx')` va `writeSync` la HAI buoc. Giua chung, tep khoa ton tai nhung con RONG.
+      // Mot tien trinh thu hai roi dung vao khe do se doc ra chuoi rong, parse hong, suy ra "khong
+      // co chu" roi CUOP mot khoa cua tien trinh dang song — dung tinh huong hai ban chay gan nhu
+      // cung luc ma khoa nay sinh ra de chan. Nen doc khong ra = COI NHU CO CHU, khong thu hoi.
+      // Doi lai: mot tep khoa hong that su can nguoi xoa tay, va do la danh doi dung huong.
       /** @type {{ pid?: number } | null} */
       let holder = null;
       try {
         holder = JSON.parse(io.readFileSync(file, 'utf8'));
       } catch {
-        holder = null;
+        return deny(REASONS.LOCK_HELD, { holder: null, unreadable: true });
       }
       const pid = Number(holder?.pid);
+      if (!Number.isInteger(pid) || pid <= 0) {
+        return deny(REASONS.LOCK_HELD, { holder: null, unreadable: true });
+      }
       if (isAlive(pid, proc)) return deny(REASONS.LOCK_HELD, { holder: pid });
       // Chu cu da chet: thu hoi DUNG MOT LAN, roi thu tao lai. Neu lan hai van EEXIST thi co mot
       // tien trinh khac vua gianh duoc — nhuong, khong gianh tiep.

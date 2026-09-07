@@ -97,7 +97,11 @@ function findSecretLeak(node, path = []) {
  * @property {'none' | 'host'} permissionPrompts
  * @property {string | null} permissionMode
  * @property {number} timeoutMs
- * @property {number} killGraceMs
+ * @property {number} killGraceMs thoi gian an han giua SIGTERM va SIGKILL. **Tren Windows khoang
+ *   nay khong ton tai**: Node khong gui duoc tin hieu POSIX, nen `child.kill('SIGTERM')` giet
+ *   tien trinh NGAY va dut khoat (do duoc tren may phat trien: tien trinh con cai san mot bo bat
+ *   SIGTERM khong bao gio chay). Truong nay chi co tac dung that tren POSIX; tren Windows hay coi
+ *   `timeoutMs` la thoi diem tien trinh bi giet khong bao truoc.
  * @property {number} maxCaptureBytes
  *
  * @typedef {object} DispatcherConfig
