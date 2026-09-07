@@ -176,6 +176,24 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.analytics.read',
 
+  /* --- THAP DIEU HANH (Lane G, #244) — den cung `transport-core` --- */
+  /**
+   * BANG DIEU HANH GOM CHUNG — bay cot vong chay, dem doi xe, hang viec dang cho nguoi xu ly.
+   *
+   * MOT quyen cho ca bang, khong phai mot quyen cho moi o. Cung ly le da dat cho
+   * `transport.alerts.read`: bang la MOT be mat cua mot vai (Dieu do/Giam doc/Ke toan), khong phai
+   * mot tap hop mang cac bao cao roi.
+   *
+   * Tach khoi `transport.alerts.read` du bang co doc bang canh bao: canh bao tra loi "cai gi sap
+   * hong", bang dieu hanh tra loi "xe nao dang o dau va viec nao dang cho ai". Mot khach chi bat
+   * `transport-core` co bang nhung khong co canh bao — hai quyen roi lam duoc dieu do, mot quyen
+   * gop thi khong.
+   *
+   * KHONG nam trong be mat lai xe: bang phoi CA doi xe, va `INV-09` giu khung nhin lai xe o pham vi
+   * cua chinh ho.
+   */
+  'transport.control_tower.read',
+
   /* --- `transport-asset-compliance` (`TX-06`) --- */
   'transport.maintenance.plan.read',
   'transport.maintenance.plan.manage',

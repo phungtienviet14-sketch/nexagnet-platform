@@ -352,6 +352,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.compliance.document.read": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
     },
+    "transport.control_tower.read": {
+      "functionName": "ControlTowerController.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower.controller.ts",
+      "line": 43
+    },
     "transport.costing.driver_fund.adjust": {
       "functionName": "DriverFundController.adjust",
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
@@ -752,6 +757,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceRegistryService.openConflict",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
       "line": 644
+    },
+    "control_tower.board_projection|BOARD_CHECKPOINT_COLUMNS_UNAVAILABLE": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 84
+    },
+    "control_tower.compile|CONTROL_TOWER_COMPILED": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 92
+    },
+    "control_tower.compile|CONTROL_TOWER_SOURCE_FAILED": {
+      "functionName": "ControlTowerReadService.guard",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 253
+    },
+    "control_tower.compile|CONTROL_TOWER_SOURCE_UNAVAILABLE": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 75
     },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",

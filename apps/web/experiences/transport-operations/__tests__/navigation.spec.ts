@@ -128,6 +128,7 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
   it('Giam doc thay moi muc van hanh khach da bat', () => {
     expect(idsOf(director())).toEqual([
       'overview',
+      'control-tower',
       'trips',
       'movement',
       'fleet',
