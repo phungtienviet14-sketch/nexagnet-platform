@@ -18,12 +18,21 @@ import type {
   DriverPayslipView,
   EffectiveVehicleState,
   ExpenseCatalogue,
+  ExpenseClaim,
+  ExpenseClaimDetail,
+  ExpenseClaimStatus,
+
   MaintenanceDue,
   MaintenancePlan,
   MaintenancePlanStatus,
   MaintenanceTriggerKind,
   MaintenanceWorkOrder,
   OperationalAlertFeed,
+  RunDistanceSummary,
+  RunLegKind,
+  TransportOrder,
+  VehicleRun,
+  VehicleRunDetail,
   PartnerPosition,
   PayrollPeriod,
   PayrollRun,
@@ -864,5 +873,88 @@ export const transportApi = {
     /** SUA mot phieu DA CHOT = phat mot phieu bu/dao, KHONG sua so cu (`INV-20`). */
     correctPayslip: (id: string, input: CorrectPayslipInput): Promise<Payslip> =>
       send('POST', `/transport/payroll/payslips/${encodeURIComponent(id)}/corrections`, input),
+  },
+
+  /**
+   * MO HINH VAN CHUYEN v2 — HAI TRUC DOC LAP (`D-01`).
+   *
+   * Danh sach o day tra ve MANG TRAN, dung nhu `transport-core` da lam cho chuyen va doi xe.
+   * Chin duong cua `TX-06`/`TX-07` dung phong bi la mot lua chon RIENG cua chung, khong phai
+   * mot quy uoc chung — xem `transport-api-envelope.spec.ts`.
+   */
+  movement: {
+    orders: (): Promise<readonly TransportOrder[]> => get('/transport/orders'),
+    order: (id: string): Promise<TransportOrder> =>
+      get(`/transport/orders/${encodeURIComponent(id)}`),
+    createOrder: (input: {
+      code: string;
+      originLabel: string;
+      destinationLabel: string;
+      businessDate?: string;
+      customerId?: string | null;
+      cargoDescription?: string | null;
+      freightAmount?: number | null;
+    }): Promise<TransportOrder> => send('POST', '/transport/orders', input),
+    fulfilOrder: (id: string): Promise<TransportOrder> =>
+      send('POST', `/transport/orders/${encodeURIComponent(id)}/transition`, { to: 'FULFILLED' }),
+    cancelOrder: (id: string, reason: string): Promise<TransportOrder> =>
+      send('POST', `/transport/orders/${encodeURIComponent(id)}/cancel`, { reason }),
+
+    runs: (): Promise<readonly VehicleRun[]> => get('/transport/runs'),
+    run: (id: string): Promise<VehicleRunDetail> =>
+      get(`/transport/runs/${encodeURIComponent(id)}`),
+    /** Tra ca `complete` — man hinh phai noi ra khi con chang thieu km. */
+    distance: (id: string): Promise<RunDistanceSummary> =>
+      get(`/transport/runs/${encodeURIComponent(id)}/distance`),
+    createRun: (input: {
+      code: string;
+      vehicleId: string;
+      businessDate?: string;
+    }): Promise<VehicleRun> => send('POST', '/transport/runs', input),
+    addLeg: (
+      runId: string,
+      input: {
+        sequence: number;
+        kind: RunLegKind;
+        originLabel: string;
+        destinationLabel: string;
+        orderId?: string | null;
+        distanceKm?: number | null;
+      },
+    ): Promise<unknown> => send('POST', `/transport/runs/${encodeURIComponent(runId)}/legs`, input),
+    startRun: (id: string): Promise<VehicleRun> =>
+      send('POST', `/transport/runs/${encodeURIComponent(id)}/transition`, { to: 'ACTIVE' }),
+    assignRun: (id: string, driverId: string): Promise<unknown> =>
+      send('POST', `/transport/runs/${encodeURIComponent(id)}/assignment`, { driverId }),
+  },
+
+  /** DE NGHI CHI + CONG DUYET (`D-06`). Duyet va tu choi la HAI duong rieng. */
+  claims: {
+    list: (status?: ExpenseClaimStatus): Promise<readonly ExpenseClaim[]> =>
+      get(
+        status === undefined
+          ? '/transport/expense-claims'
+          : `/transport/expense-claims?status=${encodeURIComponent(status)}`,
+      ),
+    get: (id: string): Promise<ExpenseClaimDetail> =>
+      get(`/transport/expense-claims/${encodeURIComponent(id)}`),
+    submit: (input: {
+      driverId: string;
+      categoryCode: string;
+      claimedAmount: number;
+      tripId?: string | null;
+      runId?: string | null;
+      note?: string | null;
+    }): Promise<ExpenseClaim> => send('POST', '/transport/expense-claims', input),
+    approve: (
+      id: string,
+      input: { reasonCode: string; approvedAmount?: number; note?: string | null },
+    ): Promise<ExpenseClaimDetail> =>
+      send('POST', `/transport/expense-claims/${encodeURIComponent(id)}/approve`, input),
+    reject: (
+      id: string,
+      input: { reasonCode: string; note?: string | null },
+    ): Promise<ExpenseClaimDetail> =>
+      send('POST', `/transport/expense-claims/${encodeURIComponent(id)}/reject`, input),
   },
 } as const;

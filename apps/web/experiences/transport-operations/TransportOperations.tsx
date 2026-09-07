@@ -23,8 +23,10 @@ import {
 } from './navigation';
 import { hasOperationsScope, operationsEmptyMessage } from './transport-actions';
 import { DriverFundView } from './views/DriverFundView';
+import { ExpenseClaimsView } from './views/ExpenseClaimsView';
 import { ExportsView } from './views/ExportsView';
 import { MaintenanceComplianceView } from './views/MaintenanceView';
+import { MovementView } from './views/MovementView';
 import { PayrollView } from './views/PayrollView';
 import { ArApView, MarginView, SettlementView } from './views/SettlementViews';
 import { FleetView } from './views/FleetView';
@@ -259,10 +261,14 @@ function SectionBody({
           onFilterChange={onTripFilterChange}
         />
       );
+    case 'movement':
+      return <MovementView />;
     case 'fleet':
       return <FleetView />;
     case 'driver-fund':
       return <DriverFundView />;
+    case 'expense-claims':
+      return <ExpenseClaimsView />;
     case 'fuel':
       return <FuelView />;
     case 'settlement':
