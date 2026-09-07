@@ -285,7 +285,51 @@ export const FUEL_SUPPLIER_PROFILE_REASONS = [
 ] as const;
 export type FuelSupplierProfileReason = (typeof FUEL_SUPPLIER_PROFILE_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * fuel_document.ingest — nhap mot chung tu nguon (Lane C / C2)
+ * ------------------------------------------------------------------ *
+ *
+ * NAM ket cuc, va ba trong so do KHONG phai loi cua ai: mot lan gui lai cung mot tep, mot hoa don
+ * da vao he thong tu tep khac, va mot chung tu khong doc duoc deu la chuyen thuong ngay cua mot
+ * hop thu. Gop chung thanh "that bai" se lam bang loc trace vo dung dung luc can no nhat.
+ */
+export const FUEL_DOCUMENT_INGEST_REASONS = [
+  'DOCUMENT_PARSED',
+  /** Dung DUNG mot tep da nhap (bam byte trung) — tra lai ban cu, KHONG ghi them hang nao. */
+  'DOCUMENT_IDEMPOTENT_REPLAY',
+  /**
+   * Hoa don nay DA vao he thong tu MOT TEP KHAC.
+   *
+   * Khac han `DOCUMENT_IDEMPOTENT_REPLAY`: o kia la cung mot tep, o day la cung mot HOA DON den
+   * bang hai tep khac nhau (ban goc va mot ban ky lai). Dau van tay byte khong bat duoc truong hop
+   * nay — khoa `(MST, ky hieu, so hoa don, dong)` moi bat duoc.
+   */
+  'DOCUMENT_DUPLICATE_INVOICE',
+  /** Chung tu khong doc duoc. Ly do cu the nam o `detail.rejectReason`. */
+  'DOCUMENT_REJECTED',
+] as const;
+export type FuelDocumentIngestReason = (typeof FUEL_DOCUMENT_INGEST_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * fuel_document.supplier_link — noi chung tu voi mot nha cung cap
+ * ------------------------------------------------------------------ */
+export const FUEL_DOCUMENT_SUPPLIER_REASONS = [
+  'SUPPLIER_LINKED',
+  /** Khong nha cung cap nao trong danh muc mang ma so thue do. Chung tu VAN duoc nhap. */
+  'SUPPLIER_TAX_CODE_UNKNOWN',
+  /**
+   * HAI nha cung cap tro len cung mot ma so thue — danh muc bi nhap trung.
+   *
+   * KHONG chon mot cai: `TransportFuelSupplier.taxCode` khong co rang buoc duy nhat, nen tinh
+   * trang nay la co that, va chon dai se noi chung tu vao nham ho so. De trong va bao ten.
+   */
+  'SUPPLIER_TAX_CODE_AMBIGUOUS',
+] as const;
+export type FuelDocumentSupplierReason = (typeof FUEL_DOCUMENT_SUPPLIER_REASONS)[number];
+
 export type TransportFuelDecisionReason =
+  | FuelDocumentIngestReason
+  | FuelDocumentSupplierReason
   | FuelEntrySubmitReason
   | FuelEntryReviewReason
   | FuelEntryAmendReason
@@ -322,6 +366,8 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     'fuel_station.alias',
     'fuel_station.resolve',
     'fuel_supplier.profile',
+    'fuel_document.ingest',
+    'fuel_document.supplier_link',
   ],
   labels: {
     FUEL_ENTRY_RECORDED: 'Đã ghi phiếu đổ dầu',
@@ -418,12 +464,23 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
 
     STATION_RESOLVED: 'Nhận ra đúng một cây xăng từ chứng từ',
     STATION_AMBIGUOUS: 'Nhiều trạm cùng khớp — cần một bí danh phân biệt',
-    STATION_SUPPLIER_MISMATCH: 'Khớp một trạm của nhà cung cấp khác — chứng từ ghi sai nhà cung cấp',
+    STATION_SUPPLIER_MISMATCH:
+      'Khớp một trạm của nhà cung cấp khác — chứng từ ghi sai nhà cung cấp',
     STATION_NO_MATCH: 'Chứng từ có dữ kiện nhưng không trạm nào khớp',
     STATION_NO_INPUT: 'Chứng từ không nói gì về trạm — nguồn quá yếu, phải gán tay',
 
     SUPPLIER_PROFILE_UPDATED: 'Đã sửa siêu dữ liệu hợp đồng của nhà cung cấp',
     SUPPLIER_PROFILE_NOT_FOUND: 'Không tìm thấy nhà cung cấp',
     SUPPLIER_CONTRACT_PERIOD_INVALID: 'Ngày bắt đầu hợp đồng sau ngày kết thúc',
+
+    DOCUMENT_PARSED: 'Đã đọc chứng từ nguồn và ghi các ứng viên',
+    DOCUMENT_IDEMPOTENT_REPLAY: 'Đúng tệp này đã nhập rồi — trả lại bản cũ, không ghi thêm',
+    DOCUMENT_DUPLICATE_INVOICE: 'Hoá đơn này đã vào hệ thống từ một tệp khác',
+    DOCUMENT_REJECTED: 'Chứng từ không đọc được — lý do có tên ở chi tiết',
+
+    SUPPLIER_LINKED: 'Đã nối chứng từ với nhà cung cấp theo mã số thuế',
+    SUPPLIER_TAX_CODE_UNKNOWN: 'Không nhà cung cấp nào trong danh mục mang mã số thuế đó',
+    SUPPLIER_TAX_CODE_AMBIGUOUS:
+      'Hai nhà cung cấp trở lên cùng một mã số thuế — danh mục nhập trùng',
   } satisfies Record<TransportFuelDecisionReason, string>,
 });

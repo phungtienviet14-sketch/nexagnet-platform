@@ -20,6 +20,7 @@ const FUEL_ARTEFACTS = [
    * ri capability ma chung dung de chan.
    */
   'FuelStationController',
+  'FuelDocumentController',
   'TransportFuelModule',
 ];
 

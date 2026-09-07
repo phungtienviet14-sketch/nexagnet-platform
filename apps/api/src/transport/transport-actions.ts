@@ -110,6 +110,16 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.fuel.station.read',
   'transport.fuel.station.manage',
+  /**
+   * CHUNG TU NGUON NHIEN LIEU (Lane C / C2) — doc hop thu chung tu, va nhap mot chung tu moi.
+   *
+   * Tach `.ingest` khoi `.read` vi hai viec khac nhau ve chat: doc la viec hang ngay cua nguoi doi
+   * soat; NHAP la mot lan dua du lieu tu ben ngoai vao he thong, va no de lai hang trong bang. Va
+   * ca hai tach khoi `transport.fuel.statement.import`: bang ke la mot ky TONG HOP do nguoi doi
+   * soat nhap tay, hoa don la tung lan ban do may cua hang phat — hai nguon, hai vong doi.
+   */
+  'transport.fuel.document.read',
+  'transport.fuel.document.ingest',
   'transport.fuel.statement.import',
   'transport.fuel.reconciliation.read',
   'transport.fuel.reconciliation.match',

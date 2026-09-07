@@ -56,6 +56,8 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.fuel.entry.verify',
       'transport.fuel.station.read',
       'transport.fuel.station.manage',
+      'transport.fuel.document.read',
+      'transport.fuel.document.ingest',
       'transport.fuel.statement.import',
       'transport.fuel.reconciliation.read',
       'transport.fuel.reconciliation.match',

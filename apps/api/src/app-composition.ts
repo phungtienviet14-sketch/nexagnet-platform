@@ -115,6 +115,7 @@ import { FuelEvidenceController } from './transport/evidence/fuel-evidence.contr
 import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js';
 import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
+import { FuelDocumentController } from './transport/fuel/fuel-document.controller.js';
 import { FuelStationController } from './transport/fuel/fuel-station.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
 import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
@@ -274,6 +275,8 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // buoc phai sua goi nen tang roi build lai — tuc cham dung vung ma #223/#224 dang lam viec. Tram
   // xang khong ton tai duoc neu khong co phieu do dau, nen no thuoc dung capability da co.
   owned('transport-fuel', FuelStationController),
+  // CHUNG TU NGUON NHIEN LIEU (Lane C / C2) — cung capability, cung ly le voi tram xang.
+  owned('transport-fuel', FuelDocumentController),
   owned('transport-fuel', FuelReconciliationController),
   // PHIEU DAU CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
   owned('transport-fuel', DriverFuelController),

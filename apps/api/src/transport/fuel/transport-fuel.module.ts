@@ -7,13 +7,17 @@ import { TransportModule } from '../transport.module.js';
 import { FuelReadService } from './fuel-read.service.js';
 import { FuelReconciliationService } from './fuel-reconciliation.service.js';
 import { TRANSPORT_FUEL_POLICY, tenantTransportFuelPolicy } from './fuel-policy.js';
+import { FuelStationRepository, InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import {
-  FuelStationRepository,
-  InMemoryFuelStationRepository,
-} from './fuel-station.repository.js';
+  FuelDocumentRepository,
+  InMemoryFuelDocumentRepository,
+} from './fuel-document.repository.js';
+import { FuelDocumentService } from './fuel-document.service.js';
+import { FuelInvoiceSource, XmlFuelInvoiceSource } from './fuel-invoice-source.js';
 import { FuelStationService } from './fuel-station.service.js';
 import { FileFuelStatementSource, FuelStatementSource } from './fuel-statement-source.js';
 import { FuelStatementService } from './fuel-statement.service.js';
+import { PrismaFuelDocumentRepository } from './prisma-fuel-document.repository.js';
 import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
 import {
   CostingFuelExpenseAdapter,
@@ -75,6 +79,20 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
           : new InMemoryFuelStationRepository(),
       inject: [PrismaService],
     },
+    /*
+     * CHUNG TU NGUON (Lane C / C2) — cung mot cong tac `PERSISTENCE` voi hai kho kia, va cung
+     * mot ly do: ba kho phai o CUNG mot the gioi. Mot kho chung tu trong bo nho dung canh mot
+     * kho tram tren Prisma se lam moi lan nhap tra `NO_MATCH` tren mot he thong day du du lieu.
+     */
+    {
+      provide: FuelDocumentRepository,
+      useFactory: (prisma: PrismaService): FuelDocumentRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaFuelDocumentRepository(prisma)
+          : new InMemoryFuelDocumentRepository(),
+      inject: [PrismaService],
+    },
+    { provide: FuelInvoiceSource, useClass: XmlFuelInvoiceSource },
     { provide: TransportFuelCoreFacts, useClass: TransportFuelCoreFactsAdapter },
     { provide: FuelCostingPort, useClass: CostingFuelExpenseAdapter },
     { provide: FuelStatementSource, useClass: FileFuelStatementSource },
@@ -84,6 +102,7 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
     FuelReconciliationService,
     FuelReadService,
     FuelStationService,
+    FuelDocumentService,
   ],
   exports: [
     FuelService,
@@ -91,8 +110,10 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
     FuelReconciliationService,
     FuelReadService,
     FuelStationService,
+    FuelDocumentService,
     FuelRepository,
     FuelStationRepository,
+    FuelDocumentRepository,
   ],
 })
 export class TransportFuelModule {}
