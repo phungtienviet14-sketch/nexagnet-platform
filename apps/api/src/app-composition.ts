@@ -136,6 +136,8 @@ import { DriverPayslipsController } from './transport/workforce/driver-payslips.
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
 import { TransportOrdersController } from './transport/movement/orders.controller.js';
+import { DriverExpenseClaimsController } from './transport/claims/driver-claims-self.controller.js';
+import { ExpenseClaimsController } from './transport/claims/claims.controller.js';
 import { RunsController } from './transport/movement/runs.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { TransportModule } from './transport/transport.module.js';
@@ -238,6 +240,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // hai controller nay, va `TransportTrip` khong doi mot cot nao.
   owned('transport-core', TransportOrdersController),
   owned('transport-core', RunsController),
+  // DE NGHI CHI + CONG DUYET (R1-C, #232 `D-06`) -- thuoc `transport-costing`: mot de nghi chi
+  // chi co nghia khi khach da bat so quy lai xe.
+  owned('transport-costing', ExpenseClaimsController),
+  owned('transport-costing', DriverExpenseClaimsController),
   owned('transport-core', TripsController),
   // BE MAT LAI XE — route rieng, khong phai mot nhanh `if` trong `TripsController` (`GD-23`).
   // Den cung `transport-core` va bien mat cung no.
