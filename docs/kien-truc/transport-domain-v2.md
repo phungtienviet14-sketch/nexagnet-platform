@@ -401,7 +401,7 @@ nào, và `F-11` chặn việc lưu. Nên: **không thêm PostGIS trong R1.**
 | Tín hiệu | Nó chứng minh gì | Nó **không** bắt được gì |
 |---|---|---|
 | `Location.isMock()` (**API 31**, thay `isFromMockProvider()` đã lỗi thời) | Bản định vị đến từ **test provider** đã đăng ký qua `addTestProvider` — tức Developer Options → "Chọn ứng dụng vị trí giả" | Mọi thứ khác. Có **module đang phát hành công khai** ép chính hai hàm này trả `false` và quét sạch cờ ẩn trong `Bundle` (LSPosed: `UnMock GPS`, `Hide Mock Location`, `XposedFakeLocation`). ROM tuỳ biến sửa thẳng `frameworks/base` |
-| Play Integrity | Ứng dụng có đúng là bản đã ký và phân phối, thiết bị có toàn vẹn | **Đòi phân phối qua Google Play.** APK cài tay hoặc máy không có Play Services không có phán quyết dùng được ⇒ **phát hành nội bộ cho lái xe là một câu hỏi mở, không phải chi tiết** |
+| Play Integrity | Ba trục **tách rời**: `appRecognitionVerdict` (bản này có phải bản Play biết không), `appLicensingVerdict` (người dùng có quyền không), `deviceRecognitionVerdict` (thiết bị có toàn vẹn không) | **Không** đòi niêm yết công khai — app chưa liên kết Play vẫn gọi được bằng `setCloudProjectNumber()`, và **closed testing** (200 danh sách × 2.000 người, không niêm yết, không giới hạn thời gian) là đường phát hành nội bộ chính thức. APK cài tay chỉ làm hai trục ĐẦU thành `UNLICENSED`/`UNRECOGNIZED_VERSION`; trục **thiết bị vẫn dùng được**. Chỉ hỏng hẳn khi máy **không có Play Services** (`PLAY_SERVICES_NOT_FOUND`). Hạn mức mặc định 10.000 lượt/ngày — thừa xa cho một đội xe |
 | Key attestation phần cứng (Android) | Khoá thật sự nằm trong phần cứng | Không nói gì về vị trí. Và **không có plugin Flutter/RN nào** phơi ra chuỗi chứng chỉ — phải viết module native |
 | App Attest / DeviceCheck (iOS) | Phiên bản ứng dụng là thật, chạy trên thiết bị Apple thật | **Không** phát hiện jailbreak, và **không** phát hiện giả mạo vị trí |
 | Giả mạo tầng vô tuyến (SDR) | — | **Không cờ phần mềm nào bắt được, theo thiết kế.** Máy thu GPS báo trung thực một fix tính từ tín hiệu giả. Nguồn bình duyệt: Chan et al., *NAVIGATION* 69(3), 2022 — và chính bài đó khuyên đối chiếu chéo GNSS ⟂ vị trí mạng, và bất thường AGC/C-N0 |
@@ -487,7 +487,7 @@ Bảng này là **hợp đồng của sự trung thực**: cột cuối nói cá
 | Sửa đồng hồ máy | Máy chủ **chỉ tin `receivedAt`**; lệch quá ngưỡng thì gắn cờ | Không |
 | Gửi trùng khi offline | Khoá idempotency client + `correlationKey` unique **đã có sẵn ở miền** | Không |
 | Lái xe A đọc/ghi dữ liệu của B | **Đã chặn bằng cấu trúc**: `SELF_SCOPE_ACTIONS`, `Driver.authUserId`, quyền sở hữu phân công | Không |
-| App bị sửa / cài tay | Play Integrity — **nhưng chỉ khi phát hành qua Play** | **Có** |
+| App bị sửa / cài tay | `deviceRecognitionVerdict` rỗng khi máy đã root hoặc bị hook. Bộ công cụ cộng đồng (Play Integrity Fix + TrickyStore) **đôi khi** vượt được, nhưng mong manh và phải cập nhật liên tục | **Có** — coi đây là một điểm trong thang rủi ro, không phải cổng chặn nhị phân |
 | Mất mạng | Hàng đợi offline + huy hiệu trạng thái | Không |
 | Máy mất / dùng chung | Ràng buộc thiết bị ⟂ phiên | **Có** |
 | Rút chứng từ sau khi kế toán đã khoá | **Đã có** ở `main` từ 07/09/2026 (migration `transport_fuel_inbox_evidence_withdrawal`) | Không |
