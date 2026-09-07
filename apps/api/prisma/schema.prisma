@@ -866,6 +866,8 @@ model TransportVehicle {
   /// `transport-asset-compliance`.
   maintenancePlans   TransportMaintenancePlan[]
   workOrders         TransportMaintenanceWorkOrder[]
+  /// R1-B: cac vong chay vat ly cua chinh chiec xe nay.
+  runs               TransportVehicleRun[]
 
   @@index([status])
 }
@@ -892,6 +894,8 @@ model TransportDriver {
   fuelEntries        TransportFuelEntry[]
   /// `TX-07` — phieu luong cua lai xe nay. Chi co mat khi khach bat `transport-workforce`.
   payslips           TransportPayslip[]
+  /// R1-B: lich su cam lai cac vong chay v2.
+  runAssignments     TransportRunAssignment[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -933,9 +937,11 @@ model TransportCustomer {
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
 
-  trips TransportTrip[]
+  trips  TransportTrip[]
+  /// R1-B: nghia vu thuong mai cua khach nay.
+  orders TransportOrder[]
   /// `TX-05` — dieu khoan thanh toan + han muc tin dung. Tuy chon: khach chua khai thi khong co hang.
-  terms TransportCustomerTerms?
+  terms  TransportCustomerTerms?
 
   @@index([status])
 }
@@ -1008,17 +1014,20 @@ model TransportTrip {
   cancelledAt        DateTime?
   cancellationReason String?
 
-  assignments TransportTripAssignment[]
+  assignments         TransportTripAssignment[]
   /// `TX-03` — hai lop cua mot khoan chi (`INV-03`). Chuyen la NGUON SU THAT cua ca hai.
-  fundEntries TransportDriverFundEntry[]
-  expenses    TransportTripExpense[]
+  fundEntries         TransportDriverFundEntry[]
+  expenses            TransportTripExpense[]
   /// `TX-04` — phieu do dau cua chuyen. `INV-04`: chuyen thue xe ngoai khong duoc co dong nao o day.
-  fuelEntries TransportFuelEntry[]
+  fuelEntries         TransportFuelEntry[]
   /// `TX-05` — chung tu AR/AP sinh ra tu chuyen nay. NHIEU hang la binh thuong: mot chuyen thue xe
   /// ngoai vua co doanh thu khach (`CUSTOMER_FREIGHT`) vua co cong no nha xe (`CARRIER_SERVICE`).
   settlementDocuments TransportSettlementDocument[]
   /// `TX-05` — lan tinh hoa hong cua chuyen. Nhieu nhat MOT.
   commission          TransportCommissionCalculation?
+  /// R1-B: BANG TUONG UNG toi mot chang v2. KHONG phai quan he cha/con (#232 `D-01`) -
+  /// bo `TransportTripRunLegLink` di thi chuyen nay van chay y nguyen.
+  runLegLink          TransportTripRunLegLink?
 
   @@index([status])
   @@index([businessDate])
@@ -2950,4 +2959,234 @@ model TransportCounterpartyLink {
 
   @@id([kind, subjectId])
   @@index([counterpartyId])
+}
+
+// ----- Van chuyen v2: NGHIA VU THUONG MAI vs VONG CHAY VAT LY (R1-B, #232 D-01 / #234 A1) -----
+//
+// HAI TRUC DOC LAP. Day la quyet dinh cua chu so huu (#232 §1 `D-01`), va no dao lai phan quyet
+// hoan cua R0 (`F-04`/`Q-01` trong `docs/kien-truc/transport-domain-v2.md`): R0 hoan vi CHUA co
+// mot su kien nguon nao ve chieu rong; #232 `D-01` chinh la su kien do, cap boi chu so huu.
+//
+//   `TransportOrder`      = NGHIA VU THUONG MAI. Ai thue, cho gi, tu dau den dau, bao nhieu tien.
+//   `TransportVehicleRun` = VONG CHAY VAT LY cua MOT xe. Xe roi bai, chay may chang, ve.
+//   `TransportRunLeg`     = MOT chang cua mot vong chay. `LOADED` co the tro toi mot don;
+//                           `EMPTY` (chay rong / deadhead) KHONG duoc tro toi don nao.
+//
+// Vi du hai chang ma #234 doi phai chay duoc:
+//
+//     TransportVehicleRun R1 (xe 29C-12345)
+//     +- RunLeg 1  HN -> HP  LOADED  order = A
+//     +- RunLeg 2  HP -> HN  EMPTY   order = NULL
+//
+// -----------------------------------------------------------------------------------------------
+// QUAN HE VOI `TransportTrip` — KHONG cha, KHONG con.
+//
+// `D-01` ghi ro: mot Order va mot Run KHONG phai ban thay the cha/con truc tiep cua `TransportTrip`.
+// Nen o day KHONG co cot `tripId` tren `TransportVehicleRun`, va KHONG co cot `runId` tren
+// `TransportTrip`. Cai noi hai the gioi la mot bang TUONG UNG rieng — `TransportTripRunLegLink` —
+// dung mau da co cua `TransportCounterpartyLink`: bo no di la ca hai truc van chay nguyen ven.
+//
+// `TransportTrip` giu nguyen cac quan he dang co du lieu that tren `transport-preview/gd1-test`,
+// gom chuyen UAT `UAT-VIET-01`. Migration cua khoi nay CHI THEM: bon enum, bon bang; khong mot
+// `ALTER TABLE` nao doi cot cua bang cu — bang moi tro khoa ngoai VAO chung, khong nguoc lai.
+//
+// -----------------------------------------------------------------------------------------------
+// RANG BUOC SONG TRONG SQL THO (Prisma khong co cu phap), xem
+// `20260907190000_transport_movement/migration.sql` va `transport-movement-storage.spec.ts`:
+//
+//   · `TransportRunLeg_empty_carries_no_order`  — chang EMPTY khong duoc co `orderId`. Day la BAT
+//     BIEN cua ca tranche: neu no chi song o tang mien thi mot lan ghi thang DB lam km rong sai.
+//   · `TransportRunLeg_sequence_positive`       — thu tu chang bat dau tu 1.
+//   · `TransportRunLeg_distance_non_negative`   — km khong am.
+//   · `TransportOrder_freightAmount_money_range`— cung khoang voi `money()`, nhu `TransportTrip`.
+//   · `TransportOrder_code_not_blank` / `TransportVehicleRun_code_not_blank`
+//   · `TransportRunAssignment_activeRun_key`    — unique MOT PHAN, mot ban phan cong DANG hieu luc
+//     cho moi vong chay. Cung mau va cung ly do voi `TransportTripAssignment_activeTrip_key`.
+// -----------------------------------------------------------------------------------------------
+
+/// VONG DOI cua mot NGHIA VU THUONG MAI. Ba trang thai, khong hon.
+///
+/// KHONG co trang thai `SETTLED`/`INVOICED`: cong no va chung tu da co nguon su that rieng
+/// (`TransportSettlementDocument`, T1 §9.1). Them mot trang thai thanh toan o day la tao nguon su
+/// that thu hai cho cung mot cau hoi.
+enum TransportOrderStatus {
+  OPEN
+  FULFILLED
+  CANCELLED
+}
+
+/// VONG DOI cua mot vong chay cua xe.
+enum TransportVehicleRunStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+/// LOAI CHANG — day la truc ma toan bo phan tich km rong dua vao.
+///
+/// `EMPTY` la chay rong/deadhead. Hai gia tri, khong ba: mot chang hoac dang cho hang cua mot
+/// nghia vu, hoac khong. Moi sac thai khac (chay ve bai, di lay vo, dieu xe) van la `EMPTY` cho
+/// toi khi co mot nguon nghiep vu doi phan biet chung.
+enum TransportRunLegKind {
+  LOADED
+  EMPTY
+}
+
+enum TransportRunLegStatus {
+  PLANNED
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+/// NGHIA VU THUONG MAI — mot don van chuyen ma khach da dat.
+///
+/// Doc lap voi `TransportVehicleRun`: mot don ton tai truoc khi biet xe nao chay no, va co the
+/// khong bao gio duoc chay bang xe cua minh. Quan he don/chang nam o `TransportRunLeg.orderId` va
+/// la MOT-NHIEU: mot don co the trai tren nhieu chang (chuyen tai, ghep xe), con mot chang co hang
+/// chi phuc vu MOT nghia vu.
+///
+/// `customerId` tro thang toi `TransportCustomer` chu KHONG toi `TransportCounterparty`: danh tinh
+/// phap nhan da co duong doc rieng qua `TransportCounterpartyLink` (R1-A). Them mot khoa ngoai
+/// danh tinh thu hai o day la tao hai duong tra loi cung mot cau hoi "don nay cua ai".
+model TransportOrder {
+  id                 String               @id @default(cuid())
+  /// MA DOC DUOC ma nguoi dung go, khong phai `cuid`. Cung vai tro voi `TransportTrip.code`.
+  code               String               @unique
+  status             TransportOrderStatus @default(OPEN)
+  /// `YYYY-MM-DD` theo mui gio tenant — tinh MOT LAN luc ghi (`INV-25`).
+  businessDate       String               @db.VarChar(10)
+  customerId         String?
+  customer           TransportCustomer?   @relation(fields: [customerId], references: [id])
+  originLabel        String
+  destinationLabel   String
+  cargoDescription   String?
+  /// DOANH THU — gia cuoc thu khach, SO NGUYEN DONG. `BigInt` = `BIGINT` chu khong `INTEGER`, cung
+  /// ly do da ghi o `TransportTrip.freightAmount`: `INTEGER` tran o 2.147.483.647 dong.
+  freightAmount      BigInt?
+  currencyCode       String               @default("VND") @db.VarChar(3)
+  note               String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  /// `GD-02` — huy THAY CHO xoa. Khong co duong xoa cung nao cho mot nghia vu.
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  legs TransportRunLeg[]
+
+  @@index([status])
+  @@index([businessDate])
+  @@index([customerId])
+}
+
+/// VONG CHAY VAT LY cua MOT xe.
+///
+/// `vehicleId` la cot BAT BUOC va nam tren chinh bang nay, khong o bang phan cong: mot vong chay
+/// LA vong chay cua mot chiec xe cu the — doi xe giua chung la mot vong chay khac. Lai xe thi
+/// nguoc lai, doi duoc giua chung, nen no o `TransportRunAssignment` dang LICH SU.
+model TransportVehicleRun {
+  id                 String                    @id @default(cuid())
+  code               String                    @unique
+  vehicleId          String
+  vehicle            TransportVehicle          @relation(fields: [vehicleId], references: [id])
+  status             TransportVehicleRunStatus @default(PLANNED)
+  /// Ngay nghiep vu MO vong chay.
+  businessDate       String                    @db.VarChar(10)
+  startedAt          DateTime?
+  completedAt        DateTime?
+  note               String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  legs        TransportRunLeg[]
+  assignments TransportRunAssignment[]
+
+  @@index([status])
+  @@index([businessDate])
+  @@index([vehicleId])
+}
+
+/// PHAN CONG LAI XE cho mot vong chay — `GD-06`: LICH SU, khong ghi de.
+///
+/// Cung hinh dang va cung ly do voi `TransportTripAssignment`: neu day la mot cot tren
+/// `TransportVehicleRun` thi lan doi lai xe se xoa mat dau ai cam vo lang luc mot khoan chi phat
+/// sinh. MOT ban hieu luc cho moi vong chay duoc cuong che O DB bang unique mot phan
+/// `TransportRunAssignment_activeRun_key` (`WHERE "effectiveTo" IS NULL`) — khai trong SQL tho.
+model TransportRunAssignment {
+  id            String              @id @default(cuid())
+  runId         String
+  run           TransportVehicleRun @relation(fields: [runId], references: [id])
+  driverId      String
+  driver        TransportDriver     @relation(fields: [driverId], references: [id])
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  assignedBy    String
+  createdAt     DateTime            @default(now())
+
+  @@index([runId, effectiveTo])
+  @@index([driverId])
+}
+
+/// MOT CHANG cua mot vong chay. Day la hang ma phan tich km rong dem.
+///
+/// BAT BIEN TRUNG TAM: `kind = EMPTY` thi `orderId` PHAI la NULL. Cuong che o DB bang
+/// `TransportRunLeg_empty_carries_no_order`, khong chi o tang mien — vi neu mot lan ghi thang DB
+/// gan duoc mot don vao chang rong thi moi con so km rong/ty le rong sau do deu sai, va khong ai
+/// biet no sai.
+///
+/// Chieu nguoc lai KHONG bi cam: mot chang `LOADED` duoc phep chua co `orderId` (dang cho hang
+/// nhung don chua nhap xong). `D-01` viet "a loaded leg MAY reference an Order" — "may", khong
+/// phai "must".
+///
+/// `distanceKm` nullable theo dung `GD-14` (km nhap tay). Doc gia phan tich KHONG duoc coi NULL la
+/// 0: `summariseRunDistance()` dem rieng so chang thieu km va tra `complete = false`.
+model TransportRunLeg {
+  id               String                @id @default(cuid())
+  runId            String
+  run              TransportVehicleRun   @relation(fields: [runId], references: [id])
+  /// Thu tu chang trong vong chay, bat dau tu 1. Duy nhat trong mot vong chay.
+  sequence         Int
+  kind             TransportRunLegKind
+  status           TransportRunLegStatus @default(PLANNED)
+  orderId          String?
+  order            TransportOrder?       @relation(fields: [orderId], references: [id])
+  originLabel      String
+  destinationLabel String
+  businessDate     String                @db.VarChar(10)
+  /// `GD-14` — nhap tay, nullable. NULL nghia la CHUA BIET, khong phai 0.
+  distanceKm       Int?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  note             String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  tripLink TransportTripRunLegLink?
+
+  @@unique([runId, sequence])
+  @@index([orderId])
+  @@index([kind])
+  @@index([businessDate])
+}
+
+/// BANG TUONG UNG giua mot chuyen v1 va mot chang v2. KHONG phai quan he cha/con.
+///
+/// `D-01` cam bien Run thanh cha hoac con truc tiep cua `TransportTrip`. Bang nay la cach giu ca
+/// hai truc doc lap ma van tra loi duoc "chuyen cu nay hien ra o dau trong mo hinh moi": bo ca
+/// bang di thi `TransportTrip` va `TransportVehicleRun` deu chay nguyen ven. Cung mau voi
+/// `TransportCounterpartyLink`.
+///
+/// `tripId` la KHOA CHINH va `legId` la UNIQUE, nen quan he la MOT-MOT hai chieu: mot chuyen cu
+/// chieu ra dung mot chang, va mot chang nhan nhieu nhat mot chuyen cu. Chinh cap rang buoc nay
+/// lam phep chieu TAT DINH va LAP LAI DUOC — chay lai `projectTrip()` khong the sinh ban thu hai.
+model TransportTripRunLegLink {
+  tripId      String          @id
+  trip        TransportTrip   @relation(fields: [tripId], references: [id])
+  legId       String          @unique
+  leg         TransportRunLeg @relation(fields: [legId], references: [id])
+  projectedBy String
+  createdAt   DateTime        @default(now())
 }

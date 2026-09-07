@@ -11,6 +11,9 @@ import {
   InMemoryCounterpartyRepository,
 } from './counterparty/counterparty.repository.js';
 import { CounterpartyService } from './counterparty/counterparty.service.js';
+import { MovementRepository, InMemoryMovementRepository } from './movement/movement.repository.js';
+import { MovementService } from './movement/movement.service.js';
+import { PrismaMovementRepository } from './movement/prisma-movement.repository.js';
 import { FleetCounterpartySubjectAdapter } from './counterparty/fleet-counterparty-subject.adapter.js';
 import { PrismaCounterpartyRepository } from './counterparty/prisma-counterparty.repository.js';
 import { FleetRepository, InMemoryFleetRepository } from './fleet/fleet.repository.js';
@@ -87,10 +90,19 @@ import { TripService } from './trips/trip.service.js';
         new FleetCounterpartySubjectAdapter(fleet),
       inject: [FleetRepository],
     },
+    {
+      provide: MovementRepository,
+      useFactory: (prisma: PrismaService): MovementRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaMovementRepository(prisma)
+          : new InMemoryMovementRepository(),
+      inject: [PrismaService],
+    },
     { provide: TRANSPORT_CORE_POLICY, useFactory: tenantTransportCorePolicy },
     FleetService,
     TripService,
     CounterpartyService,
+    MovementService,
     TransportActionGuard,
   ],
   /*
@@ -104,6 +116,7 @@ import { TripService } from './trips/trip.service.js';
     FleetService,
     TripService,
     CounterpartyService,
+    MovementService,
     TransportActionGuard,
     FleetRepository,
     TripRepository,

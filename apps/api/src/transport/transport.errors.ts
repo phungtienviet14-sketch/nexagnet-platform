@@ -9,6 +9,8 @@ import type { TransportWorkforceDecisionReason } from './workforce/workforce-dec
 import type { TransportWorkforceErrorReason } from './workforce/workforce-errors.js';
 import type { TransportSettlementErrorReason } from './settlement/settlement-errors.js';
 import type { TransportEvidenceDecisionReason } from './evidence/evidence-decisions.js';
+import type { TransportMovementDecisionReason } from './movement/movement-decisions.js';
+import type { TransportMovementErrorReason } from './movement/movement-errors.js';
 import type { TransportCounterpartyDecisionReason } from './counterparty/counterparty-decisions.js';
 import type { TransportCounterpartyErrorReason } from './counterparty/counterparty-errors.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
@@ -96,7 +98,9 @@ export type TransportErrorReason =
   | TransportWorkforceErrorReason
   | TransportEvidenceDecisionReason
   | TransportCounterpartyDecisionReason
-  | TransportCounterpartyErrorReason;
+  | TransportCounterpartyErrorReason
+  | TransportMovementDecisionReason
+  | TransportMovementErrorReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh

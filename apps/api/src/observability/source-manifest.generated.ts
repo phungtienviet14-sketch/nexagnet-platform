@@ -133,10 +133,18 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "order.approve": {
       "filePath": "apps/api/src/orders/orders.service.ts"
     },
+    "order.cancel": {
+      "functionName": "MovementService.cancelOrder",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
+    },
     "order.complete_handoff": {
       "functionName": "OrdersService.completeSalesHandoff",
       "filePath": "apps/api/src/orders/orders.service.ts",
       "line": 235
+    },
+    "order.lifecycle_transition": {
+      "functionName": "MovementService.transitionOrder",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
     },
     "order.manual_approve": {
       "functionName": "OrdersService.approveTurn",
@@ -224,6 +232,25 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "grantsFromQuote",
       "filePath": "apps/api/src/outbound/outbound-authority.ts",
       "line": 222
+    },
+    "run.assignment_change": {
+      "functionName": "MovementService.assignRun",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
+    },
+    "run.cancel": {
+      "functionName": "MovementService.cancelRun",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
+    },
+    "run.leg_change": {
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
+    },
+    "run.lifecycle_transition": {
+      "functionName": "MovementService.transitionRun",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
+    },
+    "run.trip_projection": {
+      "functionName": "MovementService.projectTrip",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
     },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
@@ -376,6 +403,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts",
       "line": 117
     },
+    "transport.order.manage": {
+      "filePath": "apps/api/src/transport/movement/orders.controller.ts"
+    },
+    "transport.order.read": {
+      "filePath": "apps/api/src/transport/movement/orders.controller.ts"
+    },
     "transport.partner.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
@@ -407,6 +440,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PayrollController.pay",
       "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
       "line": 145
+    },
+    "transport.run.manage": {
+      "filePath": "apps/api/src/transport/movement/runs.controller.ts"
+    },
+    "transport.run.read": {
+      "filePath": "apps/api/src/transport/movement/runs.controller.ts"
     },
     "transport.settlement.document.read": {
       "functionName": "SettlementReportsController.documentChain",
