@@ -129,8 +129,10 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
     expect(idsOf(director())).toEqual([
       'overview',
       'trips',
+      'movement',
       'fleet',
       'driver-fund',
+      'expense-claims',
       'fuel',
       'settlement',
       'margin',
