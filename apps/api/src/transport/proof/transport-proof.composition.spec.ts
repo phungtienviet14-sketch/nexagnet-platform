@@ -14,12 +14,16 @@ describe('composition cua transport-proof — PROOF-040', () => {
     const names = controllerNames(['transport-core', 'transport-proof']);
     expect(names).toContain('DriverTrackingController');
     expect(names).toContain('TrackingController');
+    expect(names).toContain('DriverProofController');
+    expect(names).toContain('ProofReviewController');
   });
 
   it('KHONG co mat o mot khach van tai chi bat `transport-core`', () => {
     const names = controllerNames(['transport-core']);
     expect(names).not.toContain('DriverTrackingController');
     expect(names).not.toContain('TrackingController');
+    expect(names).not.toContain('DriverProofController');
+    expect(names).not.toContain('ProofReviewController');
   });
 
   it('KHONG co mat o mot khach khong dung van tai', () => {

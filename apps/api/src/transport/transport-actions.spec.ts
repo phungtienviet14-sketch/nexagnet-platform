@@ -115,6 +115,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do.
       'transport.tracking.read',
       'transport.proof.read',
+      // BIA MO mot chung cu — TACH khoi quyen doc. Doc la doi soat; rut la go bo bang chung cua
+      // mot lan giao da xay ra, va lai xe khong bao gio duoc lam viec do voi chung cu cua minh.
+      'transport.proof.withdraw',
       // DUONG DI THO cua mot con nguoi. Ma hep nhat trong ca tep; ke toan KHONG co no.
       'transport.location.history.read',
       'transport.geofence.read',
@@ -214,6 +217,34 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
 
     it('KHONG huy duoc chuyen — nguon noi ro "khong xoa du lieu"', () => {
       expect(roleCanPerform('ACCOUNTING', 'transport.trip.cancel')).toBe(false);
+    });
+
+    /**
+     * Issue #235 Lane B — ranh gioi DOC ⟂ SUA trong mien chung cu.
+     *
+     * Ke toan doc chung cu va doc hang rao: do la doi soat, va la ca cong viec cua ho. Hai duong
+     * SUA thi khong, va vi hai ly do khac nhau:
+     *
+     *   · rut mot chung cu la go bo mot muc khoi chinh ho so dang duoc doi soat;
+     *   · hang rao duoc cham LUC DOC, nen sua ban kinh mot cai kho hom nay se doi phan quyet
+     *     `INSIDE`/`OUTSIDE` cua MOI lan giao da xong truoc do.
+     *
+     * Ca hai deu la "sua cau hoi thay vi tra loi no".
+     */
+    it('doc duoc chung cu va hang rao, nhung KHONG rut chung cu va KHONG doi hang rao', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.proof.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.geofence.read')).toBe(true);
+
+      expect(roleCanPerform('ACCOUNTING', 'transport.proof.withdraw')).toBe(false);
+      expect(roleCanPerform('ACCOUNTING', 'transport.geofence.manage')).toBe(false);
+      expect(roleCanPerform('ADMIN', 'transport.proof.withdraw')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.geofence.manage')).toBe(true);
+    });
+
+    /** Lai xe khong rut duoc chung cu cua CHINH MINH — xoa duoc bang chung thi no het la bang chung. */
+    it('lai xe (SALE) khong co duong rut chung cu nao', () => {
+      expect(roleCanPerform('SALE', 'transport.proof.withdraw')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.proof.read')).toBe(false);
     });
 
     /**

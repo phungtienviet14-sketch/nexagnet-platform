@@ -141,6 +141,11 @@ export const TRANSPORT_ACTIONS = [
   /** TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
   'transport.proof.read',
   /**
+   * BIA MO mot chung cu — quyen RIENG, khong di kem quyen doc. Lai xe khong bao gio co no.
+   * Chep nguyen tu API; xem khoi chu thich ben do cho ly do day du.
+   */
+  'transport.proof.withdraw',
+  /**
    * DUONG DI THO cua mot con nguoi — ma hep nhat trong ca tep, va Ke toan KHONG co no.
    * Doi soat so sach khong CAN toa do; xem `ACCOUNTING_DENIED` ben duoi.
    */
@@ -208,6 +213,16 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * Chep nguyen tu API; xem khoi chu thich ben do cho ly do day du.
    */
   'transport.location.history.read',
+  /**
+   * Ke toan DOC duoc chung cu — do la ca cong viec cua ho — nhung RUT mot chung cu la viec khac:
+   * go bo mot muc khoi chinh ho so minh dang doi soat.
+   */
+  'transport.proof.withdraw',
+  /**
+   * Hang rao duoc cham LUC DOC, nen them mot hang rao hom nay doi phan quyet cua MOI chung cu cu.
+   * Quyen do thuoc van hanh, khong thuoc nguoi dang doi soat chinh nhung lan giao do.
+   */
+  'transport.geofence.manage',
 ];
 
 /**

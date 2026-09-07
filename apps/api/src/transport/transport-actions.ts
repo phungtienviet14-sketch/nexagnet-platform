@@ -330,6 +330,15 @@ export const TRANSPORT_ACTIONS = [
   /** Van hanh doc TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
   'transport.proof.read',
   /**
+   * BIA MO mot chung cu — TACH khoi `transport.proof.read`, va do la mot ranh gioi quyen that.
+   *
+   * Doc chung cu la viec doi soat hang ngay; rut mot chung cu la viec go bo bang chung cua mot lan
+   * giao da xay ra. Nguoi lam viec thu nhat khong duong nhien duoc lam viec thu hai — va lai xe
+   * KHONG BAO GIO duoc, ke ca voi chung cu cua chinh minh: mot nguoi xoa duoc bang chung cua chinh
+   * minh thi cai con lai khong con la bang chung.
+   */
+  'transport.proof.withdraw',
+  /**
    * DOC DUONG DI THO cua mot con nguoi — ma RIENG, va la ma hep nhat trong ca tep nay.
    *
    * Tach han khoi `transport.tracking.read`, va do la ca diem. Ma kia tra loi "co chung cu vi tri
@@ -464,6 +473,22 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * duong di, no di qua mot nguoi co `ADMIN` va de lai mot dong o `tracking.history_read`.
    */
   'transport.location.history.read',
+  /**
+   * Ke toan DOC duoc chung cu, va do la ca cong viec cua ho. RUT mot chung cu la viec khac.
+   *
+   * Doi soat la doc mot ho so roi noi no khop hay khong khop. Rut la go bo mot muc khoi chinh ho
+   * so minh dang doi soat — tuc sua cau hoi thay vi tra loi no.
+   */
+  'transport.proof.withdraw',
+  /**
+   * Hang rao duoc cham LUC DOC (`viewsForTrip`), nen them mot hang rao hom nay se doi phan quyet
+   * `INSIDE`/`OUTSIDE` cua MOI chung cu cu.
+   *
+   * Do la hanh vi dung — sua ban kinh mot cai kho phai ap dung cho ca lich su — nhung no cung co
+   * nghia rang quyen nay doi duoc ket luan ve nhung lan giao da xong. No thuoc ve van hanh, khong
+   * thuoc ve nguoi dang doi soat chinh nhung lan giao do.
+   */
+  'transport.geofence.manage',
 ];
 
 const ROLE_ACTIONS: Readonly<Record<UserRole, readonly TransportAction[]>> = {
