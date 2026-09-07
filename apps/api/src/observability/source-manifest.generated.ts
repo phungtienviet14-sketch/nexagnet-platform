@@ -255,6 +255,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/settings/price-periods.service.ts",
       "line": 397
     },
+    "proof.challenge": {
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
+    },
     "proof.withdraw": {
       "functionName": "OperationalProofService.withdraw",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
@@ -1364,10 +1367,15 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
       "line": 291
     },
+    "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
+      "functionName": "OperationalProofService.record",
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
+      "line": 209
+    },
     "proof.record|PROOF_PHOTO_NOT_LIVE_CAMERA": {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
-      "line": 153
+      "line": 230
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",
