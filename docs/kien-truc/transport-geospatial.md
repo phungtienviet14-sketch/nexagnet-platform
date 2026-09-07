@@ -74,6 +74,20 @@ Hai điều đáng nhớ: **dung lượng bằng nhau** (chênh 0,8%), và **Pos
 lần**. Cái thứ hai là lợi thế thật của PostGIS, nhưng nó chỉ trả giá một lần lúc `REINDEX`, không
 phải mỗi ngày.
 
+### 2.1b. Cái quyết định cho #224: gói phần mềm phải cài thêm
+
+Đây là chỗ hai đường **không** ngang nhau, và nó là lý do thật của phán quyết:
+
+| | Trên image `postgres:16-alpine` | Trên Ubuntu 24.04 của khách |
+|---|---|---|
+| `cube` + `earthdistance` | **có sẵn** (đã kiểm bằng `pg_available_extensions` trong container) | **có sẵn** — `earthdistance.control` nằm ngay trong gói `postgresql-16`, không phải một gói contrib riêng |
+| PostGIS | **không có** — phải đổi image | phải `apt install postgresql-16-postgis-3` |
+
+Nói cách khác: đường `cube`/`earthdistance` chạy được trên một PostgreSQL **cài mặc định** mà không
+thêm một gói nào. Với mục tiêu "máy chủ của khách" ở #224, khác biệt đó lớn hơn mọi con số mili giây
+trong bảng trên. Và nó cũng là lý do CI hiện tại chạy được ngay: hai job `integration` và
+`workflow-integration` đang dùng đúng image `postgres:16-alpine` này.
+
 ### 2.2. Bốn truy vấn, hai quy mô
 
 Thời gian thực thi (`EXPLAIN ANALYZE`, lần chạy nóng, mili giây). **Đây là một lần đo trên một máy
