@@ -3,7 +3,6 @@ import {
   Body,
   Controller,
   Get,
-  Inject,
   Param,
   Post,
   Req,
@@ -11,20 +10,18 @@ import {
 } from '@nestjs/common';
 import { Roles } from '../../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
-import { parseGeoPoint } from '../geo/geo-point.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
-import { TransportDomainError } from '../transport.errors.js';
 import { firstIssue } from '../transport.schemas.js';
-import { GeofenceRepository, toCircle, type Geofence } from './geofence.repository.js';
+import { toCircle, type Geofence } from './geofence.repository.js';
+import { GeofenceService } from './geofence.service.js';
 import { OperationalProofService } from './operational-proof.service.js';
 import type { OperationalProofView } from './operational-proof.types.js';
 import { registerGeofenceSchema, withdrawProofSchema } from './proof.schemas.js';
-import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-policy.js';
 
 /**
  * BE MAT NGUOI DUYET cua chung cu van hanh — doc, rut, va khai hang rao.
@@ -54,10 +51,17 @@ import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-po
 @Controller('transport')
 @UseGuards(TransportActionGuard)
 export class ProofReviewController {
+  /**
+   * CHI TIEM NHUNG GI `TransportProofModule` DA EXPORT.
+   *
+   * Controller nay duoc dang ky o GOC (`app-composition.ts`), nen no chi thay nhung gi `AppModule`
+   * thay. Tiem mot provider NOI BO cua module (vi du token chinh sach) se bien dich duoc, qua het
+   * test don vi, qua ca bai composition — roi lam tien trinh chet luc khoi dong. Da xay ra that
+   * mot lan; xem khoi chu thich dau `geofence.service.ts`.
+   */
   constructor(
     private readonly proofs: OperationalProofService,
-    private readonly geofences: GeofenceRepository,
-    @Inject(TRANSPORT_PROOF_POLICY) private readonly policy: TransportProofPolicy,
+    private readonly geofences: GeofenceService,
   ) {}
 
   /**
@@ -113,43 +117,15 @@ export class ProofReviewController {
     if (!parsed.success) throw new BadRequestException(firstIssue(parsed.error));
     const input = parsed.data;
 
-    // Cung phep kiem bien voi duong ingest — mot tam hang rao o (0,0) la mot hang rao bao moi diem
-    // tren the gioi deu "o ngoai", va no se im lang lam viec do mai mai.
-    const centre = parseGeoPoint(input.latitude, input.longitude);
-    if (!centre.ok) {
-      throw TransportDomainError.invalid(
-        'GEOFENCE_COORDINATE_REJECTED',
-        `Toa do tam hang rao khong hop le: ${centre.rejection}`,
-      );
-    }
-    if (
-      input.radiusMetres < this.policy.geofenceRadiusMetres.min ||
-      input.radiusMetres > this.policy.geofenceRadiusMetres.max
-    ) {
-      throw TransportDomainError.invalid(
-        'GEOFENCE_RADIUS_OUT_OF_RANGE',
-        `Ban kinh phai trong khoang ${this.policy.geofenceRadiusMetres.min}-${this.policy.geofenceRadiusMetres.max}m`,
-      );
-    }
-    // `AD_HOC` phai KHONG co chu the; moi loai khac phai CO. Mot hang rao "cua kho nao do" khong
-    // noi duoc no thuoc kho nao la mot hang rao khong doi chieu duoc voi bat ky don hang nao.
-    const wantsSubject = input.subjectKind !== 'AD_HOC';
-    if (wantsSubject !== Boolean(input.subjectId)) {
-      throw TransportDomainError.invalid(
-        'GEOFENCE_SUBJECT_SHAPE_INVALID',
-        wantsSubject
-          ? `Hang rao loai ${input.subjectKind} bat buoc co chu the`
-          : 'Hang rao AD_HOC khong duoc gan chu the',
-      );
-    }
-
+    // Toa do, khoang ban kinh va hinh dang chu the deu duoc kiem trong `GeofenceService`: chung la
+    // LUAT NGHIEP VU, va nguong cua chung den tu chinh sach cua khach.
     return this.guard(() =>
       this.geofences.register({
         label: input.label,
         subjectKind: input.subjectKind,
         subjectId: input.subjectId ?? null,
-        latitude: centre.point.latitude,
-        longitude: centre.point.longitude,
+        latitude: input.latitude,
+        longitude: input.longitude,
         radiusMetres: input.radiusMetres,
         note: input.note ?? null,
         recordedBy: transportActorOf(request),
