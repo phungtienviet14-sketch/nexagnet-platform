@@ -6,6 +6,7 @@ import type {
   FuelVerificationStatus,
 } from './fuel-lifecycle.js';
 import type { FuelDiscrepancyKind } from './fuel-matching.js';
+import type { FuelIngestChannel } from './fuel-station.types.js';
 import type {
   FuelDiscrepancy,
   FuelDiscrepancyResolution,
@@ -82,6 +83,31 @@ export interface CreateFuelSupplierInput {
   readonly phone: string | null;
   readonly address: string | null;
   readonly taxCode: string | null;
+  readonly at: Date;
+}
+
+/**
+ * BAN VA cua sieu du lieu hop dong — Lane C / C1.
+ *
+ * `undefined` = khong dong toi; `null` = xoa gia tri. Cung quy uoc voi `UpdateFuelStationInput`,
+ * va co cung ly do: gop hai nghia lam mot se lam mot bieu mau chi sua nguoi lien he xoa sach so
+ * hop dong va ky han thanh toan.
+ *
+ * KHONG CO `name`/`code`/`taxCode`: chung la DANH TINH, va cho sua chung khong phai o day.
+ */
+export interface UpdateFuelSupplierProfileInput {
+  readonly phone?: string | null;
+  readonly address?: string | null;
+  readonly contactName?: string | null;
+  readonly contactEmail?: string | null;
+  readonly contractNo?: string | null;
+  readonly contractStartDate?: string | null;
+  readonly contractEndDate?: string | null;
+  readonly paymentTermDays?: number | null;
+  readonly termsNote?: string | null;
+  readonly ingestChannels?: readonly FuelIngestChannel[];
+  readonly ingestAccountRef?: string | null;
+  readonly status?: 'ACTIVE' | 'INACTIVE';
   readonly at: Date;
 }
 
@@ -549,6 +575,18 @@ export abstract class FuelRepository {
   abstract createSupplier(input: CreateFuelSupplierInput): Promise<FuelSupplier>;
   abstract findSupplier(id: string): Promise<FuelSupplier | null>;
   abstract listSuppliers(): Promise<FuelSupplier[]>;
+  /**
+   * SUA SIEU DU LIEU HOP DONG — Lane C / C1.
+   *
+   * MOT lenh ghi rieng chu khong mo rong `createSupplier`: ba cot danh tinh (`name`, `code`,
+   * `taxCode`) va chin cot sieu du lieu co vong doi khac han nhau, va gop chung se lam mot bieu
+   * mau "sua so dien thoai" co kha nang doi ca ma so thue. Nguoc lai, lenh nay cung KHONG cham
+   * duoc danh tinh — hinh dang cua `UpdateFuelSupplierProfileInput` khong co ba cot do.
+   */
+  abstract updateSupplierProfile(
+    id: string,
+    patch: UpdateFuelSupplierProfileInput,
+  ): Promise<FuelSupplier | null>;
 
   /* --- Phieu --- */
   abstract createEntry(input: CreateFuelEntryInput): Promise<FuelEntry>;

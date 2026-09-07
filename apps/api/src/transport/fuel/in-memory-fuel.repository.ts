@@ -31,6 +31,7 @@ import {
   type ResolveDiscrepancyInput,
   type ResolveDiscrepancyOutcome,
   type SetFuelVerificationInput,
+  type UpdateFuelSupplierProfileInput,
   type WithdrawEvidenceInput,
   type WithdrawEvidenceOutcome,
 } from './fuel.repository.js';
@@ -95,11 +96,54 @@ export class InMemoryFuelRepository extends FuelRepository {
       address: input.address,
       taxCode: input.taxCode,
       status: 'ACTIVE',
+      // Sieu du lieu hop dong bat dau RONG, khong phai mot bo mac dinh doan truoc: `Q-08` chua co
+      // loi, va mot `paymentTermDays` mac dinh se duoc doc nhu mot dieu khoan da thoa thuan.
+      contactName: null,
+      contactEmail: null,
+      contractNo: null,
+      contractStartDate: null,
+      contractEndDate: null,
+      paymentTermDays: null,
+      termsNote: null,
+      ingestChannels: [],
+      ingestAccountRef: null,
       createdAt: input.at.toISOString(),
       updatedAt: input.at.toISOString(),
     };
     this.suppliers.set(supplier.id, supplier);
     return clone(supplier);
+  }
+
+  async updateSupplierProfile(
+    id: string,
+    patch: UpdateFuelSupplierProfileInput,
+  ): Promise<FuelSupplier | null> {
+    const current = this.suppliers.get(id);
+    if (!current) return null;
+
+    const pick = <K extends keyof FuelSupplier>(
+      key: K,
+      value: FuelSupplier[K] | undefined,
+    ): FuelSupplier[K] => (value === undefined ? current[key] : value);
+
+    const next: FuelSupplier = {
+      ...current,
+      phone: pick('phone', patch.phone),
+      address: pick('address', patch.address),
+      contactName: pick('contactName', patch.contactName),
+      contactEmail: pick('contactEmail', patch.contactEmail),
+      contractNo: pick('contractNo', patch.contractNo),
+      contractStartDate: pick('contractStartDate', patch.contractStartDate),
+      contractEndDate: pick('contractEndDate', patch.contractEndDate),
+      paymentTermDays: pick('paymentTermDays', patch.paymentTermDays),
+      termsNote: pick('termsNote', patch.termsNote),
+      ingestChannels: patch.ingestChannels ?? current.ingestChannels,
+      ingestAccountRef: pick('ingestAccountRef', patch.ingestAccountRef),
+      status: patch.status ?? current.status,
+      updatedAt: patch.at.toISOString(),
+    };
+    this.suppliers.set(id, next);
+    return clone(next);
   }
 
   async findSupplier(id: string): Promise<FuelSupplier | null> {
