@@ -43,7 +43,8 @@ miền nghiệp vụ dùng lại được cho nhiều khách cùng ngành:
 | File | Là gì | Không phải gì |
 |---|---|---|
 | [`transport-domain-contract.md`](kien-truc/transport-domain-contract.md) | **Transport Domain v0** — bounded context, aggregate, bất biến tài chính, capability, phân quyền, guardrail, case nghiệm thu, giả định demo | Không nhắc tên khách; không phải kế hoạch; **chưa có code** |
-| [`transport-domain-v2.md`](kien-truc/transport-domain-v2.md) | **Transport Domain v2 — R0**: kiểm kê mô hình đang chạy (`KEEP/EXTEND/MIGRATE/DEPRECATE`), phản biện lộ trình #229 kèm bằng chứng, ma trận công nghệ, mô hình mối đe doạ, câu hỏi nghiệp vụ còn treo, tranche kế tiếp | Không thay thế v0; không phải kế hoạch có lịch |
+| [`transport-domain-v2.md`](kien-truc/transport-domain-v2.md) | **Transport Domain v2 — R0**: kiểm kê mô hình đang chạy (`KEEP/EXTEND/MIGRATE/DEPRECATE`), phản biện lộ trình #229 kèm bằng chứng, ma trận công nghệ, mô hình mối đe doạ, câu hỏi nghiệp vụ còn treo, tranche kế tiếp | Không thay thế v0; không phải kế hoạch có lịch; **§3.1 địa không gian đã bị đo lại và sửa đổi** |
+| [`transport-geospatial.md`](kien-truc/transport-geospatial.md) | **Nền địa không gian** — số đo PostGIS ⟂ Postgres tiêu chuẩn ở hai quy mô, dung lượng/xe cho 10·50·100 xe, chính sách lấy mẫu có trần, lưu giữ có hạn, đường nâng cấp chỉ-cộng-thêm | Phán quyết địa không gian **đang có hiệu lực**, thay cho v2 §3.1; chưa quyết bản đồ |
 
 Nguồn nghiệp vụ của nó nằm bên khách:
 [`khach-hang/van-tai-viet/nghiep-vu/nguon-su-that-van-tai.md`](khach-hang/van-tai-viet/nghiep-vu/nguon-su-that-van-tai.md).

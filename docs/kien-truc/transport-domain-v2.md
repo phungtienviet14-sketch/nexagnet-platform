@@ -368,6 +368,13 @@ Nguyên tắc chấm: **tính di động sang máy chủ của khách** (#224) v
 
 ### 3.1. Địa không gian — `POSTGIS = ADOPT, nhưng chỉ khi R2 mở`
 
+> ⚠️ **ĐÃ SỬA ĐỔI 07/09/2026 bởi Lane B (#235).** Mục này là bản ghi của R0 và giữ nguyên làm lịch
+> sử, nhưng **ba điều trong bảng dưới không đứng vững khi đo lại**: image `postgis/postgis:16-3.6`
+> **không tồn tại** (PostGIS 3.6 chỉ có cho PG 17/18/19; PG16 dừng ở `16-3.5`), ước lượng dung
+> lượng thấp hơn thực đo ~2 lần, và ở mọi quy mô đã đo thì `cube`+`earthdistance` **có sẵn trong
+> Postgres tiêu chuẩn** chạy ngang PostGIS cho đúng bốn truy vấn mà tầng này cần. Phán quyết đang
+> có hiệu lực nằm ở **[transport-geospatial.md](transport-geospatial.md)**.
+
 | Hạng mục | Kết luận | Bằng chứng |
 |---|---|---|
 | Phiên bản | PostGIS **3.6.x** (3.6.3 — 14/04/2026); 3.7.0rc1 — 24/08/2026 chưa GA | postgis.net/news |
