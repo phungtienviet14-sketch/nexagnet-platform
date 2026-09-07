@@ -135,6 +135,10 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
       'expense-claims',
       'fuel',
       'settlement',
+      // `TX-08` (#242) — so dang ky so huu chi doi `transport-core`, nen no co mat voi MOI khach
+      // bat van tai, khong nhu `maintenance`/`payroll` doi them capability rieng. Quyen so huu la
+      // mot su that ve chinh chiec xe, khong phai mot lop nghiep vu ban them.
+      'asset-ownership',
       'margin',
       'ar-ap',
       'exports',
@@ -163,7 +167,14 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
 describe('nhom tren thanh ben', () => {
   it('nhom rong bi bo han, khong de lai tieu de mo coi', () => {
     const groups = navigationGroups(director(MINIMUM));
-    expect(groups.map((entry) => entry.group.id)).toEqual(['root', 'dispatch', 'reports']);
+    // `assets` khong con rong tu `TX-08`: so dang ky so huu chi doi `transport-core`, nen ke ca goi
+    // toi thieu cung co mot muc trong nhom nay.
+    expect(groups.map((entry) => entry.group.id)).toEqual([
+      'root',
+      'dispatch',
+      'assets',
+      'reports',
+    ]);
     for (const entry of groups) expect(entry.sections.length).toBeGreaterThan(0);
   });
 

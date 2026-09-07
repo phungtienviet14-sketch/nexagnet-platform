@@ -39,6 +39,7 @@ export type TransportSectionId =
   | 'maintenance'
   | 'payroll'
   | 'driver-settlement'
+  | 'asset-ownership'
   | 'margin'
   | 'ar-ap'
   | 'exports';
@@ -139,6 +140,22 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Lịch bảo dưỡng đến hạn, lệnh sửa chữa, giấy tờ sắp hết hạn.',
     requiredCapabilities: ['transport-core', 'transport-asset-compliance'],
     requiredAction: 'transport.vehicle.read',
+  },
+  {
+    /**
+     * `TX-08` — so dang ky so huu. MUC RIENG, khong phai mot tab trong "Doi xe & lai xe".
+     *
+     * Hai man tra loi hai cau hoi khac nhau cho hai nguoi khac nhau: "Doi xe" tra loi *xe nay chay
+     * duoc khong* (dieu do vien), con man nay tra loi *ai la chu chiec xe nay* (giam doc/ke toan).
+     * Va chung co hai ma quyen rieng, nen gop lam mot tab se lam mot nguoi chi duoc xem ho so xe
+     * nhin thay ca so dang ky so huu.
+     */
+    id: 'asset-ownership',
+    label: 'Sở hữu tài sản',
+    group: 'assets',
+    summary: 'Quyền điều hành, sổ đăng ký sở hữu từng xe, hồ sơ bên hữu quan và lịch sử.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.asset_ownership.read',
   },
   {
     id: 'payroll',
