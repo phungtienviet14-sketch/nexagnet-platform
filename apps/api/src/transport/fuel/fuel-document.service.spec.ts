@@ -308,7 +308,9 @@ describe('FuelDocumentService — nhap mot BUC ANH (C3)', () => {
 
     expect(again.document.id).toBe(first.document.id);
     expect(again.document.sourceRef).toBe('phieu-01.jpg');
-    expect(await documents.listDocuments({ supplierId: null, status: null, limit: 50, offset: 0 })).toHaveLength(1);
+    expect(
+      await documents.listDocuments({ supplierId: null, status: null, limit: 50, offset: 0 }),
+    ).toHaveLength(1);
   });
 
   it('DOC-25 — mot tep KHONG PHAI ANH van duoc GHI LAI, kem ly do co ten', async () => {

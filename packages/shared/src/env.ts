@@ -49,7 +49,11 @@ export const envSchema = z.object({
     .min(32, 'SESSION_SECRET qua ngan — dung chuoi ngau nhien >= 32 ky tu')
     .optional(),
   SESSION_COOKIE_NAME: z.string().trim().min(1).max(64).default('netviet.sid'),
-  SESSION_MAX_AGE_MS: z.coerce.number().int().positive().default(8 * 60 * 60 * 1_000),
+  SESSION_MAX_AGE_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(8 * 60 * 60 * 1_000),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
@@ -270,7 +274,9 @@ export function loadEnv(
   // Tuong thich nguoc: chuan hoa truoc khi validate credential. Neu BOT_MODE=on thi do chinh la
   // bot mode va phai qua cung cua ZALO_BOT_TOKEN; khong duoc validate `mock` roi doi thanh `bot`.
   const data =
-    source.CHANNEL_MODE === undefined && parsedData.BOT_MODE === 'on' && parsedData.CHANNEL_MODE === 'mock'
+    source.CHANNEL_MODE === undefined &&
+    parsedData.BOT_MODE === 'on' &&
+    parsedData.CHANNEL_MODE === 'mock'
       ? { ...parsedData, CHANNEL_MODE: 'bot' as const }
       : parsedData;
   const parserRequired = requirements.parser !== false;
@@ -372,9 +378,7 @@ export function loadEnv(
       data.PERSISTENCE !== 'prisma'
         ? 'PERSISTENCE: du lieu khach that bat buoc dung prisma/Postgres, khong dung memory'
         : null,
-      data.AUTH_MODE === 'none'
-        ? 'AUTH_MODE: du lieu khach that khong duoc tat xac thuc'
-        : null,
+      data.AUTH_MODE === 'none' ? 'AUTH_MODE: du lieu khach that khong duoc tat xac thuc' : null,
       channelRequired && data.CHANNEL_MODE !== 'mock' && data.MEDIA_STORE === 'none'
         ? 'MEDIA_STORE: du lieu khach that + kenh Zalo that bat buoc dung local/gcs/s3, khong duoc none'
         : null,
@@ -407,7 +411,7 @@ export function loadEnv(
     !data.ZALO_BOT_TOKEN
   ) {
     throw new EnvValidationError([
-        `ZALO_BOT_TOKEN: BAT BUOC khi CHANNEL_MODE=${data.CHANNEL_MODE}; khong duoc roi ve kenh gia`,
+      `ZALO_BOT_TOKEN: BAT BUOC khi CHANNEL_MODE=${data.CHANNEL_MODE}; khong duoc roi ve kenh gia`,
     ]);
   }
   if (

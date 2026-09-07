@@ -267,7 +267,9 @@ describe('C4 §6 — muc tin duoi san', () => {
   });
 
   it('VAL-24 moi o TREN san thi khong keu', () => {
-    const assessment = assess({ confidence: { invoiceNo: 1000, 'line.1.amountVnd': FIELD_CONFIDENCE_FLOOR } });
+    const assessment = assess({
+      confidence: { invoiceNo: 1000, 'line.1.amountVnd': FIELD_CONFIDENCE_FLOOR },
+    });
 
     expect(assessment.outcome).toBe('NO_FINDINGS');
   });

@@ -61,9 +61,7 @@ import { normalizePlate } from './fuel-statement-mapping.js';
  */
 
 type DocumentDecisionPoint =
-  | 'fuel_document.ingest'
-  | 'fuel_document.supplier_link'
-  | 'fuel_document.extract';
+  'fuel_document.ingest' | 'fuel_document.supplier_link' | 'fuel_document.extract';
 
 /**
  * BA ma tu choi cua duong anh -> ba ly do quyet dinh. MOT cho anh xa, y het `fuel-invoice-source.ts`.
@@ -161,7 +159,11 @@ export class FuelDocumentService {
    */
   async ingestReceiptImage(image: FuelReceiptImage, actor: string): Promise<FuelDocumentDetail> {
     const contentDigest = invoiceDigest(image.content);
-    const file = { sourceRef: image.sourceRef, kind: 'RECEIPT_IMAGE' as const, content: image.content };
+    const file = {
+      sourceRef: image.sourceRef,
+      kind: 'RECEIPT_IMAGE' as const,
+      content: image.content,
+    };
 
     const replayed = await this.documents.findByDigest(contentDigest);
     if (replayed) {

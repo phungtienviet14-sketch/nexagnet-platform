@@ -152,19 +152,31 @@ describe('C3 §2 — bo doc TAT DINH: khong mang, khong doan, khong im lang', ()
  * dang noi voi ai; cai duy nhat no biet la mot `baseUrl` va mot ten mo hinh. Do la dinh nghia THAT
  * cua "trung lap nha cung cap", va no do duoc chu khong chi hua duoc.
  */
+/** Than yeu cau ma may chu ghi lai — chi nhung manh ma bo test that su doc. */
+interface SeenBody {
+  readonly model: string;
+  readonly temperature: number;
+  readonly messages: readonly {
+    readonly content: readonly {
+      readonly type: string;
+      readonly image_url?: { readonly url: string };
+    }[];
+  }[];
+}
+
 describe('C3 §3 — adapter HTTP chay voi mot may chu khong ten', () => {
   let server: Server;
   let baseUrl: string;
   let reply: unknown = null;
   let status = 200;
-  let seenBody: Record<string, any> | null = null;
+  let seenBody: SeenBody | null = null;
 
   beforeAll(async () => {
     server = createServer((request, response) => {
       const chunks: Buffer[] = [];
       request.on('data', (chunk: Buffer) => chunks.push(chunk));
       request.on('end', () => {
-        seenBody = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        seenBody = JSON.parse(Buffer.concat(chunks).toString('utf8')) as SeenBody;
         response.writeHead(status, { 'content-type': 'application/json' });
         response.end(
           JSON.stringify({ choices: [{ message: { content: JSON.stringify(reply) } }] }),
@@ -218,10 +230,10 @@ describe('C3 §3 — adapter HTTP chay voi mot may chu khong ten', () => {
 
   it('HTTP-02 goi dung khuon `chat/completions` voi mot MANG khoi text + image_url', () => {
     expect(seenBody?.model).toBe('mot-mo-hinh-nao-do');
-    const content = seenBody?.messages[0].content;
-    expect(content[0].type).toBe('text');
-    expect(content[1].type).toBe('image_url');
-    expect(String(content[1].image_url.url).startsWith('data:image/jpeg;base64,')).toBe(true);
+    const content = seenBody?.messages[0]?.content ?? [];
+    expect(content[0]?.type).toBe('text');
+    expect(content[1]?.type).toBe('image_url');
+    expect(content[1]?.image_url?.url.startsWith('data:image/jpeg;base64,')).toBe(true);
   });
 
   it('HTTP-03 `temperature: 0` — mot bo doc so lieu khong duoc sang tao', () => {
@@ -307,7 +319,15 @@ describe('C3 §3 — adapter HTTP chay voi mot may chu khong ten', () => {
   it('HTTP-14 KHONG mot ten nha cung cap nao trong ma nguon cua adapter', async () => {
     const source = await readFile(join(HERE, 'fuel-receipt-extraction.http.ts'), 'utf8');
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    for (const vendor of ['anthropic', 'openai', 'deepseek', 'google', 'gemini', 'azure', 'baidu']) {
+    for (const vendor of [
+      'anthropic',
+      'openai',
+      'deepseek',
+      'google',
+      'gemini',
+      'azure',
+      'baidu',
+    ]) {
       expect(code.toLowerCase()).not.toContain(vendor);
     }
   });

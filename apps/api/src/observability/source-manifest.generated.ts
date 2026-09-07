@@ -115,8 +115,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "expense_claim.submit": {
       "filePath": "apps/api/src/transport/claims/claim.service.ts"
     },
+    "fuel_document.extract": {
+      "functionName": "FuelDocumentService.ingestReceiptImage",
+      "filePath": "apps/api/src/transport/fuel/fuel-document.service.ts"
+    },
     "fuel_document.ingest": {
-      "functionName": "FuelDocumentService.ingest",
       "filePath": "apps/api/src/transport/fuel/fuel-document.service.ts"
     },
     "fuel_document.supplier_link": {
@@ -444,9 +447,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/fleet-status.controller.ts"
     },
     "transport.fuel.document.ingest": {
-      "functionName": "FuelDocumentController.ingest",
-      "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts",
-      "line": 91
+      "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts"
     },
     "transport.fuel.document.read": {
       "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts"

@@ -238,7 +238,10 @@ export function assessFuelCandidate(input: AssessCandidateInput): FuelCandidateA
       .map(([key]) => key)
       .sort();
     if (weak.length > 0) {
-      add('FIELD_CONFIDENCE_BELOW_FLOOR', { fields: weak.join(', '), floor: FIELD_CONFIDENCE_FLOOR });
+      add('FIELD_CONFIDENCE_BELOW_FLOOR', {
+        fields: weak.join(', '),
+        floor: FIELD_CONFIDENCE_FLOOR,
+      });
     }
   }
 

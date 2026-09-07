@@ -197,9 +197,7 @@ export function confidenceForLine(
 ): ExtractionConfidence {
   const mine = `line.${lineNumber}.`;
   return Object.fromEntries(
-    Object.entries(confidence).filter(
-      ([key]) => !key.startsWith('line.') || key.startsWith(mine),
-    ),
+    Object.entries(confidence).filter(([key]) => !key.startsWith('line.') || key.startsWith(mine)),
   );
 }
 
