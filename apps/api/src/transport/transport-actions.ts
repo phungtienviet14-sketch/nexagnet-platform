@@ -370,6 +370,30 @@ export const TRANSPORT_ACTIONS = [
   /** Khai bao hang rao dia ly (kho, bai, cay xang) — viec cua van hanh. */
   'transport.geofence.read',
   'transport.geofence.manage',
+
+  /* --- `TX-08` SO HUU TAI SAN (Lane E, Issue #242) --- */
+  /**
+   * SO DANG KY SO HUU + ho so ben huu quan — doc va quan ly.
+   *
+   * Hai ma chu khong mot, cung ly le voi cap `counterparty.read`/`.manage`: xem ai so huu mot chiec
+   * xe la viec hang ngay cua nguoi lam doi xe; SUA mot ty le so huu la sua mot su that phap ly, va
+   * lan sua do phai doc lai duoc tu so kiem toan.
+   *
+   * `.manage` cung la ma cho doi QUYEN DIEU HANH (`operationalControl`). No CO Y khong nam trong
+   * `transport.vehicle.manage`: bien mot xe thanh xe nha ngoai la mot tuyen bo ve tai san, khong
+   * phai mot lan sua ho so xe nhu doi tai trong hay so odo.
+   */
+  'transport.asset_ownership.read',
+  'transport.asset_ownership.manage',
+  /**
+   * PHAM VI CUA CHINH MINH — ben huu quan. "Xe toi co co phan".
+   *
+   * CHI DOC, va khong co bien the ghi nao: mot dong so huu khong dieu duoc xe, khong sua duoc ty le
+   * cua chinh minh, va khong ghi duoc mot dong nao vao du lieu van hanh.
+   *
+   * Xem `STAKEHOLDER_SCOPE_ACTIONS` ben duoi ve vi sao ma nay khong duoc cap qua VAI.
+   */
+  'transport.stakeholder.self.vehicle.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -390,9 +414,39 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.proof.record',
 ];
 
-/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
+/**
+ * PHAM VI BEN HUU QUAN — cap bang MOT HANG DU LIEU, khong bang mot vai.
+ *
+ * Day la khac biet quan trong nhat cua `TX-08` so voi be mat lai xe, va no khong phai mot lua chon
+ * tuy tien. Be mat lai xe duoc cap qua vai `SALE` roi CHOT lai bang `Driver.authUserId` o tang dich
+ * vu. Voi ben huu quan, tang vai KHONG CON CHO:
+ *
+ *   · `SALE` da la vai cua lai xe — cap them o day se cho moi lai xe goi duoc be mat co dong;
+ *   · `MANAGER` la mot khoang trong phan quyen CHUA AI QUYET (xem khoi `ROLE_ACTIONS`) — gan nghia
+ *     "co dong" cho no la dua mot chinh sach khong ai quyet vao base, roi moi khach van tai sau
+ *     deu thua huong;
+ *   · them mot vai thu nam vao `USER_ROLES` la sua MO HINH XAC THUC CUA NEN TANG cho mot nhu cau
+ *     cua mot mien — dung thu ma #242 E3 cam ("do not build a second auth system").
+ *
+ * Nen cac ma nay khong nam trong bang vai NAO CA. Cong that la
+ * `AssetOwnershipScopeService.resolve()`, doc `TransportAssetStakeholder.authUserId` tu chinh phien
+ * dang nhap va fail-closed khi khong co hang nao. `TransportActionGuard` cho chung di qua tang vai
+ * DUNG VI KHONG CO VAI NAO NOI DUOC GI VE CHUNG — va vi khong ma nao trong so do mo mot duong ghi.
+ *
+ * Neu mot ngay them mot ma `.write` vao day, quy uoc nay khong con du va phai co mot cong that o
+ * tang guard. `transport-actions.spec.ts` khoa dieu do.
+ */
+export const STAKEHOLDER_SCOPE_ACTIONS: readonly TransportAction[] = [
+  'transport.stakeholder.self.vehicle.read',
+];
+
+export const isStakeholderScopeAction = (action: TransportAction): boolean =>
+  STAKEHOLDER_SCOPE_ACTIONS.includes(action);
+
+/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe va pham vi ben huu quan. */
 const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
-  (action): action is TransportAction => !SELF_SCOPE_ACTIONS.includes(action),
+  (action): action is TransportAction =>
+    !SELF_SCOPE_ACTIONS.includes(action) && !STAKEHOLDER_SCOPE_ACTIONS.includes(action),
 );
 
 /**

@@ -21,7 +21,7 @@ import {
   type TransportSurface,
   type TripFilterQuery,
 } from './navigation';
-import { hasOperationsScope, operationsEmptyMessage } from './transport-actions';
+import { hasDriverScope, hasOperationsScope, operationsEmptyMessage } from './transport-actions';
 import { DriverFundView } from './views/DriverFundView';
 import { ExpenseClaimsView } from './views/ExpenseClaimsView';
 import { ExportsView } from './views/ExportsView';
@@ -30,8 +30,10 @@ import { DriverSettlementView } from './views/DriverSettlementView';
 import { MovementView } from './views/MovementView';
 import { PayrollView } from './views/PayrollView';
 import { ArApView, MarginView, SettlementView } from './views/SettlementViews';
+import { AssetOwnershipView } from './views/AssetOwnershipView';
 import { FleetView } from './views/FleetView';
 import { FuelView } from './views/FuelView';
+import { StakeholderVehiclesView } from './views/StakeholderVehiclesView';
 import { ControlTowerView } from './views/ControlTowerView';
 import { FinanceView } from './views/FinanceView';
 import { OverviewView } from './views/OverviewView';
@@ -211,7 +213,20 @@ export function TransportOperations() {
       driverScreens={driverScreens}
       onNavigate={(section) => goTo({ section })}
     >
-      {groups.length === 0 ? (
+      {groups.length === 0 && !hasDriverScope(navigation.role) ? (
+        /*
+         * `TX-08` (#242 E3) — MOT VAI KHONG CO PHAM VI VAN HANH VAN CO THE LA CO DONG.
+         *
+         * Truoc day nhanh nay luon la mot trang loi cut duong. Nhung pham vi ben huu quan KHONG den
+         * tu vai — no den tu mot hang `TransportAssetStakeholder.authUserId` ma chi may chu doc
+         * duoc. Nen o day khong doan: hien thang be mat "Xe toi co co phan", va de may chu tra loi.
+         *
+         * Nguoi khong phai ben huu quan thay dung cau `403` cua may chu — mot cau tra loi that,
+         * thay vi mot cau doan cua client. Lai xe KHONG roi vao day: ho co pham vi lai xe, va
+         * nhanh duoi giu nguyen duong "Mo man hinh lai xe" cho ho.
+         */
+        <StakeholderVehiclesView />
+      ) : groups.length === 0 ? (
         <ErrorState
           message={operationsEmptyMessage(navigation.role)}
           // Cau chu noi "Hãy dùng đường 'Mở màn hình lái xe'" — nen duong do phai o NGAY DAY.
@@ -272,6 +287,10 @@ function SectionBody({
       return <MovementView />;
     case 'fleet':
       return <FleetView />;
+    // `TX-08` (#242) — quyen dieu hanh va so dang ky so huu. Ma quyen RIENG voi ho so xe: mot nguoi
+    // duoc xem ho so xe khong nhat thiet duoc xem ai la chu chiec xe do.
+    case 'asset-ownership':
+      return <AssetOwnershipView />;
     case 'driver-fund':
       return <DriverFundView />;
     case 'expense-claims':

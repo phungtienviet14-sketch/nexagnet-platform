@@ -5,6 +5,15 @@ import { PrismaAuditLogRepository } from '../audit/prisma-audit-log.repository.j
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import { PrismaModule } from '../config/prisma.module.js';
 import { PrismaService } from '../config/prisma.service.js';
+import { AssetOwnershipScopeService } from './asset-ownership/asset-ownership-scope.service.js';
+import {
+  AssetOwnershipRepository,
+  InMemoryAssetOwnershipRepository,
+} from './asset-ownership/asset-ownership.repository.js';
+import { AssetOwnershipService } from './asset-ownership/asset-ownership.service.js';
+import { FleetVehicleOwnershipAdapter } from './asset-ownership/fleet-vehicle-ownership.adapter.js';
+import { PrismaAssetOwnershipRepository } from './asset-ownership/prisma-asset-ownership.repository.js';
+import { VehicleOwnershipPort } from './asset-ownership/vehicle-ownership.port.js';
 import { CounterpartySubjectPort } from './counterparty/counterparty-subject.port.js';
 import {
   CounterpartyRepository,
@@ -98,11 +107,32 @@ import { TripService } from './trips/trip.service.js';
           : new InMemoryMovementRepository(),
       inject: [PrismaService],
     },
+    {
+      provide: AssetOwnershipRepository,
+      useFactory: (prisma: PrismaService): AssetOwnershipRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaAssetOwnershipRepository(prisma)
+          : new InMemoryAssetOwnershipRepository(),
+      inject: [PrismaService],
+    },
+    /*
+     * CONG HEP sang doi xe (`TX-08`). Dich vu so huu KHONG duoc tiem `FleetRepository` — no chi
+     * thay nam phuong thuc cua cong nay, nen khong co duong nao de no ghi vao bang lai xe, bang
+     * khach hang hay bang doi tac. Xem `vehicle-ownership.port.ts`.
+     */
+    {
+      provide: VehicleOwnershipPort,
+      useFactory: (fleet: FleetRepository): VehicleOwnershipPort =>
+        new FleetVehicleOwnershipAdapter(fleet),
+      inject: [FleetRepository],
+    },
     { provide: TRANSPORT_CORE_POLICY, useFactory: tenantTransportCorePolicy },
     FleetService,
     TripService,
     CounterpartyService,
     MovementService,
+    AssetOwnershipService,
+    AssetOwnershipScopeService,
     TransportActionGuard,
   ],
   /*
@@ -117,6 +147,8 @@ import { TripService } from './trips/trip.service.js';
     TripService,
     CounterpartyService,
     MovementService,
+    AssetOwnershipService,
+    AssetOwnershipScopeService,
     TransportActionGuard,
     FleetRepository,
     TripRepository,

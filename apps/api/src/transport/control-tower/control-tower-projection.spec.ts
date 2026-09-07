@@ -68,6 +68,10 @@ const vehicle = (over: Partial<Vehicle> = {}): Vehicle => ({
   allowedPayloadKg: 20000,
   currentOdoKm: 100_000,
   status: 'IDLE',
+  // `TX-08` (#242): mac dinh trung voi `DEFAULT` cua Postgres — xe cua cong ty, so dang ky so huu
+  // chua khai day du. Bang dieu hanh khong doc hai truong nay; chung o day de khop kieu `Vehicle`.
+  operationalControl: 'INTERNAL_OPERATED',
+  ownershipRegisterComplete: false,
   createdAt: `${TODAY}T00:00:00.000Z`,
   updatedAt: `${TODAY}T00:00:00.000Z`,
   ...over,

@@ -543,6 +543,18 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
   );
 
   await page.route('**/transport/vehicles', (route) => json(route, VEHICLES));
+  /**
+   * `TX-08` (#242) — be mat "Xe toi co co phan".
+   *
+   * `403` la cau tra loi THAT cua may chu cho moi nhan vat trong bo mock nay: pham vi ben huu quan
+   * den tu mot hang `TransportAssetStakeholder.authUserId`, va khong nhan vat mau nao o day co hang
+   * do. Mot vai khong co pham vi van hanh (`MANAGER`) roi vao chinh man nay, nen neu khong khai
+   * route, yeu cau se roi ve trang 404 cua Next.js va man hinh se noi "nghiep vu chua duoc bat" —
+   * mot cau SAI, va sai theo kieu lam bai test ben duoi do vi mot ly do no khong dinh do.
+   */
+  await page.route('**/transport/me/vehicles', (route) =>
+    json(route, { message: 'Tài khoản này không có quyền xem xe đã yêu cầu' }, 403),
+  );
   await page.route('**/transport/drivers', (route) => json(route, DRIVERS));
   await page.route('**/transport/customers', (route) => json(route, CUSTOMERS));
   await page.route('**/transport/partners', (route) => json(route, PARTNERS));

@@ -73,8 +73,15 @@ import type {
   TripCostBreakdown,
   TripKind,
   TripStatus,
+  AssetStakeholder,
+  AssetStakeholderKind,
+  PartyStatus,
+  StakeholderVehicleView,
   Vehicle,
   VehicleDriverAssignment,
+  VehicleOperationalControl,
+  VehicleOwnershipInterest,
+  VehicleOwnershipRegister,
   VehicleStatus,
   // `TX-07b` — quyet toan lai xe (Issue #237).
   DriverCashoutDetail,
@@ -184,7 +191,11 @@ const getList = async <T>(path: string, key: string): Promise<readonly T[]> => {
   return rows as readonly T[];
 };
 
-const send = async <T>(method: 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> =>
+const send = async <T>(
+  method: 'POST' | 'PATCH' | 'PUT',
+  path: string,
+  body?: unknown,
+): Promise<T> =>
   readBody<T>(
     await authFetch(`${BASE}${path}`, {
       method,
@@ -548,6 +559,80 @@ export const transportApi = {
       send('POST', `/transport/trips/${encodeURIComponent(id)}/transition`, { to }),
     cancel: (id: string, reason: string): Promise<Trip> =>
       send('POST', `/transport/trips/${encodeURIComponent(id)}/cancel`, { reason }),
+  },
+
+  /**
+   * `TX-08` SO HUU TAI SAN (#242 Lane E).
+   *
+   * Hai NHOM tren cung mot doi tuong, va chung KHONG duoc gop: `assetOwnership.*` la be mat quan
+   * tri (doi hoi `transport.asset_ownership.*`), con `myVehicles`/`myVehicle` la be mat CUA CHINH
+   * NGUOI DANG DANG NHAP. Cai thu hai khong nhan `stakeholderId` o bat ky duong nao — danh tinh den
+   * tu phien, va may chu loc theo dung tap xe cua nguoi do.
+   */
+  assetOwnership: {
+    stakeholders: (): Promise<readonly AssetStakeholder[]> =>
+      get('/transport/asset-ownership/stakeholders'),
+    createStakeholder: (input: {
+      kind: AssetStakeholderKind;
+      displayName: string;
+      note?: string | null;
+    }): Promise<AssetStakeholder> => send('POST', '/transport/asset-ownership/stakeholders', input),
+    updateStakeholder: (
+      id: string,
+      input: { displayName?: string; note?: string | null; status?: PartyStatus },
+    ): Promise<AssetStakeholder> =>
+      send('PATCH', `/transport/asset-ownership/stakeholders/${encodeURIComponent(id)}`, input),
+    /** `authUserId: null` la GO cau noi — mot gia tri MINH THI, khong phai truong bo trong. */
+    setAccount: (id: string, authUserId: string | null): Promise<AssetStakeholder> =>
+      send('PUT', `/transport/asset-ownership/stakeholders/${encodeURIComponent(id)}/account`, {
+        authUserId,
+      }),
+
+    register: (vehicleId: string): Promise<VehicleOwnershipRegister> =>
+      get(`/transport/asset-ownership/vehicles/${encodeURIComponent(vehicleId)}`),
+    recordInterest: (
+      vehicleId: string,
+      input: {
+        stakeholderId: string;
+        ownershipBasisPoints: number;
+        effectiveFrom: string;
+        note?: string | null;
+      },
+    ): Promise<VehicleOwnershipInterest> =>
+      send(
+        'POST',
+        `/transport/asset-ownership/vehicles/${encodeURIComponent(vehicleId)}/interests`,
+        input,
+      ),
+    closeInterest: (
+      interestId: string,
+      input: { effectiveTo: string; note?: string | null },
+    ): Promise<VehicleOwnershipInterest> =>
+      send(
+        'POST',
+        `/transport/asset-ownership/interests/${encodeURIComponent(interestId)}/close`,
+        input,
+      ),
+    declareRegister: (vehicleId: string, complete: boolean): Promise<VehicleOwnershipRegister> =>
+      send('PUT', `/transport/asset-ownership/vehicles/${encodeURIComponent(vehicleId)}/register`, {
+        complete,
+      }),
+    setOperationalControl: (
+      vehicleId: string,
+      operationalControl: VehicleOperationalControl,
+    ): Promise<VehicleOwnershipRegister> =>
+      send(
+        'PUT',
+        `/transport/asset-ownership/vehicles/${encodeURIComponent(vehicleId)}/operational-control`,
+        { operationalControl },
+      ),
+  },
+
+  /** BE MAT CUA CHINH MINH — ben huu quan. Khong duong nao nhan `stakeholderId`. */
+  stakeholderSelf: {
+    myVehicles: (): Promise<readonly StakeholderVehicleView[]> => get('/transport/me/vehicles'),
+    myVehicle: (vehicleId: string): Promise<StakeholderVehicleView> =>
+      get(`/transport/me/vehicles/${encodeURIComponent(vehicleId)}`),
   },
 
   fleet: {
