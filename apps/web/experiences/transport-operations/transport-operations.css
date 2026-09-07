@@ -325,6 +325,23 @@
 }
 
 /* Tran ngang nam TRONG khung bang, khong bao gio o than trang. */
+/*
+ * Dong noi "bang dang co lai mot dong", kem duong quay ve ca danh sach. Nam TRONG khung bang de no
+ * di theo bang chu khong troi ra ngoai khi bang truot ngang.
+ */
+.tx-table__focus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--tx-line);
+  font-size: 0.82rem;
+  color: var(--tx-ink-soft);
+}
+
 .tx-tablewrap {
   overflow-x: auto;
   background: var(--tx-paper);
@@ -1162,6 +1179,22 @@
   border: 1px solid var(--tx-line);
   border-radius: var(--tx-radius-sm);
   background: var(--tx-paper);
+}
+
+/*
+ * O DONG PHAI DONG THAT.
+ *
+ * `AccountMenu` dat `hidden={!isOpen}` tren khoi nay, va `[hidden]` cua trinh duyet la
+ * `display: none` — nhung `display: flex` o ngay tren GHI DE no, vi luat cua tac gia thang luat cua
+ * trinh duyet bat ke thu tu. Hau qua doc duoc: o tai khoan CHUA BAO GIO dong. Tren thanh ben van
+ * hanh no nam mo san o cuoi danh muc; tren dien thoai khoi nay la `position: absolute`, nen nut
+ * `Đăng xuất` ghim de len noi dung va khong co cach nao cat no di — nguoi dung bao cao dung cau
+ * "dang xuat cua tk lai xe dang bi ghim giua man hinh giao dien dien thoai".
+ *
+ * `aria-expanded` cung noi doi theo: no bao `false` trong khi khoi van hien ra.
+ */
+.tx-account__panel[hidden] {
+  display: none;
 }
 
 .tx-account__facts {

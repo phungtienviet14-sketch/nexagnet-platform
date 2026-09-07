@@ -868,6 +868,35 @@ test.describe('chuyen xe', () => {
   });
 });
 
+/**
+ * CUNG MOT LUAT CHO CAC MAN KHONG CO O TIM KIEM.
+ *
+ * Man Chuyen xe co o tim kiem nen ma chuyen vao do la du. Cac man con lai khong co, va them mot o
+ * tim kiem vao mot bang ba dong thi lam giao dien te di — nen chung co lai bang chinh dong dang
+ * chon, kem duong `Xem tất cả` de mo lai.
+ */
+test.describe('chon mot dong thi bang co lai ve dong do', () => {
+  test('ky doi soat: bang con mot dong, noi ro con bao nhieu, va mo lai duoc', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=fuel');
+
+    const dongAnh = page.getByRole('rowheader', { name: 'Cây xăng Đông Anh' });
+    const giaLam = page.getByRole('rowheader', { name: 'Cây xăng Gia Lâm' });
+    await expect(dongAnh).toBeVisible();
+    await expect(giaLam).toBeVisible();
+
+    await dongAnh.click();
+
+    await expect(giaLam).toHaveCount(0);
+    // Bang KHONG duoc lang le bot dong: phai noi ro no dang thu hep, va noi bang mot con so.
+    await expect(page.getByText('Đang xem 1 / 2 dòng')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Xem tất cả' }).click();
+    await expect(giaLam).toBeVisible();
+    await expect(dongAnh).toBeVisible();
+  });
+});
+
 test.describe('quy lai xe — phieu phai giu dung nguoi', () => {
   test('phieu tam ung ghim lai xe cua chinh no va noi ten nguoi do', async ({ page }) => {
     await mockTransport(page, 'ACCOUNTING');
@@ -935,6 +964,38 @@ test.describe('be mat lai xe — cach ly doanh thu', () => {
       expect(payload).not.toContain('marginAmount');
       expect(payload).not.toContain('11500000');
     }
+  });
+
+  /**
+   * O TAI KHOAN PHAI DONG DUOC — va truoc ban nay thi khong.
+   *
+   * `AccountMenu` dat `hidden={!isOpen}`, nhung `.tx-account__panel { display: flex }` GHI DE luat
+   * `[hidden] { display: none }` cua trinh duyet. Hau qua o 390px: khoi nay la `position: absolute`
+   * nen nut `Đăng xuất` ghim de len noi dung ngay tu luc mo trang va khong cach nao cat di. Nguoi
+   * dung bao cao dung cau *"dang xuat cua tk lai xe dang bi ghim giua man hinh giao dien dien
+   * thoai"*.
+   *
+   * Bai nay do `Đăng xuất` chu khong do mot lop CSS: mot ban viet lai vo o tai khoan van phai giu
+   * dung tinh chat nay.
+   */
+  test('o tai khoan tren dien thoai DONG cho toi khi bam, va dong lai duoc', async ({ page }) => {
+    await mockTransport(page, 'SALE');
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.goto('/?surface=driver');
+    await expect(page.getByRole('heading', { level: 1, name: 'Trang chủ' })).toBeVisible();
+
+    const signOut = page.getByRole('button', { name: 'Đăng xuất' });
+    const trigger = page.getByRole('button', { name: /Người dùng SALE/ });
+
+    await expect(signOut).toBeHidden();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await trigger.click();
+    await expect(signOut).toBeVisible();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    await trigger.click();
+    await expect(signOut).toBeHidden();
   });
 
   test('lai xe go tay dia chi cua man hinh van hanh thi khong vao duoc', async ({ page }) => {

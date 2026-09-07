@@ -103,6 +103,7 @@ export function TripFuelEntries({
         rowKey={(row) => row.id}
         selectedKey={openId}
         onSelect={(row) => setOpenId(row.id === openId ? null : row.id)}
+        onShowAll={() => setOpenId(null)}
         columns={[
           {
             key: 'date',
