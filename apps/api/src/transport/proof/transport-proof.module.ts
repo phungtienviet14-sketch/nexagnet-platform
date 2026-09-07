@@ -13,6 +13,10 @@ import {
 import { InMemoryTrackingRepository, TrackingRepository } from './tracking.repository.js';
 import { TrackingService } from './tracking.service.js';
 import {
+  UnconfiguredVehicleTelematicsAdapter,
+  VehicleTelematicsPort,
+} from './telematics/vehicle-telematics.port.js';
+import {
   TransportProofCoreFacts,
   TransportProofCoreFactsAdapter,
 } from './transport-proof-facts.port.js';
@@ -41,6 +45,18 @@ import {
       inject: [PrismaService],
     },
     { provide: TransportProofCoreFacts, useClass: TransportProofCoreFactsAdapter },
+    {
+      /**
+       * NGUON VI TRI THU HAI — hom nay chua co nha cung cap nao, va adapter mac dinh noi thang
+       * dieu do thay vi tra ve mot mang rong.
+       *
+       * Khac biet do khong vun vat: mot mang rong khong phan biet duoc voi "xe do khong chay hom
+       * nay", nen mot man hinh doi chieu cheo se hien mau xanh cho moi chiec xe, mai mai, o mot
+       * he chua he duoc cam vao gi ca — va khong ai phat hien ra.
+       */
+      provide: VehicleTelematicsPort,
+      useClass: UnconfiguredVehicleTelematicsAdapter,
+    },
     { provide: TRANSPORT_CORE_POLICY, useFactory: tenantTransportCorePolicy },
     {
       // Moi nguong o day deu co mot mac dinh dung duoc, nen "goi khach khong khai gi" la duong
@@ -50,6 +66,6 @@ import {
     },
     TrackingService,
   ],
-  exports: [TrackingService, TrackingRepository],
+  exports: [TrackingService, TrackingRepository, VehicleTelematicsPort],
 })
 export class TransportProofModule {}
