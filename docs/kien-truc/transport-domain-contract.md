@@ -582,7 +582,7 @@ Ràng buộc dữ liệu của `transport-driver` (VT-083, VT-101):
 | Port | Trách nhiệm | Trạng thái | Adapter |
 |---|---|---|---|
 | `FuelStatementSourcePort` | Đọc bảng kê cây xăng thành dòng đã chuẩn hoá | Demo: CSV/Excel (`GD-07`) | Excel / CSV / API cây xăng |
-| `VehicleTelematicsPort` | Vị trí/hành trình xe **từ hộp GSHT trên xe** | **Đang mở** ở Lane B (#235 B5) — giữ nguyên tên này, không đặt tên mới | GSHT vendor / CSV / nhập tay |
+| `VehicleTelematicsPort` | Vị trí/hành trình xe **từ hộp GSHT trên xe** | **as-built** (#235 B5) — cổng + `crossCheckTracks`. Hiện thực duy nhất là `UnconfiguredVehicleTelematicsAdapter`: nó **nói ra** rằng chưa có nhà cung cấp, không trả mảng rỗng | GSHT vendor / CSV / nhập tay — **chưa hãng nào công bố API cho khách**, đo 08/09/2026 |
 | `AccountingExportPort` | Đẩy công nợ/bút toán sang phần mềm kế toán | Ngoài v1 | MISA / ERP |
 | `EInvoicePort` | Hóa đơn điện tử | Ngoài v1 — `GD-16` | — |
 | `MediaStore` *(đã có)* | Lưu ảnh phiếu/chứng từ | **as-built** | none / local / S3-compatible |

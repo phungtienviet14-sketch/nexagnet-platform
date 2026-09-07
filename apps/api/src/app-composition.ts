@@ -121,6 +121,9 @@ import { SettlementReportsController } from './transport/settlement/settlement-r
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
 import { TransportAssetComplianceModule } from './transport/asset-compliance/transport-asset-compliance.module.js';
 import { TransportWorkforceModule } from './transport/workforce/transport-workforce.module.js';
+import { TransportProofModule } from './transport/proof/transport-proof.module.js';
+import { DriverTrackingController } from './transport/proof/driver-tracking.controller.js';
+import { TrackingController } from './transport/proof/tracking.controller.js';
 import { OperationalAlertsService } from './transport/asset-compliance/operational-alerts.service.js';
 import {
   AlertDriverFundSource,
@@ -200,6 +203,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   owned('transport-asset-compliance', TransportAssetComplianceModule),
   // LUONG LAI XE. Den cung `transport-workforce` va bien mat cung no.
   owned('transport-workforce', TransportWorkforceModule),
+  // BAM VI TRI. Mot khach van tai KHONG bat capability nay thi khong co mot bang toa do nao, va
+  // do la mot cau hinh hop le — xem khoi chu thich cua `transport-proof` trong `tenant.schema.ts`.
+  owned('transport-proof', TransportProofModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -289,6 +295,11 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // `TX-05` — BAO CAO quyet toan, CHI DOC (`#168 B1`). Capability nay chay tu T5 nhung chua tung co
   // mot duong HTTP nao; xem khoi chu thich cua controller ve vi sao khong co route ghi.
   owned('transport-settlement', SettlementReportsController),
+  // BAM VI TRI CUA CHINH TOI — be mat lai xe, route rieng, cung ly le voi `DriverFuelController`.
+  owned('transport-proof', DriverTrackingController),
+  // BE MAT VAN HANH — HAI tuyen voi HAI quyen khac nhau (tom tat ⟂ duong di tho). Xem khoi chu
+  // thich cua controller: gop chung mot quyen la bo mat cong "can-biet" cua lich su vi tri.
+  owned('transport-proof', TrackingController),
 ];
 
 const guardProviders: readonly Provider[] = [
