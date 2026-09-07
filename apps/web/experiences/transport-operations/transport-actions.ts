@@ -147,6 +147,10 @@ export const TRANSPORT_ACTIONS = [
   'transport.location.history.read',
   'transport.geofence.read',
   'transport.geofence.manage',
+  /* --- `TX-08` SO HUU TAI SAN (Lane E, Issue #242) --- */
+  'transport.asset_ownership.read',
+  'transport.asset_ownership.manage',
+  'transport.stakeholder.self.vehicle.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -167,9 +171,24 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.proof.record',
 ];
 
-/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
+/**
+ * PHAM VI BEN HUU QUAN (`TX-08`) — chep nguyen tu API.
+ *
+ * KHONG vai nao cap cac ma nay, va do khong phai mot thieu sot: pham vi "Xe toi co co phan" den tu
+ * mot hang `TransportAssetStakeholder.authUserId`, khong tu mot chuc danh. Xem khoi
+ * `STAKEHOLDER_SCOPE_ACTIONS` trong `apps/api/src/transport/transport-actions.ts`.
+ *
+ * Hau qua o phia man hinh: `canPerform` tra `false` cho moi vai, nen KHONG duoc dung no lam dieu
+ * kien hien be mat ben huu quan. Dieu kien dung la API tra ve du lieu hay `403`.
+ */
+export const STAKEHOLDER_SCOPE_ACTIONS: readonly TransportAction[] = [
+  'transport.stakeholder.self.vehicle.read',
+];
+
+/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe va pham vi ben huu quan. */
 const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
-  (action): action is TransportAction => !SELF_SCOPE_ACTIONS.includes(action),
+  (action): action is TransportAction =>
+    !SELF_SCOPE_ACTIONS.includes(action) && !STAKEHOLDER_SCOPE_ACTIONS.includes(action),
 );
 
 /**

@@ -1,3 +1,4 @@
+import type { VehicleOperationalControl } from './asset-ownership/asset-ownership.types.js';
 import type { BusinessDate } from './business-date.js';
 import type { TripKind, TripStatus } from './trips/trip-lifecycle.js';
 
@@ -37,6 +38,17 @@ export interface Vehicle {
   /** VT-012. T2 chi GIU so; nguon cap nhat tu dong moi lan do dau la viec cua T4. */
   readonly currentOdoKm: number;
   readonly status: VehicleStatus;
+  /**
+   * AI DIEU HANH xe nay (`TX-08`) — TRUC DOC LAP voi quyen so huu.
+   *
+   * DOC o day vi moi man hinh doi xe deu can no; GHI thi khong: duong ghi duy nhat di qua
+   * `AssetOwnershipService`, va `updateVehicleSchema` co y KHONG nhan truong nay. Ly do o
+   * `asset-ownership/asset-ownership.types.ts` — mot xe dong so huu ma B van dieu hanh la xe NOI
+   * BO, va cho duy nhat cuong che duoc dieu do la cho cung giu so dang ky so huu.
+   */
+  readonly operationalControl: VehicleOperationalControl;
+  /** So dang ky so huu da duoc KHAI la day du hay chua (`TX-08`). Cung duong ghi voi truong tren. */
+  readonly ownershipRegisterComplete: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

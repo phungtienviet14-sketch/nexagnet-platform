@@ -145,6 +145,8 @@ import { OperationalAlertsController } from './transport/asset-compliance/operat
 import { PayrollController } from './transport/workforce/payroll.controller.js';
 import { DriverPayslipsController } from './transport/workforce/driver-payslips.controller.js';
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
+import { AssetOwnershipController } from './transport/asset-ownership/asset-ownership.controller.js';
+import { StakeholderVehiclesController } from './transport/asset-ownership/stakeholder-vehicles.controller.js';
 import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
 import { TransportOrdersController } from './transport/movement/orders.controller.js';
 import { DriverExpenseClaimsController } from './transport/claims/driver-claims-self.controller.js';
@@ -258,6 +260,13 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-core', FleetController),
   // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
   owned('transport-core', CounterpartyController),
+  /*
+   * `TX-08` so huu tai san. Ca hai thuoc `transport-core` — quyen so huu la mot su that ve chinh
+   * chiec xe, khong phai mot lop nghiep vu them vao, nen khach nao bat duoc doi xe thi cung tra loi
+   * duoc "ai so huu no". Be mat ben huu quan di kem: khong co no thi so dang ky chi la du lieu chet.
+   */
+  owned('transport-core', AssetOwnershipController),
+  owned('transport-core', StakeholderVehiclesController),
   // MO HINH VAN CHUYEN v2 (R1-B, #232 `D-01`) -- cong them. Khong duong nao cua v1 phu thuoc
   // hai controller nay, va `TransportTrip` khong doi mot cot nao.
   owned('transport-core', TransportOrdersController),

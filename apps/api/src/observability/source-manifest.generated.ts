@@ -215,6 +215,15 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/orders/sales-order-outcome.service.ts",
       "line": 55
     },
+    "ownership.interest.close": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
+    "ownership.interest.record": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
+    "ownership.register.declare": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
     "parser.production": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
@@ -338,6 +347,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "TransportAnalyticsController.runMargin",
       "filePath": "apps/api/src/transport/analytics/analytics.controller.ts",
       "line": 40
+    },
+    "transport.asset_ownership.manage": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.controller.ts"
+    },
+    "transport.asset_ownership.read": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.controller.ts"
     },
     "transport.compliance.document.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
@@ -580,6 +595,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.settlement.report.read": {
       "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts"
+    },
+    "transport.stakeholder.self.vehicle.read": {
+      "filePath": "apps/api/src/transport/asset-ownership/stakeholder-vehicles.controller.ts"
     },
     "transport.tracking.read": {
       "functionName": "TrackingController.summaries",
@@ -1260,6 +1278,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "TurnReplyService.performSendAdviceReply",
       "filePath": "apps/api/src/turns/turn-reply.service.ts",
       "line": 113
+    },
+    "ownership.scope.resolve|*": {
+      "functionName": "AssetOwnershipScopeService.decide",
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership-scope.service.ts",
+      "line": 146
     },
     "payroll.driver_fund_disclosure|DRIVER_FUND_NOT_AVAILABLE": {
       "functionName": "WorkforceService.emitFundDisclosure",
