@@ -43,6 +43,7 @@ import {
   type ResolveDiscrepancyInput,
   type ResolveDiscrepancyOutcome,
   type SetFuelVerificationInput,
+  type UpdateFuelSupplierProfileInput,
   type WithdrawEvidenceInput,
   type WithdrawEvidenceOutcome,
 } from './fuel.repository.js';
@@ -81,6 +82,18 @@ const toSupplier = (row: any): FuelSupplier => ({
   address: row.address,
   taxCode: row.taxCode,
   status: row.status,
+  contactName: row.contactName ?? null,
+  contactEmail: row.contactEmail ?? null,
+  contractNo: row.contractNo ?? null,
+  contractStartDate: row.contractStartDate ?? null,
+  contractEndDate: row.contractEndDate ?? null,
+  paymentTermDays: row.paymentTermDays ?? null,
+  termsNote: row.termsNote ?? null,
+  // `?? []` chu khong `?? null`: cot mang cua Postgres doc len la `[]` khi trong, nhung mot ban
+  // client sinh truoc migration nay se khong co khoa do — va `undefined` di ra ngoai se lam giao
+  // dien nem khi `.map()`. Mang rong la cau tra loi dung: "chua ai khai nguon nao".
+  ingestChannels: row.ingestChannels ?? [],
+  ingestAccountRef: row.ingestAccountRef ?? null,
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt),
 });
@@ -304,6 +317,21 @@ export class PrismaFuelRepository extends FuelRepository {
         },
       }),
     );
+  }
+
+  async updateSupplierProfile(
+    id: string,
+    patch: UpdateFuelSupplierProfileInput,
+  ): Promise<FuelSupplier | null> {
+    const { at, ...fields } = patch;
+    const data = Object.fromEntries(
+      Object.entries(fields).filter(([, value]) => value !== undefined),
+    );
+    const row = await model(this.prisma, 'transportFuelSupplier').update({
+      where: { id },
+      data: { ...data, updatedAt: at },
+    });
+    return row ? toSupplier(row) : null;
   }
 
   async findSupplier(id: string): Promise<FuelSupplier | null> {

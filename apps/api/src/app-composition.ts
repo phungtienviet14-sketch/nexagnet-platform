@@ -115,6 +115,7 @@ import { FuelEvidenceController } from './transport/evidence/fuel-evidence.contr
 import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js';
 import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
+import { FuelStationController } from './transport/fuel/fuel-station.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
 import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
@@ -260,6 +261,12 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // Kho anh no dung den nam o `transport-core` — xem khoi PROVIDERS.
   owned('transport-costing', DriverExpenseEvidenceController),
   owned('transport-fuel', FuelEntriesController),
+  // DANH MUC CAY XANG (Lane C / C1) — den cung `transport-fuel`, KHONG mot capability moi.
+  //
+  // R0 §2 `F-12`: `CAPABILITY_IDS` la enum dong trong `packages/tenant`, nen them mot capability
+  // buoc phai sua goi nen tang roi build lai — tuc cham dung vung ma #223/#224 dang lam viec. Tram
+  // xang khong ton tai duoc neu khong co phieu do dau, nen no thuoc dung capability da co.
+  owned('transport-fuel', FuelStationController),
   owned('transport-fuel', FuelReconciliationController),
   // PHIEU DAU CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
   owned('transport-fuel', DriverFuelController),

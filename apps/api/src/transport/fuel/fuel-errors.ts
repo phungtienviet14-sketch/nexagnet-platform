@@ -50,6 +50,30 @@ export const TRANSPORT_FUEL_VALIDATION_REASONS = [
    * khong cho ro ri. Nguoi dung hop le thi hai truong hop nay giong het nhau: tai lai trang.
    */
   'FUEL_EVIDENCE_NOT_FOUND',
+
+  /* --- Danh tinh cay xang (Lane C / C1) --- */
+  'FUEL_STATION_NOT_FOUND',
+  'FUEL_STATION_ALIAS_NOT_FOUND',
+  /**
+   * Ten tram chuan hoa ra CHUOI RONG — vd `"---"` hay `"..."`.
+   *
+   * Khong phai mot lan bat be chinh ta: `nameNormalized` la KHOA SO KHOP, va mot khoa rong se khop
+   * voi moi tram khac cung rong. Mot hang nhu vay khong tra loi duoc cau hoi duy nhat bang tram ton
+   * tai de tra loi, va no keo theo mot lan khop nham ngay lan nhan dang dau tien.
+   */
+  'FUEL_STATION_NAME_INVALID',
+  /** Nhu tren, cho bi danh. Bi danh rong con te hon: khoa cua no UNIQUE toan cuc. */
+  'FUEL_STATION_ALIAS_INVALID',
+  /**
+   * MOT NUA TOA DO khong phai mot diem.
+   *
+   * Duong hay gap nhat KHONG phai lan tao moi ma la mot lan SUA: bieu mau gui `latitudeE7: null`
+   * ma khong gui `longitudeE7`, va hang con lai mot nua toa do. Nen phep kiem chay tren trang thai
+   * DA GOP, khong tren ban va.
+   */
+  'FUEL_STATION_COORDINATES_INCOMPLETE',
+  /** Ban kinh khong co tam thi khong khoanh duoc gi — va `0` met KHONG phai "khong kiem". */
+  'FUEL_STATION_GEOFENCE_WITHOUT_COORDINATES',
 ] as const;
 export type TransportFuelValidationReason = (typeof TRANSPORT_FUEL_VALIDATION_REASONS)[number];
 
@@ -104,6 +128,24 @@ export const TRANSPORT_FUEL_CONFLICT_REASONS = [
   'FUEL_EVIDENCE_ENTRY_ALREADY_TRUSTED',
   /** Phieu da khop hoac da nam trong ky doi soat DA DONG (`GD-11`) — khong go bang chung duoc. */
   'FUEL_EVIDENCE_ENTRY_RECONCILIATION_LOCKED',
+
+  /* --- Danh tinh cay xang (Lane C / C1) --- */
+  /**
+   * Ma cua hang DA CHUAN HOA da thuoc mot tram khac CUA CUNG nha cung cap.
+   *
+   * `CH-05` va `CH05` la cung mot ma sau khi chuan hoa, nen hai lan nhap kieu do bi chan o day chu
+   * khong lang le tao hai tram — neu de lot, moi lan nhan dang theo ma se ra `AMBIGUOUS` va khong
+   * ai hieu tai sao.
+   */
+  'FUEL_STATION_CODE_TAKEN',
+  /**
+   * Bi danh nay DA tro toi mot tram KHAC.
+   *
+   * Khong ghi de, va cung khong lang le them hang thu hai: mot bi danh tro toi hai tram khong tra
+   * loi duoc gi ca, va chinh su mo ho la thu bi danh sinh ra de xoa. Nguoi dat phai lam no cu the
+   * hon (`CHXD SO 5` -> `CHXD SO 5 HA NOI`).
+   */
+  'FUEL_STATION_ALIAS_TAKEN',
 ] as const;
 export type TransportFuelConflictReason = (typeof TRANSPORT_FUEL_CONFLICT_REASONS)[number];
 
