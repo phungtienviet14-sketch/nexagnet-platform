@@ -22,6 +22,8 @@ export const TRANSPORT_ACTIONS = [
   'transport.customer.manage',
   'transport.partner.read',
   'transport.partner.manage',
+  'transport.counterparty.read',
+  'transport.counterparty.manage',
   'transport.trip.read',
   'transport.trip.create',
   'transport.trip.update',

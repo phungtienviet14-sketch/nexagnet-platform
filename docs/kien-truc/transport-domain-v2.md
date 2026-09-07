@@ -671,14 +671,20 @@ kết quả.
 | Đăng ký | `owned('transport-core', CounterpartyController)` — **không** capability mới |
 | Nghiệm thu | 17 bài, `counterparty.service.spec.ts` (`CP-001`…`CP-005`) · `transport-counterparty-storage.spec.ts` · `counterparty.composition.spec.ts` |
 
-**Tệp có sẵn bị sửa — đúng năm, và mỗi cái một dòng lý do:**
+**Tệp có sẵn bị sửa — đúng sáu, và mỗi cái một dòng lý do:**
 
 - `schema.prisma` — thêm một khối ở **cuối tệp** (dễ gộp nhánh nhất);
 - `transport-actions.ts` + `transport-actions.spec.ts` — hai mã hành động, và danh sách khoá cứng
   trong spec là **cố ý**: thêm một quyền phải là một lần sửa có ý thức;
 - `transport.errors.ts` — gộp hai union lý do mới vào kiểu chung;
 - `transport.module.ts` — hai provider + một cổng;
-- `app-composition.ts` — một dòng đăng ký controller.
+- `app-composition.ts` — một dòng đăng ký controller;
+- `apps/web/experiences/transport-operations/transport-actions.ts` — **bản gương** của bảng phân
+  quyền. Web giữ một bản sao, và `__tests__/transport-actions.spec.ts` **đọc thẳng tệp nguồn của
+  API** rồi bắt khớp từng mã đúng thứ tự. Nên thêm một hành động ở API mà không sửa bản gương là
+  **không push được** — đúng như cổng đó được dựng ra để làm.
 
-**Không** tệp nào dưới `apps/web/**`, `packages/tenant/**`, `apps/api/src/media/**` hay `deploy/**`
-bị chạm — tức không giao với #222, #223 hay #224.
+**Ngoại lệ duy nhất với ranh giới #222** là tệp gương ngay trên: nó là một **danh sách hằng số**,
+không phải giao diện, nên không thể va về mặt ngữ nghĩa với các lỗi UX mà #222 đang sửa (biểu mẫu
+phân công, hộp thư dầu, gỡ chứng từ, đăng xuất). Ngoài nó ra, **không** tệp nào dưới `apps/web/**`,
+`packages/tenant/**`, `apps/api/src/media/**` hay `deploy/**` bị chạm.
