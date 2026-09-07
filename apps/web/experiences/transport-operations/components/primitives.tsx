@@ -100,6 +100,19 @@ export interface DataColumn<Row> {
 /**
  * Bang du lieu. `overflow-x` nam TRONG khung bang, khong o than trang — #161 §7 cam trang tran
  * ngang o be rong laptop thuong.
+ *
+ * ==============================================================================================
+ * CHON MOT DONG THI BANG CO LAI VE DONG DO — `onShowAll`
+ *
+ * Khoi chi tiet cua moi man duoc ve SAU bang, nen bang cang dai thi thu vua bam cang xa: nguoi
+ * dung bao cao dung cau *"o chi tiet lai hien ra o cuoi va toi phai cuon mai xuong cuoi de xem"*.
+ * Man Chuyen xe da giai bai nay bang o tim kiem — ma chuyen vao o, bang con mot dong. Cac man con
+ * lai KHONG co o tim kiem theo dinh danh cua dong (va them mot o tim kiem vao mot bang ba dong thi
+ * lam giao dien te di, khong tot len), nen chung dung chinh co che nay.
+ *
+ * `onShowAll` VUA la cong tac VUA la duong ra, co chu dich: bang chi co lai khi goi y da co mot
+ * duong quay lai ca danh sach. Khong the lo tay bay ra mot bang bi khoa vao mot dong ma nguoi dung
+ * khong mo lai duoc — dieu do khong bieu dien duoc bang kieu neu hai thu la hai prop roi nhau.
  */
 export function DataTable<Row>({
   caption,
@@ -108,6 +121,7 @@ export function DataTable<Row>({
   rowKey,
   selectedKey,
   onSelect,
+  onShowAll,
 }: {
   readonly caption: string;
   readonly columns: readonly DataColumn<Row>[];
@@ -115,7 +129,20 @@ export function DataTable<Row>({
   readonly rowKey: (row: Row) => string;
   readonly selectedKey?: string | null;
   readonly onSelect?: (row: Row) => void;
+  /**
+   * Co ⇒ dang chon mot dong thi bang chi ve dong do, kem mot duong `Xem tất cả` goi ham nay.
+   * Khong co ⇒ bang giu nguyen moi dong, y nhu truoc.
+   */
+  readonly onShowAll?: () => void;
 }) {
+  const selectedRow =
+    selectedKey == null ? null : (rows.find((row) => rowKey(row) === selectedKey) ?? null);
+  // Chi co lai khi dong dang chon THAT SU nam trong danh sach nay. Mot `selectedKey` tro ra ngoai
+  // (bo loc vua doi, trang vua sang) ma van co bang lai se cho ra mot bang RONG — te hon han mot
+  // bang dai.
+  const isFocused = onShowAll !== undefined && selectedRow !== null && rows.length > 1;
+  const visibleRows = isFocused && selectedRow !== null ? [selectedRow] : rows;
+
   return (
     <div className="tx-tablewrap">
       <table className="tx-table">
@@ -134,7 +161,7 @@ export function DataTable<Row>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {visibleRows.map((row) => {
             const key = rowKey(row);
             const isSelected = selectedKey != null && selectedKey === key;
             return (
@@ -163,6 +190,19 @@ export function DataTable<Row>({
           })}
         </tbody>
       </table>
+
+      {/*
+        Noi RO bang dang bi thu hep, va noi bang mot con so. Mot bang lang le bo bot dong la cach
+        nhanh nhat de nguoi dung ket luan "he thong mat du lieu cua toi".
+      */}
+      {isFocused ? (
+        <p className="tx-table__focus" role="status">
+          <span>Đang xem 1 / {rows.length} dòng</span>
+          <button type="button" className="tx-btn tx-btn--small" onClick={onShowAll}>
+            Xem tất cả
+          </button>
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -538,20 +538,37 @@ function DriverFuel() {
                   {row.evidence.length > 0 && row.evidenceLockedReason !== null ? (
                     <span className="tx-note">{row.evidenceLockedReason}</span>
                   ) : null}
-                  <label className="tx-field tx-field--file">
-                    <span>Đính ảnh chứng từ</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                      disabled={upload.isPending}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) upload.mutate({ slipId: row.id, file });
-                        event.target.value = '';
-                      }}
-                    />
-                  </label>
-                  <span className="tx-note">{EVIDENCE_UPLOAD_HINT}</span>
+                  {/*
+                    O TAI ANH THEO DUNG LUAT CUA MAY CHU, va do la mot cong KHAC voi cong `Gỡ`.
+
+                    May chu chan dinh them CHI khi ky doi soat da chot; con da xac thuc thi VAN
+                    dinh them duoc (`fuel.service.attachEvidence`) — them mot tam anh khong doi mot
+                    con so nao, va ke toan tim duoc phieu goc sau khi duyet van phai gan duoc no.
+
+                    Truoc ban nay o nay bay ra VO DIEU KIEN, ke ca voi phieu nam trong ky DA CHOT —
+                    lai xe chon tep xong chi de nhan mot loi tu may chu. Nut `Gỡ chứng từ` ngay tren
+                    da theo dung luat "khong bay mot nut chac chan bi tu choi"; o nay thi chua.
+                  */}
+                  {row.canAttachEvidence ? (
+                    <>
+                      <label className="tx-field tx-field--file">
+                        <span>Đính ảnh chứng từ</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,application/pdf"
+                          disabled={upload.isPending}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) upload.mutate({ slipId: row.id, file });
+                            event.target.value = '';
+                          }}
+                        />
+                      </label>
+                      <span className="tx-note">{EVIDENCE_UPLOAD_HINT}</span>
+                    </>
+                  ) : (
+                    <span className="tx-note">{row.evidenceAttachLockedReason}</span>
+                  )}
                 </div>
                 <div className="tx-driver__badges">
                   <StatusBadge label={row.verificationLabel} tone={row.tone} />

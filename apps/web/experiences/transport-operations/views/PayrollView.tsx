@@ -207,6 +207,8 @@ export function PayrollView() {
                 rowKey={(row) => row.id}
                 selectedKey={payslipId}
                 onSelect={(row) => setPayslipId(row.id)}
+                // Mot lan chay luong sinh mot phieu cho MOI lai xe, nen bang nay dai theo quan so.
+                onShowAll={() => setPayslipId(null)}
                 columns={[
                   {
                     key: 'driver',

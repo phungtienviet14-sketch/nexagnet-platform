@@ -98,6 +98,7 @@ export function FuelView() {
             rowKey={(row) => row.id}
             selectedKey={openId}
             onSelect={(row) => setOpenId(row.id)}
+            onShowAll={() => setOpenId(null)}
             columns={[
               {
                 key: 'supplier',

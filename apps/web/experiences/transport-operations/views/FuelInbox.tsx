@@ -225,6 +225,9 @@ export function FuelInbox() {
             rowKey={(row) => row.id}
             selectedKey={openId}
             onSelect={(row) => setOpenId(row.id === openId ? null : row.id)}
+            // Bam mot phieu = "chi xem phieu nay": bang co lai mot dong nen khoi chi tiet o ngay
+            // duoi, khong con nam sau ca mot trang 50 phieu.
+            onShowAll={() => setOpenId(null)}
             columns={[
               {
                 key: 'trip',

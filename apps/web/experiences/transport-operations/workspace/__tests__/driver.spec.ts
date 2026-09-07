@@ -157,6 +157,50 @@ describe('phieu dau cua chinh minh', () => {
     expect(row.evidenceCountLabel).toBe('2');
     expect(row.hasEvidence).toBe(true);
   });
+
+  /**
+   * HAI CONG KHAC NHAU, va man hinh phai giu dung khoang cach giua chung.
+   *
+   * Chu so huu hoi: *"chung tu da xac thuc sao lai van day len duoc file, anh moi?"*. Cau tra loi
+   * la CO Y — may chu chan `attachEvidence` CHI khi ky doi soat da chot, con `withdrawEvidence`
+   * chan tu luc `VERIFIED`. Chi co THEM sau khi xac thuc, khong co BOT: mot ke toan tim duoc phieu
+   * goc sau khi duyet van phai gan duoc no vao, con go mot tam anh sau khi duyet la xoa chinh thu
+   * nguoi duyet da nhin.
+   *
+   * Bo bai nay khoa dung khoang cach do: noi rong cong `dinh them` ra `VERIFIED` se chan mot duong
+   * may chu cho phep, con noi long cong `go` se bay mot nut chi de nhan 409.
+   */
+  it('da XAC THUC: khong go duoc nua, nhung VAN dinh them duoc', () => {
+    const row = toDriverFuelSlipRows([driverFuelSlip({ verificationStatus: 'VERIFIED' })])[0]!;
+    expect(row.canRemoveEvidence).toBe(false);
+    expect(row.canAttachEvidence).toBe(true);
+    expect(row.evidenceAttachLockedReason).toBeNull();
+    // Cau giai thich phai noi CA hai ve — mot cau chi noi "khong go duoc" ben canh mot o tai anh
+    // van dung duoc chinh la thu lam nguoi dung tuong man hinh hong.
+    expect(row.evidenceLockedReason).toContain('không gỡ được');
+    expect(row.evidenceLockedReason).toContain('vẫn đính thêm được');
+  });
+
+  it('ky doi soat DA CHOT: dong ca hai duong', () => {
+    const row = toDriverFuelSlipRows([driverFuelSlip({ reconciliationStatus: 'SETTLED' })])[0]!;
+    expect(row.canRemoveEvidence).toBe(false);
+    expect(row.canAttachEvidence).toBe(false);
+    expect(row.evidenceAttachLockedReason).toContain('đã chốt');
+  });
+
+  it('DA KHOP nhung ky chua chot: chua go duoc, van dinh them duoc', () => {
+    const row = toDriverFuelSlipRows([driverFuelSlip({ reconciliationStatus: 'MATCHED' })])[0]!;
+    expect(row.canRemoveEvidence).toBe(false);
+    expect(row.canAttachEvidence).toBe(true);
+  });
+
+  it('phieu con moi thi ca hai duong deu mo', () => {
+    const row = toDriverFuelSlipRows([driverFuelSlip()])[0]!;
+    expect(row.canRemoveEvidence).toBe(true);
+    expect(row.canAttachEvidence).toBe(true);
+    expect(row.evidenceLockedReason).toBeNull();
+    expect(row.evidenceAttachLockedReason).toBeNull();
+  });
 });
 
 describe('trang chu lai xe', () => {
