@@ -339,6 +339,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/analytics/analytics.controller.ts",
       "line": 40
     },
+    "transport.checkpoint.read": {
+      "functionName": "CheckpointsController.timeline",
+      "filePath": "apps/api/src/transport/checkpoint/checkpoints.controller.ts",
+      "line": 42
+    },
+    "transport.checkpoint.record": {
+      "functionName": "CheckpointsController.record",
+      "filePath": "apps/api/src/transport/checkpoint/checkpoints.controller.ts",
+      "line": 55
+    },
     "transport.compliance.document.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
     },
@@ -401,6 +411,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.driver.self.checkpoint.record": {
+      "filePath": "apps/api/src/transport/checkpoint/driver-checkpoints.controller.ts"
     },
     "transport.driver.self.expense.claim.submit": {
       "filePath": "apps/api/src/transport/claims/driver-claims-self.controller.ts"
@@ -676,6 +689,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "OutboundChannelRouter.record",
       "filePath": "apps/api/src/channels/outbound-channel.router.ts",
       "line": 122
+    },
+    "checkpoint.record|*": {
+      "filePath": "apps/api/src/transport/checkpoint/checkpoint.service.ts"
     },
     "commission.select|*": {
       "functionName": "SettlementService.recogniseCommission",

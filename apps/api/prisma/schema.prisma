@@ -907,6 +907,8 @@ model TransportDriver {
   trackingSessions    TransportTrackingSession[]
   deviceInstallations TransportDeviceInstallation[]
   operationalProofs   TransportOperationalProof[]
+  /// F1 (#243): moc van hanh do chinh lai xe nay ghi.
+  runCheckpoints      TransportRunCheckpoint[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -3673,6 +3675,8 @@ model TransportVehicleRun {
   assignments   TransportRunAssignment[]
   /// R1-C: de nghi chi gan vao vong chay nay.
   expenseClaims TransportExpenseClaim[]
+  /// F1 (#243): moc van hanh cua vong chay nay.
+  checkpoints   TransportRunCheckpoint[]
 
   @@index([status])
   @@index([businessDate])
@@ -3737,6 +3741,8 @@ model TransportRunLeg {
   tripLink      TransportTripRunLegLink?
   /// R1-C: de nghi chi gan vao chang nay.
   expenseClaims TransportExpenseClaim[]
+  /// F1 (#243): moc van hanh gan vao chang nay.
+  checkpoints   TransportRunCheckpoint[]
 
   @@unique([runId, sequence])
   @@index([orderId])
@@ -4052,6 +4058,8 @@ model TransportLocationObservation {
   riskFlags TransportProofRiskFlag[]
   /// Nhieu nhat MOT chung cu dua tren cung mot ban dinh vi (`observationId` la `@unique` ben do).
   proof     TransportOperationalProof?
+  /// Va nhieu nhat MOT moc van hanh — cung ly le, `observationId` cung la `@unique` ben do.
+  checkpoint TransportRunCheckpoint?
 
   @@unique([sessionId, clientEventId], map: "TransportLocationObservation_session_event_key")
   @@index([sessionId, capturedAt])
@@ -4180,4 +4188,59 @@ model TransportProofPhoto {
 
   @@index([proofId])
   @@index([proofId, withdrawnAt])
+}
+
+/// LOAI MOC VAN HANH — `#243` F1. Xem `checkpoint.types.ts` de biet vi sao `IN_TRANSIT` va
+/// `WAITING_RECEIVER` CO Y khong nam trong danh sach nay.
+enum TransportRunCheckpointType {
+  ASSIGNED
+  DEPARTED
+  PICKUP_ARRIVAL
+  GATE_ENTRY
+  LOADING
+  PICKUP_DEPARTURE
+  DELIVERY_ARRIVAL
+  DELIVERY_ACCEPTED
+  COMPLETED
+}
+
+/// MOC VAN HANH CUA MOT VONG CHAY — `#243` F1.
+///
+/// GHI THEM, KHONG GHI DE. Bang nay khong co cot `updatedAt` va khong co duong sua nao: trigger
+/// `transport_run_checkpoint_append_only` chan moi `UPDATE`/`DELETE` o tang luu tru. Mot moc ghi
+/// nham duoc sua bang cach ghi mot moc dinh chinh, khong bang cach doi hang cu — cung nguyen tac
+/// voi `transport_driver_cashout_immutable` cua `TX-07b`.
+///
+/// `receivedAt` la gio MAY CHU va la gio duy nhat duoc dung de tinh. `capturedAt` la gio may khach
+/// khai bao, giu de doi chieu: mot chiec dien thoai van nguoc dong ho khong duoc xe dich lich su
+/// (`#243` F7).
+model TransportRunCheckpoint {
+  id            String                     @id @default(cuid())
+  type          TransportRunCheckpointType
+  runId         String
+  run           TransportVehicleRun        @relation(fields: [runId], references: [id], onDelete: Restrict)
+  /// NULL o moc muc vong chay (`ASSIGNED`, `DEPARTED`, `COMPLETED`).
+  legId         String?
+  leg           TransportRunLeg?           @relation(fields: [legId], references: [id], onDelete: Restrict)
+  /// Nguoi ghi — `authUserId` tu phien, khong tu than yeu cau.
+  recordedBy    String
+  driverId      String?
+  driver        TransportDriver?           @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  /// Ban dinh vi cua Lane B. MOT ban dinh vi phuc vu NHIEU NHAT mot moc — cung khuon
+  /// `TransportOperationalProof.observationId`.
+  observationId String?                       @unique
+  observation   TransportLocationObservation? @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  /// Khoa idempotency do may khach sinh — chan mot lan bam hai lan tao hai moc.
+  clientEventId String
+  capturedAt    DateTime?
+  receivedAt    DateTime                   @default(now())
+  businessDate  String                     @db.VarChar(10)
+  note          String?
+  createdAt     DateTime                   @default(now())
+
+  @@unique([runId, type, clientEventId], map: "TransportRunCheckpoint_run_type_event_key")
+  @@index([runId, receivedAt])
+  @@index([legId])
+  @@index([driverId, businessDate])
+  @@index([type, businessDate])
 }

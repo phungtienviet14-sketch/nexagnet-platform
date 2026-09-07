@@ -110,6 +110,14 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // MOT ma cho ca chung cu bat dau lan giao hang: hai duong khac nhau dung mot quy tac NGHIEP
       // VU (giao hang bat buoc co anh), khong phai mot ranh gioi QUYEN.
       'transport.driver.self.proof.record',
+      // MOT ma cho ca chin loai moc van hanh: chin duong khac nhau o THU TU va CHINH SACH CHUNG
+      // CU — ca hai deu la quy tac NGHIEP VU, khong phai ranh gioi QUYEN (`#243` F5).
+      'transport.driver.self.checkpoint.record',
+      // DONG THOI GIAN cua mot chuyen. Ke toan CO ma nay: mot khoan phu cap cho phai doi chieu
+      // duoc voi luc xe den noi. KHONG co toa do.
+      'transport.checkpoint.read',
+      // GHI moc tu be mat van hanh — ghi duoc cho MOI vong chay, va KHONG kem chung cu vi tri.
+      'transport.checkpoint.record',
       // TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do.
       'transport.tracking.read',
       'transport.proof.read',
@@ -213,13 +221,14 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.fuel.read',
         'transport.driver.self.fuel.submit',
         'transport.driver.self.expense.record',
-      'transport.driver.self.expense.claim.submit',
+        'transport.driver.self.expense.claim.submit',
         'transport.driver.self.payslip.read',
         'transport.driver.self.settlement.read',
         'transport.driver.self.tracking.start',
         'transport.driver.self.tracking.report',
         'transport.driver.self.tracking.stop',
         'transport.driver.self.proof.record',
+        'transport.driver.self.checkpoint.record',
       ]);
     });
 

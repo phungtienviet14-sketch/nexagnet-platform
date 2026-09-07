@@ -136,6 +136,12 @@ export const TRANSPORT_ACTIONS = [
   'transport.driver.self.tracking.stop',
   /** Chung cu bat dau/giao hang CUA CHINH MINH — mot ma cho ca hai loai. */
   'transport.driver.self.proof.record',
+  /** MOC VAN HANH CUA CHINH MINH — mot ma cho ca chin loai moc (`#243` F5). */
+  'transport.driver.self.checkpoint.record',
+  /** DONG THOI GIAN cua mot chuyen — moc, giai doan tung chang, canh bao. KHONG toa do. */
+  'transport.checkpoint.read',
+  /** GHI moc tu be mat van hanh — `ASSIGNED` va cac moc bu. KHONG kem chung cu vi tri. */
+  'transport.checkpoint.record',
   /** TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do. */
   'transport.tracking.read',
   /** TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
@@ -165,6 +171,7 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.tracking.report',
   'transport.driver.self.tracking.stop',
   'transport.driver.self.proof.record',
+  'transport.driver.self.checkpoint.record',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
