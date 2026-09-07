@@ -232,6 +232,19 @@ export const CAPABILITY_IDS = [
    * rang buoc `TransportPayslipComponent_deduction_manual_only` giu dieu do o tang luu tru.
    */
   'transport-workforce',
+  /**
+   * BAM VI TRI VA CHUNG CU VAN HANH (Issue #235 Lane B) — phien bam vi tri, ban dinh vi, co rui
+   * ro, hang rao dia ly, ma cai dat ung dung.
+   *
+   * MOT CAPABILITY RIENG chu khong phai mot phan cua `transport-core`, va do la mot khang dinh:
+   * mot khach van tai phai chay duoc MA KHONG bam vi tri. Vi tri cua nguoi lao dong co dieu kien
+   * phap ly rieng, co chi phi luu tru that (xem `docs/kien-truc/transport-geospatial.md` §5), va
+   * co khach se lay tu hop GSHT tren xe thay vi tu dien thoai. Gop vao loi se bat moi khach van
+   * tai mang theo ca tang do du ho khong bao gio bat no.
+   *
+   * KHONG mot co rui ro nao o day sinh ra cong no, tru luong hay ket luan gian lan (#232 D-02).
+   */
+  'transport-proof',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -656,6 +669,15 @@ const capabilityRequirements = {
    * thanh phu thuoc cung se bat mot khach chi tra luong co ban phai dung ca doi soat bang ke.
    */
   'transport-workforce': { dependencies: ['transport-core', 'transport-costing'] },
+  /**
+   * MOT phu thuoc. Bam vi tri can chuyen va lai xe (`transport-core`) va KHONG can gi khac: no
+   * khong dong vao tien, khong dong vao phieu dau, khong dong vao luong.
+   *
+   * KHONG khai `policy`, cung ly le voi sau capability van tai truoc no: moi nguong cua no
+   * (do chinh xac, nguong toc do, lech dong ho, so ngay giu du lieu) deu co mac dinh dung duoc,
+   * nen khai o day se bien mot khoi hoan toan tuy chon thanh mot dieu kien boot.
+   */
+  'transport-proof': { dependencies: ['transport-core'] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {
