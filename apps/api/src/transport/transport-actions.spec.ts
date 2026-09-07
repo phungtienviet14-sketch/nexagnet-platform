@@ -47,6 +47,8 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.fuel.entry.read',
       'transport.fuel.entry.submit_for_driver',
       'transport.fuel.entry.verify',
+      'transport.fuel.station.read',
+      'transport.fuel.station.manage',
       'transport.fuel.statement.import',
       'transport.fuel.reconciliation.read',
       'transport.fuel.reconciliation.match',
@@ -88,6 +90,18 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // `TX-07b` — lai xe doc bang quyet toan CUA CHINH MINH. Khong co bien the ghi nao: mot nguoi
       // tu chi tien cho chinh minh la dung cai ma kiem soat noi bo sinh ra de chan.
       'transport.driver.self.settlement.read',
+      // Issue #235 Lane B — bam vi tri cua chinh minh. Ba ma rieng chu khong mot ma gop, vi ba
+      // viec co ba hinh dang rui ro khac nhau: MO phien la mot lan chon chuyen, GUI la mot dong
+      // bang chung lap lai hang nghin lan, DONG la mot moc ket thuc.
+      'transport.driver.self.tracking.start',
+      'transport.driver.self.tracking.report',
+      'transport.driver.self.tracking.stop',
+      // TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do.
+      'transport.tracking.read',
+      // DUONG DI THO cua mot con nguoi. Ma hep nhat trong ca tep; ke toan KHONG co no.
+      'transport.location.history.read',
+      'transport.geofence.read',
+      'transport.geofence.manage',
     ]);
   });
 
@@ -186,6 +200,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.expense.record',
         'transport.driver.self.payslip.read',
         'transport.driver.self.settlement.read',
+        'transport.driver.self.tracking.start',
+        'transport.driver.self.tracking.report',
+        'transport.driver.self.tracking.stop',
       ]);
     });
 

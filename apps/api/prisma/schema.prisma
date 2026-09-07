@@ -866,6 +866,9 @@ model TransportVehicle {
   /// `transport-asset-compliance`.
   maintenancePlans   TransportMaintenancePlan[]
   workOrders         TransportMaintenanceWorkOrder[]
+  /// `transport-proof` — cac phien bam vi tri gan voi xe nay. Xe do MAY CHU dien tu ban phan
+  /// cong; may khach khong bao gio duoc noi minh dang lai xe nao.
+  trackingSessions   TransportTrackingSession[]
 
   @@index([status])
 }
@@ -883,17 +886,20 @@ model TransportDriver {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
-  vehicleAssignments TransportVehicleAssignment[]
-  tripAssignments    TransportTripAssignment[]
+  vehicleAssignments  TransportVehicleAssignment[]
+  tripAssignments     TransportTripAssignment[]
   /// `TX-03` — mot lai xe MOT so quy. Chi co mat khi khach bat `transport-costing`.
-  fundAccount        TransportDriverFundAccount?
-  tripExpenses       TransportTripExpense[]
+  fundAccount         TransportDriverFundAccount?
+  tripExpenses        TransportTripExpense[]
   /// `TX-04` — phieu do dau lai xe nay da khai.
-  fuelEntries        TransportFuelEntry[]
+  fuelEntries         TransportFuelEntry[]
   /// `TX-07` — phieu luong cua lai xe nay. Chi co mat khi khach bat `transport-workforce`.
-  payslips           TransportPayslip[]
   /// `TX-07b` — cac lan lai xe rut tien da duoc ghi nhan. Xem khoi `TransportDriverCashout`.
   cashouts           TransportDriverCashout[]
+  payslips            TransportPayslip[]
+  /// `transport-proof` — cac phien bam vi tri va cac ma cai dat ung dung cua lai xe nay.
+  trackingSessions    TransportTrackingSession[]
+  deviceInstallations TransportDeviceInstallation[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -1023,6 +1029,9 @@ model TransportTrip {
   commission          TransportCommissionCalculation?
   /// `TX-06b` — cac lan hong DOC DUONG da lam dut chuyen nay. Thuong rong.
   roadsideBreakdowns  TransportMaintenanceWorkOrder[]
+  /// `transport-proof` — cac phien bam vi tri cua chuyen. NHIEU hang la binh thuong: mot ca lai
+  /// bi ngat giua chung roi mo lai la hai phien tren cung mot chuyen.
+  trackingSessions    TransportTrackingSession[]
 
   @@index([status])
   @@index([businessDate])
@@ -1734,24 +1743,147 @@ enum TransportFuelReconciliationState {
   REOPENED
 }
 
+/// NGUON du lieu do dau ma MOT nha cung cap that su gui ve. Mot nha cung cap co the gui CA HAI.
+///
+/// KHONG phai mot cot loai: `Q-08` (R0 §7) chua co loi — chua ai biet B mua dau qua hop dong cay
+/// xang hay qua the/app, va hoa don dien tu dang gui ve dau. Mot cot mot gia tri se buoc phai doan
+/// dieu do ngay hom nay. Mot MANG thi khong: chua khai gi la mang rong, va khai them mot nguon ve
+/// sau khong phai mot lan di tru.
+///
+/// `EINVOICE` co mat vi ND 70/2025/ND-CP (hieu luc 01/06/2025) buoc MOI cua hang ban le xang dau
+/// phat hoa don dien tu TUNG LAN BAN, ke ca cho khach le tra tien mat. Tuc du lieu do dau khong
+/// con ket tren giay — no ton tai duoi dang co cau truc, phat tai diem ban.
+enum TransportFuelIngestChannel {
+  /// Bang ke ky (CSV/XLSX) — duong da co tu T4, `FuelStatementSource`.
+  STATEMENT_FILE
+  /// Hoa don dien tu tung lan ban — duong uu tien theo R0 §3.5 (`F-10`).
+  EINVOICE
+}
+
 /// CAY XANG / nha cung cap nhien lieu. Xem khoi canh bao dau muc ve vi sao khong dung vai doi tac.
+///
+/// ---------------------------------------------------------------------------
+/// SIEU DU LIEU HOP DONG (`contract*`, `paymentTermDays`, `termsNote`) KHONG DIEU KHIEN MOT DONG
+/// TIEN NAO.
+///
+/// Chung o day de nguoi doi soat DOC, va chi vay. `Q-08` chua co loi, nen mot luat kieu "qua han
+/// `paymentTermDays` thi tu sinh cong no" se la mot chinh sach KHONG AI QUYET duoc cai vao base
+/// roi moi khach van tai sau deu thua huong. `fuel-station.service.spec.ts` khoa dieu do lai.
 model TransportFuelSupplier {
-  id        String               @id @default(cuid())
-  name      String
+  id                String                       @id @default(cuid())
+  name              String
   /// Ma noi bo cua khach (so hop dong, ma cay xang tren bang ke). Duy nhat khi co.
-  code      String?              @unique
-  phone     String?
-  address   String?
-  taxCode   String?
-  status    TransportPartyStatus @default(ACTIVE)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  code              String?                      @unique
+  phone             String?
+  address           String?
+  taxCode           String?
+  status            TransportPartyStatus         @default(ACTIVE)
+  /// Nguoi phu trach ben cay xang — de goi khi mot dong bang ke khong khop.
+  contactName       String?
+  contactEmail      String?
+  contractNo        String?
+  /// `YYYY-MM-DD`. Sieu du lieu doc, khong phai mot cong chan chung tu ngoai ky.
+  contractStartDate String?                      @db.VarChar(10)
+  contractEndDate   String?                      @db.VarChar(10)
+  /// So ngay cong no theo hop dong. Xem khoi tren: KHONG duong tinh tien nao doc cot nay.
+  paymentTermDays   Int?
+  termsNote         String?
+  ingestChannels    TransportFuelIngestChannel[]
+  /// Ma tai khoan/hop dong ma HE THONG CUA NHA CUNG CAP dung — de dinh tuyen chung tu ve dung ho.
+  ingestAccountRef  String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
 
   entries         TransportFuelEntry[]
   statements      TransportFuelSupplierStatement[]
   reconciliations TransportFuelReconciliation[]
+  stations        TransportFuelStation[]
 
   @@index([status])
+}
+
+/// MOT CAY XANG CU THE — mot dia diem, khong phai mot phap nhan.
+///
+/// ===========================================================================
+/// VI SAO KHONG GOP VAO `TransportFuelSupplier`
+///
+/// Mot nha cung cap co hang tram cua hang. Cai ma bao cao can tra loi — *"tram nao ban thieu lit"*,
+/// *"xe nay do o dau"*, *"phieu nay co the do o day khong"* — deu la cau hoi ve DIA DIEM, khong
+/// phai ve phap nhan. Nhet dia chi vao mot cot `address` cua nha cung cap se lam moi cau hoi do
+/// khong tra loi duoc, va khong lan sua nao ve sau lam no de hon.
+///
+/// ===========================================================================
+/// TOA DO LA SO NGUYEN TY LE 1e-7 DO — KHONG `Float`, KHONG PostGIS
+///
+/// R0 §3.1 do va ket luan: PostGIS la lua chon dung KHI CO du lieu de luu, va hom nay chua co mot
+/// diem toa do nao — `F-11` chan viec luu vet vi tri NGUOI LAO DONG. Toa do cua mot CAY XANG thi
+/// khong phai du lieu ca nhan, nhung no cung khong dang mot lan doi image Postgres.
+///
+/// `Int` ty le 1e-7 (`latitudeE7`) la quy uoc san co cua Android Location: 1e-7 do ~ 1,1 cm, va
+/// 180 * 1e7 = 1,8e9 nam gon trong `INTEGER` 32-bit. Loi cua no so voi `Float`: hai lan doc cho ra
+/// DUNG mot con so, nen mot phep so khoang cach chay hai lan khong lech o chu so cuoi.
+///
+/// `geofenceRadiusM` la MOC HOP LY, khong phai mot cong chan: `INV-07`/`INV-27` cam moi duong tu
+/// dong sinh no cho lai xe, nen mot phieu do ngoai ban kinh chi tro thanh mot co cho nguoi xem.
+model TransportFuelStation {
+  id              String                @id @default(cuid())
+  supplierId      String
+  supplier        TransportFuelSupplier @relation(fields: [supplierId], references: [id])
+  name            String
+  /// TEN da chuan hoa — khoa so khop theo ten. KHONG unique: cac chuoi ban le danh so cua hang
+  /// theo tung vung, nen hai tram cung ten trong mot chuoi la chuyen co that. Lan trung ten ra
+  /// `AMBIGUOUS` va nguoi dat mot bi danh phan biet — do la ly do `TransportFuelStationAlias` co.
+  nameNormalized  String
+  /// Ma cua hang tren chung tu cua CHINH nha cung cap.
+  code            String?
+  /// `code` da chuan hoa — cot mang khoa unique. Xem `normalizeStationCode()`.
+  codeNormalized  String?
+  address         String?
+  latitudeE7      Int?
+  longitudeE7     Int?
+  geofenceRadiusM Int?
+  status          TransportPartyStatus  @default(ACTIVE)
+  note            String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  aliases TransportFuelStationAlias[]
+
+  /// Ma cua hang duy nhat TRONG mot nha cung cap — khong phai toan cuc. Hai chuoi khac nhau deu
+  /// co the co mot `CH-05`, va ep no duy nhat toan cuc se chan mot du lieu that.
+  @@unique([supplierId, codeNormalized])
+  @@index([supplierId, status])
+  /// HAI CHI SO MOT COT, cho duong doc nong nhat: "chung tu viet chuoi nay, tram nao khop".
+  ///
+  /// Khoa unique o tren KHONG phuc vu duoc cau hoi do: `codeNormalized` la cot THU HAI cua no, va
+  /// Postgres chi dung duoc tien to trai cua mot chi so nhieu cot. Thieu hai chi so nay, moi lan
+  /// nhan dang mot chung tu se quet ca bang tram — thu chi lo ra khi khach co mot chuoi ban le
+  /// that, tuc rat muon.
+  @@index([codeNormalized])
+  @@index([nameNormalized])
+}
+
+/// BI DANH cua mot cay xang — duong DUY NHAT de mot NGUOI day mot chuoi chu vao dung mot tram.
+///
+/// Ton tai vi nguon du lieu yeu: mot to phieu nhiet chi in `CHXD SO 5 KM12`, mot bang ke viet
+/// `Cua hang 5 (Km 12)`. Khong phep so gan dung nao duoc phep noi hai chuoi do la mot — nhung mot
+/// NGUOI thi noi duoc, va bang nay la cho ho ghi lai lan quyet do de khong phai quyet lai.
+///
+/// `normalized` UNIQUE TOAN CUC, khong theo nha cung cap: mot bi danh tro toi hai tram khong tra
+/// loi duoc gi ca. Khi hai tram cung muon mot bi danh, he thong TU CHOI va nguoi dat phai lam no
+/// cu the hon — do la ket cuc dung, vi chinh su mo ho la thu bi danh sinh ra de xoa.
+model TransportFuelStationAlias {
+  id         String               @id @default(cuid())
+  stationId  String
+  station    TransportFuelStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  /// Khoa so khop. Xem `normalizeStationLabel()` — bo dau, chu hoa, gom khoang trang.
+  normalized String               @unique
+  /// Nguyen ban nguoi nhap, de doc lai khi ai do nghi phep chuan hoa dang doc sai.
+  raw        String
+  createdBy  String
+  createdAt  DateTime             @default(now())
+
+  @@index([stationId])
 }
 
 /// PHIEU DO DAU — aggregate root cua `TX-04`, giu hai truc trang thai doc lap (T1 §7.4).
@@ -3192,4 +3324,221 @@ model TransportDriverCashoutAllocation {
   @@index([cashoutId])
   @@index([payslipId])
   @@index([source])
+}
+
+// ----- Transport domain: bam vi tri (transport-proof, Issue #235 Lane B) -----
+//
+// CANH BAO — RANG BUOC CUA `transport-proof` KHONG CO O DAY. Chung song trong SQL tho cua
+// migration `20260907170000_transport_proof_tracking`, vi Prisma khong co cu phap cho `CHECK` va
+// cho chi muc MOT PHAN. `transport-proof-storage.spec.ts` doc chinh tep migration do va do neu
+// mot ten bien mat: `prisma migrate dev` sinh migration bang cach diff schema voi DB va SE sinh
+// lenh xoa tat ca chung neu ai do chay no roi commit thang.
+//
+// Ba rang buoc quan trong nhat:
+//   · `TransportTrackingSession_activeDriver_key`        — chi muc MOT PHAN: mot lai xe, mot phien;
+//   · `TransportLocationObservation_session_event_key`   — chan phat lai;
+//   · `TransportDeviceInstallation_installationId_key`   — mot ma cai dat, mot chu.
+
+enum TransportTrackingSessionStatus {
+  ACTIVE
+  CLOSED
+  EXPIRED
+}
+
+/// Nguon cua mot ban dinh vi. `TELEMATICS` la hop GSHT tren xe — mot nguon DOC LAP voi dien
+/// thoai, va la doi chieu cheo tot nhat ma he nay se co (`F-07` cua R0).
+enum TransportLocationSource {
+  DEVICE_GNSS
+  DEVICE_FUSED
+  DEVICE_NETWORK
+  TELEMATICS
+  MANUAL
+}
+
+enum TransportDevicePlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+/// `UNKNOWN` (chua hoi) va `UNVERIFIED` (da hoi, khong chung minh duoc) la HAI dieu khac nhau.
+/// Gop lai se lam mot ban web binh thuong trong y het mot may da bi can thiep.
+enum TransportDeviceIntegrityVerdict {
+  UNKNOWN
+  UNVERIFIED
+  BASIC
+  STRONG
+}
+
+/// CHI HAI muc, va khong co muc thu ba kieu `BLOCK`: #232 D-02 — khong mot co nao trong he nay
+/// duoc tu dong chan mot chuyen, sinh mot khoan no hay tru mot dong luong.
+enum TransportProofRiskSeverity {
+  INFO
+  REVIEW
+}
+
+/// Khai DAY DU ngay tu dau, ke ca cac ma chi duoc phat o tranche chung cu. Ly do rat cu the:
+/// `ALTER TYPE ... ADD VALUE` khong dung duoc trong cung mot giao dich voi cau lenh dung gia tri
+/// moi, va Prisma chay migration trong mot giao dich — nen them mot ma ve sau la mot migration
+/// rieng chi de sua mot enum.
+enum TransportProofRiskCode {
+  ACCURACY_POOR
+  ACCURACY_UNKNOWN
+  MOCK_LOCATION_REPORTED
+  DEVICE_INTEGRITY_UNVERIFIED
+  CLOCK_SKEW_EXCEEDED
+  TIMESTAMP_NOT_ADVANCING
+  LARGE_TIME_GAP
+  IMPLAUSIBLE_SPEED
+  OUTSIDE_OPERATING_AREA
+  OUTSIDE_EXPECTED_GEOFENCE
+  GEOFENCE_INDETERMINATE
+  NO_GEOFENCE_CONFIGURED
+  PHOTO_MISSING
+  PHOTO_FROM_GALLERY
+}
+
+enum TransportGeofenceSubjectKind {
+  CUSTOMER
+  FUEL_SUPPLIER
+  DEPOT
+  AD_HOC
+}
+
+/// MOT MA CAI DAT UNG DUNG, gan cung lai xe dau tien dung no.
+///
+/// `installationId` la chuoi do CHINH UNG DUNG sinh va giu. No khong chung minh danh tinh (mot
+/// nguoi cai lai app se co ma moi), nhung no tra loi duoc mot cau khac va van huu ich: "hai phien
+/// nay co den tu cung mot ban cai dat khong". Khi lai xe B trinh ma cua lai xe A, unique o cot
+/// nay bien no thanh mot va cham ON AO thay vi mot lan gan lai chu so huu im lang.
+model TransportDeviceInstallation {
+  id                 String                          @id @default(cuid())
+  driverId           String
+  driver             TransportDriver                 @relation(fields: [driverId], references: [id])
+  installationId     String                          @unique
+  platform           TransportDevicePlatform
+  appVersion         String
+  integrityVerdict   TransportDeviceIntegrityVerdict @default(UNKNOWN)
+  integrityCheckedAt DateTime?
+  firstSeenAt        DateTime                        @default(now())
+  lastSeenAt         DateTime                        @default(now())
+  /// Thu hoi la mot BIA MO, khong phai mot lan xoa hang: mot ma da bi thu hoi van phai giai thich
+  /// duoc nhung ban dinh vi no da gui truoc do.
+  revokedAt          DateTime?
+  revokedBy          String?
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+
+  sessions TransportTrackingSession[]
+
+  @@index([driverId, revokedAt])
+}
+
+/// MOT CA BAM VI TRI — bi rang buoc o PHIA MAY CHU voi lai xe da xac thuc va mot chuyen cua ho.
+///
+/// `vehicleId` do MAY CHU dien tu ban phan cong dang hieu luc. Khong mot tuyen HTTP nao nhan no
+/// tu nguoi goi: neu nhan, mot lai xe gan duoc mot chuoi toa do bat ky vao mot chiec xe bat ky.
+model TransportTrackingSession {
+  id                   String                         @id @default(cuid())
+  driverId             String
+  driver               TransportDriver                @relation(fields: [driverId], references: [id])
+  tripId               String
+  trip                 TransportTrip                  @relation(fields: [tripId], references: [id])
+  vehicleId            String?
+  vehicle              TransportVehicle?              @relation(fields: [vehicleId], references: [id])
+  deviceInstallationId String?
+  deviceInstallation   TransportDeviceInstallation?   @relation(fields: [deviceInstallationId], references: [id])
+  status               TransportTrackingSessionStatus @default(ACTIVE)
+  businessDate         String                         @db.VarChar(10)
+  startedAt            DateTime                       @default(now())
+  endedAt              DateTime?
+  endedReason          String?
+  /// Bo dem tang dan de khung nhin tom tat khong phai dem lai ca bang moi lan doc.
+  observationCount     Int                            @default(0)
+  openedBy             String
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+
+  observations TransportLocationObservation[]
+
+  @@index([driverId, status])
+  @@index([tripId])
+  @@index([businessDate])
+}
+
+/// MOT BAN DINH VI. Bang nay chi CONG THEM — khong co duong sua, khong co duong xoa.
+///
+/// HAI MOC THOI GIAN, va do la diem quan trong nhat cua bang: `capturedAt` la loi khai cua may
+/// khach, `receivedAt` la su that cua may chu. Do lech duoc GHI vao `clockSkewSeconds` chu khong
+/// bao gio duoc dung de tu choi — voi mot hang doi ngoai tuyen, do lech lon gan nhu luon co nghia
+/// "may vua offline bon tieng", va tu choi se lam mat dung nhung ban ghi cua doan duong khong co
+/// song.
+model TransportLocationObservation {
+  id                   String                   @id @default(cuid())
+  sessionId            String
+  /// `Restrict` chu khong `Cascade`: mot phien co ban dinh vi thi KHONG duoc xoa. Day la bang
+  /// bang chung; mot lan xoa dat nham se mang theo ca chuoi.
+  session              TransportTrackingSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  /// Khoa idempotency do may khach sinh. Duy nhat TRONG mot phien.
+  clientEventId        String
+  latitude             Float
+  longitude            Float
+  accuracyMetres       Float?
+  speedMetresPerSecond Float?
+  bearingDegrees       Float?
+  source               TransportLocationSource
+  capturedAt           DateTime
+  receivedAt           DateTime                 @default(now())
+  clockSkewSeconds     Int
+  /// `Location.isMock` cua Android. `null` = may khach khong noi gi — mot dieu KHAC voi `false`.
+  mockLocationReported Boolean?
+  businessDate         String                   @db.VarChar(10)
+  createdAt            DateTime                 @default(now())
+
+  riskFlags TransportProofRiskFlag[]
+
+  @@unique([sessionId, clientEventId], map: "TransportLocationObservation_session_event_key")
+  @@index([sessionId, capturedAt])
+  @@index([businessDate])
+}
+
+/// MOT CO RUI RO. Doc ky enum `TransportProofRiskSeverity` o tren truoc khi them ma vao day.
+model TransportProofRiskFlag {
+  id            String                        @id @default(cuid())
+  code          TransportProofRiskCode
+  severity      TransportProofRiskSeverity
+  observationId String?
+  observation   TransportLocationObservation? @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  detail        Json
+  businessDate  String                        @db.VarChar(10)
+  raisedAt      DateTime                      @default(now())
+
+  @@index([code, businessDate])
+  @@index([severity, businessDate])
+  @@index([observationId])
+}
+
+/// HANG RAO DIA LY hinh TRON.
+///
+/// Chi hinh tron, co y: mot da giac doi mot thu vien hinh hoc, mot kieu luu tru phuc tap hon, va
+/// — quan trong hon ca — mot nguoi phai VE no cho tung kho hang. Ban kinh la thu nhan vien dieu
+/// hanh nhap duoc bang mot o so. Xem `docs/kien-truc/transport-geospatial.md` §6 cho duong nang
+/// cap len da giac khi co nhu cau THAT.
+model TransportGeofence {
+  id           String                       @id @default(cuid())
+  label        String
+  subjectKind  TransportGeofenceSubjectKind
+  /// NULL khi va chi khi `subjectKind = AD_HOC` — cuong che bang `CHECK` trong migration.
+  subjectId    String?
+  latitude     Float
+  longitude    Float
+  radiusMetres Int
+  status       TransportPartyStatus         @default(ACTIVE)
+  note         String?
+  recordedBy   String
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+
+  @@index([subjectKind, subjectId])
+  @@index([status])
 }

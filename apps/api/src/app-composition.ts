@@ -115,6 +115,7 @@ import { FuelEvidenceController } from './transport/evidence/fuel-evidence.contr
 import { DriverFuelController } from './transport/fuel/driver-fuel.controller.js';
 import { FuelEntriesController } from './transport/fuel/fuel-entries.controller.js';
 import { FuelReconciliationController } from './transport/fuel/fuel-reconciliation.controller.js';
+import { FuelStationController } from './transport/fuel/fuel-station.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
 import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
@@ -123,6 +124,9 @@ import { TransportWorkforceModule } from './transport/workforce/transport-workfo
 import { TransportDriverSettlementModule } from './transport/driver-settlement/transport-driver-settlement.module.js';
 import { DriverSettlementController } from './transport/driver-settlement/driver-settlement.controller.js';
 import { DriverSettlementSelfController } from './transport/driver-settlement/driver-settlement-self.controller.js';
+import { TransportProofModule } from './transport/proof/transport-proof.module.js';
+import { DriverTrackingController } from './transport/proof/driver-tracking.controller.js';
+import { TrackingController } from './transport/proof/tracking.controller.js';
 import { OperationalAlertsService } from './transport/asset-compliance/operational-alerts.service.js';
 import {
   AlertDriverFundSource,
@@ -202,6 +206,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // khang dinh: nguon cua moi khoan da ghi nhan la `TransportPayslip`, nen mot khach bat luong ma
   // khong bat quyet toan se co bang luong khong bao gio tra duoc thanh tien.
   owned('transport-workforce', TransportDriverSettlementModule),
+  // BAM VI TRI. Mot khach van tai KHONG bat capability nay thi khong co mot bang toa do nao, va
+  // do la mot cau hinh hop le — xem khoi chu thich cua `transport-proof` trong `tenant.schema.ts`.
+  owned('transport-proof', TransportProofModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -255,6 +262,12 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // Kho anh no dung den nam o `transport-core` — xem khoi PROVIDERS.
   owned('transport-costing', DriverExpenseEvidenceController),
   owned('transport-fuel', FuelEntriesController),
+  // DANH MUC CAY XANG (Lane C / C1) — den cung `transport-fuel`, KHONG mot capability moi.
+  //
+  // R0 §2 `F-12`: `CAPABILITY_IDS` la enum dong trong `packages/tenant`, nen them mot capability
+  // buoc phai sua goi nen tang roi build lai — tuc cham dung vung ma #223/#224 dang lam viec. Tram
+  // xang khong ton tai duoc neu khong co phieu do dau, nen no thuoc dung capability da co.
+  owned('transport-fuel', FuelStationController),
   owned('transport-fuel', FuelReconciliationController),
   // PHIEU DAU CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
   owned('transport-fuel', DriverFuelController),
@@ -282,6 +295,11 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // `TX-05` — BAO CAO quyet toan, CHI DOC (`#168 B1`). Capability nay chay tu T5 nhung chua tung co
   // mot duong HTTP nao; xem khoi chu thich cua controller ve vi sao khong co route ghi.
   owned('transport-settlement', SettlementReportsController),
+  // BAM VI TRI CUA CHINH TOI — be mat lai xe, route rieng, cung ly le voi `DriverFuelController`.
+  owned('transport-proof', DriverTrackingController),
+  // BE MAT VAN HANH — HAI tuyen voi HAI quyen khac nhau (tom tat ⟂ duong di tho). Xem khoi chu
+  // thich cua controller: gop chung mot quyen la bo mat cong "can-biet" cua lich su vi tri.
+  owned('transport-proof', TrackingController),
 ];
 
 const guardProviders: readonly Provider[] = [

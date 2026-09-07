@@ -105,6 +105,21 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 218
     },
+    "fuel_station.alias": {
+      "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
+    },
+    "fuel_station.resolve": {
+      "functionName": "FuelStationService.resolveStation",
+      "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts",
+      "line": 331
+    },
+    "fuel_station.write": {
+      "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
+    },
+    "fuel_supplier.profile": {
+      "functionName": "FuelStationService.updateSupplierProfile",
+      "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
+    },
     "golden.evaluated": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
@@ -246,6 +261,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 42
     },
+    "tracking.history_read": {
+      "functionName": "TrackingService.trackForSession",
+      "filePath": "apps/api/src/transport/proof/tracking.service.ts",
+      "line": 290
+    },
+    "tracking.observation_ingest": {
+      "filePath": "apps/api/src/transport/proof/tracking.service.ts"
+    },
+    "tracking.risk_assessed": {
+      "functionName": "TrackingService.recordRisk",
+      "filePath": "apps/api/src/transport/proof/tracking.service.ts",
+      "line": 368
+    },
+    "tracking.session_close": {
+      "functionName": "TrackingService.closeSession",
+      "filePath": "apps/api/src/transport/proof/tracking.service.ts"
+    },
+    "tracking.session_open": {
+      "filePath": "apps/api/src/transport/proof/tracking.service.ts"
+    },
     "transport.alerts.read": {
       "functionName": "OperationalAlertsController.feed",
       "filePath": "apps/api/src/transport/asset-compliance/operational-alerts.controller.ts",
@@ -327,6 +362,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/driver-settlement/driver-settlement-self.controller.ts",
       "line": 34
     },
+    "transport.driver.self.tracking.report": {
+      "functionName": "DriverTrackingController.report",
+      "filePath": "apps/api/src/transport/proof/driver-tracking.controller.ts",
+      "line": 90
+    },
+    "transport.driver.self.tracking.start": {
+      "filePath": "apps/api/src/transport/proof/driver-tracking.controller.ts"
+    },
+    "transport.driver.self.tracking.stop": {
+      "functionName": "DriverTrackingController.closeSession",
+      "filePath": "apps/api/src/transport/proof/driver-tracking.controller.ts",
+      "line": 127
+    },
     "transport.driver.self.trip.read": {
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts"
     },
@@ -379,6 +427,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.fuel.statement.import": {
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts"
+    },
+    "transport.fuel.station.manage": {
+      "filePath": "apps/api/src/transport/fuel/fuel-station.controller.ts"
+    },
+    "transport.fuel.station.read": {
+      "filePath": "apps/api/src/transport/fuel/fuel-station.controller.ts"
+    },
+    "transport.location.history.read": {
+      "functionName": "TrackingController.track",
+      "filePath": "apps/api/src/transport/proof/tracking.controller.ts",
+      "line": 43
     },
     "transport.maintenance.plan.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts"
@@ -433,6 +492,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.settlement.report.read": {
       "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts"
+    },
+    "transport.tracking.read": {
+      "functionName": "TrackingController.summaries",
+      "filePath": "apps/api/src/transport/proof/tracking.controller.ts",
+      "line": 36
     },
     "transport.trip.assign": {
       "functionName": "TripsController.assign",
@@ -1245,6 +1309,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
       "line": 763
+    },
+    "tracking.risk_assessed|*": {
+      "functionName": "TrackingService.recordRisk",
+      "filePath": "apps/api/src/transport/proof/tracking.service.ts",
+      "line": 383
     },
     "trip.assignment_change|*": {
       "functionName": "TripService.assign",

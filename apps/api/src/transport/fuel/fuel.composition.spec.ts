@@ -11,6 +11,15 @@ const FUEL_ARTEFACTS = [
   'FuelEntriesController',
   'FuelReconciliationController',
   'DriverFuelController',
+  /**
+   * DANH MUC CAY XANG (Lane C / C1) den cung `transport-fuel` va BIEN MAT cung no.
+   *
+   * Nam trong chinh danh sach nay chu khong o mot bai rieng: bon bai duoi day da hoi dung bon cau
+   * can hoi (bat du thi co, bat thieu thi khong, khach ban hang thi khong, goi khach that thi
+   * khong), va mot danh muc tram xang xuat hien tren stack cua mot khach ban hang la dung kieu ro
+   * ri capability ma chung dung de chan.
+   */
+  'FuelStationController',
   'TransportFuelModule',
 ];
 
