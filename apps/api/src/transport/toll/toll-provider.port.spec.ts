@@ -111,7 +111,9 @@ describe('hop dong TollProviderPort', () => {
       content: Buffer.from('dong-1\ndong-hong\n', 'utf8'),
     });
     expect(result.transactions).toHaveLength(1);
-    expect(result.rejected).toEqual([{ line: 2, reason: 'TOLL_ROW_UNPARSEABLE', raw: 'dong-hong' }]);
+    expect(result.rejected).toEqual([
+      { line: 2, reason: 'TOLL_ROW_UNPARSEABLE', raw: 'dong-hong' },
+    ]);
   });
 });
 

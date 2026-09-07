@@ -564,7 +564,7 @@ Sắp theo **cái gì bị chặn**, không theo chủ đề.
 | `Q-04` | Kế toán có được **duyệt một phần** một khoản chi lái xe đề nghị không? Nếu có, số bị cắt đi về đâu | **ExpenseClaim (§9 lộ trình)** | `F-06`; và `C-02` của T0 vẫn chưa gỡ |
 | `Q-05` | Cái gì **thật sự cấm** điều một xe đi (lệnh sửa đang mở? giấy tờ hết hạn?) và cái gì chỉ **cảnh báo** | **Bảo dưỡng v2 (R6)**, và cách sửa `F-09` | Thêm một cổng chặn sai là làm cả đội xe đứng bánh |
 | `Q-06` | B trả lương lái xe **thật sự** theo chu kỳ nào, và có đang chậm không | **R5** | `F-08`: dồn nhiều tháng vướng Đ.97 BLLĐ 2019. Cần biết thực tế trước khi mô hình hoá |
-| `Q-07` | B nạp và quyết toán **ETC** thế nào; tài khoản VETC/ePass đứng tên ai, đối soát bằng gì | **R7** | Không nhà cung cấp nào có API công khai; và phí duy trì tài khoản đang bị Chính phủ **rà soát**, chưa chốt |
+| `Q-07` | B nạp và quyết toán **ETC** thế nào; tài khoản VETC/ePass đứng tên ai, đối soát bằng gì | **R7** — phần *hạch toán* | **Đã đo, xem [transport-etc-toll.md](transport-etc-toll.md).** Không nhà cung cấp nào có API công khai (đo 08/09/2026); phí quản lý tài khoản đã **công bố 01/08/2026 rồi tạm dừng ~20/08/2026** theo đề nghị của Cục Đường bộ. Câu **còn treo**: tài khoản đứng tên công ty hay cá nhân |
 | `Q-08` | B mua dầu qua **hợp đồng cây xăng** hay **thẻ/app** (PVOIL Easy, Flexicard)? Hoá đơn điện tử đang gửi về đâu | **R4** | `F-10`: quyết định adapter đầu tiên là email hoá đơn hay bảng kê |
 | `Q-09` | Ảnh giao hàng có **bắt buộc** không, và có được phép có mặt người nhận trong ảnh không | **R2** | Chạm dữ liệu sinh trắc của **người thứ ba**, không phải nhân viên |
 
@@ -601,7 +601,7 @@ Bốn luật, áp cho mọi tranche v2:
 | R4 | Fuel intelligence | Đảo thứ tự: **hoá đơn điện tử trước, OCR sau** (`F-10`). Chờ `Q-08` |
 | R5 | Driver settlement + payroll | **XONG** — `TX-07b`, xem §12. `Q-06` đã được chủ sở hữu trả lời ở #237 |
 | R6 | Maintenance v2 | **PARTIAL** — nguyên hàm xong (§13); cổng chặn điều chuyến vẫn chờ `Q-05`, và `blocking` cố ý RỖNG |
-| R7 | ETC | Chỉ nghiên cứu. Chờ `Q-07` |
+| R7 | ETC | **XONG phần nghiên cứu + hợp đồng cổng** — [transport-etc-toll.md](transport-etc-toll.md) + `TollProviderPort`. Hạch toán vẫn chờ `Q-07` |
 | R8 · R9 | Analytics · hệ sinh thái | Phụ thuộc R1-C |
 
 ---
