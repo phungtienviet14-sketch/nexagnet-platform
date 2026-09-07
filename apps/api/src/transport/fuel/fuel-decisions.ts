@@ -223,6 +223,68 @@ export const DRIVER_SELF_FUEL_SCOPE_REASONS = [
 ] as const;
 export type DriverSelfFuelScopeReason = (typeof DRIVER_SELF_FUEL_SCOPE_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * fuel_station.write — tao/sua mot cay xang (Lane C / C1)
+ * ------------------------------------------------------------------ */
+export const FUEL_STATION_WRITE_REASONS = [
+  'STATION_CREATED',
+  'STATION_UPDATED',
+  /** Nha cung cap tren duong dan khong ton tai. Tram khong duoc phep mo coi. */
+  'STATION_SUPPLIER_NOT_FOUND',
+  'STATION_NOT_FOUND',
+  /** Ma DA CHUAN HOA da thuoc mot tram khac cua cung nha cung cap. */
+  'STATION_CODE_TAKEN',
+  /** Ten chuan hoa ra rong — mot khoa so khop rong se khop voi moi tram cung rong. */
+  'STATION_NAME_INVALID',
+  /** Mot nua toa do, hoac mot ban kinh khong co tam. Hai duong khac nhau, xem `fuel-errors.ts`. */
+  'STATION_GEOMETRY_INVALID',
+] as const;
+export type FuelStationWriteReason = (typeof FUEL_STATION_WRITE_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * fuel_station.alias — nguoi dat/go mot bi danh
+ * ------------------------------------------------------------------ */
+export const FUEL_STATION_ALIAS_REASONS = [
+  'ALIAS_ADDED',
+  /** Dat lai DUNG bi danh da co tren DUNG tram do — tra lai hang cu, khong ghi hang thu hai. */
+  'ALIAS_IDEMPOTENT_REPLAY',
+  /** Bi danh da tro toi mot tram KHAC. Khong ghi de — su mo ho la thu bi danh sinh ra de xoa. */
+  'ALIAS_TAKEN',
+  'ALIAS_INVALID',
+  'ALIAS_REMOVED',
+  /** Khong co bi danh do tren tram do. Idempotent — khong nem, va khong xac nhan no ton tai o dau. */
+  'ALIAS_NOT_FOUND',
+] as const;
+export type FuelStationAliasReason = (typeof FUEL_STATION_ALIAS_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * fuel_station.resolve — nhan mot cay xang tu chung tu
+ * ------------------------------------------------------------------ *
+ *
+ * NAM ma cho NAM ket cuc cua `resolveFuelStation()`, khong gop cai nao. Nguoi truc doc trace can
+ * biet ngay phai lam gi, va nam viec phai lam do khac han nhau: doc ket qua / dat bi danh phan
+ * biet / sua nha cung cap tren chung tu / them tram / gan tay vi nguon qua yeu.
+ */
+export const FUEL_STATION_RESOLVE_REASONS = [
+  'STATION_RESOLVED',
+  'STATION_AMBIGUOUS',
+  'STATION_SUPPLIER_MISMATCH',
+  'STATION_NO_MATCH',
+  'STATION_NO_INPUT',
+] as const;
+export type FuelStationResolveReason = (typeof FUEL_STATION_RESOLVE_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
+ * fuel_supplier.profile — sieu du lieu hop dong
+ * ------------------------------------------------------------------ */
+export const FUEL_SUPPLIER_PROFILE_REASONS = [
+  'SUPPLIER_PROFILE_UPDATED',
+  'SUPPLIER_PROFILE_NOT_FOUND',
+  /** Ngay bat dau sau ngay ket thuc. Kiem DANG, khong kiem chinh sach — `Q-08` chua co loi. */
+  'SUPPLIER_CONTRACT_PERIOD_INVALID',
+] as const;
+export type FuelSupplierProfileReason = (typeof FUEL_SUPPLIER_PROFILE_REASONS)[number];
+
 export type TransportFuelDecisionReason =
   | FuelEntrySubmitReason
   | FuelEntryReviewReason
@@ -235,7 +297,11 @@ export type TransportFuelDecisionReason =
   | FuelReconciliationTransitionReason
   | FuelDiscrepancyResolveReason
   | FuelSettlementHandoffReason
-  | DriverSelfFuelScopeReason;
+  | DriverSelfFuelScopeReason
+  | FuelStationWriteReason
+  | FuelStationAliasReason
+  | FuelStationResolveReason
+  | FuelSupplierProfileReason;
 
 export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-fuel',
@@ -252,6 +318,10 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     'fuel_discrepancy.resolve',
     'fuel.settlement_handoff',
     'driver.self_fuel_scope',
+    'fuel_station.write',
+    'fuel_station.alias',
+    'fuel_station.resolve',
+    'fuel_supplier.profile',
   ],
   labels: {
     FUEL_ENTRY_RECORDED: 'Đã ghi phiếu đổ dầu',
@@ -330,5 +400,30 @@ export const TRANSPORT_FUEL_DECISIONS = defineDecisionVocabulary({
     SELF_FUEL_SCOPE_GRANTED: 'Lái xe thao tác đúng phiếu của chính mình',
     SELF_FUEL_SCOPE_NO_DRIVER_BINDING: 'Tài khoản đăng nhập chưa nối với hồ sơ lái xe nào',
     SELF_FUEL_SCOPE_NOT_OWNED: 'Phiếu/chuyến này không thuộc lái xe đang đăng nhập',
+
+    STATION_CREATED: 'Đã thêm một cây xăng vào danh mục',
+    STATION_UPDATED: 'Đã sửa thông tin cây xăng',
+    STATION_SUPPLIER_NOT_FOUND: 'Không có nhà cung cấp đó để gắn trạm vào',
+    STATION_NOT_FOUND: 'Không tìm thấy cây xăng',
+    STATION_CODE_TAKEN: 'Mã cửa hàng đã thuộc một trạm khác của cùng nhà cung cấp',
+    STATION_NAME_INVALID: 'Tên trạm chuẩn hoá ra rỗng — không dùng làm khoá so khớp được',
+    STATION_GEOMETRY_INVALID: 'Toạ độ thiếu một nửa, hoặc bán kính không có tâm',
+
+    ALIAS_ADDED: 'Đã đặt một bí danh cho cây xăng',
+    ALIAS_IDEMPOTENT_REPLAY: 'Bí danh này đã trỏ đúng trạm đó rồi — không ghi thêm hàng nào',
+    ALIAS_TAKEN: 'Bí danh đã trỏ tới một trạm khác — hãy đặt tên cụ thể hơn',
+    ALIAS_INVALID: 'Bí danh chuẩn hoá ra rỗng',
+    ALIAS_REMOVED: 'Đã gỡ bí danh',
+    ALIAS_NOT_FOUND: 'Không có bí danh đó trên trạm này',
+
+    STATION_RESOLVED: 'Nhận ra đúng một cây xăng từ chứng từ',
+    STATION_AMBIGUOUS: 'Nhiều trạm cùng khớp — cần một bí danh phân biệt',
+    STATION_SUPPLIER_MISMATCH: 'Khớp một trạm của nhà cung cấp khác — chứng từ ghi sai nhà cung cấp',
+    STATION_NO_MATCH: 'Chứng từ có dữ kiện nhưng không trạm nào khớp',
+    STATION_NO_INPUT: 'Chứng từ không nói gì về trạm — nguồn quá yếu, phải gán tay',
+
+    SUPPLIER_PROFILE_UPDATED: 'Đã sửa siêu dữ liệu hợp đồng của nhà cung cấp',
+    SUPPLIER_PROFILE_NOT_FOUND: 'Không tìm thấy nhà cung cấp',
+    SUPPLIER_CONTRACT_PERIOD_INVALID: 'Ngày bắt đầu hợp đồng sau ngày kết thúc',
   } satisfies Record<TransportFuelDecisionReason, string>,
 });

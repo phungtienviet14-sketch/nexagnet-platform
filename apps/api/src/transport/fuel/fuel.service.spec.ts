@@ -426,12 +426,25 @@ describe('Be mat lai xe — INV-09 va pham vi cua chinh minh', () => {
       address: 'So 1 Cau Giay',
       taxCode: '0101234567',
       status: 'ACTIVE',
+      // Sieu du lieu hop dong cua Lane C / C1. Chung o day CHINH VI bai nay: cong hep phai chung
+      // minh duoc no van hep sau khi bang cay xang beo len — so hop dong va ky han thanh toan la
+      // thu lai xe khong duoc thay.
+      contactName: 'Nguoi phu trach cong no',
+      contactEmail: 'ke-toan@vi-du.test',
+      contractNo: 'HD-2026-07',
+      contractStartDate: '2026-01-01',
+      contractEndDate: '2026-12-31',
+      paymentTermDays: 30,
+      termsNote: 'Doi chieu cuoi thang',
+      ingestChannels: ['STATEMENT_FILE'],
+      ingestAccountRef: 'TK-000123',
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-01T00:00:00.000Z',
     });
 
     expect(Object.keys(view).sort()).toEqual(['id', 'name']);
     expect(JSON.stringify(view)).not.toContain('0101234567');
+    expect(JSON.stringify(view)).not.toContain('HD-2026-07');
   });
 
   it('lai xe chi doc duoc phieu cua chinh minh', async () => {

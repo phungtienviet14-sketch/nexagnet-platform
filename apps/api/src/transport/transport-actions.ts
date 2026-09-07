@@ -78,6 +78,19 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.fuel.entry.submit_for_driver',
   'transport.fuel.entry.verify',
+  /**
+   * DANH MUC CAY XANG (Lane C / C1) — doc va quan ly tram, bi danh, sieu du lieu hop dong.
+   *
+   * Hai ma, va chung KHONG gop vao `transport.fuel.entry.*`: phieu do dau la CHUNG TU (sinh moi
+   * ngay, khoa lai sau doi soat), tram la MASTER DATA (sua bat cu luc nao). Mot nguoi duoc duyet
+   * phieu khong hien nhien duoc sua danh muc tram — va nguoc lai, nguoi nhap danh muc khong can
+   * mot quyen dong tien nao.
+   *
+   * `.read` cung phuc vu duong NHAN DANG (`GET stations/resolve`): do la mot phep doc tren cung
+   * tap du lieu, chi khac cach hoi.
+   */
+  'transport.fuel.station.read',
+  'transport.fuel.station.manage',
   'transport.fuel.statement.import',
   'transport.fuel.reconciliation.read',
   'transport.fuel.reconciliation.match',

@@ -105,6 +105,21 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 183
     },
+    "fuel_station.alias": {
+      "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
+    },
+    "fuel_station.resolve": {
+      "functionName": "FuelStationService.resolveStation",
+      "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts",
+      "line": 331
+    },
+    "fuel_station.write": {
+      "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
+    },
+    "fuel_supplier.profile": {
+      "functionName": "FuelStationService.updateSupplierProfile",
+      "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
+    },
     "golden.evaluated": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
@@ -394,6 +409,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.fuel.statement.import": {
       "filePath": "apps/api/src/transport/fuel/fuel-reconciliation.controller.ts"
+    },
+    "transport.fuel.station.manage": {
+      "filePath": "apps/api/src/transport/fuel/fuel-station.controller.ts"
+    },
+    "transport.fuel.station.read": {
+      "filePath": "apps/api/src/transport/fuel/fuel-station.controller.ts"
     },
     "transport.location.history.read": {
       "functionName": "TrackingController.track",
