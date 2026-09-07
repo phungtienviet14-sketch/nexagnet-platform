@@ -74,6 +74,9 @@ export const TRANSPORT_FUEL_VALIDATION_REASONS = [
   'FUEL_STATION_COORDINATES_INCOMPLETE',
   /** Ban kinh khong co tam thi khong khoanh duoc gi — va `0` met KHONG phai "khong kiem". */
   'FUEL_STATION_GEOFENCE_WITHOUT_COORDINATES',
+
+  /* --- Chung tu nguon + ung vien (Lane C / C2) --- */
+  'FUEL_DOCUMENT_NOT_FOUND',
 ] as const;
 export type TransportFuelValidationReason = (typeof TRANSPORT_FUEL_VALIDATION_REASONS)[number];
 

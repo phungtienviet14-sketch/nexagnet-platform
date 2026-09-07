@@ -115,6 +115,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "expense_claim.submit": {
       "filePath": "apps/api/src/transport/claims/claim.service.ts"
     },
+    "fuel_document.ingest": {
+      "functionName": "FuelDocumentService.ingest",
+      "filePath": "apps/api/src/transport/fuel/fuel-document.service.ts"
+    },
+    "fuel_document.supplier_link": {
+      "functionName": "FuelDocumentService.linkSupplier",
+      "filePath": "apps/api/src/transport/fuel/fuel-document.service.ts"
+    },
     "fuel_station.alias": {
       "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
     },
@@ -402,6 +410,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.self.payslip.read": {
       "filePath": "apps/api/src/transport/workforce/driver-payslips.controller.ts"
     },
+    "transport.driver.self.proof.record": {
+      "filePath": "apps/api/src/transport/proof/driver-proof.controller.ts"
+    },
     "transport.driver.self.settlement.read": {
       "functionName": "DriverSettlementSelfController.statement",
       "filePath": "apps/api/src/transport/driver-settlement/driver-settlement-self.controller.ts",
@@ -454,6 +465,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.fleet_status.read": {
       "filePath": "apps/api/src/transport/asset-compliance/fleet-status.controller.ts"
+    },
+    "transport.fuel.document.ingest": {
+      "functionName": "FuelDocumentController.ingest",
+      "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts",
+      "line": 91
+    },
+    "transport.fuel.document.read": {
+      "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts"
     },
     "transport.fuel.entry.verify": {
       "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
@@ -1294,6 +1313,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "WorkforceService.movePayslip",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
       "line": 291
+    },
+    "proof.record|*": {
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
+    },
+    "proof.record|PROOF_PHOTO_NOT_LIVE_CAMERA": {
+      "functionName": "OperationalProofService.record",
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
+      "line": 149
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",

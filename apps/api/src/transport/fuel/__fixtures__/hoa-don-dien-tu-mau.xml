@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  HOA DON DIEN TU XANG DAU — DU LIEU TONG HOP, KHONG PHAI CUA MOT KHACH NAO.
+
+  Dung khuon cua Quyet dinh 1450/QD-TCT (sua doi boi 1510/QD-TCT): `HDon > DLHDon > {TTChung,
+  NDHDon, TTKhac}` va khoi chu ky `DSCKS`. Ma so thue, ten cua hang va so hoa don o day deu la
+  gia tri bia dat.
+
+  BA DIEU FIXTURE NAY CO Y CHUA:
+
+    1. `SLuong` va `DGia` viet theo dang thap phan CUA XML (`62.5`), tuc dau CHAM la dau thap
+       phan — nguoc han quy uoc doc bang ke CSV, noi dau cham la phan cach hang nghin. Xem khoi
+       chu thich dau `fuel-einvoice-parse.ts`.
+
+    2. Mot dong KHONG PHAI nhien lieu (`Nuoc uong dong chai`, don vi `Chai`). Loc no ra o tang
+       doc se la doan; no duoc nhap thanh mot ung vien va don vi cua no duoc giu lai de nguoi
+       hoac tang kiem tat dinh quyet.
+
+    3. Ten hang co dau PHAY BEN TRONG (`Dau DO 0,05S-II`). Neu ai do di quet so trong chuoi tu do,
+       con so `0,05` se di ra nhu mot so lit.
+
+  BIEN SO XE nam trong `TTKhac` duoi dang mot truong mo rong TU DAT TEN. Do la cho DUY NHAT no co
+  the nam: ND 123/2020 Dieu 10 KHONG co truong bien so trong noi dung bat buoc cua hoa don, va
+  ND 70/2025 khong them truong do. Nen bien so tren hoa don la mot GOI Y, khong bao gio la su that.
+-->
+<HDon>
+  <DLHDon Id="mau-hoa-don-xang-dau">
+    <TTChung>
+      <PBan>2.0.0</PBan>
+      <THDon>Hóa đơn giá trị gia tăng</THDon>
+      <KHMSHDon>1</KHMSHDon>
+      <KHHDon>C26TAA</KHHDon>
+      <SHDon>00001234</SHDon>
+      <NLap>2026-09-05</NLap>
+      <DVTTe>VND</DVTTe>
+      <TGia>1</TGia>
+      <HTTToan>TM/CK</HTTToan>
+    </TTChung>
+    <NDHDon>
+      <NBan>
+        <Ten>Công ty Xăng dầu Mẫu — Cửa hàng xăng dầu số 5</Ten>
+        <MST>0101234567</MST>
+        <DChi>Km 12 Quốc lộ 1A</DChi>
+        <SDThoai>0900000000</SDThoai>
+      </NBan>
+      <NMua>
+        <Ten>CÔNG TY VẬN TẢI MẪU</Ten>
+        <MST>0109876543</MST>
+        <DChi>Số 1 phố Mẫu</DChi>
+      </NMua>
+      <DSHHDVu>
+        <HHDVu>
+          <TChat>1</TChat>
+          <STT>1</STT>
+          <THHDVu>Dầu DO 0,05S-II</THHDVu>
+          <DVTinh>Lít</DVTinh>
+          <SLuong>62.5</SLuong>
+          <DGia>23000</DGia>
+          <ThTien>1437500</ThTien>
+          <TSuat>10%</TSuat>
+        </HHDVu>
+        <HHDVu>
+          <TChat>1</TChat>
+          <STT>2</STT>
+          <THHDVu>Xăng RON 95-III</THHDVu>
+          <DVTinh>Lít</DVTinh>
+          <SLuong>40</SLuong>
+          <DGia>21500</DGia>
+          <ThTien>860000</ThTien>
+          <TSuat>10%</TSuat>
+        </HHDVu>
+        <HHDVu>
+          <TChat>1</TChat>
+          <STT>3</STT>
+          <THHDVu>Nước uống đóng chai</THHDVu>
+          <DVTinh>Chai</DVTinh>
+          <SLuong>2</SLuong>
+          <DGia>10000</DGia>
+          <ThTien>20000</ThTien>
+          <TSuat>8%</TSuat>
+        </HHDVu>
+      </DSHHDVu>
+      <TToan>
+        <THTTLTSuat>
+          <LTSuat>
+            <TSuat>10%</TSuat>
+            <ThTien>2297500</ThTien>
+            <TThue>229750</TThue>
+          </LTSuat>
+        </THTTLTSuat>
+        <TgTCThue>2317500</TgTCThue>
+        <TgTThue>231350</TgTThue>
+        <TgTTTBSo>2548850</TgTTTBSo>
+        <TgTTTBChu>Hai triệu năm trăm bốn mươi tám nghìn tám trăm năm mươi đồng</TgTTTBChu>
+      </TToan>
+    </NDHDon>
+    <TTKhac>
+      <TTin>
+        <TTruong>BienSoXe</TTruong>
+        <KDLieu>string</KDLieu>
+        <DLieu>29C-123.45</DLieu>
+      </TTin>
+      <TTin>
+        <TTruong>MaCuaHang</TTruong>
+        <KDLieu>string</KDLieu>
+        <DLieu>CH-05</DLieu>
+      </TTin>
+      <TTin>
+        <TTruong>SoCongTo</TTruong>
+        <KDLieu>string</KDLieu>
+        <DLieu>07</DLieu>
+      </TTin>
+    </TTKhac>
+  </DLHDon>
+  <DSCKS>
+    <NBan>
+      <Signature Id="seller-signature">
+        <SignatureValue>KHONG-PHAI-CHU-KY-THAT</SignatureValue>
+      </Signature>
+    </NBan>
+  </DSCKS>
+</HDon>

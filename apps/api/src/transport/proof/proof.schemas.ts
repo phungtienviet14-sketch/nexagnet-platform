@@ -78,6 +78,44 @@ export const registerGeofenceSchema = z
   })
   .strict();
 
+/**
+ * CHUNG CU VAN HANH — nhan `observationId`, KHONG nhan toa do.
+ *
+ * Mot chung cu tro toi mot ban dinh vi DA GHI qua duong ingest (da kiem bien, da co `receivedAt`
+ * cua may chu, da cham rui ro, da thuoc mot phien cua dung lai xe do). Nhan toa do tho o day se
+ * vong qua tat ca nhung dieu do.
+ *
+ * `captureModes` di kem THEO THU TU cua mang tep tai len. Thieu thi `UNKNOWN` — khong bao gio
+ * mac dinh `LIVE_CAMERA`, vi mac dinh cao la tu nang muc tin cay cua mot thu khong ai khai.
+ */
+export const recordProofSchema = z
+  .object({
+    kind: z.enum(['START', 'DELIVERY']),
+    tripId: z.string().min(1),
+    observationId: z.string().min(1),
+    clientEventId: z.string().min(1).max(200),
+    note: z.string().max(500).nullish(),
+    /**
+     * MOT TRUONG MULTIPART LUON LA CHUOI, ke ca khi no lap lai.
+     *
+     * Day la mot loi da xay ra that: khai `z.array(...)` roi gui bang `FormData` thi mot tam anh
+     * duy nhat den duoi dang chuoi `"LIVE_CAMERA"`, khong phai mang — va `.strict()` tra `400`
+     * cho mot yeu cau hoan toan dung. Hai tam thi den duoi dang hai truong cung ten, ma tang HTTP
+     * gom lai thanh mang.
+     *
+     * Nen phai nhan CA HAI hinh dang. Khong noi long `.strict()` de "cho de": chuan hoa o day thi
+     * phan con lai cua he thong van chi thay dung mot kieu.
+     */
+    captureModes: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? [value] : value),
+        z.array(z.enum(['LIVE_CAMERA', 'GALLERY', 'UNKNOWN'])).max(6),
+      )
+      .optional(),
+  })
+  .strict();
+
+export type RecordProofBody = z.infer<typeof recordProofSchema>;
 export type OpenTrackingSessionBody = z.infer<typeof openTrackingSessionSchema>;
 export type ReportObservationBody = z.infer<typeof reportObservationSchema>;
 export type ReportObservationBatchBody = z.infer<typeof reportObservationBatchSchema>;

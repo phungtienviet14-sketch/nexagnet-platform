@@ -56,6 +56,8 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.fuel.entry.verify',
       'transport.fuel.station.read',
       'transport.fuel.station.manage',
+      'transport.fuel.document.read',
+      'transport.fuel.document.ingest',
       'transport.fuel.statement.import',
       'transport.fuel.reconciliation.read',
       'transport.fuel.reconciliation.match',
@@ -105,8 +107,12 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.driver.self.tracking.start',
       'transport.driver.self.tracking.report',
       'transport.driver.self.tracking.stop',
+      // MOT ma cho ca chung cu bat dau lan giao hang: hai duong khac nhau dung mot quy tac NGHIEP
+      // VU (giao hang bat buoc co anh), khong phai mot ranh gioi QUYEN.
+      'transport.driver.self.proof.record',
       // TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do.
       'transport.tracking.read',
+      'transport.proof.read',
       // DUONG DI THO cua mot con nguoi. Ma hep nhat trong ca tep; ke toan KHONG co no.
       'transport.location.history.read',
       'transport.geofence.read',
@@ -213,6 +219,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.tracking.start',
         'transport.driver.self.tracking.report',
         'transport.driver.self.tracking.stop',
+        'transport.driver.self.proof.record',
       ]);
     });
 

@@ -54,6 +54,8 @@ export const TRANSPORT_ACTIONS = [
   'transport.fuel.entry.verify',
   'transport.fuel.station.read',
   'transport.fuel.station.manage',
+  'transport.fuel.document.read',
+  'transport.fuel.document.ingest',
   'transport.fuel.statement.import',
   'transport.fuel.reconciliation.read',
   'transport.fuel.reconciliation.match',
@@ -132,8 +134,12 @@ export const TRANSPORT_ACTIONS = [
   'transport.driver.self.tracking.start',
   'transport.driver.self.tracking.report',
   'transport.driver.self.tracking.stop',
+  /** Chung cu bat dau/giao hang CUA CHINH MINH — mot ma cho ca hai loai. */
+  'transport.driver.self.proof.record',
   /** TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do. */
   'transport.tracking.read',
+  /** TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
+  'transport.proof.read',
   /**
    * DUONG DI THO cua mot con nguoi — ma hep nhat trong ca tep, va Ke toan KHONG co no.
    * Doi soat so sach khong CAN toa do; xem `ACCOUNTING_DENIED` ben duoi.
@@ -158,6 +164,7 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.tracking.start',
   'transport.driver.self.tracking.report',
   'transport.driver.self.tracking.stop',
+  'transport.driver.self.proof.record',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
