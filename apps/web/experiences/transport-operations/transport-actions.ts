@@ -196,6 +196,13 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * Chep nguyen tu API; xem khoi chu thich ben do cho ly do day du.
    */
   'transport.location.history.read',
+  /**
+   * GHI moc van hanh (`#243` F1) — Ke toan DOC duoc dong thoi gian, KHONG ghi duoc moc.
+   *
+   * Phan cong nhiem vu: F4 dat phu cap cho tren mot con so do duoc tu chinh chuoi moc, nen nguoi
+   * DUYET khoan tien do khong duoc sua can cu sinh ra no. Chep nguyen tu API.
+   */
+  'transport.checkpoint.record',
 ];
 
 /**
