@@ -313,6 +313,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/operational-alerts.controller.ts",
       "line": 24
     },
+    "transport.analytics.read": {
+      "functionName": "TransportAnalyticsController.runMargin",
+      "filePath": "apps/api/src/transport/analytics/analytics.controller.ts",
+      "line": 40
+    },
     "transport.compliance.document.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
     },

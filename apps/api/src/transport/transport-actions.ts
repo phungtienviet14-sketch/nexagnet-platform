@@ -139,6 +139,23 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.settlement.document.read',
 
+  /* --- `R8` CHI SO VAN HANH (Issue #237) — den cung `transport-costing` --- */
+  /**
+   * BAO CAO CHI SO VAN HANH — km co hang/rong, bien truc tiep theo don va theo ca vong chay.
+   *
+   * KHONG CO MA GHI DI KEM, va se khong co: #237 chot vai cua tang nay la
+   * *"AI only summarizes/ranks. AI does not rewrite facts."*
+   *
+   * Tach khoi `transport.settlement.report.read` vi hai bao cao tra loi hai cau hoi khac nhau cho
+   * hai nguoi khac nhau: quyet toan noi "cong ty dang o dau ve TIEN" (Ke toan), chi so van hanh noi
+   * "doi xe dang chay hieu qua den dau" (Dieu do/Giam doc). Gop lam mot se buoc phai cap quyen xem
+   * cong no cho nguoi chi can xem ty le km rong.
+   *
+   * KHONG nam trong be mat lai xe: bao cao co `freightAmount`, va `INV-09` cam gia cuoc di vao
+   * khung nhin lai xe.
+   */
+  'transport.analytics.read',
+
   /* --- `transport-asset-compliance` (`TX-06`) --- */
   'transport.maintenance.plan.read',
   'transport.maintenance.plan.manage',

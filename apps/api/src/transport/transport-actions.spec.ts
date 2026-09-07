@@ -62,6 +62,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // `TX-05` di vao HTTP o `#168 B1` — CHI DOC. Khong ma ghi nao, xem `transport-actions.ts`.
       'transport.settlement.report.read',
       'transport.settlement.document.read',
+      'transport.analytics.read',
       'transport.maintenance.plan.read',
       'transport.maintenance.plan.manage',
       'transport.maintenance.work_order.open',
@@ -270,6 +271,17 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
     it('#168 B1: lai xe KHONG doc duoc mot bao cao quyet toan nao', () => {
       expect(roleCanPerform('SALE', 'transport.settlement.report.read')).toBe(false);
       expect(roleCanPerform('SALE', 'transport.settlement.document.read')).toBe(false);
+    });
+
+    /**
+     * `R8` mang `freightAmount` ra mot be mat bao cao, va `INV-09` cam gia cuoc di vao khung nhin
+     * lai xe. Vai lai xe hom nay la `SALE` (cau bridge `GD-22`), nen phep do phai o dung day.
+     */
+    it('`R8`: van hanh doc duoc chi so, lai xe thi khong', () => {
+      expect(roleCanPerform('ADMIN', 'transport.analytics.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.analytics.read')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.analytics.read')).toBe(false);
+      expect(roleCanPerform('MANAGER', 'transport.analytics.read')).toBe(false);
     });
 
     it('KHONG doc duoc danh sach chuyen chung — day la cho ro ri de nhat', () => {

@@ -187,7 +187,9 @@ const toLink = (row: LinkRow): TripRunLegLink => ({
 });
 
 const prune = <T extends object>(patch: T): Partial<T> =>
-  Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as Partial<T>;
+  Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
 
 /**
  * `businessDate` giam dan roi `code` tang dan. Thu tu la MOT PHAN hop dong doc, khong phai so
@@ -445,6 +447,14 @@ export class PrismaMovementRepository extends MovementRepository {
       where: { tripId },
     });
     return row ? toLink(row) : null;
+  }
+
+  async findTripLinksByLegs(legIds: readonly string[]): Promise<TripRunLegLink[]> {
+    if (legIds.length === 0) return [];
+    const rows = await model(this.prisma, 'transportTripRunLegLink').findMany({
+      where: { legId: { in: [...legIds] } },
+    });
+    return rows.map(toLink);
   }
 
   async findProjection(tripId: string): Promise<TripProjection | null> {

@@ -122,6 +122,8 @@ import { TransportSettlementModule } from './transport/settlement/transport-sett
 import { TransportAssetComplianceModule } from './transport/asset-compliance/transport-asset-compliance.module.js';
 import { TransportWorkforceModule } from './transport/workforce/transport-workforce.module.js';
 import { TransportDriverSettlementModule } from './transport/driver-settlement/transport-driver-settlement.module.js';
+import { TransportAnalyticsModule } from './transport/analytics/transport-analytics.module.js';
+import { TransportAnalyticsController } from './transport/analytics/analytics.controller.js';
 import { DriverSettlementController } from './transport/driver-settlement/driver-settlement.controller.js';
 import { DriverSettlementSelfController } from './transport/driver-settlement/driver-settlement-self.controller.js';
 import { TransportProofModule } from './transport/proof/transport-proof.module.js';
@@ -193,6 +195,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // GIA THANH + SO QUY. Den cung `transport-costing` va bien mat cung no: mot khach van tai chi
   // theo doi doi xe va chuyen khong co mot bang so cai nao duoc nap.
   owned('transport-costing', TransportCostingModule),
+  // CHI SO VAN HANH (`R8`, #237). Den cung `transport-costing` va bien mat cung no: bien truc tiep
+  // khong co nghia neu khong ai ghi chi phi truc tiep. KHONG phai mot capability moi — xem khoi ghi
+  // chu cua `transport-analytics.module.ts`.
+  owned('transport-costing', TransportAnalyticsModule),
   // NHIEN LIEU + DOI SOAT BANG KE. Den cung `transport-fuel` va bien mat cung no: mot khach van
   // tai chua doi soat bang ke cay xang khong duoc nap tam bang nao cua `TX-04`.
   owned('transport-fuel', TransportFuelModule),
@@ -256,6 +262,8 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // BE MAT LAI XE — route rieng, khong phai mot nhanh `if` trong `TripsController` (`GD-23`).
   // Den cung `transport-core` va bien mat cung no.
   owned('transport-core', DriverTripsController),
+  // CHI SO VAN HANH — CHI DOC, khong mot route ghi nao (#237: *"AI does not rewrite facts"*).
+  owned('transport-costing', TransportAnalyticsController),
   owned('transport-costing', TripExpensesController),
   owned('transport-costing', DriverFundController),
   // SO QUY CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).

@@ -609,7 +609,8 @@ Bốn luật, áp cho mọi tranche v2:
 | R5 | Driver settlement + payroll | **XONG** — `TX-07b`, xem §13. `Q-06` đã được chủ sở hữu trả lời ở #237 |
 | R6 | Maintenance v2 | **PARTIAL** — nguyên hàm xong (§14); cổng chặn điều chuyến vẫn chờ `Q-05`, và `blocking` cố ý RỖNG |
 | R7 | ETC | **XONG phần nghiên cứu + hợp đồng cổng** — [transport-etc-toll.md](transport-etc-toll.md) + `TollProviderPort`. Hạch toán vẫn chờ `Q-07` |
-| R8 · R9 | Analytics · hệ sinh thái | Phụ thuộc R1-C |
+| R8 | Analytics | **PARTIAL** — chỉ số vận hành đối soát được đã xong (§15); các mặt còn lại (L/100km, phương sai trạm, AR/AP hợp nhất) **chưa** — xem §15.3 |
+| R9 | Hệ sinh thái | Phụ thuộc R1-C |
 
 ---
 
@@ -925,3 +926,68 @@ bản phát hành.
 - **`totalDays` không hợp nhất khoảng chồng lấp.** Hai lệnh cùng mở là tình huống thật; gộp lại sẽ
   giấu mất việc xe vào xưởng hai việc. Con số này trả lời *"tổng ngày-lệnh"*, và một con số
   *"số ngày xe vắng mặt"* phải là một hàm **riêng có tên khác**.
+
+---
+
+## 15. `R8` as-built — chỉ số vận hành (Lane D, Issue #237)
+
+### 15.1. Cái đã có sẵn, và cái thật sự còn thiếu
+
+Điều đo được **trước** khi viết một dòng nào: hai phần ba phép tính mà `R8` cần **đã tồn tại**.
+
+| Đã có | Ở đâu | Trả lời câu gì |
+|---|---|---|
+| `summariseRunDistance()` | `movement/run-distance.ts` (Lane A) | km có hàng / km rỗng / tỷ lệ rỗng của một tập chặng |
+| `computeDirectMargin()` · `rollupDirectMargin()` | `settlement/direct-margin.ts` (`TX-05`) | một **chuyến** lãi bao nhiêu, có hoa hồng và công nợ nhà xe |
+
+Nên `R8` **không viết lại** hai thứ đó. Phần còn thiếu nằm đúng ở **grain mới của Lane A**:
+
+- biên trực tiếp theo **ĐƠN HÀNG** — `TX-05` tính theo *chuyến*, không theo đơn;
+- biên trực tiếp theo **CẢ VÒNG CHẠY**, kể cả chặng rỗng — *"full VehicleRun/cycle margin"*;
+- **doanh thu/km** và **chi phí/km** — chưa nơi nào tính;
+- **đường đối soát**: `summariseRunDistance()` trả về *đếm*, không trả về *mã*.
+
+`computeDirectMargin()` không bị thay thế và không bị gọi lại: nó trả lời một câu khác trên một
+trục khác. Hai con số song song là **cố ý**; gộp lại sẽ mất một trong hai câu hỏi.
+
+### 15.2. Đường chi phí — và vì sao nó đối soát được
+
+```text
+TransportRunLeg --(TransportTripRunLegLink, 1-1)--> TransportTrip --> TransportTripExpense
+```
+
+Cầu nối là một bảng **có thật** của Lane A, không phải phép đoán theo ngày/xe. Vì vậy mọi con số
+tổng hợp mang theo `legIds` · `orderIds` · `tripIds`, và bộ test tích hợp không so báo cáo với một
+hằng số viết tay mà với `SUM(signedAmount)` **đọc lại từ Postgres**
+(`transport-analytics.int.spec.ts`, `RUN_PRISMA_IT=1`, 4/4 xanh).
+
+Bốn quyết định đáng ghi, mỗi cái đóng một cách nói dối:
+
+- **Chặng thiếu km không đóng góp `0`.** Nó vào `legIdsMissingDistance` và làm `emptyRatio` thành
+  `null` (quy ước của Lane A). Coi là `0` sẽ kéo tỷ lệ rỗng xuống **theo hướng làm đẹp số liệu** —
+  kiểu sai không ai đi kiểm tra.
+- **Một đơn chạy hai chặng chỉ được cộng cước MỘT lần.** Chỗ dễ đếm đôi nhất; một `Set` là thứ duy
+  nhất ngăn nó, và có một bài test mang đúng tên đó.
+- **Chi phí chặng rỗng không thuộc đơn nào**, nhưng **có** trong biên vòng chạy. Một đơn có thể lãi
+  trong khi cả vòng chạy lỗ — gộp hai phép đo sẽ giấu mất điều đó.
+- **Đơn đã huỷ mà vẫn có chặng chạy** ⇒ `ORDER_CANCELLED_WITH_ACTIVE_LEG`, **không** tự bỏ doanh
+  thu. Cùng khuôn `unexpectedInternalCost` của `TX-05`: mâu thuẫn dữ liệu được **báo ra**, không
+  được tầng báo cáo tự xử.
+
+**Không capability mới** (`F-12`): `R8` đến cùng `transport-costing`, capability đã khai
+`dependencies: ['transport-core']`. Hai cổng ra ngoài (`analytics.ports.ts`) **không có một hàm ghi
+nào** — `NO_CROSS_CONTEXT_REPOSITORY_WRITE` giữ bằng cấu trúc, và có bài test quét mã nguồn khoá nó.
+
+### 15.3. CHƯA LÀM — nói thẳng, không giấu trong một dấu tích
+
+`SettlementBuckets` mới chỉ là **kiểu + hợp đồng**, chưa có bề mặt nào bơm số vào. Bốn dòng của
+`TX-05` khoá theo `Record<SettlementFlow, number>` nên thêm một dòng tiền thứ năm là **không biên
+dịch được** — nhưng việc buộc nó vào bốn nguồn thật cần một quyết định *capability nào sở hữu báo
+cáo hợp nhất*, và quyết định đó chưa ai ra. Mở một cổng từ `transport-costing` sang
+`transport-settlement`/`transport-fuel`/`transport-workforce` sẽ biến một phụ thuộc **hợp đồng**
+thành phụ thuộc **thật**, và một khách bật `transport-costing` mà tắt `transport-settlement` sẽ
+không boot được.
+
+Cũng **chưa** có: L/100km kèm ghi chú quy kết, phương sai/bất thường theo trạm, tỷ lệ chi phí ngoài
+dự kiến, ngoại lệ chứng cứ/vị trí, và một báo cáo theo **cửa sổ thời gian** (hôm nay chỉ đo được
+**một vòng chạy**, vì `MovementRepository` chưa có truy vấn theo khoảng ngày).
