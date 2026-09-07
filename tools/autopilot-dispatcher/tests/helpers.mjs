@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gitSafeEnv } from '../src/worktree-manager.mjs';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const PACKAGE_ROOT = path.resolve(HERE, '..');
@@ -273,8 +274,12 @@ ${behaviour.hang ? 'setInterval(() => {}, 1000);' : `process.exit(${behaviour.ex
 export function makeGitRepo(dir) {
   const origin = path.join(dir, 'origin.git');
   const work = path.join(dir, 'work');
+  // `gitSafeEnv` chu khong phai `process.env`: khi bo test nay chay duoi mot hook `pre-push`,
+  // git da dat san `GIT_DIR` tro vao REPO THAT — va `git init` trong thu muc tam se di sua
+  // `.git/config` cua repo do. Do la dieu da xay ra that.
+  const env = gitSafeEnv();
   const git = (args, cwd) =>
-    execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync('git', args, { cwd, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   fs.mkdirSync(origin, { recursive: true });
   git(['init', '--bare', '--initial-branch=main', '.'], origin);
   fs.mkdirSync(work, { recursive: true });

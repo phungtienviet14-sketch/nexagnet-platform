@@ -12,6 +12,7 @@ import {
   checkWorktreePreconditions,
   createGit,
   createWorktree,
+  gitSafeEnv,
   resolveBaseSha,
 } from '../src/worktree-manager.mjs';
 import { makeGitRepo, removeDir, tempDir } from './helpers.mjs';
@@ -155,4 +156,49 @@ test('the worktree is preserved after use — nothing deletes evidence', async (
   await createWorktree(git, plan);
   assert.equal(fs.existsSync(plan.worktreePath), true);
   assert.equal(fs.existsSync(path.join(plan.worktreePath, 'README.md')), true);
+});
+
+test('an inherited GIT_DIR cannot redirect the dispatcher onto another repository', async (t) => {
+  const { repo, git, dir } = repoFixture(t);
+  // Dung tinh huong that: mot hook `pre-push` dat san GIT_DIR tro vao repo cua nguoi goi. Neu
+  // dispatcher ke thua bien do, moi lenh git cua no — ke ca `worktree add` — se lam viec tren repo
+  // KHAC voi cai `cwd` chi dinh.
+  const foreign = path.join(dir, 'foreign.git');
+  fs.mkdirSync(foreign, { recursive: true });
+  const previous = process.env.GIT_DIR;
+  process.env.GIT_DIR = foreign;
+  t.after(() => {
+    if (previous === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = previous;
+  });
+
+  // `createGit` chup moi truong luc tao, nen phai tao SAU khi bien duoc dat — dung nhu mot
+  // dispatcher khoi dong ben trong hook.
+  const underHook = createGit({ exec: execFile, cwd: repo.work });
+  const top = await underHook.run(['rev-parse', '--show-toplevel']);
+  assert.equal(top.ok, true, top.stderr);
+  assert.equal(fs.realpathSync(top.stdout.trim()), fs.realpathSync(repo.work));
+
+  const resolved = await resolveBaseSha(underHook, { remote: 'origin', baseBranch: 'main' });
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.baseSha, repo.baseSha);
+  assert.equal(git.cwd, repo.work);
+});
+
+test('gitSafeEnv removes every location variable but keeps authentication settings', () => {
+  const env = gitSafeEnv({
+    GIT_DIR: '/somewhere/.git',
+    GIT_WORK_TREE: '/somewhere',
+    GIT_INDEX_FILE: '/somewhere/index',
+    GIT_COMMON_DIR: '/somewhere/.git',
+    GIT_SSH_COMMAND: 'ssh -i /home/me/.ssh/id_ed25519',
+    GIT_TERMINAL_PROMPT: '0',
+    PATH: '/usr/bin',
+  });
+  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR']) {
+    assert.equal(key in env, false, `${key} must be removed`);
+  }
+  assert.equal(env.GIT_SSH_COMMAND, 'ssh -i /home/me/.ssh/id_ed25519');
+  assert.equal(env.GIT_TERMINAL_PROMPT, '0');
+  assert.equal(env.PATH, '/usr/bin');
 });

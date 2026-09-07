@@ -17,16 +17,55 @@ import { REASONS, deny } from './errors.mjs';
 const SHA40_PATTERN = /^[0-9a-f]{40}$/;
 
 /**
+ * Bien moi truong CUA GIT noi cho repo nam o dau. Neu dispatcher duoc goi tu ben trong mot lenh
+ * git khac — mot hook `pre-push`, mot `git rebase --exec`, mot GUI — thi nhung bien nay DA duoc
+ * dat san, va moi lenh git con se lam viec tren repo CUA NGUOI GOI thay vi tren cai ta chi dinh
+ * bang `cwd`.
+ *
+ * Do khong phai gia thuyet: bo test cua chinh package nay tao mot repo tam roi `git init` no, va
+ * khi chay duoi `pre-push` no da di sua `.git/config` cua REPO THAT. Mot dispatcher tao worktree
+ * nham repo la mot loi nang hon nhieu.
+ *
+ * Chi go nhung bien noi VI TRI. `GIT_SSH_COMMAND`, `GIT_TERMINAL_PROMPT`, ... la cau hinh xac
+ * thuc cua nguoi van hanh va phai duoc giu.
+ */
+const GIT_LOCATION_ENV = Object.freeze([
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_PREFIX',
+  'GIT_CEILING_DIRECTORIES',
+  'GIT_CONFIG',
+  'GIT_CONFIG_COUNT',
+]);
+
+/**
+ * Ban sao moi truong da go cac bien vi tri cua git.
+ * @param {NodeJS.ProcessEnv} [base]
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function gitSafeEnv(base = process.env) {
+  const env = { ...base };
+  for (const key of GIT_LOCATION_ENV) delete env[key];
+  return env;
+}
+
+/**
  * @param {{ exec: import('./exec.mjs').ExecFn, cwd: string, gitBin?: string }} deps
  */
 export function createGit(deps) {
   const bin = deps.gitBin ?? 'git';
+  const env = gitSafeEnv();
   /**
    * @param {ReadonlyArray<string>} args
    * @param {{ cwd?: string }} [options]
    */
   const run = (args, options = {}) =>
-    deps.exec(bin, args, { cwd: options.cwd ?? deps.cwd, timeoutMs: 180_000 });
+    deps.exec(bin, args, { cwd: options.cwd ?? deps.cwd, timeoutMs: 180_000, env });
   return { run, bin, cwd: deps.cwd };
 }
 
