@@ -15,7 +15,7 @@ import {
 import { FuelDocumentService } from './fuel-document.service.js';
 import { FuelInvoiceSource, XmlFuelInvoiceSource } from './fuel-invoice-source.js';
 import { FuelReceiptExtractionPort } from './fuel-receipt-extraction.js';
-import { OpenAiCompatibleReceiptExtractor } from './fuel-receipt-extraction.http.js';
+import { ChatCompletionsReceiptExtractor } from './fuel-receipt-extraction.http.js';
 import { StubFuelReceiptExtractor } from './fuel-receipt-extraction.stub.js';
 import { FuelStationService } from './fuel-station.service.js';
 import { FileFuelStatementSource, FuelStatementSource } from './fuel-statement-source.js';
@@ -112,7 +112,7 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
       useFactory: (): FuelReceiptExtractionPort => {
         const env = loadFoundationEnv();
         if (env.FUEL_EXTRACTION_MODE !== 'http') return new StubFuelReceiptExtractor();
-        return new OpenAiCompatibleReceiptExtractor({
+        return new ChatCompletionsReceiptExtractor({
           // `loadEnv` da chan cau hinh `http` ma thieu hai bien nay ngay luc khoi dong.
           baseUrl: env.FUEL_EXTRACTION_BASE_URL as string,
           model: env.FUEL_EXTRACTION_MODEL as string,

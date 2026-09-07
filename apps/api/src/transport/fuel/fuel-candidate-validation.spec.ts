@@ -10,6 +10,7 @@ import {
   type FuelCandidateFinding,
 } from './fuel-candidate-validation.js';
 import type { FuelCandidate } from './fuel-document.types.js';
+import { FIELD_CONFIDENCE_FLOOR } from './fuel-receipt-extraction.js';
 
 /**
  * `VAL-01`..`VAL-22` — kiem tat dinh mot ung vien (Lane C / C4, Issue #236).
@@ -247,5 +248,57 @@ describe('VAL-22 — khong ket luan nao cham toi so quy', () => {
     for (const finding of FUEL_CANDIDATE_FINDINGS) {
       expect(finding).not.toMatch(/FRAUD|THEFT|DEBT|PENALTY|BLAME/);
     }
+  });
+});
+
+/**
+ * MUC TIN (C3) — phat hien thu muoi hai, va la phat hien DUY NHAT khong noi gi ve con so.
+ *
+ * Muoi mot phat hien kia deu noi "con so nay co van de". Cai nay noi "con so nay do MAY DOAN, va
+ * doan khong chac" — mot cau khac han, va no dan den mot hanh dong khac han: mo buc anh ra nhin.
+ */
+describe('C4 §6 — muc tin duoi san', () => {
+  it('VAL-23 ung vien tu nguon TAT DINH (`confidence: null`) KHONG bao gio mang phat hien nay', () => {
+    const assessment = assess({ confidence: null });
+
+    expect(assessment.findings.map((entry) => entry.finding)).not.toContain(
+      'FIELD_CONFIDENCE_BELOW_FLOOR',
+    );
+  });
+
+  it('VAL-24 moi o TREN san thi khong keu', () => {
+    const assessment = assess({ confidence: { invoiceNo: 1000, 'line.1.amountVnd': FIELD_CONFIDENCE_FLOOR } });
+
+    expect(assessment.outcome).toBe('NO_FINDINGS');
+  });
+
+  it('VAL-25 mot o duoi san lam keu, va phat hien LIET KE DUNG O DO', () => {
+    const assessment = assess({
+      confidence: { invoiceNo: 1000, 'line.1.unitPriceMilli': FIELD_CONFIDENCE_FLOOR - 1 },
+    });
+    const finding = assessment.findings.find(
+      (entry) => entry.finding === 'FIELD_CONFIDENCE_BELOW_FLOOR',
+    );
+
+    expect(finding?.detail?.fields).toBe('line.1.unitPriceMilli');
+    expect(finding?.detail?.floor).toBe(FIELD_CONFIDENCE_FLOOR);
+  });
+
+  it('VAL-26 nhieu o yeu duoc liet ke HET va theo thu tu on dinh, khong gop thanh mot con so', () => {
+    const assessment = assess({
+      confidence: { 'line.1.unitPriceMilli': 100, invoiceNo: 200, 'line.1.amountVnd': 300 },
+    });
+    const finding = assessment.findings.find(
+      (entry) => entry.finding === 'FIELD_CONFIDENCE_BELOW_FLOOR',
+    );
+
+    // Sap xep de hai lan chay cho cung mot chuoi — mot danh sach doi thu tu se lam bai nay chop tat.
+    expect(finding?.detail?.fields).toBe('invoiceNo, line.1.amountVnd, line.1.unitPriceMilli');
+  });
+
+  it('VAL-27 mot bang muc tin RONG khong lam keu — khong o nao duoi san ca', () => {
+    const assessment = assess({ confidence: {} });
+
+    expect(assessment.outcome).toBe('NO_FINDINGS');
   });
 });

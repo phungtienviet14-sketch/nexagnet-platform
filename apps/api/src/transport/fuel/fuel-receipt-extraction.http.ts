@@ -116,8 +116,14 @@ type ExtractionReply = z.infer<typeof replySchema>;
 
 const nullable = <T>(value: T | null | undefined): T | null => value ?? null;
 
+/**
+ * Ten lop goi KHUON DAY (`chat/completions`), khong goi mot cong ty nao — va do khong phai chuyen
+ * chu nghia: `HTTP-14` doc ma nguon da bo chu thich va do neu mot ten nha cung cap xuat hien.
+ * Mot lop mang ten mot cong ty se lam nguoi doc sau nay tuong day la adapter CUA cong ty do, roi
+ * viet them mot lop thu hai cho cong ty thu hai — dung dieu ma ca thiet ke nay ton tai de tranh.
+ */
 @Injectable()
-export class OpenAiCompatibleReceiptExtractor extends FuelReceiptExtractionPort {
+export class ChatCompletionsReceiptExtractor extends FuelReceiptExtractionPort {
   constructor(private readonly endpoint: ReceiptExtractionEndpoint) {
     super();
   }

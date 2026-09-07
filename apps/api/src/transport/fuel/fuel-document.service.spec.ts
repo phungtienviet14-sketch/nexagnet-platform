@@ -241,6 +241,111 @@ describe('FuelDocumentService — duong RA SOAT (C4)', () => {
   });
 });
 
+/**
+ * CUA VAO THU HAI — MOT BUC ANH (C3).
+ *
+ * Bo nay do dieu quan trong nhat cua ca tranche: duong anh dung LAI toan bo phan sau cua duong
+ * XML. Cung bang, cung phep chong nhap trung, cung man hinh ra soat. Neu mot ngay nao do co nguoi
+ * tach hai duong ra, nhung bai nay se do chu khong lang le troi.
+ */
+describe('FuelDocumentService — nhap mot BUC ANH (C3)', () => {
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+  const photo = (content = JPEG, sourceRef = 'phieu-01.jpg') => ({
+    sourceRef,
+    mediaType: 'image/jpeg',
+    content,
+  });
+
+  let documents: InMemoryFuelDocumentRepository;
+  let service: FuelDocumentService;
+
+  beforeEach(() => {
+    documents = new InMemoryFuelDocumentRepository();
+    service = buildService(new InMemoryFuelRepository(), documents);
+  });
+
+  it('DOC-21 — mot buc anh doc duoc ra `PARSED`, va `kind` noi ro no den tu dau', async () => {
+    const detail = await service.ingestReceiptImage(photo(), ACTOR);
+
+    expect(detail.document.status).toBe('PARSED');
+    expect(detail.document.kind).toBe('RECEIPT_IMAGE');
+    expect(detail.candidates).toHaveLength(1);
+  });
+
+  /**
+   * MUC TIN LA THU DUY NHAT PHAN BIET HAI DUONG.
+   *
+   * Doi xung nay la ca thiet ke: `null` khong phai "chua do duoc" ma la "cau hoi nay khong ap dung".
+   * Neu duong XML mot ngay nao do bat dau mang `confidence`, mot nguoi doc man hinh ra soat se
+   * khong con phan biet duoc con so nao MAY DOAN voi con so nao NGUOI BAN DA KY.
+   */
+  it('DOC-22 — ung vien tu ANH mang bang muc tin; ung vien tu XML mang `null`', async () => {
+    const fromImage = await service.ingestReceiptImage(photo(), ACTOR);
+    const fromXml = await service.ingest(fileOf(FIXTURE), ACTOR);
+
+    expect(fromImage.candidates[0]?.confidence).not.toBeNull();
+    expect(fromXml.candidates[0]?.confidence).toBeNull();
+  });
+
+  it('DOC-23 — muc tin duoc CAT theo tung dong, khong de nguyen bang cua ca hoa don', async () => {
+    const detail = await service.ingestReceiptImage(photo(), ACTOR);
+    const keys = Object.keys(detail.candidates[0]?.confidence ?? {});
+
+    expect(keys).toContain('line.1.unitPriceMilli');
+    expect(keys.filter((key) => key.startsWith('line.') && !key.startsWith('line.1.'))).toEqual([]);
+  });
+
+  /**
+   * LOP MOT cua `INV-C2-DUP` tren duong anh — va o day no dat gia hon han.
+   *
+   * Tren duong XML, mot lan gui lai chi ton mot lan phan tich trong bo nho. Tren duong anh, no ton
+   * MOT LAN GOI MO HINH: tien that, thoi gian that. Phep kiem bam byte chay TRUOC khi goi, nen
+   * cung mot buc anh gui lai khong tra them mot dong nao.
+   */
+  it('DOC-24 — dung buc anh do gui lai lan hai tra lai ban cu, khong ghi them', async () => {
+    const first = await service.ingestReceiptImage(photo(), ACTOR);
+    const again = await service.ingestReceiptImage(photo(JPEG, 'ten-khac.jpg'), ACTOR);
+
+    expect(again.document.id).toBe(first.document.id);
+    expect(again.document.sourceRef).toBe('phieu-01.jpg');
+    expect(await documents.listDocuments({ supplierId: null, status: null, limit: 50, offset: 0 })).toHaveLength(1);
+  });
+
+  it('DOC-25 — mot tep KHONG PHAI ANH van duoc GHI LAI, kem ly do co ten', async () => {
+    const html = Buffer.from('<!doctype html><html><body>khong phai anh</body></html>');
+    const detail = await service.ingestReceiptImage(photo(html), ACTOR);
+
+    expect(detail.document.status).toBe('REJECTED');
+    expect(detail.document.rejectReason).toBe('UNSUPPORTED_MEDIA_TYPE');
+    // Van co MOT hang: mot tep hong bien mat khong dau vet lam nguoi doi soat thay mot thang thieu
+    // chung tu ma khong biet thieu bao nhieu.
+    expect(detail.document.id).toBeTruthy();
+    expect(detail.candidates).toEqual([]);
+  });
+
+  it('DOC-26 — duong ra soat noi ro o nao mo, chu khong mot con so trung binh', async () => {
+    const ingested = await service.ingestReceiptImage(photo(), ACTOR);
+    const review = await service.documentReview(ingested.document.id);
+    const finding = review.candidates[0]?.assessment.findings.find(
+      (entry) => entry.finding === 'FIELD_CONFIDENCE_BELOW_FLOOR',
+    );
+
+    expect(finding).toBeDefined();
+    expect(finding?.detail?.fields).toBe('line.1.unitPriceMilli');
+  });
+
+  it('DOC-27 — ung vien tu XML KHONG bao gio mang phat hien muc tin thap', async () => {
+    const ingested = await service.ingest(fileOf(FIXTURE), ACTOR);
+    const review = await service.documentReview(ingested.document.id);
+
+    for (const candidate of review.candidates) {
+      expect(candidate.assessment.findings.map((entry) => entry.finding)).not.toContain(
+        'FIELD_CONFIDENCE_BELOW_FLOOR',
+      );
+    }
+  });
+});
+
 describe('FuelDocumentService — noi chung tu voi nha cung cap', () => {
   const supplierWith = (fuel: InMemoryFuelRepository, taxCode: string, name: string) =>
     fuel.createSupplier({
