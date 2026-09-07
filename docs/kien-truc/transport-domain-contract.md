@@ -77,7 +77,7 @@ một năng lực miền còn thiếu (thêm vào base cho **mọi** khách), ho
 | Lương lái xe | ⚠️ một phần | `GD-12` (**khấu trừ TẮT**), `GD-14` |
 | Báo cáo lãi/lỗ + công nợ tổng hợp | ✅ biên trực tiếp | `GD-13` (**phân bổ chi phí cố định TẮT**) |
 | Vận đơn / container / seal | ❌ | Nguồn tự đánh dấu *"tuỳ chọn mở rộng"* (VT-066) |
-| GPS thời gian thực | ❌ | `GD-17` |
+| GPS thời gian thực | ❌ trong v1 — **`GD-17` đã bị chủ sở hữu đảo** (#229 · #232 D-02) | `GD-17`, và [transport-geospatial.md](transport-geospatial.md) |
 | Vision/OCR đọc phiếu dầu | ❌ | §12 — base không phụ thuộc |
 | Kế toán pháp định, hóa đơn điện tử, ERP | ❌ | `GD-16` |
 
@@ -582,7 +582,7 @@ Ràng buộc dữ liệu của `transport-driver` (VT-083, VT-101):
 | Port | Trách nhiệm | Trạng thái | Adapter |
 |---|---|---|---|
 | `FuelStatementSourcePort` | Đọc bảng kê cây xăng thành dòng đã chuẩn hoá | Demo: CSV/Excel (`GD-07`) | Excel / CSV / API cây xăng |
-| `VehicleTelematicsPort` | Vị trí/hành trình xe | **Chưa mở** — `GD-17` | GPS provider |
+| `VehicleTelematicsPort` | Vị trí/hành trình xe **từ hộp GSHT trên xe** | **Đang mở** ở Lane B (#235 B5) — giữ nguyên tên này, không đặt tên mới | GSHT vendor / CSV / nhập tay |
 | `AccountingExportPort` | Đẩy công nợ/bút toán sang phần mềm kế toán | Ngoài v1 | MISA / ERP |
 | `EInvoicePort` | Hóa đơn điện tử | Ngoài v1 — `GD-16` | — |
 | `MediaStore` *(đã có)* | Lưu ảnh phiếu/chứng từ | **as-built** | none / local / S3-compatible |
@@ -613,7 +613,10 @@ chọn mode trong allowlist — đúng khuôn `ChannelAdapter`/`ErpPort` đang c
 Transport Domain **không** làm, và không được lặng lẽ trở thành:
 
 1. Phần mềm **kế toán pháp định** (sổ cái kép, báo cáo tài chính theo chuẩn) — `GD-16`.
-2. Hệ thống **theo dõi GPS** — `GD-17`.
+2. ~~Hệ thống **theo dõi GPS** — `GD-17`.~~ **ĐÃ ĐẢO, 07/09/2026** (#229 §2 · #232 D-02): chứng cứ
+   vận hành có toạ độ là phạm vi phần mềm được duyệt. Cái vẫn **không** làm: bám vị trí cá nhân
+   24/7 ngoài chuyến đang chạy, và mọi tuyên bố rằng GPS giả có thể bị chặn. Xem
+   [transport-geospatial.md](transport-geospatial.md).
 3. **TMS** đa phương thức (đường biển, hàng không, kho bãi).
 4. Hệ thống **định tuyến/tối ưu tuyến đường**.
 5. Nơi **LLM quyết định tiền**.
@@ -638,7 +641,7 @@ tô hồng.
 | `NO_REPORTING_AS_BUSINESS_TRUTH` | Báo cáo không phải nguồn ghi | ⚠️ Quy ước + review |
 | `NO_HATCHET_AS_BUSINESS_DB` | Hatchet giữ tiến trình, **không** giữ dữ liệu nghiệp vụ | ✅ Đã là bất biến đang chạy (worker không có DB, gọi ngược qua `internal/*`) |
 | `NO_CLICKHOUSE_AS_BUSINESS_DB` | ClickHouse chỉ quan sát | ✅ Đã tách sẵn |
-| `NO_DIRECT_VENDOR_GPS_SDK_IN_DOMAIN` | GPS qua port | ✅ Ngay được — chưa có adapter nào |
+| `NO_DIRECT_VENDOR_GPS_SDK_IN_DOMAIN` | GPS qua port | ✅ Vẫn giữ, và **từ 07/09/2026 mới hết rỗng**: miền đã có hình học vị trí (`transport/geo/**`, thuần hàm) mà **không** nhắc tên một nhà cung cấp nào. Tín hiệu thiết bị/telematics phải đi qua port |
 | `NO_UNVERSIONED_DURABLE_WORKFLOW` | Workflow bền vững phải có version | ✅ Đã có bài học: đổi tên workflow làm run đang chờ mồ côi **trong im lặng** |
 | `NO_TRIP_ID_REQUIRED_ON_FUND_LEDGER` *(thêm mới)* | `DriverFundEntry.tripId` phải nullable | ⚠️ Sau T3. Đây là cách C-01 bị hiểu sai thành schema sai |
 
@@ -1524,7 +1527,7 @@ Hai nguồn ngoài đến qua `@Optional()`; khi vắng mặt, `unavailableSourc
 | `GD-14` | `OPEN-12` | `Trip.distanceKm` **nhập tay, nullable**. Nếu chuyến có odo đầu/cuối thì gợi ý bằng hiệu odo, người xác nhận | Không có nguồn km tự động nào trong nghiệp vụ nguồn | **Thấp** |
 | `GD-15` | `OPEN-15` | **Không bù trừ thật.** Hai chiều công nợ đối tác là hai sổ; "số dư ròng" chỉ là cột trên báo cáo | VT-054 nói rõ *"không gộp chung"*. Bù trừ thật là hành vi kế toán có hệ quả pháp lý | **Trung bình** |
 | `GD-16` | `OPEN-09`, `OPEN-13` | **Không** kế toán pháp định, **không** xuất hóa đơn điện tử. Chỉ lưu **trường tham chiếu** hóa đơn (số, ngày, tiền thuế) trên bảng kê | Nguồn chỉ nhắc "hóa đơn" như ảnh phiếu. Xây sổ kế toán pháp định là một sản phẩm khác | **Cao** nếu sau này cần — nhưng đó là mở rộng phạm vi sản phẩm, không phải sửa lỗi |
-| `GD-17` | `OPEN-01` | **Không GPS trong demo.** "Vị trí xe" thể hiện bằng **trạng thái xe + trạng thái chuyến** | Nguồn nêu vấn đề vị trí ở §1 nhưng không có một yêu cầu chức năng nào (C-03) | **Thấp** — thêm adapter sau `VehicleTelematicsPort` |
+| `GD-17` | `OPEN-01` | ~~**Không GPS trong demo.**~~ **ĐẢO 07/09/2026** (#229 · #232 D-02, Q-03 đã được chủ sở hữu giải quyết): chứng cứ vị trí lúc bắt đầu/giao hàng + bám vị trí trong chuyến đang chạy là phạm vi được duyệt. Chuyến v1 vẫn thể hiện bằng trạng thái; toạ độ nằm ở lớp **chứng cứ** cộng thêm, không thay trạng thái | Quyết định cũ đúng khi nguồn không có yêu cầu chức năng nào (C-03); chủ sở hữu nay đã cấp yêu cầu đó bằng văn bản trên #229/#232 | **Thấp** — lớp cộng thêm; xem [transport-geospatial.md](transport-geospatial.md) |
 | `GD-18` | `OPEN-02` | Ngưỡng cảnh báo hết hạn mặc định **30 ngày**, tenant config, đặt riêng được theo loại giấy tờ | Nguồn cho khoảng 15–30; lấy đầu rộng hơn để không bỏ sót | **Thấp** — config |
 | `GD-19` | `OPEN-06` | Demo **online-only**. Ảnh upload thất bại thì báo lỗi và cho thử lại; **chưa** có hàng đợi offline | Hàng đợi offline là công việc của vỏ mobile (`PG-11`), không phải của miền | **Trung bình** — ảnh hưởng T7, không ảnh hưởng schema |
 | `GD-20` | `OPEN-19` | Demo **giữ ảnh vô thời hạn**, không có job dọn. Kích thước dự kiến nhỏ (~10 xe) | Chưa có chính sách; xoá nhầm bằng chứng đắt hơn giữ thừa | **Thấp** |
