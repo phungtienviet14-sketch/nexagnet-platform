@@ -105,6 +105,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 183
     },
+    "fuel_document.ingest": {
+      "functionName": "FuelDocumentService.ingest",
+      "filePath": "apps/api/src/transport/fuel/fuel-document.service.ts"
+    },
+    "fuel_document.supplier_link": {
+      "functionName": "FuelDocumentService.linkSupplier",
+      "filePath": "apps/api/src/transport/fuel/fuel-document.service.ts"
+    },
     "fuel_station.alias": {
       "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
     },
@@ -347,6 +355,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.fleet_status.read": {
       "filePath": "apps/api/src/transport/asset-compliance/fleet-status.controller.ts"
+    },
+    "transport.fuel.document.ingest": {
+      "functionName": "FuelDocumentController.ingest",
+      "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts",
+      "line": 78
+    },
+    "transport.fuel.document.read": {
+      "filePath": "apps/api/src/transport/fuel/fuel-document.controller.ts"
     },
     "transport.fuel.entry.verify": {
       "filePath": "apps/api/src/transport/fuel/fuel-entries.controller.ts"
