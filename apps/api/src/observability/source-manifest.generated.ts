@@ -397,6 +397,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.self.payslip.read": {
       "filePath": "apps/api/src/transport/workforce/driver-payslips.controller.ts"
     },
+    "transport.driver.self.proof.record": {
+      "filePath": "apps/api/src/transport/proof/driver-proof.controller.ts"
+    },
     "transport.driver.self.tracking.report": {
       "functionName": "DriverTrackingController.report",
       "filePath": "apps/api/src/transport/proof/driver-tracking.controller.ts",
@@ -1221,6 +1224,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "WorkforceService.movePayslip",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
       "line": 291
+    },
+    "proof.record|*": {
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
+    },
+    "proof.record|PROOF_PHOTO_NOT_LIVE_CAMERA": {
+      "functionName": "OperationalProofService.record",
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
+      "line": 149
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",

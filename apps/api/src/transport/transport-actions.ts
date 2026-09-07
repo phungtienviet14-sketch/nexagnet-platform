@@ -242,8 +242,19 @@ export const TRANSPORT_ACTIONS = [
   'transport.driver.self.tracking.start',
   'transport.driver.self.tracking.report',
   'transport.driver.self.tracking.stop',
+  /**
+   * CHUNG CU VAN HANH CUA CHINH MINH — lai xe lap chung cu bat dau/giao hang.
+   *
+   * MOT ma cho ca hai loai, khong tach `start`/`delivery`: hai duong do khac nhau dung MOT dieu —
+   * giao hang bat buoc co anh — va do la mot quy tac NGHIEP VU thuoc dich vu, khong phai mot ranh
+   * gioi QUYEN. Tach thanh hai ma se goi y rang co the cap mot cai ma khong cap cai kia, trong khi
+   * mot lai xe khong lap duoc chung cu bat dau thi cung khong chay duoc chuyen.
+   */
+  'transport.driver.self.proof.record',
   /** Van hanh doc TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do. */
   'transport.tracking.read',
+  /** Van hanh doc TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
+  'transport.proof.read',
   /**
    * DOC DUONG DI THO cua mot con nguoi — ma RIENG, va la ma hep nhat trong ca tep nay.
    *
@@ -274,6 +285,7 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.tracking.start',
   'transport.driver.self.tracking.report',
   'transport.driver.self.tracking.stop',
+  'transport.driver.self.proof.record',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
