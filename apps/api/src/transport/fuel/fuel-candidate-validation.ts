@@ -2,6 +2,7 @@ import { businessDateDifferenceInDays } from '../business-date.js';
 import type { FuelCandidate } from './fuel-document.types.js';
 import { LITERS_SCALE } from './fuel-quantity.js';
 import { normalizePlate } from './fuel-statement-mapping.js';
+import { FIELD_CONFIDENCE_FLOOR } from './fuel-receipt-extraction.js';
 
 /**
  * KIEM TAT DINH mot ung vien — ham THUAN, khong cham DB, khong biet Nest (Lane C / C4).
@@ -86,6 +87,17 @@ export const FUEL_CANDIDATE_FINDINGS = [
   'PLATE_HINT_ABSENT',
   /** Co goi y bien so, nhung khong khop xe nao dang co. Khong bao gio tu tao xe tu mot chung tu. */
   'PLATE_HINT_UNKNOWN_VEHICLE',
+  /**
+   * MOT o tro len duoc doc voi muc tin DUOI SAN — chi co o duong ANH (C3).
+   *
+   * Phat hien nay khong noi rang con so SAI. No noi rang con so do do MAY DOAN, va doan khong chac.
+   * Do la mot cau khac han: mot ung vien co the vua khop so hoc vua dang ngo, khi ca ba o cung mo
+   * theo cung mot huong.
+   *
+   * `detail.fields` liet ke DUNG NHUNG O yeu, khong phai mot con so trung binh: nguoi doi soat can
+   * biet nhin vao dau tren buc anh, va mot muc tin trung binh khong chi duoc cho nao ca.
+   */
+  'FIELD_CONFIDENCE_BELOW_FLOOR',
 ] as const;
 export type FuelCandidateFinding = (typeof FUEL_CANDIDATE_FINDINGS)[number];
 
@@ -216,6 +228,21 @@ export function assessFuelCandidate(input: AssessCandidateInput): FuelCandidateA
     add('PLATE_HINT_ABSENT');
   } else if (!input.fleetPlates.has(normalizePlate(candidate.plateHintRaw))) {
     add('PLATE_HINT_UNKNOWN_VEHICLE', { plateHint: candidate.plateHintRaw });
+  }
+
+  // `confidence === null` la duong XML: khong o nao co muc tin, va do KHONG phai muc tin bang 0.
+  // Doc nham cho nay se lam moi ung vien doc tu hoa don da ky bong nhien mang mot phat hien.
+  if (candidate.confidence !== null) {
+    const weak = Object.entries(candidate.confidence)
+      .filter(([, value]) => value < FIELD_CONFIDENCE_FLOOR)
+      .map(([key]) => key)
+      .sort();
+    if (weak.length > 0) {
+      add('FIELD_CONFIDENCE_BELOW_FLOOR', {
+        fields: weak.join(', '),
+        floor: FIELD_CONFIDENCE_FLOOR,
+      });
+    }
   }
 
   const findings = FUEL_CANDIDATE_FINDINGS.map((finding) => found.get(finding)).filter(

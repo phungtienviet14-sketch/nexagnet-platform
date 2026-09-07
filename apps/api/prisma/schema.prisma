@@ -1895,6 +1895,9 @@ model TransportFuelStationAlias {
 /// trich xuat tu anh — mot `ALTER TYPE ... ADD VALUE`, tuc cong them va re.
 enum TransportFuelDocumentKind {
   EINVOICE_XML
+  /// Mot BUC ANH phieu do dau, doc bang mot bo trich xuat (C3). Ung vien sinh ra tu day LUON mang
+  /// mot bang muc tin — xem `TransportFuelCandidate.confidence`.
+  RECEIPT_IMAGE
 }
 
 /// BA ket cuc cua mot lan nhap. Khong co gia tri thu tu.
@@ -1915,6 +1918,12 @@ enum TransportFuelDocumentRejectReason {
   NOT_AN_INVOICE
   MISSING_INVOICE_IDENTITY
   NO_LINE_ITEMS
+  /// Byte dau tep khong phai mot anh JPEG/PNG/WebP — hoac loi khai cua nguoi goi lech voi byte.
+  UNSUPPORTED_MEDIA_TYPE
+  /// Bo trich xuat khong tra loi (mang, qua han, dich vu tu choi). Nhap lai duoc.
+  EXTRACTION_UNAVAILABLE
+  /// Bo trich xuat co tra loi nhung khong dung khuon. Nhap lai KHONG chac giup — bao nguoi dung he thong.
+  EXTRACTION_MALFORMED_OUTPUT
 }
 
 /// Ket cuc cua phep nhan dang cay xang — NAM gia tri, y het `resolveFuelStation()`.
@@ -2050,6 +2059,9 @@ model TransportFuelCandidate {
 
   /// XUAT XU tung truong: `ten truong -> { path, raw, unreadable? }`. Xem `fuel-einvoice-parse.ts`.
   provenance Json
+  /// MUC TIN theo tung truong, cung bo khoa voi `provenance`. `NULL` = ung vien den tu mot nguon
+  /// TAT DINH (hoa don XML), noi ma khai niem "muc tin" khong ap dung.
+  confidence Json?
   createdAt  DateTime @default(now())
 
   @@unique([documentId, lineNumber])

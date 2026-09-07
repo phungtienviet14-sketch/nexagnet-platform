@@ -49,7 +49,11 @@ export const envSchema = z.object({
     .min(32, 'SESSION_SECRET qua ngan — dung chuoi ngau nhien >= 32 ky tu')
     .optional(),
   SESSION_COOKIE_NAME: z.string().trim().min(1).max(64).default('netviet.sid'),
-  SESSION_MAX_AGE_MS: z.coerce.number().int().positive().default(8 * 60 * 60 * 1_000),
+  SESSION_MAX_AGE_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(8 * 60 * 60 * 1_000),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
@@ -106,6 +110,25 @@ export const envSchema = z.object({
   ADVICE_MODEL: z.string().trim().min(1).default('claude-opus-5'),
   /** Model khi PARSER_MODE=deepseek. Xem ghi chu nang luc trong deepseek-parser.ts. */
   DEEPSEEK_MODEL: z.string().trim().min(1).default('deepseek-v4-flash'),
+  /**
+   * DOC ANH PHIEU DO DAU (Lane C / C3) — mot cong tac RIENG, khong bam theo `PARSER_MODE`.
+   *
+   * Cung ly le voi `ADVICE_COMPOSER`, va o day con nang hon: mot buc anh phieu do dau la du lieu
+   * VAN HANH cua khach (bien so, dia diem, thoi diem). Gui no ra mot dich vu ngoai phai la mot
+   * quyet dinh CO Y cua nguoi van hanh, khong phai he qua phu cua viec da chon mot parser don hang.
+   *
+   * `stub` (mac dinh) KHONG doc anh va KHONG goi ra ngoai — no sinh mot ket qua tat dinh tu bam
+   * byte. Mac dinh nay la co y: mot stack quen dat bien se KHONG lang le gui anh cua khach di dau.
+   * `http` goi mot diem cuoi tuong thich OpenAI do `FUEL_EXTRACTION_BASE_URL` chi ra — co the la
+   * mot mo hinh TU DUNG trong chinh mang cua khach, va khi do khong byte nao roi khoi mang do.
+   */
+  FUEL_EXTRACTION_MODE: z.enum(['stub', 'http']).default('stub'),
+  FUEL_EXTRACTION_BASE_URL: z.string().url().optional(),
+  FUEL_EXTRACTION_MODEL: z.string().trim().min(1).optional(),
+  /** Bo trong cho mot mo hinh tu dung khong doi xac thuc. */
+  FUEL_EXTRACTION_API_KEY: z.string().trim().min(1).optional(),
+  /** Doc mot buc anh cham hon doc mot dong chu; 60s la mot lan cho co that, khong phai mot treo. */
+  FUEL_EXTRACTION_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(60_000),
   /**
    * Thu muc chua ANH/VIDEO CATALOG SAN PHAM, phuc vu qua route cong khai `/media/catalog/*`.
    *
@@ -251,7 +274,9 @@ export function loadEnv(
   // Tuong thich nguoc: chuan hoa truoc khi validate credential. Neu BOT_MODE=on thi do chinh la
   // bot mode va phai qua cung cua ZALO_BOT_TOKEN; khong duoc validate `mock` roi doi thanh `bot`.
   const data =
-    source.CHANNEL_MODE === undefined && parsedData.BOT_MODE === 'on' && parsedData.CHANNEL_MODE === 'mock'
+    source.CHANNEL_MODE === undefined &&
+    parsedData.BOT_MODE === 'on' &&
+    parsedData.CHANNEL_MODE === 'mock'
       ? { ...parsedData, CHANNEL_MODE: 'bot' as const }
       : parsedData;
   const parserRequired = requirements.parser !== false;
@@ -299,6 +324,26 @@ export function loadEnv(
     ].filter((issue): issue is string => issue !== null);
     if (sessionIssues.length > 0) throw new EnvValidationError(sessionIssues);
   }
+  // `FUEL_EXTRACTION_MODE=http` ma thieu diem cuoi hoac ten mo hinh la mot cau hinh KHONG chay
+  // duoc, va no phai do LUC KHOI DONG. Neu de den luc chay, cai hong nay lo ra duoi dang moi buc
+  // anh deu `EXTRACTION_UNAVAILABLE` — trong y het mot su co mang, va nguoi truc se di tim mot
+  // dich vu khong he ton tai.
+  //
+  // KHONG rang buoc `FUEL_EXTRACTION_API_KEY`: mot mo hinh tu dung trong mang cua khach thuong
+  // khong doi xac thuc, va bat buoc mot khoa rong o do se day nguoi ta di dat mot chuoi gia.
+  if (data.FUEL_EXTRACTION_MODE === 'http') {
+    const missingExtractionVariables = [
+      !data.FUEL_EXTRACTION_BASE_URL
+        ? 'FUEL_EXTRACTION_BASE_URL: BAT BUOC khi FUEL_EXTRACTION_MODE=http'
+        : null,
+      !data.FUEL_EXTRACTION_MODEL
+        ? 'FUEL_EXTRACTION_MODEL: BAT BUOC khi FUEL_EXTRACTION_MODE=http'
+        : null,
+    ].filter((issue): issue is string => issue !== null);
+    if (missingExtractionVariables.length > 0) {
+      throw new EnvValidationError(missingExtractionVariables);
+    }
+  }
   if (parserRequired && data.PARSER_MODE === 'flowise') {
     const missingFlowiseVariables = [
       !data.FLOWISE_BASE_URL ? 'FLOWISE_BASE_URL: BAT BUOC khi PARSER_MODE=flowise' : null,
@@ -333,9 +378,7 @@ export function loadEnv(
       data.PERSISTENCE !== 'prisma'
         ? 'PERSISTENCE: du lieu khach that bat buoc dung prisma/Postgres, khong dung memory'
         : null,
-      data.AUTH_MODE === 'none'
-        ? 'AUTH_MODE: du lieu khach that khong duoc tat xac thuc'
-        : null,
+      data.AUTH_MODE === 'none' ? 'AUTH_MODE: du lieu khach that khong duoc tat xac thuc' : null,
       channelRequired && data.CHANNEL_MODE !== 'mock' && data.MEDIA_STORE === 'none'
         ? 'MEDIA_STORE: du lieu khach that + kenh Zalo that bat buoc dung local/gcs/s3, khong duoc none'
         : null,
@@ -368,7 +411,7 @@ export function loadEnv(
     !data.ZALO_BOT_TOKEN
   ) {
     throw new EnvValidationError([
-        `ZALO_BOT_TOKEN: BAT BUOC khi CHANNEL_MODE=${data.CHANNEL_MODE}; khong duoc roi ve kenh gia`,
+      `ZALO_BOT_TOKEN: BAT BUOC khi CHANNEL_MODE=${data.CHANNEL_MODE}; khong duoc roi ve kenh gia`,
     ]);
   }
   if (
