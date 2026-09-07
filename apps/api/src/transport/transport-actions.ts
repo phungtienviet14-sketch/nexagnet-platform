@@ -36,6 +36,15 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.counterparty.read',
   'transport.counterparty.manage',
+  /**
+   * MO HINH VAN CHUYEN v2 (R1-B, #232 `D-01` / #234 A1) -- nghia vu thuong mai va vong chay
+   * vat ly la HAI TRUC DOC LAP, nen chung co HAI cap quyen rieng: mot nguoi duoc phep nhap don
+   * khach dat khong nhat thiet duoc phep dieu xe, va nguoc lai.
+   */
+  'transport.order.read',
+  'transport.order.manage',
+  'transport.run.read',
+  'transport.run.manage',
   'transport.trip.read',
   'transport.trip.create',
   'transport.trip.update',
