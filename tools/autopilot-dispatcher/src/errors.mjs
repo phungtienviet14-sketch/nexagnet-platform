@@ -1,0 +1,128 @@
+/**
+ * Ma LY DO va TRANG THAI cua Dispatcher V0.
+ *
+ * Moi cong tu choi phai co ma RIENG. Mot cong co N duong tu choi ma chi tra `false` thi nguoi van
+ * hanh doc log xong van khong biet phai sua gi — va mot bai test "tu choi" van xanh khi no tu choi
+ * VI LY DO KHAC. Nen o day khong co `ok:false` tran: luon kem mot ma trong `REASONS`.
+ *
+ * Ma cua GIAO THUC (hop dong task hong, marker sai cho, ...) KHONG duoc chep sang day — chung do
+ * `@netviet/autopilot-protocol` so huu va duoc chuyen tiep nguyen van. Chep lai la fork ngu nghia.
+ */
+
+/** Trang thai cuc bo cua mot lan dieu phoi. Hop dong #256 muc 10. */
+export const DISPATCH_STATES = Object.freeze({
+  PLANNED: 'PLANNED',
+  CLAIMED: 'CLAIMED',
+  WORKTREE_READY: 'WORKTREE_READY',
+  CLAUDE_STARTING: 'CLAUDE_STARTING',
+  CLAUDE_RUNNING: 'CLAUDE_RUNNING',
+  CLAUDE_EXITED_0: 'CLAUDE_EXITED_0',
+  CLAUDE_EXITED_NONZERO: 'CLAUDE_EXITED_NONZERO',
+  TIMED_OUT: 'TIMED_OUT',
+  BLOCKED_LOCAL_PERMISSION: 'BLOCKED_LOCAL_PERMISSION',
+  POST_RUN_VERIFY: 'POST_RUN_VERIFY',
+  HANDOFF_PRESENT: 'HANDOFF_PRESENT',
+  HANDOFF_MISSING: 'HANDOFF_MISSING',
+  FAILED: 'FAILED',
+});
+
+/**
+ * Tu day khong co duong TU DONG nao di tiep. `CLAUDE_EXITED_NONZERO` nam trong day la CO CHU DINH:
+ * V0 cho mot task DUNG MOT lan phong. Muon chay lai la viec cua nguoi, khong phai cua vong lap.
+ */
+export const TERMINAL_DISPATCH_STATES = /** @type {ReadonlyArray<string>} */ (
+  Object.freeze([
+    DISPATCH_STATES.HANDOFF_PRESENT,
+    DISPATCH_STATES.HANDOFF_MISSING,
+    DISPATCH_STATES.CLAUDE_EXITED_NONZERO,
+    DISPATCH_STATES.TIMED_OUT,
+    DISPATCH_STATES.BLOCKED_LOCAL_PERMISSION,
+    DISPATCH_STATES.FAILED,
+  ])
+);
+
+/** @param {string} state */
+export const isTerminalDispatchState = (state) => TERMINAL_DISPATCH_STATES.includes(state);
+
+export const REASONS = Object.freeze({
+  // --- cau hinh cuc bo ---
+  CONFIG_UNREADABLE: 'CONFIG_UNREADABLE',
+  CONFIG_NOT_JSON: 'CONFIG_NOT_JSON',
+  CONFIG_INVALID: 'CONFIG_INVALID',
+  CONFIG_SECRET_FIELD: 'CONFIG_SECRET_FIELD',
+  CONFIG_SECRET_VALUE: 'CONFIG_SECRET_VALUE',
+  CONFIG_DISABLED: 'CONFIG_DISABLED',
+  CONFIG_MODEL_NOT_OPUS: 'CONFIG_MODEL_NOT_OPUS',
+  CONFIG_EFFORT_NOT_MAX: 'CONFIG_EFFORT_NOT_MAX',
+  CONFIG_PERMISSION_MODE_FORBIDDEN: 'CONFIG_PERMISSION_MODE_FORBIDDEN',
+
+  // --- kham pha task tren GitHub ---
+  GITHUB_CALL_FAILED: 'GITHUB_CALL_FAILED',
+  GITHUB_BAD_RESPONSE: 'GITHUB_BAD_RESPONSE',
+  REPO_MISMATCH: 'REPO_MISMATCH',
+  ISSUE_NOT_OPEN: 'ISSUE_NOT_OPEN',
+  ISSUE_IS_PULL_REQUEST: 'ISSUE_IS_PULL_REQUEST',
+  READY_LABEL_MISSING: 'READY_LABEL_MISSING',
+  NO_READY_TASK: 'NO_READY_TASK',
+
+  // --- nguon goc kich hoat (fail-closed) ---
+  TRIGGER_ALLOWLIST_MISSING: 'TRIGGER_ALLOWLIST_MISSING',
+  TRIGGER_EVENT_MISSING: 'TRIGGER_EVENT_MISSING',
+  TRIGGER_EVIDENCE_UNAVAILABLE: 'TRIGGER_EVIDENCE_UNAVAILABLE',
+  TRIGGER_EVIDENCE_AMBIGUOUS: 'TRIGGER_EVIDENCE_AMBIGUOUS',
+  TRIGGER_PRINCIPAL_UNKNOWN: 'TRIGGER_PRINCIPAL_UNKNOWN',
+  TRIGGER_PRINCIPAL_NOT_ALLOWED: 'TRIGGER_PRINCIPAL_NOT_ALLOWED',
+
+  // --- hop dong task ---
+  CONTRACT_ISSUE_MISMATCH: 'CONTRACT_ISSUE_MISMATCH',
+  TASK_CONTRACT_CHANGED_AFTER_CLAIM: 'TASK_CONTRACT_CHANGED_AFTER_CLAIM',
+  TASK_ALREADY_CLAIMED: 'TASK_ALREADY_CLAIMED',
+
+  // --- khoa tien trinh / so cai ---
+  LOCK_HELD: 'LOCK_HELD',
+  LOCK_UNWRITABLE: 'LOCK_UNWRITABLE',
+  LEDGER_UNWRITABLE: 'LEDGER_UNWRITABLE',
+  LEDGER_CORRUPT: 'LEDGER_CORRUPT',
+
+  // --- git / worktree ---
+  GIT_COMMAND_FAILED: 'GIT_COMMAND_FAILED',
+  BASE_SHA_UNRESOLVED: 'BASE_SHA_UNRESOLVED',
+  BRANCH_NAME_INVALID: 'BRANCH_NAME_INVALID',
+  BRANCH_EXISTS_LOCAL: 'BRANCH_EXISTS_LOCAL',
+  BRANCH_EXISTS_REMOTE: 'BRANCH_EXISTS_REMOTE',
+  WORKTREE_PATH_EXISTS: 'WORKTREE_PATH_EXISTS',
+  WORKTREE_PATH_ESCAPES_ROOT: 'WORKTREE_PATH_ESCAPES_ROOT',
+  WORKTREE_HEAD_MISMATCH: 'WORKTREE_HEAD_MISMATCH',
+  WORKTREE_DIRTY: 'WORKTREE_DIRTY',
+
+  // --- kha nang cua Claude CLI ---
+  CLAUDE_BIN_MISSING: 'CLAUDE_BIN_MISSING',
+  CLAUDE_PROBE_FAILED: 'CLAUDE_PROBE_FAILED',
+  CLAUDE_MODEL_FLAG_UNSUPPORTED: 'CLAUDE_MODEL_FLAG_UNSUPPORTED',
+  CLAUDE_EFFORT_FLAG_UNSUPPORTED: 'CLAUDE_EFFORT_FLAG_UNSUPPORTED',
+  CLAUDE_EFFORT_MAX_UNSUPPORTED: 'CLAUDE_EFFORT_MAX_UNSUPPORTED',
+  CLAUDE_MODEL_OPUS_UNSUPPORTED: 'CLAUDE_MODEL_OPUS_UNSUPPORTED',
+  CLAUDE_NONINTERACTIVE_UNSUPPORTED: 'CLAUDE_NONINTERACTIVE_UNSUPPORTED',
+
+  // --- vong doi tien trinh ---
+  PROCESS_SPAWN_FAILED: 'PROCESS_SPAWN_FAILED',
+  PROCESS_TIMED_OUT: 'PROCESS_TIMED_OUT',
+  PROCESS_EXITED_NONZERO: 'PROCESS_EXITED_NONZERO',
+  BLOCKED_LOCAL_PERMISSION: 'BLOCKED_LOCAL_PERMISSION',
+
+  // --- su that sau khi chay ---
+  HANDOFF_MISSING: 'HANDOFF_MISSING',
+});
+
+/**
+ * @typedef {{ ok: false, reason: string, detail?: Record<string, unknown> }} Denied
+ */
+
+/**
+ * @param {string} reason ma trong `REASONS` (hoac ma cua giao thuc, khi chuyen tiep)
+ * @param {Record<string, unknown>} [detail]
+ * @returns {Denied}
+ */
+export function deny(reason, detail) {
+  return detail === undefined ? { ok: false, reason } : { ok: false, reason, detail };
+}

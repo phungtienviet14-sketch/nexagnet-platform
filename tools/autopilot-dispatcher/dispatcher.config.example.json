@@ -1,0 +1,25 @@
+{
+  "enabled": false,
+  "repo": "phungtienviet14-sketch/nexagnet-platform",
+  "readyLabel": "agent:ready",
+  "trustedTriggerPrincipals": [
+    { "kind": "USER", "id": "phungtienviet14-sketch" },
+    { "kind": "APP", "id": "nexagent-autopilot" }
+  ],
+  "worktreeRoot": "C:/Users/<you>/Documents/vietpt/source/nexagnet-platform/.claude/worktrees",
+  "branchPrefix": "claude/autopilot",
+  "stateDir": "C:/Users/<you>/.nexagent-autopilot-dispatcher",
+  "remote": "origin",
+  "baseBranch": "main",
+  "claude": {
+    "bin": "C:/Users/<you>/.local/bin/claude.exe",
+    "binPrefixArgs": [],
+    "model": "opus",
+    "effort": "max",
+    "permissionPrompts": "none",
+    "permissionMode": null,
+    "timeoutMs": 3600000,
+    "killGraceMs": 15000,
+    "maxCaptureBytes": 262144
+  }
+}
