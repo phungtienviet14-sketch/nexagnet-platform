@@ -203,7 +203,51 @@ tranche này, và cả ba đường đều chặn ở **một quyết định c�
 
 ---
 
-## 7. Câu hỏi còn treo
+## 7. Ba thứ Lane C **cố ý không xây**, và điều gì sẽ đổi câu trả lời
+
+Ghi ra đây vì "không có" và "chưa ai nghĩ tới" nhìn giống hệt nhau trong một kho mã.
+
+### 7.1 Không có hàng đợi bền (Hatchet) cho đường đọc ảnh
+
+Một lần đọc ảnh đi qua mạng và có thể mất tới 60 giây — đúng hình dạng của một việc nền. Lane C
+vẫn làm **đồng bộ**, và đó là một quyết định chứ không phải một thiếu sót:
+
+- **Khối lượng thật là 10–20 phiếu/ngày.** Một hàng đợi cho tải đó thêm một tiến trình, một bảng
+  trạng thái và một chỗ hỏng mới, để giải quyết một vấn đề chưa tồn tại. Cùng lý lẽ đã dùng cho
+  BullMQ ở [tinh-nang-dai-han.md](../phat-trien/ke-hoach/tinh-nang-dai-han.md) §7.2.
+- **Thất bại đã bền sẵn.** Một lần đọc hỏng vẫn ghi một hàng `REJECTED` kèm mã lý do. Cái mà hàng
+  đợi thường mua — "đừng mất việc khi tiến trình chết" — ở đây đã có bằng một hàng trong Postgres.
+- **Người dùng là một con người đang đứng chờ.** Trả `202 queued` cho ai đó vừa chụp một tấm phiếu
+  buộc họ quay lại xem sau. Với một tấm ảnh, đồng bộ **là** trải nghiệm đúng.
+
+**Điều sẽ đổi câu trả lời** — và chỉ những điều này: một lần nhập **hàng loạt** (một hộp thư trả về
+cả tháng hoá đơn cùng lúc), hoặc một nguồn **đẩy** mà ta không điều khiển được nhịp. Lúc đó việc cần
+làm là bọc `ingestReceiptImage` trong một workflow, **không** phải viết lại nó: cổng đã tách, và
+`INV-C2-DUP` lớp một (dấu vân tay byte) khiến chạy lại một việc là **an toàn**.
+
+Khi làm: **Hatchet không phải sự thật nghiệp vụ.** Hàng `TransportFuelDocument` là sự thật; một lần
+chạy workflow chỉ là cách hàng đó ra đời.
+
+### 7.2 Không có trừu tượng tệp thứ hai (#223)
+
+Byte đi trong thân JSON, đúng khuôn `importStatementSchema` đã đặt từ trước cho bảng kê. Lane C
+**không** tạo một lớp lưu trữ blob riêng, vì [#223](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/223)
+sở hữu vòng đời tệp dùng chung và **vẫn đang mở** — chưa có ngữ nghĩa nào trên `main` để tái sử dụng.
+
+Khi #223 hợp nhất: bức ảnh gốc nên trở thành một **id tệp mờ**, và `sourceRef` trỏ tới đó thay vì
+mang một cái tên do người gọi tự đặt. Đó là một lần đổi **một trường**, không phải một lần viết lại
+— vì hôm nay không có locator nào của bucket rò ra ngoài cổng.
+
+### 7.3 Không đụng vào hộp thư nhiên liệu (#222)
+
+[#222](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/222) sở hữu hộp thư
+nhiên liệu chung và đường gỡ bằng chứng. Lane C **không sửa một tệp `apps/web` nào** trong cả ba
+tranche. Màn hình rà soát ứng viên là một đường **đọc API** (`GET documents/:id/review`); ai dựng
+giao diện cho nó là việc của lần sau, sau khi #222 hợp nhất.
+
+---
+
+## 8. Câu hỏi còn treo
 
 - **`Q-08`** (R0 §7) vẫn **chưa có lời**: B mua dầu qua hợp đồng cây xăng hay qua thẻ/app, và hoá
   đơn điện tử đang gửi về đâu. Lane C **không đoán**: `ingestChannels` là một **mảng** (một nhà cung
