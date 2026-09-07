@@ -123,16 +123,21 @@ export function TransportOperations() {
   /**
    * Chon mot dong TRONG mot muc: `replaceState` — nen Back la "ra khoi man hinh", khong phai mot
    * nut hoan tac cho tung lan bam dong. Cung ly do nhu tren: ghi lich su nam ngoai ham cap nhat.
+   *
+   * LUA CHON VA BO LOC DOI TRONG CUNG MOT LAN GOI, khong phai hai. Man Chuyen xe bam mot dong thi
+   * vua chon chuyen do vua dat ma chuyen vao o tim kiem; goi `selectWithin` roi `filterWithin` se
+   * SAI: ca hai `useCallback` deu dong lai tren `state` cua CUNG mot lan ve, nen loi goi thu hai
+   * ghi de ket qua cua loi goi thu nhat va lua chon quay ve gia tri cu.
    */
   const selectWithin = useCallback(
-    (selection: string | null) => {
+    (selection: string | null, tripFilter?: TripFilterQuery) => {
       const resolved = resolveNavigation(
         {
           surface: state.surface === 'driver' ? 'driver' : null,
           section: state.section,
           screen: state.screen,
           selection,
-          tripFilter: state.tripFilter,
+          tripFilter: tripFilter ?? state.tripFilter,
         },
         { section: state.section, screen: state.screen },
         navigation,
@@ -237,7 +242,8 @@ function SectionBody({
 }: {
   readonly section: TransportSectionId;
   readonly selection: string | null;
-  readonly onSelect: (selection: string | null) => void;
+  /** Bo loc di kem la TUY CHON — chi man Chuyen xe dat no cung luc voi lua chon. */
+  readonly onSelect: (selection: string | null, tripFilter?: TripFilterQuery) => void;
   readonly tripFilter: TripFilterQuery;
   readonly onTripFilterChange: (filter: TripFilterQuery) => void;
 }) {

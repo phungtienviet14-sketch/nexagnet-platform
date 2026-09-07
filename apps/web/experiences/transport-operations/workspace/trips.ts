@@ -174,6 +174,38 @@ export const toTripFilterQuery = (filter: TripFilter): TripFilterQuery => {
 export const isFilterActive = (filter: TripFilter): boolean =>
   filter.search.trim().length > 0 || filter.status !== 'ALL' || filter.kind !== 'ALL';
 
+/* ------------------------------------------------------------------ *
+ * BAM MOT DONG = THU HEP DANH SACH VE DUNG DONG DO
+ * ------------------------------------------------------------------ */
+
+/**
+ * MA CHUYEN DI VAO O TIM KIEM khi nguoi dung bam mot dong.
+ *
+ * ==============================================================================================
+ * TRIEU CHUNG DUOC SUA O DAY
+ *
+ * Khoi chi tiet duoc ve SAU bang. Voi 45 chuyen, bam dong dau tien roi phai cuon qua 44 dong nua
+ * moi doc duoc thu vua bam — nguoi dung bao cao dung cau "phai cuon mai xuong cuoi de xem". Dat
+ * chinh ma chuyen vao o tim kiem thi bang co lai DUNG MOT DONG va khoi chi tiet nam ngay duoi no,
+ * khong con phu thuoc vao viec danh sach dai bao nhieu.
+ *
+ * `status`/`kind` duoc GIU NGUYEN, khong xoa: dong vua bam von dang hien duoi hai bo loc do, nen
+ * giu chung khong the lam no bien mat — con xoa chung se lang le doi thu nguoi dung dang xem.
+ */
+export const tripFilterForSelection = (filter: TripFilter, code: string): TripFilterQuery =>
+  toTripFilterQuery({ ...filter, search: code });
+
+/**
+ * DONG KHOI CHI TIET: chi tra lai o tim kiem khi chinh MAN HINH da dat chu vao do.
+ *
+ * Chu trong o dung bang ma chuyen dang mo ⇒ do la chu may tu go: xoa di de nguoi dung thay lai ca
+ * danh sach. Con neu ho da go tiep thanh chu khac, do la bo loc CUA HO — khong dung vao.
+ */
+export const tripFilterAfterClose = (filter: TripFilter, code: string | null): TripFilterQuery =>
+  code !== null && filter.search.trim() === code
+    ? toTripFilterQuery({ ...filter, search: '' })
+    : toTripFilterQuery(filter);
+
 const COMBINING_MARKS = /[̀-ͯ]/g;
 /**
  * `Đ`/`đ` (U+0110/U+0111) la chu RIENG, khong phai `D` co dau, nen `normalize('NFD')` KHONG tach no

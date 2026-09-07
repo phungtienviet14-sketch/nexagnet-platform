@@ -15,6 +15,7 @@ import {
   useRunPayslips,
   useVehicles,
 } from '../hooks/useTransportWorkspace';
+import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { canPerform } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import { toAssetDirectory } from '../workspace/assets';
@@ -47,6 +48,7 @@ export function PayrollView() {
   const [periodId, setPeriodId] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [payslipId, setPayslipId] = useState<string | null>(null);
+  const revealPayslip = useRevealOnOpen<HTMLElement>(payslipId);
   const [pending, setPending] = useState<{
     readonly id: string;
     readonly action: 'approve' | 'pay';
@@ -282,7 +284,7 @@ export function PayrollView() {
       )}
 
       {detailModel === null ? null : (
-        <section className="tx-panel" aria-label="Chi tiết phiếu lương">
+        <section className="tx-panel" aria-label="Chi tiết phiếu lương" ref={revealPayslip}>
           <h2>Chi tiết phiếu — {detailModel.row.driverLabel}</h2>
           <PayslipCorrection
             payslipId={detailModel.row.id}

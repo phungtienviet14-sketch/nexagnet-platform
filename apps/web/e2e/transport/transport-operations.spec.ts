@@ -792,6 +792,39 @@ test.describe('chuyen xe', () => {
     await expect(page.getByRole('region', { name: /Chi tiết chuyến VT-2026-0912/ })).toBeVisible();
   });
 
+  /**
+   * KHOI CHI TIET KHONG DUOC NAM O CUOI MOT DANH SACH DAI.
+   *
+   * Trieu chung nguoi dung bao cao: *"ô chi tiết lại hiện ra ở cuối và tôi phải cuộn mãi xuống
+   * cuối để xem"*. Khoi chi tiet duoc ve SAU bang, nen bang cang dai thi no cang xa — voi 45
+   * chuyen tren goi khach that thi bam dong dau roi phai cuon qua 44 dong nua.
+   *
+   * Ban sua: bam mot dong thi ma chuyen di vao O TIM KIEM, nen bang co lai dung mot dong va khoi
+   * chi tiet nam ngay duoi no. Bai nay do CHINH dieu do — mot dong khac PHAI bien mat — chu khong
+   * do vi tri pixel, vi vi tri pixel doi theo do phan giai con luat nay thi khong.
+   */
+  test('bam mot dong thi ma chuyen vao o tim kiem va danh sach co lai dung dong do', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=trips');
+    await expect(page.getByRole('rowheader', { name: 'VT-2026-0913' })).toBeVisible();
+
+    await page.getByRole('rowheader', { name: 'VT-2026-0912' }).click();
+
+    await expect(page.getByLabel('Tìm chuyến')).toHaveValue('VT-2026-0912');
+    await expect(page).toHaveURL(/q=VT-2026-0912/);
+    // Danh sach da co lai: chuyen khac khong con tren bang, nen khoi chi tiet o ngay duoi dong.
+    await expect(page.getByRole('rowheader', { name: 'VT-2026-0913' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: /Chi tiết chuyến VT-2026-0912/ })).toBeVisible();
+
+    // Dong lai thi tra lai CA danh sach — o tim kiem khong duoc giu chu do chinh man hinh go vao.
+    await page.getByRole('button', { name: 'Đóng' }).click();
+    await expect(page.getByLabel('Tìm chuyến')).toHaveValue('');
+    await expect(page).not.toHaveURL(/q=/);
+    await expect(page.getByRole('rowheader', { name: 'VT-2026-0913' })).toBeVisible();
+  });
+
   test('loc theo tu khoa khong dau tim ra dia danh co dau', async ({ page }) => {
     await mockTransport(page, 'ADMIN');
     await page.goto('/?section=trips');

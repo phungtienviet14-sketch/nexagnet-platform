@@ -7,7 +7,12 @@ import {
   resolveNavigation,
   type NavigationInput,
 } from '../navigation';
-import { parseTripFilter, toTripFilterQuery } from '../workspace/trips';
+import {
+  parseTripFilter,
+  toTripFilterQuery,
+  tripFilterAfterClose,
+  tripFilterForSelection,
+} from '../workspace/trips';
 
 /**
  * #222 P2 — BO LOC CHUYEN PHAI SONG SOT QUA TAI LAI / BACK / FORWARD.
@@ -168,5 +173,61 @@ describe('#222 P2 — vong doi giua hai dang bo loc', () => {
     expect(toTripFilterQuery({ search: '   ', status: 'ALL', kind: 'ALL' })).toEqual(
       EMPTY_TRIP_FILTER_QUERY,
     );
+  });
+});
+
+/**
+ * BAM MOT DONG PHAI THU HEP DANH SACH VE DUNG DONG DO.
+ *
+ * Trieu chung: khoi chi tiet duoc ve SAU bang, nen voi 45 chuyen thi bam dong dau tien roi phai
+ * cuon qua 44 dong nua moi doc duoc no. Sau ban nay, ma chuyen di vao o tim kiem ngay luc bam nen
+ * bang co lai mot dong — dung hinh dang cua dia chi
+ * `?section=trips&selected=CH-25091&q=CH-25091`.
+ */
+describe('bam mot dong = chi xem chuyen do', () => {
+  it('ma chuyen di vao o tim kiem khi bam', () => {
+    expect(tripFilterForSelection({ search: '', status: 'ALL', kind: 'ALL' }, 'CH-25091')).toEqual({
+      search: 'CH-25091',
+      status: null,
+      kind: null,
+    });
+  });
+
+  it('`status`/`kind` dang chon duoc GIU — dong vua bam von hien duoi chung', () => {
+    expect(
+      tripFilterForSelection({ search: 'ha noi', status: 'IN_TRANSIT', kind: 'ALL' }, 'CH-25091'),
+    ).toEqual({ search: 'CH-25091', status: 'IN_TRANSIT', kind: null });
+  });
+
+  it('dia chi dung lai tu do la dia chi trong anh bao loi cua nguoi dung', () => {
+    const filter = tripFilterForSelection({ search: '', status: 'ALL', kind: 'ALL' }, 'CH-25091');
+    expect(buildSectionUrl('trips', 'CH-25091', filter)).toBe(
+      '/?section=trips&selected=CH-25091&q=CH-25091',
+    );
+  });
+
+  it('dong khoi chi tiet thi tra lai o tim kiem — chu do la do MAN HINH go vao', () => {
+    expect(
+      tripFilterAfterClose({ search: 'CH-25091', status: 'IN_TRANSIT', kind: 'ALL' }, 'CH-25091'),
+    ).toEqual({ search: null, status: 'IN_TRANSIT', kind: null });
+  });
+
+  it('chu do NGUOI DUNG go thi khong bi dong ho ngo xoa mat', () => {
+    expect(
+      tripFilterAfterClose({ search: 'thai nguyen', status: 'ALL', kind: 'ALL' }, 'CH-25091'),
+    ).toEqual({ search: 'thai nguyen', status: null, kind: null });
+  });
+
+  it('dong khi khong co chuyen nao dang mo thi khong dung gi vao bo loc', () => {
+    expect(
+      tripFilterAfterClose({ search: 'thai nguyen', status: 'ALL', kind: 'ALL' }, null),
+    ).toEqual({ search: 'thai nguyen', status: null, kind: null });
+  });
+
+  it('bam -> dong la mot VONG DONG: bo loc tro lai dung nhu truoc luc bam', () => {
+    const before = { search: '', status: 'PLANNED', kind: 'OWN_DIRECT' } as const;
+    const opened = tripFilterForSelection(before, 'CH-25091');
+    const closed = tripFilterAfterClose(parseTripFilter(opened), 'CH-25091');
+    expect(closed).toEqual(toTripFilterQuery(before));
   });
 });

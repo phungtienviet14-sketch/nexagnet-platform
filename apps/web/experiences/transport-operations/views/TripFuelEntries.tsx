@@ -11,6 +11,7 @@ import {
   useNavigationInput,
   useTripFuelEntries,
 } from '../hooks/useTransportWorkspace';
+import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { evidenceUrls, transportApi } from '../transport-api';
 import { toFuelEntryRows, type FuelEntryRow } from '../workspace/fuel';
 
@@ -197,6 +198,7 @@ function FuelEntryDetailPanel({
   readonly row: FuelEntryRow | null;
   readonly onAct: (action: FuelEntryAction) => void;
 }) {
+  const reveal = useRevealOnOpen<HTMLElement>(row?.id ?? null);
   const navigation = useNavigationInput();
   const detail = toSectionQuery(useFuelEntryDetail(navigation, row?.id ?? null));
 
@@ -205,7 +207,11 @@ function FuelEntryDetailPanel({
   const evidence = detail.data?.evidence ?? [];
 
   return (
-    <section className="tx-detail" aria-label={`Phiếu đổ dầu ngày ${row.businessDateLabel}`}>
+    <section
+      className="tx-detail"
+      aria-label={`Phiếu đổ dầu ngày ${row.businessDateLabel}`}
+      ref={reveal}
+    >
       <h4>
         {row.supplierLabel} · {row.businessDateLabel}
       </h4>

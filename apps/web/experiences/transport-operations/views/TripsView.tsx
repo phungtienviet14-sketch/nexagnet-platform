@@ -21,6 +21,7 @@ import {
   useTrips,
   useVehicles,
 } from '../hooks/useTransportWorkspace';
+import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { canPerform, hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import { TRIP_KINDS, TRIP_STATUSES, type TripKind, type TripStatus } from '../transport-types';
@@ -41,6 +42,8 @@ import {
   toTripRows,
   toTripTimeline,
   tripActionOffers,
+  tripFilterAfterClose,
+  tripFilterForSelection,
   type TripActionOffer,
   type TripFilter,
   type TripRow,
@@ -61,8 +64,13 @@ export function TripsView({
   onFilterChange,
 }: {
   readonly selection: string | null;
-  /** Nhan MA chuyen. `null` de dong khoi chi tiet. */
-  readonly onSelect: (code: string | null) => void;
+  /**
+   * Nhan MA chuyen. `null` de dong khoi chi tiet.
+   *
+   * Bo loc di CUNG loi goi, khong phai mot loi goi thu hai: xem `selectWithin` trong
+   * `TransportOperations.tsx` — hai loi goi roi nhau se ghi de len nhau.
+   */
+  readonly onSelect: (code: string | null, filter?: TripFilterQuery) => void;
   /**
    * BO LOC DEN TU DIA CHI, khong tu `useState` cua man nay — #222 P2.
    *
@@ -148,7 +156,9 @@ export function TripsView({
           onDone={(code) => {
             setPlanning(false);
             invalidateTrips();
-            onSelect(code);
+            // Chuyen VUA LAP phai nhin thay duoc ngay, nen bo het bo loc dang co: mot bo loc trang
+            // thai hay loai chuyen con lai tu truoc hoan toan co the dang giau dung no.
+            onSelect(code, { search: code, status: null, kind: null });
           }}
         />
       ) : null}
@@ -236,7 +246,9 @@ export function TripsView({
           rows={rows}
           rowKey={(row) => row.code}
           selectedKey={selection}
-          onSelect={(row) => onSelect(row.code)}
+          // Bam mot dong = "chi xem chuyen nay": ma chuyen di vao o tim kiem, bang co lai dung mot
+          // dong, va khoi chi tiet nam NGAY DUOI no thay vi o cuoi mot danh sach 45 dong.
+          onSelect={(row) => onSelect(row.code, tripFilterForSelection(filter, row.code))}
           columns={[
             { key: 'code', header: 'Mã chuyến', isRowHeader: true, render: (row) => row.code },
             { key: 'date', header: 'Ngày', render: (row) => row.businessDateLabel },
@@ -262,7 +274,8 @@ export function TripsView({
         <TripDetailView
           key={selected.id}
           tripId={selected.id}
-          onClose={() => onSelect(null)}
+          tripCode={selected.code}
+          onClose={() => onSelect(null, tripFilterAfterClose(filter, selected.code))}
           onChanged={invalidateTrips}
         />
       )}
@@ -277,13 +290,17 @@ export function TripsView({
  */
 function TripDetailView({
   tripId,
+  tripCode,
   onClose,
   onChanged,
 }: {
   readonly tripId: string;
+  /** Dung lam KHOA MO cho `useRevealOnOpen` — biet ngay tu luc bam, khong doi tai xong. */
+  readonly tripCode: string;
   readonly onClose: () => void;
   readonly onChanged: () => void;
 }) {
+  const reveal = useRevealOnOpen<HTMLElement>(tripCode);
   const navigation = useNavigationInput();
   const queryClient = useQueryClient();
   const trips = toSectionQuery(useTrips(navigation));
@@ -331,7 +348,7 @@ function TripDetailView({
 
   if (trip === null) {
     return (
-      <section className="tx-detail" aria-label="Chi tiết chuyến">
+      <section className="tx-detail" aria-label="Chi tiết chuyến" ref={reveal}>
         {trips.isLoading ? (
           <LoadingState label="Đang đọc chuyến…" />
         ) : (
@@ -350,7 +367,7 @@ function TripDetailView({
   const row = toTripRows([trip], directory)[0];
 
   return (
-    <section className="tx-detail" aria-label={`Chi tiết chuyến ${trip.code}`}>
+    <section className="tx-detail" aria-label={`Chi tiết chuyến ${trip.code}`} ref={reveal}>
       <header className="tx-detail__head">
         <div>
           <h2>Chuyến {trip.code}</h2>
