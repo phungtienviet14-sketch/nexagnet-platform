@@ -79,6 +79,10 @@ export const TRANSPORT_ACTIONS = [
   'transport.payslip.approve',
   'transport.payslip.pay',
   'transport.payslip.correct',
+  /* --- `TX-07b` quyet toan lai xe (Lane D, Issue #237) --- */
+  'transport.driver_settlement.read',
+  'transport.driver_settlement.cashout',
+  'transport.driver_settlement.reverse',
   /* --- pham vi CUA CHINH MINH — lai xe --- */
   'transport.driver.self.trip.read',
   'transport.driver.self.trip.update',
@@ -95,6 +99,13 @@ export const TRANSPORT_ACTIONS = [
    * `transport.payroll.period.read` (bang luong ca doi xe) va khong mo mot duong ghi nao.
    */
   'transport.driver.self.payslip.read',
+  /**
+   * Bang quyet toan CUA CHINH MINH (`TX-07b`) — da ghi nhan / da rut / con lai / hoan ung.
+   *
+   * Chi doc, va khong co bien the "tu rut tien cho chinh minh": mot nguoi tu chi tien cho chinh
+   * minh la dung cai ma kiem soat noi bo sinh ra de chan.
+   */
+  'transport.driver.self.settlement.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -107,6 +118,7 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fuel.submit',
   'transport.driver.self.expense.record',
   'transport.driver.self.payslip.read',
+  'transport.driver.self.settlement.read',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */

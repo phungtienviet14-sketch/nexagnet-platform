@@ -36,6 +36,7 @@ export type TransportSectionId =
   | 'settlement'
   | 'maintenance'
   | 'payroll'
+  | 'driver-settlement'
   | 'margin'
   | 'ar-ap'
   | 'exports';
@@ -128,6 +129,22 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Kỳ lương, bảng tính thử, phiếu lương và các khoản cấu thành.',
     requiredCapabilities: ['transport-costing', 'transport-workforce'],
     requiredAction: 'transport.costing.period.read',
+  },
+  {
+    id: 'driver-settlement',
+    label: 'Quyết toán lái xe',
+    group: 'assets',
+    summary: 'Lương đã ghi nhận theo tháng, các lần chi và phân bổ, hoàn ứng công ty còn nợ.',
+    /**
+     * HAI capability, cung bo voi man Luong: nguon cua moi khoan da ghi nhan la phieu luong
+     * (`transport-workforce`), va hoan ung doc tu so quy (`transport-costing`).
+     *
+     * `requiredAction` la ma DOC rieng cua `TX-07b`, khong phai `transport.payroll.period.read`:
+     * bang nay noi tien da RA KHOI cong ty luc nao va bang duong nao, va do la mot cau hoi khac
+     * voi "thang nay lai xe duoc bao nhieu".
+     */
+    requiredCapabilities: ['transport-costing', 'transport-workforce'],
+    requiredAction: 'transport.driver_settlement.read',
   },
   {
     id: 'margin',

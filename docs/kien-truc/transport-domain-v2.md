@@ -14,7 +14,7 @@
 > mục as-built của nó về T1 §18 theo đúng quy ước cũ.
 
 > **Quy ước tài liệu nền tảng vẫn áp dụng.** `kien-truc/` không nhắc tên khách. Khách vận tải xuất
-> hiện ở đây chỉ dưới vai *reference tenant*; tham số riêng nằm ở T0 hoặc `tenants/<slug>/`.
+> hiện ở đây chỉ dưới vai _reference tenant_; tham số riêng nằm ở T0 hoặc `tenants/<slug>/`.
 
 ---
 
@@ -23,95 +23,95 @@
 `ROADMAP_VERDICT = AMENDED`.
 
 Lộ trình #229 **đúng về hướng** và **sai về hiện trạng ở bốn chỗ**. Ba trong bốn chỗ đó mô tả một
-việc như *chưa làm* trong khi nó **đã chạy trên `main` từ T3/T4**, và một chỗ đề xuất một cấu trúc
+việc như _chưa làm_ trong khi nó **đã chạy trên `main` từ T3/T4**, và một chỗ đề xuất một cấu trúc
 **không có nguồn nghiệp vụ nào** — kể cả nguồn của chính chủ sở hữu.
 
-| Mục #229 | Phán quyết | Lý do một dòng |
-|---|---|---|
-| §0 Nguyên tắc kiến trúc (10 mục) | **ACCEPT** | Trùng khớp guardrail T1 §16; không mục nào mâu thuẫn |
-| §1 Counterparty đa vai | **AMEND** | Đa vai **đã có** (`TransportPartnerRole`). Khoảng trống thật là **danh tính** giữa ba bảng bên, không phải vai |
-| §1 Order / Run / Leg | **AMEND — hoãn** | **Không có một sự kiện T0 nào** về chiều rỗng/km rỗng. Đây là chỉ đạo của chủ sở hữu, phải được ghi thành giả định có tên trước khi thành cột |
-| §2 Operational Proof | **ACCEPT có điều kiện** | Mâu thuẫn trực diện với T1 §15 non-goal #2 và `GD-17`. Chủ sở hữu có quyền đảo, nhưng phải đảo **thành văn**, không đảo ngầm |
-| §3 Địa không gian (PostGIS/MapLibre) | **ACCEPT** | Xem §4 ma trận công nghệ |
-| §4 App lái xe / chống giả GPS | **AMEND — đổi thứ tự** | Xem `F-07` |
-| §5 Offline outbox | **ACCEPT** | Đúng, và `GD-19` đã ghi sẵn "demo online-only" như một giả định phải đảo |
-| §6 Nhiên liệu = công nợ công ty | **AMEND — đã xong 90%** | `VT-041` là **sự kiện khách đã xác nhận**, và `SUPPLIER_ACCOUNT → COMPANY_DIRECT` đã chạy từ T4 |
-| §7 Vision/OCR | **ACCEPT** | Khớp guardrail `NO_LLM_FINANCIAL_DECISION`; trục `verificationStatus` đã có sẵn chỗ để cắm |
-| §8 ETC — chỉ nghiên cứu | **ACCEPT** | Xem §4 |
-| §9 Driver Fund v2 / ExpenseClaim | **AMEND — hoãn** | Duyệt một phần là **ẩn số nghiệp vụ do chính #230 §F liệt kê**. Code trước là khoá một luật chưa ai quyết |
-| §10 Số dư âm = khoản phải hoàn | **ACCEPT — đã xong** | T1 §9.4 + `describeFundBalance()` đã trả `COMPANY_OWES_DRIVER` từ T3R |
-| §11 Payroll accrual ≠ payment | **AMEND — rủi ro pháp lý** | Xem `F-08` |
-| §12 Bảo dưỡng — khảo sát trước | **ACCEPT** | Và R0 tìm được **bằng chứng cụ thể** cho câu "không khớp thực tế": xem `F-09` |
-| §13 Analytics | **ACCEPT** | Phụ thuộc §1; hoãn theo §1 |
-| §14 Hệ sinh thái A/B/C | **ACCEPT** | Không làm bây giờ; §1 amend đã chừa chỗ cắm |
+| Mục #229                             | Phán quyết                 | Lý do một dòng                                                                                                                                |
+| ------------------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| §0 Nguyên tắc kiến trúc (10 mục)     | **ACCEPT**                 | Trùng khớp guardrail T1 §16; không mục nào mâu thuẫn                                                                                          |
+| §1 Counterparty đa vai               | **AMEND**                  | Đa vai **đã có** (`TransportPartnerRole`). Khoảng trống thật là **danh tính** giữa ba bảng bên, không phải vai                                |
+| §1 Order / Run / Leg                 | **AMEND — hoãn**           | **Không có một sự kiện T0 nào** về chiều rỗng/km rỗng. Đây là chỉ đạo của chủ sở hữu, phải được ghi thành giả định có tên trước khi thành cột |
+| §2 Operational Proof                 | **ACCEPT có điều kiện**    | Mâu thuẫn trực diện với T1 §15 non-goal #2 và `GD-17`. Chủ sở hữu có quyền đảo, nhưng phải đảo **thành văn**, không đảo ngầm                  |
+| §3 Địa không gian (PostGIS/MapLibre) | **ACCEPT**                 | Xem §4 ma trận công nghệ                                                                                                                      |
+| §4 App lái xe / chống giả GPS        | **AMEND — đổi thứ tự**     | Xem `F-07`                                                                                                                                    |
+| §5 Offline outbox                    | **ACCEPT**                 | Đúng, và `GD-19` đã ghi sẵn "demo online-only" như một giả định phải đảo                                                                      |
+| §6 Nhiên liệu = công nợ công ty      | **AMEND — đã xong 90%**    | `VT-041` là **sự kiện khách đã xác nhận**, và `SUPPLIER_ACCOUNT → COMPANY_DIRECT` đã chạy từ T4                                               |
+| §7 Vision/OCR                        | **ACCEPT**                 | Khớp guardrail `NO_LLM_FINANCIAL_DECISION`; trục `verificationStatus` đã có sẵn chỗ để cắm                                                    |
+| §8 ETC — chỉ nghiên cứu              | **ACCEPT**                 | Xem §4                                                                                                                                        |
+| §9 Driver Fund v2 / ExpenseClaim     | **AMEND — hoãn**           | Duyệt một phần là **ẩn số nghiệp vụ do chính #230 §F liệt kê**. Code trước là khoá một luật chưa ai quyết                                     |
+| §10 Số dư âm = khoản phải hoàn       | **ACCEPT — đã xong**       | T1 §9.4 + `describeFundBalance()` đã trả `COMPANY_OWES_DRIVER` từ T3R                                                                         |
+| §11 Payroll accrual ≠ payment        | **AMEND — rủi ro pháp lý** | Xem `F-08`                                                                                                                                    |
+| §12 Bảo dưỡng — khảo sát trước       | **ACCEPT**                 | Và R0 tìm được **bằng chứng cụ thể** cho câu "không khớp thực tế": xem `F-09`                                                                 |
+| §13 Analytics                        | **ACCEPT**                 | Phụ thuộc §1; hoãn theo §1                                                                                                                    |
+| §14 Hệ sinh thái A/B/C               | **ACCEPT**                 | Không làm bây giờ; §1 amend đã chừa chỗ cắm                                                                                                   |
 
 ---
 
 ## 1. Kiểm kê mô hình hiện tại — `KEEP / EXTEND / MIGRATE / DEPRECATE / UNKNOWN`
 
 Đo bằng cách đọc `apps/api/prisma/schema.prisma` (2.866 dòng, 43 bảng `Transport*`) và 195 tệp
-`apps/api/src/transport/**`. Cột **Phán quyết** trả lời đúng một câu: *lộ trình v2 làm gì với nó?*
+`apps/api/src/transport/**`. Cột **Phán quyết** trả lời đúng một câu: _lộ trình v2 làm gì với nó?_
 
 ### 1.1. `transport-core` — chuyến, đội xe, bên đối tác
 
-| Model / service | Phán quyết | Ghi chú |
-|---|---|---|
-| `TransportVehicle` | `EXTEND` | `status` là cột ghi tay; trạng thái **hiệu lực** đã được suy riêng ở `resolveEffectiveVehicleState`. v2 thêm toạ độ/geofence bãi thì thêm bảng, không sửa bảng này |
-| `TransportDriver` | `KEEP` | `authUserId` unique đã là cầu nối phiên → hồ sơ; đủ cho app lái xe |
-| `TransportVehicleAssignment` | `KEEP` | Lịch sử, partial unique một bản hiệu lực. Đúng mẫu cần cho `RunLeg` sau này |
-| `TransportCustomer` | `EXTEND` | Bảng bên **thuê** vận chuyển |
-| `TransportPartner` + `TransportPartnerRole` | `KEEP` | **Đa vai đã có**: `(partnerId, role)` khoá kép, `CARRIER` + `ORDER_REFERRER` |
-| `TransportFuelSupplier` | `EXTEND` | Bảng bên **bán dầu**, tách có chủ đích (xem `F-03`) |
-| `TransportTrip` | `EXTEND` | Aggregate root. **Không migrate**, không đổi tên — 8 bảng khác trỏ FK vào nó |
-| `TransportTripAssignment` | `KEEP` | — |
-| `TripService.assign()` | `EXTEND` | Xem `F-09`: không tra lệnh bảo dưỡng |
-| `trip-lifecycle.ts` | `KEEP` | 5 trạng thái + cạnh cho phép, tất định, có mã lý do từ chối |
+| Model / service                             | Phán quyết | Ghi chú                                                                                                                                                            |
+| ------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TransportVehicle`                          | `EXTEND`   | `status` là cột ghi tay; trạng thái **hiệu lực** đã được suy riêng ở `resolveEffectiveVehicleState`. v2 thêm toạ độ/geofence bãi thì thêm bảng, không sửa bảng này |
+| `TransportDriver`                           | `KEEP`     | `authUserId` unique đã là cầu nối phiên → hồ sơ; đủ cho app lái xe                                                                                                 |
+| `TransportVehicleAssignment`                | `KEEP`     | Lịch sử, partial unique một bản hiệu lực. Đúng mẫu cần cho `RunLeg` sau này                                                                                        |
+| `TransportCustomer`                         | `EXTEND`   | Bảng bên **thuê** vận chuyển                                                                                                                                       |
+| `TransportPartner` + `TransportPartnerRole` | `KEEP`     | **Đa vai đã có**: `(partnerId, role)` khoá kép, `CARRIER` + `ORDER_REFERRER`                                                                                       |
+| `TransportFuelSupplier`                     | `EXTEND`   | Bảng bên **bán dầu**, tách có chủ đích (xem `F-03`)                                                                                                                |
+| `TransportTrip`                             | `EXTEND`   | Aggregate root. **Không migrate**, không đổi tên — 8 bảng khác trỏ FK vào nó                                                                                       |
+| `TransportTripAssignment`                   | `KEEP`     | —                                                                                                                                                                  |
+| `TripService.assign()`                      | `EXTEND`   | Xem `F-09`: không tra lệnh bảo dưỡng                                                                                                                               |
+| `trip-lifecycle.ts`                         | `KEEP`     | 5 trạng thái + cạnh cho phép, tất định, có mã lý do từ chối                                                                                                        |
 
 ### 1.2. `transport-costing` — giá thành + sổ quỹ
 
-| Model / service | Phán quyết | Ghi chú |
-|---|---|---|
-| `TransportDriverFundAccount` | `KEEP` | **Không có cột `balance`** — số dư là `SUM(signedAmount)` |
-| `TransportDriverFundEntry` | `KEEP` | Bất biến, `correlationKey` unique, `reversalOfId` unique |
-| `TransportTripExpense` | `EXTEND` | `fundedBy: DRIVER_FUND \| COMPANY_DIRECT` — đây chính là cái §6 lộ trình đòi |
-| `TransportDriverFundPeriod` + `Snapshot` | `KEEP` | EXCLUDE constraint chống chồng kỳ; snapshot append-only |
-| `driver-fund-ledger.ts` | `KEEP` | `describeFundBalance()` → `COMPANY_OWES_DRIVER` (xem `F-02`) |
+| Model / service                          | Phán quyết | Ghi chú                                                                      |
+| ---------------------------------------- | ---------- | ---------------------------------------------------------------------------- |
+| `TransportDriverFundAccount`             | `KEEP`     | **Không có cột `balance`** — số dư là `SUM(signedAmount)`                    |
+| `TransportDriverFundEntry`               | `KEEP`     | Bất biến, `correlationKey` unique, `reversalOfId` unique                     |
+| `TransportTripExpense`                   | `EXTEND`   | `fundedBy: DRIVER_FUND \| COMPANY_DIRECT` — đây chính là cái §6 lộ trình đòi |
+| `TransportDriverFundPeriod` + `Snapshot` | `KEEP`     | EXCLUDE constraint chống chồng kỳ; snapshot append-only                      |
+| `driver-fund-ledger.ts`                  | `KEEP`     | `describeFundBalance()` → `COMPANY_OWES_DRIVER` (xem `F-02`)                 |
 
 `ExpenseClaim` (§9 lộ trình): **`UNKNOWN`** — chưa có bảng, và chưa nên có (xem `F-06`).
 
 ### 1.3. `transport-fuel`
 
-| Model / service | Phán quyết | Ghi chú |
-|---|---|---|
-| `TransportFuelEntry` | `EXTEND` | Hai trục trạng thái độc lập; `sourceStatementId` chống tự-khớp-với-chính-mình |
-| `TransportFuelPaymentMethod` | `EXTEND` | `DRIVER_CASH` \| `SUPPLIER_ACCOUNT` — xem `F-01` |
-| `TransportFuelReceiptEvidence` | `MIGRATE → #223` | Bảng con giữ `locator`; khi File Platform có `fileId` thật thì đây là chỗ đổi |
-| `TransportFuelSupplierStatement` / `StatementLine` | `KEEP` | CSV/XLSX qua cổng, cột khai trong gói khách |
-| `TransportFuelReconciliation` / `Match` / `Discrepancy` | `KEEP` | 5 loại chênh lệch có tên, 5 cách quyết có tên |
-| `TransportFuelSettlementHandoff` | `KEEP` | Chuỗi bản sửa đổi + dấu vân tay kinh tế |
-| `fuel-statement-mapping.ts` | `EXTEND` | Adapter cho bảng kê; chỗ cắm của R4 |
+| Model / service                                         | Phán quyết       | Ghi chú                                                                       |
+| ------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
+| `TransportFuelEntry`                                    | `EXTEND`         | Hai trục trạng thái độc lập; `sourceStatementId` chống tự-khớp-với-chính-mình |
+| `TransportFuelPaymentMethod`                            | `EXTEND`         | `DRIVER_CASH` \| `SUPPLIER_ACCOUNT` — xem `F-01`                              |
+| `TransportFuelReceiptEvidence`                          | `MIGRATE → #223` | Bảng con giữ `locator`; khi File Platform có `fileId` thật thì đây là chỗ đổi |
+| `TransportFuelSupplierStatement` / `StatementLine`      | `KEEP`           | CSV/XLSX qua cổng, cột khai trong gói khách                                   |
+| `TransportFuelReconciliation` / `Match` / `Discrepancy` | `KEEP`           | 5 loại chênh lệch có tên, 5 cách quyết có tên                                 |
+| `TransportFuelSettlementHandoff`                        | `KEEP`           | Chuỗi bản sửa đổi + dấu vân tay kinh tế                                       |
+| `fuel-statement-mapping.ts`                             | `EXTEND`         | Adapter cho bảng kê; chỗ cắm của R4                                           |
 
 ### 1.4. `transport-settlement` · `transport-asset-compliance` · `transport-workforce`
 
-| Model / service | Phán quyết | Ghi chú |
-|---|---|---|
-| `TransportSettlementDocument` + `Allocation` | `KEEP` | Đã có phân bổ một khoản thu/chi vào nhiều chứng từ |
-| `TransportSettlementPeriod` / `CustomerTerms` / `CommissionRule*` | `KEEP` | — |
-| `TransportMaintenancePlan` / `WorkOrder` | `UNKNOWN` | §12 lộ trình nói thẳng là chưa khớp thực tế. `F-09` là bằng chứng |
-| `TransportComplianceDocument` | `KEEP` | Đã tách khỏi bảo dưỡng đúng như §12 đòi |
-| `TransportPayrollPeriod` / `Run` / `Payslip` / `Component` | `EXTEND` | Đã có `SUPPLEMENTAL`/`REVERSAL`, `policySnapshot`, `missingInputs` |
-| Chi trả / `Disbursement` | `UNKNOWN` | **Chưa có**. `paidAt`/`paidBy` là hai cột trên phiếu, không phải một lần chi có thể phân bổ |
+| Model / service                                                   | Phán quyết                     | Ghi chú                                                                                       |
+| ----------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------- |
+| `TransportSettlementDocument` + `Allocation`                      | `KEEP`                         | Đã có phân bổ một khoản thu/chi vào nhiều chứng từ                                            |
+| `TransportSettlementPeriod` / `CustomerTerms` / `CommissionRule*` | `KEEP`                         | —                                                                                             |
+| `TransportMaintenancePlan` / `WorkOrder`                          | `UNKNOWN`                      | §12 lộ trình nói thẳng là chưa khớp thực tế. `F-09` là bằng chứng                             |
+| `TransportComplianceDocument`                                     | `KEEP`                         | Đã tách khỏi bảo dưỡng đúng như §12 đòi                                                       |
+| `TransportPayrollPeriod` / `Run` / `Payslip` / `Component`        | `EXTEND`                       | Đã có `SUPPLEMENTAL`/`REVERSAL`, `policySnapshot`, `missingInputs`                            |
+| Chi trả / `Disbursement`                                          | ~~`UNKNOWN`~~ → **`AS-BUILT`** | **Đã có từ `TX-07b`** (R5, PR của Lane D) — `TransportDriverCashout` + `…Allocation`. Xem §12 |
 
 ### 1.5. Nền tảng mà v2 sẽ dựa vào
 
-| Thứ | Trạng thái đo được | Ý nghĩa cho v2 |
-|---|---|---|
-| `MediaStore` (`none`/`local`/`gcs`/`s3`) | Có `put`/`get`/`check` | #223 sở hữu; v2 **không** dựng kho thứ hai |
-| `TransportEvidenceService` | Đã bọc `MediaStore`, khoá đục, chặn theo content-type + dung lượng | Chỗ cắm sẵn cho ảnh chứng cứ vị trí |
-| Hatchet (`apps/api/src/workflow/**`) | Có adapter + outbox + worker | Dùng cho trích xuất OCR nền, **không** giữ sự thật nghiệp vụ |
-| OTel + `BusinessDecision` ledger | Đang chạy | Mọi quyết định rủi ro của v2 phải có **mã lý do**, không phải câu chữ |
-| `CAPABILITY_IDS` | **enum đóng** trong `packages/tenant` | Thêm capability v2 phải sửa enum + gói khách; không gate được cái chưa tồn tại |
-| Địa không gian / GPS | **Không có một dòng nào** | Không `latitude`, không `geofence`, không `TelematicsPort`. Guardrail `NO_DIRECT_VENDOR_GPS_SDK_IN_DOMAIN` hôm nay đúng vì *chưa ai viết gì*, không vì có cổng |
+| Thứ                                      | Trạng thái đo được                                                 | Ý nghĩa cho v2                                                                                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MediaStore` (`none`/`local`/`gcs`/`s3`) | Có `put`/`get`/`check`                                             | #223 sở hữu; v2 **không** dựng kho thứ hai                                                                                                                     |
+| `TransportEvidenceService`               | Đã bọc `MediaStore`, khoá đục, chặn theo content-type + dung lượng | Chỗ cắm sẵn cho ảnh chứng cứ vị trí                                                                                                                            |
+| Hatchet (`apps/api/src/workflow/**`)     | Có adapter + outbox + worker                                       | Dùng cho trích xuất OCR nền, **không** giữ sự thật nghiệp vụ                                                                                                   |
+| OTel + `BusinessDecision` ledger         | Đang chạy                                                          | Mọi quyết định rủi ro của v2 phải có **mã lý do**, không phải câu chữ                                                                                          |
+| `CAPABILITY_IDS`                         | **enum đóng** trong `packages/tenant`                              | Thêm capability v2 phải sửa enum + gói khách; không gate được cái chưa tồn tại                                                                                 |
+| Địa không gian / GPS                     | **Không có một dòng nào**                                          | Không `latitude`, không `geofence`, không `TelematicsPort`. Guardrail `NO_DIRECT_VENDOR_GPS_SDK_IN_DOMAIN` hôm nay đúng vì _chưa ai viết gì_, không vì có cổng |
 
 ---
 
@@ -125,8 +125,8 @@ Mỗi phát hiện ghi: **cái lộ trình nói** → **cái đo được** → 
 
 `VT-041` (T0 §7, trạng thái `CONFIRMED`, dẫn tr.5 §6 của nguồn khách):
 
-> *Lái xe **không trả tiền mặt mà ký nhận (ký nợ)** tại cây xăng; công ty thanh toán thẳng cho cây
-> xăng theo kỳ sau khi đối chiếu.*
+> _Lái xe **không trả tiền mặt mà ký nhận (ký nợ)** tại cây xăng; công ty thanh toán thẳng cho cây
+> xăng theo kỳ sau khi đối chiếu._
 
 Và mã đã làm đúng thế từ T4 (`apps/api/src/transport/fuel/fuel.service.ts:973`):
 
@@ -140,7 +140,7 @@ mà #229 §6 mô tả là đường **đã có sẵn**.
 Thứ còn lại là `DRIVER_CASH` — một nhánh `DERIVED_DESIGN`, **không có sự kiện T0 nào đòi**. Nó tồn
 tại vì một lần đổ dầu ở cây xăng ngoài hợp đồng là chuyện có thật.
 
-**Phải làm gì:** *không* xoá `DRIVER_CASH` (xoá là phá dữ liệu UAT đang có và cắt một đường vận
+**Phải làm gì:** _không_ xoá `DRIVER_CASH` (xoá là phá dữ liệu UAT đang có và cắt một đường vận
 hành thật). Thay vào đó **đưa nó ra sau một chính sách của gói khách**, mặc định **cấm**, và khi
 cấm thì cổng nằm ở tầng miền có mã lý do, không phải ở giao diện. Đây là tranche nhỏ nhất thoả mãn
 §6 mà không phá gì — xem §10.
@@ -163,12 +163,12 @@ Không nhãn nào nói "lái xe nợ công ty". `GD-12` đã tắt hẳn đườ
 muốn — và bình luận trong schema nói rõ vì sao nó không phải một cột `partnerType`. Đa vai
 `CARRIER` ⟂ `ORDER_REFERRER` **đã chạy**.
 
-Cái *không* có: một tổ chức vừa là khách thuê vừa là nhà xe phải tồn tại **hai hàng ở hai bảng**
+Cái _không_ có: một tổ chức vừa là khách thuê vừa là nhà xe phải tồn tại **hai hàng ở hai bảng**
 (`TransportCustomer` + `TransportPartner`). Cây xăng là bảng thứ ba.
 
 Nhưng việc tách đó **không phải sơ suất** — schema ghi lý do: T1 §9.1 xếp năm luồng công nợ thành
-năm sổ, và nguồn của chúng không đồng nhất; `PARTNER_CARRIER`/`PARTNER_COMMISSION` là hai *vai* của
-một đối tác, còn `FUEL` là một *nguồn riêng* đóng bằng **một bảng kê** thay vì một kỳ đối tác.
+năm sổ, và nguồn của chúng không đồng nhất; `PARTNER_CARRIER`/`PARTNER_COMMISSION` là hai _vai_ của
+một đối tác, còn `FUEL` là một _nguồn riêng_ đóng bằng **một bảng kê** thay vì một kỳ đối tác.
 
 **Phải làm gì:** **không gộp ba bảng**. Gộp là dời FK của các bảng tài chính đang có dữ liệu thật —
 đắt, rủi ro, và phá chính lý do ba bảng tồn tại. Đường cộng thêm đúng là một **xương sống danh
@@ -181,22 +181,22 @@ tổ chức về sau.
 #229 §1 đòi `VehicleRun` + `RunLeg` với `loaded | empty/deadhead` và bộ chỉ số km rỗng / tỷ lệ rỗng.
 
 Đo được trong T0: **không có `VT-*` nào** nói về chiều về, chạy rỗng, hay km rỗng. `VT-021` liệt kê
-thông tin chuyến và dừng ở *điểm đi/điểm đến*. Mục §14 `MISSING` của T0 cũng **không** liệt kê nó —
+thông tin chuyến và dừng ở _điểm đi/điểm đến_. Mục §14 `MISSING` của T0 cũng **không** liệt kê nó —
 tức đây không phải "tài liệu chưa nhận", mà là **chưa ai từng nêu**.
 
 `GD-05` đã chốt v1 một điểm đi / một điểm đến, và ghi sẵn chi phí đảo ngược **trung bình**.
 
-Chính #229 đặt ra luật này cho R0: *"R0 must not claim customer truth where owner has not supplied
-it."* Luật đó áp cho **cả #229**. Chủ sở hữu hoàn toàn có quyền cấp một sự kiện mới — nhưng nó phải
+Chính #229 đặt ra luật này cho R0: _"R0 must not claim customer truth where owner has not supplied
+it."_ Luật đó áp cho **cả #229**. Chủ sở hữu hoàn toàn có quyền cấp một sự kiện mới — nhưng nó phải
 được ghi **thành một dòng có mã** ở T0 hoặc thành một `GD-xx`, trước khi thành một cột.
 
 **Phải làm gì:** **không** đưa Order/Run/Leg vào tranche đầu. Xem `Q-01` ở §7 — câu trả lời quyết
-định `RunLeg` là *bảng con của chuyến* hay *chuyến là bảng con của Run*. Hai hình dạng đó khác nhau
+định `RunLeg` là _bảng con của chuyến_ hay _chuyến là bảng con của Run_. Hai hình dạng đó khác nhau
 về gốc, và chọn sai thì lần sửa thứ hai đắt hơn lần đầu nhiều lần.
 
 ### `F-05` — Proof/GPS mâu thuẫn trực diện với T1 §15 và `GD-17`
 
-T1 §15 liệt kê **non-goal #2: "Hệ thống theo dõi GPS"**. `GD-17` chốt *"Không GPS trong demo"*, và
+T1 §15 liệt kê **non-goal #2: "Hệ thống theo dõi GPS"**. `GD-17` chốt _"Không GPS trong demo"_, và
 guardrail `NO_DIRECT_VENDOR_GPS_SDK_IN_DOMAIN` được đánh dấu "cưỡng chế được ngay" — nhưng đo lại
 thì lý do nó cưỡng chế được là **chưa ai viết một dòng nào**: toàn repo không có `latitude`,
 `longitude`, `geofence`, hay `TelematicsPort`.
@@ -209,31 +209,31 @@ việc đảo. Cho tới lúc đó, T1 vẫn đúng với cái đang chạy.
 
 ### `F-06` — `ExpenseClaim` duyệt-một-phần là ẩn số do **chính #230 liệt kê**
 
-#229 §9 đòi vòng đời `PENDING_REVIEW → APPROVED | REJECTED | PARTIALLY_APPROVED`, giữ cả *số đề
-nghị* lẫn *số được duyệt*.
+#229 §9 đòi vòng đời `PENDING_REVIEW → APPROVED | REJECTED | PARTIALLY_APPROVED`, giữ cả _số đề
+nghị_ lẫn _số được duyệt_.
 
 Nhưng #230 §F đặt "partial approval of expenses" vào danh sách **câu hỏi cần B trả lời**. Và T0 có
-sẵn một xung đột chưa gỡ ở đúng vùng này: `C-02` (`VT-048` *"cảnh báo kiểm tra thủ công"* ⟂
-`VT-062` *"trừ vào lương... nếu thiếu chứng từ"*), là lý do `GD-12` tắt đường trừ lương.
+sẵn một xung đột chưa gỡ ở đúng vùng này: `C-02` (`VT-048` _"cảnh báo kiểm tra thủ công"_ ⟂
+`VT-062` _"trừ vào lương... nếu thiếu chứng từ"_), là lý do `GD-12` tắt đường trừ lương.
 
 Viết máy trạng thái duyệt bây giờ là **khoá một luật tiền chưa ai quyết** — đúng nghĩa STOP
 condition #1 của #229 nếu làm.
 
 **Phải làm gì:** hoãn tới khi có câu trả lời (`Q-04`). Đường hiện tại (`TripExpense` + `REVERSAL`)
-vẫn ghi được mọi khoản chi và sửa được mọi sai sót; nó chỉ thiếu *cổng duyệt trước khi vào giá
-thành*, không thiếu *khả năng ghi*.
+vẫn ghi được mọi khoản chi và sửa được mọi sai sót; nó chỉ thiếu _cổng duyệt trước khi vào giá
+thành_, không thiếu _khả năng ghi_.
 
 ### `F-07` — Xe đầu kéo ở Việt Nam **đã bắt buộc có hộp GPS hợp quy từ 01/01/2025**
 
 Đây là phát hiện làm đổi thứ tự cả R2–R3.
 
-| Văn bản | Hiệu lực | Nội dung |
-|---|---|---|
-| Luật TTATGT đường bộ 2024 (36/2024/QH15) Đ.35 k.2 | 01/01/2025 | Xe kinh doanh vận tải phải có thiết bị giám sát hành trình **và** thiết bị ghi nhận hình ảnh người lái |
-| **Nghị định 158/2024/NĐ-CP** | 01/01/2025 | Thay `NĐ 10/2020`; **gọi đích danh xe đầu kéo** |
-| **QCVN 06:2024/BCA** (TT 62/2024/TT-BCA) | 01/01/2025 | Quy chuẩn kỹ thuật, thay `QCVN 31:2014/BGTVT`; thiết bị cũ phải nâng cấp trước **12/2027** |
-| Thông tư 71/2024/TT-BCA | 01/01/2025 | Dữ liệu truyền thẳng về máy chủ Cục CSGT |
-| Nghị định 238/2026/NĐ-CP | **15/08/2026** | Phạt tới 5.000.000đ; làm sai lệch dữ liệu → có thể **thu hồi giấy phép kinh doanh vận tải** |
+| Văn bản                                           | Hiệu lực       | Nội dung                                                                                               |
+| ------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| Luật TTATGT đường bộ 2024 (36/2024/QH15) Đ.35 k.2 | 01/01/2025     | Xe kinh doanh vận tải phải có thiết bị giám sát hành trình **và** thiết bị ghi nhận hình ảnh người lái |
+| **Nghị định 158/2024/NĐ-CP**                      | 01/01/2025     | Thay `NĐ 10/2020`; **gọi đích danh xe đầu kéo**                                                        |
+| **QCVN 06:2024/BCA** (TT 62/2024/TT-BCA)          | 01/01/2025     | Quy chuẩn kỹ thuật, thay `QCVN 31:2014/BGTVT`; thiết bị cũ phải nâng cấp trước **12/2027**             |
+| Thông tư 71/2024/TT-BCA                           | 01/01/2025     | Dữ liệu truyền thẳng về máy chủ Cục CSGT                                                               |
+| Nghị định 238/2026/NĐ-CP                          | **15/08/2026** | Phạt tới 5.000.000đ; làm sai lệch dữ liệu → có thể **thu hồi giấy phép kinh doanh vận tải**            |
 
 Nghĩa là: **mỗi xe đầu kéo của B đã có một nguồn vị trí thứ hai, độc lập, hợp quy, do bên thứ ba
 vận hành, lưu ≥1 năm trên máy chủ nhà cung cấp** — và nó tồn tại dù chúng ta có làm gì hay không.
@@ -245,10 +245,11 @@ chống giả mạo nào**. Đó là tín hiệu chống gian lận rẻ nhất 
 **Nhưng** — và đây là chỗ phải trung thực — **không nhà cung cấp lớn nào có API công khai cho khách
 lấy dữ liệu đội xe của chính mình**. Đã kiểm: BA GPS (mở thẳng trang đăng nhập nền tảng — không một
 chữ nào về API/tích hợp/xuất dữ liệu), VNPT Tracking, Viettel Vtracking, Adsun: chỉ có trang tiếp
-thị. Vietmap **có** API công khai nhưng đó là **sản phẩm bản đồ** (routing/geocoding), *không* phải
+thị. Vietmap **có** API công khai nhưng đó là **sản phẩm bản đồ** (routing/geocoding), _không_ phải
 cổng lấy telemetry của thiết bị GSHT đã lắp — hai thứ khác nhau, đừng nhầm.
 
 **Phải làm gì:** ba việc, theo thứ tự.
+
 1. Hỏi B: đang dùng nhà cung cấp nào, có tài khoản dashboard không (`Q-02`).
 2. Khai `VehicleTelematicsPort` như một **cổng có hiện thực đầu tiên là nhập tay/CSV**, không phải
    một cổng chờ API không tồn tại.
@@ -258,12 +259,12 @@ cổng lấy telemetry của thiết bị GSHT đã lắp — hai thứ khác nh
 
 ### `F-08` — Trả lương dồn nhiều tháng **rất có thể là vi phạm pháp luật lao động**
 
-#229 §11 nói: *"B may allow drivers to accumulate salary for several months and receive one large
-payment later"*, và dựng cả một tầng phân bổ thanh toán trên tiền đề đó.
+#229 §11 nói: _"B may allow drivers to accumulate salary for several months and receive one large
+payment later"_, và dựng cả một tầng phân bổ thanh toán trên tiền đề đó.
 
 Bộ luật Lao động 2019:
 
-- **Điều 94** — trả lương *trực tiếp, đầy đủ, đúng hạn*;
+- **Điều 94** — trả lương _trực tiếp, đầy đủ, đúng hạn_;
 - **Điều 97 k.1** — người hưởng lương tháng được trả **ít nhất mỗi tháng một lần**, vào một ngày cố
   định đã thoả thuận;
 - **Điều 97 k.4** — bất khả kháng thì chậm **tối đa 30 ngày**, và chậm **từ 15 ngày trở lên** thì
@@ -272,7 +273,7 @@ Bộ luật Lao động 2019:
 Tức là: dồn lương **nhiều tháng** rồi trả một cục không phải một lựa chọn vận hành — nó là hành vi
 có trần 30 ngày và có lãi phạt.
 
-**Phải làm gì:** **giữ** phần cấu trúc của §11 (tách *ghi nhận* khỏi *chi trả* là đúng, và cần cho
+**Phải làm gì:** **giữ** phần cấu trúc của §11 (tách _ghi nhận_ khỏi _chi trả_ là đúng, và cần cho
 khoản hoàn ứng ở `F-02`), **bỏ** phần tiền đề (coi việc dồn tháng là dòng chảy bình thường). Thay
 vào đó, khi một phiếu lương quá hạn, hệ thống phải **nói ra** — một cảnh báo có mã lý do
 (`WAGE_PAYMENT_OVERDUE`), không phải một cột im lặng. Đây là việc của R5; ghi lại ở đây để R5 không
@@ -283,7 +284,7 @@ Kèm hai điểm nữa cùng gốc, đã đổi **chín tuần trước**:
 - Trần **4 giờ lái liên tục** vẫn còn (Đ.64 Luật 36/2024), nhưng Luật 118/2025/QH15 (hiệu lực
   **01/07/2026**) **thêm ngoại lệ bất khả kháng** — nếu sau này có cảnh báo giờ lái thì phải ghi
   được lý do ngoại lệ.
-- Trần **10 giờ/ngày và 48 giờ/tuần** *dành riêng cho lái xe* đã bị **bỏ** từ 01/07/2026; giờ làm
+- Trần **10 giờ/ngày và 48 giờ/tuần** _dành riêng cho lái xe_ đã bị **bỏ** từ 01/07/2026; giờ làm
   quay về trần chung của Bộ luật Lao động (Đ.105, Đ.107). Bất kỳ luật cứng nào viết theo hai con số
   cũ **từ hôm nay là sai**.
 
@@ -291,7 +292,7 @@ Kèm hai điểm nữa cùng gốc, đã đổi **chín tuần trước**:
 
 `docs/khach-hang/van-tai-viet/ban-giao/bat-dau-nhanh.md:68` viết:
 
-> *Xe có lệnh bảo dưỡng đang mở bị khoá khỏi việc phân chuyến.*
+> _Xe có lệnh bảo dưỡng đang mở bị khoá khỏi việc phân chuyến._
 
 Đo được: `TripService.assign()` (`apps/api/src/transport/trips/trip.service.ts:156`) kiểm **đúng ba
 thứ** — chuyến chưa ở điểm cuối, xe tồn tại, lái xe tồn tại. Nó **không** tra lệnh bảo dưỡng, và
@@ -301,8 +302,8 @@ chỉ có **một** người gọi: `asset-compliance-read.service.ts` — một
 Nói cách khác: hệ thống **suy ra** trạng thái và **cảnh báo**, nó không **chặn**.
 
 Đây vừa là một lỗi tài liệu phải sửa, vừa là bằng chứng cụ thể cho câu #229 §12 nói chung chung
-("bảo dưỡng chưa khớp thực tế"). Và nó chạm đúng một ẩn số mà #230 §F đã liệt kê: *"what legally
-blocks dispatch vs merely warns"*.
+("bảo dưỡng chưa khớp thực tế"). Và nó chạm đúng một ẩn số mà #230 §F đã liệt kê: _"what legally
+blocks dispatch vs merely warns"_.
 
 **Phải làm gì:** sửa **tài liệu** cho đúng cái mã làm (rẻ, và đang nói sai với khách). **Không**
 thêm cổng chặn cho tới khi `Q-05` có câu trả lời — thêm một cổng chặn sai chỗ trong nghiệp vụ vận
@@ -322,7 +323,7 @@ Và PVOIL Easy (ký hợp đồng với một đơn vị, đổ ở mọi trạm
 Tức là dữ liệu đổ dầu của B **không bị kẹt trên giấy**. Nó tồn tại dưới dạng XML có cấu trúc, phát
 tại thời điểm bán.
 
-**Phải làm gì:** đảo thứ tự trong R4. Đường **thứ nhất** là *nhập hoá đơn điện tử* (có cấu trúc,
+**Phải làm gì:** đảo thứ tự trong R4. Đường **thứ nhất** là _nhập hoá đơn điện tử_ (có cấu trúc,
 chính xác, không cần suy đoán). OCR/VLM lùi về đúng vai của nó: đọc **ảnh phiếu lái xe chụp tại
 chỗ** để đối chiếu thời gian thực (`VT-042`) và làm đường lùi khi không có hoá đơn. Cổng
 `FuelStatementSourcePort` đã có sẵn — thêm một adapter hoá đơn điện tử rẻ hơn nhiều so với đuổi
@@ -335,14 +336,14 @@ Luật BVDLCN 91/2025/QH15 (hiệu lực 01/01/2026) + NĐ 356/2025/NĐ-CP (thay
 trí được nhiều nguồn pháp lý thứ cấp xếp vào nhóm **nhạy cảm**; ảnh giao hàng có mặt người thứ ba
 chạm tới dữ liệu sinh trắc của người **không phải nhân viên**.
 
-Cơ sở xử lý hợp pháp có thể là *thực hiện thoả thuận* (hợp đồng lao động / nội quy lao động) —
+Cơ sở xử lý hợp pháp có thể là _thực hiện thoả thuận_ (hợp đồng lao động / nội quy lao động) —
 nhưng **phải được ghi thành văn bản**, không mặc nhiên.
 
 T0 §14 `MISSING` đã ghi sẵn: **"Văn bản đồng ý xử lý dữ liệu cá nhân (lái xe)" — chưa có.**
 
 Kèm một hệ quả cho `F-10`: gửi **ảnh** phiếu ra một API nước ngoài là **chuyển dữ liệu qua biên
 giới** nếu ảnh có mặt người/biển số, kéo theo nghĩa vụ hồ sơ đánh giá tác động của NĐ 356/2025. Nội
-dung *chữ* trên phiếu (tên cây xăng, số lít, tiền) thì không phải dữ liệu cá nhân. Cách rẻ nhất để
+dung _chữ_ trên phiếu (tên cây xăng, số lít, tiền) thì không phải dữ liệu cá nhân. Cách rẻ nhất để
 câu hỏi này biến mất: **cắt ảnh về đúng khung tờ phiếu ngay trên máy lái xe** trước khi gửi đi.
 
 **Phải làm gì:** đây là **điều kiện chặn của R2/R3**, không phải của R1. Không lưu một điểm toạ độ
@@ -368,43 +369,43 @@ Nguyên tắc chấm: **tính di động sang máy chủ của khách** (#224) v
 
 ### 3.1. Địa không gian — `POSTGIS = ADOPT, nhưng chỉ khi R2 mở`
 
-| Hạng mục | Kết luận | Bằng chứng |
-|---|---|---|
-| Phiên bản | PostGIS **3.6.x** (3.6.3 — 14/04/2026); 3.7.0rc1 — 24/08/2026 chưa GA | postgis.net/news |
-| Tương thích | PostGIS 3.6.0 cần PostgreSQL **12–18**; ta đang ở **PG16** ⇒ nằm giữa dải, **không có rủi ro phiên bản** | Release notes 3.6.0 |
-| Cài đặt | Đổi image `postgres:16` → **`postgis/postgis:16-3.6`**, giữ nguyên volume dữ liệu. `CREATE EXTENSION postgis` cần **superuser** | docker-postgis, PostgreSQL docs |
-| Rủi ro dữ liệu | **Gần bằng không** — chỉ thêm kiểu/hàm/`spatial_ref_sys`; không đụng một bảng nào đang có | PostgreSQL `CREATE EXTENSION` |
-| Kiểu cột | **`geography(Point, 4326)`** | Việt Nam **vắt qua hai múi UTM** VN-2000 (EPSG:3405 zone 48N ⟂ EPSG:3406 zone 49N, ranh 108°E). Không có **một** CRS chiếu nào đúng cho cả nước ⇒ `geometry` + chiếu là sai từ gốc |
-| Truy vấn geofence | `ST_DWithin(geog, geog, mét)` — đơn vị **luôn là mét** với geography, và nó **dùng chỉ mục**; chính PostGIS khuyến nghị nó thay cho `ST_Distance(...) < r` | postgis.net/docs/ST_DWithin |
-| Chỉ mục | **GiST** trên bảng nóng. **SP-GiST không hỗ trợ KNN trên geography** — chọn nó là mất luôn truy vấn "xe nào gần điểm này nhất". BRIN chỉ đúng trên phân vùng lạnh đã sắp xếp vật lý | Crunchy Data, PostgreSQL GiST docs |
-| Bẫy | Chỉ mục một phần `WHERE recorded_at > now() - interval '7 days'` **không** là cửa sổ trượt — Postgres đóng băng `now()` lúc build. Đúng cách là **phân vùng theo thời gian** | PostgreSQL semantics |
-| Nén tuyến | `ST_Simplify` (Douglas-Peucker) đủ cho **một** LINESTRING chuyến; `ST_SimplifyPreserveTopology` chậm hơn và chỉ cần khi nhiều hình phải khớp nhau | postgis.net/docs |
-| Đường nhẹ hơn | `cube` + `earthdistance` (có sẵn trong Postgres, **có** chỉ mục GiST qua `earth_box()`) — nhưng chỉ hình cầu, **không polygon, không LINESTRING**. Haversine tay **không dùng được chỉ mục** ⇒ chỉ đúng cho phép so một cặp điểm, không đúng cho tìm kiếm | PostgreSQL earthdistance docs |
+| Hạng mục          | Kết luận                                                                                                                                                                                                                                                  | Bằng chứng                                                                                                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phiên bản         | PostGIS **3.6.x** (3.6.3 — 14/04/2026); 3.7.0rc1 — 24/08/2026 chưa GA                                                                                                                                                                                     | postgis.net/news                                                                                                                                                                   |
+| Tương thích       | PostGIS 3.6.0 cần PostgreSQL **12–18**; ta đang ở **PG16** ⇒ nằm giữa dải, **không có rủi ro phiên bản**                                                                                                                                                  | Release notes 3.6.0                                                                                                                                                                |
+| Cài đặt           | Đổi image `postgres:16` → **`postgis/postgis:16-3.6`**, giữ nguyên volume dữ liệu. `CREATE EXTENSION postgis` cần **superuser**                                                                                                                           | docker-postgis, PostgreSQL docs                                                                                                                                                    |
+| Rủi ro dữ liệu    | **Gần bằng không** — chỉ thêm kiểu/hàm/`spatial_ref_sys`; không đụng một bảng nào đang có                                                                                                                                                                 | PostgreSQL `CREATE EXTENSION`                                                                                                                                                      |
+| Kiểu cột          | **`geography(Point, 4326)`**                                                                                                                                                                                                                              | Việt Nam **vắt qua hai múi UTM** VN-2000 (EPSG:3405 zone 48N ⟂ EPSG:3406 zone 49N, ranh 108°E). Không có **một** CRS chiếu nào đúng cho cả nước ⇒ `geometry` + chiếu là sai từ gốc |
+| Truy vấn geofence | `ST_DWithin(geog, geog, mét)` — đơn vị **luôn là mét** với geography, và nó **dùng chỉ mục**; chính PostGIS khuyến nghị nó thay cho `ST_Distance(...) < r`                                                                                                | postgis.net/docs/ST_DWithin                                                                                                                                                        |
+| Chỉ mục           | **GiST** trên bảng nóng. **SP-GiST không hỗ trợ KNN trên geography** — chọn nó là mất luôn truy vấn "xe nào gần điểm này nhất". BRIN chỉ đúng trên phân vùng lạnh đã sắp xếp vật lý                                                                       | Crunchy Data, PostgreSQL GiST docs                                                                                                                                                 |
+| Bẫy               | Chỉ mục một phần `WHERE recorded_at > now() - interval '7 days'` **không** là cửa sổ trượt — Postgres đóng băng `now()` lúc build. Đúng cách là **phân vùng theo thời gian**                                                                              | PostgreSQL semantics                                                                                                                                                               |
+| Nén tuyến         | `ST_Simplify` (Douglas-Peucker) đủ cho **một** LINESTRING chuyến; `ST_SimplifyPreserveTopology` chậm hơn và chỉ cần khi nhiều hình phải khớp nhau                                                                                                         | postgis.net/docs                                                                                                                                                                   |
+| Đường nhẹ hơn     | `cube` + `earthdistance` (có sẵn trong Postgres, **có** chỉ mục GiST qua `earth_box()`) — nhưng chỉ hình cầu, **không polygon, không LINESTRING**. Haversine tay **không dùng được chỉ mục** ⇒ chỉ đúng cho phép so một cặp điểm, không đúng cho tìm kiếm | PostgreSQL earthdistance docs                                                                                                                                                      |
 
 **Phán quyết:** PostGIS là lựa chọn đúng **khi có dữ liệu để lưu**. Hôm nay chưa có một điểm toạ độ
 nào, và `F-11` chặn việc lưu. Nên: **không thêm PostGIS trong R1.**
 
 ### 3.2. Bản đồ — `MAPS = MapLibre + PMTiles tự dựng`
 
-| Hạng mục | Kết luận |
-|---|---|
-| Renderer | **MapLibre GL JS 6.7.0**, **BSD-3-Clause**; MapLibre Native BSD-2. Không token, không tài khoản, không hạn mức khi tự phục vụ tile. Đúng nghĩa không khoá nhà cung cấp |
-| Tile | **PMTiles tự dựng** (Protomaps; hiện thực BSD-3, **đặc tả CC0**). Một **tệp tĩnh** phục vụ bằng HTTP range request — **không tiến trình tile-server nào phải chạy**. Đây là điểm quyết định cho một VM nhỏ |
-| Kích thước | `vietnam-latest.osm.pbf` ≈ **310 MB** *(số lấy từ bản cache của Geofabrik, ba lần fetch trực tiếp đều lỗi — **kiểm lại trước khi mua đĩa**)*. Tile dựng ra **ước tính ~215 MB** (suy từ tỷ lệ Hà Lan 1,3 GB → 910 MB; **là ước tính, hãy dựng rồi đo**) |
-| Không dùng | **Tile raster của OpenStreetMap.** Chính sách của OSMF **cấm tải hàng loạt và cache offline**, và ghi rõ dịch vụ thương mại có thể bị chặn bất cứ lúc nào |
-| Cẩn trọng | MapTiler/Stadia gói miễn phí **chỉ phi thương mại**; bản tự dựng của MapTiler bị khoá sau đăng ký trả phí |
-| Geocoding | Nominatim/Photon tự dựng: **kém** với địa chỉ hẻm/ngõ Việt Nam. Một benchmark (arXiv 2609.01612) đo địa chỉ "lộn xộn" làm geocoder mã nguồn mở mất tới ~25 điểm recall, và bản thương mại hơn tới ~49 điểm. Goong.io là bản Việt hoá tốt nhất — nhưng đưa địa chỉ khách ra bên thứ ba, tức quay lại đúng câu hỏi `F-11` |
-| Định tuyến | OSRM (BSD-2) / Valhalla (MIT) / GraphHopper (Apache-2.0) — cả ba đều hợp lý ở quy mô một nước; con số RAM công bố đều là quy mô **hành tinh** và không áp dụng. **Dựng thử nửa ngày rồi đo**, đừng nghiên cứu thêm |
+| Hạng mục   | Kết luận                                                                                                                                                                                                                                                                                                                |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Renderer   | **MapLibre GL JS 6.7.0**, **BSD-3-Clause**; MapLibre Native BSD-2. Không token, không tài khoản, không hạn mức khi tự phục vụ tile. Đúng nghĩa không khoá nhà cung cấp                                                                                                                                                  |
+| Tile       | **PMTiles tự dựng** (Protomaps; hiện thực BSD-3, **đặc tả CC0**). Một **tệp tĩnh** phục vụ bằng HTTP range request — **không tiến trình tile-server nào phải chạy**. Đây là điểm quyết định cho một VM nhỏ                                                                                                              |
+| Kích thước | `vietnam-latest.osm.pbf` ≈ **310 MB** _(số lấy từ bản cache của Geofabrik, ba lần fetch trực tiếp đều lỗi — **kiểm lại trước khi mua đĩa**)_. Tile dựng ra **ước tính ~215 MB** (suy từ tỷ lệ Hà Lan 1,3 GB → 910 MB; **là ước tính, hãy dựng rồi đo**)                                                                 |
+| Không dùng | **Tile raster của OpenStreetMap.** Chính sách của OSMF **cấm tải hàng loạt và cache offline**, và ghi rõ dịch vụ thương mại có thể bị chặn bất cứ lúc nào                                                                                                                                                               |
+| Cẩn trọng  | MapTiler/Stadia gói miễn phí **chỉ phi thương mại**; bản tự dựng của MapTiler bị khoá sau đăng ký trả phí                                                                                                                                                                                                               |
+| Geocoding  | Nominatim/Photon tự dựng: **kém** với địa chỉ hẻm/ngõ Việt Nam. Một benchmark (arXiv 2609.01612) đo địa chỉ "lộn xộn" làm geocoder mã nguồn mở mất tới ~25 điểm recall, và bản thương mại hơn tới ~49 điểm. Goong.io là bản Việt hoá tốt nhất — nhưng đưa địa chỉ khách ra bên thứ ba, tức quay lại đúng câu hỏi `F-11` |
+| Định tuyến | OSRM (BSD-2) / Valhalla (MIT) / GraphHopper (Apache-2.0) — cả ba đều hợp lý ở quy mô một nước; con số RAM công bố đều là quy mô **hành tinh** và không áp dụng. **Dựng thử nửa ngày rồi đo**, đừng nghiên cứu thêm                                                                                                      |
 
 ### 3.3. Chống giả mạo trên thiết bị — `ANDROID_INTEGRITY` / `IOS_INTEGRITY`
 
-| Tín hiệu | Nó chứng minh gì | Nó **không** bắt được gì |
-|---|---|---|
-| `Location.isMock()` (**API 31**, thay `isFromMockProvider()` đã lỗi thời) | Bản định vị đến từ **test provider** đã đăng ký qua `addTestProvider` — tức Developer Options → "Chọn ứng dụng vị trí giả" | Mọi thứ khác. Có **module đang phát hành công khai** ép chính hai hàm này trả `false` và quét sạch cờ ẩn trong `Bundle` (LSPosed: `UnMock GPS`, `Hide Mock Location`, `XposedFakeLocation`). ROM tuỳ biến sửa thẳng `frameworks/base` |
-| Play Integrity | Ba trục **tách rời**: `appRecognitionVerdict` (bản này có phải bản Play biết không), `appLicensingVerdict` (người dùng có quyền không), `deviceRecognitionVerdict` (thiết bị có toàn vẹn không) | **Không** đòi niêm yết công khai — app chưa liên kết Play vẫn gọi được bằng `setCloudProjectNumber()`, và **closed testing** (200 danh sách × 2.000 người, không niêm yết, không giới hạn thời gian) là đường phát hành nội bộ chính thức. APK cài tay chỉ làm hai trục ĐẦU thành `UNLICENSED`/`UNRECOGNIZED_VERSION`; trục **thiết bị vẫn dùng được**. Chỉ hỏng hẳn khi máy **không có Play Services** (`PLAY_SERVICES_NOT_FOUND`). Hạn mức mặc định 10.000 lượt/ngày — thừa xa cho một đội xe |
-| Key attestation phần cứng (Android) | Khoá thật sự nằm trong phần cứng | Không nói gì về vị trí. Và **không có plugin Flutter/RN nào** phơi ra chuỗi chứng chỉ — phải viết module native |
-| App Attest / DeviceCheck (iOS) | Phiên bản ứng dụng là thật, chạy trên thiết bị Apple thật | **Không** phát hiện jailbreak, và **không** phát hiện giả mạo vị trí |
-| Giả mạo tầng vô tuyến (SDR) | — | **Không cờ phần mềm nào bắt được, theo thiết kế.** Máy thu GPS báo trung thực một fix tính từ tín hiệu giả. Nguồn bình duyệt: Chan et al., *NAVIGATION* 69(3), 2022 — và chính bài đó khuyên đối chiếu chéo GNSS ⟂ vị trí mạng, và bất thường AGC/C-N0 |
+| Tín hiệu                                                                  | Nó chứng minh gì                                                                                                                                                                                | Nó **không** bắt được gì                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Location.isMock()` (**API 31**, thay `isFromMockProvider()` đã lỗi thời) | Bản định vị đến từ **test provider** đã đăng ký qua `addTestProvider` — tức Developer Options → "Chọn ứng dụng vị trí giả"                                                                      | Mọi thứ khác. Có **module đang phát hành công khai** ép chính hai hàm này trả `false` và quét sạch cờ ẩn trong `Bundle` (LSPosed: `UnMock GPS`, `Hide Mock Location`, `XposedFakeLocation`). ROM tuỳ biến sửa thẳng `frameworks/base`                                                                                                                                                                                                                                                           |
+| Play Integrity                                                            | Ba trục **tách rời**: `appRecognitionVerdict` (bản này có phải bản Play biết không), `appLicensingVerdict` (người dùng có quyền không), `deviceRecognitionVerdict` (thiết bị có toàn vẹn không) | **Không** đòi niêm yết công khai — app chưa liên kết Play vẫn gọi được bằng `setCloudProjectNumber()`, và **closed testing** (200 danh sách × 2.000 người, không niêm yết, không giới hạn thời gian) là đường phát hành nội bộ chính thức. APK cài tay chỉ làm hai trục ĐẦU thành `UNLICENSED`/`UNRECOGNIZED_VERSION`; trục **thiết bị vẫn dùng được**. Chỉ hỏng hẳn khi máy **không có Play Services** (`PLAY_SERVICES_NOT_FOUND`). Hạn mức mặc định 10.000 lượt/ngày — thừa xa cho một đội xe |
+| Key attestation phần cứng (Android)                                       | Khoá thật sự nằm trong phần cứng                                                                                                                                                                | Không nói gì về vị trí. Và **không có plugin Flutter/RN nào** phơi ra chuỗi chứng chỉ — phải viết module native                                                                                                                                                                                                                                                                                                                                                                                 |
+| App Attest / DeviceCheck (iOS)                                            | Phiên bản ứng dụng là thật, chạy trên thiết bị Apple thật                                                                                                                                       | **Không** phát hiện jailbreak, và **không** phát hiện giả mạo vị trí                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Giả mạo tầng vô tuyến (SDR)                                               | —                                                                                                                                                                                               | **Không cờ phần mềm nào bắt được, theo thiết kế.** Máy thu GPS báo trung thực một fix tính từ tín hiệu giả. Nguồn bình duyệt: Chan et al., _NAVIGATION_ 69(3), 2022 — và chính bài đó khuyên đối chiếu chéo GNSS ⟂ vị trí mạng, và bất thường AGC/C-N0                                                                                                                                                                                                                                          |
 
 **Phán quyết:** giữ nguyên nguyên tắc #229 §4 — **không bao giờ tuyên bố chống được GPS giả**. Và
 `F-07` nói thêm một điều mạnh hơn: tín hiệu đối chiếu chéo tốt nhất **không nằm trên điện thoại lái
@@ -412,7 +413,7 @@ xe**, nó nằm ở hộp GSHT hợp quy đã gắn trên xe.
 
 Kèm một cảnh báo vận hành cho bất kỳ app nào sau này: **chính sách Google Play về vị trí nền đang
 siết** — công cụ khai báo mở **11/2026**, hạn tuân thủ **27/01/2027**, và văn bản chính sách yêu cầu
-truy cập vị trí qua foreground service phải *"user-initiated and temporary"*. Một dịch vụ bám vị trí
+truy cập vị trí qua foreground service phải _"user-initiated and temporary"_. Một dịch vụ bám vị trí
 suốt ca lái **không** hiển nhiên là "tạm thời"; phải đóng gói theo mẫu "navigation / ride-share
 tracking" mà Google có liệt kê, và phải qua duyệt.
 
@@ -424,7 +425,7 @@ nghiên cứu lại:
 - **Nếu** cần app: **React Native + Expo SDK 57 + EAS Build** (không phải Expo Go — vị trí nền,
   camera và SQLite đều không chạy thật trong Expo Go). Lý do quyết định là **cùng ngôn ngữ với
   backend NestJS**: schema `zod` và kiểu DTO dùng chung được, Dart thì không. Và `@expo/app-integrity`
-  là gói **duy nhất có nhà cung cấp đứng sau** bọc cả Play Integrity lẫn App Attest — dù còn *alpha*.
+  là gói **duy nhất có nhà cung cấp đứng sau** bọc cả Play Integrity lẫn App Attest — dù còn _alpha_.
 - **Chi phí ẩn phải nói ra:** bám vị trí nền **đáng tin** trên Xiaomi/Oppo/Vivo/Samsung — đúng bốn
   hãng phủ thị trường Việt Nam — trên thực tế phải mua SDK đóng của Transistor Software
   (`flutter_background_geolocation` 5.7.0 ⟂ `react-native-background-geolocation` 5.5.0 là **cùng
@@ -438,13 +439,13 @@ nghiên cứu lại:
 
 ### 3.5. Trích xuất chứng từ — `VISION_OCR = ĐẢO THỨ TỰ`
 
-| Ứng viên | Giấy phép | Chi phí | Dữ liệu rời máy chủ? | Phán quyết |
-|---|---|---|---|---|
-| **Hoá đơn điện tử** (NĐ 70/2025) | — | ~0 | **Không** | **Đường thứ nhất.** Có cấu trúc, phát tại điểm bán, không suy đoán. Xem `F-10` |
-| PaddleOCR **PP-OCRv5** 3.7.0 | **Apache-2.0** | Chỉ hạ tầng; **21–31 ms/ảnh trên CPU** (benchmark của chính hãng) | **Không** | **Đường thứ hai**, tự dựng. Model 16–81 MB. Tiếng Việt `vi` **có** trong gói `latin_PP-OCRv5_mobile_rec`, nhưng **không có số đo riêng cho tiếng Việt** |
-| DeepSeek `deepseek-v4-flash-vision-exp` | API độc quyền | Rẻ nhất (~0,35–0,70 USD/1000 ảnh, ước tính) | **Có — lưu và xử lý tại Trung Quốc**, và **dùng để huấn luyện theo mặc định** | **Không dùng cho ảnh thật.** Chính `CLAUDE.md` đã ghi DeepSeek chưa nằm trong danh sách bên thứ ba được duyệt; nghiên cứu này chỉ xác nhận lý do |
-| Claude vision | API độc quyền | ~3,5–17 USD/1000 ảnh | Có (Hoa Kỳ) — **ảnh là phù du, không dùng huấn luyện** (FAQ chính thức) | Đường lùi hợp lệ nếu cần VLM đám mây |
-| PaddleOCR-VL / olmOCR | — | — | Không | **Loại** — hãng của chính PaddleOCR-VL nói không nên chạy CPU trong production; olmOCR đòi **GPU ≥12 GB VRAM** |
+| Ứng viên                                | Giấy phép      | Chi phí                                                           | Dữ liệu rời máy chủ?                                                          | Phán quyết                                                                                                                                              |
+| --------------------------------------- | -------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hoá đơn điện tử** (NĐ 70/2025)        | —              | ~0                                                                | **Không**                                                                     | **Đường thứ nhất.** Có cấu trúc, phát tại điểm bán, không suy đoán. Xem `F-10`                                                                          |
+| PaddleOCR **PP-OCRv5** 3.7.0            | **Apache-2.0** | Chỉ hạ tầng; **21–31 ms/ảnh trên CPU** (benchmark của chính hãng) | **Không**                                                                     | **Đường thứ hai**, tự dựng. Model 16–81 MB. Tiếng Việt `vi` **có** trong gói `latin_PP-OCRv5_mobile_rec`, nhưng **không có số đo riêng cho tiếng Việt** |
+| DeepSeek `deepseek-v4-flash-vision-exp` | API độc quyền  | Rẻ nhất (~0,35–0,70 USD/1000 ảnh, ước tính)                       | **Có — lưu và xử lý tại Trung Quốc**, và **dùng để huấn luyện theo mặc định** | **Không dùng cho ảnh thật.** Chính `CLAUDE.md` đã ghi DeepSeek chưa nằm trong danh sách bên thứ ba được duyệt; nghiên cứu này chỉ xác nhận lý do        |
+| Claude vision                           | API độc quyền  | ~3,5–17 USD/1000 ảnh                                              | Có (Hoa Kỳ) — **ảnh là phù du, không dùng huấn luyện** (FAQ chính thức)       | Đường lùi hợp lệ nếu cần VLM đám mây                                                                                                                    |
+| PaddleOCR-VL / olmOCR                   | —              | —                                                                 | Không                                                                         | **Loại** — hãng của chính PaddleOCR-VL nói không nên chạy CPU trong production; olmOCR đòi **GPU ≥12 GB VRAM**                                          |
 
 **Không có benchmark công khai nào** đo tiếng Việt trên **giấy in nhiệt nhàu, chụp tay, thiếu sáng**
 — trên bất kỳ ứng viên nào. SROIE/CORD/OmniDocBench đều là chứng từ phẳng, sáng, không phải tiếng
@@ -477,22 +478,22 @@ trước `Q-02`.
 
 Bảng này là **hợp đồng của sự trung thực**: cột cuối nói cái gì **vẫn phải để người xem**.
 
-| Mối đe doạ | Tín hiệu phát hiện được | Vẫn cần người |
-|---|---|---|
-| GPS giả bằng app (không root) | `isMock()`; lệch với vị trí mạng | Không — chặn được, ghi cờ |
-| GPS giả có root / LSPosed | **Không có** tín hiệu phía client đáng tin | **Có** — chỉ đối chiếu chéo với GSHT (`F-07`) mới nói được |
-| Giả mạo tầng vô tuyến (SDR) | Bất thường AGC/C-N0; lệch GNSS ⟂ mạng | **Có** |
-| Phát lại ảnh/vị trí cũ | Nonce máy chủ + hạn dùng; `capturedAt` ⟂ `receivedAt`; hash nội dung | Một phần |
-| Ảnh lấy từ thư viện thay vì chụp tại chỗ | Chụp trong app (không mở picker); EXIF; nonce | **Có** — không tuyệt đối |
-| Sửa đồng hồ máy | Máy chủ **chỉ tin `receivedAt`**; lệch quá ngưỡng thì gắn cờ | Không |
-| Gửi trùng khi offline | Khoá idempotency client + `correlationKey` unique **đã có sẵn ở miền** | Không |
-| Lái xe A đọc/ghi dữ liệu của B | **Đã chặn bằng cấu trúc**: `SELF_SCOPE_ACTIONS`, `Driver.authUserId`, quyền sở hữu phân công | Không |
-| App bị sửa / cài tay | `deviceRecognitionVerdict` rỗng khi máy đã root hoặc bị hook. Bộ công cụ cộng đồng (Play Integrity Fix + TrickyStore) **đôi khi** vượt được, nhưng mong manh và phải cập nhật liên tục | **Có** — coi đây là một điểm trong thang rủi ro, không phải cổng chặn nhị phân |
-| Mất mạng | Hàng đợi offline + huy hiệu trạng thái | Không |
-| Máy mất / dùng chung | Ràng buộc thiết bị ⟂ phiên | **Có** |
-| Rút chứng từ sau khi kế toán đã khoá | **Đã có** ở `main` từ 07/09/2026 (migration `transport_fuel_inbox_evidence_withdrawal`) | Không |
+| Mối đe doạ                               | Tín hiệu phát hiện được                                                                                                                                                                | Vẫn cần người                                                                  |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| GPS giả bằng app (không root)            | `isMock()`; lệch với vị trí mạng                                                                                                                                                       | Không — chặn được, ghi cờ                                                      |
+| GPS giả có root / LSPosed                | **Không có** tín hiệu phía client đáng tin                                                                                                                                             | **Có** — chỉ đối chiếu chéo với GSHT (`F-07`) mới nói được                     |
+| Giả mạo tầng vô tuyến (SDR)              | Bất thường AGC/C-N0; lệch GNSS ⟂ mạng                                                                                                                                                  | **Có**                                                                         |
+| Phát lại ảnh/vị trí cũ                   | Nonce máy chủ + hạn dùng; `capturedAt` ⟂ `receivedAt`; hash nội dung                                                                                                                   | Một phần                                                                       |
+| Ảnh lấy từ thư viện thay vì chụp tại chỗ | Chụp trong app (không mở picker); EXIF; nonce                                                                                                                                          | **Có** — không tuyệt đối                                                       |
+| Sửa đồng hồ máy                          | Máy chủ **chỉ tin `receivedAt`**; lệch quá ngưỡng thì gắn cờ                                                                                                                           | Không                                                                          |
+| Gửi trùng khi offline                    | Khoá idempotency client + `correlationKey` unique **đã có sẵn ở miền**                                                                                                                 | Không                                                                          |
+| Lái xe A đọc/ghi dữ liệu của B           | **Đã chặn bằng cấu trúc**: `SELF_SCOPE_ACTIONS`, `Driver.authUserId`, quyền sở hữu phân công                                                                                           | Không                                                                          |
+| App bị sửa / cài tay                     | `deviceRecognitionVerdict` rỗng khi máy đã root hoặc bị hook. Bộ công cụ cộng đồng (Play Integrity Fix + TrickyStore) **đôi khi** vượt được, nhưng mong manh và phải cập nhật liên tục | **Có** — coi đây là một điểm trong thang rủi ro, không phải cổng chặn nhị phân |
+| Mất mạng                                 | Hàng đợi offline + huy hiệu trạng thái                                                                                                                                                 | Không                                                                          |
+| Máy mất / dùng chung                     | Ràng buộc thiết bị ⟂ phiên                                                                                                                                                             | **Có**                                                                         |
+| Rút chứng từ sau khi kế toán đã khoá     | **Đã có** ở `main` từ 07/09/2026 (migration `transport_fuel_inbox_evidence_withdrawal`)                                                                                                | Không                                                                          |
 
-Ba dòng "**Có**" đầu bảng là lý do câu *"không bao giờ tuyên bố chống được GPS giả"* phải nằm trong
+Ba dòng "**Có**" đầu bảng là lý do câu _"không bao giờ tuyên bố chống được GPS giả"_ phải nằm trong
 hợp đồng, không phải trong ghi chú.
 
 ---
@@ -505,11 +506,11 @@ Một hàng điểm định vị `geography(Point,4326)`: 25 byte payload EWKB +
 cho riêng cột. Cả hàng (id, vehicleId, điểm, thời điểm, tốc độ, hướng) ≈ **90–110 byte** sau căn
 lề, **chưa kể chỉ mục GiST** (cỡ tương đương — phải đo, không có hệ số quy đổi tin cậy).
 
-| Chế độ | 10 xe | 50 xe | 100 xe |
-|---|---|---|---|
-| **Chỉ theo sự kiện** (bắt đầu · đổ dầu · giao hàng ≈ 6 điểm/xe/ngày) | ~6 KB/ngày | ~30 KB/ngày | ~60 KB/ngày |
-| 30 giây/lần, chạy 10 h/ngày | ~1,3 MB/ngày | ~6,5 MB/ngày | ~13 MB/ngày |
-| 10 giây/lần, chạy 10 h/ngày | ~3,9 MB/ngày | ~19,4 MB/ngày | ~39 MB/ngày |
+| Chế độ                                                               | 10 xe        | 50 xe         | 100 xe      |
+| -------------------------------------------------------------------- | ------------ | ------------- | ----------- |
+| **Chỉ theo sự kiện** (bắt đầu · đổ dầu · giao hàng ≈ 6 điểm/xe/ngày) | ~6 KB/ngày   | ~30 KB/ngày   | ~60 KB/ngày |
+| 30 giây/lần, chạy 10 h/ngày                                          | ~1,3 MB/ngày | ~6,5 MB/ngày  | ~13 MB/ngày |
+| 10 giây/lần, chạy 10 h/ngày                                          | ~3,9 MB/ngày | ~19,4 MB/ngày | ~39 MB/ngày |
 
 Một năm ở mức 30 giây × 50 xe ≈ **2,4 GB** dữ liệu bảng, cộng chỉ mục. Không lớn về đĩa — nhưng
 `F-11` nói rằng câu hỏi không phải đĩa, mà là **cơ sở pháp lý**.
@@ -532,12 +533,12 @@ máy chủ nhà cung cấp, trong khi Luật BVDLCN mặc định **xoá dữ li
 
 ## 6. Bản đồ phụ thuộc với #222 · #223 · #224
 
-| Issue | Sở hữu | Vùng tệp đang nóng | Giao với v2 |
-|---|---|---|---|
-| **#222** hotfix UAT | Hành vi UX vận tải đang chạy | `apps/web/experiences/transport-operations/**`, controller chứng cứ, đường đọc phiếu dầu, `TransportFuelReceiptEvidence` | **Cao.** Đã có `20260907090000_transport_fuel_inbox_evidence_withdrawal` trên `main` hôm nay ⇒ nhánh vẫn nóng. **Tranche đầu của v2 không được chạm `transport/fuel` hay bất kỳ tệp web nào** |
-| **#223** File Platform | Vòng đời tệp, ACL, audit, retention | `apps/api/src/media/**`, và sẽ định nghĩa `fileId` thật | **Trung bình, một chiều.** `TransportFuelReceiptEvidence.locator` và `TransportTripExpense.evidenceLocator` sẽ **migrate** sang khi #223 xong. v2 **không** được dựng kho tệp thứ hai — mọi ảnh chứng cứ vị trí của R2 đi qua File Platform |
-| **#224** tính di động / chi phí | Triển khai không cần `gcloud`, backup offsite | `deploy/**`, sizing VM | **Trung bình.** Hai quyết định của v2 chạm trực tiếp: (a) đổi sang image `postgis/postgis` làm image DB nặng thêm và phải vào ma trận sizing của #224; (b) **PMTiles tự dựng thêm ~200–300 MB đĩa** nhưng **không thêm một tiến trình nào** — đó là lý do nó thắng tile-server |
-| **#230** (task này) | Ngữ nghĩa miền v2, chứng cứ, vị trí, nhiên liệu, quyết toán lái xe | — | — |
+| Issue                           | Sở hữu                                                             | Vùng tệp đang nóng                                                                                                       | Giao với v2                                                                                                                                                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **#222** hotfix UAT             | Hành vi UX vận tải đang chạy                                       | `apps/web/experiences/transport-operations/**`, controller chứng cứ, đường đọc phiếu dầu, `TransportFuelReceiptEvidence` | **Cao.** Đã có `20260907090000_transport_fuel_inbox_evidence_withdrawal` trên `main` hôm nay ⇒ nhánh vẫn nóng. **Tranche đầu của v2 không được chạm `transport/fuel` hay bất kỳ tệp web nào**                                                                                  |
+| **#223** File Platform          | Vòng đời tệp, ACL, audit, retention                                | `apps/api/src/media/**`, và sẽ định nghĩa `fileId` thật                                                                  | **Trung bình, một chiều.** `TransportFuelReceiptEvidence.locator` và `TransportTripExpense.evidenceLocator` sẽ **migrate** sang khi #223 xong. v2 **không** được dựng kho tệp thứ hai — mọi ảnh chứng cứ vị trí của R2 đi qua File Platform                                    |
+| **#224** tính di động / chi phí | Triển khai không cần `gcloud`, backup offsite                      | `deploy/**`, sizing VM                                                                                                   | **Trung bình.** Hai quyết định của v2 chạm trực tiếp: (a) đổi sang image `postgis/postgis` làm image DB nặng thêm và phải vào ma trận sizing của #224; (b) **PMTiles tự dựng thêm ~200–300 MB đĩa** nhưng **không thêm một tiến trình nào** — đó là lý do nó thắng tile-server |
+| **#230** (task này)             | Ngữ nghĩa miền v2, chứng cứ, vị trí, nhiên liệu, quyết toán lái xe | —                                                                                                                        | —                                                                                                                                                                                                                                                                              |
 
 **Luật va chạm cho tranche đầu:** chỉ được thêm **thư mục mới** dưới `apps/api/src/transport/`, cộng
 một **khối mới** trong `schema.prisma` và một migration mới. Không sửa tệp web, không sửa
@@ -549,17 +550,17 @@ một **khối mới** trong `schema.prisma` và một migration mới. Không s
 
 Sắp theo **cái gì bị chặn**, không theo chủ đề.
 
-| Mã | Câu hỏi | Chặn cái gì | Vì sao không tự quyết được |
-|---|---|---|---|
+| Mã     | Câu hỏi                                                                                                                                                                                                                                                                                            | Chặn cái gì                                | Vì sao không tự quyết được                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `Q-01` | Một chuyến hàng và một **vòng chạy của xe** có phải hai thứ khác nhau trong cách B làm việc không? Cụ thể: (a) B có tính km rỗng/chiều về không, và tính để làm gì; (b) một chuyến có bao giờ gồm **nhiều đơn hàng của nhiều khách** không; (c) chiều về có khi nào là đơn của **đối tác C** không | **Order/Run/Leg (R1-A gốc), R8 analytics** | `F-04`: không một sự kiện T0 nào. Câu trả lời quyết định `Run` là cha hay con của `Trip` — chọn sai thì phải làm lại |
-| `Q-02` | Xe của B đang dùng **hộp GSHT của hãng nào**, B có tài khoản dashboard không, và hãng đó có cho **xuất dữ liệu/API** không | **Toàn bộ R2 + R3** | `F-07`: nếu lấy được, R3 (app chống giả GPS) gần như không cần |
-| `Q-03` | Đã có **văn bản** về xử lý dữ liệu cá nhân của lái xe (vị trí, ảnh, GPLX, lương) chưa | **R2, R3** — điều kiện chặn cứng | `F-11` + T0 §14 `MISSING` |
-| `Q-04` | Kế toán có được **duyệt một phần** một khoản chi lái xe đề nghị không? Nếu có, số bị cắt đi về đâu | **ExpenseClaim (§9 lộ trình)** | `F-06`; và `C-02` của T0 vẫn chưa gỡ |
-| `Q-05` | Cái gì **thật sự cấm** điều một xe đi (lệnh sửa đang mở? giấy tờ hết hạn?) và cái gì chỉ **cảnh báo** | **Bảo dưỡng v2 (R6)**, và cách sửa `F-09` | Thêm một cổng chặn sai là làm cả đội xe đứng bánh |
-| `Q-06` | B trả lương lái xe **thật sự** theo chu kỳ nào, và có đang chậm không | **R5** | `F-08`: dồn nhiều tháng vướng Đ.97 BLLĐ 2019. Cần biết thực tế trước khi mô hình hoá |
-| `Q-07` | B nạp và quyết toán **ETC** thế nào; tài khoản VETC/ePass đứng tên ai, đối soát bằng gì | **R7** | Không nhà cung cấp nào có API công khai; và phí duy trì tài khoản đang bị Chính phủ **rà soát**, chưa chốt |
-| `Q-08` | B mua dầu qua **hợp đồng cây xăng** hay **thẻ/app** (PVOIL Easy, Flexicard)? Hoá đơn điện tử đang gửi về đâu | **R4** | `F-10`: quyết định adapter đầu tiên là email hoá đơn hay bảng kê |
-| `Q-09` | Ảnh giao hàng có **bắt buộc** không, và có được phép có mặt người nhận trong ảnh không | **R2** | Chạm dữ liệu sinh trắc của **người thứ ba**, không phải nhân viên |
+| `Q-02` | Xe của B đang dùng **hộp GSHT của hãng nào**, B có tài khoản dashboard không, và hãng đó có cho **xuất dữ liệu/API** không                                                                                                                                                                         | **Toàn bộ R2 + R3**                        | `F-07`: nếu lấy được, R3 (app chống giả GPS) gần như không cần                                                       |
+| `Q-03` | Đã có **văn bản** về xử lý dữ liệu cá nhân của lái xe (vị trí, ảnh, GPLX, lương) chưa                                                                                                                                                                                                              | **R2, R3** — điều kiện chặn cứng           | `F-11` + T0 §14 `MISSING`                                                                                            |
+| `Q-04` | Kế toán có được **duyệt một phần** một khoản chi lái xe đề nghị không? Nếu có, số bị cắt đi về đâu                                                                                                                                                                                                 | **ExpenseClaim (§9 lộ trình)**             | `F-06`; và `C-02` của T0 vẫn chưa gỡ                                                                                 |
+| `Q-05` | Cái gì **thật sự cấm** điều một xe đi (lệnh sửa đang mở? giấy tờ hết hạn?) và cái gì chỉ **cảnh báo**                                                                                                                                                                                              | **Bảo dưỡng v2 (R6)**, và cách sửa `F-09`  | Thêm một cổng chặn sai là làm cả đội xe đứng bánh                                                                    |
+| `Q-06` | B trả lương lái xe **thật sự** theo chu kỳ nào, và có đang chậm không                                                                                                                                                                                                                              | **R5**                                     | `F-08`: dồn nhiều tháng vướng Đ.97 BLLĐ 2019. Cần biết thực tế trước khi mô hình hoá                                 |
+| `Q-07` | B nạp và quyết toán **ETC** thế nào; tài khoản VETC/ePass đứng tên ai, đối soát bằng gì                                                                                                                                                                                                            | **R7**                                     | Không nhà cung cấp nào có API công khai; và phí duy trì tài khoản đang bị Chính phủ **rà soát**, chưa chốt           |
+| `Q-08` | B mua dầu qua **hợp đồng cây xăng** hay **thẻ/app** (PVOIL Easy, Flexicard)? Hoá đơn điện tử đang gửi về đâu                                                                                                                                                                                       | **R4**                                     | `F-10`: quyết định adapter đầu tiên là email hoá đơn hay bảng kê                                                     |
+| `Q-09` | Ảnh giao hàng có **bắt buộc** không, và có được phép có mặt người nhận trong ảnh không                                                                                                                                                                                                             | **R2**                                     | Chạm dữ liệu sinh trắc của **người thứ ba**, không phải nhân viên                                                    |
 
 Không câu nào trong số này chặn tranche đầu ở §10.
 
@@ -583,19 +584,19 @@ Bốn luật, áp cho mọi tranche v2:
 
 ## 9. Trình tự tranche được sửa lại
 
-| Tranche | #229 gọi là | Phán quyết R0 |
-|---|---|---|
-| **R1-A′** | *(mới)* | **Xương sống danh tính đối tác** — cộng thêm, không chạm vùng nóng. **Làm ngay** |
-| R1-B | R1 "fuel disconnected from Driver Fund" | Chờ #222 hạ cánh (`F-01` + §6 va chạm). Nhỏ, một chính sách gói khách |
-| R1-C | R1 "Order/Run/Leg" | **Chặn ở `Q-01`** |
-| R1-D | R1 "ExpenseClaim" | **Chặn ở `Q-04`** |
-| R2 | Proof + geospatial | **Chặn ở `Q-03`** (pháp lý), định hình lại theo `Q-02` |
-| R3 | App lái xe | **Hạ ưu tiên** — chỉ đúng nếu `Q-02` trả lời "không lấy được dữ liệu GSHT" |
-| R4 | Fuel intelligence | Đảo thứ tự: **hoá đơn điện tử trước, OCR sau** (`F-10`). Chờ `Q-08` |
-| R5 | Driver settlement + payroll | Giữ cấu trúc, bỏ tiền đề dồn lương (`F-08`). Chờ `Q-06` |
-| R6 | Maintenance v2 | Chờ `Q-05`. Sửa tài liệu `F-09` **ngay**, rẻ |
-| R7 | ETC | Chỉ nghiên cứu. Chờ `Q-07` |
-| R8 · R9 | Analytics · hệ sinh thái | Phụ thuộc R1-C |
+| Tranche   | #229 gọi là                             | Phán quyết R0                                                                    |
+| --------- | --------------------------------------- | -------------------------------------------------------------------------------- |
+| **R1-A′** | _(mới)_                                 | **Xương sống danh tính đối tác** — cộng thêm, không chạm vùng nóng. **Làm ngay** |
+| R1-B      | R1 "fuel disconnected from Driver Fund" | Chờ #222 hạ cánh (`F-01` + §6 va chạm). Nhỏ, một chính sách gói khách            |
+| R1-C      | R1 "Order/Run/Leg"                      | **Chặn ở `Q-01`**                                                                |
+| R1-D      | R1 "ExpenseClaim"                       | **Chặn ở `Q-04`**                                                                |
+| R2        | Proof + geospatial                      | **Chặn ở `Q-03`** (pháp lý), định hình lại theo `Q-02`                           |
+| R3        | App lái xe                              | **Hạ ưu tiên** — chỉ đúng nếu `Q-02` trả lời "không lấy được dữ liệu GSHT"       |
+| R4        | Fuel intelligence                       | Đảo thứ tự: **hoá đơn điện tử trước, OCR sau** (`F-10`). Chờ `Q-08`              |
+| R5        | Driver settlement + payroll             | **XONG** — `TX-07b`, xem §12. `Q-06` đã được chủ sở hữu trả lời ở #237           |
+| R6        | Maintenance v2                          | Chờ `Q-05`. Sửa tài liệu `F-09` **ngay**, rẻ                                     |
+| R7        | ETC                                     | Chỉ nghiên cứu. Chờ `Q-07`                                                       |
+| R8 · R9   | Analytics · hệ sinh thái                | Phụ thuộc R1-C                                                                   |
 
 ---
 
@@ -603,14 +604,14 @@ Bốn luật, áp cho mọi tranche v2:
 
 ### 10.1. Vì sao là cái này
 
-Bốn phép thử của #230 (*nhỏ nhất · an toàn · độ tin cậy cao · mở đường cho sau*):
+Bốn phép thử của #230 (_nhỏ nhất · an toàn · độ tin cậy cao · mở đường cho sau_):
 
 - **An toàn:** chỉ thêm hai bảng và một thư mục mới. Không sửa một tệp web nào ⇒ **không va #222**.
   Không thêm capability ⇒ không sửa `packages/tenant` (`F-12`) ⇒ **không va #223/#224**.
 - **Độ tin cậy cao:** khoảng trống là **đo được**, không phải suy đoán — một tổ chức vừa thuê xe vừa
   chạy hộ hôm nay phải tồn tại hai hàng ở hai bảng, và không có gì nối chúng lại.
 - **Mở đường:** đây đúng là mảnh danh tính mà #229 §14 (cổng/API cho A và C) sẽ cần, và nó cũng là
-  thứ báo cáo công nợ cần để trả lời *"tổng cộng ta đang đứng ở đâu với công ty X"*.
+  thứ báo cáo công nợ cần để trả lời _"tổng cộng ta đang đứng ở đâu với công ty X"_.
 - **Không khoá một luật tiền nào.** Không đụng sổ quỹ, không đụng công nợ, không đụng lương.
 
 ### 10.2. Hình dạng
@@ -626,7 +627,7 @@ TransportCounterpartyLink             ← LIÊN KẾT tới hàng chuyên môn �
 ```
 
 **Hai loại, không phải ba.** Nhu cầu **có nguồn** là A và C — một tổ chức vừa thuê vận chuyển vừa
-chạy hộ/mang đơn về. Cây xăng (`TransportFuelSupplier`) *không* được thêm vào khi chưa ai cần: T1
+chạy hộ/mang đơn về. Cây xăng (`TransportFuelSupplier`) _không_ được thêm vào khi chưa ai cần: T1
 §9.1 xếp nhiên liệu là một **nguồn riêng**, không phải một vai đối tác. Thêm sau là một
 `ALTER TYPE … ADD VALUE`, tức cộng thêm và rẻ.
 
@@ -653,7 +654,6 @@ là tạo ra hai nguồn sự thật cho cùng một câu hỏi.
   **y như trước** khi chưa có một `TransportCounterparty` nào. Không đường nào của v1 phụ thuộc
   bảng mới.
 
-
 ---
 
 ## 11. `R1-A′` as-built — đo trên nhánh `claude/issue-230-transport-v2-r0`
@@ -661,15 +661,15 @@ là tạo ra hai nguồn sự thật cho cùng một câu hỏi.
 Đây là mục **ghi cái đã chạy**, theo đúng quy ước T1 §18: mọi thứ ở §10 là thiết kế, mục này là
 kết quả.
 
-| Thứ | Ở đâu |
-|---|---|
-| Hai bảng + enum | `apps/api/prisma/schema.prisma` (khối cuối) |
-| Migration | `apps/api/prisma/migrations/20260907140000_transport_counterparty/` — kèm `README-rollback.sql` |
-| Hai `CHECK` | `TransportCounterparty_name_not_blank`, `TransportCounterparty_taxCode_shape` (SQL thô — Prisma không có cú pháp) |
-| Miền | `apps/api/src/transport/counterparty/` — 10 tệp, không tệp nào ngoài thư mục này là mới |
-| Hành động | `transport.counterparty.read` · `transport.counterparty.manage` |
-| Đăng ký | `owned('transport-core', CounterpartyController)` — **không** capability mới |
-| Nghiệm thu | 17 bài, `counterparty.service.spec.ts` (`CP-001`…`CP-005`) · `transport-counterparty-storage.spec.ts` · `counterparty.composition.spec.ts` |
+| Thứ             | Ở đâu                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hai bảng + enum | `apps/api/prisma/schema.prisma` (khối cuối)                                                                                                |
+| Migration       | `apps/api/prisma/migrations/20260907140000_transport_counterparty/` — kèm `README-rollback.sql`                                            |
+| Hai `CHECK`     | `TransportCounterparty_name_not_blank`, `TransportCounterparty_taxCode_shape` (SQL thô — Prisma không có cú pháp)                          |
+| Miền            | `apps/api/src/transport/counterparty/` — 10 tệp, không tệp nào ngoài thư mục này là mới                                                    |
+| Hành động       | `transport.counterparty.read` · `transport.counterparty.manage`                                                                            |
+| Đăng ký         | `owned('transport-core', CounterpartyController)` — **không** capability mới                                                               |
+| Nghiệm thu      | 17 bài, `counterparty.service.spec.ts` (`CP-001`…`CP-005`) · `transport-counterparty-storage.spec.ts` · `counterparty.composition.spec.ts` |
 
 **Tệp có sẵn bị sửa — đúng sáu, và mỗi cái một dòng lý do:**
 
@@ -688,3 +688,77 @@ kết quả.
 không phải giao diện, nên không thể va về mặt ngữ nghĩa với các lỗi UX mà #222 đang sửa (biểu mẫu
 phân công, hộp thư dầu, gỡ chứng từ, đăng xuất). Ngoài nó ra, **không** tệp nào dưới `apps/web/**`,
 `packages/tenant/**`, `apps/api/src/media/**` hay `deploy/**` bị chạm.
+
+---
+
+## 12. `R5` / `TX-07b` as-built — quyết toán lái xe (Lane D, Issue #237)
+
+Mục này ghi **cái đã chạy**, theo đúng quy ước T1 §18.
+
+### 12.1. Vì sao **không** có bảng `SettlementCredit`
+
+#237 mô tả `monthly payroll credits + approved reimbursement payable → available balance`. Phản xạ
+đầu tiên là một bảng `credit` ghi một hàng mỗi khi phiếu lương được duyệt. Bảng đó sẽ mang một **bản
+sao** của `TransportPayslip.netAmount` — tức số tiền lương tồn tại ở **hai chỗ**, và kể từ lần lệch
+đầu tiên giữa hai chỗ đó không ai còn biết bên nào đúng. #237 đòi đúng điều ngược lại: _"no double
+counting between Driver Fund, fuel AP and reimbursement"_.
+
+Hai nguồn tiền **đã là hai sổ cái có sẵn**, cả hai đều bất biến:
+
+| Nguồn    | Sổ cái đã có                                  | Bất biến giữ nó                                                        |
+| -------- | --------------------------------------------- | ---------------------------------------------------------------------- |
+| lương    | `TransportPayslip`                            | trigger `transport_payslip_posted_immutable` (đóng băng từ `APPROVED`) |
+| hoàn ứng | số dư **âm** của `TransportDriverFundAccount` | `INV-01` — số dư là **kết quả cộng dồn**, không có cột                 |
+
+Cái thực sự thiếu — và §1.4 đo đúng một dòng — là **bên chi**. Nên tranche này thêm đúng bên đó.
+
+### 12.2. Vì sao một lần chi hoàn ứng **phải** ghi một bút toán quỹ
+
+Số dư quỹ âm nghĩa là lái xe đang bỏ tiền túi (`DA-T3-01`, `COMPANY_OWES_DRIVER`). Khi công ty trả
+lại, lái xe không còn bỏ tiền nữa ⇒ số dư phải về. Nếu lần chi chỉ được ghi ở bảng chứng từ chi mà
+không chạm sổ quỹ, thì **sổ quỹ vĩnh viễn nói công ty còn nợ**, và lần đối soát sau sẽ trả một lần
+nữa. Đó đúng nghĩa là đếm hai lần một khoản tiền, chỉ khác là nó nằm ở hai bảng.
+
+Nên `TransportDriverFundEntryKind` nhận thêm **một** giá trị `REIMBURSEMENT` (luôn dương), và lệnh
+ghi nó là `CostingService.postReimbursement` — **thuộc chính chủ sổ cái**, không phải `TX-07b`
+(§4.1 luật 4). `TX-07b` gọi qua `DriverSettlementFundPort`, là **cổng ghi duy nhất** trong cả tranche.
+
+### 12.3. Hình dạng
+
+| Thứ                        | Ở đâu                                                                                                    |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Hai bảng + ba enum         | `apps/api/prisma/schema.prisma` (khối cuối)                                                              |
+| Migration giá trị enum     | `apps/api/prisma/migrations/20260908110000_transport_driver_fund_reimbursement_kind/`                    |
+| Migration bảng + ràng buộc | `apps/api/prisma/migrations/20260908120000_transport_driver_settlement/` kèm `README-rollback.sql`       |
+| Sáu `CHECK` + hai trigger  | SQL thô — Prisma không có cú pháp; `transport-driver-settlement-storage.spec.ts` đọc thẳng tệp migration |
+| Miền                       | `apps/api/src/transport/driver-settlement/` — thư mục mới                                                |
+| Hành động                  | `transport.driver_settlement.read` · `.cashout` · `.reverse` · `transport.driver.self.settlement.read`   |
+| Đăng ký                    | `owned('transport-workforce', …)` — **không** capability mới (`F-12`)                                    |
+| Bề mặt web                 | `views/DriverSettlementView.tsx` + tóm tắt bốn con số trên `driver/DriverSurface.tsx`                    |
+| Nghiệm thu                 | bài đơn vị của miền + **10 bài trên Postgres thật** (`transport-driver-settlement.int.spec.ts`)          |
+
+**Hai migration chứ không một, và đó là ràng buộc của Postgres:** `ALTER TYPE … ADD VALUE` chạy được
+trong một giao dịch từ PG 12, nhưng giá trị **mới không được dùng** trong chính giao dịch đó — mà
+migration bảng phải viết lại `CHECK "TransportDriverFundEntry_sign_by_kind"`, một biểu thức **có
+nhắc tên** `'REIMBURSEMENT'`. Prisma bọc mỗi tệp migration trong một giao dịch. Gộp hai việc làm một
+tệp sẽ cho ra `unsafe use of new value of enum type` **lúc deploy**, không phải lúc test.
+
+### 12.4. `F-08` được xử lý thế nào
+
+`F-08` đọc Điều 97 BLLĐ 2019 và cấm dựng lộ trình trên tiền đề "dồn lương nhiều tháng là dòng chảy
+bình thường". Chủ sở hữu đã trả lời `Q-06` ở #237: công ty **không** cố tình giữ lương; lái xe có thể
+**tự chọn** để tiền tích luỹ rồi rút một lần lớn.
+
+Nên hệ thống: **giữ** phần cấu trúc (tách _ghi nhận_ khỏi _chi trả_), **bỏ** tiền đề, và **nói ra**
+khi một kỳ đã qua cửa sổ mà tiền chưa chi — một mã lý do có tên
+(`WAGE_CREDIT_UNSETTLED_BEYOND_WINDOW`, cửa sổ mặc định 30 ngày theo Đ.97 k.4). Cảnh báo đó **không
+chặn gì, không sinh một khoản phải trả nào, không kết luận ai sai**.
+
+### 12.5. Còn chưa làm — có chủ đích
+
+- **Không có vòng đời yêu cầu rút tiền** (`REQUESTED → APPROVED → PAID`). Hôm nay không nguồn nào mô
+  tả lái xe yêu cầu rút qua hệ thống — họ nói với kế toán. Dựng một quy trình duyệt ở đây là bịa một
+  bước nghiệp vụ (#232 §9.5). Thêm một bảng yêu cầu trỏ tới `TransportDriverCashout` sau này là một
+  bước **cộng thêm**, không phải một lần viết lại.
+- **`TransportPayslip.status = PAID` giữ nguyên nghĩa cũ** — mốc của bộ phận lương. Tầng chi tiền là
+  sổ cái riêng, và không đường nào trong tranche này ghi vào phiếu lương.

@@ -70,6 +70,10 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.payslip.approve',
       'transport.payslip.pay',
       'transport.payslip.correct',
+      // `TX-07b` (Lane D, #237) — ba ma van hanh: doc bang quyet toan, chi tien, dao mot lan chi.
+      'transport.driver_settlement.read',
+      'transport.driver_settlement.cashout',
+      'transport.driver_settlement.reverse',
       'transport.driver.self.trip.read',
       'transport.driver.self.trip.update',
       'transport.driver.self.fund.read',
@@ -81,6 +85,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // `#168 B8` — lai xe doc lich su luong DA CONG BO cua chinh minh. Tach han khoi
       // `transport.payroll.period.read`, la ma van hanh doc duoc phieu cua bat ky lai xe nao.
       'transport.driver.self.payslip.read',
+      // `TX-07b` — lai xe doc bang quyet toan CUA CHINH MINH. Khong co bien the ghi nao: mot nguoi
+      // tu chi tien cho chinh minh la dung cai ma kiem soat noi bo sinh ra de chan.
+      'transport.driver.self.settlement.read',
     ]);
   });
 
@@ -178,7 +185,21 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.fuel.submit',
         'transport.driver.self.expense.record',
         'transport.driver.self.payslip.read',
+        'transport.driver.self.settlement.read',
       ]);
+    });
+
+    /**
+     * `TX-07b` — pham vi tu phuc vu KHONG keo theo mot quyen chi tien nao.
+     *
+     * Cung phep thu voi `#168 B3` o ngay duoi, va o day no dat hon: ba ma van hanh cua quyet toan
+     * doc duoc bang cua MOI lai xe va CHUYEN DUOC TIEN THAT. Mot lai xe cham vao chung nghia la ho
+     * doc duoc luong dong nghiep va tu tra tien cho chinh minh.
+     */
+    it('KHONG cham duoc mot ma quyet toan van hanh nao', () => {
+      expect(roleCanPerform('SALE', 'transport.driver_settlement.read')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.driver_settlement.cashout')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.driver_settlement.reverse')).toBe(false);
     });
 
     /**

@@ -7,6 +7,8 @@ import type { TransportAssetComplianceDecisionReason } from './asset-compliance/
 import type { TransportAssetComplianceErrorReason } from './asset-compliance/asset-compliance-errors.js';
 import type { TransportWorkforceDecisionReason } from './workforce/workforce-decisions.js';
 import type { TransportWorkforceErrorReason } from './workforce/workforce-errors.js';
+import type { TransportDriverSettlementDecisionReason } from './driver-settlement/driver-settlement-decisions.js';
+import type { TransportDriverSettlementErrorReason } from './driver-settlement/driver-settlement-errors.js';
 import type { TransportSettlementErrorReason } from './settlement/settlement-errors.js';
 import type { TransportEvidenceDecisionReason } from './evidence/evidence-decisions.js';
 import type { TransportCounterpartyDecisionReason } from './counterparty/counterparty-decisions.js';
@@ -94,6 +96,8 @@ export type TransportErrorReason =
   | TransportAssetComplianceErrorReason
   | TransportWorkforceDecisionReason
   | TransportWorkforceErrorReason
+  | TransportDriverSettlementDecisionReason
+  | TransportDriverSettlementErrorReason
   | TransportEvidenceDecisionReason
   | TransportCounterpartyDecisionReason
   | TransportCounterpartyErrorReason;

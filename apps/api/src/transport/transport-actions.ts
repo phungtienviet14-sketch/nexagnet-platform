@@ -155,6 +155,32 @@ export const TRANSPORT_ACTIONS = [
    * viec cuoi thang, con sua mot phieu DA TRA la viet lai mot con so da bao ra ngoai.
    */
   'transport.payslip.correct',
+
+  /* --- `TX-07b` quyet toan lai xe (Lane D, Issue #237) --- */
+  /**
+   * DOC bang quyet toan cua mot lai xe — da ghi nhan / da rut / con lai / hoan ung, kem phan bo.
+   *
+   * TACH khoi `transport.payroll.period.read`, va do la mot khac biet ve NOI DUNG chu khong ve man
+   * hinh: bang nay noi tien da RA KHOI cong ty luc nao va bang duong nao. Mot nguoi duoc xem bang
+   * luong khong nhat thiet duoc xem lich su chi tien mat.
+   */
+  'transport.driver_settlement.read',
+  /**
+   * GHI mot lan chi — tien roi khoi cong ty.
+   *
+   * Quyen RIENG, cung ly le voi `transport.payslip.pay`: chay luong sinh ra con so, con lenh nay
+   * chuyen tien that. Gop chung se lam moi nguoi tinh duoc luong cung chi duoc tien.
+   */
+  'transport.driver_settlement.cashout',
+  /**
+   * DAO mot lan chi da ghi (`INV-20`) — quyen RIENG, cung khuon
+   * `transport.costing.reversal.post` va `transport.payslip.correct`.
+   *
+   * Ghi mot lan chi la viec hang ngay cua Ke toan; dao mot lan chi DA BAO ra ngoai la viet lai mot
+   * con so da di vao so quy va vao bang doi chieu cua lai xe.
+   */
+  'transport.driver_settlement.reverse',
+
   /** Pham vi CUA CHINH MINH — lai xe. Cuong che bang quyen so huu phan cong, xem `TripService`. */
   'transport.driver.self.trip.read',
   'transport.driver.self.trip.update',
@@ -193,6 +219,19 @@ export const TRANSPORT_ACTIONS = [
    * chi bao dam be mat lai xe khong bao gio cham toi duong van hanh.
    */
   'transport.driver.self.payslip.read',
+  /**
+   * BANG QUYET TOAN CUA CHINH MINH — lai xe doc so da ghi nhan, da rut, con lai va hoan ung.
+   *
+   * TACH HAN khoi `transport.driver_settlement.read`, cung ly le voi cap
+   * `transport.driver.self.payslip.read` / `transport.payroll.period.read`: ma kia doc duoc bang
+   * quyet toan cua BAT KY lai xe nao. Va ma nay KHONG mo mot duong ghi nao — khong co bien the
+   * "tu rut tien cho chinh minh", vi mot nguoi tu chi tien cho chinh minh la dung cai ma kiem soat
+   * noi bo sinh ra de chan.
+   *
+   * Cong THAT nam o `DriverSettlementReadService.selfStatement()` (`Driver.authUserId`); ma nay chi
+   * bao dam be mat lai xe khong bao gio cham toi duong van hanh.
+   */
+  'transport.driver.self.settlement.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -205,6 +244,7 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fuel.submit',
   'transport.driver.self.expense.record',
   'transport.driver.self.payslip.read',
+  'transport.driver.self.settlement.read',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */

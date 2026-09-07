@@ -188,6 +188,8 @@ export const DRIVER_FUND_ENTRY_KINDS = [
   'TRIP_EXPENSE',
   'ADJUSTMENT',
   'REVERSAL',
+  /** `TX-07b` — cong ty tra lai lai xe khoan ho da bo tui. KHONG phai luong, khong phai tam ung. */
+  'REIMBURSEMENT',
 ] as const;
 export type DriverFundEntryKind = (typeof DRIVER_FUND_ENTRY_KINDS)[number];
 
@@ -1167,4 +1169,141 @@ export interface DriverPayslipView {
 export interface ExpenseCatalogue {
   readonly categories: readonly string[];
   readonly unrestricted: boolean;
+}
+
+/* ------------------------------------------------------------------ *
+ * TX-07b Quyet toan lai xe (Lane D, Issue #237)
+ * ------------------------------------------------------------------ */
+
+export const CASHOUT_ALLOCATION_SOURCES = ['WAGE', 'REIMBURSEMENT'] as const;
+export type CashoutAllocationSource = (typeof CASHOUT_ALLOCATION_SOURCES)[number];
+
+export const CASHOUT_KINDS = ['ORIGINAL', 'REVERSAL'] as const;
+export type CashoutKind = (typeof CASHOUT_KINDS)[number];
+
+export const CASHOUT_STATUSES = ['POSTED', 'REVERSED'] as const;
+export type CashoutStatus = (typeof CASHOUT_STATUSES)[number];
+
+export interface DriverCashout {
+  readonly id: string;
+  readonly driverId: string;
+  readonly kind: CashoutKind;
+  readonly status: CashoutStatus;
+  readonly businessDate: BusinessDate;
+  readonly currencyCode: string;
+  readonly method: string;
+  readonly reference: string | null;
+  readonly reversesId: string | null;
+  readonly reversalReason: string | null;
+  readonly note: string | null;
+  readonly recordedBy: string;
+  readonly createdAt: string;
+}
+
+export interface DriverCashoutAllocation {
+  readonly id: string;
+  readonly cashoutId: string;
+  readonly source: CashoutAllocationSource;
+  /** CO DAU. Am tren mot phieu dao — man hinh KHONG duoc lay tri tuyet doi. */
+  readonly amount: number;
+  readonly payslipId: string | null;
+  readonly driverFundEntryId: string | null;
+  readonly note: string | null;
+  readonly createdAt: string;
+}
+
+export interface DriverCashoutDetail {
+  readonly cashout: DriverCashout;
+  readonly allocations: readonly DriverCashoutAllocation[];
+}
+
+/** MOT THANG luong — nguon goc ky, so da ghi nhan, so da rut, so con lai. */
+export interface WageMonth {
+  readonly periodId: string;
+  readonly periodLabel: string;
+  readonly startDate: BusinessDate;
+  readonly endDate: BusinessDate;
+  readonly credited: number;
+  readonly cashedOut: number;
+  readonly remaining: number;
+  readonly payslips: readonly WageMonthPayslip[];
+}
+
+/** MOT PHIEU trong mot ky, kem phan da rut va phan con lai cua chinh no. */
+export interface WageMonthPayslip {
+  readonly payslipId: string;
+  readonly netAmount: number;
+  readonly cashedOut: number;
+  readonly remaining: number;
+}
+
+export interface UnsettledWageMonth {
+  readonly periodId: string;
+  readonly periodLabel: string;
+  readonly endDate: BusinessDate;
+  readonly remaining: number;
+  readonly ageDays: number;
+}
+
+/**
+ * SO DU QUYET TOAN — BON con so, va man hinh KHONG duoc gop chung.
+ *
+ * `reimbursementCashedOut` la LICH SU. No KHONG duoc tru vao `reimbursementOutstanding`: so du quy
+ * da phan anh moi lan chi hoan ung roi, nen tru lan nua la dem hai lan.
+ */
+export interface DriverSettlementBalance {
+  readonly driverId: string;
+  readonly currencyCode: string;
+  readonly wageCredited: number;
+  readonly wageCashedOut: number;
+  readonly wageRemaining: number;
+  readonly fundBalance: number;
+  readonly fundStance: FundBalanceStance;
+  readonly reimbursementOutstanding: number;
+  readonly reimbursementCashedOut: number;
+}
+
+export interface DriverSettlementStatement {
+  readonly balance: DriverSettlementBalance;
+  readonly months: readonly WageMonth[];
+  readonly cashouts: readonly DriverCashoutDetail[];
+  readonly unsettled: readonly UnsettledWageMonth[];
+  readonly settlementWindowDays: number;
+}
+
+/**
+ * BE MAT LAI XE — KHONG co `fundBalance` tho.
+ *
+ * Mot lai xe doc "so du quy: -1.500.000" se hieu la minh dang no, dung cai ma `DA-T3-01` canh bao.
+ * Con so ho nhan la `reimbursementOutstanding`, luon duong, kem mot cau noi ro do la tien cong ty
+ * tra lai ho.
+ */
+export interface DriverSettlementSelfStatement {
+  readonly driverId: string;
+  readonly driverName: string;
+  readonly currencyCode: string;
+  readonly wageCredited: number;
+  readonly wageCashedOut: number;
+  readonly wageRemaining: number;
+  readonly reimbursementOutstanding: number;
+  readonly reimbursementCashedOut: number;
+  readonly months: readonly WageMonth[];
+  readonly cashouts: readonly DriverCashoutDetail[];
+}
+
+export interface RecordCashoutLineInput {
+  readonly source: CashoutAllocationSource;
+  readonly amount: number;
+  readonly payslipId?: string | null;
+  readonly note?: string | null;
+}
+
+export interface RecordCashoutInput {
+  readonly driverId: string;
+  readonly businessDate?: BusinessDate;
+  readonly method: string;
+  readonly reference?: string | null;
+  readonly note?: string | null;
+  readonly correlationKey?: string;
+  readonly lines: readonly RecordCashoutLineInput[];
 }

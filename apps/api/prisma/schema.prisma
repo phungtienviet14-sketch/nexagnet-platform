@@ -439,42 +439,42 @@ model ProductAsset {
 }
 
 model FAQ {
-  id             String            @id
-  externalId     String
-  productSku     String?
-  product        Product?          @relation(fields: [productSku], references: [sku], onDelete: SetNull)
-  question       String
-  answer         String
-  status         ContentStatus     @default(draft)
+  id                String            @id
+  externalId        String
+  productSku        String?
+  product           Product?          @relation(fields: [productSku], references: [sku], onDelete: SetNull)
+  question          String
+  answer            String
+  status            ContentStatus     @default(draft)
   /// #205: ban ghi nay co duoc KE LAI trong loi nhan khong.
   /// NULL = chua ai tuyen bo = KHONG ke duoc. Vang mat la tu choi, khong bao gio la cho phep.
   narrativeEligible Boolean?
-  provenanceId   String?
-  provenance     SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
-  operatorEdited Boolean           @default(false)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  provenanceId      String?
+  provenance        SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
+  operatorEdited    Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@unique([provenanceId, externalId])
   @@index([productSku, status])
 }
 
 model AdviceContent {
-  id             String            @id
-  externalId     String
-  productSku     String?
-  product        Product?          @relation(fields: [productSku], references: [sku], onDelete: SetNull)
-  title          String
-  body           String
-  status         ContentStatus     @default(draft)
+  id                String            @id
+  externalId        String
+  productSku        String?
+  product           Product?          @relation(fields: [productSku], references: [sku], onDelete: SetNull)
+  title             String
+  body              String
+  status            ContentStatus     @default(draft)
   /// #205: ban ghi nay co duoc KE LAI trong loi nhan khong.
   /// NULL = chua ai tuyen bo = KHONG ke duoc. Vang mat la tu choi, khong bao gio la cho phep.
   narrativeEligible Boolean?
-  provenanceId   String?
-  provenance     SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
-  operatorEdited Boolean           @default(false)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  provenanceId      String?
+  provenance        SourceProvenance? @relation(fields: [provenanceId], references: [id], onDelete: SetNull)
+  operatorEdited    Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@unique([provenanceId, externalId])
   @@index([productSku, status])
@@ -892,6 +892,8 @@ model TransportDriver {
   fuelEntries        TransportFuelEntry[]
   /// `TX-07` — phieu luong cua lai xe nay. Chi co mat khi khach bat `transport-workforce`.
   payslips           TransportPayslip[]
+  /// `TX-07b` — cac lan lai xe rut tien da duoc ghi nhan. Xem khoi `TransportDriverCashout`.
+  cashouts           TransportDriverCashout[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -948,9 +950,9 @@ model TransportPartner {
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
 
-  roles         TransportPartnerRole[]
-  carriedTrips  TransportTrip[]        @relation("TransportTripCarrier")
-  referredTrips TransportTrip[]        @relation("TransportTripReferrer")
+  roles           TransportPartnerRole[]
+  carriedTrips    TransportTrip[]           @relation("TransportTripCarrier")
+  referredTrips   TransportTrip[]           @relation("TransportTripReferrer")
   /// `TX-05` — luat hoa hong dat rieng cho doi tac nay. KHONG phai cong no: cong no cua doi tac
   /// nam o `TransportSettlementDocument` va tach theo `flow`, vi mot doi tac mang hai vai (VT-054).
   commissionRules TransportCommissionRule[]
@@ -1008,12 +1010,12 @@ model TransportTrip {
   cancelledAt        DateTime?
   cancellationReason String?
 
-  assignments TransportTripAssignment[]
+  assignments         TransportTripAssignment[]
   /// `TX-03` — hai lop cua mot khoan chi (`INV-03`). Chuyen la NGUON SU THAT cua ca hai.
-  fundEntries TransportDriverFundEntry[]
-  expenses    TransportTripExpense[]
+  fundEntries         TransportDriverFundEntry[]
+  expenses            TransportTripExpense[]
   /// `TX-04` — phieu do dau cua chuyen. `INV-04`: chuyen thue xe ngoai khong duoc co dong nao o day.
-  fuelEntries TransportFuelEntry[]
+  fuelEntries         TransportFuelEntry[]
   /// `TX-05` — chung tu AR/AP sinh ra tu chuyen nay. NHIEU hang la binh thuong: mot chuyen thue xe
   /// ngoai vua co doanh thu khach (`CUSTOMER_FREIGHT`) vua co cong no nha xe (`CARRIER_SERVICE`).
   settlementDocuments TransportSettlementDocument[]
@@ -1156,8 +1158,8 @@ model BusinessSource {
   title     String
   /// Loai nguon, tu do co chu y: moi vertical goi ten tai lieu cua no mot kieu. Ep enum o day se
   /// bat mot khach van tai phai muon thuat ngu cua mot khach ban hang.
-  kind    String
-  version String
+  kind      String
+  version   String
 
   origin         SourceOrigin
   authority      SourceAuthority
@@ -1165,11 +1167,11 @@ model BusinessSource {
   status         SourceStatus       @default(RECEIVED)
 
   /// Duong den byte trong kho RIENG. NULL khi moi ghi nhan su ton tai ma chua co duong.
-  locator String?
+  locator     String?
   /// SHA-256 cua byte. La thu duy nhat chung minh "van dung ban do" ma khong can giu ban sao.
   contentHash String?
   /// Kich thuoc byte — de doi chieu nhanh cung hash khi kiem chung lai.
-  byteSize Int?
+  byteSize    Int?
 
   receivedAt    DateTime  @default(now())
   effectiveFrom DateTime?
@@ -1210,15 +1212,15 @@ model BusinessFact {
   key    String
   /// Gia tri co cau truc. `Json` chu khong phai `String`: mot nguong so, mot bang anh xa va mot
   /// cau chinh sach deu la su that, va ep het ve chuoi se lam moi noi doc phai tu parse lai.
-  value Json
+  value  Json
 
-  status BusinessFactStatus @default(PROPOSED)
+  status         BusinessFactStatus @default(PROPOSED)
   /// Ke thua tu nguon, nhung ghi lai o day: mot trich xuat co the nhay cam hon ca tai lieu goc
   /// (vd mot dong PII rut ra tu mot bang phan lon vo hai).
   classification DataClassification
 
-  sourceId String
-  source   BusinessSource @relation(fields: [sourceId], references: [id])
+  sourceId    String
+  source      BusinessSource @relation(fields: [sourceId], references: [id])
   /// Tro chinh xac vao cho trong nguon (trang/muc/o) — de nguoi kiem chung khong phai doc lai ca tep.
   sourceLocus String?
 
@@ -1239,8 +1241,8 @@ model BusinessFact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  approvals BusinessApproval[]
-  conflicts BusinessConflictFact[]
+  approvals    BusinessApproval[]
+  conflicts    BusinessConflictFact[]
   /// Cac QUYET DINH da dung ban su that nay. Quan he nguoc bat buoc cua Prisma; cung la thu tra
   /// loi nguoc lai cau "ban so lieu sai nay da lam lech nhung ca nao".
   decisionRefs BusinessDecisionFactRef[]
@@ -1271,11 +1273,11 @@ model BusinessConflict {
   recommendationReason String?
 
   /// Bang chung dong xung dot. Thieu = khong dong duoc, khong co duong tat.
-  resolvedFactId   String?
-  resolutionActor  String?
-  resolutionRef    String?
-  resolutionNote   String?
-  resolvedAt       DateTime?
+  resolvedFactId  String?
+  resolutionActor String?
+  resolutionRef   String?
+  resolutionNote  String?
+  resolvedAt      DateTime?
 
   openedAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1307,8 +1309,8 @@ model BusinessApproval {
   id       String @id @default(cuid())
   tenantId String
 
-  level ApprovalLevel
-  actor String
+  level       ApprovalLevel
+  actor       String
   /// Dan chung: so hop dong, link mail khach tra loi, bien ban hop. Bat buoc — xem `evaluateApproval`.
   evidenceRef String
   note        String?
@@ -1336,9 +1338,9 @@ model BusinessRequiredFact {
   tenantId String
 
   /// Nang luc bi anh huong khi thieu (khop `CapabilityId` cua goi khach).
-  capability String
-  domain     String
-  key        String
+  capability        String
+  domain            String
+  key               String
   /// Muc dam bao ma nang luc nay doi: co chap nhan chay tren gia dinh hay khong.
   requiresConfirmed Boolean @default(false)
   note              String?
@@ -1369,12 +1371,24 @@ model BusinessRequiredFact {
 // TRUSTED extension, nen role `zalo` cua stack deploy — KHONG superuser, chi la CHU database — tao
 // duoc no. Da chay thu bang dung hinh dang do truoc khi viet migration.
 
+/// LOAI BUT TOAN SO QUY. Dau BAT BUOC cua tung loai song o `driver-fund-ledger.ts` va o
+/// `CHECK "TransportDriverFundEntry_sign_by_kind"` — hai lop, mot quy uoc.
+///
+/// `REIMBURSEMENT` (+) them o `TX-07b` (Lane D / #237), va no CO Y khong phai `ADVANCE`:
+/// mot lan tam ung la tien giao TRUOC cho chi tieu sap toi, con hoan ung la tien tra LAI cho mot
+/// khoan lai xe da bo tui. Gop hai thu lam mot se lam moi bao cao "da tam ung bao nhieu trong ky"
+/// dem ca tien hoan ung — mot con so khong con tra loi cau hoi nao.
+///
+/// `ADJUSTMENT` cung khong dung duoc: chu thich cua chinh no noi ro do la sua lech KIEM KE, khong
+/// phai duong de chi mot nghia vu da biet.
 enum TransportDriverFundEntryKind {
   ADVANCE
   RETURN
   TRIP_EXPENSE
   ADJUSTMENT
   REVERSAL
+  /// `TX-07b` — cong ty tra lai lai xe khoan ho da bo tui. Dua so du AM ve gan 0 (`DA-T3-01`).
+  REIMBURSEMENT
 }
 
 enum TransportTripExpenseKind {
@@ -1444,7 +1458,9 @@ model TransportDriverFundEntry {
   recordedBy     String
   createdAt      DateTime                     @default(now())
 
-  fundedExpense TransportTripExpense?
+  fundedExpense     TransportTripExpense?
+  /// `TX-07b` — dong phan bo hoan ung ma but toan nay la chan tien mat cua no. Toi da MOT.
+  cashoutAllocation TransportDriverCashoutAllocation?
 
   @@index([accountId, businessDate])
   @@index([tripId])
@@ -2230,8 +2246,8 @@ model BusinessDecisionFactRef {
   fact   BusinessFact @relation(fields: [factId], references: [id], onDelete: Restrict)
 
   /// Anh chup DIA CHI su that. Doc duoc ma khong phai join, va con dung neu mo hinh doi ve sau.
-  factDomain String
-  factKey    String
+  factDomain      String
+  factKey         String
   /// Trang thai su that LUC DUOC DUNG (`CONFIRMED`, `WORKING_ASSUMPTION`…). Chuoi, khong enum:
   /// mot hang lich su khong duoc phep hong vi hom nay ta them mot trang thai moi.
   factStatusAtUse String
@@ -2254,7 +2270,7 @@ model BusinessDecisionRelation {
   decisionId String
   decision   BusinessDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
 
-  kind BusinessDecisionRelationKind
+  kind       BusinessDecisionRelationKind
   /// Loai dich (`decision`, `approval`, `order`, `trip`…) — chuoi tu do co chu y: moi vertical
   /// goi ten thuc the cua no mot kieu.
   targetType String
@@ -2597,9 +2613,9 @@ enum TransportComplianceDocumentStatus {
 /// moc thanh cot se lam moi lan doi chu ky phai viet lai lich su — dung cai ma acceptance 3 cua
 /// Issue #88 cam o phia giay to.
 model TransportMaintenancePlan {
-  id            String                         @id @default(cuid())
+  id            String                          @id @default(cuid())
   vehicleId     String
-  vehicle       TransportVehicle               @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  vehicle       TransportVehicle                @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   /// Ten hang muc — "Thay dau may", "Bao duong 20.000km". Van ban tu do: danh muc hang muc bao
   /// duong la thu tung khach tung doi xe mot khac, khong phai mot enum cua mien.
   name          String
@@ -2610,11 +2626,11 @@ model TransportMaintenancePlan {
   intervalDays  Int?
   /// Moc goc khi chua co lan bao duong nao. `INV-25` — NGAY nghiep vu, khong phai khoanh khac.
   baselineOdoKm Int
-  baselineDate  String                         @db.VarChar(10)
-  status        TransportMaintenancePlanStatus @default(ACTIVE)
+  baselineDate  String                          @db.VarChar(10)
+  status        TransportMaintenancePlanStatus  @default(ACTIVE)
   createdBy     String
-  createdAt     DateTime                       @default(now())
-  updatedAt     DateTime                       @updatedAt
+  createdAt     DateTime                        @default(now())
+  updatedAt     DateTime                        @updatedAt
 
   workOrders TransportMaintenanceWorkOrder[]
 
@@ -2834,7 +2850,10 @@ model TransportPayslip {
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime               @updatedAt
 
-  components TransportPayslipComponent[]
+  components         TransportPayslipComponent[]
+  /// `TX-07b` — cac lan rut tien da lay tu phieu nay. Tong cua chung la "da rut bao nhieu"; KHONG
+  /// co cot `cashedOutAmount` tren phieu, cung ly le voi `INV-01` cua `TX-03`.
+  cashoutAllocations TransportDriverCashoutAllocation[]
 
   @@index([runId])
   @@index([driverId, status])
@@ -2950,4 +2969,156 @@ model TransportCounterpartyLink {
 
   @@id([kind, subjectId])
   @@index([counterpartyId])
+}
+
+// ===================================================================
+// TX-07b DRIVER SETTLEMENT — lan rut tien cua lai xe + phan bo (Lane D, Issue #237)
+// ===================================================================
+//
+// CANH BAO — RANG BUOC CUA TX-07b KHONG CO O DAY. Chung song trong SQL tho cua migration
+// `20260908120000_transport_driver_settlement`, vi Prisma khong co cu phap cho `CHECK`/`TRIGGER`:
+//
+//     1. `TransportDriverCashout_businessDate_iso`          — ngay nghiep vu dang YYYY-MM-DD
+//     2. `TransportDriverCashout_method_not_blank`          — hinh thuc chi khong duoc rong
+//     3. `TransportDriverCashout_reversal_shape`            — dao thi phai tro ve ban goc + co ly do
+//     4. `TransportDriverCashout_no_self_reversal`          — mot phieu khong tu dao chinh no
+//     5. `TransportDriverCashoutAllocation_money_range`     — khoang tien +-(2^53-1), khac 0
+//     6. `TransportDriverCashoutAllocation_source_shape`    — WAGE co phieu luong, hoan ung co but toan
+//     7. `transport_driver_cashout_immutable` (TRIGGER)     — phieu da ghi chi doi duoc `status`
+//     8. `transport_driver_cashout_allocation_frozen`       — dong phan bo khong sua, khong xoa
+//
+// `prisma migrate dev` sinh migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA ca
+// tam. Ai chay lenh do PHAI doc lai migration sinh ra va bo cac dong `DROP` truoc khi commit.
+// `transport-driver-settlement-storage.spec.ts` doc chinh tep migration va do neu mot ten bien mat.
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO KHONG CO BANG "KHOAN GHI NHAN" (`SettlementCredit`) — day la quyet dinh trung tam.
+//
+// #237 mo ta `monthly payroll credits + approved reimbursement payable -> available balance`. Phan
+// xa dau tien la dung mot bang `credit` roi ghi mot hang moi khi phieu luong duoc duyet. Bang do se
+// mang mot BAN SAO cua `TransportPayslip.netAmount` — tuc SO TIEN LUONG TON TAI O HAI CHO. Ke tu
+// lan lech dau tien giua hai cho do, khong ai con biet ben nao dung, va #237 doi dung dieu nguoc
+// lai: *"no double counting between Driver Fund, fuel AP and reimbursement"*.
+//
+// Nen o day KHONG co bang credit. Hai nguon tien da la hai so cai CO SAN, ca hai deu bat bien:
+//
+//   · luong    -> `TransportPayslip` (da co trigger `..._posted_immutable` dong bang tu `APPROVED`)
+//   · hoan ung -> so du AM cua `TransportDriverFundAccount` (`DA-T3-01`, `describeFundBalance`)
+//
+// Cai THUC SU thieu — va R0 §1.4 do dung mot dong: *"Chi tra / Disbursement: CHUA CO"* — la ben
+// CHI. Nen tranche nay them dung ben do, va khong hang nao cua `TX-03`/`TX-07` phai doi.
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO MOT LAN CHI HOAN UNG PHAI GHI MOT BUT TOAN QUY:
+//
+// So du quy AM nghia la lai xe DANG bo tien tui (`COMPANY_OWES_DRIVER`). Khi cong ty tra lai so do,
+// lai xe khong con bo tien nua — nen so du phai ve gan 0. Neu lan chi chi duoc ghi o bang nay ma
+// khong cham vao so quy, thi so quy se VINH VIEN noi rang cong ty con no, va lan doi soat sau se
+// tra mot lan nua. Do la dung nghia dem hai lan mot khoan tien, chi khac la no nam o hai bang.
+//
+// Vi vay `TransportDriverCashoutAllocation.driverFundEntryId` la BAT BUOC voi
+// `source = REIMBURSEMENT`, va `@unique`: mot but toan hoan ung khong the la chan tien cua hai
+// lan chi. Cung khuon `TransportTripExpense.driverFundEntryId` cua `TX-03`.
+
+/// LOAI PHIEU CHI. `REVERSAL` tro nguoc ve ban goc qua `reversesId` — khong co duong `DELETE` nao.
+enum TransportDriverCashoutKind {
+  ORIGINAL
+  REVERSAL
+}
+
+/// TRANG THAI QUAN TRI cua mot phieu chi. Chi doi duoc theo MOT canh: `POSTED -> REVERSED`.
+enum TransportDriverCashoutStatus {
+  POSTED
+  REVERSED
+}
+
+/// NGUON TIEN ma mot dong phan bo rut ra.
+///
+/// HAI gia tri, va chung KHONG duoc gop du cung nam tren mot phieu chi. #237: *"same cash-out may
+/// include reimbursement, but allocation/provenance stays separate"* va *"do not call reimbursement
+/// salary"*. Mot cot `source` co kieu la cach re nhat de cau do dung duoc o tang du lieu thay vi o
+/// tang giao dien: khong truy van nao co the vo tinh cong hai nguon lai ma khong go ten chung ra.
+enum TransportDriverCashoutAllocationSource {
+  /// Rut tu tien luong da ghi nhan tren mot phieu luong da chot. `payslipId` BAT BUOC.
+  WAGE
+  /// Nhan lai khoan da bo tui. `driverFundEntryId` BAT BUOC. KHONG PHAI LUONG.
+  REIMBURSEMENT
+}
+
+/// MOT LAN LAI XE NHAN TIEN — su kien chi, khong phai mot khoan ghi nhan.
+///
+/// `TransportPayslip` tra loi "thang nay lai xe duoc bao nhieu"; bang nay tra loi "lai xe da nhan
+/// bao nhieu, luc nao, bang duong nao, va rut tu nhung thang nao". Hai cau hoi khac nhau, hai bang.
+///
+/// KHONG CO COT `totalAmount`, va do la `INV-01` doc lai lan thu ba trong repo nay: tong cua mot
+/// phieu chi la KET QUA cong `allocations`. Mot o tong ghi de duoc se lech voi cac dong ngay lan
+/// dau co mot loi giua hai lenh ghi, va tu do khong con cach nao biet ben nao dung.
+///
+/// KHONG CO VONG DOI YEU CAU (`REQUESTED -> APPROVED -> PAID`). Hom nay khong nguon nao mo ta lai
+/// xe yeu cau rut tien qua he thong — ho noi voi ke toan. Dung len mot quy trinh duyet o day la
+/// bia mot buoc nghiep vu; #232 §9.5 goi do la dieu phai dung lai. Khi B mo ta quy trinh that,
+/// them mot bang yeu cau tro toi phieu nay la mot buoc cong them, khong phai mot lan viet lai.
+model TransportDriverCashout {
+  id             String                       @id @default(cuid())
+  driverId       String
+  driver         TransportDriver              @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  kind           TransportDriverCashoutKind   @default(ORIGINAL)
+  status         TransportDriverCashoutStatus @default(POSTED)
+  /// `INV-25` — NGAY nghiep vu tien roi khoi cong ty, khong phai khoanh khac ghi may.
+  businessDate   String                       @db.VarChar(10)
+  currencyCode   String                       @default("VND") @db.VarChar(3)
+  /// Hinh thuc chi — "CASH", "BANK_TRANSFER". Van ban tu do, cung khuon
+  /// `TransportSettlementAllocation.method` cua `TX-05`: danh muc nay la thu tung khach mot khac.
+  method         String                       @db.VarChar(40)
+  /// So tham chieu ngan hang / so phieu chi. `GD-16` — CHI la mot so tham chieu.
+  reference      String?
+  /// Ban goc ma phieu nay dao. NULL o `ORIGINAL`. `@unique`: mot phieu chi dao DUNG MOT LAN.
+  reversesId     String?                      @unique
+  reverses       TransportDriverCashout?      @relation("TransportDriverCashoutReversal", fields: [reversesId], references: [id], onDelete: Restrict)
+  reversedBy     TransportDriverCashout?      @relation("TransportDriverCashoutReversal")
+  reversalReason String?
+  note           String?
+  /// Chong ghi trung — cung khuon `TransportDriverFundEntry.correlationKey` cua `TX-03`. Khoa cua
+  /// but toan hoan ung sinh ra tu khoa nay, nen mot lan gui lai KHONG tao them mot but toan quy.
+  correlationKey String                       @unique
+  recordedBy     String
+  createdAt      DateTime                     @default(now())
+
+  allocations TransportDriverCashoutAllocation[]
+
+  @@index([driverId, businessDate])
+  @@index([driverId, status])
+}
+
+/// MOT DONG PHAN BO — "phan nay cua lan chi lay tu dau".
+///
+/// `amount` CO DAU, va do la cung bai hoc voi `TransportTripExpense.signedAmount` cua `TX-03`: mot
+/// phieu dao mang cac dong AM doi dau ban goc, nen phep "da rut bao nhieu" luon la MOT phep cong
+/// duy nhat. Neu dao la mot co `boolean` tren phieu, thi moi truy van tong se phai nho loai tru
+/// cac phieu da dao — va lan quen dau tien cho ra mot lai xe da rut gap doi thuc te.
+///
+/// `payslipId` la NGUON GOC THANG cua so tien. Mot lan chi phu ba thang la BA dong o day, khong
+/// phai mot dong 3 thang: #237 doi *"monthly source-period provenance remains immutable/visible"*,
+/// va mot tong gop lai thi khong con doc nguoc ra thang nao nua.
+model TransportDriverCashoutAllocation {
+  id                String                                 @id @default(cuid())
+  cashoutId         String
+  cashout           TransportDriverCashout                 @relation(fields: [cashoutId], references: [id], onDelete: Restrict)
+  source            TransportDriverCashoutAllocationSource
+  /// So nguyen dong CO DAU. Duong o `ORIGINAL`, am o `REVERSAL`. Khoang bi `CHECK` bo hep cho khop
+  /// `money()`.
+  amount            BigInt
+  /// BAT BUOC khi `source = WAGE`, NULL khi `REIMBURSEMENT`. Cuong che bang `CHECK`.
+  payslipId         String?
+  payslip           TransportPayslip?                      @relation(fields: [payslipId], references: [id], onDelete: Restrict)
+  /// BAT BUOC khi `source = REIMBURSEMENT`, NULL khi `WAGE`. Cuong che bang `CHECK`.
+  /// `@unique` — mot but toan quy khong the la chan tien mat cua hai dong phan bo.
+  driverFundEntryId String?                                @unique
+  driverFundEntry   TransportDriverFundEntry?              @relation(fields: [driverFundEntryId], references: [id], onDelete: Restrict)
+  note              String?
+  createdAt         DateTime                               @default(now())
+
+  @@index([cashoutId])
+  @@index([payslipId])
+  @@index([source])
 }
