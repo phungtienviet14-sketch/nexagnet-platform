@@ -44,13 +44,14 @@ const LEDGER_FILE = 'ledger.json';
  * Ghi THAY THE nguyen tu: ghi ra tep tam trong cung thu muc roi doi ten de. `rename` de len tep
  * dang ton tai la nguyen tu tren ca POSIX lan Windows (MoveFileEx + REPLACE_EXISTING), nen khong
  * co cua so nao ma so cai nam tren dia o trang thai viet do dang.
+ * @param {typeof import('node:fs')} io
  * @param {string} file
  * @param {unknown} data
  */
-function writeAtomic(file, data) {
+function writeAtomic(io, file, data) {
   const temp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temp, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-  fs.renameSync(temp, file);
+  io.writeFileSync(temp, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+  io.renameSync(temp, file);
 }
 
 /**
@@ -105,7 +106,7 @@ export function createLedger(options) {
       const stamped = { ...record, claimedAt: now().toISOString(), updatedAt: now().toISOString() };
       try {
         io.mkdirSync(options.dir, { recursive: true });
-        writeAtomic(file, { ...all.records, [record.key]: stamped });
+        writeAtomic(io, file, { ...all.records, [record.key]: stamped });
       } catch (error) {
         return deny(REASONS.LEDGER_UNWRITABLE, { code: /** @type {any} */ (error)?.code });
       }
@@ -123,7 +124,7 @@ export function createLedger(options) {
       if (!current) return deny(REASONS.LEDGER_CORRUPT, { key, problem: 'MISSING' });
       const next = { ...current, ...patch, key, updatedAt: now().toISOString() };
       try {
-        writeAtomic(file, { ...all.records, [key]: next });
+        writeAtomic(io, file, { ...all.records, [key]: next });
       } catch (error) {
         return deny(REASONS.LEDGER_UNWRITABLE, { code: /** @type {any} */ (error)?.code });
       }
