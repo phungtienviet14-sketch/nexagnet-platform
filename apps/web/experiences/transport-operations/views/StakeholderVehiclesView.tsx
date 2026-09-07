@@ -7,6 +7,8 @@ import {
   useMyStakeholderVehicles,
   useNavigationInput,
 } from '../hooks/useTransportWorkspace';
+import { MANAGER_HAS_NO_TRANSPORT_SCOPE } from '../transport-actions';
+import { TransportApiError } from '../transport-api';
 import { toMyVehicleRows, type MyVehicleRow } from '../workspace/asset-ownership';
 
 /**
@@ -21,13 +23,29 @@ import { toMyVehicleRows, type MyVehicleRow } from '../workspace/asset-ownership
  *   3. KHONG co mot nut ghi nao. Mot dong so huu khong dieu duoc xe va khong sua duoc ty le cua
  *      chinh minh — nen o day khong co gi de tranh luan ve quyen.
  *
- * `403` tu may chu duoc hien NGUYEN VAN qua `ErrorState`: no la cau tra loi dung cho mot nguoi
- * dang nhap ma khong phai ben huu quan, va viet lai no thanh cau cua minh se che mat ly do that.
+ * Man nay cung la CHO DAP cua mot vai khong co pham vi van hanh (vd `MANAGER`): ho co the la co
+ * dong, va chi may chu biet dieu do. Nguoi KHONG phai co dong doc duoc mot cau noi ro viec can
+ * lam — xem khoi chu thich cua `notAStakeholder` ben duoi.
  */
 export function StakeholderVehiclesView() {
   const navigation = useNavigationInput();
-  const mine = toSectionQuery(useMyStakeholderVehicles(navigation));
+  const query = useMyStakeholderVehicles(navigation);
+  const mine = toSectionQuery(query);
   const rows = toMyVehicleRows(mine.data ?? []);
+
+  /**
+   * `403` o day co nghia HEP va biet truoc: nguoi dang dang nhap KHONG phai ben huu quan.
+   *
+   * Cau cua may chu ("Tài khoản này không có quyền xem xe đã yêu cầu") dung nhung khong giup duoc
+   * gi: no ta mot lan tu choi, khong ta viec can lam. Nguoi doc no o day la mot vai khong co pham
+   * vi van hanh VA khong co co phan — viec can lam cua ho la hoi quan tri vien, dung nhu
+   * `MANAGER_HAS_NO_TRANSPORT_SCOPE` noi.
+   *
+   * Moi ma loi KHAC van hien nguyen van: mot `500` hay mot loi mang khong duoc doi thanh "ban chua
+   * duoc cap quyen", vi do se la mot cau tra loi sai cho mot su co that.
+   */
+  const notAStakeholder = query.error instanceof TransportApiError && query.error.status === 403;
+  const errorMessage = notAStakeholder ? MANAGER_HAS_NO_TRANSPORT_SCOPE : mine.errorMessage;
 
   return (
     <>
@@ -37,9 +55,9 @@ export function StakeholderVehiclesView() {
       />
 
       {mine.isLoading ? <LoadingState label="Đang tải danh sách xe" /> : null}
-      {mine.errorMessage === null ? null : <ErrorState message={mine.errorMessage} />}
+      {errorMessage === null ? null : <ErrorState message={errorMessage} />}
 
-      {mine.errorMessage === null && rows.length === 0 && !mine.isLoading ? (
+      {errorMessage === null && rows.length === 0 && !mine.isLoading ? (
         <EmptyState title="Bạn hiện không có cổ phần trong xe nào." />
       ) : null}
 
