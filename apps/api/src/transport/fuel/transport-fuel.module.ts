@@ -7,8 +7,14 @@ import { TransportModule } from '../transport.module.js';
 import { FuelReadService } from './fuel-read.service.js';
 import { FuelReconciliationService } from './fuel-reconciliation.service.js';
 import { TRANSPORT_FUEL_POLICY, tenantTransportFuelPolicy } from './fuel-policy.js';
+import {
+  FuelStationRepository,
+  InMemoryFuelStationRepository,
+} from './fuel-station.repository.js';
+import { FuelStationService } from './fuel-station.service.js';
 import { FileFuelStatementSource, FuelStatementSource } from './fuel-statement-source.js';
 import { FuelStatementService } from './fuel-statement.service.js';
+import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
 import {
   CostingFuelExpenseAdapter,
   FuelCostingPort,
@@ -53,6 +59,22 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
           : new InMemoryFuelRepository(),
       inject: [PrismaService],
     },
+    /*
+     * DANH TINH CAY XANG (Lane C / C1) — mot kho RIENG, cung mot cong tac `PERSISTENCE`.
+     *
+     * Tach khoi `FuelRepository` vi hai vong doi khac han nhau (master data vs chung tu) — xem
+     * khoi dau `fuel-station.repository.ts`. Cung mot cong tac vi hai kho phai o CUNG mot the
+     * gioi: mot ban trong bo nho dung canh mot ban Prisma se lam moi phep nhan dang tra `NO_MATCH`
+     * tren mot he thong co day du du lieu.
+     */
+    {
+      provide: FuelStationRepository,
+      useFactory: (prisma: PrismaService): FuelStationRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaFuelStationRepository(prisma)
+          : new InMemoryFuelStationRepository(),
+      inject: [PrismaService],
+    },
     { provide: TransportFuelCoreFacts, useClass: TransportFuelCoreFactsAdapter },
     { provide: FuelCostingPort, useClass: CostingFuelExpenseAdapter },
     { provide: FuelStatementSource, useClass: FileFuelStatementSource },
@@ -61,13 +83,16 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
     FuelStatementService,
     FuelReconciliationService,
     FuelReadService,
+    FuelStationService,
   ],
   exports: [
     FuelService,
     FuelStatementService,
     FuelReconciliationService,
     FuelReadService,
+    FuelStationService,
     FuelRepository,
+    FuelStationRepository,
   ],
 })
 export class TransportFuelModule {}
