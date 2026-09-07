@@ -65,8 +65,10 @@ này có đáng chạy không", không trả lời "công ty lãi bao nhiêu".
 Mở **Bảo dưỡng & giấy tờ**. Ba loại cảnh báo nằm chung một bảng: giấy tờ đã hết hạn, giấy tờ sắp
 hết hạn, xe đến hạn bảo dưỡng — kèm cả những xe **thiếu giấy tờ** mà lẽ ra phải có.
 
-Xe có lệnh bảo dưỡng đang mở bị khoá khỏi việc phân chuyến; trạng thái hiệu lực của xe do hệ thống
-suy ra, không đặt tay được.
+Xe có lệnh bảo dưỡng đang mở được hệ thống suy ra là **đang sửa** và hiện như vậy ở bảng đội xe —
+trạng thái hiệu lực do hệ thống tính, không đặt tay được. Đây là **cảnh báo, không phải khoá**: điều
+độ viên vẫn phân được chuyến cho xe đó nếu cần, và hệ thống ghi lại. Cái gì thật sự cấm điều xe đi là
+một câu chưa có lời từ phía nghiệp vụ, nên chưa ai dựng cổng chặn.
 
 ---
 
@@ -122,7 +124,7 @@ trả lời hai câu hỏi khác nhau.
 > phải ghi lý do.
 
 **Định dạng bảng kê:** CSV hoặc XLSX, ngăn cách bằng **dấu phẩy**, cột `Biển số, Ngày, Số lít,
-Thành tiền, Số hoá đơn, Ghi chú`, ngày dạng `DD/MM/YYYY`. Mẫu có sẵn — xem
+Thành tiền, Số hóa đơn, Ghi chú`, ngày dạng `DD/MM/YYYY`. Mẫu có sẵn — xem
 [`chuyen-sang-du-lieu-that.md`](chuyen-sang-du-lieu-that.md). Thiếu cột bắt buộc thì hệ thống báo
 đúng tên cột đang thiếu, không báo lỗi chung chung.
 

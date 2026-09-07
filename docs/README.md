@@ -43,6 +43,7 @@ miền nghiệp vụ dùng lại được cho nhiều khách cùng ngành:
 | File | Là gì | Không phải gì |
 |---|---|---|
 | [`transport-domain-contract.md`](kien-truc/transport-domain-contract.md) | **Transport Domain v0** — bounded context, aggregate, bất biến tài chính, capability, phân quyền, guardrail, case nghiệm thu, giả định demo | Không nhắc tên khách; không phải kế hoạch; **chưa có code** |
+| [`transport-domain-v2.md`](kien-truc/transport-domain-v2.md) | **Transport Domain v2 — R0**: kiểm kê mô hình đang chạy (`KEEP/EXTEND/MIGRATE/DEPRECATE`), phản biện lộ trình #229 kèm bằng chứng, ma trận công nghệ, mô hình mối đe doạ, câu hỏi nghiệp vụ còn treo, tranche kế tiếp | Không thay thế v0; không phải kế hoạch có lịch |
 
 Nguồn nghiệp vụ của nó nằm bên khách:
 [`khach-hang/van-tai-viet/nghiep-vu/nguon-su-that-van-tai.md`](khach-hang/van-tai-viet/nghiep-vu/nguon-su-that-van-tai.md).
