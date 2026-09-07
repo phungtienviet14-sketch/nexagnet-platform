@@ -190,6 +190,11 @@ export const FUND_ENTRY_KIND_LABEL = {
   TRIP_EXPENSE: 'Chi phí chuyến',
   ADJUSTMENT: 'Điều chỉnh',
   REVERSAL: 'Đảo bút toán',
+  /**
+   * `TX-07b`. Chữ "hoàn ứng" chứ không phải "trả lương": khoản này là tiền lái xe đã bỏ túi được
+   * nhận lại, và gọi nó là lương sẽ làm nó xuất hiện sai chỗ trên mọi bảng đối chiếu.
+   */
+  REIMBURSEMENT: 'Trả lại hoàn ứng',
 } as const satisfies Record<DriverFundEntryKind, string>;
 
 /**

@@ -127,6 +127,14 @@ export class MaintenanceController {
         openedOdoKm: input.openedOdoKm,
         openedBy: transportActorOf(request),
         note: input.note ?? null,
+        // `TX-06b` (#237). `kind` de `undefined` khi nguoi goi khong khai — tang kho suy tu
+        // `planId`, va do la CHO DUY NHAT quyet dieu do.
+        kind: input.kind,
+        vendorName: input.vendorName ?? null,
+        vendorPhone: input.vendorPhone ?? null,
+        tripId: input.tripId ?? null,
+        plannedDate: input.plannedDate ?? null,
+        plannedOdoKm: input.plannedOdoKm ?? null,
       }),
     );
   }
@@ -150,6 +158,13 @@ export class MaintenanceController {
         costAmount: input.costAmount ?? null,
         costingExpenseRef: input.costingExpenseRef ?? null,
         note: input.note ?? null,
+        // `TX-06b` (#237) — de `undefined` khi nguoi goi khong khai, de tang kho GIU nguyen gia tri
+        // da ghi luc mo. `?? null` o day se xoa mat ten xuong sua sau mot lan dong lenh so sai.
+        partsCost: input.partsCost ?? undefined,
+        labourCost: input.labourCost ?? undefined,
+        evidenceLocator: input.evidenceLocator ?? undefined,
+        vendorName: input.vendorName ?? undefined,
+        vendorPhone: input.vendorPhone ?? undefined,
       }),
     );
   }

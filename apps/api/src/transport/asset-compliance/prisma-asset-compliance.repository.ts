@@ -72,6 +72,17 @@ const toWorkOrder = (row: any): MaintenanceWorkOrder => ({
   costingExpenseRef: row.costingExpenseRef,
   note: row.note,
   updatedAt: row.updatedAt.toISOString(),
+  // `TX-06b` (#237). `kind` co `DEFAULT 'REPAIR'` duoi DB nen hang cu luon doc ra mot gia tri
+  // that; `?? 'REPAIR'` chi de mot ban `@prisma/client` chua sinh lai khong lam do runtime.
+  kind: row.kind ?? 'REPAIR',
+  vendorName: row.vendorName ?? null,
+  vendorPhone: row.vendorPhone ?? null,
+  partsCost: fromStoredAmount(row.partsCost ?? null),
+  labourCost: fromStoredAmount(row.labourCost ?? null),
+  evidenceLocator: row.evidenceLocator ?? null,
+  tripId: row.tripId ?? null,
+  plannedDate: row.plannedDate ?? null,
+  plannedOdoKm: row.plannedOdoKm ?? null,
 });
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
@@ -159,6 +170,14 @@ export class PrismaAssetComplianceRepository extends AssetComplianceRepository {
           openedOdoKm: input.openedOdoKm,
           openedBy: input.openedBy,
           note: input.note ?? null,
+          // `TX-06b` (#237). `kind` vang mat => suy tu `planId`, CUNG phep suy voi backfill cua
+          // migration — hai cho phai noi cung mot dieu, khong thi mot hang moi se khac mot hang cu.
+          kind: input.kind ?? (input.planId !== null ? 'SCHEDULED_SERVICE' : 'REPAIR'),
+          vendorName: input.vendorName ?? null,
+          vendorPhone: input.vendorPhone ?? null,
+          tripId: input.tripId ?? null,
+          plannedDate: input.plannedDate ?? null,
+          plannedOdoKm: input.plannedOdoKm ?? null,
         },
       });
       return toWorkOrder(row);
@@ -210,6 +229,13 @@ export class PrismaAssetComplianceRepository extends AssetComplianceRepository {
         ? {}
         : { costingExpenseRef: input.costingExpenseRef }),
       ...(input.note === undefined ? {} : { note: input.note }),
+      // `TX-06b` (#237) — moi truong VANG MAT thi khong xuat hien trong payload, chu khong ghi
+      // `null`. Mot lan dong lenh khong khai xuong sua khong duoc xoa mat ten xuong da ghi luc mo.
+      ...(input.partsCost === undefined ? {} : { partsCost: toStoredAmount(input.partsCost) }),
+      ...(input.labourCost === undefined ? {} : { labourCost: toStoredAmount(input.labourCost) }),
+      ...(input.evidenceLocator === undefined ? {} : { evidenceLocator: input.evidenceLocator }),
+      ...(input.vendorName === undefined ? {} : { vendorName: input.vendorName }),
+      ...(input.vendorPhone === undefined ? {} : { vendorPhone: input.vendorPhone }),
     });
   }
 

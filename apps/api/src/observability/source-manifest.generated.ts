@@ -93,7 +93,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "costing.reversal": {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 510
+      "line": 545
     },
     "dealers.configured": {
       "functionName": "evaluateOperationalReadiness",
@@ -101,9 +101,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "line": 49
     },
     "driver_fund.post_entry": {
-      "functionName": "CostingService.postEntryOnly",
+      "functionName": "CostingService.postEntryDetailed",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 183
+      "line": 218
     },
     "expense_claim.review": {
       "filePath": "apps/api/src/transport/claims/claim.service.ts"
@@ -334,6 +334,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/operational-alerts.controller.ts",
       "line": 24
     },
+    "transport.analytics.read": {
+      "functionName": "TransportAnalyticsController.runMargin",
+      "filePath": "apps/api/src/transport/analytics/analytics.controller.ts",
+      "line": 40
+    },
     "transport.compliance.document.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
     },
@@ -411,6 +416,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.self.proof.record": {
       "filePath": "apps/api/src/transport/proof/driver-proof.controller.ts"
     },
+    "transport.driver.self.settlement.read": {
+      "functionName": "DriverSettlementSelfController.statement",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement-self.controller.ts",
+      "line": 34
+    },
     "transport.driver.self.tracking.report": {
       "functionName": "DriverTrackingController.report",
       "filePath": "apps/api/src/transport/proof/driver-tracking.controller.ts",
@@ -431,6 +441,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "DriverTripsController.updateStatus",
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts",
       "line": 61
+    },
+    "transport.driver_settlement.cashout": {
+      "functionName": "DriverSettlementController.recordCashout",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.controller.ts",
+      "line": 77
+    },
+    "transport.driver_settlement.read": {
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.controller.ts"
+    },
+    "transport.driver_settlement.reverse": {
+      "functionName": "DriverSettlementController.reverseCashout",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.controller.ts",
+      "line": 111
     },
     "transport.expense.claim.read": {
       "filePath": "apps/api/src/transport/claims/claims.controller.ts"
@@ -600,7 +623,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "trip_expense.record": {
       "functionName": "CostingService.recordTripExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 275
+      "line": 310
     }
   },
   "decisions": {
@@ -711,12 +734,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "costing.reversal|*": {
       "functionName": "CostingService.denyReversal",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 574
+      "line": 609
     },
     "costing.reversal|REVERSAL_POSTED": {
       "functionName": "CostingService.reverseCorrelation",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 548
+      "line": 583
     },
     "counterparty.link|*": {
       "functionName": "CounterpartyService.denyLink",
@@ -803,14 +826,64 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "line": 474
     },
     "driver_fund.post_entry|FUND_ENTRY_IDEMPOTENT_REPLAY": {
-      "functionName": "CostingService.postEntryOnly",
+      "functionName": "CostingService.postEntryDetailed",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 173
+      "line": 208
     },
     "driver_fund.post_entry|FUND_ENTRY_POSTED": {
-      "functionName": "CostingService.postEntryOnly",
+      "functionName": "CostingService.postEntryDetailed",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 200
+      "line": 235
+    },
+    "driver_settlement.cashout_post|*": {
+      "functionName": "DriverSettlementService.denyPost",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.service.ts",
+      "line": 372
+    },
+    "driver_settlement.cashout_post|CASHOUT_IDEMPOTENT_REPLAY": {
+      "functionName": "DriverSettlementService.assertSameCashout",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.service.ts",
+      "line": 344
+    },
+    "driver_settlement.cashout_post|CASHOUT_POSTED": {
+      "functionName": "DriverSettlementService.recordCashout",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.service.ts",
+      "line": 190
+    },
+    "driver_settlement.cashout_reverse|*": {
+      "functionName": "DriverSettlementService.denyReverse",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.service.ts",
+      "line": 382
+    },
+    "driver_settlement.cashout_reverse|CASHOUT_REVERSED": {
+      "functionName": "DriverSettlementService.reverseCashout",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.service.ts",
+      "line": 301
+    },
+    "driver_settlement.reimbursement_post|*": {
+      "functionName": "DriverSettlementService.recordCashout",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.service.ts",
+      "line": 144
+    },
+    "driver_settlement.reimbursement_post|REIMBURSEMENT_FUND_ENTRY_REVERSED": {
+      "functionName": "DriverSettlementService.reverseCashout",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.service.ts",
+      "line": 257
+    },
+    "driver_settlement.self_statement|SELF_DRIVER_PROFILE_MISSING": {
+      "functionName": "DriverSettlementReadService.selfStatement",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement-read.service.ts",
+      "line": 172
+    },
+    "driver_settlement.self_statement|SELF_SETTLEMENT_SERVED": {
+      "functionName": "DriverSettlementReadService.selfStatement",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement-read.service.ts",
+      "line": 186
+    },
+    "driver_settlement.wage_window|*": {
+      "functionName": "DriverSettlementReadService.statement",
+      "filePath": "apps/api/src/transport/driver-settlement/driver-settlement-read.service.ts",
+      "line": 145
     },
     "evidence.read|EVIDENCE_LOCATOR_OUT_OF_SCOPE": {
       "functionName": "TransportEvidenceService.read",
@@ -884,12 +957,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fleet.effective_vehicle_state|*": {
       "functionName": "AssetComplianceReadService.emitStateDecision",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance-read.service.ts",
-      "line": 210
+      "line": 237
     },
     "fleet.effective_vehicle_state|VEHICLE_MAINTENANCE_TRIP_CONFLICT": {
       "functionName": "AssetComplianceReadService.emitStateDecision",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance-read.service.ts",
-      "line": 219
+      "line": 246
     },
     "fuel.cost_posting|*": {
       "functionName": "FuelService.postFuelCost",
@@ -1371,22 +1444,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "trip_expense.record|*": {
       "functionName": "CostingService.guardTripAcceptsExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 655
+      "line": 690
     },
     "trip_expense.record|EXPENSE_DRIVER_NOT_ASSIGNED": {
       "functionName": "CostingService.requireDriverAssignedToTrip",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 741
+      "line": 776
     },
     "trip_expense.record|EXPENSE_IDEMPOTENT_REPLAY": {
       "functionName": "CostingService.recordTripExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 265
+      "line": 300
     },
     "trip_expense.record|EXPENSE_RECORDED": {
       "functionName": "CostingService.recordTripExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
-      "line": 306
+      "line": 341
     }
   }
 };

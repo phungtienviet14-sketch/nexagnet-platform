@@ -106,6 +106,17 @@ export interface DemoSeedResult {
  * lam lenh reset chet ngay o phieu luong dau tien.
  */
 const TRANSPORT_TABLES_CHILD_FIRST = [
+  /**
+   * `TX-07b` — PHAI DUNG TRUOC `transportPayslip`.
+   *
+   * `TransportDriverCashoutAllocation` tro toi CA phieu luong LAN but toan quy, ca hai bang khoa
+   * ngoai `Restrict`. Xoa phieu luong truoc se do ngay o
+   * `TransportDriverCashoutAllocation_payslipId_fkey`.
+   *
+   * Ban than bang phan bo KHONG nam trong danh sach nay: mot trigger cam `DELETE` len no, nen no
+   * duoc xoa o mot buoc rieng ngay truoc vong lap — xem `wipeFrozenCashoutAllocations()`.
+   */
+  'transportDriverCashout',
   'transportPayslip',
   'transportPayrollRun',
   'transportPayrollPeriod',
@@ -171,6 +182,39 @@ const iso = (date: BusinessDate, hour: number): Date =>
  * — khong mot bang nao cua mien ban hang, khong `User`, khong `AuditLog`. Mot lenh reset xoa nhieu
  * hon cai no hua la cach nhanh nhat de khong ai dam chay no nua.
  */
+/**
+ * XOA CAC DONG PHAN BO CHI TIEN — cho DUY NHAT trong ca ma nguon duoc tat mot trigger bat bien.
+ *
+ * `transport_driver_cashout_allocation_frozen` chan `UPDATE` va `DELETE` len
+ * `TransportDriverCashoutAllocation`, va do la CO Y: doi nguon goc mot khoan tien da tra ma khong
+ * de lai dau vet se lam lan doi soat sau doc ra mot su that khac han su that da bao (`INV-20`).
+ *
+ * Nhung trigger do ton tai de chan MA NGHIEP VU, khong phai de lam du lieu demo khong xoa duoc.
+ * Ham nay chi chay sau `assertDemoResetAllowed()` — hai cong doc lap da gac o tren — va no tat
+ * trigger TRONG DUNG mot giao dich roi bat lai, nen khong co khoanh khac nao ma mot duong ghi khac
+ * di qua duoc cua da mo.
+ *
+ * `ALTER TABLE … DISABLE TRIGGER` nhan khoa `ACCESS EXCLUSIVE`, tuc no doi moi truy van khac tren
+ * bang do ket thuc. Voi mot lenh reset demo thi do la dieu dung: khong ai duoc dang doc so trong
+ * luc no bi xoa.
+ */
+async function wipeFrozenCashoutAllocations(prisma: PrismaClient): Promise<number> {
+  /**
+   * `$transaction([...])` tra ve ket qua theo DUNG thu tu lenh, nen so hang bi xoa la phan tu THU
+   * HAI. Lay phan tu dau se luon ra `0` — so hang cua `ALTER TABLE` — mot con so trong y nhu that.
+   */
+  const [, deleted] = await prisma.$transaction([
+    prisma.$executeRawUnsafe(
+      'ALTER TABLE "TransportDriverCashoutAllocation" DISABLE TRIGGER "transport_driver_cashout_allocation_frozen"',
+    ),
+    prisma.$executeRawUnsafe('DELETE FROM "TransportDriverCashoutAllocation"'),
+    prisma.$executeRawUnsafe(
+      'ALTER TABLE "TransportDriverCashoutAllocation" ENABLE TRIGGER "transport_driver_cashout_allocation_frozen"',
+    ),
+  ]);
+  return deleted ?? 0;
+}
+
 export async function resetTransportDemoData(
   prisma: PrismaClient,
   env: NodeJS.ProcessEnv = process.env,
@@ -198,6 +242,10 @@ export async function resetTransportDemoData(
     .filter((id): id is string => id !== null);
 
   const deleted: Record<string, number> = {};
+
+  const allocations = await wipeFrozenCashoutAllocations(prisma);
+  if (allocations > 0) deleted['transportDriverCashoutAllocation'] = allocations;
+
   for (const table of TRANSPORT_TABLES_CHILD_FIRST) {
     const delegate = prisma[table] as unknown as { deleteMany: () => Promise<{ count: number }> };
     const result = await delegate.deleteMany();
@@ -1120,6 +1168,17 @@ async function writePlan(
           data: {
             vehicleId: vehicleId.get(order.vehicleRef) as string,
             planId: order.planRef === null ? null : (planId.get(order.planRef) as string),
+            /**
+             * `TX-06b` — BAN CHAT SUY TU KE HOACH, dung mot luat voi kho that
+             * (`prisma-asset-compliance.repository.ts`): co `planId` la bao duong theo lich, khong
+             * co la sua chua.
+             *
+             * Cot `kind` co `DEFAULT 'REPAIR'` de mot migration khong phai doan ban chat cua du
+             * lieu cu, nhung mac dinh do KHONG dung cho mot lenh CO ke hoach — va
+             * `..._kind_plan_shape` la mot bien dieu kien, nen no tu choi ngay. Duong gieo nay ghi
+             * THANG vao bang, khong qua kho, nen luat phai duoc nhac lai o day.
+             */
+            kind: order.planRef === null ? 'REPAIR' : 'SCHEDULED_SERVICE',
             status: order.status,
             description: order.description,
             openedDate: order.openedDate,

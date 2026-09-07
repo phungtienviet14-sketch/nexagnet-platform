@@ -67,6 +67,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // `TX-05` di vao HTTP o `#168 B1` — CHI DOC. Khong ma ghi nao, xem `transport-actions.ts`.
       'transport.settlement.report.read',
       'transport.settlement.document.read',
+      'transport.analytics.read',
       'transport.maintenance.plan.read',
       'transport.maintenance.plan.manage',
       'transport.maintenance.work_order.open',
@@ -81,6 +82,10 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.payslip.approve',
       'transport.payslip.pay',
       'transport.payslip.correct',
+      // `TX-07b` (Lane D, #237) — ba ma van hanh: doc bang quyet toan, chi tien, dao mot lan chi.
+      'transport.driver_settlement.read',
+      'transport.driver_settlement.cashout',
+      'transport.driver_settlement.reverse',
       'transport.driver.self.trip.read',
       'transport.driver.self.trip.update',
       'transport.driver.self.fund.read',
@@ -93,6 +98,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // `#168 B8` — lai xe doc lich su luong DA CONG BO cua chinh minh. Tach han khoi
       // `transport.payroll.period.read`, la ma van hanh doc duoc phieu cua bat ky lai xe nao.
       'transport.driver.self.payslip.read',
+      // `TX-07b` — lai xe doc bang quyet toan CUA CHINH MINH. Khong co bien the ghi nao: mot nguoi
+      // tu chi tien cho chinh minh la dung cai ma kiem soat noi bo sinh ra de chan.
+      'transport.driver.self.settlement.read',
       // Issue #235 Lane B — bam vi tri cua chinh minh. Ba ma rieng chu khong mot ma gop, vi ba
       // viec co ba hinh dang rui ro khac nhau: MO phien la mot lan chon chuyen, GUI la mot dong
       // bang chung lap lai hang nghin lan, DONG la mot moc ket thuc.
@@ -207,11 +215,25 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.expense.record',
       'transport.driver.self.expense.claim.submit',
         'transport.driver.self.payslip.read',
+        'transport.driver.self.settlement.read',
         'transport.driver.self.tracking.start',
         'transport.driver.self.tracking.report',
         'transport.driver.self.tracking.stop',
         'transport.driver.self.proof.record',
       ]);
+    });
+
+    /**
+     * `TX-07b` — pham vi tu phuc vu KHONG keo theo mot quyen chi tien nao.
+     *
+     * Cung phep thu voi `#168 B3` o ngay duoi, va o day no dat hon: ba ma van hanh cua quyet toan
+     * doc duoc bang cua MOI lai xe va CHUYEN DUOC TIEN THAT. Mot lai xe cham vao chung nghia la ho
+     * doc duoc luong dong nghiep va tu tra tien cho chinh minh.
+     */
+    it('KHONG cham duoc mot ma quyet toan van hanh nao', () => {
+      expect(roleCanPerform('SALE', 'transport.driver_settlement.read')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.driver_settlement.cashout')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.driver_settlement.reverse')).toBe(false);
     });
 
     /**
@@ -261,6 +283,17 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
     it('#168 B1: lai xe KHONG doc duoc mot bao cao quyet toan nao', () => {
       expect(roleCanPerform('SALE', 'transport.settlement.report.read')).toBe(false);
       expect(roleCanPerform('SALE', 'transport.settlement.document.read')).toBe(false);
+    });
+
+    /**
+     * `R8` mang `freightAmount` ra mot be mat bao cao, va `INV-09` cam gia cuoc di vao khung nhin
+     * lai xe. Vai lai xe hom nay la `SALE` (cau bridge `GD-22`), nen phep do phai o dung day.
+     */
+    it('`R8`: van hanh doc duoc chi so, lai xe thi khong', () => {
+      expect(roleCanPerform('ADMIN', 'transport.analytics.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.analytics.read')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.analytics.read')).toBe(false);
+      expect(roleCanPerform('MANAGER', 'transport.analytics.read')).toBe(false);
     });
 
     it('KHONG doc duoc danh sach chuyen chung — day la cho ro ri de nhat', () => {

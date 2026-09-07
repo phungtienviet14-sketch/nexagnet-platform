@@ -26,6 +26,7 @@ import { DriverFundView } from './views/DriverFundView';
 import { ExpenseClaimsView } from './views/ExpenseClaimsView';
 import { ExportsView } from './views/ExportsView';
 import { MaintenanceComplianceView } from './views/MaintenanceView';
+import { DriverSettlementView } from './views/DriverSettlementView';
 import { MovementView } from './views/MovementView';
 import { PayrollView } from './views/PayrollView';
 import { ArApView, MarginView, SettlementView } from './views/SettlementViews';
@@ -285,5 +286,9 @@ function SectionBody({
       return <MaintenanceComplianceView />;
     case 'payroll':
       return <PayrollView />;
+    // `TX-07b` (#237) — chi tien cho lai xe. Cung capability voi man Luong, nhung mot ma quyen
+    // RIENG: xem duoc bang luong khong nhat thiet xem duoc lich su chi tien mat.
+    case 'driver-settlement':
+      return <DriverSettlementView />;
   }
 }

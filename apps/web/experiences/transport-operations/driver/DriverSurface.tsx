@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { MetricCard, StatusBadge } from '../components/primitives';
-import { expenseCategoryLabel } from '../customer-view';
+import { expenseCategoryLabel, formatMoney } from '../customer-view';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
@@ -11,6 +11,7 @@ import {
   useDriverFuelSlips,
   useDriverFund,
   useDriverPayslips,
+  useDriverSettlement,
   useDriverTrips,
   useDriverFuelSuppliers,
   useNavigationInput,
@@ -875,6 +876,58 @@ function DriverHistory() {
 }
 
 /**
+ * BON CON SO CUA CHINH TOI — `TX-07b` (#237).
+ *
+ * KHONG hien so du quy tho. `DriverSettlementSelfStatement` khong co truong do, va do la mot bat
+ * bien CAU TRUC chu khong phai mot bo loc o day: mot lai xe doc "so du quy: -1.500.000" se hieu la
+ * minh dang no, dung cai ma `DA-T3-01` canh bao. Con so ho nhan la "hoan ung cong ty tra lai", luon
+ * DUONG, va cau chu di kem noi ro do khong phai luong.
+ *
+ * KHONG co nut rut tien: mot nguoi tu chi tien cho chinh minh la dung cai ma kiem soat noi bo sinh
+ * ra de chan. Lai xe noi voi ke toan, va ke toan ghi lan chi.
+ *
+ * `isBlocked` (khach tat capability, hoac vai khong co ma tu phuc vu) tra ve `null` — mot khoi
+ * trong con hon mot khoi noi "0 dong" ve mot thu khong duoc do.
+ */
+function DriverSettlementSummary() {
+  const navigation = useNavigationInput();
+  const settlement = toSectionQuery(useDriverSettlement(navigation));
+
+  if (settlement.isBlocked) return null;
+  if (settlement.isLoading) return <LoadingState label="Đang đọc bảng quyết toán…" />;
+  if (settlement.errorMessage !== null) {
+    return <ErrorState message={settlement.errorMessage} onRetry={settlement.refetch} />;
+  }
+
+  const data = settlement.data;
+  if (!data) return null;
+
+  return (
+    <section className="tx-driver__summary" aria-label="Bảng quyết toán của tôi">
+      <dl>
+        <div>
+          <dt>Đã ghi nhận</dt>
+          <dd>{formatMoney(data.wageCredited)}</dd>
+        </div>
+        <div>
+          <dt>Đã nhận</dt>
+          <dd>{formatMoney(data.wageCashedOut)}</dd>
+        </div>
+        <div>
+          <dt>Còn lại</dt>
+          <dd>{formatMoney(data.wageRemaining)}</dd>
+        </div>
+        <div>
+          <dt>Công ty trả lại hoàn ứng</dt>
+          <dd>{formatMoney(data.reimbursementOutstanding)}</dd>
+        </div>
+      </dl>
+      <p className="tx-note">Hoàn ứng là tiền bạn đã bỏ túi cho chuyến, công ty trả lại — không phải lương.</p>
+    </section>
+  );
+}
+
+/**
  * PHIEU LUONG CUA CHINH MINH — `#168 B8`.
  *
  * KHONG loc `DRAFT` o day, va do khong phai thieu sot: may chu tra `null` cho phieu tam tinh ngay o
@@ -897,6 +950,7 @@ function DriverPayslip() {
   return (
     <>
       <h1 className="tx-driver__title">Phiếu lương</h1>
+      <DriverSettlementSummary />
       {rows.length === 0 ? (
         <EmptyState title="Bạn chưa có phiếu lương nào đã công bố." />
       ) : (

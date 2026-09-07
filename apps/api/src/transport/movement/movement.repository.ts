@@ -127,6 +127,14 @@ export abstract class MovementRepository {
   abstract activeRunAssignment(runId: string): Promise<RunAssignment | null>;
 
   abstract findTripLink(tripId: string): Promise<TripRunLegLink | null>;
+  /**
+   * TRA CUU NGUOC: tu CHANG ra CHUYEN. Nhan ca lo, khong nhan tung chang.
+   *
+   * `R8` can duong nay de quy chi phi `TX-03` (gan vao CHUYEN) ve grain CHANG. Nhan mot mang thay
+   * vi mot ma la co y: mot vong chay muoi chang se thanh muoi lan hoi neu ky mot ham `byLeg(id)`,
+   * va cai gia do roi dung vao bao cao — cho de ai cung goi trong mot vong lap.
+   */
+  abstract findTripLinksByLegs(legIds: readonly string[]): Promise<TripRunLegLink[]>;
   abstract findProjection(tripId: string): Promise<TripProjection | null>;
   /** Ghi ca bon hang (don tuy chon, vong chay, chang, lien ket) trong MOT giao dich. */
   abstract projectTrip(input: ProjectTripInput): Promise<TripProjection>;
@@ -179,7 +187,8 @@ export class InMemoryMovementRepository extends MovementRepository {
       customerId: patch.customerId === undefined ? current.customerId : patch.customerId,
       cargoDescription:
         patch.cargoDescription === undefined ? current.cargoDescription : patch.cargoDescription,
-      freightAmount: patch.freightAmount === undefined ? current.freightAmount : patch.freightAmount,
+      freightAmount:
+        patch.freightAmount === undefined ? current.freightAmount : patch.freightAmount,
       note: patch.note === undefined ? current.note : patch.note,
       updatedAt: iso(new Date()),
     };
@@ -378,6 +387,11 @@ export class InMemoryMovementRepository extends MovementRepository {
 
   async findTripLink(tripId: string): Promise<TripRunLegLink | null> {
     return this.links.get(tripId) ?? null;
+  }
+
+  async findTripLinksByLegs(legIds: readonly string[]): Promise<TripRunLegLink[]> {
+    const wanted = new Set(legIds);
+    return [...this.links.values()].filter((link) => wanted.has(link.legId));
   }
 
   async findProjection(tripId: string): Promise<TripProjection | null> {

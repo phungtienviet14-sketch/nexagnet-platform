@@ -137,6 +137,33 @@ export class CostingService {
     return this.postEntryOnly('ADJUSTMENT', { ...input, signedAmount }, actor);
   }
 
+  /**
+   * HOAN UNG — cong ty tra lai lai xe khoan ho da bo tui (`TX-07b`, Issue #237).
+   *
+   * ---------------------------------------------------------------------------
+   * VI SAO LENH NAY NAM O DAY chu khong o `transport/driver-settlement`:
+   *
+   * So quy lai xe la so cai cua `TX-03`, va §4.1 luat 4 cam mot capability khac ghi vao bang cua
+   * no. `TX-07b` can dung MOT lenh ghi — dua so du am ve sau khi tra tien — nen lenh do duoc
+   * CONG BO o day, duoi quyen so huu cua chinh chu so cai, va ben kia goi qua mot cong.
+   *
+   * Neu khong co lenh nay thi mot lan chi hoan ung se chi duoc ghi o bang chung tu chi, con so quy
+   * VINH VIEN noi rang cong ty con no — va lan doi soat sau se tra mot lan nua. Do la dem hai lan
+   * mot khoan tien, chi khac la no nam o hai bang.
+   *
+   * `replayed` duoc TRA RA thay vi nuot: `TX-07b` ghi but toan quy TRUOC roi moi ghi chung tu chi,
+   * nen mot lan hong giua hai buoc de lai mot but toan mo coi. Lan thu lai dung khoa cu se dung
+   * lai chinh but toan do, va ben goi phai NOI DUOC rang no da dung lai — do la bang chung rang
+   * khong co dong tien thu hai nao duoc sinh ra.
+   */
+  async postReimbursement(
+    input: PostFundMovementInput,
+    actor: string,
+  ): Promise<{ entry: DriverFundEntry; replayed: boolean }> {
+    const signedAmount = this.requireMagnitude('REIMBURSEMENT', input.amount);
+    return this.postEntryDetailed('REIMBURSEMENT', { ...input, signedAmount }, actor);
+  }
+
   private async postMovement(
     kind: PostableFundEntryKind,
     input: PostFundMovementInput,
@@ -151,6 +178,14 @@ export class CostingService {
     input: Omit<AdjustFundInput, 'signedAmount'> & { signedAmount: number },
     actor: string,
   ): Promise<DriverFundEntry> {
+    return (await this.postEntryDetailed(kind, input, actor)).entry;
+  }
+
+  private async postEntryDetailed(
+    kind: DriverFundEntryKind,
+    input: Omit<AdjustFundInput, 'signedAmount'> & { signedAmount: number },
+    actor: string,
+  ): Promise<{ entry: DriverFundEntry; replayed: boolean }> {
     const businessDate = this.businessDate(input.businessDate);
     await requireDriverFacts(this.core, input.driverId);
     if (input.tripId) await requireTripFacts(this.core, input.tripId);
@@ -177,7 +212,7 @@ export class CostingService {
         reason: 'FUND_ENTRY_IDEMPOTENT_REPLAY',
         detail: { correlationKey, entryId: replay.id },
       });
-      return replay;
+      return { entry: replay, replayed: true };
     }
 
     const posted = await this.postGuarded('driver_fund.post_entry', {
@@ -211,7 +246,7 @@ export class CostingService {
       entityId: entry.id,
       after: entry,
     });
-    return entry;
+    return { entry, replayed: false };
   }
 
   /* --------------------- Gia thanh chuyen --------------------- */

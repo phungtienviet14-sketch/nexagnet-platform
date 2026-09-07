@@ -47,10 +47,30 @@ export const DRIVER_FUND_ENTRY_KINDS = [
   'ADJUSTMENT',
   /** Dao mot but toan da ghi. Khong bao gio duoc tao truc tiep boi nguoi dung. */
   'REVERSAL',
+  /**
+   * `TX-07b` — CONG TY TRA LAI lai xe khoan ho da bo tui. Luon DUONG: no dua so du AM ve gan 0.
+   *
+   * KHONG PHAI `ADVANCE`: mot lan tam ung la tien giao TRUOC cho chi tieu sap toi, con hoan ung la
+   * tien tra LAI cho mot khoan da chi. Gop hai thu lam mot se lam moi bao cao "da tam ung bao nhieu
+   * trong ky" dem ca tien hoan ung — mot con so khong con tra loi cau hoi nao.
+   *
+   * KHONG PHAI `ADJUSTMENT`: chu thich cua chinh loai do noi ro no la sua lech KIEM KE.
+   *
+   * KHONG nam trong `POSTABLE_FUND_ENTRY_KINDS`, va do la mot bat bien chu khong phai bo sot: mot
+   * but toan hoan ung chi duoc sinh ra CUNG mot dong phan bo cua `TransportDriverCashout`. Cho ghi
+   * no truc tiep se cho ra mot khoan tien da tra khong co chung tu chi nao doi ung.
+   */
+  'REIMBURSEMENT',
 ] as const;
 export type DriverFundEntryKind = (typeof DRIVER_FUND_ENTRY_KINDS)[number];
 
-/** Loai but toan ma nguoi dung duoc phep tao THANG. `REVERSAL` chi den tu duong dao. */
+/**
+ * Loai but toan ma nguoi dung duoc phep tao THANG.
+ *
+ * `REVERSAL` chi den tu duong dao; `TRIP_EXPENSE` chi den tu `recordTripExpense`; `REIMBURSEMENT`
+ * chi den tu mot lan chi cua `TX-07b`. Ba loai do co chung mot tinh chat: chung luon la MOT NUA
+ * cua mot su kien hai lop, va mot nua mo coi la mot con so khong doi soat duoc voi gi.
+ */
 export const POSTABLE_FUND_ENTRY_KINDS = ['ADVANCE', 'RETURN', 'ADJUSTMENT'] as const;
 export type PostableFundEntryKind = (typeof POSTABLE_FUND_ENTRY_KINDS)[number];
 
@@ -61,6 +81,7 @@ const REQUIRED_SIGN: Readonly<Record<DriverFundEntryKind, 1 | -1 | null>> = {
   TRIP_EXPENSE: -1,
   ADJUSTMENT: null,
   REVERSAL: null,
+  REIMBURSEMENT: 1,
 };
 
 export const TRIP_EXPENSE_KINDS = [

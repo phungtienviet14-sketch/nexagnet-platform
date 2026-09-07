@@ -41,6 +41,10 @@ export const TRANSPORT_QUERY_KEYS = {
   driverFuel: ['transport', 'me', 'fuel'],
   driverPayslips: ['transport', 'me', 'payslips'],
   driverExpenseCategories: ['transport', 'me', 'expense-categories'],
+  /** `TX-07b` — bang quyet toan cua chinh lai xe dang dang nhap. */
+  driverSettlement: ['transport', 'me', 'settlement'],
+  /** `TX-07b` — mot dong so du cho moi lai xe (be mat ke toan). */
+  settlementBalances: ['transport', 'driver-settlement', 'balances'],
   orders: ['transport', 'orders'],
   runs: ['transport', 'runs'],
   expenseClaims: ['transport', 'expense-claims'],
@@ -297,6 +301,40 @@ export function useDriverPayslips(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.driverPayslips,
     queryFn: () => transportApi.me.payslips(),
     enabled: allowed(input, 'transport-workforce', 'transport.driver.self.payslip.read'),
+  });
+}
+
+/**
+ * `TX-07b` — bang quyet toan CUA CHINH LAI XE dang dang nhap.
+ *
+ * Khong tham so `driverId`: danh tinh den tu phien o may chu. Mot tham so o day se la duong de mot
+ * lai xe doc bang cua dong nghiep bang cach doi mot chuoi tren URL.
+ */
+export function useDriverSettlement(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.driverSettlement,
+    queryFn: () => transportApi.me.settlement(),
+    enabled: allowed(input, 'transport-workforce', 'transport.driver.self.settlement.read'),
+  });
+}
+
+/** `TX-07b` — mot dong so du cho moi lai xe dang lam viec (be mat ke toan). */
+export function useSettlementBalances(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.settlementBalances,
+    queryFn: () => transportApi.driverSettlement.balances(),
+    enabled: allowed(input, 'transport-workforce', 'transport.driver_settlement.read'),
+  });
+}
+
+/** `TX-07b` — bang cua MOT lai xe: cac thang, cac lan chi kem phan bo, canh bao cua so. */
+export function useSettlementStatement(input: NavigationInput, driverId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'driver-settlement', 'drivers', driverId],
+    queryFn: () => transportApi.driverSettlement.statement(driverId as string),
+    enabled:
+      driverId !== null &&
+      allowed(input, 'transport-workforce', 'transport.driver_settlement.read'),
   });
 }
 

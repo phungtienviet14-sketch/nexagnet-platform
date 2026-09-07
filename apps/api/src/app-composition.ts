@@ -122,6 +122,11 @@ import { SettlementReportsController } from './transport/settlement/settlement-r
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
 import { TransportAssetComplianceModule } from './transport/asset-compliance/transport-asset-compliance.module.js';
 import { TransportWorkforceModule } from './transport/workforce/transport-workforce.module.js';
+import { TransportDriverSettlementModule } from './transport/driver-settlement/transport-driver-settlement.module.js';
+import { TransportAnalyticsModule } from './transport/analytics/transport-analytics.module.js';
+import { TransportAnalyticsController } from './transport/analytics/analytics.controller.js';
+import { DriverSettlementController } from './transport/driver-settlement/driver-settlement.controller.js';
+import { DriverSettlementSelfController } from './transport/driver-settlement/driver-settlement-self.controller.js';
 import { TransportProofModule } from './transport/proof/transport-proof.module.js';
 import { DriverTrackingController } from './transport/proof/driver-tracking.controller.js';
 import { TrackingController } from './transport/proof/tracking.controller.js';
@@ -194,6 +199,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // GIA THANH + SO QUY. Den cung `transport-costing` va bien mat cung no: mot khach van tai chi
   // theo doi doi xe va chuyen khong co mot bang so cai nao duoc nap.
   owned('transport-costing', TransportCostingModule),
+  // CHI SO VAN HANH (`R8`, #237). Den cung `transport-costing` va bien mat cung no: bien truc tiep
+  // khong co nghia neu khong ai ghi chi phi truc tiep. KHONG phai mot capability moi — xem khoi ghi
+  // chu cua `transport-analytics.module.ts`.
+  owned('transport-costing', TransportAnalyticsModule),
   // NHIEN LIEU + DOI SOAT BANG KE. Den cung `transport-fuel` va bien mat cung no: mot khach van
   // tai chua doi soat bang ke cay xang khong duoc nap tam bang nao cua `TX-04`.
   owned('transport-fuel', TransportFuelModule),
@@ -205,6 +214,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   owned('transport-asset-compliance', TransportAssetComplianceModule),
   // LUONG LAI XE. Den cung `transport-workforce` va bien mat cung no.
   owned('transport-workforce', TransportWorkforceModule),
+  // CHI TIEN CHO LAI XE + PHAN BO (`TX-07b`, #237). Cung chu so huu voi bang luong, va do la mot
+  // khang dinh: nguon cua moi khoan da ghi nhan la `TransportPayslip`, nen mot khach bat luong ma
+  // khong bat quyet toan se co bang luong khong bao gio tra duoc thanh tien.
+  owned('transport-workforce', TransportDriverSettlementModule),
   // BAM VI TRI. Mot khach van tai KHONG bat capability nay thi khong co mot bang toa do nao, va
   // do la mot cau hinh hop le — xem khoi chu thich cua `transport-proof` trong `tenant.schema.ts`.
   owned('transport-proof', TransportProofModule),
@@ -257,6 +270,8 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // BE MAT LAI XE — route rieng, khong phai mot nhanh `if` trong `TripsController` (`GD-23`).
   // Den cung `transport-core` va bien mat cung no.
   owned('transport-core', DriverTripsController),
+  // CHI SO VAN HANH — CHI DOC, khong mot route ghi nao (#237: *"AI does not rewrite facts"*).
+  owned('transport-costing', TransportAnalyticsController),
   owned('transport-costing', TripExpensesController),
   owned('transport-costing', DriverFundController),
   // SO QUY CUA CHINH TOI — route rieng, cung ly le voi `DriverTripsController` (`GD-23`).
@@ -296,6 +311,11 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // PHIEU LUONG CUA CHINH TOI (`#168 B8`) — route rieng, cung ly le voi `DriverFuelController`.
   // Den cung `transport-workforce` va bien mat cung no: khong tinh luong thi khong co phieu de doc.
   owned('transport-workforce', DriverPayslipsController),
+  // `TX-07b` (#237) — chi tien cho lai xe va phan bo theo thang. Be mat KE TOAN.
+  owned('transport-workforce', DriverSettlementController),
+  // BANG QUYET TOAN CUA CHINH TOI — route rieng, cung khuon `DriverPayslipsController`: chi `GET`,
+  // danh tinh tu phien, va khong mot ma ghi nao duoc cap cho lai xe.
+  owned('transport-workforce', DriverSettlementSelfController),
   // `TX-05` — BAO CAO quyet toan, CHI DOC (`#168 B1`). Capability nay chay tu T5 nhung chua tung co
   // mot duong HTTP nao; xem khoi chu thich cua controller ve vi sao khong co route ghi.
   owned('transport-settlement', SettlementReportsController),

@@ -119,6 +119,14 @@ const CASES: readonly EnvelopeCase[] = [
     route: "@Get('runs/:runId/payslips')",
     call: () => transportApi.payroll.payslipsOfRun('run-1'),
   },
+  {
+    label: 'driver settlement balances',
+    path: '/transport/driver-settlement/balances',
+    key: 'balances',
+    controller: 'driver-settlement/driver-settlement.controller.ts',
+    route: "@Get('balances')",
+    call: () => transportApi.driverSettlement.balances(),
+  },
 ];
 
 describe('danh sach nam trong phong bi', () => {

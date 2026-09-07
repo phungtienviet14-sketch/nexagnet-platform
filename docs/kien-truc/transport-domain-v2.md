@@ -97,10 +97,10 @@ việc như *chưa làm* trong khi nó **đã chạy trên `main` từ T3/T4**, 
 |---|---|---|
 | `TransportSettlementDocument` + `Allocation` | `KEEP` | Đã có phân bổ một khoản thu/chi vào nhiều chứng từ |
 | `TransportSettlementPeriod` / `CustomerTerms` / `CommissionRule*` | `KEEP` | — |
-| `TransportMaintenancePlan` / `WorkOrder` | `UNKNOWN` | §12 lộ trình nói thẳng là chưa khớp thực tế. `F-09` là bằng chứng |
+| `TransportMaintenancePlan` / `WorkOrder` | ~~`UNKNOWN`~~ → **`EXTEND`** | `TX-06b` bù bảy nguyên hàm còn thiếu (xưởng, phụ tùng/công thợ, bằng chứng, hỏng dọc đường, kế hoạch-vs-thực tế, downtime, bản chất lệnh). Xem §15 |
 | `TransportComplianceDocument` | `KEEP` | Đã tách khỏi bảo dưỡng đúng như §12 đòi |
 | `TransportPayrollPeriod` / `Run` / `Payslip` / `Component` | `EXTEND` | Đã có `SUPPLEMENTAL`/`REVERSAL`, `policySnapshot`, `missingInputs` |
-| Chi trả / `Disbursement` | `UNKNOWN` | **Chưa có**. `paidAt`/`paidBy` là hai cột trên phiếu, không phải một lần chi có thể phân bổ |
+| Chi trả / `Disbursement` | ~~`UNKNOWN`~~ → **`AS-BUILT`** | **Đã có từ `TX-07b`** (R5, PR của Lane D) — `TransportDriverCashout` + `…Allocation`. Xem §14 |
 
 ### 1.5. Nền tảng mà v2 sẽ dựa vào
 
@@ -564,7 +564,7 @@ Sắp theo **cái gì bị chặn**, không theo chủ đề.
 | `Q-04` | Kế toán có được **duyệt một phần** một khoản chi lái xe đề nghị không? Nếu có, số bị cắt đi về đâu | **ExpenseClaim (§9 lộ trình)** | `F-06`; `C-02` của T0 vẫn chưa gỡ. **#232 `D-06` đã gỡ phần chặn**: duyệt TRỌN KHOẢN (`approvedAmount = claimedAmount`) được làm trước, duyệt MỘT PHẦN vẫn chờ `Q-04` |
 | `Q-05` | Cái gì **thật sự cấm** điều một xe đi (lệnh sửa đang mở? giấy tờ hết hạn?) và cái gì chỉ **cảnh báo** | **Bảo dưỡng v2 (R6)**, và cách sửa `F-09` | Thêm một cổng chặn sai là làm cả đội xe đứng bánh |
 | `Q-06` | B trả lương lái xe **thật sự** theo chu kỳ nào, và có đang chậm không | **R5** | `F-08`: dồn nhiều tháng vướng Đ.97 BLLĐ 2019. Cần biết thực tế trước khi mô hình hoá |
-| `Q-07` | B nạp và quyết toán **ETC** thế nào; tài khoản VETC/ePass đứng tên ai, đối soát bằng gì | **R7** | Không nhà cung cấp nào có API công khai; và phí duy trì tài khoản đang bị Chính phủ **rà soát**, chưa chốt |
+| `Q-07` | B nạp và quyết toán **ETC** thế nào; tài khoản VETC/ePass đứng tên ai, đối soát bằng gì | **R7** — phần *hạch toán* | **Đã đo, xem [transport-etc-toll.md](transport-etc-toll.md).** Không nhà cung cấp nào có API công khai (đo 08/09/2026); phí quản lý tài khoản đã **công bố 01/08/2026 rồi tạm dừng ~20/08/2026** theo đề nghị của Cục Đường bộ. Câu **còn treo**: tài khoản đứng tên công ty hay cá nhân |
 | `Q-08` | B mua dầu qua **hợp đồng cây xăng** hay **thẻ/app** (PVOIL Easy, Flexicard)? Hoá đơn điện tử đang gửi về đâu | **R4** | `F-10`: quyết định adapter đầu tiên là email hoá đơn hay bảng kê |
 | `Q-09` | Ảnh giao hàng có **bắt buộc** không, và có được phép có mặt người nhận trong ảnh không | **R2** | Chạm dữ liệu sinh trắc của **người thứ ba**, không phải nhân viên |
 
@@ -606,10 +606,11 @@ Bốn luật, áp cho mọi tranche v2:
 | R2 | Proof + geospatial | **Chặn ở `Q-03`** (pháp lý), định hình lại theo `Q-02` |
 | R3 | App lái xe | **Hạ ưu tiên** — chỉ đúng nếu `Q-02` trả lời "không lấy được dữ liệu GSHT" |
 | R4 | Fuel intelligence | Đảo thứ tự: **hoá đơn điện tử trước, OCR sau** (`F-10`). Chờ `Q-08` |
-| R5 | Driver settlement + payroll | Giữ cấu trúc, bỏ tiền đề dồn lương (`F-08`). Chờ `Q-06` |
-| R6 | Maintenance v2 | Chờ `Q-05`. Sửa tài liệu `F-09` **ngay**, rẻ |
-| R7 | ETC | Chỉ nghiên cứu. Chờ `Q-07` |
-| R8 · R9 | Analytics · hệ sinh thái | Phụ thuộc R1-C |
+| R5 | Driver settlement + payroll | **XONG** — `TX-07b`, xem §14. `Q-06` đã được chủ sở hữu trả lời ở #237 |
+| R6 | Maintenance v2 | **PARTIAL** — nguyên hàm xong (§15); cổng chặn điều chuyến vẫn chờ `Q-05`, và `blocking` cố ý RỖNG |
+| R7 | ETC | **XONG phần nghiên cứu + hợp đồng cổng** — [transport-etc-toll.md](transport-etc-toll.md) + `TollProviderPort`. Hạch toán vẫn chờ `Q-07` |
+| R8 | Analytics | **PARTIAL** — chỉ số vận hành đối soát được đã xong (§16); các mặt còn lại (L/100km, phương sai trạm, AR/AP hợp nhất) **chưa** — xem §16.3 |
+| R9 | Hệ sinh thái | Phụ thuộc R1-C |
 
 ---
 
@@ -864,4 +865,202 @@ nhưng `settlementExpenseId` ở lại `null` và quyết định mang mã
 — cùng lý do với `TransportDriverFundEntry`: cách chắc chắn nhất để không ai ghi đè là không cung
 cấp cái nút đó. Đổi ý về sau là một quyết định **mới** (`sequence` kế tiếp), và sửa một khoản đã vào
 sổ vẫn đi đường cũ: bút toán đảo của T3.
+---
 
+## 14. `R5` / `TX-07b` as-built — quyết toán lái xe (Lane D, Issue #237)
+
+Mục này ghi **cái đã chạy**, theo đúng quy ước T1 §18.
+
+### 14.1. Vì sao **không** có bảng `SettlementCredit`
+
+#237 mô tả `monthly payroll credits + approved reimbursement payable → available balance`. Phản xạ
+đầu tiên là một bảng `credit` ghi một hàng mỗi khi phiếu lương được duyệt. Bảng đó sẽ mang một **bản
+sao** của `TransportPayslip.netAmount` — tức số tiền lương tồn tại ở **hai chỗ**, và kể từ lần lệch
+đầu tiên giữa hai chỗ đó không ai còn biết bên nào đúng. #237 đòi đúng điều ngược lại: _"no double
+counting between Driver Fund, fuel AP and reimbursement"_.
+
+Hai nguồn tiền **đã là hai sổ cái có sẵn**, cả hai đều bất biến:
+
+| Nguồn    | Sổ cái đã có                                  | Bất biến giữ nó                                                        |
+| -------- | --------------------------------------------- | ---------------------------------------------------------------------- |
+| lương    | `TransportPayslip`                            | trigger `transport_payslip_posted_immutable` (đóng băng từ `APPROVED`) |
+| hoàn ứng | số dư **âm** của `TransportDriverFundAccount` | `INV-01` — số dư là **kết quả cộng dồn**, không có cột                 |
+
+Cái thực sự thiếu — và §1.4 đo đúng một dòng — là **bên chi**. Nên tranche này thêm đúng bên đó.
+
+### 14.2. Vì sao một lần chi hoàn ứng **phải** ghi một bút toán quỹ
+
+Số dư quỹ âm nghĩa là lái xe đang bỏ tiền túi (`DA-T3-01`, `COMPANY_OWES_DRIVER`). Khi công ty trả
+lại, lái xe không còn bỏ tiền nữa ⇒ số dư phải về. Nếu lần chi chỉ được ghi ở bảng chứng từ chi mà
+không chạm sổ quỹ, thì **sổ quỹ vĩnh viễn nói công ty còn nợ**, và lần đối soát sau sẽ trả một lần
+nữa. Đó đúng nghĩa là đếm hai lần một khoản tiền, chỉ khác là nó nằm ở hai bảng.
+
+Nên `TransportDriverFundEntryKind` nhận thêm **một** giá trị `REIMBURSEMENT` (luôn dương), và lệnh
+ghi nó là `CostingService.postReimbursement` — **thuộc chính chủ sổ cái**, không phải `TX-07b`
+(§4.1 luật 4). `TX-07b` gọi qua `DriverSettlementFundPort`, là **cổng ghi duy nhất** trong cả tranche.
+
+### 14.3. Hình dạng
+
+| Thứ                        | Ở đâu                                                                                                    |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Hai bảng + ba enum         | `apps/api/prisma/schema.prisma` (khối cuối)                                                              |
+| Migration giá trị enum     | `apps/api/prisma/migrations/20260908110000_transport_driver_fund_reimbursement_kind/`                    |
+| Migration bảng + ràng buộc | `apps/api/prisma/migrations/20260908120000_transport_driver_settlement/` kèm `README-rollback.sql`       |
+| Sáu `CHECK` + hai trigger  | SQL thô — Prisma không có cú pháp; `transport-driver-settlement-storage.spec.ts` đọc thẳng tệp migration |
+| Miền                       | `apps/api/src/transport/driver-settlement/` — thư mục mới                                                |
+| Hành động                  | `transport.driver_settlement.read` · `.cashout` · `.reverse` · `transport.driver.self.settlement.read`   |
+| Đăng ký                    | `owned('transport-workforce', …)` — **không** capability mới (`F-12`)                                    |
+| Bề mặt web                 | `views/DriverSettlementView.tsx` + tóm tắt bốn con số trên `driver/DriverSurface.tsx`                    |
+| Nghiệm thu                 | bài đơn vị của miền + **10 bài trên Postgres thật** (`transport-driver-settlement.int.spec.ts`)          |
+
+**Hai migration chứ không một, và đó là ràng buộc của Postgres:** `ALTER TYPE … ADD VALUE` chạy được
+trong một giao dịch từ PG 12, nhưng giá trị **mới không được dùng** trong chính giao dịch đó — mà
+migration bảng phải viết lại `CHECK "TransportDriverFundEntry_sign_by_kind"`, một biểu thức **có
+nhắc tên** `'REIMBURSEMENT'`. Prisma bọc mỗi tệp migration trong một giao dịch. Gộp hai việc làm một
+tệp sẽ cho ra `unsafe use of new value of enum type` **lúc deploy**, không phải lúc test.
+
+### 14.4. `F-08` được xử lý thế nào
+
+`F-08` đọc Điều 97 BLLĐ 2019 và cấm dựng lộ trình trên tiền đề "dồn lương nhiều tháng là dòng chảy
+bình thường". Chủ sở hữu đã trả lời `Q-06` ở #237: công ty **không** cố tình giữ lương; lái xe có thể
+**tự chọn** để tiền tích luỹ rồi rút một lần lớn.
+
+Nên hệ thống: **giữ** phần cấu trúc (tách _ghi nhận_ khỏi _chi trả_), **bỏ** tiền đề, và **nói ra**
+khi một kỳ đã qua cửa sổ mà tiền chưa chi — một mã lý do có tên
+(`WAGE_CREDIT_UNSETTLED_BEYOND_WINDOW`, cửa sổ mặc định 30 ngày theo Đ.97 k.4). Cảnh báo đó **không
+chặn gì, không sinh một khoản phải trả nào, không kết luận ai sai**.
+
+### 14.5. Còn chưa làm — có chủ đích
+
+- **Không có vòng đời yêu cầu rút tiền** (`REQUESTED → APPROVED → PAID`). Hôm nay không nguồn nào mô
+  tả lái xe yêu cầu rút qua hệ thống — họ nói với kế toán. Dựng một quy trình duyệt ở đây là bịa một
+  bước nghiệp vụ (#232 §9.5). Thêm một bảng yêu cầu trỏ tới `TransportDriverCashout` sau này là một
+  bước **cộng thêm**, không phải một lần viết lại.
+- **`TransportPayslip.status = PAID` giữ nguyên nghĩa cũ** — mốc của bộ phận lương. Tầng chi tiền là
+  sổ cái riêng, và không đường nào trong tranche này ghi vào phiếu lương.
+
+---
+
+## 15. `R6` / `TX-06b` as-built — bảo dưỡng v2 (Lane D, Issue #237)
+
+### 15.1. Đo lại T6 trước — bảy khoảng trống, không phải "chưa khớp thực tế" chung chung
+
+§12 lộ trình chỉ nói T6 *"chưa khớp thực tế"*. Đo lại `TransportMaintenanceWorkOrder` cho ra một
+danh sách **đếm được**:
+
+| #237 đòi | T6 as-built trước tranche | Kết luận |
+|---|---|---|
+| service/repair event | có `WorkOrder`, nhưng **không có bản chất** | thiếu — `kind` |
+| planned vs actual | có `Plan` (chu kỳ) + `WorkOrder`, **không có mốc đã chụp** | thiếu — `plannedDate`/`plannedOdoKm` |
+| odometer | `openedOdoKm` / `completedOdoKm` | **đã có** |
+| workshop/vendor | — | thiếu |
+| parts/labor/total cost | chỉ `costAmount` tổng | thiếu tách |
+| evidence qua #223 | — | thiếu — `evidenceLocator` |
+| roadside breakdown link | — | thiếu — `tripId` |
+| downtime | suy được từ `openedAt`→`completedAt`, **không ai suy** | thiếu phép đọc |
+| unavailable→available history | chính `WorkOrder` **đã là** lịch sử đó | **đã có**, chỉ thiếu cách đọc |
+| tire lifecycle | — | **KHÔNG làm** — xem §15.4 |
+| effective-state/warnings | `effective-vehicle-state.ts` + bảng cảnh báo | **đã có** |
+
+### 15.2. `F-09` lặp lại — lần này trong chính mã nguồn
+
+R0 tìm thấy `F-09` ở tài liệu bàn giao: câu *"Xe có lệnh bảo dưỡng đang mở bị khoá khỏi việc phân
+chuyến"* mô tả một cổng chặn **không tồn tại**. Tài liệu đó đã được sửa.
+
+Đo lại lần này thấy **cùng lỗi đó ở ba chỗ trong mã**, và mã thì khách không đọc được để phản đối:
+
+| Chỗ | Câu cũ | Sự thật đo được |
+|---|---|---|
+| `asset-compliance-decisions.ts` nhãn `MAINTENANCE_WORK_ORDER_OPENED` | *"và khoá xe khỏi đội hình"* | `TripService.assign()` kiểm đúng ba thứ, không tra lệnh sửa |
+| cùng tệp, nhãn `VEHICLE_UNDER_MAINTENANCE_LOCK` | *"nên không nhận chuyến"* | `evaluateTripTransition()` không nhận một đầu vào nào về xe |
+| `transport-actions.ts`, chú thích `...work_order.open` | *"điều độ viên không điều chuyến lên nó nữa"* | như trên |
+
+Cả ba đã được sửa **câu chữ**, không sửa hành vi. `Q-05` chưa có nguồn, nên không cổng chặn nào
+được thêm — #237: *"do not invent a hard block"*.
+
+### 15.3. Cổng chặn tương lai có hình dạng, chưa có nội dung
+
+`evaluateDispatchReadiness()` trả về **hai** danh sách: `warnings` (có nội dung) và `blocking`
+(**rỗng**). Khi B trả lời `Q-05`, thay đổi là chuyển một mã từ danh sách này sang danh sách kia —
+không phải một lần dựng thêm cổng ở giữa đường điều độ.
+
+Ba bài trong `vehicle-availability.spec.ts` khoá điều đó lại, và bài thứ ba đo ở **tầng mã nguồn**:
+nó đọc `trips/trip-lifecycle.ts` và khẳng định máy trạng thái chuyến không nhắc một khái niệm bảo
+dưỡng nào. Nếu một cổng chặn ra đời mà không ai tuyên bố, bài đó đỏ trước khi điều độ đi vào một
+bản phát hành.
+
+### 15.4. Không làm — có chủ đích
+
+- **Vòng đời lốp.** #237 nói *"tire lifecycle chỉ nếu justified"*. Không nguồn nào của B mô tả họ
+  theo dõi lốp theo vòng đời (lắp → luân chuyển → đắp lại → thải), và một bảng `Tyre` kéo theo vị
+  trí lắp trên xe, số serial, và một quy trình luân chuyển — tất cả đều là suy đoán. Một lần thay
+  lốp hôm nay ghi được là một `WorkOrder` kind `REPAIR` có phụ tùng; khi B mô tả cách họ thật sự
+  quản lốp, bảng đó là một bước **cộng thêm**.
+- **`totalDays` không hợp nhất khoảng chồng lấp.** Hai lệnh cùng mở là tình huống thật; gộp lại sẽ
+  giấu mất việc xe vào xưởng hai việc. Con số này trả lời *"tổng ngày-lệnh"*, và một con số
+  *"số ngày xe vắng mặt"* phải là một hàm **riêng có tên khác**.
+
+---
+
+## 16. `R8` as-built — chỉ số vận hành (Lane D, Issue #237)
+
+### 16.1. Cái đã có sẵn, và cái thật sự còn thiếu
+
+Điều đo được **trước** khi viết một dòng nào: hai phần ba phép tính mà `R8` cần **đã tồn tại**.
+
+| Đã có | Ở đâu | Trả lời câu gì |
+|---|---|---|
+| `summariseRunDistance()` | `movement/run-distance.ts` (Lane A) | km có hàng / km rỗng / tỷ lệ rỗng của một tập chặng |
+| `computeDirectMargin()` · `rollupDirectMargin()` | `settlement/direct-margin.ts` (`TX-05`) | một **chuyến** lãi bao nhiêu, có hoa hồng và công nợ nhà xe |
+
+Nên `R8` **không viết lại** hai thứ đó. Phần còn thiếu nằm đúng ở **grain mới của Lane A**:
+
+- biên trực tiếp theo **ĐƠN HÀNG** — `TX-05` tính theo *chuyến*, không theo đơn;
+- biên trực tiếp theo **CẢ VÒNG CHẠY**, kể cả chặng rỗng — *"full VehicleRun/cycle margin"*;
+- **doanh thu/km** và **chi phí/km** — chưa nơi nào tính;
+- **đường đối soát**: `summariseRunDistance()` trả về *đếm*, không trả về *mã*.
+
+`computeDirectMargin()` không bị thay thế và không bị gọi lại: nó trả lời một câu khác trên một
+trục khác. Hai con số song song là **cố ý**; gộp lại sẽ mất một trong hai câu hỏi.
+
+### 16.2. Đường chi phí — và vì sao nó đối soát được
+
+```text
+TransportRunLeg --(TransportTripRunLegLink, 1-1)--> TransportTrip --> TransportTripExpense
+```
+
+Cầu nối là một bảng **có thật** của Lane A, không phải phép đoán theo ngày/xe. Vì vậy mọi con số
+tổng hợp mang theo `legIds` · `orderIds` · `tripIds`, và bộ test tích hợp không so báo cáo với một
+hằng số viết tay mà với `SUM(signedAmount)` **đọc lại từ Postgres**
+(`transport-analytics.int.spec.ts`, `RUN_PRISMA_IT=1`, 4/4 xanh).
+
+Bốn quyết định đáng ghi, mỗi cái đóng một cách nói dối:
+
+- **Chặng thiếu km không đóng góp `0`.** Nó vào `legIdsMissingDistance` và làm `emptyRatio` thành
+  `null` (quy ước của Lane A). Coi là `0` sẽ kéo tỷ lệ rỗng xuống **theo hướng làm đẹp số liệu** —
+  kiểu sai không ai đi kiểm tra.
+- **Một đơn chạy hai chặng chỉ được cộng cước MỘT lần.** Chỗ dễ đếm đôi nhất; một `Set` là thứ duy
+  nhất ngăn nó, và có một bài test mang đúng tên đó.
+- **Chi phí chặng rỗng không thuộc đơn nào**, nhưng **có** trong biên vòng chạy. Một đơn có thể lãi
+  trong khi cả vòng chạy lỗ — gộp hai phép đo sẽ giấu mất điều đó.
+- **Đơn đã huỷ mà vẫn có chặng chạy** ⇒ `ORDER_CANCELLED_WITH_ACTIVE_LEG`, **không** tự bỏ doanh
+  thu. Cùng khuôn `unexpectedInternalCost` của `TX-05`: mâu thuẫn dữ liệu được **báo ra**, không
+  được tầng báo cáo tự xử.
+
+**Không capability mới** (`F-12`): `R8` đến cùng `transport-costing`, capability đã khai
+`dependencies: ['transport-core']`. Hai cổng ra ngoài (`analytics.ports.ts`) **không có một hàm ghi
+nào** — `NO_CROSS_CONTEXT_REPOSITORY_WRITE` giữ bằng cấu trúc, và có bài test quét mã nguồn khoá nó.
+
+### 16.3. CHƯA LÀM — nói thẳng, không giấu trong một dấu tích
+
+`SettlementBuckets` mới chỉ là **kiểu + hợp đồng**, chưa có bề mặt nào bơm số vào. Bốn dòng của
+`TX-05` khoá theo `Record<SettlementFlow, number>` nên thêm một dòng tiền thứ năm là **không biên
+dịch được** — nhưng việc buộc nó vào bốn nguồn thật cần một quyết định *capability nào sở hữu báo
+cáo hợp nhất*, và quyết định đó chưa ai ra. Mở một cổng từ `transport-costing` sang
+`transport-settlement`/`transport-fuel`/`transport-workforce` sẽ biến một phụ thuộc **hợp đồng**
+thành phụ thuộc **thật**, và một khách bật `transport-costing` mà tắt `transport-settlement` sẽ
+không boot được.
+
+Cũng **chưa** có: L/100km kèm ghi chú quy kết, phương sai/bất thường theo trạm, tỷ lệ chi phí ngoài
+dự kiến, ngoại lệ chứng cứ/vị trí, và một báo cáo theo **cửa sổ thời gian** (hôm nay chỉ đo được
+**một vòng chạy**, vì `MovementRepository` chưa có truy vấn theo khoảng ngày).

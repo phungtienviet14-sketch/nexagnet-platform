@@ -5,6 +5,7 @@ import {
   COMPLIANCE_SUBJECT_KINDS,
   MAINTENANCE_PLAN_STATUSES,
   MAINTENANCE_TRIGGER_KINDS,
+  MAINTENANCE_WORK_ORDER_KINDS,
 } from './asset-compliance.types.js';
 
 /**
@@ -56,6 +57,22 @@ export const openWorkOrderSchema = z
     openedDate: businessDate,
     openedOdoKm: odoKm,
     note: optionalText,
+
+    /* ----- `TX-06b` (#237) — deu TUY CHON, nen khong be mat goi nao dang chay phai doi ----- */
+
+    /**
+     * Vang mat => suy tat dinh tu `planId`, cung phep suy voi backfill cua migration.
+     *
+     * KHONG mac dinh o zod: mot `.default()` o day se lam tang HTTP quyet mot dieu ma tang kho da
+     * quyet, va hai cho do se troi khoi nhau o lan sua thu nhat.
+     */
+    kind: z.enum(MAINTENANCE_WORK_ORDER_KINDS).optional(),
+    vendorName: optionalText,
+    vendorPhone: optionalText,
+    /** CHI hop le voi `ROADSIDE_BREAKDOWN` — Postgres tu choi phan con lai. */
+    tripId: optionalText,
+    plannedDate: businessDate.nullish(),
+    plannedOdoKm: odoKm.nullish(),
   })
   .strict();
 
@@ -66,6 +83,20 @@ export const completeWorkOrderSchema = z
     costAmount: vndAmount.nullish(),
     costingExpenseRef: optionalText,
     note: optionalText,
+
+    /* ----- `TX-06b` (#237) — hoa don xuong doc duoc luc DONG lenh ----- */
+
+    /**
+     * Khi ca ba con so cung co mat thi `costAmount = partsCost + labourCost`.
+     *
+     * Phep kiem do nam duoi POSTGRES (`CHECK ..._cost_parts_labour`), khong o day: mot rang buoc
+     * dat o zod chi bao ve dung mot route, va duong ghi thu hai se ra doi ma khong ai nho.
+     */
+    partsCost: vndAmount.nullish(),
+    labourCost: vndAmount.nullish(),
+    evidenceLocator: optionalText,
+    vendorName: optionalText,
+    vendorPhone: optionalText,
   })
   .strict();
 

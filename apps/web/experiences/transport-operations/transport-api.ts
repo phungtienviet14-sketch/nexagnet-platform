@@ -21,7 +21,6 @@ import type {
   ExpenseClaim,
   ExpenseClaimDetail,
   ExpenseClaimStatus,
-
   MaintenanceDue,
   MaintenancePlan,
   MaintenancePlanStatus,
@@ -75,6 +74,12 @@ import type {
   Vehicle,
   VehicleDriverAssignment,
   VehicleStatus,
+  // `TX-07b` — quyet toan lai xe (Issue #237).
+  DriverCashoutDetail,
+  DriverSettlementBalance,
+  DriverSettlementSelfStatement,
+  DriverSettlementStatement,
+  RecordCashoutInput,
 } from './transport-types';
 
 /**
@@ -768,6 +773,14 @@ export const transportApi = {
     payslips: (): Promise<readonly DriverPayslipView[]> => get('/transport/me/payslips'),
     payslip: (id: string): Promise<DriverPayslipView> =>
       get(`/transport/me/payslips/${encodeURIComponent(id)}`),
+
+    /**
+     * `TX-07b` — bang quyet toan CUA CHINH TOI. CHI DOC, khong tham so, khong `:driverId`.
+     *
+     * Khong co ham nao o day ghi mot lan chi: mot nguoi tu chi tien cho chinh minh la dung cai ma
+     * kiem soat noi bo sinh ra de chan. Neu mot ham nhu the xuat hien o khoi nay, do la mot loi.
+     */
+    settlement: (): Promise<DriverSettlementSelfStatement> => get('/transport/me/settlement'),
   },
 
   /**
@@ -873,6 +886,35 @@ export const transportApi = {
     /** SUA mot phieu DA CHOT = phat mot phieu bu/dao, KHONG sua so cu (`INV-20`). */
     correctPayslip: (id: string, input: CorrectPayslipInput): Promise<Payslip> =>
       send('POST', `/transport/payroll/payslips/${encodeURIComponent(id)}/corrections`, input),
+  },
+
+  /**
+   * `TX-07b` — chi tien cho lai xe va phan bo theo thang (Issue #237).
+   *
+   * KHONG co ham `update`/`delete` nao, va do la `INV-20` viet thanh hinh dang cua chinh doi tuong
+   * nay: sua mot lan chi da ghi chi co MOT duong, va duong do la `reverseCashout`.
+   */
+  driverSettlement: {
+    balances: (): Promise<readonly DriverSettlementBalance[]> =>
+      getList('/transport/driver-settlement/balances', 'balances'),
+    statement: (driverId: string): Promise<DriverSettlementStatement> =>
+      get(`/transport/driver-settlement/drivers/${encodeURIComponent(driverId)}`),
+    recordCashout: async (input: RecordCashoutInput): Promise<DriverCashoutDetail> => {
+      const body = await send<{ readonly cashout: DriverCashoutDetail }>(
+        'POST',
+        '/transport/driver-settlement/cashouts',
+        input,
+      );
+      return body.cashout;
+    },
+    reverseCashout: async (id: string, reason: string): Promise<DriverCashoutDetail> => {
+      const body = await send<{ readonly cashout: DriverCashoutDetail }>(
+        'POST',
+        `/transport/driver-settlement/cashouts/${encodeURIComponent(id)}/reversal`,
+        { reason },
+      );
+      return body.cashout;
+    },
   },
 
   /**
