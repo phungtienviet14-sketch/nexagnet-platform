@@ -40,6 +40,7 @@ export type TransportSectionId =
   | 'maintenance'
   | 'payroll'
   | 'driver-settlement'
+  | 'finance'
   | 'margin'
   | 'ar-ap'
   | 'exports';
@@ -178,6 +179,21 @@ export const TRANSPORT_SECTIONS = [
      */
     requiredCapabilities: ['transport-costing', 'transport-workforce'],
     requiredAction: 'transport.driver_settlement.read',
+  },
+  {
+    id: 'finance',
+    label: 'Bảng tài chính',
+    group: 'reports',
+    summary: 'Doanh thu, biên trực tiếp, và sáu dòng tiền giữ riêng — không cộng chung.',
+    /**
+     * KHONG mot ma quyen moi: bang doc chinh `arAging`/`apByCounterparty`/`directMarginRollup` cua
+     * bao cao quyet toan, roi bay chung canh nhau. Xem `FinanceController`.
+     *
+     * Cong `TX-07b` la TUY CHON o tang doc, nen o day chi khai `transport-settlement`: mot khach
+     * khong tinh luong van co bang, chi thieu hai o cuoi va bang noi ra dieu do.
+     */
+    requiredCapabilities: ['transport-settlement'],
+    requiredAction: 'transport.settlement.report.read',
   },
   {
     id: 'margin',

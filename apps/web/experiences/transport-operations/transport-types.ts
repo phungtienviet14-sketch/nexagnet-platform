@@ -1562,3 +1562,69 @@ export interface ControlTowerView {
   readonly unavailableSources: readonly ControlTowerSource[];
   readonly pendingWork: readonly PendingActionQueueEntry[];
 }
+
+/* ------------------------------------------------------------------ *
+ * BANG TAI CHINH — `GET /transport/finance/summary` (Lane G, #244 G5)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/finance/finance-summary.ts`.
+ *
+ * BA thu de doc sai o day, ghi ra mot lan:
+ *
+ *   · `flows` co BON khoa va KHONG BAO GIO duoc cong lai (`GD-15`, `INV-23`). `CUSTOMER_FREIGHT`
+ *     la mot khoan PHAI THU; ba khoa con lai la PHAI TRA. Cong chung cho ra mot con so khong ai
+ *     nợ ai cả.
+ *   · `driverReimbursementOutstanding` (cong ty no lai xe, `TX-03`) va `driverSettlementRemaining`
+ *     (luong da ghi nhan chua rut, `TX-07b`) la HAI khoan khac nhau. Gop chung se lam mot lan chi
+ *     hoan ung trong nhu mot lan tra luong.
+ *   · `marginBasisPoints` la DIEM CO BAN: `4000` = 40%. Hien thi thang se ra "4000%".
+ */
+export type SettlementFlowAmounts = Readonly<Record<SettlementFlow, number>>;
+
+export interface SettlementBuckets {
+  readonly flows: SettlementFlowAmounts;
+  readonly driverReimbursementOutstanding: number;
+  readonly driverSettlementRemaining: number;
+}
+
+/**
+ * BIEN TRUC TIEP — hai truong cuoi la mot HOP DONG, khong phai sieu du lieu.
+ *
+ * `GD-13` doi cau "chua gom chi phi co dinh" di kem con so, va #244 G5 cam goi day la lai rong.
+ * Man hinh phai hien `disclosure` canh `marginAmount`, khong duoc bo di cho gon.
+ */
+export interface DirectMarginRollup {
+  readonly revenueAmount: number;
+  readonly deductionAmount: number;
+  readonly marginAmount: number;
+  /** DIEM CO BAN. `null` khi doanh thu bang 0 — khong chia duoc. */
+  readonly marginBasisPoints: number | null;
+  readonly tripCount: number;
+  /** Chuyen chua co gia cuoc, bi BO QUA chu khong coi la 0. */
+  readonly skippedTripCount: number;
+  readonly fixedCostsIncluded: false;
+  readonly disclosure: string;
+}
+
+export interface FinanceCurrencyCoverage {
+  readonly codes: readonly string[];
+  /** `false` = du lieu co nhieu hon mot ma tien, cac tong KHONG doc thang duoc. */
+  readonly isSingle: boolean;
+}
+
+export interface FinanceReceivableSummary {
+  readonly outstandingTotal: number;
+  readonly overdueTotal: number;
+}
+
+export type FinanceSource = 'DRIVER_SETTLEMENT';
+
+export interface FinanceSummaryView {
+  readonly generatedFor: BusinessDate;
+  readonly buckets: SettlementBuckets;
+  readonly directMargin: DirectMarginRollup;
+  readonly receivable: FinanceReceivableSummary;
+  readonly currency: FinanceCurrencyCoverage;
+  readonly unavailableSources: readonly FinanceSource[];
+}

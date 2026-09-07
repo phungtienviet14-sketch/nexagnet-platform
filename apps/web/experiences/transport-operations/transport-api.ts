@@ -11,6 +11,7 @@ import type {
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   ControlTowerView,
+  FinanceSummaryView,
   ComplianceSubjectKind,
   CorrelatedPosting,
   DirectMargin,
@@ -1011,5 +1012,15 @@ export const transportApi = {
    */
   controlTower: {
     view: (): Promise<ControlTowerView> => get('/transport/control-tower'),
+  },
+
+  /**
+   * BANG TAI CHINH (Lane G, #244 G5) — mot DOI TUONG, nen `get` chu khong `getList`.
+   *
+   * Khong co bien the `?combined=true`: `SettlementBuckets` co y khong co truong tong, va mot tham
+   * so gop se dung lai chinh cai cong ma `GD-15` da dong o tang duoi.
+   */
+  finance: {
+    summary: (): Promise<FinanceSummaryView> => get('/transport/finance/summary'),
   },
 } as const;
