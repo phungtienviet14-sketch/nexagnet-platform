@@ -10,6 +10,7 @@ import type {
   ComplianceDocument,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ControlTowerView,
   ComplianceSubjectKind,
   CorrelatedPosting,
   DirectMargin,
@@ -998,5 +999,17 @@ export const transportApi = {
       input: { reasonCode: string; note?: string | null },
     ): Promise<ExpenseClaimDetail> =>
       send('POST', `/transport/expense-claims/${encodeURIComponent(id)}/reject`, input),
+  },
+
+  /**
+   * THAP DIEU HANH (Lane G, #244) — MOT lan goi, MOT khung nhin.
+   *
+   * `get` chu khong `getList`: may chu tra ve mot DOI TUONG (`ControlTowerView`), khong phai mot
+   * phong bi bao quanh mot mang. Xem `control-tower.controller.ts` — mot route `@Get()` duy nhat,
+   * va do la co y: ba lan goi cho `/board`, `/queue`, `/fleet` se cho ra ba anh chup o ba khoanh
+   * khac khac nhau, roi man hinh se tu mau thuan voi chinh no.
+   */
+  controlTower: {
+    view: (): Promise<ControlTowerView> => get('/transport/control-tower'),
   },
 } as const;

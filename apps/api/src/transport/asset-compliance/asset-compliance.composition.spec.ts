@@ -148,8 +148,19 @@ describe('bang canh bao gom chung — nguon TUY CHON theo capability dang bat', 
     const bare = providerCount(['transport-core']);
     const withAssets = providerCount(['transport-core', 'transport-asset-compliance']);
 
-    // Dung mot provider duoc them: `OperationalAlertsService`. Hai adapter kia thuoc capability khac.
-    expect(withAssets).toBe(bare + 1);
+    /*
+     * DUNG HAI provider duoc them, va ca hai deu THUOC T6:
+     *
+     *   · `OperationalAlertsService`  — bang canh bao gom chung;
+     *   · `ControlTowerAlertFacts`    — cua so cua thap dieu hanh nhin vao chinh bang do (Lane G).
+     *
+     * Canh ma bai nay giu KHONG doi: hai adapter nguon cua `OperationalAlertsService`
+     * (`AlertFuelConsumptionSource`, `AlertDriverFundSource`) thuoc `transport-fuel` va
+     * `transport-costing`, nen bat rieng T6 KHONG duoc keo chung theo. Con mot cong do chinh T6 so
+     * huu thi den cung T6 la dung — khi T6 tat, thap dieu hanh mat nguon canh bao va CONG BO dieu
+     * do qua `unavailableSources` thay vi im lang.
+     */
+    expect(withAssets).toBe(bare + 2);
   });
 });
 
