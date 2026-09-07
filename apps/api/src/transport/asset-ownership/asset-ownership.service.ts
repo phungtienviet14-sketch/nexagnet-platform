@@ -197,19 +197,32 @@ export class AssetOwnershipService {
       );
     }
 
-    if (vehicle.ownershipRegisterComplete) {
-      const total = await this.activeTotal(vehicleId);
-      if (total + input.ownershipBasisPoints > OWNERSHIP_BASIS_POINTS_TOTAL) {
-        this.decide('ownership.interest.record', 'denied', 'REGISTER_COMPLETE_SUM_EXCEEDED', {
-          vehicleId,
-          total,
-          adding: input.ownershipBasisPoints,
-        });
-        throw TransportDomainError.conflict(
-          'OWNERSHIP_BASIS_POINTS_INVALID',
-          'So dang ky da khai day du — ghi them se lam tong vuot 100%',
-        );
-      }
+    /**
+     * TRAN 100% LUON DUNG — khong phu thuoc so dang ky da khai day du hay chua.
+     *
+     * Ban dau phep kiem nay nam trong `if (vehicle.ownershipRegisterComplete)`, va do la mot LOI:
+     * mot so dang ky "con thieu" khi do nhan duoc tong 11500 diem co ban. Bang chung luc chay tren
+     * `transport-preview/gd1-test` do dung con so ay ra.
+     *
+     * Hai khai niem bi lan: "day du" quyet dinh tong co phai BANG 10000 hay khong; no khong bao gio
+     * quyet dinh tong co bi CHAN o 10000 hay khong. Khong ai so huu duoc 115% mot chiec xe, du he
+     * thong da biet het chu hay chua — phan chua biet chi co the la phan CON LAI, va no khong am.
+     *
+     * Duong sua mot ty le van nguyen: DONG ban cu truoc, roi MO ban moi. Tong luc do da tru phan
+     * cu, nen mot lan tang ty le hop le khong bao gio cham tran nay.
+     */
+    const total = await this.activeTotal(vehicleId);
+    if (total + input.ownershipBasisPoints > OWNERSHIP_BASIS_POINTS_TOTAL) {
+      this.decide('ownership.interest.record', 'denied', 'OWNERSHIP_SUM_EXCEEDS_TOTAL', {
+        vehicleId,
+        total,
+        adding: input.ownershipBasisPoints,
+        registerComplete: vehicle.ownershipRegisterComplete,
+      });
+      throw TransportDomainError.conflict(
+        'OWNERSHIP_BASIS_POINTS_INVALID',
+        `Tong ty le so huu dang hieu luc se thanh ${total + input.ownershipBasisPoints}/${OWNERSHIP_BASIS_POINTS_TOTAL} diem co ban — dong bot mot quyen loi khac truoc`,
+      );
     }
 
     const row = await this.repository.openInterest({

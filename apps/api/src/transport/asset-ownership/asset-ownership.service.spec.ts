@@ -248,6 +248,73 @@ describe('AssetOwnershipService — so dang ky so huu tai san', () => {
    * E2 — bat bien tong CHI khi so dang ky duoc khai la day du
    * ------------------------------------------------------------------ */
 
+  /**
+   * TRAN 100% AP CA KHI SO DANG KY CON THIEU — hoi quy tu bang chung luc chay.
+   *
+   * Ban dau phep kiem tong nam trong `if (registerComplete)`, nen mot so dang ky "con thieu" nhan
+   * duoc tong 11500 diem tren `transport-preview/gd1-test`. Hai khai niem bi lan: "day du" quyet
+   * dinh tong co phai BANG 10000; no khong quyet dinh tong co bi CHAN o 10000. Khong ai so huu
+   * duoc 115% mot chiec xe, du he thong da biet het chu hay chua.
+   */
+  it('tu choi lam tong vuot 100% NGAY CA KHI so dang ky chua khai day du', async () => {
+    const b = await newStakeholder('Cong ty B', 'ORGANIZATION');
+    const nguoiGop = await newStakeholder('Nguoi gop von');
+    await service.recordInterest(
+      vehicleId,
+      { stakeholderId: b.id, ownershipBasisPoints: 7_000, effectiveFrom: JAN },
+      ACTOR,
+    );
+
+    const register = await service.register(vehicleId);
+    expect(register.registerComplete).toBe(false);
+
+    await expect(
+      service.recordInterest(
+        vehicleId,
+        { stakeholderId: nguoiGop.id, ownershipBasisPoints: 3_001, effectiveFrom: JAN },
+        ACTOR,
+      ),
+    ).rejects.toMatchObject({ reason: 'OWNERSHIP_BASIS_POINTS_INVALID' });
+
+    // ...va dung 3000 thi qua: tran la 10000, khong phai mot con so nho hon.
+    await service.recordInterest(
+      vehicleId,
+      { stakeholderId: nguoiGop.id, ownershipBasisPoints: 3_000, effectiveFrom: JAN },
+      ACTOR,
+    );
+    expect((await service.register(vehicleId)).currentBasisPointsTotal).toBe(10_000);
+  });
+
+  /**
+   * DONG ban cu roi MO ban moi voi ty le CAO HON van phai qua.
+   *
+   * Neu tran duoc tinh tren tong TRUOC khi dong, mot lan tang ty le hop le se bi chan — va nguoi
+   * dung se khong con duong nao sua so lieu. Bai nay khoa rang duong sua van thong.
+   */
+  it('tang ty le cua mot ben huu quan qua duoc, vi ban cu da dong truoc', async () => {
+    const b = await newStakeholder('Cong ty B', 'ORGANIZATION');
+    const nguoiGop = await newStakeholder('Nguoi gop von');
+    await service.recordInterest(
+      vehicleId,
+      { stakeholderId: b.id, ownershipBasisPoints: 5_000, effectiveFrom: JAN },
+      ACTOR,
+    );
+    const cu = await service.recordInterest(
+      vehicleId,
+      { stakeholderId: nguoiGop.id, ownershipBasisPoints: 3_000, effectiveFrom: JAN },
+      ACTOR,
+    );
+
+    await service.closeInterest(cu.id, { effectiveTo: JUN }, ACTOR);
+    await service.recordInterest(
+      vehicleId,
+      { stakeholderId: nguoiGop.id, ownershipBasisPoints: 5_000, effectiveFrom: JUN },
+      ACTOR,
+    );
+
+    expect((await service.register(vehicleId)).currentBasisPointsTotal).toBe(10_000);
+  });
+
   it('khong khai day du duoc khi tong chua dung 10000 diem', async () => {
     const holder = await newStakeholder('Nguoi gop von');
     await service.recordInterest(

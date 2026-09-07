@@ -29,13 +29,18 @@ export const OWNERSHIP_RECORD_REASONS = [
   /** Ho so ben huu quan da ngung hoat dong — khong mo them quyen loi moi cho no. */
   'STAKEHOLDER_INACTIVE',
   /**
-   * So dang ky DA DUOC KHAI la day du, va lan ghi nay se lam tong vuot 10000 diem.
+   * Lan ghi nay se lam TONG cac ty le dang hieu luc vuot 10000 diem co ban.
    *
    * Ma RIENG chu khong gop vao `OWNERSHIP_BASIS_POINTS_INVALID`: dau vao hoan toan hop le xet
    * rieng no, cai sai la QUAN HE cua no voi cac ban ghi khac. Nguoi dung phai dong bot mot quyen
    * loi khac, khong phai sua con so vua go.
+   *
+   * TEN CU la `REGISTER_COMPLETE_SUM_EXCEEDED`, va ten do mang mot gia dinh SAI: rang tran 100%
+   * chi ap khi so dang ky da khai day du. Bang chung luc chay tren `transport-preview/gd1-test` do
+   * duoc mot so dang ky "con thieu" mang tong 11500 diem. Tran luon dung; "day du" chi quyet dinh
+   * tong co phai BANG 10000 hay khong.
    */
-  'REGISTER_COMPLETE_SUM_EXCEEDED',
+  'OWNERSHIP_SUM_EXCEEDS_TOTAL',
 ] as const;
 export type OwnershipRecordReason = (typeof OWNERSHIP_RECORD_REASONS)[number];
 
@@ -105,7 +110,7 @@ export const TRANSPORT_ASSET_OWNERSHIP_DECISIONS = defineDecisionVocabulary({
     VEHICLE_NOT_FOUND: 'Không tìm thấy xe',
     STAKEHOLDER_NOT_FOUND: 'Không tìm thấy hồ sơ bên hữu quan',
     STAKEHOLDER_INACTIVE: 'Hồ sơ bên hữu quan đã ngừng hoạt động',
-    REGISTER_COMPLETE_SUM_EXCEEDED: 'Sổ đăng ký đã khai đầy đủ — ghi thêm sẽ vượt 100%',
+    OWNERSHIP_SUM_EXCEEDS_TOTAL: 'Ghi thêm sẽ làm tổng tỷ lệ sở hữu vượt 100%',
 
     INTEREST_CLOSED: 'Đã đóng một quyền lợi sở hữu',
     INTEREST_NOT_FOUND: 'Không tìm thấy quyền lợi sở hữu',
