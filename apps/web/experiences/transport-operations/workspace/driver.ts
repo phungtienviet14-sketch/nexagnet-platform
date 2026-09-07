@@ -173,6 +173,25 @@ export interface DriverFuelSlipRow {
   readonly canRemoveEvidence: boolean;
   /** Vi sao khong go duoc — `null` khi go duoc. Cau noi that thay cho mot nut bi an im lang. */
   readonly evidenceLockedReason: string | null;
+  /**
+   * DINH THEM chung tu duoc khong — mot cau HOAN TOAN KHAC voi "go duoc khong".
+   *
+   * May chu mo hai cong khac nhau, va do la co y (`fuel.service.ts` §"GAN ANH CHUNG TU"):
+   *
+   * ```text
+   * dinh them : chan khi ky doi soat SETTLED            (EVIDENCE_FROZEN_FUEL_RECONCILIATION_STATUSES)
+   * go ra     : chan khi VERIFIED, hoac MATCHED/SETTLED (evaluateFuelEvidenceRemoval)
+   * ```
+   *
+   * CHI CO THEM SAU KHI XAC THUC, KHONG CO BOT — va do la tinh chat dung. Them mot tam anh khong
+   * doi mot con so nao, va mot ke toan tim duoc phieu goc sau khi da duyet van phai gan duoc no
+   * vao; con go mot tam anh sau khi da duyet la xoa chinh thu nguoi duyet da nhin. Nen KHONG duoc
+   * dung `evidenceLockedReason` lam co cho o tai anh: lam vay se chan mot duong ma may chu cho
+   * phep, va lam ho so tien khong bao gio hoan chinh duoc.
+   */
+  readonly canAttachEvidence: boolean;
+  /** Vi sao khong dinh them duoc — `null` khi con dinh duoc. */
+  readonly evidenceAttachLockedReason: string | null;
 }
 
 /**
@@ -185,13 +204,29 @@ const EVIDENCE_LOCKED_RECONCILIATION: readonly FuelReconciliationStatus[] = ['MA
 
 const evidenceLockedReason = (slip: DriverFuelSlipView): string | null => {
   if (slip.verificationStatus === 'VERIFIED') {
-    return 'Phiếu đã được kế toán xác thực nên chứng từ không gỡ được nữa.';
+    // Noi ca VE DUONG CON MO. Mot cau chi noi "khong go duoc" ben canh mot o tai anh VAN dung
+    // duoc doc len nhu mot loi cua man hinh — chinh chu so huu da hoi "chung tu da xac thuc sao
+    // van day len duoc anh moi?". Hai ve trong mot cau tra loi luon cau do.
+    return 'Phiếu đã được kế toán xác thực: chứng từ không gỡ được nữa, nhưng vẫn đính thêm được.';
   }
   if (EVIDENCE_LOCKED_RECONCILIATION.includes(slip.reconciliationStatus)) {
     return 'Phiếu đã vào kỳ đối soát bảng kê nên chứng từ không gỡ được nữa.';
   }
   return null;
 };
+
+/**
+ * Doi ban doi cua cong DINH THEM o may chu — `EVIDENCE_FROZEN_FUEL_RECONCILIATION_STATUSES`.
+ *
+ * Hep hon han cong go ra, va phai giu dung nhu vay: chi mot ky doi soat DA CHOT moi dong duong
+ * dinh them. Noi rong ra `VERIFIED` la chan mot viec may chu cho phep.
+ */
+const EVIDENCE_ATTACH_FROZEN_RECONCILIATION: readonly FuelReconciliationStatus[] = ['SETTLED'];
+
+const evidenceAttachLockedReason = (slip: DriverFuelSlipView): string | null =>
+  EVIDENCE_ATTACH_FROZEN_RECONCILIATION.includes(slip.reconciliationStatus)
+    ? 'Kỳ đối soát của phiếu đã chốt nên không đính thêm chứng từ được nữa.'
+    : null;
 
 export const toDriverFuelSlipRows = (
   slips: readonly DriverFuelSlipView[],
@@ -218,6 +253,8 @@ export const toDriverFuelSlipRows = (
         : null,
     canRemoveEvidence: evidenceLockedReason(slip) === null,
     evidenceLockedReason: evidenceLockedReason(slip),
+    canAttachEvidence: evidenceAttachLockedReason(slip) === null,
+    evidenceAttachLockedReason: evidenceAttachLockedReason(slip),
   }));
 
 /** Cau canh o tai anh — noi ro anh di dau, vi day la anh chung tu tien. */

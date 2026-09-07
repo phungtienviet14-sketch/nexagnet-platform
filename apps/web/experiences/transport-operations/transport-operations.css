@@ -524,6 +524,24 @@
   flex: 0 1 260px;
 }
 
+/*
+ * `--inline` DAT THANG trong `.tx-main` bi hieu SAI TRUC.
+ *
+ * `.tx-main` xep theo COT, nen `flex-basis: 260px` o tren khong con la BE NGANG ma thanh CHIEU CAO:
+ * o chon lai xe cua man Quy lai xe keo dai 260px xuong duoi, de lai mot khoang trong ~245px giua no
+ * va cac the so — va vi flex item trong mot cot mac dinh `stretch`, chinh o do lai tran het be ngang
+ * trang, dung dieu ma `--inline` sinh ra de tranh.
+ *
+ * Rang buoc theo `.tx-main >` chu khong sua thang `--inline`: moi cho dung con lai deu nam trong
+ * mot khoi xep theo HANG (`.tx-inlineform`, `.tx-rowbtns`) hoac mot khoi khong-flex (`.tx-panel`),
+ * o do luat tren dang chay dung. Luat nay bat dung truong hop bi hieu sai truc, va bat luon nhung
+ * lan dat nham ve sau.
+ */
+.tx-main > .tx-field--inline {
+  flex: none;
+  width: min(100%, 260px);
+}
+
 .tx-field > span {
   font-size: 0.76rem;
   color: var(--tx-ink-faint);
@@ -558,6 +576,17 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  /*
+   * Nut nam CUNG DUONG DAY voi o nhap ma no gui.
+   *
+   * Mac dinh cua flex la `stretch`, nen mot `<button>` dung canh mot `.tx-field` bi keo cao bang ca
+   * NHAN + O NHAP — no ve ra to hon moi thu quanh no va lech han duong day cua hang. Thay ro nhat o
+   * `Đăng ký giấy tờ` trong man Bao duong & giay to.
+   *
+   * `flex-end` chu khong `center`: cac o nhap thang hang o day DUOI (nhan nam tren), nen day duoi
+   * moi la duong day that cua hang nay.
+   */
+  align-items: flex-end;
 }
 
 /* ---------------------------------------------------------------- *
