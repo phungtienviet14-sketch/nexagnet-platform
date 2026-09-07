@@ -29,6 +29,7 @@ import { canPerform, type TransportAction } from './transport-actions';
 
 export type TransportSectionId =
   | 'overview'
+  | 'control-tower'
   | 'trips'
   | 'movement'
   | 'fleet'
@@ -75,6 +76,20 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Chuyến đang chạy, đội xe, và những việc đang chờ người xử lý.',
     requiredCapabilities: [],
     requiredAction: 'transport.trip.read',
+  },
+  {
+    id: 'control-tower',
+    label: 'Bảng điều hành',
+    group: 'dispatch',
+    summary:
+      'Vòng chạy theo bảy cột của quy trình, đội xe đang ở đâu, và hàng việc đang chờ người xử lý.',
+    /**
+     * CHI `transport-core`. Ba nguồn còn lại (duyệt chi, nhiên liệu, cảnh báo) là TUỲ CHỌN ở tầng
+     * đọc: khách tắt thì bảng công bố `unavailableSources` chứ không biến mất. Khai thêm capability
+     * ở đây sẽ giấu cả bảng khỏi một khách vẫn dùng được phần lớn nó.
+     */
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.control_tower.read',
   },
   {
     id: 'trips',

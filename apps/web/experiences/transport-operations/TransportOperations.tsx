@@ -32,6 +32,7 @@ import { PayrollView } from './views/PayrollView';
 import { ArApView, MarginView, SettlementView } from './views/SettlementViews';
 import { FleetView } from './views/FleetView';
 import { FuelView } from './views/FuelView';
+import { ControlTowerView } from './views/ControlTowerView';
 import { OverviewView } from './views/OverviewView';
 import { TripsView } from './views/TripsView';
 
@@ -253,6 +254,8 @@ function SectionBody({
   switch (section) {
     case 'overview':
       return <OverviewView />;
+    case 'control-tower':
+      return <ControlTowerView />;
     case 'trips':
       return (
         <TripsView

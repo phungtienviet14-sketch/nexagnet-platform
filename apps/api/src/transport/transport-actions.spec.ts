@@ -68,6 +68,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.settlement.report.read',
       'transport.settlement.document.read',
       'transport.analytics.read',
+      'transport.control_tower.read',
       'transport.maintenance.plan.read',
       'transport.maintenance.plan.manage',
       'transport.maintenance.work_order.open',
@@ -325,6 +326,20 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('ACCOUNTING', 'transport.analytics.read')).toBe(true);
       expect(roleCanPerform('SALE', 'transport.analytics.read')).toBe(false);
       expect(roleCanPerform('MANAGER', 'transport.analytics.read')).toBe(false);
+    });
+
+    /**
+     * THAP DIEU HANH phoi CA doi xe — moi vong chay, moi xe, moi viec dang cho.
+     *
+     * `INV-09` giu khung nhin lai xe o pham vi cua chinh ho, nen vai lai xe (`SALE`, theo cau
+     * bridge `GD-22`) khong duoc cap quyen nay. Do KHONG phai mot han che ve giao dien: cong that
+     * nam o `TransportActionGuard`, va bai nay khoa dung cai bang ma guard doc.
+     */
+    it('bang dieu hanh: van hanh doc duoc ca doi xe, lai xe thi khong', () => {
+      expect(roleCanPerform('ADMIN', 'transport.control_tower.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.control_tower.read')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.control_tower.read')).toBe(false);
+      expect(roleCanPerform('MANAGER', 'transport.control_tower.read')).toBe(false);
     });
 
     it('KHONG doc duoc danh sach chuyen chung — day la cho ro ri de nhat', () => {
