@@ -1716,24 +1716,147 @@ enum TransportFuelReconciliationState {
   REOPENED
 }
 
+/// NGUON du lieu do dau ma MOT nha cung cap that su gui ve. Mot nha cung cap co the gui CA HAI.
+///
+/// KHONG phai mot cot loai: `Q-08` (R0 §7) chua co loi — chua ai biet B mua dau qua hop dong cay
+/// xang hay qua the/app, va hoa don dien tu dang gui ve dau. Mot cot mot gia tri se buoc phai doan
+/// dieu do ngay hom nay. Mot MANG thi khong: chua khai gi la mang rong, va khai them mot nguon ve
+/// sau khong phai mot lan di tru.
+///
+/// `EINVOICE` co mat vi ND 70/2025/ND-CP (hieu luc 01/06/2025) buoc MOI cua hang ban le xang dau
+/// phat hoa don dien tu TUNG LAN BAN, ke ca cho khach le tra tien mat. Tuc du lieu do dau khong
+/// con ket tren giay — no ton tai duoi dang co cau truc, phat tai diem ban.
+enum TransportFuelIngestChannel {
+  /// Bang ke ky (CSV/XLSX) — duong da co tu T4, `FuelStatementSource`.
+  STATEMENT_FILE
+  /// Hoa don dien tu tung lan ban — duong uu tien theo R0 §3.5 (`F-10`).
+  EINVOICE
+}
+
 /// CAY XANG / nha cung cap nhien lieu. Xem khoi canh bao dau muc ve vi sao khong dung vai doi tac.
+///
+/// ---------------------------------------------------------------------------
+/// SIEU DU LIEU HOP DONG (`contract*`, `paymentTermDays`, `termsNote`) KHONG DIEU KHIEN MOT DONG
+/// TIEN NAO.
+///
+/// Chung o day de nguoi doi soat DOC, va chi vay. `Q-08` chua co loi, nen mot luat kieu "qua han
+/// `paymentTermDays` thi tu sinh cong no" se la mot chinh sach KHONG AI QUYET duoc cai vao base
+/// roi moi khach van tai sau deu thua huong. `fuel-station.service.spec.ts` khoa dieu do lai.
 model TransportFuelSupplier {
-  id        String               @id @default(cuid())
-  name      String
+  id                String                       @id @default(cuid())
+  name              String
   /// Ma noi bo cua khach (so hop dong, ma cay xang tren bang ke). Duy nhat khi co.
-  code      String?              @unique
-  phone     String?
-  address   String?
-  taxCode   String?
-  status    TransportPartyStatus @default(ACTIVE)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  code              String?                      @unique
+  phone             String?
+  address           String?
+  taxCode           String?
+  status            TransportPartyStatus         @default(ACTIVE)
+  /// Nguoi phu trach ben cay xang — de goi khi mot dong bang ke khong khop.
+  contactName       String?
+  contactEmail      String?
+  contractNo        String?
+  /// `YYYY-MM-DD`. Sieu du lieu doc, khong phai mot cong chan chung tu ngoai ky.
+  contractStartDate String?                      @db.VarChar(10)
+  contractEndDate   String?                      @db.VarChar(10)
+  /// So ngay cong no theo hop dong. Xem khoi tren: KHONG duong tinh tien nao doc cot nay.
+  paymentTermDays   Int?
+  termsNote         String?
+  ingestChannels    TransportFuelIngestChannel[]
+  /// Ma tai khoan/hop dong ma HE THONG CUA NHA CUNG CAP dung — de dinh tuyen chung tu ve dung ho.
+  ingestAccountRef  String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
 
   entries         TransportFuelEntry[]
   statements      TransportFuelSupplierStatement[]
   reconciliations TransportFuelReconciliation[]
+  stations        TransportFuelStation[]
 
   @@index([status])
+}
+
+/// MOT CAY XANG CU THE — mot dia diem, khong phai mot phap nhan.
+///
+/// ===========================================================================
+/// VI SAO KHONG GOP VAO `TransportFuelSupplier`
+///
+/// Mot nha cung cap co hang tram cua hang. Cai ma bao cao can tra loi — *"tram nao ban thieu lit"*,
+/// *"xe nay do o dau"*, *"phieu nay co the do o day khong"* — deu la cau hoi ve DIA DIEM, khong
+/// phai ve phap nhan. Nhet dia chi vao mot cot `address` cua nha cung cap se lam moi cau hoi do
+/// khong tra loi duoc, va khong lan sua nao ve sau lam no de hon.
+///
+/// ===========================================================================
+/// TOA DO LA SO NGUYEN TY LE 1e-7 DO — KHONG `Float`, KHONG PostGIS
+///
+/// R0 §3.1 do va ket luan: PostGIS la lua chon dung KHI CO du lieu de luu, va hom nay chua co mot
+/// diem toa do nao — `F-11` chan viec luu vet vi tri NGUOI LAO DONG. Toa do cua mot CAY XANG thi
+/// khong phai du lieu ca nhan, nhung no cung khong dang mot lan doi image Postgres.
+///
+/// `Int` ty le 1e-7 (`latitudeE7`) la quy uoc san co cua Android Location: 1e-7 do ~ 1,1 cm, va
+/// 180 * 1e7 = 1,8e9 nam gon trong `INTEGER` 32-bit. Loi cua no so voi `Float`: hai lan doc cho ra
+/// DUNG mot con so, nen mot phep so khoang cach chay hai lan khong lech o chu so cuoi.
+///
+/// `geofenceRadiusM` la MOC HOP LY, khong phai mot cong chan: `INV-07`/`INV-27` cam moi duong tu
+/// dong sinh no cho lai xe, nen mot phieu do ngoai ban kinh chi tro thanh mot co cho nguoi xem.
+model TransportFuelStation {
+  id              String                @id @default(cuid())
+  supplierId      String
+  supplier        TransportFuelSupplier @relation(fields: [supplierId], references: [id])
+  name            String
+  /// TEN da chuan hoa — khoa so khop theo ten. KHONG unique: cac chuoi ban le danh so cua hang
+  /// theo tung vung, nen hai tram cung ten trong mot chuoi la chuyen co that. Lan trung ten ra
+  /// `AMBIGUOUS` va nguoi dat mot bi danh phan biet — do la ly do `TransportFuelStationAlias` co.
+  nameNormalized  String
+  /// Ma cua hang tren chung tu cua CHINH nha cung cap.
+  code            String?
+  /// `code` da chuan hoa — cot mang khoa unique. Xem `normalizeStationCode()`.
+  codeNormalized  String?
+  address         String?
+  latitudeE7      Int?
+  longitudeE7     Int?
+  geofenceRadiusM Int?
+  status          TransportPartyStatus  @default(ACTIVE)
+  note            String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  aliases TransportFuelStationAlias[]
+
+  /// Ma cua hang duy nhat TRONG mot nha cung cap — khong phai toan cuc. Hai chuoi khac nhau deu
+  /// co the co mot `CH-05`, va ep no duy nhat toan cuc se chan mot du lieu that.
+  @@unique([supplierId, codeNormalized])
+  @@index([supplierId, status])
+  /// HAI CHI SO MOT COT, cho duong doc nong nhat: "chung tu viet chuoi nay, tram nao khop".
+  ///
+  /// Khoa unique o tren KHONG phuc vu duoc cau hoi do: `codeNormalized` la cot THU HAI cua no, va
+  /// Postgres chi dung duoc tien to trai cua mot chi so nhieu cot. Thieu hai chi so nay, moi lan
+  /// nhan dang mot chung tu se quet ca bang tram — thu chi lo ra khi khach co mot chuoi ban le
+  /// that, tuc rat muon.
+  @@index([codeNormalized])
+  @@index([nameNormalized])
+}
+
+/// BI DANH cua mot cay xang — duong DUY NHAT de mot NGUOI day mot chuoi chu vao dung mot tram.
+///
+/// Ton tai vi nguon du lieu yeu: mot to phieu nhiet chi in `CHXD SO 5 KM12`, mot bang ke viet
+/// `Cua hang 5 (Km 12)`. Khong phep so gan dung nao duoc phep noi hai chuoi do la mot — nhung mot
+/// NGUOI thi noi duoc, va bang nay la cho ho ghi lai lan quyet do de khong phai quyet lai.
+///
+/// `normalized` UNIQUE TOAN CUC, khong theo nha cung cap: mot bi danh tro toi hai tram khong tra
+/// loi duoc gi ca. Khi hai tram cung muon mot bi danh, he thong TU CHOI va nguoi dat phai lam no
+/// cu the hon — do la ket cuc dung, vi chinh su mo ho la thu bi danh sinh ra de xoa.
+model TransportFuelStationAlias {
+  id         String               @id @default(cuid())
+  stationId  String
+  station    TransportFuelStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  /// Khoa so khop. Xem `normalizeStationLabel()` — bo dau, chu hoa, gom khoang trang.
+  normalized String               @unique
+  /// Nguyen ban nguoi nhap, de doc lai khi ai do nghi phep chuan hoa dang doc sai.
+  raw        String
+  createdBy  String
+  createdAt  DateTime             @default(now())
+
+  @@index([stationId])
 }
 
 /// PHIEU DO DAU — aggregate root cua `TX-04`, giu hai truc trang thai doc lap (T1 §7.4).

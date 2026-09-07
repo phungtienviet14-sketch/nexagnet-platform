@@ -45,6 +45,8 @@ export const TRANSPORT_ACTIONS = [
   'transport.fuel.entry.read',
   'transport.fuel.entry.submit_for_driver',
   'transport.fuel.entry.verify',
+  'transport.fuel.station.read',
+  'transport.fuel.station.manage',
   'transport.fuel.statement.import',
   'transport.fuel.reconciliation.read',
   'transport.fuel.reconciliation.match',

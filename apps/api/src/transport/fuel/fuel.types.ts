@@ -6,6 +6,7 @@ import type {
   FuelVerificationStatus,
 } from './fuel-lifecycle.js';
 import type { FuelDiscrepancyKind } from './fuel-matching.js';
+import type { FuelSupplierContract } from './fuel-station.types.js';
 
 /**
  * `TX-04 Fuel` — hinh dang du lieu doc len tu kho.
@@ -29,8 +30,15 @@ import type { FuelDiscrepancyKind } from './fuel-matching.js';
 export const FUEL_PAYMENT_METHODS = ['DRIVER_CASH', 'SUPPLIER_ACCOUNT'] as const;
 export type FuelPaymentMethod = (typeof FUEL_PAYMENT_METHODS)[number];
 
-/** CAY XANG. Xem chu thich dau muc Fuel trong `schema.prisma` ve vi sao khong la mot vai doi tac. */
-export interface FuelSupplier {
+/**
+ * CAY XANG. Xem chu thich dau muc Fuel trong `schema.prisma` ve vi sao khong la mot vai doi tac.
+ *
+ * KE THUA `FuelSupplierContract`: sieu du lieu hop dong nam CUNG mot bang, nen tra ve hai doi
+ * tuong roi bat moi ben goi tu ghep lai la mot cai gia khong doi lai gi. Nhung kieu kia VAN ton
+ * tai rieng (`fuel-station.types.ts`), va do la cho ranh gioi duoc doc len thanh chu ky ham: mot
+ * ham nhan `FuelSupplierContract` khong the vo tinh nhan them mot con so tien.
+ */
+export interface FuelSupplier extends FuelSupplierContract {
   readonly id: string;
   readonly name: string;
   readonly code: string | null;
