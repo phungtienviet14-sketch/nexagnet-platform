@@ -62,6 +62,19 @@ export class FuelDocumentController {
   }
 
   /**
+   * CHUNG TU KEM MOI DIEU KHONG ON CUA NO — duong doc cua man hinh ra soat (C4).
+   *
+   * `.read` chu khong mot ma moi: day la cung mot chung tu, chi kem ket qua cua nhung phep kiem
+   * TAT DINH chay luc doc. Che mot quyen moi cho mot goc nhin moi tren cung mot du lieu se lam
+   * bang phan quyen mo ta CONG NGHE thay vi mo ta NGHIEP VU.
+   */
+  @Get('documents/:id/review')
+  @RequiresTransportAction('transport.fuel.document.read')
+  review(@Param('id') id: string) {
+    return this.guard(() => this.documents.documentReview(id));
+  }
+
+  /**
    * NHAP MOT CHUNG TU.
    *
    * `Throttle` chat hon duong nop phieu cua lai xe: moi lan goi la mot lan doc XML va (o duong

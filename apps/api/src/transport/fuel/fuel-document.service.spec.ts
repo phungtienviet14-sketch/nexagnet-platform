@@ -9,7 +9,9 @@ import { FuelDocumentService } from './fuel-document.service.js';
 import { XmlFuelInvoiceSource, type FuelInvoiceFile } from './fuel-invoice-source.js';
 import { InMemoryFuelStationRepository } from './fuel-station.repository.js';
 import { FuelStationService } from './fuel-station.service.js';
+import { TransportFuelCoreFacts, type FuelVehicleFacts } from './fuel.ports.js';
 import { InMemoryFuelRepository } from './in-memory-fuel.repository.js';
+import type { TransportCorePolicy } from '../transport-policy.js';
 
 /**
  * `DOC-01`..`DOC-16` — nhap mot chung tu nhien lieu co cau truc (Lane C / C2, Issue #236).
@@ -39,6 +41,52 @@ const invoiceWith = (options: { taxCode?: string; symbol?: string; number?: stri
 <DSHHDVu><HHDVu><SLuong>10</SLuong><DGia>23000</DGia><ThTien>230000</ThTien></HHDVu></DSHHDVu>
 </NDHDon></DLHDon></HDon>`;
 
+/**
+ * Cong DOC sang `transport-core`, dung du cho duong ra soat.
+ *
+ * Chi `listVehicles()` co than: duong ra soat cua C4 doc danh muc xe de doi chieu GOI Y bien so.
+ * Nam ham con lai nem — neu mot lan sua sau nay goi chung tu day, bai test se noi ngay thay vi tra
+ * ve mot mang rong va lam phep kiem im lang.
+ */
+class FleetOnlyCoreFacts extends TransportFuelCoreFacts {
+  constructor(private readonly plates: readonly string[]) {
+    super();
+  }
+  async listVehicles(): Promise<FuelVehicleFacts[]> {
+    return this.plates.map((registrationPlate, index) => ({
+      id: `xe-${index}`,
+      registrationPlate,
+      vehicleClass: 'DAU_KEO',
+    }));
+  }
+  async findTrip(): Promise<never> {
+    throw new Error('duong ra soat khong duoc doc chuyen');
+  }
+  async findTripByCode(): Promise<never> {
+    throw new Error('duong ra soat khong duoc doc chuyen');
+  }
+  async listDrivers(): Promise<never> {
+    throw new Error('duong ra soat khong duoc doc lai xe');
+  }
+  async findVehicle(): Promise<never> {
+    throw new Error('duong ra soat chi doc CA danh sach xe');
+  }
+  async findDriver(): Promise<never> {
+    throw new Error('duong ra soat khong duoc doc lai xe');
+  }
+  async findDriverByAuthUserId(): Promise<never> {
+    throw new Error('duong ra soat khong duoc doc lai xe');
+  }
+  async wasDriverEverAssignedToTrip(): Promise<never> {
+    throw new Error('duong ra soat khong duoc doc phan cong');
+  }
+  async wasVehicleEverAssignedToTrip(): Promise<never> {
+    throw new Error('duong ra soat khong duoc doc phan cong');
+  }
+}
+
+const CORE_POLICY: TransportCorePolicy = { timeZone: 'Asia/Ho_Chi_Minh' };
+
 const buildService = (
   fuel: InMemoryFuelRepository,
   documents = new InMemoryFuelDocumentRepository(),
@@ -52,6 +100,8 @@ const buildService = (
       new AuditLogService(new InMemoryAuditLogRepository()),
     ),
     fuel,
+    new FleetOnlyCoreFacts(['29C-123.45']),
+    CORE_POLICY,
     new AuditLogService(new InMemoryAuditLogRepository()),
   );
 
@@ -130,6 +180,62 @@ describe('FuelDocumentService — bon ket cuc cua mot lan nhap', () => {
     await service.ingest(fileOf('<BangKe/>'), ACTOR);
     const real = await service.ingest(fileOf(invoiceWith({})), ACTOR);
     expect(real.document.status).toBe('PARSED');
+  });
+});
+
+describe('FuelDocumentService — duong RA SOAT (C4)', () => {
+  let service: FuelDocumentService;
+
+  beforeEach(() => {
+    service = buildService(new InMemoryFuelRepository());
+  });
+
+  /**
+   * Hoa don mau co bien so `29C-123.45` (khop doi xe gia lap), nhung KHONG noi duoc nha cung cap
+   * (kho rong) va KHONG nhan ra tram. Nen mot ung vien sach ve so hoc van co phat hien — va do la
+   * cau tra loi TRUNG THUC, khong phai mot loi.
+   */
+  it('DOC-17 — moi ung vien di kem ket qua kiem tat dinh cua chinh no', async () => {
+    const ingested = await service.ingest(fileOf(FIXTURE), ACTOR);
+    const review = await service.documentReview(ingested.document.id);
+
+    expect(review.candidates).toHaveLength(3);
+    for (const row of review.candidates) {
+      expect(row.candidate.id).toBeDefined();
+      expect(['NO_FINDINGS', 'HAS_FINDINGS']).toContain(row.assessment.outcome);
+    }
+  });
+
+  it('DOC-18 — chua noi duoc nha cung cap va chua nhan ra tram deu noi ra thanh phat hien', async () => {
+    const ingested = await service.ingest(fileOf(FIXTURE), ACTOR);
+    const review = await service.documentReview(ingested.document.id);
+    const findings = review.candidates[0]?.assessment.findings.map((entry) => entry.finding) ?? [];
+
+    expect(findings).toContain('SUPPLIER_UNLINKED');
+    expect(findings).toContain('STATION_UNRESOLVED');
+    // Bien so tren hoa don mau KHOP doi xe gia lap, nen hai ma bien so deu khong duoc keu.
+    expect(findings).not.toContain('PLATE_HINT_ABSENT');
+    expect(findings).not.toContain('PLATE_HINT_UNKNOWN_VEHICLE');
+  });
+
+  it('DOC-19 — dong khong phai nhien lieu duoc danh dau, khong bi loc khoi ket qua', async () => {
+    const ingested = await service.ingest(fileOf(FIXTURE), ACTOR);
+    const review = await service.documentReview(ingested.document.id);
+    const water = review.candidates[2];
+
+    expect(water?.candidate.unitRaw).toBe('Chai');
+    expect(water?.assessment.findings.map((entry) => entry.finding)).toContain('UNIT_NOT_LITRES');
+  });
+
+  /** Phat hien duoc TINH LUC DOC, nen doc lai hai lan phai cho ra dung mot ket qua. */
+  it('DOC-20 — doc lai lan hai cho ra dung ket qua do', async () => {
+    const ingested = await service.ingest(fileOf(FIXTURE), ACTOR);
+    const first = await service.documentReview(ingested.document.id);
+    const second = await service.documentReview(ingested.document.id);
+
+    expect(JSON.stringify(second.candidates.map((row) => row.assessment))).toBe(
+      JSON.stringify(first.candidates.map((row) => row.assessment)),
+    );
   });
 });
 

@@ -1,5 +1,6 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { AuditLogService } from '../../audit/audit-log.service.js';
+import { toBusinessDate } from '../business-date.js';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
@@ -9,17 +10,22 @@ import {
   type NormalizedCandidate,
 } from './fuel-candidate-normalize.js';
 import { TRANSPORT_FUEL_DECISIONS, type TransportFuelDecisionReason } from './fuel-decisions.js';
+import { assessFuelCandidate } from './fuel-candidate-validation.js';
 import { FuelDocumentRepository, type FuelDocumentQuery } from './fuel-document.repository.js';
 import type {
   FuelDocument,
   FuelDocumentDetail,
   FuelDocumentRejectReason,
+  FuelDocumentReview,
   FuelDocumentStatus,
 } from './fuel-document.types.js';
 import type { ParsedInvoice } from './fuel-einvoice-parse.js';
 import { FuelInvoiceSource, invoiceDigest, type FuelInvoiceFile } from './fuel-invoice-source.js';
 import { FuelStationService } from './fuel-station.service.js';
+import { TransportFuelCoreFacts } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
+import { TRANSPORT_CORE_POLICY, type TransportCorePolicy } from '../transport-policy.js';
+import { normalizePlate } from './fuel-statement-mapping.js';
 
 /**
  * NHAP MOT CHUNG TU NHIEN LIEU CO CAU TRUC — service cua C2 (Issue #236).
@@ -67,6 +73,8 @@ export class FuelDocumentService {
     private readonly source: FuelInvoiceSource,
     private readonly stations: FuelStationService,
     private readonly fuel: FuelRepository,
+    private readonly core: TransportFuelCoreFacts,
+    @Inject(TRANSPORT_CORE_POLICY) private readonly corePolicy: TransportCorePolicy,
     private readonly audit: AuditLogService,
     @Optional() private readonly telemetry?: TelemetryService,
   ) {}
@@ -160,6 +168,39 @@ export class FuelDocumentService {
 
   listDocuments(query: FuelDocumentQuery): Promise<FuelDocument[]> {
     return this.documents.listDocuments(query);
+  }
+
+  /**
+   * MOT CHUNG TU KEM MOI DIEU KHONG ON CUA TUNG DONG — duong doc cua man hinh ra soat (C4).
+   *
+   * PHAT HIEN DUOC TINH LUC DOC, KHONG DUOC LUU. Chung suy ra TAT DINH tu mot ung vien bat bien
+   * cong voi danh muc HIEN TAI; luu lai se tao ra mot su that thu hai, va su that thu hai bat dau
+   * troi khoi su that thu nhat ngay lan dau ai do sua danh muc xe hay noi lai nha cung cap.
+   *
+   * Doc CA danh sach xe roi so tren ban DA CHUAN HOA: doi xe cua mot khach van tai la mot con so
+   * nho co gioi han that (cung ly le voi `listVehicles()` o `fuel.ports.ts`), va bien so tren
+   * chung tu viet du kieu (`29C-123.45`, `29C 12345`).
+   */
+  async documentReview(id: string): Promise<FuelDocumentReview> {
+    const detail = await this.documentDetail(id);
+    const vehicles = await this.core.listVehicles();
+    const fleetPlates = new Set(
+      vehicles.map((vehicle) => normalizePlate(vehicle.registrationPlate)),
+    );
+    const today = toBusinessDate(new Date(), this.corePolicy.timeZone);
+
+    return {
+      document: detail.document,
+      candidates: detail.candidates.map((candidate) => ({
+        candidate,
+        assessment: assessFuelCandidate({
+          candidate,
+          supplierLinked: detail.document.supplierId !== null,
+          fleetPlates,
+          today,
+        }),
+      })),
+    };
   }
 
   /* ---------------------------- Noi bo ---------------------------- */

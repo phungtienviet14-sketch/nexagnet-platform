@@ -11,6 +11,9 @@ import { FuelStationService } from './fuel-station.service.js';
 import { PrismaFuelDocumentRepository } from './prisma-fuel-document.repository.js';
 import { PrismaFuelStationRepository } from './prisma-fuel-station.repository.js';
 import { PrismaFuelRepository } from './prisma-fuel.repository.js';
+import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
+import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
+import { TransportFuelCoreFactsAdapter } from './fuel.ports.js';
 
 /**
  * C2 — NHAP HOA DON DIEN TU TREN POSTGRES THAT (Lane C, Issue #236).
@@ -40,6 +43,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       new XmlFuelInvoiceSource(),
       new FuelStationService(stations, fuel, audit),
       fuel,
+      // Cong DOC THAT sang `transport-core`, khong mot ban gia lap nao: duong ra soat cua C4
+      // doc danh muc xe de doi chieu goi y bien so, va bai nay chay tren Postgres that.
+      new TransportFuelCoreFactsAdapter(
+        new PrismaTripRepository(prisma),
+        new PrismaFleetRepository(prisma),
+      ),
+      { timeZone: 'Asia/Ho_Chi_Minh' },
       audit,
     );
 

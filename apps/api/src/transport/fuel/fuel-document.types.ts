@@ -1,4 +1,5 @@
 import type { BusinessDate } from '../business-date.js';
+import type { FuelCandidateAssessment } from './fuel-candidate-validation.js';
 import type { EInvoiceProvenance } from './fuel-einvoice-parse.js';
 
 /**
@@ -111,4 +112,22 @@ export interface FuelCandidate {
 export interface FuelDocumentDetail {
   readonly document: FuelDocument;
   readonly candidates: readonly FuelCandidate[];
+}
+
+/**
+ * MOT UNG VIEN KEM MOI DIEU KHONG ON CUA NO — khung nhin cua man hinh RA SOAT (C4).
+ *
+ * Tach khoi `FuelDocumentDetail` co chu dich, va do la mot lua chon ve CAU HOI chu khong ve
+ * hieu nang: `documentDetail` tra loi *"chung tu da noi gi"* — mot phep doc thuan, khong can
+ * biet gi ve doi xe. `documentReview` tra loi *"co gi khong on"*, va cau do chi tra loi duoc
+ * khi doc them danh muc xe hien tai. Hai cau hoi, hai duong doc.
+ */
+export interface FuelCandidateReview {
+  readonly candidate: FuelCandidate;
+  readonly assessment: FuelCandidateAssessment;
+}
+
+export interface FuelDocumentReview {
+  readonly document: FuelDocument;
+  readonly candidates: readonly FuelCandidateReview[];
 }
