@@ -791,3 +791,77 @@ chưa phân công xe (`PROJECTION_TRIP_HAS_NO_VEHICLE`).
 chiều khoá ngoại chỉ đi **một hướng**: bảng mới → bảng cũ. `MV-IT-05` đọc lại chuyến sau khi chiếu
 và đối chiếu từng trường để khoá tính chất này bằng một bài đo, không bằng một câu trong tài liệu.
 
+
+---
+
+## 13. `R1-C` as-built — ExpenseClaim + cổng duyệt, đo trên nhánh `claude/tv2-lane-a-expense-claim`
+
+Chỉ đạo: #234 A2, quyết định #232 §1 `D-06`. Đây là tranche **gỡ một nửa** phán quyết hoãn của
+`F-06`: chủ sở hữu đã cấp luật cho duyệt **trọn khoản**; duyệt **một phần** vẫn treo ở `Q-04`.
+
+### 13.1. Câu duy nhất tranche này giữ
+
+> **Chỉ khoản ĐÃ DUYỆT mới chạm vào giá thành và sổ quỹ.**
+
+Nên `ExpenseClaimService` **không tự ghi một bút toán nào**. Lúc duyệt nó gọi
+`CostingService.recordTripExpense()` — đúng cái cửa duy nhất mà T3 mở cho tiền đi vào (`INV-03`:
+hai chân của một sự kiện kinh tế ghi trong MỘT giao dịch). Một đường ghi thứ hai ở đây sẽ tạo một
+sổ cái song song, và hai số sẽ lệch nhau mà không có gì báo.
+
+`correlationKey = claim:<id>` làm việc ghi sổ **tất định**: bấm duyệt hai lần không thể trừ tiền hai
+lần (`EC-IT-05` đo điều đó trên Postgres thật).
+
+### 13.2. Thứ tự các bước lúc duyệt là một phần hợp đồng
+
+Ghi sổ chạy **trước** khi ghi quyết định. Nếu T3 từ chối — kỳ quỹ đóng băng, chuyến đã đối soát,
+lái xe không còn phân công — thì **không có gì được ghi**, và người duyệt nhận đúng mã lý do của T3.
+Đảo thứ tự sẽ đẻ ra một đề nghị mang nhãn *đã duyệt* trong khi tiền chưa bao giờ vào sổ.
+
+### 13.3. Hai con số, ngay cả khi hôm nay chúng bằng nhau
+
+`claimedAmount` là số lái xe đề nghị; `approvedAmount` là số kế toán duyệt. Hôm nay `D-06` chỉ cho
+duyệt trọn khoản nên hai số luôn bằng nhau — nhưng **cả hai có cột ngay từ đầu**, và `CHECK` đòi
+`approvedAmount <= claimedAmount` chứ **không** đòi bằng nhau.
+
+Nhờ vậy khi `Q-04` có lời, duyệt một phần là **một lần nới lỏng ở tầng miền** — không phải một lần
+đổi kiểu dữ liệu, và không phải một lần viết lại lịch sử của những đề nghị đã duyệt.
+
+### 13.4. Người duyệt không được là người đề nghị
+
+`CLAIM_REVIEWER_IS_SUBMITTER` — cùng lý lẽ đã ghi cho `transport.payslip.approve`: một người tự
+duyệt khoản của chính mình là đúng cái mà kiểm soát nội bộ sinh ra để chặn. Bề mặt lái xe
+(`/transport/me/expense-claims`) **không có đường duyệt nào**, và danh tính ở đó đến từ **phiên**
+chứ không từ thân yêu cầu.
+
+### 13.5. Nhiên liệu và ETC không đi đường này
+
+`D-05` (dầu ở cây xăng có hợp đồng là công nợ công ty, không dùng vào quỹ lái xe — đường đó đã chạy
+từ T4) và `D-07` (ETC là tiền công ty trả, quy trình quyết toán thật của khách **chưa ai biết**).
+
+Chặn ở **hai chỗ**: tầng miền trả mã `CLAIM_CATEGORY_ROUTED_ELSEWHERE` (đọc được), và `CHECK`
+`TransportExpenseClaim_category_not_reserved` là lưới cuối cho mọi đường ghi khác — `EC-IT-04` chứng
+minh bằng cách ghi thẳng qua Prisma với `' fuel '`.
+
+### 13.6. Duyệt mà chưa vào sổ được thì phải nói ra
+
+Đường tiền của T3 đi qua một **chuyến**. Một đề nghị chỉ gắn vào vòng chạy/chặng vẫn duyệt được,
+nhưng `settlementExpenseId` ở lại `null` và quyết định mang mã
+`CLAIM_SETTLEMENT_DEFERRED_NO_TRIP`. Im lặng ở chỗ này là cách một khoản tiền biến mất.
+
+### 13.7. As-built
+
+| Thứ | Ở đâu |
+|---|---|
+| Hai enum + hai bảng | `apps/api/prisma/schema.prisma` (khối cuối) |
+| Migration | `apps/api/prisma/migrations/20260907210000_transport_expense_claim/` — kèm `README-rollback.sql` |
+| Chín `CHECK` | SQL thô trong migration; `transport-expense-claim-storage.spec.ts` đọc thẳng tệp và đo |
+| Miền | `apps/api/src/transport/claims/` — 8 tệp nguồn |
+| Hành động | `transport.expense.claim.read` · `.submit` · `.review` · `transport.driver.self.expense.claim.submit` |
+| Đăng ký | `owned('transport-costing', …)` — **không** capability mới |
+| Nghiệm thu | 38 bài: 12 miền (`EC-001`…`EC-012`) · **7 trên Postgres thật** (`EC-IT-01`…`EC-IT-07`) · 17 storage · 2 composition |
+
+**Lịch sử quyết định chỉ ghi thêm.** Cổng lưu trữ **không có** `updateDecision` lẫn `deleteDecision`
+— cùng lý do với `TransportDriverFundEntry`: cách chắc chắn nhất để không ai ghi đè là không cung
+cấp cái nút đó. Đổi ý về sau là một quyết định **mới** (`sequence` kế tiếp), và sửa một khoản đã vào
+sổ vẫn đi đường cũ: bút toán đảo của T3.
+

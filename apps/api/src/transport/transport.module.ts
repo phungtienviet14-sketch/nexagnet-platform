@@ -120,6 +120,7 @@ import { TripService } from './trips/trip.service.js';
     TransportActionGuard,
     FleetRepository,
     TripRepository,
+    MovementRepository,
     AuditLogService,
     TRANSPORT_CORE_POLICY,
   ],

@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { loadFoundationEnv } from '../../config/foundation-env.js';
 import { PrismaModule } from '../../config/prisma.module.js';
 import { PrismaService } from '../../config/prisma.service.js';
+import { ExpenseClaimRepository, InMemoryExpenseClaimRepository } from '../claims/claim.repository.js';
+import { ExpenseClaimService } from '../claims/claim.service.js';
+import { PrismaExpenseClaimRepository } from '../claims/prisma-claim.repository.js';
 import { TransportModule } from '../transport.module.js';
 import { TRANSPORT_COSTING_POLICY, tenantTransportCostingPolicy } from './costing-policy.js';
 import { CostingReadService } from './costing-read.service.js';
@@ -38,11 +41,26 @@ import { TransportCoreFacts, TransportCoreFactsAdapter } from './transport-core-
       inject: [PrismaService],
     },
     { provide: TransportCoreFacts, useClass: TransportCoreFactsAdapter },
+    {
+      provide: ExpenseClaimRepository,
+      useFactory: (prisma: PrismaService): ExpenseClaimRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaExpenseClaimRepository(prisma)
+          : new InMemoryExpenseClaimRepository(),
+      inject: [PrismaService],
+    },
     { provide: TRANSPORT_COSTING_POLICY, useFactory: tenantTransportCostingPolicy },
     CostingService,
     CostingReadService,
     FundPeriodService,
+    ExpenseClaimService,
   ],
-  exports: [CostingService, CostingReadService, FundPeriodService, CostingRepository],
+  exports: [
+    CostingService,
+    CostingReadService,
+    FundPeriodService,
+    ExpenseClaimService,
+    CostingRepository,
+  ],
 })
 export class TransportCostingModule {}

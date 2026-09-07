@@ -32,6 +32,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.order.manage',
       'transport.run.read',
       'transport.run.manage',
+      'transport.expense.claim.read',
+      'transport.expense.claim.submit',
+      'transport.expense.claim.review',
       'transport.trip.read',
       'transport.trip.create',
       'transport.trip.update',
@@ -84,6 +87,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // `#168 B3` — lai xe tu ghi mot khoan chi lay tu quy CUA CHINH MINH. Tach han khoi
       // `transport.costing.expense.record`, la ma van hanh ghi duoc cho bat ky ai.
       'transport.driver.self.expense.record',
+      'transport.driver.self.expense.claim.submit',
       // `#168 B8` — lai xe doc lich su luong DA CONG BO cua chinh minh. Tach han khoi
       // `transport.payroll.period.read`, la ma van hanh doc duoc phieu cua bat ky lai xe nao.
       'transport.driver.self.payslip.read',
@@ -195,6 +199,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.fuel.read',
         'transport.driver.self.fuel.submit',
         'transport.driver.self.expense.record',
+      'transport.driver.self.expense.claim.submit',
         'transport.driver.self.payslip.read',
         'transport.driver.self.tracking.start',
         'transport.driver.self.tracking.report',
