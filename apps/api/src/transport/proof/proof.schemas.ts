@@ -95,9 +95,22 @@ export const recordProofSchema = z
     observationId: z.string().min(1),
     clientEventId: z.string().min(1).max(200),
     note: z.string().max(500).nullish(),
+    /**
+     * MOT TRUONG MULTIPART LUON LA CHUOI, ke ca khi no lap lai.
+     *
+     * Day la mot loi da xay ra that: khai `z.array(...)` roi gui bang `FormData` thi mot tam anh
+     * duy nhat den duoi dang chuoi `"LIVE_CAMERA"`, khong phai mang — va `.strict()` tra `400`
+     * cho mot yeu cau hoan toan dung. Hai tam thi den duoi dang hai truong cung ten, ma tang HTTP
+     * gom lai thanh mang.
+     *
+     * Nen phai nhan CA HAI hinh dang. Khong noi long `.strict()` de "cho de": chuan hoa o day thi
+     * phan con lai cua he thong van chi thay dung mot kieu.
+     */
     captureModes: z
-      .array(z.enum(['LIVE_CAMERA', 'GALLERY', 'UNKNOWN']))
-      .max(6)
+      .preprocess(
+        (value) => (typeof value === 'string' ? [value] : value),
+        z.array(z.enum(['LIVE_CAMERA', 'GALLERY', 'UNKNOWN'])).max(6),
+      )
       .optional(),
   })
   .strict();
