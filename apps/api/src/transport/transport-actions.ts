@@ -216,6 +216,33 @@ export const TRANSPORT_ACTIONS = [
    * chi bao dam be mat lai xe khong bao gio cham toi duong van hanh.
    */
   'transport.driver.self.payslip.read',
+  /**
+   * BAM VI TRI CUA CHINH MINH — lai xe mo phien, gui ban dinh vi, dong phien (`transport-proof`).
+   *
+   * Ba ma rieng chu khong mot ma `tracking.write` gop chung, vi ba viec nay co ba hinh dang rui ro
+   * khac nhau: MO phien la mot lan chon chuyen (cong so huu that nam o `TrackingService`), GUI la
+   * mot dong bang chung nho lap lai hang nghin lan, DONG la mot moc ket thuc. Mot khach muon tat
+   * bam vi tri nen tang nhung van cho ghi moc bat dau se can den su khac biet do.
+   */
+  'transport.driver.self.tracking.start',
+  'transport.driver.self.tracking.report',
+  'transport.driver.self.tracking.stop',
+  /** Van hanh doc TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do. */
+  'transport.tracking.read',
+  /**
+   * DOC DUONG DI THO cua mot con nguoi — ma RIENG, va la ma hep nhat trong ca tep nay.
+   *
+   * Tach han khoi `transport.tracking.read`, va do la ca diem. Ma kia tra loi "co chung cu vi tri
+   * khong" va "co bao nhieu co rui ro" — du cho ke toan doi soat. Ma NAY tra ve chuoi toa do tung
+   * phut cua mot nguoi lam cong. Gop hai thu lam mot la mo mot nang luc giam sat ma khong ai yeu
+   * cau, cho moi vai da co quyen doc so sach.
+   *
+   * Xem `ACCOUNTING_DENIED` ben duoi: ke toan CO `transport.tracking.read` va KHONG co ma nay.
+   */
+  'transport.location.history.read',
+  /** Khai bao hang rao dia ly (kho, bai, cay xang) — viec cua van hanh. */
+  'transport.geofence.read',
+  'transport.geofence.manage',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -228,6 +255,9 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fuel.submit',
   'transport.driver.self.expense.record',
   'transport.driver.self.payslip.read',
+  'transport.driver.self.tracking.start',
+  'transport.driver.self.tracking.report',
+  'transport.driver.self.tracking.stop',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
@@ -268,6 +298,15 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
   'transport.trip.cancel',
   'transport.costing.period.reopen',
   'transport.fuel.reconciliation.reopen',
+  /**
+   * Ke toan doc duoc TOM TAT bam vi tri (`transport.tracking.read`) — du de doi soat mot chuyen
+   * co chung cu vi tri hay khong — nhung KHONG doc duoc duong di tung phut cua mot con nguoi.
+   *
+   * Day khong phai su nghi ngo ai ca. Doi soat so sach khong CAN toa do, va mot quyen khong can
+   * den ma van duoc cap la mot quyen se bi dung vao viec khac. Khi mot ho so ky luat that su can
+   * duong di, no di qua mot nguoi co `ADMIN` va de lai mot dong o `tracking.history_read`.
+   */
+  'transport.location.history.read',
 ];
 
 const ROLE_ACTIONS: Readonly<Record<UserRole, readonly TransportAction[]>> = {

@@ -22,7 +22,8 @@
     "transport-fuel",
     "transport-settlement",
     "transport-asset-compliance",
-    "transport-workforce"
+    "transport-workforce",
+    "transport-proof"
   ],
   "policies": {
     "transportCore": {
