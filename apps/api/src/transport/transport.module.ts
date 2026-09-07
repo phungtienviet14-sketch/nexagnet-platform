@@ -120,11 +120,6 @@ import { TripService } from './trips/trip.service.js';
     TransportActionGuard,
     FleetRepository,
     TripRepository,
-    /**
-     * Phoi ra vi cung mot ly do `TripRepository` da duoc phoi: mot capability phia sau boc no lai
-     * thanh mot cong CHI DOC (`analytics.ports.ts`). Kho van thuoc `transport-core`; thu di ra
-     * ngoai la mot cong khong co ham ghi.
-     */
     MovementRepository,
     AuditLogService,
     TRANSPORT_CORE_POLICY,

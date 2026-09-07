@@ -30,8 +30,10 @@ import { canPerform, type TransportAction } from './transport-actions';
 export type TransportSectionId =
   | 'overview'
   | 'trips'
+  | 'movement'
   | 'fleet'
   | 'driver-fund'
+  | 'expense-claims'
   | 'fuel'
   | 'settlement'
   | 'maintenance'
@@ -83,6 +85,14 @@ export const TRANSPORT_SECTIONS = [
     requiredAction: 'transport.trip.read',
   },
   {
+    id: 'movement',
+    label: 'Vòng chạy & đơn hàng',
+    group: 'dispatch',
+    summary: 'Nghĩa vụ thương mại và vòng chạy vật lý của xe — gồm cả chặng chạy rỗng.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.run.read',
+  },
+  {
     id: 'fleet',
     label: 'Đội xe & lái xe',
     group: 'dispatch',
@@ -97,6 +107,14 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Số dư quỹ từng lái xe, tạm ứng, hoàn quỹ, chi phí chuyến và kỳ quỹ.',
     requiredCapabilities: ['transport-costing'],
     requiredAction: 'transport.costing.driver_fund.read',
+  },
+  {
+    id: 'expense-claims',
+    label: 'Duyệt chi lái xe',
+    group: 'cost',
+    summary: 'Đề nghị chi lái xe gửi lên — chỉ khoản được duyệt mới vào giá thành và sổ quỹ.',
+    requiredCapabilities: ['transport-costing'],
+    requiredAction: 'transport.expense.claim.read',
   },
   {
     id: 'fuel',

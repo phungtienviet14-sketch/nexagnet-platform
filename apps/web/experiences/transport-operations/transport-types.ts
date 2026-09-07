@@ -1307,3 +1307,137 @@ export interface RecordCashoutInput {
   readonly correlationKey?: string;
   readonly lines: readonly RecordCashoutLineInput[];
 }
+
+/* ------------------------------------------------------------------ *
+ * MO HINH VAN CHUYEN v2 — HAI TRUC DOC LAP (#232 `D-01`, #234 A1)
+ *
+ * Ban guong cua `apps/api/src/transport/movement/movement.types.ts`. Hai truc doc lap: mot don
+ * ton tai truoc khi biet xe nao chay no.
+ * ------------------------------------------------------------------ */
+
+export type TransportOrderStatus = 'OPEN' | 'FULFILLED' | 'CANCELLED';
+export type VehicleRunStatus = 'PLANNED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+export type RunLegKind = 'LOADED' | 'EMPTY';
+export type RunLegStatus = 'PLANNED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+
+export interface TransportOrder {
+  readonly id: string;
+  readonly code: string;
+  readonly status: TransportOrderStatus;
+  readonly businessDate: BusinessDate;
+  readonly customerId: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly cargoDescription: string | null;
+  readonly freightAmount: number | null;
+  readonly currencyCode: string;
+  readonly note: string | null;
+  readonly cancelledAt: string | null;
+  readonly cancellationReason: string | null;
+}
+
+export interface VehicleRun {
+  readonly id: string;
+  readonly code: string;
+  readonly vehicleId: string;
+  readonly status: VehicleRunStatus;
+  readonly businessDate: BusinessDate;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly note: string | null;
+  readonly cancelledAt: string | null;
+  readonly cancellationReason: string | null;
+}
+
+export interface RunLeg {
+  readonly id: string;
+  readonly runId: string;
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  readonly status: RunLegStatus;
+  readonly orderId: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly businessDate: BusinessDate;
+  /** `null` = CHUA BIET, khong phai 0. Man hinh phai noi ra dieu do. */
+  readonly distanceKm: number | null;
+  readonly note: string | null;
+}
+
+export interface RunAssignment {
+  readonly id: string;
+  readonly runId: string;
+  readonly driverId: string;
+  readonly effectiveFrom: string;
+  readonly effectiveTo: string | null;
+  readonly assignedBy: string;
+}
+
+export interface VehicleRunDetail {
+  readonly run: VehicleRun;
+  readonly legs: readonly RunLeg[];
+  readonly activeAssignment: RunAssignment | null;
+}
+
+/**
+ * KM CO HANG vs KM RONG.
+ *
+ * `complete = false` nghia la con chang thieu km — va khi do `emptyRatio` la `null`. Man hinh
+ * KHONG duoc tu dien 0 vao cho trong: mot ty le tinh tren du lieu khuyet trong y het mot ty le
+ * that.
+ */
+export interface RunDistanceSummary {
+  readonly loadedKm: number;
+  readonly emptyKm: number;
+  readonly totalKm: number;
+  readonly emptyRatio: number | null;
+  readonly complete: boolean;
+  readonly legsMissingDistance: { readonly loaded: number; readonly empty: number };
+  readonly countedLegs: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * DE NGHI CHI + CONG DUYET (#232 `D-06`, #234 A2)
+ * ------------------------------------------------------------------ */
+
+export type ExpenseClaimStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+
+export interface ExpenseClaim {
+  readonly id: string;
+  readonly driverId: string;
+  readonly status: ExpenseClaimStatus;
+  readonly categoryCode: string;
+  /** SO LAI XE DE NGHI — khong bao gio bi ghi de boi so duyet. */
+  readonly claimedAmount: number;
+  /** SO DUOC DUYET — `null` cho toi khi co mot quyet dinh `APPROVED`. */
+  readonly approvedAmount: number | null;
+  readonly currencyCode: string;
+  readonly businessDate: BusinessDate;
+  readonly note: string | null;
+  readonly evidenceLocator: string | null;
+  readonly tripId: string | null;
+  readonly runId: string | null;
+  readonly legId: string | null;
+  readonly submittedBy: string;
+  readonly submittedAt: string;
+  readonly decidedAt: string | null;
+  /** `null` khi da duyet ma CHUA vao gia thanh (de nghi chua gan chuyen). */
+  readonly settlementExpenseId: string | null;
+}
+
+export interface ExpenseClaimDecision {
+  readonly id: string;
+  readonly claimId: string;
+  readonly sequence: number;
+  readonly outcome: 'APPROVED' | 'REJECTED';
+  readonly approvedAmount: number | null;
+  readonly reasonCode: string;
+  readonly note: string | null;
+  readonly decidedBy: string;
+  readonly decidedAt: string;
+}
+
+export interface ExpenseClaimDetail {
+  readonly claim: ExpenseClaim;
+  readonly decisions: readonly ExpenseClaimDecision[];
+}

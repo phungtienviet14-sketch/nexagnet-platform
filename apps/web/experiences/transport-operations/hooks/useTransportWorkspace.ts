@@ -45,6 +45,9 @@ export const TRANSPORT_QUERY_KEYS = {
   driverSettlement: ['transport', 'me', 'settlement'],
   /** `TX-07b` — mot dong so du cho moi lai xe (be mat ke toan). */
   settlementBalances: ['transport', 'driver-settlement', 'balances'],
+  orders: ['transport', 'orders'],
+  runs: ['transport', 'runs'],
+  expenseClaims: ['transport', 'expense-claims'],
 } as const;
 
 /** Nang luc + hanh dong deu phai dat truoc khi ban mot yeu cau. */
@@ -80,6 +83,58 @@ export function useDrivers(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.drivers,
     queryFn: () => transportApi.fleet.drivers(),
     enabled: allowed(input, 'transport-core', 'transport.driver.read'),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * MO HINH VAN CHUYEN v2 -- hai truc doc lap (`D-01`)
+ * ------------------------------------------------------------------ */
+
+export function useTransportOrders(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.orders,
+    queryFn: () => transportApi.movement.orders(),
+    enabled: allowed(input, 'transport-core', 'transport.order.read'),
+  });
+}
+
+export function useVehicleRuns(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.runs,
+    queryFn: () => transportApi.movement.runs(),
+    enabled: allowed(input, 'transport-core', 'transport.run.read'),
+  });
+}
+
+/** Chang cua MOT vong chay. Chi goi khi da MO mot vong chay, khong goi cho ca bang. */
+export function useVehicleRunDetail(input: NavigationInput, runId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'runs', runId ?? 'none'],
+    queryFn: () => transportApi.movement.run(runId as string),
+    enabled: runId !== null && allowed(input, 'transport-core', 'transport.run.read'),
+  });
+}
+
+/**
+ * KM co hang vs km rong CUA MOT vong chay.
+ *
+ * May chu tinh, man hinh chi hien. Neu mot ngay nao do co mot phep cong km o tep nay thi hai
+ * cach tinh se lech nhau -- va ban tren man hinh la ban khong ai doi chieu duoc.
+ */
+export function useRunDistance(input: NavigationInput, runId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'runs', runId ?? 'none', 'distance'],
+    queryFn: () => transportApi.movement.distance(runId as string),
+    enabled: runId !== null && allowed(input, 'transport-core', 'transport.run.read'),
+  });
+}
+
+/** DE NGHI CHI cho ke toan duyet (`D-06`). */
+export function useExpenseClaims(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.expenseClaims,
+    queryFn: () => transportApi.claims.list(),
+    enabled: allowed(input, 'transport-costing', 'transport.expense.claim.read'),
   });
 }
 
@@ -278,7 +333,8 @@ export function useSettlementStatement(input: NavigationInput, driverId: string 
     queryKey: ['transport', 'driver-settlement', 'drivers', driverId],
     queryFn: () => transportApi.driverSettlement.statement(driverId as string),
     enabled:
-      driverId !== null && allowed(input, 'transport-workforce', 'transport.driver_settlement.read'),
+      driverId !== null &&
+      allowed(input, 'transport-workforce', 'transport.driver_settlement.read'),
   });
 }
 

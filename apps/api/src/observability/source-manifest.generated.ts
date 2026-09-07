@@ -105,6 +105,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 218
     },
+    "expense_claim.review": {
+      "filePath": "apps/api/src/transport/claims/claim.service.ts"
+    },
+    "expense_claim.settle": {
+      "functionName": "ExpenseClaimService.settle",
+      "filePath": "apps/api/src/transport/claims/claim.service.ts"
+    },
+    "expense_claim.submit": {
+      "filePath": "apps/api/src/transport/claims/claim.service.ts"
+    },
     "fuel_station.alias": {
       "filePath": "apps/api/src/transport/fuel/fuel-station.service.ts"
     },
@@ -381,6 +391,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
+    "transport.driver.self.expense.claim.submit": {
+      "filePath": "apps/api/src/transport/claims/driver-claims-self.controller.ts"
+    },
     "transport.driver.self.fund.read": {
       "functionName": "DriverFundSelfController.statement",
       "filePath": "apps/api/src/transport/costing/driver-fund-self.controller.ts",
@@ -427,6 +440,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "DriverSettlementController.reverseCashout",
       "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.controller.ts",
       "line": 111
+    },
+    "transport.expense.claim.read": {
+      "filePath": "apps/api/src/transport/claims/claims.controller.ts"
+    },
+    "transport.expense.claim.review": {
+      "filePath": "apps/api/src/transport/claims/claims.controller.ts"
+    },
+    "transport.expense.claim.submit": {
+      "functionName": "ExpenseClaimsController.submit",
+      "filePath": "apps/api/src/transport/claims/claims.controller.ts",
+      "line": 59
     },
     "transport.fleet_status.read": {
       "filePath": "apps/api/src/transport/asset-compliance/fleet-status.controller.ts"
