@@ -124,6 +124,7 @@ import { TransportWorkforceModule } from './transport/workforce/transport-workfo
 import { TransportProofModule } from './transport/proof/transport-proof.module.js';
 import { DriverTrackingController } from './transport/proof/driver-tracking.controller.js';
 import { TrackingController } from './transport/proof/tracking.controller.js';
+import { DriverProofController } from './transport/proof/driver-proof.controller.js';
 import { OperationalAlertsService } from './transport/asset-compliance/operational-alerts.service.js';
 import {
   AlertDriverFundSource,
@@ -294,6 +295,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // BE MAT VAN HANH — HAI tuyen voi HAI quyen khac nhau (tom tat ⟂ duong di tho). Xem khoi chu
   // thich cua controller: gop chung mot quyen la bo mat cong "can-biet" cua lich su vi tri.
   owned('transport-proof', TrackingController),
+  // CHUNG CU VAN HANH CUA CHINH TOI — byte anh di qua `TransportEvidenceService` (`MediaStore`),
+  // khong dung kho tep thu hai. Dang ky o goc vi no can dich vu do, giong
+  // `DriverFuelEvidenceController`.
+  owned('transport-proof', DriverProofController),
 ];
 
 const guardProviders: readonly Provider[] = [

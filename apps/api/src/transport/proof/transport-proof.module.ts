@@ -4,6 +4,12 @@ import { PrismaModule } from '../../config/prisma.module.js';
 import { PrismaService } from '../../config/prisma.service.js';
 import { TRANSPORT_CORE_POLICY, tenantTransportCorePolicy } from '../transport-policy.js';
 import { TransportModule } from '../transport.module.js';
+import {
+  InMemoryOperationalProofRepository,
+  OperationalProofRepository,
+} from './operational-proof.repository.js';
+import { OperationalProofService } from './operational-proof.service.js';
+import { PrismaOperationalProofRepository } from './prisma-operational-proof.repository.js';
 import { PrismaTrackingRepository } from './prisma-tracking.repository.js';
 import {
   DEFAULT_TRANSPORT_PROOF_POLICY,
@@ -64,8 +70,23 @@ import {
       provide: TRANSPORT_PROOF_POLICY,
       useFactory: (): TransportProofPolicy => DEFAULT_TRANSPORT_PROOF_POLICY,
     },
+    {
+      provide: OperationalProofRepository,
+      useFactory: (prisma: PrismaService): OperationalProofRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaOperationalProofRepository(prisma)
+          : new InMemoryOperationalProofRepository(),
+      inject: [PrismaService],
+    },
     TrackingService,
+    OperationalProofService,
   ],
-  exports: [TrackingService, TrackingRepository, VehicleTelematicsPort],
+  exports: [
+    TrackingService,
+    TrackingRepository,
+    VehicleTelematicsPort,
+    OperationalProofService,
+    OperationalProofRepository,
+  ],
 })
 export class TransportProofModule {}

@@ -896,12 +896,13 @@ model TransportDriver {
   /// `TX-04` — phieu do dau lai xe nay da khai.
   fuelEntries         TransportFuelEntry[]
   /// `TX-07` — phieu luong cua lai xe nay. Chi co mat khi khach bat `transport-workforce`.
-  payslips           TransportPayslip[]
+  payslips            TransportPayslip[]
   /// R1-B: lich su cam lai cac vong chay v2.
-  runAssignments     TransportRunAssignment[]
+  runAssignments      TransportRunAssignment[]
   /// `transport-proof` — cac phien bam vi tri va cac ma cai dat ung dung cua lai xe nay.
   trackingSessions    TransportTrackingSession[]
   deviceInstallations TransportDeviceInstallation[]
+  operationalProofs   TransportOperationalProof[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -1037,6 +1038,8 @@ model TransportTrip {
   /// `transport-proof` — cac phien bam vi tri cua chuyen. NHIEU hang la binh thuong: mot ca lai
   /// bi ngat giua chung roi mo lai la hai phien tren cung mot chuyen.
   trackingSessions    TransportTrackingSession[]
+  /// `transport-proof` — chung cu bat dau/giao hang cua chuyen.
+  operationalProofs   TransportOperationalProof[]
 
   @@index([status])
   @@index([businessDate])
@@ -3493,6 +3496,8 @@ model TransportLocationObservation {
   createdAt            DateTime                 @default(now())
 
   riskFlags TransportProofRiskFlag[]
+  /// Nhieu nhat MOT chung cu dua tren cung mot ban dinh vi (`observationId` la `@unique` ben do).
+  proof     TransportOperationalProof?
 
   @@unique([sessionId, clientEventId], map: "TransportLocationObservation_session_event_key")
   @@index([sessionId, capturedAt])
@@ -3538,4 +3543,87 @@ model TransportGeofence {
 
   @@index([subjectKind, subjectId])
   @@index([status])
+}
+
+// ----- Transport domain: chung cu van hanh (transport-proof, Issue #235 Lane B) -----
+//
+// Rang buoc song trong SQL tho cua `20260908120000_transport_operational_proof`, va
+// `transport-operational-proof-storage.spec.ts` doc chinh tep do.
+
+enum TransportOperationalProofKind {
+  START
+  DELIVERY
+}
+
+/// CACH mot tam anh duoc lay — va do la mot su that ma may chu KHONG tu kiem duoc.
+///
+/// `LIVE_CAMERA` la loi khai cua ung dung rang no vua mo camera trong ung dung; `GALLERY` la loi
+/// khai rang nguoi dung chon mot tep co san. Mot ung dung bi sua hoan toan co the khai sai. Nen
+/// cot nay KHONG phai mot bien phap an ninh — no la mot ranh gioi TRUNG THUC: no cho phep he thong
+/// KHONG cham cung mot muc tin cay cho hai duong khac nhau, va cho phep nguoi xem lai biet duong
+/// nao da duoc dung. `#232 D-08`: anh lay tu thu vien khong duoc lang le huong cung muc tin cay.
+enum TransportProofPhotoCaptureMode {
+  LIVE_CAMERA
+  GALLERY
+  UNKNOWN
+}
+
+/// MOT CHUNG CU VAN HANH — bat dau hoac giao hang.
+///
+/// `observationId` la BAT BUOC: mot chung cu khong co vi tri thi khong phai chung cu ma chi la mot
+/// cai nut bam. Ban dinh vi di qua dung duong ingest cua `transport-proof`, nen no da duoc cham
+/// rui ro, da co `receivedAt` cua may chu, va da nam trong mot phien thuoc ve dung lai xe do.
+model TransportOperationalProof {
+  id            String                        @id @default(cuid())
+  kind          TransportOperationalProofKind
+  tripId        String
+  trip          TransportTrip                 @relation(fields: [tripId], references: [id])
+  driverId      String
+  driver        TransportDriver               @relation(fields: [driverId], references: [id])
+  /// Ban dinh vi tai thoi diem lap chung cu. MOT ban dinh vi phuc vu NHIEU NHAT mot chung cu.
+  observationId String                        @unique
+  observation   TransportLocationObservation  @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  sessionId     String?
+  /// Khoa idempotency do may khach sinh — chan mot lan bam hai lan tao hai chung cu.
+  clientEventId String
+  capturedAt    DateTime
+  receivedAt    DateTime                      @default(now())
+  businessDate  String                        @db.VarChar(10)
+  note          String?
+  recordedBy    String
+  createdAt     DateTime                      @default(now())
+  /// BIA MO, khong phai mot lan xoa hang — cung khuon voi `TransportFuelReceiptEvidence`.
+  withdrawnAt   DateTime?
+  withdrawnBy   String?
+
+  photos TransportProofPhoto[]
+
+  @@unique([tripId, kind, clientEventId], map: "TransportOperationalProof_trip_kind_event_key")
+  @@index([tripId, kind])
+  @@index([driverId, businessDate])
+  @@index([businessDate])
+}
+
+/// ANH CHUNG CU — bang CON, khong phai mot cot chuoi ngan cach bang dau phay.
+///
+/// Mot lan giao hang co the can nhieu tam (hang, bien ban, chu ky). Va quan trong hon: moi tam
+/// mang RIENG `captureMode` cua no, nen mot chung cu co mot tam chup tai cho va mot tam lay tu thu
+/// vien van noi ra duoc dieu do thay vi bi gop thanh mot muc tin cay duy nhat.
+model TransportProofPhoto {
+  id          String                         @id @default(cuid())
+  proofId     String
+  proof       TransportOperationalProof      @relation(fields: [proofId], references: [id], onDelete: Restrict)
+  /// Dinh vi trong kho anh (`MediaStore` qua `TransportEvidenceService`). KHONG dung kho thu hai.
+  locator     String
+  captureMode TransportProofPhotoCaptureMode @default(UNKNOWN)
+  contentType String?
+  byteSize    Int?
+  capturedAt  DateTime?
+  uploadedBy  String
+  createdAt   DateTime                       @default(now())
+  withdrawnAt DateTime?
+  withdrawnBy String?
+
+  @@index([proofId])
+  @@index([proofId, withdrawnAt])
 }
