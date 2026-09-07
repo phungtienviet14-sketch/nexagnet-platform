@@ -1,6 +1,7 @@
 import type { BusinessDate } from '../business-date.js';
 import type { FuelCandidateAssessment } from './fuel-candidate-validation.js';
 import type { EInvoiceProvenance } from './fuel-einvoice-parse.js';
+import type { ExtractionConfidence } from './fuel-receipt-extraction.js';
 
 /**
  * CHUNG TU NGUON + UNG VIEN — hinh dang du lieu doc len tu kho (Lane C / C2).
@@ -24,7 +25,15 @@ import type { EInvoiceProvenance } from './fuel-einvoice-parse.js';
  * hien o do.
  */
 
-export const FUEL_DOCUMENT_KINDS = ['EINVOICE_XML'] as const;
+/**
+ * HAI cua vao, va chung KHONG cung do tin cay.
+ *
+ * `EINVOICE_XML` la thu MAY phat ra theo mot chuan co ma so — doc duoc thi con so do CHINH LA con
+ * so nguoi ban da ky. `RECEIPT_IMAGE` la thu MAY doc lai tu mot buc anh — doc duoc thi do van chi
+ * la mot phong doan co muc tin. Su khac nhau do khong duoc gap lai o bat ky dau, va no hien ra o
+ * `FuelCandidate.confidence`: `null` cho duong dau, mot bang muc tin cho duong sau.
+ */
+export const FUEL_DOCUMENT_KINDS = ['EINVOICE_XML', 'RECEIPT_IMAGE'] as const;
 export type FuelDocumentKind = (typeof FUEL_DOCUMENT_KINDS)[number];
 
 export const FUEL_DOCUMENT_STATUSES = ['PARSED', 'REJECTED', 'DUPLICATE'] as const;
@@ -38,6 +47,11 @@ export const FUEL_DOCUMENT_REJECT_REASONS = [
   'NOT_AN_INVOICE',
   'MISSING_INVOICE_IDENTITY',
   'NO_LINE_ITEMS',
+  // Ba ma DUOI DAY chi den tu duong ANH (C3), va chung tach nhau vi nguoi truc lam ba viec khac
+  // nhau: bao lai xe doi dinh dang may anh / doi mot lat roi nhap lai / bao nguoi dung he thong.
+  'UNSUPPORTED_MEDIA_TYPE',
+  'EXTRACTION_UNAVAILABLE',
+  'EXTRACTION_MALFORMED_OUTPUT',
 ] as const;
 export type FuelDocumentRejectReason = (typeof FUEL_DOCUMENT_REJECT_REASONS)[number];
 
@@ -105,6 +119,15 @@ export interface FuelCandidate {
   readonly plateHintSource: FuelHintSource | null;
   readonly odometerHintKm: number | null;
   readonly provenance: EInvoiceProvenance;
+  /**
+   * MUC TIN theo tung truong — `null` khi ung vien den tu mot nguon TAT DINH.
+   *
+   * `null` o day khong phai "chua do duoc", no la "cau hoi nay khong ap dung": mot truong XML doc
+   * duoc thi khong co muc tin nao de noi. Dat `CONFIDENCE_SCALE` vao do se lam nguoi doc gop mot
+   * con so may DOAN voi mot con so nguoi ban KY tren cung mot thang — dieu ma `fuel-receipt-
+   * extraction.ts` giai thich la khong duoc phep.
+   */
+  readonly confidence: ExtractionConfidence | null;
   readonly createdAt: string;
 }
 

@@ -20,7 +20,11 @@ import {
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
-import { ingestFuelDocumentSchema, listFuelDocumentsQuerySchema } from './fuel-document.schemas.js';
+import {
+  ingestFuelDocumentSchema,
+  ingestFuelReceiptImageSchema,
+  listFuelDocumentsQuerySchema,
+} from './fuel-document.schemas.js';
 import { FuelDocumentService } from './fuel-document.service.js';
 
 /**
@@ -99,6 +103,32 @@ export class FuelDocumentController {
     return this.guard(() =>
       this.documents.ingest(
         { sourceRef: input.sourceRef, kind: input.kind, content },
+        transportActorOf(request),
+      ),
+    );
+  }
+
+  /**
+   * NHAP MOT BUC ANH PHIEU DO DAU (C3).
+   *
+   * `transport.fuel.document.ingest` — CUNG mot hanh dong voi duong XML, khong mot ma quyen moi.
+   * Nghiep vu la mot: dua mot chung tu nguon vao he thong. Ai duoc lam viec do thi duoc lam bang ca
+   * hai duong; tach ra se lam bang phan quyen mo ta CONG NGHE thay vi mo ta viec.
+   *
+   * `Throttle` CHAT HON duong XML — mot phan sau — vi moi lan goi o day la mot lan doc anh: ton
+   * tien that va thoi gian that. Mot vong lap hong o phia goi dap vao han nay truoc khi no dap vao
+   * hoa don cua khach.
+   */
+  @Post('documents/image')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.fuel.document.ingest')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  ingestImage(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(ingestFuelReceiptImageSchema, body);
+    const content = Buffer.from(input.contentBase64, 'base64');
+    return this.guard(() =>
+      this.documents.ingestReceiptImage(
+        { sourceRef: input.sourceRef, mediaType: input.mediaType, content },
         transportActorOf(request),
       ),
     );

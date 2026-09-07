@@ -9,6 +9,7 @@ import {
 } from './fuel-document.repository.js';
 import type { FuelCandidate, FuelDocument, FuelDocumentDetail } from './fuel-document.types.js';
 import type { EInvoiceProvenance } from './fuel-einvoice-parse.js';
+import type { ExtractionConfidence } from './fuel-receipt-extraction.js';
 import { LITERS_SCALE } from './fuel-quantity.js';
 
 /**
@@ -87,6 +88,9 @@ const toCandidate = (row: any): FuelCandidate => ({
   plateHintSource: row.plateHintSource,
   odometerHintKm: row.odometerHintKm,
   provenance: (row.provenance ?? {}) as EInvoiceProvenance,
+  // `?? null` chu KHONG `?? {}`: mot bang muc tin RONG va "khong co khai niem muc tin" la hai
+  // dieu khac nhau, va cot nay la cho duy nhat phan biet duoc chung.
+  confidence: (row.confidence ?? null) as ExtractionConfidence | null,
   createdAt: iso(row.createdAt),
 });
 
@@ -112,6 +116,7 @@ const candidateData = (candidate: NormalizedCandidate) => ({
   plateHintSource: candidate.plateHintSource,
   odometerHintKm: candidate.odometerHintKm,
   provenance: candidate.provenance,
+  confidence: candidate.confidence ?? undefined,
 });
 
 const model = (client: unknown, name: string): any => (client as Record<string, any>)[name];

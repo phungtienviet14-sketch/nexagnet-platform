@@ -14,6 +14,9 @@ import {
 } from './fuel-document.repository.js';
 import { FuelDocumentService } from './fuel-document.service.js';
 import { FuelInvoiceSource, XmlFuelInvoiceSource } from './fuel-invoice-source.js';
+import { FuelReceiptExtractionPort } from './fuel-receipt-extraction.js';
+import { ChatCompletionsReceiptExtractor } from './fuel-receipt-extraction.http.js';
+import { StubFuelReceiptExtractor } from './fuel-receipt-extraction.stub.js';
 import { FuelStationService } from './fuel-station.service.js';
 import { FileFuelStatementSource, FuelStatementSource } from './fuel-statement-source.js';
 import { FuelStatementService } from './fuel-statement.service.js';
@@ -93,6 +96,31 @@ import { PrismaFuelRepository } from './prisma-fuel.repository.js';
       inject: [PrismaService],
     },
     { provide: FuelInvoiceSource, useClass: XmlFuelInvoiceSource },
+    /*
+     * BO DOC ANH (Lane C / C3) — mac dinh `stub`, tuc KHONG goi ra ngoai.
+     *
+     * Mac dinh nay la mot lua chon ve AN TOAN DU LIEU, khong phai ve tien: mot buc anh phieu do dau
+     * mang bien so, dia diem va thoi diem cua khach. Neu mac dinh la `http`, thi mot stack quen dat
+     * bien se lang le gui du lieu do ra mot dich vu ngoai — va khong ai biet cho den khi co nguoi
+     * doc hop dong.
+     *
+     * `FUEL_EXTRACTION_BASE_URL` co the tro vao CHINH MANG cua khach (mot mo hinh doc anh tu dung).
+     * Adapter khong biet no dang noi voi ai; do la ly do co dung mot adapter cho ca ba duong.
+     */
+    {
+      provide: FuelReceiptExtractionPort,
+      useFactory: (): FuelReceiptExtractionPort => {
+        const env = loadFoundationEnv();
+        if (env.FUEL_EXTRACTION_MODE !== 'http') return new StubFuelReceiptExtractor();
+        return new ChatCompletionsReceiptExtractor({
+          // `loadEnv` da chan cau hinh `http` ma thieu hai bien nay ngay luc khoi dong.
+          baseUrl: env.FUEL_EXTRACTION_BASE_URL as string,
+          model: env.FUEL_EXTRACTION_MODEL as string,
+          apiKey: env.FUEL_EXTRACTION_API_KEY,
+          timeoutMs: env.FUEL_EXTRACTION_TIMEOUT_MS,
+        });
+      },
+    },
     { provide: TransportFuelCoreFacts, useClass: TransportFuelCoreFactsAdapter },
     { provide: FuelCostingPort, useClass: CostingFuelExpenseAdapter },
     { provide: FuelStatementSource, useClass: FileFuelStatementSource },

@@ -21,6 +21,12 @@ import type {
 } from './fuel-document.types.js';
 import type { ParsedInvoice } from './fuel-einvoice-parse.js';
 import { FuelInvoiceSource, invoiceDigest, type FuelInvoiceFile } from './fuel-invoice-source.js';
+import {
+  FuelReceiptExtractionPort,
+  type ExtractionConfidence,
+  type FuelReceiptImage,
+  type ReceiptRejectReason,
+} from './fuel-receipt-extraction.js';
 import { FuelStationService } from './fuel-station.service.js';
 import { TransportFuelCoreFacts } from './fuel.ports.js';
 import { FuelRepository } from './fuel.repository.js';
@@ -54,7 +60,35 @@ import { normalizePlate } from './fuel-statement-mapping.js';
  * mot thang thieu chung tu ma khong biet thieu bao nhieu — con so ma mot bo loc im lang lay mat.
  */
 
-type DocumentDecisionPoint = 'fuel_document.ingest' | 'fuel_document.supplier_link';
+type DocumentDecisionPoint =
+  'fuel_document.ingest' | 'fuel_document.supplier_link' | 'fuel_document.extract';
+
+/**
+ * BA ma tu choi cua duong anh -> ba ly do quyet dinh. MOT cho anh xa, y het `fuel-invoice-source.ts`.
+ *
+ * Ba ma con lai cua `FuelDocumentRejectReason` khong bao gio ra tu bo doc anh (`MALFORMED_XML` va
+ * ho hang cua no thuoc duong XML), nen chung khong co mat o day — va `satisfies` se do neu mot
+ * ngay nao do bo doc anh bat dau tra ve mot ma ma bang nay chua biet.
+ */
+const EXTRACT_REASON_BY_REJECT = {
+  EMPTY: 'RECEIPT_MEDIA_REJECTED',
+  TOO_LARGE: 'RECEIPT_MEDIA_REJECTED',
+  UNSUPPORTED_MEDIA_TYPE: 'RECEIPT_MEDIA_REJECTED',
+  EXTRACTION_UNAVAILABLE: 'RECEIPT_EXTRACTION_UNAVAILABLE',
+  EXTRACTION_MALFORMED_OUTPUT: 'RECEIPT_EXTRACTION_MALFORMED',
+} as const satisfies Record<ReceiptRejectReason, TransportFuelDecisionReason>;
+
+/**
+ * O YEU NHAT cua mot lan doc — `null` khi bo doc khong bao muc tin cho o nao.
+ *
+ * Trung binh cong bi loai tu dau: mot lan doc co chin o hoan hao va mot o mu se ra mot con so dep,
+ * va con so dep do di vao trace nhu mot loi tran an. Cai ma nguoi truc can biet la O TE NHAT te den
+ * dau, vi do la o se lam sai ca dong.
+ */
+function weakestField(confidence: ExtractionConfidence): number | null {
+  const values = Object.values(confidence);
+  return values.length === 0 ? null : Math.min(...values);
+}
 
 /** Phan than cua mot lan ghi, sau khi da quyet ket cuc. */
 interface RecordOutcome {
@@ -71,6 +105,7 @@ export class FuelDocumentService {
   constructor(
     private readonly documents: FuelDocumentRepository,
     private readonly source: FuelInvoiceSource,
+    private readonly extraction: FuelReceiptExtractionPort,
     private readonly stations: FuelStationService,
     private readonly fuel: FuelRepository,
     private readonly core: TransportFuelCoreFacts,
@@ -108,7 +143,74 @@ export class FuelDocumentService {
       });
     }
 
-    const invoice = read.invoice;
+    return this.absorb(file, contentDigest, read.invoice, undefined, actor);
+  }
+
+  /**
+   * CUA VAO THU HAI: MOT BUC ANH (C3).
+   *
+   * Cung bon ket cuc, cung bang, cung phep chong nhap trung, cung man hinh ra soat. Chi khac DUNG
+   * mot dieu: moi ung vien sinh ra o day mang mot bang MUC TIN, con ung vien sinh ra tu hoa don XML
+   * thi khong.
+   *
+   * Phep kiem `findByDigest` chay TRUOC khi goi bo doc, va o duong nay no dat gia hon nhieu so voi
+   * duong XML: mot lan goi mo hinh ton tien va ton thoi gian that. Gui lai dung mot buc anh khong
+   * duoc phep tra them mot dong nao.
+   */
+  async ingestReceiptImage(image: FuelReceiptImage, actor: string): Promise<FuelDocumentDetail> {
+    const contentDigest = invoiceDigest(image.content);
+    const file = {
+      sourceRef: image.sourceRef,
+      kind: 'RECEIPT_IMAGE' as const,
+      content: image.content,
+    };
+
+    const replayed = await this.documents.findByDigest(contentDigest);
+    if (replayed) {
+      this.decide('fuel_document.ingest', 'allowed', 'DOCUMENT_IDEMPOTENT_REPLAY', {
+        documentId: replayed.id,
+      });
+      return this.detailOf(replayed);
+    }
+
+    const read = await this.extraction.extract(image);
+    if (!read.ok) {
+      this.decide('fuel_document.extract', 'denied', EXTRACT_REASON_BY_REJECT[read.reason], {
+        sourceRef: image.sourceRef,
+        rejectReason: read.reason,
+      });
+      return this.record(file, contentDigest, actor, {
+        sellerTaxCodeRaw: null,
+        supplierId: null,
+        status: 'REJECTED',
+        rejectReason: read.reason,
+        duplicateOfId: null,
+        candidates: [],
+      });
+    }
+
+    this.decide('fuel_document.extract', 'allowed', 'RECEIPT_EXTRACTED', {
+      model: read.model,
+      minConfidence: weakestField(read.confidence),
+    });
+    return this.absorb(file, contentDigest, read.invoice, read.confidence, actor);
+  }
+
+  /**
+   * PHAN THAN CHUNG cua hai cua vao — tu mot hoa don DA DOC den nhung hang da ghi.
+   *
+   * Gop lai o day co mot ly do cu the, khong phai vi ghet lap ma: ba phep — noi nha cung cap, chan
+   * hoa don trung, nhan dang cay xang — la nhung cho mot dong tien co the bi dem hai lan. Hai ban
+   * sao cua chung se troi khoi nhau, va cho troi do khong lo ra o test don le; no lo ra o mot bang
+   * cong no lech.
+   */
+  private async absorb(
+    file: FuelInvoiceFile,
+    contentDigest: string,
+    invoice: ParsedInvoice,
+    confidence: ExtractionConfidence | undefined,
+    actor: string,
+  ): Promise<FuelDocumentDetail> {
     const supplierId = await this.linkSupplier(invoice);
 
     // LOP HAI cua `INV-C2-DUP`: cung mot HOA DON den bang mot tep khac. Kiem TRUOC khi ghi de duong
@@ -140,7 +242,7 @@ export class FuelDocumentService {
       code: findStationCodeHint(invoice),
       label: stationLabelOf(invoice),
     });
-    const candidates = normalizeInvoiceCandidates({ invoice, station });
+    const candidates = normalizeInvoiceCandidates({ invoice, station, confidence });
 
     const detail = await this.record(file, contentDigest, actor, {
       sellerTaxCodeRaw: invoice.sellerTaxCode,
