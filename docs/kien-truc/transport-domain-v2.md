@@ -97,7 +97,7 @@ việc như *chưa làm* trong khi nó **đã chạy trên `main` từ T3/T4**, 
 |---|---|---|
 | `TransportSettlementDocument` + `Allocation` | `KEEP` | Đã có phân bổ một khoản thu/chi vào nhiều chứng từ |
 | `TransportSettlementPeriod` / `CustomerTerms` / `CommissionRule*` | `KEEP` | — |
-| `TransportMaintenancePlan` / `WorkOrder` | `UNKNOWN` | §12 lộ trình nói thẳng là chưa khớp thực tế. `F-09` là bằng chứng |
+| `TransportMaintenancePlan` / `WorkOrder` | ~~`UNKNOWN`~~ → **`EXTEND`** | `TX-06b` bù bảy nguyên hàm còn thiếu (xưởng, phụ tùng/công thợ, bằng chứng, hỏng dọc đường, kế hoạch-vs-thực tế, downtime, bản chất lệnh). Xem §13 |
 | `TransportComplianceDocument` | `KEEP` | Đã tách khỏi bảo dưỡng đúng như §12 đòi |
 | `TransportPayrollPeriod` / `Run` / `Payslip` / `Component` | `EXTEND` | Đã có `SUPPLEMENTAL`/`REVERSAL`, `policySnapshot`, `missingInputs` |
 | Chi trả / `Disbursement` | ~~`UNKNOWN`~~ → **`AS-BUILT`** | **Đã có từ `TX-07b`** (R5, PR của Lane D) — `TransportDriverCashout` + `…Allocation`. Xem §12 |
@@ -600,7 +600,7 @@ Bốn luật, áp cho mọi tranche v2:
 | R3 | App lái xe | **Hạ ưu tiên** — chỉ đúng nếu `Q-02` trả lời "không lấy được dữ liệu GSHT" |
 | R4 | Fuel intelligence | Đảo thứ tự: **hoá đơn điện tử trước, OCR sau** (`F-10`). Chờ `Q-08` |
 | R5 | Driver settlement + payroll | **XONG** — `TX-07b`, xem §12. `Q-06` đã được chủ sở hữu trả lời ở #237 |
-| R6 | Maintenance v2 | Chờ `Q-05`. Sửa tài liệu `F-09` **ngay**, rẻ |
+| R6 | Maintenance v2 | **PARTIAL** — nguyên hàm xong (§13); cổng chặn điều chuyến vẫn chờ `Q-05`, và `blocking` cố ý RỖNG |
 | R7 | ETC | Chỉ nghiên cứu. Chờ `Q-07` |
 | R8 · R9 | Analytics · hệ sinh thái | Phụ thuộc R1-C |
 
@@ -769,3 +769,64 @@ chặn gì, không sinh một khoản phải trả nào, không kết luận ai 
   bước **cộng thêm**, không phải một lần viết lại.
 - **`TransportPayslip.status = PAID` giữ nguyên nghĩa cũ** — mốc của bộ phận lương. Tầng chi tiền là
   sổ cái riêng, và không đường nào trong tranche này ghi vào phiếu lương.
+
+---
+
+## 13. `R6` / `TX-06b` as-built — bảo dưỡng v2 (Lane D, Issue #237)
+
+### 13.1. Đo lại T6 trước — bảy khoảng trống, không phải "chưa khớp thực tế" chung chung
+
+§12 lộ trình chỉ nói T6 *"chưa khớp thực tế"*. Đo lại `TransportMaintenanceWorkOrder` cho ra một
+danh sách **đếm được**:
+
+| #237 đòi | T6 as-built trước tranche | Kết luận |
+|---|---|---|
+| service/repair event | có `WorkOrder`, nhưng **không có bản chất** | thiếu — `kind` |
+| planned vs actual | có `Plan` (chu kỳ) + `WorkOrder`, **không có mốc đã chụp** | thiếu — `plannedDate`/`plannedOdoKm` |
+| odometer | `openedOdoKm` / `completedOdoKm` | **đã có** |
+| workshop/vendor | — | thiếu |
+| parts/labor/total cost | chỉ `costAmount` tổng | thiếu tách |
+| evidence qua #223 | — | thiếu — `evidenceLocator` |
+| roadside breakdown link | — | thiếu — `tripId` |
+| downtime | suy được từ `openedAt`→`completedAt`, **không ai suy** | thiếu phép đọc |
+| unavailable→available history | chính `WorkOrder` **đã là** lịch sử đó | **đã có**, chỉ thiếu cách đọc |
+| tire lifecycle | — | **KHÔNG làm** — xem §13.4 |
+| effective-state/warnings | `effective-vehicle-state.ts` + bảng cảnh báo | **đã có** |
+
+### 13.2. `F-09` lặp lại — lần này trong chính mã nguồn
+
+R0 tìm thấy `F-09` ở tài liệu bàn giao: câu *"Xe có lệnh bảo dưỡng đang mở bị khoá khỏi việc phân
+chuyến"* mô tả một cổng chặn **không tồn tại**. Tài liệu đó đã được sửa.
+
+Đo lại lần này thấy **cùng lỗi đó ở ba chỗ trong mã**, và mã thì khách không đọc được để phản đối:
+
+| Chỗ | Câu cũ | Sự thật đo được |
+|---|---|---|
+| `asset-compliance-decisions.ts` nhãn `MAINTENANCE_WORK_ORDER_OPENED` | *"và khoá xe khỏi đội hình"* | `TripService.assign()` kiểm đúng ba thứ, không tra lệnh sửa |
+| cùng tệp, nhãn `VEHICLE_UNDER_MAINTENANCE_LOCK` | *"nên không nhận chuyến"* | `evaluateTripTransition()` không nhận một đầu vào nào về xe |
+| `transport-actions.ts`, chú thích `...work_order.open` | *"điều độ viên không điều chuyến lên nó nữa"* | như trên |
+
+Cả ba đã được sửa **câu chữ**, không sửa hành vi. `Q-05` chưa có nguồn, nên không cổng chặn nào
+được thêm — #237: *"do not invent a hard block"*.
+
+### 13.3. Cổng chặn tương lai có hình dạng, chưa có nội dung
+
+`evaluateDispatchReadiness()` trả về **hai** danh sách: `warnings` (có nội dung) và `blocking`
+(**rỗng**). Khi B trả lời `Q-05`, thay đổi là chuyển một mã từ danh sách này sang danh sách kia —
+không phải một lần dựng thêm cổng ở giữa đường điều độ.
+
+Ba bài trong `vehicle-availability.spec.ts` khoá điều đó lại, và bài thứ ba đo ở **tầng mã nguồn**:
+nó đọc `trips/trip-lifecycle.ts` và khẳng định máy trạng thái chuyến không nhắc một khái niệm bảo
+dưỡng nào. Nếu một cổng chặn ra đời mà không ai tuyên bố, bài đó đỏ trước khi điều độ đi vào một
+bản phát hành.
+
+### 13.4. Không làm — có chủ đích
+
+- **Vòng đời lốp.** #237 nói *"tire lifecycle chỉ nếu justified"*. Không nguồn nào của B mô tả họ
+  theo dõi lốp theo vòng đời (lắp → luân chuyển → đắp lại → thải), và một bảng `Tyre` kéo theo vị
+  trí lắp trên xe, số serial, và một quy trình luân chuyển — tất cả đều là suy đoán. Một lần thay
+  lốp hôm nay ghi được là một `WorkOrder` kind `REPAIR` có phụ tùng; khi B mô tả cách họ thật sự
+  quản lốp, bảng đó là một bước **cộng thêm**.
+- **`totalDays` không hợp nhất khoảng chồng lấp.** Hai lệnh cùng mở là tình huống thật; gộp lại sẽ
+  giấu mất việc xe vào xưởng hai việc. Con số này trả lời *"tổng ngày-lệnh"*, và một con số
+  *"số ngày xe vắng mặt"* phải là một hàm **riêng có tên khác**.

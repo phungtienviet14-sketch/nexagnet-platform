@@ -1021,6 +1021,8 @@ model TransportTrip {
   settlementDocuments TransportSettlementDocument[]
   /// `TX-05` — lan tinh hoa hong cua chuyen. Nhieu nhat MOT.
   commission          TransportCommissionCalculation?
+  /// `TX-06b` — cac lan hong DOC DUONG da lam dut chuyen nay. Thuong rong.
+  roadsideBreakdowns  TransportMaintenanceWorkOrder[]
 
   @@index([status])
   @@index([businessDate])
@@ -2571,6 +2573,25 @@ enum TransportMaintenanceWorkOrderStatus {
   CANCELLED
 }
 
+/// BAN CHAT cua mot lenh sua — `TX-06b` (Lane D, Issue #237).
+///
+/// Ba gia tri nay KHONG phai ba cai nhan cho dep: chung tra loi ba cau hoi khac nhau ma bao cao
+/// van hanh phai tach duoc.
+///
+///   · `SCHEDULED_SERVICE`   — bao duong theo lich. LUON co `planId`, va lan dong no dat lai moc
+///                             chu ky. Day la chi phi CO KE HOACH.
+///   · `REPAIR`              — sua chua tai xuong, khong theo lich nao. Chi phi NGOAI ke hoach.
+///   · `ROADSIDE_BREAKDOWN`  — hong doc duong. Khac `REPAIR` o cho no lam DUT mot chuyen dang
+///                             chay, nen no la ban ghi duy nhat duoc phep tro toi `tripId`.
+///
+/// Gop `ROADSIDE_BREAKDOWN` vao `REPAIR` se lam phep dem "bao nhieu lan xe chet doc duong" mat dap
+/// an — va do la con so mot doanh nghiep van tai nhin truoc khi quyet dinh thay xe.
+enum TransportMaintenanceWorkOrderKind {
+  SCHEDULED_SERVICE
+  REPAIR
+  ROADSIDE_BREAKDOWN
+}
+
 /// LOAI GIAY TO — VT-011 (dang kiem, bao hiem, phu hieu) + VT-014 (GPLX) + VT-065 (giay phep kinh
 /// doanh van tai cua CONG TY, giay phep van chuyen hang co dieu kien).
 ///
@@ -2668,7 +2689,7 @@ model TransportMaintenanceWorkOrder {
   cancelledAt        DateTime?
   cancelledBy        String?
   cancellationReason String?
-  /// Chi phi cua lenh sua, so nguyen dong. NULL = chua ghi nhan chi phi.
+  /// Chi phi cua lenh sua, so nguyen dong. NULL = chua ghi nhan chi phi. Xem `partsCost` ben duoi.
   costAmount         BigInt?
   currencyCode       String                              @default("VND") @db.VarChar(3)
   /// Tham chieu chung tu chi phi ben `transport-costing`. Xem ghi chu dau model.
@@ -2676,9 +2697,59 @@ model TransportMaintenanceWorkOrder {
   note               String?
   updatedAt          DateTime                            @updatedAt
 
+  // ----- `TX-06b` (Lane D, Issue #237) — cac truong CONG THEM, tat ca deu nullable -----
+
+  /// BAN CHAT cua lenh. Xem `TransportMaintenanceWorkOrderKind`.
+  ///
+  /// `DEFAULT 'REPAIR'` cong mot lan backfill tat dinh trong migration
+  /// (`planId IS NOT NULL` => `SCHEDULED_SERVICE`): hang cu khong co cach nao noi ban chat cua no
+  /// ngoai viec no co theo mot ke hoach hay khong, va do la phep suy DUY NHAT khong bia gi them.
+  kind TransportMaintenanceWorkOrderKind @default(REPAIR)
+
+  /// XUONG SUA — ten va so dien thoai. Van ban tu do, KHONG phai mot bang danh muc.
+  ///
+  /// Mot bang `Workshop` doi mot vong doi (them/sua/ngung hop tac), mot man hinh quan tri va mot
+  /// quyen rieng — trong khi khong nguon nao noi B quan ly danh sach xuong. Hai cot van ban tra
+  /// loi dung cau hoi dang co ("xe nay sua o dau"), va nang cap thanh mot bang sau nay chi la mot
+  /// lan them khoa ngoai.
+  vendorName  String?
+  vendorPhone String?
+
+  /// TACH chi phi: phu tung / cong tho. `costAmount` van la TONG.
+  ///
+  /// Ca ba deu nullable va doc lap: mot hoa don xuong thuong co du ca ba, nhung mot lenh sua nho
+  /// chi co tong. Rang buoc `..._cost_parts_labour` cuong che DUNG mot dieu — khi ca ba cung co
+  /// mat thi `costAmount = partsCost + labourCost`. Khong ep co mat, chi ep KHOP.
+  partsCost  BigInt?
+  labourCost BigInt?
+
+  /// Tham chieu BANG CHUNG (anh hoa don xuong). Cung quy uoc voi
+  /// `TransportTripExpense.evidenceLocator`: `PG-05`/#223 chua dong, nen day la mot tham chieu
+  /// van ban thuoc mien, va CAM dung mot he tai lieu song song. Khi #223 dong, cot nay tro thanh
+  /// khoa ngoai tro toi chung tu that.
+  evidenceLocator String?
+
+  /// CHUYEN bi dut vi lan hong nay. CHI co nghia voi `ROADSIDE_BREAKDOWN` — cuong che bang `CHECK`.
+  ///
+  /// `onDelete: SetNull` chu khong `Restrict`: mot lenh sua da xay ra that, va no khong duoc bien
+  /// mat theo mot chuyen. `GD-02` cam xoa chuyen, nhung neu mot ngay nao do co duong xoa thi lenh
+  /// sua phai song sot.
+  tripId String?
+  trip   TransportTrip? @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  /// MOC DEN HAN da chup lai luc mo lenh — "ke hoach" cua cap ke-hoach/thuc-te.
+  ///
+  /// KHONG tinh lai luc doc. `maintenance-schedule.ts` tinh moc tu chu ky va lan bao duong gan
+  /// nhat; con so do DOI khi khach doi chu ky. Mot bao cao "sua som/muon bao nhieu" phai so voi
+  /// moc CUA LUC DO, khong phai moc cua hom nay.
+  plannedDate  String? @db.VarChar(10)
+  plannedOdoKm Int?
+
   @@index([vehicleId, status])
   @@index([planId])
   @@index([status])
+  @@index([kind])
+  @@index([tripId])
 }
 
 /// GIAY TO PHAP LY — mot loai, mot chu the, mot ky hieu luc (T1 §5 `TX-06`).

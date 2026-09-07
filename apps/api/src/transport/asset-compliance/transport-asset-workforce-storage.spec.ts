@@ -31,6 +31,14 @@ const migrationDir = resolve(
 const migration = readFileSync(join(migrationDir, 'migration.sql'), 'utf8');
 const rollback = readFileSync(join(migrationDir, 'README-rollback.sql'), 'utf8');
 
+/** `TX-06b` (Lane D, #237) — migration THU HAI cua cung mot bang, doc rieng. */
+const maintenanceV2Dir = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../prisma/migrations/20260908130000_transport_maintenance_v2',
+);
+const maintenanceV2 = readFileSync(join(maintenanceV2Dir, 'migration.sql'), 'utf8');
+const maintenanceV2Rollback = readFileSync(join(maintenanceV2Dir, 'README-rollback.sql'), 'utf8');
+
 /**
  * CHI CAC CAU LENH — bo moi dong chu thich.
  *
@@ -308,5 +316,76 @@ describe('duong lui', () => {
 
   it('KHONG bo `btree_gist` — T3 va T5 van dang dung', () => {
     expect(rollback).not.toMatch(/^\s*DROP EXTENSION/m);
+  });
+});
+
+/**
+ * `TX-06b` (Lane D, #237) — migration THU HAI cua `TransportMaintenanceWorkOrder`.
+ *
+ * Cung ly le voi khoi tren: nam `CHECK` moi khong sinh ra tu `schema.prisma`, nen mot lan
+ * `migrate diff` vo y se lam chung bien mat ma khong bai nao do.
+ */
+describe('migration cua TX-06b', () => {
+  const flatV2 = maintenanceV2
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('--'))
+    .join('\n')
+    .replace(/\s+/g, ' ');
+
+  const V2_CHECKS = [
+    'TransportMaintenanceWorkOrder_kind_plan_shape',
+    'TransportMaintenanceWorkOrder_trip_only_roadside',
+    'TransportMaintenanceWorkOrder_vendor_shape',
+    'TransportMaintenanceWorkOrder_parts_labour_range',
+    'TransportMaintenanceWorkOrder_cost_parts_labour',
+    'TransportMaintenanceWorkOrder_planned_shape',
+  ];
+
+  it.each(V2_CHECKS)('giu rang buoc %s', (name) => {
+    expect(flatV2).toContain(`ADD CONSTRAINT "${name}"`);
+  });
+
+  it('them kieu ban chat lenh sua voi dung ba gia tri', () => {
+    expect(flatV2).toContain(
+      `CREATE TYPE "TransportMaintenanceWorkOrderKind" AS ENUM ('SCHEDULED_SERVICE', 'REPAIR', 'ROADSIDE_BREAKDOWN')`,
+    );
+  });
+
+  /**
+   * BACKFILL PHAI TAT DINH, va phai la phep suy DUY NHAT khong bia gi.
+   *
+   * `planId IS NOT NULL` la thong tin duy nhat mot hang cu mang ve ban chat cua no. Neu ai do doi
+   * dieu kien nay — vi du doan `ROADSIDE_BREAKDOWN` tu mot chuoi trong `description` — thi mot con
+   * so "so lan chet doc duong" khong co that se ra doi.
+   */
+  it('backfill `kind` chi dua tren `planId`, khong doan gi khac', () => {
+    expect(flatV2).toContain(
+      `UPDATE "TransportMaintenanceWorkOrder" SET "kind" = 'SCHEDULED_SERVICE' WHERE "planId" IS NOT NULL`,
+    );
+    expect(flatV2).not.toContain(`'ROADSIDE_BREAKDOWN' WHERE`);
+  });
+
+  /**
+   * KHONG MOT CONG CHAN NAO trong migration.
+   *
+   * `Q-05` chua tra loi. Mot trigger hay mot `CHECK` chan `TransportTripAssignment` theo trang thai
+   * bao duong se la mot cong chan dat o tang khong ai nhin — va no se lam ca doi xe dung banh ma
+   * khong mot dong ma nguon nao giai thich.
+   */
+  it('khong cham vao bang phan cong chuyen', () => {
+    expect(flatV2).not.toContain('TransportTripAssignment');
+    expect(flatV2).not.toContain('CREATE TRIGGER');
+  });
+
+  it('duong lui bo dung nhung gi da them', () => {
+    for (const name of V2_CHECKS) {
+      expect(maintenanceV2Rollback).toContain(`DROP CONSTRAINT IF EXISTS "${name}"`);
+    }
+    expect(maintenanceV2Rollback).toContain(
+      'DROP TYPE IF EXISTS "TransportMaintenanceWorkOrderKind"',
+    );
+    for (const column of ['kind', 'vendorName', 'partsCost', 'labourCost', 'tripId']) {
+      expect(maintenanceV2Rollback).toContain(`DROP COLUMN IF EXISTS "${column}"`);
+    }
   });
 });

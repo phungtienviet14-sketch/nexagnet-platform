@@ -805,12 +805,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "fleet.effective_vehicle_state|*": {
       "functionName": "AssetComplianceReadService.emitStateDecision",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance-read.service.ts",
-      "line": 210
+      "line": 237
     },
     "fleet.effective_vehicle_state|VEHICLE_MAINTENANCE_TRIP_CONFLICT": {
       "functionName": "AssetComplianceReadService.emitStateDecision",
       "filePath": "apps/api/src/transport/asset-compliance/asset-compliance-read.service.ts",
-      "line": 219
+      "line": 246
     },
     "fuel.cost_posting|*": {
       "functionName": "FuelService.postFuelCost",

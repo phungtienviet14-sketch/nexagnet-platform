@@ -123,9 +123,17 @@ export const TRANSPORT_ACTIONS = [
   /**
    * MO mot lenh sua — tach khoi `.close` co chu dich.
    *
-   * Mo mot lenh la KHOA MOT XE khoi doi hinh: tu luc do phep hop thanh tra ve
-   * `UNDER_MAINTENANCE` va dieu do vien khong dieu chuyen len no nua. Dong lai thi nguoc lai.
-   * Hai quyen do khac nhau ve hau qua van hanh, nen bang phan quyen phai noi duoc dieu do.
+   * Mo mot lenh dua xe sang `UNDER_MAINTENANCE` o PHEP HOP THANH (T1 §18.2) va lam no hien ra la
+   * dang sua tren bang doi xe. Dong lai thi nguoc lai. Hai quyen do khac nhau ve hau qua van hanh,
+   * nen bang phan quyen phai noi duoc dieu do.
+   *
+   * ---------------------------------------------------------------------------
+   * `TX-06b` (#237) SUA CAU CHU O DAY. Ban truoc viet *"dieu do vien khong dieu chuyen len no
+   * nua"* — mot cong chan KHONG ton tai: `TripService.assign()` kiem dung ba thu (chuyen chua o
+   * diem cuoi, xe ton tai, lai xe ton tai) va khong tra mot lenh sua nao.
+   *
+   * Cai co that la mot CANH BAO doc duoc (`evaluateDispatchReadiness()`), va danh sach `blocking`
+   * cua no co y RONG cho toi khi `Q-05` — *"cai gi THAT SU cam dieu mot xe di"* — co nguon tu B.
    */
   'transport.maintenance.work_order.open',
   'transport.maintenance.work_order.close',

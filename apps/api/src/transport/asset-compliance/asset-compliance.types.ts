@@ -48,10 +48,26 @@ export interface MaintenancePlan {
   readonly updatedAt: string;
 }
 
+/**
+ * BAN CHAT cua mot lenh sua — `TX-06b` (Issue #237).
+ *
+ * `ROADSIDE_BREAKDOWN` tach khoi `REPAIR` vi no tra loi mot cau hoi khac: *"bao nhieu lan xe chet
+ * doc duong"* — con so mot doanh nghiep van tai nhin truoc khi quyet dinh thay xe. Gop hai loai se
+ * lam cau do mat dap an.
+ */
+export const MAINTENANCE_WORK_ORDER_KINDS = [
+  'SCHEDULED_SERVICE',
+  'REPAIR',
+  'ROADSIDE_BREAKDOWN',
+] as const;
+export type MaintenanceWorkOrderKind = (typeof MAINTENANCE_WORK_ORDER_KINDS)[number];
+
 export interface MaintenanceWorkOrder {
   readonly id: string;
   readonly vehicleId: string;
   readonly planId: string | null;
+  /** `SCHEDULED_SERVICE` <=> co `planId`. Cuong che bang `CHECK ..._kind_plan_shape`. */
+  readonly kind: MaintenanceWorkOrderKind;
   readonly status: MaintenanceWorkOrderStatus;
   readonly description: string;
   readonly openedDate: BusinessDate;
@@ -70,6 +86,27 @@ export interface MaintenanceWorkOrder {
   readonly costingExpenseRef: string | null;
   readonly note: string | null;
   readonly updatedAt: string;
+
+  /* ----- `TX-06b` (Issue #237) — tat ca deu tuy chon ----- */
+
+  /** XUONG SUA. `vendorPhone` khong dung mot minh — cuong che bang `CHECK ..._vendor_shape`. */
+  readonly vendorName: string | null;
+  readonly vendorPhone: string | null;
+  /**
+   * TACH chi phi. `costAmount` van la TONG.
+   *
+   * Khi CA BA cung co mat thi `costAmount = partsCost + labourCost` — cuong che o DB. Khong ep co
+   * mat: mot lenh sua nho chi co tong, va bat nguoi nhap tach doi moi dong la bat ho bia so.
+   */
+  readonly partsCost: number | null;
+  readonly labourCost: number | null;
+  /** Tham chieu BANG CHUNG. Cung quy uoc voi `TransportTripExpense.evidenceLocator` cho toi #223. */
+  readonly evidenceLocator: string | null;
+  /** Chuyen bi dut. CHI co nghia voi `ROADSIDE_BREAKDOWN` — cuong che bang `CHECK`. */
+  readonly tripId: string | null;
+  /** MOC DEN HAN da chup luc mo lenh — nua "ke hoach" cua cap ke-hoach/thuc-te. */
+  readonly plannedDate: BusinessDate | null;
+  readonly plannedOdoKm: number | null;
 }
 
 export interface ComplianceDocument {
