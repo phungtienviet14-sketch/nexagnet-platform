@@ -56,12 +56,16 @@ describe('cau bridge GD-22 — web guong dung bang cua API', () => {
     expect([...SELF_SCOPE_ACTIONS]).toEqual(literalsInArray(source, 'SELF_SCOPE_ACTIONS'));
   });
 
-  it('ba hanh dong Ke toan khong co van dung ba hanh dong do', () => {
+  it('bon hanh dong Ke toan khong co van dung bon hanh dong do', () => {
     const denied = literalsInArray(source, 'ACCOUNTING_DENIED');
     expect(denied).toEqual([
       'transport.trip.cancel',
       'transport.costing.period.reopen',
       'transport.fuel.reconciliation.reopen',
+      // Issue #235 Lane B — Ke toan doc TOM TAT bam vi tri, khong doc duong di tung phut cua mot
+      // con nguoi. Doi soat so sach khong CAN toa do, va mot quyen khong can den ma van duoc cap
+      // la mot quyen se bi dung vao viec khac.
+      'transport.location.history.read',
     ]);
     for (const action of denied) {
       expect(roleCanPerform('ACCOUNTING', action as never)).toBe(false);

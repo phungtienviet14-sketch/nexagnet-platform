@@ -97,6 +97,23 @@ export const TRANSPORT_ACTIONS = [
    * `transport.payroll.period.read` (bang luong ca doi xe) va khong mo mot duong ghi nao.
    */
   'transport.driver.self.payslip.read',
+  /**
+   * Bam vi tri CUA CHINH MINH (Issue #235 Lane B) — ba ma rieng, vi ba viec co ba hinh dang rui
+   * ro khac nhau: MO phien la mot lan chon chuyen, GUI la mot dong bang chung lap lai hang nghin
+   * lan, DONG la mot moc ket thuc.
+   */
+  'transport.driver.self.tracking.start',
+  'transport.driver.self.tracking.report',
+  'transport.driver.self.tracking.stop',
+  /** TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do. */
+  'transport.tracking.read',
+  /**
+   * DUONG DI THO cua mot con nguoi — ma hep nhat trong ca tep, va Ke toan KHONG co no.
+   * Doi soat so sach khong CAN toa do; xem `ACCOUNTING_DENIED` ben duoi.
+   */
+  'transport.location.history.read',
+  'transport.geofence.read',
+  'transport.geofence.manage',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -109,6 +126,9 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.fuel.submit',
   'transport.driver.self.expense.record',
   'transport.driver.self.payslip.read',
+  'transport.driver.self.tracking.start',
+  'transport.driver.self.tracking.report',
+  'transport.driver.self.tracking.stop',
 ];
 
 /** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
@@ -127,6 +147,12 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
   'transport.trip.cancel',
   'transport.costing.period.reopen',
   'transport.fuel.reconciliation.reopen',
+  /**
+   * Ke toan doc duoc TOM TAT bam vi tri (`transport.tracking.read`) — du de doi soat mot chuyen
+   * co chung cu vi tri hay khong — nhung KHONG doc duoc duong di tung phut cua mot con nguoi.
+   * Chep nguyen tu API; xem khoi chu thich ben do cho ly do day du.
+   */
+  'transport.location.history.read',
 ];
 
 /**
