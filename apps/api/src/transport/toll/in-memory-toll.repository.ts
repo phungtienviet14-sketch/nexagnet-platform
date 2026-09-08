@@ -151,6 +151,20 @@ export class InMemoryTollRepository extends TollRepository {
         `Ban ghi noi ${id} da dong tu ${link.effectiveTo}`,
       );
     }
+    /*
+     * CUNG PHEP KIEM ma `PrismaTollRepository.closeLink` lam.
+     *
+     * Thieu no o day thi che do `memory` cho qua mot khoang DI LUI (`effectiveTo < effectiveFrom`)
+     * ma `prisma` chan — tuc moi bai test chay o che do bo nho se XANH cho mot hanh vi khong bao gio
+     * chay duoc that, va no chi lo ra o lan deploy dau tien. Hai hien thuc cua cung mot hop dong
+     * phai tra loi giong nhau.
+     */
+    if (effectiveTo < link.effectiveFrom) {
+      throw TransportDomainError.invalid(
+        'TOLL_LINK_PERIOD_INVALID',
+        `Ngay dong (${effectiveTo}) phai sau hoac bang ngay mo (${link.effectiveFrom})`,
+      );
+    }
     const updated: TollAccountVehicleLink = { ...link, effectiveTo };
     this.links.set(id, updated);
     return updated;
@@ -223,6 +237,7 @@ export class InMemoryTollRepository extends TollRepository {
         fingerprint: candidate.fingerprint,
         matchState: candidate.matchState,
         reviewState: 'PENDING',
+        duplicateOfCandidateId: null,
         rawValues: candidate.rawValues,
         createdAt: input.at,
       };
@@ -298,6 +313,7 @@ export class InMemoryTollRepository extends TollRepository {
       vehicleId: input.nextVehicleId ?? candidate.vehicleId,
       matchState: input.nextMatchState ?? candidate.matchState,
       reviewState: input.nextReviewState,
+      duplicateOfCandidateId: input.duplicateOfCandidateId,
     };
     this.candidates.set(updated.id, updated);
     this.decisions.push({

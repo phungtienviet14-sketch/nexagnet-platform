@@ -66,6 +66,34 @@ describe('doc mot dong sao ke ETC', () => {
     expect(line?.businessDate).toBe('2026-08-31');
   });
 
+  /**
+   * COT NGAY NGHIEP VU THANG, ke ca khi o gio qua tram ben canh no HONG.
+   *
+   * Ban dau khoi doc `passedAt` truoc va tu choi ca dong khi gio hong — nen mot dong CO ngay hach
+   * toan doc duoc van bi vut di vi mot o gio sai dinh dang. Neo cua ky doi soat la cot NGAY, khong
+   * phai o gio.
+   */
+  it('gio qua tram hong KHONG giet mot dong da co ngay nghiep vu doc duoc', () => {
+    const [line] = mapTollRows({
+      rows: [row({ ...full, Ngay: '31/08/2026', 'Thoi diem': '31/02/2026 10:00' })],
+      provider: 'VETC',
+      mapping: { ...mapping, columns: { ...mapping.columns, businessDate: 'Ngay' } },
+      timeZone: HCM,
+    });
+    expect(line?.parseStatus).toBe('ACCEPTED');
+    expect(line?.businessDate).toBe('2026-08-31');
+    // TRUNG THUC: khong doc duoc gio thi de trong, khong bia mot khoanh khac nao.
+    expect(line?.passedAt).toBeNull();
+    // Va chuoi goc van con de doi chieu.
+    expect(line?.rawValues['Thoi diem']).toBe('31/02/2026 10:00');
+  });
+
+  it('gio qua tram hong VAN giet dong khi do la nguon ngay DUY NHAT', () => {
+    const [line] = run([row({ ...full, 'Thoi diem': '31/02/2026 10:00' })]);
+    expect(line?.parseStatus).toBe('REJECTED');
+    expect(line?.rejectReason).toBe('TOLL_ROW_DATE_INVALID');
+  });
+
   it('`defaultKind` duoc dung khi tep khong co cot loai', () => {
     const [line] = mapTollRows({
       rows: [row({ ...full, Loai: '' })],

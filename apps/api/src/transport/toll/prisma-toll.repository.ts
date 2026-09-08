@@ -86,6 +86,7 @@ interface CandidateRow {
   fingerprint: string | null;
   matchState: string | null;
   reviewState: string;
+  duplicateOfCandidateId: string | null;
   rawValues: unknown;
   createdAt: Date;
 }
@@ -170,6 +171,7 @@ const toCandidate = (row: CandidateRow): TollTransactionCandidateRecord => ({
   fingerprint: row.fingerprint,
   matchState: row.matchState as TollMatchState | null,
   reviewState: row.reviewState as TollTransactionCandidateRecord['reviewState'],
+  duplicateOfCandidateId: row.duplicateOfCandidateId,
   rawValues: (row.rawValues ?? {}) as Readonly<Record<string, string>>,
   createdAt: row.createdAt,
 });
@@ -549,7 +551,6 @@ export class PrismaTollRepository extends TollRepository {
         where: { id: input.candidateId },
         data: {
           vehicleId: input.nextVehicleId ?? before.vehicleId,
-          resolvedVehicleId: input.nextVehicleId ?? before.vehicleId,
           matchState: input.nextMatchState ?? before.matchState,
           reviewState: input.nextReviewState,
           duplicateOfCandidateId: input.duplicateOfCandidateId,

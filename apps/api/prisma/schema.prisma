@@ -4641,10 +4641,13 @@ model TransportTollTransactionCandidate {
   fingerprint     String?                 @db.VarChar(64)
   matchState      TransportTollMatchState?
   reviewState     TransportTollReviewState @default(PENDING)
-  /// Xe do NGUOI DOI SOAT chon, tach khoi `vehicleId` do may doc ra — de mot lan sua tay khong bi
-  /// mot lan chay so khop sau ghi de.
-  resolvedVehicleId String?
   /// Dong ma nguoi doi soat noi dong nay trung. KHONG phai mot ket luan cua may.
+  ///
+  /// KHONG co cot `resolvedVehicleId` di kem, va do la mot lua chon: ban dau co mot cot nhu vay de
+  /// "tach xe nguoi chon khoi xe may doc ra", nhung khong duong doc nao dung toi no — trong khi
+  /// `TransportTollReviewDecision.previousVehicleId/nextVehicleId` DA giu dung ca hai dau cua moi
+  /// lan sua. Mot cot ghi-mot-chieu ben canh mot lich su day du la mot nguon su that thu hai, va
+  /// no se lech.
   duplicateOfCandidateId String?
   /// Dong nguyen ban, de doi chieu khi ai do nghi bo cot dang doc sai tep.
   rawValues       Json

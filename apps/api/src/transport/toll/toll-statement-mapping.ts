@@ -171,26 +171,38 @@ export function mapTollRows(input: MapTollRowsInput): MappedTollRow[] {
     const dateRaw = read('businessDate');
     const hasDateColumn = (mapping.columns.businessDate ?? '') !== '';
 
+    /*
+     * COT NGAY NGHIEP VU DUOC DOC TRUOC — va thu tu nay khong phai chuyen sap xep cho gon.
+     *
+     * Ban dau khoi nay doc `passedAt` truoc va tu choi ca dong khi gio qua tram hong. Hau qua: mot
+     * dong CO ngay hach toan khai bao ro rang, doc duoc, van bi vut di chi vi mot o gio ben canh
+     * no sai dinh dang — trong khi chinh cot ngay do moi la neo cua ky doi soat.
+     *
+     * Nen: cot ngay nghiep vu CO GIA TRI thi no THANG. Doc duoc thi dung; doc KHONG duoc thi tu
+     * choi han, KHONG lang le roi ve gio qua tram.
+     */
+    let businessDate: BusinessDate | null = null;
+    if (hasDateColumn && dateRaw !== '') {
+      businessDate = parseMappedDate(dateRaw, mapping.dateFormat);
+      if (businessDate === null) return reject('TOLL_ROW_DATE_INVALID');
+    }
+
+    /*
+     * GIO QUA TRAM la du kien BO SUNG khi da co ngay hach toan, va la du kien DUY NHAT khi chua co.
+     *
+     * Nen mot gio hong chi giet ca dong o truong hop thu hai. O truong hop dau, `passedAt` o lai
+     * `null` — mot cau tra loi TRUNG THUC ("khong doc duoc gio nay") chu khong phai mot gia tri bia,
+     * va chuoi goc van con nguyen trong `rawValues` de doi chieu.
+     */
     let passedAt: Date | null = null;
     if (passedAtRaw !== '') {
       passedAt = parseTollPassedAt(passedAtRaw, input.timeZone);
-      if (passedAt === null) return reject('TOLL_ROW_DATE_INVALID');
+      if (passedAt === null && businessDate === null) return reject('TOLL_ROW_DATE_INVALID');
     }
 
-    let businessDate: BusinessDate | null;
-    if (hasDateColumn && dateRaw !== '') {
-      /*
-       * Cot ngay nghiep vu CO GIA TRI thi no THANG — ke ca khi dong cung co gio qua tram.
-       *
-       * Doc duoc thi dung; doc KHONG duoc thi tu choi han, KHONG lang le roi ve gio qua tram. Mot
-       * duong du phong im lang o day se giau di dung cai o ma nguoi dung go sai.
-       */
-      businessDate = parseMappedDate(dateRaw, mapping.dateFormat);
-      if (businessDate === null) return reject('TOLL_ROW_DATE_INVALID');
-    } else if (passedAt !== null) {
+    if (businessDate === null) {
+      if (passedAt === null) return reject('TOLL_ROW_MISSING_DATE');
       businessDate = toBusinessDate(passedAt, input.timeZone);
-    } else {
-      return reject('TOLL_ROW_MISSING_DATE');
     }
 
     /*

@@ -102,7 +102,6 @@ CREATE TABLE "TransportTollTransactionCandidate" (
     "fingerprint" VARCHAR(64),
     "matchState" "TransportTollMatchState",
     "reviewState" "TransportTollReviewState" NOT NULL DEFAULT 'PENDING',
-    "resolvedVehicleId" TEXT,
     "duplicateOfCandidateId" TEXT,
     "rawValues" JSONB NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

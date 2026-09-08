@@ -377,6 +377,22 @@ describe('mot xe chi nhan chi tra tu MOT tai khoan', () => {
     expect(await harness.accounts.listLinksForVehicle('veh-1')).toHaveLength(2);
   });
 
+  /**
+   * HAI HIEN THUC CUA MOT HOP DONG PHAI TRA LOI GIONG NHAU.
+   *
+   * `PrismaTollRepository.closeLink` chan mot khoang di lui; ban trong bo nho ban dau thi khong.
+   * Nghia la moi bai chay o che do `memory` se XANH cho mot hanh vi ma `prisma` tu choi — va no chi
+   * lo ra o lan deploy dau tien. Bai nay khoa hai ben lai voi nhau.
+   */
+  it('dong mot doan noi bang mot ngay DI LUI bi tu choi — giong het ban Prisma', async () => {
+    const harness = build();
+    const accountId = await seed(harness);
+    const [link] = await harness.accounts.listLinksForAccount(accountId);
+    await expect(
+      harness.accounts.closeLink(link?.id ?? '', '2025-12-31', 'ke-toan'),
+    ).rejects.toMatchObject({ reason: 'TOLL_LINK_PERIOD_INVALID' });
+  });
+
   it('mot `vehicleId` bia khong tao ra ban ghi noi nao', async () => {
     const harness = build();
     const accountId = await seed(harness);

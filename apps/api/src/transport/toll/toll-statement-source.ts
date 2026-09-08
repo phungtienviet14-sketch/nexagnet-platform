@@ -3,6 +3,7 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import readXlsxFile from 'read-excel-file/node';
 import { TransportDomainError } from '../transport.errors.js';
 import { tollSourceDigest } from './toll-identity.js';
+import { declaredZipExpansion } from './toll-zip-guard.js';
 import type { RawTollRow } from './toll-statement-mapping.js';
 
 /**
@@ -101,7 +102,40 @@ export class FileTollStatementSource extends TollStatementSource {
     }
   }
 
+  /**
+   * TRAN GIAI NEN — bao nhieu lan kich thuoc tep goc thi coi la mot tep khong lanh manh.
+   *
+   * `50` la mot con so CUA CHUNG TA, khong phai mot chuan nao. Mot `.xlsx` that co ty le nen quanh
+   * 5-15 lan (XML lap lai nen rat tot); 50 lan de rong rai cho mot bang ke thua, va van cach xa
+   * hang tram lan cua mot tep dung de lam can bo nho.
+   */
+  private static readonly MAX_EXPANSION_RATIO = 50;
+
+  /**
+   * DO TRUOC KHI GIAI NEN — xem `toll-zip-guard.ts` de biet vi sao mot bien theo byte cua tep la
+   * khong du, va vi sao phep do nay duoc lam bang bang thu muc trung tam chu khong bang mot lan
+   * giai nen thu.
+   */
+  private assertSafeArchive(file: TollSourceFile): void {
+    const verdict = declaredZipExpansion(file.content);
+    if (verdict.unreadable) {
+      throw TransportDomainError.invalid(
+        'TOLL_IMPORT_FORMAT_UNSUPPORTED',
+        `Tep XLSX ${file.filename} khong co bang thu muc ZIP doc duoc`,
+      );
+    }
+    const ceiling = file.maxBytes * FileTollStatementSource.MAX_EXPANSION_RATIO;
+    if (verdict.declaredBytes > ceiling) {
+      throw TransportDomainError.invalid(
+        'TOLL_IMPORT_TOO_LARGE',
+        `Tep ${file.filename} khai giai nen ra ${String(verdict.declaredBytes)} byte, ` +
+          `vuot tran ${String(ceiling)} byte`,
+      );
+    }
+  }
+
   private async readWorkbook(file: TollSourceFile): Promise<string[][]> {
+    this.assertSafeArchive(file);
     try {
       const sheets = await readXlsxFile(file.content);
       const rows = sheets[0]?.data ?? [];

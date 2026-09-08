@@ -196,6 +196,13 @@ export interface TollTransactionCandidateRecord {
   readonly fingerprint: string | null;
   readonly matchState: TollMatchState | null;
   readonly reviewState: TollReviewState;
+  /**
+   * Dong ma NGUOI DOI SOAT noi dong nay trung. `null` cho toi khi co ai do noi ra.
+   *
+   * Khong bao gio do may dat: dung dau van chi dua mot dong vao `DUPLICATE_CANDIDATE` de mot con
+   * nguoi nhin (`transport-etc-ingestion.md` §5.1).
+   */
+  readonly duplicateOfCandidateId: string | null;
   /** Dong nguyen ban, de doi chieu khi ai do nghi bo cot dang doc sai tep. */
   readonly rawValues: Readonly<Record<string, string>>;
   readonly createdAt: Date;
