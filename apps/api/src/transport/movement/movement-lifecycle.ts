@@ -2,9 +2,11 @@ import type {
   OrderCancelReason,
   OrderTransitionReason,
   RunCancelReason,
+  RunLegCancelReason,
+  RunLegTransitionReason,
   RunTransitionReason,
 } from './movement-decisions.js';
-import type { OrderStatus, VehicleRunStatus } from './movement.types.js';
+import type { OrderStatus, RunLegStatus, VehicleRunStatus } from './movement.types.js';
 
 /**
  * HAI MAY TRANG THAI, HAI TRUC.
@@ -100,4 +102,69 @@ export function evaluateRunCancel(from: VehicleRunStatus): TransitionDecision<Ru
   if (from === 'CANCELLED') return deny('RUN_CANCEL_ALREADY_CANCELLED');
   if (from === 'COMPLETED') return deny('RUN_CANCEL_ALREADY_COMPLETED');
   return allow('RUN_CANCEL_RECORDED');
+}
+
+/* ------------------------------------------------------------------ *
+ * MAY TRANG THAI THU BA: CHANG (#276 Lane L)
+ * ------------------------------------------------------------------ */
+
+/**
+ * ```text
+ * PLANNED --> IN_TRANSIT --> COMPLETED
+ *    |
+ *    +--> CANCELLED
+ * ```
+ *
+ * ============================================================================================
+ * VI SAO KHONG CO CANH `PLANNED --> COMPLETED`
+ * ============================================================================================
+ *
+ * Mot chang chua bao gio bat dau ma "hoan thanh" duoc thi `startedAt` se mai mai `null`, va moi
+ * phep do thoi gian chay sau nay se phai doan xem cot do vang vi chang khong chay hay vi ai do
+ * bam tat. Bat di qua `IN_TRANSIT` la mot lan bam them cho van hanh, doi lai mot cot khong bao gio
+ * noi doi.
+ *
+ * ============================================================================================
+ * VI SAO KHONG CO CANH `IN_TRANSIT --> CANCELLED`
+ * ============================================================================================
+ *
+ * Chang da lan banh la mot di chuyen CO THAT. Huy no di se lam quang duong do bien mat khoi moi
+ * bao cao — `summariseRunMovement()` khong dem chang huy — tuc bien mot lan bam thanh mot cach
+ * xoa km rong. `#276` L3 chi cho phep sua *"future operational legs"*, va mot chang dang chay
+ * khong con la tuong lai. Chang do phai duoc DONG LAI voi su that cua no.
+ *
+ * `COMPLETED` con duoc khoa them mot lan nua o tang kho bang trigger
+ * `transport_run_leg_completed_is_immutable` — mot cau `UPDATE` viet tay cung khong doi duoc.
+ */
+const LEG_EDGES: Readonly<Record<RunLegStatus, readonly RunLegStatus[]>> = {
+  PLANNED: ['IN_TRANSIT', 'CANCELLED'],
+  IN_TRANSIT: ['COMPLETED'],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
+export const isTerminalLegStatus = (status: RunLegStatus): boolean =>
+  status === 'COMPLETED' || status === 'CANCELLED';
+
+export function evaluateLegTransition(
+  from: RunLegStatus,
+  to: RunLegStatus,
+): TransitionDecision<RunLegTransitionReason> {
+  if (isTerminalLegStatus(from)) return deny('LEG_ALREADY_TERMINAL');
+  if (from === to) return deny('LEG_ALREADY_IN_STATE');
+  if (to === 'CANCELLED') return deny('LEG_CANCEL_REQUIRES_DEDICATED_PATH');
+  if (!LEG_EDGES[from].includes(to)) return deny('LEG_TRANSITION_NOT_PERMITTED');
+  return allow('LEG_TRANSITION_APPLIED');
+}
+
+/**
+ * Huy mot chang di duong RIENG, cung ly le voi don va vong chay: no doi mot ly do bang chu.
+ *
+ * Khac hai duong kia o mot cho — chi `PLANNED` moi huy duoc. Xem khoi chu thich cua `LEG_EDGES`.
+ */
+export function evaluateLegCancel(from: RunLegStatus): TransitionDecision<RunLegCancelReason> {
+  if (from === 'CANCELLED') return deny('LEG_CANCEL_ALREADY_CANCELLED');
+  if (from === 'COMPLETED') return deny('LEG_CANCEL_ALREADY_COMPLETED');
+  if (from === 'IN_TRANSIT') return deny('LEG_CANCEL_ALREADY_STARTED');
+  return allow('LEG_CANCEL_RECORDED');
 }

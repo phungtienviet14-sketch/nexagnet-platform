@@ -466,6 +466,85 @@ const transportCorePolicySchema = z
   .strict();
 
 /**
+ * Chinh sach LAP KE HOACH VONG CHAY — #276 (Lane L).
+ *
+ * Ba khoi, va ca ba deu TUY CHON, cung ly le voi `transportCore`: bat mot khach van tai phai go
+ * mot khoi rong chi de he thong khoi chet la mot yeu cau khong phuc vu ai. Mac dinh cua tung khoi
+ * nam trong `run-grouping.ts` / `depot.policy.ts` / `run-closure.ts` cua mien, khong o day; schema
+ * nay chi noi cai gi HOP LE.
+ *
+ * ============================================================================================
+ * `runGrouping` — MAC DINH LA CAI KHONG DOI GI
+ * ============================================================================================
+ *
+ * `#276` L1 doi *"safe default must preserve current behavior for existing deployments"*. Hanh vi
+ * hom nay cua moi khach dang chay la KHONG co lan lap ke hoach nao gom hai don vao mot vong chay.
+ * Nen mac dinh la `ONE_ORDER_PER_RUN`, va mot khach khong khai gi se khong bao gio thay hai don
+ * cua minh nam chung mot vong chay chi vi ai do nang cap phien ban.
+ *
+ * ============================================================================================
+ * `depots` LA MOT MANG DU HOM NAY CHI DUNG DUOC MOT
+ * ============================================================================================
+ *
+ * `#276` L5 doi hai thu cung luc: *"current tenant can have exactly one active depot"* VA
+ * *"data model/API must not make future multi-depot impossible"*. Mot truong `depot` don le se
+ * dong cua thu hai lai; mot mang gioi han `max(1)` cung vay. Nen day la mot mang khong gioi han,
+ * con quy tac "dung mot bai dang hoat dong" song o TANG MIEN (`resolveDepot()`), noi no bao
+ * `DEPOT_AMBIGUOUS` thay vi doan bua mot bai khi khach khai hai.
+ *
+ * Bai xe la CO SO VAN HANH CUA B, khong phai mot `TransportCounterparty` — L5 goi ten dung cho de
+ * nham lan nay. Nen no la cau hinh cua goi khach chu khong mot hang trong danh muc phap nhan.
+ *
+ * ============================================================================================
+ * `closure.idleHours` KHONG CO MAC DINH — VA DO LA CAU TRA LOI TRUNG THUC
+ * ============================================================================================
+ *
+ * `#276` L4 cho phep mot quy tac dong theo thoi gian nghi, roi rang buoc ngay: *"The exact default
+ * must be conservative and documented; do not invent a financial meaning. If no source-backed
+ * default can be selected safely, expose the rule as required transport policy for preview and use
+ * a clearly synthetic preview value, not a hidden magic constant."*
+ *
+ * Khong co nguon nao noi mot chiec xe nghi bao lau thi coi la het vong chay — khach chua tra loi.
+ * Nen khong khai `idleHours` = KHONG BAO GIO dong vi het gio; chi con duong dong khi xe ve bai.
+ * Do la mac dinh bao thu nhat co the: khong doan gi ca. Ban xem truoc
+ * (`tenants/transport-preview`) khai mot con so TONG HOP va noi ro no la tong hop.
+ */
+const transportPlanningPolicySchema = z
+  .object({
+    runGrouping: z.enum(['ONE_ORDER_PER_RUN', 'MULTI_ORDER_RUN']).optional(),
+    depots: z
+      .array(
+        z
+          .object({
+            /** Ma on dinh cua bai. Vd `DEPOT-HN`. */
+            code: nonEmpty,
+            /**
+             * Nhan doc duoc, va la CHUOI DUOC DUNG LAM diem dau/cuoi cua chang rong. Phai trung
+             * voi cach van phong go dia diem tren don, neu khong he thong se thay "bai xe" va
+             * "diem lay hang" la hai cho khac nhau roi sinh mot chang rong khong co that.
+             */
+            label: nonEmpty,
+            /** Khong khai = dang hoat dong. Tat mot bai la doi cau hinh, khong phai xoa dong. */
+            active: z.boolean().optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+    closure: z
+      .object({
+        /**
+         * Xe khong co viec trong bao nhieu GIO thi he thong dong vong chay. Khong khai = khong
+         * dong vi het gio. Tran 720 gio (30 ngay) la chan mot con so go nham, khong phai mot
+         * gioi han nghiep vu.
+         */
+        idleHours: z.number().int().min(1).max(720).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+/**
  * Chinh sach cua `transport-costing`.
  *
  * Ca hai truong deu TUY CHON, cung ly le voi `transportCore`: bat mot khach van tai phai go mot
@@ -660,6 +739,7 @@ const tenantPoliciesSchema = z
     salesOrder: salesOrderPolicySchema.optional(),
     campaign: campaignConfigSchema.optional(),
     transportCore: transportCorePolicySchema.optional(),
+    transportPlanning: transportPlanningPolicySchema.optional(),
     transportCosting: transportCostingPolicySchema.optional(),
     transportFuel: transportFuelPolicySchema.optional(),
     transportCompliance: transportCompliancePolicySchema.optional(),

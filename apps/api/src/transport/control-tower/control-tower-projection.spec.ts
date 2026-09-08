@@ -42,6 +42,7 @@ const leg = (over: Partial<RunLeg> = {}): RunLeg => ({
   destinationLabel: 'B',
   businessDate: TODAY,
   distanceKm: 120,
+  plannedDistanceKm: null,
   startedAt: null,
   completedAt: null,
   note: null,

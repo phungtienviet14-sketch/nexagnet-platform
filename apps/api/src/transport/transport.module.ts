@@ -29,6 +29,13 @@ import { PrismaCounterpartySiteRepository } from './counterparty/prisma-counterp
 import { MovementRepository, InMemoryMovementRepository } from './movement/movement.repository.js';
 import { MovementService } from './movement/movement.service.js';
 import { PrismaMovementRepository } from './movement/prisma-movement.repository.js';
+import {
+  TRANSPORT_PLANNING_POLICY,
+  tenantTransportPlanningPolicy,
+} from './planning/planning-policy.js';
+import { InMemoryRunPlanRepository, RunPlanRepository } from './planning/planning.repository.js';
+import { PlanningService } from './planning/planning.service.js';
+import { PrismaRunPlanRepository } from './planning/prisma-planning.repository.js';
 import { FleetCounterpartySubjectAdapter } from './counterparty/fleet-counterparty-subject.adapter.js';
 import { PrismaCounterpartyRepository } from './counterparty/prisma-counterparty.repository.js';
 import { FleetRepository, InMemoryFleetRepository } from './fleet/fleet.repository.js';
@@ -145,12 +152,33 @@ import { TripService } from './trips/trip.service.js';
         new FleetVehicleOwnershipAdapter(fleet),
       inject: [FleetRepository],
     },
+    /*
+     * LICH SU LAP KE HOACH (Lane L, #276). Den cung `transport-core` vi no ghi qua chinh
+     * `MovementService` va khong doc mot capability nao khac: mot khach chi bat `transport-core`
+     * van phai co duong "gan don vao xe" ma khong phai tu tao vong chay.
+     */
+    {
+      provide: RunPlanRepository,
+      useFactory: (prisma: PrismaService): RunPlanRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaRunPlanRepository(prisma)
+          : new InMemoryRunPlanRepository(),
+      inject: [PrismaService],
+    },
     { provide: TRANSPORT_CORE_POLICY, useFactory: tenantTransportCorePolicy },
+    /*
+     * KHONG khai `policy: 'transportPlanning'` trong `capabilityRequirements`, cung ly le voi
+     * `transportCore`: ca ba khoi cua no (che do gom nhom, bai xe, nguong nghi) deu co mac dinh
+     * dung duoc, nen khai se bien mot khoi hoan toan tuy chon thanh mot dieu kien boot cho MOI
+     * khach van tai dang chay.
+     */
+    { provide: TRANSPORT_PLANNING_POLICY, useFactory: tenantTransportPlanningPolicy },
     FleetService,
     TripService,
     CounterpartyService,
     CounterpartySiteService,
     MovementService,
+    PlanningService,
     AssetOwnershipService,
     AssetOwnershipScopeService,
     TransportActionGuard,
@@ -168,6 +196,7 @@ import { TripService } from './trips/trip.service.js';
     CounterpartyService,
     CounterpartySiteService,
     MovementService,
+    PlanningService,
     AssetOwnershipService,
     AssetOwnershipScopeService,
     TransportActionGuard,
@@ -175,8 +204,10 @@ import { TripService } from './trips/trip.service.js';
     CounterpartySiteRepository,
     TripRepository,
     MovementRepository,
+    RunPlanRepository,
     AuditLogService,
     TRANSPORT_CORE_POLICY,
+    TRANSPORT_PLANNING_POLICY,
   ],
 })
 export class TransportModule {}
