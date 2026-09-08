@@ -46,6 +46,19 @@ export function readSourceFiles() {
     }));
 }
 
+/**
+ * So do phan quyen PHAT THONG DIEP mac dinh cua bo test. KHAC voi `trustedTriggerPrincipals`
+ * (`USER:architect-user`) mot cach CO Y: hai cau hoi khac nhau, hai so do khac nhau — va bai test
+ * nao vo tinh dua chung ve mot moi se do.
+ */
+export const HANDOFF_PRINCIPALS = Object.freeze([
+  Object.freeze({
+    kind: 'APP',
+    id: 'nexagent-autopilot',
+    roles: Object.freeze(['CLAUDE_BUILDER', 'CLAUDE_FIXER', 'GITHUB_ACTIONS']),
+  }),
+]);
+
 /** Cau hinh hop le toi thieu, da vu trang. @param {Record<string, any>} [overrides] */
 export function baseConfig(overrides = {}) {
   const root = overrides.__root ?? '/tmp/apd-root';
@@ -54,6 +67,7 @@ export function baseConfig(overrides = {}) {
     repo: 'acme/widgets',
     readyLabel: 'agent:ready',
     trustedTriggerPrincipals: [{ kind: 'USER', id: 'architect-user' }],
+    handoffPrincipals: HANDOFF_PRINCIPALS.map((entry) => ({ ...entry, roles: [...entry.roles] })),
     worktreeRoot: path.join(root, 'worktrees'),
     branchPrefix: 'claude/autopilot',
     stateDir: path.join(root, 'state'),
@@ -119,6 +133,53 @@ export function issueFixture(overrides = {}) {
     body: issueBodyFor(contract),
     ...overrides,
   };
+}
+
+/**
+ * Mot COMMENT nhu GitHub that tra ve — khong phai `{ body }` tran.
+ *
+ * Bo test cu chi truyen `{ body }`, va do la ly do mot lo hong ton tai duoc: neu fixture khong
+ * mang provenance thi khong bai test nao co the noi gi ve provenance. Fixture o day mang du ba
+ * thu ma cong hau kiem doc: vat mang (`issue_url`/`html_url`), danh tinh (`user.login`), va
+ * duong app (`performed_via_github_app.slug`).
+ *
+ * @param {{ repo?: string, number: number, body: string, login?: string | null, appSlug?: string | null, id?: number }} input
+ */
+export function ghComment({
+  repo = 'acme/widgets',
+  number,
+  body,
+  login = null,
+  appSlug = null,
+  id = 1,
+}) {
+  /** @type {Record<string, any>} */
+  const comment = {
+    id,
+    issue_url: `https://api.github.com/repos/${repo}/issues/${number}`,
+    html_url: `https://github.com/${repo}/issues/${number}#issuecomment-${id}`,
+    body,
+  };
+  if (login !== null) comment.user = { login };
+  if (appSlug !== null) comment.performed_via_github_app = { slug: appSlug };
+  return comment;
+}
+
+/**
+ * Comment do mot GitHub App phat. GitHub dat CA HAI: login `<slug>[bot]` va app slug — va ca hai
+ * quy ve CUNG mot principal `APP:<slug>`.
+ * @param {{ repo?: string, number: number, body: string, slug?: string, id?: number }} input
+ */
+export function appComment({ repo, number, body, slug = 'nexagent-autopilot', id = 1 }) {
+  return ghComment({ repo, number, body, login: `${slug}[bot]`, appSlug: slug, id });
+}
+
+/**
+ * Comment do mot tai khoan nguoi phat — thu bat ky ai tren mot repo PUBLIC cung viet duoc.
+ * @param {{ repo?: string, number: number, body: string, login?: string, id?: number }} input
+ */
+export function userComment({ repo, number, body, login = 'random-passerby', id = 1 }) {
+  return ghComment({ repo, number, body, login, id });
 }
 
 /** @param {Record<string, any>} [overrides] */

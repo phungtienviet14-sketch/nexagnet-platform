@@ -14,6 +14,7 @@
  * Nho vay "dry-run khong tao worktree, khong phong Claude" khong phai mot loi hua trong tai lieu
  * ma la mot tinh chat cua cau truc: nhanh thuc thi nam SAU mot lenh `return`.
  */
+import { definePrincipalRegistry } from '@netviet/autopilot-protocol/validator/index.mjs';
 import { assertArmed } from './config.mjs';
 import { DISPATCH_STATES, REASONS, deny } from './errors.mjs';
 import {
@@ -94,6 +95,24 @@ export async function runOnce({ config, mode, deps, issue: requestedIssue }) {
  */
 async function runInsideLock({ config, mode, deps, requestedIssue, log }) {
   const execute = mode === MODES.EXECUTE;
+
+  // --- 0. so do phan quyen PHAT THONG DIEP (cong cau hinh, khong cham mang) --------------------
+  //
+  // Dung o day chu khong o cho goi `verifyHandoff` la co y: mot so do hong la loi CAU HINH, va
+  // phat hien no SAU khi da tao worktree va chay xong mot lan Claude thi tra gia bang ca lan chay
+  // do. Dat truoc moi thu, `plan` cung di qua no — nen nguoi van hanh thay duoc loi ma khong phai
+  // vu trang cai gi.
+  //
+  // Day KHONG PHAI `trustedTriggerPrincipals`: quyen kich hoat mot lan chay va quyen khang dinh
+  // lan chay do da ban giao la hai thu khac nhau.
+  const handoffRegistry = definePrincipalRegistry(
+    config.handoffPrincipals.map((entry) => ({
+      kind: entry.kind,
+      id: entry.id,
+      roles: entry.roles,
+    })),
+  );
+  if (!handoffRegistry.ok) return refuse(log, mode, handoffRegistry);
 
   // --- 1. tim task san sang -------------------------------------------------------------------
   /** @type {{ number: number } | null} */
@@ -247,13 +266,23 @@ async function runInsideLock({ config, mode, deps, requestedIssue, log }) {
     };
   }
 
-  return executeDispatch({ config, deps, log, plan, prompt, promptDigest, argv, planFields });
+  return executeDispatch({
+    config,
+    deps,
+    log,
+    plan,
+    prompt,
+    promptDigest,
+    argv,
+    planFields,
+    handoffRegistry: handoffRegistry.registry,
+  });
 }
 
 /**
  * Nhanh CO TAC DONG. Tach ham rieng de doc mot lan la thay het nhung gi dispatcher lam voi may
  * nguoi dung: ghi so cai, tao worktree, phong mot tien trinh, roi hoi lai GitHub.
- * @param {{ config: any, deps: any, log: any, plan: import('./planner.mjs').DispatchPlan, prompt: string, promptDigest: string, argv: string[], planFields: Record<string, unknown> }} input
+ * @param {{ config: any, deps: any, log: any, plan: import('./planner.mjs').DispatchPlan, prompt: string, promptDigest: string, argv: string[], planFields: Record<string, unknown>, handoffRegistry: unknown }} input
  */
 async function executeDispatch({
   config,
@@ -264,6 +293,7 @@ async function executeDispatch({
   promptDigest,
   argv,
   planFields,
+  handoffRegistry,
 }) {
   // Nhan TRUOC khi tao worktree: neu tien trinh chet giua chung, dau vet cua lan nhan van con va
   // vong hoi ke tiep khong phong lai. Ghi so cai sau khi phong thi mat dien la chay trung.
@@ -364,6 +394,7 @@ async function executeDispatch({
     repo: plan.repo,
     issue: plan.issue,
     branch: plan.branch,
+    registry: handoffRegistry,
   });
   if (!verified.ok) {
     mark(DISPATCH_STATES.FAILED, verified.reason);
@@ -390,6 +421,12 @@ async function executeDispatch({
     head_sha: verified.headSha,
     exit_code: outcome.exitCode,
     ...(verified.reason ? { reason: verified.reason } : {}),
+    // "Khong co ban giao" va "co mot ban giao trong nhu that nhung khong duoc tinh" phai la HAI
+    // dong log khac nhau. Chi ghi MA — ma la sieu du lieu, con chi tiet (ai, so hieu nao) o lai
+    // trong ket qua tra ve.
+    ...(verified.rejected.length > 0
+      ? { handoff_rejected: [...new Set(verified.rejected.map((r) => r.reason))].sort().join(',') }
+      : {}),
   });
 
   return {

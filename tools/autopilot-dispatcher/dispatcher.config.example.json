@@ -6,6 +6,13 @@
     { "kind": "USER", "id": "phungtienviet14-sketch" },
     { "kind": "APP", "id": "nexagent-autopilot" }
   ],
+  "handoffPrincipals": [
+    {
+      "kind": "APP",
+      "id": "nexagent-autopilot",
+      "roles": ["CLAUDE_BUILDER", "CLAUDE_FIXER", "GITHUB_ACTIONS"]
+    }
+  ],
   "worktreeRoot": "C:/Users/<you>/Documents/vietpt/source/nexagnet-platform/.claude/worktrees",
   "branchPrefix": "claude/autopilot",
   "stateDir": "C:/Users/<you>/.nexagent-autopilot-dispatcher",

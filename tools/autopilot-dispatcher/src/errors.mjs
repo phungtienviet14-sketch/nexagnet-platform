@@ -113,6 +113,17 @@ export const REASONS = Object.freeze({
 
   // --- su that sau khi chay ---
   HANDOFF_MISSING: 'HANDOFF_MISSING',
+  // Ba ma nay noi ve VAT MANG (doi tuong comment) va ve CAU HINH cuc bo, khong ve ngu nghia giao
+  // thuc — nen chung thuoc dispatcher. Con quyen phat mot LOAI thong diep thi la cua giao thuc,
+  // va cac ma cua no (`PRINCIPAL_UNKNOWN`, `PRODUCER_UNKNOWN`, `WRONG_PRODUCER`,
+  // `PRINCIPAL_REGISTRY_MISSING`, `ISSUE_MISMATCH`, `PR_MISMATCH`, `NO_PR_BOUND`, `HEAD_MISMATCH`)
+  // duoc CHUYEN TIEP nguyen van, khong chep lai — chep la fork ngu nghia.
+  /** comment khong noi duoc no thuoc repo/Issue/PR nao, hoac no thuoc mot cho khac. */
+  HANDOFF_CARRIER_UNBOUND: 'HANDOFF_CARRIER_UNBOUND',
+  /** comment mang hai danh tinh da xac thuc khac nhau (app slug != login) — khong chon thay duoc. */
+  HANDOFF_PROVENANCE_AMBIGUOUS: 'HANDOFF_PROVENANCE_AMBIGUOUS',
+  /** `handoffPrincipals` sai HINH DANG, truoc khi giao thuc kip xet noi dung vai. */
+  HANDOFF_PRINCIPALS_INVALID: 'HANDOFF_PRINCIPALS_INVALID',
 });
 
 /**

@@ -34,6 +34,10 @@ export const ALLOWED_LOG_FIELDS = Object.freeze([
   'detail_code',
   'pr',
   'head_sha',
+  // MA cua nhung comment ban giao bi tu choi — khong bao gio danh tinh hay noi dung. Them khoa
+  // nay la mot quyet dinh co y: neu khong co no, "chua ban giao" va "co ke dan mot BUILD_READY
+  // gia" la cung mot dong log.
+  'handoff_rejected',
   'exit_code',
   'signal',
   'duration_ms',

@@ -70,6 +70,66 @@ test('an empty trusted-principal allowlist is refused, not treated as "anyone"',
   }
 });
 
+test('an empty handoff-principal registry is refused, not treated as "anyone"', () => {
+  for (const value of [[], undefined, null, 'nexagent-autopilot']) {
+    const result = parseConfig(baseConfig({ handoffPrincipals: value }));
+    assert.equal(result.ok, false, `expected ${JSON.stringify(value)} to be rejected`);
+    assert.equal(result.reason, REASONS.CONFIG_INVALID);
+    assert.equal(result.detail.field, 'handoffPrincipals');
+  }
+});
+
+test('a handoff principal without roles is refused with its own code', () => {
+  for (const roles of [undefined, [], ['']]) {
+    const result = parseConfig(
+      baseConfig({ handoffPrincipals: [{ kind: 'APP', id: 'some-app', roles }] }),
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, REASONS.HANDOFF_PRINCIPALS_INVALID);
+  }
+});
+
+test('the protocol, not this package, decides which roles exist and which may coexist', () => {
+  // Vai khong ton tai => giao thuc tu choi.
+  const unknown = parseConfig(
+    baseConfig({ handoffPrincipals: [{ kind: 'APP', id: 'some-app', roles: ['SUPERUSER'] }] }),
+  );
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.reason, 'PRINCIPAL_REGISTRY_INVALID');
+
+  // Phan lap nhiem vu: vua LAM vua DUYET bi tu choi NGAY LUC DOC CAU HINH, khong doi den luc co
+  // mot thong diep that di qua.
+  const conflicted = parseConfig(
+    baseConfig({
+      handoffPrincipals: [
+        { kind: 'APP', id: 'some-app', roles: ['CLAUDE_BUILDER', 'CHATGPT_REVIEWER'] },
+      ],
+    }),
+  );
+  assert.equal(conflicted.ok, false);
+  assert.equal(conflicted.reason, 'PRINCIPAL_ROLE_CONFLICT');
+});
+
+test('trigger authority and message-producer authority are two separate fields', () => {
+  const parsed = parseConfig(baseConfig());
+  assert.equal(parsed.ok, true);
+  // Cung mot cau hinh, hai so do khac nhau: nguoi gan nhan khong tu dong tro thanh nguoi duoc
+  // khang dinh rang viec da xong.
+  assert.deepEqual(
+    parsed.config.trustedTriggerPrincipals.map((p) => `${p.kind}:${p.id}`),
+    ['USER:architect-user'],
+  );
+  assert.deepEqual(
+    parsed.config.handoffPrincipals.map((p) => `${p.kind}:${p.id}`),
+    ['APP:nexagent-autopilot'],
+  );
+  // Va mot cau hinh chi khai allowlist kich hoat thi KHONG chay duoc — thieu so do phat thong
+  // diep la thieu, khong phai "ai cung duoc".
+  const onlyTrigger = { ...baseConfig() };
+  delete onlyTrigger.handoffPrincipals;
+  assert.equal(parseConfig(onlyTrigger).ok, false);
+});
+
 test('rejects a config key whose name looks like a secret', () => {
   for (const key of ['token', 'githubToken', 'api_key', 'cookie', 'oauthSecret', 'password']) {
     const result = parseConfig({ ...baseConfig(), [key]: 'anything' });

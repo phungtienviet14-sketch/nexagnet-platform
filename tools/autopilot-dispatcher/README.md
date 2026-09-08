@@ -33,7 +33,7 @@ GitHub Issue  ──(người/App được tin cậy gắn nhãn agent:ready)─
 
 | Vùng                                       | Ai điều khiển      | Được phép quyết định gì                                                        |
 | ------------------------------------------ | ------------------ | ------------------------------------------------------------------------------ |
-| Cấu hình cục bộ (`dispatcher.config.json`) | **người vận hành** | repo, allowlist, đường dẫn, model, effort, timeout                             |
+| Cấu hình cục bộ (`dispatcher.config.json`) | **người vận hành** | repo, **hai** sơ đồ principal, đường dẫn, model, effort, timeout               |
 | Sự kiện gắn nhãn `agent:ready`             | GitHub xác thực    | **có** được chạy hay không                                                     |
 | Thân Issue (hợp đồng task)                 | Architect          | **nội dung công việc** (prose đi vào prompt)                                   |
 | Comment trên Issue/PR                      | bất kỳ ai          | **không gì cả** — không bao giờ vào prompt                                     |
@@ -56,6 +56,20 @@ Bốn đường từ chối, mỗi đường một mã riêng:
 
 Một dòng `ROLE=CHATGPT_ARCHITECT` viết trong thân Issue **không cho thêm quyền gì** — có test khoá
 điều đó.
+
+**Quyền KÍCH HOẠT không phải quyền KHẲNG ĐỊNH.** Cấu hình mang **hai** sơ đồ principal, và chúng
+trả lời hai câu hỏi khác nhau:
+
+| Trường                     | Trả lời câu                                       | Đọc bởi                     |
+| -------------------------- | ------------------------------------------------- | --------------------------- |
+| `trustedTriggerPrincipals` | ai được gắn `agent:ready` (được **bấm nút chạy**) | `evaluateTriggerProvenance` |
+| `handoffPrincipals`        | ai được phát `BUILD_READY`/`REVIEW_REQUEST`       | `verifyHandoff` (§10)       |
+
+Gộp chúng làm một là cho **chính người mở lần chạy** tự chứng nhận kết quả của lần chạy đó. Nội
+dung vai thì **không** do package này định nghĩa: tên vai, tập vai hợp lệ, và bất biến **phân lập
+nhiệm vụ** (một principal không được vừa LÀM vừa DUYỆT) đều thuộc `definePrincipalRegistry` của
+giao thức — nên trong repo này **không có bộ luật phân quyền thứ hai**. Một sơ đồ hỏng bị từ chối
+**ngay lúc đọc cấu hình**, không đợi đến lúc có một thông điệp thật đi qua.
 
 Gắn nhãn là một lần **duyệt**, và nó duyệt **một nội dung cụ thể**. Tác giả Issue sửa được thân
 Issue của chính mình bất cứ lúc nào mà **không cần quyền ghi repo** — nên nếu thân đổi sau lần
@@ -185,16 +199,56 @@ chứng đó **không biến mất** — nó chỉ không được phép nói th
 
 `exit 0` chỉ chứng minh tiến trình kết thúc bình thường. Nó không chứng minh có code, có PR, có CI
 hay có bàn giao. Nên sau khi Claude thoát, dispatcher **đọc lại GitHub**: nhánh trên remote, PR có
-head là nhánh đó, và comment của Issue/PR chạy qua `readMessage` của giao thức để tìm một
-`BUILD_READY`/`REVIEW_REQUEST` **hợp lệ và trỏ đúng PR đó**.
+head là nhánh đó, và comment của Issue/PR chạy qua `readMessage` của giao thức.
 
 Một stdout chứa chữ "BUILD_READY" **không** tạo ra bàn giao. Kết cục
 `PROCESS_EXITED_0 + HANDOFF_MISSING` là hợp lệ và phải **nhìn thấy được là chưa xong**.
 
-**Không có PR thì không comment nào được tính.** Comment là thứ ai cũng viết được trên một repo
-PUBLIC; nếu "không tìm thấy PR" làm mệnh đề ràng buộc tắt ngưỡng thì một người lạ dán một
-`BUILD_READY` đúng hình dạng là đủ để bịa ra một lần bàn giao. Ràng buộc là **hai chiều**: phải
-có PR thật trên đúng nhánh này, **và** thông điệp phải trỏ đúng số PR đó.
+### Hình dạng đúng chưa bao giờ là quyền
+
+Repo này PUBLIC. Bất kỳ ai cũng dán được một `BUILD_READY` đúng schema, trỏ đúng số PR thật. Nếu
+hình dạng là đủ, thì "đã bàn giao" là thứ ai cũng bịa ra được bằng một comment — và hậu kiểm
+không còn là hậu kiểm. Nên có **hai cổng độc lập**, và phải qua **cả hai**:
+
+**Cổng 1 — AI PHÁT.** Danh tính lấy từ chính đối tượng comment mà GitHub trả về
+(`performed_via_github_app.slug` / `user.login`), chạy qua `principalFromGithubEvent` rồi
+`authorizeProducer` với `handoffPrincipals`. **Không** một trường nào trong **thân** thông điệp
+được tin để suy ra vai — thân là thứ người phát tự viết. Vì `assertedRole` không bao giờ được
+truyền vào, "BUILD_READY chỉ của `CLAUDE_BUILDER`/`CLAUDE_FIXER`" và "REVIEW_REQUEST chỉ của
+`GITHUB_ACTIONS`" là một **phép giao của giao thức** (`MESSAGE_PRODUCERS`), không phải một danh
+sách thứ hai chép lại ở đây.
+
+**Cổng 2 — TRỎ VÀO GÌ.** Thông điệp phải ràng buộc **đồng thời** vào bốn thứ, không phải một:
+
+| Ràng buộc               | Mã từ chối khi sai                                    |
+| ----------------------- | ----------------------------------------------------- |
+| repo đã cấu hình        | `HANDOFF_CARRIER_UNBOUND`                             |
+| đúng số Issue này       | `ISSUE_MISMATCH`                                      |
+| đúng số PR đang sống    | `NO_PR_BOUND` (không có PR) · `PR_MISMATCH` (PR khác) |
+| đúng HEAD SHA đang sống | `HEAD_MISMATCH`                                       |
+
+Ràng buộc HEAD là thứ làm cho bằng chứng **hết hạn được**: một `BUILD_READY` **thật** của HEAD A —
+đúng người phát, đúng Issue, đúng PR — **không** được tính khi PR đã lên HEAD B. Thiếu nó, một lần
+chạy đẩy thêm commit vẫn "đã bàn giao" theo một thông điệp đã cũ.
+
+Các đường từ chối khác, mỗi đường một mã:
+
+| Mã                             | Nghĩa                                                               |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `PRINCIPAL_UNKNOWN`            | comment không nói được ai viết                                      |
+| `HANDOFF_PROVENANCE_AMBIGUOUS` | app slug và login là **hai** danh tính khác nhau trong một vật mang |
+| `PRODUCER_UNKNOWN`             | biết ai, nhưng principal đó không giữ vai nào                       |
+| `WRONG_PRODUCER`               | có vai, nhưng không vai nào phát được loại này                      |
+| `PRINCIPAL_REGISTRY_MISSING`   | không có sơ đồ ⇒ **`ok:false`**, xem ngay dưới                      |
+
+**Thiếu sơ đồ phân quyền là lỗi CẤU HÌNH, không phải "không có bàn giao".** Trả về
+`HANDOFF_MISSING` lúc đó là báo "Claude chưa bàn giao" cho một cấu hình thiếu — một kết luận **sai**
+mà không ai kiểm lại. Nên `verifyHandoff` trả `ok:false`, và `runOnce` dựng sơ đồ **trước mọi cổng
+khác** để một sơ đồ hỏng chặn lần chạy _trước khi_ có worktree hay tiến trình nào.
+
+Cuối cùng, `HANDOFF_MISSING` và "có kẻ dán một `BUILD_READY` giả" phải là **hai dòng log khác
+nhau**: mọi comment bị từ chối được ghi lại thành mã trong trường `handoff_rejected` của
+`dispatch.finished` (chỉ **mã**, không danh tính, không nội dung).
 
 ## 11. Lệnh (dry-run là mặc định)
 

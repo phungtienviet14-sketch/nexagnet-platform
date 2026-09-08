@@ -14,6 +14,7 @@
  * hoac GIA TRI nao trong nhu mot token, deu bi tu choi — de nguoi van hanh khong bao gio "tien
  * tay" dan PAT vao day roi commit len mot repo PUBLIC.
  */
+import { definePrincipalRegistry } from '@netviet/autopilot-protocol/validator/index.mjs';
 import { REASONS, deny } from './errors.mjs';
 
 /** Chi OPUS. Alias `opus` la cai CLI tu tai lieu hoa; ten day du phai la ho opus. */
@@ -87,6 +88,7 @@ function findSecretLeak(node, path = []) {
 
 /**
  * @typedef {{ kind: 'APP' | 'USER', id: string }} TrustedPrincipal
+ * @typedef {{ kind: 'APP' | 'USER', id: string, roles: ReadonlyArray<string> }} HandoffPrincipal
  * @typedef {object} ClaudePolicy
  * @property {string} bin duong dan tuyet doi toi executable Claude Code
  * @property {ReadonlyArray<string>} binPrefixArgs argv dat TRUOC co chinh sach; can cho ban cai
@@ -109,6 +111,7 @@ function findSecretLeak(node, path = []) {
  * @property {string} repo
  * @property {string} readyLabel
  * @property {ReadonlyArray<TrustedPrincipal>} trustedTriggerPrincipals
+ * @property {ReadonlyArray<HandoffPrincipal>} handoffPrincipals
  * @property {string} worktreeRoot
  * @property {string} branchPrefix
  * @property {string} stateDir
@@ -155,6 +158,8 @@ export function parseConfig(raw) {
     }
     trusted.push(Object.freeze({ kind: p.kind, id: p.id.trim() }));
   }
+  const handoff = parseHandoffPrincipals(r.handoffPrincipals);
+  if (!handoff.ok) return handoff;
   for (const field of ['worktreeRoot', 'stateDir']) {
     if (!isText(r[field])) return deny(REASONS.CONFIG_INVALID, { field, want: 'absolute path' });
   }
@@ -183,6 +188,7 @@ export function parseConfig(raw) {
       repo: r.repo,
       readyLabel,
       trustedTriggerPrincipals: Object.freeze(trusted),
+      handoffPrincipals: handoff.principals,
       worktreeRoot: r.worktreeRoot,
       branchPrefix,
       stateDir: r.stateDir,
@@ -191,6 +197,59 @@ export function parseConfig(raw) {
       claude: claude.policy,
     }),
   };
+}
+
+/**
+ * SO DO PHAN QUYEN PHAT THONG DIEP — ai duoc noi rang mot lan chay da ban giao.
+ *
+ * KHONG PHAI `trustedTriggerPrincipals`. Hai cau hoi khac nhau, va gop chung lam mot la cho nguoi
+ * bam nut chay tu chung nhan ket qua cua chinh lan chay do:
+ *
+ *   trustedTriggerPrincipals  ->  ai duoc gan `agent:ready` (quyen KICH HOAT)
+ *   handoffPrincipals         ->  ai duoc phat BUILD_READY / REVIEW_REQUEST (quyen KHANG DINH)
+ *
+ * Noi dung vai KHONG do tep nay dinh nghia: ten vai, tap vai hop le, va bat bien PHAN LAP NHIEM
+ * VU (mot principal khong duoc vua LAM vua DUYET) deu thuoc `definePrincipalRegistry` cua giao
+ * thuc. O day chi kiem HINH DANG roi giao nguyen cho no — nen khong co bo luat phan quyen thu hai
+ * trong repo nay.
+ *
+ * Thieu so do = TU CHOI CAU HINH, khong phai "ai cung duoc" — cung luat fail-closed voi allowlist
+ * kich hoat va voi `PrincipalRegistry` cua giao thuc.
+ *
+ * @param {unknown} raw
+ * @returns {{ ok: true, principals: ReadonlyArray<HandoffPrincipal> } | import('./errors.mjs').Denied}
+ */
+function parseHandoffPrincipals(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return deny(REASONS.CONFIG_INVALID, { field: 'handoffPrincipals', want: 'non-empty' });
+  }
+  /** @type {HandoffPrincipal[]} */
+  const parsed = [];
+  for (const [i, p] of raw.entries()) {
+    if (!isPlainObject(p) || (p.kind !== 'APP' && p.kind !== 'USER') || !isText(p.id)) {
+      return deny(REASONS.CONFIG_INVALID, {
+        field: `handoffPrincipals.${i}`,
+        want: '{kind:APP|USER,id:string,roles:string[]}',
+      });
+    }
+    if (!Array.isArray(p.roles) || p.roles.length === 0 || !p.roles.every(isText)) {
+      return deny(REASONS.HANDOFF_PRINCIPALS_INVALID, {
+        field: `handoffPrincipals.${i}.roles`,
+        want: 'non-empty string[]',
+      });
+    }
+    parsed.push(
+      Object.freeze({ kind: p.kind, id: p.id.trim(), roles: Object.freeze([...p.roles]) }),
+    );
+  }
+  // Giao thuc la trong tai cuoi cung ve NOI DUNG: vai co ton tai khong, va so do co vi pham phan
+  // lap nhiem vu khong. Mot so do sai la mot LO HONG PHAN QUYEN, nen no bi tu choi ngay luc doc
+  // cau hinh — khong doi den luc co mot thong diep that di qua.
+  const registry = definePrincipalRegistry(
+    parsed.map((p) => ({ kind: p.kind, id: p.id, roles: p.roles })),
+  );
+  if (!registry.ok) return registry;
+  return { ok: /** @type {const} */ (true), principals: Object.freeze(parsed) };
 }
 
 /**
