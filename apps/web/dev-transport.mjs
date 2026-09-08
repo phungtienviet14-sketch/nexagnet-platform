@@ -11,6 +11,11 @@
  *
  * `NEXT_PUBLIC_API_URL=''` lam moi loi goi API thanh duong tuong doi, nen mo man hinh ma khong chay
  * API se cho ra dung trang thai loi THAT ma khach se thay — do la thu can xem, khong phai thu can che.
+ *
+ * Nhung khi NGUOI CHAY da co san mot API o mot cong khac, chuoi rong lam man hinh khong bao gio goi
+ * duoc toi no. Nen bien duoc TON TRONG neu da dat san: mac dinh giu nguyen hanh vi cu, con
+ * `NEXT_PUBLIC_API_URL=http://localhost:4601 node apps/web/dev-transport.mjs` thi tro dung vao do.
+ * (Nho dat `CORS_ORIGIN=http://localhost:3002` o phia API.)
  */
 import { spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
@@ -25,7 +30,11 @@ const child = spawn(
   {
     cwd: here,
     stdio: 'inherit',
-    env: { ...process.env, TENANT_DIR: tenantDir, NEXT_PUBLIC_API_URL: '' },
+    env: {
+      ...process.env,
+      TENANT_DIR: tenantDir,
+      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? '',
+    },
   },
 );
 
