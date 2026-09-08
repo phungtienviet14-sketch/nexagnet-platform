@@ -23,7 +23,8 @@
     "transport-settlement",
     "transport-asset-compliance",
     "transport-workforce",
-    "transport-proof"
+    "transport-proof",
+    "transport-checkpoint"
   ],
   "policies": {
     "transportCore": {

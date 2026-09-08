@@ -4,6 +4,7 @@ import type { UniqueIndexRef } from '../storage-conflict.js';
 import type {
   OperationalProof,
   OperationalProofKind,
+  ProofChallenge,
   ProofPhoto,
   ProofPhotoCaptureMode,
 } from './operational-proof.types.js';
@@ -35,6 +36,7 @@ export interface CreateProofInput {
   readonly businessDate: BusinessDate;
   readonly note: string | null;
   readonly recordedBy: string;
+  readonly challengeVerified: boolean;
   readonly photos: readonly {
     readonly locator: string;
     readonly captureMode: ProofPhotoCaptureMode;
@@ -64,12 +66,80 @@ export abstract class OperationalProofRepository {
    * kho luu chi noi duoc cai thu nhat.
    */
   abstract withdraw(input: WithdrawProofInput): Promise<OperationalProof | null>;
+  /**
+   * Ghi nhan rang chung cu nay DA tieu duoc mot loi thach thuc con han.
+   *
+   * Tach khoi `create` vi thu tu bat buoc phai la: TAO chung cu -> TIEU loi thach thuc (co proofId
+   * de ghi vao `consumedByProofId`) -> GHI NHAN. Neu dat co ngay luc tao thi hai yeu cau chay dua
+   * cung mot `nonce` se ca hai duoc danh dau "da kiem", trong khi chi mot trong hai thuc su tieu
+   * duoc no.
+   */
+  abstract markChallengeVerified(proofId: string): Promise<OperationalProof | null>;
 }
 
 export interface WithdrawProofInput {
   readonly proofId: string;
   readonly withdrawnBy: string;
   readonly withdrawnAt: Date;
+}
+
+export interface IssueChallengeInput {
+  readonly nonce: string;
+  readonly driverId: string;
+  readonly sessionId: string;
+  readonly issuedAt: Date;
+  readonly expiresAt: Date;
+}
+
+/**
+ * KHO LOI THACH THUC — tach khoi kho chung cu, vi hai thu co VONG DOI khac han nhau.
+ *
+ * Chung cu song mai (bia mo, khong xoa). Loi thach thuc song 5 phut roi thanh rac. Gop chung vao
+ * mot kho se lam moi phep don dep phai nho ra ngoai le.
+ */
+export abstract class ProofChallengeRepository {
+  abstract issue(input: IssueChallengeInput): Promise<ProofChallenge>;
+  abstract findByNonce(nonce: string): Promise<ProofChallenge | null>;
+  /**
+   * Tieu MOT LAN. Tra `null` khi loi thach thuc do DA bi tieu — day la cong chong chay dua, va no
+   * phai nam o tang luu tru chu khong o mot lenh `if` trong dich vu.
+   */
+  abstract consume(
+    nonce: string,
+    consumedAt: Date,
+    proofId: string,
+  ): Promise<ProofChallenge | null>;
+}
+
+export class InMemoryProofChallengeRepository extends ProofChallengeRepository {
+  private readonly rows = new Map<string, ProofChallenge>();
+
+  async issue(input: IssueChallengeInput): Promise<ProofChallenge> {
+    const challenge: ProofChallenge = {
+      id: randomUUID(),
+      nonce: input.nonce,
+      driverId: input.driverId,
+      sessionId: input.sessionId,
+      issuedAt: input.issuedAt,
+      expiresAt: input.expiresAt,
+      consumedAt: null,
+      consumedByProofId: null,
+    };
+    this.rows.set(challenge.nonce, challenge);
+    return challenge;
+  }
+
+  async findByNonce(nonce: string): Promise<ProofChallenge | null> {
+    return this.rows.get(nonce) ?? null;
+  }
+
+  async consume(nonce: string, consumedAt: Date, proofId: string): Promise<ProofChallenge | null> {
+    const current = this.rows.get(nonce);
+    if (current === undefined || current.consumedAt !== null) return null;
+    const consumed: ProofChallenge = { ...current, consumedAt, consumedByProofId: proofId };
+    this.rows.set(nonce, consumed);
+    return consumed;
+  }
 }
 
 export class InMemoryOperationalProofRepository extends OperationalProofRepository {
@@ -118,6 +188,7 @@ export class InMemoryOperationalProofRepository extends OperationalProofReposito
       recordedBy: input.recordedBy,
       withdrawnAt: null,
       withdrawnBy: null,
+      challengeVerified: input.challengeVerified,
       photos,
     };
     this.proofs.set(id, proof);
@@ -171,5 +242,13 @@ export class InMemoryOperationalProofRepository extends OperationalProofReposito
     };
     this.proofs.set(withdrawn.id, withdrawn);
     return withdrawn;
+  }
+
+  async markChallengeVerified(proofId: string): Promise<OperationalProof | null> {
+    const current = this.proofs.get(proofId);
+    if (current === undefined) return null;
+    const verified: OperationalProof = { ...current, challengeVerified: true };
+    this.proofs.set(proofId, verified);
+    return verified;
   }
 }

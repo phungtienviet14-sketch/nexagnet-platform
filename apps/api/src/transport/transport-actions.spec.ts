@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { USER_ROLES } from '../auth/auth.types.js';
 import {
+  STAKEHOLDER_SCOPE_ACTIONS,
   TRANSPORT_ACTIONS,
   actionsForRole,
+  isStakeholderScopeAction,
   roleCanPerform,
   type TransportAction,
 } from './transport-actions.js';
@@ -111,6 +113,14 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // MOT ma cho ca chung cu bat dau lan giao hang: hai duong khac nhau dung mot quy tac NGHIEP
       // VU (giao hang bat buoc co anh), khong phai mot ranh gioi QUYEN.
       'transport.driver.self.proof.record',
+      // MOT ma cho ca chin loai moc van hanh: chin duong khac nhau o THU TU va CHINH SACH CHUNG
+      // CU — ca hai deu la quy tac NGHIEP VU, khong phai ranh gioi QUYEN (`#243` F5).
+      'transport.driver.self.checkpoint.record',
+      // DONG THOI GIAN cua mot chuyen. Ke toan CO ma nay: mot khoan phu cap cho phai doi chieu
+      // duoc voi luc xe den noi. KHONG co toa do.
+      'transport.checkpoint.read',
+      // GHI moc tu be mat van hanh — ghi duoc cho MOI vong chay, va KHONG kem chung cu vi tri.
+      'transport.checkpoint.record',
       // TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do.
       'transport.tracking.read',
       'transport.proof.read',
@@ -121,6 +131,13 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.location.history.read',
       'transport.geofence.read',
       'transport.geofence.manage',
+      // `TX-08` SO HUU TAI SAN. Doc/quan ly so dang ky tach nhau, cung ly le voi cap
+      // `counterparty.read`/`.manage`: xem ai so huu mot chiec xe la viec hang ngay; SUA mot ty le
+      // la sua mot su that phap ly.
+      'transport.asset_ownership.read',
+      'transport.asset_ownership.manage',
+      // Pham vi CUA CHINH MINH cua ben huu quan — CHI DOC, va KHONG cap qua vai nao.
+      'transport.stakeholder.self.vehicle.read',
     ]);
   });
 
@@ -132,9 +149,55 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
     it('lam duoc moi viec van hanh, KE CA huy chuyen', () => {
       for (const action of TRANSPORT_ACTIONS) {
         if (action.startsWith('transport.driver.self.')) continue;
+        if (isStakeholderScopeAction(action)) continue;
         expect(roleCanPerform('ADMIN', action), action).toBe(true);
       }
       expect(roleCanPerform('ADMIN', 'transport.trip.cancel')).toBe(true);
+    });
+
+    /**
+     * ADMIN GIU NGUYEN nang luc quan tri doi xe sau `TX-08` — #242 E6.
+     *
+     * Them mot lop so huu khong duoc lam mat quyen cua nguoi dang van hanh. Hai ma quan tri so
+     * dang ky phai thuoc ve ADMIN, va toan bo be mat doi xe cu phai con nguyen.
+     */
+    it('quan ly duoc so dang ky so huu, va van giu nguyen quyen doi xe cu', () => {
+      expect(roleCanPerform('ADMIN', 'transport.asset_ownership.read')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.asset_ownership.manage')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.vehicle.manage')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.driver.manage')).toBe(true);
+    });
+  });
+
+  /**
+   * PHAM VI BEN HUU QUAN KHONG DUOC CAP QUA VAI — bat bien trung tam cua `TX-08`/#242 E3.
+   *
+   * Neu mot ngay co nguoi them ma nay vao `ROLE_ACTIONS`, bai duoi day do. Do la dieu can xay ra:
+   * cap qua vai nghia la MOI nguoi mang vai do doc duoc be mat co dong, trong khi cong that phai la
+   * mot hang `TransportAssetStakeholder.authUserId` cua RIENG mot con nguoi.
+   */
+  describe('TX-08 — pham vi ben huu quan (#242 E3)', () => {
+    it.each(USER_ROLES)('vai %s KHONG duoc cap pham vi ben huu quan qua bang vai', (role) => {
+      for (const action of STAKEHOLDER_SCOPE_ACTIONS) {
+        expect(roleCanPerform(role, action), `${role} / ${action}`).toBe(false);
+      }
+    });
+
+    /**
+     * `TransportActionGuard` cho nhom nay di qua tang vai, nen quy uoc CHI dung chung nao khong ma
+     * nao trong nhom mo mot duong ghi. Bai nay khoa dieu do: mot ma `.manage`/`.record`/`.submit`
+     * lot vao day se lam do test, chu khong lang le mo mot duong ghi cho moi nguoi da dang nhap.
+     */
+    it('moi ma trong nhom deu la ma CHI DOC', () => {
+      for (const action of STAKEHOLDER_SCOPE_ACTIONS) {
+        expect(action.endsWith('.read'), action).toBe(true);
+      }
+    });
+
+    it('nhom nay khong chong lan pham vi lai xe', () => {
+      for (const action of STAKEHOLDER_SCOPE_ACTIONS) {
+        expect(action.startsWith('transport.driver.self.')).toBe(false);
+      }
     });
   });
 
@@ -252,6 +315,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.tracking.report',
         'transport.driver.self.tracking.stop',
         'transport.driver.self.proof.record',
+        'transport.driver.self.checkpoint.record',
       ]);
     });
 

@@ -70,6 +70,10 @@ export const vehicle = (over: Partial<Vehicle> = {}): Vehicle => ({
   allowedPayloadKg: 5000,
   currentOdoKm: 120_450,
   status: 'IDLE',
+  // `TX-08`: mac dinh trung voi `DEFAULT` cua Postgres — xe cua B, so dang ky so huu chua khai day
+  // du. Mot fixture dat san `EXTERNAL_CARRIER` se lam moi bai dung chung no doc mot the gioi khac.
+  operationalControl: 'INTERNAL_OPERATED',
+  ownershipRegisterComplete: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
   ...over,

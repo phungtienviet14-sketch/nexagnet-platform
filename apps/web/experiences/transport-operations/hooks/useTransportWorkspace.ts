@@ -32,6 +32,9 @@ export const TRANSPORT_QUERY_KEYS = {
   trips: ['transport', 'trips'],
   vehicles: ['transport', 'vehicles'],
   drivers: ['transport', 'drivers'],
+  assetStakeholders: ['transport', 'asset-ownership', 'stakeholders'],
+  ownershipRegister: ['transport', 'asset-ownership', 'register'],
+  myVehicles: ['transport', 'me', 'vehicles'],
   customers: ['transport', 'customers'],
   partners: ['transport', 'partners'],
   fuelSuppliers: ['transport', 'fuel', 'suppliers'],
@@ -50,6 +53,8 @@ export const TRANSPORT_QUERY_KEYS = {
   expenseClaims: ['transport', 'expense-claims'],
   /** Lane G — MOT khoa cho CA bang: mot lan goi, mot khung nhin. */
   controlTower: ['transport', 'control-tower'],
+  /** Lane G — sau con so tai chinh, cung mot lan doc. */
+  financeSummary: ['transport', 'finance', 'summary'],
 } as const;
 
 /** Nang luc + hanh dong deu phai dat truoc khi ban mot yeu cau. */
@@ -91,6 +96,20 @@ export function useControlTower(input: NavigationInput) {
   });
 }
 
+/**
+ * BANG TAI CHINH — mot `useQuery` cho ca sau con so (Lane G, #244 G5).
+ *
+ * Dung `transport.settlement.report.read`: bang khong phoi mot su that nao ma quyen do chua cho
+ * xem, nen no khong can mot ma quyen thu hai. Xem khoi chu thich cua `FinanceController`.
+ */
+export function useFinanceSummary(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.financeSummary,
+    queryFn: () => transportApi.finance.summary(),
+    enabled: allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
+  });
+}
+
 export function useVehicles(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.vehicles,
@@ -104,6 +123,49 @@ export function useDrivers(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.drivers,
     queryFn: () => transportApi.fleet.drivers(),
     enabled: allowed(input, 'transport-core', 'transport.driver.read'),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * `TX-08` SO HUU TAI SAN (#242 Lane E)
+ * ------------------------------------------------------------------ */
+
+export function useAssetStakeholders(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.assetStakeholders,
+    queryFn: () => transportApi.assetOwnership.stakeholders(),
+    enabled: allowed(input, 'transport-core', 'transport.asset_ownership.read'),
+  });
+}
+
+export function useOwnershipRegister(input: NavigationInput, vehicleId: string | null) {
+  return useQuery({
+    queryKey: [...TRANSPORT_QUERY_KEYS.ownershipRegister, vehicleId],
+    queryFn: () => transportApi.assetOwnership.register(vehicleId ?? ''),
+    enabled:
+      vehicleId !== null && allowed(input, 'transport-core', 'transport.asset_ownership.read'),
+  });
+}
+
+/**
+ * "Xe toi co co phan" — be mat CUA CHINH NGUOI DANG DANG NHAP.
+ *
+ * KHONG dung `allowed(...)` o day, va do la co y. `allowed` hoi `canPerform(role, action)`, ma
+ * `transport.stakeholder.self.vehicle.read` KHONG duoc cap qua vai nao ca (xem
+ * `STAKEHOLDER_SCOPE_ACTIONS`) — nen `allowed` se luon tra `false` va query se khong bao gio chay.
+ *
+ * Cau hoi dung o day khong phai "vai nay lam duoc gi", ma "nguoi nay co phai ben huu quan khong" —
+ * va cau do CHI may chu tra loi duoc, tu mot hang `TransportAssetStakeholder.authUserId`. Nen dieu
+ * kien duy nhat o phia man hinh la khach co bat `transport-core` hay khong; con lai de `403` cua
+ * may chu noi. Doan truoc o client se hoac chan nham mot co dong that, hoac hua hen mot man hinh
+ * ma may chu se tu choi.
+ */
+export function useMyStakeholderVehicles(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.myVehicles,
+    queryFn: () => transportApi.stakeholderSelf.myVehicles(),
+    enabled: (input.capabilities as readonly string[]).includes('transport-core'),
+    retry: false,
   });
 }
 

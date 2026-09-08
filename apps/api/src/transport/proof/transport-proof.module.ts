@@ -12,8 +12,11 @@ import {
 import { GeofenceService } from './geofence.service.js';
 import {
   InMemoryOperationalProofRepository,
+  InMemoryProofChallengeRepository,
   OperationalProofRepository,
+  ProofChallengeRepository,
 } from './operational-proof.repository.js';
+import { PrismaProofChallengeRepository } from './prisma-proof-challenge.repository.js';
 import { OperationalProofService } from './operational-proof.service.js';
 import { PrismaOperationalProofRepository } from './prisma-operational-proof.repository.js';
 import { PrismaTrackingRepository } from './prisma-tracking.repository.js';
@@ -82,6 +85,14 @@ import {
         loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaOperationalProofRepository(prisma)
           : new InMemoryOperationalProofRepository(),
+      inject: [PrismaService],
+    },
+    {
+      provide: ProofChallengeRepository,
+      useFactory: (prisma: PrismaService): ProofChallengeRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaProofChallengeRepository(prisma)
+          : new InMemoryProofChallengeRepository(),
       inject: [PrismaService],
     },
     {

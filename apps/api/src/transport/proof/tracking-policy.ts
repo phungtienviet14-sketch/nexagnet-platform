@@ -39,6 +39,18 @@ export interface TransportProofPolicy {
   readonly rawRetentionDays: number;
   /** Chan duoi khoang cach hai ban dinh vi lien tiep, giay — tran chi phi cua ca he. */
   readonly minSampleIntervalSeconds: number;
+  /**
+   * Loi thach thuc cua may chu song bao lau, giay.
+   *
+   * Day la phan "bounded" cua cau *"stale nonce/challenge behavior is bounded"* (#235). Con so
+   * phai du DAI cho mot lan giao that — lai xe bam "Da den noi", chup anh, doi GPS hoi tu, roi
+   * bam gui — va du NGAN de mot `nonce` xin san tu sang khong dung duoc cho buoi chieu.
+   *
+   * 300 giay (5 phut) la cung nguong voi `maxClockSkewSeconds`, va co chu y: hai con so tra loi
+   * hai cau hoi khac nhau nhung cung mot bac do lon, nen mot nguoi van hanh khong phai nho hai
+   * thang thoi gian.
+   */
+  readonly challengeTtlSeconds: number;
 }
 
 export const DEFAULT_TRANSPORT_PROOF_POLICY: TransportProofPolicy = {
@@ -48,4 +60,5 @@ export const DEFAULT_TRANSPORT_PROOF_POLICY: TransportProofPolicy = {
   geofenceRadiusMetres: { min: 10, max: 100_000 },
   rawRetentionDays: 90,
   minSampleIntervalSeconds: 30,
+  challengeTtlSeconds: 300,
 };

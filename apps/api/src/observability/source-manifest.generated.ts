@@ -215,6 +215,15 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/orders/sales-order-outcome.service.ts",
       "line": 55
     },
+    "ownership.interest.close": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
+    "ownership.interest.record": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
+    "ownership.register.declare": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
     "parser.production": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
@@ -254,6 +263,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PricePeriodsService.removeDraftPrice",
       "filePath": "apps/api/src/settings/price-periods.service.ts",
       "line": 397
+    },
+    "proof.challenge": {
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
     },
     "proof.withdraw": {
       "functionName": "OperationalProofService.withdraw",
@@ -343,6 +355,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/analytics/analytics.controller.ts",
       "line": 40
     },
+    "transport.asset_ownership.manage": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.controller.ts"
+    },
+    "transport.asset_ownership.read": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.controller.ts"
+    },
+    "transport.checkpoint.read": {
+      "functionName": "CheckpointsController.timeline",
+      "filePath": "apps/api/src/transport/checkpoint/checkpoints.controller.ts",
+      "line": 42
+    },
+    "transport.checkpoint.record": {
+      "functionName": "CheckpointsController.record",
+      "filePath": "apps/api/src/transport/checkpoint/checkpoints.controller.ts",
+      "line": 55
+    },
     "transport.compliance.document.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
     },
@@ -410,6 +438,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
+    },
+    "transport.driver.self.checkpoint.record": {
+      "filePath": "apps/api/src/transport/checkpoint/driver-checkpoints.controller.ts"
     },
     "transport.driver.self.expense.claim.submit": {
       "filePath": "apps/api/src/transport/claims/driver-claims-self.controller.ts"
@@ -607,8 +638,8 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts",
       "line": 121
     },
-    "transport.settlement.report.read": {
-      "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts"
+    "transport.stakeholder.self.vehicle.read": {
+      "filePath": "apps/api/src/transport/asset-ownership/stakeholder-vehicles.controller.ts"
     },
     "transport.tracking.read": {
       "functionName": "TrackingController.summaries",
@@ -705,6 +736,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "OutboundChannelRouter.record",
       "filePath": "apps/api/src/channels/outbound-channel.router.ts",
       "line": 122
+    },
+    "checkpoint.record|*": {
+      "filePath": "apps/api/src/transport/checkpoint/checkpoint.service.ts"
     },
     "commission.select|*": {
       "functionName": "SettlementService.recogniseCommission",
@@ -1002,6 +1036,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceReadinessService.canUseFact",
       "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
       "line": 131
+    },
+    "finance.summary|FINANCE_CURRENCY_MIXED": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 73
+    },
+    "finance.summary|FINANCE_SOURCE_FAILED": {
+      "functionName": "FinanceReadService.readDriverBalances",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 121
+    },
+    "finance.summary|FINANCE_SOURCE_UNAVAILABLE": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 83
+    },
+    "finance.summary|FINANCE_SUMMARY_COMPILED": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 92
     },
     "fleet.effective_vehicle_state|*": {
       "functionName": "AssetComplianceReadService.emitStateDecision",
@@ -1310,6 +1364,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/turns/turn-reply.service.ts",
       "line": 113
     },
+    "ownership.scope.resolve|*": {
+      "functionName": "AssetOwnershipScopeService.decide",
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership-scope.service.ts",
+      "line": 146
+    },
     "payroll.driver_fund_disclosure|DRIVER_FUND_NOT_AVAILABLE": {
       "functionName": "WorkforceService.emitFundDisclosure",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
@@ -1364,10 +1423,15 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
       "line": 291
     },
+    "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
+      "functionName": "OperationalProofService.record",
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
+      "line": 209
+    },
     "proof.record|PROOF_PHOTO_NOT_LIVE_CAMERA": {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
-      "line": 153
+      "line": 230
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",

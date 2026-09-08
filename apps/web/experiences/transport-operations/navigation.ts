@@ -40,6 +40,8 @@ export type TransportSectionId =
   | 'maintenance'
   | 'payroll'
   | 'driver-settlement'
+  | 'asset-ownership'
+  | 'finance'
   | 'margin'
   | 'ar-ap'
   | 'exports';
@@ -156,6 +158,22 @@ export const TRANSPORT_SECTIONS = [
     requiredAction: 'transport.vehicle.read',
   },
   {
+    /**
+     * `TX-08` — so dang ky so huu. MUC RIENG, khong phai mot tab trong "Doi xe & lai xe".
+     *
+     * Hai man tra loi hai cau hoi khac nhau cho hai nguoi khac nhau: "Doi xe" tra loi *xe nay chay
+     * duoc khong* (dieu do vien), con man nay tra loi *ai la chu chiec xe nay* (giam doc/ke toan).
+     * Va chung co hai ma quyen rieng, nen gop lam mot tab se lam mot nguoi chi duoc xem ho so xe
+     * nhin thay ca so dang ky so huu.
+     */
+    id: 'asset-ownership',
+    label: 'Sở hữu tài sản',
+    group: 'assets',
+    summary: 'Quyền điều hành, sổ đăng ký sở hữu từng xe, hồ sơ bên hữu quan và lịch sử.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.asset_ownership.read',
+  },
+  {
     id: 'payroll',
     label: 'Lương',
     group: 'assets',
@@ -178,6 +196,21 @@ export const TRANSPORT_SECTIONS = [
      */
     requiredCapabilities: ['transport-costing', 'transport-workforce'],
     requiredAction: 'transport.driver_settlement.read',
+  },
+  {
+    id: 'finance',
+    label: 'Bảng tài chính',
+    group: 'reports',
+    summary: 'Doanh thu, biên trực tiếp, và sáu dòng tiền giữ riêng — không cộng chung.',
+    /**
+     * KHONG mot ma quyen moi: bang doc chinh `arAging`/`apByCounterparty`/`directMarginRollup` cua
+     * bao cao quyet toan, roi bay chung canh nhau. Xem `FinanceController`.
+     *
+     * Cong `TX-07b` la TUY CHON o tang doc, nen o day chi khai `transport-settlement`: mot khach
+     * khong tinh luong van co bang, chi thieu hai o cuoi va bang noi ra dieu do.
+     */
+    requiredCapabilities: ['transport-settlement'],
+    requiredAction: 'transport.settlement.report.read',
   },
   {
     id: 'margin',

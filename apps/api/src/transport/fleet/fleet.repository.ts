@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { VehicleOperationalControl } from '../asset-ownership/asset-ownership.types.js';
 import type {
   Driver,
   DriverStatus,
@@ -19,11 +20,21 @@ export interface CreateVehicleInput {
   readonly status?: VehicleStatus;
 }
 
+/**
+ * Hai truong `TX-08` co mat o day va KHONG co o `updateVehicleSchema`.
+ *
+ * Do la ranh gioi co chu dich: tang LUU TRU phai ghi duoc hai cot nay (chung nam tren bang xe),
+ * nhung be mat HTTP cua doi xe khong duoc mo chung ra. Duong ghi duy nhat di qua
+ * `AssetOwnershipService`, vi doi quyen dieu hanh va khai so dang ky day du la hai quyet dinh phai
+ * duoc kiem cung bat bien tong so huu — `asset-ownership.service.spec.ts` khoa dieu do.
+ */
 export interface UpdateVehicleInput {
   readonly vehicleClass?: string;
   readonly allowedPayloadKg?: number | null;
   readonly currentOdoKm?: number;
   readonly status?: VehicleStatus;
+  readonly operationalControl?: VehicleOperationalControl;
+  readonly ownershipRegisterComplete?: boolean;
 }
 
 export interface CreateDriverInput {
@@ -161,6 +172,10 @@ export class InMemoryFleetRepository extends FleetRepository {
       allowedPayloadKg: input.allowedPayloadKg ?? null,
       currentOdoKm: input.currentOdoKm ?? 0,
       status: input.status ?? 'IDLE',
+      // `TX-08`: mot xe moi la xe B dieu hanh cho toi khi co nguoi noi khac, va so dang ky so huu
+      // cua no chua duoc khai la day du. Ca hai mac dinh trung voi `DEFAULT` cua Postgres.
+      operationalControl: 'INTERNAL_OPERATED',
+      ownershipRegisterComplete: false,
       createdAt: at,
       updatedAt: at,
     };

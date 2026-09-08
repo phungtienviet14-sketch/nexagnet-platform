@@ -92,6 +92,15 @@ export interface TripAssignment {
   readonly createdAt: string;
 }
 
+/**
+ * AI DIEU HANH mot xe (`TX-08`) — TRUC DOC LAP voi quyen so huu.
+ *
+ * Mot xe dong so huu ma B van dieu hanh la `INTERNAL_OPERATED`. Man hinh KHONG duoc suy
+ * "co ben huu quan => xe nha ngoai": hai truc do tra loi hai cau hoi khac nhau.
+ */
+export const VEHICLE_OPERATIONAL_CONTROLS = ['INTERNAL_OPERATED', 'EXTERNAL_CARRIER'] as const;
+export type VehicleOperationalControl = (typeof VEHICLE_OPERATIONAL_CONTROLS)[number];
+
 export interface Vehicle {
   readonly id: string;
   readonly registrationPlate: string;
@@ -99,8 +108,83 @@ export interface Vehicle {
   readonly allowedPayloadKg: number | null;
   readonly currentOdoKm: number;
   readonly status: VehicleStatus;
+  /** `TX-08` — chi DOC o day; duong ghi di qua man So huu tai san. */
+  readonly operationalControl: VehicleOperationalControl;
+  readonly ownershipRegisterComplete: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * `TX-08` SO HUU TAI SAN (#242 Lane E)
+ * ------------------------------------------------------------------ */
+
+export const ASSET_STAKEHOLDER_KINDS = ['PERSON', 'ORGANIZATION'] as const;
+export type AssetStakeholderKind = (typeof ASSET_STAKEHOLDER_KINDS)[number];
+
+/** Toan bo mot chiec xe = 10000 diem co ban. KHONG phai `100`, va khong phai `1.0`. */
+export const OWNERSHIP_BASIS_POINTS_TOTAL = 10_000;
+
+/**
+ * BEN HUU QUAN. `hasAccount` noi CO tai khoan hay khong — may chu KHONG tra ve la tai khoan nao,
+ * va man hinh khong duoc doi hoi dieu do.
+ */
+export interface AssetStakeholder {
+  readonly id: string;
+  readonly kind: AssetStakeholderKind;
+  readonly displayName: string;
+  readonly status: PartyStatus;
+  readonly note: string | null;
+  readonly hasAccount: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface VehicleOwnershipInterest {
+  readonly id: string;
+  readonly vehicleId: string;
+  readonly stakeholderId: string;
+  readonly stakeholderName: string;
+  readonly stakeholderKind: AssetStakeholderKind;
+  readonly ownershipBasisPoints: number;
+  readonly effectiveFrom: string;
+  readonly effectiveTo: string | null;
+  readonly recordedBy: string;
+  readonly recordedNote: string | null;
+  readonly closedBy: string | null;
+  readonly closedNote: string | null;
+  readonly createdAt: string;
+}
+
+export interface VehicleOwnershipRegister {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly operationalControl: VehicleOperationalControl;
+  readonly registerComplete: boolean;
+  readonly current: readonly VehicleOwnershipInterest[];
+  readonly currentBasisPointsTotal: number;
+  readonly unattributedBasisPoints: number;
+  readonly history: readonly VehicleOwnershipInterest[];
+}
+
+export interface StakeholderOwnershipPeriod {
+  readonly ownershipBasisPoints: number;
+  readonly effectiveFrom: string;
+  readonly effectiveTo: string | null;
+}
+
+/** Khung nhin "Xe toi co co phan". Danh sach truong la mot QUYET DINH BAO MAT — xem #242 E3. */
+export interface StakeholderVehicleView {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly vehicleClass: string;
+  readonly status: string;
+  readonly operationalControl: VehicleOperationalControl;
+  readonly currentOdoKm: number;
+  readonly myBasisPoints: number;
+  readonly myEffectiveFrom: string;
+  readonly myHistory: readonly StakeholderOwnershipPeriod[];
+  readonly driverName: string | null;
 }
 
 export interface Driver {
@@ -1561,4 +1645,70 @@ export interface ControlTowerView {
   readonly queueTotal: number;
   readonly unavailableSources: readonly ControlTowerSource[];
   readonly pendingWork: readonly PendingActionQueueEntry[];
+}
+
+/* ------------------------------------------------------------------ *
+ * BANG TAI CHINH — `GET /transport/finance/summary` (Lane G, #244 G5)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/finance/finance-summary.ts`.
+ *
+ * BA thu de doc sai o day, ghi ra mot lan:
+ *
+ *   · `flows` co BON khoa va KHONG BAO GIO duoc cong lai (`GD-15`, `INV-23`). `CUSTOMER_FREIGHT`
+ *     la mot khoan PHAI THU; ba khoa con lai la PHAI TRA. Cong chung cho ra mot con so khong ai
+ *     nợ ai cả.
+ *   · `driverReimbursementOutstanding` (cong ty no lai xe, `TX-03`) va `driverSettlementRemaining`
+ *     (luong da ghi nhan chua rut, `TX-07b`) la HAI khoan khac nhau. Gop chung se lam mot lan chi
+ *     hoan ung trong nhu mot lan tra luong.
+ *   · `marginBasisPoints` la DIEM CO BAN: `4000` = 40%. Hien thi thang se ra "4000%".
+ */
+export type SettlementFlowAmounts = Readonly<Record<SettlementFlow, number>>;
+
+export interface SettlementBuckets {
+  readonly flows: SettlementFlowAmounts;
+  readonly driverReimbursementOutstanding: number;
+  readonly driverSettlementRemaining: number;
+}
+
+/**
+ * BIEN TRUC TIEP — hai truong cuoi la mot HOP DONG, khong phai sieu du lieu.
+ *
+ * `GD-13` doi cau "chua gom chi phi co dinh" di kem con so, va #244 G5 cam goi day la lai rong.
+ * Man hinh phai hien `disclosure` canh `marginAmount`, khong duoc bo di cho gon.
+ */
+export interface DirectMarginRollup {
+  readonly revenueAmount: number;
+  readonly deductionAmount: number;
+  readonly marginAmount: number;
+  /** DIEM CO BAN. `null` khi doanh thu bang 0 — khong chia duoc. */
+  readonly marginBasisPoints: number | null;
+  readonly tripCount: number;
+  /** Chuyen chua co gia cuoc, bi BO QUA chu khong coi la 0. */
+  readonly skippedTripCount: number;
+  readonly fixedCostsIncluded: false;
+  readonly disclosure: string;
+}
+
+export interface FinanceCurrencyCoverage {
+  readonly codes: readonly string[];
+  /** `false` = du lieu co nhieu hon mot ma tien, cac tong KHONG doc thang duoc. */
+  readonly isSingle: boolean;
+}
+
+export interface FinanceReceivableSummary {
+  readonly outstandingTotal: number;
+  readonly overdueTotal: number;
+}
+
+export type FinanceSource = 'DRIVER_SETTLEMENT';
+
+export interface FinanceSummaryView {
+  readonly generatedFor: BusinessDate;
+  readonly buckets: SettlementBuckets;
+  readonly directMargin: DirectMarginRollup;
+  readonly receivable: FinanceReceivableSummary;
+  readonly currency: FinanceCurrencyCoverage;
+  readonly unavailableSources: readonly FinanceSource[];
 }

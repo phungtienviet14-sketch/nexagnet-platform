@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
 import { InMemoryGeofenceRepository } from './geofence.repository.js';
 import { GeofenceService } from './geofence.service.js';
-import { InMemoryOperationalProofRepository } from './operational-proof.repository.js';
+import {
+  InMemoryOperationalProofRepository,
+  InMemoryProofChallengeRepository,
+} from './operational-proof.repository.js';
 import { OperationalProofService } from './operational-proof.service.js';
 import { ProofReviewController } from './proof-review.controller.js';
 import { DEFAULT_TRANSPORT_PROOF_POLICY } from './tracking-policy.js';
@@ -79,6 +82,8 @@ describe('Bien gioi HTTP cua be mat nguoi duyet — PROOF-100', () => {
       tracking,
       facts,
       { timeZone: 'Asia/Ho_Chi_Minh' },
+      new InMemoryProofChallengeRepository(),
+      DEFAULT_TRANSPORT_PROOF_POLICY,
       undefined,
       () => T0,
     );

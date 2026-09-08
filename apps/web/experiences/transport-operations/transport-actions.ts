@@ -144,6 +144,12 @@ export const TRANSPORT_ACTIONS = [
   'transport.driver.self.tracking.stop',
   /** Chung cu bat dau/giao hang CUA CHINH MINH — mot ma cho ca hai loai. */
   'transport.driver.self.proof.record',
+  /** MOC VAN HANH CUA CHINH MINH — mot ma cho ca chin loai moc (`#243` F5). */
+  'transport.driver.self.checkpoint.record',
+  /** DONG THOI GIAN cua mot chuyen — moc, giai doan tung chang, canh bao. KHONG toa do. */
+  'transport.checkpoint.read',
+  /** GHI moc tu be mat van hanh — `ASSIGNED` va cac moc bu. KHONG kem chung cu vi tri. */
+  'transport.checkpoint.record',
   /** TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do. */
   'transport.tracking.read',
   /** TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
@@ -160,6 +166,10 @@ export const TRANSPORT_ACTIONS = [
   'transport.location.history.read',
   'transport.geofence.read',
   'transport.geofence.manage',
+  /* --- `TX-08` SO HUU TAI SAN (Lane E, Issue #242) --- */
+  'transport.asset_ownership.read',
+  'transport.asset_ownership.manage',
+  'transport.stakeholder.self.vehicle.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -178,11 +188,27 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.tracking.report',
   'transport.driver.self.tracking.stop',
   'transport.driver.self.proof.record',
+  'transport.driver.self.checkpoint.record',
 ];
 
-/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
+/**
+ * PHAM VI BEN HUU QUAN (`TX-08`) — chep nguyen tu API.
+ *
+ * KHONG vai nao cap cac ma nay, va do khong phai mot thieu sot: pham vi "Xe toi co co phan" den tu
+ * mot hang `TransportAssetStakeholder.authUserId`, khong tu mot chuc danh. Xem khoi
+ * `STAKEHOLDER_SCOPE_ACTIONS` trong `apps/api/src/transport/transport-actions.ts`.
+ *
+ * Hau qua o phia man hinh: `canPerform` tra `false` cho moi vai, nen KHONG duoc dung no lam dieu
+ * kien hien be mat ben huu quan. Dieu kien dung la API tra ve du lieu hay `403`.
+ */
+export const STAKEHOLDER_SCOPE_ACTIONS: readonly TransportAction[] = [
+  'transport.stakeholder.self.vehicle.read',
+];
+
+/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe va pham vi ben huu quan. */
 const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
-  (action): action is TransportAction => !SELF_SCOPE_ACTIONS.includes(action),
+  (action): action is TransportAction =>
+    !SELF_SCOPE_ACTIONS.includes(action) && !STAKEHOLDER_SCOPE_ACTIONS.includes(action),
 );
 
 /**
@@ -202,6 +228,13 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * Chep nguyen tu API; xem khoi chu thich ben do cho ly do day du.
    */
   'transport.location.history.read',
+  /**
+   * GHI moc van hanh (`#243` F1) — Ke toan DOC duoc dong thoi gian, KHONG ghi duoc moc.
+   *
+   * Phan cong nhiem vu: F4 dat phu cap cho tren mot con so do duoc tu chinh chuoi moc, nen nguoi
+   * DUYET khoan tien do khong duoc sua can cu sinh ra no. Chep nguyen tu API.
+   */
+  'transport.checkpoint.record',
   /**
    * Ke toan DOC duoc chung cu — do la ca cong viec cua ho — nhung RUT mot chung cu la viec khac:
    * go bo mot muc khoi chinh ho so minh dang doi soat.
