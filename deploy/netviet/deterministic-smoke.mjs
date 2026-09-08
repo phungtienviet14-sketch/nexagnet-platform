@@ -289,6 +289,53 @@ async function probeTurnRecords() {
   record('orders', `${rows.length}-ban-ghi`);
 }
 
+/**
+ * BE MAT DE NGHI DIEU XE — `#277` Lane M. CHI DOC, va co y chi kiem HOP DONG.
+ *
+ * ============================================================================================
+ * VI SAO PHEP DO NAY KHONG TAO MOT HANG DU LIEU NAO
+ *
+ * Tang nay chay tren MOI stack, ke ca stack cua khach that. `#274` cam tuyet doi viec doi du lieu
+ * cua khach, nen mot phep do "tao don roi hoi de nghi" la khong duoc phep o day — du no chung minh
+ * nhieu hon. Va mot phep do phu thuoc du lieu cua khach con te hon: no bien mot stack chua khai
+ * hang rao thanh mot lan deploy DO, vi mot ly do khong lien quan gi den ban phat hanh.
+ *
+ * Nen no hoi bang MOT ma don KHONG CO THAT va doi dung mot cau tra loi: 404.
+ *
+ * Cai do chung minh duoc ba dieu, va ca ba deu la nhung dieu tung hong that:
+ *
+ *   1. ROUTE CO THAT tren ban dang chay — `POST /transport/orders/:id/dispatch-suggestions` da
+ *      duoc gan va di qua duoc Caddy. Mot hang so trong danh sach hanh dong KHONG chung minh
+ *      dieu do (da xay ra: khai xong ma khong co duong HTTP).
+ *   2. PHIEN DANG NHAP DI QUA DUOC cong hanh dong cua mien — neu quyen thieu thi day la 403 chu
+ *      khong phai 404.
+ *   3. MA LA THI FAIL-CLOSED — `#277 M13`: *"unknown/foreign Order/vehicle IDs fail closed"*.
+ *
+ * Cai no KHONG chung minh, va khong gia vo chung minh: thu tu xep hang, km rong, hay phep chieu
+ * "xe se ranh". Ba thu do do bo bai kiem thu va bo integration tren Postgres that lo.
+ */
+async function probeDispatchSuggestions() {
+  if (!has('transport-core')) {
+    record('dispatch', 'bo-qua(khong-co-transport-core)');
+    return;
+  }
+  const response = await fetch(
+    `${baseUrl}/transport/orders/smoke-khong-co-that/dispatch-suggestions`,
+    {
+      method: 'POST',
+      headers: headers({ 'Content-Type': 'application/json' }, true),
+      body: JSON.stringify({}),
+    },
+  );
+  if (response.status !== 404) {
+    throw new SmokeFailure(
+      'DISPATCH_CONTRACT_FAILED',
+      `/transport/orders/:id/dispatch-suggestions voi ma la tra HTTP ${response.status}, doi 404`,
+    );
+  }
+  record('dispatch', 'ma-la=404');
+}
+
 /** SSE cua console. Mo duoc la du: noi dung su kien thuoc duong co LLM, khong thuoc tang nay. */
 async function probeStream() {
   if (!has('turn-processing')) {
@@ -321,6 +368,7 @@ async function main() {
   const readinessChecks = await probeReadiness();
   const knowledgeProducts = await probeKnowledge();
   await probeTurnRecords();
+  await probeDispatchSuggestions();
   await probeStream();
 
   // PHA SAU KHOI DONG LAI: du lieu phai con y nguyen. Day la phep do ben vung duy nhat khong can
