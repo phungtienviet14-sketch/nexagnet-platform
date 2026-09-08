@@ -25,7 +25,8 @@
     "transport-workforce",
     "transport-proof",
     "transport-checkpoint",
-    "transport-site-intake"
+    "transport-site-intake",
+    "transport-toll"
   ],
   "policies": {
     "transportCore": {
