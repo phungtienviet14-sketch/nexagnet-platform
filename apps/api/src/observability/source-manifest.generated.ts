@@ -371,6 +371,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/checkpoint/checkpoints.controller.ts",
       "line": 55
     },
+    "transport.commercial_acceptance.decide": {
+      "functionName": "CommercialAcceptanceController.decide",
+      "filePath": "apps/api/src/transport/acceptance/commercial-acceptance.controller.ts",
+      "line": 102
+    },
+    "transport.commercial_acceptance.read": {
+      "filePath": "apps/api/src/transport/acceptance/commercial-acceptance.controller.ts"
+    },
     "transport.compliance.document.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
     },
@@ -739,6 +747,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "checkpoint.record|*": {
       "filePath": "apps/api/src/transport/checkpoint/checkpoint.service.ts"
+    },
+    "commercial_acceptance.decide|*": {
+      "filePath": "apps/api/src/transport/acceptance/acceptance.service.ts"
+    },
+    "commercial_acceptance.decide|ACCEPTANCE_REPLAYED": {
+      "functionName": "CommercialAcceptanceService.decide",
+      "filePath": "apps/api/src/transport/acceptance/acceptance.service.ts",
+      "line": 141
     },
     "commission.select|*": {
       "functionName": "SettlementService.recogniseCommission",

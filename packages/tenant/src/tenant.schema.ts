@@ -257,6 +257,18 @@ export const CAPABILITY_IDS = [
    * HAI phu thuoc, va ca hai deu that — xem `transport-checkpoint.module.ts`.
    */
   'transport-checkpoint',
+  /**
+   * NGHIEM THU CHUNG TU / THUONG MAI (Issue #268 Lane I) — ho so nghiem thu cua mot vong chay,
+   * lich su quyet dinh chi-ghi-them, va phep suy "du dieu kien di vao mot ky doi soat moi".
+   *
+   * MOT CAPABILITY RIENG, nhung KHAC ba capability truoc no o mot diem: no khong tuy chon doi voi
+   * khach da bat `transport-settlement`. Xem khoi phu thuoc ben duoi — day la mot CONG TAI CHINH,
+   * va mot cong tai chinh co che do tat thi khong con la mot cong.
+   *
+   * Van tach rieng chu khong nhet vao `transport-settlement`, vi chieu phu thuoc phai di mot chieu:
+   * quyet toan DOC nghiem thu, nghiem thu khong bao gio nhin thay so tien.
+   */
+  'transport-acceptance',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -650,7 +662,7 @@ const capabilityRequirements = {
    * phu thuoc that cua settlement van con nguyen o day thay vi bien mat cung mot dong bi xoa.
    */
   'transport-settlement': {
-    dependencies: ['transport-core', 'transport-costing', 'transport-fuel'],
+    dependencies: ['transport-core', 'transport-costing', 'transport-fuel', 'transport-acceptance'],
   },
   /**
    * MOT phu thuoc, va do la khac biet lon nhat trong cay van tai.
@@ -706,6 +718,19 @@ const capabilityRequirements = {
    * nen khai se bien mot khoi tuy chon thanh mot dieu kien boot. Cung ly le voi `transport-proof`.
    */
   'transport-checkpoint': { dependencies: ['transport-core', 'transport-proof'] },
+  /**
+   * MOT phu thuoc HOM NAY, va con so do la mot su that da do chu khong mot lua chon.
+   *
+   * `CommercialAcceptanceService` doc DUNG hai thu, ca hai deu thuoc `transport-core`: vong chay
+   * (`MovementRepository`) va phap nhan (`CounterpartyRepository`). No KHONG doc moc van hanh —
+   * `#243` F2 chua vao `main`, nen cong chung tu (`AcceptanceEvidenceFacts`) dang duoc buoc vao
+   * mot adapter FAIL-CLOSED khong doc gi ca.
+   *
+   * Khai `transport-checkpoint` o day HOM NAY se bien mot phu thuoc CHUA CO THAT thanh mot dieu
+   * kien boot — dung dieu ma bon khoi chu thich ben tren canh bao. Khi F2 hoan tat va adapter
+   * chung tu duoc buoc that, dong nay them mot phan tu, va luc do no moi dung.
+   */
+  'transport-acceptance': { dependencies: ['transport-core'] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {

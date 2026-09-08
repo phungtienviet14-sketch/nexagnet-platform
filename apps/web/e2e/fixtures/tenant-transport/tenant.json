@@ -20,7 +20,8 @@
     "transport-core",
     "transport-costing",
     "transport-fuel",
-    "transport-settlement"
+    "transport-settlement",
+    "transport-acceptance"
   ],
   "policies": {
     "readiness": {

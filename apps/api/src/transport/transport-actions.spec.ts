@@ -138,6 +138,8 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.asset_ownership.manage',
       // Pham vi CUA CHINH MINH cua ben huu quan — CHI DOC, va KHONG cap qua vai nao.
       'transport.stakeholder.self.vehicle.read',
+      'transport.commercial_acceptance.read',
+      'transport.commercial_acceptance.decide',
     ]);
   });
 

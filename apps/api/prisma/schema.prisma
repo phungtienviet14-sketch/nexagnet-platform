@@ -3379,6 +3379,8 @@ model TransportCounterparty {
   updatedAt DateTime             @updatedAt
 
   links TransportCounterpartyLink[]
+  /// Lane I (#268): cac ho so nghiem thu ghi nhan phap nhan nay la ben A.
+  acceptances TransportCommercialAcceptance[]
 
   @@index([status])
 }
@@ -3702,6 +3704,8 @@ model TransportVehicleRun {
   expenseClaims TransportExpenseClaim[]
   /// F1 (#243): moc van hanh cua vong chay nay.
   checkpoints   TransportRunCheckpoint[]
+  /// Lane I (#268): ho so nghiem thu chung tu. TOI DA MOT — xem `runId @unique` ben duoi.
+  acceptance    TransportCommercialAcceptance?
 
   @@index([status])
   @@index([businessDate])
@@ -4436,4 +4440,117 @@ model TransportVehicleOwnershipInterest {
 
   @@index([vehicleId, effectiveTo])
   @@index([stakeholderId, effectiveTo])
+}
+
+// ----- Transport domain: NGHIEM THU CHUNG TU / THUONG MAI (capability `transport-acceptance`,
+// Issue #268 Lane I) -----
+//
+// TRUC THU HAI, KHONG PHAI MOT TRANG THAI MOI CUA VONG CHAY.
+//
+//     TransportVehicleRun.status = COMPLETED   =  xe da chay xong
+//     nghiem thu APPROVED                      =  B da co chung tu duoc A xac nhan
+//
+// Hai cau do do hai nguoi khac nhau tra loi, o hai thoi diem khac nhau. `TransportVehicleRun` giu
+// nguyen bon trang thai cua Lane A va KHONG duoc noi them mot gia tri nao.
+//
+// `PENDING` KHONG CO TRONG ENUM, va do la co y: no la SU VANG MAT cua mot hang, khong phai mot gia
+// tri phai ghi. Nho vay Lane I khong phai cam mot duong ghi nao vao luong van hanh (khong sua
+// `MovementService`, khong dung vao lich su moc cua #243), va mot vong chay chua ai nghiem thu thi
+// mac dinh KHONG du dieu kien doi soat.
+//
+// CANH BAO — TRIGGER CHI-GHI-THEM KHONG CO TRONG TEP NAY. No song trong SQL tho cua migration
+// `20260910090000_transport_commercial_acceptance`, cung ly do voi `TransportRunCheckpoint`:
+// Prisma khong co cu phap cho TRIGGER, va `prisma migrate dev` SE sinh lenh xoa no neu ai do chay
+// roi commit thang. `transport-commercial-acceptance-storage.spec.ts` doc chinh tep migration do.
+
+enum TransportCommercialAcceptanceOutcome {
+  APPROVED
+  REJECTED
+  NEEDS_CORRECTION
+}
+
+/// CAN CU cua mot lan duyet. #268 I2 goi ten duong thu hai:
+/// *"support an explicit auditable EXTERNAL_PHYSICAL_CONFIRMATION basis rather than inventing a
+/// fake file"*. Mot he thong chi cho phep DOCUMENT se day nguoi dung toi viec tai len mot tam anh
+/// bat ky de qua cong — tuc bien mot rang buoc thanh mot nghi thuc.
+enum TransportCommercialAcceptanceBasis {
+  DOCUMENT
+  EXTERNAL_PHYSICAL_CONFIRMATION
+}
+
+/// HO SO nghiem thu cua MOT vong chay — chu the + hinh chieu trang thai hien tai.
+///
+/// `state` KHONG phai mot co `boolean` mat lich su. No la hinh chieu cua quyet dinh moi nhat, va no
+/// chi duoc ghi trong CUNG MOT giao dich voi viec them mot hang `...Decision`. Dung khuon da chay
+/// cua `TransportExpenseClaim.status` + `TransportExpenseClaimDecision`.
+///
+/// `runId @unique`: MOT vong chay, MOT ho so. Neu khong unique thi hai lan bam se tao hai ho so cho
+/// cung mot chuyen, va cau hoi "chuyen nay da duoc nghiem thu chua" co hai cau tra loi.
+model TransportCommercialAcceptance {
+  id               String                              @id @default(cuid())
+  runId            String                              @unique
+  run              TransportVehicleRun                 @relation(fields: [runId], references: [id], onDelete: Restrict)
+  state            TransportCommercialAcceptanceOutcome
+  /// Phap nhan ben A khi biet. #268 I1 goi day la truong TUY CHON.
+  counterpartyId   String?
+  counterparty     TransportCounterparty?              @relation(fields: [counterpartyId], references: [id], onDelete: Restrict)
+  /// Ngay nghiep vu cua ho so, tinh MOT lan luc mo theo mui gio tenant. `INV-25`.
+  businessDate     String                              @db.VarChar(10)
+  /// Con tro toi quyet dinh moi nhat. KHONG khai khoa ngoai: mot FK vong lai (ho so -> quyet dinh
+  /// -> ho so) buoc migration phai hoan lai rang buoc, doi lay mot bao dam ma giao dich cua kho da
+  /// cho san. `transport-commercial-acceptance.int.spec.ts` kiem tinh toan ven nay tren DB that.
+  ///
+  /// Cong dung THU HAI cua no quan trong khong kem: no la THE DANH DAU PHIEN BAN. Mot lenh sua phai
+  /// khai `supersedesId` bang DUNG gia tri nay, nen hai nguoi cung bam thi nguoi thu hai bi tu choi
+  /// thay vi ghi de len mot quyet dinh ho chua he nhin thay.
+  latestDecisionId String?
+  openedBy         String
+  createdAt        DateTime                            @default(now())
+  updatedAt        DateTime                            @updatedAt
+
+  decisions TransportCommercialAcceptanceDecision[]
+
+  @@index([state, businessDate])
+  @@index([counterpartyId])
+}
+
+/// LICH SU QUYET DINH — CHI GHI THEM, cuong che bang TRIGGER o DB.
+///
+/// Manh hon khuon cua `TransportExpenseClaimDecision` (chi giu ky luat o tang kho) mot bac, va co
+/// ly do: hang o day quyet dinh mot cong TAI CHINH. #268 I7 bai 11 doi chung minh
+/// *"Approved decision cannot be silently edited after settlement lock"* — mot TRIGGER chung minh
+/// duoc dieu do ke ca voi mot cau `UPDATE` viet tay tren psql, mot doan ma dich vu khong chung
+/// minh duoc.
+///
+/// Vi trigger chan CA `DELETE`, khoa ngoai la `Restrict` chu khong `Cascade`: mot lenh xoa day
+/// chuyen se that bai o trigger thay vi that bai o FK, va thong diep loi noi dung ly do. Cung quy
+/// uoc voi `TransportRunCheckpoint`, va cung ly do no khong nam trong duong reset demo.
+model TransportCommercialAcceptanceDecision {
+  id             String                              @id @default(cuid())
+  acceptanceId   String
+  acceptance     TransportCommercialAcceptance       @relation(fields: [acceptanceId], references: [id], onDelete: Restrict)
+  /// Bat dau tu 1, duy nhat trong mot ho so. Tinh BEN TRONG giao dich; unique la luoi cuoi.
+  sequence       Int
+  outcome        TransportCommercialAcceptanceOutcome
+  /// MA co kieu de loc duoc, khong phai cau chu. Cung do rong voi `TransportExpenseClaimDecision`.
+  reasonCode     String                              @db.VarChar(60)
+  basis          TransportCommercialAcceptanceBasis
+  /// Khoa DUC cua chung tu lam can cu. RONG khi can cu la `EXTERNAL_PHYSICAL_CONFIRMATION`.
+  /// KHONG phai duong dan bucket — quy uoc giong `TransportProofPhoto.locator`.
+  evidenceRefs   String[]
+  /// B thuc su nhan/xac nhan cai gi. BAT BUOC o duong khong-co-ban-so (cuong che o tang mien).
+  externalNote   String?
+  /// Quyet dinh ma hang nay SUA. NULL o lan dau. #268 I4: doi y la mot quyet dinh MOI.
+  supersedesId   String?
+  /// Khoa chong ghi trung do ben goi dat. #268 I4: gui lai cung khoa = cung mot hieu qua nghiep vu.
+  idempotencyKey String                              @db.VarChar(120)
+  /// Danh tinh tu PHIEN, khong tu than yeu cau. #268 I3: *"no caller-supplied decidedBy"*.
+  decidedBy      String
+  /// Gio MAY CHU. #268 I7 bai 14: *"Client clock cannot choose approvedAt"*.
+  decidedAt      DateTime                            @default(now())
+
+  @@unique([acceptanceId, sequence], map: "TransportCommercialAcceptanceDecision_sequence_key")
+  @@unique([acceptanceId, idempotencyKey], map: "TransportCommercialAcceptanceDecision_idempotency_key")
+  @@index([acceptanceId])
+  @@index([decidedBy])
 }

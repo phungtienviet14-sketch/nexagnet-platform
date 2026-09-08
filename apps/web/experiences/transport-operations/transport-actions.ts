@@ -170,6 +170,22 @@ export const TRANSPORT_ACTIONS = [
   'transport.asset_ownership.read',
   'transport.asset_ownership.manage',
   'transport.stakeholder.self.vehicle.read',
+
+  /* --- `TX-09` NGHIEM THU CHUNG TU / THUONG MAI (Lane I, Issue #268) --- */
+  /**
+   * DOC hang cho nghiem thu — vong chay da chay xong, dang cho chung tu duoc A xac nhan. Tach khoi
+   * `transport.checkpoint.read`: dong thoi gian moc noi "xe da lam gi, luc nao"; hang cho nay noi
+   * "ho so nao dang cho nguoi co tham quyen ky, va cai gi con thieu".
+   */
+  'transport.commercial_acceptance.read',
+  /**
+   * QUYET DINH nghiem thu — duyet / khong chap nhan / doi bo sung chung tu. Chi Giam doc va Ke toan.
+   *
+   * KHONG co bien the "cua chinh minh": mot lai xe tu nghiem thu chuyen cua chinh minh la dung cai
+   * ma kiem soat noi bo sinh ra de chan. Va no KHONG mo mot duong sua nao vao can cu —
+   * `transport.checkpoint.record` / `transport.proof.withdraw` van nam trong `ACCOUNTING_DENIED`.
+   */
+  'transport.commercial_acceptance.decide',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
