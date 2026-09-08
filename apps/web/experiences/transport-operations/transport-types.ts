@@ -1819,8 +1819,10 @@ export interface JourneyLegView {
   readonly originLabel: string;
   readonly destinationLabel: string;
   readonly businessDate: BusinessDate;
-  /** `null` = CHUA BIET. KHONG duoc hien thi thanh `0`. */
+  /** Km THUC TE. `null` = CHUA BIET. KHONG duoc hien thi thanh `0`. */
   readonly distanceKm: number | null;
+  /** Km DU KIEN luc lap ke hoach (Lane L #276). `null` = chang khong do ke hoach sinh ra. */
+  readonly plannedDistanceKm: number | null;
   readonly startedAt: string | null;
   readonly completedAt: string | null;
   readonly phase: RunLegPhase | null;

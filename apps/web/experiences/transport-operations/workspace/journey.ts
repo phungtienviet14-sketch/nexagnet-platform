@@ -99,6 +99,16 @@ export interface JourneyLegRow {
   /** MA don, hoac mot cau noi ro vi sao khong co. KHONG BAO GIO mot `id`. */
   readonly orderCode: string;
   readonly distanceKm: string;
+  /** Km DU KIEN. `'—'` khi chang khong do ke hoach sinh ra. */
+  readonly plannedDistanceKm: string;
+  /**
+   * DO LECH thuc te so voi ke hoach.
+   *
+   * `'—'` khi THIEU mot trong hai so — mot chang co ke hoach 100km ma thuc te chua nhap thi do
+   * lech la KHONG BIET, khong phai `-100`. Day dung la cho ma mot `?? 0` se de ra mot con so am
+   * to tuong trong mot bao cao ma khong ai kiem lai.
+   */
+  readonly distanceVariance: string;
   readonly phase: string;
   readonly startedAt: string;
   readonly completedAt: string;
@@ -149,6 +159,20 @@ export interface JourneyModel {
 const labelOf = (event: JourneyEvent): string =>
   event.code === 'FUEL_ENTRY' ? 'Đổ dầu' : CHECKPOINT_LABEL[event.code];
 
+/**
+ * DO LECH thuc te - ke hoach, hoac dau gach khi THIEU mot trong hai so.
+ *
+ * `#278` N5 doi tuyen ke hoach phan biet duoc voi tuyen thuc te. Con so o day la nua tren cua yeu
+ * cau do (nua duoi la duong ve tren ban do). Dau `+`/`-` duoc giu ro rang: `+12 km` la chay DAI hon
+ * ke hoach, va do la thu nguoi dieu hanh di hoi lai lai xe.
+ */
+const varianceOf = (planned: number | null, actual: number | null): string => {
+  if (planned === null || actual === null) return EMPTY_VALUE;
+  const delta = actual - planned;
+  if (delta === 0) return 'Đúng kế hoạch';
+  return `${delta > 0 ? '+' : '−'}${formatDistance(Math.abs(delta))}`;
+};
+
 export function toJourney(view: RunJourneyView): JourneyModel {
   const { distance } = view;
 
@@ -166,6 +190,9 @@ export function toJourney(view: RunJourneyView): JourneyModel {
        */
       orderCode: isEmpty ? 'Không có đơn (chặng rỗng)' : (leg.orderCode ?? 'Chưa gắn đơn'),
       distanceKm: leg.distanceKm === null ? EMPTY_VALUE : formatDistance(leg.distanceKm),
+      plannedDistanceKm:
+        leg.plannedDistanceKm === null ? EMPTY_VALUE : formatDistance(leg.plannedDistanceKm),
+      distanceVariance: varianceOf(leg.plannedDistanceKm, leg.distanceKm),
       phase: leg.phase === null ? EMPTY_VALUE : PHASE_LABEL[leg.phase],
       startedAt: formatInstant(leg.startedAt),
       completedAt: formatInstant(leg.completedAt),

@@ -19,6 +19,7 @@ const leg = (over: Partial<JourneyLegView> = {}): JourneyLegView => ({
   destinationLabel: 'Hải Phòng',
   businessDate: TODAY,
   distanceKm: 105,
+  plannedDistanceKm: 100,
   startedAt: `${TODAY}T02:00:00.000Z`,
   completedAt: `${TODAY}T06:00:00.000Z`,
   phase: 'DELIVERED',
@@ -124,6 +125,46 @@ describe('bao cao vong chay — null khong bao gio thanh 0', () => {
     const model = toJourney(view({ legs: [leg({ phase: null })] }));
 
     expect(model.legs[0]?.phase).toBe('—');
+  });
+});
+
+/*
+ * `#278` N5 doi tuyen KE HOACH phan biet duoc voi tuyen THUC TE. Nua duoi la duong ve tren ban do;
+ * nua tren la hai con so canh nhau, va Lane L (#276) vua dua `plannedDistanceKm` vao.
+ */
+describe('ke hoach vs thuc te — do lech chi hien khi CO ca hai so', () => {
+  it('du ca hai so thi hien do lech kem dau', () => {
+    const model = toJourney(view({ legs: [leg({ plannedDistanceKm: 100, distanceKm: 112 })] }));
+
+    expect(model.legs[0]?.plannedDistanceKm).toContain('100');
+    expect(model.legs[0]?.distanceVariance).toContain('+');
+    expect(model.legs[0]?.distanceVariance).toContain('12');
+  });
+
+  it('chay ngan hon ke hoach thi dau la dau TRU, khong phai mot so am tran', () => {
+    const model = toJourney(view({ legs: [leg({ plannedDistanceKm: 120, distanceKm: 100 })] }));
+
+    expect(model.legs[0]?.distanceVariance).toContain('−');
+    expect(model.legs[0]?.distanceVariance).toContain('20');
+  });
+
+  it('bang nhau thi noi thanh chu, khong hien mot so 0 vo nghia', () => {
+    const model = toJourney(view({ legs: [leg({ plannedDistanceKm: 100, distanceKm: 100 })] }));
+
+    expect(model.legs[0]?.distanceVariance).toBe('Đúng kế hoạch');
+  });
+
+  /*
+   * Day la cho ma mot `?? 0` se de ra mot con so am to tuong trong bao cao: chang co ke hoach
+   * 100km ma thuc te chua nhap se thanh `-100 km`, va khong ai kiem lai mot con so trong mot bang.
+   */
+  it('thieu MOT trong hai so thi do lech la dau gach, khong phai mot con so am', () => {
+    const noActual = toJourney(view({ legs: [leg({ plannedDistanceKm: 100, distanceKm: null })] }));
+    const noPlan = toJourney(view({ legs: [leg({ plannedDistanceKm: null, distanceKm: 100 })] }));
+
+    expect(noActual.legs[0]?.distanceVariance).toBe('—');
+    expect(noPlan.legs[0]?.distanceVariance).toBe('—');
+    expect(noPlan.legs[0]?.plannedDistanceKm).toBe('—');
   });
 });
 

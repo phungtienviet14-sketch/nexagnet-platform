@@ -9,7 +9,7 @@ import {
   JourneyLocationFacts,
 } from './journey-facts.port.js';
 import type { RunCheckpoint } from '../checkpoint/checkpoint.types.js';
-import type { RunLegPhase } from '../checkpoint/run-timeline.js';
+import type { RunTimeline } from '../checkpoint/run-timeline.js';
 import type {
   RunAssignment,
   RunLeg,
@@ -67,26 +67,34 @@ export class JourneyReadService {
 
     const orderCodeById = new Map(orders.map((order) => [order.id, order.code] as const));
     const tripByLeg = new Map(tripLinks.map((link) => [link.legId, link.tripId] as const));
-    const phases = await this.readPhases(run.id, unavailableSources);
 
-    const legViews = legs.map(
-      (leg): JourneyLegView => ({
-        legId: leg.id,
-        sequence: leg.sequence,
-        kind: leg.kind,
-        status: leg.status,
-        orderCode: leg.orderId === null ? null : (orderCodeById.get(leg.orderId) ?? null),
-        originLabel: leg.originLabel,
-        destinationLabel: leg.destinationLabel,
-        businessDate: leg.businessDate,
-        distanceKm: leg.distanceKm,
-        startedAt: leg.startedAt,
-        completedAt: leg.completedAt,
-        phase: phases?.[leg.id] ?? null,
-      }),
-    );
+    /*
+     * MOT lan doc dong thoi gian cho CA giai doan chang lan dong su kien.
+     *
+     * Hai lan goi `timelineForRun()` cach nhau vai chuc mili giay co the tra ve hai hien truong
+     * khac nhau — luc do bang chang se noi mot dang con dong thoi gian noi mot dang khac, tren cung
+     * mot man hinh. Va no la mot lan doc kho thua tren dung man hinh nguoi truc mo lai nhieu nhat.
+     */
+    const timeline = await this.readTimeline(run.id, unavailableSources);
 
-    const timeline = await this.buildTimeline(run.id, tripByLeg, unavailableSources);
+    const legViews = legs.map((leg): JourneyLegView => ({
+      legId: leg.id,
+      sequence: leg.sequence,
+      kind: leg.kind,
+      status: leg.status,
+      orderCode: leg.orderId === null ? null : (orderCodeById.get(leg.orderId) ?? null),
+      originLabel: leg.originLabel,
+      destinationLabel: leg.destinationLabel,
+      businessDate: leg.businessDate,
+      distanceKm: leg.distanceKm,
+      plannedDistanceKm: leg.plannedDistanceKm,
+      startedAt: leg.startedAt,
+      completedAt: leg.completedAt,
+      phase: timeline?.legPhases[leg.id] ?? null,
+    }));
+
+    const events = this.timelineEvents(timeline);
+    const fuelEvents = await this.fuelEvents(tripByLeg, unavailableSources);
 
     return {
       run: {
@@ -110,7 +118,10 @@ export class JourneyReadService {
         ...new Set(legViews.flatMap((leg) => (leg.orderCode === null ? [] : [leg.orderCode]))),
       ].sort(),
       legs: legViews,
-      timeline,
+      timeline: [...events, ...fuelEvents].sort(
+        (left, right) =>
+          left.at.localeCompare(right.at) || left.subjectId.localeCompare(right.subjectId),
+      ),
       unavailableSources,
     };
   }
@@ -259,70 +270,62 @@ export class JourneyReadService {
     return result;
   }
 
-  /** Giai doan tung chang — cung nguon voi bang dieu hanh, khong mot phep suy thu hai. */
-  private async readPhases(
+  /** MOT lan doc dong thoi gian. `null` = khong co nguon moc. */
+  private async readTimeline(
     runId: string,
     unavailable: JourneySource[],
-  ): Promise<Readonly<Record<string, RunLegPhase>> | null> {
+  ): Promise<RunTimeline | null> {
     const checkpoints = this.checkpoints;
     if (!checkpoints) {
       unavailable.push('CHECKPOINT');
       return null;
     }
-    return (await checkpoints.timelineForRun(runId)).legPhases;
+    return checkpoints.timelineForRun(runId);
   }
 
   /**
-   * DONG THOI GIAN — moc truoc, roi tron phieu do dau vao dung cho theo gio.
+   * MOC -> su kien tren dong thoi gian.
    *
-   * Moc muc vong chay VAO day (khac voi hinh hoc): `DEPARTED` la mot su kien co that cua vong chay,
+   * Moc muc VONG CHAY vao day (khac voi hinh hoc): `DEPARTED` la mot su kien co that cua vong chay,
    * va bo no di se lam dong thoi gian bat dau tu giua duong.
    */
-  private async buildTimeline(
-    runId: string,
+  private timelineEvents(timeline: RunTimeline | null): readonly JourneyEvent[] {
+    if (timeline === null) return [];
+    return timeline.entries.map((entry) => ({
+      kind: 'CHECKPOINT' as const,
+      code: entry.type,
+      at: entry.at.toISOString(),
+      legId: entry.legId,
+      hasLocationProof: entry.hasLocationProof,
+      subjectId: entry.checkpointId,
+    }));
+  }
+
+  private async fuelEvents(
     tripByLeg: ReadonlyMap<string, string>,
     unavailable: JourneySource[],
   ): Promise<readonly JourneyEvent[]> {
-    const events: JourneyEvent[] = [];
-
-    const checkpoints = this.checkpoints;
-    if (checkpoints !== undefined) {
-      const timeline = await checkpoints.timelineForRun(runId);
-      for (const entry of timeline.entries) {
-        events.push({
-          kind: 'CHECKPOINT',
-          code: entry.type,
-          at: entry.at.toISOString(),
-          legId: entry.legId,
-          hasLocationProof: entry.hasLocationProof,
-          subjectId: entry.checkpointId,
-        });
-      }
-    }
-
     const fuel = this.fuel;
     if (!fuel) {
       unavailable.push('FUEL');
-    } else {
-      for (const [legId, tripId] of tripByLeg) {
-        for (const entry of await fuel.listEntriesByTrip(tripId)) {
-          events.push({
-            kind: 'FUEL',
-            code: 'FUEL_ENTRY',
-            at: entry.occurredAt,
-            legId,
-            /* Mot phieu do dau khong mang ban dinh vi — noi that thay vi de trong. */
-            hasLocationProof: false,
-            subjectId: entry.id,
-          });
-        }
-      }
+      return [];
     }
 
-    return events.sort(
-      (left, right) =>
-        left.at.localeCompare(right.at) || left.subjectId.localeCompare(right.subjectId),
-    );
+    const events: JourneyEvent[] = [];
+    for (const [legId, tripId] of tripByLeg) {
+      for (const entry of await fuel.listEntriesByTrip(tripId)) {
+        events.push({
+          kind: 'FUEL',
+          code: 'FUEL_ENTRY',
+          at: entry.occurredAt,
+          legId,
+          /* Mot phieu do dau khong mang ban dinh vi — noi that thay vi de trong. */
+          hasLocationProof: false,
+          subjectId: entry.id,
+        });
+      }
+    }
+    return events;
   }
 }
 

@@ -136,8 +136,19 @@ export interface JourneyLegView {
   readonly originLabel: string;
   readonly destinationLabel: string;
   readonly businessDate: BusinessDate;
-  /** `GD-14` — nhap tay. `null` = CHUA BIET, khong phai 0. */
+  /** `GD-14` — km THUC TE, nhap tay. `null` = CHUA BIET, khong phai 0. */
   readonly distanceKm: number | null;
+  /**
+   * KM DU KIEN luc lap ke hoach — `RunLeg.plannedDistanceKm` cua Lane L (#276).
+   *
+   * `#278` N5 doi *"planned route vs actual/matched route visually distinguishable"*. Duong VE cua
+   * tuyen du kien van chua co (`NO_ROUTE_PROVIDER`), nhung con SO du kien thi Lane L da dua vao —
+   * nen bao cao dat hai con so canh nhau va de nguoi doc tu thay do lech.
+   *
+   * KHONG tinh san hieu so o day: mot chang co ke hoach 100km ma thuc te `null` thi hieu so la
+   * KHONG BIET, khong phai `-100`. Tang doc cua man hinh xu ly cho do.
+   */
+  readonly plannedDistanceKm: number | null;
   readonly startedAt: string | null;
   readonly completedAt: string | null;
   /** `null` khi khong co nguon moc hoac chang chua co moc nao. */
