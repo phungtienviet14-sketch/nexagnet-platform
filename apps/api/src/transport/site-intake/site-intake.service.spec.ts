@@ -319,7 +319,7 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
       const result = await confirm();
       const runs = await movementRepo.listRuns();
       expect(runs[0]?.status).toBe('PLANNED');
-      expect(result.runCode).toMatch(/^RUN-A260909-[0-9A-F]{6}$/);
+      expect(result.runCode).toMatch(/^RUN-A260909-[0-9A-F]{8}$/);
     });
 
     /**
@@ -418,6 +418,46 @@ describe('SiteIntakeService — `#267` H3/H4/H7', () => {
       const result = await confirm({ authUserId: OTHER_AUTH, clientEventId: 'cham-cua-b' });
       expect(result.replayed).toBe(false);
       expect(await movementRepo.listRuns()).toHaveLength(2);
+    });
+
+    /**
+     * HAI YEU CAU CUA CUNG MOT CHAM, DEN CUNG LUC — bai chan cai lo hong hep nhat cua ca lane.
+     *
+     * Ca hai qua duoc phep doc chong lap o dau ham (ban kia chua commit). Neu ma vong chay la mot
+     * so ngau nhien thi CA HAI tao xong vong chay, va chi lan ghi ban ghi xac nhan thu hai moi dung
+     * o unique — de lai mot vong chay MO COI, tuc `#267` H3 bi vi pham theo dung nghia den.
+     *
+     * Ma vong chay la mot BAM TAT DINH tu `(driverId, clientEventId)`, nen ban thua dung ngay o
+     * lan ghi DAU. Bai nay chay hai lenh SONG SONG that su.
+     */
+    it('hai yeu cau SONG SONG cua cung mot cham chi de lai MOT vong chay', async () => {
+      const results = await Promise.allSettled([confirm(), confirm()]);
+
+      const runs = await movementRepo.listRuns();
+      expect(runs).toHaveLength(1);
+      expect(await intakes.listForDriver(driverId)).toHaveLength(1);
+
+      // Khong chang mo coi, khong ban phan cong mo coi.
+      expect(await movementRepo.listLegs(runs[0]?.id ?? '')).toHaveLength(1);
+
+      const ok = results.filter((r) => r.status === 'fulfilled');
+      expect(ok.length).toBeGreaterThanOrEqual(1);
+      for (const settled of results) {
+        if (settled.status === 'fulfilled') expect(settled.value.runId).toBe(runs[0]?.id);
+        else expect(settled.reason.reason).toMatch(/SITE_INTAKE_(REPLAYED|CREATE_IN_FLIGHT)/);
+      }
+    });
+
+    /** Ma vong chay TAT DINH: cung khoa, cung ma — o moi thu tu den. */
+    it('ma vong chay suy tu khoa chong lap, khong tu mot so ngau nhien', async () => {
+      const first = await confirm();
+      await movement.cancelRun(first.runId, 'huy de thu lai', 'operator');
+
+      // Cung `clientEventId` -> cung ma -> dung ngay o unique cua ma vong chay.
+      const replay = await confirm();
+      expect(replay.runId).toBe(first.runId);
+      expect(replay.replayed).toBe(true);
+      expect(await movementRepo.listRuns()).toHaveLength(1);
     });
 
     /**

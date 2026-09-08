@@ -76,6 +76,14 @@ export const SITE_INTAKE_CONFIRM_REASONS = [
   'SITE_INTAKE_OBSERVATION_NOT_OWNED',
   /** Ban dinh vi do da lam bang chung cho mot lan nhan viec khac. */
   'SITE_INTAKE_OBSERVATION_ALREADY_USED',
+  /**
+   * Mot yeu cau SONG SONG cua cung mot cham da tao vong chay nhung chua ghi xong ban ghi xac nhan.
+   *
+   * Khong phai loi cua nguoi goi, va khong phai mot lan tu choi vinh vien: thu lai voi DUNG khoa cu
+   * se thay ket qua cua ban kia. Ma RIENG vi cach xu ly khac han moi ma khac o day — nguoi dung
+   * khong sua duoc gi, ho chi can bam lai.
+   */
+  'SITE_INTAKE_CREATE_IN_FLIGHT',
 ] as const;
 export type SiteIntakeConfirmReason = (typeof SITE_INTAKE_CONFIRM_REASONS)[number];
 
@@ -103,5 +111,6 @@ export const TRANSPORT_SITE_INTAKE_DECISIONS = defineDecisionVocabulary({
     SITE_INTAKE_OBSERVATION_NOT_FOUND: 'Không tìm thấy bản định vị',
     SITE_INTAKE_OBSERVATION_NOT_OWNED: 'Bản định vị đó không thuộc về bạn',
     SITE_INTAKE_OBSERVATION_ALREADY_USED: 'Bản định vị đó đã dùng cho một lần nhận việc khác',
+    SITE_INTAKE_CREATE_IN_FLIGHT: 'Lần bấm này đang được xử lý — bấm lại sau một lát',
   } satisfies Record<TransportSiteIntakeDecisionReason, string>,
 });

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { toBusinessDate } from '../business-date.js';
 import { MovementService } from '../movement/movement.service.js';
@@ -213,10 +213,47 @@ export class SiteIntakeService {
     // `#267` H4 doi *"create or reuse accepted VehicleRun/RunLeg primitives"*, va cach dung la goi
     // `MovementService` — no giu ma trang thai, dau vet kiem toan va quy uoc ngay nghiep vu. Ghi
     // thang vao `MovementRepository` se bo qua ca ba.
-    const run = await this.movement.createRun(
-      { code: runCodeFor(businessDate), vehicleId, businessDate, note: null },
-      actor,
-    );
+    let run;
+    try {
+      run = await this.movement.createRun(
+        {
+          code: runCodeFor(businessDate, driver.id, command.clientEventId),
+          vehicleId,
+          businessDate,
+          note: null,
+        },
+        actor,
+      );
+    } catch (error) {
+      // HAI YEU CAU CUA CUNG MOT CHAM, den cung luc.
+      //
+      // Ca hai qua duoc phep doc chong lap o dau ham (ban kia chua commit). Nhung ma vong chay la
+      // mot BAM TAT DINH tu `(driverId, clientEventId)`, nen unique cua `TransportVehicleRun.code`
+      // chan yeu cau thu hai NGAY O LAN GHI DAU — truoc khi no kip tao mot chang hay mot ban phan
+      // cong nao. Khong co vong chay mo coi nao duoc de lai.
+      if (!(error instanceof TransportDomainError) || error.reason !== 'RUN_CODE_TAKEN')
+        throw error;
+
+      const already = await this.intakes.findByEvent(driver.id, command.clientEventId);
+      if (already) {
+        this.decide('site_intake.confirm', 'allowed', 'SITE_INTAKE_REPLAYED', {
+          intakeId: already.id,
+          runId: already.runId,
+        });
+        return await this.resultOf(already, await this.requireSite(already.siteId), true);
+      }
+
+      // Ban kia da tao vong chay nhung CHUA ghi xong ban ghi xac nhan. Khong co gi de tra ve, va
+      // doan la sai — nen noi that: thu lai voi DUNG khoa cu, va lan sau se thay ket qua cua ban kia.
+      this.decide('site_intake.confirm', 'denied', 'SITE_INTAKE_CREATE_IN_FLIGHT', {
+        driverId: driver.id,
+        clientEventId: command.clientEventId,
+      });
+      throw TransportDomainError.conflict(
+        'SITE_INTAKE_CREATE_IN_FLIGHT',
+        'Lan bam nay dang duoc xu ly — thu lai sau mot lat',
+      );
+    }
     await this.movement.assignRun(run.id, { driverId: driver.id }, actor);
     const leg = await this.movement.addLeg(
       run.id,
@@ -572,11 +609,34 @@ const proposeReasonOf = (outcome: SiteCandidateOutcome): SiteIntakeProposeReason
  * MA VONG CHAY do MAY CHU sinh — `#267` H4 *"server-managed identity"*.
  *
  * `A` o dau phan ngay la mot nhan doc duoc: van hanh nhin ma la biet vong chay nay ra doi tu mot
- * lan lai xe xac nhan tai dia diem A, khong tu mot lan dieu xe o van phong. Duoi la sau ky tu
- * ngau nhien — unique cua `TransportVehicleRun.code` van la thu chan trung that su.
+ * lan lai xe xac nhan tai dia diem A, khong tu mot lan dieu xe o van phong.
+ *
+ * ============================================================================================
+ * PHAN DUOI LA MOT BAM TAT DINH, KHONG PHAI SO NGAU NHIEN — VA DO LA MOT CONG CHAN TRUNG
+ * ============================================================================================
+ *
+ * Ban dau day la sau ky tu ngau nhien. Voi mot khoa `clientEventId` da bi cham hai lan, no de lai
+ * mot lo hong hep nhung that: hai yeu cau den CUNG LUC deu qua duoc phep doc chong lap o dau ham
+ * (ban kia chua commit), roi CA HAI tao mot vong chay, va chi lan ghi `TransportRunSiteIntake` thu
+ * hai moi dung o unique. Ket qua: mot vong chay MO COI khong co ban ghi xac nhan nao — dung dieu
+ * ma `#267` H3 (*"double tap ... cannot create two Runs"*) cam.
+ *
+ * Bam tat dinh tu `(driverId, clientEventId)` dua cong chan trung LEN lan ghi DAU TIEN: unique cua
+ * `TransportVehicleRun.code` chan ngay yeu cau thu hai, truoc khi no kip tao gi. Mot khoa cham,
+ * mot vong chay — o moi thu tu den.
+ *
+ * `sha256` chu khong phai noi chuoi tho: `clientEventId` do may khach sinh va di vao mot ma ma
+ * nguoi khac doc duoc tren bang dieu hanh. Bam cat duong doc nguoc do ma khong doi gi ve tinh tat
+ * dinh.
  */
-function runCodeFor(businessDate: string): string {
+function runCodeFor(businessDate: string, driverId: string, clientEventId: string): string {
   const compact = businessDate.replaceAll('-', '').slice(2);
-  const suffix = randomUUID().replaceAll('-', '').slice(0, 6).toUpperCase();
-  return `RUN-A${compact}-${suffix}`;
+  const digest = createHash('sha256')
+    // DAI TRUOC, ROI NOI DUNG. Noi hai chuoi bang mot dau phan cach bat ky van nhap nhang khi
+    // `clientEventId` chua chinh dau do; tien to do dai thi khong co cach nao nhap nhang.
+    .update(`${driverId.length}:${driverId}:${clientEventId}`)
+    .digest('hex')
+    .slice(0, 8)
+    .toUpperCase();
+  return `RUN-A${compact}-${digest}`;
 }

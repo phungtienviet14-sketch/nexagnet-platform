@@ -44,7 +44,18 @@ const FENCE_PREFIX = 'IT-SI Hang rao';
 const ACTOR = 'it-site-intake';
 const AUTH = 'it-si-lai-xe';
 const POLICY = { timeZone: 'Asia/Ho_Chi_Minh' } as const;
-const HAI_PHONG = { latitude: 20.8449, longitude: 106.6881 };
+/**
+ * TOA DO RIENG CUA BO TEST NAY, khong dung chung voi demo hay mot spec khac.
+ *
+ * Bai `de nghi nhan ra kho A` khang dinh `UNIQUE`, tuc no khang dinh mot dieu ve TOAN BO bang hang
+ * rao: quanh diem nay khong co dia diem nao khac. Dung lai toa do cua du lieu demo (20.8449,
+ * 106.6881) lam khang dinh do phu thuoc vao viec khong ai khac gieo mot kho o do — va no da do dung
+ * kieu ay mot lan, sau khi mot lan chay thu bang tay de lai mot kho thu hai o cung cho.
+ *
+ * Diem duoi day lech ~2 km ve phia dong bac diem demo. No van trong khung hoat dong tho cua
+ * `geo-point.ts`, va no thuoc ve rieng tep nay.
+ */
+const HAI_PHONG = { latitude: 20.8629, longitude: 106.7061 };
 const HA_NOI = { latitude: 21.0278, longitude: 105.8342 };
 
 class StubLocationFacts extends TransportSiteIntakeLocationFacts {
