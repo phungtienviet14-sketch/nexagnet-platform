@@ -185,6 +185,26 @@ import {
   ControlTowerFuelFacts,
   ControlTowerFuelFactsAdapter,
 } from './transport/control-tower/control-tower-facts.port.js';
+import {
+  DispatchComplianceFacts,
+  DispatchComplianceFactsAdapter,
+  DispatchCoreFacts,
+  DispatchCoreFactsAdapter,
+  DispatchLocationFacts,
+  DispatchLocationFactsAdapter,
+} from './transport/dispatch/dispatch-facts.port.js';
+import {
+  DispatchAssignmentPlanner,
+  PlanningDispatchAssignmentPlanner,
+} from './transport/dispatch/dispatch-planner.port.js';
+import {
+  DEFAULT_TRANSPORT_DISPATCH_POLICY,
+  TRANSPORT_DISPATCH_POLICY,
+} from './transport/dispatch/dispatch-policy.js';
+import { DispatchController } from './transport/dispatch/dispatch.controller.js';
+import { DispatchService } from './transport/dispatch/dispatch.service.js';
+import { createRoutingPort } from './transport/dispatch/routing/routing-provider.factory.js';
+import { TransportRoutingPort } from './transport/dispatch/routing/transport-routing.port.js';
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
 import { TripsController } from './transport/trips/trips.controller.js';
@@ -325,6 +345,16 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // hai controller nay, va `TransportTrip` khong doi mot cot nao.
   owned('transport-core', TransportOrdersController),
   owned('transport-core', RunsController),
+  /*
+   * DIEU XE (Lane M, #277) — den cung `transport-core` va bien mat cung no.
+   *
+   * `transport-core` chu khong `transport-proof`, du be mat nay doc vi tri xe: cau hoi *"xe nao
+   * nen nhan don nay"* van tra loi duoc khi khach chua bat bam vi tri — luc do moi xe deu
+   * `LOCATION_CAPABILITY_ABSENT` va bang xep hang chay bang phep chieu tu cac chang da lap ke
+   * hoach. Dat no o `transport-proof` se lam mot khach co doi xe nhung khong bam vi tri mat han
+   * mot be mat ma ho VAN dung duoc.
+   */
+  owned('transport-core', DispatchController),
   /*
    * LAP KE HOACH VONG CHAY DO HE THONG QUAN (Lane L, #276) — cung `transport-core`, khong mot
    * capability moi.
@@ -489,6 +519,42 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     provide: ControlTowerAlertFacts,
     useClass: ControlTowerAlertFactsAdapter,
   }),
+  /*
+   * DIEU XE (Lane M, #277). Cung khuon voi thap dieu hanh: mot cong LOI bat buoc va hai cong TUY
+   * CHON o hai capability khac.
+   *
+   * `TransportRoutingPort` duoc dung bang mot `useFactory` doc bien moi truong. Mac dinh — va la
+   * duong duy nhat chay hom nay — la bo uoc luong TONG HOP: khong khoa, khong goi mang, tat dinh
+   * trong CI. Xem `routing-provider.factory.ts` cho ly do bien do khong nam trong `foundation-env`.
+   */
+  owned('transport-core', {
+    provide: TRANSPORT_DISPATCH_POLICY,
+    useValue: DEFAULT_TRANSPORT_DISPATCH_POLICY,
+  }),
+  owned('transport-core', {
+    provide: TransportRoutingPort,
+    useFactory: () => createRoutingPort(DEFAULT_TRANSPORT_DISPATCH_POLICY, process.env),
+  }),
+  owned('transport-core', { provide: DispatchCoreFacts, useClass: DispatchCoreFactsAdapter }),
+  owned('transport-proof', {
+    provide: DispatchLocationFacts,
+    useClass: DispatchLocationFactsAdapter,
+  }),
+  owned('transport-asset-compliance', {
+    provide: DispatchComplianceFacts,
+    useClass: DispatchComplianceFactsAdapter,
+  }),
+  /*
+   * CONG GHI cua Lane M -> bo lap ke hoach cua Lane L (#276, da len `main` o `41e9bbe`).
+   *
+   * `#274` giao quyen ghi ke hoach cho Lane L. Mot ban hien thuc thu hai o Lane M — du dung — se
+   * de trong he hai bo luat gom don, va lan lech dau tien se khong ai biet ben nao dung.
+   */
+  owned('transport-core', {
+    provide: DispatchAssignmentPlanner,
+    useClass: PlanningDispatchAssignmentPlanner,
+  }),
+  owned('transport-core', DispatchService),
   /**
    * BANG TAI CHINH — cung khuon, va cung mot ly le cau truc.
    *

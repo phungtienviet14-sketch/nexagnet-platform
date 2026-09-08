@@ -200,6 +200,8 @@ export const TRANSPORT_ACTIONS = [
    * `transport.checkpoint.record` / `transport.proof.withdraw` van nam trong `ACCOUNTING_DENIED`.
    */
   'transport.commercial_acceptance.decide',
+  /* --- `TX-11` DIEU XE (Lane M, Issue #277) — chi doc; duong ghi dung `transport.run.manage` --- */
+  'transport.dispatch.suggest.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
