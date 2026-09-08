@@ -45,6 +45,9 @@ export type TransportSectionId =
   | 'margin'
   | 'ar-ap'
   | 'journey'
+  | 'routes'
+  | 'fleet-dashboard'
+  | 'executive'
   | 'exports';
 
 export type TransportSectionGroupId = 'root' | 'dispatch' | 'cost' | 'assets' | 'reports';
@@ -222,6 +225,37 @@ export const TRANSPORT_SECTIONS = [
      */
     requiredCapabilities: ['transport-settlement'],
     requiredAction: 'transport.settlement.report.read',
+  },
+  {
+    id: 'executive',
+    label: 'Bảng điều hành',
+    group: 'reports',
+    summary: 'Xe đang chạy thế nào, tiền đang ở đâu, việc gì cần người xử lý — trong 5 phút.',
+    /**
+     * `transport.control_tower.read` chu KHONG mot ma moi.
+     *
+     * Man nay khong co lan goi API rieng nao: no ghep ba read model da nghiem thu. Ma quyen o day
+     * la ma cua PHAN LOI (thap dieu hanh); hai phan con lai — tien va doi xe — tu tat o may chu neu
+     * nguoi dung khong co quyen doc chung, va man hinh chi thieu mot khoi thay vi tu choi ca trang.
+     */
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.control_tower.read',
+  },
+  {
+    id: 'fleet-dashboard',
+    label: 'Bảng đội xe',
+    group: 'reports',
+    summary: 'Km có hàng, km rỗng, tỷ lệ sử dụng và xe chạy rỗng nhiều nhất.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.analytics.read',
+  },
+  {
+    id: 'routes',
+    label: 'Báo cáo tuyến',
+    group: 'reports',
+    summary: 'Mỗi tuyến chạy bao nhiêu chuyến, dài bao nhiêu, kéo theo bao nhiêu km rỗng.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.analytics.read',
   },
   {
     id: 'journey',

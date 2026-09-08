@@ -167,6 +167,12 @@ import { TransportPlanningController } from './transport/planning/planning.contr
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { ControlTowerController } from './transport/control-tower/control-tower.controller.js';
 import { JourneyController } from './transport/journey/journey.controller.js';
+import { InsightController } from './transport/insight/insight.controller.js';
+import { InsightReadService } from './transport/insight/insight-read.service.js';
+import {
+  InsightCoreFacts,
+  InsightCoreFactsAdapter,
+} from './transport/insight/insight-facts.port.js';
 import { JourneyReadService } from './transport/journey/journey-read.service.js';
 import {
   JourneyCheckpointFacts,
@@ -323,6 +329,7 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // nguon TUY CHON o ba capability khac; xem khoi PROVIDERS ben duoi.
   owned('transport-core', ControlTowerController),
   owned('transport-core', JourneyController),
+  owned('transport-core', InsightController),
   // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
   owned('transport-core', CounterpartyController),
   // `#267` H1: dia diem van hanh la mot MAT cua ho so phap nhan, nen no den/di cung `transport-core`
@@ -537,6 +544,15 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     useClass: JourneyLocationFactsAdapter,
   }),
   owned('transport-fuel', { provide: JourneyFuelFacts, useClass: JourneyFuelFactsAdapter }),
+  /**
+   * BANG DOI XE + BAO CAO TUYEN (`#278` N6/N7) — MOT cong, di cung `transport-core`.
+   *
+   * Khac hai bao cao tren: o day khong co cong tuy chon nao. Ca hai chi doc vong chay, chang, xe va
+   * don — bon thu deu thuoc `transport-core` — nen khong co gi de vang mat, va cung khong co
+   * `unavailableSources` de cong bo.
+   */
+  owned('transport-core', InsightReadService),
+  owned('transport-core', { provide: InsightCoreFacts, useClass: InsightCoreFactsAdapter }),
   /**
    * BANG TAI CHINH — cung khuon, va cung mot ly le cau truc.
    *

@@ -27,6 +27,9 @@ import { ExpenseClaimsView } from './views/ExpenseClaimsView';
 import { ExportsView } from './views/ExportsView';
 import { MaintenanceComplianceView } from './views/MaintenanceView';
 import { DriverSettlementView } from './views/DriverSettlementView';
+import { CorridorView } from './views/CorridorView';
+import { ExecutiveView } from './views/ExecutiveView';
+import { FleetInsightView } from './views/FleetInsightView';
 import { JourneyView } from './views/JourneyView';
 import { MovementView } from './views/MovementView';
 import { PayrollView } from './views/PayrollView';
@@ -290,6 +293,14 @@ function SectionBody({
     // quy uoc `SELECTION_QUERY_PARAM`: mot `id` ky thuat khong bao gio duoc len dia chi.
     case 'journey':
       return <JourneyView selection={selection} onSelect={onSelect} />;
+    // Lane N (#278 N6/N7/N8) — ba be mat bao cao. `ExecutiveView` khong co lan goi API rieng nao:
+    // no ghep ba read model da nghiem thu, de cong ty khong co hai con so cho cung mot cau hoi.
+    case 'routes':
+      return <CorridorView />;
+    case 'fleet-dashboard':
+      return <FleetInsightView />;
+    case 'executive':
+      return <ExecutiveView />;
     case 'fleet':
       return <FleetView />;
     // `TX-08` (#242) — quyen dieu hanh va so dang ky so huu. Ma quyen RIENG voi ho so xe: mot nguoi

@@ -127,6 +127,28 @@ export function useRunJourneyMap(input: NavigationInput, runRef: string | null) 
 }
 
 /**
+ * BANG DOI XE + BAO CAO TUYEN (Lane N, #278 N6/N7).
+ *
+ * Khoa co CA khoang ngay trong no. Bo khoang ra khoi khoa se lam TanStack Query tra lai ban da nho
+ * cua thang truoc khi nguoi dung doi sang thang nay — mot bao cao dung hinh dang nhung sai ky.
+ */
+export function useFleetInsight(input: NavigationInput, range: { from?: string; to?: string }) {
+  return useQuery({
+    queryKey: ['transport', 'insight', 'fleet', range.from ?? 'auto', range.to ?? 'auto'],
+    queryFn: () => transportApi.insight.fleet(range),
+    enabled: allowed(input, 'transport-core', 'transport.analytics.read'),
+  });
+}
+
+export function useCorridorInsight(input: NavigationInput, range: { from?: string; to?: string }) {
+  return useQuery({
+    queryKey: ['transport', 'insight', 'corridors', range.from ?? 'auto', range.to ?? 'auto'],
+    queryFn: () => transportApi.insight.corridors(range),
+    enabled: allowed(input, 'transport-core', 'transport.analytics.read'),
+  });
+}
+
+/**
  * BANG TAI CHINH — mot `useQuery` cho ca sau con so (Lane G, #244 G5).
  *
  * Dung `transport.settlement.report.read`: bang khong phoi mot su that nao ma quyen do chua cho

@@ -528,6 +528,235 @@ const DRIVER_FUND = {
   ],
 };
 
+/**
+ * MOT VONG CHAY HAI CHANG: mot co hang, mot RONG. Day la hinh dang ma `#274` §4 mo ta.
+ *
+ * `plannedDistanceKm` lech `distanceKm` o chang dau de bai kiem doc duoc do lech ke hoach/thuc te.
+ */
+const JOURNEY = {
+  run: {
+    runId: 'r-1',
+    runCode: 'RUN-E2E-1',
+    vehicleId: 'v-1',
+    vehiclePlate: '29H-111.11',
+    status: 'COMPLETED',
+    businessDate: '2026-09-08',
+    startedAt: '2026-09-08T01:00:00.000Z',
+    completedAt: '2026-09-08T12:00:00.000Z',
+    driverId: 'd-1',
+  },
+  distance: {
+    loadedKm: 105,
+    emptyKm: 105,
+    totalKm: 210,
+    emptyRatio: 0.5,
+    complete: true,
+    legsMissingDistance: { loaded: 0, empty: 0 },
+    countedLegs: 2,
+  },
+  orderCodes: ['ORD-E2E-1'],
+  legs: [
+    {
+      legId: 'l-1',
+      sequence: 1,
+      kind: 'LOADED',
+      status: 'COMPLETED',
+      orderCode: 'ORD-E2E-1',
+      originLabel: 'Hà Nội',
+      destinationLabel: 'Hải Phòng',
+      businessDate: '2026-09-08',
+      distanceKm: 105,
+      plannedDistanceKm: 100,
+      startedAt: '2026-09-08T02:00:00.000Z',
+      completedAt: '2026-09-08T06:00:00.000Z',
+      phase: 'DELIVERED',
+    },
+    {
+      legId: 'l-2',
+      sequence: 2,
+      kind: 'EMPTY',
+      status: 'COMPLETED',
+      orderCode: null,
+      originLabel: 'Hải Phòng',
+      destinationLabel: 'Hà Nội',
+      businessDate: '2026-09-08',
+      distanceKm: 105,
+      plannedDistanceKm: null,
+      startedAt: '2026-09-08T07:00:00.000Z',
+      completedAt: '2026-09-08T11:00:00.000Z',
+      phase: null,
+    },
+  ],
+  timeline: [
+    {
+      kind: 'CHECKPOINT',
+      code: 'DELIVERY_ACCEPTED',
+      at: '2026-09-08T06:00:00.000Z',
+      legId: 'l-1',
+      hasLocationProof: true,
+      subjectId: 'cp-1',
+    },
+  ],
+  unavailableSources: [],
+};
+
+const JOURNEY_MAP = {
+  runId: 'r-1',
+  runCode: 'RUN-E2E-1',
+  legs: [
+    {
+      legId: 'l-1',
+      sequence: 1,
+      kind: 'LOADED',
+      origin: {
+        point: { latitude: 21.0278, longitude: 105.8342 },
+        source: 'CHECKPOINT_OBSERVATION',
+        at: '2026-09-08T02:00:00.000Z',
+      },
+      originGap: null,
+      destination: {
+        point: { latitude: 20.8449, longitude: 106.6881 },
+        source: 'CHECKPOINT_OBSERVATION',
+        at: '2026-09-08T06:00:00.000Z',
+      },
+      destinationGap: null,
+      paths: [
+        { kind: 'PLANNED', points: [], gap: 'NO_ROUTE_PROVIDER', sampledFrom: 0 },
+        {
+          kind: 'CHECKPOINT_ANCHORED',
+          points: [
+            { latitude: 21.0278, longitude: 105.8342 },
+            { latitude: 20.8449, longitude: 106.6881 },
+          ],
+          gap: null,
+          sampledFrom: 2,
+        },
+      ],
+    },
+  ],
+  unavailableSources: [],
+};
+
+const FLEET_INSIGHT = {
+  range: { from: '2026-08-10', to: '2026-09-08', businessDays: 30 },
+  utilisationFormula: 'ngayCoChangKhongHuy / ngayLichTrongKhoang',
+  vehicles: [
+    {
+      vehicleId: 'v-1',
+      registrationPlate: '29H-111.11',
+      status: 'IDLE',
+      runCount: 3,
+      activeBusinessDays: 6,
+      utilisation: 0.2,
+      loadedKm: 300,
+      emptyKm: 150,
+      totalKm: 450,
+      emptyRatio: 1 / 3,
+      legsMissingDistance: 0,
+    },
+  ],
+  presence: { total: 1, idle: 1, onTrip: 0, underMaintenance: 0 },
+  totals: { loadedKm: 300, emptyKm: 150, totalKm: 450, emptyRatio: 1 / 3, legsMissingDistance: 0 },
+};
+
+const CORRIDOR_INSIGHT = {
+  range: { from: '2026-08-10', to: '2026-09-08', businessDays: 30 },
+  grouping: 'FREE_TEXT_LABEL_COMPATIBILITY',
+  emptyAttribution: 'PRECEDING_LOADED_LEG_IN_SAME_RUN',
+  corridors: [
+    {
+      corridorKey: 'hà nội → hải phòng',
+      originLabel: 'Hà Nội',
+      destinationLabel: 'Hải Phòng',
+      legCount: 3,
+      orderCodes: ['ORD-E2E-1'],
+      runCodes: ['RUN-E2E-1'],
+      loadedKm: 315,
+      medianLoadedKm: 105,
+      attributedEmptyKm: 210,
+      legsMissingDistance: 0,
+    },
+  ],
+};
+
+/**
+ * THAP DIEU HANH sau Lane N: ba cot giai doan MO (khong con `AWAITING_CHECKPOINT_SOURCE`), va
+ * `WAITING` van dong nhung bang mot ma RIENG.
+ */
+const CONTROL_TOWER = {
+  generatedFor: '2026-09-08',
+  board: [
+    { column: 'PLANNED', cards: [], total: 0, unavailableReason: null },
+    { column: 'PICKUP', cards: [], total: 0, unavailableReason: null },
+    { column: 'LOADING', cards: [], total: 0, unavailableReason: null },
+    {
+      column: 'IN_TRANSIT',
+      total: 1,
+      unavailableReason: null,
+      cards: [
+        {
+          runId: 'r-1',
+          runCode: 'RUN-E2E-1',
+          vehicleId: 'v-1',
+          businessDate: '2026-09-08',
+          driverId: 'd-1',
+          loadedLegs: 1,
+          emptyLegs: 1,
+          totalKm: 210,
+          emptyKm: 105,
+          currentLeg: {
+            legId: 'l-2',
+            sequence: 2,
+            kind: 'EMPTY',
+            orderCode: null,
+            phase: 'IN_TRANSIT',
+          },
+        },
+      ],
+    },
+    { column: 'ARRIVED', cards: [], total: 0, unavailableReason: null },
+    {
+      column: 'WAITING',
+      cards: [],
+      total: 0,
+      unavailableReason: 'AWAITING_WAITING_SESSION_SOURCE',
+    },
+    { column: 'DELIVERED', cards: [], total: 0, unavailableReason: null },
+  ],
+  fleet: { total: 1, idle: 0, onTrip: 1, underMaintenance: 0, activeDrivers: 1 },
+  queue: [
+    {
+      kind: 'RUN_LEG_MISSING_DISTANCE',
+      severity: 'WARNING',
+      subject: { kind: 'RUN_LEG', id: 'l-9', reference: 'RUN-E2E-1' },
+      detail: {},
+    },
+  ],
+  queueTotal: 1,
+  unavailableSources: [],
+  pendingWork: [
+    { kind: 'RECEIVER_WAITING_ABOVE_THRESHOLD', reason: 'AWAITING_WAITING_SESSION_SOURCE' },
+  ],
+};
+
+const FINANCE_SUMMARY = {
+  generatedFor: '2026-09-08',
+  buckets: {
+    flows: {
+      CUSTOMER_FREIGHT: 11_500_000,
+      FUEL_SUPPLIER: 2_000_000,
+      CARRIER_SERVICE: 6_000_000,
+      PARTNER_COMMISSION: 1_000_000,
+    },
+    driverReimbursementOutstanding: 0,
+    driverSettlementRemaining: 3_000_000,
+  },
+  directMargin: MARGIN_ROLLUP,
+  receivable: { outstandingTotal: 11_500_000, overdueTotal: 11_500_000 },
+  currency: { codes: ['VND'], isSingle: true },
+  unavailableSources: [],
+};
+
 async function mockTransport(page: Page, role?: Role): Promise<void> {
   const trips = seedTrips();
 
@@ -635,6 +864,29 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
     trips.set(id, { ...trip, status: body.to });
     return json(route, trips.get(id));
   });
+
+  /*
+   * Lane N (#278 N5) — BAO CAO va BAN DO la HAI tuyen, va do la ca diem cua bo mock nay.
+   *
+   * Tuyen ban do tra `403` cho ke toan y het may chu that (`transport.location.history.read` nam
+   * trong `ACCOUNTING_DENIED`). Neu mock tra `200` cho moi vai thi bai kiem ranh gioi quyen ben
+   * duoi se XANH ma khong chung minh gi ca.
+   */
+  await page.route('**/transport/journey/runs/*/map', (route) =>
+    role === 'ADMIN'
+      ? json(route, JOURNEY_MAP)
+      : json(route, { message: 'Tài khoản không được xem lịch sử vị trí' }, 403),
+  );
+  await page.route('**/transport/journey/runs/*', (route) => json(route, JOURNEY));
+  await page.route('**/transport/insight/fleet*', (route) => json(route, FLEET_INSIGHT));
+  await page.route('**/transport/insight/corridors*', (route) => json(route, CORRIDOR_INSIGHT));
+  /*
+   * Hai nguon ma BANG DIEU HANH ghep lai. Chung phai co mat o day chinh vi man do KHONG co lan goi
+   * API rieng nao — bo chung ra thi man hinh xuong che do loi, va do la hanh vi DUNG nhung khong
+   * phai cai bai kiem ben duoi dang do.
+   */
+  await page.route('**/transport/control-tower', (route) => json(route, CONTROL_TOWER));
+  await page.route('**/transport/finance/summary', (route) => json(route, FINANCE_SUMMARY));
 }
 
 test.describe('vo va kien truc thong tin', () => {
@@ -1085,5 +1337,115 @@ test.describe('anh chup lam bang chung', () => {
     await page.goto('/?surface=driver&screen=trip');
     await expect(page.getByRole('heading', { level: 1, name: 'Chuyến' })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('mobile-driver-trip.png'), fullPage: true });
+  });
+});
+
+/**
+ * ===========================================================================
+ * LANE N (#278 N5/N12) — BAN DO VONG CHAY TREN TRINH DUYET THAT.
+ *
+ * `#278` N12 doi bang chung o muc TRINH DUYET, khong phai o muc kieu: *"Add browser/build tests
+ * that actually load the map/chart bundle; TypeScript-only proof is insufficient."*
+ *
+ * Ba dieu duoc do o day ma khong bai `.ts` nao do duoc:
+ *
+ *   1. goi ban do nap duoc that (`dynamic(ssr:false)` + MapLibre + deck.gl khoi tao trong DOM);
+ *   2. chang RONG doc ra duoc bang CHU, khong chi bang mau;
+ *   3. ranh gioi quyen: ke toan mo dung man hinh do va KHONG thay ban do, nhung van thay bao cao.
+ */
+test.describe('ban do vong chay (Lane N)', () => {
+  test('ban do nap that, va chang RONG doc ra duoc bang chu', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=journey&selected=RUN-E2E-1');
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Bản đồ vòng chạy' })).toBeVisible();
+
+    /* Goi ban do NAP THAT: the `img` chi xuat hien sau khi component dong nap da chay. */
+    const map = page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' });
+    await expect(map).toBeVisible({ timeout: 30_000 });
+    /* Nen cuc bo — khong mot lan goi tile nao ra ngoai. */
+    await expect(map).toHaveAttribute('data-basemap', 'LOCAL_FALLBACK');
+
+    /*
+     * `#278` N13 bai 4 — chang RONG phai phan biet duoc ma KHONG can den mau. Neu mot ngay co
+     * nguoi bo chu "RỖNG" di va chi de lai mot lop CSS, bai nay do.
+     */
+    await expect(page.getByText('RỖNG', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Chặng RỖNG (chạy không hàng)')).toBeVisible();
+
+    /* Tuyen ke hoach chua co nha cung cap dan duong — man hinh NOI RA thay vi ve mot doan thang. */
+    await expect(page.getByText(/nhà cung cấp dẫn đường/)).toBeVisible();
+
+    /* Ke hoach vs thuc te: 100 -> 105 la lech +5 km. */
+    await expect(page.getByText('+5 km')).toBeVisible();
+  });
+
+  test('bieu do km co hang vs km rong nap that', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=journey&selected=RUN-E2E-1');
+
+    await expect(
+      page.getByRole('img', {
+        name: 'Biểu đồ km có hàng và km rỗng theo chặng của vòng chạy RUN-E2E-1',
+      }),
+    ).toBeVisible({ timeout: 30_000 });
+  });
+
+  /*
+   * `#278` N13 bai 6/8 tinh than: mot vai khong duoc nhin thay thu ma ma tran vai da tu choi ho.
+   * `transport.location.history.read` nam trong `ACCOUNTING_DENIED`, nen ke toan mo dung man hinh
+   * nay phai thay BAO CAO ma KHONG thay ban do.
+   */
+  test('ke toan khong thay ban do, nhung van thay bao cao day du', async ({ page }) => {
+    await mockTransport(page, 'ACCOUNTING');
+    await page.goto('/?section=journey&selected=RUN-E2E-1');
+
+    await expect(page.getByText(/không được xem lịch sử vị trí/)).toBeVisible();
+    await expect(page.getByRole('img', { name: /^Bản đồ vòng chạy/ })).toHaveCount(0);
+
+    /* Bao cao VAN day du: chang, km, ma don. */
+    await expect(page.getByText('ORD-E2E-1').first()).toBeVisible();
+    await expect(page.getByText('RỖNG', { exact: true }).first()).toBeVisible();
+  });
+
+  test('bang doi xe va bao cao tuyen mo duoc, va noi ro cach doc so lieu', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+
+    await page.goto('/?section=fleet-dashboard');
+    await expect(page.getByRole('heading', { level: 1, name: 'Bảng đội xe' })).toBeVisible();
+    /* Cong thuc ty le su dung di CUNG con so — `#278` N7 cam mot ty le khong noi tu so/mau so. */
+    await expect(page.getByText(/số NGÀY xe có chặng chưa huỷ/)).toBeVisible();
+
+    await page.goto('/?section=routes');
+    await expect(page.getByRole('heading', { level: 1, name: 'Báo cáo tuyến' })).toBeVisible();
+    await expect(page.getByText(/gom theo NHÃN địa điểm/)).toBeVisible();
+    /* Moi tuyen mo thang sang ban do cua mot vong chay CO THAT. */
+    await expect(page.getByRole('link', { name: 'RUN-E2E-1' })).toBeVisible();
+  });
+
+  test('bang dieu hanh ghep ba nguon, va khong goi lai mot ma quyen nao moi', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=executive');
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Bảng điều hành' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Vận hành' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Hiệu quả chạy xe' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Việc cần xử lý' })).toBeVisible();
+  });
+
+  /* `#278` N12 — 390px la be mat lai xe/dien thoai; ban do phai thap lai chu khong bien mat. */
+  test('tren man 390px ban do van ve duoc va trang khong tran ngang', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 780 });
+    await mockTransport(page, 'ADMIN');
+    await page.goto('/?section=journey&selected=RUN-E2E-1');
+
+    await expect(page.getByRole('img', { name: 'Bản đồ vòng chạy RUN-E2E-1' })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
   });
 });

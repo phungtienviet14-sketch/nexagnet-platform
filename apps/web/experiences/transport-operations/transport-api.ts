@@ -12,7 +12,9 @@ import type {
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   ControlTowerView,
+  CorridorInsightView,
   FinanceSummaryView,
+  FleetInsightView,
   RunJourneyMapView,
   RunJourneyView,
   ComplianceSubjectKind,
@@ -1202,5 +1204,22 @@ export const transportApi = {
       get(`/transport/journey/runs/${encodeURIComponent(runRef)}`),
     map: (runRef: string): Promise<RunJourneyMapView> =>
       get(`/transport/journey/runs/${encodeURIComponent(runRef)}/map`),
+  },
+
+  /**
+   * BANG DOI XE + BAO CAO TUYEN (Lane N, #278 N6/N7).
+   *
+   * `from`/`to` la NGAY NGHIEP VU (`YYYY-MM-DD`), khong phai moc thoi gian. Bo trong thi may chu tu
+   * chot 30 ngay gan nhat theo mui gio tenant — man hinh KHONG duoc tu tinh khoang bang
+   * `new Date()`, vi mot nguoi mo bao cao luc 00:30 gio Viet Nam se ra mot khoang lech mot ngay.
+   */
+  insight: {
+    fleet: (range?: { readonly from?: string; readonly to?: string }): Promise<FleetInsightView> =>
+      get(`/transport/insight/fleet${toQuery({ from: range?.from, to: range?.to })}`),
+    corridors: (range?: {
+      readonly from?: string;
+      readonly to?: string;
+    }): Promise<CorridorInsightView> =>
+      get(`/transport/insight/corridors${toQuery({ from: range?.from, to: range?.to })}`),
   },
 } as const;

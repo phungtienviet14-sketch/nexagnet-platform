@@ -1881,6 +1881,84 @@ export interface RunJourneyMapView {
 }
 
 /* ------------------------------------------------------------------ *
+ * BANG DOI XE + BAO CAO TUYEN — `GET /transport/insight/*` (Lane N, #278 N6/N7)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/insight/insight.types.ts`.
+ *
+ * BA TRUONG CONG BO la phan de bo sot nhat, va bo chung se lam bao cao noi doi:
+ *
+ *   · `utilisationFormula`  — cong thuc ty le su dung, phai di CUNG con so len man hinh;
+ *   · `grouping`            — tuyen dang gom theo NHAN TU DO, khong theo dia diem co that;
+ *   · `emptyAttribution`    — quy tac quy km rong ve mot tuyen.
+ *
+ * Khong in ba cai do ra thi nguoi doc se tuong day la nhung con so tuyet doi.
+ */
+export interface InsightRange {
+  readonly from: BusinessDate;
+  readonly to: BusinessDate;
+  readonly businessDays: number;
+}
+
+export interface VehicleInsight {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly status: VehicleStatus;
+  readonly runCount: number;
+  readonly activeBusinessDays: number;
+  /** `null` khi khoang rong. KHONG duoc hien thanh `0%`. */
+  readonly utilisation: number | null;
+  readonly loadedKm: number | null;
+  readonly emptyKm: number | null;
+  readonly totalKm: number | null;
+  readonly emptyRatio: number | null;
+  readonly legsMissingDistance: number;
+}
+
+export interface FleetInsightView {
+  readonly range: InsightRange;
+  /** Cong thuc, dang chuoi. Phai hien len man hinh canh con so. */
+  readonly utilisationFormula: string;
+  readonly vehicles: readonly VehicleInsight[];
+  readonly presence: {
+    readonly total: number;
+    readonly idle: number;
+    readonly onTrip: number;
+    readonly underMaintenance: number;
+  };
+  readonly totals: {
+    readonly loadedKm: number | null;
+    readonly emptyKm: number | null;
+    readonly totalKm: number | null;
+    readonly emptyRatio: number | null;
+    readonly legsMissingDistance: number;
+  };
+}
+
+export interface CorridorInsight {
+  readonly corridorKey: string;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly legCount: number;
+  readonly orderCodes: readonly string[];
+  readonly runCodes: readonly string[];
+  readonly loadedKm: number | null;
+  readonly medianLoadedKm: number | null;
+  readonly attributedEmptyKm: number | null;
+  readonly legsMissingDistance: number;
+}
+
+export interface CorridorInsightView {
+  readonly range: InsightRange;
+  /** `'FREE_TEXT_LABEL_COMPATIBILITY'` — mot phep gom TAM, va man hinh phai noi ra. */
+  readonly grouping: string;
+  /** `'PRECEDING_LOADED_LEG_IN_SAME_RUN'` — quy tac quy km rong, phai noi ra. */
+  readonly emptyAttribution: string;
+  readonly corridors: readonly CorridorInsight[];
+}
+
+/* ------------------------------------------------------------------ *
  * BANG TAI CHINH — `GET /transport/finance/summary` (Lane G, #244 G5)
  * ------------------------------------------------------------------ */
 
