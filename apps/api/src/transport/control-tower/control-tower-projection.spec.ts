@@ -8,10 +8,12 @@ import {
   type ControlTowerCoreInput,
 } from './control-tower-projection.js';
 import {
-  CHECKPOINT_DERIVED_COLUMNS,
   OPERATIONS_BOARD_COLUMNS,
+  PHASE_DERIVED_COLUMNS,
+  WAITING_COLUMN,
   type ActionQueueItem,
 } from './control-tower.types.js';
+import type { RunLegPhase } from '../checkpoint/run-timeline.js';
 
 const TODAY = '2026-09-08';
 
@@ -96,8 +98,20 @@ const coreInput = (over: Partial<ControlTowerCoreInput> = {}): ControlTowerCoreI
   assignmentsByRun: new Map(),
   vehicles: [],
   drivers: [],
+  orderCodesById: new Map(),
+  // MAC DINH LA `null` = capability `transport-checkpoint` DANG TAT. Bai nao muon moc thi phai noi
+  // ra — nho vay mot bai viet cau tha khong vo tinh chung minh mot cot ma no khong cau hinh.
+  legPhasesByRun: null,
   ...over,
 });
+
+const RUN_ID = '7c1f0a2e-0000-4000-8000-000000000001';
+
+/** `legPhasesByRun` cho MOT vong chay — cai hinh dang ma `buildRunTimeline().legPhases` tra ve. */
+const phasesFor = (
+  entries: Readonly<Record<string, RunLegPhase>>,
+  runId: string = RUN_ID,
+): ReadonlyMap<string, Readonly<Record<string, RunLegPhase>>> => new Map([[runId, entries]]);
 
 const queueItem = (over: Partial<ActionQueueItem> = {}): ActionQueueItem => ({
   kind: 'RUN_ACTIVE_WITHOUT_DRIVER',
@@ -114,19 +128,21 @@ describe('bang dieu hanh — mot PHEP CHIEU cua trang thai da duoc transport-cor
     expect(board.map((column) => column.column)).toEqual([...OPERATIONS_BOARD_COLUMNS]);
   });
 
-  it('bon cot doi checkpoint deu RONG va deu noi ra ly do — khong mot cot nao im lang', () => {
+  it('khong co nguon moc: ba cot giai doan RONG va noi ra ly do — khong cot nao im lang', () => {
     const board = buildOperationsBoard(
       coreInput({
         runs: [run({ status: 'ACTIVE' })],
-        legsByRun: new Map([
-          ['7c1f0a2e-0000-4000-8000-000000000001', [leg({ status: 'IN_TRANSIT' })]],
-        ]),
+        legsByRun: new Map([[RUN_ID, [leg({ status: 'IN_TRANSIT' })]]]),
+        legPhasesByRun: null,
       }),
     );
 
     for (const column of board) {
-      const isCheckpointColumn = CHECKPOINT_DERIVED_COLUMNS.includes(column.column);
-      if (!isCheckpointColumn) {
+      if (column.column === WAITING_COLUMN) {
+        expect(column.unavailableReason).toBe('AWAITING_WAITING_SESSION_SOURCE');
+        continue;
+      }
+      if (!PHASE_DERIVED_COLUMNS.includes(column.column)) {
         expect(column.unavailableReason).toBeNull();
         continue;
       }
@@ -134,6 +150,139 @@ describe('bang dieu hanh — mot PHEP CHIEU cua trang thai da duoc transport-cor
       expect(column.cards).toHaveLength(0);
       expect(column.total).toBe(0);
     }
+  });
+
+  /*
+   * `#278` N13 bai 1 — *"removing F1 source integration restores stale placeholder => test red"*.
+   *
+   * Bai nay do dung cai do: co nguon moc thi ba cot PHAI mo. Ai go tich hop checkpoint di, hoac
+   * quay ve khai bao cung `AWAITING_CHECKPOINT_SOURCE`, se lam bai nay do — khong phai bang mot
+   * loi bien dich ma bang mot cau khang dinh ve hanh vi.
+   */
+  it('co nguon moc: ba cot giai doan MO ra, khong con mot ma ly do nao', () => {
+    const board = buildOperationsBoard(
+      coreInput({
+        runs: [run({ status: 'ACTIVE' })],
+        legsByRun: new Map([[RUN_ID, [leg({ status: 'IN_TRANSIT' })]]]),
+        legPhasesByRun: phasesFor({ [leg().id]: 'AT_PICKUP' }),
+      }),
+    );
+
+    for (const column of PHASE_DERIVED_COLUMNS) {
+      expect(board.find((entry) => entry.column === column)?.unavailableReason).toBeNull();
+    }
+  });
+
+  /*
+   * `#278` N13 bai 2 — *"WAITING inferred from checkpoint instead of WaitingSession => red"*.
+   *
+   * Mot chang dang o `ARRIVED` la dung cai cam do de suy ra "dang cho nguoi nhan". Bai nay khoa cua
+   * do lai: co moc, co chang da den noi, cot `WAITING` van RONG va van mang ma ly do rieng cua no.
+   */
+  it('chang da DEN NOI khong bao gio roi vao cot Waiting — cho can mot phien cho', () => {
+    const board = buildOperationsBoard(
+      coreInput({
+        runs: [run({ status: 'ACTIVE' })],
+        legsByRun: new Map([[RUN_ID, [leg({ status: 'IN_TRANSIT' })]]]),
+        legPhasesByRun: phasesFor({ [leg().id]: 'ARRIVED' }),
+      }),
+    );
+
+    const waiting = board.find((entry) => entry.column === WAITING_COLUMN);
+    expect(waiting?.cards).toHaveLength(0);
+    expect(waiting?.unavailableReason).toBe('AWAITING_WAITING_SESSION_SOURCE');
+    expect(board.find((entry) => entry.column === 'ARRIVED')?.cards.map((c) => c.runCode)).toEqual([
+      'VR-001',
+    ]);
+  });
+
+  it('giai doan chang quyet dinh cot cua mot vong chay DANG CHAY', () => {
+    const columnFor = (phase: RunLegPhase): string | undefined => {
+      const board = buildOperationsBoard(
+        coreInput({
+          runs: [run({ status: 'ACTIVE' })],
+          legsByRun: new Map([[RUN_ID, [leg({ status: 'IN_TRANSIT' })]]]),
+          legPhasesByRun: phasesFor({ [leg().id]: phase }),
+        }),
+      );
+      return board.find((entry) => entry.cards.length > 0)?.column;
+    };
+
+    expect(columnFor('PLANNED')).toBe('IN_TRANSIT');
+    expect(columnFor('AT_PICKUP')).toBe('PICKUP');
+    expect(columnFor('LOADING')).toBe('LOADING');
+    expect(columnFor('IN_TRANSIT')).toBe('IN_TRANSIT');
+    expect(columnFor('ARRIVED')).toBe('ARRIVED');
+  });
+
+  it('vong chay dang chay ma chua ai bam moc van o In transit, khong bien mat khoi bang', () => {
+    const board = buildOperationsBoard(
+      coreInput({
+        runs: [run({ status: 'ACTIVE' })],
+        legsByRun: new Map([[RUN_ID, [leg({ status: 'IN_TRANSIT' })]]]),
+        legPhasesByRun: phasesFor({}),
+      }),
+    );
+
+    expect(board.find((entry) => entry.column === 'IN_TRANSIT')?.cards).toHaveLength(1);
+    expect(board.find((entry) => entry.column === 'IN_TRANSIT')?.cards[0]?.currentLeg?.phase).toBe(
+      null,
+    );
+  });
+
+  it('chang dang lam la chang mo co so thu tu NHO NHAT, kem ma don doc duoc', () => {
+    const board = buildOperationsBoard(
+      coreInput({
+        runs: [run({ status: 'ACTIVE' })],
+        legsByRun: new Map([
+          [
+            RUN_ID,
+            [
+              leg({ id: 'l1', sequence: 1, status: 'COMPLETED', kind: 'EMPTY' }),
+              leg({ id: 'l2', sequence: 2, status: 'IN_TRANSIT', orderId: 'o-9' }),
+              leg({ id: 'l3', sequence: 3, status: 'PLANNED' }),
+            ],
+          ],
+        ]),
+        orderCodesById: new Map([['o-9', 'ORD-2026-09-0009']]),
+        legPhasesByRun: phasesFor({ l1: 'DELIVERED', l2: 'LOADING' }),
+      }),
+    );
+
+    const card = board.find((entry) => entry.column === 'LOADING')?.cards[0];
+    expect(card?.currentLeg).toEqual({
+      legId: 'l2',
+      sequence: 2,
+      kind: 'LOADED',
+      orderCode: 'ORD-2026-09-0009',
+      phase: 'LOADING',
+    });
+  });
+
+  it('chang RONG khong mang ma don — bat bien cua TransportRunLeg doc len tren the', () => {
+    const board = buildOperationsBoard(
+      coreInput({
+        runs: [run({ status: 'ACTIVE' })],
+        legsByRun: new Map([[RUN_ID, [leg({ id: 'e1', kind: 'EMPTY', status: 'IN_TRANSIT' })]]]),
+        legPhasesByRun: phasesFor({ e1: 'IN_TRANSIT' }),
+      }),
+    );
+
+    const card = board.find((entry) => entry.column === 'IN_TRANSIT')?.cards[0];
+    expect(card?.currentLeg?.kind).toBe('EMPTY');
+    expect(card?.currentLeg?.orderCode).toBeNull();
+  });
+
+  it('moi chang deu xong thi khong con chang dang lam — the noi null, khong bia chang cuoi', () => {
+    const board = buildOperationsBoard(
+      coreInput({
+        runs: [run({ status: 'COMPLETED' })],
+        legsByRun: new Map([[RUN_ID, [leg({ id: 'l1', status: 'COMPLETED' })]]]),
+        legPhasesByRun: phasesFor({ l1: 'DELIVERED' }),
+      }),
+    );
+
+    expect(board.find((entry) => entry.column === 'DELIVERED')?.cards[0]?.currentLeg).toBeNull();
   });
 
   it('vong chay PLANNED vao cot Planned, ACTIVE vao In transit, COMPLETED vao Delivered', () => {
@@ -184,6 +333,8 @@ describe('bang dieu hanh — mot PHEP CHIEU cua trang thai da duoc transport-cor
     const card = board.find((column) => column.column === 'PLANNED')?.cards[0];
 
     expect(card?.totalKm).toBeNull();
+    // `#278` N13 bai 3 — km khong biet KHONG duoc ve thanh so 0 tren mot the.
+    expect(card?.emptyKm).toBeNull();
     expect(card?.loadedLegs).toBe(2);
   });
 
@@ -206,6 +357,7 @@ describe('bang dieu hanh — mot PHEP CHIEU cua trang thai da duoc transport-cor
     const card = board.find((column) => column.column === 'PLANNED')?.cards[0];
 
     expect(card?.totalKm).toBe(150);
+    expect(card?.emptyKm).toBe(30);
     expect(card?.loadedLegs).toBe(1);
     expect(card?.emptyLegs).toBe(1);
   });

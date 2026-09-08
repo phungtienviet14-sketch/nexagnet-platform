@@ -1,4 +1,6 @@
 import type { BusinessDate } from '../business-date.js';
+import type { RunLegPhase } from '../checkpoint/run-timeline.js';
+import type { RunLegKind } from '../movement/movement.types.js';
 
 /**
  * THAP DIEU HANH — mot READ MODEL, khong phai mot nguon su that thu hai (#241 §5, #244 G1/G2/G3).
@@ -51,30 +53,69 @@ export const OPERATIONS_BOARD_COLUMNS = [
 export type OperationsBoardColumn = (typeof OPERATIONS_BOARD_COLUMNS)[number];
 
 /**
- * BON COT CHUA CO NGUON — va do la mot su that duoc CONG BO, khong phai mot cho trong.
+ * BA COT SUY TU GIAI DOAN CHANG — `PICKUP`, `LOADING`, `ARRIVED`.
  *
- * `PICKUP`, `LOADING`, `ARRIVED`, `WAITING` chi ton tai khi co mo hinh CHECKPOINT cua Lane F
- * (#243): cong vao bai, phieu xuong hang, lai xe bam DA DEN, va khoang cho nguoi nhan. Mo hinh do
- * chua vao `main`.
+ * Chung KHONG suy tu `RunLegStatus`. Nguon duy nhat la `deriveLegPhase()` cua
+ * `transport-checkpoint` (`run-timeline.ts`), tuc mot chuoi moc hien truong CO THAT:
+ * `PICKUP_ARRIVAL`/`GATE_ENTRY` -> `AT_PICKUP`, `LOADING` -> `LOADING`, `DELIVERY_ARRIVAL` ->
+ * `ARRIVED`.
  *
- * Hai duong SAI ma khai bao nay chan:
- *
- *   1. suy bon cot do tu `RunLegStatus` — `IN_TRANSIT` khong phan biet duoc "dang cho o kho nguoi
- *      nhan" voi "dang chay tren duong", nen mot cot `WAITING` dung tu do se la mot con so BIA;
- *   2. bo han bon cot khoi bang — nguoi dung se doc bang nhu the quy trinh that chi co ba buoc.
- *
- * Nen chung nam tren bang, RONG, kem mot ma ly do doc duoc. Khi Lane F vao `main`, cho nay noi
- * `[]` va phep chieu doc checkpoint that.
+ * Khi capability `transport-checkpoint` TAT, ba cot nay giu nguyen cho tren bang, RONG, kem
+ * `AWAITING_CHECKPOINT_SOURCE`. Bo han chung khoi bang se lam nguoi dung doc bang nhu the quy
+ * trinh that chi co ba buoc; suy chung tu `RunLegStatus` se cho ra con so BIA.
  */
-export const CHECKPOINT_DERIVED_COLUMNS: readonly OperationsBoardColumn[] = [
+export const PHASE_DERIVED_COLUMNS: readonly OperationsBoardColumn[] = [
   'PICKUP',
   'LOADING',
   'ARRIVED',
-  'WAITING',
 ];
 
-export const BOARD_COLUMN_UNAVAILABLE_REASONS = ['AWAITING_CHECKPOINT_SOURCE'] as const;
+/**
+ * COT `WAITING` — CHUA CO NGUON, VA KHONG DUOC SUY TU MOC.
+ *
+ * `run-timeline.ts` da ghi thang ly do va no van dung sau khi `transport-checkpoint` vao `main`:
+ * hai chang cung dung o `DELIVERY_ARRIVAL` thi mot chang co the dang cho nguoi nhan con chang kia
+ * thi khong. Phan biet duoc hai truong hop do can PHIEN CHO
+ * (`TransportDeliveryWaitingSession`, Lane F3/Lane O) — mot ban ghi co gio mo va gio dong, khong
+ * phai mot moc.
+ *
+ * Nen cot nay mang mot ma ly do RIENG. Gop no vao `AWAITING_CHECKPOINT_SOURCE` sau khi moc da co
+ * that se noi doi: nguon moc DA co, cai thieu la mot nguon KHAC.
+ */
+export const WAITING_COLUMN: OperationsBoardColumn = 'WAITING';
+
+export const BOARD_COLUMN_UNAVAILABLE_REASONS = [
+  /** Capability `transport-checkpoint` dang TAT o khach nay — khong co moc hien truong nao. */
+  'AWAITING_CHECKPOINT_SOURCE',
+  /** Moc DA co, nhung khoang cho nguoi nhan can mot phien cho, va phien cho chua vao `main`. */
+  'AWAITING_WAITING_SESSION_SOURCE',
+] as const;
 export type BoardColumnUnavailableReason = (typeof BOARD_COLUMN_UNAVAILABLE_REASONS)[number];
+
+/**
+ * CHANG DANG LAM cua mot vong chay — cai ma the tren bang phai NOI RA truoc.
+ *
+ * #274 §5 doi mot vong chay chay duoc nhieu don tren nhieu chang. Luc do mot the mang ten vong
+ * chay khong con du: nguoi truc can biet ngay chang NAO dang chay va cho don nao. Nen the mang
+ * theo chang hien tai, con toan bo chuoi chang van doc duoc qua man hinh chi tiet (#278 N4:
+ * *"emphasize the current/next Order, while allowing advanced drill to Run details"*).
+ *
+ * `orderCode` chu khong `orderId`: quy uoc `SELECTION_QUERY_PARAM` cua `navigation.ts` cam mot
+ * `id` ky thuat di len dia chi. `null` khi chang la `EMPTY` (bat bien cua `TransportRunLeg`: chang
+ * rong khong mang don) hoac khi chang co hang chua nhap xong don.
+ */
+export interface BoardCurrentLeg {
+  readonly legId: string;
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  readonly orderCode: string | null;
+  /**
+   * Giai doan doc tu moc hien truong. `null` khi capability `transport-checkpoint` dang tat HOAC
+   * chang nay chua co moc nao — hai truong hop khac nhau ma bang phan biet bang
+   * `unavailableSources`, khong bang cach doan mot giai doan.
+   */
+  readonly phase: RunLegPhase | null;
+}
 
 /** Mot the tren bang — LUON tro ve mot vong chay that. */
 export interface OperationsBoardCard {
@@ -89,6 +130,13 @@ export interface OperationsBoardCard {
   readonly emptyLegs: number;
   /** `null` khi con mot chang thieu km — xem `summariseRunDistance`. Khong bao gio doan bang 0. */
   readonly totalKm: number | null;
+  /** KM RONG cong don — `null` theo dung luat cua `summariseRunDistance`, khong bao gio 0 thay. */
+  readonly emptyKm: number | null;
+  /**
+   * Chang dang lam. `null` khi vong chay khong con chang nao dang mo (moi chang da giao xong hoac
+   * da huy) — luc do chinh `VehicleRunStatus` la thu duy nhat noi ve vong chay.
+   */
+  readonly currentLeg: BoardCurrentLeg | null;
 }
 
 export interface OperationsBoardColumnView {
@@ -120,6 +168,8 @@ export const ACTION_QUEUE_SUBJECTS = [
   'FUEL_ENTRY',
   'FUEL_RECONCILIATION',
   'TRACKING_SESSION',
+  /** Mot moc van hanh cua `transport-checkpoint` — ban ghi goc cua mot canh bao thieu chung cu. */
+  'RUN_CHECKPOINT',
   'COMPANY',
 ] as const;
 export type ActionQueueSubjectKind = (typeof ACTION_QUEUE_SUBJECTS)[number];
@@ -176,6 +226,20 @@ export const ACTION_QUEUE_KINDS = [
   'MAINTENANCE_OVERDUE',
   'MAINTENANCE_DUE_SOON',
   'VEHICLE_STATE_INCONSISTENT',
+  /* --- `transport-checkpoint` (#243 F1) --- */
+  /**
+   * Mot moc DOI chung cu vi tri theo chinh sach nhung khong tro toi ban dinh vi nao.
+   *
+   * Day la ma DUY NHAT ma bang phat tu moc, va co y giu no hep nhu vay: `run-timeline.ts` da tinh
+   * san canh bao (`TIMELINE_WARNINGS`), nen o day chi doi ten sang tu vung hang viec. Phat them
+   * mot ma "chang chua bam moc" se la mot phep suy cua bang — tuc mot may trang thai thu hai o
+   * dung cho ma `#244` G3 cam.
+   *
+   * Muc `WARNING` chu khong `CRITICAL`: `#243` F1 viet ro moc thieu chung cu VAN duoc ghi va
+   * canh bao KHONG chan gi ca. Nang len `CRITICAL` se bien mot ghi chu doi soat thanh mot cao buoc
+   * nham vao lai xe chay o vung khong co song.
+   */
+  'CHECKPOINT_LOCATION_PROOF_MISSING',
 ] as const;
 export type ActionQueueKind = (typeof ACTION_QUEUE_KINDS)[number];
 
@@ -195,6 +259,16 @@ export const PENDING_ACTION_QUEUE_KINDS = [
 export type PendingActionQueueKind = (typeof PENDING_ACTION_QUEUE_KINDS)[number];
 
 export const PENDING_ACTION_QUEUE_REASONS = [
+  /**
+   * Doi PHIEN CHO NGUOI NHAN (`TransportDeliveryWaitingSession`, Lane F3/Lane O).
+   *
+   * TACH khoi `AWAITING_CHECKPOINT_SOURCE` sau khi moc hien truong da vao `main`: gop hai cai lam
+   * mot se noi rang moc con thieu, trong khi moc DA co va cai thieu la mot khoang thoi gian co gio
+   * mo/gio dong. Xem khoi chu thich cua `WAITING_COLUMN`.
+   */
+  'AWAITING_WAITING_SESSION_SOURCE',
+  /** Doi TAI LIEU VAN HANH (bien ban giao hang, phieu ky nhan) cua Lane O — chua vao `main`. */
+  'AWAITING_OPERATIONAL_DOCUMENT_SOURCE',
   /** Doi mo hinh checkpoint/dwell/chung tu cua Lane F (#243). */
   'AWAITING_CHECKPOINT_SOURCE',
   /**
@@ -245,7 +319,16 @@ export interface ActionQueueItem {
  * `transport-core`, nen nguon do khong bao gio vang mat. Mot enum co mot gia tri khong bao gio
  * duoc dung la mot enum noi doi.
  */
-export const CONTROL_TOWER_SOURCES = ['EXPENSE_CLAIMS', 'FUEL', 'OPERATIONAL_ALERTS'] as const;
+export const CONTROL_TOWER_SOURCES = [
+  'EXPENSE_CLAIMS',
+  'FUEL',
+  'OPERATIONAL_ALERTS',
+  /**
+   * `transport-checkpoint` — moc hien truong. Vang mat thi ba cot `PICKUP`/`LOADING`/`ARRIVED`
+   * chuyen sang `AWAITING_CHECKPOINT_SOURCE` va moi the mat `currentLeg.phase`.
+   */
+  'CHECKPOINT',
+] as const;
 export type ControlTowerSource = (typeof CONTROL_TOWER_SOURCES)[number];
 
 /* ------------------------------------------------------------------ *

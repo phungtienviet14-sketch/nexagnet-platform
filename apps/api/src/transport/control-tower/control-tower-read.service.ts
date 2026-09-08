@@ -5,6 +5,7 @@ import { TRANSPORT_CORE_POLICY, type TransportCorePolicy } from '../transport-po
 import { CONTROL_TOWER_DECISIONS } from './control-tower-decisions.js';
 import {
   ControlTowerAlertFacts,
+  ControlTowerCheckpointFacts,
   ControlTowerClaimFacts,
   ControlTowerCoreFacts,
   ControlTowerFuelFacts,
@@ -23,6 +24,59 @@ import {
   type PendingActionQueueEntry,
 } from './control-tower.types.js';
 import type { OperationalAlert } from '../asset-compliance/operational-alerts.js';
+import type { RunTimeline } from '../checkpoint/run-timeline.js';
+import type { VehicleRun } from '../movement/movement.types.js';
+
+/**
+ * DAU VAO cua mot lan doc — `ControlTowerCoreInput` cong dong thoi gian goc.
+ *
+ * Phep chieu chi can `legPhases`; hang viec can `entries[].warnings`. Giu ca hai TRONG MOT lan doc
+ * thay vi goi cong hai lan: hai lan doc cach nhau vai chuc mili giay co the tra ve hai hien truong
+ * khac nhau, va luc do bang se hien mot cot noi mot dang con hang viec noi mot dang khac.
+ */
+interface ControlTowerReadInput extends ControlTowerCoreInput {
+  readonly timelinesByRun: ReadonlyMap<string, RunTimeline> | null;
+}
+
+/**
+ * CANH BAO CUA DONG THOI GIAN -> hang viec.
+ *
+ * `run-timeline.ts` da quyet dinh cai gi la canh bao; o day chi doi ten sang tu vung hang viec, cung
+ * khuon `toQueueItem` cho canh bao van hanh. Khong mot phep suy nao them: bang KHONG tu hoi "chang
+ * nay le ra phai co moc gi" — do la viec cua `checkpoint-lifecycle.ts`, va no thuoc capability khac.
+ */
+const checkpointQueueItems = (
+  timelinesByRun: ReadonlyMap<string, RunTimeline> | null,
+  runs: readonly VehicleRun[],
+): readonly ActionQueueItem[] => {
+  if (timelinesByRun === null) return [];
+
+  const codeByRun = new Map(runs.map((run) => [run.id, run.code] as const));
+  const items: ActionQueueItem[] = [];
+
+  for (const [runId, timeline] of timelinesByRun) {
+    for (const entry of timeline.entries) {
+      if (!entry.warnings.includes('LOCATION_PROOF_MISSING')) continue;
+      items.push({
+        kind: 'CHECKPOINT_LOCATION_PROOF_MISSING',
+        severity: 'WARNING',
+        subject: {
+          kind: 'RUN_CHECKPOINT',
+          id: entry.checkpointId,
+          reference: codeByRun.get(runId) ?? null,
+        },
+        detail: {
+          checkpointType: entry.type,
+          runId,
+          legId: entry.legId,
+          driverId: entry.driverId,
+        },
+      });
+    }
+  }
+
+  return items;
+};
 
 /**
  * THAP DIEU HANH — mot lan doc, nhieu nguon, khong mot duong ghi nao.
@@ -54,18 +108,28 @@ export class ControlTowerReadService {
     @Optional() private readonly claims?: ControlTowerClaimFacts,
     @Optional() private readonly fuel?: ControlTowerFuelFacts,
     @Optional() private readonly alerts?: ControlTowerAlertFacts,
+    @Optional() private readonly checkpoints?: ControlTowerCheckpointFacts,
     @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
   async view(now?: Date): Promise<ControlTowerView> {
     const generatedFor = toBusinessDate(now ?? new Date(), this.corePolicy.timeZone);
-    const coreInput = await this.readCore();
+    const unavailableSources: ControlTowerSource[] = [];
+
+    /*
+     * MOC DOC TRUOC BANG, va do la thu tu bat buoc: ba cot `PICKUP`/`LOADING`/`ARRIVED` va truong
+     * `currentLeg.phase` cua moi the deu la ket qua cua lan doc nay. Doc sau roi va vao bang se
+     * phai dung mot bang thu hai.
+     */
+    const coreInput = await this.readCore(unavailableSources);
 
     const board = buildOperationsBoard(coreInput);
     const fleet = countFleetPresence(coreInput);
 
-    const unavailableSources: ControlTowerSource[] = [];
-    const queue: ActionQueueItem[] = [...this.coreQueueItems(coreInput)];
+    const queue: ActionQueueItem[] = [
+      ...this.coreQueueItems(coreInput),
+      ...checkpointQueueItems(coreInput.timelinesByRun, coreInput.runs),
+    ];
 
     queue.push(...(await this.claimQueueItems(unavailableSources)));
     queue.push(...(await this.fuelQueueItems(unavailableSources)));
@@ -109,16 +173,17 @@ export class ControlTowerReadService {
     };
   }
 
-  private async readCore(): Promise<ControlTowerCoreInput> {
-    const [runs, vehicles, drivers] = await Promise.all([
+  private async readCore(unavailable: ControlTowerSource[]): Promise<ControlTowerReadInput> {
+    const [runs, vehicles, drivers, orders] = await Promise.all([
       this.core.listRuns(),
       this.core.listVehicles(),
       this.core.listDrivers(),
+      this.core.listOrders(),
     ]);
 
     /*
      * Chi doc chang/phan cong cua vong chay CON TREN BANG. Vong chay da huy khong len bang
-     * (`COLUMN_BY_RUN_STATUS`), nen doc chang cua no la N lan goi kho cho mot o khong ai thay.
+     * (`columnForRun` tra `null`), nen doc chang cua no la N lan goi kho cho mot o khong ai thay.
      */
     const onBoard = runs.filter((run) => run.status !== 'CANCELLED');
     const legEntries = await Promise.all(
@@ -128,13 +193,59 @@ export class ControlTowerReadService {
       onBoard.map(async (run) => [run.id, await this.core.listRunAssignments(run.id)] as const),
     );
 
+    const timelinesByRun = await this.readTimelines(onBoard, unavailable);
+
     return {
       runs,
       legsByRun: new Map(legEntries),
       assignmentsByRun: new Map(assignmentEntries),
       vehicles,
       drivers,
+      orderCodesById: new Map(orders.map((order) => [order.id, order.code] as const)),
+      timelinesByRun,
+      legPhasesByRun:
+        timelinesByRun === null
+          ? null
+          : new Map(
+              [...timelinesByRun].map(([runId, timeline]) => [runId, timeline.legPhases] as const),
+            ),
     };
+  }
+
+  /**
+   * DONG THOI GIAN cua tung vong chay dang tren bang — hoac `null` khi khong co nguon.
+   *
+   * `null` mang mot y nghia CU THE ma mot `Map` rong khong mang duoc: xem chu thich cua
+   * `ControlTowerCoreInput.legPhasesByRun`. Nen ca hai duong hong deu tra `null`, khong tra `Map`
+   * rong: capability tat, va lan doc that bai. Mot lan doc that bai ma tra `Map` rong se lam ba cot
+   * hien ra NHU THE hom nay khong xe nao o buoc do — mot cau khang dinh sai ve hien truong.
+   */
+  private async readTimelines(
+    onBoard: readonly VehicleRun[],
+    unavailable: ControlTowerSource[],
+  ): Promise<ReadonlyMap<string, RunTimeline> | null> {
+    const checkpoints = this.checkpoints;
+    if (!checkpoints) {
+      unavailable.push('CHECKPOINT');
+      return null;
+    }
+
+    try {
+      const entries = await Promise.all(
+        onBoard.map(async (run) => [run.id, await checkpoints.timelineForRun(run.id)] as const),
+      );
+      return new Map(entries);
+    } catch (error) {
+      this.telemetry?.decision({
+        vocabulary: CONTROL_TOWER_DECISIONS,
+        point: 'control_tower.compile',
+        outcome: 'degraded',
+        reason: 'CONTROL_TOWER_SOURCE_FAILED',
+        detail: { source: 'CHECKPOINT', error: error instanceof Error ? error.name : 'UNKNOWN' },
+      });
+      unavailable.push('CHECKPOINT');
+      return null;
+    }
   }
 
   /** Viec doc duoc tu chinh `transport-core` — khong qua mot cong tuy chon nao. */
@@ -310,6 +421,22 @@ const PENDING_WORK: readonly PendingActionQueueEntry[] = PENDING_ACTION_QUEUE_KI
       return { kind, reason: 'AWAITING_RECEIVABLE_DUE_DATE_SOURCE' } as const;
     case 'LOCATION_PROOF_REVIEW':
       return { kind, reason: 'AWAITING_FLEET_WIDE_PROOF_QUERY' } as const;
+    /*
+     * HAI MUC NAY DOI PHIEN CHO, khong doi moc.
+     *
+     * Sau khi `transport-checkpoint` vao `main`, giu chung o `AWAITING_CHECKPOINT_SOURCE` se noi
+     * doi: nguon moc DA co. Cai con thieu la mot ban ghi co gio mo va gio dong cho lan cho nguoi
+     * nhan — xem khoi chu thich cua `WAITING_COLUMN`.
+     */
+    case 'RECEIVER_WAITING_ABOVE_THRESHOLD':
+    case 'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL':
+      return { kind, reason: 'AWAITING_WAITING_SESSION_SOURCE' } as const;
+    /*
+     * Chung tu giao hang la TAI LIEU VAN HANH, khong phai mot moc. Mot moc `DELIVERY_ACCEPTED` noi
+     * lai xe da bam nut; no khong noi bien ban ky nhan da ve tay ke toan chua.
+     */
+    case 'DELIVERY_PROOF_DOCUMENT_MISSING':
+      return { kind, reason: 'AWAITING_OPERATIONAL_DOCUMENT_SOURCE' } as const;
     default:
       return { kind, reason: 'AWAITING_CHECKPOINT_SOURCE' } as const;
   }

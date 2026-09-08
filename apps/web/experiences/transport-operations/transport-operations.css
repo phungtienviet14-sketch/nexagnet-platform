@@ -1411,6 +1411,26 @@
   font-size: 0.84rem;
 }
 
+/*
+ * CHANG DANG LAM tren mot the.
+ *
+ * `#274` §4 doi chang RONG phai noi bat MAU DO. `#278` N2 doi mau khong duoc la tin hieu duy nhat.
+ * Nen o day mau di kem mot vien va mot nen — con chu "RỖNG" thi do tang doc dat vao nhan
+ * (`currentLegLabel`), khong do CSS. Bo het mau di thi nguoi doc VAN biet chang nao la chang rong.
+ */
+.tx-board__leg {
+  font-weight: 600;
+  color: var(--tx-ink-soft);
+}
+
+.tx-board__leg--empty {
+  color: var(--tx-stop);
+  background: var(--tx-stop-wash);
+  border-left: 3px solid var(--tx-stop);
+  padding-left: 0.35rem;
+  border-radius: 2px;
+}
+
 /* Cham muc nang tren hang viec — mau la thu THU HAI, chu da mang nghia (`tx-dot` chi to them). */
 .tx-dot {
   display: inline-block;

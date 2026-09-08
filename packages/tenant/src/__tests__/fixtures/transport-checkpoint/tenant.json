@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "slug": "transport-checkpoint",
+  "identity": {
+    "displayName": "Transport Checkpoint Fixture",
+    "shortName": "Checkpoint"
+  },
+  "branding": {
+    "productName": "Transport Operations",
+    "installName": "Transport Operations",
+    "pageTitle": "Transport Operations",
+    "pageDescription": "Generic transport tenant fixture: runs, legs and field checkpoints feeding the operations board.",
+    "themeColor": "#123a5f",
+    "backgroundColor": "#f4f6f9",
+    "monogram": "T",
+    "composerPlaceholder": "Search runs"
+  },
+  "experience": "transport-operations",
+  "capabilities": ["transport-core", "transport-proof", "transport-checkpoint"],
+  "policies": {
+    "transportCore": { "timeZone": "Asia/Ho_Chi_Minh" },
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {},
+  "bootstrap": {}
+}

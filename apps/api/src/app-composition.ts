@@ -177,6 +177,8 @@ import { ControlTowerReadService } from './transport/control-tower/control-tower
 import {
   ControlTowerAlertFacts,
   ControlTowerAlertFactsAdapter,
+  ControlTowerCheckpointFacts,
+  ControlTowerCheckpointFactsAdapter,
   ControlTowerClaimFacts,
   ControlTowerClaimFactsAdapter,
   ControlTowerCoreFacts,
@@ -477,6 +479,18 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('transport-asset-compliance', {
     provide: ControlTowerAlertFacts,
     useClass: ControlTowerAlertFactsAdapter,
+  }),
+  /**
+   * MOC HIEN TRUONG (`#243` F1) — cong thu NAM, va la cong doi ban chat cua bang.
+   *
+   * Bon cong tren chi them MUC vao hang viec. Cong nay quyet dinh ba COT cua bang dieu hanh
+   * (`PICKUP`/`LOADING`/`ARRIVED`) va truong `currentLeg.phase` cua moi the. Khach tat
+   * `transport-checkpoint` thi ba cot do van nam tren bang, RONG, kem `AWAITING_CHECKPOINT_SOURCE`
+   * — chinh xac hinh dang ma bang da co truoc tranche nay.
+   */
+  owned('transport-checkpoint', {
+    provide: ControlTowerCheckpointFacts,
+    useClass: ControlTowerCheckpointFactsAdapter,
   }),
   /**
    * BANG TAI CHINH — cung khuon, va cung mot ly le cau truc.

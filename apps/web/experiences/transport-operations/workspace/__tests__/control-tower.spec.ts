@@ -3,6 +3,7 @@ import { TRANSPORT_SECTIONS } from '../../navigation';
 import type {
   ActionQueueItem,
   ControlTowerView,
+  OperationsBoardCard,
   OperationsBoardColumnView,
 } from '../../transport-types';
 import { OPERATIONS_BOARD_ORDER, toControlTower } from '../control-tower';
@@ -17,14 +18,54 @@ const column = (over: Partial<OperationsBoardColumnView> = {}): OperationsBoardC
   ...over,
 });
 
+const card = (over: Partial<OperationsBoardCard> = {}): OperationsBoardCard => ({
+  runId: 'r1',
+  runCode: 'VR-001',
+  vehicleId: 'v1',
+  businessDate: TODAY,
+  driverId: null,
+  loadedLegs: 2,
+  emptyLegs: 1,
+  totalKm: 300,
+  emptyKm: 100,
+  currentLeg: null,
+  ...over,
+});
+
+/**
+ * BANG cua mot khach DA bat `transport-checkpoint`.
+ *
+ * Ba cot giai doan MO; chi `WAITING` con dong, va no dong vi mot ly do KHAC — phien cho chua ton
+ * tai. Do la hinh dang that cua bang sau `#278` N4, nen cac bai duoi day chay tren no.
+ */
 const emptyBoard = (): OperationsBoardColumnView[] =>
   OPERATIONS_BOARD_ORDER.map((name) =>
     column({
       column: name,
-      unavailableReason: ['PICKUP', 'LOADING', 'ARRIVED', 'WAITING'].includes(name)
-        ? 'AWAITING_CHECKPOINT_SOURCE'
-        : null,
+      unavailableReason: name === 'WAITING' ? 'AWAITING_WAITING_SESSION_SOURCE' : null,
     }),
+  );
+
+/** BANG cua mot khach CHUA bat `transport-checkpoint` — ba cot giai doan dong lai. */
+const boardWithoutCheckpoints = (): OperationsBoardColumnView[] =>
+  OPERATIONS_BOARD_ORDER.map((name) =>
+    column({
+      column: name,
+      unavailableReason: ['PICKUP', 'LOADING', 'ARRIVED'].includes(name)
+        ? 'AWAITING_CHECKPOINT_SOURCE'
+        : name === 'WAITING'
+          ? 'AWAITING_WAITING_SESSION_SOURCE'
+          : null,
+    }),
+  );
+
+/** Dat MOT the vao MOT cot cua mot bang da co day du bay cot. */
+const boardWith = (
+  target: OperationsBoardColumnView['column'],
+  entry: OperationsBoardCard,
+): OperationsBoardColumnView[] =>
+  emptyBoard().map((existing) =>
+    existing.column === target ? { ...existing, total: 1, cards: [entry] } : existing,
   );
 
 const item = (over: Partial<ActionQueueItem> = {}): ActionQueueItem => ({
@@ -159,31 +200,116 @@ describe('bang — bay cot, va cot chua co nguon phai noi ra', () => {
    * bien mot vong chay chua nhap km thanh mot vong chay dai 0 km.
    */
   it('thieu km hien ra dau gach, khong bao gio ra so 0', () => {
-    const board = emptyBoard().map((entry) =>
-      entry.column === 'PLANNED'
-        ? {
-            ...entry,
-            total: 1,
-            cards: [
-              {
-                runId: 'r1',
-                runCode: 'VR-001',
-                vehicleId: 'v1',
-                businessDate: TODAY,
-                driverId: null,
-                loadedLegs: 2,
-                emptyLegs: 1,
-                totalKm: null,
-              },
-            ],
-          }
-        : entry,
+    const model = toControlTower(
+      view({ board: boardWith('PLANNED', card({ totalKm: null, emptyKm: null })) }),
     );
-    const model = toControlTower(view({ board }));
-    const card = model.columns.find((entry) => entry.column === 'PLANNED')?.cards[0];
+    const row = model.columns.find((entry) => entry.column === 'PLANNED')?.cards[0];
 
-    expect(card?.totalKm).not.toBe('0');
-    expect(card?.totalKm).toBe('—');
+    expect(row?.totalKm).not.toBe('0');
+    expect(row?.totalKm).toBe('—');
+    /* `#278` N13 bai 3 — km rong khong biet cung khong duoc ve thanh 0. */
+    expect(row?.emptyKm).not.toBe('0');
+    expect(row?.emptyKm).toBe('—');
+  });
+});
+
+describe('chang dang lam — chang RONG phai doc ra duoc, khong chi nhin ra duoc', () => {
+  /*
+   * `#278` N13 bai 4 — *"EMPTY segment not visually/emphatically distinguishable/red => red"*.
+   *
+   * Bai o tang doc khoa nua duoi cua yeu cau do: tang doc phai phat ra MOT CO rieng (`isEmpty`) VA
+   * mot chu doc duoc ("RỖNG"). Neu chi co mau o CSS thi nguoi dung mu mau, hay mot ban in den
+   * trang, se mat sach thong tin — va khong bai nao bat duoc.
+   */
+  it('chang rong mang co rieng VA chu RONG trong nhan — mau khong phai tin hieu duy nhat', () => {
+    const model = toControlTower(
+      view({
+        board: boardWith(
+          'IN_TRANSIT',
+          card({
+            currentLeg: {
+              legId: 'l2',
+              sequence: 2,
+              kind: 'EMPTY',
+              orderCode: null,
+              phase: 'IN_TRANSIT',
+            },
+          }),
+        ),
+      }),
+    );
+    const leg = model.columns.find((entry) => entry.column === 'IN_TRANSIT')?.cards[0]?.currentLeg;
+
+    expect(leg?.isEmpty).toBe(true);
+    expect(leg?.label).toContain('RỖNG');
+    expect(leg?.phase).toBe('Đang chạy');
+  });
+
+  it('chang co hang mang MA DON, va khong bi danh dau rong', () => {
+    const model = toControlTower(
+      view({
+        board: boardWith(
+          'LOADING',
+          card({
+            currentLeg: {
+              legId: 'l1',
+              sequence: 1,
+              kind: 'LOADED',
+              orderCode: 'ORD-2026-09-0009',
+              phase: 'LOADING',
+            },
+          }),
+        ),
+      }),
+    );
+    const leg = model.columns.find((entry) => entry.column === 'LOADING')?.cards[0]?.currentLeg;
+
+    expect(leg?.isEmpty).toBe(false);
+    expect(leg?.label).toContain('ORD-2026-09-0009');
+  });
+
+  it('chang chua co moc noi dau gach, KHONG doan mot giai doan', () => {
+    const model = toControlTower(
+      view({
+        board: boardWith(
+          'IN_TRANSIT',
+          card({
+            currentLeg: { legId: 'l1', sequence: 1, kind: 'LOADED', orderCode: null, phase: null },
+          }),
+        ),
+      }),
+    );
+    const leg = model.columns.find((entry) => entry.column === 'IN_TRANSIT')?.cards[0]?.currentLeg;
+
+    expect(leg?.phase).toBe('—');
+    expect(leg?.label).toContain('chưa gắn đơn');
+  });
+});
+
+describe('cot dong lai — hai ly do, hai cau chu khac nhau', () => {
+  it('khach chua bat moc: ba cot giai doan dong, va cau chu noi ve MOC', () => {
+    const model = toControlTower(view({ board: boardWithoutCheckpoints() }));
+    const pickup = model.columns.find((entry) => entry.column === 'PICKUP');
+
+    expect(pickup?.isAvailable).toBe(false);
+    expect(pickup?.note).toContain('mốc hiện trường');
+  });
+
+  /*
+   * `#278` N13 bai 2, lop cuoi cung — o TANG MAN HINH.
+   *
+   * Sau khi moc da co that, cot `WAITING` van dong. Neu cau chu cua no van noi "chưa bật nghiệp vụ
+   * mốc" thi nguoi truc se di bat mot capability DA bat, va cot van khong mo ra.
+   */
+  it('da co moc: cot Cho nguoi nhan van dong, nhung cau chu noi ve PHIEN CHO', () => {
+    const model = toControlTower(view({ board: emptyBoard() }));
+    const waiting = model.columns.find((entry) => entry.column === 'WAITING');
+    const pickup = model.columns.find((entry) => entry.column === 'PICKUP');
+
+    expect(pickup?.isAvailable).toBe(true);
+    expect(waiting?.isAvailable).toBe(false);
+    expect(waiting?.note).toContain('phiên chờ');
+    expect(waiting?.note).not.toContain('chưa bật nghiệp vụ');
   });
 });
 

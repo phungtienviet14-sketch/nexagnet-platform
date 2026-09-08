@@ -1545,7 +1545,25 @@ export interface ExpenseClaimDetail {
 export type OperationsBoardColumn =
   'PLANNED' | 'PICKUP' | 'LOADING' | 'IN_TRANSIT' | 'ARRIVED' | 'WAITING' | 'DELIVERED';
 
-export type BoardColumnUnavailableReason = 'AWAITING_CHECKPOINT_SOURCE';
+export type BoardColumnUnavailableReason =
+  /** Khach TAT `transport-checkpoint` — khong co moc hien truong nao. */
+  | 'AWAITING_CHECKPOINT_SOURCE'
+  /** Moc DA co; cai thieu la mot phien cho co gio mo/gio dong. Hai chuyen khac han nhau. */
+  | 'AWAITING_WAITING_SESSION_SOURCE';
+
+/** Giai doan mot chang, suy tu chuoi moc hien truong — KHONG tu `RunLegStatus`. */
+export type RunLegPhase =
+  'PLANNED' | 'AT_PICKUP' | 'LOADING' | 'IN_TRANSIT' | 'ARRIVED' | 'DELIVERED';
+
+export interface BoardCurrentLeg {
+  readonly legId: string;
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  /** `null` khi chang RONG (chang rong khong mang don) hoac chang co hang chua nhap xong don. */
+  readonly orderCode: string | null;
+  /** `null` khi khong co nguon moc, hoac chang nay chua co moc nao. */
+  readonly phase: RunLegPhase | null;
+}
 
 export interface OperationsBoardCard {
   readonly runId: string;
@@ -1558,6 +1576,10 @@ export interface OperationsBoardCard {
   readonly emptyLegs: number;
   /** `null` = con mot chang thieu km. KHONG duoc hien thi thanh `0`. */
   readonly totalKm: number | null;
+  /** `null` = con mot chang thieu km. KHONG duoc hien thi thanh `0`. */
+  readonly emptyKm: number | null;
+  /** `null` khi vong chay khong con chang nao dang mo. */
+  readonly currentLeg: BoardCurrentLeg | null;
 }
 
 export interface OperationsBoardColumnView {
@@ -1577,6 +1599,7 @@ export type ActionQueueSubjectKind =
   | 'FUEL_ENTRY'
   | 'FUEL_RECONCILIATION'
   | 'TRACKING_SESSION'
+  | 'RUN_CHECKPOINT'
   | 'COMPANY';
 
 export interface ActionQueueSubject {
@@ -1599,7 +1622,8 @@ export type ActionQueueKind =
   | 'COMPLIANCE_DOCUMENT_MISSING'
   | 'MAINTENANCE_OVERDUE'
   | 'MAINTENANCE_DUE_SOON'
-  | 'VEHICLE_STATE_INCONSISTENT';
+  | 'VEHICLE_STATE_INCONSISTENT'
+  | 'CHECKPOINT_LOCATION_PROOF_MISSING';
 
 export type PendingActionQueueKind =
   | 'RECEIVER_WAITING_ABOVE_THRESHOLD'
@@ -1609,6 +1633,8 @@ export type PendingActionQueueKind =
   | 'LOCATION_PROOF_REVIEW';
 
 export type PendingActionQueueReason =
+  | 'AWAITING_WAITING_SESSION_SOURCE'
+  | 'AWAITING_OPERATIONAL_DOCUMENT_SOURCE'
   | 'AWAITING_CHECKPOINT_SOURCE'
   | 'AWAITING_RECEIVABLE_DUE_DATE_SOURCE'
   | 'AWAITING_FLEET_WIDE_PROOF_QUERY';
@@ -1627,7 +1653,7 @@ export interface ActionQueueItem {
   readonly detail: Readonly<Record<string, number | string | null>>;
 }
 
-export type ControlTowerSource = 'EXPENSE_CLAIMS' | 'FUEL' | 'OPERATIONAL_ALERTS';
+export type ControlTowerSource = 'EXPENSE_CLAIMS' | 'FUEL' | 'OPERATIONAL_ALERTS' | 'CHECKPOINT';
 
 export interface FleetPresenceView {
   readonly total: number;
