@@ -138,6 +138,14 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.asset_ownership.manage',
       // Pham vi CUA CHINH MINH cua ben huu quan — CHI DOC, va KHONG cap qua vai nao.
       'transport.stakeholder.self.vehicle.read',
+      // `TX-08` mo rong (Lane J, #269) — NAP DU LIEU ETC. Bon ma, va su tach bach giua chung la co
+      // that: NAP mot ban sao cua su that nha cung cap KHAC voi QUYET rang ban sao do khop hay
+      // khong. Khong ma nao trong so nay noi ve tien da tra.
+      'transport.toll.account.read',
+      'transport.toll.account.manage',
+      'transport.toll.import',
+      'transport.toll.review.read',
+      'transport.toll.review.resolve',
       'transport.commercial_acceptance.read',
       'transport.commercial_acceptance.decide',
     ]);

@@ -25,6 +25,7 @@
     "transport-workforce",
     "transport-proof",
     "transport-checkpoint",
+    "transport-toll",
     "transport-acceptance"
   ],
   "policies": {

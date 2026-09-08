@@ -887,6 +887,11 @@ model TransportVehicle {
   /// `transport-proof` — cac phien bam vi tri gan voi xe nay. Xe do MAY CHU dien tu ban phan
   /// cong; may khach khong bao gio duoc noi minh dang lai xe nao.
   trackingSessions   TransportTrackingSession[]
+  /// `transport-toll` (#269) — cac doan noi voi mot tai khoan giao thong, KE CA cac doan da dong,
+  /// va cac dong sao ke ETC da nhan dien duoc ra xe nay. ETC la CONG TY TRA: khong duong nao tu
+  /// day di vao so quy lai xe.
+  tollAccountLinks   TransportTollAccountVehicleLink[]
+  tollCandidates     TransportTollTransactionCandidate[]
 
   @@index([status])
 }
@@ -4440,6 +4445,250 @@ model TransportVehicleOwnershipInterest {
 
   @@index([vehicleId, effectiveTo])
   @@index([stakeholderId, effectiveTo])
+}
+
+/* ====================================================================== *
+ * `transport-toll` (`TX-08` mo rong, Lane J / #269) — NAP DU LIEU ETC
+ *
+ * KHONG mot bang nao o duoi day sinh cong no, phai tra hay mot but toan nao.
+ * ETC la CONG TY TRA (#229 §8, #237), va khong bang nao co cot `driverId` —
+ * do la mot bat bien CAU TRUC, duoc mot bai test quet ma nguon giu lai.
+ *
+ * Nghien cuu + phan loai bang chung: `docs/kien-truc/transport-etc-ingestion.md`
+ * ====================================================================== */
+
+enum TransportTollProvider {
+  VETC
+  EPASS
+  OTHER
+}
+
+enum TransportTollSourceKind {
+  API
+  STATEMENT_FILE
+  INVOICE_PDF
+  MANUAL
+}
+
+enum TransportTollTransactionKind {
+  TOLL_PASS
+  TOP_UP
+  /// Khong phai mot COT rieng: phi 6.600d/thang duoc cong bo 01/08/2026 roi tam dung ~20/08/2026.
+  /// Mot cot rieng cho mot dong phi co the bien mat trong ba tuan la mot cot chet.
+  ACCOUNT_FEE
+  ADJUSTMENT
+}
+
+enum TransportTollLinkProvenance {
+  MANUAL
+  STATEMENT_DECLARED
+}
+
+enum TransportTollParseStatus {
+  ACCEPTED
+  REJECTED
+}
+
+/// VI SAO mot dong bi tu choi luc DOC. N duong tu choi thi N ma.
+enum TransportTollRejectReason {
+  TOLL_ROW_UNPARSEABLE
+  TOLL_ROW_MISSING_AMOUNT
+  TOLL_ROW_AMOUNT_INVALID
+  TOLL_ROW_MISSING_DATE
+  TOLL_ROW_DATE_INVALID
+  TOLL_ROW_ACCOUNT_MISSING
+  TOLL_ROW_PLATE_MISSING
+  TOLL_ROW_KIND_UNKNOWN
+}
+
+/// KHONG co `OUT_OF_POLICY`: #269 J6 chi cho phep no *"if a real deterministic policy exists"*, va
+/// chua ai mo ta mot chinh sach nao. KHONG co `UNSUPPORTED_KIND`: mot loai khong nhan ra hong o
+/// tang DOC, khong o tang PHAN LOAI.
+enum TransportTollMatchState {
+  MATCHED
+  ACCOUNT_UNRESOLVED
+  VEHICLE_UNRESOLVED
+  AMBIGUOUS
+  DUPLICATE_CANDIDATE
+}
+
+/// KHONG co `PAID`/`SETTLED`/`ACCOUNTED` — #269 J7 cam thang. Ba chu do noi ve TIEN DA TRA; cai
+/// duy nhat mien nay biet la mot dong da co nguoi NHIN.
+enum TransportTollReviewState {
+  PENDING
+  CONFIRMED
+  REOPENED
+}
+
+enum TransportTollReviewAction {
+  RESOLVE_VEHICLE
+  CONFIRM
+  FLAG_DUPLICATE
+  /// "Hai dong giong nhau nay la HAI su kien that" — tinh huong doc cheo lan ma VETC tu cong bo.
+  CLEAR_DUPLICATE
+  REOPEN
+}
+
+/// MOT TAI KHOAN GIAO THONG da khai — khai niem CO DINH NGHIA PHAP LY (ND 119/2024/ND-CP).
+///
+/// KHONG bao gio duoc sinh tu dong tu mot lan nhap tep: mot so tai khoan doc sai mot chu se lang
+/// le tao ra mot tai khoan ma khong so sach nao biet.
+model TransportTollAccount {
+  id         String                @id @default(cuid())
+  provider   TransportTollProvider
+  accountNo  String
+  /// ND 119 Phu luc cho phep CA NHAN lan TO CHUC dung ten tai khoan.
+  holderName String?
+  active     Boolean               @default(true)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  links      TransportTollAccountVehicleLink[]
+  candidates TransportTollTransactionCandidate[]
+
+  @@unique([provider, accountNo])
+  @@index([provider, active])
+}
+
+/// MOT DOAN THOI GIAN mot xe nhan chi tra tu mot tai khoan giao thong.
+///
+/// ND 119/2024/ND-CP Dieu 11 khoan 3: *"moi phuong tien tham gia giao thong CHI DUOC NHAN CHI TRA
+/// TU MOT TAI KHOAN GIAO THONG."* Nen tai moi khoanh khac mot `vehicleId` chi duoc co DUNG MOT
+/// dong `effectiveTo IS NULL`.
+///
+/// Bat bien do duoc cuong che O DB bang unique mot phan `TransportTollAccountVehicleLink_activeVehicle_key`
+/// (`WHERE "effectiveTo" IS NULL`), giong khuon cua `TransportVehicleOwnershipInterest`. Kiem o
+/// tang mien chi dung khi co MOT nguoi ghi.
+model TransportTollAccountVehicleLink {
+  id                 String                      @id @default(cuid())
+  accountId          String
+  account            TransportTollAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  vehicleId          String
+  vehicle            TransportVehicle            @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  /// ND 119 Phu luc co "ma dinh danh the dau cuoi" (RFID) — mot khoa BEN HON bien so.
+  /// `null` la truong hop THUONG: chua do duoc no co xuat hien tren tep xuat hay khong.
+  providerVehicleRef String?
+  /// NGAY nghiep vu, hai dau DEU TINH.
+  effectiveFrom      String                      @db.VarChar(10)
+  effectiveTo        String?                     @db.VarChar(10)
+  provenance         TransportTollLinkProvenance @default(MANUAL)
+  createdAt          DateTime                    @default(now())
+  createdBy          String
+  closedAt           DateTime?
+  closedBy           String?
+
+  @@index([accountId, effectiveTo])
+  @@index([vehicleId, effectiveTo])
+}
+
+/// MOT LAN NAP — bat bien sau khi ghi.
+///
+/// `@@unique([provider, sourceDigest])` la ca co che chong lap o tang NGUON: nap lai dung bo byte
+/// do tra ve chinh ban ghi nay, khong tao gi (#269 J4 — *"same source re-upload => idempotent"*).
+model TransportTollImport {
+  id            String                  @id @default(cuid())
+  provider      TransportTollProvider
+  sourceKind    TransportTollSourceKind
+  /// Ten tep / ma ky sao ke. KHONG phai duong dan he thong tep, va khong bao gio ra DTO duoi dang
+  /// mot dinh vi doc duoc.
+  sourceLabel   String
+  /// SHA-256 cua BYTE goc.
+  sourceDigest  String                  @db.VarChar(64)
+  /// Ky cua nguon NEU nguon co mot ky. Hoa don tung giao dich thi khong co.
+  periodStart   String?                 @db.VarChar(10)
+  periodEnd     String?                 @db.VarChar(10)
+  rowCount      Int
+  acceptedCount Int
+  rejectedCount Int
+  importedAt    DateTime                @default(now())
+  importedBy    String
+
+  candidates TransportTollTransactionCandidate[]
+
+  @@unique([provider, sourceDigest])
+  @@index([provider, importedAt])
+}
+
+/// MOT DONG cua nguon. Dong BI TU CHOI van duoc luu, voi moi o so lieu de NULL.
+///
+/// #269 J3 goi do la *"preserve partial success"*: mot tep 500 dong doc duoc 497 la ket qua BINH
+/// THUONG. Nem ca lan nap di se lam nguoi dung mat ca 497 dong dung — roi ho se khong bao gio biet
+/// ba dong kia ton tai.
+model TransportTollTransactionCandidate {
+  id           String                     @id @default(cuid())
+  importId     String
+  import       TransportTollImport        @relation(fields: [importId], references: [id], onDelete: Cascade)
+  provider     TransportTollProvider
+  /// So dong TRONG TEP, tu 1 — de nguoi doi soat mo tep ra tim dung dong.
+  rowNumber    Int
+  parseStatus  TransportTollParseStatus
+  rejectReason TransportTollRejectReason?
+  /// So tai khoan DOC DUOC TU TEP, giu nguyen ke ca khi khong ung tai khoan nao.
+  accountNoRaw String
+  accountId    String?
+  account      TransportTollAccount?      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  kind         TransportTollTransactionKind?
+  /// Bien so DOC DUOC TU TEP, giu nguyen ke ca khi khong khop xe nao.
+  vehiclePlateRaw String
+  vehicleId       String?
+  vehicle         TransportVehicle?       @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  passedAt        DateTime?
+  /// `INV-25` — NGAY nghiep vu, tinh MOT LAN luc doc theo mui gio tenant.
+  businessDate    String?                 @db.VarChar(10)
+  /// So nguyen DONG (`GD-03`), CO DAU. `CHECK` bien dat o migration, trung bien cua `money()`.
+  signedAmount    BigInt?
+  currencyCode    String                  @default("VND") @db.VarChar(3)
+  stationLabel    String?
+  providerRef     String?
+  /// TIN HIEU chong lap o tang DONG — KHONG phai mot khoa duy nhat. #269 J4 cam bia ra mot luat
+  /// duy nhat cho `providerReference` khi khong nha cung cap nao bao dam co mot cai.
+  fingerprint     String?                 @db.VarChar(64)
+  matchState      TransportTollMatchState?
+  reviewState     TransportTollReviewState @default(PENDING)
+  /// Dong ma nguoi doi soat noi dong nay trung. KHONG phai mot ket luan cua may.
+  ///
+  /// KHONG co cot `resolvedVehicleId` di kem, va do la mot lua chon: ban dau co mot cot nhu vay de
+  /// "tach xe nguoi chon khoi xe may doc ra", nhung khong duong doc nao dung toi no — trong khi
+  /// `TransportTollReviewDecision.previousVehicleId/nextVehicleId` DA giu dung ca hai dau cua moi
+  /// lan sua. Mot cot ghi-mot-chieu ben canh mot lich su day du la mot nguon su that thu hai, va
+  /// no se lech.
+  duplicateOfCandidateId String?
+  /// Dong nguyen ban, de doi chieu khi ai do nghi bo cot dang doc sai tep.
+  rawValues       Json
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  decisions TransportTollReviewDecision[]
+
+  @@unique([importId, rowNumber])
+  @@index([provider, fingerprint])
+  @@index([accountId, businessDate])
+  @@index([matchState, reviewState])
+  @@index([vehicleId, businessDate])
+}
+
+/// MOT QUYET DINH cua nguoi doi soat — GHI THEM, khong bao gio ghi de.
+///
+/// #269 J7 doi giu `actor / time / reason / old-new linkage / append-supersede history`. Nen bang
+/// nay khong co `updatedAt` va khong co duong sua: mot lan doi y la mot DONG MOI.
+model TransportTollReviewDecision {
+  id          String                            @id @default(cuid())
+  candidateId String
+  candidate   TransportTollTransactionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  action      TransportTollReviewAction
+  actor       String
+  at          DateTime                          @default(now())
+  /// Ly do CO MA, khong phai mot cau tu do.
+  reason      String
+  note        String?
+  previousVehicleId      String?
+  nextVehicleId          String?
+  previousMatchState     TransportTollMatchState?
+  nextMatchState         TransportTollMatchState?
+  duplicateOfCandidateId String?
+
+  @@index([candidateId, at])
+  @@index([actor, at])
 }
 
 // ----- Transport domain: NGHIEM THU CHUNG TU / THUONG MAI (capability `transport-acceptance`,

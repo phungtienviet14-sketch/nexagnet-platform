@@ -258,6 +258,19 @@ export const CAPABILITY_IDS = [
    */
   'transport-checkpoint',
   /**
+   * VAN TAI — NAP DU LIEU ETC / PHI DUONG BO (`TX-08` mo rong, #269).
+   *
+   * `dependencies: ['transport-core']` va CHI the: doc mot sao ke ETC can doi xe de noi bien so ve
+   * mot chiec xe, va khong can gi khac. KHONG phu thuoc `transport-costing`, va do la mot phat
+   * bieu co y: ETC la CONG TY TRA (#229 §8), no khong di qua so quy lai xe, nen mot khach dung ETC
+   * ma khong dung so quy van chay duoc.
+   *
+   * KHONG phu thuoc `transport-fuel` du hai ben giong nhau ve hinh dang nap tep: giong hinh dang
+   * khong phai mot phu thuoc, va noi chung lai se bat mot khach chi muon doi soat ETC phai khai ca
+   * dinh muc nhien lieu.
+   */
+  'transport-toll',
+  /**
    * NGHIEM THU CHUNG TU / THUONG MAI (Issue #268 Lane I) — ho so nghiem thu cua mot vong chay,
    * lich su quyet dinh chi-ghi-them, va phep suy "du dieu kien di vao mot ky doi soat moi".
    *
@@ -572,6 +585,63 @@ const transportPayrollPolicySchema = z
     fuelSavingBonusVndPerLiter: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   })
   .strict();
+const tollProviderMappingSchema = z
+  .object({
+    /**
+     * TEN COT DOC DUOC TRONG TEP cua nha cung cap.
+     *
+     * KHONG co bo mac dinh nao — khac han `transportFuel`, va khac CO CHU DICH. Ten cot cua VETC va
+     * ePass deu dang o muc `CUSTOMER SAMPLE REQUIRED`
+     * (`docs/kien-truc/transport-etc-ingestion.md` §2.3), va #269 cam bia mot dinh dang ra. Chua
+     * khai thi duong chay cua CHINH nha cung cap do tra `BLOCKED_SAMPLE_REQUIRED`.
+     */
+    columns: z
+      .object({
+        accountNo: nonEmpty.optional(),
+        kind: nonEmpty.optional(),
+        vehiclePlate: nonEmpty.optional(),
+        passedAt: nonEmpty.optional(),
+        businessDate: nonEmpty.optional(),
+        amount: nonEmpty.optional(),
+        station: nonEmpty.optional(),
+        providerRef: nonEmpty.optional(),
+      })
+      .strict(),
+    dateFormat: z.enum(['iso', 'dmy']).default('dmy'),
+    /** CHU cua nha cung cap -> loai giao dich cua ta. Khong co trong bang = dong bi tu choi. */
+    kinds: z
+      .record(nonEmpty, z.enum(['TOLL_PASS', 'TOP_UP', 'ACCOUNT_FEE', 'ADJUSTMENT']))
+      .default({}),
+    /** Dung khi tep KHONG co cot loai. Suy ho nguoi khai la doan. */
+    defaultKind: z
+      .enum(['TOLL_PASS', 'TOP_UP', 'ACCOUNT_FEE', 'ADJUSTMENT'])
+      .nullable()
+      .default(null),
+  })
+  .strict();
+
+/**
+ * Chinh sach cua `transport-toll` — `TX-08` mo rong (#269).
+ *
+ * TUY CHON toan bo: mot khach bat ETC nhung chua co ban mau nao cua nha cung cap van boot duoc, va
+ * duong chay cua tung nha cung cap bao `BLOCKED_SAMPLE_REQUIRED` rieng.
+ */
+const transportTollPolicySchema = z
+  .object({
+    providers: z
+      .object({
+        VETC: tollProviderMappingSchema.optional(),
+        EPASS: tollProviderMappingSchema.optional(),
+        OTHER: tollProviderMappingSchema.optional(),
+      })
+      .strict()
+      .optional(),
+    /** Chan mot tep nham, khong phai mot gioi han nghiep vu (#269 J9). */
+    maxSourceBytes: z.number().int().min(1_000).max(64_000_000).optional(),
+    maxRows: z.number().int().min(1).max(200_000).optional(),
+  })
+  .strict();
+
 const tenantPoliciesSchema = z
   .object({
     salesOrder: salesOrderPolicySchema.optional(),
@@ -581,6 +651,7 @@ const tenantPoliciesSchema = z
     transportFuel: transportFuelPolicySchema.optional(),
     transportCompliance: transportCompliancePolicySchema.optional(),
     transportPayroll: transportPayrollPolicySchema.optional(),
+    transportToll: transportTollPolicySchema.optional(),
     readiness: tenantReadinessSchema,
   })
   .strict();
@@ -718,6 +789,20 @@ const capabilityRequirements = {
    * nen khai se bien mot khoi tuy chon thanh mot dieu kien boot. Cung ly le voi `transport-proof`.
    */
   'transport-checkpoint': { dependencies: ['transport-core', 'transport-proof'] },
+  /**
+   * KHONG khai `policy: 'transportToll'`, cung ly le voi ba capability van tai truoc no — va o day
+   * co them mot ly do RIENG, manh hon.
+   *
+   * Khai `policy` lam khoi cau hinh do thanh BAT BUOC luc boot. Voi ETC dieu do sai han huong:
+   * chinh cai chua co (bo cot cua nha cung cap) la thu ta chua duoc phep bia ra. Mot khach bat ETC
+   * TRUOC khi xin duoc ban mau la trang thai BINH THUONG, va he thong phai boot duoc o do roi bao
+   * `BLOCKED_SAMPLE_REQUIRED` RIENG cho tung nha cung cap — chu khong tu choi khoi dong.
+   *
+   * (Do duoc: khai `policy` o day lam `app.module.transport-toll.boot.spec.ts` do voi
+   * *"transport-toll yeu cau policy transportToll"*, va se lam ca `tenants/transport-preview`
+   * khong boot duoc.)
+   */
+  'transport-toll': { dependencies: ['transport-core'] },
   /**
    * MOT phu thuoc HOM NAY, va con so do la mot su that da do chu khong mot lua chon.
    *

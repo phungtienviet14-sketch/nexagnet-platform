@@ -23,6 +23,8 @@ import type { TransportCommercialAcceptanceDecisionReason } from './acceptance/a
 import type { TransportCommercialAcceptanceErrorReason } from './acceptance/acceptance-errors.js';
 import type { TransportAssetOwnershipDecisionReason } from './asset-ownership/asset-ownership-decisions.js';
 import type { TransportAssetOwnershipErrorReason } from './asset-ownership/asset-ownership-errors.js';
+import type { TransportTollDecisionReason } from './toll/toll-decisions.js';
+import type { TollErrorReason } from './toll/toll-errors.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
 
 /**
@@ -119,6 +121,8 @@ export type TransportErrorReason =
   | TransportCheckpointDecisionReason
   | TransportAssetOwnershipDecisionReason
   | TransportAssetOwnershipErrorReason
+  | TransportTollDecisionReason
+  | TollErrorReason
   | TransportCommercialAcceptanceDecisionReason
   | TransportCommercialAcceptanceErrorReason;
 
