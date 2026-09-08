@@ -13,6 +13,8 @@ import type {
   ComplianceDocumentType,
   ControlTowerView,
   FinanceSummaryView,
+  RunJourneyMapView,
+  RunJourneyView,
   ComplianceSubjectKind,
   CorrelatedPosting,
   DirectMargin,
@@ -1132,5 +1134,25 @@ export const transportApi = {
    */
   finance: {
     summary: (): Promise<FinanceSummaryView> => get('/transport/finance/summary'),
+  },
+
+  /**
+   * BAO CAO BAN DO VONG CHAY (Lane N, #278 N5) — HAI lan goi, va do la co y.
+   *
+   * `run()` di sau `transport.run.read`; `map()` di sau `transport.location.history.read`, ma ke
+   * toan KHONG co. Gop hai lan goi lam mot se buoc may chu tra toa do duoi ma quyen thu nhat —
+   * tuc am tham cap cho ke toan dung cai quyen ma ma tran vai da tu choi ho.
+   *
+   * Nen man hinh goi rieng, va mot `403` o `map()` la mot cau tra loi DUNG: bao cao van ve, chi
+   * khong co ban do.
+   *
+   * `runRef` la MA vong chay (`navigation.ts` cam mot `id` ky thuat len dia chi), nhung may chu
+   * nhan ca hai — xem `JourneyController`.
+   */
+  journey: {
+    run: (runRef: string): Promise<RunJourneyView> =>
+      get(`/transport/journey/runs/${encodeURIComponent(runRef)}`),
+    map: (runRef: string): Promise<RunJourneyMapView> =>
+      get(`/transport/journey/runs/${encodeURIComponent(runRef)}/map`),
   },
 } as const;

@@ -1674,6 +1674,130 @@ export interface ControlTowerView {
 }
 
 /* ------------------------------------------------------------------ *
+ * BAO CAO BAN DO VONG CHAY — `GET /transport/journey/runs/:runRef` (Lane N, #278 N5)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/journey/journey.types.ts`.
+ *
+ * HAI KHUNG NHIN, HAI LAN GOI, VA DO KHONG PHAI MOT SU BAT TIEN.
+ *
+ * `RunJourneyView` (bao cao) di sau `transport.run.read`; `RunJourneyMapView` (toa do) di sau
+ * `transport.location.history.read`, ma ke toan KHONG co. Man hinh phai chiu duoc truong hop lan
+ * goi thu hai tra ve 403 va van ve duoc bao cao — do la hinh dang DUNG cua san pham, khong phai
+ * mot loi can vong tranh.
+ */
+/** Chin loai moc hien truong cua `#243` F1 — day du, de `Record` nhan nhan khong co nhanh mac dinh. */
+export type RunCheckpointType =
+  | 'ASSIGNED'
+  | 'DEPARTED'
+  | 'PICKUP_ARRIVAL'
+  | 'GATE_ENTRY'
+  | 'LOADING'
+  | 'PICKUP_DEPARTURE'
+  | 'DELIVERY_ARRIVAL'
+  | 'DELIVERY_ACCEPTED'
+  | 'COMPLETED';
+
+export type JourneyPointSource = 'CHECKPOINT_OBSERVATION';
+
+export type JourneyGeometryGap =
+  | 'NO_CHECKPOINT_OBSERVATION'
+  | 'NO_CHECKPOINT_RECORDED'
+  | 'NO_ROUTE_PROVIDER'
+  | 'NO_TRACKING_SESSION';
+
+export type JourneyPathKind = 'PLANNED' | 'CHECKPOINT_ANCHORED' | 'RAW_OBSERVED';
+
+export interface GeoPoint {
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
+export interface JourneyPoint {
+  readonly point: GeoPoint;
+  readonly source: JourneyPointSource;
+  readonly at: string | null;
+}
+
+export interface JourneyPath {
+  readonly kind: JourneyPathKind;
+  readonly points: readonly GeoPoint[];
+  readonly gap: JourneyGeometryGap | null;
+  /** So diem THAT truoc khi may chu thua bot. `points.length` co the nho hon. */
+  readonly sampledFrom: number;
+}
+
+export interface JourneyLegView {
+  readonly legId: string;
+  readonly sequence: number;
+  /** `EMPTY` la truc ma bao cao phai to MAU DO — su that cua mien, khong phai suy dien. */
+  readonly kind: RunLegKind;
+  readonly status: RunLegStatus;
+  readonly orderCode: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly businessDate: BusinessDate;
+  /** `null` = CHUA BIET. KHONG duoc hien thi thanh `0`. */
+  readonly distanceKm: number | null;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly phase: RunLegPhase | null;
+}
+
+export interface JourneyLegGeometryView {
+  readonly legId: string;
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  readonly origin: JourneyPoint | null;
+  readonly originGap: JourneyGeometryGap | null;
+  readonly destination: JourneyPoint | null;
+  readonly destinationGap: JourneyGeometryGap | null;
+  readonly paths: readonly JourneyPath[];
+}
+
+export type JourneyEventKind = 'CHECKPOINT' | 'FUEL';
+
+export interface JourneyEvent {
+  readonly kind: JourneyEventKind;
+  readonly code: RunCheckpointType | 'FUEL_ENTRY';
+  readonly at: string;
+  readonly legId: string | null;
+  readonly hasLocationProof: boolean;
+  readonly subjectId: string;
+}
+
+export type JourneySource = 'CHECKPOINT' | 'LOCATION_PROOF' | 'FUEL';
+
+export interface JourneyRunView {
+  readonly runId: string;
+  readonly runCode: string;
+  readonly vehicleId: string;
+  readonly vehiclePlate: string | null;
+  readonly status: VehicleRunStatus;
+  readonly businessDate: BusinessDate;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly driverId: string | null;
+}
+
+export interface RunJourneyView {
+  readonly run: JourneyRunView;
+  readonly distance: RunDistanceSummary;
+  readonly orderCodes: readonly string[];
+  readonly legs: readonly JourneyLegView[];
+  readonly timeline: readonly JourneyEvent[];
+  readonly unavailableSources: readonly JourneySource[];
+}
+
+export interface RunJourneyMapView {
+  readonly runId: string;
+  readonly runCode: string;
+  readonly legs: readonly JourneyLegGeometryView[];
+  readonly unavailableSources: readonly JourneySource[];
+}
+
+/* ------------------------------------------------------------------ *
  * BANG TAI CHINH — `GET /transport/finance/summary` (Lane G, #244 G5)
  * ------------------------------------------------------------------ */
 

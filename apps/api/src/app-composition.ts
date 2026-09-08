@@ -165,6 +165,18 @@ import { ExpenseClaimsController } from './transport/claims/claims.controller.js
 import { RunsController } from './transport/movement/runs.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { ControlTowerController } from './transport/control-tower/control-tower.controller.js';
+import { JourneyController } from './transport/journey/journey.controller.js';
+import { JourneyReadService } from './transport/journey/journey-read.service.js';
+import {
+  JourneyCheckpointFacts,
+  JourneyCheckpointFactsAdapter,
+  JourneyCoreFacts,
+  JourneyCoreFactsAdapter,
+  JourneyFuelFacts,
+  JourneyFuelFactsAdapter,
+  JourneyLocationFacts,
+  JourneyLocationFactsAdapter,
+} from './transport/journey/journey-facts.port.js';
 import { FinanceController } from './transport/finance/finance.controller.js';
 import { FinanceReadService } from './transport/finance/finance-read.service.js';
 import {
@@ -309,6 +321,7 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // THAP DIEU HANH (Lane G, #244) — den cung `transport-core`. Service dung sau no doc them BA
   // nguon TUY CHON o ba capability khac; xem khoi PROVIDERS ben duoi.
   owned('transport-core', ControlTowerController),
+  owned('transport-core', JourneyController),
   // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
   owned('transport-core', CounterpartyController),
   // `#267` H1: dia diem van hanh la mot MAT cua ho so phap nhan, nen no den/di cung `transport-core`
@@ -492,6 +505,27 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     provide: ControlTowerCheckpointFacts,
     useClass: ControlTowerCheckpointFactsAdapter,
   }),
+  /**
+   * BAO CAO BAN DO CUA MOT VONG CHAY (`#278` N5) — cung khuon thap dieu hanh.
+   *
+   * Cong LOI di cung `transport-core`: khong co vong chay thi khong co bao cao. Ba cong con lai
+   * quyet dinh bao cao co BAN DO hay khong, va chung den/di cung capability so huu du lieu:
+   * moc (`transport-checkpoint`), toa do (`transport-proof`), phieu do dau (`transport-fuel`).
+   *
+   * Khach tat ca ba thi bao cao van dung: chang, km co hang/rong, ma don — chi khong co ban do va
+   * khong co dong thoi gian, va `unavailableSources` noi ra dieu do.
+   */
+  owned('transport-core', JourneyReadService),
+  owned('transport-core', { provide: JourneyCoreFacts, useClass: JourneyCoreFactsAdapter }),
+  owned('transport-checkpoint', {
+    provide: JourneyCheckpointFacts,
+    useClass: JourneyCheckpointFactsAdapter,
+  }),
+  owned('transport-proof', {
+    provide: JourneyLocationFacts,
+    useClass: JourneyLocationFactsAdapter,
+  }),
+  owned('transport-fuel', { provide: JourneyFuelFacts, useClass: JourneyFuelFactsAdapter }),
   /**
    * BANG TAI CHINH — cung khuon, va cung mot ly le cau truc.
    *

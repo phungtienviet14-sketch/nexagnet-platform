@@ -97,6 +97,36 @@ export function useControlTower(input: NavigationInput) {
 }
 
 /**
+ * BAO CAO BAN DO VONG CHAY (Lane N, #278 N5) — HAI hook, hai ma quyen.
+ *
+ * Day la ngoai le NGUOC voi `useControlTower`: o do mot lan goi la dung vi ba nguon deu nam sau
+ * CUNG mot ma quyen. O day thi khong — toa do di sau `transport.location.history.read`, ma ke toan
+ * KHONG co (`transport-actions.ts`). Gop hai lan goi lam mot se buoc may chu tra toa do duoi ma
+ * quyen cua bao cao.
+ *
+ * `enabled` chi la phep tranh mot yeu cau chac chan 403; cong that van o may chu. Nho vay ke toan
+ * mo bao cao ra thi khong ban lan goi do, con quan tri thi ban ca hai.
+ */
+export function useRunJourney(input: NavigationInput, runRef: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'journey', 'run', runRef ?? 'none'],
+    queryFn: () => transportApi.journey.run(runRef ?? ''),
+    enabled: runRef !== null && allowed(input, 'transport-core', 'transport.run.read'),
+    /* 404 la mot cau tra loi nghiep vu ("khong co vong chay do"), khong phai mot su co mang. */
+    retry: false,
+  });
+}
+
+export function useRunJourneyMap(input: NavigationInput, runRef: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'journey', 'map', runRef ?? 'none'],
+    queryFn: () => transportApi.journey.map(runRef ?? ''),
+    enabled: runRef !== null && allowed(input, 'transport-core', 'transport.location.history.read'),
+    retry: false,
+  });
+}
+
+/**
  * BANG TAI CHINH — mot `useQuery` cho ca sau con so (Lane G, #244 G5).
  *
  * Dung `transport.settlement.report.read`: bang khong phoi mot su that nao ma quyen do chua cho

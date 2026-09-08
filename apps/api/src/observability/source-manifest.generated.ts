@@ -592,11 +592,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
       "line": 107
     },
-    "transport.location.history.read": {
-      "functionName": "TrackingController.track",
-      "filePath": "apps/api/src/transport/proof/tracking.controller.ts",
-      "line": 43
-    },
     "transport.maintenance.plan.manage": {
       "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts"
     },
@@ -660,9 +655,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "line": 84
     },
     "transport.run.manage": {
-      "filePath": "apps/api/src/transport/movement/runs.controller.ts"
-    },
-    "transport.run.read": {
       "filePath": "apps/api/src/transport/movement/runs.controller.ts"
     },
     "transport.settlement.document.read": {

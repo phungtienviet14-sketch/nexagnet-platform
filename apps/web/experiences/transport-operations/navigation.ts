@@ -44,6 +44,7 @@ export type TransportSectionId =
   | 'finance'
   | 'margin'
   | 'ar-ap'
+  | 'journey'
   | 'exports';
 
 export type TransportSectionGroupId = 'root' | 'dispatch' | 'cost' | 'assets' | 'reports';
@@ -211,6 +212,25 @@ export const TRANSPORT_SECTIONS = [
      */
     requiredCapabilities: ['transport-settlement'],
     requiredAction: 'transport.settlement.report.read',
+  },
+  {
+    id: 'journey',
+    label: 'Bản đồ vòng chạy',
+    group: 'reports',
+    summary: 'Chặng có hàng và chặng rỗng của một vòng chạy, trên bản đồ và trên dòng thời gian.',
+    /**
+     * CHI `transport-core`, va do la co y — cung khuon thap dieu hanh.
+     *
+     * Ban do can toa do cua `transport-proof` va moc cua `transport-checkpoint`, nhung mot khach
+     * chua bat hai capability do VAN doc duoc bao cao: chang, km co hang/rong, ma don. Khai ca ba o
+     * day se lam muc bien mat khoi menu thay vi hien ra kem mot cau noi ro thieu gi.
+     *
+     * `requiredAction` la `transport.run.read` — quyen cua BAO CAO. Toa do di sau mot ma khac
+     * (`transport.location.history.read`) va duoc kiem o may chu, khong o menu: ke toan van mo duoc
+     * muc nay, chi khong thay ban do. Xem `JourneyController`.
+     */
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.run.read',
   },
   {
     id: 'margin',

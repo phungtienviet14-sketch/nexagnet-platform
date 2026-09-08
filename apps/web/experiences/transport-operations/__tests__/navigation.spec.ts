@@ -141,6 +141,7 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
       // mot su that ve chinh chiec xe, khong phai mot lop nghiep vu ban them.
       'asset-ownership',
       'finance',
+      'journey',
       'margin',
       'ar-ap',
       'exports',
