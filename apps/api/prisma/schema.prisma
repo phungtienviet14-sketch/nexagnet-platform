@@ -3863,6 +3863,9 @@ model TransportOrder {
   cancellationReason String?
 
   legs TransportRunLeg[]
+  /// #276 L2/L3: lan lap ke hoach da gan don nay vao mot vong chay. TOI DA MOT ban con hieu luc —
+  /// xem unique mot phan `TransportOrderRunPlan_activeOrder_key` trong SQL tho.
+  runPlans TransportOrderRunPlan[]
 
   @@index([status])
   @@index([businessDate])
@@ -3900,6 +3903,9 @@ model TransportVehicleRun {
   siteIntake    TransportRunSiteIntake?
   /// Lane I (#268): ho so nghiem thu chung tu. TOI DA MOT — xem `runId @unique` ben duoi.
   acceptance    TransportCommercialAcceptance?
+  /// Lane L (#276): cac lan lap ke hoach da dat don vao vong chay nay. NHIEU o che do
+  /// `MULTI_ORDER_RUN`, DUNG MOT o che do `ONE_ORDER_PER_RUN` (cuong che bang unique mot phan).
+  runPlans      TransportOrderRunPlan[]
 
   @@index([status])
   @@index([businessDate])
@@ -3954,7 +3960,21 @@ model TransportRunLeg {
   destinationLabel String
   businessDate     String                @db.VarChar(10)
   /// `GD-14` — nhap tay, nullable. NULL nghia la CHUA BIET, khong phai 0.
+  ///
+  /// Lane L (#276 L6) chot them: cot nay la QUANG DUONG DA GHI NHAN (nguon tay/odo/GPS). No KHONG
+  /// bao gio duoc dien tu mot con so uoc luong — cho cua uoc luong la `plannedDistanceKm`.
   distanceKm       Int?
+  /// #276 L6 — QUANG DUONG DU KIEN cua chang, do khau lap ke hoach (hoac sau nay la mot nha cung
+  /// cap dan duong cua Lane M) dua ra.
+  ///
+  /// TACH KHOI `distanceKm` chu khong ghi de len no, va do la ca diem cua truong nay: L6 viet
+  /// *"If route provider later supplies estimated distance, mark it estimated/planned. Actual
+  /// distance may come from trusted GPS/odometer sources; do not overwrite raw source."* Mot con
+  /// so uoc luong roi vao cot da ghi nhan se bien mot KE HOACH thanh mot QUANG DUONG DA DI ma
+  /// khong ai phan biet duoc nua — va bao cao km rong sau do khong con la do dac.
+  ///
+  /// NULL van la CHUA BIET, khong phai 0 — cung quy uoc voi `distanceKm`.
+  plannedDistanceKm Int?
   startedAt        DateTime?
   completedAt      DateTime?
   note             String?
@@ -3962,6 +3982,10 @@ model TransportRunLeg {
   updatedAt        DateTime              @updatedAt
 
   tripLink      TransportTripRunLegLink?
+  /// #276 L2/L3: lan lap ke hoach da sinh ra chang CO HANG nay. NHIEU NHAT mot.
+  planAsLoadedLeg TransportOrderRunPlan? @relation("TransportOrderRunPlanLoadedLeg")
+  /// #276 L3: lan lap ke hoach da sinh ra chang RONG di truoc. NHIEU NHAT mot.
+  planAsEmptyLeg  TransportOrderRunPlan? @relation("TransportOrderRunPlanEmptyLeg")
   /// R1-C: de nghi chi gan vao chang nay.
   expenseClaims TransportExpenseClaim[]
   /// F1 (#243): moc van hanh gan vao chang nay.
@@ -5005,4 +5029,92 @@ model TransportCommercialAcceptanceDecision {
   @@unique([acceptanceId, idempotencyKey], map: "TransportCommercialAcceptanceDecision_idempotency_key")
   @@index([acceptanceId])
   @@index([decidedBy])
+}
+
+// ----- Van chuyen v2 — LAP KE HOACH VONG CHAY DO HE THONG QUAN (Lane L, #276) -----------------
+//
+// #274 chot lai hinh dang san pham: sep/ke toan lam viec voi DON. `TransportVehicleRun` va
+// `TransportRunLeg` van la su that van hanh, nhung KHONG con la thu ma nguoi dung phai tu tao va
+// tu dong.
+//
+// Khoi duoi day KHONG them mot mo hinh vong chay thu hai. No them dung mot thu ma mo hinh hom nay
+// khong tra loi duoc: *lan lap ke hoach nao da gan don nay vao vong chay nay, o che do gom nhom
+// nao, va no con hieu luc khong*. Ba cau hoi do khong doc ra duoc tu `TransportRunLeg`:
+//
+//   · mot chang co hang noi "don X dang o tren vong chay Y", nhung khong noi ai da quyet dieu do,
+//     luc nao, theo che do nao — nen mot lan doi chinh sach ve sau khong doi chieu duoc voi lich su;
+//   · khong co cho nao de dat MOT rang buoc duy nhat "mot don co dung mot ke hoach dang hieu luc",
+//     va thieu no thi hai yeu cau den cung luc se gan mot don len hai chiec xe;
+//   · huy mot ke hoach roi lap lai la mot viec that (dieu xe doi y), va no can mot thuc the co
+//     vong doi rieng — khong phai mot chang bi xoa.
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO KHONG DAT UNIQUE THANG LEN `TransportRunLeg.orderId`
+//
+// Do la cach re hon (mot index, khong bang moi), va no SAI. Khoi chu thich cua `TransportOrder`
+// viet ro quan he don/chang la MOT-NHIEU: *"mot don co the trai tren nhieu chang (chuyen tai, ghep
+// xe)"*. Mot unique tren `orderId` bien cau do thanh khong con dung duoc, tuc lane nay se lang le
+// go mat mot kha nang ma lane khac da khai.
+//
+// Bang nay cam dieu #276 L3 that su cam — *"one Order must never be silently attached to two
+// active loaded legs"* — o dung grain cua no: mot KE HOACH dang hieu luc cho mot don. Chang van
+// tu do nhu cu.
+// -----------------------------------------------------------------------------------------------
+
+/// CHE DO GOM NHOM — #276 L1. La CAU HINH cua khach, khong phai mot nhanh `if tenant === ...`.
+enum TransportRunGrouping {
+  /// Moi don mot vong chay rieng. MAC DINH, va la lua chon giu nguyen hanh vi cu: khong lan lap
+  /// ke hoach nao gop hai don lai voi nhau ma nguoi dung khong khai bao dieu do.
+  ONE_ORDER_PER_RUN
+  /// Mot vong chay mang nhieu chang co hang cua nhieu don, xen ke chang rong khi co di chuyen that.
+  MULTI_ORDER_RUN
+}
+
+/// Lan lap ke hoach nay da TAO mot vong chay moi hay NOI vao mot vong chay dang chay.
+enum TransportRunPlanOutcome {
+  NEW_RUN
+  APPENDED
+}
+
+/// MOT LAN LAP KE HOACH — gan MOT don vao MOT vong chay, kem cac chang no sinh ra.
+///
+/// `idempotencyKey` la khoa chong lap do nguoi goi dat, cung khuon voi
+/// `TransportCommercialAcceptanceDecision.idempotencyKey`: gui lai cung khoa = cung mot hieu qua
+/// nghiep vu, khong phai mot ke hoach thu hai. Day la thu duy nhat dung khi mot nguoi bam hai lan
+/// hoac mot may khach thu lai sau khi mat song.
+///
+/// `grouping` duoc CHOT LUC GHI chu khong doc lai tu cau hinh khi bao cao. #276 L1 doi *"changing
+/// policy affects future planning only ... do not rewrite active/closed historical runs silently"*
+/// — mot bao cao doc lai chinh sach HIEN TAI se ke lai lich su theo mot che do chua he ap dung.
+model TransportOrderRunPlan {
+  id                 String                  @id @default(cuid())
+  orderId            String
+  order              TransportOrder          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  runId              String
+  run                TransportVehicleRun     @relation(fields: [runId], references: [id], onDelete: Restrict)
+  /// Xe cua vong chay, chep lai de tra loi "don nay giao cho xe nao" ma khong phai noi bang.
+  vehicleId          String
+  /// CHANG CO HANG cua don. BAT BUOC: mot ke hoach khong sinh ra chang co hang thi khong lap gi ca.
+  loadedLegId        String                  @unique
+  loadedLeg          TransportRunLeg         @relation("TransportOrderRunPlanLoadedLeg", fields: [loadedLegId], references: [id], onDelete: Restrict)
+  /// CHANG RONG di truoc chang co hang — CHI khi co di chuyen that (#276 L4: khong bia chang rong).
+  /// NULL nghia la diem ket thuc truoc do TRUNG diem lay hang, khong phai "chua biet".
+  emptyLegId         String?                 @unique
+  emptyLeg           TransportRunLeg?        @relation("TransportOrderRunPlanEmptyLeg", fields: [emptyLegId], references: [id], onDelete: Restrict)
+  grouping           TransportRunGrouping
+  outcome            TransportRunPlanOutcome
+  idempotencyKey     String                  @unique @db.VarChar(120)
+  /// Danh tinh tu PHIEN, khong tu than yeu cau — cung quy uoc voi ca mien van tai.
+  plannedBy          String
+  businessDate       String                  @db.VarChar(10)
+  createdAt          DateTime                @default(now())
+  /// `GD-02`: HUY thay cho xoa. Mot ke hoach da huy giai phong don cho mot lan lap ke hoach moi —
+  /// do la y nghia cua unique MOT PHAN `WHERE "cancelledAt" IS NULL`.
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  @@index([runId])
+  @@index([orderId])
+  @@index([vehicleId])
+  @@index([businessDate])
 }

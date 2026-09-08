@@ -32,7 +32,12 @@ import type {
   MaintenanceTriggerKind,
   MaintenanceWorkOrder,
   OperationalAlertFeed,
+  OrderRunPlan,
+  RunClosureVerdict,
   RunDistanceSummary,
+  RunMovementSummary,
+  RunPlanProposal,
+  RunLeg,
   RunLegKind,
   TransportOrder,
   VehicleRun,
@@ -1062,6 +1067,12 @@ export const transportApi = {
     /** Tra ca `complete` — man hinh phai noi ra khi con chang thieu km. */
     distance: (id: string): Promise<RunDistanceSummary> =>
       get(`/transport/runs/${encodeURIComponent(id)}/distance`),
+    /** #276 L6 — DA DI vs DU DINH, hai o rieng. Man hinh KHONG duoc cong chung lai. */
+    movementSummary: (id: string): Promise<RunMovementSummary> =>
+      get(`/transport/runs/${encodeURIComponent(id)}/movement`),
+    /** Chang phuc vu mot don — cach doc ORDER-FIRST "don nay dang di den dau". */
+    orderLegs: (orderId: string): Promise<readonly RunLeg[]> =>
+      get(`/transport/orders/${encodeURIComponent(orderId)}/legs`),
     createRun: (input: {
       code: string;
       vehicleId: string;
@@ -1082,6 +1093,43 @@ export const transportApi = {
       send('POST', `/transport/runs/${encodeURIComponent(id)}/transition`, { to: 'ACTIVE' }),
     assignRun: (id: string, driverId: string): Promise<unknown> =>
       send('POST', `/transport/runs/${encodeURIComponent(id)}/assignment`, { driverId }),
+  },
+
+  /**
+   * LAP KE HOACH VONG CHAY DO HE THONG QUAN (#276 Lane L).
+   *
+   * Moi duong GHI o day bat dau bang mot DON, khong bang mot vong chay — do la ca diem cua #274:
+   * sep/ke toan lam viec voi don, con vong chay la su that van hanh he thong tu dung lay.
+   *
+   * `closure` KHONG phai nut "dong vong chay": no chay lai phan xu tat dinh va thi hanh ket qua.
+   * Goi tren mot vong chay chua du dieu kien tra `closed: false` kem ly do — khong phai mot loi.
+   */
+  planning: {
+    policy: (): Promise<unknown> => get('/transport/planning/policy'),
+    plans: (orderId: string): Promise<readonly OrderRunPlan[]> =>
+      get(`/transport/planning/orders/${encodeURIComponent(orderId)}/plans`),
+    /** KHONG ghi mot hang nao. Goi bao nhieu lan cung duoc. */
+    preview: (
+      orderId: string,
+      input: { vehicleId: string; plannedEmptyKm?: number | null; plannedLoadedKm?: number | null },
+    ): Promise<RunPlanProposal> =>
+      send('POST', `/transport/planning/orders/${encodeURIComponent(orderId)}/preview`, input),
+    commit: (
+      orderId: string,
+      input: {
+        vehicleId: string;
+        idempotencyKey: string;
+        plannedEmptyKm?: number | null;
+        plannedLoadedKm?: number | null;
+      },
+    ): Promise<unknown> =>
+      send('POST', `/transport/planning/orders/${encodeURIComponent(orderId)}/plan`, input),
+    cancelPlan: (planId: string, reason: string): Promise<OrderRunPlan> =>
+      send('POST', `/transport/planning/plans/${encodeURIComponent(planId)}/cancel`, { reason }),
+    projection: (vehicleId: string): Promise<unknown> =>
+      get(`/transport/planning/vehicles/${encodeURIComponent(vehicleId)}/projection`),
+    closure: (runId: string): Promise<RunClosureVerdict> =>
+      get(`/transport/planning/runs/${encodeURIComponent(runId)}/closure`),
   },
 
   /** DE NGHI CHI + CONG DUYET (`D-06`). Duyet va tu choi la HAI duong rieng. */

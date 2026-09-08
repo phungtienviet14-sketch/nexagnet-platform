@@ -229,6 +229,32 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 57
     },
+    "planning.cancel": {
+      "functionName": "PlanningService.cancelPlan",
+      "filePath": "apps/api/src/transport/planning/planning.service.ts"
+    },
+    "planning.commit": {
+      "filePath": "apps/api/src/transport/planning/planning.service.ts"
+    },
+    "planning.depot": {
+      "functionName": "PlanningService.buildProposal",
+      "filePath": "apps/api/src/transport/planning/planning.service.ts",
+      "line": 457
+    },
+    "planning.grouping": {
+      "functionName": "PlanningService.buildProposal",
+      "filePath": "apps/api/src/transport/planning/planning.service.ts",
+      "line": 482
+    },
+    "planning.preview": {
+      "functionName": "PlanningService.preview",
+      "filePath": "apps/api/src/transport/planning/planning.service.ts",
+      "line": 136
+    },
+    "planning.run_closure": {
+      "functionName": "PlanningService.settleRunClosure",
+      "filePath": "apps/api/src/transport/planning/planning.service.ts"
+    },
     "price.current_period": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
@@ -293,11 +319,18 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "MovementService.cancelRun",
       "filePath": "apps/api/src/transport/movement/movement.service.ts"
     },
+    "run.leg_cancel": {
+      "functionName": "MovementService.cancelLeg",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
+    },
     "run.leg_change": {
       "filePath": "apps/api/src/transport/movement/movement.service.ts"
     },
+    "run.leg_transition": {
+      "functionName": "MovementService.transitionLeg",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
+    },
     "run.lifecycle_transition": {
-      "functionName": "MovementService.transitionRun",
       "filePath": "apps/api/src/transport/movement/movement.service.ts"
     },
     "run.trip_projection": {
@@ -653,9 +686,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "ProofReviewController.withdraw",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
       "line": 84
-    },
-    "transport.run.manage": {
-      "filePath": "apps/api/src/transport/movement/runs.controller.ts"
     },
     "transport.settlement.document.read": {
       "functionName": "SettlementReportsController.documentChain",

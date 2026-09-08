@@ -242,6 +242,44 @@ export function useRunDistance(input: NavigationInput, runId: string | null) {
   });
 }
 
+/**
+ * DA DI vs DU DINH cua mot vong chay (#276 L6).
+ *
+ * Doc rieng khoi `useRunDistance`: hai be mat tra loi HAI cau hoi khac nhau, va gop chung se lam
+ * doc gia dang co cua `:id/distance` nhan mot con so mang y nghia khac.
+ */
+export function useRunMovement(input: NavigationInput, runId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'runs', runId ?? 'none', 'movement'],
+    queryFn: () => transportApi.movement.movementSummary(runId as string),
+    enabled: runId !== null && allowed(input, 'transport-core', 'transport.run.read'),
+  });
+}
+
+/**
+ * CHANG PHUC VU MOT DON — duong doc ORDER-FIRST.
+ *
+ * `#274` chot sep/ke toan lam viec voi don. Cau hoi thuong gap cua ho la *"don nay dang di den
+ * dau"*, khong phai *"vong chay so may co nhung chang nao"* — nen man hinh phai tra loi duoc cau
+ * do ma khong bat ho tim vong chay truoc.
+ */
+export function useOrderLegs(input: NavigationInput, orderId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'orders', orderId ?? 'none', 'legs'],
+    queryFn: () => transportApi.movement.orderLegs(orderId as string),
+    enabled: orderId !== null && allowed(input, 'transport-core', 'transport.order.read'),
+  });
+}
+
+/** Lich su lap ke hoach cua mot don — noi don voi vong chay ma khong phai quet ca danh sach. */
+export function useOrderRunPlans(input: NavigationInput, orderId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'orders', orderId ?? 'none', 'plans'],
+    queryFn: () => transportApi.planning.plans(orderId as string),
+    enabled: orderId !== null && allowed(input, 'transport-core', 'transport.run.read'),
+  });
+}
+
 /** DE NGHI CHI cho ke toan duyet (`D-06`). */
 export function useExpenseClaims(input: NavigationInput) {
   return useQuery({

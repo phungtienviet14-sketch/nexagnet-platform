@@ -91,6 +91,7 @@ interface LegRow {
   destinationLabel: string;
   businessDate: string;
   distanceKm: number | null;
+  plannedDistanceKm: number | null;
   startedAt: Date | null;
   completedAt: Date | null;
   note: string | null;
@@ -162,6 +163,7 @@ const toLeg = (row: LegRow): RunLeg => ({
   destinationLabel: row.destinationLabel,
   businessDate: row.businessDate,
   distanceKm: row.distanceKm,
+  plannedDistanceKm: row.plannedDistanceKm,
   startedAt: isoOrNull(row.startedAt),
   completedAt: isoOrNull(row.completedAt),
   note: row.note,
@@ -305,6 +307,16 @@ export class PrismaMovementRepository extends MovementRepository {
     return rows.map(toRun);
   }
 
+  async findLatestRunForVehicle(vehicleId: string): Promise<VehicleRun | null> {
+    const row: RunRow | null = await model(this.prisma, 'transportVehicleRun').findFirst({
+      where: { vehicleId },
+      // `createdAt` chu khong `businessDate`: hai vong chay cung ngay se hoa, con thu tu tao la
+      // thu tu that. `id` la day thu hai de hai hang cung mili giay van xep tat dinh.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? toRun(row) : null;
+  }
+
   async setRunStatus(id: string, status: VehicleRunStatus, at: Date): Promise<VehicleRun | null> {
     const row = await model(this.prisma, 'transportVehicleRun').update({
       where: { id },
@@ -345,6 +357,7 @@ export class PrismaMovementRepository extends MovementRepository {
           destinationLabel: input.destinationLabel,
           businessDate: input.businessDate,
           distanceKm: input.distanceKm ?? null,
+          plannedDistanceKm: input.plannedDistanceKm ?? null,
           note: input.note ?? null,
         },
       }),

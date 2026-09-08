@@ -12,6 +12,8 @@ import {
   type TransportMovementDecisionReason,
 } from './movement-decisions.js';
 import {
+  evaluateLegCancel,
+  evaluateLegTransition,
   evaluateOrderCancel,
   evaluateOrderTransition,
   evaluateRunCancel,
@@ -32,11 +34,21 @@ import type {
   RunAssignment,
   RunLeg,
   RunLegKind,
+  RunLegStatus,
   VehicleRun,
   VehicleRunDetail,
   VehicleRunStatus,
 } from './movement.types.js';
 import { planTripProjection } from './trip-run-projection.js';
+
+/**
+ * TAC NHAN cua nhung lan ghi do CHINH HE THONG quyet, khong mot nguoi nao bam.
+ *
+ * Mot chuoi rieng chu khong muon ten cua nguoi vua goi API: `#276` L4 doi dong vong chay la viec
+ * cua he thong, va dau vet kiem toan phai noi dung dieu do. Ghi ten ke toan vao mot lan dong ma ho
+ * khong quyet se lam so kiem toan noi doi ngay o cho quan trong nhat.
+ */
+export const SYSTEM_ACTOR = 'system:transport-planning';
 
 /**
  * LENH cua tang tren. Khac DTO ghi cua repository o dung mot cho: `businessDate` la TUY CHON.
@@ -62,6 +74,8 @@ export interface AddLegCommand {
   readonly destinationLabel: string;
   readonly businessDate?: string;
   readonly distanceKm?: number | null;
+  /** #276 L6 — km DU KIEN. Khong bao gio ghi de len `distanceKm`. */
+  readonly plannedDistanceKm?: number | null;
   readonly note?: string | null;
 }
 
@@ -335,6 +349,7 @@ export class MovementService {
         destinationLabel: command.destinationLabel,
         businessDate: this.resolveBusinessDate(command.businessDate ?? run.businessDate),
         distanceKm: command.distanceKm ?? null,
+        plannedDistanceKm: command.plannedDistanceKm ?? null,
         note: command.note ?? null,
       })
       .catch((error: unknown) => {
@@ -380,6 +395,144 @@ export class MovementService {
       throw this.deny('run.leg_change', 'LEG_ORDER_CANCELLED', { runId, orderId: requested });
     }
     return order.id;
+  }
+
+  getLeg(id: string): Promise<RunLeg> {
+    return this.requireLeg(id);
+  }
+
+  legsOfRun(runId: string): Promise<RunLeg[]> {
+    return this.repository.listLegs(runId);
+  }
+
+  /** Vong chay GAN NHAT cua mot chiec xe — ke ca khi no da ket thuc (`#276` L3). */
+  latestRunForVehicle(vehicleId: string): Promise<VehicleRun | null> {
+    return this.repository.findLatestRunForVehicle(vehicleId);
+  }
+
+  /**
+   * DOI TRANG THAI MOT CHANG — `#276` Lane L.
+   *
+   * Truoc lane nay `setLegStatus()` khong co nguoi goi nao: mot chang duoc tao ra roi nam mai o
+   * `PLANNED`. Cai thieu do lam ca `#276` L4 khong the co — mot vong chay khong bao gio "het viec"
+   * thi khong bao gio dong duoc, va "he thong tu dong" se chi la mot cau trong tai lieu.
+   *
+   * ============================================================================================
+   * CHANG DAU LAN BANH THI VONG CHAY TU DONG SANG `ACTIVE`
+   * ============================================================================================
+   *
+   * `#274` chot sep/ke toan lam viec voi DON. Bat ho bam "bat dau vong chay" truoc khi lai xe
+   * chay chinh la thao tac quan ly vong chay ma ca phase nay di bo. Chang chuyen sang
+   * `IN_TRANSIT` LA su that "vong chay nay dang chay" — nen he thong doc su that do thay vi hoi
+   * lai nguoi dung.
+   *
+   * Buoc tu dong nay im lang khi that bai CO CHU DICH: neu vong chay vi ly do nao do khong sang
+   * `ACTIVE` duoc, chang van duoc ghi la dang chay. Mot chang khong ghi duoc vi mot cot trang thai
+   * o cap tren la kieu hong lam lai xe bo luon buoc ghi.
+   */
+  async transitionLeg(legId: string, to: RunLegStatus, actor: string): Promise<RunLeg> {
+    const before = await this.requireLeg(legId);
+    const run = await this.requireRun(before.runId);
+    if (run.status === 'COMPLETED' || run.status === 'CANCELLED') {
+      throw this.deny('run.leg_transition', 'LEG_RUN_TERMINAL', { legId, runId: run.id });
+    }
+
+    const decision = evaluateLegTransition(before.status, to);
+    if (!decision.allowed) {
+      throw this.deny('run.leg_transition', decision.reason, { legId, from: before.status, to });
+    }
+
+    const at = new Date();
+    const after = await this.repository.setLegStatus(legId, to, at);
+    if (!after) throw TransportDomainError.notFound('RUN_LEG_NOT_FOUND', 'Khong tim thay chang.');
+
+    if (to === 'IN_TRANSIT' && run.status === 'PLANNED') {
+      await this.repository.setRunStatus(run.id, 'ACTIVE', at);
+      this.allow('run.lifecycle_transition', 'RUN_TRANSITION_APPLIED', {
+        runId: run.id,
+        from: 'PLANNED',
+        to: 'ACTIVE',
+        because: 'LEG_STARTED',
+      });
+    }
+
+    this.allow('run.leg_transition', decision.reason, { legId, from: before.status, to });
+    await this.audit.append({
+      actor,
+      action: 'transport.run.leg.transition',
+      entityType: 'TransportRunLeg',
+      entityId: legId,
+      before,
+      after,
+    });
+    return after;
+  }
+
+  /**
+   * HUY mot chang CHUA CHAY. Duong rieng vi no doi mot ly do bang chu — cung quy uoc voi don va
+   * vong chay, va cung ly do: mot lan go ke hoach khong giai trinh duoc la mot lo hong trong so.
+   *
+   * Ly do di vao DAU VET KIEM TOAN chu khong vao mot cot moi tren `TransportRunLeg`. Bang chang
+   * khong co cot `cancellationReason`, va them mot cot chi de phuc vu duong nay se lam moi chang
+   * cu mang mot o trong khong ai dien — trong khi `AuditLog` von la noi cau hoi "ai go, luc nao,
+   * vi sao" duoc tra loi cho ca mien.
+   */
+  async cancelLeg(legId: string, reason: string, actor: string): Promise<RunLeg> {
+    const before = await this.requireLeg(legId);
+    const decision = evaluateLegCancel(before.status);
+    if (!decision.allowed) {
+      throw this.deny('run.leg_cancel', decision.reason, { legId, status: before.status });
+    }
+
+    const after = await this.repository.setLegStatus(legId, 'CANCELLED', new Date());
+    if (!after) throw TransportDomainError.notFound('RUN_LEG_NOT_FOUND', 'Khong tim thay chang.');
+
+    this.allow('run.leg_cancel', decision.reason, { legId, reason });
+    await this.audit.append({
+      actor,
+      action: 'transport.run.leg.cancel',
+      entityType: 'TransportRunLeg',
+      entityId: legId,
+      before,
+      after: { ...after, cancellationReason: reason },
+    });
+    return after;
+  }
+
+  /**
+   * DONG VONG CHAY DO HE THONG QUYET — `#276` L4.
+   *
+   * KHONG nhan `to` tu ben ngoai va khong co duong nao dat `COMPLETED` theo y nguoi goi: quyet
+   * dinh dong da duoc mot ham thuan (`evaluateRunClosure`) chot truoc do, va ham nay chi thi hanh.
+   * Do la ly do no khong nam trong `transitionRun()` — duong kia la duong THU CONG, con duong nay
+   * la duong TU DONG, va tron hai lai se lam mot lan bam tay trong y het mot lan he thong quyet.
+   */
+  async closeRunAsSystem(runId: string, trigger: string): Promise<VehicleRun> {
+    const before = await this.requireRun(runId);
+    const legs = await this.repository.listLegs(runId);
+    const decision = evaluateRunTransition(before.status, 'COMPLETED', { legCount: legs.length });
+    if (!decision.allowed) {
+      throw this.deny('run.lifecycle_transition', decision.reason, { runId, to: 'COMPLETED' });
+    }
+
+    const after = await this.repository.setRunStatus(runId, 'COMPLETED', new Date());
+    if (!after) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+
+    this.allow('run.lifecycle_transition', decision.reason, {
+      runId,
+      from: before.status,
+      to: 'COMPLETED',
+      because: trigger,
+    });
+    await this.audit.append({
+      actor: SYSTEM_ACTOR,
+      action: 'transport.run.close.system',
+      entityType: 'TransportVehicleRun',
+      entityId: runId,
+      before,
+      after,
+    });
+    return after;
   }
 
   /* ------------------------------------------------------------------ *
@@ -501,6 +654,12 @@ export class MovementService {
     const run = await this.repository.findRun(id);
     if (!run) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
     return run;
+  }
+
+  private async requireLeg(id: string): Promise<RunLeg> {
+    const leg = await this.repository.findLeg(id);
+    if (!leg) throw TransportDomainError.notFound('RUN_LEG_NOT_FOUND', 'Khong tim thay chang.');
+    return leg;
   }
 
   private async requireCustomer(customerId: string | null): Promise<void> {
