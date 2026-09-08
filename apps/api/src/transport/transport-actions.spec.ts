@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { USER_ROLES } from '../auth/auth.types.js';
 import {
+  STAKEHOLDER_SCOPE_ACTIONS,
   TRANSPORT_ACTIONS,
   actionsForRole,
+  isStakeholderScopeAction,
   roleCanPerform,
   type TransportAction,
 } from './transport-actions.js';
@@ -68,6 +70,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.settlement.report.read',
       'transport.settlement.document.read',
       'transport.analytics.read',
+      'transport.control_tower.read',
       'transport.maintenance.plan.read',
       'transport.maintenance.plan.manage',
       'transport.maintenance.work_order.open',
@@ -121,10 +124,20 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do.
       'transport.tracking.read',
       'transport.proof.read',
+      // BIA MO mot chung cu — TACH khoi quyen doc. Doc la doi soat; rut la go bo bang chung cua
+      // mot lan giao da xay ra, va lai xe khong bao gio duoc lam viec do voi chung cu cua minh.
+      'transport.proof.withdraw',
       // DUONG DI THO cua mot con nguoi. Ma hep nhat trong ca tep; ke toan KHONG co no.
       'transport.location.history.read',
       'transport.geofence.read',
       'transport.geofence.manage',
+      // `TX-08` SO HUU TAI SAN. Doc/quan ly so dang ky tach nhau, cung ly le voi cap
+      // `counterparty.read`/`.manage`: xem ai so huu mot chiec xe la viec hang ngay; SUA mot ty le
+      // la sua mot su that phap ly.
+      'transport.asset_ownership.read',
+      'transport.asset_ownership.manage',
+      // Pham vi CUA CHINH MINH cua ben huu quan — CHI DOC, va KHONG cap qua vai nao.
+      'transport.stakeholder.self.vehicle.read',
     ]);
   });
 
@@ -136,9 +149,55 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
     it('lam duoc moi viec van hanh, KE CA huy chuyen', () => {
       for (const action of TRANSPORT_ACTIONS) {
         if (action.startsWith('transport.driver.self.')) continue;
+        if (isStakeholderScopeAction(action)) continue;
         expect(roleCanPerform('ADMIN', action), action).toBe(true);
       }
       expect(roleCanPerform('ADMIN', 'transport.trip.cancel')).toBe(true);
+    });
+
+    /**
+     * ADMIN GIU NGUYEN nang luc quan tri doi xe sau `TX-08` — #242 E6.
+     *
+     * Them mot lop so huu khong duoc lam mat quyen cua nguoi dang van hanh. Hai ma quan tri so
+     * dang ky phai thuoc ve ADMIN, va toan bo be mat doi xe cu phai con nguyen.
+     */
+    it('quan ly duoc so dang ky so huu, va van giu nguyen quyen doi xe cu', () => {
+      expect(roleCanPerform('ADMIN', 'transport.asset_ownership.read')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.asset_ownership.manage')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.vehicle.manage')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.driver.manage')).toBe(true);
+    });
+  });
+
+  /**
+   * PHAM VI BEN HUU QUAN KHONG DUOC CAP QUA VAI — bat bien trung tam cua `TX-08`/#242 E3.
+   *
+   * Neu mot ngay co nguoi them ma nay vao `ROLE_ACTIONS`, bai duoi day do. Do la dieu can xay ra:
+   * cap qua vai nghia la MOI nguoi mang vai do doc duoc be mat co dong, trong khi cong that phai la
+   * mot hang `TransportAssetStakeholder.authUserId` cua RIENG mot con nguoi.
+   */
+  describe('TX-08 — pham vi ben huu quan (#242 E3)', () => {
+    it.each(USER_ROLES)('vai %s KHONG duoc cap pham vi ben huu quan qua bang vai', (role) => {
+      for (const action of STAKEHOLDER_SCOPE_ACTIONS) {
+        expect(roleCanPerform(role, action), `${role} / ${action}`).toBe(false);
+      }
+    });
+
+    /**
+     * `TransportActionGuard` cho nhom nay di qua tang vai, nen quy uoc CHI dung chung nao khong ma
+     * nao trong nhom mo mot duong ghi. Bai nay khoa dieu do: mot ma `.manage`/`.record`/`.submit`
+     * lot vao day se lam do test, chu khong lang le mo mot duong ghi cho moi nguoi da dang nhap.
+     */
+    it('moi ma trong nhom deu la ma CHI DOC', () => {
+      for (const action of STAKEHOLDER_SCOPE_ACTIONS) {
+        expect(action.endsWith('.read'), action).toBe(true);
+      }
+    });
+
+    it('nhom nay khong chong lan pham vi lai xe', () => {
+      for (const action of STAKEHOLDER_SCOPE_ACTIONS) {
+        expect(action.startsWith('transport.driver.self.')).toBe(false);
+      }
     });
   });
 
@@ -167,6 +226,34 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
 
     it('KHONG huy duoc chuyen — nguon noi ro "khong xoa du lieu"', () => {
       expect(roleCanPerform('ACCOUNTING', 'transport.trip.cancel')).toBe(false);
+    });
+
+    /**
+     * Issue #235 Lane B — ranh gioi DOC ⟂ SUA trong mien chung cu.
+     *
+     * Ke toan doc chung cu va doc hang rao: do la doi soat, va la ca cong viec cua ho. Hai duong
+     * SUA thi khong, va vi hai ly do khac nhau:
+     *
+     *   · rut mot chung cu la go bo mot muc khoi chinh ho so dang duoc doi soat;
+     *   · hang rao duoc cham LUC DOC, nen sua ban kinh mot cai kho hom nay se doi phan quyet
+     *     `INSIDE`/`OUTSIDE` cua MOI lan giao da xong truoc do.
+     *
+     * Ca hai deu la "sua cau hoi thay vi tra loi no".
+     */
+    it('doc duoc chung cu va hang rao, nhung KHONG rut chung cu va KHONG doi hang rao', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.proof.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.geofence.read')).toBe(true);
+
+      expect(roleCanPerform('ACCOUNTING', 'transport.proof.withdraw')).toBe(false);
+      expect(roleCanPerform('ACCOUNTING', 'transport.geofence.manage')).toBe(false);
+      expect(roleCanPerform('ADMIN', 'transport.proof.withdraw')).toBe(true);
+      expect(roleCanPerform('ADMIN', 'transport.geofence.manage')).toBe(true);
+    });
+
+    /** Lai xe khong rut duoc chung cu cua CHINH MINH — xoa duoc bang chung thi no het la bang chung. */
+    it('lai xe (SALE) khong co duong rut chung cu nao', () => {
+      expect(roleCanPerform('SALE', 'transport.proof.withdraw')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.proof.read')).toBe(false);
     });
 
     /**
@@ -303,6 +390,20 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('ACCOUNTING', 'transport.analytics.read')).toBe(true);
       expect(roleCanPerform('SALE', 'transport.analytics.read')).toBe(false);
       expect(roleCanPerform('MANAGER', 'transport.analytics.read')).toBe(false);
+    });
+
+    /**
+     * THAP DIEU HANH phoi CA doi xe — moi vong chay, moi xe, moi viec dang cho.
+     *
+     * `INV-09` giu khung nhin lai xe o pham vi cua chinh ho, nen vai lai xe (`SALE`, theo cau
+     * bridge `GD-22`) khong duoc cap quyen nay. Do KHONG phai mot han che ve giao dien: cong that
+     * nam o `TransportActionGuard`, va bai nay khoa dung cai bang ma guard doc.
+     */
+    it('bang dieu hanh: van hanh doc duoc ca doi xe, lai xe thi khong', () => {
+      expect(roleCanPerform('ADMIN', 'transport.control_tower.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.control_tower.read')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.control_tower.read')).toBe(false);
+      expect(roleCanPerform('MANAGER', 'transport.control_tower.read')).toBe(false);
     });
 
     it('KHONG doc duoc danh sach chuyen chung — day la cho ro ri de nhat', () => {

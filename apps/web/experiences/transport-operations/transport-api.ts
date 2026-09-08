@@ -10,6 +10,8 @@ import type {
   ComplianceDocument,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ControlTowerView,
+  FinanceSummaryView,
   ComplianceSubjectKind,
   CorrelatedPosting,
   DirectMargin,
@@ -71,8 +73,15 @@ import type {
   TripCostBreakdown,
   TripKind,
   TripStatus,
+  AssetStakeholder,
+  AssetStakeholderKind,
+  PartyStatus,
+  StakeholderVehicleView,
   Vehicle,
   VehicleDriverAssignment,
+  VehicleOperationalControl,
+  VehicleOwnershipInterest,
+  VehicleOwnershipRegister,
   VehicleStatus,
   // `TX-07b` — quyet toan lai xe (Issue #237).
   DriverCashoutDetail,
@@ -182,7 +191,11 @@ const getList = async <T>(path: string, key: string): Promise<readonly T[]> => {
   return rows as readonly T[];
 };
 
-const send = async <T>(method: 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> =>
+const send = async <T>(
+  method: 'POST' | 'PATCH' | 'PUT',
+  path: string,
+  body?: unknown,
+): Promise<T> =>
   readBody<T>(
     await authFetch(`${BASE}${path}`, {
       method,
@@ -546,6 +559,80 @@ export const transportApi = {
       send('POST', `/transport/trips/${encodeURIComponent(id)}/transition`, { to }),
     cancel: (id: string, reason: string): Promise<Trip> =>
       send('POST', `/transport/trips/${encodeURIComponent(id)}/cancel`, { reason }),
+  },
+
+  /**
+   * `TX-08` SO HUU TAI SAN (#242 Lane E).
+   *
+   * Hai NHOM tren cung mot doi tuong, va chung KHONG duoc gop: `assetOwnership.*` la be mat quan
+   * tri (doi hoi `transport.asset_ownership.*`), con `myVehicles`/`myVehicle` la be mat CUA CHINH
+   * NGUOI DANG DANG NHAP. Cai thu hai khong nhan `stakeholderId` o bat ky duong nao — danh tinh den
+   * tu phien, va may chu loc theo dung tap xe cua nguoi do.
+   */
+  assetOwnership: {
+    stakeholders: (): Promise<readonly AssetStakeholder[]> =>
+      get('/transport/asset-ownership/stakeholders'),
+    createStakeholder: (input: {
+      kind: AssetStakeholderKind;
+      displayName: string;
+      note?: string | null;
+    }): Promise<AssetStakeholder> => send('POST', '/transport/asset-ownership/stakeholders', input),
+    updateStakeholder: (
+      id: string,
+      input: { displayName?: string; note?: string | null; status?: PartyStatus },
+    ): Promise<AssetStakeholder> =>
+      send('PATCH', `/transport/asset-ownership/stakeholders/${encodeURIComponent(id)}`, input),
+    /** `authUserId: null` la GO cau noi — mot gia tri MINH THI, khong phai truong bo trong. */
+    setAccount: (id: string, authUserId: string | null): Promise<AssetStakeholder> =>
+      send('PUT', `/transport/asset-ownership/stakeholders/${encodeURIComponent(id)}/account`, {
+        authUserId,
+      }),
+
+    register: (vehicleId: string): Promise<VehicleOwnershipRegister> =>
+      get(`/transport/asset-ownership/vehicles/${encodeURIComponent(vehicleId)}`),
+    recordInterest: (
+      vehicleId: string,
+      input: {
+        stakeholderId: string;
+        ownershipBasisPoints: number;
+        effectiveFrom: string;
+        note?: string | null;
+      },
+    ): Promise<VehicleOwnershipInterest> =>
+      send(
+        'POST',
+        `/transport/asset-ownership/vehicles/${encodeURIComponent(vehicleId)}/interests`,
+        input,
+      ),
+    closeInterest: (
+      interestId: string,
+      input: { effectiveTo: string; note?: string | null },
+    ): Promise<VehicleOwnershipInterest> =>
+      send(
+        'POST',
+        `/transport/asset-ownership/interests/${encodeURIComponent(interestId)}/close`,
+        input,
+      ),
+    declareRegister: (vehicleId: string, complete: boolean): Promise<VehicleOwnershipRegister> =>
+      send('PUT', `/transport/asset-ownership/vehicles/${encodeURIComponent(vehicleId)}/register`, {
+        complete,
+      }),
+    setOperationalControl: (
+      vehicleId: string,
+      operationalControl: VehicleOperationalControl,
+    ): Promise<VehicleOwnershipRegister> =>
+      send(
+        'PUT',
+        `/transport/asset-ownership/vehicles/${encodeURIComponent(vehicleId)}/operational-control`,
+        { operationalControl },
+      ),
+  },
+
+  /** BE MAT CUA CHINH MINH — ben huu quan. Khong duong nao nhan `stakeholderId`. */
+  stakeholderSelf: {
+    myVehicles: (): Promise<readonly StakeholderVehicleView[]> => get('/transport/me/vehicles'),
+    myVehicle: (vehicleId: string): Promise<StakeholderVehicleView> =>
+      get(`/transport/me/vehicles/${encodeURIComponent(vehicleId)}`),
   },
 
   fleet: {
@@ -998,5 +1085,27 @@ export const transportApi = {
       input: { reasonCode: string; note?: string | null },
     ): Promise<ExpenseClaimDetail> =>
       send('POST', `/transport/expense-claims/${encodeURIComponent(id)}/reject`, input),
+  },
+
+  /**
+   * THAP DIEU HANH (Lane G, #244) — MOT lan goi, MOT khung nhin.
+   *
+   * `get` chu khong `getList`: may chu tra ve mot DOI TUONG (`ControlTowerView`), khong phai mot
+   * phong bi bao quanh mot mang. Xem `control-tower.controller.ts` — mot route `@Get()` duy nhat,
+   * va do la co y: ba lan goi cho `/board`, `/queue`, `/fleet` se cho ra ba anh chup o ba khoanh
+   * khac khac nhau, roi man hinh se tu mau thuan voi chinh no.
+   */
+  controlTower: {
+    view: (): Promise<ControlTowerView> => get('/transport/control-tower'),
+  },
+
+  /**
+   * BANG TAI CHINH (Lane G, #244 G5) — mot DOI TUONG, nen `get` chu khong `getList`.
+   *
+   * Khong co bien the `?combined=true`: `SettlementBuckets` co y khong co truong tong, va mot tham
+   * so gop se dung lai chinh cai cong ma `GD-15` da dong o tang duoi.
+   */
+  finance: {
+    summary: (): Promise<FinanceSummaryView> => get('/transport/finance/summary'),
   },
 } as const;

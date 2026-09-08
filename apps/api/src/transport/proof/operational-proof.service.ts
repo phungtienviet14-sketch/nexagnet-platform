@@ -9,17 +9,22 @@ import {
   type TransportCorePolicy,
 } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
+import { randomBytes } from 'node:crypto';
 import {
   OperationalProofRepository,
+  ProofChallengeRepository,
   PROOF_CLIENT_EVENT,
   PROOF_OBSERVATION_ONCE,
 } from './operational-proof.repository.js';
 import type {
   OperationalProof,
   OperationalProofView,
+  ProofChallenge,
   ProofPhotoCaptureMode,
   RecordProofCommand,
+  WithdrawProofCommand,
 } from './operational-proof.types.js';
+import { TRANSPORT_PROOF_POLICY, type TransportProofPolicy } from './tracking-policy.js';
 import { TRANSPORT_PROOF_DECISIONS } from './proof-decisions.js';
 import { TrackingRepository } from './tracking.repository.js';
 import type { ProofRiskCode, ProofRiskSeverity } from './tracking.types.js';
@@ -45,6 +50,9 @@ import { TransportProofCoreFacts } from './transport-proof-facts.port.js';
  *   · bat dau  -> BAT BUOC co vi tri hien tai;
  *   · giao hang -> BAT BUOC co vi tri hien tai VA it nhat mot tam anh.
  */
+/** Ba diem quyet dinh ma dich vu nay so huu. Ghi, rut va thach thuc la ba viec khac nhau. */
+type ProofDecisionPoint = 'proof.record' | 'proof.withdraw' | 'proof.challenge';
+
 @Injectable()
 export class OperationalProofService {
   constructor(
@@ -52,9 +60,57 @@ export class OperationalProofService {
     private readonly tracking: TrackingRepository,
     private readonly core: TransportProofCoreFacts,
     @Inject(TRANSPORT_CORE_POLICY) private readonly corePolicy: TransportCorePolicy,
+    private readonly challenges: ProofChallengeRepository,
+    @Inject(TRANSPORT_PROOF_POLICY) private readonly proofPolicy: TransportProofPolicy,
     @Optional() private readonly telemetry?: TelemetryService,
     @Optional() @Inject(TRANSPORT_CLOCK) private readonly clock?: () => Date,
   ) {}
+
+  /**
+   * PHAT mot loi thach thuc cho phien dang mo cua chinh nguoi goi.
+   *
+   * `sessionId` KHONG den tu than yeu cau: no duoc may chu tra ra tu phien dang mo cua lai xe. Neu
+   * nhan tu nguoi goi, mot lai xe xin duoc `nonce` gan vao phien cua dong nghiep.
+   */
+  async issueChallenge(authUserId: string): Promise<ProofChallenge> {
+    const driver = await this.core.findDriverByAuthUserId(authUserId);
+    if (!driver) {
+      this.deny('PROOF_DRIVER_BINDING_MISSING', { authUserId });
+      throw TransportDomainError.denied(
+        'PROOF_DRIVER_BINDING_MISSING',
+        'Tai khoan dang nhap chua noi voi mot ho so lai xe nao',
+      );
+    }
+    const session = await this.tracking.findActiveSessionForDriver(driver.id);
+    if (!session) {
+      this.deny('SESSION_NOT_FOUND', { driverId: driver.id }, 'proof.challenge');
+      throw TransportDomainError.notFound(
+        'SESSION_NOT_FOUND',
+        'Chua co phien bam vi tri nao dang mo — mo phien truoc khi lap chung cu',
+      );
+    }
+
+    const issuedAt = this.now();
+    const challenge = await this.challenges.issue({
+      // 32 byte ngau nhien tu nguon CSPRNG. Doan duoc mot `nonce` la vong qua ca co che, nen no
+      // khong duoc sinh tu dong ho, tu id, hay tu `Math.random`.
+      nonce: randomBytes(32).toString('base64url'),
+      driverId: driver.id,
+      sessionId: session.id,
+      issuedAt,
+      expiresAt: new Date(issuedAt.getTime() + this.proofPolicy.challengeTtlSeconds * 1000),
+    });
+    this.allow(
+      'CHALLENGE_ISSUED',
+      {
+        driverId: driver.id,
+        sessionId: session.id,
+        ttlSeconds: this.proofPolicy.challengeTtlSeconds,
+      },
+      'proof.challenge',
+    );
+    return challenge;
+  }
 
   async record(command: RecordProofCommand): Promise<OperationalProof> {
     const driver = await this.core.findDriverByAuthUserId(command.authUserId);
@@ -120,6 +176,11 @@ export class OperationalProofService {
       );
     }
 
+    // LOI THACH THUC duoc kiem TRUOC khi ghi, nhung duoc TIEU sau — xem khoi chu thich duoi cho
+    // ly do thu tu do khong doi cho duoc.
+    const nonce = command.challengeNonce?.trim() ?? '';
+    if (nonce !== '') await this.assertChallengeUsable(nonce, driver.id, session.id);
+
     const receivedAt = this.now();
     try {
       const proof = await this.proofs.create({
@@ -134,13 +195,33 @@ export class OperationalProofService {
         businessDate: toBusinessDate(receivedAt, this.corePolicy.timeZone),
         note: command.note,
         recordedBy: command.authUserId,
+        // Dat `false` luc tao, roi NANG len sau khi tieu duoc `nonce`. Neu dat `true` ngay o day,
+        // hai yeu cau chay dua cung mot `nonce` se CA HAI mang dau "da kiem", trong khi chi mot
+        // trong hai thuc su tieu duoc no.
+        challengeVerified: false,
         photos: active,
       });
+
+      let verified = proof;
+      if (nonce === '') {
+        // KHONG phai mot cao buoc. Duong ngoai tuyen khong xin duoc `nonce`, va do la duong binh
+        // thuong cua mot lai xe trong vung lom. Ghi lai su khac biet, khong tu choi no.
+        this.telemetry?.decision({
+          vocabulary: TRANSPORT_PROOF_DECISIONS,
+          point: 'proof.challenge',
+          outcome: 'degraded',
+          reason: 'CHALLENGE_ABSENT_OFFLINE_PATH',
+          detail: { proofId: proof.id, kind: proof.kind },
+        });
+      } else {
+        verified = await this.consumeChallenge(nonce, proof);
+      }
 
       this.allow('PROOF_RECORDED', {
         proofId: proof.id,
         kind: proof.kind,
         photoCount: proof.photos.length,
+        challengeVerified: verified.challengeVerified,
       });
 
       // Anh lay tu thu vien VAN duoc nhan — no chi khong duoc huong cung muc tin cay im lang.
@@ -155,7 +236,7 @@ export class OperationalProofService {
           });
         }
       }
-      return proof;
+      return verified;
     } catch (error) {
       if (isUniqueViolationOn(error, PROOF_CLIENT_EVENT)) {
         const already = await this.proofs.findByEvent(trip.id, command.kind, command.clientEventId);
@@ -173,6 +254,124 @@ export class OperationalProofService {
       }
       throw error;
     }
+  }
+
+  /**
+   * BIA MO mot chung cu.
+   *
+   * Ba dieu tep nay CO Y khong lam, va tung dieu deu la mot lua chon:
+   *
+   *   1. KHONG xoa hang. Mot chung cu sai van la mot su kien da xay ra;
+   *   2. KHONG tra lai `observationId`. Cai khoa `@unique` tren cot do la MOT CHIEU. Neu rut ma
+   *      giai phong ban dinh vi, thi rut chinh la duong tai che mot vi tri cu — dung ban dinh vi
+   *      8h sang lam chung cu cho lan giao 5h chieu. Day la yeu cau "stale location ID" cua #235;
+   *   3. KHONG cho rut lan hai. Nguoi rut DAU TIEN la thu duy nhat tra loi duoc "ai quyet dinh bo
+   *      lan giao nay?", va mot lan ghi de se xoa mat no.
+   */
+  async withdraw(command: WithdrawProofCommand): Promise<OperationalProof> {
+    const current = await this.proofs.findById(command.proofId);
+    if (!current) {
+      this.deny('PROOF_WITHDRAW_NOT_FOUND', { proofId: command.proofId }, 'proof.withdraw');
+      throw TransportDomainError.notFound('PROOF_WITHDRAW_NOT_FOUND', 'Khong tim thay chung cu');
+    }
+    if (current.withdrawnAt !== null) {
+      this.deny(
+        'PROOF_ALREADY_WITHDRAWN',
+        { proofId: current.id, withdrawnBy: current.withdrawnBy },
+        'proof.withdraw',
+      );
+      throw TransportDomainError.conflict(
+        'PROOF_ALREADY_WITHDRAWN',
+        'Chung cu nay da duoc rut tu truoc',
+      );
+    }
+
+    const withdrawn = await this.proofs.withdraw({
+      proofId: current.id,
+      withdrawnBy: command.actorId,
+      withdrawnAt: this.now(),
+    });
+    if (!withdrawn) {
+      this.deny('PROOF_WITHDRAW_NOT_FOUND', { proofId: command.proofId }, 'proof.withdraw');
+      throw TransportDomainError.notFound('PROOF_WITHDRAW_NOT_FOUND', 'Khong tim thay chung cu');
+    }
+
+    this.allow(
+      'PROOF_WITHDRAWN',
+      { proofId: withdrawn.id, kind: withdrawn.kind, reason: command.reason },
+      'proof.withdraw',
+    );
+    return withdrawn;
+  }
+
+  /**
+   * BA CUA TU CHOI cua mot loi thach thuc, va ca ba deu co MA rieng.
+   *
+   * Gop chung thanh mot `boolean` se lam nguoi truc khong phan biet duoc "may khach gui mot chuoi
+   * bia" voi "lai xe bam cham qua nam phut" voi "mot ban ghi bi phat lai" — ba tinh huong doi ba
+   * cach xu ly khac han nhau.
+   */
+  private async assertChallengeUsable(
+    nonce: string,
+    driverId: string,
+    sessionId: string,
+  ): Promise<void> {
+    const challenge = await this.challenges.findByNonce(nonce);
+    if (!challenge) {
+      this.deny('CHALLENGE_NOT_FOUND', { driverId }, 'proof.challenge');
+      throw TransportDomainError.denied('CHALLENGE_NOT_FOUND', 'Khong tim thay loi thach thuc do');
+    }
+    if (challenge.driverId !== driverId || challenge.sessionId !== sessionId) {
+      this.deny(
+        'CHALLENGE_NOT_OWNED',
+        { driverId, challengeDriverId: challenge.driverId },
+        'proof.challenge',
+      );
+      throw TransportDomainError.denied(
+        'CHALLENGE_NOT_OWNED',
+        'Loi thach thuc do khong phat cho phien nay',
+      );
+    }
+    if (challenge.consumedAt !== null) {
+      this.deny(
+        'CHALLENGE_ALREADY_USED',
+        { consumedByProofId: challenge.consumedByProofId },
+        'proof.challenge',
+      );
+      throw TransportDomainError.conflict(
+        'CHALLENGE_ALREADY_USED',
+        'Loi thach thuc do da duoc dung cho mot chung cu khac',
+      );
+    }
+    // DAY LA PHAN "BOUNDED" cua #235: mot `nonce` xin tu sang khong dung duoc cho buoi chieu.
+    if (challenge.expiresAt.getTime() <= this.now().getTime()) {
+      this.deny(
+        'CHALLENGE_EXPIRED',
+        { expiresAt: challenge.expiresAt.toISOString() },
+        'proof.challenge',
+      );
+      throw TransportDomainError.denied('CHALLENGE_EXPIRED', 'Loi thach thuc do da qua han');
+    }
+  }
+
+  /**
+   * Tieu `nonce` SAU khi chung cu da ton tai, vi `consumedByProofId` can mot id co that.
+   *
+   * Neu tieu that bai (mot yeu cau khac vua thang cuoc chay dua), chung cu VAN duoc giu — mat bang
+   * chung la huong sai khong sua duoc — nhung no khong duoc ghi nhan la da kiem.
+   */
+  private async consumeChallenge(
+    nonce: string,
+    proof: OperationalProof,
+  ): Promise<OperationalProof> {
+    const consumed = await this.challenges.consume(nonce, this.now(), proof.id);
+    if (!consumed) {
+      this.deny('CHALLENGE_ALREADY_USED', { proofId: proof.id }, 'proof.challenge');
+      return proof;
+    }
+    const verified = await this.proofs.markChallengeVerified(proof.id);
+    this.allow('CHALLENGE_VERIFIED', { proofId: proof.id }, 'proof.challenge');
+    return verified ?? proof;
   }
 
   /** Chung cu CUA CHINH MINH — danh tinh tu phien, khong tu than yeu cau. */
@@ -231,6 +430,7 @@ export class OperationalProofService {
         capturedAt: proof.capturedAt,
         receivedAt: proof.receivedAt,
         withdrawn: proof.withdrawnAt !== null,
+        challengeVerified: proof.challengeVerified,
         photoCount: live.length,
         photosByCaptureMode: byMode,
         geofenceVerdict: assessment?.verdict ?? 'NO_FENCE',
@@ -243,20 +443,28 @@ export class OperationalProofService {
     return views;
   }
 
-  private allow(reason: string, detail: Record<string, unknown>): void {
+  private allow(
+    reason: string,
+    detail: Record<string, unknown>,
+    point: ProofDecisionPoint = 'proof.record',
+  ): void {
     this.telemetry?.decision({
       vocabulary: TRANSPORT_PROOF_DECISIONS,
-      point: 'proof.record',
+      point,
       outcome: 'allowed',
       reason: reason as never,
       detail,
     });
   }
 
-  private deny(reason: string, detail: Record<string, unknown>): void {
+  private deny(
+    reason: string,
+    detail: Record<string, unknown>,
+    point: ProofDecisionPoint = 'proof.record',
+  ): void {
     this.telemetry?.decision({
       vocabulary: TRANSPORT_PROOF_DECISIONS,
-      point: 'proof.record',
+      point,
       outcome: 'denied',
       reason: reason as never,
       detail,

@@ -215,6 +215,15 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/orders/sales-order-outcome.service.ts",
       "line": 55
     },
+    "ownership.interest.close": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
+    "ownership.interest.record": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
+    "ownership.register.declare": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.service.ts"
+    },
     "parser.production": {
       "functionName": "evaluateOperationalReadiness",
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
@@ -254,6 +263,13 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "PricePeriodsService.removeDraftPrice",
       "filePath": "apps/api/src/settings/price-periods.service.ts",
       "line": 397
+    },
+    "proof.challenge": {
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
+    },
+    "proof.withdraw": {
+      "functionName": "OperationalProofService.withdraw",
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
     },
     "rules.policy": {
       "functionName": "grantsFromDealerPolicy",
@@ -339,6 +355,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/analytics/analytics.controller.ts",
       "line": 40
     },
+    "transport.asset_ownership.manage": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.controller.ts"
+    },
+    "transport.asset_ownership.read": {
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.controller.ts"
+    },
     "transport.checkpoint.read": {
       "functionName": "CheckpointsController.timeline",
       "filePath": "apps/api/src/transport/checkpoint/checkpoints.controller.ts",
@@ -354,6 +376,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.compliance.document.read": {
       "filePath": "apps/api/src/transport/asset-compliance/compliance.controller.ts"
+    },
+    "transport.control_tower.read": {
+      "functionName": "ControlTowerController.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower.controller.ts",
+      "line": 43
     },
     "transport.costing.driver_fund.adjust": {
       "functionName": "DriverFundController.adjust",
@@ -523,6 +550,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.fuel.station.read": {
       "filePath": "apps/api/src/transport/fuel/fuel-station.controller.ts"
     },
+    "transport.geofence.manage": {
+      "functionName": "ProofReviewController.register",
+      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
+      "line": 114
+    },
+    "transport.geofence.read": {
+      "functionName": "ProofReviewController.list",
+      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
+      "line": 107
+    },
     "transport.location.history.read": {
       "functionName": "TrackingController.track",
       "filePath": "apps/api/src/transport/proof/tracking.controller.ts",
@@ -580,6 +617,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/workforce/payroll.controller.ts",
       "line": 145
     },
+    "transport.proof.read": {
+      "functionName": "ProofReviewController.forTrip",
+      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
+      "line": 76
+    },
+    "transport.proof.withdraw": {
+      "functionName": "ProofReviewController.withdraw",
+      "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
+      "line": 84
+    },
     "transport.run.manage": {
       "filePath": "apps/api/src/transport/movement/runs.controller.ts"
     },
@@ -591,8 +638,8 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts",
       "line": 121
     },
-    "transport.settlement.report.read": {
-      "filePath": "apps/api/src/transport/settlement/settlement-reports.controller.ts"
+    "transport.stakeholder.self.vehicle.read": {
+      "filePath": "apps/api/src/transport/asset-ownership/stakeholder-vehicles.controller.ts"
     },
     "transport.tracking.read": {
       "functionName": "TrackingController.summaries",
@@ -741,6 +788,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceRegistryService.openConflict",
       "filePath": "apps/api/src/source-registry/source-registry.service.ts",
       "line": 644
+    },
+    "control_tower.board_projection|BOARD_CHECKPOINT_COLUMNS_UNAVAILABLE": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 84
+    },
+    "control_tower.compile|CONTROL_TOWER_COMPILED": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 92
+    },
+    "control_tower.compile|CONTROL_TOWER_SOURCE_FAILED": {
+      "functionName": "ControlTowerReadService.guard",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 253
+    },
+    "control_tower.compile|CONTROL_TOWER_SOURCE_UNAVAILABLE": {
+      "functionName": "ControlTowerReadService.view",
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
+      "line": 75
     },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
@@ -969,6 +1036,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "SourceReadinessService.canUseFact",
       "filePath": "apps/api/src/source-registry/source-readiness.service.ts",
       "line": 131
+    },
+    "finance.summary|FINANCE_CURRENCY_MIXED": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 73
+    },
+    "finance.summary|FINANCE_SOURCE_FAILED": {
+      "functionName": "FinanceReadService.readDriverBalances",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 121
+    },
+    "finance.summary|FINANCE_SOURCE_UNAVAILABLE": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 83
+    },
+    "finance.summary|FINANCE_SUMMARY_COMPILED": {
+      "functionName": "FinanceReadService.summary",
+      "filePath": "apps/api/src/transport/finance/finance-read.service.ts",
+      "line": 92
     },
     "fleet.effective_vehicle_state|*": {
       "functionName": "AssetComplianceReadService.emitStateDecision",
@@ -1277,6 +1364,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/turns/turn-reply.service.ts",
       "line": 113
     },
+    "ownership.scope.resolve|*": {
+      "functionName": "AssetOwnershipScopeService.decide",
+      "filePath": "apps/api/src/transport/asset-ownership/asset-ownership-scope.service.ts",
+      "line": 146
+    },
     "payroll.driver_fund_disclosure|DRIVER_FUND_NOT_AVAILABLE": {
       "functionName": "WorkforceService.emitFundDisclosure",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
@@ -1331,13 +1423,15 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
       "line": 291
     },
-    "proof.record|*": {
-      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts"
+    "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
+      "functionName": "OperationalProofService.record",
+      "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
+      "line": 209
     },
     "proof.record|PROOF_PHOTO_NOT_LIVE_CAMERA": {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
-      "line": 149
+      "line": 230
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",

@@ -82,6 +82,14 @@ export const TRANSPORT_ACTIONS = [
    * quyet toan noi "cong ty dang o dau ve TIEN", chi so van hanh noi "doi xe chay hieu qua den dau".
    */
   'transport.analytics.read',
+  /* --- THAP DIEU HANH (Lane G, #244) — den cung `transport-core` --- */
+  /**
+   * BANG DIEU HANH GOM CHUNG — bay cot vong chay, dem doi xe, hang viec dang cho nguoi xu ly. MOT
+   * quyen cho ca bang, cung ly le voi `transport.alerts.read`. Tach khoi no vi canh bao tra loi
+   * "cai gi sap hong", con bang tra loi "xe nao dang o dau va viec nao dang cho ai" — mot khach chi
+   * bat `transport-core` co bang ma khong co canh bao.
+   */
+  'transport.control_tower.read',
   /* --- `transport-asset-compliance` (`TX-06`) --- */
   'transport.maintenance.plan.read',
   'transport.maintenance.plan.manage',
@@ -147,12 +155,21 @@ export const TRANSPORT_ACTIONS = [
   /** TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
   'transport.proof.read',
   /**
+   * BIA MO mot chung cu — quyen RIENG, khong di kem quyen doc. Lai xe khong bao gio co no.
+   * Chep nguyen tu API; xem khoi chu thich ben do cho ly do day du.
+   */
+  'transport.proof.withdraw',
+  /**
    * DUONG DI THO cua mot con nguoi — ma hep nhat trong ca tep, va Ke toan KHONG co no.
    * Doi soat so sach khong CAN toa do; xem `ACCOUNTING_DENIED` ben duoi.
    */
   'transport.location.history.read',
   'transport.geofence.read',
   'transport.geofence.manage',
+  /* --- `TX-08` SO HUU TAI SAN (Lane E, Issue #242) --- */
+  'transport.asset_ownership.read',
+  'transport.asset_ownership.manage',
+  'transport.stakeholder.self.vehicle.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -174,9 +191,24 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.checkpoint.record',
 ];
 
-/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
+/**
+ * PHAM VI BEN HUU QUAN (`TX-08`) — chep nguyen tu API.
+ *
+ * KHONG vai nao cap cac ma nay, va do khong phai mot thieu sot: pham vi "Xe toi co co phan" den tu
+ * mot hang `TransportAssetStakeholder.authUserId`, khong tu mot chuc danh. Xem khoi
+ * `STAKEHOLDER_SCOPE_ACTIONS` trong `apps/api/src/transport/transport-actions.ts`.
+ *
+ * Hau qua o phia man hinh: `canPerform` tra `false` cho moi vai, nen KHONG duoc dung no lam dieu
+ * kien hien be mat ben huu quan. Dieu kien dung la API tra ve du lieu hay `403`.
+ */
+export const STAKEHOLDER_SCOPE_ACTIONS: readonly TransportAction[] = [
+  'transport.stakeholder.self.vehicle.read',
+];
+
+/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe va pham vi ben huu quan. */
 const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
-  (action): action is TransportAction => !SELF_SCOPE_ACTIONS.includes(action),
+  (action): action is TransportAction =>
+    !SELF_SCOPE_ACTIONS.includes(action) && !STAKEHOLDER_SCOPE_ACTIONS.includes(action),
 );
 
 /**
@@ -203,6 +235,16 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * DUYET khoan tien do khong duoc sua can cu sinh ra no. Chep nguyen tu API.
    */
   'transport.checkpoint.record',
+  /**
+   * Ke toan DOC duoc chung cu — do la ca cong viec cua ho — nhung RUT mot chung cu la viec khac:
+   * go bo mot muc khoi chinh ho so minh dang doi soat.
+   */
+  'transport.proof.withdraw',
+  /**
+   * Hang rao duoc cham LUC DOC, nen them mot hang rao hom nay doi phan quyet cua MOI chung cu cu.
+   * Quyen do thuoc van hanh, khong thuoc nguoi dang doi soat chinh nhung lan giao do.
+   */
+  'transport.geofence.manage',
 ];
 
 /**

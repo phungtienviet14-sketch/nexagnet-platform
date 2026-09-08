@@ -34,6 +34,8 @@ export interface ProofPhoto {
   readonly capturedAt: Date | null;
   readonly uploadedBy: string;
   readonly withdrawnAt: Date | null;
+  /** Di THEO CAP voi `withdrawnAt` — rang buoc `TransportProofPhoto_withdrawal_shape`. */
+  readonly withdrawnBy: string | null;
 }
 
 export interface OperationalProof {
@@ -50,7 +52,46 @@ export interface OperationalProof {
   readonly note: string | null;
   readonly recordedBy: string;
   readonly withdrawnAt: Date | null;
+  /** Di THEO CAP voi `withdrawnAt` — rang buoc `TransportOperationalProof_withdrawal_shape`. */
+  readonly withdrawnBy: string | null;
+  /**
+   * Chung cu nay co kem mot loi thach thuc CON HAN cua may chu khong.
+   *
+   * `false` KHONG phai mot cao buoc: duong ngoai tuyen khong xin duoc `nonce`. No chi noi rang
+   * phep kiem "gui SAU luc may chu hoi" khong ap dung duoc cho ban ghi nay.
+   */
+  readonly challengeVerified: boolean;
   readonly photos: readonly ProofPhoto[];
+}
+
+/**
+ * LOI THACH THUC — mot bi mat dung MOT LAN, song trong mot khoang co han.
+ *
+ * Doc `schema.prisma` cho phan "no chung minh gi va khong chung minh gi". Tom tat: no chung minh
+ * lan GUI xay ra sau mot lan khu hoi may chu quan sat duoc; no KHONG chung minh tam anh hay ban
+ * dinh vi duoc chup dung luc do.
+ */
+export interface ProofChallenge {
+  readonly id: string;
+  readonly nonce: string;
+  readonly driverId: string;
+  readonly sessionId: string;
+  readonly issuedAt: Date;
+  readonly expiresAt: Date;
+  readonly consumedAt: Date | null;
+  readonly consumedByProofId: string | null;
+}
+
+/**
+ * BIA MO mot chung cu — mot viec cua NGUOI DUYET, khong phai cua lai xe.
+ *
+ * `reason` la bat buoc va khong duoc de trong: mot lan rut khong ly do se buoc nguoi doc ho so sau
+ * nay phai doan, va thu ho doan ra thuong nang hon su that.
+ */
+export interface WithdrawProofCommand {
+  readonly proofId: string;
+  readonly actorId: string;
+  readonly reason: string;
 }
 
 export interface RecordProofCommand {
@@ -61,6 +102,14 @@ export interface RecordProofCommand {
   readonly observationId: string;
   readonly clientEventId: string;
   readonly note: string | null;
+  /**
+   * TUY CHON — va viec no tuy chon la mot quyet dinh, khong phai mot su bo sot.
+   *
+   * Bat buoc no se lam mot lai xe trong vung lom KHONG lap duoc chung cu giao hang, tuc mat bang
+   * chung o dung doan duong ma bang chung co gia tri nhat. Thieu no thi chung cu duoc ghi voi
+   * `challengeVerified = false`, va nguoi duyet doc ra duoc dieu do.
+   */
+  readonly challengeNonce?: string | null;
   readonly photos: readonly {
     readonly locator: string;
     readonly captureMode: ProofPhotoCaptureMode;
@@ -86,6 +135,14 @@ export interface OperationalProofView {
   readonly capturedAt: Date;
   readonly receivedAt: Date;
   readonly withdrawn: boolean;
+  /**
+   * Chung cu di qua duong CO loi thach thuc, hay duong ngoai tuyen.
+   *
+   * Bay ra o khung nhin de nguoi duyet doc duoc su khac biet, dung nhu `photosByCaptureMode` bay
+   * ra su khac biet giua anh chup tai cho va anh lay tu thu vien. Ca hai deu la thu he thong BIET
+   * va khong duoc lang le san phang.
+   */
+  readonly challengeVerified: boolean;
   readonly photoCount: number;
   /** Dem theo tung cach lay — mot chung cu co ca hai loai van noi ra duoc dieu do. */
   readonly photosByCaptureMode: Readonly<Partial<Record<ProofPhotoCaptureMode, number>>>;

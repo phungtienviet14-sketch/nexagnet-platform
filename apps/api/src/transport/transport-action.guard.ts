@@ -13,7 +13,11 @@ import { Reflector } from '@nestjs/core';
 import { isInternalServiceRequest } from '../auth/internal-service.guard.js';
 import type { AuthenticatedRequest } from '../auth/session.types.js';
 import { loadFoundationEnv } from '../config/foundation-env.js';
-import { roleCanPerform, type TransportAction } from './transport-actions.js';
+import {
+  isStakeholderScopeAction,
+  roleCanPerform,
+  type TransportAction,
+} from './transport-actions.js';
 import {
   TransportDomainError,
   type TransportErrorKind,
@@ -63,7 +67,29 @@ export class TransportActionGuard implements CanActivate {
     if (isInternalServiceRequest(request)) return true;
 
     const user = request.authUser;
-    if (!user || !roleCanPerform(user.role, action)) {
+    if (!user) {
+      throw new ForbiddenException(`Ban khong co quyen thuc hien thao tac nay (${action})`);
+    }
+
+    /**
+     * PHAM VI BEN HUU QUAN di qua tang vai — va do KHONG phai mot lo hong.
+     *
+     * Tang nay tra loi dung mot cau hoi: "vai cua nguoi nay co noi gi ve hanh dong do khong". Voi
+     * `TX-08` cau tra loi la KHONG, va no la khong that: khong vai nen tang nao mang nghia "co
+     * dong" (xem khoi `STAKEHOLDER_SCOPE_ACTIONS`). Bat mot cau hoi khong co cau tra loi phai tra
+     * loi bang cach nhet nghia co dong vao `SALE` hay `MANAGER` la cach te nhat de dong cong nay.
+     *
+     * Cong THAT o duoi, va no chat hon mot vai: `AssetOwnershipScopeService.resolve()` doi mot hang
+     * `TransportAssetStakeholder.authUserId` khop DUNG phien nay, con hieu luc, va no loc tung
+     * `vehicleId` theo tap cua chinh nguoi do. Mot nguoi da dang nhap nhung khong phai ben huu quan
+     * nhan `403` o do — khong doc duoc mot dong nao.
+     *
+     * Dieu kien de quy uoc nay dung: KHONG ma nao trong `STAKEHOLDER_SCOPE_ACTIONS` mo mot duong
+     * ghi. `transport-actions.spec.ts` khoa dieu do bang mot bai doc chinh danh sach.
+     */
+    if (isStakeholderScopeAction(action)) return true;
+
+    if (!roleCanPerform(user.role, action)) {
       throw new ForbiddenException(`Ban khong co quyen thuc hien thao tac nay (${action})`);
     }
     return true;

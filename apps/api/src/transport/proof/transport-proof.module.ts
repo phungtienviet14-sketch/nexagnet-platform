@@ -5,9 +5,18 @@ import { PrismaService } from '../../config/prisma.service.js';
 import { TRANSPORT_CORE_POLICY, tenantTransportCorePolicy } from '../transport-policy.js';
 import { TransportModule } from '../transport.module.js';
 import {
+  GeofenceRepository,
+  InMemoryGeofenceRepository,
+  PrismaGeofenceRepository,
+} from './geofence.repository.js';
+import { GeofenceService } from './geofence.service.js';
+import {
   InMemoryOperationalProofRepository,
+  InMemoryProofChallengeRepository,
   OperationalProofRepository,
+  ProofChallengeRepository,
 } from './operational-proof.repository.js';
+import { PrismaProofChallengeRepository } from './prisma-proof-challenge.repository.js';
 import { OperationalProofService } from './operational-proof.service.js';
 import { PrismaOperationalProofRepository } from './prisma-operational-proof.repository.js';
 import { PrismaTrackingRepository } from './prisma-tracking.repository.js';
@@ -78,8 +87,25 @@ import {
           : new InMemoryOperationalProofRepository(),
       inject: [PrismaService],
     },
+    {
+      provide: ProofChallengeRepository,
+      useFactory: (prisma: PrismaService): ProofChallengeRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaProofChallengeRepository(prisma)
+          : new InMemoryProofChallengeRepository(),
+      inject: [PrismaService],
+    },
+    {
+      provide: GeofenceRepository,
+      useFactory: (prisma: PrismaService): GeofenceRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaGeofenceRepository(prisma)
+          : new InMemoryGeofenceRepository(),
+      inject: [PrismaService],
+    },
     TrackingService,
     OperationalProofService,
+    GeofenceService,
   ],
   exports: [
     TrackingService,
@@ -87,6 +113,10 @@ import {
     VehicleTelematicsPort,
     OperationalProofService,
     OperationalProofRepository,
+    GeofenceRepository,
+    // `ProofReviewController` dang ky o GOC, nen no CHI thay danh sach nay. Mot provider noi bo
+    // (vd `TRANSPORT_PROOF_POLICY`) tiem vao controller do se chet luc khoi dong — da xay ra that.
+    GeofenceService,
   ],
 })
 export class TransportProofModule {}

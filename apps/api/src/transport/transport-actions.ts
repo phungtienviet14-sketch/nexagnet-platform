@@ -176,6 +176,24 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.analytics.read',
 
+  /* --- THAP DIEU HANH (Lane G, #244) — den cung `transport-core` --- */
+  /**
+   * BANG DIEU HANH GOM CHUNG — bay cot vong chay, dem doi xe, hang viec dang cho nguoi xu ly.
+   *
+   * MOT quyen cho ca bang, khong phai mot quyen cho moi o. Cung ly le da dat cho
+   * `transport.alerts.read`: bang la MOT be mat cua mot vai (Dieu do/Giam doc/Ke toan), khong phai
+   * mot tap hop mang cac bao cao roi.
+   *
+   * Tach khoi `transport.alerts.read` du bang co doc bang canh bao: canh bao tra loi "cai gi sap
+   * hong", bang dieu hanh tra loi "xe nao dang o dau va viec nao dang cho ai". Mot khach chi bat
+   * `transport-core` co bang nhung khong co canh bao — hai quyen roi lam duoc dieu do, mot quyen
+   * gop thi khong.
+   *
+   * KHONG nam trong be mat lai xe: bang phoi CA doi xe, va `INV-09` giu khung nhin lai xe o pham vi
+   * cua chinh ho.
+   */
+  'transport.control_tower.read',
+
   /* --- `transport-asset-compliance` (`TX-06`) --- */
   'transport.maintenance.plan.read',
   'transport.maintenance.plan.manage',
@@ -360,6 +378,15 @@ export const TRANSPORT_ACTIONS = [
   /** Van hanh doc TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
   'transport.proof.read',
   /**
+   * BIA MO mot chung cu — TACH khoi `transport.proof.read`, va do la mot ranh gioi quyen that.
+   *
+   * Doc chung cu la viec doi soat hang ngay; rut mot chung cu la viec go bo bang chung cua mot lan
+   * giao da xay ra. Nguoi lam viec thu nhat khong duong nhien duoc lam viec thu hai — va lai xe
+   * KHONG BAO GIO duoc, ke ca voi chung cu cua chinh minh: mot nguoi xoa duoc bang chung cua chinh
+   * minh thi cai con lai khong con la bang chung.
+   */
+  'transport.proof.withdraw',
+  /**
    * DOC DUONG DI THO cua mot con nguoi — ma RIENG, va la ma hep nhat trong ca tep nay.
    *
    * Tach han khoi `transport.tracking.read`, va do la ca diem. Ma kia tra loi "co chung cu vi tri
@@ -373,6 +400,30 @@ export const TRANSPORT_ACTIONS = [
   /** Khai bao hang rao dia ly (kho, bai, cay xang) — viec cua van hanh. */
   'transport.geofence.read',
   'transport.geofence.manage',
+
+  /* --- `TX-08` SO HUU TAI SAN (Lane E, Issue #242) --- */
+  /**
+   * SO DANG KY SO HUU + ho so ben huu quan — doc va quan ly.
+   *
+   * Hai ma chu khong mot, cung ly le voi cap `counterparty.read`/`.manage`: xem ai so huu mot chiec
+   * xe la viec hang ngay cua nguoi lam doi xe; SUA mot ty le so huu la sua mot su that phap ly, va
+   * lan sua do phai doc lai duoc tu so kiem toan.
+   *
+   * `.manage` cung la ma cho doi QUYEN DIEU HANH (`operationalControl`). No CO Y khong nam trong
+   * `transport.vehicle.manage`: bien mot xe thanh xe nha ngoai la mot tuyen bo ve tai san, khong
+   * phai mot lan sua ho so xe nhu doi tai trong hay so odo.
+   */
+  'transport.asset_ownership.read',
+  'transport.asset_ownership.manage',
+  /**
+   * PHAM VI CUA CHINH MINH — ben huu quan. "Xe toi co co phan".
+   *
+   * CHI DOC, va khong co bien the ghi nao: mot dong so huu khong dieu duoc xe, khong sua duoc ty le
+   * cua chinh minh, va khong ghi duoc mot dong nao vao du lieu van hanh.
+   *
+   * Xem `STAKEHOLDER_SCOPE_ACTIONS` ben duoi ve vi sao ma nay khong duoc cap qua VAI.
+   */
+  'transport.stakeholder.self.vehicle.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];
@@ -394,9 +445,39 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.checkpoint.record',
 ];
 
-/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe. */
+/**
+ * PHAM VI BEN HUU QUAN — cap bang MOT HANG DU LIEU, khong bang mot vai.
+ *
+ * Day la khac biet quan trong nhat cua `TX-08` so voi be mat lai xe, va no khong phai mot lua chon
+ * tuy tien. Be mat lai xe duoc cap qua vai `SALE` roi CHOT lai bang `Driver.authUserId` o tang dich
+ * vu. Voi ben huu quan, tang vai KHONG CON CHO:
+ *
+ *   · `SALE` da la vai cua lai xe — cap them o day se cho moi lai xe goi duoc be mat co dong;
+ *   · `MANAGER` la mot khoang trong phan quyen CHUA AI QUYET (xem khoi `ROLE_ACTIONS`) — gan nghia
+ *     "co dong" cho no la dua mot chinh sach khong ai quyet vao base, roi moi khach van tai sau
+ *     deu thua huong;
+ *   · them mot vai thu nam vao `USER_ROLES` la sua MO HINH XAC THUC CUA NEN TANG cho mot nhu cau
+ *     cua mot mien — dung thu ma #242 E3 cam ("do not build a second auth system").
+ *
+ * Nen cac ma nay khong nam trong bang vai NAO CA. Cong that la
+ * `AssetOwnershipScopeService.resolve()`, doc `TransportAssetStakeholder.authUserId` tu chinh phien
+ * dang nhap va fail-closed khi khong co hang nao. `TransportActionGuard` cho chung di qua tang vai
+ * DUNG VI KHONG CO VAI NAO NOI DUOC GI VE CHUNG — va vi khong ma nao trong so do mo mot duong ghi.
+ *
+ * Neu mot ngay them mot ma `.write` vao day, quy uoc nay khong con du va phai co mot cong that o
+ * tang guard. `transport-actions.spec.ts` khoa dieu do.
+ */
+export const STAKEHOLDER_SCOPE_ACTIONS: readonly TransportAction[] = [
+  'transport.stakeholder.self.vehicle.read',
+];
+
+export const isStakeholderScopeAction = (action: TransportAction): boolean =>
+  STAKEHOLDER_SCOPE_ACTIONS.includes(action);
+
+/** Moi hanh dong van hanh — tuc tat ca TRU pham vi lai xe va pham vi ben huu quan. */
 const OPERATIONS_ACTIONS: readonly TransportAction[] = TRANSPORT_ACTIONS.filter(
-  (action): action is TransportAction => !SELF_SCOPE_ACTIONS.includes(action),
+  (action): action is TransportAction =>
+    !SELF_SCOPE_ACTIONS.includes(action) && !STAKEHOLDER_SCOPE_ACTIONS.includes(action),
 );
 
 /**
@@ -453,6 +534,22 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * dong thoi gian. Doc thi can, ghi thi khong.
    */
   'transport.checkpoint.record',
+  /**
+   * Ke toan DOC duoc chung cu, va do la ca cong viec cua ho. RUT mot chung cu la viec khac.
+   *
+   * Doi soat la doc mot ho so roi noi no khop hay khong khop. Rut la go bo mot muc khoi chinh ho
+   * so minh dang doi soat — tuc sua cau hoi thay vi tra loi no.
+   */
+  'transport.proof.withdraw',
+  /**
+   * Hang rao duoc cham LUC DOC (`viewsForTrip`), nen them mot hang rao hom nay se doi phan quyet
+   * `INSIDE`/`OUTSIDE` cua MOI chung cu cu.
+   *
+   * Do la hanh vi dung — sua ban kinh mot cai kho phai ap dung cho ca lich su — nhung no cung co
+   * nghia rang quyen nay doi duoc ket luan ve nhung lan giao da xong. No thuoc ve van hanh, khong
+   * thuoc ve nguoi dang doi soat chinh nhung lan giao do.
+   */
+  'transport.geofence.manage',
 ];
 
 const ROLE_ACTIONS: Readonly<Record<UserRole, readonly TransportAction[]>> = {

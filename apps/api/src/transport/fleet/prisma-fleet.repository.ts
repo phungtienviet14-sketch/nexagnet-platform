@@ -30,6 +30,8 @@ interface VehicleRow {
   allowedPayloadKg: number | null;
   currentOdoKm: number;
   status: string;
+  operationalControl: string;
+  ownershipRegisterComplete: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -85,6 +87,8 @@ const toVehicle = (row: VehicleRow): Vehicle => ({
   allowedPayloadKg: row.allowedPayloadKg,
   currentOdoKm: row.currentOdoKm,
   status: row.status as Vehicle['status'],
+  operationalControl: row.operationalControl as Vehicle['operationalControl'],
+  ownershipRegisterComplete: row.ownershipRegisterComplete,
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt),
 });

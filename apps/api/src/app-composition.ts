@@ -134,6 +134,7 @@ import { DriverProofController } from './transport/proof/driver-proof.controller
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
 import { CheckpointsController } from './transport/checkpoint/checkpoints.controller.js';
 import { DriverCheckpointsController } from './transport/checkpoint/driver-checkpoints.controller.js';
+import { ProofReviewController } from './transport/proof/proof-review.controller.js';
 import { OperationalAlertsService } from './transport/asset-compliance/operational-alerts.service.js';
 import {
   AlertDriverFundSource,
@@ -148,12 +149,34 @@ import { OperationalAlertsController } from './transport/asset-compliance/operat
 import { PayrollController } from './transport/workforce/payroll.controller.js';
 import { DriverPayslipsController } from './transport/workforce/driver-payslips.controller.js';
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
+import { AssetOwnershipController } from './transport/asset-ownership/asset-ownership.controller.js';
+import { StakeholderVehiclesController } from './transport/asset-ownership/stakeholder-vehicles.controller.js';
 import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
 import { TransportOrdersController } from './transport/movement/orders.controller.js';
 import { DriverExpenseClaimsController } from './transport/claims/driver-claims-self.controller.js';
 import { ExpenseClaimsController } from './transport/claims/claims.controller.js';
 import { RunsController } from './transport/movement/runs.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
+import { ControlTowerController } from './transport/control-tower/control-tower.controller.js';
+import { FinanceController } from './transport/finance/finance.controller.js';
+import { FinanceReadService } from './transport/finance/finance-read.service.js';
+import {
+  FinanceDriverBalanceFacts,
+  FinanceDriverBalanceFactsAdapter,
+  FinanceSettlementFacts,
+  FinanceSettlementFactsAdapter,
+} from './transport/finance/finance-facts.port.js';
+import { ControlTowerReadService } from './transport/control-tower/control-tower-read.service.js';
+import {
+  ControlTowerAlertFacts,
+  ControlTowerAlertFactsAdapter,
+  ControlTowerClaimFacts,
+  ControlTowerClaimFactsAdapter,
+  ControlTowerCoreFacts,
+  ControlTowerCoreFactsAdapter,
+  ControlTowerFuelFacts,
+  ControlTowerFuelFactsAdapter,
+} from './transport/control-tower/control-tower-facts.port.js';
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
 import { TripsController } from './transport/trips/trips.controller.js';
@@ -263,8 +286,18 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('notifications', NotificationsController),
   owned('notifications', SettingsNotificationsController),
   owned('transport-core', FleetController),
+  // THAP DIEU HANH (Lane G, #244) — den cung `transport-core`. Service dung sau no doc them BA
+  // nguon TUY CHON o ba capability khac; xem khoi PROVIDERS ben duoi.
+  owned('transport-core', ControlTowerController),
   // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
   owned('transport-core', CounterpartyController),
+  /*
+   * `TX-08` so huu tai san. Ca hai thuoc `transport-core` — quyen so huu la mot su that ve chinh
+   * chiec xe, khong phai mot lop nghiep vu them vao, nen khach nao bat duoc doi xe thi cung tra loi
+   * duoc "ai so huu no". Be mat ben huu quan di kem: khong co no thi so dang ky chi la du lieu chet.
+   */
+  owned('transport-core', AssetOwnershipController),
+  owned('transport-core', StakeholderVehiclesController),
   // MO HINH VAN CHUYEN v2 (R1-B, #232 `D-01`) -- cong them. Khong duong nao cua v1 phu thuoc
   // hai controller nay, va `TransportTrip` khong doi mot cot nao.
   owned('transport-core', TransportOrdersController),
@@ -326,6 +359,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // `TX-05` — BAO CAO quyet toan, CHI DOC (`#168 B1`). Capability nay chay tu T5 nhung chua tung co
   // mot duong HTTP nao; xem khoi chu thich cua controller ve vi sao khong co route ghi.
   owned('transport-settlement', SettlementReportsController),
+  // BANG TAI CHINH (Lane G, #244 G5) — den cung `transport-settlement`, va do la QUYET DINH ma
+  // `docs/kien-truc/transport-domain-v2.md:1056-1063` bo ngo: capability nao so huu bao cao hop
+  // nhat. Xem khoi PROVIDERS ben duoi cho cong tuy chon sang `TX-07b`.
+  owned('transport-settlement', FinanceController),
   // BAM VI TRI CUA CHINH TOI — be mat lai xe, route rieng, cung ly le voi `DriverFuelController`.
   owned('transport-proof', DriverTrackingController),
   // BE MAT VAN HANH — HAI tuyen voi HAI quyen khac nhau (tom tat ⟂ duong di tho). Xem khoi chu
@@ -335,6 +372,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // khong dung kho tep thu hai. Dang ky o goc vi no can dich vu do, giong
   // `DriverFuelEvidenceController`.
   owned('transport-proof', DriverProofController),
+  // BE MAT NGUOI DUYET — doc tom tat chung cu, bia mo mot chung cu, khai hang rao. BA quyen tach
+  // roi: ke toan doc duoc, nhung khong rut duoc chung cu va khong doi duoc ban kinh mot hang rao
+  // (hang rao cham LUC DOC, nen sua no doi ket luan cua ca nhung lan giao da xong).
+  owned('transport-proof', ProofReviewController),
   // MOC VAN HANH — HAI be mat, HAI quyen, HAI duong ghi khac nhau. Be mat lai xe ghi kem chung cu
   // vi tri va chi tren vong chay cua chinh ho; be mat van hanh ghi duoc moi vong chay nhung KHONG
   // dinh kem chung cu vi tri. Xem `CheckpointService`: hai duong do tach han o tang dich vu.
@@ -377,6 +418,51 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     useClass: FuelReviewAlertAdapter,
   }),
   owned('transport-costing', { provide: AlertDriverFundSource, useClass: CostingFundAlertAdapter }),
+  /**
+   * THAP DIEU HANH — dang ky o TANG UNG DUNG, cung ly le CAU TRUC voi bang canh bao ngay tren.
+   *
+   * Bang doc BON nguon o BON capability: vong chay/doi xe cua `transport-core`, de nghi chi cua
+   * `transport-costing`, phieu dau + ky doi soat cua `transport-fuel`, canh bao giay to/bao duong
+   * cua `transport-asset-compliance`. Neu `TransportModule` `imports` ba module sau thi
+   * `transport-core` khong con bat duoc mot minh — pha dung `dependencies: []` ma T1 §10.1 hua.
+   *
+   * Cong LOI di cung `transport-core` va khong bao gio vang: khong co vong chay thi khong co bang.
+   * Ba cong con lai chi TON TAI khi capability so huu chung duoc bat; khi vang mat,
+   * `ControlTowerReadService` nhan `undefined` qua `@Optional()` va phat ra `unavailableSources`.
+   */
+  owned('transport-core', ControlTowerReadService),
+  owned('transport-core', {
+    provide: ControlTowerCoreFacts,
+    useClass: ControlTowerCoreFactsAdapter,
+  }),
+  owned('transport-costing', {
+    provide: ControlTowerClaimFacts,
+    useClass: ControlTowerClaimFactsAdapter,
+  }),
+  owned('transport-fuel', {
+    provide: ControlTowerFuelFacts,
+    useClass: ControlTowerFuelFactsAdapter,
+  }),
+  owned('transport-asset-compliance', {
+    provide: ControlTowerAlertFacts,
+    useClass: ControlTowerAlertFactsAdapter,
+  }),
+  /**
+   * BANG TAI CHINH — cung khuon, va cung mot ly le cau truc.
+   *
+   * Cong LOI di cung `transport-settlement`: khong co bon dong tien thi khong co bang. Cong HAI SO
+   * LAI XE (`TX-07b`) di cung `transport-workforce` — mot khach bat quyet toan ma khong tinh luong
+   * van co bang, chi thieu hai o cuoi, va bang cong bo dieu do qua `unavailableSources`.
+   */
+  owned('transport-settlement', FinanceReadService),
+  owned('transport-settlement', {
+    provide: FinanceSettlementFacts,
+    useClass: FinanceSettlementFactsAdapter,
+  }),
+  owned('transport-workforce', {
+    provide: FinanceDriverBalanceFacts,
+    useClass: FinanceDriverBalanceFactsAdapter,
+  }),
   ...guardProviders.map((provider) => owned('foundation' as const, provider)),
   owned('operations', RuntimeSettingsService),
   owned('turn-processing', AgentEventsService),

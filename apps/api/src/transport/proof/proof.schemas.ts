@@ -96,6 +96,14 @@ export const recordProofSchema = z
     clientEventId: z.string().min(1).max(200),
     note: z.string().max(500).nullish(),
     /**
+     * LOI THACH THUC cua may chu — TUY CHON, va viec no tuy chon la mot quyet dinh.
+     *
+     * Bat buoc no se lam mot lai xe trong vung lom KHONG lap duoc chung cu giao hang, tuc mat bang
+     * chung o dung doan duong ma bang chung co gia tri nhat. Thieu no thi chung cu duoc ghi voi
+     * `challengeVerified = false`, va nguoi duyet doc ra duoc su khac biet do.
+     */
+    challengeNonce: z.string().trim().min(1).max(200).nullish(),
+    /**
      * MOT TRUONG MULTIPART LUON LA CHUOI, ke ca khi no lap lai.
      *
      * Day la mot loi da xay ra that: khai `z.array(...)` roi gui bang `FormData` thi mot tam anh
@@ -115,6 +123,16 @@ export const recordProofSchema = z
   })
   .strict();
 
+/**
+ * BIA MO — `reason` BAT BUOC, va toi thieu 3 ky tu.
+ *
+ * Mot lan rut khong ly do buoc nguoi doc ho so sau nay phai doan, va thu ho doan ra thuong nang
+ * hon su that. Truong nay khong co mac dinh: mot chuoi rong duoc phep se tro thanh gia tri pho
+ * bien nhat trong bang chi sau vai tuan.
+ */
+export const withdrawProofSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+
+export type WithdrawProofBody = z.infer<typeof withdrawProofSchema>;
 export type RecordProofBody = z.infer<typeof recordProofSchema>;
 export type OpenTrackingSessionBody = z.infer<typeof openTrackingSessionSchema>;
 export type ReportObservationBody = z.infer<typeof reportObservationSchema>;
