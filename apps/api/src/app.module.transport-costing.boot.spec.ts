@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { BOOT_SPAWN_TIMEOUT_MS, BOOT_TEST_TIMEOUT_MS } from './boot-spec-timeout.js';
 
 const apiDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureDir = resolve(
@@ -23,8 +24,10 @@ const fixtureDir = resolve(
  * doi soat duoc voi nhau, va bai nay do.
  */
 describe('transport-costing process boot contract', () => {
-  it('boot Nest that voi transport-core + transport-costing, chay tron mot vong tai chinh', () => {
-    const script = `
+  it(
+    'boot Nest that voi transport-core + transport-costing, chay tron mot vong tai chinh',
+    () => {
+      const script = `
       import { NestFactory } from '@nestjs/core';
       const { AppModule } = await import('./src/app.module.ts');
       const { FleetService } = await import('./src/transport/fleet/fleet.service.ts');
@@ -89,44 +92,46 @@ describe('transport-costing process boot contract', () => {
       process.stdout.write('<<TRANSPORT_COSTING_BOOT_PROOF>>' + JSON.stringify(proof));
     `;
 
-    const env = { ...process.env };
-    delete env.ANTHROPIC_API_KEY;
-    delete env.DEEPSEEK_API_KEY;
-    delete env.FLOWISE_API_KEY;
-    delete env.FLOWISE_BASE_URL;
-    delete env.FLOWISE_FLOW_ID;
-    delete env.ZALO_BOT_TOKEN;
-    delete env.TENANT;
-    env.TENANT_DIR = fixtureDir;
-    env.PERSISTENCE = 'memory';
-    env.NODE_ENV = 'test';
+      const env = { ...process.env };
+      delete env.ANTHROPIC_API_KEY;
+      delete env.DEEPSEEK_API_KEY;
+      delete env.FLOWISE_API_KEY;
+      delete env.FLOWISE_BASE_URL;
+      delete env.FLOWISE_FLOW_ID;
+      delete env.ZALO_BOT_TOKEN;
+      delete env.TENANT;
+      env.TENANT_DIR = fixtureDir;
+      env.PERSISTENCE = 'memory';
+      env.NODE_ENV = 'test';
 
-    const child = spawnSync(
-      process.execPath,
-      ['--import', '@swc-node/register/esm-register', '--input-type=module', '--eval', script],
-      { cwd: apiDir, env, encoding: 'utf8', timeout: 60_000 },
-    );
+      const child = spawnSync(
+        process.execPath,
+        ['--import', '@swc-node/register/esm-register', '--input-type=module', '--eval', script],
+        { cwd: apiDir, env, encoding: 'utf8', timeout: BOOT_SPAWN_TIMEOUT_MS },
+      );
 
-    expect(child.status, `${child.stderr}\n${child.stdout}`).toBe(0);
-    const proof = child.stdout.split('<<TRANSPORT_COSTING_BOOT_PROOF>>')[1];
-    expect(proof, `khong tim thay dau moc trong stdout:\n${child.stdout}`).toBeDefined();
-    expect(JSON.parse(proof ?? '{}')).toEqual({
-      costing: true,
-      periods: true,
-      // Khach van tai KHONG phai khai mot integration `parser` hay mot kenh Zalo nao de co so quy.
-      orders: false,
-      zalo: false,
-      // `INV-03`: hai lop, MOT khoa.
-      sameCorrelation: true,
-      // 10.000.000 - 150.000
-      balance: 9_850_000,
-      directCost: 150_000,
-      snapshotClosing: 9_850_000,
-      periodStatus: 'CLOSED',
-      // `INV-22` song trong tien trinh that, khong chi trong bai test don vi.
-      frozenReason: 'FUND_ENTRY_PERIOD_FROZEN',
-      // Danh muc cua goi khach duoc cuong che, khong phai mot goi y.
-      categoryReason: 'EXPENSE_CATEGORY_UNKNOWN',
-    });
-  }, 70_000);
+      expect(child.status, `${child.stderr}\n${child.stdout}`).toBe(0);
+      const proof = child.stdout.split('<<TRANSPORT_COSTING_BOOT_PROOF>>')[1];
+      expect(proof, `khong tim thay dau moc trong stdout:\n${child.stdout}`).toBeDefined();
+      expect(JSON.parse(proof ?? '{}')).toEqual({
+        costing: true,
+        periods: true,
+        // Khach van tai KHONG phai khai mot integration `parser` hay mot kenh Zalo nao de co so quy.
+        orders: false,
+        zalo: false,
+        // `INV-03`: hai lop, MOT khoa.
+        sameCorrelation: true,
+        // 10.000.000 - 150.000
+        balance: 9_850_000,
+        directCost: 150_000,
+        snapshotClosing: 9_850_000,
+        periodStatus: 'CLOSED',
+        // `INV-22` song trong tien trinh that, khong chi trong bai test don vi.
+        frozenReason: 'FUND_ENTRY_PERIOD_FROZEN',
+        // Danh muc cua goi khach duoc cuong che, khong phai mot goi y.
+        categoryReason: 'EXPENSE_CATEGORY_UNKNOWN',
+      });
+    },
+    BOOT_TEST_TIMEOUT_MS,
+  );
 });

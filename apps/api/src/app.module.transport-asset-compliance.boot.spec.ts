@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { BOOT_SPAWN_TIMEOUT_MS, BOOT_TEST_TIMEOUT_MS } from './boot-spec-timeout.js';
 
 const apiDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureDir = resolve(
@@ -24,8 +25,10 @@ const fixtureDir = resolve(
  * va bai nay do. Danh sach provider thi khong bao gio phat hien duoc dieu do.
  */
 describe('transport-asset-compliance process boot contract', () => {
-  it('boot Nest that voi DUNG transport-core + transport-asset-compliance', () => {
-    const script = `
+  it(
+    'boot Nest that voi DUNG transport-core + transport-asset-compliance',
+    () => {
+      const script = `
       import { NestFactory } from '@nestjs/core';
       const { AppModule } = await import('./src/app.module.ts');
       const { FleetService } = await import('./src/transport/fleet/fleet.service.ts');
@@ -81,40 +84,42 @@ describe('transport-asset-compliance process boot contract', () => {
       process.stdout.write('<<TRANSPORT_ASSET_COMPLIANCE_BOOT_PROOF>>' + JSON.stringify(proof));
     `;
 
-    const env = { ...process.env };
-    delete env.ANTHROPIC_API_KEY;
-    delete env.DEEPSEEK_API_KEY;
-    delete env.FLOWISE_API_KEY;
-    delete env.FLOWISE_BASE_URL;
-    delete env.FLOWISE_FLOW_ID;
-    delete env.ZALO_BOT_TOKEN;
-    delete env.TENANT;
-    env.TENANT_DIR = fixtureDir;
-    env.PERSISTENCE = 'memory';
-    env.NODE_ENV = 'test';
+      const env = { ...process.env };
+      delete env.ANTHROPIC_API_KEY;
+      delete env.DEEPSEEK_API_KEY;
+      delete env.FLOWISE_API_KEY;
+      delete env.FLOWISE_BASE_URL;
+      delete env.FLOWISE_FLOW_ID;
+      delete env.ZALO_BOT_TOKEN;
+      delete env.TENANT;
+      env.TENANT_DIR = fixtureDir;
+      env.PERSISTENCE = 'memory';
+      env.NODE_ENV = 'test';
 
-    const child = spawnSync(
-      process.execPath,
-      ['--import', '@swc-node/register/esm-register', '--input-type=module', '--eval', script],
-      { cwd: apiDir, env, encoding: 'utf8', timeout: 60_000 },
-    );
+      const child = spawnSync(
+        process.execPath,
+        ['--import', '@swc-node/register/esm-register', '--input-type=module', '--eval', script],
+        { cwd: apiDir, env, encoding: 'utf8', timeout: BOOT_SPAWN_TIMEOUT_MS },
+      );
 
-    expect(child.status, `${child.stderr}\n${child.stdout}`).toBe(0);
-    const proof = child.stdout.split('<<TRANSPORT_ASSET_COMPLIANCE_BOOT_PROOF>>')[1];
-    expect(proof, `khong tim thay dau moc trong stdout:\n${child.stdout}`).toBeDefined();
-    expect(JSON.parse(proof ?? '{}')).toEqual({
-      assets: true,
-      alerts: true,
-      // MOT PHU THUOC: khach nay khong bat costing, va khong phai bat.
-      costing: false,
-      // Khach van tai KHONG khai integration `parser` hay kenh Zalo nao.
-      orders: false,
-      zalo: false,
-      // Lenh sua dang mo THANG chuyen trong phep hop thanh (T1 §18.2).
-      effectiveStatus: 'UNDER_MAINTENANCE',
-      expiredDocuments: 1,
-      // Ca hai nguon TUY CHON deu vang mat, va bang canh bao NOI RA dieu do.
-      unavailableSources: ['DRIVER_FUND', 'FUEL_CONSUMPTION'],
-    });
-  }, 70_000);
+      expect(child.status, `${child.stderr}\n${child.stdout}`).toBe(0);
+      const proof = child.stdout.split('<<TRANSPORT_ASSET_COMPLIANCE_BOOT_PROOF>>')[1];
+      expect(proof, `khong tim thay dau moc trong stdout:\n${child.stdout}`).toBeDefined();
+      expect(JSON.parse(proof ?? '{}')).toEqual({
+        assets: true,
+        alerts: true,
+        // MOT PHU THUOC: khach nay khong bat costing, va khong phai bat.
+        costing: false,
+        // Khach van tai KHONG khai integration `parser` hay kenh Zalo nao.
+        orders: false,
+        zalo: false,
+        // Lenh sua dang mo THANG chuyen trong phep hop thanh (T1 §18.2).
+        effectiveStatus: 'UNDER_MAINTENANCE',
+        expiredDocuments: 1,
+        // Ca hai nguon TUY CHON deu vang mat, va bang canh bao NOI RA dieu do.
+        unavailableSources: ['DRIVER_FUND', 'FUEL_CONSUMPTION'],
+      });
+    },
+    BOOT_TEST_TIMEOUT_MS,
+  );
 });
