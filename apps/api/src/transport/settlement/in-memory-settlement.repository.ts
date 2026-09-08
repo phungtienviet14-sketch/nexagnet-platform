@@ -79,6 +79,17 @@ export class InMemorySettlementRepository extends SettlementRepository {
     }
   }
 
+  async findDocumentBySource(
+    sourceContext: string,
+    sourceId: string,
+  ): Promise<SettlementDocument | null> {
+    return (
+      [...this.documents.values()].find(
+        (doc) => doc.sourceContext === sourceContext && doc.sourceId === sourceId,
+      ) ?? null
+    );
+  }
+
   async recogniseDocument(command: RecogniseDocumentCommand): Promise<SettlementRecognition> {
     const existing = [...this.documents.values()].find(
       (doc) => doc.sourceContext === command.sourceContext && doc.sourceId === command.sourceId,

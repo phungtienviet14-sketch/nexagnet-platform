@@ -145,6 +145,19 @@ const TRANSPORT_TABLES_CHILD_FIRST = [
   'transportDriverFundEntry',
   'transportDriverFundAccount',
   'transportTripAssignment',
+  /**
+   * `#275` Lane K — PHAI DUNG TRUOC `transportTrip`.
+   *
+   * `TransportTripOrderLink.tripId` la khoa ngoai `Restrict` tro ve chuyen. Duong reset nay xoa
+   * CA BANG `transportTrip` (khong `where`), nen mot lien ket con song se chan no lai — va thong
+   * diep loi se noi ve mot rang buoc, khong noi ve du lieu mau.
+   *
+   * GHI NHAN mot truong hop ANH EM VAN CON NGU: `TransportTripRunLegLink` co dung hinh dang do va
+   * cung khong nam trong danh sach nay. No chua tung lam do duong reset vi chang/vong chay v2 cung
+   * khong bi xoa o day, nen mot lien ket cu chi ton tai khi ai do da chieu mot chuyen MAU — lane
+   * nay khong mo rong pham vi de sua mot thu chua hong, chi ghi lai de lan sau khong phai do lai.
+   */
+  'transportTripOrderLink',
   'transportTrip',
   'transportVehicleAssignment',
   'transportCustomer',

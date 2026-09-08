@@ -25,6 +25,7 @@ import {
   RUN_CODE,
   type CreateOrderInput,
   type CreateRunInput,
+  type TripOrderProjection,
   type TripProjection,
   type UpdateOrderInput,
 } from './movement.repository.js';
@@ -39,7 +40,7 @@ import type {
   VehicleRunDetail,
   VehicleRunStatus,
 } from './movement.types.js';
-import { planTripProjection } from './trip-run-projection.js';
+import { planOrderProjection, planTripProjection } from './trip-run-projection.js';
 
 /**
  * TAC NHAN cua nhung lan ghi do CHINH HE THONG quyet, khong mot nguoi nao bam.
@@ -593,6 +594,71 @@ export class MovementService {
    * Goi lai tren cung mot chuyen KHONG sinh ban thu hai: lien ket `(tripId)` la khoa chinh, nen
    * lan thu hai doc ra ban da co va tra `PROJECTION_UNCHANGED`.
    */
+  /**
+   * CHIEU THUONG MAI mot chuyen v1 -> NGHIA VU v2 -- `#275` K5.
+   *
+   * ==========================================================================================
+   * VI SAO DUONG NAY TON TAI RIENG, KHONG NAM TRONG `projectTrip`
+   * ==========================================================================================
+   *
+   * `projectTrip` dung mot `TransportVehicleRun`, va mot vong chay BAT BUOC co `vehicleId`. Nen no
+   * tu choi chuyen thue nha xe ngoai -- dung, vi bia ra mot vong chay cho mot chiec xe khong phai
+   * cua minh se lam km doi xe phong len.
+   *
+   * Nhung `#275` K5 dat cong doi soat len DON, va mot chuyen thue nha xe ngoai VAN co khach, VAN co
+   * bien nhan giao hang phai nghiem thu. Neu duong duy nhat de mot chuyen co don la di qua vong
+   * chay, thi nhung chuyen do vinh vien khong co chu the -- va cong hoac chan cung mot duong dang
+   * chay, hoac phai mo mot duong vong. `#275` cam ca hai.
+   *
+   * Nen o day co hai phep chieu doc lap, moi cai voi dieu kien cua chinh no. Ca hai TAT DINH, ca
+   * hai dung chung ma don `ORD-<ma chuyen>`, va lien ket la `tripId` khoa chinh -- nen goi lai
+   * khong bao gio de ra ban thu hai, du goi qua duong nao.
+   */
+  async projectTripOrder(tripId: string, actor: string): Promise<TripOrderProjection> {
+    const existing = await this.repository.findOrderLink(tripId);
+    if (existing) {
+      const order = await this.repository.findOrder(existing.orderId);
+      if (order) {
+        this.allow('order.trip_projection', 'ORDER_PROJECTION_UNCHANGED', { tripId });
+        return { link: existing, order };
+      }
+    }
+
+    if (!this.trips) {
+      throw TransportDomainError.notFound(
+        'PROJECTION_TRIP_NOT_FOUND',
+        'Kho chuyen v1 khong duoc bat, khong chieu duoc.',
+      );
+    }
+    const trip = await this.trips.find(tripId);
+    if (!trip) {
+      throw TransportDomainError.notFound('PROJECTION_TRIP_NOT_FOUND', 'Khong tim thay chuyen.');
+    }
+
+    const outcome = planOrderProjection(trip);
+    if (!outcome.ok) throw this.deny('order.trip_projection', outcome.reason, { tripId });
+
+    const projection = await this.repository.projectTripOrder({
+      tripId,
+      projectedBy: actor,
+      order: outcome.order,
+    });
+
+    this.allow('order.trip_projection', 'ORDER_PROJECTION_CREATED', {
+      tripId,
+      orderId: projection.order.id,
+    });
+    await this.audit.append({
+      actor,
+      action: 'transport.order.project_trip',
+      entityType: 'TransportTripOrderLink',
+      entityId: tripId,
+      before: null,
+      after: projection.link,
+    });
+    return projection;
+  }
+
   async projectTrip(tripId: string, actor: string): Promise<TripProjection> {
     const existing = await this.repository.findProjection(tripId);
     if (existing) {
@@ -638,6 +704,14 @@ export class MovementService {
 
   findProjection(tripId: string): Promise<TripProjection | null> {
     return this.repository.findProjection(tripId);
+  }
+
+  /** NGHIA VU THUONG MAI cua mot chuyen v1 -- `null` khi chua chieu. Doc lap voi vong chay. */
+  async findOrderProjection(tripId: string): Promise<TripOrderProjection | null> {
+    const link = await this.repository.findOrderLink(tripId);
+    if (!link) return null;
+    const order = await this.repository.findOrder(link.orderId);
+    return order ? { link, order } : null;
   }
 
   /* ------------------------------------------------------------------ *

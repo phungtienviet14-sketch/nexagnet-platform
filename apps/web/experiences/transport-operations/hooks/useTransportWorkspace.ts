@@ -51,6 +51,7 @@ export const TRANSPORT_QUERY_KEYS = {
   orders: ['transport', 'orders'],
   runs: ['transport', 'runs'],
   expenseClaims: ['transport', 'expense-claims'],
+  orderCompletion: ['transport', 'order-completion'],
   /** Lane G — MOT khoa cho CA bang: mot lan goi, mot khung nhin. */
   controlTower: ['transport', 'control-tower'],
   /** Lane G — sau con so tai chinh, cung mot lan doc. */
@@ -256,6 +257,21 @@ export function useExpenseClaims(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.expenseClaims,
     queryFn: () => transportApi.claims.list(),
     enabled: allowed(input, 'transport-costing', 'transport.expense.claim.read'),
+  });
+}
+
+/**
+ * HANG CHO KET THUC DON — `#275` K4.
+ *
+ * `enabled` doi CA capability `transport-acceptance` LAN quyen `transport.commercial_acceptance
+ * .read`. Vai lai xe (`SALE`) khong co ma do, nen hook nay khong bao gio ban mot yeu cau ma may chu
+ * se tu choi — nhung cong that van nam o may chu, khong o day (`#275` K8 bai 1).
+ */
+export function useOrderCompletionQueue(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.orderCompletion,
+    queryFn: () => transportApi.orderCompletion.queue(),
+    enabled: allowed(input, 'transport-acceptance', 'transport.commercial_acceptance.read'),
   });
 }
 

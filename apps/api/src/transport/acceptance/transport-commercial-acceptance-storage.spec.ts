@@ -26,8 +26,25 @@ const MIGRATION = readFileSync(
   'utf8',
 );
 
+/**
+ * `#275` Lane K — MIGRATION THU HAI, doi CHU THE tu vong chay sang DON.
+ *
+ * Doc RIENG chu khong gop vao chuoi tren: hai tep tra loi hai cau hoi khac nhau, va mot bai kiem
+ * "chuoi nay co o dau do trong hai tep" se khong phat hien duoc khi mot rang buoc bi chuyen nham
+ * tep.
+ */
+const ORDER_MIGRATION = readFileSync(
+  fileURLToPath(
+    new URL(
+      '../../../prisma/migrations/20260910120000_transport_order_completion/migration.sql',
+      import.meta.url,
+    ),
+  ),
+  'utf8',
+);
+
 describe('Rang buoc kho cua nghiem thu chung tu — CA-020', () => {
-  it('mot vong chay chi co MOT ho so nghiem thu', () => {
+  it('chu the CU (vong chay) van duy nhat trong migration goc cua #268', () => {
     expect(MIGRATION).toContain('TransportCommercialAcceptance_runId_key');
   });
 
@@ -123,5 +140,76 @@ describe('Migration nay KHONG cham vao mien nao khac — CA-021', () => {
     expect(MIGRATION).not.toMatch(/RENAME/);
     expect(MIGRATION).not.toContain('DealerPriceOverride');
     expect(MIGRATION).not.toMatch(/ALTER TABLE "User"/);
+  });
+});
+
+/**
+ * CA-030 — CHU THE MOI LA DON, VA MIGRATION KHONG PHA GI (`#275` K0/K1/K6).
+ *
+ * `#275` K0 doi *"prefer additive migration/compatibility over destructive rewrite"*, K6 cam
+ * *"invalidate already-settled rows"* va *"rewrite historical financial records"*. Ba dieu do la
+ * nhung khang dinh ve NOI DUNG TEP SQL, nen chung phai duoc kiem bang cach doc chinh tep do — mot
+ * bo bai hanh vi se van xanh sau mot lan sua bien migration thanh mot lan pha huy.
+ */
+describe('Doi chu the sang DON — CA-030', () => {
+  it('mot don chi co MOT ho so ket thuc', () => {
+    expect(ORDER_MIGRATION).toContain('TransportCommercialAcceptance_orderId_key');
+  });
+
+  it('DUNG MOT chu the tren moi hang — cuong che bang CHECK, khong bang ky luat', () => {
+    expect(ORDER_MIGRATION).toContain('TransportCommercialAcceptance_subject_exactly_one');
+    expect(ORDER_MIGRATION).toMatch(
+      /\("orderId" IS NOT NULL\)::int \+ \("runId" IS NOT NULL\)::int/,
+    );
+  });
+
+  it('chu the cu duoc NOI LONG chu khong bi go bo — #275 K0 doi migration THEM VAO', () => {
+    expect(ORDER_MIGRATION).toContain(
+      'ALTER TABLE "TransportCommercialAcceptance" ALTER COLUMN "runId" DROP NOT NULL',
+    );
+    expect(ORDER_MIGRATION).not.toMatch(/DROP COLUMN/);
+  });
+
+  it('lien ket THUONG MAI chuyen<->don la MOT-MOT hai chieu', () => {
+    expect(ORDER_MIGRATION).toContain(
+      'CONSTRAINT "TransportTripOrderLink_pkey" PRIMARY KEY ("tripId")',
+    );
+    expect(ORDER_MIGRATION).toContain('CREATE UNIQUE INDEX "TransportTripOrderLink_orderId_key"');
+  });
+
+  /**
+   * `#275` K6: *"Use deterministic compatibility based on existing authoritative links"*.
+   *
+   * Backfill duoc phep, nhung CHI khi no ghi lai mot su that DA TON TAI. Bai nay khoa hai dieu:
+   * nguon la lien ket da duoc chap nhan, va khong mot trang thai nghiem thu nao bi dat.
+   */
+  it('backfill chi ghi lai lien ket DA CO, khong dat mot trang thai nghiem thu nao', () => {
+    expect(ORDER_MIGRATION).toContain('INSERT INTO "TransportTripOrderLink"');
+    expect(ORDER_MIGRATION).toContain('FROM "TransportTripRunLegLink" link');
+    expect(ORDER_MIGRATION).toContain('ON CONFLICT DO NOTHING');
+
+    // Khong cau lenh nao dat `state`/`APPROVED` — `#275` K6 cam `mass fake APPROVED by system`.
+    expect(ORDER_MIGRATION).not.toMatch(/UPDATE "TransportCommercialAcceptance"/);
+    expect(ORDER_MIGRATION).not.toContain("'APPROVED'");
+  });
+
+  it('khong khoa ngoai nao xoa day chuyen', () => {
+    const cascades = ORDER_MIGRATION.split('\n').filter(
+      (line) => line.includes('FOREIGN KEY') && line.includes('ON DELETE CASCADE'),
+    );
+    expect(cascades).toEqual([]);
+  });
+
+  it('khong go bang, khong doi ten, khong cham mien nao khac — CA-031', () => {
+    expect(ORDER_MIGRATION).not.toMatch(/^\s*DROP TABLE/m);
+    expect(ORDER_MIGRATION).not.toMatch(/RENAME/);
+
+    const touched = ORDER_MIGRATION.split('\n').filter(
+      (line) => line.startsWith('ALTER TABLE ') || line.startsWith('DROP '),
+    );
+    expect(touched.length).toBeGreaterThan(0);
+    for (const line of touched) {
+      expect(line).toMatch(/^(ALTER TABLE|DROP) "Transport/);
+    }
   });
 });

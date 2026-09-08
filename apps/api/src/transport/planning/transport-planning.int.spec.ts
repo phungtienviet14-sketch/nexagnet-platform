@@ -90,6 +90,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });
+      /*
+       * `#275` Lane K: `projectTrip` cung ghi mot lien ket THUONG MAI, va khoa ngoai cua no la
+       * `Restrict` — cung quy uoc voi `TransportTripRunLegLink` ngay tren.
+       */
+      await prisma.transportTripOrderLink.deleteMany({
+        where: { order: { code: { contains: CODE_PREFIX } } },
+      });
       await prisma.transportOrder.deleteMany({ where: { code: { contains: CODE_PREFIX } } });
 
       const tripRows = await prisma.transportTrip.findMany({

@@ -10,6 +10,8 @@ import {
   type CommissionCalcKind,
 } from './commission-rules.js';
 import { TRANSPORT_SETTLEMENT_DECISIONS } from './settlement-decisions.js';
+import type { SettlementRecogniseReason } from './settlement-decisions.js';
+import { SettlementOrderCompletionGate } from './settlement-order-completion.port.js';
 import {
   adjustmentDelta,
   reversalAmount,
@@ -73,8 +75,112 @@ export class SettlementService {
     private readonly repository: SettlementRepository,
     private readonly core: SettlementCoreFacts,
     private readonly fuelSource: FuelSettlementSource,
+    private readonly completion: SettlementOrderCompletionGate,
     @Optional() private readonly telemetry?: TelemetryService,
   ) {}
+
+  /* ================================================================== *
+   * CONG KET THUC DON — `#275` K5
+   * ================================================================== */
+
+  private reportGate(
+    reason: SettlementRecogniseReason,
+    detail: Record<string, unknown>,
+    outcome: 'allowed' | 'denied' = 'allowed',
+  ): void {
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_SETTLEMENT_DECISIONS,
+      point: 'settlement.recognise',
+      outcome,
+      reason,
+      detail,
+    });
+  }
+
+  /**
+   * CONG DIEU KIEN DOI SOAT — bat bien trung tam cua `#275` K5.
+   *
+   * ==========================================================================================
+   *     ung vien MOI  =  du dieu kien van hanh cu  VA  don da duoc ke toan KET THUC
+   * ==========================================================================================
+   *
+   * Ham nay THEM mot dieu kien; no khong thay mot dieu kien nao. Moi cong van hanh cu
+   * (`trip.status === 'RECONCILED'`, co gia cuoc, co khach) van nam nguyen phia tren, va chung duoc
+   * kiem TRUOC — nen mot chuyen chua doi soat van bao `SETTLEMENT_TRIP_NOT_RECONCILED` chu khong
+   * bao "chua ket thuc". Do la cau tra loi dung: cai nguoi truc phai lam truoc la dong chuyen.
+   *
+   * ==========================================================================================
+   * BON DUONG RA, VA MOI DUONG DE LAI MOT DONG TRONG SO QUYET DINH
+   * ==========================================================================================
+   *
+   * 1. `ALREADY_SETTLED`  — da co chung tu cho dung khoa nguon nay. Day KHONG phai mot lan chon
+   *    nguon moi, nen cong khong ap. Thieu duong nay, mot lan goi lai vo hai tren mot chuyen DA
+   *    QUYET TOAN TU TRUOC tinh nang se NEM thay vi tra ve chung tu cu — tuc dung cai
+   *    *"invalidate already-settled rows"* ma `#275` K6 cam.
+   *
+   * 2. `NOT_LINKED`       — nguon nay chua co DON nao lam chu the. DONG CONG.
+   *
+   *    Day la cho `#275` K5 sua `#273`. Ban truoc cho qua (`NOT_PROJECTED => pass`) vi chu the la
+   *    VONG CHAY, va mot chuyen chua chieu thi khong co vong chay de hoi. Voi chu the la DON, lap
+   *    luan do sup: mot chuyen co khach LUON co mot nghia vu thuong mai, ke ca khi B thue xe ngoai
+   *    — chi la chua ai khai no. Nen cau tra loi dung khong phai "cho qua" ma la "hay khai no
+   *    truoc" (`POST /transport/orders/projections/trip/:tripId`).
+   *
+   * 3. `BLOCKED`          — co don, va no chua du dieu kien. DONG CONG.
+   *
+   * 4. `APPROVED`         — di tiep.
+   */
+  private async requireOrderCompletion(
+    trip: SettlementTripFacts,
+    sourceContext: 'TRIP_RECONCILED' | 'TRIP_COMMISSION',
+  ): Promise<void> {
+    const settled = await this.repository.findDocumentBySource(sourceContext, trip.id);
+    if (settled) {
+      this.reportGate('SETTLEMENT_ORDER_COMPLETION_ALREADY_SETTLED', {
+        tripId: trip.id,
+        sourceContext,
+        documentId: settled.id,
+      });
+      return;
+    }
+
+    const eligibility = await this.completion.eligibilityForTrip(trip.id);
+
+    if (eligibility.kind === 'NO_ORDER') {
+      this.reportGate('SETTLEMENT_ORDER_NOT_LINKED', { tripId: trip.id, sourceContext }, 'denied');
+      throw TransportDomainError.denied(
+        'SETTLEMENT_ORDER_NOT_LINKED',
+        `Chuyen ${trip.code} chua co don hang nao lam chu the thuong mai; ` +
+          'hay chieu chuyen sang mot nghia vu truoc khi ghi nhan cong no',
+      );
+    }
+
+    if (eligibility.kind === 'BLOCKED') {
+      this.reportGate(
+        'SETTLEMENT_ORDER_COMPLETION_BLOCKED',
+        {
+          tripId: trip.id,
+          sourceContext,
+          orderId: eligibility.orderId,
+          orderStatus: eligibility.orderStatus,
+          completionState: eligibility.state,
+        },
+        'denied',
+      );
+      throw TransportDomainError.denied(
+        'SETTLEMENT_ORDER_COMPLETION_BLOCKED',
+        `Don ${eligibility.orderCode} dang ${eligibility.orderStatus} va ket thuc thuong mai dang ` +
+          `${eligibility.state}; chua du dieu kien dua chuyen ${trip.code} vao ky doi soat moi`,
+      );
+    }
+
+    this.reportGate('SETTLEMENT_ORDER_COMPLETION_APPROVED', {
+      tripId: trip.id,
+      sourceContext,
+      orderId: eligibility.orderId,
+      acceptanceId: eligibility.acceptanceId,
+    });
+  }
 
   /**
    * Dung mot `RecogniseDocumentCommand` va tu tinh van tay.
@@ -212,6 +318,9 @@ export class SettlementService {
       );
     }
 
+    // `#275` K5 — cong ket thuc don. THEM mot dieu kien, khong thay dieu kien nao o tren.
+    await this.requireOrderCompletion(trip, 'TRIP_RECONCILED');
+
     const terms = await this.repository.findCustomerTerms(trip.customerId);
     const dueDate = terms ? dueDateFrom(trip.businessDate, terms.paymentTermDays) : null;
 
@@ -268,6 +377,26 @@ export class SettlementService {
         `Chuyen ${trip.code} chua gan nha xe`,
       );
     }
+
+    /*
+     * `#275` K5 "External carrier nuance" — DO LAI, khong chep gia dinh cua `#273`.
+     *
+     * Do duoc tren `main`: `TRIP_CARRIER_COST` la B TRA cho mot nha xe ngoai theo hop dong van tai
+     * giua B va ho. Khach A khong ky vao khoan nay, va khong lai xe nao cua B cam bien nhan ve tu
+     * no. Nghia vu bien nhan cua chuyen ay VAN ton tai va VAN bi chan — nhung o dong
+     * `CUSTOMER_FREIGHT` cua chinh chuyen do, noi A ky nhan hang, va dong do di qua
+     * `requireOrderCompletion` nhu moi dong khac.
+     *
+     * Cam cong ca o day nua se bat B phai co bien nhan cua khach TRUOC khi tra tien cho nha thau
+     * phu cua chinh minh — mot luat chua ai dat ra, va `#275` K5 noi ro *"Do not break Carrier AP
+     * without evidence"*. Nen duong nay di qua, va no de lai mot dong CO TEN trong so quyet dinh
+     * thay vi im lang.
+     */
+    this.reportGate('SETTLEMENT_ORDER_COMPLETION_PATH_NOT_GATED', {
+      tripId: trip.id,
+      sourceContext: 'TRIP_CARRIER_COST',
+      kind: trip.kind,
+    });
 
     const value = money(carrierAmount);
     if (value.amount <= 0) {
@@ -339,6 +468,21 @@ export class SettlementService {
         `Chuyen ${trip.code} chua nhap gia cuoc nen khong co can cu tinh hoa hong`,
       );
     }
+
+    /*
+     * `#275` K5 — hoa hong CO di qua cong, khac han cong no nha xe ngoai.
+     *
+     * Chuyen `PARTNER_REFERRED_INTERNAL_RUN` chay bang XE CUA B, nen no co lai xe cua B mang bien
+     * nhan ve, va no co mot nghia vu thuong mai voi khach. Quy trinh chu so huu mo ta ap dung
+     * nguyen ven o day.
+     *
+     * DAT TRUOC phep chon luat, va do la vi tri DOI XUNG voi `recogniseCustomerReceivable`: o do
+     * cong nam sau cac phep kiem SU THAT CUA CHUYEN (trang thai, gia cuoc, khach) va truoc phep tra
+     * cuu DINH GIA (`findCustomerTerms`). Chon luat hoa hong la mot phep dinh gia — hoi "bao nhieu
+     * tien" cho mot viec chua du dieu kien vao ky la hoi mot cau khong con y nghia, va no se tra ve
+     * mot ma ly do noi sai cai nguoi truc phai sua truoc.
+     */
+    await this.requireOrderCompletion(trip, 'TRIP_COMMISSION');
 
     const routeKey = commissionRouteKey(trip.originLabel, trip.destinationLabel);
     const candidates = await this.repository.listCommissionCandidates(

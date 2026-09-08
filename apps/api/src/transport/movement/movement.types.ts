@@ -117,6 +117,38 @@ export interface TripRunLegLink {
   readonly createdAt: string;
 }
 
+/**
+ * TUONG UNG mot chuyen v1 voi mot DON v2 -- truc THUONG MAI, doc lap voi truc dieu hanh.
+ *
+ * ==========================================================================================
+ * VI SAO CAN MOT LIEN KET THU HAI KHI DA CO `TripRunLegLink`
+ * ==========================================================================================
+ *
+ * `TripRunLegLink` tra loi "chuyen cu nay hien ra o CHANG nao" -- mot cau hoi DIEU HANH. No chi ton
+ * tai khi chuyen do chieu duoc sang mot vong chay, va `planTripProjection` TU CHOI chieu chuyen
+ * `EXTERNAL_CARRIER`: xe khong phai cua B nen khong co "vong chay cua xe" nao ca.
+ *
+ * Nhung mot chuyen thue nha xe ngoai VAN co mot nghia vu thuong mai voi khach -- van co bien nhan
+ * giao hang, van phai ke toan ket thuc truoc khi ghi nhan cong no. `#275` K5 cam dung viec "khong
+ * chieu duoc" lam duong vong cua cong:
+ *
+ *     *"Order is the grain, so projection absence must not be an authorization bypass."*
+ *
+ * Nen cau hoi THUONG MAI ("chuyen cu nay la nghia vu nao") phai co duong tra loi RIENG, khong di
+ * qua vong chay. Do la bang nay. Chinh khoi chu thich cua `TransportOrder` da noi truoc dieu do:
+ * *"mot don ton tai truoc khi biet xe nao chay no, va co the khong bao gio duoc chay bang xe cua
+ * minh"*.
+ *
+ * `tripId` la KHOA CHINH va `orderId` la UNIQUE, y het `TripRunLegLink` -- nen phep chieu thuong
+ * mai cung TAT DINH va LAP LAI DUOC: chay lai khong the sinh ban thu hai.
+ */
+export interface TripOrderLink {
+  readonly tripId: string;
+  readonly orderId: string;
+  readonly projectedBy: string;
+  readonly createdAt: string;
+}
+
 /** Mot vong chay doc kem chang va phan cong dang hieu luc -- hinh dang ma be mat van hanh can. */
 export interface VehicleRunDetail {
   readonly run: VehicleRun;

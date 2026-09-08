@@ -127,6 +127,14 @@ const CASES: readonly EnvelopeCase[] = [
     route: "@Get('balances')",
     call: () => transportApi.driverSettlement.balances(),
   },
+  {
+    label: 'order completion queue',
+    path: '/transport/commercial-acceptance',
+    key: 'acceptances',
+    controller: 'acceptance/commercial-acceptance.controller.ts',
+    route: '@Get()',
+    call: () => transportApi.orderCompletion.queue(),
+  },
 ];
 
 describe('danh sach nam trong phong bi', () => {
