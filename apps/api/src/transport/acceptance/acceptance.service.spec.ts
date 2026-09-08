@@ -68,6 +68,22 @@ class FakeCounterparties extends AcceptanceCounterpartyFacts {
   }
 }
 
+/**
+ * LOI cua mot lenh le ra phai bi tu choi.
+ *
+ * NEM khi lenh lai di qua, thay vi tra ve chinh ket qua thanh cong: mot bai so sanh thong diep loi
+ * cua hai lenh ma mot trong hai lai thanh cong se so hai `undefined` voi nhau va BAO XANH — dung
+ * cai bay ma bo bai chong do danh sach nay ton tai de tranh.
+ */
+async function failureOf(run: Promise<unknown>): Promise<TransportDomainError> {
+  try {
+    await run;
+  } catch (error) {
+    return error as TransportDomainError;
+  }
+  throw new Error('Lenh nay le ra phai bi tu choi nhung da di qua');
+}
+
 /** Dong ho GHIM. Moi gia tri `decidedAt` trong bo nay phai bang dung con so nay. */
 const SERVER_NOW = new Date('2026-09-08T03:15:00.000Z');
 
@@ -131,21 +147,17 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
     });
 
     it('thong bao KHONG ke ten khoa nao bi loai — khong do duoc chung tu cua nguoi khac', async () => {
-      const failure = await service
-        .decide(command({ evidenceRefs: [FOREIGN_DOC] }))
-        .catch((error: unknown) => error as TransportDomainError);
+      const failure = await failureOf(service.decide(command({ evidenceRefs: [FOREIGN_DOC] })));
 
       expect(failure).toBeInstanceOf(TransportDomainError);
       expect(failure.message).not.toContain(FOREIGN_DOC);
     });
 
     it('khoa KHONG TON TAI va khoa CUA NGUOI KHAC cho ra cung mot cau tra loi', async () => {
-      const foreign = await service
-        .decide(command({ evidenceRefs: [FOREIGN_DOC] }))
-        .catch((error: unknown) => error as TransportDomainError);
-      const unknown = await service
-        .decide(command({ evidenceRefs: ['khoa-hoan-toan-bia-ra'] }))
-        .catch((error: unknown) => error as TransportDomainError);
+      const foreign = await failureOf(service.decide(command({ evidenceRefs: [FOREIGN_DOC] })));
+      const unknown = await failureOf(
+        service.decide(command({ evidenceRefs: ['khoa-hoan-toan-bia-ra'] })),
+      );
 
       expect(unknown.reason).toBe(foreign.reason);
       expect(unknown.message).toBe(foreign.message);
