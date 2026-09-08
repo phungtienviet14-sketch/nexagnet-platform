@@ -118,6 +118,8 @@ import { FuelReconciliationController } from './transport/fuel/fuel-reconciliati
 import { FuelDocumentController } from './transport/fuel/fuel-document.controller.js';
 import { FuelStationController } from './transport/fuel/fuel-station.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
+import { TollController } from './transport/toll/toll.controller.js';
+import { TransportTollModule } from './transport/toll/transport-toll.module.js';
 import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
 import { TransportAssetComplianceModule } from './transport/asset-compliance/transport-asset-compliance.module.js';
@@ -232,6 +234,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // NHIEN LIEU + DOI SOAT BANG KE. Den cung `transport-fuel` va bien mat cung no: mot khach van
   // tai chua doi soat bang ke cay xang khong duoc nap tam bang nao cua `TX-04`.
   owned('transport-fuel', TransportFuelModule),
+  // NAP DU LIEU ETC / PHI DUONG BO (Lane J, #269). Den cung `transport-toll` va bien mat cung no:
+  // mot khach chua doi soat ETC khong duoc nap mot bang nao cua `TX-08` mo rong.
+  owned('transport-toll', TransportTollModule),
   // QUYET TOAN AR/AP + HOA HONG + BIEN TRUC TIEP. Den cung `transport-settlement` va bien mat cung
   // no: mot khach van tai chua theo doi cong no khong duoc nap bang chung tu nao cua `TX-05`.
   owned('transport-settlement', TransportSettlementModule),
@@ -339,6 +344,9 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // mat cung no: khong co phieu dau thi khong co anh phieu dau de xem.
   owned('transport-fuel', DriverFuelEvidenceController),
   owned('transport-fuel', FuelEvidenceController),
+  // ETC — tai khoan giao thong, nap nguon, va hop thu doi soat. MOT controller cho ca ba vi chung
+  // dung chung mot tien to route va mot vong doi; ba ma quyen RIENG moi la thu tach chung ra.
+  owned('transport-toll', TollController),
   // `TX-06` — bao duong, giay to, trang thai hieu luc cua doi xe.
   owned('transport-asset-compliance', MaintenanceController),
   owned('transport-asset-compliance', ComplianceController),

@@ -170,6 +170,12 @@ export const TRANSPORT_ACTIONS = [
   'transport.asset_ownership.read',
   'transport.asset_ownership.manage',
   'transport.stakeholder.self.vehicle.read',
+  /* --- `TX-08` mo rong: NAP DU LIEU ETC / PHI DUONG BO (Lane J, Issue #269) --- */
+  'transport.toll.account.read',
+  'transport.toll.account.manage',
+  'transport.toll.import',
+  'transport.toll.review.read',
+  'transport.toll.review.resolve',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];

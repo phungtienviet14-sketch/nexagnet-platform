@@ -424,6 +424,33 @@ export const TRANSPORT_ACTIONS = [
    * Xem `STAKEHOLDER_SCOPE_ACTIONS` ben duoi ve vi sao ma nay khong duoc cap qua VAI.
    */
   'transport.stakeholder.self.vehicle.read',
+  /* --- `TX-08` mo rong: NAP DU LIEU ETC / PHI DUONG BO (Lane J, Issue #269) --- */
+  /**
+   * TAI KHOAN GIAO THONG + anh xa xe — doc va quan ly.
+   *
+   * Hai ma chu khong mot, va rieng o day co mot ly do PHAP LY: `.manage` la ma cho phep NOI mot
+   * chiec xe vao mot tai khoan giao thong, ma ND 119/2024/ND-CP D.11 kh.3 chi cho moi xe nhan chi
+   * tra tu DUNG MOT tai khoan. Noi sai xe la lam moi luot qua tram cua no dem sang nham tai khoan.
+   */
+  'transport.toll.account.read',
+  'transport.toll.account.manage',
+  /**
+   * NAP mot nguon du lieu ETC — TACH khoi ca `.account.manage` lan `.review.resolve`.
+   *
+   * Nap la mang MOT BAN SAO cua su that nha cung cap vao he thong; doi soat la NOI cai ban sao do
+   * khop hay khong khop. Gop hai ma lam mot se cho bat ky ai nap duoc cung quyet duoc — tuc go bo
+   * dung cai cong ma #269 J7 doi phai co.
+   */
+  'transport.toll.import',
+  /**
+   * HOP THU DOI SOAT ETC — doc va quyet.
+   *
+   * `.review.resolve` KHONG phai mot ma noi ve tien. Nguoi giu no chon duoc chiec xe cho mot dong,
+   * xac nhan mot dong da co nguoi nhin, hay noi hai dong giong nhau la hai su kien that. Khong
+   * thao tac nao trong so do tao ra mot khoan phai tra — #269 J7 cam thang.
+   */
+  'transport.toll.review.read',
+  'transport.toll.review.resolve',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];

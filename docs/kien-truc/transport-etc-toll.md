@@ -4,20 +4,35 @@
 >
 > Tài liệu này trả lời `Q-07` của [transport-domain-v2.md](transport-domain-v2.md) §7 ở phần **đo
 > được**, và nói rõ phần **chưa đo được**. Mọi mô hình dữ liệu bên dưới đều mang nhãn
-> `NOT BUSINESS-PROVEN`: chúng mô tả *hình dạng dữ liệu nhà cung cấp phát ra*, **không** mô tả cách
-> công ty B đối soát hay hạch toán. #237: *"Do not invent business settlement rules."*
+> `NOT BUSINESS-PROVEN`: chúng mô tả _hình dạng dữ liệu nhà cung cấp phát ra_, **không** mô tả cách
+> công ty B đối soát hay hạch toán. #237: _"Do not invent business settlement rules."_
 >
 > Đo ngày **08/09/2026**. Lane D / Issue #237, tranche `R7`.
+
+> **ĐÃ CÓ PHẦN TIẾP NỐI (Lane J / #269, cùng ngày 08/09/2026):**
+> [transport-etc-ingestion.md](transport-etc-ingestion.md) đo lại hai nhà cung cấp bằng **văn bản
+> gốc của Chính phủ** thay vì báo chí, phân loại bằng chứng theo bốn mức, và dựng phần **nạp dữ
+> liệu + đối soát**. Ba chỗ tài liệu này được **bổ khuyết** ở đó:
+>
+> - §3.1 mới có nửa đầu của quan hệ tài khoản↔xe. NĐ 119/2024 **Điều 11 khoản 3** còn nói _"mỗi
+>   phương tiện chỉ được nhận chi trả từ **một** tài khoản giao thông"_ — nửa sau mới là bất biến.
+> - §6 ghi _"chưa đo được quy trình khiếu nại nào"_. VETC **tự công bố** cơ chế trừ 2 lần → hoàn
+>   **một giao dịch riêng**, đến trễ hơn lần trừ.
+> - §0 ghi "không tìm thấy API". Vẫn đúng — nhưng **Điều 26 khoản 2** đặt một _nghĩa vụ_ cung cấp
+>   thông tin giao dịch "theo thỏa thuận", nên đường đó là `POSSIBLE BUT NOT PROVEN`, không phải
+>   `UNKNOWN`.
+>
+> Kết luận `ETC_RESEARCH = COMPLETE` và `BUSINESS_WORKFLOW = NOT_INVENTED` ở §7 **vẫn đứng**.
 
 ---
 
 ## 0. Ba câu trả lời ngắn
 
-| Câu hỏi của #237 | Trả lời đo được |
-|---|---|
-| Có API công khai không? | **Không tìm thấy tài liệu API công khai** của VETC hay ePass. Không nhà cung cấp nào công bố cổng nhà phát triển |
+| Câu hỏi của #237               | Trả lời đo được                                                                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Có API công khai không?        | **Không tìm thấy tài liệu API công khai** của VETC hay ePass. Không nhà cung cấp nào công bố cổng nhà phát triển                          |
 | Nguồn dữ liệu giao dịch là gì? | **Hoá đơn điện tử** — nó liệt kê **từng lượt xe qua trạm**, kèm thời điểm và giá phí từng lượt. Cộng cổng thông tin khách hàng để tra cứu |
-| Một tài khoản ↔ một xe? | **Không.** Một *tài khoản giao thông doanh nghiệp* liên kết được **nhiều xe** |
+| Một tài khoản ↔ một xe?        | **Không.** Một _tài khoản giao thông doanh nghiệp_ liên kết được **nhiều xe**                                                             |
 
 Ba câu đó quyết định hình dạng của `TollProviderPort` ở §4: cổng phải nhận **tệp/hoá đơn** làm
 đường chính, và **API là đường phụ có thể không bao giờ tồn tại** — ngược hẳn với thứ tự quen thuộc.
@@ -26,10 +41,10 @@ Ba câu đó quyết định hình dạng của `TollProviderPort` ở §4: cổ
 
 ## 1. Khung pháp lý đang có hiệu lực
 
-| Thứ | Nội dung | Nguồn |
-|---|---|---|
+| Thứ                                                      | Nội dung                                                                                                                               | Nguồn                                                                                                                                   |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | **Nghị định 119/2024/NĐ-CP** + **Luật Đường bộ Điều 43** | Phí đường bộ phải thanh toán **điện tử** qua **tài khoản giao thông**, và tài khoản đó phải **liên kết ví điện tử hoặc thẻ ngân hàng** | [thoibaonganhang.vn](https://thoibaonganhang.vn/tai-khoan-vetc-va-epass-sap-khai-tu-hang-trieu-xe-doi-mat-nguy-co-ket-tram-168869.html) |
-| Hạn chuyển đổi | **01/10/2025** — sau mốc này xe chưa chuyển đổi **không qua được trạm**. Mốc này **đã qua** | như trên |
+| Hạn chuyển đổi                                           | **01/10/2025** — sau mốc này xe chưa chuyển đổi **không qua được trạm**. Mốc này **đã qua**                                            | như trên                                                                                                                                |
 
 **Hệ quả cho ta:** "tài khoản giao thông" là một khái niệm **có định nghĩa pháp lý**, không phải
 tên thương mại của một ứng dụng. Mô hình dữ liệu phải gọi đúng tên nó, và **không** gắn cứng vào
@@ -39,17 +54,17 @@ VETC hay ePass.
 
 ## 2. Hai nhà cung cấp
 
-| | VETC | ePass |
-|---|---|---|
-| Pháp nhân | Công ty TNHH thu phí tự động VETC | Công ty CP Giao thông số Việt Nam (VDTC) — công ty con của **Viettel** |
-| Công nghệ | RFID | RFID |
-| Cổng khách hàng | `customer.vetc.com.vn` — đăng nhập bằng **số tài khoản + mật khẩu VETC gửi qua SMS** | (chưa đo được cổng tương đương) |
-| Ví liên kết | Ví VETC | Viettel Money |
+|                 | VETC                                                                                 | ePass                                                                  |
+| --------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Pháp nhân       | Công ty TNHH thu phí tự động VETC                                                    | Công ty CP Giao thông số Việt Nam (VDTC) — công ty con của **Viettel** |
+| Công nghệ       | RFID                                                                                 | RFID                                                                   |
+| Cổng khách hàng | `customer.vetc.com.vn` — đăng nhập bằng **số tài khoản + mật khẩu VETC gửi qua SMS** | (chưa đo được cổng tương đương)                                        |
+| Ví liên kết     | Ví VETC                                                                              | Viettel Money                                                          |
 
 Nguồn: [luatvietnam.vn](https://luatvietnam.vn/thue-phi-le-phi/cach-lay-hoa-don-dien-tu-vetc-565-95549-article.html) ·
 [viettimes.vn](https://viettimes.vn/ai-dung-sau-2-ung-dung-thu-phi-khong-dung-epass-va-vetc-post204704.html)
 
-**Đọc ra một ràng buộc thiết kế:** đăng nhập cổng khách hàng bằng *mật khẩu gửi SMS* nghĩa là **một
+**Đọc ra một ràng buộc thiết kế:** đăng nhập cổng khách hàng bằng _mật khẩu gửi SMS_ nghĩa là **một
 con người phải đăng nhập**. Không có luồng máy-với-máy nào ở đây. Bất kỳ thiết kế nào giả định
 "hệ thống tự kéo dữ liệu về hằng đêm" là giả định **chưa có cơ sở**.
 
@@ -72,7 +87,7 @@ trị pháp lý, còn ảnh chụp/PDF chỉ là hình chiếu của nó. Nên t
 ### 3.1. Ánh xạ tài khoản ↔ xe
 
 Một **tài khoản giao thông doanh nghiệp liên kết nhiều xe**: khi bàn về phí quản lý, chính hai nhà
-cung cấp nói phí *"tính trên tài khoản liên kết chứ không thu riêng từng xe"*, và ví dụ được nêu là
+cung cấp nói phí _"tính trên tài khoản liên kết chứ không thu riêng từng xe"_, và ví dụ được nêu là
 một doanh nghiệp **trên 15 xe** duy trì khoảng 5 triệu đồng trong ví.
 
 Nguồn: [vietbao.vn](https://vietbao.vn/vetc-epass-thu-phi-quan-ly-tai-khoan-chi-phi-van-hanh-hay-tan-thu-nguoi-dung-603872.html)
@@ -107,13 +122,13 @@ Hình dạng ở `apps/api/src/transport/toll/toll-provider.port.ts`. Ba điều
 
 ## 5. Chuyện phí quản lý tài khoản — đã có kết cục, và nó là một bài học
 
-R0 `Q-07` ghi *"phí duy trì tài khoản đang bị Chính phủ rà soát, chưa chốt"*. Đo lại:
+R0 `Q-07` ghi _"phí duy trì tài khoản đang bị Chính phủ rà soát, chưa chốt"_. Đo lại:
 
-| Ngày | Việc |
-|---|---|
+| Ngày           | Việc                                                                                                                                                                                          |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **01/08/2026** | VETC và ePass công bố áp dụng phí quản lý tài khoản/ví: **6.600 đ/tháng** cá nhân, **66.000 đ/tháng** tổ chức (đã gồm VAT), trừ thẳng vào tài khoản giao thông hằng tháng kèm hoá đơn điện tử |
-| 17–18/08/2026 | Phản ứng mạnh từ chủ xe và doanh nghiệp vận tải |
-| ~20/08/2026 | **Cục Đường bộ Việt Nam** đề nghị tạm dừng để rà soát chính sách. **Cả VETC lẫn ePass thông báo dừng**; VETC xin lỗi khách hàng và khẳng định **chưa thu của tài khoản nào** |
+| 17–18/08/2026  | Phản ứng mạnh từ chủ xe và doanh nghiệp vận tải                                                                                                                                               |
+| ~20/08/2026    | **Cục Đường bộ Việt Nam** đề nghị tạm dừng để rà soát chính sách. **Cả VETC lẫn ePass thông báo dừng**; VETC xin lỗi khách hàng và khẳng định **chưa thu của tài khoản nào**                  |
 
 Nguồn: [dantri.com.vn](https://dantri.com.vn/kinh-doanh/vetc-epass-noi-gi-ve-phi-6600-dongthang-khong-muon-tra-tien-thi-sao-20260818111116230.htm) ·
 [vietnamplus.vn](https://www.vietnamplus.vn/vetc-dung-trien-khai-muc-phi-dich-vu-quan-ly-tai-khoan-6600-dongthang-post1131261.vnp) ·
@@ -128,16 +143,16 @@ vì lý do đó.
 
 ## 6. Chưa đo được — và tại sao không đoán
 
-| Ẩn số | Vì sao không tự quyết |
-|---|---|
-| B dùng VETC hay ePass, hay cả hai? | Quyết định adapter đầu tiên. Sai thì viết lại phần trích xuất |
+| Ẩn số                                                                     | Vì sao không tự quyết                                                                                                                                                                                         |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B dùng VETC hay ePass, hay cả hai?                                        | Quyết định adapter đầu tiên. Sai thì viết lại phần trích xuất                                                                                                                                                 |
 | Tài khoản giao thông đứng tên **công ty** hay tên **từng lái xe/chủ xe**? | Đây là câu **quan trọng nhất** còn lại. Nếu đứng tên cá nhân thì có một dòng tiền công ty↔cá nhân mà hôm nay **không mô hình nào của ta có** — và nó **không được** đi vào sổ quỹ lái xe nếu chưa ai xác nhận |
-| Nạp tiền vào ví theo lô hay theo xe? | Quyết định "số dư ví" là một tài sản của công ty hay N tài sản |
-| Đối soát theo tháng hay theo chuyến? | Quyết định kỳ đối soát; `TX-05` có sẵn cả hai khuôn |
-| Sai sót/khiếu nại xử lý thế nào? | **Chưa đo được quy trình khiếu nại nào của hai nhà cung cấp**. Không có nguồn ⇒ không có mô hình `Dispute` |
-| Hoá đơn điện tử gửi về đâu (email nào, ai nhận)? | Quyết định đường nạp tự động có khả thi không |
+| Nạp tiền vào ví theo lô hay theo xe?                                      | Quyết định "số dư ví" là một tài sản của công ty hay N tài sản                                                                                                                                                |
+| Đối soát theo tháng hay theo chuyến?                                      | Quyết định kỳ đối soát; `TX-05` có sẵn cả hai khuôn                                                                                                                                                           |
+| Sai sót/khiếu nại xử lý thế nào?                                          | **Chưa đo được quy trình khiếu nại nào của hai nhà cung cấp**. Không có nguồn ⇒ không có mô hình `Dispute`                                                                                                    |
+| Hoá đơn điện tử gửi về đâu (email nào, ai nhận)?                          | Quyết định đường nạp tự động có khả thi không                                                                                                                                                                 |
 
-**Không câu nào ở trên chặn `TollProviderPort`** — cổng chỉ mô tả *hình dạng dữ liệu vào*. Chúng
+**Không câu nào ở trên chặn `TollProviderPort`** — cổng chỉ mô tả _hình dạng dữ liệu vào_. Chúng
 chặn phần **hạch toán**, và phần đó cố ý chưa được viết.
 
 ---
