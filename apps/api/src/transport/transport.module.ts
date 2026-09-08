@@ -202,16 +202,14 @@ import { TripService } from './trips/trip.service.js';
     TransportActionGuard,
     FleetRepository,
     /*
-     * `#275` Lane K — THIEU tu `#271`, va chi mot lan BOOT that moi lo ra.
+     * `transport-acceptance` (`#268` Lane I) tiem thang `CounterpartyRepository` qua
+     * `AcceptanceCounterpartyFactsAdapter`. Thieu dong nay thi Nest khong giai duoc phu thuoc va
+     * TIEN TRINH API CHET LUC KHOI DONG — khong phai mot loi luc chay, ma la khong boot duoc.
      *
-     * `TransportAcceptanceModule` tiem `CounterpartyRepository` qua
-     * `AcceptanceCounterpartyFactsAdapter`. Token do duoc KHAI o day nhung khong duoc EXPORT, nen
-     * mot khach bat `transport-acceptance` khong boot duoc: Nest tu choi ngay o
-     * `lookupComponentInParentModules`. `acceptance.composition.spec.ts` khong bat duoc — no chi
-     * dem controller trong danh sach, khong dung mot injector nao.
-     *
-     * Cung khuon ba kho ke tren/duoi: mot capability ve tinh doc su that cua `transport-core` qua
-     * CONG CHI DOC cua chinh no, va cong do can token.
+     * No da lot qua moi cong mot lan: `tsc` xanh (kieu dung het), test don vi xanh (dung lop truc
+     * tiep, khong qua injector), `*.composition.spec.ts` xanh (chi hoi provider co TRONG DANH SACH
+     * khong). Cai bat duoc no la `app.module.transport-preview.boot.spec.ts` — va bai do duoc them
+     * cung luc voi dong nay.
      */
     CounterpartyRepository,
     CounterpartySiteRepository,

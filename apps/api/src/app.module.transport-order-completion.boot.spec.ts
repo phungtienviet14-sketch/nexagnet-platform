@@ -14,18 +14,22 @@ const fixtureDir = resolve(
  * `#275` Lane K — CONG KET THUC DON phai chay duoc TRONG MOT TIEN TRINH THAT.
  *
  * ============================================================================================
- * VI SAO MOT BAI COMPOSITION KHONG DU
+ * KHAC GI `app.module.transport-preview.boot.spec.ts`
  * ============================================================================================
  *
- * `acceptance.composition.spec.ts` chi noi "controller nao co trong danh sach". Bai nay noi "Nest
- * co RESOLVE duoc chung khong" — va do la mot cau hoi khac han. Lane nay them mot phu thuoc CUNG
- * moi:
+ * Bai kia (them boi `#281`) hoi *"goi xem truoc co BOOT duoc voi doi hinh capability day du
+ * khong"* — mot cau hoi ve DO THI TIEM. Bai nay hoi mot cau khac: *"cong ket thuc don co CHAN va
+ * co MO dung luc khong, tren mot tien trinh that"*. Hai bai khong thay nhau duoc: mot lan sua lam
+ * `NO_ORDER` quay lai thanh mot duong cho qua, hoac lam cong doc trang thai vong chay, hoac lam
+ * mot lan goi lai sinh chung tu thu hai — deu KHONG lam bai kia do.
+ *
+ * Lane nay them mot phu thuoc CUNG moi:
  *
  *     transport-settlement  ──imports──▶  transport-acceptance  ──▶  transport-core
  *
- * Mot vong phu thuoc giua hai module, mot token thieu provider (`SettlementOrderCompletionGate`),
- * hay mot `CommercialAcceptanceService` khong duoc `exports` deu KHONG lo ra o tang danh sach.
- * Chung chi lo ra o mot lan boot that — hoac o mot lan deploy that, muon hon nhieu.
+ * Mot vong phu thuoc giua hai module, hay mot token thieu provider
+ * (`SettlementOrderCompletionGate`), khong lo ra o tang danh sach cua
+ * `acceptance.composition.spec.ts` — no chi dem controller, khong dung mot injector nao.
  *
  * ============================================================================================
  * VA VONG NGHIEP VU BEN DUOI CUNG LA MOT KHANG DINH
