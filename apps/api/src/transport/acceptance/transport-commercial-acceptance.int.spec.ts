@@ -27,15 +27,23 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     /* Tien to KHONG duoc la tien to cua nhau — cac tep int chay song song. */
     const PLATE = 'IT-CA30-XE';
     const RUN_CODE = 'IT-CA30-VONGCHAY';
+    const ORDER_CODE = 'IT-CA30-DONHANG';
     const PARTY = 'IT-CA30-PHAPNHAN';
     const ACTOR = 'IT-CA30-ketoan';
 
-    const state = { runId: '', otherRunId: '', counterpartyId: '', acceptanceId: '' };
+    const state = {
+      orderId: '',
+      otherOrderId: '',
+      /** Vong chay CHUNG cho ca hai don — `#275` K7 bai 3 chay tren chinh hang nay. */
+      sharedRunId: '',
+      counterpartyId: '',
+      acceptanceId: '',
+    };
 
     const command = (
       patch: Partial<AppendAcceptanceDecisionCommand> = {},
     ): AppendAcceptanceDecisionCommand => ({
-      runId: state.runId,
+      orderId: state.orderId,
       outcome: 'APPROVED',
       reasonCode: 'DOCUMENT_RECEIVED',
       basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
@@ -71,39 +79,83 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportCommercialAcceptance.deleteMany({
         where: { openedBy: { startsWith: ACTOR } },
       });
+      await prisma.transportRunLeg.deleteMany({
+        where: { run: { code: { startsWith: RUN_CODE } } },
+      });
       await prisma.transportVehicleRun.deleteMany({ where: { code: { startsWith: RUN_CODE } } });
+      await prisma.transportOrder.deleteMany({ where: { code: { startsWith: ORDER_CODE } } });
       await prisma.transportVehicle.deleteMany({
         where: { registrationPlate: { startsWith: PLATE } },
       });
       await prisma.transportCounterparty.deleteMany({ where: { name: { startsWith: PARTY } } });
     }
 
+    /**
+     * BAY DAT: HAI DON tren MOT vong chay DANG CHAY.
+     *
+     * Vong chay co y de o `ACTIVE`, khong `COMPLETED`. `#275` K7 doi chung minh rang trang thai
+     * vong chay khong tham gia vao quyet dinh ket thuc don — mot bo bai dat san vong chay o
+     * `COMPLETED` se van xanh ke ca khi ai do noi lai hai truc voi nhau.
+     */
     beforeAll(async () => {
       await cleanup();
 
       const vehicle = await prisma.transportVehicle.create({
         data: { registrationPlate: `${PLATE}-1`, vehicleClass: 'DAU_KEO' },
       });
+      const order = await prisma.transportOrder.create({
+        data: {
+          code: `${ORDER_CODE}-1`,
+          status: 'FULFILLED',
+          businessDate: '2026-09-08',
+          originLabel: 'Ha Noi',
+          destinationLabel: 'Hai Phong',
+        },
+      });
+      const other = await prisma.transportOrder.create({
+        data: {
+          code: `${ORDER_CODE}-2`,
+          status: 'FULFILLED',
+          businessDate: '2026-09-08',
+          originLabel: 'Hai Phong',
+          destinationLabel: 'Ninh Binh',
+        },
+      });
       const run = await prisma.transportVehicleRun.create({
         data: {
           code: `${RUN_CODE}-1`,
           vehicleId: vehicle.id,
-          status: 'COMPLETED',
+          status: 'ACTIVE',
           businessDate: '2026-09-08',
         },
       });
-      const other = await prisma.transportVehicleRun.create({
-        data: {
-          code: `${RUN_CODE}-2`,
-          vehicleId: vehicle.id,
-          status: 'COMPLETED',
-          businessDate: '2026-09-08',
-        },
+      await prisma.transportRunLeg.createMany({
+        data: [
+          {
+            runId: run.id,
+            sequence: 1,
+            kind: 'LOADED',
+            orderId: order.id,
+            originLabel: 'Ha Noi',
+            destinationLabel: 'Hai Phong',
+            businessDate: '2026-09-08',
+          },
+          {
+            runId: run.id,
+            sequence: 2,
+            kind: 'LOADED',
+            orderId: other.id,
+            originLabel: 'Hai Phong',
+            destinationLabel: 'Ninh Binh',
+            businessDate: '2026-09-08',
+          },
+        ],
       });
       const party = await prisma.transportCounterparty.create({ data: { name: `${PARTY}-1` } });
 
-      state.runId = run.id;
-      state.otherRunId = other.id;
+      state.orderId = order.id;
+      state.otherOrderId = other.id;
+      state.sharedRunId = run.id;
       state.counterpartyId = party.id;
     });
 
@@ -150,11 +202,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       }
     });
 
-    it('mot vong chay chi co MOT ho so', async () => {
+    it('mot don chi co MOT ho so', async () => {
       await expect(
         prisma.transportCommercialAcceptance.create({
           data: {
-            runId: state.runId,
+            orderId: state.orderId,
             state: 'APPROVED',
             businessDate: '2026-09-08',
             openedBy: `${ACTOR}-trung`,
@@ -215,7 +267,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     it('doi y giu CA HAI quyet dinh, va hinh chieu tro ban moi', async () => {
       const first = await repo.append(
         command({
-          runId: state.otherRunId,
+          orderId: state.otherOrderId,
           outcome: 'NEEDS_CORRECTION',
           reasonCode: 'MISSING_RECEIPT',
           idempotencyKey: 'it-ca30-sua-1',
@@ -223,7 +275,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       );
       const second = await repo.append(
         command({
-          runId: state.otherRunId,
+          orderId: state.otherOrderId,
           supersedesId: first.decision.id,
           idempotencyKey: 'it-ca30-sua-2',
         }),
@@ -233,7 +285,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(second.acceptance.state).toBe('APPROVED');
       expect(second.acceptance.latestDecisionId).toBe(second.decision.id);
 
-      const detail = await repo.findDetailByRun(state.otherRunId);
+      const detail = await repo.findDetailByOrder(state.otherOrderId);
       expect(detail?.decisions.map((entry) => entry.outcome)).toEqual([
         'NEEDS_CORRECTION',
         'APPROVED',
@@ -264,9 +316,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       it('ngay nghiep vu phai dang ISO', async () => {
         await expect(
           prisma.$executeRawUnsafe(
-            'UPDATE "TransportCommercialAcceptance" SET "businessDate" = $1 WHERE "runId" = $2',
+            'UPDATE "TransportCommercialAcceptance" SET "businessDate" = $1 WHERE "orderId" = $2',
             '08/09/2026',
-            state.runId,
+            state.orderId,
           ),
         ).rejects.toThrow(/businessDate_iso/);
       });
@@ -285,29 +337,138 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     });
 
     /**
-     * TUONG THICH LICH SU — `#268` I5.
+     * TUONG THICH LICH SU — `#275` K6.
      *
-     * Mot vong chay DA TON TAI TU TRUOC tinh nang nay khong co ho so nghiem thu nao, va do KHONG
-     * phai mot loi du lieu: no doc len la `PENDING`. Bai nay khoa dieu do lai, vi mot lan "sua cho
-     * gon" bang cach sinh hang `PENDING` cho moi vong chay cu se lam dung cai backfill gia ma
-     * `#268` cam.
+     * Mot don DA TON TAI TU TRUOC tinh nang nay khong co ho so ket thuc nao, va do KHONG phai mot
+     * loi du lieu: no doc len la `PENDING`. Bai nay khoa dieu do lai, vi mot lan "sua cho gon" bang
+     * cach sinh hang `PENDING` cho moi don cu se lam dung cai backfill gia ma `#275` K6 cam.
      */
-    it('vong chay cu khong co ho so nghiem thu -> doc len la khong co hang, khong phai loi', async () => {
-      const vehicle = await prisma.transportVehicle.create({
-        data: { registrationPlate: `${PLATE}-cu`, vehicleClass: 'DAU_KEO' },
-      });
-      const legacy = await prisma.transportVehicleRun.create({
+    it('don cu khong co ho so ket thuc -> doc len la khong co hang, khong phai loi', async () => {
+      const legacy = await prisma.transportOrder.create({
         data: {
-          code: `${RUN_CODE}-cu`,
-          vehicleId: vehicle.id,
-          status: 'COMPLETED',
+          code: `${ORDER_CODE}-cu`,
+          status: 'FULFILLED',
           businessDate: '2026-08-01',
+          originLabel: 'Ha Noi',
+          destinationLabel: 'Vinh',
         },
       });
 
-      expect(await repo.findByRun(legacy.id)).toBeNull();
-      expect(await repo.findDetailByRun(legacy.id)).toBeNull();
-      expect(await repo.findManyByRuns([legacy.id])).toEqual([]);
+      expect(await repo.findByOrder(legacy.id)).toBeNull();
+      expect(await repo.findDetailByOrder(legacy.id)).toBeNull();
+      expect(await repo.findManyByOrders([legacy.id])).toEqual([]);
+    });
+
+    /**
+     * `#275` K7 bai 3 tren POSTGRES THAT — hai don tren MOT vong chay, quyet dinh doc lap.
+     *
+     * Ca hai don deu treo tren `state.sharedRunId`, va vong chay do dang `ACTIVE`. Bai nay chay sau
+     * cac bai o tren, luc do `state.orderId` DA `APPROVED` va `state.otherOrderId` DA `APPROVED`
+     * qua duong sua — nen phan chung minh nam o CAU TRUC: hai ho so, hai hang, khong hang nao mang
+     * `runId`, va vong chay khong he doi trang thai.
+     */
+    it('hai don tren mot vong chay co HAI ho so rieng, va vong chay khong bi dung toi', async () => {
+      const legs = await prisma.transportRunLeg.findMany({
+        where: { runId: state.sharedRunId },
+        orderBy: { sequence: 'asc' },
+      });
+      expect(legs.map((leg) => leg.orderId)).toEqual([state.orderId, state.otherOrderId]);
+
+      const rows = await prisma.transportCommercialAcceptance.findMany({
+        where: { orderId: { in: [state.orderId, state.otherOrderId] } },
+      });
+      expect(rows).toHaveLength(2);
+      expect(rows.every((row) => row.runId === null)).toBe(true);
+
+      const run = await prisma.transportVehicleRun.findUniqueOrThrow({
+        where: { id: state.sharedRunId },
+      });
+      expect(run.status).toBe('ACTIVE');
+      expect(run.completedAt).toBeNull();
+    });
+
+    /**
+     * `#275` K1/K5 — DUNG MOT CHU THE, cuong che o DB.
+     *
+     * Ca hai huong sai deu phai bi tu choi: khong chu the nao, va ca hai chu the. Neu chi kiem mot
+     * huong thi mot lan sua sau nay co the mo huong con lai ma khong ai thay.
+     */
+    describe('CHECK mot chu the duy nhat', () => {
+      const insertAcceptance = (columns: string, values: string) =>
+        prisma.$executeRawUnsafe(
+          `INSERT INTO "TransportCommercialAcceptance"
+             ("id", ${columns}, "state", "businessDate", "openedBy", "updatedAt")
+           VALUES ($1, ${values}, 'APPROVED', '2026-09-08', $2, now())`,
+          `it-ca30-subject-${columns.length}`,
+          `${ACTOR}-subject`,
+        );
+
+      it('khong chu the nao thi bi tu choi', async () => {
+        await expect(insertAcceptance('"orderId"', 'NULL')).rejects.toThrow(/subject_exactly_one/);
+      });
+
+      it('CA HAI chu the cung luc thi bi tu choi', async () => {
+        await expect(
+          prisma.$executeRawUnsafe(
+            `INSERT INTO "TransportCommercialAcceptance"
+               ("id", "orderId", "runId", "state", "businessDate", "openedBy", "updatedAt")
+             VALUES ($1, $2, $3, 'APPROVED', '2026-09-08', $4, now())`,
+            'it-ca30-subject-ca-hai',
+            state.otherOrderId,
+            state.sharedRunId,
+            `${ACTOR}-subject`,
+          ),
+        ).rejects.toThrow(/subject_exactly_one/);
+      });
+    });
+
+    /**
+     * `#275` K5 — LIEN KET THUONG MAI la MOT-MOT hai chieu, cuong che o DB.
+     *
+     * Day la duong ma cong doi soat di de tim chu the cua mot nguon quyet toan. Neu mot chuyen co
+     * hai don, hoac mot don treo tren hai chuyen, thi cau hoi "don cua nguon nay la don nao" co hai
+     * cau tra loi — va cong se chon bua.
+     */
+    it('mot chuyen chi tro toi MOT don, va mot don chi nhan MOT chuyen', async () => {
+      const trip = await prisma.transportTrip.create({
+        data: {
+          code: `${ORDER_CODE}-CHUYEN`,
+          kind: 'EXTERNAL_CARRIER',
+          businessDate: '2026-09-08',
+          originLabel: 'Ha Noi',
+          destinationLabel: 'Hai Phong',
+        },
+      });
+      const otherTrip = await prisma.transportTrip.create({
+        data: {
+          code: `${ORDER_CODE}-CHUYEN-2`,
+          kind: 'EXTERNAL_CARRIER',
+          businessDate: '2026-09-08',
+          originLabel: 'Ha Noi',
+          destinationLabel: 'Vinh',
+        },
+      });
+
+      await prisma.transportTripOrderLink.create({
+        data: { tripId: trip.id, orderId: state.orderId, projectedBy: `${ACTOR}-chieu` },
+      });
+
+      // Cung mot chuyen, mot don khac -> khoa chinh `tripId` chan.
+      await expect(
+        prisma.transportTripOrderLink.create({
+          data: { tripId: trip.id, orderId: state.otherOrderId, projectedBy: `${ACTOR}-chieu` },
+        }),
+      ).rejects.toThrow();
+
+      // Cung mot don, mot chuyen khac -> `orderId @unique` chan.
+      await expect(
+        prisma.transportTripOrderLink.create({
+          data: { tripId: otherTrip.id, orderId: state.orderId, projectedBy: `${ACTOR}-chieu` },
+        }),
+      ).rejects.toThrow();
+
+      await prisma.transportTripOrderLink.deleteMany({ where: { tripId: trip.id } });
+      await prisma.transportTrip.deleteMany({ where: { code: { startsWith: ORDER_CODE } } });
     });
   },
 );

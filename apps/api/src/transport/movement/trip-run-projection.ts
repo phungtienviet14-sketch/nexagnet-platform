@@ -1,5 +1,5 @@
 import type { Trip, TripAssignment } from '../transport.types.js';
-import type { TripProjectionReason } from './movement-decisions.js';
+import type { OrderProjectionReason, TripProjectionReason } from './movement-decisions.js';
 import type { CreateLegInput, CreateOrderInput, CreateRunInput } from './movement.repository.js';
 
 /**
@@ -37,6 +37,58 @@ export type ProjectionOutcome =
   | { readonly ok: true; readonly plan: ProjectionPlan }
   | { readonly ok: false; readonly reason: ProjectionRefusal };
 
+export type OrderProjectionRefusal = Extract<
+  OrderProjectionReason,
+  'ORDER_PROJECTION_TRIP_HAS_NO_CUSTOMER'
+>;
+
+export type OrderProjectionOutcome =
+  | { readonly ok: true; readonly order: CreateOrderInput }
+  | { readonly ok: false; readonly reason: OrderProjectionRefusal };
+
+/**
+ * CHIEU THUONG MAI: mot chuyen v1 -> mot NGHIA VU v2. HAM THUAN.
+ *
+ * ==========================================================================================
+ * MOT DIEU KIEN DUY NHAT, VA NO KHONG NOI GI VE XE
+ * ==========================================================================================
+ *
+ * Chi doi `customerId`. KHONG doi chuyen phai la xe cua minh, KHONG doi da phan cong xe -- hai dieu
+ * kien do thuoc ve phep chieu DIEU HANH (`planTripProjection`) va chung o do la dung, vi mot
+ * `TransportVehicleRun` bat buoc phai co `vehicleId`.
+ *
+ * Mot nghia vu thuong mai thi khong. Khoi chu thich cua `TransportOrder` da noi thang dieu do:
+ * *"mot don ton tai truoc khi biet xe nao chay no, va co the khong bao gio duoc chay bang xe cua
+ * minh"*. Mot chuyen thue nha xe ngoai VAN co khach, VAN co bien nhan giao hang, va `#275` K5 doi
+ * cong ket thuc phai ap duoc len no.
+ *
+ * Neu ham nay tu choi `EXTERNAL_CARRIER` giong ham kia, thi cong doi soat se lai khong co chu the
+ * cho dung nhung chuyen do -- va cai lo "khong chieu duoc thi khong bi chan" quay tro lai nguyen
+ * ven duoi mot cai ten khac.
+ *
+ * MA DON la `orderCodeForTrip(trip.code)` -- CUNG mot phep tinh voi phep chieu dieu hanh. Hai phep
+ * chieu tren cung mot chuyen khong duoc de ra hai don co hai ma khac nhau: `code` la `@unique`, nen
+ * lan thu hai se va vao rang buoc thay vi lang le nhan doi nghia vu.
+ */
+export function planOrderProjection(trip: Trip): OrderProjectionOutcome {
+  if (trip.customerId === null) {
+    return { ok: false, reason: 'ORDER_PROJECTION_TRIP_HAS_NO_CUSTOMER' };
+  }
+  return {
+    ok: true,
+    order: {
+      code: orderCodeForTrip(trip.code),
+      businessDate: trip.businessDate,
+      originLabel: trip.originLabel,
+      destinationLabel: trip.destinationLabel,
+      customerId: trip.customerId,
+      cargoDescription: trip.cargoDescription,
+      freightAmount: trip.freightAmount,
+      note: `Chieu tu chuyen ${trip.code}`,
+    },
+  };
+}
+
 /**
  * Xe cua vong chay lay tu LICH SU phan cong, khong tu mot cot tren chuyen.
  *
@@ -44,7 +96,9 @@ export type ProjectionOutcome =
  * chuyen da giao xong van phai chieu duoc -- do la phan lon du lieu lich su.
  */
 export function vehicleOfTrip(assignments: readonly TripAssignment[]): string | null {
-  const active = assignments.find((entry) => entry.effectiveTo === null && entry.vehicleId !== null);
+  const active = assignments.find(
+    (entry) => entry.effectiveTo === null && entry.vehicleId !== null,
+  );
   if (active?.vehicleId) return active.vehicleId;
 
   const withVehicle = assignments.filter((entry) => entry.vehicleId !== null);
@@ -81,19 +135,13 @@ export function planTripProjection(
   const vehicleId = vehicleOfTrip(assignments);
   if (!vehicleId) return { ok: false, reason: 'PROJECTION_TRIP_HAS_NO_VEHICLE' };
 
-  const order: CreateOrderInput | null =
-    trip.customerId === null
-      ? null
-      : {
-          code: orderCodeForTrip(trip.code),
-          businessDate: trip.businessDate,
-          originLabel: trip.originLabel,
-          destinationLabel: trip.destinationLabel,
-          customerId: trip.customerId,
-          cargoDescription: trip.cargoDescription,
-          freightAmount: trip.freightAmount,
-          note: `Chieu tu chuyen ${trip.code}`,
-        };
+  /*
+   * MOT phep tinh cho don, dung chung voi phep chieu thuong mai. Truoc day khoi nay lap lai cong
+   * thuc o day; hai ban sao cua cung mot cong thuc se lech nhau o lan sua thu ba, va luc do mot
+   * chuyen co hai don khac ma.
+   */
+  const commercial = planOrderProjection(trip);
+  const order: CreateOrderInput | null = commercial.ok ? commercial.order : null;
 
   return {
     ok: true,

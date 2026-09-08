@@ -8,6 +8,7 @@ import type {
   RunLeg,
   RunLegKind,
   RunLegStatus,
+  TripOrderLink,
   TripRunLegLink,
   VehicleRun,
   VehicleRunStatus,
@@ -96,6 +97,25 @@ export interface RunAssignmentChange {
   readonly current: RunAssignment;
 }
 
+/**
+ * Mot lan chieu THUONG MAI: chuyen v1 -> DON v2 + lien ket, ghi TRON VEN trong mot giao dich.
+ *
+ * Tach khoi `ProjectTripInput` vi hai phep chieu tra loi hai cau hoi khac nhau va co dieu kien
+ * khac nhau: phep chieu DIEU HANH doi mot chiec xe cua B (nen no tu choi `EXTERNAL_CARRIER`), phep
+ * chieu THUONG MAI chi doi mot khach hang. Gop lam mot se lam chuyen thue nha xe ngoai khong co
+ * duong nao co duoc nghia vu thuong mai cua no -- dung lo hong `#275` K5 dong lai.
+ */
+export interface ProjectTripOrderInput {
+  readonly tripId: string;
+  readonly projectedBy: string;
+  readonly order: CreateOrderInput;
+}
+
+export interface TripOrderProjection {
+  readonly link: TripOrderLink;
+  readonly order: Order;
+}
+
 /** Mot lan chieu chuyen v1 -> v2, ghi TRON VEN trong mot giao dich. */
 export interface ProjectTripInput {
   readonly tripId: string;
@@ -157,6 +177,27 @@ export abstract class MovementRepository {
    */
   abstract listOpenRunsForDriver(driverId: string): Promise<VehicleRun[]>;
 
+  /**
+   * DON THUONG MAI cua mot chuyen v1 -- duong tra loi KHONG di qua vong chay.
+   *
+   * `#275` K5 dua cau hoi nay len grain quyet dinh cua cong doi soat, nen no phai tra loi duoc ca
+   * cho mot chuyen thue nha xe ngoai (thu khong bao gio co vong chay). Xem `TripOrderLink`.
+   */
+  abstract findOrderLink(tripId: string): Promise<TripOrderLink | null>;
+  /**
+   * CHIEU THUONG MAI: tao don + lien ket trong MOT giao dich, TAT DINH va LAP LAI DUOC.
+   *
+   * Goi lai tren mot chuyen da chieu tra ve chinh ban cu (`tripId` la khoa chinh cua lien ket).
+   */
+  abstract projectTripOrder(input: ProjectTripOrderInput): Promise<TripOrderProjection>;
+  /**
+   * CHANG cua NHIEU don trong mot lan -- hang cho ket thuc khong duoc goi N+1 lan.
+   *
+   * Cung ly le voi `findTripLinksByLegs`: mot hang cho hai muoi don se thanh hai muoi lan hoi neu
+   * ky mot ham `byOrder(id)`, va cai gia do chi lo ra khi du lieu that du lon.
+   */
+  abstract listLegsByOrders(orderIds: readonly string[]): Promise<RunLeg[]>;
+
   abstract findTripLink(tripId: string): Promise<TripRunLegLink | null>;
   /**
    * TRA CUU NGUOC: tu CHANG ra CHUYEN. Nhan ca lo, khong nhan tung chang.
@@ -184,6 +225,7 @@ export class InMemoryMovementRepository extends MovementRepository {
   private readonly legs = new Map<string, RunLeg>();
   private readonly assignments = new Map<string, RunAssignment>();
   private readonly links = new Map<string, TripRunLegLink>();
+  private readonly orderLinks = new Map<string, TripOrderLink>();
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
     const now = iso(new Date());
@@ -439,6 +481,38 @@ export class InMemoryMovementRepository extends MovementRepository {
     return this.links.get(tripId) ?? null;
   }
 
+  async findOrderLink(tripId: string): Promise<TripOrderLink | null> {
+    return this.orderLinks.get(tripId) ?? null;
+  }
+
+  async projectTripOrder(input: ProjectTripOrderInput): Promise<TripOrderProjection> {
+    const existing = this.orderLinks.get(input.tripId);
+    if (existing) {
+      const order = this.orders.get(existing.orderId);
+      // Khong the xay ra: lien ket chi duoc ghi cung luc voi don. Nem thay vi tra ve mot ban thu
+      // hai -- mot lien ket tro toi hu vo la mot loi luu tru, khong phai mot lan chieu moi.
+      if (!order) throw new Error(`TripOrderLink ${input.tripId} tro toi mot don khong ton tai`);
+      return { link: existing, order };
+    }
+
+    const order = await this.createOrder(input.order);
+    const link: TripOrderLink = {
+      tripId: input.tripId,
+      orderId: order.id,
+      projectedBy: input.projectedBy,
+      createdAt: iso(new Date()),
+    };
+    this.orderLinks.set(link.tripId, link);
+    return { link, order };
+  }
+
+  async listLegsByOrders(orderIds: readonly string[]): Promise<RunLeg[]> {
+    const wanted = new Set(orderIds);
+    return [...this.legs.values()]
+      .filter((leg) => leg.orderId !== null && wanted.has(leg.orderId))
+      .sort((left, right) => left.id.localeCompare(right.id));
+  }
+
   async findTripLinksByLegs(legIds: readonly string[]): Promise<TripRunLegLink[]> {
     const wanted = new Set(legIds);
     return [...this.links.values()].filter((link) => wanted.has(link.legId));
@@ -465,6 +539,20 @@ export class InMemoryMovementRepository extends MovementRepository {
       createdAt: iso(new Date()),
     };
     this.links.set(link.tripId, link);
+    /*
+     * Phep chieu DIEU HANH cung ghi lien ket THUONG MAI khi no vua tao ra mot don. Neu khong, mot
+     * chuyen noi bo se co hai duong tra loi cau hoi "don cua chuyen nay la don nao" (qua chang, va
+     * qua lien ket) va hai duong do se lech nhau ngay lan dau ai do sua mot ben. MOT duong duy nhat
+     * di qua `TripOrderLink`.
+     */
+    if (order) {
+      this.orderLinks.set(input.tripId, {
+        tripId: input.tripId,
+        orderId: order.id,
+        projectedBy: input.projectedBy,
+        createdAt: iso(new Date()),
+      });
+    }
     return { link, run, leg, order };
   }
 }

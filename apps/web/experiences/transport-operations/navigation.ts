@@ -35,6 +35,7 @@ export type TransportSectionId =
   | 'fleet'
   | 'driver-fund'
   | 'expense-claims'
+  | 'order-completion'
   | 'fuel'
   | 'settlement'
   | 'maintenance'
@@ -132,6 +133,15 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Đề nghị chi lái xe gửi lên — chỉ khoản được duyệt mới vào giá thành và sổ quỹ.',
     requiredCapabilities: ['transport-costing'],
     requiredAction: 'transport.expense.claim.read',
+  },
+  {
+    id: 'order-completion',
+    label: 'Kết thúc đơn',
+    group: 'cost',
+    summary:
+      'Đơn đã giao xong, chờ kế toán xác nhận chứng từ. Chỉ đơn đã kết thúc mới vào kỳ đối soát mới.',
+    requiredCapabilities: ['transport-acceptance'],
+    requiredAction: 'transport.commercial_acceptance.read',
   },
   {
     id: 'fuel',

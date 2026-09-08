@@ -205,6 +205,10 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "grantsFromPersistedOrder",
       "filePath": "apps/api/src/outbound/outbound-authority.ts"
     },
+    "order.trip_projection": {
+      "functionName": "MovementService.projectTripOrder",
+      "filePath": "apps/api/src/transport/movement/movement.service.ts"
+    },
     "outbound.send_advice": {
       "functionName": "PipelineService.runPipelineTurn",
       "filePath": "apps/api/src/pipeline/pipeline.service.ts",
@@ -396,7 +400,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.commercial_acceptance.decide": {
       "functionName": "CommercialAcceptanceController.decide",
       "filePath": "apps/api/src/transport/acceptance/commercial-acceptance.controller.ts",
-      "line": 102
+      "line": 113
     },
     "transport.commercial_acceptance.read": {
       "filePath": "apps/api/src/transport/acceptance/commercial-acceptance.controller.ts"
@@ -795,27 +799,27 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "commercial_acceptance.decide|ACCEPTANCE_REPLAYED": {
       "functionName": "CommercialAcceptanceService.decide",
       "filePath": "apps/api/src/transport/acceptance/acceptance.service.ts",
-      "line": 141
+      "line": 152
     },
     "commission.select|*": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 427
+      "line": 571
     },
     "commission.select|COMMISSION_RULE_AMBIGUOUS": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 380
+      "line": 524
     },
     "commission.select|COMMISSION_RULE_NONE_APPLICABLE": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 366
+      "line": 510
     },
     "commission.select|COMMISSION_TRIP_NOT_PARTNER_REFERRED": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 324
+      "line": 453
     },
     "compliance.document_register|COMPLIANCE_DOCUMENT_REGISTERED": {
       "functionName": "AssetComplianceService.registerDocument",
@@ -1503,57 +1507,55 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "settlement.allocate|*": {
       "functionName": "SettlementService.allocate",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 712
+      "line": 856
     },
     "settlement.correct|*": {
       "functionName": "SettlementService.ingestFuelHandoff",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 543
+      "line": 687
     },
     "settlement.correct|ADJUSTMENT_POSTED": {
       "functionName": "SettlementService.adjustDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 617
+      "line": 761
     },
     "settlement.correct|CORRECTION_NO_CHANGE": {
       "functionName": "SettlementService.adjustDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 578
+      "line": 722
     },
     "settlement.correct|REVERSAL_POSTED": {
       "functionName": "SettlementService.reverseDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 670
+      "line": 814
     },
     "settlement.credit_check|*": {
       "functionName": "SettlementService.creditExposure",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 753
+      "line": 897
     },
     "settlement.recognise|*": {
-      "functionName": "SettlementService.reportRecognition",
-      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 136
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts"
     },
     "settlement.recognise|SETTLEMENT_TRIP_NOT_RECONCILED": {
       "functionName": "SettlementService.recogniseCustomerReceivable",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 181
+      "line": 287
     },
     "settlement.recognise|SETTLEMENT_TRIP_REVENUE_MISSING": {
       "functionName": "SettlementService.recogniseCustomerReceivable",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 195
+      "line": 301
     },
     "settlement_period.transition|*": {
       "functionName": "SettlementService.transitionPeriod",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 835
+      "line": 979
     },
     "settlement_period.transition|PERIOD_OPENED": {
       "functionName": "SettlementService.openPeriod",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 818
+      "line": 962
     },
     "source.approval|*": {
       "filePath": "apps/api/src/source-registry/source-registry.service.ts"

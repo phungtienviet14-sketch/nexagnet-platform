@@ -172,6 +172,19 @@ import { TripService } from './trips/trip.service.js';
     AssetOwnershipScopeService,
     TransportActionGuard,
     FleetRepository,
+    /*
+     * `#275` Lane K — THIEU tu `#271`, va chi mot lan BOOT that moi lo ra.
+     *
+     * `TransportAcceptanceModule` tiem `CounterpartyRepository` qua
+     * `AcceptanceCounterpartyFactsAdapter`. Token do duoc KHAI o day nhung khong duoc EXPORT, nen
+     * mot khach bat `transport-acceptance` khong boot duoc: Nest tu choi ngay o
+     * `lookupComponentInParentModules`. `acceptance.composition.spec.ts` khong bat duoc — no chi
+     * dem controller trong danh sach, khong dung mot injector nao.
+     *
+     * Cung khuon ba kho ke tren/duoi: mot capability ve tinh doc su that cua `transport-core` qua
+     * CONG CHI DOC cua chinh no, va cong do can token.
+     */
+    CounterpartyRepository,
     CounterpartySiteRepository,
     TripRepository,
     MovementRepository,

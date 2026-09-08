@@ -1067,6 +1067,8 @@ model TransportTrip {
   /// R1-B: BANG TUONG UNG toi mot chang v2. KHONG phai quan he cha/con (#232 `D-01`) -
   /// bo `TransportTripRunLegLink` di thi chuyen nay van chay y nguyen.
   runLegLink          TransportTripRunLegLink?
+  /// `#275` K5: BANG TUONG UNG toi mot NGHIA VU v2 — truc THUONG MAI, doc lap voi `runLegLink`.
+  orderLink           TransportTripOrderLink?
   /// R1-C: de nghi chi gan vao chuyen nay.
   expenseClaims       TransportExpenseClaim[]
   /// `transport-proof` — cac phien bam vi tri cua chuyen. NHIEU hang la binh thuong: mot ca lai
@@ -3862,7 +3864,11 @@ model TransportOrder {
   cancelledAt        DateTime?
   cancellationReason String?
 
-  legs TransportRunLeg[]
+  legs       TransportRunLeg[]
+  /// `#275` Lane K: ho so KET THUC THUONG MAI cua don nay. TOI DA MOT — xem `orderId @unique`.
+  completion TransportCommercialAcceptance?
+  /// `#275` K5: chuyen v1 da chieu ra don nay, neu co. TOI DA MOT.
+  tripLink   TransportTripOrderLink?
 
   @@index([status])
   @@index([businessDate])
@@ -3898,7 +3904,8 @@ model TransportVehicleRun {
   checkpoints   TransportRunCheckpoint[]
   /// `#267` H3/H4: lan lai xe xac nhan tai dia diem A da sinh ra vong chay nay. NHIEU NHAT mot.
   siteIntake    TransportRunSiteIntake?
-  /// Lane I (#268): ho so nghiem thu chung tu. TOI DA MOT — xem `runId @unique` ben duoi.
+  /// Lane I (#268), da THAY THE boi `#275`: ho so nghiem thu keo theo VONG CHAY. Khong con duong
+  /// ghi nao dat no — chu the hien tai la `TransportOrder`. Giu lai de mot hang cu con doc duoc.
   acceptance    TransportCommercialAcceptance?
 
   @@index([status])
@@ -3992,6 +3999,34 @@ model TransportTripRunLegLink {
   leg         TransportRunLeg @relation(fields: [legId], references: [id])
   projectedBy String
   createdAt   DateTime        @default(now())
+}
+
+/// BANG TUONG UNG giua mot chuyen v1 va mot NGHIA VU v2 — truc THUONG MAI.
+///
+/// Song song voi `TransportTripRunLegLink`, va CO Y la mot bang khac chu khong mot cot them vao
+/// bang do. Hai cau hoi khac nhau, hai dieu kien khac nhau:
+///
+///   `TransportTripRunLegLink`  "chuyen cu nay hien ra o CHANG nao"   — doi mot chiec xe cua B
+///   `TransportTripOrderLink`   "chuyen cu nay la NGHIA VU nao"       — chi doi mot khach hang
+///
+/// `planTripProjection` TU CHOI chieu chuyen `EXTERNAL_CARRIER` sang mot vong chay: xe khong phai
+/// cua B. Nhung mot chuyen thue nha xe ngoai VAN co khach, VAN co bien nhan giao hang, va `#275`
+/// K5 dat cong doi soat len DON — *"Order is the grain, so projection absence must not be an
+/// authorization bypass"*. Neu chi co mot bang lien ket va no di qua vong chay, thi nhung chuyen do
+/// vinh vien khong co chu the, va cong hoac chan mot duong dang chay hoac phai mo mot duong vong.
+///
+/// `tripId` la KHOA CHINH va `orderId` la UNIQUE, y het bang kia — nen phep chieu thuong mai cung
+/// TAT DINH va LAP LAI DUOC: chay lai `projectTripOrder()` khong the sinh ban thu hai.
+///
+/// Bo ca bang di thi `TransportTrip` va `TransportOrder` deu chay nguyen ven. Cung mau voi
+/// `TransportCounterpartyLink`.
+model TransportTripOrderLink {
+  tripId      String         @id
+  trip        TransportTrip  @relation(fields: [tripId], references: [id])
+  orderId     String         @unique
+  order       TransportOrder @relation(fields: [orderId], references: [id])
+  projectedBy String
+  createdAt   DateTime       @default(now())
 }
 
 // ----- Van chuyen v2: DE NGHI CHI cua lai xe + duyet cua nguoi (R1-C, #232 D-06 / #234 A2) -----
@@ -4930,18 +4965,38 @@ enum TransportCommercialAcceptanceBasis {
   EXTERNAL_PHYSICAL_CONFIRMATION
 }
 
-/// HO SO nghiem thu cua MOT vong chay — chu the + hinh chieu trang thai hien tai.
+/// HO SO KET THUC THUONG MAI cua MOT DON HANG — chu the + hinh chieu trang thai hien tai.
 ///
 /// `state` KHONG phai mot co `boolean` mat lich su. No la hinh chieu cua quyet dinh moi nhat, va no
 /// chi duoc ghi trong CUNG MOT giao dich voi viec them mot hang `...Decision`. Dung khuon da chay
 /// cua `TransportExpenseClaim.status` + `TransportExpenseClaimDecision`.
 ///
-/// `runId @unique`: MOT vong chay, MOT ho so. Neu khong unique thi hai lan bam se tao hai ho so cho
-/// cung mot chuyen, va cau hoi "chuyen nay da duoc nghiem thu chua" co hai cau tra loi.
+/// ===========================================================================================
+/// CHU THE DA DOI TU `runId` SANG `orderId` — `#275` K1, va no la mot MIGRATION THEM VAO
+/// ===========================================================================================
+///
+/// `#268` Lane I khoa ho so nay vao mot VONG CHAY. `#275` chot lai: *"FINAL COMPLETION SUBJECT =
+/// TransportOrder, NOT VehicleRun, NOT projected-work-only"*. Ly do la nghiep vu — sep va ke toan
+/// lam viec tren DON; mot vong chay co the cho hai don, co the dong lai truoc khi mot trong hai
+/// duoc nghiem thu, va mot don co the khong bao gio chay bang xe cua B.
+///
+/// `#275` K0 doi *"prefer additive migration/compatibility over destructive rewrite"*, nen cot
+/// `runId` KHONG bi go: no chi tro thanh nullable, va mot `CHECK` doi DUNG MOT trong hai chu the co
+/// mat. Mot hang cu (neu co) van doc duoc nguyen ven; moi hang MOI deu la chu the don. Tang mien
+/// khong con bieu dien duoc chu the vong chay — xem `CommercialAcceptance` trong
+/// `acceptance.types.ts`.
+///
+/// `orderId @unique`: MOT don, MOT ho so. Neu khong unique thi hai lan bam se tao hai ho so cho
+/// cung mot don, va cau hoi "don nay da ket thuc chua" co hai cau tra loi.
 model TransportCommercialAcceptance {
   id               String                              @id @default(cuid())
-  runId            String                              @unique
-  run              TransportVehicleRun                 @relation(fields: [runId], references: [id], onDelete: Restrict)
+  /// CHU THE HIEN TAI. Nullable CHI de mot hang cu cua `#268` con doc duoc — moi lan ghi moi deu
+  /// dat truong nay, va `CHECK` o migration `20260910120000` cuong che dieu do.
+  orderId          String?                             @unique
+  order            TransportOrder?                     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// CHU THE CU cua `#268`. Khong con duong ghi nao dat no; giu lai de khong xoa lich su.
+  runId            String?                             @unique
+  run              TransportVehicleRun?                @relation(fields: [runId], references: [id], onDelete: Restrict)
   state            TransportCommercialAcceptanceOutcome
   /// Phap nhan ben A khi biet. #268 I1 goi day la truong TUY CHON.
   counterpartyId   String?

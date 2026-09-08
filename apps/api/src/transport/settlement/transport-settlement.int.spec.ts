@@ -1,5 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../config/prisma.service.js';
+import {
+  AcceptanceCounterpartyFactsAdapter,
+  AcceptanceMovementFactsAdapter,
+  NoOperationalDocumentsAdapter,
+} from '../acceptance/acceptance-facts.port.js';
+import { CommercialAcceptanceService } from '../acceptance/acceptance.service.js';
+import { PrismaAcceptanceRepository } from '../acceptance/prisma-acceptance.repository.js';
+import { PrismaCounterpartyRepository } from '../counterparty/prisma-counterparty.repository.js';
+import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
 import { CostingReadService } from '../costing/costing-read.service.js';
 import { PrismaCostingRepository } from '../costing/prisma-costing.repository.js';
 import { TransportCoreFactsAdapter } from '../costing/transport-core-facts.port.js';
@@ -7,6 +16,7 @@ import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { PrismaFuelRepository } from '../fuel/prisma-fuel.repository.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
 import { PrismaSettlementRepository } from './prisma-settlement.repository.js';
+import { SettlementOrderCompletionGateAdapter } from './settlement-order-completion.port.js';
 import { SettlementReadService } from './settlement-read.service.js';
 import { SettlementReportsController } from './settlement-reports.controller.js';
 import {
@@ -56,7 +66,26 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     );
     const fuelSource = new FuelSettlementSourceAdapter(fuelRepo);
 
-    const service = new SettlementService(repo, core, fuelSource);
+    /**
+     * CONG THAT, khong phai mot ban gia luon-cho-qua — `#275` K5.
+     *
+     * Day la ca diem cua viec noi day: 25 bai quyet toan dang chay o duoi PHAI di qua dung cai cong
+     * ma nguoi dung se gap, tren dung CSDL that. Mot ban gia se lam bo bai nay chung minh rang cong
+     * KHONG lam do gi — trong khi thu can chung minh la cong CO chan, va chi chan dung cho.
+     */
+    const acceptance = new CommercialAcceptanceService(
+      new PrismaAcceptanceRepository(prisma),
+      new AcceptanceMovementFactsAdapter(new PrismaMovementRepository(prisma)),
+      new NoOperationalDocumentsAdapter(),
+      new AcceptanceCounterpartyFactsAdapter(new PrismaCounterpartyRepository(prisma)),
+      { timeZone: 'Asia/Ho_Chi_Minh' },
+    );
+    const service = new SettlementService(
+      repo,
+      core,
+      fuelSource,
+      new SettlementOrderCompletionGateAdapter(acceptance),
+    );
     const read = new SettlementReadService(repo, core, costing);
 
     /**
@@ -68,6 +97,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     const CUSTOMER_NAME = 'IT-T5-KHACH';
     const PARTNER_NAME = 'IT-T5-DOITAC';
     const SUPPLIER_CODE = 'IT-T5-CAYXANG';
+    const ORDER_CODE = 'IT-T5-DONHANG';
 
     const ACTOR = 'IT-T5-ketoan';
     const TODAY = '2026-09-01';
@@ -164,10 +194,90 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       });
       await prisma.transportFuelSupplier.deleteMany({ where: { id: { in: supplierIds } } });
 
+      /*
+       * `#275` Lane K — don + lien ket + ho so ket thuc cua bo bai nay.
+       *
+       * Trigger chi-ghi-them chan ca `DELETE` tren lich su quyet dinh, nen duong don dep phai TAT
+       * no — cung khuon `transport-commercial-acceptance.int.spec.ts`. Do la bang chung rang no
+       * dang bao ve that.
+       */
+      const orderRows = await prisma.transportOrder.findMany({
+        where: { code: { startsWith: ORDER_CODE } },
+        select: { id: true },
+      });
+      const orderIds = orderRows.map((row) => row.id);
+      const acceptanceRows = await prisma.transportCommercialAcceptance.findMany({
+        where: { orderId: { in: orderIds } },
+        select: { id: true },
+      });
+      const acceptanceIds = acceptanceRows.map((row) => row.id);
+      if (acceptanceIds.length > 0) {
+        await prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(
+            'ALTER TABLE "TransportCommercialAcceptanceDecision" DISABLE TRIGGER "transport_commercial_acceptance_append_only"',
+          );
+          await tx.transportCommercialAcceptanceDecision.deleteMany({
+            where: { acceptanceId: { in: acceptanceIds } },
+          });
+          await tx.$executeRawUnsafe(
+            'ALTER TABLE "TransportCommercialAcceptanceDecision" ENABLE TRIGGER "transport_commercial_acceptance_append_only"',
+          );
+        });
+        await prisma.transportCommercialAcceptance.deleteMany({
+          where: { id: { in: acceptanceIds } },
+        });
+      }
+      await prisma.transportTripOrderLink.deleteMany({ where: { orderId: { in: orderIds } } });
+      await prisma.transportOrder.deleteMany({ where: { id: { in: orderIds } } });
+
       await prisma.transportTrip.deleteMany({ where: { id: { in: tripIds } } });
       await prisma.transportCustomer.deleteMany({ where: { id: { in: customerIds } } });
       await prisma.transportPartnerRole.deleteMany({ where: { partnerId: { in: partnerIds } } });
       await prisma.transportPartner.deleteMany({ where: { id: { in: partnerIds } } });
+    }
+
+    /**
+     * MOT CHUYEN CO NGHIA VU THUONG MAI DA DUOC KE TOAN KET THUC — `#275` K5.
+     *
+     * Ba buoc, va ca ba deu la buoc THAT ma nguoi dung se di qua:
+     *
+     *   1. chieu chuyen sang mot don (`TransportTripOrderLink`);
+     *   2. don giao xong (`FULFILLED`);
+     *   3. ke toan ghi mot quyet dinh ket thuc theo can cu ban giay.
+     *
+     * KHONG dung SQL tho de dat thang `state = 'APPROVED'`: `#275` cam nguy tao bang cach ghi
+     * thang, va mot fixture di duong tat se khong con chung minh duoc rang duong that chay duoc.
+     */
+    async function completeOrderFor(
+      tripId: string,
+      code: string,
+      idempotencyKey: string,
+    ): Promise<string> {
+      const order = await prisma.transportOrder.create({
+        data: {
+          code: `${ORDER_CODE}-${code}`,
+          status: 'FULFILLED',
+          businessDate: TODAY,
+          originLabel: 'HN',
+          destinationLabel: 'HP',
+        },
+      });
+      await prisma.transportTripOrderLink.create({
+        data: { tripId, orderId: order.id, projectedBy: ACTOR },
+      });
+      await acceptance.decide({
+        orderId: order.id,
+        outcome: 'APPROVED',
+        reasonCode: 'DOCUMENT_RECEIVED',
+        basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
+        evidenceRefs: [],
+        externalNote: 'B giu ban goc phieu giao',
+        counterpartyId: null,
+        supersedesId: null,
+        idempotencyKey,
+        authUserId: ACTOR,
+      });
+      return order.id;
     }
 
     beforeAll(async () => {
@@ -235,6 +345,16 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         },
       });
       state.tripReferred = referred.id;
+
+      /*
+       * `#275` K5 — ba chuyen tren deu di vao mot ky doi soat MOI trong bo bai duoi day, nen ca ba
+       * deu phai co mot nghia vu thuong mai DA DUOC KE TOAN KET THUC. Day chinh la dieu cong moi
+       * doi, va viec 25 bai quyet toan phia duoi van xanh la bang chung rang cong khong lam do mot
+       * duong nao dang chay.
+       */
+      await completeOrderFor(own.id, 'OWN', 'it-t5-ket-thuc-own');
+      await completeOrderFor(outsourced.id, 'OUT', 'it-t5-ket-thuc-out');
+      await completeOrderFor(referred.id, 'REF', 'it-t5-ket-thuc-ref');
 
       /*
        * BAN GIAO cua `TX-04`, gieo thang — xem khoi chu thich dau tep ve ranh gioi nay.
@@ -502,6 +622,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         actor: ACTOR,
       });
 
+      // Cong ket thuc don chay TRUOC phep chon luat, nen chuyen nay cung phai qua duoc no —
+      // neu khong, bai se do o `SETTLEMENT_ORDER_NOT_LINKED` va khong con noi gi ve luat hoa hong.
+      await completeOrderFor(trip.id, 'AMB', 'it-t5-ket-thuc-amb');
+
       await expect(service.recogniseCommission(trip.id, ACTOR)).rejects.toMatchObject({
         reason: 'COMMISSION_RULE_AMBIGUOUS',
       });
@@ -681,6 +805,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         },
       });
 
+      // Cung ly do: cong ket thuc don chay truoc khi kho cham toi ky bi dong.
+      await completeOrderFor(trip.id, 'FROZEN', 'it-t5-ket-thuc-frozen');
+
       await expect(service.recogniseCustomerReceivable(trip.id, ACTOR)).rejects.toMatchObject({
         reason: 'SETTLEMENT_PERIOD_FROZEN',
       });
@@ -771,6 +898,165 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       });
 
       expect(rollup).toEqual(await read.directMarginRollup([state.tripOwn, state.tripOutsourced]));
+    });
+
+    /* ================================================================ *
+     * K5 — CONG KET THUC DON, tren Postgres THAT
+     * ================================================================ */
+
+    /**
+     * `#275` K5 tren CSDL that, di qua dung cai cong ma nguoi dung se gap.
+     *
+     * Ba bai o duoi phu ba nhanh cua cong, va ca ba deu dung `SettlementService` DA duoc noi voi
+     * `CommercialAcceptanceService` that o dau tep — khong mot ban gia nao.
+     */
+    it('K5 — chuyen KHONG co don lam chu the bi CHAN, khong con duong vong `NOT_PROJECTED`', async () => {
+      const trip = await prisma.transportTrip.create({
+        data: {
+          code: `${TRIP_CODE}-KHONGDON`,
+          kind: 'OWN_DIRECT',
+          status: 'RECONCILED',
+          businessDate: TODAY,
+          originLabel: 'HN',
+          destinationLabel: 'HP',
+          customerId: state.customerId,
+          freightAmount: BigInt(4_000_000),
+        },
+      });
+
+      await expect(service.recogniseCustomerReceivable(trip.id, ACTOR)).rejects.toMatchObject({
+        reason: 'SETTLEMENT_ORDER_NOT_LINKED',
+      });
+
+      const written = await prisma.transportSettlementDocument.findMany({
+        where: { tripId: trip.id },
+      });
+      expect(written).toHaveLength(0);
+    });
+
+    it('K5 — chuyen CO don nhung chua ai ket thuc thi bi CHAN', async () => {
+      const trip = await prisma.transportTrip.create({
+        data: {
+          code: `${TRIP_CODE}-CHOKETTHUC`,
+          kind: 'OWN_DIRECT',
+          status: 'RECONCILED',
+          businessDate: TODAY,
+          originLabel: 'HN',
+          destinationLabel: 'HP',
+          customerId: state.customerId,
+          freightAmount: BigInt(6_000_000),
+        },
+      });
+      const order = await prisma.transportOrder.create({
+        data: {
+          code: `${ORDER_CODE}-CHO`,
+          status: 'FULFILLED',
+          businessDate: TODAY,
+          originLabel: 'HN',
+          destinationLabel: 'HP',
+        },
+      });
+      await prisma.transportTripOrderLink.create({
+        data: { tripId: trip.id, orderId: order.id, projectedBy: ACTOR },
+      });
+
+      await expect(service.recogniseCustomerReceivable(trip.id, ACTOR)).rejects.toMatchObject({
+        reason: 'SETTLEMENT_ORDER_COMPLETION_BLOCKED',
+      });
+
+      /*
+       * VA SAU KHI KE TOAN BAM `Da ket thuc` THI DI QUA — cung mot chuyen, cung mot lenh, chi khac
+       * mot quyet dinh cua nguoi. Do la ca noi dung cua `#275` K5 tren du lieu that.
+       */
+      await acceptance.decide({
+        orderId: order.id,
+        outcome: 'APPROVED',
+        reasonCode: 'DOCUMENT_RECEIVED',
+        basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
+        evidenceRefs: [],
+        externalNote: 'B giu ban goc phieu giao',
+        counterpartyId: null,
+        supersedesId: null,
+        idempotencyKey: 'it-t5-ket-thuc-cho',
+        authUserId: ACTOR,
+      });
+
+      const outcome = await service.recogniseCustomerReceivable(trip.id, ACTOR);
+      expect(outcome.replayed).toBe(false);
+      expect(outcome.document.signedAmount).toBe(6_000_000);
+
+      // DUNG MOT LAN: goi lai tra ve chinh ban cu.
+      const again = await service.recogniseCustomerReceivable(trip.id, ACTOR);
+      expect(again.replayed).toBe(true);
+      expect(again.document.id).toBe(outcome.document.id);
+      expect(await prisma.transportSettlementDocument.count({ where: { tripId: trip.id } })).toBe(
+        1,
+      );
+    });
+
+    /**
+     * `#275` K7 — DONG VONG CHAY KHONG KET THUC DON NAO.
+     *
+     * Mot vong chay `COMPLETED` treo tren dung cai don o tren. Neu cong con doc trang thai vong
+     * chay o bat cu dau, don nay se tu nhien du dieu kien — bai nay do neu dieu do xay ra.
+     */
+    it('K7 — vong chay dong lai khong lam mot don dang cho tro nen du dieu kien', async () => {
+      const vehicle = await prisma.transportVehicle.create({
+        data: { registrationPlate: `${ORDER_CODE}-XE`, vehicleClass: 'DAU_KEO' },
+      });
+      const trip = await prisma.transportTrip.create({
+        data: {
+          code: `${TRIP_CODE}-RUNDONG`,
+          kind: 'OWN_DIRECT',
+          status: 'RECONCILED',
+          businessDate: TODAY,
+          originLabel: 'HN',
+          destinationLabel: 'HP',
+          customerId: state.customerId,
+          freightAmount: BigInt(7_000_000),
+        },
+      });
+      const order = await prisma.transportOrder.create({
+        data: {
+          code: `${ORDER_CODE}-RUNDONG`,
+          status: 'FULFILLED',
+          businessDate: TODAY,
+          originLabel: 'HN',
+          destinationLabel: 'HP',
+        },
+      });
+      await prisma.transportTripOrderLink.create({
+        data: { tripId: trip.id, orderId: order.id, projectedBy: ACTOR },
+      });
+      const run = await prisma.transportVehicleRun.create({
+        data: {
+          code: `${ORDER_CODE}-VONGCHAY`,
+          vehicleId: vehicle.id,
+          status: 'COMPLETED',
+          businessDate: TODAY,
+          completedAt: new Date(),
+        },
+      });
+      await prisma.transportRunLeg.create({
+        data: {
+          runId: run.id,
+          sequence: 1,
+          kind: 'LOADED',
+          orderId: order.id,
+          originLabel: 'HN',
+          destinationLabel: 'HP',
+          businessDate: TODAY,
+        },
+      });
+
+      // Vong chay DA DONG, va don van CHUA du dieu kien — chua ai bam `Da ket thuc`.
+      await expect(service.recogniseCustomerReceivable(trip.id, ACTOR)).rejects.toMatchObject({
+        reason: 'SETTLEMENT_ORDER_COMPLETION_BLOCKED',
+      });
+
+      await prisma.transportRunLeg.deleteMany({ where: { runId: run.id } });
+      await prisma.transportVehicleRun.deleteMany({ where: { id: run.id } });
+      await prisma.transportVehicle.deleteMany({ where: { id: vehicle.id } });
     });
   },
 );

@@ -2,11 +2,16 @@ import { Module } from '@nestjs/common';
 import { loadFoundationEnv } from '../../config/foundation-env.js';
 import { PrismaModule } from '../../config/prisma.module.js';
 import { PrismaService } from '../../config/prisma.service.js';
+import { TransportAcceptanceModule } from '../acceptance/transport-acceptance.module.js';
 import { TransportCostingModule } from '../costing/transport-costing.module.js';
 import { TransportFuelModule } from '../fuel/transport-fuel.module.js';
 import { TransportModule } from '../transport.module.js';
 import { InMemorySettlementRepository } from './in-memory-settlement.repository.js';
 import { PrismaSettlementRepository } from './prisma-settlement.repository.js';
+import {
+  SettlementOrderCompletionGate,
+  SettlementOrderCompletionGateAdapter,
+} from './settlement-order-completion.port.js';
 import { SettlementReadService } from './settlement-read.service.js';
 import {
   FuelSettlementSource,
@@ -52,10 +57,29 @@ import { SettlementService } from './settlement.service.js';
  *   `SettlementCostingFacts` -> doc chi phi truc tiep QUA `CostingReadService`, khong qua kho
  *   `FuelSettlementSource`   -> doc ban giao cua `TX-04` QUA `FuelRepository`
  *
+ * `SettlementOrderCompletionGate` -> doc ket luan KET THUC DON QUA `CommercialAcceptanceService`
+ *
  * Khong cong nao co ham ghi. `NO_CROSS_CONTEXT_REPOSITORY_WRITE` duoc giu bang KIEU.
+ *
+ * ===========================================================================
+ * PHU THUOC THU TU BON — `transport-acceptance` (`#275` Lane K), va no la mot phu thuoc CUNG.
+ *
+ * Chieu di MOT chieu: quyet toan DOC ket thuc don, ket thuc don khong bao gio nhin thay so tien.
+ * Adapter nam o PHIA NAY (tep `settlement-order-completion.port.ts`), dung khuon
+ * `FuelSettlementSourceAdapter` — dat no o phia kia se lam hai module nhap vao nhau thanh mot vong.
+ *
+ * `tenant.schema.ts` khai phu thuoc nay o tang goi khach, nen mot khach bat quyet toan ma tat
+ * nghiem thu KHONG BOOT DUOC. Do la cau tra loi co chu dich cho cau hoi "tat capability thi cong
+ * tai chinh co bien mat khong": khong co che do tat.
  */
 @Module({
-  imports: [PrismaModule, TransportModule, TransportCostingModule, TransportFuelModule],
+  imports: [
+    PrismaModule,
+    TransportModule,
+    TransportCostingModule,
+    TransportFuelModule,
+    TransportAcceptanceModule,
+  ],
   providers: [
     {
       provide: SettlementRepository,
@@ -68,6 +92,7 @@ import { SettlementService } from './settlement.service.js';
     { provide: SettlementCoreFacts, useClass: SettlementCoreFactsAdapter },
     { provide: SettlementCostingFacts, useClass: SettlementCostingFactsAdapter },
     { provide: FuelSettlementSource, useClass: FuelSettlementSourceAdapter },
+    { provide: SettlementOrderCompletionGate, useClass: SettlementOrderCompletionGateAdapter },
     SettlementService,
     SettlementReadService,
   ],

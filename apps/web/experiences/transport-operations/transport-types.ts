@@ -1791,3 +1791,79 @@ export interface ConfirmSiteIntakeInput extends SiteIntakeLocationInput {
   readonly clientEventId: string;
   readonly destinationLabel?: string;
 }
+
+/* ------------------------------------------------------------------ *
+ * KET THUC DON — `#275` Lane K
+ * ------------------------------------------------------------------ */
+
+/**
+ * TRANG THAI ket thuc thuong mai cua mot don.
+ *
+ * `PENDING` la SU VANG MAT cua mot quyet dinh, khong phai mot gia tri duoc ghi — nen mot don chua
+ * ai dung toi doc len la `PENDING` chu khong phai `null`. Man hinh khong phai xu ly hai cach bieu
+ * dien cho cung mot y.
+ */
+export type OrderCompletionState = 'PENDING' | 'APPROVED' | 'REJECTED' | 'NEEDS_CORRECTION';
+
+export type OrderCompletionOutcome = Exclude<OrderCompletionState, 'PENDING'>;
+
+export type OrderCompletionBasis = 'DOCUMENT' | 'EXTERNAL_PHYSICAL_CONFIRMATION';
+
+/**
+ * MOT DONG cua hang cho `Cho ket thuc` — `#275` K4.
+ *
+ * `runCode`/`vehicleId` la NGU CANH dieu hanh va CO THE `null`: `#275` K4 noi *"Run may be visible
+ * only as advanced/debug context, not required input"*. Mot don thue nha xe ngoai khong co vong
+ * chay nao, va no van ket thuc duoc.
+ */
+export interface OrderCompletionRow {
+  readonly acceptanceId: string | null;
+  readonly orderId: string;
+  readonly orderCode: string;
+  readonly orderStatus: TransportOrderStatus;
+  readonly customerId: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly state: OrderCompletionState;
+  readonly counterpartyId: string | null;
+  readonly businessDate: BusinessDate;
+  readonly evidenceCount: number;
+  readonly settlementEligible: boolean;
+  readonly runCode: string | null;
+  readonly vehicleId: string | null;
+  readonly latestDecidedAt: string | null;
+  readonly latestDecidedBy: string | null;
+}
+
+export interface OrderCompletionDecision {
+  readonly id: string;
+  readonly acceptanceId: string;
+  readonly sequence: number;
+  readonly outcome: OrderCompletionOutcome;
+  readonly reasonCode: string;
+  readonly basis: OrderCompletionBasis;
+  readonly evidenceRefs: readonly string[];
+  readonly externalNote: string | null;
+  readonly supersedesId: string | null;
+  readonly idempotencyKey: string;
+  readonly decidedBy: string;
+  readonly decidedAt: string;
+}
+
+export interface OrderCompletionRecord {
+  readonly id: string;
+  readonly orderId: string;
+  readonly state: OrderCompletionState;
+  readonly counterpartyId: string | null;
+  readonly businessDate: BusinessDate;
+  readonly latestDecisionId: string | null;
+  readonly openedBy: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Ho so kem CA lich su — `#275` K4 doi hien `actor/time/history after decision`. */
+export interface OrderCompletionDetail {
+  readonly acceptance: OrderCompletionRecord;
+  readonly decisions: readonly OrderCompletionDecision[];
+}
