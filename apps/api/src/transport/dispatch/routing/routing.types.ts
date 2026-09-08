@@ -82,6 +82,32 @@ export const EMPTY_TRUCK_PROFILE: TruckProfile = {
  */
 export type RouteEstimateQuality = 'ROAD_NETWORK' | 'SYNTHETIC';
 
+/**
+ * DAU VAN TAY CUA MOT HO SO XE — hai ho so cho ra cung chuoi thi dinh tuyen duoc CUNG NHAU.
+ *
+ * Hai cho goi, va ca hai deu la nhung cho ma bo qua no se cho ra mot con so trong hoan toan binh
+ * thuong nhung thuoc ve mot chiec xe khac:
+ *
+ *   · bo nho dem — mot xe cao 4,2 m khong duoc dung lai ket qua cua mot xe cao 2,7 m;
+ *   · phep gom ma tran — `MatrixRequest` mang DUNG MOT ho so, nen chi duoc gop nhung diem xuat
+ *     phat co cung ho so vao mot lan goi.
+ *
+ * Hom nay moi ho so deu rong nhu nhau nen chuoi nay luon giong nhau, va ca hai cho tren deu chay
+ * duong nhanh. Ca hai se tu dung ngay khi `TransportVehicle` co cot kich thuoc — khong cho nao
+ * phai nho sua.
+ */
+export const truckFingerprint = (truck: TruckProfile): string =>
+  [
+    truck.heightCm,
+    truck.widthCm,
+    truck.lengthCm,
+    truck.grossWeightKg,
+    truck.currentWeightKg,
+    truck.weightPerAxleKg,
+    truck.axleCount,
+    truck.trailerCount,
+  ].join('|');
+
 export interface RouteEstimate {
   /** Ai tinh ra con so nay. Sieu du lieu kiem toan; KHONG duoc dung lam nhanh dieu kien. */
   readonly providerId: string;

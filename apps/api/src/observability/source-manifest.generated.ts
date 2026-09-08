@@ -901,27 +901,27 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "dispatch.candidate_filter|*": {
       "functionName": "DispatchService.suggest",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 225
+      "line": 226
     },
     "dispatch.commit|*": {
       "functionName": "DispatchService.commit",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 334
+      "line": 335
     },
     "dispatch.commit|COMMIT_REVALIDATION_FAILED": {
       "functionName": "DispatchService.commit",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 315
+      "line": 316
     },
     "dispatch.pickup_resolution|*": {
       "functionName": "DispatchService.resolvePickup",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 392
+      "line": 393
     },
     "dispatch.route_estimate|*": {
-      "functionName": "DispatchService.routeToPickup",
+      "functionName": "DispatchService.routeGroupToPickup",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 651
+      "line": 683
     },
     "driver.self_expense_scope|*": {
       "functionName": "CostingReadService.selfTripExpenseEvidence",

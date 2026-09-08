@@ -598,6 +598,24 @@ describe('be mat de nghi dieu xe', () => {
     expect(view.excluded).toHaveLength(0);
   });
 
+  /**
+   * `#277 M3`: *"design must not issue N x M wasteful calls when fleet grows."*
+   *
+   * Nam chiec xe -> DUNG MOT lan goi ma tran, khong phai nam lan goi le. Bai nay cung khoa phep
+   * gom theo ho so xe: hom nay moi ho so deu rong nhu nhau nen dung mot nhom hinh thanh, va neu
+   * ai do bo phep gom di de goi tung o thi con so o day nhay len 5.
+   */
+  it('nam ung vien -> DUNG MOT lan goi ma tran', async () => {
+    core.vehicles = ['a', 'b', 'c', 'd', 'e'].map((id) => vehicle({ id }));
+    for (const id of ['a', 'b', 'c', 'd', 'e']) observe(id, HAI_PHONG);
+
+    const routing = new TableRoutingPort(new Map());
+    const view = await build(routing).suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN);
+
+    expect(view.candidates).toHaveLength(5);
+    expect(routing.matrixCalls).toBe(1);
+  });
+
   it('bo khoa xep hang duoc cong bo ra ngoai de man hinh giai thich duoc thu tu', async () => {
     core.vehicles = [vehicle({ id: 'a' })];
     observe('a', HAI_PHONG);

@@ -50,6 +50,7 @@ import {
   type PlaceIndexEntry,
 } from './place-resolution.js';
 import { TransportRoutingPort } from './routing/transport-routing.port.js';
+import { truckFingerprint } from './routing/routing.types.js';
 import type { RouteEstimate, TruckProfile } from './routing/routing.types.js';
 import { truckProfileForVehicle } from './truck-profile.js';
 import {
@@ -627,17 +628,48 @@ export class DispatchService {
     return origins;
   }
 
-  /** Mot lan goi ma tran cho ca danh sach — khong phai N lan goi le. Xem `#277 M3`. */
+  /**
+   * MOT lan goi ma tran cho ca danh sach — khong phai N lan goi le. Xem `#277 M3`.
+   *
+   * "Mot lan cho MOT HO SO XE", chinh xac hon: `MatrixRequest` mang DUNG MOT `TruckProfile`, nen
+   * gop nhung diem xuat phat co ho so KHAC NHAU vao mot lan goi se dinh tuyen ca nhom theo ho so
+   * cua chiec dau tien — mot con so trong hoan toan binh thuong nhung thuoc ve mot chiec xe khac.
+   *
+   * Hom nay moi ho so deu rong nhu nhau (`truckProfileForVehicle()` chua co cot nao de doc), nen
+   * phep gom luon cho ra DUNG MOT nhom va dung mot lan goi. No ton tai de ngay `TransportVehicle`
+   * co cot kich thuoc, tang nay tu chia nhom — khong ai phai nho quay lai sua cho nay.
+   */
   private async routeToPickup(
     origins: readonly CandidateOrigin[],
     pickup: GeoPoint,
   ): Promise<readonly (RouteEstimate | null)[]> {
     if (origins.length === 0) return [];
 
+    const groups = new Map<string, number[]>();
+    origins.forEach((origin, index) => {
+      const key = truckFingerprint(origin.assessment.truckProfile);
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(index);
+      else groups.set(key, [index]);
+    });
+
+    const estimates: (RouteEstimate | null)[] = origins.map(() => null);
+    for (const indexes of groups.values()) {
+      await this.routeGroupToPickup(origins, indexes, pickup, estimates);
+    }
+    return estimates;
+  }
+
+  private async routeGroupToPickup(
+    origins: readonly CandidateOrigin[],
+    indexes: readonly number[],
+    pickup: GeoPoint,
+    estimates: (RouteEstimate | null)[],
+  ): Promise<void> {
     const outcome = await this.routing.matrix({
-      origins: origins.map((origin) => origin.place.point),
+      origins: indexes.map((index) => origins[index]!.place.point),
       destinations: [pickup],
-      truck: origins[0]!.assessment.truckProfile,
+      truck: origins[indexes[0]!]!.assessment.truckProfile,
       departAt: null,
     });
 
@@ -670,12 +702,11 @@ export class DispatchService {
       );
     }
 
-    const byOrigin = new Map<number, RouteEstimate | null>();
     for (const cell of outcome.cells) {
       if (cell.destinationIndex !== 0) continue;
-      byOrigin.set(cell.originIndex, cell.estimate);
+      const originIndex = indexes[cell.originIndex];
+      if (originIndex !== undefined) estimates[originIndex] = cell.estimate;
     }
-    return origins.map((_origin, index) => byOrigin.get(index) ?? null);
   }
 
   private toCandidate(

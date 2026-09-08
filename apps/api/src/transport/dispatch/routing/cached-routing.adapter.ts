@@ -1,6 +1,7 @@
 import type { GeoPoint } from '../../geo/geo-point.js';
 import type { TransportDispatchPolicy } from '../dispatch-policy.js';
 import { TransportRoutingPort } from './transport-routing.port.js';
+import { truckFingerprint } from './routing.types.js';
 import type {
   MatrixCell,
   MatrixOutcome,
@@ -49,25 +50,6 @@ interface CacheEntry {
 }
 
 const roundCoordinate = (value: number): string => value.toFixed(5);
-
-/**
- * DAU VAN TAY CUA HO SO XE — phan cua khoa dem.
- *
- * Bo qua no se lam mot xe cao 4,2 m dung lai ket qua cua mot xe cao 2,7 m: cung hai diem, khac
- * tuyen duong. Hom nay moi ho so deu rong nhu nhau nen chuoi nay luon giong nhau — dung nhu mong
- * doi, va no tu dung ngay khi `TransportVehicle` co cot kich thuoc.
- */
-export const truckFingerprint = (truck: TruckProfile): string =>
-  [
-    truck.heightCm,
-    truck.widthCm,
-    truck.lengthCm,
-    truck.grossWeightKg,
-    truck.currentWeightKg,
-    truck.weightPerAxleKg,
-    truck.axleCount,
-    truck.trailerCount,
-  ].join('|');
 
 const pairKey = (
   providerId: string,
