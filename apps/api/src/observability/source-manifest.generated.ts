@@ -325,6 +325,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 42
     },
+    "toll_import.commit": {
+      "filePath": "apps/api/src/transport/toll/toll.service.ts"
+    },
+    "toll_review.resolve": {
+      "filePath": "apps/api/src/transport/toll/toll.service.ts"
+    },
     "tracking.history_read": {
       "functionName": "TrackingService.trackForSession",
       "filePath": "apps/api/src/transport/proof/tracking.service.ts",
@@ -640,6 +646,23 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.stakeholder.self.vehicle.read": {
       "filePath": "apps/api/src/transport/asset-ownership/stakeholder-vehicles.controller.ts"
+    },
+    "transport.toll.account.manage": {
+      "filePath": "apps/api/src/transport/toll/toll.controller.ts"
+    },
+    "transport.toll.account.read": {
+      "filePath": "apps/api/src/transport/toll/toll.controller.ts"
+    },
+    "transport.toll.import": {
+      "filePath": "apps/api/src/transport/toll/toll.controller.ts"
+    },
+    "transport.toll.review.read": {
+      "filePath": "apps/api/src/transport/toll/toll.controller.ts"
+    },
+    "transport.toll.review.resolve": {
+      "functionName": "TollController.review",
+      "filePath": "apps/api/src/transport/toll/toll.controller.ts",
+      "line": 192
     },
     "transport.tracking.read": {
       "functionName": "TrackingController.summaries",
@@ -1515,6 +1538,16 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "AgentOrchestrator.run",
       "filePath": "apps/api/src/agents/agent-orchestrator.service.ts",
       "line": 763
+    },
+    "toll_account.link|*": {
+      "functionName": "TollAccountService.decide",
+      "filePath": "apps/api/src/transport/toll/toll-account.service.ts",
+      "line": 202
+    },
+    "toll_import.row|*": {
+      "functionName": "TollService.commitImport",
+      "filePath": "apps/api/src/transport/toll/toll.service.ts",
+      "line": 229
     },
     "tracking.risk_assessed|*": {
       "functionName": "TrackingService.recordRisk",

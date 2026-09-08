@@ -601,7 +601,10 @@ const tollProviderMappingSchema = z
       .record(nonEmpty, z.enum(['TOLL_PASS', 'TOP_UP', 'ACCOUNT_FEE', 'ADJUSTMENT']))
       .default({}),
     /** Dung khi tep KHONG co cot loai. Suy ho nguoi khai la doan. */
-    defaultKind: z.enum(['TOLL_PASS', 'TOP_UP', 'ACCOUNT_FEE', 'ADJUSTMENT']).nullable().default(null),
+    defaultKind: z
+      .enum(['TOLL_PASS', 'TOP_UP', 'ACCOUNT_FEE', 'ADJUSTMENT'])
+      .nullable()
+      .default(null),
   })
   .strict();
 
@@ -775,16 +778,19 @@ const capabilityRequirements = {
    */
   'transport-checkpoint': { dependencies: ['transport-core', 'transport-proof'] },
   /**
-   * `policy: 'transportToll'` duoc khai — khac ba capability van tai truoc no.
+   * KHONG khai `policy: 'transportToll'`, cung ly le voi ba capability van tai truoc no — va o day
+   * co them mot ly do RIENG, manh hon.
    *
-   * Ly do: khoi cau hinh nay khong chua "mac dinh cua chung ta" ma chua DU KIEN DO KHACH DO DUOC
-   * (ten cot tren tep that cua nha cung cap ho). Khong khai policy thi khong co cho hop phap nao
-   * de dat chung, va bo cot se phai di vao ma nguon — dung dieu #269 cam.
+   * Khai `policy` lam khoi cau hinh do thanh BAT BUOC luc boot. Voi ETC dieu do sai han huong:
+   * chinh cai chua co (bo cot cua nha cung cap) la thu ta chua duoc phep bia ra. Mot khach bat ETC
+   * TRUOC khi xin duoc ban mau la trang thai BINH THUONG, va he thong phai boot duoc o do roi bao
+   * `BLOCKED_SAMPLE_REQUIRED` RIENG cho tung nha cung cap — chu khong tu choi khoi dong.
    *
-   * Van TUY CHON: mot khach bat ETC truoc khi co ban mau van boot duoc, va tung nha cung cap bao
-   * `BLOCKED_SAMPLE_REQUIRED` rieng.
+   * (Do duoc: khai `policy` o day lam `app.module.transport-toll.boot.spec.ts` do voi
+   * *"transport-toll yeu cau policy transportToll"*, va se lam ca `tenants/transport-preview`
+   * khong boot duoc.)
    */
-  'transport-toll': { dependencies: ['transport-core'], policy: 'transportToll' },
+  'transport-toll': { dependencies: ['transport-core'] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {

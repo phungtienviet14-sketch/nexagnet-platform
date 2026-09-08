@@ -1,9 +1,5 @@
 import type { BusinessDate } from '../business-date.js';
-import type {
-  TollProvider,
-  TollSourceKind,
-  TollTransactionKind,
-} from './toll-provider.port.js';
+import type { TollProvider, TollSourceKind, TollTransactionKind } from './toll-provider.port.js';
 
 /**
  * KIEU LUU TRU cua nap du lieu ETC — `TX-08` mo rong (Lane J, #269).

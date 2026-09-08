@@ -1,6 +1,10 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { BusinessDate } from '../business-date.js';
-import { TOLL_PROVIDERS, type TollImportCandidate, type TollProvider } from './toll-provider.port.js';
+import {
+  TOLL_PROVIDERS,
+  type TollImportCandidate,
+  type TollProvider,
+} from './toll-provider.port.js';
 
 /**
  * CONG API NHA CUNG CAP — mot cho GIU CHO co that, khong phai mot hien thuc.
@@ -71,7 +75,8 @@ const REQUEST_PATHS: Readonly<Record<TollProvider, string>> = {
   VETC: 'ND 119/2024 D.26 kh.2 — de nghi thoa thuan cung cap du lieu giao dich qua ho so khach hang doanh nghiep VETC (diem dich vu / cong thong tin khach hang customer.vetc.com.vn)',
   EPASS:
     'ND 119/2024 D.26 kh.2 — de nghi thoa thuan cung cap du lieu giao dich qua kenh khach hang doanh nghiep VDTC/ePass (tong dai 1900 9080, ho so dang ky doanh nghiep)',
-  OTHER: 'ND 119/2024 D.26 kh.2 — de nghi thoa thuan cung cap du lieu giao dich voi nha cung cap tuong ung',
+  OTHER:
+    'ND 119/2024 D.26 kh.2 — de nghi thoa thuan cung cap du lieu giao dich voi nha cung cap tuong ung',
 };
 
 /**

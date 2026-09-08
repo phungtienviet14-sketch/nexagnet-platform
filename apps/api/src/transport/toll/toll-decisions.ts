@@ -91,11 +91,7 @@ export const TOLL_REVIEW_REASONS = [
 export type TollReviewReason = (typeof TOLL_REVIEW_REASONS)[number];
 
 export type TransportTollDecisionReason =
-  | TollImportReason
-  | TollImportRowReason
-  | TollClassifyReason
-  | TollLinkReason
-  | TollReviewReason;
+  TollImportReason | TollImportRowReason | TollClassifyReason | TollLinkReason | TollReviewReason;
 
 export const TRANSPORT_TOLL_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-toll',
@@ -135,7 +131,8 @@ export const TRANSPORT_TOLL_DECISIONS = defineDecisionVocabulary({
     TOLL_REVIEW_VEHICLE_RESOLVED: 'Nguoi doi soat da chon xe cho dong nay',
     TOLL_REVIEW_CONFIRMED: 'Nguoi doi soat da xac nhan dong nay la dung du kien nha cung cap',
     TOLL_REVIEW_DUPLICATE_FLAGGED: 'Nguoi doi soat danh dau dong nay trung mot dong khac',
-    TOLL_REVIEW_DUPLICATE_CLEARED: 'Nguoi doi soat khang dinh hai dong giong nhau la hai su kien that',
+    TOLL_REVIEW_DUPLICATE_CLEARED:
+      'Nguoi doi soat khang dinh hai dong giong nhau la hai su kien that',
     TOLL_REVIEW_REOPENED: 'Mo lai mot dong da xac nhan',
     TOLL_REVIEW_CANDIDATE_REJECTED: 'Dong bi tu choi luc doc thi khong doi soat duoc',
     TOLL_REVIEW_VEHICLE_NOT_APPLICABLE: 'Dong nay khong gan xe (nap tien / phi tai khoan)',

@@ -92,9 +92,7 @@ export const DEFAULT_TOLL_MAX_ROWS = 20_000;
  * Ba duong hong, moi duong mot cau tra loi rieng, va tat ca deu la loi CAU HINH chu khong phai loi
  * du lieu. Bat chung o day thay vi de moi dong bi tu choi voi mot ma noi sai cho phai sua.
  */
-export function tollMappingConfigurationError(
-  mapping: TollProviderMappingPolicy,
-): string | null {
+export function tollMappingConfigurationError(mapping: TollProviderMappingPolicy): string | null {
   const missing = REQUIRED_TOLL_COLUMN_KEYS.filter((key) => (mapping.columns[key] ?? '') === '');
   if (missing.length > 0) return `thieu khai cot bat buoc: ${missing.join(', ')}`;
 

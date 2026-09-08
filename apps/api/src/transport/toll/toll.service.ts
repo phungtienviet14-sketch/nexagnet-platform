@@ -16,10 +16,7 @@ import {
   type TransportTollPolicy,
 } from './toll-policy.js';
 import type { TollProvider, TollSourceKind, TollTransactionKind } from './toll-provider.port.js';
-import {
-  TollStatementSource,
-  type TollFileFormat,
-} from './toll-statement-source.js';
+import { TollStatementSource, type TollFileFormat } from './toll-statement-source.js';
 import {
   mapTollRows,
   missingTollColumns,
@@ -186,7 +183,8 @@ export class TollService {
       sourceKind: command.sourceKind,
       sourceLabel: command.sourceLabel,
       sourceDigest: preview.sourceDigest,
-      periodStart: command.periodStart === null ? null : this.requireBusinessDate(command.periodStart),
+      periodStart:
+        command.periodStart === null ? null : this.requireBusinessDate(command.periodStart),
       periodEnd: command.periodEnd === null ? null : this.requireBusinessDate(command.periodEnd),
       rowCount: preview.rowCount,
       acceptedCount: preview.acceptedCount,
@@ -301,7 +299,9 @@ export class TollService {
     const accountIdByNormalizedNo = new Map(
       accounts.map((account) => [normalizeAccountNo(account.accountNo), account.id]),
     );
-    const plateByVehicleId = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle.registrationPlate]));
+    const plateByVehicleId = new Map(
+      vehicles.map((vehicle) => [vehicle.id, vehicle.registrationPlate]),
+    );
     const linksByAccountId = new Map<string, TollActiveLinkView[]>();
     for (const link of links) {
       const plate = plateByVehicleId.get(link.vehicleId);
@@ -322,7 +322,10 @@ export class TollService {
     const fingerprints = lines
       .map((line) => line.fingerprint)
       .filter((value): value is string => value !== null);
-    const knownFingerprints = await this.repository.knownFingerprints(command.provider, fingerprints);
+    const knownFingerprints = await this.repository.knownFingerprints(
+      command.provider,
+      fingerprints,
+    );
 
     const classified = classifyTollRows({
       rows: lines.map((line) => ({
@@ -573,8 +576,16 @@ export class TollService {
       action: 'transport.toll.review.resolve',
       entityType: 'TransportTollTransactionCandidate',
       entityId: candidate.id,
-      before: { vehicleId: candidate.vehicleId, matchState: candidate.matchState, reviewState: candidate.reviewState },
-      after: { vehicleId: updated.vehicleId, matchState: updated.matchState, reviewState: updated.reviewState },
+      before: {
+        vehicleId: candidate.vehicleId,
+        matchState: candidate.matchState,
+        reviewState: candidate.reviewState,
+      },
+      after: {
+        vehicleId: updated.vehicleId,
+        matchState: updated.matchState,
+        reviewState: updated.reviewState,
+      },
     });
     return updated;
   }
@@ -587,7 +598,12 @@ export class TollService {
       duplicateOfCandidateId: string | null;
     },
   ): Promise<{
-    reason: 'TOLL_REVIEW_VEHICLE_RESOLVED' | 'TOLL_REVIEW_CONFIRMED' | 'TOLL_REVIEW_DUPLICATE_FLAGGED' | 'TOLL_REVIEW_DUPLICATE_CLEARED' | 'TOLL_REVIEW_REOPENED';
+    reason:
+      | 'TOLL_REVIEW_VEHICLE_RESOLVED'
+      | 'TOLL_REVIEW_CONFIRMED'
+      | 'TOLL_REVIEW_DUPLICATE_FLAGGED'
+      | 'TOLL_REVIEW_DUPLICATE_CLEARED'
+      | 'TOLL_REVIEW_REOPENED';
     nextVehicleId: string | null;
     nextMatchState: TollTransactionCandidateRecord['matchState'];
     nextReviewState: 'PENDING' | 'CONFIRMED' | 'REOPENED';

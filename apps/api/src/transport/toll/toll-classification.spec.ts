@@ -62,9 +62,7 @@ describe('phan loai mot dong da doc duoc', () => {
    * lam moi lan nap tien nam vinh vien trong hang cho doi soat.
    */
   it('nap tien va phi tai khoan la MATCHED o muc TAI KHOAN, khong doi xe', () => {
-    const [topUp] = classify([
-      pass({ kind: 'TOP_UP', vehiclePlateRaw: '', fingerprint: 'fp-t' }),
-    ]);
+    const [topUp] = classify([pass({ kind: 'TOP_UP', vehiclePlateRaw: '', fingerprint: 'fp-t' })]);
     expect(topUp?.matchState).toBe('MATCHED');
     expect(topUp?.vehicleId).toBeNull();
 
@@ -172,9 +170,10 @@ describe('thu tu uu tien cua nhan', () => {
   });
 
   it('nghi ngo trung thang cau hoi bien so chua noi duoc', () => {
-    const results = classify(
-      [pass({ vehiclePlateRaw: '99Z-999.99' }), pass({ rowNumber: 3, vehiclePlateRaw: '99Z-999.99' })],
-    );
+    const results = classify([
+      pass({ vehiclePlateRaw: '99Z-999.99' }),
+      pass({ rowNumber: 3, vehiclePlateRaw: '99Z-999.99' }),
+    ]);
     expect(results.map((result) => result.matchState)).toEqual([
       'DUPLICATE_CANDIDATE',
       'DUPLICATE_CANDIDATE',

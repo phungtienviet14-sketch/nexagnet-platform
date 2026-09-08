@@ -88,7 +88,8 @@ export function classifyTollRows(input: ClassifyTollRowsInput): ClassifiedTollRo
       return { ...empty, matchState: null };
     }
 
-    const accountId = input.accountIdByNormalizedNo.get(normalizeAccountNo(row.accountNoRaw)) ?? null;
+    const accountId =
+      input.accountIdByNormalizedNo.get(normalizeAccountNo(row.accountNoRaw)) ?? null;
     if (accountId === null) return { ...empty, matchState: 'ACCOUNT_UNRESOLVED' };
 
     const resolution = resolveLinkedVehicle({
@@ -112,7 +113,13 @@ export function classifyTollRows(input: ClassifyTollRowsInput): ClassifiedTollRo
       row.fingerprint !== null &&
       ((occurrences.get(row.fingerprint) ?? 0) > 1 || input.knownFingerprints.has(row.fingerprint));
     if (duplicated) {
-      return { ...empty, accountId, vehicleId, ambiguousVehicleIds, matchState: 'DUPLICATE_CANDIDATE' };
+      return {
+        ...empty,
+        accountId,
+        vehicleId,
+        ambiguousVehicleIds,
+        matchState: 'DUPLICATE_CANDIDATE',
+      };
     }
 
     if (resolution.kind === 'AMBIGUOUS') {

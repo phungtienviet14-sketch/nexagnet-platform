@@ -95,11 +95,19 @@ describe('ETC khong bao gio cham so quy lai xe', () => {
   const HERE = dirname(fileURLToPath(import.meta.url));
 
   const sourcesOf = (): { name: string; body: string }[] =>
-    ['toll.service.ts', 'toll-account.service.ts', 'toll.controller.ts', 'transport-toll.module.ts',
-     'toll.repository.ts', 'prisma-toll.repository.ts', 'in-memory-toll.repository.ts',
-     'toll-classification.ts', 'toll-statement-mapping.ts', 'toll.ports.ts', 'toll.types.ts'].map(
-      (name) => ({ name, body: readFileSync(resolve(HERE, name), 'utf8') }),
-    );
+    [
+      'toll.service.ts',
+      'toll-account.service.ts',
+      'toll.controller.ts',
+      'transport-toll.module.ts',
+      'toll.repository.ts',
+      'prisma-toll.repository.ts',
+      'in-memory-toll.repository.ts',
+      'toll-classification.ts',
+      'toll-statement-mapping.ts',
+      'toll.ports.ts',
+      'toll.types.ts',
+    ].map((name) => ({ name, body: readFileSync(resolve(HERE, name), 'utf8') }));
 
   it('khong tep nao nhap mot module cua so quy / luong / cong no', () => {
     const forbidden = [
@@ -140,5 +148,46 @@ describe('ETC khong bao gio cham so quy lai xe', () => {
     for (const word of ["'PAID'", "'SETTLED'", "'ACCOUNTED'", "'PAYABLE'"]) {
       expect(types, word).not.toContain(word);
     }
+  });
+});
+
+/**
+ * ===========================================================================
+ * MOT MA QUYEN DA KHAI KHONG CHUNG MINH CO MOT DUONG HTTP.
+ *
+ * Mot hang so trong `transport-actions.ts` va mot bai khoa danh sach do deu XANH ma van co the
+ * khong ton tai route nao dung ma do. Bai duoi day doc metadata that cua Nest tren
+ * `TollController` va doi chieu NGUOC: moi ma `transport.toll.*` phai duoc mot handler that su
+ * doi hoi.
+ */
+describe('moi ma quyen ETC deu co mot duong HTTP that', () => {
+  it('bon ma deu duoc mot handler cua TollController doi hoi', async () => {
+    await import('reflect-metadata');
+    const { TollController } = await import('./toll.controller.js');
+    const { TRANSPORT_ACTION_KEY } = await import('../transport-action.guard.js');
+
+    const prototype = TollController.prototype as unknown as Record<string, unknown>;
+    const required = new Set<string>();
+    for (const name of Object.getOwnPropertyNames(prototype)) {
+      if (name === 'constructor') continue;
+      const handler = prototype[name];
+      if (typeof handler !== 'function') continue;
+      const action = Reflect.getMetadata(TRANSPORT_ACTION_KEY, handler) as string | undefined;
+      if (action !== undefined) required.add(action);
+    }
+
+    expect([...required].sort()).toEqual([
+      'transport.toll.account.manage',
+      'transport.toll.account.read',
+      'transport.toll.import',
+      'transport.toll.review.read',
+      'transport.toll.review.resolve',
+    ]);
+  });
+
+  it('controller mang tien to route cua mien ETC', async () => {
+    await import('reflect-metadata');
+    const { TollController } = await import('./toll.controller.js');
+    expect(Reflect.getMetadata('path', TollController)).toBe('transport/toll');
   });
 });

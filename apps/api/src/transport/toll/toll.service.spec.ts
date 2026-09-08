@@ -316,7 +316,10 @@ describe('chong lap', () => {
   it('cung mot giao dich ve qua HAI nguon khac nhau van bi phat hien', async () => {
     await importManual(harness, [manual()]);
     // Nguon thu hai co them mot dong khac nen dau nguon KHAC — day khong phai mot lan nap lai.
-    const second = await importManual(harness, [manual(), manual({ passedAt: '01/09/2026 07:00' })]);
+    const second = await importManual(harness, [
+      manual(),
+      manual({ passedAt: '01/09/2026 07:00' }),
+    ]);
     expect(second.replayed).toBe(false);
     expect(second.candidates[0]?.matchState).toBe('DUPLICATE_CANDIDATE');
     expect(second.candidates[1]?.matchState).toBe('MATCHED');
@@ -407,7 +410,13 @@ describe('quyet dinh cua nguoi doi soat', () => {
     const result = await importManual(harness, [manual({ vehiclePlate: '30E-111.22' })]);
     const id = result.candidates[0]?.id ?? '';
     const updated = await harness.toll.review(
-      { candidateId: id, action: 'RESOLVE_VEHICLE', vehicleId: 'veh-2', duplicateOfCandidateId: null, note: 'doi chieu tay' },
+      {
+        candidateId: id,
+        action: 'RESOLVE_VEHICLE',
+        vehicleId: 'veh-2',
+        duplicateOfCandidateId: null,
+        note: 'doi chieu tay',
+      },
       'ke-toan',
     );
     expect(updated.vehicleId).toBe('veh-2');
@@ -431,7 +440,13 @@ describe('quyet dinh cua nguoi doi soat', () => {
     const result = await importManual(harness, [manual(), manual()]);
     const id = result.candidates[0]?.id ?? '';
     const updated = await harness.toll.review(
-      { candidateId: id, action: 'CLEAR_DUPLICATE', vehicleId: null, duplicateOfCandidateId: null, note: null },
+      {
+        candidateId: id,
+        action: 'CLEAR_DUPLICATE',
+        vehicleId: null,
+        duplicateOfCandidateId: null,
+        note: null,
+      },
       'ke-toan',
     );
     expect(updated.matchState).toBe('MATCHED');
@@ -452,11 +467,7 @@ describe('quyet dinh cua nguoi doi soat', () => {
     await review('CONFIRM', null);
     await review('REOPEN', null);
     const detail = await harness.toll.candidateDetail(id);
-    expect(detail.decisions.map((d) => d.action)).toEqual([
-      'RESOLVE_VEHICLE',
-      'CONFIRM',
-      'REOPEN',
-    ]);
+    expect(detail.decisions.map((d) => d.action)).toEqual(['RESOLVE_VEHICLE', 'CONFIRM', 'REOPEN']);
     expect(detail.candidate.reviewState).toBe('REOPENED');
   });
 

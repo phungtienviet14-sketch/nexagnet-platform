@@ -91,7 +91,11 @@ export class TollController {
   @Patch('accounts/:id')
   @Roles('ACCOUNTING', 'ADMIN')
   @RequiresTransportAction('transport.toll.account.manage')
-  updateAccount(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
+  updateAccount(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const { active } = this.parse(updateTollAccountSchema, body);
     return this.guard(() => this.accounts.setAccountActive(id, active, transportActorOf(request)));
   }

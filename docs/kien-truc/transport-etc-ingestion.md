@@ -3,9 +3,9 @@
 > **Trạng thái: `INGESTION FOUNDATION` · `SETTLEMENT POLICY NOT INVENTED`.**
 >
 > Tài liệu này KHÔNG thay thế [transport-etc-toll.md](transport-etc-toll.md) — nó **tiếp nối**.
-> Tài liệu kia trả lời *"nhà cung cấp phát ra hình dạng gì"* và dừng ở một hợp đồng cổng.
-> Tài liệu này trả lời *"làm sao đưa hình dạng đó vào hệ thống mà không biến nó thành sự thật
-> kế toán"*.
+> Tài liệu kia trả lời _"nhà cung cấp phát ra hình dạng gì"_ và dừng ở một hợp đồng cổng.
+> Tài liệu này trả lời _"làm sao đưa hình dạng đó vào hệ thống mà không biến nó thành sự thật
+> kế toán"_.
 >
 > Lane J · Issue #269 · Coordinator #266 · nền móng #237.
 > Đo lại ngày **08/09/2026**, `origin/main` = `571e1acbda3e5dbc12001a73c02ae41af54d4d1b`.
@@ -17,14 +17,14 @@
 #237 đo bằng **báo chí và trang phổ biến pháp luật**. Lane J đo lại bằng **văn bản gốc của Chính
 phủ và trang chính chủ của hai nhà cung cấp**, và ba điều đổi:
 
-| | #237 đo được | Lane J đo lại được |
-|---|---|---|
-| Ánh xạ tài khoản ↔ xe | "1 tài khoản → N xe" (nguồn: vietbao.vn) | **Điều 11 khoản 3 NĐ 119/2024/NĐ-CP** nói cả **CHIỀU NGƯỢC LẠI**, và chiều đó mới là ràng buộc |
-| Khiếu nại / điều chỉnh | *"Chưa đo được quy trình khiếu nại nào"* ⇒ không mô hình `Dispute` | VETC **tự công bố** cơ chế trừ 2 lần → **hoàn 1 giao dịch RIÊNG**, trễ hơn lần trừ |
-| Đường lấy dữ liệu | "hoá đơn điện tử + cổng khách hàng" | **Điều 26 khoản 2** đặt một **NGHĨA VỤ PHÁP LÝ** phải cung cấp thông tin giao dịch — *"theo thỏa thuận"* |
+|                        | #237 đo được                                                       | Lane J đo lại được                                                                                       |
+| ---------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Ánh xạ tài khoản ↔ xe  | "1 tài khoản → N xe" (nguồn: vietbao.vn)                           | **Điều 11 khoản 3 NĐ 119/2024/NĐ-CP** nói cả **CHIỀU NGƯỢC LẠI**, và chiều đó mới là ràng buộc           |
+| Khiếu nại / điều chỉnh | _"Chưa đo được quy trình khiếu nại nào"_ ⇒ không mô hình `Dispute` | VETC **tự công bố** cơ chế trừ 2 lần → **hoàn 1 giao dịch RIÊNG**, trễ hơn lần trừ                       |
+| Đường lấy dữ liệu      | "hoá đơn điện tử + cổng khách hàng"                                | **Điều 26 khoản 2** đặt một **NGHĨA VỤ PHÁP LÝ** phải cung cấp thông tin giao dịch — _"theo thỏa thuận"_ |
 
 Kết luận của #237 (`API_STATUS` chưa chứng minh được) **vẫn đứng**. Cái đổi là ta biết rõ hơn
-*vì sao* nó chưa chứng minh được, và *đường hợp pháp nào* để nó có thể được chứng minh sau này.
+_vì sao_ nó chưa chứng minh được, và _đường hợp pháp nào_ để nó có thể được chứng minh sau này.
 
 ---
 
@@ -32,9 +32,9 @@ Kết luận của #237 (`API_STATUS` chưa chứng minh được) **vẫn đứ
 
 ### 1.1. Điều 11 khoản 3 — bất biến hai chiều
 
-> *"Mỗi tài khoản giao thông có thể sử dụng để chi trả cho nhiều phương tiện tham gia giao thông
+> _"Mỗi tài khoản giao thông có thể sử dụng để chi trả cho nhiều phương tiện tham gia giao thông
 > thuộc sở hữu của chủ phương tiện; **mỗi phương tiện tham gia giao thông chỉ được nhận chi trả từ
-> một tài khoản giao thông**."*
+> một tài khoản giao thông**."_
 >
 > — [Nghị định 119/2024/NĐ-CP, toàn văn trên Cổng Xây dựng chính sách của Chính phủ](https://xaydungchinhsach.chinhphu.vn/toan-van-nghi-dinh-119-2024-nd-cp-quy-dinh-ve-thanh-toan-dien-tu-giao-thong-duong-bo-119240930194034842.htm)
 
@@ -47,7 +47,7 @@ Kết luận của #237 (`API_STATUS` chưa chứng minh được) **vẫn đứ
 
 Nên `TollAccountVehicleLink` **không phải** một bảng nối tự do. Nó là một **lịch sử có hiệu lực**
 mà tại mọi khoảnh khắc chỉ được có **một** dòng đang mở cho một xe. "Xe đổi tài khoản" (yêu cầu
-của #269 J2) chính là *đóng dòng cũ rồi mở dòng mới*, không phải *thêm một dòng thứ hai*.
+của #269 J2) chính là _đóng dòng cũ rồi mở dòng mới_, không phải _thêm một dòng thứ hai_.
 
 Đây là lý do bất biến đó được giữ bằng **một unique index bộ phận trong Postgres**, không bằng một
 lần kiểm ở tầng miền: kiểm ở tầng miền chỉ đúng khi có **một** người ghi.
@@ -69,8 +69,8 @@ Hai điều đọc ra được:
 
 ### 1.3. Điều 26 khoản 2 — nghĩa vụ cung cấp dữ liệu
 
-> *"Nhà cung cấp dịch vụ thanh toán điện tử giao thông có nghĩa vụ **cung cấp thông tin về giao
-> dịch qua tài khoản giao thông cho chủ phương tiện mở tài khoản giao thông theo thỏa thuận**."*
+> _"Nhà cung cấp dịch vụ thanh toán điện tử giao thông có nghĩa vụ **cung cấp thông tin về giao
+> dịch qua tài khoản giao thông cho chủ phương tiện mở tài khoản giao thông theo thỏa thuận**."_
 
 Câu này là **đường hợp pháp duy nhất** dẫn tới một luồng dữ liệu tự động, và nó nói rõ hai vế:
 
@@ -91,43 +91,43 @@ ai đọc nhầm hai điều này thành "có API".
 
 ## 2. Đo được gì ở hai nhà cung cấp — RIÊNG từng bên
 
-Yêu cầu của #269: *"VETC và ePass báo evidence RIÊNG."* Nên bảng dưới **không** có một dòng nào
+Yêu cầu của #269: _"VETC và ePass báo evidence RIÊNG."_ Nên bảng dưới **không** có một dòng nào
 nói "hai nhà cung cấp đều...".
 
 ### 2.1. VETC — Công ty TNHH thu phí tự động VETC
 
-| Hạng mục | Đo được | Phân loại | Nguồn |
-|---|---|---|---|
-| Cổng khách hàng | `customer.vetc.com.vn`, đăng nhập rồi **"Tra cứu hóa đơn"** | `PUBLICLY DOCUMENTED` | [vetc.com.vn/hoi-dap](https://vetc.com.vn/hoi-dap.html) Q2 |
-| Mở tài khoản doanh nghiệp | "Giấy đề nghị mở tài khoản theo mẫu VETC" + "Giấy phép Đăng ký kinh doanh" | `PUBLICLY DOCUMENTED` | như trên, Q4 |
-| Chuyển xe cá nhân → tài khoản doanh nghiệp | Có thủ tục, làm tại điểm dịch vụ | `PUBLICLY DOCUMENTED` | như trên, Q8 |
-| Hoá đơn điện tử | **Hai chế độ**: từng giao dịch (theo ngày), hoặc **gộp tháng — tối đa 1.000 giao dịch/hoá đơn** | `PUBLICLY DOCUMENTED` | [hướng dẫn KH doanh nghiệp](https://vetc.com.vn/huong-dan-khach-hang-doanh-nghiep-xuat-hoa-don-dien-tu-s34.html) |
-| Bảng kê giao dịch xuất Excel | **KHÔNG xác nhận được trên trang chính chủ** | `CUSTOMER SAMPLE REQUIRED` | — |
-| Trừ tiền 2 lần → hoàn tiền | Hoàn **trong ~2 giờ**, là **một giao dịch RIÊNG**, kèm thông báo riêng | `PUBLICLY DOCUMENTED` | [VETC phản hồi](https://vetc.com.vn/vetc-phan-hoi-ve-viec-cham-hoan-tien-tre-thong-bao-voi-nghiep-vu2-lan-tru-tien-1-lan-hoan-tien--n129.html) |
-| Tài liệu API công khai | Không tìm thấy | `NOT PUBLICLY PROVEN` | — |
+| Hạng mục                                   | Đo được                                                                                         | Phân loại                  | Nguồn                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cổng khách hàng                            | `customer.vetc.com.vn`, đăng nhập rồi **"Tra cứu hóa đơn"**                                     | `PUBLICLY DOCUMENTED`      | [vetc.com.vn/hoi-dap](https://vetc.com.vn/hoi-dap.html) Q2                                                                                     |
+| Mở tài khoản doanh nghiệp                  | "Giấy đề nghị mở tài khoản theo mẫu VETC" + "Giấy phép Đăng ký kinh doanh"                      | `PUBLICLY DOCUMENTED`      | như trên, Q4                                                                                                                                   |
+| Chuyển xe cá nhân → tài khoản doanh nghiệp | Có thủ tục, làm tại điểm dịch vụ                                                                | `PUBLICLY DOCUMENTED`      | như trên, Q8                                                                                                                                   |
+| Hoá đơn điện tử                            | **Hai chế độ**: từng giao dịch (theo ngày), hoặc **gộp tháng — tối đa 1.000 giao dịch/hoá đơn** | `PUBLICLY DOCUMENTED`      | [hướng dẫn KH doanh nghiệp](https://vetc.com.vn/huong-dan-khach-hang-doanh-nghiep-xuat-hoa-don-dien-tu-s34.html)                               |
+| Bảng kê giao dịch xuất Excel               | **KHÔNG xác nhận được trên trang chính chủ**                                                    | `CUSTOMER SAMPLE REQUIRED` | —                                                                                                                                              |
+| Trừ tiền 2 lần → hoàn tiền                 | Hoàn **trong ~2 giờ**, là **một giao dịch RIÊNG**, kèm thông báo riêng                          | `PUBLICLY DOCUMENTED`      | [VETC phản hồi](https://vetc.com.vn/vetc-phan-hoi-ve-viec-cham-hoan-tien-tre-thong-bao-voi-nghiep-vu2-lan-tru-tien-1-lan-hoan-tien--n129.html) |
+| Tài liệu API công khai                     | Không tìm thấy                                                                                  | `NOT PUBLICLY PROVEN`      | —                                                                                                                                              |
 
 **"Tối đa 1.000 giao dịch/hoá đơn" là một dữ kiện thiết kế, không phải một con số vui:** một tháng
 của B có thể về **nhiều tệp nguồn**, và cùng một lượt qua trạm sẽ **không** bao giờ nằm ở hai tệp —
-nhưng ta không được *giả định* điều đó. Đó là lý do khoá chống trùng ở §5 làm việc theo **dấu vân
+nhưng ta không được _giả định_ điều đó. Đó là lý do khoá chống trùng ở §5 làm việc theo **dấu vân
 dòng xuyên tệp**, chứ không theo `(tệp, số dòng)`.
 
 ### 2.2. ePass — Công ty CP Giao thông số Việt Nam (VDTC, thuộc Viettel)
 
-| Hạng mục | Đo được | Phân loại | Nguồn |
-|---|---|---|---|
-| Lịch sử giao dịch | Mục **"Lịch sử giao dịch" / "Giao dịch thu phí"**: tên trạm, thời điểm, **biển số**, số tiền trừ, số dư còn lại | `PUBLICLY DOCUMENTED` | [giaothongso.com.vn](https://giaothongso.com.vn/cach-quan-ly-giao-dich-etc-tren-ung-dung-thanh-toan-epass/) |
-| Lọc | theo **"ngày"**, **"biển số xe"**, **"trạm thu phí"** | `PUBLICLY DOCUMENTED` | như trên |
-| Xuất bảng kê | **"Xuất file" / "Tải báo cáo"** dạng **PDF hoặc Excel**, có gửi email | `PUBLICLY DOCUMENTED` | như trên |
-| Mở tài khoản doanh nghiệp | Đăng ký được **trên website**; hồ sơ: giấy phép ĐKKD, giấy đề nghị mở tài khoản, giấy tờ tuỳ thân người đại diện, đăng ký xe, đăng kiểm | `PUBLICLY DOCUMENTED` | [giaothongso.com.vn](https://giaothongso.com.vn/mo-tai-khoan-thu-phi-khong-dung-epass/) |
-| Một tài khoản doanh nghiệp ↔ nhiều xe | **Trang chính chủ KHÔNG nói rõ**; chỉ NĐ 119 nói (§1.1) | `PUBLICLY DOCUMENTED` (tầng pháp lý) / `CUSTOMER SAMPLE REQUIRED` (tầng sản phẩm) | — |
-| Tên cột / thứ tự cột của tệp xuất | Không đo được | `CUSTOMER SAMPLE REQUIRED` | — |
-| Điều chỉnh / hoàn tiền thể hiện thế nào trên tệp xuất | Không đo được | `UNKNOWN` | — |
-| Tài liệu API công khai | Không tìm thấy | `NOT PUBLICLY PROVEN` | — |
-| `epass-vdtc.com.vn` | **Chứng thư TLS hết hạn** lúc đo (08/09/2026) — không lấy được nội dung qua HTTPS hợp lệ | ghi nhận chất lượng nguồn | — |
+| Hạng mục                                              | Đo được                                                                                                                                 | Phân loại                                                                         | Nguồn                                                                                                       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Lịch sử giao dịch                                     | Mục **"Lịch sử giao dịch" / "Giao dịch thu phí"**: tên trạm, thời điểm, **biển số**, số tiền trừ, số dư còn lại                         | `PUBLICLY DOCUMENTED`                                                             | [giaothongso.com.vn](https://giaothongso.com.vn/cach-quan-ly-giao-dich-etc-tren-ung-dung-thanh-toan-epass/) |
+| Lọc                                                   | theo **"ngày"**, **"biển số xe"**, **"trạm thu phí"**                                                                                   | `PUBLICLY DOCUMENTED`                                                             | như trên                                                                                                    |
+| Xuất bảng kê                                          | **"Xuất file" / "Tải báo cáo"** dạng **PDF hoặc Excel**, có gửi email                                                                   | `PUBLICLY DOCUMENTED`                                                             | như trên                                                                                                    |
+| Mở tài khoản doanh nghiệp                             | Đăng ký được **trên website**; hồ sơ: giấy phép ĐKKD, giấy đề nghị mở tài khoản, giấy tờ tuỳ thân người đại diện, đăng ký xe, đăng kiểm | `PUBLICLY DOCUMENTED`                                                             | [giaothongso.com.vn](https://giaothongso.com.vn/mo-tai-khoan-thu-phi-khong-dung-epass/)                     |
+| Một tài khoản doanh nghiệp ↔ nhiều xe                 | **Trang chính chủ KHÔNG nói rõ**; chỉ NĐ 119 nói (§1.1)                                                                                 | `PUBLICLY DOCUMENTED` (tầng pháp lý) / `CUSTOMER SAMPLE REQUIRED` (tầng sản phẩm) | —                                                                                                           |
+| Tên cột / thứ tự cột của tệp xuất                     | Không đo được                                                                                                                           | `CUSTOMER SAMPLE REQUIRED`                                                        | —                                                                                                           |
+| Điều chỉnh / hoàn tiền thể hiện thế nào trên tệp xuất | Không đo được                                                                                                                           | `UNKNOWN`                                                                         | —                                                                                                           |
+| Tài liệu API công khai                                | Không tìm thấy                                                                                                                          | `NOT PUBLICLY PROVEN`                                                             | —                                                                                                           |
+| `epass-vdtc.com.vn`                                   | **Chứng thư TLS hết hạn** lúc đo (08/09/2026) — không lấy được nội dung qua HTTPS hợp lệ                                                | ghi nhận chất lượng nguồn                                                         | —                                                                                                           |
 
 **ePass có bằng chứng công khai MẠNH HƠN VETC ở đúng một điểm quan trọng:** trang chính chủ nói
 thẳng là **xuất được file Excel**, và nói rõ **biển số nằm trong dòng giao dịch**. Với VETC, thứ
-xác nhận được chỉ là *hoá đơn*. Hai bên **không** cùng một mức bằng chứng, nên §6 không cấp cho
+xác nhận được chỉ là _hoá đơn_. Hai bên **không** cùng một mức bằng chứng, nên §6 không cấp cho
 chúng cùng một trạng thái sẵn sàng.
 
 ### 2.3. Bốn phân loại — bảng gọn
@@ -188,14 +188,14 @@ tại**, và **không có adapter nào được đăng ký lúc chạy**. Một 
 
 ## 4. Ranh giới — thứ lane này KHÔNG được phép làm
 
-| Ranh giới | Vì sao |
-|---|---|
-| **Không chạm Sổ quỹ lái xe** | #229 §8 + #237: ETC là **công ty trả**. Giữ bằng KIỂU (`TollNeverTouchesDriverFund`), không bằng kỷ luật |
-| **Không sinh công nợ / phải trả / settlement** | Chưa ai mô tả chính sách. Một dòng `TOP_UP` **không** là một nghĩa vụ thanh toán |
-| **Không suy ra nghĩa vụ từ dấu của số tiền** | Quy ước dấu của tệp nguồn còn `CUSTOMER SAMPLE REQUIRED` |
-| **Không nhầm với `Phí cầu đường` của `transportCosting`** | Đó là khoản **lái xe ứng tiền mặt** rồi đề nghị hoàn. ETC đi thẳng từ ví công ty. Hai dòng tiền khác nhau, không gộp |
-| **Không gọi kết quả đối soát là `paid`/`settled`/`accounted`** | #269 J7. Trạng thái chỉ nói về **khớp**, không nói về **tiền đã trả** |
-| **Không tự tạo xe / tài khoản từ một tệp nhập** | Cùng quy ước với `UNKNOWN_VEHICLE` của nhiên liệu |
+| Ranh giới                                                      | Vì sao                                                                                                               |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Không chạm Sổ quỹ lái xe**                                   | #229 §8 + #237: ETC là **công ty trả**. Giữ bằng KIỂU (`TollNeverTouchesDriverFund`), không bằng kỷ luật             |
+| **Không sinh công nợ / phải trả / settlement**                 | Chưa ai mô tả chính sách. Một dòng `TOP_UP` **không** là một nghĩa vụ thanh toán                                     |
+| **Không suy ra nghĩa vụ từ dấu của số tiền**                   | Quy ước dấu của tệp nguồn còn `CUSTOMER SAMPLE REQUIRED`                                                             |
+| **Không nhầm với `Phí cầu đường` của `transportCosting`**      | Đó là khoản **lái xe ứng tiền mặt** rồi đề nghị hoàn. ETC đi thẳng từ ví công ty. Hai dòng tiền khác nhau, không gộp |
+| **Không gọi kết quả đối soát là `paid`/`settled`/`accounted`** | #269 J7. Trạng thái chỉ nói về **khớp**, không nói về **tiền đã trả**                                                |
+| **Không tự tạo xe / tài khoản từ một tệp nhập**                | Cùng quy ước với `UNKNOWN_VEHICLE` của nhiên liệu                                                                    |
 
 ---
 
@@ -217,7 +217,7 @@ số dư suy ra: 0đ   — SAI. Nhà cung cấp đã trừ 52.000 rồi hoàn 52
 
 Nên: trùng **trong cùng một tệp** là `DUPLICATE_CANDIDATE` — một **trạng thái cần người nhìn**,
 **không** phải một dòng bị vứt. Cái được vứt chỉ là **cùng một tệp nạp hai lần** (§5.2), vì đó là
-trùng của *hành động nhập*, không phải trùng của *sự kiện thật*.
+trùng của _hành động nhập_, không phải trùng của _sự kiện thật_.
 
 ### 5.2. Chống lặp có HAI tầng, vì có HAI loại lặp
 
@@ -229,8 +229,8 @@ tầng DÒNG  — cùng sự kiện qua 2 tệp -> dấu vân dòng -> đánh d�
 Tầng nguồn **tất định và an toàn** ⇒ tự động. Tầng dòng **không** tất định (§2.3: chưa biết có
 tham chiếu giao dịch duy nhất nào) ⇒ **không** tự quyết, chỉ nêu.
 
-#269 J4 cấm *"invent a universal `providerReference` uniqueness rule if either provider does not
-guarantee one"*. Không bên nào bảo đảm. Nên dấu vân là một **hợp thành có tài liệu**:
+#269 J4 cấm _"invent a universal `providerReference` uniqueness rule if either provider does not
+guarantee one"_. Không bên nào bảo đảm. Nên dấu vân là một **hợp thành có tài liệu**:
 
 ```text
 fingerprint = sha256( provider | accountNo | kind | plateChuanHoa
@@ -292,13 +292,13 @@ trong khi ePass đã mở, hoặc ngược lại.
 
 ## 7. Còn treo — và ai gỡ được
 
-| Ẩn số | Ai trả lời | Chặn cái gì |
-|---|---|---|
-| Một tệp bảng kê/hoá đơn **thật** của VETC | B (khách) | Bộ cột VETC ⇒ đường chạy VETC |
-| Một tệp xuất **thật** của ePass | B (khách) | Bộ cột ePass ⇒ đường chạy ePass |
-| Tài khoản giao thông đứng tên **công ty** hay **cá nhân** | B | Nếu cá nhân: có một dòng tiền công ty↔cá nhân mà hôm nay **không mô hình nào của ta có** |
-| Có thoả thuận cung cấp dữ liệu theo Đ.26 kh.2 không | B ↔ nhà cung cấp | Đường `API` |
-| Đối soát theo tháng hay theo chuyến | B | Kỳ đối soát — **không** chặn phần nạp dữ liệu |
+| Ẩn số                                                     | Ai trả lời       | Chặn cái gì                                                                              |
+| --------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------- |
+| Một tệp bảng kê/hoá đơn **thật** của VETC                 | B (khách)        | Bộ cột VETC ⇒ đường chạy VETC                                                            |
+| Một tệp xuất **thật** của ePass                           | B (khách)        | Bộ cột ePass ⇒ đường chạy ePass                                                          |
+| Tài khoản giao thông đứng tên **công ty** hay **cá nhân** | B                | Nếu cá nhân: có một dòng tiền công ty↔cá nhân mà hôm nay **không mô hình nào của ta có** |
+| Có thoả thuận cung cấp dữ liệu theo Đ.26 kh.2 không       | B ↔ nhà cung cấp | Đường `API`                                                                              |
+| Đối soát theo tháng hay theo chuyến                       | B                | Kỳ đối soát — **không** chặn phần nạp dữ liệu                                            |
 
 **Không ẩn số nào ở trên chặn phần trung tính nhà cung cấp** đã dựng ở §6. Chúng chặn đúng hai
 thứ: bộ cột của từng nhà cung cấp, và phần hạch toán — mà phần hạch toán thì cố ý chưa được viết.

@@ -81,7 +81,11 @@ export const tollImportSchema = z
       });
     }
     if (value.sourceKind === 'MANUAL' && (value.rows ?? []).length === 0) {
-      ctx.addIssue({ code: 'custom', path: ['rows'], message: 'nhap tay thi phai co it nhat mot dong' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['rows'],
+        message: 'nhap tay thi phai co it nhat mot dong',
+      });
     }
   });
 

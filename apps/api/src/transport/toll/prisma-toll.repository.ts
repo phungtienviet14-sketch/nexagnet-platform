@@ -250,7 +250,10 @@ export class PrismaTollRepository extends TollRepository {
   async setAccountActive(id: string, active: boolean): Promise<TollAccount> {
     const existing = await this.findAccount(id);
     if (!existing) {
-      throw TransportDomainError.notFound('TOLL_ACCOUNT_NOT_FOUND', `Khong tim thay tai khoan ${id}`);
+      throw TransportDomainError.notFound(
+        'TOLL_ACCOUNT_NOT_FOUND',
+        `Khong tim thay tai khoan ${id}`,
+      );
     }
     return toAccount(
       await model(this.prisma, 'transportTollAccount').update({ where: { id }, data: { active } }),
@@ -343,7 +346,10 @@ export class PrismaTollRepository extends TollRepository {
   ): Promise<TollAccountVehicleLink> {
     const link = await this.findLink(id);
     if (!link) {
-      throw TransportDomainError.notFound('TOLL_LINK_NOT_FOUND', `Khong tim thay ban ghi noi ${id}`);
+      throw TransportDomainError.notFound(
+        'TOLL_LINK_NOT_FOUND',
+        `Khong tim thay ban ghi noi ${id}`,
+      );
     }
     if (link.effectiveTo !== null) {
       throw TransportDomainError.conflict(
@@ -399,7 +405,10 @@ export class PrismaTollRepository extends TollRepository {
   async createImportWithCandidates(input: CreateTollImportInput): Promise<CreatedTollImport> {
     try {
       const created = await this.prisma.$transaction(async (tx) => {
-        const importRow: ImportRow = await model(tx as unknown as PrismaService, 'transportTollImport').create({
+        const importRow: ImportRow = await model(
+          tx as unknown as PrismaService,
+          'transportTollImport',
+        ).create({
           data: {
             provider: input.provider,
             sourceKind: input.sourceKind,
@@ -415,28 +424,30 @@ export class PrismaTollRepository extends TollRepository {
           },
         });
 
-        await model(tx as unknown as PrismaService, 'transportTollTransactionCandidate').createMany({
-          data: input.candidates.map((candidate) => ({
-            importId: importRow.id,
-            provider: input.provider,
-            rowNumber: candidate.rowNumber,
-            parseStatus: candidate.parseStatus,
-            rejectReason: candidate.rejectReason,
-            accountNoRaw: candidate.accountNoRaw,
-            accountId: candidate.accountId,
-            kind: candidate.kind,
-            vehiclePlateRaw: candidate.vehiclePlateRaw,
-            vehicleId: candidate.vehicleId,
-            passedAt: candidate.passedAt,
-            businessDate: candidate.businessDate,
-            signedAmount: toStoredAmount(candidate.signedAmount),
-            stationLabel: candidate.stationLabel,
-            providerRef: candidate.providerRef,
-            fingerprint: candidate.fingerprint,
-            matchState: candidate.matchState,
-            rawValues: candidate.rawValues,
-          })),
-        });
+        await model(tx as unknown as PrismaService, 'transportTollTransactionCandidate').createMany(
+          {
+            data: input.candidates.map((candidate) => ({
+              importId: importRow.id,
+              provider: input.provider,
+              rowNumber: candidate.rowNumber,
+              parseStatus: candidate.parseStatus,
+              rejectReason: candidate.rejectReason,
+              accountNoRaw: candidate.accountNoRaw,
+              accountId: candidate.accountId,
+              kind: candidate.kind,
+              vehiclePlateRaw: candidate.vehiclePlateRaw,
+              vehicleId: candidate.vehicleId,
+              passedAt: candidate.passedAt,
+              businessDate: candidate.businessDate,
+              signedAmount: toStoredAmount(candidate.signedAmount),
+              stationLabel: candidate.stationLabel,
+              providerRef: candidate.providerRef,
+              fingerprint: candidate.fingerprint,
+              matchState: candidate.matchState,
+              rawValues: candidate.rawValues,
+            })),
+          },
+        );
 
         const rows: CandidateRow[] = await model(
           tx as unknown as PrismaService,

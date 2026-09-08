@@ -33,9 +33,9 @@ describe('mot xe chi nhan chi tra tu MOT tai khoan tai mot thoi diem', () => {
   });
 
   it('hai doan lien tiep KHONG chong nhau', () => {
-    expect(
-      tollPeriodsOverlap(period('2026-01-01', '2026-03-31'), period('2026-04-01', null)),
-    ).toBe(false);
+    expect(tollPeriodsOverlap(period('2026-01-01', '2026-03-31'), period('2026-04-01', null))).toBe(
+      false,
+    );
   });
 
   /**
@@ -45,21 +45,21 @@ describe('mot xe chi nhan chi tra tu MOT tai khoan tai mot thoi diem', () => {
    * nhan chi tra tu HAI tai khoan. Do la ngay ma mot luot qua tram khong biet thuoc ve ai.
    */
   it('dong va mo trong CUNG mot ngay VAN la chong nhau', () => {
-    expect(
-      tollPeriodsOverlap(period('2026-01-01', '2026-03-31'), period('2026-03-31', null)),
-    ).toBe(true);
+    expect(tollPeriodsOverlap(period('2026-01-01', '2026-03-31'), period('2026-03-31', null))).toBe(
+      true,
+    );
   });
 
   it('doan moi nam gon truoc doan cu thi khong chong', () => {
-    expect(
-      tollPeriodsOverlap(period('2026-06-01', null), period('2026-01-01', '2026-05-31')),
-    ).toBe(false);
+    expect(tollPeriodsOverlap(period('2026-06-01', null), period('2026-01-01', '2026-05-31'))).toBe(
+      false,
+    );
   });
 
   it('doan moi bao trum doan cu thi chong', () => {
-    expect(
-      tollPeriodsOverlap(period('2026-02-01', '2026-02-28'), period('2026-01-01', null)),
-    ).toBe(true);
+    expect(tollPeriodsOverlap(period('2026-02-01', '2026-02-28'), period('2026-01-01', null))).toBe(
+      true,
+    );
   });
 
   it('va cham duoc do tren MOI doan da co cua chiec xe do, khong chi doan cuoi', () => {

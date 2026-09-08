@@ -83,7 +83,10 @@ export class InMemoryTollRepository extends TollRepository {
   async setAccountActive(id: string, active: boolean): Promise<TollAccount> {
     const account = this.accounts.get(id);
     if (!account) {
-      throw TransportDomainError.notFound('TOLL_ACCOUNT_NOT_FOUND', `Khong tim thay tai khoan ${id}`);
+      throw TransportDomainError.notFound(
+        'TOLL_ACCOUNT_NOT_FOUND',
+        `Khong tim thay tai khoan ${id}`,
+      );
     }
     const updated: TollAccount = { ...account, active, updatedAt: new Date() };
     this.accounts.set(id, updated);
@@ -137,7 +140,10 @@ export class InMemoryTollRepository extends TollRepository {
   ): Promise<TollAccountVehicleLink> {
     const link = this.links.get(id);
     if (!link) {
-      throw TransportDomainError.notFound('TOLL_LINK_NOT_FOUND', `Khong tim thay ban ghi noi ${id}`);
+      throw TransportDomainError.notFound(
+        'TOLL_LINK_NOT_FOUND',
+        `Khong tim thay ban ghi noi ${id}`,
+      );
     }
     if (link.effectiveTo !== null) {
       throw TransportDomainError.conflict(
@@ -233,11 +239,18 @@ export class InMemoryTollRepository extends TollRepository {
 
   private matching(filter: TollCandidateFilter): TollTransactionCandidateRecord[] {
     return [...this.candidates.values()]
-      .filter((candidate) => filter.provider === undefined || candidate.provider === filter.provider)
-      .filter((candidate) => filter.importId === undefined || candidate.importId === filter.importId)
-      .filter((candidate) => filter.accountId === undefined || candidate.accountId === filter.accountId)
       .filter(
-        (candidate) => filter.matchState === undefined || candidate.matchState === filter.matchState,
+        (candidate) => filter.provider === undefined || candidate.provider === filter.provider,
+      )
+      .filter(
+        (candidate) => filter.importId === undefined || candidate.importId === filter.importId,
+      )
+      .filter(
+        (candidate) => filter.accountId === undefined || candidate.accountId === filter.accountId,
+      )
+      .filter(
+        (candidate) =>
+          filter.matchState === undefined || candidate.matchState === filter.matchState,
       )
       .filter(
         (candidate) =>

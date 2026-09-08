@@ -49,7 +49,14 @@ function offsetMinutes(instant: Date, timeZone: string): number {
     Number(parts.find((part) => part.type === type)?.value ?? '0');
   // `hour12: false` co the tra ve gio 24 o nua dem tren mot so moi truong ICU.
   const hour = pick('hour') % 24;
-  const asUtc = Date.UTC(pick('year'), pick('month') - 1, pick('day'), hour, pick('minute'), pick('second'));
+  const asUtc = Date.UTC(
+    pick('year'),
+    pick('month') - 1,
+    pick('day'),
+    hour,
+    pick('minute'),
+    pick('second'),
+  );
   return (asUtc - instant.getTime()) / 60_000;
 }
 
@@ -61,7 +68,14 @@ function offsetMinutes(instant: Date, timeZone: string): number {
  * o dung nhung ngay chuyen giao — kieu sai chi lo ra hai lan mot nam.
  */
 function fromWallClock(wall: Wall, timeZone: string): Date | null {
-  const naiveUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second);
+  const naiveUtc = Date.UTC(
+    wall.year,
+    wall.month - 1,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second,
+  );
   if (Number.isNaN(naiveUtc)) return null;
 
   let instant = new Date(naiveUtc - offsetMinutes(new Date(naiveUtc), timeZone) * 60_000);
@@ -105,7 +119,8 @@ export function parseTollPassedAt(value: string, timeZone: string): Date | null 
 
   const matched = NAIVE.exec(text);
   if (matched === null) return null;
-  const [, first = '', second = '', third = '', hour = '0', minute = '0', secondPart = '0'] = matched;
+  const [, first = '', second = '', third = '', hour = '0', minute = '0', secondPart = '0'] =
+    matched;
 
   // `2026-08-31` (nam dung dau) hay `31/08/2026` (ngay dung dau) — phan biet bang DO DAI cua nhom
   // dau, khong bang gia tri. Mot bo doan theo gia tri se doc `03/04/2026` hai kieu o hai tep.
