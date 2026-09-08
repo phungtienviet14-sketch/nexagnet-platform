@@ -442,6 +442,19 @@ export class PrismaMovementRepository extends MovementRepository {
     return row ? toAssignment(row) : null;
   }
 
+  async listOpenRunsForDriver(driverId: string): Promise<VehicleRun[]> {
+    // `@@index([driverId])` tren `TransportRunAssignment` phuc vu dung truy van nay. Loc trang thai
+    // vong chay o DB chu khong trong bo nho: mot lai xe lau nam co hang tram ban phan cong da dong.
+    const rows: RunRow[] = await model(this.prisma, 'transportVehicleRun').findMany({
+      where: {
+        status: { in: ['PLANNED', 'ACTIVE'] },
+        assignments: { some: { driverId, effectiveTo: null } },
+      },
+      orderBy: { code: 'asc' },
+    });
+    return rows.map(toRun);
+  }
+
   async findTripLink(tripId: string): Promise<TripRunLegLink | null> {
     const row = await model(this.prisma, 'transportTripRunLegLink').findUnique({
       where: { tripId },

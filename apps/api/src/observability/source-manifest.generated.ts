@@ -304,6 +304,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "MovementService.projectTrip",
       "filePath": "apps/api/src/transport/movement/movement.service.ts"
     },
+    "site_intake.confirm": {
+      "filePath": "apps/api/src/transport/site-intake/site-intake.service.ts"
+    },
+    "site_intake.propose": {
+      "filePath": "apps/api/src/transport/site-intake/site-intake.service.ts"
+    },
     "source_truth.dealer.upsert": {
       "filePath": "apps/api/src/mcp/server.ts",
       "line": 279
@@ -445,12 +451,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/costing/driver-fund.controller.ts",
       "line": 124
     },
-    "transport.counterparty.manage": {
-      "filePath": "apps/api/src/transport/counterparty/counterparty.controller.ts"
-    },
-    "transport.counterparty.read": {
-      "filePath": "apps/api/src/transport/counterparty/counterparty.controller.ts"
-    },
     "transport.customer.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
@@ -484,6 +484,14 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "DriverSettlementSelfController.statement",
       "filePath": "apps/api/src/transport/driver-settlement/driver-settlement-self.controller.ts",
       "line": 34
+    },
+    "transport.driver.self.site_intake.confirm": {
+      "functionName": "DriverSiteIntakeController.confirm",
+      "filePath": "apps/api/src/transport/site-intake/driver-site-intake.controller.ts",
+      "line": 75
+    },
+    "transport.driver.self.site_intake.propose": {
+      "filePath": "apps/api/src/transport/site-intake/driver-site-intake.controller.ts"
     },
     "transport.driver.self.tracking.report": {
       "functionName": "DriverTrackingController.report",

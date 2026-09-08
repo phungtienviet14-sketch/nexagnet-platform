@@ -1712,3 +1712,82 @@ export interface FinanceSummaryView {
   readonly currency: FinanceCurrencyCoverage;
   readonly unavailableSources: readonly FinanceSource[];
 }
+
+/* ------------------------------------------------------------------ *
+ * NHAN VIEC TAI DIA DIEM A (`#267` Lane H)
+ * ------------------------------------------------------------------ */
+
+/**
+ * MUC DO TIN cua vi tri da de nghi ra mot lan nhan viec.
+ *
+ * `SERVER_BOUND` la ban dinh vi da qua duong chung cu cua Lane B; `DRIVER_REPORTED` la cap so may
+ * khach doc len, hoac khong co gi ca. Man hinh NOI RA nhan nay thay vi giau: mot lan nhan viec
+ * khong co ban dinh vi la mot su that ma nguoi doi soat sau nay can doc duoc.
+ */
+export type SiteIntakeLocationTrust = 'SERVER_BOUND' | 'DRIVER_REPORTED';
+
+export type SiteCandidateConfidence = 'INSIDE' | 'NEAR';
+
+export type SiteIntakeLocationUnusableReason =
+  'COORDINATE_INVALID' | 'ACCURACY_UNUSABLE' | 'LOCATION_STALE';
+
+export interface SiteCandidateView {
+  readonly siteId: string;
+  readonly siteName: string;
+  readonly address: string | null;
+  readonly counterpartyId: string;
+  readonly counterpartyName: string;
+  readonly distanceMetres: number;
+  readonly confidence: SiteCandidateConfidence;
+}
+
+export interface SiteIntakeOpenRunView {
+  readonly runId: string;
+  readonly code: string;
+  readonly status: VehicleRunStatus;
+}
+
+/** DE NGHI cua may chu. `canCreate` la thu man hinh doc de biet hien nut nao. */
+export interface SiteIntakeProposal {
+  readonly outcome: 'UNIQUE' | 'AMBIGUOUS' | 'NO_MATCH' | 'LOCATION_UNUSABLE';
+  readonly locationUnusable: SiteIntakeLocationUnusableReason | null;
+  readonly candidates: readonly SiteCandidateView[];
+  readonly truncated: boolean;
+  readonly locationTrust: SiteIntakeLocationTrust;
+  readonly openRuns: readonly SiteIntakeOpenRunView[];
+  readonly canCreate: boolean;
+}
+
+export interface SiteIntakeResult {
+  readonly intakeId: string;
+  readonly runId: string;
+  readonly runCode: string;
+  readonly legId: string;
+  readonly siteId: string;
+  readonly siteName: string;
+  readonly counterpartyName: string;
+  readonly locationTrust: SiteIntakeLocationTrust;
+  readonly distanceMetres: number | null;
+  readonly destinationPending: boolean;
+  readonly businessDate: BusinessDate;
+  readonly replayed: boolean;
+}
+
+/**
+ * VI TRI gui kem — BA hinh dang, va may chu tu choi hinh dang thu tu.
+ *
+ * Hoac `observationId` mot minh, hoac `latitude` + `longitude`, hoac khong gi ca. Gui ca hai nguon
+ * bi tu choi thay vi lang le uu tien mot ben.
+ */
+export interface SiteIntakeLocationInput {
+  readonly latitude?: number;
+  readonly longitude?: number;
+  readonly accuracyMetres?: number | null;
+  readonly observationId?: string;
+}
+
+export interface ConfirmSiteIntakeInput extends SiteIntakeLocationInput {
+  readonly siteId: string;
+  readonly clientEventId: string;
+  readonly destinationLabel?: string;
+}

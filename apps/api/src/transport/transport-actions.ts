@@ -355,6 +355,23 @@ export const TRANSPORT_ACTIONS = [
    * bao dam be mat lai xe khong bao gio cham toi duong van hanh.
    */
   'transport.driver.self.checkpoint.record',
+  /**
+   * NHAN VIEC TAI DIA DIEM A CUA CHINH MINH — `#267` H2/H4. Lai xe hoi "toi dang o dau", roi xac
+   * nhan de mo mot vong chay toi thieu.
+   *
+   * HAI ma chu khong mot, va do la ranh gioi ma ca `#267` xoay quanh: `.propose` la mot phep DOC
+   * ma man hinh goi lai moi lan lai xe keo de lam moi — no khong ghi mot hang nao. `.confirm` TAO
+   * ra mot vong chay. Gop chung lai se lam cau *"khong duoc lang le tao chuyen chi vi mot thiet bi
+   * di vao hang rao"* thanh mot loi khuyen trong tai lieu thay vi mot ranh gioi quyen.
+   *
+   * Mot khach muon cho lai xe XEM de nghi nhung chua muon cho ho tu tao chuyen se can dung su
+   * khac biet do — va do la mot cau hinh hop le, khong phai mot truong hop tuong tuong.
+   *
+   * Cong THAT nam o `SiteIntakeService` (`Driver.authUserId`, so huu ban dinh vi, chan vong chay
+   * dang mo); hai ma nay chi bao dam be mat lai xe khong bao gio cham toi duong van hanh.
+   */
+  'transport.driver.self.site_intake.propose',
+  'transport.driver.self.site_intake.confirm',
   /* --- `transport-checkpoint` (Lane F, Issue #243) --- */
   /**
    * DOC dong thoi gian van hanh cua mot chuyen — moc, giai doan tung chang, canh bao thieu chung
@@ -502,6 +519,8 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.tracking.stop',
   'transport.driver.self.proof.record',
   'transport.driver.self.checkpoint.record',
+  'transport.driver.self.site_intake.propose',
+  'transport.driver.self.site_intake.confirm',
 ];
 
 /**

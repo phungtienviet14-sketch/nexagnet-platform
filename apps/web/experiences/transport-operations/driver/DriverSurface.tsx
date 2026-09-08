@@ -28,6 +28,7 @@ import {
   toDriverTripCard,
 } from '../workspace/driver';
 import { toDriverPayslipRows } from '../workspace/payroll';
+import { DriverSiteIntake } from './SiteIntakeScreen';
 
 /**
  * BE MAT LAI XE — `GD-23`, va moi payload di qua kieu khung nhin rieng khong co doanh thu (`INV-09`).
@@ -42,6 +43,8 @@ export function DriverSurface({ screen }: { readonly screen: DriverScreenId }) {
   switch (screen) {
     case 'home':
       return <DriverHome />;
+    case 'site-intake':
+      return <DriverSiteIntake />;
     case 'trip':
       return <DriverTrip />;
     case 'fuel':
@@ -922,7 +925,9 @@ function DriverSettlementSummary() {
           <dd>{formatMoney(data.reimbursementOutstanding)}</dd>
         </div>
       </dl>
-      <p className="tx-note">Hoàn ứng là tiền bạn đã bỏ túi cho chuyến, công ty trả lại — không phải lương.</p>
+      <p className="tx-note">
+        Hoàn ứng là tiền bạn đã bỏ túi cho chuyến, công ty trả lại — không phải lương.
+      </p>
     </section>
   );
 }

@@ -3,7 +3,16 @@ import { Injectable } from '@nestjs/common';
 import type { PrismaService } from '../../config/prisma.service.js';
 import type { CircleGeofence } from '../geo/geofence.js';
 
-export type GeofenceSubjectKind = 'CUSTOMER' | 'FUEL_SUPPLIER' | 'DEPOT' | 'AD_HOC';
+/**
+ * `COUNTERPARTY_SITE` la gia tri cua `#267` H1: hang rao cua mot DIA DIEM VAN HANH
+ * (`TransportCounterpartySite`) — kho/nha may cua mot phap nhan.
+ *
+ * `CUSTOMER` khong dung duoc cho viec do: `subjectId` cua no tro toi `TransportCustomer`, con A la
+ * mot phap nhan co the chua bao gio thue B mot chuyen nao. `AD_HOC` cung khong: hang rao cua mot
+ * kho co that thuoc ve mot cho co that.
+ */
+export type GeofenceSubjectKind =
+  'CUSTOMER' | 'FUEL_SUPPLIER' | 'DEPOT' | 'AD_HOC' | 'COUNTERPARTY_SITE';
 
 export interface Geofence {
   readonly id: string;

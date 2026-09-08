@@ -42,6 +42,18 @@ export interface GeofenceAssessment {
   readonly nearest: GeofenceEvaluation | null;
   /** Moi hang rao ma diem nam CHAC CHAN ben trong. Khong gom cac hang rao `INDETERMINATE`. */
   readonly inside: readonly GeofenceEvaluation[];
+  /**
+   * MOI hang rao da duoc do, ke ca `OUTSIDE` va `INDETERMINATE`, theo DUNG thu tu nguoi goi truyen
+   * vao.
+   *
+   * Them cho `#267` H2, va co mot ly do hep: nhan dang dia diem A phai phan biet duoc "chac chan
+   * dang o kho X" voi "co the dang o kho X" — tuc no can ca cac hang rao `INDETERMINATE`, thu ma
+   * `inside` co y bo di. Khong co truong nay, tang goi se phai TU do lai khoang cach va tu suy lai
+   * phan quyet, tuc dung mot may do hang rao THU HAI; va hai may do thi se co luc chung lech nhau.
+   *
+   * Day la mot truong CONG THEM: `nearest`, `inside` va `verdict` khong doi mot chut nao.
+   */
+  readonly all: readonly GeofenceEvaluation[];
   readonly verdict: GeofenceVerdict | 'NO_FENCE';
 }
 
@@ -76,18 +88,17 @@ export function assessGeofences(
   });
 
   if (evaluations.length === 0) {
-    return { nearest: null, inside: [], verdict: 'NO_FENCE' };
+    return { nearest: null, inside: [], all: [], verdict: 'NO_FENCE' };
   }
 
   // `reduce` chu khong `sort`: chi can cai nho nhat, va sort se doi thu tu nguoi goi truyen vao —
   // mot tac dung phu ma khong ai o day yeu cau.
-  const nearest = evaluations.reduce((best, current) =>
-    isCloser(current, best) ? current : best,
-  );
+  const nearest = evaluations.reduce((best, current) => (isCloser(current, best) ? current : best));
 
   return {
     nearest,
     inside: evaluations.filter((evaluation) => evaluation.verdict === 'INSIDE'),
+    all: evaluations,
     verdict: nearest.verdict,
   };
 }

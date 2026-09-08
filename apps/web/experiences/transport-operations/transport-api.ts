@@ -5,6 +5,7 @@ import type {
   ArAgingReport,
   BusinessDate,
   ClosedFundPeriod,
+  ConfirmSiteIntakeInput,
   ClosedReconciliationResult,
   ComplianceAlert,
   ComplianceDocument,
@@ -40,6 +41,9 @@ import type {
   Payslip,
   PayslipComponentKind,
   PayslipDetail,
+  SiteIntakeLocationInput,
+  SiteIntakeProposal,
+  SiteIntakeResult,
   SettlementDocumentChain,
   SettlementFlow,
   DriverFuelSlipView,
@@ -778,6 +782,27 @@ export const transportApi = {
    */
   me: {
     trips: (): Promise<readonly DriverTripView[]> => get('/transport/me/trips'),
+
+    /**
+     * NHAN VIEC TAI DIA DIEM A — `#267` H2/H4.
+     *
+     * `POST` cho ca duong DOC, va do khong phai mot nham lan REST: than yeu cau mang toa do cua mot
+     * con nguoi, va mot chuoi truy van se nam trong nhat ky may chu, trong `Referer`, va trong
+     * lich su trinh duyet. Quy uoc bao mat cua repo cam dua du lieu ca nhan vao URL.
+     *
+     * HAI ham RIENG, khong mot ham co co `create: true`: `proposeSite` KHONG ghi mot hang nao,
+     * `confirmSite` tao mot vong chay. Do la ranh gioi ma ca `#267` xoay quanh, va no phai nhin
+     * thay duoc ngay o day.
+     */
+    proposeSite: (input: SiteIntakeLocationInput = {}): Promise<SiteIntakeProposal> =>
+      send('POST', '/transport/me/site-intake/proposals', input),
+    /**
+     * `clientEventId` la KHOA CHONG LAP, va no phai on dinh qua cac lan thu lai cua CUNG mot cham.
+     * Sinh moi o moi lan goi lai se bien mot lan mat song thanh hai vong chay — nen no den tu tang
+     * goi, khong tu day.
+     */
+    confirmSite: (input: ConfirmSiteIntakeInput): Promise<SiteIntakeResult> =>
+      send('POST', '/transport/me/site-intake/confirmations', input),
     trip: (id: string): Promise<DriverTripView> =>
       get(`/transport/me/trips/${encodeURIComponent(id)}`),
     /** Lai xe chi dat duoc `IN_TRANSIT` hoac `DELIVERED`. `RECONCILED` doi mot lan chuyen tay khac. */
