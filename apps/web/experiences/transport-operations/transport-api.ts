@@ -94,6 +94,7 @@ import type {
   AssetStakeholder,
   AssetStakeholderKind,
   PartyStatus,
+  StakeholderActivityView,
   StakeholderVehicleView,
   Vehicle,
   VehicleDriverAssignment,
@@ -651,6 +652,18 @@ export const transportApi = {
     myVehicles: (): Promise<readonly StakeholderVehicleView[]> => get('/transport/me/vehicles'),
     myVehicle: (vehicleId: string): Promise<StakeholderVehicleView> =>
       get(`/transport/me/vehicles/${encodeURIComponent(vehicleId)}`),
+    /**
+     * HOAT DONG cua chinh nhung chiec xe do (`#278` N9).
+     *
+     * `/activity` la mot duong CO DINH, khong phai mot `vehicleId`. May chu khai no TRUOC route
+     * tham so, nen chuoi nay khong bao gio bi doc thanh ma xe — xem
+     * `stakeholder-activity.composition.spec.ts`.
+     */
+    activity: (range?: {
+      readonly from?: string;
+      readonly to?: string;
+    }): Promise<StakeholderActivityView> =>
+      get(`/transport/me/vehicles/activity${toQuery({ from: range?.from, to: range?.to })}`),
   },
 
   fleet: {

@@ -1,15 +1,23 @@
 'use client';
 
+import { useCallback } from 'react';
 import { DataTable, PageHeader } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
   useMyStakeholderVehicles,
+  useMyVehicleActivity,
   useNavigationInput,
 } from '../hooks/useTransportWorkspace';
 import { MANAGER_HAS_NO_TRANSPORT_SCOPE } from '../transport-actions';
 import { TransportApiError } from '../transport-api';
+import { loadedVsEmptyOption, type ChartPalette } from '../visual/chart-options';
+import { TransportChart } from '../visual/TransportChart';
 import { toMyVehicleRows, type MyVehicleRow } from '../workspace/asset-ownership';
+import {
+  toStakeholderActivity,
+  type StakeholderActivityRow,
+} from '../workspace/stakeholder-activity';
 
 /**
  * Man "XE TOI CO CO PHAN" — be mat cua BEN HUU QUAN (`TX-08`, #242 E3/E5).
@@ -32,6 +40,32 @@ export function StakeholderVehiclesView() {
   const query = useMyStakeholderVehicles(navigation);
   const mine = toSectionQuery(query);
   const rows = toMyVehicleRows(mine.data ?? []);
+
+  /*
+   * LAN DOC THU HAI, CO Y TACH RIENG.
+   *
+   * Danh sach xe va bang hoat dong di qua hai lan goi khac nhau, nen mot lan doc hong o phia hoat
+   * dong KHONG lam mat luon danh sach xe va ty le so huu — thu ma nguoi so huu vao day de xem
+   * truoc tien. Gop hai lan lam mot se bien mot su co cua phan bao duong thanh mot man hinh trang.
+   */
+  const activityQuery = toSectionQuery(useMyVehicleActivity(navigation));
+  const activity =
+    activityQuery.data === undefined ? null : toStakeholderActivity(activityQuery.data);
+
+  const chart = activity?.chart;
+  const buildChartOption = useCallback(
+    (palette: ChartPalette) =>
+      loadedVsEmptyOption(
+        {
+          sequences: chart?.plates ?? [],
+          loadedKm: chart?.loadedKm ?? [],
+          emptyKm: chart?.emptyKm ?? [],
+          omittedLegs: chart?.omittedVehicles ?? 0,
+        },
+        palette,
+      ),
+    [chart],
+  );
 
   /**
    * `403` o day co nghia HEP va biet truoc: nguoi dang dang nhap KHONG phai ben huu quan.
@@ -98,6 +132,125 @@ export function StakeholderVehiclesView() {
               },
             ]}
           />
+
+          <section className="tx-panel" aria-label="Hoạt động của xe tôi có cổ phần">
+            <h3>Xe của tôi chạy thế nào</h3>
+            {activity === null ? (
+              activityQuery.isLoading ? (
+                <LoadingState label="Đang tải số liệu hoạt động" />
+              ) : activityQuery.errorMessage === null ? null : (
+                <ErrorState message={activityQuery.errorMessage} />
+              )
+            ) : (
+              <>
+                <p className="tx-note">
+                  Khoảng {activity.rangeLabel}. {activity.utilisationNote}
+                </p>
+                {activity.maintenanceNote === null ? null : (
+                  <p className="tx-note tx-note--warn">{activity.maintenanceNote}</p>
+                )}
+
+                <DataTable
+                  caption="Hoạt động của xe tôi có cổ phần"
+                  rows={activity.rows}
+                  rowKey={(row: StakeholderActivityRow) => row.key}
+                  columns={[
+                    {
+                      key: 'plate',
+                      header: 'Biển số',
+                      render: (row: StakeholderActivityRow) => row.plate,
+                      isRowHeader: true,
+                    },
+                    {
+                      key: 'runs',
+                      header: 'Số vòng chạy',
+                      render: (row: StakeholderActivityRow) => row.runCount,
+                      isNumeric: true,
+                    },
+                    {
+                      key: 'days',
+                      header: 'Ngày có việc',
+                      render: (row: StakeholderActivityRow) => row.activeDays,
+                      isNumeric: true,
+                    },
+                    {
+                      key: 'use',
+                      header: 'Tỷ lệ sử dụng',
+                      render: (row: StakeholderActivityRow) => row.utilisation,
+                      isNumeric: true,
+                    },
+                    {
+                      key: 'loaded',
+                      header: 'Km có hàng',
+                      render: (row: StakeholderActivityRow) => row.loadedKm,
+                      isNumeric: true,
+                    },
+                    {
+                      key: 'empty',
+                      header: 'Km rỗng',
+                      render: (row: StakeholderActivityRow) => row.emptyKm,
+                      isNumeric: true,
+                    },
+                    {
+                      key: 'ratio',
+                      header: 'Tỷ lệ rỗng',
+                      render: (row: StakeholderActivityRow) => row.emptyRatio,
+                      isNumeric: true,
+                    },
+                    {
+                      key: 'downtime',
+                      header: 'Ngày-lệnh sửa',
+                      render: (row: StakeholderActivityRow) => row.downtimeDays,
+                      isNumeric: true,
+                    },
+                    {
+                      key: 'open',
+                      header: 'Lệnh đang mở',
+                      render: (row: StakeholderActivityRow) => row.openWorkOrders,
+                      isNumeric: true,
+                    },
+                  ]}
+                />
+
+                {/*
+                 * Cot "Ngay-lenh sua" CONG THANG hai lenh cung mo tren mot xe. Goi no la "so ngay
+                 * xe nghi" se ra mot cau sai khi xe vao xuong hai viec cung luc — nen ten cot va
+                 * cau nay phai di cung nhau.
+                 */}
+                <p className="tx-note">
+                  “Ngày-lệnh sửa” cộng thẳng số ngày của từng lệnh sửa. Hai lệnh cùng mở trong một
+                  ngày tính là hai — đây không phải số ngày xe vắng mặt.
+                </p>
+
+                {activity.rows.some((row) => row.missingNote !== null) ? (
+                  <ul className="tx-notes">
+                    {activity.rows
+                      .filter((row) => row.missingNote !== null)
+                      .map((row) => (
+                        <li key={row.key}>
+                          <strong>{row.plate}</strong> — {row.missingNote}
+                        </li>
+                      ))}
+                  </ul>
+                ) : null}
+
+                {activity.chart.plates.length === 0 ? (
+                  <EmptyState title="Chưa xe nào đủ số km để vẽ biểu đồ." />
+                ) : (
+                  <TransportChart
+                    ariaLabel="Biểu đồ km có hàng và km rỗng của xe tôi có cổ phần"
+                    buildOption={buildChartOption}
+                  />
+                )}
+                {activity.chart.omittedVehicles > 0 ? (
+                  <p className="tx-note tx-note--warn">
+                    {activity.chart.omittedVehicles} xe không có trên biểu đồ vì còn chặng chưa nhập
+                    km.
+                  </p>
+                ) : null}
+              </>
+            )}
+          </section>
 
           <section className="tx-panel" aria-label="Lịch sử sở hữu của tôi">
             <h3>Lịch sử sở hữu của tôi</h3>

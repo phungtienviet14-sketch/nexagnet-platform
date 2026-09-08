@@ -157,6 +157,11 @@ import { DriverPayslipsController } from './transport/workforce/driver-payslips.
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { AssetOwnershipController } from './transport/asset-ownership/asset-ownership.controller.js';
 import { StakeholderVehiclesController } from './transport/asset-ownership/stakeholder-vehicles.controller.js';
+import { StakeholderActivityService } from './transport/asset-ownership/stakeholder-activity.service.js';
+import {
+  StakeholderMaintenanceFacts,
+  StakeholderMaintenanceFactsAdapter,
+} from './transport/asset-ownership/stakeholder-activity-facts.port.js';
 import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
 import { CounterpartySitesController } from './transport/counterparty/counterparty-sites.controller.js';
 import { TransportOrdersController } from './transport/movement/orders.controller.js';
@@ -619,6 +624,21 @@ const PROVIDERS: readonly Owned<Provider>[] = [
    */
   owned('transport-core', InsightReadService),
   owned('transport-core', { provide: InsightCoreFacts, useClass: InsightCoreFactsAdapter }),
+  /**
+   * BE MAT BEN HUU QUAN — PHAN HOAT DONG (`#278` N9).
+   *
+   * Dich vu di cung `transport-core`: no doc vong chay, chang va xe — dung nhung thu ma man hinh
+   * "Xe toi co co phan" da dung san.
+   *
+   * Cong BAO DUONG thi KHONG: so ngay nghi thuoc `transport-asset-compliance`. Khach tat capability
+   * do van mo duoc bang — cot so ngay nghi la mot dau gach kem `MAINTENANCE_CAPABILITY_OFF`, chu
+   * khong phai mot so `0` doc y het "xe chay du thang".
+   */
+  owned('transport-core', StakeholderActivityService),
+  owned('transport-asset-compliance', {
+    provide: StakeholderMaintenanceFacts,
+    useClass: StakeholderMaintenanceFactsAdapter,
+  }),
   /**
    * BANG TAI CHINH — cung khuon, va cung mot ly le cau truc.
    *

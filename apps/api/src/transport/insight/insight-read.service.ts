@@ -1,12 +1,12 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { addBusinessDays, assertBusinessDate, toBusinessDate } from '../business-date.js';
+import { toBusinessDate } from '../business-date.js';
 import {
   TRANSPORT_CLOCK,
   TRANSPORT_CORE_POLICY,
   type TransportCorePolicy,
 } from '../transport-policy.js';
 import { InsightCoreFacts } from './insight-facts.port.js';
-import { buildCorridorInsight, buildFleetInsight, businessDaysBetween } from './insight-metrics.js';
+import { buildCorridorInsight, buildFleetInsight, resolveInsightRange } from './insight-metrics.js';
 import type { RunLeg, VehicleRun } from '../movement/movement.types.js';
 import type { CorridorInsightView, FleetInsightView, InsightRange } from './insight.types.js';
 
@@ -22,8 +22,6 @@ import type { CorridorInsightView, FleetInsightView, InsightRange } from './insi
  * khoang lech mot ngay so voi dong nghiep ngoi canh — vi may cua ho doc `new Date()` ra ngay hom
  * truoc theo UTC.
  */
-export const DEFAULT_RANGE_DAYS = 30;
-
 @Injectable()
 export class InsightReadService {
   constructor(
@@ -77,13 +75,10 @@ export class InsightReadService {
    * bien, khong duoc di tiep thanh mot bao cao rong ma nguoi doc tuong la "khong co chuyen nao".
    */
   private resolveRange(from?: string, to?: string): InsightRange {
-    const today = toBusinessDate(this.clock?.() ?? new Date(), this.corePolicy.timeZone);
-    const end = to === undefined ? today : assertBusinessDate(to);
-    const start =
-      from === undefined
-        ? addBusinessDays(end, -(DEFAULT_RANGE_DAYS - 1))
-        : assertBusinessDate(from);
-
-    return { from: start, to: end, businessDays: businessDaysBetween(start, end) };
+    return resolveInsightRange(
+      from,
+      to,
+      toBusinessDate(this.clock?.() ?? new Date(), this.corePolicy.timeZone),
+    );
   }
 }

@@ -1,6 +1,6 @@
 import type { Order, RunLeg, VehicleRun } from '../movement/movement.types.js';
 import type { Vehicle } from '../transport.types.js';
-import type { BusinessDate } from '../business-date.js';
+import { addBusinessDays, assertBusinessDate, type BusinessDate } from '../business-date.js';
 import {
   CORRIDOR_EMPTY_ATTRIBUTION,
   CORRIDOR_GROUPING,
@@ -35,6 +35,35 @@ export function businessDaysBetween(from: BusinessDate, to: BusinessDate): numbe
   const end = Date.parse(`${to}T00:00:00.000Z`);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
   return Math.round((end - start) / 86_400_000) + 1;
+}
+
+/** Khoang mac dinh khi nguoi goi khong dat: 30 ngay gan nhat, TINH CA hom nay. */
+export const DEFAULT_RANGE_DAYS = 30;
+
+/**
+ * CHOT KHOANG NGAY — ham THUAN, va la NOI DUY NHAT quyet dinh viec do.
+ *
+ * `#278` N10: *"Time ranges must use tenant business-date/timezone semantics, not browser-local/UTC
+ * accidents."* `today` do NGUOI GOI dua vao (da quy ve mui gio tenant), nen tep nay khong doc dong
+ * ho — hai mui gio khong cho ra hai bao cao.
+ *
+ * Bang doi xe (`InsightReadService`) va be mat ben huu quan (`StakeholderActivityService`) deu goi
+ * ham nay. Neu moi ben tu tinh lay 30 ngay, hai man hinh se lech nhau dung vao ngay dau thang — va
+ * khong ai biet ben nao dung.
+ *
+ * `assertBusinessDate` NEM khi chuoi khong phai `YYYY-MM-DD`: mot khoang sai phai dung lai o bien,
+ * khong duoc di tiep thanh mot bao cao rong ma nguoi doc tuong la "khong co chuyen nao".
+ */
+export function resolveInsightRange(
+  from: string | undefined,
+  to: string | undefined,
+  today: BusinessDate,
+): InsightRange {
+  const end = to === undefined ? today : assertBusinessDate(to);
+  const start =
+    from === undefined ? addBusinessDays(end, -(DEFAULT_RANGE_DAYS - 1)) : assertBusinessDate(from);
+
+  return { from: start, to: end, businessDays: businessDaysBetween(start, end) };
 }
 
 /** Ngay nghiep vu nam trong khoang. So sanh CHUOI — `YYYY-MM-DD` xep dung theo tu dien. */
@@ -262,21 +291,19 @@ export function buildCorridorInsight(input: CorridorInsightInput): CorridorInsig
   }
 
   const corridors = [...buckets.entries()]
-    .map(
-      ([corridorKey, bucket]): CorridorInsight => ({
-        corridorKey,
-        originLabel: bucket.originLabel,
-        destinationLabel: bucket.destinationLabel,
-        legCount: bucket.legCount,
-        orderCodes: [...bucket.orderCodes].sort(),
-        runCodes: [...bucket.runCodes].sort(),
-        loadedKm: bucket.missing > 0 ? null : bucket.loadedKm,
-        /* Trung vi tinh tren CAC CHANG CO SO — mot chang thieu km khong lam mat ca trung vi. */
-        medianLoadedKm: median(bucket.loadedSamples),
-        attributedEmptyKm: bucket.emptyMissing > 0 ? null : bucket.attributedEmptyKm,
-        legsMissingDistance: bucket.missing + bucket.emptyMissing,
-      }),
-    )
+    .map(([corridorKey, bucket]): CorridorInsight => ({
+      corridorKey,
+      originLabel: bucket.originLabel,
+      destinationLabel: bucket.destinationLabel,
+      legCount: bucket.legCount,
+      orderCodes: [...bucket.orderCodes].sort(),
+      runCodes: [...bucket.runCodes].sort(),
+      loadedKm: bucket.missing > 0 ? null : bucket.loadedKm,
+      /* Trung vi tinh tren CAC CHANG CO SO — mot chang thieu km khong lam mat ca trung vi. */
+      medianLoadedKm: median(bucket.loadedSamples),
+      attributedEmptyKm: bucket.emptyMissing > 0 ? null : bucket.attributedEmptyKm,
+      legsMissingDistance: bucket.missing + bucket.emptyMissing,
+    }))
     /* Tuyen chay nhieu nhat len truoc; hoa thi on dinh theo khoa. */
     .sort(
       (left, right) =>

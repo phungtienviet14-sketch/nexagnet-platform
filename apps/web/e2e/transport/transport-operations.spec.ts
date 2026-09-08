@@ -784,6 +784,14 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
   await page.route('**/transport/me/vehicles', (route) =>
     json(route, { message: 'Tài khoản này không có quyền xem xe đã yêu cầu' }, 403),
   );
+  /*
+   * `#278` N9 — duong HOAT DONG cua chinh be mat do. Cung mot `403`, va vi cung mot ly do: khong
+   * nhan vat mau nao trong bo mock nay co hang `TransportAssetStakeholder.authUserId`. Khai rieng
+   * vi day la mot duong dan SAU HON, khong khop voi mau tren.
+   */
+  await page.route('**/transport/me/vehicles/activity*', (route) =>
+    json(route, { message: 'Tài khoản này không có quyền xem xe đã yêu cầu' }, 403),
+  );
   await page.route('**/transport/drivers', (route) => json(route, DRIVERS));
   await page.route('**/transport/customers', (route) => json(route, CUSTOMERS));
   await page.route('**/transport/partners', (route) => json(route, PARTNERS));
@@ -1447,5 +1455,96 @@ test.describe('ban do vong chay (Lane N)', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
+  });
+});
+
+/*
+ * `#278` N9 — BE MAT BEN HUU QUAN, PHAN HOAT DONG.
+ *
+ * Hai route duoi day duoc khai SAU `mockTransport`, nen chung DE LEN cap `403` mac dinh cua bo
+ * mock: Playwright uu tien route dang ky sau cung. O day nguoi dang xem THAT SU la mot ben huu
+ * quan, va do la trang thai duy nhat ma bang hoat dong hien ra.
+ */
+test.describe('hoat dong cua xe toi co co phan (Lane N)', () => {
+  const MY_VEHICLES = [
+    {
+      vehicleId: 'veh-n9-1',
+      registrationPlate: '29H-111.11',
+      vehicleClass: 'Dau keo',
+      status: 'IDLE',
+      operationalControl: 'INTERNAL_OPERATED',
+      currentOdoKm: 120000,
+      myBasisPoints: 3000,
+      myEffectiveFrom: '2026-01-01',
+      myHistory: [{ ownershipBasisPoints: 3000, effectiveFrom: '2026-01-01', effectiveTo: null }],
+      driverName: 'Nguyen Van A',
+    },
+  ];
+
+  const ACTIVITY = {
+    range: { from: '2026-08-10', to: '2026-09-08', businessDays: 30 },
+    utilisationFormula: 'ngayCoChangKhongHuy / ngayLichTrongKhoang',
+    vehicles: [
+      {
+        vehicleId: 'veh-n9-1',
+        registrationPlate: '29H-111.11',
+        status: 'IDLE',
+        runCount: 6,
+        activeBusinessDays: 12,
+        utilisation: 0.4,
+        loadedKm: 1200,
+        emptyKm: 300,
+        totalKm: 1500,
+        emptyRatio: 0.2,
+        legsMissingDistance: 0,
+        downtime: { workOrderDays: 3, openWorkOrderCount: 1 },
+      },
+    ],
+    unavailableSources: [],
+  };
+
+  test('bang hoat dong hien ra kem cong thuc, va bieu do nap that', async ({ page }) => {
+    await mockTransport(page, 'MANAGER');
+    await page.route('**/transport/me/vehicles', (route) => json(route, MY_VEHICLES));
+    await page.route('**/transport/me/vehicles/activity*', (route) => json(route, ACTIVITY));
+
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { name: 'Xe của tôi chạy thế nào' })).toBeVisible();
+
+    /* Cong thuc di CUNG con so — mot ty le khong kem dinh nghia la mot con so khong kiem duoc. */
+    await expect(page.getByText(/ngayCoChangKhongHuy \/ ngayLichTrongKhoang/)).toBeVisible();
+
+    /*
+     * Cau canh bao ve cach dem "ngay-lenh". Neu ai do doi ten cot thanh "So ngay xe nghi" ma quen
+     * cau nay, bai do — va do dung la luc con so bat dau bi doc sai.
+     */
+    await expect(page.getByText(/không phải số ngày xe vắng mặt/)).toBeVisible();
+
+    await expect(
+      page.getByRole('img', { name: 'Biểu đồ km có hàng và km rỗng của xe tôi có cổ phần' }),
+    ).toBeVisible({ timeout: 30_000 });
+  });
+
+  test('khach chua bat bao duong: o ngay nghi la dau gach VA co cau giai thich', async ({
+    page,
+  }) => {
+    await mockTransport(page, 'MANAGER');
+    await page.route('**/transport/me/vehicles', (route) => json(route, MY_VEHICLES));
+    await page.route('**/transport/me/vehicles/activity*', (route) =>
+      json(route, {
+        ...ACTIVITY,
+        vehicles: [{ ...ACTIVITY.vehicles[0], downtime: null }],
+        unavailableSources: ['MAINTENANCE_CAPABILITY_OFF'],
+      }),
+    );
+
+    await page.goto('/');
+
+    /*
+     * `#278` N13 tinh than: mot o trong phai NOI duoc vi sao no trong. Khong co cau nay, nguoi doc
+     * se ket luan xe chay du thang — mot ket luan sai rut ra tu mot dau gach.
+     */
+    await expect(page.getByText(/phần Bảo dưỡng chưa được bật/)).toBeVisible();
   });
 });

@@ -33,6 +33,7 @@ export const TRANSPORT_QUERY_KEYS = {
   vehicles: ['transport', 'vehicles'],
   drivers: ['transport', 'drivers'],
   assetStakeholders: ['transport', 'asset-ownership', 'stakeholders'],
+  myVehicleActivity: ['transport', 'me', 'vehicles', 'activity'],
   ownershipRegister: ['transport', 'asset-ownership', 'register'],
   myVehicles: ['transport', 'me', 'vehicles'],
   customers: ['transport', 'customers'],
@@ -253,6 +254,25 @@ export function useMyStakeholderVehicles(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.myVehicles,
     queryFn: () => transportApi.stakeholderSelf.myVehicles(),
+    enabled: (input.capabilities as readonly string[]).includes('transport-core'),
+    retry: false,
+  });
+}
+
+/**
+ * HOAT DONG cua nhung chiec xe do (`#278` N9).
+ *
+ * CUNG mot dieu kien `enabled` voi `useMyStakeholderVehicles`, va cung mot ly do: cau hoi "nguoi
+ * nay co phai ben huu quan khong" chi may chu tra loi duoc. Doan truoc o client se hoac chan nham
+ * mot co dong that, hoac hua mot man hinh ma may chu se tu choi.
+ *
+ * KHONG truyen khoang ngay: may chu tu chot 30 ngay gan nhat theo mui gio tenant. Neu man hinh tu
+ * tinh bang `new Date()`, hai nguoi o hai mui gio se doc ra hai bang khac nhau — `#278` N10.
+ */
+export function useMyVehicleActivity(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.myVehicleActivity,
+    queryFn: () => transportApi.stakeholderSelf.activity(),
     enabled: (input.capabilities as readonly string[]).includes('transport-core'),
     retry: false,
   });

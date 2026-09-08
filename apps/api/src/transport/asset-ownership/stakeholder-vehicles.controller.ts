@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
 import {
   RequiresTransportAction,
@@ -7,6 +7,8 @@ import {
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { AssetOwnershipScopeService } from './asset-ownership-scope.service.js';
+import { StakeholderActivityService } from './stakeholder-activity.service.js';
+import type { StakeholderActivityView } from './stakeholder-activity.js';
 import type { StakeholderVehicleView } from './asset-ownership.types.js';
 
 /**
@@ -29,7 +31,10 @@ import type { StakeholderVehicleView } from './asset-ownership.types.js';
 @Controller('transport/me/vehicles')
 @UseGuards(TransportActionGuard)
 export class StakeholderVehiclesController {
-  constructor(private readonly scope: AssetOwnershipScopeService) {}
+  constructor(
+    private readonly scope: AssetOwnershipScopeService,
+    private readonly activityService: StakeholderActivityService,
+  ) {}
 
   @Get()
   @RequiresTransportAction('transport.stakeholder.self.vehicle.read')
@@ -37,6 +42,35 @@ export class StakeholderVehiclesController {
     const authUserId = requireAuthUserId(request);
     try {
       return await this.scope.myVehicles(authUserId);
+    } catch (error) {
+      return transportErrorToHttp(error);
+    }
+  }
+
+  /**
+   * HOAT DONG cua chinh nhung chiec xe do (`#278` N9).
+   *
+   * ---------------------------------------------------------------------------
+   * KHAI TRUOC `:vehicleId` — VA DO KHONG PHAI CHUYEN THAM MY.
+   *
+   * Nest doi khop theo DUNG THU TU khai bao. Neu dong nay nam duoi `@Get(':vehicleId')`, chuoi
+   * `activity` se roi vao tham so duong dan, doi chieu pham vi that bai, va nguoi dung nhan `403`
+   * "khong co quyen xem xe da yeu cau" cho mot chiec xe khong he ton tai. Bai
+   * `stakeholder-activity.composition.spec.ts` khoa dung thu tu nay lai.
+   *
+   * CUNG MOT MA QUYEN voi hai duong tren: day khong phai mot quyen moi, ma la them cot cho dung
+   * nhung chiec xe nguoi ta da duoc phep xem. `#278` N9 gioi han o *"already authorized fields"*.
+   */
+  @Get('activity')
+  @RequiresTransportAction('transport.stakeholder.self.vehicle.read')
+  async activity(
+    @Req() request: AuthenticatedRequest,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<StakeholderActivityView> {
+    const authUserId = requireAuthUserId(request);
+    try {
+      return await this.activityService.activity(authUserId, from, to);
     } catch (error) {
       return transportErrorToHttp(error);
     }

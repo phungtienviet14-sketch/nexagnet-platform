@@ -187,6 +187,41 @@ export interface StakeholderVehicleView {
   readonly driverName: string | null;
 }
 
+/**
+ * HOAT DONG cua xe minh co co phan (`#278` N9) — guong cua `StakeholderActivityView` ben may chu.
+ *
+ * KHONG mot truong tien nao, va do la hop dong chu khong phai su tinh co: `#278` N9 chi cho phep
+ * mo rong trong pham vi da duoc cap, con so lieu kinh te thi phai co mot loi cap quyen minh thi ma
+ * hom nay chua ton tai.
+ */
+export interface StakeholderDowntime {
+  /** TONG NGAY-LENH, khong phai "so ngay xe vang mat" — hai lenh cung mo duoc cong thang. */
+  readonly workOrderDays: number;
+  readonly openWorkOrderCount: number;
+}
+
+export interface StakeholderVehicleActivity {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly status: string;
+  readonly runCount: number;
+  readonly activeBusinessDays: number;
+  readonly utilisation: number | null;
+  readonly loadedKm: number | null;
+  readonly emptyKm: number | null;
+  readonly totalKm: number | null;
+  readonly emptyRatio: number | null;
+  readonly legsMissingDistance: number;
+  readonly downtime: StakeholderDowntime | null;
+}
+
+export interface StakeholderActivityView {
+  readonly range: { readonly from: string; readonly to: string; readonly businessDays: number };
+  readonly utilisationFormula: string;
+  readonly vehicles: readonly StakeholderVehicleActivity[];
+  readonly unavailableSources: readonly string[];
+}
+
 export interface Driver {
   readonly id: string;
   readonly fullName: string;
