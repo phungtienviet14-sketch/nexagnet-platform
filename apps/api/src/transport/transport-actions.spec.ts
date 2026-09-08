@@ -116,6 +116,12 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // MOT ma cho ca chin loai moc van hanh: chin duong khac nhau o THU TU va CHINH SACH CHUNG
       // CU — ca hai deu la quy tac NGHIEP VU, khong phai ranh gioi QUYEN (`#243` F5).
       'transport.driver.self.checkpoint.record',
+      // HAI ma cho nhan viec tai dia diem A (`#267` H2/H4), va do la ranh gioi ma ca `#267` xoay
+      // quanh: `.propose` DOC ("toi dang o dau"), `.confirm` TAO ra mot vong chay. Gop chung se
+      // lam cau "khong duoc lang le tao chuyen chi vi mot thiet bi di vao hang rao" thanh mot loi
+      // khuyen trong tai lieu thay vi mot ranh gioi quyen.
+      'transport.driver.self.site_intake.propose',
+      'transport.driver.self.site_intake.confirm',
       // DONG THOI GIAN cua mot chuyen. Ke toan CO ma nay: mot khoan phu cap cho phai doi chieu
       // duoc voi luc xe den noi. KHONG co toa do.
       'transport.checkpoint.read',
@@ -138,6 +144,14 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.asset_ownership.manage',
       // Pham vi CUA CHINH MINH cua ben huu quan — CHI DOC, va KHONG cap qua vai nao.
       'transport.stakeholder.self.vehicle.read',
+      // `TX-08` mo rong (Lane J, #269) — NAP DU LIEU ETC. Bon ma, va su tach bach giua chung la co
+      // that: NAP mot ban sao cua su that nha cung cap KHAC voi QUYET rang ban sao do khop hay
+      // khong. Khong ma nao trong so nay noi ve tien da tra.
+      'transport.toll.account.read',
+      'transport.toll.account.manage',
+      'transport.toll.import',
+      'transport.toll.review.read',
+      'transport.toll.review.resolve',
       'transport.commercial_acceptance.read',
       'transport.commercial_acceptance.decide',
     ]);
@@ -318,6 +332,8 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.tracking.stop',
         'transport.driver.self.proof.record',
         'transport.driver.self.checkpoint.record',
+        'transport.driver.self.site_intake.propose',
+        'transport.driver.self.site_intake.confirm',
       ]);
     });
 

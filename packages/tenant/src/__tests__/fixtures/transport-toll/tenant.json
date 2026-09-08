@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "slug": "transport-toll",
+  "identity": {
+    "displayName": "Transport Toll Fixture",
+    "shortName": "Toll"
+  },
+  "branding": {
+    "productName": "Transport Operations",
+    "installName": "Transport Operations",
+    "pageTitle": "Transport Operations",
+    "pageDescription": "Generic transport tenant fixture: fleet, trips and ETC provider ingestion.",
+    "themeColor": "#123a5f",
+    "backgroundColor": "#f4f6f9",
+    "monogram": "T",
+    "composerPlaceholder": "Search trips"
+  },
+  "experience": "transport-operations",
+  "capabilities": ["transport-core", "transport-toll"],
+  "policies": {
+    "transportCore": { "timeZone": "Asia/Ho_Chi_Minh" },
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {},
+  "bootstrap": {}
+}

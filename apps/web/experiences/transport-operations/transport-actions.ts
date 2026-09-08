@@ -146,6 +146,14 @@ export const TRANSPORT_ACTIONS = [
   'transport.driver.self.proof.record',
   /** MOC VAN HANH CUA CHINH MINH — mot ma cho ca chin loai moc (`#243` F5). */
   'transport.driver.self.checkpoint.record',
+  /**
+   * NHAN VIEC TAI DIA DIEM A CUA CHINH MINH (`#267` H2/H4) — HAI ma, chu khong mot.
+   *
+   * `.propose` DOC ("toi dang o dau"), `.confirm` TAO ra mot vong chay. Ranh gioi nay la thu ca
+   * `#267` xoay quanh; chep nguyen tu API, xem khoi chu thich ben do cho ly do day du.
+   */
+  'transport.driver.self.site_intake.propose',
+  'transport.driver.self.site_intake.confirm',
   /** DONG THOI GIAN cua mot chuyen — moc, giai doan tung chang, canh bao. KHONG toa do. */
   'transport.checkpoint.read',
   /** GHI moc tu be mat van hanh — `ASSIGNED` va cac moc bu. KHONG kem chung cu vi tri. */
@@ -170,6 +178,12 @@ export const TRANSPORT_ACTIONS = [
   'transport.asset_ownership.read',
   'transport.asset_ownership.manage',
   'transport.stakeholder.self.vehicle.read',
+  /* --- `TX-08` mo rong: NAP DU LIEU ETC / PHI DUONG BO (Lane J, Issue #269) --- */
+  'transport.toll.account.read',
+  'transport.toll.account.manage',
+  'transport.toll.import',
+  'transport.toll.review.read',
+  'transport.toll.review.resolve',
 
   /* --- `TX-09` NGHIEM THU CHUNG TU / THUONG MAI (Lane I, Issue #268) --- */
   /**
@@ -205,6 +219,8 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.tracking.stop',
   'transport.driver.self.proof.record',
   'transport.driver.self.checkpoint.record',
+  'transport.driver.self.site_intake.propose',
+  'transport.driver.self.site_intake.confirm',
 ];
 
 /**

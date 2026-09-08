@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { storageUniqueViolation } from '../proof/proof-storage-conflict.js';
+import type { UniqueIndexRef } from '../storage-conflict.js';
 import type {
   Order,
   OrderStatus,
@@ -10,6 +12,23 @@ import type {
   VehicleRun,
   VehicleRunStatus,
 } from './movement.types.js';
+
+/**
+ * MA VONG CHAY la DUY NHAT toan he.
+ *
+ * `MovementService.createRun` da doc truoc bang `findRunByCode`, nhung mot phep kiem-roi-ghi co mot
+ * khe hep giua hai buoc: hai yeu cau den cung luc deu doc thay "chua co" roi ca hai cung ghi. Chi
+ * unique cua DB dong duoc khe do — va tang tren phai DICH duoc va cham do, neu khong nguoi dung
+ * nhan `500` cho mot tinh huong ma cau tra loi dung la "ma nay da co roi".
+ *
+ * `#267` H3 dua bat bien chong lap cua no LEN chinh unique nay: ma vong chay cua mot lan nhan viec
+ * tai dia diem A la mot bam tat dinh tu `(driverId, clientEventId)`.
+ */
+export const RUN_CODE: UniqueIndexRef = {
+  indexName: 'TransportVehicleRun_code_key',
+  model: 'TransportVehicleRun',
+  column: 'code',
+};
 
 /* ----------------------------------------------------------------------------------------- *
  * DTO GHI. Quy uoc da co: `*.types.ts` giu mo hinh DOC, tep nay giu DTO GHI + cong + ban
@@ -125,6 +144,18 @@ export abstract class MovementRepository {
   abstract assignRun(runId: string, input: AssignRunInput): Promise<RunAssignmentChange>;
   abstract listRunAssignments(runId: string): Promise<RunAssignment[]>;
   abstract activeRunAssignment(runId: string): Promise<RunAssignment | null>;
+  /**
+   * VONG CHAY CHUA KET THUC ma lai xe nay DANG cam — `#267` H3.
+   *
+   * Tra ve mot DANH SACH chu khong `VehicleRun | null`, va do la mot lua chon co y: mo hinh hom
+   * nay KHONG cam mot lai xe cam hai vong chay chua ket thuc (khong unique nao noi dieu do), nen
+   * mot chu ky `| null` se lang le giau mat truong hop thu hai. `#267` H3 doi phai NHIN THAY no de
+   * tu choi tao them; giau di la cach chac chan nhat de mot ngay nao do tao ra cai thu ba.
+   *
+   * "DANG cam" = ban phan cong con hieu luc (`effectiveTo IS NULL`) VA vong chay chua o diem cuoi.
+   * Mot vong chay da `COMPLETED`/`CANCELLED` khong chan ai lam gi nua.
+   */
+  abstract listOpenRunsForDriver(driverId: string): Promise<VehicleRun[]>;
 
   abstract findTripLink(tripId: string): Promise<TripRunLegLink | null>;
   /**
@@ -235,6 +266,12 @@ export class InMemoryMovementRepository extends MovementRepository {
   }
 
   async createRun(input: CreateRunInput): Promise<VehicleRun> {
+    // Ban trong bo nho cuong che CUNG bat bien voi Postgres. Khong co dong nay thi bai chong lap
+    // cua `#267` H3 se XANH o che do `PERSISTENCE=prisma` va DO o che do `memory` — va che do
+    // `memory` la mot duong chay that (demo, CI khong co CSDL), khong phai mot ban gia de test.
+    for (const existing of this.runs.values()) {
+      if (existing.code === input.code) throw storageUniqueViolation(RUN_CODE);
+    }
     const now = iso(new Date());
     const run: VehicleRun = {
       id: randomUUID(),
@@ -383,6 +420,19 @@ export class InMemoryMovementRepository extends MovementRepository {
       if (entry.runId === runId && entry.effectiveTo === null) return entry;
     }
     return null;
+  }
+
+  async listOpenRunsForDriver(driverId: string): Promise<VehicleRun[]> {
+    const runIds = [...this.assignments.values()]
+      .filter((entry) => entry.driverId === driverId && entry.effectiveTo === null)
+      .map((entry) => entry.runId);
+    return [...new Set(runIds)]
+      .map((runId) => this.runs.get(runId))
+      .filter(
+        (run): run is VehicleRun =>
+          run !== undefined && run.status !== 'COMPLETED' && run.status !== 'CANCELLED',
+      )
+      .sort((left, right) => left.code.localeCompare(right.code));
   }
 
   async findTripLink(tripId: string): Promise<TripRunLegLink | null> {

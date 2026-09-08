@@ -286,6 +286,18 @@ export class PrismaFleetRepository extends FleetRepository {
     return rows.map(toVehicleAssignment);
   }
 
+  async activeVehicleForDriver(driverId: string): Promise<string | null> {
+    // `@@index([driverId])` tren `TransportVehicleAssignment` phuc vu dung truy van nay.
+    const row: AssignmentRow | null = await model(
+      this.prisma,
+      'transportVehicleAssignment',
+    ).findFirst({
+      where: { driverId, effectiveTo: null },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+    return row?.vehicleId ?? null;
+  }
+
   async createCustomer(input: CreateCustomerInput): Promise<TransportCustomer> {
     return toCustomer(
       await model(this.prisma, 'transportCustomer').create({

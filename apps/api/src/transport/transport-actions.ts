@@ -355,6 +355,23 @@ export const TRANSPORT_ACTIONS = [
    * bao dam be mat lai xe khong bao gio cham toi duong van hanh.
    */
   'transport.driver.self.checkpoint.record',
+  /**
+   * NHAN VIEC TAI DIA DIEM A CUA CHINH MINH — `#267` H2/H4. Lai xe hoi "toi dang o dau", roi xac
+   * nhan de mo mot vong chay toi thieu.
+   *
+   * HAI ma chu khong mot, va do la ranh gioi ma ca `#267` xoay quanh: `.propose` la mot phep DOC
+   * ma man hinh goi lai moi lan lai xe keo de lam moi — no khong ghi mot hang nao. `.confirm` TAO
+   * ra mot vong chay. Gop chung lai se lam cau *"khong duoc lang le tao chuyen chi vi mot thiet bi
+   * di vao hang rao"* thanh mot loi khuyen trong tai lieu thay vi mot ranh gioi quyen.
+   *
+   * Mot khach muon cho lai xe XEM de nghi nhung chua muon cho ho tu tao chuyen se can dung su
+   * khac biet do — va do la mot cau hinh hop le, khong phai mot truong hop tuong tuong.
+   *
+   * Cong THAT nam o `SiteIntakeService` (`Driver.authUserId`, so huu ban dinh vi, chan vong chay
+   * dang mo); hai ma nay chi bao dam be mat lai xe khong bao gio cham toi duong van hanh.
+   */
+  'transport.driver.self.site_intake.propose',
+  'transport.driver.self.site_intake.confirm',
   /* --- `transport-checkpoint` (Lane F, Issue #243) --- */
   /**
    * DOC dong thoi gian van hanh cua mot chuyen — moc, giai doan tung chang, canh bao thieu chung
@@ -424,6 +441,33 @@ export const TRANSPORT_ACTIONS = [
    * Xem `STAKEHOLDER_SCOPE_ACTIONS` ben duoi ve vi sao ma nay khong duoc cap qua VAI.
    */
   'transport.stakeholder.self.vehicle.read',
+  /* --- `TX-08` mo rong: NAP DU LIEU ETC / PHI DUONG BO (Lane J, Issue #269) --- */
+  /**
+   * TAI KHOAN GIAO THONG + anh xa xe — doc va quan ly.
+   *
+   * Hai ma chu khong mot, va rieng o day co mot ly do PHAP LY: `.manage` la ma cho phep NOI mot
+   * chiec xe vao mot tai khoan giao thong, ma ND 119/2024/ND-CP D.11 kh.3 chi cho moi xe nhan chi
+   * tra tu DUNG MOT tai khoan. Noi sai xe la lam moi luot qua tram cua no dem sang nham tai khoan.
+   */
+  'transport.toll.account.read',
+  'transport.toll.account.manage',
+  /**
+   * NAP mot nguon du lieu ETC — TACH khoi ca `.account.manage` lan `.review.resolve`.
+   *
+   * Nap la mang MOT BAN SAO cua su that nha cung cap vao he thong; doi soat la NOI cai ban sao do
+   * khop hay khong khop. Gop hai ma lam mot se cho bat ky ai nap duoc cung quyet duoc — tuc go bo
+   * dung cai cong ma #269 J7 doi phai co.
+   */
+  'transport.toll.import',
+  /**
+   * HOP THU DOI SOAT ETC — doc va quyet.
+   *
+   * `.review.resolve` KHONG phai mot ma noi ve tien. Nguoi giu no chon duoc chiec xe cho mot dong,
+   * xac nhan mot dong da co nguoi nhin, hay noi hai dong giong nhau la hai su kien that. Khong
+   * thao tac nao trong so do tao ra mot khoan phai tra — #269 J7 cam thang.
+   */
+  'transport.toll.review.read',
+  'transport.toll.review.resolve',
 
   /* --- `TX-09` NGHIEM THU CHUNG TU / THUONG MAI (Lane I, Issue #268) --- */
   /**
@@ -475,6 +519,8 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.tracking.stop',
   'transport.driver.self.proof.record',
   'transport.driver.self.checkpoint.record',
+  'transport.driver.self.site_intake.propose',
+  'transport.driver.self.site_intake.confirm',
 ];
 
 /**

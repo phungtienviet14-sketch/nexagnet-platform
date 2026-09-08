@@ -19,10 +19,14 @@ import type { TransportCounterpartyDecisionReason } from './counterparty/counter
 import type { TransportCounterpartyErrorReason } from './counterparty/counterparty-errors.js';
 import type { TransportProofDecisionReason } from './proof/proof-decisions.js';
 import type { TransportCheckpointDecisionReason } from './checkpoint/checkpoint-decisions.js';
+import type { TransportSiteIntakeDecisionReason } from './site-intake/site-intake-decisions.js';
+import type { TransportSiteIntakeErrorReason } from './site-intake/site-intake-errors.js';
 import type { TransportCommercialAcceptanceDecisionReason } from './acceptance/acceptance-decisions.js';
 import type { TransportCommercialAcceptanceErrorReason } from './acceptance/acceptance-errors.js';
 import type { TransportAssetOwnershipDecisionReason } from './asset-ownership/asset-ownership-decisions.js';
 import type { TransportAssetOwnershipErrorReason } from './asset-ownership/asset-ownership-errors.js';
+import type { TransportTollDecisionReason } from './toll/toll-decisions.js';
+import type { TollErrorReason } from './toll/toll-errors.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
 
 /**
@@ -117,8 +121,12 @@ export type TransportErrorReason =
   | TransportExpenseClaimErrorReason
   | TransportProofDecisionReason
   | TransportCheckpointDecisionReason
+  | TransportSiteIntakeDecisionReason
+  | TransportSiteIntakeErrorReason
   | TransportAssetOwnershipDecisionReason
   | TransportAssetOwnershipErrorReason
+  | TransportTollDecisionReason
+  | TollErrorReason
   | TransportCommercialAcceptanceDecisionReason
   | TransportCommercialAcceptanceErrorReason;
 

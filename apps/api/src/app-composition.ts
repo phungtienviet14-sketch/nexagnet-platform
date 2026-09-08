@@ -118,6 +118,8 @@ import { FuelReconciliationController } from './transport/fuel/fuel-reconciliati
 import { FuelDocumentController } from './transport/fuel/fuel-document.controller.js';
 import { FuelStationController } from './transport/fuel/fuel-station.controller.js';
 import { TransportFuelModule } from './transport/fuel/transport-fuel.module.js';
+import { TollController } from './transport/toll/toll.controller.js';
+import { TransportTollModule } from './transport/toll/transport-toll.module.js';
 import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
 import { TransportAssetComplianceModule } from './transport/asset-compliance/transport-asset-compliance.module.js';
@@ -132,6 +134,8 @@ import { DriverTrackingController } from './transport/proof/driver-tracking.cont
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
+import { TransportSiteIntakeModule } from './transport/site-intake/transport-site-intake.module.js';
+import { DriverSiteIntakeController } from './transport/site-intake/driver-site-intake.controller.js';
 import { TransportAcceptanceModule } from './transport/acceptance/transport-acceptance.module.js';
 import { CommercialAcceptanceController } from './transport/acceptance/commercial-acceptance.controller.js';
 import { CheckpointsController } from './transport/checkpoint/checkpoints.controller.js';
@@ -154,6 +158,7 @@ import { TripExpensesController } from './transport/costing/trip-expenses.contro
 import { AssetOwnershipController } from './transport/asset-ownership/asset-ownership.controller.js';
 import { StakeholderVehiclesController } from './transport/asset-ownership/stakeholder-vehicles.controller.js';
 import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
+import { CounterpartySitesController } from './transport/counterparty/counterparty-sites.controller.js';
 import { TransportOrdersController } from './transport/movement/orders.controller.js';
 import { DriverExpenseClaimsController } from './transport/claims/driver-claims-self.controller.js';
 import { ExpenseClaimsController } from './transport/claims/claims.controller.js';
@@ -234,6 +239,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // NHIEN LIEU + DOI SOAT BANG KE. Den cung `transport-fuel` va bien mat cung no: mot khach van
   // tai chua doi soat bang ke cay xang khong duoc nap tam bang nao cua `TX-04`.
   owned('transport-fuel', TransportFuelModule),
+  // NAP DU LIEU ETC / PHI DUONG BO (Lane J, #269). Den cung `transport-toll` va bien mat cung no:
+  // mot khach chua doi soat ETC khong duoc nap mot bang nao cua `TX-08` mo rong.
+  owned('transport-toll', TransportTollModule),
   // QUYET TOAN AR/AP + HOA HONG + BIEN TRUC TIEP. Den cung `transport-settlement` va bien mat cung
   // no: mot khach van tai chua theo doi cong no khong duoc nap bang chung tu nao cua `TX-05`.
   owned('transport-settlement', TransportSettlementModule),
@@ -253,6 +261,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // va bien mat cung no: mot khach khong co cong de vao va khong co can de can thi khong mang
   // theo chin loai moc cua cong ty B.
   owned('transport-checkpoint', TransportCheckpointModule),
+  // NHAN VIEC TAI DIA DIEM A (`#267`). Den cung `transport-site-intake` va bien mat cung no: mot
+  // khach dieu xe tu van phong khong co nut `Tao chuyen` tren dien thoai lai xe, va do la mot cau
+  // hinh hop le — xem khoi chu cua `transport-site-intake.module.ts`.
+  owned('transport-site-intake', TransportSiteIntakeModule),
   // NGHIEM THU CHUNG TU / THUONG MAI (`#268`). Den cung `transport-acceptance` va bien mat cung
   // no — nhung mot khach bat `transport-settlement` KHONG duoc phep tat no: xem khoi phu thuoc
   // trong `tenant.schema.ts`. Mot cong tai chinh co che do tat thi khong con la mot cong.
@@ -297,6 +309,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-core', ControlTowerController),
   // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
   owned('transport-core', CounterpartyController),
+  // `#267` H1: dia diem van hanh la mot MAT cua ho so phap nhan, nen no den/di cung `transport-core`
+  // chu khong cung capability nhan dang. Mot khach khai kho cua khach hang minh ma khong bat bam
+  // vi tri la mot cau hinh hop le.
+  owned('transport-core', CounterpartySitesController),
   /*
    * `TX-08` so huu tai san. Ca hai thuoc `transport-core` — quyen so huu la mot su that ve chinh
    * chiec xe, khong phai mot lop nghiep vu them vao, nen khach nao bat duoc doi xe thi cung tra loi
@@ -345,6 +361,9 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // mat cung no: khong co phieu dau thi khong co anh phieu dau de xem.
   owned('transport-fuel', DriverFuelEvidenceController),
   owned('transport-fuel', FuelEvidenceController),
+  // ETC — tai khoan giao thong, nap nguon, va hop thu doi soat. MOT controller cho ca ba vi chung
+  // dung chung mot tien to route va mot vong doi; ba ma quyen RIENG moi la thu tach chung ra.
+  owned('transport-toll', TollController),
   // `TX-06` — bao duong, giay to, trang thai hieu luc cua doi xe.
   owned('transport-asset-compliance', MaintenanceController),
   owned('transport-asset-compliance', ComplianceController),
@@ -386,6 +405,7 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // vi tri va chi tren vong chay cua chinh ho; be mat van hanh ghi duoc moi vong chay nhung KHONG
   // dinh kem chung cu vi tri. Xem `CheckpointService`: hai duong do tach han o tang dich vu.
   owned('transport-checkpoint', DriverCheckpointsController),
+  owned('transport-site-intake', DriverSiteIntakeController),
   owned('transport-checkpoint', CheckpointsController),
   // HANG CHO NGHIEM THU CHUNG TU — MOT be mat, va KHONG co ban 'cua chinh minh' cho lai xe.
   // Ca hai ma quyen deu nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi duoc mot duong

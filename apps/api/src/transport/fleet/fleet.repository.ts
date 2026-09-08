@@ -117,6 +117,19 @@ export abstract class FleetRepository {
     at: Date,
   ): Promise<VehicleDriverAssignment>;
   abstract listVehicleDriverAssignments(vehicleId?: string): Promise<VehicleDriverAssignment[]>;
+  /**
+   * XE ma lai xe nay DANG cam — `null` khi khong co ban phan cong nao con hieu luc.
+   *
+   * MOT truy van, khong phai mot lan doc ca bang roi loc: `#267` H4 doi xe phai duoc SUY tu trang
+   * thai phan cong chu khong tu than yeu cau, nen duong nay nam tren duong chay cua moi lan lai xe
+   * bam `Tao chuyen`. Loc trong bo nho se quet ca lich su phan cong cua toan doi xe cho mot cau
+   * hoi ve mot nguoi.
+   *
+   * "DANG", khong phai "TUNG" — va o day khac han `wasDriverEverAssignedToRun` cua `#243`. Cau
+   * hoi kia la mot cau ve QUYEN doc/ghi lich su; cau nay la mot cau ve HIEN TAI: chiec xe nao se
+   * duoc ghi vao vong chay sap tao. Mot ban phan cong da dong khong tra loi duoc cau do.
+   */
+  abstract activeVehicleForDriver(driverId: string): Promise<string | null>;
 
   abstract createCustomer(input: CreateCustomerInput): Promise<TransportCustomer>;
   abstract updateCustomer(
@@ -267,6 +280,13 @@ export class InMemoryFleetRepository extends FleetRepository {
     return this.vehicleDriverAssignments.filter(
       (entry) => vehicleId === undefined || entry.vehicleId === vehicleId,
     );
+  }
+
+  async activeVehicleForDriver(driverId: string): Promise<string | null> {
+    const active = this.vehicleDriverAssignments.find(
+      (entry) => entry.driverId === driverId && entry.effectiveTo === null,
+    );
+    return active?.vehicleId ?? null;
   }
 
   async createCustomer(input: CreateCustomerInput): Promise<TransportCustomer> {

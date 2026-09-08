@@ -19,7 +19,7 @@ import {
 const MIGRATION = readFileSync(
   fileURLToPath(
     new URL(
-      '../../../prisma/migrations/20260910090000_transport_commercial_acceptance/migration.sql',
+      '../../../prisma/migrations/20260910110000_transport_commercial_acceptance/migration.sql',
       import.meta.url,
     ),
   ),
