@@ -13,6 +13,7 @@ import type {
   ComplianceDocumentType,
   ControlTowerView,
   CorridorInsightView,
+  DispatchSuggestionView,
   FinanceSummaryView,
   FleetInsightView,
   RunJourneyMapView,
@@ -1213,6 +1214,26 @@ export const transportApi = {
    * chot 30 ngay gan nhat theo mui gio tenant — man hinh KHONG duoc tu tinh khoang bang
    * `new Date()`, vi mot nguoi mo bao cao luc 00:30 gio Viet Nam se ra mot khoang lech mot ngay.
    */
+  /**
+   * DE NGHI DIEU XE (Lane M, #277) — `POST`, va do KHONG phai mot lan ghi.
+   *
+   * `POST` vi lan goi mang mot the yeu cau (diem lay hang, han gio, tai trong) va co the goi mot
+   * nha cung cap dinh tuyen that — no co chi phi, co `@Throttle`, va khong dat vao mot URL duoc.
+   * `assignmentCreated: false` trong DTO nhac lai rang khong gi bi ghi.
+   *
+   * `assign()` la mot LENH KHAC: ma quyen khac (`transport.run.manage`), va no chi duoc goi sau khi
+   * mot con nguoi bam. Man hinh khong bao gio goi no thay nguoi dung.
+   */
+  dispatch: {
+    suggest: (
+      orderId: string,
+      body: Readonly<Record<string, unknown>> = {},
+    ): Promise<DispatchSuggestionView> =>
+      send('POST', `/transport/orders/${encodeURIComponent(orderId)}/dispatch-suggestions`, body),
+    assign: (orderId: string, body: Readonly<Record<string, unknown>>): Promise<unknown> =>
+      send('POST', `/transport/orders/${encodeURIComponent(orderId)}/dispatch-assignment`, body),
+  },
+
   insight: {
     fleet: (range?: { readonly from?: string; readonly to?: string }): Promise<FleetInsightView> =>
       get(`/transport/insight/fleet${toQuery({ from: range?.from, to: range?.to })}`),

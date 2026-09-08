@@ -132,6 +132,7 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
       'trips',
       'movement',
       'fleet',
+      'dispatch',
       'driver-fund',
       'expense-claims',
       'fuel',

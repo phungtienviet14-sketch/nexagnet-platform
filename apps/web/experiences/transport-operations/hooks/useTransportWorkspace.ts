@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useAuth } from '../../../components/auth/AuthGate';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
@@ -137,6 +137,42 @@ export function useFleetInsight(input: NavigationInput, range: { from?: string; 
     queryKey: ['transport', 'insight', 'fleet', range.from ?? 'auto', range.to ?? 'auto'],
     queryFn: () => transportApi.insight.fleet(range),
     enabled: allowed(input, 'transport-core', 'transport.analytics.read'),
+  });
+}
+
+/**
+ * DE NGHI DIEU XE (Lane M, #277) — mot `useMutation`, va do la co y.
+ *
+ * KHONG phai `useQuery`: lan goi la `POST`, co `@Throttle`, va co the goi mot nha cung cap dinh
+ * tuyen that. Mot `useQuery` se tu chay lai khi cua so lay lai tieu diem, khi mang noi lai, khi
+ * khoa doi — moi lan la mot chi phi that ma khong ai bam nut. Nguoi dung bam "Tim xe", va CHI luc
+ * do mot lan hoi duoc gui.
+ */
+export function useDispatchSuggestions() {
+  return useMutation({
+    mutationFn: (input: { orderId: string; requiredPickupAt?: string | null }) =>
+      transportApi.dispatch.suggest(input.orderId, {
+        requiredPickupAt: input.requiredPickupAt ?? null,
+      }),
+  });
+}
+
+/**
+ * BOSS DA CHON — lenh gan xe. Ma quyen KHAC (`transport.run.manage`).
+ *
+ * `#278` N3: *"Boss chooses; map does not auto-assign."* Khong mot cho nao trong man hinh goi ham
+ * nay thay nguoi dung: no chi chay tu mot `onClick` tren dung mot chiec xe da duoc chon.
+ */
+export function useDispatchAssignment() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { orderId: string; vehicleId: string }) =>
+      transportApi.dispatch.assign(input.orderId, { vehicleId: input.vehicleId }),
+    onSuccess: () => {
+      /* Vong chay vua doi — bang dieu hanh va danh sach vong chay phai doc lai. */
+      void client.invalidateQueries({ queryKey: TRANSPORT_QUERY_KEYS.runs });
+      void client.invalidateQueries({ queryKey: TRANSPORT_QUERY_KEYS.controlTower });
+    },
   });
 }
 

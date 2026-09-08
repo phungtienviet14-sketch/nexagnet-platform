@@ -1959,6 +1959,83 @@ export interface CorridorInsightView {
 }
 
 /* ------------------------------------------------------------------ *
+ * DE NGHI DIEU XE — `POST /transport/orders/:id/dispatch-suggestions` (Lane M, #277)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/dispatch/dispatch.types.ts`.
+ *
+ * HAI DIEU KHONG DUOC QUEN KHI VE MAN HINH NAY:
+ *
+ *   1. `assignmentCreated` LUON `false`. Mot bang xep hang khong phai mot lan phan cong; nguoi
+ *      quyet la boss, va lenh gan xe di qua MOT tuyen KHAC voi mot ma quyen KHAC.
+ *   2. `point` co the `null` kem `pointRedacted: true` — nguoi dang xem khong co quyen doc toa do.
+ *      Do KHONG phai "chua co du lieu", va man hinh phai noi hai dieu do khac nhau.
+ */
+export type DispatchCandidateMode = 'CURRENT_NEAR' | 'NEXT_FREE_NEAR';
+
+export type LocationFreshness = 'FRESH' | 'AGEING' | 'STALE';
+
+export interface ResolvedPlaceView {
+  /** `null` khi khong giai duoc HOAC khi nguoi goi khong co quyen doc toa do. */
+  readonly point: GeoPoint | null;
+  /** `true` = CO toa do nhung da bi che vi quyen. Khac han `point === null` vi thieu du lieu. */
+  readonly pointRedacted: boolean;
+  readonly source: string;
+  readonly label: string;
+  readonly geofenceId: string | null;
+  readonly siteId: string | null;
+}
+
+export interface VehicleCurrentLocationView {
+  readonly observedAt: string;
+  readonly ageSeconds: number;
+  readonly freshness: LocationFreshness;
+  readonly accuracyGrade: string;
+  readonly source: string;
+  readonly point: GeoPoint | null;
+  readonly pointRedacted: boolean;
+}
+
+export interface DispatchCandidate {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly mode: DispatchCandidateMode;
+  readonly origin: ResolvedPlaceView;
+  /** `null` = khong tinh duoc luc xe ranh. */
+  readonly availableAt: string | null;
+  readonly availableAtIsLowerBound: boolean;
+  /** KM CHAY RONG THEM VAO, tinh bang MET theo duong bo. */
+  readonly emptyRoadMetresToPickup: number;
+  readonly roadSecondsToPickup: number;
+  readonly pickupEtaAt: string | null;
+  /** `null` = don khong co han lay hang, khong phai "chua tinh". */
+  readonly meetsRequiredPickupAt: boolean | null;
+  readonly suitability: readonly string[];
+  readonly currentLocation: VehicleCurrentLocationView | null;
+}
+
+export interface DispatchExclusion {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly reasons: readonly string[];
+  readonly reasonSummary: string;
+}
+
+export interface DispatchSuggestionView {
+  readonly orderId: string;
+  readonly orderCode: string;
+  readonly pickup: { readonly place: ResolvedPlaceView; readonly resolution: string };
+  readonly requiredPickupAt: string | null;
+  readonly generatedAt: string;
+  readonly orderingKeys: readonly string[];
+  readonly candidates: readonly DispatchCandidate[];
+  readonly excluded: readonly DispatchExclusion[];
+  /** LUON `false`. Mot de nghi khong bao gio la mot lan phan cong (#277 M9). */
+  readonly assignmentCreated: false;
+}
+
+/* ------------------------------------------------------------------ *
  * BANG TAI CHINH — `GET /transport/finance/summary` (Lane G, #244 G5)
  * ------------------------------------------------------------------ */
 

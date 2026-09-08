@@ -28,6 +28,7 @@ import { ExportsView } from './views/ExportsView';
 import { MaintenanceComplianceView } from './views/MaintenanceView';
 import { DriverSettlementView } from './views/DriverSettlementView';
 import { CorridorView } from './views/CorridorView';
+import { DispatchView } from './views/DispatchView';
 import { ExecutiveView } from './views/ExecutiveView';
 import { FleetInsightView } from './views/FleetInsightView';
 import { JourneyView } from './views/JourneyView';
@@ -295,6 +296,8 @@ function SectionBody({
       return <JourneyView selection={selection} onSelect={onSelect} />;
     // Lane N (#278 N6/N7/N8) — ba be mat bao cao. `ExecutiveView` khong co lan goi API rieng nao:
     // no ghep ba read model da nghiem thu, de cong ty khong co hai con so cho cung mot cau hoi.
+    case 'dispatch':
+      return <DispatchView />;
     case 'routes':
       return <CorridorView />;
     case 'fleet-dashboard':

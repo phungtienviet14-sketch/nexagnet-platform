@@ -44,6 +44,7 @@ export type TransportSectionId =
   | 'finance'
   | 'margin'
   | 'ar-ap'
+  | 'dispatch'
   | 'journey'
   | 'routes'
   | 'fleet-dashboard'
@@ -130,6 +131,21 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Hồ sơ xe, hồ sơ lái xe, lịch sử phụ trách và số km đồng hồ.',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.vehicle.read',
+  },
+  {
+    id: 'dispatch',
+    label: 'Điều xe',
+    group: 'dispatch',
+    summary: 'Xe nào gần điểm lấy hàng, sẽ rảnh lúc nào, chạy rỗng thêm bao nhiêu — người chọn.',
+    /**
+     * `transport.dispatch.suggest.read` — ma cua Lane M (#277), khong phai mot ma moi cua Lane N.
+     *
+     * Muc nam o nhom DIEU HANH chu khong o nhom BAO CAO: day la mot man hinh nguoi truc dung de
+     * LAM VIEC, khong phai mot bao cao de doc. Lenh gan xe di sau `transport.run.manage` va duoc
+     * kiem lai o may chu.
+     */
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.dispatch.suggest.read',
   },
   {
     id: 'driver-fund',
