@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { BOOT_SPAWN_TIMEOUT_MS, BOOT_TEST_TIMEOUT_MS } from './boot-spec-timeout.js';
 
 const apiDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureDir = resolve(apiDir, '../../packages/tenant/src/__tests__/fixtures/transport-core');
@@ -20,8 +21,10 @@ const fixtureDir = resolve(apiDir, '../../packages/tenant/src/__tests__/fixtures
  * hien luc lap dat.
  */
 describe('transport-core process boot contract', () => {
-  it('boot Nest that chi voi transport-core: khong Zalo, khong parser, khong don hang', () => {
-    const script = `
+  it(
+    'boot Nest that chi voi transport-core: khong Zalo, khong parser, khong don hang',
+    () => {
+      const script = `
       import { NestFactory } from '@nestjs/core';
       const { AppModule } = await import('./src/app.module.ts');
       const { FleetService } = await import('./src/transport/fleet/fleet.service.ts');
@@ -60,53 +63,55 @@ describe('transport-core process boot contract', () => {
       process.stdout.write('<<TRANSPORT_BOOT_PROOF>>' + JSON.stringify(proof));
     `;
 
-    const env = { ...process.env };
-    delete env.ANTHROPIC_API_KEY;
-    delete env.DEEPSEEK_API_KEY;
-    delete env.FLOWISE_API_KEY;
-    delete env.FLOWISE_BASE_URL;
-    delete env.FLOWISE_FLOW_ID;
-    delete env.ZALO_BOT_TOKEN;
-    delete env.TENANT;
-    env.TENANT_DIR = fixtureDir;
-    env.PERSISTENCE = 'memory';
-    env.NODE_ENV = 'test';
+      const env = { ...process.env };
+      delete env.ANTHROPIC_API_KEY;
+      delete env.DEEPSEEK_API_KEY;
+      delete env.FLOWISE_API_KEY;
+      delete env.FLOWISE_BASE_URL;
+      delete env.FLOWISE_FLOW_ID;
+      delete env.ZALO_BOT_TOKEN;
+      delete env.TENANT;
+      env.TENANT_DIR = fixtureDir;
+      env.PERSISTENCE = 'memory';
+      env.NODE_ENV = 'test';
 
-    const child = spawnSync(
-      process.execPath,
-      ['--import', '@swc-node/register/esm-register', '--input-type=module', '--eval', script],
-      { cwd: apiDir, env, encoding: 'utf8', timeout: 60_000 },
-    );
+      const child = spawnSync(
+        process.execPath,
+        ['--import', '@swc-node/register/esm-register', '--input-type=module', '--eval', script],
+        { cwd: apiDir, env, encoding: 'utf8', timeout: BOOT_SPAWN_TIMEOUT_MS },
+      );
 
-    expect(child.status, `${child.stderr}\n${child.stdout}`).toBe(0);
-    const proof = child.stdout.split('<<TRANSPORT_BOOT_PROOF>>')[1];
-    expect(proof, `khong tim thay dau moc trong stdout:\n${child.stdout}`).toBeDefined();
-    expect(JSON.parse(proof ?? '{}')).toEqual({
-      fleet: true,
-      trips: true,
-      orders: false,
-      zalo: false,
-      /**
-       * GHIM MOT SU THAT DO DUOC, khong phai mot mong muon.
-       *
-       * `KnowledgeService` van resolve duoc o mot khach KHONG bat `knowledge`. Duong di do duoc:
-       * `AuthModule` (owner `foundation`) import `OperationalSettingsModule` (owner `operations`),
-       * va module do import `KnowledgeModule` — von la `@Global()`. Nen do thi module cua hai
-       * capability duoc nap cho MOI khach, bat ke ho khai gi.
-       *
-       * Day la mot khoang cach cua NEN TANG, khong phai cua van tai, va sua no la mot thay doi
-       * quyen so huu composition anh huong moi khach — nam ngoai T2. Ghim lai o day de: (a) su that
-       * duoc ghi ra thay vi nam im, va (b) ngay ai do sua duoc no thi bai test nay DO, va nguoi sua
-       * biet ngay minh vua dong dung cai khe ho da biet.
-       *
-       * He qua truc tiep len van tai: `TransportModule` PHAI tu cung cap `AuditLogService` cua
-       * chinh no. Duong toan cuc kia hom nay co ho no, nhung do la mot tai nan — cai gi den bang
-       * tai nan thi cung bien mat bang tai nan.
-       */
-      knowledgeLeaksIntoEveryTenant: true,
-      tripStatus: 'IN_TRANSIT',
-      businessDateLength: 10,
-      currencyCode: 'VND',
-    });
-  }, 70_000);
+      expect(child.status, `${child.stderr}\n${child.stdout}`).toBe(0);
+      const proof = child.stdout.split('<<TRANSPORT_BOOT_PROOF>>')[1];
+      expect(proof, `khong tim thay dau moc trong stdout:\n${child.stdout}`).toBeDefined();
+      expect(JSON.parse(proof ?? '{}')).toEqual({
+        fleet: true,
+        trips: true,
+        orders: false,
+        zalo: false,
+        /**
+         * GHIM MOT SU THAT DO DUOC, khong phai mot mong muon.
+         *
+         * `KnowledgeService` van resolve duoc o mot khach KHONG bat `knowledge`. Duong di do duoc:
+         * `AuthModule` (owner `foundation`) import `OperationalSettingsModule` (owner `operations`),
+         * va module do import `KnowledgeModule` — von la `@Global()`. Nen do thi module cua hai
+         * capability duoc nap cho MOI khach, bat ke ho khai gi.
+         *
+         * Day la mot khoang cach cua NEN TANG, khong phai cua van tai, va sua no la mot thay doi
+         * quyen so huu composition anh huong moi khach — nam ngoai T2. Ghim lai o day de: (a) su that
+         * duoc ghi ra thay vi nam im, va (b) ngay ai do sua duoc no thi bai test nay DO, va nguoi sua
+         * biet ngay minh vua dong dung cai khe ho da biet.
+         *
+         * He qua truc tiep len van tai: `TransportModule` PHAI tu cung cap `AuditLogService` cua
+         * chinh no. Duong toan cuc kia hom nay co ho no, nhung do la mot tai nan — cai gi den bang
+         * tai nan thi cung bien mat bang tai nan.
+         */
+        knowledgeLeaksIntoEveryTenant: true,
+        tripStatus: 'IN_TRANSIT',
+        businessDateLength: 10,
+        currencyCode: 'VND',
+      });
+    },
+    BOOT_TEST_TIMEOUT_MS,
+  );
 });

@@ -343,6 +343,36 @@ export const TRANSPORT_ACTIONS = [
    * mot lai xe khong lap duoc chung cu bat dau thi cung khong chay duoc chuyen.
    */
   'transport.driver.self.proof.record',
+  /**
+   * MOC VAN HANH CUA CHINH MINH — lai xe ghi den noi / vao cong / boc hang / roi kho / giao xong.
+   *
+   * MOT ma cho ca chin loai moc, khong tach theo loai: chin duong do khac nhau o THU TU va o
+   * CHINH SACH CHUNG CU, ca hai deu la quy tac NGHIEP VU thuoc dich vu, khong phai ranh gioi
+   * QUYEN. Tach thanh chin ma se goi y rang cap duoc cai nay ma khong cap cai kia — trong khi mot
+   * lai xe khong ghi duoc moc den noi thi cung khong hoan thanh duoc chuyen.
+   *
+   * Cong THAT nam o `CheckpointService.recordAsDriver` (`wasDriverEverAssignedToRun`); ma nay chi
+   * bao dam be mat lai xe khong bao gio cham toi duong van hanh.
+   */
+  'transport.driver.self.checkpoint.record',
+  /* --- `transport-checkpoint` (Lane F, Issue #243) --- */
+  /**
+   * DOC dong thoi gian van hanh cua mot chuyen — moc, giai doan tung chang, canh bao thieu chung
+   * cu. KHONG co toa do, cung quy uoc voi `transport.tracking.read`.
+   *
+   * Ke toan CO ma nay: mot khoan phu cap cho phai doi chieu duoc voi luc xe den noi va luc nguoi
+   * nhan nhan hang, va do dung la viec cua ke toan.
+   */
+  'transport.checkpoint.read',
+  /**
+   * GHI mot moc tu be mat VAN HANH — trong thuc te la `ASSIGNED`, va cac moc bu khi lai xe khong
+   * ghi duoc (het pin, mat song ca ngay).
+   *
+   * TACH HAN khoi `transport.driver.self.checkpoint.record`, va do la ca diem. Ma nay ghi duoc cho
+   * BAT KY vong chay nao va KHONG kem chung cu vi tri — nguoi ngoi van phong khong o hien truong.
+   * Cap no cho lai xe se cho ho ghi moc "da den noi" ma khong can o do.
+   */
+  'transport.checkpoint.record',
   /** Van hanh doc TOM TAT bam vi tri — dem, quang duong, co rui ro. KHONG co toa do. */
   'transport.tracking.read',
   /** Van hanh doc TOM TAT chung cu — loai, so anh, cach chup, phan quyet hang rao. KHONG toa do. */
@@ -412,6 +442,7 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.tracking.report',
   'transport.driver.self.tracking.stop',
   'transport.driver.self.proof.record',
+  'transport.driver.self.checkpoint.record',
 ];
 
 /**
@@ -491,6 +522,18 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * duong di, no di qua mot nguoi co `ADMIN` va de lai mot dong o `tracking.history_read`.
    */
   'transport.location.history.read',
+  /**
+   * GHI moc van hanh (`#243` F1) — Ke toan DOC duoc dong thoi gian, KHONG ghi duoc moc.
+   *
+   * Day la mot phan cong nhiem vu, khong phai su nghi ngo. F4 dat phu cap cho tren mot con so do
+   * duoc tu chinh chuoi moc: gio den noi, gio nguoi nhan nhan hang. Neu nguoi DUYET khoan tien do
+   * cung sua duoc can cu sinh ra no thi cong duyet cua F4 khong con y nghia gi — no chi con kiem
+   * mot con so ma chinh nguoi kiem viet ra.
+   *
+   * Ke toan van GIU `transport.checkpoint.read`: doi soat mot khoan phu cap thi phai nhin duoc
+   * dong thoi gian. Doc thi can, ghi thi khong.
+   */
+  'transport.checkpoint.record',
   /**
    * Ke toan DOC duoc chung cu, va do la ca cong viec cua ho. RUT mot chung cu la viec khac.
    *

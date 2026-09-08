@@ -245,6 +245,18 @@ export const CAPABILITY_IDS = [
    * KHONG mot co rui ro nao o day sinh ra cong no, tru luong hay ket luan gian lan (#232 D-02).
    */
   'transport-proof',
+  /**
+   * MOC VAN HANH, TAI LIEU HIEN TRUONG VA THOI GIAN CHO (Issue #243 Lane F) — moc gan vao
+   * `VehicleRun`/`RunLeg`, phieu cong/can/giao, phien cho nguoi nhan, phu cap cho cua lai xe.
+   *
+   * MOT CAPABILITY RIENG, cung ly le voi `transport-proof` ngay tren: mot khach van tai phai chay
+   * duoc MA KHONG co quy trinh cong/can/phieu giao. Quy trinh do la cua cong ty B; khach chi chay
+   * chuyen le thi khong co cong de vao va khong co can de can. Gop chin loai moc vao
+   * `transport-core` se bat moi khach van tai mang theo quy trinh cua dung mot khach.
+   *
+   * HAI phu thuoc, va ca hai deu that — xem `transport-checkpoint.module.ts`.
+   */
+  'transport-checkpoint',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -678,6 +690,22 @@ const capabilityRequirements = {
    * nen khai o day se bien mot khoi hoan toan tuy chon thanh mot dieu kien boot.
    */
   'transport-proof': { dependencies: ['transport-core'] },
+  /**
+   * HAI phu thuoc, khac han `transport-proof` ngay tren — va cai thu hai la co y.
+   *
+   * `transport-core` thi hien nhien: moc gan vao `VehicleRun`/`RunLeg`.
+   *
+   * `transport-proof` thi khong hien nhien, nen ghi ro: `#243` F3 goi nut `Da den noi` la mot hanh
+   * dong *"backed by accepted location proof"*, va `#241` goi ca khoi nay la mot
+   * *"proof-bearing checkpoint timeline"*. Mot dong thoi gian khong chung minh duoc lan den noi
+   * KHONG tra loi duoc cau hoi ma ca hai van ban dat ra — nen phu thuoc nay la mot phan cua dinh
+   * nghia, khong phai mot tien nghi. Khai no o day bien dieu do thanh dieu kien boot thay vi mot
+   * cot `null` phat hien ra sau ba thang.
+   *
+   * KHONG khai `policy`: moi mac dinh cua no (loai moc doi vi tri) deu dung duoc ngay cho ho so B,
+   * nen khai se bien mot khoi tuy chon thanh mot dieu kien boot. Cung ly le voi `transport-proof`.
+   */
+  'transport-checkpoint': { dependencies: ['transport-core', 'transport-proof'] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { BOOT_SPAWN_TIMEOUT_MS, BOOT_TEST_TIMEOUT_MS } from '../boot-spec-timeout.js';
 
 const apiDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const fixtureDir = resolve(apiDir, '../../packages/tenant/src/__tests__/fixtures/neutral-turn');
@@ -14,8 +15,10 @@ const fixtureDir = resolve(apiDir, '../../packages/tenant/src/__tests__/fixtures
  * dependency cua sales-order la boot no ngay). Chi mot tien trinh boot that moi bat duoc chuyen do.
  */
 describe('neutral tenant process boot contract', () => {
-  it('boot Nest that voi turn-processing ma KHONG co don, gia hay ERP', () => {
-    const script = `
+  it(
+    'boot Nest that voi turn-processing ma KHONG co don, gia hay ERP',
+    () => {
+      const script = `
       import { NestFactory } from '@nestjs/core';
       const { AppModule } = await import('./src/app.module.ts');
       const { PipelineService } = await import('./src/pipeline/pipeline.service.ts');
@@ -49,43 +52,45 @@ describe('neutral tenant process boot contract', () => {
       await context.close();
       process.stdout.write(JSON.stringify(proof));
     `;
-    const env = { ...process.env };
-    delete env.ANTHROPIC_API_KEY;
-    delete env.FLOWISE_API_KEY;
-    delete env.FLOWISE_BASE_URL;
-    delete env.FLOWISE_FLOW_ID;
-    delete env.ZALO_BOT_TOKEN;
-    delete env.TENANT;
-    env.TENANT_DIR = fixtureDir;
-    env.PERSISTENCE = 'memory';
-    env.PARSER_MODE = 'deepseek';
-    // Khoa GIA — parser duoc DUNG NEN nhung khong goi ra ngoai trong bai nay.
-    env.DEEPSEEK_API_KEY = 'sk-test-khong-goi-that';
-    env.CHANNEL_MODE = 'mock';
-    env.NODE_ENV = 'test';
+      const env = { ...process.env };
+      delete env.ANTHROPIC_API_KEY;
+      delete env.FLOWISE_API_KEY;
+      delete env.FLOWISE_BASE_URL;
+      delete env.FLOWISE_FLOW_ID;
+      delete env.ZALO_BOT_TOKEN;
+      delete env.TENANT;
+      env.TENANT_DIR = fixtureDir;
+      env.PERSISTENCE = 'memory';
+      env.PARSER_MODE = 'deepseek';
+      // Khoa GIA — parser duoc DUNG NEN nhung khong goi ra ngoai trong bai nay.
+      env.DEEPSEEK_API_KEY = 'sk-test-khong-goi-that';
+      env.CHANNEL_MODE = 'mock';
+      env.NODE_ENV = 'test';
 
-    const child = spawnSync(
-      process.execPath,
-      ['--import', '@swc-node/register/esm-register', '--input-type=module', '--eval', script],
-      { cwd: apiDir, env, encoding: 'utf8', timeout: 60_000 },
-    );
+      const child = spawnSync(
+        process.execPath,
+        ['--import', '@swc-node/register/esm-register', '--input-type=module', '--eval', script],
+        { cwd: apiDir, env, encoding: 'utf8', timeout: BOOT_SPAWN_TIMEOUT_MS },
+      );
 
-    expect(child.status, `${child.stderr}\n${child.stdout}`).toBe(0);
-    expect(JSON.parse(child.stdout)).toEqual({
-      // Co duong xu ly luot day du…
-      pipeline: true,
-      orchestrator: true,
-      turnRecords: true,
-      turnReply: true,
-      conversations: true,
-      messages: true,
-      parser: true,
-      // …va TUYET DOI khong co gi cua ban hang.
-      ordersService: false,
-      ordersRepository: false,
-      orderCommands: false,
-      erp: false,
-      campaign: false,
-    });
-  }, 70_000);
+      expect(child.status, `${child.stderr}\n${child.stdout}`).toBe(0);
+      expect(JSON.parse(child.stdout)).toEqual({
+        // Co duong xu ly luot day du…
+        pipeline: true,
+        orchestrator: true,
+        turnRecords: true,
+        turnReply: true,
+        conversations: true,
+        messages: true,
+        parser: true,
+        // …va TUYET DOI khong co gi cua ban hang.
+        ordersService: false,
+        ordersRepository: false,
+        orderCommands: false,
+        erp: false,
+        campaign: false,
+      });
+    },
+    BOOT_TEST_TIMEOUT_MS,
+  );
 });

@@ -131,6 +131,9 @@ import { TransportProofModule } from './transport/proof/transport-proof.module.j
 import { DriverTrackingController } from './transport/proof/driver-tracking.controller.js';
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
+import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
+import { CheckpointsController } from './transport/checkpoint/checkpoints.controller.js';
+import { DriverCheckpointsController } from './transport/checkpoint/driver-checkpoints.controller.js';
 import { ProofReviewController } from './transport/proof/proof-review.controller.js';
 import { OperationalAlertsService } from './transport/asset-compliance/operational-alerts.service.js';
 import {
@@ -244,6 +247,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // BAM VI TRI. Mot khach van tai KHONG bat capability nay thi khong co mot bang toa do nao, va
   // do la mot cau hinh hop le — xem khoi chu thich cua `transport-proof` trong `tenant.schema.ts`.
   owned('transport-proof', TransportProofModule),
+  // MOC VAN HANH + TAI LIEU HIEN TRUONG + THOI GIAN CHO (`#243`). Den cung `transport-checkpoint`
+  // va bien mat cung no: mot khach khong co cong de vao va khong co can de can thi khong mang
+  // theo chin loai moc cua cong ty B.
+  owned('transport-checkpoint', TransportCheckpointModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -369,6 +376,11 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // roi: ke toan doc duoc, nhung khong rut duoc chung cu va khong doi duoc ban kinh mot hang rao
   // (hang rao cham LUC DOC, nen sua no doi ket luan cua ca nhung lan giao da xong).
   owned('transport-proof', ProofReviewController),
+  // MOC VAN HANH — HAI be mat, HAI quyen, HAI duong ghi khac nhau. Be mat lai xe ghi kem chung cu
+  // vi tri va chi tren vong chay cua chinh ho; be mat van hanh ghi duoc moi vong chay nhung KHONG
+  // dinh kem chung cu vi tri. Xem `CheckpointService`: hai duong do tach han o tang dich vu.
+  owned('transport-checkpoint', DriverCheckpointsController),
+  owned('transport-checkpoint', CheckpointsController),
 ];
 
 const guardProviders: readonly Provider[] = [
