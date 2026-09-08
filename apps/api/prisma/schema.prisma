@@ -4708,7 +4708,7 @@ model TransportTollReviewDecision {
 // mac dinh KHONG du dieu kien doi soat.
 //
 // CANH BAO — TRIGGER CHI-GHI-THEM KHONG CO TRONG TEP NAY. No song trong SQL tho cua migration
-// `20260910090000_transport_commercial_acceptance`, cung ly do voi `TransportRunCheckpoint`:
+// `20260910110000_transport_commercial_acceptance`, cung ly do voi `TransportRunCheckpoint`:
 // Prisma khong co cu phap cho TRIGGER, va `prisma migrate dev` SE sinh lenh xoa no neu ai do chay
 // roi commit thang. `transport-commercial-acceptance-storage.spec.ts` doc chinh tep migration do.
 
