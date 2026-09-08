@@ -336,6 +336,128 @@ async function probeDispatchSuggestions() {
   record('dispatch', 'ma-la=404');
 }
 
+/**
+ * BE MAT BAO CAO CUA LANE N (`#278` N15) — CHI DOC, va do la mot rang buoc chu khong mot lua chon.
+ *
+ * ============================================================================================
+ * VI SAO KHONG MOT PHEP DO NAO O DAY TAO DU LIEU
+ *
+ * Tang nay chay tren MOI stack, ke ca stack khach that. `#274` cam doi du lieu khach, nen mot phep
+ * do kieu "tao vong chay roi mo bao cao" la khong duoc phep — du no chung minh nhieu hon. Va mot
+ * phep do PHU THUOC du lieu khach con te hon: mot stack chua co vong chay nao se thanh mot lan
+ * deploy DO vi mot ly do khong lien quan gi den ban phat hanh.
+ *
+ * Nen cac phep do duoi day chi hoi, va chung duoc chon sao cho cau tra loi dung KHONG phu thuoc vao
+ * viec stack co bao nhieu du lieu.
+ */
+async function probeTransportReports() {
+  if (!has('transport-core')) {
+    record('bao-cao-van-tai', 'bo-qua(khong-co-transport-core)');
+    return;
+  }
+
+  /*
+   * 1. BANG DOI XE — `200` tren mot stack RONG cung la `200`.
+   *
+   * Doi `utilisationFormula` co mat trong than phan hoi, chu khong chi doi ma HTTP: chuoi do la
+   * cong thuc ty le su dung do chinh `insight-metrics.ts` phat ra. Mot `200` tu mot route khac (hay
+   * tu mot trang HTML cua Caddy) se khong mang no.
+   */
+  const fleet = await getJson('/transport/insight/fleet', 'INSIGHT_CONTRACT_FAILED');
+  if (typeof fleet?.utilisationFormula !== 'string' || !Array.isArray(fleet?.vehicles)) {
+    throw new SmokeFailure(
+      'INSIGHT_CONTRACT_FAILED',
+      '/transport/insight/fleet thieu `utilisationFormula` hoac `vehicles`',
+    );
+  }
+  record('doi-xe', `cong-thuc=${fleet.utilisationFormula}`);
+
+  /*
+   * 2. BAO CAO TUYEN — cung ly le, va `grouping` la cau cong bo rang tuyen duoc gom theo NHAN TU DO.
+   */
+  const corridors = await getJson('/transport/insight/corridors', 'INSIGHT_CONTRACT_FAILED');
+  if (typeof corridors?.grouping !== 'string') {
+    throw new SmokeFailure(
+      'INSIGHT_CONTRACT_FAILED',
+      '/transport/insight/corridors thieu cau cong bo `grouping`',
+    );
+  }
+  record('tuyen', `gom=${corridors.grouping}`);
+
+  /*
+   * 3. BAO CAO MOT VONG CHAY — hoi bang mot MA KHONG CO THAT, va doi `404` KEM ma ly do cua mien.
+   *
+   * Doi rieng ma `404` thi YEU: mot duong dan khong duoc gan cung tra `404`. Nen phep do nay doc
+   * `reason` trong than loi va doi dung `RUN_NOT_FOUND` — chuoi do chi ra duoc khi
+   * `JourneyController` da chay that va `JourneyReadService` da tra loi. Mot `404` cua Nest vi
+   * thieu route khong mang no.
+   *
+   * Ba dieu duoc chung minh, va ca ba deu tung hong that:
+   *
+   *   1. ROUTE CO THAT tren ban dang chay va di qua duoc Caddy — mot hang so trong danh sach hanh
+   *      dong KHONG chung minh dieu do (da xay ra: khai xong ma khong co duong HTTP);
+   *   2. PHIEN DANG NHAP DI QUA duoc cong `transport.run.read` — thieu quyen la `403`, khong `404`;
+   *   3. MA LA THI FAIL-CLOSED.
+   */
+  const journey = await fetch(`${baseUrl}/transport/journey/runs/smoke-khong-co-that`, {
+    headers: headers(),
+  });
+  const journeyBody = await journey.json().catch(() => null);
+  if (journey.status !== 404 || journeyBody?.reason !== 'RUN_NOT_FOUND') {
+    throw new SmokeFailure(
+      'JOURNEY_CONTRACT_FAILED',
+      `/transport/journey/runs/:ma voi ma la tra HTTP ${journey.status} reason=${journeyBody?.reason}, doi 404/RUN_NOT_FOUND`,
+    );
+  }
+  record('bao-cao-vong-chay', 'ma-la=404/RUN_NOT_FOUND');
+
+  /*
+   * 4. BAN DO cua chinh vong chay do la mot ROUTE KHAC, sau mot ma quyen KHAC
+   *    (`transport.location.history.read`). Phep do nay khong doi mot ma cu the: tuy vai cua tai
+   *    khoan smoke tren tung stack ma cau tra loi dung co the la `404` (qua duoc cong, ma la khong
+   *    co that) hoac `403` (vai do khong duoc xem lich su vi tri — ke toan chang han).
+   *
+   *    CA HAI deu la cau tra loi DUNG, va ghi lai cai nao da xay ra co ich hon la ep mot con so:
+   *    `200` moi la cau tra loi sai, vi no co nghia mot ma khong co that van mo ra duoc mot ban do.
+   */
+  const map = await fetch(`${baseUrl}/transport/journey/runs/smoke-khong-co-that/map`, {
+    headers: headers(),
+  });
+  if (![403, 404].includes(map.status)) {
+    throw new SmokeFailure(
+      'JOURNEY_CONTRACT_FAILED',
+      `/transport/journey/runs/:ma/map voi ma la tra HTTP ${map.status}, doi 403 hoac 404`,
+    );
+  }
+  record('ban-do-vong-chay', `ma-la=${map.status}`);
+}
+
+/**
+ * BE MAT BEN HUU QUAN (`#278` N9, va muc 12 cua N15) — pham vi phai FAIL-CLOSED.
+ *
+ * `transport.stakeholder.self.vehicle.read` khong duoc cap qua mot VAI nao ca: pham vi den tu mot
+ * hang `TransportAssetStakeholder.authUserId`. Tai khoan smoke la mot tai khoan van hanh, khong
+ * phai mot co dong — nen cau tra loi dung tren mot stack sach la `403`.
+ *
+ * Phep do KHONG ep `403`: neu mot ngay tai khoan van hanh cua mot stack nao do co gan ho so ben huu
+ * quan that, `200` cung la mot cau tra loi dung, va bien no thanh mot lan deploy DO se la mot bao
+ * dong gia. Cai bi tu choi la `404` va `5xx` — tuc route bien mat, hoac no no.
+ */
+async function probeStakeholderScope() {
+  if (!has('transport-core')) {
+    record('ben-huu-quan', 'bo-qua(khong-co-transport-core)');
+    return;
+  }
+  const response = await fetch(`${baseUrl}/transport/me/vehicles/activity`, { headers: headers() });
+  if (![200, 403].includes(response.status)) {
+    throw new SmokeFailure(
+      'STAKEHOLDER_SCOPE_CONTRACT_FAILED',
+      `/transport/me/vehicles/activity tra HTTP ${response.status}, doi 200 (la co dong) hoac 403 (khong phai)`,
+    );
+  }
+  record('ben-huu-quan', `pham-vi=${response.status}`);
+}
+
 /** SSE cua console. Mo duoc la du: noi dung su kien thuoc duong co LLM, khong thuoc tang nay. */
 async function probeStream() {
   if (!has('turn-processing')) {
@@ -369,6 +491,8 @@ async function main() {
   const knowledgeProducts = await probeKnowledge();
   await probeTurnRecords();
   await probeDispatchSuggestions();
+  await probeTransportReports();
+  await probeStakeholderScope();
   await probeStream();
 
   // PHA SAU KHOI DONG LAI: du lieu phai con y nguyen. Day la phep do ben vung duy nhat khong can
