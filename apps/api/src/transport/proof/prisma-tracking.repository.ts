@@ -108,6 +108,23 @@ export class PrismaTrackingRepository extends TrackingRepository {
     return row ? toObservation(row) : null;
   }
 
+  /**
+   * Ban dinh vi moi nhat cua mot CHIEC XE — loc qua quan he phien.
+   *
+   * `@@index([sessionId, capturedAt])` khong phuc vu truy van nay, va do la mot su that duoc chap
+   * nhan co y thuc: doi xe hien tai khoang 10 chiec va moi lan mo bang de nghi chi hoi dung mot
+   * lan cho moi xe. Ngay con so do doi (mot bang dieu hanh tu lam moi moi 10 giay cho 100 xe), cau
+   * tra loi dung la mot chi muc `(sessionId, receivedAt)` hoac mot bang "vi tri gan nhat" duoc cap
+   * nhat luc nhan tin — khong phai mot bo nho dem o tang nay.
+   */
+  async latestObservationForVehicle(vehicleId: string): Promise<LocationObservation | null> {
+    const row = await this.prisma.transportLocationObservation.findFirst({
+      where: { session: { vehicleId } },
+      orderBy: { receivedAt: 'desc' },
+    });
+    return row ? toObservation(row) : null;
+  }
+
   async findObservationById(observationId: string): Promise<LocationObservation | null> {
     const row = await this.prisma.transportLocationObservation.findUnique({
       where: { id: observationId },

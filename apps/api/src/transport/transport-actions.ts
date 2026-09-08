@@ -500,6 +500,28 @@ export const TRANSPORT_ACTIONS = [
    * quyet dinh cua chinh ho.
    */
   'transport.commercial_acceptance.decide',
+
+  /* --- `TX-11` DIEU XE / DE NGHI XE CHO MOT DON (Lane M, Issue #277) --- */
+  /**
+   * DOC bang de nghi xe cho mot don — CHI DOC, khong sinh mot phan cong nao.
+   *
+   * MA MOI, va no CO Y khong gop vao `transport.run.read`: ma kia tra loi *"vong chay nao dang
+   * chay"*; ma nay mo mot be mat NHIN CA DOI XE kem vi tri hien tai cua tung chiec. Gop lam mot se
+   * bien moi nguoi xem duoc mot vong chay thanh nguoi xem duoc ca doi xe dang o dau.
+   *
+   * `OPERATIONS_ACTIONS` duoc suy ra bang phep tru, nen ma nay tu dong duoc cap cho `ADMIN` va
+   * `ACCOUNTING`, va tu dong KHONG cap cho `SALE` (vai as-built cua lai xe) lan `MANAGER`. Do la
+   * dung cau tra loi cua `#277 M13`: *"driver cannot query fleet-wide dispatch suggestions"*.
+   *
+   * KHONG co ma thu hai cho lan GHI. Boss bam xac nhan thi duong ghi di qua `transport.run.manage`
+   * — chinh ma da chi phoi moi lan ghi vong chay/chang tren `main` hom nay. Che them mot ma rieng
+   * se tao mot duong ghi vong chay THU HAI voi mot bang phan quyen khac, va `#277 M13` cam mo rong
+   * quyen cho tien (*"do not broaden rights by convenience"*).
+   *
+   * TOA DO trong ket qua van chiu them mot cong nua: chung chi hien khi nguoi goi CO
+   * `transport.location.history.read`. Xem `DispatchController.callerOf()`.
+   */
+  'transport.dispatch.suggest.read',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];

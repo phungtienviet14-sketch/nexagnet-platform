@@ -485,6 +485,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.customer.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
+    "transport.dispatch.suggest.read": {
+      "functionName": "DispatchController.suggest",
+      "filePath": "apps/api/src/transport/dispatch/dispatch.controller.ts",
+      "line": 64
+    },
     "transport.driver.manage": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
@@ -915,6 +920,31 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "CounterpartyService.unlink",
       "filePath": "apps/api/src/transport/counterparty/counterparty.service.ts",
       "line": 148
+    },
+    "dispatch.candidate_filter|*": {
+      "functionName": "DispatchService.suggest",
+      "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
+      "line": 226
+    },
+    "dispatch.commit|*": {
+      "functionName": "DispatchService.commit",
+      "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
+      "line": 335
+    },
+    "dispatch.commit|COMMIT_REVALIDATION_FAILED": {
+      "functionName": "DispatchService.commit",
+      "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
+      "line": 316
+    },
+    "dispatch.pickup_resolution|*": {
+      "functionName": "DispatchService.resolvePickup",
+      "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
+      "line": 393
+    },
+    "dispatch.route_estimate|*": {
+      "functionName": "DispatchService.routeGroupToPickup",
+      "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
+      "line": 683
     },
     "driver.self_expense_scope|*": {
       "functionName": "CostingReadService.selfTripExpenseEvidence",
