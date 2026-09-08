@@ -201,6 +201,17 @@ import { TripService } from './trips/trip.service.js';
     AssetOwnershipScopeService,
     TransportActionGuard,
     FleetRepository,
+    /*
+     * `transport-acceptance` (`#268` Lane I) tiem thang `CounterpartyRepository` qua
+     * `AcceptanceCounterpartyFactsAdapter`. Thieu dong nay thi Nest khong giai duoc phu thuoc va
+     * TIEN TRINH API CHET LUC KHOI DONG — khong phai mot loi luc chay, ma la khong boot duoc.
+     *
+     * No da lot qua moi cong mot lan: `tsc` xanh (kieu dung het), test don vi xanh (dung lop truc
+     * tiep, khong qua injector), `*.composition.spec.ts` xanh (chi hoi provider co TRONG DANH SACH
+     * khong). Cai bat duoc no la `app.module.transport-preview.boot.spec.ts` — va bai do duoc them
+     * cung luc voi dong nay.
+     */
+    CounterpartyRepository,
     CounterpartySiteRepository,
     TripRepository,
     MovementRepository,
