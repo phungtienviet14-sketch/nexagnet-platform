@@ -34,7 +34,7 @@
       "timeZone": "Asia/Ho_Chi_Minh"
     },
     "transportPlanning": {
-      "runGrouping": "MULTI_ORDER_RUN",
+      "runGrouping": "ONE_ORDER_PER_RUN",
       "depots": [
         {
           "code": "DEPOT-HN",
