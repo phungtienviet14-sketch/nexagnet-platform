@@ -177,7 +177,15 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       await expect(
         prisma.$executeRawUnsafe(
-          'UPDATE "TransportCommercialAcceptanceDecision" SET "outcome" = $1 WHERE "id" = $2',
+          /*
+           * ÉP KIỂU TƯỜNG MINH — không phải trang trí.
+           *
+           * Postgres KHÔNG tự ép `text` sang enum cho một tham số buộc, nên bản đầu của bài này
+           * hỏng ở `42804` (sai kiểu) TRƯỚC khi chạm tới trigger. Nó vẫn "ném", nên bài vẫn XANH
+           * nếu chỉ khẳng định là có ném — tức một bài chứng minh sai điều nó tưởng đang chứng
+           * minh. Ép kiểu ở đây làm câu lệnh HỢP LỆ, để thứ duy nhất còn có thể chặn nó là trigger.
+           */
+          'UPDATE "TransportCommercialAcceptanceDecision" SET "outcome" = $1::"TransportCommercialAcceptanceOutcome" WHERE "id" = $2',
           'REJECTED',
           decision.id,
         ),
