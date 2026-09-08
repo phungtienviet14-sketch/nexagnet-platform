@@ -6,6 +6,11 @@
 - **Chỉ thị:** Issue #268 (hợp đồng lane) · điều phối #266 · cha #241 / #229
 - **Nguồn phụ thuộc:** #243 Lane F (F1 mốc vận hành đã merge, F2 chứng từ CHƯA merge) · #223 File Platform (CHƯA merge)
 
+> ⚠️ **CHỦ THỂ ĐÃ ĐỔI — đọc [transport-order-completion.md](transport-order-completion.md) trước.** Tài liệu này mô tả Lane I (#268), nơi chủ thể
+> nghiệm thu là **vòng chạy**. `#275` (Lane K) đã chuyển chủ thể sang **đơn hàng**, bỏ nhánh
+> `NOT_PROJECTED ⇒ cho qua` của PR #273, và thay hai đường HTTP `runs/:runId` bằng `orders/:orderId`.
+> Mọi lập luận về đo đạc và về tách nhiệm vụ ở đây vẫn đúng; phần **hạt** thì không.
+
 > **Tài liệu nền tảng — không nhắc tên khách.** Công ty B xuất hiện ở đây dưới vai _reference
 > tenant_; tham số riêng nằm ở `tenants/<slug>/`.
 

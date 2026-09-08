@@ -270,3 +270,38 @@ describe('trang thai tren dia chi', () => {
     expect(parseNavigationFromSearch(rebuilt, director())).toEqual(once);
   });
 });
+
+/**
+ * `#275` K3/K4 — MUC `Ket thuc don` chi mo ra cho dung hai vai, va chi khi khach BAT nang luc do.
+ *
+ * Hai truc long nhau, va bai nay do CA HAI. Truc quyen la thu quan trong hon: `#275` K8 bai 1 doi
+ * *"Driver direct POST => denied"*, va cong that nam o may chu — nhung mot muc hien ra cho lai xe
+ * roi bao loi khi bam la mot man hinh noi doi ve dieu ho duoc lam.
+ */
+describe('#275 K4 — muc Ket thuc don', () => {
+  const WITH_ACCEPTANCE: readonly CapabilityId[] = [...FULL, 'transport-acceptance'];
+
+  it('khong hien khi khach CHUA bat transport-acceptance', () => {
+    expect(idsOf(director())).not.toContain('order-completion');
+  });
+
+  it('Giam doc va Ke toan deu thay khi khach da bat', () => {
+    expect(idsOf(director(WITH_ACCEPTANCE))).toContain('order-completion');
+    expect(idsOf(accountant(WITH_ACCEPTANCE))).toContain('order-completion');
+  });
+
+  it('LAI XE khong thay, ke ca khi khach da bat', () => {
+    expect(idsOf(driver(WITH_ACCEPTANCE))).not.toContain('order-completion');
+  });
+
+  it('MANAGER khong thay — fail-closed', () => {
+    expect(idsOf(manager(WITH_ACCEPTANCE))).not.toContain('order-completion');
+  });
+
+  it('nam trong nhom CHI PHI & DOI SOAT, canh duyet chi va quyet toan', () => {
+    const section = TRANSPORT_SECTIONS.find((entry) => entry.id === 'order-completion');
+    expect(section?.group).toBe('cost');
+    expect(section?.requiredAction).toBe('transport.commercial_acceptance.read');
+    expect(section?.requiredCapabilities).toEqual(['transport-acceptance']);
+  });
+});

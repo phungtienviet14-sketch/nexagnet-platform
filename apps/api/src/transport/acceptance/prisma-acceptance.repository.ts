@@ -47,7 +47,7 @@ import type {
  */
 interface AcceptanceRow {
   readonly id: string;
-  readonly runId: string;
+  readonly orderId: string | null;
   readonly state: string;
   readonly counterpartyId: string | null;
   readonly businessDate: string;
@@ -74,7 +74,12 @@ interface DecisionRow {
 
 const toAcceptance = (row: AcceptanceRow): CommercialAcceptance => ({
   id: row.id,
-  runId: row.runId,
+  /*
+   * Chu the la DON. Mot hang cu cua `#268` (chu the vong chay) van doc duoc tu CSDL, nhung tang
+   * mien khong bieu dien duoc no — nen o day no phai lo ra thay vi bi doc thanh mot don rong.
+   * `CHECK ..._subject_exactly_one` bao dam moi hang MOI luon co `orderId`.
+   */
+  orderId: row.orderId ?? '',
   state: row.state as CommercialAcceptanceState,
   counterpartyId: row.counterpartyId,
   businessDate: row.businessDate as BusinessDate,
@@ -104,14 +109,14 @@ export class PrismaAcceptanceRepository extends AcceptanceRepository {
     super();
   }
 
-  async findByRun(runId: string): Promise<CommercialAcceptance | null> {
-    const row = await this.prisma.transportCommercialAcceptance.findUnique({ where: { runId } });
+  async findByOrder(orderId: string): Promise<CommercialAcceptance | null> {
+    const row = await this.prisma.transportCommercialAcceptance.findUnique({ where: { orderId } });
     return row ? toAcceptance(row) : null;
   }
 
-  async findDetailByRun(runId: string): Promise<CommercialAcceptanceDetail | null> {
+  async findDetailByOrder(orderId: string): Promise<CommercialAcceptanceDetail | null> {
     const row = await this.prisma.transportCommercialAcceptance.findUnique({
-      where: { runId },
+      where: { orderId },
       include: { decisions: { orderBy: { sequence: 'asc' } } },
     });
     if (!row) return null;
@@ -121,10 +126,10 @@ export class PrismaAcceptanceRepository extends AcceptanceRepository {
     };
   }
 
-  async findManyByRuns(runIds: readonly string[]): Promise<CommercialAcceptance[]> {
-    if (runIds.length === 0) return [];
+  async findManyByOrders(orderIds: readonly string[]): Promise<CommercialAcceptance[]> {
+    if (orderIds.length === 0) return [];
     const rows = await this.prisma.transportCommercialAcceptance.findMany({
-      where: { runId: { in: [...runIds] } },
+      where: { orderId: { in: [...orderIds] } },
     });
     return rows.map(toAcceptance);
   }
@@ -133,9 +138,9 @@ export class PrismaAcceptanceRepository extends AcceptanceRepository {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const opened = await tx.transportCommercialAcceptance.upsert({
-          where: { runId: command.runId },
+          where: { orderId: command.orderId },
           create: {
-            runId: command.runId,
+            orderId: command.orderId,
             state: projectedStateOf(command),
             counterpartyId: command.counterpartyId,
             businessDate: command.businessDate,

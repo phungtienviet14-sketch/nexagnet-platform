@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { buildAppComposition } from '../../app-composition.js';
 import { actionsForRole } from '../transport-actions.js';
@@ -97,5 +99,49 @@ describe('Quyen nghiem thu — CA-012', () => {
     // Va van DOC duoc chung — doi soat thi phai nhin duoc can cu.
     expect(accounting).toContain('transport.checkpoint.read');
     expect(accounting).toContain('transport.proof.read');
+  });
+});
+
+/**
+ * CA-013 — DUONG HTTP THUC SU LA DUONG DON, doc tu chinh ma nguon cua controller.
+ *
+ * Mot hang so quyen va mot bai kiem `controllers` KHONG chung minh duoc rang co mot duong HTTP nao
+ * — chung chi chung minh rang mot lop duoc dang ky. `#275` K4 dat ra mot yeu cau ve DUONG DAN
+ * (*"Normal boss/accounting surface should not ask them for a Run ID"*), nen bai nay doc dung cai
+ * tep dinh nghia duong do.
+ */
+describe('Duong HTTP cua ket thuc don — CA-013', () => {
+  const controller = readFileSync(
+    fileURLToPath(new URL('./commercial-acceptance.controller.ts', import.meta.url)),
+    'utf8',
+  );
+  const orders = readFileSync(
+    fileURLToPath(new URL('../movement/orders.controller.ts', import.meta.url)),
+    'utf8',
+  );
+
+  it('ho so va quyet dinh deu key bang orderId', () => {
+    expect(controller).toContain("@Get('orders/:orderId')");
+    expect(controller).toContain("@Post('orders/:orderId/decisions')");
+  });
+
+  it('KHONG con duong nao key bang runId — chu the da doi', () => {
+    expect(controller).not.toMatch(/@Get\('runs\//);
+    expect(controller).not.toMatch(/@Post\('runs\//);
+  });
+
+  it('quyet dinh lay danh tinh tu PHIEN, khong tu than yeu cau', () => {
+    expect(controller).toContain('requireAuthUserId(request)');
+    expect(controller).not.toMatch(/body\.\w*decidedBy/);
+  });
+
+  /**
+   * `#275` K5 — duong CHIEU THUONG MAI phai ton tai, neu khong thi mot chuyen chua co don se bi
+   * cong chan vinh vien va khong ai co cach nao mo no ra.
+   */
+  it('co mot duong chieu chuyen v1 sang nghia vu thuong mai', () => {
+    expect(orders).toContain("@Post('projections/trip/:tripId')");
+    expect(orders).toContain('projectTripOrder');
+    expect(orders).toContain("@Roles('ACCOUNTING', 'ADMIN')");
   });
 });

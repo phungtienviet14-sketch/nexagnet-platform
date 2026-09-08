@@ -30,6 +30,10 @@ import type {
   MaintenanceTriggerKind,
   MaintenanceWorkOrder,
   OperationalAlertFeed,
+  OrderCompletionBasis,
+  OrderCompletionDetail,
+  OrderCompletionOutcome,
+  OrderCompletionRow,
   OrderRunPlan,
   RunClosureVerdict,
   RunDistanceSummary,
@@ -1180,5 +1184,48 @@ export const transportApi = {
    */
   finance: {
     summary: (): Promise<FinanceSummaryView> => get('/transport/finance/summary'),
+  },
+
+  /**
+   * KET THUC DON (`#275` Lane K) — hanh dong ma ke toan thay la `Da ket thuc`.
+   *
+   * Duong di key bang `orderId`, KHONG bang `runId`: `#275` K4 noi ro *"Normal boss/accounting
+   * surface should not ask them for a Run ID"*. Vong chay chi xuat hien trong mot dong hang cho
+   * lam NGU CANH, va no `null` duoc.
+   *
+   * `POST .../decisions` chu khong `.../approve` + `.../reject`: ba ket qua di qua CUNG mot cong
+   * nghiep vu voi cung mot bo luat, va tach thanh ba route se tao ba cho de mot lan sua sau nay
+   * quen mot dieu kien. Tai nguyen duoc tao la MOT QUYET DINH — dung thu duoc them vao lich su.
+   */
+  orderCompletion: {
+    /**
+     * HANG CHO — CA danh sach, khong tham so loc.
+     *
+     * May chu CO `?state=` (`acceptanceQuerySchema`), nhung hang cho nay chi chua nhung don DA GIAO
+     * XONG nen no bi chan tren tu ban chat. Loc trong bo nho khong ton mot vong mang nao va cho ra
+     * mot man hinh doi ngay khi bam — mot lan goi lai chi de bo bot dong la mot lan cho khong can.
+     */
+    queue: (): Promise<readonly OrderCompletionRow[]> =>
+      getList('/transport/commercial-acceptance', 'acceptances'),
+    get: (orderId: string): Promise<OrderCompletionDetail> =>
+      get(`/transport/commercial-acceptance/orders/${encodeURIComponent(orderId)}`),
+    decide: (
+      orderId: string,
+      input: {
+        outcome: OrderCompletionOutcome;
+        reasonCode: string;
+        basis: OrderCompletionBasis;
+        evidenceRefs?: readonly string[];
+        externalNote?: string | null;
+        counterpartyId?: string | null;
+        supersedesId?: string | null;
+        idempotencyKey: string;
+      },
+    ): Promise<OrderCompletionDetail> =>
+      send(
+        'POST',
+        `/transport/commercial-acceptance/orders/${encodeURIComponent(orderId)}/decisions`,
+        input,
+      ),
   },
 } as const;

@@ -9,7 +9,7 @@ import type {
 } from './acceptance.types.js';
 
 /**
- * KHO cua truc nghiem thu.
+ * KHO cua truc KET THUC DON.
  *
  * ============================================================================================
  * MOT LENH, MOT GIAO DICH — TANG DICH VU KHONG DUOC TU GHEP HAI LAN GHI
@@ -38,7 +38,7 @@ import type {
  */
 
 export interface AppendAcceptanceDecisionCommand {
-  readonly runId: string;
+  readonly orderId: string;
   readonly outcome: CommercialAcceptanceOutcome;
   readonly reasonCode: string;
   readonly basis: CommercialAcceptanceBasis;
@@ -79,11 +79,11 @@ export interface AcceptanceDecisionOutcome {
 }
 
 export abstract class AcceptanceRepository {
-  /** Ho so cua mot vong chay. `null` khi chua co quyet dinh nao — tuc dang `PENDING`. */
-  abstract findByRun(runId: string): Promise<CommercialAcceptance | null>;
-  abstract findDetailByRun(runId: string): Promise<CommercialAcceptanceDetail | null>;
-  /** Ho so cua NHIEU vong chay trong mot lan — hang cho khong duoc goi N+1 lan. */
-  abstract findManyByRuns(runIds: readonly string[]): Promise<CommercialAcceptance[]>;
+  /** Ho so cua mot DON. `null` khi chua co quyet dinh nao — tuc dang `PENDING`. */
+  abstract findByOrder(orderId: string): Promise<CommercialAcceptance | null>;
+  abstract findDetailByOrder(orderId: string): Promise<CommercialAcceptanceDetail | null>;
+  /** Ho so cua NHIEU don trong mot lan — hang cho khong duoc goi N+1 lan. */
+  abstract findManyByOrders(orderIds: readonly string[]): Promise<CommercialAcceptance[]>;
   abstract append(command: AppendAcceptanceDecisionCommand): Promise<AcceptanceDecisionOutcome>;
 }
 
@@ -92,7 +92,7 @@ const iso = (value: Date): string => value.toISOString();
 /**
  * BAN TRONG BO NHO — dung cho demo/CI khong co CSDL, va cho bai test mien.
  *
- * Bat chuoc CA HAI rang buoc duy nhat cua ban Prisma (`runId`, va `(acceptanceId,
+ * Bat chuoc CA HAI rang buoc duy nhat cua ban Prisma (`orderId`, va `(acceptanceId,
  * idempotencyKey)`). Mot ban trong bo nho khong bat chuoc rang buoc se XANH ca nhung bai ma DB that
  * se do — dung bai hoc ma `transport-settlement.int.spec.ts` ghi lai.
  */
@@ -106,25 +106,25 @@ export class InMemoryAcceptanceRepository extends AcceptanceRepository {
     return `${prefix}-${String(this.sequence).padStart(6, '0')}`;
   }
 
-  async findByRun(runId: string): Promise<CommercialAcceptance | null> {
-    return this.acceptances.get(runId) ?? null;
+  async findByOrder(orderId: string): Promise<CommercialAcceptance | null> {
+    return this.acceptances.get(orderId) ?? null;
   }
 
-  async findDetailByRun(runId: string): Promise<CommercialAcceptanceDetail | null> {
-    const acceptance = this.acceptances.get(runId);
+  async findDetailByOrder(orderId: string): Promise<CommercialAcceptanceDetail | null> {
+    const acceptance = this.acceptances.get(orderId);
     if (!acceptance) return null;
     return { acceptance, decisions: [...(this.decisions.get(acceptance.id) ?? [])] };
   }
 
-  async findManyByRuns(runIds: readonly string[]): Promise<CommercialAcceptance[]> {
-    return runIds.flatMap((runId) => {
-      const found = this.acceptances.get(runId);
+  async findManyByOrders(orderIds: readonly string[]): Promise<CommercialAcceptance[]> {
+    return orderIds.flatMap((orderId) => {
+      const found = this.acceptances.get(orderId);
       return found ? [found] : [];
     });
   }
 
   async append(command: AppendAcceptanceDecisionCommand): Promise<AcceptanceDecisionOutcome> {
-    const existing = this.acceptances.get(command.runId);
+    const existing = this.acceptances.get(command.orderId);
     const history = existing ? (this.decisions.get(existing.id) ?? []) : [];
 
     const replay = history.find((entry) => entry.idempotencyKey === command.idempotencyKey);
@@ -150,7 +150,7 @@ export class InMemoryAcceptanceRepository extends AcceptanceRepository {
 
     const acceptance: CommercialAcceptance = {
       id: acceptanceId,
-      runId: command.runId,
+      orderId: command.orderId,
       state: projectedStateOf(command),
       // Phap nhan ben A: mot lan khai SAU van duoc ghi nhan, nhung mot lan khai `null` KHONG xoa
       // gia tri da co. Xoa mot lien ket phap nhan la mot viec khac, va no chua ai yeu cau.
@@ -162,7 +162,7 @@ export class InMemoryAcceptanceRepository extends AcceptanceRepository {
       updatedAt: iso(command.decidedAt),
     };
 
-    this.acceptances.set(command.runId, acceptance);
+    this.acceptances.set(command.orderId, acceptance);
     this.decisions.set(acceptanceId, [...history, decision]);
     return { acceptance, decision, replayed: false };
   }

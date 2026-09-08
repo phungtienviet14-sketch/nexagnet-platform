@@ -437,6 +437,18 @@ export class PrismaSettlementRepository extends SettlementRepository {
     return row ? toDocument(row) : null;
   }
 
+  async findDocumentBySource(
+    sourceContext: string,
+    sourceId: string,
+  ): Promise<SettlementDocument | null> {
+    // Di thang qua unique kep `@@unique([sourceContext, sourceId])` — cung khoa ma
+    // `recogniseDocument()` dung de chong ghi trung, nen hai duong khong the tra loi khac nhau.
+    const row = await model(this.prisma, 'transportSettlementDocument').findUnique({
+      where: { sourceContext_sourceId: { sourceContext, sourceId } },
+    });
+    return row ? toDocument(row) : null;
+  }
+
   async findChain(originalId: string): Promise<SettlementDocumentChain | null> {
     const original = await model(this.prisma, 'transportSettlementDocument').findUnique({
       where: { id: originalId },
