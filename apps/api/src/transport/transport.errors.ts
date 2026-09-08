@@ -27,6 +27,8 @@ import type { TransportAssetOwnershipDecisionReason } from './asset-ownership/as
 import type { TransportAssetOwnershipErrorReason } from './asset-ownership/asset-ownership-errors.js';
 import type { TransportTollDecisionReason } from './toll/toll-decisions.js';
 import type { TollErrorReason } from './toll/toll-errors.js';
+import type { TransportDispatchDecisionReason } from './dispatch/dispatch-decisions.js';
+import type { TransportDispatchErrorReason } from './dispatch/dispatch.errors.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
 
 /**
@@ -128,7 +130,9 @@ export type TransportErrorReason =
   | TransportTollDecisionReason
   | TollErrorReason
   | TransportCommercialAcceptanceDecisionReason
-  | TransportCommercialAcceptanceErrorReason;
+  | TransportCommercialAcceptanceErrorReason
+  | TransportDispatchDecisionReason
+  | TransportDispatchErrorReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh

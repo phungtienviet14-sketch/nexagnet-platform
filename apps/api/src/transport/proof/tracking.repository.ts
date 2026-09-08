@@ -95,6 +95,23 @@ export abstract class TrackingRepository {
   ): Promise<LocationObservation | null>;
   /** Ban ghi moi nhat theo `capturedAt` — dau vao cua phep kiem lien tuc. */
   abstract lastObservation(sessionId: string): Promise<LocationObservation | null>;
+  /**
+   * Ban dinh vi moi nhat cua MOT CHIEC XE, khong phai cua mot phien — `#277 M1` (Lane M).
+   *
+   * HAI khac biet so voi `lastObservation()`, va ca hai deu co ly do:
+   *
+   *   · Truc la XE chu khong phai phien. Mot chiec xe di qua nhieu ca lai, moi ca mot phien; cau
+   *     hoi cua nguoi dieu xe la *"chiec xe do dang o dau"*, khong phai *"phien nay den dau roi"*.
+   *     `TrackingSession.vehicleId` do MAY CHU dien tu ban phan cong — may khach khong bao gio noi
+   *     duoc minh dang lai xe nao — nen truc nay tin duoc.
+   *   · Sap theo `receivedAt` chu khong `capturedAt`. `capturedAt` la dong ho MAY KHACH: mot may
+   *     bi chinh gio hoac mot hang doi ngoai tuyen se day mot ban ghi cu len dau. Voi phep kiem
+   *     lien tuc thi `capturedAt` moi dung (no do QUANG DUONG theo thoi gian may khach); voi cau
+   *     hoi *"ban ghi nao la moi nhat ta biet"* thi dong ho may chu moi dung.
+   *
+   * `null` khi chiec xe chua tung co mot phien nao, hoac co phien nhung chua ban dinh vi nao.
+   */
+  abstract latestObservationForVehicle(vehicleId: string): Promise<LocationObservation | null>;
   /** Doc mot ban dinh vi theo id — chung cu van hanh TRO toi mot ban da ghi, khong tu ghi. */
   abstract findObservationById(observationId: string): Promise<LocationObservation | null>;
   abstract appendObservation(input: AppendObservationInput): Promise<LocationObservation>;
@@ -188,6 +205,24 @@ export class InMemoryTrackingRepository extends TrackingRepository {
   async lastObservation(sessionId: string): Promise<LocationObservation | null> {
     const forSession = await this.listObservations(sessionId);
     return forSession.at(-1) ?? null;
+  }
+
+  async latestObservationForVehicle(vehicleId: string): Promise<LocationObservation | null> {
+    const sessionIds = new Set(
+      [...this.sessions.values()]
+        .filter((session) => session.vehicleId === vehicleId)
+        .map((session) => session.id),
+    );
+    if (sessionIds.size === 0) return null;
+
+    let latest: LocationObservation | null = null;
+    for (const observation of this.observations.values()) {
+      if (!sessionIds.has(observation.sessionId)) continue;
+      if (latest === null || observation.receivedAt.getTime() > latest.receivedAt.getTime()) {
+        latest = observation;
+      }
+    }
+    return latest;
   }
 
   async findObservationById(observationId: string): Promise<LocationObservation | null> {
