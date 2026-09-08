@@ -23,6 +23,7 @@ import type { RecordAcceptanceDecisionCommand } from './acceptance.types.js';
  */
 
 const RUN_DONE = 'run-xong';
+const TRIP_WITH_RUN = 'chuyen-co-vong-chay';
 const RUN_RUNNING = 'run-dang-chay';
 const FOREIGN_DOC = 'media/transport-evidence/2026/09/cua-nguoi-khac.jpg';
 const OWN_DOC = 'media/transport-evidence/2026/09/phieu-giao.jpg';
@@ -48,6 +49,11 @@ class FakeMovement extends AcceptanceMovementFacts {
 
   async listCompletedRuns(): Promise<AcceptanceRunFacts[]> {
     return [...this.runs.values()].filter((run) => run.status === 'COMPLETED');
+  }
+
+  /** `TRIP_WITH_RUN` la chuyen DA duoc chieu; moi chuyen khac chua co vong chay nao. */
+  async findRunForTrip(tripId: string): Promise<AcceptanceRunFacts | null> {
+    return tripId === TRIP_WITH_RUN ? (this.runs.get(RUN_DONE) ?? null) : null;
   }
 }
 

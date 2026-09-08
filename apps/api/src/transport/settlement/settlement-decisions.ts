@@ -31,6 +31,48 @@ export const SETTLEMENT_RECOGNISE_REASONS = [
   'SETTLEMENT_TRIP_NOT_RECONCILED',
   'SETTLEMENT_TRIP_REVENUE_MISSING',
   'SETTLEMENT_FLOW_SHAPE_MISMATCH',
+
+  /* --- CONG NGHIEM THU CHUNG TU (`#268` I5, Lane I) --- */
+  /**
+   * Da nghiem thu — `COMPLETED` + `APPROVED`. Duong DUY NHAT cho mot viec MOI di vao mot ky.
+   */
+  'SETTLEMENT_ACCEPTANCE_APPROVED',
+  /**
+   * Co vong chay, nhung no CHUA du dieu kien: chua chay xong, hoac chua ai nghiem thu, hoac da bi
+   * tu choi / bi tra lai doi bo sung.
+   *
+   * MOT ma cho ca bon tinh huong do, va day la ngoai le CO Y duy nhat cua quy uoc "N duong tu choi
+   * thi N ma": `detail` mang CA HAI ve cua dieu kien (`runStatus` va `state`), nen nguoi doc trace
+   * doc duoc chinh xac cai gi con thieu ma khong can bon ma. Tach thanh bon se goi y rang bon
+   * duong do can bon cach xu ly khac nhau — trong khi ca bon deu can dung mot viec: hoan thanh
+   * chuyen roi mang chung tu di nghiem thu.
+   */
+  'SETTLEMENT_ACCEPTANCE_BLOCKED',
+  /**
+   * Chuyen nay khong co vong chay nao de nghiem thu — chua tung duoc chieu sang mo hinh v2.
+   *
+   * MOT KET QUA CHO PHEP, va no de lai mot dong trong so quyet dinh CHINH VI THE. Duong v1 thuan
+   * tuy van di qua cong thu cong cua chinh no (`DELIVERED -> RECONCILED`, doi
+   * `transport.trip.transition`), nen cong moi khong siet them gi o day. Ghi lai dieu do thay vi im
+   * lang di qua la cach duy nhat de dem duoc BAO NHIEU khoan cong no van di duong cu.
+   */
+  'SETTLEMENT_ACCEPTANCE_NOT_PROJECTED',
+  /**
+   * Duong nay khong thuoc pham vi cong nghiem thu — cong no NHA XE NGOAI.
+   *
+   * Xe khong phai cua B, khong lai xe nao cua B cam bien nhan ve, va `planTripProjection` TU CHOI
+   * chieu chuyen `EXTERNAL_CARRIER` sang mot vong chay. Cam cong o day se chan cung mot duong dang
+   * chay de doi lay con so khong.
+   */
+  'SETTLEMENT_ACCEPTANCE_PATH_NOT_GATED',
+  /**
+   * DA CO chung tu quyet toan cho dung khoa nguon nay — tuc day KHONG phai mot lan chon nguon MOI.
+   *
+   * `#268` I5: *"existing authoritative settlement links remain authoritative"*. Thieu duong nay,
+   * mot lan goi lai vo hai tren mot chuyen DA QUYET TOAN TU TRUOC tinh nang se NEM thay vi tra ve
+   * chung tu cu — tuc dung cai "retroactively invalidate" ma `#268` cam.
+   */
+  'SETTLEMENT_ACCEPTANCE_ALREADY_SETTLED',
 ] as const;
 export type SettlementRecogniseReason = (typeof SETTLEMENT_RECOGNISE_REASONS)[number];
 
@@ -130,6 +172,11 @@ export const TRANSPORT_SETTLEMENT_DECISIONS = defineDecisionVocabulary({
     SETTLEMENT_TRIP_NOT_RECONCILED: 'Chuyến chưa đối soát nên chưa ghi nhận doanh thu',
     SETTLEMENT_TRIP_REVENUE_MISSING: 'Chuyến chưa nhập giá cước',
     SETTLEMENT_FLOW_SHAPE_MISMATCH: 'Chiều hoặc loại đối tác không khớp dòng tiền',
+    SETTLEMENT_ACCEPTANCE_APPROVED: 'Chứng từ đã được nghiệm thu — đủ điều kiện đối soát',
+    SETTLEMENT_ACCEPTANCE_BLOCKED: 'Chuyến chưa đủ điều kiện: chưa chạy xong hoặc chứng từ chưa được nghiệm thu',
+    SETTLEMENT_ACCEPTANCE_NOT_PROJECTED: 'Chuyến chưa có vòng chạy nào để nghiệm thu — vẫn đi đường cũ',
+    SETTLEMENT_ACCEPTANCE_PATH_NOT_GATED: 'Công nợ nhà xe ngoài không đi qua cổng nghiệm thu chứng từ',
+    SETTLEMENT_ACCEPTANCE_ALREADY_SETTLED: 'Nguồn này đã có chứng từ quyết toán từ trước — giữ nguyên hiệu lực',
 
     ADJUSTMENT_POSTED: 'Đã ghi bản điều chỉnh, bản gốc giữ nguyên',
     REVERSAL_POSTED: 'Đã ghi bản đảo, bản gốc giữ nguyên',

@@ -44,6 +44,20 @@ export interface AcceptanceRunFacts {
 export abstract class AcceptanceMovementFacts {
   abstract findRun(runId: string): Promise<AcceptanceRunFacts | null>;
   abstract listCompletedRuns(): Promise<AcceptanceRunFacts[]>;
+  /**
+   * VONG CHAY cua mot CHUYEN v1, qua phep chieu da duoc chap nhan.
+   *
+   * `TransportTripRunLegLink` co khoa chinh la `tripId` va `legId` la `@unique`, nen duong nay
+   * cho ra TOI DA MOT vong chay — khong phai mot danh sach. Do la mot su that cua mo hinh, khong
+   * phai mot gia dinh: xem khoi chu thich cua bang do trong `schema.prisma`.
+   *
+   * `null` co HAI nghia, va ca hai deu la `null` mot cach trung thuc:
+   *   · chuyen chua tung duoc chieu sang mo hinh v2 (chuyen v1 thuan tuy);
+   *   · chuyen thue xe ngoai — `planTripProjection` TU CHOI chieu, vi xe khong phai cua B.
+   *
+   * Tang goi phai xu ly `null` thanh mot quyet dinh CO TEN, khong duoc lang le di qua.
+   */
+  abstract findRunForTrip(tripId: string): Promise<AcceptanceRunFacts | null>;
 }
 
 interface RunRow {
@@ -78,6 +92,16 @@ export class AcceptanceMovementFactsAdapter extends AcceptanceMovementFacts {
   async listCompletedRuns(): Promise<AcceptanceRunFacts[]> {
     const runs = await this.movement.listRuns();
     return runs.filter((run) => run.status === 'COMPLETED').map(toRunFacts);
+  }
+
+  async findRunForTrip(tripId: string): Promise<AcceptanceRunFacts | null> {
+    const link = await this.movement.findTripLink(tripId);
+    if (!link) return null;
+
+    const leg = await this.movement.findLeg(link.legId);
+    if (!leg) return null;
+
+    return this.findRun(leg.runId);
   }
 }
 

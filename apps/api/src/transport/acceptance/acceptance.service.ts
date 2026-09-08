@@ -26,6 +26,7 @@ import type {
   CommercialAcceptanceQueueRow,
   CommercialAcceptanceState,
   RecordAcceptanceDecisionCommand,
+  TripAcceptanceEligibility,
 } from './acceptance.types.js';
 
 /**
@@ -275,6 +276,51 @@ export class CommercialAcceptanceService {
         updatedAt: at.toISOString(),
       },
       decisions: [],
+    };
+  }
+
+  /**
+   * MOT CHUYEN CO DU DIEU KIEN DI VAO MOT KY DOI SOAT MOI KHONG — `#268` I5.
+   *
+   * ==========================================================================================
+   * HAM NAY CHI DOC, VA DO LA DIEU QUAN TRONG NHAT VE NO
+   * ==========================================================================================
+   *
+   * Cong doi soat GOI ham nay; no khong ghi mot dong nao va khong biet mot dong nao ve tien. Nho
+   * vay chieu phu thuoc di MOT chieu (`transport-settlement` -> `transport-acceptance`) va tang
+   * nghiem thu khong bao gio cham duoc vao so tien.
+   *
+   * Phep suy that su nam o `isSettlementEligible()` — mot ham THUAN, kiem duoc khong can CSDL. O
+   * day chi la phan tra cuu: chuyen -> vong chay -> ho so.
+   */
+  async eligibilityForTrip(tripId: string): Promise<TripAcceptanceEligibility> {
+    const run = await this.movement.findRunForTrip(tripId);
+    if (!run) return { kind: 'NOT_PROJECTED' };
+
+    const acceptance = await this.repository.findByRun(run.id);
+    const state: CommercialAcceptanceState = acceptance?.state ?? 'PENDING';
+
+    if (!isSettlementEligible({ runStatus: run.status, state })) {
+      return {
+        kind: 'BLOCKED',
+        runId: run.id,
+        runCode: run.code,
+        runStatus: run.status,
+        state,
+      };
+    }
+
+    /*
+     * `acceptance` KHONG the la `null` o nhanh nay: `isSettlementEligible` doi `state === 'APPROVED'`
+     * va `PENDING` la gia tri duy nhat khi khong co hang. Nhung `??` van o day thay vi mot dau `!`:
+     * mot khang dinh khong-null la mot loi hua voi trinh bien dich, con cai nay la mot gia tri doc
+     * duoc neu loi hua do co ngay bi pha.
+     */
+    return {
+      kind: 'ELIGIBLE',
+      runId: run.id,
+      runCode: run.code,
+      acceptanceId: acceptance?.id ?? '',
     };
   }
 

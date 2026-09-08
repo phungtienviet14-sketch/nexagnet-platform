@@ -172,6 +172,35 @@ export interface RecordAcceptanceDecisionCommand {
  * KHONG co truong gia cuoc/doanh thu: hang cho nay noi ve CHUNG TU, khong noi ve tien. Mang tien
  * vao day se lam mot man hinh nghiem thu tro thanh mot bao cao cong no — hai be mat, hai quyen.
  */
+/**
+ * KET LUAN ve mot CHUYEN, doc tu truc nghiem thu — hinh dang ma cong doi soat (`#268` I5) can.
+ *
+ * MOT UNION CO NHAN, khong phai mot `boolean`. Cong doi soat co BA duong di khac han nhau va moi
+ * duong phai de lai mot ma ly do RIENG trong so quyet dinh:
+ *
+ *   · `NOT_PROJECTED` — chuyen nay khong co vong chay nao de nghiem thu. Mot `false` o day se bi
+ *     doc thanh "chua duoc duyet", va cong se chan mot chuyen ma truc nghiem thu KHONG HE noi gi
+ *     ve no. Hai tinh huong do khac nhau hoan toan, va nguoi doc trace phai phan biet duoc.
+ *   · `BLOCKED`       — co vong chay, va no CHUA du dieu kien. Mang theo ca hai ve cua dieu kien
+ *     (`runStatus` va `state`) de thong bao noi duoc CAI GI con thieu.
+ *   · `ELIGIBLE`      — `COMPLETED` + `APPROVED`.
+ */
+export type TripAcceptanceEligibility =
+  | { readonly kind: 'NOT_PROJECTED' }
+  | {
+      readonly kind: 'BLOCKED';
+      readonly runId: string;
+      readonly runCode: string;
+      readonly runStatus: string;
+      readonly state: CommercialAcceptanceState;
+    }
+  | {
+      readonly kind: 'ELIGIBLE';
+      readonly runId: string;
+      readonly runCode: string;
+      readonly acceptanceId: string;
+    };
+
 export interface CommercialAcceptanceQueueRow {
   readonly acceptanceId: string | null;
   readonly runId: string;
