@@ -106,6 +106,8 @@ const leg = (over: Partial<RunLeg> & { id: string; runId: string }): RunLeg => (
   destinationLabel: 'Kho Hai Phong',
   businessDate: '2026-09-08',
   distanceKm: null,
+  // Lane L (#276) them cot nay: km DU KIEN cua bo lap ke hoach, tach khoi km NHAP TAY o tren.
+  plannedDistanceKm: null,
   startedAt: null,
   completedAt: null,
   note: null,

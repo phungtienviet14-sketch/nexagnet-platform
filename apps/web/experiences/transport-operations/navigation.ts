@@ -103,10 +103,20 @@ export const TRANSPORT_SECTIONS = [
   },
   {
     id: 'movement',
-    label: 'Vòng chạy & đơn hàng',
+    /**
+     * DON dung truoc VONG CHAY trong ca ten man hinh — `#274`: sep/ke toan lam viec voi don, con
+     * vong chay la su that van hanh he thong tu lap va tu dong.
+     */
+    label: 'Đơn hàng & vòng chạy',
     group: 'dispatch',
-    summary: 'Nghĩa vụ thương mại và vòng chạy vật lý của xe — gồm cả chặng chạy rỗng.',
+    summary:
+      'Đơn hàng là trục chính; vòng chạy và chặng chạy rỗng do hệ thống lập và tự đóng theo sự thật vận hành.',
     requiredCapabilities: ['transport-core'],
+    /**
+     * Van la `transport.run.read` chu khong `transport.order.read`, va do la co y: man hinh doc CA
+     * hai truc, nen quyen hep hon phai la quyen quyet dinh. Doi sang quyen doc don se cho mot
+     * nguoi khong duoc phep xem vong chay nhin thay bang vong chay o nua duoi.
+     */
     requiredAction: 'transport.run.read',
   },
   {

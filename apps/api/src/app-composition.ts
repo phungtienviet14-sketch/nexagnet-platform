@@ -163,6 +163,7 @@ import { TransportOrdersController } from './transport/movement/orders.controlle
 import { DriverExpenseClaimsController } from './transport/claims/driver-claims-self.controller.js';
 import { ExpenseClaimsController } from './transport/claims/claims.controller.js';
 import { RunsController } from './transport/movement/runs.controller.js';
+import { TransportPlanningController } from './transport/planning/planning.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { ControlTowerController } from './transport/control-tower/control-tower.controller.js';
 import { FinanceController } from './transport/finance/finance.controller.js';
@@ -194,7 +195,7 @@ import {
 } from './transport/dispatch/dispatch-facts.port.js';
 import {
   DispatchAssignmentPlanner,
-  MovementDispatchAssignmentPlanner,
+  PlanningDispatchAssignmentPlanner,
 } from './transport/dispatch/dispatch-planner.port.js';
 import {
   DEFAULT_TRANSPORT_DISPATCH_POLICY,
@@ -354,6 +355,16 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
    * mot be mat ma ho VAN dung duoc.
    */
   owned('transport-core', DispatchController),
+  /*
+   * LAP KE HOACH VONG CHAY DO HE THONG QUAN (Lane L, #276) — cung `transport-core`, khong mot
+   * capability moi.
+   *
+   * Ly do: lop nay khong doc mot capability nao khac. No ghi qua chinh `MovementService`, doc
+   * `FleetRepository` de kiem xe, va doc cau hinh cua goi khach. Tach ra thanh capability rieng
+   * se bat moi khach van tai dang chay phai them mot dong vao `capabilities` chi de giu nguyen
+   * kha nang gan don vao xe — tuc mot lan doi hinh dang goi khach ma khong ai duoc gi.
+   */
+  owned('transport-core', TransportPlanningController),
   // DE NGHI CHI + CONG DUYET (R1-C, #232 `D-06`) -- thuoc `transport-costing`: mot de nghi chi
   // chi co nghia khi khach da bat so quy lai xe.
   owned('transport-costing', ExpenseClaimsController),
@@ -534,13 +545,14 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     useClass: DispatchComplianceFactsAdapter,
   }),
   /*
-   * CONG GHI cua Lane M. `useClass` tro vao ban hien thuc dung tren `main` da duoc chap nhan
-   * (`ONE_ORDER_PER_RUN`). Khi bo lap ke hoach cua Lane L (#276) len `main`, DUNG MOT dong nay
-   * doi — khong mot dong nghiep vu nao cua Lane M phai sua.
+   * CONG GHI cua Lane M -> bo lap ke hoach cua Lane L (#276, da len `main` o `41e9bbe`).
+   *
+   * `#274` giao quyen ghi ke hoach cho Lane L. Mot ban hien thuc thu hai o Lane M — du dung — se
+   * de trong he hai bo luat gom don, va lan lech dau tien se khong ai biet ben nao dung.
    */
   owned('transport-core', {
     provide: DispatchAssignmentPlanner,
-    useClass: MovementDispatchAssignmentPlanner,
+    useClass: PlanningDispatchAssignmentPlanner,
   }),
   owned('transport-core', DispatchService),
   /**

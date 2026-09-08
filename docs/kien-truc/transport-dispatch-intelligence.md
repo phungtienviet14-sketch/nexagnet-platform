@@ -203,11 +203,29 @@ nghị không đổi một hàng dữ liệu nào"_ là một tính chất **ki�
 chuyển cho `DispatchAssignmentPlanner`. Sự thật đã đổi ⇒ `DISPATCH_RECOMMENDATION_STALE`, không ép
 quyết định cũ đi tiếp (`#277 M9`).
 
-Bản hiện thực mặc định của cổng ghi là `MovementDispatchAssignmentPlanner` — dựng đúng hành vi
-`ONE_ORDER_PER_RUN` đã có trên `main`, với mã vòng chạy **suy tất định từ mã đơn** để chỉ mục
-`@unique` phủ nhận bản thứ hai khi hai lần bấm đến cùng lúc. Khi bộ lập kế hoạch của Lane L
-([#276](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/276)) lên `main`, **đúng
-một dòng binding** trong `app-composition.ts` đổi.
+Cổng ghi nối thẳng vào `PlanningService` của Lane L
+([#276](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/276), đã lên `main` ở
+`41e9bbe`). Lane M **không** giữ một đường ghi vòng chạy của riêng mình: `#274` giao quyền lập kế
+hoạch cho L, và một bản hiện thực thứ hai — dù đúng — sẽ để trong hệ **hai bộ luật gom đơn**, và
+lần lệch đầu tiên sẽ không ai biết bên nào đúng.
+
+Chống lặp đến từ `idempotencyKey` **suy tất định** từ `(đơn, xe)`: hai lần bấm của cùng một người
+trên cùng một dòng bảng cho cùng một khoá, nên lần thứ hai đọc lại kế hoạch cũ. Đổi xe là một
+**quyết định khác**, nên khoá đổi theo, và L từ chối bằng `PLAN_ORDER_ALREADY_PLANNED` — đúng câu
+trả lời, từ đúng bên sở hữu luật.
+
+### Một chỗ hai lane cùng tính, và vì sao giữ nguyên
+
+Lane L cũng có `projectVehicle()` trả về `endpointLabel`/`freeFrom` (`#276` L7, khối chú thích của
+nó ghi thẳng _"nguồn cho Lane M"_). Lane M **không** dùng nó, và đó là một lựa chọn có lý do chứ
+không phải bỏ sót: `VehicleEndpointSource` của L có nhánh `DEPOT` — khi xe không còn vòng chạy nào
+mở, L trả về bãi xe. Đúng cho **lập kế hoạch**; sai cho câu hỏi của Lane M, vì `#277 M1` cấm
+_"invent depot"_ khi trả lời _"xe đang ở đâu"_. Một chiếc xe rảnh chưa bật bám vị trí phải hiện ra
+là `VEHICLE_HAS_NO_USABLE_ORIGIN`, không phải "đang ở bãi".
+
+Hai bên đọc **cùng một nguồn** (các chặng chưa xong, sắp cùng thứ tự) nên hôm nay chúng đồng ý về
+điểm kết thúc. Nếu một ngày cần gộp, chỗ đúng là cho L nhận một cờ _"không rơi về bãi"_ — không
+phải cho M đọc rồi lọc lại.
 
 ### Toạ độ chịu một cổng nữa
 

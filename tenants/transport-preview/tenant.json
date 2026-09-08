@@ -33,6 +33,18 @@
     "transportCore": {
       "timeZone": "Asia/Ho_Chi_Minh"
     },
+    "transportPlanning": {
+      "runGrouping": "MULTI_ORDER_RUN",
+      "depots": [
+        {
+          "code": "DEPOT-HN",
+          "label": "Bãi xe Hà Nội"
+        }
+      ],
+      "closure": {
+        "idleHours": 12
+      }
+    },
     "transportCosting": {
       "expenseCategories": [
         "Phí cầu đường",

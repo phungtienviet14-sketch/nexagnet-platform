@@ -5,54 +5,80 @@ import { PrismaService } from '../../config/prisma.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { MovementService } from '../movement/movement.service.js';
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
+import { PlanningService } from '../planning/planning.service.js';
+import type { TransportPlanningPolicy } from '../planning/planning.types.js';
+import { PrismaRunPlanRepository } from '../planning/prisma-planning.repository.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
 import {
-  MovementDispatchAssignmentPlanner,
-  dispatchRunCodeForOrder,
+  PlanningDispatchAssignmentPlanner,
+  dispatchIdempotencyKey,
 } from './dispatch-planner.port.js';
 
 /**
  * CONG GHI cua Lane M tren POSTGRES THAT — `#277 M14` muc 8/9/10 va `M15` muc 10.
  *
  * ===========================================================================
- * VI SAO BO NAY PHAI CHAY TREN POSTGRES CHU KHONG PHAI BAN TRONG BO NHO
+ * BO NAY KIEM MOT DUONG NOI, KHONG KIEM LAI LANE L
  *
- * Tinh chong lap cua `commit()` KHONG den tu mot cau `if` trong TypeScript — mot phep "doc roi
- * ghi" luon co mot khe hep giua hai buoc. No den tu chi muc `@unique` tren
- * `TransportVehicleRun.code` cong voi mot ma vong chay SUY TAT DINH tu ma don. Chi Postgres moi
- * phu nhan duoc ban ghi thu hai, nen chi o day moi chung minh duoc dieu do.
+ * Luat gom don, chang rong va vong doi vong chay thuoc `#276` va da co bo bai rieng
+ * (`transport-planning.int.spec.ts`). Cai CHUA ai kiem la doan noi giua hai lane: mot cu bam cua
+ * boss -> mot khoa chong lap suy TAT DINH -> mot ke hoach cua Lane L -> mot `DispatchCommitResult`.
  *
- * Chay bang `RUN_PRISMA_IT=1`.
+ * Va no phai chay tren Postgres that vi tinh chong lap khong den tu mot cau `if` trong TypeScript:
+ * no den tu chinh khoa `idempotencyKey` va cac rang buoc cua Lane L. Chay bang `RUN_PRISMA_IT=1`.
  */
 
 const PREFIX = 'IT-DSP';
 const ACTOR = 'it-dispatch';
-const POLICY = { timeZone: 'Asia/Ho_Chi_Minh' } as const;
+const CORE_POLICY = { timeZone: 'Asia/Ho_Chi_Minh' } as const;
 const BUSINESS_DATE = '2026-09-08';
+
+const planningPolicy: TransportPlanningPolicy = {
+  grouping: 'ONE_ORDER_PER_RUN',
+  depots: [{ code: 'IT-DSP-DEPOT', label: 'IT-DSP Bai xe' }],
+  closure: { idleHours: null },
+};
 
 describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgres that', () => {
   const prisma = new PrismaService();
+  const audit = new AuditLogService(new InMemoryAuditLogRepository());
+  const fleet = new PrismaFleetRepository(prisma);
   const movement = new MovementService(
     new PrismaMovementRepository(prisma),
-    new PrismaFleetRepository(prisma),
-    new AuditLogService(new InMemoryAuditLogRepository()),
-    POLICY,
+    fleet,
+    audit,
+    CORE_POLICY,
     new PrismaTripRepository(prisma),
   );
-  const planner = new MovementDispatchAssignmentPlanner(movement);
+  const planning = new PlanningService(
+    movement,
+    new PrismaRunPlanRepository(prisma),
+    fleet,
+    audit,
+    CORE_POLICY,
+    planningPolicy,
+  );
+  const planner = new PlanningDispatchAssignmentPlanner(planning);
 
-  /** Don dep theo THU TU AN TOAN VE KHOA NGOAI: chang -> vong chay -> don -> xe. */
+  /** Don dep theo THU TU AN TOAN VE KHOA NGOAI: ke hoach -> chang -> vong chay -> don -> xe. */
   async function cleanup(): Promise<void> {
-    const runs = await prisma.transportVehicleRun.findMany({
-      where: { code: { contains: PREFIX } },
+    const orders = await prisma.transportOrder.findMany({
+      where: { code: { startsWith: PREFIX } },
       select: { id: true },
     });
-    const runIds = runs.map((run) => run.id);
+    const orderIds = orders.map((order) => order.id);
+    const legs = await prisma.transportRunLeg.findMany({
+      where: { orderId: { in: orderIds } },
+      select: { runId: true },
+    });
+    const runIds = [...new Set(legs.map((leg) => leg.runId))];
+
+    await prisma.transportOrderRunPlan.deleteMany({ where: { orderId: { in: orderIds } } });
     await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });
-    await prisma.transportOrder.deleteMany({ where: { code: { startsWith: PREFIX } } });
+    await prisma.transportOrder.deleteMany({ where: { id: { in: orderIds } } });
     await prisma.transportVehicle.deleteMany({
       where: { registrationPlate: { startsWith: PREFIX } },
     });
@@ -92,7 +118,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
     return { id: created.id, code: created.code };
   };
 
-  it('lan bam dau tien sinh DUNG mot vong chay va mot chang CO TAI', async () => {
+  it('lan bam dau tien sinh mot chang CO TAI mang dung don do', async () => {
     const vehicleId = await seedVehicle('A1');
     const order = await seedOrder('A1');
 
@@ -102,16 +128,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
     expect(result.reason).toBe('COMMIT_PLANNED');
 
     const detail = await movement.getRun(result.runId);
-    expect(detail.run.code).toBe(dispatchRunCodeForOrder(order.code));
     expect(detail.run.vehicleId).toBe(vehicleId);
-    expect(detail.legs).toHaveLength(1);
-    expect(detail.legs[0]?.kind).toBe('LOADED');
-    expect(detail.legs[0]?.orderId).toBe(order.id);
-    /*
-     * `#276 L6` — quang duong THUC TE den tu GPS/dong ho km. Mot uoc luong ban do o cot nay se lam
-     * moi bao cao km rong sau nay cong mot con so du bao vao mot cot su that.
-     */
-    expect(detail.legs[0]?.distanceKm).toBeNull();
+
+    const loaded = detail.legs.find((leg) => leg.id === result.legId);
+    expect(loaded?.kind).toBe('LOADED');
+    expect(loaded?.orderId).toBe(order.id);
   });
 
   /** `M15` muc 10 — bam lai khong duoc sinh ban thu hai. */
@@ -127,21 +148,16 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
     expect(second.runId).toBe(first.runId);
     expect(second.legId).toBe(first.legId);
 
-    const runs = await prisma.transportVehicleRun.count({
-      where: { code: dispatchRunCodeForOrder(order.code) },
-    });
-    expect(runs).toBe(1);
     expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(1);
   });
 
   /**
    * `M14` muc 8 — HAI LAN BAM DEN CUNG LUC.
    *
-   * Ca hai deu vuot qua phep doc "don nay da co chang chua" (khong lan nao thay lan kia vi chua
-   * commit); chi muc unique tren ma vong chay la thu duy nhat phu nhan ban thu hai. Ket qua dung:
-   * mot vong chay, mot chang, va CA HAI loi goi deu tra ve chinh no.
+   * Khoa chong lap suy tat dinh tu `(don, xe)`, nen ca hai lan goi mang CUNG mot khoa. Ket qua
+   * dung: mot ke hoach, mot chang, va CA HAI loi goi deu tra ve chinh no.
    */
-  it('hai lan bam DONG THOI van chi ra mot vong chay', async () => {
+  it('hai lan bam DONG THOI van chi ra mot chang co hang', async () => {
     const vehicleId = await seedVehicle('A3');
     const order = await seedOrder('A3');
 
@@ -150,17 +166,18 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
       planner.commit({ orderId: order.id, vehicleId, actor: ACTOR }),
     ]);
 
-    expect(left.runId).toBe(right.runId);
     expect(left.legId).toBe(right.legId);
-    expect([left.created, right.created].filter(Boolean)).toHaveLength(1);
-    expect(
-      await prisma.transportVehicleRun.count({
-        where: { code: dispatchRunCodeForOrder(order.code) },
-      }),
-    ).toBe(1);
+    expect(left.runId).toBe(right.runId);
+    expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(1);
   });
 
-  /** `#276 L3` — mot don khong duoc nam tren hai chang co tai cung luc. */
+  /**
+   * `#276 L3` — mot don khong duoc nam tren hai chang co tai cung luc.
+   *
+   * Khoa chong lap CO `vehicleId`, nen mot lua chon xe khac la mot lenh KHAC — no khong duoc phat
+   * lai ket qua cu. Ben tu choi la Lane L (`PLAN_ORDER_ALREADY_PLANNED`), tuc ben so huu luat gom
+   * don; Lane M khong tu viet mot phep kiem thu hai cho cung cau hoi.
+   */
   it('gan don da co ke hoach sang MOT XE KHAC bi tu choi CO KIEU', async () => {
     const firstVehicle = await seedVehicle('A4');
     const secondVehicle = await seedVehicle('A5');
@@ -170,7 +187,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
 
     await expect(
       planner.commit({ orderId: order.id, vehicleId: secondVehicle, actor: ACTOR }),
-    ).rejects.toMatchObject({ reason: 'DISPATCH_ORDER_ALREADY_ASSIGNED' });
+    ).rejects.toBeInstanceOf(TransportDomainError);
 
     expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(1);
   });
@@ -184,5 +201,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
       planner.commit({ orderId: order.id, vehicleId, actor: ACTOR }),
     ).rejects.toBeInstanceOf(TransportDomainError);
     expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(0);
+  });
+
+  /** Khoa chong lap phai TAT DINH — neu no ngau nhien thi moi bai o tren deu vo nghia. */
+  it('khoa chong lap suy tat dinh tu (don, xe)', () => {
+    expect(dispatchIdempotencyKey('ord-1', 'xe-1')).toBe(dispatchIdempotencyKey('ord-1', 'xe-1'));
+    expect(dispatchIdempotencyKey('ord-1', 'xe-1')).not.toBe(
+      dispatchIdempotencyKey('ord-1', 'xe-2'),
+    );
   });
 });
