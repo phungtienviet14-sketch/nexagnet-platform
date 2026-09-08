@@ -1,0 +1,144 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { buildAppComposition } from '../../app-composition.js';
+import { actionsForRole } from '../transport-actions.js';
+
+const controllerNames = (capabilities: Parameters<typeof buildAppComposition>[0]): string[] =>
+  buildAppComposition(capabilities).controllers.map((controller) => controller.name);
+
+/**
+ * `transport-toll` la mot CAPABILITY RIENG, va no den/di tron ven.
+ *
+ * Quyet dinh kien truc #6: mot khach van tai chua doi soat ETC khong duoc nap mot bang nao cua
+ * `TX-08` mo rong, va khong duoc nhin thay mot muc "ETC" khong lam gi.
+ */
+describe('composition cua transport-toll', () => {
+  it('den cung `transport-toll`', () => {
+    expect(controllerNames(['transport-core', 'transport-toll'])).toContain('TollController');
+  });
+
+  it('KHONG co mat o mot khach van tai chi bat `transport-core`', () => {
+    expect(controllerNames(['transport-core'])).not.toContain('TollController');
+  });
+
+  it('KHONG co mat o mot khach khong dung van tai', () => {
+    expect(controllerNames(['knowledge'])).not.toContain('TollController');
+  });
+
+  /**
+   * ETC KHONG keo theo nhien lieu, va nhien lieu khong keo theo ETC.
+   *
+   * Hai ben giong nhau ve hinh dang nap tep, va do CHINH LA ly do bai nay ton tai: giong hinh dang
+   * la mot cam do de noi hai capability lai, va lan noi do se bat mot khach chi muon doi soat ETC
+   * phai khai ca dinh muc nhien lieu.
+   */
+  it('ETC va nhien lieu doc lap voi nhau', () => {
+    const tollOnly = controllerNames(['transport-core', 'transport-toll']);
+    expect(tollOnly).toContain('TollController');
+    expect(tollOnly).not.toContain('FuelReconciliationController');
+  });
+});
+
+/**
+ * ===========================================================================
+ * ETC LA CONG TY TRA — VA LAI XE KHONG DUNG DEN NO.
+ *
+ * #229 §8 + #237. Cong THAT nam o bang phan quyen, khong o giao dien: neu mot ngay ai do them mot
+ * man hinh ETC vao be mat lai xe, bai nay do TRUOC khi mot dong phi duong bo kip di vao so quy.
+ */
+describe('phan quyen cua ETC', () => {
+  it('lai xe KHONG co mot ma `transport.toll.*` nao', () => {
+    const sale = actionsForRole('SALE');
+    expect(sale.filter((action) => action.startsWith('transport.toll.'))).toEqual([]);
+  });
+
+  /** Doi soat ETC la viec cuoi thang cua Ke toan — ho co ca bon ma. */
+  it('ke toan co du bon ma de nap va doi soat', () => {
+    const accounting = actionsForRole('ACCOUNTING');
+    expect(accounting).toContain('transport.toll.account.read');
+    expect(accounting).toContain('transport.toll.account.manage');
+    expect(accounting).toContain('transport.toll.import');
+    expect(accounting).toContain('transport.toll.review.read');
+    expect(accounting).toContain('transport.toll.review.resolve');
+  });
+
+  it('dieu hanh cung co du', () => {
+    const admin = actionsForRole('ADMIN');
+    expect(admin).toContain('transport.toll.import');
+    expect(admin).toContain('transport.toll.review.resolve');
+  });
+
+  /**
+   * NAP tach khoi QUYET, va do la mot cong that.
+   *
+   * Nap la mang mot ban sao cua su that nha cung cap vao he thong; doi soat la noi ban sao do khop
+   * hay khong. Neu mot ngay ai do gop hai ma lam mot, bai nay do.
+   */
+  it('nap va quyet la HAI ma khac nhau', () => {
+    expect('transport.toll.import').not.toBe('transport.toll.review.resolve');
+    const admin = actionsForRole('ADMIN');
+    expect(new Set(admin).size).toBe(admin.length);
+  });
+});
+
+/**
+ * ===========================================================================
+ * KHONG MOT TEP NAO CUA `transport-toll` DUOC CHAM VAO SO QUY LAI XE.
+ *
+ * `TollStorageNeverTouchesDriverFund` giu bat bien do o tang KIEU cho cac TRUONG. Cai kieu khong
+ * noi duoc la "khong tep nao trong thu muc nay IMPORT mot module cua so quy" — nen phai quet ma
+ * nguon. Mot lan `import { CostingService }` vao day se lam bai nay do.
+ */
+describe('ETC khong bao gio cham so quy lai xe', () => {
+  const HERE = dirname(fileURLToPath(import.meta.url));
+
+  const sourcesOf = (): { name: string; body: string }[] =>
+    ['toll.service.ts', 'toll-account.service.ts', 'toll.controller.ts', 'transport-toll.module.ts',
+     'toll.repository.ts', 'prisma-toll.repository.ts', 'in-memory-toll.repository.ts',
+     'toll-classification.ts', 'toll-statement-mapping.ts', 'toll.ports.ts', 'toll.types.ts'].map(
+      (name) => ({ name, body: readFileSync(resolve(HERE, name), 'utf8') }),
+    );
+
+  it('khong tep nao nhap mot module cua so quy / luong / cong no', () => {
+    const forbidden = [
+      '../costing/',
+      '../driver-settlement/',
+      '../workforce/',
+      '../settlement/',
+      '../claims/',
+    ];
+    for (const source of sourcesOf()) {
+      for (const path of forbidden) {
+        expect(source.body, `${source.name} nhap ${path}`).not.toContain(`from '${path}`);
+      }
+    }
+  });
+
+  /**
+   * `toll.types.ts` bi LOAI TRU khoi phep quet nay, va do khong phai mot ngoai le de cho tien.
+   *
+   * Chinh `TollStorageNeverTouchesDriverFund` phai NHAC TEN `driverId` de khang dinh no VANG MAT
+   * (`Extract<keyof T, 'driverId'>` chi la `never` khi truong do khong ton tai). Mot phep quet van
+   * ban se bat dung cai bay bao ve. Bat bien do da duoc giu bang KIEU o `toll-provider.port.spec.ts`
+   * — la cho dung de giu no.
+   */
+  it('khong tep nao KHAC nhac toi `driverId`', () => {
+    for (const source of sourcesOf()) {
+      if (source.name === 'toll.types.ts') continue;
+      expect(source.body, source.name).not.toContain('driverId');
+    }
+  });
+
+  /**
+   * #269 J7 cam goi mot quyet dinh doi soat la `paid`/`settled`/`accounted`. Ba chu do noi ve TIEN
+   * DA TRA; cai duy nhat mien nay biet la mot dong da co nguoi NHIN.
+   */
+  it('khong trang thai nao mang nghia da tra tien', () => {
+    const types = readFileSync(resolve(HERE, 'toll.types.ts'), 'utf8');
+    for (const word of ["'PAID'", "'SETTLED'", "'ACCOUNTED'", "'PAYABLE'"]) {
+      expect(types, word).not.toContain(word);
+    }
+  });
+});

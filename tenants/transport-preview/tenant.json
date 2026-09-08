@@ -24,7 +24,8 @@
     "transport-asset-compliance",
     "transport-workforce",
     "transport-proof",
-    "transport-checkpoint"
+    "transport-checkpoint",
+    "transport-toll"
   ],
   "policies": {
     "transportCore": {

@@ -173,13 +173,19 @@ export function mapTollRows(input: MapTollRowsInput): MappedTollRow[] {
     }
 
     let businessDate: BusinessDate | null;
-    if (hasDateColumn) {
-      if (dateRaw === '') return reject('TOLL_ROW_MISSING_DATE');
+    if (hasDateColumn && dateRaw !== '') {
+      /*
+       * Cot ngay nghiep vu CO GIA TRI thi no THANG — ke ca khi dong cung co gio qua tram.
+       *
+       * Doc duoc thi dung; doc KHONG duoc thi tu choi han, KHONG lang le roi ve gio qua tram. Mot
+       * duong du phong im lang o day se giau di dung cai o ma nguoi dung go sai.
+       */
       businessDate = parseMappedDate(dateRaw, mapping.dateFormat);
       if (businessDate === null) return reject('TOLL_ROW_DATE_INVALID');
-    } else {
-      if (passedAt === null) return reject('TOLL_ROW_MISSING_DATE');
+    } else if (passedAt !== null) {
       businessDate = toBusinessDate(passedAt, input.timeZone);
+    } else {
+      return reject('TOLL_ROW_MISSING_DATE');
     }
 
     /*
