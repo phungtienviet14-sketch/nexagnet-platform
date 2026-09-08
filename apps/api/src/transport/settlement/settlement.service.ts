@@ -9,7 +9,9 @@ import {
   selectCommissionRule,
   type CommissionCalcKind,
 } from './commission-rules.js';
+import { SettlementAcceptanceGate } from './settlement-acceptance.port.js';
 import { TRANSPORT_SETTLEMENT_DECISIONS } from './settlement-decisions.js';
+import type { SettlementRecogniseReason } from './settlement-decisions.js';
 import {
   adjustmentDelta,
   reversalAmount,
@@ -73,8 +75,109 @@ export class SettlementService {
     private readonly repository: SettlementRepository,
     private readonly core: SettlementCoreFacts,
     private readonly fuelSource: FuelSettlementSource,
+    private readonly acceptance: SettlementAcceptanceGate,
     @Optional() private readonly telemetry?: TelemetryService,
   ) {}
+
+  /* ================================================================== *
+   * CONG NGHIEM THU CHUNG TU — `#268` I5
+   * ================================================================== */
+
+  private reportGate(
+    reason: SettlementRecogniseReason,
+    detail: Record<string, unknown>,
+    outcome: 'allowed' | 'denied' = 'allowed',
+  ): void {
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_SETTLEMENT_DECISIONS,
+      point: 'settlement.recognise',
+      outcome,
+      reason,
+      detail,
+    });
+  }
+
+  /**
+   * CONG DIEU KIEN DOI SOAT — bat bien trung tam cua `#268` I5.
+   *
+   * ==========================================================================================
+   *     ung vien MOI  =  du dieu kien van hanh  VA  nghiem thu chung tu da `APPROVED`
+   * ==========================================================================================
+   *
+   * Ham nay THEM mot dieu kien; no khong thay mot dieu kien nao. Moi cong van hanh cu
+   * (`trip.status === 'RECONCILED'`, co gia cuoc, co khach) van nam nguyen phia tren, va chung duoc
+   * kiem TRUOC — nen mot chuyen chua doi soat van bao `SETTLEMENT_TRIP_NOT_RECONCILED` chu khong
+   * bao "chua nghiem thu". Do la cau tra loi dung: cai nguoi truc phai lam truoc la dong chuyen.
+   *
+   * ==========================================================================================
+   * BON DUONG RA, VA MOI DUONG DE LAI MOT DONG TRONG SO QUYET DINH
+   * ==========================================================================================
+   *
+   * 1. `ALREADY_SETTLED`  — da co chung tu cho dung khoa nguon nay. Day KHONG phai mot lan chon
+   *    nguon moi, nen cong khong ap. Thieu duong nay, mot lan goi lai vo hai tren mot chuyen DA
+   *    QUYET TOAN TU TRUOC tinh nang se NEM thay vi tra ve chung tu cu — tuc dung cai
+   *    *"retroactively invalidate"* ma `#268` I5 cam. Day la nua thu nhat cua tuong thich lich su.
+   *
+   * 2. `NOT_PROJECTED`    — chuyen chua tung duoc chieu sang mo hinh v2, nen khong co vong chay nao
+   *    de nghiem thu. CHO QUA, va ghi lai. Duong v1 thuan tuy van di qua cong thu cong cua chinh no
+   *    (`DELIVERED -> RECONCILED`, doi `transport.trip.transition`) — cong moi khong siet them gi o
+   *    day, va cung khong noi long gi. Do la nua thu hai cua tuong thich lich su.
+   *
+   *    ⚠ GIOI HAN DA BIET, bao cao chu khong che: cong nay chi rang buoc phan cong viec DA di qua
+   *    phep chieu v2. Dong no lai = bat moi chuyen phai duoc chieu truoc khi ghi nhan cong no, va
+   *    do la mot QUYET DINH NGHIEP VU CHUA AI QUYET. Xem `OPEN_BLOCKERS` cua Lane I.
+   *
+   * 3. `BLOCKED`          — co vong chay, va no chua du dieu kien. DONG CONG.
+   *
+   * 4. `APPROVED`         — di tiep.
+   */
+  private async requireCommercialAcceptance(
+    trip: SettlementTripFacts,
+    sourceContext: 'TRIP_RECONCILED' | 'TRIP_COMMISSION',
+  ): Promise<void> {
+    const settled = await this.repository.findDocumentBySource(sourceContext, trip.id);
+    if (settled) {
+      this.reportGate('SETTLEMENT_ACCEPTANCE_ALREADY_SETTLED', {
+        tripId: trip.id,
+        sourceContext,
+        documentId: settled.id,
+      });
+      return;
+    }
+
+    const eligibility = await this.acceptance.eligibilityForTrip(trip.id);
+
+    if (eligibility.kind === 'NOT_PROJECTED') {
+      this.reportGate('SETTLEMENT_ACCEPTANCE_NOT_PROJECTED', { tripId: trip.id, sourceContext });
+      return;
+    }
+
+    if (eligibility.kind === 'BLOCKED') {
+      this.reportGate(
+        'SETTLEMENT_ACCEPTANCE_BLOCKED',
+        {
+          tripId: trip.id,
+          sourceContext,
+          runId: eligibility.runId,
+          runStatus: eligibility.runStatus,
+          acceptanceState: eligibility.state,
+        },
+        'denied',
+      );
+      throw TransportDomainError.denied(
+        'SETTLEMENT_ACCEPTANCE_BLOCKED',
+        `Vong chay ${eligibility.runCode} dang ${eligibility.runStatus} va nghiem thu chung tu dang ` +
+          `${eligibility.state}; chua du dieu kien dua chuyen ${trip.code} vao ky doi soat moi`,
+      );
+    }
+
+    this.reportGate('SETTLEMENT_ACCEPTANCE_APPROVED', {
+      tripId: trip.id,
+      sourceContext,
+      runId: eligibility.runId,
+      acceptanceId: eligibility.acceptanceId,
+    });
+  }
 
   /**
    * Dung mot `RecogniseDocumentCommand` va tu tinh van tay.
@@ -211,6 +314,9 @@ export class SettlementService {
         `Chuyen ${trip.code} khong gan khach hang nao`,
       );
     }
+
+    // `#268` I5 — cong nghiem thu chung tu. THEM mot dieu kien, khong thay dieu kien nao o tren.
+    await this.requireCommercialAcceptance(trip, 'TRIP_RECONCILED');
 
     const terms = await this.repository.findCustomerTerms(trip.customerId);
     const dueDate = terms ? dueDateFrom(trip.businessDate, terms.paymentTermDays) : null;
@@ -390,6 +496,14 @@ export class SettlementService {
           `Dong mot trong hai lai truoc khi tinh hoa hong cho chuyen ${trip.code}`,
       );
     }
+
+    /*
+     * `#268` I5 — hoa hong CO di qua cong, khac han cong no nha xe ngoai.
+     *
+     * Chuyen `PARTNER_REFERRED_INTERNAL_RUN` chay bang XE CUA B, nen no co vong chay va co lai xe
+     * cua B mang bien nhan ve. Quy trinh chu so huu mo ta ap dung nguyen ven o day.
+     */
+    await this.requireCommercialAcceptance(trip, 'TRIP_COMMISSION');
 
     const { rule, scope } = selection;
     const amount = calculateCommission(rule, trip.freightAmount);

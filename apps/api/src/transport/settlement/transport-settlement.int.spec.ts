@@ -6,6 +6,16 @@ import { TransportCoreFactsAdapter } from '../costing/transport-core-facts.port.
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { PrismaFuelRepository } from '../fuel/prisma-fuel.repository.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
+import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
+import { PrismaCounterpartyRepository } from '../counterparty/prisma-counterparty.repository.js';
+import { PrismaAcceptanceRepository } from '../acceptance/prisma-acceptance.repository.js';
+import { CommercialAcceptanceService } from '../acceptance/acceptance.service.js';
+import {
+  AcceptanceCounterpartyFactsAdapter,
+  AcceptanceMovementFactsAdapter,
+  NoOperationalDocumentsAdapter,
+} from '../acceptance/acceptance-facts.port.js';
+import { SettlementAcceptanceGateAdapter } from './settlement-acceptance.port.js';
 import { PrismaSettlementRepository } from './prisma-settlement.repository.js';
 import { SettlementReadService } from './settlement-read.service.js';
 import { SettlementReportsController } from './settlement-reports.controller.js';
@@ -56,7 +66,27 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     );
     const fuelSource = new FuelSettlementSourceAdapter(fuelRepo);
 
-    const service = new SettlementService(repo, core, fuelSource);
+    /*
+     * CONG NGHIEM THU THAT, khong phai mot ban gia — `#268` I5.
+     *
+     * Cac chuyen cua bo bai nay chua tung duoc chieu sang mo hinh v2, nen cong tra ve
+     * `NOT_PROJECTED` va CHO QUA. Do chinh la dieu can chung minh: cong moi KHONG lam do mot duong
+     * quyet toan dang chay. Mot ban gia luon-cho-qua se chung minh dieu do bang cach gia dinh no.
+     */
+    const acceptance = new CommercialAcceptanceService(
+      new PrismaAcceptanceRepository(prisma),
+      new AcceptanceMovementFactsAdapter(new PrismaMovementRepository(prisma)),
+      new NoOperationalDocumentsAdapter(),
+      new AcceptanceCounterpartyFactsAdapter(new PrismaCounterpartyRepository(prisma)),
+      { timeZone: 'Asia/Ho_Chi_Minh' },
+    );
+
+    const service = new SettlementService(
+      repo,
+      core,
+      fuelSource,
+      new SettlementAcceptanceGateAdapter(acceptance),
+    );
     const read = new SettlementReadService(repo, core, costing);
 
     /**

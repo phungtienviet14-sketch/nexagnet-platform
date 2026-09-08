@@ -754,27 +754,27 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "commercial_acceptance.decide|ACCEPTANCE_REPLAYED": {
       "functionName": "CommercialAcceptanceService.decide",
       "filePath": "apps/api/src/transport/acceptance/acceptance.service.ts",
-      "line": 141
+      "line": 142
     },
     "commission.select|*": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 427
+      "line": 541
     },
     "commission.select|COMMISSION_RULE_AMBIGUOUS": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 380
+      "line": 486
     },
     "commission.select|COMMISSION_RULE_NONE_APPLICABLE": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 366
+      "line": 472
     },
     "commission.select|COMMISSION_TRIP_NOT_PARTNER_REFERRED": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 324
+      "line": 430
     },
     "compliance.document_register|COMPLIANCE_DOCUMENT_REGISTERED": {
       "functionName": "AssetComplianceService.registerDocument",
@@ -1462,57 +1462,55 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "settlement.allocate|*": {
       "functionName": "SettlementService.allocate",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 712
+      "line": 826
     },
     "settlement.correct|*": {
       "functionName": "SettlementService.ingestFuelHandoff",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 543
+      "line": 657
     },
     "settlement.correct|ADJUSTMENT_POSTED": {
       "functionName": "SettlementService.adjustDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 617
+      "line": 731
     },
     "settlement.correct|CORRECTION_NO_CHANGE": {
       "functionName": "SettlementService.adjustDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 578
+      "line": 692
     },
     "settlement.correct|REVERSAL_POSTED": {
       "functionName": "SettlementService.reverseDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 670
+      "line": 784
     },
     "settlement.credit_check|*": {
       "functionName": "SettlementService.creditExposure",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 753
+      "line": 867
     },
     "settlement.recognise|*": {
-      "functionName": "SettlementService.reportRecognition",
-      "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 136
+      "filePath": "apps/api/src/transport/settlement/settlement.service.ts"
     },
     "settlement.recognise|SETTLEMENT_TRIP_NOT_RECONCILED": {
       "functionName": "SettlementService.recogniseCustomerReceivable",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 181
+      "line": 284
     },
     "settlement.recognise|SETTLEMENT_TRIP_REVENUE_MISSING": {
       "functionName": "SettlementService.recogniseCustomerReceivable",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 195
+      "line": 298
     },
     "settlement_period.transition|*": {
       "functionName": "SettlementService.transitionPeriod",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 835
+      "line": 949
     },
     "settlement_period.transition|PERIOD_OPENED": {
       "functionName": "SettlementService.openPeriod",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 818
+      "line": 932
     },
     "source.approval|*": {
       "filePath": "apps/api/src/source-registry/source-registry.service.ts"
