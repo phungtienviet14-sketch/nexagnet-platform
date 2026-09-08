@@ -149,13 +149,17 @@ describe('bang canh bao gom chung — nguon TUY CHON theo capability dang bat', 
     const withAssets = providerCount(['transport-core', 'transport-asset-compliance']);
 
     /*
-     * DUNG BA provider duoc them, va ca ba deu THUOC T6:
+     * DUNG BON provider duoc them, va ca bon deu THUOC T6:
      *
      *   · `OperationalAlertsService`   — bang canh bao gom chung;
      *   · `ControlTowerAlertFacts`     — cua so cua thap dieu hanh nhin vao chinh bang do (Lane G);
      *   · `DispatchComplianceFacts`    — cua so cua be mat dieu xe nhin vao chinh bang do (Lane M,
      *     #277). Cung khuon va cung ly le: no doc `evaluateDispatchReadiness()` cua T6 chu khong
      *     tinh lai canh bao, nen no den/di cung T6.
+     *   · `StakeholderMaintenanceFacts` — cua so cua be mat ben huu quan nhin vao so ngay nghi cua
+     *     chinh xe ho so huu (Lane N, #278 N9). Cung khuon: no doc `foldVehicleDowntime()` cua T6
+     *     qua `AssetComplianceReadService` chu khong dem lai ngay, nen no den/di cung T6 — va khi
+     *     T6 tat, bang ben huu quan CONG BO `MAINTENANCE_CAPABILITY_OFF` thay vi in mot so `0`.
      *
      * Canh ma bai nay giu KHONG doi: hai adapter nguon cua `OperationalAlertsService`
      * (`AlertFuelConsumptionSource`, `AlertDriverFundSource`) thuoc `transport-fuel` va
@@ -163,7 +167,7 @@ describe('bang canh bao gom chung — nguon TUY CHON theo capability dang bat', 
      * huu thi den cung T6 la dung — khi T6 tat, ben doc mat nguon canh bao va CONG BO dieu do
      * thay vi im lang.
      */
-    expect(withAssets).toBe(bare + 3);
+    expect(withAssets).toBe(bare + 4);
   });
 });
 
