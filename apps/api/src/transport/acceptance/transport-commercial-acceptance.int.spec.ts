@@ -83,6 +83,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         where: { run: { code: { startsWith: RUN_CODE } } },
       });
       await prisma.transportVehicleRun.deleteMany({ where: { code: { startsWith: RUN_CODE } } });
+      await prisma.transportTripOrderLink.deleteMany({
+        where: { order: { code: { startsWith: ORDER_CODE } } },
+      });
       await prisma.transportOrder.deleteMany({ where: { code: { startsWith: ORDER_CODE } } });
       await prisma.transportVehicle.deleteMany({
         where: { registrationPlate: { startsWith: PLATE } },
