@@ -409,11 +409,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/operational-alerts.controller.ts",
       "line": 24
     },
-    "transport.analytics.read": {
-      "functionName": "TransportAnalyticsController.runMargin",
-      "filePath": "apps/api/src/transport/analytics/analytics.controller.ts",
-      "line": 40
-    },
     "transport.asset_ownership.manage": {
       "filePath": "apps/api/src/transport/asset-ownership/asset-ownership.controller.ts"
     },
@@ -880,22 +875,20 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "control_tower.board_projection|BOARD_CHECKPOINT_COLUMNS_UNAVAILABLE": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 84
+      "line": 148
     },
     "control_tower.compile|CONTROL_TOWER_COMPILED": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 92
+      "line": 156
     },
     "control_tower.compile|CONTROL_TOWER_SOURCE_FAILED": {
-      "functionName": "ControlTowerReadService.guard",
-      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 253
+      "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts"
     },
     "control_tower.compile|CONTROL_TOWER_SOURCE_UNAVAILABLE": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 75
+      "line": 139
     },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",

@@ -12,7 +12,12 @@ import type {
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   ControlTowerView,
+  CorridorInsightView,
+  DispatchSuggestionView,
   FinanceSummaryView,
+  FleetInsightView,
+  RunJourneyMapView,
+  RunJourneyView,
   ComplianceSubjectKind,
   CorrelatedPosting,
   DirectMargin,
@@ -89,6 +94,7 @@ import type {
   AssetStakeholder,
   AssetStakeholderKind,
   PartyStatus,
+  StakeholderActivityView,
   StakeholderVehicleView,
   Vehicle,
   VehicleDriverAssignment,
@@ -646,6 +652,18 @@ export const transportApi = {
     myVehicles: (): Promise<readonly StakeholderVehicleView[]> => get('/transport/me/vehicles'),
     myVehicle: (vehicleId: string): Promise<StakeholderVehicleView> =>
       get(`/transport/me/vehicles/${encodeURIComponent(vehicleId)}`),
+    /**
+     * HOAT DONG cua chinh nhung chiec xe do (`#278` N9).
+     *
+     * `/activity` la mot duong CO DINH, khong phai mot `vehicleId`. May chu khai no TRUOC route
+     * tham so, nen chuoi nay khong bao gio bi doc thanh ma xe — xem
+     * `stakeholder-activity.composition.spec.ts`.
+     */
+    activity: (range?: {
+      readonly from?: string;
+      readonly to?: string;
+    }): Promise<StakeholderActivityView> =>
+      get(`/transport/me/vehicles/activity${toQuery({ from: range?.from, to: range?.to })}`),
   },
 
   fleet: {
@@ -1184,6 +1202,63 @@ export const transportApi = {
    */
   finance: {
     summary: (): Promise<FinanceSummaryView> => get('/transport/finance/summary'),
+  },
+
+  /**
+   * BAO CAO BAN DO VONG CHAY (Lane N, #278 N5) — HAI lan goi, va do la co y.
+   *
+   * `run()` di sau `transport.run.read`; `map()` di sau `transport.location.history.read`, ma ke
+   * toan KHONG co. Gop hai lan goi lam mot se buoc may chu tra toa do duoi ma quyen thu nhat —
+   * tuc am tham cap cho ke toan dung cai quyen ma ma tran vai da tu choi ho.
+   *
+   * Nen man hinh goi rieng, va mot `403` o `map()` la mot cau tra loi DUNG: bao cao van ve, chi
+   * khong co ban do.
+   *
+   * `runRef` la MA vong chay (`navigation.ts` cam mot `id` ky thuat len dia chi), nhung may chu
+   * nhan ca hai — xem `JourneyController`.
+   */
+  journey: {
+    run: (runRef: string): Promise<RunJourneyView> =>
+      get(`/transport/journey/runs/${encodeURIComponent(runRef)}`),
+    map: (runRef: string): Promise<RunJourneyMapView> =>
+      get(`/transport/journey/runs/${encodeURIComponent(runRef)}/map`),
+  },
+
+  /**
+   * DE NGHI DIEU XE (Lane M, #277) — `POST`, va do KHONG phai mot lan ghi.
+   *
+   * `POST` vi lan goi mang mot the yeu cau (diem lay hang, han gio, tai trong) va co the goi mot
+   * nha cung cap dinh tuyen that — no co chi phi, co `@Throttle`, va khong dat vao mot URL duoc.
+   * `assignmentCreated: false` trong DTO nhac lai rang khong gi bi ghi.
+   *
+   * `assign()` la mot LENH KHAC: ma quyen khac (`transport.run.manage`), va no chi duoc goi sau khi
+   * mot con nguoi bam. Man hinh khong bao gio goi no thay nguoi dung.
+   */
+  dispatch: {
+    suggest: (
+      orderId: string,
+      body: Readonly<Record<string, unknown>> = {},
+    ): Promise<DispatchSuggestionView> =>
+      send('POST', `/transport/orders/${encodeURIComponent(orderId)}/dispatch-suggestions`, body),
+    assign: (orderId: string, body: Readonly<Record<string, unknown>>): Promise<unknown> =>
+      send('POST', `/transport/orders/${encodeURIComponent(orderId)}/dispatch-assignment`, body),
+  },
+
+  /**
+   * BANG DOI XE + BAO CAO TUYEN (Lane N, #278 N6/N7).
+   *
+   * `from`/`to` la NGAY NGHIEP VU (`YYYY-MM-DD`), khong phai moc thoi gian. Bo trong thi may chu tu
+   * chot 30 ngay gan nhat theo mui gio tenant — man hinh KHONG duoc tu tinh khoang bang
+   * `new Date()`, vi mot nguoi mo bao cao luc 00:30 gio Viet Nam se ra mot khoang lech mot ngay.
+   */
+  insight: {
+    fleet: (range?: { readonly from?: string; readonly to?: string }): Promise<FleetInsightView> =>
+      get(`/transport/insight/fleet${toQuery({ from: range?.from, to: range?.to })}`),
+    corridors: (range?: {
+      readonly from?: string;
+      readonly to?: string;
+    }): Promise<CorridorInsightView> =>
+      get(`/transport/insight/corridors${toQuery({ from: range?.from, to: range?.to })}`),
   },
 
   /**

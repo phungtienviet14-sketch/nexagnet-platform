@@ -157,6 +157,11 @@ import { DriverPayslipsController } from './transport/workforce/driver-payslips.
 import { TripExpensesController } from './transport/costing/trip-expenses.controller.js';
 import { AssetOwnershipController } from './transport/asset-ownership/asset-ownership.controller.js';
 import { StakeholderVehiclesController } from './transport/asset-ownership/stakeholder-vehicles.controller.js';
+import { StakeholderActivityService } from './transport/asset-ownership/stakeholder-activity.service.js';
+import {
+  StakeholderMaintenanceFacts,
+  StakeholderMaintenanceFactsAdapter,
+} from './transport/asset-ownership/stakeholder-activity-facts.port.js';
 import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
 import { CounterpartySitesController } from './transport/counterparty/counterparty-sites.controller.js';
 import { TransportOrdersController } from './transport/movement/orders.controller.js';
@@ -166,6 +171,24 @@ import { RunsController } from './transport/movement/runs.controller.js';
 import { TransportPlanningController } from './transport/planning/planning.controller.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { ControlTowerController } from './transport/control-tower/control-tower.controller.js';
+import { JourneyController } from './transport/journey/journey.controller.js';
+import { InsightController } from './transport/insight/insight.controller.js';
+import { InsightReadService } from './transport/insight/insight-read.service.js';
+import {
+  InsightCoreFacts,
+  InsightCoreFactsAdapter,
+} from './transport/insight/insight-facts.port.js';
+import { JourneyReadService } from './transport/journey/journey-read.service.js';
+import {
+  JourneyCheckpointFacts,
+  JourneyCheckpointFactsAdapter,
+  JourneyCoreFacts,
+  JourneyCoreFactsAdapter,
+  JourneyFuelFacts,
+  JourneyFuelFactsAdapter,
+  JourneyLocationFacts,
+  JourneyLocationFactsAdapter,
+} from './transport/journey/journey-facts.port.js';
 import { FinanceController } from './transport/finance/finance.controller.js';
 import { FinanceReadService } from './transport/finance/finance-read.service.js';
 import {
@@ -178,6 +201,8 @@ import { ControlTowerReadService } from './transport/control-tower/control-tower
 import {
   ControlTowerAlertFacts,
   ControlTowerAlertFactsAdapter,
+  ControlTowerCheckpointFacts,
+  ControlTowerCheckpointFactsAdapter,
   ControlTowerClaimFacts,
   ControlTowerClaimFactsAdapter,
   ControlTowerCoreFacts,
@@ -328,6 +353,8 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // THAP DIEU HANH (Lane G, #244) — den cung `transport-core`. Service dung sau no doc them BA
   // nguon TUY CHON o ba capability khac; xem khoi PROVIDERS ben duoi.
   owned('transport-core', ControlTowerController),
+  owned('transport-core', JourneyController),
+  owned('transport-core', InsightController),
   // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
   owned('transport-core', CounterpartyController),
   // `#267` H1: dia diem van hanh la mot MAT cua ho so phap nhan, nen no den/di cung `transport-core`
@@ -555,6 +582,63 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     useClass: PlanningDispatchAssignmentPlanner,
   }),
   owned('transport-core', DispatchService),
+  /**
+   * MOC HIEN TRUONG (`#243` F1) — cong thu NAM, va la cong doi ban chat cua bang.
+   *
+   * Bon cong tren chi them MUC vao hang viec. Cong nay quyet dinh ba COT cua bang dieu hanh
+   * (`PICKUP`/`LOADING`/`ARRIVED`) va truong `currentLeg.phase` cua moi the. Khach tat
+   * `transport-checkpoint` thi ba cot do van nam tren bang, RONG, kem `AWAITING_CHECKPOINT_SOURCE`
+   * — chinh xac hinh dang ma bang da co truoc tranche nay.
+   */
+  owned('transport-checkpoint', {
+    provide: ControlTowerCheckpointFacts,
+    useClass: ControlTowerCheckpointFactsAdapter,
+  }),
+  /**
+   * BAO CAO BAN DO CUA MOT VONG CHAY (`#278` N5) — cung khuon thap dieu hanh.
+   *
+   * Cong LOI di cung `transport-core`: khong co vong chay thi khong co bao cao. Ba cong con lai
+   * quyet dinh bao cao co BAN DO hay khong, va chung den/di cung capability so huu du lieu:
+   * moc (`transport-checkpoint`), toa do (`transport-proof`), phieu do dau (`transport-fuel`).
+   *
+   * Khach tat ca ba thi bao cao van dung: chang, km co hang/rong, ma don — chi khong co ban do va
+   * khong co dong thoi gian, va `unavailableSources` noi ra dieu do.
+   */
+  owned('transport-core', JourneyReadService),
+  owned('transport-core', { provide: JourneyCoreFacts, useClass: JourneyCoreFactsAdapter }),
+  owned('transport-checkpoint', {
+    provide: JourneyCheckpointFacts,
+    useClass: JourneyCheckpointFactsAdapter,
+  }),
+  owned('transport-proof', {
+    provide: JourneyLocationFacts,
+    useClass: JourneyLocationFactsAdapter,
+  }),
+  owned('transport-fuel', { provide: JourneyFuelFacts, useClass: JourneyFuelFactsAdapter }),
+  /**
+   * BANG DOI XE + BAO CAO TUYEN (`#278` N6/N7) — MOT cong, di cung `transport-core`.
+   *
+   * Khac hai bao cao tren: o day khong co cong tuy chon nao. Ca hai chi doc vong chay, chang, xe va
+   * don — bon thu deu thuoc `transport-core` — nen khong co gi de vang mat, va cung khong co
+   * `unavailableSources` de cong bo.
+   */
+  owned('transport-core', InsightReadService),
+  owned('transport-core', { provide: InsightCoreFacts, useClass: InsightCoreFactsAdapter }),
+  /**
+   * BE MAT BEN HUU QUAN — PHAN HOAT DONG (`#278` N9).
+   *
+   * Dich vu di cung `transport-core`: no doc vong chay, chang va xe — dung nhung thu ma man hinh
+   * "Xe toi co co phan" da dung san.
+   *
+   * Cong BAO DUONG thi KHONG: so ngay nghi thuoc `transport-asset-compliance`. Khach tat capability
+   * do van mo duoc bang — cot so ngay nghi la mot dau gach kem `MAINTENANCE_CAPABILITY_OFF`, chu
+   * khong phai mot so `0` doc y het "xe chay du thang".
+   */
+  owned('transport-core', StakeholderActivityService),
+  owned('transport-asset-compliance', {
+    provide: StakeholderMaintenanceFacts,
+    useClass: StakeholderMaintenanceFactsAdapter,
+  }),
   /**
    * BANG TAI CHINH — cung khuon, va cung mot ly le cau truc.
    *

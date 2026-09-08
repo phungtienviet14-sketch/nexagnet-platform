@@ -62,6 +62,21 @@ describe('composition cua thap dieu hanh', () => {
     );
   });
 
+  /**
+   * Cong MOC di cung `transport-checkpoint`, va day la cong duy nhat doi HINH DANG cua bang.
+   *
+   * Bon cong kia chi them muc vao hang viec, nen dang ky nham chung o `transport-core` chi lam thua
+   * mot provider. Dang ky nham cong nay se lam ba cot `PICKUP`/`LOADING`/`ARRIVED` MO ra o mot
+   * khach khong he ghi moc nao — tuc ba cot rong vinh vien ma khong mang mot ma ly do nao, dung
+   * kieu "im lang bao rang khong co viec gi" ma ca tep nay ton tai de chan.
+   */
+  it('cong moc chi ton tai khi bat `transport-checkpoint`', () => {
+    expect(providerTokens(['transport-core'])).not.toContain('ControlTowerCheckpointFacts');
+    expect(providerTokens(['transport-core', 'transport-checkpoint'])).toContain(
+      'ControlTowerCheckpointFacts',
+    );
+  });
+
   /** Cong LOI di cung `transport-core` — khong co no thi khong co bang de ve. */
   it('cong loi luon di cung `transport-core`', () => {
     expect(providerTokens(['transport-core'])).toContain('ControlTowerCoreFacts');
@@ -91,12 +106,45 @@ describe('be mat thap dieu hanh khong co duong ghi nao', () => {
     expect(source).toContain('@Get(');
   });
 
-  it('bon cong ra ngoai chi co ham doc', () => {
+  /**
+   * NAM CONG RA NGOAI CHI CO HAM DOC.
+   *
+   * Bai giu hai chieu, va can ca hai. Danh sach CHO PHEP mot minh se yeu di moi lan co nguoi them
+   * mot dong tu doc moi (`timeline` la lan gan nhat); danh sach CAM mot minh thi khong bat duoc mot
+   * ten sang tao kieu `applyRunPhase`. Nen o day ca hai cung dung: dong tu phai nam trong tu dien
+   * doc, VA khong duoc chua mot dong tu ghi o bat ky vi tri nao trong ten.
+   */
+  it('nam cong ra ngoai chi co ham doc', () => {
     const source = sourceOf('control-tower-facts.port.ts');
-    const methods = source.match(/abstract (\w+)\(/g) ?? [];
+    const methods = [...source.matchAll(/abstract ([a-z]+)(\w*)\(/g)];
     expect(methods.length).toBeGreaterThan(0);
-    for (const method of methods) {
-      expect(method).toMatch(/abstract (find|list|feed)/);
+
+    const READ_VERBS = ['find', 'list', 'feed', 'timeline'];
+    const WRITE_VERBS = [
+      'create',
+      'update',
+      'set',
+      'record',
+      'delete',
+      'remove',
+      'cancel',
+      'assign',
+      'close',
+      'reopen',
+      'apply',
+      'write',
+      'save',
+    ];
+
+    for (const [, verb, tail] of methods) {
+      const name = `${verb}${tail}`;
+      /*
+       * Kiem tren DONG TU DAU, khong tren ca ten. `listRunAssignments` co chua chuoi "assign" o
+       * giua va van la mot ham doc — mot bai kiem chuoi con se cam no, va nguoi sua tiep theo se
+       * doi ten mot ham doc cho vua mot bai kiem thay vi cho vua nguoi doc.
+       */
+      expect(READ_VERBS, name).toContain(verb);
+      expect(WRITE_VERBS, name).not.toContain(verb);
     }
   });
 

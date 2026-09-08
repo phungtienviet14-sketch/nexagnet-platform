@@ -1,11 +1,14 @@
 import { summariseRunDistance } from '../movement/run-distance.js';
-import type { RunAssignment, RunLeg, VehicleRun } from '../movement/movement.types.js';
+import type { Order, RunAssignment, RunLeg, VehicleRun } from '../movement/movement.types.js';
+import type { RunLegPhase } from '../checkpoint/run-timeline.js';
 import type { Driver, Vehicle } from '../transport.types.js';
 import {
-  CHECKPOINT_DERIVED_COLUMNS,
   OPERATIONS_BOARD_COLUMNS,
+  PHASE_DERIVED_COLUMNS,
+  WAITING_COLUMN,
   type ActionQueueItem,
   type ActionQueueSeverity,
+  type BoardCurrentLeg,
   type FleetPresenceView,
   type OperationsBoardCard,
   type OperationsBoardColumn,
@@ -23,8 +26,8 @@ import {
  *
  *   1. KHONG BIA. Thieu km o mot chang thi `totalKm` la `null`, khong phai 0 — day dung la luat ma
  *      `summariseRunDistance` da dat, va o day chi doc lai ket luan cua no thay vi cong lai.
- *   2. KHONG DOI TRANG THAI. Bang la mot phep chieu cua `VehicleRunStatus`; khong mot ham nao o day
- *      nhan mot lenh chuyen trang thai (#244 G3).
+ *   2. KHONG DOI TRANG THAI. Bang la mot phep chieu cua `VehicleRunStatus` + giai doan chang doc
+ *      tu MOC; khong mot ham nao o day nhan mot lenh chuyen trang thai (#244 G3).
  *   3. TAT DINH. Cung dau vao cho ra cung thu tu, khong phu thuoc thu tu tra ve cua kho.
  */
 
@@ -36,21 +39,85 @@ export interface ControlTowerCoreInput {
   readonly assignmentsByRun: ReadonlyMap<string, readonly RunAssignment[]>;
   readonly vehicles: readonly Vehicle[];
   readonly drivers: readonly Driver[];
+  /**
+   * MA DON theo `orderId` — chi de dat len the. `Order.code` la dinh danh nghiep vu; `orderId`
+   * khong duoc di len dia chi (quy uoc `SELECTION_QUERY_PARAM` cua `navigation.ts`).
+   */
+  readonly orderCodesById: ReadonlyMap<string, Order['code']>;
+  /**
+   * GIAI DOAN CHANG doc tu moc hien truong, khoa ngoai la `runId`, khoa trong la `legId`.
+   *
+   * `null` — chu KHONG mot `Map` rong — khi capability `transport-checkpoint` dang tat. Hai thu do
+   * khac han nhau: mot `Map` rong nghia la CO nguon nhung chua ai bam moc nao (bang van hien ba cot
+   * that, rong); `null` nghia la khong co nguon, va bang phai cong bo `AWAITING_CHECKPOINT_SOURCE`.
+   */
+  readonly legPhasesByRun: ReadonlyMap<string, Readonly<Record<string, RunLegPhase>>> | null;
 }
 
 /**
- * BA COT CO NGUON hom nay, anh xa tu `VehicleRunStatus`.
+ * CHANG DANG LAM = chang co so thu tu NHO NHAT ma chua xong.
  *
- * `CANCELLED` KHONG co mat, va do la cung mot quyet dinh ma `run-distance.ts` da lay cho chang huy:
- * mot ke hoach bi bo khong phai mot buoc trong quy trinh. No bien mat khoi bang thay vi tao mot cot
- * thu tam ma khong ai lam gi voi no.
+ * "Chua xong" doc tu HAI truc va can ca hai: `RunLegStatus` la su that cua `transport-core` (chang
+ * huy, chang da dong), con `RunLegPhase` la su that cua hien truong (lai xe da bam
+ * `DELIVERY_ACCEPTED` chua). Bo truc nao cung sai: chi doc trang thai thi mot chang lai xe da giao
+ * xong ma dieu hanh chua dong van bi coi la dang lam; chi doc giai doan thi mot chang HUY van len
+ * bang, vi khong ai bam moc cho mot chang bi huy.
  */
-const COLUMN_BY_RUN_STATUS: Readonly<Partial<Record<VehicleRun['status'], OperationsBoardColumn>>> =
-  {
-    PLANNED: 'PLANNED',
-    ACTIVE: 'IN_TRANSIT',
-    COMPLETED: 'DELIVERED',
+const pickCurrentLeg = (
+  legs: readonly RunLeg[],
+  phases: Readonly<Record<string, RunLegPhase>> | undefined,
+  orderCodesById: ReadonlyMap<string, string>,
+): BoardCurrentLeg | null => {
+  const open = [...legs]
+    .sort((left, right) => left.sequence - right.sequence)
+    .find((leg) => {
+      if (leg.status === 'CANCELLED' || leg.status === 'COMPLETED') return false;
+      return phases?.[leg.id] !== 'DELIVERED';
+    });
+
+  if (open === undefined) return null;
+
+  return {
+    legId: open.id,
+    sequence: open.sequence,
+    kind: open.kind,
+    orderCode: open.orderId === null ? null : (orderCodesById.get(open.orderId) ?? null),
+    phase: phases?.[open.id] ?? null,
   };
+};
+
+/**
+ * COT cua mot vong chay.
+ *
+ * `PLANNED`/`DELIVERED`/loai bo `CANCELLED` van do `VehicleRunStatus` quyet — do la vong doi cua
+ * chinh vong chay va no khong doi. Cai `#243` F1 them vao la BEN TRONG `ACTIVE`: mot vong chay dang
+ * chay bay gio phan biet duoc "dang o bai lay hang", "dang xuong hang", "dang chay", "da den noi
+ * giao" — bon tinh huong ma truoc day deu do chung mot o `IN_TRANSIT`.
+ *
+ * `IN_TRANSIT` la CHO VE MAC DINH cua mot vong chay dang chay, va do khong phai mot phong doan: khi
+ * chua co moc nao thi dieu duy nhat he thong biet chac la vong chay dang mo — dung cai ma cot
+ * `IN_TRANSIT` noi. Mot vong chay dang chay bien mat khoi bang chi vi lai xe chua bam nut thi te
+ * hon han.
+ */
+const columnForRun = (
+  run: VehicleRun,
+  currentLeg: BoardCurrentLeg | null,
+): OperationsBoardColumn | null => {
+  if (run.status === 'PLANNED') return 'PLANNED';
+  if (run.status === 'COMPLETED') return 'DELIVERED';
+  if (run.status !== 'ACTIVE') return null;
+
+  switch (currentLeg?.phase) {
+    case 'AT_PICKUP':
+      return 'PICKUP';
+    case 'LOADING':
+      return 'LOADING';
+    case 'ARRIVED':
+      return 'ARRIVED';
+    default:
+      return 'IN_TRANSIT';
+  }
+};
 
 const activeDriverOf = (assignments: readonly RunAssignment[] | undefined): string | null =>
   assignments?.find((assignment) => assignment.effectiveTo === null)?.driverId ?? null;
@@ -71,9 +138,11 @@ const toCard = (run: VehicleRun, input: ControlTowerCoreInput): OperationsBoardC
     /*
      * `complete === false` nghia la con mot chang thieu km. Tra `null` chu khong tra tong mot phan:
      * mot tong tinh tren du lieu khuyet doc giong het mot tong that, va no sai theo huong LAM DEP
-     * (nho hon su that) — tuc kieu sai khong ai di kiem tra.
+     * (nho hon su that) — tuc kieu sai khong ai di kiem tra. Cung luat cho `emptyKm`.
      */
     totalKm: distance.complete ? distance.totalKm : null,
+    emptyKm: distance.complete ? distance.emptyKm : null,
+    currentLeg: pickCurrentLeg(legs, input.legPhasesByRun?.get(run.id), input.orderCodesById),
   };
 };
 
@@ -87,20 +156,36 @@ export function buildOperationsBoard(
   const cardsByColumn = new Map<OperationsBoardColumn, OperationsBoardCard[]>();
 
   for (const run of input.runs) {
-    const column = COLUMN_BY_RUN_STATUS[run.status];
-    if (column === undefined) continue;
+    const card = toCard(run, input);
+    const column = columnForRun(run, card.currentLeg);
+    if (column === null) continue;
     const bucket = cardsByColumn.get(column) ?? [];
-    bucket.push(toCard(run, input));
+    bucket.push(card);
     cardsByColumn.set(column, bucket);
   }
 
+  const phasesAvailable = input.legPhasesByRun !== null;
+
   return OPERATIONS_BOARD_COLUMNS.map((column) => {
     /*
-     * Bon cot cua Lane F giu NGUYEN cho tren bang va noi ra ly do. Xem khoi chu thich cua
-     * `CHECKPOINT_DERIVED_COLUMNS`: bo cot di se lam nguoi doc tuong quy trinh that chi co ba buoc,
-     * con suy chung tu `RunLegStatus` se cho ra mot con so bia.
+     * `WAITING` giu nguyen cho tren bang va RONG, o MOI cau hinh. Xem `WAITING_COLUMN`: khoang cho
+     * nguoi nhan can mot PHIEN CHO co gio mo/gio dong, va suy no tu `DELIVERY_ARRIVAL` se bien hai
+     * chang khac han nhau thanh mot con so.
      */
-    if (CHECKPOINT_DERIVED_COLUMNS.includes(column)) {
+    if (column === WAITING_COLUMN) {
+      return {
+        column,
+        cards: [],
+        total: 0,
+        unavailableReason: 'AWAITING_WAITING_SESSION_SOURCE' as const,
+      };
+    }
+
+    /*
+     * Ba cot giai doan chi rong khi KHONG CO nguon moc. Khi co nguon, chung la cot that: rong o day
+     * nghia la hom nay khong xe nao dang o buoc do — mot su that, khong phai mot cho trong.
+     */
+    if (!phasesAvailable && PHASE_DERIVED_COLUMNS.includes(column)) {
       return {
         column,
         cards: [],
@@ -108,6 +193,7 @@ export function buildOperationsBoard(
         unavailableReason: 'AWAITING_CHECKPOINT_SOURCE' as const,
       };
     }
+
     const cards = [...(cardsByColumn.get(column) ?? [])].sort(byRunCode);
     return { column, cards, total: cards.length, unavailableReason: null };
   });

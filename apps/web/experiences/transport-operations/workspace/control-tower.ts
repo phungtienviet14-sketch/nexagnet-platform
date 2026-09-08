@@ -4,10 +4,13 @@ import type {
   ActionQueueItem,
   ActionQueueKind,
   ActionQueueSeverity,
+  BoardColumnUnavailableReason,
+  BoardCurrentLeg,
   ControlTowerSource,
   ControlTowerView,
   OperationsBoardColumn,
   PendingActionQueueEntry,
+  RunLegPhase,
 } from '../transport-types';
 
 /**
@@ -49,14 +52,37 @@ const COLUMN_LABEL: Readonly<Record<OperationsBoardColumn, string>> = {
   DELIVERED: 'Đã giao xong',
 };
 
-const CHECKPOINT_COLUMN_NOTE =
-  'Cột này cần mốc hiện trường (vào cổng, xếp hàng, bấm đã đến, chờ nhận) — hệ thống chưa ghi ' +
-  'nhận các mốc đó, nên cột để trống thay vì đoán từ trạng thái chặng.';
+/**
+ * MOT CAU CHU CHO MOI MA LY DO — `Record` day du, khong nhanh mac dinh.
+ *
+ * Hai ly do noi hai dieu KHAC HAN nhau, va gop chung lam mot cau se lam nguoi truc di tim nham cho:
+ * mot ben la khach chua bat nghiep vu moc, ben kia la nen tang chua co phien cho. Nguoi doc cau thu
+ * nhat di goi ban quan tri; nguoi doc cau thu hai thi khong.
+ */
+const COLUMN_UNAVAILABLE_NOTE: Readonly<Record<BoardColumnUnavailableReason, string>> = {
+  AWAITING_CHECKPOINT_SOURCE:
+    'Cột này cần mốc hiện trường (vào cổng, xếp hàng, bấm đã đến) — khách chưa bật nghiệp vụ ' +
+    'mốc, nên cột để trống thay vì đoán từ trạng thái chặng.',
+  AWAITING_WAITING_SESSION_SOURCE:
+    'Cột này cần phiên chờ người nhận — một bản ghi có giờ mở và giờ đóng. Hai chặng cùng dừng ở ' +
+    '“đã đến nơi giao” có thể một bên đang chờ còn một bên thì không, nên hệ thống không suy ' +
+    'cột này từ mốc.',
+};
 
 const SOURCE_LABEL: Readonly<Record<ControlTowerSource, string>> = {
   EXPENSE_CLAIMS: 'Duyệt chi lái xe',
   FUEL: 'Nhiên liệu',
   OPERATIONAL_ALERTS: 'Bảo dưỡng & giấy tờ',
+  CHECKPOINT: 'Mốc hiện trường',
+};
+
+const PHASE_LABEL: Readonly<Record<RunLegPhase, string>> = {
+  PLANNED: 'Chưa bấm mốc nào',
+  AT_PICKUP: 'Đã vào lấy hàng',
+  LOADING: 'Đang xếp hàng',
+  IN_TRANSIT: 'Đang chạy',
+  ARRIVED: 'Đã đến nơi giao',
+  DELIVERED: 'Đã giao xong',
 };
 
 const QUEUE_LABEL: Readonly<Record<ActionQueueKind, string>> = {
@@ -73,6 +99,7 @@ const QUEUE_LABEL: Readonly<Record<ActionQueueKind, string>> = {
   MAINTENANCE_OVERDUE: 'Bảo dưỡng đã quá hạn',
   MAINTENANCE_DUE_SOON: 'Bảo dưỡng sắp đến hạn',
   VEHICLE_STATE_INCONSISTENT: 'Xe vừa đang sửa vừa đang chạy chuyến',
+  CHECKPOINT_LOCATION_PROOF_MISSING: 'Mốc hiện trường không kèm bằng chứng vị trí',
 };
 
 /**
@@ -95,6 +122,8 @@ const QUEUE_SECTION: Readonly<Record<ActionQueueKind, TransportSectionId>> = {
   MAINTENANCE_OVERDUE: 'maintenance',
   MAINTENANCE_DUE_SOON: 'maintenance',
   VEHICLE_STATE_INCONSISTENT: 'maintenance',
+  /* Ban ghi goc la mot MOC, va moc song trong dong thoi gian cua chinh vong chay do. */
+  CHECKPOINT_LOCATION_PROOF_MISSING: 'movement',
 };
 
 const PENDING_LABEL: Readonly<Record<PendingActionQueueEntry['kind'], string>> = {
@@ -106,6 +135,9 @@ const PENDING_LABEL: Readonly<Record<PendingActionQueueEntry['kind'], string>> =
 };
 
 const PENDING_REASON: Readonly<Record<PendingActionQueueEntry['reason'], string>> = {
+  AWAITING_WAITING_SESSION_SOURCE: 'chưa có phiên chờ người nhận (giờ mở, giờ đóng)',
+  AWAITING_OPERATIONAL_DOCUMENT_SOURCE:
+    'chưa có tài liệu vận hành (biên bản giao hàng, phiếu ký nhận)',
   AWAITING_CHECKPOINT_SOURCE: 'chưa có mốc hiện trường',
   AWAITING_RECEIVABLE_DUE_DATE_SOURCE: 'chưa có đường đọc công nợ theo hạn',
   AWAITING_FLEET_WIDE_PROOF_QUERY: 'chưa có đường đọc bằng chứng vị trí cho cả đội xe',
@@ -119,6 +151,20 @@ const SEVERITY_TONE: Readonly<Record<ActionQueueSeverity, SeverityTone>> = {
   INFO: 'muted',
 };
 
+/**
+ * CHANG DANG LAM, da san sang hien thi.
+ *
+ * `isEmpty` la mot CO RIENG chu khong phai mot mau: `#274` §4 doi chang rong phai NOI BAT mau do,
+ * con `#278` N2 doi mau khong duoc la tin hieu duy nhat. Nen tang doc tra ve mot co, va man hinh
+ * dung no cho CA hai — mot lop mau va mot chu "RỖNG" doc duoc.
+ */
+export interface ControlTowerCurrentLeg {
+  readonly label: string;
+  readonly isEmpty: boolean;
+  /** `'—'` khi chua co moc nao cho chang nay. KHONG doan mot giai doan. */
+  readonly phase: string;
+}
+
 export interface ControlTowerCard {
   readonly key: string;
   readonly runCode: string;
@@ -126,6 +172,10 @@ export interface ControlTowerCard {
   readonly legs: string;
   /** Da dinh dang. `'—'` khi con mot chang thieu km — KHONG bao gio la `'0'`. */
   readonly totalKm: string;
+  /** Da dinh dang. `'—'` khi con mot chang thieu km — KHONG bao gio la `'0'`. */
+  readonly emptyKm: string;
+  /** `null` khi vong chay khong con chang nao dang mo. */
+  readonly currentLeg: ControlTowerCurrentLeg | null;
 }
 
 export interface ControlTowerColumn {
@@ -169,6 +219,21 @@ export interface ControlTowerModel {
 /** Cat danh sach de bang doc duoc; `queueTotal` van la con so THAT. */
 export const QUEUE_LIMIT = 12;
 
+/**
+ * NHAN CHANG DANG LAM. `orderCode` vang mat KHONG duoc dien bang mot chuoi giong mot ma don.
+ *
+ * Chang rong khong mang don — do la bat bien cua `TransportRunLeg`, khong phai mot thieu sot du
+ * lieu — nen o do nhan noi thang "RỖNG · chạy không hàng". Chang co hang ma chua co don thi noi
+ * "chưa gắn đơn", va hai cau do phai doc ra khac nhau.
+ */
+const currentLegLabel = (leg: BoardCurrentLeg): string => {
+  const position = `Chặng ${formatCount(leg.sequence)}`;
+  if (leg.kind === 'EMPTY') return `${position} · RỖNG · chạy không hàng`;
+  return leg.orderCode === null
+    ? `${position} · có hàng · chưa gắn đơn`
+    : `${position} · có hàng · ${leg.orderCode}`;
+};
+
 const toCard = (
   card: ControlTowerView['board'][number]['cards'][number],
   column: OperationsBoardColumn,
@@ -182,6 +247,15 @@ const toCard = (
    * nay cho `null`, nen o day chi can khong chen mot gia tri mac dinh vao truoc no.
    */
   totalKm: card.totalKm === null ? EMPTY_VALUE : formatDistance(card.totalKm),
+  emptyKm: card.emptyKm === null ? EMPTY_VALUE : formatDistance(card.emptyKm),
+  currentLeg:
+    card.currentLeg === null
+      ? null
+      : {
+          label: currentLegLabel(card.currentLeg),
+          isEmpty: card.currentLeg.kind === 'EMPTY',
+          phase: card.currentLeg.phase === null ? EMPTY_VALUE : PHASE_LABEL[card.currentLeg.phase],
+        },
 });
 
 export function toControlTower(view: ControlTowerView): ControlTowerModel {
@@ -189,14 +263,14 @@ export function toControlTower(view: ControlTowerView): ControlTowerModel {
 
   const columns = OPERATIONS_BOARD_ORDER.map((column): ControlTowerColumn => {
     const source = byColumn.get(column);
-    const isAvailable = source?.unavailableReason == null;
+    const reason = source?.unavailableReason ?? null;
     return {
       column,
       label: COLUMN_LABEL[column],
       total: formatCount(source?.total ?? 0),
       cards: (source?.cards ?? []).map((card) => toCard(card, column)),
-      isAvailable,
-      note: isAvailable ? null : CHECKPOINT_COLUMN_NOTE,
+      isAvailable: reason === null,
+      note: reason === null ? null : COLUMN_UNAVAILABLE_NOTE[reason],
     };
   });
 

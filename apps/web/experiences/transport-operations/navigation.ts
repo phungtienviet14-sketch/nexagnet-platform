@@ -45,6 +45,11 @@ export type TransportSectionId =
   | 'finance'
   | 'margin'
   | 'ar-ap'
+  | 'dispatch'
+  | 'journey'
+  | 'routes'
+  | 'fleet-dashboard'
+  | 'executive'
   | 'exports';
 
 export type TransportSectionGroupId = 'root' | 'dispatch' | 'cost' | 'assets' | 'reports';
@@ -127,6 +132,21 @@ export const TRANSPORT_SECTIONS = [
     summary: 'Hồ sơ xe, hồ sơ lái xe, lịch sử phụ trách và số km đồng hồ.',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.vehicle.read',
+  },
+  {
+    id: 'dispatch',
+    label: 'Điều xe',
+    group: 'dispatch',
+    summary: 'Xe nào gần điểm lấy hàng, sẽ rảnh lúc nào, chạy rỗng thêm bao nhiêu — người chọn.',
+    /**
+     * `transport.dispatch.suggest.read` — ma cua Lane M (#277), khong phai mot ma moi cua Lane N.
+     *
+     * Muc nam o nhom DIEU HANH chu khong o nhom BAO CAO: day la mot man hinh nguoi truc dung de
+     * LAM VIEC, khong phai mot bao cao de doc. Lenh gan xe di sau `transport.run.manage` va duoc
+     * kiem lai o may chu.
+     */
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.dispatch.suggest.read',
   },
   {
     id: 'driver-fund',
@@ -231,6 +251,56 @@ export const TRANSPORT_SECTIONS = [
      */
     requiredCapabilities: ['transport-settlement'],
     requiredAction: 'transport.settlement.report.read',
+  },
+  {
+    id: 'executive',
+    label: 'Bảng điều hành',
+    group: 'reports',
+    summary: 'Xe đang chạy thế nào, tiền đang ở đâu, việc gì cần người xử lý — trong 5 phút.',
+    /**
+     * `transport.control_tower.read` chu KHONG mot ma moi.
+     *
+     * Man nay khong co lan goi API rieng nao: no ghep ba read model da nghiem thu. Ma quyen o day
+     * la ma cua PHAN LOI (thap dieu hanh); hai phan con lai — tien va doi xe — tu tat o may chu neu
+     * nguoi dung khong co quyen doc chung, va man hinh chi thieu mot khoi thay vi tu choi ca trang.
+     */
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.control_tower.read',
+  },
+  {
+    id: 'fleet-dashboard',
+    label: 'Bảng đội xe',
+    group: 'reports',
+    summary: 'Km có hàng, km rỗng, tỷ lệ sử dụng và xe chạy rỗng nhiều nhất.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.analytics.read',
+  },
+  {
+    id: 'routes',
+    label: 'Báo cáo tuyến',
+    group: 'reports',
+    summary: 'Mỗi tuyến chạy bao nhiêu chuyến, dài bao nhiêu, kéo theo bao nhiêu km rỗng.',
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.analytics.read',
+  },
+  {
+    id: 'journey',
+    label: 'Bản đồ vòng chạy',
+    group: 'reports',
+    summary: 'Chặng có hàng và chặng rỗng của một vòng chạy, trên bản đồ và trên dòng thời gian.',
+    /**
+     * CHI `transport-core`, va do la co y — cung khuon thap dieu hanh.
+     *
+     * Ban do can toa do cua `transport-proof` va moc cua `transport-checkpoint`, nhung mot khach
+     * chua bat hai capability do VAN doc duoc bao cao: chang, km co hang/rong, ma don. Khai ca ba o
+     * day se lam muc bien mat khoi menu thay vi hien ra kem mot cau noi ro thieu gi.
+     *
+     * `requiredAction` la `transport.run.read` — quyen cua BAO CAO. Toa do di sau mot ma khac
+     * (`transport.location.history.read`) va duoc kiem o may chu, khong o menu: ke toan van mo duoc
+     * muc nay, chi khong thay ban do. Xem `JourneyController`.
+     */
+    requiredCapabilities: ['transport-core'],
+    requiredAction: 'transport.run.read',
   },
   {
     id: 'margin',

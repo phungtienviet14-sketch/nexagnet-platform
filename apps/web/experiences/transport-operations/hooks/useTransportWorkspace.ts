@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useAuth } from '../../../components/auth/AuthGate';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
@@ -33,6 +33,7 @@ export const TRANSPORT_QUERY_KEYS = {
   vehicles: ['transport', 'vehicles'],
   drivers: ['transport', 'drivers'],
   assetStakeholders: ['transport', 'asset-ownership', 'stakeholders'],
+  myVehicleActivity: ['transport', 'me', 'vehicles', 'activity'],
   ownershipRegister: ['transport', 'asset-ownership', 'register'],
   myVehicles: ['transport', 'me', 'vehicles'],
   customers: ['transport', 'customers'],
@@ -94,6 +95,94 @@ export function useControlTower(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.controlTower,
     queryFn: () => transportApi.controlTower.view(),
     enabled: allowed(input, 'transport-core', 'transport.control_tower.read'),
+  });
+}
+
+/**
+ * BAO CAO BAN DO VONG CHAY (Lane N, #278 N5) — HAI hook, hai ma quyen.
+ *
+ * Day la ngoai le NGUOC voi `useControlTower`: o do mot lan goi la dung vi ba nguon deu nam sau
+ * CUNG mot ma quyen. O day thi khong — toa do di sau `transport.location.history.read`, ma ke toan
+ * KHONG co (`transport-actions.ts`). Gop hai lan goi lam mot se buoc may chu tra toa do duoi ma
+ * quyen cua bao cao.
+ *
+ * `enabled` chi la phep tranh mot yeu cau chac chan 403; cong that van o may chu. Nho vay ke toan
+ * mo bao cao ra thi khong ban lan goi do, con quan tri thi ban ca hai.
+ */
+export function useRunJourney(input: NavigationInput, runRef: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'journey', 'run', runRef ?? 'none'],
+    queryFn: () => transportApi.journey.run(runRef ?? ''),
+    enabled: runRef !== null && allowed(input, 'transport-core', 'transport.run.read'),
+    /* 404 la mot cau tra loi nghiep vu ("khong co vong chay do"), khong phai mot su co mang. */
+    retry: false,
+  });
+}
+
+export function useRunJourneyMap(input: NavigationInput, runRef: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'journey', 'map', runRef ?? 'none'],
+    queryFn: () => transportApi.journey.map(runRef ?? ''),
+    enabled: runRef !== null && allowed(input, 'transport-core', 'transport.location.history.read'),
+    retry: false,
+  });
+}
+
+/**
+ * BANG DOI XE + BAO CAO TUYEN (Lane N, #278 N6/N7).
+ *
+ * Khoa co CA khoang ngay trong no. Bo khoang ra khoi khoa se lam TanStack Query tra lai ban da nho
+ * cua thang truoc khi nguoi dung doi sang thang nay — mot bao cao dung hinh dang nhung sai ky.
+ */
+export function useFleetInsight(input: NavigationInput, range: { from?: string; to?: string }) {
+  return useQuery({
+    queryKey: ['transport', 'insight', 'fleet', range.from ?? 'auto', range.to ?? 'auto'],
+    queryFn: () => transportApi.insight.fleet(range),
+    enabled: allowed(input, 'transport-core', 'transport.analytics.read'),
+  });
+}
+
+/**
+ * DE NGHI DIEU XE (Lane M, #277) — mot `useMutation`, va do la co y.
+ *
+ * KHONG phai `useQuery`: lan goi la `POST`, co `@Throttle`, va co the goi mot nha cung cap dinh
+ * tuyen that. Mot `useQuery` se tu chay lai khi cua so lay lai tieu diem, khi mang noi lai, khi
+ * khoa doi — moi lan la mot chi phi that ma khong ai bam nut. Nguoi dung bam "Tim xe", va CHI luc
+ * do mot lan hoi duoc gui.
+ */
+export function useDispatchSuggestions() {
+  return useMutation({
+    mutationFn: (input: { orderId: string; requiredPickupAt?: string | null }) =>
+      transportApi.dispatch.suggest(input.orderId, {
+        requiredPickupAt: input.requiredPickupAt ?? null,
+      }),
+  });
+}
+
+/**
+ * BOSS DA CHON — lenh gan xe. Ma quyen KHAC (`transport.run.manage`).
+ *
+ * `#278` N3: *"Boss chooses; map does not auto-assign."* Khong mot cho nao trong man hinh goi ham
+ * nay thay nguoi dung: no chi chay tu mot `onClick` tren dung mot chiec xe da duoc chon.
+ */
+export function useDispatchAssignment() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { orderId: string; vehicleId: string }) =>
+      transportApi.dispatch.assign(input.orderId, { vehicleId: input.vehicleId }),
+    onSuccess: () => {
+      /* Vong chay vua doi — bang dieu hanh va danh sach vong chay phai doc lai. */
+      void client.invalidateQueries({ queryKey: TRANSPORT_QUERY_KEYS.runs });
+      void client.invalidateQueries({ queryKey: TRANSPORT_QUERY_KEYS.controlTower });
+    },
+  });
+}
+
+export function useCorridorInsight(input: NavigationInput, range: { from?: string; to?: string }) {
+  return useQuery({
+    queryKey: ['transport', 'insight', 'corridors', range.from ?? 'auto', range.to ?? 'auto'],
+    queryFn: () => transportApi.insight.corridors(range),
+    enabled: allowed(input, 'transport-core', 'transport.analytics.read'),
   });
 }
 
@@ -165,6 +254,25 @@ export function useMyStakeholderVehicles(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.myVehicles,
     queryFn: () => transportApi.stakeholderSelf.myVehicles(),
+    enabled: (input.capabilities as readonly string[]).includes('transport-core'),
+    retry: false,
+  });
+}
+
+/**
+ * HOAT DONG cua nhung chiec xe do (`#278` N9).
+ *
+ * CUNG mot dieu kien `enabled` voi `useMyStakeholderVehicles`, va cung mot ly do: cau hoi "nguoi
+ * nay co phai ben huu quan khong" chi may chu tra loi duoc. Doan truoc o client se hoac chan nham
+ * mot co dong that, hoac hua mot man hinh ma may chu se tu choi.
+ *
+ * KHONG truyen khoang ngay: may chu tu chot 30 ngay gan nhat theo mui gio tenant. Neu man hinh tu
+ * tinh bang `new Date()`, hai nguoi o hai mui gio se doc ra hai bang khac nhau — `#278` N10.
+ */
+export function useMyVehicleActivity(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.myVehicleActivity,
+    queryFn: () => transportApi.stakeholderSelf.activity(),
     enabled: (input.capabilities as readonly string[]).includes('transport-core'),
     retry: false,
   });

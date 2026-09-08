@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { RunAssignment, RunLeg, VehicleRun } from '../movement/movement.types.js';
+import type { Order, RunAssignment, RunLeg, VehicleRun } from '../movement/movement.types.js';
 import type { Driver, Vehicle } from '../transport.types.js';
 import type { OperationalAlertFeed } from '../asset-compliance/operational-alerts.js';
+import type { RunTimeline, RunTimelineEntry } from '../checkpoint/run-timeline.js';
 import type { TransportCorePolicy } from '../transport-policy.js';
 import {
   ControlTowerAlertFacts,
+  ControlTowerCheckpointFacts,
   ControlTowerClaimFacts,
   ControlTowerCoreFacts,
   ControlTowerFuelFacts,
@@ -64,6 +66,7 @@ class CoreStub extends ControlTowerCoreFacts {
       assignments?: readonly RunAssignment[];
       vehicles?: readonly Vehicle[];
       drivers?: readonly Driver[];
+      orders?: readonly Order[];
     } = {},
   ) {
     super();
@@ -82,6 +85,45 @@ class CoreStub extends ControlTowerCoreFacts {
   }
   listDrivers() {
     return Promise.resolve(this.data.drivers ?? []);
+  }
+  listOrders() {
+    return Promise.resolve(this.data.orders ?? []);
+  }
+}
+
+const timeline = (over: Partial<RunTimeline> = {}): RunTimeline => ({
+  runId: RUN_ID,
+  entries: [],
+  legPhases: {},
+  warningCount: 0,
+  ...over,
+});
+
+const timelineEntry = (over: Partial<RunTimelineEntry> = {}): RunTimelineEntry => ({
+  checkpointId: 'cp-1',
+  at: new Date(`${TODAY}T04:00:00.000Z`),
+  type: 'DELIVERY_ARRIVAL',
+  legId: '9a2b3c4d-0000-4000-8000-000000000001',
+  recordedBy: 'auth-user-1',
+  driverId: 'dd44ee55-0000-4000-8000-000000000001',
+  hasLocationProof: false,
+  note: null,
+  warnings: [],
+  ...over,
+});
+
+class CheckpointStub extends ControlTowerCheckpointFacts {
+  constructor(private readonly value: RunTimeline = timeline()) {
+    super();
+  }
+  timelineForRun(runId: string) {
+    return Promise.resolve({ ...this.value, runId });
+  }
+}
+
+class ThrowingCheckpointStub extends ControlTowerCheckpointFacts {
+  timelineForRun(): Promise<RunTimeline> {
+    return Promise.reject(new Error('kho moc dang hong'));
   }
 }
 
@@ -128,12 +170,13 @@ class AlertStub extends ControlTowerAlertFacts {
 }
 
 describe('nguon vang mat phai NOI RA, khong duoc im lang', () => {
-  it('khach chi bat `transport-core` — ba nguon deu duoc cong bo la thieu', async () => {
+  it('khach chi bat `transport-core` — bon nguon deu duoc cong bo la thieu', async () => {
     const service = new ControlTowerReadService(new CoreStub(), policy);
 
     const view = await service.view(NOW);
 
     expect([...view.unavailableSources].sort()).toEqual([
+      'CHECKPOINT',
       'EXPENSE_CLAIMS',
       'FUEL',
       'OPERATIONAL_ALERTS',
@@ -141,18 +184,44 @@ describe('nguon vang mat phai NOI RA, khong duoc im lang', () => {
     expect(view.queue).toHaveLength(0);
   });
 
-  it('khach bat du ba nguon — khong con nguon nao duoc bao la thieu', async () => {
+  it('khach bat du bon nguon — khong con nguon nao duoc bao la thieu', async () => {
     const service = new ControlTowerReadService(
       new CoreStub(),
       policy,
       new ClaimStub([]),
       new FuelStub(),
       new AlertStub({ generatedFor: TODAY, alerts: [], unavailableSources: [] }),
+      new CheckpointStub(),
     );
 
     const view = await service.view(NOW);
 
     expect(view.unavailableSources).toEqual([]);
+  });
+
+  /*
+   * Kho moc HONG khac han capability moc TAT, nhung o mot diem thi hai tinh huong phai giong nhau:
+   * ba cot giai doan deu KHONG duoc hien ra nhu the chung dang trong. Nen ca hai deu ha
+   * `legPhasesByRun` xuong `null` — xem `readTimelines()`.
+   */
+  it('kho moc nem loi: ba cot giai doan dong lai, bang van dung, va nguon duoc cong bo', async () => {
+    const service = new ControlTowerReadService(
+      new CoreStub({ runs: [run()] }),
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      new ThrowingCheckpointStub(),
+    );
+
+    const view = await service.view(NOW);
+
+    expect(view.unavailableSources).toContain('CHECKPOINT');
+    expect(view.board.find((column) => column.column === 'PICKUP')?.unavailableReason).toBe(
+      'AWAITING_CHECKPOINT_SOURCE',
+    );
+    /* Bang van co that: vong chay dang chay van len cot In transit. */
+    expect(view.board.find((column) => column.column === 'IN_TRANSIT')?.cards).toHaveLength(1);
   });
 
   /**
@@ -242,12 +311,140 @@ describe('viec CHUA THEO DOI DUOC phai duoc cong bo kem ly do', () => {
     const view = await service.view(NOW);
 
     expect(view.pendingWork).toEqual([
-      { kind: 'RECEIVER_WAITING_ABOVE_THRESHOLD', reason: 'AWAITING_CHECKPOINT_SOURCE' },
-      { kind: 'DELIVERY_PROOF_DOCUMENT_MISSING', reason: 'AWAITING_CHECKPOINT_SOURCE' },
-      { kind: 'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL', reason: 'AWAITING_CHECKPOINT_SOURCE' },
+      { kind: 'RECEIVER_WAITING_ABOVE_THRESHOLD', reason: 'AWAITING_WAITING_SESSION_SOURCE' },
+      { kind: 'DELIVERY_PROOF_DOCUMENT_MISSING', reason: 'AWAITING_OPERATIONAL_DOCUMENT_SOURCE' },
+      {
+        kind: 'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL',
+        reason: 'AWAITING_WAITING_SESSION_SOURCE',
+      },
       { kind: 'CUSTOMER_AR_OVERDUE', reason: 'AWAITING_RECEIVABLE_DUE_DATE_SOURCE' },
       { kind: 'LOCATION_PROOF_REVIEW', reason: 'AWAITING_FLEET_WIDE_PROOF_QUERY' },
     ]);
+  });
+
+  /*
+   * `#278` N13 bai 2, lop thu hai — o TANG DICH VU.
+   *
+   * Bai o `control-tower-projection.spec.ts` khoa cot `WAITING`. Bai nay khoa LY DO: sau khi moc da
+   * co that, khong muc nao doi phien cho duoc phep con mang `AWAITING_CHECKPOINT_SOURCE`. Neu co,
+   * nguoi doc se di tim mot nguon da nam san trong he thong.
+   */
+  it('sau khi co nguon moc, khong muc nao con vin vao ly do "chua co moc"', async () => {
+    const service = new ControlTowerReadService(
+      new CoreStub(),
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      new CheckpointStub(),
+    );
+
+    const view = await service.view(NOW);
+
+    expect(view.pendingWork.map((entry) => entry.reason)).not.toContain(
+      'AWAITING_CHECKPOINT_SOURCE',
+    );
+  });
+});
+
+describe('moc hien truong — bang doc, khong suy', () => {
+  it('ba cot giai doan MO ra khi co nguon moc, va chang dang lam mang giai doan that', async () => {
+    const service = new ControlTowerReadService(
+      new CoreStub({ runs: [run()], legs: [leg({ status: 'IN_TRANSIT' })] }),
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      new CheckpointStub(
+        timeline({ legPhases: { '9a2b3c4d-0000-4000-8000-000000000001': 'LOADING' } }),
+      ),
+    );
+
+    const view = await service.view(NOW);
+    const loading = view.board.find((column) => column.column === 'LOADING');
+
+    expect(loading?.unavailableReason).toBeNull();
+    expect(loading?.cards.map((card) => card.runCode)).toEqual(['VR-001']);
+    expect(loading?.cards[0]?.currentLeg?.phase).toBe('LOADING');
+  });
+
+  it('canh bao thieu chung cu vi tri len hang viec va tro ve DUNG moc do', async () => {
+    const service = new ControlTowerReadService(
+      new CoreStub({ runs: [run()] }),
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      new CheckpointStub(
+        timeline({
+          entries: [timelineEntry({ warnings: ['LOCATION_PROOF_MISSING'] })],
+          warningCount: 1,
+        }),
+      ),
+    );
+
+    const view = await service.view(NOW);
+    const item = view.queue.find((entry) => entry.kind === 'CHECKPOINT_LOCATION_PROOF_MISSING');
+
+    expect(item?.severity).toBe('WARNING');
+    expect(item?.subject).toEqual({ kind: 'RUN_CHECKPOINT', id: 'cp-1', reference: 'VR-001' });
+    expect(item?.detail.checkpointType).toBe('DELIVERY_ARRIVAL');
+  });
+
+  it('moc CO chung cu vi tri thi khong sinh viec — canh bao khong phai mot mac dinh', async () => {
+    const service = new ControlTowerReadService(
+      new CoreStub({ runs: [run()] }),
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      new CheckpointStub(
+        timeline({ entries: [timelineEntry({ hasLocationProof: true, warnings: [] })] }),
+      ),
+    );
+
+    const view = await service.view(NOW);
+
+    expect(view.queue.map((entry) => entry.kind)).not.toContain(
+      'CHECKPOINT_LOCATION_PROOF_MISSING',
+    );
+  });
+
+  it('ma don doc duoc len the — khong phai `orderId` ky thuat', async () => {
+    const order: Order = {
+      id: 'o-9',
+      code: 'ORD-2026-09-0009',
+      status: 'OPEN',
+      businessDate: TODAY,
+      customerId: null,
+      originLabel: 'Ha Noi',
+      destinationLabel: 'Hai Phong',
+      cargoDescription: null,
+      freightAmount: null,
+      currencyCode: 'VND',
+      note: null,
+      createdAt: `${TODAY}T01:00:00.000Z`,
+      updatedAt: `${TODAY}T01:00:00.000Z`,
+      cancelledAt: null,
+      cancellationReason: null,
+    };
+    const service = new ControlTowerReadService(
+      new CoreStub({
+        runs: [run()],
+        legs: [leg({ status: 'IN_TRANSIT', orderId: 'o-9' })],
+        orders: [order],
+      }),
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      new CheckpointStub(),
+    );
+
+    const view = await service.view(NOW);
+    const card = view.board.find((column) => column.column === 'IN_TRANSIT')?.cards[0];
+
+    expect(card?.currentLeg?.orderCode).toBe('ORD-2026-09-0009');
   });
 });
 

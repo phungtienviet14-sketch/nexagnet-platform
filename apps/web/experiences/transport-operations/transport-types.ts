@@ -187,6 +187,41 @@ export interface StakeholderVehicleView {
   readonly driverName: string | null;
 }
 
+/**
+ * HOAT DONG cua xe minh co co phan (`#278` N9) — guong cua `StakeholderActivityView` ben may chu.
+ *
+ * KHONG mot truong tien nao, va do la hop dong chu khong phai su tinh co: `#278` N9 chi cho phep
+ * mo rong trong pham vi da duoc cap, con so lieu kinh te thi phai co mot loi cap quyen minh thi ma
+ * hom nay chua ton tai.
+ */
+export interface StakeholderDowntime {
+  /** TONG NGAY-LENH, khong phai "so ngay xe vang mat" — hai lenh cung mo duoc cong thang. */
+  readonly workOrderDays: number;
+  readonly openWorkOrderCount: number;
+}
+
+export interface StakeholderVehicleActivity {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly status: string;
+  readonly runCount: number;
+  readonly activeBusinessDays: number;
+  readonly utilisation: number | null;
+  readonly loadedKm: number | null;
+  readonly emptyKm: number | null;
+  readonly totalKm: number | null;
+  readonly emptyRatio: number | null;
+  readonly legsMissingDistance: number;
+  readonly downtime: StakeholderDowntime | null;
+}
+
+export interface StakeholderActivityView {
+  readonly range: { readonly from: string; readonly to: string; readonly businessDays: number };
+  readonly utilisationFormula: string;
+  readonly vehicles: readonly StakeholderVehicleActivity[];
+  readonly unavailableSources: readonly string[];
+}
+
 export interface Driver {
   readonly id: string;
   readonly fullName: string;
@@ -1626,7 +1661,25 @@ export interface ExpenseClaimDetail {
 export type OperationsBoardColumn =
   'PLANNED' | 'PICKUP' | 'LOADING' | 'IN_TRANSIT' | 'ARRIVED' | 'WAITING' | 'DELIVERED';
 
-export type BoardColumnUnavailableReason = 'AWAITING_CHECKPOINT_SOURCE';
+export type BoardColumnUnavailableReason =
+  /** Khach TAT `transport-checkpoint` — khong co moc hien truong nao. */
+  | 'AWAITING_CHECKPOINT_SOURCE'
+  /** Moc DA co; cai thieu la mot phien cho co gio mo/gio dong. Hai chuyen khac han nhau. */
+  | 'AWAITING_WAITING_SESSION_SOURCE';
+
+/** Giai doan mot chang, suy tu chuoi moc hien truong — KHONG tu `RunLegStatus`. */
+export type RunLegPhase =
+  'PLANNED' | 'AT_PICKUP' | 'LOADING' | 'IN_TRANSIT' | 'ARRIVED' | 'DELIVERED';
+
+export interface BoardCurrentLeg {
+  readonly legId: string;
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  /** `null` khi chang RONG (chang rong khong mang don) hoac chang co hang chua nhap xong don. */
+  readonly orderCode: string | null;
+  /** `null` khi khong co nguon moc, hoac chang nay chua co moc nao. */
+  readonly phase: RunLegPhase | null;
+}
 
 export interface OperationsBoardCard {
   readonly runId: string;
@@ -1639,6 +1692,10 @@ export interface OperationsBoardCard {
   readonly emptyLegs: number;
   /** `null` = con mot chang thieu km. KHONG duoc hien thi thanh `0`. */
   readonly totalKm: number | null;
+  /** `null` = con mot chang thieu km. KHONG duoc hien thi thanh `0`. */
+  readonly emptyKm: number | null;
+  /** `null` khi vong chay khong con chang nao dang mo. */
+  readonly currentLeg: BoardCurrentLeg | null;
 }
 
 export interface OperationsBoardColumnView {
@@ -1658,6 +1715,7 @@ export type ActionQueueSubjectKind =
   | 'FUEL_ENTRY'
   | 'FUEL_RECONCILIATION'
   | 'TRACKING_SESSION'
+  | 'RUN_CHECKPOINT'
   | 'COMPANY';
 
 export interface ActionQueueSubject {
@@ -1680,7 +1738,8 @@ export type ActionQueueKind =
   | 'COMPLIANCE_DOCUMENT_MISSING'
   | 'MAINTENANCE_OVERDUE'
   | 'MAINTENANCE_DUE_SOON'
-  | 'VEHICLE_STATE_INCONSISTENT';
+  | 'VEHICLE_STATE_INCONSISTENT'
+  | 'CHECKPOINT_LOCATION_PROOF_MISSING';
 
 export type PendingActionQueueKind =
   | 'RECEIVER_WAITING_ABOVE_THRESHOLD'
@@ -1690,6 +1749,8 @@ export type PendingActionQueueKind =
   | 'LOCATION_PROOF_REVIEW';
 
 export type PendingActionQueueReason =
+  | 'AWAITING_WAITING_SESSION_SOURCE'
+  | 'AWAITING_OPERATIONAL_DOCUMENT_SOURCE'
   | 'AWAITING_CHECKPOINT_SOURCE'
   | 'AWAITING_RECEIVABLE_DUE_DATE_SOURCE'
   | 'AWAITING_FLEET_WIDE_PROOF_QUERY';
@@ -1708,7 +1769,7 @@ export interface ActionQueueItem {
   readonly detail: Readonly<Record<string, number | string | null>>;
 }
 
-export type ControlTowerSource = 'EXPENSE_CLAIMS' | 'FUEL' | 'OPERATIONAL_ALERTS';
+export type ControlTowerSource = 'EXPENSE_CLAIMS' | 'FUEL' | 'OPERATIONAL_ALERTS' | 'CHECKPOINT';
 
 export interface FleetPresenceView {
   readonly total: number;
@@ -1726,6 +1787,287 @@ export interface ControlTowerView {
   readonly queueTotal: number;
   readonly unavailableSources: readonly ControlTowerSource[];
   readonly pendingWork: readonly PendingActionQueueEntry[];
+}
+
+/* ------------------------------------------------------------------ *
+ * BAO CAO BAN DO VONG CHAY — `GET /transport/journey/runs/:runRef` (Lane N, #278 N5)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/journey/journey.types.ts`.
+ *
+ * HAI KHUNG NHIN, HAI LAN GOI, VA DO KHONG PHAI MOT SU BAT TIEN.
+ *
+ * `RunJourneyView` (bao cao) di sau `transport.run.read`; `RunJourneyMapView` (toa do) di sau
+ * `transport.location.history.read`, ma ke toan KHONG co. Man hinh phai chiu duoc truong hop lan
+ * goi thu hai tra ve 403 va van ve duoc bao cao — do la hinh dang DUNG cua san pham, khong phai
+ * mot loi can vong tranh.
+ */
+/** Chin loai moc hien truong cua `#243` F1 — day du, de `Record` nhan nhan khong co nhanh mac dinh. */
+export type RunCheckpointType =
+  | 'ASSIGNED'
+  | 'DEPARTED'
+  | 'PICKUP_ARRIVAL'
+  | 'GATE_ENTRY'
+  | 'LOADING'
+  | 'PICKUP_DEPARTURE'
+  | 'DELIVERY_ARRIVAL'
+  | 'DELIVERY_ACCEPTED'
+  | 'COMPLETED';
+
+export type JourneyPointSource = 'CHECKPOINT_OBSERVATION';
+
+export type JourneyGeometryGap =
+  | 'NO_CHECKPOINT_OBSERVATION'
+  | 'NO_CHECKPOINT_RECORDED'
+  | 'NO_ROUTE_PROVIDER'
+  | 'NO_TRACKING_SESSION';
+
+export type JourneyPathKind = 'PLANNED' | 'CHECKPOINT_ANCHORED' | 'RAW_OBSERVED';
+
+export interface GeoPoint {
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
+export interface JourneyPoint {
+  readonly point: GeoPoint;
+  readonly source: JourneyPointSource;
+  readonly at: string | null;
+}
+
+export interface JourneyPath {
+  readonly kind: JourneyPathKind;
+  readonly points: readonly GeoPoint[];
+  readonly gap: JourneyGeometryGap | null;
+  /** So diem THAT truoc khi may chu thua bot. `points.length` co the nho hon. */
+  readonly sampledFrom: number;
+}
+
+export interface JourneyLegView {
+  readonly legId: string;
+  readonly sequence: number;
+  /** `EMPTY` la truc ma bao cao phai to MAU DO — su that cua mien, khong phai suy dien. */
+  readonly kind: RunLegKind;
+  readonly status: RunLegStatus;
+  readonly orderCode: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly businessDate: BusinessDate;
+  /** Km THUC TE. `null` = CHUA BIET. KHONG duoc hien thi thanh `0`. */
+  readonly distanceKm: number | null;
+  /** Km DU KIEN luc lap ke hoach (Lane L #276). `null` = chang khong do ke hoach sinh ra. */
+  readonly plannedDistanceKm: number | null;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly phase: RunLegPhase | null;
+}
+
+export interface JourneyLegGeometryView {
+  readonly legId: string;
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  readonly origin: JourneyPoint | null;
+  readonly originGap: JourneyGeometryGap | null;
+  readonly destination: JourneyPoint | null;
+  readonly destinationGap: JourneyGeometryGap | null;
+  readonly paths: readonly JourneyPath[];
+}
+
+export type JourneyEventKind = 'CHECKPOINT' | 'FUEL';
+
+export interface JourneyEvent {
+  readonly kind: JourneyEventKind;
+  readonly code: RunCheckpointType | 'FUEL_ENTRY';
+  readonly at: string;
+  readonly legId: string | null;
+  readonly hasLocationProof: boolean;
+  readonly subjectId: string;
+}
+
+export type JourneySource = 'CHECKPOINT' | 'LOCATION_PROOF' | 'FUEL';
+
+export interface JourneyRunView {
+  readonly runId: string;
+  readonly runCode: string;
+  readonly vehicleId: string;
+  readonly vehiclePlate: string | null;
+  readonly status: VehicleRunStatus;
+  readonly businessDate: BusinessDate;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly driverId: string | null;
+}
+
+export interface RunJourneyView {
+  readonly run: JourneyRunView;
+  readonly distance: RunDistanceSummary;
+  readonly orderCodes: readonly string[];
+  readonly legs: readonly JourneyLegView[];
+  readonly timeline: readonly JourneyEvent[];
+  readonly unavailableSources: readonly JourneySource[];
+}
+
+export interface RunJourneyMapView {
+  readonly runId: string;
+  readonly runCode: string;
+  readonly legs: readonly JourneyLegGeometryView[];
+  readonly unavailableSources: readonly JourneySource[];
+}
+
+/* ------------------------------------------------------------------ *
+ * BANG DOI XE + BAO CAO TUYEN — `GET /transport/insight/*` (Lane N, #278 N6/N7)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/insight/insight.types.ts`.
+ *
+ * BA TRUONG CONG BO la phan de bo sot nhat, va bo chung se lam bao cao noi doi:
+ *
+ *   · `utilisationFormula`  — cong thuc ty le su dung, phai di CUNG con so len man hinh;
+ *   · `grouping`            — tuyen dang gom theo NHAN TU DO, khong theo dia diem co that;
+ *   · `emptyAttribution`    — quy tac quy km rong ve mot tuyen.
+ *
+ * Khong in ba cai do ra thi nguoi doc se tuong day la nhung con so tuyet doi.
+ */
+export interface InsightRange {
+  readonly from: BusinessDate;
+  readonly to: BusinessDate;
+  readonly businessDays: number;
+}
+
+export interface VehicleInsight {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly status: VehicleStatus;
+  readonly runCount: number;
+  readonly activeBusinessDays: number;
+  /** `null` khi khoang rong. KHONG duoc hien thanh `0%`. */
+  readonly utilisation: number | null;
+  readonly loadedKm: number | null;
+  readonly emptyKm: number | null;
+  readonly totalKm: number | null;
+  readonly emptyRatio: number | null;
+  readonly legsMissingDistance: number;
+}
+
+export interface FleetInsightView {
+  readonly range: InsightRange;
+  /** Cong thuc, dang chuoi. Phai hien len man hinh canh con so. */
+  readonly utilisationFormula: string;
+  readonly vehicles: readonly VehicleInsight[];
+  readonly presence: {
+    readonly total: number;
+    readonly idle: number;
+    readonly onTrip: number;
+    readonly underMaintenance: number;
+  };
+  readonly totals: {
+    readonly loadedKm: number | null;
+    readonly emptyKm: number | null;
+    readonly totalKm: number | null;
+    readonly emptyRatio: number | null;
+    readonly legsMissingDistance: number;
+  };
+}
+
+export interface CorridorInsight {
+  readonly corridorKey: string;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly legCount: number;
+  readonly orderCodes: readonly string[];
+  readonly runCodes: readonly string[];
+  readonly loadedKm: number | null;
+  readonly medianLoadedKm: number | null;
+  readonly attributedEmptyKm: number | null;
+  readonly legsMissingDistance: number;
+}
+
+export interface CorridorInsightView {
+  readonly range: InsightRange;
+  /** `'FREE_TEXT_LABEL_COMPATIBILITY'` — mot phep gom TAM, va man hinh phai noi ra. */
+  readonly grouping: string;
+  /** `'PRECEDING_LOADED_LEG_IN_SAME_RUN'` — quy tac quy km rong, phai noi ra. */
+  readonly emptyAttribution: string;
+  readonly corridors: readonly CorridorInsight[];
+}
+
+/* ------------------------------------------------------------------ *
+ * DE NGHI DIEU XE — `POST /transport/orders/:id/dispatch-suggestions` (Lane M, #277)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban SAO cua `apps/api/src/transport/dispatch/dispatch.types.ts`.
+ *
+ * HAI DIEU KHONG DUOC QUEN KHI VE MAN HINH NAY:
+ *
+ *   1. `assignmentCreated` LUON `false`. Mot bang xep hang khong phai mot lan phan cong; nguoi
+ *      quyet la boss, va lenh gan xe di qua MOT tuyen KHAC voi mot ma quyen KHAC.
+ *   2. `point` co the `null` kem `pointRedacted: true` — nguoi dang xem khong co quyen doc toa do.
+ *      Do KHONG phai "chua co du lieu", va man hinh phai noi hai dieu do khac nhau.
+ */
+export type DispatchCandidateMode = 'CURRENT_NEAR' | 'NEXT_FREE_NEAR';
+
+export type LocationFreshness = 'FRESH' | 'AGEING' | 'STALE';
+
+export interface ResolvedPlaceView {
+  /** `null` khi khong giai duoc HOAC khi nguoi goi khong co quyen doc toa do. */
+  readonly point: GeoPoint | null;
+  /** `true` = CO toa do nhung da bi che vi quyen. Khac han `point === null` vi thieu du lieu. */
+  readonly pointRedacted: boolean;
+  readonly source: string;
+  readonly label: string;
+  readonly geofenceId: string | null;
+  readonly siteId: string | null;
+}
+
+export interface VehicleCurrentLocationView {
+  readonly observedAt: string;
+  readonly ageSeconds: number;
+  readonly freshness: LocationFreshness;
+  readonly accuracyGrade: string;
+  readonly source: string;
+  readonly point: GeoPoint | null;
+  readonly pointRedacted: boolean;
+}
+
+export interface DispatchCandidate {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly mode: DispatchCandidateMode;
+  readonly origin: ResolvedPlaceView;
+  /** `null` = khong tinh duoc luc xe ranh. */
+  readonly availableAt: string | null;
+  readonly availableAtIsLowerBound: boolean;
+  /** KM CHAY RONG THEM VAO, tinh bang MET theo duong bo. */
+  readonly emptyRoadMetresToPickup: number;
+  readonly roadSecondsToPickup: number;
+  readonly pickupEtaAt: string | null;
+  /** `null` = don khong co han lay hang, khong phai "chua tinh". */
+  readonly meetsRequiredPickupAt: boolean | null;
+  readonly suitability: readonly string[];
+  readonly currentLocation: VehicleCurrentLocationView | null;
+}
+
+export interface DispatchExclusion {
+  readonly vehicleId: string;
+  readonly registrationPlate: string;
+  readonly reasons: readonly string[];
+  readonly reasonSummary: string;
+}
+
+export interface DispatchSuggestionView {
+  readonly orderId: string;
+  readonly orderCode: string;
+  readonly pickup: { readonly place: ResolvedPlaceView; readonly resolution: string };
+  readonly requiredPickupAt: string | null;
+  readonly generatedAt: string;
+  readonly orderingKeys: readonly string[];
+  readonly candidates: readonly DispatchCandidate[];
+  readonly excluded: readonly DispatchExclusion[];
+  /** LUON `false`. Mot de nghi khong bao gio la mot lan phan cong (#277 M9). */
+  readonly assignmentCreated: false;
 }
 
 /* ------------------------------------------------------------------ *

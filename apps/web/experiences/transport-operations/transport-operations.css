@@ -1411,6 +1411,102 @@
   font-size: 0.84rem;
 }
 
+/*
+ * CHANG DANG LAM tren mot the.
+ *
+ * `#274` §4 doi chang RONG phai noi bat MAU DO. `#278` N2 doi mau khong duoc la tin hieu duy nhat.
+ * Nen o day mau di kem mot vien va mot nen — con chu "RỖNG" thi do tang doc dat vao nhan
+ * (`currentLegLabel`), khong do CSS. Bo het mau di thi nguoi doc VAN biet chang nao la chang rong.
+ */
+.tx-board__leg {
+  font-weight: 600;
+  color: var(--tx-ink-soft);
+}
+
+.tx-board__leg--empty {
+  color: var(--tx-stop);
+  background: var(--tx-stop-wash);
+  border-left: 3px solid var(--tx-stop);
+  padding-left: 0.35rem;
+  border-radius: 2px;
+}
+
+/*
+ * ===========================================================================
+ * BAN DO VA BIEU DO (Lane N, #278 N1/N2)
+ *
+ * Ca hai deu la KHOI CO CHIEU CAO CO DINH do component dat qua `style`, khong do CSS: MapLibre va
+ * ECharts deu do kich thuoc the chua luc khoi tao, va mot chieu cao tinh bang `%` cua mot cha chua
+ * co chieu cao se cho ra `0` — luc do ban do khoi tao thanh mot canvas rong 0 pixel va khong ai
+ * thay loi nao.
+ */
+.tx-map {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius-sm);
+  overflow: hidden;
+  background: var(--tx-canvas);
+}
+
+.tx-chart {
+  width: 100%;
+}
+
+/*
+ * CHU GIAI — mau di kem CHU, khong bao gio thay chu.
+ *
+ * `#278` N2: *"red is reserved consistently for EMPTY/deadhead ... distinguish them by legend/text
+ * so color is not the only signal"*. O mau o day chi la mot dau phu; noi dung nam o van ban ben
+ * canh, va no van doc duoc khi in den trang hay khi nguoi dung khong phan biet duoc do va xanh.
+ */
+.tx-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  font-size: 0.82rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tx-legend__swatch {
+  width: 1.4rem;
+  height: 0.3rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.tx-legend__swatch--loaded {
+  background: var(--tx-go);
+}
+
+.tx-legend__swatch--empty {
+  background: var(--tx-stop);
+  /* Chang rong ve DAY hon tren ban do — chu giai phai noi lai dung dieu do. */
+  height: 0.45rem;
+}
+
+@media (max-width: 880px) {
+  /*
+   * MAN HINH HEP: ban do thap lai chu khong bien mat.
+   *
+   * `#278` N12 doi *"mobile layouts degrade gracefully rather than rendering an unusable desktop
+   * map"*. Mot ban do cao 420px tren man 390px chiem gan het chieu cao kha dung va day moi thu con
+   * lai xuong duoi man; 260px thi van doc duoc hinh dang tuyen ma khong nuot ca trang.
+   */
+  .tx-map {
+    height: 260px !important;
+  }
+}
+
 /* Cham muc nang tren hang viec — mau la thu THU HAI, chu da mang nghia (`tx-dot` chi to them). */
 .tx-dot {
   display: inline-block;

@@ -94,8 +94,21 @@ export function ControlTowerView() {
                       <li key={card.key}>
                         <a href={buildSectionUrl('movement', card.runCode)}>
                           <strong>{card.runCode}</strong>
+                          {card.currentLeg === null ? null : (
+                            <span
+                              className={
+                                card.currentLeg.isEmpty
+                                  ? 'tx-board__leg tx-board__leg--empty'
+                                  : 'tx-board__leg'
+                              }
+                            >
+                              {card.currentLeg.label}
+                            </span>
+                          )}
                           <span>{card.legs}</span>
-                          <span>{card.totalKm}</span>
+                          <span>
+                            {card.totalKm} · rỗng {card.emptyKm}
+                          </span>
                         </a>
                       </li>
                     ))}

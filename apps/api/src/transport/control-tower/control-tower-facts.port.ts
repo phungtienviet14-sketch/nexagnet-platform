@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { OperationalAlertsService } from '../asset-compliance/operational-alerts.service.js';
+import { CheckpointService } from '../checkpoint/checkpoint.service.js';
 import { ExpenseClaimService } from '../claims/claim.service.js';
 import { FuelRepository } from '../fuel/fuel.repository.js';
 import { FleetRepository } from '../fleet/fleet.repository.js';
 import { MovementRepository } from '../movement/movement.repository.js';
-import type { RunAssignment, RunLeg, VehicleRun } from '../movement/movement.types.js';
+import type { Order, RunAssignment, RunLeg, VehicleRun } from '../movement/movement.types.js';
 import type { OperationalAlertFeed } from '../asset-compliance/operational-alerts.js';
+import type { RunTimeline } from '../checkpoint/run-timeline.js';
 import type { FuelReconciliationState } from '../fuel/fuel-lifecycle.js';
 import type { Driver, Vehicle } from '../transport.types.js';
 
@@ -38,6 +40,14 @@ export abstract class ControlTowerCoreFacts {
   abstract listRunAssignments(runId: string): Promise<readonly RunAssignment[]>;
   abstract listVehicles(): Promise<readonly Vehicle[]>;
   abstract listDrivers(): Promise<readonly Driver[]>;
+  /**
+   * DON — chi de doi `orderId` cua mot chang thanh MA don doc duoc.
+   *
+   * Mot lan doc ca danh sach chu khong `findOrder(id)` cho tung chang: bang da doc chang cua moi
+   * vong chay tren bang, nen tra cuu tung don se la mot vong N+1 nam ngay trong duong ve cua man
+   * hinh ma nguoi truc mo lai nhieu lan nhat trong ngay.
+   */
+  abstract listOrders(): Promise<readonly Order[]>;
 }
 
 @Injectable()
@@ -67,6 +77,10 @@ export class ControlTowerCoreFactsAdapter extends ControlTowerCoreFacts {
 
   listDrivers(): Promise<readonly Driver[]> {
     return this.fleet.listDrivers();
+  }
+
+  listOrders(): Promise<readonly Order[]> {
+    return this.movement.listOrders();
   }
 }
 
@@ -165,6 +179,43 @@ export class ControlTowerFuelFactsAdapter extends ControlTowerFuelFacts {
         periodStart: reconciliation.periodStart,
         periodEnd: reconciliation.periodEnd,
       }));
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * transport-checkpoint — TUY CHON
+ * ------------------------------------------------------------------ */
+
+/**
+ * DONG THOI GIAN CUA MOT VONG CHAY, doc NGUYEN VEN.
+ *
+ * Cung ly le voi `ControlTowerAlertFacts`: `buildRunTimeline()` da suy giai doan tung chang va da
+ * dem canh bao thieu chung cu vi tri. Suy lai o day se cho ra HAI cau tra loi cho cung cau hoi
+ * "chang nay dang o dau", va khong ai biet cai nao dung khi chung lech.
+ *
+ * Cong nay tra ve chinh `RunTimeline` chu khong mot hinh dang thu gon: bang can `legPhases` cho ba
+ * cot, va `entries[].warnings` cho hang viec. Thu gon truoc se phai mo lai o tranche sau.
+ */
+export abstract class ControlTowerCheckpointFacts {
+  abstract timelineForRun(runId: string): Promise<RunTimeline>;
+}
+
+/**
+ * Tiem `CheckpointService`, KHONG `CheckpointRepository`.
+ *
+ * `TransportCheckpointModule` export ca hai, nen ca hai deu boot duoc — nhung `timelineForRun()`
+ * cua service la cho DUY NHAT `buildRunTimeline()` duoc goi kem dung `CheckpointPolicy` cua khach
+ * (`TRANSPORT_CHECKPOINT_POLICY`). Doc thang kho roi tu goi `buildRunTimeline()` o day se dung
+ * chinh sach MAC DINH — tuc mot bang hien canh bao khac han voi man hinh moc, tren cung du lieu.
+ */
+@Injectable()
+export class ControlTowerCheckpointFactsAdapter extends ControlTowerCheckpointFacts {
+  constructor(private readonly checkpoints: CheckpointService) {
+    super();
+  }
+
+  timelineForRun(runId: string): Promise<RunTimeline> {
+    return this.checkpoints.timelineForRun(runId);
   }
 }
 
