@@ -123,6 +123,29 @@ export const TRIP_PROJECTION_REASONS = [
 ] as const;
 export type TripProjectionReason = (typeof TRIP_PROJECTION_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * order.trip_projection -- MovementService.projectTripOrder()
+ * ------------------------------------------------------------------ */
+
+/**
+ * PHEP CHIEU THUONG MAI -- chuyen v1 -> NGHIA VU v2. Doc lap voi phep chieu dieu hanh o tren.
+ *
+ * `#275` K5 dat cong ket thuc len DON, nen cau hoi "don cua chuyen nay la don nao" phai tra loi
+ * duoc CA cho mot chuyen thue nha xe ngoai -- thu ma `run.trip_projection` tu choi bang
+ * `PROJECTION_TRIP_OUTSOURCED`. Hai phep chieu, hai bo dieu kien, hai bo ma ly do.
+ */
+export const ORDER_PROJECTION_REASONS = [
+  'ORDER_PROJECTION_CREATED',
+  /** Chay lai tren cung mot chuyen: TAT DINH, khong sinh don thu hai. */
+  'ORDER_PROJECTION_UNCHANGED',
+  /**
+   * Chuyen khong gan khach nao. Mot "nghia vu thuong mai" khong co ben thue la mot nghia vu khong
+   * ai no -- va mot chuyen dieu xe noi bo dung la khong no ai ca.
+   */
+  'ORDER_PROJECTION_TRIP_HAS_NO_CUSTOMER',
+] as const;
+export type OrderProjectionReason = (typeof ORDER_PROJECTION_REASONS)[number];
+
 export type TransportMovementDecisionReason =
   | OrderTransitionReason
   | OrderCancelReason
@@ -132,7 +155,8 @@ export type TransportMovementDecisionReason =
   | RunLegReason
   | RunLegTransitionReason
   | RunLegCancelReason
-  | TripProjectionReason;
+  | TripProjectionReason
+  | OrderProjectionReason;
 
 export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-core',
@@ -146,6 +170,7 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
     'run.leg_transition',
     'run.leg_cancel',
     'run.trip_projection',
+    'order.trip_projection',
   ],
   labels: {
     ORDER_TRANSITION_APPLIED: 'Da doi trang thai nghia vu thuong mai',
@@ -188,5 +213,9 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
     PROJECTION_UNCHANGED: 'Chuyen nay da duoc chieu tu truoc, khong sinh ban thu hai',
     PROJECTION_TRIP_OUTSOURCED: 'Chuyen thue xe ngoai khong co vong chay cua xe minh',
     PROJECTION_TRIP_HAS_NO_VEHICLE: 'Chuyen chua phan cong xe nen chua biet vong chay cua xe nao',
+    ORDER_PROJECTION_CREATED: 'Da chieu chuyen v1 sang nghia vu thuong mai v2',
+    ORDER_PROJECTION_UNCHANGED: 'Chuyen nay da co nghia vu thuong mai, khong sinh ban thu hai',
+    ORDER_PROJECTION_TRIP_HAS_NO_CUSTOMER:
+      'Chuyen khong gan khach hang nen khong co nghia vu thuong mai nao',
   } satisfies Record<TransportMovementDecisionReason, string>,
 });

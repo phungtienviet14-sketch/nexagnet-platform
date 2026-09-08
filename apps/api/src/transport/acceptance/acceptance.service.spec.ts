@@ -1,64 +1,85 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { BusinessDate } from '../business-date.js';
-import type { VehicleRunStatus } from '../movement/movement.types.js';
+import type { OrderStatus } from '../movement/movement.types.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
   AcceptanceCounterpartyFacts,
   AcceptanceEvidenceFacts,
   AcceptanceMovementFacts,
-  type AcceptanceRunFacts,
+  type AcceptanceOrderContext,
+  type AcceptanceOrderFacts,
 } from './acceptance-facts.port.js';
 import { InMemoryAcceptanceRepository } from './acceptance.repository.js';
 import { CommercialAcceptanceService } from './acceptance.service.js';
 import type { RecordAcceptanceDecisionCommand } from './acceptance.types.js';
 
 /**
- * BAI DOI KHANG cua truc nghiem thu — `#268` I7.
+ * BAI DOI KHANG cua truc KET THUC DON — `#275` K7 va K8.
  *
  * Bo nay dung kho TRONG BO NHO va ba cong gia. Nhung dieu no chung minh la nhung dieu thuoc ve
- * TANG DICH VU: thu tu kiem, danh tinh den tu dau, gio den tu dau, va cai gi duoc dung lam can cu.
- * Nhung dieu thuoc ve CSDL (rang buoc duy nhat, trigger chi-ghi-them) nam o
- * `transport-commercial-acceptance.int.spec.ts` va chay tren Postgres that — mot kho trong bo nho
- * theo dinh nghia khong co bien gioi do.
+ * TANG DICH VU: thu tu kiem, danh tinh den tu dau, gio den tu dau, cai gi duoc dung lam can cu, va
+ * hai don tren CUNG mot vong chay quyet dinh doc lap duoc. Nhung dieu thuoc ve CSDL (rang buoc duy
+ * nhat, trigger chi-ghi-them) nam o `transport-commercial-acceptance.int.spec.ts` va chay tren
+ * Postgres that — mot kho trong bo nho theo dinh nghia khong co bien gioi do.
  */
 
-const RUN_DONE = 'run-xong';
-const RUN_RUNNING = 'run-dang-chay';
-const FOREIGN_DOC = 'media/transport-evidence/2026/09/cua-nguoi-khac.jpg';
+const ORDER_DONE = 'don-da-giao';
+/** Don THU HAI tren CUNG mot vong chay voi `ORDER_DONE` — `#275` K7 bai 3. */
+const ORDER_SIBLING = 'don-cung-vong-chay';
+const ORDER_OPEN = 'don-dang-cho';
+const ORDER_CANCELLED = 'don-da-huy';
+const TRIP_WITH_ORDER = 'chuyen-co-don';
+const FOREIGN_DOC = 'media/transport-evidence/2026/09/cua-don-khac.jpg';
 const OWN_DOC = 'media/transport-evidence/2026/09/phieu-giao.jpg';
+const SHARED_RUN_CODE = 'RUN-CHUNG';
 
-const runOf = (id: string, status: VehicleRunStatus): AcceptanceRunFacts => ({
+const orderOf = (id: string, status: OrderStatus): AcceptanceOrderFacts => ({
   id,
   code: `MA-${id}`,
   status,
-  vehicleId: 'xe-1',
+  customerId: 'khach-1',
+  originLabel: 'Ha Noi',
+  destinationLabel: 'Hai Phong',
   businessDate: '2026-09-08' as BusinessDate,
-  completedAt: status === 'COMPLETED' ? '2026-09-08T02:00:00.000Z' : null,
 });
 
 class FakeMovement extends AcceptanceMovementFacts {
-  private readonly runs = new Map<string, AcceptanceRunFacts>([
-    [RUN_DONE, runOf(RUN_DONE, 'COMPLETED')],
-    [RUN_RUNNING, runOf(RUN_RUNNING, 'ACTIVE')],
+  private readonly orders = new Map<string, AcceptanceOrderFacts>([
+    [ORDER_DONE, orderOf(ORDER_DONE, 'FULFILLED')],
+    [ORDER_SIBLING, orderOf(ORDER_SIBLING, 'FULFILLED')],
+    [ORDER_OPEN, orderOf(ORDER_OPEN, 'OPEN')],
+    [ORDER_CANCELLED, orderOf(ORDER_CANCELLED, 'CANCELLED')],
   ]);
 
-  async findRun(runId: string): Promise<AcceptanceRunFacts | null> {
-    return this.runs.get(runId) ?? null;
+  async findOrder(orderId: string): Promise<AcceptanceOrderFacts | null> {
+    return this.orders.get(orderId) ?? null;
   }
 
-  async listCompletedRuns(): Promise<AcceptanceRunFacts[]> {
-    return [...this.runs.values()].filter((run) => run.status === 'COMPLETED');
+  /** Chi `TRIP_WITH_ORDER` da co nghia vu thuong mai; moi chuyen khac chua co don nao. */
+  async findOrderForTrip(tripId: string): Promise<AcceptanceOrderFacts | null> {
+    return tripId === TRIP_WITH_ORDER ? (this.orders.get(ORDER_DONE) ?? null) : null;
+  }
+
+  async listCompletableOrders(): Promise<AcceptanceOrderFacts[]> {
+    return [...this.orders.values()].filter((order) => order.status === 'FULFILLED');
+  }
+
+  /** CA HAI don da giao deu nam tren CUNG mot vong chay — nen dung cho bai `#275` K7 bai 3. */
+  async contextForOrders(orderIds: readonly string[]): Promise<readonly AcceptanceOrderContext[]> {
+    return orderIds
+      .filter((orderId) => orderId === ORDER_DONE || orderId === ORDER_SIBLING)
+      .map((orderId) => ({ orderId, runCode: SHARED_RUN_CODE, vehicleId: 'xe-1' }));
   }
 }
 
-/** Chi MOT chung tu thuoc ve `RUN_DONE`. Moi khoa khac la cua nguoi khac hoac khong ton tai. */
+/** Chi MOT chung tu thuoc ve `ORDER_DONE`. Moi khoa khac la cua don khac hoac khong ton tai. */
 class FakeEvidence extends AcceptanceEvidenceFacts {
-  async belongingTo(runId: string, refs: readonly string[]): Promise<readonly string[]> {
-    return runId === RUN_DONE ? refs.filter((ref) => ref === OWN_DOC) : [];
+  async belongingTo(orderId: string, refs: readonly string[]): Promise<readonly string[]> {
+    return orderId === ORDER_DONE ? refs.filter((ref) => ref === OWN_DOC) : [];
   }
 
-  async countFor(runId: string): Promise<number> {
-    return runId === RUN_DONE ? 1 : 0;
+  async countFor(orderId: string): Promise<number> {
+    return orderId === ORDER_DONE ? 1 : 0;
   }
 }
 
@@ -90,7 +111,7 @@ const SERVER_NOW = new Date('2026-09-08T03:15:00.000Z');
 const command = (
   patch: Partial<RecordAcceptanceDecisionCommand> = {},
 ): RecordAcceptanceDecisionCommand => ({
-  runId: RUN_DONE,
+  orderId: ORDER_DONE,
   outcome: 'APPROVED',
   reasonCode: 'DOCUMENT_RECEIVED',
   basis: 'DOCUMENT',
@@ -103,7 +124,7 @@ const command = (
   ...patch,
 });
 
-describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
+describe('CommercialAcceptanceService — bai doi khang #275 K8', () => {
   let service: CommercialAcceptanceService;
 
   beforeEach(() => {
@@ -118,42 +139,55 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
     );
   });
 
-  describe('I7-06 — duyet truoc khi chay xong khong lam gi du dieu kien', () => {
-    it('tu choi duyet mot vong chay dang chay', async () => {
-      await expect(service.decide(command({ runId: RUN_RUNNING }))).rejects.toMatchObject({
-        reason: 'ACCEPTANCE_RUN_NOT_COMPLETED',
+  describe('K8-12 — ket thuc truoc khi giao xong khong lam gi du dieu kien', () => {
+    it('tu choi ket thuc mot don con dang cho giao', async () => {
+      await expect(service.decide(command({ orderId: ORDER_OPEN }))).rejects.toMatchObject({
+        reason: 'ACCEPTANCE_ORDER_NOT_FULFILLED',
       });
     });
 
-    it('vong chay khong ton tai -> NOT_FOUND, khong phai mot ho so rong', async () => {
-      await expect(service.decide(command({ runId: 'khong-co' }))).rejects.toMatchObject({
-        reason: 'ACCEPTANCE_RUN_NOT_FOUND',
+    it('don DA HUY co ma rieng, khong gop vao "chua giao xong"', async () => {
+      await expect(service.decide(command({ orderId: ORDER_CANCELLED }))).rejects.toMatchObject({
+        reason: 'ACCEPTANCE_ORDER_CANCELLED',
+      });
+    });
+
+    it('don khong ton tai -> NOT_FOUND, khong phai mot ho so rong', async () => {
+      await expect(service.decide(command({ orderId: 'khong-co' }))).rejects.toMatchObject({
+        reason: 'ACCEPTANCE_ORDER_NOT_FOUND',
       });
     });
   });
 
-  describe('I7-04 va I7-05 — chung cu cua nguoi khac, va khong do duoc danh sach', () => {
-    it('khoa chung tu khong thuoc vong chay nay thi khong duyet duoc', async () => {
+  describe('K8-06 va K8-07 — chung cu cua don khac, va khong do duoc danh sach', () => {
+    it('chung tu cua don A khong ket thuc duoc don B', async () => {
       await expect(service.decide(command({ evidenceRefs: [FOREIGN_DOC] }))).rejects.toMatchObject({
-        reason: 'ACCEPTANCE_EVIDENCE_NOT_FOR_RUN',
+        reason: 'ACCEPTANCE_EVIDENCE_NOT_FOR_ORDER',
       });
     });
 
-    it('tron mot khoa hop le voi mot khoa la thi CA LENH bi tu choi', async () => {
-      // Loc bo khoa la roi ghi phan con lai se bien mot lan gian lan thanh mot lan duyet hop le.
+    it('chung tu cua don A khong dung duoc khi dang ket thuc don SIBLING', async () => {
+      // Cung mot khoa hop le voi `ORDER_DONE`, nhung tren mot don khac thi no khong con la can cu.
       await expect(
-        service.decide(command({ evidenceRefs: [OWN_DOC, FOREIGN_DOC] })),
-      ).rejects.toMatchObject({ reason: 'ACCEPTANCE_EVIDENCE_NOT_FOR_RUN' });
+        service.decide(command({ orderId: ORDER_SIBLING, evidenceRefs: [OWN_DOC] })),
+      ).rejects.toMatchObject({ reason: 'ACCEPTANCE_EVIDENCE_NOT_FOR_ORDER' });
     });
 
-    it('thong bao KHONG ke ten khoa nao bi loai — khong do duoc chung tu cua nguoi khac', async () => {
+    it('tron mot khoa hop le voi mot khoa la thi CA LENH bi tu choi', async () => {
+      // Loc bo khoa la roi ghi phan con lai se bien mot lan gian lan thanh mot lan ket thuc hop le.
+      await expect(
+        service.decide(command({ evidenceRefs: [OWN_DOC, FOREIGN_DOC] })),
+      ).rejects.toMatchObject({ reason: 'ACCEPTANCE_EVIDENCE_NOT_FOR_ORDER' });
+    });
+
+    it('thong bao KHONG ke ten khoa nao bi loai — khong do duoc chung tu cua don khac', async () => {
       const failure = await failureOf(service.decide(command({ evidenceRefs: [FOREIGN_DOC] })));
 
       expect(failure).toBeInstanceOf(TransportDomainError);
       expect(failure.message).not.toContain(FOREIGN_DOC);
     });
 
-    it('khoa KHONG TON TAI va khoa CUA NGUOI KHAC cho ra cung mot cau tra loi', async () => {
+    it('khoa KHONG TON TAI va khoa CUA DON KHAC cho ra cung mot cau tra loi', async () => {
       const foreign = await failureOf(service.decide(command({ evidenceRefs: [FOREIGN_DOC] })));
       const unknown = await failureOf(
         service.decide(command({ evidenceRefs: ['khoa-hoan-toan-bia-ra'] })),
@@ -163,14 +197,14 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
       expect(unknown.message).toBe(foreign.message);
     });
 
-    it('duyet theo chung tu ma khong tro toi chung tu nao thi bi tu choi', async () => {
+    it('ket thuc theo chung tu ma khong tro toi chung tu nao thi bi tu choi', async () => {
       await expect(service.decide(command({ evidenceRefs: [] }))).rejects.toMatchObject({
         reason: 'ACCEPTANCE_EVIDENCE_REQUIRED',
       });
     });
   });
 
-  describe('I7-14 — dong ho cua may khach khong chon duoc gio duyet', () => {
+  describe('K8-03 va K8-16 — dong ho va danh tinh khong den tu ben goi', () => {
     it('`decidedAt` den tu dong ho MAY CHU', async () => {
       const detail = await service.decide(command());
       expect(detail.decisions).toHaveLength(1);
@@ -183,7 +217,7 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
     });
   });
 
-  describe('I7-09 — gui lai mot lenh khong sinh ra hai quyet dinh', () => {
+  describe('K8-04 — gui lai mot lenh khong sinh ra hai quyet dinh', () => {
     it('cung `idempotencyKey` tra ve dung mot quyet dinh', async () => {
       await service.decide(command());
       const again = await service.decide(command());
@@ -200,7 +234,7 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
     });
   });
 
-  describe('I7-10 va I7-11 — tu choi roi sua lai giu CA HAI quyet dinh', () => {
+  describe('K8-05 — hai nguoi cung bam, va lich su giu CA HAI quyet dinh', () => {
     it('lich su giu du ban goc sau khi doi y', async () => {
       const first = await service.decide(
         command({ outcome: 'NEEDS_CORRECTION', reasonCode: 'MISSING_RECEIPT', evidenceRefs: [] }),
@@ -243,8 +277,8 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
     });
   });
 
-  describe('can cu ngoai — #268 I2', () => {
-    it('duyet khong co ban so PHAI ghi ro B da nhan cai gi', async () => {
+  describe('can cu ngoai — #275 K2', () => {
+    it('ket thuc khong co ban so PHAI ghi ro B da nhan cai gi', async () => {
       await expect(
         service.decide(
           command({
@@ -268,7 +302,7 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
       ).rejects.toMatchObject({ reason: 'ACCEPTANCE_EXTERNAL_BASIS_NOTE_REQUIRED' });
     });
 
-    it('duyet theo ban giay di duoc khi co ghi chu that', async () => {
+    it('ket thuc theo ban giay di duoc khi co ghi chu that', async () => {
       const detail = await service.decide(
         command({
           basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
@@ -295,24 +329,87 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
     });
   });
 
-  describe('#268 I6 — hang cho va phep suy du dieu kien doi soat', () => {
-    it('vong chay da chay xong nhung chua ai nghiem thu thi dang PENDING va KHONG du dieu kien', async () => {
+  /**
+   * `#275` K7 bai 3: *"A Run containing multiple Orders may have Order A approved and Order B
+   * pending independently."*
+   *
+   * `FakeMovement.contextForOrders` dat CA HAI don da giao len CUNG mot vong chay `RUN-CHUNG`, nen
+   * bai nay that su chay tren tinh huong do chu khong phai tren hai vong chay roi.
+   */
+  describe('#275 K7 — hai don tren CUNG mot vong chay quyet dinh doc lap', () => {
+    it('ket thuc don A khong dong gi den don B', async () => {
+      await service.decide(
+        command({
+          basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
+          evidenceRefs: [],
+          externalNote: 'B giu ban goc',
+        }),
+      );
+
       const rows = await service.queue();
-      const row = rows.find((entry) => entry.runId === RUN_DONE);
+      const a = rows.find((row) => row.orderId === ORDER_DONE);
+      const b = rows.find((row) => row.orderId === ORDER_SIBLING);
+
+      expect(a?.runCode).toBe(SHARED_RUN_CODE);
+      expect(b?.runCode).toBe(SHARED_RUN_CODE);
+      expect(a?.state).toBe('APPROVED');
+      expect(a?.settlementEligible).toBe(true);
+      expect(b?.state).toBe('PENDING');
+      expect(b?.settlementEligible).toBe(false);
+    });
+
+    it('don B van ket thuc duoc sau do, doc lap voi don A', async () => {
+      await service.decide(
+        command({
+          basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
+          evidenceRefs: [],
+          externalNote: 'B giu ban goc',
+        }),
+      );
+      const detail = await service.decide(
+        command({
+          orderId: ORDER_SIBLING,
+          basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
+          evidenceRefs: [],
+          externalNote: 'Ban giay cua don thu hai',
+          idempotencyKey: 'idem-don-2',
+        }),
+      );
+      expect(detail.acceptance.orderId).toBe(ORDER_SIBLING);
+      expect(detail.acceptance.state).toBe('APPROVED');
+    });
+  });
+
+  describe('#275 K4 — hang cho va phep suy du dieu kien doi soat', () => {
+    it('don da giao nhung chua ai ket thuc thi dang PENDING va KHONG du dieu kien', async () => {
+      const rows = await service.queue();
+      const row = rows.find((entry) => entry.orderId === ORDER_DONE);
 
       expect(row?.state).toBe('PENDING');
       expect(row?.settlementEligible).toBe(false);
       expect(row?.acceptanceId).toBeNull();
     });
 
-    it('hang cho KHONG chua vong chay dang chay', async () => {
-      const rows = await service.queue();
-      expect(rows.map((row) => row.runId)).not.toContain(RUN_RUNNING);
+    it('hang cho KHONG chua don chua giao xong hay don da huy', async () => {
+      const ids = (await service.queue()).map((row) => row.orderId);
+      expect(ids).not.toContain(ORDER_OPEN);
+      expect(ids).not.toContain(ORDER_CANCELLED);
     });
 
-    it('sau khi duyet thi du dieu kien doi soat', async () => {
+    it('dong hang cho mang du ngu canh nghiep vu ma #275 K4 doi', async () => {
+      const row = (await service.queue()).find((entry) => entry.orderId === ORDER_DONE);
+      expect(row).toMatchObject({
+        orderCode: `MA-${ORDER_DONE}`,
+        customerId: 'khach-1',
+        originLabel: 'Ha Noi',
+        destinationLabel: 'Hai Phong',
+        evidenceCount: 1,
+      });
+    });
+
+    it('sau khi ket thuc thi du dieu kien doi soat', async () => {
       await service.decide(command());
-      const row = (await service.queue()).find((entry) => entry.runId === RUN_DONE);
+      const row = (await service.queue()).find((entry) => entry.orderId === ORDER_DONE);
 
       expect(row?.state).toBe('APPROVED');
       expect(row?.settlementEligible).toBe(true);
@@ -322,7 +419,7 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
       'sau khi %s thi KHONG du dieu kien doi soat',
       async (outcome) => {
         await service.decide(command({ outcome, reasonCode: 'NO_EVIDENCE', evidenceRefs: [] }));
-        const row = (await service.queue()).find((entry) => entry.runId === RUN_DONE);
+        const row = (await service.queue()).find((entry) => entry.orderId === ORDER_DONE);
 
         expect(row?.state).toBe(outcome);
         expect(row?.settlementEligible).toBe(false);
@@ -331,22 +428,76 @@ describe('CommercialAcceptanceService — bai doi khang #268 I7', () => {
 
     it('loc theo trang thai tra dung nhung ho so dang cho', async () => {
       expect(await service.queue({ state: 'APPROVED' })).toEqual([]);
-      expect((await service.queue({ state: 'PENDING' })).map((row) => row.runId)).toEqual([
-        RUN_DONE,
+      expect((await service.queue({ state: 'PENDING' })).map((row) => row.orderId)).toEqual([
+        ORDER_DONE,
+        ORDER_SIBLING,
       ]);
     });
   });
 
-  describe('doc mot ho so chua ai nghiem thu', () => {
+  /**
+   * `#275` K5 — hinh dang ma CONG DOI SOAT doc.
+   *
+   * Ba nhanh, ba y nghia khac nhau. Nhanh `NO_ORDER` la thu thay the
+   * `NOT_PROJECTED => pass` cua `#273`, va no PHAI phan biet duoc voi `BLOCKED`: hai viec nguoi truc
+   * phai lam khac han nhau.
+   */
+  describe('#275 K5 — dieu kien doi soat doc tu DON, khong tu vong chay', () => {
+    it('chuyen chua co nghia vu thuong mai nao -> NO_ORDER', async () => {
+      expect(await service.eligibilityForTrip('chuyen-chua-chieu')).toEqual({ kind: 'NO_ORDER' });
+    });
+
+    it('chuyen co don nhung chua ai ket thuc -> BLOCKED kem CA HAI ve dieu kien', async () => {
+      expect(await service.eligibilityForTrip(TRIP_WITH_ORDER)).toEqual({
+        kind: 'BLOCKED',
+        orderId: ORDER_DONE,
+        orderCode: `MA-${ORDER_DONE}`,
+        orderStatus: 'FULFILLED',
+        state: 'PENDING',
+      });
+    });
+
+    it('sau khi ke toan ket thuc -> ELIGIBLE', async () => {
+      const detail = await service.decide(command());
+      expect(await service.eligibilityForTrip(TRIP_WITH_ORDER)).toEqual({
+        kind: 'ELIGIBLE',
+        orderId: ORDER_DONE,
+        orderCode: `MA-${ORDER_DONE}`,
+        acceptanceId: detail.acceptance.id,
+      });
+    });
+
+    it.each(['REJECTED', 'NEEDS_CORRECTION'] as const)('%s van BLOCKED', async (outcome) => {
+      await service.decide(command({ outcome, reasonCode: 'NO_EVIDENCE', evidenceRefs: [] }));
+      expect(await service.eligibilityForTrip(TRIP_WITH_ORDER)).toMatchObject({
+        kind: 'BLOCKED',
+        state: outcome,
+      });
+    });
+
+    it('don chua giao xong ma da co ho so thi van BLOCKED — khong duong tat', async () => {
+      expect(await service.eligibilityForOrder(ORDER_OPEN)).toMatchObject({
+        kind: 'BLOCKED',
+        orderStatus: 'OPEN',
+        state: 'PENDING',
+      });
+    });
+
+    it('don khong ton tai -> NO_ORDER, khong nem', async () => {
+      expect(await service.eligibilityForOrder('khong-co')).toEqual({ kind: 'NO_ORDER' });
+    });
+  });
+
+  describe('doc mot ho so chua ai ket thuc', () => {
     it('tra ve PENDING chu khong nem NOT_FOUND — vang mat la mot cau tra loi nghiep vu', async () => {
-      const detail = await service.detailForRun(RUN_DONE);
+      const detail = await service.detailForOrder(ORDER_DONE);
       expect(detail.acceptance.state).toBe('PENDING');
       expect(detail.decisions).toEqual([]);
     });
 
-    it('vong chay khong co that van la NOT_FOUND', async () => {
-      await expect(service.detailForRun('khong-co')).rejects.toMatchObject({
-        reason: 'ACCEPTANCE_RUN_NOT_FOUND',
+    it('don khong co that van la NOT_FOUND', async () => {
+      await expect(service.detailForOrder('khong-co')).rejects.toMatchObject({
+        reason: 'ACCEPTANCE_ORDER_NOT_FOUND',
       });
     });
   });

@@ -166,6 +166,21 @@ export abstract class SettlementRepository {
   }>;
 
   abstract findDocument(id: string): Promise<SettlementDocument | null>;
+  /**
+   * Chung tu GOC cua mot khoa nguon, neu da co.
+   *
+   * Ton tai cho DUNG MOT cau hoi cua `#268` I5: *day co phai mot lan chon nguon MOI khong*.
+   * Neu da co chung tu cho khoa nay thi su kien kinh te DA XAY RA, va cong nghiem thu khong
+   * duoc ap nguoc len no — *"existing authoritative settlement links remain authoritative"*.
+   *
+   * Tach khoi `listDocuments()` vi `DocumentQuery` khong loc theo khoa nguon, va noi long no de
+   * lam viec do se mo mot duong doc theo `sourceId` cho moi bao cao — mot truong ma bao cao
+   * khong bao gio nen nhin thay.
+   */
+  abstract findDocumentBySource(
+    sourceContext: string,
+    sourceId: string,
+  ): Promise<SettlementDocument | null>;
 
   /** Doc CA CHUOI: ban goc, moi ban sua, moi lan phan bo, va hai con so cong don. */
   abstract findChain(originalId: string): Promise<SettlementDocumentChain | null>;

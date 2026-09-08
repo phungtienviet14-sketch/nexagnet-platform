@@ -45,6 +45,34 @@ export class TransportOrdersController {
     return this.movement.listOrders();
   }
 
+  /**
+   * NGHIA VU THUONG MAI cua mot chuyen v1 -- `null` khi chua chieu.
+   *
+   * Dat TRUOC `@Get(':id')`: Nest so khop theo thu tu khai bao, nen mot duong tinh phai dung truoc
+   * duong co tham so, neu khong `projections` se bi doc thanh mot ma don.
+   */
+  @Get('projections/trip/:tripId')
+  @RequiresTransportAction('transport.order.read')
+  projection(@Param('tripId') tripId: string) {
+    return this.guard(() => this.movement.findOrderProjection(tripId));
+  }
+
+  /**
+   * CHIEU THUONG MAI mot chuyen v1 sang mot nghia vu -- TAT DINH va LAP LAI DUOC.
+   *
+   * Duong nay ton tai vi `#275` K5 dat cong doi soat len DON: mot chuyen chua co nghia vu thuong
+   * mai thi khong co chu the de ke toan ket thuc, va cong se dong. Khac voi
+   * `POST /transport/runs/projections/trip/:tripId`, duong nay KHONG doi chuyen phai chay bang xe
+   * cua minh -- xem `planOrderProjection`.
+   */
+  @Post('projections/trip/:tripId')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.order.manage')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  project(@Param('tripId') tripId: string, @Req() request: AuthenticatedRequest) {
+    return this.guard(() => this.movement.projectTripOrder(tripId, transportActorOf(request)));
+  }
+
   @Get(':id')
   @RequiresTransportAction('transport.order.read')
   get(@Param('id') id: string) {

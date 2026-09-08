@@ -24,6 +24,7 @@ import {
 import { hasDriverScope, hasOperationsScope, operationsEmptyMessage } from './transport-actions';
 import { DriverFundView } from './views/DriverFundView';
 import { ExpenseClaimsView } from './views/ExpenseClaimsView';
+import { OrderCompletionView } from './views/OrderCompletionView';
 import { ExportsView } from './views/ExportsView';
 import { MaintenanceComplianceView } from './views/MaintenanceView';
 import { DriverSettlementView } from './views/DriverSettlementView';
@@ -314,6 +315,8 @@ function SectionBody({
       return <DriverFundView />;
     case 'expense-claims':
       return <ExpenseClaimsView />;
+    case 'order-completion':
+      return <OrderCompletionView />;
     case 'fuel':
       return <FuelView />;
     case 'settlement':

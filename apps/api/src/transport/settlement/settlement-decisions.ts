@@ -31,6 +31,58 @@ export const SETTLEMENT_RECOGNISE_REASONS = [
   'SETTLEMENT_TRIP_NOT_RECONCILED',
   'SETTLEMENT_TRIP_REVENUE_MISSING',
   'SETTLEMENT_FLOW_SHAPE_MISMATCH',
+
+  /* --- CONG KET THUC DON (`#275` K5, Lane K) --- */
+  /**
+   * Ke toan da bam `Da ket thuc` tren don, va don da giao xong. Duong DUY NHAT cho mot viec MOI di
+   * vao mot ky.
+   */
+  'SETTLEMENT_ORDER_COMPLETION_APPROVED',
+  /**
+   * Co don, nhung no CHUA du dieu kien: chua giao xong, hoac chua ai ket thuc, hoac da bi tu choi /
+   * bi tra lai doi bo sung.
+   *
+   * MOT ma cho ca bon tinh huong do, va day la ngoai le CO Y duy nhat cua quy uoc "N duong tu choi
+   * thi N ma": `detail` mang CA HAI ve cua dieu kien (`orderStatus` va `state`), nen nguoi doc
+   * trace doc duoc chinh xac cai gi con thieu ma khong can bon ma. Tach thanh bon se goi y rang bon
+   * duong do can bon cach xu ly khac nhau — trong khi ca bon deu can dung mot viec: giao xong don
+   * roi mang chung tu di nghiem thu.
+   */
+  'SETTLEMENT_ORDER_COMPLETION_BLOCKED',
+  /**
+   * Nguon nay CHUA CO DON nao lam chu the thuong mai.
+   *
+   * DONG CONG. Day la cho `#275` K5 sua `#273`:
+   *
+   *     *"Remove/replace any final `NOT_PROJECTED => pass` behavior that allows a new Order to
+   *     bypass the gate merely because it lacks a v2 Run projection. Order is the grain, so
+   *     projection absence must not be an authorization bypass."*
+   *
+   * Van la mot ma RIENG chu khong gop vao `BLOCKED`, vi viec phai lam khac han: chieu/tao nghia vu
+   * thuong mai cho chuyen do (`POST /transport/orders/projections/trip/:tripId`), chu khong phai di
+   * xin chung tu.
+   */
+  'SETTLEMENT_ORDER_NOT_LINKED',
+  /**
+   * Duong nay khong thuoc pham vi cong ket thuc don — cong no NHA XE NGOAI.
+   *
+   * `#275` K5 doi do lai gia dinh cua `#273` thay vi chep no. Ket qua do: `TRIP_CARRIER_COST` la B
+   * TRA nha xe ngoai theo mot hop dong van tai, KHONG phai mot nghia vu giao hang co bien nhan cua
+   * khach. Nghia vu do van ton tai va van bi cong chan — nhung o dong CUSTOMER_FREIGHT cua CHINH
+   * chuyen ay (`recogniseCustomerReceivable`), noi khach A ky nhan hang. Cam cong o ca hai dong se
+   * bat B phai co bien nhan cua khach truoc khi tra tien cho nha thau phu cua chinh minh — mot luat
+   * chua ai dat ra.
+   */
+  'SETTLEMENT_ORDER_COMPLETION_PATH_NOT_GATED',
+  /**
+   * DA CO chung tu quyet toan cho dung khoa nguon nay — tuc day KHONG phai mot lan chon nguon MOI.
+   *
+   * `#275` K6: *"Existing authoritative settlement links created before activation remain
+   * authoritative."* Thieu duong nay, mot lan goi lai vo hai tren mot chuyen DA QUYET TOAN TU TRUOC
+   * tinh nang se NEM thay vi tra ve chung tu cu — tuc dung cai *"invalidate already-settled rows"*
+   * ma `#275` cam.
+   */
+  'SETTLEMENT_ORDER_COMPLETION_ALREADY_SETTLED',
 ] as const;
 export type SettlementRecogniseReason = (typeof SETTLEMENT_RECOGNISE_REASONS)[number];
 
@@ -130,6 +182,14 @@ export const TRANSPORT_SETTLEMENT_DECISIONS = defineDecisionVocabulary({
     SETTLEMENT_TRIP_NOT_RECONCILED: 'Chuyến chưa đối soát nên chưa ghi nhận doanh thu',
     SETTLEMENT_TRIP_REVENUE_MISSING: 'Chuyến chưa nhập giá cước',
     SETTLEMENT_FLOW_SHAPE_MISMATCH: 'Chiều hoặc loại đối tác không khớp dòng tiền',
+    SETTLEMENT_ORDER_COMPLETION_APPROVED: 'Đơn đã được kế toán kết thúc — đủ điều kiện đối soát',
+    SETTLEMENT_ORDER_COMPLETION_BLOCKED:
+      'Đơn chưa đủ điều kiện: chưa giao xong hoặc chưa được kết thúc',
+    SETTLEMENT_ORDER_NOT_LINKED: 'Nguồn này chưa có đơn hàng nào làm chủ thể thương mại',
+    SETTLEMENT_ORDER_COMPLETION_PATH_NOT_GATED:
+      'Công nợ nhà xe ngoài không đi qua cổng kết thúc đơn',
+    SETTLEMENT_ORDER_COMPLETION_ALREADY_SETTLED:
+      'Nguồn này đã có chứng từ quyết toán từ trước — giữ nguyên hiệu lực',
 
     ADJUSTMENT_POSTED: 'Đã ghi bản điều chỉnh, bản gốc giữ nguyên',
     REVERSAL_POSTED: 'Đã ghi bản đảo, bản gốc giữ nguyên',

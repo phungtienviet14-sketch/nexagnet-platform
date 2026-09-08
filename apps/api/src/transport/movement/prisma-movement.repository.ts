@@ -12,7 +12,9 @@ import {
   type CreateOrderInput,
   type CreateRunInput,
   type ProjectTripInput,
+  type ProjectTripOrderInput,
   type RunAssignmentChange,
+  type TripOrderProjection,
   type TripProjection,
   type UpdateOrderInput,
 } from './movement.repository.js';
@@ -22,6 +24,7 @@ import type {
   RunAssignment,
   RunLeg,
   RunLegStatus,
+  TripOrderLink,
   TripRunLegLink,
   VehicleRun,
   VehicleRunStatus,
@@ -116,6 +119,13 @@ interface LinkRow {
   createdAt: Date;
 }
 
+interface OrderLinkRow {
+  tripId: string;
+  orderId: string;
+  projectedBy: string;
+  createdAt: Date;
+}
+
 const iso = (value: Date): string => value.toISOString();
 const isoOrNull = (value: Date | null): string | null => (value === null ? null : iso(value));
 
@@ -184,6 +194,13 @@ const toAssignment = (row: AssignmentRow): RunAssignment => ({
 const toLink = (row: LinkRow): TripRunLegLink => ({
   tripId: row.tripId,
   legId: row.legId,
+  projectedBy: row.projectedBy,
+  createdAt: iso(row.createdAt),
+});
+
+const toOrderLink = (row: OrderLinkRow): TripOrderLink => ({
+  tripId: row.tripId,
+  orderId: row.orderId,
   projectedBy: row.projectedBy,
   createdAt: iso(row.createdAt),
 });
@@ -468,6 +485,59 @@ export class PrismaMovementRepository extends MovementRepository {
     return rows.map(toRun);
   }
 
+  async findOrderLink(tripId: string): Promise<TripOrderLink | null> {
+    const row = await model(this.prisma, 'transportTripOrderLink').findUnique({
+      where: { tripId },
+    });
+    return row ? toOrderLink(row) : null;
+  }
+
+  async listLegsByOrders(orderIds: readonly string[]): Promise<RunLeg[]> {
+    if (orderIds.length === 0) return [];
+    const rows: LegRow[] = await model(this.prisma, 'transportRunLeg').findMany({
+      where: { orderId: { in: [...orderIds] } },
+      orderBy: [{ orderId: 'asc' }, { sequence: 'asc' }],
+    });
+    return rows.map(toLeg);
+  }
+
+  /**
+   * CHIEU THUONG MAI -- don + lien ket trong MOT giao dich.
+   *
+   * Doc truoc bang `tripId` roi moi ghi: mot lan goi lai phai tra ve chinh ban cu chu khong tao don
+   * thu hai. Khe hep giua doc va ghi duoc dong bang khoa chinh `tripId` cua bang lien ket -- hai
+   * yeu cau den cung luc thi mot cai vao unique violation, khong phai ca hai cung ghi.
+   */
+  async projectTripOrder(input: ProjectTripOrderInput): Promise<TripOrderProjection> {
+    const existing = await model(this.prisma, 'transportTripOrderLink').findUnique({
+      where: { tripId: input.tripId },
+      include: { order: true },
+    });
+    if (existing) {
+      return { link: toOrderLink(existing), order: toOrder(existing.order) };
+    }
+
+    return this.prisma.$transaction(async (tx: unknown) => {
+      const client = tx as PrismaService;
+      const orderRow: OrderRow = await model(client, 'transportOrder').create({
+        data: {
+          code: input.order.code,
+          businessDate: input.order.businessDate,
+          originLabel: input.order.originLabel,
+          destinationLabel: input.order.destinationLabel,
+          customerId: input.order.customerId ?? null,
+          cargoDescription: input.order.cargoDescription ?? null,
+          freightAmount: toStoredAmount(input.order.freightAmount ?? null),
+          note: input.order.note ?? null,
+        },
+      });
+      const linkRow: OrderLinkRow = await model(client, 'transportTripOrderLink').create({
+        data: { tripId: input.tripId, orderId: orderRow.id, projectedBy: input.projectedBy },
+      });
+      return { link: toOrderLink(linkRow), order: toOrder(orderRow) };
+    });
+  }
+
   async findTripLink(tripId: string): Promise<TripRunLegLink | null> {
     const row = await model(this.prisma, 'transportTripRunLegLink').findUnique({
       where: { tripId },
@@ -546,6 +616,17 @@ export class PrismaMovementRepository extends MovementRepository {
       const linkRow: LinkRow = await model(client, 'transportTripRunLegLink').create({
         data: { tripId: input.tripId, legId: legRow.id, projectedBy: input.projectedBy },
       });
+
+      /*
+       * Lien ket THUONG MAI ghi trong CUNG giao dich khi phep chieu vua tao mot don. Neu de no
+       * ngoai, mot chuyen noi bo se co hai duong tra loi "don cua chuyen nay la don nao" -- qua
+       * chang, va qua lien ket -- va hai duong do lech nhau ngay lan dau ai do sua mot ben.
+       */
+      if (orderRow) {
+        await model(client, 'transportTripOrderLink').create({
+          data: { tripId: input.tripId, orderId: orderRow.id, projectedBy: input.projectedBy },
+        });
+      }
 
       return {
         link: toLink(linkRow),

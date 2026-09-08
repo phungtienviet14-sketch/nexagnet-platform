@@ -26,7 +26,18 @@ import type {
 } from './acceptance.types.js';
 
 /**
- * BE MAT NGHIEM THU CHUNG TU — `#268` I3/I6.
+ * BE MAT KET THUC DON — `#275` K3/K4.
+ *
+ * ============================================================================================
+ * DUONG DI KEY BANG `orderId`, KHONG BANG `runId`
+ * ============================================================================================
+ *
+ * `#275` K4: *"Normal boss/accounting surface should not ask them for a Run ID."* Duong
+ * `runs/:runId` cua `#271` da bi GO — khong phai de don dep, ma vi giu no lai se de mot nguoi ke
+ * toan quyet mot VONG CHAY roi tuong don da xong, trong khi cong doi soat khong doc duong do. Hai
+ * be mat cho mot cau hoi la mot be mat noi doi.
+ *
+ * Khong ben goi nao mat: `grep` toan `apps/web` truoc lane nay cho ZERO ket qua cho hai route cu.
  *
  * ============================================================================================
  * KHONG CO BE MAT LAI XE O DAY, VA DO LA MOT KHANG DINH
@@ -36,8 +47,8 @@ import type {
  * nam trong `SELF_SCOPE_ACTIONS`. Nen vai `SALE` — vai as-built cua LAI XE — khong goi duoc mot
  * duong nao trong tep nay, ke ca doc, ke ca tren vong chay cua chinh ho.
  *
- * Do la co y va no manh hon "an nut di": `#268` I7 bai 15 doi *"UI-hidden action is still denied
- * server-side"*, va bai 1 doi *"Driver cannot approve their own run"*. Cong that nam o
+ * Do la co y va no manh hon "an nut di": `#275` K3 doi *"direct API calls enforce
+ * authorization"*, va K8 bai 1 doi *"Driver direct POST => denied"*. Cong that nam o
  * `TransportActionGuard`, khong o man hinh.
  *
  * `MANAGER` cung khong goi duoc gi: `ROLE_ACTIONS.MANAGER` la `[]`, va do la fail-closed CO CHU
@@ -57,7 +68,7 @@ export class CommercialAcceptanceController {
   constructor(private readonly acceptance: CommercialAcceptanceService) {}
 
   /**
-   * HANG CHO — `Cho nghiem thu chung tu`, `Da nghiem thu`, `Can bo sung`, `Khong chap nhan`.
+   * HANG CHO — `Cho ket thuc`, `Da ket thuc`, `Can bo sung`, `Tu choi` (`#275` K4).
    *
    * Tra ve mot PHONG BI (`{ acceptances: [...] }`) chu khong mot mang tran, dung quy uoc ma
    * `transport-api-envelope.spec.ts` cua `apps/web` khoa: mot mang tran khong con cho de them
@@ -78,18 +89,18 @@ export class CommercialAcceptanceController {
     return { acceptances };
   }
 
-  /** HO SO cua mot vong chay — kem CA lich su quyet dinh (`#268` I4: khong ban nao bi mat). */
-  @Get('runs/:runId')
+  /** HO SO cua mot DON — kem CA lich su quyet dinh (`#275` K1: khong ban nao bi mat). */
+  @Get('orders/:orderId')
   @Roles('ADMIN', 'ACCOUNTING')
   @RequiresTransportAction('transport.commercial_acceptance.read')
-  detail(@Param('runId') runId: string): Promise<CommercialAcceptanceDetail> {
-    return this.guard(() => this.acceptance.detailForRun(runId));
+  detail(@Param('orderId') orderId: string): Promise<CommercialAcceptanceDetail> {
+    return this.guard(() => this.acceptance.detailForOrder(orderId));
   }
 
   /**
-   * GHI mot quyet dinh nghiem thu.
+   * GHI mot quyet dinh ket thuc don — hanh dong ma nguoi dung thay la `Da ket thuc`.
    *
-   * `runId` lay tu DUONG DAN, khong tu than yeu cau — cung ly le da ghi o `CheckpointsController`:
+   * `orderId` lay tu DUONG DAN, khong tu than yeu cau — cung ly le da ghi o `CheckpointsController`:
    * hai nguon cho cung mot su that se co luc lech nhau.
    *
    * `POST .../decisions` chu khong `POST .../approve` + `POST .../reject`: ba ket qua di qua CUNG
@@ -97,12 +108,12 @@ export class CommercialAcceptanceController {
    * se tao ba cho de mot lan sua sau nay quen mot dieu kien. Tai nguyen duoc tao o day la MOT
    * QUYET DINH — va do dung la thu duoc them vao lich su.
    */
-  @Post('runs/:runId/decisions')
+  @Post('orders/:orderId/decisions')
   @Roles('ADMIN', 'ACCOUNTING')
   @RequiresTransportAction('transport.commercial_acceptance.decide')
   decide(
     @Req() request: AuthenticatedRequest,
-    @Param('runId') runId: string,
+    @Param('orderId') orderId: string,
     @Body() body: unknown,
   ): Promise<CommercialAcceptanceDetail> {
     const authUserId = requireAuthUserId(request);
@@ -111,7 +122,7 @@ export class CommercialAcceptanceController {
 
     return this.guard(() =>
       this.acceptance.decide({
-        runId,
+        orderId,
         outcome: parsed.data.outcome,
         reasonCode: parsed.data.reasonCode,
         basis: parsed.data.basis,

@@ -13,11 +13,11 @@ import {
   AcceptanceCounterpartyFacts,
   AcceptanceEvidenceFacts,
   AcceptanceMovementFacts,
-  type AcceptanceRunFacts,
+  type AcceptanceOrderFacts,
 } from './acceptance-facts.port.js';
 import {
   evaluateAcceptanceDecision,
-  isRunAcceptable,
+  isOrderCompletable,
   isSettlementEligible,
 } from './acceptance-lifecycle.js';
 import { AcceptanceRepository } from './acceptance.repository.js';
@@ -25,21 +25,22 @@ import type {
   CommercialAcceptanceDetail,
   CommercialAcceptanceQueueRow,
   CommercialAcceptanceState,
+  OrderCompletionEligibility,
   RecordAcceptanceDecisionCommand,
 } from './acceptance.types.js';
 
 /**
- * TANG UNG DUNG cua `transport-acceptance` — `#268` Lane I.
+ * TANG UNG DUNG cua `transport-acceptance` — `#275` Lane K.
  *
  * ============================================================================================
  * DICH VU NAY KHONG CAM MOT CAI BUT NAO NGOAI BUT CUA CHINH NO
  * ============================================================================================
  *
  * No tiem DUNG MOT kho ghi (`AcceptanceRepository`) va ba cong CHI DOC. Do khong phai mot lua chon
- * ve kien truc cho dep — do la cach `#268` I3 duoc giu bang CAU TRUC:
+ * ve kien truc cho dep — do la cach `#275` K3 duoc giu bang CAU TRUC:
  *
- *     *"Accounting may DECIDE acceptance but may NOT mutate source checkpoints / location proofs /
- *     uploaded delivery evidence"*
+ *     *"ACCOUNTING may decide Order completion but may NOT mutate the source checkpoint / GPS proof
+ *     / receipt File they are reviewing"*
  *
  * Neu bat bien do chi song trong bang phan quyen, thi mot lan sua sau nay them mot loi goi ghi vao
  * day se pha no ma khong bai test nao do duoc. Vi dich vu KHONG CO tham chieu nao toi
@@ -54,8 +55,8 @@ import type {
  * ============================================================================================
  *
  * `decidedBy` den tu `command.authUserId`, ma controller lay bang `requireAuthUserId(request)` —
- * KHONG tu than yeu cau (`#268` I3: *"no caller-supplied `decidedBy`"*). `decidedAt` do dich vu nay
- * dat tu `TRANSPORT_CLOCK` (bai I7 so 14: *"Client clock cannot choose `approvedAt`"*).
+ * KHONG tu than yeu cau (`#275` K1: *"`decidedBy`, role and server time must never come from caller
+ * payload"*). `decidedAt` do dich vu nay dat tu `TRANSPORT_CLOCK` (`#275` K8 bai 16).
  *
  * Ca hai deu duoc giu bang KIEU chu khong bang mot phep kiem: `RecordAcceptanceDecisionCommand`
  * khong co truong nao de ben goi dat hai gia tri do.
@@ -86,54 +87,64 @@ export class CommercialAcceptanceService {
     });
   }
 
-  private async requireRun(runId: string): Promise<AcceptanceRunFacts> {
-    const run = await this.movement.findRun(runId);
-    if (!run) {
-      this.deny('ACCEPTANCE_RUN_NOT_FOUND', { runId });
+  private async requireOrder(orderId: string): Promise<AcceptanceOrderFacts> {
+    const order = await this.movement.findOrder(orderId);
+    if (!order) {
+      this.deny('ACCEPTANCE_ORDER_NOT_FOUND', { orderId });
       throw TransportDomainError.notFound(
-        'ACCEPTANCE_RUN_NOT_FOUND',
-        `Khong thay vong chay ${runId}`,
+        'ACCEPTANCE_ORDER_NOT_FOUND',
+        `Khong thay don ${orderId}`,
       );
     }
-    return run;
+    return order;
   }
 
   /**
-   * GHI mot quyet dinh nghiem thu.
+   * GHI mot quyet dinh ket thuc don.
    *
-   * THU TU la mot phan cua hop dong: vong chay -> phap nhan -> chung cu -> luat mien -> ghi.
+   * THU TU la mot phan cua hop dong: don -> phap nhan -> chung cu -> luat mien -> ghi.
    *
-   * Chung cu duoc LOC TRUOC khi vao luat mien, va do la ca diem cua bai I7 so 4. Neu luat mien nhan
-   * so luong khoa MA BEN GOI GUI, thi mot nguoi go dai ba chuoi bat ky se qua duoc dieu kien "co it
-   * nhat mot chung tu". Cai di vao luat la so khoa DA XAC MINH thuoc ve dung vong chay nay.
+   * Chung cu duoc LOC TRUOC khi vao luat mien, va do la ca diem cua `#275` K8 bai 6 va 7. Neu luat
+   * mien nhan so luong khoa MA BEN GOI GUI, thi mot nguoi go dai ba chuoi bat ky se qua duoc dieu
+   * kien "co it nhat mot chung tu". Cai di vao luat la so khoa DA XAC MINH thuoc ve dung don nay.
    */
   async decide(command: RecordAcceptanceDecisionCommand): Promise<CommercialAcceptanceDetail> {
-    const run = await this.requireRun(command.runId);
+    const order = await this.requireOrder(command.orderId);
 
     /*
-     * TRANG THAI VONG CHAY di TRUOC moi phep kiem khac — `acceptance-lifecycle.ts` dat ra thu tu do
-     * va o day no phai duoc giu, khong chi o ham thuan. Neu de phep kiem chung cu chay truoc, mot
-     * lenh tren mot chuyen DANG CHAY se bao "chung tu khong thuoc vong chay nay" thay vi "chuyen
-     * chua chay xong" — mot cau tra loi dung ve ky thuat va sai ve nguyen nhan.
+     * TRANG THAI DON di TRUOC moi phep kiem khac — `acceptance-lifecycle.ts` dat ra thu tu do va o
+     * day no phai duoc giu, khong chi o ham thuan. Neu de phep kiem chung cu chay truoc, mot lenh
+     * tren mot don CHUA GIAO XONG se bao "chung tu khong thuoc don nay" thay vi "don chua giao
+     * xong" — mot cau tra loi dung ve ky thuat va sai ve nguyen nhan.
+     *
+     * KHONG mot dong nao o day doc trang thai vong chay. `#275` K7: mot vong chay dang chay van cho
+     * phep ket thuc don da giao, va mot vong chay da dong khong tu no ket thuc don nao.
      */
-    if (!isRunAcceptable(run.status)) {
-      this.deny('ACCEPTANCE_RUN_NOT_COMPLETED', { runId: run.id, status: run.status });
+    if (order.status === 'CANCELLED') {
+      this.deny('ACCEPTANCE_ORDER_CANCELLED', { orderId: order.id });
       throw TransportDomainError.denied(
-        'ACCEPTANCE_RUN_NOT_COMPLETED',
-        `Vong chay ${run.code} dang ${run.status}; chua co gi de nghiem thu`,
+        'ACCEPTANCE_ORDER_CANCELLED',
+        `Don ${order.code} da bi huy; khong ket thuc thuong mai duoc`,
+      );
+    }
+    if (!isOrderCompletable(order.status)) {
+      this.deny('ACCEPTANCE_ORDER_NOT_FULFILLED', { orderId: order.id, status: order.status });
+      throw TransportDomainError.denied(
+        'ACCEPTANCE_ORDER_NOT_FULFILLED',
+        `Don ${order.code} dang ${order.status}; chua giao xong nen chua co gi de ket thuc`,
       );
     }
 
     /*
      * PHAT LAI di TRUOC cong nghiep vu, va do la mot sua loi that chu khong phai mot toi uu.
      *
-     * `#268` I4 doi *"Retry with same idempotency key returns the same business effect"*. Neu cong
-     * nghiep vu chay truoc, thi lan gui lai cua MOT lenh da ghi thanh cong se va vao
+     * `#275` K8 bai 4 doi *"Same idempotency key retry => one decision/effect"*. Neu cong nghiep vu
+     * chay truoc, thi lan gui lai cua MOT lenh da ghi thanh cong se va vao
      * `ACCEPTANCE_ALREADY_IN_OUTCOME` — tuc mot lan bam lai sau khi mat mang bi bao la loi, dung
      * luc nguoi dung khong biet lan dau co vao hay khong. Mot lan phat lai KHONG phai mot quyet
      * dinh moi, nen no khong di qua cong danh cho quyet dinh moi.
      */
-    const history = await this.repository.findDetailByRun(run.id);
+    const history = await this.repository.findDetailByOrder(order.id);
     const replay = history?.decisions.find(
       (entry) => entry.idempotencyKey === command.idempotencyKey,
     );
@@ -143,7 +154,7 @@ export class CommercialAcceptanceService {
         point: 'commercial_acceptance.decide',
         outcome: 'allowed',
         reason: 'ACCEPTANCE_REPLAYED',
-        detail: { runId: run.id, acceptanceId: history.acceptance.id, decisionId: replay.id },
+        detail: { orderId: order.id, acceptanceId: history.acceptance.id, decisionId: replay.id },
       });
       return history;
     }
@@ -161,22 +172,23 @@ export class CommercialAcceptanceService {
     const owned =
       command.evidenceRefs.length === 0
         ? []
-        : await this.evidence.belongingTo(run.id, command.evidenceRefs);
+        : await this.evidence.belongingTo(order.id, command.evidenceRefs);
 
     if (owned.length !== command.evidenceRefs.length) {
       /*
-       * KHONG ke ten khoa nao bi loai. Bai I7 so 5 (*"Unknown vs foreign IDs do not provide useful
-       * enumeration"*): mot thong bao noi "khoa X khong thuoc vong chay nay" xac nhan rang khoa X
-       * TON TAI o dau do — tuc bien cong nay thanh mot may do danh sach chung tu cua nguoi khac.
+       * KHONG ke ten khoa nao bi loai. `#275` K8 bai 7 (*"Foreign/unknown evidence fails closed
+       * without useful enumeration"*): mot thong bao noi "khoa X khong thuoc don nay" xac nhan rang
+       * khoa X TON TAI o dau do — tuc bien cong nay thanh mot may do danh sach chung tu cua don
+       * khac.
        */
-      this.deny('ACCEPTANCE_EVIDENCE_NOT_FOR_RUN', {
-        runId: run.id,
+      this.deny('ACCEPTANCE_EVIDENCE_NOT_FOR_ORDER', {
+        orderId: order.id,
         requested: command.evidenceRefs.length,
         accepted: owned.length,
       });
       throw TransportDomainError.denied(
-        'ACCEPTANCE_EVIDENCE_NOT_FOR_RUN',
-        'Chung tu duoc tro toi khong thuoc vong chay nay',
+        'ACCEPTANCE_EVIDENCE_NOT_FOR_ORDER',
+        'Chung tu duoc tro toi khong thuoc don nay',
       );
     }
 
@@ -186,7 +198,7 @@ export class CommercialAcceptanceService {
     const verdict = evaluateAcceptanceDecision({
       outcome: command.outcome,
       basis: command.basis,
-      runStatus: run.status,
+      orderStatus: order.status,
       currentState: current?.state ?? 'PENDING',
       latestDecisionId: current?.latestDecisionId ?? null,
       supersedesId: command.supersedesId,
@@ -195,7 +207,7 @@ export class CommercialAcceptanceService {
     });
 
     if (!verdict.allowed) {
-      this.deny(verdict.reason, { runId: run.id, outcome: command.outcome });
+      this.deny(verdict.reason, { orderId: order.id, outcome: command.outcome });
       throw verdict.reason === 'ACCEPTANCE_SUPERSEDES_STALE'
         ? TransportDomainError.conflict(
             verdict.reason,
@@ -203,13 +215,13 @@ export class CommercialAcceptanceService {
           )
         : TransportDomainError.denied(
             verdict.reason,
-            `Khong ghi duoc quyet dinh nghiem thu cho vong chay ${run.code}`,
+            `Khong ghi duoc quyet dinh ket thuc cho don ${order.code}`,
           );
     }
 
     const at = this.now();
     const outcome = await this.repository.append({
-      runId: run.id,
+      orderId: order.id,
       outcome: command.outcome,
       reasonCode: command.reasonCode,
       basis: command.basis,
@@ -229,7 +241,7 @@ export class CommercialAcceptanceService {
       outcome: 'allowed',
       reason: outcome.replayed ? 'ACCEPTANCE_REPLAYED' : 'ACCEPTANCE_DECIDED',
       detail: {
-        runId: run.id,
+        orderId: order.id,
         acceptanceId: outcome.acceptance.id,
         state: outcome.acceptance.state,
         basis: outcome.decision.basis,
@@ -237,38 +249,38 @@ export class CommercialAcceptanceService {
       },
     });
 
-    const detail = await this.repository.findDetailByRun(run.id);
+    const detail = await this.repository.findDetailByOrder(order.id);
     if (!detail) {
       // Khong the xay ra: `append` vua ghi xong. Nem thay vi tra `null` de mot loi that khong bi
       // doc thanh "chua co ho so nao" o tang tren.
       throw TransportDomainError.notFound(
         'ACCEPTANCE_NOT_FOUND',
-        `Khong doc lai duoc ho so nghiem thu cua vong chay ${run.code}`,
+        `Khong doc lai duoc ho so ket thuc cua don ${order.code}`,
       );
     }
     return detail;
   }
 
   /**
-   * HO SO cua MOT vong chay — kem CA lich su quyet dinh.
+   * HO SO cua MOT DON — kem CA lich su quyet dinh.
    *
    * `PENDING` duoc TRA VE chu khong phai `404` khi chua co quyet dinh nao: vang mat la mot cau tra
-   * loi nghiep vu ("chua ai nghiem thu"), khong phai mot loi. Tra `404` o day se buoc giao dien
-   * phai doc mot ma loi de biet mot dieu binh thuong.
+   * loi nghiep vu ("chua ai ket thuc"), khong phai mot loi. Tra `404` o day se buoc giao dien phai
+   * doc mot ma loi de biet mot dieu binh thuong.
    */
-  async detailForRun(runId: string): Promise<CommercialAcceptanceDetail> {
-    const run = await this.requireRun(runId);
-    const found = await this.repository.findDetailByRun(run.id);
+  async detailForOrder(orderId: string): Promise<CommercialAcceptanceDetail> {
+    const order = await this.requireOrder(orderId);
+    const found = await this.repository.findDetailByOrder(order.id);
     if (found) return found;
 
     const at = this.now();
     return {
       acceptance: {
         id: '',
-        runId: run.id,
+        orderId: order.id,
         state: 'PENDING',
         counterpartyId: null,
-        businessDate: run.businessDate,
+        businessDate: order.businessDate,
         latestDecisionId: null,
         openedBy: '',
         createdAt: at.toISOString(),
@@ -279,11 +291,90 @@ export class CommercialAcceptanceService {
   }
 
   /**
-   * HANG CHO nguoi duyet — `#268` I6.
+   * MOT DON CO DU DIEU KIEN DI VAO MOT KY DOI SOAT MOI KHONG — `#275` K5.
    *
-   * Doc MOT lan cho ca danh sach (`findManyByRuns`) chu khong hoi tung vong chay: mot hang cho goi
-   * N+1 lan se cham dan theo dung toc do doi xe lon len, va do la thu khong ai phat hien duoc luc
-   * demo.
+   * ==========================================================================================
+   * HAM NAY CHI DOC, VA DO LA DIEU QUAN TRONG NHAT VE NO
+   * ==========================================================================================
+   *
+   * Cong doi soat GOI ham nay; no khong ghi mot dong nao va khong biet mot dong nao ve tien. Nho
+   * vay chieu phu thuoc di MOT chieu (`transport-settlement` -> `transport-acceptance`) va tang ket
+   * thuc khong bao gio cham duoc vao so tien.
+   *
+   * Phep suy that su nam o `isSettlementEligible()` — mot ham THUAN, kiem duoc khong can CSDL. O
+   * day chi la phan tra cuu.
+   */
+  async eligibilityForOrder(orderId: string): Promise<OrderCompletionEligibility> {
+    const order = await this.movement.findOrder(orderId);
+    if (!order) return { kind: 'NO_ORDER' };
+    return this.eligibilityOf(order);
+  }
+
+  /**
+   * DIEU KIEN DOI SOAT cua mot CHUYEN v1 — tra loi qua DON cua no.
+   *
+   * ==========================================================================================
+   * `NO_ORDER` DONG CONG. DO LA THAY DOI TRUNG TAM CUA `#275` SO VOI `#273`.
+   * ==========================================================================================
+   *
+   * `#273` co mot nhanh `NOT_PROJECTED => pass`: mot chuyen chua duoc chieu sang mo hinh v2 thi
+   * cong khong ap. Chu so huu da bac bo hinh dang do:
+   *
+   *     *"Remove/replace any final `NOT_PROJECTED => pass` behavior that allows a new Order to
+   *     bypass the gate merely because it lacks a v2 Run projection. Order is the grain, so
+   *     projection absence must not be an authorization bypass."*
+   *
+   * Nen o day vang mat cua don DONG cong. No van la mot NHANH RIENG chu khong gop vao `BLOCKED`,
+   * vi viec nguoi truc phai lam khac han: chieu/tao nghia vu thuong mai cho chuyen do
+   * (`POST /transport/orders/projections/trip/:tripId`), chu khong phai di xin chung tu.
+   *
+   * Duong tra cuu KHONG di qua vong chay — `movement.findOrderForTrip` doc `TransportTripOrderLink`
+   * truc tiep. Do la ly do mot chuyen thue nha xe ngoai (khong bao gio co vong chay) van co chu the
+   * de ket thuc.
+   */
+  async eligibilityForTrip(tripId: string): Promise<OrderCompletionEligibility> {
+    const order = await this.movement.findOrderForTrip(tripId);
+    if (!order) return { kind: 'NO_ORDER' };
+    return this.eligibilityOf(order);
+  }
+
+  private async eligibilityOf(order: AcceptanceOrderFacts): Promise<OrderCompletionEligibility> {
+    const acceptance = await this.repository.findByOrder(order.id);
+    const state: CommercialAcceptanceState = acceptance?.state ?? 'PENDING';
+
+    if (!isSettlementEligible({ orderStatus: order.status, state })) {
+      return {
+        kind: 'BLOCKED',
+        orderId: order.id,
+        orderCode: order.code,
+        orderStatus: order.status,
+        state,
+      };
+    }
+
+    /*
+     * `acceptance` KHONG the la `null` o nhanh nay: `isSettlementEligible` doi `state === 'APPROVED'`
+     * va `PENDING` la gia tri duy nhat khi khong co hang. Nhung `??` van o day thay vi mot dau `!`:
+     * mot khang dinh khong-null la mot loi hua voi trinh bien dich, con cai nay la mot gia tri doc
+     * duoc neu loi hua do co ngay bi pha.
+     */
+    return {
+      kind: 'ELIGIBLE',
+      orderId: order.id,
+      orderCode: order.code,
+      acceptanceId: acceptance?.id ?? '',
+    };
+  }
+
+  /**
+   * HANG CHO nguoi quyet — `#275` K4.
+   *
+   * Doc MOT lan cho ca danh sach (`findManyByOrders`, `contextForOrders`) chu khong hoi tung don:
+   * mot hang cho goi N+1 lan se cham dan theo dung toc do so don lon len, va do la thu khong ai
+   * phat hien duoc luc demo.
+   *
+   * NGUON la `listCompletableOrders()` — nhung don DA GIAO XONG. Mot don chua giao xong khong nam
+   * trong hang cho cua ke toan: chua co gi de ket thuc.
    *
    * SAP XEP: cho lau nhat len truoc (`businessDate` tang dan). Nguoi truc mo hang cho de tim viec
    * TON DONG, khong phai de xem viec vua xong.
@@ -291,26 +382,34 @@ export class CommercialAcceptanceService {
   async queue(
     filter: { readonly state?: CommercialAcceptanceState } = {},
   ): Promise<readonly CommercialAcceptanceQueueRow[]> {
-    const runs = await this.movement.listCompletedRuns();
-    const found = await this.repository.findManyByRuns(runs.map((run) => run.id));
-    const byRun = new Map(found.map((entry) => [entry.runId, entry]));
+    const orders = await this.movement.listCompletableOrders();
+    const orderIds = orders.map((order) => order.id);
+    const found = await this.repository.findManyByOrders(orderIds);
+    const byOrder = new Map(found.map((entry) => [entry.orderId, entry]));
+    const context = new Map(
+      (await this.movement.contextForOrders(orderIds)).map((row) => [row.orderId, row]),
+    );
 
     const rows = await Promise.all(
-      runs.map(async (run): Promise<CommercialAcceptanceQueueRow> => {
-        const acceptance = byRun.get(run.id) ?? null;
+      orders.map(async (order): Promise<CommercialAcceptanceQueueRow> => {
+        const acceptance = byOrder.get(order.id) ?? null;
         const state: CommercialAcceptanceState = acceptance?.state ?? 'PENDING';
+        const operational = context.get(order.id) ?? null;
         return {
           acceptanceId: acceptance?.id ?? null,
-          runId: run.id,
-          runCode: run.code,
-          runStatus: run.status,
-          runCompletedAt: run.completedAt,
-          vehicleId: run.vehicleId,
+          orderId: order.id,
+          orderCode: order.code,
+          orderStatus: order.status,
+          customerId: order.customerId,
+          originLabel: order.originLabel,
+          destinationLabel: order.destinationLabel,
           state,
           counterpartyId: acceptance?.counterpartyId ?? null,
-          businessDate: acceptance?.businessDate ?? run.businessDate,
-          evidenceCount: await this.evidence.countFor(run.id),
-          settlementEligible: isSettlementEligible({ runStatus: run.status, state }),
+          businessDate: acceptance?.businessDate ?? order.businessDate,
+          evidenceCount: await this.evidence.countFor(order.id),
+          settlementEligible: isSettlementEligible({ orderStatus: order.status, state }),
+          runCode: operational?.runCode ?? null,
+          vehicleId: operational?.vehicleId ?? null,
           latestDecidedAt: acceptance?.updatedAt ?? null,
           latestDecidedBy: acceptance?.openedBy ?? null,
         };

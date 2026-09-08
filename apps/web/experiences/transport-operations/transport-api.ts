@@ -35,6 +35,10 @@ import type {
   MaintenanceTriggerKind,
   MaintenanceWorkOrder,
   OperationalAlertFeed,
+  OrderCompletionBasis,
+  OrderCompletionDetail,
+  OrderCompletionOutcome,
+  OrderCompletionRow,
   OrderRunPlan,
   RunClosureVerdict,
   RunDistanceSummary,
@@ -1208,13 +1212,6 @@ export const transportApi = {
   },
 
   /**
-   * BANG DOI XE + BAO CAO TUYEN (Lane N, #278 N6/N7).
-   *
-   * `from`/`to` la NGAY NGHIEP VU (`YYYY-MM-DD`), khong phai moc thoi gian. Bo trong thi may chu tu
-   * chot 30 ngay gan nhat theo mui gio tenant — man hinh KHONG duoc tu tinh khoang bang
-   * `new Date()`, vi mot nguoi mo bao cao luc 00:30 gio Viet Nam se ra mot khoang lech mot ngay.
-   */
-  /**
    * DE NGHI DIEU XE (Lane M, #277) — `POST`, va do KHONG phai mot lan ghi.
    *
    * `POST` vi lan goi mang mot the yeu cau (diem lay hang, han gio, tai trong) va co the goi mot
@@ -1234,6 +1231,13 @@ export const transportApi = {
       send('POST', `/transport/orders/${encodeURIComponent(orderId)}/dispatch-assignment`, body),
   },
 
+  /**
+   * BANG DOI XE + BAO CAO TUYEN (Lane N, #278 N6/N7).
+   *
+   * `from`/`to` la NGAY NGHIEP VU (`YYYY-MM-DD`), khong phai moc thoi gian. Bo trong thi may chu tu
+   * chot 30 ngay gan nhat theo mui gio tenant — man hinh KHONG duoc tu tinh khoang bang
+   * `new Date()`, vi mot nguoi mo bao cao luc 00:30 gio Viet Nam se ra mot khoang lech mot ngay.
+   */
   insight: {
     fleet: (range?: { readonly from?: string; readonly to?: string }): Promise<FleetInsightView> =>
       get(`/transport/insight/fleet${toQuery({ from: range?.from, to: range?.to })}`),
@@ -1242,5 +1246,48 @@ export const transportApi = {
       readonly to?: string;
     }): Promise<CorridorInsightView> =>
       get(`/transport/insight/corridors${toQuery({ from: range?.from, to: range?.to })}`),
+  },
+
+  /**
+   * KET THUC DON (`#275` Lane K) — hanh dong ma ke toan thay la `Da ket thuc`.
+   *
+   * Duong di key bang `orderId`, KHONG bang `runId`: `#275` K4 noi ro *"Normal boss/accounting
+   * surface should not ask them for a Run ID"*. Vong chay chi xuat hien trong mot dong hang cho
+   * lam NGU CANH, va no `null` duoc.
+   *
+   * `POST .../decisions` chu khong `.../approve` + `.../reject`: ba ket qua di qua CUNG mot cong
+   * nghiep vu voi cung mot bo luat, va tach thanh ba route se tao ba cho de mot lan sua sau nay
+   * quen mot dieu kien. Tai nguyen duoc tao la MOT QUYET DINH — dung thu duoc them vao lich su.
+   */
+  orderCompletion: {
+    /**
+     * HANG CHO — CA danh sach, khong tham so loc.
+     *
+     * May chu CO `?state=` (`acceptanceQuerySchema`), nhung hang cho nay chi chua nhung don DA GIAO
+     * XONG nen no bi chan tren tu ban chat. Loc trong bo nho khong ton mot vong mang nao va cho ra
+     * mot man hinh doi ngay khi bam — mot lan goi lai chi de bo bot dong la mot lan cho khong can.
+     */
+    queue: (): Promise<readonly OrderCompletionRow[]> =>
+      getList('/transport/commercial-acceptance', 'acceptances'),
+    get: (orderId: string): Promise<OrderCompletionDetail> =>
+      get(`/transport/commercial-acceptance/orders/${encodeURIComponent(orderId)}`),
+    decide: (
+      orderId: string,
+      input: {
+        outcome: OrderCompletionOutcome;
+        reasonCode: string;
+        basis: OrderCompletionBasis;
+        evidenceRefs?: readonly string[];
+        externalNote?: string | null;
+        counterpartyId?: string | null;
+        supersedesId?: string | null;
+        idempotencyKey: string;
+      },
+    ): Promise<OrderCompletionDetail> =>
+      send(
+        'POST',
+        `/transport/commercial-acceptance/orders/${encodeURIComponent(orderId)}/decisions`,
+        input,
+      ),
   },
 } as const;

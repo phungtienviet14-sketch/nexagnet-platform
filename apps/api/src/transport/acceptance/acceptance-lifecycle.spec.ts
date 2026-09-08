@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { VehicleRunStatus } from '../movement/movement.types.js';
+import { ORDER_STATUSES, type OrderStatus } from '../movement/movement.types.js';
 import {
   evaluateAcceptanceDecision,
+  isOrderCompletable,
   isSettlementEligible,
   stateAfter,
   type AcceptanceEvaluation,
@@ -13,18 +14,18 @@ import {
 } from './acceptance.types.js';
 
 /**
- * LUAT cua truc nghiem thu — `#268` I4 va I5, kiem o muc ham THUAN.
+ * LUAT cua truc KET THUC DON — `#275` K1, K5 va K7, kiem o muc ham THUAN.
  *
  * Bo bai nay CO Y khong dung Nest, khong dung Prisma, khong dung dong ho. Bat bien tai chinh trung
- * tam cua lane (`COMPLETED + APPROVED`) phai doc duoc va kiem duoc ma khong can dung mot ha tang
+ * tam cua lane (`FULFILLED + APPROVED`) phai doc duoc va kiem duoc ma khong can dung mot ha tang
  * nao — neu no chi chung minh duoc khi co CSDL that thi no khong con la mot luat, no la mot hanh vi.
  */
 
-/** Mot lenh HOP LE lam nen: da chay xong, chua co lich su, duyet theo chung tu. */
+/** Mot lenh HOP LE lam nen: da giao xong, chua co lich su, ket thuc theo chung tu. */
 const base: AcceptanceEvaluation = {
   outcome: 'APPROVED',
   basis: 'DOCUMENT',
-  runStatus: 'COMPLETED',
+  orderStatus: 'FULFILLED',
   currentState: 'PENDING',
   latestDecisionId: null,
   supersedesId: null,
@@ -35,39 +36,67 @@ const base: AcceptanceEvaluation = {
 const evaluate = (patch: Partial<AcceptanceEvaluation> = {}) =>
   evaluateAcceptanceDecision({ ...base, ...patch });
 
-describe('evaluateAcceptanceDecision — cong nghiem thu chung tu', () => {
-  it('cho qua mot lan duyet dau tien co chung tu tren vong chay da chay xong', () => {
+describe('evaluateAcceptanceDecision — cong ket thuc don', () => {
+  it('cho qua mot lan ket thuc dau tien co chung tu tren don da giao xong', () => {
     expect(evaluate()).toEqual({ allowed: true, reason: 'ACCEPTANCE_DECIDED' });
   });
 
-  describe('vong chay phai chay xong truoc — #268 I5 bai 6', () => {
-    const notCompleted: readonly VehicleRunStatus[] = ['PLANNED', 'ACTIVE', 'CANCELLED'];
-
-    it.each(notCompleted)('tu choi khi vong chay dang %s', (runStatus) => {
-      expect(evaluate({ runStatus })).toEqual({
+  describe('don phai giao xong truoc — #275 K5', () => {
+    it('tu choi khi don con dang OPEN', () => {
+      expect(evaluate({ orderStatus: 'OPEN' })).toEqual({
         allowed: false,
-        reason: 'ACCEPTANCE_RUN_NOT_COMPLETED',
+        reason: 'ACCEPTANCE_ORDER_NOT_FULFILLED',
+      });
+    });
+
+    it('don DA HUY co ma RIENG — hai viec phai lam khac han nhau', () => {
+      expect(evaluate({ orderStatus: 'CANCELLED' })).toEqual({
+        allowed: false,
+        reason: 'ACCEPTANCE_ORDER_CANCELLED',
       });
     });
 
     it.each(COMMERCIAL_ACCEPTANCE_OUTCOMES)(
       'chan ca ket qua %s chu khong rieng APPROVED',
       (outcome) => {
-        // Mot chuyen dang chay thi khong co gi de tu choi hay doi bo sung. Cho tu choi som se sinh
-        // ra nhung ho so REJECTED cua chinh nhung chuyen chua ket thuc.
-        expect(evaluate({ runStatus: 'ACTIVE', outcome }).allowed).toBe(false);
+        // Mot don chua giao xong thi khong co gi de tu choi hay doi bo sung. Cho tu choi som se
+        // sinh ra nhung ho so REJECTED cua chinh nhung don chua giao.
+        expect(evaluate({ orderStatus: 'OPEN', outcome }).allowed).toBe(false);
       },
     );
 
-    it('trang thai vong chay duoc kiem TRUOC can cu', () => {
+    it('trang thai don duoc kiem TRUOC can cu', () => {
       // Vua sai trang thai vua thieu chung tu -> phai bao trang thai, vi do la cai phai sua truoc.
-      expect(evaluate({ runStatus: 'ACTIVE', evidenceCount: 0 }).reason).toBe(
-        'ACCEPTANCE_RUN_NOT_COMPLETED',
+      expect(evaluate({ orderStatus: 'OPEN', evidenceCount: 0 }).reason).toBe(
+        'ACCEPTANCE_ORDER_NOT_FULFILLED',
       );
     });
   });
 
-  describe('sua mot quyet dinh phai KHAI RO — #268 I4', () => {
+  /**
+   * `#275` K7 — KHONG COUPLING VOI VONG CHAY, kiem o muc KIEU.
+   *
+   * Bai nay khong goi mot ham nao. No khang dinh mot dieu ve HINH DANG cua hop dong: khong co
+   * truong nao trong `AcceptanceEvaluation` mang trang thai vong chay. Do la cach duy nhat chung
+   * minh "vong chay dong/mo khong tu no cho phep hay tu choi mot lan ket thuc" ma khong phai liet
+   * ke bon trang thai vong chay nhan bon trang thai don.
+   */
+  describe('khong doc trang thai vong chay — #275 K7', () => {
+    it('hop dong cua cong khong co truong nao ve vong chay', () => {
+      expect(Object.keys(base).sort()).toEqual([
+        'basis',
+        'currentState',
+        'evidenceCount',
+        'externalNote',
+        'latestDecisionId',
+        'orderStatus',
+        'outcome',
+        'supersedesId',
+      ]);
+    });
+  });
+
+  describe('sua mot quyet dinh phai KHAI RO — #275 K1', () => {
     it('tu choi khi da co quyet dinh ma khong khai ban dang sua', () => {
       expect(
         evaluate({ currentState: 'REJECTED', latestDecisionId: 'dec-1', supersedesId: null }),
@@ -91,7 +120,7 @@ describe('evaluateAcceptanceDecision — cong nghiem thu chung tu', () => {
       );
     });
 
-    it('tu choi khi ban dang sua KHONG con la ban moi nhat — hai nguoi cung bam', () => {
+    it('tu choi khi ban dang sua KHONG con la ban moi nhat — #275 K8 bai 5', () => {
       expect(
         evaluate({
           currentState: 'REJECTED',
@@ -124,14 +153,14 @@ describe('evaluateAcceptanceDecision — cong nghiem thu chung tu', () => {
     });
   });
 
-  describe('can cu — #268 I2', () => {
-    it('duyet theo chung tu ma khong co chung tu nao thi bi tu choi', () => {
+  describe('can cu — #275 K2', () => {
+    it('ket thuc theo chung tu ma khong co chung tu nao thi bi tu choi', () => {
       expect(evaluate({ basis: 'DOCUMENT', evidenceCount: 0 }).reason).toBe(
         'ACCEPTANCE_EVIDENCE_REQUIRED',
       );
     });
 
-    it('duyet khong co ban so thi phai ghi ro B da nhan cai gi', () => {
+    it('ket thuc khong co ban so thi phai ghi ro B da nhan cai gi', () => {
       expect(
         evaluate({
           basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
@@ -141,7 +170,7 @@ describe('evaluateAcceptanceDecision — cong nghiem thu chung tu', () => {
       ).toBe('ACCEPTANCE_EXTERNAL_BASIS_NOTE_REQUIRED');
     });
 
-    it('duyet khong co ban so DUOC PHEP khi co ghi chu can cu', () => {
+    it('ket thuc khong co ban so DUOC PHEP khi co ghi chu can cu', () => {
       expect(
         evaluate({
           basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
@@ -171,38 +200,53 @@ describe('stateAfter — ket qua doc thanh trang thai', () => {
   });
 });
 
-describe('isSettlementEligible — bat bien tai chinh trung tam cua #268 I5', () => {
+describe('isOrderCompletable — dieu kien van hanh o grain DON', () => {
+  it('chi FULFILLED', () => {
+    const completable = ORDER_STATUSES.filter(isOrderCompletable);
+    expect(completable).toEqual(['FULFILLED']);
+  });
+});
+
+describe('isSettlementEligible — bat bien tai chinh trung tam cua #275 K5', () => {
   const otherThanApproved = COMMERCIAL_ACCEPTANCE_STATES.filter(
     (state): state is CommercialAcceptanceState => state !== 'APPROVED',
   );
 
-  it('COMPLETED + APPROVED la truong hop DUY NHAT du dieu kien', () => {
-    expect(isSettlementEligible({ runStatus: 'COMPLETED', state: 'APPROVED' })).toBe(true);
+  it('FULFILLED + APPROVED la truong hop DUY NHAT du dieu kien', () => {
+    expect(isSettlementEligible({ orderStatus: 'FULFILLED', state: 'APPROVED' })).toBe(true);
   });
 
-  it.each(otherThanApproved)('COMPLETED + %s KHONG du dieu kien', (state) => {
-    expect(isSettlementEligible({ runStatus: 'COMPLETED', state })).toBe(false);
+  it.each(otherThanApproved)('FULFILLED + %s KHONG du dieu kien', (state) => {
+    expect(isSettlementEligible({ orderStatus: 'FULFILLED', state })).toBe(false);
   });
 
-  it.each(['PLANNED', 'ACTIVE', 'CANCELLED'] as const)(
-    '%s + APPROVED khong co duong tat nao — #268 I5 "non-completed + APPROVED cannot bypass"',
-    (runStatus) => {
-      expect(isSettlementEligible({ runStatus, state: 'APPROVED' })).toBe(false);
+  it.each(['OPEN', 'CANCELLED'] as const)(
+    '%s + APPROVED khong co duong tat nao — #275 K5 "APPROVED but operational prerequisite false"',
+    (orderStatus) => {
+      expect(isSettlementEligible({ orderStatus, state: 'APPROVED' })).toBe(false);
     },
   );
 
-  it('khong to hop nao ngoai COMPLETED+APPROVED cho ra true', () => {
-    const runStatuses: readonly VehicleRunStatus[] = [
-      'PLANNED',
-      'ACTIVE',
-      'COMPLETED',
-      'CANCELLED',
-    ];
-    const eligible = runStatuses.flatMap((runStatus) =>
+  it('khong to hop nao ngoai FULFILLED+APPROVED cho ra true', () => {
+    const orderStatuses: readonly OrderStatus[] = ORDER_STATUSES;
+    const eligible = orderStatuses.flatMap((orderStatus) =>
       COMMERCIAL_ACCEPTANCE_STATES.filter((state) =>
-        isSettlementEligible({ runStatus, state }),
-      ).map((state) => `${runStatus}+${state}`),
+        isSettlementEligible({ orderStatus, state }),
+      ).map((state) => `${orderStatus}+${state}`),
     );
-    expect(eligible).toEqual(['COMPLETED+APPROVED']);
+    expect(eligible).toEqual(['FULFILLED+APPROVED']);
+  });
+
+  /**
+   * `#275` K5: *"no dependency on whether the internal VehicleRun is open or closed"*.
+   *
+   * Kiem o muc KIEU chu khong bang mot vong lap qua bon trang thai vong chay: neu chu ky nhan them
+   * mot truong `runStatus`, `Object.keys` cua dau vao se dai ra va bai nay do — trong khi mot vong
+   * lap se van xanh vi no chi truyen nhung gia tri no biet.
+   */
+  it('dau vao cua bat bien KHONG co truong nao ve vong chay — #275 K5/K7', () => {
+    const input = { orderStatus: 'FULFILLED', state: 'APPROVED' } as const;
+    expect(Object.keys(input).sort()).toEqual(['orderStatus', 'state']);
+    expect(isSettlementEligible(input)).toBe(true);
   });
 });
