@@ -13,6 +13,7 @@ import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
 import {
   PlanningDispatchAssignmentPlanner,
   dispatchIdempotencyKey,
+  type DispatchCommitResult,
 } from './dispatch-planner.port.js';
 
 /**
@@ -154,21 +155,44 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
   /**
    * `M14` muc 8 — HAI LAN BAM DEN CUNG LUC.
    *
-   * Khoa chong lap suy tat dinh tu `(don, xe)`, nen ca hai lan goi mang CUNG mot khoa. Ket qua
-   * dung: mot ke hoach, mot chang, va CA HAI loi goi deu tra ve chinh no.
+   * ===========================================================================
+   * BAI NAY KHANG DINH DUNG HOP DONG CUA LANE L, KHONG CHAT HON.
+   *
+   * `#276` `PL-IT-02` viet ro: *"It nhat mot ban thanh cong. Ban con lai hoac phat lai, hoac bao
+   * dang xu ly — KHONG bao gio tao mot vong chay thu hai."* Ban kia co the nhan
+   * `PLAN_COMMIT_IN_FLIGHT` — mot cau tra loi DUNG: ai do dang ghi, hay tai lai roi nhin.
+   *
+   * Doi CA HAI cung tra ve mot `legId` la doi chat hon hop dong that. Mot bai nhu the do khi Lane
+   * L khong lam gi sai ca — va lan do do se day nguoi doc di sua dung cho khong hong.
+   *
+   * Cai KHONG duoc phep xay ra, va la thu bai nay thuc su canh: HAI chang co tai cho mot don.
    */
-  it('hai lan bam DONG THOI van chi ra mot chang co hang', async () => {
+  it('hai lan bam DONG THOI khong bao gio sinh chang co tai thu hai', async () => {
     const vehicleId = await seedVehicle('A3');
     const order = await seedOrder('A3');
 
-    const [left, right] = await Promise.all([
+    const settled = await Promise.allSettled([
       planner.commit({ orderId: order.id, vehicleId, actor: ACTOR }),
       planner.commit({ orderId: order.id, vehicleId, actor: ACTOR }),
     ]);
 
-    expect(left.legId).toBe(right.legId);
-    expect(left.runId).toBe(right.runId);
-    expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(1);
+    const fulfilled = settled.filter((entry) => entry.status === 'fulfilled');
+    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+
+    // Moi ban THANH CONG deu phai tro ve cung mot chang — khong ai duoc thay mot ke hoach khac.
+    const legIds = new Set(
+      fulfilled.map((entry) => (entry as PromiseFulfilledResult<DispatchCommitResult>).value.legId),
+    );
+    expect(legIds.size).toBe(1);
+
+    // Ban KHONG thanh cong (neu co) phai la mot tu choi CO KIEU, khong phai mot loi ky thuat.
+    for (const entry of settled) {
+      if (entry.status === 'rejected') expect(entry.reason).toBeInstanceOf(TransportDomainError);
+    }
+
+    expect(
+      await prisma.transportRunLeg.count({ where: { orderId: order.id, kind: 'LOADED' } }),
+    ).toBe(1);
   });
 
   /**
