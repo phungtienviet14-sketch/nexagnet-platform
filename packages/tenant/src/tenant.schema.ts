@@ -257,6 +257,19 @@ export const CAPABILITY_IDS = [
    * HAI phu thuoc, va ca hai deu that — xem `transport-checkpoint.module.ts`.
    */
   'transport-checkpoint',
+  /**
+   * NHAN VIEC TAI DIA DIEM A (Issue #267 Lane H) — dia diem van hanh cua phap nhan, nhan dang tu
+   * hang rao, va duong lai xe tu xac nhan de mo mot vong chay toi thieu.
+   *
+   * MOT CAPABILITY RIENG, cung ly le voi `transport-proof` va `transport-checkpoint` ngay tren:
+   * mot khach van tai phai chay duoc MA KHONG co duong lai xe tu tao chuyen. Cong ty B can no vi
+   * lai xe cua ho den thang nha may A roi moi biet se cho gi di dau; mot khach dieu xe tu van
+   * phong thi moi vong chay deu ra doi tu mot lenh dieu, va mot nut `Tao chuyen` tren dien thoai
+   * lai xe la mot lo hong quy trinh chu khong phai mot tien ich.
+   *
+   * KHONG mot truong tien nao di qua duong nay (#267 H4).
+   */
+  'transport-site-intake',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -706,6 +719,21 @@ const capabilityRequirements = {
    * nen khai se bien mot khoi tuy chon thanh mot dieu kien boot. Cung ly le voi `transport-proof`.
    */
   'transport-checkpoint': { dependencies: ['transport-core', 'transport-proof'] },
+  /**
+   * HAI phu thuoc, va ca hai deu that.
+   *
+   * `transport-core` thi hien nhien: dia diem la mot mat cua ho so phap nhan, va vong chay toi
+   * thieu duoc tao qua chinh `MovementService` cua Lane A.
+   *
+   * `transport-proof` thi khong hien nhien, nen ghi ro: `#267` H2 doi *"geofence/distance is
+   * deterministic"* va noi vi tri phai di qua ban dinh vi da duoc chap nhan khi ha tang co the
+   * noi no. Bo phu thuoc nay thi khong con gi de DE NGHI — man hinh se hien danh sach toan bo kho
+   * cua moi khach hang, va cau hoi *"Ban dang o Cong ty A?"* tro thanh mot o tim kiem.
+   *
+   * KHONG khai `policy`: ba nguong cua no (tran sai so, han tuoi ban dinh vi, so ung vien toi da)
+   * deu co mac dinh dung duoc ngay cho ho so B — xem `transport-site-intake.module.ts`.
+   */
+  'transport-site-intake': { dependencies: ['transport-core', 'transport-proof'] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {

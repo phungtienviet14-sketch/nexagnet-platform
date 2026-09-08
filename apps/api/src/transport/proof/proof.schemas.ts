@@ -69,7 +69,7 @@ export const closeTrackingSessionSchema = z
 export const registerGeofenceSchema = z
   .object({
     label: z.string().min(1).max(200),
-    subjectKind: z.enum(['CUSTOMER', 'FUEL_SUPPLIER', 'DEPOT', 'AD_HOC']),
+    subjectKind: z.enum(['CUSTOMER', 'FUEL_SUPPLIER', 'DEPOT', 'AD_HOC', 'COUNTERPARTY_SITE']),
     subjectId: z.string().min(1).nullish(),
     latitude: z.number(),
     longitude: z.number(),

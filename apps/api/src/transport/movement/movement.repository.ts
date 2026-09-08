@@ -125,6 +125,18 @@ export abstract class MovementRepository {
   abstract assignRun(runId: string, input: AssignRunInput): Promise<RunAssignmentChange>;
   abstract listRunAssignments(runId: string): Promise<RunAssignment[]>;
   abstract activeRunAssignment(runId: string): Promise<RunAssignment | null>;
+  /**
+   * VONG CHAY CHUA KET THUC ma lai xe nay DANG cam — `#267` H3.
+   *
+   * Tra ve mot DANH SACH chu khong `VehicleRun | null`, va do la mot lua chon co y: mo hinh hom
+   * nay KHONG cam mot lai xe cam hai vong chay chua ket thuc (khong unique nao noi dieu do), nen
+   * mot chu ky `| null` se lang le giau mat truong hop thu hai. `#267` H3 doi phai NHIN THAY no de
+   * tu choi tao them; giau di la cach chac chan nhat de mot ngay nao do tao ra cai thu ba.
+   *
+   * "DANG cam" = ban phan cong con hieu luc (`effectiveTo IS NULL`) VA vong chay chua o diem cuoi.
+   * Mot vong chay da `COMPLETED`/`CANCELLED` khong chan ai lam gi nua.
+   */
+  abstract listOpenRunsForDriver(driverId: string): Promise<VehicleRun[]>;
 
   abstract findTripLink(tripId: string): Promise<TripRunLegLink | null>;
   /**
@@ -383,6 +395,19 @@ export class InMemoryMovementRepository extends MovementRepository {
       if (entry.runId === runId && entry.effectiveTo === null) return entry;
     }
     return null;
+  }
+
+  async listOpenRunsForDriver(driverId: string): Promise<VehicleRun[]> {
+    const runIds = [...this.assignments.values()]
+      .filter((entry) => entry.driverId === driverId && entry.effectiveTo === null)
+      .map((entry) => entry.runId);
+    return [...new Set(runIds)]
+      .map((runId) => this.runs.get(runId))
+      .filter(
+        (run): run is VehicleRun =>
+          run !== undefined && run.status !== 'COMPLETED' && run.status !== 'CANCELLED',
+      )
+      .sort((left, right) => left.code.localeCompare(right.code));
   }
 
   async findTripLink(tripId: string): Promise<TripRunLegLink | null> {

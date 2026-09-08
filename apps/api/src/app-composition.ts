@@ -132,6 +132,8 @@ import { DriverTrackingController } from './transport/proof/driver-tracking.cont
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
+import { TransportSiteIntakeModule } from './transport/site-intake/transport-site-intake.module.js';
+import { DriverSiteIntakeController } from './transport/site-intake/driver-site-intake.controller.js';
 import { CheckpointsController } from './transport/checkpoint/checkpoints.controller.js';
 import { DriverCheckpointsController } from './transport/checkpoint/driver-checkpoints.controller.js';
 import { ProofReviewController } from './transport/proof/proof-review.controller.js';
@@ -152,6 +154,7 @@ import { TripExpensesController } from './transport/costing/trip-expenses.contro
 import { AssetOwnershipController } from './transport/asset-ownership/asset-ownership.controller.js';
 import { StakeholderVehiclesController } from './transport/asset-ownership/stakeholder-vehicles.controller.js';
 import { CounterpartyController } from './transport/counterparty/counterparty.controller.js';
+import { CounterpartySitesController } from './transport/counterparty/counterparty-sites.controller.js';
 import { TransportOrdersController } from './transport/movement/orders.controller.js';
 import { DriverExpenseClaimsController } from './transport/claims/driver-claims-self.controller.js';
 import { ExpenseClaimsController } from './transport/claims/claims.controller.js';
@@ -251,6 +254,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // va bien mat cung no: mot khach khong co cong de vao va khong co can de can thi khong mang
   // theo chin loai moc cua cong ty B.
   owned('transport-checkpoint', TransportCheckpointModule),
+  // NHAN VIEC TAI DIA DIEM A (`#267`). Den cung `transport-site-intake` va bien mat cung no: mot
+  // khach dieu xe tu van phong khong co nut `Tao chuyen` tren dien thoai lai xe, va do la mot cau
+  // hinh hop le — xem khoi chu cua `transport-site-intake.module.ts`.
+  owned('transport-site-intake', TransportSiteIntakeModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -291,6 +298,10 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-core', ControlTowerController),
   // DANH TINH PHAP NHAN (R1-A, #230) — cong them, khong hang nao cua v1 phu thuoc no.
   owned('transport-core', CounterpartyController),
+  // `#267` H1: dia diem van hanh la mot MAT cua ho so phap nhan, nen no den/di cung `transport-core`
+  // chu khong cung capability nhan dang. Mot khach khai kho cua khach hang minh ma khong bat bam
+  // vi tri la mot cau hinh hop le.
+  owned('transport-core', CounterpartySitesController),
   /*
    * `TX-08` so huu tai san. Ca hai thuoc `transport-core` — quyen so huu la mot su that ve chinh
    * chiec xe, khong phai mot lop nghiep vu them vao, nen khach nao bat duoc doi xe thi cung tra loi
@@ -380,6 +391,7 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // vi tri va chi tren vong chay cua chinh ho; be mat van hanh ghi duoc moi vong chay nhung KHONG
   // dinh kem chung cu vi tri. Xem `CheckpointService`: hai duong do tach han o tang dich vu.
   owned('transport-checkpoint', DriverCheckpointsController),
+  owned('transport-site-intake', DriverSiteIntakeController),
   owned('transport-checkpoint', CheckpointsController),
 ];
 
