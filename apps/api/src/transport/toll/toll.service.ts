@@ -1,5 +1,10 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { AuditLogService } from '../../audit/audit-log.service.js';
+import type {
+  DecisionOutcome,
+  DecisionPointOf,
+  DecisionReasonOf,
+} from '../../observability/decision-vocabulary.js';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { BusinessDateError, assertBusinessDate, type BusinessDate } from '../business-date.js';
 import { TRANSPORT_CLOCK } from '../transport-policy.js';
@@ -7,7 +12,11 @@ import { TransportDomainError } from '../transport.errors.js';
 import { TollApiRegistry, type TollApiDiagnostic } from './toll-api.port.js';
 import type { TollActiveLinkView } from './toll-account-link.js';
 import { classifyTollRows, type ClassifiedTollRow } from './toll-classification.js';
-import { TRANSPORT_TOLL_DECISIONS } from './toll-decisions.js';
+import {
+  TRANSPORT_TOLL_DECISIONS,
+  type TollClassifyReason,
+  type TollImportRowReason,
+} from './toll-decisions.js';
 import { normalizeAccountNo, tollSourceDigest } from './toll-identity.js';
 import {
   TRANSPORT_TOLL_POLICY,
@@ -25,7 +34,21 @@ import {
 } from './toll-statement-mapping.js';
 import { TransportTollCoreFacts, type TollCandidateWrite } from './toll.ports.js';
 import { TollRepository } from './toll.repository.js';
-import type { TollImport, TollTransactionCandidateRecord } from './toll.types.js';
+import type { TollImport, TollMatchState, TollTransactionCandidateRecord } from './toll.types.js';
+
+/**
+ * NHAN DOI SOAT -> MA QUYET DINH. Anh xa o DUNG MOT CHO.
+ *
+ * Ghep chuoi `'TOLL_' + state` se lam mot lan doi ten enum lang le sinh ra mot ma khong co trong
+ * bo tu vung, va `decision-vocabulary` se nem LUC CHAY — tuc o mot lan nap that cua khach.
+ */
+const CLASSIFY_REASONS: Readonly<Record<TollMatchState, TollClassifyReason>> = {
+  MATCHED: 'TOLL_MATCHED',
+  ACCOUNT_UNRESOLVED: 'TOLL_ACCOUNT_UNRESOLVED',
+  VEHICLE_UNRESOLVED: 'TOLL_VEHICLE_UNRESOLVED',
+  AMBIGUOUS: 'TOLL_VEHICLE_AMBIGUOUS',
+  DUPLICATE_CANDIDATE: 'TOLL_DUPLICATE_CANDIDATE',
+};
 
 /**
  * BO COT CUA DUONG NHAP TAY — do CHUNG TA dinh nghia, va do la ca ly do no duoc phep ton tai.
@@ -79,8 +102,8 @@ export interface TollImportPreview {
   readonly rowCount: number;
   readonly acceptedCount: number;
   readonly rejectedCount: number;
-  readonly rejectionsByReason: Readonly<Record<string, number>>;
-  readonly matchStateCounts: Readonly<Record<string, number>>;
+  readonly rejectionsByReason: Readonly<Partial<Record<TollImportRowReason, number>>>;
+  readonly matchStateCounts: Readonly<Partial<Record<TollMatchState, number>>>;
   /** Nguon nay DA duoc nap roi — nap lai se tra ve chinh lan cu, khong tao gi. */
   readonly alreadyImportedId: string | null;
   readonly lines: readonly MappedTollRow[];
@@ -225,14 +248,30 @@ export class TollService {
      * MOT dong trace cho MOI ly do tu choi, kem so luong. Nguoi truc doc trace tra loi duoc "tep
      * nay hong o dau" ma khong phai mo lai tep.
      */
-    for (const [reason, count] of Object.entries(preview.rejectionsByReason)) {
-      this.telemetry?.decision({
-        vocabulary: TRANSPORT_TOLL_DECISIONS,
-        point: 'toll_import.row',
-        outcome: 'denied',
-        reason: reason as never,
-        detail: { importId: created.import.id, count },
-      });
+    for (const [reason, count] of Object.entries(preview.rejectionsByReason) as [
+      TollImportRowReason,
+      number,
+    ][]) {
+      this.decide('toll_import.row', 'denied', reason, { importId: created.import.id, count });
+    }
+
+    /*
+     * MOT dong trace cho MOI o doi soat, kem so luong.
+     *
+     * Nguoi truc tra loi duoc "lan nap nay de lai bao nhieu viec cho nguoi doi soat, va thuoc loai
+     * gi" ma khong phai mo hop thu ra dem. `MATCHED` la `allowed`; moi nhan con lai la `denied` —
+     * khong phai vi co gi hong, ma vi mot cong TU DONG da khong mo va mot con nguoi phai nhin.
+     */
+    for (const [state, count] of Object.entries(preview.matchStateCounts) as [
+      TollMatchState,
+      number,
+    ][]) {
+      this.decide(
+        'toll_candidate.classify',
+        state === 'MATCHED' ? 'allowed' : 'denied',
+        CLASSIFY_REASONS[state],
+        { importId: created.import.id, count },
+      );
     }
 
     await this.audit.append({
@@ -343,12 +382,12 @@ export class TollService {
       knownFingerprints,
     });
 
-    const rejectionsByReason: Record<string, number> = {};
+    const rejectionsByReason: Partial<Record<TollImportRowReason, number>> = {};
     for (const line of lines) {
       if (line.rejectReason === null) continue;
       rejectionsByReason[line.rejectReason] = (rejectionsByReason[line.rejectReason] ?? 0) + 1;
     }
-    const matchStateCounts: Record<string, number> = {};
+    const matchStateCounts: Partial<Record<TollMatchState, number>> = {};
     for (const entry of classified) {
       if (entry.matchState === null) continue;
       matchStateCounts[entry.matchState] = (matchStateCounts[entry.matchState] ?? 0) + 1;
@@ -719,18 +758,24 @@ export class TollService {
     }
   }
 
-  /** Telemetry LUON fail-open — thieu no thi nghiep vu van chay (`.claude/rules`). */
+  /**
+   * Telemetry LUON fail-open — thieu no thi nghiep vu van chay (`.claude/rules`).
+   *
+   * `point` va `reason` deu lay kieu TU CHINH BO TU VUNG, khong qua mot lan ep kieu nao. `.claude/
+   * rules` doi dung dieu do: mot ma go sai phai la mot loi BIEN DICH, chu khong phai mot dong trace
+   * mang mot ma khong ai loc duoc.
+   */
   private decide(
-    point: Parameters<TelemetryService['decision']>[0]['point'],
-    outcome: 'allowed' | 'denied',
-    reason: string,
+    point: DecisionPointOf<typeof TRANSPORT_TOLL_DECISIONS>,
+    outcome: DecisionOutcome,
+    reason: DecisionReasonOf<typeof TRANSPORT_TOLL_DECISIONS>,
     detail: Record<string, unknown>,
   ): void {
     this.telemetry?.decision({
       vocabulary: TRANSPORT_TOLL_DECISIONS,
-      point: point as never,
+      point,
       outcome,
-      reason: reason as never,
+      reason,
       detail,
     });
   }
