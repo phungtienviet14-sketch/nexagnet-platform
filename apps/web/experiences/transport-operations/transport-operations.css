@@ -1443,3 +1443,115 @@
   line-height: 1.5;
   color: var(--tx-ink-soft);
 }
+
+/* ------------------------------------------------------------------ *
+ * NHAN VIEC TAI DIA DIEM A (`#267` H6)
+ *
+ * Man hinh nay duoc doc o CONG NHA MAY: mot tay cam dien thoai, nang chieu, va vai giay truoc khi
+ * xe sau bam coi. Nen ba quyet dinh o duoi khong phai thi hieu:
+ *
+ *   · TEN CHO to hon moi thu khac tren the — do la thu lai xe doi chieu voi cai bien truoc mat;
+ *   · moi the la mot vung cham cao it nhat 3rem, khong phai mot dong chu co the cham trung;
+ *   · khong `overflow` ngang o 390px — ten kho dai xuong dong, khong day ca trang truot ngang.
+ * ------------------------------------------------------------------ */
+
+.tx-intake__headline {
+  margin: 0;
+  color: var(--tx-ink-soft);
+  font-size: 0.95rem;
+}
+
+.tx-intake__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tx-intake__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem;
+  text-align: left;
+  background: var(--tx-paper);
+  border: 1px solid var(--tx-line);
+  border-radius: var(--tx-radius);
+}
+
+.tx-intake__card--pick {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.tx-intake__card--pick:hover {
+  border-color: var(--tx-ink-faint);
+}
+
+/* Vien DAY o trang thai chon, khong chi doi mau: mot khac biet chi bang mau se bien mat duoi nang. */
+.tx-intake__card--pick.is-selected {
+  border-color: var(--tx-ink);
+  box-shadow: inset 0 0 0 1px var(--tx-ink);
+}
+
+.tx-intake__card--pick:focus-visible {
+  outline: 2px solid var(--tx-ink);
+  outline-offset: 2px;
+}
+
+.tx-intake__company {
+  color: var(--tx-ink-soft);
+  font-size: 0.9rem;
+}
+
+/* Dong LON NHAT cua the. Day la thu lai xe doi chieu voi cai bien truoc mat. */
+.tx-intake__site {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.tx-intake__address,
+.tx-intake__meta {
+  color: var(--tx-ink-faint);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.tx-intake__runs {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+  gap: 0.3rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.tx-intake__runs dt {
+  color: var(--tx-ink-faint);
+}
+
+.tx-intake__runs dd {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  overflow-wrap: anywhere;
+}
+
+.tx-intake__notice,
+.tx-intake__handoff {
+  margin: 0;
+  color: var(--tx-ink-soft);
+  font-size: 0.9rem;
+}
+
+/* Suc nang cua vi tri noi ra o day, nho va khong on ao — no la mot ghi chu, khong phai mot canh bao. */
+.tx-intake__trust {
+  margin: 0;
+  color: var(--tx-ink-faint);
+  font-size: 0.8rem;
+}
