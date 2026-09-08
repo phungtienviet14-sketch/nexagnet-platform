@@ -82,6 +82,8 @@ export interface CreateLegInput {
   readonly destinationLabel: string;
   readonly businessDate: string;
   readonly distanceKm?: number | null;
+  /** #276 L6 — km DU KIEN. Khong bao gio ghi de len `distanceKm`. */
+  readonly plannedDistanceKm?: number | null;
   readonly note?: string | null;
 }
 
@@ -152,6 +154,18 @@ export abstract class MovementRepository {
   abstract findRun(id: string): Promise<VehicleRun | null>;
   abstract findRunByCode(code: string): Promise<VehicleRun | null>;
   abstract listRuns(): Promise<VehicleRun[]>;
+  /**
+   * VONG CHAY GAN NHAT cua mot chiec xe — `#276` L3. Ke ca khi no da ket thuc.
+   *
+   * Tra ve ca vong chay da dong chu khong loc san, va do la co y: khau lap ke hoach phai PHAN BIET
+   * duoc "xe nay chua co vong chay nao" voi "vong chay cu da dong roi". Hai tinh huong cho ra cung
+   * mot ket qua (mot vong chay moi) nhung khac ly do, va `#276` L4 doi ghi ro rang he thong da
+   * nhin thay lich su chu khong mo lai no.
+   *
+   * "Gan nhat" = `createdAt` lon nhat. Khong dung `businessDate`: hai vong chay cung ngay se hoa,
+   * va thu tu tao la thu tu that.
+   */
+  abstract findLatestRunForVehicle(vehicleId: string): Promise<VehicleRun | null>;
   abstract setRunStatus(id: string, status: VehicleRunStatus, at: Date): Promise<VehicleRun | null>;
   abstract cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null>;
 
@@ -349,6 +363,15 @@ export class InMemoryMovementRepository extends MovementRepository {
     );
   }
 
+  async findLatestRunForVehicle(vehicleId: string): Promise<VehicleRun | null> {
+    let latest: VehicleRun | null = null;
+    for (const run of this.runs.values()) {
+      if (run.vehicleId !== vehicleId) continue;
+      if (latest === null || run.createdAt > latest.createdAt) latest = run;
+    }
+    return latest;
+  }
+
   async setRunStatus(id: string, status: VehicleRunStatus, at: Date): Promise<VehicleRun | null> {
     const current = this.runs.get(id);
     if (!current) return null;
@@ -392,6 +415,7 @@ export class InMemoryMovementRepository extends MovementRepository {
       destinationLabel: input.destinationLabel,
       businessDate: input.businessDate,
       distanceKm: input.distanceKm ?? null,
+      plannedDistanceKm: input.plannedDistanceKm ?? null,
       startedAt: null,
       completedAt: null,
       note: input.note ?? null,

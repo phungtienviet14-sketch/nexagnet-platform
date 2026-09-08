@@ -76,8 +76,18 @@ export interface RunLeg {
   readonly originLabel: string;
   readonly destinationLabel: string;
   readonly businessDate: string;
-  /** `GD-14` -- nhap tay. `null` nghia la CHUA BIET, khong phai 0. */
+  /**
+   * `GD-14` -- nhap tay. `null` nghia la CHUA BIET, khong phai 0.
+   *
+   * #276 L6 chot them: day la quang duong DA GHI NHAN. Mot con so uoc luong khong bao gio duoc
+   * dien vao day — cho cua no la `plannedDistanceKm`.
+   */
   readonly distanceKm: number | null;
+  /**
+   * #276 L6 -- quang duong DU KIEN. Tach khoi `distanceKm` de mot uoc luong khong the tro thanh
+   * mot quang duong da di ma khong ai phan biet duoc. `null` = chua biet, khong phai 0.
+   */
+  readonly plannedDistanceKm: number | null;
   readonly startedAt: string | null;
   readonly completedAt: string | null;
   readonly note: string | null;
