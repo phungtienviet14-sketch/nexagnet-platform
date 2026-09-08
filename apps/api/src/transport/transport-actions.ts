@@ -468,6 +468,38 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.toll.review.read',
   'transport.toll.review.resolve',
+
+  /* --- `TX-09` NGHIEM THU CHUNG TU / THUONG MAI (Lane I, Issue #268) --- */
+  /**
+   * DOC hang cho nghiem thu — vong chay da chay xong, dang cho chung tu duoc A xac nhan.
+   *
+   * TACH khoi `transport.checkpoint.read`, va do la mot khac biet ve CAU HOI chu khong ve man hinh:
+   * dong thoi gian moc noi "xe da lam gi, luc nao"; hang cho nay noi "ho so nao dang cho nguoi co
+   * tham quyen ky, va cai gi con thieu". Gop lam mot se buoc phai cap quyen xem hang cho tai chinh
+   * cho moi nguoi chi can xem gio xe den noi.
+   */
+  'transport.commercial_acceptance.read',
+  /**
+   * QUYET DINH nghiem thu — duyet / khong chap nhan / doi bo sung chung tu.
+   *
+   * MA QUYEN QUAN TRONG NHAT CUA LANE NAY, va no khong gop vao bat cu ma nao dang co.
+   *
+   * `#268` chot ro ai duoc quyet: *"Final approval in Nexagnet may be performed by boss/ADMIN and
+   * ACCOUNTING"* va *"Driver and unauthorized roles cannot approve"*. Vi `OPERATIONS_ACTIONS` duoc
+   * SUY RA bang phep tru (moi ma khong thuoc pham vi tu than), mot ma moi khai o day tu dong duoc
+   * cap cho `ADMIN` va `ACCOUNTING`, va tu dong KHONG duoc cap cho `SALE` (vai as-built cua lai xe)
+   * lan `MANAGER`. Chinh sach den tu CAU TRUC, khong tu mot dong cau hinh phai nho.
+   *
+   * KHONG co bien the "cua chinh minh". Mot lai xe tu nghiem thu chuyen cua chinh minh la dung cai
+   * ma kiem soat noi bo sinh ra de chan — cung ly le da ghi o `transport.expense.claim.review` va
+   * `transport.payslip.approve`.
+   *
+   * VA no KHONG mo mot duong sua nao vao can cu: `transport.checkpoint.record`,
+   * `transport.proof.withdraw` va `transport.geofence.manage` van nam trong `ACCOUNTING_DENIED`.
+   * Do la bat bien tach nhiem vu ma `#268` I3 doi — nguoi DUYET khong duoc sua can cu sinh ra
+   * quyet dinh cua chinh ho.
+   */
+  'transport.commercial_acceptance.decide',
 ] as const;
 
 export type TransportAction = (typeof TRANSPORT_ACTIONS)[number];

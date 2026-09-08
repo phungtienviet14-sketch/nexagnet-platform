@@ -152,6 +152,8 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.toll.import',
       'transport.toll.review.read',
       'transport.toll.review.resolve',
+      'transport.commercial_acceptance.read',
+      'transport.commercial_acceptance.decide',
     ]);
   });
 

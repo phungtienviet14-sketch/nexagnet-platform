@@ -21,6 +21,8 @@ import type { TransportProofDecisionReason } from './proof/proof-decisions.js';
 import type { TransportCheckpointDecisionReason } from './checkpoint/checkpoint-decisions.js';
 import type { TransportSiteIntakeDecisionReason } from './site-intake/site-intake-decisions.js';
 import type { TransportSiteIntakeErrorReason } from './site-intake/site-intake-errors.js';
+import type { TransportCommercialAcceptanceDecisionReason } from './acceptance/acceptance-decisions.js';
+import type { TransportCommercialAcceptanceErrorReason } from './acceptance/acceptance-errors.js';
 import type { TransportAssetOwnershipDecisionReason } from './asset-ownership/asset-ownership-decisions.js';
 import type { TransportAssetOwnershipErrorReason } from './asset-ownership/asset-ownership-errors.js';
 import type { TransportTollDecisionReason } from './toll/toll-decisions.js';
@@ -124,7 +126,9 @@ export type TransportErrorReason =
   | TransportAssetOwnershipDecisionReason
   | TransportAssetOwnershipErrorReason
   | TransportTollDecisionReason
-  | TollErrorReason;
+  | TollErrorReason
+  | TransportCommercialAcceptanceDecisionReason
+  | TransportCommercialAcceptanceErrorReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh

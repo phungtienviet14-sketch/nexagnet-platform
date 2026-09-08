@@ -473,6 +473,32 @@ describe('goi khach hong -> nem ngay, khong chay tiep', () => {
     expect(() => loadTenantConfig()).toThrow(/capabilities/);
   });
 
+  /**
+   * `#268` I5 — CONG TAI CHINH KHONG CO CHE DO TAT.
+   *
+   * `transport-settlement` khai `transport-acceptance` la phu thuoc CUNG. Khong co bai nay thi mot
+   * lan sua sau nay go dong phu thuoc do se de MOI bai kiem hanh vi cua `#268` van XANH — vi hanh
+   * vi cua tung tang khong doi. Cai doi la mot khach chay duoc quyet toan voi cai cong nghiem thu
+   * lang le vang mat, va do dung la hinh dang cua su co ma khong bo bai nao khac bat duoc.
+   */
+  it('transport-settlement thieu dependency transport-acceptance -> chan luc boot', () => {
+    useFakePack({
+      'tenant.json': {
+        ...VALID_CONFIG,
+        experience: 'transport-operations',
+        capabilities: [
+          'transport-core',
+          'transport-costing',
+          'transport-fuel',
+          'transport-settlement',
+        ],
+      },
+    });
+    expect(() => loadTenantConfig()).toThrow(
+      /transport-settlement yeu cau capability transport-acceptance/,
+    );
+  });
+
   it('sales-order thieu dependency knowledge -> chan luc boot', () => {
     useFakePack({
       'tenant.json': {

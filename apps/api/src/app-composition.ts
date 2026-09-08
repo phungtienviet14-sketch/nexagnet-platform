@@ -136,6 +136,8 @@ import { DriverProofController } from './transport/proof/driver-proof.controller
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
 import { TransportSiteIntakeModule } from './transport/site-intake/transport-site-intake.module.js';
 import { DriverSiteIntakeController } from './transport/site-intake/driver-site-intake.controller.js';
+import { TransportAcceptanceModule } from './transport/acceptance/transport-acceptance.module.js';
+import { CommercialAcceptanceController } from './transport/acceptance/commercial-acceptance.controller.js';
 import { CheckpointsController } from './transport/checkpoint/checkpoints.controller.js';
 import { DriverCheckpointsController } from './transport/checkpoint/driver-checkpoints.controller.js';
 import { ProofReviewController } from './transport/proof/proof-review.controller.js';
@@ -263,6 +265,10 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // khach dieu xe tu van phong khong co nut `Tao chuyen` tren dien thoai lai xe, va do la mot cau
   // hinh hop le — xem khoi chu cua `transport-site-intake.module.ts`.
   owned('transport-site-intake', TransportSiteIntakeModule),
+  // NGHIEM THU CHUNG TU / THUONG MAI (`#268`). Den cung `transport-acceptance` va bien mat cung
+  // no — nhung mot khach bat `transport-settlement` KHONG duoc phep tat no: xem khoi phu thuoc
+  // trong `tenant.schema.ts`. Mot cong tai chinh co che do tat thi khong con la mot cong.
+  owned('transport-acceptance', TransportAcceptanceModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -401,6 +407,11 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-checkpoint', DriverCheckpointsController),
   owned('transport-site-intake', DriverSiteIntakeController),
   owned('transport-checkpoint', CheckpointsController),
+  // HANG CHO NGHIEM THU CHUNG TU — MOT be mat, va KHONG co ban 'cua chinh minh' cho lai xe.
+  // Ca hai ma quyen deu nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi duoc mot duong
+  // nao o day: mot lai xe tu nghiem thu chuyen cua chinh minh la dung cai ma kiem soat noi bo
+  // sinh ra de chan.
+  owned('transport-acceptance', CommercialAcceptanceController),
 ];
 
 const guardProviders: readonly Provider[] = [
