@@ -18,7 +18,10 @@ import {
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
+import { TransportDomainError } from '../transport.errors.js';
 import { firstIssue } from '../transport.schemas.js';
+import { legCancelSchema, legTransitionSchema } from '../planning/planning.schemas.js';
+import { PlanningService } from '../planning/planning.service.js';
 import {
   addLegSchema,
   assignRunSchema,
@@ -27,7 +30,7 @@ import {
   runTransitionSchema,
 } from './movement.schemas.js';
 import { MovementService } from './movement.service.js';
-import { summariseRunDistance } from './run-distance.js';
+import { summariseRunDistance, summariseRunMovement } from './run-distance.js';
 
 /**
  * VONG CHAY VAT LY qua HTTP.
@@ -38,7 +41,15 @@ import { summariseRunDistance } from './run-distance.js';
 @Controller('transport/runs')
 @UseGuards(TransportActionGuard)
 export class RunsController {
-  constructor(private readonly movement: MovementService) {}
+  constructor(
+    private readonly movement: MovementService,
+    /**
+     * Lane L (#276). Chieu phu thuoc di MOT huong: controller -> planning -> movement. Doi trang
+     * thai mot chang la mot su that VAN HANH; ai do phai hoi lai "vong chay nay xong chua" ngay
+     * sau do, va cau hoi do thuoc lop lap ke hoach chu khong thuoc `MovementService`.
+     */
+    private readonly planning: PlanningService,
+  ) {}
 
   @Get()
   @RequiresTransportAction('transport.run.read')
@@ -72,6 +83,65 @@ export class RunsController {
   @RequiresTransportAction('transport.run.read')
   distance(@Param('id') id: string) {
     return this.guard(async () => summariseRunDistance((await this.movement.getRun(id)).legs));
+  }
+
+  /**
+   * DA DI vs DU DINH — `#276` L6.
+   *
+   * Duong `:id/distance` o tren van giu nguyen hinh dang va y nghia cu (mot con so gop). Duong nay
+   * la be mat MOI, va no tra loi mot cau khac: bao nhieu km xe DA di, bao nhieu km con la ke hoach,
+   * va bao nhieu chang da bi bo. Sua `:id/distance` de tra ca hai se lam moi doc gia dang co doc
+   * nham mot con so co y nghia khac.
+   */
+  @Get(':id/movement')
+  @RequiresTransportAction('transport.run.read')
+  movementSummary(@Param('id') id: string) {
+    return this.guard(async () => summariseRunMovement((await this.movement.getRun(id)).legs));
+  }
+
+  /**
+   * DOI TRANG THAI MOT CHANG, roi HOI LAI xem vong chay da dong duoc chua.
+   *
+   * Lan hoi lai la ca diem cua `#276` L4: khong ai bam "dong vong chay". Chang cuoi cung ket thuc
+   * LA su kien danh thuc phan xu, va phan xu do tat dinh — no co the tra ve "chua dong duoc" kem
+   * ly do, va do la mot ket qua binh thuong chu khong mot loi.
+   *
+   * Lan quet do KHONG duoc lam hong lan ghi chang: no chay sau, va neu no nem thi chang van da
+   * duoc ghi. Nen ket qua cua no di kem trong than tra ve (`closure`) thay vi lam doi ma HTTP.
+   */
+  @Post(':runId/legs/:legId/transition')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.run.manage')
+  @Throttle({ default: { limit: 240, ttl: 60_000 } })
+  transitionLeg(
+    @Param('runId') runId: string,
+    @Param('legId') legId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const { to } = this.parse(legTransitionSchema, body);
+    return this.guard(async () => {
+      await this.requireLegOfRun(runId, legId);
+      const leg = await this.movement.transitionLeg(legId, to, transportActorOf(request));
+      return { leg, closure: await this.planning.settleRunClosure(runId) };
+    });
+  }
+
+  @Post(':runId/legs/:legId/cancel')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.run.manage')
+  cancelLeg(
+    @Param('runId') runId: string,
+    @Param('legId') legId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const { reason } = this.parse(legCancelSchema, body);
+    return this.guard(async () => {
+      await this.requireLegOfRun(runId, legId);
+      const leg = await this.movement.cancelLeg(legId, reason, transportActorOf(request));
+      return { leg, closure: await this.planning.settleRunClosure(runId) };
+    });
   }
 
   @Get(':id/assignments')
@@ -123,6 +193,24 @@ export class RunsController {
   cancel(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const { reason } = this.parse(cancelSchema, body);
     return this.guard(() => this.movement.cancelRun(id, reason, transportActorOf(request)));
+  }
+
+  /**
+   * Chang phai thuoc DUNG vong chay tren duong dan.
+   *
+   * `MovementService.transitionLeg()` tu doc vong chay cua chang nen no van dung ma khong co phep
+   * kiem nay — nhung mot URL noi doi (`runs/A/legs/<chang cua B>`) ma van doi duoc trang thai se
+   * lam moi dau vet kiem toan doc theo `runId` bi thieu mot su kien. Chan o day, o dung tang ma
+   * `runId` con ton tai.
+   */
+  private async requireLegOfRun(runId: string, legId: string): Promise<void> {
+    const leg = await this.movement.getLeg(legId);
+    if (leg.runId !== runId) {
+      throw TransportDomainError.notFound(
+        'RUN_LEG_NOT_FOUND',
+        'Khong tim thay chang do trong vong chay nay.',
+      );
+    }
   }
 
   private parse<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {

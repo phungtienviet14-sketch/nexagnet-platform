@@ -79,6 +79,34 @@ export const RUN_LEG_REASONS = [
 export type RunLegReason = (typeof RUN_LEG_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
+ * run.leg_transition -- MovementService.transitionLeg() / cancelLeg() (#276 Lane L)
+ * ------------------------------------------------------------------ */
+export const RUN_LEG_TRANSITION_REASONS = [
+  'LEG_TRANSITION_APPLIED',
+  /**
+   * Chang da `COMPLETED`/`CANCELLED`. Voi `COMPLETED` day la lop chan THU NHAT; lop thu hai la
+   * trigger `transport_run_leg_completed_is_immutable` duoi Postgres, chan ca `UPDATE` viet tay.
+   */
+  'LEG_ALREADY_TERMINAL',
+  'LEG_ALREADY_IN_STATE',
+  'LEG_TRANSITION_NOT_PERMITTED',
+  'LEG_CANCEL_REQUIRES_DEDICATED_PATH',
+] as const;
+export type RunLegTransitionReason = (typeof RUN_LEG_TRANSITION_REASONS)[number];
+
+export const RUN_LEG_CANCEL_REASONS = [
+  'LEG_CANCEL_RECORDED',
+  'LEG_CANCEL_ALREADY_CANCELLED',
+  'LEG_CANCEL_ALREADY_COMPLETED',
+  /**
+   * Chang DA LAN BANH. Huy no la xoa mot quang duong co that khoi moi bao cao — xem khoi chu
+   * thich cua `LEG_EDGES` trong `movement-lifecycle.ts`.
+   */
+  'LEG_CANCEL_ALREADY_STARTED',
+] as const;
+export type RunLegCancelReason = (typeof RUN_LEG_CANCEL_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
  * run.trip_projection -- MovementService.projectTrip()
  * ------------------------------------------------------------------ */
 export const TRIP_PROJECTION_REASONS = [
@@ -102,6 +130,8 @@ export type TransportMovementDecisionReason =
   | RunCancelReason
   | RunAssignmentReason
   | RunLegReason
+  | RunLegTransitionReason
+  | RunLegCancelReason
   | TripProjectionReason;
 
 export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
@@ -113,6 +143,8 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
     'run.cancel',
     'run.assignment_change',
     'run.leg_change',
+    'run.leg_transition',
+    'run.leg_cancel',
     'run.trip_projection',
   ],
   labels: {
@@ -143,6 +175,15 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
     LEG_ORDER_NOT_FOUND: 'Khong tim thay nghia vu thuong mai de gan vao chang',
     LEG_ORDER_CANCELLED: 'Nghia vu do da huy, khong gan vao chang duoc',
     LEG_RUN_TERMINAL: 'Vong chay da o trang thai cuoi, khong them chang duoc',
+    LEG_TRANSITION_APPLIED: 'Da doi trang thai chang',
+    LEG_ALREADY_TERMINAL: 'Chang da o trang thai cuoi',
+    LEG_ALREADY_IN_STATE: 'Chang da o dung trang thai nay',
+    LEG_TRANSITION_NOT_PERMITTED: 'May trang thai khong cho phep buoc chuyen nay',
+    LEG_CANCEL_REQUIRES_DEDICATED_PATH: 'Huy chang phai di duong huy rieng',
+    LEG_CANCEL_RECORDED: 'Da huy chang chua chay',
+    LEG_CANCEL_ALREADY_CANCELLED: 'Chang da huy tu truoc',
+    LEG_CANCEL_ALREADY_COMPLETED: 'Chang da chay xong, khong huy nguoc',
+    LEG_CANCEL_ALREADY_STARTED: 'Chang da lan banh: dong lai voi su that cua no, khong huy',
     PROJECTION_CREATED: 'Da chieu chuyen v1 sang vong chay v2',
     PROJECTION_UNCHANGED: 'Chuyen nay da duoc chieu tu truoc, khong sinh ban thu hai',
     PROJECTION_TRIP_OUTSOURCED: 'Chuyen thue xe ngoai khong co vong chay cua xe minh',

@@ -1445,6 +1445,11 @@ export interface RunLeg {
   readonly businessDate: BusinessDate;
   /** `null` = CHUA BIET, khong phai 0. Man hinh phai noi ra dieu do. */
   readonly distanceKm: number | null;
+  /**
+   * #276 L6 — km DU KIEN. Tach khoi `distanceKm` de mot uoc luong khong bao gio trong y het mot
+   * quang duong da di. `null` = chua biet, khong phai 0.
+   */
+  readonly plannedDistanceKm: number | null;
   readonly note: string | null;
 }
 
@@ -1478,6 +1483,82 @@ export interface RunDistanceSummary {
   readonly complete: boolean;
   readonly legsMissingDistance: { readonly loaded: number; readonly empty: number };
   readonly countedLegs: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * LAP KE HOACH VONG CHAY DO HE THONG QUAN (#276 Lane L)
+ * ------------------------------------------------------------------ */
+
+/**
+ * DA DI vs DU DINH — `#276` L6.
+ *
+ * Hai o, va man hinh KHONG duoc cong chung lai: mot chang chua chay xong la mot KE HOACH, va gop
+ * no vao km da di se lam bao cao noi rang xe da di mot quang duong no chua di.
+ */
+export interface RunMovementSummary {
+  readonly actual: RunDistanceSummary;
+  readonly planned: RunDistanceSummary;
+  readonly cancelledLegs: number;
+}
+
+export type RunGrouping = 'ONE_ORDER_PER_RUN' | 'MULTI_ORDER_RUN';
+export type RunPlanOutcome = 'NEW_RUN' | 'APPENDED';
+
+/** Lan lap ke hoach da gan mot don vao mot vong chay. */
+export interface OrderRunPlan {
+  readonly id: string;
+  readonly orderId: string;
+  readonly runId: string;
+  readonly vehicleId: string;
+  readonly loadedLegId: string;
+  readonly emptyLegId: string | null;
+  readonly grouping: RunGrouping;
+  readonly outcome: RunPlanOutcome;
+  readonly businessDate: BusinessDate;
+  readonly createdAt: string;
+  readonly cancelledAt: string | null;
+  readonly cancellationReason: string | null;
+}
+
+export type PlanStartSource = 'DEPOT' | 'PREVIOUS_LEG_DESTINATION' | 'ORDER_ORIGIN';
+
+export interface PlannedLeg {
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  readonly orderId: string | null;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly plannedDistanceKm: number | null;
+}
+
+/** Ket qua XEM TRUOC — khong mot hang nao duoc ghi khi doc no. */
+export interface RunPlanProposal {
+  readonly orderId: string;
+  readonly vehicleId: string;
+  readonly grouping: RunGrouping;
+  readonly outcome: RunPlanOutcome;
+  readonly runId: string | null;
+  readonly runCode: string | null;
+  readonly startsFrom: string;
+  readonly startSource: PlanStartSource;
+  readonly legs: readonly PlannedLeg[];
+  readonly emptyLegRequired: boolean;
+}
+
+export type RunClosureBlocker =
+  | 'RUN_NOT_ACTIVE'
+  | 'LEG_STILL_OPEN'
+  | 'PLAN_STILL_OPEN'
+  | 'NO_COMPLETED_WORK'
+  | 'CARGO_STILL_CARRIED'
+  | 'OPEN_WAITING_SESSION';
+
+export interface RunClosureVerdict {
+  readonly closable: boolean;
+  readonly trigger: 'DEPOT_RETURN' | 'IDLE_TIMEOUT' | null;
+  readonly blockers: readonly RunClosureBlocker[];
+  /** Het viec nhung chua den dieu kien dong. KHONG phai loi. */
+  readonly holding: boolean;
 }
 
 /* ------------------------------------------------------------------ *
