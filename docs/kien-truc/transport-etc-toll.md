@@ -9,6 +9,21 @@
 >
 > Đo ngày **08/09/2026**. Lane D / Issue #237, tranche `R7`.
 
+> **ĐÃ CÓ PHẦN TIẾP NỐI (Lane J / #269, cùng ngày 08/09/2026):**
+> [transport-etc-ingestion.md](transport-etc-ingestion.md) đo lại hai nhà cung cấp bằng **văn bản
+> gốc của Chính phủ** thay vì báo chí, phân loại bằng chứng theo bốn mức, và dựng phần **nạp dữ
+> liệu + đối soát**. Ba chỗ tài liệu này được **bổ khuyết** ở đó:
+>
+> - §3.1 mới có nửa đầu của quan hệ tài khoản↔xe. NĐ 119/2024 **Điều 11 khoản 3** còn nói *"mỗi
+>   phương tiện chỉ được nhận chi trả từ **một** tài khoản giao thông"* — nửa sau mới là bất biến.
+> - §6 ghi *"chưa đo được quy trình khiếu nại nào"*. VETC **tự công bố** cơ chế trừ 2 lần → hoàn
+>   **một giao dịch riêng**, đến trễ hơn lần trừ.
+> - §0 ghi "không tìm thấy API". Vẫn đúng — nhưng **Điều 26 khoản 2** đặt một *nghĩa vụ* cung cấp
+>   thông tin giao dịch "theo thỏa thuận", nên đường đó là `POSSIBLE BUT NOT PROVEN`, không phải
+>   `UNKNOWN`.
+>
+> Kết luận `ETC_RESEARCH = COMPLETE` và `BUSINESS_WORKFLOW = NOT_INVENTED` ở §7 **vẫn đứng**.
+
 ---
 
 ## 0. Ba câu trả lời ngắn
