@@ -14,6 +14,16 @@ export const TRANSPORT_COUNTERPARTY_ERROR_REASONS = [
    * phap nhan da co roi lien ket vao do", khong phai "tao mot cai nua".
    */
   'COUNTERPARTY_TAX_CODE_TAKEN',
+  /** `#267` H1 — khong tim thay dia diem van hanh. */
+  'COUNTERPARTY_SITE_NOT_FOUND',
+  /**
+   * Hai kho cua CUNG mot phap nhan trung ten.
+   *
+   * Tach khoi mot loi unique tho cua Postgres vi day la thu nguoi nhap lieu SUA DUOC ngay, va cau
+   * tra loi dung la "mo kho da co roi sua no", khong phai "tao mot cai nua" — cung ly le voi
+   * `COUNTERPARTY_TAX_CODE_TAKEN` ngay tren.
+   */
+  'COUNTERPARTY_SITE_NAME_TAKEN',
 ] as const;
 export type TransportCounterpartyErrorReason =
   (typeof TRANSPORT_COUNTERPARTY_ERROR_REASONS)[number];

@@ -17,8 +17,10 @@ import {
   evaluateRunCancel,
   evaluateRunTransition,
 } from './movement-lifecycle.js';
+import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
   MovementRepository,
+  RUN_CODE,
   type CreateOrderInput,
   type CreateRunInput,
   type TripProjection,
@@ -222,10 +224,24 @@ export class MovementService {
       throw TransportDomainError.notFound('RUN_VEHICLE_NOT_FOUND', 'Khong tim thay xe.');
     }
 
-    const run = await this.repository.createRun({
-      ...input,
-      businessDate: this.resolveBusinessDate(input.businessDate),
-    });
+    const run = await this.repository
+      .createRun({
+        ...input,
+        businessDate: this.resolveBusinessDate(input.businessDate),
+      })
+      .catch((error: unknown) => {
+        // HAI YEU CAU DEN CUNG LUC. Phep doc `findRunByCode` o tren khong thay ban kia vi no chua
+        // commit; unique cua kho thi thay. Dich ra DUNG ma ma duong tuan tu da tra ve, thay vi de mot
+        // `P2002` tho di len thanh `500` — nguoi goi khong phan biet duoc hai tinh huong, va ca hai
+        // deu co cung mot cau tra loi dung: "ma nay da co roi".
+        if (isUniqueViolationOn(error, RUN_CODE)) {
+          throw TransportDomainError.conflict(
+            'RUN_CODE_TAKEN',
+            `Ma vong chay "${input.code}" da duoc dung.`,
+          );
+        }
+        throw error;
+      });
 
     await this.audit.append({
       actor,

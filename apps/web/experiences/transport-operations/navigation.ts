@@ -253,7 +253,8 @@ const DEFAULT_SECTION: TransportSectionId = 'overview';
  * Man "Chi phi" CO tu T7B: `#168 B3` mo `POST /transport/me/expenses`, va `#169` acceptance 4
  * cho phep dinh anh chung tu ngay trong cung lan goi do.
  */
-export type DriverScreenId = 'home' | 'trip' | 'fuel' | 'expense' | 'fund' | 'history' | 'payslip';
+export type DriverScreenId =
+  'home' | 'site-intake' | 'trip' | 'fuel' | 'expense' | 'fund' | 'history' | 'payslip';
 
 export interface DriverScreen {
   readonly id: DriverScreenId;
@@ -268,6 +269,20 @@ export const DRIVER_SCREENS = [
     label: 'Trang chủ',
     requiredCapabilities: ['transport-core'],
     requiredAction: 'transport.driver.self.trip.read',
+  },
+  {
+    /**
+     * NHAN VIEC TAI DIA DIEM A (`#267` H6). Dung SAU `home`, va do la thu tu cua mot ngay lam viec:
+     * lai xe mo app o cong nha may, truoc khi co chuyen nao de mo.
+     *
+     * `requiredAction` la ma DOC (`.propose`), khong phai ma tao. Man hinh phai hien ra duoc ca voi
+     * mot khach chi cap quyen xem de nghi — luc do nut `Tao chuyen` khong hien, va do la mot cau
+     * hinh hop le chu khong phai mot man hinh hong.
+     */
+    id: 'site-intake',
+    label: 'Nhận việc',
+    requiredCapabilities: ['transport-site-intake'],
+    requiredAction: 'transport.driver.self.site_intake.propose',
   },
   {
     id: 'trip',

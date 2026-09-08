@@ -20,6 +20,12 @@ import {
   InMemoryCounterpartyRepository,
 } from './counterparty/counterparty.repository.js';
 import { CounterpartyService } from './counterparty/counterparty.service.js';
+import {
+  CounterpartySiteRepository,
+  InMemoryCounterpartySiteRepository,
+} from './counterparty/site.repository.js';
+import { CounterpartySiteService } from './counterparty/site.service.js';
+import { PrismaCounterpartySiteRepository } from './counterparty/prisma-counterparty-site.repository.js';
 import { MovementRepository, InMemoryMovementRepository } from './movement/movement.repository.js';
 import { MovementService } from './movement/movement.service.js';
 import { PrismaMovementRepository } from './movement/prisma-movement.repository.js';
@@ -89,6 +95,19 @@ import { TripService } from './trips/trip.service.js';
       inject: [PrismaService],
     },
     /*
+     * DIA DIEM VAN HANH (`#267` H1). Den cung `transport-core` vi no la mot MAT cua ho so phap
+     * nhan, khong phai mot thuc the cua tang bam vi tri: mot khach chua bat `transport-proof` van
+     * khai duoc danh sach kho cua khach hang minh.
+     */
+    {
+      provide: CounterpartySiteRepository,
+      useFactory: (prisma: PrismaService): CounterpartySiteRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaCounterpartySiteRepository(prisma)
+          : new InMemoryCounterpartySiteRepository(),
+      inject: [PrismaService],
+    },
+    /*
      * CONG kiem chu the — hien thuc duy nhat hom nay dung dung nhung danh muc cua chinh
      * `transport-core`. Mot loai chu the thuoc capability khac se dang ky adapter cua rieng no o
      * capability do, khong them mot canh phu thuoc nao vao day.
@@ -130,6 +149,7 @@ import { TripService } from './trips/trip.service.js';
     FleetService,
     TripService,
     CounterpartyService,
+    CounterpartySiteService,
     MovementService,
     AssetOwnershipService,
     AssetOwnershipScopeService,
@@ -146,11 +166,13 @@ import { TripService } from './trips/trip.service.js';
     FleetService,
     TripService,
     CounterpartyService,
+    CounterpartySiteService,
     MovementService,
     AssetOwnershipService,
     AssetOwnershipScopeService,
     TransportActionGuard,
     FleetRepository,
+    CounterpartySiteRepository,
     TripRepository,
     MovementRepository,
     AuditLogService,

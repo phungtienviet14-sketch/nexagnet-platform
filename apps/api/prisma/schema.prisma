@@ -931,6 +931,8 @@ model TransportDriver {
   /// F1 (#243): moc van hanh do chinh lai xe nay ghi.
   runCheckpoints      TransportRunCheckpoint[]
   proofChallenges     TransportProofChallenge[]
+  /// `#267` H3/H4: cac lan chinh lai xe nay xac nhan dia diem A va tao vong chay.
+  siteIntakes         TransportRunSiteIntake[]
 
   @@index([status])
   @@index([licenceExpiry])
@@ -3384,6 +3386,8 @@ model TransportCounterparty {
   updatedAt DateTime             @updatedAt
 
   links TransportCounterpartyLink[]
+  /// `#267` H1: cac dia diem van hanh vat ly cua phap nhan nay.
+  sites TransportCounterpartySite[]
 
   @@index([status])
 }
@@ -3407,6 +3411,189 @@ model TransportCounterpartyLink {
 
   @@id([kind, subjectId])
   @@index([counterpartyId])
+}
+
+
+// ===================================================================
+// TX-09 DIA DIEM VAN HANH — mot phap nhan, nhieu cho lam viec (Lane H, Issue #267)
+// ===================================================================
+//
+// CANH BAO — RANG BUOC CUA TX-09 KHONG NAM O DAY. Chung song trong SQL tho cua migration
+// `20260909230000_transport_counterparty_site`, vi Prisma khong co cu phap cho `CHECK`:
+//
+//     1. `TransportCounterpartySite_name_not_blank`     — ten dia diem khong duoc rong
+//     2. `TransportCounterpartySite_address_not_blank`  — dia chi NULL duoc, rong thi khong
+//
+// `prisma migrate dev` sinh migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA ca
+// hai. Ai chay lenh do PHAI doc lai migration sinh ra va bo cac dong `DROP` truoc khi commit.
+// `transport-counterparty-site-storage.spec.ts` doc chinh tep migration va do neu mot ten bien mat.
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO CAN MOT BANG MOI, VA VI SAO NO KHONG PHAI MOT PHAP NHAN THU HAI
+//
+// `#267` H1 dat dung mot cau hoi: mo hinh dang duoc chap nhan co dien ta duoc *"a real company
+// with multiple pickup sites"* khong. Cau tra loi la KHONG, va cho hong khong hien nhien:
+//
+//   · `TransportCounterparty` la PHAP NHAN — no khong co toa do, va khong nen co: mot cong ty co
+//     ba kho thi khong co "toa do cua cong ty";
+//   · `TransportGeofence` co toa do nhung khong co TEN CHO lan DIA CHI, va `label` cua no la mot
+//     nhan de nguoi truc doc, khong phai mot danh tinh de doi chieu;
+//   · nhan ba kho thanh ba `TransportCounterparty` se lam bao cao cong no gop theo phap nhan dem
+//     ba lan mot khach — dung dieu ma khoa chinh kep cua `TransportCounterpartyLink` sinh ra de
+//     chan.
+//
+// Nen bang nay la MOT CHO LAM VIEC, khong phai mot phap nhan: no khong mang ma so thue, khong mang
+// dieu khoan thanh toan, khong mang mot truong tien nao. Cau hoi no tra loi la *"xe dang dung o
+// dau"*, khong phai *"hoa don xuat cho ai"*.
+//
+// -----------------------------------------------------------------------------------------------
+// HANG RAO TRO VAO DAY, KHONG PHAI NGUOC LAI — mot chieu, va do la co y.
+//
+// `TransportGeofence.subjectKind = COUNTERPARTY_SITE` + `subjectId = <site.id>` la duong DUY NHAT
+// noi mot dia diem voi hinh hoc cua no. Mot cot `geofenceId` tren bang nay se la duong THU HAI cho
+// cung mot quan he, va tu lan lech dau tien khong ai biet ben nao dung — cung ly le da ghi o
+// `TransportAssetStakeholder` ve viec khong them `counterpartyId` khong khoa ngoai.
+//
+// He qua duoc chap nhan: mot dia diem co the co 0 hang rao (biet cho do nhung chua ve vong), va co
+// the co N (cong + bai can). Ca hai deu dung. `resolveSiteCandidates()` gom theo `siteId`, nen hai
+// hang rao cua mot kho khong bien thanh hai lua chon.
+//
+// -----------------------------------------------------------------------------------------------
+// KHONG CO BI DANH/MA DIA DIEM. `#267` H1 viet ro *"site aliases/codes only if evidenced"*, va
+// chua ai dua ra mot bang ma kho nao. Them mot cot rong de "sau nay dung" la them mot cho de mot
+// lan nhap tay tro thanh nguon su that thu hai cho ten mot cai kho.
+
+/// MOT CHO LAM VIEC VAT LY cua mot phap nhan — `#267` H1.
+///
+/// `onDelete: Restrict` tren `counterparty`: mot phap nhan con dia diem thi khong xoa cung duoc.
+/// Duong nghi viec la `status = INACTIVE`, cung khuon `GD-02` (huy thay xoa) da dung o khap mien.
+model TransportCounterpartySite {
+  id             String                @id @default(cuid())
+  counterpartyId String
+  counterparty   TransportCounterparty @relation(fields: [counterpartyId], references: [id], onDelete: Restrict)
+  /// TEN CHO ma lai xe doc duoc tren man hinh: "Kho Hai Phong", "Nha may Que Vo 2".
+  name           String
+  /// Dia chi hanh chinh. NULL nghia la CHUA NHAP, khong phai "khong co dia chi".
+  address        String?
+  status         TransportPartyStatus  @default(ACTIVE)
+  note           String?
+  /// `authUserId` cua nguoi khai. Moi lan doi di qua `AuditLogService`.
+  recordedBy     String
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  /// `#267` H3/H4: cac lan lai xe nhan viec tai dia diem nay.
+  intakes TransportRunSiteIntake[]
+
+  /// Hai kho cua CUNG mot cong ty khong duoc trung ten: man hinh lai xe chi hien ten, nen hai
+  /// dong chu giong het nhau la hai lua chon khong phan biet duoc.
+  @@unique([counterpartyId, name], map: "TransportCounterpartySite_counterparty_name_key")
+  @@index([counterpartyId, status])
+  @@index([status])
+}
+
+
+// ===================================================================
+// TX-10 NHAN VIEC TAI DIA DIEM A — cham xac nhan cua lai xe (Lane H, Issue #267 H3/H4)
+// ===================================================================
+//
+// CANH BAO — RANG BUOC CUA TX-10 KHONG NAM O DAY. Chung song trong SQL tho cua migration
+// `20260909230200_transport_run_site_intake`:
+//
+//     1. `TransportRunSiteIntake_businessDate_iso`    — ngay nghiep vu dang YYYY-MM-DD
+//     2. `TransportRunSiteIntake_clientEventId_shape` — khoa chong lap khong duoc rong
+//     3. `TransportRunSiteIntake_trust_shape`         — SERVER_BOUND thi PHAI co ban dinh vi
+//     4. `transport_run_site_intake_append_only` (TRIGGER) — khong UPDATE, khong DELETE
+//
+// `prisma migrate dev` sinh migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA ca
+// bon. Ai chay lenh do PHAI doc lai migration sinh ra va bo cac dong do truoc khi commit.
+//
+// -----------------------------------------------------------------------------------------------
+// BANG NAY LA CAI CHAM CUA CON NGUOI, VA DO LA LY DO DUY NHAT NO TON TAI.
+//
+// `#267` mo dau bang mot cau cam: *"No trip/run may be silently auto-created solely because a
+// device entered a geofence."* Mot cau cam thi khong tu no thanh mot bao dam — phai co cho de doc
+// lai rang lan tao NAY da co mot con nguoi bam vao no.
+//
+// Nen bang nay ghi dung ba dieu ma `TransportVehicleRun` khong cho nao de ghi:
+//
+//   · AI da bam    -> `confirmedBy` (authUserId tu phien) + `driverId`;
+//   · O DAU        -> `siteId`, tuc mot dia diem CO THAT da khai truoc do, khong phai mot chuoi;
+//   · TIN DEN DAU  -> `locationTrust` + `observationId`.
+//
+// Bo bang nay di thi vong chay van chay, chi khong ai con tra loi duoc cau "vi sao no ton tai".
+//
+// -----------------------------------------------------------------------------------------------
+// `locationTrust` — HAI GIA TRI, VA CHUNG KHONG BAO GIO DUOC GOP.
+//
+// `SERVER_BOUND` la ban dinh vi cua Lane B: no di qua mot phien bam vi tri co chu, qua kiem bien,
+// qua tang cham rui ro, va no KHONG SUA DUOC. `DRIVER_REPORTED` la cap so ma dien thoai vua doc
+// len — no chua di qua gi ca.
+//
+// Ca hai deu duoc phep TAO mot lan nhan viec, va do khong phai mot lo hong: thu cho phep tao la
+// CHAM CUA CON NGUOI, khong phai toa do. Lai xe dang dung o cong nha may va noi "dung, day la kho
+// Hai Phong" — do la mot loi khai truc tiep, va no khong yeu hon vi dien thoai chua kip mo phien
+// bam vi tri.
+//
+// Cai KHONG duoc phep la de mot cap so cua may khach di vao cho ma he thong doi mot BANG CHUNG:
+// `TransportRunCheckpoint.observationId` va `TransportOperationalProof.observationId` deu la khoa
+// ngoai tro thang vao `TransportLocationObservation`, va khong duong nao o day sinh ra mot hang
+// dinh vi. Mot lan nhan viec `DRIVER_REPORTED` de lai dung nhan do trong so — nguoi doi soat sau
+// nay doc duoc rang cho nay chua tung co bang chung vi tri.
+//
+// -----------------------------------------------------------------------------------------------
+// VI SAO `(driverId, clientEventId)` LA KHOA CHONG LAP, CHU KHONG PHAI `(runId, ...)`.
+//
+// Khoa phai chan duoc lan ghi THU HAI *truoc khi* co vong chay thu hai. Mot khoa co `runId` chi
+// hinh thanh SAU khi vong chay da duoc tao — tuc dung sau cai ma no dang tim cach chan. Cham hai
+// lan hay mot hang doi ngoai tuyen phat lai deu mang CUNG `clientEventId`, va lan thu hai dung o
+// unique nay chu khong di tiep.
+
+/// MUC DO TIN CUA VI TRI da de nghi ra mot lan nhan viec — `#267` H2/H7.
+enum TransportSiteIntakeLocationTrust {
+  /// Ban dinh vi cua Lane B (`TransportLocationObservation`) — da qua phien, kiem bien va cham rui ro.
+  SERVER_BOUND
+  /// Cap toa do may khach doc len, CHUA qua duong chung cu nao. Chi de DE NGHI.
+  DRIVER_REPORTED
+}
+
+/// MOT LAN LAI XE XAC NHAN "toi dang o day, tao chuyen" — `#267` H3/H4.
+///
+/// GHI THEM, KHONG GHI DE, KHONG XOA: trigger `transport_run_site_intake_append_only` chan moi
+/// `UPDATE`/`DELETE`. Cung nguyen tac voi `TransportRunCheckpoint` cua `#243` F1 — mot lan bam
+/// nham duoc sua bang cach HUY vong chay (`cancelRun`, co ly do bang chu), khong bang cach doi
+/// hang nay.
+model TransportRunSiteIntake {
+  id             String                            @id @default(cuid())
+  /// MOT vong chay co NHIEU NHAT mot lan nhan viec. Day la bat bien chan trung o tang luu tru.
+  runId          String                            @unique
+  run            TransportVehicleRun               @relation(fields: [runId], references: [id], onDelete: Restrict)
+  /// Chang dau tien, tao cung luc. `#243` F1 gan moc cong/boc hang vao CHANG, nen khong co chang
+  /// thi lai xe khong ghi duoc mot moc nao — tuc man hinh ke tiep khong co gi de bam.
+  legId          String                            @unique
+  leg            TransportRunLeg                   @relation(fields: [legId], references: [id], onDelete: Restrict)
+  /// Dia diem A da duoc xac nhan. `Restrict`: mot kho da tung sinh ra vong chay thi khong bo duoc.
+  siteId         String
+  site           TransportCounterpartySite         @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  driverId       String
+  driver         TransportDriver                   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  /// `authUserId` cua chinh cham xac nhan — khong tu than yeu cau.
+  confirmedBy    String
+  locationTrust  TransportSiteIntakeLocationTrust
+  /// MOT ban dinh vi phuc vu NHIEU NHAT mot lan nhan viec — cung khuon `TransportRunCheckpoint`.
+  observationId  String?                           @unique
+  observation    TransportLocationObservation?     @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  /// Khoang cach tu vi tri de nghi toi tam hang rao, met, lam tron. NULL khi khong do duoc.
+  distanceMetres Int?
+  /// Khoa chong lap do may khach sinh.
+  clientEventId  String
+  confirmedAt    DateTime                          @default(now())
+  businessDate   String                            @db.VarChar(10)
+  createdAt      DateTime                          @default(now())
+
+  @@unique([driverId, clientEventId], map: "TransportRunSiteIntake_driver_event_key")
+  @@index([siteId, businessDate])
+  @@index([businessDate])
 }
 
 // ===================================================================
@@ -3707,6 +3894,8 @@ model TransportVehicleRun {
   expenseClaims TransportExpenseClaim[]
   /// F1 (#243): moc van hanh cua vong chay nay.
   checkpoints   TransportRunCheckpoint[]
+  /// `#267` H3/H4: lan lai xe xac nhan tai dia diem A da sinh ra vong chay nay. NHIEU NHAT mot.
+  siteIntake    TransportRunSiteIntake?
 
   @@index([status])
   @@index([businessDate])
@@ -3773,6 +3962,8 @@ model TransportRunLeg {
   expenseClaims TransportExpenseClaim[]
   /// F1 (#243): moc van hanh gan vao chang nay.
   checkpoints   TransportRunCheckpoint[]
+  /// `#267` H4: chang nay duoc tao boi mot lan nhan viec tai A. NHIEU NHAT mot.
+  siteIntake    TransportRunSiteIntake?
 
   @@unique([runId, sequence])
   @@index([orderId])
@@ -3993,6 +4184,16 @@ enum TransportGeofenceSubjectKind {
   FUEL_SUPPLIER
   DEPOT
   AD_HOC
+  /// DIA DIEM VAN HANH cua mot phap nhan (`TransportCounterpartySite`) — `#267` H1.
+  ///
+  /// Them mot gia tri chu KHONG them mot bang hang rao thu hai, va do la ca diem: `#267` H0 cam
+  /// dung *"a second geofence engine"*. Hang rao cua mot kho hang A di qua DUNG duong ma hang rao
+  /// cua kho khach va cay xang da di — cung bang, cung `assessGeofences`, cung quy uoc do chinh xac.
+  ///
+  /// `CUSTOMER` KHONG dung duoc cho viec nay: `subjectId` cua no tro toi `TransportCustomer`, con
+  /// A la mot PHAP NHAN co the chua bao gio thue B mot chuyen nao. `AD_HOC` cung khong: hang rao
+  /// cua mot kho co that thuoc ve mot cho co that, khong phai mot diem hen giao mot lan.
+  COUNTERPARTY_SITE
 }
 
 /// MOT MA CAI DAT UNG DUNG, gan cung lai xe dau tien dung no.
@@ -4129,6 +4330,8 @@ model TransportLocationObservation {
   proof      TransportOperationalProof?
   /// Va nhieu nhat MOT moc van hanh — cung ly le, `observationId` cung la `@unique` ben do.
   checkpoint TransportRunCheckpoint?
+  /// Va nhieu nhat MOT lan nhan viec tai A (`#267` H4) — cung khuon.
+  siteIntake TransportRunSiteIntake?
 
   @@unique([sessionId, clientEventId], map: "TransportLocationObservation_session_event_key")
   @@index([sessionId, capturedAt])
