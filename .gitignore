@@ -62,6 +62,15 @@ Thumbs.db
 .agents/
 /agents/
 
+# Claude Code — cai gi THEO REPO thi commit, cai gi theo MAY thi khong.
+#   .claude/settings.json       -> COMMIT (cau hinh chung cua repo)
+#   .claude/settings.local.json -> KHONG commit (rieng tung may, co the chua duong dan/bi mat)
+#   .claude/worktrees/          -> KHONG commit (cay lam viec native cua `claude --worktree`)
+# Hai dong duoi truoc day chi duoc che boi gitignore TOAN MAY (~/.config/git/ignore) va boi
+# .git/info/exclude CUC BO — khong thu nao di theo repo sang mot clone hay mot may khac.
+.claude/settings.local.json
+.claude/worktrees/
+
 # Temp
 *.tmp
 .cache/
