@@ -37,10 +37,34 @@ overrides:
   # `sharp: 0.35.0` ghim cung lai keo NGUOC apps/api (khai ^0.35.3) ve 0.35.0. Ban 0.35.0
   # thieu dieu kien `types` cho nhanh ESM trong exports map -> typecheck do TS7016.
   # Lockfile cu con giu ca hai ban nen chua lo; cai lai la override thang.
-  sharp: '>=0.35.3'
+  #
+  # 09/09/2026: san nang len 0.35.4 vi GHSA-rgj7-g3m4-5g8c (HIGH) — lo hong trong libheif ma
+  # sharp dong goi san. Day dung la truong hop ma kieu ghim SAN o tren duoc chon de xu ly: chi
+  # sua mot con so o day, khong phai di sua tung noi khai sharp.
+  sharp: '>=0.35.4'
+  # GHSA-wc9g-mqfw-jrwm · GHSA-qfvm-cv95-jqjf · GHSA-535w-7cp7-47q4 — ba advisory HIGH (DoS) cua
+  # multer, ca ba vao repo qua DUY NHAT mot duong bac cau:
+  # apps/api -> @nestjs/platform-express -> multer. Khong goi nao trong workspace khai multer
+  # truc tiep, nen khong the sua bang cach nang mot dependency cap mot; override la cho DUY NHAT
+  # dat duoc san.
+  #
+  # `<3` khong thua: ban va la 2.3.0, tuc CUNG DONG 2.x, con @nestjs/platform-express@11 khai
+  # theo ho ^2. Neu chi viet `>=2.3.0` thi ngay khi multer 3.0.0 len npm, mot lan re-resolve se
+  # keo major moi vao va lam vo duong upload cua Nest — dung kieu ma cong `audit` khong bat duoc.
+  multer: '>=2.3.0 <3'
   tinymce: 7.9.3
   uuid: 11.1.1
-  js-yaml: 4.3.1
+  # GHSA-2883-xcg3-v3hh (HIGH) — `maxTotalMergeKeys` khong chan duoc CPU cho merge key long nhau.
+  # Vao repo qua DUY NHAT mot duong bac cau: . > eslint > @eslint/eslintrc > js-yaml.
+  #
+  # Ban cu ghim CHINH XAC `4.3.1`, va chinh cai ghim cung do lam cong `audit` do: mot
+  # `pnpm install` binh thuong khong the tu bo len ban da va. Doi sang SAN, dung nhu `sharp` va
+  # `browserslist` ben duoi.
+  #
+  # `<5` khong thua: ban va nam o 4.3.2, tuc CUNG DONG 4.x. js-yaml 5 la major moi (API doi),
+  # va override CUONG CHE bat ke consumer khai gi — khong chan tran thi mot lan re-resolve se
+  # keo 5.x vao va lam vo eslint mot cach im lang.
+  js-yaml: '>=4.3.2 <5'
   nanoid: 3.3.18
   deepmerge-ts: '>=8.0.0'
   # GHSA-c83g-rgw3-j3cx (OOM do cache khong bi thu hoi) + GHSA-73wf-gq98-2v4g (ghi prototype qua
