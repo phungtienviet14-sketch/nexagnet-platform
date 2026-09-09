@@ -18,10 +18,26 @@ describe('composition cua transport-checkpoint — CP-040', () => {
     expect(names).toContain('CheckpointsController');
   });
 
+  /**
+   * PHIEN CHO NGUOI NHAN (`#279` O5) den cung capability nay — khong mot `CapabilityId` moi.
+   *
+   * `tenant.schema.ts` da mo ta `transport-checkpoint` la *"moc gan vao VehicleRun/RunLeg, phieu
+   * cong/can/giao, phien cho nguoi nhan, phu cap cho cua lai xe"*. Mot khach co cong de vao va can
+   * de can thi cung la khach co khoang cho nguoi nhan; tach chung ra se bat ho khai hai co cho mot
+   * quy trinh.
+   */
+  it('phien cho den/di CUNG moc van hanh', () => {
+    const names = controllerNames(['transport-core', 'transport-proof', 'transport-checkpoint']);
+    expect(names).toContain('DriverWaitingController');
+    expect(names).toContain('WaitingController');
+  });
+
   it('KHONG co mat o mot khach van tai chi bat `transport-core`', () => {
     const names = controllerNames(['transport-core']);
     expect(names).not.toContain('DriverCheckpointsController');
     expect(names).not.toContain('CheckpointsController');
+    expect(names).not.toContain('DriverWaitingController');
+    expect(names).not.toContain('WaitingController');
   });
 
   /**
@@ -66,6 +82,30 @@ describe('Hai be mat cua moc van hanh — CP-041', () => {
     const accounting = actionsForRole('ACCOUNTING');
     expect(accounting).toContain('transport.checkpoint.read');
     expect(accounting).not.toContain('transport.checkpoint.record');
+  });
+
+  /**
+   * `#279` O5/O6 — cung phan cong nhiem vu, ap cho phien cho, va o day no chat hon.
+   *
+   * Gio DONG cua mot phien la moc tren cua khoang thoi gian ma Ke toan sap duyet tien cho. Cho
+   * nguoi duyet dong duoc phien la cho ho tu chot lay con so ho sap duyet.
+   */
+  it('ke toan DOC duoc phien cho nhung KHONG dong duoc', () => {
+    const accounting = actionsForRole('ACCOUNTING');
+    expect(accounting).toContain('transport.waiting.read');
+    expect(accounting).not.toContain('transport.waiting.close');
+  });
+
+  /**
+   * Lai xe co DUNG MOT ma: MO. Ho dong mot phien bang cach bam `Khach da nhan hang` — tuc ghi mot
+   * moc — chu khong bang mot lenh thu hai. Mot ma `.close` rieng cho lai xe se la duong ghi THU HAI
+   * cho cung mot su that.
+   */
+  it('lai xe MO duoc phien cho nhung khong co mot ma DONG nao', () => {
+    const sale = actionsForRole('SALE');
+    expect(sale).toContain('transport.driver.self.waiting.start');
+    expect(sale).not.toContain('transport.waiting.close');
+    expect(sale).not.toContain('transport.waiting.read');
   });
 
   it('dieu hanh co ca hai ma van hanh', () => {

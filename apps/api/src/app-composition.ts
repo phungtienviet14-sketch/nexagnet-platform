@@ -134,6 +134,8 @@ import { DriverTrackingController } from './transport/proof/driver-tracking.cont
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
+import { DriverWaitingController } from './transport/waiting/driver-waiting.controller.js';
+import { WaitingController } from './transport/waiting/waiting.controller.js';
 import { TransportSiteIntakeModule } from './transport/site-intake/transport-site-intake.module.js';
 import { DriverSiteIntakeController } from './transport/site-intake/driver-site-intake.controller.js';
 import { TransportAcceptanceModule } from './transport/acceptance/transport-acceptance.module.js';
@@ -475,6 +477,16 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-checkpoint', DriverCheckpointsController),
   owned('transport-site-intake', DriverSiteIntakeController),
   owned('transport-checkpoint', CheckpointsController),
+  /**
+   * PHIEN CHO NGUOI NHAN (`#279` O5) — cung capability, cung khuon HAI be mat.
+   *
+   * Be mat lai xe co DUNG MOT duong ghi (`Bat dau cho`) va khong co duong dong: mot phien dong lai
+   * boi chinh moc `Khach da nhan hang`. Be mat van hanh doc duoc moi phien va dong duoc mot phien
+   * bo quen — nhung ma `transport.waiting.close` nam trong `ACCOUNTING_DENIED`, vi gio dong la moc
+   * tren cua khoang thoi gian ma Ke toan sap duyet tien cho.
+   */
+  owned('transport-checkpoint', DriverWaitingController),
+  owned('transport-checkpoint', WaitingController),
   // HANG CHO NGHIEM THU CHUNG TU — MOT be mat, va KHONG co ban 'cua chinh minh' cho lai xe.
   // Ca hai ma quyen deu nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi duoc mot duong
   // nao o day: mot lai xe tu nghiem thu chuyen cua chinh minh la dung cai ma kiem soat noi bo

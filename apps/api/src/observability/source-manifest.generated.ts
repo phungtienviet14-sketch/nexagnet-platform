@@ -551,6 +551,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts",
       "line": 61
     },
+    "transport.driver.self.waiting.start": {
+      "filePath": "apps/api/src/transport/waiting/driver-waiting.controller.ts"
+    },
     "transport.driver_settlement.cashout": {
       "functionName": "DriverSettlementController.recordCashout",
       "filePath": "apps/api/src/transport/driver-settlement/driver-settlement.controller.ts",
@@ -755,10 +758,26 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.vehicle.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
+    "transport.waiting.close": {
+      "functionName": "WaitingController.close",
+      "filePath": "apps/api/src/transport/waiting/waiting.controller.ts",
+      "line": 49
+    },
+    "transport.waiting.read": {
+      "functionName": "WaitingController.listForRun",
+      "filePath": "apps/api/src/transport/waiting/waiting.controller.ts",
+      "line": 42
+    },
     "trip_expense.record": {
       "functionName": "CostingService.recordTripExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 310
+    },
+    "waiting.close": {
+      "filePath": "apps/api/src/transport/waiting/waiting.service.ts"
+    },
+    "waiting.start": {
+      "filePath": "apps/api/src/transport/waiting/waiting.service.ts"
     }
   },
   "decisions": {

@@ -372,6 +372,15 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.driver.self.site_intake.propose',
   'transport.driver.self.site_intake.confirm',
+  /**
+   * MO MOT PHIEN CHO NGUOI NHAN (`#279` O5) — nut `Bat dau cho` cua chinh lai xe do.
+   *
+   * MOT ma, va CHI mot: khong co ma `.close` o pham vi lai xe, vi lai xe khong dong mot phien cho
+   * bang mot lenh rieng. Ho bam `Khach da nhan hang` — mot moc — va chinh moc do dong phien
+   * (`DeliveryWaitingCloser`). Mo mot ma `.close` cho lai xe se tao duong ghi THU HAI cho cung mot
+   * su that, va hai duong thi se co luc lech nhau: mot phien da dong ma khong co moc nhan hang.
+   */
+  'transport.driver.self.waiting.start',
   /* --- `transport-checkpoint` (Lane F, Issue #243) --- */
   /**
    * DOC dong thoi gian van hanh cua mot chuyen — moc, giai doan tung chang, canh bao thieu chung
@@ -380,6 +389,23 @@ export const TRANSPORT_ACTIONS = [
    * Ke toan CO ma nay: mot khoan phu cap cho phai doi chieu duoc voi luc xe den noi va luc nguoi
    * nhan nhan hang, va do dung la viec cua ke toan.
    */
+  /**
+   * DOC phien cho — `#279` O5/O11. Nguon cua cot `WAITING` tren bang dieu hanh (`#278`).
+   *
+   * TACH khoi `transport.checkpoint.read`, va do la mot khang dinh chu khong mot thoi quen: mot
+   * moc tra loi *"da den noi luc may gio"*, mot phien cho tra loi *"da ket bao lau"*. Cai thu hai
+   * la CAN CU CUA MOT KHOAN TIEN (`#279` O6), nen no phai dem duoc rieng trong bang phan quyen.
+   */
+  'transport.waiting.read',
+  /**
+   * DONG mot phien cho BO QUEN — duong don dep cua van hanh, khong phai duong cua lai xe.
+   *
+   * Nam trong `ACCOUNTING_DENIED`, cung ly le voi `transport.checkpoint.record`: `#279` O6 dat
+   * khoan phu cap cho tren mot con so do chinh phien nay sinh ra. Neu nguoi DUYET khoan tien cung
+   * dong duoc phien de chot con so do thi cong duyet khong con y nghia — no chi con kiem mot con so
+   * ma chinh nguoi kiem viet ra.
+   */
+  'transport.waiting.close',
   'transport.checkpoint.read',
   /**
    * GHI mot moc tu be mat VAN HANH — trong thuc te la `ASSIGNED`, va cac moc bu khi lai xe khong
@@ -543,6 +569,7 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.checkpoint.record',
   'transport.driver.self.site_intake.propose',
   'transport.driver.self.site_intake.confirm',
+  'transport.driver.self.waiting.start',
 ];
 
 /**
@@ -634,6 +661,15 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * dong thoi gian. Doc thi can, ghi thi khong.
    */
   'transport.checkpoint.record',
+  /**
+   * DONG mot phien cho (`#279` O5) — Ke toan DOC duoc phien cho, KHONG dong duoc.
+   *
+   * Cung mot phan cong nhiem vu voi dong ngay tren, va o day no chat hon nua: `#279` O6 doi
+   * *"approving user cannot rewrite WaitingSession timestamps"*. Gio dong cua mot phien CHINH LA
+   * moc tren cua khoang thoi gian ma khoan phu cap dua vao. Cap quyen nay cho Ke toan la cho nguoi
+   * duyet tien tu chot lay con so ho sap duyet.
+   */
+  'transport.waiting.close',
   /**
    * Ke toan DOC duoc chung cu, va do la ca cong viec cua ho. RUT mot chung cu la viec khac.
    *

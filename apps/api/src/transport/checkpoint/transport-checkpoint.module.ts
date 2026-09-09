@@ -15,10 +15,23 @@ import { DEFAULT_CHECKPOINT_POLICY, type CheckpointPolicy } from './checkpoint-l
 import { CheckpointRepository, InMemoryCheckpointRepository } from './checkpoint.repository.js';
 import { CheckpointService, TRANSPORT_CHECKPOINT_POLICY } from './checkpoint.service.js';
 import { PrismaCheckpointRepository } from './prisma-checkpoint.repository.js';
+import { PrismaWaitingSessionRepository } from '../waiting/prisma-waiting.repository.js';
+import { DeliveryWaitingCloser } from '../waiting/waiting-close.port.js';
+import {
+  InMemoryWaitingSessionRepository,
+  WaitingSessionRepository,
+} from '../waiting/waiting.repository.js';
+import { WaitingSessionService } from '../waiting/waiting.service.js';
 
 /**
  * Capability `transport-checkpoint` — moc van hanh, tai lieu hien truong, va thoi gian cho
- * (`#243`).
+ * (`#243`, tiep tuc o `#279`).
+ *
+ * PHIEN CHO NGUOI NHAN (`#279` O5) den cung capability nay chu khong mot capability moi, va do la
+ * cau tra loi cua chinh `tenant.schema.ts`: khoi mo ta `transport-checkpoint` da viet
+ * *"moc gan vao VehicleRun/RunLeg, phieu cong/can/giao, phien cho nguoi nhan, phu cap cho cua lai
+ * xe"*. Mot khach co cong de vao va can de can thi cung la khach co khoang cho nguoi nhan; tach
+ * chung ra se bat ho khai hai co cho mot quy trinh.
  *
  * MOT CAPABILITY RIENG, cung ly le da viet o `transport-proof`: mot khach van tai phai chay duoc
  * MA KHONG co quy trinh cong/can/phieu giao. Cong ty B co quy trinh do; khach chi chay chuyen le
@@ -61,8 +74,30 @@ import { PrismaCheckpointRepository } from './prisma-checkpoint.repository.js';
       provide: TRANSPORT_CHECKPOINT_POLICY,
       useFactory: (): CheckpointPolicy => DEFAULT_CHECKPOINT_POLICY,
     },
+    {
+      provide: WaitingSessionRepository,
+      useFactory: (prisma: PrismaService): WaitingSessionRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaWaitingSessionRepository(prisma)
+          : new InMemoryWaitingSessionRepository(),
+      inject: [PrismaService],
+    },
+    WaitingSessionService,
+    /**
+     * CAU NOI moc -> phien cho. MOT the hien, hai token.
+     *
+     * `useExisting` chu khong `useClass`: hai the hien `WaitingSessionService` se co hai kho khac
+     * nhau o duong trong-bo-nho, va luc do moc `DELIVERY_ACCEPTED` se dong mot phien cho nam trong
+     * mot kho ma khong ai doc.
+     */
+    { provide: DeliveryWaitingCloser, useExisting: WaitingSessionService },
     CheckpointService,
   ],
-  exports: [CheckpointService, CheckpointRepository],
+  exports: [
+    CheckpointService,
+    CheckpointRepository,
+    WaitingSessionService,
+    WaitingSessionRepository,
+  ],
 })
 export class TransportCheckpointModule {}
