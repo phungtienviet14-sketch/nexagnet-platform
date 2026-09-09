@@ -134,6 +134,10 @@ import { DriverTrackingController } from './transport/proof/driver-tracking.cont
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
+import { TransportDocumentEvidenceBridgeModule } from './transport/document/document-evidence-bridge.module.js';
+import { TransportDocumentModule } from './transport/document/transport-document.module.js';
+import { DriverDocumentsController } from './transport/document/driver-documents.controller.js';
+import { DocumentsController } from './transport/document/documents.controller.js';
 import { WaitingAllowanceController } from './transport/waiting/allowance.controller.js';
 import { DriverWaitingController } from './transport/waiting/driver-waiting.controller.js';
 import { TransportWaitingPayrollBridgeModule } from './transport/waiting/waiting-payroll-bridge.module.js';
@@ -318,6 +322,14 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // `WAITING_ALLOWANCE_UNAVAILABLE` — mot dau vao vang mat DOC DUOC tren phieu, thay vi mot so
   // khong khong ai giai thich duoc.
   owned('transport-checkpoint', TransportWaitingPayrollBridgeModule),
+  // CHUNG TU VAN HANH + BAN GIAO BIEN NHAN GIAY (`#279` O1/O7). Den cung `transport-checkpoint`:
+  // mot khach co cong de vao va can de can cung la khach co phieu cong va phieu can.
+  owned('transport-checkpoint', TransportDocumentModule),
+  // CAU NOI chung tu -> cong nghiem thu cua Lane K. `@Global()`, CHI xuat mot adapter CHI DOC.
+  //
+  // Vang mat thi `transport-acceptance` giu nguyen `NoOperationalDocumentsAdapter` — FAIL-CLOSED,
+  // dung hinh dang `main` da co truoc tranche nay. Bo cau noi KHONG mo mot lo hong nao.
+  owned('transport-checkpoint', TransportDocumentEvidenceBridgeModule),
   // NHAN VIEC TAI DIA DIEM A (`#267`). Den cung `transport-site-intake` va bien mat cung no: mot
   // khach dieu xe tu van phong khong co nut `Tao chuyen` tren dien thoai lai xe, va do la mot cau
   // hinh hop le — xem khoi chu cua `transport-site-intake.module.ts`.
@@ -501,6 +513,11 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // xe tu de nghi roi tu duyet phu cap cho chinh minh la dung cai ma kiem soat noi bo sinh ra de
   // chan. Cong THAT chong tu duyet con nam o tang dich vu, tren `Driver.authUserId`.
   owned('transport-checkpoint', WaitingAllowanceController),
+  // CHUNG TU VAN HANH — HAI be mat, HAI quyen. Be mat lai xe ghi kem moc neo CUA CHINH HO va KHONG
+  // co duong bia mo; be mat van hanh ghi bu duoc cho moi vong chay va bia mo duoc — nhung ma
+  // `transport.operational_document.withdraw` nam trong `ACCOUNTING_DENIED`.
+  owned('transport-checkpoint', DriverDocumentsController),
+  owned('transport-checkpoint', DocumentsController),
   // HANG CHO NGHIEM THU CHUNG TU — MOT be mat, va KHONG co ban 'cua chinh minh' cho lai xe.
   // Ca hai ma quyen deu nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi duoc mot duong
   // nao o day: mot lai xe tu nghiem thu chuyen cua chinh minh la dung cai ma kiem soat noi bo

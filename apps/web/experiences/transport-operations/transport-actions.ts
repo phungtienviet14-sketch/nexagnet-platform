@@ -161,12 +161,21 @@ export const TRANSPORT_ACTIONS = [
    * `Khach da nhan hang` — mot moc — va chinh moc do dong phien.
    */
   'transport.driver.self.waiting.start',
+  /** HAI ma cua lai xe cho chung tu (`#279` O1/O7). Khong co ma BIA MO. */
+  'transport.driver.self.document.record',
+  'transport.driver.self.receipt_handover.record',
   /** DOC phien cho (`#279` O5/O11). Ke toan CO ma nay; ma DONG thi khong. */
   'transport.waiting.read',
   'transport.waiting.close',
   /** HAI ma cho phu cap cho (`#279` O6): de nghi ⟂ quyet dinh. */
   'transport.waiting_allowance.propose',
   'transport.waiting_allowance.decide',
+  /** BA ma cho chung tu van hanh (`#279` O1/O11): doc ⟂ ghi bu ⟂ bia mo. */
+  'transport.operational_document.read',
+  'transport.operational_document.record',
+  'transport.operational_document.withdraw',
+  /** BAN GIAO BIEN NHAN (`#279` O7) — hai buoc cua VAN PHONG. */
+  'transport.receipt_handover.record',
   /** DONG THOI GIAN cua mot chuyen — moc, giai doan tung chang, canh bao. KHONG toa do. */
   'transport.checkpoint.read',
   /** GHI moc tu be mat van hanh — `ASSIGNED` va cac moc bu. KHONG kem chung cu vi tri. */
@@ -237,6 +246,8 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.site_intake.propose',
   'transport.driver.self.site_intake.confirm',
   'transport.driver.self.waiting.start',
+  'transport.driver.self.document.record',
+  'transport.driver.self.receipt_handover.record',
 ];
 
 /**
@@ -288,6 +299,12 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * tren cua khoang thoi gian ma Ke toan sap duyet tien cho.
    */
   'transport.waiting.close',
+  /**
+   * BIA MO mot chung tu van hanh (`#279` O2/O12) — Ke toan DOC duoc, KHONG go duoc.
+   *
+   * To giay do co the la can cu cua chinh lan `Da ket thuc` ma ho sap bam.
+   */
+  'transport.operational_document.withdraw',
   /**
    * Ke toan DOC duoc chung cu — do la ca cong viec cua ho — nhung RUT mot chung cu la viec khac:
    * go bo mot muc khoi chinh ho so minh dang doi soat.

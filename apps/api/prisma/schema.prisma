@@ -938,6 +938,8 @@ model TransportDriver {
   @@index([licenceExpiry])
   waitingSessions       TransportDeliveryWaitingSession[]
   waitingAllowances     TransportDriverWaitingAllowance[]
+  operationalDocuments  TransportOperationalDocument[]
+  receiptHandovers      TransportPhysicalReceiptHandover[]
 }
 
 /// Gan lai xe phu trach mot xe — tang DOI XE. `effectiveTo = NULL` la ban dang hieu luc.
@@ -3507,6 +3509,7 @@ model TransportCounterpartySite {
   @@unique([counterpartyId, name], map: "TransportCounterpartySite_counterparty_name_key")
   @@index([counterpartyId, status])
   @@index([status])
+  operationalDocuments TransportOperationalDocument[]
 }
 
 
@@ -3889,6 +3892,8 @@ model TransportOrder {
   @@index([status])
   @@index([businessDate])
   @@index([customerId])
+  operationalDocuments TransportOperationalDocument[]
+  receiptHandovers     TransportPhysicalReceiptHandover[]
 }
 
 /// VONG CHAY VAT LY cua MOT xe.
@@ -3931,6 +3936,7 @@ model TransportVehicleRun {
   @@index([businessDate])
   @@index([vehicleId])
   waitingSessions          TransportDeliveryWaitingSession[]
+  operationalDocuments     TransportOperationalDocument[]
 }
 
 /// PHAN CONG LAI XE cho mot vong chay — `GD-06`: LICH SU, khong ghi de.
@@ -4019,6 +4025,8 @@ model TransportRunLeg {
   @@index([kind])
   @@index([businessDate])
   waitingSessions      TransportDeliveryWaitingSession[]
+  operationalDocuments TransportOperationalDocument[]
+  receiptHandovers     TransportPhysicalReceiptHandover[]
 }
 
 /// BANG TUONG UNG giua mot chuyen v1 va mot chang v2. KHONG phai quan he cha/con.
@@ -4601,6 +4609,7 @@ model TransportRunCheckpoint {
   @@index([type, businessDate])
   waitingArrivals TransportDeliveryWaitingSession[] @relation("WaitingArrival")
   waitingClosing TransportDeliveryWaitingSession? @relation("WaitingClosing")
+  operationalDocuments TransportOperationalDocument[]
 }
 
 /// LY DO CHO — su that VAN HANH, khong phai mot muc gia. Xem `waiting.types.ts`.
@@ -4753,6 +4762,135 @@ model TransportDriverWaitingAllowance {
   @@index([waitingSessionId])
   @@index([driverId, businessDate])
   @@index([status, proposedAt])
+}
+
+/// NAM LOAI CHUNG TU VAN HANH — `#279` O1. Xem `document.types.ts` de biet vi sao dung nam.
+enum TransportOperationalDocumentType {
+  GATE_PASS
+  LOADING_SLIP
+  WEIGH_TICKET
+  DELIVERY_RECEIPT
+  OTHER
+}
+
+/// CAN CU cua mot chung tu — B thuc su dang cam cai gi. Cung khuon `CommercialAcceptanceBasis`.
+enum TransportOperationalDocumentBasis {
+  DIGITAL_FILE
+  EXTERNAL_PHYSICAL
+}
+
+enum TransportOperationalDocumentStatus {
+  ACTIVE
+  WITHDRAWN
+}
+
+/// CHUNG TU VAN HANH — `#279` O1/O2, tiep tuc `#243` F2.
+///
+/// KHONG CO COT DINH VI KHO. `#279` O2: *"store stable opaque File IDs, never raw GCS/S3/local
+/// locator in public DTO"*. `fileId` la mot ma DUC do Nen tang Tep (`#287`) cap; mien nay khong
+/// biet byte nam o dau, va khong co cot nao de hoi.
+///
+/// `orderId` duoc GIAI o may chu tu chinh chang. Do la cong cho `#279` O13 bai 8
+/// (*"DELIVERY_RECEIPT for Order A cannot satisfy Order B"*): neu ben goi khai duoc `orderId` thi
+/// ho gan duoc mot to bien nhan cua don nay sang don khac, va Lane K se doc no nhu mot can cu hop
+/// le de bam `Da ket thuc`.
+///
+/// `extractionCandidate` la UNG VIEN do may doc ra — `#279` O8. No KHONG tham gia vao mot quyet
+/// dinh nao; no ton tai de nguoi doc so sanh bang mat.
+///
+/// RANG BUOC KHONG NAM O DAY, chung nam trong SQL tho cua migration
+/// `20260911180000_transport_operational_document`.
+model TransportOperationalDocument {
+  id                  String                             @id @default(cuid())
+  type                TransportOperationalDocumentType
+  runId               String
+  run                 TransportVehicleRun                @relation(fields: [runId], references: [id], onDelete: Restrict)
+  legId               String?
+  leg                 TransportRunLeg?                   @relation(fields: [legId], references: [id], onDelete: Restrict)
+  /// Don thuong mai cua chang — GIAI o may chu, khong nhan tu than yeu cau.
+  orderId             String?
+  order               TransportOrder?                    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  checkpointId        String?
+  checkpoint          TransportRunCheckpoint?            @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  counterpartySiteId  String?
+  counterpartySite    TransportCounterpartySite?         @relation(fields: [counterpartySiteId], references: [id], onDelete: Restrict)
+  driverId            String?
+  driver              TransportDriver?                   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  recordedBy          String
+  basis               TransportOperationalDocumentBasis
+  /// Ma tep DUC. NULL o duong chung tu giay. KHONG BAO GIO la mot dinh vi kho.
+  fileId              String?
+  /// B dang cam cai gi — bat buoc o duong khong-co-ban-so.
+  externalNote        String?
+  label               String?
+  captureMode         TransportProofPhotoCaptureMode     @default(UNKNOWN)
+  status              TransportOperationalDocumentStatus @default(ACTIVE)
+  clientEventId       String
+  receivedAt          DateTime                           @default(now())
+  withdrawnAt         DateTime?
+  withdrawnBy         String?
+  /// UNG VIEN do may doc ra (`#279` O8) — KHONG phai su that da xac minh.
+  extractionCandidate String?
+  extractionProvider  String?
+  businessDate        String                             @db.VarChar(10)
+  createdAt           DateTime                           @default(now())
+  updatedAt           DateTime                           @updatedAt
+
+  handovers TransportPhysicalReceiptHandover[]
+
+  @@unique([runId, type, clientEventId], map: "TransportOperationalDocument_run_type_event_key")
+  @@index([runId, receivedAt])
+  @@index([legId])
+  @@index([orderId, status])
+  @@index([driverId, businessDate])
+  @@index([type, businessDate])
+}
+
+/// BUOC BAN GIAO BIEN NHAN GIAY — `#279` O7.
+enum TransportReceiptHandoverState {
+  WITH_DRIVER
+  RETURNED_TO_OFFICE
+  SUBMITTED_FOR_CONFIRMATION
+}
+
+/// CHUOI BAN GIAO cua mot DON — ghi them, khong ghi de.
+///
+/// KHONG CO COT NAO TREN `TransportOrder`. Trang thai hien tai la buoc co `sequence` lon nhat —
+/// mot phep chieu, khong mot cot. Mot cot `handoverState` tren don se phai duoc backfill cho moi
+/// don cu, va `#275` K6 da cam dung `APPROVED by system` hang loat vi cung ly le do.
+///
+/// VA QUAN TRONG NHAT: bang nay KHONG co mot khoa ngoai nao tro sang truc nghiem thu, va mien nay
+/// khong co mot duong ghi nao vao `TransportOrder`. Ghi `RETURNED_TO_OFFICE` KHONG ket thuc mot
+/// don — `#274` va `#279` O7 deu phat bieu ranh gioi do.
+model TransportPhysicalReceiptHandover {
+  id            String                        @id @default(cuid())
+  orderId       String
+  order         TransportOrder                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Bat dau tu 1, duy nhat trong mot don.
+  sequence      Int
+  state         TransportReceiptHandoverState
+  legId         String?
+  leg           TransportRunLeg?              @relation(fields: [legId], references: [id], onDelete: Restrict)
+  documentId    String?
+  document      TransportOperationalDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  /// B dang ban giao cai gi — bat buoc khi khong co ban so.
+  externalNote  String?
+  driverId      String?
+  driver        TransportDriver?              @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  /// Danh tinh tu PHIEN, gio tu MAY CHU — `#279` O12.
+  recordedBy    String
+  recordedAt    DateTime                      @default(now())
+  clientEventId String
+  note          String?
+  businessDate  String                        @db.VarChar(10)
+  createdAt     DateTime                      @default(now())
+
+  @@unique([orderId, clientEventId], map: "TransportPhysicalReceiptHandover_order_event_key")
+  @@unique([orderId, state], map: "TransportPhysicalReceiptHandover_order_state_key")
+  @@unique([orderId, sequence], map: "TransportPhysicalReceiptHandover_order_sequence_key")
+  @@index([orderId, sequence])
+  @@index([documentId])
+  @@index([state, recordedAt])
 }
 
 // ===================================================================

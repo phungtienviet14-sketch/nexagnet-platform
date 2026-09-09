@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 2,
+  "slug": "transport-field-closeout",
+  "identity": {
+    "displayName": "Transport Field Closeout Fixture",
+    "shortName": "Closeout"
+  },
+  "branding": {
+    "productName": "Transport Operations",
+    "installName": "Transport Operations",
+    "pageTitle": "Transport Operations",
+    "pageDescription": "Generic transport tenant fixture: field documents and physical receipt handover feeding the Lane K acceptance evidence gate.",
+    "themeColor": "#123a5f",
+    "backgroundColor": "#f4f6f9",
+    "monogram": "T",
+    "composerPlaceholder": "Search orders"
+  },
+  "experience": "transport-operations",
+  "capabilities": [
+    "transport-core",
+    "transport-proof",
+    "transport-checkpoint",
+    "transport-costing",
+    "transport-fuel",
+    "transport-acceptance",
+    "transport-settlement"
+  ],
+  "policies": {
+    "transportCore": {
+      "timeZone": "Asia/Ho_Chi_Minh"
+    },
+    "transportCosting": {
+      "expenseCategories": [
+        "BOT",
+        "BAI_XE",
+        "SUA_CHUA_DOC_DUONG"
+      ]
+    },
+    "transportFuel": {
+      "matching": {
+        "amountToleranceVnd": 1000,
+        "businessDateToleranceDays": 1
+      },
+      "statement": {
+        "columns": {
+          "vehiclePlate": "Biển số",
+          "businessDate": "Ngày",
+          "liters": "Số lít",
+          "amount": "Thành tiền",
+          "invoiceNo": "Số hóa đơn",
+          "note": "Ghi chú"
+        },
+        "dateFormat": "dmy"
+      },
+      "consumption": {
+        "normsByVehicleClass": {
+          "Tải 2 tấn": 13,
+          "Tải 5 tấn": 20,
+          "Tải 8 tấn": 26,
+          "Tải 15 tấn": 33,
+          "Đầu kéo container": 38
+        },
+        "tolerancePercent": 15
+      }
+    },
+    "readiness": {
+      "blockedCapabilities": []
+    }
+  },
+  "integrations": {},
+  "bootstrap": {}
+}

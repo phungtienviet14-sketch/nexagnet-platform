@@ -119,6 +119,14 @@ import { WaitingSessionService } from '../waiting/waiting.service.js';
   exports: [
     CheckpointService,
     CheckpointRepository,
+    /**
+     * Cong DOC danh tinh lai xe + phan cong, xuat ra cho `TransportDocumentModule` (`#279` O1).
+     *
+     * Xuat CONG chu khong xuat `FleetRepository`/`MovementRepository`: mien chung tu can dung hai
+     * cau hoi ("phien nay la ai" va "nguoi nay co tung cam vong chay do khong"), va cong nay khong
+     * co mot ham ghi nao. Xuat kho se cho mien chung tu mot cai but de viet nham vao doi xe.
+     */
+    TransportCheckpointCoreFacts,
     WaitingSessionService,
     WaitingSessionRepository,
     WaitingAllowanceService,

@@ -73,6 +73,10 @@ describe('cau bridge GD-22 — web guong dung bang cua API', () => {
       // cua khoang thoi gian ma chinh ho sap duyet tien cho; cho nguoi duyet dong duoc phien la cho
       // ho tu chot lay con so ho sap duyet.
       'transport.waiting.close',
+      // Issue #279 Lane O — Ke toan DOC duoc chung tu van hanh nhung KHONG go duoc mot to nao ra
+      // khoi ho so ho dang doi soat. To giay do co the la can cu cua chinh lan `Da ket thuc` ma ho
+      // sap bam.
+      'transport.operational_document.withdraw',
       // Issue #235 Lane B — hai quyen SUA trong mien chung cu. Doi soat la doc mot ho so roi noi
       // no khop hay khong; rut mot chung cu, va doi ban kinh mot hang rao (duoc cham LUC DOC, nen
       // no doi phan quyet cua ca lich su), la sua chinh ho so dang duoc doi soat.

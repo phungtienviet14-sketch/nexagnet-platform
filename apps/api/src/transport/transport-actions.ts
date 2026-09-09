@@ -381,6 +381,24 @@ export const TRANSPORT_ACTIONS = [
    * su that, va hai duong thi se co luc lech nhau: mot phien da dong ma khong co moc nhan hang.
    */
   'transport.driver.self.waiting.start',
+  /**
+   * GHI mot chung tu van hanh CUA CHINH MINH (`#279` O1) — nam loai, mot ma.
+   *
+   * MOT ma cho ca nam loai, cung ly le voi `transport.driver.self.checkpoint.record`: nam duong do
+   * khac nhau o CAN CU va o NEO — ca hai deu la quy tac NGHIEP VU, khong phai ranh gioi QUYEN.
+   *
+   * KHONG co ma `.withdraw` o pham vi lai xe. `#279` O2: *"immutable boundary prevents driver
+   * deletion once evidence is authoritative"*, va cach re nhat de giu no la khong co ma.
+   */
+  'transport.driver.self.document.record',
+  /**
+   * `Toi dang giu to bien nhan` (`#279` O7) — va KHONG gi hon.
+   *
+   * Ma nay chi mo duoc buoc `WITH_DRIVER`. Hai buoc con lai
+   * (`RETURNED_TO_OFFICE`, `SUBMITTED_FOR_CONFIRMATION`) thuoc `transport.receipt_handover.record`,
+   * mot ma VAN HANH: chi nguoi NHAN moi xac nhan duoc la ho da nhan.
+   */
+  'transport.driver.self.receipt_handover.record',
   /* --- `transport-checkpoint` (Lane F, Issue #243) --- */
   /**
    * DOC dong thoi gian van hanh cua mot chuyen — moc, giai doan tung chang, canh bao thieu chung
@@ -423,6 +441,25 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.waiting_allowance.propose',
   'transport.waiting_allowance.decide',
+  /**
+   * CHUNG TU VAN HANH (`#279` O1/O11) — BA ma, va tach chung la mot phan cua hop dong.
+   *
+   * `.read` la viec hang ngay cua nguoi doi soat. `.record` la ghi BU mot chung tu lai xe khong ghi
+   * duoc (het pin, mat song ca ngay) — mot duong van hanh, khong kem ho so lai xe. `.withdraw` la
+   * go mot to bang chung ra khoi ho so, va no nam trong `ACCOUNTING_DENIED`: `#279` O12 doi rang Ke
+   * toan *"cannot mutate source evidence used for its own acceptance decision"*.
+   */
+  'transport.operational_document.read',
+  'transport.operational_document.record',
+  'transport.operational_document.withdraw',
+  /**
+   * BAN GIAO BIEN NHAN GIAY (`#279` O7) — hai buoc cua VAN PHONG.
+   *
+   * Ke toan CO ma nay: chinh ho la nguoi nhan to giay tren ban. Nhung ghi `RETURNED_TO_OFFICE`
+   * KHONG ket thuc mot don — do van la mot lan bam RIENG tren truc nghiem thu cua Lane K, voi mot
+   * ma quyen RIENG (`transport.commercial_acceptance.decide`).
+   */
+  'transport.receipt_handover.record',
   'transport.checkpoint.read',
   /**
    * GHI mot moc tu be mat VAN HANH — trong thuc te la `ASSIGNED`, va cac moc bu khi lai xe khong
@@ -587,6 +624,8 @@ const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.site_intake.propose',
   'transport.driver.self.site_intake.confirm',
   'transport.driver.self.waiting.start',
+  'transport.driver.self.document.record',
+  'transport.driver.self.receipt_handover.record',
 ];
 
 /**
@@ -687,6 +726,14 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * duyet tien tu chot lay con so ho sap duyet.
    */
   'transport.waiting.close',
+  /**
+   * BIA MO mot chung tu van hanh (`#279` O2/O12 bai 7) — Ke toan DOC duoc, KHONG go duoc.
+   *
+   * Cung ranh gioi voi `transport.proof.withdraw` ngay duoi: doi soat la doc mot ho so roi noi no
+   * khop hay khong khop. Go mot to ra khoi chinh ho so minh dang doi soat la sua cau hoi thay vi
+   * tra loi no — va o day to giay do co the la can cu cua chinh lan `Da ket thuc` ma ho sap bam.
+   */
+  'transport.operational_document.withdraw',
   /**
    * Ke toan DOC duoc chung cu, va do la ca cong viec cua ho. RUT mot chung cu la viec khac.
    *

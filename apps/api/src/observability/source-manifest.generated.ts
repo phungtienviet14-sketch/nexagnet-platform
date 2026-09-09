@@ -100,6 +100,13 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 49
     },
+    "document.record": {
+      "filePath": "apps/api/src/transport/document/document.service.ts"
+    },
+    "document.withdraw": {
+      "functionName": "OperationalDocumentService.withdraw",
+      "filePath": "apps/api/src/transport/document/document.service.ts"
+    },
     "driver_fund.post_entry": {
       "functionName": "CostingService.postEntryDetailed",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
@@ -503,6 +510,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.self.checkpoint.record": {
       "filePath": "apps/api/src/transport/checkpoint/driver-checkpoints.controller.ts"
     },
+    "transport.driver.self.document.record": {
+      "filePath": "apps/api/src/transport/document/driver-documents.controller.ts"
+    },
     "transport.driver.self.expense.claim.submit": {
       "filePath": "apps/api/src/transport/claims/driver-claims-self.controller.ts"
     },
@@ -516,6 +526,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.driver.self.proof.record": {
       "filePath": "apps/api/src/transport/proof/driver-proof.controller.ts"
+    },
+    "transport.driver.self.receipt_handover.record": {
+      "functionName": "DriverDocumentsController.handover",
+      "filePath": "apps/api/src/transport/document/driver-documents.controller.ts",
+      "line": 85
     },
     "transport.driver.self.settlement.read": {
       "functionName": "DriverSettlementSelfController.statement",
@@ -646,6 +661,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts",
       "line": 117
     },
+    "transport.operational_document.read": {
+      "filePath": "apps/api/src/transport/document/documents.controller.ts"
+    },
+    "transport.operational_document.record": {
+      "functionName": "DocumentsController.record",
+      "filePath": "apps/api/src/transport/document/documents.controller.ts",
+      "line": 79
+    },
+    "transport.operational_document.withdraw": {
+      "functionName": "DocumentsController.withdraw",
+      "filePath": "apps/api/src/transport/document/documents.controller.ts",
+      "line": 108
+    },
     "transport.order.manage": {
       "filePath": "apps/api/src/transport/movement/orders.controller.ts"
     },
@@ -693,6 +721,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "ProofReviewController.withdraw",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
       "line": 84
+    },
+    "transport.receipt_handover.record": {
+      "functionName": "DocumentsController.handover",
+      "filePath": "apps/api/src/transport/document/documents.controller.ts",
+      "line": 133
     },
     "transport.settlement.document.read": {
       "functionName": "SettlementReportsController.documentChain",
@@ -1573,6 +1606,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
       "line": 230
+    },
+    "receipt_handover.record|*": {
+      "filePath": "apps/api/src/transport/document/handover.service.ts"
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",
