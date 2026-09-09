@@ -32,6 +32,15 @@ import type {
  * completion"* — canh bao la de nguoi doi soat nhin thay, khong phai de chan mot lai xe dang o hien
  * truong.
  */
+/**
+ * TOKEN tiem chinh sach chung tu.
+ *
+ * O DAY chu khong o mot trong hai noi dung no, vi CA HAI deu dung: `DriverFieldReadService` (tinh
+ * canh bao cho mot lai xe) va `ControlTowerFieldFactsAdapter` (tinh canh bao cho ca doi xe). Hai
+ * ban token se lam hai man hinh doc hai chinh sach khac nhau tren cung du lieu.
+ */
+export const TRANSPORT_DOCUMENT_POLICY = Symbol('TRANSPORT_DOCUMENT_POLICY');
+
 export interface DocumentRequirementPolicy {
   /** Loai chung tu BAT BUOC tren mot chang CO HANG. Thieu thi canh bao, khong chan. */
   readonly requiredOnLoadedLeg: readonly OperationalDocumentType[];
@@ -70,9 +79,8 @@ const ANCHOR_HINT: Readonly<Record<OperationalDocumentType, readonly RunCheckpoi
  * o moc `DELIVERY_ARRIVAL` van la mot to phieu can that; chan no lai se lam lai xe khong ghi duoc
  * roi ho bo qua luon buoc ghi.
  */
-export const anchorHintFor = (
-  type: OperationalDocumentType,
-): readonly RunCheckpointType[] | null => ANCHOR_HINT[type];
+export const anchorHintFor = (type: OperationalDocumentType): readonly RunCheckpointType[] | null =>
+  ANCHOR_HINT[type];
 
 export interface DocumentRecordDecision {
   readonly allowed: boolean;
@@ -93,9 +101,7 @@ export interface DocumentRecordEvaluation {
  * loi goi ra ngoai va thuoc tang dich vu. O day chi con phan noi ve HINH DANG cua lenh — va do la
  * phan duy nhat kiem duoc ma khong cham mang.
  */
-export function evaluateDocumentRecord(
-  input: DocumentRecordEvaluation,
-): DocumentRecordDecision {
+export function evaluateDocumentRecord(input: DocumentRecordEvaluation): DocumentRecordDecision {
   if (input.runTerminal) return { allowed: false, reason: 'DOCUMENT_RUN_TERMINAL' };
 
   // CAN CU va MA TEP phai di cung nhau, hoac khong cai nao. Mot lenh khai `DIGITAL_FILE` ma khong

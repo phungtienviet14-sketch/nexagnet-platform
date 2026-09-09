@@ -2290,3 +2290,139 @@ export interface OrderCompletionDetail {
   readonly acceptance: OrderCompletionRecord;
   readonly decisions: readonly OrderCompletionDecision[];
 }
+
+/* ------------------------------------------------------------------ *
+ * HIEN TRUONG — `#279` Lane O
+ * ------------------------------------------------------------------ */
+
+/**
+ * MOT VIEC LAI XE BAM DUOC NGAY BAY GIO — `#279` O9.
+ *
+ * BAN SAO cua kieu may chu (`apps/api/src/transport/field/field.types.ts`). Ban sao chu khong mot
+ * goi dung chung, va do la quy uoc da co cua tep nay: web va api KHONG chia se kieu qua mot goi
+ * thu ba. Bo test guong (`__tests__/field-contract.spec.ts`) doc chinh tep nguon cua may chu de mot
+ * ban sao lech se do LEN, thay vi mot man hinh lang le hien sai nut.
+ */
+export type DriverFieldActionKind =
+  'CHECKPOINT' | 'WAITING_START' | 'DOCUMENT' | 'RECEIPT_HANDOVER';
+
+export interface DriverFieldAction {
+  readonly kind: DriverFieldActionKind;
+  /** Tieng Viet co dau — chuoi nay di THANG len man hinh cua mot con nguoi. */
+  readonly label: string;
+  readonly checkpointType?: RunCheckpointType;
+  readonly documentType?: OperationalDocumentType;
+  readonly requiresLocation: boolean;
+  readonly required: boolean;
+}
+
+export type OperationalDocumentType =
+  'GATE_PASS' | 'LOADING_SLIP' | 'WEIGH_TICKET' | 'DELIVERY_RECEIPT' | 'OTHER';
+
+/*
+ * `RunCheckpointType` va `RunLegPhase` DA duoc khai o phan `#243` cua tep nay (moc van hanh va
+ * dong thoi gian). Khai lai o day se la ban sao THU HAI cua cung mot tu vung, va hai ban se lech
+ * nhau o lan sua thu ba — nen phan hien truong dung lai dung hai kieu do.
+ */
+
+export type ReceiptHandoverState =
+  'WITH_DRIVER' | 'RETURNED_TO_OFFICE' | 'SUBMITTED_FOR_CONFIRMATION';
+
+export interface DriverFieldDocument {
+  readonly id: string;
+  readonly type: OperationalDocumentType;
+  readonly basis: 'DIGITAL_FILE' | 'EXTERNAL_PHYSICAL';
+  readonly status: 'ACTIVE' | 'WITHDRAWN';
+  readonly receivedAt: string;
+}
+
+/**
+ * PHIEN CHO dang mo — `elapsedSeconds` do o MAY CHU.
+ *
+ * `#279` O5: *"elapsed display derives from server start time"*. Man hinh KHONG tru `startedAt` voi
+ * `Date.now()` cua chinh no — mot chiec dien thoai lech mot tieng se hien mot con so khac han con
+ * so ma nguoi duyet phu cap doc.
+ */
+export interface DriverFieldWaiting {
+  readonly sessionId: string;
+  readonly reason: string;
+  readonly startedAt: string;
+  readonly elapsedSeconds: number;
+}
+
+export interface DriverFieldLeg {
+  readonly legId: string;
+  readonly sequence: number;
+  readonly kind: RunLegKind;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly orderCode: string | null;
+  readonly orderId: string | null;
+  readonly phase: RunLegPhase;
+  readonly recordedTypes: readonly RunCheckpointType[];
+  readonly arrivalCheckpointId: string | null;
+  readonly waiting: DriverFieldWaiting | null;
+  readonly documents: readonly DriverFieldDocument[];
+  readonly missingDocumentTypes: readonly OperationalDocumentType[];
+  readonly receiptHandover: ReceiptHandoverState | null;
+  readonly nextActions: readonly DriverFieldAction[];
+}
+
+export interface DriverFieldRun {
+  readonly runId: string;
+  readonly runCode: string;
+  readonly legs: readonly DriverFieldLeg[];
+}
+
+export interface DriverFieldWork {
+  readonly serverNow: string;
+  readonly runs: readonly DriverFieldRun[];
+}
+
+/** Lenh ghi mot moc tu be mat lai xe. Danh tinh + gio den tu may chu. */
+export interface RecordCheckpointInput {
+  readonly type: RunCheckpointType;
+  readonly runId: string;
+  readonly legId?: string;
+  readonly observationId?: string;
+  readonly clientEventId: string;
+  readonly note?: string;
+}
+
+export interface StartWaitingInput {
+  readonly runId: string;
+  readonly legId: string;
+  readonly arrivalCheckpointId: string;
+  readonly reason:
+    'RECEIVER_NOT_READY' | 'NO_UNLOADING_DOCK' | 'QUEUE_AHEAD' | 'DOCUMENT_ISSUE' | 'OTHER';
+  readonly clientEventId: string;
+  readonly note?: string;
+}
+
+/**
+ * Ghi mot chung tu.
+ *
+ * `basis: 'EXTERNAL_PHYSICAL'` la duong DUY NHAT di duoc cho toi khi `#287` Nen tang Tep vao
+ * `main`: cong tep tra `UNAVAILABLE` cho moi ma, va duong giay la duong DUNG cho hom nay vi B that
+ * su chi co ban giay.
+ */
+export interface RecordDocumentInput {
+  readonly type: OperationalDocumentType;
+  readonly runId: string;
+  readonly legId?: string;
+  readonly checkpointId?: string;
+  readonly basis: 'DIGITAL_FILE' | 'EXTERNAL_PHYSICAL';
+  readonly fileId?: string;
+  readonly externalNote?: string;
+  readonly label?: string;
+  readonly clientEventId: string;
+}
+
+export interface DriverHandoverInput {
+  readonly orderId: string;
+  readonly legId?: string;
+  readonly documentId?: string;
+  readonly externalNote?: string;
+  readonly note?: string;
+  readonly clientEventId: string;
+}

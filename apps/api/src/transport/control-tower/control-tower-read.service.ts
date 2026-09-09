@@ -7,6 +7,7 @@ import {
   ControlTowerAlertFacts,
   ControlTowerCheckpointFacts,
   ControlTowerClaimFacts,
+  ControlTowerFieldFacts,
   ControlTowerCoreFacts,
   ControlTowerFuelFacts,
 } from './control-tower-facts.port.js';
@@ -110,6 +111,14 @@ export class ControlTowerReadService {
     @Optional() private readonly alerts?: ControlTowerAlertFacts,
     @Optional() private readonly checkpoints?: ControlTowerCheckpointFacts,
     @Optional() private readonly telemetry?: TelemetryService,
+    /**
+     * HIEN TRUONG (`#279` Lane O) — phien cho dang mo, phu cap cho duyet, chung tu con thieu.
+     *
+     * `@Optional()` cung khuon bon cong tren: vang mat thi cot `WAITING` trong kem ma ly do, va hai
+     * muc hang viec khong duoc phat ra. Bang van ve duoc — no chi noi that ve nhung gi no khong
+     * biet.
+     */
+    @Optional() private readonly field?: ControlTowerFieldFacts,
   ) {}
 
   async view(now?: Date): Promise<ControlTowerView> {
@@ -123,17 +132,34 @@ export class ControlTowerReadService {
      */
     const coreInput = await this.readCore(unavailableSources);
 
-    const board = buildOperationsBoard(coreInput);
-    const fleet = countFleetPresence(coreInput);
+    /*
+     * HIEN TRUONG DOC TRUOC BANG, cung ly do voi moc: cot `WAITING` la ket qua cua lan doc nay.
+     * Doc sau roi va vao bang se phai dung mot bang thu hai.
+     */
+    const fieldInput = await this.readField(unavailableSources);
+
+    /*
+     * MOT dau vao hop nhat, dung MOT lan. Ghep o day chu khong o ba cho goi: ba ban ghep se lech
+     * nhau o lan sua thu ba, va bang se ve mot cot bang mot nguon con hang viec dung mot nguon
+     * khac.
+     */
+    const boardInput: ControlTowerCoreInput = {
+      ...coreInput,
+      waitingLegIds: fieldInput.waitingLegIds,
+    };
+
+    const board = buildOperationsBoard(boardInput);
+    const fleet = countFleetPresence(boardInput);
 
     const queue: ActionQueueItem[] = [
-      ...this.coreQueueItems(coreInput),
+      ...this.coreQueueItems(boardInput),
       ...checkpointQueueItems(coreInput.timelinesByRun, coreInput.runs),
     ];
 
     queue.push(...(await this.claimQueueItems(unavailableSources)));
     queue.push(...(await this.fuelQueueItems(unavailableSources)));
     queue.push(...(await this.alertQueueItems(unavailableSources, now)));
+    queue.push(...fieldInput.queue);
 
     for (const source of unavailableSources) {
       this.telemetry?.decision({
@@ -173,7 +199,16 @@ export class ControlTowerReadService {
     };
   }
 
-  private async readCore(unavailable: ControlTowerSource[]): Promise<ControlTowerReadInput> {
+  /**
+   * `Omit<..., 'waitingLegIds'>` — nguon hien truong den tu MOT cong KHAC (`readField`).
+   *
+   * Bo truong do ra khoi kieu tra ve o day thay vi tra `null` roi ghi de: mot `null` tam thoi la
+   * mot gia tri SAI di qua ba dong ma, va lan quen ghi de dau tien se lam cot `WAITING` cong bo
+   * "khong co nguon" o dung khach DANG co nguon.
+   */
+  private async readCore(
+    unavailable: ControlTowerSource[],
+  ): Promise<Omit<ControlTowerReadInput, 'waitingLegIds'>> {
     const [runs, vehicles, drivers, orders] = await Promise.all([
       this.core.listRuns(),
       this.core.listVehicles(),
@@ -299,6 +334,66 @@ export class ControlTowerReadService {
     );
   }
 
+  /**
+   * NGUON HIEN TRUONG (`#279` Lane O) — mot lan doc, ba cau tra loi.
+   *
+   * Gop ba phep doc vao MOT ham chu khong ba ham rieng, va do la co y: ca ba den tu cung mot
+   * capability, nen chung vang mat CUNG NHAU. Ba ham rieng se day `FIELD_OPERATIONS` vao
+   * `unavailableSources` ba lan, va nguoi truc se doc mot bang bao thieu ba nguon trong khi chi
+   * thieu mot.
+   *
+   * `waitingLegIds` la `null` — chu KHONG mot `Set` rong — khi cong vang mat. Xem
+   * `ControlTowerCoreInput.waitingLegIds`: mot `Set` rong nghia la hom nay khong xe nao dang cho.
+   */
+  private async readField(unavailable: ControlTowerSource[]): Promise<{
+    readonly waitingLegIds: ReadonlySet<string> | null;
+    readonly queue: readonly ActionQueueItem[];
+  }> {
+    const field = this.field;
+    if (!field) {
+      unavailable.push('FIELD_OPERATIONS');
+      return { waitingLegIds: null, queue: [] };
+    }
+
+    const [waitingLegIds, pendingAllowances, missingDocuments] = await Promise.all([
+      field.listOpenWaitingLegIds(),
+      field.countPendingAllowances(),
+      field.listLegsMissingRequiredDocuments(),
+    ]);
+
+    const queue: ActionQueueItem[] = [];
+
+    /*
+     * MOT muc cho CA hang cho duyet, khong mot muc cho moi de nghi.
+     *
+     * Hang viec cua thap dieu hanh tra loi *"hom nay con viec gi"*, khong phai *"liet ke tung
+     * viec"*. Bay khoan cho duyet la MOT viec cua nguoi van phong — mo man hinh phu cap ra va duyet
+     * — chu khong phai bay dong day nhung muc khac ra khoi bang.
+     *
+     * VA KHONG MOT SO TIEN NAO: `detail` mang so LUONG, khong mang so DONG. `#279` O6 dat khoan tien
+     * do o mot be mat rieng, voi mot quyen rieng.
+     */
+    if (pendingAllowances > 0) {
+      queue.push({
+        kind: 'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL',
+        severity: 'WARNING',
+        subject: { kind: 'RUN', id: 'pending-waiting-allowances', reference: null },
+        detail: { count: pendingAllowances },
+      });
+    }
+
+    for (const legId of missingDocuments) {
+      queue.push({
+        kind: 'DELIVERY_PROOF_DOCUMENT_MISSING',
+        severity: 'WARNING',
+        subject: { kind: 'RUN_LEG', id: legId, reference: null },
+        detail: {},
+      });
+    }
+
+    return { waitingLegIds, queue };
+  }
+
   private async fuelQueueItems(
     unavailable: ControlTowerSource[],
   ): Promise<readonly ActionQueueItem[]> {
@@ -422,21 +517,18 @@ const PENDING_WORK: readonly PendingActionQueueEntry[] = PENDING_ACTION_QUEUE_KI
     case 'LOCATION_PROOF_REVIEW':
       return { kind, reason: 'AWAITING_FLEET_WIDE_PROOF_QUERY' } as const;
     /*
-     * HAI MUC NAY DOI PHIEN CHO, khong doi moc.
+     * MUC NAY DOI MOT NGUONG, KHONG DOI MOT NGUON.
      *
-     * Sau khi `transport-checkpoint` vao `main`, giu chung o `AWAITING_CHECKPOINT_SOURCE` se noi
-     * doi: nguon moc DA co. Cai con thieu la mot ban ghi co gio mo va gio dong cho lan cho nguoi
-     * nhan — xem khoi chu thich cua `WAITING_COLUMN`.
+     * `#279` O5 da lam ra phien cho: gio mo, gio dong, thoi luong doc duoc. Nen giu no o
+     * `AWAITING_WAITING_SESSION_SOURCE` bay gio se noi doi — nguon DA co.
+     *
+     * Cai thieu la mot con so: *"cho bao lau thi dang bao dong"*. `#279` O6 cam bia ra
+     * (*"do not invent thresholds/rates"*), va mot muc "qua 4 tieng" nghe vo hai se thanh con so
+     * van phong dua vao de goi dien cho lai xe — trong khi khong ai o phia khach hang da noi con so
+     * do la bao nhieu.
      */
     case 'RECEIVER_WAITING_ABOVE_THRESHOLD':
-    case 'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL':
-      return { kind, reason: 'AWAITING_WAITING_SESSION_SOURCE' } as const;
-    /*
-     * Chung tu giao hang la TAI LIEU VAN HANH, khong phai mot moc. Mot moc `DELIVERY_ACCEPTED` noi
-     * lai xe da bam nut; no khong noi bien ban ky nhan da ve tay ke toan chua.
-     */
-    case 'DELIVERY_PROOF_DOCUMENT_MISSING':
-      return { kind, reason: 'AWAITING_OPERATIONAL_DOCUMENT_SOURCE' } as const;
+      return { kind, reason: 'AWAITING_WAITING_THRESHOLD_POLICY' } as const;
     default:
       return { kind, reason: 'AWAITING_CHECKPOINT_SOURCE' } as const;
   }

@@ -28,6 +28,7 @@ import {
   toDriverTripCard,
 } from '../workspace/driver';
 import { toDriverPayslipRows } from '../workspace/payroll';
+import { DriverFieldWork } from './FieldScreen';
 import { DriverSiteIntake } from './SiteIntakeScreen';
 
 /**
@@ -45,6 +46,8 @@ export function DriverSurface({ screen }: { readonly screen: DriverScreenId }) {
       return <DriverHome />;
     case 'site-intake':
       return <DriverSiteIntake />;
+    case 'field':
+      return <DriverFieldWork />;
     case 'trip':
       return <DriverTrip />;
     case 'fuel':

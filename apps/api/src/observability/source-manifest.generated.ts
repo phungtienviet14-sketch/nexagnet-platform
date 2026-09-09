@@ -507,9 +507,6 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
-    "transport.driver.self.checkpoint.record": {
-      "filePath": "apps/api/src/transport/checkpoint/driver-checkpoints.controller.ts"
-    },
     "transport.driver.self.document.record": {
       "filePath": "apps/api/src/transport/document/driver-documents.controller.ts"
     },
@@ -943,12 +940,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "control_tower.board_projection|BOARD_CHECKPOINT_COLUMNS_UNAVAILABLE": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 148
+      "line": 174
     },
     "control_tower.compile|CONTROL_TOWER_COMPILED": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 156
+      "line": 182
     },
     "control_tower.compile|CONTROL_TOWER_SOURCE_FAILED": {
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts"
@@ -956,7 +953,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "control_tower.compile|CONTROL_TOWER_SOURCE_UNAVAILABLE": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 139
+      "line": 165
     },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",

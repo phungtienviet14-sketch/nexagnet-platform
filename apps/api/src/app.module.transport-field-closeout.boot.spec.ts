@@ -47,6 +47,8 @@ const { CommercialAcceptanceService } = await import('./src/transport/acceptance
 const { AcceptanceEvidenceFacts } = await import('./src/transport/acceptance/acceptance-facts.port.ts');
 const { MovementService } = await import('./src/transport/movement/movement.service.ts');
 const { FleetService } = await import('./src/transport/fleet/fleet.service.ts');
+const { DriverFieldReadService } = await import('./src/transport/field/field-read.service.ts');
+const { DriverFieldController } = await import('./src/transport/field/driver-field.controller.ts');
 
 const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
 const has = (token) => { try { context.get(token, { strict: false }); return true; } catch { return false; } };
@@ -60,6 +62,7 @@ const documents = context.get(OperationalDocumentService, { strict: false });
 const handovers = context.get(PhysicalReceiptHandoverService, { strict: false });
 const acceptance = context.get(CommercialAcceptanceService, { strict: false });
 const evidence = context.get(AcceptanceEvidenceFacts, { strict: false });
+const field = context.get(DriverFieldReadService, { strict: false });
 
 const vehicle = await fleet.registerVehicle({ registrationPlate: '29H-33333', vehicleClass: 'Dau keo' }, 'boot');
 const driver = await fleet.registerDriver({
@@ -101,6 +104,23 @@ await movement.transitionOrder(orderB.id, 'FULFILLED', 'boot');
 
 const evidenceCountForOrderA = await evidence.countFor(orderA.id);
 
+// MAN HINH HIEN TRUONG (O9) — doc qua DI that, tren chinh vong chay vua dung.
+const work = await field.workFor('boot-driver');
+const firstLeg = work.runs[0]?.legs[0] ?? null;
+const fieldActionLabels = (firstLeg?.nextActions ?? []).map((action) => action.label);
+const fieldMissingDocuments = firstLeg?.missingDocumentTypes ?? [];
+const MONEY = ['freight', 'revenue', 'margin', 'amount', 'currency', 'salary', 'allowance'];
+const fieldMoneyKeys = [];
+const walk = (node) => {
+  if (node === null || typeof node !== 'object') return;
+  if (Array.isArray(node)) { node.forEach(walk); return; }
+  for (const key of Object.keys(node)) {
+    if (MONEY.some((needle) => key.toLowerCase().includes(needle))) fieldMoneyKeys.push(key);
+    walk(node[key]);
+  }
+};
+walk(work);
+
 // CHUOI BAN GIAO, ghi TRUOC khi ai bam ket thuc — de do dung dieu O13 bai 9.
 await handovers.recordAsDriver({
   orderId: orderA.id, documentId: receiptA.id,
@@ -138,7 +158,11 @@ const accepted = await acceptance.decide({
 const proof = {
   driverDocumentsController: has(DriverDocumentsController),
   documentsController: has(DocumentsController),
+  driverFieldController: has(DriverFieldController),
   evidenceCountForOrderA,
+  fieldActionLabels,
+  fieldMissingDocuments,
+  fieldMoneyKeys,
   acceptedWithDocumentBasis: accepted.acceptance.state,
   foreignOrderReason,
   withdrawnEvidenceReason,
@@ -179,8 +203,20 @@ describe('transport field closeout process boot contract', () => {
       expect(JSON.parse(proof ?? '{}')).toEqual({
         driverDocumentsController: true,
         documentsController: true,
+        driverFieldController: true,
         /* Cong chung tu CON SONG: mot to bien nhan cua don nay duoc chap nhan. */
         evidenceCountForOrderA: 1,
+        /*
+         * `#279` O9 — man hinh lai xe noi VIEC KE TIEP bang tieng Viet, khong noi ten enum.
+         *
+         * Chang nay moi co mot to `DELIVERY_RECEIPT` ghi qua duong VAN HANH (khong moc nao), nen
+         * viec dau tien va duy nhat con lai la den diem lay hang.
+         */
+        fieldActionLabels: ['Đã tới điểm lấy hàng'],
+        /* Chang CO HANG, va chinh sach ho so B doi mot bien nhan — da co, nen khong con thieu gi. */
+        fieldMissingDocuments: [],
+        /* `#279` O9 + `INV-09` — khong mot khoa nao co mui tien trong payload cua lai xe. */
+        fieldMoneyKeys: [],
         acceptedWithDocumentBasis: 'APPROVED',
         /* `#279` O13 bai 8 — chinh to do khong thoa man don khac. */
         foreignOrderReason: 'ACCEPTANCE_EVIDENCE_NOT_FOR_ORDER',

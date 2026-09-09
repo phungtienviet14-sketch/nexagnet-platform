@@ -83,6 +83,14 @@ export abstract class OperationalDocumentRepository {
   abstract listForLeg(legId: string): Promise<readonly OperationalDocument[]>;
   abstract listForOrder(orderId: string): Promise<readonly OperationalDocument[]>;
   abstract listForDriver(driverId: string): Promise<readonly OperationalDocument[]>;
+  /**
+   * MOI chung tu CON HIEU LUC co gan chang — nguon canh bao thieu chung tu cua thap dieu hanh.
+   *
+   * MOT lan doc cho ca doi xe, khong `listForLeg(legId)` cho tung chang: thap dieu hanh ve lai o
+   * moi lan nguoi truc mo man hinh, va mot vong N+1 o do la mot vong N+1 tren duong ve cua man hinh
+   * duoc mo nhieu nhat trong ngay.
+   */
+  abstract listActiveWithLeg(): Promise<readonly OperationalDocument[]>;
 }
 
 /** Da bia mo — mot lop loi RIENG de tang dich vu dich duoc thanh mot ma nguoi dung doc duoc. */
@@ -206,6 +214,10 @@ export class InMemoryOperationalDocumentRepository extends OperationalDocumentRe
 
   async listForDriver(driverId: string): Promise<readonly OperationalDocument[]> {
     return this.sorted(this.rows.filter((row) => row.driverId === driverId));
+  }
+
+  async listActiveWithLeg(): Promise<readonly OperationalDocument[]> {
+    return this.sorted(this.rows.filter((row) => row.status === 'ACTIVE' && row.legId !== null));
   }
 
   private sorted(rows: readonly OperationalDocument[]): readonly OperationalDocument[] {

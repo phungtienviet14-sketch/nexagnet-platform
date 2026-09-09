@@ -27,6 +27,18 @@ const ACTOR = 'it-document';
 const POLICY = { timeZone: 'Asia/Ho_Chi_Minh' } as const;
 const NOW = new Date('2026-09-09T03:00:00.000Z');
 
+/**
+ * KHOA TU VAN quanh khoi TAT/BAT trigger — cung ly le voi hai tep IT cua mien phien cho.
+ *
+ * Trigger la mot doi tuong CHUNG cua ca co so du lieu, va CI chay cac tep IT SONG SONG. Mot tep bat
+ * lai trigger dung luc tep kia dang xoa se lam lan xoa do chet vi chinh cai trigger vua duoc bat —
+ * mot flake lam nguoi ta chay lai thay vi doc.
+ *
+ * Hai bang cua tep nay khong dung chung trigger voi tep nao khac HOM NAY, nhung khoa van duoc dat:
+ * tep IT thu hai cham vao chung se den ma khong ai nho ra rang phai dat khoa.
+ */
+const DOCUMENT_TRIGGER_LOCK = 279_006;
+
 describe.runIf(process.env.RUN_PRISMA_IT === '1')('chung tu van hanh tren Postgres that', () => {
   const prisma = new PrismaService();
   const fleet = new PrismaFleetRepository(prisma);
@@ -63,6 +75,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('chung tu van hanh tren Postgr
       ['TransportPhysicalReceiptHandover', 'transport_physical_receipt_handover_append_only'],
       ['TransportOperationalDocument', 'transport_operational_document_immutable'],
     ] as const;
+    await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${DOCUMENT_TRIGGER_LOCK})`);
     for (const [table, trigger] of guarded) {
       await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
     }
@@ -75,6 +88,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('chung tu van hanh tren Postgr
       for (const [table, trigger] of guarded) {
         await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
       }
+      await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${DOCUMENT_TRIGGER_LOCK})`);
     }
     await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });

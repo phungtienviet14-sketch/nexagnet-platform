@@ -49,6 +49,8 @@ describe('transport-checkpoint process boot contract', () => {
       const { ControlTowerReadService } = await import('./src/transport/control-tower/control-tower-read.service.ts');
       const { CheckpointService } = await import('./src/transport/checkpoint/checkpoint.service.ts');
       const { MovementService } = await import('./src/transport/movement/movement.service.ts');
+      const { WaitingSessionRepository } = await import('./src/transport/waiting/waiting.repository.ts');
+      const { CheckpointRepository } = await import('./src/transport/checkpoint/checkpoint.repository.ts');
       const { FleetService } = await import('./src/transport/fleet/fleet.service.ts');
 
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
@@ -58,6 +60,8 @@ describe('transport-checkpoint process boot contract', () => {
       const movement = context.get(MovementService, { strict: false });
       const checkpoints = context.get(CheckpointService, { strict: false });
       const tower = context.get(ControlTowerReadService, { strict: false });
+      const waitingSessions = context.get(WaitingSessionRepository, { strict: false });
+      const checkpointRepo = context.get(CheckpointRepository, { strict: false });
 
       const vehicle = await fleet.registerVehicle({ registrationPlate: '29H-11111', vehicleClass: 'Dau keo' }, 'boot');
       const driver = await fleet.registerDriver({
@@ -108,6 +112,33 @@ describe('transport-checkpoint process boot contract', () => {
       const waitingColumn = columnOf(after, 'WAITING');
       const card = loadingColumn.cards[0] ?? null;
 
+      // MOT PHIEN CHO THAT (#279 O5), ghi thang qua kho: luat mo/dong da duoc do o
+      // waiting.service.spec.ts va transport-waiting.int.spec.ts. Cai bai NAY do mot dieu khac:
+      // bang dieu hanh CO DOC duoc nguon do khong.
+      await checkpoints.recordAsOperator({
+        type: 'PICKUP_DEPARTURE', runId: run.id, legId: loaded.id,
+        authUserId: 'boot-operator', clientEventId: 'boot-5',
+      });
+      // DELIVERY_ARRIVAL doi chung cu vi tri theo chinh sach ho so B, va duong DIEU HANH khong dinh
+      // kem ban dinh vi duoc (xem CheckpointService). Ghi thang qua kho: bai nay do bang dieu hanh,
+      // khong do lai chinh sach chung cu — cai do da co bo test rieng.
+      const arrival = await checkpointRepo.create({
+        type: 'DELIVERY_ARRIVAL', runId: run.id, legId: loaded.id,
+        recordedBy: 'boot-driver', driverId: driver.id, observationId: null,
+        clientEventId: 'boot-6', capturedAt: null, receivedAt: new Date(),
+        businessDate: '2026-09-09', note: null,
+      });
+      await waitingSessions.create({
+        runId: run.id, legId: loaded.id, driverId: driver.id,
+        arrivalCheckpointId: arrival.id, reason: 'RECEIVER_NOT_READY',
+        startedAt: new Date(), startedBy: 'boot-driver', startClientEventId: 'boot-w1',
+        note: null, businessDate: '2026-09-09',
+      });
+
+      const waiting = await tower.view();
+      const waitingAfter = columnOf(waiting, 'WAITING');
+      const arrivedAfter = columnOf(waiting, 'ARRIVED');
+
       const proof = {
         controlTower: has(ControlTowerController),
         checkpointsController: has(CheckpointsController),
@@ -126,9 +157,13 @@ describe('transport-checkpoint process boot contract', () => {
         emptyLegs: card?.emptyLegs ?? null,
         emptyKm: card?.emptyKm ?? null,
         totalKm: card?.totalKm ?? null,
-        // Cot WAITING van rong, va ly do cua no KHONG phai "chua co moc".
+        // Cot WAITING la mot cot THAT: co nguon (unavailableReason === null), va rong o day chi
+        // nghia la chua ai mo phien cho nao — mot su that, khong phai mot cho trong.
         waitingCards: waitingColumn.cards.length,
         waitingReason: waitingColumn.unavailableReason,
+        // Va sau khi CO mot phien cho: vong chay chuyen sang cot WAITING, va roi khoi ARRIVED.
+        waitingRunsAfterSession: waitingAfter.cards.map((entry) => entry.runCode),
+        arrivedRunsAfterSession: arrivedAfter.cards.map((entry) => entry.runCode),
         pendingCheckpointReasons: after.pendingWork.filter(
           (entry) => entry.reason === 'AWAITING_CHECKPOINT_SOURCE',
         ).length,
@@ -176,9 +211,14 @@ describe('transport-checkpoint process boot contract', () => {
         emptyLegs: 1,
         emptyKm: 105,
         totalKm: 210,
-        /* `#278` N13 bai 2 — do o muc tien trinh. */
+        /*
+         * `#279` O5 da lam ra nguon phien cho, nen cot `WAITING` khong con mang ma ly do nao —
+         * `#278` N13 bai 2 doi dieu do THAY DOI dung khi nguon xuat hien, va day la lan do no.
+         */
         waitingCards: 0,
-        waitingReason: 'AWAITING_WAITING_SESSION_SOURCE',
+        waitingReason: null,
+        waitingRunsAfterSession: ['RUN-BOOT-1'],
+        arrivedRunsAfterSession: [],
         pendingCheckpointReasons: 0,
       });
     },

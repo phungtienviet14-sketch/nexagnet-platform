@@ -108,6 +108,10 @@ export class PrismaOperationalDocumentRepository extends OperationalDocumentRepo
     return this.list({ driverId });
   }
 
+  async listActiveWithLeg(): Promise<readonly OperationalDocument[]> {
+    return this.list({ status: 'ACTIVE', legId: { not: null } });
+  }
+
   private async list(where: Record<string, unknown>): Promise<readonly OperationalDocument[]> {
     const rows = await this.prisma.transportOperationalDocument.findMany({
       where,

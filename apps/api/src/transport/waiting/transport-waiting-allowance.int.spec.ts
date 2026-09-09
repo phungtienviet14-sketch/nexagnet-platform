@@ -36,6 +36,14 @@ const OFFICE = 'it-wa-van-phong';
 const BOSS = 'it-wa-sep';
 const POLICY = { timeZone: 'Asia/Ho_Chi_Minh' } as const;
 
+/**
+ * KHOA TU VAN dung chung cho MOI tep IT cham vao trigger cua mien phien cho.
+ *
+ * Con so nay khong co y nghia nghiep vu — no chi can GIONG NHAU o moi tep. Doi no o mot tep ma
+ * quen tep kia se lam khoa mat tac dung mot cach im lang.
+ */
+const WAITING_TRIGGER_LOCK = 279_005;
+
 class PrismaIdentity extends WaitingAllowanceDriverIdentityFacts {
   constructor(private readonly fleet: PrismaFleetRepository) {
     super();
@@ -96,6 +104,22 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('phu cap cho tren Postgres tha
       ['TransportDeliveryWaitingSession', 'transport_waiting_session_immutable'],
       ['TransportRunCheckpoint', 'transport_run_checkpoint_append_only'],
     ] as const;
+    /**
+     * KHOA TU VAN quanh khoi TAT/BAT trigger.
+     *
+     * Hai tep IT cua mien nay (`transport-waiting.int.spec.ts` va tep nay) deu tat roi bat lai trigger
+     * `transport_waiting_session_immutable` — mot doi tuong CHUNG cua ca co so du lieu. CI chay cac
+     * tep IT SONG SONG, nen mot tep co the BAT lai trigger dung luc tep kia dang xoa, va lan xoa do
+     * chet vi chinh cai trigger vua duoc bat.
+     *
+     * Do khong phai mot gia dinh: no da do dung kieu ay khi hai tep duoc chay cung mot lenh
+     * (09/09/2026), roi XANH khi chay lai — dung hinh dang cua mot flake lam nguoi ta chay lai thay
+     * vi doc.
+     *
+     * `pg_advisory_lock` tren mot khoa co dinh lam hai tep xep hang. Khoa duoc nha o `finally`, nen
+     * mot bai do khong khoa lai ca lan chay ke tiep.
+     */
+    await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${WAITING_TRIGGER_LOCK})`);
     for (const [table, trigger] of guarded) {
       await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
     }
@@ -109,6 +133,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('phu cap cho tren Postgres tha
       for (const [table, trigger] of guarded) {
         await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
       }
+      await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${WAITING_TRIGGER_LOCK})`);
     }
     await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
