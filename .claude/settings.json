@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(docker compose up:*)",
+      "Bash(docker compose down:*)",
+      "Bash(docker compose restart:*)",
+      "Bash(docker compose start:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker run:*)",
+      "Bash(docker start:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker volume rm:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(./deploy/netviet/*)",
+      "Bash(deploy/netviet/*)",
+      "Bash(bash deploy/netviet/*)",
+      "Bash(sh deploy/netviet/*)",
+      "Bash(pwsh deploy/netviet/*)",
+      "Bash(powershell deploy/netviet/*)",
+      "Bash(gcloud secrets versions access:*)",
+      "Read(./.env)",
+      "Read(./secrets/**)",
+      "Edit(./.env)",
+      "Edit(./secrets/**)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git worktree remove:*)",
+      "Bash(git worktree prune:*)",
+      "Bash(docker:*)"
+    ]
+  },
+  "worktree": {
+    "baseRef": "fresh",
+    "bgIsolation": "worktree",
+    "symlinkDirectories": []
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-check.mjs\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
