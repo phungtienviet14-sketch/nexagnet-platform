@@ -21,6 +21,7 @@ import type { TransportCounterpartyDecisionReason } from './counterparty/counter
 import type { TransportCounterpartyErrorReason } from './counterparty/counterparty-errors.js';
 import type { TransportProofDecisionReason } from './proof/proof-decisions.js';
 import type { TransportCheckpointDecisionReason } from './checkpoint/checkpoint-decisions.js';
+import type { TransportWaitingAllowanceDecisionReason } from './waiting/allowance-decisions.js';
 import type { TransportWaitingDecisionReason } from './waiting/waiting-decisions.js';
 import type { TransportSiteIntakeDecisionReason } from './site-intake/site-intake-decisions.js';
 import type { TransportSiteIntakeErrorReason } from './site-intake/site-intake-errors.js';
@@ -129,6 +130,7 @@ export type TransportErrorReason =
   | TransportProofDecisionReason
   | TransportCheckpointDecisionReason
   | TransportWaitingDecisionReason
+  | TransportWaitingAllowanceDecisionReason
   | TransportSiteIntakeDecisionReason
   | TransportSiteIntakeErrorReason
   | TransportAssetOwnershipDecisionReason

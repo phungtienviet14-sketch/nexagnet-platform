@@ -90,9 +90,45 @@ describe('duong HTTP cua phien cho — WT-040', () => {
     expect(has('POST', '/transport/waiting-sessions/:param/close')).toBe(true);
   });
 
+  /**
+   * PHU CAP CHO (`#279` O6) — ba duong, va KHONG mot duong nao mang tien tien to `/transport/me/`.
+   *
+   * Do la ca khang dinh: ca hai ma quyen nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi
+   * duoc mot duong nao. Mot lai xe tu de nghi roi tu duyet phu cap cho chinh minh la dung cai ma
+   * kiem soat noi bo sinh ra de chan.
+   */
+  it('phu cap cho co ba duong van phong, va khong mot duong lai xe nao', () => {
+    expect(has('POST', '/transport/waiting-allowances')).toBe(true);
+    expect(has('POST', '/transport/waiting-allowances/:param/decision')).toBe(true);
+    expect(has('GET', '/transport/waiting-allowances/pending')).toBe(true);
+
+    const driverAllowanceRoutes = routes.filter((route) =>
+      route.path.startsWith('/transport/me/waiting-allowance'),
+    );
+    expect(driverAllowanceRoutes).toEqual([]);
+  });
+
+  /**
+   * KHONG co duong SUA va KHONG co duong XOA. Doi y ve sau la mot de nghi MOI tren cung phien cho —
+   * `#279` O6 doi *"rejected/corrected history preserved"*, va mot tuyen `PATCH`/`DELETE` se lam
+   * lich su do khong con.
+   */
+  it('khong mot duong sua hay xoa nao tren phu cap cho', () => {
+    const allowanceRoutes = routes.filter((route) =>
+      route.path.startsWith('/transport/waiting-allowances'),
+    );
+    expect(allowanceRoutes.map((route) => route.method).sort()).toEqual([
+      'GET',
+      'GET',
+      'POST',
+      'POST',
+    ]);
+  });
+
   it('khong duong nao ton tai o mot khach chi bat `transport-core`', () => {
     const core = routesFor(['transport-core']);
     expect(core.filter((route) => route.path.includes('waiting'))).toEqual([]);
+    expect(core.filter((route) => route.path.includes('allowance'))).toEqual([]);
   });
 
   /** Neo NGUOC LAI: phep quet phai that su doc duoc bang dinh tuyen. */

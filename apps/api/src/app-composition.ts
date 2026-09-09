@@ -134,7 +134,9 @@ import { DriverTrackingController } from './transport/proof/driver-tracking.cont
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
+import { WaitingAllowanceController } from './transport/waiting/allowance.controller.js';
 import { DriverWaitingController } from './transport/waiting/driver-waiting.controller.js';
+import { TransportWaitingPayrollBridgeModule } from './transport/waiting/waiting-payroll-bridge.module.js';
 import { WaitingController } from './transport/waiting/waiting.controller.js';
 import { TransportSiteIntakeModule } from './transport/site-intake/transport-site-intake.module.js';
 import { DriverSiteIntakeController } from './transport/site-intake/driver-site-intake.controller.js';
@@ -309,6 +311,13 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // va bien mat cung no: mot khach khong co cong de vao va khong co can de can thi khong mang
   // theo chin loai moc cua cong ty B.
   owned('transport-checkpoint', TransportCheckpointModule),
+  // CAU NOI phu cap cho -> bang luong (`#279` O6). `@Global()`, va CHI xuat mot cong CHI DOC.
+  //
+  // Den cung `transport-checkpoint` va bien mat cung no: khach tat moc hien truong thi token khong
+  // ton tai, `WorkforceService` nhan `undefined` qua `@Optional()`, va lan chay luong ghi
+  // `WAITING_ALLOWANCE_UNAVAILABLE` — mot dau vao vang mat DOC DUOC tren phieu, thay vi mot so
+  // khong khong ai giai thich duoc.
+  owned('transport-checkpoint', TransportWaitingPayrollBridgeModule),
   // NHAN VIEC TAI DIA DIEM A (`#267`). Den cung `transport-site-intake` va bien mat cung no: mot
   // khach dieu xe tu van phong khong co nut `Tao chuyen` tren dien thoai lai xe, va do la mot cau
   // hinh hop le — xem khoi chu cua `transport-site-intake.module.ts`.
@@ -487,6 +496,11 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
    */
   owned('transport-checkpoint', DriverWaitingController),
   owned('transport-checkpoint', WaitingController),
+  // PHU CAP CHO (`#279` O6) — MOT be mat, va KHONG co ban 'cua chinh minh' cho lai xe. Ca hai ma
+  // quyen deu nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi duoc mot duong nao: mot lai
+  // xe tu de nghi roi tu duyet phu cap cho chinh minh la dung cai ma kiem soat noi bo sinh ra de
+  // chan. Cong THAT chong tu duyet con nam o tang dich vu, tren `Driver.authUserId`.
+  owned('transport-checkpoint', WaitingAllowanceController),
   // HANG CHO NGHIEM THU CHUNG TU — MOT be mat, va KHONG co ban 'cua chinh minh' cho lai xe.
   // Ca hai ma quyen deu nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi duoc mot duong
   // nao o day: mot lai xe tu nghiem thu chuyen cua chinh minh la dung cai ma kiem soat noi bo

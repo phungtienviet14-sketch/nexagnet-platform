@@ -154,6 +154,19 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.driver.self.site_intake.propose',
   'transport.driver.self.site_intake.confirm',
+  /**
+   * MO MOT PHIEN CHO NGUOI NHAN (`#279` O5) — nut `Bat dau cho` cua chinh lai xe do.
+   *
+   * MOT ma, va CHI mot: khong co ma `.close` o pham vi lai xe. Ho dong mot phien bang cach bam
+   * `Khach da nhan hang` — mot moc — va chinh moc do dong phien.
+   */
+  'transport.driver.self.waiting.start',
+  /** DOC phien cho (`#279` O5/O11). Ke toan CO ma nay; ma DONG thi khong. */
+  'transport.waiting.read',
+  'transport.waiting.close',
+  /** HAI ma cho phu cap cho (`#279` O6): de nghi ⟂ quyet dinh. */
+  'transport.waiting_allowance.propose',
+  'transport.waiting_allowance.decide',
   /** DONG THOI GIAN cua mot chuyen — moc, giai doan tung chang, canh bao. KHONG toa do. */
   'transport.checkpoint.read',
   /** GHI moc tu be mat van hanh — `ASSIGNED` va cac moc bu. KHONG kem chung cu vi tri. */
@@ -223,6 +236,7 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.driver.self.checkpoint.record',
   'transport.driver.self.site_intake.propose',
   'transport.driver.self.site_intake.confirm',
+  'transport.driver.self.waiting.start',
 ];
 
 /**
@@ -269,6 +283,11 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    * DUYET khoan tien do khong duoc sua can cu sinh ra no. Chep nguyen tu API.
    */
   'transport.checkpoint.record',
+  /**
+   * DONG mot phien cho (`#279` O5) — cung phan cong nhiem vu, va o day chat hon: gio dong la moc
+   * tren cua khoang thoi gian ma Ke toan sap duyet tien cho.
+   */
+  'transport.waiting.close',
   /**
    * Ke toan DOC duoc chung cu — do la ca cong viec cua ho — nhung RUT mot chung cu la viec khac:
    * go bo mot muc khoi chinh ho so minh dang doi soat.

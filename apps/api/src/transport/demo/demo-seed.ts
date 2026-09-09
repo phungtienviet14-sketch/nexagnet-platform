@@ -1306,6 +1306,7 @@ async function writePlan(
           tripCount: row.tripCount,
           distanceKm: row.distanceKm,
           fuelLitersSaved: null,
+          waitingAllowance: null,
           driverFundBalance: Number(balance._sum.signedAmount ?? 0n),
           manualComponents: (manualByDriver.get(driver.ref) ?? []).map((component) => ({
             kind: component.kind,

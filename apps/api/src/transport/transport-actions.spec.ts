@@ -129,6 +129,10 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // chinh con so nay. Ma DONG thi khong — xem bai rieng ben duoi.
       'transport.waiting.read',
       'transport.waiting.close',
+      // HAI ma cho phu cap cho (`#279` O6): de nghi ⟂ quyet dinh. Gop chung se cho bat ky ai de
+      // nghi duoc cung duyet duoc.
+      'transport.waiting_allowance.propose',
+      'transport.waiting_allowance.decide',
       // DONG THOI GIAN cua mot chuyen. Ke toan CO ma nay: mot khoan phu cap cho phai doi chieu
       // duoc voi luc xe den noi. KHONG co toa do.
       'transport.checkpoint.read',

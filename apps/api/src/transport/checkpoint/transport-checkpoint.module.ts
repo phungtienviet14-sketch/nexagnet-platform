@@ -15,7 +15,17 @@ import { DEFAULT_CHECKPOINT_POLICY, type CheckpointPolicy } from './checkpoint-l
 import { CheckpointRepository, InMemoryCheckpointRepository } from './checkpoint.repository.js';
 import { CheckpointService, TRANSPORT_CHECKPOINT_POLICY } from './checkpoint.service.js';
 import { PrismaCheckpointRepository } from './prisma-checkpoint.repository.js';
+import { PrismaWaitingAllowanceRepository } from '../waiting/prisma-allowance.repository.js';
 import { PrismaWaitingSessionRepository } from '../waiting/prisma-waiting.repository.js';
+import {
+  InMemoryWaitingAllowanceRepository,
+  WaitingAllowanceRepository,
+} from '../waiting/allowance.repository.js';
+import {
+  WaitingAllowanceDriverIdentityFacts,
+  WaitingAllowanceDriverIdentityFactsAdapter,
+} from '../waiting/allowance-facts.port.js';
+import { WaitingAllowanceService } from '../waiting/allowance.service.js';
 import { DeliveryWaitingCloser } from '../waiting/waiting-close.port.js';
 import {
   InMemoryWaitingSessionRepository,
@@ -83,6 +93,19 @@ import { WaitingSessionService } from '../waiting/waiting.service.js';
       inject: [PrismaService],
     },
     WaitingSessionService,
+    {
+      provide: WaitingAllowanceRepository,
+      useFactory: (prisma: PrismaService): WaitingAllowanceRepository =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaWaitingAllowanceRepository(prisma)
+          : new InMemoryWaitingAllowanceRepository(),
+      inject: [PrismaService],
+    },
+    {
+      provide: WaitingAllowanceDriverIdentityFacts,
+      useClass: WaitingAllowanceDriverIdentityFactsAdapter,
+    },
+    WaitingAllowanceService,
     /**
      * CAU NOI moc -> phien cho. MOT the hien, hai token.
      *
@@ -98,6 +121,8 @@ import { WaitingSessionService } from '../waiting/waiting.service.js';
     CheckpointRepository,
     WaitingSessionService,
     WaitingSessionRepository,
+    WaitingAllowanceService,
+    WaitingAllowanceRepository,
   ],
 })
 export class TransportCheckpointModule {}

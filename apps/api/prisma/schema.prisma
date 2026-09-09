@@ -937,6 +937,7 @@ model TransportDriver {
   @@index([status])
   @@index([licenceExpiry])
   waitingSessions       TransportDeliveryWaitingSession[]
+  waitingAllowances     TransportDriverWaitingAllowance[]
 }
 
 /// Gan lai xe phu trach mot xe — tang DOI XE. `effectiveTo = NULL` la ban dang hieu luc.
@@ -3202,6 +3203,17 @@ enum TransportPayslipComponentSource {
   PER_TRIP
   PER_KM
   FUEL_SAVING_BONUS
+  /// `#279` O6 — tong cac khoan phu cap cho DA DUOC DUYET trong ky.
+  ///
+  /// KHONG phai `MANUAL_BONUS`: mot khoan thu cong duoc go thang vao bang luong va chi song trong
+  /// bang luong. Khoan nay co mot HO SO RIENG dung sau no (`TransportDriverWaitingAllowance` ->
+  /// `TransportDeliveryWaitingSession` -> moc `DELIVERY_ARRIVAL`), nen no truy nguyen duoc ve mot
+  /// khoang thoi gian co that. Gop chung se lam mat duong truy nguyen do.
+  ///
+  /// `recordedBy` cua thanh phan nay la NULL, va rang buoc
+  /// `TransportPayslipComponent_manual_needs_signer` doi dung dieu do: chu ky cua nguoi duyet song
+  /// tren HO SO PHU CAP (`decidedBy`), noi no khong bi tinh lai o moi lan chay luong.
+  WAITING_ALLOWANCE
   MANUAL_BONUS
   MANUAL_DEDUCTION
 }
@@ -4680,6 +4692,67 @@ model TransportDeliveryWaitingSession {
   @@index([legId, status])
   @@index([driverId, businessDate])
   @@index([status, startedAt])
+  waitingAllowances   TransportDriverWaitingAllowance[]
+}
+
+enum TransportWaitingAllowanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// PHU CAP CHO CUA LAI XE — `#279` O6.
+///
+/// KHONG CO COT THOI LUONG, va do la mot khang dinh trung tam: thoi luong doc duoc tu
+/// `waitingSessionId` bang mot phep tru tren gio may chu. Chep no vao day se tao ban thu hai cua
+/// mot con so co the doi — va ban chep se la ban duoc doc khi hai ban lech nhau.
+///
+/// KHONG CO CONG THUC nao doi thoi luong thanh tien. `#279` O6 va `#243` F4 deu ghi rang chu khach
+/// CHUA dua ra mot cong thuc. `candidateAmount` la con so NGUOI VAN PHONG go vao; `approvedAmount`
+/// la con so NGUOI DUYET chot. Hai truong chu khong mot: mot truong bi ghi de se lam bien mat cau
+/// hoi *"nguoi duyet da cat bot bao nhieu"*.
+///
+/// KHONG CO KHOA NGOAI NAO TRO SANG KHACH HANG hay chung tu quyet toan. `#279` O6 tach bach phu
+/// cap cho cua LAI XE voi tien luu bai cua KHACH, va cach chac chan nhat de giu dieu do la khong co
+/// cot nao de ai do noi hai thu lai.
+///
+/// RANG BUOC KHONG NAM O DAY, chung nam trong SQL tho cua migration
+/// `20260911170000_transport_waiting_allowance`:
+///
+///     1. `TransportDriverWaitingAllowance_approvedSession_key` — unique MOT PHAN `WHERE status = 'APPROVED'`
+///     2. `TransportDriverWaitingAllowance_decision_shape`      — quyet thi phai du gio/nguoi/khoa
+///     3. `TransportDriverWaitingAllowance_amount_range`        — so nguyen duong, khong vuot de nghi
+///     4. `TransportDriverWaitingAllowance_reason_not_blank`
+///     5. `TransportDriverWaitingAllowance_businessDate_iso`
+///     6. trigger `transport_waiting_allowance_immutable` — chi mot canh `PENDING -> APPROVED|REJECTED`
+model TransportDriverWaitingAllowance {
+  id                     String                          @id @default(cuid())
+  waitingSessionId       String
+  waitingSession         TransportDeliveryWaitingSession @relation(fields: [waitingSessionId], references: [id], onDelete: Restrict)
+  /// Lai xe HUONG khoan nay. Lay tu chinh phien cho, khong tu than yeu cau.
+  driverId               String
+  driver                 TransportDriver                 @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  status                 TransportWaitingAllowanceStatus @default(PENDING)
+  currencyCode           String                          @default("VND") @db.VarChar(3)
+  /// So NGUYEN DONG (`GD-03`). Nguoi van phong go vao.
+  candidateAmount        BigInt
+  /// So NGUYEN DONG. NULL khi chua duyet hoac bi tu choi.
+  approvedAmount         BigInt?
+  reason                 String
+  proposedBy             String
+  proposedAt             DateTime                        @default(now())
+  decidedBy              String?
+  decidedAt              DateTime?
+  decisionNote           String?
+  /// Khoa chong ghi trung cua lan QUYET DINH — `#279` O6 *"same approval retry one effect"*.
+  decisionIdempotencyKey String?                         @unique(map: "TransportDriverWaitingAllowance_decisionKey_key")
+  businessDate           String                          @db.VarChar(10)
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
+
+  @@index([waitingSessionId])
+  @@index([driverId, businessDate])
+  @@index([status, proposedAt])
 }
 
 // ===================================================================

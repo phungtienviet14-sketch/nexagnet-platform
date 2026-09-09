@@ -32,6 +32,16 @@ export const PAYSLIP_COMPONENT_SOURCES = [
   'PER_TRIP',
   'PER_KM',
   'FUEL_SAVING_BONUS',
+  /**
+   * `#279` O6 — tong cac khoan phu cap cho DA DUOC DUYET trong ky.
+   *
+   * KHONG dung `MANUAL_BONUS`: mot khoan thu cong duoc go thang vao bang luong va chi song trong
+   * bang luong. Khoan nay co mot HO SO RIENG dung sau no
+   * (`TransportDriverWaitingAllowance` -> `TransportDeliveryWaitingSession` -> moc
+   * `DELIVERY_ARRIVAL`), nen no truy nguyen duoc ve mot khoang thoi gian co that. Gop chung se lam
+   * mat duong truy nguyen do.
+   */
+  'WAITING_ALLOWANCE',
   'MANUAL_BONUS',
   'MANUAL_DEDUCTION',
 ] as const;
@@ -49,6 +59,13 @@ export const PAYROLL_MISSING_INPUTS = [
   'FUEL_SAVING_UNAVAILABLE',
   /** Khach khong bat `transport-costing` — khong doc duoc so du quy de HIEN THI. */
   'DRIVER_FUND_UNAVAILABLE',
+  /**
+   * Khach khong bat `transport-checkpoint` — khong co khoang cho nguoi nhan nao duoc theo doi.
+   *
+   * Ghi ten thay vi de ngam, cung ly le voi hai dong tren: mot bang luong khong co dong phu cap cho
+   * doc giong het mot ky ma khong ai phai cho.
+   */
+  'WAITING_ALLOWANCE_UNAVAILABLE',
 ] as const;
 export type PayrollMissingInput = (typeof PAYROLL_MISSING_INPUTS)[number];
 

@@ -406,6 +406,23 @@ export const TRANSPORT_ACTIONS = [
    * ma chinh nguoi kiem viet ra.
    */
   'transport.waiting.close',
+  /**
+   * PHU CAP CHO CUA LAI XE (`#279` O6) — HAI ma, va tach chung la CA DIEM cua tranche.
+   *
+   * `.propose` la go mot con so vao mot o. `.decide` la bien con so do thanh TIEN TRONG LUONG cua
+   * mot con nguoi. Gop hai ma lam mot se cho bat ky ai de nghi duoc cung duyet duoc — tuc go bo
+   * dung cai cong ma `#279` O6 sinh ra (*"human approve/reject"*).
+   *
+   * Cung khuon `transport.expense.claim.submit` / `.review` cua `#232 D-06`, va o day co them mot
+   * lop nua: cong THAT chong tu duyet nam o tang dich vu, tren `Driver.authUserId`
+   * (`WaitingAllowanceService.isSelfDealing`). Bang vai khong noi duoc gi ve mot nguoi co CA HAI
+   * ho so — mot tai khoan `ADMIN` duoc noi voi mot `TransportDriver`.
+   *
+   * CA HAI deu la ma VAN HANH, nen ca `ADMIN` lan `ACCOUNTING` co chung; vai `SALE` (vai as-built
+   * cua lai xe) khong co ma nao.
+   */
+  'transport.waiting_allowance.propose',
+  'transport.waiting_allowance.decide',
   'transport.checkpoint.read',
   /**
    * GHI mot moc tu be mat VAN HANH — trong thuc te la `ASSIGNED`, va cac moc bu khi lai xe khong
