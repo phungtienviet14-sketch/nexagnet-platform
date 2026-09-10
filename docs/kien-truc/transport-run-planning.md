@@ -277,6 +277,38 @@ thật bên ngoài** (`RunClosureBlockerSource`), **fail-closed** khi nguồn đ
 đã đổi. Người thua cuộc nhận `transitioned: false` và **không** ghi thêm một dòng
 `transport.run.close.system` nào.
 
+**Ứng viên phải là "có thể đóng được", không chỉ "đã xong việc".** Một trang chỉ có `batchSize`
+chỗ, và một ứng viên không đóng được sẽ quay lại lượt sau với nguyên `updatedAt` cũ — tức nằm mãi ở
+đầu trang, và những vòng chạy phía sau **không bao giờ được nhìn tới**. Đó là một cách hỏng im lặng.
+Nguy hiểm nhất là những vòng chạy không bao giờ đóng được bằng thời gian: khách không khai
+`closure.idleHours` thì một chiếc xe xong việc ở **xa bãi** nằm nguyên ở `holding` mãi mãi (đúng như
+thiết kế). Nên khi khách chưa khai ngưỡng nghỉ, ứng viên bị thu hẹp về những vòng chạy **có thể** đóng
+được: một chặng đã hoàn thành kết thúc tại bãi đang hoạt động. Phép lọc là so sánh chuỗi thẳng, không
+`sameSite()` — hai bản hiện thực của cùng một kho phải cùng **một** luật, và lệch nhãn chỉ làm **bỏ
+sót** một ứng viên (đường sự kiện vẫn đóng nó ngay), không bao giờ làm đóng bừa.
+
+### Vì sao nền tảng này KHÔNG dùng Hatchet cho lượt quét
+
+`OWNER_ARCHITECTURE_CLARIFICATION_2026_09_10` xếp Hatchet là **ưu tiên** cho đường bền vững, và nói
+rõ: *"If an already-accepted bounded durable mechanism proves better for a measured case, keep it."*
+Đây là phép đo cho trường hợp của lane này.
+
+| Câu hỏi | Đo được |
+| --- | --- |
+| Hatchet có phải hạ tầng bắt buộc? | **Không.** `WORKFLOW_ENGINE=on` **và** khách khai `integrations.workflowEngine` mới bật (`workflow-engine-switch.ts`). Mặc định là `DisabledWorkflowEngineAdapter`. |
+| Nếu chỉ dùng Hatchet thì sao? | Mọi khách không bật engine **không bao giờ** đóng được vòng chạy xa bãi. Một năng lực phải chạy cho mọi khách vận tải không được phụ thuộc vào hạ tầng tuỳ chọn. |
+| Trạng thái đóng nằm ở đâu? | **Postgres.** Timer chỉ đánh thức; tập ứng viên được suy lại từ sự thật nguồn mỗi lượt. Không có con trỏ nào sống trong tiến trình. |
+
+Kết luận: giữ cơ chế đã được repo chấp nhận (`setInterval` + `.unref()` + trạng thái trong DB, đúng
+khuôn `CampaignScheduler`/`WorkflowScheduler`), và **không** dựng thêm một đường Hatchet chỉ để có
+Hatchet. Đổi lại, đây là hai điều phải nói thẳng:
+
+- đây **không** phải một `durable wait` cấp từng thực thể; nó là một lượt quét có trần, và tính bền
+  của nó đến từ việc **suy lại từ Postgres**, không từ engine;
+- nếu sau này khách bật engine và cần một lần đánh thức đúng hạn cho từng vòng chạy, đường
+  `WorkflowOutbox` → Hatchet `durableTask`/`sleepFor` đã có sẵn khuôn để nối vào **cùng** hàm phán
+  xử này. Việc đó không được phép sinh ra đường ghi thứ hai.
+
 ---
 
 ## 7. Bề mặt HTTP — Lane M tiêu thụ được (#276 L7)
