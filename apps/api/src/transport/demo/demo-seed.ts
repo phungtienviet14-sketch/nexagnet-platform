@@ -16,6 +16,7 @@ import { formatConsumption, formatLiters } from '../fuel/fuel-quantity.js';
 import { toStoredAmount } from '../money.js';
 import { calculateCommission } from '../settlement/commission-rules.js';
 import { settlementDocumentFingerprint } from '../settlement/settlement-documents.js';
+import { customerReconciliationFingerprint } from '../customer-ar/customer-ar-documents.js';
 import { calculatePayslip, payrollPolicyVersion } from '../workforce/payroll-calculator.js';
 import { loadDemoMonthDataset } from './demo-dataset.js';
 import { assertDemoResetAllowed, assertTransportDemoTenant } from './demo-guard.js';
@@ -157,7 +158,6 @@ const TRANSPORT_TABLES_CHILD_FIRST = [
    * khong bi xoa o day, nen mot lien ket cu chi ton tai khi ai do da chieu mot chuyen MAU — lane
    * nay khong mo rong pham vi de sua mot thu chua hong, chi ghi lai de lan sau khong phai do lai.
    */
-  'transportTripOrderLink',
   'transportTrip',
   'transportVehicleAssignment',
   'transportCustomer',
@@ -228,6 +228,76 @@ async function wipeFrozenCashoutAllocations(prisma: PrismaClient): Promise<numbe
   return deleted ?? 0;
 }
 
+/**
+ * Xoa lich su Order/doi soat CHI trong reset demo da qua hai cong bao ve.
+ *
+ * Cac trigger append-only dung de bao ve giao dich that. Reset demo la thao tac pha huy co chu
+ * dich, nen tat trigger trong cung mot transaction co khoa bang, xoa con truoc cha sau, roi bat
+ * lai. Khong co duong nghiep vu nao goi ham nay.
+ */
+async function wipeCustomerArDemoHistory(
+  prisma: PrismaClient,
+): Promise<Readonly<Record<string, number>>> {
+  return prisma.$transaction(async (tx) => {
+    const triggers = [
+      ['TransportCustomerPaymentAllocation', 'transport_customer_payment_allocation_append_only'],
+      ['TransportCustomerPayment', 'transport_customer_payment_append_only'],
+      ['TransportCustomerReconciliation', 'transport_customer_reconciliation_append_only'],
+      ['TransportCustomerReconciliationBatchLine', 'transport_customer_reconciliation_line_guard'],
+      ['TransportCustomerReconciliationBatch', 'transport_customer_reconciliation_batch_guard'],
+      ['TransportSettlementAllocation', 'transport_customer_legacy_allocation_append_only'],
+      ['TransportSettlementDocument', 'transport_customer_receivable_document_guard'],
+      ['TransportCommercialAcceptanceDecision', 'transport_commercial_acceptance_append_only'],
+    ] as const;
+    for (const [table, trigger] of triggers) {
+      await tx.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
+    }
+
+    const customerDocuments = await tx.transportSettlementDocument.findMany({
+      where: { flow: 'CUSTOMER_FREIGHT' }, select: { id: true },
+    });
+    const documentIds = customerDocuments.map((row) => row.id);
+    const results = await Promise.all([
+      tx.transportCustomerPaymentAllocation.deleteMany(),
+      tx.transportCustomerPayment.deleteMany(),
+      tx.transportCustomerReconciliation.deleteMany(),
+      tx.transportCustomerReconciliationBatchLine.deleteMany(),
+      tx.transportCustomerReconciliationBatch.deleteMany(),
+      tx.transportSettlementAllocation.deleteMany({ where: { documentId: { in: documentIds } } }),
+    ]);
+    const customerSettlementDocuments = await tx.transportSettlementDocument.deleteMany({
+      where: { id: { in: documentIds } },
+    });
+    const acceptanceDecisions = await tx.transportCommercialAcceptanceDecision.deleteMany();
+    const acceptances = await tx.transportCommercialAcceptance.deleteMany();
+    const tripOrderLinks = await tx.transportTripOrderLink.deleteMany();
+    const orders = await tx.transportOrder.deleteMany();
+
+    for (const [table, trigger] of [...triggers].reverse()) {
+      await tx.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
+    }
+    const keys = [
+      'transportCustomerPaymentAllocation', 'transportCustomerPayment',
+      'transportCustomerReconciliation', 'transportCustomerReconciliationBatchLine',
+      'transportCustomerReconciliationBatch', 'transportSettlementAllocation',
+    ] as const;
+    const deleted: Record<string, number> = {};
+    results.forEach((result, index) => {
+      if (result.count > 0) deleted[keys[index]!] = result.count;
+    });
+    for (const [key, count] of [
+      ['transportSettlementDocument', customerSettlementDocuments.count],
+      ['transportCommercialAcceptanceDecision', acceptanceDecisions.count],
+      ['transportCommercialAcceptance', acceptances.count],
+      ['transportTripOrderLink', tripOrderLinks.count],
+      ['transportOrder', orders.count],
+    ] as const) {
+      if (count > 0) deleted[key] = count;
+    }
+    return deleted;
+  });
+}
+
 export async function resetTransportDemoData(
   prisma: PrismaClient,
   env: NodeJS.ProcessEnv = process.env,
@@ -258,6 +328,7 @@ export async function resetTransportDemoData(
 
   const allocations = await wipeFrozenCashoutAllocations(prisma);
   if (allocations > 0) deleted['transportDriverCashoutAllocation'] = allocations;
+  Object.assign(deleted, await wipeCustomerArDemoHistory(prisma));
 
   for (const table of TRANSPORT_TABLES_CHILD_FIRST) {
     const delegate = prisma[table] as unknown as { deleteMany: () => Promise<{ count: number }> };
@@ -1066,24 +1137,122 @@ async function writePlan(
       for (const trip of plan.trips) {
         if (trip.receivable === null) continue;
         const id = tripId.get(trip.code) as string;
+        const customer = customerId.get(trip.customerRef) as string;
+        const order = await tx.transportOrder.create({
+          data: {
+            code: `DEMO-AR-${trip.code}`,
+            status: 'FULFILLED',
+            businessDate: trip.businessDate,
+            customerId: customer,
+            originLabel: trip.originLabel,
+            destinationLabel: trip.destinationLabel,
+            cargoDescription: trip.cargoDescription,
+            freightAmount: amountOf(trip.freightAmount),
+            currencyCode: 'VND',
+            note: 'Đơn mẫu đã hoàn tất, chờ/đã được A đối soát',
+          },
+        });
+        bump('orders');
+        await tx.transportTripOrderLink.create({
+          data: { tripId: id, orderId: order.id, projectedBy: DEMO_SEED_ACTOR },
+        });
+        bump('tripOrderLinks');
 
-        const receivableId = await postDocument({
-          direction: 'RECEIVABLE',
-          flow: 'CUSTOMER_FREIGHT',
-          counterpartyKind: 'CUSTOMER',
-          counterpartyId: customerId.get(trip.customerRef) as string,
+        const acceptance = await tx.transportCommercialAcceptance.create({
+          data: {
+            orderId: order.id,
+            state: 'APPROVED',
+            businessDate: trip.businessDate,
+            openedBy: DEMO_SEED_ACTOR,
+          },
+        });
+        const decision = await tx.transportCommercialAcceptanceDecision.create({
+          data: {
+            acceptanceId: acceptance.id,
+            sequence: 1,
+            outcome: 'APPROVED',
+            reasonCode: 'DEMO_DELIVERY_ACCEPTED',
+            basis: 'EXTERNAL_PHYSICAL_CONFIRMATION',
+            evidenceRefs: [],
+            externalNote: 'Bên A đã xác nhận giao nhận trong dữ liệu mẫu',
+            supersedesId: null,
+            idempotencyKey: `demo:acceptance:${trip.code}`,
+            decidedBy: DEMO_SEED_ACTOR,
+            decidedAt: iso(trip.businessDate, 17),
+          },
+        });
+        await tx.transportCommercialAcceptance.update({
+          where: { id: acceptance.id }, data: { latestDecisionId: decision.id },
+        });
+        bump('commercialAcceptances');
+        bump('commercialAcceptanceDecisions');
+
+        const documentIdentity = {
+          direction: 'RECEIVABLE' as const,
+          flow: 'CUSTOMER_FREIGHT' as const,
+          counterpartyKind: 'CUSTOMER' as const,
+          counterpartyId: customer,
+          kind: 'ORIGINAL' as const,
           signedAmount: trip.freightAmount,
+          currencyCode: 'VND' as const,
           businessDate: trip.businessDate,
           dueDate: trip.dueDate,
           tripId: id,
-          sourceContext: 'TRIP_RECONCILED',
-          sourceId: id,
+          adjustsId: null,
+        };
+        const receivable = await tx.transportSettlementDocument.create({
+          data: {
+            ...documentIdentity,
+            status: 'POSTED',
+            signedAmount: amountOf(trip.freightAmount),
+            sourceContext: 'CUSTOMER_RECONCILIATION',
+            sourceId: order.id,
+            sourceFingerprint: settlementDocumentFingerprint(documentIdentity),
+            invoiceRef: null,
+            note: null,
+            recordedBy: DEMO_SEED_ACTOR,
+          },
         });
+        bump('settlementDocuments');
+        const reconciliationIdentity = {
+          orderId: order.id,
+          batchLineId: null,
+          proposedAmount: trip.freightAmount,
+          confirmedAmount: trip.freightAmount,
+          currencyCode: 'VND',
+          businessDate: trip.businessDate,
+          differenceReason: null,
+          confirmationReference: `DEMO-A-${trip.code}`,
+          evidenceRefs: [] as readonly string[],
+        };
+        await tx.transportCustomerReconciliation.create({
+          data: {
+            orderId: order.id,
+            customerId: customer,
+            batchLineId: null,
+            proposedAmount: amountOf(trip.freightAmount),
+            confirmedAmount: amountOf(trip.freightAmount),
+            differenceAmount: 0n,
+            currencyCode: 'VND',
+            businessDate: trip.businessDate,
+            dueDate: trip.dueDate,
+            differenceReason: null,
+            confirmationReference: reconciliationIdentity.confirmationReference,
+            evidenceRefs: [],
+            sourceContext: 'CUSTOMER_RECONCILIATION',
+            sourceId: `demo:customer-reconciliation:${trip.code}`,
+            sourceFingerprint: customerReconciliationFingerprint(reconciliationIdentity),
+            confirmedBy: DEMO_SEED_ACTOR,
+            confirmedAt: iso(trip.businessDate, 18),
+            settlementDocumentId: receivable.id,
+          },
+        });
+        bump('customerReconciliations');
 
         if (trip.receivable === 'PAID') {
           await tx.transportSettlementAllocation.create({
             data: {
-              documentId: receivableId,
+              documentId: receivable.id,
               amount: amountOf(trip.freightAmount),
               businessDate: trip.dueDate ?? trip.businessDate,
               method: 'Chuyển khoản',

@@ -188,6 +188,7 @@ export class PrismaSettlementRepository extends SettlementRepository {
     flow: SettlementFlow,
     businessDate: BusinessDate,
   ): Promise<void> {
+    await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${flow}`}, 0))`;
     const period = await model(tx, 'transportSettlementPeriod').findFirst({
       where: { flow, startDate: { lte: businessDate }, endDate: { gte: businessDate } },
     });
@@ -204,6 +205,7 @@ export class PrismaSettlementRepository extends SettlementRepository {
 
   async recogniseDocument(command: RecogniseDocumentCommand): Promise<SettlementRecognition> {
     return this.prisma.$transaction(async (tx) => {
+      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
       const existing = await model(tx, 'transportSettlementDocument').findUnique({
         where: {
           sourceContext_sourceId: {
@@ -256,6 +258,7 @@ export class PrismaSettlementRepository extends SettlementRepository {
     command: CorrectDocumentCommand,
   ): Promise<{ readonly document: SettlementDocument; readonly replayed: boolean }> {
     return this.prisma.$transaction(async (tx) => {
+      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.sourceContext}:${command.sourceId}`}, 0))`;
       /*
        * CHONG GHI TRUNG cho ca duong SUA, khong chi duong ghi nhan.
        *
@@ -282,6 +285,18 @@ export class PrismaSettlementRepository extends SettlementRepository {
         }
         return { document: toDocument(replay), replayed: true };
       }
+
+      // Read only to discover the period lock key. Re-read after the row lock below.
+      const candidate = await model(tx, 'transportSettlementDocument').findUnique({
+        where: { id: command.targetId },
+      });
+      if (!candidate) {
+        throw TransportDomainError.notFound(
+          'SETTLEMENT_DOCUMENT_NOT_FOUND',
+          `Khong thay chung tu ${command.targetId}`,
+        );
+      }
+      await this.assertPeriodWritable(tx, candidate.flow, command.businessDate);
 
       /*
        * KHOA HANG BAN GOC truoc khi doc trang thai cua no. Day la thu giu cho hai lenh sua dong
@@ -313,7 +328,21 @@ export class PrismaSettlementRepository extends SettlementRepository {
         );
       }
 
-      await this.assertPeriodWritable(tx, target.flow, command.businessDate);
+      if (command.expectedGrossAmount !== undefined) {
+        const chainRows = await model(tx, 'transportSettlementDocument').findMany({
+          where: { OR: [{ id: target.id }, { adjustsId: target.id }], status: 'POSTED' },
+        });
+        const currentGrossAmount = chainRows.reduce(
+          (total: number, row: any) => total + amount(row.signedAmount),
+          0,
+        );
+        if (currentGrossAmount !== command.expectedGrossAmount) {
+          throw TransportDomainError.denied(
+            'SETTLEMENT_TARGET_CONCURRENTLY_CHANGED',
+            `Chuoi chung tu ${target.id} da doi tu ${command.expectedGrossAmount} thanh ${currentGrossAmount}`,
+          );
+        }
+      }
 
       if (command.kind === 'REVERSAL') {
         const reversed = await model(tx, 'transportSettlementDocument').findFirst({
@@ -376,6 +405,18 @@ export class PrismaSettlementRepository extends SettlementRepository {
       });
       if (existing) return { allocation: toAllocation(existing), replayed: true };
 
+      // Discover the flow before taking locks, then obey period -> document everywhere.
+      const candidate = await model(tx, 'transportSettlementDocument').findUnique({
+        where: { id: command.documentId },
+      });
+      if (!candidate || candidate.kind !== 'ORIGINAL') {
+        throw TransportDomainError.notFound(
+          'SETTLEMENT_DOCUMENT_NOT_FOUND',
+          `Khong thay chung tu goc ${command.documentId}`,
+        );
+      }
+      await this.assertPeriodWritable(tx, candidate.flow, command.businessDate);
+
       /*
        * Khoa BAN GOC chu khong khoa hang phan bo: hai lan phan bo dong thoi deu doc so du cua CUNG
        * mot chuoi, va so du do la thu chung tranh. Khoa o hang phan bo se cho ca hai di qua.
@@ -393,19 +434,25 @@ export class PrismaSettlementRepository extends SettlementRepository {
         );
       }
 
-      await this.assertPeriodWritable(tx, original.flow, command.businessDate);
-
       const corrections = await model(tx, 'transportSettlementDocument').findMany({
         where: { adjustsId: original.id },
       });
       const allocations = await model(tx, 'transportSettlementAllocation').findMany({
         where: { documentId: original.id },
       });
+      const customerAllocations = await model(tx, 'transportCustomerPaymentAllocation').findMany({
+        where: { documentId: original.id },
+      });
 
-      const outstanding = outstandingOf(
+      const legacyOutstanding = outstandingOf(
         [original, ...corrections].map((doc: any) => ({ signedAmount: amount(doc.signedAmount) })),
         allocations.map((alloc: any) => ({ amount: amount(alloc.amount) })),
       );
+      const customerAllocated = customerAllocations.reduce(
+        (total: number, row: any) => total + (row.kind === 'APPLY' ? amount(row.amount) : -amount(row.amount)),
+        0,
+      );
+      const outstanding = legacyOutstanding - customerAllocated;
 
       if (command.amount > Math.abs(outstanding)) {
         throw TransportDomainError.denied(
@@ -459,10 +506,15 @@ export class PrismaSettlementRepository extends SettlementRepository {
       where: { adjustsId: originalId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    const allocations = await model(this.prisma, 'transportSettlementAllocation').findMany({
-      where: { documentId: originalId },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    });
+    const [allocations, customerAllocations] = await Promise.all([
+      model(this.prisma, 'transportSettlementAllocation').findMany({
+        where: { documentId: originalId },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+      model(this.prisma, 'transportCustomerPaymentAllocation').findMany({
+        where: { documentId: originalId },
+      }),
+    ]);
 
     const documents = [original, ...corrections].map(toDocument);
     const allocated = allocations.map(toAllocation);
@@ -472,7 +524,13 @@ export class PrismaSettlementRepository extends SettlementRepository {
       corrections: documents.slice(1),
       allocations: allocated,
       grossAmount: documents.reduce((total, doc) => total + doc.signedAmount, 0),
-      outstandingAmount: outstandingOf(documents, allocated),
+      outstandingAmount:
+        outstandingOf(documents, allocated) -
+        customerAllocations.reduce(
+          (total: number, row: any) =>
+            total + (row.kind === 'APPLY' ? amount(row.amount) : -amount(row.amount)),
+          0,
+        ),
     };
   }
 
@@ -510,10 +568,15 @@ export class PrismaSettlementRepository extends SettlementRepository {
       where: { adjustsId: { in: ids } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    const allocationRows = await model(this.prisma, 'transportSettlementAllocation').findMany({
-      where: { documentId: { in: ids } },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    });
+    const [allocationRows, customerAllocationRows] = await Promise.all([
+      model(this.prisma, 'transportSettlementAllocation').findMany({
+        where: { documentId: { in: ids } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+      model(this.prisma, 'transportCustomerPaymentAllocation').findMany({
+        where: { documentId: { in: ids } },
+      }),
+    ]);
 
     const correctionsBy = new Map<string, SettlementDocument[]>();
     for (const row of correctionRows) {
@@ -531,6 +594,15 @@ export class PrismaSettlementRepository extends SettlementRepository {
       allocationsBy.set(alloc.documentId, bucket);
     }
 
+    const customerAllocatedBy = new Map<string, number>();
+    for (const row of customerAllocationRows) {
+      customerAllocatedBy.set(
+        row.documentId,
+        (customerAllocatedBy.get(row.documentId) ?? 0) +
+          (row.kind === 'APPLY' ? amount(row.amount) : -amount(row.amount)),
+      );
+    }
+
     return originals.map((original) => {
       const corrections = correctionsBy.get(original.id) ?? [];
       const allocations = allocationsBy.get(original.id) ?? [];
@@ -540,7 +612,8 @@ export class PrismaSettlementRepository extends SettlementRepository {
         corrections,
         allocations,
         grossAmount: documents.reduce((total, doc) => total + doc.signedAmount, 0),
-        outstandingAmount: outstandingOf(documents, allocations),
+        outstandingAmount:
+          outstandingOf(documents, allocations) - (customerAllocatedBy.get(original.id) ?? 0),
       };
     });
   }
@@ -553,8 +626,11 @@ export class PrismaSettlementRepository extends SettlementRepository {
     readonly endDate: BusinessDate;
   }): Promise<SettlementPeriod> {
     try {
-      const row = await model(this.prisma, 'transportSettlementPeriod').create({
-        data: { flow: input.flow, startDate: input.startDate, endDate: input.endDate },
+      const row = await this.prisma.$transaction(async (tx) => {
+        await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${input.flow}`}, 0))`;
+        return model(tx, 'transportSettlementPeriod').create({
+          data: { flow: input.flow, startDate: input.startDate, endDate: input.endDate },
+        });
       });
       return toPeriod(row);
     } catch (error) {
@@ -589,6 +665,16 @@ export class PrismaSettlementRepository extends SettlementRepository {
     readonly reason: string | null;
   }): Promise<SettlementPeriod> {
     return this.prisma.$transaction(async (tx) => {
+      const candidate = await model(tx, 'transportSettlementPeriod').findUnique({
+        where: { id: input.periodId },
+      });
+      if (!candidate) {
+        throw TransportDomainError.notFound(
+          'SETTLEMENT_PERIOD_NOT_FOUND',
+          `Khong thay ky ${input.periodId}`,
+        );
+      }
+      await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`settlement-period:${candidate.flow}`}, 0))`;
       await (tx as any)
         .$executeRaw`SELECT "id" FROM "TransportSettlementPeriod" WHERE "id" = ${input.periodId} FOR UPDATE`;
 

@@ -122,6 +122,8 @@ import { TollController } from './transport/toll/toll.controller.js';
 import { TransportTollModule } from './transport/toll/transport-toll.module.js';
 import { SettlementReportsController } from './transport/settlement/settlement-reports.controller.js';
 import { TransportSettlementModule } from './transport/settlement/transport-settlement.module.js';
+import { CustomerArController } from './transport/customer-ar/customer-ar.controller.js';
+import { CustomerArModule } from './transport/customer-ar/customer-ar.module.js';
 import { TransportAssetComplianceModule } from './transport/asset-compliance/transport-asset-compliance.module.js';
 import { TransportWorkforceModule } from './transport/workforce/transport-workforce.module.js';
 import { TransportDriverSettlementModule } from './transport/driver-settlement/transport-driver-settlement.module.js';
@@ -298,6 +300,9 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // QUYET TOAN AR/AP + HOA HONG + BIEN TRUC TIEP. Den cung `transport-settlement` va bien mat cung
   // no: mot khach van tai chua theo doi cong no khong duoc nap bang chung tu nao cua `TX-05`.
   owned('transport-settlement', TransportSettlementModule),
+  // DOI SOAT KHACH HANG + PHAI THU (`#292`). Cung bien capability voi settlement: khi khong bat
+  // quyet toan thi khong nap hang cho, batch, thanh toan hay phan bo nao.
+  owned('transport-settlement', CustomerArModule),
   // BAO DUONG + GIAY TO + TRANG THAI HIEU LUC CUA XE. Den cung `transport-asset-compliance` va
   // bien mat cung no: mot khach chua theo doi han dang kiem khong duoc nap bang nao cua `TX-06`.
   owned('transport-asset-compliance', TransportAssetComplianceModule),
@@ -459,6 +464,8 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // `TX-05` — BAO CAO quyet toan, CHI DOC (`#168 B1`). Capability nay chay tu T5 nhung chua tung co
   // mot duong HTTP nao; xem khoi chu thich cua controller ve vi sao khong co route ghi.
   owned('transport-settlement', SettlementReportsController),
+  // Lane Q: be mat ghi tai chinh co cong quyen rieng va danh tinh lay tu phien.
+  owned('transport-settlement', CustomerArController),
   // BANG TAI CHINH (Lane G, #244 G5) — den cung `transport-settlement`, va do la QUYET DINH ma
   // `docs/kien-truc/transport-domain-v2.md:1056-1063` bo ngo: capability nao so huu bao cao hop
   // nhat. Xem khoi PROVIDERS ben duoi cho cong tuy chon sang `TX-07b`.

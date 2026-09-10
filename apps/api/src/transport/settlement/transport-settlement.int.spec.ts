@@ -16,6 +16,8 @@ import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
 import { PrismaFuelRepository } from '../fuel/prisma-fuel.repository.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
 import { PrismaSettlementRepository } from './prisma-settlement.repository.js';
+import { settlementDocumentFingerprint } from './settlement-documents.js';
+import { dueDateFrom } from './settlement-terms.js';
 import { SettlementOrderCompletionGateAdapter } from './settlement-order-completion.port.js';
 import { SettlementReadService } from './settlement-read.service.js';
 import { SettlementReportsController } from './settlement-reports.controller.js';
@@ -112,6 +114,39 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       tripReferred: '',
     };
 
+    async function seedLegacyTripReceivable(tripId: string) {
+      const trip = await prisma.transportTrip.findUniqueOrThrow({ where: { id: tripId } });
+      const terms = trip.customerId
+        ? await repo.findCustomerTerms(trip.customerId)
+        : null;
+      const dueDate = terms ? dueDateFrom(trip.businessDate, terms.paymentTermDays) : null;
+      const identity = {
+        direction: 'RECEIVABLE' as const,
+        flow: 'CUSTOMER_FREIGHT' as const,
+        counterpartyKind: 'CUSTOMER' as const,
+        counterpartyId: trip.customerId!,
+        kind: 'ORIGINAL' as const,
+        signedAmount: Number(trip.freightAmount),
+        currencyCode: trip.currencyCode,
+        businessDate: trip.businessDate,
+        dueDate,
+        tripId: trip.id,
+        adjustsId: null,
+      };
+      const created = await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('ALTER TABLE "TransportSettlementDocument" DISABLE TRIGGER USER');
+        const row = await tx.transportSettlementDocument.create({ data: {
+          ...identity, signedAmount: BigInt(identity.signedAmount), status: 'POSTED',
+          sourceContext: 'TRIP_RECONCILED', sourceId: trip.id,
+          sourceFingerprint: settlementDocumentFingerprint(identity), invoiceRef: null,
+          note: 'Legacy fixture truoc Lane Q', recordedBy: ACTOR,
+        } });
+        await tx.$executeRawUnsafe('ALTER TABLE "TransportSettlementDocument" ENABLE TRIGGER USER');
+        return row;
+      });
+      return { document: (await repo.findDocument(created.id))!, replayed: false };
+    }
+
     /**
      * THU TU XOA theo chieu khoa ngoai cua `TX-05`: anh chup hoa hong tro toi CA chung tu LAN ban
      * luat, va chung tu tro toi CHINH NO (`adjustsId`). Xoa ban sua truoc ban goc.
@@ -165,11 +200,16 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await prisma.transportSettlementAllocation.deleteMany({
         where: { documentId: { in: docIds } },
       });
-      // Ban sua tro toi ban goc: xoa chung TRUOC.
-      await prisma.transportSettlementDocument.deleteMany({
-        where: { id: { in: docIds }, kind: { not: 'ORIGINAL' } },
+      // Lane Q bao ve CUSTOMER_FREIGHT bang trigger append-only; cleanup fixture tat USER trigger
+      // trong giao dich rieng, roi xoa ban sua truoc ban goc.
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('ALTER TABLE "TransportSettlementDocument" DISABLE TRIGGER USER');
+        await tx.transportSettlementDocument.deleteMany({
+          where: { id: { in: docIds }, kind: { not: 'ORIGINAL' } },
+        });
+        await tx.transportSettlementDocument.deleteMany({ where: { id: { in: docIds } } });
+        await tx.$executeRawUnsafe('ALTER TABLE "TransportSettlementDocument" ENABLE TRIGGER USER');
       });
-      await prisma.transportSettlementDocument.deleteMany({ where: { id: { in: docIds } } });
 
       await prisma.transportSettlementPeriod.deleteMany({
         where: { startDate: { startsWith: '2099' } },
@@ -432,8 +472,11 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
      * P1, P2 — cong no khach + han thanh toan tat dinh
      * ================================================================ */
 
-    it('P1 — chuyen da doi soat sinh DUNG MOT cong no khach', async () => {
-      const first = await service.recogniseCustomerReceivable(state.tripOwn, ACTOR);
+    it('P1 — chuyen da doi soat chi cho doi soat; fixture legacy van doc duoc', async () => {
+      await expect(service.recogniseCustomerReceivable(state.tripOwn, ACTOR)).rejects.toMatchObject({
+        reason: 'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
+      });
+      const first = await seedLegacyTripReceivable(state.tripOwn);
       expect(first.replayed).toBe(false);
       expect(first.document.direction).toBe('RECEIVABLE');
       expect(first.document.flow).toBe('CUSTOMER_FREIGHT');
@@ -472,7 +515,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(exposure.warning).toBe('NONE');
 
       // Them cong no cua chuyen thue ngoai (30tr) -> tong 50tr, vuot han muc 25tr.
-      await service.recogniseCustomerReceivable(state.tripOutsourced, ACTOR);
+      await seedLegacyTripReceivable(state.tripOutsourced);
       const after = await service.creditExposure(state.customerId, TODAY);
       expect(after.outstandingAmount).toBe(50_000_000);
       expect(after.warning).toBe('LIMIT_EXCEEDED');
@@ -482,7 +525,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * VA CHUYEN VAN GHI NHAN DUOC. Day la ca noi dung cua acceptance 3: canh bao la mot NHAN,
        * khong phai mot cong. Neu dong nay nem thi T5 da bien mot canh bao thanh mot lenh chan.
        */
-      const referred = await service.recogniseCustomerReceivable(state.tripReferred, ACTOR);
+      const referred = await seedLegacyTripReceivable(state.tripReferred);
       expect(referred.document.signedAmount).toBe(10_000_000);
     });
 
@@ -809,7 +852,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       await completeOrderFor(trip.id, 'FROZEN', 'it-t5-ket-thuc-frozen');
 
       await expect(service.recogniseCustomerReceivable(trip.id, ACTOR)).rejects.toMatchObject({
-        reason: 'SETTLEMENT_PERIOD_FROZEN',
+        reason: 'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
       });
 
       const written = await prisma.transportSettlementDocument.findMany({
@@ -981,17 +1024,13 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
         authUserId: ACTOR,
       });
 
-      const outcome = await service.recogniseCustomerReceivable(trip.id, ACTOR);
-      expect(outcome.replayed).toBe(false);
-      expect(outcome.document.signedAmount).toBe(6_000_000);
-
-      // DUNG MOT LAN: goi lai tra ve chinh ban cu.
-      const again = await service.recogniseCustomerReceivable(trip.id, ACTOR);
-      expect(again.replayed).toBe(true);
-      expect(again.document.id).toBe(outcome.document.id);
-      expect(await prisma.transportSettlementDocument.count({ where: { tripId: trip.id } })).toBe(
-        1,
-      );
+      await expect(service.recogniseCustomerReceivable(trip.id, ACTOR)).rejects.toMatchObject({
+        reason: 'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
+      });
+      await expect(service.recogniseCustomerReceivable(trip.id, ACTOR)).rejects.toMatchObject({
+        reason: 'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
+      });
+      expect(await prisma.transportSettlementDocument.count({ where: { tripId: trip.id } })).toBe(0);
     });
 
     /**
