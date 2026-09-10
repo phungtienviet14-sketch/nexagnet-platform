@@ -544,7 +544,11 @@ dispatch.
 >    Thêm một lời gọi API mà quên thêm quyền thì job đỏ ở **sản xuất**, không đỏ trong PR (xem điều
 >    4). Bảng "lời gọi ↔ quyền" nằm ở `src/permissions.mjs` và có hai cái chặn: một bài kiểm hợp
 >    đồng đối chiếu nó với YAML, và job `preflight` **gọi thật** từng đường **đọc** bằng chính
->    `GITHUB_TOKEN`. Hai quyền **ghi** thì chỉ còn hợp đồng tĩnh canh — xem điều 6.
+>    `GITHUB_TOKEN`. Quyền **ghi** thì chỉ còn hợp đồng tĩnh canh — xem điều 6. Nó **dẫn xuất từ
+>    loại tài nguyên** mà lời gọi nhắm vào, không viết tay: cả ba lời gọi ghi đều nhắm vào một **PR**
+>    (đường dẫn `/issues/{n}/...` chỉ là di sản của việc GitHub dùng chung một không gian số), nên
+>    bộ hiện tại là đúng một dòng `pull-requests: write`. Đó vẫn là **giả thuyết chưa chứng minh**:
+>    xem NOT PROVEN §4 của README package và Issue #188.
 > 4. **`issue_comment` và `check_suite` chạy bản workflow trên nhánh mặc định**, nên hai đường này
 >    không chứng minh được từ chính PR thêm chúng; bằng chứng chạy thật chỉ có sau khi merge.
 >    `pull_request` là **ngoại lệ** — nó chạy bản của chính PR, và đó là chỗ duy nhất đo được một
@@ -556,8 +560,10 @@ dispatch.
 >    job đỏ. Một giá trị dự phòng ở đó sẽ lặng lẽ trao vai `CHATGPT_REVIEWER` — vai quyết định
 >    `REVIEW_PASS` **của ai** được tính — cho một app ghi cứng trong mã nguồn.
 > 6. **Mã nguồn của PR không được cầm quyền ghi.** Trên `pull_request`, một PR chưa duyệt quyết
->    định cả mã nguồn lẫn **chính tệp workflow** — nên một job chạy ở đó mà cầm `issues: write` là
->    một job cho phép mã chưa duyệt ghi vào đúng mặt phẳng trạng thái nó đang xin duyệt. Workflow
+>    định cả mã nguồn lẫn **chính tệp workflow** — nên một job chạy ở đó mà cầm **bất kỳ quyền ghi
+>    nào** là một job cho phép mã chưa duyệt ghi vào đúng mặt phẳng trạng thái nó đang xin duyệt.
+>    Từ #188, quyền ghi ấy là `pull-requests: write`, tức quyền đổi base, đổi title và đóng chính PR
+>    đang xin duyệt — bài kiểm hợp đồng gọi tên nó riêng một dòng vì lẽ đó. Workflow
 >    vì thế tách hai: `pull_request` chạy **toàn đọc** (`preflight`, `orchestrate-readonly`), còn
 >    `issue_comment`/`check_suite` — hai trigger GitHub bắt buộc chạy bản trên nhánh mặc định — là
 >    nơi **duy nhất** có quyền ghi, và checkout của nó **ghim vào nhánh mặc định**. Hệ quả phải

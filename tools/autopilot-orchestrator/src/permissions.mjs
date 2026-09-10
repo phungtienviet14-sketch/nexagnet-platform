@@ -21,8 +21,8 @@
  * chi can cho hai viec cuoi cung cua `main.mjs` — dang comment va doi nhan.
  *
  * Gop chung lai co mot hau qua that: `preflight` chay o trigger `pull_request`, tuc chay MA NGUON
- * CUA CHINH PR. Doi hoi no phai cam `issues: write` la doi hoi ma nguon chua duyet cam quyen ghi
- * vao mat phang trang thai cua repo. Nen bang nay tach lam hai:
+ * CUA CHINH PR. Doi hoi no phai cam MOT QUYEN GHI la doi hoi ma nguon chua duyet cam quyen ghi vao
+ * mat phang trang thai cua repo. Nen bang nay tach lam hai:
  *
  *   READ_GRANTS     — du cho ca nam `GET`. Job chay ma nguon PR chi duoc cam dung bay nhieu.
  *   MUTATION_GRANTS — chi cho job chay ma nguon nhanh mac dinh, noi thuc su co ghi.
@@ -94,6 +94,27 @@ export const probesFor = ({ repo, pr, headSha }) =>
   ]);
 
 /**
+ * BANG DOC O TREN VAN GAN NHAN THEO DUONG DAN — va do la mot KHOANG CHUA DO DUOC, noi ra o day.
+ *
+ * Probe `issue-comments` goi `/repos/{o}/{r}/issues/{PR}/comments`: mot duong dan `/issues/...`
+ * nhung `{n}` la SO PR. Theo dung cach doc ma bang GHI ben duoi vua chuyen sang — quyen di theo
+ * LOAI TAI NGUYEN — nhan dung cua probe do CO THE la `pull-requests: read`, khong phai `issues: read`.
+ *
+ * KHONG DOI NHAN, va ly do la KHONG CO BANG CHUNG: moi lan chay that deu cam CA HAI quyen doc do,
+ * nen khong lan nao phan biet duoc cai nao thuc su cho phep loi goi ay. Doi nhan bay gio la thay
+ * mot gia dinh chua do bang mot gia dinh chua do khac — dung viec da lam blocker B7 sai.
+ *
+ * Va khong co gi phai lo, vi CA HAI quyen deu duoc giu VI MOT LY DO DOC LAP:
+ *
+ *   issues: read         -> GET /issues/{n}   (than hop dong task — mot ISSUE that, khong phai PR)
+ *   pull-requests: read  -> GET /pulls/{n}    (HEAD that)
+ *
+ * Nen du nhan dung la cai nao, `/issues/{PR}/comments` van co quyen no can. Muon dong khoang nay
+ * thi phai DO: bo mot trong hai quyen o mot lan chay THAT roi xem loi goi nao 403 — mot task rieng,
+ * khong lam lang le o day.
+ */
+
+/**
  * Quyen DOC ma moi job cua workflow phai co du. Dan xuat tu chinh bang tren, nen khong the lech:
  * mot probe moi la mot quyen moi.
  * @type {ReadonlyArray<string>}
@@ -105,63 +126,134 @@ export const READ_GRANTS = Object.freeze([
 ]);
 
 /**
- * MOI LOI GOI GHI CUA ORCHESTRATOR, VA QUYEN MA GITHUB DOI HOI CHO DUNG LOI GOI DO.
+ * LOAI TAI NGUYEN MA MOT LOI GOI GHI NHAM VAO — khong phai hinh dang duong dan cua no.
  *
- * Bang nay song song voi `probesFor` o tren, va vi cung mot le: quyen phai DAN XUAT tu loi goi co
- * that, khong phai nguoc lai. `MUTATION_GRANTS` duoc TINH ra tu day, nen khong con duong nao them
- * mot quyen ghi vao workflow ma khong co mot dong o day tro toi mot endpoint cu the.
+ * Day la cho blocker B7 cua PR #167 doc sai, va cho mot lan goi GitHub THAT da bac bo (Issue #188).
  *
- * BA LOI GOI, VA CA BA DEU LA `/issues/...` (blocker B7 cua PR #167)
+ * B7 doc bang duoi day theo DUONG DAN: ca ba endpoint deu la `/issues/...`, tai lieu REST cua
+ * GitHub ghi cho ca ba cung mot cau — token can "Issues" write HOAC "Pull requests" write — nen B7
+ * ket luan `issues: write` la du, va GO `pull-requests: write` di. Suy luan chat che, tien de sai.
  *
- * Tai lieu REST cua GitHub ghi cho ca ba endpoint duoi day cung mot cau: token can "Issues" write
- * HOAC "Pull requests" write — MOT trong hai, khong phai ca hai. Ban truoc cam ca hai, va ly do
- * ghi ngay tai cho nay la "giu dung bo ma lan chay that da do". Do la mot ly do VAN HANH, khong
- * phai mot doi hoi cua API — va no khong du de cam mot quyen ghi.
+ * BANG CHUNG BAC BO, do ngay 04/09/2026 tren PR #167:
  *
- * Cai gia cua no la that: `pull-requests: write` uy quyen cho MOI thao tac ghi khac tren mot PR —
- * doi base, doi title, dong PR, day review — trong dung mot job cam quyen ghi cua ca mat phang
- * dieu khien. Khong mot dong nao trong package nay goi den chung. Mot quyen khong loi goi nao can
- * la mot quyen chi con tac dung khi co ai do dung sai no.
+ *   run 33889198070 — token cua job co dung `Issues: write` + `PullRequests: read` (log runner xac
+ *   nhan). Loi quyet dinh chay dung toi cuoi (`HEAD_MISMATCH`), roi
+ *   `POST /repos/{o}/{r}/issues/167/comments` tra ve **403**. Lap lai hai lan.
  *
- * Nen bo cua Orchestrator V0 la `issues: write` + `pull-requests: read`. `pull-requests` van CAN,
- * nhung chi de DOC: `GET /pulls/{n}` lay HEAD that (probe `pull` o bang tren).
+ * Nhung thu da LOAI TRU bang do, de khong ai di lai: PR khong `locked`, repo khong archived, khong
+ * interaction limit, request khong hong, va `default_workflow_permissions` cua repo KHONG phai
+ * nguyen nhan — thu ca `read` lan `write` deu 403 y het.
  *
+ * Nen cach doc dung la theo LOAI TAI NGUYEN: `{n}` trong ca ba duong dan la mot SO PR, va GitHub
+ * ap quyen theo doi tuong duoc dia chi hoa chu khong theo tien to duong dan. Mot PR la mot pull
+ * request — `/issues/` trong URL chi la di san cua viec GitHub dung chung mot khong gian so.
+ *
+ * DAY VAN LA MOT GIA THUYET, VA NO DUOC GHI RA DUNG NHU THE.
+ *
+ * `issues: write` da bi bac bo bang mot lan goi that. `pull-requests: write` la gia thuyet manh
+ * nhat con lai, nhung no CHUA duoc chung minh — chung minh no doi mot `201` that tu GitHub sau khi
+ * ban nay len `main` (`issue_comment` chi chay ban workflow tren nhanh mac dinh). Cho den luc do,
+ * muc NOT PROVEN cua README giu nguyen cau nay. Neu bo quyen moi VAN 403 thi dung lai voi bang
+ * chung da lam sach — KHONG cam them quyen "cho chac".
+ *
+ * Va do la ly do bang nay khong con cho ai VIET TAY mot dong `grant`.
+ */
+export const WRITE_RESOURCES = Object.freeze({
+  /** Doi tuong duoc dia chi hoa la mot PULL REQUEST, du duong dan REST co the la `/issues/{n}/...`. */
+  PULL_REQUEST: 'pull-request',
+  /** Doi tuong duoc dia chi hoa la mot ISSUE that. Chua loi goi ghi nao cua V0 nham vao day. */
+  ISSUE: 'issue',
+});
+
+/**
+ * LOAI TAI NGUYEN -> QUYEN GHI. Day la cho DUY NHAT trong repo anh xa hai thu do, va no la mot
+ * bang DONG: mot loai tai nguyen khong co trong day thi khong khai duoc mot loi goi ghi nao.
+ * @type {Readonly<Record<string, string>>}
+ */
+export const WRITE_GRANT_BY_RESOURCE = Object.freeze({
+  [WRITE_RESOURCES.PULL_REQUEST]: 'pull-requests: write',
+  [WRITE_RESOURCES.ISSUE]: 'issues: write',
+});
+
+/**
  * @typedef {object} WriteCall
  * @property {string} name Ten ngan, hien trong thong bao loi cua bai kiem hop dong.
- * @property {string} grant Dong PHAI CO trong khoi `permissions:` cua job ghi, nguyen van.
+ * @property {string} resource Loai tai nguyen — mot gia tri cua `WRITE_RESOURCES`.
+ * @property {string} grant Dong PHAI CO trong khoi `permissions:` cua job ghi. DAN XUAT tu
+ *   `resource`, khong viet tay: xem `writeCall()` ben duoi.
  * @property {'POST' | 'PUT' | 'PATCH' | 'DELETE'} verb Dung dong `method:` ma ma nguon truyen di.
  * @property {string} endpoint Duong dan REST, dang tai lieu.
  * @property {string} site Tep trong `src/` thuc su phat loi goi nay.
  */
 
-/** @type {ReadonlyArray<WriteCall>} */
+/**
+ * Mot dong cua bang, voi `grant` TINH RA tu `resource`.
+ *
+ * Vi sao khong cho khai `grant` truc tiep: dung cai do la cach B7 ghi mot tien de sai vao mot o ma
+ * khong cong nao doi chieu duoc. Nay quyen di theo loai tai nguyen, va loai tai nguyen la thu mot
+ * nguoi doc code KIEM duoc: `{n}` la so PR hay so Issue.
+ *
+ * Mot `resource` KHONG BIET thi NEM NGAY LUC NAP MODULE — fail-closed, va no do trong PR chu khong
+ * o san xuat.
+ *
+ * @param {{ name: string, resource: string, verb: 'POST' | 'PUT' | 'PATCH' | 'DELETE', endpoint: string, site: string }} call
+ * @returns {WriteCall}
+ */
+function writeCall(call) {
+  const grant = WRITE_GRANT_BY_RESOURCE[call.resource];
+  if (typeof grant !== 'string') {
+    throw new Error(
+      `loi goi ghi \`${call.name}\` khai loai tai nguyen khong biet: \`${call.resource}\``,
+    );
+  }
+  return Object.freeze({ ...call, grant });
+}
+
+/**
+ * MOI LOI GOI GHI CUA ORCHESTRATOR.
+ *
+ * Bang nay song song voi `probesFor` o tren, va vi cung mot le: quyen phai DAN XUAT tu loi goi co
+ * that, khong phai nguoc lai. `MUTATION_GRANTS` duoc TINH ra tu day, nen khong con duong nao them
+ * mot quyen ghi vao workflow ma khong co mot dong o day tro toi mot endpoint cu the.
+ *
+ * CA BA DEU NHAM VAO MOT PR. `{pr}` o ca ba dong duoi la so PR — `main.mjs` lay no tu
+ * `eventTarget.pr`, va `labels.mjs` nhan lai chinh so do. Khong mot loi goi ghi nao cua V0 cham
+ * vao mot Issue that; Issue chi duoc DOC (`GET /issues/{n}` lay than hop dong task), va viec doc do
+ * la ly do `issues: read` van con trong bo quyen.
+ *
+ * @type {ReadonlyArray<WriteCall>}
+ */
 export const WRITE_CALLS = Object.freeze([
-  {
+  writeCall({
     name: 'post-comment',
-    grant: 'issues: write',
+    resource: WRITE_RESOURCES.PULL_REQUEST,
     verb: 'POST',
-    endpoint: '/issues/{n}/comments',
+    endpoint: '/issues/{pr}/comments',
     site: 'main.mjs',
-  },
-  {
+  }),
+  writeCall({
     name: 'add-labels',
-    grant: 'issues: write',
+    resource: WRITE_RESOURCES.PULL_REQUEST,
     verb: 'POST',
-    endpoint: '/issues/{n}/labels',
+    endpoint: '/issues/{pr}/labels',
     site: 'labels.mjs',
-  },
-  {
+  }),
+  writeCall({
     name: 'remove-label',
-    grant: 'issues: write',
+    resource: WRITE_RESOURCES.PULL_REQUEST,
     verb: 'DELETE',
-    endpoint: '/issues/{n}/labels/{ten}',
+    endpoint: '/issues/{pr}/labels/{ten}',
     site: 'labels.mjs',
-  },
+  }),
 ]);
 
 /**
  * Quyen GHI — DAN XUAT tu bang tren, khong viet tay. Bo mot loi goi ghi la bo quyen tuong ung;
  * them mot quyen ma khong them loi goi la viec KHONG LAM DUOC tu day.
+ *
+ * Bo nay hien co DUNG MOT dong (`pull-requests: write`), va do la co y: ca ba loi goi ghi nham vao
+ * cung mot loai tai nguyen. `issues: write` KHONG con trong bo — khong loi goi ghi nao cua V0 cham
+ * vao mot Issue, va mot lan goi that da chung minh no khong thay the duoc quyen tren PR.
  *
  * CHI job chay ma nguon NHANH MAC DINH duoc cam bo nay (blocker B4). Job chay ma nguon cua PR thi
  * khong — ma nguon chua duyet khong duoc ghi vao mat phang trang thai ma chinh no dang xin duyet.

@@ -44,10 +44,11 @@ globalThis.fetch = /** @type {any} */ (
       (route) => route.method === method && new RegExp(route.path).test(path),
     );
     const status = matched ? matched.status : 599;
-    const text =
-      matched && matched.body !== undefined && status >= 200 && status < 300
-        ? JSON.stringify(matched.body)
-        : '';
+    // THAN DUOC PHUC VU CA KHI NON-2XX (Issue #188). GitHub tra ve mot than co noi dung khi hong
+    // ("Resource not accessible by integration"), va tu #188 thi `github.mjs` giu lai than do. Mot
+    // do nghe chi phuc vu than khi 2xx se lam duong chan doan ay KHONG DO DUOC — bai kiem se thay
+    // mot `error: null` sach se va tuong la dung.
+    const text = matched && matched.body !== undefined ? JSON.stringify(matched.body) : '';
 
     appendFileSync(
       callsPath,
