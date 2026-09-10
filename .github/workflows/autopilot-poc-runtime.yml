@@ -1,0 +1,29 @@
+name: autopilot-poc-runtime
+
+# POC-6: prove the pipeline does not stop at CI green, and that a runtime proof is bound to
+# one release. Deterministic - no deploy, no production credential, no stack is touched.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - tools/autopilot-poc-runtime/**
+      - .github/workflows/autopilot-poc-runtime.yml
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    name: autopilot-poc-runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Runtime handoff state machine, and the repository verifier it relies on
+        run: node --test tools/autopilot-poc-runtime/runtime-gate.test.mjs
