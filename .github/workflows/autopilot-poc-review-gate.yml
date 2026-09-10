@@ -1,0 +1,147 @@
+name: autopilot-poc-review-gate
+
+# POC-3: prove the repo-side review handshake and, above all, that a verdict is a
+# statement about ONE commit.
+#
+# WHAT THIS DOES NOT PROVE: that the reviewer is independent. Every verdict this workflow
+# evaluates is written by this workflow. That is deliberate - the gate must not be able to
+# tell who wrote a verdict, so its safety cannot rest on trusting the author. Whether
+# ChatGPT Work actually performs an independent review is outside what this repository can
+# demonstrate, and is tracked separately as POC-7.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - tools/autopilot-poc-review/**
+      - docs/poc/autopilot/review-gate-proof.md
+      - .github/workflows/autopilot-poc-review-gate.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: autopilot-poc-review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  SANDBOX_FILE: docs/poc/autopilot/review-gate-proof.md
+  BOT_NAME: autopilot-poc[bot]
+  BOT_EMAIL: autopilot-poc@users.noreply.github.com
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  PR: ${{ github.event.pull_request.number }}
+
+jobs:
+  gate:
+    name: autopilot-poc-review-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 2
+
+      - name: Loop guard
+        id: guard
+        run: |
+          set -euo pipefail
+          head_email="$(git log -1 --format='%ae')"
+          echo "head_commit_author=${head_email}"
+          if [ "${head_email}" = "${BOT_EMAIL}" ]; then
+            echo "REVIEW_GATE_VERDICT=SKIPPED_BY_LOOP_GUARD"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Deterministic protocol matrix
+        if: steps.guard.outputs.skip != 'true'
+        run: node --test tools/autopilot-poc-review/review-gate.test.mjs
+
+      - name: Live handshake against real PR comments
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          HEAD_A: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          api="repos/${GITHUB_REPOSITORY}/issues/${PR}/comments"
+          render="tools/autopilot-poc-review/render-comment.mjs"
+
+          post() { node "${render}" "$@" > "$RUNNER_TEMP/body.md"; gh api "${api}" -F body=@"$RUNNER_TEMP/body.md" --jq '.id'; }
+          gate() { gh api "${api}" --paginate | node tools/autopilot-poc-review/gate-cli.mjs --head-sha "$1" --expect "$2"; }
+
+          echo "REVIEW_GATE_HEAD_A=${HEAD_A}"
+          echo "REVIEW_GATE_BASE_SHA=${BASE_SHA}"
+
+          echo "== 1. the orchestrator posts a review request for this exact commit =="
+          post request --pr "${PR}" --head-sha "${HEAD_A}"
+
+          echo "== 2. nobody has reviewed yet -> BLOCK =="
+          gate "${HEAD_A}" BLOCK | tee "$RUNNER_TEMP/g2.txt"
+          grep -qx 'REVIEW_GATE_REASON=NO_VERDICT_FOR_HEAD_SHA' "$RUNNER_TEMP/g2.txt"
+
+          echo "== 3. a PASS naming a DIFFERENT commit -> BLOCK =="
+          post verdict --head-sha "${BASE_SHA}" --verdict PASS
+          gate "${HEAD_A}" BLOCK | tee "$RUNNER_TEMP/g3.txt"
+          grep -qx 'REVIEW_GATE_REASON=NO_VERDICT_FOR_HEAD_SHA' "$RUNNER_TEMP/g3.txt"
+
+          echo "== 4. a PASS naming THIS commit -> ALLOW =="
+          post verdict --head-sha "${HEAD_A}" --verdict PASS
+          gate "${HEAD_A}" ALLOW | tee "$RUNNER_TEMP/g4.txt"
+          grep -qx 'REVIEW_GATE_REASON=REVIEWER_PASSED_AT_HEAD_SHA' "$RUNNER_TEMP/g4.txt"
+          echo "LIVE_MATRIX=OK"
+
+      # THE TEST THAT MATTERS. Step 4 left a real, well-formed PASS for HEAD_A sitting on
+      # this PR. Now move the branch and demand that the same PASS stops counting.
+      - name: Stale test - move the branch and re-ask the gate
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          HEAD_A: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          api="repos/${GITHUB_REPOSITORY}/issues/${PR}/comments"
+
+          printf '\n- branch moved by run %s at %s\n' "${GITHUB_RUN_ID}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${SANDBOX_FILE}"
+          changed="$(git status --porcelain | cut -c4-)"
+          if [ "${changed}" != "${SANDBOX_FILE}" ]; then
+            echo "FAIL: expected only ${SANDBOX_FILE} to change, got: ${changed}"
+            exit 1
+          fi
+          git config user.name "${BOT_NAME}"
+          git config user.email "${BOT_EMAIL}"
+          git add -- "${SANDBOX_FILE}"
+          git commit -m "chore(poc): move the branch to invalidate the review verdict [autopilot-poc]"
+          git push origin "HEAD:${{ github.head_ref }}"
+          head_b="$(git rev-parse HEAD)"
+
+          echo "STALE_TEST_HEAD_A=${HEAD_A}"
+          echo "STALE_TEST_HEAD_B=${head_b}"
+          [ "${HEAD_A}" != "${head_b}" ] || { echo "FAIL: branch did not move"; exit 1; }
+
+          echo "== 5. the PASS for A must NOT carry over to B =="
+          gh api "${api}" --paginate \
+            | node tools/autopilot-poc-review/gate-cli.mjs --head-sha "${head_b}" --expect BLOCK \
+            | tee "$RUNNER_TEMP/g5.txt"
+          grep -qx 'REVIEW_GATE_REASON=NO_VERDICT_FOR_HEAD_SHA' "$RUNNER_TEMP/g5.txt"
+          grep -q "REVIEW_GATE_VERDICTS_AT_OTHER_SHAS=.*${HEAD_A}" "$RUNNER_TEMP/g5.txt"
+          echo "STALE_VERDICT_REJECTED=OK"
+          echo "REVIEW_GATE_VERDICT=PASS"
+
+      - name: Loop guard stopped this run
+        if: steps.guard.outputs.skip == 'true'
+        run: |
+          echo "REVIEW_GATE_VERDICT=SKIPPED_BY_LOOP_GUARD"
+          echo "HEAD was authored by ${BOT_EMAIL}; the handshake already ran for this branch."
