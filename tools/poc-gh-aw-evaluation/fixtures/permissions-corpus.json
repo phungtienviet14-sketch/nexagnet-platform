@@ -1,0 +1,398 @@
+{
+  "auditedSha": "82239c030d6a1ef6ec8b87a80a1346eeef211f8d",
+  "lockFilesScanned": 299,
+  "withSafeOutputsJob": 299,
+  "agentWriteGrants": {
+    "copilot-requests: write": 107,
+    "id-token: write": 2
+  },
+  "safeOutputsPermissionSets": {
+    "[\"issues: write\"]": 85,
+    "[\"discussions: write\",\"issues: write\"]": 71,
+    "[\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 6,
+    "[\"issues: write\",\"pull-requests: write\"]": 47,
+    "[\"contents: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 8,
+    "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 58,
+    "[]": 3,
+    "[\"discussions: write\",\"issues: write\",\"security-events: write\"]": 1,
+    "[\"issues: write\",\"security-events: write\"]": 1,
+    "[\"checks: write\",\"issues: write\",\"pull-requests: write\"]": 8,
+    "[\"checks: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1,
+    "[\"actions: write\",\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 3,
+    "[\"checks: write\",\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1,
+    "[\"contents: write\",\"issues: write\"]": 1,
+    "[\"checks: write\",\"issues: write\",\"pull-requests: write\",\"security-events: write\"]": 1,
+    "[\"actions: write\",\"checks: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 3,
+    "[\"actions: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+  },
+  "declaredToPermissions": {
+    "[\"create-issue\"]": {
+      "[\"issues: write\"]": 24,
+      "[\"discussions: write\",\"issues: write\"]": 7
+    },
+    "[\"create-issue\",\"mentions\",\"noop\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"create-discussion\",\"create-issue\"]": {
+      "[\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-issue\",\"threat-detection\"]": {
+      "[\"issues: write\"]": 2
+    },
+    "[\"create-issue\",\"upload-asset\"]": {
+      "[\"issues: write\"]": 2
+    },
+    "[\"add-labels\",\"hide-comment\",\"noop\",\"threat-detection\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"upload-asset\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 5
+    },
+    "[\"add-comment\",\"add-labels\",\"messages\",\"noop\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"messages\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 3
+    },
+    "[\"messages\"]": {
+      "[\"issues: write\"]": 3,
+      "[\"checks: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-discussion\",\"create-pull-request\",\"steer\"]": {
+      "[\"contents: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-discussion\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 5
+    },
+    "[\"add-labels\",\"create-discussion\",\"noop\"]": {
+      "[\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-pull-request\",\"missing-tool\",\"steer\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 4
+    },
+    "[\"create-issue\",\"link-sub-issue\",\"noop\",\"update-issue\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"create-issue\",\"mentions\",\"threat-detection\",\"update-issue\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"push-to-pull-request-branch\",\"threat-detection\",\"update-pull-request\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-pull-request\",\"noop\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-pull-request\",\"steer\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 13,
+      "[\"contents: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 3
+    },
+    "[\"add-comment\",\"create-issue\",\"messages\",\"noop\",\"update-issue\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"create-pull-request\",\"messages\",\"steer\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 2,
+      "[\"checks: write\",\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-labels\",\"create-issue\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"allowed-github-references\",\"create-discussion\",\"max-bot-mentions\",\"mentions\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"create-issue\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"allowed-github-references\",\"create-issue\",\"max-bot-mentions\",\"mentions\"]": {
+      "[\"issues: write\"]": 2,
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"allowed-github-references\",\"create-issue\",\"mentions\"]": {
+      "[\"issues: write\"]": 6,
+      "[\"discussions: write\",\"issues: write\"]": 2
+    },
+    "[\"add-comment\",\"messages\",\"push-to-pull-request-branch\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-issue\",\"noop\"]": {
+      "[\"issues: write\"]": 8,
+      "[\"discussions: write\",\"issues: write\"]": 2
+    },
+    "[\"create-pull-request\",\"steer\",\"upload-asset\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 2
+    },
+    "[\"create-issue\",\"create-pull-request\",\"noop\",\"steer\"]": {
+      "[\"contents: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 2
+    },
+    "[\"allowed-domains\",\"create-discussion\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"assign-to-user\",\"noop\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"allowed-github-references\",\"create-issue\",\"mentions\",\"missing-tool\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"create-issue\",\"messages\"]": {
+      "[\"issues: write\"]": 2,
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"create-discussion\",\"create-issue\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 3
+    },
+    "[\"create-pull-request\",\"noop\",\"steer\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 9,
+      "[\"contents: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"jobs\",\"staged\"]": {
+      "[]": 1
+    },
+    "[\"add-comment\",\"create-issue\"]": {
+      "[\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1,
+      "[\"issues: write\",\"pull-requests: write\"]": 2
+    },
+    "[\"create-issue\",\"create-pull-request\",\"steer\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-discussion\",\"noop\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"create-issue\",\"messages\",\"noop\"]": {
+      "[\"issues: write\"]": 2
+    },
+    "[\"add-comment\",\"add-labels\",\"allowed-github-references\",\"max-bot-mentions\",\"mentions\",\"upload-asset\"]": {
+      "[\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-discussion\",\"upload-asset\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 3
+    },
+    "[\"allowed-github-references\",\"max-bot-mentions\",\"mentions\"]": {
+      "[\"issues: write\"]": 2,
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"upload-artifact\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"allowed-github-references\",\"mentions\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"create-issue\",\"noop\",\"threat-detection\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"create-code-scanning-alert\",\"threat-detection\"]": {
+      "[\"discussions: write\",\"issues: write\",\"security-events: write\"]": 1
+    },
+    "[\"create-issue\",\"messages\",\"noop\",\"report-failure-as-issue\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"create-agent-session\",\"create-issue\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"create-issue\",\"upload-artifact\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"create-discussion\",\"upload-artifact\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 3
+    },
+    "[\"close-discussion\",\"upload-asset\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"create-issue\",\"missing-tool\"]": {
+      "[\"issues: write\"]": 6
+    },
+    "[\"close-discussion\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"create-issue\",\"create-pull-request\",\"push-to-pull-request-branch\",\"steer\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-code-scanning-alert\"]": {
+      "[\"issues: write\",\"security-events: write\"]": 1
+    },
+    "[\"assign-to-user\",\"close-issue\",\"create-issue\",\"noop\",\"update-issue\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"create-issue\",\"create-pull-request\",\"noop\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-discussion\",\"messages\",\"upload-artifact\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"create-discussion\",\"create-issue\",\"upload-artifact\"]": {
+      "[\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"allowed-domains\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1,
+      "[\"issues: write\",\"pull-requests: write\"]": 2
+    },
+    "[\"close-issue\",\"create-issue\"]": {
+      "[\"issues: write\"]": 3
+    },
+    "[\"add-comment\",\"messages\",\"noop\",\"push-to-pull-request-branch\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 2
+    },
+    "[\"add-comment\",\"add-labels\",\"close-pull-request\",\"messages\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"assign-to-agent\",\"close-issue\",\"create-discussion\",\"create-issue\",\"noop\",\"update-issue\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 2
+    },
+    "[\"create-issue\",\"report-failure-as-issue\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"noop\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-pull-request-review-comment\",\"messages\"]": {
+      "[\"checks: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"create-pull-request-review-comment\",\"mentions\",\"messages\",\"submit-pull-request-review\"]": {
+      "[\"checks: write\",\"issues: write\",\"pull-requests: write\"]": 2
+    },
+    "[\"create-discussion\",\"create-issue\",\"link-sub-issue\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"assign-to-agent\",\"messages\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"data\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-pull-request\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 2
+    },
+    "[\"push-to-pull-request-branch\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"noop\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"create-discussion\",\"messages\"]": {
+      "[\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"close-discussion\",\"create-issue\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"close-pull-request\",\"create-agent-session\",\"create-discussion\",\"create-issue\",\"create-pull-request\",\"create-pull-request-review-comment\",\"link-sub-issue\",\"messages\",\"missing-tool\",\"noop\",\"push-to-pull-request-branch\",\"staged\",\"steer\",\"update-issue\",\"upload-artifact\"]": {
+      "[]": 1
+    },
+    "[\"create-pull-request-review-comment\",\"submit-pull-request-review\"]": {
+      "[\"checks: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-pull-request-review-comment\",\"messages\",\"submit-pull-request-review\"]": {
+      "[\"checks: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"noop\",\"update-pull-request\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-discussion\",\"messages\"]": {
+      "[\"checks: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"approve-workflow-run\",\"create-issue\",\"dismiss-pull-request-review\",\"mentions\",\"messages\",\"needs\",\"noop\",\"push-to-pull-request-branch\",\"resolve-pull-request-review-thread\",\"update-pull-request\"]": {
+      "[\"actions: write\",\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"create-issue\",\"data\",\"messages\"]": {
+      "[\"checks: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-pull-request\",\"noop\",\"steer\",\"upload-code-coverage\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"messages\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1,
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"threat-detection\",\"update-release\"]": {
+      "[\"contents: write\",\"issues: write\"]": 1
+    },
+    "[\"missing-tool\"]": {
+      "[\"discussions: write\",\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"create-issue\",\"create-pull-request\",\"messages\",\"steer\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"data\",\"messages\"]": {
+      "[\"checks: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"allowed-domains\",\"messages\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 6
+    },
+    "[\"add-comment\",\"allowed-domains\",\"assign-to-agent\",\"messages\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"allowed-domains\",\"create-issue\",\"messages\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 7
+    },
+    "[\"allowed-domains\",\"call-workflow\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"create-issue\",\"remove-labels\",\"threat-detection\",\"update-issue\",\"update-pull-request\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[]": {
+      "[\"checks: write\",\"issues: write\",\"pull-requests: write\",\"security-events: write\"]": 1,
+      "[\"issues: write\",\"pull-requests: write\"]": 6,
+      "[\"actions: write\",\"checks: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 3,
+      "[\"actions: write\",\"discussions: write\",\"issues: write\",\"pull-requests: write\"]": 1,
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"allowed-domains\",\"create-issue\",\"create-pull-request\",\"messages\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"allowed-domains\",\"create-issue\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"jira-create-issue\",\"linear-create-issue\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"allowed-domains\",\"create-pull-request\",\"messages\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"allowed-domains\",\"create-issue\",\"link-sub-issue\",\"messages\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"allowed-domains\",\"create-issue\",\"messages\",\"push-to-pull-request-branch\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"allowed-domains\",\"noop\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"create-pull-request\",\"steer\",\"upload-code-coverage\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"create-pull-request\",\"dispatch-workflow\"]": {
+      "[\"actions: write\",\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"create-issue\",\"create-pull-request\",\"data\",\"dispatch-workflow\"]": {
+      "[\"actions: write\",\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"add-labels\",\"close-pull-request\",\"messages\",\"noop\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"create-issue\",\"messages\",\"noop\",\"staged\",\"upload-artifact\"]": {
+      "[]": 1
+    },
+    "[\"add-comment\",\"update-issue\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"create-pull-request\",\"messages\",\"steer\",\"upload-artifact\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"messages\",\"noop\",\"submit-pull-request-review\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"create-pull-request\",\"missing-tool\",\"push-to-pull-request-branch\",\"steer\"]": {
+      "[\"contents: write\",\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"add-comment\",\"timeout-minutes\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    },
+    "[\"assign-to-agent\",\"update-issue\"]": {
+      "[\"issues: write\"]": 1
+    },
+    "[\"add-comment\",\"create-issue\",\"update-issue\"]": {
+      "[\"issues: write\",\"pull-requests: write\"]": 1
+    }
+  }
+}

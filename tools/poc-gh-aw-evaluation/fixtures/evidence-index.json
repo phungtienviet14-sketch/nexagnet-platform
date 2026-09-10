@@ -1,0 +1,137 @@
+{
+  "auditedSha": "82239c030d6a1ef6ec8b87a80a1346eeef211f8d",
+  "claims": [
+    {
+      "id": "AUTH_BINDING_ACCEPTS_ANY_SECRET_NAME",
+      "area": "oauth",
+      "line": 292,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/engine_definition.go#L292"
+    },
+    {
+      "id": "REQUIRED_SECRETS_INCLUDE_AUTH_BINDINGS",
+      "area": "oauth",
+      "line": 113,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/behavior_defined_engine.go#L113"
+    },
+    {
+      "id": "BEHAVIOR_ENGINE_INJECTS_SECRET_ENV",
+      "area": "oauth",
+      "line": 599,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/behavior_defined_engine.go#L599"
+    },
+    {
+      "id": "BEHAVIOR_ENGINE_SECRET_SURVIVES_FILTER",
+      "area": "oauth",
+      "line": 653,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/behavior_defined_engine.go#L653"
+    },
+    {
+      "id": "SHARED_ENGINE_DEFINITION_IS_RECOGNISED",
+      "area": "oauth",
+      "line": 166,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/engine_validation.go#L166"
+    },
+    {
+      "id": "FILTER_ENV_FOR_SECRETS",
+      "area": "oauth",
+      "line": 479,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/engine_helpers.go#L479"
+    },
+    {
+      "id": "BUILTIN_ENGINE_ENV_REJECTS_SECRETS",
+      "area": "oauth",
+      "line": 140,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/strict_mode_env_validation.go#L140"
+    },
+    {
+      "id": "BUILTIN_CLAUDE_REQUIRES_PROVIDER_SECRET",
+      "area": "oauth",
+      "line": 70,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/claude_engine.go#L70"
+    },
+    {
+      "id": "ANTHROPIC_PROVIDER_SECRET_NAME",
+      "area": "oauth",
+      "line": 91,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/llm_provider.go#L91"
+    },
+    {
+      "id": "DEFAULT_CLAUDE_CODE_VERSION",
+      "area": "oauth",
+      "line": 35,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/constants/version_constants.go#L35"
+    },
+    {
+      "id": "SAFE_OUTPUTS_JOB_NEEDS_AGENT",
+      "area": "safe-outputs-coupling",
+      "line": 733,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/compiler_safe_outputs_job.go#L733"
+    },
+    {
+      "id": "PERMISSIONS_COMPUTED_AT_COMPILE_TIME",
+      "area": "permission-derivation",
+      "line": 124,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/compiler_safe_outputs_job.go#L124"
+    },
+    {
+      "id": "ADD_COMMENT_GRANTS_BOTH_SCOPES",
+      "area": "permission-derivation",
+      "line": 129,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/add_comment.go#L129"
+    },
+    {
+      "id": "ACTIVATION_STATUS_COMMENT_ISSUES_ONLY",
+      "area": "permission-derivation",
+      "line": 182,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/compiler_activation_job.go#L182"
+    },
+    {
+      "id": "ACTIVATION_SCOPE_TEST_ASSERTS_ABSENCE",
+      "area": "permission-derivation",
+      "line": 700,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/activation_permissions_scope_test.go#L700"
+    },
+    {
+      "id": "VALIDATION_CONFIG_MISSING_IS_EMPTY",
+      "area": "validation-fail-open",
+      "line": 251,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/actions/setup/js/safe_output_type_validator.cjs#L251"
+    },
+    {
+      "id": "UNKNOWN_TYPE_IS_VALID",
+      "area": "validation-fail-open",
+      "line": 766,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/actions/setup/js/safe_output_type_validator.cjs#L766"
+    },
+    {
+      "id": "CREATE_COMMENT_IS_UNCONDITIONAL",
+      "area": "idempotency",
+      "line": 1021,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/actions/setup/js/add_comment.cjs#L1021"
+    },
+    {
+      "id": "HANDLER_LOOP_CONTINUES_AFTER_FAILURE",
+      "area": "idempotency",
+      "line": 1226,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/actions/setup/js/safe_output_handler_manager.cjs#L1226"
+    },
+    {
+      "id": "PRIVILEGED_JOB_KEEPS_PUSH_CREDENTIALS",
+      "area": "privileged-checkout",
+      "line": 43,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/compiler_safe_outputs_steps.go#L43"
+    },
+    {
+      "id": "DEFAULT_REF_OVERRIDE_IS_DEAD_CODE",
+      "area": "privileged-checkout",
+      "line": 200,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/checkout_manager.go#L200"
+    },
+    {
+      "id": "AGENT_JOB_MUST_BE_READ_ONLY",
+      "area": "agent-read-only",
+      "line": 83,
+      "permalink": "https://github.com/github/gh-aw/blob/82239c030d6a1ef6ec8b87a80a1346eeef211f8d/pkg/workflow/dangerous_permissions_validation.go#L83"
+    }
+  ]
+}

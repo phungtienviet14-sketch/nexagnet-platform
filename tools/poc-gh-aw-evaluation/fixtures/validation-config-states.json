@@ -1,0 +1,15 @@
+{
+  "auditedSha": "82239c030d6a1ef6ec8b87a80a1346eeef211f8d",
+  "noConfig": {
+    "isValid": true,
+    "undeclaredFieldSurvived": true
+  },
+  "corruptConfig": {
+    "isValid": true,
+    "undeclaredFieldSurvived": true
+  },
+  "validConfig": {
+    "isValid": true,
+    "undeclaredFieldSurvived": false
+  }
+}
