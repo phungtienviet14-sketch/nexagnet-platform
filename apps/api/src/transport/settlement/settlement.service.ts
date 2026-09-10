@@ -25,7 +25,6 @@ import {
 } from './settlement-flows.js';
 import {
   assessCreditExposure,
-  dueDateFrom,
   isOverdue,
   type CreditExposure,
 } from './settlement-terms.js';
@@ -283,6 +282,10 @@ export class SettlementService {
   ): Promise<SettlementRecognition> {
     const trip = await this.requireTrip(tripId);
 
+    // Du lieu v1 da ghi truoc Lane Q van la authoritative va phai doc/phat lai duoc.
+    const legacy = await this.repository.findDocumentBySource('TRIP_RECONCILED', trip.id);
+    if (legacy) return { document: legacy, replayed: true };
+
     if (trip.status !== 'RECONCILED') {
       this.telemetry?.decision({
         vocabulary: TRANSPORT_SETTLEMENT_DECISIONS,
@@ -320,28 +323,12 @@ export class SettlementService {
 
     // `#275` K5 — cong ket thuc don. THEM mot dieu kien, khong thay dieu kien nao o tren.
     await this.requireOrderCompletion(trip, 'TRIP_RECONCILED');
-
-    const terms = await this.repository.findCustomerTerms(trip.customerId);
-    const dueDate = terms ? dueDateFrom(trip.businessDate, terms.paymentTermDays) : null;
-
-    const command = this.buildCommand({
-      flow: 'CUSTOMER_FREIGHT',
-      counterpartyId: trip.customerId,
-      signedAmount: money(trip.freightAmount).amount,
-      currencyCode: trip.currencyCode,
-      businessDate: trip.businessDate,
-      dueDate,
-      tripId: trip.id,
-      sourceContext: 'TRIP_RECONCILED',
-      sourceId: trip.id,
-      invoiceRef: options.invoiceRef ?? null,
-      note: options.note ?? null,
-      recordedBy: actor,
-    });
-
-    const outcome = await this.repository.recogniseDocument(command);
-    this.reportRecognition(outcome);
-    return outcome;
+    void actor;
+    void options;
+    throw TransportDomainError.denied(
+      'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
+      `Don cua chuyen ${trip.code} chi dang cho doi soat; A phai xac nhan truoc khi sinh cong no`,
+    );
   }
 
   /* ================================================================== *
@@ -709,15 +696,16 @@ export class SettlementService {
     readonly note: string | null;
     readonly actor: string;
   }): Promise<SettlementDocument> {
-    const target = await this.repository.findDocument(input.targetId);
-    if (!target) {
+    const chain = await this.repository.findChain(input.targetId);
+    if (!chain) {
       throw TransportDomainError.notFound(
         'SETTLEMENT_DOCUMENT_NOT_FOUND',
         `Khong thay chung tu ${input.targetId}`,
       );
     }
 
-    const delta = adjustmentDelta(target.signedAmount, money(input.desiredSignedAmount).amount);
+    const target = chain.original;
+    const delta = adjustmentDelta(chain.grossAmount, money(input.desiredSignedAmount).amount);
     if (delta === null) {
       this.telemetry?.decision({
         vocabulary: TRANSPORT_SETTLEMENT_DECISIONS,
@@ -728,7 +716,7 @@ export class SettlementService {
       });
       throw TransportDomainError.denied(
         'SETTLEMENT_ADJUSTMENT_NO_CHANGE',
-        `So tien mong muon trung so da ghi (${target.signedAmount}); khong sinh ban dieu chinh 0 dong`,
+        `So tien mong muon trung so hien tai (${chain.grossAmount}); khong sinh ban dieu chinh 0 dong`,
       );
     }
 
@@ -754,6 +742,7 @@ export class SettlementService {
       sourceContext: 'MANUAL_ADJUSTMENT',
       sourceId: input.sourceId,
       sourceFingerprint: fingerprint,
+      expectedGrossAmount: chain.grossAmount,
       note: input.note,
       recordedBy: input.actor,
     });
@@ -776,15 +765,16 @@ export class SettlementService {
     readonly note: string | null;
     readonly actor: string;
   }): Promise<SettlementDocument> {
-    const target = await this.repository.findDocument(input.targetId);
-    if (!target) {
+    const chain = await this.repository.findChain(input.targetId);
+    if (!chain) {
       throw TransportDomainError.notFound(
         'SETTLEMENT_DOCUMENT_NOT_FOUND',
         `Khong thay chung tu ${input.targetId}`,
       );
     }
 
-    const signedAmount = reversalAmount(target.signedAmount);
+    const target = chain.original;
+    const signedAmount = reversalAmount(chain.grossAmount);
     const fingerprint = settlementDocumentFingerprint({
       direction: target.direction,
       flow: target.flow,
@@ -807,6 +797,7 @@ export class SettlementService {
       sourceContext: 'MANUAL_ADJUSTMENT',
       sourceId: input.sourceId,
       sourceFingerprint: fingerprint,
+      expectedGrossAmount: chain.grossAmount,
       note: input.note,
       recordedBy: input.actor,
     });

@@ -159,6 +159,20 @@ export const TRANSPORT_ACTIONS = [
    */
   'transport.settlement.document.read',
 
+  /* --- DOI SOAT KHACH HANG + PHAI THU (`#292`, Lane Q) --- */
+  /** Xem hang cho, lo doi soat, cong no chinh thuc va so du thanh toan cua khach. */
+  'transport.customer_reconciliation.read',
+  /** A/Ke toan xac nhan tung Order hoac cac dong trong mot batch thanh phai thu chinh thuc. */
+  'transport.customer_reconciliation.confirm',
+  /** Xem giao dich thanh toan, phan bo va tin dung chua phan bo. */
+  'transport.customer_payment.read',
+  /** Ghi nhan mot giao dich thanh toan bat bien cua khach. */
+  'transport.customer_payment.record',
+  /** Phan bo mot giao dich vao mot hoac nhieu chung tu phai thu. */
+  'transport.customer_payment.allocate',
+  /** Sua phan bo bang mot su kien RELEASE moi; khong UPDATE lich su. */
+  'transport.customer_payment.correct',
+
   /* --- `R8` CHI SO VAN HANH (Issue #237) — den cung `transport-costing` --- */
   /**
    * BAO CAO CHI SO VAN HANH — km co hang/rong, bien truc tiep theo don va theo ca vong chay.

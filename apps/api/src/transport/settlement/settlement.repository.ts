@@ -74,6 +74,8 @@ export interface CorrectDocumentCommand {
   readonly kind: Extract<SettlementDocumentKind, 'ADJUSTMENT' | 'REVERSAL'>;
   /** So tien CO DAU cua ban sua: chenh lech voi `ADJUSTMENT`, so doi dau voi `REVERSAL`. */
   readonly signedAmount: number;
+  /** Snapshot doc truoc khi tinh delta; neu da doi trong luc tranh chap thi fail, khong ghi delta cu. */
+  readonly expectedGrossAmount?: number;
   readonly businessDate: BusinessDate;
   readonly sourceContext: SettlementSourceContext;
   readonly sourceId: string;

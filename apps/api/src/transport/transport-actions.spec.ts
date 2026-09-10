@@ -69,6 +69,12 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // `TX-05` di vao HTTP o `#168 B1` — CHI DOC. Khong ma ghi nao, xem `transport-actions.ts`.
       'transport.settlement.report.read',
       'transport.settlement.document.read',
+      'transport.customer_reconciliation.read',
+      'transport.customer_reconciliation.confirm',
+      'transport.customer_payment.read',
+      'transport.customer_payment.record',
+      'transport.customer_payment.allocate',
+      'transport.customer_payment.correct',
       'transport.analytics.read',
       'transport.control_tower.read',
       'transport.maintenance.plan.read',
@@ -239,6 +245,24 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('ADMIN', 'transport.settlement.report.read')).toBe(true);
       expect(roleCanPerform('ACCOUNTING', 'transport.driver.self.expense.record')).toBe(false);
       expect(roleCanPerform('ADMIN', 'transport.driver.self.expense.record')).toBe(false);
+    });
+
+    it('#292: co quyen doi soat khach va ghi/phan bo thanh toan, khong mo cho lai xe', () => {
+      const laneQActions = [
+        'transport.customer_reconciliation.read',
+        'transport.customer_reconciliation.confirm',
+        'transport.customer_payment.read',
+        'transport.customer_payment.record',
+        'transport.customer_payment.allocate',
+        'transport.customer_payment.correct',
+      ] as const;
+
+      for (const action of laneQActions) {
+        expect(roleCanPerform('ACCOUNTING', action), action).toBe(true);
+        expect(roleCanPerform('ADMIN', action), action).toBe(true);
+        expect(roleCanPerform('SALE', action), action).toBe(false);
+        expect(roleCanPerform('MANAGER', action), action).toBe(false);
+      }
     });
 
     it('KHONG huy duoc chuyen — nguon noi ro "khong xoa du lieu"', () => {

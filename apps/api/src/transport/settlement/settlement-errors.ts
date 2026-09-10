@@ -52,6 +52,8 @@ export const TRANSPORT_SETTLEMENT_DENIED_REASONS = [
   'SETTLEMENT_TARGET_ALREADY_REVERSED',
   /** Chi `ORIGINAL` moi la dich cua mot ban sua — sua mot ban sua tao ra cay nhieu tang. */
   'SETTLEMENT_TARGET_NOT_ORIGINAL',
+  /** Chuoi chung tu da doi sau khi caller tinh delta; caller phai doc lai va quyet dinh lai. */
+  'SETTLEMENT_TARGET_CONCURRENTLY_CHANGED',
   /** Khong co gi de sua: so tien mong muon trung so tien da ghi. */
   'SETTLEMENT_ADJUSTMENT_NO_CHANGE',
   /** Mot ban goc chi bi dao MOT lan. */
@@ -67,6 +69,8 @@ export const TRANSPORT_SETTLEMENT_DENIED_REASONS = [
   'SETTLEMENT_TRIP_NOT_RECONCILED',
   /** Chuyen chua co gia cuoc thi khong co gi de ghi nhan. */
   'SETTLEMENT_TRIP_REVENUE_MISSING',
+  /** Dong Order chi tao hang doi soat; A xac nhan moi sinh cong no khach chinh thuc. */
+  'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
   /** Chuyen nay khong phai chuyen thue xe ngoai nen khong co cong no nha xe. */
   'SETTLEMENT_TRIP_NOT_OUTSOURCED',
   /** Chuyen nay khong phai chuyen doi tac mang don nen khong co hoa hong. */
