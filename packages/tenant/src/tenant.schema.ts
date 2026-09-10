@@ -541,6 +541,26 @@ const transportPlanningPolicySchema = z
       })
       .strict()
       .optional(),
+    /**
+     * NHIP CUA LUOT QUET DINH KY (`#293` R3) — hai so VAN HANH, khong phai hai nguong nghiep vu.
+     *
+     * Khac han `closure.idleHours`: khong con so nao o day quyet dinh mot vong chay CO duoc dong
+     * hay khong. Chung chi quyet dinh *bao lau hoi lai mot lan* va *moi lan hoi bao nhieu vong
+     * chay*, nen khach khong khai thi van co mot luot quet chay dung — va do la khac biet giua
+     * "khong co cau hinh" va "khong co co che".
+     *
+     * Tran cua ca hai la chan mot con so go nham: mot luot quet moi 5 giay khong phai mot nhu cau
+     * van hanh, va mot trang 10.000 vong chay khong con la mot trang.
+     */
+    sweep: z
+      .object({
+        /** Khoang cach giua hai luot quet, tinh bang GIAY. */
+        intervalSeconds: z.number().int().min(5).max(3_600).optional(),
+        /** So vong chay toi da moi luot quet. */
+        batchSize: z.number().int().min(1).max(1_000).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

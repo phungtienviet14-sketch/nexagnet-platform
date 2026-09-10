@@ -169,6 +169,13 @@ import { DriverExpenseClaimsController } from './transport/claims/driver-claims-
 import { ExpenseClaimsController } from './transport/claims/claims.controller.js';
 import { RunsController } from './transport/movement/runs.controller.js';
 import { TransportPlanningController } from './transport/planning/planning.controller.js';
+import { RunClosureSweepScheduler } from './transport/planning/run-closure-sweep.scheduler.js';
+import { RunClosureService } from './transport/planning/run-closure.service.js';
+import {
+  NoRunClosureBlockerSource,
+  RunClosureBlockerSource,
+} from './transport/planning/run-closure-blocker.source.js';
+import { CheckpointRunClosureBlockerSource } from './transport/checkpoint/checkpoint-run-closure-blocker.source.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { ControlTowerController } from './transport/control-tower/control-tower.controller.js';
 import { JourneyController } from './transport/journey/journey.controller.js';
@@ -583,6 +590,25 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   }),
   owned('transport-core', DispatchService),
   /**
+   * DONG VONG CHAY DO HE THONG QUAN (`#293` Lane R).
+   *
+   * Ba dong, va thu tu cua chung la mot phan cua hop dong:
+   *
+   *   · `RunClosureService` la DUONG PHAN XU DUY NHAT — controller va luot quet deu di qua no;
+   *   · `RunClosureSweepScheduler` danh thuc no theo nhip, khong giu trang thai nao;
+   *   · `RunClosureBlockerSource` mac dinh la RONG — mot khach chi bat `transport-core` khong co
+   *     nguon su that ben ngoai nao de hoi, va do la mot cau hinh hop le.
+   *
+   * Dong cuoi bi GHI DE boi capability so huu du lieu (xem `transport-checkpoint` ben duoi). No
+   * nam TRUOC dong ghi de do, va thu tu do la co y: Nest lay provider CUOI CUNG cho mot token.
+   */
+  owned('transport-core', RunClosureService),
+  owned('transport-core', RunClosureSweepScheduler),
+  owned('transport-core', {
+    provide: RunClosureBlockerSource,
+    useClass: NoRunClosureBlockerSource,
+  }),
+  /**
    * MOC HIEN TRUONG (`#243` F1) — cong thu NAM, va la cong doi ban chat cua bang.
    *
    * Bon cong tren chi them MUC vao hang viec. Cong nay quyet dinh ba COT cua bang dieu hanh
@@ -593,6 +619,21 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('transport-checkpoint', {
     provide: ControlTowerCheckpointFacts,
     useClass: ControlTowerCheckpointFactsAdapter,
+  }),
+  /**
+   * HANG TREN THUNG — `#293` R4. GHI DE ban mac dinh rong cua `transport-core`.
+   *
+   * Su that den tu mot phep chieu DA DUOC CHAP NHAN (`buildRunTimeline()` cua `#243` F6), khong tu
+   * mot bang hay mot cot trang thai moi. Khach tat `transport-checkpoint` thi dong nay bien mat
+   * cung capability do, va ban mac dinh rong cua `transport-core` quay lai — tuc he thong khong hoi
+   * mot nguon khong ton tai, chu khong phai hoi roi nhan ve mot cau tra loi gia.
+   *
+   * Xem `checkpoint-run-closure-blocker.source.ts` de biet vi sao mot vong chay CHUA CO MOC NAO tra
+   * ve `[]` ma do khong phai mot phep doan.
+   */
+  owned('transport-checkpoint', {
+    provide: RunClosureBlockerSource,
+    useClass: CheckpointRunClosureBlockerSource,
   }),
   /**
    * BAO CAO BAN DO CUA MOT VONG CHAY (`#278` N5) — cung khuon thap dieu hanh.

@@ -1586,7 +1586,10 @@ export type RunClosureBlocker =
   | 'PLAN_STILL_OPEN'
   | 'NO_COMPLETED_WORK'
   | 'CARGO_STILL_CARRIED'
-  | 'OPEN_WAITING_SESSION';
+  | 'OPEN_WAITING_SESSION'
+  /* Khong hoi duoc nguon su that ben ngoai — he thong KHONG dong, va noi ro vi sao. */
+  | 'EXTERNAL_BLOCKER_SOURCE_UNAVAILABLE'
+  | 'EXTERNAL_BLOCKER_SOURCE_AMBIGUOUS';
 
 export interface RunClosureVerdict {
   readonly closable: boolean;

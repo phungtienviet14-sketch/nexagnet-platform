@@ -25,6 +25,18 @@ import type {
  * `#267` H3 dua bat bien chong lap cua no LEN chinh unique nay: ma vong chay cua mot lan nhan viec
  * tai dia diem A la mot bam tat dinh tu `(driverId, clientEventId)`.
  */
+/**
+ * KET QUA cua mot lan dong vong chay CO DIEU KIEN (`completeRunIfActive`).
+ *
+ * Hai truong, va ca hai deu can: `run` la su that SAU lan goi (de nguoi goi tra ve duoc ket qua
+ * dung, du no thang hay thua), `transitioned` noi ai la nguoi da lam buoc chuyen.
+ */
+export interface RunCloseAttempt {
+  readonly run: VehicleRun;
+  /** `true` khi CHINH lan goi nay la lan ghi trang thai. */
+  readonly transitioned: boolean;
+}
+
 export const RUN_CODE: UniqueIndexRef = {
   indexName: 'TransportVehicleRun_code_key',
   model: 'TransportVehicleRun',
@@ -167,7 +179,42 @@ export abstract class MovementRepository {
    */
   abstract findLatestRunForVehicle(vehicleId: string): Promise<VehicleRun | null>;
   abstract setRunStatus(id: string, status: VehicleRunStatus, at: Date): Promise<VehicleRun | null>;
+  /**
+   * DONG vong chay — buoc chuyen CO DIEU KIEN, va la lop chan CUOI cung chong dong hai lan.
+   *
+   * `setRunStatus()` ghi theo KHOA CHINH: hai nguoi ghi song song deu thay `status = 'ACTIVE'`,
+   * deu quyet dinh duoc phep dong, va ca hai deu ghi — ban sau ghi de `completedAt` cua ban truoc,
+   * va so dau vet co hai dong `transport.run.close.system` cho mot lan dong. Do la mot cuoc dua
+   * doc-roi-ghi, khong phai mot rang buoc.
+   *
+   * Ham nay chuyen phep kiem xuong chinh cau `UPDATE` (`WHERE status = 'ACTIVE'`), nen chi mot
+   * nguoi ghi doi duoc trang thai. Nguoi thua nhan `transitioned: false` kem trang thai HIEN TAI —
+   * mot ket qua binh thuong de hai worker cung chay mot luot quet khong sinh hai lan dong.
+   *
+   * `null` = khong tim thay vong chay. Phan biet duoc voi `transitioned: false` la ca diem.
+   */
+  abstract completeRunIfActive(id: string, at: Date): Promise<RunCloseAttempt | null>;
   abstract cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null>;
+
+  /**
+   * UNG VIEN cho luot quet nghi — `#293` R3.
+   *
+   * Tra ve mot TRANG GIOI HAN (`limit`) cac vong chay dang `ACTIVE` ma MOI chang deu da o trang
+   * thai cuoi va lan hoan thanh MUON NHAT da cu hon `completedBefore`. Dieu kien "cu hon nguong
+   * nghi" nam trong cau truy van chu khong nam trong bo nho: mot luot quet khoi phuc sau khi tien
+   * trinh chet phai tim lai duoc dung tap do tu su that nguon, khong tu mot con tro song.
+   *
+   * Day la tap UNG VIEN, khong phai tap KET LUAN. Con ke hoach mo, con hang tren thung, con phien
+   * cho — ba thu do khong nam trong hai bang nay, va `evaluateRunClosure()` moi la noi phan xu.
+   * Mot ung vien chua du dieu kien dong se quay lai o luot sau.
+   *
+   * Thu tu SAP XEP la tat dinh (`updatedAt`, roi `id`) de hai worker cung mot luot quet nhin thay
+   * cung mot trang theo cung mot thu tu.
+   */
+  abstract listRunClosureCandidates(
+    completedBefore: Date,
+    limit: number,
+  ): Promise<VehicleRun[]>;
 
   abstract createLeg(input: CreateLegInput): Promise<RunLeg>;
   abstract findLeg(id: string): Promise<RunLeg | null>;
@@ -384,6 +431,54 @@ export class InMemoryMovementRepository extends MovementRepository {
     };
     this.runs.set(id, next);
     return next;
+  }
+
+  /**
+   * Ban trong bo nho cua phep dong CO DIEU KIEN.
+   *
+   * `Map` cua Node la don luong, nen phep `get` roi `set` o day KHONG co khe ho giua hai buoc —
+   * nhung no van phai kiem `status === 'ACTIVE'` y nhu ban Prisma. Ly do khong phai de chong dua
+   * (khong co dua), ma de hai ban chay CUNG MOT LUAT: `PERSISTENCE=memory` la mot duong chay that,
+   * va mot ban de lot mot lan dong thu hai se lam bai kiem dong thoi XANH o mot che do va DO o che
+   * do kia.
+   */
+  async completeRunIfActive(id: string, at: Date): Promise<RunCloseAttempt | null> {
+    const current = this.runs.get(id);
+    if (!current) return null;
+    if (current.status !== 'ACTIVE') return { run: current, transitioned: false };
+
+    const next: VehicleRun = { ...current, status: 'COMPLETED', completedAt: iso(at), updatedAt: iso(at) };
+    this.runs.set(id, next);
+    return { run: next, transitioned: true };
+  }
+
+  async listRunClosureCandidates(completedBefore: Date, limit: number): Promise<VehicleRun[]> {
+    const threshold = iso(completedBefore);
+    return [...this.runs.values()]
+      .filter((run) => {
+        if (run.status !== 'ACTIVE') return false;
+        const legs = this.legsOf(run.id);
+        if (legs.length === 0) return false;
+
+        let lastCompletedAt: string | null = null;
+        for (const leg of legs) {
+          if (leg.status === 'CANCELLED') continue;
+          if (leg.status !== 'COMPLETED' || leg.completedAt === null) return false;
+          if (lastCompletedAt === null || leg.completedAt > lastCompletedAt) {
+            lastCompletedAt = leg.completedAt;
+          }
+        }
+        return lastCompletedAt !== null && lastCompletedAt <= threshold;
+      })
+      .sort(
+        (left, right) =>
+          left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
+      )
+      .slice(0, limit);
+  }
+
+  private legsOf(runId: string): RunLeg[] {
+    return [...this.legs.values()].filter((leg) => leg.runId === runId);
   }
 
   async cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null> {

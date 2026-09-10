@@ -18,6 +18,7 @@ import {
   evaluateOrderTransition,
   evaluateRunCancel,
   evaluateRunTransition,
+  evaluateSystemRunClose,
 } from './movement-lifecycle.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
@@ -25,6 +26,7 @@ import {
   RUN_CODE,
   type CreateOrderInput,
   type CreateRunInput,
+  type RunCloseAttempt,
   type TripOrderProjection,
   type TripProjection,
   type UpdateOrderInput,
@@ -273,6 +275,18 @@ export class MovementService {
     return this.repository.listRuns();
   }
 
+  /**
+   * UNG VIEN cho luot quet dong vong chay — `#293` R3. Xem `MovementRepository` de biet vi sao tap
+   * nay la ung vien chu khong phai ket luan.
+   *
+   * Di qua dich vu chu khong qua kho: `PlanningService` va `RunClosureService` chi duoc nhin thay
+   * `MovementService`, va mot phuong thuc doc o day giu dung chieu phu thuoc do. Quy uoc cua lane
+   * L la *ghi* phai di qua dich vu; o day cung vay — lop tren khong cam vao kho.
+   */
+  listRunClosureCandidates(completedBefore: Date, limit: number): Promise<VehicleRun[]> {
+    return this.repository.listRunClosureCandidates(completedBefore, limit);
+  }
+
   async getRun(id: string): Promise<VehicleRunDetail> {
     const run = await this.requireRun(id);
     return {
@@ -508,16 +522,32 @@ export class MovementService {
    * Do la ly do no khong nam trong `transitionRun()` — duong kia la duong THU CONG, con duong nay
    * la duong TU DONG, va tron hai lai se lam mot lan bam tay trong y het mot lan he thong quyet.
    */
-  async closeRunAsSystem(runId: string, trigger: string): Promise<VehicleRun> {
+  async closeRunAsSystem(runId: string, trigger: string): Promise<RunCloseAttempt> {
     const before = await this.requireRun(runId);
-    const legs = await this.repository.listLegs(runId);
-    const decision = evaluateRunTransition(before.status, 'COMPLETED', { legCount: legs.length });
+    const decision = evaluateSystemRunClose(before.status);
     if (!decision.allowed) {
       throw this.deny('run.lifecycle_transition', decision.reason, { runId, to: 'COMPLETED' });
     }
 
-    const after = await this.repository.setRunStatus(runId, 'COMPLETED', new Date());
-    if (!after) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+    /*
+     * PHEP GHI CO DIEU KIEN — lop chan cuoi cung chong dong hai lan.
+     *
+     * Hai worker cung mot luot quet deu doc thay `ACTIVE` va deu quyet dinh duoc dong. Phep kiem o
+     * tren khong nhin thay ban kia; chi cau `UPDATE ... WHERE status = 'ACTIVE'` moi nhin thay. Ke
+     * thua cuoc KHONG phai mot loi: vong chay da dong, ket qua mong doi da dat duoc, va thu duy
+     * nhat khong duoc phep xay ra la mot dong dau vet thu hai.
+     */
+    const attempt = await this.repository.completeRunIfActive(runId, new Date());
+    if (!attempt) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+
+    if (!attempt.transitioned) {
+      this.allow('run.lifecycle_transition', 'RUN_ALREADY_TERMINAL', {
+        runId,
+        because: trigger,
+        by: 'ANOTHER_WRITER',
+      });
+      return attempt;
+    }
 
     this.allow('run.lifecycle_transition', decision.reason, {
       runId,
@@ -531,9 +561,9 @@ export class MovementService {
       entityType: 'TransportVehicleRun',
       entityId: runId,
       before,
-      after,
+      after: attempt.run,
     });
-    return after;
+    return attempt;
   }
 
   /* ------------------------------------------------------------------ *

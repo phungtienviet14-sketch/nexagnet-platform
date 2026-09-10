@@ -21,6 +21,7 @@ import { transportActorOf } from '../transport-actor.js';
 import { firstIssue } from '../transport.schemas.js';
 import { planCancelSchema, planCommitSchema, planPreviewSchema } from './planning.schemas.js';
 import { PlanningService } from './planning.service.js';
+import { RunClosureService } from './run-closure.service.js';
 
 /**
  * LAP KE HOACH VONG CHAY qua HTTP — #276 (Lane L).
@@ -43,23 +44,33 @@ import { PlanningService } from './planning.service.js';
  * `.manage`, va khong khai `@Roles` — bat ky ai doc duoc vong chay deu xem truoc duoc.
  *
  * ============================================================================================
- * `closure` KHONG PHAI NUT "DONG VONG CHAY"
+ * KHONG CON NUT "DONG VONG CHAY" — `#293` R1
  * ============================================================================================
  *
- * `POST runs/:runId/closure` KHONG nhan mot y muon nao va KHONG the ep dong: no chay lai dung
- * phan xu tat dinh cua `evaluateRunClosure()` va thi hanh ket qua. Goi no tren mot vong chay chua
- * du dieu kien tra ve `closed: false` kem danh sach ly do — khong phai mot loi, va khong phai mot
- * lan dong.
+ * `POST runs/:runId/closure` da BI GO BO. No tung khong ep dong duoc (no chay lai dung phan xu tat
+ * dinh), nhung no van la mot lan bam cua NGUOI lam cho vong chay chuyen sang `COMPLETED`. Cau hoi
+ * `#293` R1 dat ra khong phai *"co ep duoc khong"* ma *"co phai bam khong"* — va cau tra loi phai
+ * la khong: dong vong chay la quyen cua HE THONG.
  *
- * No ton tai vi mot ly do cu the: nhanh `IDLE_TIMEOUT` khong co su kien nao danh thuc. Dong theo
- * bai xe duoc kich hoat boi chinh lan chang cuoi ket thuc; dong theo gio nghi thi phai co ai do
- * hoi lai. Cho toi khi nen tang co mot bo lap lich, "ai do" la mot lan quet — khong phai mot
- * quyet dinh cua ke toan.
+ * Cai con lai la `GET runs/:runId/closure`: mot be mat CHAN DOAN, chi doc, tra loi *"dong duoc
+ * chua va neu chua thi vi sao"*. No khong doi mot hang nao, va noi dung cung bang chan voi duong
+ * he thong dung de quyet dinh (`RunClosureService.inspect`).
+ *
+ * Cau hoi cu — *"nhanh `IDLE_TIMEOUT` khong co su kien nao danh thuc thi ai goi?"* — nay co mot
+ * cau tra loi that: `RunClosureSweepScheduler`, mot luot quet dinh ky, khong giu trang thai nao,
+ * va doc lai su that nguon moi luot.
  */
 @Controller('transport/planning')
 @UseGuards(TransportActionGuard)
 export class TransportPlanningController {
-  constructor(private readonly planning: PlanningService) {}
+  constructor(
+    private readonly planning: PlanningService,
+    /**
+     * `#293` R2. Mot duong phan xu duy nhat: controller bao "su that vua doi", khong tu ghep su
+     * that lai. `LEG_CHANGED` nam o `RunsController`; o day la `PLAN_CANCELLED`.
+     */
+    private readonly closures: RunClosureService,
+  ) {}
 
   /** Chinh sach dang ap dung. Be mat CHAN DOAN — `#276` L1. */
   @Get('policy')
@@ -125,7 +136,20 @@ export class TransportPlanningController {
     @Req() request: AuthenticatedRequest,
   ) {
     const { reason } = this.parse(planCancelSchema, body);
-    return this.guard(() => this.planning.cancelPlan(planId, reason, transportActorOf(request)));
+    return this.guard(async () => {
+      const plan = await this.planning.cancelPlan(planId, reason, transportActorOf(request));
+      /*
+       * GO KE HOACH CUOI CUNG LA MOT SU THAT LAM VONG CHAY CO THE DONG DUOC (`#293` R2: *"plan
+       * cancellation removes final future work"*).
+       *
+       * Su that doi SAU khi lenh huy da ghi xong, nen lan phan xu nay chay tren trang thai da ben
+       * vung. No khong nem: mot vong chay chua du dieu kien tra ve `closed: false` kem ly do, va do
+       * la mot ket qua binh thuong — lop huy ke hoach khong duoc hong chi vi phan xu sau no khong
+       * dong duoc gi.
+       */
+      const closure = await this.closures.attempt(plan.runId, 'PLAN_CANCELLED');
+      return { plan, closure };
+    });
   }
 
   /** Diem ket thuc du kien cua mot chiec xe — nguon cho Lane M (`#276` L7). */
@@ -135,20 +159,18 @@ export class TransportPlanningController {
     return this.guard(() => this.planning.projectVehicle(vehicleId));
   }
 
-  /** Phan xu dong vong chay, KHONG thi hanh. */
+  /**
+   * Phan xu dong vong chay, KHONG thi hanh. Be mat CHAN DOAN — `#293` R1.
+   *
+   * Doc cung bang chan voi duong ma he thong dung de quyet dinh, ke ca nguon su that ben ngoai
+   * (`RunClosureService.inspect`), nen mot cau "dong duoc" o day la mot cau dung.
+   *
+   * KHONG co duong `POST` tuong ung: xem chu thich dau lop.
+   */
   @Get('runs/:runId/closure')
   @RequiresTransportAction('transport.run.read')
   closure(@Param('runId') runId: string) {
-    return this.guard(() => this.planning.inspectClosure(runId));
-  }
-
-  /** Chay lai phan xu va thi hanh neu du dieu kien. Khong ep duoc — xem chu thich dau lop. */
-  @Post('runs/:runId/closure')
-  @Roles('ACCOUNTING', 'ADMIN')
-  @RequiresTransportAction('transport.run.manage')
-  @Throttle({ default: { limit: 120, ttl: 60_000 } })
-  settle(@Param('runId') runId: string) {
-    return this.guard(() => this.planning.settleRunClosure(runId));
+    return this.guard(() => this.closures.inspect(runId));
   }
 
   private parse<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {

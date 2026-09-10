@@ -49,10 +49,29 @@ export interface RunClosurePolicy {
   readonly idleHours: number | null;
 }
 
+/**
+ * LUOT QUET DINH KY — `#293` R3.
+ *
+ * Day KHONG phai mot nguong nghiep vu va khong duoc lan vao `RunClosurePolicy`: `idleHours` la cau
+ * hoi *"khach noi xe nghi bao lau thi coi la het vong chay"*, con hai so duoi day la cau hoi *"nen
+ * hoi lai bao lau mot lan, va moi lan hoi bao nhieu vong chay"*. Tron hai loai so lai se lam mot
+ * tham so van hanh tro thanh mot quyet dinh nghiep vu.
+ */
+export interface RunClosureSweepPolicy {
+  /** Khoang cach giua hai luot quet. Nhip van hanh, khong phai nguong nghiep vu. */
+  readonly intervalSeconds: number;
+  /**
+   * So vong chay toi da moi luot quet. Co tran la co y: mot luot quet khong duoc bien thanh mot
+   * phep quet toan bo bang khi doi xe lon dan.
+   */
+  readonly batchSize: number;
+}
+
 export interface TransportPlanningPolicy {
   readonly grouping: RunGrouping;
   readonly depots: readonly DepotConfig[];
   readonly closure: RunClosurePolicy;
+  readonly sweep: RunClosureSweepPolicy;
 }
 
 /* ------------------------------------------------------------------ *
@@ -199,6 +218,19 @@ export const RUN_CLOSURE_BLOCKERS = [
   'CARGO_STILL_CARRIED',
   /** Con mot phien cho nguoi nhan chua dong (F3, Lane O). Cung duong nap voi `CARGO_STILL_CARRIED`. */
   'OPEN_WAITING_SESSION',
+  /**
+   * KHONG HOI DUOC nguon su that ben ngoai, nen khong biet con gi chan hay khong. Fail-closed —
+   * xem `collectBlockers()` cua `run-closure-blocker.source.ts`.
+   *
+   * Day la mot ma chan THAT chu khong phai mot ngoai le: mot lan dong bi bo qua vi mot su co tam
+   * thoi se tu khoi phuc o luot quet sau, va bang dieu hanh nhin thay ly do.
+   */
+  'EXTERNAL_BLOCKER_SOURCE_UNAVAILABLE',
+  /**
+   * Nguon su that ben ngoai tra ve mot thu khong doc duoc (khong phai mang, hoac chua ma la).
+   * Khac han `..._UNAVAILABLE`: mot cai la loi ha tang, mot cai la hop dong cong bi vi pham.
+   */
+  'EXTERNAL_BLOCKER_SOURCE_AMBIGUOUS',
 ] as const;
 export type RunClosureBlocker = (typeof RUN_CLOSURE_BLOCKERS)[number];
 
@@ -209,6 +241,25 @@ export const RUN_CLOSURE_TRIGGERS = [
   'IDLE_TIMEOUT',
 ] as const;
 export type RunClosureTrigger = (typeof RUN_CLOSURE_TRIGGERS)[number];
+
+/**
+ * VI SAO LAN PHAN XU NAY CHAY — `#293` R2.
+ *
+ * Nam duong lam thay doi su that cua mot vong chay, va bon trong so do lam no CO THE dong duoc. Ly
+ * do la mot MA chu khong mot chuoi tu do: hai nguoi se viet hai cau khac nhau cho cung mot su kien,
+ * va mot so quyet dinh khong loc duoc theo mot cau van.
+ */
+export const RUN_CLOSURE_CAUSES = [
+  /** Mot chang hoan thanh (chang cuoi ve bai) hoac bi huy. */
+  'LEG_CHANGED',
+  /** Ke hoach cuoi cung bi go: khong con viec tuong lai nao chan nua. */
+  'PLAN_CANCELLED',
+  /** Khong co su kien nao ca — xe xong viec o xa bai va nguong nghi da troi qua. */
+  'IDLE_SWEEP',
+  /** Duong bao hiem: su kien `LEG_CHANGED` da that lac (tien trinh chet giua ghi va phan xu). */
+  'BACKSTOP_SWEEP',
+] as const;
+export type RunClosureCause = (typeof RUN_CLOSURE_CAUSES)[number];
 
 export interface RunClosureVerdict {
   readonly closable: boolean;

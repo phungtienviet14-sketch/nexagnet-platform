@@ -41,6 +41,7 @@ const planningPolicy = (over: Partial<TransportPlanningPolicy> = {}): TransportP
   grouping: 'ONE_ORDER_PER_RUN',
   depots: [{ code: 'IT-PLAN-DEPOT', label: DEPOT_LABEL }],
   closure: { idleHours: null },
+  sweep: { intervalSeconds: 60, batchSize: 50 },
   ...over,
 });
 
