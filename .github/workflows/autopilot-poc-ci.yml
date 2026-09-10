@@ -1,0 +1,37 @@
+name: autopilot-poc-ci
+
+# POC-2, half one: a deterministic check that fails ON PURPOSE, so the fixer half has a
+# real failed workflow run to consume. check.mjs is the SPEC and fixture.json is the
+# DATA; the fixer is scoped to the data only, so it can never turn this green by
+# weakening the check.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - tools/autopilot-poc-ci/**
+      - .github/workflows/autopilot-poc-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: autopilot-poc-ci-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Check out the branch head, not the merge commit, so the SHA this run reports is
+      # the SHA the fixer will bind its evidence to.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Report the SHA under test
+        run: echo "POC_CI_HEAD_SHA=$(git rev-parse HEAD)"
+      - name: Run the PoC fixture check
+        run: node tools/autopilot-poc-ci/check.mjs
