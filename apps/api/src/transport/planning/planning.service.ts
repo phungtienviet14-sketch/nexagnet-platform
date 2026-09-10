@@ -27,6 +27,8 @@ import {
 } from './planning.repository.js';
 import type {
   OrderRunPlan,
+  RunClosureBlocker,
+  RunClosureCause,
   RunClosureVerdict,
   RunPlanProposal,
   TransportPlanningPolicy,
@@ -66,6 +68,20 @@ export interface RunClosureOutcome {
   /** `true` khi CHINH lan goi nay dong vong chay. Goi lai lan hai tra `false`. */
   readonly closed: boolean;
   readonly run: VehicleRun;
+}
+
+/**
+ * SU THAT DI KEM mot lan phan xu — su that ma lop nay KHONG tu co.
+ *
+ * `blockers` den tu `RunClosureBlockerSource` (hang tren thung, phien cho nguoi nhan): chung khong
+ * song trong `transport-core`, va day la duong duy nhat de chung di vao phan xu.
+ *
+ * `cause` la vi sao lan phan xu nay chay. No khong doi ket qua — no de nguoi doc so quyet dinh biet
+ * duoc lan danh thuc nay den tu mot su kien chang, tu mot lan go ke hoach, hay tu mot luot quet.
+ */
+export interface RunClosureAttempt {
+  readonly blockers?: readonly RunClosureBlocker[];
+  readonly cause?: RunClosureCause;
 }
 
 /**
@@ -233,10 +249,16 @@ export class PlanningService {
     };
   }
 
-  /** Phan xu dong vong chay, KHONG thi hanh. Be mat chan doan cua bang dieu hanh. */
-  async inspectClosure(runId: string): Promise<RunClosureVerdict> {
+  /**
+   * Phan xu dong vong chay, KHONG thi hanh. Be mat chan doan cua bang dieu hanh.
+   *
+   * `additionalBlockers` la su that den tu BEN NGOAI `transport-core` (hang tren thung, phien cho
+   * nguoi nhan). Nguon cua chung la `RunClosureBlockerSource`, va nguoi goi chuan la
+   * `RunClosureService` — xem `run-closure-blocker.source.ts`.
+   */
+  async inspectClosure(runId: string, blockers: readonly RunClosureBlocker[] = []): Promise<RunClosureVerdict> {
     const detail = await this.movement.getRun(runId);
-    return evaluateRunClosure(await this.closureFacts(detail.run, detail.legs));
+    return evaluateRunClosure(await this.closureFacts(detail.run, detail.legs, blockers));
   }
 
   /* ------------------------------------------------------------------ *
@@ -414,15 +436,29 @@ export class PlanningService {
    * Goi duoc bao nhieu lan cung duoc: lan thu hai thay vong chay da o diem cuoi va tra
    * `closed: false` kem ly do, khong nem.
    */
-  async settleRunClosure(runId: string): Promise<RunClosureOutcome> {
+  async settleRunClosure(
+    runId: string,
+    attempt: RunClosureAttempt = {},
+  ): Promise<RunClosureOutcome> {
     const detail = await this.movement.getRun(runId);
-    const verdict = evaluateRunClosure(await this.closureFacts(detail.run, detail.legs));
+    const verdict = evaluateRunClosure(
+      await this.closureFacts(detail.run, detail.legs, attempt.blockers ?? []),
+    );
+    // `cause` di vao MOI nhanh cua so quyet dinh, ke ca nhanh khong dong duoc: cau hoi "vi sao lan
+    // phan xu nay chay" phai tra loi duoc ke ca khi cau tra loi la "chua den luc".
+    const detailOf = (extra: Record<string, unknown>): Record<string, unknown> => ({
+      runId,
+      ...(attempt.cause === undefined ? {} : { cause: attempt.cause }),
+      ...extra,
+    });
 
     if (isTerminalRunStatus(detail.run.status)) {
-      this.decide('planning.run_closure', 'allowed', 'RUN_CLOSURE_ALREADY_TERMINAL', {
-        runId,
-        status: detail.run.status,
-      });
+      this.decide(
+        'planning.run_closure',
+        'allowed',
+        'RUN_CLOSURE_ALREADY_TERMINAL',
+        detailOf({ status: detail.run.status }),
+      );
       return { runId, verdict, closed: false, run: detail.run };
     }
 
@@ -431,20 +467,39 @@ export class PlanningService {
         'planning.run_closure',
         verdict.holding ? 'allowed' : 'denied',
         verdict.holding ? 'RUN_CLOSURE_HOLDING' : 'RUN_CLOSURE_BLOCKED',
-        { runId, blockers: verdict.blockers },
+        detailOf({ blockers: verdict.blockers }),
       );
       return { runId, verdict, closed: false, run: detail.run };
     }
 
     const trigger = verdict.trigger ?? 'DEPOT_RETURN';
-    const run = await this.movement.closeRunAsSystem(runId, trigger);
+    const outcome = await this.movement.closeRunAsSystem(runId, trigger);
+
+    /*
+     * KHONG PHAI MOI LAN `verdict.closable` LA MOI LAN DONG DUOC.
+     *
+     * Hai worker cung mot luot quet deu thay "dong duoc"; chi mot ban ghi duoc trang thai (xem
+     * `completeRunIfActive`). Ban thua cuoc khong duoc ghi them mot dong `RUN_CLOSED_ON_*` — neu
+     * ghi, so quyet dinh se co hai lan dong cho mot vong chay, va do dung la thu ma `#293` R3 cam:
+     * *"no duplicated close under concurrent workers."*
+     */
+    if (!outcome.transitioned) {
+      this.decide(
+        'planning.run_closure',
+        'allowed',
+        'RUN_CLOSURE_ALREADY_TERMINAL',
+        detailOf({ status: outcome.run.status, by: 'ANOTHER_WRITER' }),
+      );
+      return { runId, verdict, closed: false, run: outcome.run };
+    }
+
     this.decide(
       'planning.run_closure',
       'allowed',
       trigger === 'DEPOT_RETURN' ? 'RUN_CLOSED_ON_DEPOT_RETURN' : 'RUN_CLOSED_ON_IDLE_TIMEOUT',
-      { runId, trigger },
+      detailOf({ trigger }),
     );
-    return { runId, verdict, closed: true, run };
+    return { runId, verdict, closed: true, run: outcome.run };
   }
 
   /* ------------------------------------------------------------------ *
@@ -559,7 +614,11 @@ export class PlanningService {
     return { plan, run: detail.run, legs, replayed: true };
   }
 
-  private async closureFacts(run: VehicleRun, legs: readonly RunLeg[]) {
+  private async closureFacts(
+    run: VehicleRun,
+    legs: readonly RunLeg[],
+    additionalBlockers: readonly RunClosureBlocker[],
+  ) {
     const open = await this.plans.listActiveForRun(run.id);
     const openPlanCount = open.filter((plan) => {
       const leg = legs.find((entry) => entry.id === plan.loadedLegId);
@@ -582,6 +641,7 @@ export class PlanningService {
       depot: usableDepot(resolveDepot(this.policy)),
       policy: this.policy.closure,
       now: this.now(),
+      ...(additionalBlockers.length === 0 ? {} : { additionalBlockers }),
     };
   }
 

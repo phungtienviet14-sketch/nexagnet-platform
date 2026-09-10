@@ -39,6 +39,7 @@ const planningPolicy: TransportPlanningPolicy = {
   grouping: 'ONE_ORDER_PER_RUN',
   depots: [{ code: 'IT-DSP-DEPOT', label: 'IT-DSP Bai xe' }],
   closure: { idleHours: null },
+  sweep: { intervalSeconds: 60, batchSize: 50 },
 };
 
 describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgres that', () => {

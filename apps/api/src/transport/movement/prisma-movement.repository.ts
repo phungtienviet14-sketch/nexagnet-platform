@@ -14,6 +14,8 @@ import {
   type ProjectTripInput,
   type ProjectTripOrderInput,
   type RunAssignmentChange,
+  type RunCloseAttempt,
+  type RunClosureCandidateQuery,
   type TripOrderProjection,
   type TripProjection,
   type UpdateOrderInput,
@@ -345,6 +347,86 @@ export class PrismaMovementRepository extends MovementRepository {
       },
     });
     return row ? toRun(row) : null;
+  }
+
+  /**
+   * DONG vong chay — `updateMany` CO DIEU KIEN, khong phai `update` theo khoa chinh.
+   *
+   * `updateMany` tra ve SO HANG da doi. Dieu kien `status: 'ACTIVE'` di xuong tan cau `UPDATE`,
+   * nen Postgres chu khong phai tang ung dung quyet dinh ai thang: hai giao dich song song thi
+   * hang bi khoa, mot ban doi duoc trang thai va ban kia thay `count = 0`.
+   *
+   * Khi `count = 0` thi van phai DOC LAI hang de tra ve su that hien tai — nguoi thua cuoc can
+   * biet vong chay dang o dau, va "da dong boi nguoi khac" khac han "khong tim thay".
+   */
+  async completeRunIfActive(id: string, at: Date): Promise<RunCloseAttempt | null> {
+    const updated = await model(this.prisma, 'transportVehicleRun').updateMany({
+      where: { id, status: 'ACTIVE' },
+      data: { status: 'COMPLETED', completedAt: at, updatedAt: at },
+    });
+    if (updated.count === 1) {
+      const row: RunRow | null = await model(this.prisma, 'transportVehicleRun').findUnique({
+        where: { id },
+      });
+      return row ? { run: toRun(row), transitioned: true } : null;
+    }
+
+    const current: RunRow | null = await model(this.prisma, 'transportVehicleRun').findUnique({
+      where: { id },
+    });
+    return current ? { run: toRun(current), transitioned: false } : null;
+  }
+
+  async listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]> {
+    /*
+     * PHEP LOC "CO THE DONG DUOC" — xem chu thich dai o ban trong bo nho (`movement.repository.ts`).
+     *
+     * Khach khong khai nguong nghi: mot chiec xe xong viec o xa bai nam nguyen `holding` mai mai,
+     * nen no khong duoc chiem mot cho trong trang. Cai con lai co the dong duoc la vong chay VE
+     * BAI, va dieu kien do la mot chang da hoan thanh ket thuc tai bai dang hoat dong.
+     *
+     * So sanh chuoi THANG, khong `sameSite()`: mot phep chuan hoa hoa/thuong/khoang trang khong
+     * dien dat duoc trong SQL, va mot ban Prisma "gan dung" con te hon mot ban dung it hon — hai
+     * ban hien thuc cua cung mot kho phai cung MOT luat. Lech nhan chi lam BO SOT mot ung vien
+     * (duong su kien van dong no ngay), khong bao gio lam dong bua mot vong chay.
+     */
+    const possibleOnly = query.idleHours === null;
+    if (possibleOnly && query.depotLabel === null) return [];
+
+    const rows: RunRow[] = await model(this.prisma, 'transportVehicleRun').findMany({
+      where: {
+        status: 'ACTIVE',
+        // KHONG dung `some` + `none` roi tu tinh `completedAt` trong bo nho: dieu kien "lan hoan
+        // thanh muon nhat da cu hon nguong" phai nam trong cau truy van, neu khong moi luot quet
+        // keo ve toan bo vong chay dang chay cua doi xe.
+        legs: {
+          some: { status: 'COMPLETED', completedAt: { not: null, lte: query.completedBefore } },
+          every: {
+            OR: [
+              { status: 'COMPLETED', completedAt: { not: null, lte: query.completedBefore } },
+              { status: 'CANCELLED' },
+            ],
+          },
+        },
+        ...(possibleOnly
+          ? {
+              AND: [
+                {
+                  legs: {
+                    some: {
+                      status: 'COMPLETED',
+                      destinationLabel: { equals: query.depotLabel as string },
+                    },
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: query.limit,
+    });
+    return rows.map(toRun);
   }
 
   async cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null> {

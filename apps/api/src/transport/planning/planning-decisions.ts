@@ -111,13 +111,28 @@ export const RUN_CLOSURE_REASONS = [
 ] as const;
 export type RunClosureReason = (typeof RUN_CLOSURE_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * planning.run_closure_sweep -- RunClosureService.sweep()
+ * ------------------------------------------------------------------ */
+export const RUN_CLOSURE_SWEEP_REASONS = [
+  /** Co ung vien trong trang nay. `closed` noi bao nhieu vong chay da dong that. */
+  'RUN_CLOSURE_SWEEP_RAN',
+  /**
+   * Khong co ung vien nao. Day la trang thai BINH THUONG cua mot doi xe dang chay — khong phai mot
+   * lan quet that bai, va khong phai mot loi.
+   */
+  'RUN_CLOSURE_SWEEP_EMPTY',
+] as const;
+export type RunClosureSweepReason = (typeof RUN_CLOSURE_SWEEP_REASONS)[number];
+
 export type TransportPlanningDecisionReason =
   | PlanPreviewReason
   | PlanCommitReason
   | PlanCancelReason
   | PlanGroupingReason
   | PlanDepotReason
-  | RunClosureReason;
+  | RunClosureReason
+  | RunClosureSweepReason;
 
 export const TRANSPORT_PLANNING_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-core',
@@ -128,6 +143,7 @@ export const TRANSPORT_PLANNING_DECISIONS = defineDecisionVocabulary({
     'planning.grouping',
     'planning.depot',
     'planning.run_closure',
+    'planning.run_closure_sweep',
   ],
   labels: {
     PLAN_PREVIEW_NEW_RUN: 'Ke hoach se mo mot vong chay moi cho don nay',
@@ -156,5 +172,7 @@ export const TRANSPORT_PLANNING_DECISIONS = defineDecisionVocabulary({
     RUN_CLOSURE_HOLDING: 'Khong con gi chan, nhung chua den dieu kien dong',
     RUN_CLOSURE_BLOCKED: 'Con dieu kien chan, chua dong vong chay',
     RUN_CLOSURE_ALREADY_TERMINAL: 'Vong chay da o trang thai cuoi tu truoc',
+    RUN_CLOSURE_SWEEP_RAN: 'Luot quet dinh ky da chay tren mot trang ung vien',
+    RUN_CLOSURE_SWEEP_EMPTY: 'Luot quet dinh ky khong co ung vien nao',
   } satisfies Record<TransportPlanningDecisionReason, string>,
 });

@@ -21,7 +21,7 @@ import { transportActorOf } from '../transport-actor.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { firstIssue } from '../transport.schemas.js';
 import { legCancelSchema, legTransitionSchema } from '../planning/planning.schemas.js';
-import { PlanningService } from '../planning/planning.service.js';
+import { RunClosureService } from '../planning/run-closure.service.js';
 import {
   addLegSchema,
   assignRunSchema,
@@ -44,11 +44,17 @@ export class RunsController {
   constructor(
     private readonly movement: MovementService,
     /**
-     * Lane L (#276). Chieu phu thuoc di MOT huong: controller -> planning -> movement. Doi trang
-     * thai mot chang la mot su that VAN HANH; ai do phai hoi lai "vong chay nay xong chua" ngay
-     * sau do, va cau hoi do thuoc lop lap ke hoach chu khong thuoc `MovementService`.
+     * Lane L (#276), va tu `#293` (Lane R) la `RunClosureService`.
+     *
+     * Chieu phu thuoc di MOT huong: controller -> phan xu dong -> planning -> movement. Doi trang
+     * thai mot chang la mot su that VAN HANH; ai do phai hoi lai "vong chay nay xong chua" ngay sau
+     * do, va cau hoi do thuoc lop lap ke hoach chu khong thuoc `MovementService`.
+     *
+     * Controller KHONG con tu ghep su that lai: no bao "su that vua doi" (`LEG_CHANGED`), con viec
+     * hoi nguon su that ben ngoai, chiu fail-closed khi nguon hong, va ghi so quyet dinh nam o
+     * `RunClosureService` — mot cho duy nhat cho moi duong danh thuc.
      */
-    private readonly planning: PlanningService,
+    private readonly closures: RunClosureService,
   ) {}
 
   @Get()
@@ -123,7 +129,7 @@ export class RunsController {
     return this.guard(async () => {
       await this.requireLegOfRun(runId, legId);
       const leg = await this.movement.transitionLeg(legId, to, transportActorOf(request));
-      return { leg, closure: await this.planning.settleRunClosure(runId) };
+      return { leg, closure: await this.closures.attempt(runId, 'LEG_CHANGED') };
     });
   }
 
@@ -140,7 +146,7 @@ export class RunsController {
     return this.guard(async () => {
       await this.requireLegOfRun(runId, legId);
       const leg = await this.movement.cancelLeg(legId, reason, transportActorOf(request));
-      return { leg, closure: await this.planning.settleRunClosure(runId) };
+      return { leg, closure: await this.closures.attempt(runId, 'LEG_CHANGED') };
     });
   }
 

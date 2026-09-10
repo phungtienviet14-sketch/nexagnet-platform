@@ -235,16 +235,79 @@ trông như một sự cố, và bảng điều hành sẽ đỏ rực lên mỗ
 hoà**: hai chặng đóng trong cùng một mili giây sẽ hoà, và khi đó thứ tự đọc của kho sẽ quyết định
 "xe đang ở đâu" — với một vòng chạy hai chặng, đó là khác biệt giữa _xe ở cảng_ và _xe ở kho_.
 
-### Ai kích hoạt
+### Ai kích hoạt — `#293` Lane R
+
+> ⚠️ **Cập nhật 10/09/2026 (`#293`).** Mục này đã đổi. `POST /transport/planning/runs/:runId/closure`
+> **đã bị gỡ bỏ**: nó không ép đóng được, nhưng nó vẫn là một lần **bấm của người** làm vòng chạy
+> chuyển sang `COMPLETED`, và câu hỏi `#293` R1 đặt ra là *"có phải bấm không"* — câu trả lời phải
+> là không. Cùng lúc đó, `POST /transport/runs/:id/transition` **không còn nhận `COMPLETED`**: máy
+> trạng thái từ chối bằng `RUN_COMPLETE_REQUIRES_SYSTEM_PATH`, đối xứng với
+> `RUN_CANCEL_REQUIRES_DEDICATED_PATH`. Đường duy nhất dẫn tới `COMPLETED` là
+> `MovementService.closeRunAsSystem()`, và nó không nhận `to`.
+
+Mọi lần phán xử đi qua **một** đường ứng dụng: `RunClosureService` (`planning/run-closure.service.ts`).
 
 | Đường                                                | Khi nào                                                        |
 | ---------------------------------------------------- | -------------------------------------------------------------- |
-| `POST /transport/runs/:runId/legs/:legId/transition` | mỗi lần một chặng đổi trạng thái, phán xử chạy lại ngay sau đó |
-| `POST /transport/planning/runs/:runId/closure`       | một lần **quét**, không phải một nút "đóng vòng chạy"          |
+| `POST /transport/runs/:runId/legs/:legId/transition` | mỗi lần một chặng đổi trạng thái — `LEG_CHANGED`                |
+| `POST /transport/runs/:runId/legs/:legId/cancel`     | chặng bị huỷ — `LEG_CHANGED`                                    |
+| `POST /transport/planning/plans/:planId/cancel`      | kế hoạch cuối bị gỡ — `PLAN_CANCELLED`                          |
+| `RunClosureSweepScheduler`                           | `IDLE_SWEEP`, và `BACKSTOP_SWEEP` cho sự kiện đã thất lạc        |
 
-Đường thứ hai tồn tại vì một lý do cụ thể: nhánh `IDLE_TIMEOUT` không có sự kiện nào đánh thức. Nó
-**không ép đóng được** — nó chạy lại đúng phán xử tất định và thi hành kết quả; gọi trên một vòng
-chạy chưa đủ điều kiện trả `closed: false` kèm danh sách lý do.
+`RunClosureService` gom ba việc vào một chỗ mà trước đây mỗi controller phải tự nhớ: hỏi **nguồn sự
+thật bên ngoài** (`RunClosureBlockerSource`), **fail-closed** khi nguồn đó hỏng, và ghi sổ quyết định.
+
+**Luồng quét** (`sweep()`) là cơ chế bền vững cho nhánh không có sự kiện nào đánh thức:
+
+- chạy trong tiến trình `api` (không phải tiến trình worker), bật mặc định, tắt bằng
+  `TRANSPORT_RUN_CLOSURE_SWEEP=off`;
+- tập ứng viên suy ra **từ sự thật nguồn** mỗi lượt (`ACTIVE`, mọi chặng đã ở trạng thái cuối, lần
+  hoàn thành muộn nhất đã cũ hơn cửa sổ) — **không có con trỏ sống nào**, nên tiến trình chết giữa
+  hai lượt quét không làm mất gì;
+- cửa sổ ứng viên = `min(idleHours, 2 phút)`. Hai phút là **đường bảo hiểm cho nhánh về bãi**: nếu
+  sự kiện `LEG_CHANGED` thất lạc, vòng chạy vẫn được phán xử lại thay vì nằm chờ tới hết nguồn nghỉ;
+- **có trần** `sweep.batchSize` (mặc định 50), nhịp `sweep.intervalSeconds` (mặc định 60) — hai số
+  **vận hành**, cấu hình được theo khách, và **không** phải nguồn nghỉ nghiệp vụ (`closure.idleHours`
+  vẫn là con số duy nhất quyết định một vòng chạy có được đóng hay không);
+- khách không khai `idleHours` thì lượt quét **vẫn chạy** nhưng không bao giờ đóng một chiếc xe đang
+  ở xa bãi: nó giữ nguyên `holding`.
+
+**Không đóng hai lần dưới hai worker.** `evaluateRunClosure()` chỉ là *phán xử*; lớp chặn thật là
+`MovementRepository.completeRunIfActive()` — một `UPDATE ... WHERE status = 'ACTIVE'` trả về số hàng
+đã đổi. Người thua cuộc nhận `transitioned: false` và **không** ghi thêm một dòng
+`transport.run.close.system` nào.
+
+**Ứng viên phải là "có thể đóng được", không chỉ "đã xong việc".** Một trang chỉ có `batchSize`
+chỗ, và một ứng viên không đóng được sẽ quay lại lượt sau với nguyên `updatedAt` cũ — tức nằm mãi ở
+đầu trang, và những vòng chạy phía sau **không bao giờ được nhìn tới**. Đó là một cách hỏng im lặng.
+Nguy hiểm nhất là những vòng chạy không bao giờ đóng được bằng thời gian: khách không khai
+`closure.idleHours` thì một chiếc xe xong việc ở **xa bãi** nằm nguyên ở `holding` mãi mãi (đúng như
+thiết kế). Nên khi khách chưa khai ngưỡng nghỉ, ứng viên bị thu hẹp về những vòng chạy **có thể** đóng
+được: một chặng đã hoàn thành kết thúc tại bãi đang hoạt động. Phép lọc là so sánh chuỗi thẳng, không
+`sameSite()` — hai bản hiện thực của cùng một kho phải cùng **một** luật, và lệch nhãn chỉ làm **bỏ
+sót** một ứng viên (đường sự kiện vẫn đóng nó ngay), không bao giờ làm đóng bừa.
+
+### Vì sao nền tảng này KHÔNG dùng Hatchet cho lượt quét
+
+`OWNER_ARCHITECTURE_CLARIFICATION_2026_09_10` xếp Hatchet là **ưu tiên** cho đường bền vững, và nói
+rõ: *"If an already-accepted bounded durable mechanism proves better for a measured case, keep it."*
+Đây là phép đo cho trường hợp của lane này.
+
+| Câu hỏi | Đo được |
+| --- | --- |
+| Hatchet có phải hạ tầng bắt buộc? | **Không.** `WORKFLOW_ENGINE=on` **và** khách khai `integrations.workflowEngine` mới bật (`workflow-engine-switch.ts`). Mặc định là `DisabledWorkflowEngineAdapter`. |
+| Nếu chỉ dùng Hatchet thì sao? | Mọi khách không bật engine **không bao giờ** đóng được vòng chạy xa bãi. Một năng lực phải chạy cho mọi khách vận tải không được phụ thuộc vào hạ tầng tuỳ chọn. |
+| Trạng thái đóng nằm ở đâu? | **Postgres.** Timer chỉ đánh thức; tập ứng viên được suy lại từ sự thật nguồn mỗi lượt. Không có con trỏ nào sống trong tiến trình. |
+
+Kết luận: giữ cơ chế đã được repo chấp nhận (`setInterval` + `.unref()` + trạng thái trong DB, đúng
+khuôn `CampaignScheduler`/`WorkflowScheduler`), và **không** dựng thêm một đường Hatchet chỉ để có
+Hatchet. Đổi lại, đây là hai điều phải nói thẳng:
+
+- đây **không** phải một `durable wait` cấp từng thực thể; nó là một lượt quét có trần, và tính bền
+  của nó đến từ việc **suy lại từ Postgres**, không từ engine;
+- nếu sau này khách bật engine và cần một lần đánh thức đúng hạn cho từng vòng chạy, đường
+  `WorkflowOutbox` → Hatchet `durableTask`/`sleepFor` đã có sẵn khuôn để nối vào **cùng** hàm phán
+  xử này. Việc đó không được phép sinh ra đường ghi thứ hai.
 
 ---
 
@@ -260,8 +323,7 @@ Mọi đường **ghi** đều bắt đầu bằng một **đơn**, không bằn
 | `POST /transport/planning/orders/:orderId/plan`           | `transport.run.manage` | có                                                    |
 | `POST /transport/planning/plans/:planId/cancel`           | `transport.run.manage` | có                                                    |
 | `GET  /transport/planning/vehicles/:vehicleId/projection` | `transport.run.read`   | không                                                 |
-| `GET  /transport/planning/runs/:runId/closure`            | `transport.run.read`   | không                                                 |
-| `POST /transport/planning/runs/:runId/closure`            | `transport.run.manage` | có (chỉ khi phán xử cho phép)                         |
+| `GET  /transport/planning/runs/:runId/closure`            | `transport.run.read`   | không — chỉ đọc, xem chú thích dưới                   |
 | `GET  /transport/runs/:id/movement`                       | `transport.run.read`   | không                                                 |
 | `POST /transport/runs/:runId/legs/:legId/transition`      | `transport.run.manage` | có                                                    |
 | `POST /transport/runs/:runId/legs/:legId/cancel`          | `transport.run.manage` | có                                                    |
@@ -300,14 +362,33 @@ không ràng buộc nào bị gỡ. Đường lui nằm ở `README-rollback.sql
 
 ## 9. Khoảng cách đã ghi tên
 
-| Khoảng cách                                          | Vì sao chưa đóng                                                                                                                               |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CARGO_STILL_CARRIED` chưa có nguồn                  | Suy ra từ mốc vận hành của `transport-checkpoint`, mà `transport-core` **không được** phụ thuộc ngược lên capability đó                        |
-| `OPEN_WAITING_SESSION` chưa có nguồn                 | `TransportDeliveryWaitingSession` (#243 F3) chưa vào `main`; thuộc Lane O                                                                      |
-| `IDLE_TIMEOUT` cần một lần quét                      | Nền tảng chưa có bộ lập lịch. Cho tới lúc đó, "ai đó" là một lần quét — không phải một quyết định của kế toán                                  |
-| So sánh địa điểm bằng nhãn chữ                       | Chưa có khoá địa điểm/toạ độ ở grain chặng. Lane M sở hữu phần đó                                                                              |
-| Vòng chạy mồ côi khi hai yêu cầu song song cùng thua | Bản thua ở `plans.create` để lại một vòng chạy `PLANNED` rỗng việc; nó được dọn bằng đường huỷ bình thường. Cùng khuôn với `SiteIntakeService` |
+> ⚠️ **Cập nhật 10/09/2026 (`#293` Lane R).** Hai hàng đầu và hàng thứ ba đã đóng lại; bảng dưới
+> giữ nguyên hàng cũ kèm trạng thái mới, để người đọc sau thấy được cái gì đã đổi và cái gì chưa.
 
-Cả hai mã chặn ở hàng đầu **đã có chỗ cắm sẵn**: `RunClosureFacts.additionalBlockers` là một tham số
-của hàm thuần, không phải một `@Optional()` DI không bao giờ được buộc. Khi Lane O có phiên chờ, nó
-truyền mã vào đó và không một dòng nào của `run-closure.ts` phải đổi.
+| Khoảng cách                                          | Trạng thái                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CARGO_STILL_CARRIED` chưa có nguồn                  | **ĐÃ ĐÓNG.** `CheckpointRunClosureBlockerSource` suy ra nó từ `buildRunTimeline()` của `#243` F6 (giai đoạn `LOADING`/`IN_TRANSIT`/`ARRIVED` = hàng còn trên thùng). `transport-core` vẫn không phụ thuộc ngược: cổng `RunClosureBlockerSource` do `transport-core` khai, `transport-checkpoint` ghi đè ở tầng composition |
+| `OPEN_WAITING_SESSION` chưa có nguồn                 | **CHỜ LANE O.** Cổng đã có và đã kiểm bằng adapter giả; `TransportDeliveryWaitingSession` (#243 F3) vẫn chưa vào `main`, và lane này **không** dựng một bảng giả. Xem `WAITING_SESSION_BINDING` ở báo cáo cuối lane                                                                                                              |
+| `IDLE_TIMEOUT` cần một lần quét                      | **ĐÃ ĐÓNG.** `RunClosureSweepScheduler` + `RunClosureService.sweep()` — bền vững, có trần, khôi phục được sau khi tiến trình chết, và không đóng hai lần dưới hai worker                                                                                        |
+| So sánh địa điểm bằng nhãn chữ                       | **CÒN.** Chưa có khoá địa điểm/toạ độ ở grain chặng. Lane M sở hữu phần đó                                                                                                                                                                                     |
+| Vòng chạy mồ côi khi hai yêu cầu song song cùng thua | **CÒN.** Bản thua ở `plans.create` để lại một vòng chạy `PLANNED` rỗng việc; nó được dọn bằng đường huỷ bình thường. Cùng khuôn với `SiteIntakeService`                                                                                                       |
+
+### Nguồn sự thật bên ngoài — cổng, không phải một DI tuỳ nghi
+
+`RunClosureFacts.additionalBlockers` vẫn là một tham số của hàm thuần. Cái mới của `#293` R4 là một
+**cổng chỉ đọc** để lấp nó ở tầng ứng dụng:
+
+```ts
+RunClosureBlockerSource.blockersForRun(runId) -> RunClosureBlocker[]
+```
+
+Ba tính chất, và cả ba đều được kiểm:
+
+1. **Chỉ đọc.** Một phương thức, không `record()`, không `clear()` — một cổng đọc mà ghi được sẽ sớm
+   thành chỗ "tạm gỡ vật cản ra".
+2. **Fail-closed.** Nguồn ném → `EXTERNAL_BLOCKER_SOURCE_UNAVAILABLE`; nguồn trả về thứ không đọc
+   được → `EXTERNAL_BLOCKER_SOURCE_AMBIGUOUS`. Cả hai là **mã chặn thật**, đi qua đúng con đường mà
+   mọi mã chặn khác đi, và hiện lên bảng điều hành. Không bao giờ trả `[]` khi có sự cố: `[]` nghĩa
+   là *"đã hỏi, và không có gì chặn"*.
+3. **Vắng mặt là một câu trả lời hợp lệ.** Khách không bật `transport-checkpoint` nhận
+   `NoRunClosureBlockerSource` — không có cổng nào để hỏi, khác hẳn với hỏi rồi nhận về "không chặn".
