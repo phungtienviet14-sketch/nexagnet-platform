@@ -27,6 +27,7 @@ import {
   type CreateOrderInput,
   type CreateRunInput,
   type RunCloseAttempt,
+  type RunClosureCandidateQuery,
   type TripOrderProjection,
   type TripProjection,
   type UpdateOrderInput,
@@ -283,8 +284,8 @@ export class MovementService {
    * `MovementService`, va mot phuong thuc doc o day giu dung chieu phu thuoc do. Quy uoc cua lane
    * L la *ghi* phai di qua dich vu; o day cung vay — lop tren khong cam vao kho.
    */
-  listRunClosureCandidates(completedBefore: Date, limit: number): Promise<VehicleRun[]> {
-    return this.repository.listRunClosureCandidates(completedBefore, limit);
+  listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]> {
+    return this.repository.listRunClosureCandidates(query);
   }
 
   async getRun(id: string): Promise<VehicleRunDetail> {

@@ -143,9 +143,13 @@ export class TransportPlanningController {
        * cancellation removes final future work"*).
        *
        * Su that doi SAU khi lenh huy da ghi xong, nen lan phan xu nay chay tren trang thai da ben
-       * vung. No khong nem: mot vong chay chua du dieu kien tra ve `closed: false` kem ly do, va do
-       * la mot ket qua binh thuong — lop huy ke hoach khong duoc hong chi vi phan xu sau no khong
-       * dong duoc gi.
+       * vung. MOT VONG CHAY CHUA DU DIEU KIEN khong phai mot loi: no tra ve `closed: false` kem ly
+       * do.
+       *
+       * Nhung mot su co HA TANG thi co the nem — va khi do nguoi goi nhan `500` cho mot lenh HUY
+       * da ghi xong that. Lan goi lai se gap `PLAN_CANCEL_ALREADY_CANCELLED`. Do la mot danh doi
+       * da biet: tra ve `plan` ma nuot loi phan xu se giau mat mot su co that, con nem thi bao sai
+       * rang lenh huy da that bai. Chon cai thu hai, vi no on ao hon va khong lam mat thong tin.
        */
       const closure = await this.closures.attempt(plan.runId, 'PLAN_CANCELLED');
       return { plan, closure };

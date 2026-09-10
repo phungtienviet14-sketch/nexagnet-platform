@@ -254,10 +254,15 @@ export const RUN_CLOSURE_CAUSES = [
   'LEG_CHANGED',
   /** Ke hoach cuoi cung bi go: khong con viec tuong lai nao chan nua. */
   'PLAN_CANCELLED',
-  /** Khong co su kien nao ca — xe xong viec o xa bai va nguong nghi da troi qua. */
+  /**
+   * Khong co su kien nao danh thuc: mot luot quet dinh ky hoi lai.
+   *
+   * MOT ma cho MOI lan quet, khong tach "quet vi het gio nghi" voi "quet vi su kien that lac".
+   * Su khac biet do da duoc ghi lai o cho khac va ghi CHINH XAC hon: `planning.run_closure` cua
+   * lan dong do mang `trigger` (`DEPOT_RETURN` hay `IDLE_TIMEOUT`). Mot ma thu hai o day se la mot
+   * suy doan ve ly do, trong khi ly do that da nam trong cung so quyet dinh.
+   */
   'IDLE_SWEEP',
-  /** Duong bao hiem: su kien `LEG_CHANGED` da that lac (tien trinh chet giua ghi va phan xu). */
-  'BACKSTOP_SWEEP',
 ] as const;
 export type RunClosureCause = (typeof RUN_CLOSURE_CAUSES)[number];
 

@@ -532,7 +532,48 @@ describe('dong vong chay do he thong quan (#293 Lane R)', () => {
       expect(result.closed).toBe(2);
     });
 
-    it('bai 19 — luot quet cua khach nay khong dung toi vong chay cua khach khac', async () => {
+    it('bai — TRANG CO TRAN khong duoc BO SOT vong chay phia sau no', async () => {
+      /*
+       * BAI NAY LA MOT BAI SUA, khong phai mot bai kiem cho vui.
+       *
+       * Ban dau, ung vien cua luot quet la "vong chay da xong viec". Nhung mot vong chay XONG VIEC
+       * ma khong bao gio DONG DUOC — xe o xa bai, khach khong khai nguong nghi — se quay lai o moi
+       * luot voi nguyen `updatedAt` cu, tuc no nam mai o dau trang. Voi `batchSize: 2` va hai vong
+       * chay nhu the, mot vong chay VE BAI that su o phia sau KHONG BAO GIO duoc nhin toi, va no
+       * nam mo mai mai. Khong mot loi nao duoc ghi ra: luot quet chi bao "quet 2, dong 0".
+       *
+       * Day la kich ban do duoc dung nguyen van.
+       */
+      const closures = configure({ closure: { idleHours: null }, sweep: { intervalSeconds: 60, batchSize: 2 } });
+
+      // Hai vong chay KHONG BAO GIO dong duoc: xong viec o xa bai, va khach khong khai nguong.
+      await completedRun(FAR_LABEL);
+      await completedRun('Cảng xa hơn');
+
+      // Mot vong chay dong duoc that su: ve bai.
+      const home = await completedRun(DEPOT_LABEL);
+
+      // Qua khoang dem bao hiem — neu khong, chinh cua so thoi gian moi la thu loai ca ba ra.
+      now = new Date(now.getTime() + 5 * 60_000);
+      const first = await closures.sweep();
+
+      expect(first.closed).toBe(1);
+      expect(await statusOf(home.runId)).toBe('COMPLETED');
+    });
+
+    it('bai — vong chay XA BAI khong chiem cho trong trang khi khach chua khai nguong', async () => {
+      const closures = configure({ closure: { idleHours: null }, sweep: { intervalSeconds: 60, batchSize: 50 } });
+      const away = await completedRun(FAR_LABEL);
+
+      now = new Date(now.getTime() + 365 * 24 * HOUR_MS);
+
+      // Mot nam sau: van khong phai ung vien nao ca. No khong bi bo quen — no KHONG THE dong duoc
+      // bang thoi gian, va mot luot quet dinh ky khong co gi de hoi them.
+      expect(await closures.sweep()).toEqual({ scanned: 0, closed: 0 });
+      expect(await statusOf(away.runId)).toBe('ACTIVE');
+    });
+
+    it('bai 19 — luot quet chi dung chinh sach CUA NO, ke ca cho vong chay cua doi xe khac', async () => {
       /*
        * MOT TIEN TRINH = MOT KHACH (`tenantDir()` chot dieu do), nen "khach khac" o day dung nghia
        * nhat kiem duoc: mot vong chay ma CHINH SACH CUA KHACH NAY khong cho dong — no ket thuc o

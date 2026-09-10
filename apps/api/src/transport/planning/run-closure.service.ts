@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { MovementService } from '../movement/movement.service.js';
 import type { VehicleRun } from '../movement/movement.types.js';
@@ -7,7 +7,12 @@ import {
   TRANSPORT_PLANNING_DECISIONS,
   type TransportPlanningDecisionReason,
 } from './planning-decisions.js';
-import { TRANSPORT_PLANNING_POLICY, RUN_CLOSURE_EVENT_BACKSTOP_MS } from './planning-policy.js';
+import {
+  TRANSPORT_PLANNING_POLICY,
+  RUN_CLOSURE_EVENT_BACKSTOP_MS,
+  resolveDepot,
+  usableDepot,
+} from './planning-policy.js';
 import { PlanningService, type RunClosureOutcome } from './planning.service.js';
 import type { RunClosureCause, TransportPlanningPolicy } from './planning.types.js';
 import {
@@ -54,6 +59,8 @@ export interface RunClosureSweepResult {
  */
 @Injectable()
 export class RunClosureService {
+  private readonly logger = new Logger(RunClosureService.name);
+
   constructor(
     private readonly planning: PlanningService,
     private readonly movement: MovementService,
@@ -127,10 +134,12 @@ export class RunClosureService {
       idleHours === null ? RUN_CLOSURE_EVENT_BACKSTOP_MS : Math.min(idleHours * HOUR_MS, RUN_CLOSURE_EVENT_BACKSTOP_MS);
     const completedBefore = new Date(now.getTime() - windowMs);
 
-    const candidates = await this.movement.listRunClosureCandidates(
+    const candidates = await this.movement.listRunClosureCandidates({
       completedBefore,
-      this.policy.sweep.batchSize,
-    );
+      idleHours,
+      depotLabel: usableDepot(resolveDepot(this.policy))?.label ?? null,
+      limit: this.policy.sweep.batchSize,
+    });
 
     let closed = 0;
     for (const candidate of candidates) {
@@ -149,16 +158,24 @@ export class RunClosureService {
   /**
    * MOT ung vien, va mot quy tac: mot vong chay hong KHONG duoc lam hong ca luot quet.
    *
-   * `attempt()` da khong nem cho cac truong hop binh thuong (chua du dieu kien, da dong). Nhung
-   * mot su co that su — CSDL ngat, mot dong du lieu khong doc duoc — se nem, va neu no thoat ra
-   * khoi vong lap thi nhung ung vien con lai cua trang khong bao gio duoc hoi. Bo qua va di tiep
-   * KHONG phai la im lang nuot loi: ma chan tuong ung da duoc ghi o so quyet dinh cua lan phan xu.
+   * `attempt()` da khong nem cho cac truong hop BINH THUONG (chua du dieu kien, da dong — chung
+   * tra ve `closed: false` kem ly do). Nhung mot su co that su — CSDL ngat, mot dong du lieu khong
+   * doc duoc — se nem, va neu no thoat ra khoi vong lap thi nhung ung vien con lai cua trang khong
+   * bao gio duoc hoi.
+   *
+   * Loi o day KHONG duoc nuot im lang. Loi tu nguon su that ben ngoai thi da co ma chan rieng
+   * (`EXTERNAL_BLOCKER_SOURCE_UNAVAILABLE`), nhung loi xay ra TRUOC khi phan xu kip ghi mot dong
+   * nao thi khong de lai dau vet nao — va khi do mot luot quet hong hoan toan giong y mot luot
+   * quet sach khong co gi de lam. Nen no phai duoc ghi ra log: day la cho duy nhat phan biet duoc.
    */
   private async settleCandidate(candidate: VehicleRun): Promise<boolean> {
     try {
       const outcome = await this.attempt(candidate.id, 'IDLE_SWEEP');
       return outcome.closed;
-    } catch {
+    } catch (error) {
+      this.logger.error(
+        `Luot quet khong phan xu duoc vong chay ${candidate.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }

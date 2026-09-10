@@ -37,6 +37,22 @@ export interface RunCloseAttempt {
   readonly transitioned: boolean;
 }
 
+export interface RunClosureCandidateQuery {
+  /** Lan hoan thanh muon nhat phai da cu hon moc nay. */
+  readonly completedBefore: Date;
+  /**
+   * Nguong nghi khach da khai, hoac `null`.
+   *
+   * `null` KHONG phai "khong loc gi": no nghia la khong con duong dong nao dua tren THOI GIAN, nen
+   * ung vien phai la "co the dong duoc" chu khong chi "da xong viec" — xem chu thich cua
+   * `listRunClosureCandidates`.
+   */
+  readonly idleHours: number | null;
+  /** Nhan bai dang hoat dong, hoac `null` khi khach chua khai bai nao. */
+  readonly depotLabel: string | null;
+  readonly limit: number;
+}
+
 export const RUN_CODE: UniqueIndexRef = {
   indexName: 'TransportVehicleRun_code_key',
   model: 'TransportVehicleRun',
@@ -197,24 +213,42 @@ export abstract class MovementRepository {
   abstract cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null>;
 
   /**
-   * UNG VIEN cho luot quet nghi — `#293` R3.
+   * UNG VIEN cho luot quet — `#293` R3.
    *
    * Tra ve mot TRANG GIOI HAN (`limit`) cac vong chay dang `ACTIVE` ma MOI chang deu da o trang
-   * thai cuoi va lan hoan thanh MUON NHAT da cu hon `completedBefore`. Dieu kien "cu hon nguong
-   * nghi" nam trong cau truy van chu khong nam trong bo nho: mot luot quet khoi phuc sau khi tien
-   * trinh chet phai tim lai duoc dung tap do tu su that nguon, khong tu mot con tro song.
+   * thai cuoi va lan hoan thanh MUON NHAT da cu hon `completedBefore`. Dieu kien nam trong cau truy
+   * van chu khong nam trong bo nho: mot luot quet khoi phuc sau khi tien trinh chet phai tim lai
+   * duoc dung tap do tu su that nguon, khong tu mot con tro song.
    *
    * Day la tap UNG VIEN, khong phai tap KET LUAN. Con ke hoach mo, con hang tren thung, con phien
    * cho — ba thu do khong nam trong hai bang nay, va `evaluateRunClosure()` moi la noi phan xu.
-   * Mot ung vien chua du dieu kien dong se quay lai o luot sau.
    *
    * Thu tu SAP XEP la tat dinh (`updatedAt`, roi `id`) de hai worker cung mot luot quet nhin thay
    * cung mot trang theo cung mot thu tu.
+   *
+   * ============================================================================================
+   * VI SAO UNG VIEN PHAI LA "CO THE DONG DUOC", KHONG CHI "DA XONG VIEC"
+   * ============================================================================================
+   *
+   * `take` chi lay MOT trang. Mot ung vien quet ma khong dong duoc se quay lai o luot sau voi
+   * nguyen `updatedAt` cu, tuc no nam mai o dau trang va nhung vong chay phia sau khong bao gio
+   * duoc nhin toi. Do la mot cach hong IM LANG, va no da duoc do bang mot bai kiem truoc khi sua.
+   *
+   * Truong hop nguy hiem nhat la nhung vong chay KHONG BAO GIO dong duoc bang thoi gian: khach
+   * khong khai `closure.idleHours` thi mot chiec xe ket thuc viec o XA BAI se nam nguyen o trang
+   * thai `holding` mai mai (`RunClosureFacts` co y lam dieu do — khong doan mot nguong khach chua
+   * noi). Chung se chiem cho trong trang vinh vien.
+   *
+   * Nen khi khach CHUA khai nguong nghi, ung vien bi thu hep ve nhung vong chay CO THE dong duoc:
+   * mot chang da hoan thanh ket thuc tai BAI XE dang hoat dong. Do la mot phep LOC THO (so sanh
+   * chuoi, khong phai `sameSite()`), va no duoc phep sai theo huong BO SOT: mot vong chay ve bai
+   * voi nhan bai lech khoang trang van duoc duong SU KIEN dong ngay; luot quet chi la luoi an toan
+   * cho su kien da that lac, va no khong bao gio duoc phep dong bua mot vong chay chi vi doan sai.
+   *
+   * Khi khach CO khai nguong nghi thi moi vong chay het viec deu la ung vien that: chu so 0 o
+   * `updatedAt` la moc thoi gian, va "cu hon nguong" la mot su that se den.
    */
-  abstract listRunClosureCandidates(
-    completedBefore: Date,
-    limit: number,
-  ): Promise<VehicleRun[]>;
+  abstract listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]>;
 
   abstract createLeg(input: CreateLegInput): Promise<RunLeg>;
   abstract findLeg(id: string): Promise<RunLeg | null>;
@@ -452,29 +486,45 @@ export class InMemoryMovementRepository extends MovementRepository {
     return { run: next, transitioned: true };
   }
 
-  async listRunClosureCandidates(completedBefore: Date, limit: number): Promise<VehicleRun[]> {
-    const threshold = iso(completedBefore);
-    return [...this.runs.values()]
-      .filter((run) => {
-        if (run.status !== 'ACTIVE') return false;
-        const legs = this.legsOf(run.id);
-        if (legs.length === 0) return false;
+  async listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]> {
+    const threshold = iso(query.completedBefore);
+    const candidates = [...this.runs.values()].filter((run) => {
+      if (run.status !== 'ACTIVE') return false;
+      const legs = this.legsOf(run.id);
+      if (legs.length === 0) return false;
 
-        let lastCompletedAt: string | null = null;
-        for (const leg of legs) {
-          if (leg.status === 'CANCELLED') continue;
-          if (leg.status !== 'COMPLETED' || leg.completedAt === null) return false;
-          if (lastCompletedAt === null || leg.completedAt > lastCompletedAt) {
-            lastCompletedAt = leg.completedAt;
-          }
+      let lastCompletedAt: string | null = null;
+      for (const leg of legs) {
+        if (leg.status === 'CANCELLED') continue;
+        if (leg.status !== 'COMPLETED' || leg.completedAt === null) return false;
+        if (lastCompletedAt === null || leg.completedAt > lastCompletedAt) {
+          lastCompletedAt = leg.completedAt;
         }
-        return lastCompletedAt !== null && lastCompletedAt <= threshold;
-      })
+      }
+      if (lastCompletedAt === null || lastCompletedAt > threshold) return false;
+
+      /*
+       * PHEP LOC "CO THE DONG DUOC" — cung menh de voi ban Prisma, va cung ly do.
+       *
+       * Khach khong khai nguong nghi thi mot chiec xe xong viec o xa bai nam nguyen `holding` mai
+       * mai. No khong duoc chiem mot cho trong trang: do la cach mot luot quet co tran bien thanh
+       * mot luot quet BO SOT nhung vong chay phia sau, va bo sot do im lang.
+       */
+      if (query.idleHours === null) {
+        if (query.depotLabel === null) return false;
+        return legs.some(
+          (leg) => leg.status === 'COMPLETED' && leg.destinationLabel === query.depotLabel,
+        );
+      }
+      return true;
+    });
+
+    return candidates
       .sort(
         (left, right) =>
           left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
       )
-      .slice(0, limit);
+      .slice(0, query.limit);
   }
 
   private legsOf(runId: string): RunLeg[] {
