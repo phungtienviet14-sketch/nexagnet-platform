@@ -176,6 +176,16 @@ export class InMemorySettlementRepository extends SettlementRepository {
       );
     }
 
+    const currentGrossAmount = [...this.documents.values()]
+      .filter((doc) => doc.id === target.id || (doc.adjustsId === target.id && doc.status === 'POSTED'))
+      .reduce((total, doc) => total + doc.signedAmount, 0);
+    if (command.expectedGrossAmount !== undefined && currentGrossAmount !== command.expectedGrossAmount) {
+      throw TransportDomainError.denied(
+        'SETTLEMENT_TARGET_CONCURRENTLY_CHANGED',
+        `Chuoi chung tu ${target.id} da doi tu ${command.expectedGrossAmount} thanh ${currentGrossAmount}`,
+      );
+    }
+
     this.assertPeriodWritable(target.flow, command.businessDate);
 
     if (command.kind === 'REVERSAL') {

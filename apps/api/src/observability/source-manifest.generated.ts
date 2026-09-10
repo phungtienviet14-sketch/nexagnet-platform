@@ -489,6 +489,32 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.customer.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
+    "transport.customer_payment.allocate": {
+      "functionName": "CustomerArController.allocatePayment",
+      "filePath": "apps/api/src/transport/customer-ar/customer-ar.controller.ts",
+      "line": 190
+    },
+    "transport.customer_payment.correct": {
+      "functionName": "CustomerArController.releaseAllocation",
+      "filePath": "apps/api/src/transport/customer-ar/customer-ar.controller.ts",
+      "line": 213
+    },
+    "transport.customer_payment.read": {
+      "functionName": "CustomerArController.payment",
+      "filePath": "apps/api/src/transport/customer-ar/customer-ar.controller.ts",
+      "line": 77
+    },
+    "transport.customer_payment.record": {
+      "functionName": "CustomerArController.recordPayment",
+      "filePath": "apps/api/src/transport/customer-ar/customer-ar.controller.ts",
+      "line": 169
+    },
+    "transport.customer_reconciliation.confirm": {
+      "filePath": "apps/api/src/transport/customer-ar/customer-ar.controller.ts"
+    },
+    "transport.customer_reconciliation.read": {
+      "filePath": "apps/api/src/transport/customer-ar/customer-ar.controller.ts"
+    },
     "transport.dispatch.suggest.read": {
       "functionName": "DispatchController.suggest",
       "filePath": "apps/api/src/transport/dispatch/dispatch.controller.ts",
@@ -826,22 +852,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "commission.select|*": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 571
+      "line": 558
     },
     "commission.select|COMMISSION_RULE_AMBIGUOUS": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 524
+      "line": 511
     },
     "commission.select|COMMISSION_RULE_NONE_APPLICABLE": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 510
+      "line": 497
     },
     "commission.select|COMMISSION_TRIP_NOT_PARTNER_REFERRED": {
       "functionName": "SettlementService.recogniseCommission",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 453
+      "line": 440
     },
     "compliance.document_register|COMPLIANCE_DOCUMENT_REGISTERED": {
       "functionName": "AssetComplianceService.registerDocument",
@@ -1552,32 +1578,32 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "settlement.allocate|*": {
       "functionName": "SettlementService.allocate",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 856
+      "line": 847
     },
     "settlement.correct|*": {
       "functionName": "SettlementService.ingestFuelHandoff",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 687
+      "line": 674
     },
     "settlement.correct|ADJUSTMENT_POSTED": {
       "functionName": "SettlementService.adjustDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 761
+      "line": 750
     },
     "settlement.correct|CORRECTION_NO_CHANGE": {
       "functionName": "SettlementService.adjustDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 722
+      "line": 710
     },
     "settlement.correct|REVERSAL_POSTED": {
       "functionName": "SettlementService.reverseDocument",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 814
+      "line": 805
     },
     "settlement.credit_check|*": {
       "functionName": "SettlementService.creditExposure",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 897
+      "line": 888
     },
     "settlement.recognise|*": {
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts"
@@ -1585,22 +1611,22 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "settlement.recognise|SETTLEMENT_TRIP_NOT_RECONCILED": {
       "functionName": "SettlementService.recogniseCustomerReceivable",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 287
+      "line": 290
     },
     "settlement.recognise|SETTLEMENT_TRIP_REVENUE_MISSING": {
       "functionName": "SettlementService.recogniseCustomerReceivable",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 301
+      "line": 304
     },
     "settlement_period.transition|*": {
       "functionName": "SettlementService.transitionPeriod",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 979
+      "line": 970
     },
     "settlement_period.transition|PERIOD_OPENED": {
       "functionName": "SettlementService.openPeriod",
       "filePath": "apps/api/src/transport/settlement/settlement.service.ts",
-      "line": 962
+      "line": 953
     },
     "source.approval|*": {
       "filePath": "apps/api/src/source-registry/source-registry.service.ts"
