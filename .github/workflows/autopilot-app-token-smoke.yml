@@ -1,0 +1,78 @@
+name: Nexagent Autopilot App Token Smoke
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - .github/workflows/autopilot-app-token-smoke.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: autopilot-app-token-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Mint Nexagent Autopilot installation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.NEXAGENT_AUTOPILOT_CLIENT_ID }}
+          private-key: ${{ secrets.NEXAGENT_AUTOPILOT_PRIVATE_KEY }}
+
+      - name: Verify App identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          app_slug='${{ steps.app-token.outputs.app-slug }}'
+          installation_id='${{ steps.app-token.outputs.installation-id }}'
+
+          if [ "$app_slug" != "nexagent-autopilot" ]; then
+            echo "FAIL: unexpected app slug: $app_slug"
+            exit 1
+          fi
+
+          if [ -z "$installation_id" ]; then
+            echo "FAIL: installation ID is empty"
+            exit 1
+          fi
+
+          echo "APP_SLUG=$app_slug"
+          echo "INSTALLATION_ID=$installation_id"
+          echo "APP_IDENTITY_VERDICT=PASS"
+
+      - name: Verify installation token can access this repository
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          EXPECTED_REPO: phungtienviet14-sketch/nexagnet-platform
+        run: |
+          set -euo pipefail
+
+          response="$(
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${APP_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/installation/repositories?per_page=100"
+          )"
+
+          found="$(
+            printf '%s' "$response" |
+              jq --arg repo "$EXPECTED_REPO" \
+                '[.repositories[].full_name == $repo] | any'
+          )"
+
+          if [ "$found" != "true" ]; then
+            echo "FAIL: installation token cannot see $EXPECTED_REPO"
+            exit 1
+          fi
+
+          echo "REPOSITORY_ACCESS=$EXPECTED_REPO"
+          echo "APP_TOKEN_SMOKE_VERDICT=PASS"
