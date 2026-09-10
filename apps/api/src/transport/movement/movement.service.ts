@@ -19,6 +19,7 @@ import {
   evaluateRunCancel,
   evaluateRunTransition,
   evaluateSystemRunClose,
+  isTerminalRunStatus,
 } from './movement-lifecycle.js';
 import { isUniqueViolationOn } from '../storage-conflict.js';
 import {
@@ -525,6 +526,28 @@ export class MovementService {
    */
   async closeRunAsSystem(runId: string, trigger: string): Promise<RunCloseAttempt> {
     const before = await this.requireRun(runId);
+
+    /*
+     * DA O DIEM CUOI — mot ket qua BINH THUONG, khong phai mot loi.
+     *
+     * Hai worker cung mot luot quet deu doc thay `ACTIVE` va deu quyet dinh duoc dong; den khi
+     * vao toi day thi mot ban da thang. Neu cho nay NEM, ke thua cuoc se bien mot lan dong da
+     * thanh cong thanh mot loi o tang tren — va `RunClosureService` se tra ve mot ngoai le cho
+     * mot trang thai hoan toan dung. Do la ly do `RunCloseAttempt.transitioned` ton tai.
+     *
+     * Phan biet voi vong chay CHUA CHAY: mot vong chay `PLANNED` khong duoc phep dong, va do la
+     * mot lan tu choi that — xem nhanh duoi.
+     */
+    if (isTerminalRunStatus(before.status)) {
+      this.allow('run.lifecycle_transition', 'RUN_ALREADY_TERMINAL', {
+        runId,
+        status: before.status,
+        because: trigger,
+        by: 'ANOTHER_WRITER',
+      });
+      return { run: before, transitioned: false };
+    }
+
     const decision = evaluateSystemRunClose(before.status);
     if (!decision.allowed) {
       throw this.deny('run.lifecycle_transition', decision.reason, { runId, to: 'COMPLETED' });
