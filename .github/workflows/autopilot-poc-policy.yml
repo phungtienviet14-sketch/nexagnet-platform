@@ -1,0 +1,34 @@
+name: autopilot-poc-policy
+
+# POC-4: prove the risk policy fails closed.
+#
+# No Claude call. A policy that needs a language model to decide whether a change may ship
+# unattended is not a policy - it is another thing to review. This is a pure function over
+# a machine-readable fixture, so it can be argued about, diffed, and tested.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - tools/autopilot-poc-policy/**
+      - .github/workflows/autopilot-poc-policy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: autopilot-poc-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Policy decision matrix
+        run: node --test tools/autopilot-poc-policy/policy.test.mjs
+      - name: Show the decision for a few representative tasks
+        run: node tools/autopilot-poc-policy/report.mjs

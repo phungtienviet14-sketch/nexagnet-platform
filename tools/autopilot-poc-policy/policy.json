@@ -1,0 +1,42 @@
+{
+  "_comment": "POC-4 policy fixture. Machine-readable on purpose: a policy written in prose is a policy nobody can test.",
+  "maxAttempts": {
+    "ci": 2,
+    "runtime": 2
+  },
+  "autoMerge": {
+    "LOW": true,
+    "MEDIUM": true,
+    "HIGH": false
+  },
+  "highRiskPathPatterns": [
+    "^apps/api/src/auth/",
+    "^apps/api/src/orders/.*price",
+    "^apps/api/src/(rules|pricing)/",
+    "^apps/api/prisma/migrations/",
+    "^deploy/",
+    "^tenants/[^/]+/(tenant\\.json|sources/)",
+    "^\\.github/workflows/",
+    "secrets?",
+    "\\.env"
+  ],
+  "highRiskTopics": [
+    "price",
+    "money",
+    "financial",
+    "auth",
+    "authorization",
+    "security",
+    "tenant-isolation",
+    "destructive-migration",
+    "data-deletion",
+    "secret-change",
+    "production-infra",
+    "customer-source-conflict"
+  ],
+  "mediumRiskPathPatterns": [
+    "^apps/",
+    "^packages/",
+    "^tools/"
+  ]
+}
