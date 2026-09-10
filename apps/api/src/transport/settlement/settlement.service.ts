@@ -61,9 +61,11 @@ import type {
  * do la MOT ham cua kho — xem khoi chu thich dau `settlement.repository.ts`.
  *
  * ===========================================================================
- * GIA DINH DEMO CUA Issue #87 duoc ghi thanh MA, khong ghi thanh chu:
+ * CAC BAT BIEN SETTLEMENT duoc ghi thanh MA, khong ghi thanh chu:
  *
- *   · cong no khach ghi nhan khi chuyen sang `RECONCILED`;
+ *   · ke toan ket thuc Order chi tao pending reconciliation, CHUA tao cong no khach chinh thuc;
+ *   · A xac nhan reconciliation moi sinh `CUSTOMER_FREIGHT` receivable chinh thuc;
+ *   · `TRIP_RECONCILED` chi con la khoa replay cho chung tu legacy da ton tai;
  *   · han thanh toan = ngay ghi nhan + dieu khoan cua khach;
  *   · cong no nha xe den tu MOT SO TIEN KE TOAN XAC NHAN — khong suy tu LLM, khong suy tu gia cuoc;
  *   · hoa hong chup lai ban luat luc ghi nhan.
@@ -99,14 +101,12 @@ export class SettlementService {
   /**
    * CONG DIEU KIEN DOI SOAT — bat bien trung tam cua `#275` K5.
    *
-   * ==========================================================================================
-   *     ung vien MOI  =  du dieu kien van hanh cu  VA  don da duoc ke toan KET THUC
-   * ==========================================================================================
+   * Voi `CUSTOMER_FREIGHT`, ket thuc Order chi mo pending reconciliation; A xac nhan moi tao
+   * receivable chinh thuc. Cac cong van hanh cu cua entry point theo trip duoc giu de bao toan
+   * thu tu loi legacy, nhung entry point nay khong con duoc phep ghi chung tu moi.
+   * `TRIP_RECONCILED` chi nhan dien va phat lai chung tu legacy da ton tai.
    *
-   * Ham nay THEM mot dieu kien; no khong thay mot dieu kien nao. Moi cong van hanh cu
-   * (`trip.status === 'RECONCILED'`, co gia cuoc, co khach) van nam nguyen phia tren, va chung duoc
-   * kiem TRUOC — nen mot chuyen chua doi soat van bao `SETTLEMENT_TRIP_NOT_RECONCILED` chu khong
-   * bao "chua ket thuc". Do la cau tra loi dung: cai nguoi truc phai lam truoc la dong chuyen.
+   * Luong `TRIP_COMMISSION` khong thay doi va van dung cong ket thuc don nay truoc khi ghi nhan.
    *
    * ==========================================================================================
    * BON DUONG RA, VA MOI DUONG DE LAI MOT DONG TRONG SO QUYET DINH
@@ -267,13 +267,13 @@ export class SettlementService {
    * ================================================================== */
 
   /**
-   * GHI NHAN cong no khach tu mot chuyen DA DOI SOAT. Acceptance 1 va 2.
+   * ENTRY POINT TUONG THICH NGUOC cho `CUSTOMER_FREIGHT` theo trip.
    *
-   * Hai cong truoc khi ghi, va chung PHAN BIET DUOC:
-   *   · chuyen chua `RECONCILED` — gia dinh demo cua Issue #87 ve thoi diem ghi nhan;
-   *   · chuyen chua co gia cuoc — khong co gi de ghi.
+   * Neu da co chung tu `TRIP_RECONCILED` tu v1 thi phat lai chinh chung tu legacy do. Neu chua co,
+   * ham chi chay cac cong legacy de bao toan loi tuong thich roi tu choi tao cong no moi.
    *
-   * Gop hai cai lam mot `false` se lam nguoi truc phai doan xem phai sua chuyen hay sua gia cuoc.
+   * Luong canonical: ke toan ket thuc Order -> pending reconciliation (chua co official AR) ->
+   * A xac nhan tung Order hoac batch -> sinh official receivable qua customer reconciliation.
    */
   async recogniseCustomerReceivable(
     tripId: string,
@@ -282,7 +282,7 @@ export class SettlementService {
   ): Promise<SettlementRecognition> {
     const trip = await this.requireTrip(tripId);
 
-    // Du lieu v1 da ghi truoc Lane Q van la authoritative va phai doc/phat lai duoc.
+    // `TRIP_RECONCILED` chi dung de phat lai du lieu v1 da ton tai; khong tao official AR moi.
     const legacy = await this.repository.findDocumentBySource('TRIP_RECONCILED', trip.id);
     if (legacy) return { document: legacy, replayed: true };
 
@@ -321,7 +321,7 @@ export class SettlementService {
       );
     }
 
-    // `#275` K5 — cong ket thuc don. THEM mot dieu kien, khong thay dieu kien nao o tren.
+    // Giu cong legacy de bao toan thu tu loi; moi yeu cau van ket thuc o reconciliation-required.
     await this.requireOrderCompletion(trip, 'TRIP_RECONCILED');
     void actor;
     void options;
