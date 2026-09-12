@@ -936,6 +936,10 @@ model TransportDriver {
 
   @@index([status])
   @@index([licenceExpiry])
+  waitingSessions       TransportDeliveryWaitingSession[]
+  waitingAllowances     TransportDriverWaitingAllowance[]
+  operationalDocuments  TransportOperationalDocument[]
+  receiptHandovers      TransportPhysicalReceiptHandover[]
 }
 
 /// Gan lai xe phu trach mot xe — tang DOI XE. `effectiveTo = NULL` la ban dang hieu luc.
@@ -3353,6 +3357,17 @@ enum TransportPayslipComponentSource {
   PER_TRIP
   PER_KM
   FUEL_SAVING_BONUS
+  /// `#279` O6 — tong cac khoan phu cap cho DA DUOC DUYET trong ky.
+  ///
+  /// KHONG phai `MANUAL_BONUS`: mot khoan thu cong duoc go thang vao bang luong va chi song trong
+  /// bang luong. Khoan nay co mot HO SO RIENG dung sau no (`TransportDriverWaitingAllowance` ->
+  /// `TransportDeliveryWaitingSession` -> moc `DELIVERY_ARRIVAL`), nen no truy nguyen duoc ve mot
+  /// khoang thoi gian co that. Gop chung se lam mat duong truy nguyen do.
+  ///
+  /// `recordedBy` cua thanh phan nay la NULL, va rang buoc
+  /// `TransportPayslipComponent_manual_needs_signer` doi dung dieu do: chu ky cua nguoi duyet song
+  /// tren HO SO PHU CAP (`decidedBy`), noi no khong bi tinh lai o moi lan chay luong.
+  WAITING_ALLOWANCE
   MANUAL_BONUS
   MANUAL_DEDUCTION
 }
@@ -3645,6 +3660,7 @@ model TransportCounterpartySite {
   @@unique([counterpartyId, name], map: "TransportCounterpartySite_counterparty_name_key")
   @@index([counterpartyId, status])
   @@index([status])
+  operationalDocuments TransportOperationalDocument[]
 }
 
 // ===================================================================
@@ -4029,6 +4045,8 @@ model TransportOrder {
   @@index([status])
   @@index([businessDate])
   @@index([customerId])
+  operationalDocuments TransportOperationalDocument[]
+  receiptHandovers     TransportPhysicalReceiptHandover[]
 }
 
 /// VONG CHAY VAT LY cua MOT xe.
@@ -4070,6 +4088,8 @@ model TransportVehicleRun {
   @@index([status])
   @@index([businessDate])
   @@index([vehicleId])
+  waitingSessions          TransportDeliveryWaitingSession[]
+  operationalDocuments     TransportOperationalDocument[]
 }
 
 /// PHAN CONG LAI XE cho mot vong chay — `GD-06`: LICH SU, khong ghi de.
@@ -4157,6 +4177,9 @@ model TransportRunLeg {
   @@index([orderId])
   @@index([kind])
   @@index([businessDate])
+  waitingSessions      TransportDeliveryWaitingSession[]
+  operationalDocuments TransportOperationalDocument[]
+  receiptHandovers     TransportPhysicalReceiptHandover[]
 }
 
 /// BANG TUONG UNG giua mot chuyen v1 va mot chang v2. KHONG phai quan he cha/con.
@@ -4737,6 +4760,290 @@ model TransportRunCheckpoint {
   @@index([legId])
   @@index([driverId, businessDate])
   @@index([type, businessDate])
+  waitingArrivals TransportDeliveryWaitingSession[] @relation("WaitingArrival")
+  waitingClosing TransportDeliveryWaitingSession? @relation("WaitingClosing")
+  operationalDocuments TransportOperationalDocument[]
+}
+
+/// LY DO CHO — su that VAN HANH, khong phai mot muc gia. Xem `waiting.types.ts`.
+enum TransportWaitingReason {
+  RECEIVER_NOT_READY
+  NO_UNLOADING_DOCK
+  QUEUE_AHEAD
+  DOCUMENT_ISSUE
+  OTHER
+}
+
+enum TransportWaitingSessionStatus {
+  OPEN
+  CLOSED
+}
+
+/// VI SAO MOT PHIEN DA DONG. HAI ma, va chung la HAI su that khac nhau — xem `waiting.types.ts`.
+enum TransportWaitingCloseReason {
+  RECEIVER_ACCEPTED
+  OPERATOR_CLOSED
+}
+
+/// PHIEN CHO NGUOI NHAN — `#279` O5, tiep tuc `#243` F3.
+///
+/// KHONG CO COT `durationSeconds`, va do la mot khang dinh chu khong mot bo sot. Thoi luong la mot
+/// PHEP TRU doc luc doc (`elapsedSecondsOf`). Mot cot se la cau tra loi THU HAI cho cung mot cau
+/// hoi, va `#243` F3 doi thoi luong phai duoc suy ra tat dinh chu khong duoc sua tay thanh su that.
+///
+/// KHONG CO COT NAO MANG GIO MAY KHACH. `startedAt` do dong ho may chu dat; `endedAt` la
+/// `receivedAt` cua chinh moc `DELIVERY_ACCEPTED` da dong phien — cung mot dong ho. `#279` O4:
+/// *"Do not let a client clock decide authoritative waiting duration."*
+///
+/// RANG BUOC KHONG NAM O DAY, chung nam trong SQL tho cua migration
+/// `20260911160000_transport_waiting_session`, vi Prisma khong co cu phap cho `CHECK` lan cho
+/// unique MOT PHAN:
+///
+///     1. `TransportDeliveryWaitingSession_openLeg_key`    — unique MOT PHAN `WHERE status = 'OPEN'`
+///     2. `TransportDeliveryWaitingSession_close_pairing`  — dong thi phai co du gio/nguoi/ly do
+///     3. `TransportDeliveryWaitingSession_period_order`   — `endedAt` khong duoc truoc `startedAt`
+///     4. `TransportDeliveryWaitingSession_businessDate_iso`
+///     5. `TransportDeliveryWaitingSession_clientEventId_not_blank`
+///     6. trigger `transport_waiting_session_immutable` — chi cho DUNG mot canh `OPEN -> CLOSED`
+///
+/// `prisma migrate dev` sinh migration bang cach diff schema nay voi DB, nen no se sinh lenh XOA
+/// ca sau. Ai chay lenh do PHAI doc lai migration sinh ra va bo cac dong `DROP` truoc khi commit.
+/// `transport-waiting-session-storage.spec.ts` doc chinh tep migration va do neu mot ten bien mat.
+model TransportDeliveryWaitingSession {
+  id                  String                        @id @default(cuid())
+  runId               String
+  run                 TransportVehicleRun           @relation(fields: [runId], references: [id], onDelete: Restrict)
+  /// BAT BUOC — mot lan cho luon xay ra tai mot diem giao cu the.
+  legId               String
+  leg                 TransportRunLeg               @relation(fields: [legId], references: [id], onDelete: Restrict)
+  driverId            String?
+  driver              TransportDriver?              @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  /// NEO: moc `DELIVERY_ARRIVAL` da mo duong cho phien nay. Moc do BAT BUOC co ban dinh vi
+  /// (`DEFAULT_LOCATION_REQUIRED_TYPES`), nen khong co duong nao mo mot phien cho cho mot noi chua
+  /// ai chung minh la da den.
+  ///
+  /// KHONG `@unique`, va do la mot khang dinh do duoc tren Postgres that (WT-IT-09): mot lan den
+  /// noi CO THE sinh ra nhieu phien cho noi tiep nhau — van phong dong nham mot phien roi lai xe
+  /// van con phai cho that. Ep `@unique` o day se lam khoang cho THAT do khong ghi duoc, va lai xe
+  /// mat mot can cu ma ho co quyen co. Bat bien that la "mot chang, mot phien DANG MO", va no nam
+  /// o unique MOT PHAN `TransportDeliveryWaitingSession_openLeg_key`.
+  arrivalCheckpointId String
+  arrivalCheckpoint   TransportRunCheckpoint        @relation("WaitingArrival", fields: [arrivalCheckpointId], references: [id], onDelete: Restrict)
+  /// Moc `DELIVERY_ACCEPTED` da dong phien. NULL khi phien con mo hoac khi van phong dong.
+  closingCheckpointId String?                       @unique
+  closingCheckpoint   TransportRunCheckpoint?       @relation("WaitingClosing", fields: [closingCheckpointId], references: [id], onDelete: Restrict)
+  status              TransportWaitingSessionStatus @default(OPEN)
+  reason              TransportWaitingReason
+  closeReason         TransportWaitingCloseReason?
+  /// GIO MAY CHU. Khong nhan tu than yeu cau, khong sua duoc.
+  startedAt           DateTime                      @default(now())
+  endedAt             DateTime?
+  startedBy           String
+  endedBy             String?
+  /// Khoa idempotency do may khach sinh — chan mot lan bam hai lan mo hai phien.
+  startClientEventId  String
+  note                String?
+  closeNote           String?
+  businessDate        String                        @db.VarChar(10)
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  @@unique([legId, startClientEventId], map: "TransportDeliveryWaitingSession_leg_event_key")
+  @@index([arrivalCheckpointId])
+  @@index([runId, startedAt])
+  @@index([legId, status])
+  @@index([driverId, businessDate])
+  @@index([status, startedAt])
+  waitingAllowances   TransportDriverWaitingAllowance[]
+}
+
+enum TransportWaitingAllowanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// PHU CAP CHO CUA LAI XE — `#279` O6.
+///
+/// KHONG CO COT THOI LUONG, va do la mot khang dinh trung tam: thoi luong doc duoc tu
+/// `waitingSessionId` bang mot phep tru tren gio may chu. Chep no vao day se tao ban thu hai cua
+/// mot con so co the doi — va ban chep se la ban duoc doc khi hai ban lech nhau.
+///
+/// KHONG CO CONG THUC nao doi thoi luong thanh tien. `#279` O6 va `#243` F4 deu ghi rang chu khach
+/// CHUA dua ra mot cong thuc. `candidateAmount` la con so NGUOI VAN PHONG go vao; `approvedAmount`
+/// la con so NGUOI DUYET chot. Hai truong chu khong mot: mot truong bi ghi de se lam bien mat cau
+/// hoi *"nguoi duyet da cat bot bao nhieu"*.
+///
+/// KHONG CO KHOA NGOAI NAO TRO SANG KHACH HANG hay chung tu quyet toan. `#279` O6 tach bach phu
+/// cap cho cua LAI XE voi tien luu bai cua KHACH, va cach chac chan nhat de giu dieu do la khong co
+/// cot nao de ai do noi hai thu lai.
+///
+/// RANG BUOC KHONG NAM O DAY, chung nam trong SQL tho cua migration
+/// `20260911170000_transport_waiting_allowance`:
+///
+///     1. `TransportDriverWaitingAllowance_approvedSession_key` — unique MOT PHAN `WHERE status = 'APPROVED'`
+///     2. `TransportDriverWaitingAllowance_decision_shape`      — quyet thi phai du gio/nguoi/khoa
+///     3. `TransportDriverWaitingAllowance_amount_range`        — so nguyen duong, khong vuot de nghi
+///     4. `TransportDriverWaitingAllowance_reason_not_blank`
+///     5. `TransportDriverWaitingAllowance_businessDate_iso`
+///     6. trigger `transport_waiting_allowance_immutable` — chi mot canh `PENDING -> APPROVED|REJECTED`
+model TransportDriverWaitingAllowance {
+  id                     String                          @id @default(cuid())
+  waitingSessionId       String
+  waitingSession         TransportDeliveryWaitingSession @relation(fields: [waitingSessionId], references: [id], onDelete: Restrict)
+  /// Lai xe HUONG khoan nay. Lay tu chinh phien cho, khong tu than yeu cau.
+  driverId               String
+  driver                 TransportDriver                 @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  status                 TransportWaitingAllowanceStatus @default(PENDING)
+  currencyCode           String                          @default("VND") @db.VarChar(3)
+  /// So NGUYEN DONG (`GD-03`). Nguoi van phong go vao.
+  candidateAmount        BigInt
+  /// So NGUYEN DONG. NULL khi chua duyet hoac bi tu choi.
+  approvedAmount         BigInt?
+  reason                 String
+  proposedBy             String
+  proposedAt             DateTime                        @default(now())
+  decidedBy              String?
+  decidedAt              DateTime?
+  decisionNote           String?
+  /// Khoa chong ghi trung cua lan QUYET DINH — `#279` O6 *"same approval retry one effect"*.
+  decisionIdempotencyKey String?                         @unique(map: "TransportDriverWaitingAllowance_decisionKey_key")
+  businessDate           String                          @db.VarChar(10)
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
+
+  @@index([waitingSessionId])
+  @@index([driverId, businessDate])
+  @@index([status, proposedAt])
+}
+
+/// NAM LOAI CHUNG TU VAN HANH — `#279` O1. Xem `document.types.ts` de biet vi sao dung nam.
+enum TransportOperationalDocumentType {
+  GATE_PASS
+  LOADING_SLIP
+  WEIGH_TICKET
+  DELIVERY_RECEIPT
+  OTHER
+}
+
+/// CAN CU cua mot chung tu — B thuc su dang cam cai gi. Cung khuon `CommercialAcceptanceBasis`.
+enum TransportOperationalDocumentBasis {
+  DIGITAL_FILE
+  EXTERNAL_PHYSICAL
+}
+
+enum TransportOperationalDocumentStatus {
+  ACTIVE
+  WITHDRAWN
+}
+
+/// CHUNG TU VAN HANH — `#279` O1/O2, tiep tuc `#243` F2.
+///
+/// KHONG CO COT DINH VI KHO. `#279` O2: *"store stable opaque File IDs, never raw GCS/S3/local
+/// locator in public DTO"*. `fileId` la mot ma DUC do Nen tang Tep (`#287`) cap; mien nay khong
+/// biet byte nam o dau, va khong co cot nao de hoi.
+///
+/// `orderId` duoc GIAI o may chu tu chinh chang. Do la cong cho `#279` O13 bai 8
+/// (*"DELIVERY_RECEIPT for Order A cannot satisfy Order B"*): neu ben goi khai duoc `orderId` thi
+/// ho gan duoc mot to bien nhan cua don nay sang don khac, va Lane K se doc no nhu mot can cu hop
+/// le de bam `Da ket thuc`.
+///
+/// `extractionCandidate` la UNG VIEN do may doc ra — `#279` O8. No KHONG tham gia vao mot quyet
+/// dinh nao; no ton tai de nguoi doc so sanh bang mat.
+///
+/// RANG BUOC KHONG NAM O DAY, chung nam trong SQL tho cua migration
+/// `20260911180000_transport_operational_document`.
+model TransportOperationalDocument {
+  id                  String                             @id @default(cuid())
+  type                TransportOperationalDocumentType
+  runId               String
+  run                 TransportVehicleRun                @relation(fields: [runId], references: [id], onDelete: Restrict)
+  legId               String?
+  leg                 TransportRunLeg?                   @relation(fields: [legId], references: [id], onDelete: Restrict)
+  /// Don thuong mai cua chang — GIAI o may chu, khong nhan tu than yeu cau.
+  orderId             String?
+  order               TransportOrder?                    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  checkpointId        String?
+  checkpoint          TransportRunCheckpoint?            @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  counterpartySiteId  String?
+  counterpartySite    TransportCounterpartySite?         @relation(fields: [counterpartySiteId], references: [id], onDelete: Restrict)
+  driverId            String?
+  driver              TransportDriver?                   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  recordedBy          String
+  basis               TransportOperationalDocumentBasis
+  /// Ma tep DUC. NULL o duong chung tu giay. KHONG BAO GIO la mot dinh vi kho.
+  fileId              String?
+  /// B dang cam cai gi — bat buoc o duong khong-co-ban-so.
+  externalNote        String?
+  label               String?
+  captureMode         TransportProofPhotoCaptureMode     @default(UNKNOWN)
+  status              TransportOperationalDocumentStatus @default(ACTIVE)
+  clientEventId       String
+  receivedAt          DateTime                           @default(now())
+  withdrawnAt         DateTime?
+  withdrawnBy         String?
+  /// UNG VIEN do may doc ra (`#279` O8) — KHONG phai su that da xac minh.
+  extractionCandidate String?
+  extractionProvider  String?
+  businessDate        String                             @db.VarChar(10)
+  createdAt           DateTime                           @default(now())
+  updatedAt           DateTime                           @updatedAt
+
+  handovers TransportPhysicalReceiptHandover[]
+
+  @@unique([runId, type, clientEventId], map: "TransportOperationalDocument_run_type_event_key")
+  @@index([runId, receivedAt])
+  @@index([legId])
+  @@index([orderId, status])
+  @@index([driverId, businessDate])
+  @@index([type, businessDate])
+}
+
+/// BUOC BAN GIAO BIEN NHAN GIAY — `#279` O7.
+enum TransportReceiptHandoverState {
+  WITH_DRIVER
+  RETURNED_TO_OFFICE
+  SUBMITTED_FOR_CONFIRMATION
+}
+
+/// CHUOI BAN GIAO cua mot DON — ghi them, khong ghi de.
+///
+/// KHONG CO COT NAO TREN `TransportOrder`. Trang thai hien tai la buoc co `sequence` lon nhat —
+/// mot phep chieu, khong mot cot. Mot cot `handoverState` tren don se phai duoc backfill cho moi
+/// don cu, va `#275` K6 da cam dung `APPROVED by system` hang loat vi cung ly le do.
+///
+/// VA QUAN TRONG NHAT: bang nay KHONG co mot khoa ngoai nao tro sang truc nghiem thu, va mien nay
+/// khong co mot duong ghi nao vao `TransportOrder`. Ghi `RETURNED_TO_OFFICE` KHONG ket thuc mot
+/// don — `#274` va `#279` O7 deu phat bieu ranh gioi do.
+model TransportPhysicalReceiptHandover {
+  id            String                        @id @default(cuid())
+  orderId       String
+  order         TransportOrder                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Bat dau tu 1, duy nhat trong mot don.
+  sequence      Int
+  state         TransportReceiptHandoverState
+  legId         String?
+  leg           TransportRunLeg?              @relation(fields: [legId], references: [id], onDelete: Restrict)
+  documentId    String?
+  document      TransportOperationalDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  /// B dang ban giao cai gi — bat buoc khi khong co ban so.
+  externalNote  String?
+  driverId      String?
+  driver        TransportDriver?              @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  /// Danh tinh tu PHIEN, gio tu MAY CHU — `#279` O12.
+  recordedBy    String
+  recordedAt    DateTime                      @default(now())
+  clientEventId String
+  note          String?
+  businessDate  String                        @db.VarChar(10)
+  createdAt     DateTime                      @default(now())
+
+  @@unique([orderId, clientEventId], map: "TransportPhysicalReceiptHandover_order_event_key")
+  @@unique([orderId, state], map: "TransportPhysicalReceiptHandover_order_state_key")
+  @@unique([orderId, sequence], map: "TransportPhysicalReceiptHandover_order_sequence_key")
+  @@index([orderId, sequence])
+  @@index([documentId])
+  @@index([state, recordedAt])
 }
 
 // ===================================================================

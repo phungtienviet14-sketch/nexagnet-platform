@@ -136,6 +136,18 @@ import { DriverTrackingController } from './transport/proof/driver-tracking.cont
 import { TrackingController } from './transport/proof/tracking.controller.js';
 import { DriverProofController } from './transport/proof/driver-proof.controller.js';
 import { TransportCheckpointModule } from './transport/checkpoint/transport-checkpoint.module.js';
+import { TransportDocumentEvidenceBridgeModule } from './transport/document/document-evidence-bridge.module.js';
+import { TransportFieldModule } from './transport/field/transport-field.module.js';
+import { DriverFieldController } from './transport/field/driver-field.controller.js';
+import { ControlTowerFieldFactsAdapter } from './transport/field/control-tower-field.adapter.js';
+import { ControlTowerFieldFacts } from './transport/control-tower/control-tower-facts.port.js';
+import { TransportDocumentModule } from './transport/document/transport-document.module.js';
+import { DriverDocumentsController } from './transport/document/driver-documents.controller.js';
+import { DocumentsController } from './transport/document/documents.controller.js';
+import { WaitingAllowanceController } from './transport/waiting/allowance.controller.js';
+import { DriverWaitingController } from './transport/waiting/driver-waiting.controller.js';
+import { TransportWaitingPayrollBridgeModule } from './transport/waiting/waiting-payroll-bridge.module.js';
+import { WaitingController } from './transport/waiting/waiting.controller.js';
 import { TransportSiteIntakeModule } from './transport/site-intake/transport-site-intake.module.js';
 import { DriverSiteIntakeController } from './transport/site-intake/driver-site-intake.controller.js';
 import { TransportAcceptanceModule } from './transport/acceptance/transport-acceptance.module.js';
@@ -312,6 +324,25 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // va bien mat cung no: mot khach khong co cong de vao va khong co can de can thi khong mang
   // theo chin loai moc cua cong ty B.
   owned('transport-checkpoint', TransportCheckpointModule),
+  // CAU NOI phu cap cho -> bang luong (`#279` O6). `@Global()`, va CHI xuat mot cong CHI DOC.
+  //
+  // Den cung `transport-checkpoint` va bien mat cung no: khach tat moc hien truong thi token khong
+  // ton tai, `WorkforceService` nhan `undefined` qua `@Optional()`, va lan chay luong ghi
+  // `WAITING_ALLOWANCE_UNAVAILABLE` — mot dau vao vang mat DOC DUOC tren phieu, thay vi mot so
+  // khong khong ai giai thich duoc.
+  owned('transport-checkpoint', TransportWaitingPayrollBridgeModule),
+  // CHUNG TU VAN HANH + BAN GIAO BIEN NHAN GIAY (`#279` O1/O7). Den cung `transport-checkpoint`:
+  // mot khach co cong de vao va can de can cung la khach co phieu cong va phieu can.
+  owned('transport-checkpoint', TransportDocumentModule),
+  // CAU NOI chung tu -> cong nghiem thu cua Lane K. `@Global()`, CHI xuat mot adapter CHI DOC.
+  //
+  // Vang mat thi `transport-acceptance` giu nguyen `NoOperationalDocumentsAdapter` — FAIL-CLOSED,
+  // dung hinh dang `main` da co truoc tranche nay. Bo cau noi KHONG mo mot lo hong nao.
+  owned('transport-checkpoint', TransportDocumentEvidenceBridgeModule),
+  // MAN HINH HIEN TRUONG (`#279` O9/O11) — CHI DOC. Gop bon nguon da co (moc, phien cho, chung tu,
+  // ban giao) thanh mot danh sach NUT ma lai xe bam duoc ngay. Khong mot kho moi, khong mot
+  // migration nao.
+  owned('transport-checkpoint', TransportFieldModule),
   // NHAN VIEC TAI DIA DIEM A (`#267`). Den cung `transport-site-intake` va bien mat cung no: mot
   // khach dieu xe tu van phong khong co nut `Tao chuyen` tren dien thoai lai xe, va do la mot cau
   // hinh hop le — xem khoi chu cua `transport-site-intake.module.ts`.
@@ -482,6 +513,29 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   owned('transport-checkpoint', DriverCheckpointsController),
   owned('transport-site-intake', DriverSiteIntakeController),
   owned('transport-checkpoint', CheckpointsController),
+  /**
+   * PHIEN CHO NGUOI NHAN (`#279` O5) — cung capability, cung khuon HAI be mat.
+   *
+   * Be mat lai xe co DUNG MOT duong ghi (`Bat dau cho`) va khong co duong dong: mot phien dong lai
+   * boi chinh moc `Khach da nhan hang`. Be mat van hanh doc duoc moi phien va dong duoc mot phien
+   * bo quen — nhung ma `transport.waiting.close` nam trong `ACCOUNTING_DENIED`, vi gio dong la moc
+   * tren cua khoang thoi gian ma Ke toan sap duyet tien cho.
+   */
+  owned('transport-checkpoint', DriverWaitingController),
+  owned('transport-checkpoint', WaitingController),
+  // PHU CAP CHO (`#279` O6) — MOT be mat, va KHONG co ban 'cua chinh minh' cho lai xe. Ca hai ma
+  // quyen deu nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi duoc mot duong nao: mot lai
+  // xe tu de nghi roi tu duyet phu cap cho chinh minh la dung cai ma kiem soat noi bo sinh ra de
+  // chan. Cong THAT chong tu duyet con nam o tang dich vu, tren `Driver.authUserId`.
+  owned('transport-checkpoint', WaitingAllowanceController),
+  // CHUNG TU VAN HANH — HAI be mat, HAI quyen. Be mat lai xe ghi kem moc neo CUA CHINH HO va KHONG
+  // co duong bia mo; be mat van hanh ghi bu duoc cho moi vong chay va bia mo duoc — nhung ma
+  // `transport.operational_document.withdraw` nam trong `ACCOUNTING_DENIED`.
+  owned('transport-checkpoint', DriverDocumentsController),
+  owned('transport-checkpoint', DocumentsController),
+  // MAN HINH HIEN TRUONG — MOT tuyen, CHI DOC. Moi nut no tra ve tro toi mot tuyen ghi DA CO, nen
+  // khong mot duong ghi thu hai nao ra doi cung man hinh nay.
+  owned('transport-checkpoint', DriverFieldController),
   // HANG CHO NGHIEM THU CHUNG TU — MOT be mat, va KHONG co ban 'cua chinh minh' cho lai xe.
   // Ca hai ma quyen deu nam ngoai `SELF_SCOPE_ACTIONS`, nen vai `SALE` khong goi duoc mot duong
   // nao o day: mot lai xe tu nghiem thu chuyen cua chinh minh la dung cai ma kiem soat noi bo
@@ -600,6 +654,20 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('transport-checkpoint', {
     provide: ControlTowerCheckpointFacts,
     useClass: ControlTowerCheckpointFactsAdapter,
+  }),
+  /**
+   * NGUON HIEN TRUONG (`#279` O11) — cong thu SAU cua thap dieu hanh.
+   *
+   * TACH khoi `ControlTowerCheckpointFacts` du hai cong cung mot capability, va do la mot khac biet
+   * co that o man hinh: vang mat cong moc thi ba cot giai doan trong; vang mat cong nay thi cot
+   * `WAITING` trong va hai muc hang viec bien mat. Gop lam mot se lam nguoi truc khong biet cai nao
+   * dang thieu.
+   *
+   * Dien ba cho trong ma Lane N da dat san ten trong `control-tower.types.ts`.
+   */
+  owned('transport-checkpoint', {
+    provide: ControlTowerFieldFacts,
+    useClass: ControlTowerFieldFactsAdapter,
   }),
   /**
    * BAO CAO BAN DO CUA MOT VONG CHAY (`#278` N5) — cung khuon thap dieu hanh.

@@ -211,6 +211,7 @@ describe.runIf(RUN)('Gieo thang van hanh mau (Postgres THAT)', () => {
         tripCount: row.tripCount,
         distanceKm: row.distanceKm,
         fuelLitersSaved: null,
+        waitingAllowance: null,
         driverFundBalance: Number(payslip.driverFundBalanceSnapshot ?? 0n),
         manualComponents: manual,
       });

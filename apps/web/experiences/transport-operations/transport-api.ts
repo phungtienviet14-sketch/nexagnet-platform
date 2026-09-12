@@ -6,6 +6,9 @@ import type {
   BusinessDate,
   ClosedFundPeriod,
   ConfirmSiteIntakeInput,
+  RecordCheckpointInput,
+  RecordDocumentInput,
+  StartWaitingInput,
   ClosedReconciliationResult,
   ComplianceAlert,
   ComplianceDocument,
@@ -64,7 +67,9 @@ import type {
   DriverFuelSupplier,
   DriverFundEntry,
   DriverFundPeriod,
+  DriverFieldWork,
   DriverFundStatement,
+  DriverHandoverInput,
   DriverTripView,
   ExpenseFundingSource,
   FuelDiscrepancy,
@@ -835,6 +840,26 @@ export const transportApi = {
     /** Lai xe chi dat duoc `IN_TRANSIT` hoac `DELIVERED`. `RECONCILED` doi mot lan chuyen tay khac. */
     setTripStatus: (id: string, to: 'IN_TRANSIT' | 'DELIVERED'): Promise<DriverTripView> =>
       send('PATCH', `/transport/me/trips/${encodeURIComponent(id)}/status`, { to }),
+    /**
+     * VIEC HIEN TRUONG (`#279` O9) — MOT lan doc, tra ve danh sach NUT ma may chu da tinh.
+     *
+     * Man hinh KHONG tu suy ra nut tu mot enum trang thai: quy tac thu tu moc, chinh sach chung cu
+     * vi tri va chinh sach chung tu deu song o may chu. Lam lai chung o day se cho ra HAI ban luat,
+     * va ban tren dien thoai se cu roi lai sau moi lan luat doi.
+     */
+    fieldWork: (): Promise<DriverFieldWork> => get('/transport/me/field-work'),
+    /**
+     * BON DUONG GHI cua man hinh hien truong. `clientEventId` den tu TANG GOI, khong sinh o day —
+     * mot lan thu lai phai mang DUNG khoa cu, neu khong may chu se ghi mot hang thu hai.
+     */
+    recordCheckpoint: (input: RecordCheckpointInput): Promise<unknown> =>
+      send('POST', '/transport/me/checkpoints', input),
+    startWaiting: (input: StartWaitingInput): Promise<unknown> =>
+      send('POST', '/transport/me/waiting-sessions', input),
+    recordDocument: (input: RecordDocumentInput): Promise<unknown> =>
+      send('POST', '/transport/me/documents', input),
+    recordReceiptHandover: (input: DriverHandoverInput): Promise<unknown> =>
+      send('POST', '/transport/me/receipt-handovers', input),
     fund: (): Promise<DriverFundStatement> => get('/transport/me/fund'),
     /**
      * CAY XANG ma lai xe duoc doc — `GET /transport/me/fuel/suppliers`.

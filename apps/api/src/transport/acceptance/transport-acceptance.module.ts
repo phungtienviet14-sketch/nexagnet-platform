@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { OperationalDocumentAcceptanceEvidenceAdapter } from '../document/acceptance-evidence.adapter.js';
 import { loadFoundationEnv } from '../../config/foundation-env.js';
 import { PrismaModule } from '../../config/prisma.module.js';
 import { PrismaService } from '../../config/prisma.service.js';
@@ -43,13 +44,22 @@ import { PrismaAcceptanceRepository } from './prisma-acceptance.repository.js';
  * tai chinh im lang vang mat vi mot dong cau hinh la dung thu khong duoc phep ton tai.
  *
  * ============================================================================================
- * `AcceptanceEvidenceFacts` — MOT DONG SE DOI KHI `#243` F2 VAO `main`
+ * `AcceptanceEvidenceFacts` — DONG DO DA DOI (`#243` F2 / `#279` O2 da vao `main`)
  * ============================================================================================
  *
- * Hom nay khong co mo hinh chung tu van hanh nao tren `main`, nen adapter mac dinh la
- * `NoOperationalDocumentsAdapter` — FAIL-CLOSED. Khi F2 hoan tat, dong `useClass` duoi day tro toi
- * adapter that, va KHONG mot luat mien nao, KHONG mot bang nao, KHONG mot bai test nghiep vu nao
- * phai doi. Do la ca ly do cai cong nay ton tai truoc khi co thu de cam vao.
+ * Truoc `#279`, adapter mac dinh la `NoOperationalDocumentsAdapter` — FAIL-CLOSED, vi khong co mo
+ * hinh chung tu van hanh nao tren `main`. Bay gio co, va DUNG MOT dong duoi day doi: khong mot
+ * luat mien nao, khong mot bang nao, khong mot bai test nghiep vu nao phai doi. Do la ca ly do cai
+ * cong nay ton tai truoc khi co thu de cam vao.
+ *
+ * Adapter that duoc tiem `optional: true` chu khong `useClass` thang, va do KHONG phai mot su than
+ * trong thua. `transport-acceptance` la PHU THUOC BAT BUOC cua `transport-settlement`; buoc cung
+ * vao `transport-checkpoint` se lam moi khach theo doi cong no phai bat ca quy trinh cong/can/phieu
+ * giao cua cong ty B — dung dieu Quyet dinh kien truc #6 cam.
+ *
+ * Khach TAT `transport-checkpoint` ⇒ token vang mat ⇒ quay ve `NoOperationalDocumentsAdapter`.
+ * Fail-closed, dung hinh dang `main` da co truoc tranche nay: duong can cu `DOCUMENT` dong lai, va
+ * duong `EXTERNAL_PHYSICAL` van di duoc.
  */
 @Module({
   imports: [PrismaModule, TransportModule],
@@ -64,7 +74,13 @@ import { PrismaAcceptanceRepository } from './prisma-acceptance.repository.js';
     },
     { provide: AcceptanceMovementFacts, useClass: AcceptanceMovementFactsAdapter },
     { provide: AcceptanceCounterpartyFacts, useClass: AcceptanceCounterpartyFactsAdapter },
-    { provide: AcceptanceEvidenceFacts, useClass: NoOperationalDocumentsAdapter },
+    {
+      provide: AcceptanceEvidenceFacts,
+      useFactory: (
+        documents?: OperationalDocumentAcceptanceEvidenceAdapter,
+      ): AcceptanceEvidenceFacts => documents ?? new NoOperationalDocumentsAdapter(),
+      inject: [{ token: OperationalDocumentAcceptanceEvidenceAdapter, optional: true }],
+    },
     CommercialAcceptanceService,
   ],
   exports: [CommercialAcceptanceService, AcceptanceRepository, AcceptanceMovementFacts],

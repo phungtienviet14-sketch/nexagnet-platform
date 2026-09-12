@@ -100,6 +100,13 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/readiness/operational-readiness.ts",
       "line": 49
     },
+    "document.record": {
+      "filePath": "apps/api/src/transport/document/document.service.ts"
+    },
+    "document.withdraw": {
+      "functionName": "OperationalDocumentService.withdraw",
+      "filePath": "apps/api/src/transport/document/document.service.ts"
+    },
     "driver_fund.post_entry": {
       "functionName": "CostingService.postEntryDetailed",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
@@ -526,8 +533,8 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.driver.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
-    "transport.driver.self.checkpoint.record": {
-      "filePath": "apps/api/src/transport/checkpoint/driver-checkpoints.controller.ts"
+    "transport.driver.self.document.record": {
+      "filePath": "apps/api/src/transport/document/driver-documents.controller.ts"
     },
     "transport.driver.self.expense.claim.submit": {
       "filePath": "apps/api/src/transport/claims/driver-claims-self.controller.ts"
@@ -542,6 +549,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
     },
     "transport.driver.self.proof.record": {
       "filePath": "apps/api/src/transport/proof/driver-proof.controller.ts"
+    },
+    "transport.driver.self.receipt_handover.record": {
+      "functionName": "DriverDocumentsController.handover",
+      "filePath": "apps/api/src/transport/document/driver-documents.controller.ts",
+      "line": 85
     },
     "transport.driver.self.settlement.read": {
       "functionName": "DriverSettlementSelfController.statement",
@@ -576,6 +588,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "DriverTripsController.updateStatus",
       "filePath": "apps/api/src/transport/trips/driver-trips.controller.ts",
       "line": 61
+    },
+    "transport.driver.self.waiting.start": {
+      "filePath": "apps/api/src/transport/waiting/driver-waiting.controller.ts"
     },
     "transport.driver_settlement.cashout": {
       "functionName": "DriverSettlementController.recordCashout",
@@ -669,6 +684,19 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "filePath": "apps/api/src/transport/asset-compliance/maintenance.controller.ts",
       "line": 117
     },
+    "transport.operational_document.read": {
+      "filePath": "apps/api/src/transport/document/documents.controller.ts"
+    },
+    "transport.operational_document.record": {
+      "functionName": "DocumentsController.record",
+      "filePath": "apps/api/src/transport/document/documents.controller.ts",
+      "line": 79
+    },
+    "transport.operational_document.withdraw": {
+      "functionName": "DocumentsController.withdraw",
+      "filePath": "apps/api/src/transport/document/documents.controller.ts",
+      "line": 108
+    },
     "transport.order.manage": {
       "filePath": "apps/api/src/transport/movement/orders.controller.ts"
     },
@@ -716,6 +744,11 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "ProofReviewController.withdraw",
       "filePath": "apps/api/src/transport/proof/proof-review.controller.ts",
       "line": 84
+    },
+    "transport.receipt_handover.record": {
+      "functionName": "DocumentsController.handover",
+      "filePath": "apps/api/src/transport/document/documents.controller.ts",
+      "line": 133
     },
     "transport.settlement.document.read": {
       "functionName": "SettlementReportsController.documentChain",
@@ -781,10 +814,42 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "transport.vehicle.read": {
       "filePath": "apps/api/src/transport/fleet/fleet.controller.ts"
     },
+    "transport.waiting.close": {
+      "functionName": "WaitingController.close",
+      "filePath": "apps/api/src/transport/waiting/waiting.controller.ts",
+      "line": 49
+    },
+    "transport.waiting.read": {
+      "functionName": "WaitingController.listForRun",
+      "filePath": "apps/api/src/transport/waiting/waiting.controller.ts",
+      "line": 42
+    },
+    "transport.waiting_allowance.decide": {
+      "functionName": "WaitingAllowanceController.decide",
+      "filePath": "apps/api/src/transport/waiting/allowance.controller.ts",
+      "line": 91
+    },
+    "transport.waiting_allowance.propose": {
+      "filePath": "apps/api/src/transport/waiting/allowance.controller.ts"
+    },
     "trip_expense.record": {
       "functionName": "CostingService.recordTripExpense",
       "filePath": "apps/api/src/transport/costing/costing.service.ts",
       "line": 310
+    },
+    "waiting.close": {
+      "filePath": "apps/api/src/transport/waiting/waiting.service.ts"
+    },
+    "waiting.start": {
+      "filePath": "apps/api/src/transport/waiting/waiting.service.ts"
+    },
+    "waiting_allowance.decide": {
+      "functionName": "WaitingAllowanceService.decide",
+      "filePath": "apps/api/src/transport/waiting/allowance.service.ts"
+    },
+    "waiting_allowance.propose": {
+      "functionName": "WaitingAllowanceService.propose",
+      "filePath": "apps/api/src/transport/waiting/allowance.service.ts"
     }
   },
   "decisions": {
@@ -901,12 +966,12 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "control_tower.board_projection|BOARD_CHECKPOINT_COLUMNS_UNAVAILABLE": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 148
+      "line": 174
     },
     "control_tower.compile|CONTROL_TOWER_COMPILED": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 156
+      "line": 182
     },
     "control_tower.compile|CONTROL_TOWER_SOURCE_FAILED": {
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts"
@@ -914,7 +979,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "control_tower.compile|CONTROL_TOWER_SOURCE_UNAVAILABLE": {
       "functionName": "ControlTowerReadService.view",
       "filePath": "apps/api/src/transport/control-tower/control-tower-read.service.ts",
-      "line": 139
+      "line": 165
     },
     "conversation.resolve|*": {
       "functionName": "PipelineService.runPipelineTurn",
@@ -1504,47 +1569,47 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "payroll.driver_fund_disclosure|DRIVER_FUND_NOT_AVAILABLE": {
       "functionName": "WorkforceService.emitFundDisclosure",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 238
+      "line": 266
     },
     "payroll.driver_fund_disclosure|DRIVER_FUND_SHOWN_WITHOUT_DEDUCTION": {
       "functionName": "WorkforceService.emitFundDisclosure",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 247
+      "line": 275
     },
     "payroll.run|PAYROLL_INPUT_UNAVAILABLE": {
       "functionName": "WorkforceService.runPayroll",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 177
+      "line": 205
     },
     "payroll.run|PAYROLL_PERIOD_CLOSED": {
       "functionName": "WorkforceService.runPayroll",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 202
+      "line": 230
     },
     "payroll.run|PAYROLL_PERIOD_UNKNOWN": {
       "functionName": "WorkforceService.runPayroll",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 128
+      "line": 137
     },
     "payroll.run|PAYROLL_RUN_COMPLETED": {
       "functionName": "WorkforceService.runPayroll",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 215
+      "line": 243
     },
     "payslip.correction|*": {
       "functionName": "WorkforceService.issueCorrection",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 433
+      "line": 465
     },
     "payslip.correction|PAYSLIP_ALREADY_REVERSED": {
       "functionName": "WorkforceService.issueCorrection",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 420
+      "line": 452
     },
     "payslip.correction|PAYSLIP_NOT_CORRECTABLE": {
       "functionName": "WorkforceService.issueCorrection",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 344
+      "line": 372
     },
     "payslip.transition|*": {
       "functionName": "WorkforceService.movePayslip",
@@ -1553,7 +1618,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "payslip.transition|PAYSLIP_TRANSITION_NOT_PERMITTED": {
       "functionName": "WorkforceService.movePayslip",
       "filePath": "apps/api/src/transport/workforce/workforce.service.ts",
-      "line": 291
+      "line": 319
     },
     "proof.challenge|CHALLENGE_ABSENT_OFFLINE_PATH": {
       "functionName": "OperationalProofService.record",
@@ -1564,6 +1629,9 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "functionName": "OperationalProofService.record",
       "filePath": "apps/api/src/transport/proof/operational-proof.service.ts",
       "line": 230
+    },
+    "receipt_handover.record|*": {
+      "filePath": "apps/api/src/transport/document/handover.service.ts"
     },
     "rules.dealer_price|*": {
       "functionName": "AgentOrchestrator.dispatch",

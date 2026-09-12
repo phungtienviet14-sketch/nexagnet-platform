@@ -128,6 +128,29 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       // khuyen trong tai lieu thay vi mot ranh gioi quyen.
       'transport.driver.self.site_intake.propose',
       'transport.driver.self.site_intake.confirm',
+      // MOT ma cho phien cho (`#279` O5): MO. Khong co ma DONG o pham vi lai xe — mot phien dong
+      // lai boi chinh moc `Khach da nhan hang`, khong boi mot lenh thu hai.
+      'transport.driver.self.waiting.start',
+      // HAI ma cua lai xe cho chung tu (`#279` O1/O7). Khong co ma BIA MO: `#279` O2 goi day la
+      // *"immutable boundary prevents driver deletion once evidence is authoritative"*.
+      'transport.driver.self.document.record',
+      'transport.driver.self.receipt_handover.record',
+      // PHIEN CHO NGUOI NHAN (`#279` O5). Ke toan CO ma DOC: mot khoan phu cap cho duoc duyet tren
+      // chinh con so nay. Ma DONG thi khong — xem bai rieng ben duoi.
+      'transport.waiting.read',
+      'transport.waiting.close',
+      // HAI ma cho phu cap cho (`#279` O6): de nghi ⟂ quyet dinh. Gop chung se cho bat ky ai de
+      // nghi duoc cung duyet duoc.
+      'transport.waiting_allowance.propose',
+      'transport.waiting_allowance.decide',
+      // BA ma cho chung tu van hanh (`#279` O1/O11): doc ⟂ ghi bu ⟂ bia mo. Ma bia mo nam trong
+      // `ACCOUNTING_DENIED` — xem bai rieng ben duoi.
+      'transport.operational_document.read',
+      'transport.operational_document.record',
+      'transport.operational_document.withdraw',
+      // BAN GIAO BIEN NHAN (`#279` O7) — hai buoc cua VAN PHONG. Ke toan CO ma nay: chinh ho la
+      // nguoi nhan to giay tren ban. Nhung ghi `da ve van phong` KHONG ket thuc mot don.
+      'transport.receipt_handover.record',
       // DONG THOI GIAN cua mot chuyen. Ke toan CO ma nay: mot khoan phu cap cho phai doi chieu
       // duoc voi luc xe den noi. KHONG co toa do.
       'transport.checkpoint.read',
@@ -291,6 +314,62 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       expect(roleCanPerform('ADMIN', 'transport.geofence.manage')).toBe(true);
     });
 
+    /**
+     * `#279` O5/O6 — ranh gioi DOC ⟂ DONG trong mien phien cho.
+     *
+     * Ke toan doc duoc moi phien cho: ho phai doc de doi soat mot khoan phu cap. Dong mot phien
+     * thi khong, va ly do chat hon ca hai truong hop tren: gio dong CHINH LA moc tren cua khoang
+     * thoi gian ma ho sap duyet tien. Cho nguoi duyet tu chot con so ho sap duyet la go bo dung cai
+     * cong ma `#279` O6 sinh ra.
+     *
+     * Lai xe cung khong co ma dong — nhung vi mot ly do KHAC: ho dong mot phien bang cach bam
+     * `Khach da nhan hang`, tuc ghi mot moc. Mot ma `.close` rieng cho lai xe se la duong ghi THU
+     * HAI cho cung mot su that.
+     */
+    it('#279: Ke toan doc duoc phien cho nhung KHONG dong duoc', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.waiting.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.waiting.close')).toBe(false);
+      expect(roleCanPerform('ADMIN', 'transport.waiting.close')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.waiting.close')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.waiting.read')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.driver.self.waiting.start')).toBe(true);
+    });
+
+    /**
+     * `#279` O12 — ranh gioi DOC ⟂ BIA MO trong mien chung tu van hanh.
+     *
+     * Ke toan doc duoc moi chung tu: do la ca cong viec cua ho. Go mot to ra khoi chinh ho so ho
+     * dang doi soat thi khong — va o day to giay do co the la can cu cua chinh lan `Da ket thuc`
+     * ma ho sap bam. `#279` O12: *"[Accounting] cannot mutate source evidence used for its own
+     * acceptance decision"*.
+     *
+     * Lai xe cung khong co ma bia mo, nhung vi mot ly do KHAC: `#279` O2 goi day la
+     * *"immutable boundary prevents driver deletion once evidence is authoritative"*.
+     */
+    it('#279: Ke toan doc duoc chung tu nhung KHONG bia mo duoc', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.read')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.record')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.withdraw')).toBe(false);
+      expect(roleCanPerform('ADMIN', 'transport.operational_document.withdraw')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.operational_document.withdraw')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.driver.self.document.record')).toBe(true);
+    });
+
+    /**
+     * `#279` O7 — Ke toan ghi duoc `da nhan to giay`, va do KHONG phai `Da ket thuc`.
+     *
+     * Hai ma khac nhau, tren hai be mat khac nhau, cho hai su that khac nhau. Bai nay khoa lai
+     * dieu do: co ma nay KHONG hien nhien la co ma kia (Ke toan co ca hai, nhung `SALE` chi co
+     * duong tu phuc vu, va hai ma van la hai).
+     */
+    it('#279: ghi `da ve van phong` va bam `Da ket thuc` la HAI ma khac nhau', () => {
+      expect(roleCanPerform('ACCOUNTING', 'transport.receipt_handover.record')).toBe(true);
+      expect(roleCanPerform('ACCOUNTING', 'transport.commercial_acceptance.decide')).toBe(true);
+      expect(roleCanPerform('SALE', 'transport.receipt_handover.record')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.commercial_acceptance.decide')).toBe(false);
+      expect(roleCanPerform('SALE', 'transport.driver.self.receipt_handover.record')).toBe(true);
+    });
+
     /** Lai xe khong rut duoc chung cu cua CHINH MINH — xoa duoc bang chung thi no het la bang chung. */
     it('lai xe (SALE) khong co duong rut chung cu nao', () => {
       expect(roleCanPerform('SALE', 'transport.proof.withdraw')).toBe(false);
@@ -359,6 +438,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
         'transport.driver.self.checkpoint.record',
         'transport.driver.self.site_intake.propose',
         'transport.driver.self.site_intake.confirm',
+        'transport.driver.self.waiting.start',
+        'transport.driver.self.document.record',
+        'transport.driver.self.receipt_handover.record',
       ]);
     });
 
