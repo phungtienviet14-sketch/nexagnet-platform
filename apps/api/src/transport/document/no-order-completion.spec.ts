@@ -69,7 +69,10 @@ describe('Khong mot dinh vi kho tho nao — DC-070', () => {
   }
 
   it('bang chung tu khong co cot dinh vi nao — chi mot ma tep DUC', () => {
-    const schema = readFileSync(SCHEMA, 'utf8');
+    // CRLF -> LF: moc ket thuc model ben duoi tim '\n}\n'. Tren worktree Windows
+    // (core.autocrlf=true) moc do khong khop -> indexOf tra -1 -> slice nuot ca phan
+    // con lai cua tep, keo model khac vao vung quet. Blob trong git luon la LF.
+    const schema = readFileSync(SCHEMA, 'utf8').replace(/\r\n/g, '\n');
     const start = schema.indexOf('model TransportOperationalDocument {');
     expect(start).toBeGreaterThan(0);
     const model = stripComments(schema.slice(start, schema.indexOf('\n}\n', start)));
@@ -131,7 +134,10 @@ describe('Khong mot duong nao ket thuc mot DON — DC-071', () => {
    * khong duoc co mot cot trang thai nao tren chinh don.
    */
   it('bang ban giao khong tro sang truc nghiem thu', () => {
-    const schema = readFileSync(SCHEMA, 'utf8');
+    // CRLF -> LF: moc ket thuc model ben duoi tim '\n}\n'. Tren worktree Windows
+    // (core.autocrlf=true) moc do khong khop -> indexOf tra -1 -> slice nuot ca phan
+    // con lai cua tep, keo model khac vao vung quet. Blob trong git luon la LF.
+    const schema = readFileSync(SCHEMA, 'utf8').replace(/\r\n/g, '\n');
     const start = schema.indexOf('model TransportPhysicalReceiptHandover {');
     expect(start).toBeGreaterThan(0);
     const model = stripComments(schema.slice(start, schema.indexOf('\n}\n', start)));
