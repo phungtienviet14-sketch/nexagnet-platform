@@ -14,6 +14,7 @@ import {
   type CreateTrackingSessionInput,
   type UpsertDeviceInput,
 } from './tracking.repository.js';
+import { LOCATION_SOURCE_VALUES } from './tracking.types.js';
 import type {
   DeviceInstallation,
   LocationObservation,
@@ -58,6 +59,13 @@ export class PrismaTrackingRepository extends TrackingRepository {
   async findActiveSessionForDriver(driverId: string): Promise<TrackingSession | null> {
     const row = await this.prisma.transportTrackingSession.findFirst({
       where: { driverId, status: 'ACTIVE' },
+    });
+    return row ? toSession(row) : null;
+  }
+
+  async findActiveSessionForVehicle(vehicleId: string): Promise<TrackingSession | null> {
+    const row = await this.prisma.transportTrackingSession.findFirst({
+      where: { vehicleId, status: 'ACTIVE' },
     });
     return row ? toSession(row) : null;
   }
@@ -123,6 +131,33 @@ export class PrismaTrackingRepository extends TrackingRepository {
       orderBy: { receivedAt: 'desc' },
     });
     return row ? toObservation(row) : null;
+  }
+
+  /**
+   * MOT truy van cho MOI nguon tho, chay song song — nhieu nhat nam lan hoi.
+   *
+   * Vi sao khong mot truy van: Prisma `groupBy` tra ve tri tong hop chu khong tra ve HANG, nen
+   * "ban moi nhat cua tung nguon" khong dien dat duoc bang mot lan goi. Va cach thay the hay bi
+   * chon — lay N hang moi nhat roi gom trong bo nho — thi SAI: mot dien thoai bam moi 30 giay se
+   * day ban telematics duy nhat ra khoi N hang dau, va ket qua la mot nguon con song bi bao mat.
+   *
+   * Chi phi: cung mot duong chi muc voi `latestObservationForVehicle` (xem chu thich cua no) va
+   * chi bi hoi khi mot man hinh mo phep cham suc khoe. Neu so xe len hang tram va co mot bang
+   * dieu hanh tu lam moi, cau tra loi dung la mot bang "vi tri gan nhat theo nguon" cap nhat luc
+   * nhan tin — khong phai mot bo nho dem o tang nay.
+   */
+  async latestObservationPerSourceForVehicle(
+    vehicleId: string,
+  ): Promise<readonly LocationObservation[]> {
+    const rows = await Promise.all(
+      LOCATION_SOURCE_VALUES.map((source) =>
+        this.prisma.transportLocationObservation.findFirst({
+          where: { source, session: { vehicleId } },
+          orderBy: { receivedAt: 'desc' },
+        }),
+      ),
+    );
+    return rows.filter((row) => row !== null).map((row) => toObservation(row));
   }
 
   async findObservationById(observationId: string): Promise<LocationObservation | null> {

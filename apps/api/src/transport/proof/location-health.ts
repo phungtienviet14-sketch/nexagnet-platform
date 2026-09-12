@@ -83,6 +83,17 @@ export const locationSourceFamily = (source: LocationSource): LocationSourceFami
 const TRACKED_FAMILIES = ['PHONE', 'TELEMATICS'] as const;
 type TrackedFamily = (typeof TRACKED_FAMILIES)[number];
 
+/**
+ * MOT phep kiem chay duoc cho danh sach tren, thay vi hai cho go tay cung mot luat.
+ *
+ * Viet la `=== 'MANUAL'` thi moi ho nguon THEM VAO sau nay se duoc tinh vao phep cham mot cach
+ * im lang — tuc mac dinh la MO. Hoi "co nam trong danh sach duoc bam khong" thi mac dinh la
+ * DONG, va do la chieu dung cho mot phep cham suc khoe: mot nguon chua ai quyet dinh tin den muc
+ * nao thi khong duoc tu dong tro thanh bang chung "xe con song".
+ */
+const isTrackedFamily = (family: LocationSourceFamily): family is TrackedFamily =>
+  (TRACKED_FAMILIES as readonly LocationSourceFamily[]).includes(family);
+
 /* ------------------------------------------------------------------ *
  * THANG TRANG THAI
  * ------------------------------------------------------------------ */
@@ -292,7 +303,7 @@ const ageSecondsBetween = (from: Date, now: Date): number =>
  * Mot ban bi loai khong lam ho nguon cua no `LIVE` — no khong lam gi ca, y nhu chua tung den.
  */
 const isUsableSample = (sample: LocationHealthSample): boolean => {
-  if (locationSourceFamily(sample.source) === 'MANUAL') return false;
+  if (!isTrackedFamily(locationSourceFamily(sample.source))) return false;
   return parseGeoPoint(sample.point.latitude, sample.point.longitude).ok;
 };
 
@@ -302,9 +313,10 @@ function newestByFamily(
 ): ReadonlyMap<TrackedFamily, LocationHealthSample> {
   const newest = new Map<TrackedFamily, LocationHealthSample>();
   for (const sample of samples) {
-    if (!isUsableSample(sample)) continue;
-    // `locationSourceFamily` da tra ve `MANUAL` cho moi nguon nhap tay, va chung da bi loai o tren.
-    const family = locationSourceFamily(sample.source) as TrackedFamily;
+    const family = locationSourceFamily(sample.source);
+    // Thu hep kieu o DAY chu khong bang mot phep ep: `isUsableSample` da loai moi ho khong duoc
+    // bam, nhung `tsc` khong doc duoc dieu do qua mot ham tra `boolean`.
+    if (!isTrackedFamily(family) || !isUsableSample(sample)) continue;
     const held = newest.get(family);
     // `>` chu khong `>=`: hai ban cung mot mili giay may chu cua CUNG mot ho nguon khong xay ra
     // (khoa idempotency + chan duoi 30 giay cua chinh sach lay mau), nen khong can mot khoa phan
