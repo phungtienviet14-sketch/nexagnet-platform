@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyLocationHealth,
   locationSourceFamily,
+  toLocationHealthView,
   type LocationHealthInput,
   type LocationHealthSample,
 } from './location-health.js';
+import { roleCanPerform } from '../transport-actions.js';
 import {
   DEFAULT_HEALTHY_SILENCE_SECONDS,
   DEFAULT_LOST_SILENCE_SECONDS,
@@ -399,5 +401,76 @@ describe('tinh tat dinh', () => {
 
     expect(result.ageSeconds).toBe(0);
     expect(result.status).toBe('LIVE');
+  });
+});
+
+/* ================================================================== *
+ * T10.14-T10.16 — KHUNG NHIN DOC VA QUYEN
+ * ================================================================== */
+
+describe('T10.16 — che toa do theo quyen', () => {
+  const health = () => classify({ samples: [phoneSample(60)] });
+
+  it('nguoi CO quyen doc duong di tho thay toa do', () => {
+    const view = toLocationHealthView(health(), { canReadCoordinates: true });
+
+    expect(view.lastKnown?.point).toEqual(HANOI);
+    expect(view.lastKnown?.coordinatesRedacted).toBe(false);
+  });
+
+  it('nguoi KHONG co quyen do van doi soat duoc, nhung khong thay MOT CAP SO nao', () => {
+    const source = health();
+    const view = toLocationHealthView(source, { canReadCoordinates: false });
+
+    expect(view.lastKnown?.point).toBeNull();
+    // Noi RO la bi che, de man hinh khong ve mot o trong roi de nguoi doc tu doan.
+    expect(view.lastKnown?.coordinatesRedacted).toBe(true);
+
+    // Va moi thu KHONG phai toa do van con — cat het di thi ke toan mat kha nang doi soat.
+    expect(view.status).toBe(source.status);
+    expect(view.reason).toBe(source.reason);
+    expect(view.ageSeconds).toBe(source.ageSeconds);
+    expect(view.currentSource).toBe(source.currentSource);
+    expect(view.sources).toEqual(source.sources);
+    // Mot loi khai ve DO TIN cua ban ghi, khong phai mot toa do.
+    expect(view.lastKnown?.usableAsCurrent).toBe(source.lastKnown?.usableAsCurrent);
+  });
+
+  it('khong co bang chung thi khung nhin cung khong bia ra mot khoi rong', () => {
+    const view = toLocationHealthView(classify({ expectation: null }), {
+      canReadCoordinates: false,
+    });
+
+    expect(view.lastKnown).toBeNull();
+  });
+
+  it('KHONG mot truong nao cua khung nhin bi che chua toa do', () => {
+    const view = toLocationHealthView(classify({ samples: [phoneSample(60)] }), {
+      canReadCoordinates: false,
+    });
+
+    // Bai vit chac: neu mot ngay ai do them mot truong mang toa do (vd `centroid`) vao ket qua ma
+    // quen che no, chuoi JSON se lai chua so — va bai nay do.
+    const serialised = JSON.stringify(view);
+    expect(serialised).not.toContain(String(HANOI.latitude));
+    expect(serialised).not.toContain(String(HANOI.longitude));
+  });
+});
+
+describe('T10.14-T10.15 — hai ma quyen, hai cau hoi khac nhau', () => {
+  it('ke toan doc duoc TOM TAT nhung KHONG doc duoc duong di tho', () => {
+    expect(roleCanPerform('ACCOUNTING', 'transport.tracking.read')).toBe(true);
+    expect(roleCanPerform('ACCOUNTING', 'transport.location.history.read')).toBe(false);
+  });
+
+  it('quan tri doc duoc ca hai', () => {
+    expect(roleCanPerform('ADMIN', 'transport.tracking.read')).toBe(true);
+    expect(roleCanPerform('ADMIN', 'transport.location.history.read')).toBe(true);
+  });
+
+  it('vai cua lai xe khong doc duoc be mat van hanh nao', () => {
+    // `SALE` la vai cua lai xe — ho chi co cac ma pham vi CHINH MINH.
+    expect(roleCanPerform('SALE', 'transport.tracking.read')).toBe(false);
+    expect(roleCanPerform('SALE', 'transport.location.history.read')).toBe(false);
   });
 });

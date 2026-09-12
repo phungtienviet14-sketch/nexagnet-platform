@@ -536,3 +536,59 @@ export function classifyLocationHealth(
     lastKnownFrom(evidence, false),
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * KHUNG NHIN DOC — `#297 T6`
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ban KHONG co toa do cua `LastKnownLocation`.
+ *
+ * Hai truong thay cho mot, va do la co y: `point: null` mot minh se buoc nguoi doc phai doan xem
+ * "khong co toa do" nghia la chua tung co ban nao hay la bi che theo quyen. `coordinatesRedacted`
+ * tra loi thang, nen mot man hinh ve duoc dung chu ("ban khong duoc xem vi tri" ⟂ "chua co vi tri
+ * nao") thay vi ve mot o trong.
+ */
+export interface LastKnownLocationView extends Omit<LastKnownLocation, 'point'> {
+  readonly point: GeoPoint | null;
+  readonly coordinatesRedacted: boolean;
+}
+
+export interface VehicleLocationHealthView extends Omit<VehicleLocationHealth, 'lastKnown'> {
+  readonly lastKnown: LastKnownLocationView | null;
+}
+
+/**
+ * Che toa do theo QUYEN, va giu lai moi thu khong phai toa do.
+ *
+ * ============================================================================================
+ * VI SAO CHE TOA DO CHU KHONG CHE CA CAU TRA LOI
+ * ============================================================================================
+ *
+ * `transport.tracking.read` va `transport.location.history.read` la HAI ma, va su khac nhau giua
+ * chung da duoc viet ra tu truoc (`transport-actions.ts`): ke toan can biet *"co chung cu vi tri
+ * khong"* va *"con nhin thay chiec xe khong"* de doi soat mot chuyen; ho khong can duong di tung
+ * phut cua mot nguoi lam cong, va cap no cho ho la mo mot nang luc giam sat khong ai yeu cau.
+ *
+ * Nen mot nguoi chi co ma thu nhat VAN thay: trang thai, ly do, tuoi ban cuoi, va nguon nao dang
+ * choi. Ho khong thay MOT CAP SO. Cat ca cau tra loi di thi ho mat kha nang doi soat; tra ca toa
+ * do thi he thong tu mo rong pham vi giam sat — va ca hai deu sai.
+ *
+ * `usableAsCurrent` VAN duoc giu ke ca khi toa do bi che: no la mot loi khai ve DO TIN cua ban
+ * ghi, khong phai mot toa do.
+ */
+export function toLocationHealthView(
+  health: VehicleLocationHealth,
+  caller: { readonly canReadCoordinates: boolean },
+): VehicleLocationHealthView {
+  if (health.lastKnown === null) {
+    return { ...health, lastKnown: null };
+  }
+  const { point, ...rest } = health.lastKnown;
+  return {
+    ...health,
+    lastKnown: caller.canReadCoordinates
+      ? { ...rest, point, coordinatesRedacted: false }
+      : { ...rest, point: null, coordinatesRedacted: true },
+  };
+}

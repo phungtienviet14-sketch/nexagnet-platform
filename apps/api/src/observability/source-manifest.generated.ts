@@ -748,9 +748,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
       "line": 192
     },
     "transport.tracking.read": {
-      "functionName": "TrackingController.summaries",
-      "filePath": "apps/api/src/transport/proof/tracking.controller.ts",
-      "line": 36
+      "filePath": "apps/api/src/transport/proof/tracking.controller.ts"
     },
     "transport.trip.assign": {
       "functionName": "TripsController.assign",

@@ -39,6 +39,7 @@ describe('transport-proof process boot contract', () => {
       const { TrackingService } = await import('./src/transport/proof/tracking.service.ts');
       const { OperationalProofService } = await import('./src/transport/proof/operational-proof.service.ts');
       const { VehicleTelematicsPort } = await import('./src/transport/proof/telematics/vehicle-telematics.port.ts');
+      const { LocationHealthService } = await import('./src/transport/proof/location-health.service.ts');
       const { ZaloUserClient } = await import('./src/channels/zalo-user.client.ts');
 
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
@@ -51,6 +52,12 @@ describe('transport-proof process boot contract', () => {
         latitude: 20.8449, longitude: 106.6881, radiusMetres: 200, note: null, recordedBy: 'boot',
       });
       const listed = await geofences.listActive();
+
+      // SUC KHOE VI TRI phai chay duoc trong tien trinh THAT, khong chi trong bai don vi: tuyen doc
+      // nam tren mot controller dang ky o GOC, nen no chi thay danh sach export cua module.
+      // Mot chiec xe khong ai theo doi phai ra NOT_TRACKED — KHONG phai LOST.
+      const health = context.get(LocationHealthService, { strict: false });
+      const unwatched = await health.forVehicle('xe-khong-ai-theo-doi');
 
       // Nguong chinh sach phai SONG trong tien trinh that, khong chi trong bai test don vi.
       let radiusReason = 'KHONG BI CHAN';
@@ -76,6 +83,9 @@ describe('transport-proof process boot contract', () => {
         proofReview: has(ProofReviewController),
         trackingService: has(TrackingService),
         operationalProof: has(OperationalProofService),
+        locationHealth: has(LocationHealthService),
+        unwatchedStatus: unwatched.status,
+        unwatchedReason: unwatched.reason,
         // Nguon vi tri thu hai phai co mat, va phai la ban CHUA CAM VAO GI.
         telematics: has(VehicleTelematicsPort),
         // Khach van tai khong phai khai mot kenh Zalo nao de bam vi tri.
@@ -118,6 +128,10 @@ describe('transport-proof process boot contract', () => {
       proofReview: true,
       trackingService: true,
       operationalProof: true,
+      locationHealth: true,
+      // `NOT_TRACKED` khac `LOST`, va o day no duoc chung minh boi mot tien trinh that.
+      unwatchedStatus: 'NOT_TRACKED',
+      unwatchedReason: 'TRACKING_NOT_EXPECTED',
       telematics: true,
       zalo: false,
       fenceRadius: 200,
