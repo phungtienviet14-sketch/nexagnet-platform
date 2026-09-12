@@ -84,6 +84,22 @@ import type {
   MatchingRunResult,
   PartnerRoleKind,
   StatementImportPreview,
+  // `TX-08` phi duong bo / ETC (Issue #295).
+  ManualTollRowInput,
+  TollAccount,
+  TollAccountVehicleLink,
+  TollCandidate,
+  TollCandidateDetail,
+  TollCandidatePage,
+  TollCandidateQuery,
+  TollCommittedImport,
+  TollFileFormat,
+  TollImport,
+  TollImportPreview,
+  TollProvider,
+  TollProviderSurface,
+  TollReviewAction,
+  TollSourceKind,
   TransportCustomer,
   TransportPartner,
   Trip,
@@ -552,6 +568,56 @@ export interface ResolveDiscrepancyInput {
   readonly fuelEntryId?: string;
 }
 
+/* --- `TX-08` phi duong bo / ETC (#295) --- */
+
+export interface CreateTollAccountInput {
+  readonly provider: TollProvider;
+  readonly accountNo: string;
+  readonly holderName: string | null;
+}
+
+/**
+ * MO mot doan noi xe <-> tai khoan giao thong.
+ *
+ * `effectiveTo` co mat NGAY LUC MO vi mot doan noi da ket thuc van phai khai lai duoc (nhap lai lich
+ * su cua thang truoc). May chu tu choi `effectiveTo < effectiveFrom` bang `TOLL_LINK_PERIOD_INVALID`.
+ */
+export interface OpenTollLinkInput {
+  readonly vehicleId: string;
+  /** ND 119 Phu luc — "ma dinh danh the dau cuoi". Tuy chon: chua do duoc no co tren tep xuat khong. */
+  readonly providerVehicleRef: string | null;
+  readonly effectiveFrom: BusinessDate;
+  readonly effectiveTo: BusinessDate | null;
+}
+
+/**
+ * MOT LENH NAP. HAI duong loai tru nhau, va may chu kiem dieu do bang `superRefine`:
+ * `STATEMENT_FILE` phai co `contentBase64`, `MANUAL` phai co it nhat mot dong `rows`.
+ */
+export interface TollImportInput {
+  readonly provider: TollProvider;
+  readonly sourceKind: TollSourceKind;
+  readonly sourceLabel: string;
+  readonly periodStart: BusinessDate | null;
+  readonly periodEnd: BusinessDate | null;
+  readonly format?: TollFileFormat;
+  readonly contentBase64?: string;
+  readonly rows?: readonly ManualTollRowInput[];
+}
+
+/**
+ * MOT LAN QUYET cua nguoi doi soat.
+ *
+ * `note` la CHU CHO NGUOI DOC; ly do co ma do may chu sinh tu `action`, nen khong mot cau tu do nao
+ * cua client di duoc vao lich su kiem toan.
+ */
+export interface TollReviewInput {
+  readonly action: TollReviewAction;
+  readonly vehicleId: string | null;
+  readonly duplicateOfCandidateId: string | null;
+  readonly note: string | null;
+}
+
 /* ------------------------------------------------------------------ *
  * Be mat van hanh
  * ------------------------------------------------------------------ */
@@ -801,6 +867,74 @@ export const transportApi = {
       send('POST', `/transport/fuel/reconciliations/${encodeURIComponent(id)}/close`),
     reopenReconciliation: (id: string, reason: string): Promise<FuelReconciliation> =>
       send('POST', `/transport/fuel/reconciliations/${encodeURIComponent(id)}/reopen`, { reason }),
+  },
+
+  /**
+   * `TX-08` PHI DUONG BO / ETC — #295 Lane V. Muoi ba duong cua `TollController`.
+   *
+   * ==============================================================================================
+   * KHONG MOT DUONG XOA NAO, va do la mot quyet dinh chu khong mot thieu sot.
+   *
+   * May chu khong mo `DELETE` o dau: mot lan nap la mot su kien da xay ra, va go no di se lam moi
+   * quyet dinh doi soat truoc do tro vao hu khong. Sua mot dong sai = GHI THEM mot quyet dinh
+   * (`review`). Nen o day cung khong co ham nao goi `remove`.
+   *
+   * ==============================================================================================
+   * DANH SACH TRA VE MANG TRAN, nen dung `get` chu khong `getList`.
+   *
+   * `getList` ton tai cho nhung duong goi phong bi (`{ plans }`, `{ payslips }`, …). `TollController`
+   * tra thang mang cho tai khoan/doan noi/lan nap, va CHI hang doi soat moi co phong bi
+   * (`{ items, total, limit, offset }`) vi no co phan trang. Goi `getList` len mot mang tran se nem
+   * `502` cho mot phan hoi hoan toan dung hop dong.
+   */
+  toll: {
+    providers: (): Promise<TollProviderSurface> => get('/transport/toll/providers'),
+
+    accounts: (provider?: TollProvider | null): Promise<readonly TollAccount[]> =>
+      get(`/transport/toll/accounts${toQuery({ provider })}`),
+    createAccount: (input: CreateTollAccountInput): Promise<TollAccount> =>
+      send('POST', '/transport/toll/accounts', input),
+    setAccountActive: (id: string, active: boolean): Promise<TollAccount> =>
+      send('PATCH', `/transport/toll/accounts/${encodeURIComponent(id)}`, { active }),
+
+    links: (accountId: string): Promise<readonly TollAccountVehicleLink[]> =>
+      get(`/transport/toll/accounts/${encodeURIComponent(accountId)}/links`),
+    openLink: (accountId: string, input: OpenTollLinkInput): Promise<TollAccountVehicleLink> =>
+      send('POST', `/transport/toll/accounts/${encodeURIComponent(accountId)}/links`, input),
+    /**
+     * DONG mot doan noi — `PATCH`, khong `DELETE`.
+     *
+     * "Xe doi tai khoan" phai giu duoc CA HAI doan: mot luot qua tram thang truoc thuoc ve tai khoan
+     * CU. Xoa doan cu se lam moi dong cu tro thanh `VEHICLE_UNRESOLVED` — mot lich su bi viet lai
+     * boi mot thao tac hom nay.
+     */
+    closeLink: (linkId: string, effectiveTo: BusinessDate): Promise<TollAccountVehicleLink> =>
+      send('PATCH', `/transport/toll/links/${encodeURIComponent(linkId)}`, { effectiveTo }),
+
+    /** DOC THU — khong ghi mot hang nao. An toan de bam bao nhieu lan cung duoc. */
+    previewImport: (input: TollImportInput): Promise<TollImportPreview> =>
+      send('POST', '/transport/toll/imports/preview', input),
+    commitImport: (input: TollImportInput): Promise<TollCommittedImport> =>
+      send('POST', '/transport/toll/imports', input),
+    imports: (provider?: TollProvider | null): Promise<readonly TollImport[]> =>
+      get(`/transport/toll/imports${toQuery({ provider })}`),
+
+    candidates: (query: TollCandidateQuery = {}): Promise<TollCandidatePage> =>
+      get(
+        `/transport/toll/candidates${toQuery({
+          provider: query.provider,
+          importId: query.importId,
+          accountId: query.accountId,
+          matchState: query.matchState,
+          reviewState: query.reviewState,
+          limit: query.limit,
+          offset: query.offset,
+        })}`,
+      ),
+    candidate: (id: string): Promise<TollCandidateDetail> =>
+      get(`/transport/toll/candidates/${encodeURIComponent(id)}`),
+    review: (id: string, input: TollReviewInput): Promise<TollCandidate> =>
+      send('POST', `/transport/toll/candidates/${encodeURIComponent(id)}/review`, input),
   },
 
   /**

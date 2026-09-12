@@ -39,6 +39,7 @@ import { ArApView, MarginView, SettlementView } from './views/SettlementViews';
 import { AssetOwnershipView } from './views/AssetOwnershipView';
 import { FleetView } from './views/FleetView';
 import { FuelView } from './views/FuelView';
+import { TollView } from './views/TollView';
 import { StakeholderVehiclesView } from './views/StakeholderVehiclesView';
 import { ControlTowerView } from './views/ControlTowerView';
 import { FinanceView } from './views/FinanceView';
@@ -319,6 +320,8 @@ function SectionBody({
       return <OrderCompletionView />;
     case 'fuel':
       return <FuelView />;
+    case 'toll':
+      return <TollView />;
     case 'settlement':
       return <SettlementView />;
     case 'margin':

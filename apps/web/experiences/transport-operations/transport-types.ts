@@ -810,6 +810,263 @@ export interface ClosedReconciliationResult {
 }
 
 /* ------------------------------------------------------------------ *
+ * `TX-08` PHI DUONG BO / ETC — #295 Lane V (guong cua `apps/api/src/transport/toll`)
+ * ------------------------------------------------------------------ */
+
+/**
+ * ETC DUNG CANH NHIEN LIEU, va do khong phai mot cho ngoi tuy tien.
+ *
+ * Hai mien co cung HINH DANG nap lieu (nguon -> doc thu -> nap -> hang doi soat), nen doc chung
+ * canh nhau la cach re nhat de mot nguoi sua mot ben nhin thay ben kia. Nhung chung KHONG dung
+ * chung mot kieu nao: phieu dau la tien LAI XE ung truoc, con ETC la tien CONG TY tra thang cho nha
+ * cung cap (#229 §8). Mot kieu dung chung se la cho dau tien hai dong tien do chay lan vao nhau.
+ */
+
+export const TOLL_PROVIDERS = ['VETC', 'EPASS', 'OTHER'] as const;
+export type TollProvider = (typeof TOLL_PROVIDERS)[number];
+
+export const TOLL_SOURCE_KINDS = ['API', 'STATEMENT_FILE', 'INVOICE_PDF', 'MANUAL'] as const;
+export type TollSourceKind = (typeof TOLL_SOURCE_KINDS)[number];
+
+export const TOLL_TRANSACTION_KINDS = [
+  'TOLL_PASS',
+  'TOP_UP',
+  'ACCOUNT_FEE',
+  'ADJUSTMENT',
+] as const;
+export type TollTransactionKind = (typeof TOLL_TRANSACTION_KINDS)[number];
+
+export const TOLL_FILE_FORMATS = ['CSV', 'XLSX'] as const;
+export type TollFileFormat = (typeof TOLL_FILE_FORMATS)[number];
+
+export const TOLL_LINK_PROVENANCES = ['MANUAL', 'STATEMENT_DECLARED'] as const;
+export type TollLinkProvenance = (typeof TOLL_LINK_PROVENANCES)[number];
+
+/**
+ * KET QUA SO KHOP cua mot dong. `AMBIGUOUS` la mot cau tra loi THAT, khong phai mot loi.
+ *
+ * May chu khong bao gio chon bua khi co nhieu ung vien (`toll-classification.ts`), nen man hinh
+ * cung khong duoc chon giup: mot dong `AMBIGUOUS` phai o lai hang cho nguoi.
+ */
+export const TOLL_MATCH_STATES = [
+  'MATCHED',
+  'ACCOUNT_UNRESOLVED',
+  'VEHICLE_UNRESOLVED',
+  'AMBIGUOUS',
+  'DUPLICATE_CANDIDATE',
+] as const;
+export type TollMatchState = (typeof TOLL_MATCH_STATES)[number];
+
+/**
+ * TRANG THAI DOI SOAT. KHONG co `PAID`/`SETTLED`/`ACCOUNTED` — #269 J7 cam thang, va #295 nhac lai.
+ *
+ * Ba chu do noi ve TIEN DA TRA. Cai duy nhat be mat nay biet la mot dong da co nguoi NHIN va noi no
+ * khop hay chua. Mot nhan "da thanh toan" o day se bien mot phep doc tep thanh mot khang dinh ke
+ * toan ma khong ai ky.
+ */
+export const TOLL_REVIEW_STATES = ['PENDING', 'CONFIRMED', 'REOPENED'] as const;
+export type TollReviewState = (typeof TOLL_REVIEW_STATES)[number];
+
+export const TOLL_REVIEW_ACTIONS = [
+  'RESOLVE_VEHICLE',
+  'CONFIRM',
+  'FLAG_DUPLICATE',
+  'CLEAR_DUPLICATE',
+  'REOPEN',
+] as const;
+export type TollReviewAction = (typeof TOLL_REVIEW_ACTIONS)[number];
+
+/**
+ * TRANG THAI DUONG API cua tung nha cung cap.
+ *
+ * `NOT_PUBLICLY_PROVEN` la ket qua DA DO (08/09/2026), khong phai mot cho trong cho toi khi ai do
+ * cau hinh. Man hinh phai noi ra dung the — xem `TOLL_API_STATUS_LABEL`.
+ */
+export const TOLL_API_STATUSES = ['NOT_PUBLICLY_PROVEN', 'REGISTERED'] as const;
+export type TollApiStatus = (typeof TOLL_API_STATUSES)[number];
+
+export interface TollAccount {
+  readonly id: string;
+  readonly provider: TollProvider;
+  readonly accountNo: string;
+  readonly holderName: string | null;
+  readonly active: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/**
+ * MOT DOAN THOI GIAN mot xe nhan chi tra tu mot tai khoan giao thong.
+ *
+ * `effectiveTo === null` = DANG HIEU LUC. Man hinh doc dung truong do chu khong so ngay voi dong ho
+ * cua trinh duyet: ngay nghiep vu duoc tinh MOT LAN o may chu theo mui gio tenant (`INV-25`), va
+ * mot chiec may tinh dat sai mui gio se ve ra mot lich su khac voi lich su that.
+ */
+export interface TollAccountVehicleLink {
+  readonly id: string;
+  readonly accountId: string;
+  readonly vehicleId: string;
+  readonly providerVehicleRef: string | null;
+  readonly effectiveFrom: BusinessDate;
+  readonly effectiveTo: BusinessDate | null;
+  readonly provenance: TollLinkProvenance;
+  readonly createdAt: string;
+  readonly createdBy: string;
+}
+
+export interface TollProviderReadiness {
+  readonly provider: TollProvider;
+  /** `false` = goi khach chua khai bo cot cho nha cung cap nay — tuc `BLOCKED_SAMPLE_REQUIRED`. */
+  readonly statementReady: boolean;
+  readonly blockedReason: string | null;
+  readonly apiStatus: string;
+}
+
+export interface TollApiDiagnostic {
+  readonly provider: TollProvider;
+  readonly status: TollApiStatus;
+  /** Duong DOI HOI HOP PHAP (ND 119/2024 D.26 kh.2) — khong phai mot cach di vong. */
+  readonly requestPath: string;
+}
+
+export interface TollProviderSurface {
+  readonly readiness: readonly TollProviderReadiness[];
+  readonly api: readonly TollApiDiagnostic[];
+}
+
+export interface TollImport {
+  readonly id: string;
+  readonly provider: TollProvider;
+  readonly sourceKind: TollSourceKind;
+  readonly sourceLabel: string;
+  readonly sourceDigest: string;
+  readonly periodStart: BusinessDate | null;
+  readonly periodEnd: BusinessDate | null;
+  readonly rowCount: number;
+  readonly acceptedCount: number;
+  readonly rejectedCount: number;
+  readonly importedAt: string;
+  readonly importedBy: string;
+}
+
+/** MOT dong nguoi van hanh go tay. Bieu nhap la CUA TA — khong phai dinh dang cua nha cung cap nao. */
+export interface ManualTollRowInput {
+  readonly accountNo: string;
+  readonly kind: TollTransactionKind;
+  readonly vehiclePlate: string | null;
+  readonly passedAt: string | null;
+  readonly businessDate: BusinessDate | null;
+  /** Chuoi chu khong `number`: quy uoc phan cach hang nghin duoc doc o may chu, mot lan. */
+  readonly amount: string;
+  readonly station: string | null;
+  readonly providerRef: string | null;
+}
+
+/** Dong cua BAN DOC THU — chua co `id`, chi co `rowNumber`; cung quy uoc voi `MappedStatementLine`. */
+export interface TollPreviewSampleRow {
+  readonly rowNumber: number;
+  readonly parseStatus: 'ACCEPTED' | 'REJECTED';
+  readonly rejectReason: string | null;
+  readonly kind: TollTransactionKind | null;
+  readonly vehiclePlateRaw: string;
+  readonly businessDate: BusinessDate | null;
+  readonly signedAmount: number | null;
+  readonly stationLabel: string | null;
+  readonly matchState: TollMatchState | null;
+}
+
+/**
+ * KET QUA DOC THU. `sample` la 20 DONG DAU, khong phai ca tep — may chu cat co chu dich.
+ *
+ * `alreadyImportedId !== null` nghia la dung bo byte nay DA duoc nap: nap lai se tra ve chinh lan
+ * cu va KHONG tao them mot nghia vu nao.
+ */
+export interface TollImportPreview {
+  readonly provider: TollProvider;
+  readonly sourceKind: TollSourceKind;
+  readonly sourceDigest: string;
+  readonly rowCount: number;
+  readonly acceptedCount: number;
+  readonly rejectedCount: number;
+  readonly rejectionsByReason: Readonly<Record<string, number>>;
+  readonly matchStateCounts: Readonly<Partial<Record<TollMatchState, number>>>;
+  readonly alreadyImportedId: string | null;
+  readonly sample: readonly TollPreviewSampleRow[];
+}
+
+export interface TollCommittedImport {
+  readonly import: TollImport;
+  /** `true` = dung bo byte do da nap truoc; khong ban ghi nao duoc tao them. */
+  readonly replayed: boolean;
+  readonly candidateCount: number;
+}
+
+export interface TollCandidate {
+  readonly id: string;
+  readonly importId: string;
+  readonly provider: TollProvider;
+  readonly rowNumber: number;
+  readonly parseStatus: 'ACCEPTED' | 'REJECTED';
+  readonly rejectReason: string | null;
+  readonly accountNoRaw: string;
+  readonly accountId: string | null;
+  readonly kind: TollTransactionKind | null;
+  readonly vehiclePlateRaw: string;
+  readonly vehicleId: string | null;
+  readonly passedAt: string | null;
+  readonly businessDate: BusinessDate | null;
+  readonly signedAmount: number | null;
+  readonly currencyCode: string;
+  readonly stationLabel: string | null;
+  readonly providerRef: string | null;
+  readonly fingerprint: string | null;
+  readonly matchState: TollMatchState | null;
+  readonly reviewState: TollReviewState;
+  readonly duplicateOfCandidateId: string | null;
+  readonly rawValues: Readonly<Record<string, string>>;
+  readonly createdAt: string;
+}
+
+export interface TollCandidatePage {
+  readonly items: readonly TollCandidate[];
+  readonly total: number;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+export interface TollCandidateQuery {
+  readonly provider?: TollProvider | null;
+  readonly importId?: string | null;
+  readonly accountId?: string | null;
+  readonly matchState?: TollMatchState | null;
+  readonly reviewState?: TollReviewState | null;
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
+/** MOT QUYET DINH cua nguoi doi soat — GHI THEM, khong bao gio ghi de dong truoc. */
+export interface TollReviewDecision {
+  readonly id: string;
+  readonly candidateId: string;
+  readonly action: TollReviewAction;
+  readonly actor: string;
+  readonly at: string;
+  /** Ly do CO MA do may chu sinh tu `action` — nguoi goi khong tu dat mot cau tuy y vao lich su. */
+  readonly reason: string;
+  readonly note: string | null;
+  readonly previousVehicleId: string | null;
+  readonly nextVehicleId: string | null;
+  readonly previousMatchState: TollMatchState | null;
+  readonly nextMatchState: TollMatchState | null;
+  readonly duplicateOfCandidateId: string | null;
+}
+
+export interface TollCandidateDetail {
+  readonly candidate: TollCandidate;
+  readonly decisions: readonly TollReviewDecision[];
+}
+
+/* ------------------------------------------------------------------ *
  * `TX-05` — quyet toan (T7D: da co duong HTTP, xem `SettlementReportsController`)
  * ------------------------------------------------------------------ */
 

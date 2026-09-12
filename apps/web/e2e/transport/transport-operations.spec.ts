@@ -908,6 +908,11 @@ test.describe('vo va kien truc thong tin', () => {
     await expect(nav.getByRole('link', { name: /Quỹ lái xe/ })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Nhiên liệu' })).toBeVisible();
 
+    // ETC hien vi goi khach nay CO bat `transport-toll`. Muc nay nam canh Nhien lieu trong cung
+    // nhom CHI PHI, nhung KHONG dung chung kieu hay bang nao voi no: phieu dau la tien lai xe ung
+    // truoc, con ETC la tien cong ty tra thang cho nha cung cap.
+    await expect(nav.getByRole('link', { name: /Phí đường bộ/ })).toBeVisible();
+
     // Goi `transport-preview` bat ca `transport-asset-compliance` lan `transport-workforce`, nen
     // hai muc cua T6 HIEN — va nhom cua chung khong con mo coi. Chieu nguoc lai (khach khong bat
     // thi an) duoc khoa o `__tests__/navigation.spec.ts`, cho ca hai chieu.
