@@ -44,7 +44,22 @@ export const reportObservationSchema = z
     accuracyMetres: z.number().nonnegative().nullish(),
     speedMetresPerSecond: z.number().nonnegative().nullish(),
     bearingDegrees: z.number().min(0).lt(360).nullish(),
-    source: z.enum(['DEVICE_GNSS', 'DEVICE_FUSED', 'DEVICE_NETWORK', 'TELEMATICS', 'MANUAL']),
+    /**
+     * CHI ba nguon cua THIET BI. `TELEMATICS` va `MANUAL` bi tu choi o day — `#297 T3`.
+     *
+     * Duong nay la duong TU KHAI CUA DIEN THOAI (`transport.driver.self.tracking.report`). Neu no
+     * nhan `TELEMATICS`, thi chinh chiec dien thoai dang bi doi chieu tu ghi duoc ban ghi cua
+     * nguon dung de doi chieu no — va "nguon doc lap thu hai" tro thanh mot cau noi suong. Hau qua
+     * cu the: `SOURCE_FALLBACK` se bao "dien thoai im nhung hop GSHT tren xe con bao" trong khi ca
+     * hai ban ghi deu den tu cung mot thiet bi, va mot nguoi truc se tin la con nhin thay chiec xe.
+     *
+     * `MANUAL` cung bi tu choi, vi mot ly do khac: nhap tay la thao tac cua NGUOI VAN HANH tren
+     * mot be mat khac, khong phai mot ban do duoc cua ung dung lai xe.
+     *
+     * Hai nguon do van hop le trong `LocationObservation` — chung chi khong duoc vao bang duong
+     * nay. Nguon telematics vao bang `VehicleTelematicsPort`, noi adapter la thu giai ra xe.
+     */
+    source: z.enum(['DEVICE_GNSS', 'DEVICE_FUSED', 'DEVICE_NETWORK']),
     capturedAt: z.coerce.date(),
     /** `null` (may khach khong noi) KHAC `false` (may khach noi la khong). Giu ba trang thai. */
     mockLocationReported: z.boolean().nullish(),

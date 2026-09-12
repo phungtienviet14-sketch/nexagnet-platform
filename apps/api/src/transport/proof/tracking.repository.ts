@@ -81,6 +81,17 @@ export abstract class TrackingRepository {
   abstract findSession(sessionId: string): Promise<TrackingSession | null>;
   /** Phien `ACTIVE` duy nhat cua mot lai xe, neu co. */
   abstract findActiveSessionForDriver(driverId: string): Promise<TrackingSession | null>;
+  /**
+   * Phien `ACTIVE` cua mot CHIEC XE — truc xe, khong phai truc lai xe (`#297 T1`).
+   *
+   * Ton tai vi su khac nhau giua `NOT_TRACKED` va `LOST` nam tron trong cau hoi *"co ai dang
+   * doi vi tri chiec xe nay khong"*. Khong tra loi duoc cau do thi moi chiec xe im lang deu
+   * phai bao `LOST`, ke ca chiec dang dau bai va khong ai theo doi.
+   *
+   * `vehicleId` do MAY CHU dien tu ban phan cong (`TrackingSession.vehicleId`), nen truc nay tin
+   * duoc y nhu `latestObservationForVehicle`.
+   */
+  abstract findActiveSessionForVehicle(vehicleId: string): Promise<TrackingSession | null>;
   abstract closeSession(
     sessionId: string,
     endedAt: Date,
@@ -112,6 +123,20 @@ export abstract class TrackingRepository {
    * `null` khi chiec xe chua tung co mot phien nao, hoac co phien nhung chua ban dinh vi nao.
    */
   abstract latestObservationForVehicle(vehicleId: string): Promise<LocationObservation | null>;
+  /**
+   * Ban moi nhat cua TUNG NGUON tho cua mot chiec xe — nhieu nhat mot ban moi nguon.
+   *
+   * KHAC `latestObservationForVehicle` o dung mot diem, va diem do la ca ly do ton tai: ham kia
+   * tra ve ban moi nhat KHONG KE nguon, nen mot dien thoai dang bam moi 30 giay se che khuat hoan
+   * toan mot hop GSHT da im ca ngay. Phep cham suc khoe can biet trang thai cua TUNG duong truyen
+   * doc lap, nen no can ban moi nhat cua tung nguon.
+   *
+   * Tang nay KHONG biet gi ve "ho nguon" — viec gop `DEVICE_*` thanh mot ho la nghia NGHIEP VU,
+   * va no nam o `location-health.ts`. O day chi co nguon tho.
+   */
+  abstract latestObservationPerSourceForVehicle(
+    vehicleId: string,
+  ): Promise<readonly LocationObservation[]>;
   /** Doc mot ban dinh vi theo id — chung cu van hanh TRO toi mot ban da ghi, khong tu ghi. */
   abstract findObservationById(observationId: string): Promise<LocationObservation | null>;
   abstract appendObservation(input: AppendObservationInput): Promise<LocationObservation>;
@@ -162,6 +187,13 @@ export class InMemoryTrackingRepository extends TrackingRepository {
   async findActiveSessionForDriver(driverId: string): Promise<TrackingSession | null> {
     for (const session of this.sessions.values()) {
       if (session.driverId === driverId && session.status === 'ACTIVE') return session;
+    }
+    return null;
+  }
+
+  async findActiveSessionForVehicle(vehicleId: string): Promise<TrackingSession | null> {
+    for (const session of this.sessions.values()) {
+      if (session.vehicleId === vehicleId && session.status === 'ACTIVE') return session;
     }
     return null;
   }
@@ -223,6 +255,27 @@ export class InMemoryTrackingRepository extends TrackingRepository {
       }
     }
     return latest;
+  }
+
+  async latestObservationPerSourceForVehicle(
+    vehicleId: string,
+  ): Promise<readonly LocationObservation[]> {
+    const sessionIds = new Set(
+      [...this.sessions.values()]
+        .filter((session) => session.vehicleId === vehicleId)
+        .map((session) => session.id),
+    );
+    if (sessionIds.size === 0) return [];
+
+    const newest = new Map<LocationSource, LocationObservation>();
+    for (const observation of this.observations.values()) {
+      if (!sessionIds.has(observation.sessionId)) continue;
+      const held = newest.get(observation.source);
+      if (held === undefined || observation.receivedAt.getTime() > held.receivedAt.getTime()) {
+        newest.set(observation.source, observation);
+      }
+    }
+    return [...newest.values()];
   }
 
   async findObservationById(observationId: string): Promise<LocationObservation | null> {
