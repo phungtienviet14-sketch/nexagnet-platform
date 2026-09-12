@@ -1539,6 +1539,23 @@ export interface RunMovementSummary {
 export type RunGrouping = 'ONE_ORDER_PER_RUN' | 'MULTI_ORDER_RUN';
 export type RunPlanOutcome = 'NEW_RUN' | 'APPENDED';
 
+/**
+ * CHINH SACH LAP KE HOACH dang ap dung cho khach nay — be mat CHAN DOAN cua `GET
+ * /transport/planning/policy`.
+ *
+ * CO Y HEP HON cau tra loi that. May chu con tra `depot` va `closure`; man hinh dieu xe khong doc
+ * hai truong do, va khai chung o day se keo ca kieu `DepotResolution` (ba nhanh, thuoc Lane L/R)
+ * vao mot tep ma Lane S khong so huu.
+ *
+ * `grouping` KHONG phai de giau mot cai nut. Cong chan that nam o may chu
+ * (`DispatchService.requireMultiOrderRun`), va no van tu choi ke ca khi man hinh nay bi bo qua —
+ * xem `#294 S-OWNER-03`. Truong nay chi de man hinh NOI TRUOC dieu do thay vi bat nguoi dung bam
+ * mot cai nut roi nhan 403.
+ */
+export interface TransportPlanningPolicyView {
+  readonly grouping: RunGrouping;
+}
+
 /** Lan lap ke hoach da gan mot don vao mot vong chay. */
 export interface OrderRunPlan {
   readonly id: string;

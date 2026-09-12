@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DispatchReadiness } from '../asset-compliance/vehicle-availability.js';
 import type { Order, RunLeg, VehicleRun } from '../movement/movement.types.js';
+import { DEFAULT_RUN_GROUPING } from '../planning/planning-policy.js';
+import type { RunGrouping, TransportPlanningPolicy } from '../planning/planning.types.js';
 import { TransportDomainError } from '../transport.errors.js';
 import type { Vehicle } from '../transport.types.js';
 import {
@@ -30,6 +32,27 @@ import type {
 } from './routing/routing.types.js';
 import { TransportRoutingPort } from './routing/transport-routing.port.js';
 import type { ObservationSample } from './vehicle-state-projection.js';
+
+/**
+ * CHINH SACH LAP KE HOACH cho cac bai o tep nay.
+ *
+ * MAC DINH LA `MULTI_ORDER_RUN`, va do la mot lua chon phai doc ky — no NGUOC voi mac dinh cua san
+ * pham (`DEFAULT_RUN_GROUPING = 'ONE_ORDER_PER_RUN'`).
+ *
+ * Ly do: ke tu `#294 S-OWNER-02`, ca be mat de nghi dieu xe CHI ton tai o che do `MULTI_ORDER_RUN`.
+ * Moi bai trong tep nay deu kiem mot tinh chat CUA BANG DE NGHI — xep hang duong bo, hai diem xuat
+ * phat, che toa do, tinh lai luc xac nhan — nen tat ca deu phai chay o che do co bang de nghi.
+ * Dung mac dinh cua san pham o day se lam ca tep do vi mot ly do khong lien quan gi den thu no do.
+ *
+ * Che do `ONE_ORDER_PER_RUN` co bo bai RIENG ("cong che do gom nhom" o cuoi tep), va bo do moi la
+ * cho kiem mac dinh that.
+ */
+const planningPolicy = (grouping: RunGrouping): TransportPlanningPolicy => ({
+  grouping,
+  depots: [],
+  closure: { idleHours: null },
+});
+const multiOrderPlanningPolicy = (): TransportPlanningPolicy => planningPolicy('MULTI_ORDER_RUN');
 
 /**
  * `#277 M14` — bo bai doi khang cua be mat de nghi dieu xe.
@@ -120,6 +143,14 @@ class FakeCoreFacts extends DispatchCoreFacts {
   orders: Order[] = [order()];
   vehicles: Vehicle[] = [];
   legs: DispatchLegFact[] = [];
+  /**
+   * MOI LAN HOI MOT DON, ghi lai.
+   *
+   * Ton tai cho `#294` bai 2/6: o che do `ONE_ORDER_PER_RUN`, cong chinh sach phai chan TRUOC khi
+   * mien cham vao bat ky su that nao. Mot bai chi kiem "co nem loi khong" se van xanh neu ai do
+   * doi cong xuong duoi `requireOpenOrder()` — danh sach nay la thu bat duoc dieu do.
+   */
+  orderReads: string[] = [];
 
   listVehicles(): Promise<readonly Vehicle[]> {
     return Promise.resolve(this.vehicles);
@@ -128,6 +159,7 @@ class FakeCoreFacts extends DispatchCoreFacts {
     return Promise.resolve(this.vehicles.find((entry) => entry.id === vehicleId) ?? null);
   }
   findOrder(orderId: string): Promise<Order | null> {
+    this.orderReads.push(orderId);
     return Promise.resolve(this.orders.find((entry) => entry.id === orderId) ?? null);
   }
   listOpenLegsForVehicle(vehicleId: string): Promise<readonly DispatchLegFact[]> {
@@ -271,12 +303,16 @@ describe('be mat de nghi dieu xe', () => {
   let compliance: FakeComplianceFacts;
   let planner: RecordingPlanner;
 
-  const build = (routing: TransportRoutingPort): DispatchService =>
+  const build = (
+    routing: TransportRoutingPort,
+    planning: TransportPlanningPolicy = multiOrderPlanningPolicy(),
+  ): DispatchService =>
     new DispatchService(
       core,
       routing,
       planner,
       DEFAULT_TRANSPORT_DISPATCH_POLICY,
+      planning,
       location,
       compliance,
       undefined,
@@ -637,12 +673,13 @@ describe('xac nhan cua con nguoi', () => {
   let location: FakeLocationFacts;
   let planner: RecordingPlanner;
 
-  const build = (): DispatchService =>
+  const build = (planning: TransportPlanningPolicy = multiOrderPlanningPolicy()): DispatchService =>
     new DispatchService(
       core,
       new TableRoutingPort(new Map()),
       planner,
       DEFAULT_TRANSPORT_DISPATCH_POLICY,
+      planning,
       location,
       undefined,
       undefined,
@@ -699,6 +736,167 @@ describe('xac nhan cua con nguoi', () => {
         canReadLocationHistory: true,
       }),
     ).rejects.toBeInstanceOf(TransportDomainError);
+    expect(planner.calls).toHaveLength(0);
+  });
+});
+
+/**
+ * CONG CHE DO GOM NHOM — `#294 S1`, `S-OWNER-01`, `S-OWNER-02`, `S-OWNER-03`.
+ *
+ * ===========================================================================
+ * DAY LA BO BAI DOT BIEN CUA CA LANE S
+ *
+ * Xoa mot dong `this.requireMultiOrderRun(orderId)` khoi `DispatchService` thi bo nay phai DO. Do
+ * la ca muc dich cua no: `S-OWNER-03` cam giau cong chan trong React, va cach duy nhat de chung
+ * minh cong nam o tang mien la goi THANG vao tang mien — khong qua HTTP, khong qua man hinh.
+ *
+ * Bai "che do ONE" dung `DEFAULT_RUN_GROUPING` nhap tu `planning-policy.ts` chu khong go tay chuoi
+ * `'ONE_ORDER_PER_RUN'` vao day. Neu ngay nao do ai do doi mac dinh cua san pham, bai nay se doi
+ * theo va noi ra — thay vi tiep tuc xanh trong khi kiem mot hang so khong con la mac dinh nua.
+ */
+describe('cong che do gom nhom', () => {
+  let core: FakeCoreFacts;
+  let location: FakeLocationFacts;
+  let planner: RecordingPlanner;
+
+  const build = (grouping: RunGrouping): DispatchService =>
+    new DispatchService(
+      core,
+      new TableRoutingPort(new Map()),
+      planner,
+      DEFAULT_TRANSPORT_DISPATCH_POLICY,
+      planningPolicy(grouping),
+      location,
+      undefined,
+      undefined,
+      () => NOW,
+    );
+
+  const boss: DispatchCaller = { actor: 'boss', canReadLocationHistory: true };
+
+  beforeEach(() => {
+    core = new FakeCoreFacts();
+    location = new FakeLocationFacts();
+    planner = new RecordingPlanner();
+    core.vehicles = [vehicle({ id: 'a' })];
+    location.samples.set('a', {
+      sessionId: 'ses-a',
+      point: HAI_PHONG,
+      accuracyMetres: 10,
+      source: 'DEVICE_GNSS',
+      receivedAt: NOW,
+    });
+  });
+
+  /** `#294` bai 1 — khach khong khai gi thi giai ra che do khong gom don. */
+  it('khach khong khai gi -> mac dinh la ONE_ORDER_PER_RUN', () => {
+    expect(DEFAULT_RUN_GROUPING).toBe('ONE_ORDER_PER_RUN');
+  });
+
+  /**
+   * `#294` bai 3 — GOI THANG VAO TANG MIEN, khong qua man hinh nao.
+   *
+   * Day la cau tra loi cho `S-OWNER-03`: *"A caller must not be able to bypass the tenant
+   * run-grouping rule by invoking the candidate endpoint directly."*
+   */
+  it('che do ONE: goi thang suggest() van bi tu choi CO MA', async () => {
+    await expect(
+      build(DEFAULT_RUN_GROUPING).suggest('ord-1', EMPTY_DISPATCH_REQUEST, boss),
+    ).rejects.toMatchObject({
+      kind: 'DENIED',
+      reason: 'DISPATCH_MULTI_ORDER_DISABLED',
+    });
+  });
+
+  /**
+   * FAIL-CLOSED DUNG THU TU: cong chinh sach chay TRUOC khi hoi don co that khong.
+   *
+   * Neu hoi don truoc, mot khach che do ONE go bua ma don se phan biet duoc 404 voi 403 — tuc mot
+   * be mat khach khong bat van tra loi duoc cau hoi "don nao co that". Hai ma don duoi day, mot co
+   * that mot khong, phai ra CUNG mot ma tu choi.
+   */
+  it('che do ONE: don khong ton tai cung ra dung ma do, khong ro ri su ton tai cua don', async () => {
+    const service = build('ONE_ORDER_PER_RUN');
+    const real = await service.suggest('ord-1', EMPTY_DISPATCH_REQUEST, boss).catch((e) => e);
+    const fake = await service.suggest('ord-bia', EMPTY_DISPATCH_REQUEST, boss).catch((e) => e);
+    expect(real.reason).toBe('DISPATCH_MULTI_ORDER_DISABLED');
+    expect(fake.reason).toBe(real.reason);
+  });
+
+  /** `#294` bai 5 — va la doi chung am cua bai 3: cung ma do, doi che do thi chay duoc. */
+  it('che do MULTI: suggest() chay va tra ve mot bang de nghi', async () => {
+    const view = await build('MULTI_ORDER_RUN').suggest('ord-1', EMPTY_DISPATCH_REQUEST, boss);
+    expect(view.orderId).toBe('ord-1');
+    expect(view.assignmentCreated).toBe(false);
+  });
+
+  /** `#294` bai 2 + 6 — che do ONE khong cham mot cong nao: khong doc don, khong ghi gi. */
+  it('che do ONE: khong doc su that nao va khong ghi gi', async () => {
+    await build('ONE_ORDER_PER_RUN')
+      .suggest('ord-1', EMPTY_DISPATCH_REQUEST, boss)
+      .catch(() => undefined);
+    expect(core.orderReads).toHaveLength(0);
+    expect(planner.calls).toHaveLength(0);
+  });
+
+  /** `#294` bai 3 — duong GHI cung bi chan, khong chi duong doc. */
+  it('che do ONE: commit() bi tu choi va bo lap ke hoach khong duoc goi', async () => {
+    await expect(
+      build('ONE_ORDER_PER_RUN').commit('ord-1', 'a', EMPTY_DISPATCH_REQUEST, boss),
+    ).rejects.toMatchObject({ reason: 'DISPATCH_MULTI_ORDER_DISABLED' });
+    expect(planner.calls).toHaveLength(0);
+  });
+
+  /**
+   * CONG RIENG CUA `commit()`, va day la bai DUY NHAT chung minh no ton tai.
+   *
+   * `commit()` goi `suggest()` de tinh lai, nen cong cua `suggest()` mot minh cung du de mot lan
+   * xac nhan o che do ONE bi tu choi — tuc bai ngay tren VAN XANH ke ca khi cong rieng cua
+   * `commit()` bi go. Cai phan biet duoc hai truong hop la THU TU: khong co cong rieng, dong
+   * `findVehicle()` chay truoc va mot ma xe khong ton tai se ra `DISPATCH_VEHICLE_NOT_FOUND` —
+   * mot cau tra loi ro ri rang he thong co tra loi cau hoi "xe nay co that khong" cho mot khach
+   * khong bat nghiep vu nay.
+   */
+  it('che do ONE: commit() voi xe KHONG ton tai van ra ma chinh sach, khong phai ma "khong tim thay xe"', async () => {
+    await expect(
+      build('ONE_ORDER_PER_RUN').commit('ord-1', 'xe-khong-co', EMPTY_DISPATCH_REQUEST, boss),
+    ).rejects.toMatchObject({ reason: 'DISPATCH_MULTI_ORDER_DISABLED' });
+    expect(planner.calls).toHaveLength(0);
+  });
+
+  /**
+   * `#294` bai 14 — CHE DO DOI GIUA LUC DE NGHI VA LUC XAC NHAN.
+   *
+   * Mot doi tuong chinh sach DUY NHAT di qua ca hai lan goi, va bi doi o giua. Neu `commit()` tin
+   * vao ket qua cua `suggest()` thay vi doc lai, bai nay xanh mot cach sai — nen no la bai khoa
+   * yeu cau *"reread tenant run-grouping policy"* cua `S5` buoc 2.
+   */
+  it('MULTI luc de nghi, ONE luc xac nhan -> xac nhan bi tu choi', async () => {
+    const policy: { grouping: RunGrouping } & Omit<TransportPlanningPolicy, 'grouping'> = {
+      grouping: 'MULTI_ORDER_RUN',
+      depots: [],
+      closure: { idleHours: null },
+    };
+    const service = new DispatchService(
+      core,
+      new TableRoutingPort(new Map()),
+      planner,
+      DEFAULT_TRANSPORT_DISPATCH_POLICY,
+      policy,
+      location,
+      undefined,
+      undefined,
+      () => NOW,
+    );
+
+    const view = await service.suggest('ord-1', EMPTY_DISPATCH_REQUEST, boss);
+    expect(view.candidates.length).toBeGreaterThan(0);
+
+    policy.grouping = 'ONE_ORDER_PER_RUN';
+
+    await expect(service.commit('ord-1', 'a', EMPTY_DISPATCH_REQUEST, boss)).rejects.toMatchObject({
+      reason: 'DISPATCH_MULTI_ORDER_DISABLED',
+    });
     expect(planner.calls).toHaveLength(0);
   });
 });

@@ -51,6 +51,8 @@ export const TRANSPORT_QUERY_KEYS = {
   settlementBalances: ['transport', 'driver-settlement', 'balances'],
   orders: ['transport', 'orders'],
   runs: ['transport', 'runs'],
+  /** `#294` — che do gom nhom cua khach. Doi khi khach doi cau hinh, tuc gan nhu khong bao gio. */
+  planningPolicy: ['transport', 'planning', 'policy'],
   expenseClaims: ['transport', 'expense-claims'],
   orderCompletion: ['transport', 'order-completion'],
   /** Lane G — MOT khoa cho CA bang: mot lan goi, mot khung nhin. */
@@ -139,6 +141,26 @@ export function useFleetInsight(input: NavigationInput, range: { from?: string; 
     queryKey: ['transport', 'insight', 'fleet', range.from ?? 'auto', range.to ?? 'auto'],
     queryFn: () => transportApi.insight.fleet(range),
     enabled: allowed(input, 'transport-core', 'transport.analytics.read'),
+  });
+}
+
+/**
+ * CHE DO GOM NHOM cua khach — `#294 S-OWNER-02`.
+ *
+ * `useQuery` chu khong `useMutation`, nguoc han voi `useDispatchSuggestions()` ngay ben duoi, va
+ * ly do la cai gia cua moi lan goi: day la mot lan DOC cau hinh, khong cham nha cung cap dinh
+ * tuyen nao va khong ton mot dong nao. No chay khi mo man hinh, va no PHAI chay truoc — man hinh
+ * can biet co nen moi nguoi dung bam "Tim xe" hay khong.
+ *
+ * Ma quyen la `transport.run.read` vi do dung la ma ma route `GET /transport/planning/policy` da
+ * doi tu `#276`. KHONG che ra mot ma moi cho cung mot su that: hai ma cho mot cong se lech nhau
+ * dung vao ngay ai do doi bang phan quyen.
+ */
+export function useTransportPlanningPolicy(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.planningPolicy,
+    queryFn: () => transportApi.planning.policy(),
+    enabled: allowed(input, 'transport-core', 'transport.run.read'),
   });
 }
 

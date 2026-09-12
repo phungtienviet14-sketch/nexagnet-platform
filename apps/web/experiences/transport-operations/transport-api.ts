@@ -47,6 +47,7 @@ import type {
   RunLeg,
   RunLegKind,
   TransportOrder,
+  TransportPlanningPolicyView,
   VehicleRun,
   VehicleRunDetail,
   PartnerPosition,
@@ -1125,7 +1126,12 @@ export const transportApi = {
    * Goi tren mot vong chay chua du dieu kien tra `closed: false` kem ly do — khong phai mot loi.
    */
   planning: {
-    policy: (): Promise<unknown> => get('/transport/planning/policy'),
+    /**
+     * `Promise<unknown>` cho toi `#294`: khong man hinh nao doc ket qua nay, nen khong ai can mot
+     * kieu. Man hinh dieu xe la nguoi doc dau tien — no can biet khach co o che do `MULTI_ORDER_RUN`
+     * khong de noi truoc, thay vi de nguoi dung bam "Tim xe" roi nhan 403.
+     */
+    policy: (): Promise<TransportPlanningPolicyView> => get('/transport/planning/policy'),
     plans: (orderId: string): Promise<readonly OrderRunPlan[]> =>
       get(`/transport/planning/orders/${encodeURIComponent(orderId)}/plans`),
     /** KHONG ghi mot hang nao. Goi bao nhieu lan cung duoc. */
