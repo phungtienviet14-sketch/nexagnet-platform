@@ -954,27 +954,37 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "dispatch.candidate_filter|*": {
       "functionName": "DispatchService.suggest",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 226
+      "line": 293
     },
     "dispatch.commit|*": {
       "functionName": "DispatchService.commit",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 335
+      "line": 413
     },
     "dispatch.commit|COMMIT_REVALIDATION_FAILED": {
       "functionName": "DispatchService.commit",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 316
+      "line": 394
     },
     "dispatch.pickup_resolution|*": {
       "functionName": "DispatchService.resolvePickup",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 393
+      "line": 471
     },
     "dispatch.route_estimate|*": {
       "functionName": "DispatchService.routeGroupToPickup",
       "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
-      "line": 683
+      "line": 761
+    },
+    "dispatch.run_grouping|RUN_GROUPING_MULTI_ORDER_RUN": {
+      "functionName": "DispatchService.requireMultiOrderRun",
+      "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
+      "line": 235
+    },
+    "dispatch.run_grouping|RUN_GROUPING_ONE_ORDER_PER_RUN": {
+      "functionName": "DispatchService.requireMultiOrderRun",
+      "filePath": "apps/api/src/transport/dispatch/dispatch.service.ts",
+      "line": 245
     },
     "driver.self_expense_scope|*": {
       "functionName": "CostingReadService.selfTripExpenseEvidence",

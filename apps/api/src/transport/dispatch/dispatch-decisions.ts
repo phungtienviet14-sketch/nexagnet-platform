@@ -88,6 +88,36 @@ export const DISPATCH_ROUTE_ESTIMATE_REASONS = [
 export type DispatchRouteEstimateReason = (typeof DISPATCH_ROUTE_ESTIMATE_REASONS)[number];
 
 /* ------------------------------------------------------------------ *
+ * dispatch.run_grouping -- khach nay CO bai toan dieu xe nhieu don khong
+ * ------------------------------------------------------------------ */
+/**
+ * CONG DAU TIEN cua ca mien, va la cong DUY NHAT khong noi gi ve nhung chiec xe.
+ *
+ * `#294 S-OWNER-02` chot rang bang de nghi dieu xe la mot TOI UU TUY CHON, khong phai hanh vi mac
+ * dinh: no chi ton tai khi khach khai `transportPlanning.runGrouping = MULTI_ORDER_RUN`. O che do
+ * mac dinh `ONE_ORDER_PER_RUN`, moi don di mot vong chay rieng, nen cau hoi *"nen noi don nay vao
+ * chiec xe nao"* KHONG CO THAT — va mot he thong tra loi mot cau hoi khong co that la mot he thong
+ * moi nguoi dung lam sai.
+ *
+ * Hai ma chu khong phai mot `boolean`: nguoi doc trace phai phan biet duoc *"khach nay tat tinh
+ * nang"* voi *"khach nay bat, va day la ket qua"*. `#294 S-OWNER-03` doi dung dieu do khi cam giau
+ * cong chan trong React — mot cai nut bien mat khong de lai dau vet nao, mot ma quyet dinh thi co.
+ */
+export const DISPATCH_RUN_GROUPING_REASONS = [
+  /** Khach khai `MULTI_ORDER_RUN`. Bang de nghi duoc phep tinh — va VAN chi la de nghi. */
+  'RUN_GROUPING_MULTI_ORDER_RUN',
+  /**
+   * Khach o che do `ONE_ORDER_PER_RUN` — ke ca khi do la MAC DINH vi khach khong khai gi.
+   *
+   * Khong tach "khong khai" khoi "khai ONE" thanh hai ma: ve mat nghiep vu chung la MOT cau tra
+   * loi ("khach nay khong gom don"), va `planning-policy.ts` da giai hai truong hop do ve cung mot
+   * gia tri tu truoc khi mien nay nhin thay no.
+   */
+  'RUN_GROUPING_ONE_ORDER_PER_RUN',
+] as const;
+export type DispatchRunGroupingReason = (typeof DISPATCH_RUN_GROUPING_REASONS)[number];
+
+/* ------------------------------------------------------------------ *
  * dispatch.commit -- BOSS bam xac nhan; day la cho DUY NHAT co lan ghi
  * ------------------------------------------------------------------ */
 export const DISPATCH_COMMIT_REASONS = [
@@ -108,11 +138,19 @@ export type TransportDispatchDecisionReason =
   | DispatchPickupResolutionReason
   | DispatchCandidateFilterReason
   | DispatchRouteEstimateReason
+  | DispatchRunGroupingReason
   | DispatchCommitReason;
 
 export const TRANSPORT_DISPATCH_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-dispatch',
   points: [
+    /*
+     * DAT DAU TIEN vi no CHAY dau tien: neu khach khong o che do `MULTI_ORDER_RUN` thi khong mot
+     * diem quyet dinh nao ben duoi duoc phat ra ca — khong co diem lay hang nao duoc giai, khong
+     * chiec xe nao bi loai, khong mot lan goi dinh tuyen nao. Mot trace cua che do ONE la mot
+     * trace CHI co dong nay, va do la cach doc nhanh nhat de biet vi sao bang de nghi trong rong.
+     */
+    'dispatch.run_grouping',
     'dispatch.pickup_resolution',
     'dispatch.candidate_filter',
     'dispatch.route_estimate',
@@ -139,6 +177,9 @@ export const TRANSPORT_DISPATCH_DECISIONS = defineDecisionVocabulary({
     ROUTE_PROVIDER_UNAVAILABLE: 'Nha cung cap dinh tuyen khong tra loi',
     ROUTE_PROVIDER_RATE_LIMITED: 'Nha cung cap dinh tuyen dang chan vi vuot han muc',
     ROUTE_REQUEST_BOUND_EXCEEDED: 'So diem yeu cau vuot tran ma tran cua chinh sach',
+    RUN_GROUPING_MULTI_ORDER_RUN: 'Khach o che do gom nhieu don mot vong chay — duoc phep de nghi',
+    RUN_GROUPING_ONE_ORDER_PER_RUN:
+      'Khach o che do moi don mot vong chay — khong co bai toan de nghi dieu xe',
     COMMIT_PLANNED: 'Da ghi ke hoach: don nam tren vong chay cua chiec xe duoc chon',
     COMMIT_ALREADY_PLANNED_ON_SAME_VEHICLE: 'Don da nam tren dung chiec xe do — khong ghi them',
     COMMIT_ORDER_ALREADY_ON_OTHER_VEHICLE: 'Don da duoc gan cho mot chiec xe khac',

@@ -54,5 +54,22 @@ export const TRANSPORT_DISPATCH_ERROR_REASONS = [
   'DISPATCH_ROUTING_UNAVAILABLE',
   /** So diem yeu cau vuot tran ma tri cua chinh sach — chan tren chi phi, xem `M12`. */
   'DISPATCH_MATRIX_BOUND_EXCEEDED',
+  /**
+   * KHACH NAY KHONG O CHE DO GOM DON, nen ca be mat de nghi dieu xe khong ap dung.
+   *
+   * `#294 S-OWNER-02`: bang de nghi la mot toi uu CHI bat khi `transportPlanning.runGrouping =
+   * MULTI_ORDER_RUN`. O che do mac dinh `ONE_ORDER_PER_RUN` thi moi don di mot vong chay rieng, va
+   * cau hoi *"nen noi don nay vao chiec xe nao"* khong ton tai.
+   *
+   * `DENIED` (403) chu khong phai `NOT_FOUND` (404): hai duong nay CO THAT va van duoc dinh tuyen —
+   * cai thieu la quyen cua KHACH doi voi nghiep vu do. Tra 404 se noi rang he thong nay khong co
+   * tinh nang dieu xe, va do la mot cau sai: no co, khach nay khong bat.
+   *
+   * `DENIED` cung KHONG phai mot phan quyen theo vai: mot ADMIN day du quyen van nhan dung ma nay
+   * o mot khach `ONE_ORDER_PER_RUN`. Truong `reason` la thu phan biet hai loai tu choi do — mot
+   * man hinh doc `reason` se biet nen noi "ban khong co quyen" hay "khach nay khong dung tinh nang
+   * nay", thay vi doan tu con so 403.
+   */
+  'DISPATCH_MULTI_ORDER_DISABLED',
 ] as const;
 export type TransportDispatchErrorReason = (typeof TRANSPORT_DISPATCH_ERROR_REASONS)[number];
