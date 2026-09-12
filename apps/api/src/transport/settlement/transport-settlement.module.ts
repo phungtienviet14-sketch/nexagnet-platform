@@ -96,6 +96,11 @@ import { SettlementService } from './settlement.service.js';
     SettlementService,
     SettlementReadService,
   ],
-  exports: [SettlementService, SettlementReadService, SettlementRepository],
+  exports: [
+    SettlementService,
+    SettlementReadService,
+    SettlementRepository,
+    SettlementOrderCompletionGate,
+  ],
 })
 export class TransportSettlementModule {}

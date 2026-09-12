@@ -28,7 +28,32 @@ function tenantDirForRoot(): string {
 
 const repoRoot = resolve(dirname(tenantDirForRoot()), '..');
 
-const SKIP_DIRS = new Set(['node_modules', '.next', '.git', 'dist', 'coverage', 'test-results']);
+// `.claude` nam trong danh sach nay vi mot ly do KHAC voi cac ten con lai.
+//
+// Cac ten kia la RAC BUILD. `.claude` thi khong: `claude --worktree` tao cay lam viec cua nhanh
+// khac ngay tai `<repo>/.claude/worktrees/<ten>/`. Moi cay do la MOT BAN CHECKOUT DAY DU cua repo
+// — ke ca `tenants/` va `apps/web/e2e/fixtures/` cua NO. Phep quet duoi day la `readdirSync`
+// thuan, khong hoi git, nen no di thang vao day va doi goi khach cua nhanh KHAC phai qua schema
+// cua nhanh NAY.
+//
+// Hau qua da xay ra that: mot may co 41 worktree lam `pnpm test` do 26 bai, tat ca deu la
+// `.claude/worktrees/*/tenants/transport-preview` va `.../e2e/fixtures/tenant-transport`, voi
+// loi kieu "transport-settlement yeu cau capability transport-acceptance". Khong mot bai nao
+// trong so do noi ve cay lam viec hien tai. CI thi luon xanh (checkout cua CI khong co worktree),
+// nen cai gia phai tra roi het len nguoi chay test cuc bo — dung luc ho sap push.
+//
+// Bo qua `.claude` khong lam mat do phu: khong co `tenant.json` nao song trong `.claude/` ngoai
+// cac worktree. Moi goi that nam o `tenants/`, `packages/tenant/src/__tests__/fixtures/` va
+// `apps/web/e2e/fixtures/`.
+const SKIP_DIRS = new Set([
+  'node_modules',
+  '.next',
+  '.git',
+  '.claude',
+  'dist',
+  'coverage',
+  'test-results',
+]);
 
 function findTenantJson(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

@@ -74,6 +74,12 @@ export const TRANSPORT_ACTIONS = [
    * nhieu"; chuoi chung tu noi "ai da sua con so nay, luc nao, vi sao". Do la mot quyen khac.
    */
   'transport.settlement.document.read',
+  'transport.customer_reconciliation.read',
+  'transport.customer_reconciliation.confirm',
+  'transport.customer_payment.read',
+  'transport.customer_payment.record',
+  'transport.customer_payment.allocate',
+  'transport.customer_payment.correct',
   /* --- `R8` CHI SO VAN HANH (Issue #237) — den cung `transport-costing` --- */
   /**
    * BAO CAO CHI SO VAN HANH — km co hang/rong, bien truc tiep theo don va theo ca vong chay. KHONG

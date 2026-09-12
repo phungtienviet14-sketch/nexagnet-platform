@@ -9,6 +9,7 @@ import { SettlementOrderCompletionGate } from './settlement-order-completion.por
 import { FuelSettlementSource, SettlementCoreFacts } from './settlement.ports.js';
 import type { FuelHandoffFacts, SettlementTripFacts } from './settlement.ports.js';
 import { SettlementService } from './settlement.service.js';
+import { settlementDocumentFingerprint } from './settlement-documents.js';
 
 /**
  * CG-020 — CONG DIEU KIEN DOI SOAT O GRAIN DON (`#275` K5).
@@ -85,6 +86,11 @@ class FakeGate extends SettlementOrderCompletionGate {
     this.calls += 1;
     return this.verdict;
   }
+
+  async eligibilityForOrder(): Promise<OrderCompletionEligibility> {
+    this.calls += 1;
+    return this.verdict;
+  }
 }
 
 const blocked = (
@@ -105,6 +111,31 @@ const approved: OrderCompletionEligibility = {
   acceptanceId: 'acc-1',
 };
 
+const seedLegacyCustomerReceivable = (repo: InMemorySettlementRepository) => {
+  const identity = {
+    direction: 'RECEIVABLE' as const,
+    flow: 'CUSTOMER_FREIGHT' as const,
+    counterpartyKind: 'CUSTOMER' as const,
+    counterpartyId: 'khach-1',
+    kind: 'ORIGINAL' as const,
+    signedAmount: 5_000_000,
+    currencyCode: 'VND',
+    businessDate: '2026-09-08' as BusinessDate,
+    dueDate: null,
+    tripId: TRIP,
+    adjustsId: null,
+  };
+  return repo.recogniseDocument({
+    ...identity,
+    sourceContext: 'TRIP_RECONCILED',
+    sourceId: TRIP,
+    sourceFingerprint: settlementDocumentFingerprint(identity),
+    invoiceRef: null,
+    note: null,
+    recordedBy: 'ke-toan-cu',
+  });
+};
+
 describe('Cong ket thuc don chan cong no khach — CG-020', () => {
   let repo: InMemorySettlementRepository;
   let gate: FakeGate;
@@ -118,12 +149,12 @@ describe('Cong ket thuc don chan cong no khach — CG-020', () => {
 
   beforeEach(() => build(approved));
 
-  it('FULFILLED + APPROVED — duong DUY NHAT cho mot viec moi di vao ky', async () => {
-    const outcome = await service.recogniseCustomerReceivable(TRIP, 'ke-toan');
+  it('FULFILLED + APPROVED — chi CHO DOI SOAT, khong tao cong no tu trip', async () => {
+    await expect(service.recogniseCustomerReceivable(TRIP, 'ke-toan')).rejects.toMatchObject({
+      reason: 'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
+    });
 
-    expect(outcome.replayed).toBe(false);
-    expect(outcome.document.sourceContext).toBe('TRIP_RECONCILED');
-    expect(outcome.document.signedAmount).toBe(5_000_000);
+    expect(await repo.listDocuments({})).toEqual([]);
   });
 
   it.each([
@@ -175,14 +206,15 @@ describe('Cong ket thuc don chan cong no khach — CG-020', () => {
     expect(await repo.listDocuments({})).toEqual([]);
   });
 
-  it('mot don da ket thuc chi vao dong kinh te DUNG MOT LAN', async () => {
-    const first = await service.recogniseCustomerReceivable(TRIP, 'ke-toan');
-    const second = await service.recogniseCustomerReceivable(TRIP, 'ke-toan');
+  it('goi lai duong trip khong the bien Order completion thanh official AR', async () => {
+    await expect(service.recogniseCustomerReceivable(TRIP, 'ke-toan')).rejects.toMatchObject({
+      reason: 'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
+    });
+    await expect(service.recogniseCustomerReceivable(TRIP, 'ke-toan')).rejects.toMatchObject({
+      reason: 'SETTLEMENT_CUSTOMER_RECONCILIATION_REQUIRED',
+    });
 
-    expect(first.replayed).toBe(false);
-    expect(second.replayed).toBe(true);
-    expect(second.document.id).toBe(first.document.id);
-    expect(await repo.listDocuments({})).toHaveLength(1);
+    expect(await repo.listDocuments({})).toEqual([]);
   });
 
   /**
@@ -226,8 +258,7 @@ describe('Tuong thich lich su — CG-021', () => {
     const core = new FakeCore(tripFacts());
 
     // Ghi truoc bang mot dich vu co cong LUON CHO QUA — mo phong du lieu co san tren `main`.
-    const legacy = new SettlementService(repo, core, new FakeFuel(), new FakeGate(approved));
-    const before = await legacy.recogniseCustomerReceivable(TRIP, 'ke-toan-cu');
+    const before = await seedLegacyCustomerReceivable(repo);
 
     // Bay gio cong da bat, va ho so ket thuc dang PENDING.
     const gate = new FakeGate(blocked('PENDING'));
@@ -246,8 +277,7 @@ describe('Tuong thich lich su — CG-021', () => {
     const repo = new InMemorySettlementRepository();
     const core = new FakeCore(tripFacts());
 
-    const legacy = new SettlementService(repo, core, new FakeFuel(), new FakeGate(approved));
-    const before = await legacy.recogniseCustomerReceivable(TRIP, 'ke-toan-cu');
+    const before = await seedLegacyCustomerReceivable(repo);
 
     const gate = new FakeGate({ kind: 'NO_ORDER' });
     const gated = new SettlementService(repo, core, new FakeFuel(), gate);

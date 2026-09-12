@@ -53,6 +53,8 @@ export const SETTLEMENT_SOURCE_CONTEXTS = [
   'TRIP_COMMISSION',
   /** Ban giao cua `TX-04` -> cong no cay xang. `sourceId` = id BAN SUA DOI cua ban giao. */
   'FUEL_SETTLEMENT_HANDOFF',
+  /** Lane Q: A xac nhan doi soat tung Order/batch -> cong no khach chinh thuc. */
+  'CUSTOMER_RECONCILIATION',
   /** Ke toan ghi tay mot dieu chinh. `sourceId` = khoa do nguoi nhap dat. */
   'MANUAL_ADJUSTMENT',
 ] as const;

@@ -35,6 +35,7 @@ import type { TollErrorReason } from './toll/toll-errors.js';
 import type { TransportDispatchDecisionReason } from './dispatch/dispatch-decisions.js';
 import type { TransportDispatchErrorReason } from './dispatch/dispatch.errors.js';
 import type { TransportDecisionReason } from './transport-decisions.js';
+import type { CustomerArErrorReason } from './customer-ar/customer-ar-errors.js';
 
 /**
  * Ly do TU CHOI thuoc tang KIEM DAU VAO — khac han ma quyet dinh nghiep vu.
@@ -142,7 +143,8 @@ export type TransportErrorReason =
   | TransportCommercialAcceptanceDecisionReason
   | TransportCommercialAcceptanceErrorReason
   | TransportDispatchDecisionReason
-  | TransportDispatchErrorReason;
+  | TransportDispatchErrorReason
+  | CustomerArErrorReason;
 
 /**
  * Loai loi quyet dinh MA HTTP o controller. Nam o day chu khong o controller vi cung mot tinh

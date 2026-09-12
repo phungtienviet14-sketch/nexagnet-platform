@@ -37,6 +37,7 @@ import type { OrderCompletionEligibility } from '../acceptance/acceptance.types.
  */
 export abstract class SettlementOrderCompletionGate {
   abstract eligibilityForTrip(tripId: string): Promise<OrderCompletionEligibility>;
+  abstract eligibilityForOrder(orderId: string): Promise<OrderCompletionEligibility>;
 }
 
 @Injectable()
@@ -47,5 +48,9 @@ export class SettlementOrderCompletionGateAdapter extends SettlementOrderComplet
 
   eligibilityForTrip(tripId: string): Promise<OrderCompletionEligibility> {
     return this.acceptance.eligibilityForTrip(tripId);
+  }
+
+  eligibilityForOrder(orderId: string): Promise<OrderCompletionEligibility> {
+    return this.acceptance.eligibilityForOrder(orderId);
   }
 }

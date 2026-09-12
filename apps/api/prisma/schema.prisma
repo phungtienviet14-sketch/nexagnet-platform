@@ -978,11 +978,15 @@ model TransportCustomer {
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
 
-  trips  TransportTrip[]
+  trips                 TransportTrip[]
   /// R1-B: nghia vu thuong mai cua khach nay.
-  orders TransportOrder[]
+  orders                TransportOrder[]
   /// `TX-05` — dieu khoan thanh toan + han muc tin dung. Tuy chon: khach chua khai thi khong co hang.
-  terms  TransportCustomerTerms?
+  terms                 TransportCustomerTerms?
+  /// Lane Q: doi soat/thu tien phai thu khach. Payment la su kien rieng, khong phai boolean tren don.
+  reconciliationBatches TransportCustomerReconciliationBatch[]
+  reconciliations       TransportCustomerReconciliation[]
+  payments              TransportCustomerPayment[]
 
   @@index([status])
 }
@@ -2755,8 +2759,10 @@ model TransportSettlementDocument {
   recordedBy        String
   createdAt         DateTime                            @default(now())
 
-  allocations TransportSettlementAllocation[]
-  commission  TransportCommissionCalculation?
+  allocations                TransportSettlementAllocation[]
+  commission                 TransportCommissionCalculation?
+  customerReconciliation     TransportCustomerReconciliation?
+  customerPaymentAllocations TransportCustomerPaymentAllocation[]
 
   @@unique([sourceContext, sourceId])
   @@index([direction, flow, counterpartyId])
@@ -2785,6 +2791,152 @@ model TransportSettlementAllocation {
   createdAt     DateTime                    @default(now())
 
   @@unique([sourceContext, sourceId])
+  @@index([documentId])
+}
+
+enum TransportCustomerReconciliationBatchStatus {
+  DRAFT
+  CLOSED
+  CANCELLED
+}
+
+enum TransportCustomerReconciliationLineState {
+  PENDING
+  CONFIRMED
+  DEFERRED
+}
+
+enum TransportCustomerPaymentAllocationKind {
+  APPLY
+  RELEASE
+}
+
+/// NHOM DOI SOAT voi ben A. Batch chi la tien ich quy trinh; Order van la grain su that.
+model TransportCustomerReconciliationBatch {
+  id                String                                     @id @default(cuid())
+  customerId        String
+  customer          TransportCustomer                          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  currencyCode      String                                     @default("VND") @db.VarChar(3)
+  status            TransportCustomerReconciliationBatchStatus @default(DRAFT)
+  periodStart       String?                                    @db.VarChar(10)
+  periodEnd         String?                                    @db.VarChar(10)
+  reference         String?
+  note              String?
+  sourceContext     String                                     @db.VarChar(60)
+  sourceId          String                                     @db.VarChar(160)
+  sourceFingerprint String
+  createdBy         String
+  createdAt         DateTime                                   @default(now()) @db.Timestamptz(6)
+  closedBy          String?
+  closedAt          DateTime?                                  @db.Timestamptz(6)
+
+  lines TransportCustomerReconciliationBatchLine[]
+
+  @@unique([sourceContext, sourceId])
+  @@index([customerId, status])
+  @@index([periodStart, periodEnd])
+}
+
+/// Dong cong viec trong batch. Dong PENDING duoc giai quyet dung mot lan thanh CONFIRMED/DEFERRED.
+model TransportCustomerReconciliationBatchLine {
+  id                    String                                   @id @default(cuid())
+  batchId               String
+  batch                 TransportCustomerReconciliationBatch     @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  orderId               String
+  order                 TransportOrder                           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderCode             String
+  proposedAmount        BigInt
+  currencyCode          String                                   @default("VND") @db.VarChar(3)
+  state                 TransportCustomerReconciliationLineState @default(PENDING)
+  resolutionReason      String?
+  resolvedBy            String?
+  resolvedAt            DateTime?                                @db.Timestamptz(6)
+  resolutionSourceId    String?                                  @db.VarChar(160)
+  resolutionFingerprint String?
+  reconciliation        TransportCustomerReconciliation?
+  createdAt             DateTime                                 @default(now()) @db.Timestamptz(6)
+
+  @@unique([batchId, orderId])
+  @@index([batchId, state])
+  @@index([orderId])
+}
+
+/// Ket qua A xac nhan o grain Order. Bat bien; sua tien bang settlement adjustment/reversal hien co.
+model TransportCustomerReconciliation {
+  id                    String                                    @id @default(cuid())
+  orderId               String                                    @unique
+  order                 TransportOrder                            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  customerId            String
+  customer              TransportCustomer                         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  batchLineId           String?                                   @unique
+  batchLine             TransportCustomerReconciliationBatchLine? @relation(fields: [batchLineId], references: [id], onDelete: Restrict)
+  proposedAmount        BigInt
+  confirmedAmount       BigInt
+  differenceAmount      BigInt
+  currencyCode          String                                    @default("VND") @db.VarChar(3)
+  businessDate          String                                    @db.VarChar(10)
+  dueDate               String?                                   @db.VarChar(10)
+  differenceReason      String?
+  confirmationReference String?
+  evidenceRefs          String[]                                  @default([])
+  sourceContext         String                                    @db.VarChar(60)
+  sourceId              String                                    @db.VarChar(160)
+  sourceFingerprint     String
+  confirmedBy           String
+  confirmedAt           DateTime                                  @default(now()) @db.Timestamptz(6)
+  settlementDocumentId  String                                    @unique
+  settlementDocument    TransportSettlementDocument               @relation(fields: [settlementDocumentId], references: [id], onDelete: Restrict)
+  createdAt             DateTime                                  @default(now()) @db.Timestamptz(6)
+
+  @@unique([sourceContext, sourceId])
+  @@index([customerId, businessDate])
+}
+
+/// TIEN A CHUYEN cho B. Co the den truoc doi soat, nen khong tro thang vao Order/chung tu.
+model TransportCustomerPayment {
+  id                String            @id @default(cuid())
+  customerId        String
+  customer          TransportCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  amount            BigInt
+  currencyCode      String            @default("VND") @db.VarChar(3)
+  receivedAt        DateTime          @db.Timestamptz(6)
+  businessDate      String            @db.VarChar(10)
+  externalRef       String?
+  note              String?
+  recordedBy        String
+  sourceContext     String            @db.VarChar(60)
+  sourceId          String            @db.VarChar(160)
+  sourceFingerprint String
+  createdAt         DateTime          @default(now()) @db.Timestamptz(6)
+
+  allocations TransportCustomerPaymentAllocation[]
+
+  @@unique([sourceContext, sourceId])
+  @@index([customerId, businessDate])
+}
+
+/// Phan bo many-to-many giua payment va cong no da confirm.
+model TransportCustomerPaymentAllocation {
+  id                String                                 @id @default(cuid())
+  paymentId         String
+  payment           TransportCustomerPayment               @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  documentId        String
+  document          TransportSettlementDocument            @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  kind              TransportCustomerPaymentAllocationKind @default(APPLY)
+  amount            BigInt
+  businessDate      String                                 @db.VarChar(10)
+  reversesId        String?                                @unique
+  reverses          TransportCustomerPaymentAllocation?    @relation("TransportCustomerPaymentAllocationRelease", fields: [reversesId], references: [id], onDelete: Restrict)
+  releasedBy        TransportCustomerPaymentAllocation?    @relation("TransportCustomerPaymentAllocationRelease")
+  sourceContext     String                                 @db.VarChar(60)
+  sourceId          String                                 @db.VarChar(160)
+  sourceFingerprint String
+  note              String?
+  recordedBy        String
+  createdAt         DateTime                               @default(now()) @db.Timestamptz(6)
+
+  @@unique([sourceContext, sourceId])
+  @@index([paymentId])
   @@index([documentId])
 }
 
@@ -3402,9 +3554,9 @@ model TransportCounterparty {
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
 
-  links TransportCounterpartyLink[]
+  links       TransportCounterpartyLink[]
   /// `#267` H1: cac dia diem van hanh vat ly cua phap nhan nay.
-  sites TransportCounterpartySite[]
+  sites       TransportCounterpartySite[]
   /// Lane I (#268): cac ho so nghiem thu ghi nhan phap nhan nay la ben A.
   acceptances TransportCommercialAcceptance[]
 
@@ -3431,7 +3583,6 @@ model TransportCounterpartyLink {
   @@id([kind, subjectId])
   @@index([counterpartyId])
 }
-
 
 // ===================================================================
 // TX-09 DIA DIEM VAN HANH — mot phap nhan, nhieu cho lam viec (Lane H, Issue #267)
@@ -3512,7 +3663,6 @@ model TransportCounterpartySite {
   operationalDocuments TransportOperationalDocument[]
 }
 
-
 // ===================================================================
 // TX-10 NHAN VIEC TAI DIA DIEM A — cham xac nhan cua lai xe (Lane H, Issue #267 H3/H4)
 // ===================================================================
@@ -3584,32 +3734,32 @@ enum TransportSiteIntakeLocationTrust {
 /// nham duoc sua bang cach HUY vong chay (`cancelRun`, co ly do bang chu), khong bang cach doi
 /// hang nay.
 model TransportRunSiteIntake {
-  id             String                            @id @default(cuid())
+  id             String                           @id @default(cuid())
   /// MOT vong chay co NHIEU NHAT mot lan nhan viec. Day la bat bien chan trung o tang luu tru.
-  runId          String                            @unique
-  run            TransportVehicleRun               @relation(fields: [runId], references: [id], onDelete: Restrict)
+  runId          String                           @unique
+  run            TransportVehicleRun              @relation(fields: [runId], references: [id], onDelete: Restrict)
   /// Chang dau tien, tao cung luc. `#243` F1 gan moc cong/boc hang vao CHANG, nen khong co chang
   /// thi lai xe khong ghi duoc mot moc nao — tuc man hinh ke tiep khong co gi de bam.
-  legId          String                            @unique
-  leg            TransportRunLeg                   @relation(fields: [legId], references: [id], onDelete: Restrict)
+  legId          String                           @unique
+  leg            TransportRunLeg                  @relation(fields: [legId], references: [id], onDelete: Restrict)
   /// Dia diem A da duoc xac nhan. `Restrict`: mot kho da tung sinh ra vong chay thi khong bo duoc.
   siteId         String
-  site           TransportCounterpartySite         @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  site           TransportCounterpartySite        @relation(fields: [siteId], references: [id], onDelete: Restrict)
   driverId       String
-  driver         TransportDriver                   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  driver         TransportDriver                  @relation(fields: [driverId], references: [id], onDelete: Restrict)
   /// `authUserId` cua chinh cham xac nhan — khong tu than yeu cau.
   confirmedBy    String
   locationTrust  TransportSiteIntakeLocationTrust
   /// MOT ban dinh vi phuc vu NHIEU NHAT mot lan nhan viec — cung khuon `TransportRunCheckpoint`.
-  observationId  String?                           @unique
-  observation    TransportLocationObservation?     @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  observationId  String?                          @unique
+  observation    TransportLocationObservation?    @relation(fields: [observationId], references: [id], onDelete: Restrict)
   /// Khoang cach tu vi tri de nghi toi tam hang rao, met, lam tron. NULL khi khong do duoc.
   distanceMetres Int?
   /// Khoa chong lap do may khach sinh.
   clientEventId  String
-  confirmedAt    DateTime                          @default(now())
-  businessDate   String                            @db.VarChar(10)
-  createdAt      DateTime                          @default(now())
+  confirmedAt    DateTime                         @default(now())
+  businessDate   String                           @db.VarChar(10)
+  createdAt      DateTime                         @default(now())
 
   @@unique([driverId, clientEventId], map: "TransportRunSiteIntake_driver_event_key")
   @@index([siteId, businessDate])
@@ -3880,14 +4030,17 @@ model TransportOrder {
   cancelledAt        DateTime?
   cancellationReason String?
 
-  legs       TransportRunLeg[]
+  legs                     TransportRunLeg[]
   /// #276 L2/L3: lan lap ke hoach da gan don nay vao mot vong chay. TOI DA MOT ban con hieu luc —
   /// xem unique mot phan `TransportOrderRunPlan_activeOrder_key` trong SQL tho.
-  runPlans   TransportOrderRunPlan[]
+  runPlans                 TransportOrderRunPlan[]
   /// `#275` Lane K: ho so KET THUC THUONG MAI cua don nay. TOI DA MOT — xem `orderId @unique`.
-  completion TransportCommercialAcceptance?
+  completion               TransportCommercialAcceptance?
   /// `#275` K5: chuyen v1 da chieu ra don nay, neu co. TOI DA MOT.
-  tripLink   TransportTripOrderLink?
+  tripLink                 TransportTripOrderLink?
+  /// Lane Q: ket qua A xac nhan duy nhat; sua tien qua settlement adjustment/reversal hien co.
+  customerReconciliation   TransportCustomerReconciliation?
+  reconciliationBatchLines TransportCustomerReconciliationBatchLine[]
 
   @@index([status])
   @@index([businessDate])
@@ -3974,23 +4127,23 @@ model TransportRunAssignment {
 /// `distanceKm` nullable theo dung `GD-14` (km nhap tay). Doc gia phan tich KHONG duoc coi NULL la
 /// 0: `summariseRunDistance()` dem rieng so chang thieu km va tra `complete = false`.
 model TransportRunLeg {
-  id               String                @id @default(cuid())
-  runId            String
-  run              TransportVehicleRun   @relation(fields: [runId], references: [id])
+  id                String                @id @default(cuid())
+  runId             String
+  run               TransportVehicleRun   @relation(fields: [runId], references: [id])
   /// Thu tu chang trong vong chay, bat dau tu 1. Duy nhat trong mot vong chay.
-  sequence         Int
-  kind             TransportRunLegKind
-  status           TransportRunLegStatus @default(PLANNED)
-  orderId          String?
-  order            TransportOrder?       @relation(fields: [orderId], references: [id])
-  originLabel      String
-  destinationLabel String
-  businessDate     String                @db.VarChar(10)
+  sequence          Int
+  kind              TransportRunLegKind
+  status            TransportRunLegStatus @default(PLANNED)
+  orderId           String?
+  order             TransportOrder?       @relation(fields: [orderId], references: [id])
+  originLabel       String
+  destinationLabel  String
+  businessDate      String                @db.VarChar(10)
   /// `GD-14` — nhap tay, nullable. NULL nghia la CHUA BIET, khong phai 0.
   ///
   /// Lane L (#276 L6) chot them: cot nay la QUANG DUONG DA GHI NHAN (nguon tay/odo/GPS). No KHONG
   /// bao gio duoc dien tu mot con so uoc luong — cho cua uoc luong la `plannedDistanceKm`.
-  distanceKm       Int?
+  distanceKm        Int?
   /// #276 L6 — QUANG DUONG DU KIEN cua chang, do khau lap ke hoach (hoac sau nay la mot nha cung
   /// cap dan duong cua Lane M) dua ra.
   ///
@@ -4002,23 +4155,23 @@ model TransportRunLeg {
   ///
   /// NULL van la CHUA BIET, khong phai 0 — cung quy uoc voi `distanceKm`.
   plannedDistanceKm Int?
-  startedAt        DateTime?
-  completedAt      DateTime?
-  note             String?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  startedAt         DateTime?
+  completedAt       DateTime?
+  note              String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
-  tripLink      TransportTripRunLegLink?
+  tripLink        TransportTripRunLegLink?
   /// #276 L2/L3: lan lap ke hoach da sinh ra chang CO HANG nay. NHIEU NHAT mot.
-  planAsLoadedLeg TransportOrderRunPlan? @relation("TransportOrderRunPlanLoadedLeg")
+  planAsLoadedLeg TransportOrderRunPlan?   @relation("TransportOrderRunPlanLoadedLeg")
   /// #276 L3: lan lap ke hoach da sinh ra chang RONG di truoc. NHIEU NHAT mot.
-  planAsEmptyLeg  TransportOrderRunPlan? @relation("TransportOrderRunPlanEmptyLeg")
+  planAsEmptyLeg  TransportOrderRunPlan?   @relation("TransportOrderRunPlanEmptyLeg")
   /// R1-C: de nghi chi gan vao chang nay.
-  expenseClaims TransportExpenseClaim[]
+  expenseClaims   TransportExpenseClaim[]
   /// F1 (#243): moc van hanh gan vao chang nay.
-  checkpoints   TransportRunCheckpoint[]
+  checkpoints     TransportRunCheckpoint[]
   /// `#267` H4: chang nay duoc tao boi mot lan nhan viec tai A. NHIEU NHAT mot.
-  siteIntake    TransportRunSiteIntake?
+  siteIntake      TransportRunSiteIntake?
 
   @@unique([runId, sequence])
   @@index([orderId])
@@ -5016,15 +5169,15 @@ model TransportVehicleOwnershipInterest {
   @@index([stakeholderId, effectiveTo])
 }
 
-/* ====================================================================== *
+/**
+ * ====================================================================== *
  * `transport-toll` (`TX-08` mo rong, Lane J / #269) — NAP DU LIEU ETC
- *
  * KHONG mot bang nao o duoi day sinh cong no, phai tra hay mot but toan nao.
  * ETC la CONG TY TRA (#229 §8, #237), va khong bang nao co cot `driverId` —
  * do la mot bat bien CAU TRUC, duoc mot bai test quet ma nguon giu lai.
- *
  * Nghien cuu + phan loai bang chung: `docs/kien-truc/transport-etc-ingestion.md`
- * ====================================================================== */
+ * ======================================================================
+ */
 
 enum TransportTollProvider {
   VETC
@@ -5184,36 +5337,36 @@ model TransportTollImport {
 /// THUONG. Nem ca lan nap di se lam nguoi dung mat ca 497 dong dung — roi ho se khong bao gio biet
 /// ba dong kia ton tai.
 model TransportTollTransactionCandidate {
-  id           String                     @id @default(cuid())
-  importId     String
-  import       TransportTollImport        @relation(fields: [importId], references: [id], onDelete: Cascade)
-  provider     TransportTollProvider
+  id                     String                        @id @default(cuid())
+  importId               String
+  import                 TransportTollImport           @relation(fields: [importId], references: [id], onDelete: Cascade)
+  provider               TransportTollProvider
   /// So dong TRONG TEP, tu 1 — de nguoi doi soat mo tep ra tim dung dong.
-  rowNumber    Int
-  parseStatus  TransportTollParseStatus
-  rejectReason TransportTollRejectReason?
+  rowNumber              Int
+  parseStatus            TransportTollParseStatus
+  rejectReason           TransportTollRejectReason?
   /// So tai khoan DOC DUOC TU TEP, giu nguyen ke ca khi khong ung tai khoan nao.
-  accountNoRaw String
-  accountId    String?
-  account      TransportTollAccount?      @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  kind         TransportTollTransactionKind?
+  accountNoRaw           String
+  accountId              String?
+  account                TransportTollAccount?         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  kind                   TransportTollTransactionKind?
   /// Bien so DOC DUOC TU TEP, giu nguyen ke ca khi khong khop xe nao.
-  vehiclePlateRaw String
-  vehicleId       String?
-  vehicle         TransportVehicle?       @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  passedAt        DateTime?
+  vehiclePlateRaw        String
+  vehicleId              String?
+  vehicle                TransportVehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  passedAt               DateTime?
   /// `INV-25` — NGAY nghiep vu, tinh MOT LAN luc doc theo mui gio tenant.
-  businessDate    String?                 @db.VarChar(10)
+  businessDate           String?                       @db.VarChar(10)
   /// So nguyen DONG (`GD-03`), CO DAU. `CHECK` bien dat o migration, trung bien cua `money()`.
-  signedAmount    BigInt?
-  currencyCode    String                  @default("VND") @db.VarChar(3)
-  stationLabel    String?
-  providerRef     String?
+  signedAmount           BigInt?
+  currencyCode           String                        @default("VND") @db.VarChar(3)
+  stationLabel           String?
+  providerRef            String?
   /// TIN HIEU chong lap o tang DONG — KHONG phai mot khoa duy nhat. #269 J4 cam bia ra mot luat
   /// duy nhat cho `providerReference` khi khong nha cung cap nao bao dam co mot cai.
-  fingerprint     String?                 @db.VarChar(64)
-  matchState      TransportTollMatchState?
-  reviewState     TransportTollReviewState @default(PENDING)
+  fingerprint            String?                       @db.VarChar(64)
+  matchState             TransportTollMatchState?
+  reviewState            TransportTollReviewState      @default(PENDING)
   /// Dong ma nguoi doi soat noi dong nay trung. KHONG phai mot ket luan cua may.
   ///
   /// KHONG co cot `resolvedVehicleId` di kem, va do la mot lua chon: ban dau co mot cot nhu vay de
@@ -5223,9 +5376,9 @@ model TransportTollTransactionCandidate {
   /// no se lech.
   duplicateOfCandidateId String?
   /// Dong nguyen ban, de doi chieu khi ai do nghi bo cot dang doc sai tep.
-  rawValues       Json
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  rawValues              Json
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
 
   decisions TransportTollReviewDecision[]
 
@@ -5241,15 +5394,15 @@ model TransportTollTransactionCandidate {
 /// #269 J7 doi giu `actor / time / reason / old-new linkage / append-supersede history`. Nen bang
 /// nay khong co `updatedAt` va khong co duong sua: mot lan doi y la mot DONG MOI.
 model TransportTollReviewDecision {
-  id          String                            @id @default(cuid())
-  candidateId String
-  candidate   TransportTollTransactionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  action      TransportTollReviewAction
-  actor       String
-  at          DateTime                          @default(now())
+  id                     String                            @id @default(cuid())
+  candidateId            String
+  candidate              TransportTollTransactionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  action                 TransportTollReviewAction
+  actor                  String
+  at                     DateTime                          @default(now())
   /// Ly do CO MA, khong phai mot cau tu do.
-  reason      String
-  note        String?
+  reason                 String
+  note                   String?
   previousVehicleId      String?
   nextVehicleId          String?
   previousMatchState     TransportTollMatchState?
@@ -5320,20 +5473,20 @@ enum TransportCommercialAcceptanceBasis {
 /// `orderId @unique`: MOT don, MOT ho so. Neu khong unique thi hai lan bam se tao hai ho so cho
 /// cung mot don, va cau hoi "don nay da ket thuc chua" co hai cau tra loi.
 model TransportCommercialAcceptance {
-  id               String                              @id @default(cuid())
+  id               String                               @id @default(cuid())
   /// CHU THE HIEN TAI. Nullable CHI de mot hang cu cua `#268` con doc duoc — moi lan ghi moi deu
   /// dat truong nay, va `CHECK` o migration `20260910120000` cuong che dieu do.
-  orderId          String?                             @unique
-  order            TransportOrder?                     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderId          String?                              @unique
+  order            TransportOrder?                      @relation(fields: [orderId], references: [id], onDelete: Restrict)
   /// CHU THE CU cua `#268`. Khong con duong ghi nao dat no; giu lai de khong xoa lich su.
-  runId            String?                             @unique
-  run              TransportVehicleRun?                @relation(fields: [runId], references: [id], onDelete: Restrict)
+  runId            String?                              @unique
+  run              TransportVehicleRun?                 @relation(fields: [runId], references: [id], onDelete: Restrict)
   state            TransportCommercialAcceptanceOutcome
   /// Phap nhan ben A khi biet. #268 I1 goi day la truong TUY CHON.
   counterpartyId   String?
-  counterparty     TransportCounterparty?              @relation(fields: [counterpartyId], references: [id], onDelete: Restrict)
+  counterparty     TransportCounterparty?               @relation(fields: [counterpartyId], references: [id], onDelete: Restrict)
   /// Ngay nghiep vu cua ho so, tinh MOT lan luc mo theo mui gio tenant. `INV-25`.
-  businessDate     String                              @db.VarChar(10)
+  businessDate     String                               @db.VarChar(10)
   /// Con tro toi quyet dinh moi nhat. KHONG khai khoa ngoai: mot FK vong lai (ho so -> quyet dinh
   /// -> ho so) buoc migration phai hoan lai rang buoc, doi lay mot bao dam ma giao dich cua kho da
   /// cho san. `transport-commercial-acceptance.int.spec.ts` kiem tinh toan ven nay tren DB that.
@@ -5343,8 +5496,8 @@ model TransportCommercialAcceptance {
   /// thay vi ghi de len mot quyet dinh ho chua he nhin thay.
   latestDecisionId String?
   openedBy         String
-  createdAt        DateTime                            @default(now())
-  updatedAt        DateTime                            @updatedAt
+  createdAt        DateTime                             @default(now())
+  updatedAt        DateTime                             @updatedAt
 
   decisions TransportCommercialAcceptanceDecision[]
 
@@ -5364,14 +5517,14 @@ model TransportCommercialAcceptance {
 /// chuyen se that bai o trigger thay vi that bai o FK, va thong diep loi noi dung ly do. Cung quy
 /// uoc voi `TransportRunCheckpoint`, va cung ly do no khong nam trong duong reset demo.
 model TransportCommercialAcceptanceDecision {
-  id             String                              @id @default(cuid())
+  id             String                               @id @default(cuid())
   acceptanceId   String
-  acceptance     TransportCommercialAcceptance       @relation(fields: [acceptanceId], references: [id], onDelete: Restrict)
+  acceptance     TransportCommercialAcceptance        @relation(fields: [acceptanceId], references: [id], onDelete: Restrict)
   /// Bat dau tu 1, duy nhat trong mot ho so. Tinh BEN TRONG giao dich; unique la luoi cuoi.
   sequence       Int
   outcome        TransportCommercialAcceptanceOutcome
   /// MA co kieu de loc duoc, khong phai cau chu. Cung do rong voi `TransportExpenseClaimDecision`.
-  reasonCode     String                              @db.VarChar(60)
+  reasonCode     String                               @db.VarChar(60)
   basis          TransportCommercialAcceptanceBasis
   /// Khoa DUC cua chung tu lam can cu. RONG khi can cu la `EXTERNAL_PHYSICAL_CONFIRMATION`.
   /// KHONG phai duong dan bucket — quy uoc giong `TransportProofPhoto.locator`.
@@ -5381,11 +5534,11 @@ model TransportCommercialAcceptanceDecision {
   /// Quyet dinh ma hang nay SUA. NULL o lan dau. #268 I4: doi y la mot quyet dinh MOI.
   supersedesId   String?
   /// Khoa chong ghi trung do ben goi dat. #268 I4: gui lai cung khoa = cung mot hieu qua nghiep vu.
-  idempotencyKey String                              @db.VarChar(120)
+  idempotencyKey String                               @db.VarChar(120)
   /// Danh tinh tu PHIEN, khong tu than yeu cau. #268 I3: *"no caller-supplied decidedBy"*.
   decidedBy      String
   /// Gio MAY CHU. #268 I7 bai 14: *"Client clock cannot choose approvedAt"*.
-  decidedAt      DateTime                            @default(now())
+  decidedAt      DateTime                             @default(now())
 
   @@unique([acceptanceId, sequence], map: "TransportCommercialAcceptanceDecision_sequence_key")
   @@unique([acceptanceId, idempotencyKey], map: "TransportCommercialAcceptanceDecision_idempotency_key")
