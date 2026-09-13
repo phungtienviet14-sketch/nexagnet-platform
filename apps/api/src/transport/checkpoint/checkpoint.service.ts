@@ -26,6 +26,7 @@ import {
   CheckpointRepository,
 } from './checkpoint.repository.js';
 import type { RecordCheckpointCommand, RunCheckpoint } from './checkpoint.types.js';
+import { DeliveryWaitingCloser } from '../waiting/waiting-close.port.js';
 import { buildRunTimeline, type RunTimeline } from './run-timeline.js';
 
 export const TRANSPORT_CHECKPOINT_POLICY = Symbol('TRANSPORT_CHECKPOINT_POLICY');
@@ -65,6 +66,13 @@ export class CheckpointService {
     private readonly policy: CheckpointPolicy = DEFAULT_CHECKPOINT_POLICY,
     @Optional() private readonly telemetry?: TelemetryService,
     @Optional() @Inject(TRANSPORT_CLOCK) private readonly clock?: () => Date,
+    /**
+     * PHIEN CHO NGUOI NHAN (`#279` O4) — vang mat o khach khong dung khoang cho nguoi nhan.
+     *
+     * Xem `DeliveryWaitingCloser`: cong nay duoc goi o CA duong ghi moi LAN duong gui lai, de mot
+     * lan mat song dung giua hai buoc tu sua duoc o lan bam ke tiep.
+     */
+    @Optional() private readonly waiting?: DeliveryWaitingCloser,
   ) {}
 
   /** Duong cua LAI XE — danh tinh tu phien, quyen tu phan cong. */
@@ -144,7 +152,7 @@ export class CheckpointService {
     );
     if (replayed) {
       this.allow('CHECKPOINT_REPLAYED', { checkpointId: replayed.id, type: replayed.type });
-      return replayed;
+      return this.settleWaiting(replayed);
     }
 
     const legId = command.legId ?? null;
@@ -237,7 +245,7 @@ export class CheckpointService {
         type: checkpoint.type,
         hasLocationProof: observationId !== null,
       });
-      return checkpoint;
+      return this.settleWaiting(checkpoint);
     } catch (error) {
       // HAI YEU CAU SONG SONG cua cung mot lan bam. Phep doc o dau ham khong thay ban kia vi no
       // chua commit; unique cua kho thi thay. Doc lai va tra ve — khong bao loi cho mot viec da
@@ -250,7 +258,7 @@ export class CheckpointService {
         );
         if (already) {
           this.allow('CHECKPOINT_REPLAYED', { checkpointId: already.id, type: already.type });
-          return already;
+          return this.settleWaiting(already);
         }
       }
       if (isUniqueViolationOn(error, CHECKPOINT_OBSERVATION_ONCE)) {
@@ -262,6 +270,23 @@ export class CheckpointService {
       }
       throw error;
     }
+  }
+
+  /**
+   * DONG PHIEN CHO khi moc vua ghi la lan nguoi nhan nhan hang — `#279` O4.
+   *
+   * Goi o CA duong ghi moi LAN duong gui lai, va khong o mot duong nao khac. Loi cua cong nay
+   * KHONG bi nuot: neu phien cho khong dong duoc thi lan bam do phai bao that bai, de lai xe bam
+   * lai — va lan bam lai se di vao nhanh `CHECKPOINT_REPLAYED` roi hoan tat not viec dong phien.
+   *
+   * Nuot loi o day se cho ra dung trang thai ma `#279` O10 goi ten: mot thao tac hien thanh cong
+   * tren may lai xe trong khi may chu chua ghi xong.
+   */
+  private async settleWaiting(checkpoint: RunCheckpoint): Promise<RunCheckpoint> {
+    if (checkpoint.type === 'DELIVERY_ACCEPTED') {
+      await this.waiting?.closeByAcceptance(checkpoint);
+    }
+    return checkpoint;
   }
 
   private errorFor(reason: CheckpointRecordReason, requires?: string): TransportDomainError {

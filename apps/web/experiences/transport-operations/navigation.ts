@@ -344,7 +344,7 @@ const DEFAULT_SECTION: TransportSectionId = 'overview';
  * cho phep dinh anh chung tu ngay trong cung lan goi do.
  */
 export type DriverScreenId =
-  'home' | 'site-intake' | 'trip' | 'fuel' | 'expense' | 'fund' | 'history' | 'payslip';
+  'home' | 'site-intake' | 'field' | 'trip' | 'fuel' | 'expense' | 'fund' | 'history' | 'payslip';
 
 export interface DriverScreen {
   readonly id: DriverScreenId;
@@ -373,6 +373,21 @@ export const DRIVER_SCREENS = [
     label: 'Nhận việc',
     requiredCapabilities: ['transport-site-intake'],
     requiredAction: 'transport.driver.self.site_intake.propose',
+  },
+  {
+    /**
+     * HIEN TRUONG (`#279` O9) — dung SAU `site-intake` va TRUOC `trip`, va do la thu tu cua mot ngay
+     * lam viec: nhan viec o cong nha may, roi bam tung buoc hien truong, roi moi den man hinh
+     * chuyen (v1) de doi trang thai.
+     *
+     * `requiredAction` la ma GHI MOC chu khong mot ma doc rieng: man hinh nay CHI co nghia voi
+     * nguoi thuc su ghi duoc moc. Che them mot ma `.field.read` se la mot ma khong ai dung mot
+     * minh, va moi khach van tai sau deu phai mang no.
+     */
+    id: 'field',
+    label: 'Hiện trường',
+    requiredCapabilities: ['transport-checkpoint'],
+    requiredAction: 'transport.driver.self.checkpoint.record',
   },
   {
     id: 'trip',

@@ -50,6 +50,19 @@ export interface PayrollDriverInput {
   readonly fuelLitersSaved: number | null;
   /** `GD-12` — CHI de hien thi. `null` khi khach tat `transport-costing`. */
   readonly driverFundBalance: number | null;
+  /**
+   * PHU CAP CHO DA DUOC MOT NGUOI DUYET (`#279` O6) — `null` khi khach tat
+   * `transport-checkpoint`.
+   *
+   * `totalAmount` la tong cua nhung con so NGUOI DUYET da chot, khong phai mot phep tinh tren thoi
+   * gian. Ham nay khong biet mot khoang cho keo dai bao lau, va do la co y: `#279` O6 va `#243` F4
+   * deu ghi rang chu khach CHUA dua ra cong thuc doi thoi luong thanh tien.
+   *
+   * `null` KHAC mot tong bang khong, cung ly le voi `fuelLitersSaved` ngay tren: `null` la "khach
+   * khong theo doi khoang cho nguoi nhan", con khong la "co theo doi, va ky nay khong ai duyet
+   * khoan nao". Su khac biet do doc duoc o `PayrollRun.missingInputs`.
+   */
+  readonly waitingAllowance: { readonly totalAmount: number; readonly count: number } | null;
   readonly manualComponents: readonly ManualComponentInput[];
 }
 
@@ -157,6 +170,31 @@ export function calculatePayslip(
       amount: money(policy.fuelSavingBonusVndPerLiter * litersSaved).amount,
       quantity: litersSaved,
       unitAmount: policy.fuelSavingBonusVndPerLiter,
+      recordedBy: null,
+      note: null,
+    });
+  }
+
+  /**
+   * PHU CAP CHO — mot con so DA DUOC DUYET, cong vao chu khong tinh ra.
+   *
+   * `unitAmount` la `null` va do la mot khang dinh: khong co don gia nao ca. Mot con so o day se la
+   * mot muc "d/gio" ma khong ai o phia khach hang da quyet — va no se tra vao luong that cua nhung
+   * con nguoi that.
+   *
+   * `recordedBy` cung `null`, va rang buoc `TransportPayslipComponent_manual_needs_signer` doi dung
+   * dieu do: chu ky cua nguoi duyet song tren HO SO PHU CAP (`decidedBy`), noi no khong bi ghi lai
+   * o moi lan chay luong.
+   */
+  const allowance = input.waitingAllowance;
+  if (allowance !== null && allowance.totalAmount > 0) {
+    components.push({
+      kind: 'EARNING',
+      source: 'WAITING_ALLOWANCE',
+      label: 'Phụ cấp chờ nhận hàng (đã duyệt)',
+      amount: money(allowance.totalAmount).amount,
+      quantity: allowance.count,
+      unitAmount: null,
       recordedBy: null,
       note: null,
     });

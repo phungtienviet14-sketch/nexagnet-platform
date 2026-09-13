@@ -97,6 +97,14 @@ const coreInput = (over: Partial<ControlTowerCoreInput> = {}): ControlTowerCoreI
   runs: [],
   legsByRun: new Map(),
   assignmentsByRun: new Map(),
+  /**
+   * MAC DINH `null` — tuc khach dang TAT `transport-checkpoint`.
+   *
+   * Do la hinh dang bang da co truoc `#279`, nen moi bai cu trong tep nay giu nguyen y nghia: cot
+   * `WAITING` rong kem `AWAITING_WAITING_SESSION_SOURCE`. Bai nao muon do cot do that su thi truyen
+   * mot `Set` vao — xem `Cot WAITING khi CO nguon phien cho`.
+   */
+  waitingLegIds: null,
   vehicles: [],
   drivers: [],
   orderCodesById: new Map(),

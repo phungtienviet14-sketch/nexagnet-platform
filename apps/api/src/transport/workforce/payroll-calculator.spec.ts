@@ -20,6 +20,7 @@ const driver = (overrides: Partial<PayrollDriverInput> = {}): PayrollDriverInput
   distanceKm: 2_400,
   fuelLitersSaved: 0,
   driverFundBalance: 0,
+  waitingAllowance: null,
   manualComponents: [],
   ...overrides,
 });

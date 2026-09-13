@@ -119,7 +119,11 @@ describe('be mat thap dieu hanh khong co duong ghi nao', () => {
     const methods = [...source.matchAll(/abstract ([a-z]+)(\w*)\(/g)];
     expect(methods.length).toBeGreaterThan(0);
 
-    const READ_VERBS = ['find', 'list', 'feed', 'timeline'];
+    /**
+     * `count` la dong tu DOC thu nam, them o `#279`: `countPendingAllowances()` tra ve mot con SO,
+     * khong tra ve hang — thap dieu hanh khong duoc doc so tien cua mot khoan phu cap.
+     */
+    const READ_VERBS = ['find', 'list', 'feed', 'timeline', 'count'];
     const WRITE_VERBS = [
       'create',
       'update',

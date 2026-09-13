@@ -220,6 +220,37 @@ export class ControlTowerCheckpointFactsAdapter extends ControlTowerCheckpointFa
 }
 
 /* ------------------------------------------------------------------ *
+ * transport-checkpoint / phien cho + phu cap + chung tu (`#279`) — TUY CHON
+ * ------------------------------------------------------------------ */
+
+/**
+ * CONG THU SAU: NHUNG GI DANG DIEN RA O HIEN TRUONG NGAY BAY GIO.
+ *
+ * Ba cau hoi, va ca ba deu la CAU HOI CUA NGUOI TRUC luc 3 gio chieu:
+ *
+ *   · xe nao dang KET o diem giao (`listOpenWaitingLegIds`);
+ *   · co khoan phu cap cho nao dang doi minh duyet khong (`countPendingAllowances`);
+ *   · chang nao da giao xong ma thieu chung tu bat buoc (`listLegsMissingRequiredDocuments`).
+ *
+ * Ca ba deu tra ve DEM hoac TAP HOP MA, khong tra ve hang. Thap dieu hanh khong can biet mot phien
+ * cho keo dai bao lau hay mot khoan phu cap la bao nhieu tien — no chi can biet CO hay KHONG, va
+ * bao nhieu cai. Tra ve hang se mang so tien cua mot con nguoi vao mot man hinh dieu hanh.
+ */
+export abstract class ControlTowerFieldFacts {
+  /** `legId` dang co mot phien cho MO. Rong la mot cau tra loi hop le. */
+  abstract listOpenWaitingLegIds(): Promise<ReadonlySet<string>>;
+  /** So de nghi phu cap cho dang doi duyet. KHONG tra ve so tien. */
+  abstract countPendingAllowances(): Promise<number>;
+  /**
+   * `legId` cua nhung chang CO HANG da giao xong ma con thieu chung tu bat buoc.
+   *
+   * "Bat buoc" den tu `DocumentRequirementPolicy` cua khach — `#279` O3 cam ep moi loai chung tu
+   * cho moi nha may A.
+   */
+  abstract listLegsMissingRequiredDocuments(): Promise<ReadonlySet<string>>;
+}
+
+/* ------------------------------------------------------------------ *
  * transport-asset-compliance — TUY CHON
  * ------------------------------------------------------------------ */
 
