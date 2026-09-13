@@ -80,7 +80,7 @@ export function TollView() {
   const accountRows = toTollAccountRows(accounts.data ?? [], linkCounts.data ?? []);
   const selectedAccount = (accounts.data ?? []).find((account) => account.id === selectedAccountId);
   const linkRows = toTollLinkRows(
-    links.data ?? [],
+    links.data ?? null,
     () => (selectedAccount ? `${selectedAccount.provider} ${selectedAccount.accountNo}` : '—'),
     (vehicleId) => vehicleId,
   );
@@ -364,7 +364,10 @@ function LinksPanel({
               header: 'Tình trạng',
               render: (row: TollLinkRow) => (
                 <StatusBadge
-                  label={row.effectiveNow ? 'Đang hiệu lực' : 'Đã đóng'}
+                  // Chu do TANG KHUNG NHIN cham (ba trang thai), khong phai mot phep ba ngoi o day:
+                  // "chua toi han" va "da dong" cung la `effectiveNow === false` nhung doi hai
+                  // thao tac khac nhau.
+                  label={row.effectiveLabel}
                   tone={row.effectiveTone}
                 />
               ),

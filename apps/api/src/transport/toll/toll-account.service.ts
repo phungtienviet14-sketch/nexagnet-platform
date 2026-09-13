@@ -15,7 +15,12 @@ import { TRANSPORT_TOLL_POLICY, type TransportTollPolicy } from './toll-policy.j
 import type { TollProvider } from './toll-provider.port.js';
 import { TransportTollCoreFacts } from './toll.ports.js';
 import { TollRepository } from './toll.repository.js';
-import type { TollAccount, TollAccountLinkCount, TollAccountVehicleLink } from './toll.types.js';
+import type {
+  TollAccount,
+  TollAccountLinkCount,
+  TollAccountLinkListing,
+  TollAccountVehicleLink,
+} from './toll.types.js';
 
 /**
  * TAI KHOAN GIAO THONG va ANH XA XE — tach khoi `toll.service.ts` vi hai ly do.
@@ -66,8 +71,31 @@ export class TollAccountService {
     return account;
   }
 
-  listLinksForAccount(accountId: string): Promise<readonly TollAccountVehicleLink[]> {
-    return this.repository.listLinksForAccount(accountId);
+  /**
+   * SO DOAN NOI cua mot tai khoan — kem ket luan "dang hieu luc" cho TUNG doan.
+   *
+   * ======================================================================================
+   * VI SAO KHONG TRA VE MANG TRAN NHU TRUOC
+   * ======================================================================================
+   *
+   * Ban truoc tra ve mang ban ghi tho, va man hinh tu cham bang `effectiveTo === null`. Phep rut
+   * gon do bien mot doan MO TU THANG SAU thanh mot huy hieu xanh *"Dang hieu luc"* — trong khi
+   * chinh may chu, o phep dem ngay ben canh, loai no ra. Hai con so canh nhau noi hai dieu khac
+   * nhau ve cung mot doan noi, va nguoi doc khong co cach nao biet ben nao dung.
+   *
+   * Nen ket luan duoc cham o DAY, bang DUNG mot ham ma phep dem va phep doc mot dong ve chiec xe
+   * dang dung (`tollLinkEffectiveOn`). Ba be mat, mot dinh nghia.
+   *
+   * `onDate` di ra ngoai cung ly do o `countEffectiveLinksByAccount`: man hinh phai noi duoc moc
+   * da dung, va no khong duoc tu lay ngay tu dong ho trinh duyet.
+   */
+  async listLinksForAccount(accountId: string): Promise<TollAccountLinkListing> {
+    const onDate = toBusinessDate(this.now(), this.policy.timeZone);
+    const links = await this.repository.listLinksForAccount(accountId);
+    return {
+      onDate,
+      links: links.map((link) => ({ ...link, effective: tollLinkEffectiveOn(link, onDate) })),
+    };
   }
 
   listLinksForVehicle(vehicleId: string): Promise<readonly TollAccountVehicleLink[]> {

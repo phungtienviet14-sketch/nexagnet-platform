@@ -22,7 +22,7 @@ import { canPerform } from '../transport-actions';
 import type {
   TollAccount,
   TollAccountLinkCount,
-  TollAccountVehicleLink,
+  TollAccountLinkListing,
   TollCandidate,
   TollCandidatePage,
   TollImportPreview,
@@ -123,14 +123,19 @@ export const toTollAccountRows = (
   return accounts.map((account) => toTollAccountRow(account, byAccount));
 };
 
-/**
- * Doan noi nay con DE NGO khong — dung cho HUY HIEU cua tung dong trong bang doan noi.
+/*
+ * KHONG CON MOT PHEP CHAM "dang hieu luc" NAO O TEP NAY.
  *
- * KHAC voi phep dem o tren, va su khac nhau la co y: o day ky han day du (`periodLabel`) nam ngay
- * canh huy hieu, nen nguoi doc thay duoc ca hai. Phep dem thi khong co cho de bay ky han, nen no
- * phai do may chu tinh theo ngay nghiep vu.
+ * Ban truoc co `isEffectiveNow = link.effectiveTo === null`, va do la mot phep sai that: mot doan
+ * MO TU THANG SAU cung co `effectiveTo` rong, nen no deo huy hieu xanh *"Dang hieu luc"* trong khi
+ * phep dem cua may chu — ngay o bang ben canh — loai no ra. Hai con so canh nhau noi hai dieu khac
+ * nhau ve cung mot doan noi.
+ *
+ * Sua bang cach KHONG cham o day nua: `TollAccountLinkView.effective` do may chu tra ve, cham bang
+ * dung ham ma phep dem dung (`tollLinkEffectiveOn`). Ly do sau hon la ky thuat: mot ket luan
+ * "dang hieu luc" can mot NGAY NGHIEP VU, va trinh duyet khong co ngay nghiep vu cua khach — no chi
+ * co dong ho may nguoi dung.
  */
-const isEffectiveNow = (link: TollAccountVehicleLink): boolean => link.effectiveTo === null;
 
 export interface TollLinkRow {
   readonly id: string;
@@ -139,6 +144,14 @@ export interface TollLinkRow {
   readonly providerVehicleRefLabel: string;
   readonly periodLabel: string;
   readonly effectiveNow: boolean;
+  /**
+   * Chu tren huy hieu — BA trang thai, khong hai.
+   *
+   * *"Chua toi han"* va *"Da dong"* deu la `effectiveNow === false`, nhung chung doi hai viec khac
+   * nhau: mot cai la doan noi da duoc dat truoc va se tu chay, cai kia la mot doan da het. Gop
+   * chung thanh mot chu se lam nguoi van hanh mo lai mot doan noi da duoc dat truoc.
+   */
+  readonly effectiveLabel: string;
   readonly effectiveTone: StatusTone;
   readonly provenanceLabel: string;
   readonly createdLabel: string;
@@ -152,18 +165,25 @@ export interface TollLinkRow {
  * gia tri cua tep nay nam o cho no kiem duoc.
  */
 export const toTollLinkRows = (
-  links: readonly TollAccountVehicleLink[],
+  listing: TollAccountLinkListing | null,
   accountLabelOf: (accountId: string) => string,
   vehicleLabelOf: (vehicleId: string) => string,
 ): readonly TollLinkRow[] =>
-  links.map((link) => ({
+  (listing?.links ?? []).map((link) => ({
     id: link.id,
     accountLabel: accountLabelOf(link.accountId),
     vehicleLabel: vehicleLabelOf(link.vehicleId),
     providerVehicleRefLabel: link.providerVehicleRef ?? '—',
     periodLabel: formatBusinessDateRange(link.effectiveFrom, link.effectiveTo),
-    effectiveNow: isEffectiveNow(link),
-    effectiveTone: isEffectiveNow(link) ? 'go' : 'flat',
+    effectiveNow: link.effective,
+    // Ba trang thai duoc phan biet bang CHU, khong chi bang mau: mot doan CHUA toi han va mot doan
+    // DA dong deu la "khong hieu luc hom nay", nhung nguoi van hanh phai lam hai viec khac nhau.
+    effectiveLabel: link.effective
+      ? 'Đang hiệu lực'
+      : listing !== null && link.effectiveFrom > listing.onDate
+        ? 'Chưa tới hạn'
+        : 'Đã đóng',
+    effectiveTone: link.effective ? 'go' : 'flat',
     provenanceLabel: TOLL_LINK_PROVENANCE_LABEL[link.provenance],
     createdLabel: formatInstant(link.createdAt),
     createdBy: link.createdBy,

@@ -89,6 +89,7 @@ import type {
   ManualTollRowInput,
   TollAccount,
   TollAccountLinkCount,
+  TollAccountLinkListing,
   TollAccountVehicleLink,
   TollCandidate,
   TollCandidateDetail,
@@ -899,7 +900,13 @@ export const transportApi = {
     setAccountActive: (id: string, active: boolean): Promise<TollAccount> =>
       send('PATCH', `/transport/toll/accounts/${encodeURIComponent(id)}`, { active }),
 
-    links: (accountId: string): Promise<readonly TollAccountVehicleLink[]> =>
+    /**
+     * So doan noi cua MOT tai khoan — kem `effective` DA duoc may chu cham cho tung doan.
+     *
+     * Tra ve mot bao (`{ onDate, links }`) chu khong mot mang tran: con so va moc ngay phai di
+     * cung nhau, neu khong man hinh se hien mot ket luan ma khong noi duoc no tinh vao ngay nao.
+     */
+    links: (accountId: string): Promise<TollAccountLinkListing> =>
       get(`/transport/toll/accounts/${encodeURIComponent(accountId)}/links`),
     /**
      * So xe dang nhan chi tra cua TUNG tai khoan — MOT lan hoi cho ca bang.

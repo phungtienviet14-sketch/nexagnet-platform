@@ -96,6 +96,32 @@ export interface TollAccountLinkCount {
   readonly onDate: BusinessDate;
 }
 
+/**
+ * MOT DOAN NOI kem CAU TRA LOI "doan nay co dang hieu luc khong" — do MAY CHU cham.
+ *
+ * ========================================================================
+ * VI SAO CO `effective` O DAY, KHI BAN GHI DA CO DU HAI NGAY
+ * ========================================================================
+ *
+ * `effectiveFrom`/`effectiveTo` la DU LIEU; *"dang hieu luc"* la mot KET LUAN rut ra tu du lieu do
+ * cong voi mot ngay nghiep vu. Chi phat ra du lieu thi moi nguoi doc phai tu rut ket luan — va lan
+ * nao cung co mot nguoi rut gon thanh `effectiveTo === null`. Do la mot phep sai that: mot doan
+ * MO TU THANG SAU cung co `effectiveTo` rong, va no chua nhan chi tra ngay nao ca.
+ *
+ * Chuyen ket luan ve may chu con dong mot khe thu hai: trinh duyet khong co ngay nghiep vu cua
+ * khach. No chi co dong ho may nguoi dung, va hai nguoi o hai mui gio se thay hai su that.
+ *
+ * `onDate` di kem de man hinh NOI RA duoc moc da dung, thay vi bat nguoi doc tin.
+ */
+export interface TollAccountLinkView extends TollAccountVehicleLink {
+  readonly effective: boolean;
+}
+
+export interface TollAccountLinkListing {
+  readonly onDate: BusinessDate;
+  readonly links: readonly TollAccountLinkView[];
+}
+
 /* ====================================================================== *
  * NGUON NAP va DONG UNG VIEN
  * ====================================================================== */

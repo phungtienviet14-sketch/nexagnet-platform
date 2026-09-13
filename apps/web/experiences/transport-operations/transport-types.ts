@@ -925,6 +925,24 @@ export interface TollAccountLinkCount {
   readonly onDate: BusinessDate;
 }
 
+/**
+ * MOT DOAN NOI kem ket luan "dang hieu luc" DA DUOC MAY CHU CHAM.
+ *
+ * `effective` khong phai mot tien nghi — no la cach DUY NHAT man hinh biet duoc dieu do cho dung.
+ * Hai ngay trong ban ghi la du lieu; *"dang hieu luc"* la ket luan rut ra tu du lieu do cong mot
+ * NGAY NGHIEP VU, va trinh duyet khong co ngay nghiep vu cua khach — no chi co dong ho may nguoi
+ * dung. Tu cham o day se cho hai nguoi o hai mui gio hai su that, va se de mot doan MO TU THANG
+ * SAU deo huy hieu xanh trong khi phep dem ngay ben canh loai no ra.
+ */
+export interface TollAccountLinkView extends TollAccountVehicleLink {
+  readonly effective: boolean;
+}
+
+export interface TollAccountLinkListing {
+  readonly onDate: BusinessDate;
+  readonly links: readonly TollAccountLinkView[];
+}
+
 export interface TollProviderReadiness {
   readonly provider: TollProvider;
   /** `false` = goi khach chua khai bo cot cho nha cung cap nay — tuc `BLOCKED_SAMPLE_REQUIRED`. */

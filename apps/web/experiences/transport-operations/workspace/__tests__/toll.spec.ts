@@ -5,7 +5,8 @@ import type {
   BusinessDate,
   TollAccount,
   TollAccountLinkCount,
-  TollAccountVehicleLink,
+  TollAccountLinkListing,
+  TollAccountLinkView,
   TollCandidate,
   TollCandidatePage,
   TollImportPreview,
@@ -44,7 +45,7 @@ const account = (overrides: Partial<TollAccount> = {}): TollAccount => ({
   ...overrides,
 });
 
-const link = (overrides: Partial<TollAccountVehicleLink> = {}): TollAccountVehicleLink => ({
+const link = (overrides: Partial<TollAccountLinkView> = {}): TollAccountLinkView => ({
   id: 'link-1',
   accountId: 'acc-1',
   vehicleId: 'veh-1',
@@ -54,8 +55,17 @@ const link = (overrides: Partial<TollAccountVehicleLink> = {}): TollAccountVehic
   provenance: 'MANUAL',
   createdAt: '2026-09-01T02:00:00Z',
   createdBy: 'operator',
+  // MAY CHU cham truong nay. Fixture phai dat no THANG chu khong suy tu hai ngay o tren — suy o
+  // day la dung lai chinh phep cham ma ban va vua go bo khoi man hinh.
+  effective: true,
   ...overrides,
 });
+
+/** Bao doan noi nhu may chu tra ve: ket luan va MOC NGAY di cung nhau. */
+const listing = (
+  links: readonly TollAccountLinkView[],
+  onDate: BusinessDate = DATE,
+): TollAccountLinkListing => ({ onDate, links });
 
 const count = (overrides: Partial<TollAccountLinkCount> = {}): TollAccountLinkCount => ({
   accountId: 'acc-1',
@@ -390,7 +400,10 @@ describe('tai khoan va so dang ky xe nhan chi tra', () => {
 
   it('doan dang hieu luc va doan da dong duoc phan biet bang sac thai', () => {
     const rows = toTollLinkRows(
-      [link({ id: 'l1' }), link({ id: 'l2', effectiveTo: '2026-08-31' as BusinessDate })],
+      listing([
+        link({ id: 'l1' }),
+        link({ id: 'l2', effectiveTo: '2026-08-31' as BusinessDate, effective: false }),
+      ]),
       () => 'VETC 1234',
       () => '29H-123.45',
     );
@@ -401,12 +414,70 @@ describe('tai khoan va so dang ky xe nhan chi tra', () => {
     expect(rows[1]?.effectiveTone).toBe('flat');
   });
 
+  /**
+   * HOI QUY — soat doc lap 13/09/2026, finding 3 (P2).
+   *
+   * Ban truoc cham `effectiveTo === null` o phia man hinh. Mot doan MO TU THANG SAU cung co
+   * `effectiveTo` rong, nen no deo huy hieu xanh *"Dang hieu luc"* — trong khi phep dem cua may
+   * chu, o bang NGAY BEN CANH, loai no ra. Hai con so canh nhau noi hai dieu khac nhau.
+   */
+  it('doan MO TU THANG SAU (`effectiveTo` rong) KHONG duoc hien "Đang hiệu lực"', () => {
+    const rows = toTollLinkRows(
+      listing([
+        link({
+          id: 'tuong-lai',
+          effectiveFrom: '2026-10-01' as BusinessDate,
+          effectiveTo: null,
+          effective: false,
+        }),
+      ]),
+      () => 'VETC 1234',
+      () => '29H-123.45',
+    );
+
+    expect(rows[0]?.effectiveNow).toBe(false);
+    expect(rows[0]?.effectiveTone).toBe('flat');
+    // Va phai noi ra la CHUA toi han — khong gop chung voi mot doan da het.
+    expect(rows[0]?.effectiveLabel).toBe('Chưa tới hạn');
+  });
+
+  it('"chua toi han" va "da dong" KHONG duoc gop lam mot', () => {
+    const rows = toTollLinkRows(
+      listing([
+        link({ id: 'tuong-lai', effectiveFrom: '2026-10-01' as BusinessDate, effective: false }),
+        link({ id: 'da-dong', effectiveTo: '2026-08-31' as BusinessDate, effective: false }),
+        link({ id: 'dang-chay' }),
+      ]),
+      () => 'VETC 1234',
+      () => '29H-123.45',
+    );
+
+    // Ca ba deu can mot thao tac khac nhau cua nguoi van hanh, nen ba chu khac nhau.
+    expect(rows.map((row) => row.effectiveLabel)).toEqual([
+      'Chưa tới hạn',
+      'Đã đóng',
+      'Đang hiệu lực',
+    ]);
+  });
+
+  it('man hinh KHONG tu cham lai: `effective` cua may chu la cau tra loi cuoi', () => {
+    // Hai ngay noi "dang chay" nhung may chu bao `false`. Man hinh phai theo may chu — neu no tu
+    // cham, bai nay xanh nham va loi cu quay lai ma khong ai thay.
+    const rows = toTollLinkRows(
+      listing([link({ id: 'l1', effectiveFrom: DATE, effectiveTo: null, effective: false })]),
+      () => 'VETC 1234',
+      () => '29H-123.45',
+    );
+
+    expect(rows[0]?.effectiveNow).toBe(false);
+  });
+
   it('nguon cua moi doan hien ra — nguoi khai KHAC doc tu tep', () => {
     const rows = toTollLinkRows(
-      [
+      listing([
         link({ id: 'l1', provenance: 'MANUAL' }),
         link({ id: 'l2', provenance: 'STATEMENT_DECLARED' }),
-      ],
+      ]),
       () => 'VETC 1234',
       () => '29H-123.45',
     );

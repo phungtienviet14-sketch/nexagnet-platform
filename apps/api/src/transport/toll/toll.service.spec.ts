@@ -359,7 +359,7 @@ describe('mot xe chi nhan chi tra tu MOT tai khoan', () => {
   it('DONG doan cu roi MO doan moi thi duoc — do la "xe doi tai khoan"', async () => {
     const harness = build();
     const accountId = await seed(harness);
-    const [link] = await harness.accounts.listLinksForAccount(accountId);
+    const [link] = (await harness.accounts.listLinksForAccount(accountId)).links;
     await harness.accounts.closeLink(link?.id ?? '', '2026-05-31', 'ke-toan');
 
     const other = await harness.accounts.createAccount(
@@ -391,7 +391,7 @@ describe('mot xe chi nhan chi tra tu MOT tai khoan', () => {
   it('dong mot doan noi bang mot ngay DI LUI bi tu choi — giong het ban Prisma', async () => {
     const harness = build();
     const accountId = await seed(harness);
-    const [link] = await harness.accounts.listLinksForAccount(accountId);
+    const [link] = (await harness.accounts.listLinksForAccount(accountId)).links;
     await expect(
       harness.accounts.closeLink(link?.id ?? '', '2025-12-31', 'ke-toan'),
     ).rejects.toMatchObject({ reason: 'TOLL_LINK_PERIOD_INVALID' });
@@ -650,5 +650,78 @@ describe('dem xe dang nhan chi tra theo tung tai khoan', () => {
     const counts = await accounts.countEffectiveLinksByAccount();
 
     expect(counts[0]?.onDate).toBe(TODAY);
+  });
+
+  /**
+   * HOI QUY — soat doc lap 13/09/2026 (comment 5652336290), finding 3 (P2).
+   *
+   * Phep DEM da duoc sua cho dung, nhung BANG DOAN NOI ngay ben canh van tu cham
+   * `effectiveTo === null` o phia man hinh. Ket qua: mot doan mo tu thang sau bi loai khoi con so
+   * tong ma van deo huy hieu xanh *"Dang hieu luc"* o bang duoi. Hai be mat noi hai dieu khac nhau
+   * ve cung mot doan noi, va nguoi doc khong co cach nao biet ben nao dung.
+   *
+   * Cach sua: may chu cham san `effective` cho TUNG doan, bang DUNG ham ma phep dem dung.
+   */
+  describe('so doan noi mang san ket luan "dang hieu luc" cua may chu', () => {
+    it('doan MO TU THANG SAU ra `effective: false` — du `effectiveTo` rong', async () => {
+      const repository = new InMemoryTollRepository();
+      const accounts = countingAccounts(repository);
+      const account = await openAccount(accounts, 'TK-A');
+      await link(accounts, account, 'veh-a1', '2026-10-01', null);
+
+      const listing = await accounts.listLinksForAccount(account);
+
+      expect(listing.links[0]?.effectiveTo).toBeNull();
+      expect(listing.links[0]?.effective).toBe(false);
+    });
+
+    it('doan DA DONG ra `effective: false`', async () => {
+      const repository = new InMemoryTollRepository();
+      const accounts = countingAccounts(repository);
+      const account = await openAccount(accounts, 'TK-A');
+      await link(accounts, account, 'veh-a1', '2026-01-01', '2026-08-31');
+
+      expect((await accounts.listLinksForAccount(account)).links[0]?.effective).toBe(false);
+    });
+
+    it('doan DANG CHAY ra `effective: true`, ke ca khi da biet ngay ket thuc', async () => {
+      const repository = new InMemoryTollRepository();
+      const accounts = countingAccounts(repository);
+      const account = await openAccount(accounts, 'TK-A');
+      await link(accounts, account, 'veh-a1', '2026-01-01', '2026-12-31');
+
+      expect((await accounts.listLinksForAccount(account)).links[0]?.effective).toBe(true);
+    });
+
+    it('`onDate` di kem de man hinh noi duoc moc da dung', async () => {
+      const repository = new InMemoryTollRepository();
+      const accounts = countingAccounts(repository);
+      const account = await openAccount(accounts, 'TK-A');
+
+      expect((await accounts.listLinksForAccount(account)).onDate).toBe(TODAY);
+    });
+
+    /**
+     * BAI QUAN TRONG NHAT CUA NHOM NAY.
+     *
+     * Hai be mat cua cung mot su that phai dem ra cung mot con so. Neu mot ben doi cach cham, bai
+     * nay do — ke ca khi ca hai ben, tach rieng, deu trong nhu dung.
+     */
+    it('so doan `effective` KHOP dung con so cua phep dem', async () => {
+      const repository = new InMemoryTollRepository();
+      const accounts = countingAccounts(repository);
+      const account = await openAccount(accounts, 'TK-A');
+      await link(accounts, account, 'veh-a1', '2026-01-01', null); // dang chay
+      await link(accounts, account, 'veh-b1', '2026-10-01', null); // chua toi han
+      await link(accounts, account, 'veh-b2', '2026-01-01', '2026-08-31'); // da dong
+
+      const listing = await accounts.listLinksForAccount(account);
+      const counts = await accounts.countEffectiveLinksByAccount();
+      const byAccount = new Map(counts.map((row) => [row.accountId, row.effectiveLinkCount]));
+
+      expect(listing.links).toHaveLength(3);
+      expect(listing.links.filter((row) => row.effective)).toHaveLength(1);
+      expect(byAccount.get(account)).toBe(1);
+    });
   });
 });

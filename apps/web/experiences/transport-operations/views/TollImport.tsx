@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/SectionState
 import {
   TOLL_PROVIDER_LABEL,
   TOLL_SOURCE_KIND_LABEL,
+  TOLL_TRANSACTION_KIND_LABEL,
   formatBusinessDate,
   formatCount,
   formatInstant,
@@ -14,17 +15,33 @@ import {
 import { readUploadAsBase64 } from '../file-base64';
 import { toSectionQuery, useTollImports } from '../hooks/useTransportWorkspace';
 import type { NavigationInput } from '../navigation';
-import { transportApi, type TollImportInput } from '../transport-api';
+import { transportApi } from '../transport-api';
 import {
   TOLL_FILE_FORMATS,
   TOLL_PROVIDERS,
+  TOLL_TRANSACTION_KINDS,
   type ManualTollRowInput,
   type TollFileFormat,
   type TollImport as TollImportRecord,
   type TollProvider,
   type TollProviderReadiness,
+  type TollTransactionKind,
 } from '../transport-types';
 import { toTollPreviewModel, type TollPreviewModel } from '../workspace/toll';
+import {
+  applyTollRowKind,
+  bindTollPreview,
+  buildTollImportRequest,
+  commitableTollRequest,
+  EMPTY_MANUAL_TOLL_ROW,
+  tollFileToken,
+  tollImportReady,
+  tollPreviewStale,
+  tollRowCarriesVehicle,
+  type TollImportDraft,
+  type TollImportMode,
+  type TollImportPreviewBinding,
+} from '../workspace/toll-import';
 
 /**
  * NAP BANG KE PHI DUONG BO (ETC) — doc thu roi moi ghi.
@@ -74,19 +91,6 @@ export function TollImport({
   );
 }
 
-type TollImportMode = 'STATEMENT_FILE' | 'MANUAL';
-
-const EMPTY_MANUAL_ROW: ManualTollRowInput = {
-  accountNo: '',
-  kind: 'TOLL_PASS',
-  vehiclePlate: null,
-  passedAt: null,
-  businessDate: null,
-  amount: '',
-  station: null,
-  providerRef: null,
-};
-
 /** Chuoi rong tu mot o nhap la "khong co", khong phai mot gia tri. */
 const orNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
 
@@ -99,48 +103,68 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
   const [periodEnd, setPeriodEnd] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [format, setFormat] = useState<TollFileFormat>('CSV');
-  const [rows, setRows] = useState<readonly ManualTollRowInput[]>([EMPTY_MANUAL_ROW]);
-  const [preview, setPreview] = useState<TollPreviewModel | null>(null);
+  const [rows, setRows] = useState<readonly ManualTollRowInput[]>([EMPTY_MANUAL_TOLL_ROW]);
+  const [binding, setBinding] = useState<TollImportPreviewBinding | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [committed, setCommitted] = useState<string | null>(null);
 
   const statementReady =
     readiness.find((entry) => entry.provider === provider)?.statementReady ?? false;
 
-  const buildInput = async (): Promise<TollImportInput> => {
-    const base = {
-      provider,
-      sourceLabel: sourceLabel.trim(),
-      periodStart: orNull(periodStart),
-      periodEnd: orNull(periodEnd),
-    };
-    if (mode === 'MANUAL') {
-      return { ...base, sourceKind: 'MANUAL', rows };
-    }
-    if (file === null) throw new Error('Chưa chọn tệp bảng kê.');
-    return {
-      ...base,
-      sourceKind: 'STATEMENT_FILE',
-      format,
-      contentBase64: await readUploadAsBase64(file),
-    };
+  /*
+   * BAN NHAP la mot GIA TRI, khong phai tam bien roi rac.
+   *
+   * Gom lai de mot ham THUAN cham duoc *"ban nhap hien tai co con la ban nhap da doc thu khong"*.
+   * Chung nao con nam roi rac trong `useState`, cau hoi do chi tra loi duoc bang mat nguoi doc.
+   */
+  const draft: TollImportDraft = {
+    provider,
+    mode,
+    sourceLabel,
+    periodStart,
+    periodEnd,
+    format,
+    fileToken: file === null ? null : tollFileToken(file),
+    rows,
   };
 
+  /*
+   * NAP THAT GUI DI `binding.request` — dung bo byte da duoc doc thu, khong phai mot bo moi dung
+   * lai tu bieu nhap. `null` = bieu nhap da doi ke tu lan doc thu.
+   */
+  const commitable = commitableTollRequest(binding, draft);
+  const stale = tollPreviewStale(binding, draft);
+
   const runPreview = useMutation({
-    mutationFn: async () => transportApi.toll.previewImport(await buildInput()),
-    onSuccess: (result) => {
+    mutationFn: async () => {
+      const request = buildTollImportRequest(
+        draft,
+        mode === 'STATEMENT_FILE' && file !== null ? await readUploadAsBase64(file) : null,
+      );
+      return { request, preview: await transportApi.toll.previewImport(request) };
+    },
+    onSuccess: ({ request, preview }) => {
       setFailure(null);
       setCommitted(null);
-      setPreview(toTollPreviewModel(result));
+      // Ket qua doc thu duoc BUOC vao dung than yeu cau da sinh ra no.
+      setBinding(bindTollPreview(request, draft, toTollPreviewModel(preview)));
     },
     onError: (error: Error) => {
-      setPreview(null);
+      setBinding(null);
       setFailure(error.message);
     },
   });
 
   const runCommit = useMutation({
-    mutationFn: async () => transportApi.toll.commitImport(await buildInput()),
+    mutationFn: async () => {
+      // Doc lai qua `commitableTollRequest` ngay tai day: giua luc ve nut va luc bam, ban nhap co
+      // the da doi. Mot cai nut bi khoa la mot loi moi, khong phai mot bao dam.
+      const request = commitableTollRequest(binding, draft);
+      if (request === null) {
+        throw new Error('Biểu nhập đã đổi kể từ lần đọc thử. Hãy đọc thử lại trước khi nạp.');
+      }
+      return transportApi.toll.commitImport(request);
+    },
     onSuccess: (result) => {
       setFailure(null);
       setCommitted(
@@ -154,11 +178,7 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
     onError: (error: Error) => setFailure(error.message),
   });
 
-  const ready =
-    sourceLabel.trim() !== '' &&
-    (mode === 'MANUAL'
-      ? rows.some((row) => row.accountNo.trim() !== '' && row.amount.trim() !== '')
-      : file !== null && statementReady);
+  const ready = tollImportReady(draft, statementReady);
 
   return (
     <section className="tx-panel tx-panel--form" aria-labelledby="toll-import-heading">
@@ -169,6 +189,12 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
       </p>
 
       {failure === null ? null : <ErrorState message={failure} />}
+      {!stale ? null : (
+        <p className="tx-note" role="status">
+          Biểu nhập đã đổi kể từ lần đọc thử. Hãy đọc thử lại — nút nạp chỉ mở cho đúng bộ dữ liệu
+          đã được đọc thử.
+        </p>
+      )}
       {committed === null ? null : (
         <p className="tx-note" role="status">
           {committed}
@@ -183,7 +209,6 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
             value={provider}
             onChange={(event) => {
               setProvider(event.target.value as TollProvider);
-              setPreview(null);
               setCommitted(null);
             }}
           >
@@ -202,7 +227,6 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
             value={mode}
             onChange={(event) => {
               setMode(event.target.value as TollImportMode);
-              setPreview(null);
               setCommitted(null);
             }}
           >
@@ -236,7 +260,6 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
           onFormat={setFormat}
           onFile={(picked) => {
             setFile(picked);
-            setPreview(null);
             setCommitted(null);
             // Doan dinh dang tu duoi tep nhung VAN de sua duoc: duoi tep la mot pho doan, khong
             // phai mot su that.
@@ -250,7 +273,6 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
           rows={rows}
           onChange={(next) => {
             setRows(next);
-            setPreview(null);
             setCommitted(null);
           }}
         />
@@ -268,15 +290,21 @@ function TollImportForm({ readiness }: { readonly readiness: readonly TollProvid
         <button
           type="button"
           className="tx-btn tx-btn--go"
-          disabled={preview === null || runCommit.isPending}
+          disabled={commitable === null || runCommit.isPending}
           onClick={() => runCommit.mutate()}
-          title={preview === null ? 'Xem trước trước đã.' : undefined}
+          title={
+            commitable === null
+              ? stale
+                ? 'Biểu nhập đã đổi kể từ lần đọc thử — đọc thử lại đã.'
+                : 'Xem trước trước đã.'
+              : undefined
+          }
         >
           {runCommit.isPending ? 'Đang nạp…' : 'Nạp bảng kê'}
         </button>
       </div>
 
-      {preview === null ? null : <PreviewPanel model={preview} />}
+      {binding === null ? null : <PreviewPanel model={binding.model} stale={stale} />}
     </section>
   );
 }
@@ -347,6 +375,18 @@ function FilePicker({
  * Bien so de trong la HOP LE, va do la co y: mot dong nap tien hay phi tai khoan khong gan vao
  * chiec xe nao. Ep mot bien so vao day se tao ra mot lien he khong co that roi no di tiep vao moi
  * bao cao theo xe.
+ *
+ * ==============================================================================================
+ * LOAI GIAO DICH LA MOT O NHAP, KHONG PHAI MOT HANG SO
+ * ==============================================================================================
+ *
+ * Ban truoc dong cung moi dong thanh `TOLL_PASS`, trong khi chinh cau huong dan ngay tren lai noi
+ * *"de trong bien so neu la nap tien / phi tai khoan"*. Tuc man hinh MOI nguoi van hanh nhap mot
+ * dong nap tien roi gui no di duoi danh nghia mot luot qua tram — va tu do khoan tien do nam sai
+ * cho trong moi bao cao.
+ *
+ * Doi loai sang mot loai KHONG mang xe thi ba o cua xe duoc don va khoa lai (`applyTollRowKind`):
+ * de lai gia tri cu se gui di mot dong `TOP_UP` mang bien so, va may chu khong tu choi dong do.
  */
 function ManualRows({
   rows,
@@ -355,6 +395,10 @@ function ManualRows({
   readonly rows: readonly ManualTollRowInput[];
   readonly onChange: (rows: readonly ManualTollRowInput[]) => void;
 }) {
+  const replace = (index: number, next: ManualTollRowInput) => {
+    onChange(rows.map((row, position) => (position === index ? next : row)));
+  };
+
   const patch = (index: number, change: Partial<ManualTollRowInput>) => {
     onChange(rows.map((row, position) => (position === index ? { ...row, ...change } : row)));
   };
@@ -377,6 +421,23 @@ function ManualRows({
             />
           </label>
           <label className="tx-field">
+            <span>Loại</span>
+            <select
+              aria-label={`Loại giao dịch dòng ${String(index + 1)}`}
+              value={row.kind}
+              onChange={(event) =>
+                // KHONG `patch(index, { kind })`: doi loai con phai DON theo cac o cua xe.
+                replace(index, applyTollRowKind(row, event.target.value as TollTransactionKind))
+              }
+            >
+              {TOLL_TRANSACTION_KINDS.map((value) => (
+                <option key={value} value={value}>
+                  {TOLL_TRANSACTION_KIND_LABEL[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="tx-field">
             <span>Số tiền</span>
             <input
               value={row.amount}
@@ -388,6 +449,12 @@ function ManualRows({
             <span>Biển số</span>
             <input
               value={row.vehiclePlate ?? ''}
+              disabled={!tollRowCarriesVehicle(row.kind)}
+              title={
+                tollRowCarriesVehicle(row.kind)
+                  ? undefined
+                  : 'Dòng nạp tiền / phí tài khoản không thuộc về một chiếc xe.'
+              }
               onChange={(event) => patch(index, { vehiclePlate: orNull(event.target.value) })}
             />
           </label>
@@ -395,6 +462,7 @@ function ManualRows({
             <span>Trạm</span>
             <input
               value={row.station ?? ''}
+              disabled={!tollRowCarriesVehicle(row.kind)}
               onChange={(event) => patch(index, { station: orNull(event.target.value) })}
             />
           </label>
@@ -403,6 +471,7 @@ function ManualRows({
             <input
               value={row.passedAt ?? ''}
               placeholder="31/08/2026 23:40"
+              disabled={!tollRowCarriesVehicle(row.kind)}
               onChange={(event) => patch(index, { passedAt: orNull(event.target.value) })}
             />
           </label>
@@ -423,7 +492,7 @@ function ManualRows({
         <button
           type="button"
           className="tx-button tx-button--quiet"
-          onClick={() => onChange([...rows, EMPTY_MANUAL_ROW])}
+          onClick={() => onChange([...rows, EMPTY_MANUAL_TOLL_ROW])}
         >
           Thêm dòng
         </button>
@@ -439,10 +508,28 @@ function ManualRows({
  * nua so dong bi loai se sinh ra mot hang cho lech tran lan, va cho re nhat de phat hien dieu do la
  * o day — truoc khi ghi, va truoc khi khong con duong xoa.
  */
-function PreviewPanel({ model }: { readonly model: TollPreviewModel }) {
+function PreviewPanel({
+  model,
+  stale,
+}: {
+  readonly model: TollPreviewModel;
+  readonly stale: boolean;
+}) {
   return (
     <div className="tx-detail__block">
       <h3>Kết quả đọc thử</h3>
+
+      {/*
+        Ban doc thu KHONG bi go xuong khi bieu nhap doi — no van la mot ket qua that, va nguoi van
+        hanh can nhin no de biet minh vua sua gi. Cai phai doi la CAU no dang noi: tu "day la thu
+        sap duoc ghi" thanh "day la thu cua ban nhap TRUOC do".
+      */}
+      {!stale ? null : (
+        <p className="tx-note" role="status">
+          Kết quả này thuộc về biểu nhập <strong>trước khi bạn sửa</strong>. Đọc thử lại để nó nói
+          về bộ dữ liệu hiện tại.
+        </p>
+      )}
 
       {model.replayNotice === null ? null : (
         <p className="tx-note" role="status">
