@@ -588,3 +588,203 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     });
   },
 );
+
+/**
+ * CUA SO CUA KY VONG, tren Postgres THAT — hoi quy cho finding 1 cua ban soat doc lap 13/09/2026.
+ *
+ * Bo bai trong bo nho da khoa nghia nay o `InMemoryTrackingRepository`. Bo nay khoa chinh no o
+ * PostgreSQL, va do khong phai mot ban sao cho du: hai hien thuc tra loi cung mot cau hoi bang hai
+ * co che khac han — mot vong lap tren `Map` so voi mot `WHERE ... receivedAt >= $1` chay tren
+ * chi muc. Mot ben sua ma ben kia khong la dung cai lech ma che do `PERSISTENCE` giau di duoc:
+ * xanh o CI khong co DB, do o ban chay that.
+ *
+ * Tien to `ITLHEAL` KHONG long nhau voi `ITPROOF`/`ITWDRAW` — `cleanup` dung `startsWith`.
+ */
+describe.runIf(process.env.RUN_PRISMA_IT === '1')(
+  'Cua so ky vong cua suc khoe vi tri (Postgres)',
+  () => {
+    const prisma = new PrismaService();
+    const tracking = new PrismaTrackingRepository(prisma);
+    const fleet = new PrismaFleetRepository(prisma);
+    const trips = new PrismaTripRepository(prisma);
+
+    const PLATE = 'ITLHEAL-0001';
+    const TRIP_CODE = 'ITLHEAL-TR-1';
+    const DRIVER_PHONE = '0955ITLHEALA';
+    const BUSINESS_DATE = '2026-09-07';
+
+    /** Phien CU chay 01:00-02:00; phien MOI mo luc 03:00. Dong ho may chu, tat dinh. */
+    const PREVIOUS_STARTED = new Date('2026-09-07T01:00:00Z');
+    const PREVIOUS_OBSERVED = new Date('2026-09-07T01:30:00Z');
+    const PREVIOUS_CLOSED = new Date('2026-09-07T02:00:00Z');
+    const CURRENT_STARTED = new Date('2026-09-07T03:00:00Z');
+
+    let vehicleId = '';
+    let driverId = '';
+    let tripId = '';
+    let currentSessionId = '';
+
+    async function cleanup(): Promise<void> {
+      await prisma.transportLocationObservation.deleteMany({
+        where: { session: { trip: { code: TRIP_CODE } } },
+      });
+      await prisma.transportTrackingSession.deleteMany({ where: { trip: { code: TRIP_CODE } } });
+      const trip = await trips.findByCode(TRIP_CODE);
+      if (trip) {
+        await prisma.transportTripAssignment.deleteMany({ where: { tripId: trip.id } });
+        await prisma.transportTrip.deleteMany({ where: { code: TRIP_CODE } });
+      }
+      await prisma.transportVehicle.deleteMany({ where: { registrationPlate: PLATE } });
+      await prisma.transportDriver.deleteMany({ where: { phone: DRIVER_PHONE } });
+    }
+
+    const observe = (
+      sessionId: string,
+      clientEventId: string,
+      source: 'DEVICE_GNSS' | 'TELEMATICS',
+      receivedAt: Date,
+    ) =>
+      tracking.appendObservation({
+        sessionId,
+        clientEventId,
+        latitude: 21.0285,
+        longitude: 105.8542,
+        accuracyMetres: 8,
+        speedMetresPerSecond: null,
+        bearingDegrees: null,
+        source,
+        capturedAt: receivedAt,
+        receivedAt,
+        clockSkewSeconds: 0,
+        mockLocationReported: false,
+        businessDate: BUSINESS_DATE,
+      });
+
+    beforeAll(async () => {
+      await cleanup();
+      const vehicle = await fleet.createVehicle({
+        registrationPlate: PLATE,
+        vehicleClass: 'TRUCK',
+      });
+      const driver = await fleet.createDriver({
+        fullName: 'ITLHEAL Lai xe',
+        phone: DRIVER_PHONE,
+        licenceClass: 'FC',
+        licenceExpiry: '2030-01-01',
+      });
+      const trip = await trips.create({
+        code: TRIP_CODE,
+        kind: 'OWN_DIRECT',
+        businessDate: BUSINESS_DATE,
+        originLabel: 'Ha Noi',
+        destinationLabel: 'Hai Phong',
+      });
+      vehicleId = vehicle.id;
+      driverId = driver.id;
+      tripId = trip.id;
+
+      // Phien CU: co mot ban dinh vi that, roi dong lai.
+      const previous = await tracking.createSession({
+        driverId,
+        tripId,
+        vehicleId,
+        deviceInstallationId: null,
+        businessDate: BUSINESS_DATE,
+        startedAt: PREVIOUS_STARTED,
+        openedBy: 'itlheal',
+      });
+      await observe(previous.id, 'itlheal-cu-1', 'DEVICE_GNSS', PREVIOUS_OBSERVED);
+      await tracking.closeSession(previous.id, PREVIOUS_CLOSED, 'ITLHEAL');
+
+      // Phien MOI: chua co ban dinh vi nao.
+      const current = await tracking.createSession({
+        driverId,
+        tripId,
+        vehicleId,
+        deviceInstallationId: null,
+        businessDate: BUSINESS_DATE,
+        startedAt: CURRENT_STARTED,
+        openedBy: 'itlheal',
+      });
+      currentSessionId = current.id;
+    });
+
+    afterAll(async () => {
+      await cleanup();
+      await prisma.$disconnect();
+    });
+
+    it('ban cua PHIEN CU nam ngoai cua so -> khong mot nguon nao duoc tra ve', async () => {
+      const samples = await tracking.latestObservationPerSourceForVehicle(
+        vehicleId,
+        CURRENT_STARTED,
+      );
+
+      // Khong chan cua so, hang nay tra ve ban 01:30 — va tang tren cham no thanh `LOST`, tuc bao
+      // mat GPS ngay giay dau tien cua mot phien vua mo.
+      expect(samples).toHaveLength(0);
+    });
+
+    it('khong chan cua so thi ban cu VAN o do — bai tren khong xanh vi thieu du lieu', async () => {
+      const all = await tracking.latestObservationPerSourceForVehicle(
+        vehicleId,
+        new Date('2026-09-07T00:00:00Z'),
+      );
+
+      // Doi chung AM. Neu fixture rong thi bai tren xanh ma khong chung minh dieu gi; hang nay bat
+      // buoc no phai xanh VI cua so, khong phai vi khong co gi de tra ve.
+      expect(all).toHaveLength(1);
+      expect(all[0]?.receivedAt.toISOString()).toBe(PREVIOUS_OBSERVED.toISOString());
+    });
+
+    it('ban den DUNG giay phien mo duoc tinh (bien `>=` cua Postgres)', async () => {
+      await observe(currentSessionId, 'itlheal-moi-bien', 'DEVICE_GNSS', CURRENT_STARTED);
+
+      const samples = await tracking.latestObservationPerSourceForVehicle(
+        vehicleId,
+        CURRENT_STARTED,
+      );
+
+      // `gt` thay vi `gte` se vut di ban DAU TIEN cua chinh phien do, va chiec xe hien "dang cho
+      // dinh vi" mai mai. Ban trong bo nho khoa cung bien nay.
+      expect(samples).toHaveLength(1);
+      expect(samples[0]?.clientEventId).toBe('itlheal-moi-bien');
+    });
+
+    it('trong cua so, MOI NGUON tra ve ban moi nhat cua rieng no', async () => {
+      await observe(
+        currentSessionId,
+        'itlheal-moi-gnss',
+        'DEVICE_GNSS',
+        new Date('2026-09-07T03:10:00Z'),
+      );
+      await observe(
+        currentSessionId,
+        'itlheal-moi-tele',
+        'TELEMATICS',
+        new Date('2026-09-07T03:05:00Z'),
+      );
+
+      const samples = await tracking.latestObservationPerSourceForVehicle(
+        vehicleId,
+        CURRENT_STARTED,
+      );
+      const bySource = new Map(samples.map((sample) => [sample.source, sample]));
+
+      // Cua so cat theo THOI GIAN, khong cat theo nguon: mot hop GSHT im hon dien thoai van phai
+      // ra duoc, neu khong `SOURCE_FALLBACK` khong bao gio tinh dung.
+      expect(samples).toHaveLength(2);
+      expect(bySource.get('DEVICE_GNSS')?.clientEventId).toBe('itlheal-moi-gnss');
+      expect(bySource.get('TELEMATICS')?.clientEventId).toBe('itlheal-moi-tele');
+    });
+
+    it('cua so KHONG lam ro ri sang mot chiec xe khac', async () => {
+      const samples = await tracking.latestObservationPerSourceForVehicle(
+        'khong-phai-mot-xe-nao',
+        new Date('2026-09-07T00:00:00Z'),
+      );
+
+      expect(samples).toHaveLength(0);
+    });
+  },
+);

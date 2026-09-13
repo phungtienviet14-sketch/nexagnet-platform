@@ -1,12 +1,16 @@
 import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { Roles } from '../../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
+import { loadFoundationEnv } from '../../config/foundation-env.js';
+import { roleCanPerform } from '../transport-actions.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
+import { toLocationHealthView, type VehicleLocationHealthView } from './location-health.js';
+import { LocationHealthService } from './location-health.service.js';
 import { TrackingService } from './tracking.service.js';
 import type { LocationTrackView, TrackingSummaryView } from './tracking.types.js';
 
@@ -29,7 +33,18 @@ import type { LocationTrackView, TrackingSummaryView } from './tracking.types.js
 @Controller('transport')
 @UseGuards(TransportActionGuard)
 export class TrackingController {
-  constructor(private readonly tracking: TrackingService) {}
+  constructor(
+    private readonly tracking: TrackingService,
+    /**
+     * `LocationHealthService` phai nam trong `exports` cua `TransportProofModule`.
+     *
+     * Controller nay dang ky o GOC (`app-composition.ts`), nen no CHI thay danh sach export cua
+     * module — mot provider noi bo tiem vao day se qua `tsc`, qua test don vi, qua
+     * `*.composition.spec.ts`, roi chet luc khoi dong that. Da xay ra roi; xem
+     * `app.module.transport-proof.boot.spec.ts`.
+     */
+    private readonly health: LocationHealthService,
+  ) {}
 
   @Get('trips/:tripId/tracking')
   @Roles('ACCOUNTING', 'ADMIN')
@@ -50,6 +65,37 @@ export class TrackingController {
     // duong di cua ai".
     const actor = transportActorOf(request);
     return this.guard(() => this.tracking.trackForSession(sessionId, actor));
+  }
+
+  /**
+   * SUC KHOE VI TRI cua mot chiec xe — `#297 T6`.
+   *
+   * `transport.tracking.read`, y nhu tuyen tom tat o tren, va KHONG mot ma quyen moi nao. Toa do
+   * trong `lastKnown` bi che tru khi nguoi goi co `transport.location.history.read` — nen ke toan
+   * (khong co ma do) doc duoc trang thai va tuoi ban cuoi ma khong doc duoc chiec xe dang o dau.
+   */
+  @Get('vehicles/:vehicleId/location-health')
+  @Roles('ACCOUNTING', 'ADMIN')
+  @RequiresTransportAction('transport.tracking.read')
+  locationHealth(
+    @Req() request: AuthenticatedRequest,
+    @Param('vehicleId') vehicleId: string,
+  ): Promise<VehicleLocationHealthView> {
+    const canReadCoordinates = this.canReadCoordinates(request);
+    return this.guard(async () =>
+      toLocationHealthView(await this.health.forVehicle(vehicleId), { canReadCoordinates }),
+    );
+  }
+
+  /**
+   * Cung dieu kien mo dau voi `TransportActionGuard`: o che do khong-phien thi khong co danh tinh
+   * nao de hoi va toan bo ung dung von khong xac thuc. Lech dieu kien voi cong kia se tao ra mot
+   * che do chay ma mot nua so cong mo mot nua dong.
+   */
+  private canReadCoordinates(request: AuthenticatedRequest): boolean {
+    if (loadFoundationEnv().AUTH_MODE !== 'session') return true;
+    const role = request.authUser?.role;
+    return role !== undefined && roleCanPerform(role, 'transport.location.history.read');
   }
 
   private async guard<T>(run: () => Promise<T>): Promise<T> {

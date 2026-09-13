@@ -172,3 +172,71 @@ một phép đo khác, cần một thiết bị, và nó **chưa được làm**
 - Rằng có thiết bị Android thật để chứng minh. Máy dựng hiện tại **không có** máy Android nào cắm
   vào (không có adb/MTP, không có Android SDK). Đó là một chặn **bên ngoài**, và theo #235 nó
   không được chặn phần máy chủ.
+
+---
+
+## 7. Bám vị trí nền: **RESEARCHED / NOT DEVICE-PROVEN** (`#297 T7`, đo 12/09/2026)
+
+Mục §2 trả lời _"chọn nền tảng nào"_. Mục này trả lời câu khác và hẹp hơn: **hệ điều hành cho phép
+biết vị trí một chiếc xe liên tục đến mức nào, và cần bằng chứng gì để nói rằng ta làm được.**
+
+Ma trận đầy đủ (Android · iOS · 8 thư viện, mọi khẳng định kèm URL nguồn chính thức) nằm ở
+[`#297` comment T0.11](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/297#issuecomment-5645213792).
+Không sao lại vào đây — dưới đây chỉ là những điều **đổi quyết định**.
+
+### 7.1 Trần của hệ điều hành, không phải trần của thư viện
+
+- **iOS: không thư viện nào — miễn phí hay 999 USD — cho vị trí liên tục sau khi người dùng
+  _terminate_ ứng dụng.** Apple ghi thẳng: _"If your app is terminated, the delivery of new location
+  events stops altogether"_. Thứ **có** đánh thức lại ứng dụng là loại thô: significant-change
+  ~**500 m** và _"not… more frequently than once every five minutes"_.
+  ⇒ Một yêu cầu kiểu _"biết xe ở đâu mỗi 30 giây kể cả khi lái xe tắt hẳn ứng dụng"_ là
+  **không thoả được trên iOS ở bất kỳ giá nào**. Nó phải được đàm phán lại thành _"phục hồi thô +
+  một khoảng trống phát hiện được"_.
+- **Android: ba chế độ chết mà Google KHÔNG tài liệu hoá cách giảm thiểu** — Task Manager "Stop"
+  (Android 13+, _"doesn't send your app any callbacks"_), force-stop (Android 15 huỷ mọi pending
+  intent, chỉ hết khi **chính người dùng** mở lại ứng dụng), và các trình quản lý pin của OEM
+  (AOSP: _"Device implementers can continue to use their custom methods"_).
+- **Android 14+ bắt buộc** `foregroundServiceType="location"` + `FOREGROUND_SERVICE_LOCATION`;
+  **Android 11+** không còn nút "Allow all the time" trong hộp thoại — phải đưa người dùng sang
+  trang cài đặt, và một yêu cầu gộp foreground+background bị **bỏ lặng lẽ**.
+- **Android 16 / API 36** áp hạn mức thời gian chạy cho job khởi từ foreground service, nên thiết kế
+  _"thu trong FGS → tải lên bằng WorkManager"_ bị ảnh hưởng trực tiếp.
+
+### 7.2 Một cái bẫy kiểm toán về giấy phép
+
+`react-native-background-geolocation` có tệp `LICENSE` **là MIT nguyên văn** và npm khai
+`license: MIT`, nhưng SDK native đi kèm là **nhị phân dựng sẵn, chặn bằng khoá**: miễn phí ở
+`DEBUG`, **399–999 USD** cho `RELEASE`. ⇒ Một máy quét SPDX đọc tệp `LICENSE` hoặc trường npm sẽ
+**kết luận sai rằng nó miễn phí**. Ghi lại ở đây vì đó là loại sai không ai bắt được khi review PR.
+
+### 7.3 Vị thế của Lane T, và vì sao
+
+| Lối                                     | Dựng được hôm nay?                                | Chặn                                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1. Giữ mobile-web, nói thẳng `LOST`** | **CÓ — không cần dựng gì mới**                    | Không có chặn kỹ thuật. Giá phải trả là độ phủ trung thực: điện thoại khoá màn hình thì mọi khoảng đó đọc là `LOST`. Đó là **quyết định sản phẩm cần chấp nhận, không phải lỗi cần che**                                                                                                                                    |
+| 2. Native Android-first                 | Không                                             | **Không có máy Android nào được đăng ký, không có môi trường ký/phát hành.** Một FGS chưa từng chạy trên máy thật **không phải bằng chứng** về tính liên tục — đúng những chế độ chết ở §7.1 chỉ hiện trên phần cứng                                                                                                        |
+| 3. Vỏ cross-platform (Capacitor/Expo)   | Không                                             | Cùng một chặn máy + ký, **cộng một chặn riêng**: khẳng định "sống sót sau terminate" của plugin là **lời của nhà cung cấp mà ta không kiểm được**, và nó sẽ nằm trên đường tới hạn của đối soát. Plugin miễn phí gần nhất tự ghi _"no on-disk queue and no automatic retry… points are not persisted across process death"_ |
+| **4. Hộp GSHT trên xe**                 | Một phần — **cổng `VehicleTelematicsPort` đã có** | Là phụ thuộc **tích hợp và thương mại**, không phải bài toán chứng minh trên thiết bị. Lợi thế quyết định: **nó không chịu một ràng buộc nào ở §7.1** — không force-stop, không hibernate, không mất quyền, không bị Apple/Google duyệt                                                                                     |
+
+⇒ **Vị thế: Lối 1 (nói thẳng `LOST`), với Lối 4 làm nguồn liên tục ở những xe có lắp hộp.** Đó
+chính là lý do tầng máy chủ phân biệt `LIVE` ⟂ `DEGRADED` ⟂ `LOST` ⟂ `SOURCE_FALLBACK` thay vì
+nội suy cho liền mạch (`apps/api/src/transport/proof/location-health.ts`).
+
+### 7.4 Cần đúng 6 hiện vật này để nâng lên **PROVEN**
+
+1. Một bản dựng **đã ký** cài trên **≥2 máy Android thật của 2 hãng khác nhau** (một gần AOSP, một
+   có trình quản lý pin hung hãn), đang chạy `location` foreground service.
+2. Một lần chạy liên tục **ghi lại theo từng máy**: tắt màn hình · chuyển nền · gạt khỏi recents ·
+   khởi động lại máy — kèm **dấu thời gian nhận ở máy chủ** cho biết điểm còn về không, và bao lâu.
+3. Một lần **force-stop** cho thấy khoảng trống được **phát hiện và báo `LOST`**, không nội suy;
+   quan sát `ApplicationStartInfo.wasForceStopped()` ở lần mở kế tiếp.
+4. Một lần chạy **mất mạng** chứng minh điểm đệm trong lúc mất mạng **đến được sau đó** — đúng thứ
+   các plugin miễn phí **không** cung cấp.
+5. Trên iOS: một lần **terminate rồi di chuyển**, **đo** khoảng cách và độ trễ phục hồi thật so với
+   sàn ~500 m / ≥5 phút.
+6. **Cả hai** khai báo Play đã qua duyệt (background location + loại FGS `location`, kèm **video
+   minh hoạ**) — một bản dựng không phát hành được thì không phải một năng lực đã chứng minh.
+
+Trước khi có đủ 1–6, mọi câu _"ứng dụng chạy nền được"_ trong tài liệu hay báo cáo phải viết là
+**RESEARCHED / NOT DEVICE-PROVEN**, và §6 ở trên vẫn nguyên giá trị.

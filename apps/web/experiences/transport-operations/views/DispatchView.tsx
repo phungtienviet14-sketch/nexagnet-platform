@@ -10,6 +10,7 @@ import {
   useDispatchSuggestions,
   useNavigationInput,
   useTransportOrders,
+  useTransportPlanningPolicy,
 } from '../hooks/useTransportWorkspace';
 import { boundsOf } from '../workspace/journey';
 import { toDispatch, toDispatchMap, type DispatchCandidateRow } from '../workspace/dispatch';
@@ -33,9 +34,23 @@ const TransportMap = dynamic(() => import('../visual/TransportMap'), {
 export function DispatchView(): React.ReactElement {
   const input = useNavigationInput();
   const ordersQuery = toSectionQuery(useTransportOrders(input));
+  const policyQuery = useTransportPlanningPolicy(input);
   const suggestions = useDispatchSuggestions();
   const assignment = useDispatchAssignment();
   const [orderId, setOrderId] = useState<string>('');
+
+  /**
+   * CHUA BIET thi coi nhu TAT — `undefined` khong duoc hieu thanh "chac la bat".
+   *
+   * Trong luc lan doc chinh sach chua ve, `data` la `undefined`, va bieu thuc nay ra `false`. Do la
+   * huong hong DUNG: man hinh im lang mot nhip roi hien dung trang thai, thay vi moi nguoi dung bam
+   * mot cai nut ma may chu se tu choi.
+   *
+   * Va day KHONG phai cong chan. Cong chan that nam o `DispatchService.requireMultiOrderRun()`; neu
+   * ai do go bo doan nay, may chu VAN tra 403 `DISPATCH_MULTI_ORDER_DISABLED`. `#294 S-OWNER-03`:
+   * *"UI hiding is not authorization."*
+   */
+  const multiOrderRunEnabled = policyQuery.data?.grouping === 'MULTI_ORDER_RUN';
 
   const model = suggestions.data === undefined ? null : toDispatch(suggestions.data);
   const mapModel = suggestions.data === undefined ? null : toDispatchMap(suggestions.data);
@@ -91,29 +106,58 @@ export function DispatchView(): React.ReactElement {
         summary="Xe nào đang gần điểm lấy hàng, sẽ rảnh lúc nào, và chạy rỗng thêm bao nhiêu km."
         context={model === null ? undefined : `Đề nghị lúc ${model.generatedAt}`}
         actions={
-          <>
-            <label className="tx-field tx-field--inline">
-              <span>Đơn hàng</span>
-              <select value={orderId} onChange={(event) => setOrderId(event.target.value)}>
-                <option value="">— Chọn đơn —</option>
-                {orders.map((order) => (
-                  <option key={order.id} value={order.id}>
-                    {order.code} · {order.originLabel} → {order.destinationLabel}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className="tx-btn"
-              disabled={orderId === '' || suggestions.isPending}
-              onClick={() => suggestions.mutate({ orderId })}
-            >
-              Tìm xe
-            </button>
-          </>
+          !multiOrderRunEnabled ? null : (
+            <>
+              <label className="tx-field tx-field--inline">
+                <span>Đơn hàng</span>
+                <select value={orderId} onChange={(event) => setOrderId(event.target.value)}>
+                  <option value="">— Chọn đơn —</option>
+                  {orders.map((order) => (
+                    <option key={order.id} value={order.id}>
+                      {order.code} · {order.originLabel} → {order.destinationLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="tx-btn"
+                disabled={orderId === '' || suggestions.isPending}
+                onClick={() => suggestions.mutate({ orderId })}
+              >
+                Tìm xe
+              </button>
+            </>
+          )
         }
       />
+
+      {policyQuery.isPending ? <LoadingState label="Đang đọc chế độ vận hành…" /> : null}
+
+      {/*
+        CHE DO MOI DON MOT VONG CHAY — noi thang ra, khong de mot man hinh trong.
+
+        `#294 S-OWNER-01`: o che do nay khong ai duoc moi noi don moi vao mot vong chay dang chay,
+        nen bang de nghi khong ton tai. Mot `EmptyState` ("chua co de nghi nao") se noi sai: no ham
+        y rang cu bam them thi se co.
+      */}
+      {policyQuery.isSuccess && !multiOrderRunEnabled ? (
+        <section
+          className="tx-panel"
+          aria-label="Chế độ vận hành"
+          data-testid="tx-dispatch-one-order"
+        >
+          <h2>Khách này chạy chế độ mỗi đơn một vòng chạy</h2>
+          <p className="tx-note">
+            Mỗi đơn đi một vòng chạy riêng, nên không có bảng đề nghị ghép đơn vào xe đang chạy. Đơn
+            vẫn được giao xe theo cách hiện tại ở màn hình Chuyến.
+          </p>
+          <p className="tx-note">
+            Muốn bật bảng đề nghị điều xe, đổi cấu hình <code>transportPlanning.runGrouping</code>{' '}
+            sang <code>MULTI_ORDER_RUN</code> trong gói khách.
+          </p>
+        </section>
+      ) : null}
 
       {suggestions.isError ? <ErrorState message={(suggestions.error as Error).message} /> : null}
       {assignment.isError ? <ErrorState message={(assignment.error as Error).message} /> : null}
@@ -123,7 +167,10 @@ export function DispatchView(): React.ReactElement {
       ) : null}
 
       {model === null ? (
-        <EmptyState title="Chọn một đơn rồi bấm “Tìm xe” để xem đề nghị." />
+        /* O che do mot-don-mot-vong, loi moi "bam Tim xe" la mot cai bay — khoi hien. */
+        multiOrderRunEnabled ? (
+          <EmptyState title="Chọn một đơn rồi bấm “Tìm xe” để xem đề nghị." />
+        ) : null
       ) : (
         <>
           <section className="tx-panel" aria-label="Bản đồ đội xe">
