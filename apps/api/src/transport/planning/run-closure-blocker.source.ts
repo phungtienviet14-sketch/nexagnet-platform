@@ -62,6 +62,46 @@ export class NoRunClosureBlockerSource extends RunClosureBlockerSource {
 }
 
 /**
+ * NHIEU NGUON, MOT CONG — `#293` R4, sau khi `#290` dem `OPEN_WAITING_SESSION` ve `main`.
+ *
+ * ============================================================================================
+ * VI SAO PHAI GOP, KHONG PHAI DANG KY HAI LAN
+ * ============================================================================================
+ *
+ * Nest lay provider CUOI CUNG cho mot token. Dang ky hai ban cho `RunClosureBlockerSource` thi ban
+ * thu hai de len ban thu nhat, va he thong lang le mat mot trong hai su that — khong mot loi boot
+ * nao, khong mot dong log nao. Dung kieu hong ma `planning.composition.spec.ts` da dat mot bai
+ * kiem THU TU de canh.
+ *
+ * Nen hai nguon phai gap nhau o mot cho, va do la lop nay.
+ *
+ * ============================================================================================
+ * KHONG NUOT LOI — VA DO LA CA DIEM
+ * ============================================================================================
+ *
+ * Mot delegate NEM thi loi di thang ra `collectBlockers()`, va o do no thanh
+ * `EXTERNAL_BLOCKER_SOURCE_UNAVAILABLE`: vong chay DUNG LAI. Bat loi o day roi di tiep voi cac
+ * nguon con lai se bien *"khong hoi duoc so ghi hien truong"* thanh *"so ghi hien truong khong
+ * chan gi"* — dung phep thay the ma `#293` R4 goi ten la fail-open.
+ *
+ * Ma trung lap thi gop lai: hai nguon cung noi mot dieu khong lam dieu do dung hon, va mot bang
+ * dieu hanh liet ke `CARGO_STILL_CARRIED` hai lan chi lam nguoi truc tuong co hai viec phai lam.
+ */
+export class CompositeRunClosureBlockerSource extends RunClosureBlockerSource {
+  constructor(private readonly delegates: readonly RunClosureBlockerSource[]) {
+    super();
+  }
+
+  async blockersForRun(runId: string): Promise<readonly RunClosureBlocker[]> {
+    const seen = new Set<RunClosureBlocker>();
+    for (const delegate of this.delegates) {
+      for (const blocker of await delegate.blockersForRun(runId)) seen.add(blocker);
+    }
+    return [...seen];
+  }
+}
+
+/**
  * MA CHAN SINH RA KHI KHONG HOI DUOC NGUON SU THAT.
  *
  * Nam trong `planning.types.ts` cung voi cac ma khac — o day chi la noi tra ve chung.

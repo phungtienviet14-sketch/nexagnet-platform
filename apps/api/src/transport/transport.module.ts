@@ -29,6 +29,7 @@ import { PrismaCounterpartySiteRepository } from './counterparty/prisma-counterp
 import { MovementRepository, InMemoryMovementRepository } from './movement/movement.repository.js';
 import { MovementService } from './movement/movement.service.js';
 import { PrismaMovementRepository } from './movement/prisma-movement.repository.js';
+import { MovementRunWriteGuard, RunWriteGuard } from './movement/run-write-guard.port.js';
 import {
   TRANSPORT_PLANNING_POLICY,
   tenantTransportPlanningPolicy,
@@ -139,6 +140,14 @@ import { TripService } from './trips/trip.service.js';
           : new InMemoryMovementRepository(trace),
       inject: [PrismaService, AuditLogRepository],
     },
+    /**
+     * RANH GIOI SERIALIZE cua vong chay (`#293` R2) — mot cong HEP tren kho da so huu khoa.
+     *
+     * Song o `transport-core` vi khoa la khoa cua hang `TransportVehicleRun`, va vi ca hai duong
+     * ghi kia (`closeRunAsSystemSerialized`, `createLeg`) deu o day. Capability nhan CONG nay chu
+     * khong nhan `MovementRepository`: xem `run-write-guard.port.ts`.
+     */
+    { provide: RunWriteGuard, useClass: MovementRunWriteGuard },
     {
       provide: AssetOwnershipRepository,
       useFactory: (prisma: PrismaService): AssetOwnershipRepository =>
@@ -221,6 +230,14 @@ import { TripService } from './trips/trip.service.js';
     CounterpartySiteRepository,
     TripRepository,
     MovementRepository,
+    /**
+     * XUAT CONG, khong xuat kho — `#293` R2.
+     *
+     * `transport-checkpoint` can ghi duoi khoa cua vong chay; no KHONG duoc quyen tao chang hay doi
+     * trang thai vong chay. `MovementRepository` o tren duoc xuat cho cac cong DOC da co tu truoc;
+     * dong nay la duong GHI duy nhat di ra ngoai, va no hep bang dung mot phuong thuc.
+     */
+    RunWriteGuard,
     RunPlanRepository,
     AuditLogService,
     TRANSPORT_CORE_POLICY,

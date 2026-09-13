@@ -190,6 +190,8 @@ import {
   RunClosureBlockerSource,
 } from './transport/planning/run-closure-blocker.source.js';
 import { CheckpointRunClosureBlockerSource } from './transport/checkpoint/checkpoint-run-closure-blocker.source.js';
+import { TransportCheckpointRunClosureBlockerSource } from './transport/checkpoint/transport-checkpoint-blocker.source.js';
+import { WaitingRunClosureBlockerSource } from './transport/waiting/waiting-run-closure-blocker.source.js';
 import { FleetController } from './transport/fleet/fleet.controller.js';
 import { ControlTowerController } from './transport/control-tower/control-tower.controller.js';
 import { JourneyController } from './transport/journey/journey.controller.js';
@@ -682,19 +684,26 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     useClass: ControlTowerCheckpointFactsAdapter,
   }),
   /**
-   * HANG TREN THUNG — `#293` R4. GHI DE ban mac dinh rong cua `transport-core`.
+   * HAI SU THAT CHAN DONG — `#293` R4. GHI DE ban mac dinh rong cua `transport-core`.
    *
-   * Su that den tu mot phep chieu DA DUOC CHAP NHAN (`buildRunTimeline()` cua `#243` F6), khong tu
-   * mot bang hay mot cot trang thai moi. Khach tat `transport-checkpoint` thi dong nay bien mat
-   * cung capability do, va ban mac dinh rong cua `transport-core` quay lai — tuc he thong khong hoi
-   * mot nguon khong ton tai, chu khong phai hoi roi nhan ve mot cau tra loi gia.
+   *   · HANG TREN THUNG (`CARGO_STILL_CARRIED`) — suy tu mot phep chieu DA DUOC CHAP NHAN
+   *     (`buildRunTimeline()` cua `#243` F6), khong tu mot bang hay mot cot trang thai moi;
+   *   · PHIEN CHO DANG MO (`OPEN_WAITING_SESSION`) — doc thang tren bang cua `#279` O5, sau khi
+   *     `#290` vao `main`. Truoc do ma nay chi ton tai trong bo test.
    *
-   * Xem `checkpoint-run-closure-blocker.source.ts` de biet vi sao mot vong chay CHUA CO MOC NAO tra
-   * ve `[]` ma do khong phai mot phep doan.
+   * Hai dong tren la HAI provider rieng, KHONG phai hai ban ghi cho cung mot token: Nest lay
+   * provider cuoi cung, nen dang ky ca hai vao `RunClosureBlockerSource` se lam mot trong hai bien
+   * mat lang le. Chung gap nhau o `TransportCheckpointRunClosureBlockerSource`.
+   *
+   * Khach tat `transport-checkpoint` thi ca ba dong bien mat cung capability do, va ban mac dinh
+   * rong cua `transport-core` quay lai — tuc he thong khong hoi mot nguon khong ton tai, chu khong
+   * phai hoi roi nhan ve mot cau tra loi gia.
    */
+  owned('transport-checkpoint', CheckpointRunClosureBlockerSource),
+  owned('transport-checkpoint', WaitingRunClosureBlockerSource),
   owned('transport-checkpoint', {
     provide: RunClosureBlockerSource,
-    useClass: CheckpointRunClosureBlockerSource,
+    useClass: TransportCheckpointRunClosureBlockerSource,
   }),
   /**
    * NGUON HIEN TRUONG (`#279` O11) — cong thu SAU cua thap dieu hanh.

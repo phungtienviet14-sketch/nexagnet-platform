@@ -91,10 +91,19 @@ export class RunClosureService {
        * mot moc "con hang tren thung" vua ghi se khong co trong do. Phep hoi lai chay ben trong
        * giao dich dong, sat nhat co the voi luc buoc chuyen duoc ghi.
        *
-       * Cai nay KHONG lam nguon ngoai serialize theo khoa cua vong chay: mot nguoi ghi o mien khac
-       * van co the ghi ngay sau lan hoi nay. Dong not khoang do la viec cua `WAITING_SESSION_BINDING`
-       * (#302), va no cho `#290` vao `main` truoc. Cai da dong duoc o day la su that cua chinh
-       * `transport-core` — chang va ke hoach — va do la cai ma lane nay LA NGUON.
+       * PHEP HOI LAI NAY MOT MINH VAN CHUA DU, va phan con lai KHONG nam o day.
+       *
+       * Anh chup thu hai duoc doc duoi khoa, nhung cac bang ma no doc — phien cho, moc hien truong
+       * — khong bi khoa cua vong chay cham toi. Nen truoc `#290` van con dung mot cua so: mot lai
+       * xe mo phien cho hoac bam moc `LOADING` ngay SAU lan hoi nay va ngay TRUOC luc buoc chuyen
+       * commit, va ket qua la mot vong chay o diem cuoi nam canh mot dieu kien chan dang mo.
+       *
+       * Cua so do dong bang cach bat chinh NHUNG NGUOI GHI KIA xep hang sau cung mot khoa — xem
+       * `RunWriteGuard` (`movement/run-write-guard.port.ts`). Khong phai bang cach hoi lai nhieu
+       * lan hon o day: mot lan hoi thu ba van se co mot cua so thu ba.
+       *
+       * Bang chung: `run-closure-concurrency.int.spec.ts` R-IT-10 (phien cho) va R-IT-11 (hang tren
+       * thung), tren Postgres that.
        */
       recheckBlockers: () => collectBlockers(this.blockerSource, runId),
     });

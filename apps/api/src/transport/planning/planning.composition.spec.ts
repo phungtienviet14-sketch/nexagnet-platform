@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildAppComposition } from '../../app-composition.js';
 import { CheckpointRunClosureBlockerSource } from '../checkpoint/checkpoint-run-closure-blocker.source.js';
+import { TransportCheckpointRunClosureBlockerSource } from '../checkpoint/transport-checkpoint-blocker.source.js';
+import { WaitingRunClosureBlockerSource } from '../waiting/waiting-run-closure-blocker.source.js';
 import {
   NoRunClosureBlockerSource,
   RunClosureBlockerSource,
@@ -25,9 +27,7 @@ const providerNames = (capabilities: Parameters<typeof buildAppComposition>[0]):
  * chi tiet sap xep: ban mac dinh phai dung TRUOC ban ghi de, neu khong no se de len chinh ban ghi
  * de va moi khach bat `transport-checkpoint` se lang le mat nguon su that "hang tren thung".
  */
-const blockerSourceBindings = (
-  capabilities: Parameters<typeof buildAppComposition>[0],
-): string[] =>
+const blockerSourceBindings = (capabilities: Parameters<typeof buildAppComposition>[0]): string[] =>
   buildAppComposition(capabilities)
     .providers.filter(
       (provider) =>
@@ -107,7 +107,37 @@ describe('composition cua lane dong vong chay (#293)', () => {
      */
     expect(blockerSourceBindings(['transport-core', 'transport-checkpoint'])).toEqual([
       NoRunClosureBlockerSource.name,
-      CheckpointRunClosureBlockerSource.name,
+      TransportCheckpointRunClosureBlockerSource.name,
     ]);
+  });
+
+  it('ban ghi de mang CA HAI nguon — mot minh `CARGO_STILL_CARRIED` la mot nua su that', () => {
+    /*
+     * `OPEN_WAITING_SESSION` chi co nguon tu khi `#290` vao `main`. Truoc do ma nay ton tai duy
+     * nhat trong bo test, va mot vong chay co the dong lai trong khi mot lai xe con dang cho o
+     * diem giao.
+     *
+     * Bai nay giu hai delegate o lai TRONG mang provider. Khong co chung thi
+     * `TransportCheckpointRunClosureBlockerSource` van dang ky duoc — va no se chet luc BOOT chu
+     * khong luc bien dich, tuc bai kiem thu tu ben tren van xanh trong khi tien trinh API khong
+     * khoi dong noi.
+     */
+    const names = providerNames(['transport-core', 'transport-checkpoint']);
+
+    expect(names).toContain(CheckpointRunClosureBlockerSource.name);
+    expect(names).toContain(WaitingRunClosureBlockerSource.name);
+  });
+
+  it('ca hai nguon bien mat cung `transport-checkpoint`', () => {
+    /*
+     * Khang dinh PHU DINH: khach chi bat `transport-core` khong duoc mang theo mot nguon nao cua
+     * capability kia. Neu chung ro ri sang, `buildAppComposition` se doi mot kho ma khach do khong
+     * he cau hinh, va loi se la mot loi BOOT — kieu hong dat nhat trong cac kieu.
+     */
+    const names = providerNames(['transport-core']);
+
+    expect(names).not.toContain(CheckpointRunClosureBlockerSource.name);
+    expect(names).not.toContain(WaitingRunClosureBlockerSource.name);
+    expect(names).not.toContain(TransportCheckpointRunClosureBlockerSource.name);
   });
 });

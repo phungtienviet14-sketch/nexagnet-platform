@@ -269,7 +269,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "planning.run_closure_sweep": {
       "functionName": "RunClosureService.sweep",
       "filePath": "apps/api/src/transport/planning/run-closure.service.ts",
-      "line": 165
+      "line": 174
     },
     "price.current_period": {
       "functionName": "evaluateOperationalReadiness",

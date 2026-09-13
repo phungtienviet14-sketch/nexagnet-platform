@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { TransportDeliveryWaitingSession as PrismaWaitingSession } from '@prisma/client';
 import type { BusinessDate } from '../business-date.js';
 import type { PrismaService } from '../../config/prisma.service.js';
+import type { RunWriteTransaction } from '../movement/movement.repository.js';
 import {
   WaitingSessionAlreadyClosedError,
   WaitingSessionRepository,
@@ -23,14 +24,28 @@ import type { DeliveryWaitingSession } from './waiting.types.js';
  * `transport_waiting_session_immutable` chan cung dieu do o mot tang thap hon, nhung mot loi
  * `P0001` cua trigger doc kho hon mot con so `count = 0`.
  */
+/**
+ * Delegate cua bang phien cho, doc duoc tu CA client goc LAN mot loi ra giao dich.
+ *
+ * Cung ly le voi `model()` trong `prisma-movement.repository.ts`: kieu that cua loi ra giao dich
+ * chua ton tai truoc khi `prisma generate` chay. Ranh gioi kieu THAT van la `toDomain()` ben duoi.
+ */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+const sessions = (client: unknown): any =>
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  (client as Record<string, any>).transportDeliveryWaitingSession;
+
 @Injectable()
 export class PrismaWaitingSessionRepository extends WaitingSessionRepository {
   constructor(private readonly prisma: PrismaService) {
     super();
   }
 
-  async create(input: CreateWaitingSessionInput): Promise<DeliveryWaitingSession> {
-    const row = await this.prisma.transportDeliveryWaitingSession.create({
+  async create(
+    input: CreateWaitingSessionInput,
+    tx?: RunWriteTransaction,
+  ): Promise<DeliveryWaitingSession> {
+    const row = await sessions(tx ?? this.prisma).create({
       data: {
         runId: input.runId,
         legId: input.legId,

@@ -18,6 +18,7 @@ import {
   type RunAssignmentChange,
   type RunCloseAttempt,
   type RunClosureCandidateQuery,
+  type RunWriteScope,
   type SerializedRunCloseInput,
   type SerializedRunCloseResult,
   type TripOrderProjection,
@@ -477,6 +478,44 @@ export class PrismaMovementRepository extends MovementRepository {
         });
 
         return { run: after, transitioned: true, verdict };
+      },
+      { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
+    );
+  }
+
+  /**
+   * CUNG mot cau khoa voi `closeRunAsSystemSerialized()` va `createLeg()` — `#293` R2.
+   *
+   * Ba duong ghi, mot cau `SELECT ... FOR UPDATE` tren CUNG mot hang `TransportVehicleRun`. Do la
+   * ca diem cua ranh gioi nay: nguoi ghi o ngoai `transport-core` xep hang sau dung cai cong ma lan
+   * dong phai di qua.
+   *
+   * `ReadCommitted` la du, va no la MUC DUNG chu khong phai mot nhuong bo:
+   *
+   *   · lan doc lai hang vong chay xay ra SAU khi khoa da trong tay, nen no thay ban commit moi
+   *     nhat — khong phai anh chup luc mo giao dich;
+   *   · cai duoc bao ve la mot HANG cu the, va `FOR UPDATE` bao ve hang do o moi muc co lap;
+   *   · `Serializable` o day chi doi them chi phi va them loi `40001` phai thu lai, cho mot bat
+   *     bien ma khoa hang da du suc giu.
+   *
+   * Nem tu trong `write` thi Prisma cuon lai giao dich va nem tiep ra ngoai — nguoi goi giu nguyen
+   * cach bat loi cua minh, va lan ghi khong de lai gi.
+   */
+  async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx: unknown) => {
+        const locked: unknown = await (tx as TxClient).$queryRaw`
+          SELECT "id" FROM "TransportVehicleRun" WHERE "id" = ${runId} FOR UPDATE`;
+        if (!Array.isArray(locked) || locked.length === 0) {
+          throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+        }
+
+        const row: RunRow | null = await model(tx as TxClient, 'transportVehicleRun').findUnique({
+          where: { id: runId },
+        });
+        if (!row) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+
+        return write({ run: toRun(row), tx });
       },
       { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 },
     );

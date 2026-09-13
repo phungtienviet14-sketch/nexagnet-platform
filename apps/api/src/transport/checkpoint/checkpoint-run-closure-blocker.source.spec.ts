@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CheckpointRunClosureBlockerSource } from './checkpoint-run-closure-blocker.source.js';
 import { InMemoryCheckpointRepository } from './checkpoint.repository.js';
 import { CheckpointService } from './checkpoint.service.js';
+import { RunWriteGuard, type RunWriteScope } from '../movement/run-write-guard.port.js';
+import { TransportDomainError } from '../transport.errors.js';
 import type { RunCheckpointType } from './checkpoint.types.js';
 import {
   TransportCheckpointCoreFacts,
@@ -51,11 +53,48 @@ class FakeLocationFacts extends TransportCheckpointLocationFacts {
   }
 }
 
+/**
+ * RANH GIOI SERIALIZE gia lap — doc trang thai vong chay TU CHINH `FakeCoreFacts`.
+ *
+ * Khong khoa gi: mot bai kiem don luong khong co ai de xep hang, va `#293` R2 dat bang chung ve
+ * khoa o `run-closure-concurrency.int.spec.ts` tren Postgres that. Nhung no DOC LAI that — mot bai
+ * doi trang thai vong chay giua chung se thay dung cai ma duong that thay.
+ */
+class FakeRunWriteGuard extends RunWriteGuard {
+  constructor(private readonly core: FakeCoreFacts) {
+    super();
+  }
+
+  async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
+    const facts = await this.core.findRun(runId);
+    if (!facts) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+    return write({
+      run: {
+        id: facts.id,
+        code: facts.code,
+        status: facts.status,
+        vehicleId: 'v.1',
+        businessDate: '2026-09-11',
+        startedAt: null,
+        completedAt: null,
+        note: null,
+        createdAt: '2026-09-11T00:00:00.000Z',
+        updatedAt: '2026-09-11T00:00:00.000Z',
+        cancelledAt: null,
+        cancellationReason: null,
+      },
+      tx: null,
+    });
+  }
+}
+
 const build = () => {
+  const core = new FakeCoreFacts();
   const checkpoints = new CheckpointService(
     new InMemoryCheckpointRepository(),
-    new FakeCoreFacts(),
+    core,
     new FakeLocationFacts(),
+    new FakeRunWriteGuard(core),
     { timeZone: 'Asia/Ho_Chi_Minh' },
     /*
      * Chinh sach vi tri RONG, va do la mot lua chon cua BAI KIEM chu khong mot noi long nghiep vu:

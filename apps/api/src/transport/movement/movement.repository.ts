@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { AuditLogRepository, type AppendAuditLogInput } from '../../audit/audit-log.repository.js';
 import { storageUniqueViolation } from '../proof/proof-storage-conflict.js';
 import type { UniqueIndexRef } from '../storage-conflict.js';
+import { TransportDomainError } from '../transport.errors.js';
 import type {
   Order,
   OrderStatus,
@@ -47,6 +48,40 @@ export interface RunCloseAttempt {
 export interface SerializedRunSnapshot {
   readonly run: VehicleRun;
   readonly legs: readonly RunLeg[];
+}
+
+/**
+ * LOI RA GIAO DICH dang giu khoa hang vong chay — khong kieu.
+ *
+ * Kieu that cua loi ra giao dich Prisma chua ton tai truoc khi `prisma generate` chay; cung ly le
+ * voi `model()` trong `prisma-movement.repository.ts`. Ranh gioi kieu THAT van la cac ham `to*()`
+ * cua tung kho. Ban trong bo nho dat `null` vao day — no khong co giao dich nao de dua ra.
+ */
+export type RunWriteTransaction = unknown;
+
+/**
+ * MOT LAN GHI DUOI KHOA CUA VONG CHAY — `#293` R2, cho nguoi ghi o NGOAI `transport-core`.
+ *
+ * Xem `run-write-guard.port.ts` de biet cua so nao dang duoc dong lai. O day chi ghi hai truong.
+ */
+export interface RunWriteScope {
+  /**
+   * Vong chay DOC LAI duoi khoa — khong phai ban nguoi goi da doc truoc do.
+   *
+   * Day la ca ly do ranh gioi nay ton tai. Nguoi ghi van doc trang thai vong chay mot lan tu som
+   * (de tu choi som cho re), nhung ban doc do co the da cu truoc khi cau lenh ke tiep chay. Ban
+   * NAY thi khong cu duoc: khong ai sua duoc hang do chung nao khoa con trong tay.
+   */
+  readonly run: VehicleRun;
+  /**
+   * GIAO DICH dang giu khoa. Kho cua capability phai ghi qua CHINH no.
+   *
+   * Ghi qua mot duong khac (client goc) thi lan ghi do muon mot ket noi THU HAI trong khi ket noi
+   * thu nhat van dang giu khoa. Duoi tai that, n lan ghi dong thoi giu n ket noi va cung cho n ket
+   * noi nua — be ket noi can, va khong cai nao nha ra duoc. Do la mot deadlock khong hien ra o bat
+   * ky bai kiem tuan tu nao.
+   */
+  readonly tx: RunWriteTransaction;
 }
 
 /** Cau tra loi cua nguoi phan xu, dua ra TU BEN TRONG duong da khoa. */
@@ -291,6 +326,32 @@ export abstract class MovementRepository {
   abstract closeRunAsSystemSerialized(
     input: SerializedRunCloseInput,
   ): Promise<SerializedRunCloseResult | null>;
+
+  /**
+   * GIANH CHINH KHOA DO, cho mot nguoi ghi o NGOAI `transport-core` — `#293` R2.
+   *
+   * ==========================================================================================
+   * VI SAO KHOA PHAI O DAY, KHONG O CAPABILITY
+   * ==========================================================================================
+   *
+   * `closeRunAsSystemSerialized()` va `createLeg()` deu gianh khoa hang `TransportVehicleRun`. Mot
+   * capability tu viet lay cau `SELECT ... FOR UPDATE` cua rieng no se la cau lenh khoa THU BA cho
+   * cung mot hang — va thu tu khoa la mot tinh chat toan cuc, khong phai mot chi tiet cuc bo. Ba
+   * cho tu chon thu tu khoa la ba co hoi deadlock, va chung chi lo ra duoi tai that.
+   *
+   * Nen o day chi co MOT cau lenh khoa, va no dung chung cho ca ba duong ghi.
+   *
+   * ==========================================================================================
+   * `write` PHAI GHI QUA `scope.tx`
+   * ==========================================================================================
+   *
+   * Ghi qua client goc thi lan ghi do muon mot ket noi THU HAI trong khi ket noi thu nhat van dang
+   * giu khoa — xem `RunWriteScope.tx`. Ngoai ra no con pha vo tinh nguyen tu: mot loi sau do se
+   * cuon lai giao dich ma KHONG cuon lai lan ghi kia.
+   *
+   * Nem tu trong `write` thi giao dich cuon lai va loi di thang ra ngoai.
+   */
+  abstract underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T>;
   abstract cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null>;
 
   /**
@@ -611,6 +672,22 @@ export class InMemoryMovementRepository extends MovementRepository {
     };
     this.runs.set(id, next);
     return { run: next, transitioned: true };
+  }
+
+  /**
+   * CUNG mot hang doi voi `closeRunAsSystemSerialized()` va `createLeg()` — do la ca y nghia.
+   *
+   * `tx` la `null`: khong co giao dich nao o duong nay. Kho trong bo nho ghi thang vao `Map`, va
+   * mot loi nem ra giua chung KHONG cuon lai duoc — do la mot khac biet THAT so voi Postgres, va no
+   * duoc noi ra o day thay vi bi giau di. Cai duong nay VAN cuong che duoc la thu tu: hai nguoi ghi
+   * khong bao gio nhin thay cung mot anh chup.
+   */
+  async underRunLock<T>(runId: string, write: (scope: RunWriteScope) => Promise<T>): Promise<T> {
+    return this.withRunLock(runId, async () => {
+      const run = this.runs.get(runId);
+      if (!run) throw TransportDomainError.notFound('RUN_NOT_FOUND', 'Khong tim thay vong chay.');
+      return write({ run, tx: null });
+    });
   }
 
   async closeRunAsSystemSerialized(

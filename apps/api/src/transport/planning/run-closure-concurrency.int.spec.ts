@@ -3,6 +3,20 @@ import { AuditLogService } from '../../audit/audit-log.service.js';
 import { PrismaAuditLogRepository } from '../../audit/prisma-audit-log.repository.js';
 import { PrismaService } from '../../config/prisma.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
+import { CheckpointRunClosureBlockerSource } from '../checkpoint/checkpoint-run-closure-blocker.source.js';
+import {
+  TransportCheckpointCoreFactsAdapter,
+  TransportCheckpointLocationFacts,
+} from '../checkpoint/checkpoint-facts.port.js';
+import { CheckpointService } from '../checkpoint/checkpoint.service.js';
+import { PrismaCheckpointRepository } from '../checkpoint/prisma-checkpoint.repository.js';
+import { TransportCheckpointRunClosureBlockerSource } from '../checkpoint/transport-checkpoint-blocker.source.js';
+import { MovementRunWriteGuard } from '../movement/run-write-guard.port.js';
+import { TransportDomainError } from '../transport.errors.js';
+import { PrismaWaitingSessionRepository } from '../waiting/prisma-waiting.repository.js';
+import { WaitingRunClosureBlockerSource } from '../waiting/waiting-run-closure-blocker.source.js';
+import { WaitingSessionService } from '../waiting/waiting.service.js';
+import { RunClosureBlockerSource } from './run-closure-blocker.source.js';
 import { MovementService } from '../movement/movement.service.js';
 import { PrismaMovementRepository } from '../movement/prisma-movement.repository.js';
 import { PlanningService } from './planning.service.js';
@@ -47,7 +61,23 @@ import { RunClosureService } from './run-closure.service.js';
 
 const CODE_PREFIX = 'IT-R293';
 const PLATE_PREFIX = 'IT-R293-XE';
+const PHONE_PREFIX = '0966R293';
 const ACTOR = 'it-lane-r';
+const AUTH = 'it-r293-lai-xe';
+
+/**
+ * KHOA TU VAN dung chung voi MOI tep IT cham vao trigger cua mien moc/phien cho.
+ *
+ * Con so nay khong co y nghia nghiep vu — no chi can GIONG NHAU o moi tep (xem
+ * `transport-waiting.int.spec.ts`). Doi no o mot tep ma quen tep kia se lam khoa mat tac dung mot
+ * cach im lang.
+ */
+const WAITING_TRIGGER_LOCK = 279_005;
+
+const PROTECTED_TABLES = [
+  ['TransportDeliveryWaitingSession', 'transport_waiting_session_immutable'],
+  ['TransportRunCheckpoint', 'transport_run_checkpoint_append_only'],
+] as const;
 const CORE_POLICY = { timeZone: 'Asia/Ho_Chi_Minh' } as const;
 const DEPOT_LABEL = 'IT-R293 Bãi xe';
 const FAR_LABEL = 'IT-R293 Cảng xa';
@@ -125,12 +155,40 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       });
       const runIds = runs.map((run) => run.id);
 
+      /*
+       * MOC va PHIEN CHO deu duoc bao ve boi trigger (`append_only` / `immutable`), va khoa ngoai
+       * la `Restrict` — khong co duong `CASCADE` nao. Lan don dep phai TAT trigger mot cach tuong
+       * minh roi bat lai ngay.
+       *
+       * `pg_advisory_lock` tren DUNG con so ma `transport-waiting.int.spec.ts` dung: trigger la mot
+       * doi tuong CHUNG cua ca CSDL, va CI chay cac tep `*.int.spec.ts` SONG SONG. Mot tep BAT lai
+       * trigger dung luc tep kia dang xoa se lam lan xoa do chet vi chinh cai trigger vua bat. Doi
+       * con so o mot tep ma quen tep kia se lam khoa mat tac dung mot cach im lang.
+       */
+      await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${WAITING_TRIGGER_LOCK})`);
+      for (const [table, trigger] of PROTECTED_TABLES) {
+        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
+      }
+      try {
+        await prisma.transportDeliveryWaitingSession.deleteMany({
+          where: { runId: { in: runIds } },
+        });
+        await prisma.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
+      } finally {
+        for (const [table, trigger] of PROTECTED_TABLES) {
+          await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
+        }
+        await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${WAITING_TRIGGER_LOCK})`);
+      }
+
       await prisma.transportOrderRunPlan.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });
       await prisma.transportOrder.deleteMany({ where: { code: { contains: CODE_PREFIX } } });
       await prisma.transportVehicle.deleteMany({ where: { id: { in: vehicleIds } } });
+      await prisma.transportDriver.deleteMany({ where: { phone: { startsWith: PHONE_PREFIX } } });
+      sharedDriverId = null;
       await prisma.auditLog.deleteMany({ where: { actor: { startsWith: ACTOR } } });
     }
 
@@ -512,6 +570,281 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(outcome.closed).toBe(true);
       expect(await statusOf(run.id)).toBe('COMPLETED');
       expect(await closeAuditCount(run.id)).toBe(1);
+    });
+
+    /* ==================================================================================
+     * CUA SO CON LAI SAU `#290` — NGUOI GHI O NGOAI `transport-core`
+     * ==================================================================================
+     *
+     * R-IT-01..09 dong cua so cua CHINH `transport-core`: chang, ke hoach, dau vet. Hai bai duoi
+     * day dong cua so con lai, cai ma `run-closure.service.ts` truoc do ghi ro la con ho: mot
+     * phien cho hoac mot moc hien truong ghi duoc SAU khi lan dong da chup anh nhung TRUOC khi no
+     * commit.
+     *
+     * CACH EP DUNG CUA SO DO. `attempt()` hoi nguon chan HAI lan — mot lan truoc khi khoa, mot lan
+     * BEN TRONG giao dich dang giu khoa. `raceOnRecheck()` gai doi thu vao dung lan thu hai, tuc
+     * dung khoanh khac ma truoc lane nay khong ai bao ve.
+     *
+     * VA NO KHONG `await` DOI THU O DO. Voi ranh gioi serialize dung cho, doi thu dang CHO chinh
+     * cai khoa ma lan dong giu; `await` o day se treo ca hai. Nen bai kiem chi cho mot nhip du de
+     * doi thu cham toi cau `FOR UPDATE` roi di tiep. Khong co khoa thi lan ghi cua doi thu hoan
+     * tat NGAY trong nhip do — va do dung la truong hop hong ma hai bai nay ton tai de bat.
+     */
+    const RACE_SETTLE_MS = 150;
+
+    const stubLocationFacts = new (class extends TransportCheckpointLocationFacts {
+      async findObservation(): Promise<null> {
+        return null;
+      }
+    })();
+
+    /** Bo doi cua `transport-checkpoint`, day du nhu luc chay: cung kho, cung cong, cung khoa. */
+    const checkpointStack = () => {
+      const guard = new MovementRunWriteGuard(movementRepo);
+      const core = new TransportCheckpointCoreFactsAdapter(movementRepo, fleet);
+      const checkpointRepo = new PrismaCheckpointRepository(prisma);
+      const sessionRepo = new PrismaWaitingSessionRepository(prisma);
+      const checkpointService = new CheckpointService(
+        checkpointRepo,
+        core,
+        stubLocationFacts,
+        guard,
+        CORE_POLICY,
+        // Chinh sach vi tri RONG: hai bai nay hoi ve KHOA, khong ve bang chung vi tri.
+        { locationRequiredTypes: [] },
+      );
+      return {
+        checkpointRepo,
+        checkpointService,
+        waitingService: new WaitingSessionService(
+          sessionRepo,
+          checkpointRepo,
+          core,
+          guard,
+          CORE_POLICY,
+        ),
+        /**
+         * CHI phien cho — dung cho R-IT-10.
+         *
+         * Neo cua mot phien cho la mot moc `DELIVERY_ARRIVAL` co that, va chinh moc do dua chang
+         * sang giai doan `ARRIVED` — tuc `CARGO_STILL_CARRIED`. Dung ban gop o bai do thi vong chay
+         * bi chan NGAY TU LAN HOI DAU, lan dong khong bao gio vao toi khoa, va cuoc dua khong bao
+         * gio xay ra: bai kiem se XANH ma khong kiem gi ca.
+         *
+         * Nen bai phien cho hoi dung chieu cua no. Chieu kia da co bai rieng ngay duoi.
+         */
+        waitingBlockers: new WaitingRunClosureBlockerSource(sessionRepo),
+        blockers: new TransportCheckpointRunClosureBlockerSource(
+          new CheckpointRunClosureBlockerSource(checkpointService),
+          new WaitingRunClosureBlockerSource(sessionRepo),
+        ),
+      };
+    };
+
+    /**
+     * Mot `RunClosureService` that, nhung nguon chan bi gai mot doi thu o LAN HOI THU HAI.
+     *
+     * Lan thu nhat (truoc khoa) di qua nguyen ven: neu no cung kich hoat doi thu thi bai kiem se do
+     * o mot cua so khac han, va khong noi duoc gi ve cua so dang xet.
+     */
+    const raceOnRecheck = (source: RunClosureBlockerSource, racer: () => void) => {
+      let asked = 0;
+      let fired = false;
+      const spy = new (class extends RunClosureBlockerSource {
+        async blockersForRun(runId: string) {
+          asked += 1;
+          const seen = await source.blockersForRun(runId);
+          if (asked === 2) {
+            fired = true;
+            racer();
+            await new Promise((resolve) => setTimeout(resolve, RACE_SETTLE_MS));
+          }
+          return seen;
+        }
+      })();
+      const policy = policyWith();
+      const service = new MovementService(movementRepo, fleet, audit, CORE_POLICY);
+      return {
+        /**
+         * DOI THU DA THUC SU CHAY CHUA.
+         *
+         * Khang dinh nay khong thua. `settleRunClosure()` chi hoi nguon chan LAN THU HAI khi lan
+         * thu nhat da ket luan "dong duoc" — mot vong chay bi chan ngay tu dau se khong bao gio vao
+         * toi khoa, va doi thu khong bao gio duoc gai. Khi do moi khang dinh ben duoi van dung MOT
+         * CACH RONG TUECH, va bai kiem bao xanh cho mot cuoc dua chua tung dien ra.
+         *
+         * Do khong phai mot gia dinh: dung dieu do da xay ra o ban dau cua R-IT-10, khi moc neo cua
+         * phien cho tu no dung len mot ma chan `CARGO_STILL_CARRIED`.
+         */
+        raced: () => fired,
+        closures: new RunClosureService(
+          new PlanningService(
+            service,
+            new PrismaRunPlanRepository(prisma),
+            fleet,
+            audit,
+            CORE_POLICY,
+            policy,
+          ),
+          service,
+          policy,
+          spy,
+        ),
+      };
+    };
+
+    /**
+     * MOT ho so lai xe cho ca hai bai, khong phai mot ho so moi cho moi bai.
+     *
+     * `authUserId` la DUY NHAT tren bang lai xe — cau noi phien dang nhap sang ho so chi co nghia
+     * khi no mot-doi-mot. Tao ho so thu hai voi cung `AUTH` se do vi mot va cham unique khong lien
+     * quan gi den dieu hai bai nay dinh kiem.
+     */
+    let sharedDriverId: string | null = null;
+    const theDriver = async () => {
+      if (sharedDriverId) return sharedDriverId;
+      const driver = await fleet.createDriver({
+        fullName: 'IT-R293 Lai xe',
+        phone: `${PHONE_PREFIX}01`,
+        licenceClass: 'FC',
+        licenceExpiry: '2030-01-01',
+        authUserId: AUTH,
+      });
+      sharedDriverId = driver.id;
+      return sharedDriverId;
+    };
+
+    /** Mot vong chay da xong viec, co lai xe da phan cong va mot chang de bam moc. */
+    const closableRunWithDriver = async () => {
+      const { run } = await finishedRun(DEPOT_LABEL);
+      const driverId = await theDriver();
+      await movement.assignRun(run.id, { driverId }, ACTOR);
+      const legs = (await movement.getRun(run.id)).legs;
+      return { run, driverId, legId: legs[0]!.id };
+    };
+
+    const reasonOfRejection = (error: unknown): string =>
+      error instanceof TransportDomainError ? error.reason : `UNEXPECTED:${String(error)}`;
+
+    it('R-IT-10 — mo phien cho DUNG LUC dong: khong vong chay dong nao mang phien mo', async () => {
+      const { run, driverId, legId } = await closableRunWithDriver();
+      const stack = checkpointStack();
+
+      // NEO cua phien cho: mot lan `DELIVERY_ARRIVAL` co that, do CHINH lai xe nay ghi.
+      const anchor = await stack.checkpointRepo.create({
+        type: 'DELIVERY_ARRIVAL',
+        runId: run.id,
+        legId,
+        recordedBy: AUTH,
+        driverId,
+        observationId: null,
+        clientEventId: next('ARR'),
+        capturedAt: null,
+        receivedAt: new Date(),
+        businessDate: '2026-09-11',
+        note: null,
+      });
+
+      let racer: Promise<unknown> = Promise.resolve();
+      const race = raceOnRecheck(stack.waitingBlockers, () => {
+        racer = stack.waitingService.start({
+          runId: run.id,
+          legId,
+          arrivalCheckpointId: anchor.id,
+          reason: 'RECEIVER_NOT_READY',
+          clientEventId: next('WAIT'),
+          authUserId: AUTH,
+        });
+      });
+
+      const outcome = await race.closures.attempt(run.id, 'IDLE_SWEEP');
+      expect(race.raced()).toBe(true);
+      const started = await racer.then(
+        () => ({ ok: true, reason: '' }) as const,
+        (error: unknown) => ({ ok: false, reason: reasonOfRejection(error) }) as const,
+      );
+
+      const status = await statusOf(run.id);
+      const open = await prisma.transportDeliveryWaitingSession.count({
+        where: { runId: run.id, status: 'OPEN' },
+      });
+
+      /*
+       * BAT BIEN, doc duoc thanh mot cau: mot vong chay o diem cuoi KHONG duoc ton tai cung mot
+       * phien cho dang mo. Ben nao thang khong quan trong — ca hai ket cuc deu dung, va bai kiem
+       * khong duoc ep mot thu tu ma khoa khong he hua.
+       */
+      expect(status === 'COMPLETED' && open > 0).toBe(false);
+
+      if (status === 'COMPLETED') {
+        // Lan dong thang: lenh mo phien bi TU CHOI, bang mot ly do that chu khong mot `500`.
+        expect(outcome.closed).toBe(true);
+        expect(open).toBe(0);
+        expect(started).toEqual({ ok: false, reason: 'WAITING_RUN_TERMINAL' });
+      } else {
+        // Phien thang: lan dong GIU LAI, va giu bang dung ma chan cua Lane O.
+        expect(started.ok).toBe(true);
+        expect(open).toBe(1);
+        expect(outcome.closed).toBe(false);
+        expect(outcome.verdict.blockers).toContain('OPEN_WAITING_SESSION');
+        expect(await closeAuditCount(run.id)).toBe(0);
+      }
+    });
+
+    it('R-IT-11 — ghi moc hang-tren-thung DUNG LUC dong: khong vong chay dong nao con hang', async () => {
+      const { run, legId } = await closableRunWithDriver();
+      const stack = checkpointStack();
+
+      /*
+       * `LOADING` doi `PICKUP_ARRIVAL` (xem `REQUIRES` o `checkpoint-lifecycle.ts`), nen moc dau
+       * duoc ghi TRUOC cuoc dua. Mot minh no chi cho ra giai doan `AT_PICKUP` — CHUA phai hang tren
+       * thung — va khang dinh ngay duoi ghim dieu do lai: cuoc dua bat dau tu mot vong chay KHONG
+       * co gi chan.
+       */
+      await stack.checkpointService.recordAsDriver({
+        type: 'PICKUP_ARRIVAL',
+        runId: run.id,
+        legId,
+        authUserId: AUTH,
+        clientEventId: next('PA'),
+      });
+      expect(await stack.blockers.blockersForRun(run.id)).toEqual([]);
+
+      let racer: Promise<unknown> = Promise.resolve();
+      const race = raceOnRecheck(stack.blockers, () => {
+        racer = stack.checkpointService.recordAsDriver({
+          type: 'LOADING',
+          runId: run.id,
+          legId,
+          authUserId: AUTH,
+          clientEventId: next('LD'),
+        });
+      });
+
+      const outcome = await race.closures.attempt(run.id, 'IDLE_SWEEP');
+      expect(race.raced()).toBe(true);
+      const recorded = await racer.then(
+        () => ({ ok: true, reason: '' }) as const,
+        (error: unknown) => ({ ok: false, reason: reasonOfRejection(error) }) as const,
+      );
+
+      const status = await statusOf(run.id);
+      const carrying = (await stack.blockers.blockersForRun(run.id)).includes(
+        'CARGO_STILL_CARRIED',
+      );
+
+      expect(status === 'COMPLETED' && carrying).toBe(false);
+
+      if (status === 'COMPLETED') {
+        expect(outcome.closed).toBe(true);
+        expect(recorded).toEqual({ ok: false, reason: 'CHECKPOINT_RUN_TERMINAL' });
+      } else {
+        expect(recorded.ok).toBe(true);
+        expect(carrying).toBe(true);
+        expect(outcome.closed).toBe(false);
+        expect(outcome.verdict.blockers).toContain('CARGO_STILL_CARRIED');
+        expect(await closeAuditCount(run.id)).toBe(0);
+      }
     });
   },
 );

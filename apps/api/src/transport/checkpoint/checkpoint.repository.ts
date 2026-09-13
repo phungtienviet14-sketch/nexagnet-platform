@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { RunWriteTransaction } from '../movement/movement.repository.js';
 import type { UniqueIndexRef } from '../storage-conflict.js';
 import type { RunCheckpoint, RunCheckpointType } from './checkpoint.types.js';
 
@@ -54,7 +55,16 @@ export interface CreateCheckpointInput {
  * `transport_run_checkpoint_append_only`, de mot lan `UPDATE` viet tay tren psql cung bi chan.
  */
 export abstract class CheckpointRepository {
-  abstract create(input: CreateCheckpointInput): Promise<RunCheckpoint>;
+  /**
+   * GHI mot moc — tuy chon TREN GIAO DICH dang giu khoa vong chay (`#293` R2).
+   *
+   * Cung hop dong voi `WaitingSessionRepository.create()`, va cung ly do: mot moc `LOADING` ghi
+   * duoc sau khi lan dong da chup anh nhung truoc khi no commit se de lai mot vong chay o diem cuoi
+   * mang ma chan `CARGO_STILL_CARRIED` — dung cai ma `#293` R4 bao khong duoc phep ton tai.
+   *
+   * `tx` vang mat la duong cu, van dung cho moi lan ghi khong dua vao trang thai vong chay.
+   */
+  abstract create(input: CreateCheckpointInput, tx?: RunWriteTransaction): Promise<RunCheckpoint>;
   abstract findByEvent(
     runId: string,
     type: RunCheckpointType,
