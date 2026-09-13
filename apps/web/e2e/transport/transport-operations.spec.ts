@@ -757,6 +757,89 @@ const FINANCE_SUMMARY = {
   unavailableSources: [],
 };
 
+/* --- `#294` — mot don MO de man hinh dieu xe co gi do chon --- */
+
+const DISPATCH_ORDERS = [
+  {
+    id: 'ord-e2e-1',
+    code: 'DH-E2E-1',
+    status: 'OPEN',
+    businessDate: '2026-09-12',
+    customerId: 'cus-1',
+    originLabel: 'Kho Hải Phòng',
+    destinationLabel: 'Ninh Bình',
+    cargoDescription: null,
+    freightAmount: 5_000_000,
+    currencyCode: 'VND',
+    note: null,
+    cancelledAt: null,
+    cancellationReason: null,
+  },
+];
+
+/** Mot bang de nghi TOI THIEU — du de man hinh ve mot dong, khong hon. */
+const DISPATCH_SUGGESTION = {
+  orderId: 'ord-e2e-1',
+  orderCode: 'DH-E2E-1',
+  pickup: {
+    place: {
+      point: { latitude: 20.8449, longitude: 106.6881 },
+      source: 'GEOFENCE_LABEL_EXACT',
+      label: 'Kho Hải Phòng',
+      geofenceId: 'gf-1',
+      siteId: null,
+    },
+    resolution: 'PICKUP_FROM_GEOFENCE_LABEL',
+  },
+  requiredPickupAt: null,
+  generatedAt: '2026-09-12T03:00:00.000Z',
+  orderingKeys: ['DEADLINE_FEASIBILITY', 'NO_WORK_INTERRUPTION', 'EMPTY_ROAD_DISTANCE'],
+  candidates: [
+    {
+      vehicleId: 'veh-1',
+      registrationPlate: '15C-123.45',
+      mode: 'CURRENT_NEAR',
+      origin: {
+        point: { latitude: 20.85, longitude: 106.69 },
+        pointRedacted: false,
+        source: 'VEHICLE_OBSERVATION',
+        label: 'Vị trí hiện tại',
+        geofenceId: null,
+        siteId: null,
+      },
+      availableAt: '2026-09-12T03:00:00.000Z',
+      availableAtIsLowerBound: true,
+      emptyRoadMetresToPickup: 4_200,
+      roadSecondsToPickup: 600,
+      pickupEtaAt: '2026-09-12T03:10:00.000Z',
+      meetsRequiredPickupAt: null,
+      suitability: [],
+      currentLocation: {
+        observedAt: '2026-09-12T02:58:00.000Z',
+        ageSeconds: 120,
+        freshness: 'FRESH',
+        accuracyGrade: 'GOOD',
+        source: 'DEVICE_GNSS',
+        point: { latitude: 20.85, longitude: 106.69 },
+        pointRedacted: false,
+      },
+      nextFree: null,
+      truckProfile: { complete: false },
+      route: {
+        providerId: 'synthetic',
+        quality: 'SYNTHETIC',
+        estimated: true,
+        fromCache: false,
+        computedAt: '2026-09-12T03:00:00.000Z',
+        reason: 'ROUTE_SYNTHETIC_ESTIMATE',
+      },
+      reasonSummary: 'Đang ở gần điểm lấy hàng',
+    },
+  ],
+  excluded: [],
+  assignmentCreated: false,
+};
+
 async function mockTransport(page: Page, role?: Role): Promise<void> {
   const trips = seedTrips();
 
@@ -895,7 +978,83 @@ async function mockTransport(page: Page, role?: Role): Promise<void> {
    */
   await page.route('**/transport/control-tower', (route) => json(route, CONTROL_TOWER));
   await page.route('**/transport/finance/summary', (route) => json(route, FINANCE_SUMMARY));
+
+  /*
+   * `#294` — CHE DO GOM NHOM, va mac dinh o day la mac dinh CUA SAN PHAM.
+   *
+   * `ONE_ORDER_PER_RUN` chu khong phai `MULTI_ORDER_RUN`: mot bo mock de man hinh dieu xe bat san
+   * se lam bai "che do mac dinh khong co bang de nghi" xanh o moi cach cai dat, ke ca cach sai.
+   * Bai nao can che do MULTI thi tu khai de len — `page.route` dang ky sau se thang.
+   */
+  await page.route('**/transport/planning/policy', (route) =>
+    json(route, { grouping: 'ONE_ORDER_PER_RUN', depots: [], closure: { idleHours: null } }),
+  );
+  await page.route('**/transport/orders', (route) => json(route, DISPATCH_ORDERS));
 }
+
+/**
+ * CHE DO GOM NHOM tren TRINH DUYET THAT — `#294 S1`.
+ *
+ * Bo bai don vi o `dispatch.service.spec.ts` da chung minh CONG MAY CHU. Bo nay chung minh thu
+ * khac han va khong thay the duoc: rang o che do mac dinh, man hinh KHONG GUI mot lan hoi de nghi
+ * nao. Do la yeu cau *"opening/creating an Order does not trigger multi-order candidate fetching"*,
+ * va cach duy nhat de do no la dem so lan goi that di tren duong mang.
+ */
+test.describe('che do gom nhom tren man hinh dieu xe (#294)', () => {
+  test('che do mac dinh: noi ro ly do, va KHONG goi de nghi dieu xe lan nao', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+
+    const suggestCalls: string[] = [];
+    await page.route('**/transport/orders/*/dispatch-suggestions', async (route) => {
+      suggestCalls.push(route.request().url());
+      await json(route, DISPATCH_SUGGESTION);
+    });
+
+    await page.goto('/?section=dispatch');
+
+    await expect(page.getByTestId('tx-dispatch-one-order')).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Khách này chạy chế độ mỗi đơn một vòng chạy' }),
+    ).toBeVisible();
+
+    /* Khong co loi moi nao de bam — nut va o chon don deu khong duoc dung ra. */
+    await expect(page.getByRole('button', { name: 'Tìm xe' })).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Đơn hàng' })).toHaveCount(0);
+
+    /*
+     * VA KHONG MOT LAN GOI NAO. Day la khang dinh quan trong nhat cua ca bai: mot man hinh co the
+     * giau ket qua di ma van goi — tuc van ton mot lan hoi nha cung cap dinh tuyen that.
+     */
+    expect(suggestCalls).toEqual([]);
+  });
+
+  test('che do MULTI_ORDER_RUN: bang de nghi hien ra, va van chi la de nghi', async ({ page }) => {
+    await mockTransport(page, 'ADMIN');
+
+    /* Dang ky SAU `mockTransport` nen thang no — Playwright uu tien route dang ky sau. */
+    await page.route('**/transport/planning/policy', (route) =>
+      json(route, { grouping: 'MULTI_ORDER_RUN', depots: [], closure: { idleHours: null } }),
+    );
+    await page.route('**/transport/orders/*/dispatch-suggestions', (route) =>
+      json(route, DISPATCH_SUGGESTION),
+    );
+
+    await page.goto('/?section=dispatch');
+
+    await expect(page.getByTestId('tx-dispatch-one-order')).toHaveCount(0);
+
+    await page.getByRole('combobox', { name: 'Đơn hàng' }).selectOption('ord-e2e-1');
+    await page.getByRole('button', { name: 'Tìm xe' }).click();
+
+    await expect(page.getByRole('region', { name: 'Xe phù hợp' })).toBeVisible();
+    /* `rowheader` chu khong `cell`: cot bien so khai `isRowHeader: true` trong `DataTable`. */
+    await expect(page.getByRole('rowheader', { name: '15C-123.45' })).toBeVisible();
+    /* Km rong la con so DUONG BO, va no phai doc duoc tren man hinh chu khong chi trong DTO. */
+    await expect(page.getByRole('cell', { name: '4,2 km' })).toBeVisible();
+    /* `assignmentCreated: false` phai doc duoc bang mat, khong chi trong DTO. */
+    await expect(page.getByText('Đây là ĐỀ NGHỊ, chưa gán xe cho đơn nào.')).toBeVisible();
+  });
+});
 
 test.describe('vo va kien truc thong tin', () => {
   test('danh muc dung nhom, va HAI muc cua T6 hien theo nang luc goi khach', async ({ page }) => {

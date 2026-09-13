@@ -4,6 +4,8 @@ import { parseGeoPoint, type GeoPoint } from '../geo/geo-point.js';
 import { greatCircleMetres } from '../geo/geodesy.js';
 import { DEFAULT_ACCURACY_POLICY } from '../geo/location-quality.js';
 import type { Order } from '../movement/movement.types.js';
+import { TRANSPORT_PLANNING_POLICY } from '../planning/planning-policy.js';
+import type { TransportPlanningPolicy } from '../planning/planning.types.js';
 import { TransportDomainError } from '../transport.errors.js';
 import type { Vehicle } from '../transport.types.js';
 import {
@@ -172,6 +174,25 @@ export class DispatchService {
     private readonly routing: TransportRoutingPort,
     private readonly planner: DispatchAssignmentPlanner,
     @Inject(TRANSPORT_DISPATCH_POLICY) private readonly policy: TransportDispatchPolicy,
+    /**
+     * CHINH SACH LAP KE HOACH — va no BAT BUOC, khac han moi thu co `@Optional()` ben duoi.
+     *
+     * `#294 S-OWNER-03` doi cong chan nam o tang API/mien va phai FAIL-CLOSED. Mot phu thuoc
+     * `@Optional()` se lam dieu nguoc lai: o mot cach lap module nao do quen dang ky token, `policy`
+     * thanh `undefined`, va mot cai `?.` o giua duong se lang le cho MOI khach di qua cong. Nen no
+     * la phu thuoc bat buoc — thieu thi tien trinh khong khoi dong duoc, va do la kieu hong DUNG.
+     *
+     * Token nay do `TransportModule` cung cap (`transport.module.ts:175`) va EXPORT (`:221`), con
+     * `DispatchService` lai duoc dang ky o `app-composition.ts`. Canh phu thuoc do that su ton tai,
+     * nhung `tsc`, test don vi va `*.composition.spec.ts` deu KHONG kiem duoc no — chi mot bai boot
+     * that moi kiem duoc. Xem `app.module.transport-core.boot.spec.ts`.
+     *
+     * Doc lai o MOI lan goi chu khong chup lay mot `boolean` trong ham dung: gia tri nay la mot
+     * anh chup luc khoi dong theo dung quy uoc chinh sach tenant hien hanh (`PlanningService` dung
+     * y het), nhung `suggest()` va `commit()` la HAI lan goi khac nhau, va `#294 S5` doi lan thu
+     * hai phai DOC LAI chu khong duoc tin vao ket qua cua lan thu nhat.
+     */
+    @Inject(TRANSPORT_PLANNING_POLICY) private readonly planning: TransportPlanningPolicy,
     @Optional() private readonly location?: DispatchLocationFacts,
     @Optional() private readonly compliance?: DispatchComplianceFacts,
     @Optional() private readonly telemetry?: TelemetryService,
@@ -189,6 +210,51 @@ export class DispatchService {
     return this.clock ? this.clock() : new Date();
   }
 
+  /**
+   * CONG CHINH SACH — chay TRUOC moi thu khac, ke ca truoc khi hoi don co ton tai khong.
+   *
+   * ===========================================================================
+   * VI SAO DAT TRUOC `requireOpenOrder()`
+   *
+   * Neu hoi don truoc, thi mot khach `ONE_ORDER_PER_RUN` go bua mot ma don se phan biet duoc
+   * "don nay khong co" (404) voi "don nay co" (403) — tuc mot be mat nghiep vu khach KHONG bat
+   * van tra loi duoc cau hoi don nao co that. Dat cong chinh sach len truoc thi ca hai truong hop
+   * ra cung mot cau tra loi, va do la nghia cua fail-closed.
+   *
+   * ===========================================================================
+   * VI SAO NEM chu khong tra ve mot danh sach rong
+   *
+   * Mot bang de nghi RONG va mot be mat KHONG TON TAI trong y het nhau tren man hinh, nhung la hai
+   * cau tra loi khac han: cai dau noi "khong chiec xe nao hop", cai sau noi "khach nay khong dung
+   * bai toan nay". `#294 S1` doi *"explicit disabled semantics"*, va mot mang rong thi khong ro
+   * rang chut nao — no se lam nguoi dieu xe ngoi doi mot chiec xe khong bao gio hien ra.
+   */
+  private requireMultiOrderRun(orderId: string): void {
+    const grouping = this.planning.grouping;
+    if (grouping === 'MULTI_ORDER_RUN') {
+      this.telemetry?.decision({
+        vocabulary: TRANSPORT_DISPATCH_DECISIONS,
+        point: 'dispatch.run_grouping',
+        outcome: 'allowed',
+        reason: 'RUN_GROUPING_MULTI_ORDER_RUN',
+        detail: { orderId, grouping },
+      });
+      return;
+    }
+
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_DISPATCH_DECISIONS,
+      point: 'dispatch.run_grouping',
+      outcome: 'denied',
+      reason: 'RUN_GROUPING_ONE_ORDER_PER_RUN',
+      detail: { orderId, grouping },
+    });
+    throw TransportDomainError.denied(
+      'DISPATCH_MULTI_ORDER_DISABLED',
+      'Khach nay dang o che do moi don mot vong chay, nen khong co bang de nghi dieu xe.',
+    );
+  }
+
   /* ------------------------------------------------------------------ *
    * DOC — khong mot lan ghi nao
    * ------------------------------------------------------------------ */
@@ -198,6 +264,7 @@ export class DispatchService {
     request: DispatchSuggestionRequest,
     caller: DispatchCaller,
   ): Promise<DispatchSuggestionView> {
+    this.requireMultiOrderRun(orderId);
     const order = await this.requireOpenOrder(orderId);
     const placeIndex = (await this.location?.placeIndex()) ?? [];
     const pickup = this.resolvePickup(order, request.pickup, placeIndex);
@@ -303,6 +370,17 @@ export class DispatchService {
     request: DispatchSuggestionRequest,
     caller: DispatchCaller,
   ): Promise<DispatchCommitView> {
+    /*
+     * DOC LAI CHINH SACH, va day KHONG phai mot lan kiem thua.
+     *
+     * `#294 S5` buoc 2 doi dung dieu nay: giua luc mot nguoi nhin bang de nghi va luc ho bam xac
+     * nhan, che do gom nhom cua khach co the da doi. `suggest()` ben duoi cung se chan lan nua khi
+     * duoc goi de tinh lai — nhung dat cong o day cho ra ma tu choi DUNG (`DISPATCH_MULTI_ORDER_
+     * DISABLED`) thay vi mot ma di lac (`DISPATCH_VEHICLE_NOT_FOUND` cua dong ngay ben duoi, hoac
+     * `DISPATCH_RECOMMENDATION_STALE` cua vong tinh lai).
+     */
+    this.requireMultiOrderRun(orderId);
+
     const vehicle = await this.core.findVehicle(vehicleId);
     if (!vehicle) {
       throw TransportDomainError.notFound('DISPATCH_VEHICLE_NOT_FOUND', 'Khong tim thay xe.');
