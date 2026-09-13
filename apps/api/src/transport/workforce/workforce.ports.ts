@@ -3,9 +3,10 @@ import type { BusinessDate } from '../business-date.js';
 import { CostingReadService } from '../costing/costing-read.service.js';
 import { FleetRepository } from '../fleet/fleet.repository.js';
 import { TripRepository } from '../trips/trip.repository.js';
+import { WaitingAllowanceRepository } from '../waiting/allowance.repository.js';
 
 /**
- * BA CUA SO tu `transport-workforce` nhin sang cac capability khac. Ca ba CHI DOC.
+ * BON CUA SO tu `transport-workforce` nhin sang cac capability khac. Ca bon CHI DOC.
  *
  * Hai cai dau (`WorkforceCoreFacts`, `WorkforceCostingFacts`) la BAT BUOC — chung khop dung hai
  * phu thuoc khai o T1 §10.1. Cai thu ba (`WorkforceFuelFacts`) la TUY CHON, va do la lua chon
@@ -13,6 +14,10 @@ import { TripRepository } from '../trips/trip.repository.js';
  * `transport-fuel` thanh phu thuoc se lam mot khach chi tra luong co ban phai dung ca doi soat
  * bang ke cay xang. Nen no den qua `@Optional()`, va khi vang mat thi lan chay ghi
  * `FUEL_SAVING_UNAVAILABLE` vao `missingInputs` thay vi lang le tinh ra so khong.
+ *
+ * `WorkforceWaitingAllowanceFacts` (`#279` O6) den theo dung khuon do va vi dung mot ly do: phu cap
+ * cho thuoc `transport-checkpoint`, va mot khach chi tra luong co ban khong phai bat ca quy trinh
+ * cong/can/phieu giao de chay duoc bang luong.
  */
 
 /** Cong viec cua mot lai xe trong mot ky — dem duoc, tat dinh. */
@@ -153,4 +158,69 @@ export abstract class WorkforceFuelFacts {
     startDate: BusinessDate,
     endDate: BusinessDate,
   ): Promise<ReadonlyMap<string, number>>;
+}
+
+/**
+ * PHU CAP CHO DA DUOC DUYET — cong THU TU, TUY CHON, va CHI DOC.
+ *
+ * ============================================================================================
+ * CHIEU PHU THUOC DI TU LUONG SANG MOC, KHONG NGUOC LAI
+ * ============================================================================================
+ *
+ * `transport-checkpoint` KHONG duoc biet gi ve bang luong: mot khach co cong de vao va can de can
+ * van phai chay duoc ma khong bat `transport-workforce`. Nen cong nay nam o phia LUONG, `@Optional()`,
+ * y het `WorkforceFuelFacts`.
+ *
+ * Vang mat cong ⇒ bang luong chay binh thuong, khong co dong phu cap cho nao. Do la mot cau tra loi
+ * DUNG chu khong phai mot con so bi thieu: khach do khong theo doi khoang cho nguoi nhan.
+ *
+ * ============================================================================================
+ * CONG NAY TRA VE MOT SO DA DUOC MOT NGUOI DUYET, KHONG PHAI MOT SO DUOC TINH
+ * ============================================================================================
+ *
+ * `#279` O6: *"only approved amount enters driver earning/settlement source exactly once"*. Tong o
+ * day chi cong nhung hang `APPROVED`, va so duoc cong la `approvedAmount` — con so NGUOI DUYET
+ * chot, khong phai con so van phong de nghi.
+ *
+ * KHONG mot phep tinh nao tren thoi luong di qua day. `payroll-calculator.ts` nhan mot con so da
+ * co san va cong no vao; no khong biet phien cho la gi.
+ */
+export abstract class WorkforceWaitingAllowanceFacts {
+  /**
+   * Tong khoan phu cap cho DA DUYET theo lai xe, trong mot khoang NGAY NGHIEP VU.
+   *
+   * `count` di kem `totalAmount` de phieu luong noi duoc *"3 lan cho"* thay vi mot con so gop
+   * khong giai thich duoc. Chi tiet tung phien nam o `TransportDriverWaitingAllowance`, va bang
+   * luong khong co viec gi phai cam khoa cua no.
+   */
+  abstract approvedAllowanceByDriver(
+    startDate: BusinessDate,
+    endDate: BusinessDate,
+  ): Promise<ReadonlyMap<string, { readonly totalAmount: number; readonly count: number }>>;
+}
+
+/**
+ * ADAPTER cua cong tren, doc tu kho phu cap cho cua `transport-checkpoint`.
+ *
+ * Song o day (phia LUONG) chu khong o phia moc, cung quy uoc voi `WorkforceCostingFactsAdapter`
+ * ngay tren: kieu cua cong thuoc ve nguoi DUNG no, con phep dang ky provider thuoc ve capability
+ * SO HUU du lieu (`app-composition.ts`, `owned('transport-checkpoint', ...)`).
+ *
+ * KHONG mot phep tinh nao o day. Adapter chi doi hinh dang cua mot con so da duoc mot nguoi duyet.
+ */
+@Injectable()
+export class WorkforceWaitingAllowanceFactsAdapter extends WorkforceWaitingAllowanceFacts {
+  constructor(private readonly allowances: WaitingAllowanceRepository) {
+    super();
+  }
+
+  async approvedAllowanceByDriver(
+    startDate: BusinessDate,
+    endDate: BusinessDate,
+  ): Promise<ReadonlyMap<string, { readonly totalAmount: number; readonly count: number }>> {
+    const totals = await this.allowances.approvedTotalsBetween(startDate, endDate);
+    return new Map(
+      totals.map((row) => [row.driverId, { totalAmount: row.totalAmount, count: row.count }]),
+    );
+  }
 }

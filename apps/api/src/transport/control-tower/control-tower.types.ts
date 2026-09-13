@@ -87,7 +87,13 @@ export const WAITING_COLUMN: OperationsBoardColumn = 'WAITING';
 export const BOARD_COLUMN_UNAVAILABLE_REASONS = [
   /** Capability `transport-checkpoint` dang TAT o khach nay — khong co moc hien truong nao. */
   'AWAITING_CHECKPOINT_SOURCE',
-  /** Moc DA co, nhung khoang cho nguoi nhan can mot phien cho, va phien cho chua vao `main`. */
+  /**
+   * Moc DA co, nhung khoang cho nguoi nhan can mot phien cho.
+   *
+   * `#279` O5 da lam ra phien cho (`TransportDeliveryWaitingSession`), nen ma nay khong con phat ra
+   * o khach BAT `transport-checkpoint`. No o lai vi mot ly do khac va van dung: khach TAT capability
+   * do thi cot `WAITING` van nam tren bang, RONG, va phai noi duoc vi sao.
+   */
   'AWAITING_WAITING_SESSION_SOURCE',
 ] as const;
 export type BoardColumnUnavailableReason = (typeof BOARD_COLUMN_UNAVAILABLE_REASONS)[number];
@@ -240,6 +246,26 @@ export const ACTION_QUEUE_KINDS = [
    * nham vao lai xe chay o vung khong co song.
    */
   'CHECKPOINT_LOCATION_PROOF_MISSING',
+  /* --- `transport-checkpoint` (`#279` Lane O) --- */
+  /**
+   * Mot de nghi PHU CAP CHO dang doi nguoi duyet (`#279` O6).
+   *
+   * Muc nay KHONG can mot nguong nao: no dem nhung hang `PENDING` co that trong
+   * `TransportDriverWaitingAllowance`. Do la ly do no ra khoi `PENDING_ACTION_QUEUE_KINDS` con
+   * `RECEIVER_WAITING_ABOVE_THRESHOLD` thi khong — cai kia doi mot con so gio ma chua ai quyet.
+   *
+   * Muc `WARNING` chu khong `CRITICAL`: mot khoan cho duyet la viec hang ngay cua van phong, khong
+   * phai mot su co.
+   */
+  'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL',
+  /**
+   * Mot chang CO HANG da giao xong ma thieu chung tu BAT BUOC theo chinh sach (`#279` O11).
+   *
+   * "Bat buoc theo chinh sach" chu khong "bat buoc voi moi khach": `#279` O3 cam ep moi loai chung
+   * tu cho moi nha may A, nen danh sach den tu `DocumentRequirementPolicy` — mac dinh ho so B la
+   * DUNG MOT loai (`DELIVERY_RECEIPT`).
+   */
+  'DELIVERY_PROOF_DOCUMENT_MISSING',
 ] as const;
 export type ActionQueueKind = (typeof ACTION_QUEUE_KINDS)[number];
 
@@ -251,8 +277,6 @@ export type ActionQueueKind = (typeof ACTION_QUEUE_KINDS)[number];
  */
 export const PENDING_ACTION_QUEUE_KINDS = [
   'RECEIVER_WAITING_ABOVE_THRESHOLD',
-  'DELIVERY_PROOF_DOCUMENT_MISSING',
-  'DRIVER_WAITING_ALLOWANCE_AWAITING_APPROVAL',
   'CUSTOMER_AR_OVERDUE',
   'LOCATION_PROOF_REVIEW',
 ] as const;
@@ -262,11 +286,22 @@ export const PENDING_ACTION_QUEUE_REASONS = [
   /**
    * Doi PHIEN CHO NGUOI NHAN (`TransportDeliveryWaitingSession`, Lane F3/Lane O).
    *
-   * TACH khoi `AWAITING_CHECKPOINT_SOURCE` sau khi moc hien truong da vao `main`: gop hai cai lam
-   * mot se noi rang moc con thieu, trong khi moc DA co va cai thieu la mot khoang thoi gian co gio
-   * mo/gio dong. Xem khoi chu thich cua `WAITING_COLUMN`.
+   * `#279` O5 da lam ra phien cho, nen ma nay khong con phat ra o khach BAT `transport-checkpoint`.
+   * No o lai cho khach TAT capability do.
    */
   'AWAITING_WAITING_SESSION_SOURCE',
+  /**
+   * Doi mot NGUONG "cho bao lau thi dang bao dong" — va khong ai da quyet con so do.
+   *
+   * Ma NAY thay cho `AWAITING_WAITING_SESSION_SOURCE` o muc `RECEIVER_WAITING_ABOVE_THRESHOLD` sau
+   * khi `#279` O5 vao `main`, va su khac biet la ca diem: NGUON da co (mot phien cho co gio mo,
+   * doc duoc, dem duoc), cai thieu la mot CHINH SACH.
+   *
+   * `#279` O6 cam bia ra: *"do not invent thresholds/rates"*. Mot muc "cho qua 4 tieng thi bao
+   * dong" nghe vo hai, nhung no se thanh con so ma van phong dua vao de goi dien cho lai xe — va
+   * khong ai o phia khach hang da noi con so do la bao nhieu.
+   */
+  'AWAITING_WAITING_THRESHOLD_POLICY',
   /** Doi TAI LIEU VAN HANH (bien ban giao hang, phieu ky nhan) cua Lane O — chua vao `main`. */
   'AWAITING_OPERATIONAL_DOCUMENT_SOURCE',
   /** Doi mo hinh checkpoint/dwell/chung tu cua Lane F (#243). */
@@ -328,6 +363,15 @@ export const CONTROL_TOWER_SOURCES = [
    * chuyen sang `AWAITING_CHECKPOINT_SOURCE` va moi the mat `currentLeg.phase`.
    */
   'CHECKPOINT',
+  /**
+   * `#279` Lane O — phien cho, phu cap cho, va chung tu van hanh.
+   *
+   * TACH khoi `CHECKPOINT` du hai thu cung mot capability, va do la mot khac biet co that o man
+   * hinh: vang mat `CHECKPOINT` thi ba cot giai doan trong; vang mat `FIELD_OPERATIONS` thi cot
+   * `WAITING` trong va hai muc hang viec bien mat. Gop lam mot se lam nguoi truc khong biet cai
+   * nao dang thieu.
+   */
+  'FIELD_OPERATIONS',
 ] as const;
 export type ControlTowerSource = (typeof CONTROL_TOWER_SOURCES)[number];
 
