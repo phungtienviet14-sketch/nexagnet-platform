@@ -8,10 +8,7 @@ import { InMemoryMovementRepository } from '../movement/movement.repository.js';
 import { MovementService } from '../movement/movement.service.js';
 import { InMemoryRunPlanRepository } from './planning.repository.js';
 import { PlanningService } from './planning.service.js';
-import type {
-  RunClosureBlocker,
-  TransportPlanningPolicy,
-} from './planning.types.js';
+import type { RunClosureBlocker, TransportPlanningPolicy } from './planning.types.js';
 import { RunClosureBlockerSource } from './run-closure-blocker.source.js';
 import { RunClosureService } from './run-closure.service.js';
 
@@ -101,7 +98,16 @@ describe('dong vong chay do he thong quan (#293 Lane R)', () => {
     now = new Date();
     sequence = 0;
     fleet = new InMemoryFleetRepository();
-    movementRepo = new InMemoryMovementRepository();
+    /*
+     * MOT kho dau vet, dung o CA HAI cho.
+     *
+     * `MovementService` ghi dau vet cua nhung duong nguoi dung bam; kho van chuyen ghi dau vet cua
+     * lan dong DO HE THONG — vi lan do phai dat dau vet o cung mot luot voi buoc chuyen trang thai
+     * (`#293` R2). Neu hai cho dung hai kho khac nhau thi `closeAuditRows()` se dem tren mot kho
+     * trong va bai kiem se xanh ma khong chung minh gi.
+     */
+    movementAudit = new InMemoryAuditLogRepository();
+    movementRepo = new InMemoryMovementRepository(movementAudit);
     plans = new InMemoryRunPlanRepository();
     records = [];
 
@@ -113,7 +119,6 @@ describe('dong vong chay do he thong quan (#293 Lane R)', () => {
       sinks: [sink],
     });
 
-    movementAudit = new InMemoryAuditLogRepository();
     movement = new MovementService(
       movementRepo,
       fleet,
@@ -170,7 +175,12 @@ describe('dong vong chay do he thong quan (#293 Lane R)', () => {
     if (options.home) {
       const home = await movement.addLeg(
         run.id,
-        { sequence: legs.length + 1, kind: 'EMPTY', originLabel: destination, destinationLabel: DEPOT_LABEL },
+        {
+          sequence: legs.length + 1,
+          kind: 'EMPTY',
+          originLabel: destination,
+          destinationLabel: DEPOT_LABEL,
+        },
         ACTOR,
       );
       await runLeg(home.id);
@@ -274,11 +284,7 @@ describe('dong vong chay do he thong quan (#293 Lane R)', () => {
 
       // Don B da lap ke hoach nhung CHUA chay: chang cua no con `PLANNED`.
       const orderB = await anOrder(DEPOT_LABEL, FAR_LABEL);
-      await planning.commit(
-        orderB.id,
-        { vehicleId: vehicle.id, idempotencyKey: next('b') },
-        ACTOR,
-      );
+      await planning.commit(orderB.id, { vehicleId: vehicle.id, idempotencyKey: next('b') }, ACTOR);
 
       const outcome = await closures.attempt(first.run.id, 'LEG_CHANGED');
 
@@ -544,7 +550,10 @@ describe('dong vong chay do he thong quan (#293 Lane R)', () => {
        *
        * Day la kich ban do duoc dung nguyen van.
        */
-      const closures = configure({ closure: { idleHours: null }, sweep: { intervalSeconds: 60, batchSize: 2 } });
+      const closures = configure({
+        closure: { idleHours: null },
+        sweep: { intervalSeconds: 60, batchSize: 2 },
+      });
 
       // Hai vong chay KHONG BAO GIO dong duoc: xong viec o xa bai, va khach khong khai nguong.
       await completedRun(FAR_LABEL);
@@ -562,7 +571,10 @@ describe('dong vong chay do he thong quan (#293 Lane R)', () => {
     });
 
     it('bai — vong chay XA BAI khong chiem cho trong trang khi khach chua khai nguong', async () => {
-      const closures = configure({ closure: { idleHours: null }, sweep: { intervalSeconds: 60, batchSize: 50 } });
+      const closures = configure({
+        closure: { idleHours: null },
+        sweep: { intervalSeconds: 60, batchSize: 50 },
+      });
       const away = await completedRun(FAR_LABEL);
 
       now = new Date(now.getTime() + 365 * 24 * HOUR_MS);
@@ -758,10 +770,11 @@ describe('dong vong chay la quyen cua HE THONG (#293 R1)', () => {
 
   const buildMovement = (): { movement: MovementService; fleet: InMemoryFleetRepository } => {
     const fleet = new InMemoryFleetRepository();
+    const audit = new InMemoryAuditLogRepository();
     const movement = new MovementService(
-      new InMemoryMovementRepository(),
+      new InMemoryMovementRepository(audit),
       fleet,
-      new AuditLogService(new InMemoryAuditLogRepository()),
+      new AuditLogService(audit),
       CORE_POLICY,
     );
     return { movement, fleet };
@@ -769,7 +782,10 @@ describe('dong vong chay la quyen cua HE THONG (#293 R1)', () => {
 
   const aRunWithLeg = async (plate: string) => {
     const { movement, fleet } = buildMovement();
-    const vehicle = await fleet.createVehicle({ registrationPlate: plate, vehicleClass: 'Đầu kéo' });
+    const vehicle = await fleet.createVehicle({
+      registrationPlate: plate,
+      vehicleClass: 'Đầu kéo',
+    });
     const order = await movement.createOrder(
       { code: 'ORD-1', originLabel: 'A', destinationLabel: 'B', businessDate: '2026-09-11' },
       ACTOR,

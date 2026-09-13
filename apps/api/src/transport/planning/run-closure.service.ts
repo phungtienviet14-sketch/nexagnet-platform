@@ -15,10 +15,7 @@ import {
 } from './planning-policy.js';
 import { PlanningService, type RunClosureOutcome } from './planning.service.js';
 import type { RunClosureCause, TransportPlanningPolicy } from './planning.types.js';
-import {
-  RunClosureBlockerSource,
-  collectBlockers,
-} from './run-closure-blocker.source.js';
+import { RunClosureBlockerSource, collectBlockers } from './run-closure-blocker.source.js';
 
 type DecisionPoint = (typeof TRANSPORT_PLANNING_DECISIONS)['points'][number];
 
@@ -84,7 +81,23 @@ export class RunClosureService {
    */
   async attempt(runId: string, cause: RunClosureCause): Promise<RunClosureOutcome> {
     const blockers = await collectBlockers(this.blockerSource, runId);
-    return this.planning.settleRunClosure(runId, { blockers, cause });
+    return this.planning.settleRunClosure(runId, {
+      blockers,
+      cause,
+      /*
+       * HOI LAI tren duong da khoa — `#293` R2.
+       *
+       * Anh chup o tren duoc chup TRUOC khi hang vong chay bi khoa, nen mot phien cho vua mo hay
+       * mot moc "con hang tren thung" vua ghi se khong co trong do. Phep hoi lai chay ben trong
+       * giao dich dong, sat nhat co the voi luc buoc chuyen duoc ghi.
+       *
+       * Cai nay KHONG lam nguon ngoai serialize theo khoa cua vong chay: mot nguoi ghi o mien khac
+       * van co the ghi ngay sau lan hoi nay. Dong not khoang do la viec cua `WAITING_SESSION_BINDING`
+       * (#302), va no cho `#290` vao `main` truoc. Cai da dong duoc o day la su that cua chinh
+       * `transport-core` — chang va ke hoach — va do la cai ma lane nay LA NGUON.
+       */
+      recheckBlockers: () => collectBlockers(this.blockerSource, runId),
+    });
   }
 
   /**
@@ -131,7 +144,9 @@ export class RunClosureService {
      * ly do `IDLE_TIMEOUT` thay vi `DEPOT_RETURN` — tuc so quyet dinh noi sai ve ly do.
      */
     const windowMs =
-      idleHours === null ? RUN_CLOSURE_EVENT_BACKSTOP_MS : Math.min(idleHours * HOUR_MS, RUN_CLOSURE_EVENT_BACKSTOP_MS);
+      idleHours === null
+        ? RUN_CLOSURE_EVENT_BACKSTOP_MS
+        : Math.min(idleHours * HOUR_MS, RUN_CLOSURE_EVENT_BACKSTOP_MS);
     const completedBefore = new Date(now.getTime() - windowMs);
 
     const candidates = await this.movement.listRunClosureCandidates({

@@ -243,17 +243,17 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "planning.depot": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 512
+      "line": 574
     },
     "planning.grouping": {
       "functionName": "PlanningService.buildProposal",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 537
+      "line": 599
     },
     "planning.preview": {
       "functionName": "PlanningService.preview",
       "filePath": "apps/api/src/transport/planning/planning.service.ts",
-      "line": 152
+      "line": 162
     },
     "planning.run_closure": {
       "functionName": "PlanningService.settleRunClosure",
@@ -262,7 +262,7 @@ export const SOURCE_MANIFEST: SourceManifest = {
     "planning.run_closure_sweep": {
       "functionName": "RunClosureService.sweep",
       "filePath": "apps/api/src/transport/planning/run-closure.service.ts",
-      "line": 150
+      "line": 165
     },
     "price.current_period": {
       "functionName": "evaluateOperationalReadiness",

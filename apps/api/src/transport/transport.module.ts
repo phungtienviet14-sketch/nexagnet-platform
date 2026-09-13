@@ -125,13 +125,19 @@ import { TripService } from './trips/trip.service.js';
         new FleetCounterpartySubjectAdapter(fleet),
       inject: [FleetRepository],
     },
+    /*
+     * Ban TRONG BO NHO nhan kho dau vet vi `closeRunAsSystemSerialized()` phai dat dau vet o CUNG
+     * mot luot voi buoc chuyen trang thai (`#293` R2). Ban Prisma khong can: no ghi thang tren
+     * giao dich cua chinh no. Bo doi so nay se lam duong `PERSISTENCE=memory` dong vong chay ma
+     * khong de lai dong bang chung nao — dung khoang trong dang duoc dong.
+     */
     {
       provide: MovementRepository,
-      useFactory: (prisma: PrismaService): MovementRepository =>
+      useFactory: (prisma: PrismaService, trace: AuditLogRepository): MovementRepository =>
         loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaMovementRepository(prisma)
-          : new InMemoryMovementRepository(),
-      inject: [PrismaService],
+          : new InMemoryMovementRepository(trace),
+      inject: [PrismaService, AuditLogRepository],
     },
     {
       provide: AssetOwnershipRepository,

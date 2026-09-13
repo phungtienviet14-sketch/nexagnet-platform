@@ -166,10 +166,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
     };
 
     /** Mot vong chay da xong viec. `home: true` them mot chang rong ve bai. */
-    const finishedRun = async (
-      destination: string,
-      options: { readonly home?: boolean } = {},
-    ) => {
+    const finishedRun = async (destination: string, options: { readonly home?: boolean } = {}) => {
       const vehicle = await aVehicle();
       const order = await anOrder('IT-R293 Kho A', destination);
       const { run, legs } = await new PlanningService(
@@ -198,8 +195,7 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       return { run, order, vehicle };
     };
 
-    const statusOf = async (runId: string) =>
-      (await movement.getRun(runId)).run.status;
+    const statusOf = async (runId: string) => (await movement.getRun(runId)).run.status;
     const closeAuditCount = (runId: string) =>
       prisma.auditLog.count({
         where: { action: 'transport.run.close.system', entityId: runId },
@@ -249,7 +245,10 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * Khong co "su kien" nao trong bo nho ca. Mot tien trinh dung lai tu dau, voi dong ho cua no
        * dat vao hai gio sau, doc lai dung nhung hang do tu Postgres va di den cung ket luan.
        */
-      const restarted = freshProcess({ closure: { idleHours: 1 } }, () => new Date(Date.now() + 2 * HOUR_MS));
+      const restarted = freshProcess(
+        { closure: { idleHours: 1 } },
+        () => new Date(Date.now() + 2 * HOUR_MS),
+      );
       const outcome = await restarted.closures.attempt(run.id, 'IDLE_SWEEP');
 
       expect(outcome.closed).toBe(true);
@@ -365,6 +364,154 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       const persisted = await movement.getRun(run.id);
       expect(persisted.legs).toHaveLength(2);
+    });
+
+    /* ================================================================ *
+     * R-IT-07..09 — TOCTOU: NGUOI LAP KE HOACH DUA VOI DUONG DONG
+     *
+     * R-IT-06 do mot THU TU da biet: dong xong roi moi them chang. Cai chua ai do la khi hai viec
+     * do chay CHONG LEN NHAU — dung cua so ma `#293` R2 goi ten. Bat bien phai giu duoc la mot
+     * cau don:
+     *
+     *     KHONG BAO GIO co mot vong chay o diem cuoi mang mot viec moi vua duoc ghi.
+     *
+     * Nen moi bai duoi day khong khang dinh AI THANG. Chung khang dinh rang hai ket cuc — va chi
+     * hai — la hop le, va ket cuc thu ba (dong + co viec moi) khong bao gio xay ra. Mot bai kiem
+     * doi mot nguoi thang cu the se do vi lich CPU, va nguoi ta se chay lai thay vi doc.
+     * ================================================================ */
+
+    it('R-IT-07 — dua giua DONG va THEM CHANG: khong bao gio ra mot vong chay dong mang chang moi', async () => {
+      for (let round = 0; round < 6; round += 1) {
+        const { run } = await finishedRun(DEPOT_LABEL);
+
+        const [closing, adding] = await Promise.allSettled([
+          freshProcess().closures.attempt(run.id, 'IDLE_SWEEP'),
+          movement.addLeg(
+            run.id,
+            {
+              sequence: 90 + round,
+              kind: 'EMPTY',
+              originLabel: DEPOT_LABEL,
+              destinationLabel: 'IT-R293 Diem moi',
+            },
+            ACTOR,
+          ),
+        ]);
+
+        const persisted = await movement.getRun(run.id);
+        const openLegs = persisted.legs.filter(
+          (leg) => leg.status !== 'COMPLETED' && leg.status !== 'CANCELLED',
+        );
+
+        if (persisted.run.status === 'COMPLETED') {
+          // Duong dong thang: chang moi PHAI bi tu choi, va bi tu choi bang dung ma nghiep vu ma
+          // duong tuan tu tra ve — nguoi dung khong duoc nhan hai cau tra loi khac nhau cho cung
+          // mot su that chi vi ho cham hon mot phan nghin giay.
+          expect(adding.status).toBe('rejected');
+          if (adding.status === 'rejected') {
+            expect(adding.reason).toMatchObject({ reason: 'LEG_RUN_TERMINAL' });
+          }
+          expect(openLegs).toHaveLength(0);
+          expect(await closeAuditCount(run.id)).toBe(1);
+        } else {
+          // Nguoi lap ke hoach thang: chang moi con do, vong chay VAN chay, va khong mot dong dau
+          // vet dong nao duoc ghi.
+          expect(adding.status).toBe('fulfilled');
+          expect(persisted.run.status).toBe('ACTIVE');
+          expect(openLegs).toHaveLength(1);
+          expect(await closeAuditCount(run.id)).toBe(0);
+          if (closing.status === 'fulfilled') expect(closing.value.closed).toBe(false);
+        }
+      }
+    });
+
+    it('R-IT-08 — dua giua DONG va CHOT KE HOACH: vong chay dong khong mang ke hoach moi', async () => {
+      for (let round = 0; round < 4; round += 1) {
+        const { run, vehicle } = await finishedRun(DEPOT_LABEL);
+        const extra = await anOrder('IT-R293 Kho A', 'IT-R293 Diem gop');
+
+        /*
+         * `MULTI_ORDER_RUN` la che do gom nhom: mot don moi duoc gan vao vong chay DANG chay cua
+         * chinh chiec xe do thay vi mo mot vong chay khac. Do la duong duy nhat trong he nay ma
+         * mot lan CHOT KE HOACH ghi viec moi vao mot vong chay da ton tai — tuc dung doi tuong ma
+         * `#293` R2 goi la *"a concurrent planner"*.
+         */
+        const planner = new PlanningService(
+          movement,
+          planRepo,
+          fleet,
+          audit,
+          CORE_POLICY,
+          policyWith({ grouping: 'MULTI_ORDER_RUN' }),
+        );
+
+        const [, committing] = await Promise.allSettled([
+          freshProcess().closures.attempt(run.id, 'IDLE_SWEEP'),
+          planner.commit(extra.id, { vehicleId: vehicle.id, idempotencyKey: next('KEY') }, ACTOR),
+        ]);
+
+        const persisted = await movement.getRun(run.id);
+        const plansOnRun = await prisma.transportOrderRunPlan.findMany({
+          where: { runId: run.id },
+          select: { id: true, loadedLegId: true },
+        });
+        const openLegs = persisted.legs.filter(
+          (leg) => leg.status !== 'COMPLETED' && leg.status !== 'CANCELLED',
+        );
+
+        if (persisted.run.status === 'COMPLETED') {
+          // Mot ke hoach chi ton tai khi chang co hang cua no ton tai, va chang do di qua chinh
+          // khoa ma lan dong dang giu. Nen mot vong chay da dong khong the mang mot ke hoach ma
+          // chang cua no con mo.
+          expect(openLegs).toHaveLength(0);
+          for (const plan of plansOnRun) {
+            const leg = persisted.legs.find((entry) => entry.id === plan.loadedLegId);
+            expect(leg?.status === 'COMPLETED' || leg?.status === 'CANCELLED').toBe(true);
+          }
+        } else {
+          expect(persisted.run.status).toBe('ACTIVE');
+          expect(committing.status).toBe('fulfilled');
+          expect(openLegs.length).toBeGreaterThan(0);
+          expect(await closeAuditCount(run.id)).toBe(0);
+        }
+      }
+    });
+
+    /**
+     * R-IT-09 — BUOC CHUYEN VA DAU VET SONG CHET CUNG NHAU.
+     *
+     * Truoc `#293` R2, dau vet duoc ghi bang mot lan goi kho RIENG sau khi buoc chuyen da commit.
+     * Mot cu chet o giua hai lan ghi do de lai mot vong chay `COMPLETED` ma khong mot dong bang
+     * chung nao noi ai dong no va vi sao — va dau vet CHINH LA bang chung nghiem thu cua lane nay.
+     *
+     * Khong the tat dien mot tien trinh trong mot bai kiem, nen bai nay lam dieu tuong duong va
+     * kiem duoc: bat lan ghi dau vet HONG. Neu hai thu nam trong mot giao dich thi buoc chuyen
+     * phai cuon lai cung no; neu chung nam o hai giao dich thi vong chay se o lai `COMPLETED`
+     * khong dau vet — dung khoang trong dang duoc dong.
+     */
+    it('R-IT-09 — dau vet ghi hong thi buoc chuyen cuon lai, khong de lai vong chay dong mu', async () => {
+      const { run } = await finishedRun(DEPOT_LABEL);
+
+      const repo = new PrismaMovementRepository(prisma);
+      await expect(
+        repo.closeRunAsSystemSerialized({
+          runId: run.id,
+          at: new Date(),
+          decide: async () => ({ close: true, trigger: 'DEPOT_RETURN' }),
+          trace: () => {
+            throw new Error('kho dau vet ngat giua chung');
+          },
+        }),
+      ).rejects.toThrow(/kho dau vet ngat giua chung/);
+
+      expect(await statusOf(run.id)).toBe('ACTIVE');
+      expect(await closeAuditCount(run.id)).toBe(0);
+
+      // Va duong binh thuong van dong duoc sau do — lan hong khong de lai mot hang khoa nao.
+      const outcome = await freshProcess().closures.attempt(run.id, 'IDLE_SWEEP');
+      expect(outcome.closed).toBe(true);
+      expect(await statusOf(run.id)).toBe('COMPLETED');
+      expect(await closeAuditCount(run.id)).toBe(1);
     });
   },
 );

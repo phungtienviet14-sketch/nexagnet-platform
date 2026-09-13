@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { AuditLogRepository, type AppendAuditLogInput } from '../../audit/audit-log.repository.js';
 import { storageUniqueViolation } from '../proof/proof-storage-conflict.js';
 import type { UniqueIndexRef } from '../storage-conflict.js';
 import type {
@@ -35,6 +36,64 @@ export interface RunCloseAttempt {
   readonly run: VehicleRun;
   /** `true` khi CHINH lan goi nay la lan ghi trang thai. */
   readonly transitioned: boolean;
+}
+
+/**
+ * SU THAT DOC LAI TREN DUONG DA KHOA — `#293` R2.
+ *
+ * Hai truong nay la phan ma `transport-core` LA NGUON. Chung duoc doc SAU khi hang vong chay bi
+ * khoa, nen giua luc doc va luc ghi khong mot nguoi lap ke hoach nao chen duoc mot chang moi vao.
+ */
+export interface SerializedRunSnapshot {
+  readonly run: VehicleRun;
+  readonly legs: readonly RunLeg[];
+}
+
+/** Cau tra loi cua nguoi phan xu, dua ra TU BEN TRONG duong da khoa. */
+export type SerializedRunCloseVerdict =
+  { readonly close: true; readonly trigger: string } | { readonly close: false };
+
+export interface SerializedRunCloseInput {
+  readonly runId: string;
+  readonly at: Date;
+  /**
+   * PHAN XU, chay khi hang vong chay DA bi khoa.
+   *
+   * Nhan su that loi cua `transport-core`; nguoi phan xu tu hoi them nhung nguon ngoai ma no can.
+   * Phai la mot lan doc + tinh NGAN: no dang giu mot khoa hang tren mot giao dich dang mo.
+   */
+  readonly decide: (snapshot: SerializedRunSnapshot) => Promise<SerializedRunCloseVerdict>;
+  /**
+   * DAU VET BEN VUNG cua lan dong, dat o CUNG mot don vi cong viec voi buoc chuyen trang thai.
+   *
+   * Khong phai mot lan goi kho RIENG: mot vong chay `COMPLETED` ma khong co dong dau vet nao la
+   * mot su that da doi khong ai giai thich duoc — va do la khoang trong `#293` doi phai dong.
+   */
+  readonly trace: (before: VehicleRun, after: VehicleRun, trigger: string) => AppendAuditLogInput;
+}
+
+export interface SerializedRunCloseResult {
+  readonly run: VehicleRun;
+  /** `true` khi CHINH lan goi nay la lan ghi trang thai. */
+  readonly transitioned: boolean;
+  readonly verdict: SerializedRunCloseVerdict;
+}
+
+/**
+ * VONG CHAY DA O DIEM CUOI khi mot lenh THEM VIEC MOI cham toi hang da khoa.
+ *
+ * Mot lop loi RIENG chu khong mot `Error` chung: `MovementService` phai dich no thanh
+ * `LEG_RUN_TERMINAL` — mot ma nguoi dung doc duoc — thay vi 500. Phep kiem o tang dich vu van con,
+ * nhung no doc TRUOC khi khoa nen no khong thay ban dong dang chay; cai nay thi thay.
+ */
+export class RunClosedForNewWorkError extends Error {
+  constructor(
+    readonly runId: string,
+    readonly status: VehicleRunStatus,
+  ) {
+    super(`Vong chay ${runId} da o trang thai ${status} — khong nhan them viec moi`);
+    this.name = 'RunClosedForNewWorkError';
+  }
 }
 
 export interface RunClosureCandidateQuery {
@@ -210,6 +269,28 @@ export abstract class MovementRepository {
    * `null` = khong tim thay vong chay. Phan biet duoc voi `transitioned: false` la ca diem.
    */
   abstract completeRunIfActive(id: string, at: Date): Promise<RunCloseAttempt | null>;
+
+  /**
+   * DONG DO HE THONG, TREN MOT DUONG DA SERIALIZE — `#293` R2.
+   *
+   * ==========================================================================================
+   * VI SAO `completeRunIfActive` MOT MINH KHONG DU
+   * ==========================================================================================
+   *
+   * `UPDATE ... WHERE status = 'ACTIVE'` chan duoc HAI LAN DONG. No khong chan duoc mot thu khac:
+   * mot nguoi lap ke hoach them mot chang moi vao vong chay GIUA luc phan xu doc su that va luc
+   * buoc chuyen duoc ghi. Ket qua la mot vong chay `COMPLETED` mang mot chang `PLANNED` — dung
+   * cai ma `#293` R3 goi la khong duoc phep ton tai.
+   *
+   * Nen o day khoa hang vong chay TRUOC, doc lai su that TREN duong da khoa, phan xu, roi moi
+   * chuyen trang thai. Moi duong ghi co the them viec moi cho vong chay (`createLeg`) deu phai
+   * gianh CUNG mot khoa — neu khong thi khoa nay chi lam cham chinh no.
+   *
+   * Tra ve `null` khi khong co vong chay nao mang dinh danh do.
+   */
+  abstract closeRunAsSystemSerialized(
+    input: SerializedRunCloseInput,
+  ): Promise<SerializedRunCloseResult | null>;
   abstract cancelRun(id: string, input: CancelRunInput): Promise<VehicleRun | null>;
 
   /**
@@ -321,6 +402,47 @@ export class InMemoryMovementRepository extends MovementRepository {
   private readonly assignments = new Map<string, RunAssignment>();
   private readonly links = new Map<string, TripRunLegLink>();
   private readonly orderLinks = new Map<string, TripOrderLink>();
+  /** Hang doi mot-luot-mot theo vong chay — ban trong bo nho cua `SELECT ... FOR UPDATE`. */
+  private readonly runLocks = new Map<string, Promise<unknown>>();
+
+  /**
+   * Kho dau vet, de ban nay ghi dau vet dong vong chay o CUNG mot luot voi buoc chuyen trang thai.
+   *
+   * Tuy chon vi phan lon bo test cua cac mien khac dung kho nay ma khong quan tam den dau vet. Khi
+   * VANG mat, `closeRunAsSystemSerialized()` van dong dung nhu the — no chi khong co cho de dat
+   * hang dau vet, va bai `run-closure` nao doi bang chung do phai tiem kho vao.
+   */
+  constructor(private readonly traceStore?: AuditLogRepository) {
+    super();
+  }
+
+  /**
+   * MOT VONG CHAY, MOT LUOT — ban trong bo nho cua khoa hang.
+   *
+   * JavaScript don luong khong co nghia la khong co dua: moi `await` la mot cho nhuong luot, va
+   * hai lan goi dong xen ke nhau tai dung nhung diem do se cung doc thay `ACTIVE`. Ban Postgres
+   * xep hang bang `FOR UPDATE`; neu ban nay khong xep hang thi hai ban hien thuc cua CUNG mot kho
+   * chay theo hai luat khac nhau, va bai kiem xanh o day se khong noi gi ve duong that.
+   */
+  private async withRunLock<T>(runId: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.runLocks.get(runId) ?? Promise.resolve();
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Nguoi den sau xep hang SAU cai cong nay, khong sau ket qua cua `work()`: mot luot that bai
+    // van phai nha khoa, va no nha o `finally` ben duoi.
+    this.runLocks.set(
+      runId,
+      previous.then(() => held),
+    );
+    await previous;
+    try {
+      return await work();
+    } finally {
+      release();
+    }
+  }
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
     const now = iso(new Date());
@@ -481,9 +603,43 @@ export class InMemoryMovementRepository extends MovementRepository {
     if (!current) return null;
     if (current.status !== 'ACTIVE') return { run: current, transitioned: false };
 
-    const next: VehicleRun = { ...current, status: 'COMPLETED', completedAt: iso(at), updatedAt: iso(at) };
+    const next: VehicleRun = {
+      ...current,
+      status: 'COMPLETED',
+      completedAt: iso(at),
+      updatedAt: iso(at),
+    };
     this.runs.set(id, next);
     return { run: next, transitioned: true };
+  }
+
+  async closeRunAsSystemSerialized(
+    input: SerializedRunCloseInput,
+  ): Promise<SerializedRunCloseResult | null> {
+    return this.withRunLock(input.runId, async () => {
+      const before = this.runs.get(input.runId);
+      if (!before) return null;
+
+      const verdict = await input.decide({ run: before, legs: this.legsOf(input.runId) });
+      if (!verdict.close) return { run: before, transitioned: false, verdict };
+
+      // Doc LAI sau khi nguoi phan xu tra loi: `decide()` co `await` ben trong no, nhung khoa hang
+      // van dang duoc giu nen khong ai doi duoc trang thai o giua. Doc lai la de phong dung mot
+      // truong hop: chinh nguoi phan xu do di ghi len vong chay nay.
+      const current = this.runs.get(input.runId);
+      if (!current) return null;
+      if (current.status !== 'ACTIVE') return { run: current, transitioned: false, verdict };
+
+      const after: VehicleRun = {
+        ...current,
+        status: 'COMPLETED',
+        completedAt: iso(input.at),
+        updatedAt: iso(input.at),
+      };
+      this.runs.set(input.runId, after);
+      await this.traceStore?.append(input.trace(current, after, verdict.trigger));
+      return { run: after, transitioned: true, verdict };
+    });
   }
 
   async listRunClosureCandidates(query: RunClosureCandidateQuery): Promise<VehicleRun[]> {
@@ -545,7 +701,23 @@ export class InMemoryMovementRepository extends MovementRepository {
     return next;
   }
 
+  /**
+   * THEM MOT CHANG — gianh CUNG khoa vong chay voi duong dong.
+   *
+   * Phep kiem "vong chay con mo khong" o tang dich vu doc TRUOC khi khoa, nen no khong thay duoc
+   * mot lan dong dang chay. Phep kiem o day thi thay: hoac no chay TRUOC lan dong (va lan dong se
+   * doc lai thay mot chang moi con mo), hoac no chay SAU (va no thay `COMPLETED` roi tu choi). Cua
+   * so o giua bien mat vi ca hai deu di qua mot khoa.
+   */
   async createLeg(input: CreateLegInput): Promise<RunLeg> {
+    return this.withRunLock(input.runId, async () => this.insertLeg(input));
+  }
+
+  private insertLeg(input: CreateLegInput): RunLeg {
+    const run = this.runs.get(input.runId);
+    if (run && (run.status === 'COMPLETED' || run.status === 'CANCELLED')) {
+      throw new RunClosedForNewWorkError(input.runId, run.status);
+    }
     const now = iso(new Date());
     const leg: RunLeg = {
       id: randomUUID(),
